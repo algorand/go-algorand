@@ -39,5 +39,9 @@ git commit -m "Build ${BUILD_NUMBER}"
 git push
 
 TAG=rel/stable-$(scripts/compute_build_number.sh -f)
-git tag -a ${TAG} -m "Genesis Timestamp: $(cat ./genesistimestamp.dat)"
+if [ ! -z "${SIGNING_KEY_ADDR}" ]; then
+    git tag -s -u "${SIGNING_KEY_ADDR}" ${TAG} -m "Genesis Timestamp: $(cat ./genesistimestamp.dat)"
+else
+    git tag -a ${TAG} -m "Genesis Timestamp: $(cat ./genesistimestamp.dat)"
+fi
 git push origin ${TAG}

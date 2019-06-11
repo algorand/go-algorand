@@ -19,7 +19,12 @@ cd ${REPO_DIR}
 
 echo "Building RPM package"
 
-./scripts/build_prod.sh
+if [ -z "${NO_BUILD}" ]; then
+    env GOOS=${OS} GOARCH=${ARCH} scripts/build_prod.sh
+else
+    echo "already built"
+    true
+fi
 
 VER=$(./scripts/compute_build_number.sh -f)
 
