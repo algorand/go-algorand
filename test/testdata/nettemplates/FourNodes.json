@@ -1,0 +1,58 @@
+{
+    "Genesis": {
+        "NetworkName": "tbd",
+        "Wallets": [
+            {
+                "Name": "Online",
+                "Stake": 97,
+                "Online": true
+            },
+            {
+                "Name": "Offline",
+                "Stake": 1,
+                "Online": false
+            },
+            {
+                "Name": "Partkey",
+                "Stake": 1,
+                "Online": true
+            },
+            {
+                "Name": "SmallWallet",
+                "Stake": 1,
+                "Online": true
+            }
+        ]
+    },
+    "Nodes": [
+        {
+            "Name": "Online",
+            "IsRelay": true,
+            "Wallets": [
+                { "Name": "Online",
+                  "ParticipationOnly": false }
+            ]
+        },
+        {
+            "Name": "Offline",
+            "Wallets": [
+                { "Name": "Offline",
+                  "ParticipationOnly": false }
+            ]
+        },
+        {
+            "Name": "Partkey",
+            "Wallets": [
+                { "Name": "Partkey",
+                    "ParticipationOnly": true }
+            ]
+        },
+        {
+            "Name": "SmallNode",
+            "Wallets": [
+                { "Name": "SmallWallet",
+                    "ParticipationOnly": false }
+            ]
+        }
+    ]
+}

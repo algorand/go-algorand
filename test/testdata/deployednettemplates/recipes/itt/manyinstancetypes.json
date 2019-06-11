@@ -1,0 +1,46 @@
+{
+  "Hosts": [
+    {
+      "Name": "AWS-US-EAST-1-m5a.4xlarge",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "m5a.4xlarge"
+    },
+    {
+      "Name": "AWS-US-EAST-1-t2.2xlarge",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "t2.2xlarge"
+    },
+    {
+      "Name": "AWS-US-EAST-1-t3.2xlarge",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "t3.2xlarge"
+    },
+    {
+      "Name": "AWS-US-EAST-1-c5.4xlarge",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "c5.4xlarge"
+    },
+    {
+      "Name": "AWS-US-EAST-1-c5.2xlarge",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "c5.2xlarge"
+    },
+    {
+      "Name": "AWS-US-EAST-1-t2.xlarge",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "t2.xlarge"
+    },
+    {
+      "Name": "AWS-US-EAST-1-m5.xlarge",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "m5.xlarge"
+    }
+  ]
+}

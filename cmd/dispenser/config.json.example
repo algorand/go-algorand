@@ -1,0 +1,19 @@
+{
+  "bank.testnet.algorand.network": {
+    "recaptcha_sitekey": "YOUR SITEKEY HERE"
+    "recaptcha_secret": "YOUR SECRET HERE",
+    "amount": 1000,
+    "fee": 1,
+    "wallet": "M5XGQQMKZJQI2GIBSMUYRYB32QT23MBPAEWDQXQE223IQM7PY22JPLZOHY",
+    "data_dir": "http://127.0.0.1:8161",
+  },
+
+  "bank.devnet.algodev.network": {
+    "recaptcha_sitekey": "YOUR SITEKEY HERE",
+    "recaptcha_secret": "YOUR SECRET HERE",
+    "amount": 1000,
+    "fee": 1,
+    "wallet": "A4NEDM7HE23PYDDMGY4RKSNGIYFKO5SWDLEFAUIB3Y7XUSQ7754E4YR364",
+    "data_dir": "http://127.0.0.1:8160",
+  }
+}

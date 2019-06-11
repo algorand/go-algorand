@@ -1,0 +1,12 @@
+{
+    "Archival": false,
+    "GossipFanout": 4,
+    "NetAddress": ":4160",
+    "BaseLoggerDebugLevel": 1,
+    "IncomingConnectionsLimit": -1,
+    "LogSizeLimit": 1073741824,
+    "EnableMetricReporting": false,
+    "EnableOutgoingNetworkMessageFiltering": true,
+    "EnableIncomingMessageFilter": false,
+    "CatchupParallelBlocks": 50
+}

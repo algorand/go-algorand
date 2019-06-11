@@ -1,0 +1,118 @@
+{
+    "Genesis": {
+        "NetworkName": "tbd",
+        "Wallets": [
+            {
+                "Name": "20pct",
+                "Stake": 20,
+                "Online": true
+            },
+            {
+                "Name": "10pct",
+                "Stake": 10,
+                "Online": true
+            },
+            {
+                "Name": "Node1",
+                "Stake": 10,
+                "Online": true
+            },
+            {
+                "Name": "Node2",
+                "Stake": 10,
+                "Online": true
+            },
+            {
+                "Name": "Node3",
+                "Stake": 10,
+                "Online": true
+            },
+            {
+                "Name": "Node4",
+                "Stake": 10,
+                "Online": true
+            },
+            {
+                "Name": "Node5",
+                "Stake": 10,
+                "Online": true
+            },
+            {
+                "Name": "Node6",
+                "Stake": 10,
+                "Online": true
+            },
+            {
+                "Name": "Node7",
+                "Stake": 10,
+                "Online": true
+            }
+        ]
+    },
+    "Nodes": [
+        {
+            "Name": "Primary",
+            "IsRelay": true,
+            "Wallets": [
+              { "Name": "20pct",
+                "ParticipationOnly": false }
+            ]
+        },
+        {
+            "Name": "Relay2",
+            "IsRelay": true,
+            "Wallets": [
+              { "Name": "10pct",
+                "ParticipationOnly": false }
+            ]
+        },
+        {
+            "Name": "Node1-3",
+            "Wallets": [
+              { "Name": "Node1",
+                "ParticipationOnly": false },
+              { "Name": "Node2",
+                "ParticipationOnly": false },
+              { "Name": "Node3",
+                "ParticipationOnly": false }
+            ]
+        },
+        {
+            "Name": "Node4",
+            "Wallets": [
+              { "Name": "Node4",
+                "ParticipationOnly": false }
+            ]
+        },
+        {
+            "Name": "Node5",
+            "Wallets": [
+              { "Name": "Node5",
+                "ParticipationOnly": false }
+            ]
+        },
+        {
+            "Name": "Node6",
+            "Wallets": [
+              { "Name": "Node6",
+                "ParticipationOnly": false }
+            ]
+        },
+        {
+            "Name": "Node7",
+            "Wallets": [
+              { "Name": "Node7",
+                "ParticipationOnly": false }
+            ]
+        },
+        {
+            "Name": "Node8"
+        },
+        {
+            "Name": "Node9"
+        },
+        {
+            "Name": "Node10"
+        }
+    ]
+}

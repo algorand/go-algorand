@@ -1,0 +1,12 @@
+{
+  "Hosts": [
+    {
+      "Name": "R1",
+      "Template": "AWS-US-EAST-1-Large"
+    },
+    {
+      "Name": "N1",
+      "Template": "AWS-US-EAST-1-Small"
+    }
+  ]
+}

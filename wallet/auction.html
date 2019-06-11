@@ -1,0 +1,537 @@
+<html>
+<head>
+    <title>Algorand auction</title>
+    <script src="lib/jquery-3.3.1.min.js"></script>
+    <script src="lib/mustache.min.js"></script>
+    <script src="lib/algosdk.min.js"></script>
+    <script src="algorand.js"></script>
+
+</head>
+
+<body onload="onload()">
+<h1>Algorand auction manager</h1>
+
+<div>
+    <table border=0>
+        <tr>
+            <td>
+                algod URL:
+            </td>
+            <td>
+                <input id="algod-url" value="http://127.0.0.1">
+            </td>
+        </tr>
+        <tr>
+            <td>
+                algod port:
+            </td>
+            <td>
+                <input id="algod-port" value=8080>
+            </td>
+        </tr>
+        <tr>
+            <td>
+                API Token:
+            </td>
+            <td>
+                <input id="algod-token" value="">
+            </td>
+        </tr>
+        <tr>
+            <td>
+                Mnemonic:
+            </td>
+            <td>
+                <input id="mn-key" value="">
+            </td>
+        </tr>
+        <tr>
+            <td>
+                Auction console URL:
+            </td>
+            <td>
+                <input id="auction-console-url" value="http://127.0.0.1:8081">
+            </td>
+        </tr>
+        <tr>
+            <td>
+                Auction bank URL:
+            </td>
+            <td>
+                <input id="auction-bank-url" value="http://127.0.0.1:8123">
+            </td>
+        </tr>
+        <tr>
+            <td>
+                Bank username:
+            </td>
+            <td>
+                <input id="bank-username" placeholder="username">
+            </td>
+        </tr>
+        <tr colspan=2>
+            <td>
+                <button id="config-refresh">Reload</button>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div>
+    <h2>algod + auction</h2>
+
+    <table border=0>
+        <tr>
+            <td>algod version:</td>
+            <td><span id="algod-version"></span></td>
+        </tr>
+
+        <tr>
+            <td>Last round:</td>
+            <td><span id="last-round"></span></td>
+        </tr>
+
+        <tr>
+            <td>Current auction price:</td>
+            <td><span id="auction-cur-price"></span></td>
+        </tr>
+
+        <tr>
+            <td>Number of bids:</td>
+            <td><span id="auction-num-bids"></span></td>
+        </tr>
+    </table>
+</div>
+
+<div>
+    <h2>bank</h2>
+
+    <div id="bank-status"></div>
+
+    <table border=0>
+        <tr>
+            <td colspan="2">
+                <button id="bank-username-create">Create bank account</button>
+            </td>
+        </tr>
+
+        <tr>
+            <td>Transfer:</td>
+            <td><input id="bank-amount" placeholder="amount"></td>
+            <td>
+                <button id="bank-xfer-in">in</button>
+                <button id="bank-xfer-out">out</button>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div>
+    <h2>auction params</h2>
+
+    <div id="auction-params"></div>
+</div>
+
+<div>
+    <h2>accounts</h2>
+
+    <div id="wallets"></div>
+</div>
+
+<div id="status" style="position: absolute; top: 0; right: 0; background: yellow; ">
+    HTML loaded.
+</div>
+
+<script id="wallet-template" type="text/template">
+    <table border=0>
+        <tr>
+            <td>Address:</td>
+            <td>{{address}}</td>
+        </tr>
+
+        <tr>
+            <td>Balance:</td>
+            <td>{{amount}}</td>
+        </tr>
+
+        <tr>
+            <td>Bid:</td>
+            <td><input id="bid-currency-{{address}}" placeholder="currency"></input>
+                <button data-bidder="{{address}}" class="bid-go">Go</button>
+            </td>
+        </tr>
+    </table>
+</script>
+
+<script id="bank-status-template" type="text/template">
+    <table border=0>
+        <tr>
+            <td>Balance:</td>
+            <td>{{balance}}</td>
+        </tr>
+
+        <tr>
+            <td>Pending deposits:</td>
+            <td>{{pending}}</td>
+        </tr>
+    </table>
+</script>
+
+<script id="auction-params-template" type="text/template">
+    <table border=0>
+        <tr>
+            <td>Auction key:</td>
+            <td>{{auctionKey}}</td>
+        </tr>
+
+        <tr>
+            <td>Auction ID:</td>
+            <td>{{auctionID}}</td>
+        </tr>
+
+        <tr>
+            <td>Deposit round:</td>
+            <td>{{params.DepositRound}}</td>
+        </tr>
+
+        <tr>
+            <td>First round:</td>
+            <td>{{params.FirstRound}}</td>
+        </tr>
+
+        <tr>
+            <td>Last round:</td>
+            <td>{{lastRound}}</td>
+        </tr>
+
+        <tr>
+            <td>Last price:</td>
+            <td>{{params.LastPrice}}</td>
+        </tr>
+
+        <tr>
+            <td>First price:</td>
+            <td>{{params.MaxPriceMultiple}}&times; last price</td>
+        </tr>
+
+        <tr>
+            <td># of algos:</td>
+            <td>{{params.NumAlgos}}</td>
+        </tr>
+    </table>
+</script>
+
+<script>
+    var baseurl = "";
+    var baseport = 0;
+    var apitoken = "";
+    var consoleurl = "";
+    var bankurl = "";
+    var username = "";
+    var mnemonic = "";
+
+    var keys;
+
+    var status_polling = false;
+
+    var last_wallets_html = "";
+
+    var auction_key = "";
+    var auction_id = 0;
+
+    var client;
+
+    function reload_config() {
+        baseurl = $('#algod-url').val();
+        baseport = parseInt($('#algod-port').val());
+        apitoken = $('#algod-token').val();
+        consoleurl = $('#auction-console-url').val();
+        bankurl = $('#auction-bank-url').val();
+        username = $('#bank-username').val();
+        mnemonic = $('#mn-key').val();
+
+        window.localStorage.setItem('algod-token', apitoken);
+        window.localStorage.setItem('algod-port', baseport);
+        window.localStorage.setItem('algod-url', baseurl);
+        window.localStorage.setItem('auction-console-url', consoleurl);
+        window.localStorage.setItem('auction-bank-url', bankurl);
+        window.localStorage.setItem('bank-username', username);
+        window.localStorage.setItem('mn-key', mnemonic);
+
+
+        client = new algosdk.Algod(apitoken, baseurl, baseport);
+        keys = algosdk.importMnemonic(mnemonic);
+    }
+
+    function load_localstorage() {
+        localstorage_to_input('algod-token');
+        localstorage_to_input('algod-port');
+        localstorage_to_input('algod-url');
+        localstorage_to_input('auction-console-url');
+        localstorage_to_input('auction-bank-url');
+        localstorage_to_input('bank-username');
+        localstorage_to_input('mn-key');
+    }
+
+    function status(s) {
+        console.log(s);
+        $('#status').text(s);
+    }
+
+    function handle_algod_status_error(req) {
+        status("Fetching status: " + req.statusText + " / " + req.responseText);
+        status_polling = false;
+    }
+
+    function handle_algod_status(data) {
+        $('#last-round').text(data.lastRound);
+
+        refresh();
+
+        client.statusAfterBlock(data.lastRound).then(handle_algod_status, handle_algod_status_error)
+    }
+
+    async function start_polling_algod_status() {
+        if (!status_polling) {
+            status_polling = true;
+            client.status().then(handle_algod_status, handle_algod_status_error);
+        }
+    }
+
+    function onload() {
+        status("Javascript loaded.");
+
+        load_localstorage();
+
+        $('#config-refresh').click(function (e) {
+            reload_config();
+            authAlgorandRequests(apitoken, baseurl);
+            start_polling_algod_status();
+            refresh();
+            status('Reloaded URLs');
+        });
+
+        $('#bank-username-create').click(function (e) {
+            reload_config();
+
+            $.post(bankurl + '/create-user', {
+                username: username,
+            }, function (data) {
+                if (!data.success) {
+                    status('Create user: ' + data.err);
+                    return;
+                }
+
+                status('Created user');
+                refresh();
+            }).fail(function (req) {
+                status('Create user: ' + req.statusText);
+            });
+        });
+
+        $('#bank-xfer-in').click(function (e) {
+            var amount = $('#bank-amount').val();
+            $.post(bankurl + '/transfer-in', {
+                username: username,
+                amount: amount,
+            }, function (data) {
+                if (!data.success) {
+                    status('Transfer: ' + data.err);
+                    return;
+                }
+
+                status('Transfer OK');
+                refresh();
+            }).fail(function (req) {
+                status('Transfer: ' + req.statusText);
+            });
+        });
+
+        $('#bank-xfer-out').click(function (e) {
+            var amount = $('#bank-amount').val();
+            $.post(bankurl + '/transfer-out', {
+                username: username,
+                amount: amount,
+            }, function (data) {
+                if (!data.success) {
+                    status('Transfer: ' + data.err);
+                    return;
+                }
+
+                status('Transfer OK');
+                refresh();
+            }).fail(function (req) {
+                status('Transfer: ' + req.statusText);
+            });
+        });
+
+        reload_config();
+        authAlgorandRequests(apitoken, baseurl);
+
+        start_polling_algod_status();
+    }
+
+    function bid_go(e) {
+        var bidder = $(this).attr('data-bidder');
+        var bidamount = parseInt($('#bid-currency-' + bidder).val());
+        var unitPrice = parseInt($('#auction-cur-price').text());
+
+        if (isNaN(bidamount)) {
+            status('Cannot parse bid amount');
+            return;
+        }
+
+        if (isNaN(unitPrice)) {
+            status('Cannot determine bid price');
+            return;
+        }
+
+        function base64toUint8Array(base64) {
+            var raw = atob(base64);
+            var rawLength = raw.length;
+            var array = new Uint8Array(new ArrayBuffer(rawLength));
+
+            for (i = 0; i < rawLength; i++) {
+                array[i] = raw.charCodeAt(i);
+            }
+            return array;
+        }
+
+        // Get a signed deposit from the bank
+        $.post(bankurl + '/deposit-auction', {
+            username: username,
+            amount: bidamount,
+            auction: auction_key,
+            auctionid: auction_id,
+            bidder: bidder,
+        }, function (data) {
+            if (!data.success) {
+                status('Could not deposit: ' + data.err);
+                return;
+            }
+
+            status('Deposit OK');
+            var sigdep = data.sigdepb64;
+            console.log('Signed deposit message:', sigdep);
+
+            bid = {
+                "bidderKey": keys.addr,
+                "bidAmount": bidamount,
+                "maxPrice": unitPrice,
+                "bidID": Math.round(new Date().getTime() / 1000),
+                "auctionKey": auction_key,
+                "auctionID": auction_id,
+            };
+
+            sbid = algosdk.signBid(bid, keys.sk);
+
+            console.log('Signed bid message:', sbid);
+
+            function concatenate(...arrays) {
+                let totalLength = 0;
+                for (let arr of arrays) {
+                    totalLength += arr.length;
+                }
+                let result = new Uint8Array(totalLength);
+                let offset = 0;
+                for (let arr of arrays) {
+                    result.set(arr, offset);
+                    offset += arr.length;
+                }
+                return result;
+            }
+
+            var note = concatenate(base64toUint8Array(sigdep), sbid);
+
+            // Figure out what transaction fee we should use
+            client.status().then(function (st) {
+                client.suggestedFee().then(function (data) {
+                    var fee = data.fee;
+
+                    txn = {
+                        to: auction_key,
+                        firstRound: st.lastRound,
+                        lastRound: st.lastRound + 1000,
+                        amount: 0,
+                        fee: fee,
+                        note: note,
+                    };
+                    stxn = algosdk.signTransaction(txn, keys.sk);
+                    client.sendRawTransaction(stxn.blob).then(function (data) {
+                        status('Bid Placed - ' + data.txId);
+                    }, function (req) {
+                        status('Could not post transaction: ' + req.Response)
+                    })
+
+                }, function (req) {
+                    status('Could not determine fee: ' + req.responseText);
+                });
+            });
+        });
+    }
+
+    function apply_accounts(data) {
+        var wallet_template = $('#wallet-template').html();
+        var wallets_html = "";
+
+        wallets_html += Mustache.to_html(wallet_template, data);
+
+        if (last_wallets_html != wallets_html) {
+            last_wallets_html = wallets_html;
+            $('#wallets').html(wallets_html);
+            $('.bid-go').click(bid_go);
+        }
+    }
+
+    function refresh() {
+        client.versions().then(function (data) {
+            $('#algod-version').text(data.versions + " / " + data.genesis_id)
+        });
+
+        client.accountInforamtion(keys.addr).then(apply_accounts);
+
+        $.get(consoleurl + '/auctions/last-auction-id', function (data) {
+            auction_key = data.auctionKey;
+            auction_id = data.auctionID;
+
+            $.get(consoleurl + '/auctions/' + auction_id, function (data) {
+                var template = $('#auction-params-template').html();
+                data['auctionKey'] = auction_key;
+                data['auctionID'] = auction_id;
+                data['lastRound'] = data.params.FirstRound + data.params.NumChunks * data.params.PriceChunkRounds - 1;
+                $('#auction-params').html(Mustache.to_html(template, data));
+            });
+
+            var lastRound = $('#last-round').text();
+            $.get(consoleurl + '/auctions/' + auction_id + '/price/' + lastRound, function (data) {
+                if (data.success) {
+                    $('#auction-cur-price').text(data.price);
+                } else {
+                    $('#auction-cur-price').text(data.err);
+                }
+            });
+
+            $.get(consoleurl + '/auctions/' + auction_id + '/bids', function (data) {
+                if (data.success) {
+                    $('#auction-num-bids').text(data.bids.length);
+                } else {
+                    $('#auction-num-bids').text(data.err);
+                }
+            });
+        });
+
+        var bank_username = $('#bank-username').val();
+        $.get(bankurl + '/account-status?username=' + bank_username, function (data) {
+            if (data.success) {
+                var template = $('#bank-status-template').html();
+                $('#bank-status').html(Mustache.to_html(template, data));
+            } else {
+                $('#bank-status').html('');
+            }
+        }).fail(function () {
+            $('#bank-status').html('');
+        });
+    }
+</script>
+</body>
+</html>

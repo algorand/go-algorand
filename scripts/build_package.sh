@@ -1,0 +1,118 @@
+#!/bin/bash
+
+# build_package.sh - Builds packages for one or more platforms and creates .tar.gz archive to be used for auto-update.
+#           Packages are assembled under $HOME/node_pkg.  This directory is deleted before starting.
+#
+# Syntax:   build_package.sh <os> <arch> <package_root_folder>
+#
+# Outputs:  'Building package for os-arch' and any errors
+#
+# ExitCode: 0 = Package built and deployment layout created under $HOME/node_pkg/<platform>
+#
+# Usage:    Generate production version of layout for deployment.
+#           Currently used by build_packages.sh for each requested platform
+#
+# Examples: scripts/build_package.sh darwin amd64 $HOME/some_folder/for-mac
+#
+# Notes:    The specified package_root_folder must exist.
+
+if [ ! "$#" -eq 3 ]; then
+    echo "Syntax: build_package.sh <os> <arch> <package_root_folder - must exist>"
+    exit 1
+fi
+
+OS=$1
+ARCH=$2
+PKG_ROOT=$3
+
+if [ ! -d "${PKG_ROOT}" ]; then
+    echo "Package Root Folder '${PKG_ROOT}' must exist"
+    exit 1
+fi
+
+export GOPATH=$(go env GOPATH)
+REPO_DIR=${GOPATH}/src/github.com/algorand/go-algorand
+cd ${REPO_DIR}
+
+echo "Building package for '${OS} - ${ARCH}'"
+
+env GOOS=${OS} GOARCH=${ARCH} scripts/build_prod.sh
+
+if [ $? -ne 0 ]; then
+    echo 'Error building! Aborting...'
+    exit 1
+fi
+
+if [ "${DEFAULTNETWORK}" = "" ]; then
+    DEFAULTNETWORK=$(./scripts/compute_branch_network.sh)
+fi
+DEFAULT_RELEASE_NETWORK=$(./scripts/compute_branch_release_network.sh "${DEFAULTNETWORK}")
+
+mkdir ${PKG_ROOT}/bin
+
+# If you modify this list, also update this list in ./cmd/updater/update.sh backup_binaries()
+bin_files=("algod" "algoh" "algokey" "carpenter" "catchupsrv" "diagcfg" "find-nodes.sh" "goal" "kmd" "msgpacktool" "node_exporter" "update.sh" "updatekey.json" "updater" "COPYING")
+for bin in "${bin_files[@]}"; do
+    cp ${GOPATH}/bin/${bin} ${PKG_ROOT}/bin
+    if [ $? -ne 0 ]; then exit 1; fi
+done
+
+# Copy systemd setup script and templates
+cp "cmd/updater/systemd-setup.sh" ${PKG_ROOT}/bin
+if [ $? -ne 0 ]; then exit 1; fi
+
+cp "installer/algorand@.service.template" ${PKG_ROOT}/bin
+if [ $? -ne 0 ]; then exit 1; fi
+
+cp "installer/sudoers.template" ${PKG_ROOT}/bin
+if [ $? -ne 0 ]; then exit 1; fi
+
+data_files=("config.json.example")
+mkdir ${PKG_ROOT}/data
+for data in "${data_files[@]}"; do
+    cp installer/${data} ${PKG_ROOT}/data
+    if [ $? -ne 0 ]; then exit 1; fi
+done
+
+mkdir ${PKG_ROOT}/genesis
+
+if [ ! -z "${RELEASE_GENESIS_PROCESS}" ]; then
+    genesis_dirs=("devnet" "testnet" "mainnet")
+    for dir in "${genesis_dirs[@]}"; do
+        mkdir -p ${PKG_ROOT}/genesis/${dir}
+        cp ${REPO_DIR}/installer/genesis/${dir}/genesis.json ${PKG_ROOT}/genesis/${dir}/
+        #${GOPATH}/bin/buildtools genesis ensure -n ${dir} --source ${REPO_DIR}/gen/${dir}/genesis.json --target ${PKG_ROOT}/genesis/${dir}/genesis.json --releasedir ${REPO_DIR}/installer/genesis
+        if [ $? -ne 0 ]; then exit 1; fi
+    done
+    # Copy the appropriate network genesis.json for our default (in root ./genesis folder)
+    cp ${PKG_ROOT}/genesis/${DEFAULT_RELEASE_NETWORK}/genesis.json ${PKG_ROOT}/genesis
+    if [ $? -ne 0 ]; then exit 1; fi
+elif [[ "${CHANNEL}" == "dev" || "${CHANNEL}" == "stable" || "${CHANNEL}" == "nightly" ]]; then
+    cp ${REPO_DIR}/installer/genesis/${DEFAULTNETWORK}/genesis.json ${PKG_ROOT}/genesis/
+    #${GOPATH}/bin/buildtools genesis ensure -n ${DEFAULTNETWORK} --source ${REPO_DIR}/gen/${DEFAULTNETWORK}/genesis.json --target ${PKG_ROOT}/genesis/genesis.json --releasedir ${REPO_DIR}/installer/genesis
+    if [ $? -ne 0 ]; then exit 1; fi
+else
+    cp installer/genesis/${DEFAULTNETWORK}/genesis.json ${PKG_ROOT}/genesis
+    if [ $? -ne 0 ]; then exit 1; fi
+    #if [ -z "${TIMESTAMP}" ]; then
+    #  TIMESTAMP=$(date +%s)
+    #fi
+    #${GOPATH}/bin/buildtools genesis timestamp -f ${PKG_ROOT}/genesis/genesis.json -t ${TIMESTAMP}
+fi
+
+TOOLS_ROOT=${PKG_ROOT}/tools
+
+echo "Staging tools package files"
+
+bin_files=("algons" "auctionconsole" "auctionmaster" "auctionminion" "coroner" "dispenser" "netgoal" "nodecfg" "pingpong" "cc_service" "cc_agent" "cc_client" "COPYING")
+mkdir -p ${TOOLS_ROOT}
+for bin in "${bin_files[@]}"; do
+    cp ${GOPATH}/bin/${bin} ${TOOLS_ROOT}
+    if [ $? -ne 0 ]; then exit 1; fi
+done
+
+cp "scripts/sysctl.sh" ${TOOLS_ROOT}
+if [ $? -ne 0 ]; then exit 1; fi
+
+cp "scripts/sysctl-all.sh" ${TOOLS_ROOT}
+if [ $? -ne 0 ]; then exit 1; fi

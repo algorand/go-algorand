@@ -1,0 +1,53 @@
+#!/usr/bin/expect -f
+
+set err 0
+log_user 1
+
+if { [catch {
+
+    source  goalExpectCommon.exp
+
+    set TEST_ALGO_DIR [lindex $argv 0]
+    set TEST_DATA_DIR [lindex $argv 1]
+
+    puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
+    puts "TEST_DATA_DIR: $TEST_DATA_DIR"
+
+    set TIME_STAMP [clock seconds]
+
+    set TEST_ROOT_DIR $TEST_ALGO_DIR/root
+    set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/Primary/
+    set NETWORK_NAME test_net_expect_$TIME_STAMP
+    set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/ThreeNodesEvenDist.json"
+
+    exec cp $TEST_DATA_DIR/../../gen/devnet/genesis.json $TEST_ALGO_DIR
+
+    # Create network
+    ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    # Set Wallet Name and verify it
+    set WALLET_NAME unencrypted-default-wallet
+    set WALLET_PASSWORD ""
+    # ::AlgorandGoal::VerifyWallet $WALLET_NAME $TEST_PRIMARY_NODE_DIR
+
+    # Associate a new account with the wallet
+    set ADDRESS_1 [::AlgorandGoal::CreateAccountForWallet $WALLET_NAME $WALLET_PASSWORD $TEST_PRIMARY_NODE_DIR]
+    set ADDRESS_2 [::AlgorandGoal::CreateAccountForWallet $WALLET_NAME $WALLET_PASSWORD $TEST_PRIMARY_NODE_DIR]
+
+    # Make a multisig account in the wallet
+    set MULTISIG_ADDRESS [::AlgorandGoal::CreateOneOfTwoMultisigForWallet $ADDRESS_1 $ADDRESS_2 $WALLET_NAME $WALLET_PASSWORD $TEST_PRIMARY_NODE_DIR]
+
+    # Check that we can get info for this new account
+    ::AlgorandGoal::VerifyMultisigInfoForOneOfTwoMultisig $MULTISIG_ADDRESS $ADDRESS_1 $ADDRESS_2 $WALLET_NAME $TEST_PRIMARY_NODE_DIR
+
+    # Delete the multisig account
+    ::AlgorandGoal::DeleteMultisigAccount $MULTISIG_ADDRESS $TEST_PRIMARY_NODE_DIR
+
+    # Clean up
+    ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    exit 0
+
+} EXCEPTION ] } {
+   ::AlgorandGoal::Abort "ERROR in multisigCreationDeletionTest: $EXCEPTION"
+}

@@ -1,0 +1,48 @@
+{
+  "FuzzerName": "reflectMessages",
+  "NodesCount": 5,
+  "Filters": [
+    {
+      "Name": "MessageReflectionFilter",
+      "UpStreamReflection": {
+        "0": {
+          "VV": 4
+        },
+        "1": {
+          "VV": 4
+        },
+        "2": {
+          "VV": 10
+        },
+        "3": {
+          "VV": 40
+        },
+        "4": {
+          "VV": 4
+        }
+      },
+      "DownStreamReflection": {
+        "0": {
+          "PP": 12
+        },
+        "1": {
+          "PP": 2
+        },
+        "2": {
+          "PP": 9
+        },
+        "3": {
+          "PP": 6
+        },
+        "4": {
+          "PP": 5
+        }
+      }
+    }
+  ],
+  "Validator": {
+    "NetworkRunTicks" : 50,
+    "NetworkRecoverTicks": 50
+  },
+  "LogLevel": 4
+}

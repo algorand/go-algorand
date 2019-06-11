@@ -1,0 +1,13 @@
+## For Ubuntu
+@@USER@@ ALL=(ALL) NOPASSWD: /bin/systemctl start *
+@@USER@@ ALL=(ALL) NOPASSWD: /bin/systemctl stop *
+@@USER@@ ALL=(ALL) NOPASSWD: /bin/systemctl restart *
+@@USER@@ ALL=(ALL) NOPASSWD: /bin/systemctl status *
+@@USER@@ ALL=(ALL) NOPASSWD: /bin/systemctl enable *
+
+## For CentOS / RHEL
+@@USER@@ ALL=(ALL) NOPASSWD: /usr/bin/systemctl start *
+@@USER@@ ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop *
+@@USER@@ ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart *
+@@USER@@ ALL=(ALL) NOPASSWD: /usr/bin/systemctl status *
+@@USER@@ ALL=(ALL) NOPASSWD: /usr/bin/systemctl enable *

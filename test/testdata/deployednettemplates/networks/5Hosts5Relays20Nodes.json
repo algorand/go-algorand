@@ -1,0 +1,192 @@
+{
+	"Hosts": [
+		{
+			"Name": "R1",
+			"Nodes": [
+				{
+					"Name": "relay1",
+					"IsRelay": true,
+					"NetAddress": "{{NetworkPort}}",
+					"APIEndpoint": "{{APIEndpoint2}}",
+					"APIToken": "{{APIToken}}",
+					"EnableBlockStats": true,
+					"DashboardEndpoint": "{{DashboardEndpoint}}",
+					"EnableTelemetry": true,
+					"TelemetryURI": "{{TelemetryURI}}",
+					"EnableMetrics": true,
+					"MetricsURI": "{{MetricsURI}}",
+					"DeadlockOverride": -1,
+					"Wallets": []
+				},
+				{
+					"Name": "node1-1",
+					"DeadlockOverride": -1,
+					"Wallets": [{ "Name": "Wallet1" }]
+				},
+				{
+					"Name": "node1-2",
+					"DeadlockOverride": -1,
+					"Wallets": [{ "Name": "Wallet2" }]
+				},
+				{
+					"Name": "node1-3",
+					"DeadlockOverride": -1,
+					"Wallets": [{ "Name": "Wallet3" }]
+				},
+				{
+					"Name": "node1-4",
+					"DeadlockOverride": -1,
+					"Wallets": [{ "Name": "Wallet4" }]
+				}
+			]
+		},
+		{
+			"Name": "R2",
+			"Nodes": [
+				{
+					"Name": "relay2",
+					"IsRelay": true,
+					"NetAddress": "{{NetworkPort}}",
+					"APIEndpoint": "{{APIEndpoint2}}",
+					"APIToken": "{{APIToken}}",
+					"EnableBlockStats": true,
+					"DashboardEndpoint": "{{DashboardEndpoint}}",
+					"EnableTelemetry": true,
+					"TelemetryURI": "{{TelemetryURI}}",
+					"EnableMetrics": true,
+					"MetricsURI": "{{MetricsURI}}",
+					"DeadlockOverride": -1,
+					"Wallets": []
+				},
+				{
+					"Name": "node2-1",
+					"DeadlockOverride": -1,
+					"Wallets": [{ "Name": "Wallet5" }]
+				},
+				{
+					"Name": "node2-2",
+					"DeadlockOverride": -1,
+					"Wallets": [{ "Name": "Wallet6" }]
+				},
+				{
+					"Name": "node2-3",
+					"DeadlockOverride": -1,
+					"Wallets": [{ "Name": "Wallet7" }]
+				},
+				{
+					"Name": "node2-4",
+					"DeadlockOverride": -1,
+					"Wallets": [{ "Name": "Wallet8" }]
+				}
+			]
+		},
+		{
+			"Name": "R3",
+			"Nodes": [
+				{
+					"Name": "relay3",
+					"IsRelay": true,
+					"NetAddress": "{{NetworkPort}}",
+					"EnableTelemetry": true,
+					"TelemetryURI": "{{TelemetryURI}}",
+					"EnableMetrics": true,
+					"MetricsURI": "{{MetricsURI}}",
+					"DeadlockOverride": -1,
+					"Wallets": []
+				},
+				{
+					"Name": "node3-1",
+					"DeadlockOverride": -1,
+					"Wallets": [{ "Name": "Wallet9" }]
+				},
+				{
+					"Name": "node3-2",
+					"DeadlockOverride": -1,
+					"Wallets": [{ "Name": "Wallet10" }]
+				},
+				{
+					"Name": "node3-3",
+					"DeadlockOverride": -1,
+					"Wallets": [{ "Name": "Wallet11" }]
+				},
+				{
+					"Name": "node3-4",
+					"DeadlockOverride": -1,
+					"Wallets": [{ "Name": "Wallet12" }]
+				}
+			]
+		},
+		{
+			"Name": "R4",
+			"Nodes": [
+				{
+					"Name": "relay4",
+					"IsRelay": true,
+					"NetAddress": "{{NetworkPort}}",
+					"EnableTelemetry": true,
+					"TelemetryURI": "{{TelemetryURI}}",
+					"EnableMetrics": true,
+					"MetricsURI": "{{MetricsURI}}",
+					"DeadlockOverride": -1,
+					"Wallets": []
+				},
+				{
+					"Name": "node4-1",
+					"DeadlockOverride": -1,
+					"Wallets": [{ "Name": "Wallet13" }]
+				},
+				{
+					"Name": "node4-2",
+					"DeadlockOverride": -1,
+					"Wallets": [{ "Name": "Wallet14" }]
+				},
+				{
+					"Name": "node4-3",
+					"DeadlockOverride": -1,
+					"Wallets": [{ "Name": "Wallet15" }]
+				},
+				{
+					"Name": "node4-4",
+					"DeadlockOverride": -1,
+					"Wallets": [{ "Name": "Wallet16" }]
+				}
+			]
+		},
+		{
+			"Name": "R5",
+			"Nodes": [
+				{
+					"Name": "relay5",
+					"IsRelay": true,
+					"NetAddress": "{{NetworkPort}}",
+					"EnableTelemetry": true,
+					"TelemetryURI": "{{TelemetryURI}}",
+					"EnableMetrics": true,
+					"MetricsURI": "{{MetricsURI}}",
+					"DeadlockOverride": -1,
+					"Wallets": []
+				},
+				{
+					"Name": "node5-1",
+					"DeadlockOverride": -1,
+					"Wallets": [{ "Name": "Wallet17" }]
+				},
+				{
+					"Name": "node5-2",
+					"DeadlockOverride": -1,
+					"Wallets": [{ "Name": "Wallet18" }]
+				},
+				{
+					"Name": "node5-3",
+					"DeadlockOverride": -1,
+					"Wallets": [{ "Name": "Wallet19" }]
+				},
+				{
+					"Name": "node5-4",
+					"DeadlockOverride": -1,
+					"Wallets": [{ "Name": "Wallet20" }]
+				}
+			]
+		}
+	]
+}

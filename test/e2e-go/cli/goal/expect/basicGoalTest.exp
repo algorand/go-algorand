@@ -1,0 +1,104 @@
+#!/usr/bin/expect -f
+set err 0
+log_user 1
+
+if { [catch {
+    source  goalExpectCommon.exp
+    set TEST_ALGO_DIR [lindex $argv 0]
+    set TEST_DATA_DIR [lindex $argv 1]
+
+    puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
+    puts "TEST_DATA_DIR: $TEST_DATA_DIR"
+
+    set TIME_STAMP [clock seconds]
+
+    set TEST_ROOT_DIR $TEST_ALGO_DIR/root
+    set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/Primary/
+    set NETWORK_NAME test_net_expect_$TIME_STAMP
+    set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/TwoNodes50Each.json"
+
+    # Create network
+    ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    set PRIMARY_NODE_ADDRESS [ ::AlgorandGoal::GetAlgodNetworkAddress $TEST_PRIMARY_NODE_DIR ]
+    puts "Primary Node Address: $PRIMARY_NODE_ADDRESS"
+
+    set PRIMARY_WALLET_NAME unencrypted-default-wallet
+
+    # Determine primary account
+    set PRIMARY_ACCOUNT_ADDRESS [::AlgorandGoal::GetHighestFundedAccountForWallet $PRIMARY_WALLET_NAME  $TEST_PRIMARY_NODE_DIR]
+
+    # Check the balance of the primary account
+    set PRIMARY_ACCOUNT_BALANCE [::AlgorandGoal::GetAccountBalance $PRIMARY_WALLET_NAME $PRIMARY_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR]
+    puts "Primary Account Balance: $PRIMARY_ACCOUNT_BALANCE"
+
+    # Check the rewards of the primary account
+    set PRIMARY_ACCOUNT_EARNINGS [::AlgorandGoal::GetAccountRewards $PRIMARY_WALLET_NAME $PRIMARY_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR]
+    puts "Primary Account Rewards: $PRIMARY_ACCOUNT_EARNINGS"
+
+    # Create wallet #1
+    set WALLET_1_NAME Wallet_1_$TIME_STAMP
+    set WALLET_1_PASSWORD 1234
+    set WALLET_1_PASSPHRASE [::AlgorandGoal::CreateWallet $WALLET_1_NAME $WALLET_1_PASSWORD $TEST_PRIMARY_NODE_DIR]
+    puts "WALLET_1_PASSPHRASE: $WALLET_1_PASSPHRASE"
+    ::AlgorandGoal::VerifyWallet $WALLET_1_NAME  $TEST_PRIMARY_NODE_DIR
+
+    # Associate a new account with the wallet
+    set ACCOUNT_1_ADDRESS [::AlgorandGoal::CreateAccountForWallet $WALLET_1_NAME $WALLET_1_PASSWORD $TEST_PRIMARY_NODE_DIR]
+    ::AlgorandGoal::VerifyAccount $WALLET_1_NAME $WALLET_1_PASSWORD $ACCOUNT_1_ADDRESS $TEST_PRIMARY_NODE_DIR
+
+    # Create wallet #2
+    set WALLET_2_NAME Wallet_2_$TIME_STAMP
+    set WALLET_2_PASSWORD 12345678
+    set WALLET_2_PASSPHRASE [::AlgorandGoal::CreateWallet $WALLET_2_NAME $WALLET_2_PASSWORD $TEST_PRIMARY_NODE_DIR]
+    puts "WALLET_2_PASSPHRASE: $WALLET_2_PASSPHRASE"
+    ::AlgorandGoal::VerifyWallet $WALLET_2_NAME  $TEST_PRIMARY_NODE_DIR
+
+    # Associate a new account with the wallet
+    set ACCOUNT_2_ADDRESS [::AlgorandGoal::CreateAccountForWallet $WALLET_2_NAME $WALLET_2_PASSWORD $TEST_PRIMARY_NODE_DIR]
+    ::AlgorandGoal::VerifyAccount $WALLET_2_NAME $WALLET_2_PASSWORD $ACCOUNT_2_ADDRESS $TEST_PRIMARY_NODE_DIR
+
+    # Transfer Algos from primary account to account 1
+    set MIN_BALANCE 100000
+    set TRANSFER_AMOUNT  [expr {3 * $MIN_BALANCE}]
+    set FEE_AMOUNT 1000
+    set TRANSACTION_ID [::AlgorandGoal::AccountTransfer $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS $TRANSFER_AMOUNT $ACCOUNT_1_ADDRESS $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR]
+
+    # Print the transaction id
+    puts "TRANSACTION_ID 1: $TRANSACTION_ID"
+
+    # Check to make sure that the transfer is reflected in the to account
+    ::AlgorandGoal::WaitForAccountBalance $WALLET_1_NAME $ACCOUNT_1_ADDRESS $TRANSFER_AMOUNT $TEST_PRIMARY_NODE_DIR
+
+    # Transfer Algos from account 1 to account 2
+    set TRANSFER_AMOUNT_2 $MIN_BALANCE
+    set TRANSACTION_ID [::AlgorandGoal::AccountTransfer $WALLET_1_NAME $WALLET_1_PASSWORD $ACCOUNT_1_ADDRESS $TRANSFER_AMOUNT_2 $ACCOUNT_2_ADDRESS $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR]
+
+    # Print the transaction id
+    puts "TRANSACTION_ID 2: $TRANSACTION_ID"
+
+    # Check to make sure that the transfer is reflected in the to account
+    ::AlgorandGoal::WaitForAccountBalance $WALLET_2_NAME $ACCOUNT_2_ADDRESS $TRANSFER_AMOUNT_2 $TEST_PRIMARY_NODE_DIR
+
+    # Check the balance of the primary account
+    set NEW_ACCOUNT_1_BALANCE [::AlgorandGoal::GetAccountBalance $WALLET_1_NAME $ACCOUNT_1_ADDRESS $TEST_PRIMARY_NODE_DIR]
+    puts "New Account 1 Balance: NEW_WALLET_1_BALANCE"
+
+    # Check that the from account balance is updated to reflect the transfer and transaction fee
+    set EXPECTED_ACCOUNT_1_AMOUNT  [ expr { $TRANSFER_AMOUNT - $TRANSFER_AMOUNT_2 - $FEE_AMOUNT  } ]
+    puts "Expected amount: $EXPECTED_ACCOUNT_1_AMOUNT"
+    #if { $NEW_ACCOUNT_1_BALANCE != $EXPECTED_ACCOUNT_1_AMOUNT } then { ::AlgorandGoal::Abort "Account 1 is not correct, expected $EXPECTED_ACCOUNT_1_AMOUNT, but received $NEW_ACCOUNT_1_BALANCE " }
+
+    # Delete an account
+    ::AlgorandGoal::DeleteAccount $WALLET_1_NAME $ACCOUNT_1_ADDRESS
+
+    # Shutdown the network
+    ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    puts "Basic Goal Test Successful"
+
+    exit 0
+
+} EXCEPTION ] } {
+   ::AlgorandGoal::Abort "ERROR in basicGoalTest: $EXCEPTION"
+}

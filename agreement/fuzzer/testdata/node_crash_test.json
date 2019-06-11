@@ -1,0 +1,91 @@
+{
+  "FuzzerName": "nodeCrashTest",
+  "NodesCount": 5,
+  "Filters": [
+    {
+      "Name": "SchedulerFilter",
+      "Filters": [
+        {
+          "Name": "NullFilter"
+        }
+      ],
+      "Schedule": [
+        {
+          "FirstTick": 10,
+          "SecondTick": 0,
+          "Operation": 1,
+          "Nodes": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        }
+      ],
+      "ScheduleName": "precrash",
+      "DebugMessages": false
+    },
+    {
+      "Name": "SchedulerFilter",
+      "Filters": [
+        {
+          "Name": "NodeCrashFilter",
+          "Nodes": [
+            0
+          ],
+          "Count": 1
+        }
+      ],
+      "Schedule": [
+        {
+          "FirstTick": 11,
+          "SecondTick":20,
+          "Operation": 2,
+          "Nodes": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        }
+      ],
+      "ScheduleName": "crash-node-0",
+      "DebugMessages": false
+    },
+    {
+      "Name": "SchedulerFilter",
+      "Filters": [
+        {
+          "Name": "NodeCrashFilter",
+          "Nodes": [
+            1
+          ],
+          "Count": 1
+        }
+      ],
+      "Schedule": [
+        {
+          "FirstTick": 21,
+          "SecondTick":30,
+          "Operation": 2,
+          "Nodes": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        }
+      ],
+      "ScheduleName": "crash-node-1",
+      "DebugMessages": false
+    }
+  ],
+  "Validator": {
+    "NetworkRunTicks" : 40,
+    "NetworkRecoverTicks": 50
+  },
+  "LogLevel": 4
+}

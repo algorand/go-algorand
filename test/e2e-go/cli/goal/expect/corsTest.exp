@@ -1,0 +1,45 @@
+#!/usr/bin/expect -f
+set err 0
+log_user 1
+
+if { [catch {
+    source  goalExpectCommon.exp
+    set TEST_ALGO_DIR [lindex $argv 0]
+    set TEST_DATA_DIR [lindex $argv 1]
+
+    puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
+    puts "TEST_DATA_DIR: $TEST_DATA_DIR"
+
+    set TIME_STAMP [clock seconds]
+
+    set TEST_ROOT_DIR $TEST_ALGO_DIR/root
+    set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/Primary/
+    set NETWORK_NAME test_net_expect_$TIME_STAMP
+    set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/TwoNodes50Each.json"
+
+    # Create network
+    ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    # Set Primary Wallet Name
+    set PRIMARY_WALLET_NAME unencrypted-default-wallet
+    set PRIMARY_WALLET_PASSWORD ""
+
+    # Hit algod with an OPTIONS preflight and look for 200 OK
+    set ALGOD_NET_ADDRESS [::AlgorandGoal::GetAlgodNetworkAddress $TEST_PRIMARY_NODE_DIR]
+    ::AlgorandGoal::CheckNetworkAddressForCors $ALGOD_NET_ADDRESS
+
+    # Start kmd, then do the same CORS check as algod
+    exec goal kmd start -t 180 -d $TEST_PRIMARY_NODE_DIR
+    set KMD_NET_ADDRESS [::AlgorandGoal::GetKMDNetworkAddress $TEST_PRIMARY_NODE_DIR]
+    ::AlgorandGoal::CheckNetworkAddressForCors $KMD_NET_ADDRESS
+    exec goal kmd stop -d $TEST_PRIMARY_NODE_DIR
+
+    ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    puts "Basic Cors Test Successful"
+
+    exit 0
+
+} EXCEPTION ] } {
+   ::AlgorandGoal::Abort "ERROR in corsTest: $EXCEPTION"
+}

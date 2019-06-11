@@ -1,0 +1,63 @@
+{
+	"Hosts": [
+		{
+			"Name": "R1",
+			"Nodes": [
+				{
+					"Name": "relay1",
+					"IsRelay": true,
+					"NetAddress": "{{NetworkPort}}",
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableBlockStats": true,
+					"DashboardEndpoint": "{{DashboardEndpoint}}",
+					"EnableTelemetry": true,
+					"TelemetryURI": "{{TelemetryURI}}",
+					"EnableMetrics": true,
+					"MetricsURI": "{{MetricsURI}}",
+					"DeadlockOverride": -1,
+					"Wallets": []
+				}
+			]
+		},
+		{
+			"Name": "N1",
+			"Nodes": [
+				{
+					"Name": "node1",
+					"IsRelay": false,
+					"Wallets": [
+						{
+							"Name": "Wallet1",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": true,
+					"TelemetryURI": "{{TelemetryURI}}",
+					"EnableMetrics": true,
+					"DeadlockOverride": -1,
+					"MetricsURI": "{{MetricsURI}}"
+				},
+				{
+					"Name": "node2",
+					"IsRelay": false,
+					"Wallets": [
+						{
+							"Name": "Wallet2",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint2}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": true,
+					"TelemetryURI": "{{TelemetryURI}}",
+					"EnableMetrics": true,
+					"DeadlockOverride": -1,
+					"MetricsURI": "{{MetricsURI}}"
+				}
+			]
+		}
+	]
+}

@@ -1,0 +1,175 @@
+#!/usr/bin/expect -f
+set err 0
+log_user 1
+
+if { [catch {
+
+    source  goalExpectCommon.exp
+    set TEST_ALGO_DIR [lindex $argv 0]
+    set TEST_DATA_DIR [lindex $argv 1]
+    set MIN_BALANCE 100000
+    set MIN_TXN_FEE 1000
+
+    puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
+    puts "TEST_DATA_DIR: $TEST_DATA_DIR"
+
+    set TIME_STAMP [clock seconds]
+
+    set TEST_ROOT_DIR $TEST_ALGO_DIR/root
+    set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/Primary/
+    set NETWORK_NAME test_net_expect_$TIME_STAMP
+    set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/TwoNodes50Each.json"
+
+    exec cp $TEST_DATA_DIR/../../gen/devnet/genesis.json $TEST_ALGO_DIR
+
+    # Create network
+    ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    # Set Primary Wallet Name
+    set PRIMARY_WALLET_NAME unencrypted-default-wallet
+    set PRIMARY_WALLET_PASSWORD ""
+
+    # Determine primary account
+    set PRIMARY_ACCOUNT_ADDRESS [::AlgorandGoal::GetHighestFundedAccountForWallet $PRIMARY_WALLET_NAME  $TEST_PRIMARY_NODE_DIR]
+
+    # Check the balance of the primary account
+    set PRIMARY_ACCOUNT_BALANCE [::AlgorandGoal::GetAccountBalance $PRIMARY_WALLET_NAME $PRIMARY_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR]
+    puts "Primary Account Balance: $PRIMARY_ACCOUNT_BALANCE"
+
+    # Associate a new account with the primary wallet
+    set NEW_PRIMARY_ACCOUNT_ADDRESS [::AlgorandGoal::CreateAccountForWallet $PRIMARY_WALLET_NAME $PRIMARY_WALLET_PASSWORD $TEST_PRIMARY_NODE_DIR]
+    ::AlgorandGoal::VerifyAccount $PRIMARY_WALLET_NAME $PRIMARY_WALLET_PASSWORD $NEW_PRIMARY_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR
+
+    set WALLET_NAME_PREFIX "TestWallet_"
+    set WALLET_COUNT 3
+    set OUTPUT_FILE_NAME "$TEST_ALGO_DIR/walletlist.out"
+
+    set outfile [open $OUTPUT_FILE_NAME w]
+
+    puts $outfile WALLET_NAME,WALLET_PASSWORD,ACCOUNT_ADDRESS,ACCOUNT_BALANCE,WALLET_PASSPHRASE
+
+    set TIME_STAMP [clock seconds]
+
+    for { set index 1}  {$index <= $WALLET_COUNT} {incr index} {
+
+        puts "value of index: $index"
+
+        set UID1 $TIME_STAMP$index
+        set UID2 $TIME_STAMP$index
+
+        set WALLET_NAME  $WALLET_NAME_PREFIX$UID1
+        set WALLET_PASSWORD  $UID2
+        puts "WALLET_NAME $WALLET_NAME WALLET_PASSWORD $WALLET_PASSWORD"
+
+        set ACCOUNT_BALANCE  [expr {3 * $MIN_BALANCE} + {int(1 + rand() * $MIN_TXN_FEE)}]
+
+        # Create a new wallet
+        set WALLET_PASSPHRASE [::AlgorandGoal::CreateWallet $WALLET_NAME $WALLET_PASSWORD $TEST_PRIMARY_NODE_DIR]
+        puts "WALLET_PASSPHRASE: $WALLET_PASSPHRASE"
+        ::AlgorandGoal::VerifyWallet $WALLET_NAME  $TEST_PRIMARY_NODE_DIR
+
+        # Associate a new account with the wallet
+        set ACCOUNT_ADDRESS [::AlgorandGoal::CreateAccountForWallet $WALLET_NAME $WALLET_PASSWORD $TEST_PRIMARY_NODE_DIR]
+        ::AlgorandGoal::VerifyAccount $WALLET_NAME $WALLET_PASSWORD $ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR
+
+        # Transfer Algos from primary account to account
+        set FEE_AMOUNT $MIN_TXN_FEE
+        set TRANSACTION_ID [::AlgorandGoal::AccountTransfer $PRIMARY_WALLET_NAME $PRIMARY_WALLET_PASSWORD $PRIMARY_ACCOUNT_ADDRESS $ACCOUNT_BALANCE $ACCOUNT_ADDRESS $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR]
+
+        # Print the transaction id
+        puts "TRANSACTION_ID: $TRANSACTION_ID"
+
+        puts $outfile $WALLET_NAME,$WALLET_PASSWORD,$ACCOUNT_ADDRESS,$ACCOUNT_BALANCE,$WALLET_PASSPHRASE
+
+    }
+
+    close $outfile
+
+    puts "Wallet Creation Successful, output saved to file: $OUTPUT_FILE_NAME"
+
+    ::AlgorandGoal::WaitForAccountBalance $WALLET_NAME $ACCOUNT_ADDRESS $ACCOUNT_BALANCE $TEST_PRIMARY_NODE_DIR
+
+    # Test wallet recovery with passphrase
+
+    set INPUT [open $OUTPUT_FILE_NAME]
+    set LINES [split [read $INPUT] "\n"]
+    close $INPUT;
+
+    set firstLine true
+    foreach LINE $LINES {
+        if {$firstLine } { set firstLine false; continue }
+        if { [llength [string trim $LINE]] == 0 } {continue }
+
+        # do something with each line...
+        puts "Line: $LINE"
+        set PARTS [ split $LINE "," ]
+        set WALLET_NAME [lindex $PARTS 0]
+        set RECOVERED_WALLET_NAME [lindex $PARTS 0]_recovered
+        set NEW_WALLET_PASSWORD [lindex $PARTS 1]_recovered
+        set ACCOUNT_ADDRESS [lindex $PARTS 2]
+        set ACCOUNT_BALANCE [lindex $PARTS 3]
+        set WALLET_PASSPHRASE [lindex $PARTS 4]
+
+        puts "PARTS: $PARTS"
+
+        puts "WALLET_NAME: $RECOVERED_WALLET_NAME, WALLET_PASSWORD: $NEW_WALLET_PASSWORD, ACCOUNT_ADDRESS: $ACCOUNT_ADDRESS, ACCOUNT_BALANCE: $ACCOUNT_BALANCE, PASSPHRASE: $WALLET_PASSPHRASE"
+
+        set CREATED_WALLET_NAME [ ::AlgorandGoal::RecoverWallet $RECOVERED_WALLET_NAME $WALLET_PASSPHRASE $NEW_WALLET_PASSWORD $TEST_PRIMARY_NODE_DIR ]
+        puts "Created new wallet: $CREATED_WALLET_NAME"
+        if { $CREATED_WALLET_NAME != $RECOVERED_WALLET_NAME } {
+           ::AlgorandGoal::Abort "Expected recovered wallet name $RECOVERED_WALLET_NAME, but found $CREATED_WALLET_NAME"
+        }
+
+        # Check the account balance with new wallet name from recovery
+        set RECOVERED_BALANCE [::AlgorandGoal::GetAccountBalance $RECOVERED_WALLET_NAME $ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR]
+        puts "Recovered Balance: $RECOVERED_BALANCE"
+        if { $RECOVERED_BALANCE != $ACCOUNT_BALANCE } {
+           ::AlgorandGoal::Abort "Expected balance of $ACCOUNT_BALANCE, but found $RECOVERED_BALANCE"
+        }
+
+        # Check the account balance with the original wallet name which should still work
+        set RECOVERED_BALANCE [::AlgorandGoal::GetAccountBalance $WALLET_NAME $ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR]
+        puts "Old Wallet Name Balance: $RECOVERED_BALANCE"
+        if { $RECOVERED_BALANCE != $ACCOUNT_BALANCE } {
+           ::AlgorandGoal::Abort "Expected balance of $ACCOUNT_BALANCE, but found $RECOVERED_BALANCE"
+        }
+
+        # Create a new account under the recovered wallet to retrieve preexisting account
+        set RECOVERED_ACCOUNT_ADDRESS [::AlgorandGoal::CreateAccountForWallet $RECOVERED_WALLET_NAME $NEW_WALLET_PASSWORD $TEST_PRIMARY_NODE_DIR]
+        ::AlgorandGoal::VerifyAccount $WALLET_NAME $WALLET_PASSWORD $RECOVERED_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR
+
+        if { $RECOVERED_ACCOUNT_ADDRESS != $ACCOUNT_ADDRESS } {
+           ::AlgorandGoal::Abort "Expected recovered account address $ACCOUNT_ADDRESS, but found $RECOVERED_ACCOUNT_ADDRESS"
+        }
+
+        # Create a new account under the recovered wallet, this should return a new account with zero balance since
+        # only one account was created under the original wallet name.
+        set RECOVERED_ACCOUNT_ADDRESS_2 [::AlgorandGoal::CreateAccountForWallet $RECOVERED_WALLET_NAME $NEW_WALLET_PASSWORD $TEST_PRIMARY_NODE_DIR]
+        ::AlgorandGoal::VerifyAccount $RECOVERED_WALLET_NAME $NEW_WALLET_PASSWORD #RECOVERED_ACCOUNT_ADDRESS_2 $TEST_PRIMARY_NODE_DIR
+        set RECOVERED_BALANCE_2 [::AlgorandGoal::GetAccountBalance $RECOVERED_WALLET_NAME $RECOVERED_ACCOUNT_ADDRESS_2 $TEST_PRIMARY_NODE_DIR]
+        if { $RECOVERED_BALANCE_2 != 0 } {
+           ::AlgorandGoal::Abort "Expected recovered account address $RECOVERED_ACCOUNT_ADDRESS_2 with balance 0, but found $RECOVERED_BALANCE_2"
+        }
+
+        # Verify that recovered accounts are functional with the new wallet
+        # Transfer MIN_BALANCE Algos from original 1st account to the newly created 2nd account
+        set TRANSFER_2_AMOUNT $MIN_BALANCE
+        set FEE_AMOUNT $MIN_TXN_FEE
+        set TRANSACTION_ID [::AlgorandGoal::AccountTransfer $RECOVERED_WALLET_NAME $NEW_WALLET_PASSWORD $RECOVERED_ACCOUNT_ADDRESS $TRANSFER_2_AMOUNT $RECOVERED_ACCOUNT_ADDRESS_2 $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR]
+
+        # Ensure that the transfer was successful
+        set EXPECTED_NEW_ACCOUNT_1_BALANCE [expr $RECOVERED_BALANCE - $TRANSFER_2_AMOUNT - $FEE_AMOUNT ]
+        set NEW_ACCOUNT_1_BALANCE [::AlgorandGoal::WaitForAccountBalance $RECOVERED_WALLET_NAME $RECOVERED_ACCOUNT_ADDRESS $EXPECTED_NEW_ACCOUNT_1_BALANCE $TEST_PRIMARY_NODE_DIR]
+        puts "New Account 1 Balance: $NEW_ACCOUNT_1_BALANCE"
+        set NEW_ACCOUNT_2_BALANCE [::AlgorandGoal::WaitForAccountBalance $RECOVERED_WALLET_NAME $RECOVERED_ACCOUNT_ADDRESS_2 $TRANSFER_2_AMOUNT $TEST_PRIMARY_NODE_DIR]
+        puts "New Account 2 Balance: $NEW_ACCOUNT_2_BALANCE"
+    }
+
+    # Shutdown the network
+    ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    exit 0
+
+} EXCEPTION ] } {
+   ::AlgorandGoal::Abort "ERROR in createWalletTest: $EXCEPTION"
+}

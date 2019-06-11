@@ -1,0 +1,159 @@
+#!/usr/bin/env python3
+# -*- python -*-
+#
+# Read algod json logs and format them pretty.
+# Can filter on some of the fields.
+#
+# requires termcolor:
+# pip install termcolor
+
+import datetime
+import json
+import re
+import sys
+import time
+
+from termcolor import colored
+
+level_short = {
+    'debug': colored('D', 'grey'),
+    'info': 'I',
+    'warn': colored('W', 'yellow'),
+    'warning': colored('W', 'yellow'),
+    'error': colored('E', 'red'),
+}
+
+level_num = {
+    'debug':0,
+    'info':1,
+    'warn':2,
+    'warning':2,
+    'error':3,
+}
+
+def levelToNum(x):
+    l = level_num.get(x)
+    if l is None:
+        try:
+            return int(l)
+        except:
+            return -1
+    return l
+
+def dictfilter(d):
+    out = dict()
+    for k,v in d.items():
+        if not k or not v:
+            continue
+        out[k] = v
+    return out
+
+class LogFile:
+    def __init__(self):
+        self.fileRe = None
+        self.messageRe = None
+        self.levelMin = 0
+        self.levelAlways = 2
+        self.functionPrefixRemovals = ['github.com/algorand/go-algorand/']
+
+    def recordGenerator(self, fin):
+        for line in fin:
+            if not line:
+                continue
+            line = line.strip()
+            if not line:
+                continue
+            if line[0] == '#':
+                continue
+            try:
+                ob = json.loads(line)
+                yield ob
+            except:
+                sys.stderr.write(line + '\n')
+    def format(self, rec):
+        # e.g.
+        # {"file":"wsNetwork.go","function":"github.com/algorand/go-algorand/network.(*WebsocketNetwork).readFromBootstrap","level":"debug","line":682,"msg":"no dns lookup due to empty bootstrapID","name":"127.0.0.1:0","time":"2019-02-01T13:03:35-05:00"}
+        level = rec.pop('level', None)
+        fname = rec.pop('file', None)
+        fline = rec.pop('line', None)
+        function = rec.pop('function', '')
+        msg = rec.pop('msg', None)
+        when = rec.pop('time', None)
+        go = False
+        lnum = levelToNum(level)
+        if lnum < self.levelMin:
+            print('level {} -> {}'.format(level, lnum))
+            return None
+        if lnum > self.levelAlways:
+            go = True
+        if not go and not self.fileRe and not self.messageRe:
+            go = True
+        if not go and self.fileRe and self.fileRe.search(fname):
+            go = True
+        if not go and self.messageRe and self.messageRe.search(msg):
+            go = True
+        if not go:
+            return None
+
+        if when:
+            when = datetime.datetime.strptime(when, '%Y-%m-%dT%H:%M:%S%z')
+            now = time.time()
+            dt = when.timestamp() - now
+            # TODO: format sub-second if available
+            if dt < 3600:
+                ds = time.strftime('%H:%M:%S', time.gmtime(when.timestamp()))
+            elif dt < 3600 * 24:
+                ds = time.strftime('%H:%M:%S', time.gmtime(when.timestamp()))
+            elif dt < 3600 * 24 * 7:
+                ds = time.strftime('%d %H:%M:%S', time.gmtime(when.timestamp()))
+            else:
+                ds = time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(when.timestamp()))
+            ds = colored(ds, 'red')
+        else:
+            ds = ' '
+        if fname or fline:
+            fs = colored('{}:{} '.format(fname, fline), 'blue')
+        else:
+            fs = ' '
+        ls = level_short.get(level, level)
+        if function:
+            function = ' ' + colored(self.functionCleanup(function), 'green')
+        rest = ''
+        rec = dictfilter(rec)
+        if rec:
+            rest = ' ' + repr(rec)
+        return (ds + ls + fs + msg + function + rest)
+    def read(self, fin):
+        for rec in self.recordGenerator(fin):
+            formatted = self.format(rec)
+            if formatted is not None:
+                print(formatted)
+    def functionCleanup(self, f):
+        for prefix in self.functionPrefixRemovals:
+            f = f.replace(prefix, '')
+        return f
+
+
+def main():
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument('-f', '--file', help='regex applied to file name')
+    ap.add_argument('-g', '--msg', help='regex applied to message')
+    ap.add_argument('-m', '--min', help='minimum log level to display')
+    ap.add_argument('-L', '--always', help='log level to ALWAYS display, even if it misses other regexes')
+    # TODO: --follow for `tail -f` behavior
+    # TODO: time based filtering, e.g. newer than 5 minutes ago
+    args = ap.parse_args()
+    lf = LogFile()
+    if args.file:
+        lf.fileRe = re.compile(args.file, re.IGNORECASE)
+    if args.msg:
+        lf.messageRe = re.compile(args.msg, re.IGNORECASE)
+    if args.min:
+        lf.levelMin = levelToNum(args.min)
+    if args.always:
+        lf.levelAlways = levelToNum(args.always)
+    lf.read(sys.stdin)
+
+if __name__ == '__main__':
+    main()

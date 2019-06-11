@@ -1,0 +1,14 @@
+{
+  "FuzzerName": "trivialTraffic",
+  "NodesCount": 5,
+  "Filters": [
+    {
+      "Name": "TrafficStatisticsFilter"
+    }
+  ],
+  "LogLevel": 4,
+  "Validator": {
+    "NetworkRunTicks" : 250,
+    "NetworkRecoverTicks": 0
+  }
+}

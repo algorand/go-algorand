@@ -1,0 +1,62 @@
+{
+    "Genesis": {
+        "NetworkName": "tbd",
+        "Wallets": [
+            {
+                "Name": "Wallet1",
+                "Stake": 25,
+                "Online": true
+            },
+            {
+                "Name": "Wallet2",
+                "Stake": 25,
+                "Online": true
+            },
+            {
+                "Name": "Wallet3",
+                "Stake": 25,
+                "Online": true
+            },
+            {
+                "Name": "Wallet4",
+                "Stake": 25,
+                "Online": true
+            }
+        ]
+    },
+    "Nodes": [
+        {
+            "Name": "Primary",
+            "IsRelay": true,
+            "DeadlockDetection": -1,
+            "Wallets": [
+                { "Name": "Wallet1",
+                  "ParticipationOnly": false }
+            ]
+        },
+        {
+            "Name": "Node2",
+            "DeadlockDetection": -1,
+            "Wallets": [
+                { "Name": "Wallet2",
+                  "ParticipationOnly": false }
+            ]
+        },
+        {
+            "Name": "Node3",
+            "DeadlockDetection": -1,
+            "Wallets": [
+                { "Name": "Wallet3",
+                  "ParticipationOnly": false }
+            ]
+        },
+        {
+            "Name": "Node4",
+            "DeadlockDetection": -1,
+            "Wallets": [
+                { "Name": "Wallet4",
+                  "ParticipationOnly": false }
+            ]
+        }
+    ]
+}

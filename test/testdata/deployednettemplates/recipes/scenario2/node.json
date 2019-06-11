@@ -1,0 +1,9 @@
+{
+    "APIToken": "{{APIToken}}",
+    "EnableBlockStats": false,
+    "EnableTelemetry": false,
+    "TelemetryURI": "{{TelemetryURI}}",
+    "EnableMetrics": false,
+    "MetricsURI": "{{MetricsURI}}",
+    "ConfigJSONOverride": " \"DNSBootstrapID\": \"<network>.algodev.network\", {\"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 5}"
+}

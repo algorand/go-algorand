@@ -1,0 +1,16 @@
+[Unit]
+Description=Algorand dispenser
+After=network.target
+
+[Service]
+ExecStart=/home/algo/dispenser/dispenser -config /home/algo/dispenser/config.json -autocert /home/algo/dispenser/autocert-cache
+Type=simple
+User=algo
+Group=algo
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+Restart=always
+RestartSec=5s
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

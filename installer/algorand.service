@@ -1,0 +1,16 @@
+[Unit]
+Description=Algorand daemon
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/algod -d /var/lib/algorand
+PIDFile=/var/lib/algorand/algod.pid
+User=algorand
+Group=nogroup
+Restart=always
+RestartSec=5s
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,18 @@
+{
+  "NetworkName": "tbd",
+  "NetworkPort": ":4162",
+  "NetworkPort2": ":4262",
+  "NetworkPort3": ":4362",
+  "NetworkPort4": ":4462",
+  "APIEndpoint": "localhost:8180",
+  "APIEndpoint2": "localhost:8181",
+  "APIEndpoint3": "localhost:8182",
+  "APIEndpoint4": "localhost:8183",
+  "APIToken": "",
+  "EnableTelemetry": true,
+  "TelemetryURI": "",
+  "MetricsURI": "",
+  "RunAsService": true,
+  "CrontabSchedule": "15 * *",
+  "EnableAlgoh": true
+}

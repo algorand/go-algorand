@@ -1,0 +1,192 @@
+{
+  "FuzzerName": "networkCrashTest",
+  "NodesCount": 5,
+  "Filters": [
+    {
+      "Name": "SchedulerFilter",
+      "Filters": [
+        {
+          "Name": "NullFilter"
+        }
+      ],
+      "Schedule": [
+        {
+          "FirstTick": 30,
+          "SecondTick": 0,
+          "Operation": 1,
+          "Nodes": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        }
+      ],
+      "ScheduleName": "precrash",
+      "DebugMessages": false
+    },
+
+    {
+      "Name": "SchedulerFilter",
+      "Filters": [
+        {
+          "Name": "NodeCrashFilter",
+          "Nodes": [
+            0
+          ],
+          "Count": 1
+        },
+        {
+          "Name": "TopologyFilter",
+          "NodesConnection": {
+              "0" : [],
+              "1" : [2, 3, 4],
+              "2" : [1, 3, 4],
+              "3" : [1, 2, 4],
+              "4" : [1, 2, 3]
+          }
+        }
+      ],
+      "Schedule": [
+        {
+          "FirstTick": 31,
+          "SecondTick":60,
+          "Operation": 2,
+          "Nodes": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        }
+      ],
+      "ScheduleName": "crash-node-0",
+      "DebugMessages": false
+    },
+   
+    {
+      "Name": "SchedulerFilter",
+      "Filters": [
+        {
+          "Name": "NodeCrashFilter",
+          "Nodes": [
+            1
+          ],
+          "Count": 1
+        },
+        {
+          "Name": "TopologyFilter",
+          "NodesConnection": {
+              "0" : [],
+              "1" : [],
+              "2" : [3, 4],
+              "3" : [2, 4],
+              "4" : [2, 3]
+          }
+        }
+      ],
+      "Schedule": [
+        {
+          "FirstTick": 61,
+          "SecondTick":90,
+          "Operation": 2,
+          "Nodes": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        }
+      ],
+      "ScheduleName": "crash-node-1",
+      "DebugMessages": false
+    },
+
+    {
+      "Name": "SchedulerFilter",
+      "Filters": [
+        {
+          "Name": "NodeCrashFilter",
+          "Nodes": [
+            2
+          ],
+          "Count": 1
+        },
+        {
+          "Name": "TopologyFilter",
+          "NodesConnection": {
+              "0" : [],
+              "1" : [],
+              "2" : [],
+              "3" : [4],
+              "4" : [3]
+          }
+        }
+      ],
+      "Schedule": [
+        {
+          "FirstTick": 91,
+          "SecondTick":120,
+          "Operation": 2,
+          "Nodes": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        }
+      ],
+      "ScheduleName": "crash-node-2",
+      "DebugMessages": false
+    },
+
+    {
+      "Name": "SchedulerFilter",
+      "Filters": [
+        {
+          "Name": "NodeCrashFilter",
+          "Nodes": [
+            3, 4
+          ],
+          "Count": 1
+        },
+        {
+          "Name": "TopologyFilter",
+          "NodesConnection": {
+              "0" : [],
+              "1" : [],
+              "2" : [],
+              "3" : [],
+              "4" : []
+          }
+        }
+      ],
+      "Schedule": [
+        {
+          "FirstTick": 121,
+          "SecondTick":150,
+          "Operation": 2,
+          "Nodes": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        }
+      ],
+      "ScheduleName": "crash-node-34",
+      "DebugMessages": false
+    }
+
+  ],
+  "Validator": {
+    "NetworkRunTicks" : 150,
+    "NetworkRecoverTicks": 300
+  },
+  "LogLevel": 4
+}

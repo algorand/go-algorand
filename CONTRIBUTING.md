@@ -1,0 +1,36 @@
+# Algorand Developer Contribution Guide
+
+If you are interested in contributing to the project, we welcome and thank you. We want to make the best decentralized and effective blockchain platform available and we appreciate your willingness to help us.
+
+The algorand project is composed of several repositories on GitHub. Specifically we have repositories for the main node software,the JavaScript SDK, the Go SDK, and  the Java SDK. Additionally we have repositories for projects we forked like go-codec that make up some of the main dependencies for a node. Each of these will follow similar guidelines on how to contribute. The main difference between these concerns code formatting and deploying changes to production.
+
+# Filing Issues
+
+Did you discover a bug? Do you have a feature request? Filing issues is an easy way anyone can contribute and helps us improve Algorand. We use GitHub  Issues to track all known bugs and feature requests. 
+
+Before logging an issue be sure to check current issues, verify that your [node is synced](https://developer.algorand.org/docs/introduction-installing-node#sync-node), check the [Developer Frequently Asked Questions](https://developer.algorand.org/docs/developer-faq) and [GitHub issues][issues_url] to see if your issue is described there.
+
+If you’d like to contribute to any of the repositories, please file a [GitHub issue][issues_url] using the issues menu item. Make sure to specify whether you are describing a bug or a new enhancement using the **Bug report** or **Feature request** button.
+
+See the GitHub help guide for more information on [filing an issue](https://help.github.com/en/articles/creating-an-issue)
+
+# Contribution Model
+
+For each of our repositories we use the same model for contributing code. Developers wanting to contribute must create pull requests. This process is described in the GitHub [Creating a pull request from a fork](https://help.github.com/en/articles/creating-a-pull-request-from-a-fork) documentation. Each pull request should be initiated against the master branch in the Algorand repository.  After a pull request is submitted the core development team will review the submission and communicate with the developer using the comments sections of the PR. After the submission is reviewed and approved, it will be merged into the master branch of the source. These changes will be merged to our release branch on the next viable release date. For the SDKs, this may be immediate. Changes to the node software may take more time as we must ensure and verify the security, as well as apply protocol upgrades in an orderly way.
+
+# Code Guidelines
+
+For Go code we use the [Golang guidelines defined here](https://golang.org/doc/effective_go.html)
+* Code must adhere to the official Go formatting guidelines (i.e. uses gofmt).
+* We use **gofmt** and **golint**. Also make sure to run `make fix` and `make generate` before opening a pull request.
+* Code must be documented adhering to the official Go commentary guidelines.
+
+For JavaScript code we use the [MDN formatting rules](https://developer.mozilla.org/en-US/docs/MDN/Contribute/Guidelines/Code_guidelines/JavaScript).
+
+For Java code we use [Oracle’s standard formatting rules for Java](https://www.oracle.com/technetwork/java/codeconventions-150003.pdf).
+
+# Communication Channels
+
+The core development team monitors the Algorand community forums and regularly responds to questions and suggestions. Issues and Pull Requests are handled on GitHub.
+
+[issues_url]: https://github.com/algorand/go-algorand/issues

@@ -1,0 +1,6 @@
+[algorand]
+name=Algorand repository for $basearch
+baseurl=http://tbd.algorand.com/rpm/algorand/$basearch
+enabled=1
+gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-Algorand

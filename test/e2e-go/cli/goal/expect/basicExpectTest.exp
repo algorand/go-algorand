@@ -1,0 +1,32 @@
+#!/usr/bin/expect -f
+exp_internal 1
+set timeout 2
+set err 0
+log_user 1
+
+proc abort { err } {
+    send_error $err
+    exit 1
+}
+
+if { [catch {
+
+    puts "Basic Expect Test"
+
+    spawn echo "hello"
+    expect {
+        timeout { abort "\n Failed to see expected input hello" }
+        "^hello*" {close}
+    }
+
+    spawn echo "goodbye"
+    expect {
+        timeout { abort "Failed to see expected input goodbye" }
+        "^goodbye*" {close}
+    }
+
+    exit 0
+
+} EXCEPTION ] } {
+   abort "ERROR in basic expect test: $EXCEPTION"
+}

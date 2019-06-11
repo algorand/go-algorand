@@ -1,0 +1,18 @@
+{
+	"NetworkName": "",
+	"VersionModifier": "",
+	"FirstPartKeyRound": 0,
+	"LastPartKeyRound": 1000300,
+	"Wallets": [
+		{
+			"Name": "Wallet1",
+			"Stake": 50,
+			"Online": true
+		},
+		{
+			"Name": "Wallet2",
+			"Stake": 50,
+			"Online": true
+		}
+	]
+}

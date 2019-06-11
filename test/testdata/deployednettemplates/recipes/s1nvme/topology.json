@@ -1,0 +1,64 @@
+{
+  "Hosts": [
+    {
+      "Name": "R1",
+      "Template": "AWS-US-EAST-1-m5d.4xl"
+    },
+    {
+      "Name": "R2",
+      "Template": "AWS-US-EAST-1-m5d.4xl"
+    },
+    {
+      "Name": "R3",
+      "Template": "AWS-US-EAST-1-m5d.4xl"
+    },
+    {
+      "Name": "R4",
+      "Template": "AWS-US-EAST-1-m5d.4xl"
+    },
+    {
+      "Name": "R5",
+      "Template": "AWS-US-EAST-1-m5d.4xl"
+    },
+    {
+      "Name": "N1",
+      "Template": "AWS-US-EAST-1-m5d.2xl"
+    },
+    {
+      "Name": "N2",
+      "Template": "AWS-US-EAST-1-m5d.2xl"
+    },
+    {
+      "Name": "N3",
+      "Template": "AWS-US-EAST-1-m5d.2xl"
+    },
+    {
+      "Name": "N4",
+      "Template": "AWS-US-EAST-1-m5d.2xl"
+    },
+    {
+      "Name": "N5",
+      "Template": "AWS-US-EAST-1-m5d.2xl"
+    },
+    {
+      "Name": "N6",
+      "Template": "AWS-US-EAST-1-m5d.2xl"
+    },
+    {
+      "Name": "N7",
+      "Template": "AWS-US-EAST-1-m5d.2xl"
+    },
+    {
+      "Name": "N8",
+      "Template": "AWS-US-EAST-1-m5d.2xl"
+    },
+    {
+      "Name": "N9",
+      "Template": "AWS-US-EAST-1-m5d.2xl"
+    },
+    {
+      "Name": "N10",
+      "Template": "AWS-US-EAST-1-m5d.2xl"
+    }
+  ]
+}

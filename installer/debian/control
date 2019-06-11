@@ -1,0 +1,8 @@
+Package: algorand
+Homepage: https://www.algorand.com/
+Maintainer: Algorand developers <dev@algorand.com>
+Version: @VER@
+Architecture: @ARCH@
+Recommends: unattended-upgrades
+Description: Algorand node software
+ This package provides an implementation of the Algorand protocol.

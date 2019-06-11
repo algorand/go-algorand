@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+export GOPATH=$(go env GOPATH)
+cd ${GOPATH}/src/github.com/algorand/go-algorand
+
+# If enlistment isn't clean, it's 'dev'
+./scripts/check_clean_enlistment.sh
+if [ $? -ne 0 ]; then
+    echo "dev"
+    exit 0
+fi
+
+if [ "$1" = "master" ]; then
+    echo "master"
+elif [ "$1" = "rel/nightly" ]; then
+    echo "nightly"
+elif [ "$1" = "rel/stable" ]; then
+    echo "stable"
+else
+    echo "dev"
+fi

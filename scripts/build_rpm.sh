@@ -1,0 +1,37 @@
+#!/bin/bash -e
+
+# build_rpm.sh - Build a .deb package for one platform.
+#
+# Syntax:   build_rpm.sh <output directory>
+#
+# Examples: scripts/build_rpm.sh /tmp
+
+if [ ! "$#" -eq 1 ]; then
+    echo "Syntax: build_rpm.sh <output directory>"
+    exit 1
+fi
+
+OUTDIR="$1"
+
+export GOPATH=$(go env GOPATH)
+export REPO_DIR=${GOPATH}/src/github.com/algorand/go-algorand
+cd ${REPO_DIR}
+
+echo "Building RPM package"
+
+./scripts/build_prod.sh
+
+VER=$(./scripts/compute_build_number.sh -f)
+
+if [ "${DEFAULTNETWORK}" = "" ]; then
+    export DEFAULTNETWORK=$(./scripts/compute_branch_network.sh)
+fi
+export DEFAULT_RELEASE_NETWORK=$(./scripts/compute_branch_release_network.sh "${DEFAULTNETWORK}")
+
+TEMPDIR=$(mktemp -d)
+trap "rm -rf $TEMPDIR" 0
+cat installer/rpm/algorand.spec \
+    | sed -e s,@VER@,${VER}, \
+    > ${TEMPDIR}/algorand.spec
+
+rpmbuild --define "_rpmdir ${OUTDIR}" --define "RELEASE_GENESIS_PROCESS x${RELEASE_GENESIS_PROCESS}" --define "LICENSE_FILE $(pwd)/COPYING" -bb ${TEMPDIR}/algorand.spec

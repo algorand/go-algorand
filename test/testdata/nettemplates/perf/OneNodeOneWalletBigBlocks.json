@@ -1,0 +1,24 @@
+{
+    "Genesis": {
+        "NetworkName": "tbd",
+        "ConsensusProtocol": "test-big-blocks",
+        "Wallets": [
+            {
+                "Name": "Wallet1",
+                "Stake": 100,
+                "Online": true
+            }
+        ]
+    },
+    "Nodes": [
+        {
+            "Name": "Primary",
+            "IsRelay": true,
+            "DeadlockDetection": -1,
+            "Wallets": [
+                { "Name": "Wallet1",
+                  "ParticipationOnly": false }
+            ]
+        }
+    ]
+}

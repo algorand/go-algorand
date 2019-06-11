@@ -1,0 +1,20 @@
+#!/bin/sh
+
+## cat /usr/share/debhelper/autoscripts/postrm-systemd | sed -e s,#UNITFILES#,algorand.service,
+if [ "$1" = "remove" ]; then
+	if [ -x "/usr/bin/deb-systemd-helper" ]; then
+		deb-systemd-helper mask algorand.service >/dev/null || true
+	fi
+fi
+
+if [ "$1" = "purge" ]; then
+	if [ -x "/usr/bin/deb-systemd-helper" ]; then
+		deb-systemd-helper purge algorand.service >/dev/null || true
+		deb-systemd-helper unmask algorand.service >/dev/null || true
+	fi
+fi
+
+## cat /usr/share/debhelper/autoscripts/postrm-systemd-reload-only | sed -e s,#UNITFILES#,algorand.service,
+if [ -d /run/systemd/system ]; then
+	systemctl --system daemon-reload >/dev/null || true
+fi

@@ -1,0 +1,7 @@
+{
+    "GenesisFile":"../scenario1/genesis.json",
+    "NetworkFile":"../scenario1/net.json",
+    "ConfigFile": "../../configs/reference.json",
+    "HostTemplatesFile": "../../hosttemplates/hosttemplates.json",
+    "TopologyFile": "topology.json"
+}

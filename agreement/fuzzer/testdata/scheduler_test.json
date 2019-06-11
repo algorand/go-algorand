@@ -1,0 +1,73 @@
+{
+  "FuzzerName": "schedulerTest",
+  "NodesCount": 5,
+  "Filters": [
+    {
+      "Name": "SchedulerFilter",
+      "Filters": [
+        {
+          "Name": "TopologyFilter",
+          "NodesConnection": {
+              "0" : [],
+              "1" : [2, 3, 4],
+              "2" : [1, 3, 4],
+              "3" : [1, 2, 4],
+              "4" : [1, 2, 3]
+          }
+        }
+      ],
+      "Schedule": [
+        {
+          "FirstTick": 10,
+          "SecondTick": 0,
+          "Operation": 1,
+          "Nodes": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        {
+          "FirstTick": 12,
+          "SecondTick": 20,
+          "Operation": 2,
+          "Nodes": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        {
+          "FirstTick": 20,
+          "SecondTick": 25,
+          "Operation": 2,
+          "Nodes": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "FirstTick": 0,
+          "SecondTick": 35,
+          "Operation": 5,
+          "Nodes": [
+            3,
+            4
+          ]
+        }
+      ],
+      "ScheduleName": "mySchedule",
+      "DebugMessages": false
+    }
+  ],
+  "Validator": {
+    "NetworkRunTicks" : 50,
+    "NetworkRecoverTicks": 50
+  },
+  "LogLevel": 4
+}

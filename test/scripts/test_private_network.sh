@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+echo "######################################################################"
+echo "  test_private_network"
+echo "######################################################################"
+set -e
+
+# Suppress telemetry reporting for tests
+export ALGOTEST=1
+
+export GOPATH=$(go env GOPATH)
+SRCPATH=${GOPATH}/src/github.com/algorand/go-algorand
+cd ${SRCPATH}
+
+NETROOTPATH=${SRCPATH}/tmp/test_private_network
+# purge if it already exists
+${GOPATH}/bin/goal network delete -r ${NETROOTPATH} || true
+rm -rf ${NETROOTPATH}
+
+${GOPATH}/bin/goal network create -r ${NETROOTPATH} -n net1 -t ./test/testdata/nettemplates/TwoNodes50Each.json
+
+${GOPATH}/bin/goal network start -r ${NETROOTPATH}
+
+${GOPATH}/bin/goal network stop -r ${NETROOTPATH}
+
+${GOPATH}/bin/goal network delete -r ${NETROOTPATH}
+
+echo "----------------------------------------------------------------------"
+echo "  DONE: test_private_network"
+echo "----------------------------------------------------------------------"

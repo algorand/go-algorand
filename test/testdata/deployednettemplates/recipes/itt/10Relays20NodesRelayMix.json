@@ -1,0 +1,124 @@
+{
+  "Hosts": [
+    {
+      "Name": "R1",
+      "Template": "AWS-US-EAST-1-c5.4xlarge"
+    },
+    {
+      "Name": "R2",
+      "Template": "AWS-US-EAST-1-c5.4xlarge"
+    },
+    {
+      "Name": "R3",
+      "Template": "AWS-US-EAST-1-c5.4xlarge"
+    },
+    {
+      "Name": "R4",
+      "Template": "AWS-US-EAST-1-c5.4xlarge"
+    },
+    {
+      "Name": "R5",
+      "Template": "AWS-US-EAST-1-c5.4xlarge"
+    },
+    {
+      "Name": "R6",
+      "Template": "AWS-US-EAST-1-c5.4xlarge"
+    },
+    {
+      "Name": "R7",
+      "Template": "AWS-US-EAST-1-c5.4xlarge"
+    },
+    {
+      "Name": "R8",
+      "Template": "AWS-US-EAST-1-c5.4xlarge"
+    },
+    {
+      "Name": "R9",
+      "Template": "AWS-US-EAST-1-c5.4xlarge"
+    },
+    {
+      "Name": "R10",
+      "Template": "AWS-US-EAST-1-c5.4xlarge"
+    },
+    {
+      "Name": "N1",
+      "Template": "AWS-US-EAST-1-c5.2xlarge"
+    },
+    {
+      "Name": "N2",
+      "Template": "AWS-US-EAST-1-c5.2xlarge"
+    },
+    {
+      "Name": "N3",
+      "Template": "AWS-US-EAST-1-c5.2xlarge"
+    },
+    {
+      "Name": "N4",
+      "Template": "AWS-US-EAST-1-c5.2xlarge"
+    },
+    {
+      "Name": "N5",
+      "Template": "AWS-US-EAST-1-c5.2xlarge"
+    },
+    {
+      "Name": "N6",
+      "Template": "AWS-US-EAST-1-c5.2xlarge"
+    },
+    {
+      "Name": "N7",
+      "Template": "AWS-US-EAST-1-c5.2xlarge"
+    },
+    {
+      "Name": "N8",
+      "Template": "AWS-US-EAST-1-c5.2xlarge"
+    },
+    {
+      "Name": "N9",
+      "Template": "AWS-US-EAST-1-c5.2xlarge"
+    },
+    {
+      "Name": "N10",
+      "Template": "AWS-US-EAST-1-c5.2xlarge"
+    },
+    {
+      "Name": "N11",
+      "Template": "AWS-US-EAST-1-c5.2xlarge"
+    },
+    {
+      "Name": "N12",
+      "Template": "AWS-US-EAST-1-c5.2xlarge"
+    },
+    {
+      "Name": "N13",
+      "Template": "AWS-US-EAST-1-c5.2xlarge"
+    },
+    {
+      "Name": "N14",
+      "Template": "AWS-US-EAST-1-c5.2xlarge"
+    },
+    {
+      "Name": "N15",
+      "Template": "AWS-US-EAST-1-c5.2xlarge"
+    },
+    {
+      "Name": "N16",
+      "Template": "AWS-US-EAST-1-c5.2xlarge"
+    },
+    {
+      "Name": "N17",
+      "Template": "AWS-US-EAST-1-c5.2xlarge"
+    },
+    {
+      "Name": "N18",
+      "Template": "AWS-US-EAST-1-c5.2xlarge"
+    },
+    {
+      "Name": "N19",
+      "Template": "AWS-US-EAST-1-c5.2xlarge"
+    },
+    {
+      "Name": "N20",
+      "Template": "AWS-US-EAST-1-c5.2xlarge"
+    }
+  ]
+}

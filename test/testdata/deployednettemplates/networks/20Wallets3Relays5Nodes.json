@@ -1,0 +1,319 @@
+{
+	"Hosts": [
+		{
+			"Name": "R1",
+			"Nodes": [
+				{
+					"Name": "relay1",
+					"IsRelay": true,
+					"NetAddress": "{{NetworkPort}}",
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableBlockStats": true,
+					"DashboardEndpoint": "{{DashboardEndpoint}}",
+					"EnableTelemetry": true,
+					"TelemetryURI": "{{TelemetryURI}}",
+					"EnableMetrics": true,
+					"MetricsURI": "{{MetricsURI}}",
+					"DeadlockOverride": -1,
+					"Wallets": []
+				}
+			]
+		},
+		{
+			"Name": "R2",
+			"Nodes": [
+				{
+					"Name": "relay2",
+					"IsRelay": true,
+					"NetAddress": "{{NetworkPort}}",
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableBlockStats": true,
+					"DashboardEndpoint": "{{DashboardEndpoint}}",
+					"EnableTelemetry": true,
+					"TelemetryURI": "{{TelemetryURI}}",
+					"EnableMetrics": true,
+					"MetricsURI": "{{MetricsURI}}",
+					"DeadlockOverride": -1,
+					"Wallets": []
+				}
+			]
+		},
+		{
+			"Name": "R3",
+			"Nodes": [
+				{
+					"Name": "relay3",
+					"IsRelay": true,
+					"NetAddress": "{{NetworkPort}}",
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableBlockStats": true,
+					"DashboardEndpoint": "{{DashboardEndpoint}}",
+					"EnableTelemetry": true,
+					"TelemetryURI": "{{TelemetryURI}}",
+					"EnableMetrics": true,
+					"MetricsURI": "{{MetricsURI}}",
+					"DeadlockOverride": -1,
+					"Wallets": []
+				}
+			]
+		},
+		{
+			"Name": "N1",
+			"Nodes": [
+				{
+					"Name": "node1",
+					"IsRelay": false,
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableBlockStats": true,
+					"DashboardEndpoint": "{{DashboardEndpoint}}",
+					"EnableTelemetry": true,
+					"TelemetryURI": "{{TelemetryURI}}",
+					"EnableMetrics": true,
+					"MetricsURI": "{{MetricsURI}}",
+					"DeadlockOverride": -1,
+					"Wallets": [
+						{
+							"Name": "Wallet1",
+							"ParticipationOnly": false
+						},
+						{
+							"Name": "Wallet2",
+							"ParticipationOnly": false
+						}
+					]
+				},
+				{
+					"Name": "node2",
+					"IsRelay": false,
+					"APIEndpoint": "{{APIEndpoint2}}",
+					"APIToken": "{{APIToken}}",
+					"EnableBlockStats": true,
+					"DashboardEndpoint": "{{DashboardEndpoint}}",
+					"EnableTelemetry": true,
+					"TelemetryURI": "{{TelemetryURI}}",
+					"EnableMetrics": true,
+					"MetricsURI": "{{MetricsURI}}",
+					"DeadlockOverride": -1,
+					"Wallets": [
+						{
+							"Name": "Wallet3",
+							"ParticipationOnly": false
+						},
+						{
+							"Name": "Wallet4",
+							"ParticipationOnly": false
+						}
+					]
+				}
+			]
+		},
+		{
+			"Name": "N2",
+			"Nodes": [
+				{
+					"Name": "node3",
+					"IsRelay": false,
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableBlockStats": true,
+					"DashboardEndpoint": "{{DashboardEndpoint}}",
+					"EnableTelemetry": true,
+					"TelemetryURI": "{{TelemetryURI}}",
+					"EnableMetrics": true,
+					"MetricsURI": "{{MetricsURI}}",
+					"DeadlockOverride": -1,
+					"Wallets": [
+						{
+							"Name": "Wallet5",
+							"ParticipationOnly": false
+						},
+						{
+							"Name": "Wallet6",
+							"ParticipationOnly": false
+						}
+					]
+				},
+				{
+					"Name": "node4",
+					"IsRelay": false,
+					"APIEndpoint": "{{APIEndpoint2}}",
+					"APIToken": "{{APIToken}}",
+					"EnableBlockStats": true,
+					"DashboardEndpoint": "{{DashboardEndpoint}}",
+					"EnableTelemetry": true,
+					"TelemetryURI": "{{TelemetryURI}}",
+					"EnableMetrics": true,
+					"MetricsURI": "{{MetricsURI}}",
+					"DeadlockOverride": -1,
+					"Wallets": [
+						{
+							"Name": "Wallet7",
+							"ParticipationOnly": false
+						},
+						{
+							"Name": "Wallet8",
+							"ParticipationOnly": false
+						}
+					]
+				}
+			]
+		},
+		{
+			"Name": "N3",
+			"Nodes": [
+				{
+					"Name": "node5",
+					"IsRelay": false,
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableBlockStats": true,
+					"DashboardEndpoint": "{{DashboardEndpoint}}",
+					"EnableTelemetry": true,
+					"TelemetryURI": "{{TelemetryURI}}",
+					"EnableMetrics": true,
+					"MetricsURI": "{{MetricsURI}}",
+					"DeadlockOverride": -1,
+					"Wallets": [
+						{
+							"Name": "Wallet9",
+							"ParticipationOnly": false
+						},
+						{
+							"Name": "Wallet10",
+							"ParticipationOnly": false
+						}
+					]
+				},
+				{
+					"Name": "node6",
+					"IsRelay": false,
+					"APIEndpoint": "{{APIEndpoint2}}",
+					"APIToken": "{{APIToken}}",
+					"EnableBlockStats": true,
+					"DashboardEndpoint": "{{DashboardEndpoint}}",
+					"EnableTelemetry": true,
+					"TelemetryURI": "{{TelemetryURI}}",
+					"EnableMetrics": true,
+					"MetricsURI": "{{MetricsURI}}",
+					"DeadlockOverride": -1,
+					"Wallets": [
+						{
+							"Name": "Wallet11",
+							"ParticipationOnly": false
+						},
+						{
+							"Name": "Wallet12",
+							"ParticipationOnly": false
+						}
+					]
+				}
+			]
+		},
+		{
+			"Name": "N4",
+			"Nodes": [
+				{
+					"Name": "node7",
+					"IsRelay": false,
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableBlockStats": true,
+					"DashboardEndpoint": "{{DashboardEndpoint}}",
+					"EnableTelemetry": true,
+					"TelemetryURI": "{{TelemetryURI}}",
+					"EnableMetrics": true,
+					"MetricsURI": "{{MetricsURI}}",
+					"DeadlockOverride": -1,
+					"Wallets": [
+						{
+							"Name": "Wallet13",
+							"ParticipationOnly": false
+						},
+						{
+							"Name": "Wallet14",
+							"ParticipationOnly": false
+						}
+					]
+				},
+				{
+					"Name": "node8",
+					"IsRelay": false,
+					"APIEndpoint": "{{APIEndpoint2}}",
+					"APIToken": "{{APIToken}}",
+					"EnableBlockStats": true,
+					"DashboardEndpoint": "{{DashboardEndpoint}}",
+					"EnableTelemetry": true,
+					"TelemetryURI": "{{TelemetryURI}}",
+					"EnableMetrics": true,
+					"MetricsURI": "{{MetricsURI}}",
+					"DeadlockOverride": -1,
+					"Wallets": [
+						{
+							"Name": "Wallet15",
+							"ParticipationOnly": false
+						},
+						{
+							"Name": "Wallet16",
+							"ParticipationOnly": false
+						}
+					]
+				}
+			]
+		},
+		{
+			"Name": "N5",
+			"Nodes": [
+				{
+					"Name": "node9",
+					"IsRelay": false,
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableBlockStats": true,
+					"DashboardEndpoint": "{{DashboardEndpoint}}",
+					"EnableTelemetry": true,
+					"TelemetryURI": "{{TelemetryURI}}",
+					"EnableMetrics": true,
+					"MetricsURI": "{{MetricsURI}}",
+					"DeadlockOverride": -1,
+					"Wallets": [
+						{
+							"Name": "Wallet17",
+							"ParticipationOnly": false
+						},
+						{
+							"Name": "Wallet18",
+							"ParticipationOnly": false
+						}
+					]
+				},
+				{
+					"Name": "node10",
+					"IsRelay": false,
+					"APIEndpoint": "{{APIEndpoint2}}",
+					"APIToken": "{{APIToken}}",
+					"EnableBlockStats": true,
+					"DashboardEndpoint": "{{DashboardEndpoint}}",
+					"EnableTelemetry": true,
+					"TelemetryURI": "{{TelemetryURI}}",
+					"EnableMetrics": true,
+					"MetricsURI": "{{MetricsURI}}",
+					"DeadlockOverride": -1,
+					"Wallets": [
+						{
+							"Name": "Wallet19",
+							"ParticipationOnly": false
+						},
+						{
+							"Name": "Wallet20",
+							"ParticipationOnly": false
+						}
+					]
+				}
+			]
+		}
+	]
+}

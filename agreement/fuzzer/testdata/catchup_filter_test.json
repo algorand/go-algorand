@@ -1,0 +1,95 @@
+{
+  "FuzzerName": "catchup",
+  "NodesCount": 5,
+  "Filters": [
+    {
+      "Name": "SchedulerFilter",
+      "Filters": [
+        {
+          "Name": "TopologyFilter",
+          "NodesConnection": {
+              "0" : [],
+              "1" : [2, 3, 4],
+              "2" : [1, 3, 4],
+              "3" : [1, 2, 4],
+              "4" : [1, 2, 3]
+          }
+        }
+      ],
+      "Schedule": [
+        {
+          "FirstTick": 60,
+          "SecondTick": 0,
+          "Operation": 1,
+          "Nodes": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        }
+      ],
+      "ScheduleName": "precatchup",
+      "DebugMessages": false
+    },
+    {
+      "Name": "SchedulerFilter",
+      "Filters": [
+        {
+          "Name": "CatchupFilter",
+          "Nodes": [
+            0
+          ],
+          "Count": 1
+        }
+      ],
+      "Schedule": [
+        {
+          "FirstTick": 61,
+          "SecondTick": 100,
+          "Operation": 2,
+          "Nodes": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        }
+      ],
+      "ScheduleName": "precatchup",
+      "DebugMessages": false
+    },
+    {
+      "Name": "SchedulerFilter",
+      "Filters": [
+        {
+          "Name": "NullFilter"
+        }
+      ],
+      "Schedule": [
+        {
+          "FirstTick": 101,
+          "SecondTick": 120,
+          "Operation": 2,
+          "Nodes": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        }
+      ],
+      "ScheduleName": "postcatchup",
+      "DebugMessages": false
+    }
+    
+  ],
+  "Validator": {
+    "NetworkRunTicks" : 120,
+    "NetworkRecoverTicks": 50
+  },
+  "LogLevel":4
+}

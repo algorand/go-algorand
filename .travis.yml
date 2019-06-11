@@ -1,0 +1,90 @@
+dist: xenial
+go:
+  - "1.12"
+go_import_path: github.com/algorand/go-algorand
+language: go
+sudo: required
+
+# Don't build tags
+if: tag IS blank
+
+stages:
+  - name: build_commit
+    if: NOT (branch =~ /^rel\//) AND type != pull_request
+  - name: build_pr
+    if: type = pull_request
+  - name: build_release
+    if: branch =~ /^rel\// AND type != pull_request
+  - name: deploy
+    if: branch =~ /^rel\// AND type != pull_request
+  - name: release
+    if: branch =~ /^rel\// AND type != pull_request
+
+jobs:
+  include:
+    - stage: build_commit
+      os: linux
+      script:
+        - scripts/travis/build.sh || travis_terminate 1;
+        - travis_wait 90 scripts/travis/test.sh
+
+    - stage: build_pr
+      os: linux
+      script:
+        - scripts/travis/build.sh || travis_terminate 1;
+        - travis_wait 90 scripts/travis/test.sh
+#    - # same stage, parallel job
+#      os: linux
+#      env:
+#        - BUILD_TYPE: "integration"
+#      script:
+#        - scripts/travis/build.sh || travis_terminate 1;
+#        - travis_wait 90 scripts/travis/test.sh
+
+    - stage: build_release
+      os: linux
+      script:
+        - scripts/travis/build.sh || travis_terminate 1;
+        - travis_wait 90 scripts/travis/test.sh
+#    - # same stage, parallel job
+#      os: linux
+#      env:
+#        - BUILD_TYPE: "integration"
+#      script:
+#        - scripts/travis/build.sh || travis_terminate 1;
+#        - travis_wait 90 scripts/travis/test.sh
+    - # same stage, parallel job
+      os: osx
+      script:
+        - scripts/travis/build.sh || travis_terminate 1;
+        - travis_wait 90 scripts/travis/test.sh
+
+    - stage: deploy
+      os: linux
+      script: scripts/travis/deploy_packages.sh
+    - # same stage, parallel job
+      os: osx
+      script: scripts/travis/deploy_packages.sh
+
+    - stage: release
+      script: scripts/travis/release_packages.sh
+
+# Don't rebuild libsodium every time
+cache:
+  directories:
+    - crypto/lib
+
+addons:
+  apt:
+    packages:
+      - libboost-all-dev
+      - fakeroot
+      - rpm
+  artifacts:
+    s3_region: "us-east-1"
+    paths:
+      - $(git ls-files -o | grep -v crypto/libsodium-fork | grep -v crypto/lib/ | tr "\n" ":")
+
+notifications:
+  slack:
+    secure: lBomhenfQvDzpUGxLadga188zavtGRr05GVWI6iI8ll/uwXewij8ginQ716Axg3pJvvRMNCuTNEmg0+fVlHf0JxTG3qWG35qOUexAHGcmimPD4ugmVkufua8Oc8Nl1LRSdWvbwIKvrAU1HDA37M5tCdEOm+Sf/OL72iVWbXhlHRvhdeiKHkbkcpI/15dOH4RpXuvPeYBrgcB2Ixs7gTSVyIAU458aT0JORu7expElQ+iBP9Kqze1V4dvjJyzHTgE01z2nyAm2Xpko447y//fYX2e20iDBE5S/GukaK/TeB3pD+FoC+Z2R7Gg1qA7a/gdGFbVgP12zWmzNaKVwY1YOvx8IIwP13XutioAE7bQbnHI1zGlQ+jxk3odWKZPhZSN/YvWD3i7g/xVksaTo++zwon2UlZ7x8LmKg1kOMeA3o2TUlzjQrwZZ4cB+4HqYHEqVdsSAadaMhKK82XE1OtGImdrIX1Y/02X2F/myJXwaE4Ap8smULHWGghCL/ALad+hdyE0K4/2SYDcoaOONgX9+VgaSEtYDO00Bt4/GMcuM+gwILsfCA9ZQuxCgIFEL1QWwDud8aGU1qF20yaimDlstlLnZXsv3Oli6r/CEEUVXltI5dkJyRd/jTlqWGjFGL8agGg34EPLP24Vn4h4QcIzoMfGWXkz2yrd6i0fvMAPXds=

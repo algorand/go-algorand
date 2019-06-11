@@ -1,0 +1,184 @@
+{
+  "Hosts": [
+    {
+      "Name": "AWS-US-WEST-1-Small",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "t2.micro"
+    },
+    {
+      "Name": "AWS-US-WEST-1-Large",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "t2.micro"
+    },
+    {
+      "Name": "AWS-US-WEST-2-Small",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "t2.micro"
+    },
+    {
+      "Name": "AWS-US-WEST-2-Large",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "t2.micro"
+    },
+    {
+      "Name": "AWS-US-EAST-1-Small",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "t2.micro"
+    },
+    {
+      "Name": "AWS-US-EAST-1-Large",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "t2.micro"
+    },
+    {
+      "Name": "AWS-US-EAST-2-Small",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "t2.micro"
+    },
+    {
+      "Name": "AWS-US-EAST-2-Large",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "t2.micro"
+    },
+    {
+      "Name": "AWS-AP-SOUTH-1-Small",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "t2.micro"
+    },
+    {
+      "Name": "AWS-AP-SOUTH-1-Large",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "t2.micro"
+    },
+    {
+      "Name": "AWS-AP-SOUTHEAST-1-Small",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "t2.micro"
+    },
+    {
+      "Name": "AWS-AP-SOUTHEAST-1-Large",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "t2.micro"
+    },
+    {
+      "Name": "AWS-AP-SOUTHEAST-2-Small",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "t2.micro"
+    },
+    {
+      "Name": "AWS-AP-SOUTHEAST-2-Large",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "t2.micro"
+    },
+    {
+      "Name": "AWS-AP-NORTHEAST-1-Small",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "t2.micro"
+    },
+    {
+      "Name": "AWS-AP-NORTHEAST-1-Large",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "t2.micro"
+    },
+    {
+      "Name": "AWS-AP-NORTHEAST-2-Small",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "t2.micro"
+    },
+    {
+      "Name": "AWS-AP-NORTHEAST-2-Large",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "t2.micro"
+    },
+    {
+      "Name": "AWS-EU-CENTRAL-1-Small",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "t2.micro"
+    },
+    {
+      "Name": "AWS-EU-CENTRAL-1-Large",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "t2.micro"
+    },
+    {
+      "Name": "AWS-EU-WEST-1-Small",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "t2.micro"
+    },
+    {
+      "Name": "AWS-EU-WEST-1-Large",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "t2.micro"
+    },
+    {
+      "Name": "AWS-EU-WEST-2-Small",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "t2.micro"
+    },
+    {
+      "Name": "AWS-EU-WEST-2-Large",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "t2.micro"
+    },
+    {
+      "Name": "AWS-EU-WEST-3-Small",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "t2.micro"
+    },
+    {
+      "Name": "AWS-EU-WEST-3-Large",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "t2.micro"
+    },
+    {
+      "Name": "AWS-EU-NORTH-1-Small",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "t2.micro"
+    },
+    {
+      "Name": "AWS-EU-NORTH-1-Large",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "t2.micro"
+    },
+    {
+      "Name": "AWS-SA-EAST-1-Small",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "t2.micro"
+    },
+    {
+      "Name": "AWS-SA-EAST-1-Large",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "t2.micro"
+    }
+  ]
+}

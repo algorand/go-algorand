@@ -1,0 +1,28 @@
+{
+  "FuzzerName": "dropMessagesTest",
+  "NodesCount": 5,
+  "Filters": [
+    {
+      "Name": "DropMessageFilter",
+      "UpStreamDropRate": {
+        "0": 8,
+        "1": 7,
+        "2": 6,
+        "3": 5,
+        "4": 4
+      },
+      "DownStreamDropRate": {
+        "0": 8,
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0
+      }
+    }
+  ],
+  "Validator": {
+    "NetworkRunTicks" : 50,
+    "NetworkRecoverTicks": 50
+  },
+  "LogLevel": 4
+}

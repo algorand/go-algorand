@@ -1,0 +1,124 @@
+{
+  "Hosts": [
+    {
+      "Name": "R1",
+      "Template": "AWS-US-EAST-1-Large"
+    },
+    {
+      "Name": "R2",
+      "Template": "AWS-US-WEST-1-Large"
+    },
+    {
+      "Name": "R3",
+      "Template": "AWS-SA-EAST-1-Large"
+    },
+    {
+      "Name": "R4",
+      "Template": "AWS-EU-NORTH-1-Large"
+    },
+    {
+      "Name": "R5",
+      "Template": "AWS-EU-CENTRAL-1-Large"
+    },
+    {
+      "Name": "R6",
+      "Template": "AWS-AP-SOUTHEAST-1-Large"
+    },
+    {
+      "Name": "R7",
+      "Template": "AWS-AP-SOUTHEAST-2-Large"
+    },
+    {
+      "Name": "R8",
+      "Template": "AWS-AP-NORTHEAST-1-Large"
+    },
+    {
+      "Name": "R9",
+      "Template": "AWS-US-WEST-1-Large"
+    },
+    {
+      "Name": "R10",
+      "Template": "AWS-US-EAST-1-Large"
+    },
+    {
+      "Name": "N1",
+      "Template": "AWS-US-EAST-1-Small"
+    },
+    {
+      "Name": "N2",
+      "Template": "AWS-US-WEST-1-Small"
+    },
+    {
+      "Name": "N3",
+      "Template": "AWS-SA-EAST-1-Small"
+    },
+    {
+      "Name": "N4",
+      "Template": "AWS-EU-NORTH-1-Small"
+    },
+    {
+      "Name": "N5",
+      "Template": "AWS-EU-CENTRAL-1-Small"
+    },
+    {
+      "Name": "N6",
+      "Template": "AWS-AP-SOUTHEAST-1-Small"
+    },
+    {
+      "Name": "N7",
+      "Template": "AWS-AP-SOUTHEAST-2-Small"
+    },
+    {
+      "Name": "N8",
+      "Template": "AWS-AP-NORTHEAST-1-Small"
+    },
+    {
+      "Name": "N9",
+      "Template": "AWS-US-WEST-1-Small"
+    },
+    {
+      "Name": "N10",
+      "Template": "AWS-US-EAST-1-Small"
+    },
+    {
+      "Name": "N11",
+      "Template": "AWS-US-EAST-1-Small"
+    },
+    {
+      "Name": "N12",
+      "Template": "AWS-US-WEST-1-Small"
+    },
+    {
+      "Name": "N13",
+      "Template": "AWS-SA-EAST-1-Small"
+    },
+    {
+      "Name": "N14",
+      "Template": "AWS-EU-NORTH-1-Small"
+    },
+    {
+      "Name": "N15",
+      "Template": "AWS-EU-CENTRAL-1-Small"
+    },
+    {
+      "Name": "N16",
+      "Template": "AWS-AP-SOUTHEAST-1-Small"
+    },
+    {
+      "Name": "N17",
+      "Template": "AWS-AP-SOUTHEAST-2-Small"
+    },
+    {
+      "Name": "N18",
+      "Template": "AWS-AP-NORTHEAST-1-Small"
+    },
+    {
+      "Name": "N19",
+      "Template": "AWS-US-WEST-1-Small"
+    },
+    {
+      "Name": "N20",
+      "Template": "AWS-US-EAST-1-Small"
+    }
+  ]
+}

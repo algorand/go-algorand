@@ -1,0 +1,53 @@
+1.	How is Algorand licensed?
+
+Algorand provides SDKs, example applications, and helper libraries under the
+permissive MIT license. You can do almost anything you want with this code,
+including changing it and embedding it in your proprietary application,
+provided you meet the notice requirements set forth in the license.
+
+Algorand's node software is released under the Affero General Public License,
+version 3, or "AGPL." The AGPL is a free and open source software license
+designed to promote cooperative development of software that is used in a
+client-server or peer-to-peer context.
+
+2.	What do these licenses mean to someone building on the Algorand blockchain?
+
+If you are using our example applications, interfacing with the Algorand
+blockchain through our SDKs, or running an unmodified Algorand node, Algorand's
+licensing should not affect your code at all. There is no need to license your
+code in any particular way to build on the Algorand blockchain in this manner.
+
+If you modify the Algorand node software (for example, creating a new
+blockchain), reimplement the APIs (not interfacing through the SDKs), use
+Algorand's consensus mechanism in other software, or otherwise create a new
+work based on any Algorand materials licensed under the AGPL, your software
+will be automatically licensed under the AGPL and needs to be made available
+to everyone who is a recipient of your new or modified software or interacts
+with it remotely over a network. 
+
+3.	What does it mean to "make my code available" under the AGPL license?
+
+It is your responsibility to make sure that your users know that the source
+code is available. You need to prominently include a "download source" button
+or link on your website, such as where programs are downloaded, and in the user
+interface of any software that interacts with your modified code. The "download
+source" button must allow anyone to directly download the exact source code and
+applicable cryptographic keys needed to install or use the modified AGPL
+software. You cannot remove the "download source" button or link. 
+
+5.	What if I don't want to license my source code under the AGPL?
+
+If you have written an application that needs to be released under the AGPL and
+you would prefer different licensing terms, Algorand offers commercial
+licensing options. Contact us here.
+
+6.	What about patents?
+
+While Algorand and the Algorand consensus protocol are protected by patent
+rights, anyone using our code under the MIT, AGPL or a commercial license from
+us has a patent license. Algorand believes that under current IP laws, the
+safest way to confer patent rights is under established open source licensing. 
+
+Re-implementations of the Algorand consensus protocol or other Algorand
+technology protected by patent rights that do not use Algorand's source code
+require a separate commercial patent license.

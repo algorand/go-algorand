@@ -1,0 +1,14 @@
+{
+  "FuzzerName": "messageDecoderTest",
+  "NodesCount": 5,
+  "Filters": [
+    {
+      "Name": "MessageDecoderFilter"
+    }
+  ],
+  "Validator": {
+    "NetworkRunTicks" : 50,
+    "NetworkRecoverTicks": 50
+  },
+  "LogLevel": 4
+}

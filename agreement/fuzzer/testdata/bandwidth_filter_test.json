@@ -1,0 +1,28 @@
+{
+  "FuzzerName": "limitBandwidth",
+  "NodesCount": 5,
+  "Filters": [
+    {
+      "Name": "BandwidthFilter",
+      "UpstreamBandwidth": {
+        "0": 1000,
+        "1": 5000,
+        "2": 1000,
+        "3": 4000,
+        "4": 4000
+      },
+      "DownstreamBandwidth": {
+        "0": 20000,
+        "1": 20000,
+        "2": 20000,
+        "3": 20000,
+        "4": 20000
+      }
+    }
+  ],
+  "Validator": {
+    "NetworkRunTicks" : 100,
+    "NetworkRecoverTicks": 200
+  },
+  "LogLevel":4
+}

@@ -1,0 +1,50 @@
+{
+  "FuzzerName": "messageDelayTest",
+  "NodesCount": 5,
+  "Filters": [
+    {
+      "Name": "MessageDelayFilter",
+      "UpStreamTickDelay": {
+        "0": {
+          "*": 12
+        },
+        "1": {
+          "*": 2
+        },
+        "2": {
+          "*": 9
+        },
+        "3": {
+          "*": 6
+        },
+        "4": {
+          "*": 5
+        }
+      },
+      "DownStreamTickDelay": {
+        "0": {
+          "*": 4,
+          "AV": 30,
+          "VV": 40
+        },
+        "1": {
+          "*": 4
+        },
+        "2": {
+          "*": 9
+        },
+        "3": {
+          "*": 6
+        },
+        "4": {
+          "*": 5
+        }
+      }
+    }
+  ],
+  "Validator": {
+    "NetworkRunTicks" : 100,
+    "NetworkRecoverTicks": 150
+  },
+  "LogLevel": 4
+}

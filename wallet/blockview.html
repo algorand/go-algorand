@@ -1,0 +1,202 @@
+<html>
+  <head>
+    <title>Algorand block viewer</title>
+    <script src="lib/jquery-3.3.1.min.js"></script>
+    <script src="lib/mustache.min.js"></script>
+    <script src="algorand.js"></script>
+  </head>
+
+  <body onload="onload()">
+    <h1>Algorand block viewer</h1>
+
+    <div>
+      <table border=0>
+        <tr>
+          <td>
+            algod URL:
+          </td>
+          <td>
+            <input id="algod-url" value="http://127.0.0.1:8080">
+          </td>
+        </tr>
+        <tr>
+          <td>
+            API Token:
+          </td>
+          <td>
+            <input id="algod-token" value="">
+          </td>
+        </tr>
+        <tr colspan=2>
+          <td><button id="algod-refresh">Reload</button></td>
+        </tr>
+      </table>
+    </div>
+    <div>
+      Block: <button id="block-prev">Previous</button>
+      <input id="block-cur" size=5>
+      <button id="block-next">Next</button>
+      <button id="block-latest">Latest</button>
+    </div>
+
+    <div id="block-status">
+    </div>
+
+    <div id="status" style="position: absolute; top: 0; right: 0; background: yellow; ">
+      HTML loaded.
+    </div>
+
+    <script id="block-template" type="text/template">
+      <h2>Block {{thisHash}}</h2>
+
+      <table border=0>
+        <tr><td><b>Prev hash</b></td>
+            <td>{{previousBlockHash}}</td></tr>
+        <tr><td><b>Seed</b></td>
+            <td>{{seed}}</td></tr>
+        <tr><td><b>Proposer</b></td>
+            <td>{{proposer}}</td></tr>
+        <tr><td><b>Round</b></td>
+            <td>{{round}}</td></tr>
+        <tr><td><b>Period</b></td>
+            <td>{{period}}</td></tr>
+        <tr><td><b>Current protocol</b></td>
+            <td>{{currentProtocol}}</td></tr>
+        <tr><td><b>Next protocol</b></td>
+            <td>{{nextProtocol}}</td></tr>
+        <tr><td><b>Next protocol approvals</b></td>
+            <td>{{nextProtocolApprovals}}</td></tr>
+        <tr><td><b>Next protocol vote before</b></td>
+            <td>{{nextProtocolVoteBefore}}</td></tr>
+        <tr><td><b>Next protocol switch on</b></td>
+            <td>{{nextProtocolSwitchOn}}</td></tr>
+        <tr><td><b>Upgrade proposal</b></td>
+            <td>{{upgradePropose}}</td></tr>
+        <tr><td><b>Upgrade approval</b></td>
+            <td>{{upgradeApprove}}</td></tr>
+        <tr><td><b>TxnRoot</b></td>
+            <td>{{txnRoot}}</td></tr>
+        <tr><td><b>Timestamp</b></td>
+            <td>{{timestamp}}</td></tr>
+        <tr><td><b>Transaction Count</b></td>
+            <td>{{txns.transactions.length}}</td></tr>
+      </table>
+
+      {{#txns.transactions}}
+        <h2>Transaction {{tx}}</h2>
+
+        <table border=0>
+          <tr><td><b>Type</b></td>
+              <td>{{type}}</td></tr>
+          <tr><td><b>From</b></td>
+              <td>{{from}}</td></tr>
+          <tr><td><b>To</b></td>
+              <td>{{payment.to}}</td></tr>
+          <tr><td><b>Amount</b></td>
+              <td>{{payment.amount}}</td></tr>
+          <tr><td><b>Fee</b></td>
+              <td>{{fee}}</td></tr>
+          <tr><td><b>First</b></td>
+              <td>{{first-round}}</td></tr>
+            <tr><td><b>Last</b></td>
+                <td>{{last-round}}</td></tr>
+            <tr><td><b>Note</b></td>
+              <td>{{noteb64}}</td></tr>
+        </table>
+      {{/txns.transactions}}
+    </script>
+
+    <script>
+      var baseurl = "";
+      var apitoken = "";
+
+      function reload_config() {
+        apitoken = $('#algod-token').val();
+        baseurl = $('#algod-url').val();
+
+        window.localStorage.setItem('algod-token', apitoken);
+        window.localStorage.setItem('algod-url', baseurl);
+      }
+
+      function load_localstorage() {
+        localstorage_to_input('algod-token');
+        localstorage_to_input('algod-url');
+      }
+
+      function status(s) {
+        console.log(s);
+        $('#status').text(s);
+      }
+
+      function switchToLatest() {
+        status('Querying for latest block..');
+        $.get(baseurl + '/v1/status', function (data) {
+          $('#block-cur').val(data.lastRound);
+          refresh();
+        });
+      }
+
+      function onload() {
+        status("Javascript loaded.");
+
+        load_localstorage();
+
+        reload_config();
+        authAlgorandRequests(apitoken, baseurl);
+
+        var h = window.location.hash;
+        if (h.length > 0 && window.location.hash != '#') {
+          $('#block-cur').val(window.location.hash.substring(1));
+          refresh();
+        } else {
+          switchToLatest();
+        }
+
+        $('#algod-refresh').click(function (e) {
+          reload_config();
+          authAlgorandRequests(apitoken, baseurl);
+          refresh();
+        });
+
+        $('#block-cur').keypress(function (e) {
+          if (e.which != 13) {
+            return;
+          }
+          refresh();
+        });
+
+        $('#block-prev').click(function (e) {
+          var b = parseInt($('#block-cur').val());
+          $('#block-cur').val(b - 1);
+          refresh();
+        });
+
+        $('#block-next').click(function (e) {
+          var b = parseInt($('#block-cur').val());
+          $('#block-cur').val(b + 1);
+          refresh();
+        });
+
+        $('#block-latest').click(function (e) {
+          switchToLatest();
+        });
+      }
+
+      function refresh() {
+        var b = $('#block-cur').val();
+        window.location.replace('#' + b);
+        status("Fetching block " + b);
+
+        var req = $.get(baseurl + '/v1/block/' + b, function (data) {
+          status("Fetched block " + b);
+          var block_template = $('#block-template').html();
+          var block_html = Mustache.to_html(block_template, data);
+          $('#block-status').html(block_html);
+        }).fail(function () {
+          status("Error fetching block " + b + ": " + req.status + " " + req.statusText);
+          $('#block-status').html('');
+        });
+      }
+    </script>
+  </body>
+</html>

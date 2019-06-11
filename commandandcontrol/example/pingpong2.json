@@ -1,0 +1,14 @@
+{
+  "SrcAccount": "",
+  "DelayBetweenTxn": 200,
+  "RandomizeFee": true,
+  "RandomizeAmt": true,
+  "RandomizeDst": false,
+  "MaxFee": 5,
+  "MaxAmt": 200,
+  "NumPartAccounts": 20,
+  "RunTime": 10000,
+  "RestTime": 10000,
+  "RefreshTime": 10000,
+  "MinAccountFunds": 100000
+}

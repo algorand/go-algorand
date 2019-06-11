@@ -1,0 +1,280 @@
+<html>
+  <head>
+    <title>Algorand wallet</title>
+    <script src="lib/jquery-3.3.1.min.js"></script>
+    <script src="lib/mustache.min.js"></script>
+    <script src="algorand.js"></script>
+  </head>
+
+  <body onload="onload()">
+    <h1>Algorand wallet manager</h1>
+
+    <div>
+      <table border=0>
+        <tr>
+          <td>
+            algod URL:
+          </td>
+          <td>
+            <input id="algod-url" value="http://127.0.0.1:8080">
+          </td>
+        </tr>
+        <tr>
+          <td>
+            API Token:
+          </td>
+          <td>
+            <input id="algod-token" value="">
+          </td>
+        </tr>
+        <tr colspan=2>
+          <td><button id="algod-refresh">Reload</button></td>
+        </tr>
+      </table>
+    </div>
+
+    <div>
+      <table border=0>
+        <tr>
+          <td>Agent version:</td>
+          <td><span id="algod-version"></span></td>
+        </tr>
+
+        <tr>
+          <td>Last round:</td>
+          <td><span id="last-round"></span></td>
+        </tr>
+
+        <tr>
+          <td>Last consensus version:</td>
+          <td><span id="last-version"></span></td>
+        </tr>
+
+        <tr>
+          <td>Next consensus version:</td>
+          <td><span id="next-version"></span></td>
+        </tr>
+
+        <tr>
+          <td>Round for next version:</td>
+          <td><span id="next-version-round"></span></td>
+        </tr>
+
+        <tr>
+          <td>Next version supported:</td>
+          <td><span id="next-version-supported"></span></td>
+        </tr>
+      </table>
+    </div>
+
+    <div id="status" style="position: absolute; top: 0; right: 0; background: yellow; ">
+      HTML loaded.
+    </div>
+
+    <script id="wallet-template" type="text/template">
+      <h2>Wallet {{address}}</h2>
+
+      <div>Current balance: {{balance}}</div>
+
+      <div>Transfer
+        <input id="xfer-amount-{{address}}" placeholder="amount" size=5>
+        to
+        <input id="xfer-recipient-{{address}}" placeholder="recipient">
+        (fee <input id="xfer-fee-{{address}}" placeholder="fee" value="1" size=5>)
+        <button data-sender="{{address}}" class="xfer-go">Go</button>
+      </div>
+    </script>
+
+    <script id="txn-template" type="text/template">
+      <table border=0>
+        <tr>
+          <td><b>Transaction</b></td>
+          <td>{{tx}}</td>
+        </tr>
+        <tr>
+          <td>From</td>
+          <td>{{from}}</td>
+        </tr>
+        <tr>
+          <td>To</td>
+          <td>{{to}}</td>
+        </tr>
+        <tr>
+          <td>Submitted</td>
+          <td>{{submitted}}</td>
+        </tr>
+        <tr>
+          <td>Amount</td>
+          <td>{{amount}}</td>
+        </tr>
+        <tr>
+          <td>Fee</td>
+          <td>{{fee}}</td>
+        </tr>
+      </table>
+    </script>
+
+    <div id="new-wallet">
+      <button id="new-wallet-button">Create new wallet</button>
+    </div>
+
+    <div id="wallets">
+    </div>
+
+    <div id="txns-box">
+      <h2>Transactions</h2>
+
+      Max number of transactions:
+      <input id="num-txns" value="10" size=5>
+
+      <div id="txns">
+      </div>
+    </div>
+
+    <script>
+      var baseurl = "";
+      var apitoken = "";
+      var last_wallets_html = "";
+      var status_polling = false;
+
+      function reload_config() {
+        apitoken = $('#algod-token').val();
+        baseurl = $('#algod-url').val();
+
+        window.localStorage.setItem('algod-token', apitoken);
+        window.localStorage.setItem('algod-url', baseurl);
+      }
+
+      function load_localstorage() {
+        localstorage_to_input('algod-token');
+        localstorage_to_input('algod-url');
+      }
+
+      function status(s) {
+        console.log(s);
+        $('#status').text(s);
+      }
+
+      function handle_algod_status_error(req) {
+        status("Fetching status: " + req.statusText);
+        status_polling = false;
+      }
+
+      function handle_algod_status(data) {
+        $('#last-round').text(data.lastRound);
+        $('#last-version').text(data.lastConsensusVersion);
+        $('#next-version').text(data.nextConsensusVersion);
+        $('#next-version-round').text(data.nextConsensusVersionRound);
+        $('#next-version-supported').text(data.nextConsensusVersionSupported);
+
+        refresh();
+
+        var statusreq = $.get(baseurl + '/v1/status/wait-for-block-after/' + data.lastRound, handle_algod_status);
+        statusreq.fail(function() { handle_algod_status_error(statusreq); });
+      }
+
+      function start_polling_algod_status() {
+        if (!status_polling) {
+          var statusreq = $.get(baseurl + '/v1/status', handle_algod_status);
+          statusreq.fail(function() { handle_algod_status_error(statusreq); });
+          status_polling = true;
+        }
+      }
+
+      function onload() {
+        status("Javascript loaded.");
+
+        load_localstorage();
+
+        $('#algod-refresh').click(function (e) {
+          reload_config();
+          authAlgorandRequests(apitoken, baseurl);
+          start_polling_algod_status();
+          refresh();
+          status('Reloaded algod URL');
+        });
+
+        $('#num-txns').keypress(function (e) {
+          if (e.which != 13) {
+            return;
+          }
+          refresh();
+        });
+
+        $('#new-wallet-button').click(function (e) {
+          $.post(baseurl + '/v1/accounts', function (data) {
+            status("New wallet: " + data.address);
+            refresh();
+          });
+        });
+
+        reload_config();
+        authAlgorandRequests(apitoken, baseurl);
+        start_polling_algod_status();
+      }
+
+      function sort_by_address(a, b) {
+        return a.address.localeCompare(b.address);
+      }
+
+      function refresh() {
+        $.get(baseurl + '/versions', function (data) {
+          $('#algod-version').text(data["genesis_id"] + " / " + data.versions);
+        });
+
+        $.get(baseurl + '/XXX-BROKEN/accounts', function (data) {
+          var wallet_template = $('#wallet-template').html();
+          var wallets_html = "";
+          data.sort(sort_by_address);
+
+          data.forEach(function (acct) {
+            wallets_html += Mustache.to_html(wallet_template, acct);
+          });
+
+          if (last_wallets_html != wallets_html) {
+            $('#wallets').html(wallets_html);
+            last_wallets_html = wallets_html;
+          }
+
+          $('.xfer-go').click(function () {
+            var sender = $(this).attr('data-sender');
+            var recipient = $('#xfer-recipient-' + sender).val();
+            var amount = $('#xfer-amount-' + sender).val();
+            var fee = $('#xfer-fee-' + sender).val();
+
+            sender = sender.replace("addr-", "");
+            recipient = recipient.replace("addr-", "");
+
+            status('Transferring ' + amount + ' to ' + recipient + '..');
+
+            $.post(baseurl + '/XXX-BROKEN/pay', {
+              from: sender,
+              to: recipient,
+              amount: parseInt(amount),
+              fee: parseInt(fee),
+            }, function (data) {
+              if (data.ok) {
+                status('Transaction ID ' + data.txid);
+              } else {
+                status('Transaction could not be issued');
+              }
+            });
+          });
+        });
+
+        var num_txns = $('#num-txns').val();
+
+        $.get(baseurl + '/XXX-BROKEN/tx/recent/' + num_txns, function (data) {
+          var txn_template = $('#txn-template').html();
+          var txns_html = "";
+
+          data.txs.forEach(function (txn) {
+            txns_html += Mustache.to_html(txn_template, txn);
+          });
+
+          $('#txns').html(txns_html);
+        });
+      }
+    </script>
+  </body>
+</html>

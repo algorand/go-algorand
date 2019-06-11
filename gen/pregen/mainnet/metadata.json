@@ -1,0 +1,6 @@
+{
+  "Network":           "mainnet",
+  "SchemaID":          "v0.9",
+  "ConsensusProtocol": "https://github.com/algorandfoundation/specs/tree/5615adc36bad610c7f165fa2967f4ecfa75125f0",
+  "Comment":           ""
+}

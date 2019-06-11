@@ -1,0 +1,21 @@
+{
+  "FuzzerName": "messageReorderingTest",
+  "NodesCount": 5,
+  "Filters": [
+    {
+      "Name": "MessageReorderingFilter",
+      "NodesShuffleConfig": {
+        "0": {
+          "SendShuffleSize": 10,
+          "ReceiveShuffleSize": 3,
+          "MaxRetension": 1000000000
+        }
+      }
+    }
+  ],
+  "Validator": {
+    "NetworkRunTicks" : 50,
+    "NetworkRecoverTicks": 50
+  },
+  "LogLevel": 4
+}

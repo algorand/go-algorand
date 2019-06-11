@@ -1,0 +1,728 @@
+{
+  "VersionModifier": ".0",
+  "FirstPartKeyRound": 0,
+  "LastPartKeyRound": 3000000,
+  "ConsensusProtocol": "https://github.com/algorand/spec/tree/a26ed78ed8f834e2b9ccb6eb7d3ee9f629a6e622",
+  "Wallets": [
+    {
+      "Name": "Wallet1",
+      "Online": true,
+      "Stake": 3.2
+    },
+    {
+      "Name": "Wallet2",
+      "Online": true,
+      "Stake": 3.2
+    },
+    {
+      "Name": "Wallet3",
+      "Online": true,
+      "Stake": 3.2
+    },
+    {
+      "Name": "Wallet4",
+      "Online": true,
+      "Stake": 3.2
+    },
+    {
+      "Name": "Wallet5",
+      "Online": true,
+      "Stake": 3.2
+    },
+    {
+      "Name": "Wallet6",
+      "Online": true,
+      "Stake": 3.2
+    },
+    {
+      "Name": "Wallet7",
+      "Online": true,
+      "Stake": 3.2
+    },
+    {
+      "Name": "Wallet8",
+      "Online": true,
+      "Stake": 3.2
+    },
+    {
+      "Name": "Wallet9",
+      "Online": true,
+      "Stake": 3.2
+    },
+    {
+      "Name": "Wallet10",
+      "Online": true,
+      "Stake": 3.2
+    },
+    {
+      "Name": "Wallet11",
+      "Online": true,
+      "Stake": 3.2
+    },
+    {
+      "Name": "Wallet12",
+      "Online": true,
+      "Stake": 3.2
+    },
+    {
+      "Name": "Wallet13",
+      "Online": true,
+      "Stake": 3.2
+    },
+    {
+      "Name": "Wallet14",
+      "Online": true,
+      "Stake": 3.2
+    },
+    {
+      "Name": "Wallet15",
+      "Online": true,
+      "Stake": 3.2
+    },
+    {
+      "Name": "Wallet16",
+      "Online": true,
+      "Stake": 3.2
+    },
+    {
+      "Name": "Wallet17",
+      "Online": true,
+      "Stake": 3.2
+    },
+    {
+      "Name": "Wallet18",
+      "Online": true,
+      "Stake": 3.2
+    },
+    {
+      "Name": "Wallet19",
+      "Online": true,
+      "Stake": 3.2
+    },
+    {
+      "Name": "Wallet20",
+      "Online": true,
+      "Stake": 3.2
+    },
+    {
+      "Name": "bank-testnet",
+      "Stake": 2,
+      "Online": true
+    },
+    {
+      "Name": "n1-testnet",
+      "Stake": 1.5,
+      "Online": true
+    },
+    {
+      "Name": "n2-testnet",
+      "Stake": 1.5,
+      "Online": true
+    },
+    {
+      "Name": "n3-testnet",
+      "Stake": 1.5,
+      "Online": true
+    },
+    {
+      "Name": "n4-testnet",
+      "Stake": 1.5,
+      "Online": true
+    },
+    {
+      "Name": "n5-testnet",
+      "Stake": 1.5,
+      "Online": true
+    },
+    {
+      "Name": "n6-testnet",
+      "Stake": 1.5,
+      "Online": true
+    },
+    {
+      "Name": "n7-testnet",
+      "Stake": 1.5,
+      "Online": true
+    },
+    {
+      "Name": "n8-testnet",
+      "Stake": 1.5,
+      "Online": true
+    },
+    {
+      "Name": "n9-testnet",
+      "Stake": 1.5,
+      "Online": true
+    },
+    {
+      "Name": "n10-testnet",
+      "Stake": 1.5,
+      "Online": true
+    },
+    {
+      "Name": "n11-testnet",
+      "Stake": 0.5,
+      "Online": true
+    },
+    {
+      "Name": "n12-testnet",
+      "Stake": 0.5,
+      "Online": true
+    },
+    {
+      "Name": "n13-testnet",
+      "Stake": 0.5,
+      "Online": true
+    },
+    {
+      "Name": "n14-testnet",
+      "Stake": 0.5,
+      "Online": true
+    },
+    {
+      "Name": "n15-testnet",
+      "Stake": 2,
+      "Online": true
+    },
+    {
+      "Name": "n16-testnet",
+      "Stake": 2,
+      "Online": true
+    },
+    {
+      "Name": "n17-testnet",
+      "Stake": 2,
+      "Online": true
+    },
+    {
+      "Name": "n18-testnet",
+      "Stake": 2,
+      "Online": true
+    },
+    {
+      "Name": "n19-testnet",
+      "Stake": 3,
+      "Online": true
+    },
+    {
+      "Name": "n20-testnet",
+      "Stake": 3,
+      "Online": true
+    },
+    {
+      "Name": "pp1-testnet",
+      "Stake": 0.5,
+      "Online": true
+    },
+    {
+      "Name": "pp2-testnet",
+      "Stake": 0.25,
+      "Online": true
+    },
+    {
+      "Name": "pp3-testnet",
+      "Stake": 0.25,
+      "Online": true
+    },
+    {
+      "Name": "u1-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u2-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u3-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u4-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u5-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u6-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u7-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u8-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u9-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u10-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u11-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u12-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u13-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u14-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u15-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u16-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u17-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u18-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u19-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u20-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u21-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u22-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u23-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u24-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u25-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u26-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u27-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u28-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u29-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u30-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u31-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u32-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u33-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u34-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u35-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u36-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u37-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u38-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u39-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u40-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u41-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u42-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u43-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u44-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u45-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u46-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u47-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u48-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u49-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u50-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u51-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u52-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u53-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u54-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u55-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u56-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u57-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u58-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u59-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u60-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u61-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u62-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u63-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u64-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u65-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u66-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u67-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u68-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u69-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u70-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u71-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u72-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u73-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u74-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u75-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u76-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u77-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u78-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u79-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u80-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u81-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u82-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u83-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u84-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u85-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u86-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u87-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u88-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u89-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u90-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u91-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u92-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u93-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u94-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u95-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u96-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u97-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u98-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u99-testnet",
+      "Stake": 0.02,
+      "Online": false
+    },
+    {
+      "Name": "u100-testnet",
+      "Stake": 0.02,
+      "Online": false
+    }
+  ]
+}

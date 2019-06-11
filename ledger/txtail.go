@@ -1,0 +1,117 @@
+// Copyright (C) 2019 Algorand, Inc.
+// This file is part of go-algorand
+//
+// go-algorand is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// go-algorand is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
+package ledger
+
+import (
+	"fmt"
+
+	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions"
+)
+
+type roundTxMembers struct {
+	txids map[transactions.Txid]struct{}
+	proto config.ConsensusParams
+}
+
+type txTail struct {
+	recent map[basics.Round]roundTxMembers
+}
+
+func (t *txTail) loadFromDisk(l ledgerForTracker) error {
+	latest := l.Latest()
+	hdr, err := l.BlockHdr(latest)
+	if err != nil {
+		return fmt.Errorf("txTail: could not get latest block header: %v", err)
+	}
+	proto := config.Consensus[hdr.CurrentProtocol]
+
+	// If the latest round is R, then any transactions from blocks strictly older than
+	// R + 1 - proto.MaxTxnLife
+	// could not be valid in the next round (R+1), and so are irrelevant.
+	// Thus we load the txids from blocks R+1-maxTxnLife to R, inclusive
+	old := (latest + 1).SubSaturate(basics.Round(proto.MaxTxnLife))
+
+	t.recent = make(map[basics.Round]roundTxMembers)
+	for ; old <= latest; old++ {
+		blk, err := l.Block(old)
+		if err != nil {
+			return err
+		}
+
+		payset, err := blk.DecodePayset()
+		if err != nil {
+			return err
+		}
+
+		t.recent[old] = roundTxMembers{
+			txids: make(map[transactions.Txid]struct{}),
+			proto: config.Consensus[blk.CurrentProtocol],
+		}
+		for _, tx := range payset {
+			t.recent[old].txids[tx.ID()] = struct{}{}
+		}
+	}
+
+	return nil
+}
+
+func (t *txTail) close() {
+}
+
+func (t *txTail) newBlock(blk bookkeeping.Block, delta stateDelta) {
+	rnd := blk.Round()
+
+	if t.recent[rnd].txids != nil {
+		// Repeat, ignore
+		return
+	}
+
+	t.recent[rnd] = roundTxMembers{
+		txids: delta.txids,
+		proto: config.Consensus[blk.CurrentProtocol],
+	}
+}
+
+func (t *txTail) committedUpTo(rnd basics.Round) basics.Round {
+	maxlife := basics.Round(t.recent[rnd].proto.MaxTxnLife)
+	for r := range t.recent {
+		if r+maxlife < rnd {
+			delete(t.recent, r)
+		}
+	}
+
+	return (rnd + 1).SubSaturate(maxlife)
+}
+
+func (t *txTail) isDup(firstValid basics.Round, lastValid basics.Round, txid transactions.Txid) (bool, error) {
+	for rnd := firstValid; rnd <= lastValid; rnd++ {
+		rndtxs := t.recent[rnd].txids
+		if rndtxs == nil {
+			return true, fmt.Errorf("txTail: tried to check for dup in missing round %d", rnd)
+		}
+
+		_, present := rndtxs[txid]
+		if present {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
