@@ -109,6 +109,10 @@ var meanPing = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_peer_me
 var medianPing = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_peer_median_ping_seconds", Description: "Network round trip time to median peer in seconds."})
 var maxPing = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_peer_max_ping_seconds", Description: "Network round trip time to slowest peer in seconds."})
 
+var peers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_peers", Description: "Number of active peers."})
+var incomingPeers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_incoming_peers", Description: "Number of active incoming peers."})
+var outgoingPeers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_outgoing_peers", Description: "Number of active outgoing peers."})
+
 // Peer opaque interface for referring to a neighbor in the network
 type Peer interface{}
 
@@ -849,6 +853,9 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 			Incoming:     true,
 			InstanceName: otherInstanceName,
 		})
+
+	peers.Set(float64(wn.NumPeers()), nil)
+	incomingPeers.Set(float64(wn.numIncomingPeers()), nil)
 }
 
 func (wn *WebsocketNetwork) messageHandlerThread() {
@@ -1446,6 +1453,9 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 			InstanceName: myInstanceName,
 		})
 
+	peers.Set(float64(wn.NumPeers()), nil)
+	outgoingPeers.Set(float64(wn.numOutgoingPeers()), nil)
+
 	if wn.prioScheme != nil {
 		challenge := response.Header.Get(PriorityChallengeHeader)
 		if challenge != "" {
@@ -1520,6 +1530,10 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 			},
 			Reason: string(reason),
 		})
+
+	peers.Set(float64(wn.NumPeers()), nil)
+	incomingPeers.Set(float64(wn.numIncomingPeers()), nil)
+	outgoingPeers.Set(float64(wn.numOutgoingPeers()), nil)
 
 	wn.peersLock.Lock()
 	defer wn.peersLock.Unlock()

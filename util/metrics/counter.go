@@ -172,3 +172,22 @@ func (counter *Counter) WriteMetric(buf *strings.Builder, parentLabels string) {
 		buf.WriteString("\n")
 	}
 }
+
+func (counter *Counter) AddMetric(values map[string]string) {
+	counter.Lock()
+	defer counter.Unlock()
+
+	if len(counter.values) < 1 {
+		return
+	}
+
+	for _, l := range counter.values {
+		sum := l.counter
+		if len(l.labels) == 0 {
+			sum += float64(atomic.LoadUint64(&counter.intValue))
+		}
+
+		values[counter.name] = strconv.FormatFloat(sum, 'f', -1, 32)
+	}
+
+}
