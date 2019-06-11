@@ -37,6 +37,13 @@ fi
 mkdir -p ${HOME}/go
 mkdir -p ${HOME}/gpgbin
 
+cat <<EOF>${HOME}/gpgbin/remote_gpg_socket
+export GOPATH=\${HOME}/go
+export PATH=\${HOME}/gpgbin:${GOPATH}/bin:/usr/local/go/bin:${PATH}
+gpgconf --list-dirs|grep agent-socket|awk -F: '{ print \$2 }'
+EOF
+chmod +x ${HOME}/gpgbin/remote_gpg_socket
+
 if [ "${DISTRIB_ID}" = "Ubuntu" ]; then
     if [ "${DISTRIB_RELEASE}" = "16.04" ]; then
 	echo "WARNING: Ubuntu 16.04 is DEPRECATED"
@@ -100,7 +107,7 @@ sg docker "docker pull centos:7"
 # Check out
 mkdir -p ${GOPATH}/src/github.com/algorand
 if [ ! -d "${GOPATH}/src/github.com/algorand/go-algorand/.git" ]; then
-    (cd ${GOPATH}/src/github.com/algorand && git clone "${GIT_REPO_PATH}")
+    (cd ${GOPATH}/src/github.com/algorand && git clone "${GIT_REPO_PATH}" go-algorand)
 fi
 cd ${GOPATH}/src/github.com/algorand/go-algorand
 git checkout "${GIT_CHECKOUT_LABEL}"
@@ -116,6 +123,9 @@ fi
 
 cat<<EOF>> "${HOME}/.bashrc"
 export EDITOR=vi
+EOF
+
+cat<<EOF>> "${HOME}/.profile"
 export GOPATH=\${HOME}/go
 export PATH=\${HOME}/gpgbin:\${GOPATH}/bin:/usr/local/go/bin:\${PATH}
 EOF

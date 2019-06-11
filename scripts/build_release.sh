@@ -58,10 +58,10 @@ fi
 BUILD_NUMBER=
 if [ -e buildnumber.dat ]; then
     BUILD_NUMBER=$(cat ./buildnumber.dat)
+    BUILD_NUMBER=$((${BUILD_NUMBER} + 1))
 else
     BUILD_NUMBER=0
 fi
-BUILD_NUMBER=$((${BUILD_NUMBER} + 1))
 echo ${BUILD_NUMBER} > ./buildnumber.dat
 export FULLVERSION=$(./scripts/compute_build_number.sh -f)
 
@@ -74,6 +74,18 @@ make ${GOPATH}/src/github.com/algorand/go-algorand/crypto/lib/libsodium.a
 make build
 
 scripts/build_packages.sh "${PLATFORM}"
+
+# Run RPM bulid in Centos7 Docker container
+sg docker "docker build -t algocentosbuild - < scripts/centos-build.Dockerfile"
+
+# cleanup our libsodium build
+if [ -f ${GOPATH}/src/github.com/algorand/go-algorand/crypto/libsodium-fork/Makefile ]; then
+    (cd ${GOPATH}/src/github.com/algorand/go-algorand/crypto/libsodium-fork && make distclean)
+fi
+rm -rf ${GOPATH}/src/github.com/algorand/go-algorand/crypto/lib
+
+# do the RPM build
+sg docker "docker run --mount type=bind,src=${GOPATH}/src,dst=/root/go/src --mount type=bind,src=${HOME},dst=/root/subhome --mount type=bind,src=/usr/local/go,dst=/usr/local/go -a stdout -a stderr algocentosbuild /root/go/src/github.com/algorand/go-algorand/scripts/build_release_centos_docker.sh"
 
 # Tag Source
 git add -A
@@ -88,19 +100,6 @@ fi
 git push origin ${TAG}
 
 git archive --prefix=algorand-${FULLVERSION}/ "${TAG}" | gzip > ${PKG_ROOT}/algorand_${CHANNEL}_source_${FULLVERSION}.tar.gz
-
-# Run RPM bulid in Centos7 Docker container
-sg docker "docker build -t algocentosbuild - < scripts/centos-build.Dockerfile"
-
-# cleanup our libsodium build
-if [ -f ${GOPATH}/src/github.com/algorand/go-algorand/crypto/libsodium-fork/Makefile ]; then
-    (cd ${GOPATH}/src/github.com/algorand/go-algorand/crypto/libsodium-fork && make distclean)
-fi
-rm -rf ${GOPATH}/src/github.com/algorand/go-algorand/crypto/lib
-
-# do the RPM build
-sg docker "docker run --mount type=bind,src=${GOPATH}/src,dst=/root/go/src --mount type=bind,src=${HOME},dst=/root/subhome --mount type=bind,src=/usr/local/go,dst=/usr/local/go -a stdout -a stderr algocentosbuild /root/go/src/github.com/algorand/go-algorand/scripts/build_release_centos_docker.sh"
-
 
 # create *.sig gpg signatures
 cd ${PKG_ROOT}
@@ -132,6 +131,16 @@ echo "ami-id:" > "${STATUSFILE}"
 curl --silent http://169.254.169.254/latest/meta-data/ami-id >> "${STATUSFILE}"
 cat <<EOF>>"${STATUSFILE}"
 
+
+go version:
+EOF
+go version >>"${STATUSFILE}"
+cat <<EOF>>"${STATUSFILE}"
+
+go env:
+EOF
+go env >>"${STATUSFILE}"
+cat <<EOF>>"${STATUSFILE}"
 
 dpkg-l:
 EOF
