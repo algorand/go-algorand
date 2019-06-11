@@ -173,6 +173,7 @@ func (counter *Counter) WriteMetric(buf *strings.Builder, parentLabels string) {
 	}
 }
 
+// AddMetric adds the metric into the map
 func (counter *Counter) AddMetric(values map[string]string) {
 	counter.Lock()
 	defer counter.Unlock()
