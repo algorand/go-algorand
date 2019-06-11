@@ -175,8 +175,7 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *eval
 	}
 
 	if aux == nil {
-		aux = &evalAux{
-		}
+		aux = &evalAux{}
 	}
 
 	base := &roundCowBase{
