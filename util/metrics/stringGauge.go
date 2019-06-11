@@ -1,5 +1,3 @@
-// +build telemetry
-
 package metrics
 
 import (
