@@ -89,7 +89,11 @@ func init() {
 }
 
 func makeTestWebsocketNodeWithConfig(t testing.TB, conf config.Local) *WebsocketNetwork {
-	log := logging.TestingLog(t)
+	return makeTestWebsocketNodeWithNodeNameAndConfig(t, "testnode", conf)
+}
+
+func makeTestWebsocketNodeWithNodeNameAndConfig(t testing.TB, nodename string, conf config.Local) *WebsocketNetwork {
+	log := logging.TestingLog(t).With("node", nodename)
 	log.SetLevel(logging.Level(conf.BaseLoggerDebugLevel))
 	wn := &WebsocketNetwork{
 		log:       log,
@@ -1353,4 +1357,116 @@ func TestWebsocketNetwork_checkHeaders(t *testing.T) {
 			}
 		})
 	}
+}
+
+func getNetConfigWithMaxConnections(maxConnections int) (netConfig config.Local) {
+
+	const xForwardedAddrHeaderKey = "X-Forwarded-Addr"
+	const CFxForwardedAddrHeaderKey = "Cf-Connecting-Ip"
+
+	netConfig = config.GetDefaultLocal()
+	netConfig.Archival = false
+	netConfig.GossipFanout = 4
+	netConfig.NetAddress = "127.0.0.1:0"
+	netConfig.BaseLoggerDebugLevel = uint32(logging.Debug)
+	netConfig.IncomingConnectionsLimit = -1
+	netConfig.DNSBootstrapID = ""
+	netConfig.UseXForwardedForAddressField = ""
+	netConfig.MaxConnectionsPerIP = maxConnections
+
+	return
+}
+
+func TestPerIPConnectionLimit(t *testing.T) {
+	//netA := makeTestFilterWebsocketNode(t, "a")
+	netA := makeTestWebsocketNodeWithNodeNameAndConfig(t, "a", getNetConfigWithMaxConnections(1))
+	netA.config.GossipFanout = 1
+	netA.Start()
+	defer func() { t.Log("stopping A"); netA.Stop(); t.Log("A done") }()
+
+	addrA, postListen := netA.Address()
+	require.True(t, postListen)
+	t.Log(addrA)
+
+	netB1 := makeTestWebsocketNodeWithNodeNameAndConfig(t, "b1", getNetConfigWithMaxConnections(2))
+	netB1.config.GossipFanout = 2
+	netB1.phonebook = &oneEntryPhonebook{addrA}
+	netB1.Start()
+	defer func() { t.Log("stopping B1"); netB1.Stop(); t.Log("B1 done") }()
+
+	netB2 := makeTestWebsocketNodeWithNodeNameAndConfig(t, "b2", getNetConfigWithMaxConnections(2))
+	netB2.config.GossipFanout = 2
+	netB2.phonebook = &oneEntryPhonebook{addrA}
+	netB2.Start()
+	defer func() { t.Log("stopping B2"); netB2.Stop(); t.Log("B2 done") }()
+
+	netB3 := makeTestWebsocketNodeWithNodeNameAndConfig(t, "b2", getNetConfigWithMaxConnections(2))
+	netB3.config.GossipFanout = 1
+	netB3.phonebook = &oneEntryPhonebook{addrA}
+	netB3.Start()
+	defer func() { t.Log("stopping B3"); netB3.Stop(); t.Log("B3 done") }()
+
+	counter := &messageCounterHandler{t: t, limit: 1, done: make(chan struct{})}
+	netB1.RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{Tag: protocol.AgreementVoteTag, MessageHandler: counter}})
+	debugTag2 := protocol.Tag("D2")
+	counter2 := &messageCounterHandler{t: t, limit: 1, done: make(chan struct{})}
+	netB1.RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{Tag: debugTag2, MessageHandler: counter2}})
+
+	readyTimeout := time.NewTimer(2 * time.Second)
+	if waitReady(t, netA, readyTimeout.C) {
+		t.Log("a ready")
+	} else {
+		t.Log("a not ready")
+		t.Fail()
+	}
+	if waitReady(t, netB1, readyTimeout.C) {
+		t.Log("b1 ready")
+	} else {
+		t.Log("b1 not ready")
+		t.Fail()
+	}
+	if waitReady(t, netB2, readyTimeout.C) {
+		t.Log("b2 ready")
+	} else {
+		t.Log("b2 not ready")
+		t.Fail()
+	}
+	if waitReady(t, netB3, readyTimeout.C) {
+		t.Log("b3 ready")
+	} else {
+		t.Log("b3 not ready")
+		t.Fail()
+	}
+
+	time.Sleep(time.Second * 1)
+
+	// This exercises inbound connection limiting
+
+	t.Log("B1 -> A")
+	err := netB1.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte("message B1"), true, nil)
+	if err != nil {
+		t.Errorf("B1 failed to connect")
+	}
+	t.Log("B2 -> A")
+	time.Sleep(time.Second * 1)
+	err = netB2.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte("message B2 a"), true, nil)
+	if err == nil {
+		t.Errorf("B2 should have failed to connect")
+	}
+	time.Sleep(time.Second * 1)
+	err = netB2.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte("message B2 b"), true, nil)
+	if err == nil {
+		t.Errorf("B2 should have failed to connect")
+	}
+	t.Log("B3 -> A")
+	time.Sleep(time.Second * 1)
+	err = netB3.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte("message B3"), true, nil)
+	if err == nil {
+		t.Errorf("B3 should have failed to connect")
+	}
+	time.Sleep(time.Second * 1)
+	time.Sleep(time.Second * 1)
+
+	t.Log("end of test")
+
 }
