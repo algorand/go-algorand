@@ -1,7 +1,8 @@
+[![Build Status](https://travis-ci.com/algorand/go-algorand.svg?token=25XP72ADqbCQJ3TJVC9S&branch=master)](https://travis-ci.com/algorand/go-algorand)
+
 go-algorand
 ====================
-Algorand's official implementation in Go.  
-[![Build Status](https://travis-ci.com/algorand/go-algorand.svg?token=25XP72ADqbCQJ3TJVC9S&branch=master)](https://travis-ci.com/algorand/go-algorand)
+Algorand's official implementation in Go.
 
 Algorand is a permissionless, pure proof-of-stake blockchain that delivers decentralization, scalability, security, and transaction finality.
 
@@ -42,10 +43,16 @@ make test
 make integration 
 ```
 
-#### style
+#### style and checks
 ```bash
 make fmt
 make lint
+make fix
+make vet
+```
+or alternatively
+```bash
+make sanity
 ```
 
 ### Running a node
@@ -71,6 +78,7 @@ The following packages provide core functionality to the `algod` and `kmd` daemo
      - `account` defines accounts, including "root" accounts (which can spend money) and "participation" accounts (which can participate in the agreement protocol).
 	 - `transactions` defines transactions that accounts can issue against the Algorand state.  These include standard payments and also participation key registration transactions.
 	 - `bookkeeping` defines blocks, which are batches of transactions atomically committed to Algorand.
+	 - `pools` implements the transaction pool.  The transaction pool holds transactions seen by a node in memory before they are proposed in a block.
 	 - `committee` implements the credentials that authenticate a participating account's membership in the agreement protocol.
   - `ledger` contains the Algorand Ledger state machine, which holds the sequence of blocks.  The Ledger executes the state transitions that result from applying these blocks.  It answers queries on blocks (e.g., what transactions were in the last committed block?) and on accounts (e.g., what is my balance?).
   - `protocol` declares constants used to identify protocol versions, tags for routing network messages, and prefixes for domain separation of cryptographic inputs.  It also implements the canonical encoder.

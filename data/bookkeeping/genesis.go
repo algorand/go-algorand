@@ -59,7 +59,7 @@ type Genesis struct {
 	Timestamp int64 `codec:"timestamp"`
 
 	// Arbitrary genesis comment string - will be excluded from file if empty
-	Comment string  `codec:"comment"`
+	Comment string `codec:"comment"`
 }
 
 // LoadGenesisFromFile attempts to load a Genesis structure from a (presumably) genesis.json file.

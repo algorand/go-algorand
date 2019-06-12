@@ -21,6 +21,8 @@ if [ ! "$#" -eq 3 ]; then
     exit 1
 fi
 
+set -x
+
 OS=$1
 ARCH=$2
 PKG_ROOT=$3
@@ -36,7 +38,12 @@ cd ${REPO_DIR}
 
 echo "Building package for '${OS} - ${ARCH}'"
 
-env GOOS=${OS} GOARCH=${ARCH} scripts/build_prod.sh
+if [ -z "${NO_BUILD}" ]; then
+    env GOOS=${OS} GOARCH=${ARCH} scripts/build_prod.sh
+else
+    echo "already built"
+    true
+fi
 
 if [ $? -ne 0 ]; then
     echo 'Error building! Aborting...'

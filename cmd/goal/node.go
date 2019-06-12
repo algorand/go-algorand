@@ -17,8 +17,8 @@
 package main
 
 import (
-	"encoding/json"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"os"
 	"time"
@@ -347,7 +347,7 @@ var pendingTxnsCmd = &cobra.Command{
 var waitCmd = &cobra.Command{
 	Use:   "wait",
 	Short: "Waits for the node to make progress",
-	Long: "Waits for the node to make progress, which includes catching up",
+	Long:  "Waits for the node to make progress, which includes catching up",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		client := ensureAlgodClient(ensureSingleDataDir())
@@ -360,16 +360,16 @@ var waitCmd = &cobra.Command{
 		endTime := time.After(time.Second * time.Duration(waitSec))
 		for {
 			select {
-				case <-endTime:
-					reportErrorf("Timed out waiting for node to make progress")
-				case <-time.After(500 * time.Millisecond):
-					stat, err = client.Status()
-					if err != nil {
-						reportErrorf(errorNodeStatus, err)
-					}
-					if startRound != stat.LastRound {
-						os.Exit(0)
-					}
+			case <-endTime:
+				reportErrorf("Timed out waiting for node to make progress")
+			case <-time.After(500 * time.Millisecond):
+				stat, err = client.Status()
+				if err != nil {
+					reportErrorf(errorNodeStatus, err)
+				}
+				if startRound != stat.LastRound {
+					os.Exit(0)
+				}
 			}
 		}
 	},

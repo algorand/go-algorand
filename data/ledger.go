@@ -53,7 +53,7 @@ func makeGenesisBlocks(proto protocol.ConsensusVersion, genesisBal GenesisBalanc
 	if !ok {
 		return nil, fmt.Errorf("unsupported protocol %s", proto)
 	}
-  
+
 	poolAddr := basics.Address(genesisBal.rewardsPool)
 	incentivePoolBalanceAtGenesis := genesisBal.balances[poolAddr].MicroAlgos
 

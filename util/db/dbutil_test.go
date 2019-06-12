@@ -20,6 +20,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -201,4 +203,61 @@ func TestDBConcurrency(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
+}
+
+func TestDBConcurrencyRW(t *testing.T) {
+	fn := fmt.Sprintf("/dev/shm/%s.%d.sqlite3", t.Name(), crypto.RandUint64())
+	acc, err := MakeAccessor(fn, false, false)
+	require.NoError(t, err)
+
+	acc2, err := MakeAccessor(fn, true, false)
+	require.NoError(t, err)
+
+	err = acc.Atomic(func(tx *sql.Tx) error {
+		_, err := tx.Exec("CREATE TABLE t (a INTEGER PRIMARY KEY)")
+		return err
+	})
+	require.NoError(t, err)
+
+	var lastInsert int64
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer atomic.StoreInt64(&lastInsert, -1)
+		for i := int64(0); i < 10000; i++ {
+			errw := acc.Atomic(func(tx *sql.Tx) error {
+				_, err := tx.Exec("INSERT INTO t (a) VALUES (?)", i)
+				return err
+			})
+			atomic.StoreInt64(&lastInsert, i)
+			require.NoError(t, errw)
+		}
+	}()
+
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				id := atomic.LoadInt64(&lastInsert)
+				if id == 0 {
+					continue
+				}
+				if id < 0 {
+					break
+				}
+				var x int64
+				errsel := acc2.Atomic(func(tx *sql.Tx) error {
+					return tx.QueryRow("SELECT a FROM t WHERE a=?", id).Scan(&x)
+				})
+				if errsel != nil {
+					t.Errorf("selecting %d: %v", id, errsel)
+				}
+				require.Equal(t, x, id)
+			}
+		}()
+	}
+
+	wg.Wait()
 }
