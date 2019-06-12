@@ -64,6 +64,9 @@ else
     BUILD_NUMBER=0
 fi
 echo ${BUILD_NUMBER} > ./buildnumber.dat
+git add -A
+git commit -m "Build ${BUILD_NUMBER}"
+git push
 export FULLVERSION=$(./scripts/compute_build_number.sh -f)
 
 # a bash user might `source build_env` to manually continue a broken build
@@ -107,8 +110,6 @@ rm -rf ${GOPATH}/src/github.com/algorand/go-algorand/crypto/lib
 sg docker "docker run --env-file ${HOME}/build_env_docker --mount type=bind,src=${GOPATH}/src,dst=/root/go/src --mount type=bind,src=${HOME},dst=/root/subhome --mount type=bind,src=/usr/local/go,dst=/usr/local/go -a stdout -a stderr algocentosbuild /root/go/src/github.com/algorand/go-algorand/scripts/build_release_centos_docker.sh"
 
 # Tag Source
-git add -A
-git commit -m "Build ${BUILD_NUMBER}"
 
 TAG=${BRANCH}-${FULLVERSION}
 if [ ! -z "${SIGNING_KEY_ADDR}" ]; then
