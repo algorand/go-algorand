@@ -1,6 +1,6 @@
 [algorand]
 name=Algorand
-baseurl=http://algorand-releases.s3-website-us-east-1.amazonaws.com/rpm/stable/
+baseurl=https://releases.algorand.com/rpm/stable/
 enabled=1
 gpgcheck=1
-gpgkey=http://algorand-releases.s3-website-us-east-1.amazonaws.com/key.pub
+gpgkey=https://releases.algorand.com/key.pub
