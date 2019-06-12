@@ -583,6 +583,18 @@ func (l amCoserviceListener) dec(sum uint) {
 	}
 }
 
+// copied from fuzzer/ledger_test.go. We can merge once a refactor seems necessary.
+func generatePseudoRandomVRF(keynum int) *crypto.VRFSecrets {
+	seed := [32]byte{}
+	seed[0] = byte(keynum % 255)
+	seed[1] = byte(keynum / 255)
+	pk, sk := crypto.VrfKeygenFromSeed(seed)
+	return &crypto.VRFSecrets{
+		PK: pk,
+		SK: sk,
+	}
+}
+
 func createTestAccountsAndBalances(t *testing.T, numNodes int, rootSeed []byte) (accounts []account.Participation, balances map[basics.Address]basics.BalanceRecord) {
 	off := int(rand.Uint32() >> 2) // prevent name collision from running tests more than once
 
@@ -590,44 +602,63 @@ func createTestAccountsAndBalances(t *testing.T, numNodes int, rootSeed []byte) 
 	accounts = make([]account.Participation, numNodes)
 	balances = make(map[basics.Address]basics.BalanceRecord, numNodes)
 	var seed crypto.Seed
-	if len(rootSeed) < 32 {
-		crypto.RandBytes(seed[:])
-	} else {
-		copy(seed[:], rootSeed)
-	}
+	copy(seed[:], rootSeed)
 
 	for i := 0; i < numNodes; i++ {
-		stake := basics.MicroAlgos{Raw: 1000000}
+		var rootAddress basics.Address
+		// add new account rootAddress to db
+		{
+			rootAccess, err := db.MakeAccessor(t.Name()+"root"+strconv.Itoa(i+off), false, true)
+			if err != nil {
+				panic(err)
+			}
+			seed = sha256.Sum256(seed[:]) // rehash every node to get different root addresses
+			root, err := account.ImportRoot(rootAccess, seed)
+			if err != nil {
+				panic(err)
+			}
+			rootAddress = root.Address()
+		}
+
+		var v *crypto.OneTimeSignatureSecrets
 		firstValid := basics.Round(0)
 		lastValid := basics.Round(1000)
+		// generate new participation keys
+		{
+			// Compute how many distinct participation keys we should generate
+			keyDilution := config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution
+			firstID := basics.OneTimeIDForRound(firstValid, keyDilution)
+			lastID := basics.OneTimeIDForRound(lastValid, keyDilution)
+			numBatches := lastID.Batch - firstID.Batch + 1
 
-		rootAccess, err := db.MakeAccessor(t.Name()+"root"+strconv.Itoa(i+off), false, true)
-
-		if err != nil {
-			panic(err)
+			// Generate them
+			v = crypto.GenerateOneTimeSignatureSecrets(firstID.Batch, numBatches)
 		}
 
-		seed = sha256.Sum256(seed[:])
-		root, err := account.ImportRoot(rootAccess, seed)
-		if err != nil {
-			panic(err)
+		// save partkeys to db
+		{
+			partAccess, err := db.MakeAccessor(t.Name()+"part"+strconv.Itoa(i+off), false, true)
+			if err != nil {
+				panic(err)
+			}
+			accounts[i] = account.Participation{
+				Parent:     rootAddress,
+				VRF:        generatePseudoRandomVRF(i),
+				Voting:     v,
+				FirstValid: firstValid,
+				LastValid:  lastValid,
+				Store:      partAccess,
+			}
+			err = accounts[i].Persist()
+			if err != nil {
+				panic(err)
+			}
 		}
-		rootAddress := root.Address()
 
-		partAccess, err := db.MakeAccessor(t.Name()+"part"+strconv.Itoa(i+off), false, true)
-
-		if err != nil {
-			panic(err)
-		}
-
-		accounts[i], err = account.FillDBWithParticipationKeys(partAccess, rootAddress, firstValid, lastValid, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
-		if err != nil {
-			panic(err)
-		}
-
+		// expose balances for future ledger creation
 		acctData := basics.AccountData{
 			Status:      basics.Online,
-			MicroAlgos:  stake,
+			MicroAlgos:  basics.MicroAlgos{Raw: 1000000},
 			VoteID:      accounts[i].VotingSecrets().OneTimeSignatureVerifier,
 			SelectionID: accounts[i].VRFSecrets().PK,
 		}
@@ -657,8 +688,7 @@ func setupAgreement(t *testing.T, numNodes int, traceLevel traceLevel, ledgerFac
 	bufCap := 1000 // max number of buffered messages
 
 	// system state setup: keygen, stake initialization
-	accounts, balances := createTestAccountsAndBalances(t, numNodes, nil)
-
+	accounts, balances := createTestAccountsAndBalances(t, numNodes, (&[32]byte{})[:])
 	baseLedger := makeTestLedger(balances)
 
 	// logging
@@ -669,7 +699,6 @@ func setupAgreement(t *testing.T, numNodes int, traceLevel traceLevel, ledgerFac
 	log.SetLevel(logging.Debug)
 
 	// node setup
-
 	clocks := make([]timers.Clock, numNodes)
 	ledgers := make([]Ledger, numNodes)
 	dbAccessors := make([]db.Accessor, numNodes)
@@ -736,7 +765,6 @@ func setupAgreement(t *testing.T, numNodes int, traceLevel traceLevel, ledgerFac
 			panic(r)
 		}
 	}
-
 	return baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, am
 }
 
