@@ -16,8 +16,6 @@ git merge origin/rel/stable
 scp -p ${GOPATH}/src/github.com/algorand/go-algorand/scripts/build_release_setup.sh ubuntu@${TARGET}:~/
 
 # upload the latest public key
-scp -p ~/.gnupg/dev_algorand_com.pub "ubuntu@${TARGET}:~/key.gpg"
-# OR
 GTMPDIR=$(mktemp -d 2>/dev/null || mktemp -d -t "rpmtmp")
 gpg --export --armor -o "${GTMPDIR}/key.gpg" dev@algorand.com
 scp -p "${GTMPDIR}/key.gpg" "ubuntu@${TARGET}:~/key.gpg"
