@@ -36,7 +36,7 @@ var (
 	timestampFile string
 	forceUpdate   bool
 
-	genesisFile   string
+	genesisFile string
 
 	networkName   string
 	sourceFile    string

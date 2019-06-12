@@ -19,6 +19,8 @@ if [ "$#" -eq 0 ]; then
     exit 1
 fi
 
+set -x
+
 export GOPATH=$(go env GOPATH)
 cd ${GOPATH}/src/github.com/algorand/go-algorand
 
@@ -47,9 +49,9 @@ export TIMESTAMP=${TIMESTAMP}
 # To ensure deterministic availability of testnet (stable) builds, prefix the packages
 # with "pending_" so updater will not detect the package before we rename it.
 GATE_PREFIX=""
-if [[ "${CHANNEL}" = "stable" || "${CHANNEL}" = "nightly" ]]; then
-    GATE_PREFIX="pending_"
-fi
+# if [[ "${CHANNEL}" = "stable" || "${CHANNEL}" = "nightly" ]]; then
+#     GATE_PREFIX="pending_"
+# fi
 
 VERSION_COMPONENTS=(${FULLVERSION//\./ })
 export BUILDNUMBER=${VERSION_COMPONENTS[2]}
@@ -126,17 +128,7 @@ for var in "${VARIATION_ARRAY[@]}"; do
                 exit 1
             fi
             pushd ${DEBTMP}
-            tar -zcf ${PKG_ROOT}/${GATE_PREFIX}deb_${CHANNEL}_${PKG_NAME}_${FULLVERSION}.tar.gz *.deb >/dev/null 2>&1
-            popd
-        fi
-
-        # If Linux package, build RPM package as well
-        if [ $(scripts/ostype.sh) = "linux" ]; then
-            RPMTMP=$(mktemp -d 2>/dev/null || mktemp -d -t "rpmtmp")
-            trap "rm -rf ${RPMTMP}" 0
-            scripts/build_rpm.sh ${RPMTMP}
-            pushd ${RPMTMP}
-            tar -zcf ${PKG_ROOT}/${GATE_PREFIX}rpm_${CHANNEL}_${PKG_NAME}_${FULLVERSION}.tar.gz */*.rpm >/dev/null 2>&1
+	    cp -p *.deb ${PKG_ROOT}/${GATE_PREFIX}algorand_${CHANNEL}_${PKG_NAME}_${FULLVERSION}.deb
             popd
         fi
 
@@ -146,9 +138,6 @@ for var in "${VARIATION_ARRAY[@]}"; do
             cp ${PKG_ROOT}/${GATE_PREFIX}node_${CHANNEL}_${PKG_NAME}_${FULLVERSION}.tar.gz ${PKG_ROOT}/${GATE_PREFIX}node_${CHANNEL}-telem_${PKG_NAME}_${FULLVERSION}.tar.gz
             cp ${PKG_ROOT}/${GATE_PREFIX}install_${CHANNEL}_${PKG_NAME}_${FULLVERSION}.tar.gz ${PKG_ROOT}/${GATE_PREFIX}install_${CHANNEL}-telem_${PKG_NAME}_${FULLVERSION}.tar.gz
             cp ${PKG_ROOT}/${GATE_PREFIX}tools_${CHANNEL}_${PKG_NAME}_${FULLVERSION}.tar.gz ${PKG_ROOT}/${GATE_PREFIX}tools_${CHANNEL}-telem_${PKG_NAME}_${FULLVERSION}.tar.gz
-            if [ $(scripts/ostype.sh) = "linux" ]; then
-                cp ${PKG_ROOT}/${GATE_PREFIX}deb_${CHANNEL}_${PKG_NAME}_${FULLVERSION}.tar.gz ${PKG_ROOT}/${GATE_PREFIX}deb_${CHANNEL}-telem_${PKG_NAME}_${FULLVERSION}.tar.gz
-            fi
         fi
     done
 done
