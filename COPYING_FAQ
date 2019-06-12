@@ -39,7 +39,7 @@ software. You cannot remove the "download source" button or link.
 
 If you have written an application that needs to be released under the AGPL and
 you would prefer different licensing terms, Algorand offers commercial
-licensing options. Contact us here.
+licensing options. For more information, contact us at licensing@algorand.com.
 
 6.	What about patents?
 
@@ -49,5 +49,8 @@ us has a patent license. Algorand believes that under current IP laws, the
 safest way to confer patent rights is under established open source licensing. 
 
 Re-implementations of the Algorand consensus protocol or other Algorand
-technology protected by patent rights that do not use Algorand's source code
-require a separate commercial patent license.
+technology protected by patent rights require a separate patent license unless they 
+use Algorand source code.  Commercial and non-commercial (for example, 
+non-profit or academic) licenses are available.  For more information, contact 
+us at patents@algorand.com.
+
