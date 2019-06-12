@@ -17,7 +17,7 @@ scp -p ${GOPATH}/src/github.com/algorand/go-algorand/scripts/build_release_setup
 
 # upload the latest public key
 GTMPDIR=$(mktemp -d 2>/dev/null || mktemp -d -t "rpmtmp")
-gpg --export --armor -o "${GTMPDIR}/key.gpg" sa@algorand.com
+gpg --export --armor -o "${GTMPDIR}/key.gpg" dev@algorand.com
 scp -p "${GTMPDIR}/key.gpg" "ubuntu@${TARGET}:~/key.gpg"
 rm -rf ${GTMPDIR}
 
@@ -47,7 +47,8 @@ type some stuff
 
 # TODO: use simpler expression when we can rely on gpg 2.2 on ubuntu >= 18.04
 #REMOTE_GPG_SOCKET=$(ssh ubuntu@${TARGET} gpgconf --list-dir agent-socket)
-REMOTE_GPG_SOCKET=$(ssh ubuntu@${TARGET} "gpgconf --list-dirs|grep agent-socket|awk -F: '{ print \$2 }'")
+#REMOTE_GPG_SOCKET=$(ssh ubuntu@${TARGET} "gpgconf --list-dirs|grep agent-socket|awk -F: '{ print \$2 }'")
+REMOTE_GPG_SOCKET=$(ssh ubuntu@${TARGET} gpgbin/remote_gpg_socket)
 LOCAL_GPG_SOCKET=$(gpgconf --list-dir agent-extra-socket)
 ssh -A -R "${REMOTE_GPG_SOCKET}:${LOCAL_GPG_SOCKET}" ubuntu@${TARGET}
 

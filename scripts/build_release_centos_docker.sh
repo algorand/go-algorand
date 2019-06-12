@@ -36,6 +36,8 @@ make ${GOPATH}/src/github.com/algorand/go-algorand/crypto/lib/libsodium.a
 
 make build
 
+export NO_BUILD=1
+
 RPMTMP=$(mktemp -d 2>/dev/null || mktemp -d -t "rpmtmp")
 trap "rm -rf ${RPMTMP}" 0
 scripts/build_rpm.sh ${RPMTMP}
