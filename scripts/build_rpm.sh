@@ -11,6 +11,8 @@ if [ ! "$#" -eq 1 ]; then
     exit 1
 fi
 
+set -x
+
 OUTDIR="$1"
 
 export GOPATH=$(go env GOPATH)

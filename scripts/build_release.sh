@@ -46,6 +46,7 @@ OS=${PLATFORM_SPLIT[0]}
 ARCH=${PLATFORM_SPLIT[1]}
 export BRANCH=rel/stable
 export CHANNEL=$(./scripts/compute_branch_channel.sh ${BRANCH})
+export DEFAULTNETWORK=$(./scripts/compute_branch_network.sh)
 export PKG_ROOT=${HOME}/node_pkg
 export VARIATIONS="base"
 # tell underlying 'build' scripts we already built
@@ -58,13 +59,34 @@ fi
 BUILD_NUMBER=
 if [ -e buildnumber.dat ]; then
     BUILD_NUMBER=$(cat ./buildnumber.dat)
+    BUILD_NUMBER=$((${BUILD_NUMBER} + 1))
 else
     BUILD_NUMBER=0
 fi
-BUILD_NUMBER=$((${BUILD_NUMBER} + 1))
 echo ${BUILD_NUMBER} > ./buildnumber.dat
+git add -A
+git commit -m "Build ${BUILD_NUMBER}"
+git push
 export FULLVERSION=$(./scripts/compute_build_number.sh -f)
 
+# a bash user might `source build_env` to manually continue a broken build
+cat <<EOF>${HOME}/build_env
+export RELEASE_GENESIS_PROCESS=${RELEASE_GENESIS_PROCESS}
+export TRANSITION_TELEMETRY_BUILDS=${TRANSITION_TELEMETRY_BUILDS}
+PLATFORM=${PLATFORM}
+OS=${OS}
+ARCH=${ARCH}
+export BRANCH=${BRANCH}
+export CHANNEL=${CHANNEL}
+export DEFAULTNETWORK=${DEFAULTNETWORK}
+export PKG_ROOT=${PKG_ROOT}
+export VARIATIONS=${VARIATIONS}
+RSTAMP=${RSTAMP}
+BUILD_NUMBER=${BUILD_NUMBER}
+export FULLVERSION=${FULLVERSION}
+EOF
+# strip leading 'export ' for docker --env-file
+sed 's/^export //g' < ${HOME}/build_env > ${HOME}/build_env_docker
 
 # Build!
 scripts/configure_dev.sh
@@ -74,20 +96,6 @@ make ${GOPATH}/src/github.com/algorand/go-algorand/crypto/lib/libsodium.a
 make build
 
 scripts/build_packages.sh "${PLATFORM}"
-
-# Tag Source
-git add -A
-git commit -m "Build ${BUILD_NUMBER}"
-
-TAG=${BRANCH}-${FULLVERSION}
-if [ ! -z "${SIGNING_KEY_ADDR}" ]; then
-    git tag -s -u "${SIGNING_KEY_ADDR}" ${TAG} -m "Genesis Timestamp: $(cat ./genesistimestamp.dat)"
-else
-    git tag -s ${TAG} -m "Genesis Timestamp: $(cat ./genesistimestamp.dat)"
-fi
-git push origin ${TAG}
-
-git archive --prefix=algorand-${FULLVERSION}/ "${TAG}" | gzip > ${PKG_ROOT}/algorand_${CHANNEL}_source_${FULLVERSION}.tar.gz
 
 # Run RPM bulid in Centos7 Docker container
 sg docker "docker build -t algocentosbuild - < scripts/centos-build.Dockerfile"
@@ -99,8 +107,19 @@ fi
 rm -rf ${GOPATH}/src/github.com/algorand/go-algorand/crypto/lib
 
 # do the RPM build
-sg docker "docker run --mount type=bind,src=${GOPATH}/src,dst=/root/go/src --mount type=bind,src=${HOME},dst=/root/subhome --mount type=bind,src=/usr/local/go,dst=/usr/local/go -a stdout -a stderr algocentosbuild /root/go/src/github.com/algorand/go-algorand/scripts/build_release_centos_docker.sh"
+sg docker "docker run --env-file ${HOME}/build_env_docker --mount type=bind,src=${GOPATH}/src,dst=/root/go/src --mount type=bind,src=${HOME},dst=/root/subhome --mount type=bind,src=/usr/local/go,dst=/usr/local/go -a stdout -a stderr algocentosbuild /root/go/src/github.com/algorand/go-algorand/scripts/build_release_centos_docker.sh"
 
+# Tag Source
+
+TAG=${BRANCH}-${FULLVERSION}
+if [ ! -z "${SIGNING_KEY_ADDR}" ]; then
+    git tag -s -u "${SIGNING_KEY_ADDR}" ${TAG} -m "Genesis Timestamp: $(cat ./genesistimestamp.dat)"
+else
+    git tag -s ${TAG} -m "Genesis Timestamp: $(cat ./genesistimestamp.dat)"
+fi
+git push origin ${TAG}
+
+git archive --prefix=algorand-${FULLVERSION}/ "${TAG}" | gzip > ${PKG_ROOT}/algorand_${CHANNEL}_source_${FULLVERSION}.tar.gz
 
 # create *.sig gpg signatures
 cd ${PKG_ROOT}
@@ -132,6 +151,21 @@ echo "ami-id:" > "${STATUSFILE}"
 curl --silent http://169.254.169.254/latest/meta-data/ami-id >> "${STATUSFILE}"
 cat <<EOF>>"${STATUSFILE}"
 
+
+go version:
+EOF
+go version >>"${STATUSFILE}"
+cat <<EOF>>"${STATUSFILE}"
+
+go env:
+EOF
+go env >>"${STATUSFILE}"
+cat <<EOF>>"${STATUSFILE}"
+
+build_env:
+EOF
+cat <${HOME}/build_env>>"${STATUSFILE}"
+cat <<EOF>>"${STATUSFILE}"
 
 dpkg-l:
 EOF
