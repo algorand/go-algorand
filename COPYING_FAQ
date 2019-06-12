@@ -46,11 +46,11 @@ licensing options. For more information, contact us at licensing@algorand.com.
 While Algorand and the Algorand consensus protocol are protected by patent
 rights, anyone using our code under the MIT, AGPL or a commercial license from
 us has a patent license. Algorand believes that under current IP laws, the
-safest way to confer patent rights is under established open source licensing. 
+safest way to confer patent rights is under established open source licensing.
 
 Re-implementations of the Algorand consensus protocol or other Algorand
-technology protected by patent rights require a separate patent license unless they 
-use Algorand source code.  Commercial and non-commercial (for example, 
-non-profit or academic) licenses are available.  For more information, contact 
+technology protected by patent rights require a separate patent license unless
+they use Algorand source code.  Commercial and non-commercial (for example, 
+non-profit or academic) licenses are available.  For more information, contact
 us at patents@algorand.com.
 
