@@ -52,3 +52,15 @@ type ProtocolError protocol.ConsensusVersion
 func (err ProtocolError) Error() string {
 	return fmt.Sprintf("protocol not supported: %s", err)
 }
+
+// ErrNoEntry is used to indicate that a block is not present in the ledger.
+type ErrNoEntry struct {
+	Round     basics.Round
+	Latest    basics.Round
+	Committed basics.Round
+}
+
+// Error satisfies builtin interface `error`
+func (err ErrNoEntry) Error() string {
+	return fmt.Sprintf("ledger does not have entry %d (latest %d, committed %d)", err.Round, err.Latest, err.Committed)
+}
