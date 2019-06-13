@@ -33,26 +33,26 @@ jobs:
       script:
         - scripts/travis/build.sh || travis_terminate 1;
         - travis_wait 90 scripts/travis/test.sh
-#    - # same stage, parallel job
-#      os: linux
-#      env:
-#        - BUILD_TYPE: "integration"
-#      script:
-#        - scripts/travis/build.sh || travis_terminate 1;
-#        - travis_wait 90 scripts/travis/test.sh
+    - # same stage, parallel job
+      os: linux
+      env:
+        - BUILD_TYPE: "integration"
+      script:
+        - scripts/travis/build.sh || travis_terminate 1;
+        - travis_wait 90 scripts/travis/test.sh
 
     - stage: build_release
       os: linux
       script:
         - scripts/travis/build.sh || travis_terminate 1;
         - travis_wait 90 scripts/travis/test.sh
-#    - # same stage, parallel job
-#      os: linux
-#      env:
-#        - BUILD_TYPE: "integration"
-#      script:
-#        - scripts/travis/build.sh || travis_terminate 1;
-#        - travis_wait 90 scripts/travis/test.sh
+    - # same stage, parallel job
+      os: linux
+      env:
+        - BUILD_TYPE: "integration"
+      script:
+        - scripts/travis/build.sh || travis_terminate 1;
+        - travis_wait 90 scripts/travis/test.sh
     - # same stage, parallel job
       os: osx
       script:
