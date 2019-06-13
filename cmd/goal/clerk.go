@@ -359,7 +359,11 @@ var inspectCmd = &cobra.Command{
 				if err != nil {
 					reportErrorf(txDecodeError, txFilename, err)
 				}
-				fmt.Printf("%s[%d]\n%s\n\n", txFilename, count, string(protocol.EncodeJSON(txn)))
+				sti, err := inspectTxn(txn)
+				if err != nil {
+					reportErrorf(txDecodeError, txFilename, err)
+				}
+				fmt.Printf("%s[%d]\n%s\n\n", txFilename, count, string(protocol.EncodeJSON(sti)))
 			}
 		}
 	},
