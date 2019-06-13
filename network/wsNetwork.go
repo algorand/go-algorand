@@ -83,21 +83,21 @@ const MaxInt = int((^uint(0)) >> 1)
 // connectionActivityMonitorInterval is the interval at which we check
 // if any of the connected peers have been idle for a long while and
 // need to be disconnected.
-const connectionActivityMonitorInterval = time.Minute * 3
+const connectionActivityMonitorInterval = 3 * time.Minute
 
 // maxPeerInactivityDuration is the maximum allowed duration for a
 // peer to remain completly idle (i.e. no inbound or outbound communication), before
 // we discard the connection.
-const maxPeerInactivityDuration = time.Minute * 5
+const maxPeerInactivityDuration = 5 * time.Minute
 
 // maxMessageQueueDuration is the maximum amount of time a message is allowed to be waiting
 // in the various queues before being sent. Once that deadline has reached, sending the message
 // is pointless, as it's too stale to be of any value
-const maxMessageQueueDuration = time.Second * 25
+const maxMessageQueueDuration = 25 * time.Second
 
 // slowWritingPeerMonitorInterval is the interval at which we peek on the connected peers to
 // verify that their current outgoing message is not being blocked for too long.
-const slowWritingPeerMonitorInterval = time.Second * 5
+const slowWritingPeerMonitorInterval = 5 * time.Second
 
 var networkIncomingConnections = metrics.MakeGauge(metrics.NetworkIncomingConnections)
 var networkOutgoingConnections = metrics.MakeGauge(metrics.NetworkOutgoingConnections)
@@ -971,15 +971,12 @@ func (wn *WebsocketNetwork) broadcastThread() {
 	defer slowWritingPeerCheckTicker.Stop()
 	for {
 		// broadcast from high prio channel as long as we can
+		// we want to try and keep this as a single case select with a default, since go compiles a single-case
+		// select with a default into a more efficient non-blocking receive, instead of compiling it to the general-purpose selectgo
 		select {
 		case request := <-wn.broadcastQueueHighPrio:
 			wn.innerBroadcast(request, true, &peers)
 			continue
-		case <-slowWritingPeerCheckTicker.C:
-			wn.checkSlowWritingPeers()
-			continue
-		case <-wn.ctx.Done():
-			return
 		default:
 		}
 
