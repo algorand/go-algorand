@@ -248,8 +248,13 @@ func voteFresh(proto protocol.ConsensusVersion, freshData freshnessData, vote un
 		return fmt.Errorf("filtered vote from bad round: player.Round=%v; vote.Round=%v", freshData.PlayerRound, vote.R.Round)
 	}
 
-	if freshData.PlayerRound+1 == vote.R.Round && (vote.R.Period > 0 || vote.R.Step > next) {
-		return fmt.Errorf("filtered future vote from bad period or step: player.Round=%v; vote.(Round,Period,Step)=(%v,%v,%v)", freshData.PlayerRound, vote.R.Round, vote.R.Period, vote.R.Step)
+	if freshData.PlayerRound+1 == vote.R.Round {
+		if (vote.R.Period > 0 || vote.R.Step > next) {
+			return fmt.Errorf("filtered future vote from bad period or step: player.Round=%v; vote.(Round,Period,Step)=(%v,%v,%v)", freshData.PlayerRound, vote.R.Round, vote.R.Period, vote.R.Step)
+		} else {
+			// pipeline votes from next round period 0
+			return nil
+		}
 	}
 
 	switch vote.R.Period {
