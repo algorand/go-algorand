@@ -77,15 +77,15 @@ fi
 /usr/bin/goal
 /var/lib/algorand/config.json.example
 /var/lib/algorand/system.json
-/var/lib/algorand/genesis.json
+%config(noreplace) /var/lib/algorand/genesis.json
 %if %{RELEASE_GENESIS_PROCESS} != "x"
   /var/lib/algorand/genesis/devnet/genesis.json
   /var/lib/algorand/genesis/testnet/genesis.json
   /var/lib/algorand/genesis/mainnet/genesis.json
 %endif
 /lib/systemd/system/algorand.service
-/etc/cron.hourly/0yum-algorand-hourly.cron
-/etc/yum/yum-cron-algorand.conf
+%config(noreplace) /etc/cron.hourly/0yum-algorand-hourly.cron
+%config(noreplace) /etc/yum/yum-cron-algorand.conf
 /etc/pki/rpm-gpg/RPM-GPG-KEY-Algorand
 /usr/lib/algorand/yum.repos.d/algorand.repo
 
