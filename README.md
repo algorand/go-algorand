@@ -12,7 +12,7 @@ Our [developer website][developer site url] has the most up to date information 
 
 ## Building from source ##
 
-Development is done using the [Go Programming Language](https://golang.org/), and this document assumes that you have a functioning environment setup. If you need assistance setting up an environment please visit the [official Go documentation website](https://golang.org/doc/).
+Development is done using the [Go Programming Language](https://golang.org/) version 1.12.x, and this document assumes that you have a functioning environment setup. If you need assistance setting up an environment please visit the [official Go documentation website](https://golang.org/doc/).
 
 ### Linux / OSX ###
 
