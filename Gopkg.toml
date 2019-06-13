@@ -31,7 +31,6 @@
 
   [[prune.project]]
     name = "github.com/karalabe/hid"
-    non-go = false
     unused-packages = false
 
 # The current version of logrus, v1.2.0, implements UnmarshalText but not MarshalText.
@@ -74,10 +73,6 @@
 [[constraint]]
   name = "github.com/jmoiron/sqlx"
   version = "1.2.0"
-
-[[constraint]]
-  name = "gopkg.in/yaml.v2"
-  version = "2.2.2"
 
 [[constraint]]
   name = "github.com/algorand/websocket"
