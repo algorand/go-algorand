@@ -76,7 +76,7 @@ while [ "$1" != "" ]; do
         -g)
             shift
             GENESIS_NETWORK_DIR=$1
-            GENESIS_NETWORK_DIR_SPEC=-g $1
+            GENESIS_NETWORK_DIR_SPEC="-g $1"
             ;;
         -b)
             shift
@@ -330,7 +330,7 @@ function copy_genesis_files() {
 function check_for_new_ledger() {
     CURDATADIR=$1
     echo "Checking for new ledger in ${CURDATADIR}"
-    EXISTING_VER="$(head -n 1 ${CURDATADIR}/wallet-genesis.id)"
+    EXISTING_VER=$(${UPDATESRCDIR}/bin/algod -d ${CURDATADIR} -g ${CURDATADIR}/genesis.json -G)
 
     if [ -z $EXISTING_VER ]; then
         if [ -z ${GENESIS_NETWORK_DIR} ]; then
@@ -359,10 +359,10 @@ function check_for_new_ledger() {
     # changed the file itself in a compatible way.
     cp ${UPDATESRCDIR}/genesis/${GENESIS_NETWORK_DIR}/genesis.json ${CURDATADIR}
 
+    echo ${NEW_VER} > ${CURDATADIR}/wallet-genesis.id
     if [ "${NEW_VER}" != "${EXISTING_VER}" ]; then
         echo "New genesis ID, resetting wallets"
         NEW_LEDGER=1
-        echo ${NEW_VER} > ${CURDATADIR}/wallet-genesis.id
         reset_wallets_for_new_ledger ${CURDATADIR}
 
         import_rootkeys ${CURDATADIR}
