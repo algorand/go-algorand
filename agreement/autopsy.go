@@ -131,7 +131,7 @@ func prepareStreamingAutopsy(r io.Reader, c io.Closer, nextBounds func(int, Auto
 			tch := make(chan autopsyTrace)
 			ch <- tch
 
-			err, empty, bounds := a.extractNextCdv(tch)
+			bounds, empty, err := a.extractNextCdv(tch)
 
 			if !empty {
 				nextBounds(n, bounds)
@@ -342,7 +342,7 @@ type autopsyPair struct {
 	aok bool
 }
 
-func (a *Autopsy) extractNextCdv(ch chan<- autopsyTrace) (reterr error, empty bool, bounds AutopsyBounds) {
+func (a *Autopsy) extractNextCdv(ch chan<- autopsyTrace) (bounds AutopsyBounds, empty bool, reterr error) {
 	empty = true
 
 	recording := false
