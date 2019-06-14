@@ -810,6 +810,47 @@ var importCmd = &cobra.Command{
 	},
 }
 
+var exportCmd = &cobra.Command{
+	Use:   "export",
+	Short: "Export an account key for use with account import",
+	Run: func(cmd *cobra.Command, args []string) {
+		dataDir := ensureSingleDataDir()
+		accountList := makeAccountsList(dataDir)
+		// Choose an account name
+		if len(args) == 0 {
+			// TODO evan: error out
+		} else {
+			// TODO evan: might be getting Address wrong here
+			accountName = args[0]
+		}
+
+		// If not valid name, return an error
+		if ok, err := isValidName(accountName); !ok {
+			reportErrorln(err)
+		}
+
+		// Ensure the user's name choice isn't taken
+		if accountList.isTaken(accountName) {
+			reportErrorf(errorNameAlreadyTaken, accountName)
+		}
+
+		client := ensureKmdClient(dataDir)
+		wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
+		passwordString := string(pw)
+		resp, err := client.ExportKey(wh, passwordString, accountAddress)
+		if err != nil {
+			reportErrorf(errorRequestFail, err)
+		}
+
+		privKeyAsMnemonic, err := passphrase.KeyToMnemonic(resp.PrivateKey)
+		if err != nil {
+			reportErrorf(errorConversionFail, err)
+		}
+		reportInfof(infoExportedKey, privKeyAsMnemonic)
+
+	},
+}
+
 var importRootKeysCmd = &cobra.Command{
 	Use:   "importrootkey",
 	Short: "Import .rootkey files from the data directory into a kmd wallet",
