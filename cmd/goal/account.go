@@ -828,8 +828,9 @@ var exportCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
-
-		privKeyAsMnemonic, err := passphrase.KeyToMnemonic(response.PrivateKey[:])
+		// response.PrivateKey is (seed||PK), want just the seed
+		seed := response.PrivateKey[:len(response.PrivateKey)/2]
+		privKeyAsMnemonic, err := passphrase.KeyToMnemonic(seed)
 
 		if err != nil {
 			reportErrorf(errorMnemonicConversion, accountAddress, err)
