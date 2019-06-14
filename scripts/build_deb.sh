@@ -101,7 +101,7 @@ for f in "${unattended_upgrades_files[@]}"; do
 done
 
 mkdir -p ${PKG_ROOT}/DEBIAN
-debian_files=("control" "postinst" "prerm" "postrm")
+debian_files=("control" "postinst" "prerm" "postrm" "conffiles")
 for ctl in "${debian_files[@]}"; do
     # Copy first, to preserve permissions, then overwrite to fill in template.
     cp -a installer/debian/${ctl} ${PKG_ROOT}/DEBIAN/${ctl}

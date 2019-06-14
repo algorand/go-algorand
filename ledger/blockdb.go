@@ -18,7 +18,6 @@ package ledger
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 
 	"github.com/mattn/go-sqlite3"
@@ -28,9 +27,6 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/protocol"
 )
-
-// ErrNoEntry is the error indicating the ledger does not contain an entry for a requested Round
-var ErrNoEntry = errors.New("ledger does not have entry")
 
 var blockSchema = []string{
 	`CREATE TABLE IF NOT EXISTS blocks (
@@ -76,7 +72,7 @@ func blockGet(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, err error) {
 	err = tx.QueryRow("SELECT blkdata FROM blocks WHERE rnd=?", rnd).Scan(&buf)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			err = ErrNoEntry
+			err = ErrNoEntry{Round: rnd}
 		}
 
 		return
@@ -91,7 +87,7 @@ func blockGetHdr(tx *sql.Tx, rnd basics.Round) (hdr bookkeeping.BlockHeader, err
 	err = tx.QueryRow("SELECT hdrdata FROM blocks WHERE rnd=?", rnd).Scan(&buf)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			err = ErrNoEntry
+			err = ErrNoEntry{Round: rnd}
 		}
 
 		return
@@ -107,7 +103,7 @@ func blockGetCert(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, cert agr
 	err = tx.QueryRow("SELECT blkdata, certdata FROM blocks WHERE rnd=?", rnd).Scan(&blkbuf, &certbuf)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			err = ErrNoEntry
+			err = ErrNoEntry{Round: rnd}
 		}
 
 		return
@@ -132,7 +128,7 @@ func blockGetAux(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, aux evalA
 	err = tx.QueryRow("SELECT blkdata, auxdata FROM blocks WHERE rnd=?", rnd).Scan(&blkbuf, &auxbuf)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			err = ErrNoEntry
+			err = ErrNoEntry{Round: rnd}
 		}
 
 		return
