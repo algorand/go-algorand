@@ -135,11 +135,11 @@ type ioLoggedActor struct {
 
 func (l ioLoggedActor) handle(h routerHandle, e event) []action {
 	if l.tracer.level >= top {
-		fmt.Printf("%23v  => %23v: %v\n", "", l.T(), e)
+		fmt.Fprintf(l.tracer.w, "%23v  => %23v: %v\n", "", l.T(), e)
 	}
 	a := l.checkedActor.handle(h, e)
 	if l.tracer.level >= top {
-		fmt.Printf("%23v <=  %23v: %v\n", "", l.T(), a)
+		fmt.Fprintf(l.tracer.w, "%23v <=  %23v: %v\n", "", l.T(), a)
 	}
 	return a
 }
