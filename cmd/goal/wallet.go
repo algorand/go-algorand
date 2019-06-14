@@ -43,7 +43,7 @@ func init() {
 	walletCmd.Flags().StringVarP(&defaultWalletName, "default", "f", "", "Set the wallet with this name to be the default wallet")
 
 	// Should we recover the wallet?
-	newWalletCmd.Flags().BoolVarP(&recoverWallet, "recover", "r", false, "Recover the wallet from a backup mnemonic. Regenerate accounts in the wallet with `goal account new`")
+	newWalletCmd.Flags().BoolVarP(&recoverWallet, "recover", "r", false, "Recover the wallet from the backup mnemonic provided at wallet creation (NOT the mnemonic provided by goal account export or by algokey). Regenerate accounts in the wallet with `goal account new`")
 }
 
 var walletCmd = &cobra.Command{
