@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 	// logging imports metrics so that we can have metrics about logging, which is more important than the four Debug lines we had here logging about metrics. TODO: find a more clever cycle resolution
@@ -205,10 +206,11 @@ func (reporter *MetricReporter) tryInvokeNodeExporter(ctx context.Context) {
 			os.Stderr}
 	}
 	// prepare the vargs that the new process is going to have.
-	vargs := []string{
-		reporter.serviceConfig.NodeExporterPath,
-		"--web.listen-address=" + reporter.serviceConfig.NodeExporterListenAddress,
-		"--web.telemetry-path=" + nodeExporterMetricsPath}
+	whitespaceRegExp := regexp.MustCompile(`\s+`)
+	vargs := whitespaceRegExp.Split(reporter.serviceConfig.NodeExporterPath, -1)
+	vargs = append(vargs,
+		"--web.listen-address="+reporter.serviceConfig.NodeExporterListenAddress,
+		"--web.telemetry-path="+nodeExporterMetricsPath)
 	// launch the process
 	proc, err := os.StartProcess(vargs[0], vargs, &neAttributes)
 	if err != nil {
