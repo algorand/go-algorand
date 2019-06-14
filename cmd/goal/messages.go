@@ -28,6 +28,7 @@ const (
 	infoNoAccounts                 = "Did not find any account. Please import or create a new one."
 	infoRenamedAccount             = "Renamed account '%s' to '%s'"
 	infoImportedKey                = "Imported %s"
+	infoExportedKey                = "Imported key for account %s: \"%s\""
 	infoImportedNKeys              = "Imported %d key%s"
 	infoCreatedNewAccount          = "Created new account with address %s"
 	errorNameAlreadyTaken          = "The account name '%s' is already taken, please choose another."
@@ -40,6 +41,7 @@ const (
 	warnMultisigDuplicatesDetected = "Warning: one or more duplicate addresses detected in multisig account creation. This will effectively give the duplicated address(es) extra signature weight. Continuing multisig account creation."
 	errLastRoundInvalid            = "roundLastValid needs to be well after the current round (%d)"
 	errExistingPartKey             = "Account already has a participation key valid at least until roundLastValid (%d) - current is %d"
+	errorMnemonicConversion        = "Got private key for account %s, but was unable to convert to mnemonic: %s"
 
 	// KMD
 	infoKMDStopped        = "Stopped kmd"

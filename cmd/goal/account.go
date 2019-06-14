@@ -71,6 +71,7 @@ func init() {
 	accountCmd.AddCommand(addParticipationKeyCmd)
 	accountCmd.AddCommand(listParticipationKeysCmd)
 	accountCmd.AddCommand(importCmd)
+	accountCmd.AddCommand(exportCmd)
 	accountCmd.AddCommand(importRootKeysCmd)
 	accountCmd.AddCommand(accountMultisigCmd)
 
@@ -140,7 +141,9 @@ func init() {
 	// import flags
 	importCmd.Flags().BoolVarP(&importDefault, "default", "f", false, "Set this account as the default one")
 	importCmd.Flags().StringVarP(&mnemonic, "mnemonic", "m", "", "Mnemonic to import (will prompt otherwise)")
-
+	// export flags
+	exportCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Address of account to export")
+	exportCmd.MarkFlagRequired("addr")
 	// importRootKeys flags
 	importRootKeysCmd.Flags().BoolVarP(&unencryptedWallet, "unencrypted-wallet", "u", false, "Import into the default unencrypted wallet, potentially creating it")
 
@@ -815,39 +818,24 @@ var exportCmd = &cobra.Command{
 	Short: "Export an account key for use with account import",
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
-		accountList := makeAccountsList(dataDir)
-		// Choose an account name
-		if len(args) == 0 {
-			// TODO evan: error out
-		} else {
-			// TODO evan: might be getting Address wrong here
-			accountName = args[0]
-		}
-
-		// If not valid name, return an error
-		if ok, err := isValidName(accountName); !ok {
-			reportErrorln(err)
-		}
-
-		// Ensure the user's name choice isn't taken
-		if accountList.isTaken(accountName) {
-			reportErrorf(errorNameAlreadyTaken, accountName)
-		}
-
 		client := ensureKmdClient(dataDir)
+
 		wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
 		passwordString := string(pw)
-		resp, err := client.ExportKey(wh, passwordString, accountAddress)
+
+		response, err := client.ExportKey(wh, passwordString, accountAddress)
+
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
 
-		privKeyAsMnemonic, err := passphrase.KeyToMnemonic(resp.PrivateKey)
-		if err != nil {
-			reportErrorf(errorConversionFail, err)
-		}
-		reportInfof(infoExportedKey, privKeyAsMnemonic)
+		privKeyAsMnemonic, err := passphrase.KeyToMnemonic(response.PrivateKey[:])
 
+		if err != nil {
+			reportErrorf(errorMnemonicConversion, accountAddress, err)
+		}
+
+		reportInfof(infoExportedKey, accountAddress, privKeyAsMnemonic)
 	},
 }
 
