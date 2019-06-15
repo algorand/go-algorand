@@ -178,6 +178,30 @@ func (reporter *MetricReporter) tryDetachNodeExporter() {
 	}
 }
 
+// parseNodeExporterArgs parses the NodeExporterPath configuration string to extract node exporter's arguments.
+func parseNodeExporterArgs(nodeExporterPath string, nodeExporterListenAddress string, nodeExporterMetricsPath string) []string {
+	whitespaceRE := regexp.MustCompile(`\s+`)
+	listenAddressRE := regexp.MustCompile(`--web.listen-address=(.+)`)
+	telemetryPathRE := regexp.MustCompile(`--web.telemetry-path=(.+)`)
+	vargs := whitespaceRE.Split(nodeExporterPath, -1)
+	temp := vargs[:0]
+	for _, varg := range vargs {
+		if listenAddressRE.MatchString(varg) {
+			nodeExporterListenAddress = listenAddressRE.FindStringSubmatch(varg)[1]
+		} else if telemetryPathRE.MatchString(varg) {
+			nodeExporterMetricsPath = telemetryPathRE.FindStringSubmatch(varg)[1]
+		} else if varg == "" {
+			continue
+		} else {
+			temp = append(temp, varg)
+		}
+	}
+	vargs = append(vargs[:len(temp)],
+		"--web.listen-address="+nodeExporterListenAddress,
+		"--web.telemetry-path="+nodeExporterMetricsPath)
+	return vargs
+}
+
 func (reporter *MetricReporter) tryInvokeNodeExporter(ctx context.Context) {
 	var err error
 	if nil == reporter.neSync {
@@ -206,11 +230,7 @@ func (reporter *MetricReporter) tryInvokeNodeExporter(ctx context.Context) {
 			os.Stderr}
 	}
 	// prepare the vargs that the new process is going to have.
-	whitespaceRegExp := regexp.MustCompile(`\s+`)
-	vargs := whitespaceRegExp.Split(reporter.serviceConfig.NodeExporterPath, -1)
-	vargs = append(vargs,
-		"--web.listen-address="+reporter.serviceConfig.NodeExporterListenAddress,
-		"--web.telemetry-path="+nodeExporterMetricsPath)
+	vargs := parseNodeExporterArgs(reporter.serviceConfig.NodeExporterPath, reporter.serviceConfig.NodeExporterListenAddress, nodeExporterMetricsPath)
 	// launch the process
 	proc, err := os.StartProcess(vargs[0], vargs, &neAttributes)
 	if err != nil {
