@@ -1,4 +1,4 @@
-package main
+package eb
 
 import "time"
 
@@ -16,6 +16,7 @@ type NodeRunner struct {
 const RelayKind = "Relay"
 
 type Relay struct {
+	ID                    int64  // db key injected when loaded
 	InvestorID            string
 	ContactEmail          string // comma separated list of emails
 	NodeProvider          string
@@ -26,4 +27,8 @@ type Relay struct {
 	SRVRecordCreationTime time.Time
 	Telemetry             string // GUID[:name]
 	MetricsEnabled        bool
+	CheckTime             time.Time // time the check was done
+	CheckSuccess          bool // true if check was successful
+	CheckError            string // non-empty if check error, contains the error
+	DNSAlias              string // DNS Alias name used
 }
