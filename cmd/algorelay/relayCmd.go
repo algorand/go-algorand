@@ -3,14 +3,16 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/algorand/go-algorand/cmd/algorelay/eb"
-	"github.com/algorand/go-algorand/tools/network/cloudflare"
-	"github.com/algorand/go-algorand/util/codecs"
-	"github.com/spf13/cobra"
 	"net"
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/spf13/cobra"
+
+	"github.com/algorand/go-algorand/cmd/algorelay/eb"
+	"github.com/algorand/go-algorand/tools/network/cloudflare"
+	"github.com/algorand/go-algorand/util/codecs"
 )
 
 var (
@@ -59,6 +61,25 @@ func init() {
 	checkCmd.MarkFlagRequired("defaultport")
 	checkCmd.Flags().StringVarP(&dnsBootstrapArg, "dnsbootstrap", "b", "", "Bootstrap name for SRV records (eg mainnet)")
 	checkCmd.MarkFlagRequired("dnsbootstrap")
+
+
+	rootCmd.AddCommand(updateCmd)
+
+	updateCmd.Flags().StringVarP(&inputFileArg, "inputfile", "i", "", "File containing Relay data")
+	updateCmd.MarkFlagRequired("inputfile")
+
+	updateCmd.Flags().StringVarP(&outputFileArg, "outputfile", "o", "", "File to output results to, as JSON")
+
+	updateCmd.Flags().Int64Var(&recordIDArg, "id", 0, "Specific Datastore record ID to check (all if not specified)")
+
+	updateCmd.Flags().StringVarP(&srvDomainArg, "srvdomain", "s", "", "Domain name for SRV records")
+	updateCmd.MarkFlagRequired("srvdomain")
+	updateCmd.Flags().StringVarP(&nameDomainArg, "namedomain", "n", "", "Domain name for A/CNAME records")
+	updateCmd.MarkFlagRequired("namedomain")
+	updateCmd.Flags().Uint16VarP(&defaultPortArg, "defaultport", "p", 4160, "Default listening port (eg 4160)")
+	updateCmd.MarkFlagRequired("defaultport")
+	updateCmd.Flags().StringVarP(&dnsBootstrapArg, "dnsbootstrap", "b", "", "Bootstrap name for SRV records (eg mainnet)")
+	updateCmd.MarkFlagRequired("dnsbootstrap")
 }
 
 func loadRelays(file string) []eb.Relay {
@@ -76,28 +97,58 @@ type checkResult struct {
 	Error     string  `json:",omitempty"`
 }
 
+type dnsContext struct {
+	nameEntries    map[string]string
+	bootstrap      srvService
+	metrics        srvService
+}
+
+type srvService struct {
+	serviceName  string
+	entries      map[string]uint16
+	shortName    string
+	networkName  string
+}
+
+func makeDNSContext() *dnsContext {
+	nameEntries, err := getReverseMappedEntries(cfNameZoneID, nameRecordTypes)
+	if err != nil {
+		panic(err)
+	}
+
+	bootstrap, err := getSrvRecords("_algobootstrap", dnsBootstrapArg + "." + srvDomainArg, cfSrvZoneID)
+	if err != nil {
+		panic(err)
+	}
+
+	metrics, err := getSrvRecords("_metrics", srvDomainArg, cfSrvZoneID)
+	if err != nil {
+		panic(err)
+	}
+
+	return &dnsContext{
+		nameEntries: nameEntries,
+		bootstrap: bootstrap,
+		metrics: metrics,
+	}
+}
+
+func makeService(shortName, networkName string) srvService {
+	return srvService{
+		serviceName: shortName + "._tcp." + networkName,
+		entries: make(map[string]uint16),
+		shortName: shortName,
+		networkName: networkName,
+	}
+}
+
 var checkCmd = &cobra.Command{
 	Use:   "check",
 	Short: "Check status of all relays",
 	Run: func(cmd *cobra.Command, args []string) {
 		relays := loadRelays(inputFileArg)
 
-		nameEntries, err := getReverseMappedEntries(cfNameZoneID, nameRecordTypes)
-		if err != nil {
-			panic(err)
-		}
-
-		bootstrapSrvService := "_algobootstrap._tcp." + dnsBootstrapArg + "." + srvDomainArg
-		srvEntries, err := getSrvRecords(cfSrvZoneID, bootstrapSrvService)
-		if err != nil {
-			panic(err)
-		}
-
-		metricsSrvService := "_metrics._tcp." + srvDomainArg
-		metricsEntries, err := getSrvRecords(cfSrvZoneID, metricsSrvService)
-		if err != nil {
-			panic(err)
-		}
+		context := makeDNSContext()
 
 		checkOne := recordIDArg != 0
 		results := make([]checkResult,0)
@@ -108,7 +159,8 @@ var checkCmd = &cobra.Command{
 				continue
 			}
 
-			name, port, err := verifyRelayStatus(relay, nameDomainArg, srvDomainArg, defaultPortArg, nameEntries, srvEntries, metricsEntries)
+			const checkOnly = true
+			name, port, err := ensureRelayStatus(checkOnly, relay, nameDomainArg, srvDomainArg, defaultPortArg, context)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "[%d] ERROR: %s: %s\n", relay.ID, relay.IPOrDNSName, err)
 				results = append(results, checkResult{
@@ -141,7 +193,63 @@ var checkCmd = &cobra.Command{
 	},
 }
 
-func verifyRelayStatus(relay eb.Relay, nameDomain string, srvDomain string, defaultPort uint16, nameEntries map[string]string, srvEntries map[string]uint16, metricsEntries map[string]uint16) (srvName string, srvPort uint16, err error) {
+var updateCmd = &cobra.Command{
+	Use:   "update",
+	Short: "Updates configuration for all relays to match the expectations",
+	Run: func(cmd *cobra.Command, args []string) {
+		relays := loadRelays(inputFileArg)
+
+		context := makeDNSContext()
+
+		updateOne := recordIDArg != 0
+		results := make([]checkResult,0)
+		anyUpdateError := false
+
+		for _, relay := range relays {
+			if updateOne && relay.ID != recordIDArg {
+				continue
+			}
+
+			if !relay.CheckSuccess {
+				fmt.Printf("[%d] OK: Skipping NotSuccessful %s\n", relay.ID, relay.IPOrDNSName)
+				// Don't output results if skipped
+				continue
+			}
+			const checkOnly = false
+			name, port, err := ensureRelayStatus(checkOnly, relay, nameDomainArg, srvDomainArg, defaultPortArg, context)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "[%d] ERROR: %s: %s\n", relay.ID, relay.IPOrDNSName, err)
+				results = append(results, checkResult{
+					ID: relay.ID,
+					Success: false,
+					Error: err.Error(),
+				})
+				anyUpdateError = true
+			} else {
+				fmt.Printf("[%d] OK: %s -> %s:%d\n", relay.ID, relay.IPOrDNSName, name, port)
+				results = append(results, checkResult{
+					ID: relay.ID,
+					Success: true,
+				})
+			}
+
+			if updateOne {
+				break
+			}
+		}
+
+		if outputFileArg != "" {
+			codecs.SaveObjectToFile(outputFileArg, &results, true)
+		}
+
+		// Only return success if all checked out
+		if anyUpdateError {
+			os.Exit(-1)
+		}
+	},
+}
+
+func ensureRelayStatus(checkOnly bool, relay eb.Relay, nameDomain string, srvDomain string, defaultPort uint16, ctx *dnsContext) (srvName string, srvPort uint16, err error) {
 	var port uint16
 	target, portString, err := net.SplitHostPort(relay.IPOrDNSName)
 	if err != nil {
@@ -162,27 +270,48 @@ func verifyRelayStatus(relay eb.Relay, nameDomain string, srvDomain string, defa
 	}
 
 	// Error if target has another name entry - target should be relay provider's domain so shouldn't be possible
-	if mapsTo, has := nameEntries[target]; has {
+	if mapsTo, has := ctx.nameEntries[target]; has {
 		err = fmt.Errorf("relay target has a DNS Name entry and should not (%s -> %s)", target, mapsTo)
 	}
 
-	names, err := getTargetDNSChain(nameEntries, target)
+	names, err := getTargetDNSChain(ctx.nameEntries, target)
 	if err != nil {
 		return
 	}
 
 	// Error if no entries
 	if len(names) == 1 {
-		err = fmt.Errorf("no DNS entries found mapping to %s in '%s'", target, nameDomain)
-		return
+		if checkOnly {
+			err = fmt.Errorf("no DNS entries found mapping to %s in '%s'", target, nameDomain)
+			return
+		}
 	}
 
 	topmost := names[len(names)-1]
 
-	if topmost != relay.DNSAlias+"."+nameDomain {
-		err = fmt.Errorf("topmost DNS name is not the assigned DNS Alias (wanted: %s, found %s)",
-			relay.DNSAlias, topmost)
-		return
+	if relay.DNSAlias == "" {
+		err = fmt.Errorf("missing DNSAlias name")
+	}
+
+	targetDomainAlias := relay.DNSAlias + "." + nameDomain
+	if topmost != targetDomainAlias {
+		if checkOnly {
+			err = fmt.Errorf("topmost DNS name is not the assigned DNS Alias (wanted: %s, found %s)",
+				relay.DNSAlias, topmost)
+			return
+		}
+
+		// Add A/CNAME for the DNSAlias assigned
+		err = addDNSRecord(targetDomainAlias, topmost, cfNameZoneID)
+		if err != nil {
+			return
+		} else {
+			fmt.Printf("[%d] Added DNS Record: %s -> %s\n", relay.ID, targetDomainAlias, topmost)
+
+			// Update our state
+			names = append(names, targetDomainAlias)
+			topmost = targetDomainAlias
+		}
 	}
 
 	var ensureEntry = func(use string, entries map[string]uint16, port uint16) error {
@@ -215,15 +344,35 @@ func verifyRelayStatus(relay eb.Relay, nameDomain string, srvDomain string, defa
 		return nil
 	}
 
-	err = ensureEntry("bootstrap", srvEntries, port)
+	err = ensureEntry("bootstrap", ctx.bootstrap.entries, port)
 	if err != nil {
-		return
-	}
+		if checkOnly {
+			return
+		}
 
-	err = ensureEntry("metrics", metricsEntries, metricsPort)
-	if relay.MetricsEnabled {
+		// Add SRV entry to map to our DNSAlias
+		err = addSRVRecord(ctx.bootstrap.networkName, topmost, port, ctx.bootstrap.shortName, cfSrvZoneID)
 		if err != nil {
 			return
+		} else {
+			fmt.Printf("[%d] Added boostrap SRV Record: %s:%d\n", relay.ID, targetDomainAlias, port)
+		}
+	}
+
+	err = ensureEntry("metrics", ctx.metrics.entries, metricsPort)
+	if relay.MetricsEnabled {
+		if err != nil {
+			if checkOnly {
+				return
+			}
+
+			// Add SRV entry for metrics
+			err = addSRVRecord(ctx.metrics.networkName, topmost, metricsPort, ctx.metrics.shortName, cfSrvZoneID)
+			if err != nil {
+				return
+			} else {
+				fmt.Printf("[%d] Added metrics SRV Record: %s:%d\n", relay.ID, targetDomainAlias, metricsPort)
+			}
 		}
 	} else if err == nil {
 		err = fmt.Errorf("metrics should not be registered for %s but it is", target)
@@ -278,13 +427,13 @@ func getReverseMappedEntries(zoneID string, recordTypes []string) (reverseMap ma
 	return
 }
 
-func getSrvRecords(zoneID string, serviceName string) (srvEntries map[string]uint16, err error){
-	srvEntries = make(map[string]uint16)
+func getSrvRecords(serviceName string, networkName, zoneID string) (service srvService, err error){
+	service = makeService(serviceName, networkName)
 
 	cloudflareDNS := cloudflare.NewDNS(zoneID, cfEmail, cfAuthKey)
 
 	var records []cloudflare.DNSRecordResponseEntry
-	records, err = cloudflareDNS.ListDNSRecord(context.Background(), "SRV", serviceName, "", "", "", "")
+	records, err = cloudflareDNS.ListDNSRecord(context.Background(), "SRV", service.serviceName, "", "", "", "")
 	if err != nil {
 		return
 	}
@@ -303,14 +452,43 @@ func getSrvRecords(zoneID string, serviceName string) (srvEntries map[string]uin
 		port := uint16(port64)
 
 		// Error if duplicates found
-		if existing, has := srvEntries[target]; has {
+		if existing, has := service.entries[target]; has {
 			err = fmt.Errorf("duplicate SRV entries mapped to %s: (%d && %d)", target, port, existing)
 			return
 		}
-		srvEntries[target] = port
+		service.entries[target] = port
 	}
 	return
 }
+
+func addDNSRecord(from string, to string, cfZoneID string) error {
+	cloudflareDNS := cloudflare.NewDNS(cfZoneID, cfEmail, cfAuthKey)
+
+	const priority = 1
+	const proxied = false
+
+	// If we need to register anything, first register a DNS entry
+	// to map our network DNS name to our public name (or IP) provided to nodecfg
+	// Network HostName = eg r1.testnet.algorand.network
+	isIP := net.ParseIP(to) != nil
+	var recordType string
+	if isIP {
+		recordType = "A"
+	} else {
+		recordType = "CNAME"
+	}
+	return cloudflareDNS.SetDNSRecord(context.Background(), recordType, from, to, cloudflare.AutomaticTTL, priority, proxied)
+}
+
+func addSRVRecord(srvNetwork string, target string, port uint16, serviceShortName string, cfZoneID string) error {
+	cloudflareDNS := cloudflare.NewDNS(cfZoneID, cfEmail, cfAuthKey)
+
+	const priority = 1
+	const weight = 1
+
+	return cloudflareDNS.SetSRVRecord(context.Background(), srvNetwork, target, cloudflare.AutomaticTTL, priority, uint(port), serviceShortName, "_tcp", weight)
+}
+
 
 //var addCmd = &cobra.Command{
 //	Use:   "add",
@@ -339,31 +517,6 @@ func getSrvRecords(zoneID string, serviceName string) (srvEntries map[string]uin
 //	},
 //}
 //
-//func doAddDNS(from string, to string) (err error) {
-//	cfZoneID, cfEmail, cfKey, err := getClouldflareCredentials()
-//	if err != nil {
-//		return fmt.Errorf("error getting DNS credentials: %v", err)
-//	}
-//
-//	cloudflareDNS := cloudflare.NewDNS(cfZoneID, cfEmail, cfKey)
-//
-//	const priority = 1
-//	const proxied = false
-//
-//	// If we need to register anything, first register a DNS entry
-//	// to map our network DNS name to our public name (or IP) provided to nodecfg
-//	// Network HostName = eg r1.testnet.algorand.network
-//	isIP := net.ParseIP(to) != nil
-//	var recordType string
-//	if isIP {
-//		recordType = "A"
-//	} else {
-//		recordType = "CNAME"
-//	}
-//	cloudflareDNS.SetDNSRecord(context.Background(), recordType, from, to, cloudflare.AutomaticTTL, priority, proxied)
-//
-//	return
-//}
 
 //func checkDNSRecord(dnsName string) {
 //	fmt.Printf("------------------------\nDNS Lookup: %s\n", dnsName)
