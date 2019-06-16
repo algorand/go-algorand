@@ -24,6 +24,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -35,6 +36,8 @@ import (
 	tools_network "github.com/algorand/go-algorand/tools/network"
 )
 
+const lenBlockStr = 6
+
 var downloadFlag = flag.Bool("download", false, "Download blocks from an origin server")
 var serversFlag = flag.String("servers", "", "Semicolon-separated list of origin server addresses (host:port)")
 var networkFlag = flag.String("network", "", "Network ID to obtain servers via DNS SRV")
@@ -44,24 +47,72 @@ var connsFlag = flag.Int("conns", 2, "Number of connections per server")
 var serverList []string
 var nextBlk uint64
 
-func blockToString(blk uint64) string {
-	return strconv.FormatUint(blk, 36)
+// padLeftZeros pad the string s with zeros on the left to the length n
+func padLeftZeros(s string, n int) string {
+	return strings.Repeat("0", n-len(s)) + s
 }
 
+// blockToFileName converts a block number into the filename in which it will be downloaded
+// When using subfolders, the string corresponding to the base-36 number padded with zeros
+// Otherwise it is just the base-36 number
+func blockToFileName(blk uint64) string {
+	if *subfoldersFlag {
+		return padLeftZeros(strconv.FormatUint(blk, 36), lenBlockStr)
+	} else {
+		return strconv.FormatUint(blk, 36)
+	}
+}
+
+// stringToBlock converts a base-36 string into a block number
+func stringToBlock(s string) uint64 {
+	blk, err := strconv.ParseUint(s, 36, 64)
+	if err != nil {
+		panic(err)
+	}
+	return blk
+}
+
+// blockToPath converts a block number into the full path in which it will be downloaded
+// When using subfolders, the path is `0b/cd/0bcdef` for block `bcdef`
+// Otherwise the path is just `bcdef` for block `bcdef`
+func blockToPath(blk uint64) string {
+	if *subfoldersFlag {
+		s := blockToFileName(blk)
+		return path.Join(
+			s[0:2],
+			s[2:4],
+			s,
+		)
+	} else {
+		return blockToFileName(blk)
+	}
+}
+
+// stringBlockToPath is the same as blockToPath except it takes a (non-padded) base-36 block
+func stringBlockToPath(s string) string {
+	if *subfoldersFlag {
+		return blockToPath(stringToBlock(s))
+	} else {
+		return s
+	}
+}
+
+// blockDir returns the root folder where all the blocks are stored
 func blockDir() string {
 	return filepath.Join(*dirFlag, fmt.Sprintf("v1/%s/block", *genesisFlag))
 }
 
-func blockFile(blk uint64) string {
-	return filepath.Join(blockDir(), blockToString(blk))
+// blockFullPath returns the full path to a block, including blockDir
+func blockFullPath(blk uint64) string {
+	return filepath.Join(blockDir(), blockToPath(blk))
 }
 
 func blockURL(server string, blk uint64) string {
-	return fmt.Sprintf("http://%s/v1/%s/block/%s", server, *genesisFlag, blockToString(blk))
+	return fmt.Sprintf("http://%s/v1/%s/block/%s", server, *genesisFlag, blockToFileName(blk))
 }
 
 func fetchBlock(server string, blk uint64) error {
-	fn := blockFile(blk)
+	fn := blockFullPath(blk)
 	_, err := os.Stat(fn)
 	if err == nil {
 		return nil
@@ -85,6 +136,20 @@ func fetchBlock(server string, blk uint64) error {
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return err
+	}
+
+	if *subfoldersFlag {
+		d := path.Dir(fn)
+		_, err = os.Stat(d)
+		if os.IsNotExist(err) {
+			// Create the folder if it does not exist
+			err = os.MkdirAll(d, 0777)
+			if err != nil {
+				panic(err)
+			}
+		} else if err != nil {
+			panic(err)
+		}
 	}
 
 	return ioutil.WriteFile(fn, body, 0666)
@@ -140,7 +205,10 @@ func download() {
 	http.DefaultTransport.(*http.Transport).MaxConnsPerHost = *connsFlag
 	http.DefaultTransport.(*http.Transport).MaxIdleConnsPerHost = *connsFlag
 
-	os.MkdirAll(blockDir(), 0777)
+	err := os.MkdirAll(blockDir(), 0777)
+	if err != nil {
+		panic(err)
+	}
 
 	var wg sync.WaitGroup
 

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"path"
 	"strconv"
 
 	"github.com/algorand/websocket"
@@ -32,6 +33,7 @@ import (
 
 var addrFlag = flag.String("addr", "127.0.0.1:4160", "Address to listen on")
 var dirFlag = flag.String("dir", "", "Directory containing catchup blocks")
+var subfoldersFlag = flag.Bool("subfolders", false, "Organize downloaded blocks in subfolders (if used, must be specified both when executed with and without -download)")
 
 func main() {
 	flag.Parse()
@@ -84,8 +86,15 @@ func main() {
 		roundStr := pathVars["round"]
 		genesisID := pathVars["genesisID"]
 
-		data, err := ioutil.ReadFile(fmt.Sprintf("%s/v%s/%s/block/%s",
-			*dirFlag, versionStr, genesisID, roundStr))
+		data, err := ioutil.ReadFile(
+			path.Join(
+				*dirFlag,
+				"v"+versionStr,
+				genesisID,
+				"block",
+				stringBlockToPath(roundStr),
+			),
+		)
 		if err != nil {
 			fmt.Printf("%s %s: %v\n", r.Method, r.URL, err)
 			http.NotFound(w, r)
