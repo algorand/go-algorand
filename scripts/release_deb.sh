@@ -71,9 +71,8 @@ SNAPSHOT=algorand-$(date +%Y%m%d_%H%M%S)
 aptly snapshot create ${SNAPSHOT} from repo algorand
 if [ ! -z "${FIRSTTIME}" ]; then
     echo "first publish"
-    aptly publish snapshot ${SNAPSHOT} "s3:${APTLY_S3_NAME}:"
+    aptly publish snapshot ${SNAPSHOT} "s3:${APTLY_S3_NAME}:" -origin=Algorand -label=Algorand
 else
-    echo "publish snapshot ${SNAPSHOT}"
+    echo "publish snapshot ${SNAPSHOT}" -origin=Algorand -label=Algorand
     aptly publish switch stable "s3:${APTLY_S3_NAME}:" ${SNAPSHOT}
 fi
-
