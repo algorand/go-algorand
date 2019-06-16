@@ -20,6 +20,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	log "github.com/sirupsen/logrus"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -115,6 +116,7 @@ func fetchBlock(server string, blk uint64) error {
 	fn := blockFullPath(blk)
 	_, err := os.Stat(fn)
 	if err == nil {
+		log.Debugf("block %d already exists", blk)
 		return nil
 	}
 
@@ -122,7 +124,7 @@ func fetchBlock(server string, blk uint64) error {
 		return err
 	}
 
-	fmt.Printf("Fetching %d from %s..\n", blk, server)
+	log.Infof("fetching %d (%s) from %s..", blk, blockToFileName(blk), server)
 	resp, err := http.Get(blockURL(server, blk))
 	if err != nil {
 		return err
@@ -161,7 +163,7 @@ func fetcher(server string, wg *sync.WaitGroup) {
 
 		err := fetchBlock(server, myBlock)
 		if err != nil {
-			fmt.Printf("Fetching %d from %s: %v\n", myBlock, server, err)
+			log.Errorf("fetching %d (%s) from %s: %v", myBlock, blockToFileName(myBlock), server, err)
 			break
 		}
 	}

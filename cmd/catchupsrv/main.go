@@ -18,11 +18,12 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"path"
 	"strconv"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/algorand/websocket"
 	"github.com/gorilla/mux"
@@ -96,7 +97,7 @@ func main() {
 			),
 		)
 		if err != nil {
-			fmt.Printf("%s %s: %v\n", r.Method, r.URL, err)
+			log.Infof("%s %s: %v", r.Method, r.URL, err)
 			http.NotFound(w, r)
 			return
 		}
