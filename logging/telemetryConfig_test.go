@@ -34,8 +34,8 @@ func Test_loadTelemetryConfig(t *testing.T) {
 		MinLogLevel:        4,
 		ReportHistoryLevel: 4,
 		LogHistoryDepth:    100,
-		UserName:           "username",
-		Password:           "password",
+		UserName:           "telemetry-v9",
+		Password:           "oq%$FA1TOJ!yYeMEcJ7D688eEOE#MGCu",
 	}
 
 	a := require.New(t)
