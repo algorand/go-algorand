@@ -1,4 +1,10 @@
 #!/bin/bash
+#
+# This is a file of commands to copy and paste to run build_release.sh on an AWS EC2 instance.
+# Should work on Ubuntu 16.04 ro 18.04
+#
+# Externally settable env vars:
+# S3_PREFIX_BUILDLOG= where upload build log (no trailing /)
 
 echo "this is a file of commands to copy and paste to run build_release.sh on an AWS EC2 instance"
 exit 1
@@ -40,7 +46,7 @@ umask 0002
 # this will require your key password, and export a private key file protected by the same password
 
 # warm up your local gpg-agent
-gpg --clearsign
+gpg -u dev@algorand.com --clearsign
 type some stuff
 ^D
 
@@ -51,6 +57,12 @@ type some stuff
 REMOTE_GPG_SOCKET=$(ssh ubuntu@${TARGET} gpgbin/remote_gpg_socket)
 LOCAL_GPG_SOCKET=$(gpgconf --list-dir agent-extra-socket)
 ssh -A -R "${REMOTE_GPG_SOCKET}:${LOCAL_GPG_SOCKET}" ubuntu@${TARGET}
+
+# check gpg agent connection
+gpg -u dev@algorand.com --clearsign
+blah blah
+^D
+
 
 # set AWS credentials so we can upload to S3 and connect to EFS
 export AWS_ACCESS_KEY_ID=
@@ -74,5 +86,7 @@ if [ -z "${RSTAMP}" ]; then
     echo "could not figure out RSTAMP, script must have failed early"
     exit 1
 fi
-gzip buildlog_*
-aws s3 cp buildlog_*.gz s3://algorand-devops-misc/buildlog/${RSTAMP}/
+gzip "buildlog_${BUILDTIMESTAMP}"
+if [ ! -z "${S3_PREFIX_BUILDLOG}" ]; then
+    aws s3 cp "buildlog_${BUILDTIMESTAMP}.gz" "${S3_PREFIX_BUILDLOG}/${RSTAMP}/buildlog_${BUILDTIMESTAMP}.gz"
+fi
