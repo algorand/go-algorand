@@ -53,14 +53,19 @@ func padLeftZeros(s string, n int) string {
 	return strings.Repeat("0", n-len(s)) + s
 }
 
+// blockToString converts a block number into a base-36 number
+func blockToString(blk uint64) string {
+	return strconv.FormatUint(blk, 36)
+}
+
 // blockToFileName converts a block number into the filename in which it will be downloaded
 // When using subfolders, the string corresponding to the base-36 number padded with zeros
 // Otherwise it is just the base-36 number
 func blockToFileName(blk uint64) string {
 	if *subfoldersFlag {
-		return padLeftZeros(strconv.FormatUint(blk, 36), lenBlockStr)
+		return padLeftZeros(blockToString(blk), lenBlockStr)
 	} else {
-		return strconv.FormatUint(blk, 36)
+		return blockToString(blk)
 	}
 }
 
@@ -109,7 +114,7 @@ func blockFullPath(blk uint64) string {
 }
 
 func blockURL(server string, blk uint64) string {
-	return fmt.Sprintf("http://%s/v1/%s/block/%s", server, *genesisFlag, blockToFileName(blk))
+	return fmt.Sprintf("http://%s/v1/%s/block/%s", server, *genesisFlag, blockToString(blk))
 }
 
 func fetchBlock(server string, blk uint64) error {
