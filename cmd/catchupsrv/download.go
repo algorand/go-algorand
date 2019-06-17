@@ -37,7 +37,7 @@ import (
 	tools_network "github.com/algorand/go-algorand/tools/network"
 )
 
-const lenBlockStr = 6
+const minLenBlockStr = 6 // the minimum size of a block filename (after padding with zeros) when using subfolders
 
 var downloadFlag = flag.Bool("download", false, "Download blocks from an origin server")
 var serversFlag = flag.String("servers", "", "Semicolon-separated list of origin server addresses (host:port)")
@@ -66,7 +66,7 @@ func blockToString(blk uint64) string {
 // Otherwise it is just the base-36 number
 func blockToFileName(blk uint64) string {
 	if *subfoldersFlag {
-		return padLeftZeros(blockToString(blk), lenBlockStr)
+		return padLeftZeros(blockToString(blk), minLenBlockStr)
 	}
 	return blockToString(blk)
 }
@@ -87,8 +87,8 @@ func blockToPath(blk uint64) string {
 	if *subfoldersFlag {
 		s := blockToFileName(blk)
 		return path.Join(
-			s[0:2],
-			s[2:4],
+			s[0:(len(s)+2-minLenBlockStr)],
+			s[(len(s)+2-minLenBlockStr):(len(s)+4-minLenBlockStr)],
 			s,
 		)
 	}
