@@ -50,7 +50,11 @@ var nextBlk uint64
 
 // padLeftZeros pad the string s with zeros on the left to the length n
 func padLeftZeros(s string, n int) string {
-	return strings.Repeat("0", n-len(s)) + s
+	if len(s) < n {
+		return strings.Repeat("0", n-len(s)) + s
+	} else {
+		return s
+	}
 }
 
 // blockToString converts a block number into a base-36 number
