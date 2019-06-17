@@ -792,9 +792,12 @@ func Transactions(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 
 		txs, err = ctx.Node.ListTxns(addr, basics.Round(fR), basics.Round(lR))
 		if err != nil {
-			if err == ledger.ErrNoEntry && !ctx.Node.IsArchival() {
-				lib.ErrorResponse(w, http.StatusInternalServerError, err, errBlockHashBeenDeletedArchival, ctx.Log)
-				return
+			switch err.(type) {
+			case ledger.ErrNoEntry:
+				if !ctx.Node.IsArchival() {
+					lib.ErrorResponse(w, http.StatusInternalServerError, err, errBlockHashBeenDeletedArchival, ctx.Log)
+					return
+				}
 			}
 
 			lib.ErrorResponse(w, http.StatusInternalServerError, err, err.Error(), ctx.Log)
