@@ -74,12 +74,12 @@ func blockToFileName(blk uint64) string {
 }
 
 // stringToBlock converts a base-36 string into a block number
-func stringToBlock(s string) uint64 {
+func stringToBlock(s string) (uint64, error) {
 	blk, err := strconv.ParseUint(s, 36, 64)
 	if err != nil {
-		panic(err)
+		return 0, fmt.Errorf("invalid block string \"%s\": %v", s, err)
 	}
-	return blk
+	return blk, nil
 }
 
 // blockToPath converts a block number into the full path in which it will be downloaded
@@ -99,12 +99,12 @@ func blockToPath(blk uint64) string {
 }
 
 // stringBlockToPath is the same as blockToPath except it takes a (non-padded) base-36 block
-func stringBlockToPath(s string) string {
-	if *subfoldersFlag {
-		return blockToPath(stringToBlock(s))
-	} else {
-		return s
+func stringBlockToPath(s string) (string, error) {
+	blk, err := stringToBlock(s)
+	if err != nil {
+		return "", err
 	}
+	return blockToPath(blk), nil
 }
 
 // blockDir returns the root folder where all the blocks are stored

@@ -89,13 +89,20 @@ func main() {
 		roundStr := pathVars["round"]
 		genesisID := pathVars["genesisID"]
 
+		blkPath, err := stringBlockToPath(roundStr)
+		if err != nil {
+			log.Infof("%s %s: %v", r.Method, r.URL, err)
+			http.NotFound(w, r)
+			return
+		}
+
 		data, err := ioutil.ReadFile(
 			path.Join(
 				*dirFlag,
 				"v"+versionStr,
 				genesisID,
 				"block",
-				stringBlockToPath(roundStr),
+				blkPath,
 			),
 		)
 		if err != nil {
