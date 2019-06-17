@@ -17,8 +17,9 @@
 package metrics
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestParseNodeExporterArgs(t *testing.T) {
@@ -35,9 +36,7 @@ func TestParseNodeExporterArgs(t *testing.T) {
 	}
 	for test, expected := range passTestcases {
 		vargs := parseNodeExporterArgs(test, ":9100", "/metrics")
-		if !reflect.DeepEqual(vargs, expected) {
-			t.Errorf("Argument parsing did not result in expected value for: %v, got: %v, want: %v.", test, vargs, expected)
-		}
+		require.Equalf(t, vargs, expected, "Argument parsing did not result in expected value for: %v, got: %v, want: %v.", test, vargs, expected)
 	}
 
 	failTestcases := map[string][]string{
@@ -48,8 +47,6 @@ func TestParseNodeExporterArgs(t *testing.T) {
 	}
 	for test, notexpected := range failTestcases {
 		vargs := parseNodeExporterArgs(test, ":9100", "/metrics")
-		if reflect.DeepEqual(vargs, notexpected) {
-			t.Errorf("Argument parsing did result in expected value for: %v, got: %v, want: %v.", test, vargs, notexpected)
-		}
+		require.NotEqualf(t, vargs, notexpected, "Argument parsing did result in expected value for: %v, got: %v, want: %v.", test, vargs, notexpected)
 	}
 }

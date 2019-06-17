@@ -178,7 +178,7 @@ func (reporter *MetricReporter) tryDetachNodeExporter() {
 	}
 }
 
-// parseNodeExporterArgs parses the NodeExporterPath configuration string to extract node exporter's arguments.
+// parseNodeExporterArgs parses the NodeExporterPath configuration string to extract Node Exporter's arguments.
 func parseNodeExporterArgs(nodeExporterPath string, nodeExporterListenAddress string, nodeExporterMetricsPath string) []string {
 	whitespaceRE := regexp.MustCompile(`\s+`)
 	listenAddressRE := regexp.MustCompile(`--web.listen-address=(.+)`)
