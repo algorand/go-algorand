@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"os"
 	"regexp"
@@ -40,6 +41,8 @@ var (
 	recordType     string
 	noPrompt       bool
 	excludePattern string
+	exportNetwork  string
+	outputFilename string
 )
 
 func init() {
@@ -47,6 +50,10 @@ func init() {
 	dnsCmd.AddCommand(addCmd)
 	dnsCmd.AddCommand(deleteCmd)
 	dnsCmd.AddCommand(listCmd)
+	dnsCmd.AddCommand(exportCmd)
+
+	listCmd.AddCommand(listRecordsCmd)
+	listCmd.AddCommand(listZonesCmd)
 
 	addCmd.Flags().StringVarP(&addFromName, "from", "f", "", "From name to add new DNS entry")
 	addCmd.MarkFlagRequired("from")
@@ -58,9 +65,13 @@ func init() {
 	deleteCmd.Flags().BoolVarP(&noPrompt, "no-prompt", "y", false, "No prompting for records deletion")
 	deleteCmd.Flags().StringVarP(&excludePattern, "exclude", "e", "", "name records exclude pattern")
 
-	listCmd.Flags().StringVarP(&listNetwork, "network", "n", "", "Domain name for records to list")
-	listCmd.Flags().StringVarP(&recordType, "recordType", "t", "", "DNS record type to list (A, CNAME, SRV)")
-	listCmd.MarkFlagRequired("network")
+	listRecordsCmd.Flags().StringVarP(&listNetwork, "network", "n", "", "Domain name for records to list")
+	listRecordsCmd.Flags().StringVarP(&recordType, "recordType", "t", "", "DNS record type to list (A, CNAME, SRV)")
+	listRecordsCmd.MarkFlagRequired("network")
+
+	exportCmd.Flags().StringVarP(&exportNetwork, "network", "n", "", "Domain name to export")
+	exportCmd.MarkFlagRequired("network")
+	exportCmd.Flags().StringVarP(&outputFilename, "zonefile", "z", "", "Output file for backup ( intead of outputing it to stdout ) ")
 }
 
 type byIP []net.IP
@@ -81,14 +92,34 @@ var dnsCmd = &cobra.Command{
 
 var listCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List the DNS/SRV entries of the given network",
-	Long:  "List the DNS/SRV entries of the given network",
+	Short: "List the A/SRV/Zones entries of the given network",
+	Long:  "List the A/SRV/Zones entries of the given network",
+	Run: func(cmd *cobra.Command, args []string) {
+		cmd.HelpFunc()(cmd, args)
+	},
+}
+
+var listRecordsCmd = &cobra.Command{
+	Use:   "records",
+	Short: "List the A/SRV entries of the given network",
+	Long:  "List the A/SRV entries of the given network",
 	Run: func(cmd *cobra.Command, args []string) {
 		recordType = strings.ToUpper(recordType)
 		if recordType == "" || recordType == "A" || recordType == "CNAME" || recordType == "SRV" {
 			listEntries(listNetwork, recordType)
 		} else {
 			fmt.Fprintf(os.Stderr, "Invalid recordType specified.\n")
+			os.Exit(1)
+		}
+	},
+}
+
+var listZonesCmd = &cobra.Command{
+	Use:   "zones",
+	Short: "List the zones",
+	Long:  "List the zones",
+	Run: func(cmd *cobra.Command, args []string) {
+		if !doListZones() {
 			os.Exit(1)
 		}
 	},
@@ -140,6 +171,16 @@ var deleteCmd = &cobra.Command{
 	},
 }
 
+var exportCmd = &cobra.Command{
+	Use:   "export",
+	Short: "Export DNS record entries for a specified network",
+	Run: func(cmd *cobra.Command, args []string) {
+		if !doExportZone(exportNetwork, outputFilename) {
+			os.Exit(1)
+		}
+	},
+}
+
 func doAddDNS(from string, to string) (err error) {
 	cfZoneID, cfEmail, cfKey, err := getClouldflareCredentials()
 	if err != nil {
@@ -166,11 +207,22 @@ func doAddDNS(from string, to string) (err error) {
 	return
 }
 
-func getClouldflareCredentials() (zoneID string, email string, authKey string, err error) {
-	zoneID = os.Getenv("CLOUDFLARE_ZONE_ID")
+func getClouldflareAuthCredentials() (email string, authKey string, err error) {
 	email = os.Getenv("CLOUDFLARE_EMAIL")
 	authKey = os.Getenv("CLOUDFLARE_AUTH_KEY")
-	if zoneID == "" || email == "" || authKey == "" {
+	if email == "" || authKey == "" {
+		err = fmt.Errorf("one or more credentials missing from ENV")
+	}
+	return
+}
+func getClouldflareCredentials() (zoneID string, email string, authKey string, err error) {
+	email, authKey, err = getClouldflareAuthCredentials()
+	if err != nil {
+		return
+	}
+
+	zoneID = os.Getenv("CLOUDFLARE_ZONE_ID")
+	if zoneID == "" {
 		err = fmt.Errorf("one or more credentials missing from ENV")
 	}
 	return
@@ -332,4 +384,65 @@ func listEntries(listNetwork string, recordType string) {
 			}
 		}
 	}
+}
+
+func doExportZone(network string, outputFilename string) bool {
+	cfEmail, cfKey, err := getClouldflareAuthCredentials()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error getting DNS credentials: %v", err)
+		return false
+	}
+	cloudflareCred := cloudflare.NewCred(cfEmail, cfKey)
+	zones, err := cloudflareCred.GetZones(context.Background())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error retrieving zones entries: %v\n", err)
+		return false
+	}
+	zoneID := ""
+	// find a zone that matches the requested network name.
+	for _, z := range zones {
+		if z.DomainName == network {
+			zoneID = z.ZoneID
+			break
+		}
+		fmt.Printf("%s : %s\n", z.DomainName, z.ZoneID)
+	}
+	if zoneID == "" {
+		fmt.Fprintf(os.Stderr, "No matching zoneID was found for %s\n", network)
+		return false
+	}
+	cloudflareDNS := cloudflare.NewDNS(zoneID, cfEmail, cfKey)
+	exportedZone, err := cloudflareDNS.ExportZone(context.Background())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Unable to export zone : %v\n", err)
+		return false
+	}
+	if outputFilename != "" {
+		err = ioutil.WriteFile(outputFilename, exportedZone, 0666)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Unable to write exported zone file : %v\n", err)
+			return false
+		}
+	} else {
+		fmt.Fprint(os.Stdout, string(exportedZone))
+	}
+	return true
+}
+
+func doListZones() bool {
+	cfEmail, cfKey, err := getClouldflareAuthCredentials()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error getting DNS credentials: %v", err)
+		return false
+	}
+	cloudflareCred := cloudflare.NewCred(cfEmail, cfKey)
+	zones, err := cloudflareCred.GetZones(context.Background())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error listing zones entries: %v\n", err)
+		return false
+	}
+	for _, z := range zones {
+		fmt.Printf("%s : %s\n", z.DomainName, z.ZoneID)
+	}
+	return true
 }
