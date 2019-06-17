@@ -20,7 +20,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -33,6 +32,7 @@ import (
 	"sync/atomic"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	tools_network "github.com/algorand/go-algorand/tools/network"
 )
@@ -113,6 +113,8 @@ func blockURL(server string, blk uint64) string {
 }
 
 func fetchBlock(server string, blk uint64) error {
+	log := logging.Base()
+
 	fn := blockFullPath(blk)
 	_, err := os.Stat(fn)
 	if err == nil {
@@ -158,6 +160,8 @@ func fetchBlock(server string, blk uint64) error {
 }
 
 func fetcher(server string, wg *sync.WaitGroup) {
+	log := logging.Base()
+
 	for {
 		myBlock := atomic.AddUint64(&nextBlk, 1) - 1
 

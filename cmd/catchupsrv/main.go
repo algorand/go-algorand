@@ -23,11 +23,10 @@ import (
 	"path"
 	"strconv"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/algorand/websocket"
 	"github.com/gorilla/mux"
 
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/rpcs"
 )
@@ -38,6 +37,9 @@ var subfoldersFlag = flag.Bool("subfolders", false, "Organize downloaded blocks 
 
 func main() {
 	flag.Parse()
+
+	log := logging.Base()
+	log.SetLevel(logging.Info)
 
 	if *dirFlag == "" {
 		panic("Must specify -dir")
