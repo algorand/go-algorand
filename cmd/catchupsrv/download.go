@@ -52,9 +52,8 @@ var nextBlk uint64
 func padLeftZeros(s string, n int) string {
 	if len(s) < n {
 		return strings.Repeat("0", n-len(s)) + s
-	} else {
-		return s
 	}
+	return s
 }
 
 // blockToString converts a block number into a base-36 number
@@ -68,9 +67,8 @@ func blockToString(blk uint64) string {
 func blockToFileName(blk uint64) string {
 	if *subfoldersFlag {
 		return padLeftZeros(blockToString(blk), lenBlockStr)
-	} else {
-		return blockToString(blk)
 	}
+	return blockToString(blk)
 }
 
 // stringToBlock converts a base-36 string into a block number
@@ -93,9 +91,8 @@ func blockToPath(blk uint64) string {
 			s[2:4],
 			s,
 		)
-	} else {
-		return blockToFileName(blk)
 	}
+	return blockToFileName(blk)
 }
 
 // stringBlockToPath is the same as blockToPath except it takes a (non-padded) base-36 block
