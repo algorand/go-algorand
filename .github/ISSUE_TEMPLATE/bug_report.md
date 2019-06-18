@@ -18,6 +18,7 @@ Describe your issue here.
 * Software version: `algod -v`
 * Node status if applicable: `goal node status`
 * Operating System details. 
+* In many cases log files and cadaver files are also useful to include, since these files may be large an Algorand developer may request them later.
 
 ### Steps to reproduce
 Tell us how to reproduce this issue.
