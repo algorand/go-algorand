@@ -215,6 +215,7 @@ func getClouldflareAuthCredentials() (email string, authKey string, err error) {
 	}
 	return
 }
+
 func getClouldflareCredentials() (zoneID string, email string, authKey string, err error) {
 	email, authKey, err = getClouldflareAuthCredentials()
 	if err != nil {
