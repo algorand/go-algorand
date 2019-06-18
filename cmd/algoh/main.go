@@ -66,7 +66,7 @@ func main() {
 
 	genesisID, err := nc.GetGenesisID()
 	if err != nil {
-		_, _ = fmt.Fprintln(os.Stdout, "error loading telemetry config", err)
+		fmt.Fprintln(os.Stdout, "error loading telemetry config", err)
 		return
 	}
 
@@ -84,7 +84,7 @@ func main() {
 
 	// If data directory doesn't exist, we can't run. Don't bother trying.
 	if len(dataDir) == 0 {
-		_, _ = fmt.Fprintln(os.Stderr, "Data directory not specified.  Please use -d or set $ALGORAND_DATA in your environment.")
+		fmt.Fprintln(os.Stderr, "Data directory not specified.  Please use -d or set $ALGORAND_DATA in your environment.")
 		os.Exit(1)
 	}
 
@@ -136,21 +136,8 @@ func main() {
 		close(done)
 
 		// capture logs if algod terminated prior to blockWatcher starting
-		if !blockWatcherInitialized && algohConfig.UploadOnError {
-			if errorOutput.output != "" {
-				_, _ = fmt.Fprintf(os.Stderr, errorOutput.output)
-				details := telemetryspec.ErrorOutputEventDetails{
-					Error:  errorOutput.output,
-					Output: output.output,
-				}
-				log.EventWithDetails(telemetryspec.HostApplicationState, telemetryspec.ErrorOutputEvent, details)
-
-				// Write stdout & stderr streams to disk
-				_ = ioutil.WriteFile(filepath.Join(absolutePath, nodecontrol.StdOutFilename), []byte(output.output), os.ModePerm)
-				_ = ioutil.WriteFile(filepath.Join(absolutePath, nodecontrol.StdErrFilename), []byte(errorOutput.output), os.ModePerm)
-			}
-			_, _ = fmt.Fprintf(os.Stdout, "from algod start, Uploading logs...\n")
-			sendLogs()
+		if !blockWatcherInitialized {
+			captureErrorLogs(algohConfig, errorOutput, output, absolutePath, true)
 		}
 
 		log.Infoln("++++++++++++++++++++++++++++++++++++++++")
@@ -158,25 +145,9 @@ func main() {
 		log.Infoln("++++++++++++++++++++++++++++++++++++++++")
 	}()
 
-	// Set up error capturing in case algod exits before we can get REST client
+	// Set up error capturing
 	defer func() {
-		if errorOutput.output != "" {
-			_, _ = fmt.Fprintf(os.Stderr, errorOutput.output)
-			details := telemetryspec.ErrorOutputEventDetails{
-				Error:  errorOutput.output,
-				Output: output.output,
-			}
-			log.EventWithDetails(telemetryspec.HostApplicationState, telemetryspec.ErrorOutputEvent, details)
-
-			// Write stdout & stderr streams to disk
-			_ = ioutil.WriteFile(filepath.Join(absolutePath, nodecontrol.StdOutFilename), []byte(output.output), os.ModePerm)
-			_ = ioutil.WriteFile(filepath.Join(absolutePath, nodecontrol.StdErrFilename), []byte(errorOutput.output), os.ModePerm)
-
-			if algohConfig.UploadOnError {
-				_, _ = fmt.Fprintf(os.Stdout, "Uploading logs...\n")
-				sendLogs()
-			}
-		}
+		captureErrorLogs(algohConfig, errorOutput, output, absolutePath, false)
 	}()
 
 	// Handle signals cleanly
@@ -297,9 +268,9 @@ func configureLogging(genesisID string, log logging.Logger, rootPath string) {
 
 	// if we have the telemetry enabled, we want to use it's sessionid as part of the
 	// collected metrics decorations.
-	_, _ = fmt.Fprintln(writer, "++++++++++++++++++++++++++++++++++++++++")
-	_, _ = fmt.Fprintln(writer, "Logging Starting")
-	_, _ = fmt.Fprintln(writer, "++++++++++++++++++++++++++++++++++++++++")
+	fmt.Fprintln(writer, "++++++++++++++++++++++++++++++++++++++++")
+	fmt.Fprintln(writer, "Logging Starting")
+	fmt.Fprintln(writer, "++++++++++++++++++++++++++++++++++++++++")
 }
 
 func initTelemetry(genesisID string, log logging.Logger, dataDirectory string) {
@@ -309,7 +280,7 @@ func initTelemetry(genesisID string, log logging.Logger, dataDirectory string) {
 	if !isTest {
 		telemetryConfig, err := logging.EnsureTelemetryConfig(nil, genesisID)
 		if err != nil {
-			_, _ = fmt.Fprintln(os.Stdout, "error loading telemetry config", err)
+			fmt.Fprintln(os.Stdout, "error loading telemetry config", err)
 			return
 		}
 
@@ -322,7 +293,7 @@ func initTelemetry(genesisID string, log logging.Logger, dataDirectory string) {
 		if telemetryConfig.Enable {
 			err = log.EnableTelemetry(telemetryConfig)
 			if err != nil {
-				_, _ = fmt.Fprintln(os.Stdout, "error creating telemetry hook", err)
+				fmt.Fprintln(os.Stdout, "error creating telemetry hook", err)
 				return
 			}
 			// For privacy concerns, we don't want to provide the full data directory to telemetry.
@@ -347,8 +318,30 @@ func initTelemetry(genesisID string, log logging.Logger, dataDirectory string) {
 	}
 }
 
+// capture algod error output and optionally upload logs
+func captureErrorLogs(algohConfig algoh.HostConfig, errorOutput stdCollector, output stdCollector, absolutePath string, errorCondition bool) {
+	if errorOutput.output != "" {
+		fmt.Fprintf(os.Stdout, "errorOutput.output: `%s`\n", errorOutput.output)
+		errorCondition = true
+		fmt.Fprintf(os.Stderr, errorOutput.output)
+		details := telemetryspec.ErrorOutputEventDetails{
+			Error:  errorOutput.output,
+			Output: output.output,
+		}
+		log.EventWithDetails(telemetryspec.HostApplicationState, telemetryspec.ErrorOutputEvent, details)
+
+		// Write stdout & stderr streams to disk
+		_ = ioutil.WriteFile(filepath.Join(absolutePath, nodecontrol.StdOutFilename), []byte(output.output), os.ModePerm)
+		_ = ioutil.WriteFile(filepath.Join(absolutePath, nodecontrol.StdErrFilename), []byte(errorOutput.output), os.ModePerm)
+	}
+	if errorCondition && algohConfig.UploadOnError {
+		fmt.Fprintf(os.Stdout, "Uploading logs...\n")
+		sendLogs()
+	}
+}
+
 func reportErrorf(format string, args ...interface{}) {
-	_, _ = fmt.Fprintf(os.Stderr, format, args...)
+	fmt.Fprintf(os.Stderr, format, args...)
 	logging.Base().Fatalf(format, args...)
 }
 
