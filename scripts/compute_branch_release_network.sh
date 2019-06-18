@@ -9,9 +9,9 @@ if [ -z "${NETWORK}" ]; then
     exit -1
 fi
 
-#if [ "${NETWORK}" = "testnet" ]; then
-#    echo "mainnet"
-#    exit 0
-#fi
+if [ "${NETWORK}" = "testnet" ]; then
+    echo "mainnet"
+    exit 0
+fi
 
 echo "${NETWORK}"
