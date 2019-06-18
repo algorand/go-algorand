@@ -522,7 +522,9 @@ func (wn *WebsocketNetwork) setup() {
 		config.Consensus[protocol.ConsensusCurrentVersion].SoftCommitteeSize +
 		config.Consensus[protocol.ConsensusCurrentVersion].CertCommitteeSize +
 		config.Consensus[protocol.ConsensusCurrentVersion].NextCommitteeSize +
-		config.Consensus[protocol.ConsensusCurrentVersion].LateCommitteeSize)
+		config.Consensus[protocol.ConsensusCurrentVersion].LateCommitteeSize +
+		config.Consensus[protocol.ConsensusCurrentVersion].RedoCommitteeSize +
+		config.Consensus[protocol.ConsensusCurrentVersion].DownCommitteeSize)
 
 	wn.broadcastQueueHighPrio = make(chan broadcastRequest, wn.outgoingMessagesBufferSize)
 	wn.broadcastQueueBulk = make(chan broadcastRequest, 100)
@@ -1013,9 +1015,9 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 		defer close(request.done)
 	}
 
-	broadcastQueueTime := time.Now().Sub(request.enqueueTime)
-	networkBroadcastQueueMicros.AddUint64(uint64(broadcastQueueTime.Nanoseconds()/1000), nil)
-	if broadcastQueueTime > maxMessageQueueDuration {
+	broadcastQueueDuration := time.Now().Sub(request.enqueueTime)
+	networkBroadcastQueueMicros.AddUint64(uint64(broadcastQueueDuration.Nanoseconds()/1000), nil)
+	if broadcastQueueDuration > maxMessageQueueDuration {
 		networkBroadcastsDropped.Inc(nil)
 		return
 	}

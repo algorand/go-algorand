@@ -347,6 +347,13 @@ func (wp *wsPeer) writeLoopSend(msg sendMessage) (exit bool) {
 		// just drop it, don't break the connection
 		return false
 	}
+	// check if this message was waiting in the queue for too long. If this is the case, return "true" to indicate that we want to close the connection.
+	msgWaitDuration := time.Now().Sub(msg.enqueued)
+	if msgWaitDuration > maxMessageQueueDuration {
+		wp.net.log.Warnf("peer stale enqueued message %dms", msgWaitDuration.Nanoseconds()/1000000)
+		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "stale message"})
+		return true
+	}
 	atomic.StoreInt64(&wp.intermittentOutgoingMessageEnqueueTime, msg.enqueued.UnixNano())
 	defer atomic.StoreInt64(&wp.intermittentOutgoingMessageEnqueueTime, 0)
 	err := wp.conn.WriteMessage(websocket.BinaryMessage, msg.data)
