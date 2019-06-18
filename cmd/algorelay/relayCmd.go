@@ -380,6 +380,10 @@ func ensureRelayStatus(checkOnly bool, relay eb.Relay, nameDomain string, srvDom
 		}
 	} else if err == nil {
 		err = fmt.Errorf("metrics should not be registered for %s but it is", target)
+	} else {
+		// If metrics are not enabled, then we SHOULD get an error.
+		// Since this isn't actually an error, reset to nil
+		err = nil
 	}
 
 	srvName = topmost
