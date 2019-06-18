@@ -159,6 +159,10 @@ var checkCmd = &cobra.Command{
 				continue
 			}
 
+			if !relay.CheckSuccess {
+				continue
+			}
+
 			const checkOnly = true
 			name, port, err := ensureRelayStatus(checkOnly, relay, nameDomainArg, srvDomainArg, defaultPortArg, context)
 			if err != nil {
