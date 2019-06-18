@@ -151,20 +151,21 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 		return
 	}
 	encodedBlockCert, err := ls.encodedBlockCert(round)
-	switch err {
-	case ledger.ErrNoEntry:
-		// entry cound not be found.
-		response.Header().Set("Cache-Control", ledgerResponseMissingBlockCacheControl)
-		response.WriteHeader(http.StatusNotFound)
-		return
-	default:
-		// unexpected error.
-		logging.Base().Warnf("ServeHTTP : failed to retrieve block %d %v", round, err)
-		response.WriteHeader(http.StatusInternalServerError)
-		return
-	case nil:
-		// no error ! keep going.
+	if err != nil {
+		switch err.(type) {
+		case ledger.ErrNoEntry:
+			// entry cound not be found.
+			response.Header().Set("Cache-Control", ledgerResponseMissingBlockCacheControl)
+			response.WriteHeader(http.StatusNotFound)
+			return
+		default:
+			// unexpected error.
+			logging.Base().Warnf("ServeHTTP : failed to retrieve block %d %v", round, err)
+			response.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 	}
+
 	response.Header().Set("Content-Type", ledgerResponseContentType)
 	response.Header().Set("Content-Length", strconv.Itoa(len(encodedBlockCert)))
 	response.Header().Set("Cache-Control", ledgerResponseHasBlockCacheControl)
