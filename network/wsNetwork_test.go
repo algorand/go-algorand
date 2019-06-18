@@ -1400,13 +1400,14 @@ func TestDelayedMessageDrop(t *testing.T) {
 
 	currentTime := time.Now()
 	for i := 0; i < 10; i++ {
-		netA.broadcastWithTimestamp(debugTag, []byte("foo"), currentTime.Add(time.Hour*time.Duration(i-5)))
+		err := netA.broadcastWithTimestamp(debugTag, []byte("foo"), currentTime.Add(time.Hour*time.Duration(i-5)))
+		require.NoErrorf(t, err, "No error was expected")
 	}
 
 	select {
 	case <-counterDone:
-	case <-time.After(2 * time.Second):
-		t.Errorf("timeout, count=%d, wanted 5", counter.count)
+	case <-time.After(maxMessageQueueDuration):
+		require.Equalf(t, 5, counter.count, "One or more messages failed to reach destination network")
 	}
 }
 
