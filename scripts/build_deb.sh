@@ -94,7 +94,7 @@ for svc in "${systemd_files[@]}"; do
     cp installer/${svc} ${PKG_ROOT}/lib/systemd/system
 done
 
-unattended_upgrades_files=("50algorand-upgrades")
+unattended_upgrades_files=("51algorand-upgrades")
 mkdir -p ${PKG_ROOT}/etc/apt/apt.conf.d
 for f in "${unattended_upgrades_files[@]}"; do
     cp installer/${f} ${PKG_ROOT}/etc/apt/apt.conf.d
