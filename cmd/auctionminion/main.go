@@ -21,6 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"net/url"
 	"os"
 
@@ -143,7 +144,7 @@ func main() {
 			fmt.Printf("Checking round %d..\n", curRound)
 		}
 
-		txns, err := restClient.TransactionsByAddr(auctionChecksumAddr.String(), curRound, curRound)
+		txns, err := restClient.TransactionsByAddr(auctionChecksumAddr.String(), curRound, curRound, math.MaxUint64)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot fetch transactions from %d: %v\n", curRound, err)
 			os.Exit(1)

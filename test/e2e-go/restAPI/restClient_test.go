@@ -211,7 +211,7 @@ func TestTransactionsByAddr(t *testing.T) {
 
 	restClient, err := localFixture.NC.AlgodClient()
 	require.NoError(t, err)
-	res, err := restClient.TransactionsByAddr(toAddress, 0, rnd.LastRound)
+	res, err := restClient.TransactionsByAddr(toAddress, 0, rnd.LastRound, 100)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(res.Transactions))
 
