@@ -479,6 +479,8 @@ func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []by
 	return c.ConstructPaymentForRounds(from, to, fee, amount, note, closeTo, firstRound, lastRound)
 }
 
+// ConstructPaymentForRounds builds a payment transaction, valid for the passed rounds, to be signed
+// If the fee is 0, the function will use the suggested one form the network
 func (c *Client) ConstructPaymentForRounds(from, to string, fee, amount uint64, note []byte, closeTo string, firstValid, lastValid basics.Round) (transactions.Transaction, error) {
 	fromAddr, err := basics.UnmarshalChecksumAddress(from)
 	if err != nil {
@@ -496,7 +498,6 @@ func (c *Client) ConstructPaymentForRounds(from, to string, fee, amount uint64, 
 		return transactions.Transaction{}, err
 	}
 
-	round := params.LastRound
 	cp := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
 	tx := transactions.Transaction{
 		Type: protocol.PaymentTx,
