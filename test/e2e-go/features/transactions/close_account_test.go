@@ -22,7 +22,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 )
 
@@ -63,7 +62,7 @@ func TestAccountsCanClose(t *testing.T) {
 	a.NoError(err)
 	fixture.WaitForConfirmedTxn(status.LastRound+10, baseAcct, tx.ID().String())
 
-	tx, err = client.SendPaymentFromWallet(walletHandle, nil, acct0, acct1, 1, 100000, nil, acct2, basics.Round(0), basics.Round(0))
+	tx, err = client.SendPaymentFromWallet(walletHandle, nil, acct0, acct1, 1, 100000, nil, acct2, 0, 0)
 	a.NoError(err)
 	fixture.WaitForConfirmedTxn(status.LastRound+10, acct0, tx.ID().String())
 

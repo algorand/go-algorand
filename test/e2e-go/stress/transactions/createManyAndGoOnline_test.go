@@ -36,7 +36,7 @@ func cascadeCreateAndFundAccounts(amountToSend, transactionFee uint64, fundingAc
 		a.NoError(err, "should be able to get unencrypted wallet handle")
 		newAddress, err := client.GenerateAddress(wh)
 		a.NoError(err, "should be able to generate new address")
-		tx, err := client.SendPaymentFromWallet(wh, nil, fundingAccount, newAddress, transactionFee, amountToSend, nil, "", basics.Round(0), basics.Round(0))
+		tx, err := client.SendPaymentFromWallet(wh, nil, fundingAccount, newAddress, transactionFee, amountToSend, nil, "", 0, 0)
 		a.NoError(err, "should be no errors when funding new accounts, send number %v", i)
 		i++
 		outputTxidsToAccounts[tx.ID().String()] = newAddress

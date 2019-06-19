@@ -20,7 +20,6 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 )
 
@@ -36,7 +35,7 @@ func (c *Client) SendPaymentFromUnencryptedWallet(from, to string, fee, amount u
 		return transactions.Transaction{}, err
 	}
 
-	return c.SendPaymentFromWallet(wh, nil, from, to, fee, amount, note, "", basics.Round(0), basics.Round(0))
+	return c.SendPaymentFromWallet(wh, nil, from, to, fee, amount, note, "", 0, 0)
 }
 
 // GetUnencryptedWalletHandle returns the unencrypted wallet handle. If there
