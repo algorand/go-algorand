@@ -62,8 +62,8 @@ func init() {
 	sendCmd.Flags().StringVarP(&toAddress, "to", "t", "", "Address to send to money to (required)")
 	sendCmd.Flags().Uint64VarP(&amount, "amount", "a", 0, "The amount to be transferred (required), in microAlgos")
 	sendCmd.Flags().Uint64Var(&fee, "fee", 0, "The transaction fee (automatically determined by default), in microAlgos")
-	sendCmd.Flags().Uint64Var(&firstValid, "firstvalid", 0, "The first round where the transaction may be committed to the ledger (currently ignored)")
-	sendCmd.Flags().Uint64Var(&lastValid, "lastvalid", 0, "The last round where the transaction may be committed to the ledger (currently ignored)")
+	sendCmd.Flags().Uint64Var(&firstValid, "firstvalid", 0, "The first round where the transaction may be committed to the ledger")
+	sendCmd.Flags().Uint64Var(&lastValid, "lastvalid", 0, "The last round where the transaction may be committed to the ledger")
 	sendCmd.Flags().StringVar(&noteBase64, "noteb64", "", "Note (URL-base64 encoded)")
 	sendCmd.Flags().StringVarP(&noteText, "note", "n", "", "Note text (ignored if --noteb64 used also)")
 	sendCmd.Flags().StringVarP(&txFilename, "out", "o", "", "Dump an unsigned tx to the given file. In order to dump a signed transaction, pass -s")
@@ -200,7 +200,7 @@ var sendCmd = &cobra.Command{
 		} else {
 			var payment transactions.Transaction
 			if firstValid != 0 && lastValid != 0 {
-				payment, err = client.ConstructPaymentForRounds(fromAddressResolved, toAddressResolved, fee, amount, noteBytes, closeToAddressResolved, firstValid, lastValid)
+				payment, err = client.ConstructPaymentForRounds(fromAddressResolved, toAddressResolved, fee, amount, noteBytes, closeToAddressResolved, basics.Round(firstValid), basics.Round(lastValid))
 			} else {
 				payment, err = client.ConstructPayment(fromAddressResolved, toAddressResolved, fee, amount, noteBytes, closeToAddressResolved)
 			}
