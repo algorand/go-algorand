@@ -19,12 +19,12 @@ package main
 import (
 	"encoding/base64"
 	"fmt"
-	"github.com/algorand/go-algorand/data/basics"
 	"io"
 	"io/ioutil"
 	"os"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 
