@@ -32,10 +32,6 @@ import (
 
 var loggingFilename = "logging.config"
 
-// these credentials have the minimum privilege set required to write to elasticsearch
-var userName = "telemetry-v9"
-var password = "oq%$FA1TOJ!yYeMEcJ7D688eEOE#MGCu"
-
 func elasticsearchEndpoint() string {
 	return "https://1ae9f9654b25441090fe5c48c833b95a.us-east-1.aws.found.io:9243"
 }
@@ -70,6 +66,8 @@ func createTelemetryConfig() TelemetryConfig {
 		MinLogLevel:        logrus.WarnLevel,
 		ReportHistoryLevel: logrus.WarnLevel,
 		LogHistoryDepth:    100,
+		UserName:           "telemetry-v9",
+		Password:           "oq%$FA1TOJ!yYeMEcJ7D688eEOE#MGCu",
 	}
 }
 

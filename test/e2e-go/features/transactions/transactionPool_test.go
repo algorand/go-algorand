@@ -27,6 +27,7 @@ import (
 )
 
 func TestTransactionPoolOrderingAndClearing(t *testing.T) {
+	t.Skip("test is flaky as of 2019-06-18")
 	t.Parallel()
 	r := require.New(t)
 
