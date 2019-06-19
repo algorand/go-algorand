@@ -428,20 +428,9 @@ type MultisigInfo struct {
 }
 
 // SendPaymentFromWallet signs a transaction using the given wallet and returns the resulted transaction id
-func (c *Client) SendPaymentFromWallet(walletHandle, pw []byte, from, to string, fee, amount uint64, note []byte, closeTo string) (transactions.Transaction, error) {
+func (c *Client) SendPaymentFromWallet(walletHandle, pw []byte, from, to string, fee, amount uint64, note []byte, closeTo string, firstValid, lastValid basics.Round) (transactions.Transaction, error) {
 	// Build the transaction
-	tx, err := c.ConstructPayment(from, to, fee, amount, note, closeTo)
-	if err != nil {
-		return transactions.Transaction{}, err
-	}
-
-	return c.signAndBroadcastTransactionWithWallet(walletHandle, pw, tx)
-}
-
-// SendPaymentFromWalletWithCustomValidity signs a transaction, which has a non-default validity period, using the given wallet and returns the resulted transaction id
-func (c *Client) SendPaymentFromWalletWithCustomValidity(walletHandle, pw []byte, from, to string, fee, amount uint64, note []byte, closeTo string, firstValid, lastValid basics.Round) (transactions.Transaction, error) {
-	// Build the transaction
-	tx, err := c.ConstructPaymentForRounds(from, to, fee, amount, note, closeTo, firstValid, lastValid)
+	tx, err := c.ConstructPayment(from, to, fee, amount, note, closeTo, firstValid, lastValid)
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
@@ -480,23 +469,9 @@ func (c *Client) signAndBroadcastTransactionWithWallet(walletHandle, pw []byte, 
 	return tx, nil
 }
 
-// ConstructPayment builds a payment transaction to be signed
-// If the fee is 0, the function will use the suggested one form the network
-func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []byte, closeTo string) (transactions.Transaction, error) {
-	// Get current round, protocol, genesis ID
-	params, err := c.SuggestedParams()
-	if err != nil {
-		return transactions.Transaction{}, err
-	}
-	firstRound := basics.Round(params.LastRound + 1)
-	cp := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
-	lastRound := firstRound + basics.Round(cp.MaxTxnLife)
-	return c.ConstructPaymentForRounds(from, to, fee, amount, note, closeTo, firstRound, lastRound)
-}
-
 // ConstructPaymentForRounds builds a payment transaction, valid for the passed rounds, to be signed
 // If the fee is 0, the function will use the suggested one form the network
-func (c *Client) ConstructPaymentForRounds(from, to string, fee, amount uint64, note []byte, closeTo string, firstValid, lastValid basics.Round) (transactions.Transaction, error) {
+func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []byte, closeTo string, firstValid, lastValid basics.Round) (transactions.Transaction, error) {
 	fromAddr, err := basics.UnmarshalChecksumAddress(from)
 	if err != nil {
 		return transactions.Transaction{}, err
@@ -514,6 +489,17 @@ func (c *Client) ConstructPaymentForRounds(from, to string, fee, amount uint64, 
 	}
 
 	cp := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
+	if firstValid == 0 && lastValid == 0 {
+		firstValid = basics.Round(params.LastRound + 1)
+		lastValid = firstValid + basics.Round(cp.MaxTxnLife)
+	} else if firstValid != 0 && lastValid == 0 {
+		lastValid = firstValid + basics.Round(cp.MaxTxnLife)
+	} else if firstValid > lastValid {
+		return transactions.Transaction{}, fmt.Errorf("cannot construct payment: txn would first be valid on round %d which is after last valid round %d", firstValid, lastValid)
+	} else if lastValid-firstValid > basics.Round(cp.MaxTxnLife) {
+		return transactions.Transaction{}, fmt.Errorf("cannot construct payment: txn validity period ( %d to %d ) is greater than protocol max txn lifetime %d ", firstValid, lastValid, cp.MaxTxnLife)
+	}
+
 	tx := transactions.Transaction{
 		Type: protocol.PaymentTx,
 		Header: transactions.Header{
