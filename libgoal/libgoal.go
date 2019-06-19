@@ -435,6 +435,25 @@ func (c *Client) SendPaymentFromWallet(walletHandle, pw []byte, from, to string,
 		return transactions.Transaction{}, err
 	}
 
+	if err != nil {
+		return transactions.Transaction{}, err
+	}
+
+	return c.signAndBroadcastTransactionWithWallet(walletHandle, pw, tx)
+}
+
+// SendPaymentFromWalletWithCustomValidity signs a transaction, which has a non-default validity period, using the given wallet and returns the resulted transaction id
+func (c *Client) SendPaymentFromWalletWithCustomValidity(walletHandle, pw []byte, from, to string, fee, amount uint64, note []byte, closeTo string, firstValid, lastValid basics.Round) (transactions.Transaction, error) {
+	// Build the transaction
+	tx, err := c.ConstructPaymentForRounds(from, to, fee, amount, note, closeTo, firstValid, lastValid)
+	if err != nil {
+		return transactions.Transaction{}, err
+	}
+
+	return c.signAndBroadcastTransactionWithWallet(walletHandle, pw, tx)
+}
+
+func (c *Client) signAndBroadcastTransactionWithWallet(walletHandle, pw []byte, tx transactions.Transaction) (transactions.Transaction, error) {
 	// Sign the transaction
 	kmd, err := c.ensureKmdClient()
 	if err != nil {

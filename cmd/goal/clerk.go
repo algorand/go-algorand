@@ -19,6 +19,7 @@ package main
 import (
 	"encoding/base64"
 	"fmt"
+	"github.com/algorand/go-algorand/data/basics"
 	"io"
 	"io/ioutil"
 	"os"
@@ -145,7 +146,13 @@ var sendCmd = &cobra.Command{
 		if txFilename == "" {
 			// Sign and broadcast the tx
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			tx, err := client.SendPaymentFromWallet(wh, pw, fromAddressResolved, toAddressResolved, fee, amount, noteBytes, closeToAddressResolved)
+			var tx transactions.Transaction
+
+			if firstValid != 0 && lastValid != 0 {
+				tx, err = client.SendPaymentFromWalletWithCustomValidity(wh, pw, fromAddressResolved, toAddressResolved, fee, amount, noteBytes, closeToAddressResolved, basics.Round(firstValid), basics.Round(lastValid))
+			} else {
+				tx, err = client.SendPaymentFromWallet(wh, pw, fromAddressResolved, toAddressResolved, fee, amount, noteBytes, closeToAddressResolved)
+			}
 
 			// update information from Transaction
 			txid := tx.ID().String()
@@ -191,7 +198,12 @@ var sendCmd = &cobra.Command{
 				}
 			}
 		} else {
-			payment, err := client.ConstructPayment(fromAddressResolved, toAddressResolved, fee, amount, noteBytes, closeToAddressResolved)
+			var payment transactions.Transaction
+			if firstValid != 0 && lastValid != 0 {
+				payment, err = client.ConstructPaymentForRounds(fromAddressResolved, toAddressResolved, fee, amount, noteBytes, closeToAddressResolved, firstValid, lastValid)
+			} else {
+				payment, err = client.ConstructPayment(fromAddressResolved, toAddressResolved, fee, amount, noteBytes, closeToAddressResolved)
+			}
 			if err != nil {
 				reportErrorf(errorConstructingTX, err)
 			}
