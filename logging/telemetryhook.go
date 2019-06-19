@@ -123,7 +123,7 @@ func (hook *asyncTelemetryHook) Flush() {
 
 func createElasticHook(cfg TelemetryConfig) (hook logrus.Hook, err error) {
 	client, err := elastic.NewClient(elastic.SetURL(cfg.URI),
-		elastic.SetBasicAuth(userName, password),
+		elastic.SetBasicAuth(cfg.UserName, cfg.Password),
 		elastic.SetSniff(false),
 		elastic.SetGzip(true))
 	if err != nil {
