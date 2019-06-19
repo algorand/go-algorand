@@ -890,6 +890,7 @@ func (wn *WebsocketNetwork) messageHandlerThread() {
 		case <-wn.ctx.Done():
 			return
 		case msg := <-wn.readBuffer:
+			wn.log.Debugf("WebsocketNetwork messageHandlerThread msg=%v read", msg)
 			if msg.processing != nil {
 				// The channel send should never block, but just in case..
 				select {
@@ -905,6 +906,7 @@ func (wn *WebsocketNetwork) messageHandlerThread() {
 			start := time.Now()
 			// now, send to global handlers
 			outmsg := wn.handlers.Handle(msg)
+			wn.log.Debugf("WebsocketNetwork messageHandlerThread msg=%v handled", msg)
 			handled := time.Now()
 			bufferNanos := start.UnixNano() - msg.Received
 			networkIncomingBufferMicros.AddUint64(uint64(bufferNanos/1000), nil)

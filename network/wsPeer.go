@@ -279,6 +279,8 @@ func (wp *wsPeer) readLoop() {
 			wp.reportReadErr(err)
 			return
 		}
+		wp.net.log.Debugf("wsPeer readLoop msg=%v read", msg)
+
 		msg.processing = wp.processed
 		msg.Received = time.Now().UnixNano()
 		msg.Data = slurper.Bytes()
@@ -342,6 +344,8 @@ func (wp *wsPeer) handleFilterMessage(msg IncomingMessage) {
 }
 
 func (wp *wsPeer) writeLoopSend(msg sendMessage) (exit bool) {
+	wp.net.log.Debugf("wsPeer writeLoopSend in msg=%v", msg)
+	defer wp.net.log.Debugf("wsPeer writeLoopSend exit msg=%v", msg)
 	if len(msg.data) > maxMessageLength {
 		wp.net.log.Errorf("trying to send a message longer than we would recieve: %d > %d tag=%#v", len(msg.data), maxMessageLength, string(msg.data[0:2]))
 		// just drop it, don't break the connection
