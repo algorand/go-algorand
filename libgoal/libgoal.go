@@ -435,10 +435,6 @@ func (c *Client) SendPaymentFromWallet(walletHandle, pw []byte, from, to string,
 		return transactions.Transaction{}, err
 	}
 
-	if err != nil {
-		return transactions.Transaction{}, err
-	}
-
 	return c.signAndBroadcastTransactionWithWallet(walletHandle, pw, tx)
 }
 
