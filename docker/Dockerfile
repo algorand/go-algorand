@@ -11,5 +11,9 @@ RUN mkdir -p $GOPATH/src/github.com/algorand
 WORKDIR $GOPATH/src/github.com/algorand
 RUN git clone https://github.com/algorand/go-algorand
 WORKDIR $GOPATH/src/github.com/algorand/go-algorand
+RUN apt-get -y install sudo
+ENV DEBIAN_FRONTEND noninteractive
+RUN apt-get -y install tzdata
+RUN apt-get -y install bsdmainutils
 RUN git checkout master && scripts/configure_dev.sh && make
 ENTRYPOINT ["/bin/bash"]
