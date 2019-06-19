@@ -255,12 +255,14 @@ func (wp *wsPeer) readLoop() {
 	wp.conn.SetReadLimit(maxMessageLength)
 	slurper := LimitedReaderSlurper{Limit: maxMessageLength}
 	for {
+		wp.net.log.Debugf("wsPeer readLoop for-loop top")
 		msg := IncomingMessage{}
 		mtype, reader, err := wp.conn.NextReader()
 		if err != nil {
 			wp.reportReadErr(err)
 			return
 		}
+		wp.net.log.Debugf("wsPeer readLoop mtype=%v read", mtype)
 		if mtype != websocket.BinaryMessage {
 			wp.net.log.Errorf("peer sent non websocket-binary message: %#v", mtype)
 			networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "protocol"})
