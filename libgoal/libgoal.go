@@ -468,6 +468,18 @@ func (c *Client) SendPaymentFromWallet(walletHandle, pw []byte, from, to string,
 // ConstructPayment builds a payment transaction to be signed
 // If the fee is 0, the function will use the suggested one form the network
 func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []byte, closeTo string) (transactions.Transaction, error) {
+	// Get current round, protocol, genesis ID
+	params, err := c.SuggestedParams()
+	if err != nil {
+		return transactions.Transaction{}, err
+	}
+	firstRound := basics.Round(params.LastRound)
+	cp := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
+	lastRound := firstRound + basics.Round(cp.MaxTxnLife)
+	return c.ConstructPaymentForRounds(from, to, fee, amount, note, closeTo, firstRound, lastRound)
+}
+
+func (c *Client) ConstructPaymentForRounds(from, to string, fee, amount uint64, note []byte, closeTo string, firstValid, lastValid basics.Round) (transactions.Transaction, error) {
 	fromAddr, err := basics.UnmarshalChecksumAddress(from)
 	if err != nil {
 		return transactions.Transaction{}, err
@@ -491,8 +503,8 @@ func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []by
 		Header: transactions.Header{
 			Sender:     fromAddr,
 			Fee:        basics.MicroAlgos{Raw: fee},
-			FirstValid: basics.Round(round),
-			LastValid:  basics.Round(round) + basics.Round(cp.MaxTxnLife),
+			FirstValid: firstValid,
+			LastValid:  lastValid,
 			Note:       note,
 		},
 		PaymentTxnFields: transactions.PaymentTxnFields{
