@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"os"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -146,7 +147,7 @@ var sendCmd = &cobra.Command{
 
 		// if firstValid or lastValid are nonzero, but not both, print error and exit.
 		if ((firstValid == 0) || (lastValid == 0)) && !(firstValid == 0 && lastValid == 0) {
-			reportErrorln(validRangeError)
+			reportErrorln(validRangeArgsError)
 		}
 
 		if txFilename == "" {
@@ -155,6 +156,15 @@ var sendCmd = &cobra.Command{
 			var tx transactions.Transaction
 
 			if firstValid != 0 && lastValid != 0 {
+				// validate passed firstValid and lastValid against current consensus
+				params, err := client.SuggestedParams()
+				if err != nil {
+					reportErrorf(errorRequestFail, err)
+				}
+				cp := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
+				if lastValid < firstValid || (lastValid-firstValid > cp.MaxTxnLife) {
+					reportErrorf(validRangeLargeError, cp.MaxTxnLife, lastValid, firstValid, lastValid-firstValid)
+				}
 				tx, err = client.SendPaymentFromWalletWithCustomValidity(wh, pw, fromAddressResolved, toAddressResolved, fee, amount, noteBytes, closeToAddressResolved, basics.Round(firstValid), basics.Round(lastValid))
 			} else {
 				tx, err = client.SendPaymentFromWallet(wh, pw, fromAddressResolved, toAddressResolved, fee, amount, noteBytes, closeToAddressResolved)
@@ -206,6 +216,15 @@ var sendCmd = &cobra.Command{
 		} else {
 			var payment transactions.Transaction
 			if firstValid != 0 && lastValid != 0 {
+				// validate passed firstValid and lastValid against current consensus
+				params, err := client.SuggestedParams()
+				if err != nil {
+					reportErrorf(errorRequestFail, err)
+				}
+				cp := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
+				if lastValid < firstValid || (lastValid-firstValid > cp.MaxTxnLife) {
+					reportErrorf(validRangeLargeError, cp.MaxTxnLife, lastValid, firstValid, lastValid-firstValid)
+				}
 				payment, err = client.ConstructPaymentForRounds(fromAddressResolved, toAddressResolved, fee, amount, noteBytes, closeToAddressResolved, basics.Round(firstValid), basics.Round(lastValid))
 			} else {
 				payment, err = client.ConstructPayment(fromAddressResolved, toAddressResolved, fee, amount, noteBytes, closeToAddressResolved)
