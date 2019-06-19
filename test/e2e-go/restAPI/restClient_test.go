@@ -19,7 +19,6 @@ package restapi
 import (
 	"context"
 	"errors"
-	"github.com/algorand/go-algorand/data/basics"
 	"math"
 	"math/rand"
 	"path/filepath"
@@ -32,6 +31,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/client/models"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"

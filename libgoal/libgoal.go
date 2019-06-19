@@ -469,7 +469,7 @@ func (c *Client) signAndBroadcastTransactionWithWallet(walletHandle, pw []byte, 
 	return tx, nil
 }
 
-// ConstructPayment builds a payment transaction, to be signed
+// ConstructPayment builds a payment transaction to be signed
 // If the fee is 0, the function will use the suggested one form the network
 // if the lastValid is 0, firstValid + maxTxnLifetime will be used
 // if the firstValid is 0, lastRound + 1 will be used

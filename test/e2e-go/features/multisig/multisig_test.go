@@ -17,11 +17,11 @@
 package multisig
 
 import (
-	"github.com/algorand/go-algorand/data/basics"
 	"path/filepath"
 	"testing"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/stretchr/testify/require"

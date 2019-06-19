@@ -17,13 +17,13 @@
 package algod
 
 import (
-	"github.com/algorand/go-algorand/data/basics"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/test/framework/fixtures"

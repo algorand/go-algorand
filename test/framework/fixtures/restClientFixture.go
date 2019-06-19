@@ -18,7 +18,6 @@ package fixtures
 
 import (
 	"fmt"
-	"github.com/algorand/go-algorand/data/basics"
 	"sort"
 	"time"
 	"unicode"
@@ -27,6 +26,7 @@ import (
 
 	"github.com/algorand/go-algorand/daemon/algod/api/client"
 	"github.com/algorand/go-algorand/daemon/algod/api/client/models"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/test/e2e-go/globals"

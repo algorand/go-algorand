@@ -17,12 +17,12 @@
 package transactions
 
 import (
-	"github.com/algorand/go-algorand/data/basics"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 )
 
