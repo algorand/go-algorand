@@ -18,6 +18,8 @@ package agreement
 
 import (
 	"fmt"
+	"io"
+	"os"
 	"strings"
 	"time"
 
@@ -51,6 +53,8 @@ type tracer struct {
 
 	log serviceLogger
 
+	w io.Writer
+
 	// Tracer is now a little stateful (for ad-hoc logging)
 	// parent state machines/routers are responsible for making sure tracer
 	// picks up the right state. Optional.
@@ -74,6 +78,7 @@ func makeTracer(log serviceLogger, cadaverFilename string, cadaverSizeTarget uin
 	t.log = log
 	t.verboseReports = verboseReportFlag
 	t.timingReports = timingReportFlag
+	t.w = os.Stdout
 
 	fileSizeTarget := int64(cadaverSizeTarget)
 	if fileSizeTarget == 0 {
@@ -126,21 +131,21 @@ func (t *tracer) setMetadata(metadata tracerMetadata) {
 func (t *tracer) ein(src, dest stateMachineTag, e event, r round, p period, s step) {
 	t.seq++
 	if t.level >= all {
-		// fmt.Printf("%v %3v %23v  -> %23v: %30v\n", t.tag, t.seq, src, dest, e)
-		fmt.Printf("%v] %23v  -> %23v: %30v\n", t.tag, src, dest, e)
+		// fmt.Fprintf(t.w, "%v %3v %23v  -> %23v: %30v\n", t.tag, t.seq, src, dest, e)
+		fmt.Fprintf(t.w, "%v] %23v  -> %23v: %30v\n", t.tag, src, dest, e)
 	}
 }
 
 func (t *tracer) eout(src, dest stateMachineTag, e event, r round, p period, s step) {
 	t.seq++
 	if t.level >= all {
-		// fmt.Printf("%v %3v %23v <-  %23v: %30v\n", t.tag, t.seq, src, dest, e)
-		fmt.Printf("%v] %23v <-  %23v: %30v\n", t.tag, src, dest, e)
+		// fmt.Fprintf(t.w, "%v %3v %23v <-  %23v: %30v\n", t.tag, t.seq, src, dest, e)
+		fmt.Fprintf(t.w, "%v] %23v <-  %23v: %30v\n", t.tag, src, dest, e)
 	} else if t.level >= key {
 		switch e.t() {
 		case proposalAccepted, proposalCommittable, softThreshold, certThreshold, nextThreshold:
-			// fmt.Printf("%v %3v %23v <-  %23v: %30v\n", t.tag, t.seq, src, dest, e)
-			fmt.Printf("%v] %23v <-  %23v: %30v\n", t.tag, src, dest, e)
+			// fmt.Fprintf(t.w, "%v %3v %23v <-  %23v: %30v\n", t.tag, t.seq, src, dest, e)
+			fmt.Fprintf(t.w, "%v] %23v <-  %23v: %30v\n", t.tag, src, dest, e)
 		}
 	}
 }
@@ -148,8 +153,8 @@ func (t *tracer) eout(src, dest stateMachineTag, e event, r round, p period, s s
 func (t *tracer) ainTop(src, dest stateMachineTag, state player, e event, r round, p period, s step) {
 	t.seq++
 	if t.level >= top {
-		// fmt.Printf("%v %3v %23v  => %23v: %30v\n", t.tag, t.seq, src, dest, e)
-		fmt.Printf("%v] %23v =>  %23v: %30v\n", t.tag, src, dest, e)
+		// fmt.Fprintf(t.w, "%v %3v %23v  => %23v: %30v\n", t.tag, t.seq, src, dest, e)
+		fmt.Fprintf(t.w, "%v] %23v =>  %23v: %30v\n", t.tag, src, dest, e)
 	}
 }
 
@@ -165,8 +170,8 @@ func (t *tracer) aoutTop(src, dest stateMachineTag, as []action, r round, p peri
 
 	t.seq++
 	if t.level >= top {
-		// fmt.Printf("%v %3v %23v <=  %23v: %.30v\n", t.tag, t.seq, src, dest, as)
-		fmt.Printf("%v] %23v <=  %23v: %.30v\n", t.tag, src, dest, as)
+		// fmt.Fprintf(t.w, "%v %3v %23v <=  %23v: %.30v\n", t.tag, t.seq, src, dest, as)
+		fmt.Fprintf(t.w, "%v] %23v <=  %23v: %.30v\n", t.tag, src, dest, as)
 	}
 }
 
