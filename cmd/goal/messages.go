@@ -85,6 +85,7 @@ const (
 	txMergeMismatch = "Cannot merge transactions: transaction IDs differ"
 	txMergeError    = "Cannot merge signatures: %v"
 	txNoFilesError  = "No input filenames specified"
+	validRangeError = "First round valid or last round valid was supplied, but not both. Supply both or neither"
 	soFlagError     = "-s is not meaningful without -o"
 	infoRawTxIssued = "Raw transaction ID %s issued"
 	txPoolError     = "Transaction %s kicked out of local node pool: %s"

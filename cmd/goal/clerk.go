@@ -143,6 +143,12 @@ var sendCmd = &cobra.Command{
 		}
 
 		client := ensureFullClient(dataDir)
+
+		// if firstValid or lastValid are nonzero, but not both, print error and exit.
+		if ((firstValid == 0) || (lastValid == 0)) && !(firstValid == 0 && lastValid == 0) {
+			reportErrorln(validRangeError)
+		}
+
 		if txFilename == "" {
 			// Sign and broadcast the tx
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
