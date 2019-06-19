@@ -364,6 +364,7 @@ var inspectCmd = &cobra.Command{
 					reportErrorf(txDecodeError, txFilename, err)
 				}
 				fmt.Printf("%s[%d]\n%s\n\n", txFilename, count, string(protocol.EncodeJSON(sti)))
+				count++
 			}
 		}
 	},

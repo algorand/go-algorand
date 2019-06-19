@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 	// logging imports metrics so that we can have metrics about logging, which is more important than the four Debug lines we had here logging about metrics. TODO: find a more clever cycle resolution
@@ -177,6 +178,30 @@ func (reporter *MetricReporter) tryDetachNodeExporter() {
 	}
 }
 
+// parseNodeExporterArgs parses the NodeExporterPath configuration string to extract Node Exporter's arguments.
+func parseNodeExporterArgs(nodeExporterPath string, nodeExporterListenAddress string, nodeExporterMetricsPath string) []string {
+	whitespaceRE := regexp.MustCompile(`\s+`)
+	listenAddressRE := regexp.MustCompile(`--web.listen-address=(.+)`)
+	telemetryPathRE := regexp.MustCompile(`--web.telemetry-path=(.+)`)
+	vargs := whitespaceRE.Split(nodeExporterPath, -1)
+	temp := vargs[:0]
+	for _, varg := range vargs {
+		if listenAddressRE.MatchString(varg) {
+			nodeExporterListenAddress = listenAddressRE.FindStringSubmatch(varg)[1]
+		} else if telemetryPathRE.MatchString(varg) {
+			nodeExporterMetricsPath = telemetryPathRE.FindStringSubmatch(varg)[1]
+		} else if varg == "" {
+			continue
+		} else {
+			temp = append(temp, varg)
+		}
+	}
+	vargs = append(vargs[:len(temp)],
+		"--web.listen-address="+nodeExporterListenAddress,
+		"--web.telemetry-path="+nodeExporterMetricsPath)
+	return vargs
+}
+
 func (reporter *MetricReporter) tryInvokeNodeExporter(ctx context.Context) {
 	var err error
 	if nil == reporter.neSync {
@@ -205,10 +230,7 @@ func (reporter *MetricReporter) tryInvokeNodeExporter(ctx context.Context) {
 			os.Stderr}
 	}
 	// prepare the vargs that the new process is going to have.
-	vargs := []string{
-		reporter.serviceConfig.NodeExporterPath,
-		"--web.listen-address=" + reporter.serviceConfig.NodeExporterListenAddress,
-		"--web.telemetry-path=" + nodeExporterMetricsPath}
+	vargs := parseNodeExporterArgs(reporter.serviceConfig.NodeExporterPath, reporter.serviceConfig.NodeExporterListenAddress, nodeExporterMetricsPath)
 	// launch the process
 	proc, err := os.StartProcess(vargs[0], vargs, &neAttributes)
 	if err != nil {

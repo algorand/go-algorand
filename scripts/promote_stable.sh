@@ -39,5 +39,5 @@ CHANNEL="stable"
 ${S3CMD} ls s3://${S3_UPLOAD_BUCKET}/pending_ | grep _${CHANNEL}[_-] | awk '{ print $4 }' | while read line; do
     NEW_ARTIFACT_NAME=$(echo "$line" | sed -e 's/pending_//')
     echo "Rename ${line} => ${NEW_ARTIFACT_NAME}"
-    ${S3CMD} mv ${line} ${RENAMED}
+    ${S3CMD} mv ${line} ${NEW_ARTIFACT_NAME}
 done
