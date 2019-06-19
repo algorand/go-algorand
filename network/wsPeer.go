@@ -47,8 +47,6 @@ const maxMessageLength = 4 * 1024 * 1024 // Currently the biggest message is VB 
 // buffer and starve messages from other peers.
 const msgsInReadBufferPerPeer = 10
 
-const sendBufferLength = 1000
-
 var networkSentBytesTotal = metrics.MakeCounter(metrics.NetworkSentBytesTotal)
 var networkReceivedBytesTotal = metrics.MakeCounter(metrics.NetworkReceivedBytesTotal)
 
@@ -72,8 +70,9 @@ type wsPeerWebsocketConn interface {
 }
 
 type sendMessage struct {
-	data     []byte
-	enqueued time.Time
+	data         []byte
+	enqueued     time.Time // the time at which the message was first generated
+	peerEnqueued time.Time // the time at which the peer was attempting to enqueue the message
 }
 
 // wsPeerCore also works for non-connected peers we want to do HTTP GET from
@@ -91,6 +90,7 @@ const disconnectTooSlow disconnectReason = "TooSlow"
 const disconnectReadError disconnectReason = "ReadError"
 const disconnectWriteError disconnectReason = "WriteError"
 const disconnectIdleConn disconnectReason = "IdleConnection"
+const disconnectSlowConn disconnectReason = "SlowConnection"
 
 type wsPeer struct {
 	// lastPacketTime contains the UnixNano at the last time a successfull communication was made with the peer.
@@ -98,6 +98,10 @@ type wsPeer struct {
 	// error.
 	// we want this to be a 64-bit aligned for atomics.
 	lastPacketTime int64
+
+	// intermittentOutgoingMessageEnqueueTime contains the UnixNano of the message's enqueue time that is currently being written to the
+	// peer, or zero if no message is being written.
+	intermittentOutgoingMessageEnqueueTime int64
 
 	wsPeerCore
 
@@ -192,7 +196,7 @@ func (wp *wsPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag) err
 		digest = crypto.Hash(mbytes)
 	}
 
-	ok := wp.writeNonBlock(mbytes, false, digest)
+	ok := wp.writeNonBlock(mbytes, false, digest, time.Now())
 	if !ok {
 		networkBroadcastsDropped.Inc(nil)
 		err = fmt.Errorf("wsPeer failed to unicast: %v", wp.GetAddress())
@@ -202,7 +206,7 @@ func (wp *wsPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag) err
 }
 
 // setup values not trivially assigned
-func (wp *wsPeer) init(config config.Local) {
+func (wp *wsPeer) init(config config.Local, sendBufferLength int) {
 	wp.net.log.Debugf("wsPeer init outgoing=%v %#v", wp.outgoing, wp.rootURL)
 	wp.closing = make(chan struct{})
 	wp.sendBufferHighPrio = make(chan sendMessage, sendBufferLength)
@@ -343,6 +347,15 @@ func (wp *wsPeer) writeLoopSend(msg sendMessage) (exit bool) {
 		// just drop it, don't break the connection
 		return false
 	}
+	// check if this message was waiting in the queue for too long. If this is the case, return "true" to indicate that we want to close the connection.
+	msgWaitDuration := time.Now().Sub(msg.enqueued)
+	if msgWaitDuration > maxMessageQueueDuration {
+		wp.net.log.Warnf("peer stale enqueued message %dms", msgWaitDuration.Nanoseconds()/1000000)
+		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "stale message"})
+		return true
+	}
+	atomic.StoreInt64(&wp.intermittentOutgoingMessageEnqueueTime, msg.enqueued.UnixNano())
+	defer atomic.StoreInt64(&wp.intermittentOutgoingMessageEnqueueTime, 0)
 	err := wp.conn.WriteMessage(websocket.BinaryMessage, msg.data)
 	if err != nil {
 		if atomic.LoadInt32(&wp.didInnerClose) == 0 {
@@ -354,7 +367,7 @@ func (wp *wsPeer) writeLoopSend(msg sendMessage) (exit bool) {
 	atomic.StoreInt64(&wp.lastPacketTime, time.Now().UnixNano())
 	networkSentBytesTotal.AddUint64(uint64(len(msg.data)), nil)
 	networkMessageSentTotal.AddUint64(1, nil)
-	networkMessageQueueMicrosTotal.AddUint64(uint64(time.Now().Sub(msg.enqueued).Nanoseconds()/1000), nil)
+	networkMessageQueueMicrosTotal.AddUint64(uint64(time.Now().Sub(msg.peerEnqueued).Nanoseconds()/1000), nil)
 	return false
 }
 
@@ -391,7 +404,7 @@ func (wp *wsPeer) writeLoopCleanup() {
 }
 
 // return true if enqueued/sent
-func (wp *wsPeer) writeNonBlock(data []byte, highPrio bool, digest crypto.Digest) bool {
+func (wp *wsPeer) writeNonBlock(data []byte, highPrio bool, digest crypto.Digest, msgEnqueueTime time.Time) bool {
 	if wp.outgoingMsgFilter != nil && len(data) > messageFilterSize && wp.outgoingMsgFilter.CheckDigest(digest, false, false) {
 		//wp.net.log.Debugf("msg drop as outbound dup %s(%d) %v", string(data[:2]), len(data)-2, digest)
 		// peer has notified us it doesn't need this message
@@ -407,7 +420,7 @@ func (wp *wsPeer) writeNonBlock(data []byte, highPrio bool, digest crypto.Digest
 		outchan = wp.sendBufferBulk
 	}
 	select {
-	case outchan <- sendMessage{data, time.Now()}:
+	case outchan <- sendMessage{data: data, enqueued: msgEnqueueTime, peerEnqueued: time.Now()}:
 		return true
 	default:
 	}
@@ -432,7 +445,7 @@ func (wp *wsPeer) sendPing() bool {
 	copy(mbytes, tagBytes)
 	rand.Read(mbytes[len(tagBytes):])
 	wp.pingData = mbytes[len(tagBytes):]
-	sent := wp.writeNonBlock(mbytes, false, crypto.Digest{})
+	sent := wp.writeNonBlock(mbytes, false, crypto.Digest{}, time.Now())
 
 	if sent {
 		wp.pingInFlight = true
@@ -475,4 +488,13 @@ func (wp *wsPeer) CloseAndWait() {
 
 func (wp *wsPeer) GetLastPacketTime() int64 {
 	return atomic.LoadInt64(&wp.lastPacketTime)
+}
+
+func (wp *wsPeer) CheckSlowWritingPeer(now time.Time) bool {
+	ongoingMessageTime := atomic.LoadInt64(&wp.intermittentOutgoingMessageEnqueueTime)
+	if ongoingMessageTime == 0 {
+		return false
+	}
+	timeSinceMessageCreated := now.Sub(time.Unix(0, ongoingMessageTime))
+	return timeSinceMessageCreated > maxMessageQueueDuration
 }

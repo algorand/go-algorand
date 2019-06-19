@@ -83,12 +83,21 @@ const MaxInt = int((^uint(0)) >> 1)
 // connectionActivityMonitorInterval is the interval at which we check
 // if any of the connected peers have been idle for a long while and
 // need to be disconnected.
-const connectionActivityMonitorInterval = time.Minute * 3
+const connectionActivityMonitorInterval = 3 * time.Minute
 
 // maxPeerInactivityDuration is the maximum allowed duration for a
 // peer to remain completly idle (i.e. no inbound or outbound communication), before
 // we discard the connection.
-const maxPeerInactivityDuration = time.Minute * 5
+const maxPeerInactivityDuration = 5 * time.Minute
+
+// maxMessageQueueDuration is the maximum amount of time a message is allowed to be waiting
+// in the various queues before being sent. Once that deadline has reached, sending the message
+// is pointless, as it's too stale to be of any value
+const maxMessageQueueDuration = 25 * time.Second
+
+// slowWritingPeerMonitorInterval is the interval at which we peek on the connected peers to
+// verify that their current outgoing message is not being blocked for too long.
+const slowWritingPeerMonitorInterval = 5 * time.Second
 
 var networkIncomingConnections = metrics.MakeGauge(metrics.NetworkIncomingConnections)
 var networkOutgoingConnections = metrics.MakeGauge(metrics.NetworkOutgoingConnections)
@@ -99,10 +108,12 @@ var networkHandleMicros = metrics.MakeCounter(metrics.MetricName{Name: "algod_ne
 var networkBroadcasts = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_broadcasts_total", Description: "number of broadcast operations"})
 var networkBroadcastQueueMicros = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_broadcast_queue_micros_total", Description: "microseconds broadcast requests sit on queue"})
 var networkBroadcastSendMicros = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_broadcast_send_micros_total", Description: "microseconds spent broadcasting"})
-var networkBroadcastsDropped = metrics.MakeCounter(metrics.MetricName{Name: "algod_broadcasts_dropped_total", Description: "number of broadcast messages not sent to some peer"})
+var networkBroadcastsDropped = metrics.MakeCounter(metrics.MetricName{Name: "algod_broadcasts_dropped_total", Description: "number of broadcast messages not sent to any peer"})
+var networkPeerBroadcastDropped = metrics.MakeCounter(metrics.MetricName{Name: "algod_peer_broadcast_dropped_total", Description: "number of broadcast messages not sent to some peer"})
 
 var networkSlowPeerDrops = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_slow_drops_total", Description: "number of peers dropped for being slow to send to"})
 var networkIdlePeerDrops = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_idle_drops_total", Description: "number of peers dropped due to idle connection"})
+var networkBroadcastQueueFull = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_broadcast_queue_full_total", Description: "number of messages that were drops due to full broadcast queue"})
 
 var minPing = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_peer_min_ping_seconds", Description: "Network round trip time to fastest peer in seconds."})
 var meanPing = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_peer_mean_ping_seconds", Description: "Network round trip time to average peer in seconds."})
@@ -294,14 +305,20 @@ type WebsocketNetwork struct {
 
 	// once we detect that we have a misconfigured UseForwardedForAddress, we set this and write an warning message.
 	misconfiguredUseForwardedForAddress bool
+
+	// outgoingMessagesBufferSize is the size used for outgoing messages.
+	outgoingMessagesBufferSize int
+
+	// slowWritingPeerMonitorInterval defines the interval between two consecutive tests for slow peer writing
+	slowWritingPeerMonitorInterval time.Duration
 }
 
 type broadcastRequest struct {
-	tag    Tag
-	data   []byte
-	except *wsPeer
-	done   chan struct{}
-	start  time.Time
+	tag         Tag
+	data        []byte
+	except      *wsPeer
+	done        chan struct{}
+	enqueueTime time.Time
 }
 
 // Address returns a string and whether that is a 'final' address or guessed.
@@ -335,7 +352,7 @@ func (wn *WebsocketNetwork) PublicAddress() string {
 // if wait is true then the call blocks until the packet has actually been sent to all neighbors.
 // TODO: add `priority` argument so that we don't have to guess it based on tag
 func (wn *WebsocketNetwork) Broadcast(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error {
-	request := broadcastRequest{tag: tag, data: data, start: time.Now()}
+	request := broadcastRequest{tag: tag, data: data, enqueueTime: time.Now()}
 	if except != nil {
 		request.except = except.(*wsPeer)
 	}
@@ -373,6 +390,7 @@ func (wn *WebsocketNetwork) Broadcast(ctx context.Context, tag protocol.Tag, dat
 	default:
 		wn.log.Debugf("broadcast queue full")
 		// broadcastQueue full, and we're not going to wait for it.
+		networkBroadcastQueueFull.Inc(nil)
 		return errBcastQFull
 	}
 }
@@ -499,13 +517,25 @@ func (wn *WebsocketNetwork) setup() {
 	wn.server.IdleTimeout = httpServerIdleTimeout
 	wn.server.MaxHeaderBytes = httpServerMaxHeaderBytes
 	wn.ctx, wn.ctxCancel = context.WithCancel(context.Background())
-	wn.broadcastQueueHighPrio = make(chan broadcastRequest, 1000)
+	// roughly estimate the number of messages that could be sent over the lifespan of a single round.
+	wn.outgoingMessagesBufferSize = int(config.Consensus[protocol.ConsensusCurrentVersion].NumProposers*2 +
+		config.Consensus[protocol.ConsensusCurrentVersion].SoftCommitteeSize +
+		config.Consensus[protocol.ConsensusCurrentVersion].CertCommitteeSize +
+		config.Consensus[protocol.ConsensusCurrentVersion].NextCommitteeSize +
+		config.Consensus[protocol.ConsensusCurrentVersion].LateCommitteeSize +
+		config.Consensus[protocol.ConsensusCurrentVersion].RedoCommitteeSize +
+		config.Consensus[protocol.ConsensusCurrentVersion].DownCommitteeSize)
+
+	wn.broadcastQueueHighPrio = make(chan broadcastRequest, wn.outgoingMessagesBufferSize)
 	wn.broadcastQueueBulk = make(chan broadcastRequest, 100)
 	wn.meshUpdateRequests = make(chan meshRequest, 5)
 	wn.readyChan = make(chan struct{})
 	wn.tryConnectAddrs = make(map[string]int64)
 	wn.eventualReadyDelay = time.Minute
 	wn.prioTracker = newPrioTracker(wn)
+	if wn.slowWritingPeerMonitorInterval == 0 {
+		wn.slowWritingPeerMonitorInterval = slowWritingPeerMonitorInterval
+	}
 
 	readBufferLen := wn.config.IncomingConnectionsLimit + wn.config.GossipFanout
 	if readBufferLen < 100 {
@@ -838,7 +868,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 		prioChallenge:     challenge,
 	}
 	peer.TelemetryGUID = otherTelemetryGUID
-	peer.init(wn.config)
+	peer.init(wn.config, wn.outgoingMessagesBufferSize)
 	wn.addPeer(peer)
 	localAddr, _ := wn.Address()
 	wn.log.With("event", "ConnectedIn").With("remote", otherPublicAddr).With("local", localAddr).Infof("Accepted incoming connection from peer %s", otherPublicAddr)
@@ -913,6 +943,23 @@ func (wn *WebsocketNetwork) checkPeersConnectivity() {
 	}
 }
 
+// checkSlowWritingPeers tests each of the peer's current message timestamp.
+// if that timestamp is too old, it means that the transmission of that message
+// takes longer than desired. In that case, it will disconnect the peer, allowing it to reconnect
+// to a faster network endpoint.
+func (wn *WebsocketNetwork) checkSlowWritingPeers() {
+	wn.peersLock.Lock()
+	defer wn.peersLock.Unlock()
+	currentTime := time.Now()
+	for _, peer := range wn.peers {
+		if peer.CheckSlowWritingPeer(currentTime) {
+			wn.wg.Add(1)
+			go wn.disconnectThread(peer, disconnectSlowConn)
+			networkSlowPeerDrops.Inc(nil)
+		}
+	}
+}
+
 func (wn *WebsocketNetwork) sendFilterMessage(msg IncomingMessage) {
 	digest := generateMessageDigest(msg.Tag, msg.Data)
 	//wn.log.Debugf("send filter %s(%d) %v", msg.Tag, len(msg.Data), digest)
@@ -922,8 +969,12 @@ func (wn *WebsocketNetwork) sendFilterMessage(msg IncomingMessage) {
 func (wn *WebsocketNetwork) broadcastThread() {
 	defer wn.wg.Done()
 	var peers []*wsPeer
+	slowWritingPeerCheckTicker := time.NewTicker(wn.slowWritingPeerMonitorInterval)
+	defer slowWritingPeerCheckTicker.Stop()
 	for {
 		// broadcast from high prio channel as long as we can
+		// we want to try and keep this as a single case select with a default, since go compiles a single-case
+		// select with a default into a more efficient non-blocking receive, instead of compiling it to the general-purpose selectgo
 		select {
 		case request := <-wn.broadcastQueueHighPrio:
 			wn.innerBroadcast(request, true, &peers)
@@ -935,6 +986,9 @@ func (wn *WebsocketNetwork) broadcastThread() {
 		select {
 		case request := <-wn.broadcastQueueHighPrio:
 			wn.innerBroadcast(request, true, &peers)
+		case <-slowWritingPeerCheckTicker.C:
+			wn.checkSlowWritingPeers()
+			continue
 		case request := <-wn.broadcastQueueBulk:
 			wn.innerBroadcast(request, false, &peers)
 		case <-wn.ctx.Done():
@@ -957,8 +1011,16 @@ func (wn *WebsocketNetwork) peerSnapshot(dest []*wsPeer) []*wsPeer {
 
 // prio is set if the broadcast is a high-priority broadcast.
 func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, ppeers *[]*wsPeer) {
-	broadcastQueueTime := time.Now().Sub(request.start)
-	networkBroadcastQueueMicros.AddUint64(uint64(broadcastQueueTime.Nanoseconds()/1000), nil)
+	if request.done != nil {
+		defer close(request.done)
+	}
+
+	broadcastQueueDuration := time.Now().Sub(request.enqueueTime)
+	networkBroadcastQueueMicros.AddUint64(uint64(broadcastQueueDuration.Nanoseconds()/1000), nil)
+	if broadcastQueueDuration > maxMessageQueueDuration {
+		networkBroadcastsDropped.Inc(nil)
+		return
+	}
 
 	start := time.Now()
 	tbytes := []byte(request.tag)
@@ -975,37 +1037,27 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 	peers := *ppeers
 
 	// first send to all the easy outbound peers who don't block, get them started.
+	sentMessageCount := 0
 	for pi, peer := range peers {
-		if wn.config.BroadcastConnectionsLimit >= 0 && pi >= wn.config.BroadcastConnectionsLimit {
+		if wn.config.BroadcastConnectionsLimit >= 0 && sentMessageCount >= wn.config.BroadcastConnectionsLimit {
 			break
 		}
 		if peer == request.except {
 			peers[pi] = nil
 			continue
 		}
-		ok := peer.writeNonBlock(mbytes, prio, digest)
+		ok := peer.writeNonBlock(mbytes, prio, digest, request.enqueueTime)
 		if ok {
 			peers[pi] = nil
+			sentMessageCount++
 			continue
 		}
-		if prio {
-			// couldn't send a high prio message; give up
-			wn.log.Infof("dropping peer for being too slow to send to: %s, %d enqueued", peer.rootURL, len(peer.sendBufferHighPrio))
-			wn.removePeer(peer, disconnectTooSlow)
-			peer.Close()
-			networkSlowPeerDrops.Inc(nil)
-		} else {
-			networkBroadcastsDropped.Inc(nil)
-		}
+		networkPeerBroadcastDropped.Inc(nil)
 	}
 
 	dt := time.Now().Sub(start)
 	networkBroadcasts.Inc(nil)
 	networkBroadcastSendMicros.AddUint64(uint64(dt.Nanoseconds()/1000), nil)
-
-	if request.done != nil {
-		close(request.done)
-	}
 }
 
 // NumPeers returns number of peers we connect to (all peers incoming and outbound).
@@ -1434,7 +1486,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	}
 	peer := &wsPeer{wsPeerCore: wsPeerCore{net: wn, rootURL: addr}, conn: conn, outgoing: true, incomingMsgFilter: wn.incomingMsgFilter}
 	peer.TelemetryGUID = otherTelemetryGUID
-	peer.init(wn.config)
+	peer.init(wn.config, wn.outgoingMessagesBufferSize)
 	wn.addPeer(peer)
 	localAddr, _ := wn.Address()
 	wn.log.With("event", "ConnectedOut").With("remote", addr).With("local", localAddr).Infof("Made outgoing connection to peer %v", addr)
@@ -1452,7 +1504,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 			resp := wn.prioScheme.MakePrioResponse(challenge)
 			if resp != nil {
 				mbytes := append([]byte(protocol.NetPrioResponseTag), resp...)
-				sent := peer.writeNonBlock(mbytes, true, crypto.Digest{})
+				sent := peer.writeNonBlock(mbytes, true, crypto.Digest{}, time.Now())
 				if !sent {
 					wn.log.With("remote", addr).With("local", localAddr).Warnf("could not send priority response to %v", addr)
 				}
