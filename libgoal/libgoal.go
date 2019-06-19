@@ -469,8 +469,10 @@ func (c *Client) signAndBroadcastTransactionWithWallet(walletHandle, pw []byte, 
 	return tx, nil
 }
 
-// ConstructPaymentForRounds builds a payment transaction, valid for the passed rounds, to be signed
+// ConstructPayment builds a payment transaction, to be signed
 // If the fee is 0, the function will use the suggested one form the network
+// if the lastValid is 0, firstValid + maxTxnLifetime will be used
+// if the firstValid is 0, lastRound + 1 will be used
 func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []byte, closeTo string, firstValid, lastValid basics.Round) (transactions.Transaction, error) {
 	fromAddr, err := basics.UnmarshalChecksumAddress(from)
 	if err != nil {

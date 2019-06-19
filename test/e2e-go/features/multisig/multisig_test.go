@@ -17,6 +17,7 @@
 package multisig
 
 import (
+	"github.com/algorand/go-algorand/data/basics"
 	"path/filepath"
 	"testing"
 
@@ -71,7 +72,7 @@ func TestBasicMultisig(t *testing.T) {
 	fixture.SendMoneyAndWait(curStatus.LastRound, amountToFund, minTxnFee, fundingAddr, multisigAddr)
 	// try to transact with 1 of 3
 	amountToSend := minAcctBalance
-	unsignedTransaction, err := client.ConstructPayment(multisigAddr, addrs[0], minTxnFee, amountToSend, nil, "")
+	unsignedTransaction, err := client.ConstructPayment(multisigAddr, addrs[0], minTxnFee, amountToSend, nil, "", basics.Round(0), basics.Round(0))
 	r.NoError(err, "Unexpected error when constructing payment transaction")
 	emptyPartial := crypto.MultisigSig{}
 	emptySignature := crypto.Signature{}
@@ -90,7 +91,7 @@ func TestBasicMultisig(t *testing.T) {
 	r.True(fixture.WaitForTxnConfirmation(curStatus.LastRound+uint64(5), multisigAddr, txid))
 
 	// Need a new txid to avoid dup detection
-	unsignedTransaction, err = client.ConstructPayment(multisigAddr, addrs[0], minTxnFee, amountToSend, []byte("foobar"), "")
+	unsignedTransaction, err = client.ConstructPayment(multisigAddr, addrs[0], minTxnFee, amountToSend, []byte("foobar"), "", basics.Round(0), basics.Round(0))
 	r.NoError(err, "Unexpected error when constructing payment transaction")
 	signatureWithOne, err = client.UnencryptedMultisigSignTransaction(unsignedTransaction, addrs[0], emptyPartial)
 	r.NoError(err, "first signing returned error")
@@ -196,7 +197,7 @@ func TestDuplicateKeys(t *testing.T) {
 	fixture.SendMoneyAndWait(curStatus.LastRound, amountToFund, txnFee, fundingAddr, multisigAddr)
 	// try to transact with "1" signature (though, this is a signature from "every" member of the multisig)
 	amountToSend := minAcctBalance
-	unsignedTransaction, err := client.ConstructPayment(multisigAddr, addrs[0], txnFee, amountToSend, nil, "")
+	unsignedTransaction, err := client.ConstructPayment(multisigAddr, addrs[0], txnFee, amountToSend, nil, "", basics.Round(0), basics.Round(0))
 	r.NoError(err, "Unexpected error when constructing payment transaction")
 	emptyPartial := crypto.MultisigSig{}
 	emptySignature := crypto.Signature{}

@@ -17,6 +17,7 @@
 package algod
 
 import (
+	"github.com/algorand/go-algorand/data/basics"
 	"path/filepath"
 	"testing"
 
@@ -58,7 +59,7 @@ func BenchmarkSendPayment(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			var nonce [8]byte
 			crypto.RandBytes(nonce[:])
-			tx, err = c.ConstructPayment(addr, addr, 1, 1, nonce[:], "")
+			tx, err = c.ConstructPayment(addr, addr, 1, 1, nonce[:], "", basics.Round(0), basics.Round(0))
 			require.NoError(b, err)
 		}
 	})
@@ -74,7 +75,7 @@ func BenchmarkSendPayment(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			var nonce [8]byte
 			crypto.RandBytes(nonce[:])
-			_, err := c.SendPaymentFromWallet(wallet, nil, addr, addr, 1, 1, nonce[:], "")
+			_, err := c.SendPaymentFromWallet(wallet, nil, addr, addr, 1, 1, nonce[:], "", basics.Round(0), basics.Round(0))
 			require.NoError(b, err)
 		}
 	})
