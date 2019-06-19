@@ -488,7 +488,7 @@ func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []by
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
-	firstRound := basics.Round(params.LastRound)
+	firstRound := basics.Round(params.LastRound + 1)
 	cp := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
 	lastRound := firstRound + basics.Round(cp.MaxTxnLife)
 	return c.ConstructPaymentForRounds(from, to, fee, amount, note, closeTo, firstRound, lastRound)
