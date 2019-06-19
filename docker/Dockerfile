@@ -1,6 +1,7 @@
 FROM ubuntu:18.04
 ENV GOLANG_VERSION 1.12
 ENV DEBIAN_FRONTEND noninteractive
+ENV GO111MODULE=auto
 
 RUN apt update && apt-get install -y git libboost-all-dev wget sqlite3 autoconf sudo tzdata bsdmainutils
 
