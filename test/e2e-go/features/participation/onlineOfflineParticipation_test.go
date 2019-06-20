@@ -59,7 +59,7 @@ func TestParticipationKeyOnlyAccountParticipatesCorrectly(t *testing.T) {
 	amountToSend := uint64(10000) // arbitrary
 	wh, err := client.GetUnencryptedWalletHandle()
 	a.NoError(err, "should get unencrypted wallet handle")
-	_, err = client.SendPaymentFromWallet(wh, nil, partkeyOnlyAccount, richAccount, amountToSend, transactionFee, nil, "")
+	_, err = client.SendPaymentFromWallet(wh, nil, partkeyOnlyAccount, richAccount, amountToSend, transactionFee, nil, "", basics.Round(0), basics.Round(0))
 	a.Error(err, "attempt to send money from partkey-only account should be treated as though wallet is not controlled")
 	// partkeyonly_account attempts to go offline, should fail (no rootkey to sign txn with)
 	goOfflineUTx, err := client.MakeUnsignedGoOfflineTx(partkeyOnlyAccount, 0, 0, transactionFee)
