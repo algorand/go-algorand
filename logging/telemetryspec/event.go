@@ -41,6 +41,11 @@ type StartupEventDetails struct {
 // HeartbeatEvent is sent periodically to indicate node is running
 const HeartbeatEvent Event = "Heartbeat"
 
+// HeartbeatEventDetails contains details for the StartupEvent
+type HeartbeatEventDetails struct {
+	Metrics map[string]string
+}
+
 // CatchupStartEvent event
 const CatchupStartEvent Event = "CatchupStart"
 

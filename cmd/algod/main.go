@@ -36,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/metrics"
 	"github.com/algorand/go-algorand/util/tokens"
 )
 
@@ -71,12 +72,19 @@ func main() {
 		rand.Seed(time.Now().UnixNano())
 	}
 
+	version := config.GetCurrentVersion()
 	if *versionCheck {
-		version := config.GetCurrentVersion()
 		fmt.Printf("%d\n%s.%s [%s] (commit #%s)\n%s\n", version.AsUInt64(), version.String(),
 			version.Channel, version.Branch, version.GetCommitHash(), config.GetLicenseInfo())
 		return
 	}
+
+	heartbeatGauge := metrics.MakeStringGauge()
+	heartbeatGauge.Set("version", version.String())
+	heartbeatGauge.Set("version-num", strconv.FormatUint(version.AsUInt64(), 10))
+	heartbeatGauge.Set("channel", version.Channel)
+	heartbeatGauge.Set("branch", version.Branch)
+	heartbeatGauge.Set("commit-hash", version.GetCommitHash())
 
 	if *branchCheck {
 		fmt.Println(config.Branch)
@@ -183,10 +191,18 @@ func main() {
 
 				log.EventWithDetails(telemetryspec.ApplicationState, telemetryspec.StartupEvent, startupDetails)
 				// Send a heartbeat event every 10 minutes as a sign of life
+				ticker := time.NewTicker(10 * time.Minute)
 				go func() {
+					values := make(map[string]string)
 					for {
-						log.Event(telemetryspec.ApplicationState, telemetryspec.HeartbeatEvent)
-						<-time.After(10 * time.Minute)
+						metrics.DefaultRegistry().AddMetrics(values)
+
+						heartbeatDetails := telemetryspec.HeartbeatEventDetails{
+							Metrics: values,
+						}
+
+						log.EventWithDetails(telemetryspec.ApplicationState, telemetryspec.HeartbeatEvent, heartbeatDetails)
+						<-ticker.C
 					}
 				}()
 			}
