@@ -25,6 +25,7 @@ import (
 // Metric represent any collectable metric
 type Metric interface {
 	WriteMetric(buf *strings.Builder, parentLabels string)
+	AddMetric(values map[string]string)
 }
 
 // Registry represents a single set of metrics registry
