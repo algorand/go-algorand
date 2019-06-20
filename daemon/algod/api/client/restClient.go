@@ -210,12 +210,13 @@ func (client RestClient) LedgerSupply() (response models.Supply, err error) {
 type transactionsByAddrParams struct {
 	FirstRound uint64 `url:"firstRound"`
 	LastRound  uint64 `url:"lastRound"`
+	Max        uint64 `url:"max"`
 }
 
 // TransactionsByAddr returns all transactions for a PK [addr] in the [first,
 // last] rounds range.
-func (client RestClient) TransactionsByAddr(addr string, first, last uint64) (response models.TransactionList, err error) {
-	err = client.get(&response, fmt.Sprintf("/account/%s/transactions", addr), transactionsByAddrParams{first, last})
+func (client RestClient) TransactionsByAddr(addr string, first, last, max uint64) (response models.TransactionList, err error) {
+	err = client.get(&response, fmt.Sprintf("/account/%s/transactions", addr), transactionsByAddrParams{first, last, max})
 	return
 }
 
