@@ -325,13 +325,12 @@ func ensureRelayStatus(checkOnly bool, relay eb.Relay, nameDomain string, srvDom
 		err = addDNSRecord(targetDomainAlias, topmost, cfNameZoneID)
 		if err != nil {
 			return
-		} else {
-			fmt.Printf("[%d] Added DNS Record: %s -> %s\n", relay.ID, targetDomainAlias, topmost)
-
-			// Update our state
-			names = append(names, targetDomainAlias)
-			topmost = targetDomainAlias
 		}
+		fmt.Printf("[%d] Added DNS Record: %s -> %s\n", relay.ID, targetDomainAlias, topmost)
+
+		// Update our state
+		names = append(names, targetDomainAlias)
+		topmost = targetDomainAlias
 	}
 
 	var ensureEntry = func(use string, entries map[string]uint16, port uint16) error {
@@ -374,9 +373,8 @@ func ensureRelayStatus(checkOnly bool, relay eb.Relay, nameDomain string, srvDom
 		err = addSRVRecord(ctx.bootstrap.networkName, topmost, port, ctx.bootstrap.shortName, cfSrvZoneID)
 		if err != nil {
 			return
-		} else {
-			fmt.Printf("[%d] Added boostrap SRV Record: %s:%d\n", relay.ID, targetDomainAlias, port)
 		}
+		fmt.Printf("[%d] Added boostrap SRV Record: %s:%d\n", relay.ID, targetDomainAlias, port)
 	}
 
 	err = ensureEntry("metrics", ctx.metrics.entries, metricsPort)
@@ -390,9 +388,8 @@ func ensureRelayStatus(checkOnly bool, relay eb.Relay, nameDomain string, srvDom
 			err = addSRVRecord(ctx.metrics.networkName, topmost, metricsPort, ctx.metrics.shortName, cfSrvZoneID)
 			if err != nil {
 				return
-			} else {
-				fmt.Printf("[%d] Added metrics SRV Record: %s:%d\n", relay.ID, targetDomainAlias, metricsPort)
 			}
+			fmt.Printf("[%d] Added metrics SRV Record: %s:%d\n", relay.ID, targetDomainAlias, metricsPort)
 		}
 	} else if err == nil {
 		err = fmt.Errorf("metrics should not be registered for %s but it is", target)
