@@ -93,12 +93,20 @@ func init() {
 	defaultConfig.MaxConnectionsPerIP = 30
 }
 
+var muLog deadlock.Mutex
+var logMap = make(map[testing.TB]bool, 0)
+
 func makeTestWebsocketNodeWithConfig(t testing.TB, conf config.Local) *WebsocketNetwork {
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Level(conf.BaseLoggerDebugLevel))
-	websocket.MLogFunc = func(text string) {
-		log.Debug(text)
+	muLog.Lock()
+	if logMap[t] == false {
+		websocket.MLogFunc = func(text string) {
+			log.Debug(text)
+		}
+		logMap[t] = true
 	}
+	muLog.Unlock()
 
 	wn := &WebsocketNetwork{
 		log:       log,
