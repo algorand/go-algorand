@@ -17,10 +17,12 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"net/url"
 	"os"
 
@@ -143,7 +145,7 @@ func main() {
 			fmt.Printf("Checking round %d..\n", curRound)
 		}
 
-		txns, err := restClient.TransactionsByAddr(auctionChecksumAddr.String(), curRound, curRound)
+		txns, err := restClient.TransactionsByAddr(auctionChecksumAddr.String(), curRound, curRound, math.MaxUint64)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot fetch transactions from %d: %v\n", curRound, err)
 			os.Exit(1)
@@ -248,4 +250,8 @@ func main() {
 	cfg.StartRound = ra.LastRound() + 1
 	writeConfig(cfg)
 	fmt.Printf("Wrote updated state to %s\n", *stateFile)
+
+	outcomes := ra.Settle(false)
+	outcomesHash := crypto.HashObj(outcomes)
+	fmt.Printf("Expected outcomes hash (if settled without cancelling): %v\n", base64.StdEncoding.EncodeToString(outcomesHash[:]))
 }
