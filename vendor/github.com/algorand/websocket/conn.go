@@ -90,6 +90,9 @@ var ErrCloseSent = errors.New("websocket: close sent")
 // read limit set for the connection.
 var ErrReadLimit = errors.New("websocket: read limit exceeded")
 
+// log function.
+var MLogFunc func(text string)
+
 // netError satisfies the net Error interface.
 type netError struct {
 	msg       string
@@ -432,23 +435,44 @@ func (c *Conn) write(frameType int, deadline time.Time, buf0, buf1 []byte) error
 	if !c.bwPresent {
 		out = c.conn
 		c.conn.SetWriteDeadline(deadline)
+		if MLogFunc != nil {
+			MLogFunc("Conn.write no c.bwPresent")
+		}
 	} else {
+		if MLogFunc != nil {
+			MLogFunc("Conn.write c.bwPresent")
+		}
 		c.bwLock.Lock()
 		defer c.bwLock.Unlock()
 		if c.bw == nil {
 			return errors.New("websocket: writing to closed connection")
 		}
 		out = c.bw
+		if MLogFunc != nil {
+			MLogFunc("Conn.write before Signal")
+		}
 		c.bwCond.Signal()
 	}
 	if out == nil {
 		panic(fmt.Sprintf("c.bw=%v c.conn=%v", c.bw, c.conn))
 	}
 	if len(buf0) != 0 {
+		if MLogFunc != nil {
+			MLogFunc("Conn.write before write0")
+		}
 		_, err = out.Write(buf0)
+		if MLogFunc != nil {
+			MLogFunc("Conn.write after write0")
+		}
 	}
 	if err == nil && len(buf1) != 0 {
+		if MLogFunc != nil {
+			MLogFunc("Conn.write before write1")
+		}
 		_, err = out.Write(buf1)
+		if MLogFunc != nil {
+			MLogFunc("Conn.write after write1")
+		}
 	}
 	if err != nil {
 		return c.writeFatal(err)
@@ -469,11 +493,17 @@ func (c *Conn) flushThread() {
 	defer c.bwLock.Unlock()
 
 	for true {
+		if MLogFunc != nil {
+			MLogFunc("Conn.flushThread wait")
+		}
 		c.bwCond.Wait()
 		if c.bw == nil {
 			return
 		}
 		c.bwLock.Unlock()
+		if MLogFunc != nil {
+			MLogFunc("Conn.flushThread 1ms wait")
+		}
 
 		bwTimeout.Reset(writeTimeout)
 		select {
@@ -481,12 +511,22 @@ func (c *Conn) flushThread() {
 		case <-c.bwFlushClose:
 		}
 
+		if MLogFunc != nil {
+			MLogFunc("Conn.flushThread 1ms done")
+		}
+
 		c.bwLock.Lock()
 		if c.bw == nil {
 			return
 		}
 		c.conn.SetWriteDeadline(c.writeDeadline)
+		if MLogFunc != nil {
+			MLogFunc("Conn.flushThread before Flush")
+		}
 		err := c.bw.Flush()
+		if MLogFunc != nil {
+			MLogFunc("Conn.flushThread after Flush")
+		}
 		if err != nil {
 			c.writeErrMu.Lock()
 			if c.writeErr != nil {
@@ -851,7 +891,9 @@ func (c *Conn) WriteMessage(messageType int, data []byte) error {
 
 	if c.isServer && (c.newCompressionWriter == nil || !c.enableWriteCompression) {
 		// Fast path with no allocations and single frame.
-
+		if MLogFunc != nil {
+			MLogFunc("Conn.WriteMessage server")
+		}
 		var mw messageWriter
 		if err := c.beginMessage(&mw, messageType); err != nil {
 			return err
@@ -859,17 +901,36 @@ func (c *Conn) WriteMessage(messageType int, data []byte) error {
 		n := copy(c.writeBuf[mw.pos:], data)
 		mw.pos += n
 		data = data[n:]
-		return mw.flushFrame(true, data)
+		if MLogFunc != nil {
+			MLogFunc("Conn.WriteMessage calling flushFrame")
+		}
+		err := mw.flushFrame(true, data)
+		if MLogFunc != nil {
+			MLogFunc("Conn.WriteMessage after flushFrame")
+		}
+		return err
 	}
-
+	if MLogFunc != nil {
+		MLogFunc("Conn.WriteMessage non server")
+	}
 	w, err := c.NextWriter(messageType)
 	if err != nil {
 		return err
 	}
+	if MLogFunc != nil {
+		MLogFunc("Conn.WriteMessage non server before write")
+	}
 	if _, err = w.Write(data); err != nil {
 		return err
 	}
-	return w.Close()
+	if MLogFunc != nil {
+		MLogFunc("Conn.WriteMessage before Close")
+	}
+	err = w.Close()
+	if MLogFunc != nil {
+		MLogFunc("Conn.WriteMessage after Close")
+	}
+	return err
 }
 
 // SetWriteDeadline sets the write deadline on the underlying network

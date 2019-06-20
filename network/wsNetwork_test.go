@@ -52,6 +52,10 @@ const sendBufferLength = 1000
 
 func TestMain(m *testing.M) {
 	logging.Base().SetLevel(logging.Debug)
+
+	websocket.MLogFunc = func(text string) {
+		logging.Base().Debug(text)
+	}
 	os.Exit(m.Run())
 }
 
