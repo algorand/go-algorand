@@ -35,13 +35,13 @@ type KeyregTxnFields struct {
 }
 
 // Apply changes the balances according to this transaction.
-func (keyreg KeyregTxnFields) apply(header Header, balances Balances, spec SpecialAddresses, ad *ApplyData) error {
+func (keyreg KeyregTxnFields) apply(sender Sender, balances Balances, spec SpecialAddresses, ad *ApplyData) error {
 	if header.Sender == spec.FeeSink {
 		return fmt.Errorf("cannot register participation key for fee sink's address %v ", header.Sender)
 	}
 
 	// Get the user's balance entry
-	record, err := balances.Get(header.Sender)
+	record, err := balances.Get(sender)
 	if err != nil {
 		return err
 	}

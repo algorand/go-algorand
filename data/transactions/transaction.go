@@ -91,6 +91,7 @@ type Transaction struct {
 	// Fields for different types of transactions
 	KeyregTxnFields
 	PaymentTxnFields
+	MultiPaymentTxnFields
 
 	// The transaction's Txid is computed when we decode,
 	// and cached here, to avoid needlessly recomputing it.
@@ -349,10 +350,19 @@ func (tx Transaction) Apply(balances Balances, spec SpecialAddresses) (ad ApplyD
 
 	switch tx.Type {
 	case protocol.PaymentTx:
-		err = tx.PaymentTxnFields.apply(tx.Header, balances, spec, &ad)
+		err = tx.PaymentTxnFields.apply(tx.Sender, balances, spec, &ad)
+
+	case protocol.MultiPaymentTx:
+		// for each Sender and Payment apply changes in balances
+		for i := 0; i < len(tx.Senders); i++ {
+			err = tx.PaymentTxnFields.apply(tx.Sender, balances, spec, &ad)
+			if err != nil {
+				break
+			}
+		}
 
 	case protocol.KeyRegistrationTx:
-		err = tx.KeyregTxnFields.apply(tx.Header, balances, spec, &ad)
+		err = tx.KeyregTxnFields.apply(tx.Sender, balances, spec, &ad)
 
 	default:
 		err = fmt.Errorf("Unknown transaction type %v", tx.Type)

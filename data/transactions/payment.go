@@ -37,6 +37,16 @@ type PaymentTxnFields struct {
 	CloseRemainderTo basics.Address `codec:"close"`
 }
 
+
+// MultiPaymentTxnFields captures the fields used by multi-payment transactions.
+// There are zero or more senders of payments to receivers.
+type MultiPaymentTxnFields struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Senders  []basics.Address     `codec:"snd"`
+	Payments []PaymentTxnFields   `codec:"pay""`
+}
+
 func (payment PaymentTxnFields) senderDeductions() (amount basics.MicroAlgos, empty bool) {
 	amount = payment.Amount
 	if payment.CloseRemainderTo != (basics.Address{}) {
@@ -45,18 +55,18 @@ func (payment PaymentTxnFields) senderDeductions() (amount basics.MicroAlgos, em
 	return
 }
 
-func (payment PaymentTxnFields) checkSpender(header Header, spec SpecialAddresses, proto config.ConsensusParams) error {
-	if header.Sender == payment.CloseRemainderTo {
-		return fmt.Errorf("transaction cannot close account to its sender %v", header.Sender)
+func (payment PaymentTxnFields) checkSpender(sender Sender, spec SpecialAddresses, proto config.ConsensusParams) error {
+	if sender == payment.CloseRemainderTo {
+		return fmt.Errorf("transaction cannot close account to its sender %v", sender)
 	}
 
 	// the FeeSink account may only spend to the IncentivePool
-	if header.Sender == spec.FeeSink {
+	if sender == spec.FeeSink {
 		if payment.Receiver != spec.RewardsPool {
-			return fmt.Errorf("cannot spend from fee sink's address %v to non incentive pool address %v", header.Sender, payment.Receiver)
+			return fmt.Errorf("cannot spend from fee sink's address %v to non incentive pool address %v", sender, payment.Receiver)
 		}
 		if payment.CloseRemainderTo != (basics.Address{}) {
-			return fmt.Errorf("cannot close fee sink %v to %v", header.Sender, payment.CloseRemainderTo)
+			return fmt.Errorf("cannot close fee sink %v to %v", sender, payment.CloseRemainderTo)
 		}
 	}
 	return nil
@@ -69,10 +79,10 @@ func (payment PaymentTxnFields) checkSpender(header Header, spec SpecialAddresse
 // than overwriting it.  For example, Transaction.Apply() may
 // have updated ad.SenderRewards, and this function should only
 // add to ad.SenderRewards (if needed), but not overwrite it.
-func (payment PaymentTxnFields) apply(header Header, balances Balances, spec SpecialAddresses, ad *ApplyData) error {
+func (payment PaymentTxnFields) apply(sender Sender, balances Balances, spec SpecialAddresses, ad *ApplyData) error {
 	// move tx money
 	if !payment.Amount.IsZero() || payment.Receiver != (basics.Address{}) {
-		err := balances.Move(header.Sender, payment.Receiver, payment.Amount, &ad.SenderRewards, &ad.ReceiverRewards)
+		err := balances.Move(sender, payment.Receiver, payment.Amount, &ad.SenderRewards, &ad.ReceiverRewards)
 		if err != nil {
 			return err
 		}
@@ -80,20 +90,20 @@ func (payment PaymentTxnFields) apply(header Header, balances Balances, spec Spe
 
 	if payment.CloseRemainderTo != (basics.Address{}) {
 		if balances.ConsensusParams().SupportTransactionClose {
-			rec, err := balances.Get(header.Sender)
+			rec, err := balances.Get(sender)
 			if err != nil {
 				return err
 			}
 
 			closeAmount := rec.AccountData.MicroAlgos
 			ad.ClosingAmount = closeAmount
-			err = balances.Move(header.Sender, payment.CloseRemainderTo, closeAmount, &ad.SenderRewards, &ad.CloseRewards)
+			err = balances.Move(spender, payment.CloseRemainderTo, closeAmount, &ad.SenderRewards, &ad.CloseRewards)
 			if err != nil {
 				return err
 			}
 
 			// Confirm that we have no balance left
-			rec, err = balances.Get(header.Sender)
+			rec, err = balances.Get(sender)
 			if !rec.AccountData.MicroAlgos.IsZero() {
 				return fmt.Errorf("balance %d still not zero after CloseRemainderTo", rec.AccountData.MicroAlgos.Raw)
 			}
