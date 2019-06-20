@@ -1,3 +1,3 @@
-module github.com/ugorji/go/codec
+module github.com/algorand/go-codec/codec
 
-require github.com/ugorji/go v1.1.2
+require github.com/algorand/go-codec v1.1.2

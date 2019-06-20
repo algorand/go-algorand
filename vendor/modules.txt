@@ -1,0 +1,124 @@
+# github.com/algorand/go-codec v1.1.2
+github.com/algorand/go-codec
+# github.com/algorand/go-codec/codec v0.0.0-20190507210007-269d70b6135d
+github.com/algorand/go-codec/codec
+# github.com/algorand/go-deadlock v0.0.0-20181221160745-78d8cb5e2759
+github.com/algorand/go-deadlock
+# github.com/algorand/websocket v1.4.1
+github.com/algorand/websocket
+# github.com/aws/aws-sdk-go v1.16.5
+github.com/aws/aws-sdk-go
+# github.com/cpuguy83/go-md2man v1.0.8
+github.com/cpuguy83/go-md2man
+# github.com/davecgh/go-spew v1.1.1
+github.com/davecgh/go-spew
+# github.com/davidlazar/go-crypto v0.0.0-20170701192655-dcfb0a7ac018
+github.com/davidlazar/go-crypto
+# github.com/dchest/siphash v1.2.1
+github.com/dchest/siphash
+# github.com/fatih/color v1.7.0
+github.com/fatih/color
+# github.com/fortytw2/leaktest v1.3.0
+github.com/fortytw2/leaktest
+# github.com/fsnotify/fsnotify v1.4.7
+github.com/fsnotify/fsnotify
+# github.com/gen2brain/beeep v0.0.0-20180718162406-4e430518395f
+github.com/gen2brain/beeep
+# github.com/go-sql-driver/mysql v1.4.0
+github.com/go-sql-driver/mysql
+# github.com/godbus/dbus v0.0.0-20181101234600-2ff6f7ffd60f
+github.com/godbus/dbus
+# github.com/gofrs/flock v0.7.0
+github.com/gofrs/flock
+# github.com/golang/protobuf v1.3.1
+github.com/golang/protobuf
+# github.com/google/go-querystring v1.0.0
+github.com/google/go-querystring
+# github.com/gopherjs/gopherjs v0.0.0-20181103185306-d547d1d9531e
+github.com/gopherjs/gopherjs
+# github.com/gopherjs/gopherwasm v1.0.1
+github.com/gopherjs/gopherwasm
+# github.com/gorilla/context v1.1.1
+github.com/gorilla/context
+# github.com/gorilla/mux v1.6.2
+github.com/gorilla/mux
+# github.com/gorilla/schema v1.0.2
+github.com/gorilla/schema
+# github.com/gorilla/websocket v1.4.0
+github.com/gorilla/websocket
+# github.com/hpcloud/tail v1.0.0
+github.com/hpcloud/tail
+# github.com/inconshreveable/mousetrap v1.0.0
+github.com/inconshreveable/mousetrap
+# github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af
+github.com/jmespath/go-jmespath
+# github.com/jmoiron/sqlx v1.2.0
+github.com/jmoiron/sqlx
+# github.com/karalabe/hid v0.0.0-20181128192157-d815e0c1a2e2
+github.com/karalabe/hid
+# github.com/lib/pq v1.0.0
+github.com/lib/pq
+# github.com/mailru/easyjson v0.0.0-20180823135443-60711f1a8329
+github.com/mailru/easyjson
+# github.com/mattn/go-colorable v0.0.9
+github.com/mattn/go-colorable
+# github.com/mattn/go-isatty v0.0.4
+github.com/mattn/go-isatty
+# github.com/mattn/go-sqlite3 v1.10.0
+github.com/mattn/go-sqlite3
+# github.com/nu7hatch/gouuid v0.0.0-20131221200532-179d4d0c4d8d
+github.com/nu7hatch/gouuid
+# github.com/olivere/elastic v6.2.14+incompatible
+github.com/olivere/elastic
+# github.com/onsi/ginkgo v1.8.0
+github.com/onsi/ginkgo
+# github.com/onsi/gomega v1.5.0
+github.com/onsi/gomega
+# github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5
+github.com/petermattis/goid
+# github.com/pkg/errors v0.8.0
+github.com/pkg/errors
+# github.com/pmezard/go-difflib v1.0.0
+github.com/pmezard/go-difflib
+# github.com/russross/blackfriday v1.5.2
+github.com/russross/blackfriday
+# github.com/satori/go.uuid v1.2.0
+github.com/satori/go.uuid
+# github.com/sirupsen/logrus v1.0.5
+github.com/sirupsen/logrus
+# github.com/spf13/cobra v0.0.3
+github.com/spf13/cobra
+# github.com/spf13/pflag v1.0.3
+github.com/spf13/pflag
+# github.com/stretchr/testify v1.2.2
+github.com/stretchr/testify
+# golang.org/x/crypto v0.0.0-20190605123033-f99c8df09eb5
+golang.org/x/crypto
+# golang.org/x/net v0.0.0-20190603091049-60506f45cf65
+golang.org/x/net
+# golang.org/x/sync v0.0.0-20190423024810-112230192c58
+golang.org/x/sync
+# golang.org/x/sys v0.0.0-20190606165138-5da285871e9c
+golang.org/x/sys
+# golang.org/x/text v0.3.2
+golang.org/x/text
+# golang.org/x/tools v0.0.0-20190606124116-d0a3d012864b
+golang.org/x/tools
+# google.golang.org/appengine v1.6.1
+google.golang.org/appengine
+# gopkg.in/airbrake/gobrake.v2 v2.0.9
+gopkg.in/airbrake/gobrake.v2
+# gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405
+gopkg.in/check.v1
+# gopkg.in/fsnotify.v1 v1.4.7
+gopkg.in/fsnotify.v1
+# gopkg.in/gemnasium/logrus-airbrake-hook.v2 v2.1.2
+gopkg.in/gemnasium/logrus-airbrake-hook.v2
+# gopkg.in/sohlich/elogrus.v3 v3.0.0-20180410122755-1fa29e2f2009
+gopkg.in/sohlich/elogrus.v3
+# gopkg.in/toast.v1 v1.0.0-20180812000517-0a84660828b2
+gopkg.in/toast.v1
+# gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7
+gopkg.in/tomb.v1
+# gopkg.in/yaml.v2 v2.2.2
+gopkg.in/yaml.v2
