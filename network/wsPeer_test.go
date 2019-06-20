@@ -14,22 +14,26 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package metrics
+package network
 
 import (
-	"strings"
+	"testing"
+	"time"
 
-	"github.com/algorand/go-deadlock"
+	"github.com/stretchr/testify/require"
 )
 
-// Metric represent any collectable metric
-type Metric interface {
-	WriteMetric(buf *strings.Builder, parentLabels string)
-	AddMetric(values map[string]string)
-}
+func TestCheckSlowWritingPeer(t *testing.T) {
+	now := time.Now()
+	peer := wsPeer{
+		intermittentOutgoingMessageEnqueueTime: 0,
+	}
+	require.Equal(t, peer.CheckSlowWritingPeer(now), false)
 
-// Registry represents a single set of metrics registry
-type Registry struct {
-	metrics   []Metric
-	metricsMu deadlock.Mutex
+	peer.intermittentOutgoingMessageEnqueueTime = now.UnixNano()
+	require.Equal(t, peer.CheckSlowWritingPeer(now), false)
+
+	peer.intermittentOutgoingMessageEnqueueTime = now.Add(-maxMessageQueueDuration * 2).UnixNano()
+	require.Equal(t, peer.CheckSlowWritingPeer(now), true)
+
 }
