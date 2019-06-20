@@ -221,7 +221,8 @@ func (agg *voteAggregator) filterBundle(ub unauthenticatedBundle, freshData fres
 
 // voteStepFresh is a helper function for vote relay rules.  Votes from steps
 // [soft, next] are always propagated, as are votes from [s-1, s+1] where s is
-// the current/last concluding step.
+// the current/last concluding step. Set mine to 0 to effectively disable allowing
+// votes adjacent to the current/last concluding step.
 func voteStepFresh(descr string, proto protocol.ConsensusVersion, mine, vote step) error {
 	if vote <= next {
 		// always propagate first recovery vote to ensure synchronous block of periods after partition
@@ -249,11 +250,11 @@ func voteFresh(proto protocol.ConsensusVersion, freshData freshnessData, vote un
 	}
 
 	if freshData.PlayerRound+1 == vote.R.Round {
-		if (vote.R.Period > 0 || vote.R.Step > next) {
-			return fmt.Errorf("filtered future vote from bad period or step: player.Round=%v; vote.(Round,Period,Step)=(%v,%v,%v)", freshData.PlayerRound, vote.R.Round, vote.R.Period, vote.R.Step)
+		if (vote.R.Period > 0) {
+			return fmt.Errorf("filtered future vote from bad period: player.Round=%v; vote.(Round,Period,Step)=(%v,%v,%v)", freshData.PlayerRound, vote.R.Round, vote.R.Period, vote.R.Step)
 		}
 		// pipeline votes from next round period 0
-		return nil
+		return voteStepFresh("from next round", proto, 0, vote.R.Step)
 	}
 
 	switch vote.R.Period {
