@@ -35,7 +35,7 @@ func (c *Client) SendPaymentFromUnencryptedWallet(from, to string, fee, amount u
 		return transactions.Transaction{}, err
 	}
 
-	return c.SendPaymentFromWallet(wh, nil, from, to, fee, amount, note, "")
+	return c.SendPaymentFromWallet(wh, nil, from, to, fee, amount, note, "", 0, 0)
 }
 
 // GetUnencryptedWalletHandle returns the unencrypted wallet handle. If there
