@@ -76,6 +76,8 @@ export AWS_EFS_MOUNT=
 # It can still steal the outer terminal from within piping the output to tee. Nifty, huh?
 BUILDTIMESTAMP=$(cat "${HOME}/buildtimestamp")
 (bash "${HOME}/go/src/github.com/algorand/go-algorand/scripts/build_release.sh" 2>&1)|tee -a "buildlog_${BUILDTIMESTAMP}"
+(bash "${HOME}/go/src/github.com/algorand/go-algorand/scripts/build_release_sign.sh" 2>&1)|tee -a "buildlog_${BUILDTIMESTAMP}"
+(bash "${HOME}/go/src/github.com/algorand/go-algorand/scripts/build_release_upload.sh" 2>&1)|tee -a "buildlog_${BUILDTIMESTAMP}"
 if [ -f "${HOME}/rstamp" ]; then
     . "${HOME}/rstamp"
 fi
