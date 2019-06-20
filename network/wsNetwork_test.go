@@ -54,7 +54,6 @@ func TestMain(m *testing.M) {
 	logging.Base().SetLevel(logging.Debug)
 
 	websocket.MLogFunc = func(text string) {
-		logging.Base().Debug(text)
 	}
 	os.Exit(m.Run())
 }
@@ -97,6 +96,10 @@ func init() {
 func makeTestWebsocketNodeWithConfig(t testing.TB, conf config.Local) *WebsocketNetwork {
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Level(conf.BaseLoggerDebugLevel))
+	websocket.MLogFunc = func(text string) {
+		log.Debug(text)
+	}
+
 	wn := &WebsocketNetwork{
 		log:       log,
 		config:    conf,
