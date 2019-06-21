@@ -243,7 +243,7 @@ func TestWebsocketNetworkBasic(t *testing.T) {
 
 	select {
 	case <-counterDone:
-	case <-time.After(2 * time.Second):
+	case <-time.After(500 * time.Millisecond):
 		t.Errorf("timeout, count=%d, wanted 2", counter.count)
 	}
 }
@@ -282,7 +282,7 @@ func TestWebsocketNetworkUnicast(t *testing.T) {
 
 	select {
 	case <-counterDone:
-	case <-time.After(2 * time.Second):
+	case <-time.After(500 * time.Millisecond):
 		t.Errorf("timeout, count=%d, wanted 2", counter.count)
 	}
 }
@@ -319,7 +319,7 @@ func TestWebsocketNetworkNoAddress(t *testing.T) {
 
 	select {
 	case <-counterDone:
-	case <-time.After(2 * time.Second):
+	case <-time.After(500 * time.Millisecond):
 		t.Errorf("timeout, count=%d, wanted 2", counter.count)
 	}
 }

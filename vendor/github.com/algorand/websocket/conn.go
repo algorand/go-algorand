@@ -547,6 +547,14 @@ func (c *Conn) WriteControl(messageType int, data []byte, deadline time.Time) er
 		return errInvalidControlFrame
 	}
 
+	if c.bwPresent {
+		c.bwLock.Lock()
+		if c.bw.Buffered() > 0 {
+			panic("writing to conn before flushing buffer")
+		}
+		c.bwLock.Unlock()
+	}
+
 	b0 := byte(messageType) | finalBit
 	b1 := byte(len(data))
 	if !c.isServer {
