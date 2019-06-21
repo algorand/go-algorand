@@ -106,7 +106,7 @@ func TestArchival(t *testing.T) {
 		wl.l.AddBlock(blk, agreement.Certificate{})
 
 		// Don't bother checking the trackers every round -- it's too slow..
-		if crypto.RandUint64()%10 > 0 {
+		if crypto.RandUint64()%23 > 0 {
 			continue
 		}
 
