@@ -62,7 +62,8 @@ func TestMain(m *testing.M) {
 		if currentTestLogger == nil {
 			logging.Base().Debug(text)
 		} else {
-			currentTestLogger.Debug(text)
+			//currentTestLogger.Debug(text)
+			fmt.Printf("%s : %s\n", time.Now().String(), text)
 		}
 	}
 	os.Exit(m.Run())
