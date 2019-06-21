@@ -777,3 +777,65 @@ func TestVoteAggregatorFiltersVotePresentPeriod(t *testing.T) {
 	require.NoError(t, err)
 	require.NoErrorf(t, res, "VotePresent not correctly filtered")
 }
+
+func TestVoteAggregatorFiltersVoteNextRound(t *testing.T) {
+	// Set up a composed test machine
+	rRouter := new(rootRouter)
+	rRouter.update(player{}, 0, false)
+	voteM := &ioAutomataConcrete{
+		listener:  rRouter.voteRoot,
+		routerCtx: rRouter,
+	}
+	helper := voteMakerHelper{}
+	helper.Setup()
+	b := testCaseBuilder{}
+
+	// define a current player state for freshness testing
+	lastConcludingStep := next
+	msgTemplate := filterableMessageEvent{
+		FreshnessData: freshnessData{
+			PlayerRound:          round(10),
+			PlayerPeriod:         period(10),
+			PlayerStep:           next + 5,
+			PlayerLastConcluding: lastConcludingStep,
+		},
+	}
+	// generate old next vote in next round, period 0, step 1; make sure it is accepted
+	pV := helper.MakeRandomProposalValue()
+	uv := helper.MakeUnauthenticatedVote(t, 0, round(11), period(0), soft, *pV)
+	inMsg := msgTemplate // copy
+	inMsg.messageEvent = messageEvent{
+		T: votePresent,
+		Input: message{
+			UnauthenticatedVote: uv,
+		},
+	}
+	b.AddInOutPair(inMsg, emptyEvent{})
+
+	// next round, period 0, step > next should be rejected
+	uv = helper.MakeUnauthenticatedVote(t, 1, round(11), period(0), next+1, *pV)
+	inMsg = msgTemplate // copy
+	inMsg.messageEvent = messageEvent{
+		T: votePresent,
+		Input: message{
+			UnauthenticatedVote: uv,
+		},
+	}
+	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
+
+	// next round, period 1 should be rejected
+	uv = helper.MakeUnauthenticatedVote(t, 1, round(11), period(1), soft, *pV)
+	inMsg = msgTemplate // copy
+	inMsg.messageEvent = messageEvent{
+		T: votePresent,
+		Input: message{
+			UnauthenticatedVote: uv,
+		},
+	}
+	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
+
+	// finalize
+	res, err := b.Build().Validate(voteM)
+	require.NoError(t, err)
+	require.NoErrorf(t, res, "Votes from next round not correctly filtered")
+}
