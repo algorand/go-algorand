@@ -22,6 +22,9 @@ elif [ "${OS}" = "darwin" ]; then
     install_or_upgrade pkg-config
     install_or_upgrade boost
     install_or_upgrade jq
+    install_or_upgrade libtool
+    install_or_upgrade autoconf
+    install_or_upgrade automake
 fi
 
 ${SCRIPTPATH}/configure_dev-deps.sh

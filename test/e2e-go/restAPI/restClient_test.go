@@ -193,7 +193,7 @@ func TestTransactionsByAddr(t *testing.T) {
 		t.Error("no addr with funds")
 	}
 	toAddress := getDestAddr(t, testClient, addresses, someAddress, wh)
-	tx, err := testClient.SendPaymentFromWallet(wh, nil, someAddress, toAddress, 10000, 100000, nil, "")
+	tx, err := testClient.SendPaymentFromWallet(wh, nil, someAddress, toAddress, 10000, 100000, nil, "", 0, 0)
 	require.NoError(t, err)
 	txID := tx.ID()
 	rnd, err := testClient.Status()
@@ -211,7 +211,7 @@ func TestTransactionsByAddr(t *testing.T) {
 
 	restClient, err := localFixture.NC.AlgodClient()
 	require.NoError(t, err)
-	res, err := restClient.TransactionsByAddr(toAddress, 0, rnd.LastRound)
+	res, err := restClient.TransactionsByAddr(toAddress, 0, rnd.LastRound, 100)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(res.Transactions))
 
@@ -256,7 +256,7 @@ func TestClientRejectsBadFromAddressWhenSending(t *testing.T) {
 	require.NoError(t, err)
 	badAccountAddress := "This is absolutely not a valid account address."
 	goodAccountAddress := addresses[0]
-	_, err = testClient.SendPaymentFromWallet(wh, nil, badAccountAddress, goodAccountAddress, 10000, 100000, nil, "")
+	_, err = testClient.SendPaymentFromWallet(wh, nil, badAccountAddress, goodAccountAddress, 10000, 100000, nil, "", 0, 0)
 	require.Error(t, err)
 }
 
@@ -269,7 +269,7 @@ func TestClientRejectsBadToAddressWhenSending(t *testing.T) {
 	require.NoError(t, err)
 	badAccountAddress := "This is absolutely not a valid account address."
 	goodAccountAddress := addresses[0]
-	_, err = testClient.SendPaymentFromWallet(wh, nil, goodAccountAddress, badAccountAddress, 10000, 100000, nil, "")
+	_, err = testClient.SendPaymentFromWallet(wh, nil, goodAccountAddress, badAccountAddress, 10000, 100000, nil, "", 0, 0)
 	require.Error(t, err)
 }
 
@@ -289,7 +289,7 @@ func TestClientRejectsMutatedFromAddressWhenSending(t *testing.T) {
 		require.NoError(t, err)
 	}
 	mutatedAccountAddress := mutateStringAtIndex(unmutatedAccountAddress, 0)
-	_, err = testClient.SendPaymentFromWallet(wh, nil, mutatedAccountAddress, goodAccountAddress, 10000, 100000, nil, "")
+	_, err = testClient.SendPaymentFromWallet(wh, nil, mutatedAccountAddress, goodAccountAddress, 10000, 100000, nil, "", 0, 0)
 	require.Error(t, err)
 }
 
@@ -309,7 +309,7 @@ func TestClientRejectsMutatedToAddressWhenSending(t *testing.T) {
 		require.NoError(t, err)
 	}
 	mutatedAccountAddress := mutateStringAtIndex(unmutatedAccountAddress, 0)
-	_, err = testClient.SendPaymentFromWallet(wh, nil, goodAccountAddress, mutatedAccountAddress, 10000, 100000, nil, "")
+	_, err = testClient.SendPaymentFromWallet(wh, nil, goodAccountAddress, mutatedAccountAddress, 10000, 100000, nil, "", 0, 0)
 	require.Error(t, err)
 }
 
@@ -322,7 +322,7 @@ func TestClientRejectsSendingMoneyFromAccountForWhichItHasNoKey(t *testing.T) {
 	require.NoError(t, err)
 	goodAccountAddress := addresses[0]
 	nodeDoesNotHaveKeyForThisAddress := "NJY27OQ2ZXK6OWBN44LE4K43TA2AV3DPILPYTHAJAMKIVZDWTEJKZJKO4A"
-	_, err = testClient.SendPaymentFromWallet(wh, nil, nodeDoesNotHaveKeyForThisAddress, goodAccountAddress, 10000, 100000, nil, "")
+	_, err = testClient.SendPaymentFromWallet(wh, nil, nodeDoesNotHaveKeyForThisAddress, goodAccountAddress, 10000, 100000, nil, "", 0, 0)
 	require.Error(t, err)
 }
 
@@ -344,7 +344,7 @@ func TestClientOversizedNote(t *testing.T) {
 	}
 	maxTxnNoteBytes := config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnNoteBytes
 	note := make([]byte, maxTxnNoteBytes+1)
-	_, err = testClient.SendPaymentFromWallet(wh, nil, fromAddress, toAddress, 10000, 100000, note, "")
+	_, err = testClient.SendPaymentFromWallet(wh, nil, fromAddress, toAddress, 10000, 100000, note, "", 0, 0)
 	require.Error(t, err)
 }
 
@@ -363,7 +363,7 @@ func TestClientCanSendAndGetNote(t *testing.T) {
 	toAddress := getDestAddr(t, testClient, addresses, someAddress, wh)
 	maxTxnNoteBytes := config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnNoteBytes
 	note := make([]byte, maxTxnNoteBytes)
-	tx, err := testClient.SendPaymentFromWallet(wh, nil, someAddress, toAddress, 10000, 100000, note, "")
+	tx, err := testClient.SendPaymentFromWallet(wh, nil, someAddress, toAddress, 10000, 100000, note, "", 0, 0)
 	require.NoError(t, err)
 	txStatus, err := waitForTransaction(t, testClient, someAddress, tx.ID().String(), 15*time.Second)
 	require.NoError(t, err)
@@ -383,7 +383,7 @@ func TestClientCanGetTransactionStatus(t *testing.T) {
 		t.Error("no addr with funds")
 	}
 	toAddress := getDestAddr(t, testClient, addresses, someAddress, wh)
-	tx, err := testClient.SendPaymentFromWallet(wh, nil, someAddress, toAddress, 10000, 100000, nil, "")
+	tx, err := testClient.SendPaymentFromWallet(wh, nil, someAddress, toAddress, 10000, 100000, nil, "", 0, 0)
 	t.Log(string(protocol.EncodeJSON(tx)))
 	require.NoError(t, err)
 	t.Log(tx.ID().String())
@@ -430,22 +430,22 @@ func TestSendingTooMuchFails(t *testing.T) {
 	fromBalance, err := testClient.GetBalance(fromAddress)
 	require.NoError(t, err)
 	// too much amount
-	_, err = testClient.SendPaymentFromWallet(wh, nil, fromAddress, toAddress, 10000, fromBalance+100, nil, "")
+	_, err = testClient.SendPaymentFromWallet(wh, nil, fromAddress, toAddress, 10000, fromBalance+100, nil, "", 0, 0)
 	t.Log(err)
 	require.Error(t, err)
 
 	// waaaay too much amount
-	_, err = testClient.SendPaymentFromWallet(wh, nil, fromAddress, toAddress, 10000, math.MaxUint64, nil, "")
+	_, err = testClient.SendPaymentFromWallet(wh, nil, fromAddress, toAddress, 10000, math.MaxUint64, nil, "", 0, 0)
 	t.Log(err)
 	require.Error(t, err)
 
 	// too much fee
-	_, err = testClient.SendPaymentFromWallet(wh, nil, fromAddress, toAddress, fromBalance+100, 10000, nil, "")
+	_, err = testClient.SendPaymentFromWallet(wh, nil, fromAddress, toAddress, fromBalance+100, 10000, nil, "", 0, 0)
 	t.Log(err)
 	require.Error(t, err)
 
 	// waaaay too much fee
-	_, err = testClient.SendPaymentFromWallet(wh, nil, fromAddress, toAddress, math.MaxUint64, 10000, nil, "")
+	_, err = testClient.SendPaymentFromWallet(wh, nil, fromAddress, toAddress, math.MaxUint64, 10000, nil, "", 0, 0)
 	t.Log(err)
 	require.Error(t, err)
 }
@@ -482,7 +482,7 @@ func TestSendingFromEmptyAccountFails(t *testing.T) {
 		toAddress, err = testClient.GenerateAddress(wh)
 		require.NoError(t, err)
 	}
-	_, err = testClient.SendPaymentFromWallet(wh, nil, fromAddress, toAddress, 10000, 100000, nil, "")
+	_, err = testClient.SendPaymentFromWallet(wh, nil, fromAddress, toAddress, 10000, 100000, nil, "", 0, 0)
 	require.Error(t, err)
 }
 
@@ -511,7 +511,7 @@ func TestSendingTooLittleToEmptyAccountFails(t *testing.T) {
 	if someAddress == "" {
 		t.Error("no addr with funds")
 	}
-	_, err = testClient.SendPaymentFromWallet(wh, nil, someAddress, emptyAddress, 10000, 1, nil, "")
+	_, err = testClient.SendPaymentFromWallet(wh, nil, someAddress, emptyAddress, 10000, 1, nil, "", 0, 0)
 	require.Error(t, err)
 }
 
@@ -531,7 +531,7 @@ func TestSendingLowFeeFails(t *testing.T) {
 		t.Errorf("balance too low %d < %d", someBal, sendAmount)
 	}
 	toAddress := getDestAddr(t, testClient, addresses, someAddress, wh)
-	utx, err := testClient.ConstructPayment(someAddress, toAddress, 1, sendAmount, nil, "")
+	utx, err := testClient.ConstructPayment(someAddress, toAddress, 1, sendAmount, nil, "", 0, 0)
 	require.NoError(t, err)
 	utx.Fee.Raw = 1
 	stx, err := testClient.SignTransactionWithWallet(wh, nil, utx)
@@ -586,7 +586,7 @@ func TestSendingNotClosingAccountFails(t *testing.T) {
 		t.Error("no addr with funds")
 	}
 	amt := someBal - 10000 - 1
-	_, err = testClient.SendPaymentFromWallet(wh, nil, someAddress, emptyAddress, 10000, amt, nil, "")
+	_, err = testClient.SendPaymentFromWallet(wh, nil, someAddress, emptyAddress, 10000, amt, nil, "", 0, 0)
 	require.Error(t, err)
 }
 

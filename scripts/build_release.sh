@@ -4,7 +4,8 @@
 # be prompted for GPG key password at a couple points.
 #
 # Externally settable env vars:
-# S3_PREFIX= where to upload build artifacts
+# S3_PREFIX= where to upload build artifacts (no trailing /)
+# S3_PREFIX_BUILDLOG= where upload build log (no trailing /)
 # AWS_EFS_MOUNT= NFS to mount for `aptly` persistent state and scratch storage
 # SIGNING_KEY_ADDR= dev@algorand.com or similar for GPG key
 # RSTAMP= `scripts/reverse_hex_timestamp`
@@ -15,10 +16,6 @@ date "+build_release start %Y%m%d_%H%M%S"
 
 set -e
 set -x
-
-if [ -z "${S3_PREFIX}" ]; then
-    S3_PREFIX=s3://algorand-builds
-fi
 
 # persistent storage of repo manager scratch space is on EFS
 if [ ! -z "${AWS_EFS_MOUNT}" ]; then
@@ -36,6 +33,14 @@ fi
 
 export GOPATH=${HOME}/go
 export PATH=${HOME}/gpgbin:${GOPATH}/bin:/usr/local/go/bin:${PATH}
+
+# a previous docker centos build can leave junk owned by root. chown and clean
+sudo chown -R ${USER} ${GOPATH}
+if [ -f ${GOPATH}/src/github.com/algorand/go-algorand/crypto/libsodium-fork/Makefile ]; then
+    (cd ${GOPATH}/src/github.com/algorand/go-algorand/crypto/libsodium-fork && make distclean)
+fi
+rm -rf ${GOPATH}/src/github.com/algorand/go-algorand/crypto/lib
+
 
 cd ${GOPATH}/src/github.com/algorand/go-algorand
 export RELEASE_GENESIS_PROCESS=true
@@ -136,7 +141,9 @@ gpg --detach-sign "${HASHFILE}"
 gpg --clearsign "${HASHFILE}"
 
 echo RSTAMP=${RSTAMP} > "${HOME}/rstamp"
-aws s3 sync --quiet --exclude dev\* --exclude master\* --exclude nightly\* --exclude stable\* --acl public-read ./ ${S3_PREFIX}/${CHANNEL}/${RSTAMP}_${FULLVERSION}/
+if [ ! -z "${S3_PREFIX}" ]; then
+    aws s3 sync --quiet --exclude dev\* --exclude master\* --exclude nightly\* --exclude stable\* --acl public-read ./ ${S3_PREFIX}/${CHANNEL}/${RSTAMP}_${FULLVERSION}/
+fi
 
 # copy .rpm file to intermediate yum repo scratch space, actual publish manually later
 if [ ! -d /data/yumrepo ]; then
@@ -172,7 +179,9 @@ EOF
 dpkg -l >>"${STATUSFILE}"
 gpg --clearsign "${STATUSFILE}"
 gzip "${STATUSFILE}.asc"
-aws s3 cp --quiet "${STATUSFILE}.asc.gz" "s3://algorand-devops-misc/buildlog/${RSTAMP}/${STATUSFILE}.asc.gz"
+if [ ! -z "${S3_PREFIX_BUILDLOG}" ]; then
+    aws s3 cp --quiet "${STATUSFILE}.asc.gz" "${S3_PREFIX_BUILDLOG}/${RSTAMP}/${STATUSFILE}.asc.gz"
+fi
 
 # use aptly to push .deb to its serving repo
 # Leave .deb publishing to manual step after we do more checks on the release artifacts.
