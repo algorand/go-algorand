@@ -8,8 +8,9 @@ labels: 'question'
 NOTE: If this issue relates to security, please use the vulnerability disclosure form here:
 https://www.algorand.com/resources/blog/security
 
-We prefer the issue tracker to be focused on code within the core.  
-This allows us to manage this list much more effectively and get fixes and enhancements built quicker.
+🚨 The issue tracker is not for questions. 🚨
+
+As questions here are likely to be closed, listed below are some resources that may be helpful in getting your question answered.
 
 If you have general, developer or support questions concerning Algorand please see the Algorand Forums https://forum.algorand.org/.
 
