@@ -35,7 +35,7 @@ func isTCPPortAvailable(host string, port int) bool {
 }
 func TestFirstListenerSetupGetsPort8080WhenPassedPortZero(t *testing.T) {
 	// this test will fail if there is already a listener on the testing machine's port 8080
-	// (execpt if a dev has a node running on port 8080 and runs the test; in that case, we can't run this test.)
+	// (except if a dev has a node running on port 8080 and runs the test; in that case, we can't run this test.)
 	targetPort := 8080
 	host := "127.0.0.1"
 	// check if port 8080 is busy :
