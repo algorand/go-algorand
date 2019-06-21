@@ -248,4 +248,8 @@ func main() {
 	cfg.StartRound = ra.LastRound() + 1
 	writeConfig(cfg)
 	fmt.Printf("Wrote updated state to %s\n", *stateFile)
+
+	outcomes := ra.Settle(false)
+	outcomesHash := crypto.HashObj(outcomes)
+	fmt.Printf("Expected outcomes hash (if settled without cancelling): %v\n", outcomesHash.String())
 }
