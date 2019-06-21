@@ -8,10 +8,10 @@ labels: 'question'
 NOTE: If this issue relates to security, please use the vulnerability disclosure form here:
 https://www.algorand.com/resources/blog/security
 
-This issue tracker is not appropriate for most questions.
-If your question does not involve a compiler it probably shouldn't be asked here.
+We prefer the issue tracker to be focused on code within the core.  
+This allows us to manage this list much more effectively and get fixes and enhancements built quicker.
 
-General, developer or support questions concerning Algorand should be directed to the Algorand Forums https://forum.algorand.org/.
+if you have general, developer or support questions concerning Algorand please see the Algorand Forums https://forum.algorand.org/.
 
-Additional information is available here: https://developer.algorand.org/
+Additional Developer information is available here: https://developer.algorand.org/
 -->
