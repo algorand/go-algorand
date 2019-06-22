@@ -190,5 +190,4 @@ func (counter *Counter) AddMetric(values map[string]string) {
 
 		values[counter.name] = strconv.FormatFloat(sum, 'f', -1, 32)
 	}
-
 }

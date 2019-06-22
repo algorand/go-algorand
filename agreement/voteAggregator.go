@@ -250,7 +250,7 @@ func voteFresh(proto protocol.ConsensusVersion, freshData freshnessData, vote un
 	}
 
 	if freshData.PlayerRound+1 == vote.R.Round {
-		if (vote.R.Period > 0) {
+		if vote.R.Period > 0 {
 			return fmt.Errorf("filtered future vote from bad period: player.Round=%v; vote.(Round,Period,Step)=(%v,%v,%v)", freshData.PlayerRound, vote.R.Round, vote.R.Period, vote.R.Step)
 		}
 		// pipeline votes from next round period 0
