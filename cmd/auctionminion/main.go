@@ -17,7 +17,6 @@
 package main
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -253,5 +252,5 @@ func main() {
 
 	outcomes := ra.Settle(false)
 	outcomesHash := crypto.HashObj(outcomes)
-	fmt.Printf("Expected outcomes hash (if settled without cancelling): %v\n", base64.StdEncoding.EncodeToString(outcomesHash[:]))
+	fmt.Printf("Expected outcomes hash (if settled without cancelling): %v\n", outcomesHash.String())
 }
