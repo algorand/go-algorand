@@ -123,10 +123,6 @@ type ConsensusParams struct {
 	// a way of making the spender subsidize the cost of storing this transaction.
 	MinTxnFee uint64
 
-	// SupportTxnClosing indicates if we support transactions that
-	// close out an account.
-	SupportTransactionClose bool
-
 	// RewardUnit specifies the number of MicroAlgos corresponding to one reward
 	// unit.
 	//
@@ -272,11 +268,10 @@ func initConsensusProtocols() {
 	// v2 can be upgraded to v3.
 	v2.ApprovedUpgrades[protocol.ConsensusV3] = true
 
-	// In v4, we add a minimum balance, and add support for transactions
+	// In v4, we added a minimum balance and added support for transactions
 	// that close an account.
 	v4 := v3
 	v4.MinBalance = 1000
-	v4.SupportTransactionClose = true
 	v4.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
 	Consensus[protocol.ConsensusV4] = v4
 
