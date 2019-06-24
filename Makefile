@@ -162,7 +162,7 @@ buildsrc: $(SRCPATH)/crypto/lib/libsodium.a node_exporter NONGO_BIN deps $(ALGOD
 build-race: build
 	@mkdir -p $(GOPATH)/bin-race
 	cd $(SRCPATH) && \
-		GOBIN=$(GOPATH)/bin-race go install $(GOTAGS) -ldflags="$(GOLDFLAGS)" $(SOURCES)
+		GOBIN=$(GOPATH)/bin-race go install $(GOTAGS) -race -ldflags="$(GOLDFLAGS)" $(SOURCES)
 
 NONGO_BIN_FILES=$(GOPATH)/bin/find-nodes.sh $(GOPATH)/bin/update.sh $(GOPATH)/bin/updatekey.json $(GOPATH)/bin/COPYING
 
