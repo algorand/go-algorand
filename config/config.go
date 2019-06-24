@@ -107,17 +107,10 @@ type ConsensusParams struct {
 	RequireGenesisHash bool
 
 	// DefaultKeyDilution specifies the granularity of top-level ephemeral
-	// keys.  If FineGrainedEphemeralKeys is not set, then every ephemeral
-	// key is valid for DefaultKeyDilution rounds.  If FineGrainedEphemeralKeys
-	// is set, then KeyDilution is the number of second-level keys in each
-	// batch, signed by a top-level "batch" key.  The default value can be
+	// keys. KeyDilution is the number of second-level keys in each batch,
+	// signed by a top-level "batch" key.  The default value can be
 	// overriden in the account state.
 	DefaultKeyDilution uint64
-
-	// FineGrainedEphemeralKeys indicates support for fine-grained
-	// ephemeral keys, implemented as a two-level tree.  We will accept
-	// (and produce) fine-grained vote signatures only if this flag is true.
-	FineGrainedEphemeralKeys bool
 
 	// MinBalance specifies the minimum balance that can appear in
 	// an account.  To spend money below MinBalance requires issuing
@@ -271,9 +264,8 @@ func initConsensusProtocols() {
 	}
 	Consensus[protocol.ConsensusV2] = v2
 
-	// In v3, we add support for fine-grained ephemeral keys.
+	// In v3, we added support for fine-grained ephemeral keys.
 	v3 := v2
-	v3.FineGrainedEphemeralKeys = true
 	v3.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
 	Consensus[protocol.ConsensusV3] = v3
 

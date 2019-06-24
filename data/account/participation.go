@@ -87,11 +87,7 @@ func (part Participation) DeleteOldKeys(current basics.Round, proto config.Conse
 		keyDilution = proto.DefaultKeyDilution
 	}
 
-	if proto.FineGrainedEphemeralKeys {
-		part.Voting.DeleteBeforeFineGrained(basics.OneTimeIDForRound(current, keyDilution), keyDilution)
-	} else {
-		part.Voting.DeleteBeforeCoarseGrained(basics.OneTimeIDForRound(current, keyDilution))
-	}
+	part.Voting.DeleteBeforeFineGrained(basics.OneTimeIDForRound(current, keyDilution), keyDilution)
 	raw := protocol.Encode(part.Voting.Snapshot())
 
 	return part.Store.Atomic(func(tx *sql.Tx) error {
