@@ -353,9 +353,10 @@ func (tx Transaction) Apply(balances Balances, spec SpecialAddresses) (ad ApplyD
 		err = tx.PaymentTxnFields.apply(tx.Sender, balances, spec, &ad)
 
 	case protocol.MultiPaymentTx:
+	
 		// for each Sender and Payment apply changes in balances
 		for i := 0; i < len(tx.Senders); i++ {
-			err = tx.PaymentTxnFields.apply(tx.Sender, balances, spec, &ad)
+			err = tx.PaymentTxnFields.apply(tx.Senders[i], balances, spec, &ad)
 			if err != nil {
 				break
 			}

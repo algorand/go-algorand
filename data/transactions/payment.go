@@ -43,8 +43,8 @@ type PaymentTxnFields struct {
 type MultiPaymentTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Senders  []basics.Address     `codec:"snd"`
-	Payments []PaymentTxnFields   `codec:"pay""`
+	Senders  []basics.Address     `codec:"snds"`
+	Payments []PaymentTxnFields   `codec:"pays""`
 }
 
 func (payment PaymentTxnFields) senderDeductions() (amount basics.MicroAlgos, empty bool) {
