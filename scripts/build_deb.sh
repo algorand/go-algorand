@@ -94,14 +94,14 @@ for svc in "${systemd_files[@]}"; do
     cp installer/${svc} ${PKG_ROOT}/lib/systemd/system
 done
 
-unattended_upgrades_files=("50algorand-upgrades")
+unattended_upgrades_files=("51algorand-upgrades")
 mkdir -p ${PKG_ROOT}/etc/apt/apt.conf.d
 for f in "${unattended_upgrades_files[@]}"; do
     cp installer/${f} ${PKG_ROOT}/etc/apt/apt.conf.d
 done
 
 mkdir -p ${PKG_ROOT}/DEBIAN
-debian_files=("control" "postinst" "prerm" "postrm")
+debian_files=("control" "postinst" "prerm" "postrm" "conffiles")
 for ctl in "${debian_files[@]}"; do
     # Copy first, to preserve permissions, then overwrite to fill in template.
     cp -a installer/debian/${ctl} ${PKG_ROOT}/DEBIAN/${ctl}

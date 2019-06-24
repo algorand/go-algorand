@@ -1,0 +1,2 @@
+/etc/apt/apt.conf.d/51algorand-upgrades
+/var/lib/algorand/genesis.json

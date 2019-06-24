@@ -270,6 +270,7 @@ type Conn struct {
 	bwPresent     bool
 	bwLock        sync.Mutex
 	bwCond        sync.Cond
+	bwFlushClose  chan struct{}
 	readRemaining int64 // bytes remaining in current frame.
 	readFinal     bool  // true the current message has more frames.
 	readLength    int64 // Message size.
@@ -326,7 +327,10 @@ func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int, 
 		compressionLevel:       defaultCompressionLevel,
 	}
 	c.bwCond.L = &c.bwLock
-	go c.flushThread()
+	if c.bwPresent {
+		c.bwFlushClose = make(chan struct{})
+		go c.flushThread()
+	}
 	c.SetCloseHandler(nil)
 	c.SetPingHandler(nil)
 	c.SetPongHandler(nil)
@@ -361,6 +365,7 @@ func (c *Conn) CloseWithoutFlush() error {
 		c.bwLock.Lock()
 		defer c.bwLock.Unlock()
 		if c.bw != nil {
+			close(c.bwFlushClose)
 			c.bw = nil
 		}
 		c.bwCond.Signal()
@@ -464,16 +469,6 @@ func (c *Conn) flushThread() {
 	defer c.bwLock.Unlock()
 
 	for true {
-		c.bwCond.Wait()
-		if c.bw == nil {
-			return
-		}
-		c.bwLock.Unlock()
-
-		bwTimeout.Reset(writeTimeout)
-		<-bwTimeout.C
-
-		c.bwLock.Lock()
 		if c.bw == nil {
 			return
 		}
@@ -486,6 +481,20 @@ func (c *Conn) flushThread() {
 			}
 			c.writeErrMu.Unlock()
 		}
+
+		c.bwCond.Wait()
+		if c.bw == nil {
+			return
+		}
+		c.bwLock.Unlock()
+
+		bwTimeout.Reset(writeTimeout)
+		select {
+		case <-bwTimeout.C:
+		case <-c.bwFlushClose:
+		}
+
+		c.bwLock.Lock()
 	}
 }
 
