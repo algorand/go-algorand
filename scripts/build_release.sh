@@ -43,6 +43,8 @@ if [ -z "${RSTAMP}" ]; then
     RSTAMP=$(scripts/reverse_hex_timestamp)
     echo RSTAMP=${RSTAMP} > "${HOME}/rstamp"
 fi
+DC_IP=$(curl --silent http://169.254.169.254/latest/meta-data/local-ipv4)
+
 
 # Update version file for this build
 BUILD_NUMBER=
@@ -72,6 +74,7 @@ export VARIATIONS=${VARIATIONS}
 RSTAMP=${RSTAMP}
 BUILD_NUMBER=${BUILD_NUMBER}
 export FULLVERSION=${FULLVERSION}
+DC_IP=${DC_IP}
 EOF
 # strip leading 'export ' for docker --env-file
 sed 's/^export //g' < ${HOME}/build_env > ${HOME}/build_env_docker
@@ -85,6 +88,66 @@ make build
 
 scripts/build_packages.sh "${PLATFORM}"
 
+
+# Test .deb installer
+
+mkdir -p ${HOME}/docker_test_resources
+if [ ! -f "${HOME}/docker_test_resources/gnupg2.2.9_centos7_amd64.tar.bz2" ]; then
+    aws s3 cp s3://algorand-devops-misc/tools/gnupg2.2.9_centos7_amd64.tar.bz2 ${HOME}/docker_test_resources
+fi
+cp -p "${HOME}/key.gpg" "${HOME}/docker_test_resources/key.pub"
+
+# copy previous installers into ~/docker_test_resources
+(cd "${HOME}/docker_test_resources" && python3 ${GOPATH}/src/github.com/algorand/go-algorand/scripts/get_current_installers.py "${S3_PREFIX}/${CHANNEL}")
+
+
+rm -rf ${HOME}/dummyaptly
+mkdir -p ${HOME}/dummyaptly
+cat <<EOF>${HOME}/dummyaptly.conf
+{
+  "rootDir": "${HOME}/dummyaptly",
+  "downloadConcurrency": 4,
+  "downloadSpeedLimit": 0,
+  "architectures": [],
+  "dependencyFollowSuggests": false,
+  "dependencyFollowRecommends": false,
+  "dependencyFollowAllVariants": false,
+  "dependencyFollowSource": false,
+  "dependencyVerboseResolve": false,
+  "gpgDisableSign": false,
+  "gpgDisableVerify": false,
+  "gpgProvider": "gpg",
+  "downloadSourcePackages": false,
+  "skipLegacyPool": true,
+  "ppaDistributorID": "ubuntu",
+  "ppaCodename": "",
+  "skipContentsPublishing": false,
+  "FileSystemPublishEndpoints": {},
+  "S3PublishEndpoints": {
+    "algorand-releases": {
+      "region":"us-east-1",
+      "bucket":"algorand-releases",
+      "acl":"public-read",
+      "prefix":"deb"
+    }
+  },
+  "SwiftPublishEndpoints": {}
+}
+EOF
+aptly -config=${HOME}/dummyaptly.conf repo create -distribution=stable -component=main algodummy
+aptly -config=${HOME}/dummyaptly.conf repo add algodummy node_pkg/*.deb
+SNAPSHOT=algodummy-$(date +%Y%m%d_%H%M%S)
+aptly -config=${HOME}/dummyaptly.conf snapshot create ${SNAPSHOT} from repo algodummy
+aptly -config=${HOME}/dummyaptly.conf publish snapshot -origin=Algorand -label=Algorand ${SNAPSHOT}
+
+(cd ${HOME}/dummyaptly/public && python3 scripts/httpd.py --pid ${HOME}/phttpd.pid) &
+
+
+sg docker "docker run --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME}/docker_test_resources,dst=/stuff --mount type=bind,src=${GOPATH}/src,dst=/root/go/src --mount type=bind,src=/usr/local/go,dst=/usr/local/go -it ubuntu:16.04 bash /root/go/src/github.com/algorand/go-algorand/scripts/build_release_ubuntu_test_docker.sh"
+sg docker "docker run --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME}/docker_test_resources,dst=/stuff --mount type=bind,src=${GOPATH}/src,dst=/root/go/src --mount type=bind,src=/usr/local/go,dst=/usr/local/go -it ubuntu:18.04 bash /root/go/src/github.com/algorand/go-algorand/scripts/build_release_ubuntu_test_docker.sh"
+
+kill $(cat ${HOME}/phttpd.pid)
+
 date "+build_release done building ubuntu %Y%m%d_%H%M%S"
 
 # Run RPM bulid in Centos7 Docker container
@@ -96,8 +159,14 @@ if [ -f ${GOPATH}/src/github.com/algorand/go-algorand/crypto/libsodium-fork/Make
 fi
 rm -rf ${GOPATH}/src/github.com/algorand/go-algorand/crypto/lib
 
-# do the RPM build
-sg docker "docker run --env-file ${HOME}/build_env_docker --mount type=bind,src=${GOPATH}/src,dst=/root/go/src --mount type=bind,src=${HOME},dst=/root/subhome --mount type=bind,src=/usr/local/go,dst=/usr/local/go -a stdout -a stderr algocentosbuild /root/go/src/github.com/algorand/go-algorand/scripts/build_release_centos_docker.sh"
+# do the RPM build, sign and validate it
+
+mkdir -p ${HOME}/dummyrepo
+(cd ${HOME}/dummyrepo && python3 scripts/httpd.py --pid ${HOME}/phttpd.pid) &
+
+sg docker "docker run --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME}/.gnupg/S.gpg-agent,dst=/S.gpg-agent --mount type=bind,src=${HOME}/dummyrepo,dst=/dummyrepo --mount type=bind,src=${HOME}/docker_test_resources,dst=/stuff --mount type=bind,src=${GOPATH}/src,dst=/root/go/src --mount type=bind,src=${HOME},dst=/root/subhome --mount type=bind,src=/usr/local/go,dst=/usr/local/go -it algocentosbuild /root/go/src/github.com/algorand/go-algorand/scripts/build_release_centos_docker.sh"
+
+kill $(cat ${HOME}/phttpd.pid)
 
 date "+build_release done building centos %Y%m%d_%H%M%S"
 

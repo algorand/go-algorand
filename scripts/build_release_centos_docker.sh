@@ -42,3 +42,58 @@ RPMTMP=$(mktemp -d 2>/dev/null || mktemp -d -t "rpmtmp")
 trap "rm -rf ${RPMTMP}" 0
 scripts/build_rpm.sh ${RPMTMP}
 cp -p ${RPMTMP}/*/*.rpm /root/subhome/node_pkg
+
+(cd ${HOME} && tar jxf /stuff/gnupg*.tar.bz2)
+export PATH="${HOME}/gnupg2/bin:${PATH}"
+export LD_LIBRARY_PATH=${HOME}/gnupg2/lib
+
+umask 0077
+mkdir -p ~/.gnupg
+umask 0022
+
+touch "${HOME}/.gnupg/gpg.conf"
+if grep -q no-autostart "${HOME}/.gnupg/gpg.conf"; then
+    echo ""
+else
+    echo "no-autostart" >> "${HOME}/.gnupg/gpg.conf"
+fi
+rm -f ${HOME}/.gnupg/S.gpg-agent
+(cd ~/.gnupg && ln -s /S.gpg-agent S.gpg-agent)
+
+gpg --import /stuff/key.pub
+gpg --import ${GOPATH}/src/github.com/algorand/go-algorand/installer/rpm/RPM-GPG-KEY-Algorand
+
+cat <<EOF>"${HOME}/.rpmmacros"
+%_gpg_name Algorand RPM <rpm@algorand.com>
+%__gpg /home/centos/gnupg2/bin/gpg
+EOF
+
+NEWEST_RPM=$(ls -t /root/subhome/node_pkg/*rpm|head -1)
+rpmsign --addsign "${NEWEST_RPM}"
+
+cp -p "${NEWEST_RPM}" /dummyrepo
+createrepo --database /dummyrepo
+rm -f /dummyrepo/repodata/repomd.xml.asc
+gpg -u rpm@algorand.com --detach-sign --armor /dummyrepo/repodata/repomd.xml
+
+OLDRPM=$(ls -t /stuff/*.rpm|head -1)
+if [ -f "${OLDRPM}" ]; then
+    yum install -y "${OLDRPM}"
+    algod -v
+    mkdir -p /root/testnode
+    cp -p /var/lib/algorand/genesis/testnet/genesis.json /root/testnode
+    goal node start -d /root/testnode
+    python3 ${GOPATH}/src/github.com/algorand/go-algorand/scripts/wait_for_progress.py -t 60 /root/testnode/node.log
+    goal node stop -d /root/testnode
+fi
+
+
+yum-config-manager --add-repo http://${DC_IP}:8111/algodummy.repo
+
+yum upgrade -y algorand
+algod -v
+
+goal node start -d /root/testnode
+python3 ${GOPATH}/src/github.com/algorand/go-algorand/scripts/wait_for_progress.py -t 60 /root/testnode/node.log
+#python3 /stuff/wait_for_progress.py -t 60 --verbose /root/testnode/node.log
+goal node stop -d /root/testnode

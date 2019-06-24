@@ -103,6 +103,8 @@ fi
 
 sudo usermod -a -G docker ubuntu
 sg docker "docker pull centos:7"
+sg docker "docker pull ubuntu:18.04"
+sg docker "docker pull ubuntu:16.04"
 
 # Check out
 mkdir -p ${GOPATH}/src/github.com/algorand
@@ -111,6 +113,8 @@ if [ ! -d "${GOPATH}/src/github.com/algorand/go-algorand/.git" ]; then
 fi
 cd ${GOPATH}/src/github.com/algorand/go-algorand
 git checkout "${GIT_CHECKOUT_LABEL}"
+
+gpg --import ${GOPATH}/src/github.com/algorand/go-algorand/installer/rpm/RPM-GPG-KEY-Algorand
 
 # Install latest Go
 cd $HOME

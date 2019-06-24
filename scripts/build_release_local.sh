@@ -50,6 +50,8 @@ gpg -u dev@algorand.com --clearsign
 type some stuff
 ^D
 
+gpg -u rpm@algorand.com --clearsign
+
 
 # TODO: use simpler expression when we can rely on gpg 2.2 on ubuntu >= 18.04
 #REMOTE_GPG_SOCKET=$(ssh ubuntu@${TARGET} gpgconf --list-dir agent-socket)
