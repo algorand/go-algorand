@@ -801,21 +801,10 @@ func (wn *WebsocketNetwork) updateURLHost(originalRootURL string, originIP net.I
 
 // ServerHTTP handles the gossip network functions over websockets
 func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *http.Request) {
-	if wn.numIncomingPeers() >= wn.config.IncomingConnectionsLimit {
-		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "incoming_connection_limit"})
-		wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerFailEvent,
-			telemetryspec.ConnectPeerFailEventDetails{
-				Address:      justHost(request.RemoteAddr),
-				HostName:     request.Header.Get(TelemetryIDHeader),
-				Incoming:     true,
-				InstanceName: request.Header.Get(InstanceNameHeader),
-				Reason:       "Connection Limit",
-			})
-		response.WriteHeader(http.StatusServiceUnavailable)
-		return
-	}
 	remoteHost, _, err := net.SplitHostPort(request.RemoteAddr)
 	if err != nil {
+		// this error should not happen. The go framework is responsible for populating the RemoteAddr using the incoming TCP connection
+		// information.
 		wn.log.Errorf("could not parse request.RemoteAddr=%v, %s", request.RemoteAddr, err)
 		response.WriteHeader(http.StatusServiceUnavailable)
 		return
@@ -824,11 +813,26 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 	if originIP != nil {
 		remoteHost = originIP.String()
 	}
-	if wn.connectedForIP(remoteHost) >= wn.config.MaxConnectionsPerIP {
+
+	if wn.numIncomingPeers() >= wn.config.IncomingConnectionsLimit {
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "incoming_connection_limit"})
 		wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerFailEvent,
 			telemetryspec.ConnectPeerFailEventDetails{
-				Address:      justHost(request.RemoteAddr),
+				Address:      remoteHost,
+				HostName:     request.Header.Get(TelemetryIDHeader),
+				Incoming:     true,
+				InstanceName: request.Header.Get(InstanceNameHeader),
+				Reason:       "Connection Limit",
+			})
+		response.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+
+	if wn.connectedForIP(remoteHost) >= wn.config.MaxConnectionsPerIP {
+		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "incoming_connection_per_ip_limit"})
+		wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerFailEvent,
+			telemetryspec.ConnectPeerFailEventDetails{
+				Address:      remoteHost,
 				HostName:     request.Header.Get(TelemetryIDHeader),
 				Incoming:     true,
 				InstanceName: request.Header.Get(InstanceNameHeader),
@@ -878,7 +882,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 	wn.log.With("event", "ConnectedIn").With("remote", otherPublicAddr).With("local", localAddr).Infof("Accepted incoming connection from peer %s", otherPublicAddr)
 	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerEvent,
 		telemetryspec.PeerEventDetails{
-			Address:      justHost(request.RemoteAddr),
+			Address:      remoteHost,
 			HostName:     otherTelemetryGUID,
 			Incoming:     true,
 			InstanceName: otherInstanceName,
@@ -1554,9 +1558,9 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 	// definitely don't change this to do the logging while holding the lock.
 	localAddr, _ := wn.Address()
 	wn.log.With("event", "Disconnected").With("remote", peer.rootURL).With("local", localAddr).Infof("Peer %v disconnected", peer.rootURL)
-	peerAddr := ""
+	peerAddr := peer.OriginAddress()
 	// we might be able to get addr out of conn, or it might be closed
-	if peer.conn != nil {
+	if peerAddr == "" && peer.conn != nil {
 		paddr := peer.conn.RemoteAddr()
 		if paddr != nil {
 			peerAddr = justHost(paddr.String())
