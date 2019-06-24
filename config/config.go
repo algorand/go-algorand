@@ -134,9 +134,6 @@ type ConsensusParams struct {
 	// rewards level is recomputed for the next RewardsRateRefreshInterval rounds.
 	RewardsRateRefreshInterval uint64
 
-	// TwinSeeds specifies whether we are using multiple seeds in parallel (instead of just one).
-	TwinSeeds bool
-
 	// seed-related parameters
 	SeedLookback        uint64 // how many blocks back we use seeds from in sortition. delta_s in the spec
 	SeedRefreshInterval uint64 // how often an old block hash is mixed into the seed. delta_r in the spec
@@ -304,7 +301,6 @@ func initConsensusProtocols() {
 	// v8 uses parameters and a seed derivation policy (the "twin seeds") from Georgios' new analysis
 	v8 := v7
 
-	v8.TwinSeeds = true
 	v8.SeedRefreshInterval = 80
 	v8.NumProposers = 9
 	v8.SoftCommitteeSize = 2990
