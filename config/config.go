@@ -157,7 +157,6 @@ type ConsensusParams struct {
 	DownCommitteeThreshold uint64
 
 	FastRecoveryLambda    time.Duration // time between fast recovery attempts
-	FastPartitionRecovery bool          // set when fast partition recovery is enabled
 
 	// commit to payset using a hash of entire payset,
 	// instead of txid merkle tree
@@ -333,7 +332,6 @@ func initConsensusProtocols() {
 
 	// v10 introduces fast partition recovery (and also raises NumProposers).
 	v10 := v9
-	v10.FastPartitionRecovery = true
 	v10.NumProposers = 20
 	v10.LateCommitteeSize = 500
 	v10.LateCommitteeThreshold = 320

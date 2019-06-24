@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/logspec"
 	"github.com/algorand/go-algorand/protocol"
@@ -225,15 +224,7 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 
 	ledgerNextRoundCh := s.Ledger.Wait(nextRound)
 	deadlineCh := s.Clock.TimeoutAt(deadline)
-	var fastDeadlineCh <-chan time.Time
-
-	proto, err := d.ledger.ConsensusVersion(ParamsRound(currentRound))
-	if err == nil && config.Consensus[proto].FastPartitionRecovery {
-		fastDeadlineCh = s.Clock.TimeoutAt(fastDeadline)
-	}
-	if err != nil {
-		logging.Base().Errorf("could not get consensus parameters for round %v: %v", ParamsRound(currentRound), err)
-	}
+	fastDeadlineCh := s.Clock.TimeoutAt(fastDeadline)
 
 	d.UpdateEventsQueue(eventQueueDemux, 0)
 	d.monitor.dec(demuxCoserviceType)
