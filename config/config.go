@@ -145,10 +145,6 @@ type ConsensusParams struct {
 	// rewards level is recomputed for the next RewardsRateRefreshInterval rounds.
 	RewardsRateRefreshInterval uint64
 
-	// IncorrectBalLookback, if true, causes committee selection to use a balance lookback that disagrees with the spec and the rest of the code.
-	// If false, use the correct balance lookback everywhere.
-	// TODO: This option exists to allow fixing this bug with an in-band protocol upgrade. It should be removed the next time genesis is bumped.
-	IncorrectBalLookback bool
 	// TwinSeeds specifies whether we are using multiple seeds in parallel (instead of just one).
 	TwinSeeds bool
 
@@ -251,7 +247,6 @@ func initConsensusProtocols() {
 		RewardsRateRefreshInterval: 5e5,
 
 		ApprovedUpgrades:     map[protocol.ConsensusVersion]bool{},
-		IncorrectBalLookback: true,
 
 		NumProposers:           30,
 		SoftCommitteeSize:      2500,
@@ -300,7 +295,6 @@ func initConsensusProtocols() {
 	v5 := v4
 	v5.MinTxnFee = 1000
 	v5.MinBalance = 10000
-	v5.IncorrectBalLookback = false
 	v5.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
 	Consensus[protocol.ConsensusV5] = v5
 

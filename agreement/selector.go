@@ -51,9 +51,6 @@ func balanceRound(r basics.Round, cparams config.ConsensusParams) basics.Round {
 	}
 
 	lookback := basics.Round(2*cparams.SeedRefreshInterval + cparams.SeedLookback + 1)
-	if cparams.IncorrectBalLookback {
-		return (r + 2).SubSaturate(lookback)
-	}
 	return r.SubSaturate(lookback)
 }
 
