@@ -131,13 +131,5 @@ for var in "${VARIATION_ARRAY[@]}"; do
 	    cp -p *.deb ${PKG_ROOT}/${GATE_PREFIX}algorand_${CHANNEL}_${PKG_NAME}_${FULLVERSION}.deb
             popd
         fi
-
-        # For now, we only deploy packages with telemetry (so we can transition smoothly).
-        # Copy xxx_channel_yyy -> xxx_channel-telem_yyy
-        if [[ ("${var}" = "") && (! -z ${TRANSITION_TELEMETRY_BUILDS}) ]]; then
-            cp ${PKG_ROOT}/${GATE_PREFIX}node_${CHANNEL}_${PKG_NAME}_${FULLVERSION}.tar.gz ${PKG_ROOT}/${GATE_PREFIX}node_${CHANNEL}-telem_${PKG_NAME}_${FULLVERSION}.tar.gz
-            cp ${PKG_ROOT}/${GATE_PREFIX}install_${CHANNEL}_${PKG_NAME}_${FULLVERSION}.tar.gz ${PKG_ROOT}/${GATE_PREFIX}install_${CHANNEL}-telem_${PKG_NAME}_${FULLVERSION}.tar.gz
-            cp ${PKG_ROOT}/${GATE_PREFIX}tools_${CHANNEL}_${PKG_NAME}_${FULLVERSION}.tar.gz ${PKG_ROOT}/${GATE_PREFIX}tools_${CHANNEL}-telem_${PKG_NAME}_${FULLVERSION}.tar.gz
-        fi
     done
 done

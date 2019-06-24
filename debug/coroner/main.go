@@ -26,53 +26,45 @@ import (
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/data/basics"
 )
 
 var numRegex = regexp.MustCompile(`^\d+$`)
-var posOffRegex = regexp.MustCompile(`^\+\d+$`)
-var negOffRegex = regexp.MustCompile(`^\-\d+$`)
 
-var filename = flag.String("file", "", "Name of the input cadaver file")
+var filename = flag.String("file", "", "Name of the input cadaver file (otherwise, use stdin)")
 var versionCheck = flag.Bool("version", false, "Display current coroner build version and exit")
-
 var printmsgpack = flag.Bool("msgpack", false, "If provided, emit msgpack instead of a string")
 
-// note: these also take relative offsets given by "+" or "-" symbols
-// e.g., the command
-//   coroner --skip-head -10
-// will give the last 10 rounds of the coroner.
-// If relative is set, the removal is done relative to the minimum round in the
-// trace if the given round is nonnegative. Otherwise, the removal is relative
-// to the maximum round in the trace.
 var skipHead = flag.String("skip-head", "", "The first round to trim before")
 var skipTail = flag.String("skip-tail", "", "The last round to trim after")
 
-func mustParse(data []byte) int64 {
-	x, err := strconv.ParseInt(string(data), 10, 64)
+func mustParse(data []byte) uint64 {
+	x, err := strconv.ParseUint(string(data), 10, 64)
 	if err != nil {
 		log.Fatalf(`failed to parse round bound in "%s": %s`, string(data), err)
 	}
 	return x
 }
 
-func parseRoundBound(s string) (bound int64, relative bool) {
-	data := []byte(s)
-	signfact := int64(1)
-
-	switch {
-	case s == "":
-	case numRegex.Match(data):
-		bound = mustParse(numRegex.Find(data))
-	case negOffRegex.Match(data):
-		signfact = -1
-		fallthrough
-	case posOffRegex.Match(data):
-		relative = true
-		bound = mustParse(numRegex.Find(data[1:])) * signfact
-	default:
-		log.Fatalf(`failed to parse round bound in "%s": string does not match regex "^(+|-)\d+$"`, s)
+func parseRoundBound(s string) uint64 {
+	if !numRegex.Match([]byte(s)) {
+		log.Fatalf(`failed to parse round bound in "%s": string does not match regex "^\d+$"`, s)
 	}
-	return
+	return mustParse(numRegex.Find([]byte(s)))
+}
+
+func done(n int, err error) {
+	if n == 0 {
+		log.Println("coroner: no cadavers autopsied")
+	}
+
+	if err != nil {
+		log.Println("coroner: failed to extract full autopsy trace:", err)
+	}
+}
+
+func nextBounds(i int, bounds agreement.AutopsyBounds) {
+	log.Printf("cadaver seq: %d\tstart(r,p): (%d,%d)\tend(r,p): (%d,%d)\n", i, bounds.StartRound, bounds.StartPeriod, bounds.EndRound, bounds.EndPeriod)
 }
 
 func main() {
@@ -89,80 +81,34 @@ func main() {
 
 	if *filename == "" {
 		log.Println("coroner: no filename provided; reading from stdin...")
-		autopsy, err = agreement.PrepareAutopsyFromInputStream()
+		autopsy, err = agreement.PrepareAutopsyFromStream(os.Stdin, nextBounds, done)
 	} else {
-		autopsy, err = agreement.PrepareAutopsy(*filename)
+		autopsy, err = agreement.PrepareAutopsy(*filename, nextBounds, done)
 	}
 	if err != nil {
 		log.Fatalln("coroner: failed to prepare autopsy:", err)
 	}
 	defer autopsy.Close()
 
-	headRound, headRelative := parseRoundBound(*skipHead)
-	tailRound, tailRelative := parseRoundBound(*skipTail)
-
-	autopsiedCdvs, err := autopsy.ExtractCdvs()
-	if err != nil {
-		log.Println("coroner: failed to extract full autopsy trace:", err)
-		log.Println("coroner: continuing after error...")
-	}
-
-	if len(autopsiedCdvs) < 1 {
-		log.Println("coroner: no cadavers autopsied")
-		return
-	}
-
-	firstMeta := autopsiedCdvs[0].M
-	log.Printf("coroner: Cadaver file generated with commit hash:\n%s\n", firstMeta.VersionCommitHash)
-	if firstMeta.VersionCommitHash != version.GetCommitHash() {
-		log.Printf("coroner: Cadaver version mismatches coroner version:\n(%s (cadaver) != %s (coroner))\n", firstMeta.VersionCommitHash, version.GetCommitHash())
-	}
-
-	cachedStartRound := autopsiedCdvs[0].StartRound
+	var filter agreement.AutopsyFilter
 	if *skipHead != "" {
-		numCdvs := len(autopsiedCdvs)
-		first := headRound
-		if headRelative {
-			if headRound >= 0 {
-				first = cachedStartRound + headRound
-			} else {
-				first = autopsiedCdvs[numCdvs-1].EndRound + headRound
-			}
-		}
-		for i := range autopsiedCdvs {
-			if autopsiedCdvs[i].EndRound < first {
-				autopsiedCdvs = autopsiedCdvs[i+1:]
-				break
-			}
-		}
-		autopsiedCdvs[0].T, autopsiedCdvs[0].StartRound = autopsiedCdvs[0].T.FilterBefore(first)
+		filter.Enabled = true
+		filter.First = basics.Round(parseRoundBound(*skipHead))
 	}
 	if *skipTail != "" {
-		numCdvs := len(autopsiedCdvs)
-		last := tailRound
-		if tailRelative {
-			if tailRound >= 0 {
-				last = cachedStartRound + tailRound
-			} else {
-				last = autopsiedCdvs[numCdvs-1].EndRound + tailRound
-			}
-		}
-		for i := range autopsiedCdvs {
-			if autopsiedCdvs[i].StartRound > last {
-				autopsiedCdvs = autopsiedCdvs[:i]
-				break
-			}
-		}
-		end := len(autopsiedCdvs)
-		autopsiedCdvs[end].T, autopsiedCdvs[end].EndRound = autopsiedCdvs[end].T.FilterAfter(last)
+		filter.Enabled = true
+		filter.Last = basics.Round(parseRoundBound(*skipTail))
 	}
 
-	for i := range autopsiedCdvs {
-		log.Printf("Cadaver Seq: %d\tstart: %d\tend: %d\n", i, autopsiedCdvs[i].StartRound, autopsiedCdvs[i].EndRound)
-	}
+	var commitHash string
 	if *printmsgpack {
-		agreement.DumpMessagePack(autopsiedCdvs, os.Stdout)
+		commitHash = autopsy.DumpMessagePack(filter, os.Stdout)
 	} else {
-		agreement.DumpString(autopsiedCdvs, os.Stdout)
+		commitHash = autopsy.DumpString(filter, os.Stdout)
 	}
+	if commitHash != version.GetCommitHash() {
+		log.Printf("coroner: cadaver version mismatches coroner version:\n(%s (cadaver) != %s (coroner))\n", commitHash, version.GetCommitHash())
+	}
+
+	return
 }

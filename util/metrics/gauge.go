@@ -184,3 +184,19 @@ func (gauge *Gauge) WriteMetric(buf *strings.Builder, parentLabels string) {
 		buf.WriteString("\n")
 	}
 }
+
+// AddMetric adds the metric into the map
+func (gauge *Gauge) AddMetric(values map[string]string) {
+	gauge.Lock()
+	defer gauge.Unlock()
+
+	gauge.filterExpiredMetrics()
+
+	if len(gauge.valuesIndices) < 1 {
+		return
+	}
+
+	for _, l := range gauge.valuesIndices {
+		values[gauge.name] = strconv.FormatFloat(l.gauge, 'f', -1, 32)
+	}
+}

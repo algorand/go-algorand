@@ -450,7 +450,11 @@ func (node *AlgorandFullNode) BroadcastSignedTxn(signed transactions.SignedTxn) 
 		return transactions.Txid{}, err
 	}
 
-	node.net.Broadcast(context.TODO(), protocol.TxnTag, protocol.Encode(signed), true, nil)
+	err = node.net.Broadcast(context.TODO(), protocol.TxnTag, protocol.Encode(signed), true, nil)
+	if err != nil {
+		node.log.Infof("failure broadcasting transaction to network: %v - transaction was %+v", err, signed)
+		return transactions.Txid{}, err
+	}
 	node.log.Infof("Sent signed tx %s", signed.ID())
 	return signed.ID(), nil
 }
@@ -768,9 +772,10 @@ func (node *AlgorandFullNode) oldKeyDeletionThread() {
 		// r.  The params come from agreement.ParamsRound(r), which is r-2.
 		hdr, err := node.ledger.BlockHdr(agreement.ParamsRound(r))
 		if err != nil {
-			if err == ledger.ErrNoEntry {
+			switch err.(type) {
+			case ledger.ErrNoEntry:
 				// No need to warn; expected during catchup.
-			} else {
+			default:
 				node.log.Warnf("Cannot look up block %d for deleting ephemeral keys: %v", agreement.ParamsRound(r), err)
 			}
 		} else {
