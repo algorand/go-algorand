@@ -16,7 +16,7 @@ git archive --prefix=algorand-${FULLVERSION}/ "${TAG}" | gzip > ${PKG_ROOT}/algo
 # create *.sig gpg signatures
 cd ${PKG_ROOT}
 for i in *.tar.gz *.deb *.rpm; do
-    gpg --detach-sign "${i}"
+    gpg -u "${SIGNING_KEY_ADDR}" --detach-sign "${i}"
 done
 HASHFILE=hashes_${CHANNEL}_${OS}_${ARCH}_${FULLVERSION}
 rm -f "${HASHFILE}"
@@ -24,8 +24,8 @@ touch "${HASHFILE}"
 md5sum *.tar.gz *.deb *.rpm >> "${HASHFILE}"
 shasum -a 256 *.tar.gz *.deb *.rpm >> "${HASHFILE}"
 shasum -a 512 *.tar.gz *.deb *.rpm >> "${HASHFILE}"
-gpg --detach-sign "${HASHFILE}"
-gpg --clearsign "${HASHFILE}"
+gpg -u "${SIGNING_KEY_ADDR}" --detach-sign "${HASHFILE}"
+gpg -u "${SIGNING_KEY_ADDR}" --clearsign "${HASHFILE}"
 
 date "+build_release done signing %Y%m%d_%H%M%S"
 
