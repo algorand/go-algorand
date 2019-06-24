@@ -19,6 +19,7 @@ package cloudflare
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"strings"
 )
@@ -29,19 +30,34 @@ const (
 	AutomaticTTL = 1
 )
 
-// DNS is the cloudflare package main access class. Initiate an instance of this class to access the clouldflare APIs.
-type DNS struct {
-	zoneID    string
+// Cred contains the credentials used to authenticate with the cloudflare API.
+type Cred struct {
 	authEmail string
 	authKey   string
+}
+
+// DNS is the cloudflare package main access class. Initiate an instance of this class to access the clouldflare APIs.
+type DNS struct {
+	zoneID string
+	Cred
+}
+
+// NewCred creates a new credential structure used to authenticate with the cloudflare service.
+func NewCred(authEmail string, authKey string) *Cred {
+	return &Cred{
+		authEmail: authEmail,
+		authKey:   authKey,
+	}
 }
 
 // NewDNS create a new instance of clouldflare DNS services class
 func NewDNS(zoneID string, authEmail string, authKey string) *DNS {
 	return &DNS{
-		zoneID:    zoneID,
-		authEmail: authEmail,
-		authKey:   authKey,
+		zoneID: zoneID,
+		Cred: Cred{
+			authEmail: authEmail,
+			authKey:   authKey,
+		},
 	}
 }
 
@@ -240,4 +256,60 @@ func (d *DNS) UpdateSRVRecord(ctx context.Context, recordID string, name string,
 		return fmt.Errorf("failed to update SRV record : %v", parsedResponse)
 	}
 	return nil
+}
+
+// Zone represent a single zone on the cloudflare API.
+type Zone struct {
+	DomainName string
+	ZoneID     string
+}
+
+// GetZones returns a list of zones that are associated with cloudflare.
+func (c *Cred) GetZones(ctx context.Context) (zones []Zone, err error) {
+	request, err := getZonesRequest(c.authEmail, c.authKey)
+	if err != nil {
+		return nil, err
+	}
+	client := &http.Client{}
+	response, err := client.Do(request.WithContext(ctx))
+	if err != nil {
+		return nil, err
+	}
+
+	parsedResponse, err := parseGetZonesResponse(response)
+	if err != nil {
+		return nil, err
+	}
+	if parsedResponse.Success == false {
+		return nil, fmt.Errorf("failed to retrieve zone records : %v", parsedResponse)
+	}
+
+	for _, z := range parsedResponse.Result {
+		zones = append(zones,
+			Zone{
+				DomainName: z.Name,
+				ZoneID:     z.ID,
+			},
+		)
+	}
+	return zones, err
+}
+
+// ExportZone exports the zone into a BIND config bytes array
+func (d *DNS) ExportZone(ctx context.Context) (exportedZoneBytes []byte, err error) {
+	request, err := exportZoneRequest(d.zoneID, d.authEmail, d.authKey)
+	if err != nil {
+		return nil, err
+	}
+	client := &http.Client{}
+	response, err := client.Do(request.WithContext(ctx))
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close()
+	body, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return nil, err
+	}
+	return body, nil
 }
