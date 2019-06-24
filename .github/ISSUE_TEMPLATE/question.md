@@ -15,5 +15,3 @@ Additional Developer information is available here: https://developer.algorand.o
 
 NOTE: If this issue relates to security, please use the vulnerability disclosure form here:
 https://www.algorand.com/resources/blog/security
-
-
