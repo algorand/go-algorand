@@ -41,8 +41,9 @@ type OneTimeSignature struct {
 	PK  ed25519PublicKey `codec:"p"`
 
 	// Old-style signature that does not use proper domain separation.
-	// PKSigOld is a signature of (PK || BatchID) under the master key (OneTimeSignatureVerifier).
-	// TODO(adam): This should be safe to delete now, right?
+	// PKSigOld is unused; however, unfortunately we forgot to mark it
+	// `codec:omitempty` and so it appears (with zero value) in certs.
+	// This means we can't delete the field without breaking catchup.
 	PKSigOld ed25519Signature `codec:"ps"`
 
 	// Used to verify a new-style two-level ephemeral signature.
@@ -187,19 +188,12 @@ func GenerateOneTimeSignatureSecretsRNG(startBatch uint64, numBatches uint64, rn
 		pk, sk := ed25519GenerateKeyRNG(rng)
 		batchnum := startBatch + i
 
-		// Generate the old-style signature in case we need to sign a message
-		// compatible with the old-style protocol.  Can eventually go away,
-		// once we never need to sign messages in an old protocol.
-		oldid := OneTimeSignatureIdentifier{Batch: batchnum}
-		oldsig := ed25519Sign(ephemeralSec, append(pk[:], oldid.BatchBytes()...))
-
 		newid := OneTimeSignatureSubkeyBatchID{SubKeyPK: pk, Batch: batchnum}
 		newsig := ed25519Sign(ephemeralSec, hashRep(newid))
 
 		subkeys[i] = ephemeralSubkey{
 			PK:       pk,
 			SK:       sk,
-			PKSigOld: oldsig,
 			PKSigNew: newsig,
 		}
 	}
@@ -257,12 +251,6 @@ func (s *OneTimeSignatureSecrets) Sign(id OneTimeSignatureIdentifier, message Ha
 		batchidx := id.Batch - s.FirstBatch
 		pksig := s.Batches[batchidx].PKSigNew
 
-		// Backwards compatibility: we might only have a participation
-		// key generated with the old signature plan.  If so, use it.
-		if pksig == (ed25519Signature{}) {
-			pksig = s.Batches[batchidx].PKSigOld
-		}
-
 		pk1id := OneTimeSignatureSubkeyOffsetID{
 			SubKeyPK: pk,
 			Batch:    id.Batch,
@@ -310,14 +298,7 @@ func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, message 
 	}
 
 	if !ed25519Verify(ed25519PublicKey(v), hashRep(batchID), sig.PK2Sig) {
-		// Maybe this was signed by a user that generated their participation
-		// key a while ago, before they had a PKSigNew.  Check against the old
-		// encoding.  Once we're sure all these keys are gone, this fallback
-		// can be removed.
-		ccat := append(sig.PK2[:], id.BatchBytes()...)
-		if !ed25519Verify(ed25519PublicKey(v), ccat, sig.PK2Sig) {
-			return false
-		}
+		return false
 	}
 	if !ed25519Verify(batchID.SubKeyPK, hashRep(offsetID), sig.PK1Sig) {
 		return false
@@ -384,11 +365,6 @@ func (s *OneTimeSignatureSecrets) DeleteBeforeFineGrained(current OneTimeSignatu
 
 	s.OffsetsPK2 = s.Batches[0].PK
 	s.OffsetsPK2Sig = s.Batches[0].PKSigNew
-	// Backwards compatibility: we might only have a participation
-	// key generated with the old signature plan.  If so, use it.
-	if s.OffsetsPK2Sig == (ed25519Signature{}) {
-		s.OffsetsPK2Sig = s.Batches[0].PKSigOld
-	}
 
 	s.FirstOffset = current.Offset
 	for off := current.Offset; off < numKeysPerBatch; off++ {

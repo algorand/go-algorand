@@ -35,21 +35,6 @@ func TestOneTimeSignVerifyNewStyle(t *testing.T) {
 	testOneTimeSignVerifyNewStyle(t, c, c2)
 }
 
-func TestOneTimeSignVerifyMixedStyle(t *testing.T) {
-	c := GenerateOneTimeSignatureSecrets(0, 1000)
-	c2 := GenerateOneTimeSignatureSecrets(0, 1000)
-
-	// Wipe out PKSigNew from subkeys
-	for i := range c.Batches {
-		c.Batches[i].PKSigNew = ed25519Signature{}
-	}
-	for i := range c2.Batches {
-		c2.Batches[i].PKSigNew = ed25519Signature{}
-	}
-
-	testOneTimeSignVerifyNewStyle(t, c, c2)
-}
-
 func testOneTimeSignVerifyNewStyle(t *testing.T, c *OneTimeSignatureSecrets, c2 *OneTimeSignatureSecrets) {
 	id := randID()
 	s := randString()
