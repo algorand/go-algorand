@@ -133,11 +133,9 @@ func (part Participation) GenerateRegistrationTransaction(fee basics.MicroAlgos,
 			SelectionPK: part.VRF.PK,
 		},
 	}
-	if params.ExplicitEphemeralParams {
-		t.KeyregTxnFields.VoteFirst = part.FirstValid
-		t.KeyregTxnFields.VoteLast = part.LastValid
-		t.KeyregTxnFields.VoteKeyDilution = part.KeyDilution
-	}
+	t.KeyregTxnFields.VoteFirst = part.FirstValid
+	t.KeyregTxnFields.VoteLast = part.LastValid
+	t.KeyregTxnFields.VoteKeyDilution = part.KeyDilution
 	return t
 }
 

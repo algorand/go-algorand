@@ -137,10 +137,6 @@ type ConsensusParams struct {
 	// TwinSeeds specifies whether we are using multiple seeds in parallel (instead of just one).
 	TwinSeeds bool
 
-	// ExplicitEphemeralParams indicates support for explicitly specifying
-	// VotingFirstValid, VotingLastValid, and VotingKeyDilution.
-	ExplicitEphemeralParams bool
-
 	// seed-related parameters
 	SeedLookback        uint64 // how many blocks back we use seeds from in sortition. delta_s in the spec
 	SeedRefreshInterval uint64 // how often an old block hash is mixed into the seed. delta_r in the spec
@@ -288,9 +284,8 @@ func initConsensusProtocols() {
 	// v4 can be upgraded to v5.
 	v4.ApprovedUpgrades[protocol.ConsensusV5] = true
 
-	// v6 adds support for explicit ephemeral-key parameters.
+	// v6 added support for explicit ephemeral-key parameters.
 	v6 := v5
-	v6.ExplicitEphemeralParams = true
 	v6.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
 	Consensus[protocol.ConsensusV6] = v6
 
