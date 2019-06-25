@@ -24,6 +24,7 @@ import (
 
 func init() {
 	completionCmd.AddCommand(bashCompletionCmd)
+	completionCmd.AddCommand(zshCompletionCmd)
 }
 
 var completionCmd = &cobra.Command{
@@ -44,5 +45,15 @@ var bashCompletionCmd = &cobra.Command{
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		rootCmd.GenBashCompletion(os.Stdout)
+	},
+}
+
+var zshCompletionCmd = &cobra.Command{
+	Use:   "zsh",
+	Short: "Generate zsh completion commands",
+	Long:  "Generate zsh completion commands",
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, _ []string) {
+		rootCmd.GenZshCompletion(os.Stdout)
 	},
 }
