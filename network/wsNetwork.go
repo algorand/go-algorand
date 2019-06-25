@@ -521,6 +521,7 @@ func (wn *WebsocketNetwork) setup() {
 	wn.server.IdleTimeout = httpServerIdleTimeout
 	wn.server.MaxHeaderBytes = httpServerMaxHeaderBytes
 	wn.ctx, wn.ctxCancel = context.WithCancel(context.Background())
+	wn.relayMessages = wn.config.NetAddress != "" || wn.config.ForceRelayMessages
 	// roughly estimate the number of messages that could be sent over the lifespan of a single round.
 	wn.outgoingMessagesBufferSize = int(config.Consensus[protocol.ConsensusCurrentVersion].NumProposers*2 +
 		config.Consensus[protocol.ConsensusCurrentVersion].SoftCommitteeSize +
@@ -1528,8 +1529,6 @@ func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebook Phon
 	outerPhonebook := &MultiPhonebook{phonebooks: []Phonebook{phonebook}}
 	wn = &WebsocketNetwork{log: log, config: config, phonebook: outerPhonebook, GenesisID: genesisID, NetworkID: networkID}
 
-	// TODO - add config parameter to allow non-relays to enable relaying.
-	wn.relayMessages = config.NetAddress != ""
 	wn.setup()
 	return wn, nil
 }
