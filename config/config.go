@@ -251,6 +251,7 @@ func initConsensusProtocols() {
 
 		MaxBalLookback: 320,
 	}
+	Consensus[protocol.ConsensusV10] = v10
 
 	// v11 introduces SignedTxnInBlock.
 	v11 := v10
