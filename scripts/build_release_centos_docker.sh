@@ -103,7 +103,7 @@ fi
 
 yum-config-manager --add-repo http://${DC_IP}:8111/algodummy.repo
 
-yum upgrade -y algorand
+yum install -y algorand
 algod -v
 # check that the installed version is now the current version
 algod -v | grep -q ${FULLVERSION}
@@ -117,3 +117,6 @@ goal node start -d /root/testnode
 python3 ${GOPATH}/src/github.com/algorand/go-algorand/scripts/wait_for_progress.py -t 60 /root/testnode/node.log
 #python3 /stuff/wait_for_progress.py -t 60 --verbose /root/testnode/node.log
 goal node stop -d /root/testnode
+
+
+echo CENTOS_DOCKER_TEST_OK
