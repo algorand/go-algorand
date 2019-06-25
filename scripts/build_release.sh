@@ -98,8 +98,14 @@ fi
 cp -p "${HOME}/key.gpg" "${HOME}/docker_test_resources/key.pub"
 
 # copy previous installers into ~/docker_test_resources
-(cd "${HOME}/docker_test_resources" && python3 ${GOPATH}/src/github.com/algorand/go-algorand/scripts/get_current_installers.py "${S3_PREFIX}/${CHANNEL}")
+cd "${HOME}/docker_test_resources"
+if [ "${TEST_UPGRADE}" == "no" ]; then
+    echo "upgrade test disabled"
+else
+    python3 ${GOPATH}/src/github.com/algorand/go-algorand/scripts/get_current_installers.py "${S3_PREFIX}/${CHANNEL}"
+fi
 
+echo "TEST_UPGRADE=${TEST_UPGRADE}" >> ${HOME}/build_env_docker
 
 rm -rf ${HOME}/dummyaptly
 mkdir -p ${HOME}/dummyaptly

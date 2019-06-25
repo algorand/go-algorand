@@ -16,19 +16,24 @@ export PATH=${GOPATH}/bin:/usr/local/go/bin:${PATH}
 
 apt-get update
 apt-get install -y gnupg2 curl software-properties-common python3
-apt install -y /stuff/*.deb
-algod -v
-if algod -v | grep -q ${FULLVERSION}; then
-    echo "already installed current version. wat?"
-    false
+
+if [ "${TEST_UPGRADE}" == "no" ]; then
+    echo "upgrade test skipped"
+else
+    apt install -y /stuff/*.deb
+    algod -v
+    if algod -v | grep -q ${FULLVERSION}; then
+	echo "already installed current version. wat?"
+	false
+    fi
+
+    mkdir -p /root/testnode
+    cp -p /var/lib/algorand/genesis/testnet/genesis.json /root/testnode
+
+    goal node start -d /root/testnode
+    python3 ${GOPATH}/src/github.com/algorand/go-algorand/scripts/wait_for_progress.py -t 60 /root/testnode/node.log
+    goal node stop -d /root/testnode
 fi
-
-mkdir -p /root/testnode
-cp -p /var/lib/algorand/genesis/testnet/genesis.json /root/testnode
-
-goal node start -d /root/testnode
-python3 ${GOPATH}/src/github.com/algorand/go-algorand/scripts/wait_for_progress.py -t 60 /root/testnode/node.log
-goal node stop -d /root/testnode
 
 #apt-key adv --fetch-keys https://releases.algorand.com/key.pub
 apt-key add /stuff/key.pub
@@ -38,6 +43,11 @@ apt-get install -y algorand
 algod -v
 # check that the installed version is now the current version
 algod -v | grep -q ${FULLVERSION}
+
+if [ ! -d /root/testnode ]; then
+    mkdir -p /root/testnode
+    cp -p /var/lib/algorand/genesis/testnet/genesis.json /root/testnode
+fi
 
 goal node start -d /root/testnode
 python3 ${GOPATH}/src/github.com/algorand/go-algorand/scripts/wait_for_progress.py -t 60 /root/testnode/node.log

@@ -36,6 +36,9 @@ def main():
     bucket, prefix = parse_s3_path(sys.argv[1])
     s3 = boto3.client('s3')
     staging_response = s3.list_objects_v2(Bucket=bucket, Prefix=prefix, MaxKeys=100)
+    if (not staging_response.get('KeyCount')) or ('Contents' not in staging_response):
+        sys.stderr.write('nothing found under {}\n'.format(sys.argv[1]))
+        sys.exit(1)
     rset = get_stage_release_set(staging_response)
     for ob in rset:
         okey = ob['Key']
