@@ -141,12 +141,12 @@ cat <<EOF>${HOME}/dummyaptly.conf
 }
 EOF
 aptly -config=${HOME}/dummyaptly.conf repo create -distribution=stable -component=main algodummy
-aptly -config=${HOME}/dummyaptly.conf repo add algodummy node_pkg/*.deb
+aptly -config=${HOME}/dummyaptly.conf repo add algodummy ${HOME}/node_pkg/*.deb
 SNAPSHOT=algodummy-$(date +%Y%m%d_%H%M%S)
 aptly -config=${HOME}/dummyaptly.conf snapshot create ${SNAPSHOT} from repo algodummy
 aptly -config=${HOME}/dummyaptly.conf publish snapshot -origin=Algorand -label=Algorand ${SNAPSHOT}
 
-(cd ${HOME}/dummyaptly/public && python3 scripts/httpd.py --pid ${HOME}/phttpd.pid) &
+(cd ${HOME}/dummyaptly/public && python3 ${GOPATH}/src/github.com/algorand/go-algorand/scripts/httpd.py --pid ${HOME}/phttpd.pid) &
 
 
 sg docker "docker run --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME}/docker_test_resources,dst=/stuff --mount type=bind,src=${GOPATH}/src,dst=/root/go/src --mount type=bind,src=/usr/local/go,dst=/usr/local/go -it ubuntu:16.04 bash /root/go/src/github.com/algorand/go-algorand/scripts/build_release_ubuntu_test_docker.sh"
@@ -168,7 +168,7 @@ rm -rf ${GOPATH}/src/github.com/algorand/go-algorand/crypto/lib
 # do the RPM build, sign and validate it
 
 mkdir -p ${HOME}/dummyrepo
-(cd ${HOME}/dummyrepo && python3 scripts/httpd.py --pid ${HOME}/phttpd.pid) &
+(cd ${HOME}/dummyrepo && python3 ${GOPATH}/src/github.com/algorand/go-algorand/scripts/httpd.py --pid ${HOME}/phttpd.pid) &
 
 sg docker "docker run --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME}/.gnupg/S.gpg-agent,dst=/S.gpg-agent --mount type=bind,src=${HOME}/dummyrepo,dst=/dummyrepo --mount type=bind,src=${HOME}/docker_test_resources,dst=/stuff --mount type=bind,src=${GOPATH}/src,dst=/root/go/src --mount type=bind,src=${HOME},dst=/root/subhome --mount type=bind,src=/usr/local/go,dst=/usr/local/go -it algocentosbuild /root/go/src/github.com/algorand/go-algorand/scripts/build_release_centos_docker.sh"
 

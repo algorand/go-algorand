@@ -50,6 +50,11 @@ def timeout_linesource(linesource, timeout=60):
             return
         yield ob
 
+def jloads(x):
+    if isinstance(x, bytes):
+        x = x.decode()
+    return json.loads(x)
+
 # returne True if progress, False if timeout
 def wait_for_progress(linesource, timeout=60, verbose=False):
     errcount = 0
@@ -59,7 +64,7 @@ def wait_for_progress(linesource, timeout=60, verbose=False):
     linesource = timeout_linesource(linesource, timeout=timeout)
     for line in linesource:
         try:
-            ob = json.loads(line)
+            ob = jloads(line)
             lround = ob.get('Round')
             if lround is None:
                 continue
