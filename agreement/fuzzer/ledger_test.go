@@ -334,11 +334,11 @@ func (l *testLedger) EnsureDigest(c agreement.Certificate, quit chan struct{}, v
 }
 
 func (l *testLedger) ConsensusParams(r basics.Round) (config.ConsensusParams, error) {
-	return config.Consensus[protocol.ConsensusV2], nil
+	return config.Consensus[protocol.ConsensusV10], nil
 }
 
 func (l *testLedger) ConsensusVersion(r basics.Round) (protocol.ConsensusVersion, error) {
-	return protocol.ConsensusV2, nil
+	return protocol.ConsensusV10, nil
 }
 
 func (l *testLedger) TryEnsuringDigest() bool {

@@ -210,13 +210,14 @@ func initConsensusProtocols() {
 	// ConsensusParams structure gets a fresh ApprovedUpgrades map.
 
 	// Base consensus protocol version, v2.
-	v2 := ConsensusParams{
+	v10 := ConsensusParams{
 		UpgradeVoteRounds:   10000,
 		UpgradeThreshold:    9000,
 		UpgradeWaitRounds:   10000,
 		MaxVersionStringLen: 64,
 
-		MinTxnFee:           1,
+		MinTxnFee:           1000,
+		MinBalance:          100000,
 		MaxTxnLife:          1000,
 		MaxTxnNoteBytes:     1024,
 		MaxTxnBytesPerBlock: 1000000,
@@ -229,121 +230,28 @@ func initConsensusProtocols() {
 
 		ApprovedUpgrades:     map[protocol.ConsensusVersion]bool{},
 
-		NumProposers:           30,
-		SoftCommitteeSize:      2500,
-		SoftCommitteeThreshold: 1870,
-		CertCommitteeSize:      1000,
-		CertCommitteeThreshold: 720,
-		NextCommitteeSize:      10000,
-		NextCommitteeThreshold: 7750,
-		LateCommitteeSize:      10000,
-		LateCommitteeThreshold: 7750,
-		RedoCommitteeSize:      10000,
-		RedoCommitteeThreshold: 7750,
-		DownCommitteeSize:      10000,
-		DownCommitteeThreshold: 7750,
+		NumProposers:           20,
+		SoftCommitteeSize:      2990,
+		SoftCommitteeThreshold: 2267,
+		CertCommitteeSize:      1500,
+		CertCommitteeThreshold: 1112,
+		NextCommitteeSize:      5000,
+		NextCommitteeThreshold: 3838,
+		LateCommitteeSize:      500,
+		LateCommitteeThreshold: 320,
+		RedoCommitteeSize:      2400,
+		RedoCommitteeThreshold: 1768,
+		DownCommitteeSize:      6000,
+		DownCommitteeThreshold: 4560,
 
 		FastRecoveryLambda: 5 * time.Minute,
 
 		SeedLookback:        2,
-		SeedRefreshInterval: 100,
+		SeedRefreshInterval: 80,
 
-		MaxBalLookback: 203,
+		MaxBalLookback: 320,
+
 	}
-	Consensus[protocol.ConsensusV2] = v2
-
-	// In v3, we added support for fine-grained ephemeral keys.
-	v3 := v2
-	v3.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
-	Consensus[protocol.ConsensusV3] = v3
-
-	// v2 can be upgraded to v3.
-	v2.ApprovedUpgrades[protocol.ConsensusV3] = true
-
-	// In v4, we added a minimum balance and added support for transactions
-	// that close an account.
-	v4 := v3
-	v4.MinBalance = 1000
-	v4.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
-	Consensus[protocol.ConsensusV4] = v4
-
-	// v3 can be upgraded to v4.
-	v3.ApprovedUpgrades[protocol.ConsensusV4] = true
-
-	// v5 sets the min transaction fee to 1000 microAlgos, the min balance to 10000 microAlgos and also fixes a balance lookback bug
-	v5 := v4
-	v5.MinTxnFee = 1000
-	v5.MinBalance = 10000
-	v5.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
-	Consensus[protocol.ConsensusV5] = v5
-
-	// v4 can be upgraded to v5.
-	v4.ApprovedUpgrades[protocol.ConsensusV5] = true
-
-	// v6 added support for explicit ephemeral-key parameters.
-	v6 := v5
-	v6.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
-	Consensus[protocol.ConsensusV6] = v6
-
-	// v5 can be upgraded to v6.
-	v5.ApprovedUpgrades[protocol.ConsensusV6] = true
-
-	// v7 increases block retention in the ledger to 320 (= 2 * 2 [seed lookback] * 80 [seed refresh interval])
-	v7 := v6
-	v7.MaxBalLookback = 320
-	v7.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
-	Consensus[protocol.ConsensusV7] = v7
-
-	// v6 can be upgraded to v7.
-	v6.ApprovedUpgrades[protocol.ConsensusV7] = true
-
-	// v8 uses parameters and a seed derivation policy (the "twin seeds") from Georgios' new analysis
-	v8 := v7
-
-	v8.SeedRefreshInterval = 80
-	v8.NumProposers = 9
-	v8.SoftCommitteeSize = 2990
-	v8.SoftCommitteeThreshold = 2267
-	v8.CertCommitteeSize = 1500
-	v8.CertCommitteeThreshold = 1112
-	v8.NextCommitteeSize = 5000
-	v8.NextCommitteeThreshold = 3838
-	v8.LateCommitteeSize = 5000
-	v8.LateCommitteeThreshold = 3838
-	v8.RedoCommitteeSize = 5000
-	v8.RedoCommitteeThreshold = 3838
-	v8.DownCommitteeSize = 5000
-	v8.DownCommitteeThreshold = 3838
-
-	v8.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
-	Consensus[protocol.ConsensusV8] = v8
-
-	// v7 can be upgraded to v8.
-	v7.ApprovedUpgrades[protocol.ConsensusV8] = true
-
-	// v9 increases the minimum balance to 100,000 microAlgos.
-	v9 := v8
-	v9.MinBalance = 100000
-	v9.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
-	Consensus[protocol.ConsensusV9] = v9
-
-	// v8 can be upgraded to v9.
-	v8.ApprovedUpgrades[protocol.ConsensusV9] = true
-
-	// v10 introduces fast partition recovery (and also raises NumProposers).
-	v10 := v9
-	v10.NumProposers = 20
-	v10.LateCommitteeSize = 500
-	v10.LateCommitteeThreshold = 320
-	v10.RedoCommitteeSize = 2400
-	v10.RedoCommitteeThreshold = 1768
-	v10.DownCommitteeSize = 6000
-	v10.DownCommitteeThreshold = 4560
-	v10.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
-	Consensus[protocol.ConsensusV10] = v10
-
-	// v9 can be upgraded to v10.
-	v9.ApprovedUpgrades[protocol.ConsensusV10] = true
 
 	// v11 introduces SignedTxnInBlock.
 	v11 := v10

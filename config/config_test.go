@@ -355,8 +355,8 @@ func TestConfigLatestVersion(t *testing.T) {
 func TestConsensusUpgrades(t *testing.T) {
 	a := require.New(t)
 
-	// Starting with v1, ensure we have a path to ConsensusCurrentVersion
-	currentVersionName := protocol.ConsensusV2
+	// Starting with v10, ensure we have a path to ConsensusCurrentVersion
+	currentVersionName := protocol.ConsensusV10
 	latestVersionName := protocol.ConsensusCurrentVersion
 
 	leadsTo := consensusUpgradesTo(a, currentVersionName, latestVersionName)
