@@ -3,6 +3,8 @@
 set -e
 set -x
 
+cd ${GOPATH}/src/github.com/algorand/go-algorand
+
 # Tag Source
 TAG=${BRANCH}-${FULLVERSION}
 if [ ! -z "${SIGNING_KEY_ADDR}" ]; then
