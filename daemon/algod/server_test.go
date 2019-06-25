@@ -19,20 +19,35 @@ package algod
 // this should make dummy requests against the API and check the results for consistency
 
 import (
+	"fmt"
+	"net"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
+func isTCPPortAvailable(host string, port int) bool {
+	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, port))
+	if l != nil {
+		l.Close()
+	}
+	return err == nil
+}
 func TestFirstListenerSetupGetsPort8080WhenPassedPortZero(t *testing.T) {
 	// this test will fail if there is already a listener on the testing machine's port 8080
-	// (ex if a dev has a node running on port 8080 and runs the test, it will fail)
-	defaultAddr := "127.0.0.1:0"
-	expectedAddr := "127.0.0.1:8080"
+	// (except if a dev has a node running on port 8080 and runs the test; in that case, we can't run this test.)
+	targetPort := 8080
+	host := "127.0.0.1"
+	// check if port 8080 is busy :
+	if !isTCPPortAvailable(host, targetPort) {
+		t.Skipf("Cannot run this test since port 8080 is already in use.")
+	}
+	defaultAddr := host + ":0"
+	expectedAddr := fmt.Sprintf("%s:%d", host, targetPort)
 	listener, err := makeListener(defaultAddr)
 	require.NoError(t, err)
 	actualAddr := listener.Addr().String()
-	require.Equal(t, expectedAddr, actualAddr, "if port 8080 is occupied when this test runs, it will fail")
+	require.Equalf(t, expectedAddr, actualAddr, "if port %d is occupied when this test runs, it will fail", targetPort)
 }
 
 func TestSecondListenerSetupGetsAnotherPortWhen8080IsBusy(t *testing.T) {
