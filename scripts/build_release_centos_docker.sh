@@ -65,11 +65,18 @@ gpg --import ${GOPATH}/src/github.com/algorand/go-algorand/installer/rpm/RPM-GPG
 
 cat <<EOF>"${HOME}/.rpmmacros"
 %_gpg_name Algorand RPM <rpm@algorand.com>
-%__gpg /home/centos/gnupg2/bin/gpg
+%__gpg ${HOME}/gnupg2/bin/gpg
+%__gpg_check_password_cmd true
+EOF
+
+cat <<EOF>"${HOME}/rpmsign.py"
+import rpm
+import sys
+rpm.addSign(sys.argv[1], '')
 EOF
 
 NEWEST_RPM=$(ls -t /root/subhome/node_pkg/*rpm|head -1)
-rpmsign --addsign "${NEWEST_RPM}"
+python2 "${HOME}/rpmsign.py" "${NEWEST_RPM}"
 
 cp -p "${NEWEST_RPM}" /dummyrepo
 createrepo --database /dummyrepo
