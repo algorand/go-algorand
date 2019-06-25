@@ -43,6 +43,9 @@ if [ -z "${RSTAMP}" ]; then
     RSTAMP=$(scripts/reverse_hex_timestamp)
     echo RSTAMP=${RSTAMP} > "${HOME}/rstamp"
 fi
+# What's my default IP address?
+# get the datacenter IP address for this EC2 host.
+# this might equivalently be gotten from `netstat -rn` and `ifconfig -a`
 DC_IP=$(curl --silent http://169.254.169.254/latest/meta-data/local-ipv4)
 
 
@@ -129,14 +132,7 @@ cat <<EOF>${HOME}/dummyaptly.conf
   "ppaCodename": "",
   "skipContentsPublishing": false,
   "FileSystemPublishEndpoints": {},
-  "S3PublishEndpoints": {
-    "algorand-releases": {
-      "region":"us-east-1",
-      "bucket":"algorand-releases",
-      "acl":"public-read",
-      "prefix":"deb"
-    }
-  },
+  "S3PublishEndpoints": {},
   "SwiftPublishEndpoints": {}
 }
 EOF
