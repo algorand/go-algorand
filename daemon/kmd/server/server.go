@@ -101,15 +101,13 @@ func ValidateConfig(cfg WalletServerConfig) error {
 
 // MakeWalletServer takes a WalletServerConfig, and returns a validated,
 // configured WalletServer.
-func MakeWalletServer(config WalletServerConfig) (WalletServer, error) {
-	var ws WalletServer
-
+func MakeWalletServer(config WalletServerConfig) (*WalletServer, error) {
 	err := ValidateConfig(config)
 	if err != nil {
-		return ws, err
+		return nil, err
 	}
 
-	ws = WalletServer{
+	ws := &WalletServer{
 		WalletServerConfig: config,
 		netPath:            filepath.Join(config.DataDir, NetFilename),
 		pidPath:            filepath.Join(config.DataDir, PIDFilename),
