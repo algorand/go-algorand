@@ -87,8 +87,14 @@ OLDRPM=$(ls -t /stuff/*.rpm|head -1)
 if [ -f "${OLDRPM}" ]; then
     yum install -y "${OLDRPM}"
     algod -v
+    if algod -v | grep -q ${FULLVERSION}; then
+	echo "already installed current version. wat?"
+	false
+    fi
+
     mkdir -p /root/testnode
     cp -p /var/lib/algorand/genesis/testnet/genesis.json /root/testnode
+
     goal node start -d /root/testnode
     python3 ${GOPATH}/src/github.com/algorand/go-algorand/scripts/wait_for_progress.py -t 60 /root/testnode/node.log
     goal node stop -d /root/testnode
@@ -99,6 +105,13 @@ yum-config-manager --add-repo http://${DC_IP}:8111/algodummy.repo
 
 yum upgrade -y algorand
 algod -v
+# check that the installed version is now the current version
+algod -v | grep -q ${FULLVERSION}
+
+if [ ! -d /root/testnode ]; then
+    mkdir -p /root/testnode
+    cp -p /var/lib/algorand/genesis/testnet/genesis.json /root/testnode
+fi
 
 goal node start -d /root/testnode
 python3 ${GOPATH}/src/github.com/algorand/go-algorand/scripts/wait_for_progress.py -t 60 /root/testnode/node.log
