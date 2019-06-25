@@ -18,6 +18,7 @@ package fixtures
 
 import (
 	"fmt"
+	"github.com/algorand/go-algorand/logging"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -133,6 +134,9 @@ func (f *LibGoalFixture) importRootKeys(lg *libgoal.Client, dataDir string) {
 
 			secretKey := root.Secrets().SK
 			wh, err := lg.GetUnencryptedWalletHandle()
+			logfile := f.PrimaryDataDir() + "/kmd-v0.5/kmd-err.log"
+			fmt.Println(ioutil.ReadFile(logfile))
+			logging.Base().Warnf(f.PrimaryDataDir())
 			f.failOnError(err, "couldn't get default wallet handle: %v")
 			_, err = lg.ImportKey(wh, secretKey[:])
 			if err != nil && !strings.Contains(err.Error(), "key already exists") {
