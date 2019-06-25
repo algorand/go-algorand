@@ -30,7 +30,7 @@ func TestAccountsCanClose(t *testing.T) {
 	a := require.New(t)
 
 	var fixture fixtures.RestClientFixture
-	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachV4.json"))
+	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
 	defer fixture.Shutdown()
 	client := fixture.LibGoalClient
 

@@ -1,7 +1,7 @@
 {
   "Genesis": {
     "NetworkName": "tbd",
-    "ConsensusProtocol": "v6",
+    "ConsensusProtocol": "v10",
     "Wallets": [
       {
         "Name": "Offline1",
