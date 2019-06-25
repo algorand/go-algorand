@@ -30,6 +30,12 @@ const (
 	AutomaticTTL = 1
 )
 
+// ErrUserNotPermitted is used when a user that is not permitted in a given zone attempt to perform an operation on that zone.
+var ErrUserNotPermitted = fmt.Errorf("user not permitted in zone")
+
+// ErrInvalidDomainName indicate that the given domain zone corresponds to multiple zones.
+var ErrInvalidDomainName = fmt.Errorf("invalid domain name")
+
 // Cred contains the credentials used to authenticate with the cloudflare API.
 type Cred struct {
 	authEmail string
@@ -293,6 +299,37 @@ func (c *Cred) GetZones(ctx context.Context) (zones []Zone, err error) {
 		)
 	}
 	return zones, err
+}
+
+// GetZoneID returns a zoneID that matches the requested zoneDomainName.
+func (c *Cred) GetZoneID(ctx context.Context, zoneDomainName string) (zoneID string, err error) {
+	zoneID = ""
+	zones, err := c.GetZones(ctx)
+	if err != nil {
+		return
+	}
+	if len(zones) == 0 {
+		err = ErrUserNotPermitted
+		return
+	}
+	zoneDomainName = strings.ToLower(zoneDomainName)
+	var matchingZone *Zone
+	for _, zone := range zones {
+		if zoneDomainName == strings.ToLower(zone.DomainName) {
+			// found a match.
+			if matchingZone != nil {
+				// we already had a previous match ?!
+				err = ErrInvalidDomainName
+				return
+			}
+			matchingZone = &zone
+		}
+	}
+	if matchingZone == nil {
+		err = ErrUserNotPermitted
+		return
+	}
+	return matchingZone.ZoneID, nil
 }
 
 // ExportZone exports the zone into a BIND config bytes array
