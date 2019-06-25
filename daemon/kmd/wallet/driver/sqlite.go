@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"crypto/subtle"
 	"fmt"
+	"github.com/algorand/go-algorand/logging"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -362,8 +363,11 @@ func checkDBError(err error) error {
 // and initializes a database with the appropriate name.
 func (swd *SQLiteWalletDriver) CreateWallet(name []byte, id []byte, pw []byte, mdk crypto.MasterDerivationKey) error {
 	// Grab our lock to avoid races with duplicate wallet names/ids
+	logging.Base().Warnf("Inside create wallet... %+v, %+v, %+v, %+v\n", name, id, pw, mdk)
+
 	swd.mux.Lock()
 	defer swd.mux.Unlock()
+	logging.Base().Warnf("aquired lock... \n")
 
 	if len(name) > sqliteMaxWalletNameLen {
 		return errNameTooLong
@@ -375,6 +379,7 @@ func (swd *SQLiteWalletDriver) CreateWallet(name []byte, id []byte, pw []byte, m
 
 	// name, id -> "/data/dir/name-id.db"
 	dbPath := swd.nameIDToPath(name, id)
+	logging.Base().Warnf("got name id %+v... \n", dbPath)
 
 	// Ensure the wallet with this filename doesn't already exist, and that we
 	// have permissions to access the wallet directory
@@ -382,6 +387,7 @@ func (swd *SQLiteWalletDriver) CreateWallet(name []byte, id []byte, pw []byte, m
 	if !os.IsNotExist(err) {
 		return err
 	}
+	logging.Base().Warnf("acquired permissions... \n")
 
 	// Ensure a wallet with this name doesn't already exist. swd.mux is
 	// locked above to avoid races here
@@ -392,6 +398,7 @@ func (swd *SQLiteWalletDriver) CreateWallet(name []byte, id []byte, pw []byte, m
 	if len(sameNameDBPaths) != 0 {
 		return errSameName
 	}
+	logging.Base().Warnf("same name paths already exist... \n")
 
 	// Ensure a wallet with this id doesn't already exist. As above, we use
 	// swd.mux to avoid races
@@ -402,12 +409,15 @@ func (swd *SQLiteWalletDriver) CreateWallet(name []byte, id []byte, pw []byte, m
 	if len(sameIDDBPaths) != 0 {
 		return errSameID
 	}
+	logging.Base().Warnf("same name IDs already exist... \n")
 
 	// Create the database
 	db, err := sqlx.Connect("sqlite3", dbConnectionURL(dbPath))
 	if err != nil {
 		return errDatabaseConnect
 	}
+	logging.Base().Warnf("connected to DB... \n")
+
 	defer db.Close()
 
 	// Run the schema
@@ -415,6 +425,7 @@ func (swd *SQLiteWalletDriver) CreateWallet(name []byte, id []byte, pw []byte, m
 	if err != nil {
 		return errDatabase
 	}
+	logging.Base().Warnf("ran schemea... \n")
 
 	// Generate the master encryption password, used to encrypt the master
 	// derivation key, generated keys, and imported keys
@@ -423,6 +434,7 @@ func (swd *SQLiteWalletDriver) CreateWallet(name []byte, id []byte, pw []byte, m
 	if err != nil {
 		return err
 	}
+	logging.Base().Warnf("filled random 1... \n")
 
 	// If we were passed a blank master derivation key, generate one here
 	masterDerivationKey := mdk
@@ -432,6 +444,7 @@ func (swd *SQLiteWalletDriver) CreateWallet(name []byte, id []byte, pw []byte, m
 			return err
 		}
 	}
+	logging.Base().Warnf("filled random 2... \n")
 
 	// Encrypt the master encryption password using the user's password (which
 	// may be blank)
@@ -439,6 +452,7 @@ func (swd *SQLiteWalletDriver) CreateWallet(name []byte, id []byte, pw []byte, m
 	if err != nil {
 		return err
 	}
+	logging.Base().Warnf("encrypoted MEP blob... \n")
 
 	// Encrypt the master derivation key using the master encryption password
 	// (which may not be blank)
@@ -446,6 +460,7 @@ func (swd *SQLiteWalletDriver) CreateWallet(name []byte, id []byte, pw []byte, m
 	if err != nil {
 		return err
 	}
+	logging.Base().Warnf("encrypted MDK blob... \n")
 
 	// Encrypt the max key index using the master encryption password. We encrypt
 	// this for integrity reasons, so that someone with access to the file can't
@@ -455,12 +470,14 @@ func (swd *SQLiteWalletDriver) CreateWallet(name []byte, id []byte, pw []byte, m
 	if err != nil {
 		return err
 	}
+	logging.Base().Warnf("encryption operations done... \n")
 
 	// Store the metadata row in the database
 	_, err = db.Exec("INSERT INTO metadata (driver_name, driver_version, wallet_id, wallet_name, mep_encrypted, mdk_encrypted, max_key_idx_encrypted) VALUES(?, ?, ?, ?, ?, ?, ?)", sqliteWalletDriverName, sqliteWalletDriverVersion, id, name, encryptedMEPBlob, encryptedMDKBlob, encryptedIdxBlob)
 	if err != nil {
 		return errDatabase
 	}
+	logging.Base().Warnf("finished create wallet... \n")
 
 	return nil
 }

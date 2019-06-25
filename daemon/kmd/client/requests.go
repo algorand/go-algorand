@@ -19,6 +19,7 @@ package client
 import (
 	"bytes"
 	"fmt"
+	"github.com/algorand/go-algorand/logging"
 	"net/http"
 
 	v1 "github.com/algorand/go-algorand/daemon/kmd/api/v1"
@@ -50,6 +51,7 @@ func (kcl KMDClient) DoV1Request(req kmdapi.APIV1Request, resp kmdapi.APIV1Respo
 	// Send the request
 	hresp, err := kcl.httpClient.Do(hreq)
 	if err != nil {
+		logging.Base().Warnf("ERROR: %+v", err)
 		return err
 	}
 

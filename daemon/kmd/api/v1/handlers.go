@@ -140,56 +140,72 @@ func postWalletHandler(ctx reqContext, w http.ResponseWriter, r *http.Request) {
 	// Decode the request
 	decoder := protocol.NewJSONDecoder(r.Body)
 	err := decoder.Decode(&req)
+	logging.Base().Warnf("Called post wallet with parameterss %+v\n", req)
 	if err != nil {
+		logging.Base().Warnf("first err: %+v\n", errCouldNotDecode)
 		errorResponse(w, http.StatusBadRequest, errCouldNotDecode)
 		return
 	}
+	logging.Base().Warnf("OK - we got past that line...\n")
 
 	// Fetch the wallet driver
 	walletDriver, err := driver.FetchWalletDriver(req.WalletDriverName)
 	if err != nil {
+		logging.Base().Warnf("bad req err: %+v\n", err)
 		errorResponse(w, http.StatusBadRequest, err)
 		return
 	}
+	logging.Base().Warnf("OK - we made it here...\n")
 
 	// Generate a wallet ID
 	walletID, err := wallet.GenerateWalletID()
 	if err != nil {
+		logging.Base().Warnf("could not generate wallet id req err: %+v\n", err)
 		errorResponse(w, http.StatusInternalServerError, err)
 		return
 	}
+	logging.Base().Warnf("OK - called generateWalletID...\n")
 
 	// If the wallet name is blank, use the wallet ID
 	walletName := []byte(req.WalletName)
 	if len(walletName) == 0 {
 		walletName = walletID
 	}
+	logging.Base().Warnf("OK - set walletName...\n")
 
 	// Create the wallet via its driver
 	err = walletDriver.CreateWallet(walletName, walletID, []byte(req.WalletPassword), req.MasterDerivationKey)
 	if err != nil {
+		logging.Base().Warnf("another bad request: %+v\n", err)
 		errorResponse(w, http.StatusBadRequest, err)
 		return
 	}
+	logging.Base().Warnf("OK - created a wallet...\n")
 
 	// Fetch the wallet
 	wallet, err := walletDriver.FetchWallet(walletID)
 	if err != nil {
+		logging.Base().Warnf("failed to fetch wal;et: %+v\n", err)
 		errorResponse(w, http.StatusInternalServerError, err)
 		return
 	}
+	logging.Base().Warnf("OK - fetched the wallet...\n")
 
 	// Fetch metadata about the wallet we just created
 	metadata, err := wallet.Metadata()
 	if err != nil {
+		logging.Base().Warnf("failed to fetch wallet metadata: %+v\n", err)
 		errorResponse(w, http.StatusInternalServerError, err)
 		return
 	}
+	logging.Base().Warnf("OK - fetched the wallet metadata...\n")
 
 	// Build the response
 	resp := kmdapi.APIV1POSTWalletResponse{
 		Wallet: apiWalletFromMetadata(metadata),
 	}
+	logging.Base().Warnf("OK - constructing response.\n")
+	logging.Base().Warnf("success!: %+v\n", err)
 
 	// Return and encode the response
 	successResponse(w, resp)

@@ -20,6 +20,7 @@ import (
 	"crypto/rand"
 	"crypto/sha512"
 	"fmt"
+	"github.com/algorand/go-algorand/logging"
 	"io"
 
 	"golang.org/x/crypto/hkdf"
@@ -76,7 +77,9 @@ func deriveEncryptionKeyWithSalt(password []byte, salt *[saltLen]byte, cfg confi
 	var key [masterKeyLen]byte
 
 	// derive the encryption key from the password + salt
+	logging.Base().Warnf("Derive encryption wutgh salt %+v, %+v, %+v", password, salt, cfg)
 	keySlice, err := scrypt.Key(password, salt[:], cfg.ScryptN, cfg.ScryptR, cfg.ScryptP, masterKeyLen)
+	logging.Base().Warnf("keyslice %+v", keySlice)
 	if err != nil {
 		err = errDeriveKey
 		return nil, err
@@ -130,12 +133,15 @@ func encryptBlobWithKey(plaintext []byte, ptType plaintextType, key []byte) ([]b
 // cryptographic key, and no scrypt key derivation is applied.
 func encryptBlobWithPasswordBlankOK(plaintext []byte, ptType plaintextType, password []byte, cfg *config.ScryptParams) (blob []byte, err error) {
 	var nonceArr [nonceLen]byte
+	logging.Base().Warnf("entered encrypt Blobc")
 
 	// Generate the key and salt
 	var key *[masterKeyLen]byte
 	var salt *[saltLen]byte
 	if cfg != nil {
+		logging.Base().Warnf("cfg: %+v", cfg)
 		key, salt, err = deriveEncryptionKey(password, *cfg)
+		logging.Base().Warnf("err derivce: %+v", err)
 		if err != nil {
 			return
 		}
@@ -147,6 +153,7 @@ func encryptBlobWithPasswordBlankOK(plaintext []byte, ptType plaintextType, pass
 		key = new([masterKeyLen]byte)
 		copy(key[:], password)
 	}
+	logging.Base().Warnf("gggggc %+v", key)
 
 	// Generate the nonce
 	err = fillRandomBytes(nonceArr[:])
@@ -159,10 +166,14 @@ func encryptBlobWithPasswordBlankOK(plaintext []byte, ptType plaintextType, pass
 		Plaintext: plaintext,
 		Type:      ptType,
 	}
+	logging.Base().Warnf("derived encryption keys... %+v, %+v, %+v\n", typedPT, nonceArr, key)
 
 	// Encode & encrypt the typed plaintext
 	encodedPT := msgpackEncode(typedPT)
+	logging.Base().Warnf("encoded msgpack %+v\n", encodedPT)
+
 	ciphertext := secretbox.Seal(nil, encodedPT, &nonceArr, key)
+	logging.Base().Warnf("encoded seal %+v\n", ciphertext)
 
 	// Build the encrypted database blob
 	dbblob := encryptedDBBlob{
@@ -177,9 +188,12 @@ func encryptBlobWithPasswordBlankOK(plaintext []byte, ptType plaintextType, pass
 	} else {
 		dbblob.DoScrypt = false
 	}
+	logging.Base().Warnf("dbblob %+v\n", dbblob)
 
 	// Encode to msgpack
 	blob = msgpackEncode(dbblob)
+	logging.Base().Warnf("blob %+v\n", blob)
+
 	return
 }
 
