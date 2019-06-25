@@ -37,14 +37,13 @@ type PaymentTxnFields struct {
 	CloseRemainderTo basics.Address `codec:"close"`
 }
 
-
 // MultiPaymentTxnFields captures the fields used by multi-payment transactions.
 // There are zero or more senders of payments to receivers.
 type MultiPaymentTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Senders  []basics.Address     `codec:"snds"`
-	Payments []PaymentTxnFields   `codec:"pays""`
+	Senders  []basics.Address   `codec:"snds"`
+	Payments []PaymentTxnFields `codec:"pays"`
 }
 
 func (payment PaymentTxnFields) senderDeductions() (amount basics.MicroAlgos, empty bool) {
@@ -55,7 +54,7 @@ func (payment PaymentTxnFields) senderDeductions() (amount basics.MicroAlgos, em
 	return
 }
 
-func (payment PaymentTxnFields) checkSpender(sender Sender, spec SpecialAddresses, proto config.ConsensusParams) error {
+func (payment PaymentTxnFields) checkSpender(sender basics.Address, spec SpecialAddresses, proto config.ConsensusParams) error {
 	if sender == payment.CloseRemainderTo {
 		return fmt.Errorf("transaction cannot close account to its sender %v", sender)
 	}
@@ -79,7 +78,7 @@ func (payment PaymentTxnFields) checkSpender(sender Sender, spec SpecialAddresse
 // than overwriting it.  For example, Transaction.Apply() may
 // have updated ad.SenderRewards, and this function should only
 // add to ad.SenderRewards (if needed), but not overwrite it.
-func (payment PaymentTxnFields) apply(sender Sender, balances Balances, spec SpecialAddresses, ad *ApplyData) error {
+func (payment PaymentTxnFields) apply(sender basics.Address, balances Balances, spec SpecialAddresses, ad *ApplyData) error {
 	// move tx money
 	if !payment.Amount.IsZero() || payment.Receiver != (basics.Address{}) {
 		err := balances.Move(sender, payment.Receiver, payment.Amount, &ad.SenderRewards, &ad.ReceiverRewards)
@@ -97,7 +96,7 @@ func (payment PaymentTxnFields) apply(sender Sender, balances Balances, spec Spe
 
 			closeAmount := rec.AccountData.MicroAlgos
 			ad.ClosingAmount = closeAmount
-			err = balances.Move(spender, payment.CloseRemainderTo, closeAmount, &ad.SenderRewards, &ad.CloseRewards)
+			err = balances.Move(sender, payment.CloseRemainderTo, closeAmount, &ad.SenderRewards, &ad.CloseRewards)
 			if err != nil {
 				return err
 			}

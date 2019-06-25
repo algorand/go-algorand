@@ -219,9 +219,17 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 	switch tx.Type {
 	case protocol.PaymentTx:
 		// in case that the fee sink is spending, check that this spend is to a valid address
-		err := tx.checkSpender(tx.Header, spec, proto)
+		err := tx.checkSpender(tx.Sender, spec, proto)
 		if err != nil {
 			return err
+		}
+	case protocol.MultiPaymentTx:
+		// check that all multiplexed spends are to valid addresses
+		for i := 0; i < len(tx.Senders); i++ {
+			err := tx.checkSpender(tx.Senders[i], spec, proto)
+			if err != nil {
+				break
+			}
 		}
 	case protocol.KeyRegistrationTx:
 		// All OK
@@ -290,6 +298,11 @@ func (tx Transaction) RelevantAddrs(spec SpecialAddresses, proto config.Consensu
 		if tx.PaymentTxnFields.CloseRemainderTo != (basics.Address{}) {
 			addrs = append(addrs, tx.PaymentTxnFields.CloseRemainderTo)
 		}
+	case protocol.MultiPaymentTx:
+		for i := 0; i < len(tx.Senders); i++ {
+			addrs = append(addrs, tx.Senders[i])
+			addrs = append(addrs, tx.Payments[i].Receiver)
+		}
 	}
 
 	return addrs
@@ -353,10 +366,10 @@ func (tx Transaction) Apply(balances Balances, spec SpecialAddresses) (ad ApplyD
 		err = tx.PaymentTxnFields.apply(tx.Sender, balances, spec, &ad)
 
 	case protocol.MultiPaymentTx:
-	
+
 		// for each Sender and Payment apply changes in balances
 		for i := 0; i < len(tx.Senders); i++ {
-			err = tx.PaymentTxnFields.apply(tx.Senders[i], balances, spec, &ad)
+			err = tx.Payments[i].apply(tx.Senders[i], balances, spec, &ad)
 			if err != nil {
 				break
 			}

@@ -24,7 +24,10 @@ type TxType string
 
 const (
 	// PaymentTx indicates a payment transaction
-	PaymentTx TxType = "pay"
+	PaymentTx      TxType = "pay"
+
+	// MultiPaymentTx indicates a multiplexed payment transactions
+	MultiPaymentTx TxType = "mxpay"
 
 	// KeyRegistrationTx indicates a transaction that registers participation keys
 	KeyRegistrationTx TxType = "keyreg"
