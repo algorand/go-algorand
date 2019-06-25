@@ -156,7 +156,7 @@ type ConsensusParams struct {
 	DownCommitteeSize      uint64
 	DownCommitteeThreshold uint64
 
-	FastRecoveryLambda    time.Duration // time between fast recovery attempts
+	FastRecoveryLambda time.Duration // time between fast recovery attempts
 
 	// commit to payset using a hash of entire payset,
 	// instead of txid merkle tree
@@ -209,7 +209,7 @@ func initConsensusProtocols() {
 	// does not copy the ApprovedUpgrades map.  Make sure that each new
 	// ConsensusParams structure gets a fresh ApprovedUpgrades map.
 
-	// Base consensus protocol version, v2.
+	// Base consensus protocol version, v10.
 	v10 := ConsensusParams{
 		UpgradeVoteRounds:   10000,
 		UpgradeThreshold:    9000,
@@ -228,7 +228,7 @@ func initConsensusProtocols() {
 		RewardUnit:                 1e6,
 		RewardsRateRefreshInterval: 5e5,
 
-		ApprovedUpgrades:     map[protocol.ConsensusVersion]bool{},
+		ApprovedUpgrades: map[protocol.ConsensusVersion]bool{},
 
 		NumProposers:           20,
 		SoftCommitteeSize:      2990,
@@ -250,7 +250,6 @@ func initConsensusProtocols() {
 		SeedRefreshInterval: 80,
 
 		MaxBalLookback: 320,
-
 	}
 
 	// v11 introduces SignedTxnInBlock.
