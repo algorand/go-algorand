@@ -39,6 +39,7 @@ func init() {
 	rootCmd.AddCommand(exportCmd)
 	rootCmd.AddCommand(signCmd)
 	rootCmd.AddCommand(multisigCmd)
+	rootCmd.AddCommand(partCmd)
 }
 
 func main() {
