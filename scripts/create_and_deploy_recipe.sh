@@ -18,8 +18,8 @@
 
 set -e
 
-if [[ "${AWS_ACCESS_KEY_ID}" = "" || "${AWS_SECRET_ACCESS_KEY}" = "" ]]; then
-    echo "You need to export your AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY for this to work"
+if [[ "${AWS_ACCESS_KEY_ID}" = "" || "${AWS_SECRET_ACCESS_KEY}" = "" || "${S3_UPLOAD_BUCKET}" = "" ]]; then
+    echo "You need to export your AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and S3_UPLOAD_BUCKET for this to work"
     exit 1
 fi
 
@@ -93,5 +93,5 @@ ${SRCPATH}/scripts/upload_config.sh "${ROOTDIR}" "${CHANNEL}"
 
 if [ "${NO_DEPLOY}" = "" ]; then
     # Now generate a private build using our custom genesis.json and deploy it to S3 also
-    ${SRCPATH}/scripts/deploy_private_version.sh -c "${CHANNEL}" -f "${ROOTDIR}/genesisdata/genesis.json" -n "${NETWORK}" -b algorand-internal
+    ${SRCPATH}/scripts/deploy_private_version.sh -c "${CHANNEL}" -f "${ROOTDIR}/genesisdata/genesis.json" -n "${NETWORK}" -b "${S3_UPLOAD_BUCKET}"
 fi
