@@ -167,6 +167,44 @@ func (c *Client) GenParticipationKeysTo(address string, firstValid, lastValid, k
 	return newPart, partKeyPath, err
 }
 
+// InstallParticipationKeys creates a .partkey database for a given address,
+// based on an existing database from inputfile
+func (c *Client) InstallParticipationKeys(inputfile string) (part account.Participation, filePath string, err error) {
+	// Get the GenesisID for use in the participation key path
+	var genID string
+	genID, err = c.GenesisID()
+	if err != nil {
+		return
+	}
+
+	outDir := filepath.Join(c.DataDir(), genID)
+
+	inputdb, err := db.MakeErasableAccessor(inputfile)
+	if err != nil {
+		return
+	}
+	defer inputdb.Close()
+
+	partkey, err := account.RestoreParticipation(inputdb)
+	if err != nil {
+		return
+	}
+
+	newdbpath, err := participationKeysPath(outDir, partkey.Parent, partkey.FirstValid, partkey.LastValid)
+	if err != nil {
+		return
+	}
+
+	newdb, err := db.MakeErasableAccessor(newdbpath)
+	if err != nil {
+		return
+	}
+
+	partkey.Store = newdb
+	err = partkey.Persist()
+	return partkey, newdbpath, err
+}
+
 // ListParticipationKeys returns the available participation keys,
 // as a map from database filename to Participation key object.
 func (c *Client) ListParticipationKeys() (partKeyFiles map[string]account.Participation, err error) {

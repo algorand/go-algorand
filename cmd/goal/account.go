@@ -56,6 +56,7 @@ var (
 	keyDilution        uint64
 	threshold          uint8
 	partKeyOutDir      string
+	inputPartkey       string
 	importDefault      bool
 	mnemonic           string
 )
@@ -69,6 +70,7 @@ func init() {
 	accountCmd.AddCommand(rewardsCmd)
 	accountCmd.AddCommand(changeOnlineCmd)
 	accountCmd.AddCommand(addParticipationKeyCmd)
+	accountCmd.AddCommand(installParticipationKeyCmd)
 	accountCmd.AddCommand(listParticipationKeysCmd)
 	accountCmd.AddCommand(importCmd)
 	accountCmd.AddCommand(exportCmd)
@@ -137,6 +139,10 @@ func init() {
 	addParticipationKeyCmd.MarkFlagRequired("roundLastValid")
 	addParticipationKeyCmd.Flags().StringVarP(&partKeyOutDir, "outdir", "o", "", "Save participation key file to specified output directory to (for offline creation)")
 	addParticipationKeyCmd.Flags().Uint64VarP(&keyDilution, "keyDilution", "", 0, "Key dilution for two-level participation keys")
+
+	// installParticipationKey flags
+	installParticipationKeyCmd.Flags().StringVarP(&inputPartkey, "partkey", "", "", "Participation key file to install")
+	installParticipationKeyCmd.MarkFlagRequired("partkey")
 
 	// import flags
 	importCmd.Flags().BoolVarP(&importDefault, "default", "f", false, "Set this account as the default one")
@@ -576,6 +582,23 @@ var addParticipationKeyCmd = &cobra.Command{
 			reportErrorf(errorRequestFail, err)
 		}
 		fmt.Println("Participation key generation successful")
+	},
+}
+
+var installParticipationKeyCmd = &cobra.Command{
+	Use:   "installpartkey",
+	Short: "Install a participation key",
+	Long:  `Install a participation key`,
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, args []string) {
+		dataDir := ensureSingleDataDir()
+
+		client := ensureFullClient(dataDir)
+		_, _, err := client.InstallParticipationKeys(inputPartkey)
+		if err != nil {
+			reportErrorf(errorRequestFail, err)
+		}
+		fmt.Println("Participation key installed successfully")
 	},
 }
 
