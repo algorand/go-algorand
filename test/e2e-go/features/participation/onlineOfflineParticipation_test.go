@@ -185,13 +185,5 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 
 // helper copied from agreement/selector.go
 func balanceRound(r basics.Round, cparams config.ConsensusParams) basics.Round {
-	if cparams.TwinSeeds {
-		return r.SubSaturate(basics.Round(2 * cparams.SeedRefreshInterval * cparams.SeedLookback))
-	}
-
-	lookback := basics.Round(2*cparams.SeedRefreshInterval + cparams.SeedLookback + 1)
-	if cparams.IncorrectBalLookback {
-		return r.SubSaturate(lookback) + 2
-	}
-	return r.SubSaturate(lookback)
+	return r.SubSaturate(basics.Round(2 * cparams.SeedRefreshInterval * cparams.SeedLookback))
 }

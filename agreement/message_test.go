@@ -63,7 +63,7 @@ func BenchmarkVoteDecoding(b *testing.B) {
 		Cred: committee.UnauthenticatedCredential{
 			Proof: vrfProof,
 		},
-		Sig: oneTimeSecrets.Sign(id, false, proposal),
+		Sig: oneTimeSecrets.Sign(id, proposal),
 	}
 
 	msgBytes := protocol.Encode(&uv)
