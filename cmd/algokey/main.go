@@ -26,6 +26,7 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "algokey",
 	Short: "CLI for managing Algorand keys",
+	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		// If no arguments passed, we should fallback to help
 		cmd.HelpFunc()(cmd, args)
