@@ -669,7 +669,7 @@ type Local struct {
 	// the max size the sync server would return
 	TxSyncServeResponseSize int
 
-	// IsIndexerActive indicates wheather to activate the indexer for fast retrieval of transactions
+	// IsIndexerActive indicates whether to activate the indexer for fast retrieval of transactions
 	// Note -- Indexer cannot operate on non Archival nodes
 	IsIndexerActive bool
 
@@ -678,6 +678,9 @@ type Local struct {
 	// proxy vendor provides another header field.  In the case of CloudFlare proxy, the "CF-Connecting-IP" header
 	// field can be used.
 	UseXForwardedForAddressField string
+
+	// ForceRelayMessages indicates whether the network library relay messages even in the case that no NetAddress was specified.
+	ForceRelayMessages bool
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)

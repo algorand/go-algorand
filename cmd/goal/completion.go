@@ -17,19 +17,20 @@
 package main
 
 import (
-	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 )
 
 func init() {
-	ledgerCmd.AddCommand(supplyCmd)
+	completionCmd.AddCommand(bashCompletionCmd)
+	completionCmd.AddCommand(zshCompletionCmd)
 }
 
-var ledgerCmd = &cobra.Command{
-	Use:   "ledger",
-	Short: "Access ledger-related details",
-	Long:  "Access ledger-related details",
+var completionCmd = &cobra.Command{
+	Use:   "completion",
+	Short: "Shell completion helper",
+	Long:  "Shell completion helper",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		// If no arguments passed, we should fallback to help
@@ -37,18 +38,22 @@ var ledgerCmd = &cobra.Command{
 	},
 }
 
-var supplyCmd = &cobra.Command{
-	Use:   "supply",
-	Short: "Show ledger token supply",
-	Long:  "Show ledger token supply. All units are in microAlgos.",
+var bashCompletionCmd = &cobra.Command{
+	Use:   "bash",
+	Short: "Generate bash completion commands",
+	Long:  "Generate bash completion commands",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		dataDir := ensureSingleDataDir()
-		response, err := ensureAlgodClient(dataDir).LedgerSupply()
-		if err != nil {
-			reportErrorf(errorRequestFail, err)
-		}
+		rootCmd.GenBashCompletion(os.Stdout)
+	},
+}
 
-		fmt.Printf("Round: %v\nTotal Money: %v microAlgos\nOnline Money: %v microAlgos\n", response.Round, response.TotalMoney, response.OnlineMoney)
+var zshCompletionCmd = &cobra.Command{
+	Use:   "zsh",
+	Short: "Generate zsh completion commands",
+	Long:  "Generate zsh completion commands",
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, _ []string) {
+		rootCmd.GenZshCompletion(os.Stdout)
 	},
 }
