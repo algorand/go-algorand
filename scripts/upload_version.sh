@@ -1,7 +1,6 @@
 #!/bin/bash
 
 # upload_version.sh - Uploads available update packages
-#           NOTE: Will only work if you have the required S3_UPLOAD_ID/SECRET vars set
 #
 # Syntax:   upload_version.sh <channel> <directory-with-packages>
 #

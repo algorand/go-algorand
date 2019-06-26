@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -34,6 +33,9 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
+
+const algorandReleasesBucketName = "algorand-releases"
+const algorandBuildsBucketName = "algorand-builds"
 
 type s3Helper struct {
 	session *session.Session
@@ -78,25 +80,11 @@ func makePrivateS3SessionForDownload(bucket string) (s3Helper, error) {
 }
 
 func makePublicS3SessionForDownload() (s3Helper, error) {
-	// Create a session with our read-only credentials for the algorand-testnet bucket.
+	// Create a session without credentials for the public algorand-releases bucket.
 	// Upload requires write access and uses different credentials, read from
 	// the environment so they're not publicly-available.
-	// Download keys are loaded from updatekey.json
 
-	ex, err := os.Executable()
-	if err != nil {
-		panic(err) // Legitimate to panic here?
-	}
-	baseDir := filepath.Dir(ex)
-	keyFile := filepath.Join(baseDir, "updatekey.json")
-
-	keys, err := loadS3Keys(keyFile)
-	if err != nil {
-		exitErrorf("unable to access remote store - missing credentials")
-	}
-	creds := credentials.NewStaticCredentials(keys.ID, keys.Secret, "")
-
-	return makeS3Session(creds, keys.Bucket)
+	return makeS3Session(nil, algorandReleasesBucketName)
 }
 
 func makeS3SessionForUpload(bucket string) (s3Helper, error) {
@@ -119,11 +107,11 @@ func makeLocalS3SessionForUpload(bucket string) (s3Helper, error) {
 
 func makeTravisS3SessionForUpload() (s3Helper, error) {
 	// Use special Algorand environment variables from build environment.
-	awsID, _ := os.LookupEnv("S3_UPLOAD_ID")
-	awsKey, _ := os.LookupEnv("S3_UPLOAD_SECRET")
-	awsBucket, _ := os.LookupEnv("S3_UPLOAD_BUCKET")
+	awsID, _ := os.LookupEnv("AWS_ACCESS_KEY_ID")
+	awsKey, _ := os.LookupEnv("AWS_SECRET_ACCESS_KEY")
+	awsBucket := algorandBuildsBucketName
 	if awsID == "" || awsKey == "" || awsBucket == "" {
-		exitErrorf("unable to upload. Credentials must be specified in S3_UPLOAD_ID / S3_UPLOAD_SECRET and a bucket specified in S3_UPLOAD_BUCKET")
+		exitErrorf("unable to upload. Credentials must be specified in AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY and a bucket specified in S3_UPLOAD_BUCKET")
 	}
 	creds := credentials.NewStaticCredentials(awsID, awsKey, "")
 	return makeS3Session(creds, awsBucket)

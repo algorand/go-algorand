@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strconv"
 
@@ -33,6 +32,9 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
+
+const algorandReleasesBucketName = "algorand-releases"
+const algorandBuildsBucketName = "algorand-builds"
 
 // Helper encapsulates the s3 session state for interactive with our default S3 bucket with appropriate credentials
 type Helper struct {
@@ -61,35 +63,18 @@ func loadS3Keys(keyFile string) (keys s3Keys, err error) {
 
 // MakeS3SessionForDownload returns an s3.Helper for the default algorand S3 bucket - for downloading
 func MakeS3SessionForDownload() (helper Helper, err error) {
-	// Create a session with our read-only credentials for the algorand-testnet bucket.
-	// Upload requires write access and uses different credentials, read from
-	// the environment so they're not publicly-available.
-	// Download keys are loaded from updatekey.json
-
-	ex, err := os.Executable()
-	if err != nil {
-		return
-	}
-	baseDir := filepath.Dir(ex)
-	keyFile := filepath.Join(baseDir, "updatekey.json")
-
-	keys, err := loadS3Keys(keyFile)
-	if err != nil {
-		err = fmt.Errorf("unable to access remote store - error loading keys: %v", err)
-		return
-	}
-	creds := credentials.NewStaticCredentials(keys.ID, keys.Secret, "")
-	helper, err = makeS3Session(creds, keys.Bucket)
+	// Create a session without credentials for the public algorand-releases bucket.
+	helper, err = makeS3Session(nil, algorandReleasesBucketName)
 	return
 }
 
 // MakeS3SessionForUpload returns an s3.Helper for the default algorand S3 bucket - for uploading
 func MakeS3SessionForUpload() (helper Helper, err error) {
-	awsID, _ := os.LookupEnv("S3_UPLOAD_ID")
-	awsKey, _ := os.LookupEnv("S3_UPLOAD_SECRET")
-	awsBucket, _ := os.LookupEnv("S3_UPLOAD_BUCKET")
+	awsID, _ := os.LookupEnv("AWS_ACCESS_KEY_ID")
+	awsKey, _ := os.LookupEnv("AWS_SECRET_ACCESS_KEY")
+	awsBucket := algorandBuildsBucketName
 	if awsID == "" || awsKey == "" || awsBucket == "" {
-		err = fmt.Errorf("unable to upload. Credentials must be specified in S3_UPLOAD_ID and S3_UPLOAD_SECRET")
+		err = fmt.Errorf("unable to upload. Credentials must be specified in AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY")
 		return
 	}
 	creds := credentials.NewStaticCredentials(awsID, awsKey, "")
