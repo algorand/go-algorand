@@ -474,7 +474,7 @@ var rewardsCmd = &cobra.Command{
 var changeOnlineCmd = &cobra.Command{
 	Use:   "changeonlinestatus",
 	Short: "Change online status for the specified account",
-	Long:  `Change online status for the specified account. Set online should be 1 to set online, 0 to set offline. The broadcast transaction will be valid for a limited number of rounds. goal will provide the TXID of the transaction if successful. Going online requires that the given account have a valid participation key.`,
+	Long:  `Change online status for the specified account. Set online should be 1 to set online, 0 to set offline. The broadcast transaction will be valid for a limited number of rounds. goal will provide the TXID of the transaction if successful. Going online requires that the given account has a valid participation key.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		if accountAddress == "" && partKeyFile == "" {
