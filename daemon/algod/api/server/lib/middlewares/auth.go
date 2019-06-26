@@ -78,7 +78,7 @@ func Auth(log logging.Logger, apiToken string) func(http.Handler) http.Handler {
 				// Accept tokens provided in a bearer token format.
 				authentication := strings.SplitN(r.Header.Get("Authorization"), " ", 2)
 				if len(authentication) == 2 && strings.EqualFold("Bearer", authentication[0]) {
-					providedToken = []byte(r.Header.Get("Authorization")[7:])
+					providedToken = []byte(authentication[1])
 				}
 			}
 			if route.GetName() == debugRouteName {
