@@ -2,6 +2,7 @@
 set -e
 
 # upload_config.sh - Archives and uploads a netgoal configuration package from a specified directory
+#           NOTE: Will only work if you have the required AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY vars set
 #
 # Syntax:   upload_config.sh <config root directory> <channel>
 #

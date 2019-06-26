@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 
@@ -34,7 +35,8 @@ import (
 )
 
 const algorandReleasesBucketName = "algorand-releases"
-const algorandBuildsBucketName = "algorand-builds"
+const s3DefaultUploadBucket = "algorand-uploads"
+const s3DefaultRegion = "us-east-1"
 
 // Helper encapsulates the s3 session state for interactive with our default S3 bucket with appropriate credentials
 type Helper struct {
@@ -61,10 +63,47 @@ func loadS3Keys(keyFile string) (keys s3Keys, err error) {
 	return
 }
 
+func getS3UploadBucket() (bucketName string) {
+	bucketName, found := os.LookupEnv("S3_UPLOAD_BUCKET")
+	if !found {
+		bucketName = s3DefaultUploadBucket
+	}
+	return
+}
+
+func getS3ReleaseBucket() (bucketName string) {
+	bucketName, found := os.LookupEnv("S3_RELEASE_BUCKET")
+	if !found {
+		bucketName = algorandReleasesBucketName
+	}
+	return
+}
+
+func getS3Region() (region string) {
+	region, found := os.LookupEnv("S3_REGION")
+	if !found {
+		region = s3DefaultRegion
+	}
+	return
+}
+
+func (helper *Helper) UploadFileStream(filename string, reader io.Reader) error {
+	uploader := s3manager.NewUploader(helper.session)
+	_, err := uploader.Upload(&s3manager.UploadInput{
+		Bucket: aws.String(helper.bucket),
+		Key:    aws.String(filepath.Base(filename)),
+		Body:   reader,
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // MakeS3SessionForDownload returns an s3.Helper for the default algorand S3 bucket - for downloading
 func MakeS3SessionForDownload() (helper Helper, err error) {
 	// Create a session without credentials for the public algorand-releases bucket.
-	helper, err = makeS3Session(nil, algorandReleasesBucketName)
+	helper, err = makeS3Session(nil, getS3ReleaseBucket())
 	return
 }
 
@@ -72,8 +111,8 @@ func MakeS3SessionForDownload() (helper Helper, err error) {
 func MakeS3SessionForUpload() (helper Helper, err error) {
 	awsID, _ := os.LookupEnv("AWS_ACCESS_KEY_ID")
 	awsKey, _ := os.LookupEnv("AWS_SECRET_ACCESS_KEY")
-	awsBucket := algorandBuildsBucketName
-	if awsID == "" || awsKey == "" || awsBucket == "" {
+	awsBucket := getS3UploadBucket()
+	if awsID == "" || awsKey == "" {
 		err = fmt.Errorf("unable to upload. Credentials must be specified in AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY")
 		return
 	}
@@ -83,7 +122,7 @@ func MakeS3SessionForUpload() (helper Helper, err error) {
 }
 
 func makeS3Session(credentials *credentials.Credentials, bucket string) (helper Helper, err error) {
-	sess, err := session.NewSession(&aws.Config{Region: aws.String("us-east-1"),
+	sess, err := session.NewSession(&aws.Config{Region: aws.String(getS3Region()),
 		Credentials: credentials})
 	if err != nil {
 		return

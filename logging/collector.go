@@ -24,6 +24,8 @@ import (
 	"path"
 	"path/filepath"
 	"sync"
+
+	"github.com/algorand/go-algorand/util/s3"
 )
 
 // CollectAndUploadData combines all of the data files that we want packaged up and uploaded
@@ -34,7 +36,7 @@ func CollectAndUploadData(dataDir string, bundleFilename string) <-chan error {
 	errorChannel := make(chan error, 1)
 	pipeReader, pipeWriter := io.Pipe()
 	go func() {
-		s3, err := makeS3SessionForUpload()
+		s3, err := s3.MakeS3SessionForUpload()
 		if err != nil {
 			errorChannel <- err
 			return
@@ -42,7 +44,7 @@ func CollectAndUploadData(dataDir string, bundleFilename string) <-chan error {
 		wg := sync.WaitGroup{}
 		wg.Add(1)
 		go func() {
-			err = s3.uploadFileStream(bundleFilename, pipeReader)
+			err = s3.UploadFileStream(bundleFilename, pipeReader)
 			if err != nil {
 				errorChannel <- err
 			}
