@@ -87,6 +87,7 @@ func getS3Region() (region string) {
 	return
 }
 
+// UploadFileStream sends file as stream to s3
 func (helper *Helper) UploadFileStream(filename string, reader io.Reader) error {
 	uploader := s3manager.NewUploader(helper.session)
 	_, err := uploader.Upload(&s3manager.UploadInput{
