@@ -41,7 +41,9 @@ type OneTimeSignature struct {
 	PK  ed25519PublicKey `codec:"p"`
 
 	// Old-style signature that does not use proper domain separation.
-	// PKSigOld is a signature of (PK || BatchID) under the master key (OneTimeSignatureVerifier).
+	// PKSigOld is unused; however, unfortunately we forgot to mark it
+	// `codec:omitempty` and so it appears (with zero value) in certs.
+	// This means we can't delete the field without breaking catchup.
 	PKSigOld ed25519Signature `codec:"ps"`
 
 	// Used to verify a new-style two-level ephemeral signature.
@@ -186,19 +188,12 @@ func GenerateOneTimeSignatureSecretsRNG(startBatch uint64, numBatches uint64, rn
 		pk, sk := ed25519GenerateKeyRNG(rng)
 		batchnum := startBatch + i
 
-		// Generate the old-style signature in case we need to sign a message
-		// compatible with the old-style protocol.  Can eventually go away,
-		// once we never need to sign messages in an old protocol.
-		oldid := OneTimeSignatureIdentifier{Batch: batchnum}
-		oldsig := ed25519Sign(ephemeralSec, append(pk[:], oldid.BatchBytes()...))
-
 		newid := OneTimeSignatureSubkeyBatchID{SubKeyPK: pk, Batch: batchnum}
 		newsig := ed25519Sign(ephemeralSec, hashRep(newid))
 
 		subkeys[i] = ephemeralSubkey{
 			PK:       pk,
 			SK:       sk,
-			PKSigOld: oldsig,
 			PKSigNew: newsig,
 		}
 	}
@@ -228,169 +223,90 @@ func (s *OneTimeSignatureSecrets) getRNG() RNG {
 }
 
 // Sign produces a OneTimeSignature of some Hashable message under some
-// OneTimeSignatureIdentifier.  fineGrained specifies whether the signature
-// should use the new plan (two-level ephemeral keys) or the old plan (one
-// ephemeral key for an entire batch).
-func (s *OneTimeSignatureSecrets) Sign(id OneTimeSignatureIdentifier, fineGrained bool, message Hashable) OneTimeSignature {
+// OneTimeSignatureIdentifier.
+func (s *OneTimeSignatureSecrets) Sign(id OneTimeSignatureIdentifier, message Hashable) OneTimeSignature {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if fineGrained {
-		// Check if we already have a partial batch of subkeys.
-		if id.Batch+1 == s.FirstBatch && id.Offset >= s.FirstOffset && id.Offset-s.FirstOffset < uint64(len(s.Offsets)) {
-			offidx := id.Offset - s.FirstOffset
-			sig := ed25519Sign(s.Offsets[offidx].SK, hashRep(message))
-			return OneTimeSignature{
-				Sig:    sig,
-				PK:     s.Offsets[offidx].PK,
-				PK1Sig: s.Offsets[offidx].PKSigNew,
-				PK2:    s.OffsetsPK2,
-				PK2Sig: s.OffsetsPK2Sig,
-			}
+	// Check if we already have a partial batch of subkeys.
+	if id.Batch+1 == s.FirstBatch && id.Offset >= s.FirstOffset && id.Offset-s.FirstOffset < uint64(len(s.Offsets)) {
+		offidx := id.Offset - s.FirstOffset
+		sig := ed25519Sign(s.Offsets[offidx].SK, hashRep(message))
+		return OneTimeSignature{
+			Sig:    sig,
+			PK:     s.Offsets[offidx].PK,
+			PK1Sig: s.Offsets[offidx].PKSigNew,
+			PK2:    s.OffsetsPK2,
+			PK2Sig: s.OffsetsPK2Sig,
 		}
+	}
 
-		// Check if we are asking for an offset from an available batch.
-		if id.Batch >= s.FirstBatch && id.Batch-s.FirstBatch < uint64(len(s.Batches)) {
-			// Since we have not yet broken out this batch into per-offset keys,
-			// generate a fresh subkey right away, sign it, and use it.
-			pk, sk := ed25519GenerateKeyRNG(s.getRNG())
-			sig := ed25519Sign(sk, hashRep(message))
+	// Check if we are asking for an offset from an available batch.
+	if id.Batch >= s.FirstBatch && id.Batch-s.FirstBatch < uint64(len(s.Batches)) {
+		// Since we have not yet broken out this batch into per-offset keys,
+		// generate a fresh subkey right away, sign it, and use it.
+		pk, sk := ed25519GenerateKeyRNG(s.getRNG())
+		sig := ed25519Sign(sk, hashRep(message))
 
-			batchidx := id.Batch - s.FirstBatch
-			pksig := s.Batches[batchidx].PKSigNew
+		batchidx := id.Batch - s.FirstBatch
+		pksig := s.Batches[batchidx].PKSigNew
 
-			// Backwards compatibility: we might only have a participation
-			// key generated with the old signature plan.  If so, use it.
-			if pksig == (ed25519Signature{}) {
-				pksig = s.Batches[batchidx].PKSigOld
-			}
-
-			pk1id := OneTimeSignatureSubkeyOffsetID{
-				SubKeyPK: pk,
-				Batch:    id.Batch,
-				Offset:   id.Offset,
-			}
-			return OneTimeSignature{
-				Sig:    sig,
-				PK:     pk,
-				PK1Sig: ed25519Sign(s.Batches[batchidx].SK, hashRep(pk1id)),
-				PK2:    s.Batches[batchidx].PK,
-				PK2Sig: pksig,
-			}
+		pk1id := OneTimeSignatureSubkeyOffsetID{
+			SubKeyPK: pk,
+			Batch:    id.Batch,
+			Offset:   id.Offset,
 		}
-
-		errmsg := fmt.Sprintf("tried to sign %v with out-of-range one-time identifier %v (firstbatch %d, len(batches) %d, firstoffset %d, len(offsets) %d)",
-			message, id, s.FirstBatch, len(s.Batches), s.FirstOffset, len(s.Offsets))
-
-		// It's expected that we sometimes hit this error, when trying to sign
-		// using an identifier of a block that we just reached agreement on and
-		// thus deleted.  Don't warn if we're out-of-range by just one.  This
-		// might still trigger a false warning if we're out-of-range by just one
-		// and it happens to be a batch boundary, but we don't have the batch
-		// size (key dilution) parameter accessible here easily.
-		if s.FirstBatch == id.Batch+1 && s.FirstOffset == id.Offset+1 {
-			logging.Base().Info(errmsg)
-		} else {
-			logging.Base().Warn(errmsg)
+		return OneTimeSignature{
+			Sig:    sig,
+			PK:     pk,
+			PK1Sig: ed25519Sign(s.Batches[batchidx].SK, hashRep(pk1id)),
+			PK2:    s.Batches[batchidx].PK,
+			PK2Sig: pksig,
 		}
-		return OneTimeSignature{}
 	}
 
-	// Old style signatures: batch subkey signs for all offsets
-	// in the batch, and we use the old-style signature that does
-	// not do proper domain separation.
-	if id.Batch < s.FirstBatch {
-		logging.Base().Warnf("tried to sign %v with expired one-time identifier %v", message, id)
-		return OneTimeSignature{}
-	}
-	batch := id.Batch - s.FirstBatch
-	if int(batch) >= len(s.Batches) {
-		logging.Base().Warnf("tried to sign %v with out-of-range one-time identifier %v", message, id)
-		return OneTimeSignature{}
-	}
+	errmsg := fmt.Sprintf("tried to sign %v with out-of-range one-time identifier %v (firstbatch %d, len(batches) %d, firstoffset %d, len(offsets) %d)",
+		message, id, s.FirstBatch, len(s.Batches), s.FirstOffset, len(s.Offsets))
 
-	sig := ed25519Sign(s.Batches[batch].SK, hashRep(message))
-	signed := OneTimeSignature{
-		Sig:      sig,
-		PK:       s.Batches[batch].PK,
-		PKSigOld: s.Batches[batch].PKSigOld,
+	// It's expected that we sometimes hit this error, when trying to sign
+	// using an identifier of a block that we just reached agreement on and
+	// thus deleted.  Don't warn if we're out-of-range by just one.  This
+	// might still trigger a false warning if we're out-of-range by just one
+	// and it happens to be a batch boundary, but we don't have the batch
+	// size (key dilution) parameter accessible here easily.
+	if s.FirstBatch == id.Batch+1 && s.FirstOffset == id.Offset+1 {
+		logging.Base().Info(errmsg)
+	} else {
+		logging.Base().Warn(errmsg)
 	}
-	return signed
+	return OneTimeSignature{}
 }
 
 // Verify verifies that some Hashable signature was signed under some
 // OneTimeSignatureVerifier and some OneTimeSignatureIdentifier.
-// fineGrained specifies if the signature should verify under the new
-// two-level scheme (fineGrained) or the old scheme (not fineGrained).
 //
 // It returns true if this is the case; otherwise, it returns false.
-func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, fineGrained bool, message Hashable, sig OneTimeSignature) bool {
-	if fineGrained {
-		offsetID := OneTimeSignatureSubkeyOffsetID{
-			SubKeyPK: sig.PK,
-			Batch:    id.Batch,
-			Offset:   id.Offset,
-		}
-		batchID := OneTimeSignatureSubkeyBatchID{
-			SubKeyPK: sig.PK2,
-			Batch:    id.Batch,
-		}
-
-		if !ed25519Verify(ed25519PublicKey(v), hashRep(batchID), sig.PK2Sig) {
-			// Maybe this was signed by a user that generated their participation
-			// key a while ago, before they had a PKSigNew.  Check against the old
-			// encoding.  Once we're sure all these keys are gone, this fallback
-			// can be removed.
-			ccat := append(sig.PK2[:], id.BatchBytes()...)
-			if !ed25519Verify(ed25519PublicKey(v), ccat, sig.PK2Sig) {
-				return false
-			}
-		}
-		if !ed25519Verify(batchID.SubKeyPK, hashRep(offsetID), sig.PK1Sig) {
-			return false
-		}
-		if !ed25519Verify(offsetID.SubKeyPK, hashRep(message), sig.Sig) {
-			return false
-		}
-		return true
+func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, message Hashable, sig OneTimeSignature) bool {
+	offsetID := OneTimeSignatureSubkeyOffsetID{
+		SubKeyPK: sig.PK,
+		Batch:    id.Batch,
+		Offset:   id.Offset,
+	}
+	batchID := OneTimeSignatureSubkeyBatchID{
+		SubKeyPK: sig.PK2,
+		Batch:    id.Batch,
 	}
 
-	// Single-level ephemeral signature, old-style.  This should never get confused
-	// with the new-style signature because its encoding is of a different length.
-	// The old-style signature is len(PK)+8 bytes for the batch number, and the
-	// new-style signature is a 2-byte HashID followed by a msgpack encoding of
-	// the PK and a 64-bit batch number.
-	ccat := append(sig.PK[:], id.BatchBytes()...)
-	if !ed25519Verify(ed25519PublicKey(v), ccat, sig.PKSigOld) {
+	if !ed25519Verify(ed25519PublicKey(v), hashRep(batchID), sig.PK2Sig) {
 		return false
 	}
-	if !ed25519Verify(sig.PK, hashRep(message), sig.Sig) {
+	if !ed25519Verify(batchID.SubKeyPK, hashRep(offsetID), sig.PK1Sig) {
+		return false
+	}
+	if !ed25519Verify(offsetID.SubKeyPK, hashRep(message), sig.Sig) {
 		return false
 	}
 	return true
-}
-
-// DeleteBeforeCoarseGrained deletes ephemeral keys before (but not including) the given id.
-func (s *OneTimeSignatureSecrets) DeleteBeforeCoarseGrained(current OneTimeSignatureIdentifier) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// TODO: Securely wipe the keys from memory.
-
-	// Since we are in coarse-grained mode, wipe any fine-grained offsets
-	// just in case.
-	s.FirstOffset = 0
-	s.Offsets = nil
-
-	if current.Batch > s.FirstBatch {
-		jump := current.Batch - s.FirstBatch
-		if jump > uint64(len(s.Batches)) {
-			jump = uint64(len(s.Batches))
-		}
-
-		s.FirstBatch += jump
-		s.Batches = s.Batches[jump:]
-	}
 }
 
 // DeleteBeforeFineGrained deletes ephemeral keys before (but not including) the given id.
@@ -449,11 +365,6 @@ func (s *OneTimeSignatureSecrets) DeleteBeforeFineGrained(current OneTimeSignatu
 
 	s.OffsetsPK2 = s.Batches[0].PK
 	s.OffsetsPK2Sig = s.Batches[0].PKSigNew
-	// Backwards compatibility: we might only have a participation
-	// key generated with the old signature plan.  If so, use it.
-	if s.OffsetsPK2Sig == (ed25519Signature{}) {
-		s.OffsetsPK2Sig = s.Batches[0].PKSigOld
-	}
 
 	s.FirstOffset = current.Offset
 	for off := current.Offset; off < numKeysPerBatch; off++ {
