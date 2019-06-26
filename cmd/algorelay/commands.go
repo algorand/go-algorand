@@ -18,37 +18,28 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 )
 
 func init() {
-	ledgerCmd.AddCommand(supplyCmd)
 }
 
-var ledgerCmd = &cobra.Command{
-	Use:   "ledger",
-	Short: "Access ledger-related details",
-	Long:  "Access ledger-related details",
-	Args:  validateNoPosArgsFn,
+var rootCmd = &cobra.Command{
+	Use:   "algorelay",
+	Short: "algorelay",
+	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
 		// If no arguments passed, we should fallback to help
+
 		cmd.HelpFunc()(cmd, args)
 	},
 }
 
-var supplyCmd = &cobra.Command{
-	Use:   "supply",
-	Short: "Show ledger token supply",
-	Long:  "Show ledger token supply. All units are in microAlgos.",
-	Args:  validateNoPosArgsFn,
-	Run: func(cmd *cobra.Command, _ []string) {
-		dataDir := ensureSingleDataDir()
-		response, err := ensureAlgodClient(dataDir).LedgerSupply()
-		if err != nil {
-			reportErrorf(errorRequestFail, err)
-		}
-
-		fmt.Printf("Round: %v\nTotal Money: %v microAlgos\nOnline Money: %v microAlgos\n", response.Round, response.TotalMoney, response.OnlineMoney)
-	},
+func main() {
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
 }

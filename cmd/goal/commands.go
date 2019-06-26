@@ -76,6 +76,9 @@ func init() {
 	// ledger.go
 	rootCmd.AddCommand(ledgerCmd)
 
+	// completion.go
+	rootCmd.AddCommand(completionCmd)
+
 	// Config
 	defaultDataDirValue := []string{""}
 	rootCmd.PersistentFlags().StringArrayVarP(&dataDirs, "datadir", "d", defaultDataDirValue, "Data directory for the node")
