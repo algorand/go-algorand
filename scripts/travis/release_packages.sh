@@ -16,7 +16,7 @@ S3CMD="s3cmd"
 
 function init_s3cmd() {
     SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
-    SEDARGS="-e s,-ACCESS_KEY-,${S3_UPLOAD_ID}, -e s,-SECRET_KEY-,${S3_UPLOAD_SECRET}, -e s,-S3_BUCKET-,${S3_UPLOAD_BUCKET},"
+    SEDARGS="-e s,-ACCESS_KEY-,${AWS_ACCESS_KEY_ID}, -e s,-SECRET_KEY-,${AWS_SECRET_ACCESS_KEY}, -e s,-S3_BUCKET-,${S3_UPLOAD_BUCKET},"
 
     cat ${SCRIPTPATH}/../s3cfg.template \
       | sed ${SEDARGS} \

@@ -38,7 +38,7 @@ func downloadAndExtractConfigPackage(channel string, targetDir string) (err erro
 }
 
 func downloadConfigPackage(channelName string, targetDir string) (packageFile string, err error) {
-	s3, err := s3.MakeS3SessionForDownload()
+	s3, err := s3.MakePublicS3SessionForDownload()
 	if err != nil {
 		return
 	}

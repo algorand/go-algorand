@@ -20,6 +20,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/util/s3"
 )
 
 func TestGetVersion(t *testing.T) {
@@ -37,14 +39,14 @@ func TestGetVersion(t *testing.T) {
 }
 
 func testValidVersion(t *testing.T, name string, expected uint64) {
-	ver, err := getVersionFromName(name)
+	ver, err := s3.GetVersionFromName(name)
 
 	require.NoError(t, err, "%q should parse to a valid version", name)
 	require.Equal(t, expected, ver, "%q should evaluate to %v", name, expected)
 }
 
 func testInvalidVersion(t *testing.T, name string) {
-	_, err := getVersionFromName(name)
+	_, err := s3.GetVersionFromName(name)
 
 	require.NotNil(t, err, "%q should fail to parse", name)
 }

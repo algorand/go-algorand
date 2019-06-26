@@ -20,6 +20,8 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
+
+	"github.com/algorand/go-algorand/util/s3"
 )
 
 var sourcePath string
@@ -36,14 +38,14 @@ var sendCmd = &cobra.Command{
 	Short: "Upload versions to S3",
 	Long:  "Uploads *.tar.gz files from specified path",
 	Run: func(cmd *cobra.Command, args []string) {
-		s3, err := makeS3SessionForUpload(sendBucket)
+		s3, err := s3.MakeS3SessionForUploadWithBucket(sendBucket)
 		if err != nil {
 			exitErrorf("Error creating s3 session %s", err.Error())
 		}
 
 		var files []string
 		if files, err = getPackageFilesInPath(sourcePath); err == nil {
-			err = s3.uploadFiles(files)
+			err = s3.UploadFiles(files)
 		}
 		if err != nil {
 			exitErrorf("Error uploading files", err.Error())

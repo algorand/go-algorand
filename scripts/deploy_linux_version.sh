@@ -37,8 +37,8 @@ while [ "$1" != "" ]; do
 done
 
 
-if [ "${S3_UPLOAD_ID}" = "" ] || [ "${S3_UPLOAD_SECRET}" = "" ] || [ "${S3_UPLOAD_BUCKET}" = "" ]; then
-    echo "You need to export S3_UPLOAD_ID, S3_UPLOAD_SECRECT and S3_UPLOAD_BUCKET for this to work"
+if [ "${AWS_ACCESS_KEY_ID}" = "" ] || [ "${AWS_SECRET_ACCESS_KEY}" = "" ] || [ "${S3_UPLOAD_BUCKET}" = "" ]; then
+    echo "You need to export AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and S3_UPLOAD_BUCKET for this to work"
     exit 1
 fi
 
@@ -62,8 +62,8 @@ echo export DEFAULTNETWORK=${DEFAULTNETWORK} >> ${TMPDIR}/deploy_linux_version_e
 echo export GENESISFILE=${GENESISFILE} >> ${TMPDIR}/deploy_linux_version_exec.sh
 echo export FULLVERSION=${FULLVERSION} >> ${TMPDIR}/deploy_linux_version_exec.sh
 echo export PKG_ROOT=${PKG_ROOT} >> ${TMPDIR}/deploy_linux_version_exec.sh
-echo export S3_UPLOAD_ID=${S3_UPLOAD_ID} >> ${TMPDIR}/deploy_linux_version_exec.sh
-echo export S3_UPLOAD_SECRET=${S3_UPLOAD_SECRET} >> ${TMPDIR}/deploy_linux_version_exec.sh
+echo export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} >> ${TMPDIR}/deploy_linux_version_exec.sh
+echo export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} >> ${TMPDIR}/deploy_linux_version_exec.sh
 echo export S3_UPLOAD_BUCKET=${S3_UPLOAD_BUCKET} >> ${TMPDIR}/deploy_linux_version_exec.sh
 echo export NETWORK=${NETWORK} >> ${TMPDIR}/deploy_linux_version_exec.sh
 

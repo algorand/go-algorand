@@ -21,8 +21,8 @@
 
 set -e
 
-if [[ "${S3_UPLOAD_ID}" = "" || "${S3_UPLOAD_SECRET}" = "" || "${S3_UPLOAD_BUCKET}" = "" ]]; then
-    echo "You need to export S3_UPLOAD_ID, S3_UPLOAD_SECRECT and S3_UPLOAD_BUCKET for this to work"
+if [[ "${AWS_ACCESS_KEY_ID}" = "" || "${AWS_SECRET_ACCESS_KEY}" = "" || "${S3_UPLOAD_BUCKET}" = "" ]]; then
+    echo "You need to export AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and S3_UPLOAD_BUCKET for this to work"
     exit 1
 fi
 

@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -87,6 +88,24 @@ func getS3Region() (region string) {
 	return
 }
 
+func getAWSCredentials() (awsID string, awsKey string) {
+	awsID, _ = os.LookupEnv("AWS_ACCESS_KEY_ID")
+	awsKey, _ = os.LookupEnv("AWS_SECRET_ACCESS_KEY")
+	return
+}
+
+func validateS3Params(action string, awsID string, awsKey string, awsBucket string) (err error) {
+	if awsID == "" || awsKey == "" {
+		err = fmt.Errorf("unable to %s. Credentials must be specified in AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY", action)
+		return
+	}
+	if awsBucket == "" {
+		err = fmt.Errorf("unable to %s, bucket name is empty", action)
+		return
+	}
+	return
+}
+
 // UploadFileStream sends file as stream to s3
 func (helper *Helper) UploadFileStream(filename string, reader io.Reader) error {
 	uploader := s3manager.NewUploader(helper.session)
@@ -101,8 +120,38 @@ func (helper *Helper) UploadFileStream(filename string, reader io.Reader) error 
 	return nil
 }
 
-// MakeS3SessionForDownload returns an s3.Helper for the default algorand S3 bucket - for downloading
-func MakeS3SessionForDownload() (helper Helper, err error) {
+// MakeS3SessionForDownloadWithBucket download with bucket name provided
+func MakeS3SessionForDownloadWithBucket(bucket string) (helper Helper, err error) {
+	if bucket == "" {
+		return MakePublicS3SessionForDownload()
+	}
+	return makePrivateS3SessionForDownload(bucket)
+}
+
+// MakeS3SessionForUploadWithBucket upload with bucket name provided
+func MakeS3SessionForUploadWithBucket(bucket string) (helper Helper, err error) {
+	if bucket == "" {
+		return makeTravisS3SessionForUpload()
+	}
+	return makeLocalS3SessionForUpload(bucket)
+}
+
+func makeLocalS3SessionForUpload(awsBucket string) (helper Helper, err error) {
+	awsID, awsKey := getAWSCredentials()
+	err = validateS3Params("upload", awsID, awsKey, awsBucket)
+	if err != nil {
+		return
+	}
+	creds := credentials.NewStaticCredentials(awsID, awsKey, "")
+	return makeS3Session(creds, awsBucket)
+}
+
+func makeTravisS3SessionForUpload() (helper Helper, err error) {
+	return makeLocalS3SessionForUpload(getS3ReleaseBucket())
+}
+
+// MakePublicS3SessionForDownload returns an s3.Helper for the default algorand S3 bucket - for downloading
+func MakePublicS3SessionForDownload() (helper Helper, err error) {
 	// Create a session without credentials for the public algorand-releases bucket.
 	awsBucket := getS3ReleaseBucket()
 	if awsBucket == "" {
@@ -113,17 +162,23 @@ func MakeS3SessionForDownload() (helper Helper, err error) {
 	return
 }
 
-// MakeS3SessionForUpload returns an s3.Helper for the default algorand S3 bucket - for uploading
-func MakeS3SessionForUpload() (helper Helper, err error) {
-	awsID, _ := os.LookupEnv("AWS_ACCESS_KEY_ID")
-	awsKey, _ := os.LookupEnv("AWS_SECRET_ACCESS_KEY")
-	awsBucket := getS3UploadBucket()
-	if awsID == "" || awsKey == "" {
-		err = fmt.Errorf("unable to upload. Credentials must be specified in AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY")
+func makePrivateS3SessionForDownload(awsBucket string) (helper Helper, err error) {
+	// If a bucket is provided, lookup credentials from standard location.
+	awsID, awsKey := getAWSCredentials()
+	err = validateS3Params("download", awsID, awsKey, awsBucket)
+	if err != nil {
 		return
 	}
-	if awsBucket == "" {
-		err = fmt.Errorf("unable to upload, bucket name is empty")
+	creds := credentials.NewStaticCredentials(awsID, awsKey, "")
+	return makeS3Session(creds, awsBucket)
+}
+
+// MakeS3SessionForUpload returns an s3.Helper for the default algorand S3 bucket - for uploading
+func MakeS3SessionForUpload() (helper Helper, err error) {
+	awsID, awsKey := getAWSCredentials()
+	awsBucket := getS3UploadBucket()
+	err = validateS3Params("upload", awsID, awsKey, awsBucket)
+	if err != nil {
 		return
 	}
 	creds := credentials.NewStaticCredentials(awsID, awsKey, "")
@@ -220,6 +275,72 @@ func (helper *Helper) UploadFiles(files []string) error {
 }
 
 func getVersionFromName(name string) (version uint64, err error) {
+	re := regexp.MustCompile(`_(\d*)\.(\d*)\.(\d*)`)
+	submatchAll := re.FindAllStringSubmatch(name, -1)
+	if submatchAll == nil || len(submatchAll) == 0 || len(submatchAll[0]) != 4 {
+		err = errors.New("unable to parse version from filename " + name)
+		return
+	}
+	var val uint64
+	for index, match := range submatchAll[0] {
+		if index > 0 {
+			version <<= 16
+			val, err = strconv.ParseUint(match, 10, 0)
+			if err != nil {
+				return
+			}
+			version += val
+		}
+	}
+	return
+}
+
+// GetPackageVersion return the package version
+func (helper *Helper) GetPackageVersion(pkg string, channel string, specificVersion uint64) (maxVersion uint64, maxVersionName string, err error) {
+	maxVersion = 0
+	maxVersionName = ""
+
+	os := runtime.GOOS
+	arch := runtime.GOARCH
+	prefix := fmt.Sprintf("%s_%s_%s-%s", pkg, channel, os, arch)
+	svc := s3.New(helper.session)
+	input := &s3.ListObjectsInput{
+		Bucket:  &helper.bucket,
+		Prefix:  &prefix,
+		MaxKeys: aws.Int64(500),
+	}
+
+	result, err := svc.ListObjects(input)
+	if err != nil {
+		if awsErr, ok := err.(awserr.Error); ok {
+			err = awsErr
+		}
+		return
+	}
+
+	for _, item := range result.Contents {
+		var version uint64
+		name := string(*item.Key)
+		version, err = getVersionFromName(name)
+		if err != nil {
+			return
+		}
+		if specificVersion != 0 {
+			if version == specificVersion {
+				maxVersion = version
+				maxVersionName = name
+				break
+			}
+		} else if version > maxVersion {
+			maxVersion = version
+			maxVersionName = name
+		}
+	}
+	return
+}
+
+// GetVersionFromName return the version for the given name
+func GetVersionFromName(name string) (version uint64, err error) {
 	re := regexp.MustCompile(`_(\d*)\.(\d*)\.(\d*)`)
 	submatchAll := re.FindAllStringSubmatch(name, -1)
 	if submatchAll == nil || len(submatchAll) == 0 || len(submatchAll[0]) != 4 {
