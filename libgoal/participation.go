@@ -224,7 +224,7 @@ func (c *Client) InstallParticipationKeys(inputfile string) (part account.Partic
 	partkey.DeleteOldKeys(basics.Round(math.MaxUint64), config.Consensus[protocol.ConsensusCurrentVersion])
 	os.Remove(inputfile)
 
-	return partkey, newdbpath, nil
+	return newpartkey, newdbpath, nil
 }
 
 // ListParticipationKeys returns the available participation keys,
