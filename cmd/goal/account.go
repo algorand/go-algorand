@@ -474,11 +474,16 @@ var rewardsCmd = &cobra.Command{
 var changeOnlineCmd = &cobra.Command{
 	Use:   "changeonlinestatus",
 	Short: "Change online status for the specified account",
-	Long:  `Change online status for the specified account. Set online should be 1 to set online, 0 to set offline. The broadcast transaction will be valid for a limited number of rounds. goal will provide the TXID of the transaction if successful. Going online requires that the given account has a valid participation key.`,
+	Long:  `Change online status for the specified account. Set online should be 1 to set online, 0 to set offline. The broadcast transaction will be valid for a limited number of rounds. goal will provide the TXID of the transaction if successful. Going online requires that the given account has a valid participation key. If the participation key is specified using --partkeyfile, you must separately install the participation key from that file using "goal account installpartkey".`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		if accountAddress == "" && partKeyFile == "" {
 			fmt.Printf("Must specify one of --address or --partkeyfile\n")
+			os.Exit(1)
+		}
+
+		if partKeyFile != "" && !online {
+			fmt.Printf("Going offline does not support --partkeyfile\n")
 			os.Exit(1)
 		}
 
