@@ -34,7 +34,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
-const algorandReleasesBucketName = "algorand-releases"
+const s3DefaultReleaseBucket = "algorand-releases"
 const s3DefaultUploadBucket = "algorand-uploads"
 const s3DefaultRegion = "us-east-1"
 
@@ -74,7 +74,7 @@ func getS3UploadBucket() (bucketName string) {
 func getS3ReleaseBucket() (bucketName string) {
 	bucketName, found := os.LookupEnv("S3_RELEASE_BUCKET")
 	if !found {
-		bucketName = algorandReleasesBucketName
+		bucketName = s3DefaultReleaseBucket
 	}
 	return
 }
@@ -104,7 +104,12 @@ func (helper *Helper) UploadFileStream(filename string, reader io.Reader) error 
 // MakeS3SessionForDownload returns an s3.Helper for the default algorand S3 bucket - for downloading
 func MakeS3SessionForDownload() (helper Helper, err error) {
 	// Create a session without credentials for the public algorand-releases bucket.
-	helper, err = makeS3Session(nil, getS3ReleaseBucket())
+	awsBucket := getS3ReleaseBucket()
+	if awsBucket == "" {
+		err = fmt.Errorf("unable to download, bucket name is empty")
+		return
+	}
+	helper, err = makeS3Session(nil, awsBucket)
 	return
 }
 
@@ -115,6 +120,10 @@ func MakeS3SessionForUpload() (helper Helper, err error) {
 	awsBucket := getS3UploadBucket()
 	if awsID == "" || awsKey == "" {
 		err = fmt.Errorf("unable to upload. Credentials must be specified in AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY")
+		return
+	}
+	if awsBucket == "" {
+		err = fmt.Errorf("unable to upload, bucket name is empty")
 		return
 	}
 	creds := credentials.NewStaticCredentials(awsID, awsKey, "")
