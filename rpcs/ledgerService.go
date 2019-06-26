@@ -17,6 +17,7 @@
 package rpcs
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 	"strconv"
@@ -42,10 +43,11 @@ const ledgerServerCatchupRequestBufferSize = 10
 
 // LedgerService represents the Ledger RPC API
 type LedgerService struct {
-	ledger      *data.Ledger
-	genesisID   string
-	catchupReqs chan network.IncomingMessage
-	stop        chan struct{}
+	ledger           *data.Ledger
+	genesisID        string
+	catchupReqs      chan network.IncomingMessage
+	stop             chan struct{}
+	encodingWrappers [3][]byte
 }
 
 // EncodedBlockCert defines how GetBlockBytes encodes a block and its certificate
@@ -56,19 +58,46 @@ type EncodedBlockCert struct {
 
 // RegisterLedgerService creates a LedgerService around the provider Ledger and registers it for RPC with the provided Registrar
 func RegisterLedgerService(config config.Local, ledger *data.Ledger, registrar Registrar, genesisID string) *LedgerService {
-	service := LedgerService{ledger: ledger, genesisID: genesisID}
-	registrar.RegisterHTTPHandler(LedgerServiceBlockPath, &service)
+	service := &LedgerService{ledger: ledger, genesisID: genesisID}
+	registrar.RegisterHTTPHandler(LedgerServiceBlockPath, service)
 	c := make(chan network.IncomingMessage, config.CatchupParallelBlocks*ledgerServerCatchupRequestBufferSize)
 
 	handlers := []network.TaggedMessageHandler{
-		{Tag: protocol.UniCatchupReqTag, MessageHandler: network.HandlerFunc((&service).processIncomingMessage)},
-		{Tag: protocol.UniEnsBlockReqTag, MessageHandler: network.HandlerFunc((&service).processIncomingMessage)},
+		{Tag: protocol.UniCatchupReqTag, MessageHandler: network.HandlerFunc(service.processIncomingMessage)},
+		{Tag: protocol.UniEnsBlockReqTag, MessageHandler: network.HandlerFunc(service.processIncomingMessage)},
 	}
 
 	registrar.RegisterHandlers(handlers)
 	service.catchupReqs = c
 	service.stop = make(chan struct{})
-	return &service
+
+	service.initializeEncodingWrappers()
+	return service
+}
+
+// initializeEncodingWrappers figures out the packing that would get added when encoding a EncodedBlockCert structure
+// using msgpack; it allows us to work on encoded blocks directly and wrap them manually.
+func (ls *LedgerService) initializeEncodingWrappers() {
+	block := bookkeeping.Block{
+		BlockHeader: bookkeeping.BlockHeader{
+			Round: basics.Round(1000),
+		},
+	}
+	cert := agreement.Certificate{
+		Round: basics.Round(1000),
+	}
+	blockCert := EncodedBlockCert{
+		Block:       block,
+		Certificate: cert,
+	}
+	encodedBlock := protocol.Encode(block)
+	encodedCert := protocol.Encode(cert)
+	encodedBlockCert := protocol.Encode(blockCert)
+	blockIdx := bytes.Index(encodedBlockCert, encodedBlock)
+	certIdx := bytes.LastIndex(encodedBlockCert, encodedCert)
+	ls.encodingWrappers[0] = encodedBlockCert[:blockIdx]
+	ls.encodingWrappers[1] = encodedBlockCert[blockIdx+len(encodedBlock) : certIdx]
+	ls.encodingWrappers[2] = encodedBlockCert[certIdx+len(encodedCert):]
 }
 
 // Start listening to catchup requests over ws
@@ -245,12 +274,15 @@ func (ls *LedgerService) sendCatchupRes(ctx context.Context, target network.Unic
 }
 
 func (ls *LedgerService) encodedBlockCert(round uint64) ([]byte, error) {
-	blk, cert, err := ls.ledger.BlockCert(basics.Round(round))
+	blk, cert, err := ls.ledger.EncodedBlockCert(basics.Round(round))
 	if err != nil {
 		return nil, err
 	}
-	return protocol.Encode(EncodedBlockCert{
-		Block:       blk,
-		Certificate: cert,
-	}), nil
+	outBuffer := make([]byte, len(blk)+len(cert)+len(ls.encodingWrappers[0])+len(ls.encodingWrappers[1])+len(ls.encodingWrappers[2]))
+	copy(outBuffer, ls.encodingWrappers[0])
+	copy(outBuffer[len(ls.encodingWrappers[0]):], blk)
+	copy(outBuffer[len(ls.encodingWrappers[0])+len(blk):], ls.encodingWrappers[1])
+	copy(outBuffer[len(ls.encodingWrappers[0])+len(blk)+len(ls.encodingWrappers[1]):], cert)
+	copy(outBuffer[len(ls.encodingWrappers[0])+len(blk)+len(ls.encodingWrappers[1])+len(cert):], ls.encodingWrappers[2])
+	return outBuffer, nil
 }

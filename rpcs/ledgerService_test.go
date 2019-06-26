@@ -91,6 +91,7 @@ func TestGetBlockHTTP(t *testing.T) {
 		return
 	}
 	ls := LedgerService{ledger: ledger, genesisID: "test genesisID"}
+	ls.initializeEncodingWrappers()
 	nodeA := BasicRPCNode{}
 	nodeA.RegisterHTTPHandler(LedgerServiceBlockPath, &ls)
 	nodeA.start()
@@ -188,6 +189,7 @@ func TestGetBlockWS(t *testing.T) {
 	}
 	c := make(chan network.IncomingMessage, 50)
 	ls := LedgerService{ledger: ledger, genesisID: "test genesisID", catchupReqs: c}
+	ls.initializeEncodingWrappers()
 	ls.Start()
 
 	// get ws fetcher
