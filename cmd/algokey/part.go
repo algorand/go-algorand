@@ -156,20 +156,20 @@ func init() {
 	partCmd.AddCommand(partInfoCmd)
 	partCmd.AddCommand(partReparentCmd)
 
-	partGenerateCmd.Flags().StringVarP(&partKeyfile, "keyfile", "", "", "Participation key filename")
-	partGenerateCmd.Flags().Uint64VarP(&partFirstRound, "first", "", 0, "First round for participation key")
-	partGenerateCmd.Flags().Uint64VarP(&partLastRound, "last", "", 0, "Last round for participation key")
-	partGenerateCmd.Flags().Uint64VarP(&partKeyDilution, "dilution", "", 0, "Key dilution (default to sqrt of validity window)")
-	partGenerateCmd.Flags().StringVarP(&partParent, "parent", "", "", "Address of parent account")
+	partGenerateCmd.Flags().StringVar(&partKeyfile, "keyfile", "", "Participation key filename")
+	partGenerateCmd.Flags().Uint64Var(&partFirstRound, "first", 0, "First round for participation key")
+	partGenerateCmd.Flags().Uint64Var(&partLastRound, "last", 0, "Last round for participation key")
+	partGenerateCmd.Flags().Uint64Var(&partKeyDilution, "dilution", 0, "Key dilution (default to sqrt of validity window)")
+	partGenerateCmd.Flags().StringVar(&partParent, "parent", "", "Address of parent account")
 	partGenerateCmd.MarkFlagRequired("first")
 	partGenerateCmd.MarkFlagRequired("last")
 	partGenerateCmd.MarkFlagRequired("keyfile")
 
-	partInfoCmd.Flags().StringVarP(&partKeyfile, "keyfile", "", "", "Participation key filename")
+	partInfoCmd.Flags().StringVar(&partKeyfile, "keyfile", "", "Participation key filename")
 	partInfoCmd.MarkFlagRequired("keyfile")
 
-	partReparentCmd.Flags().StringVarP(&partKeyfile, "keyfile", "", "", "Participation key filename")
-	partReparentCmd.Flags().StringVarP(&partParent, "parent", "", "", "Address of parent account")
+	partReparentCmd.Flags().StringVar(&partKeyfile, "keyfile", "", "Participation key filename")
+	partReparentCmd.Flags().StringVar(&partParent, "parent", "", "Address of parent account")
 	partReparentCmd.MarkFlagRequired("keyfile")
 	partReparentCmd.MarkFlagRequired("parent")
 }

@@ -141,7 +141,7 @@ func init() {
 	addParticipationKeyCmd.Flags().Uint64VarP(&keyDilution, "keyDilution", "", 0, "Key dilution for two-level participation keys")
 
 	// installParticipationKey flags
-	installParticipationKeyCmd.Flags().StringVarP(&partKeyFile, "partkey", "", "", "Participation key file to install")
+	installParticipationKeyCmd.Flags().StringVar(&partKeyFile, "partkey", "", "Participation key file to install")
 	installParticipationKeyCmd.MarkFlagRequired("partkey")
 
 	// import flags
