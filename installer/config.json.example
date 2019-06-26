@@ -36,5 +36,6 @@
     "TxPoolSize": 50000,
     "TxSyncIntervalSeconds": 60,
     "TxSyncServeResponseSize": 1000000,
-    "TxSyncTimeoutSeconds": 30
+    "TxSyncTimeoutSeconds": 30,
+    "ForceRelayMessages": false
 }
