@@ -34,10 +34,10 @@ import (
 var (
 	inputFileArg    string
 	outputFileArg   string
-	srvDomainArg    string // i.e. algorand.network
-	nameDomainArg   string // i.e. algorand-mainnet.network
+	srvDomainArg    string // e.g. algorand.network
+	nameDomainArg   string // e.g. algorand-mainnet.network
 	defaultPortArg  uint16
-	dnsBootstrapArg string // i.e. mainnet or testnet
+	dnsBootstrapArg string // e.g. mainnet or testnet
 	recordIDArg     int64
 
 	cfEmail   string
@@ -124,12 +124,18 @@ type srvService struct {
 }
 
 func makeDNSContext() *dnsContext {
-	nameEntries, nameZoneID, err := getReverseMappedEntries(nameDomainArg, nameRecordTypes)
+	cloudflareCred := cloudflare.NewCred(cfEmail, cfAuthKey)
+
+	nameZoneID, err := cloudflareCred.GetZoneID(context.Background(), nameDomainArg)
 	if err != nil {
 		panic(err)
 	}
 
-	cloudflareCred := cloudflare.NewCred(cfEmail, cfAuthKey)
+	nameEntries, err := getReverseMappedEntries(nameZoneID, nameRecordTypes)
+	if err != nil {
+		panic(err)
+	}
+
 	srvZoneID, err := cloudflareCred.GetZoneID(context.Background(), srvDomainArg)
 	if err != nil {
 		panic(err)
@@ -427,14 +433,8 @@ func getTargetDNSChain(nameEntries map[string]string, target string) (names []st
 	}
 }
 
-func getReverseMappedEntries(zoneDomainName string, recordTypes []string) (reverseMap map[string]string, nameZoneID string, err error) {
+func getReverseMappedEntries(nameZoneID string, recordTypes []string) (reverseMap map[string]string, err error) {
 	reverseMap = make(map[string]string)
-
-	cloudflareCred := cloudflare.NewCred(cfEmail, cfAuthKey)
-	nameZoneID, err = cloudflareCred.GetZoneID(context.Background(), zoneDomainName)
-	if err != nil {
-		return
-	}
 
 	cloudflareDNS := cloudflare.NewDNS(nameZoneID, cfEmail, cfAuthKey)
 

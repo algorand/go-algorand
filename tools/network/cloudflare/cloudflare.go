@@ -303,7 +303,6 @@ func (c *Cred) GetZones(ctx context.Context) (zones []Zone, err error) {
 
 // GetZoneID returns a zoneID that matches the requested zoneDomainName.
 func (c *Cred) GetZoneID(ctx context.Context, zoneDomainName string) (zoneID string, err error) {
-	zoneID = ""
 	zones, err := c.GetZones(ctx)
 	if err != nil {
 		return
@@ -326,7 +325,7 @@ func (c *Cred) GetZoneID(ctx context.Context, zoneDomainName string) (zoneID str
 		}
 	}
 	if matchingZone == nil {
-		err = ErrUserNotPermitted
+		err = fmt.Errorf("no zones matching %s for specified credentials", zoneDomainName)
 		return
 	}
 	return matchingZone.ZoneID, nil
