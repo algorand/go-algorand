@@ -623,7 +623,7 @@ var installParticipationKeyCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
 
-		client := ensureFullClient(dataDir)
+		client := ensureAlgodClient(dataDir)
 		_, _, err := client.InstallParticipationKeys(partKeyFile)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
