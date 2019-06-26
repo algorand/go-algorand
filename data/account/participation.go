@@ -103,6 +103,14 @@ func (part Participation) DeleteOldKeys(current basics.Round, proto config.Conse
 	})
 }
 
+// PersistNewParent writes a new parent address to the partkey database.
+func (part Participation) PersistNewParent() error {
+	return part.Store.Atomic(func(tx *sql.Tx) error {
+		_, err := tx.Exec("UPDATE ParticipationAccount SET parent=?", part.Parent[:])
+		return err
+	})
+}
+
 // VRFSecrets returns the VRF secrets associated with this Participation account.
 func (part Participation) VRFSecrets() *crypto.VRFSecrets {
 	return part.VRF
