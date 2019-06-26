@@ -96,7 +96,7 @@ if [ -f "${OLDRPM}" ]; then
     cp -p /var/lib/algorand/genesis/testnet/genesis.json /root/testnode
 
     goal node start -d /root/testnode
-    python3 ${GOPATH}/src/github.com/algorand/go-algorand/scripts/wait_for_progress.py -t 60 /root/testnode/node.log
+    goal node wait -d /root/testnode -w 60
     goal node stop -d /root/testnode
 fi
 
@@ -114,8 +114,7 @@ if [ ! -d /root/testnode ]; then
 fi
 
 goal node start -d /root/testnode
-python3 ${GOPATH}/src/github.com/algorand/go-algorand/scripts/wait_for_progress.py -t 60 /root/testnode/node.log
-#python3 /stuff/wait_for_progress.py -t 60 --verbose /root/testnode/node.log
+goal node wait -d /root/testnode -w 60
 goal node stop -d /root/testnode
 
 

@@ -7,6 +7,7 @@ cd ${GOPATH}/src/github.com/algorand/go-algorand
 
 # Tag Source
 TAG=${BRANCH}-${FULLVERSION}
+echo "TAG=${TAG}" >> ${HOME}/build_env
 if [ ! -z "${SIGNING_KEY_ADDR}" ]; then
     git tag -s -u "${SIGNING_KEY_ADDR}" ${TAG} -m "Genesis Timestamp: $(cat ./genesistimestamp.dat)"
 else

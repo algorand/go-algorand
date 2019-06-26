@@ -19,7 +19,9 @@ fi
 
 cd ${GOPATH}/src/github.com/algorand/go-algorand
 
-git push origin --tags ${BRANCH}
+. ${HOME}/build_env
+git push origin
+git push origin ${TAG}
 
 cd ${PKG_ROOT}
 
