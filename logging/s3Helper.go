@@ -18,6 +18,7 @@ package logging
 
 import (
 	"io"
+	"os"
 	"path/filepath"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -31,22 +32,25 @@ type s3Helper struct {
 	bucket  string
 }
 
+const s3UploadBucket = "algorand-uploads"
+const awsRegion = "us-east-1"
+
 func makeS3SessionForUpload() (s3Helper, error) {
-	awsID := "AKIAJXNTCEEL64GDSXDQ"
-	awsKey := "CG06GzJ9Jwx+WSFKz2OdGy17qCpALkEgeQY6/T4b"
+	awsID := os.Getenv("AWS_ACCESS_KEY_ID")
+	awsKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
 	creds := credentials.NewStaticCredentials(awsID, awsKey, "")
 	return makeS3Session(creds)
 }
 
 func makeS3Session(credentials *credentials.Credentials) (s3Helper, error) {
-	sess, err := session.NewSession(&aws.Config{Region: aws.String("us-east-1"),
+	sess, err := session.NewSession(&aws.Config{Region: aws.String(awsRegion),
 		Credentials: credentials})
 	if err != nil {
 		return s3Helper{}, err
 	}
 	return s3Helper{
 		session: sess,
-		bucket:  "testnet-data",
+		bucket:  s3UploadBucket,
 	}, nil
 }
 
