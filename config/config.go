@@ -210,14 +210,15 @@ func initConsensusProtocols() {
 	// does not copy the ApprovedUpgrades map.  Make sure that each new
 	// ConsensusParams structure gets a fresh ApprovedUpgrades map.
 
-	// Base consensus protocol version, v2.
-	v2 := ConsensusParams{
+	// Base consensus protocol version, v7.
+	v7 := ConsensusParams{
 		UpgradeVoteRounds:   10000,
 		UpgradeThreshold:    9000,
 		UpgradeWaitRounds:   10000,
 		MaxVersionStringLen: 64,
 
-		MinTxnFee:           1,
+		MinBalance:          10000,
+		MinTxnFee:           1000,
 		MaxTxnLife:          1000,
 		MaxTxnNoteBytes:     1024,
 		MaxTxnBytesPerBlock: 1000000,
@@ -249,54 +250,11 @@ func initConsensusProtocols() {
 		SeedLookback:        2,
 		SeedRefreshInterval: 100,
 
-		MaxBalLookback: 203,
+		MaxBalLookback: 320,
 	}
-	Consensus[protocol.ConsensusV2] = v2
 
-	// In v3, we added support for fine-grained ephemeral keys.
-	v3 := v2
-	v3.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
-	Consensus[protocol.ConsensusV3] = v3
-
-	// v2 can be upgraded to v3.
-	v2.ApprovedUpgrades[protocol.ConsensusV3] = true
-
-	// In v4, we added a minimum balance and added support for transactions
-	// that close an account.
-	v4 := v3
-	v4.MinBalance = 1000
-	v4.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
-	Consensus[protocol.ConsensusV4] = v4
-
-	// v3 can be upgraded to v4.
-	v3.ApprovedUpgrades[protocol.ConsensusV4] = true
-
-	// v5 sets the min transaction fee to 1000 microAlgos, the min balance to 10000 microAlgos and also fixes a balance lookback bug
-	v5 := v4
-	v5.MinTxnFee = 1000
-	v5.MinBalance = 10000
-	v5.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
-	Consensus[protocol.ConsensusV5] = v5
-
-	// v4 can be upgraded to v5.
-	v4.ApprovedUpgrades[protocol.ConsensusV5] = true
-
-	// v6 added support for explicit ephemeral-key parameters.
-	v6 := v5
-	v6.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
-	Consensus[protocol.ConsensusV6] = v6
-
-	// v5 can be upgraded to v6.
-	v5.ApprovedUpgrades[protocol.ConsensusV6] = true
-
-	// v7 increases block retention in the ledger to 320 (= 2 * 2 [seed lookback] * 80 [seed refresh interval])
-	v7 := v6
-	v7.MaxBalLookback = 320
 	v7.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
 	Consensus[protocol.ConsensusV7] = v7
-
-	// v6 can be upgraded to v7.
-	v6.ApprovedUpgrades[protocol.ConsensusV7] = true
 
 	// v8 uses parameters and a seed derivation policy (the "twin seeds") from Georgios' new analysis
 	v8 := v7

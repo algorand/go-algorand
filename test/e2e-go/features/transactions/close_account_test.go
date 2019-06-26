@@ -30,7 +30,7 @@ func TestAccountsCanClose(t *testing.T) {
 	a := require.New(t)
 
 	var fixture fixtures.RestClientFixture
-	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachV4.json"))
+	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachV10.json"))
 	defer fixture.Shutdown()
 	client := fixture.LibGoalClient
 
@@ -58,11 +58,11 @@ func TestAccountsCanClose(t *testing.T) {
 	a.NoError(err)
 
 	// Transfer some money to acct0 and wait.
-	tx, err := client.SendPaymentFromUnencryptedWallet(baseAcct, acct0, 1, 1000000, nil)
+	tx, err := client.SendPaymentFromUnencryptedWallet(baseAcct, acct0, 1000, 10000000, nil)
 	a.NoError(err)
 	fixture.WaitForConfirmedTxn(status.LastRound+10, baseAcct, tx.ID().String())
 
-	tx, err = client.SendPaymentFromWallet(walletHandle, nil, acct0, acct1, 1, 100000, nil, acct2, 0, 0)
+	tx, err = client.SendPaymentFromWallet(walletHandle, nil, acct0, acct1, 1000, 1000000, nil, acct2, 0, 0)
 	a.NoError(err)
 	fixture.WaitForConfirmedTxn(status.LastRound+10, acct0, tx.ID().String())
 
@@ -76,6 +76,6 @@ func TestAccountsCanClose(t *testing.T) {
 	a.NoError(err)
 
 	a.True(bal0 == 0)
-	a.True(bal1 >= 100000)
-	a.True(bal2 >= 899999)
+	a.True(bal1 >= 1000000)
+	a.True(bal2 >= 8999000)
 }
