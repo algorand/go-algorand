@@ -32,8 +32,8 @@ type s3Helper struct {
 	bucket  string
 }
 
-const s3UploadBucket = "algorand-uploads"
-const awsRegion = "us-east-1"
+const s3DefaultUploadBucket = "algorand-uploads"
+const s3DefaultRegion = "us-east-1"
 
 func makeS3SessionForUpload() (s3Helper, error) {
 	awsID := os.Getenv("AWS_ACCESS_KEY_ID")
@@ -42,15 +42,31 @@ func makeS3SessionForUpload() (s3Helper, error) {
 	return makeS3Session(creds)
 }
 
+func getS3Bucket() (bucketName string) {
+	bucketName, found := os.LookupEnv("S3_UPLOAD_BUCKET")
+	if !found {
+		bucketName = s3DefaultUploadBucket
+	}
+	return
+}
+
+func getS3Region() (region string) {
+	region, found := os.LookupEnv("S3_REGION")
+	if !found {
+		region = s3DefaultRegion
+	}
+	return
+}
+
 func makeS3Session(credentials *credentials.Credentials) (s3Helper, error) {
-	sess, err := session.NewSession(&aws.Config{Region: aws.String(awsRegion),
+	sess, err := session.NewSession(&aws.Config{Region: aws.String(getS3Region()),
 		Credentials: credentials})
 	if err != nil {
 		return s3Helper{}, err
 	}
 	return s3Helper{
 		session: sess,
-		bucket:  s3UploadBucket,
+		bucket:  getS3Bucket(),
 	}, nil
 }
 
