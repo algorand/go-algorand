@@ -72,32 +72,7 @@ func (status StatusReport) TimeSinceLastRound() time.Duration {
 	return time.Since(status.LastRoundTimestamp)
 }
 
-// Full is an interface representing a Full Algorand Node
-type Full interface {
-	GetSupply() basics.SupplyDetail
-	GetBalanceAndStatus(address basics.Address) (money basics.MicroAlgos, rewards basics.MicroAlgos, moneyWithoutPendingRewards basics.MicroAlgos, status basics.Status, round basics.Round, err error)
-	BroadcastSignedTxn(signed transactions.SignedTxn) (transactions.Txid, error)
-	ListTxns(address basics.Address, minRound basics.Round, maxRound basics.Round) ([]TxnWithStatus, error)
-	GetTransaction(address basics.Address, txID transactions.Txid, minRound basics.Round, maxRound basics.Round) (TxnWithStatus, bool)
-	GetPendingTransaction(txID transactions.Txid) (TxnWithStatus, bool)
-	SuggestedFee() basics.MicroAlgos
-	PoolStats() PoolStats
-	GetBlock(r basics.Round) (bookkeeping.Block, agreement.Certificate, error)
-	ExtendPeerList(args ...string)
-	LatestRound() basics.Round
-	WaitForRound(r basics.Round) chan struct{}
-	GetPendingTxnsFromPool() ([]transactions.SignedTxn, error)
-	Start()
-	Stop()
-	IsArchival() bool
-	Status() (StatusReport, error)
-	GenesisID() string
-	GenesisHash() crypto.Digest
-	Indexer() (*indexer.Indexer, error)
-	GetTransactionByID(txid transactions.Txid, rnd basics.Round) (TxnWithStatus, error)
-}
-
-// AlgorandFullNode is a concrete implementation of the Full interface
+// AlgorandFullNode specifies and implements a full Algorand node.
 type AlgorandFullNode struct {
 	nodeContextData
 
