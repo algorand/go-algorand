@@ -17,7 +17,6 @@
 package s3
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -43,25 +42,6 @@ const s3DefaultRegion = "us-east-1"
 type Helper struct {
 	session *session.Session
 	bucket  string
-}
-
-type s3Keys struct {
-	ID     string
-	Secret string
-	Bucket string
-}
-
-func loadS3Keys(keyFile string) (keys s3Keys, err error) {
-	keys = s3Keys{}
-	configpath := keyFile
-	f, err := os.Open(configpath)
-	if err != nil {
-		return
-	}
-	defer f.Close()
-	dec := json.NewDecoder(f)
-	err = dec.Decode(&keys)
-	return
 }
 
 func getS3UploadBucket() (bucketName string) {
@@ -120,24 +100,17 @@ func (helper *Helper) UploadFileStream(filename string, reader io.Reader) error 
 	return nil
 }
 
-// MakeS3SessionForDownloadWithBucket download with bucket name provided
-func MakeS3SessionForDownloadWithBucket(bucket string) (helper Helper, err error) {
-	if bucket == "" {
-		return MakePublicS3SessionForDownload()
-	}
-	return makePrivateS3SessionForDownload(bucket)
+// MakeS3SessionForUpload returns an s3.Helper with default bucket for upload
+func MakeS3SessionForUpload() (helper Helper, err error) {
+	return MakeS3SessionForUploadWithBucket(getS3UploadBucket())
 }
 
-// MakeS3SessionForUploadWithBucket upload with bucket name provided
-func MakeS3SessionForUploadWithBucket(bucket string) (helper Helper, err error) {
-	if bucket == "" {
-		return makeTravisS3SessionForUpload()
-	}
-	return makeLocalS3SessionForUpload(bucket)
-}
-
-func makeLocalS3SessionForUpload(awsBucket string) (helper Helper, err error) {
+// MakeS3SessionForUploadWithBucket upload to bucket
+func MakeS3SessionForUploadWithBucket(awsBucket string) (helper Helper, err error) {
 	awsID, awsKey := getAWSCredentials()
+	if awsBucket == "" {
+		awsBucket = s3DefaultUploadBucket
+	}
 	err = validateS3Params("upload", awsID, awsKey, awsBucket)
 	if err != nil {
 		return
@@ -146,44 +119,23 @@ func makeLocalS3SessionForUpload(awsBucket string) (helper Helper, err error) {
 	return makeS3Session(creds, awsBucket)
 }
 
-func makeTravisS3SessionForUpload() (helper Helper, err error) {
-	return makeLocalS3SessionForUpload(getS3ReleaseBucket())
+// MakeS3SessionForDownload returns an s3.Helper with default bucket for download
+func MakeS3SessionForDownload() (helper Helper, err error) {
+	return MakeS3SessionForDownloadWithBucket(getS3ReleaseBucket())
 }
 
-// MakePublicS3SessionForDownload returns an s3.Helper for the default algorand S3 bucket - for downloading
-func MakePublicS3SessionForDownload() (helper Helper, err error) {
-	// Create a session without credentials for the public algorand-releases bucket.
-	awsBucket := getS3ReleaseBucket()
-	if awsBucket == "" {
-		err = fmt.Errorf("unable to download, bucket name is empty")
-		return
-	}
-	helper, err = makeS3Session(nil, awsBucket)
-	return
-}
-
-func makePrivateS3SessionForDownload(awsBucket string) (helper Helper, err error) {
-	// If a bucket is provided, lookup credentials from standard location.
+// MakeS3SessionForDownloadWithBucket download from bucket
+func MakeS3SessionForDownloadWithBucket(awsBucket string) (helper Helper, err error) {
 	awsID, awsKey := getAWSCredentials()
+	if awsBucket == "" {
+		awsBucket = s3DefaultReleaseBucket
+	}
 	err = validateS3Params("download", awsID, awsKey, awsBucket)
 	if err != nil {
 		return
 	}
 	creds := credentials.NewStaticCredentials(awsID, awsKey, "")
 	return makeS3Session(creds, awsBucket)
-}
-
-// MakeS3SessionForUpload returns an s3.Helper for the default algorand S3 bucket - for uploading
-func MakeS3SessionForUpload() (helper Helper, err error) {
-	awsID, awsKey := getAWSCredentials()
-	awsBucket := getS3UploadBucket()
-	err = validateS3Params("upload", awsID, awsKey, awsBucket)
-	if err != nil {
-		return
-	}
-	creds := credentials.NewStaticCredentials(awsID, awsKey, "")
-	helper, err = makeS3Session(creds, awsBucket)
-	return
 }
 
 func makeS3Session(credentials *credentials.Credentials, bucket string) (helper Helper, err error) {
@@ -254,10 +206,7 @@ func (helper *Helper) DownloadFile(name string, writer io.WriterAt) error {
 			Bucket: &helper.bucket,
 			Key:    aws.String(name),
 		})
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 // UploadFiles uploads the provided set of files in a batch
@@ -268,10 +217,7 @@ func (helper *Helper) UploadFiles(files []string) error {
 	uploader := s3manager.NewUploader(helper.session)
 	iter := makeFileIterator(files, helper.bucket)
 	err := uploader.UploadWithIterator(aws.BackgroundContext(), iter)
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 func getVersionFromName(name string) (version uint64, err error) {

@@ -38,13 +38,13 @@ func downloadAndExtractConfigPackage(channel string, targetDir string) (err erro
 }
 
 func downloadConfigPackage(channelName string, targetDir string) (packageFile string, err error) {
-	s3, err := s3.MakePublicS3SessionForDownload()
+	s3Session, err := s3.MakeS3SessionForDownload()
 	if err != nil {
 		return
 	}
 
 	prefix := fmt.Sprintf("config_%s", channelName)
-	version, name, err := s3.GetLatestVersion(prefix)
+	version, name, err := s3Session.GetLatestVersion(prefix)
 	if err != nil {
 		return
 	}
@@ -60,7 +60,7 @@ func downloadConfigPackage(channelName string, targetDir string) (packageFile st
 	}
 	defer file.Close()
 
-	if err = s3.DownloadFile(name, file); err != nil {
+	if err = s3Session.DownloadFile(name, file); err != nil {
 		err = fmt.Errorf("error downloading file: %v", err)
 		return
 	}
