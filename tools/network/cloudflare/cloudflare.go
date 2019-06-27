@@ -33,8 +33,8 @@ const (
 // ErrUserNotPermitted is used when a user that is not permitted in a given zone attempt to perform an operation on that zone.
 var ErrUserNotPermitted = fmt.Errorf("user not permitted in zone")
 
-// ErrInvalidDomainName indicate that the given domain zone corresponds to multiple zones.
-var ErrInvalidDomainName = fmt.Errorf("invalid domain name")
+// ErrDuplicateZoneNameFound is used when a user that is not permitted in a given zone attempt to perform an operation on that zone.
+var ErrDuplicateZoneNameFound = fmt.Errorf("more than a single zone name found to match the requested zone name")
 
 // Cred contains the credentials used to authenticate with the cloudflare API.
 type Cred struct {
@@ -318,7 +318,7 @@ func (c *Cred) GetZoneID(ctx context.Context, zoneDomainName string) (zoneID str
 			// found a match.
 			if matchingZone != nil {
 				// we already had a previous match ?!
-				err = ErrInvalidDomainName
+				err = ErrDuplicateZoneNameFound
 				return
 			}
 			matchingZone = &zone
