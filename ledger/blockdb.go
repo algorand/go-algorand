@@ -98,9 +98,7 @@ func blockGetHdr(tx *sql.Tx, rnd basics.Round) (hdr bookkeeping.BlockHeader, err
 }
 
 func blockGetEncodedCert(tx *sql.Tx, rnd basics.Round) (blk []byte, cert []byte, err error) {
-	var blkbuf []byte
-	var certbuf []byte
-	err = tx.QueryRow("SELECT blkdata, certdata FROM blocks WHERE rnd=?", rnd).Scan(&blkbuf, &certbuf)
+	err = tx.QueryRow("SELECT blkdata, certdata FROM blocks WHERE rnd=?", rnd).Scan(&blk, &cert)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			err = ErrNoEntry{Round: rnd}
@@ -108,7 +106,7 @@ func blockGetEncodedCert(tx *sql.Tx, rnd basics.Round) (blk []byte, cert []byte,
 
 		return
 	}
-	return blkbuf, certbuf, nil
+	return
 }
 
 func blockGetCert(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, cert agreement.Certificate, err error) {

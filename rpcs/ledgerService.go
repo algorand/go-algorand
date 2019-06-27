@@ -24,6 +24,8 @@ import (
 
 	"github.com/gorilla/mux"
 
+	"github.com/algorand/go-codec/codec"
+
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data"
@@ -54,6 +56,13 @@ type LedgerService struct {
 type EncodedBlockCert struct {
 	Block       bookkeeping.Block     `codec:"block"`
 	Certificate agreement.Certificate `codec:"cert"`
+}
+
+// PreEncodedBlockCert defines how GetBlockBytes encodes a block and its certificate,
+// using a pre-encoded Block and Certificate in msgpack format.
+type PreEncodedBlockCert struct {
+	Block       codec.Raw `codec:"block"`
+	Certificate codec.Raw `codec:"cert"`
 }
 
 // RegisterLedgerService creates a LedgerService around the provider Ledger and registers it for RPC with the provided Registrar
@@ -278,11 +287,9 @@ func (ls *LedgerService) encodedBlockCert(round uint64) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	outBuffer := make([]byte, len(blk)+len(cert)+len(ls.encodingWrappers[0])+len(ls.encodingWrappers[1])+len(ls.encodingWrappers[2]))
-	copy(outBuffer, ls.encodingWrappers[0])
-	copy(outBuffer[len(ls.encodingWrappers[0]):], blk)
-	copy(outBuffer[len(ls.encodingWrappers[0])+len(blk):], ls.encodingWrappers[1])
-	copy(outBuffer[len(ls.encodingWrappers[0])+len(blk)+len(ls.encodingWrappers[1]):], cert)
-	copy(outBuffer[len(ls.encodingWrappers[0])+len(blk)+len(ls.encodingWrappers[1])+len(cert):], ls.encodingWrappers[2])
-	return outBuffer, nil
+
+	return protocol.Encode(PreEncodedBlockCert{
+		Block:       blk,
+		Certificate: cert,
+	}), nil
 }
