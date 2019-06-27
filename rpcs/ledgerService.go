@@ -17,7 +17,6 @@
 package rpcs
 
 import (
-	"bytes"
 	"context"
 	"net/http"
 	"strconv"
@@ -45,11 +44,10 @@ const ledgerServerCatchupRequestBufferSize = 10
 
 // LedgerService represents the Ledger RPC API
 type LedgerService struct {
-	ledger           *data.Ledger
-	genesisID        string
-	catchupReqs      chan network.IncomingMessage
-	stop             chan struct{}
-	encodingWrappers [3][]byte
+	ledger      *data.Ledger
+	genesisID   string
+	catchupReqs chan network.IncomingMessage
+	stop        chan struct{}
 }
 
 // EncodedBlockCert defines how GetBlockBytes encodes a block and its certificate
@@ -80,33 +78,7 @@ func RegisterLedgerService(config config.Local, ledger *data.Ledger, registrar R
 	service.catchupReqs = c
 	service.stop = make(chan struct{})
 
-	service.initializeEncodingWrappers()
 	return service
-}
-
-// initializeEncodingWrappers figures out the packing that would get added when encoding a EncodedBlockCert structure
-// using msgpack; it allows us to work on encoded blocks directly and wrap them manually.
-func (ls *LedgerService) initializeEncodingWrappers() {
-	block := bookkeeping.Block{
-		BlockHeader: bookkeeping.BlockHeader{
-			Round: basics.Round(1000),
-		},
-	}
-	cert := agreement.Certificate{
-		Round: basics.Round(1000),
-	}
-	blockCert := EncodedBlockCert{
-		Block:       block,
-		Certificate: cert,
-	}
-	encodedBlock := protocol.Encode(block)
-	encodedCert := protocol.Encode(cert)
-	encodedBlockCert := protocol.Encode(blockCert)
-	blockIdx := bytes.Index(encodedBlockCert, encodedBlock)
-	certIdx := bytes.LastIndex(encodedBlockCert, encodedCert)
-	ls.encodingWrappers[0] = encodedBlockCert[:blockIdx]
-	ls.encodingWrappers[1] = encodedBlockCert[blockIdx+len(encodedBlock) : certIdx]
-	ls.encodingWrappers[2] = encodedBlockCert[certIdx+len(encodedCert):]
 }
 
 // Start listening to catchup requests over ws
