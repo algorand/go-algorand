@@ -1503,7 +1503,7 @@ func TestForceMessageRelaying(t *testing.T) {
 	netC.config.GossipFanout = 1
 	netC.phonebook = &oneEntryPhonebook{addrA}
 	netC.Start()
-	defer func() { t.Log("stopping C"); netB.Stop(); t.Log("C done") }()
+	defer func() { t.Log("stopping C"); netC.Stop(); t.Log("C done") }()
 
 	readyTimeout := time.NewTimer(2 * time.Second)
 	waitReady(t, netA, readyTimeout.C)
