@@ -18,7 +18,7 @@
 
 set -e
 
-if [[ "${AWS_ACCESS_KEY_ID}" = "" || "${AWS_SECRET_ACCESS_KEY}" = "" || "${S3_UPLOAD_BUCKET}" = "" ]]; then
+if [[ "${AWS_ACCESS_KEY_ID}" = "" || "${AWS_SECRET_ACCESS_KEY}" = "" ]]; then
     echo "You need to export your AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and S3_UPLOAD_BUCKET for this to work"
     exit 1
 fi
@@ -34,6 +34,7 @@ ROOTDIR=""
 NO_DEPLOY=""
 FORCE_OPTION=""
 SCHEMA_MODIFIER=""
+BUCKET="${S3_UPLOAD_BUCKET}"
 
 while [ "$1" != "" ]; do
     case "$1" in
@@ -63,6 +64,10 @@ while [ "$1" != "" ]; do
         --nodeploy)
             NO_DEPLOY="true"
             ;;
+        -b)
+            shift
+            BUCKET="-b $1"
+            ;;
         *)
             echo "Unknown option" "$1"
             exit 1
@@ -82,6 +87,11 @@ if [[ "${NETWORK}" = "" ]]; then
     NETWORK=${CHANNEL}
 fi
 
+if [[ "${BUCKET}" = "" ]]; then
+    echo "You need to export S3_UPLOAD_BUCKET or specify the bucket with the -b flag for this to work"
+    exit 1
+fi
+
 # Build so we've got up-to-date binaries
 (cd ${SRCPATH} && make)
 
@@ -93,5 +103,5 @@ ${SRCPATH}/scripts/upload_config.sh "${ROOTDIR}" "${CHANNEL}"
 
 if [ "${NO_DEPLOY}" = "" ]; then
     # Now generate a private build using our custom genesis.json and deploy it to S3 also
-    ${SRCPATH}/scripts/deploy_private_version.sh -c "${CHANNEL}" -f "${ROOTDIR}/genesisdata/genesis.json" -n "${NETWORK}" -b "${S3_UPLOAD_BUCKET}"
+    ${SRCPATH}/scripts/deploy_private_version.sh -c "${CHANNEL}" -f "${ROOTDIR}/genesisdata/genesis.json" -n "${NETWORK}" -b "${BUCKET}"
 fi

@@ -21,8 +21,8 @@
 
 set -e
 
-if [[ "${AWS_ACCESS_KEY_ID}" = "" || "${AWS_SECRET_ACCESS_KEY}" = "" || "${S3_UPLOAD_BUCKET}" = "" ]]; then
-    echo "You need to export AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and S3_UPLOAD_BUCKET for this to work"
+if [[ "${AWS_ACCESS_KEY_ID}" = "" || "${AWS_SECRET_ACCESS_KEY}" = "" ]]; then
+    echo "You need to export AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY for this to work"
     exit 1
 fi
 
@@ -30,7 +30,7 @@ SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 export GOPATH=$(go env GOPATH)
 export SRCPATH=${GOPATH}/src/github.com/algorand/go-algorand
 
-BUCKET=""
+BUCKET="${S3_UPLOAD_BUCKET}"
 CHANNEL=""
 NETWORK=""
 CONFIGFILE=""
@@ -91,6 +91,12 @@ fi
 if [[ "${ROOTDIR}" = "" ]]; then
     ROOTDIR=${SRCPATH}/test/testdata/networks/${NETWORK}
 fi
+
+if [[ "${BUCKET}" = "" ]]; then
+    echo "You need to export S3_UPLOAD_BUCKET or specify the bucket with the -b flag for this to work"
+    exit 1
+fi
+
 
 # Build so we've got up-to-date binaries
 (cd ${SRCPATH} && make)
