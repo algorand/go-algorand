@@ -50,7 +50,7 @@ func TestFeeTracker_ProcessBlock(t *testing.T) {
 	var block bookkeeping.Block
 	block.Payset = make(transactions.Payset, 0)
 
-	proto := config.Consensus[protocol.ConsensusV2]
+	proto := config.Consensus[protocol.ConsensusV7]
 	for i, sender := range addresses {
 		for j, receiver := range addresses {
 			if sender != receiver {
@@ -80,5 +80,5 @@ func TestFeeTracker_ProcessBlock(t *testing.T) {
 		}
 	}
 	ft.ProcessBlock(block)
-	require.Equal(t, uint64(0x1a), ft.EstimateFee().Raw)
+	require.Equal(t, uint64(0x1f), ft.EstimateFee().Raw)
 }
