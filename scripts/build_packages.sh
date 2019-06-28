@@ -46,13 +46,6 @@ else
 fi
 export TIMESTAMP=${TIMESTAMP}
 
-# To ensure deterministic availability of testnet (stable) builds, prefix the packages
-# with "pending_" so updater will not detect the package before we rename it.
-GATE_PREFIX=""
-# if [[ "${CHANNEL}" = "stable" || "${CHANNEL}" = "nightly" ]]; then
-#     GATE_PREFIX="pending_"
-# fi
-
 VERSION_COMPONENTS=(${FULLVERSION//\./ })
 export BUILDNUMBER=${VERSION_COMPONENTS[2]}
 
@@ -106,30 +99,16 @@ for var in "${VARIATION_ARRAY[@]}"; do
         echo Building package for channel ${CHANNEL} to ${PLATFORM_ROOT}
 
         pushd ${PLATFORM_ROOT}
-        tar --exclude=tools -zcf ${PKG_ROOT}/${GATE_PREFIX}node_${CHANNEL}_${PKG_NAME}_${FULLVERSION}.tar.gz * >/dev/null 2>&1
+        tar --exclude=tools -zcf ${PKG_ROOT}/node_${CHANNEL}_${PKG_NAME}_${FULLVERSION}.tar.gz * >/dev/null 2>&1
         cd bin
-        tar -zcf ${PKG_ROOT}/${GATE_PREFIX}install_${CHANNEL}_${PKG_NAME}_${FULLVERSION}.tar.gz updater update.sh >/dev/null 2>&1
+        tar -zcf ${PKG_ROOT}/install_${CHANNEL}_${PKG_NAME}_${FULLVERSION}.tar.gz updater update.sh >/dev/null 2>&1
         if [ $? -ne 0 ]; then
             echo "Error creating tar file for package ${PLATFORM}.  Aborting..."
             exit 1
         fi
 
         cd ${PLATFORM_ROOT}/tools
-        tar -zcf ${PKG_ROOT}/${GATE_PREFIX}tools_${CHANNEL}_${PKG_NAME}_${FULLVERSION}.tar.gz * >/dev/null 2>&1
+        tar -zcf ${PKG_ROOT}/tools_${CHANNEL}_${PKG_NAME}_${FULLVERSION}.tar.gz * >/dev/null 2>&1
         popd
-
-        # If Linux package, build debian (deb) package as well
-        if [ $(scripts/ostype.sh) = "linux" ]; then
-            DEBTMP=$(mktemp -d 2>/dev/null || mktemp -d -t "debtmp")
-            trap "rm -rf ${DEBTMP}" 0
-            scripts/build_deb.sh ${ARCH} ${DEBTMP}
-            if [ $? -ne 0 ]; then
-                echo "Error building debian package for ${PLATFORM}.  Aborting..."
-                exit 1
-            fi
-            pushd ${DEBTMP}
-	    cp -p *.deb ${PKG_ROOT}/${GATE_PREFIX}algorand_${CHANNEL}_${PKG_NAME}_${FULLVERSION}.deb
-            popd
-        fi
     done
 done
