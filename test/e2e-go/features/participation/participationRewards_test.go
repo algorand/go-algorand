@@ -65,7 +65,7 @@ func waitUntilRewards(t *testing.T, fixture *fixtures.RestClientFixture, round u
 func spendToNonParticipating(t *testing.T, fixture *fixtures.RestClientFixture, lastRound uint64, account string, balance uint64, minFee uint64) uint64 {
 	// move a lot of Algos to a non participating account -- the incentive pool
 	poolAddr := basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff} // hardcoded; change if the pool address changes
-	pd := poolAddr.GetChecksumAddress()
+	pd := poolAddr
 	drainTx, err := fixture.LibGoalClient.SendPaymentFromUnencryptedWallet(account, pd.String(), minFee, balance-balance/100-minFee, nil)
 	require.NoError(t, err)
 	fixture.WaitForAllTxnsToConfirm(lastRound+uint64(10), map[string]string{drainTx.ID().String(): account})
@@ -140,7 +140,7 @@ func TestPartkeyOnlyRewards(t *testing.T) {
 	richAccount, _ := fixture.GetRichestAccount()
 	client := fixture.GetLibGoalClientForNamedNode("Partkey")
 	accounts := fixture.GetParticipationOnlyAccounts(client)
-	account := accounts[0].Address().GetChecksumAddress()
+	account := accounts[0].Address()
 
 	status, err := fixture.LibGoalClient.Status()
 	r.NoError(err)
@@ -292,7 +292,7 @@ func TestRewardRateRecalculation(t *testing.T) {
 	r.NoError(fixture.WaitForRoundWithTimeout(uint64(5)))
 	richAccount, err := fixture.GetRichestAccount()
 	r.NoError(err)
-	rewardsAccount := defaultPoolAddr.GetChecksumAddress().String()
+	rewardsAccount := defaultPoolAddr.String()
 	amountToSend := uint64(1e15) // 1e12 insufficient
 
 	curStatus, err := client.Status()

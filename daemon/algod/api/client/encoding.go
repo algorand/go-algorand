@@ -60,5 +60,5 @@ func (a *ChecksumAddress) UnmarshalText(text []byte) error {
 // MarshalText implements the encoding.TextMarshaler interface
 func (a ChecksumAddress) MarshalText() (text []byte, err error) {
 	addr := basics.Address(a)
-	return []byte(addr.GetChecksumAddress().String()), nil
+	return []byte(addr.String()), nil
 }

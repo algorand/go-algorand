@@ -254,8 +254,8 @@ func initAuctionParams() {
 	atomicEncode("nextsettlement", params.AuctionID)
 
 	fmt.Printf("Initial auction state:\n%s\n", string(jsonParamsOut))
-	fmt.Printf("AuctionKey: %s\n", basics.Address(masterKey.SignatureVerifier).GetChecksumAddress().String())
-	fmt.Printf("DispensingKey: %s\n", basics.Address(msigAddr).GetChecksumAddress().String())
+	fmt.Printf("AuctionKey: %s\n", basics.Address(masterKey.SignatureVerifier).String())
+	fmt.Printf("DispensingKey: %s\n", basics.Address(msigAddr).String())
 }
 
 func settleAuction() {

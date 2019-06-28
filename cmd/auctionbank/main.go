@@ -546,7 +546,7 @@ func main() {
 
 		bankKey = crypto.GenerateSignatureSecrets(seed)
 		fmt.Fprintf(os.Stderr, "Bank key: %s\n",
-			basics.Address(bankKey.SignatureVerifier).GetChecksumAddress())
+			basics.Address(bankKey.SignatureVerifier))
 
 		os.Exit(0)
 	}
@@ -578,7 +578,7 @@ func main() {
 	copy(seed[:], seedBytes)
 	bankKey = crypto.GenerateSignatureSecrets(seed)
 	fmt.Fprintf(os.Stderr, "Bank key: %s\n",
-		basics.Address(bankKey.SignatureVerifier).GetChecksumAddress())
+		basics.Address(bankKey.SignatureVerifier))
 
 	http.HandleFunc("/create-user", createUser)
 	http.HandleFunc("/transfer-in", transferIn)

@@ -40,10 +40,10 @@ var (
 	dnsBootstrapArg string
 	recordIDArg     int64
 
-	cfEmail         string
-	cfAuthKey       string
-	cfSrvZoneID     string
-	cfNameZoneID    string
+	cfEmail      string
+	cfAuthKey    string
+	cfSrvZoneID  string
+	cfNameZoneID string
 )
 
 var nameRecordTypes = []string{"A", "CNAME", "SRV"}
@@ -78,7 +78,6 @@ func init() {
 	checkCmd.Flags().StringVarP(&dnsBootstrapArg, "dnsbootstrap", "b", "", "Bootstrap name for SRV records (eg mainnet)")
 	checkCmd.MarkFlagRequired("dnsbootstrap")
 
-
 	rootCmd.AddCommand(updateCmd)
 
 	updateCmd.Flags().StringVarP(&inputFileArg, "inputfile", "i", "", "File containing Relay data")
@@ -108,22 +107,22 @@ func loadRelays(file string) []eb.Relay {
 }
 
 type checkResult struct {
-	ID        int64
-	Success   bool
-	Error     string  `json:",omitempty"`
+	ID      int64
+	Success bool
+	Error   string `json:",omitempty"`
 }
 
 type dnsContext struct {
-	nameEntries    map[string]string
-	bootstrap      srvService
-	metrics        srvService
+	nameEntries map[string]string
+	bootstrap   srvService
+	metrics     srvService
 }
 
 type srvService struct {
-	serviceName  string
-	entries      map[string]uint16
-	shortName    string
-	networkName  string
+	serviceName string
+	entries     map[string]uint16
+	shortName   string
+	networkName string
 }
 
 func makeDNSContext() *dnsContext {
@@ -132,7 +131,7 @@ func makeDNSContext() *dnsContext {
 		panic(err)
 	}
 
-	bootstrap, err := getSrvRecords("_algobootstrap", dnsBootstrapArg + "." + srvDomainArg, cfSrvZoneID)
+	bootstrap, err := getSrvRecords("_algobootstrap", dnsBootstrapArg+"."+srvDomainArg, cfSrvZoneID)
 	if err != nil {
 		panic(err)
 	}
@@ -144,16 +143,16 @@ func makeDNSContext() *dnsContext {
 
 	return &dnsContext{
 		nameEntries: nameEntries,
-		bootstrap: bootstrap,
-		metrics: metrics,
+		bootstrap:   bootstrap,
+		metrics:     metrics,
 	}
 }
 
 func makeService(shortName, networkName string) srvService {
 	return srvService{
 		serviceName: shortName + "._tcp." + networkName,
-		entries: make(map[string]uint16),
-		shortName: shortName,
+		entries:     make(map[string]uint16),
+		shortName:   shortName,
 		networkName: networkName,
 	}
 }
@@ -167,7 +166,7 @@ var checkCmd = &cobra.Command{
 		context := makeDNSContext()
 
 		checkOne := recordIDArg != 0
-		results := make([]checkResult,0)
+		results := make([]checkResult, 0)
 		anyCheckError := false
 
 		for _, relay := range relays {
@@ -184,15 +183,15 @@ var checkCmd = &cobra.Command{
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "[%d] ERROR: %s: %s\n", relay.ID, relay.IPOrDNSName, err)
 				results = append(results, checkResult{
-					ID: relay.ID,
+					ID:      relay.ID,
 					Success: false,
-					Error: err.Error(),
-					})
+					Error:   err.Error(),
+				})
 				anyCheckError = true
 			} else {
 				fmt.Printf("[%d] OK: %s -> %s:%d\n", relay.ID, relay.IPOrDNSName, name, port)
 				results = append(results, checkResult{
-					ID: relay.ID,
+					ID:      relay.ID,
 					Success: true,
 				})
 			}
@@ -222,7 +221,7 @@ var updateCmd = &cobra.Command{
 		context := makeDNSContext()
 
 		updateOne := recordIDArg != 0
-		results := make([]checkResult,0)
+		results := make([]checkResult, 0)
 		anyUpdateError := false
 
 		for _, relay := range relays {
@@ -240,15 +239,15 @@ var updateCmd = &cobra.Command{
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "[%d] ERROR: %s: %s\n", relay.ID, relay.IPOrDNSName, err)
 				results = append(results, checkResult{
-					ID: relay.ID,
+					ID:      relay.ID,
 					Success: false,
-					Error: err.Error(),
+					Error:   err.Error(),
 				})
 				anyUpdateError = true
 			} else {
 				fmt.Printf("[%d] OK: %s -> %s:%d\n", relay.ID, relay.IPOrDNSName, name, port)
 				results = append(results, checkResult{
-					ID: relay.ID,
+					ID:      relay.ID,
 					Success: true,
 				})
 			}
@@ -448,7 +447,7 @@ func getReverseMappedEntries(zoneID string, recordTypes []string) (reverseMap ma
 	return
 }
 
-func getSrvRecords(serviceName string, networkName, zoneID string) (service srvService, err error){
+func getSrvRecords(serviceName string, networkName, zoneID string) (service srvService, err error) {
 	service = makeService(serviceName, networkName)
 
 	cloudflareDNS := cloudflare.NewDNS(zoneID, cfEmail, cfAuthKey)

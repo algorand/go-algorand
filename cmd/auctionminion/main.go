@@ -129,7 +129,7 @@ func main() {
 
 	restClient := client.MakeRestClient(*algodURL, cfg.AlgodToken)
 	auctionKey := crypto.Digest(cfg.AuctionKey)
-	auctionChecksumAddr := basics.Address(auctionKey).GetChecksumAddress()
+	auctionChecksumAddr := basics.Address(auctionKey)
 
 	var results []auction.MasterInput
 	var ra *auction.RunningAuction

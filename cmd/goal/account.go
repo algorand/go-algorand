@@ -509,7 +509,7 @@ var changeOnlineCmd = &cobra.Command{
 
 			part = &partkey
 			if accountAddress == "" {
-				accountAddress = part.Parent.GetChecksumAddress().String()
+				accountAddress = part.Parent.String()
 			}
 		}
 
@@ -625,7 +625,7 @@ var installParticipationKeyCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		if !partKeyDeleteInput {
 			fmt.Println(
-`The installpartkey command deletes the input participation file on
+				`The installpartkey command deletes the input participation file on
 successful installation.  Please acknowledge this by passing the
 "--delete-input" flag to the installpartkey command.  You can make
 a copy of the input file if needed, but please keep in mind that
@@ -679,7 +679,7 @@ var renewParticipationKeyCmd = &cobra.Command{
 			reportErrorf(errorRequestFail, err)
 		}
 		for _, part := range parts {
-			if part.Address().GetChecksumAddress().String() == accountAddress {
+			if part.Address().String() == accountAddress {
 				if part.LastValid >= basics.Round(roundLastValid) {
 					reportErrorf(errExistingPartKey, roundLastValid, part.LastValid)
 				}
@@ -771,17 +771,17 @@ func renewPartKeysInDir(dataDir string, lastValidRound uint64, fee uint64, dilut
 	// Make sure we don't already have a partkey valid for (or after) specified roundLastValid
 	for _, renewPart := range renewAccounts {
 		if renewPart.LastValid >= basics.Round(lastValidRound) {
-			fmt.Printf("  Skipping account %s: Already has a part key valid beyond %d (currently %d)\n", renewPart.Address().GetChecksumAddress(), lastValidRound, renewPart.LastValid)
+			fmt.Printf("  Skipping account %s: Already has a part key valid beyond %d (currently %d)\n", renewPart.Address(), lastValidRound, renewPart.LastValid)
 			continue
 		}
 
 		// If the account's latest partkey expired before the current round, don't automatically renew and instead instruct the user to explicitly renew it.
 		if renewPart.LastValid < basics.Round(lastValidRound) {
-			fmt.Printf("  Skipping account %s: This account has part keys that have expired.  Please renew this account explicitly using 'renewpartkey'\n", renewPart.Address().GetChecksumAddress())
+			fmt.Printf("  Skipping account %s: This account has part keys that have expired.  Please renew this account explicitly using 'renewpartkey'\n", renewPart.Address())
 			continue
 		}
 
-		address := renewPart.Address().GetChecksumAddress().String()
+		address := renewPart.Address().String()
 		err = generateAndRegisterPartKey(address, currentRound, lastValidRound, proto.MaxTxnLife, fee, dilution, wallet, dataDir, client)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  Error renewing part key for account %s: %v\n", address, err)
@@ -1032,7 +1032,7 @@ var partkeyInfoCmd = &cobra.Command{
 			for filename, part := range parts {
 				fmt.Println("------------------------------------------------------------------")
 				info := partkeyInfo{
-					Address:         part.Address().GetChecksumAddress().String(),
+					Address:         part.Address().String(),
 					FirstValid:      part.FirstValid,
 					LastValid:       part.LastValid,
 					VoteID:          part.VotingSecrets().OneTimeSignatureVerifier,

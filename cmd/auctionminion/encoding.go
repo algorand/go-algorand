@@ -38,6 +38,6 @@ func (d *DigestChecksummed) UnmarshalText(text []byte) error {
 
 // MarshalText implements the encoding.TextMarshaler interface
 func (d DigestChecksummed) MarshalText() (text []byte, err error) {
-	checksumAddr := basics.Address(d).GetChecksumAddress()
+	checksumAddr := basics.Address(d)
 	return []byte(checksumAddr.String()), nil
 }
