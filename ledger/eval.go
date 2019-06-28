@@ -331,12 +331,16 @@ func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn, ad *transact
 			return fmt.Errorf("transaction %v: no applyData for validation", txn.ID())
 		}
 		if eval.proto.ApplyData {
-			if *ad != applyData {
-				return fmt.Errorf("transaction %v: applyData mismatch: %v != %v", txn.ID(), *ad, applyData)
+			for i := 0; i < len(ad.Data); i++ {
+				if ad.Data[i] != applyData.Data[i] {
+					return fmt.Errorf("transaction %v: applyData mismatch: %v != %v", txn.ID(), ad.Data[i], applyData)
+				}
 			}
 		} else {
-			if *ad != (transactions.ApplyData{}) {
-				return fmt.Errorf("transaction %v: applyData not supported", txn.ID())
+			for i := 0; i < len(ad.Data); i++ {
+				if ad.Data[i] != (transactions.PaymentData{}) {
+					return fmt.Errorf("transaction %v: applyData not supported", txn.ID())
+				}
 			}
 		}
 	}

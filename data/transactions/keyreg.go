@@ -35,7 +35,7 @@ type KeyregTxnFields struct {
 }
 
 // Apply changes the balances according to this transaction.
-func (keyreg KeyregTxnFields) apply(sender basics.Address, balances Balances, spec SpecialAddresses, ad *ApplyData) error {
+func (keyreg KeyregTxnFields) apply(sender basics.Address, balances Balances, spec SpecialAddresses, td *PaymentData) error {
 	if sender == spec.FeeSink {
 		return fmt.Errorf("cannot register participation key for fee sink's address %v ", sender)
 	}

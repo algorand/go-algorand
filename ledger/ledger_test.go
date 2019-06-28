@@ -649,14 +649,14 @@ func TestLedgerSingleTxApplyData(t *testing.T) {
 	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "overspent with (amount + fee)")
 
 	adClose := ad
-	adClose.ClosingAmount = initAccounts[correctClose.Sender].MicroAlgos
-	adClose.ClosingAmount, _ = basics.OSubA(adClose.ClosingAmount, correctPay.Amount)
-	adClose.ClosingAmount, _ = basics.OSubA(adClose.ClosingAmount, correctPay.Fee)
-	adClose.ClosingAmount, _ = basics.OSubA(adClose.ClosingAmount, correctClose.Amount)
-	adClose.ClosingAmount, _ = basics.OSubA(adClose.ClosingAmount, correctClose.Fee)
+	adClose.Data[0].ClosingAmount = initAccounts[correctClose.Sender].MicroAlgos
+	adClose.Data[0].ClosingAmount, _ = basics.OSubA(adClose.Data[0].ClosingAmount, correctPay.Amount)
+	adClose.Data[0].ClosingAmount, _ = basics.OSubA(adClose.Data[0].ClosingAmount, correctPay.Fee)
+	adClose.Data[0].ClosingAmount, _ = basics.OSubA(adClose.Data[0].ClosingAmount, correctClose.Amount)
+	adClose.Data[0].ClosingAmount, _ = basics.OSubA(adClose.Data[0].ClosingAmount, correctClose.Fee)
 
 	adCloseWrong := adClose
-	adCloseWrong.ClosingAmount.Raw++
+	adCloseWrong.Data[0].ClosingAmount.Raw++
 
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPay, ad), "could not add payment transaction")
 	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctClose, adCloseWrong), "closed transaction with wrong ApplyData")

@@ -58,13 +58,13 @@ func paymentTxEncode(tx transactions.Transaction, ad transactions.ApplyData) Tra
 	payment := PaymentTransactionType{
 		To:           tx.Receiver.GetChecksumAddress().String(),
 		Amount:       tx.TxAmount().Raw,
-		ToRewards:    ad.ReceiverRewards.Raw,
-		CloseRewards: ad.CloseRewards.Raw,
+		ToRewards:    ad.Data[0].ReceiverRewards.Raw,
+		CloseRewards: ad.Data[0].CloseRewards.Raw,
 	}
 
 	if tx.CloseRemainderTo != (basics.Address{}) {
 		payment.CloseRemainderTo = tx.CloseRemainderTo.GetChecksumAddress().String()
-		payment.CloseAmount = ad.ClosingAmount.Raw
+		payment.CloseAmount = ad.Data[0].ClosingAmount.Raw
 	}
 
 	return Transaction{
@@ -76,7 +76,7 @@ func paymentTxEncode(tx transactions.Transaction, ad transactions.ApplyData) Tra
 		LastRound:   uint64(tx.Last()),
 		Note:        tx.Aux(),
 		Payment:     &payment,
-		FromRewards: ad.SenderRewards.Raw,
+		FromRewards: ad.Data[0].SenderRewards.Raw,
 		GenesisID:   tx.GenesisID,
 		GenesisHash: tx.GenesisHash[:],
 	}

@@ -102,8 +102,8 @@ type Transaction struct {
 	valid bool
 }
 
-// ApplyData contains information about the transaction's execution.
-type ApplyData struct {
+// PaymentData contains information about a transfer's execution.
+type PaymentData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	// Closing amount for transaction.
@@ -113,6 +113,13 @@ type ApplyData struct {
 	SenderRewards   basics.MicroAlgos `codec:"rs"`
 	ReceiverRewards basics.MicroAlgos `codec:"rr"`
 	CloseRewards    basics.MicroAlgos `codec:"rc"`
+}
+
+// ApplyData contains information about the transaction's execution.
+type ApplyData struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Data []PaymentData
 }
 
 // ToBeHashed implements the crypto.Hashable interface.
@@ -224,11 +231,11 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			return err
 		}
 	case protocol.MultiPaymentTx:
-		// check that all multiplexed spends are to valid addresses
-		for i := 0; i < len(tx.Senders); i++ {
-			err := tx.checkSpender(tx.Senders[i], spec, proto)
+		for i := 0; i < len(tx.Payments); i++ {
+			// in case that the fee sink is spending, check that this spend is to a valid address
+			err := tx.checkSpender(tx.Payments[i].Sender, spec, proto)
 			if err != nil {
-				break
+				return err
 			}
 		}
 	case protocol.KeyRegistrationTx:
@@ -299,9 +306,12 @@ func (tx Transaction) RelevantAddrs(spec SpecialAddresses, proto config.Consensu
 			addrs = append(addrs, tx.PaymentTxnFields.CloseRemainderTo)
 		}
 	case protocol.MultiPaymentTx:
-		for i := 0; i < len(tx.Senders); i++ {
-			addrs = append(addrs, tx.Senders[i])
+		for i := 0; i < len(tx.Payments); i++ {
+			addrs = append(addrs, tx.Payments[i].Sender)
 			addrs = append(addrs, tx.Payments[i].Receiver)
+			if tx.Payments[i].CloseRemainderTo != (basics.Address{}) {
+				addrs = append(addrs, tx.Payments[i].CloseRemainderTo)
+			}
 		}
 	}
 
@@ -356,27 +366,27 @@ func (tx Transaction) Apply(balances Balances, spec SpecialAddresses) (ad ApplyD
 	params := balances.ConsensusParams()
 
 	// move fee to pool
-	err = balances.Move(tx.Sender, spec.FeeSink, tx.Fee, &ad.SenderRewards, nil)
+	err = balances.Move(tx.Sender, spec.FeeSink, tx.Fee, &ad.Data[0].SenderRewards, nil)
 	if err != nil {
 		return
 	}
 
 	switch tx.Type {
 	case protocol.PaymentTx:
-		err = tx.PaymentTxnFields.apply(tx.Sender, balances, spec, &ad)
+		err = tx.PaymentTxnFields.apply(tx.Sender, balances, spec, &ad.Data[0])
 
 	case protocol.MultiPaymentTx:
 
 		// for each Sender and Payment apply changes in balances
-		for i := 0; i < len(tx.Senders); i++ {
-			err = tx.Payments[i].apply(tx.Senders[i], balances, spec, &ad)
+		for i := 0; i < len(tx.Payments); i++ {
+			err = tx.Payments[i].PaymentTxnFields.apply(tx.Payments[i].Sender, balances, spec, &ad.Data[i+1])
 			if err != nil {
 				break
 			}
 		}
 
 	case protocol.KeyRegistrationTx:
-		err = tx.KeyregTxnFields.apply(tx.Sender, balances, spec, &ad)
+		err = tx.KeyregTxnFields.apply(tx.Sender, balances, spec, &ad.Data[0])
 
 	default:
 		err = fmt.Errorf("Unknown transaction type %v", tx.Type)
@@ -385,9 +395,11 @@ func (tx Transaction) Apply(balances Balances, spec SpecialAddresses) (ad ApplyD
 	// If the protocol does not support rewards in ApplyData,
 	// clear them out.
 	if !params.RewardsInApplyData {
-		ad.SenderRewards = basics.MicroAlgos{}
-		ad.ReceiverRewards = basics.MicroAlgos{}
-		ad.CloseRewards = basics.MicroAlgos{}
+		for i := 0; i < len(tx.Payments)+1; i++ {
+			ad.Data[i].SenderRewards = basics.MicroAlgos{}
+			ad.Data[i].ReceiverRewards = basics.MicroAlgos{}
+			ad.Data[i].CloseRewards = basics.MicroAlgos{}
+		}
 	}
 
 	return

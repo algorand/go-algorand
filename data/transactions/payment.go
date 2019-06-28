@@ -37,13 +37,20 @@ type PaymentTxnFields struct {
 	CloseRemainderTo basics.Address `codec:"close"`
 }
 
-// MultiPaymentTxnFields captures the fields used by multi-payment transactions.
-// There are zero or more senders of payments to receivers.
+// payment captures fields for one payment of a multi-payment transaction.
+type payment struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	PaymentTxnFields `codec:"mxpay"`
+	Sender           basics.Address `codec:"mxsnd"`
+}
+
+// MultiPaymentTxnFields captures the list of all transfers for a multi-payment transaction.
+// There are zero or more transfers from senders to receivers.
 type MultiPaymentTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Senders  []basics.Address   `codec:"snds"`
-	Payments []PaymentTxnFields `codec:"pays"`
+	Payments []payment `codec:"trans"`
 }
 
 func (payment PaymentTxnFields) senderDeductions() (amount basics.MicroAlgos, empty bool) {
@@ -72,16 +79,16 @@ func (payment PaymentTxnFields) checkSpender(sender basics.Address, spec Special
 }
 
 // Apply changes the balances according to this transaction.
-// The ApplyData argument should reflect the changes made by
+// The PaymentDatavargument should reflect the changes made by
 // apply().  It may already include changes made by the caller
 // (i.e., Transaction.Apply), so apply() must update it rather
 // than overwriting it.  For example, Transaction.Apply() may
 // have updated ad.SenderRewards, and this function should only
 // add to ad.SenderRewards (if needed), but not overwrite it.
-func (payment PaymentTxnFields) apply(sender basics.Address, balances Balances, spec SpecialAddresses, ad *ApplyData) error {
+func (payment PaymentTxnFields) apply(sender basics.Address, balances Balances, spec SpecialAddresses, paydata *PaymentData) error {
 	// move tx money
 	if !payment.Amount.IsZero() || payment.Receiver != (basics.Address{}) {
-		err := balances.Move(sender, payment.Receiver, payment.Amount, &ad.SenderRewards, &ad.ReceiverRewards)
+		err := balances.Move(sender, payment.Receiver, payment.Amount, &paydata.SenderRewards, &paydata.ReceiverRewards)
 		if err != nil {
 			return err
 		}
@@ -95,8 +102,8 @@ func (payment PaymentTxnFields) apply(sender basics.Address, balances Balances, 
 			}
 
 			closeAmount := rec.AccountData.MicroAlgos
-			ad.ClosingAmount = closeAmount
-			err = balances.Move(sender, payment.CloseRemainderTo, closeAmount, &ad.SenderRewards, &ad.CloseRewards)
+			paydata.ClosingAmount = closeAmount
+			err = balances.Move(sender, payment.CloseRemainderTo, closeAmount, &paydata.SenderRewards, &paydata.CloseRewards)
 			if err != nil {
 				return err
 			}

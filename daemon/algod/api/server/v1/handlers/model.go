@@ -174,7 +174,8 @@ type Transaction struct {
 	// This is a list of all supported transactions.
 	// To add another one, create a struct with XXXTransactionType and embed it here.
 	// To prevent extraneous fields, all must have the "omitempty" tag.
-	Payment *PaymentTransactionType `json:"payment,omitempty"`
+	Payment             *PaymentTransactionType      `json:"payment,omitempty"`
+	MultiPaymentPayment *MultiPaymentTransactionType `json:"multipayment,omitempty"`
 
 	// FromRewards is the amount of pending rewards applied to the From
 	// account as part of this transaction.
@@ -227,6 +228,34 @@ type PaymentTransactionType struct {
 	//
 	// required: false
 	CloseRewards uint64 `json:"closerewards"`
+}
+
+// MultiPaymentTransactionType contains the additional fields for a multi-payment Transaction
+// swagger:model MultiPaymentTransactionType
+type MultiPaymentTransactionType struct {
+
+	// CloseAmountList is the amounts sent to transfers' CloseRemainderTo, for committed transaction
+	//
+	// required: false
+	CloseAmountList uint64 `json:"closeamountslist"`
+
+	// FromRewardsList is the amounts of pending rewards applied to transfers' From
+	// accounts as part of this transaction.
+	//
+	// required: false
+	FromRewardsList []uint64 `json:"fromrewardslist"`
+
+	// ToRewardsList is the amounts of pending rewards applied to transfers' To accounts
+	// as part of this transaction.
+	//
+	// required: false
+	ToRewardsList []uint64 `json:"torewardslist"`
+
+	// CloseRewardsList is the amounts of pending rewards applied to transfers' CloseRemainderTo
+	// accounts as part of this transaction.
+	//
+	// required: false
+	CloseRewardsList []uint64 `json:"closerewardslist"`
 }
 
 // TransactionList contains a list of transactions
