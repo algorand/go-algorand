@@ -114,7 +114,7 @@ func TestAddressMarshalUnmarshal(t *testing.T) {
 	crypto.RandBytes(addr[:])
 	testob := TestOb{Aaaa: addr}
 	data := protocol.EncodeJSON(testob)
-	var nob TestOb = TestOb{}
+	var nob TestOb 
 	err := protocol.DecodeJSON(data, &nob)
 	require.NoError(t, err)
 	require.Equal(t, testob, nob)

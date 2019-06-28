@@ -62,7 +62,7 @@ func (addr checksumAddress) Address() Address {
 	return addr.shortAddress
 }
 
-// Unmarshal checksumAddresstries to unmarshal the checksummed address string.
+// UnmarshalChecksumAddress tries to unmarshal the checksummed address string.
 func UnmarshalChecksumAddress(address string) (Address, error) {
 	decoded, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(address)
 	if err != nil {
