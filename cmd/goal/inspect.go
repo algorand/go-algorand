@@ -52,7 +52,7 @@ type inspectMultisigSig struct {
 type inspectMultisigSubsig struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Key basics.Address  `codec:"pk"`
+	Key basics.Address   `codec:"pk"`
 	Sig crypto.Signature `codec:"s"`
 }
 
@@ -72,7 +72,7 @@ type inspectTransaction struct {
 type inspectTxnHeader struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Sender      basics.Address   `codec:"snd"`
+	Sender      basics.Address    `codec:"snd"`
 	Fee         basics.MicroAlgos `codec:"fee"`
 	FirstValid  basics.Round      `codec:"fv"`
 	LastValid   basics.Round      `codec:"lv"`
@@ -86,9 +86,9 @@ type inspectTxnHeader struct {
 type inspectPaymentTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Receiver         basics.Address   `codec:"rcv"`
+	Receiver         basics.Address    `codec:"rcv"`
 	Amount           basics.MicroAlgos `codec:"amt"`
-	CloseRemainderTo basics.Address   `codec:"close"`
+	CloseRemainderTo basics.Address    `codec:"close"`
 }
 
 func inspectTxn(stxn transactions.SignedTxn) (sti inspectSignedTxn, err error) {
