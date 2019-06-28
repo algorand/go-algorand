@@ -46,7 +46,8 @@ func init() {
 var multisigCmd = &cobra.Command{
 	Use:   "multisig",
 	Short: "Add a multisig signature to transactions from a file using a private key",
-	Run: func(cmd *cobra.Command, args []string) {
+	Args:  cobra.NoArgs,
+	Run: func(cmd *cobra.Command, _ []string) {
 		seed := loadKeyfileOrMnemonic(multisigKeyfile, multisigMnemonic)
 		key := crypto.GenerateSignatureSecrets(seed)
 

@@ -74,6 +74,13 @@ func Auth(log logging.Logger, apiToken string) func(http.Handler) http.Handler {
 			// Handle debug route
 			// Grab the apiToken from the HTTP header
 			providedToken := []byte(r.Header.Get(TokenHeader))
+			if len(providedToken) == 0 {
+				// Accept tokens provided in a bearer token format.
+				authentication := strings.SplitN(r.Header.Get("Authorization"), " ", 2)
+				if len(authentication) == 2 && strings.EqualFold("Bearer", authentication[0]) {
+					providedToken = []byte(authentication[1])
+				}
+			}
 			if route.GetName() == debugRouteName {
 				// For debug routes, we place the apiToken in the path itself
 				providedToken = []byte(mux.Vars(r)["apiToken"])

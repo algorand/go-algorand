@@ -150,6 +150,21 @@ func (s *Service) fetchAndWrite(fetcher rpcs.Fetcher, r basics.Round, prevFetchC
 
 		if err != nil {
 			s.log.Debugf("fetchAndWrite(%v): Could not fetch: %v (attempt %d)", r, err, i)
+			// we've just failed to retrieve a block; wait until the previous block is fetched before trying again
+			// to avoid the usecase where the first block doesn't exists and we're making many requests down the chain
+			// for no reason.
+			if !hasLookback {
+				select {
+				case <-s.ctx.Done():
+					s.log.Debugf("fetchAndWrite(%v): Aborted while waiting for lookback block to ledger after failing once", r)
+					return false
+				case hasLookback = <-lookbackComplete:
+					if !hasLookback {
+						s.log.Debugf("fetchAndWrite(%v): lookback block doesn't exist, won't try to retrieve block again", r)
+						return false
+					}
+				}
+			}
 			continue // retry the fetch
 		} else if block == nil || cert == nil {
 			// someone already wrote the block to the ledger, we should stop syncing

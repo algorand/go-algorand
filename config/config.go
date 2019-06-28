@@ -107,17 +107,10 @@ type ConsensusParams struct {
 	RequireGenesisHash bool
 
 	// DefaultKeyDilution specifies the granularity of top-level ephemeral
-	// keys.  If FineGrainedEphemeralKeys is not set, then every ephemeral
-	// key is valid for DefaultKeyDilution rounds.  If FineGrainedEphemeralKeys
-	// is set, then KeyDilution is the number of second-level keys in each
-	// batch, signed by a top-level "batch" key.  The default value can be
+	// keys. KeyDilution is the number of second-level keys in each batch,
+	// signed by a top-level "batch" key.  The default value can be
 	// overriden in the account state.
 	DefaultKeyDilution uint64
-
-	// FineGrainedEphemeralKeys indicates support for fine-grained
-	// ephemeral keys, implemented as a two-level tree.  We will accept
-	// (and produce) fine-grained vote signatures only if this flag is true.
-	FineGrainedEphemeralKeys bool
 
 	// MinBalance specifies the minimum balance that can appear in
 	// an account.  To spend money below MinBalance requires issuing
@@ -130,10 +123,6 @@ type ConsensusParams struct {
 	// a way of making the spender subsidize the cost of storing this transaction.
 	MinTxnFee uint64
 
-	// SupportTxnClosing indicates if we support transactions that
-	// close out an account.
-	SupportTransactionClose bool
-
 	// RewardUnit specifies the number of MicroAlgos corresponding to one reward
 	// unit.
 	//
@@ -144,17 +133,6 @@ type ConsensusParams struct {
 	// RewardsRateRefreshInterval is the number of rounds after which the
 	// rewards level is recomputed for the next RewardsRateRefreshInterval rounds.
 	RewardsRateRefreshInterval uint64
-
-	// IncorrectBalLookback, if true, causes committee selection to use a balance lookback that disagrees with the spec and the rest of the code.
-	// If false, use the correct balance lookback everywhere.
-	// TODO: This option exists to allow fixing this bug with an in-band protocol upgrade. It should be removed the next time genesis is bumped.
-	IncorrectBalLookback bool
-	// TwinSeeds specifies whether we are using multiple seeds in parallel (instead of just one).
-	TwinSeeds bool
-
-	// ExplicitEphemeralParams indicates support for explicitly specifying
-	// VotingFirstValid, VotingLastValid, and VotingKeyDilution.
-	ExplicitEphemeralParams bool
 
 	// seed-related parameters
 	SeedLookback        uint64 // how many blocks back we use seeds from in sortition. delta_s in the spec
@@ -232,14 +210,15 @@ func initConsensusProtocols() {
 	// does not copy the ApprovedUpgrades map.  Make sure that each new
 	// ConsensusParams structure gets a fresh ApprovedUpgrades map.
 
-	// Base consensus protocol version, v2.
-	v2 := ConsensusParams{
+	// Base consensus protocol version, v7.
+	v7 := ConsensusParams{
 		UpgradeVoteRounds:   10000,
 		UpgradeThreshold:    9000,
 		UpgradeWaitRounds:   10000,
 		MaxVersionStringLen: 64,
 
-		MinTxnFee:           1,
+		MinBalance:          10000,
+		MinTxnFee:           1000,
 		MaxTxnLife:          1000,
 		MaxTxnNoteBytes:     1024,
 		MaxTxnBytesPerBlock: 1000000,
@@ -251,7 +230,6 @@ func initConsensusProtocols() {
 		RewardsRateRefreshInterval: 5e5,
 
 		ApprovedUpgrades:     map[protocol.ConsensusVersion]bool{},
-		IncorrectBalLookback: true,
 
 		NumProposers:           30,
 		SoftCommitteeSize:      2500,
@@ -272,63 +250,15 @@ func initConsensusProtocols() {
 		SeedLookback:        2,
 		SeedRefreshInterval: 100,
 
-		MaxBalLookback: 203,
+		MaxBalLookback: 320,
 	}
-	Consensus[protocol.ConsensusV2] = v2
 
-	// In v3, we add support for fine-grained ephemeral keys.
-	v3 := v2
-	v3.FineGrainedEphemeralKeys = true
-	v3.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
-	Consensus[protocol.ConsensusV3] = v3
-
-	// v2 can be upgraded to v3.
-	v2.ApprovedUpgrades[protocol.ConsensusV3] = true
-
-	// In v4, we add a minimum balance, and add support for transactions
-	// that close an account.
-	v4 := v3
-	v4.MinBalance = 1000
-	v4.SupportTransactionClose = true
-	v4.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
-	Consensus[protocol.ConsensusV4] = v4
-
-	// v3 can be upgraded to v4.
-	v3.ApprovedUpgrades[protocol.ConsensusV4] = true
-
-	// v5 sets the min transaction fee to 1000 microAlgos, the min balance to 10000 microAlgos and also fixes a balance lookback bug
-	v5 := v4
-	v5.MinTxnFee = 1000
-	v5.MinBalance = 10000
-	v5.IncorrectBalLookback = false
-	v5.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
-	Consensus[protocol.ConsensusV5] = v5
-
-	// v4 can be upgraded to v5.
-	v4.ApprovedUpgrades[protocol.ConsensusV5] = true
-
-	// v6 adds support for explicit ephemeral-key parameters.
-	v6 := v5
-	v6.ExplicitEphemeralParams = true
-	v6.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
-	Consensus[protocol.ConsensusV6] = v6
-
-	// v5 can be upgraded to v6.
-	v5.ApprovedUpgrades[protocol.ConsensusV6] = true
-
-	// v7 increases block retention in the ledger to 320 (= 2 * 2 [seed lookback] * 80 [seed refresh interval])
-	v7 := v6
-	v7.MaxBalLookback = 320
 	v7.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
 	Consensus[protocol.ConsensusV7] = v7
-
-	// v6 can be upgraded to v7.
-	v6.ApprovedUpgrades[protocol.ConsensusV7] = true
 
 	// v8 uses parameters and a seed derivation policy (the "twin seeds") from Georgios' new analysis
 	v8 := v7
 
-	v8.TwinSeeds = true
 	v8.SeedRefreshInterval = 80
 	v8.NumProposers = 9
 	v8.SoftCommitteeSize = 2990
@@ -669,7 +599,7 @@ type Local struct {
 	// the max size the sync server would return
 	TxSyncServeResponseSize int
 
-	// IsIndexerActive indicates wheather to activate the indexer for fast retrieval of transactions
+	// IsIndexerActive indicates whether to activate the indexer for fast retrieval of transactions
 	// Note -- Indexer cannot operate on non Archival nodes
 	IsIndexerActive bool
 
@@ -678,6 +608,9 @@ type Local struct {
 	// proxy vendor provides another header field.  In the case of CloudFlare proxy, the "CF-Connecting-IP" header
 	// field can be used.
 	UseXForwardedForAddressField string
+
+	// ForceRelayMessages indicates whether the network library relay messages even in the case that no NetAddress was specified.
+	ForceRelayMessages bool
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)

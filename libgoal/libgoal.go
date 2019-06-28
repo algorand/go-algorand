@@ -428,13 +428,17 @@ type MultisigInfo struct {
 }
 
 // SendPaymentFromWallet signs a transaction using the given wallet and returns the resulted transaction id
-func (c *Client) SendPaymentFromWallet(walletHandle, pw []byte, from, to string, fee, amount uint64, note []byte, closeTo string) (transactions.Transaction, error) {
+func (c *Client) SendPaymentFromWallet(walletHandle, pw []byte, from, to string, fee, amount uint64, note []byte, closeTo string, firstValid, lastValid basics.Round) (transactions.Transaction, error) {
 	// Build the transaction
-	tx, err := c.ConstructPayment(from, to, fee, amount, note, closeTo)
+	tx, err := c.ConstructPayment(from, to, fee, amount, note, closeTo, firstValid, lastValid)
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
 
+	return c.signAndBroadcastTransactionWithWallet(walletHandle, pw, tx)
+}
+
+func (c *Client) signAndBroadcastTransactionWithWallet(walletHandle, pw []byte, tx transactions.Transaction) (transactions.Transaction, error) {
 	// Sign the transaction
 	kmd, err := c.ensureKmdClient()
 	if err != nil {
@@ -467,7 +471,9 @@ func (c *Client) SendPaymentFromWallet(walletHandle, pw []byte, from, to string,
 
 // ConstructPayment builds a payment transaction to be signed
 // If the fee is 0, the function will use the suggested one form the network
-func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []byte, closeTo string) (transactions.Transaction, error) {
+// if the lastValid is 0, firstValid + maxTxnLifetime will be used
+// if the firstValid is 0, lastRound + 1 will be used
+func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []byte, closeTo string, firstValid, lastValid basics.Round) (transactions.Transaction, error) {
 	fromAddr, err := basics.UnmarshalChecksumAddress(from)
 	if err != nil {
 		return transactions.Transaction{}, err
@@ -484,15 +490,25 @@ func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []by
 		return transactions.Transaction{}, err
 	}
 
-	round := params.LastRound
 	cp := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
+	if firstValid == 0 && lastValid == 0 {
+		firstValid = basics.Round(params.LastRound + 1)
+		lastValid = firstValid + basics.Round(cp.MaxTxnLife)
+	} else if firstValid != 0 && lastValid == 0 {
+		lastValid = firstValid + basics.Round(cp.MaxTxnLife)
+	} else if firstValid > lastValid {
+		return transactions.Transaction{}, fmt.Errorf("cannot construct payment: txn would first be valid on round %d which is after last valid round %d", firstValid, lastValid)
+	} else if lastValid-firstValid > basics.Round(cp.MaxTxnLife) {
+		return transactions.Transaction{}, fmt.Errorf("cannot construct payment: txn validity period ( %d to %d ) is greater than protocol max txn lifetime %d ", firstValid, lastValid, cp.MaxTxnLife)
+	}
+
 	tx := transactions.Transaction{
 		Type: protocol.PaymentTx,
 		Header: transactions.Header{
 			Sender:     fromAddr,
 			Fee:        basics.MicroAlgos{Raw: fee},
-			FirstValid: basics.Round(round),
-			LastValid:  basics.Round(round) + basics.Round(cp.MaxTxnLife),
+			FirstValid: firstValid,
+			LastValid:  lastValid,
 			Note:       note,
 		},
 		PaymentTxnFields: transactions.PaymentTxnFields{

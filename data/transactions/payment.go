@@ -95,33 +95,30 @@ func (payment PaymentTxnFields) apply(sender basics.Address, balances Balances, 
 	}
 
 	if payment.CloseRemainderTo != (basics.Address{}) {
-		if balances.ConsensusParams().SupportTransactionClose {
-			rec, err := balances.Get(sender)
-			if err != nil {
-				return err
-			}
 
-			closeAmount := rec.AccountData.MicroAlgos
-			paydata.ClosingAmount = closeAmount
-			err = balances.Move(sender, payment.CloseRemainderTo, closeAmount, &paydata.SenderRewards, &paydata.CloseRewards)
-			if err != nil {
-				return err
-			}
+      rec, err := balances.Get(sender)
+      if err != nil {
+         return err
+      }
 
-			// Confirm that we have no balance left
-			rec, err = balances.Get(sender)
-			if !rec.AccountData.MicroAlgos.IsZero() {
-				return fmt.Errorf("balance %d still not zero after CloseRemainderTo", rec.AccountData.MicroAlgos.Raw)
-			}
+      closeAmount := rec.AccountData.MicroAlgos
+      paydata.ClosingAmount = closeAmount
+      err = balances.Move(sender, payment.CloseRemainderTo, closeAmount, &paydata.SenderRewards, &paydata.CloseRewards)
+      if err != nil {
+         return err
+      }
 
-			// Clear out entire account record, to allow the DB to GC it
-			rec.AccountData = basics.AccountData{}
-			err = balances.Put(rec)
-			if err != nil {
-				return err
-			}
-		} else {
-			return fmt.Errorf("CloseRemainderTo not supported")
+      // Confirm that we have no balance left
+      rec, err = balances.Get(sender)
+      if !rec.AccountData.MicroAlgos.IsZero() {
+         return fmt.Errorf("balance %d still not zero after CloseRemainderTo", rec.AccountData.MicroAlgos.Raw)
+      }
+
+		// Clear out entire account record, to allow the DB to GC it
+		rec.AccountData = basics.AccountData{}
+		err = balances.Put(rec)
+		if err != nil {
+			return err
 		}
 	}
 
