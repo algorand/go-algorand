@@ -121,7 +121,7 @@ for var in "${VARIATION_ARRAY[@]}"; do
                 exit 1
             fi
             pushd ${DEBTMP}
-            cp -p *.deb ${PKG_ROOT}/${GATE_PREFIX}algorand_${CHANNEL}_${PKG_NAME}_${FULLVERSION}.deb
+            cp -p *.deb ${PKG_ROOT}/algorand_${CHANNEL}_${PKG_NAME}_${FULLVERSION}.deb
             popd
         fi
     done
