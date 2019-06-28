@@ -312,19 +312,19 @@ func (c *Cred) GetZoneID(ctx context.Context, zoneDomainName string) (zoneID str
 		return
 	}
 	zoneDomainName = strings.ToLower(zoneDomainName)
-	var matchingZone *Zone
+	var matchingZone Zone
 	for _, zone := range zones {
 		if zoneDomainName == strings.ToLower(zone.DomainName) {
 			// found a match.
-			if matchingZone != nil {
+			if matchingZone.ZoneID != "" {
 				// we already had a previous match ?!
 				err = ErrDuplicateZoneNameFound
 				return
 			}
-			matchingZone = &zone
+			matchingZone = zone
 		}
 	}
-	if matchingZone == nil {
+	if matchingZone.ZoneID == "" {
 		err = fmt.Errorf("no zones matching %s for specified credentials", zoneDomainName)
 		return
 	}
