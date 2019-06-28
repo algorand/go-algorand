@@ -29,37 +29,21 @@ type (
 	Address crypto.Digest
 )
 
-// checksumAddress is a representation of the short address with a checksum
-type checksumAddress struct {
-	shortAddress Address
-	checksum     []byte
-}
-
 const (
 	checksumLength = 4
 )
 
-// get checksumAddressreturns the short address with its checksum as a string
+// GetChecksum returns the checksum as []byte
 // Checksum in Algorand are the last 4 bytes of the shortAddress Hash. H(Address)[28:]
-func (addr Address) getChecksumAddress() *checksumAddress {
+func (addr Address) GetChecksum() []byte {
 	shortAddressHash := crypto.Hash(addr[:])
-	return &checksumAddress{addr, shortAddressHash[len(shortAddressHash)-checksumLength:]}
+	checksum := shortAddressHash[len(shortAddressHash)-checksumLength:]
+	return checksum
 }
 
 // GetUserAddress returns the human-readable, checksummed version of the address
 func (addr Address) GetUserAddress() string {
-	return addr.getChecksumAddress().String()
-}
-
-// IsValid returns true if the address is valid, false otherwise
-func (addr checksumAddress) IsValid() bool {
-	shortAddressHash := crypto.Hash(addr.shortAddress[:])
-	return bytes.Equal(shortAddressHash[len(shortAddressHash)-checksumLength:], addr.checksum)
-}
-
-// Address returns the address's Address
-func (addr checksumAddress) Address() Address {
-	return addr.shortAddress
+	return addr.String()
 }
 
 // UnmarshalChecksumAddress tries to unmarshal the checksummed address string.
@@ -72,30 +56,30 @@ func UnmarshalChecksumAddress(address string) (Address, error) {
 	if len(decoded) < len(short) {
 		return Address{}, fmt.Errorf("decoded bad addr: %s %v", decoded, decoded)
 	}
-	copy(short[:], decoded[:len(short)])
 
-	checksumAddr := checksumAddress{short, decoded[len(decoded)-checksumLength:]}
-	if !checksumAddr.IsValid() {
-		return Address{}, fmt.Errorf("address %s is malformed, checksum verification failed", address)
+	copy(short[:], decoded[:len(short)])
+	incomingchecksum := decoded[len(decoded)-checksumLength:]
+
+	calculatedchecksum := short.GetChecksum()
+	isValid := bytes.Equal(incomingchecksum, calculatedchecksum)
+
+	if !isValid {
+		return Address{}, fmt.Errorf("address %s is malformed, checksum verification failed ", address)
 	}
 
 	// Validate that we had a canonical string representation
-	if checksumAddr.String() != address {
+	if short.String() != address {
 		return Address{}, fmt.Errorf("address %s is non-canonical", address)
 	}
 
 	return short, nil
 }
 
-// String returns a string representation of checksumAddress
-func (addr *checksumAddress) String() string {
-	var addrWithChecksum []byte
-	addrWithChecksum = append(addr.shortAddress[:], addr.checksum...)
-	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(addrWithChecksum)
-}
-
+// String returns a string representation of Address
 func (addr Address) String() string {
-	return addr.getChecksumAddress().String()
+	var addrWithChecksum []byte
+	addrWithChecksum = append(addr[:], addr.GetChecksum()...)
+	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(addrWithChecksum)
 }
 
 // MarshalText returns the address string as an array of bytes
