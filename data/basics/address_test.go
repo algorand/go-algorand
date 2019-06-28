@@ -25,17 +25,15 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-/*
 func TestAddressChecksum(t *testing.T) {
 	address := crypto.Hash([]byte("randomString"))
 	shortAddress := Address(address)
-	checksumAddress := shortAddress
+	checksumAddress := shortAddress.getChecksumAddress()
 
 	require.True(t, checksumAddress.IsValid())
 
 	require.Equal(t, shortAddress, checksumAddress.shortAddress)
 }
-*/
 
 func TestChecksumAddress_Unmarshal(t *testing.T) {
 	address := crypto.Hash([]byte("randomString"))

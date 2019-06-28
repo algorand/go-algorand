@@ -229,7 +229,7 @@ func initConsensusProtocols() {
 		RewardUnit:                 1e6,
 		RewardsRateRefreshInterval: 5e5,
 
-		ApprovedUpgrades: map[protocol.ConsensusVersion]bool{},
+		ApprovedUpgrades:     map[protocol.ConsensusVersion]bool{},
 
 		NumProposers:           30,
 		SoftCommitteeSize:      2500,
