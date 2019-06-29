@@ -100,6 +100,7 @@ make ${GOPATH}/src/github.com/algorand/go-algorand/crypto/lib/libsodium.a
 
 make build
 
+export BUILD_DEB=1
 scripts/build_packages.sh "${PLATFORM}"
 
 # Run RPM bulid in Centos7 Docker container
