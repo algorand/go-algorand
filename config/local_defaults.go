@@ -334,6 +334,16 @@ func migrate(cfg Local) (newCfg Local, err error) {
 		}
 		newCfg.Version = 4
 	}
+	// Migrate 4 -> 5
+	if newCfg.Version == 4 {
+		if newCfg.RestWriteTimeoutSeconds == defaultLocalV4.RestWriteTimeoutSeconds {
+			newCfg.RestWriteTimeoutSeconds = defaultLocalV5.RestWriteTimeoutSeconds
+		}
+		if newCfg.RestReadTimeoutSeconds == defaultLocalV4.RestReadTimeoutSeconds {
+			newCfg.RestReadTimeoutSeconds = defaultLocalV5.RestReadTimeoutSeconds
+		}
+		newCfg.Version = 5
+	}
 
 	if newCfg.Version != configVersion {
 		err = fmt.Errorf("failed to migrate config version %d (stuck at %d) to latest %d", cfg.Version, newCfg.Version, configVersion)
