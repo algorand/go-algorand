@@ -171,7 +171,7 @@ func (s *Server) Start() {
 
 	// use the data dir as the static file dir (for our API server), there's
 	// no need to separate the two yet. This lets us serve the swagger.json file.
-	handler := apiServer.NewRouter(s.log, s.node, apiToken, s.RootPath)
+	apiHandler := apiServer.NewRouter(s.log, s.node, apiToken, s.RootPath)
 
 	addr := cfg.EndpointAddress
 	if addr == "" {
@@ -188,7 +188,7 @@ func (s *Server) Start() {
 	addr = listener.Addr().String()
 	server = http.Server{
 		Addr:         addr,
-		Handler:      handler,
+		Handler:      apiHandler,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 30 * time.Second,
 	}
