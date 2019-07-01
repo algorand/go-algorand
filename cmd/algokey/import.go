@@ -37,7 +37,8 @@ func init() {
 var importCmd = &cobra.Command{
 	Use:   "import",
 	Short: "Import key file from mnemonic",
-	Run: func(cmd *cobra.Command, args []string) {
+	Args:  cobra.NoArgs,
+	Run: func(cmd *cobra.Command, _ []string) {
 		seed := loadMnemonic(mnemonic)
 
 		key := crypto.GenerateSignatureSecrets(seed)

@@ -176,11 +176,9 @@ func generateGenesisFiles(outDir string, proto protocol.ConsensusVersion, netNam
 		if wallet.Online == basics.Online {
 			data.VoteID = part.VotingSecrets().OneTimeSignatureVerifier
 			data.SelectionID = part.VRFSecrets().PK
-			if params.ExplicitEphemeralParams {
-				data.VoteFirstValid = part.FirstValid
-				data.VoteLastValid = part.LastValid
-				data.VoteKeyDilution = part.KeyDilution
-			}
+			data.VoteFirstValid = part.FirstValid
+			data.VoteLastValid = part.LastValid
+			data.VoteKeyDilution = part.KeyDilution
 		}
 
 		records[wallet.Name] = data

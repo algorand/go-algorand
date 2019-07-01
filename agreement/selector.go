@@ -46,15 +46,7 @@ func (sel selector) CommitteeSize(proto config.ConsensusParams) uint64 {
 }
 
 func balanceRound(r basics.Round, cparams config.ConsensusParams) basics.Round {
-	if cparams.TwinSeeds {
-		return r.SubSaturate(basics.Round(2 * cparams.SeedRefreshInterval * cparams.SeedLookback))
-	}
-
-	lookback := basics.Round(2*cparams.SeedRefreshInterval + cparams.SeedLookback + 1)
-	if cparams.IncorrectBalLookback {
-		return (r + 2).SubSaturate(lookback)
-	}
-	return r.SubSaturate(lookback)
+	return r.SubSaturate(basics.Round(2 * cparams.SeedRefreshInterval * cparams.SeedLookback))
 }
 
 func seedRound(r basics.Round, cparams config.ConsensusParams) basics.Round {

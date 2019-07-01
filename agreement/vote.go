@@ -126,7 +126,7 @@ func (uv unauthenticatedVote) verify(l LedgerReader) (vote, error) {
 
 	ephID := basics.OneTimeIDForRound(rv.Round, m.Record.KeyDilution(proto))
 	voteID := m.Record.VoteID
-	if !voteID.Verify(ephID, proto.FineGrainedEphemeralKeys, rv, uv.Sig) {
+	if !voteID.Verify(ephID, rv, uv.Sig) {
 		return vote{}, fmt.Errorf("unauthenticatedVote.verify: could not verify FS signature on vote by %v given %v: %+v", rv.Sender, voteID, uv)
 	}
 
@@ -173,7 +173,7 @@ func makeVote(rv rawVote, voting crypto.OneTimeSigner, selection *crypto.VRFSecr
 	}
 
 	ephID := basics.OneTimeIDForRound(rv.Round, voting.KeyDilution(proto))
-	sig := voting.Sign(ephID, proto.FineGrainedEphemeralKeys, rv)
+	sig := voting.Sign(ephID, rv)
 	if (sig == crypto.OneTimeSignature{}) {
 		return unauthenticatedVote{}, fmt.Errorf("makeVote: got back empty signature for vote")
 	}

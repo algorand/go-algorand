@@ -318,6 +318,11 @@ func (l *Ledger) BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err er
 	return
 }
 
+// EncodedBlockCert returns the encoded block and the corresponding encodded certificate of the block for round rnd.
+func (l *Ledger) EncodedBlockCert(rnd basics.Round) (blk []byte, cert []byte, err error) {
+	return l.blockQ.getEncodedBlockCert(rnd)
+}
+
 // BlockCert returns the block and the certificate of the block for round rnd.
 func (l *Ledger) BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreement.Certificate, err error) {
 	return l.blockQ.getBlockCert(rnd)

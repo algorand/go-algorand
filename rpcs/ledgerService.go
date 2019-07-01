@@ -23,6 +23,8 @@ import (
 
 	"github.com/gorilla/mux"
 
+	"github.com/algorand/go-codec/codec"
+
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data"
@@ -54,21 +56,29 @@ type EncodedBlockCert struct {
 	Certificate agreement.Certificate `codec:"cert"`
 }
 
+// PreEncodedBlockCert defines how GetBlockBytes encodes a block and its certificate,
+// using a pre-encoded Block and Certificate in msgpack format.
+type PreEncodedBlockCert struct {
+	Block       codec.Raw `codec:"block"`
+	Certificate codec.Raw `codec:"cert"`
+}
+
 // RegisterLedgerService creates a LedgerService around the provider Ledger and registers it for RPC with the provided Registrar
 func RegisterLedgerService(config config.Local, ledger *data.Ledger, registrar Registrar, genesisID string) *LedgerService {
-	service := LedgerService{ledger: ledger, genesisID: genesisID}
-	registrar.RegisterHTTPHandler(LedgerServiceBlockPath, &service)
+	service := &LedgerService{ledger: ledger, genesisID: genesisID}
+	registrar.RegisterHTTPHandler(LedgerServiceBlockPath, service)
 	c := make(chan network.IncomingMessage, config.CatchupParallelBlocks*ledgerServerCatchupRequestBufferSize)
 
 	handlers := []network.TaggedMessageHandler{
-		{Tag: protocol.UniCatchupReqTag, MessageHandler: network.HandlerFunc((&service).processIncomingMessage)},
-		{Tag: protocol.UniEnsBlockReqTag, MessageHandler: network.HandlerFunc((&service).processIncomingMessage)},
+		{Tag: protocol.UniCatchupReqTag, MessageHandler: network.HandlerFunc(service.processIncomingMessage)},
+		{Tag: protocol.UniEnsBlockReqTag, MessageHandler: network.HandlerFunc(service.processIncomingMessage)},
 	}
 
 	registrar.RegisterHandlers(handlers)
 	service.catchupReqs = c
 	service.stop = make(chan struct{})
-	return &service
+
+	return service
 }
 
 // Start listening to catchup requests over ws
@@ -245,11 +255,12 @@ func (ls *LedgerService) sendCatchupRes(ctx context.Context, target network.Unic
 }
 
 func (ls *LedgerService) encodedBlockCert(round uint64) ([]byte, error) {
-	blk, cert, err := ls.ledger.BlockCert(basics.Round(round))
+	blk, cert, err := ls.ledger.EncodedBlockCert(basics.Round(round))
 	if err != nil {
 		return nil, err
 	}
-	return protocol.Encode(EncodedBlockCert{
+
+	return protocol.Encode(PreEncodedBlockCert{
 		Block:       blk,
 		Certificate: cert,
 	}), nil

@@ -43,18 +43,6 @@ func TestAccountsCanSendMoney(t *testing.T) {
 	testAccountsCanSendMoney(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
 }
 
-// this test checks that we can still send money in protocol v3,
-// which adds support for fine-grained ephemeral keys.
-func TestAccountsCanSendMoneyV3(t *testing.T) {
-	testAccountsCanSendMoney(t, filepath.Join("nettemplates", "TwoNodes50EachV3.json"))
-}
-
-// this test checks that we can still send money in protocol v4,
-// which adds MinBalance.
-func TestAccountsCanSendMoneyV4(t *testing.T) {
-	testAccountsCanSendMoney(t, filepath.Join("nettemplates", "TwoNodes50EachV4.json"))
-}
-
 func testAccountsCanSendMoney(t *testing.T, templatePath string) {
 	t.Parallel()
 	a := require.New(t)

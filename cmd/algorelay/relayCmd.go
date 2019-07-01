@@ -34,16 +34,14 @@ import (
 var (
 	inputFileArg    string
 	outputFileArg   string
-	srvDomainArg    string
-	nameDomainArg   string
+	srvDomainArg    string // e.g. algorand.network
+	nameDomainArg   string // e.g. algorand-mainnet.network
 	defaultPortArg  uint16
-	dnsBootstrapArg string
+	dnsBootstrapArg string // e.g. mainnet or testnet
 	recordIDArg     int64
 
-	cfEmail         string
-	cfAuthKey       string
-	cfSrvZoneID     string
-	cfNameZoneID    string
+	cfEmail   string
+	cfAuthKey string
 )
 
 var nameRecordTypes = []string{"A", "CNAME", "SRV"}
@@ -52,11 +50,9 @@ var srvRecordTypes = []string{"SRV"}
 const metricsPort = uint16(9100)
 
 func init() {
-	cfSrvZoneID = os.Getenv("CLOUDFLARE_SRV_ZONE_ID")
-	cfNameZoneID = os.Getenv("CLOUDFLARE_NAME_ZONE_ID")
 	cfEmail = os.Getenv("CLOUDFLARE_EMAIL")
 	cfAuthKey = os.Getenv("CLOUDFLARE_AUTH_KEY")
-	if cfSrvZoneID == "" || cfNameZoneID == "" || cfEmail == "" || cfAuthKey == "" {
+	if cfEmail == "" || cfAuthKey == "" {
 		panic("One or more credentials missing from ENV")
 	}
 
@@ -77,7 +73,6 @@ func init() {
 	checkCmd.MarkFlagRequired("defaultport")
 	checkCmd.Flags().StringVarP(&dnsBootstrapArg, "dnsbootstrap", "b", "", "Bootstrap name for SRV records (eg mainnet)")
 	checkCmd.MarkFlagRequired("dnsbootstrap")
-
 
 	rootCmd.AddCommand(updateCmd)
 
@@ -108,52 +103,68 @@ func loadRelays(file string) []eb.Relay {
 }
 
 type checkResult struct {
-	ID        int64
-	Success   bool
-	Error     string  `json:",omitempty"`
+	ID      int64
+	Success bool
+	Error   string `json:",omitempty"`
 }
 
 type dnsContext struct {
-	nameEntries    map[string]string
-	bootstrap      srvService
-	metrics        srvService
+	nameEntries map[string]string
+	bootstrap   srvService
+	metrics     srvService
+	srvZoneID   string
+	nameZoneID  string
 }
 
 type srvService struct {
-	serviceName  string
-	entries      map[string]uint16
-	shortName    string
-	networkName  string
+	serviceName string
+	entries     map[string]uint16
+	shortName   string
+	networkName string
 }
 
 func makeDNSContext() *dnsContext {
-	nameEntries, err := getReverseMappedEntries(cfNameZoneID, nameRecordTypes)
+	cloudflareCred := cloudflare.NewCred(cfEmail, cfAuthKey)
+
+	nameZoneID, err := cloudflareCred.GetZoneID(context.Background(), nameDomainArg)
 	if err != nil {
 		panic(err)
 	}
 
-	bootstrap, err := getSrvRecords("_algobootstrap", dnsBootstrapArg + "." + srvDomainArg, cfSrvZoneID)
+	nameEntries, err := getReverseMappedEntries(nameZoneID, nameRecordTypes)
 	if err != nil {
 		panic(err)
 	}
 
-	metrics, err := getSrvRecords("_metrics", srvDomainArg, cfSrvZoneID)
+	srvZoneID, err := cloudflareCred.GetZoneID(context.Background(), srvDomainArg)
+	if err != nil {
+		panic(err)
+	}
+
+	bootstrap, err := getSrvRecords("_algobootstrap", dnsBootstrapArg+"."+srvDomainArg, srvZoneID)
+	if err != nil {
+		panic(err)
+	}
+
+	metrics, err := getSrvRecords("_metrics", srvDomainArg, srvZoneID)
 	if err != nil {
 		panic(err)
 	}
 
 	return &dnsContext{
 		nameEntries: nameEntries,
-		bootstrap: bootstrap,
-		metrics: metrics,
+		bootstrap:   bootstrap,
+		metrics:     metrics,
+		srvZoneID:   srvZoneID,
+		nameZoneID:  nameZoneID,
 	}
 }
 
 func makeService(shortName, networkName string) srvService {
 	return srvService{
 		serviceName: shortName + "._tcp." + networkName,
-		entries: make(map[string]uint16),
-		shortName: shortName,
+		entries:     make(map[string]uint16),
+		shortName:   shortName,
 		networkName: networkName,
 	}
 }
@@ -167,7 +178,7 @@ var checkCmd = &cobra.Command{
 		context := makeDNSContext()
 
 		checkOne := recordIDArg != 0
-		results := make([]checkResult,0)
+		results := make([]checkResult, 0)
 		anyCheckError := false
 
 		for _, relay := range relays {
@@ -184,15 +195,15 @@ var checkCmd = &cobra.Command{
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "[%d] ERROR: %s: %s\n", relay.ID, relay.IPOrDNSName, err)
 				results = append(results, checkResult{
-					ID: relay.ID,
+					ID:      relay.ID,
 					Success: false,
-					Error: err.Error(),
-					})
+					Error:   err.Error(),
+				})
 				anyCheckError = true
 			} else {
 				fmt.Printf("[%d] OK: %s -> %s:%d\n", relay.ID, relay.IPOrDNSName, name, port)
 				results = append(results, checkResult{
-					ID: relay.ID,
+					ID:      relay.ID,
 					Success: true,
 				})
 			}
@@ -222,7 +233,7 @@ var updateCmd = &cobra.Command{
 		context := makeDNSContext()
 
 		updateOne := recordIDArg != 0
-		results := make([]checkResult,0)
+		results := make([]checkResult, 0)
 		anyUpdateError := false
 
 		for _, relay := range relays {
@@ -240,15 +251,15 @@ var updateCmd = &cobra.Command{
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "[%d] ERROR: %s: %s\n", relay.ID, relay.IPOrDNSName, err)
 				results = append(results, checkResult{
-					ID: relay.ID,
+					ID:      relay.ID,
 					Success: false,
-					Error: err.Error(),
+					Error:   err.Error(),
 				})
 				anyUpdateError = true
 			} else {
 				fmt.Printf("[%d] OK: %s -> %s:%d\n", relay.ID, relay.IPOrDNSName, name, port)
 				results = append(results, checkResult{
-					ID: relay.ID,
+					ID:      relay.ID,
 					Success: true,
 				})
 			}
@@ -322,7 +333,7 @@ func ensureRelayStatus(checkOnly bool, relay eb.Relay, nameDomain string, srvDom
 		}
 
 		// Add A/CNAME for the DNSAlias assigned
-		err = addDNSRecord(targetDomainAlias, topmost, cfNameZoneID)
+		err = addDNSRecord(targetDomainAlias, topmost, ctx.nameZoneID)
 		if err != nil {
 			return
 		}
@@ -370,7 +381,7 @@ func ensureRelayStatus(checkOnly bool, relay eb.Relay, nameDomain string, srvDom
 		}
 
 		// Add SRV entry to map to our DNSAlias
-		err = addSRVRecord(ctx.bootstrap.networkName, topmost, port, ctx.bootstrap.shortName, cfSrvZoneID)
+		err = addSRVRecord(ctx.bootstrap.networkName, topmost, port, ctx.bootstrap.shortName, ctx.srvZoneID)
 		if err != nil {
 			return
 		}
@@ -385,7 +396,7 @@ func ensureRelayStatus(checkOnly bool, relay eb.Relay, nameDomain string, srvDom
 			}
 
 			// Add SRV entry for metrics
-			err = addSRVRecord(ctx.metrics.networkName, topmost, metricsPort, ctx.metrics.shortName, cfSrvZoneID)
+			err = addSRVRecord(ctx.metrics.networkName, topmost, metricsPort, ctx.metrics.shortName, ctx.srvZoneID)
 			if err != nil {
 				return
 			}
@@ -422,10 +433,10 @@ func getTargetDNSChain(nameEntries map[string]string, target string) (names []st
 	}
 }
 
-func getReverseMappedEntries(zoneID string, recordTypes []string) (reverseMap map[string]string, err error) {
+func getReverseMappedEntries(nameZoneID string, recordTypes []string) (reverseMap map[string]string, err error) {
 	reverseMap = make(map[string]string)
 
-	cloudflareDNS := cloudflare.NewDNS(zoneID, cfEmail, cfAuthKey)
+	cloudflareDNS := cloudflare.NewDNS(nameZoneID, cfEmail, cfAuthKey)
 
 	for _, recType := range recordTypes {
 		var records []cloudflare.DNSRecordResponseEntry
@@ -448,7 +459,7 @@ func getReverseMappedEntries(zoneID string, recordTypes []string) (reverseMap ma
 	return
 }
 
-func getSrvRecords(serviceName string, networkName, zoneID string) (service srvService, err error){
+func getSrvRecords(serviceName string, networkName, zoneID string) (service srvService, err error) {
 	service = makeService(serviceName, networkName)
 
 	cloudflareDNS := cloudflare.NewDNS(zoneID, cfEmail, cfAuthKey)
