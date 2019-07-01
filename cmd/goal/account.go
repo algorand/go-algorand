@@ -625,7 +625,7 @@ var installParticipationKeyCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		if !partKeyDeleteInput {
 			fmt.Println(
-`The installpartkey command deletes the input participation file on
+				`The installpartkey command deletes the input participation file on
 successful installation.  Please acknowledge this by passing the
 "--delete-input" flag to the installpartkey command.  You can make
 a copy of the input file if needed, but please keep in mind that
