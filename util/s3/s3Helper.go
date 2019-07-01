@@ -34,9 +34,20 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
-const s3DefaultReleaseBucket = "algorand-releases"
-const s3DefaultUploadBucket = "algorand-uploads"
-const s3DefaultRegion = "us-east-1"
+const (
+	s3UploadBucketEnvVariable   = "S3_UPLOAD_BUCKET"
+	s3ReleaseBucketEnvVariable  = "S3_RELEASE_BUCKET"
+	s3InternalBucketEnvVariable = "S3_INTERNAL_BUCKET"
+	s3RegionEnvVariable         = "S3_REGION"
+
+	s3DefaultReleaseBucket  = "algorand-releases"
+	s3DefaultUploadBucket   = "algorand-uploads"
+	s3DefaultInternalBucket = "algorand-internal"
+	s3DefaultRegion         = "us-east-1"
+
+	downloadAction = "download"
+	uploadAction   = "upload"
+)
 
 // Helper encapsulates the s3 session state for interactive with our default S3 bucket with appropriate credentials
 type Helper struct {
@@ -44,46 +55,57 @@ type Helper struct {
 	bucket  string
 }
 
-func getS3UploadBucket() (bucketName string) {
-	bucketName, found := os.LookupEnv("S3_UPLOAD_BUCKET")
+// GetS3UploadBucket returns bucket name for uploading log files (private read access, public write access)
+func GetS3UploadBucket() (bucketName string) {
+	bucketName, found := os.LookupEnv(s3UploadBucketEnvVariable)
 	if !found {
 		bucketName = s3DefaultUploadBucket
 	}
 	return
 }
 
-func getS3ReleaseBucket() (bucketName string) {
-	bucketName, found := os.LookupEnv("S3_RELEASE_BUCKET")
+// GetS3ReleaseBucket returns bucket name for public releases (public read access, private write access)
+func GetS3ReleaseBucket() (bucketName string) {
+	bucketName, found := os.LookupEnv(s3ReleaseBucketEnvVariable)
 	if !found {
 		bucketName = s3DefaultReleaseBucket
 	}
 	return
 }
 
+// GetS3InternalBucket returns bucket name for Algorand internal use (private read access, private write access)
+func GetS3InternalBucket() (bucketName string) {
+	bucketName, found := os.LookupEnv(s3InternalBucketEnvVariable)
+	if !found {
+		bucketName = s3DefaultInternalBucket
+	}
+	return
+}
+
 func getS3Region() (region string) {
-	region, found := os.LookupEnv("S3_REGION")
+	region, found := os.LookupEnv(s3RegionEnvVariable)
 	if !found {
 		region = s3DefaultRegion
 	}
 	return
 }
 
-func getAWSCredentials() (awsID string, awsKey string) {
-	awsID, _ = os.LookupEnv("AWS_ACCESS_KEY_ID")
-	awsKey, _ = os.LookupEnv("AWS_SECRET_ACCESS_KEY")
-	return
+// MakeS3SessionForUploadWithBucket upload to bucket
+func MakeS3SessionForUploadWithBucket(awsBucket string) (helper Helper, err error) {
+	creds, err := getCredentials(uploadAction, awsBucket)
+	if err != nil {
+		return
+	}
+	return makeS3Session(creds, awsBucket)
 }
 
-func validateS3Params(action string, awsID string, awsKey string, awsBucket string) (err error) {
-	if awsID == "" || awsKey == "" {
-		err = fmt.Errorf("unable to %s. Credentials must be specified in AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY", action)
+// MakeS3SessionForDownloadWithBucket download from bucket
+func MakeS3SessionForDownloadWithBucket(awsBucket string) (helper Helper, err error) {
+	creds, err := getCredentials(downloadAction, awsBucket)
+	if err != nil {
 		return
 	}
-	if awsBucket == "" {
-		err = fmt.Errorf("unable to %s, bucket name is empty", action)
-		return
-	}
-	return
+	return makeS3Session(creds, awsBucket)
 }
 
 // UploadFileStream sends file as stream to s3
@@ -100,45 +122,58 @@ func (helper *Helper) UploadFileStream(filename string, reader io.Reader) error 
 	return nil
 }
 
-// MakeS3SessionForUpload returns an s3.Helper with default bucket for upload
-func MakeS3SessionForUpload() (helper Helper, err error) {
-	return MakeS3SessionForUploadWithBucket(getS3UploadBucket())
-}
-
-// MakeS3SessionForUploadWithBucket upload to bucket
-func MakeS3SessionForUploadWithBucket(awsBucket string) (helper Helper, err error) {
+func getCredentials(action string, awsBucket string) (creds *credentials.Credentials, err error) {
 	awsID, awsKey := getAWSCredentials()
-	if awsBucket == "" {
-		awsBucket = s3DefaultUploadBucket
+	credentailsRequired := checkCredentialsRequired(action, awsBucket)
+	if !credentailsRequired && (awsID == "" || awsKey == "") {
+		return nil, nil
 	}
-	err = validateS3Params("upload", awsID, awsKey, awsBucket)
+	err = validateS3Credentials(awsID, awsKey)
 	if err != nil {
 		return
 	}
-	creds := credentials.NewStaticCredentials(awsID, awsKey, "")
-	return makeS3Session(creds, awsBucket)
+	creds = credentials.NewStaticCredentials(awsID, awsKey, "")
+	return
+
 }
 
-// MakeS3SessionForDownload returns an s3.Helper with default bucket for download
-func MakeS3SessionForDownload() (helper Helper, err error) {
-	return MakeS3SessionForDownloadWithBucket(getS3ReleaseBucket())
+func getAWSCredentials() (awsID string, awsKey string) {
+	awsID, _ = os.LookupEnv("AWS_ACCESS_KEY_ID")
+	awsKey, _ = os.LookupEnv("AWS_SECRET_ACCESS_KEY")
+	return
 }
 
-// MakeS3SessionForDownloadWithBucket download from bucket
-func MakeS3SessionForDownloadWithBucket(awsBucket string) (helper Helper, err error) {
-	awsID, awsKey := getAWSCredentials()
-	if awsBucket == "" {
-		awsBucket = s3DefaultReleaseBucket
-	}
-	err = validateS3Params("download", awsID, awsKey, awsBucket)
-	if err != nil {
+func validateS3Credentials(awsID string, awsKey string) (err error) {
+	if awsID == "" || awsKey == "" {
+		err = fmt.Errorf("AWS credentials must be specified in enviroment variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY")
 		return
 	}
-	creds := credentials.NewStaticCredentials(awsID, awsKey, "")
-	return makeS3Session(creds, awsBucket)
+	return
+}
+
+func validateS3Bucket(awsBucket string) (err error) {
+	if awsBucket == "" {
+		err = fmt.Errorf("bucket name is empty")
+		return
+	}
+	return
+}
+
+func checkCredentialsRequired(action string, bucketName string) (required bool) {
+	required = true
+	if action == uploadAction && bucketName == s3DefaultUploadBucket {
+		required = false
+	} else if action == downloadAction && bucketName == s3DefaultReleaseBucket {
+		required = false
+	}
+	return
 }
 
 func makeS3Session(credentials *credentials.Credentials, bucket string) (helper Helper, err error) {
+	err = validateS3Bucket(bucket)
+	if err != nil {
+		return
+	}
 	sess, err := session.NewSession(&aws.Config{Region: aws.String(getS3Region()),
 		Credentials: credentials})
 	if err != nil {
@@ -180,7 +215,7 @@ func (helper *Helper) GetVersion(prefix string, specificVersion uint64) (maxVers
 	for _, item := range result.Contents {
 		var version uint64
 		name := string(*item.Key)
-		version, err = getVersionFromName(name)
+		version, err = helper.getVersionFromName(name)
 		if err != nil {
 			return
 		}
@@ -212,7 +247,7 @@ func (helper *Helper) DownloadFile(name string, writer io.WriterAt) error {
 // UploadFiles uploads the provided set of files in a batch
 func (helper *Helper) UploadFiles(files []string) error {
 	for _, f := range files {
-		fmt.Printf("Uploading file: %s\n", f)
+		fmt.Printf("Uploading file: '%s' to s3 bucket '%s'\n", f, helper.bucket)
 	}
 	uploader := s3manager.NewUploader(helper.session)
 	iter := makeFileIterator(files, helper.bucket)
@@ -220,7 +255,7 @@ func (helper *Helper) UploadFiles(files []string) error {
 	return err
 }
 
-func getVersionFromName(name string) (version uint64, err error) {
+func (helper *Helper) getVersionFromName(name string) (version uint64, err error) {
 	re := regexp.MustCompile(`_(\d*)\.(\d*)\.(\d*)`)
 	submatchAll := re.FindAllStringSubmatch(name, -1)
 	if submatchAll == nil || len(submatchAll) == 0 || len(submatchAll[0]) != 4 {
@@ -267,7 +302,7 @@ func (helper *Helper) GetPackageVersion(pkg string, channel string, specificVers
 	for _, item := range result.Contents {
 		var version uint64
 		name := string(*item.Key)
-		version, err = getVersionFromName(name)
+		version, err = helper.getVersionFromName(name)
 		if err != nil {
 			return
 		}

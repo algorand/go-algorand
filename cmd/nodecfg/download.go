@@ -25,9 +25,9 @@ import (
 	"github.com/algorand/go-algorand/util/tar"
 )
 
-func downloadAndExtractConfigPackage(channel string, targetDir string) (err error) {
+func downloadAndExtractConfigPackage(channel string, targetDir string, configBucket string) (err error) {
 	fmt.Fprintf(os.Stdout, "Downloading latest configuration file for '%s'...\n", channel)
-	packageFile, err := downloadConfigPackage(channel, targetDir)
+	packageFile, err := downloadConfigPackage(channel, targetDir, configBucket)
 	if err != nil {
 		return fmt.Errorf("error downloading config package for channel '%s': %v", channel, err)
 	}
@@ -37,8 +37,12 @@ func downloadAndExtractConfigPackage(channel string, targetDir string) (err erro
 	return extractConfigPackage(packageFile, targetDir)
 }
 
-func downloadConfigPackage(channelName string, targetDir string) (packageFile string, err error) {
-	s3Session, err := s3.MakeS3SessionForDownload()
+func downloadConfigPackage(channelName string, targetDir string, configBucket string) (packageFile string, err error) {
+	if configBucket == "" {
+		configBucket = s3.GetS3ReleaseBucket()
+	}
+	fmt.Fprintf(os.Stdout, "Downloading configuration package '%s' from bucket '%s'\n", packageFile, configBucket)
+	s3Session, err := s3.MakeS3SessionForDownloadWithBucket(configBucket)
 	if err != nil {
 		return
 	}

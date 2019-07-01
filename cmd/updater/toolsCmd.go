@@ -38,6 +38,9 @@ var getToolsCmd = &cobra.Command{
 	Short: "Download the latest version of tools package available for specified channel",
 	Long:  "Download the latest version of tools package available for specified channel",
 	Run: func(cmd *cobra.Command, args []string) {
+		if toolsBucket == "" {
+			toolsBucket = s3.GetS3ReleaseBucket()
+		}
 		s3Session, err := s3.MakeS3SessionForDownloadWithBucket(toolsBucket)
 		if err != nil {
 			exitErrorf("Error creating s3 session %s\n", err.Error())

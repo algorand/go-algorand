@@ -35,8 +35,6 @@ func init() {
 	versionCmd.AddCommand(checkCmd)
 	versionCmd.AddCommand(getCmd)
 
-	checkCmd.Flags().StringVarP(&versionBucket, "bucket", "b", "", "S3 bucket to check for updates.")
-
 	getCmd.Flags().StringVarP(&destFile, "outputFile", "o", "", "Path for downloaded file (required)")
 	getCmd.Flags().StringVarP(&versionBucket, "bucket", "b", "", "S3 bucket to check for updates.")
 	getCmd.Flags().Uint64VarP(&specificVersion, "version", "v", 0, "Specific version to download")
@@ -58,6 +56,9 @@ var checkCmd = &cobra.Command{
 	Short: "Check the latest version available",
 	Long:  `Check the latest version available`,
 	Run: func(cmd *cobra.Command, args []string) {
+		if versionBucket == "" {
+			versionBucket = s3.GetS3ReleaseBucket()
+		}
 		s3Session, err := s3.MakeS3SessionForDownloadWithBucket(versionBucket)
 		if err != nil {
 			exitErrorf("Error creating s3 session %s\n", err.Error())
@@ -82,6 +83,9 @@ var getCmd = &cobra.Command{
 	Short: "Download the latest version available",
 	Long:  `Download the latest version available`,
 	Run: func(cmd *cobra.Command, args []string) {
+		if versionBucket == "" {
+			versionBucket = s3.GetS3ReleaseBucket()
+		}
 		s3Session, err := s3.MakeS3SessionForDownloadWithBucket(versionBucket)
 		if err != nil {
 			exitErrorf("Error creating s3 session %s\n", err.Error())

@@ -36,7 +36,7 @@ func CollectAndUploadData(dataDir string, bundleFilename string) <-chan error {
 	errorChannel := make(chan error, 1)
 	pipeReader, pipeWriter := io.Pipe()
 	go func() {
-		s3, err := s3.MakeS3SessionForUpload()
+		s3Session, err := s3.MakeS3SessionForUploadWithBucket(s3.GetS3UploadBucket())
 		if err != nil {
 			errorChannel <- err
 			return
@@ -44,7 +44,7 @@ func CollectAndUploadData(dataDir string, bundleFilename string) <-chan error {
 		wg := sync.WaitGroup{}
 		wg.Add(1)
 		go func() {
-			err = s3.UploadFileStream(bundleFilename, pipeReader)
+			err = s3Session.UploadFileStream(bundleFilename, pipeReader)
 			if err != nil {
 				errorChannel <- err
 			}
