@@ -513,6 +513,10 @@ type Local struct {
 	// API endpoint address
 	EndpointAddress string
 
+	// timeouts passed to the rest http.Server implementation
+	RestReadTimeout  time.Duration
+	RestWriteTimeout time.Duration
+
 	// SRV-based phonebook
 	DNSBootstrapID string
 
