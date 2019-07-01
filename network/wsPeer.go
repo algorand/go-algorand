@@ -65,6 +65,7 @@ type wsPeerWebsocketConn interface {
 	RemoteAddr() net.Addr
 	NextReader() (int, io.Reader, error)
 	WriteMessage(int, []byte) error
+	WriteControl(int, []byte, time.Time) error
 	SetReadLimit(int64)
 	CloseWithoutFlush() error
 }
