@@ -190,7 +190,7 @@ func (s *Server) Start() {
 		Addr:         addr,
 		Handler:      apiHandler,
 		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 30 * time.Second,
+		WriteTimeout: 90 * time.Second,
 	}
 
 	defer s.Stop()
