@@ -476,6 +476,7 @@ func (wp *wsPeer) Close() {
 	atomic.StoreInt32(&wp.didSignalClose, 1)
 	if atomic.CompareAndSwapInt32(&wp.didInnerClose, 0, 1) {
 		close(wp.closing)
+		wp.conn.WriteControl(websocket.CloseMessage, nil, time.Now().Add(5*time.Second))
 		wp.conn.CloseWithoutFlush()
 	}
 }
