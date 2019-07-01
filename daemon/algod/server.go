@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/algorand/go-deadlock"
 
@@ -188,8 +189,8 @@ func (s *Server) Start() {
 	server = http.Server{
 		Addr:         addr,
 		Handler:      apiHandler,
-		ReadTimeout:  cfg.RestReadTimeout,
-		WriteTimeout: cfg.RestWriteTimeout,
+		ReadTimeout:  time.Duration(cfg.RestReadTimeoutSeconds) * time.Second,
+		WriteTimeout: time.Duration(cfg.RestWriteTimeoutSeconds) * time.Second,
 	}
 
 	defer s.Stop()

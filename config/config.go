@@ -514,8 +514,8 @@ type Local struct {
 	EndpointAddress string
 
 	// timeouts passed to the rest http.Server implementation
-	RestReadTimeout  time.Duration
-	RestWriteTimeout time.Duration
+	RestReadTimeoutSeconds  int
+	RestWriteTimeoutSeconds int
 
 	// SRV-based phonebook
 	DNSBootstrapID string
