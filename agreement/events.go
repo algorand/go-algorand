@@ -737,6 +737,9 @@ func zeroEvent(t eventType) event {
 
 type voteFilterRequestEvent struct {
 	RawVote rawVote
+
+	// Proto is the consensus version corresponding to RawVote.Round
+	Proto protocol.ConsensusVersion
 }
 
 func (e voteFilterRequestEvent) t() eventType {

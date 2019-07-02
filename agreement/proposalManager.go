@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // A proposalManager is a proposalMachine which applies relay rules to incoming
@@ -134,7 +135,7 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 
 	switch e.t() {
 	case votePresent:
-		err := m.filterProposalVote(p, r, e.Input.UnauthenticatedVote, e.FreshnessData)
+		err := m.filterProposalVote(p, r, e.Input.UnauthenticatedVote, e.FreshnessData, e.Proto.Version)
 		if err != nil {
 			return filteredEvent{T: voteFiltered, Err: makeSerErr(err)}
 		}
@@ -218,13 +219,13 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 }
 
 // filterVote filters a vote, checking if it is both fresh and not a duplicate.
-func (m *proposalManager) filterProposalVote(p player, r routerHandle, uv unauthenticatedVote, freshData freshnessData) error {
+func (m *proposalManager) filterProposalVote(p player, r routerHandle, uv unauthenticatedVote, freshData freshnessData, protoVersion protocol.ConsensusVersion) error {
 	err := proposalFresh(freshData, uv)
 	if err != nil {
 		return fmt.Errorf("proposalManager: filtered proposal-vote due to age: %v", err)
 	}
 
-	qe := voteFilterRequestEvent{RawVote: uv.R}
+	qe := voteFilterRequestEvent{RawVote: uv.R, Proto: protoVersion}
 	sawVote := r.dispatch(p, qe, proposalMachinePeriod, uv.R.Round, uv.R.Period, 0)
 	if sawVote.t() == voteFiltered {
 		return fmt.Errorf("proposalManager: filtered proposal-vote: sender %v had already sent a vote in round %v period %v", uv.R.Sender, uv.R.Round, uv.R.Period)

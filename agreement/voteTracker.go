@@ -255,8 +255,21 @@ func (tracker *voteTracker) handle(r routerHandle, p player, e0 event) event {
 		return res
 	case voteFilterRequest:
 		e := e0.(voteFilterRequestEvent)
-		_, equivocated := tracker.Equivocators[e.RawVote.Sender]
+		eqVote, equivocated := tracker.Equivocators[e.RawVote.Sender]
 		if equivocated {
+			equivocationDetails := telemetryspec.EquivocatedVoteEventDetails{
+				VoterAddress:          e.RawVote.Sender.String(),
+				ProposalHash:          e.RawVote.Proposal.BlockDigest.String(),
+				Round:                 uint64(e.RawVote.Round),
+				Period:                uint64(e.RawVote.Period),
+				Step:                  uint64(e.RawVote.Step),
+				StepThreshold:         e.RawVote.Step.threshold(config.Consensus[e.Proto]),
+				Weight:                eqVote.Cred.Weight,
+				PreviousProposalHash1: eqVote.Proposals[0].BlockDigest.String(),
+				PreviousProposalHash2: eqVote.Proposals[1].BlockDigest.String(),
+			}
+			logging.Base().EventWithDetails(telemetryspec.ApplicationState, telemetryspec.EquivocatedVoteEvent, equivocationDetails)
+
 			return filteredStepEvent{T: voteFilteredStep}
 		}
 
