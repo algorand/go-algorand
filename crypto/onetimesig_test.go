@@ -29,76 +29,9 @@ func randID() OneTimeSignatureIdentifier {
 	}
 }
 
-func TestOneTimeSignVerifyOldStyle(t *testing.T) {
-	c := GenerateOneTimeSignatureSecrets(0, 1000)
-	c2 := GenerateOneTimeSignatureSecrets(0, 1000)
-
-	id := randID()
-	s := randString()
-	s2 := randString()
-
-	sig := c.Sign(id, false, s)
-	if !c.Verify(id, false, s, sig) {
-		t.Errorf("correct signature failed to verify (ephemeral)")
-	}
-
-	if c.Verify(id, false, s2, sig) {
-		t.Errorf("signature verifies on wrong message")
-	}
-
-	sig2 := c2.Sign(id, false, s)
-	if c.Verify(id, false, s, sig2) {
-		t.Errorf("wrong master key incorrectly verified (ephemeral)")
-	}
-
-	otherID := randID()
-	for otherID.Batch == id.Batch {
-		// Enforce that the Batch ID be different;
-		// otherwise this test may fail spuriously
-		otherID = randID()
-	}
-	if c.Verify(otherID, false, s, sig) {
-		t.Errorf("signature verifies for wrong ID")
-	}
-
-	nextOffsetID := id
-	nextOffsetID.Offset++
-	if !c.Verify(nextOffsetID, false, s, sig) {
-		t.Errorf("correct signature failed to verify after bumping batch (should be irrelevant when coarse-grained)")
-	}
-
-	nextID := id
-	nextID.Batch++
-	c.DeleteBeforeCoarseGrained(nextID)
-	sigAfterDelete := c.Sign(id, false, s)
-	if c.Verify(id, false, s, sigAfterDelete) {
-		t.Errorf("signature verifies after delete")
-	}
-
-	sigNextAfterDelete := c.Sign(nextID, false, s)
-	if !c.Verify(nextID, false, s, sigNextAfterDelete) {
-		t.Errorf("correct signature for nextID failed to verify")
-	}
-}
-
 func TestOneTimeSignVerifyNewStyle(t *testing.T) {
 	c := GenerateOneTimeSignatureSecrets(0, 1000)
 	c2 := GenerateOneTimeSignatureSecrets(0, 1000)
-	testOneTimeSignVerifyNewStyle(t, c, c2)
-}
-
-func TestOneTimeSignVerifyMixedStyle(t *testing.T) {
-	c := GenerateOneTimeSignatureSecrets(0, 1000)
-	c2 := GenerateOneTimeSignatureSecrets(0, 1000)
-
-	// Wipe out PKSigNew from subkeys
-	for i := range c.Batches {
-		c.Batches[i].PKSigNew = ed25519Signature{}
-	}
-	for i := range c2.Batches {
-		c2.Batches[i].PKSigNew = ed25519Signature{}
-	}
-
 	testOneTimeSignVerifyNewStyle(t, c, c2)
 }
 
@@ -107,45 +40,45 @@ func testOneTimeSignVerifyNewStyle(t *testing.T, c *OneTimeSignatureSecrets, c2 
 	s := randString()
 	s2 := randString()
 
-	sig := c.Sign(id, true, s)
-	if !c.Verify(id, true, s, sig) {
+	sig := c.Sign(id, s)
+	if !c.Verify(id, s, sig) {
 		t.Errorf("correct signature failed to verify (ephemeral)")
 	}
 
-	if c.Verify(id, true, s2, sig) {
+	if c.Verify(id, s2, sig) {
 		t.Errorf("signature verifies on wrong message")
 	}
 
-	sig2 := c2.Sign(id, true, s)
-	if c.Verify(id, true, s, sig2) {
+	sig2 := c2.Sign(id, s)
+	if c.Verify(id, s, sig2) {
 		t.Errorf("wrong master key incorrectly verified (ephemeral)")
 	}
 
 	otherID := randID()
-	if c.Verify(otherID, true, s, sig) {
+	if c.Verify(otherID, s, sig) {
 		t.Errorf("signature verifies for wrong ID")
 	}
 
 	nextOffsetID := id
 	nextOffsetID.Offset++
-	if c.Verify(nextOffsetID, true, s, sig) {
+	if c.Verify(nextOffsetID, s, sig) {
 		t.Errorf("signature verifies after changing offset")
 	}
 
 	c.DeleteBeforeFineGrained(nextOffsetID, 256)
-	sigAfterDelete := c.Sign(id, true, s)
-	if c.Verify(id, false, s, sigAfterDelete) {
+	sigAfterDelete := c.Sign(id, s)
+	if c.Verify(id, s, sigAfterDelete) { // TODO(adam): Previously, this call to Verify was verifying old-style coarse-grained one-time signatures. Now it's verifying new-style fine-grained one-time signatures. Is this correct?
 		t.Errorf("signature verifies after delete offset")
 	}
 
-	sigNextAfterDelete := c.Sign(nextOffsetID, true, s)
-	if !c.Verify(nextOffsetID, true, s, sigNextAfterDelete) {
+	sigNextAfterDelete := c.Sign(nextOffsetID, s)
+	if !c.Verify(nextOffsetID, s, sigNextAfterDelete) {
 		t.Errorf("signature fails to verify after deleting up to this offset")
 	}
 
 	nextOffsetID.Offset++
-	sigNext2AfterDelete := c.Sign(nextOffsetID, true, s)
-	if !c.Verify(nextOffsetID, true, s, sigNext2AfterDelete) {
+	sigNext2AfterDelete := c.Sign(nextOffsetID, s)
+	if !c.Verify(nextOffsetID, s, sigNext2AfterDelete) {
 		t.Errorf("signature fails to verify after deleting up to previous offset")
 	}
 
@@ -155,19 +88,19 @@ func testOneTimeSignVerifyNewStyle(t *testing.T, c *OneTimeSignatureSecrets, c2 
 	nextBatchOffsetID := nextBatchID
 	nextBatchOffsetID.Offset++
 	c.DeleteBeforeFineGrained(nextBatchOffsetID, 256)
-	sigAfterDelete = c.Sign(nextBatchID, true, s)
-	if c.Verify(nextBatchID, true, s, sigAfterDelete) {
+	sigAfterDelete = c.Sign(nextBatchID, s)
+	if c.Verify(nextBatchID, s, sigAfterDelete) {
 		t.Errorf("signature verifies after delete")
 	}
 
-	sigNextAfterDelete = c.Sign(nextBatchOffsetID, true, s)
-	if !c.Verify(nextBatchOffsetID, true, s, sigNextAfterDelete) {
+	sigNextAfterDelete = c.Sign(nextBatchOffsetID, s)
+	if !c.Verify(nextBatchOffsetID, s, sigNextAfterDelete) {
 		t.Errorf("signature fails to verify after delete up to this offset")
 	}
 
 	nextBatchOffsetID.Offset++
-	sigNext2AfterDelete = c.Sign(nextBatchOffsetID, true, s)
-	if !c.Verify(nextBatchOffsetID, true, s, sigNext2AfterDelete) {
+	sigNext2AfterDelete = c.Sign(nextBatchOffsetID, s)
+	if !c.Verify(nextBatchOffsetID, s, sigNext2AfterDelete) {
 		t.Errorf("signature fails to verify after delete up to previous offset")
 	}
 
@@ -178,27 +111,27 @@ func testOneTimeSignVerifyNewStyle(t *testing.T, c *OneTimeSignatureSecrets, c2 
 
 	preBigJumpID := bigJumpID
 	preBigJumpID.Batch--
-	if c.Verify(preBigJumpID, true, s, c.Sign(preBigJumpID, true, s)) {
+	if c.Verify(preBigJumpID, s, c.Sign(preBigJumpID, s)) {
 		t.Errorf("preBigJumpID verifies")
 	}
 
 	preBigJumpID.Batch++
 	preBigJumpID.Offset--
-	if c.Verify(preBigJumpID, true, s, c.Sign(preBigJumpID, true, s)) {
+	if c.Verify(preBigJumpID, s, c.Sign(preBigJumpID, s)) {
 		t.Errorf("preBigJumpID verifies")
 	}
 
-	if !c.Verify(bigJumpID, true, s, c.Sign(bigJumpID, true, s)) {
+	if !c.Verify(bigJumpID, s, c.Sign(bigJumpID, s)) {
 		t.Errorf("bigJumpID does not verify")
 	}
 
 	bigJumpID.Offset++
-	if !c.Verify(bigJumpID, true, s, c.Sign(bigJumpID, true, s)) {
+	if !c.Verify(bigJumpID, s, c.Sign(bigJumpID, s)) {
 		t.Errorf("bigJumpID.Offset++ does not verify")
 	}
 
 	bigJumpID.Batch++
-	if !c.Verify(bigJumpID, true, s, c.Sign(bigJumpID, true, s)) {
+	if !c.Verify(bigJumpID, s, c.Sign(bigJumpID, s)) {
 		t.Errorf("bigJumpID.Batch++ does not verify")
 	}
 }

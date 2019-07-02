@@ -50,6 +50,8 @@ gpg -u dev@algorand.com --clearsign
 type some stuff
 ^D
 
+gpg -u rpm@algorand.com --clearsign
+
 
 # TODO: use simpler expression when we can rely on gpg 2.2 on ubuntu >= 18.04
 #REMOTE_GPG_SOCKET=$(ssh ubuntu@${TARGET} gpgconf --list-dir agent-socket)
@@ -75,7 +77,9 @@ export AWS_EFS_MOUNT=
 # to be prompted for GPG key password at a couple points.
 # It can still steal the outer terminal from within piping the output to tee. Nifty, huh?
 BUILDTIMESTAMP=$(cat "${HOME}/buildtimestamp")
-(bash "${HOME}/go/src/github.com/algorand/go-algorand/scripts/build_release.sh" 2>&1)|tee -a "buildlog_${BUILDTIMESTAMP}"
+(bash "${HOME}/go/src/github.com/algorand/go-algorand/scripts/build_release.sh" 2>&1)|tee -a "${HOME}/buildlog_${BUILDTIMESTAMP}"
+(bash "${HOME}/go/src/github.com/algorand/go-algorand/scripts/build_release_sign.sh" 2>&1)|tee -a "${HOME}/buildlog_${BUILDTIMESTAMP}"
+(bash "${HOME}/go/src/github.com/algorand/go-algorand/scripts/build_release_upload.sh" 2>&1)|tee -a "${HOME}/buildlog_${BUILDTIMESTAMP}"
 if [ -f "${HOME}/rstamp" ]; then
     . "${HOME}/rstamp"
 fi
@@ -86,7 +90,7 @@ if [ -z "${RSTAMP}" ]; then
     echo "could not figure out RSTAMP, script must have failed early"
     exit 1
 fi
-gzip "buildlog_${BUILDTIMESTAMP}"
+gzip "${HOME}/buildlog_${BUILDTIMESTAMP}"
 if [ ! -z "${S3_PREFIX_BUILDLOG}" ]; then
-    aws s3 cp "buildlog_${BUILDTIMESTAMP}.gz" "${S3_PREFIX_BUILDLOG}/${RSTAMP}/buildlog_${BUILDTIMESTAMP}.gz"
+    aws s3 cp "${HOME}/buildlog_${BUILDTIMESTAMP}.gz" "${S3_PREFIX_BUILDLOG}/${RSTAMP}/buildlog_${BUILDTIMESTAMP}.gz"
 fi

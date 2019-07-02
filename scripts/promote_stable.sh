@@ -26,7 +26,6 @@ function init_s3cmd() {
         wget https://sourceforge.net/projects/s3tools/files/s3cmd/2.0.2/s3cmd-2.0.2.tar.gz
         tar -xf s3cmd-2.0.2.tar.gz
         popd
-        sudo apt-get install python-dateutil
         S3CMD=~/s3cmd-2.0.2/s3cmd
     fi
 }

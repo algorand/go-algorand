@@ -37,7 +37,8 @@ func init() {
 var exportCmd = &cobra.Command{
 	Use:   "export",
 	Short: "Export key file to mnemonic and public key",
-	Run: func(cmd *cobra.Command, args []string) {
+	Args:  cobra.NoArgs,
+	Run: func(cmd *cobra.Command, _ []string) {
 		seed := loadKeyfile(exportKeyfile)
 		mnemonic := computeMnemonic(seed)
 

@@ -40,26 +40,6 @@ func GenerateRandomBytes(n int) []byte {
 
 // this test checks that two accounts can send money to one another
 // across a protocol upgrade.
-func TestAccountsCanSendMoneyAcrossUpgradeV2toV3(t *testing.T) {
-	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV2Upgrade.json"))
-}
-
-func TestAccountsCanSendMoneyAcrossUpgradeV3toV4(t *testing.T) {
-	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV3Upgrade.json"))
-}
-
-func TestAccountsCanSendMoneyAcrossUpgradeV4toV5(t *testing.T) {
-	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV4Upgrade.json"))
-}
-
-func TestAccountsCanSendMoneyAcrossUpgradeV5toV6(t *testing.T) {
-	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV5Upgrade.json"))
-}
-
-func TestAccountsCanSendMoneyAcrossUpgradeV6toV7(t *testing.T) {
-	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV6Upgrade.json"))
-}
-
 func TestAccountsCanSendMoneyAcrossUpgradeV7toV8(t *testing.T) {
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV7Upgrade.json"))
 }

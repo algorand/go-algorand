@@ -87,11 +87,7 @@ func (part Participation) DeleteOldKeys(current basics.Round, proto config.Conse
 		keyDilution = proto.DefaultKeyDilution
 	}
 
-	if proto.FineGrainedEphemeralKeys {
-		part.Voting.DeleteBeforeFineGrained(basics.OneTimeIDForRound(current, keyDilution), keyDilution)
-	} else {
-		part.Voting.DeleteBeforeCoarseGrained(basics.OneTimeIDForRound(current, keyDilution))
-	}
+	part.Voting.DeleteBeforeFineGrained(basics.OneTimeIDForRound(current, keyDilution), keyDilution)
 	raw := protocol.Encode(part.Voting.Snapshot())
 
 	return part.Store.Atomic(func(tx *sql.Tx) error {
@@ -100,6 +96,14 @@ func (part Participation) DeleteOldKeys(current basics.Round, proto config.Conse
 			return fmt.Errorf("Participation.DeleteOldKeys: failed to update account: %v", err)
 		}
 		return nil
+	})
+}
+
+// PersistNewParent writes a new parent address to the partkey database.
+func (part Participation) PersistNewParent() error {
+	return part.Store.Atomic(func(tx *sql.Tx) error {
+		_, err := tx.Exec("UPDATE ParticipationAccount SET parent=?", part.Parent[:])
+		return err
 	})
 }
 
@@ -137,11 +141,9 @@ func (part Participation) GenerateRegistrationTransaction(fee basics.MicroAlgos,
 			SelectionPK: part.VRF.PK,
 		},
 	}
-	if params.ExplicitEphemeralParams {
-		t.KeyregTxnFields.VoteFirst = part.FirstValid
-		t.KeyregTxnFields.VoteLast = part.LastValid
-		t.KeyregTxnFields.VoteKeyDilution = part.KeyDilution
-	}
+	t.KeyregTxnFields.VoteFirst = part.FirstValid
+	t.KeyregTxnFields.VoteLast = part.LastValid
+	t.KeyregTxnFields.VoteKeyDilution = part.KeyDilution
 	return t
 }
 
