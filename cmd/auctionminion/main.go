@@ -61,7 +61,7 @@ var stateFile = flag.String("statefile", "auctionminion.state", "State/config fi
 var initFlag = flag.Bool("init", false, "Initialize state file")
 
 type minionConfig struct {
-	AuctionKey DigestChecksummed
+	AuctionKey crypto.Digest
 	AuctionID  uint64
 	StartRound uint64
 	AlgodURL   string
