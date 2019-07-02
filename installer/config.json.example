@@ -1,5 +1,5 @@
 {
-    "Version": 5,
+    "Version": 4,
     "AnnounceParticipationKey": true,
     "Archival": false,
     "BaseLoggerDebugLevel": 4,
@@ -29,8 +29,6 @@
     "PriorityPeers": {},
     "ReconnectTime": 60000000000,
     "ReservedFDs": 256,
-    "RestReadTimeoutSeconds": 15,
-    "RestWriteTimeoutSeconds": 120,
     "RunHosted": false,
     "SuggestedFeeBlockHistory": 3,
     "SuggestedFeeSlidingWindowSize": 50,
