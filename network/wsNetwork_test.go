@@ -1464,3 +1464,86 @@ func TestSlowPeerDisconnection(t *testing.T) {
 		time.Sleep(time.Millisecond * 5)
 	}
 }
+
+func TestForceMessageRelaying(t *testing.T) {
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Level(defaultConfig.BaseLoggerDebugLevel))
+	wn := &WebsocketNetwork{
+		log:       log,
+		config:    defaultConfig,
+		phonebook: emptyPhonebookSingleton,
+		GenesisID: "go-test-network-genesis",
+		NetworkID: config.Devtestnet,
+	}
+	wn.setup()
+	wn.eventualReadyDelay = time.Second
+
+	netA := wn
+	netA.config.GossipFanout = 1
+
+	defer func() { t.Log("stopping A"); netA.Stop(); t.Log("A done") }()
+
+	counter := newMessageCounter(t, 5)
+	counterDone := counter.done
+	netA.RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{Tag: debugTag, MessageHandler: counter}})
+	netA.Start()
+	addrA, postListen := netA.Address()
+	require.Truef(t, postListen, "Listening network failed to start")
+
+	noAddressConfig := defaultConfig
+	noAddressConfig.NetAddress = ""
+	netB := makeTestWebsocketNodeWithConfig(t, noAddressConfig)
+	netB.config.GossipFanout = 1
+	netB.phonebook = &oneEntryPhonebook{addrA}
+	netB.Start()
+	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
+
+	noAddressConfig.ForceRelayMessages = true
+	netC := makeTestWebsocketNodeWithConfig(t, noAddressConfig)
+	netC.config.GossipFanout = 1
+	netC.phonebook = &oneEntryPhonebook{addrA}
+	netC.Start()
+	defer func() { t.Log("stopping C"); netC.Stop(); t.Log("C done") }()
+
+	readyTimeout := time.NewTimer(2 * time.Second)
+	waitReady(t, netA, readyTimeout.C)
+	waitReady(t, netB, readyTimeout.C)
+	waitReady(t, netC, readyTimeout.C)
+
+	// send 5 messages from both netB and netC to netA
+	for i := 0; i < 5; i++ {
+		err := netB.Relay(context.Background(), debugTag, []byte{1, 2, 3}, true, nil)
+		require.NoError(t, err)
+		err = netC.Relay(context.Background(), debugTag, []byte{1, 2, 3}, true, nil)
+		require.NoError(t, err)
+	}
+
+	select {
+	case <-counterDone:
+	case <-time.After(2 * time.Second):
+		if counter.count < 5 {
+			require.Failf(t, "One or more messages failed to reach destination network", "%d > %d", 5, counter.count)
+		} else if counter.count > 5 {
+			require.Failf(t, "One or more messages that were expected to be dropped, reached destination network", "%d < %d", 5, counter.count)
+		}
+	}
+	netA.ClearHandlers()
+	counter = newMessageCounter(t, 10)
+	counterDone = counter.done
+	netA.RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{Tag: debugTag, MessageHandler: counter}})
+
+	// hack the relayMessages on the netB so that it would start sending messages.
+	netB.relayMessages = true
+	// send additional 10 messages from netB
+	for i := 0; i < 10; i++ {
+		err := netB.Relay(context.Background(), debugTag, []byte{1, 2, 3}, true, nil)
+		require.NoError(t, err)
+	}
+
+	select {
+	case <-counterDone:
+	case <-time.After(2 * time.Second):
+		require.Failf(t, "One or more messages failed to reach destination network", "%d > %d", 10, counter.count)
+	}
+
+}

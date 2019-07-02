@@ -17,34 +17,43 @@
 package main
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
 )
 
-var rootCmd = &cobra.Command{
-	Use:   "algokey",
-	Short: "CLI for managing Algorand keys",
-	Args:  cobra.NoArgs,
+func init() {
+	completionCmd.AddCommand(bashCompletionCmd)
+	completionCmd.AddCommand(zshCompletionCmd)
+}
+
+var completionCmd = &cobra.Command{
+	Use:   "completion",
+	Short: "Shell completion helper",
+	Long:  "Shell completion helper",
+	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		// If no arguments passed, we should fallback to help
 		cmd.HelpFunc()(cmd, args)
 	},
 }
 
-func init() {
-	rootCmd.AddCommand(generateCmd)
-	rootCmd.AddCommand(importCmd)
-	rootCmd.AddCommand(exportCmd)
-	rootCmd.AddCommand(signCmd)
-	rootCmd.AddCommand(multisigCmd)
-	rootCmd.AddCommand(partCmd)
+var bashCompletionCmd = &cobra.Command{
+	Use:   "bash",
+	Short: "Generate bash completion commands",
+	Long:  "Generate bash completion commands",
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, _ []string) {
+		rootCmd.GenBashCompletion(os.Stdout)
+	},
 }
 
-func main() {
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
+var zshCompletionCmd = &cobra.Command{
+	Use:   "zsh",
+	Short: "Generate zsh completion commands",
+	Long:  "Generate zsh completion commands",
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, _ []string) {
+		rootCmd.GenZshCompletion(os.Stdout)
+	},
 }

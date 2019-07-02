@@ -330,11 +330,11 @@ func TestLedgerSingleTx(t *testing.T) {
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
-	initBlocks, initAccounts, initSecrets := testGenerateInitState(t, protocol.ConsensusV4)
+	initBlocks, initAccounts, initSecrets := testGenerateInitState(t, protocol.ConsensusV7)
 	l, err := OpenLedger(logging.Base(), t.Name(), true, initBlocks, initAccounts, crypto.Hash([]byte(t.Name())))
 	a.NoError(err, "could not open ledger")
 
-	proto := config.Consensus[protocol.ConsensusV4]
+	proto := config.Consensus[protocol.ConsensusV7]
 	poolAddr := testPoolAddr
 	sinkAddr := testSinkAddr
 
