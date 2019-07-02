@@ -288,12 +288,6 @@ func migrate(cfg Local) (newCfg Local, err error) {
 		if newCfg.PriorityPeers == nil {
 			newCfg.PriorityPeers = map[string]bool{}
 		}
-		if newCfg.RestReadTimeoutSeconds == defaultLocalV3.RestReadTimeoutSeconds {
-			newCfg.RestReadTimeoutSeconds = defaultLocalV4.RestReadTimeoutSeconds
-		}
-		if newCfg.RestWriteTimeoutSeconds == defaultLocalV3.RestWriteTimeoutSeconds {
-			newCfg.RestWriteTimeoutSeconds = defaultLocalV4.RestWriteTimeoutSeconds
-		}
 		newCfg.Version = 4
 	}
 
