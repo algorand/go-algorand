@@ -304,6 +304,12 @@ func TestConfigMigrateFromDisk(t *testing.T) {
 	a.NoError(err)
 	a.Equal(defaultLocal, modified)
 
+	c5, err := loadConfigFromFile(filepath.Join(configsPath, "config-v5.json"))
+	a.NoError(err)
+	modified, err = migrate(c5)
+	a.NoError(err)
+	a.Equal(defaultLocal, modified)
+
 	cNext := Local{Version: configVersion + 1}
 	_, err = migrate(cNext)
 	a.Error(err)
@@ -313,7 +319,7 @@ func TestConfigMigrateFromDisk(t *testing.T) {
 func TestConfigInvariant(t *testing.T) {
 	a := require.New(t)
 
-	a.Equal(uint32(4), configVersion, "If you bump Config Version, please update this test (and consider if you should be adding more)")
+	a.Equal(uint32(5), configVersion, "If you bump Config Version, please update this test (and consider if you should be adding more)")
 
 	ourPath, err := os.Getwd()
 	a.NoError(err)
@@ -343,6 +349,11 @@ func TestConfigInvariant(t *testing.T) {
 	err = codecs.LoadObjectFromFile(filepath.Join(configsPath, "config-v4.json"), &c4)
 	a.NoError(err)
 	a.Equal(defaultLocalV4, c4)
+
+	c5 := Local{}
+	err = codecs.LoadObjectFromFile(filepath.Join(configsPath, "config-v5.json"), &c5)
+	a.NoError(err)
+	a.Equal(defaultLocalV4, c5)
 }
 
 func TestConfigLatestVersion(t *testing.T) {
