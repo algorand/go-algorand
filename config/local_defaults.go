@@ -21,9 +21,9 @@ import (
 	"time"
 )
 
-var defaultLocal = defaultLocalV5
+var defaultLocal = defaultLocalV4
 
-const configVersion = uint32(5)
+const configVersion = uint32(4)
 
 // !!! WARNING !!!
 //
@@ -45,52 +45,6 @@ const configVersion = uint32(5)
 // provide a migration implementation.
 //
 // !!! WARNING !!!
-
-var defaultLocalV5 = Local{
-	// DO NOT MODIFY THIS STRUCTURE IN ANY WAY - See WARNING at top of file
-	Version:                               4,
-	Archival:                              false,
-	BaseLoggerDebugLevel:                  4, // Was 1
-	BroadcastConnectionsLimit:             -1,
-	AnnounceParticipationKey:              true,
-	PriorityPeers:                         map[string]bool{},
-	CadaverSizeTarget:                     1073741824,
-	CatchupFailurePeerRefreshRate:         10,
-	CatchupParallelBlocks:                 50,
-	DeadlockDetection:                     0,
-	DNSBootstrapID:                        "<network>.algorand.network",
-	EnableAgreementReporting:              false,
-	EnableAgreementTimeMetrics:            false,
-	EnableIncomingMessageFilter:           false,
-	EnableMetricReporting:                 false,
-	EnableOutgoingNetworkMessageFiltering: true,
-	EnableTopAccountsReporting:            false,
-	EndpointAddress:                       "127.0.0.1:0",
-	GossipFanout:                          4,
-	IncomingConnectionsLimit:              10000, // Was -1
-	IncomingMessageFilterBucketCount:      5,
-	IncomingMessageFilterBucketSize:       512,
-	LogSizeLimit:                          1073741824,
-	MaxConnectionsPerIP:                   30,
-	NetAddress:                            "",
-	NodeExporterListenAddress:             ":9100",
-	NodeExporterPath:                      "./node_exporter",
-	OutgoingMessageFilterBucketCount:      3,
-	OutgoingMessageFilterBucketSize:       128,
-	ReconnectTime:                         1 * time.Minute, // Was 60ns
-	ReservedFDs:                           256,
-	RestReadTimeoutSeconds:                15,
-	RestWriteTimeoutSeconds:               120,
-	RunHosted:                             false,
-	SuggestedFeeBlockHistory:              3,
-	SuggestedFeeSlidingWindowSize:         50,
-	TxPoolExponentialIncreaseFactor:       2,
-	TxPoolSize:                            50000,
-	TxSyncIntervalSeconds:                 60,
-	TxSyncTimeoutSeconds:                  30,
-	TxSyncServeResponseSize:               1000000,
-	// DO NOT MODIFY THIS STRUCTURE IN ANY WAY - See WARNING at top of file
-}
 
 var defaultLocalV4 = Local{
 	// DO NOT MODIFY THIS STRUCTURE IN ANY WAY - See WARNING at top of file
@@ -125,6 +79,8 @@ var defaultLocalV4 = Local{
 	OutgoingMessageFilterBucketSize:       128,
 	ReconnectTime:                         1 * time.Minute, // Was 60ns
 	ReservedFDs:                           256,
+	RestReadTimeoutSeconds:                15,
+	RestWriteTimeoutSeconds:               120,
 	RunHosted:                             false,
 	SuggestedFeeBlockHistory:              3,
 	SuggestedFeeSlidingWindowSize:         50,
@@ -331,6 +287,12 @@ func migrate(cfg Local) (newCfg Local, err error) {
 		}
 		if newCfg.PriorityPeers == nil {
 			newCfg.PriorityPeers = map[string]bool{}
+		}
+		if newCfg.RestReadTimeoutSeconds == defaultLocalV3.RestReadTimeoutSeconds {
+			newCfg.RestReadTimeoutSeconds = defaultLocalV4.RestReadTimeoutSeconds
+		}
+		if newCfg.RestWriteTimeoutSeconds == defaultLocalV3.RestWriteTimeoutSeconds {
+			newCfg.RestWriteTimeoutSeconds = defaultLocalV4.RestWriteTimeoutSeconds
 		}
 		newCfg.Version = 4
 	}
