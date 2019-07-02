@@ -54,7 +54,7 @@ func UnmarshalChecksumAddress(address string) (Address, error) {
 	}
 	var short Address
 	if len(decoded) < len(short) {
-		return Address{}, fmt.Errorf("decoded bad addr: %s %v", decoded, decoded)
+		return Address{}, fmt.Errorf("decoded bad addr: %s", address)
 	}
 
 	copy(short[:], decoded[:len(short)])
@@ -64,7 +64,7 @@ func UnmarshalChecksumAddress(address string) (Address, error) {
 	isValid := bytes.Equal(incomingchecksum, calculatedchecksum)
 
 	if !isValid {
-		return Address{}, fmt.Errorf("address %s is malformed, checksum verification failed ", address)
+		return Address{}, fmt.Errorf("address %s is malformed, checksum verification failed", address)
 	}
 
 	// Validate that we had a canonical string representation
