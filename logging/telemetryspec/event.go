@@ -160,6 +160,22 @@ type VoteRejectedEventDetails struct {
 	Reason string
 }
 
+// EquivocatedVoteEvent event
+const EquivocatedVoteEvent Event = "EquivocatedVoteEvent"
+
+// EquivocatedVoteEventDetails contains details for the EquivocatedVoteEvent
+type EquivocatedVoteEventDetails struct {
+	VoterAddress          string
+	ProposalHash          string
+	Round                 uint64
+	Period                uint64
+	Step                  uint64
+	StepThreshold         uint64
+	Weight                uint64
+	PreviousProposalHash1 string
+	PreviousProposalHash2 string
+}
+
 // ConnectPeerEvent event
 const ConnectPeerEvent Event = "ConnectPeer"
 
