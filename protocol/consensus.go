@@ -30,22 +30,22 @@ const DEPRECATEDConsensusV0 = ConsensusVersion("v0")
 // It is now deprecated.
 const DEPRECATEDConsensusV1 = ConsensusVersion("v1")
 
-// ConsensusV2 fixes a bug in the agreement protocol where proposalValues
+// DEPRECATEDConsensusV2 fixes a bug in the agreement protocol where proposalValues
 // fail to commit to the original period and sender of a block.
-const ConsensusV2 = ConsensusVersion("v2")
+const DEPRECATEDConsensusV2 = ConsensusVersion("v2")
 
-// ConsensusV3 adds support for fine-grained ephemeral keys.
-const ConsensusV3 = ConsensusVersion("v3")
+// DEPRECATEDConsensusV3 adds support for fine-grained ephemeral keys.
+const DEPRECATEDConsensusV3 = ConsensusVersion("v3")
 
-// ConsensusV4 adds support for a min balance and a transaction that
+// DEPRECATEDConsensusV4 adds support for a min balance and a transaction that
 // closes out an account.
-const ConsensusV4 = ConsensusVersion("v4")
+const DEPRECATEDConsensusV4 = ConsensusVersion("v4")
 
-// ConsensusV5 sets MinTxnFee to 1000 and fixes a blance lookback bug
-const ConsensusV5 = ConsensusVersion("v5")
+// DEPRECATEDConsensusV5 sets MinTxnFee to 1000 and fixes a blance lookback bug
+const DEPRECATEDConsensusV5 = ConsensusVersion("v5")
 
-// ConsensusV6 adds support for explicit ephemeral-key parameters
-const ConsensusV6 = ConsensusVersion("v6")
+// DEPRECATEDConsensusV6 adds support for explicit ephemeral-key parameters
+const DEPRECATEDConsensusV6 = ConsensusVersion("v6")
 
 // ConsensusV7 increases MaxBalLookback to 320 in preparation for
 // the twin seeds change.

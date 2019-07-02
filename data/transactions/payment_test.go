@@ -120,7 +120,7 @@ func TestPaymentApply(t *testing.T) {
 
 func TestCheckSpender(t *testing.T) {
 	mockBalV0 := mockBalances{protocol.ConsensusCurrentVersion}
-	mockBalV4 := mockBalances{protocol.ConsensusV4}
+	mockBalV7 := mockBalances{protocol.ConsensusV7}
 
 	secretSrc := keypair()
 	src := basics.Address(secretSrc.SignatureVerifier)
@@ -151,10 +151,10 @@ func TestCheckSpender(t *testing.T) {
 
 	tx.CloseRemainderTo = poolAddr
 	require.Error(t, tx.checkSpender(tx.Header, spec, mockBalV0.ConsensusParams()))
-	require.Error(t, tx.checkSpender(tx.Header, spec, mockBalV4.ConsensusParams()))
+	require.Error(t, tx.checkSpender(tx.Header, spec, mockBalV7.ConsensusParams()))
 
 	tx.Sender = src
-	require.NoError(t, tx.checkSpender(tx.Header, spec, mockBalV4.ConsensusParams()))
+	require.NoError(t, tx.checkSpender(tx.Header, spec, mockBalV7.ConsensusParams()))
 }
 
 func TestPaymentValidation(t *testing.T) {

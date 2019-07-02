@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 type blockEntry struct {
@@ -256,6 +257,29 @@ func (bq *blockQueue) getBlockHdr(r basics.Round) (hdr bookkeeping.BlockHeader, 
 	err = bq.l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
 		var err0 error
 		hdr, err0 = blockGetHdr(tx, r)
+		return err0
+	})
+	err = updateErrNoEntry(err, lastCommitted, latest)
+	return
+}
+
+func (bq *blockQueue) getEncodedBlockCert(r basics.Round) (blk []byte, cert []byte, err error) {
+	e, lastCommitted, latest, err := bq.checkEntry(r)
+	if e != nil {
+		// block has yet to be committed. we'll need to encode it.
+		blk = protocol.Encode(e.block)
+		cert = protocol.Encode(e.cert)
+		err = nil
+		return
+	}
+
+	if err != nil {
+		return
+	}
+
+	err = bq.l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
+		var err0 error
+		blk, cert, err0 = blockGetEncodedCert(tx, r)
 		return err0
 	})
 	err = updateErrNoEntry(err, lastCommitted, latest)

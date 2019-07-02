@@ -43,12 +43,6 @@ cat <<EOF>${HOME}/.aptly.conf
       "bucket":"algorand-releases",
       "acl":"public-read",
       "prefix":"deb"
-    },
-    "algorand-dev-deb-repo": {
-      "region":"us-east-1",
-      "bucket":"algorand-dev-deb-repo",
-      "acl":"public-read",
-      "prefix":"deb"
     }
   },
   "SwiftPublishEndpoints": {}
@@ -56,7 +50,9 @@ cat <<EOF>${HOME}/.aptly.conf
 EOF
 
 mkdir -p $GOPATH/src/github.com/aptly-dev
-git clone https://github.com/aptly-dev/aptly $GOPATH/src/github.com/aptly-dev/aptly || true
+if [ ! -d $GOPATH/src/github.com/aptly-dev/aptly ]; then
+    git clone https://github.com/aptly-dev/aptly $GOPATH/src/github.com/aptly-dev/aptly
+fi
 (cd $GOPATH/src/github.com/aptly-dev/aptly && git fetch)
 # As of 2019-06-06 release tag v1.3.0 is 2018-May, GnuPG 2 support was added in October but they haven't tagged a new release yet. Hash below seems to work so far.
 (cd $GOPATH/src/github.com/aptly-dev/aptly && git checkout e2d6a53de5ee03814b3fe19a8954a09a5c2969b9)
