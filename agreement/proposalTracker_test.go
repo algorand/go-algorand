@@ -23,8 +23,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/algorand/go-algorand/protocol"
 )
 
 func sortedVoteGen(t *testing.T) (votes []vote) {
@@ -173,7 +171,7 @@ func (s *proposalTrackerTestShadow) addVote(v vote) {
 	sender := v.R.Sender
 
 	// check seen before
-	req = voteFilterRequestEvent{RawVote: v.R, Proto: protocol.ConsensusCurrentVersion}
+	req = voteFilterRequestEvent{RawVote: v.R}
 	res = filteredEvent{T: voteFiltered, Err: makeSerErr(errProposalTrackerSenderDup{Round: round, Period: period})}
 	if !s.seen[v] {
 		res = emptyEvent{}
@@ -214,7 +212,7 @@ func (s *proposalTrackerTestShadow) addVote(v vote) {
 	s.outputs = append(s.outputs, res)
 
 	// check seen after
-	req = voteFilterRequestEvent{RawVote: v.R, Proto: protocol.ConsensusCurrentVersion}
+	req = voteFilterRequestEvent{RawVote: v.R}
 	res = filteredEvent{T: voteFiltered, Err: makeSerErr(errProposalTrackerSenderDup{Sender: sender, Round: round, Period: period})}
 	s.inputs = append(s.inputs, req)
 	s.outputs = append(s.outputs, res)

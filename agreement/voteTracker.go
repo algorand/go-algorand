@@ -125,7 +125,6 @@ func (tracker *voteTracker) handle(r routerHandle, p player, e0 event) event {
 				Round:                 uint64(e.Vote.R.Round),
 				Period:                uint64(e.Vote.R.Period),
 				Step:                  uint64(e.Vote.R.Step),
-				StepThreshold:         e.Vote.R.Step.threshold(proto),
 				Weight:                e.Vote.Cred.Weight,
 				PreviousProposalHash1: eqVote.Proposals[0].BlockDigest.String(),
 				PreviousProposalHash2: eqVote.Proposals[1].BlockDigest.String(),
@@ -168,7 +167,6 @@ func (tracker *voteTracker) handle(r routerHandle, p player, e0 event) event {
 				Round:                 uint64(e.Vote.R.Round),
 				Period:                uint64(e.Vote.R.Period),
 				Step:                  uint64(e.Vote.R.Step),
-				StepThreshold:         e.Vote.R.Step.threshold(proto),
 				Weight:                e.Vote.Cred.Weight,
 				PreviousProposalHash1: oldVote.R.Proposal.BlockDigest.String(),
 			}
@@ -263,7 +261,6 @@ func (tracker *voteTracker) handle(r routerHandle, p player, e0 event) event {
 				Round:                 uint64(e.RawVote.Round),
 				Period:                uint64(e.RawVote.Period),
 				Step:                  uint64(e.RawVote.Step),
-				StepThreshold:         e.RawVote.Step.threshold(config.Consensus[e.Proto]),
 				Weight:                eqVote.Cred.Weight,
 				PreviousProposalHash1: eqVote.Proposals[0].BlockDigest.String(),
 				PreviousProposalHash2: eqVote.Proposals[1].BlockDigest.String(),

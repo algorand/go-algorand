@@ -170,7 +170,6 @@ type EquivocatedVoteEventDetails struct {
 	Round                 uint64
 	Period                uint64
 	Step                  uint64
-	StepThreshold         uint64
 	Weight                uint64
 	PreviousProposalHash1 string
 	PreviousProposalHash2 string

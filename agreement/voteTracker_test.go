@@ -521,7 +521,7 @@ func TestVoteTrackerFiltersDuplicateVoteOnce(t *testing.T) {
 			inputVotes[i] = helper.MakeValidVoteAcceptedVal(t, i, next, Val1)
 			expectedOutputs[i] = thresholdEvent{T: none}
 		case i == Num:
-			inputVotes[i] = voteFilterRequestEvent{RawVote: inputVotes[Num-1].(voteAcceptedEvent).Vote.R, Proto: protocol.ConsensusCurrentVersion}
+			inputVotes[i] = voteFilterRequestEvent{RawVote: inputVotes[Num-1].(voteAcceptedEvent).Vote.R}
 			expectedOutputs[i] = filteredStepEvent{T: voteFilteredStep}
 		}
 	}
@@ -565,7 +565,7 @@ func TestVoteTrackerForwardsFirstEquivocation(t *testing.T) {
 			expectedOutputs[i] = thresholdEvent{T: none}
 		case i == V1Bound:
 			// simple duplicate
-			inputVotes[i] = voteFilterRequestEvent{RawVote: inputVotes[i-1].(voteAcceptedEvent).Vote.R, Proto: protocol.ConsensusCurrentVersion}
+			inputVotes[i] = voteFilterRequestEvent{RawVote: inputVotes[i-1].(voteAcceptedEvent).Vote.R}
 			expectedOutputs[i] = filteredStepEvent{T: voteFilteredStep}
 		case i < V2Bound:
 			// these dont equivocate
@@ -574,13 +574,13 @@ func TestVoteTrackerForwardsFirstEquivocation(t *testing.T) {
 		case i == V2Bound:
 			// simple duplicate
 			rv := inputVotes[i-1].(voteAcceptedEvent).Vote.R
-			inputVotes[i] = voteFilterRequestEvent{RawVote: rv, Proto: protocol.ConsensusCurrentVersion}
+			inputVotes[i] = voteFilterRequestEvent{RawVote: rv}
 			require.EqualValuesf(t, equivVal2, rv.Proposal, "test case is malformed, filtering incorrect vote")
 			expectedOutputs[i] = filteredStepEvent{T: voteFilteredStep}
 		case i == V2Bound+1:
 			// make sure first equivocation is not filtered
 			voteTwo := helper.MakeValidVoteAcceptedVal(t, V2Bound-1, next, equivVal1)
-			inputVotes[i] = voteFilterRequestEvent{RawVote: voteTwo.Vote.R, Proto: protocol.ConsensusCurrentVersion}
+			inputVotes[i] = voteFilterRequestEvent{RawVote: voteTwo.Vote.R}
 			expectedOutputs[i] = emptyEvent{}
 		case i < V1V2Bound:
 			// now, add some equivocations
@@ -588,7 +588,7 @@ func TestVoteTrackerForwardsFirstEquivocation(t *testing.T) {
 			expectedOutputs[i] = thresholdEvent{T: none}
 		case i == V1V2Bound:
 			voteThree := helper.MakeValidVoteAcceptedVal(t, 2, next, equivVal3)
-			inputVotes[i] = voteFilterRequestEvent{RawVote: voteThree.Vote.R, Proto: protocol.ConsensusCurrentVersion}
+			inputVotes[i] = voteFilterRequestEvent{RawVote: voteThree.Vote.R}
 			expectedOutputs[i] = filteredStepEvent{T: voteFilteredStep}
 		}
 	}
@@ -620,7 +620,7 @@ func TestVoteTrackerFiltersFutureEquivocations(t *testing.T) {
 			// first equivocation should not be filtered
 			Val := proposalValue{BlockDigest: randomBlockHash()}
 			VA := helper.MakeValidVoteAcceptedVal(t, 0, soft, Val)
-			inputVotes[i] = voteFilterRequestEvent{RawVote: VA.Vote.R, Proto: protocol.ConsensusCurrentVersion}
+			inputVotes[i] = voteFilterRequestEvent{RawVote: VA.Vote.R}
 			expectedOutputs[i] = emptyEvent{}
 		case i == 2:
 			// add an equivocation
@@ -631,7 +631,7 @@ func TestVoteTrackerFiltersFutureEquivocations(t *testing.T) {
 			// future equivocations should be filtered
 			Val := proposalValue{BlockDigest: randomBlockHash()}
 			VA := helper.MakeValidVoteAcceptedVal(t, 0, soft, Val)
-			inputVotes[i] = voteFilterRequestEvent{RawVote: VA.Vote.R, Proto: protocol.ConsensusCurrentVersion}
+			inputVotes[i] = voteFilterRequestEvent{RawVote: VA.Vote.R}
 			expectedOutputs[i] = filteredStepEvent{T: voteFilteredStep}
 		}
 	}

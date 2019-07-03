@@ -192,7 +192,7 @@ func (agg *voteAggregator) filterVote(proto protocol.ConsensusVersion, p player,
 	if err != nil {
 		return fmt.Errorf("voteAggregator: rejected vote due to age: %v", err)
 	}
-	filterReq := voteFilterRequestEvent{RawVote: uv.R, Proto: proto}
+	filterReq := voteFilterRequestEvent{RawVote: uv.R}
 	filterRes := r.dispatch(p, filterReq, voteMachineStep, uv.R.Round, uv.R.Period, uv.R.Step)
 	switch filterRes.t() {
 	case voteFilteredStep:
