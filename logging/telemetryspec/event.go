@@ -31,11 +31,11 @@ const StartupEvent Event = "Startup"
 
 // StartupEventDetails contains details for the StartupEvent
 type StartupEventDetails struct {
-	Version    string
-	CommitHash string
-	Branch     string
-	Channel    string
-	Instance   string
+	Version      string
+	CommitHash   string
+	Branch       string
+	Channel      string
+	InstanceHash string
 }
 
 // HeartbeatEvent is sent periodically to indicate node is running
