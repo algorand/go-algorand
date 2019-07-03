@@ -48,7 +48,8 @@ type networkImpl struct {
 	proposalCh chan agreement.Message
 	bundleCh   chan agreement.Message
 
-	net network.GossipNode
+	net           network.GossipNode
+	backgroundCtx context.Context
 }
 
 // WrapNetwork adapts a network.GossipNode into an agreement.Network.
@@ -60,6 +61,7 @@ func WrapNetwork(net network.GossipNode) agreement.Network {
 	i.bundleCh = make(chan agreement.Message, bundleBufferSize)
 
 	i.net = net
+	i.backgroundCtx = context.Background()
 
 	handlers := []network.TaggedMessageHandler{
 		{Tag: protocol.AgreementVoteTag, MessageHandler: network.HandlerFunc(i.processVoteMessage)},
@@ -121,26 +123,28 @@ func (i *networkImpl) Messages(t protocol.Tag) <-chan agreement.Message {
 	}
 }
 
-func (i *networkImpl) Broadcast(t protocol.Tag, data []byte) {
-	err := i.net.Broadcast(context.Background(), t, data, false, nil)
+func (i *networkImpl) Broadcast(t protocol.Tag, data []byte) (err error) {
+	err = i.net.Broadcast(i.backgroundCtx, t, data, false, nil)
 	if err != nil {
 		logging.Base().Infof("agreement: could not broadcast message with tag %v: %v", t, err)
 	}
+	return
 }
 
-func (i *networkImpl) Relay(h agreement.MessageHandle, t protocol.Tag, data []byte) {
+func (i *networkImpl) Relay(h agreement.MessageHandle, t protocol.Tag, data []byte) (err error) {
 	metadata := messageMetadataFromHandle(h)
 	if metadata == nil { // synthentic loopback
-		err := i.net.Broadcast(context.Background(), t, data, false, nil)
+		err = i.net.Broadcast(i.backgroundCtx, t, data, false, nil)
 		if err != nil {
 			logging.Base().Infof("agreement: could not (pseudo)relay message with tag %v: %v", t, err)
 		}
 	} else {
-		err := i.net.Relay(context.Background(), t, data, false, metadata.raw.Sender)
+		err = i.net.Relay(i.backgroundCtx, t, data, false, metadata.raw.Sender)
 		if err != nil {
 			logging.Base().Infof("agreement: could not relay message from %v with tag %v: %v", metadata.raw.Sender, t, err)
 		}
 	}
+	return
 }
 
 func (i *networkImpl) Disconnect(h agreement.MessageHandle) {
@@ -158,7 +162,7 @@ func (i *networkImpl) Disconnect(h agreement.MessageHandle) {
 // In test code we want to queue up a bunch of outbound packets and then see that they got through, so we need to wait at least a little bit for them to all go out.
 // Normal agreement state machine code uses GossipNode.Broadcast non-blocking and may drop outbound packets.
 func (i *networkImpl) broadcastTimeout(t protocol.Tag, data []byte, timeout time.Duration) error {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(i.backgroundCtx, timeout)
 	defer cancel()
 	return i.net.Broadcast(ctx, t, data, true, nil)
 }
