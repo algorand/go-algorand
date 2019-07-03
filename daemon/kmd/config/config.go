@@ -24,6 +24,7 @@ import (
 
 const (
 	kmdConfigFilename          = "kmd_config.json"
+	kmdConfigExampleFilename   = kmdConfigFilename + ".example"
 	defaultSessionLifetimeSecs = 60
 	defaultScryptN             = 65536
 	defaultScryptR             = 1
@@ -95,8 +96,15 @@ func LoadKMDConfig(dataDir string) (cfg KMDConfig, err error) {
 	cfg = defaultConfig(dataDir)
 	configFilename := filepath.Join(dataDir, kmdConfigFilename)
 	dat, err := ioutil.ReadFile(configFilename)
-	// Return the default configuration if the file doesn't exist
+	// If there is no config file, then return the default configuration, and dump the default config to disk
 	if err != nil {
+		exampleFilename := filepath.Join(dataDir, kmdConfigExampleFilename)
+		cfgBytes, jsonErr := json.Marshal(cfg)
+		if jsonErr == nil {
+			// writefile may return an unhandled error because
+			// there is nothing to do if an error occurs
+			ioutil.WriteFile(exampleFilename, cfgBytes, 0640)
+		}
 		return cfg, nil
 	}
 	// Fill in the non-default values
