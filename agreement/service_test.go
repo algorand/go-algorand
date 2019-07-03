@@ -18,6 +18,7 @@ package agreement
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"math/rand"
@@ -465,17 +466,19 @@ func (e *testingNetworkEndpoint) Messages(tag protocol.Tag) <-chan Message {
 	}
 }
 
-func (e *testingNetworkEndpoint) Broadcast(tag protocol.Tag, data []byte) {
+func (e *testingNetworkEndpoint) Broadcast(ctx context.Context, tag protocol.Tag, data []byte) (err error) {
 	e.parent.multicast(tag, data, e.id, e.id)
+	return nil
 }
 
-func (e *testingNetworkEndpoint) Relay(h MessageHandle, t protocol.Tag, data []byte) {
+func (e *testingNetworkEndpoint) Relay(ctx context.Context, h MessageHandle, t protocol.Tag, data []byte) (err error) {
 	sourceID := e.id
 	if _, isMsg := h.(*int); isMsg {
 		sourceID = e.parent.sourceOf(h)
 	}
 
 	e.parent.multicast(t, data, e.id, sourceID)
+	return nil
 }
 
 func (e *testingNetworkEndpoint) Disconnect(h MessageHandle) {

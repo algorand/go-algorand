@@ -121,26 +121,67 @@ func (i *networkImpl) Messages(t protocol.Tag) <-chan agreement.Message {
 	}
 }
 
-func (i *networkImpl) Broadcast(t protocol.Tag, data []byte) {
-	err := i.net.Broadcast(context.Background(), t, data, false, nil)
+func (i *networkImpl) Broadcast(ctx context.Context, t protocol.Tag, data []byte) (err error) {
+	err = i.net.Broadcast(ctx, t, data, false, nil)
 	if err != nil {
-		logging.Base().Infof("agreement: could not broadcast message with tag %v: %v", t, err)
+		if ctx == nil {
+			logging.Base().Warnf("agreement: could not broadcast message with tag %v; network buffers were full.", t)
+			return
+		}
+		// network buffers were full. try again while waiting.
+		err = i.net.Broadcast(ctx, t, data, true, nil)
+		if err != nil {
+			// we were unable to send the message, even while waiting.
+			if ctx.Err() == nil {
+				// network was shutting down
+				logging.Base().Infof("agreement: could not broadcast message with tag %v; network shut down before sent was complete.", t)
+			}
+			// we had a context error, exit.
+		}
 	}
+	return
 }
 
-func (i *networkImpl) Relay(h agreement.MessageHandle, t protocol.Tag, data []byte) {
+func (i *networkImpl) Relay(ctx context.Context, h agreement.MessageHandle, t protocol.Tag, data []byte) (err error) {
 	metadata := messageMetadataFromHandle(h)
 	if metadata == nil { // synthentic loopback
-		err := i.net.Broadcast(context.Background(), t, data, false, nil)
+		err = i.net.Broadcast(ctx, t, data, false, nil)
 		if err != nil {
-			logging.Base().Infof("agreement: could not (pseudo)relay message with tag %v: %v", t, err)
+			if ctx == nil {
+				logging.Base().Warnf("agreement: could not broadcast message with tag %v; network buffers were full.", t)
+				return
+			}
+			// network buffers were full. try again while waiting.
+			err = i.net.Broadcast(ctx, t, data, true, nil)
+			if err != nil {
+				// we were unable to send the message, even while waiting.
+				if ctx.Err() == nil {
+					// network was shutting down
+					logging.Base().Infof("agreement: could not broadcast message with tag %v; network shut down before sent was complete.", t)
+				}
+				// we had a context error, exit.
+			}
 		}
 	} else {
-		err := i.net.Relay(context.Background(), t, data, false, metadata.raw.Sender)
+		err = i.net.Relay(ctx, t, data, false, metadata.raw.Sender)
 		if err != nil {
-			logging.Base().Infof("agreement: could not relay message from %v with tag %v: %v", metadata.raw.Sender, t, err)
+			if ctx == nil {
+				logging.Base().Warnf("agreement: could not relay message with tag %v; network buffers were full.", t)
+				return
+			}
+			// network buffers were full. try again while waiting.
+			err = i.net.Relay(ctx, t, data, true, metadata.raw.Sender)
+			if err != nil {
+				// we were unable to send the message, even while waiting.
+				if ctx.Err() == nil {
+					// network was shutting down
+					logging.Base().Infof("agreement: could not relay message with tag %v; network shut down before sent was complete.", t)
+				}
+				// we had a context error, exit.
+			}
 		}
 	}
+	return
 }
 
 func (i *networkImpl) Disconnect(h agreement.MessageHandle) {

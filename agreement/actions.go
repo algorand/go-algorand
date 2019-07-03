@@ -19,6 +19,7 @@ package agreement
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/logspec"
@@ -58,6 +59,10 @@ const (
 	// disk
 	checkpoint
 )
+
+// maxRecoveryVotesSendDuration is the duration limit for sending all the votes to the network library.
+// this is used only in fast recovery, after the bundle is being sent.
+const maxRecoveryVotesSendDuration = 10 * time.Second
 
 type action interface {
 	t() actionType
@@ -119,9 +124,32 @@ func (a networkAction) String() string {
 func (a networkAction) do(ctx context.Context, s *Service) {
 	if a.T == broadcastVotes {
 		tag := protocol.AgreementVoteTag
-		for _, uv := range a.UnauthenticatedVotes {
+		sendCtx, cancelSendCtx := context.WithDeadline(ctx, time.Now().Add(maxRecoveryVotesSendDuration))
+		defer cancelSendCtx()
+		for i, uv := range a.UnauthenticatedVotes {
 			data := protocol.Encode(uv)
-			s.Network.Broadcast(tag, data)
+			sendErr := s.Network.Broadcast(sendCtx, tag, data)
+			if sendErr != nil {
+				// make sure we're not erroring due to shutdown.
+				if ctx.Err() == nil {
+					// if we've timed out, log that as a separate issue.
+					if sendCtx.Err() != nil {
+						s.log.Warnf("Timed out sending votes to network. %d / %d votes for round %d period %d step %d were dropped.",
+							len(a.UnauthenticatedVotes)-i, len(a.UnauthenticatedVotes),
+							uv.R.Round,
+							uv.R.Period,
+							uv.R.Step)
+					} else {
+						s.log.Warnf("Network was unable to queue votes for broadcast(%v). %d / %d votes for round %d period %d step %d were dropped.",
+							len(a.UnauthenticatedVotes)-i, len(a.UnauthenticatedVotes),
+							sendErr,
+							uv.R.Round,
+							uv.R.Period,
+							uv.R.Step)
+					}
+				}
+				break
+			}
 		}
 		return
 	}
@@ -143,9 +171,9 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 
 	switch a.T {
 	case broadcast:
-		s.Network.Broadcast(a.Tag, data)
+		s.Network.Broadcast(nil, a.Tag, data)
 	case relay:
-		s.Network.Relay(a.h, a.Tag, data)
+		s.Network.Relay(nil, a.h, a.Tag, data)
 	case disconnect:
 		s.Network.Disconnect(a.h)
 	case ignore:

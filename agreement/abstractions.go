@@ -251,7 +251,10 @@ type Network interface {
 	//
 	// Calls to Broadcast by the agreement package are currently guaranteed
 	// to be serialized.
-	Broadcast(protocol.Tag, []byte)
+	//
+	// Broadcast returns the error that was generated during the operation or
+	// nil othewise.
+	Broadcast(ctx context.Context, t protocol.Tag, data []byte) (err error)
 
 	// Relay attempts to send a slice of bytes under some protocol.Tag to
 	// all neighbors, except for the neighbor associated with the given
@@ -261,9 +264,12 @@ type Network interface {
 	//
 	// Passing a MessageHandle value of nil to Relay should produce behavior
 	// identical to calling Broadcast.  In other words, the calls
-	// Broadcast(tag, data) and Relay(nil, tag, data) should cause identical
+	// Broadcast(context, tag, data) and Relay(context, nil, tag, data) should cause identical
 	// behavior.
-	Relay(MessageHandle, protocol.Tag, []byte)
+	//
+	// Relay returns the error that was generated during the operation or
+	// nil othewise.
+	Relay(context.Context, MessageHandle, protocol.Tag, []byte) error
 
 	// Disconnect sends the Network a hint to disconnect to the peer
 	// associated with the given MessageHandle.
