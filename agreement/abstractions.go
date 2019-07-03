@@ -254,7 +254,7 @@ type Network interface {
 	//
 	// Broadcast returns the error that was generated during the operation or
 	// nil othewise.
-	Broadcast(ctx context.Context, t protocol.Tag, data []byte) (err error)
+	Broadcast(context.Context, protocol.Tag, []byte) error
 
 	// Relay attempts to send a slice of bytes under some protocol.Tag to
 	// all neighbors, except for the neighbor associated with the given
