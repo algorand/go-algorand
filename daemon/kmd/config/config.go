@@ -20,6 +20,8 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"path/filepath"
+
+	"github.com/algorand/go-algorand/util/codecs"
 )
 
 const (
@@ -99,12 +101,9 @@ func LoadKMDConfig(dataDir string) (cfg KMDConfig, err error) {
 	// If there is no config file, then return the default configuration, and dump the default config to disk
 	if err != nil {
 		exampleFilename := filepath.Join(dataDir, kmdConfigExampleFilename)
-		cfgBytes, jsonErr := json.Marshal(cfg)
-		if jsonErr == nil {
-			// writefile may return an unhandled error because
-			// there is nothing to do if an error occurs
-			ioutil.WriteFile(exampleFilename, cfgBytes, 0640)
-		}
+		// SaveObjectToFile may return an unhandled error because
+		// there is nothing to do if an error occurs
+		codecs.SaveObjectToFile(exampleFilename, cfg, true)
 		return cfg, nil
 	}
 	// Fill in the non-default values
