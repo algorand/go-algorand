@@ -174,7 +174,7 @@ func toByteArray(arr []uint32) []byte {
 		}
 	}
 
-	if buffer != 0 {
+	if numberOfBits != 0 {
 		output = append(output, byte(buffer))
 	}
 
