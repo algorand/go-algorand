@@ -278,8 +278,7 @@ type WebsocketNetwork struct {
 	broadcastQueueHighPrio chan broadcastRequest
 	broadcastQueueBulk     chan broadcastRequest
 
-	phonebook    Phonebook
-	dnsPhonebook ThreadsafePhonebook
+	phonebook Phonebook
 
 	GenesisID string
 	NetworkID protocol.NetworkID
@@ -1162,16 +1161,24 @@ func (wn *WebsocketNetwork) meshThread() {
 		}
 
 		// TODO: only do DNS fetch every N seconds? Honor DNS TTL? Trust DNS library we're using to handle caching and TTL?
-		dnsAddrs := wn.getDNSAddrs()
-		if len(dnsAddrs) > 0 {
-			wn.log.Debugf("got %d dns addrs, %#v", len(dnsAddrs), dnsAddrs[:imin(5, len(dnsAddrs))])
-			wn.dnsPhonebook.ReplacePeerList(dnsAddrs)
-			mp, ok := wn.phonebook.(*MultiPhonebook)
-			if ok {
-				mp.AddPhonebook(&wn.dnsPhonebook)
+		dnsBootstrapArray := wn.config.DNSBootstrapArray(wn.NetworkID)
+		multiPhonebook := &MultiPhonebook{}
+		dnsStatus := false
+		for _, dnsBootstrap := range dnsBootstrapArray {
+			dnsAddrs := wn.getDNSAddrs(dnsBootstrap)
+			if len(dnsAddrs) > 0 {
+				wn.log.Debugf("got %d dns addrs, %#v", len(dnsAddrs), dnsAddrs[:imin(5, len(dnsAddrs))])
+				dnsPhonebook := &ThreadsafePhonebook{
+					addrs: dnsAddrs,
+				}
+				multiPhonebook.AddPhonebook(dnsPhonebook)
+				dnsStatus = true
+			} else {
+				wn.log.Debugf("got no DNS addrs for network %#v", wn.NetworkID)
 			}
-		} else {
-			wn.log.Debugf("got no DNS addrs for network %#v", wn.NetworkID)
+		}
+		if dnsStatus {
+			wn.phonebook = multiPhonebook
 		}
 		desired := wn.config.GossipFanout
 		numOutgoing := wn.numOutgoingPeers() + wn.numOutgoingPending()
@@ -1309,8 +1316,7 @@ func (wn *WebsocketNetwork) peersToPing() []*wsPeer {
 	return out
 }
 
-func (wn *WebsocketNetwork) getDNSAddrs() []string {
-	dnsBootstrap := wn.config.DNSBootstrap(wn.NetworkID)
+func (wn *WebsocketNetwork) getDNSAddrs(dnsBootstrap string) []string {
 	srvPhonebook, err := wn.readFromBootstrap(dnsBootstrap)
 	if err != nil {
 		// only log this warning on testnet or devnet

@@ -229,7 +229,7 @@ func initConsensusProtocols() {
 		RewardUnit:                 1e6,
 		RewardsRateRefreshInterval: 5e5,
 
-		ApprovedUpgrades:     map[protocol.ConsensusVersion]bool{},
+		ApprovedUpgrades: map[protocol.ConsensusVersion]bool{},
 
 		NumProposers:           30,
 		SoftCommitteeSize:      2500,
@@ -679,6 +679,13 @@ func mergeConfigFromFile(configpath string, source Local) (Local, error) {
 func loadConfig(reader io.Reader, config *Local) error {
 	dec := json.NewDecoder(reader)
 	return dec.Decode(config)
+}
+
+// DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
+func (cfg Local) DNSBootstrapArray(networkID protocol.NetworkID) (bootstrapArray []string) {
+	dnsBootstrapString := cfg.DNSBootstrap(networkID)
+	dnsBootStrapArray := strings.Split(dnsBootstrapString, ";")
+	return dnsBootStrapArray
 }
 
 // DNSBootstrap returns the network-specific DNSBootstrap identifier
