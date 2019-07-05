@@ -20,6 +20,11 @@ import (
 	"errors"
 )
 
+import "github.com/algorand/go-algorand/daemon/algod/api/server/lib"
+
+// swagger:strfmt binary
+type libBytes lib.Bytes
+
 // APIV1Response is the interface that all API V1 responses must satisfy
 type APIV1Response interface {
 	GetError() error
@@ -147,7 +152,7 @@ type APIV1POSTKeyListResponse struct {
 // friendly:SignTransactionResponse
 type APIV1POSTTransactionSignResponse struct {
 	APIV1ResponseEnvelope
-	SignedTransaction Bytes `json:"signed_transaction"`
+	SignedTransaction libBytes `json:"signed_transaction"`
 }
 
 // APIV1POSTMultisigListResponse is the response to `POST /v1/multisig/list`
@@ -183,5 +188,5 @@ type APIV1DELETEMultisigResponse struct {
 // friendly:SignMultisigResponse
 type APIV1POSTMultisigTransactionSignResponse struct {
 	APIV1ResponseEnvelope
-	Multisig Bytes `json:"multisig"`
+	Multisig libBytes `json:"multisig"`
 }

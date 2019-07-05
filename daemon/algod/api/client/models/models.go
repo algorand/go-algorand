@@ -27,6 +27,8 @@
 // sticking with a hard-coded internal approach.
 package models
 
+import "github.com/algorand/go-algorand/daemon/algod/api/server/lib"
+
 // Account Description
 // swagger:model Account
 type Account struct {
@@ -249,6 +251,9 @@ type Supply struct {
 	TotalMoney uint64 `json:"totalMoney"`
 }
 
+// swagger:strfmt binary
+type libBytes lib.Bytes
+
 // Transaction contains all fields common to all transactions and serves as an envelope to all transactions
 // type
 // swagger:model Transaction
@@ -280,7 +285,7 @@ type Transaction struct {
 	LastRound uint64 `json:"last-round"`
 
 	// Note is a free form data
-	Note []uint8 `json:"noteb64"`
+	Note libBytes `json:"noteb64"`
 
 	// TxID is the transaction ID
 	// Required: true
@@ -306,7 +311,7 @@ type Transaction struct {
 	// Genesis hash
 	//
 	// required: true
-	GenesisHash []byte `json:"genesishashb64"`
+	GenesisHash libBytes `json:"genesishashb64"`
 }
 
 // TransactionFee contains the suggested fee
@@ -335,7 +340,7 @@ type TransactionParams struct {
 	// Genesis hash
 	//
 	// required: true
-	GenesisHash []byte `json:"genesishashb64"`
+	GenesisHash libBytes `json:"genesishashb64"`
 
 	// LastRound indicates the last round seen
 	//

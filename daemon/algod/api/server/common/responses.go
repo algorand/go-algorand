@@ -18,6 +18,9 @@ package common
 
 import "github.com/algorand/go-algorand/daemon/algod/api/server/lib"
 
+// swagger:strfmt binary
+type libBytes lib.Bytes
+
 // Version contains the current algod version.
 //
 // Note that we annotate this as a model so that legacy clients
@@ -29,7 +32,7 @@ type Version struct {
 	// required: true
 	GenesisID string `json:"genesis_id"`
 	// required: true
-	GenesisHash lib.Bytes `json:"genesis_hash_b64"`
+	GenesisHash libBytes `json:"genesis_hash_b64"`
 }
 
 // VersionsResponse is the response to 'GET /versions'

@@ -27,6 +27,9 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+// swagger:strfmt binary
+type libBytes lib.Bytes
+
 // NodeStatus contains the information about a node status
 // swagger:model NodeStatus
 type NodeStatus struct {
@@ -156,7 +159,7 @@ type Transaction struct {
 	// Note is a free form data
 	//
 	// required: false
-	Note lib.Bytes `json:"noteb64,omitempty"`
+	Note libBytes `json:"noteb64,omitempty"`
 
 	// ConfirmedRound indicates the block number this transaction appeared in
 	//
@@ -190,7 +193,7 @@ type Transaction struct {
 	// Genesis hash
 	//
 	// required: true
-	GenesisHash lib.Bytes `json:"genesishashb64"`
+	GenesisHash libBytes `json:"genesishashb64"`
 }
 
 // PaymentTransactionType contains the additional fields for a payment Transaction
@@ -270,7 +273,7 @@ type TransactionParams struct {
 	// Genesis hash
 	//
 	// required: true
-	GenesisHash lib.Bytes `json:"genesishashb64"`
+	GenesisHash libBytes `json:"genesishashb64"`
 
 	// LastRound indicates the last round seen
 	//
