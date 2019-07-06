@@ -17,13 +17,25 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
-
+	msgpackcore "github.com/algorand/go-algorand/cmd/msgpacktool/core"
 	"github.com/spf13/cobra"
+	"io"
+	"io/ioutil"
+	"os"
+	"strconv"
+)
+
+var (
+	jsonblockfmt bool
 )
 
 func init() {
 	ledgerCmd.AddCommand(supplyCmd)
+	ledgerCmd.AddCommand(blockCmd)
+	blockCmd.Flags().BoolVarP(&jsonblockfmt, "json", "j", false, "Use json format.")
 }
 
 var ledgerCmd = &cobra.Command{
@@ -50,5 +62,34 @@ var supplyCmd = &cobra.Command{
 		}
 
 		fmt.Printf("Round: %v\nTotal Money: %v microAlgos\nOnline Money: %v microAlgos\n", response.Round, response.TotalMoney, response.OnlineMoney)
+	},
+}
+
+var blockCmd = &cobra.Command{
+	Use:   "dumpblock <round>",
+	Short: "Show ledger block.",
+	Long:  "Show ledger block. In msgpack format or json format.",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		dataDir := ensureSingleDataDir()
+		algodClient := ensureAlgodClient(dataDir)
+		blocknum, err := strconv.ParseUint(args[0], 10, 64)
+		if err != nil {
+			reportErrorf(errorRequestFail, err)
+		}
+		block, err := algodClient.Block(blocknum)
+		if err != nil {
+			reportErrorf(errorRequestFail, err)
+		}
+		jsonbytes, err := json.Marshal(block)
+		if err != nil {
+			reportErrorf(errorRequestFail, err)
+		}
+		jsonreader := ioutil.NopCloser(bytes.NewReader(jsonbytes))
+		if !jsonblockfmt {
+			msgpackcore.Transcode(false, jsonreader, os.Stdout)
+		} else {
+			io.Copy(os.Stdout, jsonreader)
+		}
 	},
 }

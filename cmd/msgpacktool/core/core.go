@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package main
+package core
 
 import (
 	"encoding/base32"
@@ -28,11 +28,16 @@ import (
 	"github.com/algorand/go-codec/codec"
 )
 
+var (
+	Base32Encoding bool = true
+	StrictJSON     bool = true
+)
+
 type decoder interface {
 	Decode(v interface{}) error
 }
 
-func transcode(mpToJSON bool, in io.ReadCloser, out io.WriteCloser) error {
+func Transcode(mpToJSON bool, in io.ReadCloser, out io.WriteCloser) error {
 	canonicalMsgpackHandle := new(codec.MsgpackHandle)
 	canonicalMsgpackHandle.ErrorIfNoField = true
 	canonicalMsgpackHandle.ErrorIfNoArrayExpand = true
@@ -106,13 +111,13 @@ func toJSON(a interface{}) interface{} {
 			eb, ok2 := e.([]byte)
 
 			if ok1 && ok2 {
-				if *base32Encoding {
+				if Base32Encoding {
 					r[fmt.Sprintf("%s:b32", ks)] = base32.StdEncoding.EncodeToString(eb)
 				} else {
 					r[fmt.Sprintf("%s:b64", ks)] = base64.StdEncoding.EncodeToString(eb)
 				}
 			} else {
-				if *strictJSON {
+				if StrictJSON {
 					k = fmt.Sprintf("%v", k)
 				}
 				r[toJSON(k)] = toJSON(e)
