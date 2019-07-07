@@ -17,12 +17,12 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
 	msgpackcore "github.com/algorand/go-algorand/cmd/msgpacktool/core"
 	"github.com/spf13/cobra"
+	"io"
 	"io/ioutil"
 	"os"
 	"strconv"
@@ -81,19 +81,15 @@ var blockCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
-		fmt.Printf("GOT BLOCK OK\n")
-		var b bytes.Buffer
-		bufwriter := bufio.NewWriter(&b)
-		bufreader := ioutil.NopCloser(bufio.NewReader(&b))
-		if err := json.NewEncoder(bufwriter).Encode(block); err != nil {
+		jsonbytes, err := json.Marshal(block)
+		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
-		fmt.Printf("Encoded as json OK...\n")
+		jsonreader := ioutil.NopCloser(bytes.NewReader(jsonbytes))
 		if !jsonblockfmt {
-			fmt.Printf("Turnin to msgpack\n")
-			msgpackcore.Transcode(false, bufreader, os.Stdout)
+			msgpackcore.Transcode(false, jsonreader, os.Stdout)
 		} else {
-			fmt.Printf("Trying to output json\n")
+			io.Copy(os.Stdout, jsonreader)
 		}
 	},
 }
