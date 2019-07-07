@@ -32,17 +32,18 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+
+	"github.com/algorand/go-algorand/util"
+	"github.com/algorand/go-algorand/util/codecs"
 )
 
 const (
 	s3UploadBucketEnvVariable   = "S3_UPLOAD_BUCKET"
 	s3ReleaseBucketEnvVariable  = "S3_RELEASE_BUCKET"
-	s3InternalBucketEnvVariable = "S3_INTERNAL_BUCKET"
 	s3RegionEnvVariable         = "S3_REGION"
 
 	s3DefaultReleaseBucket  = "algorand-releases"
 	s3DefaultUploadBucket   = "algorand-uploads"
-	s3DefaultInternalBucket = "algorand-internal"
 	s3DefaultRegion         = "us-east-1"
 
 	downloadAction = "download"
@@ -69,15 +70,6 @@ func GetS3ReleaseBucket() (bucketName string) {
 	bucketName, found := os.LookupEnv(s3ReleaseBucketEnvVariable)
 	if !found {
 		bucketName = s3DefaultReleaseBucket
-	}
-	return
-}
-
-// GetS3InternalBucket returns bucket name for Algorand internal use (private read access, private write access)
-func GetS3InternalBucket() (bucketName string) {
-	bucketName, found := os.LookupEnv(s3InternalBucketEnvVariable)
-	if !found {
-		bucketName = s3DefaultInternalBucket
 	}
 	return
 }
@@ -122,6 +114,11 @@ func (helper *Helper) UploadFileStream(targetFile string, reader io.Reader) erro
 	return nil
 }
 
+type s3Keys struct {
+	ID     string
+	Secret string
+}
+
 func getCredentials(action string, awsBucket string) (creds *credentials.Credentials, err error) {
 	awsID, awsKey := getAWSCredentials()
 	credentailsRequired := checkCredentialsRequired(action, awsBucket)
@@ -137,9 +134,27 @@ func getCredentials(action string, awsBucket string) (creds *credentials.Credent
 
 }
 
+func loadS3KeysFromFile(keyFile string) (keys s3Keys, err error) {
+	err = codecs.LoadObjectFromFile(keyFile, &keys)
+	return
+}
+
 func getAWSCredentials() (awsID string, awsKey string) {
 	awsID, _ = os.LookupEnv("AWS_ACCESS_KEY_ID")
 	awsKey, _ = os.LookupEnv("AWS_SECRET_ACCESS_KEY")
+
+	// If not in environment, try to load from s3.json file in bin dir
+	if awsID == "" || awsKey == "" {
+		baseDir, err := util.ExeDir()
+		if err == nil {
+			keyFile := filepath.Join(baseDir, "s3.json")
+			keys, err := loadS3KeysFromFile(keyFile)
+			if err == nil {
+				awsID = keys.ID
+				awsKey = keys.Secret
+			}
+		}
+	}
 	return
 }
 
@@ -161,9 +176,7 @@ func validateS3Bucket(awsBucket string) (err error) {
 
 func checkCredentialsRequired(action string, bucketName string) (required bool) {
 	required = true
-	if action == uploadAction && bucketName == s3DefaultUploadBucket {
-		required = false
-	} else if action == downloadAction && bucketName == s3DefaultReleaseBucket {
+    if action == downloadAction && bucketName == s3DefaultReleaseBucket {
 		required = false
 	}
 	return

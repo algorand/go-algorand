@@ -19,7 +19,7 @@
 set -e
 
 if [[ "${AWS_ACCESS_KEY_ID}" = "" || "${AWS_SECRET_ACCESS_KEY}" = "" ]]; then
-    echo "You need to export your AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and S3_UPLOAD_BUCKET for this to work"
+    echo "You need to export your AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY for this to work"
     exit 1
 fi
 
@@ -34,7 +34,7 @@ ROOTDIR=""
 NO_DEPLOY=""
 FORCE_OPTION=""
 SCHEMA_MODIFIER=""
-S3_UPLOAD_BUCKET="${S3_UPLOAD_BUCKET}"
+BUCKET=""
 
 while [ "$1" != "" ]; do
     case "$1" in
@@ -66,7 +66,7 @@ while [ "$1" != "" ]; do
             ;;
         -b)
             shift
-            S3_UPLOAD_BUCKET="-b $1"
+            BUCKET="$1"
             ;;
         *)
             echo "Unknown option" "$1"
@@ -82,14 +82,15 @@ if [[ -z "${CHANNEL}" || -z "${RECIPEFILE}" || -z "${ROOTDIR}" ]]; then
     exit 1
 fi
 
+# Don't use environment variable for S3_RELEASE_BUCKET - default to algorand-internal for private deployments
+if [[ ! -z "${S3_RELEASE_BUCKET}" && -z "${BUCKET}" ]]; then
+    echo "Ignoring S3_RELEASE_BUCKET setting - defaulting to algorand-internal.  Use -b to override."
+fi
+S3_RELEASE_BUCKET="${BUCKET:-algorand-internal}"
+
 # if Network isn't specified, use the same string as Channel
 if [[ "${NETWORK}" = "" ]]; then
     NETWORK=${CHANNEL}
-fi
-
-if [ -z "${S3_UPLOAD_BUCKET}" ]; then
-    echo "You need to export S3_UPLOAD_BUCKET or specify the bucket with the -b flag for this to work"
-    exit 1
 fi
 
 # Build so we've got up-to-date binaries
@@ -99,9 +100,10 @@ fi
 ${GOPATH}/bin/netgoal build -r "${ROOTDIR}" -n "${NETWORK}" --recipe "${RECIPEFILE}" "${FORCE_OPTION}" -m "${SCHEMA_MODIFIER}"
 
 # Package and upload the config package
+export S3_RELEASE_BUCKET="${S3_RELEASE_BUCKET}"
 ${SRCPATH}/scripts/upload_config.sh "${ROOTDIR}" "${CHANNEL}"
 
 if [ "${NO_DEPLOY}" = "" ]; then
     # Now generate a private build using our custom genesis.json and deploy it to S3 also
-    ${SRCPATH}/scripts/deploy_private_version.sh -c "${CHANNEL}" -f "${ROOTDIR}/genesisdata/genesis.json" -n "${NETWORK}" -b "${S3_UPLOAD_BUCKET}"
+    ${SRCPATH}/scripts/deploy_private_version.sh -c "${CHANNEL}" -f "${ROOTDIR}/genesisdata/genesis.json" -n "${NETWORK}" -b "${S3_RELEASE_BUCKET}"
 fi

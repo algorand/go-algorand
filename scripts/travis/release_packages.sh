@@ -16,7 +16,7 @@ S3CMD="s3cmd"
 
 function init_s3cmd() {
     SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
-    SEDARGS="-e s,-ACCESS_KEY-,${AWS_ACCESS_KEY_ID}, -e s,-SECRET_KEY-,${AWS_SECRET_ACCESS_KEY}, -e s,-S3_BUCKET-,${S3_UPLOAD_BUCKET},"
+    SEDARGS="-e s,-ACCESS_KEY-,${AWS_ACCESS_KEY_ID}, -e s,-SECRET_KEY-,${AWS_SECRET_ACCESS_KEY}, -e s,-S3_BUCKET-,${S3_RELEASE_BUCKET},"
 
     cat ${SCRIPTPATH}/../s3cfg.template \
       | sed ${SEDARGS} \
@@ -39,7 +39,7 @@ function promote_nightly() {
     init_s3cmd
 
     # Rename the _CHANNEL_ and _CHANNEL-VARIANT_ pending files
-    ${S3CMD} ls s3://${S3_UPLOAD_BUCKET}/pending_ | grep _${FULLVERSION}. | grep _${CHANNEL}[-_] | awk '{ print $4 }' | while read line
+    ${S3CMD} ls s3://${S3_RELEASE_BUCKET}/pending_ | grep _${FULLVERSION}. | grep _${CHANNEL}[-_] | awk '{ print $4 }' | while read line
     do
         NEW_ARTIFACT_NAME=$(echo "$line" | sed -e 's/pending_//')
         echo "Copy ${line} => ${NEW_ARTIFACT_NAME}"
@@ -51,7 +51,7 @@ function promote_stable() {
     init_s3cmd
 
     # Copy the _CHANNEL_ pending 'node' files to _CHANNEL-canary_
-    ${S3CMD} ls s3://${S3_UPLOAD_BUCKET}/pending_node_ | grep _${FULLVERSION}. | grep _${CHANNEL}_ | awk '{ print $4 }' | while read line
+    ${S3CMD} ls s3://${S3_RELEASE_BUCKET}/pending_node_ | grep _${FULLVERSION}. | grep _${CHANNEL}_ | awk '{ print $4 }' | while read line
     do
         NEW_ARTIFACT_NAME=$(echo "$line" | sed -e 's/pending_//' | sed -e "s/_${CHANNEL}_/_${CHANNEL}-canary_/g")
         echo "Copy ${line} => ${NEW_ARTIFACT_NAME}"

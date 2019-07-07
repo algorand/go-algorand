@@ -18,7 +18,7 @@ ENV PATH=$GOPATH/bin:$GOROOT/bin:$PATH \
     PKG_ROOT=${PKG_ROOT} \
     AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} \
     AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} \
-    S3_UPLOAD_BUCKET=${S3_UPLOAD_BUCKET} \
+    S3_RELEASE_BUCKET=${S3_RELEASE_BUCKET} \
     NETWORK=${NETWORK}
 WORKDIR $GOPATH/src/github.com/algorand/go-algorand
 RUN scripts/configure_dev-deps.sh && make deps && make clean && find tmp && TMPDIR/deploy_linux_version_exec.sh

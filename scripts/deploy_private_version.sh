@@ -25,7 +25,7 @@ CHANNEL=""
 DEFAULTNETWORK=""
 NETWORK=""
 GENESISFILE=""
-S3_UPLOAD_BUCKET=${S3_UPLOAD_BUCKET}
+BUCKET=""
 
 while [ "$1" != "" ]; do
     case "$1" in
@@ -47,7 +47,7 @@ while [ "$1" != "" ]; do
             ;;
         -b)
             shift
-            S3_UPLOAD_BUCKET=$1
+            BUCKET="$1"
             ;;
         *)
             echo "Unknown option" "$1"
@@ -63,6 +63,12 @@ if [[ "${CHANNEL}" = "" || "${NETWORK}" = "" || "${DEFAULTNETWORK}" = "" && "${G
     exit 1
 fi
 
+# Don't use environment variable for S3_RELEASE_BUCKET - default to algorand-internal for private deployments
+if [[ ! -z "${S3_RELEASE_BUCKET}" && -z "${BUCKET}" ]]; then
+    echo "Ignoring S3_RELEASE_BUCKET setting - defaulting to algorand-internal.  Use -b to override."
+fi
+S3_RELEASE_BUCKET="${BUCKET:-algorand-internal}"
+
 # If GENESISFILE specified, DEFAULTNETWORK doesn't really matter but we need to ensure we have one
 if [[ "${DEFAULTNETWORK}" = "" ]]; then
     DEFAULTNETWORK=devnet
@@ -71,20 +77,13 @@ elif [[ "${DEFAULTNETWORK}" != "devnet" && "${DEFAULTNETWORK}" != "testnet" ]]; 
     exit 1
 fi
 
-if [ -z "${S3_UPLOAD_BUCKET}" ]; then
-    S3_UPLOAD_BUCKET=algorand-internal
-    echo "using default upload bucket: ${S3_UPLOAD_BUCKET}"
-else
-    echo "uploading to bucket: ${S3_UPLOAD_BUCKET}"
-fi
-
 export BRANCH=$(./scripts/compute_branch.sh)
 export CHANNEL=${CHANNEL}
 export BUILDCHANNEL=${CHANNEL}
 export DEFAULTNETWORK=${DEFAULTNETWORK}
 export FULLVERSION=$(./scripts/compute_build_number.sh -f)
 export PKG_ROOT=${HOME}/node_pkg
-export S3_UPLOAD_BUCKET=${S3_UPLOAD_BUCKET}
+export S3_RELEASE_BUCKET=${S3_RELEASE_BUCKET}
 
 if [[ $(uname) == "Darwin" ]]; then
     export NETWORK=${NETWORK}
@@ -107,4 +106,4 @@ fi
 export VARIATIONS="base"
 scripts/build_packages.sh $(./scripts/osarchtype.sh)
 
-scripts/upload_version.sh ${CHANNEL} ${PKG_ROOT} ${S3_UPLOAD_BUCKET}
+scripts/upload_version.sh ${CHANNEL} ${PKG_ROOT} ${S3_RELEASE_BUCKET}

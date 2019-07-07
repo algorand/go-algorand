@@ -30,13 +30,13 @@ SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 export GOPATH=$(go env GOPATH)
 export SRCPATH=${GOPATH}/src/github.com/algorand/go-algorand
 
-S3_UPLOAD_BUCKET="${S3_UPLOAD_BUCKET}"
 CHANNEL=""
 NETWORK=""
 CONFIGFILE=""
 TEMPLATEFILE=""
 ROOTDIR=""
 HOSTTEMPLATESSPEC=""
+BUCKET=""
 
 while [ "$1" != "" ]; do
     case "$1" in
@@ -66,7 +66,7 @@ while [ "$1" != "" ]; do
             ;;
         -b)
             shift
-            S3_UPLOAD_BUCKET="-b $1"
+            BUCKET="$1"
             ;;
         *)
             echo "Unknown option" "$1"
@@ -87,16 +87,16 @@ if [[ "${CHANNEL}" = "" || "${NETWORK}" = "" || "${CONFIGFILE}" = "" || "${TEMPL
     exit 1
 fi
 
+# Don't use environment variable for S3_RELEASE_BUCKET - default to algorand-internal for private deployments
+if [[ ! -z "${S3_RELEASE_BUCKET}" && -z "${BUCKET}" ]]; then
+    echo "Ignoring S3_RELEASE_BUCKET setting - defaulting to algorand-internal.  Use -b to override."
+fi
+S3_RELEASE_BUCKET="${BUCKET:-algorand-internal}"
+
 # if rootdir not specified, default to storing in our repo for posterity / reference
 if [[ "${ROOTDIR}" = "" ]]; then
     ROOTDIR=${SRCPATH}/test/testdata/networks/${NETWORK}
 fi
-
-if [ -z "${S3_UPLOAD_BUCKET}" ]; then
-    echo "You need to export S3_UPLOAD_BUCKET or specify the bucket with the -b flag for this to work"
-    exit 1
-fi
-
 
 # Build so we've got up-to-date binaries
 (cd ${SRCPATH} && make)
@@ -105,7 +105,8 @@ fi
 ${GOPATH}/bin/netgoal build -r "${ROOTDIR}" -n "${NETWORK}" -c "${CONFIGFILE}" -t "${TEMPLATEFILE}" ${HOSTTEMPLATESSPEC}
 
 # Package and upload the config package
+export S3_RELEASE_BUCKET="${S3_RELEASE_BUCKET}"
 ${SRCPATH}/scripts/upload_config.sh "${ROOTDIR}" "${CHANNEL}"
 
 # Now generate a private build using our custom genesis.json and deploy it to S3 also
-${SRCPATH}/scripts/deploy_private_version.sh -c "${CHANNEL}" -f "${ROOTDIR}/genesisdata/genesis.json" -n "${NETWORK}" -b "${S3_UPLOAD_BUCKET}"
+${SRCPATH}/scripts/deploy_private_version.sh -c "${CHANNEL}" -f "${ROOTDIR}/genesisdata/genesis.json" -n "${NETWORK}" -b "${S3_RELEASE_BUCKET}"

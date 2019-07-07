@@ -31,5 +31,5 @@ TARFILE=${TEMPDIR}/config_${CHANNEL}_${FULLVERSION}.tar.gz
 cd $1
 tar -zcf ${TARFILE} * >/dev/null 2>&1
 
-${GOPATH}/bin/updater send -s ${TEMPDIR} -c ${CHANNEL}
+${GOPATH}/bin/updater send -s ${TEMPDIR} -c ${CHANNEL} -b "${S3_RELEASE_BUCKET}"
 rm ${TARFILE}

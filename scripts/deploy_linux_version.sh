@@ -37,8 +37,8 @@ while [ "$1" != "" ]; do
 done
 
 
-if [ "${AWS_ACCESS_KEY_ID}" = "" ] || [ "${AWS_SECRET_ACCESS_KEY}" = "" ] || [ "${S3_UPLOAD_BUCKET}" = "" ]; then
-    echo "You need to export AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and S3_UPLOAD_BUCKET for this to work"
+if [ "${AWS_ACCESS_KEY_ID}" = "" ] || [ "${AWS_SECRET_ACCESS_KEY}" = "" ] || [ "${S3_RELEASE_BUCKET}" = "" ]; then
+    echo "You need to export AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and S3_RELEASE_BUCKET for this to work"
     exit 1
 fi
 
@@ -64,10 +64,10 @@ echo export FULLVERSION=${FULLVERSION} >> ${TMPDIR}/deploy_linux_version_exec.sh
 echo export PKG_ROOT=${PKG_ROOT} >> ${TMPDIR}/deploy_linux_version_exec.sh
 echo export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} >> ${TMPDIR}/deploy_linux_version_exec.sh
 echo export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} >> ${TMPDIR}/deploy_linux_version_exec.sh
-echo export S3_UPLOAD_BUCKET=${S3_UPLOAD_BUCKET} >> ${TMPDIR}/deploy_linux_version_exec.sh
+echo export S3_RELEASE_BUCKET=${S3_RELEASE_BUCKET} >> ${TMPDIR}/deploy_linux_version_exec.sh
 echo export NETWORK=${NETWORK} >> ${TMPDIR}/deploy_linux_version_exec.sh
 
-echo scripts/deploy_private_version.sh -c \"${CHANNEL}\" -g \"${DEFAULTNETWORK}\" -n \"${NETWORK}\" -f \"${GENESISFILE}\" >> ${TMPDIR}/deploy_linux_version_exec.sh
+echo scripts/deploy_private_version.sh -c \"${CHANNEL}\" -g \"${DEFAULTNETWORK}\" -n \"${NETWORK}\" -f \"${GENESISFILE}\" -b \"${S3_RELEASE_BUCKET}\" >> ${TMPDIR}/deploy_linux_version_exec.sh
 chmod +x ${TMPDIR}/deploy_linux_version_exec.sh
 
 sed "s|TMPDIR|${TMPDIR#"$SRCPATH/"}|g" ${SRCPATH}/docker/build/Dockerfile-deploy > ${TMPDIR}/Dockerfile-deploy

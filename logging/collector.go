@@ -38,6 +38,9 @@ func CollectAndUploadData(dataDir string, bundleFilename string, targetFolder st
 	errorChannel := make(chan error, 1)
 	pipeReader, pipeWriter := io.Pipe()
 	go func() {
+		// Close the error channel to signal completion
+		defer close(errorChannel)
+
 		bucket := s3.GetS3UploadBucket()
 		s3Session, err := s3.MakeS3SessionForUploadWithBucket(bucket)
 		if err != nil {
@@ -65,8 +68,6 @@ func CollectAndUploadData(dataDir string, bundleFilename string, targetFolder st
 		pipeWriter.Close()
 		// Now wait for reader (S3 uploader) to finish uploading
 		wg.Wait()
-		// Close the error channel to signal completion
-		close(errorChannel)
 	}()
 	return errorChannel
 }

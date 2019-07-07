@@ -5,7 +5,7 @@
 # Syntax:   promote_stable.sh
 #
 # Usage:    Should only be used when officially releasing the build.
-#           Requires AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and S3_UPLOAD_BUCKET to be defined in the env.
+#           Requires AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and S3_RELEASE_BUCKET to be defined in the env.
 #
 # Examples: scripts/promote_stable.sh
 
@@ -15,7 +15,7 @@ S3CMD="s3cmd"
 
 function init_s3cmd() {
     SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
-    SEDARGS="-e s,-ACCESS_KEY-,${AWS_ACCESS_KEY_ID}, -e s,-SECRET_KEY-,${AWS_SECRET_ACCESS_KEY}, -e s,-S3_BUCKET-,${S3_UPLOAD_BUCKET},"
+    SEDARGS="-e s,-ACCESS_KEY-,${AWS_ACCESS_KEY_ID}, -e s,-SECRET_KEY-,${AWS_SECRET_ACCESS_KEY}, -e s,-S3_BUCKET-,${S3_RELEASE_BUCKET},"
 
     cat ${SCRIPTPATH}/s3cfg.template \
       | sed ${SEDARGS} \
@@ -36,7 +36,7 @@ init_s3cmd
 CHANNEL="stable"
 
 # Rename the _CHANNEL_ and CHANNEL-VARIANT pending files
-${S3CMD} ls s3://${S3_UPLOAD_BUCKET}/pending_ | grep _${CHANNEL}[_-] | awk '{ print $4 }' | while read line; do
+${S3CMD} ls s3://${S3_RELEASE_BUCKET}/pending_ | grep _${CHANNEL}[_-] | awk '{ print $4 }' | while read line; do
     NEW_ARTIFACT_NAME=$(echo "$line" | sed -e 's/pending_//')
     echo "Rename ${line} => ${NEW_ARTIFACT_NAME}"
     ${S3CMD} mv ${line} ${NEW_ARTIFACT_NAME}
