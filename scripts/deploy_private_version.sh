@@ -25,7 +25,7 @@ CHANNEL=""
 DEFAULTNETWORK=""
 NETWORK=""
 GENESISFILE=""
-BUCKET=""
+S3_UPLOAD_BUCKET=${S3_UPLOAD_BUCKET}
 
 while [ "$1" != "" ]; do
     case "$1" in
@@ -47,7 +47,7 @@ while [ "$1" != "" ]; do
             ;;
         -b)
             shift
-            BUCKET=$1
+            S3_UPLOAD_BUCKET=$1
             ;;
         *)
             echo "Unknown option" "$1"
@@ -58,7 +58,7 @@ while [ "$1" != "" ]; do
 done
 
 if [[ "${CHANNEL}" = "" || "${NETWORK}" = "" || "${DEFAULTNETWORK}" = "" && "${GENESISFILE}" = "" ]]; then
-    echo "Syntax: deploy_private_version -c <channel> [ -g <genesis-network> | -f <genesis-file> ] -n <network>"
+    echo "Syntax: deploy_private_version -c <channel> [ -g <genesis-network> | -f <genesis-file> ] -n <network> [ -b <bucket> ]"
     echo "e.g. deploy_private_version.sh -c TestCatchup -g testnet -n testnetwork"
     exit 1
 fi
@@ -71,12 +71,20 @@ elif [[ "${DEFAULTNETWORK}" != "devnet" && "${DEFAULTNETWORK}" != "testnet" ]]; 
     exit 1
 fi
 
+if [ -z "${S3_UPLOAD_BUCKET}" ]; then
+    S3_UPLOAD_BUCKET=algorand-internal
+    echo "using default upload bucket: ${S3_UPLOAD_BUCKET}"
+else
+    echo "uploading to bucket: ${S3_UPLOAD_BUCKET}"
+fi
+
 export BRANCH=$(./scripts/compute_branch.sh)
 export CHANNEL=${CHANNEL}
 export BUILDCHANNEL=${CHANNEL}
 export DEFAULTNETWORK=${DEFAULTNETWORK}
 export FULLVERSION=$(./scripts/compute_build_number.sh -f)
 export PKG_ROOT=${HOME}/node_pkg
+export S3_UPLOAD_BUCKET=${S3_UPLOAD_BUCKET}
 
 if [[ $(uname) == "Darwin" ]]; then
     export NETWORK=${NETWORK}
@@ -99,4 +107,4 @@ fi
 export VARIATIONS="base"
 scripts/build_packages.sh $(./scripts/osarchtype.sh)
 
-scripts/upload_version.sh ${CHANNEL} ${PKG_ROOT} ${BUCKET}
+scripts/upload_version.sh ${CHANNEL} ${PKG_ROOT} ${S3_UPLOAD_BUCKET}

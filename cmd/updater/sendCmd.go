@@ -48,7 +48,7 @@ var sendCmd = &cobra.Command{
 
 		var files []string
 		if files, err = getPackageFilesInPath(sourcePath); err == nil {
-			err = s3Session.UploadFiles(files)
+			err = s3Session.UploadChannelFiles(channel, files)
 		}
 		if err != nil {
 			exitErrorf("Error uploading files", err.Error())

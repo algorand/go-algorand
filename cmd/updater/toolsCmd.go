@@ -46,7 +46,7 @@ var getToolsCmd = &cobra.Command{
 			exitErrorf("Error creating s3 session %s\n", err.Error())
 		}
 
-		version, name, err := s3Session.GetPackageVersion("tools", channel, specificVersion)
+		version, name, err := s3Session.GetPackageVersion(channel, "tools", specificVersion)
 		if err != nil {
 			exitErrorf("Error getting latest tools version from s3 %s\n", err.Error())
 		}

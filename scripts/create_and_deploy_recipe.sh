@@ -2,7 +2,7 @@
 
 # create_and_deploy_recipe.sh - Generates deployed network configuration (based on a recipe) and private build and pushes to S3
 #
-# Syntax:   create_and_deploy_recipe.sh -c <channel/network> [-n network] --recipe <recipe file> -r <rootdir> [--nodeploy] [--force] [-m genesisVersionModifier]"
+# Syntax:   create_and_deploy_recipe.sh -c <channel/network> [-n network] --recipe <recipe file> -r <rootdir> [--nodeploy] [--force] [-m genesisVersionModifier] [ -b <bucket> ]"
 #
 # Outputs:  <errors or warnings>
 #
@@ -34,7 +34,7 @@ ROOTDIR=""
 NO_DEPLOY=""
 FORCE_OPTION=""
 SCHEMA_MODIFIER=""
-BUCKET="${S3_UPLOAD_BUCKET}"
+S3_UPLOAD_BUCKET="${S3_UPLOAD_BUCKET}"
 
 while [ "$1" != "" ]; do
     case "$1" in
@@ -66,7 +66,7 @@ while [ "$1" != "" ]; do
             ;;
         -b)
             shift
-            BUCKET="-b $1"
+            S3_UPLOAD_BUCKET="-b $1"
             ;;
         *)
             echo "Unknown option" "$1"
@@ -87,7 +87,7 @@ if [[ "${NETWORK}" = "" ]]; then
     NETWORK=${CHANNEL}
 fi
 
-if [[ "${BUCKET}" = "" ]]; then
+if [ -z "${S3_UPLOAD_BUCKET}" ]; then
     echo "You need to export S3_UPLOAD_BUCKET or specify the bucket with the -b flag for this to work"
     exit 1
 fi
@@ -103,5 +103,5 @@ ${SRCPATH}/scripts/upload_config.sh "${ROOTDIR}" "${CHANNEL}"
 
 if [ "${NO_DEPLOY}" = "" ]; then
     # Now generate a private build using our custom genesis.json and deploy it to S3 also
-    ${SRCPATH}/scripts/deploy_private_version.sh -c "${CHANNEL}" -f "${ROOTDIR}/genesisdata/genesis.json" -n "${NETWORK}" -b "${BUCKET}"
+    ${SRCPATH}/scripts/deploy_private_version.sh -c "${CHANNEL}" -f "${ROOTDIR}/genesisdata/genesis.json" -n "${NETWORK}" -b "${S3_UPLOAD_BUCKET}"
 fi

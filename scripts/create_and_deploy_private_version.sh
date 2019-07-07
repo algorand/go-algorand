@@ -30,7 +30,7 @@ SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 export GOPATH=$(go env GOPATH)
 export SRCPATH=${GOPATH}/src/github.com/algorand/go-algorand
 
-BUCKET="${S3_UPLOAD_BUCKET}"
+S3_UPLOAD_BUCKET="${S3_UPLOAD_BUCKET}"
 CHANNEL=""
 NETWORK=""
 CONFIGFILE=""
@@ -66,7 +66,7 @@ while [ "$1" != "" ]; do
             ;;
         -b)
             shift
-            BUCKET="-b $1"
+            S3_UPLOAD_BUCKET="-b $1"
             ;;
         *)
             echo "Unknown option" "$1"
@@ -92,7 +92,7 @@ if [[ "${ROOTDIR}" = "" ]]; then
     ROOTDIR=${SRCPATH}/test/testdata/networks/${NETWORK}
 fi
 
-if [[ "${BUCKET}" = "" ]]; then
+if [ -z "${S3_UPLOAD_BUCKET}" ]; then
     echo "You need to export S3_UPLOAD_BUCKET or specify the bucket with the -b flag for this to work"
     exit 1
 fi
@@ -108,4 +108,4 @@ ${GOPATH}/bin/netgoal build -r "${ROOTDIR}" -n "${NETWORK}" -c "${CONFIGFILE}" -
 ${SRCPATH}/scripts/upload_config.sh "${ROOTDIR}" "${CHANNEL}"
 
 # Now generate a private build using our custom genesis.json and deploy it to S3 also
-${SRCPATH}/scripts/deploy_private_version.sh -c "${CHANNEL}" -f "${ROOTDIR}/genesisdata/genesis.json" -n "${NETWORK}" "${BUCKET}"
+${SRCPATH}/scripts/deploy_private_version.sh -c "${CHANNEL}" -f "${ROOTDIR}/genesisdata/genesis.json" -n "${NETWORK}" -b "${S3_UPLOAD_BUCKET}"

@@ -109,11 +109,11 @@ func MakeS3SessionForDownloadWithBucket(awsBucket string) (helper Helper, err er
 }
 
 // UploadFileStream sends file as stream to s3
-func (helper *Helper) UploadFileStream(filename string, reader io.Reader) error {
+func (helper *Helper) UploadFileStream(targetFile string, reader io.Reader) error {
 	uploader := s3manager.NewUploader(helper.session)
 	_, err := uploader.Upload(&s3manager.UploadInput{
 		Bucket: aws.String(helper.bucket),
-		Key:    aws.String(filepath.Base(filename)),
+		Key:    aws.String(targetFile),
 		Body:   reader,
 	})
 	if err != nil {
@@ -126,7 +126,7 @@ func getCredentials(action string, awsBucket string) (creds *credentials.Credent
 	awsID, awsKey := getAWSCredentials()
 	credentailsRequired := checkCredentialsRequired(action, awsBucket)
 	if !credentailsRequired && (awsID == "" || awsKey == "") {
-		return nil, nil
+		return credentials.AnonymousCredentials, nil
 	}
 	err = validateS3Credentials(awsID, awsKey)
 	if err != nil {
@@ -187,50 +187,14 @@ func makeS3Session(credentials *credentials.Credentials, bucket string) (helper 
 }
 
 // GetLatestVersion returns the latest version details for a given standard filename prefix
-func (helper *Helper) GetLatestVersion(prefix string) (maxVersion uint64, maxVersionName string, err error) {
-	return helper.GetVersion(prefix, 0)
+func (helper *Helper) GetLatestVersion(channel string) (maxVersion uint64, maxVersionName string, err error) {
+	return helper.GetVersion(channel, 0)
 }
 
 // GetVersion ensures the specified version is present and returns the name of the file, if found
 // Or if specificVersion == 0, returns the name of the file with the max version
-func (helper *Helper) GetVersion(prefix string, specificVersion uint64) (maxVersion uint64, maxVersionName string, err error) {
-	maxVersion = 0
-	maxVersionName = ""
-
-	svc := s3.New(helper.session)
-	input := &s3.ListObjectsInput{
-		Bucket:  &helper.bucket,
-		Prefix:  &prefix,
-		MaxKeys: aws.Int64(500),
-	}
-
-	result, err := svc.ListObjects(input)
-	if err != nil {
-		if awsErr, ok := err.(awserr.Error); ok {
-			err = awsErr
-		}
-		return
-	}
-
-	for _, item := range result.Contents {
-		var version uint64
-		name := string(*item.Key)
-		version, err = helper.getVersionFromName(name)
-		if err != nil {
-			return
-		}
-		if specificVersion != 0 {
-			if version == specificVersion {
-				maxVersion = version
-				maxVersionName = name
-				break
-			}
-		} else if version > maxVersion {
-			maxVersion = version
-			maxVersionName = name
-		}
-	}
-	return
+func (helper *Helper) GetVersion(channel string, specificVersion uint64) (maxVersion uint64, maxVersionName string, err error) {
+	return helper.GetPackageVersion(channel, "node", specificVersion)
 }
 
 // DownloadFile downloads the specified file to the provided Writer
@@ -244,52 +208,40 @@ func (helper *Helper) DownloadFile(name string, writer io.WriterAt) error {
 	return err
 }
 
+// UploadChannelFiles uploads the provided set of package files in a batch
+func (helper *Helper) UploadChannelFiles(channel string, files []string) error {
+	subFolder := filepath.Join("channel", channel)
+	return helper.UploadFiles(subFolder, files)
+}
+
 // UploadFiles uploads the provided set of files in a batch
-func (helper *Helper) UploadFiles(files []string) error {
+func (helper *Helper) UploadFiles(subFolder string, files []string) error {
+	target := filepath.Join(helper.bucket, subFolder)
 	for _, f := range files {
-		fmt.Printf("Uploading file: '%s' to s3 bucket '%s'\n", f, helper.bucket)
+		fmt.Printf("Uploading file: '%s' to '%s'\n", f, target)
 	}
 	uploader := s3manager.NewUploader(helper.session)
-	iter := makeFileIterator(files, helper.bucket)
+	iter := makeFileIterator(files, helper.bucket, subFolder)
 	err := uploader.UploadWithIterator(aws.BackgroundContext(), iter)
 	return err
 }
 
-func (helper *Helper) getVersionFromName(name string) (version uint64, err error) {
-	re := regexp.MustCompile(`_(\d*)\.(\d*)\.(\d*)`)
-	submatchAll := re.FindAllStringSubmatch(name, -1)
-	if submatchAll == nil || len(submatchAll) == 0 || len(submatchAll[0]) != 4 {
-		err = errors.New("unable to parse version from filename " + name)
-		return
-	}
-	var val uint64
-	for index, match := range submatchAll[0] {
-		if index > 0 {
-			version <<= 16
-			val, err = strconv.ParseUint(match, 10, 0)
-			if err != nil {
-				return
-			}
-			version += val
-		}
-	}
-	return
-}
-
 // GetPackageVersion return the package version
-func (helper *Helper) GetPackageVersion(pkg string, channel string, specificVersion uint64) (maxVersion uint64, maxVersionName string, err error) {
+func (helper *Helper) GetPackageVersion(channel string, pkg string, specificVersion uint64) (maxVersion uint64, maxVersionName string, err error) {
 	maxVersion = 0
 	maxVersionName = ""
 
-	os := runtime.GOOS
+	osName := runtime.GOOS
 	arch := runtime.GOARCH
-	prefix := fmt.Sprintf("%s_%s_%s-%s", pkg, channel, os, arch)
+	prefix := fmt.Sprintf("channel/%s/%s_%s_%s-%s", channel, pkg, channel, osName, arch)
 	svc := s3.New(helper.session)
 	input := &s3.ListObjectsInput{
 		Bucket:  &helper.bucket,
 		Prefix:  &prefix,
 		MaxKeys: aws.Int64(500),
 	}
+
+	fmt.Fprintf(os.Stderr, "Checking for files matching: '%s' in bucket %s\n", prefix, helper.bucket)
 
 	result, err := svc.ListObjects(input)
 	if err != nil {
@@ -302,7 +254,7 @@ func (helper *Helper) GetPackageVersion(pkg string, channel string, specificVers
 	for _, item := range result.Contents {
 		var version uint64
 		name := string(*item.Key)
-		version, err = helper.getVersionFromName(name)
+		version, err = GetVersionFromName(name)
 		if err != nil {
 			return
 		}
