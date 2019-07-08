@@ -83,7 +83,7 @@ addons:
   artifacts:
     s3_region: "us-east-1"
     paths:
-      - $(git ls-files -o | grep -v crypto/libsodium-fork | grep -v crypto/lib/ | tr "\n" ":")
+      - $(git ls-files -o | grep -v crypto/libsodium-fork | grep -v crypto/lib/ | grep -v ^gen/ | tr "\n" ":")
 
 notifications:
   slack:
