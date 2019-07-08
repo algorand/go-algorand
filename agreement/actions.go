@@ -124,8 +124,8 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 			sendErr := s.Network.Broadcast(tag, data)
 			if sendErr != nil {
 				s.log.Warnf("Network was unable to queue votes for broadcast(%v). %d / %d votes for round %d period %d step %d were dropped.",
-					len(a.UnauthenticatedVotes)-i, len(a.UnauthenticatedVotes),
 					sendErr,
+					len(a.UnauthenticatedVotes)-i, len(a.UnauthenticatedVotes),
 					uv.R.Round,
 					uv.R.Period,
 					uv.R.Step)
