@@ -120,7 +120,8 @@ type AccountData struct {
 	// Each currency bumps the required MinBalance in this account.
 	// An account that created a currency (i.e., ThisCurrencyTotal>0)
 	// must have its own currency in the Currencies map until that
-	// currency is destroyed.
+	// currency is destroyed.  The map is keyed by the CurrencyID,
+	// which is the address of the account that created the currency.
 	//
 	// NOTE: do not modify this value in-place in existing AccountData
 	// structs; allocate a copy and modify that instead.  AccountData
