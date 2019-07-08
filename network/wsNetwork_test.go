@@ -24,6 +24,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"net/textproto"
 	"os"
 	"runtime"
 	"sort"
@@ -1198,7 +1199,6 @@ func TestWebsocketNetwork_checkHeaders(t *testing.T) {
 		broadcastQueueBulk     chan broadcastRequest
 		phonebook              Phonebook
 		dnsPhonebook           ThreadsafePhonebook
-		GenesisID              string
 		NetworkID              protocol.NetworkID
 		RandomID               string
 		ready                  int32
@@ -1254,96 +1254,95 @@ func TestWebsocketNetwork_checkHeaders(t *testing.T) {
 		name                   string
 		fields                 *fields
 		args                   args
-		wantOk                 bool
+		wantOk                 checkHeadersError
 		wantOtherTelemetryGUID string
 		wantOtherPublicAddr    string
 		wantOtherInstanceName  string
 	}{
-		{name: "test1 ipv4",
+		{
+			name:   "test1 ipv4",
 			fields: &testFields1,
 			args: args{
 				header: http.Header{
-					ProtocolVersionHeader:   []string{"1"},
-					GenesisHeader:           []string{""},
-					NodeRandomHeader:        []string{"node random header"},
-					TelemetryIDHeader:       []string{"telemetry id header"},
-					AddressHeader:           []string{"http://[::]:8080/aaa/bbb/ccc"},
-					xForwardedAddrHeaderKey: []string{"12.12.12.12", "1.2.3.4", "55.55.55.55"},
-					InstanceNameHeader:      []string{"instance header name"},
+					textproto.CanonicalMIMEHeaderKey(ProtocolVersionHeader):   []string{"1"},
+					textproto.CanonicalMIMEHeaderKey(NodeRandomHeader):        []string{"node random header"},
+					textproto.CanonicalMIMEHeaderKey(TelemetryIDHeader):       []string{"telemetry id header"},
+					textproto.CanonicalMIMEHeaderKey(AddressHeader):           []string{"http://[::]:8080/aaa/bbb/ccc"},
+					textproto.CanonicalMIMEHeaderKey(xForwardedAddrHeaderKey): []string{"12.12.12.12", "1.2.3.4", "55.55.55.55"},
+					textproto.CanonicalMIMEHeaderKey(InstanceNameHeader):      []string{"instance header name"},
 				},
 				addr: "http://123.20.50.128:8080/aaa/bbb/ccc"},
-			wantOk:                 true,
-			wantOtherTelemetryGUID: "",
+			wantOk:                 nil,
+			wantOtherTelemetryGUID: "telemetry id header",
 			wantOtherPublicAddr:    "http://12.12.12.12:8080/aaa/bbb/ccc",
-			wantOtherInstanceName:  "",
+			wantOtherInstanceName:  "instance header name",
 		},
-		{name: "test2 ipv6",
+		{
+			name:   "test2 ipv6",
 			fields: &testFields2,
 			args: args{
 				header: http.Header{
-					ProtocolVersionHeader:   []string{"1"},
-					GenesisHeader:           []string{""},
-					NodeRandomHeader:        []string{"node random header"},
-					TelemetryIDHeader:       []string{"telemetry id header"},
-					AddressHeader:           []string{"http://[::]:8080/aaa/bbb/ccc"},
-					xForwardedAddrHeaderKey: []string{"2601:192:4b40:6a23:2999:acf5:c0f6:47dc"},
-					InstanceNameHeader:      []string{"instance header name"},
+					textproto.CanonicalMIMEHeaderKey(ProtocolVersionHeader):   []string{"1"},
+					textproto.CanonicalMIMEHeaderKey(NodeRandomHeader):        []string{"node random header"},
+					textproto.CanonicalMIMEHeaderKey(TelemetryIDHeader):       []string{"telemetry id header"},
+					textproto.CanonicalMIMEHeaderKey(AddressHeader):           []string{"http://[::]:8080/aaa/bbb/ccc"},
+					textproto.CanonicalMIMEHeaderKey(xForwardedAddrHeaderKey): []string{"2601:192:4b40:6a23:2999:acf5:c0f6:47dc"},
+					textproto.CanonicalMIMEHeaderKey(InstanceNameHeader):      []string{"instance header name"},
 				},
 				addr: "http://123.20.50.128:8080/aaa/bbb/ccc"},
-			wantOk:                 true,
-			wantOtherTelemetryGUID: "",
+			wantOk:                 nil,
+			wantOtherTelemetryGUID: "telemetry id header",
 			wantOtherPublicAddr:    "http://[2601:192:4b40:6a23:2999:acf5:c0f6:47dc]:8080/aaa/bbb/ccc",
-			wantOtherInstanceName:  "",
+			wantOtherInstanceName:  "instance header name",
 		},
-		{name: "test2 ipv6 no path",
+		{
+			name:   "test2 ipv6 no path",
 			fields: &testFields3,
 			args: args{
 				header: http.Header{
-					ProtocolVersionHeader:     []string{"1"},
-					GenesisHeader:             []string{""},
-					NodeRandomHeader:          []string{"node random header"},
-					TelemetryIDHeader:         []string{"telemetry id header"},
-					AddressHeader:             []string{"http://[::]:80"},
-					CFxForwardedAddrHeaderKey: []string{"2601:192:4b40:6a23:2999:acf5:c0f6:47dc"},
-					InstanceNameHeader:        []string{"instance header name"},
+					textproto.CanonicalMIMEHeaderKey(ProtocolVersionHeader):     []string{"1"},
+					textproto.CanonicalMIMEHeaderKey(NodeRandomHeader):          []string{"node random header"},
+					textproto.CanonicalMIMEHeaderKey(TelemetryIDHeader):         []string{"telemetry id header"},
+					textproto.CanonicalMIMEHeaderKey(AddressHeader):             []string{"http://[::]:80"},
+					textproto.CanonicalMIMEHeaderKey(CFxForwardedAddrHeaderKey): []string{"2601:192:4b40:6a23:2999:acf5:c0f6:47dc"},
+					textproto.CanonicalMIMEHeaderKey(InstanceNameHeader):        []string{"instance header name"},
 				},
 				addr: "http://123.20.50.128:8080/aaa/bbb/ccc"},
-			wantOk:                 true,
-			wantOtherTelemetryGUID: "",
+			wantOk:                 nil,
+			wantOtherTelemetryGUID: "telemetry id header",
 			wantOtherPublicAddr:    "http://[2601:192:4b40:6a23:2999:acf5:c0f6:47dc]:80",
-			wantOtherInstanceName:  "",
+			wantOtherInstanceName:  "instance header name",
 		},
-		{name: "test2 ipv6 no UseXForwardedForAddressField",
+		{
+			name:   "test2 ipv6 no UseXForwardedForAddressField",
 			fields: &testFields4,
 			args: args{
 				header: http.Header{
-					ProtocolVersionHeader: []string{"1"},
-					GenesisHeader:         []string{""},
-					NodeRandomHeader:      []string{"node random header"},
-					TelemetryIDHeader:     []string{"telemetry id header"},
-					AddressHeader:         []string{"http://[::]:80"},
-					InstanceNameHeader:    []string{"instance header name"},
+					textproto.CanonicalMIMEHeaderKey(ProtocolVersionHeader): []string{"1"},
+					textproto.CanonicalMIMEHeaderKey(NodeRandomHeader):      []string{"node random header"},
+					textproto.CanonicalMIMEHeaderKey(TelemetryIDHeader):     []string{"telemetry id header"},
+					textproto.CanonicalMIMEHeaderKey(AddressHeader):         []string{"http://[::]:80"},
+					textproto.CanonicalMIMEHeaderKey(InstanceNameHeader):    []string{"instance header name"},
 				},
 				addr: "http://123.20.50.128:8080/aaa/bbb/ccc"},
-			wantOk:                 true,
-			wantOtherTelemetryGUID: "",
+			wantOk:                 nil,
+			wantOtherTelemetryGUID: "telemetry id header",
 			wantOtherPublicAddr:    "http://[::]:80",
-			wantOtherInstanceName:  "",
+			wantOtherInstanceName:  "instance header name",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			wn := &WebsocketNetwork{
-				config:    tt.fields.config,
-				log:       tt.fields.log,
-				GenesisID: tt.fields.GenesisID,
-				RandomID:  tt.fields.RandomID,
+				config:   tt.fields.config,
+				log:      tt.fields.log,
+				RandomID: tt.fields.RandomID,
 			}
 
 			t.Logf("headers %+v", tt.args.header)
-			gotOk, gotOtherTelemetryGUID, gotOtherPublicAddr, gotOtherInstanceName := wn.checkHeaders(tt.args.header, tt.args.addr, wn.getForwardedConnectionAddress(tt.args.header))
-			if gotOk != tt.wantOk {
-				t.Errorf("WebsocketNetwork.checkHeaders() gotOk = %v, want %v", gotOk, tt.wantOk)
+			gotOtherTelemetryGUID, gotOtherPublicAddr, gotOtherInstanceName, gotErr := wn.checkHeaders(tt.args.header, tt.args.addr, wn.getForwardedConnectionAddress(tt.args.header))
+			if gotErr != tt.wantOk {
+				t.Errorf("WebsocketNetwork.checkHeaders() gotOk = %v, want %v", gotErr, tt.wantOk)
 			}
 			if gotOtherTelemetryGUID != tt.wantOtherTelemetryGUID {
 				t.Errorf("WebsocketNetwork.checkHeaders() gotOtherTelemetryGUID = %v, want %v", gotOtherTelemetryGUID, tt.wantOtherTelemetryGUID)
