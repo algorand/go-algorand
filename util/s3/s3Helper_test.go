@@ -117,11 +117,11 @@ func TestMakeS3SessionForUploadWithBucket(t *testing.T) {
 		{name: "test3", args: args{awsBucket: bucket1, awsID: "", awsSecret: "AWS_SECRET"}, wantHelper: Helper{bucket: bucket1}, wantErr: true},
 		{name: "test4", args: args{awsBucket: bucket1, awsID: "AWS_ID", awsSecret: ""}, wantHelper: Helper{bucket: bucket1}, wantErr: true},
 		{name: "test5", args: args{awsBucket: bucket1, awsID: "", awsSecret: ""}, wantHelper: Helper{bucket: bucket1}, wantErr: true},
-		// public upload bucket does not require AWS credentials for uploads
+		// public upload bucket requires AWS credentials for uploads
 		{name: "test6", args: args{awsBucket: publicUploadBucket, awsID: "AWS_ID", awsSecret: "AWS_SECRET"}, wantHelper: Helper{bucket: publicUploadBucket}, wantErr: false},
-		{name: "test7", args: args{awsBucket: publicUploadBucket, awsID: "", awsSecret: "AWS_SECRET"}, wantHelper: Helper{bucket: publicUploadBucket}, wantErr: false},
-		{name: "test8", args: args{awsBucket: publicUploadBucket, awsID: "AWS_ID", awsSecret: ""}, wantHelper: Helper{bucket: publicUploadBucket}, wantErr: false},
-		{name: "test9", args: args{awsBucket: publicUploadBucket, awsID: "", awsSecret: ""}, wantHelper: Helper{bucket: publicUploadBucket}, wantErr: false},
+		{name: "test7", args: args{awsBucket: publicUploadBucket, awsID: "", awsSecret: "AWS_SECRET"}, wantHelper: Helper{bucket: publicUploadBucket}, wantErr: true},
+		{name: "test8", args: args{awsBucket: publicUploadBucket, awsID: "AWS_ID", awsSecret: ""}, wantHelper: Helper{bucket: publicUploadBucket}, wantErr: true},
+		{name: "test9", args: args{awsBucket: publicUploadBucket, awsID: "", awsSecret: ""}, wantHelper: Helper{bucket: publicUploadBucket}, wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
