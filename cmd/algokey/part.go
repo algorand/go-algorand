@@ -141,7 +141,7 @@ var partReparentCmd = &cobra.Command{
 }
 
 func printPartkey(partkey account.Participation) {
-	fmt.Printf("Parent address:    %s\n", partkey.Parent.GetChecksumAddress().String())
+	fmt.Printf("Parent address:    %s\n", partkey.Parent.String())
 	fmt.Printf("VRF public key:    %s\n", base64.StdEncoding.EncodeToString(partkey.VRF.PK[:]))
 	fmt.Printf("Voting public key: %s\n", base64.StdEncoding.EncodeToString(partkey.Voting.OneTimeSignatureVerifier[:]))
 	fmt.Printf("First round:       %d\n", partkey.FirstValid)

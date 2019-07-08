@@ -183,7 +183,7 @@ func populateBlankMultisig(client libgoal.Client, dataDir string, walletName str
 		return stxn
 	}
 
-	multisigInfo, err := client.LookupMultisigAccount(wh, stxn.Txn.Sender.GetChecksumAddress().String())
+	multisigInfo, err := client.LookupMultisigAccount(wh, stxn.Txn.Sender.String())
 	if err != nil {
 		return stxn
 	}

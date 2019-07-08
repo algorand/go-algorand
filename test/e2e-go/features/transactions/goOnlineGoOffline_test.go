@@ -70,7 +70,7 @@ func testAccountsCanChangeOnlineState(t *testing.T, templatePath string) {
 	// make a participation key for initiallyOffline
 	partkeyResponse, _, err := client.GenParticipationKeys(initiallyOffline, 0, curRound+1000, 0)
 	a.NoError(err, "should be no errors when creating partkeys")
-	a.Equal(initiallyOffline, partkeyResponse.Address().GetChecksumAddress().String(), "successful partkey creation should echo account")
+	a.Equal(initiallyOffline, partkeyResponse.Address().String(), "successful partkey creation should echo account")
 
 	goOnlineUTx, err := client.MakeUnsignedGoOnlineTx(initiallyOffline, nil, curRound, transactionValidityPeriod, transactionFee)
 	a.NoError(err, "should be able to make go online tx")
@@ -82,7 +82,7 @@ func testAccountsCanChangeOnlineState(t *testing.T, templatePath string) {
 	// make a participation key for initiallyOnline
 	partkeyResponse, _, err = client.GenParticipationKeys(initiallyOnline, 0, curRound+1000, 0)
 	a.NoError(err, "should be no errors when creating partkeys")
-	a.Equal(initiallyOnline, partkeyResponse.Address().GetChecksumAddress().String(), "successful partkey creation should echo account")
+	a.Equal(initiallyOnline, partkeyResponse.Address().String(), "successful partkey creation should echo account")
 
 	goOfflineUTx, err := client.MakeUnsignedGoOfflineTx(initiallyOnline, curRound, transactionValidityPeriod, transactionFee)
 	a.NoError(err, "should be able to make go offline tx")
