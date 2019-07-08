@@ -773,7 +773,7 @@ func (wn *WebsocketNetwork) checkHeaders(header http.Header, addr string, forwar
 	otherPublicAddr = ""
 	otherVersion := header.Get(ProtocolVersionHeader)
 	if otherVersion != ProtocolVersion {
-		wn.log.Warnf("new peer %s version mismatch, mine=%s theirs=%s, headers %#v", addr, ProtocolVersion, otherVersion, header)
+		wn.log.Infof("new peer %s version mismatch, mine=%s theirs=%s, headers %#v", addr, ProtocolVersion, otherVersion, header)
 		err = &mismatchingVersionError{otherVersion}
 		return
 	}
