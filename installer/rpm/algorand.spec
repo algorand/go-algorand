@@ -29,7 +29,8 @@ This package provides an implementation of the Algorand protocol.
 
 %install
 mkdir -p %{buildroot}/usr/bin
-for f in algod kmd carpenter msgpacktool algokey catchupsrv goal; do
+# NOTE: keep in sync with scripts/build_deb.sh bin_files
+for f in algod algoh algokey carpenter catchupsrv diagcfg goal kmd msgpacktool node_exporter; do
   install -m 755 ${GOPATH}/bin/${f} %{buildroot}/usr/bin/${f}
 done
 
