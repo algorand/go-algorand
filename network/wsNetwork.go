@@ -1576,7 +1576,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	}
 	otherGenesisID := response.Header.Get(GenesisHeader)
 	if wn.GenesisID != otherGenesisID {
-		if len(otherGenesisID) > 0 {
+		if otherGenesisID != "" {
 			wn.log.Warnf("new peer %#v genesis mismatch, mine=%#v theirs=%#v, headers %#v", addr, wn.GenesisID, otherGenesisID, response.Header)
 		} else {
 			wn.log.Warnf("new peer %#v did not include genesis header in response. mine=%#v headers %#v", addr, wn.GenesisID, response.Header)
