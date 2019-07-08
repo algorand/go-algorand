@@ -114,10 +114,15 @@ func (p *ThreadsafePhonebook) ReplacePeerList(they []string) {
 	copy(p.addrs, they)
 }
 
-// MultiPhonebook contains several phonebooks
+// MultiPhonebook contains a map of phonebooks
 type MultiPhonebook struct {
-	phonebooks []Phonebook
-	lock       deadlock.RWMutex
+	phonebookMap map[string]*Phonebook
+	lock         deadlock.RWMutex
+}
+
+// MakeMultiPhonebook constructs and returns a new Multi Phonebook
+func MakeMultiPhonebook() *MultiPhonebook {
+	return &MultiPhonebook{phonebookMap: make(map[string]*Phonebook)}
 }
 
 // GetAddresses returns up to N address
@@ -125,13 +130,20 @@ type MultiPhonebook struct {
 func (mp *MultiPhonebook) GetAddresses(n int) []string {
 	mp.lock.RLock()
 	defer mp.lock.RUnlock()
-	if len(mp.phonebooks) == 1 {
-		return mp.phonebooks[0].GetAddresses(n)
+
+	phonebookList := []Phonebook{}
+
+	for _, phonebook := range mp.phonebookMap {
+		phonebookList = append(phonebookList, *phonebook)
 	}
-	sizes := make([]int, len(mp.phonebooks))
+
+	if len(phonebookList) == 1 {
+		return phonebookList[0].GetAddresses(n)
+	}
+	sizes := make([]int, len(phonebookList))
 	total := 0
-	addrs := make([][]string, len(mp.phonebooks))
-	for pi, p := range mp.phonebooks {
+	addrs := make([][]string, len(phonebookList))
+	for pi, p := range phonebookList {
 		switch xp := p.(type) {
 		case *ArrayPhonebook:
 			sizes[pi] = len(xp.Entries)
@@ -150,7 +162,7 @@ func (mp *MultiPhonebook) GetAddresses(n int) []string {
 			copy(all[pos:], addrs[pi])
 			pos += len(addrs[pi])
 		} else {
-			xa := mp.phonebooks[pi].GetAddresses(size)
+			xa := phonebookList[pi].GetAddresses(size)
 			copy(all[pos:], xa)
 			pos += len(xa)
 		}
@@ -163,14 +175,9 @@ func (mp *MultiPhonebook) GetAddresses(n int) []string {
 	return out
 }
 
-// AddPhonebook adds a Phonebook if it is new
-func (mp *MultiPhonebook) AddPhonebook(p Phonebook) {
+// AddOrUpdatePhonebook adds or updates Phonebook in Pnonebook map
+func (mp *MultiPhonebook) AddOrUpdatePhonebook(name string, p Phonebook) {
 	mp.lock.Lock()
 	defer mp.lock.Unlock()
-	for _, op := range mp.phonebooks {
-		if op == p {
-			return
-		}
-	}
-	mp.phonebooks = append(mp.phonebooks, p)
+	mp.phonebookMap[name] = &p
 }

@@ -758,8 +758,8 @@ func TestGetPeers(t *testing.T) {
 	require.True(t, postListen)
 	t.Log(addrA)
 	phba := &oneEntryPhonebook{addrA}
-	phbMulti := &MultiPhonebook{}
-	phbMulti.AddPhonebook(phba)
+	phbMulti := MakeMultiPhonebook()
+	phbMulti.AddOrUpdatePhonebook("phba", phba)
 	netB.phonebook = phbMulti
 	netB.Start()
 	defer netB.Stop()
@@ -771,7 +771,7 @@ func TestGetPeers(t *testing.T) {
 	t.Log("b ready")
 
 	ph := ArrayPhonebook{[]string{"a", "b", "c"}}
-	phbMulti.AddPhonebook(&ph)
+	phbMulti.AddOrUpdatePhonebook("ph", &ph)
 
 	//addrB, _ := netB.Address()
 

@@ -159,13 +159,13 @@ func TestMultiPhonebook(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j"}
 	pha := ArrayPhonebook{set[:5]}
 	phb := ArrayPhonebook{set[5:]}
-	mp := MultiPhonebook{}
-	mp.AddPhonebook(&pha)
-	mp.AddPhonebook(&phb)
+	mp := MakeMultiPhonebook()
+	mp.AddOrUpdatePhonebook("pha", &pha)
+	mp.AddOrUpdatePhonebook("phb", &phb)
 
-	testPhonebookAll(t, set, &mp)
-	testPhonebookUniform(t, set, &mp, 1)
-	testPhonebookUniform(t, set, &mp, 3)
+	testPhonebookAll(t, set, mp)
+	testPhonebookUniform(t, set, mp, 1)
+	testPhonebookUniform(t, set, mp, 3)
 }
 
 func BenchmarkThreadsafePhonebook(b *testing.B) {
