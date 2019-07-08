@@ -879,11 +879,13 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 	pathVars := mux.Vars(request)
 	otherGenesisID, hasGenesisID := pathVars["genesisID"]
 	if !hasGenesisID || otherGenesisID == "" {
+		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "missing genesis-id"})
 		response.WriteHeader(http.StatusNotFound)
 		return
 	}
 	if wn.GenesisID != otherGenesisID {
 		wn.log.Warnf("new peer %#v genesis mismatch, mine=%#v theirs=%#v, headers %#v", request.RemoteAddr, wn.GenesisID, otherGenesisID, request.Header)
+		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "mismatching genesis-id"})
 		response.WriteHeader(http.StatusPreconditionFailed)
 		response.Write([]byte("mismatching genesis ID"))
 		return
@@ -1550,7 +1552,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 			bodyBytes, _ := ioutil.ReadAll(response.Body)
 			errString := string(bodyBytes)
 
-			// we're gurenteed to have a valid response object.
+			// we're guaranteed to have a valid response object.
 			switch response.StatusCode {
 			case http.StatusPreconditionFailed:
 				wn.log.Warnf("ws connect(%s) fail - bad handshake, precondition failed : %s error : '%s'", gossipAddr, errString)
