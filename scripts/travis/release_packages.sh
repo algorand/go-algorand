@@ -13,6 +13,8 @@ set -e
 CHANNEL=""
 FULLVERSION=""
 S3CMD="s3cmd"
+BUILD_BUCKET=${S3_RELEASE_BUCKET}
+RELEASE_BUCKET="algorand-releases"
 
 function init_s3cmd() {
     SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
@@ -39,9 +41,9 @@ function promote_nightly() {
     init_s3cmd
 
     # Rename the _CHANNEL_ and _CHANNEL-VARIANT_ pending files
-    ${S3CMD} ls s3://${S3_RELEASE_BUCKET}/pending_ | grep _${FULLVERSION}. | grep _${CHANNEL}[-_] | awk '{ print $4 }' | while read line
+    ${S3CMD} ls s3://${BUILD_BUCKET}/pending_ | grep _${FULLVERSION}. | grep _${CHANNEL}[-_] | awk '{ print $4 }' | while read line
     do
-        NEW_ARTIFACT_NAME=$(echo "$line" | sed -e 's/pending_//')
+        NEW_ARTIFACT_NAME=$(echo "$line" | sed -e 's/pending_//' | sed -e "s/${BUILD_BUCKET}/${RELEASE_BUCKET}/g")
         echo "Copy ${line} => ${NEW_ARTIFACT_NAME}"
         ${S3CMD} cp ${line} ${NEW_ARTIFACT_NAME}
     done
@@ -51,9 +53,10 @@ function promote_stable() {
     init_s3cmd
 
     # Copy the _CHANNEL_ pending 'node' files to _CHANNEL-canary_
-    ${S3CMD} ls s3://${S3_RELEASE_BUCKET}/pending_node_ | grep _${FULLVERSION}. | grep _${CHANNEL}_ | awk '{ print $4 }' | while read line
+    ${S3CMD} ls s3://${BUILD_BUCKET}/pending_node_ | grep _${FULLVERSION}. | grep _${CHANNEL}_ | awk '{ print $4 }' | while read line
     do
         NEW_ARTIFACT_NAME=$(echo "$line" | sed -e 's/pending_//' | sed -e "s/_${CHANNEL}_/_${CHANNEL}-canary_/g")
+        NEW_ARTIFACT_NAME=$(echo "$NEW_ARTIFACT_NAME" | sed -e "s/${BUILD_BUCKET}/${RELEASE_BUCKET}/g")
         echo "Copy ${line} => ${NEW_ARTIFACT_NAME}"
         ${S3CMD} cp ${line} ${NEW_ARTIFACT_NAME}
     done
@@ -65,5 +68,8 @@ case "${TRAVIS_BRANCH}" in
         ;;
     rel/stable)
         promote_stable
+        ;;
+    *)
+        promote_nightly
         ;;
 esac

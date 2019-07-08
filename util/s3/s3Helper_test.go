@@ -72,31 +72,6 @@ func TestGetS3ReleaseBucket(t *testing.T) {
 	}
 }
 
-func TestGetS3InternalBucket(t *testing.T) {
-	tests := []struct {
-		name           string
-		getDefault     bool
-		wantBucketName string
-	}{
-		{name: "test1", wantBucketName: "test-bucket"},
-		{name: "test2", wantBucketName: "anotherbucket"},
-		{name: "test3", wantBucketName: ""},
-		{name: "test4", getDefault: true, wantBucketName: "algorand-internal"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.getDefault {
-				os.Unsetenv("S3_INTERNAL_BUCKET")
-			} else {
-				os.Setenv("S3_INTERNAL_BUCKET", tt.wantBucketName)
-			}
-			if gotBucketName := GetS3InternalBucket(); gotBucketName != tt.wantBucketName {
-				t.Errorf("GetS3InternalBucket() = %v, want %v", gotBucketName, tt.wantBucketName)
-			}
-		})
-	}
-}
-
 func Test_getS3Region(t *testing.T) {
 	tests := []struct {
 		name       string
