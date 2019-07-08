@@ -52,20 +52,25 @@ type CurrencyTransferTxnFields struct {
 	CurrencyCloseTo basics.Address `codec:"cclose"`
 }
 
+func clone(m map[basics.Address]uint64) map[basics.Address]uint64 {
+	res := make(map[basics.Address]uint64)
+	for id, val := range m {
+		res[id] = val
+	}
+	return res
+}
+
 func (ca CurrencyAllocTxnFields) apply(header Header, balances Balances, spec SpecialAddresses, ad *ApplyData) error {
 	record, err := balances.Get(header.Sender)
 	if err != nil {
 		return err
 	}
+	record.Currencies = clone(record.Currencies)
 
 	if ca.CurrencyTotal > 0 {
 		// If we are trying to allocate, there must not be an existing allocation.
 		if record.ThisCurrencyTotal > 0 {
 			return fmt.Errorf("sub-currency already allocated: ThisCurrencyTotal %d, requested total %d", record.ThisCurrencyTotal, ca.CurrencyTotal)
-		}
-
-		if record.Currencies == nil {
-			record.Currencies = make(map[basics.Address]uint64)
 		}
 
 		record.ThisCurrencyTotal = ca.CurrencyTotal
@@ -95,10 +100,7 @@ func (ct CurrencyTransferTxnFields) apply(header Header, balances Balances, spec
 			return err
 		}
 
-		if snd.Currencies == nil {
-			snd.Currencies = make(map[basics.Address]uint64)
-		}
-
+		snd.Currencies = clone(snd.Currencies)
 		if snd.Currencies[ct.CurrencyID] < ct.CurrencyAmount {
 			return fmt.Errorf("sub-currency balance %d less than transfer amount %d", snd.Currencies[ct.CurrencyID], ct.CurrencyAmount)
 		}
@@ -113,10 +115,7 @@ func (ct CurrencyTransferTxnFields) apply(header Header, balances Balances, spec
 			return err
 		}
 
-		if rcv.Currencies == nil {
-			snd.Currencies = make(map[basics.Address]uint64)
-		}
-
+		rcv.Currencies = clone(rcv.Currencies)
 		_, ok := rcv.Currencies[ct.CurrencyID]
 		if !ok {
 			return fmt.Errorf("sub-currency not present in receiver account")
@@ -139,10 +138,7 @@ func (ct CurrencyTransferTxnFields) apply(header Header, balances Balances, spec
 			return err
 		}
 
-		if snd.Currencies == nil {
-			snd.Currencies = make(map[basics.Address]uint64)
-		}
-
+		snd.Currencies = clone(snd.Currencies)
 		amt := snd.Currencies[ct.CurrencyID]
 		delete(snd.Currencies, ct.CurrencyID)
 		err = balances.Put(snd)
@@ -156,10 +152,7 @@ func (ct CurrencyTransferTxnFields) apply(header Header, balances Balances, spec
 				return err
 			}
 
-			if rcv.Currencies == nil {
-				rcv.Currencies = make(map[basics.Address]uint64)
-			}
-
+			rcv.Currencies = clone(rcv.Currencies)
 			_, ok := rcv.Currencies[ct.CurrencyID]
 			if !ok {
 				return fmt.Errorf("sub-currency not present in close-to account")
