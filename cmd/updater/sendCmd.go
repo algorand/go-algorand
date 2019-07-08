@@ -39,7 +39,7 @@ var sendCmd = &cobra.Command{
 	Long:  "Uploads *.tar.gz files from specified path",
 	Run: func(cmd *cobra.Command, args []string) {
 		if uploadBucket == "" {
-			uploadBucket = s3.GetS3UploadBucket()
+			uploadBucket = s3.GetS3ReleaseBucket()
 		}
 		s3Session, err := s3.MakeS3SessionForUploadWithBucket(uploadBucket)
 		if err != nil {
