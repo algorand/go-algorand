@@ -47,7 +47,7 @@ chmod +x ${HOME}/gpgbin/remote_gpg_socket
 if [ "${DISTRIB_ID}" = "Ubuntu" ]; then
     if [ "${DISTRIB_RELEASE}" = "16.04" ]; then
 	echo "WARNING: Ubuntu 16.04 is DEPRECATED"
-	sudo apt-get install -y autoconf awscli docker.io g++ fakeroot git gnupg2 gpgv2 make nfs-common python3 rpm sqlite3
+	sudo apt-get install -y autoconf awscli docker.io g++ fakeroot git gnupg2 gpgv2 make nfs-common python3 rpm sqlite3 python3-boto3
 	cat <<EOF>${HOME}/gpgbin/gpg
 #!/bin/bash
 exec /usr/bin/gpg2 "\$@"
@@ -58,7 +58,7 @@ exec /usr/bin/gpgv2 "\$@"
 EOF
 	chmod +x ${HOME}/gpgbin/*
     elif [ "${DISTRIB_RELEASE}" = "18.04" ]; then
-	sudo apt-get install -y autoconf awscli docker.io git gpg nfs-common python3 rpm sqlite3
+	sudo apt-get install -y autoconf awscli docker.io git gpg nfs-common python3 rpm sqlite3 python3-boto3
     else
 	echo "don't know how to build on Ubuntu ${DISTRIB_RELEASE}"
 	exit 1
@@ -103,6 +103,8 @@ fi
 
 sudo usermod -a -G docker ubuntu
 sg docker "docker pull centos:7"
+sg docker "docker pull ubuntu:18.04"
+sg docker "docker pull ubuntu:16.04"
 
 # Check out
 mkdir -p ${GOPATH}/src/github.com/algorand
@@ -111,6 +113,8 @@ if [ ! -d "${GOPATH}/src/github.com/algorand/go-algorand/.git" ]; then
 fi
 cd ${GOPATH}/src/github.com/algorand/go-algorand
 git checkout "${GIT_CHECKOUT_LABEL}"
+
+gpg --import ${GOPATH}/src/github.com/algorand/go-algorand/installer/rpm/RPM-GPG-KEY-Algorand
 
 # Install latest Go
 cd $HOME

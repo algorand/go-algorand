@@ -19,6 +19,7 @@ package libgoal
 import (
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
 	"path/filepath"
 
@@ -165,6 +166,65 @@ func (c *Client) GenParticipationKeysTo(address string, firstValid, lastValid, k
 	// Fill the database with new participation keys
 	newPart, err := account.FillDBWithParticipationKeys(partdb, parsedAddr, firstRound, lastRound, keyDilution)
 	return newPart, partKeyPath, err
+}
+
+// InstallParticipationKeys creates a .partkey database for a given address,
+// based on an existing database from inputfile.  On successful install, it
+// deletes the input file.
+func (c *Client) InstallParticipationKeys(inputfile string) (part account.Participation, filePath string, err error) {
+	// Get the GenesisID for use in the participation key path
+	var genID string
+	genID, err = c.GenesisID()
+	if err != nil {
+		return
+	}
+
+	outDir := filepath.Join(c.DataDir(), genID)
+
+	inputdb, err := db.MakeErasableAccessor(inputfile)
+	if err != nil {
+		return
+	}
+	defer inputdb.Close()
+
+	partkey, err := account.RestoreParticipation(inputdb)
+	if err != nil {
+		return
+	}
+
+	if partkey.Parent == (basics.Address{}) {
+		err = fmt.Errorf("Cannot install partkey with missing (zero) parent address")
+		return
+	}
+
+	newdbpath, err := participationKeysPath(outDir, partkey.Parent, partkey.FirstValid, partkey.LastValid)
+	if err != nil {
+		return
+	}
+
+	newdb, err := db.MakeErasableAccessor(newdbpath)
+	if err != nil {
+		return
+	}
+
+	newpartkey := partkey
+	newpartkey.Store = newdb
+	err = newpartkey.Persist()
+	if err != nil {
+		return
+	}
+
+	// After successful install, remove the input copy of the
+	// partkey so that old keys cannot be recovered after they
+	// are used by algod.  We try to delete the data inside
+	// sqlite first, so the key material is zeroed out from
+	// disk blocks, but regardless of whether that works, we
+	// delete the input file.  The consensus protocol version
+	// is irrelevant for the maxuint64 round number we pass in.
+	partkey.DeleteOldKeys(basics.Round(math.MaxUint64), config.Consensus[protocol.ConsensusCurrentVersion])
+	os.Remove(inputfile)
+
+	return newpartkey, newdbpath, nil
 }
 
 // ListParticipationKeys returns the available participation keys,

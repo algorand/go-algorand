@@ -151,18 +151,23 @@ $(KMD_API_SWAGGER_INJECT): $(KMD_API_SWAGGER_SPEC)
 
 build: buildsrc gen
 
-buildsrc: $(SRCPATH)/crypto/lib/libsodium.a node_exporter NONGO_BIN deps $(ALGOD_API_SWAGGER_INJECT) $(KMD_API_SWAGGER_INJECT)
+buildsrc: $(SRCPATH)/crypto/lib/libsodium.a node_exporter NONGO_BIN deps
 	cd $(SRCPATH) && \
 		go install $(GOTAGS) -ldflags="$(GOLDFLAGS)" $(SOURCES)
 	cd $(SRCPATH) && \
 		go vet $(UNIT_TEST_SOURCES) $(E2E_TEST_SOURCES)
 
+SOURCES_RACE := github.com/algorand/go-algorand/cmd/kmd
+
 ## Build binaries with the race detector enabled in them.
 ## This allows us to run e2e tests with race detection.
+## We overwrite bin-race/kmd with a non -race version due to
+## the incredible performance impact of -race on Scrypt.
 build-race: build
 	@mkdir -p $(GOPATH)/bin-race
 	cd $(SRCPATH) && \
-		GOBIN=$(GOPATH)/bin-race go install $(GOTAGS) -ldflags="$(GOLDFLAGS)" $(SOURCES)
+		GOBIN=$(GOPATH)/bin-race go install $(GOTAGS) -race -ldflags="$(GOLDFLAGS)" $(SOURCES) && \
+		GOBIN=$(GOPATH)/bin-race go install $(GOTAGS) -ldflags="$(GOLDFLAGS)" $(SOURCES_RACE)
 
 NONGO_BIN_FILES=$(GOPATH)/bin/find-nodes.sh $(GOPATH)/bin/update.sh $(GOPATH)/bin/COPYING
 

@@ -29,6 +29,8 @@
     "PriorityPeers": {},
     "ReconnectTime": 60000000000,
     "ReservedFDs": 256,
+    "RestReadTimeoutSeconds": 15,
+    "RestWriteTimeoutSeconds": 120,
     "RunHosted": false,
     "SuggestedFeeBlockHistory": 3,
     "SuggestedFeeSlidingWindowSize": 50,
@@ -36,5 +38,6 @@
     "TxPoolSize": 50000,
     "TxSyncIntervalSeconds": 60,
     "TxSyncServeResponseSize": 1000000,
-    "TxSyncTimeoutSeconds": 30
+    "TxSyncTimeoutSeconds": 30,
+    "ForceRelayMessages": false
 }

@@ -278,6 +278,14 @@ func (f *LibGoalFixture) ShutdownImpl(preserveData bool) {
 	}
 }
 
+// intercept baseFixture.failOnError so we can clean up any algods that are still alive
+func (f *LibGoalFixture) failOnError(err error, message string) {
+	if err != nil {
+		f.network.Stop(f.binDir)
+		f.baseFixture.failOnError(err, message)
+	}
+}
+
 // PrimaryDataDir returns the data directory for the PrimaryNode for the network
 func (f *LibGoalFixture) PrimaryDataDir() string {
 	return f.network.PrimaryDataDir()

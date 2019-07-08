@@ -17,23 +17,6 @@ date "+build_release start %Y%m%d_%H%M%S"
 set -e
 set -x
 
-# persistent storage of repo manager scratch space is on EFS
-if [ ! -z "${AWS_EFS_MOUNT}" ]; then
-    if mount|grep -q /data; then
-	echo /data already mounted
-    else
-	sudo mkdir -p /data
-	sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport "${AWS_EFS_MOUNT}":/ /data
-	# make environment for release_deb.sh
-	sudo mkdir -p /data/_aptly
-	sudo chown -R ${USER} /data/_aptly
-	export APTLY_DIR=/data/_aptly
-    fi
-fi
-
-export GOPATH=${HOME}/go
-export PATH=${HOME}/gpgbin:${GOPATH}/bin:/usr/local/go/bin:${PATH}
-
 # a previous docker centos build can leave junk owned by root. chown and clean
 sudo chown -R ${USER} ${GOPATH}
 if [ -f ${GOPATH}/src/github.com/algorand/go-algorand/crypto/libsodium-fork/Makefile ]; then
@@ -58,6 +41,17 @@ export VARIATIONS="base"
 export NO_BUILD=true
 if [ -z "${RSTAMP}" ]; then
     RSTAMP=$(scripts/reverse_hex_timestamp)
+    echo RSTAMP=${RSTAMP} > "${HOME}/rstamp"
+fi
+# What's my default IP address?
+# get the datacenter IP address for this EC2 host.
+# this might equivalently be gotten from `netstat -rn` and `ifconfig -a`
+if [ -z "${DC_IP}" ]; then
+    DC_IP=$(curl --silent http://169.254.169.254/latest/meta-data/local-ipv4)
+fi
+if [ -z "${DC_IP}" ]; then
+    echo "ERROR: need DC_IP to be set to your local (but not localhost) IP"
+    exit 1
 fi
 
 # Update version file for this build
@@ -71,7 +65,6 @@ fi
 echo ${BUILD_NUMBER} > ./buildnumber.dat
 git add -A
 git commit -m "Build ${BUILD_NUMBER}"
-git push
 export FULLVERSION=$(./scripts/compute_build_number.sh -f)
 
 # a bash user might `source build_env` to manually continue a broken build
@@ -89,6 +82,7 @@ export VARIATIONS=${VARIATIONS}
 RSTAMP=${RSTAMP}
 BUILD_NUMBER=${BUILD_NUMBER}
 export FULLVERSION=${FULLVERSION}
+DC_IP=${DC_IP}
 EOF
 # strip leading 'export ' for docker --env-file
 sed 's/^export //g' < ${HOME}/build_env > ${HOME}/build_env_docker
@@ -100,10 +94,72 @@ make ${GOPATH}/src/github.com/algorand/go-algorand/crypto/lib/libsodium.a
 
 make build
 
+export BUILD_DEB=1
 scripts/build_packages.sh "${PLATFORM}"
 
+
+# Test .deb installer
+
+mkdir -p ${HOME}/docker_test_resources
+if [ ! -f "${HOME}/docker_test_resources/gnupg2.2.9_centos7_amd64.tar.bz2" ]; then
+    aws s3 cp s3://algorand-devops-misc/tools/gnupg2.2.9_centos7_amd64.tar.bz2 ${HOME}/docker_test_resources
+fi
+cp -p "${HOME}/key.gpg" "${HOME}/docker_test_resources/key.pub"
+
+# copy previous installers into ~/docker_test_resources
+cd "${HOME}/docker_test_resources"
+if [ "${TEST_UPGRADE}" == "no" ]; then
+    echo "upgrade test disabled"
+else
+    python3 ${GOPATH}/src/github.com/algorand/go-algorand/scripts/get_current_installers.py "${S3_PREFIX}/${CHANNEL}"
+fi
+
+echo "TEST_UPGRADE=${TEST_UPGRADE}" >> ${HOME}/build_env_docker
+
+rm -rf ${HOME}/dummyaptly
+mkdir -p ${HOME}/dummyaptly
+cat <<EOF>${HOME}/dummyaptly.conf
+{
+  "rootDir": "${HOME}/dummyaptly",
+  "downloadConcurrency": 4,
+  "downloadSpeedLimit": 0,
+  "architectures": [],
+  "dependencyFollowSuggests": false,
+  "dependencyFollowRecommends": false,
+  "dependencyFollowAllVariants": false,
+  "dependencyFollowSource": false,
+  "dependencyVerboseResolve": false,
+  "gpgDisableSign": false,
+  "gpgDisableVerify": false,
+  "gpgProvider": "gpg",
+  "downloadSourcePackages": false,
+  "skipLegacyPool": true,
+  "ppaDistributorID": "ubuntu",
+  "ppaCodename": "",
+  "skipContentsPublishing": false,
+  "FileSystemPublishEndpoints": {},
+  "S3PublishEndpoints": {},
+  "SwiftPublishEndpoints": {}
+}
+EOF
+aptly -config=${HOME}/dummyaptly.conf repo create -distribution=stable -component=main algodummy
+aptly -config=${HOME}/dummyaptly.conf repo add algodummy ${HOME}/node_pkg/*.deb
+SNAPSHOT=algodummy-$(date +%Y%m%d_%H%M%S)
+aptly -config=${HOME}/dummyaptly.conf snapshot create ${SNAPSHOT} from repo algodummy
+aptly -config=${HOME}/dummyaptly.conf publish snapshot -origin=Algorand -label=Algorand ${SNAPSHOT}
+
+(cd ${HOME}/dummyaptly/public && python3 ${GOPATH}/src/github.com/algorand/go-algorand/scripts/httpd.py --pid ${HOME}/phttpd.pid) &
+
+
+sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME}/docker_test_resources,dst=/stuff --mount type=bind,src=${GOPATH}/src,dst=/root/go/src --mount type=bind,src=/usr/local/go,dst=/usr/local/go ubuntu:16.04 bash /root/go/src/github.com/algorand/go-algorand/scripts/build_release_ubuntu_test_docker.sh"
+sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME}/docker_test_resources,dst=/stuff --mount type=bind,src=${GOPATH}/src,dst=/root/go/src --mount type=bind,src=/usr/local/go,dst=/usr/local/go ubuntu:18.04 bash /root/go/src/github.com/algorand/go-algorand/scripts/build_release_ubuntu_test_docker.sh"
+
+kill $(cat ${HOME}/phttpd.pid)
+
+date "+build_release done building ubuntu %Y%m%d_%H%M%S"
+
 # Run RPM bulid in Centos7 Docker container
-sg docker "docker build -t algocentosbuild - < scripts/centos-build.Dockerfile"
+sg docker "docker build -t algocentosbuild - < ${GOPATH}/src/github.com/algorand/go-algorand/scripts/centos-build.Dockerfile"
 
 # cleanup our libsodium build
 if [ -f ${GOPATH}/src/github.com/algorand/go-algorand/crypto/libsodium-fork/Makefile ]; then
@@ -111,82 +167,26 @@ if [ -f ${GOPATH}/src/github.com/algorand/go-algorand/crypto/libsodium-fork/Make
 fi
 rm -rf ${GOPATH}/src/github.com/algorand/go-algorand/crypto/lib
 
-# do the RPM build
-sg docker "docker run --env-file ${HOME}/build_env_docker --mount type=bind,src=${GOPATH}/src,dst=/root/go/src --mount type=bind,src=${HOME},dst=/root/subhome --mount type=bind,src=/usr/local/go,dst=/usr/local/go -a stdout -a stderr algocentosbuild /root/go/src/github.com/algorand/go-algorand/scripts/build_release_centos_docker.sh"
+# do the RPM build, sign and validate it
 
-# Tag Source
+sudo rm -rf ${HOME}/dummyrepo
+mkdir -p ${HOME}/dummyrepo
 
-TAG=${BRANCH}-${FULLVERSION}
-if [ ! -z "${SIGNING_KEY_ADDR}" ]; then
-    git tag -s -u "${SIGNING_KEY_ADDR}" ${TAG} -m "Genesis Timestamp: $(cat ./genesistimestamp.dat)"
-else
-    git tag -s ${TAG} -m "Genesis Timestamp: $(cat ./genesistimestamp.dat)"
-fi
-git push origin ${TAG}
-
-git archive --prefix=algorand-${FULLVERSION}/ "${TAG}" | gzip > ${PKG_ROOT}/algorand_${CHANNEL}_source_${FULLVERSION}.tar.gz
-
-# create *.sig gpg signatures
-cd ${PKG_ROOT}
-for i in *.tar.gz *.deb *.rpm; do
-    gpg --detach-sign "${i}"
-done
-HASHFILE=hashes_${CHANNEL}_${OS}_${ARCH}_${FULLVERSION}
-rm -f "${HASHFILE}"
-touch "${HASHFILE}"
-md5sum *.tar.gz *.deb *.rpm >> "${HASHFILE}"
-shasum -a 256 *.tar.gz *.deb *.rpm >> "${HASHFILE}"
-shasum -a 512 *.tar.gz *.deb *.rpm >> "${HASHFILE}"
-gpg --detach-sign "${HASHFILE}"
-gpg --clearsign "${HASHFILE}"
-
-echo RSTAMP=${RSTAMP} > "${HOME}/rstamp"
-if [ ! -z "${S3_PREFIX}" ]; then
-    aws s3 sync --quiet --exclude dev\* --exclude master\* --exclude nightly\* --exclude stable\* --acl public-read ./ ${S3_PREFIX}/${CHANNEL}/${RSTAMP}_${FULLVERSION}/
-fi
-
-# copy .rpm file to intermediate yum repo scratch space, actual publish manually later
-if [ ! -d /data/yumrepo ]; then
-    sudo mkdir -p /data/yumrepo
-    sudo chown ${USER} /data/yumrepo
-fi
-cp -p -n *.rpm *.rpm.sig /data/yumrepo
-
-cd ${HOME}
-STATUSFILE=build_status_${CHANNEL}_${FULLVERSION}
-echo "ami-id:" > "${STATUSFILE}"
-curl --silent http://169.254.169.254/latest/meta-data/ami-id >> "${STATUSFILE}"
-cat <<EOF>>"${STATUSFILE}"
-
-
-go version:
+cat <<EOF>${HOME}/dummyrepo/algodummy.repo
+[algodummy]
+name=Algorand
+baseurl=http://${DC_IP}:8111/
+enabled=1
+gpgcheck=1
+gpgkey=https://releases.algorand.com/rpm/rpm_algorand.pub
 EOF
-go version >>"${STATUSFILE}"
-cat <<EOF>>"${STATUSFILE}"
+(cd ${HOME}/dummyrepo && python3 ${GOPATH}/src/github.com/algorand/go-algorand/scripts/httpd.py --pid ${HOME}/phttpd.pid) &
 
-go env:
-EOF
-go env >>"${STATUSFILE}"
-cat <<EOF>>"${STATUSFILE}"
+sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME}/.gnupg/S.gpg-agent,dst=/S.gpg-agent --mount type=bind,src=${HOME}/dummyrepo,dst=/dummyrepo --mount type=bind,src=${HOME}/docker_test_resources,dst=/stuff --mount type=bind,src=${GOPATH}/src,dst=/root/go/src --mount type=bind,src=${HOME},dst=/root/subhome --mount type=bind,src=/usr/local/go,dst=/usr/local/go algocentosbuild /root/go/src/github.com/algorand/go-algorand/scripts/build_release_centos_docker.sh"
 
-build_env:
-EOF
-cat <${HOME}/build_env>>"${STATUSFILE}"
-cat <<EOF>>"${STATUSFILE}"
+kill $(cat ${HOME}/phttpd.pid)
 
-dpkg-l:
-EOF
-dpkg -l >>"${STATUSFILE}"
-gpg --clearsign "${STATUSFILE}"
-gzip "${STATUSFILE}.asc"
-if [ ! -z "${S3_PREFIX_BUILDLOG}" ]; then
-    aws s3 cp --quiet "${STATUSFILE}.asc.gz" "${S3_PREFIX_BUILDLOG}/${RSTAMP}/${STATUSFILE}.asc.gz"
-fi
+date "+build_release done building centos %Y%m%d_%H%M%S"
 
-# use aptly to push .deb to its serving repo
-# Leave .deb publishing to manual step after we do more checks on the release artifacts.
-# ${GOPATH}/src/github.com/algorand/go-algorand/scripts/release_deb.sh ${PKG_ROOT}/*deb
+# NEXT: build_release_sign.sh
 
-# TODO: manually post rpm to repo
-
-date "+build_release finish %Y%m%d_%H%M%S"

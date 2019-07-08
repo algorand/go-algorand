@@ -167,9 +167,6 @@ func (u AccountData) VotingStake() MicroAlgos {
 		return MicroAlgos{Raw: 0}
 	}
 
-	// Online accounts are not subject to rewards, so the value
-	// of u.MicroAlgos is accurate and there's no need to add deferred
-	// rewards by calling WithUpdatedRewards().
 	return u.MicroAlgos
 }
 

@@ -79,6 +79,8 @@ var defaultLocalV4 = Local{
 	OutgoingMessageFilterBucketSize:       128,
 	ReconnectTime:                         1 * time.Minute, // Was 60ns
 	ReservedFDs:                           256,
+	RestReadTimeoutSeconds:                15,
+	RestWriteTimeoutSeconds:               120,
 	RunHosted:                             false,
 	SuggestedFeeBlockHistory:              3,
 	SuggestedFeeSlidingWindowSize:         50,

@@ -56,6 +56,8 @@ var (
 	keyDilution        uint64
 	threshold          uint8
 	partKeyOutDir      string
+	partKeyFile        string
+	partKeyDeleteInput bool
 	importDefault      bool
 	mnemonic           string
 )
@@ -69,6 +71,7 @@ func init() {
 	accountCmd.AddCommand(rewardsCmd)
 	accountCmd.AddCommand(changeOnlineCmd)
 	accountCmd.AddCommand(addParticipationKeyCmd)
+	accountCmd.AddCommand(installParticipationKeyCmd)
 	accountCmd.AddCommand(listParticipationKeysCmd)
 	accountCmd.AddCommand(importCmd)
 	accountCmd.AddCommand(exportCmd)
@@ -118,8 +121,8 @@ func init() {
 	rewardsCmd.MarkFlagRequired("address")
 
 	// changeOnlineStatus flags
-	changeOnlineCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to change (required)")
-	changeOnlineCmd.MarkFlagRequired("address")
+	changeOnlineCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to change (required if no -partkeyfile)")
+	changeOnlineCmd.Flags().StringVarP(&partKeyFile, "partkeyfile", "", "", "Participation key file (required if no -account)")
 	changeOnlineCmd.Flags().BoolVarP(&online, "online", "o", true, "Set this account to online or offline")
 	changeOnlineCmd.MarkFlagRequired("online")
 	changeOnlineCmd.Flags().Uint64VarP(&transactionFee, "fee", "f", 0, "The Fee to set on the status change transaction (defaults to suggested fee)")
@@ -137,6 +140,11 @@ func init() {
 	addParticipationKeyCmd.MarkFlagRequired("roundLastValid")
 	addParticipationKeyCmd.Flags().StringVarP(&partKeyOutDir, "outdir", "o", "", "Save participation key file to specified output directory to (for offline creation)")
 	addParticipationKeyCmd.Flags().Uint64VarP(&keyDilution, "keyDilution", "", 0, "Key dilution for two-level participation keys")
+
+	// installParticipationKey flags
+	installParticipationKeyCmd.Flags().StringVar(&partKeyFile, "partkey", "", "Participation key file to install")
+	installParticipationKeyCmd.MarkFlagRequired("partkey")
+	installParticipationKeyCmd.Flags().BoolVar(&partKeyDeleteInput, "delete-input", false, "Acknowledge that installpartkey will delete the input key file")
 
 	// import flags
 	importCmd.Flags().BoolVarP(&importDefault, "default", "f", false, "Set this account as the default one")
@@ -468,14 +476,44 @@ var rewardsCmd = &cobra.Command{
 var changeOnlineCmd = &cobra.Command{
 	Use:   "changeonlinestatus",
 	Short: "Change online status for the specified account",
-	Long:  `Change online status for the specified account. Set online should be 1 to set online, 0 to set offline. The broadcast transaction will be valid for a limited number of rounds. goal will provide the TXID of the transaction if successful. Going online requires that the given account have a valid participation key.`,
+	Long:  `Change online status for the specified account. Set online should be 1 to set online, 0 to set offline. The broadcast transaction will be valid for a limited number of rounds. goal will provide the TXID of the transaction if successful. Going online requires that the given account has a valid participation key. If the participation key is specified using --partkeyfile, you must separately install the participation key from that file using "goal account installpartkey".`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
+		if accountAddress == "" && partKeyFile == "" {
+			fmt.Printf("Must specify one of --address or --partkeyfile\n")
+			os.Exit(1)
+		}
+
+		if partKeyFile != "" && !online {
+			fmt.Printf("Going offline does not support --partkeyfile\n")
+			os.Exit(1)
+		}
+
 		// Pull the current round for use in our new transactions
 		dataDir := ensureSingleDataDir()
 		client := ensureFullClient(dataDir)
 
-		err := changeAccountOnlineStatus(accountAddress, nil, online, onlineTxFile, walletName, onlineFirstRound, onlineValidRounds, transactionFee, dataDir, client)
+		var part *algodAcct.Participation
+		if partKeyFile != "" {
+			partdb, err := db.MakeErasableAccessor(partKeyFile)
+			if err != nil {
+				fmt.Printf("Cannot open partkey %s: %v\n", partKeyFile, err)
+				os.Exit(1)
+			}
+
+			partkey, err := algodAcct.RestoreParticipation(partdb)
+			if err != nil {
+				fmt.Printf("Cannot load partkey %s: %v\n", partKeyFile, err)
+				os.Exit(1)
+			}
+
+			part = &partkey
+			if accountAddress == "" {
+				accountAddress = part.Parent.GetChecksumAddress().String()
+			}
+		}
+
+		err := changeAccountOnlineStatus(accountAddress, part, online, onlineTxFile, walletName, onlineFirstRound, onlineValidRounds, transactionFee, dataDir, client)
 		if err != nil {
 			reportErrorf(err.Error())
 		}
@@ -576,6 +614,37 @@ var addParticipationKeyCmd = &cobra.Command{
 			reportErrorf(errorRequestFail, err)
 		}
 		fmt.Println("Participation key generation successful")
+	},
+}
+
+var installParticipationKeyCmd = &cobra.Command{
+	Use:   "installpartkey",
+	Short: "Install a participation key",
+	Long:  `Install a participation key from a partkey file. Intended for use with participation key files generated by "algokey part generate". Does not change the online status of an account or register the participation key; use "goal account changeonlinestatus" for doing so. Deletes input key file on successful install to ensure forward security.`,
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, args []string) {
+		if !partKeyDeleteInput {
+			fmt.Println(
+				`The installpartkey command deletes the input participation file on
+successful installation.  Please acknowledge this by passing the
+"--delete-input" flag to the installpartkey command.  You can make
+a copy of the input file if needed, but please keep in mind that
+participation keys must be securely deleted for each round, to ensure
+forward security.  Storing old participation keys compromises overall
+system security.
+
+No --delete-input flag specified, exiting without installing key.`)
+			os.Exit(1)
+		}
+
+		dataDir := ensureSingleDataDir()
+
+		client := ensureAlgodClient(dataDir)
+		_, _, err := client.InstallParticipationKeys(partKeyFile)
+		if err != nil {
+			reportErrorf(errorRequestFail, err)
+		}
+		fmt.Println("Participation key installed successfully")
 	},
 }
 
