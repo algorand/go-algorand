@@ -29,6 +29,12 @@ const (
 	// KeyRegistrationTx indicates a transaction that registers participation keys
 	KeyRegistrationTx TxType = "keyreg"
 
+	// CurrencyAllocTx creates or destroys a new sub-currency
+	CurrencyAllocTx TxType = "curalloc"
+
+	// CurrencyTransferTx transfers sub-currency units between accounts (optionally closing)
+	CurrencyTransferTx TxType = "curxfer"
+
 	// UnknownTx signals an error
 	UnknownTx TxType = "unknown"
 )

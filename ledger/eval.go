@@ -365,7 +365,7 @@ func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn, ad *transact
 		// It's always OK to have the account move to an empty state,
 		// because the accounts DB can delete it.  Otherwise, we will
 		// enforce MinBalance.
-		if data == (basics.AccountData{}) {
+		if data.IsZero() {
 			continue
 		}
 

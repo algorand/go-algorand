@@ -17,6 +17,8 @@
 package basics
 
 import (
+	"reflect"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
@@ -103,6 +105,27 @@ type AccountData struct {
 	VoteFirstValid  Round  `codec:"voteFst"`
 	VoteLastValid   Round  `codec:"voteLst"`
 	VoteKeyDilution uint64 `codec:"voteKD"`
+
+	// If this account created a sub-currency, ThisCurrencyTotal stores
+	// the number of tokens created in that sub-currency.  An account
+	// with a non-zero ThisCurrencyTotal cannot be closed, until the
+	// sub-currency is destroyed.  A sub-currency can be destroyed if
+	// this account holds ThisCurrencyTotal units of that currency (in
+	// the Currencies array below).
+	ThisCurrencyTotal uint64 `codec:"thiscur"`
+
+	// Currencies is the set of currencies that can be held by this
+	// account.  Currencies (i.e., slots in this map) are explicitly
+	// added and removed from an account by special transactions.
+	// Each currency bumps the required MinBalance in this account.
+	// An account that created a currency (i.e., ThisCurrencyTotal>0)
+	// must have its own currency in the Currencies map until that
+	// currency is destroyed.
+	//
+	// NOTE: do not modify this value in-place in existing AccountData
+	// structs; allocate a copy and modify that instead.  AccountData
+	// is expected to have copy-by-value semantics.
+	Currencies map[Address]uint64 `codec:"cur"`
 }
 
 // AccountDetail encapsulates meaningful details about a given account, for external consumption
@@ -178,6 +201,15 @@ func (u AccountData) KeyDilution(proto config.ConsensusParams) uint64 {
 	}
 
 	return proto.DefaultKeyDilution
+}
+
+// IsZero checks if an AccountData value is the same as its zero value.
+func (ad AccountData) IsZero() bool {
+	if ad.Currencies != nil && len(ad.Currencies) == 0 {
+		ad.Currencies = nil
+	}
+
+	return reflect.DeepEqual(ad, AccountData{})
 }
 
 // BalanceRecord pairs an account's address with its associated data.

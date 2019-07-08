@@ -91,6 +91,8 @@ type Transaction struct {
 	// Fields for different types of transactions
 	KeyregTxnFields
 	PaymentTxnFields
+	CurrencyAllocTxnFields
+	CurrencyTransferTxnFields
 
 	// The transaction's Txid is computed when we decode,
 	// and cached here, to avoid needlessly recomputing it.
@@ -222,8 +224,19 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		if err != nil {
 			return err
 		}
+
 	case protocol.KeyRegistrationTx:
 		// All OK
+
+	case protocol.CurrencyAllocTx:
+		if !proto.MultiCurrency {
+			return fmt.Errorf("sub-currency transaction not supported")
+		}
+
+	case protocol.CurrencyTransferTx:
+		if !proto.MultiCurrency {
+			return fmt.Errorf("sub-currency transaction not supported")
+		}
 
 	default:
 		return fmt.Errorf("unknown tx type %v", tx.Type)
@@ -236,6 +249,14 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 
 	if tx.KeyregTxnFields != (KeyregTxnFields{}) {
 		nonZeroFields[protocol.KeyRegistrationTx] = true
+	}
+
+	if tx.CurrencyAllocTxnFields != (CurrencyAllocTxnFields{}) {
+		nonZeroFields[protocol.CurrencyAllocTx] = true
+	}
+
+	if tx.CurrencyTransferTxnFields != (CurrencyTransferTxnFields{}) {
+		nonZeroFields[protocol.CurrencyTransferTx] = true
 	}
 
 	for t, nonZero := range nonZeroFields {
@@ -289,6 +310,11 @@ func (tx Transaction) RelevantAddrs(spec SpecialAddresses, proto config.Consensu
 		if tx.PaymentTxnFields.CloseRemainderTo != (basics.Address{}) {
 			addrs = append(addrs, tx.PaymentTxnFields.CloseRemainderTo)
 		}
+	case protocol.CurrencyTransferTx:
+		addrs = append(addrs, tx.CurrencyTransferTxnFields.CurrencyReceiver)
+		if tx.CurrencyTransferTxnFields.CurrencyCloseTo != (basics.Address{}) {
+			addrs = append(addrs, tx.CurrencyTransferTxnFields.CurrencyCloseTo)
+		}
 	}
 
 	return addrs
@@ -321,6 +347,10 @@ func (tx Transaction) SenderDeduction() (amount basics.MicroAlgos, empty bool, e
 		}
 	case protocol.KeyRegistrationTx:
 		// no additional spend over the fee
+	case protocol.CurrencyAllocTx:
+		// no additional spend over the fee
+	case protocol.CurrencyTransferTx:
+		// TODO: is it important to track sub-currencies for tx pool purposes?
 	default:
 		err = fmt.Errorf("unknown transaction type %v", tx.Type)
 	}
@@ -353,6 +383,12 @@ func (tx Transaction) Apply(balances Balances, spec SpecialAddresses) (ad ApplyD
 
 	case protocol.KeyRegistrationTx:
 		err = tx.KeyregTxnFields.apply(tx.Header, balances, spec, &ad)
+
+	case protocol.CurrencyAllocTx:
+		err = tx.CurrencyAllocTxnFields.apply(tx.Header, balances, spec, &ad)
+
+	case protocol.CurrencyTransferTx:
+		err = tx.CurrencyTransferTxnFields.apply(tx.Header, balances, spec, &ad)
 
 	default:
 		err = fmt.Errorf("Unknown transaction type %v", tx.Type)

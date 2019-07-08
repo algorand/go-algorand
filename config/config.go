@@ -179,6 +179,9 @@ type ConsensusParams struct {
 
 	// domain-separated credentials
 	CredentialDomainSeparationEnabled bool
+
+	// multi-currency support
+	MultiCurrency bool
 }
 
 // Consensus tracks the protocol-level settings for different versions of the
