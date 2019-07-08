@@ -378,9 +378,9 @@ func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn, ad *transact
 		}
 
 		dataNew := data.WithUpdatedRewards(eval.proto, rewardlvl)
-		if dataNew.MicroAlgos.Raw < eval.proto.MinBalance {
-			return fmt.Errorf("transaction %v: account %v balance %d below min %d",
-				txn.ID(), addr, dataNew.MicroAlgos.Raw, eval.proto.MinBalance)
+		if dataNew.MicroAlgos.Raw < basics.MulSaturate(eval.proto.MinBalance, uint64(1+len(dataNew.Currencies))) {
+			return fmt.Errorf("transaction %v: account %v balance %d below min %d (%d subcurrencies)",
+				txn.ID(), addr, dataNew.MicroAlgos.Raw, eval.proto.MinBalance, len(dataNew.Currencies))
 		}
 	}
 
