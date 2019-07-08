@@ -52,7 +52,7 @@ type inspectMultisigSig struct {
 type inspectMultisigSubsig struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Key checksumAddress  `codec:"pk"`
+	Key basics.Address   `codec:"pk"`
 	Sig crypto.Signature `codec:"s"`
 }
 
@@ -72,7 +72,7 @@ type inspectTransaction struct {
 type inspectTxnHeader struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Sender      checksumAddress   `codec:"snd"`
+	Sender      basics.Address    `codec:"snd"`
 	Fee         basics.MicroAlgos `codec:"fee"`
 	FirstValid  basics.Round      `codec:"fv"`
 	LastValid   basics.Round      `codec:"lv"`
@@ -86,30 +86,9 @@ type inspectTxnHeader struct {
 type inspectPaymentTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Receiver         checksumAddress   `codec:"rcv"`
+	Receiver         basics.Address    `codec:"rcv"`
 	Amount           basics.MicroAlgos `codec:"amt"`
-	CloseRemainderTo checksumAddress   `codec:"close"`
-}
-
-// checksumAddress is a checksummed address, for use with text encodings
-// like JSON.
-type checksumAddress basics.Address
-
-// UnmarshalText implements the encoding.TextUnmarshaler interface
-func (a *checksumAddress) UnmarshalText(text []byte) error {
-	addr, err := basics.UnmarshalChecksumAddress(string(text))
-	if err != nil {
-		return err
-	}
-
-	*a = checksumAddress(addr)
-	return nil
-}
-
-// MarshalText implements the encoding.TextMarshaler interface
-func (a checksumAddress) MarshalText() (text []byte, err error) {
-	addr := basics.Address(a)
-	return []byte(addr.GetChecksumAddress().String()), nil
+	CloseRemainderTo basics.Address    `codec:"close"`
 }
 
 func inspectTxn(stxn transactions.SignedTxn) (sti inspectSignedTxn, err error) {
@@ -150,7 +129,7 @@ func msigToInspect(msig crypto.MultisigSig) inspectMultisigSig {
 	for _, subsig := range msig.Subsigs {
 		res.Subsigs = append(res.Subsigs, inspectMultisigSubsig{
 			Sig: subsig.Sig,
-			Key: checksumAddress(subsig.Key),
+			Key: basics.Address(subsig.Key),
 		})
 	}
 
@@ -177,7 +156,7 @@ func txnToInspect(txn transactions.Transaction) inspectTransaction {
 	return inspectTransaction{
 		Type: txn.Type,
 		inspectTxnHeader: inspectTxnHeader{
-			Sender:      checksumAddress(txn.Sender),
+			Sender:      basics.Address(txn.Sender),
 			Fee:         txn.Fee,
 			FirstValid:  txn.FirstValid,
 			LastValid:   txn.LastValid,
@@ -187,9 +166,9 @@ func txnToInspect(txn transactions.Transaction) inspectTransaction {
 		},
 		KeyregTxnFields: txn.KeyregTxnFields,
 		inspectPaymentTxnFields: inspectPaymentTxnFields{
-			Receiver:         checksumAddress(txn.Receiver),
+			Receiver:         basics.Address(txn.Receiver),
 			Amount:           txn.Amount,
-			CloseRemainderTo: checksumAddress(txn.CloseRemainderTo),
+			CloseRemainderTo: basics.Address(txn.CloseRemainderTo),
 		},
 	}
 }
