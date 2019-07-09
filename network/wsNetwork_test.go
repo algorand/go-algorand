@@ -24,7 +24,6 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
-	"net/textproto"
 	"os"
 	"runtime"
 	"sort"
@@ -1179,182 +1178,51 @@ func TestWebsocketNetwork_updateUrlHost(t *testing.T) {
 	}
 }
 
-func TestWebsocketNetwork_checkHeaders(t *testing.T) {
-	type fields struct {
-		listener               net.Listener
-		server                 http.Server
-		router                 *mux.Router
-		scheme                 string
-		upgrader               websocket.Upgrader
-		config                 config.Local
-		log                    logging.Logger
-		readBuffer             chan IncomingMessage
-		wg                     sync.WaitGroup
-		handlers               Multiplexer
-		ctx                    context.Context
-		ctxCancel              context.CancelFunc
-		peersLock              deadlock.RWMutex
-		peers                  []*wsPeer
-		broadcastQueueHighPrio chan broadcastRequest
-		broadcastQueueBulk     chan broadcastRequest
-		phonebook              Phonebook
-		dnsPhonebook           ThreadsafePhonebook
-		NetworkID              protocol.NetworkID
-		RandomID               string
-		ready                  int32
-		readyChan              chan struct{}
-		meshUpdateRequests     chan meshRequest
-		tryConnectAddrs        map[string]int64
-		tryConnectLock         deadlock.Mutex
-		incomingMsgFilter      *messageFilter
-		eventualReadyDelay     time.Duration
-		relayMessages          bool
-		prioScheme             NetPrioScheme
-		prioTracker            *prioTracker
-		prioResponseChan       chan *wsPeer
-	}
+func TestWebsocketNetwork_getCommonHeaders(t *testing.T) {
+	header := http.Header{}
+	expectedTelemetryGUID := "123"
+	expectedInstanceName := "456"
+	expectedPublicAddr := "789"
+	header.Set(TelemetryIDHeader, expectedTelemetryGUID)
+	header.Set(InstanceNameHeader, expectedInstanceName)
+	header.Set(AddressHeader, expectedPublicAddr)
+	otherTelemetryGUID, otherInstanceName, otherPublicAddr := getCommonHeaders(header)
+	require.Equal(t, expectedTelemetryGUID, otherTelemetryGUID)
+	require.Equal(t, expectedInstanceName, otherInstanceName)
+	require.Equal(t, expectedPublicAddr, otherPublicAddr)
+}
 
-	const xForwardedAddrHeaderKey = "X-Forwarded-Addr"
-	const CFxForwardedAddrHeaderKey = "Cf-Connecting-Ip"
-	wn1 := makeTestWebsocketNode(t)
-	wn1.config.UseXForwardedForAddressField = xForwardedAddrHeaderKey
-	testFields1 := fields{
-		log:      wn1.log,
-		config:   wn1.config,
-		RandomID: wn1.RandomID,
-	}
-	wn2 := makeTestWebsocketNode(t)
-	wn2.config.UseXForwardedForAddressField = xForwardedAddrHeaderKey
-	testFields2 := fields{
-		log:      wn2.log,
-		config:   wn2.config,
-		RandomID: wn2.RandomID,
-	}
-	wn3 := makeTestWebsocketNode(t)
-	wn3.config.UseXForwardedForAddressField = CFxForwardedAddrHeaderKey
-	testFields3 := fields{
-		log:      wn3.log,
-		config:   wn3.config,
-		RandomID: wn3.RandomID,
-	}
-	wn4 := makeTestWebsocketNode(t)
-	wn4.config.UseXForwardedForAddressField = ""
-	testFields4 := fields{
-		log:      wn4.log,
-		config:   wn4.config,
-		RandomID: wn4.RandomID,
-	}
+func TestWebsocketNetwork_checkOutgoingConnectionVariables(t *testing.T) {
+	wn := makeTestWebsocketNode(t)
+	wn.GenesisID = "genesis-id1"
+	wn.RandomID = "random-id1"
+	header := http.Header{}
+	header.Set(ProtocolVersionHeader, ProtocolVersion)
+	header.Set(NodeRandomHeader, wn.RandomID+"tag")
+	header.Set(GenesisHeader, wn.GenesisID)
+	require.Equal(t, true, wn.checkOutgoingConnectionVariables(header, "addressX"))
 
-	type args struct {
-		header http.Header
-		addr   string
-	}
+	noVersionHeader := http.Header{}
+	noVersionHeader.Set(NodeRandomHeader, wn.RandomID+"tag")
+	noVersionHeader.Set(GenesisHeader, wn.GenesisID)
+	require.Equal(t, false, wn.checkOutgoingConnectionVariables(noVersionHeader, "addressX"))
 
-	tests := []struct {
-		name                   string
-		fields                 *fields
-		args                   args
-		wantOk                 checkHeadersError
-		wantOtherTelemetryGUID string
-		wantOtherPublicAddr    string
-		wantOtherInstanceName  string
-	}{
-		{
-			name:   "test1 ipv4",
-			fields: &testFields1,
-			args: args{
-				header: http.Header{
-					textproto.CanonicalMIMEHeaderKey(ProtocolVersionHeader):   []string{"1"},
-					textproto.CanonicalMIMEHeaderKey(NodeRandomHeader):        []string{"node random header"},
-					textproto.CanonicalMIMEHeaderKey(TelemetryIDHeader):       []string{"telemetry id header"},
-					textproto.CanonicalMIMEHeaderKey(AddressHeader):           []string{"http://[::]:8080/aaa/bbb/ccc"},
-					textproto.CanonicalMIMEHeaderKey(xForwardedAddrHeaderKey): []string{"12.12.12.12", "1.2.3.4", "55.55.55.55"},
-					textproto.CanonicalMIMEHeaderKey(InstanceNameHeader):      []string{"instance header name"},
-				},
-				addr: "http://123.20.50.128:8080/aaa/bbb/ccc"},
-			wantOk:                 nil,
-			wantOtherTelemetryGUID: "telemetry id header",
-			wantOtherPublicAddr:    "http://12.12.12.12:8080/aaa/bbb/ccc",
-			wantOtherInstanceName:  "instance header name",
-		},
-		{
-			name:   "test2 ipv6",
-			fields: &testFields2,
-			args: args{
-				header: http.Header{
-					textproto.CanonicalMIMEHeaderKey(ProtocolVersionHeader):   []string{"1"},
-					textproto.CanonicalMIMEHeaderKey(NodeRandomHeader):        []string{"node random header"},
-					textproto.CanonicalMIMEHeaderKey(TelemetryIDHeader):       []string{"telemetry id header"},
-					textproto.CanonicalMIMEHeaderKey(AddressHeader):           []string{"http://[::]:8080/aaa/bbb/ccc"},
-					textproto.CanonicalMIMEHeaderKey(xForwardedAddrHeaderKey): []string{"2601:192:4b40:6a23:2999:acf5:c0f6:47dc"},
-					textproto.CanonicalMIMEHeaderKey(InstanceNameHeader):      []string{"instance header name"},
-				},
-				addr: "http://123.20.50.128:8080/aaa/bbb/ccc"},
-			wantOk:                 nil,
-			wantOtherTelemetryGUID: "telemetry id header",
-			wantOtherPublicAddr:    "http://[2601:192:4b40:6a23:2999:acf5:c0f6:47dc]:8080/aaa/bbb/ccc",
-			wantOtherInstanceName:  "instance header name",
-		},
-		{
-			name:   "test2 ipv6 no path",
-			fields: &testFields3,
-			args: args{
-				header: http.Header{
-					textproto.CanonicalMIMEHeaderKey(ProtocolVersionHeader):     []string{"1"},
-					textproto.CanonicalMIMEHeaderKey(NodeRandomHeader):          []string{"node random header"},
-					textproto.CanonicalMIMEHeaderKey(TelemetryIDHeader):         []string{"telemetry id header"},
-					textproto.CanonicalMIMEHeaderKey(AddressHeader):             []string{"http://[::]:80"},
-					textproto.CanonicalMIMEHeaderKey(CFxForwardedAddrHeaderKey): []string{"2601:192:4b40:6a23:2999:acf5:c0f6:47dc"},
-					textproto.CanonicalMIMEHeaderKey(InstanceNameHeader):        []string{"instance header name"},
-				},
-				addr: "http://123.20.50.128:8080/aaa/bbb/ccc"},
-			wantOk:                 nil,
-			wantOtherTelemetryGUID: "telemetry id header",
-			wantOtherPublicAddr:    "http://[2601:192:4b40:6a23:2999:acf5:c0f6:47dc]:80",
-			wantOtherInstanceName:  "instance header name",
-		},
-		{
-			name:   "test2 ipv6 no UseXForwardedForAddressField",
-			fields: &testFields4,
-			args: args{
-				header: http.Header{
-					textproto.CanonicalMIMEHeaderKey(ProtocolVersionHeader): []string{"1"},
-					textproto.CanonicalMIMEHeaderKey(NodeRandomHeader):      []string{"node random header"},
-					textproto.CanonicalMIMEHeaderKey(TelemetryIDHeader):     []string{"telemetry id header"},
-					textproto.CanonicalMIMEHeaderKey(AddressHeader):         []string{"http://[::]:80"},
-					textproto.CanonicalMIMEHeaderKey(InstanceNameHeader):    []string{"instance header name"},
-				},
-				addr: "http://123.20.50.128:8080/aaa/bbb/ccc"},
-			wantOk:                 nil,
-			wantOtherTelemetryGUID: "telemetry id header",
-			wantOtherPublicAddr:    "http://[::]:80",
-			wantOtherInstanceName:  "instance header name",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			wn := &WebsocketNetwork{
-				config:   tt.fields.config,
-				log:      tt.fields.log,
-				RandomID: tt.fields.RandomID,
-			}
+	noRandomHeader := http.Header{}
+	noRandomHeader.Set(ProtocolVersionHeader, ProtocolVersion)
+	noRandomHeader.Set(GenesisHeader, wn.GenesisID)
+	require.Equal(t, false, wn.checkOutgoingConnectionVariables(noRandomHeader, "addressX"))
 
-			t.Logf("headers %+v", tt.args.header)
-			gotOtherTelemetryGUID, gotOtherPublicAddr, gotOtherInstanceName, gotErr := wn.checkHeaders(tt.args.header, tt.args.addr, wn.getForwardedConnectionAddress(tt.args.header))
-			if gotErr != tt.wantOk {
-				t.Errorf("WebsocketNetwork.checkHeaders() gotOk = %v, want %v", gotErr, tt.wantOk)
-			}
-			if gotOtherTelemetryGUID != tt.wantOtherTelemetryGUID {
-				t.Errorf("WebsocketNetwork.checkHeaders() gotOtherTelemetryGUID = %v, want %v", gotOtherTelemetryGUID, tt.wantOtherTelemetryGUID)
-			}
-			if gotOtherPublicAddr != tt.wantOtherPublicAddr {
-				t.Errorf("WebsocketNetwork.checkHeaders() gotOtherPublicAddr = %v, want %v", gotOtherPublicAddr, tt.wantOtherPublicAddr)
-			}
-			if gotOtherInstanceName != tt.wantOtherInstanceName {
-				t.Errorf("WebsocketNetwork.checkHeaders() gotOtherInstanceName = %v, want %v", gotOtherInstanceName, tt.wantOtherInstanceName)
-			}
-		})
-	}
+	sameRandomHeader := http.Header{}
+	sameRandomHeader.Set(ProtocolVersionHeader, ProtocolVersion)
+	sameRandomHeader.Set(NodeRandomHeader, wn.RandomID)
+	sameRandomHeader.Set(GenesisHeader, wn.GenesisID)
+	require.Equal(t, false, wn.checkOutgoingConnectionVariables(sameRandomHeader, "addressX"))
+
+	differentGenesisIDHeader := http.Header{}
+	differentGenesisIDHeader.Set(ProtocolVersionHeader, ProtocolVersion)
+	differentGenesisIDHeader.Set(NodeRandomHeader, wn.RandomID+"tag")
+	differentGenesisIDHeader.Set(GenesisHeader, wn.GenesisID+"tag")
+	require.Equal(t, false, wn.checkOutgoingConnectionVariables(differentGenesisIDHeader, "addressX"))
 }
 
 func (wn *WebsocketNetwork) broadcastWithTimestamp(tag protocol.Tag, data []byte, when time.Time) error {
