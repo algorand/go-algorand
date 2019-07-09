@@ -56,21 +56,21 @@ func nodeStatus(node node.Full) (res NodeStatus, err error) {
 
 func paymentTxEncode(tx transactions.Transaction, ad transactions.ApplyData) Transaction {
 	payment := PaymentTransactionType{
-		To:           tx.Receiver.GetChecksumAddress().String(),
+		To:           tx.Receiver.String(),
 		Amount:       tx.TxAmount().Raw,
 		ToRewards:    ad.ReceiverRewards.Raw,
 		CloseRewards: ad.CloseRewards.Raw,
 	}
 
 	if tx.CloseRemainderTo != (basics.Address{}) {
-		payment.CloseRemainderTo = tx.CloseRemainderTo.GetChecksumAddress().String()
+		payment.CloseRemainderTo = tx.CloseRemainderTo.String()
 		payment.CloseAmount = ad.ClosingAmount.Raw
 	}
 
 	return Transaction{
 		Type:        tx.Type,
 		TxID:        tx.ID().String(),
-		From:        tx.Src().GetChecksumAddress().String(),
+		From:        tx.Src().String(),
 		Fee:         tx.TxFee().Raw,
 		FirstRound:  uint64(tx.First()),
 		LastRound:   uint64(tx.Last()),
@@ -94,7 +94,7 @@ func blockEncode(b bookkeeping.Block, c agreement.Certificate) (Block, error) {
 		Hash:              crypto.Digest(b.Hash()).String(),
 		PreviousBlockHash: crypto.Digest(b.Branch).String(),
 		Seed:              crypto.Digest(b.Seed()).String(),
-		Proposer:          c.Proposal.OriginalProposer.GetChecksumAddress().String(),
+		Proposer:          c.Proposal.OriginalProposer.String(),
 		Round:             uint64(b.Round()),
 		TransactionsRoot:  b.TxnRoot.String(),
 		RewardsRate:       b.RewardsRate,
@@ -324,7 +324,7 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 
 	accountInfo := Account{
 		Round:                       uint64(round),
-		Address:                     addr.GetChecksumAddress().String(),
+		Address:                     addr.String(),
 		Amount:                      amount.Raw,
 		PendingRewards:              pendingRewards.Raw,
 		AmountWithoutPendingRewards: amountWithoutPendingRewards.Raw,
@@ -836,7 +836,7 @@ func Transactions(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			rounds, err = indexer.GetRoundsByAddressAndDate(addr.GetChecksumAddress().String(), max, fd.Unix(), td.Unix())
+			rounds, err = indexer.GetRoundsByAddressAndDate(addr.String(), max, fd.Unix(), td.Unix())
 			if err != nil {
 				lib.ErrorResponse(w, http.StatusInternalServerError, err, err.Error(), ctx.Log)
 				return
@@ -844,7 +844,7 @@ func Transactions(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 
 		} else {
 			// return last [max] transactions
-			rounds, err = indexer.GetRoundsByAddress(addr.GetChecksumAddress().String(), max)
+			rounds, err = indexer.GetRoundsByAddress(addr.String(), max)
 			if err != nil {
 				lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedGettingInformationFromIndexer, ctx.Log)
 				return

@@ -214,7 +214,7 @@ func (a ensureAction) do(ctx context.Context, s *Service) {
 		logEvent.Type = logspec.RoundConcluded
 		s.log.with(logEvent).Infof("committed round %v with pre-validated block %v", a.Certificate.Round, a.Certificate.Proposal)
 		s.log.EventWithDetails(telemetryspec.Agreement, telemetryspec.BlockAcceptedEvent, telemetryspec.BlockAcceptedEventDetails{
-			Address: a.Certificate.Proposal.OriginalProposer.GetChecksumAddress().String(),
+			Address: a.Certificate.Proposal.OriginalProposer.String(),
 			Hash:    a.Certificate.Proposal.BlockDigest.String(),
 			Round:   uint64(a.Certificate.Round),
 		})
@@ -229,7 +229,7 @@ func (a ensureAction) do(ctx context.Context, s *Service) {
 			logEvent.Type = logspec.RoundConcluded
 			s.log.with(logEvent).Infof("committed round %v with block %v", a.Certificate.Round, a.Certificate.Proposal)
 			s.log.EventWithDetails(telemetryspec.Agreement, telemetryspec.BlockAcceptedEvent, telemetryspec.BlockAcceptedEventDetails{
-				Address: a.Certificate.Proposal.OriginalProposer.GetChecksumAddress().String(),
+				Address: a.Certificate.Proposal.OriginalProposer.String(),
 				Hash:    a.Certificate.Proposal.BlockDigest.String(),
 				Round:   uint64(a.Certificate.Round),
 			})
