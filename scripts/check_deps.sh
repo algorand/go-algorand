@@ -41,12 +41,6 @@ function check_deps() {
         echo "... stringer missing"
     fi
 
-    if [ ! -f "${GOPATH}/bin/swagger" ]; then
-        SWAGGER_MISSING=1
-        ANY_MISSING=1
-        echo "... swagger missing"
-    fi
-
     if [ ! -f "${GOPATH}/bin/dep" ]; then
         DEP_MISSING=1
         ANY_MISSING=1
@@ -75,14 +69,6 @@ if [ ${STRINGER_MISSING} -ne 0 ]; then
     if [ "$OK" = "y" ]; then
         echo "Installing stringer..."
         go get -u golang.org/x/tools/cmd/stringer
-    fi
-fi
-
-if [ ${SWAGGER_MISSING} -ne 0 ]; then
-    read -p "Install go-swagger (using go get) (y/N): " OK
-    if [ "$OK" = "y" ]; then
-        echo "Installing swagger..."
-        go get -u github.com/go-swagger/go-swagger/cmd/swagger
     fi
 fi
 

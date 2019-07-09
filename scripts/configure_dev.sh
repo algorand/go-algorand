@@ -16,6 +16,9 @@ function install_or_upgrade {
 if [ "${OS}" = "linux" ]; then
     sudo apt-get update
     sudo apt-get -y install libboost-all-dev expect jq
+    echo "deb [trusted=yes] https://dl.bintray.com/go-swagger/goswagger-debian ubuntu main" | sudo tee -a /etc/apt/sources.list
+    sudo apt-get update
+    sudo apt-get -y install swagger
 elif [ "${OS}" = "darwin" ]; then
     brew update
     brew tap caskroom/cask
@@ -25,6 +28,8 @@ elif [ "${OS}" = "darwin" ]; then
     install_or_upgrade libtool
     install_or_upgrade autoconf
     install_or_upgrade automake
+    brew tap go-swagger/go-swagger
+    install_or_upgrade go-swagger
 fi
 
 ${SCRIPTPATH}/configure_dev-deps.sh
