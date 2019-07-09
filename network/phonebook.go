@@ -131,29 +131,29 @@ func (mp *MultiPhonebook) GetAddresses(n int) []string {
 	mp.lock.RLock()
 	defer mp.lock.RUnlock()
 
-	phonebookList := []Phonebook{}
-
-	for _, phonebook := range mp.phonebookMap {
-		phonebookList = append(phonebookList, *phonebook)
-	}
-
-	if len(phonebookList) == 1 {
-		return phonebookList[0].GetAddresses(n)
-	}
-	sizes := make([]int, len(phonebookList))
-	total := 0
-	addrs := make([][]string, len(phonebookList))
-	for pi, p := range phonebookList {
-		switch xp := p.(type) {
-		case *ArrayPhonebook:
-			sizes[pi] = len(xp.Entries)
-		case *ThreadsafePhonebook:
-			sizes[pi] = xp.Length()
-		default:
-			addrs[pi] = xp.GetAddresses(1000)
-			sizes[pi] = len(addrs[pi])
+	if len(mp.phonebookMap) == 1 {
+		for _, phonebook := range mp.phonebookMap {
+			return (*phonebook).GetAddresses(n)
 		}
-		total += sizes[pi]
+	}
+	sizes := make([]int, len(mp.phonebookMap))
+	total := 0
+	addrs := make([][]string, len(mp.phonebookMap))
+	names := make([]string, len(mp.phonebookMap))
+	i := 0
+	for name, p := range mp.phonebookMap {
+		names[i] = name
+		switch xp := (*p).(type) {
+		case *ArrayPhonebook:
+			sizes[i] = len(xp.Entries)
+		case *ThreadsafePhonebook:
+			sizes[i] = xp.Length()
+		default:
+			addrs[i] = xp.GetAddresses(1000)
+			sizes[i] = len(addrs[i])
+		}
+		total += sizes[i]
+		i++
 	}
 	all := make([]string, total)
 	pos := 0
@@ -162,7 +162,7 @@ func (mp *MultiPhonebook) GetAddresses(n int) []string {
 			copy(all[pos:], addrs[pi])
 			pos += len(addrs[pi])
 		} else {
-			xa := phonebookList[pi].GetAddresses(size)
+			xa := (*mp.phonebookMap[names[pi]]).GetAddresses(size)
 			copy(all[pos:], xa)
 			pos += len(xa)
 		}
@@ -175,9 +175,9 @@ func (mp *MultiPhonebook) GetAddresses(n int) []string {
 	return out
 }
 
-// AddOrUpdatePhonebook adds or updates Phonebook in Pnonebook map
-func (mp *MultiPhonebook) AddOrUpdatePhonebook(name string, p Phonebook) {
+// AddOrUpdatePhonebook adds or updates Phonebook in Phonebook map
+func (mp *MultiPhonebook) AddOrUpdatePhonebook(bootstrapNetworkName string, p Phonebook) {
 	mp.lock.Lock()
 	defer mp.lock.Unlock()
-	mp.phonebookMap[name] = &p
+	mp.phonebookMap[bootstrapNetworkName] = &p
 }

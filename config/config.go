@@ -684,17 +684,7 @@ func loadConfig(reader io.Reader, config *Local) error {
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
 func (cfg Local) DNSBootstrapArray(networkID protocol.NetworkID) (bootstrapArray []string) {
 	dnsBootstrapString := cfg.DNSBootstrap(networkID)
-
-	splitFn := func(c rune) bool {
-		return c == ';'
-	}
-	tempBootstrapArray := strings.FieldsFunc(dnsBootstrapString, splitFn)
-	for i := range tempBootstrapArray {
-		tempBootstrapArray[i] = strings.TrimSpace(tempBootstrapArray[i])
-		if len(tempBootstrapArray[i]) > 0 {
-			bootstrapArray = append(bootstrapArray, tempBootstrapArray[i])
-		}
-	}
+	bootstrapArray = strings.Split(dnsBootstrapString, ";")
 	return
 }
 

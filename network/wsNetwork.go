@@ -1162,7 +1162,6 @@ func (wn *WebsocketNetwork) meshThread() {
 
 		// TODO: only do DNS fetch every N seconds? Honor DNS TTL? Trust DNS library we're using to handle caching and TTL?
 		dnsBootstrapArray := wn.config.DNSBootstrapArray(wn.NetworkID)
-		multiPhonebook := MakeMultiPhonebook()
 		for _, dnsBootstrap := range dnsBootstrapArray {
 			dnsAddrs := wn.getDNSAddrs(dnsBootstrap)
 			if len(dnsAddrs) > 0 {
@@ -1170,9 +1169,12 @@ func (wn *WebsocketNetwork) meshThread() {
 				dnsPhonebook := &ThreadsafePhonebook{
 					addrs: dnsAddrs,
 				}
-				multiPhonebook.AddOrUpdatePhonebook(dnsBootstrap, dnsPhonebook)
+				mp, ok := wn.phonebook.(*MultiPhonebook)
+				if ok {
+					mp.AddOrUpdatePhonebook(dnsBootstrap, dnsPhonebook)
+				}
 			} else {
-				wn.log.Debugf("got no DNS addrs for network %#v", wn.NetworkID)
+				wn.log.Infof("got no DNS addrs for network %s", wn.NetworkID)
 			}
 		}
 		desired := wn.config.GossipFanout
