@@ -300,7 +300,7 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	amount, rewards, amountWithoutPendingRewards, status, round, err := ctx.Node.GetBalanceAndStatus(basics.Address(addr))
+	amount, rewards, amountWithoutPendingRewards, status, totalCurrency, currencies, round, err := ctx.Node.GetBalanceAndStatus(basics.Address(addr))
 
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
@@ -314,6 +314,14 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	var currenciesStr map[string]uint64
+	if len(currencies) > 0 {
+		currenciesStr = make(map[string]uint64)
+		for curid, bal := range currencies {
+			currenciesStr[curid.GetChecksumAddress().String()] = bal
+		}
+	}
+
 	accountInfo := Account{
 		Round:                       uint64(round),
 		Address:                     addr.GetChecksumAddress().String(),
@@ -322,6 +330,8 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 		AmountWithoutPendingRewards: amountWithoutPendingRewards.Raw,
 		Rewards:                     rewards.Raw,
 		Status:                      status.String(),
+		ThisCurrencyTotal:		totalCurrency,
+		Currencies: currenciesStr,
 	}
 
 	SendJSON(AccountInformationResponse{&accountInfo}, w, ctx.Log)

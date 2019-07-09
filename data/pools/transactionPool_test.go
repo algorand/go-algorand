@@ -45,7 +45,7 @@ type mockSpendableBalancesUnbounded struct {
 	exceptions map[basics.Address]uint64
 }
 
-func (b mockSpendableBalancesUnbounded) BalanceAndStatus(address basics.Address) (total basics.MicroAlgos, rewards basics.MicroAlgos, totalWithoutPendingRewards basics.MicroAlgos, status basics.Status, round basics.Round, err error) {
+func (b mockSpendableBalancesUnbounded) BalanceAndStatus(address basics.Address) (total basics.MicroAlgos, rewards basics.MicroAlgos, totalWithoutPendingRewards basics.MicroAlgos, status basics.Status, totalCurrency uint64, currencies map[basics.Address]uint64, round basics.Round, err error) {
 	if b.exceptions != nil {
 		if balance, has := b.exceptions[address]; has {
 			total = basics.MicroAlgos{Raw: balance}

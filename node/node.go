@@ -75,7 +75,7 @@ func (status StatusReport) TimeSinceLastRound() time.Duration {
 // Full is an interface representing a Full Algorand Node
 type Full interface {
 	GetSupply() basics.SupplyDetail
-	GetBalanceAndStatus(address basics.Address) (money basics.MicroAlgos, rewards basics.MicroAlgos, moneyWithoutPendingRewards basics.MicroAlgos, status basics.Status, round basics.Round, err error)
+	GetBalanceAndStatus(address basics.Address) (money basics.MicroAlgos, rewards basics.MicroAlgos, moneyWithoutPendingRewards basics.MicroAlgos, status basics.Status, totalCurrency uint64, currencies map[basics.Address]uint64, round basics.Round, err error)
 	BroadcastSignedTxn(signed transactions.SignedTxn) (transactions.Txid, error)
 	ListTxns(address basics.Address, minRound basics.Round, maxRound basics.Round) ([]TxnWithStatus, error)
 	GetTransaction(address basics.Address, txID transactions.Txid, minRound basics.Round, maxRound basics.Round) (TxnWithStatus, bool)
@@ -422,7 +422,7 @@ func (node *AlgorandFullNode) GetSupply() basics.SupplyDetail {
 }
 
 // GetBalanceAndStatus returns both the Balance and the Delegator status of the account, in one call so they're from the same block
-func (node *AlgorandFullNode) GetBalanceAndStatus(address basics.Address) (money basics.MicroAlgos, rewards basics.MicroAlgos, moneyWithoutPendingRewards basics.MicroAlgos, status basics.Status, round basics.Round, err error) {
+func (node *AlgorandFullNode) GetBalanceAndStatus(address basics.Address) (money basics.MicroAlgos, rewards basics.MicroAlgos, moneyWithoutPendingRewards basics.MicroAlgos, status basics.Status, totalCurrency uint64, currencies map[basics.Address]uint64, round basics.Round, err error) {
 	return node.ledger.BalanceAndStatus(address)
 }
 

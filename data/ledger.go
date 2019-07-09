@@ -196,7 +196,7 @@ func (l *Ledger) BalanceRecord(r basics.Round, addr basics.Address) (basics.Bala
 }
 
 // BalanceAndStatus returns Balance and DelegationStatus as one call
-func (l *Ledger) BalanceAndStatus(addr basics.Address) (money basics.MicroAlgos, rewards basics.MicroAlgos, moneyWithoutPendingRewards basics.MicroAlgos, status basics.Status, latest basics.Round, err error) {
+func (l *Ledger) BalanceAndStatus(addr basics.Address) (money basics.MicroAlgos, rewards basics.MicroAlgos, moneyWithoutPendingRewards basics.MicroAlgos, status basics.Status, totalCurrency uint64, currencies map[basics.Address]uint64, latest basics.Round, err error) {
 	latest = l.Latest()
 	data, err := l.Lookup(latest, addr)
 	if err != nil {
@@ -225,6 +225,9 @@ func (l *Ledger) BalanceAndStatus(addr basics.Address) (money basics.MicroAlgos,
 		return
 	}
 	moneyWithoutPendingRewards = dataWithoutRewards.MicroAlgos
+
+	totalCurrency = dataWithoutRewards.ThisCurrencyTotal
+	currencies = dataWithoutRewards.Currencies
 
 	return
 }

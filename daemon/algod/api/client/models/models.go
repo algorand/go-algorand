@@ -65,6 +65,19 @@ type Account struct {
 	// NotParticipating - indicates that the associated account is neither a delegator nor a delegate.
 	// Required: true
 	Status string `json:"status"`
+
+	// If this account created a sub-currency, ThisCurrencyTotal indicates the number of
+	// units of that currency that were created.
+	//
+	// required: false
+	ThisCurrencyTotal uint64 `json:"thiscurrencytotal,omitempty"`
+
+	// Currencies specifies the holdings of sub-currencies by this account,
+	// indexed by the currency ID (the address of the account that created
+	// that sub-currency).
+	//
+	// required: false
+	Currencies map[string]uint64 `json:"currencies,omitempty"`
 }
 
 // Block contains a block information

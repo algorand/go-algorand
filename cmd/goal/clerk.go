@@ -38,6 +38,7 @@ var (
 	fee             uint64
 	firstValid      uint64
 	lastValid       uint64
+	numValidRounds  uint64
 	txFilename      string
 	outFilename     string
 	rejectsFilename string
@@ -46,6 +47,9 @@ var (
 	sign            bool
 	closeToAddress  string
 	noWaitAfterSend bool
+	currencyID      string
+	currencyTotal   uint64
+	currencyDestroy bool
 )
 
 func init() {
@@ -53,6 +57,10 @@ func init() {
 	clerkCmd.AddCommand(rawsendCmd)
 	clerkCmd.AddCommand(inspectCmd)
 	clerkCmd.AddCommand(signCmd)
+	clerkCmd.AddCommand(currencyCmd)
+
+	currencyCmd.AddCommand(allocCurrencyCmd)
+	// currencyCmd.AddCommand(sendCurrencyCmd)
 
 	// Wallet to be used for the clerk operation
 	clerkCmd.PersistentFlags().StringVarP(&walletName, "wallet", "w", "", "Set the wallet to be used for the selected operation")
@@ -84,6 +92,16 @@ func init() {
 	signCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Filename for writing the signed transaction")
 	signCmd.MarkFlagRequired("infile")
 	signCmd.MarkFlagRequired("outfile")
+
+	allocCurrencyCmd.Flags().StringVar(&currencyID, "currency", "", "Account address for creating or destroying a sub-currency")
+	allocCurrencyCmd.Flags().Uint64Var(&currencyTotal, "total", 0, "Total amount of tokens for created sub-currency")
+	allocCurrencyCmd.Flags().BoolVar(&currencyDestroy, "destroy", false, "Destroy a currency (instead of creating)")
+	allocCurrencyCmd.Flags().Uint64Var(&fee, "fee", 0, "The transaction fee (automatically determined by default), in microAlgos")
+	allocCurrencyCmd.Flags().Uint64Var(&firstValid, "firstvalid", 0, "The first round where the transaction may be committed to the ledger")
+	allocCurrencyCmd.Flags().Uint64Var(&numValidRounds, "validrounds", 0, "The number of rounds for which the transaction will be valid")
+	allocCurrencyCmd.Flags().StringVarP(&txFilename, "out", "o", "", "Write transaction to this file")
+	allocCurrencyCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
+	allocCurrencyCmd.MarkFlagRequired("currency")
 }
 
 var clerkCmd = &cobra.Command{
@@ -93,6 +111,16 @@ var clerkCmd = &cobra.Command{
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		//If no arguments passed, we should fallback to help
+		cmd.HelpFunc()(cmd, args)
+	},
+}
+
+var currencyCmd = &cobra.Command{
+	Use:   "currency",
+	Short: "Manage sub-currencies",
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, args []string) {
+		// If no arguments passed, we should fallback to help
 		cmd.HelpFunc()(cmd, args)
 	},
 }
@@ -409,6 +437,98 @@ var signCmd = &cobra.Command{
 		err = ioutil.WriteFile(outFilename, outData, 0600)
 		if err != nil {
 			reportErrorf(fileWriteError, outFilename, err)
+		}
+	},
+}
+
+var allocCurrencyCmd = &cobra.Command{
+	Use:   "alloc",
+	Short: "Allocate or destroy a sub-currency",
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, _ []string) {
+		if currencyTotal == 0 && !currencyDestroy {
+			reportErrorf("Must specify total to create sub-currency")
+		}
+
+		if currencyTotal > 0 && currencyDestroy {
+			reportErrorf("Cannot specify total when destroying sub-currency")
+		}
+
+		dataDir := ensureSingleDataDir()
+		client := ensureFullClient(dataDir)
+		accountList := makeAccountsList(dataDir)
+		sender := accountList.getAddressByName(currencyID)
+
+		var tx transactions.Transaction
+		tx.Type = protocol.CurrencyAllocTx
+		tx.CurrencyTotal = currencyTotal
+		tx, err := client.FillUnsignedTxTemplate(sender, firstValid, numValidRounds, fee, tx)
+		if err != nil {
+			reportErrorf("Cannot construct transaction: %s", err)
+		}
+
+		if txFilename == "" {
+			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
+			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
+			if err != nil {
+				reportErrorf(errorSigningTX, err)
+			}
+
+			txid, err := client.BroadcastTransaction(signedTxn)
+			if err != nil {
+				reportErrorf(errorBroadcastingTX, err)
+			}
+
+			// Report tx details to user
+			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
+
+			if noWaitAfterSend {
+				return
+			}
+
+			// Get current round information
+			stat, err := client.Status()
+			if err != nil {
+				reportErrorf(errorRequestFail, err)
+			}
+
+			for {
+				// Check if we know about the transaction yet
+				txn, err := client.PendingTransactionInformation(txid)
+				if err != nil {
+					reportErrorf(errorRequestFail, err)
+				}
+
+				if txn.ConfirmedRound > 0 {
+					reportInfof(infoTxCommitted, txid, txn.ConfirmedRound)
+					break
+				}
+
+				if txn.PoolError != "" {
+					reportErrorf(txPoolError, txid, txn.PoolError)
+				}
+
+				reportInfof(infoTxPending, txid, stat.LastRound)
+				stat, err = client.WaitForRound(stat.LastRound + 1)
+				if err != nil {
+					reportErrorf(errorRequestFail, err)
+				}
+			}
+		} else {
+			// Wrap in a transactions.SignedTxn with an empty sig.
+			// This way protocol.Encode will encode the transaction type
+			stxn, err := transactions.AssembleSignedTxn(tx, crypto.Signature{}, crypto.MultisigSig{})
+			if err != nil {
+				reportErrorf(errorConstructingTX, err)
+			}
+
+			stxn = populateBlankMultisig(client, dataDir, walletName, stxn)
+
+			// Write the SignedTxn to the output file
+			err = ioutil.WriteFile(txFilename, protocol.Encode(stxn), 0600)
+			if err != nil {
+				reportErrorf(fileWriteError, txFilename, err)
+			}
 		}
 	},
 }

@@ -34,7 +34,7 @@ import (
 // Ledger allows retrieving the amount of spendable MicroAlgos
 // and also checking if a transaction has already been committed.
 type Ledger interface {
-	BalanceAndStatus(basics.Address) (basics.MicroAlgos, basics.MicroAlgos, basics.MicroAlgos, basics.Status, basics.Round, error)
+	BalanceAndStatus(basics.Address) (basics.MicroAlgos, basics.MicroAlgos, basics.MicroAlgos, basics.Status, uint64, map[basics.Address]uint64, basics.Round, error)
 	Committed(transactions.SignedTxn) (bool, error)
 	ConsensusParams(basics.Round) (config.ConsensusParams, error)
 	BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error)
@@ -244,7 +244,7 @@ func (pool *TransactionPool) computeDeductions(t transactions.SignedTxn) (accoun
 	if err != nil {
 		return algosPendingSpend, fmt.Errorf("TransactionPool.Remember: failed to compute balance - %v", err)
 	}
-	senderBalance, _, _, _, _, err := pool.ledger.BalanceAndStatus(t.Txn.Src())
+	senderBalance, _, _, _, _, _, _, err := pool.ledger.BalanceAndStatus(t.Txn.Src())
 	if err != nil {
 		return algosPendingSpend, err
 	}
@@ -274,7 +274,7 @@ func (pool *TransactionPool) computeDeductions(t transactions.SignedTxn) (accoun
 		}
 	} else if t.Txn.CloseRemainderTo != hdr.FeeSink && t.Txn.CloseRemainderTo != hdr.RewardsPool {
 		// account is being closed, make sure that the account getting the remainder does not go below min balance
-		money, _, _, _, _, err := pool.ledger.BalanceAndStatus(t.Txn.CloseRemainderTo)
+		money, _, _, _, _, _, _, err := pool.ledger.BalanceAndStatus(t.Txn.CloseRemainderTo)
 		// some error accessing the account balance.
 		if err != nil {
 			return algosPendingSpend, err
@@ -290,7 +290,7 @@ func (pool *TransactionPool) computeDeductions(t transactions.SignedTxn) (accoun
 
 	// check that recipient's account does not go below min balance
 	if t.Txn.Receiver != (basics.Address{}) && t.Txn.Receiver != hdr.FeeSink && t.Txn.Receiver != hdr.RewardsPool {
-		money, _, _, _, _, err := pool.ledger.BalanceAndStatus(t.Txn.Receiver)
+		money, _, _, _, _, _, _, err := pool.ledger.BalanceAndStatus(t.Txn.Receiver)
 		// some error accessing the account balance.
 		if err != nil {
 			return algosPendingSpend, err
@@ -391,7 +391,7 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block) {
 	for _, tx := range payset {
 		account := tx.Txn.Src()
 		pendingSpend := pool.algosPendingSpend[account]
-		spendable, _, _, _, _, err := pool.ledger.BalanceAndStatus(account)
+		spendable, _, _, _, _, _, _, err := pool.ledger.BalanceAndStatus(account)
 		if err != nil {
 			logging.Base().Errorf("TransactionPool.OnNewBlock: Cannot get balance for %v: %v", account, err)
 			break

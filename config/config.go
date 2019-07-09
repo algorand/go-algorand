@@ -373,6 +373,15 @@ func initConsensusProtocols() {
 
 	// v16 can be upgraded to v17.
 	v16.ApprovedUpgrades[protocol.ConsensusV17] = true
+
+	// ConsensusV18 adds sub-currencies
+	v18 := v17
+	v18.MultiCurrency = true
+	v18.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	Consensus[protocol.ConsensusV18] = v18
+
+	// v17 can be upgraded to v18.
+	v17.ApprovedUpgrades[protocol.ConsensusV18] = true
 }
 
 func initConsensusTestProtocols() {

@@ -224,8 +224,14 @@ func (accountList *AccountsList) outputAccount(addr string, acctInfo models.Acco
 	if multisigInfo != nil {
 		fmt.Printf("\t[%d/%d multisig]", multisigInfo.Threshold, len(multisigInfo.PKs))
 	}
+	if acctInfo.ThisCurrencyTotal > 0 {
+		fmt.Printf("\t[sub-currency: %d units]", acctInfo.ThisCurrencyTotal)
+	}
 	if accountList.isDefault(addr) {
 		fmt.Printf("\t*Default")
 	}
 	fmt.Print("\n")
+	for curid, bal := range acctInfo.Currencies {
+		fmt.Printf("\t%20d units of sub-currency %s\n", bal, curid)
+	}
 }

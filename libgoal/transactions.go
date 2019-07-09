@@ -220,3 +220,64 @@ func (c *Client) MakeUnsignedGoOfflineTx(address string, round, txValidRounds, f
 	}
 	return goOfflineTransaction, nil
 }
+
+// FillUnsignedTxTemplate fills in header fields in a partially-filled-in transaction.
+func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, numValidRounds, fee uint64, tx transactions.Transaction) (transactions.Transaction, error) {
+	// Parse the address
+	parsedAddr, err := basics.UnmarshalChecksumAddress(sender)
+	if err != nil {
+		return transactions.Transaction{}, err
+	}
+
+	params, err := c.SuggestedParams()
+	if err != nil {
+		return transactions.Transaction{}, err
+	}
+
+	cparams, ok := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
+	if !ok {
+		return transactions.Transaction{}, errors.New("unknown consensus version")
+	}
+
+	// Determine the last round this tx will be valid
+	if firstValid == 0 {
+		firstValid = params.LastRound + 1
+	}
+
+	if numValidRounds == 0 {
+		numValidRounds = cparams.MaxTxnLife
+	}
+
+	parsedFirstValid := basics.Round(firstValid)
+	parsedLastValid := basics.Round(firstValid + numValidRounds)
+	parsedFee := basics.MicroAlgos{Raw: fee}
+
+	tx.Header = transactions.Header{
+		Sender:     parsedAddr,
+		Fee:        parsedFee,
+		FirstValid: parsedFirstValid,
+		LastValid:  parsedLastValid,
+	}
+
+	if cparams.SupportGenesisHash {
+		var genHash crypto.Digest
+		copy(genHash[:], params.GenesisHash)
+		tx.GenesisHash = genHash
+	}
+
+	// Default to the suggested fee, if the caller didn't supply it
+	// Fee is tricky, should taken care last. We encode the final
+	// transaction to get the size post signing and encoding.
+	// Then, we multiply it by the suggested fee per byte.
+	if fee == 0 {
+		tx.Fee = basics.MulAIntSaturate(basics.MicroAlgos{Raw: params.Fee}, tx.EstimateEncodedSize())
+		if tx.Fee.Raw < cparams.MinTxnFee {
+			tx.Fee.Raw = cparams.MinTxnFee
+		}
+	}
+
+	// Recompute the TXID
+	tx.ResetCaches()
+
+	return tx, nil
+}
