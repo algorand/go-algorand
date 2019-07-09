@@ -47,6 +47,13 @@ function check_deps() {
         echo "... dep missing"
     fi
 
+    if [ -f "${GOPATH}/bin/swagger" ]; then
+        SWAGGER_EXTRANEOUS=1
+        ANY_MISSING=1
+        echo "... GOPATH/bin/swagger extraneous"
+        echo "... Ensure that you have installed a release build of go-swagger with brew or deb, or with configure_dev.sh"
+    fi
+
     return ${ANY_MISSING}
 }
 
@@ -78,6 +85,11 @@ if [ ${DEP_MISSING} -ne 0 ]; then
         echo "Installing dep..."
         go get -u github.com/golang/dep/cmd/dep
     fi
+fi
+
+if [ ${SWAGGER_EXTRANEOUS} -ne 0 ]; then
+    echo "Removing GOPATH/bin/swagger..."
+    go clean -i github.com/go-swagger/go-swagger/cmd/swagger
 fi
 
 check_deps
