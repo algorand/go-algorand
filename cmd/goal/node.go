@@ -75,13 +75,13 @@ func init() {
 	pendingTxnsCmd.Flags().Uint64VarP(&maxPendingTransactions, "maxPendingTxn", "m", 0, "Cap the number of txns to fetch")
 	waitCmd.Flags().Uint32VarP(&waitSec, "waittime", "w", 5, "Time (in seconds) to wait for node to make progress")
 	createCmd.Flags().StringVarP(&newNodeNetwork, "network", "n", "testnet", "Network the new node should point to")
-	createCmd.Flags().StringVarP(&newNodeDestination, "destination", "dest", "", "Destination path for the new node")
+	createCmd.Flags().StringVarP(&newNodeDestination, "destination", "q", "", "Destination path for the new node")
 	createCmd.Flags().BoolVarP(&newNodeArchival, "archival", "a", false, "Make the new node archival, storing all blocks")
 	createCmd.Flags().BoolVarP(&runUnderHost, "hosted", "H", false, "Run algod hosted by algoh")
 	createCmd.Flags().BoolVarP(&newNodeIndexer, "indexer", "i", false, "The new node will run with an indexer")
 	createCmd.Flags().StringVarP(&peerDial, "peer", "p", "", "Peer address to dial for initial connection")
 	createCmd.Flags().StringVarP(&listenIP, "listen", "l", "", "Endpoint / REST address to listen on")
-
+	createCmd.MarkFlagRequired("destination")
 }
 
 var nodeCmd = &cobra.Command{
@@ -407,9 +407,9 @@ var createCmd = &cobra.Command{
 		if gopath == "" {
 			gopath = build.Default.GOPATH
 		}
-		firstChoicePath := filepath.Join(gopath, "genesisfiles", newNodeNetwork, "genesis.json")
-		secondChoicePath := filepath.Join("/var/lib/algorand/genesis/", newNodeNetwork, "genesis.json")
-		thirdChoicePath := filepath.Join(gopath, "genesisfiles", "genesis", newNodeNetwork, "genesis.json")
+		firstChoicePath := filepath.Join(gopath, "bin", "genesisfiles", newNodeNetwork, "genesis.json")
+		secondChoicePath := filepath.Join("var", "lib", "algorand", "genesis", newNodeNetwork, "genesis.json")
+		thirdChoicePath := filepath.Join(gopath, "bin", "genesisfiles", "genesis", newNodeNetwork, "genesis.json")
 		paths := [...]string{firstChoicePath, secondChoicePath, thirdChoicePath}
 		correctPath := ""
 		for _, pathCandidate := range paths {
@@ -442,12 +442,12 @@ var createCmd = &cobra.Command{
 		if newNodeIndexer {
 			configBuilder.WriteString(prefix)
 			prefix = ","
-			configBuilder.WriteString("\"IsIndexerActive\": false")
+			configBuilder.WriteString("\"IsIndexerActive\": true")
 		}
 		if runUnderHost {
 			configBuilder.WriteString(prefix)
 			prefix = ","
-			configBuilder.WriteString("\"RunHosted\": false")
+			configBuilder.WriteString("\"RunHosted\": true")
 		}
 		if peerDial != "" {
 			configBuilder.WriteString(prefix)
