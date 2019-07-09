@@ -464,12 +464,15 @@ var createCmd = &cobra.Command{
 			configBuilder.WriteString("\"")
 		}
 		configBuilder.WriteString("}")
-		configDest := filepath.Join(newNodeDestination, "config.json")
 		configString := configBuilder.String()
-		configBytes := []byte(configString)
-		err = ioutil.WriteFile(configDest, configBytes, 0666)
-		if err != nil {
-			reportErrorf(errorNodeCreation, err)
+		if configString != "{}" {
+			configDest := filepath.Join(newNodeDestination, "config.json")
+			configBytes := []byte(configString)
+			err = ioutil.WriteFile(configDest, configBytes, 0666)
+			if err != nil {
+				reportErrorf(errorNodeCreation, err)
+			}
 		}
+
 	},
 }
