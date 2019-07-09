@@ -35,8 +35,10 @@ func init() {
 	versionCmd.AddCommand(checkCmd)
 	versionCmd.AddCommand(getCmd)
 
+	checkCmd.Flags().StringVarP(&versionBucket, "bucket", "b", "", "S3 bucket containing updates.")
+
 	getCmd.Flags().StringVarP(&destFile, "outputFile", "o", "", "Path for downloaded file (required)")
-	getCmd.Flags().StringVarP(&versionBucket, "bucket", "b", "", "S3 bucket to check for updates.")
+	getCmd.Flags().StringVarP(&versionBucket, "bucket", "b", "", "S3 bucket containing updates.")
 	getCmd.Flags().Uint64VarP(&specificVersion, "version", "v", 0, "Specific version to download")
 	getCmd.MarkFlagRequired("outputFile")
 }
