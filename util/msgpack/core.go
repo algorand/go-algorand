@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package core
+package msgpack
 
 import (
 	"encoding/base32"
@@ -29,14 +29,17 @@ import (
 )
 
 var (
-	Base32Encoding bool = true
-	StrictJSON     bool = true
+	//Base32Encoding controls base32 vs base64 encoding
+	Base32Encoding = false
+	//StrictJSON controls strict json
+	StrictJSON = false
 )
 
 type decoder interface {
 	Decode(v interface{}) error
 }
 
+//Transcode messagepack -> json or json -> msgpack based on mpToJsonBool
 func Transcode(mpToJSON bool, in io.ReadCloser, out io.WriteCloser) error {
 	canonicalMsgpackHandle := new(codec.MsgpackHandle)
 	canonicalMsgpackHandle.ErrorIfNoField = true

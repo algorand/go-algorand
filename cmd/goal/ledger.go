@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	msgpackcore "github.com/algorand/go-algorand/cmd/msgpacktool/core"
+	"github.com/algorand/go-algorand/util/msgpack"
 	"github.com/spf13/cobra"
 	"io"
 	"io/ioutil"
@@ -67,13 +67,15 @@ var supplyCmd = &cobra.Command{
 
 var blockCmd = &cobra.Command{
 	Use:   "dumpblock <round>",
-	Short: "Show ledger block.",
-	Long:  "Show ledger block. In msgpack format or json format.",
+	Short: "Dump ledger block.",
+	Long:  "Dump ledger block.",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
 		algodClient := ensureAlgodClient(dataDir)
 		blocknum, err := strconv.ParseUint(args[0], 10, 64)
+		msgpack.StrictJSON = false
+		msgpack.Base32Encoding = true
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
@@ -87,7 +89,7 @@ var blockCmd = &cobra.Command{
 		}
 		jsonreader := ioutil.NopCloser(bytes.NewReader(jsonbytes))
 		if !jsonblockfmt {
-			msgpackcore.Transcode(false, jsonreader, os.Stdout)
+			msgpack.Transcode(false, jsonreader, os.Stdout)
 		} else {
 			io.Copy(os.Stdout, jsonreader)
 		}

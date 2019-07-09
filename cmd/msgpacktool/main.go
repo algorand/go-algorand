@@ -44,8 +44,8 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/algorand/go-algorand/util/msgpack"
 	"os"
-	"github.com/algorand/go-algorand/cmd/msgpacktool/core"
 )
 
 var mpToJSON = flag.Bool("d", false, "Decode msgpack to JSON")
@@ -55,8 +55,8 @@ var strictJSON = flag.Bool("strict", false, "Strict JSON decode: turn all keys i
 
 func main() {
 	flag.Parse()
-	core.Base32Encoding = *base32Encoding
-	core.StrictJSON = *strictJSON
+	msgpack.Base32Encoding = *base32Encoding
+	msgpack.StrictJSON = *strictJSON
 	if *mpToJSON && *jsonToMp {
 		fmt.Fprintf(os.Stderr, "Cannot specify both -d and -e\n")
 		os.Exit(1)
@@ -67,7 +67,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	err := core.Transcode(*mpToJSON, os.Stdin, os.Stdout)
+	err := msgpack.Transcode(*mpToJSON, os.Stdin, os.Stdout)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
