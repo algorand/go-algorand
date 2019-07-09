@@ -76,21 +76,22 @@ func (ca CurrencyAllocTxnFields) apply(header Header, balances Balances, spec Sp
 		record.ThisCurrencyTotal = ca.CurrencyTotal
 		record.Currencies[header.Sender] = ca.CurrencyTotal
 		return balances.Put(record)
-	} else {
-		if record.ThisCurrencyTotal == 0 {
-			return fmt.Errorf("sub-currency not allocated")
-		}
-
-		// If we are trying to destroy a currency, this account must hold the
-		// entire outstanding sub-currency amount.
-		if record.Currencies[header.Sender] != record.ThisCurrencyTotal {
-			return fmt.Errorf("cannot destroy sub-currency: holding only %d/%d", record.Currencies[header.Sender], record.ThisCurrencyTotal)
-		}
-
-		delete(record.Currencies, header.Sender)
-		record.ThisCurrencyTotal = 0
-		return balances.Put(record)
 	}
+
+	// CurrencyTotal==0 means destroy sub-currency
+	if record.ThisCurrencyTotal == 0 {
+		return fmt.Errorf("sub-currency not allocated")
+	}
+
+	// If we are trying to destroy a currency, this account must hold the
+	// entire outstanding sub-currency amount.
+	if record.Currencies[header.Sender] != record.ThisCurrencyTotal {
+		return fmt.Errorf("cannot destroy sub-currency: holding only %d/%d", record.Currencies[header.Sender], record.ThisCurrencyTotal)
+	}
+
+	delete(record.Currencies, header.Sender)
+	record.ThisCurrencyTotal = 0
+	return balances.Put(record)
 }
 
 func (ct CurrencyTransferTxnFields) apply(header Header, balances Balances, spec SpecialAddresses, ad *ApplyData) error {

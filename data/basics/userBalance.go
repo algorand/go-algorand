@@ -205,12 +205,12 @@ func (u AccountData) KeyDilution(proto config.ConsensusParams) uint64 {
 }
 
 // IsZero checks if an AccountData value is the same as its zero value.
-func (ad AccountData) IsZero() bool {
-	if ad.Currencies != nil && len(ad.Currencies) == 0 {
-		ad.Currencies = nil
+func (u AccountData) IsZero() bool {
+	if u.Currencies != nil && len(u.Currencies) == 0 {
+		u.Currencies = nil
 	}
 
-	return reflect.DeepEqual(ad, AccountData{})
+	return reflect.DeepEqual(u, AccountData{})
 }
 
 // BalanceRecord pairs an account's address with its associated data.
