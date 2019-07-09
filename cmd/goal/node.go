@@ -20,7 +20,11 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"go/build"
+	"io/ioutil"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -41,6 +45,10 @@ var runUnderHost bool
 var telemetryOverride string
 var maxPendingTransactions uint64
 var waitSec uint32
+var newNodeNetwork string
+var newNodeDestination string
+var newNodeArchival bool
+var newNodeIndexer bool
 
 func init() {
 	nodeCmd.AddCommand(startCmd)
@@ -52,6 +60,7 @@ func init() {
 	nodeCmd.AddCommand(generateTokenCmd)
 	nodeCmd.AddCommand(pendingTxnsCmd)
 	nodeCmd.AddCommand(waitCmd)
+	nodeCmd.AddCommand(createCmd)
 
 	startCmd.Flags().StringVarP(&peerDial, "peer", "p", "", "Peer address to dial for initial connection")
 	startCmd.Flags().StringVarP(&listenIP, "listen", "l", "", "Endpoint / REST address to listen on")
@@ -64,8 +73,15 @@ func init() {
 	startCmd.Flags().StringVarP(&telemetryOverride, "telemetry", "t", "", `Enable telemetry if supported (Use "true", "false", "0" or "1")`)
 	restartCmd.Flags().StringVarP(&telemetryOverride, "telemetry", "t", "", `Enable telemetry if supported (Use "true", "false", "0" or "1")`)
 	pendingTxnsCmd.Flags().Uint64VarP(&maxPendingTransactions, "maxPendingTxn", "m", 0, "Cap the number of txns to fetch")
-
 	waitCmd.Flags().Uint32VarP(&waitSec, "waittime", "w", 5, "Time (in seconds) to wait for node to make progress")
+	createCmd.Flags().StringVarP(&newNodeNetwork, "network", "n", "testnet", "Network the new node should point to")
+	createCmd.Flags().StringVarP(&newNodeDestination, "destination", "dest", "", "Destination path for the new node")
+	createCmd.Flags().BoolVarP(&newNodeArchival, "archival", "a", false, "Make the new node archival, storing all blocks")
+	createCmd.Flags().BoolVarP(&runUnderHost, "hosted", "H", false, "Run algod hosted by algoh")
+	createCmd.Flags().BoolVarP(&newNodeIndexer, "indexer", "i", false, "The new node will run with an indexer")
+	createCmd.Flags().StringVarP(&peerDial, "peer", "p", "", "Peer address to dial for initial connection")
+	createCmd.Flags().StringVarP(&listenIP, "listen", "l", "", "Endpoint / REST address to listen on")
+
 }
 
 var nodeCmd = &cobra.Command{
@@ -371,6 +387,89 @@ var waitCmd = &cobra.Command{
 					os.Exit(0)
 				}
 			}
+		}
+	},
+}
+
+var createCmd = &cobra.Command{
+	Use:   "create",
+	Short: "create a node at the desired data directory for the desired network",
+	Long:  "create a node at the desired data directory for the desired network",
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, _ []string) {
+
+		validNetworks := map[string]bool{"mainnet": true, "testnet": true, "devnet": true}
+		if !validNetworks[newNodeNetwork] {
+			reportErrorf(errorNodeCreation, "passed network name invalid")
+		}
+
+		gopath := os.Getenv("GOPATH")
+		if gopath == "" {
+			gopath = build.Default.GOPATH
+		}
+		firstChoicePath := filepath.Join(gopath, "genesisfiles", newNodeNetwork, "genesis.json")
+		secondChoicePath := filepath.Join("/var/lib/algorand/genesis/", newNodeNetwork, "genesis.json")
+		thirdChoicePath := filepath.Join(gopath, "genesisfiles", "genesis", newNodeNetwork, "genesis.json")
+		paths := [...]string{firstChoicePath, secondChoicePath, thirdChoicePath}
+		correctPath := ""
+		for _, pathCandidate := range paths {
+			if _, err := os.Stat(pathCandidate); err == nil {
+				correctPath = pathCandidate
+				break
+			}
+		}
+		if correctPath == "" {
+			reportErrorf(errorNodeCreation, "no genesis file found")
+		}
+		genesisInput, err := ioutil.ReadFile(correctPath)
+		if err != nil {
+			reportErrorf(errorNodeCreation, err)
+		}
+		destPath := filepath.Join(newNodeDestination, "genesis.json")
+		err = ioutil.WriteFile(destPath, genesisInput, 0666)
+		if err != nil {
+			reportErrorf(errorNodeCreation, err)
+		}
+
+		var configBuilder strings.Builder
+		configBuilder.WriteString("{")
+		prefix := ""
+		if newNodeArchival {
+			configBuilder.WriteString(prefix)
+			prefix = ","
+			configBuilder.WriteString("\"Archival\": true")
+		}
+		if newNodeIndexer {
+			configBuilder.WriteString(prefix)
+			prefix = ","
+			configBuilder.WriteString("\"IsIndexerActive\": false")
+		}
+		if runUnderHost {
+			configBuilder.WriteString(prefix)
+			prefix = ","
+			configBuilder.WriteString("\"RunHosted\": false")
+		}
+		if peerDial != "" {
+			configBuilder.WriteString(prefix)
+			prefix = ","
+			configBuilder.WriteString("\"NetAddress\": \"")
+			configBuilder.WriteString(peerDial)
+			configBuilder.WriteString("\"")
+		}
+		if listenIP != "" {
+			configBuilder.WriteString(prefix)
+			prefix = ","
+			configBuilder.WriteString("\"EndpointAddress\": \"")
+			configBuilder.WriteString(listenIP)
+			configBuilder.WriteString("\"")
+		}
+		configBuilder.WriteString("}")
+		configDest := filepath.Join(newNodeDestination, "config.json")
+		configString := configBuilder.String()
+		configBytes := []byte(configString)
+		err = ioutil.WriteFile(configDest, configBytes, 0666)
+		if err != nil {
+			reportErrorf(errorNodeCreation, err)
 		}
 	},
 }

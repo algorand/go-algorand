@@ -63,6 +63,7 @@ const (
 	errorNodeFailedToStart           = "Algorand node failed to start: %s"
 	errorNodeRunning                 = "Node must be stopped before writing APIToken"
 	errorNodeFailGenToken            = "Cannot generate API token: %s"
+	errorNodeCreation                = "Error during node creation: %v"
 	errorKill                        = "Cannot kill node: %s"
 	errorCloningNode                 = "Error cloning the node: %s"
 	infoNodeCloned                   = "Node cloned successfully to: %s"
