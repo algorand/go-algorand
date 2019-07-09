@@ -232,6 +232,6 @@ func (accountList *AccountsList) outputAccount(addr string, acctInfo models.Acco
 	}
 	fmt.Print("\n")
 	for curid, bal := range acctInfo.Currencies {
-		fmt.Printf("\t%20d units of sub-currency %s\n", bal, curid)
+		fmt.Printf("\t%20d units of sub-currency %s\n", bal, accountList.getNameByAddress(curid))
 	}
 }
