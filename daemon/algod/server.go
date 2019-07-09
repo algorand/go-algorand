@@ -246,6 +246,8 @@ func (s *Server) Stop() {
 	// Attempt to log a shutdown event before we exit...
 	s.log.Event(telemetryspec.ApplicationState, telemetryspec.ShutdownEvent)
 
+	s.node.Stop()
+
 	err := server.Shutdown(context.Background())
 	if err != nil {
 		s.log.Error(err)
