@@ -544,52 +544,11 @@ func changeAccountOnlineStatus(acct string, part *algodAcct.Participation, goOnl
 
 		if noWaitAfterSend {
 			fmt.Println("Note: status will not change until transaction is finalized")
-			return nil
 		}
 
-		// Get current round information
-		stat, err := client.Status()
-		if err != nil {
-			return fmt.Errorf(errorRequestFail, err)
-		}
-
-		for {
-			// Check if we know about the transaction yet
-			txn, err := client.PendingTransactionInformation(txid)
-			if err != nil {
-				return fmt.Errorf(errorRequestFail, err)
-			}
-
-			if txn.ConfirmedRound > 0 {
-				reportInfof(infoTxCommitted, txid, txn.ConfirmedRound)
-				break
-			}
-
-			if txn.PoolError != "" {
-				return fmt.Errorf(txPoolError, txid, txn.PoolError)
-			}
-
-			reportInfof(infoTxPending, txid, stat.LastRound)
-			stat, err = client.WaitForRound(stat.LastRound + 1)
-			if err != nil {
-				return fmt.Errorf(errorRequestFail, err)
-			}
-		}
+		waitForCommit(client, txid)
 	} else {
-		// Wrap in a transactions.SignedTxn with an empty sig.
-		// This way protocol.Encode will encode the transaction type
-		stxn, err := transactions.AssembleSignedTxn(utx, crypto.Signature{}, crypto.MultisigSig{})
-		if err != nil {
-			return fmt.Errorf(errorConstructingTX, err)
-		}
-
-		stxn = populateBlankMultisig(client, dataDir, wallet, stxn)
-
-		// Write the SignedTxn to the output file
-		err = ioutil.WriteFile(txFile, protocol.Encode(stxn), 0600)
-		if err != nil {
-			return fmt.Errorf(fileWriteError, txFile, err)
-		}
+		writeTxnToFile(client, dataDir, wallet, utx, txFile)
 	}
 	return nil
 }
