@@ -318,7 +318,7 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 	if len(currencies) > 0 {
 		currenciesStr = make(map[string]uint64)
 		for curid, bal := range currencies {
-			currenciesStr[curid.GetChecksumAddress().String()] = bal
+			currenciesStr[curid.String()] = bal
 		}
 	}
 
