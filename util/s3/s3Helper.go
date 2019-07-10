@@ -199,14 +199,24 @@ func makeS3Session(credentials *credentials.Credentials, bucket string) (helper 
 	return
 }
 
-// GetLatestVersion returns the latest version details for a given standard filename prefix
-func (helper *Helper) GetLatestVersion(channel string) (maxVersion uint64, maxVersionName string, err error) {
-	return helper.GetVersion(channel, 0)
+// GetLatestUpdateVersion returns the latest version details for the 'node' package
+func (helper *Helper) GetLatestUpdateVersion(channel string) (maxVersion uint64, maxVersionName string, err error) {
+	return helper.GetUpdateVersion(channel, 0)
 }
 
-// GetVersion ensures the specified version is present and returns the name of the file, if found
+// GetLatestPackageVersion returns the latest version details for a given package name (eg node, install, tools)
+func (helper *Helper) GetLatestPackageVersion(channel string, packageName string) (maxVersion uint64, maxVersionName string, err error) {
+	return helper.GetPackageVersion(channel, packageName, 0)
+}
+
+// GetLatestPackageFilesVersion returns the latest version details for a given standard filename prefix
+func (helper *Helper) GetLatestPackageFilesVersion(channel string, packagePrefix string) (maxVersion uint64, maxVersionName string, err error) {
+	return helper.GetPackageFilesVersion(channel, packagePrefix, 0)
+}
+
+// GetUpdateVersion ensures the specified version is present and returns the name of the file, if found
 // Or if specificVersion == 0, returns the name of the file with the max version
-func (helper *Helper) GetVersion(channel string, specificVersion uint64) (maxVersion uint64, maxVersionName string, err error) {
+func (helper *Helper) GetUpdateVersion(channel string, specificVersion uint64) (maxVersion uint64, maxVersionName string, err error) {
 	return helper.GetPackageVersion(channel, "node", specificVersion)
 }
 
@@ -241,12 +251,18 @@ func (helper *Helper) UploadFiles(subFolder string, files []string) error {
 
 // GetPackageVersion return the package version
 func (helper *Helper) GetPackageVersion(channel string, pkg string, specificVersion uint64) (maxVersion uint64, maxVersionName string, err error) {
+		osName := runtime.GOOS
+		arch := runtime.GOARCH
+		prefix := fmt.Sprintf("%s_%s_%s-%s", pkg, channel, osName, arch)
+		return helper.GetPackageFilesVersion(channel, prefix, specificVersion)
+}
+
+// GetPackageFilesVersion return the package version
+func (helper *Helper) GetPackageFilesVersion(channel string, pkgFiles string, specificVersion uint64) (maxVersion uint64, maxVersionName string, err error) {
 	maxVersion = 0
 	maxVersionName = ""
 
-	osName := runtime.GOOS
-	arch := runtime.GOARCH
-	prefix := fmt.Sprintf("channel/%s/%s_%s_%s-%s", channel, pkg, channel, osName, arch)
+	prefix := fmt.Sprintf("channel/%s/%s", channel, pkgFiles)
 	svc := s3.New(helper.session)
 	input := &s3.ListObjectsInput{
 		Bucket:  &helper.bucket,
@@ -254,7 +270,7 @@ func (helper *Helper) GetPackageVersion(channel string, pkg string, specificVers
 		MaxKeys: aws.Int64(500),
 	}
 
-	fmt.Fprintf(os.Stderr, "Checking for files matching: '%s' in bucket %s\n", prefix, helper.bucket)
+	fmt.Fprintf(os.Stdout, "Checking for files matching: '%s' in bucket %s\n", prefix, helper.bucket)
 
 	result, err := svc.ListObjects(input)
 	if err != nil {

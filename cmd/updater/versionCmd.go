@@ -65,7 +65,7 @@ var checkCmd = &cobra.Command{
 		if err != nil {
 			exitErrorf("Error creating s3 session %s\n", err.Error())
 		} else {
-			version, _, err := s3Session.GetLatestVersion(channel)
+			version, _, err := s3Session.GetLatestUpdateVersion(channel)
 			if err != nil {
 				exitErrorf("Error getting latest version from s3 %s\n", err.Error())
 			}
@@ -92,7 +92,7 @@ var getCmd = &cobra.Command{
 		if err != nil {
 			exitErrorf("Error creating s3 session %s\n", err.Error())
 		} else {
-			version, name, err := s3Session.GetVersion(channel, specificVersion)
+			version, name, err := s3Session.GetUpdateVersion(channel, specificVersion)
 			if err != nil {
 				exitErrorf("Error getting latest version from s3 %s\n", err.Error())
 			}

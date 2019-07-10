@@ -19,6 +19,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 
 	"github.com/algorand/go-algorand/util/s3"
@@ -41,14 +42,14 @@ func downloadConfigPackage(channelName string, targetDir string, configBucket st
 	if configBucket == "" {
 		configBucket = s3.GetS3ReleaseBucket()
 	}
-	fmt.Fprintf(os.Stdout, "Downloading configuration package '%s' from bucket '%s'\n", packageFile, configBucket)
+	fmt.Fprintf(os.Stdout, "Downloading configuration package for channel '%s' from bucket '%s'\n", channelName, configBucket)
 	s3Session, err := s3.MakeS3SessionForDownloadWithBucket(configBucket)
 	if err != nil {
 		return
 	}
 
 	prefix := fmt.Sprintf("config_%s", channelName)
-	version, name, err := s3Session.GetLatestVersion(prefix)
+	version, name, err := s3Session.GetLatestPackageFilesVersion(channelName, prefix)
 	if err != nil {
 		return
 	}
@@ -57,7 +58,8 @@ func downloadConfigPackage(channelName string, targetDir string, configBucket st
 		return
 	}
 
-	packageFile = filepath.Join(targetDir, name)
+	fileName := path.Base(name)
+	packageFile = filepath.Join(targetDir, fileName)
 	file, err := os.Create(packageFile)
 	if err != nil {
 		return
