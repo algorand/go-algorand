@@ -155,16 +155,23 @@ func (mp *MultiPhonebook) GetAddresses(n int) []string {
 		total += sizes[i]
 		i++
 	}
-	all := make([]string, total)
-	pos := 0
+
+	addrSet := make(map[string]bool, total)
 	for pi, size := range sizes {
 		if addrs[pi] != nil {
-			copy(all[pos:], addrs[pi])
-			pos += len(addrs[pi])
+			mp.addAddressArrayToAdressSet(&addrSet, &(addrs[pi]))
 		} else {
 			xa := (*mp.phonebookMap[names[pi]]).GetAddresses(size)
-			copy(all[pos:], xa)
-			pos += len(xa)
+			mp.addAddressArrayToAdressSet(&addrSet, &xa)
+		}
+	}
+	pos := 0
+	all := make([]string, len(addrSet))
+
+	for addr := range addrSet {
+		if addrSet[addr] {
+			all[pos] = addr
+			pos++
 		}
 	}
 	out := all[:pos]
@@ -173,6 +180,12 @@ func (mp *MultiPhonebook) GetAddresses(n int) []string {
 		return out[:n]
 	}
 	return out
+}
+
+func (mp *MultiPhonebook) addAddressArrayToAdressSet(addrMap *map[string]bool, addrArray *[]string) {
+	for _, addr := range *addrArray {
+		(*addrMap)[addr] = true
+	}
 }
 
 // AddOrUpdatePhonebook adds or updates Phonebook in Phonebook map
