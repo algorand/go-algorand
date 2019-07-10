@@ -112,7 +112,7 @@ for var in "${VARIATION_ARRAY[@]}"; do
         popd
 
         # If Linux package, build debian (deb) package as well
-        if [[ ! -z "${BUILD_DEB}" && $(scripts/ostype.sh) = "linux" ]]; then
+        if [ ! -z "${BUILD_DEB}" -a $(scripts/ostype.sh) = "linux" ]; then
             DEBTMP=$(mktemp -d 2>/dev/null || mktemp -d -t "debtmp")
             trap "rm -rf ${DEBTMP}" 0
             scripts/build_deb.sh ${ARCH} ${DEBTMP}

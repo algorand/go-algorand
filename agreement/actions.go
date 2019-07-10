@@ -119,9 +119,21 @@ func (a networkAction) String() string {
 func (a networkAction) do(ctx context.Context, s *Service) {
 	if a.T == broadcastVotes {
 		tag := protocol.AgreementVoteTag
-		for _, uv := range a.UnauthenticatedVotes {
+		for i, uv := range a.UnauthenticatedVotes {
 			data := protocol.Encode(uv)
-			s.Network.Broadcast(tag, data)
+			sendErr := s.Network.Broadcast(tag, data)
+			if sendErr != nil {
+				s.log.Warnf("Network was unable to queue votes for broadcast(%v). %d / %d votes for round %d period %d step %d were dropped.",
+					sendErr,
+					len(a.UnauthenticatedVotes)-i, len(a.UnauthenticatedVotes),
+					uv.R.Round,
+					uv.R.Period,
+					uv.R.Step)
+				break
+			}
+			if ctx.Err() != nil {
+				break
+			}
 		}
 		return
 	}
@@ -214,7 +226,7 @@ func (a ensureAction) do(ctx context.Context, s *Service) {
 		logEvent.Type = logspec.RoundConcluded
 		s.log.with(logEvent).Infof("committed round %v with pre-validated block %v", a.Certificate.Round, a.Certificate.Proposal)
 		s.log.EventWithDetails(telemetryspec.Agreement, telemetryspec.BlockAcceptedEvent, telemetryspec.BlockAcceptedEventDetails{
-			Address: a.Certificate.Proposal.OriginalProposer.GetChecksumAddress().String(),
+			Address: a.Certificate.Proposal.OriginalProposer.String(),
 			Hash:    a.Certificate.Proposal.BlockDigest.String(),
 			Round:   uint64(a.Certificate.Round),
 		})
@@ -229,7 +241,7 @@ func (a ensureAction) do(ctx context.Context, s *Service) {
 			logEvent.Type = logspec.RoundConcluded
 			s.log.with(logEvent).Infof("committed round %v with block %v", a.Certificate.Round, a.Certificate.Proposal)
 			s.log.EventWithDetails(telemetryspec.Agreement, telemetryspec.BlockAcceptedEvent, telemetryspec.BlockAcceptedEventDetails{
-				Address: a.Certificate.Proposal.OriginalProposer.GetChecksumAddress().String(),
+				Address: a.Certificate.Proposal.OriginalProposer.String(),
 				Hash:    a.Certificate.Proposal.BlockDigest.String(),
 				Round:   uint64(a.Certificate.Round),
 			})

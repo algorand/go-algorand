@@ -290,7 +290,7 @@ func (am *Tracker) LiveUpdateWithContext(ctx context.Context, wg *sync.WaitGroup
 		log.Debugf("Getting transactions for %d-%d",
 			am.LastRound+1, status.LastRound)
 
-		transactions, err := rc.TransactionsByAddr(am.AuctionKey.GetChecksumAddress().String(), am.LastRound+1, status.LastRound, math.MaxUint64)
+		transactions, err := rc.TransactionsByAddr(am.AuctionKey.String(), am.LastRound+1, status.LastRound, math.MaxUint64)
 		if err != nil {
 			log.Error(err)
 			fmt.Println(err)

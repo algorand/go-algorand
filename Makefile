@@ -151,7 +151,7 @@ $(KMD_API_SWAGGER_INJECT): $(KMD_API_SWAGGER_SPEC)
 
 build: buildsrc gen
 
-buildsrc: $(SRCPATH)/crypto/lib/libsodium.a node_exporter NONGO_BIN deps
+buildsrc: $(SRCPATH)/crypto/lib/libsodium.a node_exporter NONGO_BIN deps $(ALGOD_API_SWAGGER_INJECT) $(KMD_API_SWAGGER_INJECT)
 	cd $(SRCPATH) && \
 		go install $(GOTAGS) -ldflags="$(GOLDFLAGS)" $(SOURCES)
 	cd $(SRCPATH) && \
