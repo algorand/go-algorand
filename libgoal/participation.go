@@ -214,12 +214,12 @@ func (c *Client) InstallParticipationKeys(inputfile string) (part account.Partic
 		return
 	}
 
-        // After successful install, remove the input copy of the
-        // partkey so that old keys cannot be recovered after they
-        // are used by algod.  We try to delete the data inside
-        // sqlite first, so the key material is zeroed out from
-        // disk blocks, but regardless of whether that works, we
-        // delete the input file.  The consensus protocol version
+	// After successful install, remove the input copy of the
+	// partkey so that old keys cannot be recovered after they
+	// are used by algod.  We try to delete the data inside
+	// sqlite first, so the key material is zeroed out from
+	// disk blocks, but regardless of whether that works, we
+	// delete the input file.  The consensus protocol version
 	// is irrelevant for the maxuint64 round number we pass in.
 	partkey.DeleteOldKeys(basics.Round(math.MaxUint64), config.Consensus[protocol.ConsensusCurrentVersion])
 	os.Remove(inputfile)

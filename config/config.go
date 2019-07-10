@@ -229,7 +229,7 @@ func initConsensusProtocols() {
 		RewardUnit:                 1e6,
 		RewardsRateRefreshInterval: 5e5,
 
-		ApprovedUpgrades:     map[protocol.ConsensusVersion]bool{},
+		ApprovedUpgrades: map[protocol.ConsensusVersion]bool{},
 
 		NumProposers:           30,
 		SoftCommitteeSize:      2500,
@@ -512,6 +512,10 @@ type Local struct {
 	// local server
 	// API endpoint address
 	EndpointAddress string
+
+	// timeouts passed to the rest http.Server implementation
+	RestReadTimeoutSeconds  int
+	RestWriteTimeoutSeconds int
 
 	// SRV-based phonebook
 	DNSBootstrapID string

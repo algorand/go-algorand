@@ -25,22 +25,11 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-func TestAddressChecksum(t *testing.T) {
-	address := crypto.Hash([]byte("randomString"))
-	shortAddress := Address(address)
-	checksumAddress := shortAddress.GetChecksumAddress()
-
-	require.True(t, checksumAddress.IsValid())
-
-	require.Equal(t, shortAddress, checksumAddress.shortAddress)
-}
-
 func TestChecksumAddress_Unmarshal(t *testing.T) {
 	address := crypto.Hash([]byte("randomString"))
 	shortAddress := Address(address)
-	checksumAddress := shortAddress.GetChecksumAddress()
 
-	addr, err := UnmarshalChecksumAddress(checksumAddress.String())
+	addr, err := UnmarshalChecksumAddress(shortAddress.String())
 
 	require.Nil(t, err)
 
@@ -50,10 +39,9 @@ func TestChecksumAddress_Unmarshal(t *testing.T) {
 func TestAddressChecksumMalformedWrongChecksum(t *testing.T) {
 	address := crypto.Hash([]byte("randomString"))
 	shortAddress := Address(address)
-	checksumAddress := shortAddress.GetChecksumAddress()
 
 	// Change it slightly
-	_, err := UnmarshalChecksumAddress(checksumAddress.String() + "r")
+	_, err := UnmarshalChecksumAddress(shortAddress.String() + "r")
 
 	require.NotNil(t, err)
 }
@@ -67,10 +55,9 @@ func TestAddressChecksumShort(t *testing.T) {
 func TestAddressChecksumMalformedWrongChecksumSpace(t *testing.T) {
 	address := crypto.Hash([]byte("randomString"))
 	shortAddress := Address(address)
-	checksumAddress := shortAddress.GetChecksumAddress()
 
 	// Flip a bit
-	_, err := UnmarshalChecksumAddress(checksumAddress.String() + " ")
+	_, err := UnmarshalChecksumAddress(shortAddress.String() + " ")
 
 	require.NotNil(t, err)
 }
@@ -78,10 +65,9 @@ func TestAddressChecksumMalformedWrongChecksumSpace(t *testing.T) {
 func TestAddressChecksumMalformedWrongAddress(t *testing.T) {
 	address := crypto.Hash([]byte("randomString"))
 	shortAddress := Address(address)
-	checksumAddress := shortAddress.GetChecksumAddress()
 
 	// Flip a bit
-	_, err := UnmarshalChecksumAddress("4" + checksumAddress.String())
+	_, err := UnmarshalChecksumAddress("4" + shortAddress.String())
 
 	require.NotNil(t, err)
 }
@@ -89,10 +75,9 @@ func TestAddressChecksumMalformedWrongAddress(t *testing.T) {
 func TestAddressChecksumMalformedWrongAddressSpaces(t *testing.T) {
 	address := crypto.Hash([]byte("randomString"))
 	shortAddress := Address(address)
-	checksumAddress := shortAddress.GetChecksumAddress()
 
 	// Flip a bit
-	_, err := UnmarshalChecksumAddress(" " + checksumAddress.String())
+	_, err := UnmarshalChecksumAddress(" " + shortAddress.String())
 
 	require.NotNil(t, err)
 }
@@ -115,7 +100,7 @@ type TestOb struct {
 func TestAddressMarshalUnmarshal(t *testing.T) {
 	var addr Address
 	crypto.RandBytes(addr[:])
-	testob := TestOb{addr}
+	testob := TestOb{Aaaa: addr}
 	data := protocol.EncodeJSON(testob)
 	var nob TestOb
 	err := protocol.DecodeJSON(data, &nob)

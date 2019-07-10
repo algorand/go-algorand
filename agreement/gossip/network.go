@@ -121,26 +121,28 @@ func (i *networkImpl) Messages(t protocol.Tag) <-chan agreement.Message {
 	}
 }
 
-func (i *networkImpl) Broadcast(t protocol.Tag, data []byte) {
-	err := i.net.Broadcast(context.Background(), t, data, false, nil)
+func (i *networkImpl) Broadcast(t protocol.Tag, data []byte) (err error) {
+	err = i.net.Broadcast(context.Background(), t, data, false, nil)
 	if err != nil {
 		logging.Base().Infof("agreement: could not broadcast message with tag %v: %v", t, err)
 	}
+	return
 }
 
-func (i *networkImpl) Relay(h agreement.MessageHandle, t protocol.Tag, data []byte) {
+func (i *networkImpl) Relay(h agreement.MessageHandle, t protocol.Tag, data []byte) (err error) {
 	metadata := messageMetadataFromHandle(h)
 	if metadata == nil { // synthentic loopback
-		err := i.net.Broadcast(context.Background(), t, data, false, nil)
+		err = i.net.Broadcast(context.Background(), t, data, false, nil)
 		if err != nil {
 			logging.Base().Infof("agreement: could not (pseudo)relay message with tag %v: %v", t, err)
 		}
 	} else {
-		err := i.net.Relay(context.Background(), t, data, false, metadata.raw.Sender)
+		err = i.net.Relay(context.Background(), t, data, false, metadata.raw.Sender)
 		if err != nil {
 			logging.Base().Infof("agreement: could not relay message from %v with tag %v: %v", metadata.raw.Sender, t, err)
 		}
 	}
+	return
 }
 
 func (i *networkImpl) Disconnect(h agreement.MessageHandle) {

@@ -410,7 +410,7 @@ func (c *Client) LookupMultisigAccount(walletHandle []byte, multisigAddr string)
 
 	var pks []string
 	for _, pk := range resp.PKs {
-		addr := basics.Address(pk).GetChecksumAddress().String()
+		addr := basics.Address(pk).String()
 		pks = append(pks, addr)
 	}
 
