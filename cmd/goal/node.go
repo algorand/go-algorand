@@ -20,7 +20,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"go/build"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -34,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/util"
+	"github.com/algorand/go-algorand/util/codecs"
 	"github.com/algorand/go-algorand/util/tokens"
 )
 
@@ -75,12 +75,12 @@ func init() {
 	pendingTxnsCmd.Flags().Uint64VarP(&maxPendingTransactions, "maxPendingTxn", "m", 0, "Cap the number of txns to fetch")
 	waitCmd.Flags().Uint32VarP(&waitSec, "waittime", "w", 5, "Time (in seconds) to wait for node to make progress")
 	createCmd.Flags().StringVarP(&newNodeNetwork, "network", "n", "testnet", "Network the new node should point to")
-	createCmd.Flags().StringVarP(&newNodeDestination, "destination", "q", "", "Destination path for the new node")
+	createCmd.Flags().StringVar(&newNodeDestination, "destination", "", "Destination path for the new node")
 	createCmd.Flags().BoolVarP(&newNodeArchival, "archival", "a", false, "Make the new node archival, storing all blocks")
-	createCmd.Flags().BoolVarP(&runUnderHost, "hosted", "H", false, "Run algod hosted by algoh")
-	createCmd.Flags().BoolVarP(&newNodeIndexer, "indexer", "i", false, "The new node will run with an indexer")
+	createCmd.Flags().BoolVarP(&runUnderHost, "hosted", "H", false, "Configure the new node to run hosted by algoh")
+	createCmd.Flags().BoolVarP(&newNodeIndexer, "indexer", "i", false, "Configure the new node to enable the indexer feature (implies --archival)")
 	createCmd.Flags().StringVarP(&peerDial, "peer", "p", "", "Peer address to dial for initial connection")
-	createCmd.Flags().StringVarP(&listenIP, "listen", "l", "", "Endpoint / REST address to listen on")
+	createCmd.Flags().StringVarP(&listenIP, "listen", "l", "", "REST API Endpoint (defaults to \"127.0.0.1:0\")")
 	createCmd.MarkFlagRequired("destination")
 }
 
@@ -398,81 +398,67 @@ var createCmd = &cobra.Command{
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 
+		// validate network input
 		validNetworks := map[string]bool{"mainnet": true, "testnet": true, "devnet": true}
 		if !validNetworks[newNodeNetwork] {
 			reportErrorf(errorNodeCreation, "passed network name invalid")
 		}
 
-		gopath := os.Getenv("GOPATH")
-		if gopath == "" {
-			gopath = build.Default.GOPATH
+		// locate genesis block
+		exePath, err := util.ExeDir()
+		if err != nil {
+			reportErrorln(errorNodeCreation, err)
 		}
-		firstChoicePath := filepath.Join(gopath, "bin", "genesisfiles", newNodeNetwork, "genesis.json")
+		firstChoicePath := filepath.Join(exePath, "genesisfiles", newNodeNetwork, "genesis.json")
 		secondChoicePath := filepath.Join("var", "lib", "algorand", "genesis", newNodeNetwork, "genesis.json")
-		thirdChoicePath := filepath.Join(gopath, "bin", "genesisfiles", "genesis", newNodeNetwork, "genesis.json")
-		paths := [...]string{firstChoicePath, secondChoicePath, thirdChoicePath}
+		thirdChoicePath := filepath.Join(exePath, "genesisfiles", "genesis", newNodeNetwork, "genesis.json")
+		paths := []string{firstChoicePath, secondChoicePath, thirdChoicePath}
 		correctPath := ""
 		for _, pathCandidate := range paths {
-			if _, err := os.Stat(pathCandidate); err == nil {
+			if util.FileExists(pathCandidate) {
 				correctPath = pathCandidate
 				break
 			}
 		}
 		if correctPath == "" {
-			reportErrorf(errorNodeCreation, "no genesis file found")
+			reportErrorf("Could not find genesis.json file. Paths checked: %v", strings.Join(paths, ","))
 		}
+
+		// verify destination does not exist, and attempt to create destination folder
+		if util.FileExists(newNodeDestination) {
+			reportErrorf(errorNodeCreation, "destination folder already exists")
+		}
+		destPath := filepath.Join(newNodeDestination, "genesis.json")
+		err = os.MkdirAll(newNodeDestination, 0666)
+		if err != nil {
+			reportErrorf(errorNodeCreation, "could not create destination folder")
+		}
+
+		// copy genesis block to destination
 		genesisInput, err := ioutil.ReadFile(correctPath)
 		if err != nil {
 			reportErrorf(errorNodeCreation, err)
 		}
-		destPath := filepath.Join(newNodeDestination, "genesis.json")
 		err = ioutil.WriteFile(destPath, genesisInput, 0666)
 		if err != nil {
 			reportErrorf(errorNodeCreation, err)
 		}
 
-		var configBuilder strings.Builder
-		configBuilder.WriteString("{")
-		prefix := ""
-		if newNodeArchival {
-			configBuilder.WriteString(prefix)
-			prefix = ","
-			configBuilder.WriteString("\"Archival\": true")
-		}
-		if newNodeIndexer {
-			configBuilder.WriteString(prefix)
-			prefix = ","
-			configBuilder.WriteString("\"IsIndexerActive\": true")
-		}
-		if runUnderHost {
-			configBuilder.WriteString(prefix)
-			prefix = ","
-			configBuilder.WriteString("\"RunHosted\": true")
-		}
+		// build config and save to destination
+		localConfig := config.GetDefaultLocal()
+		localConfig.Archival = newNodeArchival
+		localConfig.IsIndexerActive = newNodeIndexer
+		localConfig.RunHosted = runUnderHost
 		if peerDial != "" {
-			configBuilder.WriteString(prefix)
-			prefix = ","
-			configBuilder.WriteString("\"NetAddress\": \"")
-			configBuilder.WriteString(peerDial)
-			configBuilder.WriteString("\"")
+			localConfig.NetAddress = peerDial
 		}
 		if listenIP != "" {
-			configBuilder.WriteString(prefix)
-			prefix = ","
-			configBuilder.WriteString("\"EndpointAddress\": \"")
-			configBuilder.WriteString(listenIP)
-			configBuilder.WriteString("\"")
+			localConfig.EndpointAddress = listenIP
 		}
-		configBuilder.WriteString("}")
-		configString := configBuilder.String()
-		if configString != "{}" {
-			configDest := filepath.Join(newNodeDestination, "config.json")
-			configBytes := []byte(configString)
-			err = ioutil.WriteFile(configDest, configBytes, 0666)
-			if err != nil {
-				reportErrorf(errorNodeCreation, err)
-			}
+		configDest := filepath.Join(newNodeDestination, "config.json")
+		err = codecs.SaveNonDefaultValuesToFile(configDest, localConfig, config.GetDefaultLocal(), nil, true)
+		if err != nil {
+			reportErrorf(errorNodeCreation, err)
 		}
-
 	},
 }
