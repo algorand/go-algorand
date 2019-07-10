@@ -510,52 +510,16 @@ var allocCurrencyCmd = &cobra.Command{
 			// Report tx details to user
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
-			if noWaitAfterSend {
-				return
-			}
-
-			// Get current round information
-			stat, err := client.Status()
-			if err != nil {
-				reportErrorf(errorRequestFail, err)
-			}
-
-			for {
-				// Check if we know about the transaction yet
-				txn, err := client.PendingTransactionInformation(txid)
+			if !noWaitAfterSend {
+				err = waitForCommit(client, txid)
 				if err != nil {
-					reportErrorf(errorRequestFail, err)
-				}
-
-				if txn.ConfirmedRound > 0 {
-					reportInfof(infoTxCommitted, txid, txn.ConfirmedRound)
-					break
-				}
-
-				if txn.PoolError != "" {
-					reportErrorf(txPoolError, txid, txn.PoolError)
-				}
-
-				reportInfof(infoTxPending, txid, stat.LastRound)
-				stat, err = client.WaitForRound(stat.LastRound + 1)
-				if err != nil {
-					reportErrorf(errorRequestFail, err)
+					reportErrorf(err.Error())
 				}
 			}
 		} else {
-			// Wrap in a transactions.SignedTxn with an empty sig.
-			// This way protocol.Encode will encode the transaction type
-			stxn, err := transactions.AssembleSignedTxn(tx, crypto.Signature{}, crypto.MultisigSig{})
+			err = writeTxnToFile(client, false, dataDir, walletName, tx, txFilename)
 			if err != nil {
-				reportErrorf(errorConstructingTX, err)
-			}
-
-			stxn = populateBlankMultisig(client, dataDir, walletName, stxn)
-
-			// Write the SignedTxn to the output file
-			err = ioutil.WriteFile(txFilename, protocol.Encode(stxn), 0600)
-			if err != nil {
-				reportErrorf(fileWriteError, txFilename, err)
+				reportErrorf(err.Error())
 			}
 		}
 	},
@@ -622,52 +586,16 @@ var sendCurrencyCmd = &cobra.Command{
 			// Report tx details to user
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
-			if noWaitAfterSend {
-				return
-			}
-
-			// Get current round information
-			stat, err := client.Status()
-			if err != nil {
-				reportErrorf(errorRequestFail, err)
-			}
-
-			for {
-				// Check if we know about the transaction yet
-				txn, err := client.PendingTransactionInformation(txid)
+			if !noWaitAfterSend {
+				err = waitForCommit(client, txid)
 				if err != nil {
-					reportErrorf(errorRequestFail, err)
-				}
-
-				if txn.ConfirmedRound > 0 {
-					reportInfof(infoTxCommitted, txid, txn.ConfirmedRound)
-					break
-				}
-
-				if txn.PoolError != "" {
-					reportErrorf(txPoolError, txid, txn.PoolError)
-				}
-
-				reportInfof(infoTxPending, txid, stat.LastRound)
-				stat, err = client.WaitForRound(stat.LastRound + 1)
-				if err != nil {
-					reportErrorf(errorRequestFail, err)
+					reportErrorf(err.Error())
 				}
 			}
 		} else {
-			// Wrap in a transactions.SignedTxn with an empty sig.
-			// This way protocol.Encode will encode the transaction type
-			stxn, err := transactions.AssembleSignedTxn(tx, crypto.Signature{}, crypto.MultisigSig{})
+			err = writeTxnToFile(client, false, dataDir, walletName, tx, txFilename)
 			if err != nil {
-				reportErrorf(errorConstructingTX, err)
-			}
-
-			stxn = populateBlankMultisig(client, dataDir, walletName, stxn)
-
-			// Write the SignedTxn to the output file
-			err = ioutil.WriteFile(txFilename, protocol.Encode(stxn), 0600)
-			if err != nil {
-				reportErrorf(fileWriteError, txFilename, err)
+				reportErrorf(err.Error())
 			}
 		}
 	},
