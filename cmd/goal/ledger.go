@@ -68,7 +68,7 @@ var supplyCmd = &cobra.Command{
 var blockCmd = &cobra.Command{
 	Use:   "dumpblock <round>",
 	Short: "Dump ledger block.",
-	Long:  "Dump ledger block.",
+	Long:  "Dump a specific block from from the ledger, in msgpack or json format",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()

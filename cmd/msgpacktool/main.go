@@ -44,8 +44,9 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/algorand/go-algorand/util/msgpack"
 	"os"
+	
+	"github.com/algorand/go-algorand/util/msgpack"
 )
 
 var mpToJSON = flag.Bool("d", false, "Decode msgpack to JSON")
