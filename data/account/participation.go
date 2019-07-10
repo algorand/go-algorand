@@ -90,7 +90,7 @@ func (part Participation) DeleteOldKeys(current basics.Round, proto config.Conse
 	part.Voting.DeleteBeforeFineGrained(basics.OneTimeIDForRound(current, keyDilution), keyDilution)
 	raw := protocol.Encode(part.Voting.Snapshot())
 
-	return part.Store.Atomic(func(tx *sql.Tx) error {
+	return part.Store.Atomic("accountUpdateParticipationVoting", func(tx *sql.Tx) error {
 		_, err := tx.Exec("UPDATE ParticipationAccount SET voting=?", raw)
 		if err != nil {
 			return fmt.Errorf("Participation.DeleteOldKeys: failed to update account: %v", err)
@@ -101,7 +101,7 @@ func (part Participation) DeleteOldKeys(current basics.Round, proto config.Conse
 
 // PersistNewParent writes a new parent address to the partkey database.
 func (part Participation) PersistNewParent() error {
-	return part.Store.Atomic(func(tx *sql.Tx) error {
+	return part.Store.Atomic("accountUpdateParticipationParent", func(tx *sql.Tx) error {
 		_, err := tx.Exec("UPDATE ParticipationAccount SET parent=?", part.Parent[:])
 		return err
 	})
@@ -186,7 +186,7 @@ func (part Participation) Persist() error {
 	rawVRF := protocol.Encode(part.VRF)
 	rawVoting := protocol.Encode(part.Voting.Snapshot())
 
-	return part.Store.Atomic(func(tx *sql.Tx) error {
+	return part.Store.Atomic("accountInstallDatabase", func(tx *sql.Tx) error {
 		err := partInstallDatabase(tx)
 		if err != nil {
 			return fmt.Errorf("Participation.persist: failed to install database: %v", err)
@@ -204,7 +204,7 @@ func (part Participation) Persist() error {
 // Migrate is called when loading participation keys.
 // Calls through to the migration helper and returns the result.
 func Migrate(partDB db.Accessor) error {
-	return partDB.Atomic(func(tx *sql.Tx) error {
+	return partDB.Atomic("accountMigrateParticipation", func(tx *sql.Tx) error {
 		return partMigrate(tx)
 	})
 }

@@ -127,7 +127,7 @@ func Retry(fn func() error) (err error) {
 
 // Atomic executes a piece of code with respect to the database atomically.
 // For transactions where readOnly is false, sync determines whether or not to wait for the result.
-func (db Accessor) Atomic(fn idemFn) (err error) {
+func (db Accessor) Atomic(fnDescription string, fn idemFn) (err error) {
 	descr := "w"
 	if db.readOnly {
 		descr = "r"
@@ -138,9 +138,9 @@ func (db Accessor) Atomic(fn idemFn) (err error) {
 		end := time.Now()
 		delta := end.Sub(start)
 		if delta > time.Second {
-			logging.Base().Warnf("dbatomic(%v): tx took %v", descr, delta)
+			logging.Base().With("description", fnDescription).Warnf("dbatomic(%v): tx took %v", descr, delta)
 		} else if delta > time.Millisecond {
-			logging.Base().Debugf("dbatomic(%v): tx took %v", descr, delta)
+			logging.Base().With("description", fnDescription).Debugf("dbatomic(%v): tx took %v", descr, delta)
 		}
 	}()
 
@@ -175,7 +175,7 @@ func (db Accessor) Atomic(fn idemFn) (err error) {
 				logging.Base().Errorf("dbatomic(%v): %d retries (last err: %v)", descr, i, err)
 				return
 			}
-			logging.Base().Warnf("dbatomic(%v): %d retries (last err: %v)", descr, i, err)
+			logging.Base().With("description", fnDescription).Warnf("dbatomic(%v): %d retries (last err: %v)", descr, i, err)
 		}
 
 		tx, err = conn.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable, ReadOnly: db.readOnly})
