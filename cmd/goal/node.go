@@ -49,6 +49,7 @@ var newNodeNetwork string
 var newNodeDestination string
 var newNodeArchival bool
 var newNodeIndexer bool
+var newNodeRelay string
 
 func init() {
 	nodeCmd.AddCommand(startCmd)
@@ -74,14 +75,16 @@ func init() {
 	restartCmd.Flags().StringVarP(&telemetryOverride, "telemetry", "t", "", `Enable telemetry if supported (Use "true", "false", "0" or "1")`)
 	pendingTxnsCmd.Flags().Uint64VarP(&maxPendingTransactions, "maxPendingTxn", "m", 0, "Cap the number of txns to fetch")
 	waitCmd.Flags().Uint32VarP(&waitSec, "waittime", "w", 5, "Time (in seconds) to wait for node to make progress")
-	createCmd.Flags().StringVarP(&newNodeNetwork, "network", "n", "testnet", "Network the new node should point to")
+	createCmd.Flags().StringVar(&newNodeNetwork, "network", "testnet", "Network the new node should point to")
 	createCmd.Flags().StringVar(&newNodeDestination, "destination", "", "Destination path for the new node")
-	createCmd.Flags().BoolVarP(&newNodeArchival, "archival", "a", false, "Make the new node archival, storing all blocks")
-	createCmd.Flags().BoolVarP(&runUnderHost, "hosted", "H", false, "Configure the new node to run hosted by algoh")
-	createCmd.Flags().BoolVarP(&newNodeIndexer, "indexer", "i", false, "Configure the new node to enable the indexer feature (implies --archival)")
-	createCmd.Flags().StringVarP(&peerDial, "peer", "p", "", "Peer address to dial for initial connection")
-	createCmd.Flags().StringVarP(&listenIP, "listen", "l", "", "REST API Endpoint (defaults to \"127.0.0.1:0\")")
+	localDefaults := config.GetDefaultLocal()
+	createCmd.Flags().BoolVarP(&newNodeArchival, "archival", "a", localDefaults.Archival, "Make the new node archival, storing all blocks")
+	createCmd.Flags().BoolVarP(&runUnderHost, "hosted", "H", localDefaults.RunHosted, "Configure the new node to run hosted by algoh")
+	createCmd.Flags().BoolVarP(&newNodeIndexer, "indexer", "i", localDefaults.IsIndexerActive, "Configure the new node to enable the indexer feature (implies --archival)")
+	createCmd.Flags().StringVar(&newNodeRelay, "relay", localDefaults.NetAddress, "IP address that will be used for incoming connections as a relay")
+	createCmd.Flags().StringVar(&listenIP, "api", localDefaults.EndpointAddress, "REST API Endpoint")
 	createCmd.MarkFlagRequired("destination")
+	createCmd.MarkFlagRequired("network")
 }
 
 var nodeCmd = &cobra.Command{
@@ -446,11 +449,11 @@ var createCmd = &cobra.Command{
 
 		// build config and save to destination
 		localConfig := config.GetDefaultLocal()
-		localConfig.Archival = newNodeArchival
+		localConfig.Archival = newNodeArchival || newNodeRelay != "" || newNodeIndexer
 		localConfig.IsIndexerActive = newNodeIndexer
 		localConfig.RunHosted = runUnderHost
-		if peerDial != "" {
-			localConfig.NetAddress = peerDial
+		if newNodeRelay != "" {
+			localConfig.NetAddress = newNodeRelay
 		}
 		if listenIP != "" {
 			localConfig.EndpointAddress = listenIP
