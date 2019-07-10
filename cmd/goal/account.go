@@ -533,24 +533,24 @@ func changeAccountOnlineStatus(acct string, part *algodAcct.Participation, goOnl
 		return err
 	}
 
-	if txFile == "" {
-		// Sign & broadcast the transaction
-		wh, pw := ensureWalletHandleMaybePassword(dataDir, wallet, true)
-		txid, err := client.SignAndBroadcastTransaction(wh, pw, utx)
-		if err != nil {
-			return fmt.Errorf(errorOnlineTX, err)
-		}
-		fmt.Printf("Transaction id for status change transaction: %s\n", txid)
-
-		if noWaitAfterSend {
-			fmt.Println("Note: status will not change until transaction is finalized")
-		}
-
-		waitForCommit(client, txid)
-	} else {
-		writeTxnToFile(client, dataDir, wallet, utx, txFile)
+	if txFile != "" {
+		return writeTxnToFile(client, false, dataDir, wallet, utx, txFile)
 	}
-	return nil
+
+	// Sign & broadcast the transaction
+	wh, pw := ensureWalletHandleMaybePassword(dataDir, wallet, true)
+	txid, err := client.SignAndBroadcastTransaction(wh, pw, utx)
+	if err != nil {
+		return fmt.Errorf(errorOnlineTX, err)
+	}
+	fmt.Printf("Transaction id for status change transaction: %s\n", txid)
+
+	if noWaitAfterSend {
+		fmt.Println("Note: status will not change until transaction is finalized")
+		return nil
+	}
+
+	return waitForCommit(client, txid)
 }
 
 var addParticipationKeyCmd = &cobra.Command{

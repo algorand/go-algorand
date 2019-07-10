@@ -98,22 +98,18 @@ var clerkCmd = &cobra.Command{
 	},
 }
 
-func waitForCommit(client libgoal.Client, txid string) {
-	if noWaitAfterSend {
-		return
-	}
-
+func waitForCommit(client libgoal.Client, txid string) error {
 	// Get current round information
 	stat, err := client.Status()
 	if err != nil {
-		reportErrorf(errorRequestFail, err)
+		return fmt.Errorf(errorRequestFail, err)
 	}
 
 	for {
 		// Check if we know about the transaction yet
 		txn, err := client.PendingTransactionInformation(txid)
 		if err != nil {
-			reportErrorf(errorRequestFail, err)
+			return fmt.Errorf(errorRequestFail, err)
 		}
 
 		if txn.ConfirmedRound > 0 {
@@ -122,43 +118,42 @@ func waitForCommit(client libgoal.Client, txid string) {
 		}
 
 		if txn.PoolError != "" {
-			reportErrorf(txPoolError, txid, txn.PoolError)
+			return fmt.Errorf(txPoolError, txid, txn.PoolError)
 		}
 
 		reportInfof(infoTxPending, txid, stat.LastRound)
 		stat, err = client.WaitForRound(stat.LastRound + 1)
 		if err != nil {
-			reportErrorf(errorRequestFail, err)
+			return fmt.Errorf(errorRequestFail, err)
 		}
 	}
+
+	return nil
 }
 
-func writeTxnToFile(client libgoal.Client, dataDir string, walletName string, tx transactions.Transaction, filename string) {
+func writeTxnToFile(client libgoal.Client, signTx bool, dataDir string, walletName string, tx transactions.Transaction, filename string) error {
 	var err error
 	var stxn transactions.SignedTxn
-	if sign {
+	if signTx {
 		// Sign the transaction
 		wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
 		stxn, err = client.SignTransactionWithWallet(wh, pw, tx)
 		if err != nil {
-			reportErrorf(errorConstructingTX, err)
+			return err
 		}
 	} else {
 		// Wrap in a transactions.SignedTxn with an empty sig.
 		// This way protocol.Encode will encode the transaction type
 		stxn, err = transactions.AssembleSignedTxn(tx, crypto.Signature{}, crypto.MultisigSig{})
 		if err != nil {
-			reportErrorf(errorConstructingTX, err)
+			return err
 		}
 
 		stxn = populateBlankMultisig(client, dataDir, walletName, stxn)
 	}
 
 	// Write the SignedTxn to the output file
-	err = ioutil.WriteFile(filename, protocol.Encode(stxn), 0600)
-	if err != nil {
-		reportErrorf(fileWriteError, txFilename, err)
-	}
+	return ioutil.WriteFile(filename, protocol.Encode(stxn), 0600)
 }
 
 var sendCmd = &cobra.Command{
@@ -223,13 +218,21 @@ var sendCmd = &cobra.Command{
 			// Report tx details to user
 			reportInfof(infoTxIssued, amount, fromAddressResolved, toAddressResolved, txid, fee)
 
-			waitForCommit(client, txid)
+			if !noWaitAfterSend {
+				err = waitForCommit(client, txid)
+				if err != nil {
+					reportErrorf(err.Error())
+				}
+			}
 		} else {
 			payment, err := client.ConstructPayment(fromAddressResolved, toAddressResolved, fee, amount, noteBytes, closeToAddressResolved, basics.Round(firstValid), basics.Round(lastValid))
 			if err != nil {
 				reportErrorf(errorConstructingTX, err)
 			}
-			writeTxnToFile(client, dataDir, walletName, payment, txFilename)
+			err = writeTxnToFile(client, sign, dataDir, walletName, payment, txFilename)
+			if err != nil {
+				reportErrorf(err.Error())
+			}
 		}
 	},
 }
