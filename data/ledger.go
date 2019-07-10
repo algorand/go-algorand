@@ -227,7 +227,13 @@ func (l *Ledger) BalanceAndStatus(addr basics.Address) (money basics.MicroAlgos,
 	moneyWithoutPendingRewards = dataWithoutRewards.MicroAlgos
 
 	totalCurrency = dataWithoutRewards.ThisCurrencyTotal
-	currencies = dataWithoutRewards.Currencies
+	if len(dataWithoutRewards.Currencies) > 0 {
+		// Clone the map to avoid caller accidentally modifying the underlying data.
+		currencies = make(map[basics.Address]uint64)
+		for curid, bal := range dataWithoutRewards.Currencies {
+			currencies[curid] = bal
+		}
+	}
 
 	return
 }
