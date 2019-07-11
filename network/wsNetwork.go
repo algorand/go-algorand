@@ -736,9 +736,9 @@ func (wn *WebsocketNetwork) getForwardedConnectionAddress(header http.Header) (i
 	return
 }
 
-// checkOutgoingConnectionVariables check that the version and random-id in the request headers matches the server ones.
+// checkServerResponseVariables check that the version and random-id in the request headers matches the server ones.
 // it returns true if it's a match, and false otherwise.
-func (wn *WebsocketNetwork) checkOutgoingConnectionVariables(header http.Header, addr string) bool {
+func (wn *WebsocketNetwork) checkServerResponseVariables(header http.Header, addr string) bool {
 	otherVersion := header.Get(ProtocolVersionHeader)
 	if otherVersion != ProtocolVersion {
 		wn.log.Infof("new peer %s version mismatch, mine=%s theirs=%s, headers %#v", addr, ProtocolVersion, otherVersion, header)
@@ -1592,13 +1592,13 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	// checking the headers here is abit redundent; the server has already verified that the headers match. But we will need this in the future -
 	// once our server would support multiple protocols, we would need to verify here that we use the correct protocol, out of the "proposed" protocols we have provided in the
 	// request headers.
-	if !wn.checkOutgoingConnectionVariables(response.Header, gossipAddr) {
+	if !wn.checkServerResponseVariables(response.Header, gossipAddr) {
 		// The error was already logged, so no need to log again.
 		return
 	}
 
 	peer := &wsPeer{wsPeerCore: wsPeerCore{net: wn, rootURL: addr}, conn: conn, outgoing: true, incomingMsgFilter: wn.incomingMsgFilter}
-	peer.TelemetryGUID, _, _ = getCommonHeaders(response.Header)
+	peer.TelemetryGUID = response.Header.Get(TelemetryIDHeader)
 	peer.init(wn.config, wn.outgoingMessagesBufferSize)
 	wn.addPeer(peer)
 	localAddr, _ := wn.Address()

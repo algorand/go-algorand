@@ -1195,7 +1195,7 @@ func TestWebsocketNetwork_getCommonHeaders(t *testing.T) {
 	require.Equal(t, expectedPublicAddr, otherPublicAddr)
 }
 
-func TestWebsocketNetwork_checkOutgoingConnectionVariables(t *testing.T) {
+func TestWebsocketNetwork_checkServerResponseVariables(t *testing.T) {
 	wn := makeTestWebsocketNode(t)
 	wn.GenesisID = "genesis-id1"
 	wn.RandomID = "random-id1"
@@ -1203,29 +1203,29 @@ func TestWebsocketNetwork_checkOutgoingConnectionVariables(t *testing.T) {
 	header.Set(ProtocolVersionHeader, ProtocolVersion)
 	header.Set(NodeRandomHeader, wn.RandomID+"tag")
 	header.Set(GenesisHeader, wn.GenesisID)
-	require.Equal(t, true, wn.checkOutgoingConnectionVariables(header, "addressX"))
+	require.Equal(t, true, wn.checkServerResponseVariables(header, "addressX"))
 
 	noVersionHeader := http.Header{}
 	noVersionHeader.Set(NodeRandomHeader, wn.RandomID+"tag")
 	noVersionHeader.Set(GenesisHeader, wn.GenesisID)
-	require.Equal(t, false, wn.checkOutgoingConnectionVariables(noVersionHeader, "addressX"))
+	require.Equal(t, false, wn.checkServerResponseVariables(noVersionHeader, "addressX"))
 
 	noRandomHeader := http.Header{}
 	noRandomHeader.Set(ProtocolVersionHeader, ProtocolVersion)
 	noRandomHeader.Set(GenesisHeader, wn.GenesisID)
-	require.Equal(t, false, wn.checkOutgoingConnectionVariables(noRandomHeader, "addressX"))
+	require.Equal(t, false, wn.checkServerResponseVariables(noRandomHeader, "addressX"))
 
 	sameRandomHeader := http.Header{}
 	sameRandomHeader.Set(ProtocolVersionHeader, ProtocolVersion)
 	sameRandomHeader.Set(NodeRandomHeader, wn.RandomID)
 	sameRandomHeader.Set(GenesisHeader, wn.GenesisID)
-	require.Equal(t, false, wn.checkOutgoingConnectionVariables(sameRandomHeader, "addressX"))
+	require.Equal(t, false, wn.checkServerResponseVariables(sameRandomHeader, "addressX"))
 
 	differentGenesisIDHeader := http.Header{}
 	differentGenesisIDHeader.Set(ProtocolVersionHeader, ProtocolVersion)
 	differentGenesisIDHeader.Set(NodeRandomHeader, wn.RandomID+"tag")
 	differentGenesisIDHeader.Set(GenesisHeader, wn.GenesisID+"tag")
-	require.Equal(t, false, wn.checkOutgoingConnectionVariables(differentGenesisIDHeader, "addressX"))
+	require.Equal(t, false, wn.checkServerResponseVariables(differentGenesisIDHeader, "addressX"))
 }
 
 func (wn *WebsocketNetwork) broadcastWithTimestamp(tag protocol.Tag, data []byte, when time.Time) error {
