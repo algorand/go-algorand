@@ -26,6 +26,7 @@ if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-decon
 		systemctl --system daemon-reload >/dev/null || true
 		if [ -n "$2" ]; then
 			_dh_action=restart
+			deb-systemd-invoke restart algorand@\* >/dev/null || true
 		else
 			_dh_action=start
 		fi
