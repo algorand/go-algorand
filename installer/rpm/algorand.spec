@@ -102,12 +102,12 @@ getent group nogroup >/dev/null || \
 
 %post
 chown -R algorand /var/lib/algorand
-%systemd_post algorand.service
+%systemd_post algorand
 
 %preun
-%systemd_preun algorand.service
-%systemd_preun algorand@*.service
+%systemd_preun algorand
+%systemd_preun algorand@*
 
 %postun
-%systemd_postun_with_restart algorand.service
-%systemd_postun_with_restart algorand@*.service
+%systemd_postun_with_restart algorand
+%systemd_postun_with_restart algorand@*
