@@ -7,7 +7,6 @@ License:       AGPL-3+
 Requires:      yum-cron
 Requires:      systemd
 Requires(pre): shadow-utils
-BuildRequires: systemd-rpm-macros
 
 %define SRCDIR go-algorand-rpmbuild
 %define _buildshell /bin/bash
