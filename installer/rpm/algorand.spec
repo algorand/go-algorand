@@ -106,6 +106,8 @@ chown -R algorand /var/lib/algorand
 
 %preun
 %systemd_preun algorand.service
+%systemd_preun algorand@*.service
 
 %postun
 %systemd_postun_with_restart algorand.service
+%systemd_postun_with_restart algorand@*.service
