@@ -282,6 +282,12 @@ type TransactionParams struct {
 	//
 	// required: true
 	ConsensusVersion string `json:"consensusVersion"`
+
+	// The minimum transaction fee (not per byte) required for the
+	// txn to validate for the current network protocol.
+	//
+	// required: false
+	MinTxnFee uint64 `json:"minFee"`
 }
 
 // Block contains a block information
