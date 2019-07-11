@@ -225,8 +225,8 @@ func generateGenesisFiles(outDir string, proto protocol.ConsensusVersion, netNam
 		Proto:       proto,
 		Network:     protocol.NetworkID(netName),
 		Timestamp:   0,
-		FeeSink:     feeSink.GetChecksumAddress().String(),
-		RewardsPool: rewardsPool.GetChecksumAddress().String(),
+		FeeSink:     feeSink.String(),
+		RewardsPool: rewardsPool.String(),
 		Comment:     comment,
 	}
 
@@ -234,7 +234,7 @@ func generateGenesisFiles(outDir string, proto protocol.ConsensusVersion, netNam
 		walletData := records[wallet.Name]
 
 		g.Allocation = append(g.Allocation, bookkeeping.GenesisAllocation{
-			Address: genesisAddrs[wallet.Name].GetChecksumAddress().String(),
+			Address: genesisAddrs[wallet.Name].String(),
 			Comment: wallet.Name,
 			State:   walletData,
 		})

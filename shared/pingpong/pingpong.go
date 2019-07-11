@@ -181,7 +181,7 @@ func sendFromTo(fromList, toList []string, client libgoal.Client, cfg PpConfig) 
 		if cfg.RandomizeDst {
 			var addr basics.Address
 			crypto.RandBytes(addr[:])
-			to = addr.GetChecksumAddress().String()
+			to = addr.String()
 		}
 
 		var noteField []byte
