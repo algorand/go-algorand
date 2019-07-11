@@ -21,10 +21,14 @@ import (
 )
 
 // APIV1Request is the interface that all API V1 requests must satisfy
-type APIV1Request interface{}
+//
+// swagger:ignore
+type APIV1Request interface{} // we need to tell swagger to ignore due to bug (go-swagger/issues/1436)
 
 // APIV1RequestEnvelope is a common envelope that all API V1 requests must embed
-type APIV1RequestEnvelope struct {
+//
+// swagger:ignore
+type APIV1RequestEnvelope struct { // we need to tell swagger to ignore due to bug (go-swagger/issues/1436)
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 }
 
