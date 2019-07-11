@@ -478,7 +478,7 @@ var createCmd = &cobra.Command{
 			if isValidIP(listenIP) {
 				localConfig.EndpointAddress = listenIP
 			} else {
-				reportWarnf(warnNodeCreationIPFailure, newNodeRelay)
+				reportWarnf(warnNodeCreationIPFailure, listenIP)
 			}
 		}
 		configDest := filepath.Join(newNodeDestination, "config.json")
