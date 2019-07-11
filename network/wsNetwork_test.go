@@ -415,6 +415,9 @@ func (nc *nopConn) NextReader() (int, io.Reader, error) {
 func (nc *nopConn) WriteMessage(int, []byte) error {
 	return nil
 }
+func (nc *nopConn) WriteControl(int, []byte, time.Time) error {
+	return nil
+}
 func (nc *nopConn) SetReadLimit(limit int64) {
 }
 func (nc *nopConn) CloseWithoutFlush() error {
@@ -1061,6 +1064,7 @@ func TestWebsocketNetworkManyIdle(t *testing.T) {
 // TODO: test funcion when some message handler is slow?
 
 func TestWebsocketNetwork_updateUrlHost(t *testing.T) {
+	tlog := logging.TestingLog(t)
 	type fields struct {
 		listener               net.Listener
 		server                 http.Server
@@ -1068,7 +1072,6 @@ func TestWebsocketNetwork_updateUrlHost(t *testing.T) {
 		scheme                 string
 		upgrader               websocket.Upgrader
 		config                 config.Local
-		log                    logging.Logger
 		readBuffer             chan IncomingMessage
 		wg                     sync.WaitGroup
 		handlers               Multiplexer
@@ -1099,11 +1102,11 @@ func TestWebsocketNetwork_updateUrlHost(t *testing.T) {
 		originalAddress string
 		host            string
 	}
-	testFields1 := fields{log: logging.NewLogger()}
-	testFields2 := fields{log: logging.NewLogger()}
-	testFields3 := fields{log: logging.NewLogger()}
-	testFields4 := fields{log: logging.NewLogger()}
-	testFields5 := fields{log: logging.NewLogger()}
+	testFields1 := fields{}
+	testFields2 := fields{}
+	testFields3 := fields{}
+	testFields4 := fields{}
+	testFields5 := fields{}
 
 	tests := []struct {
 		name           string
@@ -1164,7 +1167,7 @@ func TestWebsocketNetwork_updateUrlHost(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			wn := &WebsocketNetwork{
-				log: tt.fields.log,
+				log: tlog,
 			}
 			gotNewAddress, err := wn.updateURLHost(tt.args.originalAddress, net.ParseIP(tt.args.host))
 			if (err != nil) != tt.wantErr {

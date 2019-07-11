@@ -21,11 +21,11 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:8f6b71091c3cf5069b57669db97a79fb5939f82eae39f0d33cebb0496a8a1bb6"
+  digest = "1:7848da889dc49d132f301f0321d9860ac3960e13a2c54ebb3ef09b5337b44377"
   name = "github.com/algorand/websocket"
   packages = ["."]
   pruneopts = "UT"
-  revision = "8e576782c555b1e0edd8acb347649be04ff82d7f"
+  revision = "a1555fd643b68f3852a5d81ca4483ed5fd25deaf"
 
 [[projects]]
   digest = "1:f84c885bd17de475b92997e6e9972465e3c533894dd82223c0f62eda8852cc83"

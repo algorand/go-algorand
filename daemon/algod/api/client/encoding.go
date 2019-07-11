@@ -18,8 +18,6 @@ package client
 
 import (
 	"encoding/base64"
-
-	"github.com/algorand/go-algorand/data/basics"
 )
 
 // BytesBase64 is a base64-encoded binary blob (i.e., []byte), for
@@ -40,25 +38,4 @@ func (b *BytesBase64) UnmarshalText(text []byte) error {
 // MarshalText implements the encoding.TextMarshaler interface
 func (b BytesBase64) MarshalText() (text []byte, err error) {
 	return []byte(base64.StdEncoding.EncodeToString(b[:])), nil
-}
-
-// ChecksumAddress is a checksummed address, for use with text encodings
-// like JSON.
-type ChecksumAddress basics.Address
-
-// UnmarshalText implements the encoding.TextUnmarshaler interface
-func (a *ChecksumAddress) UnmarshalText(text []byte) error {
-	addr, err := basics.UnmarshalChecksumAddress(string(text))
-	if err != nil {
-		return err
-	}
-
-	*a = ChecksumAddress(addr)
-	return nil
-}
-
-// MarshalText implements the encoding.TextMarshaler interface
-func (a ChecksumAddress) MarshalText() (text []byte, err error) {
-	addr := basics.Address(a)
-	return []byte(addr.GetChecksumAddress().String()), nil
 }
