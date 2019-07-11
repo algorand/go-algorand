@@ -533,65 +533,24 @@ func changeAccountOnlineStatus(acct string, part *algodAcct.Participation, goOnl
 		return err
 	}
 
-	if txFile == "" {
-		// Sign & broadcast the transaction
-		wh, pw := ensureWalletHandleMaybePassword(dataDir, wallet, true)
-		txid, err := client.SignAndBroadcastTransaction(wh, pw, utx)
-		if err != nil {
-			return fmt.Errorf(errorOnlineTX, err)
-		}
-		fmt.Printf("Transaction id for status change transaction: %s\n", txid)
-
-		if noWaitAfterSend {
-			fmt.Println("Note: status will not change until transaction is finalized")
-			return nil
-		}
-
-		// Get current round information
-		stat, err := client.Status()
-		if err != nil {
-			return fmt.Errorf(errorRequestFail, err)
-		}
-
-		for {
-			// Check if we know about the transaction yet
-			txn, err := client.PendingTransactionInformation(txid)
-			if err != nil {
-				return fmt.Errorf(errorRequestFail, err)
-			}
-
-			if txn.ConfirmedRound > 0 {
-				reportInfof(infoTxCommitted, txid, txn.ConfirmedRound)
-				break
-			}
-
-			if txn.PoolError != "" {
-				return fmt.Errorf(txPoolError, txid, txn.PoolError)
-			}
-
-			reportInfof(infoTxPending, txid, stat.LastRound)
-			stat, err = client.WaitForRound(stat.LastRound + 1)
-			if err != nil {
-				return fmt.Errorf(errorRequestFail, err)
-			}
-		}
-	} else {
-		// Wrap in a transactions.SignedTxn with an empty sig.
-		// This way protocol.Encode will encode the transaction type
-		stxn, err := transactions.AssembleSignedTxn(utx, crypto.Signature{}, crypto.MultisigSig{})
-		if err != nil {
-			return fmt.Errorf(errorConstructingTX, err)
-		}
-
-		stxn = populateBlankMultisig(client, dataDir, wallet, stxn)
-
-		// Write the SignedTxn to the output file
-		err = ioutil.WriteFile(txFile, protocol.Encode(stxn), 0600)
-		if err != nil {
-			return fmt.Errorf(fileWriteError, txFile, err)
-		}
+	if txFile != "" {
+		return writeTxnToFile(client, false, dataDir, wallet, utx, txFile)
 	}
-	return nil
+
+	// Sign & broadcast the transaction
+	wh, pw := ensureWalletHandleMaybePassword(dataDir, wallet, true)
+	txid, err := client.SignAndBroadcastTransaction(wh, pw, utx)
+	if err != nil {
+		return fmt.Errorf(errorOnlineTX, err)
+	}
+	fmt.Printf("Transaction id for status change transaction: %s\n", txid)
+
+	if noWaitAfterSend {
+		fmt.Println("Note: status will not change until transaction is finalized")
+		return nil
+	}
+
+	return waitForCommit(client, txid)
 }
 
 var addParticipationKeyCmd = &cobra.Command{

@@ -119,9 +119,21 @@ func (a networkAction) String() string {
 func (a networkAction) do(ctx context.Context, s *Service) {
 	if a.T == broadcastVotes {
 		tag := protocol.AgreementVoteTag
-		for _, uv := range a.UnauthenticatedVotes {
+		for i, uv := range a.UnauthenticatedVotes {
 			data := protocol.Encode(uv)
-			s.Network.Broadcast(tag, data)
+			sendErr := s.Network.Broadcast(tag, data)
+			if sendErr != nil {
+				s.log.Warnf("Network was unable to queue votes for broadcast(%v). %d / %d votes for round %d period %d step %d were dropped.",
+					sendErr,
+					len(a.UnauthenticatedVotes)-i, len(a.UnauthenticatedVotes),
+					uv.R.Round,
+					uv.R.Period,
+					uv.R.Step)
+				break
+			}
+			if ctx.Err() != nil {
+				break
+			}
 		}
 		return
 	}
