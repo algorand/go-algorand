@@ -42,7 +42,7 @@ apt-get update
 apt-get install -y algorand
 algod -v
 # check that the installed version is now the current version
-algod -v | grep -q ${FULLVERSION}
+algod -v | grep -q ${FULLVERSION}.stable
 
 if [ ! -d /root/testnode ]; then
     mkdir -p /root/testnode

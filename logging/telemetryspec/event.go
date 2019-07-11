@@ -31,11 +31,11 @@ const StartupEvent Event = "Startup"
 
 // StartupEventDetails contains details for the StartupEvent
 type StartupEventDetails struct {
-	Version    string
-	CommitHash string
-	Branch     string
-	Channel    string
-	Instance   string
+	Version      string
+	CommitHash   string
+	Branch       string
+	Channel      string
+	InstanceHash string
 }
 
 // HeartbeatEvent is sent periodically to indicate node is running
@@ -158,6 +158,21 @@ const VoteRejectedEvent Event = "VoteRejected"
 type VoteRejectedEventDetails struct {
 	VoteEventDetails
 	Reason string
+}
+
+// EquivocatedVoteEvent event
+const EquivocatedVoteEvent Event = "EquivocatedVoteEvent"
+
+// EquivocatedVoteEventDetails contains details for the EquivocatedVoteEvent
+type EquivocatedVoteEventDetails struct {
+	VoterAddress          string
+	ProposalHash          string
+	Round                 uint64
+	Period                uint64
+	Step                  uint64
+	Weight                uint64
+	PreviousProposalHash1 string
+	PreviousProposalHash2 string
 }
 
 // ConnectPeerEvent event
