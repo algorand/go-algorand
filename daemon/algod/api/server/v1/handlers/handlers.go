@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -37,13 +38,13 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-func nodeStatus(node node.Full) (res NodeStatus, err error) {
+func nodeStatus(node node.Full) (res v1.NodeStatus, err error) {
 	stat, err := node.Status()
 	if err != nil {
-		return NodeStatus{}, err
+		return v1.NodeStatus{}, err
 	}
 
-	return NodeStatus{
+	return v1.NodeStatus{
 		LastRound:            uint64(stat.LastRound),
 		LastVersion:          string(stat.LastVersion),
 		NextVersion:          string(stat.NextVersion),
@@ -54,8 +55,8 @@ func nodeStatus(node node.Full) (res NodeStatus, err error) {
 	}, nil
 }
 
-func paymentTxEncode(tx transactions.Transaction, ad transactions.ApplyData) Transaction {
-	payment := PaymentTransactionType{
+func paymentTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
+	payment := v1.PaymentTransactionType{
 		To:           tx.Receiver.String(),
 		Amount:       tx.TxAmount().Raw,
 		ToRewards:    ad.ReceiverRewards.Raw,
@@ -67,8 +68,8 @@ func paymentTxEncode(tx transactions.Transaction, ad transactions.ApplyData) Tra
 		payment.CloseAmount = ad.ClosingAmount.Raw
 	}
 
-	return Transaction{
-		Type:        tx.Type,
+	return v1.Transaction{
+		Type:        string(tx.Type),
 		TxID:        tx.ID().String(),
 		From:        tx.Src().String(),
 		Fee:         tx.TxFee().Raw,
@@ -82,15 +83,15 @@ func paymentTxEncode(tx transactions.Transaction, ad transactions.ApplyData) Tra
 	}
 }
 
-func txWithStatusEncode(tr node.TxnWithStatus) Transaction {
+func txWithStatusEncode(tr node.TxnWithStatus) v1.Transaction {
 	s := paymentTxEncode(tr.Txn.Txn, tr.ApplyData)
 	s.ConfirmedRound = uint64(tr.ConfirmedRound)
 	s.PoolError = tr.PoolError
 	return s
 }
 
-func blockEncode(b bookkeeping.Block, c agreement.Certificate) (Block, error) {
-	block := Block{
+func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error) {
+	block := v1.Block{
 		Hash:              crypto.Digest(b.Hash()).String(),
 		PreviousBlockHash: crypto.Digest(b.Branch).String(),
 		Seed:              crypto.Digest(b.Seed()).String(),
@@ -102,24 +103,24 @@ func blockEncode(b bookkeeping.Block, c agreement.Certificate) (Block, error) {
 		RewardsResidue:    b.RewardsResidue,
 		Timestamp:         b.TimeStamp,
 
-		UpgradeState: UpgradeState{
+		UpgradeState: v1.UpgradeState{
 			CurrentProtocol:        string(b.CurrentProtocol),
 			NextProtocol:           string(b.NextProtocol),
 			NextProtocolApprovals:  b.NextProtocolApprovals,
 			NextProtocolVoteBefore: uint64(b.NextProtocolVoteBefore),
 			NextProtocolSwitchOn:   uint64(b.NextProtocolSwitchOn),
 		},
-		UpgradeVote: UpgradeVote{
+		UpgradeVote: v1.UpgradeVote{
 			UpgradePropose: string(b.UpgradePropose),
 			UpgradeApprove: b.UpgradeApprove,
 		},
 	}
 
 	// Transactions
-	var txns []Transaction
+	var txns []v1.Transaction
 	payset, err := b.DecodePaysetWithAD()
 	if err != nil {
-		return Block{}, err
+		return v1.Block{}, err
 	}
 
 	for _, txn := range payset {
@@ -131,7 +132,7 @@ func blockEncode(b bookkeeping.Block, c agreement.Certificate) (Block, error) {
 		txns = append(txns, txWithStatusEncode(tx))
 	}
 
-	block.Transactions = TransactionList{Transactions: txns}
+	block.Transactions = v1.TransactionList{Transactions: txns}
 
 	return block, nil
 }
@@ -256,7 +257,7 @@ func RawTransaction(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	SendJSON(TransactionIDResponse{&TransactionID{TxID: txid.String()}}, w, ctx.Log)
+	SendJSON(TransactionIDResponse{&v1.TransactionID{TxID: txid.String()}}, w, ctx.Log)
 }
 
 // AccountInformation is an httpHandler for route GET /v1/account/{addr:[A-Z0-9]{KeyLength}}
@@ -314,7 +315,7 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	accountInfo := Account{
+	accountInfo := v1.Account{
 		Round:                       uint64(round),
 		Address:                     addr.String(),
 		Amount:                      amount.Raw,
@@ -404,7 +405,7 @@ func TransactionInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.R
 	}
 
 	if txn, ok := ctx.Node.GetTransaction(addr, txID, start, latestRound); ok {
-		var responseTxs Transaction
+		var responseTxs v1.Transaction
 		responseTxs = txWithStatusEncode(txn)
 
 		response := TransactionResponse{
@@ -471,7 +472,7 @@ func PendingTransactionInformation(ctx lib.ReqContext, w http.ResponseWriter, r 
 	}
 
 	if txn, ok := ctx.Node.GetPendingTransaction(txID); ok {
-		var responseTxs Transaction
+		var responseTxs v1.Transaction
 		responseTxs = txWithStatusEncode(txn)
 
 		response := TransactionResponse{
@@ -535,14 +536,14 @@ func GetPendingTransactions(ctx lib.ReqContext, w http.ResponseWriter, r *http.R
 		txs = txs[:max]
 	}
 
-	responseTxs := make([]Transaction, len(txs))
+	responseTxs := make([]v1.Transaction, len(txs))
 	for i, twr := range txs {
 		responseTxs[i] = paymentTxEncode(twr.Txn, transactions.ApplyData{})
 	}
 
 	response := PendingTransactionsResponse{
-		Body: &PendingTransactions{
-			TruncatedTxns: TransactionList{
+		Body: &v1.PendingTransactions{
+			TruncatedTxns: v1.TransactionList{
 				Transactions: responseTxs,
 			},
 			TotalTxns: totalTxns,
@@ -571,7 +572,7 @@ func SuggestedFee(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	//         "$ref": '#/responses/TransactionFeeResponse'
 	//       401: { description: Invalid API Token }
 	//       default: { description: Unknown Error }
-	fee := TransactionFee{Fee: ctx.Node.SuggestedFee().Raw}
+	fee := v1.TransactionFee{Fee: ctx.Node.SuggestedFee().Raw}
 	SendJSON(TransactionFeeResponse{&fee}, w, ctx.Log)
 }
 
@@ -597,7 +598,7 @@ func SuggestedParams(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request)
 
 	gh := ctx.Node.GenesisHash()
 
-	var params TransactionParams
+	var params v1.TransactionParams
 	params.Fee = ctx.Node.SuggestedFee().Raw
 	params.GenesisID = ctx.Node.GenesisID()
 	params.GenesisHash = gh[:]
@@ -674,7 +675,7 @@ func GetSupply(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	//       401: { description: Invalid API Token }
 	//       default: { description: Unknown Error }
 	balances := ctx.Node.GetSupply()
-	supply := Supply{
+	supply := v1.Supply{
 		Round:       uint64(balances.Round),
 		TotalMoney:  balances.TotalMoney.Raw,
 		OnlineMoney: balances.OnlineMoney.Raw,
@@ -863,13 +864,13 @@ func Transactions(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 		txs = txs[:max]
 	}
 
-	responseTxs := make([]Transaction, len(txs))
+	responseTxs := make([]v1.Transaction, len(txs))
 	for i, twr := range txs {
 		responseTxs[i] = txWithStatusEncode(twr)
 	}
 
 	response := TransactionsResponse{
-		&TransactionList{
+		&v1.TransactionList{
 			Transactions: responseTxs,
 		},
 	}
@@ -931,7 +932,7 @@ func GetTransactionByID(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 	}
 
 	if txn, err := ctx.Node.GetTransactionByID(txID, basics.Round(rnd)); err == nil {
-		var responseTxs Transaction
+		var responseTxs v1.Transaction
 		responseTxs = txWithStatusEncode(txn)
 
 		response := TransactionResponse{

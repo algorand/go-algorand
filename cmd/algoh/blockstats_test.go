@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/daemon/algod/api/client/models"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/stretchr/testify/require"
 )
@@ -45,13 +45,13 @@ func TestConsecutiveBlocks(t *testing.T) {
 	sender := MockEventSender{}
 	bs := blockstats{log: &sender}
 
-	bs.onBlock(models.Block{Round: 300})
+	bs.onBlock(v1.Block{Round: 300})
 	// first consecutive block
-	bs.onBlock(models.Block{Round: 301})
+	bs.onBlock(v1.Block{Round: 301})
 	// reset
-	bs.onBlock(models.Block{Round: 303})
+	bs.onBlock(v1.Block{Round: 303})
 	// second consecutive block
-	bs.onBlock(models.Block{Round: 304})
+	bs.onBlock(v1.Block{Round: 304})
 
 	require.Equal(t, 2, len(sender.events))
 }
@@ -60,9 +60,9 @@ func TestAgreementTime(t *testing.T) {
 	sender := MockEventSender{}
 	bs := blockstats{log: &sender}
 
-	bs.onBlock(models.Block{Round: 300})
+	bs.onBlock(v1.Block{Round: 300})
 	time.Sleep(500 * time.Millisecond)
-	bs.onBlock(models.Block{Round: 301})
+	bs.onBlock(v1.Block{Round: 301})
 
 	require.Equal(t, 1, len(sender.events))
 	details := sender.events[0].details.(telemetryspec.BlockStatsEventDetails)

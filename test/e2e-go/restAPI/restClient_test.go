@@ -30,7 +30,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/daemon/algod/api/client/models"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
@@ -135,7 +135,7 @@ func waitForRoundOne(t *testing.T, testClient libgoal.Client) {
 
 var errWaitForTransactionTimeout = errors.New("wait for transaction timed out")
 
-func waitForTransaction(t *testing.T, testClient libgoal.Client, fromAddress, txID string, timeout time.Duration) (tx models.Transaction, err error) {
+func waitForTransaction(t *testing.T, testClient libgoal.Client, fromAddress, txID string, timeout time.Duration) (tx v1.Transaction, err error) {
 	rnd, err := testClient.Status()
 	require.NoError(t, err)
 	if rnd.LastRound == 0 {
@@ -236,6 +236,14 @@ func TestClientCanGetSuggestedFee(t *testing.T) {
 	suggestedFeeResponse, err := testClient.SuggestedFee()
 	require.NoError(t, err)
 	_ = suggestedFeeResponse // per-byte-fee is allowed to be zero
+}
+
+func TestClientCanGetMinTxnFee(t *testing.T) {
+	defer fixture.SetTestContext(t)()
+	testClient := fixture.LibGoalClient
+	suggestedParamsRes, err := testClient.SuggestedParams()
+	require.NoError(t, err)
+	require.Truef(t, suggestedParamsRes.MinTxnFee > 0, "min txn fee not supplied")
 }
 
 func TestClientCanGetBlockInfo(t *testing.T) {
