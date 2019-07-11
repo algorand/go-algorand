@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -394,6 +395,20 @@ var waitCmd = &cobra.Command{
 	},
 }
 
+func isValidIP(userInput string) bool {
+	host, port, err := net.SplitHostPort(userInput)
+	if err != nil {
+		return false
+	}
+	if port == "" {
+		return false
+	}
+	if host == "" {
+		return false
+	}
+	return isValidIP(host)
+}
+
 var createCmd = &cobra.Command{
 	Use:   "create",
 	Short: "create a node at the desired data directory for the desired network",
@@ -453,10 +468,18 @@ var createCmd = &cobra.Command{
 		localConfig.IsIndexerActive = newNodeIndexer
 		localConfig.RunHosted = runUnderHost
 		if newNodeRelay != "" {
-			localConfig.NetAddress = newNodeRelay
+			if isValidIP(newNodeRelay) {
+				localConfig.NetAddress = newNodeRelay
+			} else {
+				reportWarnf(warnNodeCreationIPFailure, newNodeRelay)
+			}
 		}
 		if listenIP != "" {
-			localConfig.EndpointAddress = listenIP
+			if isValidIP(listenIP) {
+				localConfig.EndpointAddress = listenIP
+			} else {
+				reportWarnf(warnNodeCreationIPFailure, newNodeRelay)
+			}
 		}
 		configDest := filepath.Join(newNodeDestination, "config.json")
 		err = codecs.SaveNonDefaultValuesToFile(configDest, localConfig, config.GetDefaultLocal(), nil, true)
