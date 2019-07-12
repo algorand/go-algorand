@@ -23,6 +23,8 @@ import (
 	"github.com/algorand/go-deadlock"
 )
 
+// when using GetAddresses with getAllAddresses, all the addresses will be retrieved, regardless
+// of how many addresses the phonebook actually has. ( with the retry-after logic applied )
 const getAllAddresses = 1000000
 
 // Phonebook stores or looks up addresses of nodes we might contact
