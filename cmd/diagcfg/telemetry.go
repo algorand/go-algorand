@@ -18,6 +18,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -27,6 +28,7 @@ import (
 var (
 	nodeName string
 	uri      string
+	//dataDir  string // declared in ./metric.go
 )
 
 func init() {
@@ -36,9 +38,17 @@ func init() {
 	telemetryCmd.AddCommand(telemetryNameCmd)
 	telemetryCmd.AddCommand(telemetryEndpointCmd)
 
+	telemetryCmd.PersistentFlags().StringVarP(&dataDir, "datadir", "d", "", "Data directory for the node")
 	// Enable Logging : node name
 	telemetryNameCmd.Flags().StringVarP(&nodeName, "name", "n", "", "Friendly-name to use for node")
 	telemetryEndpointCmd.Flags().StringVarP(&uri, "endpoint", "e", "", "Endpoint's URI")
+}
+
+// If we didn't get a value from -d, try $ALGORAND_DATA
+func maybeUpdateDataDirFromEnv() {
+	if dataDir == "" {
+		dataDir = os.Getenv("ALGORAND_DATA")
+	}
 }
 
 var telemetryCmd = &cobra.Command{
@@ -53,7 +63,8 @@ var telemetryStatusCmd = &cobra.Command{
 	Short: "Print the node's telemetry status",
 	Long:  `Print the node's telemetry status`,
 	Run: func(cmd *cobra.Command, args []string) {
-		cfg, err := logging.EnsureTelemetryConfig(nil, "")
+		maybeUpdateDataDirFromEnv()
+		cfg, err := logging.EnsureTelemetryConfig(&dataDir, "")
 
 		// If error loading config, can't disable / no need to disable
 		if err != nil {
@@ -72,7 +83,8 @@ var telemetryEnableCmd = &cobra.Command{
 	Short: "Enable Algorand remote logging",
 	Long:  `Enable Algorand remote logging`,
 	Run: func(cmd *cobra.Command, args []string) {
-		cfg, err := logging.EnsureTelemetryConfig(nil, "")
+		maybeUpdateDataDirFromEnv()
+		cfg, err := logging.EnsureTelemetryConfig(&dataDir, "")
 
 		// If error loading config, can't disable / no need to disable
 		if err != nil {
@@ -90,7 +102,8 @@ var telemetryDisableCmd = &cobra.Command{
 	Short: "Disable Algorand remote logging",
 	Long:  `Disable Algorand remote logging`,
 	Run: func(cmd *cobra.Command, args []string) {
-		cfg, err := logging.EnsureTelemetryConfig(nil, "")
+		maybeUpdateDataDirFromEnv()
+		cfg, err := logging.EnsureTelemetryConfig(&dataDir, "")
 
 		// If error loading config, can't disable / no need to disable
 		if err != nil {
@@ -108,7 +121,8 @@ var telemetryNameCmd = &cobra.Command{
 	Short: "Enable Algorand remote logging",
 	Long:  `Enable Algorand remote logging with specified node name`,
 	Run: func(cmd *cobra.Command, args []string) {
-		cfg, err := logging.EnsureTelemetryConfig(nil, "")
+		maybeUpdateDataDirFromEnv()
+		cfg, err := logging.EnsureTelemetryConfig(&dataDir, "")
 		if err != nil {
 			fmt.Println(err)
 			return
@@ -127,7 +141,8 @@ var telemetryEndpointCmd = &cobra.Command{
 	Short: "sets the \"URI\" property",
 	Long:  `Sets the "URI" property in the telemetry configuration`,
 	Run: func(cmd *cobra.Command, args []string) {
-		cfg, err := logging.EnsureTelemetryConfig(nil, "")
+		maybeUpdateDataDirFromEnv()
+		cfg, err := logging.EnsureTelemetryConfig(&dataDir, "")
 		if err != nil {
 			fmt.Println(err)
 			return

@@ -19,6 +19,7 @@ package logging
 import (
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -74,25 +75,32 @@ func makeTelemetryState(cfg TelemetryConfig, hookFactory hookFactory) (*telemetr
 // EnsureTelemetryConfig creates a new TelemetryConfig structure with a generated GUID and the appropriate Telemetry endpoint
 // Err will be non-nil if the file doesn't exist, or if error loading.
 // Cfg will always be valid.
-func EnsureTelemetryConfig(configDir *string, genesisID string) (TelemetryConfig, error) {
-	cfg, _, err := EnsureTelemetryConfigCreated(configDir, genesisID)
+func EnsureTelemetryConfig(dataDir *string, genesisID string) (TelemetryConfig, error) {
+	cfg, _, err := EnsureTelemetryConfigCreated(dataDir, genesisID)
 	return cfg, err
 }
 
 // EnsureTelemetryConfigCreated is the same as EnsureTelemetryConfig but it also returns a bool indicating
 // whether EnsureTelemetryConfig had to create the config.
-func EnsureTelemetryConfigCreated(configDir *string, genesisID string) (TelemetryConfig, bool, error) {
-	var configPath string
-	if configDir == nil {
-		var err error
+func EnsureTelemetryConfigCreated(dataDir *string, genesisID string) (TelemetryConfig, bool, error) {
+	configPath := ""
+	var cfg TelemetryConfig
+	var err error
+	if dataDir != nil && *dataDir != "" {
+		configPath = filepath.Join(*dataDir, loggingFilename)
+		cfg, err = LoadTelemetryConfig(configPath)
+		if err != nil && os.IsNotExist(err) {
+			// if it just didn't exist, try again at the other path
+			configPath = ""
+		}
+	}
+	if configPath == "" {
 		configPath, err = config.GetConfigFilePath(loggingFilename)
 		if err != nil {
 			return createTelemetryConfig(), true, err
 		}
-	} else {
-		configPath = filepath.Join(*configDir, loggingFilename)
+		cfg, err = LoadTelemetryConfig(configPath)
 	}
-	cfg, err := LoadTelemetryConfig(configPath)
 	created := false
 	if err != nil {
 		err = nil
