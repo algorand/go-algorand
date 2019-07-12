@@ -156,12 +156,12 @@ type Transaction struct {
 	// Note is a free form data
 	//
 	// required: false
-	Note lib.Bytes `json:"noteb64,omitempty"`
+	Note lib.Bytes `json:"noteb64"`
 
 	// ConfirmedRound indicates the block number this transaction appeared in
 	//
 	// required: false
-	ConfirmedRound uint64 `json:"round,omitempty"`
+	ConfirmedRound uint64 `json:"round"`
 
 	// PoolError indicates the transaction was evicted from this node's transaction
 	// pool (if non-empty).  A non-empty PoolError does not guarantee that the
@@ -169,12 +169,12 @@ type Transaction struct {
 	// transaction and may attempt to commit it in the future.
 	//
 	// required: false
-	PoolError string `json:"poolerror,omitempty"`
+	PoolError string `json:"poolerror"`
 
 	// This is a list of all supported transactions.
 	// To add another one, create a struct with XXXTransactionType and embed it here.
 	// To prevent extraneous fields, all must have the "omitempty" tag.
-	Payment *PaymentTransactionType `json:"payment,omitempty"`
+	Payment *PaymentTransactionType `json:"payment"`
 
 	// FromRewards is the amount of pending rewards applied to the From
 	// account as part of this transaction.
