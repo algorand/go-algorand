@@ -23,10 +23,13 @@ import (
 	"github.com/algorand/go-deadlock"
 )
 
+const getAllAddresses = 1000000
+
 // Phonebook stores or looks up addresses of nodes we might contact
 type Phonebook interface {
 	// GetAddresses(N) returns up to N addresses, but may return fewer
 	GetAddresses(n int) []string
+
 	// UpdateRetryAfter updates the retry-after field for the entries matching the given address
 	UpdateRetryAfter(addr string, retryAfter time.Time)
 }
@@ -72,7 +75,7 @@ func shuffleStrings(set []string) {
 }
 
 func shuffleSelect(set []string, n int) []string {
-	if n >= len(set) {
+	if n >= len(set) || n == getAllAddresses {
 		// return shuffled copy of everything
 		out := make([]string, len(set))
 		copy(out, set)
@@ -197,28 +200,15 @@ func (mp *MultiPhonebook) GetAddresses(n int) []string {
 	total := 0
 	addrs := make([][]string, len(mp.phonebooks))
 	for pi, p := range mp.phonebooks {
-		switch xp := p.(type) {
-		case *ArrayPhonebook:
-			sizes[pi] = len(xp.Entries)
-		case *ThreadsafePhonebook:
-			sizes[pi] = xp.Length()
-		default:
-			addrs[pi] = xp.GetAddresses(1000)
-			sizes[pi] = len(addrs[pi])
-		}
+		addrs[pi] = p.GetAddresses(getAllAddresses)
+		sizes[pi] = len(addrs[pi])
 		total += sizes[pi]
 	}
 	all := make([]string, total)
 	pos := 0
-	for pi, size := range sizes {
-		if addrs[pi] != nil {
-			copy(all[pos:], addrs[pi])
-			pos += len(addrs[pi])
-		} else {
-			xa := mp.phonebooks[pi].GetAddresses(size)
-			copy(all[pos:], xa)
-			pos += len(xa)
-		}
+	for pi, sizei := range sizes {
+		copy(all[pos:], addrs[pi])
+		pos += sizei
 	}
 	out := all[:pos]
 	rand.Shuffle(len(out), func(i, j int) { t := out[i]; out[i] = out[j]; out[j] = t })
