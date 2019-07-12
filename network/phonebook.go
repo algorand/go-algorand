@@ -59,6 +59,15 @@ func (e *phonebookEntries) filterRetryTime(t time.Time) []string {
 	return o
 }
 
+// ReplacePeerList replaces set of addresses with that passed in.
+func (e *phonebookEntries) ReplacePeerList(they []string) {
+	newList := make([]phonebookEntry, len(they))
+	for i, e := range they {
+		newList[i] = phonebookEntry{address: e}
+	}
+	*e = newList
+}
+
 // UpdateRetryAfter updates the retry-after field for the entries matching the given address
 func (p *ArrayPhonebook) UpdateRetryAfter(addr string, retryAfter time.Time) {
 	p.Entries.updateRetryAfter(addr, retryAfter)
@@ -156,10 +165,7 @@ func (p *ThreadsafePhonebook) Length() int {
 func (p *ThreadsafePhonebook) ReplacePeerList(they []string) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
-	p.entries = make([]phonebookEntry, len(they))
-	for i, e := range they {
-		p.entries[i] = phonebookEntry{address: e}
-	}
+	p.entries.ReplacePeerList(they)
 }
 
 // MergePeerList mearges set of addresses with that passed in.
