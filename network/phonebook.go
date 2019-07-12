@@ -18,6 +18,7 @@ package network
 
 import (
 	"math/rand"
+	"time"
 
 	"github.com/algorand/go-deadlock"
 )
@@ -26,11 +27,44 @@ import (
 type Phonebook interface {
 	// GetAddresses(N) returns up to N addresses, but may return fewer
 	GetAddresses(n int) []string
+	// UpdateRetryAfter updates the retry-after field for the entries matching the given address
+	UpdateRetryAfter(addr string, retryAfter time.Time)
 }
+
+// phonebookEntry is a single server on the phonebook
+type phonebookEntry struct {
+	address    string
+	retryAfter time.Time
+}
+
+type phonebookEntries []phonebookEntry
 
 // ArrayPhonebook is a simple wrapper on a slice of string with addresses
 type ArrayPhonebook struct {
-	Entries []string
+	Entries phonebookEntries
+}
+
+func (e *phonebookEntries) filterRetryTime(t time.Time) []string {
+	o := make([]string, 0, len(*e))
+	for _, entry := range *e {
+		if t.After(entry.retryAfter) {
+			o = append(o, entry.address)
+		}
+	}
+	return o
+}
+
+// UpdateRetryAfter updates the retry-after field for the entries matching the given address
+func (p *ArrayPhonebook) UpdateRetryAfter(addr string, retryAfter time.Time) {
+	p.Entries.updateRetryAfter(addr, retryAfter)
+}
+
+func (e *phonebookEntries) updateRetryAfter(addr string, retryAfter time.Time) {
+	for i, entry := range *e {
+		if entry.address == addr {
+			(*e)[i] = phonebookEntry{address: addr, retryAfter: retryAfter}
+		}
+	}
 }
 
 func shuffleStrings(set []string) {
@@ -64,20 +98,27 @@ func shuffleSelect(set []string, n int) []string {
 
 // GetAddresses returns up to N shuffled address
 func (p *ArrayPhonebook) GetAddresses(n int) []string {
-	return shuffleSelect(p.Entries, n)
+	return shuffleSelect(p.Entries.filterRetryTime(time.Now()), n)
 }
 
 // ThreadsafePhonebook implements Phonebook interface
 type ThreadsafePhonebook struct {
-	lock  deadlock.RWMutex
-	addrs []string
+	lock    deadlock.RWMutex
+	entries phonebookEntries
 }
 
 // GetAddresses returns up to N shuffled address
 func (p *ThreadsafePhonebook) GetAddresses(n int) []string {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
-	return shuffleSelect(p.addrs, n)
+	return shuffleSelect(p.entries.filterRetryTime(time.Now()), n)
+}
+
+// UpdateRetryAfter updates the retry-after field for the entries matching the given address
+func (p *ThreadsafePhonebook) UpdateRetryAfter(addr string, retryAfter time.Time) {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+	p.entries.updateRetryAfter(addr, retryAfter)
 }
 
 // ExtendPeerList adds unique addresses to this set of addresses
@@ -87,14 +128,14 @@ func (p *ThreadsafePhonebook) ExtendPeerList(more []string) {
 	// TODO: if this gets bad because p.addrs gets long, replace storage with a map[string]bool
 	for _, addr := range more {
 		found := false
-		for _, oaddr := range p.addrs {
-			if addr == oaddr {
+		for _, oaddr := range p.entries {
+			if addr == oaddr.address {
 				found = true
 				break
 			}
 		}
 		if !found {
-			p.addrs = append(p.addrs, addr)
+			p.entries = append(p.entries, phonebookEntry{address: addr})
 		}
 	}
 }
@@ -103,15 +144,39 @@ func (p *ThreadsafePhonebook) ExtendPeerList(more []string) {
 func (p *ThreadsafePhonebook) Length() int {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
-	return len(p.addrs)
+	return len(p.entries)
 }
 
 // ReplacePeerList replaces set of addresses with that passed in.
 func (p *ThreadsafePhonebook) ReplacePeerList(they []string) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
-	p.addrs = make([]string, len(they))
-	copy(p.addrs, they)
+	p.entries = make([]phonebookEntry, len(they))
+	for i, e := range they {
+		p.entries[i] = phonebookEntry{address: e}
+	}
+}
+
+// MergePeerList mearges set of addresses with that passed in.
+// new entries in they are being added
+// existing items that aren't included in they are being removed
+// matching entries don't change
+func (p *ThreadsafePhonebook) MergePeerList(they []string) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+	existing := make(map[string]phonebookEntry)
+	for _, e := range p.entries {
+		existing[e.address] = e
+	}
+
+	p.entries = make([]phonebookEntry, len(they))
+	for i, e := range they {
+		if existingEntry, has := existing[e]; has {
+			p.entries[i] = existingEntry
+		} else {
+			p.entries[i] = phonebookEntry{address: e}
+		}
+	}
 }
 
 // MultiPhonebook contains several phonebooks
@@ -173,4 +238,13 @@ func (mp *MultiPhonebook) AddPhonebook(p Phonebook) {
 		}
 	}
 	mp.phonebooks = append(mp.phonebooks, p)
+}
+
+// UpdateRetryAfter updates the retry-after field for the entries matching the given address
+func (mp *MultiPhonebook) UpdateRetryAfter(addr string, retryAfter time.Time) {
+	mp.lock.Lock()
+	defer mp.lock.Unlock()
+	for _, op := range mp.phonebooks {
+		op.UpdateRetryAfter(addr, retryAfter)
+	}
 }

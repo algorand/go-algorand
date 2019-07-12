@@ -85,19 +85,28 @@ func testPhonebookUniform(t *testing.T, set []string, ph Phonebook, getsize int)
 
 func TestArrayPhonebookAll(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e"}
-	ph := ArrayPhonebook{set}
+	ph := ArrayPhonebook{}
+	for _, e := range set {
+		ph.Entries = append(ph.Entries, phonebookEntry{address: e})
+	}
 	testPhonebookAll(t, set, &ph)
 }
 
 func TestArrayPhonebookUniform1(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e"}
-	ph := ArrayPhonebook{set}
+	ph := ArrayPhonebook{}
+	for _, e := range set {
+		ph.Entries = append(ph.Entries, phonebookEntry{address: e})
+	}
 	testPhonebookUniform(t, set, &ph, 1)
 }
 
 func TestArrayPhonebookUniform3(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e"}
-	ph := ArrayPhonebook{set}
+	ph := ArrayPhonebook{}
+	for _, e := range set {
+		ph.Entries = append(ph.Entries, phonebookEntry{address: e})
+	}
 	testPhonebookUniform(t, set, &ph, 3)
 }
 
@@ -157,8 +166,14 @@ func TestThreadsafePhonebookExtensionLong(t *testing.T) {
 
 func TestMultiPhonebook(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j"}
-	pha := ArrayPhonebook{set[:5]}
-	phb := ArrayPhonebook{set[5:]}
+	pha := ArrayPhonebook{}
+	for _, e := range set[:5] {
+		pha.Entries = append(pha.Entries, phonebookEntry{address: e})
+	}
+	phb := ArrayPhonebook{}
+	for _, e := range set[5:] {
+		phb.Entries = append(phb.Entries, phonebookEntry{address: e})
+	}
 	mp := MultiPhonebook{}
 	mp.AddPhonebook(&pha)
 	mp.AddPhonebook(&phb)

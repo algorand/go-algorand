@@ -31,6 +31,7 @@ import (
 	"path"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -800,7 +801,7 @@ func getCommonHeaders(headers http.Header) (otherTelemetryGUID, otherInstanceNam
 }
 
 // checkIncomingConnectionLimits perform the connection limits counting for the incoming connections.
-func (wn *WebsocketNetwork) checkIncomingConnectionLimits(response http.ResponseWriter, request *http.Request, remoteHost, otherTelemetryGUID, otherInstanceName string) int {
+func (wn *WebsocketNetwork) checkIncomingConnectionLimits(response http.ResponseWriter, request *http.Request, remoteHost, otherTelemetryGUID, otherInstanceName string, requestTime time.Time) int {
 	if wn.numIncomingPeers() >= wn.config.IncomingConnectionsLimit {
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "incoming_connection_limit"})
 		wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerFailEvent,
@@ -815,7 +816,13 @@ func (wn *WebsocketNetwork) checkIncomingConnectionLimits(response http.Response
 		return http.StatusServiceUnavailable
 	}
 
-	if wn.connectedForIP(remoteHost) >= wn.config.MaxConnectionsPerIP {
+	var rateLimitingWindowStartTime time.Time
+	if wn.config.ConnectionsRateLimitingWindowSeconds > 0 && wn.config.ConnectionsRateLimitingCount > 0 {
+		rateLimitingWindowStartTime = requestTime.Add(-time.Duration(wn.config.ConnectionsRateLimitingWindowSeconds) * time.Second)
+	}
+
+	totalConnections, newerConnection := wn.connectedForIP(remoteHost, rateLimitingWindowStartTime)
+	if totalConnections >= wn.config.MaxConnectionsPerIP {
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "incoming_connection_per_ip_limit"})
 		wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerFailEvent,
 			telemetryspec.ConnectPeerFailEventDetails{
@@ -827,6 +834,20 @@ func (wn *WebsocketNetwork) checkIncomingConnectionLimits(response http.Response
 			})
 		response.WriteHeader(http.StatusServiceUnavailable)
 		return http.StatusServiceUnavailable
+	}
+	if newerConnection > wn.config.ConnectionsRateLimitingCount && wn.config.ConnectionsRateLimitingWindowSeconds > 0 && wn.config.ConnectionsRateLimitingCount > 0 {
+		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "incoming_connection_per_ip_rate_limit"})
+		wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerFailEvent,
+			telemetryspec.ConnectPeerFailEventDetails{
+				Address:      remoteHost,
+				HostName:     otherTelemetryGUID,
+				Incoming:     true,
+				InstanceName: otherInstanceName,
+				Reason:       "Remote IP Connection Rate Limit",
+			})
+		response.Header().Add(TooManyRequestsRetryAfterHeader, fmt.Sprintf("%d", wn.config.ConnectionsRateLimitingWindowSeconds))
+		response.WriteHeader(http.StatusTooManyRequests)
+		return http.StatusTooManyRequests
 	}
 	return http.StatusOK
 }
@@ -904,8 +925,8 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 		remoteHost = originIP.String()
 	}
 	otherTelemetryGUID, otherInstanceName, otherPublicAddr := getCommonHeaders(request.Header)
-
-	if wn.checkIncomingConnectionLimits(response, request, remoteHost, otherTelemetryGUID, otherInstanceName) != http.StatusOK {
+	requestTime := time.Now()
+	if wn.checkIncomingConnectionLimits(response, request, remoteHost, otherTelemetryGUID, otherInstanceName, requestTime) != http.StatusOK {
 		// we've already logged and written all response(s).
 		return
 	}
@@ -951,6 +972,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 		InstanceName:      otherInstanceName,
 		incomingMsgFilter: wn.incomingMsgFilter,
 		prioChallenge:     challenge,
+		createTime:        requestTime,
 	}
 	peer.TelemetryGUID = otherTelemetryGUID
 	peer.init(wn.config, wn.outgoingMessagesBufferSize)
@@ -1191,16 +1213,20 @@ func (wn *WebsocketNetwork) isConnectedTo(addr string) bool {
 }
 
 // connectedForIP returns number of peers with same host
-func (wn *WebsocketNetwork) connectedForIP(host string) int {
+func (wn *WebsocketNetwork) connectedForIP(host string, connectionsNewerThan time.Time) (totalConnections int, newerConnections uint) {
 	wn.peersLock.RLock()
 	defer wn.peersLock.RUnlock()
-	out := 0
+	totalConnections = 0
+	newerConnections = 0
 	for _, peer := range wn.peers {
 		if host == peer.OriginAddress() {
-			out++
+			totalConnections++
+			if peer.createTime.After(connectionsNewerThan) {
+				newerConnections++
+			}
 		}
 	}
-	return out
+	return
 }
 
 const meshThreadInterval = time.Minute
@@ -1241,7 +1267,7 @@ func (wn *WebsocketNetwork) meshThread() {
 		dnsAddrs := wn.getDNSAddrs()
 		if len(dnsAddrs) > 0 {
 			wn.log.Debugf("got %d dns addrs, %#v", len(dnsAddrs), dnsAddrs[:imin(5, len(dnsAddrs))])
-			wn.dnsPhonebook.ReplacePeerList(dnsAddrs)
+			wn.dnsPhonebook.MergePeerList(dnsAddrs)
 			mp, ok := wn.phonebook.(*MultiPhonebook)
 			if ok {
 				mp.AddPhonebook(&wn.dnsPhonebook)
@@ -1463,6 +1489,9 @@ const InstanceNameHeader = "X-Algorand-InstanceName"
 // PriorityChallengeHeader HTTP header informs a client about the challenge it should sign to increase network priority.
 const PriorityChallengeHeader = "X-Algorand-PriorityChallenge"
 
+// TooManyRequestsRetryAfterHeader HTTP header let the client know when to make the next connection attempt
+const TooManyRequestsRetryAfterHeader = "Retry-After"
+
 var websocketsScheme = map[string]string{"http": "ws", "https": "wss"}
 
 var errBadAddr = errors.New("bad address")
@@ -1579,6 +1608,15 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 				wn.log.Warnf("ws connect(%s) fail - bad handshake, precondition failed : %s error : '%s'", gossipAddr, errString)
 			case http.StatusLoopDetected:
 				wn.log.Infof("ws connect(%s) aborted due to connecting to self", gossipAddr)
+			case http.StatusTooManyRequests:
+				wn.log.Infof("ws connect(%s) aborted due to connecting too frequently", gossipAddr)
+				retryAfterHeader := response.Header.Get(TooManyRequestsRetryAfterHeader)
+				if retryAfter, retryParseErr := strconv.ParseUint(retryAfterHeader, 10, 32); retryParseErr == nil {
+					// we've got a retry-after header.
+					// convert it to a timestamp so that we could use it.
+					retryAfterTime := time.Now().Add(time.Duration(retryAfter) * time.Second)
+					wn.phonebook.UpdateRetryAfter(addr, retryAfterTime)
+				}
 			default:
 				wn.log.Warnf("ws connect(%s) fail - bad handshake, Status code = %d, Headers = %#v, Body = %s", gossipAddr, response.StatusCode, response.Header, errString)
 			}
@@ -1597,7 +1635,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		return
 	}
 
-	peer := &wsPeer{wsPeerCore: wsPeerCore{net: wn, rootURL: addr}, conn: conn, outgoing: true, incomingMsgFilter: wn.incomingMsgFilter}
+	peer := &wsPeer{wsPeerCore: wsPeerCore{net: wn, rootURL: addr}, conn: conn, outgoing: true, incomingMsgFilter: wn.incomingMsgFilter, createTime: time.Now()}
 	peer.TelemetryGUID = response.Header.Get(TelemetryIDHeader)
 	peer.init(wn.config, wn.outgoingMessagesBufferSize)
 	wn.addPeer(peer)
