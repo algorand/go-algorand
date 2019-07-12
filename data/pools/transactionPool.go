@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 )
@@ -39,6 +40,7 @@ type Ledger interface {
 	ConsensusParams(basics.Round) (config.ConsensusParams, error)
 	BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error)
 	LastRound() basics.Round
+	Latest() basics.Round
 }
 
 // TransactionPool is a struct maintaining a sanitized pool of transactions that are available for inclusion in
@@ -49,8 +51,8 @@ type TransactionPool struct {
 	pendingTxns                     map[transactions.Txid]transactions.SignedTxn // note: digests do not include signatures to reduce spam
 	expiredTxCount                  map[basics.Round]int
 	exponentialPriorityGrowthFactor uint64
-	algosPendingSpend               accountsToPendingTransactions
-	ledger                          Ledger
+	pendingBlockEvaluator           *ledger.BlockEvaluator
+	ledger                          *ledger.Ledger
 	statusCache                     *statusCache
 	logStats                        bool
 	size                            int
@@ -63,18 +65,18 @@ type TransactionPool struct {
 //
 // The pool also contains status information for the last transactionPoolSize
 // transactions that were removed from the pool without being committed.
-func MakeTransactionPool(ledger Ledger, exponentialPriorityGrowthFactor uint64, transactionPoolSize int, logStats bool) *TransactionPool {
+func MakeTransactionPool(ledger *ledger.Ledger, exponentialPriorityGrowthFactor uint64, transactionPoolSize int, logStats bool) *TransactionPool {
 	pool := TransactionPool{
 		txPriorityQueue:                 makeTxPriorityQueue(transactionPoolSize),
 		pendingTxns:                     make(map[transactions.Txid]transactions.SignedTxn),
 		expiredTxCount:                  make(map[basics.Round]int),
 		exponentialPriorityGrowthFactor: exponentialPriorityGrowthFactor,
-		algosPendingSpend:               make(map[basics.Address]pendingTransactions),
 		ledger:                          ledger,
 		statusCache:                     makeStatusCache(transactionPoolSize),
 		logStats:                        logStats,
 		size:                            transactionPoolSize,
 	}
+	pool.recomputeBlockEvaluator()
 	return &pool
 }
 
@@ -160,14 +162,14 @@ func (pool *TransactionPool) Test(t transactions.SignedTxn) error {
 	pool.mu.RLock()
 	defer pool.mu.RUnlock()
 
-	_, _, _, err := pool.test(t)
+	_, _, err := pool.test(t)
 	return err
 }
 
-func (pool *TransactionPool) test(t transactions.SignedTxn) (accountDeductions, bool, transactions.Txid, error) {
+func (pool *TransactionPool) test(t transactions.SignedTxn) (bool, transactions.Txid, error) {
 	// check if we already have this transaction in the pool.
 	if _, has := pool.pendingTxns[t.ID()]; has {
-		return accountDeductions{}, false, transactions.Txid{}, errors.New("TransactionPool.test: transaction already in the pool")
+		return false, transactions.Txid{}, errors.New("TransactionPool.test: transaction already in the pool")
 	}
 
 	var minTransactionID transactions.Txid
@@ -179,26 +181,11 @@ func (pool *TransactionPool) test(t transactions.SignedTxn) (accountDeductions, 
 		minTransactionID, minPriority = pool.txPriorityQueue.getMin()
 
 		if t.Priority().LessThan(minPriority.Mul(pool.exponentialPriorityGrowthFactor)) {
-			return accountDeductions{}, isFull, transactions.Txid{}, fmt.Errorf("TransactionPool.test: transaction pool is full and tx priority too low: min in pool %v vs. %v", minPriority, t.Priority())
+			return isFull, transactions.Txid{}, fmt.Errorf("TransactionPool.test: transaction pool is full and tx priority too low: min in pool %v vs. %v", minPriority, t.Priority())
 		}
 	}
 
-	// check if we have committed the transaction recently already
-	committed, err := pool.ledger.Committed(t)
-	if err != nil {
-		return accountDeductions{}, isFull, transactions.Txid{}, fmt.Errorf("TransactionPool.test: failed to call Committed(): %v", err)
-	}
-	if committed {
-		return accountDeductions{}, isFull, transactions.Txid{}, fmt.Errorf("TransactionPool.test: transaction with ID %v has already been committed", t.ID())
-	}
-
-	// compute the deductions following this transaction
-	deductions, err := pool.computeDeductions(t)
-	if err != nil {
-		return accountDeductions{}, isFull, transactions.Txid{}, err
-	}
-
-	return deductions, isFull, minTransactionID, nil
+	return isFull, minTransactionID, nil
 }
 
 // Remember stores the provided transaction
@@ -209,7 +196,7 @@ func (pool *TransactionPool) Remember(t transactions.SignedTxn) error {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
-	deductions, isFull, minTransactionID, err := pool.test(t)
+	isFull, minTransactionID, err := pool.test(t)
 	if err != nil {
 		return fmt.Errorf("TransactionPool.Remember: %v", err)
 	}
@@ -218,6 +205,15 @@ func (pool *TransactionPool) Remember(t transactions.SignedTxn) error {
 		// remove old transaction. we want to do that before adding the new entry to ensure we
 		// won't exceed (temporarly) the total number of pending transactions.
 		pool.remove(minTransactionID, fmt.Errorf("transaction evicted due to low priority"))
+	}
+
+	if pool.pendingBlockEvaluator == nil {
+		return fmt.Errorf("TransactionPool.Remember: no pending block evaluator")
+	}
+
+	err = pool.pendingBlockEvaluator.Transaction(t, nil)
+	if err != nil {
+		return fmt.Errorf("TransactionPool.Remember: %v", err)
 	}
 
 	// push to the priority queue
@@ -230,80 +226,8 @@ func (pool *TransactionPool) Remember(t transactions.SignedTxn) error {
 	// we're almost done; the transaction was already saved into the priority queue. now, save the transaction
 	// into the pending transactions list.
 	pool.pendingTxns[t.ID()] = t
-	// last, update the spent algos from the sender account
-	pool.algosPendingSpend.accountForTransactionDeductions(t.Txn, deductions)
 
 	return nil
-}
-
-func (pool *TransactionPool) computeDeductions(t transactions.SignedTxn) (accountDeductions, error) {
-	// compute how this transaction would affect the number of MicroAlgos pending spend by the sender
-	algosPendingSpend, err := pool.algosPendingSpend.deductionsWithTransaction(t.Txn)
-
-	// make sure that the sender has the balance to cover all their pending transactions
-	if err != nil {
-		return algosPendingSpend, fmt.Errorf("TransactionPool.Remember: failed to compute balance - %v", err)
-	}
-	senderBalance, _, _, _, _, err := pool.ledger.BalanceAndStatus(t.Txn.Src())
-	if err != nil {
-		return algosPendingSpend, err
-	}
-	remainder, overflow := basics.OSubA(senderBalance, algosPendingSpend.amount)
-	if overflow {
-		return algosPendingSpend, fmt.Errorf("TransactionPool.Remember: Insufficient funds - The total pending transactions from the address require %d microAlgos but the account only has %d microAlgos", algosPendingSpend.amount.Raw, senderBalance.Raw)
-	}
-
-	// get the min balance
-	consensusParams, err := pool.ledger.ConsensusParams(pool.ledger.LastRound())
-	if err != nil {
-		return algosPendingSpend, err
-	}
-
-	hdr, err := pool.ledger.BlockHdr(pool.ledger.LastRound())
-	if err != nil {
-		return algosPendingSpend, err
-	}
-
-	// check that sender's account does not go below min balance
-	if t.Txn.CloseRemainderTo == (basics.Address{}) {
-		// if the account is not closed, then remainder should be above min
-		if t.Txn.Sender != hdr.FeeSink && t.Txn.Sender != hdr.RewardsPool {
-			if remainder.LessThan(basics.MicroAlgos{Raw: consensusParams.MinBalance}) {
-				return algosPendingSpend, fmt.Errorf("TransactionPool.Remember: Insufficient funds - sender's account will have only %v microAlgos left out of %d required", remainder, consensusParams.MinBalance)
-			}
-		}
-	} else if t.Txn.CloseRemainderTo != hdr.FeeSink && t.Txn.CloseRemainderTo != hdr.RewardsPool {
-		// account is being closed, make sure that the account getting the remainder does not go below min balance
-		money, _, _, _, _, err := pool.ledger.BalanceAndStatus(t.Txn.CloseRemainderTo)
-		// some error accessing the account balance.
-		if err != nil {
-			return algosPendingSpend, err
-		}
-
-		// if the account does not already exist, make sure it does not go below min
-		if money.IsZero() {
-			if remainder.LessThan(basics.MicroAlgos{Raw: consensusParams.MinBalance}) {
-				return algosPendingSpend, fmt.Errorf("TransactionPool.Remember: Insufficient funds - The transaction's remainder %v is lower than the minimum required, %d, for an account", remainder, consensusParams.MinBalance)
-			}
-		}
-	}
-
-	// check that recipient's account does not go below min balance
-	if t.Txn.Receiver != (basics.Address{}) && t.Txn.Receiver != hdr.FeeSink && t.Txn.Receiver != hdr.RewardsPool {
-		money, _, _, _, _, err := pool.ledger.BalanceAndStatus(t.Txn.Receiver)
-		// some error accessing the account balance.
-		if err != nil {
-			return algosPendingSpend, err
-		}
-
-		// if the account does not already exist, make sure it does not go below min
-		if money.IsZero() {
-			if t.Txn.Amount.LessThan(basics.MicroAlgos{Raw: consensusParams.MinBalance}) {
-				return algosPendingSpend, fmt.Errorf("TransactionPool.Remember: Insufficient funds - receiver's account will have only %v microAlgos out of %d required", t.Txn.Amount, consensusParams.MinBalance)
-			}
-		}
-	}
-	return algosPendingSpend, nil
 }
 
 // Lookup returns the error associated with a transaction that used
@@ -351,79 +275,31 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block) {
 	defer pool.mu.Unlock()
 
 	var stats telemetryspec.ProcessBlockMetrics
+	var knownCommitted uint
+	var unknownCommitted uint
 
-	remove := make(map[transactions.Txid]error, 0)
-
-	// collect transactions that appear in the last block
 	payset, err := block.DecodePayset()
-	if err != nil {
-		return
-	}
-
-	for _, tx := range payset {
-		txid := tx.ID()
-		_, ok := pool.pendingTxns[txid]
-		if ok {
-			remove[txid] = nil
-			stats.KnownCommittedCount++
-		} else {
-			stats.UnknownCommittedCount++
-		}
-	}
-
-	// collect expired transactions
-	expired := 0
-	for txid, tx := range pool.pendingTxns {
-		err := tx.Txn.Alive(block)
-		if err != nil {
-			remove[txid] = err
-			expired++
-			stats.ExpiredCount++
-		}
-	}
-
-	// remove all collected transactions
-	for txid, txErr := range remove {
-		pool.remove(txid, txErr)
-	}
-
-	// remove transactions from senders in this block until everyone can spend what they have given the last block
-	for _, tx := range payset {
-		account := tx.Txn.Src()
-		pendingSpend := pool.algosPendingSpend[account]
-		spendable, _, _, _, _, err := pool.ledger.BalanceAndStatus(account)
-		if err != nil {
-			logging.Base().Errorf("TransactionPool.OnNewBlock: Cannot get balance for %v: %v", account, err)
-			break
-		}
-
-		if spendable.LessThan(pendingSpend.deductions.amount) {
-			txids := make([]transactions.Txid, 0)
-			for txid := range pendingSpend.txids {
-				txids = append(txids, txid)
-			}
-
-			// sort in increasing order of priority
-			sort.SliceStable(txids, func(i, j int) bool {
-				return pool.pendingTxns[txids[i]].Priority().LessThan(pool.pendingTxns[txids[j]].Priority())
-			})
-
-			// remove transactions, beginning with the lowest priority one until the sender can spend all their pending transactions
-			for _, txid := range txids {
-				if pool.algosPendingSpend[account].deductions.amount.GreaterThan(spendable) {
-					pool.remove(txid, fmt.Errorf("pending spend %d exceeds spendable %d",
-						pool.algosPendingSpend[account].deductions.amount.Raw, spendable.Raw))
-					stats.RemovedInvalidCount++
-				} else {
-					break
-				}
+	if err == nil {
+		for _, tx := range payset {
+			txid := tx.ID()
+			_, ok := pool.pendingTxns[txid]
+			if ok {
+				knownCommitted++
+			} else {
+				unknownCommitted++
 			}
 		}
 	}
 
-	// save exipred history and clean old statistics about expired transactions
+	if pool.pendingBlockEvaluator == nil || block.Round() >= pool.pendingBlockEvaluator.Round() {
+		stats = pool.recomputeBlockEvaluator()
+	}
+
+	stats.KnownCommittedCount = knownCommitted
+	stats.UnknownCommittedCount = unknownCommitted
+
 	proto := config.Consensus[block.CurrentProtocol]
-	pool.expiredTxCount[block.Round()] = expired
+	pool.expiredTxCount[block.Round()] = int(stats.ExpiredCount)
 	delete(pool.expiredTxCount, block.Round()-expiredHistory*basics.Round(proto.MaxTxnLife))
 
 	if pool.logStats {
@@ -433,6 +309,75 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block) {
 		details.Round = uint64(block.Round())
 		logging.Base().Metrics(telemetryspec.Transaction, stats, details)
 	}
+}
+
+// alwaysVerifiedPool implements ledger.VerifiedTxnCache and returns every
+// transaction as verified.
+type alwaysVerifiedPool struct{}
+
+func (*alwaysVerifiedPool) Verified(txn transactions.SignedTxn) bool {
+	return true
+}
+
+// recomputeBlockEvaluator constructs a new BlockEvaluator and feeds all
+// in-pool transactions to it (removing any transactions that are rejected
+// by the BlockEvaluator).
+func (pool *TransactionPool) recomputeBlockEvaluator() (stats telemetryspec.ProcessBlockMetrics) {
+	pool.pendingBlockEvaluator = nil
+
+	latest := pool.ledger.Latest()
+	prev, err := pool.ledger.BlockHdr(latest)
+	if err != nil {
+		logging.Base().Warnf("TransactionPool.recomputeBlockEvaluator: cannot get prev header for %d: %v",
+			latest, err)
+		return
+	}
+
+	next := bookkeeping.MakeBlock(prev)
+	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, &alwaysVerifiedPool{}, nil)
+	if err != nil {
+		logging.Base().Warnf("TransactionPool.recomputeBlockEvaluator: cannot start evaluator: %v", err)
+		return
+	}
+
+	pool.pendingBlockEvaluator.SetValidateTxnBytes(false)
+
+	// Feed the transactions in priority order, so that higher-priority
+	// transactions go in first, and lower-priority transactions are more
+	// likely to get dropped.
+	txns := make([]transactions.SignedTxn, len(pool.pendingTxns))
+	sorti := make([]int, len(pool.pendingTxns))
+	i := 0
+	for _, txn := range pool.pendingTxns {
+		txns[i] = txn
+		sorti[i] = i
+		i++
+	}
+
+	sort.SliceStable(sorti, func(i, j int) bool {
+		return txns[sorti[j]].PtrPriority().LessThan(txns[sorti[i]].PtrPriority())
+	})
+
+	out := make([]transactions.SignedTxn, len(pool.pendingTxns))
+	for i, p := range sorti {
+		out[i] = txns[p]
+	}
+
+	for _, tx := range out {
+		err := pool.pendingBlockEvaluator.Transaction(tx, nil)
+		if err != nil {
+			pool.remove(tx.ID(), err)
+
+			switch err.(type) {
+			case transactions.TxnDeadError:
+				stats.ExpiredCount++
+			default:
+				stats.RemovedInvalidCount++
+			}
+		}
+	}
+
+	return
 }
 
 // Remove removes a transaction from the pool, and remembers its error
@@ -448,9 +393,6 @@ func (pool *TransactionPool) remove(txid transactions.Txid, txErr error) {
 	tx, has := pool.pendingTxns[txid]
 	if !has {
 		return
-	}
-	if err := pool.algosPendingSpend.remove(tx.Txn); err != nil {
-		logging.Base().Errorf("TransactionPool::remove: %v", err)
 	}
 	pool.txPriorityQueue.Remove(txid)
 	delete(pool.pendingTxns, txid)

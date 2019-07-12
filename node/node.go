@@ -219,7 +219,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookDir
 	}
 
 	node.ledger.SetArchival(cfg.Archival)
-	node.transactionPool = pools.MakeTransactionPool(node.ledger, cfg.TxPoolExponentialIncreaseFactor, cfg.TxPoolSize, cfg.EnableAssembleStats)
+	node.transactionPool = pools.MakeTransactionPool(node.ledger.Ledger, cfg.TxPoolExponentialIncreaseFactor, cfg.TxPoolSize, cfg.EnableAssembleStats)
 	node.ledger.RegisterBlockListeners([]ledger.BlockListener{node.transactionPool})
 	node.txHandler = data.MakeTxHandler(node.transactionPool, node.ledger, node.net, node.genesisID, node.genesisHash, node.lowPriorityCryptoVerificationPool)
 	node.feeTracker, err = pools.MakeFeeTracker()
