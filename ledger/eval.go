@@ -55,7 +55,7 @@ type roundCowBase struct {
 }
 
 func (x *roundCowBase) lookup(addr basics.Address) (basics.AccountData, error) {
-	return x.l.lookupWithoutRewards(x.rnd, addr)
+	return x.l.LookupWithoutRewards(x.rnd, addr)
 }
 
 func (x *roundCowBase) isDup(firstValid basics.Round, txid transactions.Txid) (bool, error) {
@@ -159,7 +159,7 @@ type ledgerForEvaluator interface {
 	Lookup(basics.Round, basics.Address) (basics.AccountData, error)
 	Totals(basics.Round) (AccountTotals, error)
 	isDup(basics.Round, basics.Round, transactions.Txid) (bool, error)
-	lookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, error)
+	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, error)
 }
 
 // StartEvaluator creates a BlockEvaluator, given a ledger and a block header

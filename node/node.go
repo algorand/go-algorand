@@ -401,9 +401,16 @@ func (node *AlgorandFullNode) GetSupply() basics.SupplyDetail {
 	}
 }
 
-// GetBalanceAndStatus returns both the Balance and the Delegator status of the account, in one call so they're from the same block
-func (node *AlgorandFullNode) GetBalanceAndStatus(address basics.Address) (money basics.MicroAlgos, rewards basics.MicroAlgos, moneyWithoutPendingRewards basics.MicroAlgos, status basics.Status, round basics.Round, err error) {
-	return node.ledger.BalanceAndStatus(address)
+// GetBalanceRecord returns the balance record, which includes the balance and delegator status.
+// Usage: To get the current balance and status, call this with the current last round.
+func (node *AlgorandFullNode) GetBalanceRecord(r basics.Round, address basics.Address) (basics.BalanceRecord, error) {
+	return node.ledger.BalanceRecord(r, address)
+}
+
+// GetBalanceRecordWithoutPendingRewards returns the balance record associated with the given account, without applying the pending rewards
+// to the balance and other totals.
+func (node *AlgorandFullNode) GetBalanceRecordWithoutPendingRewards(r basics.Round, address basics.Address) (basics.BalanceRecord, error) {
+	return node.ledger.BalanceRecordWithoutPendingRewards(r, address)
 }
 
 // BroadcastSignedTxn broadcasts a transaction that has already been signed.

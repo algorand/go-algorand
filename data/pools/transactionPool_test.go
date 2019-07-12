@@ -45,17 +45,21 @@ type mockSpendableBalancesUnbounded struct {
 	exceptions map[basics.Address]uint64
 }
 
-func (b mockSpendableBalancesUnbounded) BalanceAndStatus(address basics.Address) (total basics.MicroAlgos, rewards basics.MicroAlgos, totalWithoutPendingRewards basics.MicroAlgos, status basics.Status, round basics.Round, err error) {
+func (b mockSpendableBalancesUnbounded) BalanceRecord(r basics.Round, address basics.Address) (rec basics.BalanceRecord, err error) {
+	rec.Addr = address
 	if b.exceptions != nil {
 		if balance, has := b.exceptions[address]; has {
-			total = basics.MicroAlgos{Raw: balance}
+			rec.MicroAlgos = basics.MicroAlgos{Raw: balance}
 			return
 		}
 	}
-	total = basics.MicroAlgos{Raw: b.balance}
-	rewards = basics.MicroAlgos{Raw: 0}
-	round = 1
+	rec.MicroAlgos = basics.MicroAlgos{Raw: b.balance}
+	rec.RewardedMicroAlgos = basics.MicroAlgos{Raw: 0}
 	return
+}
+
+func (b mockSpendableBalancesUnbounded) BalanceRecordWithoutPendingRewards(r basics.Round, address basics.Address) (rec basics.BalanceRecord, err error) {
+	panic("Not implemented")
 }
 
 func (b mockSpendableBalancesUnbounded) Committed(transactions.SignedTxn) (bool, error) {

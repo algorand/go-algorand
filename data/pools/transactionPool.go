@@ -34,7 +34,8 @@ import (
 // Ledger allows retrieving the amount of spendable MicroAlgos
 // and also checking if a transaction has already been committed.
 type Ledger interface {
-	BalanceAndStatus(basics.Address) (basics.MicroAlgos, basics.MicroAlgos, basics.MicroAlgos, basics.Status, basics.Round, error)
+	BalanceRecord(basics.Round, basics.Address) (basics.BalanceRecord, error)
+	BalanceRecordWithoutPendingRewards(basics.Round, basics.Address) (basics.BalanceRecord, error)
 	Committed(transactions.SignedTxn) (bool, error)
 	ConsensusParams(basics.Round) (config.ConsensusParams, error)
 	BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error)
@@ -244,22 +245,23 @@ func (pool *TransactionPool) computeDeductions(t transactions.SignedTxn) (accoun
 	if err != nil {
 		return algosPendingSpend, fmt.Errorf("TransactionPool.Remember: failed to compute balance - %v", err)
 	}
-	senderBalance, _, _, _, _, err := pool.ledger.BalanceAndStatus(t.Txn.Src())
+	lastRound := pool.ledger.LastRound()
+	record, err := pool.ledger.BalanceRecord(lastRound, t.Txn.Src())
 	if err != nil {
 		return algosPendingSpend, err
 	}
-	remainder, overflow := basics.OSubA(senderBalance, algosPendingSpend.amount)
+	remainder, overflow := basics.OSubA(record.MicroAlgos, algosPendingSpend.amount)
 	if overflow {
-		return algosPendingSpend, fmt.Errorf("TransactionPool.Remember: Insufficient funds - The total pending transactions from the address require %d microAlgos but the account only has %d microAlgos", algosPendingSpend.amount.Raw, senderBalance.Raw)
+		return algosPendingSpend, fmt.Errorf("TransactionPool.Remember: Insufficient funds - The total pending transactions from the address require %d microAlgos but the account only has %d microAlgos", algosPendingSpend.amount.Raw, record.MicroAlgos.Raw)
 	}
 
 	// get the min balance
-	consensusParams, err := pool.ledger.ConsensusParams(pool.ledger.LastRound())
+	consensusParams, err := pool.ledger.ConsensusParams(lastRound)
 	if err != nil {
 		return algosPendingSpend, err
 	}
 
-	hdr, err := pool.ledger.BlockHdr(pool.ledger.LastRound())
+	hdr, err := pool.ledger.BlockHdr(lastRound)
 	if err != nil {
 		return algosPendingSpend, err
 	}
@@ -274,14 +276,14 @@ func (pool *TransactionPool) computeDeductions(t transactions.SignedTxn) (accoun
 		}
 	} else if t.Txn.CloseRemainderTo != hdr.FeeSink && t.Txn.CloseRemainderTo != hdr.RewardsPool {
 		// account is being closed, make sure that the account getting the remainder does not go below min balance
-		money, _, _, _, _, err := pool.ledger.BalanceAndStatus(t.Txn.CloseRemainderTo)
+		closeRemainderBalance, err := pool.ledger.BalanceRecord(lastRound, t.Txn.CloseRemainderTo)
 		// some error accessing the account balance.
 		if err != nil {
 			return algosPendingSpend, err
 		}
 
 		// if the account does not already exist, make sure it does not go below min
-		if money.IsZero() {
+		if closeRemainderBalance.MicroAlgos.IsZero() {
 			if remainder.LessThan(basics.MicroAlgos{Raw: consensusParams.MinBalance}) {
 				return algosPendingSpend, fmt.Errorf("TransactionPool.Remember: Insufficient funds - The transaction's remainder %v is lower than the minimum required, %d, for an account", remainder, consensusParams.MinBalance)
 			}
@@ -290,14 +292,14 @@ func (pool *TransactionPool) computeDeductions(t transactions.SignedTxn) (accoun
 
 	// check that recipient's account does not go below min balance
 	if t.Txn.Receiver != (basics.Address{}) && t.Txn.Receiver != hdr.FeeSink && t.Txn.Receiver != hdr.RewardsPool {
-		money, _, _, _, _, err := pool.ledger.BalanceAndStatus(t.Txn.Receiver)
+		receiverBalance, err := pool.ledger.BalanceRecord(lastRound, t.Txn.Receiver)
 		// some error accessing the account balance.
 		if err != nil {
 			return algosPendingSpend, err
 		}
 
 		// if the account does not already exist, make sure it does not go below min
-		if money.IsZero() {
+		if receiverBalance.MicroAlgos.IsZero() {
 			if t.Txn.Amount.LessThan(basics.MicroAlgos{Raw: consensusParams.MinBalance}) {
 				return algosPendingSpend, fmt.Errorf("TransactionPool.Remember: Insufficient funds - receiver's account will have only %v microAlgos out of %d required", t.Txn.Amount, consensusParams.MinBalance)
 			}
@@ -391,11 +393,12 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block) {
 	for _, tx := range payset {
 		account := tx.Txn.Src()
 		pendingSpend := pool.algosPendingSpend[account]
-		spendable, _, _, _, _, err := pool.ledger.BalanceAndStatus(account)
+		record, err := pool.ledger.BalanceRecord(pool.ledger.LastRound(), account)
 		if err != nil {
 			logging.Base().Errorf("TransactionPool.OnNewBlock: Cannot get balance for %v: %v", account, err)
 			break
 		}
+		spendable := record.MicroAlgos
 
 		if spendable.LessThan(pendingSpend.deductions.amount) {
 			txids := make([]transactions.Txid, 0)
