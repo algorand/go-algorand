@@ -97,7 +97,7 @@ func TestTransactionPoolOrderingAndClearing(t *testing.T) {
 	for i := stoppedRound; i < latestRound; i++ {
 		block, err := c.Block(i)
 		r.NoError(err)
-		for _, tx := range block.Txns.Transactions {
+		for _, tx := range block.Transactions.Transactions {
 			confirmedTransactions = append(confirmedTransactions, tx.TxID)
 		}
 	}

@@ -20,25 +20,25 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/algorand/go-algorand/daemon/algod/api/client/models"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 )
 
 //////////////////////////////////////
 // Helpers to initialize mockClient //
 //////////////////////////////////////
 
-func makeNodeStatuses(blocks ...uint64) (ret []models.NodeStatus) {
-	ret = make([]models.NodeStatus, 0, len(blocks))
+func makeNodeStatuses(blocks ...uint64) (ret []v1.NodeStatus) {
+	ret = make([]v1.NodeStatus, 0, len(blocks))
 	for _, block := range blocks {
-		ret = append(ret, models.NodeStatus{LastRound: block})
+		ret = append(ret, v1.NodeStatus{LastRound: block})
 	}
 	return ret
 }
 
-func makeBlocks(blocks ...uint64) (ret map[uint64]models.Block) {
-	ret = map[uint64]models.Block{}
+func makeBlocks(blocks ...uint64) (ret map[uint64]v1.Block) {
+	ret = map[uint64]v1.Block{}
 	for _, block := range blocks {
-		ret[block] = models.Block{Round: block}
+		ret[block] = v1.Block{Round: block}
 	}
 	return ret
 }
@@ -50,12 +50,12 @@ type mockClient struct {
 	BlockCalls         map[uint64]int
 	GetGoRoutinesCalls int
 	error              []error
-	status             []models.NodeStatus
+	status             []v1.NodeStatus
 	routine            []string
-	block              map[uint64]models.Block
+	block              map[uint64]v1.Block
 }
 
-func makeMockClient(error []error, status []models.NodeStatus, block map[uint64]models.Block, routine []string) mockClient {
+func makeMockClient(error []error, status []v1.NodeStatus, block map[uint64]v1.Block, routine []string) mockClient {
 	return mockClient{
 		BlockCalls: make(map[uint64]int),
 		error:      error,
@@ -77,7 +77,7 @@ func (c *mockClient) nextError() (e error) {
 	return
 }
 
-func (c *mockClient) Status() (s models.NodeStatus, e error) {
+func (c *mockClient) Status() (s v1.NodeStatus, e error) {
 	c.StatusCalls++
 	s = c.status[0]
 	// Repeat last status...
@@ -88,7 +88,7 @@ func (c *mockClient) Status() (s models.NodeStatus, e error) {
 	return
 }
 
-func (c *mockClient) Block(block uint64) (b models.Block, e error) {
+func (c *mockClient) Block(block uint64) (b v1.Block, e error) {
 	c.BlockCalls[block]++
 	e = c.nextError()
 	b, ok := c.block[block]
