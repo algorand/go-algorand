@@ -38,5 +38,7 @@
     "TxSyncIntervalSeconds": 60,
     "TxSyncTimeoutSeconds": 30,
     "TxSyncServeResponseSize": 1000000,
-    "SuggestedFeeSlidingWindowSize":  50
+    "SuggestedFeeSlidingWindowSize":  50,
+    "ConnectionsRateLimitingWindowSeconds": 1,
+    "ConnectionsRateLimitingCount": 10
 }

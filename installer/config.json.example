@@ -39,5 +39,7 @@
     "TxSyncIntervalSeconds": 60,
     "TxSyncServeResponseSize": 1000000,
     "TxSyncTimeoutSeconds": 30,
-    "ForceRelayMessages": false
+    "ForceRelayMessages": false,
+    "ConnectionsRateLimitingWindowSeconds": 1,
+    "ConnectionsRateLimitingCount": 10
 }
