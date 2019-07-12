@@ -452,3 +452,26 @@ func reportErrorf(format string, args ...interface{}) {
 	// log.Warnf(format, args...)
 	os.Exit(1)
 }
+
+// writeFile is a wrapper of ioutil.WriteFile which considers the special
+// case of stdout filename
+func writeFile(filename string, data []byte, perm os.FileMode) error {
+	var err error
+	if filename == stdoutFilenameValue {
+		// Write to Stdout
+		if _, err = os.Stdout.Write(data); err != nil {
+			return err
+		}
+		return nil
+	}
+	return ioutil.WriteFile(filename, data, 0600)
+}
+
+// readFile is a wrapper of ioutil.ReadFile which consniders the
+// special case of stdin filename
+func readFile(filename string) ([]byte, error) {
+	if filename == stdinFileNameValue {
+		return ioutil.ReadAll(os.Stdin)
+	}
+	return ioutil.ReadFile(filename)
+}
