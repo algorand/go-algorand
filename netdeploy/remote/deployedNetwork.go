@@ -422,7 +422,7 @@ func createHostSpec(host HostConfig, template cloudHost) (hostSpec cloudHostSpec
 	defaultConfig := config.GetDefaultLocal()
 	var port int
 	for _, node := range host.Nodes {
-		if node.IsRelay {
+		if node.IsRelay() {
 			relayCount++
 			port, err = extractPublicPort(node.NetAddress)
 			if err != nil {

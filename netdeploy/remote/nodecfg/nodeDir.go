@@ -55,7 +55,7 @@ type nodeDir struct {
 //		* DeadlockOverride
 func (nd *nodeDir) configure(dnsName string) (err error) {
 	fmt.Fprintf(os.Stdout, "Configuring Node %s\n", nd.Name)
-	if err = nd.configureRelay(nd.IsRelay); err != nil {
+	if err = nd.configureRelay(nd.IsRelay()); err != nil {
 		fmt.Fprintf(os.Stdout, "Error during configureRelay: %s\n", err)
 		return
 	}
@@ -143,7 +143,7 @@ func (nd *nodeDir) configureNetAddress(address string) (err error) {
 	}
 	fmt.Fprintf(os.Stdout, " - Assigning NetAddress: %s\n", address)
 	nd.config.NetAddress = address
-	if address != "" && address[0] == ':' && nd.IsRelay {
+	if address != "" && address[0] == ':' && nd.IsRelay() {
 		fmt.Fprintf(os.Stdout, " - adding to relay addresses\n")
 		domainName := strings.Replace(nd.config.DNSBootstrapID, "<network>", string(nd.configurator.genesisData.Network), -1)
 		nd.configurator.addRelaySrv(domainName, address)

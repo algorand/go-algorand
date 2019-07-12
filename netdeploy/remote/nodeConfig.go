@@ -19,7 +19,7 @@ package remote
 // NodeConfig represents the configuration settings to apply to a single node running on a host
 type NodeConfig struct {
 	Name               string `json:",omitempty"`
-	IsRelay            bool
+	IsRelayDEPRECATED  bool   `json:"IsRelay,omitempty"` // The field still exists to parse any old serialized NodeConfig objects, but "IsRelay" should not be used.
 	Wallets            []NodeWalletData
 	NetAddress         string `json:",omitempty"`
 	APIEndpoint        string `json:",omitempty"`
@@ -44,4 +44,9 @@ type NodeConfig struct {
 	// AltConfigs have other values for NodeNameMatchRegex or FractionApply. Typically the root NodeConfig is the default template and AltConfig contains variations that match some regex or are applied randomly to some fraction.
 	// This should not be used recursively, but only one deep, a root and a list of alt configs.
 	AltConfigs []NodeConfig `json:",omitempty"`
+}
+
+// If we advertise to the world an address where we listen for gossip network connections, we are taking on the role of relay.
+func (nc NodeConfig) IsRelay() bool {
+	return nc.NetAddress != ""
 }

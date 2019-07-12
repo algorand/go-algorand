@@ -199,7 +199,10 @@ func generateNetworkTemplate(templateFilename string, wallets, relays, nodeHosts
 		newNode.NodeNameMatchRegex = ""
 		newNode.FractionApply = 0.0
 		newNode.Name = name
-		newNode.IsRelay = true
+		if newNode.NetAddress == "" {
+			// if not set by relayTemplate ensure that it is a relay
+			newNode.NetAddress = "0.0.0.0:4160"
+		}
 		newNode.Wallets = nil
 		host.Nodes = append(host.Nodes, newNode)
 		network.Hosts = append(network.Hosts, host)
