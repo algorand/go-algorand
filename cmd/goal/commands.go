@@ -464,7 +464,7 @@ func writeFile(filename string, data []byte, perm os.FileMode) error {
 		}
 		return nil
 	}
-	return ioutil.WriteFile(filename, data, 0600)
+	return ioutil.WriteFile(filename, data, perm)
 }
 
 // readFile is a wrapper of ioutil.ReadFile which consniders the
