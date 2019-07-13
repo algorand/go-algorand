@@ -39,9 +39,9 @@ func init() {
 	multisigCmd.AddCommand(mergeSigCmd)
 
 	addSigCmd.Flags().StringVarP(&txFilename, "tx", "t", "", "Partially-signed transaction file to add signature to")
-	addSigCmd.Flags().StringVarP(&addr, "addr", "a", "", "Address of the key to sign with")
+	addSigCmd.Flags().StringVarP(&addr, "address", "a", "", "Address of the key to sign with")
 	addSigCmd.MarkFlagRequired("tx")
-	addSigCmd.MarkFlagRequired("addr")
+	addSigCmd.MarkFlagRequired("address")
 
 	mergeSigCmd.Flags().StringVarP(&txFilename, "out", "o", "", "Output file for merged transactions")
 	mergeSigCmd.MarkFlagRequired("out")
