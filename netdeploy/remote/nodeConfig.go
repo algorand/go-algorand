@@ -19,7 +19,6 @@ package remote
 // NodeConfig represents the configuration settings to apply to a single node running on a host
 type NodeConfig struct {
 	Name               string `json:",omitempty"`
-	IsRelayDEPRECATED  bool   `json:"IsRelay,omitempty"` // The field still exists to parse any old serialized NodeConfig objects, but "IsRelay" should not be used.
 	Wallets            []NodeWalletData
 	NetAddress         string `json:",omitempty"`
 	APIEndpoint        string `json:",omitempty"`
