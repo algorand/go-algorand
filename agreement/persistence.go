@@ -74,7 +74,7 @@ func persist(log serviceLogger, crash db.Accessor, Round basics.Round, Period pe
 		log.with(logEvent).Info("persisted state to the database")
 	}()
 
-	err = crash.Atomic(func(tx *sql.Tx) error {
+	err = crash.Atomic("agreementInsertServiceRow", func(tx *sql.Tx) error {
 		_, err := tx.Exec("insert or replace into Service (rowid, data) values (1, ?)", raw)
 		return err
 	})
@@ -92,7 +92,7 @@ func persist(log serviceLogger, crash db.Accessor, Round basics.Round, Period pe
 func reset(log logging.Logger, crash db.Accessor) (err error) {
 	logging.Base().Infof("reset (agreement): resetting crash state")
 
-	err = crash.Atomic(func(tx *sql.Tx) (res error) {
+	err = crash.Atomic("agreementDeleteService", func(tx *sql.Tx) (res error) {
 		// we could not retrieve our state, so wipe it
 		_, err := tx.Exec("delete from Service")
 		if err != nil {
@@ -115,11 +115,11 @@ func restore(log logging.Logger, crash db.Accessor) (raw []byte, err error) {
 		}
 	}()
 
-	crash.Atomic(func(tx *sql.Tx) error {
+	crash.Atomic("agreementInstallDatabase", func(tx *sql.Tx) error {
 		return agreeInstallDatabase(tx)
 	}) // ignore error
 
-	err = crash.Atomic(func(tx *sql.Tx) (res error) {
+	err = crash.Atomic("agreementRestore", func(tx *sql.Tx) (res error) {
 		var reset bool
 		defer func() {
 			if !reset {

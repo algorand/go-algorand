@@ -125,7 +125,7 @@ func OpenLedger(log logging.Logger, dbPathPrefix string, dbMem bool, initBlocks 
 		return nil, err
 	}
 
-	err = l.blockDBs.wdb.Atomic(func(tx *sql.Tx) error {
+	err = l.blockDBs.wdb.Atomic("ledgerBlockInit", func(tx *sql.Tx) error {
 		return blockInit(tx, initBlocks)
 	})
 	if err != nil {
@@ -161,7 +161,7 @@ func OpenLedger(log logging.Logger, dbPathPrefix string, dbMem bool, initBlocks 
 	}
 
 	// Check that the genesis hash, if present, matches.
-	err = l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
+	err = l.blockDBs.rdb.Atomic("ledgerGetLatestBlockHeader", func(tx *sql.Tx) error {
 		latest, err := blockLatest(tx)
 		if err != nil {
 			return err
