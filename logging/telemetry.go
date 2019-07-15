@@ -72,6 +72,35 @@ func makeTelemetryState(cfg TelemetryConfig, hookFactory hookFactory) (*telemetr
 	return telemetry, nil
 }
 
+// ReadTelemetryConfigOrDefault reads telemetry config from file or defaults if no config file found.
+func ReadTelemetryConfigOrDefault(dataDir *string, genesisID string) (cfg TelemetryConfig, err error) {
+	err = nil
+	if dataDir != nil && *dataDir != "" {
+		configPath := filepath.Join(*dataDir, TelemetryConfigFilename)
+		cfg, err = LoadTelemetryConfig(configPath)
+	}
+	if err != nil && os.IsNotExist(err) {
+		var configPath string
+		configPath, err = config.GetConfigFilePath(TelemetryConfigFilename)
+		if err != nil {
+			cfg = createTelemetryConfig()
+			return
+		}
+		cfg, err = LoadTelemetryConfig(configPath)
+	}
+	if err != nil {
+		err = nil
+		cfg = createTelemetryConfig()
+	}
+	ch := config.GetCurrentVersion().Channel
+	// Should not happen, but default to "dev" if channel is unspecified.
+	if ch == "" {
+		ch = "dev"
+	}
+	cfg.ChainID = fmt.Sprintf("%s-%s", ch, genesisID)
+	return cfg, err
+}
+
 // EnsureTelemetryConfig creates a new TelemetryConfig structure with a generated GUID and the appropriate Telemetry endpoint
 // Err will be non-nil if the file doesn't exist, or if error loading.
 // Cfg will always be valid.
@@ -87,7 +116,7 @@ func EnsureTelemetryConfigCreated(dataDir *string, genesisID string) (TelemetryC
 	var cfg TelemetryConfig
 	var err error
 	if dataDir != nil && *dataDir != "" {
-		configPath = filepath.Join(*dataDir, loggingFilename)
+		configPath = filepath.Join(*dataDir, TelemetryConfigFilename)
 		cfg, err = LoadTelemetryConfig(configPath)
 		if err != nil && os.IsNotExist(err) {
 			// if it just didn't exist, try again at the other path
@@ -95,7 +124,7 @@ func EnsureTelemetryConfigCreated(dataDir *string, genesisID string) (TelemetryC
 		}
 	}
 	if configPath == "" {
-		configPath, err = config.GetConfigFilePath(loggingFilename)
+		configPath, err = config.GetConfigFilePath(TelemetryConfigFilename)
 		if err != nil {
 			return createTelemetryConfig(), true, err
 		}

@@ -30,7 +30,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 )
 
-var loggingFilename = "logging.config"
+var TelemetryConfigFilename = "logging.config"
 
 func elasticsearchEndpoint() string {
 	return "https://1ae9f9654b25441090fe5c48c833b95a.us-east-1.aws.found.io:9243"
@@ -53,7 +53,7 @@ func TelemetryOverride(env string) (bool, bool) {
 }
 
 // createTelemetryConfig creates a new TelemetryConfig structure with a generated GUID and the appropriate Telemetry endpoint.
-// Note: This should only be used/persisted when initially creating 'loggingFilename'. Because the methods are called
+// Note: This should only be used/persisted when initially creating 'TelemetryConfigFilename'. Because the methods are called
 //       from various tools and goal commands and affect the future default settings for telemetry, we need to inject
 //       a "dev" branch check.
 func createTelemetryConfig() TelemetryConfig {

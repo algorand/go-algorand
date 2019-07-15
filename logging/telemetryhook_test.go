@@ -72,11 +72,11 @@ func TestLoggingConfigDataDirFirst(t *testing.T) {
 	defer os.RemoveAll(globalConfigRoot)
 	oldConfigRoot := config.SetGlobalConfigFileRoot(globalConfigRoot)
 	defer config.SetGlobalConfigFileRoot(oldConfigRoot)
-	globalLoggingPath := filepath.Join(globalConfigRoot, loggingFilename)
+	globalLoggingPath := filepath.Join(globalConfigRoot, TelemetryConfigFilename)
 
 	dataDir, err := ioutil.TempDir("", "dataDir")
 	defer os.RemoveAll(dataDir)
-	dataDirLoggingPath := filepath.Join(dataDir, loggingFilename)
+	dataDirLoggingPath := filepath.Join(dataDir, TelemetryConfigFilename)
 
 	_, err = os.Stat(globalLoggingPath)
 	a.True(os.IsNotExist(err))
@@ -116,7 +116,7 @@ func TestLoggingConfigGlobalSecond(t *testing.T) {
 	defer os.RemoveAll(globalConfigRoot)
 	oldConfigRoot := config.SetGlobalConfigFileRoot(globalConfigRoot)
 	defer config.SetGlobalConfigFileRoot(oldConfigRoot)
-	globalLoggingPath := filepath.Join(globalConfigRoot, loggingFilename)
+	globalLoggingPath := filepath.Join(globalConfigRoot, TelemetryConfigFilename)
 
 	_, err = os.Stat(globalLoggingPath)
 	a.True(os.IsNotExist(err))

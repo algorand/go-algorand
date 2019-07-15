@@ -67,6 +67,7 @@ var enableCmd = &cobra.Command{
 	Long:  `This will turn on remote logging. The "friendly name" for the node, used by logging, will be determined by -n nodename.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
+		fmt.Errorf("`goal logging enable` deprecated, use `diagcfg telemetry enable`\n")
 		dataDir := ensureSingleDataDir()
 		cfg, err := logging.EnsureTelemetryConfig(&dataDir, "")
 		if err != nil {
@@ -88,6 +89,7 @@ var disableCmd = &cobra.Command{
 	Long:  `Disable Algorand remote logging`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
+		fmt.Errorf("`goal logging disable` deprecated, use `diagcfg telemetry disable`\n")
 		dataDir := ensureSingleDataDir()
 		cfg, err := logging.EnsureTelemetryConfig(&dataDir, "")
 
