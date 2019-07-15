@@ -55,7 +55,7 @@ type nodeDir struct {
 //		* DeadlockOverride
 func (nd *nodeDir) configure(dnsName string) (err error) {
 	fmt.Fprintf(os.Stdout, "Configuring Node %s\n", nd.Name)
-	if err = nd.configureRelay(nd.IsRelay); err != nil {
+	if err = nd.configureRelay(nd.IsRelay()); err != nil {
 		fmt.Fprintf(os.Stdout, "Error during configureRelay: %s\n", err)
 		return
 	}
@@ -94,7 +94,7 @@ func (nd *nodeDir) configure(dnsName string) (err error) {
 	}
 	// Do this after reconciling the DNSBootstrap ID because we'll extract the network name
 	// from it (eg <network>.algoblah.network -> algoblah.network)
-	if err = nd.configureNetAddress(nd.NetAddress); err != nil {
+	if err = nd.configureNetAddress(); err != nil {
 		fmt.Fprintf(os.Stdout, "Error during configureNetAddress: %s\n", err)
 		return
 	}
@@ -137,16 +137,16 @@ func (nd *nodeDir) configureRelay(enable bool) (err error) {
 	return
 }
 
-func (nd *nodeDir) configureNetAddress(address string) (err error) {
+func (nd *nodeDir) configureNetAddress() (err error) {
 	if err = nd.ensureConfig(); err != nil {
 		return
 	}
-	fmt.Fprintf(os.Stdout, " - Assigning NetAddress: %s\n", address)
-	nd.config.NetAddress = address
-	if address != "" && address[0] == ':' && nd.IsRelay {
+	fmt.Fprintf(os.Stdout, " - Assigning NetAddress: %s\n", nd.NetAddress)
+	nd.config.NetAddress = nd.NetAddress
+	if nd.IsRelay() && nd.NetAddress[0] == ':' {
 		fmt.Fprintf(os.Stdout, " - adding to relay addresses\n")
 		domainName := strings.Replace(nd.config.DNSBootstrapID, "<network>", string(nd.configurator.genesisData.Network), -1)
-		nd.configurator.addRelaySrv(domainName, address)
+		nd.configurator.addRelaySrv(domainName, nd.NetAddress)
 	}
 	err = nd.saveConfig()
 	return
