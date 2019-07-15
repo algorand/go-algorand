@@ -35,4 +35,3 @@ ProtectHome=true
 
 [Install]
 WantedBy=multi-user.target
-DefaultInstance=-var-lib-algorand
