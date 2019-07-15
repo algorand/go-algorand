@@ -135,13 +135,11 @@ func (db *Accessor) getDecoratedLogger(fn idemFn, extras ...interface{}) logging
 		log = log.With("caller", fmt.Sprintf("%s:%d", file, line))
 	}
 	log = log.With("callee", runtime.FuncForPC(reflect.ValueOf(fn).Pointer()).Name())
-	if len(extras) > 0 {
-		for i, e := range extras {
-			if e == nil || reflect.ValueOf(e).IsNil() {
-				continue
-			}
-			log = log.With(fmt.Sprintf("extra(%d)", i), e)
+	for i, e := range extras {
+		if e == nil || reflect.ValueOf(e).IsNil() {
+			continue
 		}
+		log = log.With(fmt.Sprintf("extra(%d)", i), e)
 	}
 
 	return log

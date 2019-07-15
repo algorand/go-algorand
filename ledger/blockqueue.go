@@ -319,7 +319,7 @@ func (bq *blockQueue) getBlockAux(r basics.Round) (blk bookkeeping.Block, aux ev
 		var err0 error
 		blk, aux, err0 = blockGetAux(tx, r)
 		return err0
-	}, r)
+	})
 	err = updateErrNoEntry(err, lastCommitted, latest)
 	return
 }
