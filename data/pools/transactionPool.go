@@ -435,6 +435,14 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block) {
 	}
 }
 
+// alwaysVerifiedPool implements ledger.VerifiedTxnCache and returns every
+// transaction as verified.
+type alwaysVerifiedPool struct{}
+
+func (*alwaysVerifiedPool) Verified(txn transactions.SignedTxn) bool {
+	return true
+}
+
 // Remove removes a transaction from the pool, and remembers its error
 // status (txErr), if not nil.
 func (pool *TransactionPool) Remove(txid transactions.Txid, txErr error) {
