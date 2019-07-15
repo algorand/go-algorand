@@ -45,7 +45,8 @@ type NodeConfig struct {
 	AltConfigs []NodeConfig `json:",omitempty"`
 }
 
-// If we advertise to the world an address where we listen for gossip network connections, we are taking on the role of relay.
+// IsRelay returns true if the node is configured to be a relay
 func (nc NodeConfig) IsRelay() bool {
+	// If we advertise to the world an address where we listen for gossip network connections, we are taking on the role of relay.
 	return nc.NetAddress != ""
 }
