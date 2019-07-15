@@ -32,17 +32,6 @@ import (
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 )
 
-// Ledger allows retrieving the amount of spendable MicroAlgos
-// and also checking if a transaction has already been committed.
-type Ledger interface {
-	BalanceAndStatus(basics.Address) (basics.MicroAlgos, basics.MicroAlgos, basics.MicroAlgos, basics.Status, basics.Round, error)
-	Committed(transactions.SignedTxn) (bool, error)
-	ConsensusParams(basics.Round) (config.ConsensusParams, error)
-	BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error)
-	LastRound() basics.Round
-	Latest() basics.Round
-}
-
 // TransactionPool is a struct maintaining a sanitized pool of transactions that are available for inclusion in
 // a Block.  We sanitize it by preventing duplicates and limiting the number of transactions retained for each account
 type TransactionPool struct {
@@ -52,6 +41,7 @@ type TransactionPool struct {
 	expiredTxCount                  map[basics.Round]int
 	exponentialPriorityGrowthFactor uint64
 	pendingBlockEvaluator           *ledger.BlockEvaluator
+	pendingBlockEvaluatorRound	basics.Round
 	ledger                          *ledger.Ledger
 	statusCache                     *statusCache
 	logStats                        bool
@@ -211,7 +201,7 @@ func (pool *TransactionPool) Remember(t transactions.SignedTxn) error {
 		return fmt.Errorf("TransactionPool.Remember: no pending block evaluator")
 	}
 
-	err = pool.pendingBlockEvaluator.Transaction(t, nil)
+	err = pool.addToPendingBlockEvaluator(t)
 	if err != nil {
 		return fmt.Errorf("TransactionPool.Remember: %v", err)
 	}
@@ -319,6 +309,24 @@ func (*alwaysVerifiedPool) Verified(txn transactions.SignedTxn) bool {
 	return true
 }
 
+func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(tx *transactions.SignedTxn) error {
+	if tx.LastValid < pool.pendingBlockEvaluatorRound {
+		return fmt.Errorf("Transaction valid for %d..%d which is before %d", tx.FirstValid, tx.LastValid, simulatedNextRound)
+	}
+
+	return pool.pendingBlockEvaluator.Transaction(tx, nil)
+}
+
+func (pool *TransactionPool) addToPendingBlockEvaluator(tx *transactions.SignedTxn) error {
+	err := pool.addToPendingBlockEvaluatorOnce(tx)
+	if err == ledger.ErrNoSpace {
+		pool.pendingBlockEvaluatorRound++
+		pool.pendingBlockEvaluator.ResetTxnBytes()
+		err = pool.addToPendingBlockEvaluatorOnce(tx)
+	}
+	return err
+}
+
 // recomputeBlockEvaluator constructs a new BlockEvaluator and feeds all
 // in-pool transactions to it (removing any transactions that are rejected
 // by the BlockEvaluator).
@@ -334,13 +342,12 @@ func (pool *TransactionPool) recomputeBlockEvaluator() (stats telemetryspec.Proc
 	}
 
 	next := bookkeeping.MakeBlock(prev)
+	pool.pendingBlockEvaluatorRound = next.Round()
 	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, &alwaysVerifiedPool{}, nil)
 	if err != nil {
 		logging.Base().Warnf("TransactionPool.recomputeBlockEvaluator: cannot start evaluator: %v", err)
 		return
 	}
-
-	pool.pendingBlockEvaluator.SetValidateTxnBytes(false)
 
 	// Feed the transactions in priority order, so that higher-priority
 	// transactions go in first, and lower-priority transactions are more
@@ -364,7 +371,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator() (stats telemetryspec.Proc
 	}
 
 	for _, tx := range out {
-		err := pool.pendingBlockEvaluator.Transaction(tx, nil)
+		err := pool.addToPendingBlockEvaluator(tx)
 		if err != nil {
 			pool.remove(tx.ID(), err)
 

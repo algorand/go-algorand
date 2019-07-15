@@ -137,12 +137,11 @@ func (cs *roundCowState) ConsensusParams() config.ConsensusParams {
 // BlockEvaluator represents an in-progress evaluation of a block
 // against the ledger.
 type BlockEvaluator struct {
-	state            *roundCowState
-	aux              *evalAux
-	validate         bool
-	validateTxnBytes bool
-	generate         bool
-	txcache          VerifiedTxnCache
+	state    *roundCowState
+	aux      *evalAux
+	validate bool
+	generate bool
+	txcache  VerifiedTxnCache
 
 	prevHeader  bookkeeping.BlockHeader // cached
 	proto       config.ConsensusParams
@@ -191,7 +190,6 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *eval
 	eval := &BlockEvaluator{
 		aux:              aux,
 		validate:         validate,
-		validateTxnBytes: true,
 		generate:         generate,
 		txcache:          txcache,
 		block:            bookkeeping.Block{BlockHeader: hdr},
@@ -276,12 +274,11 @@ func (eval *BlockEvaluator) Round() basics.Round {
 	return eval.block.Round()
 }
 
-// SetValidateTxnBytes sets whether the BlockEvaluator checks that transactions
-// fit into the block.  It is used by the transaction pool to disable length
-// checks, when using the BlockEvaluator to check if in-pool transactions are
-// potentially valid.
-func (eval *BlockEvaluator) SetValidateTxnBytes(validateTxnBytes bool) {
-	eval.validateTxnBytes = validateTxnBytes
+// ResetTxnBytes resets the number of bytes tracked by the BlockEvaluator to
+// zero.  This is a specialized operation used by the transaction pool to
+// simulate the effect of putting pending transactions in multiple blocks.
+func (eval *BlockEvaluator) ResetTxnBytes(validateTxnBytes bool) {
+	eval.totalTxBytes = 0
 }
 
 // Transaction tentatively adds a new transaction as part of this block evaluation.
@@ -356,7 +353,7 @@ func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn, ad *transact
 	if err != nil {
 		return err
 	}
-	if eval.validate && eval.validateTxnBytes {
+	if eval.validate {
 		thisTxBytes = len(protocol.Encode(txib))
 		if eval.totalTxBytes+thisTxBytes > eval.proto.MaxTxnBytesPerBlock {
 			return ErrNoSpace

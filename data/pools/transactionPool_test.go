@@ -1016,12 +1016,12 @@ func BenchmarkTransactionPoolPending(b *testing.B) {
 }
 
 func BenchmarkTransactionPoolSteadyState(b *testing.B) {
-	poolSize := 100000
+	poolSize := 50000
 
 	fmt.Printf("BenchmarkTransactionPoolSteadyState: N=%d\n", b.N)
 
 	numOfAccounts := 100
-	// Genereate accounts
+	// Generate accounts
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
 	addresses := make([]basics.Address, numOfAccounts)
 
