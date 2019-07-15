@@ -52,7 +52,7 @@ func TestParticipation_NewDB(t *testing.T) {
 }
 
 func getSchemaVersions(db db.Accessor) (versions map[string]int, err error) {
-	err = db.Atomic("participationTestGetSchemaVersions", func(tx *sql.Tx) (err error) {
+	err = db.Atomic(func(tx *sql.Tx) (err error) {
 		rows, err := tx.Query("SELECT tablename, version FROM schema")
 		if err != nil {
 			return

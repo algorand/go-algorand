@@ -90,7 +90,7 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 		return fmt.Errorf("accountUpdates.loadFromDisk: initAccounts not set")
 	}
 
-	err := au.dbs.wdb.Atomic("ledgerLoadFromDisk", func(tx *sql.Tx) error {
+	err := au.dbs.wdb.Atomic(func(tx *sql.Tx) error {
 		var err0 error
 		err0 = accountsInit(tx, au.initAccounts, au.initProto)
 		if err0 != nil {
@@ -216,7 +216,7 @@ func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address
 		return
 	}
 
-	err = au.dbs.rdb.Atomic("ledgerGetAllBalances", func(tx *sql.Tx) error {
+	err = au.dbs.rdb.Atomic(func(tx *sql.Tx) error {
 		var err0 error
 		bals, err0 = accountsAll(tx)
 		return err0
@@ -261,7 +261,7 @@ func (au *accountUpdates) committedUpTo(rnd basics.Round) basics.Round {
 	flushcount := make(map[basics.Address]int)
 
 	offset := uint64(newBase - au.dbRound)
-	err := au.dbs.wdb.Atomic("ledgerCommitUpTo", func(tx *sql.Tx) error {
+	err := au.dbs.wdb.Atomic(func(tx *sql.Tx) error {
 		for i := uint64(0); i < offset; i++ {
 			rnd := au.dbRound + basics.Round(i) + 1
 			err := accountsNewRound(tx, rnd, au.deltas[i], au.roundTotals[i+1].RewardsLevel, au.protos[i+1])

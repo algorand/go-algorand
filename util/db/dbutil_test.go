@@ -35,13 +35,13 @@ import (
 func TestInMemoryDisposal(t *testing.T) {
 	acc, err := MakeAccessor("fn.db", false, true)
 	require.NoError(t, err)
-	err = acc.Atomic("TestInMemoryDisposal_CreateServiceTable", func(tx *sql.Tx) error {
+	err = acc.Atomic(func(tx *sql.Tx) error {
 		_, err := tx.Exec("create table Service (data blob)")
 		return err
 	})
 	require.NoError(t, err)
 
-	err = acc.Atomic("TestInMemoryDisposal_InsertService", func(tx *sql.Tx) error {
+	err = acc.Atomic(func(tx *sql.Tx) error {
 		raw := []byte{0, 1, 2}
 		_, err := tx.Exec("insert or replace into Service (rowid, data) values (1, ?)", raw)
 		return err
@@ -50,7 +50,7 @@ func TestInMemoryDisposal(t *testing.T) {
 
 	anotherAcc, err := MakeAccessor("fn.db", false, true)
 	require.NoError(t, err)
-	err = anotherAcc.Atomic("TestInMemoryDisposal_SelectService", func(tx *sql.Tx) error {
+	err = anotherAcc.Atomic(func(tx *sql.Tx) error {
 		var nrows int
 		row := tx.QueryRow("select count(*) from Service")
 		err := row.Scan(&nrows)
@@ -63,7 +63,7 @@ func TestInMemoryDisposal(t *testing.T) {
 
 	acc, err = MakeAccessor("fn.db", false, true)
 	require.NoError(t, err)
-	err = acc.Atomic("TestInMemoryDisposal_SelectService", func(tx *sql.Tx) error {
+	err = acc.Atomic(func(tx *sql.Tx) error {
 		var nrows int
 		row := tx.QueryRow("select count(*) from Service")
 		err := row.Scan(&nrows)
@@ -80,13 +80,13 @@ func TestInMemoryDisposal(t *testing.T) {
 func TestInMemoryUniqueDB(t *testing.T) {
 	acc, err := MakeAccessor("fn.db", false, true)
 	require.NoError(t, err)
-	err = acc.Atomic("TestInMemoryUniqueDB_CreateService", func(tx *sql.Tx) error {
+	err = acc.Atomic(func(tx *sql.Tx) error {
 		_, err := tx.Exec("create table Service (data blob)")
 		return err
 	})
 	require.NoError(t, err)
 
-	err = acc.Atomic("TestInMemoryUniqueDB_InsertService", func(tx *sql.Tx) error {
+	err = acc.Atomic(func(tx *sql.Tx) error {
 		raw := []byte{0, 1, 2}
 		_, err := tx.Exec("insert or replace into Service (rowid, data) values (1, ?)", raw)
 		return err
@@ -95,7 +95,7 @@ func TestInMemoryUniqueDB(t *testing.T) {
 
 	anotherAcc, err := MakeAccessor("fn2.db", false, true)
 	require.NoError(t, err)
-	err = anotherAcc.Atomic("TestInMemoryUniqueDB_SelectService", func(tx *sql.Tx) error {
+	err = anotherAcc.Atomic(func(tx *sql.Tx) error {
 		var nrows int
 		row := tx.QueryRow("select count(*) from Service")
 		err := row.Scan(&nrows)
@@ -118,13 +118,13 @@ func TestDBConcurrency(t *testing.T) {
 	acc2, err := MakeAccessor(fn, true, false)
 	require.NoError(t, err)
 
-	err = acc.Atomic("TestDBConcurrency_CreateFoo", func(tx *sql.Tx) error {
+	err = acc.Atomic(func(tx *sql.Tx) error {
 		_, err := tx.Exec("CREATE TABLE foo (a INTEGER, b INTEGER)")
 		return err
 	})
 	require.NoError(t, err)
 
-	err = acc.Atomic("TestDBConcurrency_InsertFoo", func(tx *sql.Tx) error {
+	err = acc.Atomic(func(tx *sql.Tx) error {
 		_, err := tx.Exec("INSERT INTO foo (a, b) VALUES (?, ?)", 1, 1)
 		return err
 	})
@@ -133,7 +133,7 @@ func TestDBConcurrency(t *testing.T) {
 	c1 := make(chan struct{})
 	c2 := make(chan struct{})
 	go func() {
-		err := acc.Atomic("TestDBConcurrency_InsertFoo", func(tx *sql.Tx) error {
+		err := acc.Atomic(func(tx *sql.Tx) error {
 			<-c2
 
 			_, err := tx.Exec("INSERT INTO foo (a, b) VALUES (?, ?)", 2, 2)
@@ -156,7 +156,7 @@ func TestDBConcurrency(t *testing.T) {
 		c1 <- struct{}{}
 	}()
 
-	err = acc2.Atomic("TestDBConcurrency_SelectFoo", func(tx *sql.Tx) error {
+	err = acc2.Atomic(func(tx *sql.Tx) error {
 		var nrows int64
 		err := tx.QueryRow("SELECT COUNT(*) FROM foo").Scan(&nrows)
 		if err != nil {
@@ -174,7 +174,7 @@ func TestDBConcurrency(t *testing.T) {
 	c2 <- struct{}{}
 	<-c1
 
-	err = acc2.Atomic("TestDBConcurrency_SelectFoo", func(tx *sql.Tx) error {
+	err = acc2.Atomic(func(tx *sql.Tx) error {
 		var nrows int64
 		err := tx.QueryRow("SELECT COUNT(*) FROM foo").Scan(&nrows)
 		if err != nil {
@@ -192,7 +192,7 @@ func TestDBConcurrency(t *testing.T) {
 	c2 <- struct{}{}
 	<-c1
 
-	err = acc2.Atomic("TestDBConcurrency_SelectFoo", func(tx *sql.Tx) error {
+	err = acc2.Atomic(func(tx *sql.Tx) error {
 		var nrows int64
 		err := tx.QueryRow("SELECT COUNT(*) FROM foo").Scan(&nrows)
 		if err != nil {
@@ -227,7 +227,7 @@ func TestDBConcurrencyRW(t *testing.T) {
 	acc2, err := MakeAccessor(fn, true, false)
 	require.NoError(t, err)
 
-	err = acc.Atomic("TestDBConcurrencyRW_CreateT", func(tx *sql.Tx) error {
+	err = acc.Atomic(func(tx *sql.Tx) error {
 		_, err := tx.Exec("CREATE TABLE t (a INTEGER PRIMARY KEY)")
 		return err
 	})
@@ -240,7 +240,7 @@ func TestDBConcurrencyRW(t *testing.T) {
 		defer wg.Done()
 		defer atomic.StoreInt64(&lastInsert, -1)
 		for i := int64(0); i < 10000; i++ {
-			errw := acc.Atomic("TestDBConcurrencyRW_InsertT", func(tx *sql.Tx) error {
+			errw := acc.Atomic(func(tx *sql.Tx) error {
 				_, err := tx.Exec("INSERT INTO t (a) VALUES (?)", i)
 				return err
 			})
@@ -262,7 +262,7 @@ func TestDBConcurrencyRW(t *testing.T) {
 					break
 				}
 				var x int64
-				errsel := acc2.Atomic("TestDBConcurrencyRW_SelectT", func(tx *sql.Tx) error {
+				errsel := acc2.Atomic(func(tx *sql.Tx) error {
 					return tx.QueryRow("SELECT a FROM t WHERE a=?", id).Scan(&x)
 				})
 				if errsel != nil {
