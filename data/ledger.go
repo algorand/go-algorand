@@ -195,19 +195,6 @@ func (l *Ledger) BalanceRecord(r basics.Round, addr basics.Address) (basics.Bala
 	}, nil
 }
 
-// BalanceRecordWithoutPendingRewards fetches the balance record without applying pending rewards
-func (l *Ledger) BalanceRecordWithoutPendingRewards(r basics.Round, addr basics.Address) (basics.BalanceRecord, error) {
-	data, err := l.LookupWithoutRewards(r, addr)
-	if err != nil {
-		return basics.BalanceRecord{}, err
-	}
-
-	return basics.BalanceRecord{
-		Addr:        addr,
-		AccountData: data,
-	}, nil
-}
-
 // Circulation implements agreement.Ledger.Circulation.
 func (l *Ledger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
 	totals, err := l.Totals(r)

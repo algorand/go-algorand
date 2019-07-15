@@ -35,7 +35,6 @@ import (
 // and also checking if a transaction has already been committed.
 type Ledger interface {
 	BalanceRecord(basics.Round, basics.Address) (basics.BalanceRecord, error)
-	BalanceRecordWithoutPendingRewards(basics.Round, basics.Address) (basics.BalanceRecord, error)
 	Committed(transactions.SignedTxn) (bool, error)
 	ConsensusParams(basics.Round) (config.ConsensusParams, error)
 	BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error)
