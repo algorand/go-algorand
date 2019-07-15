@@ -24,6 +24,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"reflect"
+	"runtime"
 	"time"
 
 	"github.com/mattn/go-sqlite3"
@@ -125,24 +127,28 @@ func Retry(fn func() error) (err error) {
 	}
 }
 
-// Atomic executes a piece of code with respect to the database atomically.
-// For transactions where readOnly is false, sync determines whether or not to wait for the result.
-func (db Accessor) Atomic(fn idemFn) (err error) {
-	descr := "w"
-	if db.readOnly {
-		descr = "r"
+// getDecoratedLogger retruns a decorated logger that includes the readonly true/false, caller and extra fields.
+func (db *Accessor) getDecoratedLogger(fn idemFn, extras ...interface{}) logging.Logger {
+	log := logging.Base().With("readonly", db.readOnly)
+	_, file, line, ok := runtime.Caller(2)
+	if ok {
+		log = log.With("caller", fmt.Sprintf("%s:%d", file, line))
+	}
+	log = log.With("callee", runtime.FuncForPC(reflect.ValueOf(fn).Pointer()).Name())
+	for i, e := range extras {
+		if e == nil || reflect.ValueOf(e).IsNil() {
+			continue
+		}
+		log = log.With(fmt.Sprintf("extra(%d)", i), e)
 	}
 
+	return log
+}
+
+// Atomic executes a piece of code with respect to the database atomically.
+// For transactions where readOnly is false, sync determines whether or not to wait for the result.
+func (db Accessor) Atomic(fn idemFn, extras ...interface{}) (err error) {
 	start := time.Now()
-	defer func() {
-		end := time.Now()
-		delta := end.Sub(start)
-		if delta > time.Second {
-			logging.Base().Warnf("dbatomic(%v): tx took %v", descr, delta)
-		} else if delta > time.Millisecond {
-			logging.Base().Debugf("dbatomic(%v): tx took %v", descr, delta)
-		}
-	}()
 
 	// note that the sql library will drop panics inside an active transaction
 	guardedFn := func(tx *sql.Tx) (err error) {
@@ -172,17 +178,17 @@ func (db Accessor) Atomic(fn idemFn) (err error) {
 	for i := 0; ; i++ {
 		if i > 0 && i%warnTxRetries == 0 {
 			if i >= 1000 {
-				logging.Base().Errorf("dbatomic(%v): %d retries (last err: %v)", descr, i, err)
-				return
+				db.getDecoratedLogger(fn, extras).Errorf("dbatomic: %d retries (last err: %v)", i, err)
+				break
 			}
-			logging.Base().Warnf("dbatomic(%v): %d retries (last err: %v)", descr, i, err)
+			db.getDecoratedLogger(fn, extras).Warnf("dbatomic: %d retries (last err: %v)", i, err)
 		}
 
 		tx, err = conn.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable, ReadOnly: db.readOnly})
 		if dbretry(err) {
 			continue
 		} else if err != nil {
-			return
+			break
 		}
 
 		err = guardedFn(tx)
@@ -191,17 +197,26 @@ func (db Accessor) Atomic(fn idemFn) (err error) {
 			if dbretry(err) {
 				continue
 			} else {
-				return
+				break
 			}
 		}
 
 		err = tx.Commit()
 		if err == nil {
-			return
+			break
 		} else if !dbretry(err) {
-			return
+			break
 		}
 	}
+
+	end := time.Now()
+	delta := end.Sub(start)
+	if delta > time.Second {
+		db.getDecoratedLogger(fn, extras).Warnf("dbatomic: tx took %v", delta)
+	} else if delta > time.Millisecond {
+		db.getDecoratedLogger(fn, extras).Debugf("dbatomic: tx took %v", delta)
+	}
+	return
 }
 
 // URI returns the sqlite URI given a db filename as an input.
