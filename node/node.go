@@ -380,6 +380,11 @@ func (node *AlgorandFullNode) getExistingPartHandle(filename string) (db.Accesso
 	return db.Accessor{}, err
 }
 
+// Ledger exposes the node's ledger handle to the algod API code
+func (node *AlgorandFullNode) Ledger() *data.Ledger {
+	return node.ledger
+}
+
 // GetSupply returns the current supply reported by the ledger
 func (node *AlgorandFullNode) GetSupply() basics.SupplyDetail {
 	latest := node.ledger.Latest()
