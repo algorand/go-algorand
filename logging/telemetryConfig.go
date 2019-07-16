@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 )
 
+// TelemetryConfigFilename default file name for telemetry config "logging.config"
 var TelemetryConfigFilename = "logging.config"
 
 func elasticsearchEndpoint() string {

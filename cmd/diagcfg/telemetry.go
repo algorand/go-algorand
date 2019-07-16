@@ -57,7 +57,7 @@ func readTelemetryConfigOrExit() logging.TelemetryConfig {
 	maybeUpdateDataDirFromEnv()
 	cfg, err := logging.ReadTelemetryConfigOrDefault(&dataDir, "")
 	if err != nil {
-		fmt.Errorf("could not read telemetry config: %s\n", err)
+		fmt.Fprintf(os.Stderr, telemetryConfigReadError, err)
 		os.Exit(1)
 	}
 	return cfg
@@ -66,7 +66,7 @@ func readTelemetryConfigOrExit() logging.TelemetryConfig {
 func saveTelemetryConfig(cfg logging.TelemetryConfig) {
 	globalPath, err := config.GetConfigFilePath(logging.TelemetryConfigFilename)
 	if err != nil {
-		fmt.Errorf("%s", err)
+		fmt.Fprintf(os.Stderr, "%s\n", err)
 		os.Exit(1)
 	}
 	if dataDir != "" {
@@ -74,26 +74,26 @@ func saveTelemetryConfig(cfg logging.TelemetryConfig) {
 		ddPath := filepath.Join(dataDir, logging.TelemetryConfigFilename)
 		err := cfg.Save(ddPath)
 		if err != nil {
-			fmt.Errorf("%s: %s", ddPath, err)
+			fmt.Fprintf(os.Stderr, pathErrFormat, ddPath, err)
 			os.Exit(1)
 		}
 		gcfg, err := logging.LoadTelemetryConfig(globalPath)
 		if err != nil && !os.IsNotExist(err) {
-			fmt.Errorf("%s: %s", globalPath, err)
+			fmt.Fprintf(os.Stderr, pathErrFormat, globalPath, err)
 			os.Exit(1)
 		}
 		gcfg.Name = cfg.Name
 		gcfg.GUID = cfg.GUID
 		err = gcfg.Save(globalPath)
 		if err != nil {
-			fmt.Errorf("%s: %s", globalPath, err)
+			fmt.Fprintf(os.Stderr, pathErrFormat, globalPath, err)
 			os.Exit(1)
 		}
 	} else {
 		// write to global config
 		err = cfg.Save(globalPath)
 		if err != nil {
-			fmt.Errorf("%s: %s", globalPath, err)
+			fmt.Fprintf(os.Stderr, pathErrFormat, globalPath, err)
 			os.Exit(1)
 		}
 	}
