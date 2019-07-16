@@ -201,7 +201,7 @@ func WaitForBlock(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 
 	select {
 	case <-time.After(1 * time.Minute):
-	case <-ctx.Node.WaitForRound(basics.Round(queryRound + 1)):
+	case <-ctx.Node.Ledger().Wait(basics.Round(queryRound + 1)):
 	}
 
 	nodeStatus, err := nodeStatus(ctx.Node)
@@ -301,13 +301,21 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	amount, rewards, amountWithoutPendingRewards, status, round, err := ctx.Node.GetBalanceAndStatus(basics.Address(addr))
-
+	myLedger := ctx.Node.Ledger()
+	lastRound := myLedger.Latest()
+	record, err := myLedger.Lookup(lastRound, basics.Address(addr))
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
+		return
+	}
+	recordWithoutPendingRewards, err := myLedger.LookupWithoutRewards(lastRound, basics.Address(addr))
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
 		return
 	}
 
+	amount := record.MicroAlgos
+	amountWithoutPendingRewards := recordWithoutPendingRewards.MicroAlgos
 	pendingRewards, overflowed := basics.OSubA(amount, amountWithoutPendingRewards)
 	if overflowed {
 		err = fmt.Errorf("overflowed pending rewards: %v - %v", amount, amountWithoutPendingRewards)
@@ -316,13 +324,13 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 	}
 
 	accountInfo := v1.Account{
-		Round:                       uint64(round),
+		Round:                       uint64(lastRound),
 		Address:                     addr.String(),
 		Amount:                      amount.Raw,
 		PendingRewards:              pendingRewards.Raw,
 		AmountWithoutPendingRewards: amountWithoutPendingRewards.Raw,
-		Rewards:                     rewards.Raw,
-		Status:                      status.String(),
+		Rewards:                     record.RewardedMicroAlgos.Raw,
+		Status:                      record.Status.String(),
 	}
 
 	SendJSON(AccountInformationResponse{&accountInfo}, w, ctx.Log)
@@ -389,7 +397,7 @@ func TransactionInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.R
 		return
 	}
 
-	latestRound := ctx.Node.LatestRound()
+	latestRound := ctx.Node.Ledger().Latest()
 	stat, err := ctx.Node.Status()
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
@@ -645,7 +653,7 @@ func GetBlock(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b, c, err := ctx.Node.GetBlock(basics.Round(queryRound))
+	b, c, err := ctx.Node.Ledger().BlockCert(basics.Round(queryRound))
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
 		return
@@ -674,11 +682,17 @@ func GetSupply(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	//         "$ref": '#/responses/SupplyResponse'
 	//       401: { description: Invalid API Token }
 	//       default: { description: Unknown Error }
-	balances := ctx.Node.GetSupply()
+	latest := ctx.Node.Ledger().Latest()
+	totals, err := ctx.Node.Ledger().Totals(latest)
+	if err != nil {
+		err = fmt.Errorf("GetSupply(): round %d failed: %v", latest, err)
+		lib.ErrorResponse(w, http.StatusInternalServerError, err, errInternalFailure, ctx.Log)
+		return
+	}
 	supply := v1.Supply{
-		Round:       uint64(balances.Round),
-		TotalMoney:  balances.TotalMoney.Raw,
-		OnlineMoney: balances.OnlineMoney.Raw,
+		Round:       uint64(latest),
+		TotalMoney:  totals.Participating().Raw,
+		OnlineMoney: totals.Online.Money.Raw,
 	}
 	SendJSON(SupplyResponse{&supply}, w, ctx.Log)
 }
