@@ -70,6 +70,7 @@ var defaultLocalV4 = Local{
 	IncomingConnectionsLimit:              10000, // Was -1
 	IncomingMessageFilterBucketCount:      5,
 	IncomingMessageFilterBucketSize:       512,
+	LogArchiveName:                        "node.archive.log",
 	LogSizeLimit:                          1073741824,
 	MaxConnectionsPerIP:                   30,
 	NetAddress:                            "",
@@ -284,6 +285,9 @@ func migrate(cfg Local) (newCfg Local, err error) {
 		}
 		if newCfg.AnnounceParticipationKey == defaultLocalV3.AnnounceParticipationKey {
 			newCfg.AnnounceParticipationKey = defaultLocalV4.AnnounceParticipationKey
+		}
+		if newCfg.LogArchiveName == defaultLocalV3.LogArchiveName {
+			newCfg.LogArchiveName = defaultLocalV4.LogArchiveName
 		}
 		if newCfg.PriorityPeers == nil {
 			newCfg.PriorityPeers = map[string]bool{}

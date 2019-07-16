@@ -65,8 +65,8 @@ func (s *Server) Initialize(cfg config.Local) error {
 	// set up node
 	s.log = logging.Base()
 
-	liveLog := fmt.Sprintf("%s/node.log", s.RootPath)
-	archive := fmt.Sprintf("%s/node.archive.log", s.RootPath)
+	liveLog := filepath.Join(s.RootPath, "node.log")
+	archive := filepath.Join(s.RootPath, cfg.LogArchiveName)
 	fmt.Println("Logging to: ", liveLog)
 	logWriter := logging.MakeCyclicFileWriter(liveLog, archive, cfg.LogSizeLimit)
 	s.log.SetOutput(logWriter)

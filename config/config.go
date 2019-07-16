@@ -523,6 +523,16 @@ type Local struct {
 	// Log file size limit in bytes
 	LogSizeLimit uint64
 
+	// text/template for creating log archive filename.
+	// Available template vars:
+	// Time at start of log: {{.Year}} {{.Month}} {{.Day}} {{.Hour}} {{.Minute}} {{.Second}}
+	// Time at end of log: {{.EndYear}} {{.EndMonth}} {{.EndDay}} {{.EndHour}} {{.EndMinute}} {{.EndSecond}}
+	//
+	// If the filename ends with .gz or .bz2 it will be compressed.
+	//
+	// default: "node.archive.log" (no rotation, clobbers previous archive)
+	LogArchiveName string
+
 	// number of consecutive attempts to catchup after which we replace the peers we're connected to
 	CatchupFailurePeerRefreshRate int
 
