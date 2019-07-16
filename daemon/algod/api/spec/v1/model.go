@@ -14,18 +14,12 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-// Package handlers defines models exposed by algod rest api
-//
-// IF YOU MODIFY THIS FILE: IMPORTANT
-// This is the ground truth for the API spec. Whenever you update this file,
-// make sure to update any clients if you make breaking changes. This includes
-// copying model changes into api/client/models/.
-package handlers
+// Package v1 defines models exposed by algod rest api
+package v1
 
-import (
-	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
-	"github.com/algorand/go-algorand/protocol"
-)
+// swagger:strfmt binary
+type bytes = []byte // note that we need to make this its own object to get the strfmt annotation to work properly. Otherwise swagger generates []uint8 instead of type binary
+// ^ one day we should probably fork swagger, to avoid this workaround.
 
 // NodeStatus contains the information about a node status
 // swagger:model NodeStatus
@@ -126,7 +120,7 @@ type Transaction struct {
 	// Type is the transaction type
 	//
 	// required: true
-	Type protocol.TxType `json:"type"`
+	Type string `json:"type"`
 
 	// TxID is the transaction ID
 	//
@@ -156,7 +150,7 @@ type Transaction struct {
 	// Note is a free form data
 	//
 	// required: false
-	Note lib.Bytes `json:"noteb64"`
+	Note bytes `json:"noteb64"`
 
 	// ConfirmedRound indicates the block number this transaction appeared in
 	//
@@ -190,7 +184,7 @@ type Transaction struct {
 	// Genesis hash
 	//
 	// required: true
-	GenesisHash lib.Bytes `json:"genesishashb64"`
+	GenesisHash bytes `json:"genesishashb64"`
 }
 
 // PaymentTransactionType contains the additional fields for a payment Transaction
@@ -270,7 +264,7 @@ type TransactionParams struct {
 	// Genesis hash
 	//
 	// required: true
-	GenesisHash lib.Bytes `json:"genesishashb64"`
+	GenesisHash bytes `json:"genesishashb64"`
 
 	// LastRound indicates the last round seen
 	//
@@ -282,6 +276,12 @@ type TransactionParams struct {
 	//
 	// required: true
 	ConsensusVersion string `json:"consensusVersion"`
+
+	// The minimum transaction fee (not per byte) required for the
+	// txn to validate for the current network protocol.
+	//
+	// required: false
+	MinTxnFee uint64 `json:"minFee"`
 }
 
 // Block contains a block information

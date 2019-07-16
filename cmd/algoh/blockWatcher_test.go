@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/daemon/algod/api/client/models"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/stretchr/testify/require"
 )
 
@@ -106,7 +106,7 @@ func (l *testlistener) init(block uint64) {
 	atomic.AddUint32(&(l.initCount), 1)
 }
 
-func (l *testlistener) onBlock(block models.Block) {
+func (l *testlistener) onBlock(block v1.Block) {
 	atomic.AddUint32(&(l.blockCount), 1)
 }
 
