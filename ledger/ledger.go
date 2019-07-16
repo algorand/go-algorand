@@ -228,7 +228,7 @@ func (l *Ledger) Lookup(rnd basics.Round, addr basics.Address) (basics.AccountDa
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 
-	// Intentionally apply rewards up to rnd.
+	// Intentionally apply (pending) rewards up to rnd.
 	data, err := l.accts.lookup(rnd, addr, true)
 	if err != nil {
 		return basics.AccountData{}, err
