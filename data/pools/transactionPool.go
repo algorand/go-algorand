@@ -41,7 +41,7 @@ type TransactionPool struct {
 	expiredTxCount                  map[basics.Round]int
 	exponentialPriorityGrowthFactor uint64
 	pendingBlockEvaluator           *ledger.BlockEvaluator
-	pendingBlockEvaluatorRound	basics.Round
+	pendingBlockEvaluatorRound      basics.Round
 	ledger                          *ledger.Ledger
 	statusCache                     *statusCache
 	logStats                        bool
@@ -309,15 +309,19 @@ func (*alwaysVerifiedPool) Verified(txn transactions.SignedTxn) bool {
 	return true
 }
 
-func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(tx *transactions.SignedTxn) error {
-	if tx.LastValid < pool.pendingBlockEvaluatorRound {
-		return fmt.Errorf("Transaction valid for %d..%d which is before %d", tx.FirstValid, tx.LastValid, simulatedNextRound)
+func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(tx transactions.SignedTxn) error {
+	if tx.Txn.LastValid < pool.pendingBlockEvaluatorRound {
+		return transactions.TxnDeadError{
+			Round:      pool.pendingBlockEvaluatorRound,
+			FirstValid: tx.Txn.FirstValid,
+			LastValid:  tx.Txn.LastValid,
+		}
 	}
 
 	return pool.pendingBlockEvaluator.Transaction(tx, nil)
 }
 
-func (pool *TransactionPool) addToPendingBlockEvaluator(tx *transactions.SignedTxn) error {
+func (pool *TransactionPool) addToPendingBlockEvaluator(tx transactions.SignedTxn) error {
 	err := pool.addToPendingBlockEvaluatorOnce(tx)
 	if err == ledger.ErrNoSpace {
 		pool.pendingBlockEvaluatorRound++

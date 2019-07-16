@@ -277,7 +277,7 @@ func (eval *BlockEvaluator) Round() basics.Round {
 // ResetTxnBytes resets the number of bytes tracked by the BlockEvaluator to
 // zero.  This is a specialized operation used by the transaction pool to
 // simulate the effect of putting pending transactions in multiple blocks.
-func (eval *BlockEvaluator) ResetTxnBytes(validateTxnBytes bool) {
+func (eval *BlockEvaluator) ResetTxnBytes() {
 	eval.totalTxBytes = 0
 }
 
