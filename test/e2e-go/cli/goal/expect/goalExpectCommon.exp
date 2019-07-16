@@ -209,7 +209,7 @@ proc ::AlgorandGoal::VerifyAccount { WALLET_NAME WALLET_PASSWORD ACCOUNT_ADDRESS
 
 # Delete an account
 proc ::AlgorandGoal::DeleteAccount { WALLET_NAME ACCOUNT_ADDRESS } {
-    spawn goal account delete --wallet $WALLET_NAME --addr $ACCOUNT_ADDRESS
+    spawn goal account delete --wallet $WALLET_NAME --address $ACCOUNT_ADDRESS
     expect {*}
 }
 
@@ -400,7 +400,7 @@ proc ::AlgorandGoal::CreateOneOfTwoMultisigForWallet { ADDRESS_1 ADDRESS_2 WALLE
 # Query info for a 1-of-2 multisig account, and verify
 proc ::AlgorandGoal::VerifyMultisigInfoForOneOfTwoMultisig { MULTISIG_ADDRESS ADDRESS_1 ADDRESS_2 WALLET_NAME TEST_PRIMARY_NODE_DIR } {
     if { [ catch {
-        spawn goal account multisig info --addr $MULTISIG_ADDRESS -d $TEST_PRIMARY_NODE_DIR -w $WALLET_NAME
+        spawn goal account multisig info --address $MULTISIG_ADDRESS -d $TEST_PRIMARY_NODE_DIR -w $WALLET_NAME
         expect {
             timeout { ::AlgorandGoal::Abort "Timed out querying info about multisig account $MULTISIG_ADDRESS"  }
             -re {Version: (\d+)\r\nThreshold: (\d+)\r\nPublic keys:\r\n  ([a-zA-Z0-9]+)\r\n  ([a-zA-Z0-9]+)\r\n} {
@@ -422,7 +422,7 @@ proc ::AlgorandGoal::VerifyMultisigInfoForOneOfTwoMultisig { MULTISIG_ADDRESS AD
 # Delete a multisig address
 proc ::AlgorandGoal::DeleteMultisigAccount { MULTISIG_ADDRESS TEST_PRIMARY_NODE_DIR } {
     if { [ catch {
-        spawn goal account multisig delete --addr $MULTISIG_ADDRESS -d $TEST_PRIMARY_NODE_DIR
+        spawn goal account multisig delete --address $MULTISIG_ADDRESS -d $TEST_PRIMARY_NODE_DIR
         expect {*}
     } EXCEPTION ] } {
        ::AlgorandGoal::Abort "ERROR in DeleteMultisigAccount: $EXCEPTION"

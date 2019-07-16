@@ -24,19 +24,33 @@ import (
 
 // ExecAndCaptureOutput runs the specified command and args and captures
 // stdout into a string, returning the string or an error upon completion.
-func ExecAndCaptureOutput(command string, args ...string) (string, error) {
-	r, w, _ := os.Pipe()
+func ExecAndCaptureOutput(command string, args ...string) (string, string, error) {
+	rStdout, wStdout, err := os.Pipe()
+	if err != nil {
+		return "", "", err
+	}
+	rStderr, wStderr, err := os.Pipe()
+	if err != nil {
+		return "", "", err
+	}
 
 	subcmd := exec.Command(command, args...)
-	subcmd.Stdout = w
+	subcmd.Stdout = wStdout
+	subcmd.Stderr = wStderr
 
-	err := subcmd.Run()
+	err = subcmd.Run()
 
-	w.Close()
-	ret, errIO := ioutil.ReadAll(r)
-
+	wStdout.Close()
+	outputStdout, errIO := ioutil.ReadAll(rStdout)
 	if err == nil {
 		err = errIO
 	}
-	return string(ret), err
+
+	wStderr.Close()
+	outputStderr, errIO := ioutil.ReadAll(rStderr)
+	if err == nil {
+		err = errIO
+	}
+
+	return string(outputStdout), string(outputStderr), err
 }
