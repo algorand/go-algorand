@@ -204,12 +204,12 @@ type PaymentTransactionType struct {
 	// CloseRemainderTo is the address the sender closed to
 	//
 	// required: false
-	CloseRemainderTo string `json:"close,omitempty"`
+	CloseRemainderTo string `json:"close"`
 
 	// CloseAmount is the amount sent to CloseRemainderTo, for committed transaction
 	//
 	// required: false
-	CloseAmount uint64 `json:"closeamount,omitempty"`
+	CloseAmount uint64 `json:"closeamount"`
 
 	// Amount is the amount of MicroAlgos intended to be transferred
 	//
