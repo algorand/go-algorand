@@ -323,6 +323,15 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	apiParticipation := v1.Participation{
+		Round:           uint64(lastRound), // these fields are redundant when embedded in Account, but enables reuse of the model elsewhere.
+		Address:         addr.String(),
+		ParticipationPK: record.VoteID[:],
+		VRFPK:           record.SelectionID[:],
+		VoteFirst:       uint64(record.VoteFirstValid),
+		VoteLast:        uint64(record.VoteLastValid),
+		VoteKeyDilution: uint64(record.VoteKeyDilution),
+	}
 	accountInfo := v1.Account{
 		Round:                       uint64(lastRound),
 		Address:                     addr.String(),
@@ -331,6 +340,7 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 		AmountWithoutPendingRewards: amountWithoutPendingRewards.Raw,
 		Rewards:                     record.RewardedMicroAlgos.Raw,
 		Status:                      record.Status.String(),
+		Participation:               apiParticipation,
 	}
 
 	SendJSON(AccountInformationResponse{&accountInfo}, w, ctx.Log)

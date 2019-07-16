@@ -69,6 +69,45 @@ type TransactionID struct {
 	TxID string `json:"txId"`
 }
 
+// Participation Description
+// swagger:model Participation
+type Participation struct {
+	// Round indicates the round for which this information is relevant
+	//
+	// required: true
+	Round uint64 `json:"round"`
+
+	// Address indicates the account associated with this participation
+	//
+	// required: true
+	Address string `json:"address"`
+
+	// ParticipationPK is the root participation public key (if any) currently registered for this round
+	//
+	// required: true
+	ParticipationPK bytes `json:"partpkb64"`
+
+	// VRFPK is the selection public key (if any) currently registered for this round
+	//
+	// required: true
+	VRFPK bytes `json:"vrfpkb64"`
+
+	// VoteFirst is the first round for which this participation is valid.
+	//
+	// required: true
+	VoteFirst uint64 `json:"votefst"`
+
+	// VoteLast is the last round for which this participation is valid.
+	//
+	// required: true
+	VoteLast uint64 `json:"votelst"`
+
+	// VoteKeyDilution is the number of subkeys in for each batch of participation keys.
+	//
+	// required: true
+	VoteKeyDilution uint64 `json:"votekd"`
+}
+
 // Account Description
 // swagger:model Account
 type Account struct {
@@ -111,6 +150,13 @@ type Account struct {
 	//
 	// required: true
 	Status string `json:"status"`
+
+	// Participation is the participation information currently associated with the account, if any.
+	// This field is optional and may not be set even if participation information is registered.
+	// In future REST API versions, this field may become required.
+	//
+	// required: false
+	Participation Participation `json:"participation,omitempty"`
 }
 
 // Transaction contains all fields common to all transactions and serves as an envelope to all transactions
