@@ -435,7 +435,7 @@ func TransactionInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.R
 	}
 
 	// We didn't find it, return a failure
-	lib.ErrorResponse(w, http.StatusNotFound, err, errTransactionNotFound, ctx.Log)
+	lib.ErrorResponse(w, http.StatusNotFound, errors.New(errTransactionNotFound), errTransactionNotFound, ctx.Log)
 	return
 }
 
