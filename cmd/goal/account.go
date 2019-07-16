@@ -421,7 +421,7 @@ var listCmd = &cobra.Command{
 		// For each address, request information about it from algod
 		for _, addr := range addrs {
 			response, _ := client.AccountInformation(addr.Addr)
-			// it's okay to procede with out algod info
+			// it's okay to proceed without algod info
 
 			// Display this information to the user
 			if addr.Multisig {
@@ -772,11 +772,27 @@ var listParticipationKeysCmd = &cobra.Command{
 		}
 		sort.Strings(filenames)
 
-		rowFormat := "%-80s\t%-60s\t%12s\t%12s\t%12s\n"
-		fmt.Printf(rowFormat, "Filename", "Parent address", "First round", "Last round", "First key")
+		rowFormat := "%-10s\t%-80s\t%-60s\t%12s\t%12s\t%12s\n"
+		fmt.Printf(rowFormat, "Registered", "Filename", "Parent address", "First round", "Last round", "First key")
 		for _, fn := range filenames {
+			onlineInfoStr := "unknown"
+			onlineAccountInfo, err := client.AccountInformation(parts[fn].Address().GetUserAddress())
+			if err == nil {
+				votingBytes := parts[fn].Voting.OneTimeSignatureVerifier
+				vrfBytes := parts[fn].VRF.PK
+				if string(onlineAccountInfo.Participation.ParticipationPK) == string(votingBytes[:]) &&
+					(string(onlineAccountInfo.Participation.VRFPK) == string(vrfBytes[:])) &&
+					(onlineAccountInfo.Participation.VoteFirst == uint64(parts[fn].FirstValid)) &&
+					(onlineAccountInfo.Participation.VoteKeyDilution == uint64(parts[fn].KeyDilution)) &&
+					(onlineAccountInfo.Participation.VoteLast == uint64(parts[fn].LastValid)) {
+					onlineInfoStr = "yes"
+				} else {
+					onlineInfoStr = "no"
+				}
+			}
+			// it's okay to proceed without algod info
 			first, last := parts[fn].ValidInterval()
-			fmt.Printf(rowFormat, fn, parts[fn].Address().GetUserAddress(),
+			fmt.Printf(rowFormat, onlineInfoStr, fn, parts[fn].Address().GetUserAddress(),
 				fmt.Sprintf("%d", first),
 				fmt.Sprintf("%d", last),
 				fmt.Sprintf("%d.%d", parts[fn].Voting.FirstBatch, parts[fn].Voting.FirstOffset))
