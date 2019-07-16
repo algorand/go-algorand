@@ -168,7 +168,7 @@ type Transaction struct {
 	// This is a list of all supported transactions.
 	// To add another one, create a struct with XXXTransactionType and embed it here.
 	// To prevent extraneous fields, all must have the "omitempty" tag.
-	Payment *PaymentTransactionType `json:"payment"`
+	Payment *PaymentTransactionType `json:"payment,omitempty"`
 
 	// FromRewards is the amount of pending rewards applied to the From
 	// account as part of this transaction.
