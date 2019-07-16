@@ -38,7 +38,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-func nodeStatus(node node.Full) (res v1.NodeStatus, err error) {
+func nodeStatus(node *node.AlgorandFullNode) (res v1.NodeStatus, err error) {
 	stat, err := node.Status()
 	if err != nil {
 		return v1.NodeStatus{}, err

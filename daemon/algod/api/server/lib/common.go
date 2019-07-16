@@ -43,7 +43,7 @@ type Routes []Route
 // ReqContext is passed to each of the handlers below via wrapCtx, allowing
 // handlers to interact with the node
 type ReqContext struct {
-	Node          node.Full
+	Node          *node.AlgorandFullNode
 	Log           logging.Logger
 	StaticDataDir string
 }
