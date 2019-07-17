@@ -99,7 +99,7 @@ type Account struct {
 	// required: true
 	AmountWithoutPendingRewards uint64 `json:"amountwithoutpendingrewards"`
 
-	// Rewards indicates the total rewards of MicroAlgos the account has recieved
+	// Rewards indicates the total rewards of MicroAlgos the account has received, including pending rewards.
 	//
 	// required: true
 	Rewards uint64 `json:"rewards"`
