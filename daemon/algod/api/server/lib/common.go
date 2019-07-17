@@ -43,9 +43,8 @@ type Routes []Route
 // ReqContext is passed to each of the handlers below via wrapCtx, allowing
 // handlers to interact with the node
 type ReqContext struct {
-	Node          *node.AlgorandFullNode
-	Log           logging.Logger
-	StaticDataDir string
+	Node *node.AlgorandFullNode
+	Log  logging.Logger
 }
 
 // ErrorResponse sets the specified status code (should != 200), and fills in the
