@@ -72,7 +72,7 @@ func (t NetworkTemplate) createNodeDirectories(targetFolder string, binDir strin
 	nodeDirs = make(map[string]string)
 	getGenesisVerCmd := filepath.Join(binDir, "algod")
 	importKeysCmd := filepath.Join(binDir, "goal")
-	genesisVer, err := util.ExecAndCaptureOutput(getGenesisVerCmd, "-G", "-d", targetFolder)
+	genesisVer, _, err := util.ExecAndCaptureOutput(getGenesisVerCmd, "-G", "-d", targetFolder)
 	if err != nil {
 		return
 	}
@@ -137,7 +137,7 @@ func (t NetworkTemplate) createNodeDirectories(targetFolder string, binDir strin
 				return
 			}
 
-			_, err = util.ExecAndCaptureOutput(importKeysCmd, "account", "importrootkey", "-w", string(libgoal.UnencryptedWalletName), "-d", nodeDir)
+			_, _, err = util.ExecAndCaptureOutput(importKeysCmd, "account", "importrootkey", "-w", string(libgoal.UnencryptedWalletName), "-d", nodeDir)
 			if err != nil {
 				return
 			}

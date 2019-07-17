@@ -89,7 +89,7 @@ else
     #${GOPATH}/bin/buildtools genesis timestamp -f ${PKG_ROOT}/var/lib/algorand/genesis.json -t ${TIMESTAMP}
 fi
 
-systemd_files=("algorand.service")
+systemd_files=("algorand.service" "algorand@.service")
 mkdir -p ${PKG_ROOT}/lib/systemd/system
 for svc in "${systemd_files[@]}"; do
     cp installer/${svc} ${PKG_ROOT}/lib/systemd/system

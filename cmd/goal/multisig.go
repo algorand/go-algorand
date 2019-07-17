@@ -64,7 +64,7 @@ var addSigCmd = &cobra.Command{
 	Long:  `Start a multisig, or add a signature to an existing multisig, for a given transaction`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		data, err := ioutil.ReadFile(txFilename)
+		data, err := readFile(txFilename)
 		if err != nil {
 			reportErrorf(fileReadError, txFilename, err)
 		}
@@ -96,7 +96,7 @@ var addSigCmd = &cobra.Command{
 			outData = append(outData, protocol.Encode(stxn)...)
 		}
 
-		err = ioutil.WriteFile(txFilename, outData, 0600)
+		err = writeFile(txFilename, outData, 0600)
 		if err != nil {
 			reportErrorf(fileWriteError, txFilename, err)
 		}
@@ -168,7 +168,7 @@ var mergeSigCmd = &cobra.Command{
 			mergedData = append(mergedData, protocol.Encode(txn)...)
 		}
 
-		err := ioutil.WriteFile(txFilename, mergedData, 0600)
+		err := writeFile(txFilename, mergedData, 0600)
 		if err != nil {
 			reportErrorf(fileWriteError, txFilename, err)
 		}
