@@ -324,8 +324,6 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 	}
 
 	apiParticipation := v1.Participation{
-		Round:           uint64(lastRound), // these fields are redundant when embedded in Account, but enables reuse of the model elsewhere.
-		Address:         addr.String(),
 		ParticipationPK: record.VoteID[:],
 		VRFPK:           record.SelectionID[:],
 		VoteFirst:       uint64(record.VoteFirstValid),

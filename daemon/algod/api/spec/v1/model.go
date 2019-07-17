@@ -71,17 +71,7 @@ type TransactionID struct {
 
 // Participation Description
 // swagger:model Participation
-type Participation struct {
-	// Round indicates the round for which this information is relevant
-	//
-	// required: true
-	Round uint64 `json:"round"`
-
-	// Address indicates the account associated with this participation
-	//
-	// required: true
-	Address string `json:"address"`
-
+type Participation struct { // Round and Address fields are redundant if Participation embedded in Account. Exclude for now.
 	// ParticipationPK is the root participation public key (if any) currently registered for this round
 	//
 	// required: true
