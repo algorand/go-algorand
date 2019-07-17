@@ -380,11 +380,9 @@ func (*Ledger) AssemblePayset(pool *pools.TransactionPool, eval *ledger.BlockEva
 				stats.CommittedCount++
 			case transactions.MinFeeError:
 				logAt = logging.Base().Info
-				pool.Remove(txn.ID(), err)
 				stats.InvalidCount++
 			default:
 				// logAt = Warn
-				pool.Remove(txn.ID(), err)
 				stats.InvalidCount++
 			}
 

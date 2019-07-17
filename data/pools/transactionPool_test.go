@@ -255,19 +255,6 @@ func TestCloseAccount(t *testing.T) {
 	}
 	signedTx2 := tx.Sign(secrets[0])
 	require.Error(t, transactionPool.Remember(signedTx2))
-
-	transactionPool.Remove(closeTx.ID(), fmt.Errorf("removing close account tx"))
-
-	// Generate a new block to force the pool to recompute the block evaluator
-	eval := newBlockEvaluator(t, ledger)
-	blk, err := eval.GenerateBlock()
-	require.NoError(t, err)
-
-	err = ledger.AddValidatedBlock(*blk, agreement.Certificate{})
-	require.NoError(t, err)
-
-	transactionPool.OnNewBlock(blk.Block())
-	require.NoError(t, transactionPool.Remember(signedTx2))
 }
 
 func TestCloseAccountWhileTxIsPending(t *testing.T) {
@@ -467,71 +454,6 @@ func TestRememberForget(t *testing.T) {
 	require.Len(t, pending, 0)
 }
 
-func TestPendingIsOrdered(t *testing.T) {
-	numOfAccounts := 5
-	// Genereate accounts
-	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
-	addresses := make([]basics.Address, numOfAccounts)
-
-	for i := 0; i < numOfAccounts; i++ {
-		secret := keypair()
-		addr := basics.Address(secret.SignatureVerifier)
-		secrets[i] = secret
-		addresses[i] = addr
-	}
-
-	ledger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
-	transactionPool := MakeTransactionPool(ledger, exponentialGrowth, testPoolSize, false)
-
-	for i, sender := range addresses {
-		for j, receiver := range addresses {
-			if sender != receiver {
-				tx := transactions.Transaction{
-					Type: protocol.PaymentTx,
-					Header: transactions.Header{
-						Sender:      sender,
-						Fee:         basics.MicroAlgos{Raw: uint64(rand.Int()%10000) + proto.MinTxnFee},
-						FirstValid:  0,
-						LastValid:   basics.Round(proto.MaxTxnLife),
-						Note:        make([]byte, 2),
-						GenesisHash: ledger.GenesisHash(),
-					},
-					PaymentTxnFields: transactions.PaymentTxnFields{
-						Receiver: receiver,
-						Amount:   basics.MicroAlgos{Raw: 1},
-					},
-				}
-				tx.Note[0] = byte(i)
-				tx.Note[1] = byte(j)
-				signedTx := tx.Sign(secrets[i])
-				transactionPool.Remember(signedTx)
-			}
-		}
-	}
-
-	pending := transactionPool.Pending()
-	numberOfTxns := numOfAccounts*numOfAccounts - numOfAccounts
-	require.Len(t, pending, numberOfTxns)
-
-	last := pending[0].Txn.TxFee()
-	for i := 0; i < numberOfTxns; i++ {
-		require.False(t, last.LessThan(pending[i].Txn.TxFee()))
-		last = pending[i].Txn.TxFee()
-	}
-
-	ids := transactionPool.PendingTxIDs()
-	require.Equal(t, len(pending), len(ids))
-
-	idset := make(map[transactions.Txid]bool)
-
-	for _, id := range ids {
-		idset[id] = true
-	}
-	for _, tx := range pending {
-		require.True(t, idset[tx.ID()])
-	}
-}
-
 //	Test that clean up works
 func TestCleanUp(t *testing.T) {
 	numOfAccounts := 10
@@ -696,90 +618,6 @@ func TestFixOverflowOnNewBlock(t *testing.T) {
 	pending = transactionPool.Pending()
 	// only one transaction is missing
 	require.Len(t, pending, savedTransactions-1)
-
-	for _, tx := range pending {
-		// ensure it's the lowest priority one that is removed
-		if tx.Txn.Src() == overSpender {
-			require.True(t, tx.Txn.TxFee().Raw > proto.MinTxnFee)
-		}
-	}
-}
-
-func TestExponentialPriorityGrowth(t *testing.T) {
-	numOfAccounts := 5
-	// Genereate accounts
-	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
-	addresses := make([]basics.Address, numOfAccounts)
-
-	for i := 0; i < numOfAccounts; i++ {
-		secret := keypair()
-		addr := basics.Address(secret.SignatureVerifier)
-		secrets[i] = secret
-		addresses[i] = addr
-	}
-
-	poolSize := 2
-	ledger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
-	transactionPool := MakeTransactionPool(ledger, exponentialGrowth, poolSize, false)
-
-	sender := addresses[0]
-	receiver := addresses[1]
-
-	baseFee := minFee
-	for i := 0; i < poolSize; i++ {
-		tx := transactions.Transaction{
-			Type: protocol.PaymentTx,
-			Header: transactions.Header{
-				Sender:      sender,
-				Fee:         basics.MicroAlgos{Raw: baseFee},
-				FirstValid:  0,
-				LastValid:   basics.Round(proto.MaxTxnLife),
-				Note:        []byte{byte(i)},
-				GenesisHash: ledger.GenesisHash(),
-			},
-			PaymentTxnFields: transactions.PaymentTxnFields{
-				Receiver: receiver,
-				Amount:   basics.MicroAlgos{Raw: 1},
-			},
-		}
-		signedTx := tx.Sign(secrets[0])
-		require.NoError(t, transactionPool.Remember(signedTx))
-	}
-
-	txLowFee := transactions.Transaction{
-		Type: protocol.PaymentTx,
-		Header: transactions.Header{
-			Sender:      sender,
-			Fee:         basics.MicroAlgos{Raw: baseFee*exponentialGrowth - 1},
-			FirstValid:  0,
-			LastValid:   basics.Round(proto.MaxTxnLife),
-			Note:        []byte{byte(poolSize + 1)},
-			GenesisHash: ledger.GenesisHash(),
-		},
-		PaymentTxnFields: transactions.PaymentTxnFields{
-			Receiver: receiver,
-			Amount:   basics.MicroAlgos{Raw: 1},
-		},
-	}
-	signed := txLowFee.Sign(secrets[0])
-	require.Error(t, transactionPool.Remember(signed))
-
-	txHighFee := transactions.Transaction{
-		Type: protocol.PaymentTx,
-		Header: transactions.Header{
-			Sender:      sender,
-			Fee:         basics.MicroAlgos{Raw: baseFee * exponentialGrowth},
-			FirstValid:  0,
-			LastValid:   basics.Round(proto.MaxTxnLife),
-			Note:        []byte{byte(poolSize + 2)},
-			GenesisHash: ledger.GenesisHash(),
-		},
-		PaymentTxnFields: transactions.PaymentTxnFields{
-			Receiver: receiver,
-			Amount:   basics.MicroAlgos{Raw: 1},
-		},
-	}
-	require.NoError(t, transactionPool.Remember(txHighFee.Sign(secrets[0])))
 }
 
 func TestOverspender(t *testing.T) {
@@ -876,27 +714,6 @@ func TestRemove(t *testing.T) {
 	signedTx := tx.Sign(secrets[0])
 	require.NoError(t, transactionPool.Remember(signedTx))
 	require.Equal(t, transactionPool.Pending(), []transactions.SignedTxn{signedTx})
-
-	tx2 := transactions.Transaction{
-		Type: protocol.PaymentTx,
-		Header: transactions.Header{
-			Sender:      sender,
-			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee + 1},
-			FirstValid:  0,
-			LastValid:   10,
-			Note:        []byte{1},
-			GenesisHash: ledger.GenesisHash(),
-		},
-		PaymentTxnFields: transactions.PaymentTxnFields{
-			Receiver: receiver,
-			Amount:   basics.MicroAlgos{Raw: 0},
-		},
-	}
-
-	// invalid remove
-	transactionPool.remove(tx2.ID(), nil)
-	require.Equal(t, transactionPool.Pending(), []transactions.SignedTxn{signedTx})
-
 }
 
 func BenchmarkTransactionPoolRemember(b *testing.B) {
