@@ -667,6 +667,8 @@ func TestClientTruncatesPendingTransactions(t *testing.T) {
 }
 
 func TestClientPrioritizesPendingTransactions(t *testing.T) {
+	t.Skip("new FIFO pool does not have prioritization")
+
 	var localFixture fixtures.RestClientFixture
 	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
 	defer localFixture.Shutdown()
