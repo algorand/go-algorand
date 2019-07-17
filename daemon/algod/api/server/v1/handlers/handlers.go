@@ -95,11 +95,11 @@ func paymentTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.
 
 func keyregTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
 	keyreg := v1.KeyregTransactionType{
-		VotePK:          KeyregTxnFields.VotePK[:],
-		SelectionPK:     KeyregTxnFields.SelectionPK[:],
-		VoteFirst:       uint64(KeyregTxnFields.VoteFirst),
-		VoteLast:        uint64(KeyregTxnFields.VoteLast),
-		VoteKeyDilution: KeyregTxnFields.VoteKeyDilution
+		VotePK:          tx.KeyregTxnFields.VotePK[:],
+		SelectionPK:     tx.KeyregTxnFields.SelectionPK[:],
+		VoteFirst:       uint64(tx.KeyregTxnFields.VoteFirst),
+		VoteLast:        uint64(tx.KeyregTxnFields.VoteLast),
+		VoteKeyDilution: tx.KeyregTxnFields.VoteKeyDilution,
 	}
 
 	return v1.Transaction{
