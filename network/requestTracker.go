@@ -44,14 +44,14 @@ func (ard *hostIncomingRequests) findTimestampIndex(t time.Time) int {
 	return i
 }
 
-func (ard *hostIncomingRequests) add(remoteHost, remotePort, remoteAddr string, createTime time.Time, rateLimitingWindowStartTime time.Time, request *http.Request) (newEntry *TrackerRequest) {
+func (ard *hostIncomingRequests) add(remoteHost, remotePort, remoteAddr string, createTime time.Time, rateLimitingWindowStartTime time.Time) (newEntry *TrackerRequest) {
 	// keep track of the recent connection attempts ( up to ConnectionsRateLimitingWindowSeconds second into the past )
 	newEntry = &TrackerRequest{
 		created:    createTime,
 		remoteHost: remoteHost,
 		remotePort: remotePort,
 		remoteAddr: remoteAddr,
-		request:    request}
+	}
 	// prune list first.
 	pruneIdx := ard.findTimestampIndex(rateLimitingWindowStartTime)
 	if pruneIdx > 0 {
@@ -84,8 +84,18 @@ func (ard *hostIncomingRequests) remove(trackedRequest *TrackerRequest) {
 	}
 }
 
-func (ard *hostIncomingRequests) countConnections(rateLimitingWindowStartTime time.Time) uint {
-	return uint(len(ard.requests) - ard.findTimestampIndex(rateLimitingWindowStartTime))
+func (ard *hostIncomingRequests) countConnections(rateLimitingWindowStartTime time.Time, tcpRequestsOnly bool) (count uint) {
+	i := ard.findTimestampIndex(rateLimitingWindowStartTime)
+	if !tcpRequestsOnly {
+		count = uint(len(ard.requests) - i)
+		return
+	}
+	for ; i < len(ard.requests); i++ {
+		if ard.requests[i].request != nil {
+			count++
+		}
+	}
+	return
 }
 
 // RequestTracker tracks the incoming request connections
@@ -132,13 +142,13 @@ func (rt *RequestTracker) Accept() (conn net.Conn, err error) {
 		rateLimitingWindowStartTime := requestTime.Add(-time.Duration(rt.config.ConnectionsRateLimitingWindowSeconds) * time.Second)
 
 		rt.remoteHostRequestsMu.Lock()
-		trackerRequest := rt.addAcceptedConnection(remoteHost, remotePort, remoteAddr, requestTime, rateLimitingWindowStartTime, nil)
+		trackerRequest := rt.addAcceptedConnection(remoteHost, remotePort, remoteAddr, requestTime, rateLimitingWindowStartTime)
 		rt.pruneRequests(rateLimitingWindowStartTime)
-		originConnections := rt.countOriginConnections(remoteHost, rateLimitingWindowStartTime)
+		originConnections := rt.countOriginConnections(remoteHost, rateLimitingWindowStartTime, true)
 		rt.remoteHostRequestsMu.Unlock()
 
 		// check the number of connections
-		if originConnections > rt.config.ConnectionsRateLimitingCount*2 && rt.config.ConnectionsRateLimitingWindowSeconds > 0 && rt.config.ConnectionsRateLimitingCount > 0 {
+		if originConnections > rt.config.ConnectionsRateLimitingCount && rt.config.ConnectionsRateLimitingWindowSeconds > 0 && rt.config.ConnectionsRateLimitingCount > 0 {
 			networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "incoming_connection_per_ip_tcp_rate_limit"})
 
 			rt.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerFailEvent,
@@ -149,9 +159,9 @@ func (rt *RequestTracker) Accept() (conn net.Conn, err error) {
 				})
 
 			// this is not a normal - usually we want to wait for the HTTP handler to give the response; however, it seems that we're either getting requests faster than the
-			// http handler can handle, or ending up with twice as much as the designated connection rate.
+			// http handler can handle, or getting requests that fails before the header retrieval is complete.
 			// in this case, we want to send our response right away and disconnect. If the client is currently still sending it's request, it might not know how to handle
-			// this correctly. This is a pre-cursor to the issue handled by the go-server in the same manner. ( see "431 Request Header Fields Too Large" in the server.go )
+			// this correctly. This use case is similar to the issue handled by the go-server in the same manner. ( see "431 Request Header Fields Too Large" in the server.go )
 			conn.Write([]byte(
 				fmt.Sprintf("HTTP/1.1 %d Too Many Requests\r\nContent-Type: text/plain; charset=utf-8\r\nConnection: close\r\n%s: %d\r\n\r\n", http.StatusTooManyRequests, TooManyRequestsRetryAfterHeader, rt.config.ConnectionsRateLimitingWindowSeconds)))
 			conn.Close()
@@ -204,7 +214,7 @@ func (rt *RequestTracker) pruneRequests(rateLimitingWindowStartTime time.Time) {
 	}
 }
 
-func (rt *RequestTracker) addAcceptedConnection(host, port, remoteAddr string, requestTime time.Time, rateLimitingWindowStartTime time.Time, request *http.Request) *TrackerRequest {
+func (rt *RequestTracker) addAcceptedConnection(host, port, remoteAddr string, requestTime time.Time, rateLimitingWindowStartTime time.Time) *TrackerRequest {
 	requestData, has := rt.remoteHostRequests[host]
 	if !has {
 		requestData = &hostIncomingRequests{
@@ -213,7 +223,7 @@ func (rt *RequestTracker) addAcceptedConnection(host, port, remoteAddr string, r
 		}
 		rt.remoteHostRequests[host] = requestData
 	}
-	return requestData.add(host, port, remoteAddr, requestTime, rateLimitingWindowStartTime, request)
+	return requestData.add(host, port, remoteAddr, requestTime, rateLimitingWindowStartTime)
 }
 
 func (rt *RequestTracker) removeAcceptedConnection(trackedRequest *TrackerRequest) {
@@ -226,9 +236,9 @@ func (rt *RequestTracker) removeAcceptedConnection(trackedRequest *TrackerReques
 	}
 }
 
-func (rt *RequestTracker) countOriginConnections(remoteHost string, rateLimitingWindowStartTime time.Time) uint {
+func (rt *RequestTracker) countOriginConnections(remoteHost string, rateLimitingWindowStartTime time.Time, tcpRequestsOnly bool) uint {
 	if requestData, has := rt.remoteHostRequests[remoteHost]; has {
-		return requestData.countConnections(rateLimitingWindowStartTime)
+		return requestData.countConnections(rateLimitingWindowStartTime, tcpRequestsOnly)
 	}
 	return 0
 }
@@ -263,17 +273,18 @@ func (rt *RequestTracker) ServeHTTP(response http.ResponseWriter, request *http.
 	// tcp-connection established time to align with current time.
 	rateLimitingWindowStartTime := time.Now().Add(-time.Duration(rt.config.ConnectionsRateLimitingWindowSeconds) * time.Second)
 
-	trackedRequest := rt.updateOriginAddress(request, rateLimitingWindowStartTime)
+	trackedRequest := rt.updateRequestRemoteAddr(request, rateLimitingWindowStartTime)
 	if trackedRequest == nil {
 		rt.log.Errorf("missing entry for %s in acceptedConnection map", request.RemoteAddr)
 		response.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
 
+	trackedRequest.request = request
 	trackedRequest.otherTelemetryGUID, trackedRequest.otherInstanceName, trackedRequest.otherPublicAddr = getCommonHeaders(request.Header)
 
 	rt.remoteHostRequestsMu.Lock()
-	originConnections := rt.countOriginConnections(trackedRequest.remoteHost, rateLimitingWindowStartTime)
+	originConnections := rt.countOriginConnections(trackedRequest.remoteHost, rateLimitingWindowStartTime, false)
 	rt.remoteHostRequestsMu.Unlock()
 
 	if originConnections > rt.config.ConnectionsRateLimitingCount && rt.config.ConnectionsRateLimitingWindowSeconds > 0 && rt.config.ConnectionsRateLimitingCount > 0 {
@@ -302,7 +313,7 @@ func (rt *RequestTracker) ServeHTTP(response http.ResponseWriter, request *http.
 
 }
 
-func (rt *RequestTracker) updateOriginAddress(request *http.Request, rateLimitingWindowStartTime time.Time) (trackedRequest *TrackerRequest) {
+func (rt *RequestTracker) updateRequestRemoteAddr(request *http.Request, rateLimitingWindowStartTime time.Time) (trackedRequest *TrackerRequest) {
 	rt.acceptedConnectionsMu.Lock()
 	trackedRequest = rt.acceptedConnections[request.RemoteAddr]
 	rt.acceptedConnectionsMu.Unlock()
@@ -318,7 +329,7 @@ func (rt *RequestTracker) updateOriginAddress(request *http.Request, rateLimitin
 	rt.remoteHostRequestsMu.Lock()
 	rt.removeAcceptedConnection(originalTrackedRequest)
 	// add the tracking with the new address
-	trackedRequest = rt.addAcceptedConnection(origin, trackedRequest.remotePort, request.RemoteAddr, trackedRequest.created, rateLimitingWindowStartTime, request)
+	trackedRequest = rt.addAcceptedConnection(origin, trackedRequest.remotePort, request.RemoteAddr, trackedRequest.created, rateLimitingWindowStartTime)
 	rt.remoteHostRequestsMu.Unlock()
 
 	rt.acceptedConnectionsMu.Lock()
