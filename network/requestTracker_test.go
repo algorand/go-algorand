@@ -38,4 +38,17 @@ func TestHostIncomingRequestsOrdering(t *testing.T) {
 	for i := 1; i < 100; i++ {
 		require.True(t, hir.requests[i].created.After(hir.requests[i-1].created))
 	}
+
+	// test the remove function.
+	for len(hir.requests) > 0 {
+		// select a random item.
+		i := rand.Int() % len(hir.requests)
+		o := hir.requests[i]
+		hir.remove(o)
+		// make sure the item isn't there anymore.
+		for _, p := range hir.requests {
+			require.False(t, p == o)
+			require.Equal(t, hir.countConnections(now.Add(-time.Second), false), uint(len(hir.requests)))
+		}
+	}
 }
