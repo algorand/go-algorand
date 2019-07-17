@@ -97,20 +97,20 @@ func init() {
 	newCmd.Flags().BoolVarP(&defaultAccount, "default", "f", false, "Set this account as the default one")
 
 	// Delete account flag
-	deleteCmd.Flags().StringVarP(&accountAddress, "addr", "a", "", "Address of account to delete")
-	deleteCmd.MarkFlagRequired("addr")
+	deleteCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Address of account to delete")
+	deleteCmd.MarkFlagRequired("address")
 
 	// New Multisig account flag
 	newMultisigCmd.Flags().Uint8VarP(&threshold, "threshold", "T", 1, "Number of signatures required to spend from this address")
 	newMultisigCmd.MarkFlagRequired("threshold")
 
 	// Delete multisig account flag
-	deleteMultisigCmd.Flags().StringVarP(&accountAddress, "addr", "a", "", "Address of multisig account to delete")
-	deleteMultisigCmd.MarkFlagRequired("addr")
+	deleteMultisigCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Address of multisig account to delete")
+	deleteMultisigCmd.MarkFlagRequired("address")
 
 	// Lookup info for multisig account flag
-	infoMultisigCmd.Flags().StringVarP(&accountAddress, "addr", "a", "", "Address of multisig account to look up")
-	infoMultisigCmd.MarkFlagRequired("addr")
+	infoMultisigCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Address of multisig account to look up")
+	infoMultisigCmd.MarkFlagRequired("address")
 
 	// Balance flags
 	balanceCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to retrieve balance (required)")

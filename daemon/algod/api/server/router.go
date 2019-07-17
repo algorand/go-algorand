@@ -106,7 +106,7 @@ func registerHandlers(router *mux.Router, prefix string, routes lib.Routes, ctx 
 }
 
 // NewRouter builds and returns a new router from routes
-func NewRouter(logger logging.Logger, node node.Full, apiToken string, staticFileDir string) *mux.Router {
+func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, apiToken string, staticFileDir string) *mux.Router {
 	router := mux.NewRouter().StrictSlash(true)
 
 	// Middleware

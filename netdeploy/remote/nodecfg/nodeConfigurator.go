@@ -213,7 +213,7 @@ func getClouldflareCredentials() (zoneID string, email string, authKey string, e
 }
 
 func importWalletFiles(importKeysCmd string, nodeDir string) error {
-	_, err := util.ExecAndCaptureOutput(importKeysCmd, "account", "importrootkey", "-d", nodeDir, "-u")
+	_, _, err := util.ExecAndCaptureOutput(importKeysCmd, "account", "importrootkey", "-d", nodeDir, "-u")
 	return err
 }
 
