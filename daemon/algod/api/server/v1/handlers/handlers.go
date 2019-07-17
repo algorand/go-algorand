@@ -328,7 +328,7 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 		VRFPK:           record.SelectionID[:],
 		VoteFirst:       uint64(record.VoteFirstValid),
 		VoteLast:        uint64(record.VoteLastValid),
-		VoteKeyDilution: uint64(record.VoteKeyDilution),
+		VoteKeyDilution: record.VoteKeyDilution,
 	}
 	accountInfo := v1.Account{
 		Round:                       uint64(lastRound),
