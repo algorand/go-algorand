@@ -102,6 +102,13 @@ func (pool *TransactionPool) Pending() []transactions.SignedTxn {
 	return txns
 }
 
+// PendingCount returns the number of transactions currently pending in the pool.
+func (pool *TransactionPool) PendingCount() int {
+	pool.mu.RLock()
+	defer pool.mu.RUnlock()
+	return len(pool.pendingTxns)
+}
+
 // Test checks whether a transaction could be remembered in the pool, but does not actually store this transaction
 // in the pool
 func (pool *TransactionPool) Test(t transactions.SignedTxn) error {
