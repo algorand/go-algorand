@@ -169,6 +169,7 @@ type Transaction struct {
 	// To add another one, create a struct with XXXTransactionType and embed it here.
 	// To prevent extraneous fields, all must have the "omitempty" tag.
 	Payment *PaymentTransactionType `json:"payment,omitempty"`
+	Keyreg  *KeyregTransactionType  `json:"keyreg,omitempty"`
 
 	// FromRewards is the amount of pending rewards applied to the From
 	// account as part of this transaction.
@@ -221,6 +222,35 @@ type PaymentTransactionType struct {
 	//
 	// required: false
 	CloseRewards uint64 `json:"closerewards"`
+}
+
+// KeyregTransactionType contains the additional fields for a keyreg Transaction
+// swagger:model KeyregTransactionType
+type KeyregTransactionType struct {
+	// VotePK is the participation public key used in key registration transactions
+	//
+	// required: false
+	VotePK bytes `json:"votekey,omitempty"`
+
+	// SelectionPK is the VRF public key used in key registration transactions
+	//
+	// required: false
+	SelectionPK bytes `json:"selkey,omitempty"`
+
+	// VoteFirst is the first round this participation key is valid
+	//
+	// required: false
+	VoteFirst uint64 `json:"votefst,omitempty"`
+
+	// VoteLast is the last round this participation key is valid
+	//
+	// required: false
+	VoteLast uint64 `json:"votelst,omitempty"`
+
+	// VoteKeyDilution is the dilution for the 2-level participation key
+	//
+	// required: false
+	VoteKeyDilution uint64 `json:"votekd,omitempty"`
 }
 
 // TransactionList contains a list of transactions

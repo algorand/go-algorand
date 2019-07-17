@@ -55,6 +55,16 @@ func nodeStatus(node *node.AlgorandFullNode) (res v1.NodeStatus, err error) {
 	}, nil
 }
 
+func txEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
+	if tx.Type == protocol.PaymentTx {
+		return paymentTxEncode(tx, ad);
+	}
+	if tx.Type == protocol.KeyRegistrationTx {
+		return keyregTxEncode(tx, ad);
+	}
+	return unknownTxEncode(tx, ad);
+}
+
 func paymentTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
 	payment := v1.PaymentTransactionType{
 		To:           tx.Receiver.String(),
@@ -83,8 +93,47 @@ func paymentTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.
 	}
 }
 
+func keyregTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
+	keyreg := v1.KeyregTransactionType{
+		VotePK:          KeyregTxnFields.VotePK[:],
+		SelectionPK:     KeyregTxnFields.SelectionPK[:],
+		VoteFirst:       uint64(KeyregTxnFields.VoteFirst),
+		VoteLast:        uint64(KeyregTxnFields.VoteLast),
+		VoteKeyDilution: KeyregTxnFields.VoteKeyDilution
+	}
+
+	return v1.Transaction{
+		Type:        string(tx.Type),
+		TxID:        tx.ID().String(),
+		From:        tx.Src().String(),
+		Fee:         tx.TxFee().Raw,
+		FirstRound:  uint64(tx.First()),
+		LastRound:   uint64(tx.Last()),
+		Note:        tx.Aux(),
+		Keyreg:     &keyreg,
+		FromRewards: ad.SenderRewards.Raw,
+		GenesisID:   tx.GenesisID,
+		GenesisHash: tx.GenesisHash[:],
+	}
+}
+
+func unknownTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
+	return v1.Transaction{
+		Type:        string(tx.Type),
+		TxID:        tx.ID().String(),
+		From:        tx.Src().String(),
+		Fee:         tx.TxFee().Raw,
+		FirstRound:  uint64(tx.First()),
+		LastRound:   uint64(tx.Last()),
+		Note:        tx.Aux(),
+		FromRewards: ad.SenderRewards.Raw,
+		GenesisID:   tx.GenesisID,
+		GenesisHash: tx.GenesisHash[:],
+	}
+}
+
 func txWithStatusEncode(tr node.TxnWithStatus) v1.Transaction {
-	s := paymentTxEncode(tr.Txn.Txn, tr.ApplyData)
+	s := txEncode(tr.Txn.Txn, tr.ApplyData)
 	s.ConfirmedRound = uint64(tr.ConfirmedRound)
 	s.PoolError = tr.PoolError
 	return s
@@ -546,7 +595,7 @@ func GetPendingTransactions(ctx lib.ReqContext, w http.ResponseWriter, r *http.R
 
 	responseTxs := make([]v1.Transaction, len(txs))
 	for i, twr := range txs {
-		responseTxs[i] = paymentTxEncode(twr.Txn, transactions.ApplyData{})
+		responseTxs[i] = txEncode(twr.Txn, transactions.ApplyData{})
 	}
 
 	response := PendingTransactionsResponse{
