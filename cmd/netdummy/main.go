@@ -47,12 +47,12 @@ func main() {
 	log.SetLevel(logging.Debug)
 	log.SetOutput(os.Stderr)
 
-	addrs := &network.ArrayPhonebook{}
+	addrs := network.MakeArrayPhonebook()
 	addrs.Entries.ReplacePeerList([]string{*serverAddress})
 
 	var nodes []network.GossipNode
 	for i := 0; i < *numClients; i++ {
-		n, _ := network.NewWebsocketGossipNode(log, conf, addrs, *genesisID, protocol.NetworkID(*networkID))
+		n, _ := network.NewWebsocketGossipNode(log, conf, &addrs, *genesisID, protocol.NetworkID(*networkID))
 		n.Start()
 		nodes = append(nodes, n)
 	}

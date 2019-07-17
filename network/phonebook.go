@@ -17,6 +17,7 @@
 package network
 
 import (
+	"math"
 	"math/rand"
 	"time"
 
@@ -25,7 +26,7 @@ import (
 
 // when using GetAddresses with getAllAddresses, all the addresses will be retrieved, regardless
 // of how many addresses the phonebook actually has. ( with the retry-after logic applied )
-const getAllAddresses = 1000000
+const getAllAddresses = math.MaxInt32
 
 // Phonebook stores or looks up addresses of nodes we might contact
 type Phonebook interface {
@@ -37,23 +38,34 @@ type Phonebook interface {
 }
 
 // phonebookEntry is a single server on the phonebook
-type phonebookEntry struct {
+/*type phonebookEntry struct {
 	address    string
+	retryAfter time.Time
+}*/
+
+type phonebookData struct {
 	retryAfter time.Time
 }
 
-type phonebookEntries []phonebookEntry
+type phonebookEntries map[string]phonebookData
 
 // ArrayPhonebook is a simple wrapper on a slice of string with addresses
 type ArrayPhonebook struct {
 	Entries phonebookEntries
 }
 
+// MakeArrayPhonebook creates a ArrayPhonebook
+func MakeArrayPhonebook() ArrayPhonebook {
+	return ArrayPhonebook{
+		Entries: make(phonebookEntries, 0),
+	}
+}
+
 func (e *phonebookEntries) filterRetryTime(t time.Time) []string {
 	o := make([]string, 0, len(*e))
-	for _, entry := range *e {
+	for addr, entry := range *e {
 		if t.After(entry.retryAfter) {
-			o = append(o, entry.address)
+			o = append(o, addr)
 		}
 	}
 	return o
@@ -61,24 +73,23 @@ func (e *phonebookEntries) filterRetryTime(t time.Time) []string {
 
 // ReplacePeerList replaces set of addresses with that passed in.
 func (e *phonebookEntries) ReplacePeerList(they []string) {
-	newList := make([]phonebookEntry, len(they))
-	for i, e := range they {
-		newList[i] = phonebookEntry{address: e}
+	// clear current map.
+	for k := range *e {
+		delete(*e, k)
 	}
-	*e = newList
+
+	for _, v := range they {
+		(*e)[v] = phonebookData{}
+	}
+}
+
+func (e *phonebookEntries) updateRetryAfter(addr string, retryAfter time.Time) {
+	(*e)[addr] = phonebookData{retryAfter: retryAfter}
 }
 
 // UpdateRetryAfter updates the retry-after field for the entries matching the given address
 func (p *ArrayPhonebook) UpdateRetryAfter(addr string, retryAfter time.Time) {
 	p.Entries.updateRetryAfter(addr, retryAfter)
-}
-
-func (e *phonebookEntries) updateRetryAfter(addr string, retryAfter time.Time) {
-	for i, entry := range *e {
-		if entry.address == addr {
-			(*e)[i] = phonebookEntry{address: addr, retryAfter: retryAfter}
-		}
-	}
 }
 
 func shuffleStrings(set []string) {
@@ -121,6 +132,13 @@ type ThreadsafePhonebook struct {
 	entries phonebookEntries
 }
 
+// MakeThreadsafePhonebook creates a ThreadsafePhonebook
+func MakeThreadsafePhonebook() ThreadsafePhonebook {
+	return ThreadsafePhonebook{
+		entries: make(phonebookEntries, 0),
+	}
+}
+
 // GetAddresses returns up to N shuffled address
 func (p *ThreadsafePhonebook) GetAddresses(n int) []string {
 	p.lock.RLock()
@@ -141,16 +159,10 @@ func (p *ThreadsafePhonebook) ExtendPeerList(more []string) {
 	defer p.lock.Unlock()
 	// TODO: if this gets bad because p.addrs gets long, replace storage with a map[string]bool
 	for _, addr := range more {
-		found := false
-		for _, oaddr := range p.entries {
-			if addr == oaddr.address {
-				found = true
-				break
-			}
+		if _, has := p.entries[addr]; has {
+			continue
 		}
-		if !found {
-			p.entries = append(p.entries, phonebookEntry{address: addr})
-		}
+		p.entries[addr] = phonebookData{}
 	}
 }
 
@@ -168,25 +180,33 @@ func (p *ThreadsafePhonebook) ReplacePeerList(they []string) {
 	p.entries.ReplacePeerList(they)
 }
 
-// MergePeerList mearges set of addresses with that passed in.
+// MergePeerList merges a set of addresses with that passed in.
 // new entries in they are being added
 // existing items that aren't included in they are being removed
 // matching entries don't change
 func (p *ThreadsafePhonebook) MergePeerList(they []string) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
-	existing := make(map[string]phonebookEntry)
-	for _, e := range p.entries {
-		existing[e.address] = e
+
+	// prepare a map of items we'd like to remove.
+	removeItems := make(map[string]bool, 0)
+	for k := range p.entries {
+		removeItems[k] = true
 	}
 
-	p.entries = make([]phonebookEntry, len(they))
-	for i, e := range they {
-		if existingEntry, has := existing[e]; has {
-			p.entries[i] = existingEntry
+	for _, addr := range they {
+		if _, has := p.entries[addr]; has {
+			// we already have this. do nothing.
+			delete(removeItems, addr)
 		} else {
-			p.entries[i] = phonebookEntry{address: e}
+			// we don't have this item. add it.
+			p.entries[addr] = phonebookData{}
 		}
+	}
+
+	// remove items that were missing in they
+	for k := range removeItems {
+		delete(p.entries, k)
 	}
 }
 
