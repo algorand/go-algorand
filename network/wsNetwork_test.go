@@ -1417,3 +1417,10 @@ func TestForceMessageRelaying(t *testing.T) {
 	}
 
 }
+
+func TestSetUserAgentHeader(t *testing.T) {
+	headers := http.Header{}
+	SetUserAgentHeader(headers)
+	require.Equal(t, 1, len(headers))
+	t.Log(headers)
+}
