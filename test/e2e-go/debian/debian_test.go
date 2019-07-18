@@ -95,13 +95,13 @@ func TestGoalWithExpect(t *testing.T) {
 	err = f.initialize(t)
 	require.NoError(t, err)
 
-	testName := "Debian Test"
+	testName := "debian_test"
 
 	t.Run(testName, func(t *testing.T) {
 		workingDir, algoDir, err := f.getTestDir(testName)
 		require.NoError(t, err)
 		//t.Logf("algoDir: %s\ntestDataDir:%s\n", algoDir, f.testDataDir)
-		cmd := execCommand("./start_docker.sh", testName, algoDir, f.testDataDir)
+		cmd := execCommand("./start_docker.sh", testName, algoDir, workingDir)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Logf("err running '%s': %s\noutput: %s", testName, err, out)

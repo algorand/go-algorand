@@ -1,9 +1,6 @@
-#FROM golang:1.11-alpine AS build
-#FROM ubuntu:18.04
 FROM debian:stable
 RUN \
 apt-get update && \
-#apt-get install -y gnupg-curl && \
 apt-get update && \
 apt-get install -y apt-transport-https && \
 apt-get update && \

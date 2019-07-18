@@ -1,30 +1,39 @@
 #!/bin/bash
 set -x
-set -v 
-echo "start_docker"
+set -v
+TEST_NAME=$1
+TEST_DIR=$3
+echo "start docker test: " $TEST_NAME
+echo "test dir: " $TEST_DIR
+
+#set TMPDIR for aptly to use
+TMPDIR=$TEST_DIR
 
 STATUS=0
 
-# build the docker container algotest
+# build the docker container algotest using the local Dockerfile
 docker build -t algotest:latest .
 
 # run the docker container
+CONTAINER_ID=$(
 docker run -d -v /sys/fs/cgroup:/sys/fs/cgroup:ro \
   --cap-add SYS_ADMIN \
   --mount type=bind,src=`(pwd)`,dst=/workdir \
   --mount type=bind,src=`(pwd)`/../cli/goal/expect,dst=/expectdir \
+  -v type=bind,src=${TEST_DIR},dst=/testdir \
   algotest:latest \
-  /sbin/init \
-  /workdir/deb_setup.sh
+  /sbin/init
+)
+echo "docker container id" ${CONTAINER_ID}
 
+ls $TEST_DIR
 
-CONTAINER_ID=`(docker ps | grep algotest:latest | awk '{ print $1 }')`
-docker exec -t ${CONTAINER_ID} /workdir/deb_setup.sh && STATUS=0  || STATUS=1
+#exec the test driver
+docker exec -t ${CONTAINER_ID} /workdir/deb_setup.sh || STATUS=1
 
+#destroy the docker container
 docker kill ${CONTAINER_ID}
 
-
-echo "start_docker completed successfully"
+echo "start_docker completed with status: " $STATUS
 
 exit $STATUS
-
