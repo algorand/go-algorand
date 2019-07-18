@@ -185,6 +185,10 @@ type NodeStatus struct {
 	// TimeSinceLastRound in nanoseconds
 	// Required: true
 	TimeSinceLastRound int64 `json:"timeSinceLastRound"`
+
+	// HasSyncedSinceStartup indicates whether a round has completed since startup
+	// Required: true
+	HasSyncedSinceStartup bool `json:"hasSyncedSinceStartup"`
 }
 
 // PaymentTransactionType contains the additional fields for a payment Transaction

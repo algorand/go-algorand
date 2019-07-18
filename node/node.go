@@ -53,14 +53,15 @@ const participationKeyCheckSecs = 60
 
 // StatusReport represents the current basic status of the node
 type StatusReport struct {
-	LastRound            basics.Round
-	LastVersion          protocol.ConsensusVersion
-	NextVersion          protocol.ConsensusVersion
-	NextVersionRound     basics.Round
-	NextVersionSupported bool
-	LastRoundTimestamp   time.Time
-	SynchronizingTime    time.Duration
-	CatchupTime          time.Duration
+	LastRound             basics.Round
+	LastVersion           protocol.ConsensusVersion
+	NextVersion           protocol.ConsensusVersion
+	NextVersionRound      basics.Round
+	NextVersionSupported  bool
+	LastRoundTimestamp    time.Time
+	SynchronizingTime     time.Duration
+	CatchupTime           time.Duration
+	HasSyncedSinceStartup bool
 }
 
 // TimeSinceLastRound returns the time since the last block was approved (locally), or 0 if no blocks seen
@@ -126,7 +127,8 @@ type AlgorandFullNode struct {
 
 	log logging.Logger
 
-	lastRoundTimestamp time.Time
+	lastRoundTimestamp    time.Time
+	hasSyncedSinceStartup bool
 
 	txPoolSyncer *rpcs.TxSyncer
 
@@ -585,6 +587,7 @@ func (node *AlgorandFullNode) Status() (s StatusReport, err error) {
 	s.SynchronizingTime = node.syncer.SynchronizingTime()
 	s.LastRoundTimestamp = node.lastRoundTimestamp
 	s.CatchupTime = node.syncer.SynchronizingTime()
+	s.HasSyncedSinceStartup = node.hasSyncedSinceStartup
 	return
 }
 
@@ -746,6 +749,7 @@ func (node *AlgorandFullNode) OnNewBlock(block bookkeeping.Block) {
 	defer node.mu.Unlock()
 
 	node.lastRoundTimestamp = time.Now()
+	node.hasSyncedSinceStartup = true
 
 	// Wake up oldKeyDeletionThread(), non-blocking.
 	select {
