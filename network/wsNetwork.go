@@ -515,6 +515,7 @@ func (wn *WebsocketNetwork) setup() {
 	wn.upgrader.ReadBufferSize = 4096
 	wn.upgrader.WriteBufferSize = 4096
 	wn.upgrader.EnableCompression = false
+	wn.dnsPhonebook = MakeThreadsafePhonebook()
 	wn.router = mux.NewRouter()
 	wn.router.Handle(GossipNetworkPath, wn)
 	wn.requestsTracker = makeRequestsTracker(wn.router, wn.log, wn.config)

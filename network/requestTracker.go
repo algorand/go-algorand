@@ -174,13 +174,15 @@ func (rt *RequestTracker) Accept() (conn net.Conn, err error) {
 					Reason:   "Remote IP Connection TCP Rate Limit",
 				})
 
-			// this is not a normal - usually we want to wait for the HTTP handler to give the response; however, it seems that we're either getting requests faster than the
-			// http handler can handle, or getting requests that fails before the header retrieval is complete.
-			// in this case, we want to send our response right away and disconnect. If the client is currently still sending it's request, it might not know how to handle
-			// this correctly. This use case is similar to the issue handled by the go-server in the same manner. ( see "431 Request Header Fields Too Large" in the server.go )
-			conn.Write([]byte(
-				fmt.Sprintf("HTTP/1.1 %d Too Many Requests\r\nContent-Type: text/plain; charset=utf-8\r\nConnection: close\r\n%s: %d\r\n\r\n", http.StatusTooManyRequests, TooManyRequestsRetryAfterHeader, rt.config.ConnectionsRateLimitingWindowSeconds)))
-			conn.Close()
+			// we've already *doubled* the amount of allowed connections; disconnect right away.
+			// we don't want to create more go routines beyond this point.
+			if originConnections > rt.config.ConnectionsRateLimitingCount*2 {
+				conn.Close()
+			} else {
+				// we want to make an attempt to read the connection reqest and send a response, but not within this go routine -
+				// this go routine is used single-threaded and should not get blocked.
+				go rt.sendBlockedConnectionResponse(conn, requestTime)
+			}
 			continue
 		}
 
@@ -191,7 +193,21 @@ func (rt *RequestTracker) Accept() (conn net.Conn, err error) {
 		rt.acceptedConnections[remoteAddr] = trackerRequest
 		return
 	}
+}
 
+// sendBlockedConnectionResponse reads the incoming connection request followed by sending a "too many requests" response.
+func (rt *RequestTracker) sendBlockedConnectionResponse(conn net.Conn, requestTime time.Time) {
+	conn.SetReadDeadline(requestTime.Add(500 * time.Millisecond))
+	conn.SetWriteDeadline(requestTime.Add(500 * time.Millisecond))
+	var dummyBuffer [512]byte
+	conn.Read(dummyBuffer[:])
+	// this is not a normal - usually we want to wait for the HTTP handler to give the response; however, it seems that we're either getting requests faster than the
+	// http handler can handle, or getting requests that fails before the header retrieval is complete.
+	// in this case, we want to send our response right away and disconnect. If the client is currently still sending it's request, it might not know how to handle
+	// this correctly. This use case is similar to the issue handled by the go-server in the same manner. ( see "431 Request Header Fields Too Large" in the server.go )
+	conn.Write([]byte(
+		fmt.Sprintf("HTTP/1.1 %d %s\r\nContent-Type: text/plain; charset=utf-8\r\nConnection: close\r\n%s: %d\r\n\r\n", http.StatusTooManyRequests, http.StatusText(http.StatusTooManyRequests), TooManyRequestsRetryAfterHeader, rt.config.ConnectionsRateLimitingWindowSeconds)))
+	conn.Close()
 }
 
 // pruneAcceptedConnections clean stale items form the acceptedConnections map; it's syncornized via the acceptedConnectionsMu mutex which is expected to be taken by the caller.
