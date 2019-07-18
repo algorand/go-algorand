@@ -88,7 +88,7 @@ func (e *phonebookEntries) updateRetryAfter(addr string, retryAfter time.Time) {
 }
 
 // UpdateRetryAfter updates the retry-after field for the entries matching the given address
-func (p *ArrayPhonebook) UpdateRetryAfter(addr string, retryAfter time.Time) {
+func (p ArrayPhonebook) UpdateRetryAfter(addr string, retryAfter time.Time) {
 	p.Entries.updateRetryAfter(addr, retryAfter)
 }
 
@@ -122,7 +122,7 @@ func shuffleSelect(set []string, n int) []string {
 }
 
 // GetAddresses returns up to N shuffled address
-func (p *ArrayPhonebook) GetAddresses(n int) []string {
+func (p ArrayPhonebook) GetAddresses(n int) []string {
 	return shuffleSelect(p.Entries.filterRetryTime(time.Now()), n)
 }
 

@@ -22,6 +22,9 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/logging"
 )
 
 func TestHostIncomingRequestsOrdering(t *testing.T) {
@@ -51,4 +54,71 @@ func TestHostIncomingRequestsOrdering(t *testing.T) {
 			require.Equal(t, hir.countConnections(now.Add(-time.Second), false), uint(len(hir.requests)))
 		}
 	}
+}
+
+func TestRateLimiting(t *testing.T) {
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Level(defaultConfig.BaseLoggerDebugLevel))
+	wn := &WebsocketNetwork{
+		log:       log,
+		config:    defaultConfig,
+		phonebook: emptyPhonebookSingleton,
+		GenesisID: "go-test-network-genesis",
+		NetworkID: config.Devtestnet,
+	}
+
+	wn.setup()
+	wn.eventualReadyDelay = time.Second
+
+	netA := wn
+	netA.config.GossipFanout = 1
+
+	defer func() { t.Log("stopping A"); netA.Stop(); t.Log("A done") }()
+
+	counter := newMessageCounter(t, 5)
+	netA.RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{Tag: debugTag, MessageHandler: counter}})
+	netA.Start()
+	addrA, postListen := netA.Address()
+	require.Truef(t, postListen, "Listening network failed to start")
+
+	noAddressConfig := defaultConfig
+	noAddressConfig.NetAddress = ""
+
+	clientsCount := int(defaultConfig.ConnectionsRateLimitingCount * 2)
+
+	networks := make([]*WebsocketNetwork, clientsCount)
+	phonebooks := make([]ArrayPhonebook, clientsCount)
+	for i := 0; i < clientsCount; i++ {
+		networks[i] = makeTestWebsocketNodeWithConfig(t, noAddressConfig)
+		networks[i].config.GossipFanout = 1
+		phonebooks[i] = MakeArrayPhonebook()
+		phonebooks[i].Entries.ReplacePeerList([]string{addrA})
+		networks[i].phonebook = phonebooks[i]
+		defer func(net *WebsocketNetwork, i int) {
+			t.Logf("stopping network %d", i)
+			net.Stop()
+			t.Logf("network %d done", i)
+		}(networks[i], i)
+	}
+	for i := 0; i < clientsCount; i++ {
+		networks[i].Start()
+	}
+	// wait for half the defaultConfig.ConnectionsRateLimitingWindowSeconds window.
+	time.Sleep(time.Duration(defaultConfig.ConnectionsRateLimitingWindowSeconds) * time.Second / 2)
+	connectedClients := 0
+	for i := 0; i < clientsCount; i++ {
+		// check if the channel is ready.
+		select {
+		case <-networks[i].Ready():
+			// it's closed, so this client got connected.
+			connectedClients++
+		default:
+			// not connected.
+			// test to see that the retryAfter is set.
+			require.Equal(t, 0, len(phonebooks[i].GetAddresses(1)))
+		}
+	}
+
+	// test to see that at least some of the clients have seen 429
+	require.Equal(t, int(defaultConfig.ConnectionsRateLimitingCount), connectedClients)
 }

@@ -100,15 +100,19 @@ func (ard *hostIncomingRequests) remove(trackedRequest *TrackerRequest) {
 	}
 }
 
-func (ard *hostIncomingRequests) countConnections(rateLimitingWindowStartTime time.Time, tcpRequestsOnly bool) (count uint) {
+func (ard *hostIncomingRequests) countConnections(rateLimitingWindowStartTime time.Time, tcpRequests bool) (count uint) {
 	i := ard.findTimestampIndex(rateLimitingWindowStartTime)
-	if !tcpRequestsOnly {
-		count = uint(len(ard.requests) - i)
-		return
-	}
-	for ; i < len(ard.requests); i++ {
-		if ard.requests[i].request != nil {
-			count++
+	if tcpRequests {
+		for ; i < len(ard.requests); i++ {
+			if ard.requests[i].request == nil {
+				count++
+			}
+		}
+	} else {
+		for ; i < len(ard.requests); i++ {
+			if ard.requests[i].request != nil {
+				count++
+			}
 		}
 	}
 	return
@@ -166,7 +170,7 @@ func (rt *RequestTracker) Accept() (conn net.Conn, err error) {
 		// check the number of connections
 		if originConnections > rt.config.ConnectionsRateLimitingCount && rt.config.ConnectionsRateLimitingWindowSeconds > 0 && rt.config.ConnectionsRateLimitingCount > 0 {
 			networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "incoming_connection_per_ip_tcp_rate_limit"})
-
+			rt.log.With("connection", "tcp").With("count", originConnections).Debugf("Rejected connection due to excessive connections attempt rate")
 			rt.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerFailEvent,
 				telemetryspec.ConnectPeerFailEventDetails{
 					Address:  remoteHost,
@@ -271,9 +275,9 @@ func (rt *RequestTracker) removeAcceptedConnection(trackedRequest *TrackerReques
 }
 
 // countOriginConnections counts the number of connection that were seen since rateLimitingWindowStartTime coming from the host rateLimitingWindowStartTime; it's syncornized via the hostRequestsMu mutex which is expected to be taken by the caller.
-func (rt *RequestTracker) countOriginConnections(remoteHost string, rateLimitingWindowStartTime time.Time, tcpRequestsOnly bool) uint {
+func (rt *RequestTracker) countOriginConnections(remoteHost string, rateLimitingWindowStartTime time.Time, tcpRequests bool) uint {
 	if requestData, has := rt.hostRequests[remoteHost]; has {
-		return requestData.countConnections(rateLimitingWindowStartTime, tcpRequestsOnly)
+		return requestData.countConnections(rateLimitingWindowStartTime, tcpRequests)
 	}
 	return 0
 }
@@ -323,7 +327,7 @@ func (rt *RequestTracker) ServeHTTP(response http.ResponseWriter, request *http.
 
 	if originConnections > rt.config.ConnectionsRateLimitingCount && rt.config.ConnectionsRateLimitingWindowSeconds > 0 && rt.config.ConnectionsRateLimitingCount > 0 {
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "incoming_connection_per_ip_rate_limit"})
-
+		rt.log.With("connection", "http").With("count", originConnections).Debugf("Rejected connection due to excessive connections attempt rate")
 		rt.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerFailEvent,
 			telemetryspec.ConnectPeerFailEventDetails{
 				Address:      trackedRequest.remoteHost,

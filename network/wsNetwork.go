@@ -701,7 +701,9 @@ func (wn *WebsocketNetwork) Stop() {
 		wn.log.Warnf("problem shutting down %s: %v", listenAddr, err)
 	}
 	wn.wg.Wait()
-	wn.log.Debugf("closed %s", listenAddr)
+	if wn.listener != nil {
+		wn.log.Debugf("closed %s", listenAddr)
+	}
 }
 
 // RegisterHandlers registers the set of given message handlers.
