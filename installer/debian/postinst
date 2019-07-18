@@ -2,7 +2,7 @@
 
 adduser --system --group --home /var/lib/algorand --no-create-home algorand >/dev/null
 # prior versions didn't create this group and adduser above won't create it if the algorand user exists
-getent group algorand >/dev/null || groupadd algorand
+getent group algorand >/dev/null || groupadd --system algorand
 chown -R algorand:algorand /var/lib/algorand
 
 ## cat /usr/share/debhelper/autoscripts/postinst-systemd-enable | sed -e s,#UNITFILE#,algorand.service,
