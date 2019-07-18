@@ -29,7 +29,8 @@ import (
 
 	"github.com/google/go-querystring/query"
 
-	"github.com/algorand/go-algorand/daemon/algod/api/client/models"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -164,7 +165,7 @@ func (client RestClient) post(response interface{}, path string, request interfa
 // Status retrieves the StatusResponse from the running node
 // the StatusResponse includes data like the consensus version and current round
 // Not supported
-func (client RestClient) Status() (response models.NodeStatus, err error) {
+func (client RestClient) Status() (response v1.NodeStatus, err error) {
 	err = client.get(&response, "/status", nil)
 	return
 }
@@ -178,7 +179,7 @@ func (client RestClient) HealthCheck() error {
 // StatusAfterBlock waits for a block to occur then returns the StatusResponse after that block
 // blocks on the node end
 // Not supported
-func (client RestClient) StatusAfterBlock(blockNum uint64) (response models.NodeStatus, err error) {
+func (client RestClient) StatusAfterBlock(blockNum uint64) (response v1.NodeStatus, err error) {
 	err = client.get(&response, fmt.Sprintf("/status/wait-for-block-after/%d", blockNum), nil)
 	return
 }
@@ -189,20 +190,20 @@ type pendingTransactionsParams struct {
 
 // GetPendingTransactions asks algod for a snapshot of current pending txns on the node, bounded by maxTxns.
 // If maxTxns = 0, fetches as many transactions as possible.
-func (client RestClient) GetPendingTransactions(maxTxns uint64) (response models.PendingTransactions, err error) {
+func (client RestClient) GetPendingTransactions(maxTxns uint64) (response v1.PendingTransactions, err error) {
 	err = client.get(&response, fmt.Sprintf("/transactions/pending"), pendingTransactionsParams{maxTxns})
 	return
 }
 
 // Versions retrieves the VersionResponse from the running node
 // the VersionResponse includes data like version number and genesis ID
-func (client RestClient) Versions() (response models.Version, err error) {
+func (client RestClient) Versions() (response common.Version, err error) {
 	err = client.get(&response, "/versions", nil)
 	return
 }
 
 // LedgerSupply gets the supply details for the specified node's Ledger
-func (client RestClient) LedgerSupply() (response models.Supply, err error) {
+func (client RestClient) LedgerSupply() (response v1.Supply, err error) {
 	err = client.get(&response, "/ledger/supply", nil)
 	return
 }
@@ -215,19 +216,19 @@ type transactionsByAddrParams struct {
 
 // TransactionsByAddr returns all transactions for a PK [addr] in the [first,
 // last] rounds range.
-func (client RestClient) TransactionsByAddr(addr string, first, last, max uint64) (response models.TransactionList, err error) {
+func (client RestClient) TransactionsByAddr(addr string, first, last, max uint64) (response v1.TransactionList, err error) {
 	err = client.get(&response, fmt.Sprintf("/account/%s/transactions", addr), transactionsByAddrParams{first, last, max})
 	return
 }
 
 // AccountInformation also gets the AccountInformationResponse associated with the passed address
-func (client RestClient) AccountInformation(address string) (response models.Account, err error) {
+func (client RestClient) AccountInformation(address string) (response v1.Account, err error) {
 	err = client.get(&response, fmt.Sprintf("/account/%s", address), nil)
 	return
 }
 
 // TransactionInformation gets information about a specific transaction involving a specific account
-func (client RestClient) TransactionInformation(accountAddress, transactionID string) (response models.Transaction, err error) {
+func (client RestClient) TransactionInformation(accountAddress, transactionID string) (response v1.Transaction, err error) {
 	transactionID = stripTransaction(transactionID)
 	err = client.get(&response, fmt.Sprintf("/account/%s/transaction/%s", accountAddress, transactionID), nil)
 	return
@@ -242,32 +243,32 @@ func (client RestClient) TransactionInformation(accountAddress, transactionID st
 //
 // Or the transaction may have happened sufficiently long ago that the
 // node no longer remembers it, and this will return an error.
-func (client RestClient) PendingTransactionInformation(transactionID string) (response models.Transaction, err error) {
+func (client RestClient) PendingTransactionInformation(transactionID string) (response v1.Transaction, err error) {
 	transactionID = stripTransaction(transactionID)
 	err = client.get(&response, fmt.Sprintf("/transactions/pending/%s", transactionID), nil)
 	return
 }
 
 // SuggestedFee gets the recommended transaction fee from the node
-func (client RestClient) SuggestedFee() (response models.TransactionFee, err error) {
+func (client RestClient) SuggestedFee() (response v1.TransactionFee, err error) {
 	err = client.get(&response, "/transactions/fee", nil)
 	return
 }
 
 // SuggestedParams gets the suggested transaction parameters
-func (client RestClient) SuggestedParams() (response models.TransactionParams, err error) {
+func (client RestClient) SuggestedParams() (response v1.TransactionParams, err error) {
 	err = client.get(&response, "/transactions/params", nil)
 	return
 }
 
 // SendRawTransaction gets a SignedTxn and broadcasts it to the network
-func (client RestClient) SendRawTransaction(txn transactions.SignedTxn) (response models.TransactionID, err error) {
+func (client RestClient) SendRawTransaction(txn transactions.SignedTxn) (response v1.TransactionID, err error) {
 	err = client.post(&response, "/transactions", protocol.Encode(txn))
 	return
 }
 
 // Block gets the block info for the given round
-func (client RestClient) Block(round uint64) (response models.Block, err error) {
+func (client RestClient) Block(round uint64) (response v1.Block, err error) {
 	err = client.get(&response, fmt.Sprintf("/block/%d", round), nil)
 	return
 }

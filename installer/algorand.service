@@ -1,5 +1,5 @@
 [Unit]
-Description=Algorand daemon
+Description=Algorand daemon for mainnet in /var/lib/algorand
 After=network.target
 
 [Service]

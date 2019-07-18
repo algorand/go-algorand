@@ -14,30 +14,23 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package main
+// Package common defines models exposed by algod rest api
+package common
 
-import (
-	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/data/basics"
-)
+// swagger:strfmt binary
+type bytes = []byte // note that we need to make this its own object to get the strfmt annotation to work properly. Otherwise swagger generates []uint8 instead of type binary
+// ^ one day we should probably fork swagger, to avoid this workaround.
 
-// DigestChecksummed is an encoding of a crypto.Digest using
-// basics.ChecksumAddress.
-type DigestChecksummed crypto.Digest
-
-// UnmarshalText implements the encoding.TextUnmarshaler interface
-func (d *DigestChecksummed) UnmarshalText(text []byte) error {
-	res, err := basics.UnmarshalChecksumAddress(string(text))
-	if err != nil {
-		return err
-	}
-
-	*d = DigestChecksummed(res)
-	return nil
-}
-
-// MarshalText implements the encoding.TextMarshaler interface
-func (d DigestChecksummed) MarshalText() (text []byte, err error) {
-	checksumAddr := basics.Address(d).GetChecksumAddress()
-	return []byte(checksumAddr.String()), nil
+// Version contains the current algod version.
+//
+// Note that we annotate this as a model so that legacy clients
+// can directly import a swagger generated Version model.
+// swagger:model Version
+type Version struct {
+	// required: true
+	Versions []string `json:"versions"`
+	// required: true
+	GenesisID string `json:"genesis_id"`
+	// required: true
+	GenesisHash bytes `json:"genesis_hash_b64"`
 }

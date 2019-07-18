@@ -123,7 +123,7 @@ func (idb *DB) AddBlock(b bookkeeping.Block) error {
 			return err
 		}
 		for _, txn := range payset {
-			_, err = stmt.Exec(txn.ID().String(), txn.Txn.Sender.GetChecksumAddress().String(), txn.Txn.Receiver.GetChecksumAddress().String(), b.Round(), b.TimeStamp)
+			_, err = stmt.Exec(txn.ID().String(), txn.Txn.Sender.String(), txn.Txn.Receiver.String(), b.Round(), b.TimeStamp)
 			if err != nil {
 				return err
 			}

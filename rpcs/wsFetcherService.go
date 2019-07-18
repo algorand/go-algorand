@@ -38,7 +38,7 @@ func (fs *WsFetcherService) handleNetworkMsg(msg network.IncomingMessage) (out n
 	f := fs.fetchers[msg.Tag]
 	fs.mu.RUnlock()
 	if f == nil {
-		fs.log.Warnf("WsFetcherService: no fetcher registered for tag (%v)", msg.Tag)
+		fs.log.Infof("WsFetcherService: no fetcher registered for tag (%v)", msg.Tag)
 		return
 	}
 	return f.HandleNetworkMsg(msg)

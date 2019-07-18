@@ -31,6 +31,7 @@ import (
 	"github.com/gofrs/flock"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
@@ -182,11 +183,11 @@ func main() {
 			if log.GetTelemetryEnabled() {
 				currentVersion := config.GetCurrentVersion()
 				startupDetails := telemetryspec.StartupEventDetails{
-					Version:    currentVersion.String(),
-					CommitHash: currentVersion.CommitHash,
-					Branch:     currentVersion.Branch,
-					Channel:    currentVersion.Channel,
-					Instance:   absolutePath,
+					Version:      currentVersion.String(),
+					CommitHash:   currentVersion.CommitHash,
+					Branch:       currentVersion.Branch,
+					Channel:      currentVersion.Channel,
+					InstanceHash: crypto.Hash([]byte(absolutePath)).String(),
 				}
 
 				log.EventWithDetails(telemetryspec.ApplicationState, telemetryspec.StartupEvent, startupDetails)

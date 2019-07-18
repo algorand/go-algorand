@@ -22,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/algorand/go-algorand/daemon/algod/api/client/models"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 )
 
@@ -85,7 +85,7 @@ func (w deadManWatcher) run(initBlock uint64) {
 	}
 }
 
-func (w deadManWatcher) onBlock(block models.Block) {
+func (w deadManWatcher) onBlock(block v1.Block) {
 	w.newBlockChan <- block.Round
 }
 

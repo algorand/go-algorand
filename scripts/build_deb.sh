@@ -47,6 +47,7 @@ trap "rm -rf $PKG_ROOT" 0
 mkdir -p ${PKG_ROOT}/usr/bin
 
 if [ "${VARIATION}" = "" ]; then
+    # NOTE: keep in sync with installer/rpm/algorand.spec
     bin_files=("algod" "algoh" "algokey" "carpenter" "catchupsrv" "diagcfg" "goal" "kmd" "msgpacktool" "node_exporter")
 fi
 
@@ -88,7 +89,7 @@ else
     #${GOPATH}/bin/buildtools genesis timestamp -f ${PKG_ROOT}/var/lib/algorand/genesis.json -t ${TIMESTAMP}
 fi
 
-systemd_files=("algorand.service")
+systemd_files=("algorand.service" "algorand@.service")
 mkdir -p ${PKG_ROOT}/lib/systemd/system
 for svc in "${systemd_files[@]}"; do
     cp installer/${svc} ${PKG_ROOT}/lib/systemd/system
