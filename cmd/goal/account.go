@@ -783,8 +783,8 @@ var listParticipationKeysCmd = &cobra.Command{
 				if string(onlineAccountInfo.Participation.ParticipationPK) == string(votingBytes[:]) &&
 					(string(onlineAccountInfo.Participation.VRFPK) == string(vrfBytes[:])) &&
 					(onlineAccountInfo.Participation.VoteFirst == uint64(parts[fn].FirstValid)) &&
-					(onlineAccountInfo.Participation.VoteKeyDilution == uint64(parts[fn].KeyDilution)) &&
-					(onlineAccountInfo.Participation.VoteLast == uint64(parts[fn].LastValid)) {
+					(onlineAccountInfo.Participation.VoteLast == uint64(parts[fn].LastValid)) &&
+					(onlineAccountInfo.Participation.VoteKeyDilution == parts[fn].KeyDilution) {
 					onlineInfoStr = "yes"
 				} else {
 					onlineInfoStr = "no"
