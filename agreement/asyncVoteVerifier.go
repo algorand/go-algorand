@@ -132,6 +132,9 @@ func (avv *AsyncVoteVerifier) verifyVote(verctx context.Context, l LedgerReader,
 		req := asyncVerifyVoteRequest{ctx: verctx, l: l, uv: &uv, index: index, message: message, out: out}
 		avv.wg.Add(1)
 		if avv.backlogExecPool.EnqueueBacklog(avv.ctx, avv.executeVoteVerification, req, avv.execpoolOut) != nil {
+			// we want to call "wg.Done()" here to "fix" the accounting of the number of pending tasks.
+			// if we got a non-nil, it means that our context has expired, which means that we won't see this task
+			// getting to the verification function.
 			avv.wg.Done()
 		}
 	}
@@ -147,6 +150,9 @@ func (avv *AsyncVoteVerifier) verifyEqVote(verctx context.Context, l LedgerReade
 		req := asyncVerifyVoteRequest{ctx: verctx, l: l, uev: &uev, index: index, message: message, out: out}
 		avv.wg.Add(1)
 		if avv.backlogExecPool.EnqueueBacklog(avv.ctx, avv.executeEqVoteVerification, req, avv.execpoolOut) != nil {
+			// we want to call "wg.Done()" here to "fix" the accounting of the number of pending tasks.
+			// if we got a non-nil, it means that our context has expired, which means that we won't see this task
+			// getting to the verification function.
 			avv.wg.Done()
 		}
 	}
