@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"runtime"
 	"sync"
@@ -119,6 +120,8 @@ func TestDBConcurrency(t *testing.T) {
 	acc2, err := MakeAccessor(fn, true, false)
 	require.NoError(t, err)
 
+	defer cleanupSqliteDb(t, fn)
+
 	err = acc.Atomic(func(tx *sql.Tx) error {
 		_, err := tx.Exec("CREATE TABLE foo (a INTEGER, b INTEGER)")
 		return err
@@ -209,6 +212,20 @@ func TestDBConcurrency(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func cleanupSqliteDb(t *testing.T, path string) {
+	parts, err := filepath.Glob(path + "*")
+	if err != nil {
+		t.Errorf("%s*: could not glob, %s", path, err)
+		return
+	}
+	for _, part := range parts {
+		err = os.Remove(part)
+		if err != nil {
+			t.Errorf("%s: error cleaning up, %s", part, err)
+		}
+	}
+}
+
 func TestDBConcurrencyRW(t *testing.T) {
 	dbFolder := "/dev/shm"
 	os := runtime.GOOS
@@ -227,6 +244,8 @@ func TestDBConcurrencyRW(t *testing.T) {
 
 	acc2, err := MakeAccessor(fn, true, false)
 	require.NoError(t, err)
+
+	defer cleanupSqliteDb(t, fn)
 
 	err = acc.Atomic(func(tx *sql.Tx) error {
 		_, err := tx.Exec("CREATE TABLE t (a INTEGER PRIMARY KEY)")
