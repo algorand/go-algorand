@@ -48,7 +48,7 @@ func testPhonebookAll(t *testing.T, set []string, ph Phonebook) {
 			}
 		}
 		if !ok {
-			t.Errorf("get missed %#v", known)
+			t.Errorf("get missed %#v; actual=%#v; set=%#v", known, actual, set)
 		}
 	}
 }
@@ -174,13 +174,32 @@ func TestMultiPhonebook(t *testing.T) {
 	for _, e := range set[5:] {
 		phb.Entries[e] = phonebookData{}
 	}
-	mp := MultiPhonebook{}
-	mp.AddPhonebook(pha)
-	mp.AddPhonebook(phb)
+	mp := MakeMultiPhonebook()
+	mp.AddOrUpdatePhonebook("pha", pha)
+	mp.AddOrUpdatePhonebook("phb", phb)
 
-	testPhonebookAll(t, set, &mp)
-	testPhonebookUniform(t, set, &mp, 1)
-	testPhonebookUniform(t, set, &mp, 3)
+	testPhonebookAll(t, set, mp)
+	testPhonebookUniform(t, set, mp, 1)
+	testPhonebookUniform(t, set, mp, 3)
+}
+
+func TestMultiPhonebookDuplicateFiltering(t *testing.T) {
+	set := []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j"}
+	pha := MakeArrayPhonebook()
+	for _, e := range set[:7] {
+		pha.Entries[e] = phonebookData{}
+	}
+	phb := MakeArrayPhonebook()
+	for _, e := range set[3:] {
+		phb.Entries[e] = phonebookData{}
+	}
+	mp := MakeMultiPhonebook()
+	mp.AddOrUpdatePhonebook("pha", pha)
+	mp.AddOrUpdatePhonebook("phb", phb)
+
+	testPhonebookAll(t, set, mp)
+	testPhonebookUniform(t, set, mp, 1)
+	testPhonebookUniform(t, set, mp, 3)
 }
 
 func BenchmarkThreadsafePhonebook(b *testing.B) {

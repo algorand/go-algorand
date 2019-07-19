@@ -37,12 +37,6 @@ type Phonebook interface {
 	UpdateRetryAfter(addr string, retryAfter time.Time)
 }
 
-// phonebookEntry is a single server on the phonebook
-/*type phonebookEntry struct {
-	address    string
-	retryAfter time.Time
-}*/
-
 type phonebookData struct {
 	retryAfter time.Time
 }
@@ -210,10 +204,15 @@ func (p *ThreadsafePhonebook) MergePeerList(they []string) {
 	}
 }
 
-// MultiPhonebook contains several phonebooks
+// MultiPhonebook contains a map of phonebooks
 type MultiPhonebook struct {
-	phonebooks []Phonebook
-	lock       deadlock.RWMutex
+	phonebookMap map[string]Phonebook
+	lock         deadlock.RWMutex
+}
+
+// MakeMultiPhonebook constructs and returns a new Multi Phonebook
+func MakeMultiPhonebook() *MultiPhonebook {
+	return &MultiPhonebook{phonebookMap: make(map[string]Phonebook)}
 }
 
 // GetAddresses returns up to N address
@@ -221,14 +220,28 @@ type MultiPhonebook struct {
 func (mp *MultiPhonebook) GetAddresses(n int) []string {
 	mp.lock.RLock()
 	defer mp.lock.RUnlock()
-	if len(mp.phonebooks) == 1 {
-		return mp.phonebooks[0].GetAddresses(n)
+
+	if len(mp.phonebookMap) == 1 {
+		for _, phonebook := range mp.phonebookMap {
+			return phonebook.GetAddresses(n)
+		}
 	}
-	sizes := make([]int, len(mp.phonebooks))
+	sizes := make([]int, len(mp.phonebookMap))
 	total := 0
-	addrs := make([][]string, len(mp.phonebooks))
-	for pi, p := range mp.phonebooks {
-		addrs[pi] = p.GetAddresses(getAllAddresses)
+	addrs := make([][]string, len(mp.phonebookMap))
+	uniqueEntries := make(map[string]bool, 0)
+	pi := -1
+	for _, p := range mp.phonebookMap {
+		pi++
+		phonebookAddrs := p.GetAddresses(getAllAddresses)
+		addrs[pi] = make([]string, 0, len(phonebookAddrs))
+		for _, addr := range phonebookAddrs {
+			if uniqueEntries[addr] {
+				continue
+			}
+			addrs[pi] = append(addrs[pi], addr)
+			uniqueEntries[addr] = true
+		}
 		sizes[pi] = len(addrs[pi])
 		total += sizes[pi]
 	}
@@ -246,23 +259,18 @@ func (mp *MultiPhonebook) GetAddresses(n int) []string {
 	return out
 }
 
-// AddPhonebook adds a Phonebook if it is new
-func (mp *MultiPhonebook) AddPhonebook(p Phonebook) {
+// AddOrUpdatePhonebook adds or updates Phonebook in Phonebook map
+func (mp *MultiPhonebook) AddOrUpdatePhonebook(bootstrapNetworkName string, p Phonebook) {
 	mp.lock.Lock()
 	defer mp.lock.Unlock()
-	for _, op := range mp.phonebooks {
-		if op == p {
-			return
-		}
-	}
-	mp.phonebooks = append(mp.phonebooks, p)
+	mp.phonebookMap[bootstrapNetworkName] = p
 }
 
 // UpdateRetryAfter updates the retry-after field for the entries matching the given address
 func (mp *MultiPhonebook) UpdateRetryAfter(addr string, retryAfter time.Time) {
 	mp.lock.Lock()
 	defer mp.lock.Unlock()
-	for _, op := range mp.phonebooks {
+	for _, op := range mp.phonebookMap {
 		op.UpdateRetryAfter(addr, retryAfter)
 	}
 }
