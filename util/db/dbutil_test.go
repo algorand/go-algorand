@@ -26,6 +26,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -233,6 +234,7 @@ func TestDBConcurrencyRW(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	started := make(chan struct{})
 	var lastInsert int64
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -245,6 +247,9 @@ func TestDBConcurrencyRW(t *testing.T) {
 				return err
 			})
 			atomic.StoreInt64(&lastInsert, i)
+			if i == 1 {
+				close(started)
+			}
 			require.NoError(t, errw)
 		}
 	}()
@@ -253,6 +258,12 @@ func TestDBConcurrencyRW(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			select {
+			case <-started:
+			case <-time.After(10 * time.Second):
+				t.Error("timeout")
+				return
+			}
 			for {
 				id := atomic.LoadInt64(&lastInsert)
 				if id == 0 {
