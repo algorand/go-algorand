@@ -509,7 +509,7 @@ var changeOnlineCmd = &cobra.Command{
 
 			part = &partkey
 			if accountAddress == "" {
-				accountAddress = part.Parent.GetChecksumAddress().String()
+				accountAddress = part.Parent.String()
 			}
 		}
 
@@ -533,65 +533,24 @@ func changeAccountOnlineStatus(acct string, part *algodAcct.Participation, goOnl
 		return err
 	}
 
-	if txFile == "" {
-		// Sign & broadcast the transaction
-		wh, pw := ensureWalletHandleMaybePassword(dataDir, wallet, true)
-		txid, err := client.SignAndBroadcastTransaction(wh, pw, utx)
-		if err != nil {
-			return fmt.Errorf(errorOnlineTX, err)
-		}
-		fmt.Printf("Transaction id for status change transaction: %s\n", txid)
-
-		if noWaitAfterSend {
-			fmt.Println("Note: status will not change until transaction is finalized")
-			return nil
-		}
-
-		// Get current round information
-		stat, err := client.Status()
-		if err != nil {
-			return fmt.Errorf(errorRequestFail, err)
-		}
-
-		for {
-			// Check if we know about the transaction yet
-			txn, err := client.PendingTransactionInformation(txid)
-			if err != nil {
-				return fmt.Errorf(errorRequestFail, err)
-			}
-
-			if txn.ConfirmedRound > 0 {
-				reportInfof(infoTxCommitted, txid, txn.ConfirmedRound)
-				break
-			}
-
-			if txn.PoolError != "" {
-				return fmt.Errorf(txPoolError, txid, txn.PoolError)
-			}
-
-			reportInfof(infoTxPending, txid, stat.LastRound)
-			stat, err = client.WaitForRound(stat.LastRound + 1)
-			if err != nil {
-				return fmt.Errorf(errorRequestFail, err)
-			}
-		}
-	} else {
-		// Wrap in a transactions.SignedTxn with an empty sig.
-		// This way protocol.Encode will encode the transaction type
-		stxn, err := transactions.AssembleSignedTxn(utx, crypto.Signature{}, crypto.MultisigSig{})
-		if err != nil {
-			return fmt.Errorf(errorConstructingTX, err)
-		}
-
-		stxn = populateBlankMultisig(client, dataDir, wallet, stxn)
-
-		// Write the SignedTxn to the output file
-		err = ioutil.WriteFile(txFile, protocol.Encode(stxn), 0600)
-		if err != nil {
-			return fmt.Errorf(fileWriteError, txFile, err)
-		}
+	if txFile != "" {
+		return writeTxnToFile(client, false, dataDir, wallet, utx, txFile)
 	}
-	return nil
+
+	// Sign & broadcast the transaction
+	wh, pw := ensureWalletHandleMaybePassword(dataDir, wallet, true)
+	txid, err := client.SignAndBroadcastTransaction(wh, pw, utx)
+	if err != nil {
+		return fmt.Errorf(errorOnlineTX, err)
+	}
+	fmt.Printf("Transaction id for status change transaction: %s\n", txid)
+
+	if noWaitAfterSend {
+		fmt.Println("Note: status will not change until transaction is finalized")
+		return nil
+	}
+
+	return waitForCommit(client, txid)
 }
 
 var addParticipationKeyCmd = &cobra.Command{
@@ -679,7 +638,7 @@ var renewParticipationKeyCmd = &cobra.Command{
 			reportErrorf(errorRequestFail, err)
 		}
 		for _, part := range parts {
-			if part.Address().GetChecksumAddress().String() == accountAddress {
+			if part.Address().String() == accountAddress {
 				if part.LastValid >= basics.Round(roundLastValid) {
 					reportErrorf(errExistingPartKey, roundLastValid, part.LastValid)
 				}
@@ -771,17 +730,17 @@ func renewPartKeysInDir(dataDir string, lastValidRound uint64, fee uint64, dilut
 	// Make sure we don't already have a partkey valid for (or after) specified roundLastValid
 	for _, renewPart := range renewAccounts {
 		if renewPart.LastValid >= basics.Round(lastValidRound) {
-			fmt.Printf("  Skipping account %s: Already has a part key valid beyond %d (currently %d)\n", renewPart.Address().GetChecksumAddress(), lastValidRound, renewPart.LastValid)
+			fmt.Printf("  Skipping account %s: Already has a part key valid beyond %d (currently %d)\n", renewPart.Address(), lastValidRound, renewPart.LastValid)
 			continue
 		}
 
 		// If the account's latest partkey expired before the current round, don't automatically renew and instead instruct the user to explicitly renew it.
 		if renewPart.LastValid < basics.Round(lastValidRound) {
-			fmt.Printf("  Skipping account %s: This account has part keys that have expired.  Please renew this account explicitly using 'renewpartkey'\n", renewPart.Address().GetChecksumAddress())
+			fmt.Printf("  Skipping account %s: This account has part keys that have expired.  Please renew this account explicitly using 'renewpartkey'\n", renewPart.Address())
 			continue
 		}
 
-		address := renewPart.Address().GetChecksumAddress().String()
+		address := renewPart.Address().String()
 		err = generateAndRegisterPartKey(address, currentRound, lastValidRound, proto.MaxTxnLife, fee, dilution, wallet, dataDir, client)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  Error renewing part key for account %s: %v\n", address, err)
@@ -1032,7 +991,7 @@ var partkeyInfoCmd = &cobra.Command{
 			for filename, part := range parts {
 				fmt.Println("------------------------------------------------------------------")
 				info := partkeyInfo{
-					Address:         part.Address().GetChecksumAddress().String(),
+					Address:         part.Address().String(),
 					FirstValid:      part.FirstValid,
 					LastValid:       part.LastValid,
 					VoteID:          part.VotingSecrets().OneTimeSignatureVerifier,

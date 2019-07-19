@@ -44,7 +44,7 @@ func TestParticipationKeyOnlyAccountParticipatesCorrectly(t *testing.T) {
 	partAccounts := fixture.GetParticipationOnlyAccounts(client)
 	a.NotEmpty(partAccounts)
 
-	partkeyOnlyAccount := partAccounts[0].Address().GetChecksumAddress().String() // 20% stake
+	partkeyOnlyAccount := partAccounts[0].Address().String() // 20% stake
 	// allow "a few" rounds to pass so accounts can participate
 
 	// the below window controls the likelihood a block will be proposed by the account under test
@@ -139,11 +139,11 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 	partKeyLastValid := partKeyFirstValid + partKeyValidityPeriod
 	partkeyResponse, _, err := client.GenParticipationKeys(newAccount, partKeyFirstValid, partKeyLastValid, 0)
 	a.NoError(err, "rest client should be able to add participation key to new account")
-	a.Equal(newAccount, partkeyResponse.Parent.GetChecksumAddress().String(), "partkey response should echo queried account")
+	a.Equal(newAccount, partkeyResponse.Parent.String(), "partkey response should echo queried account")
 	// account uses part key to go online
 	goOnlineTx, err := client.MakeUnsignedGoOnlineTx(newAccount, nil, 0, 0, transactionFee)
 	a.NoError(err, "should be able to make go online tx")
-	a.Equal(newAccount, goOnlineTx.Src().GetChecksumAddress().String(), "go online response should echo queried account")
+	a.Equal(newAccount, goOnlineTx.Src().String(), "go online response should echo queried account")
 	onlineTxID, err := client.SignAndBroadcastTransaction(wh, nil, goOnlineTx)
 	a.NoError(err, "new account with new partkey should be able to go online")
 

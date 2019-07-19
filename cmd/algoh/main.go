@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/client"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
@@ -305,11 +306,11 @@ func initTelemetry(genesisID string, log logging.Logger, dataDirectory string) {
 			if log.GetTelemetryEnabled() {
 				currentVersion := config.GetCurrentVersion()
 				startupDetails := telemetryspec.StartupEventDetails{
-					Version:    currentVersion.String(),
-					CommitHash: currentVersion.CommitHash,
-					Branch:     currentVersion.Branch,
-					Channel:    currentVersion.Channel,
-					Instance:   dataDirectory,
+					Version:      currentVersion.String(),
+					CommitHash:   currentVersion.CommitHash,
+					Branch:       currentVersion.Branch,
+					Channel:      currentVersion.Channel,
+					InstanceHash: crypto.Hash([]byte(dataDirectory)).String(),
 				}
 
 				log.EventWithDetails(telemetryspec.HostApplicationState, telemetryspec.StartupEvent, startupDetails)
