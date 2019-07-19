@@ -53,12 +53,14 @@ fi
 
 for bin in "${bin_files[@]}"; do
     cp ${GOPATH}/bin/${bin} ${PKG_ROOT}/usr/bin
+    chmod 755 ${PKG_ROOT}/usr/bin/${bin}
 done
 
 mkdir -p ${PKG_ROOT}/usr/lib/algorand
 lib_files=("updater" "find-nodes.sh" "updatekey.json")
 for lib in "${lib_files[@]}"; do
     cp ${GOPATH}/bin/${lib} ${PKG_ROOT}/usr/lib/algorand
+    chmod g-w ${PKG_ROOT}/usr/lib/algorand/${lib}
 done
 
 data_files=("config.json.example" "system.json")
@@ -93,6 +95,7 @@ systemd_files=("algorand.service" "algorand@.service")
 mkdir -p ${PKG_ROOT}/lib/systemd/system
 for svc in "${systemd_files[@]}"; do
     cp installer/${svc} ${PKG_ROOT}/lib/systemd/system
+    chmod 644 ${PKG_ROOT}/lib/systemd/system/${svc}
 done
 
 unattended_upgrades_files=("51algorand-upgrades")
@@ -100,6 +103,10 @@ mkdir -p ${PKG_ROOT}/etc/apt/apt.conf.d
 for f in "${unattended_upgrades_files[@]}"; do
     cp installer/${f} ${PKG_ROOT}/etc/apt/apt.conf.d
 done
+
+# files should not be group writable but directories should be
+chmod -R g-w ${PKG_ROOT}/var/lib/algorand
+find ${PKG_ROOT}/var/lib/algorand -type d | xargs chmod g+w
 
 mkdir -p ${PKG_ROOT}/DEBIAN
 debian_files=("control" "postinst" "prerm" "postrm" "conffiles")
