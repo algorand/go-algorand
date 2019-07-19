@@ -162,7 +162,7 @@ func (rt *RequestTracker) Accept() (conn net.Conn, err error) {
 		rateLimitingWindowStartTime := requestTime.Add(-time.Duration(rt.config.ConnectionsRateLimitingWindowSeconds) * time.Second)
 
 		rt.hostRequestsMu.Lock()
-		trackerRequest := rt.addAcceptedConnection(remoteHost, remotePort, remoteAddr, requestTime, rateLimitingWindowStartTime)
+		trackerRequest := rt.addRequest(remoteHost, remotePort, remoteAddr, requestTime, rateLimitingWindowStartTime)
 		rt.pruneRequests(rateLimitingWindowStartTime)
 		originConnections := rt.countOriginConnections(remoteHost, rateLimitingWindowStartTime, true)
 		rt.hostRequestsMu.Unlock()
@@ -250,8 +250,8 @@ func (rt *RequestTracker) pruneRequests(rateLimitingWindowStartTime time.Time) {
 	}
 }
 
-// addAcceptedConnection adds an entry to the hostRequests map, or update the item within the map; it's syncornized via the hostRequestsMu mutex which is expected to be taken by the caller.
-func (rt *RequestTracker) addAcceptedConnection(host, port, remoteAddr string, requestTime time.Time, rateLimitingWindowStartTime time.Time) *TrackerRequest {
+// addRequest adds an entry to the hostRequests map, or update the item within the map; it's syncornized via the hostRequestsMu mutex which is expected to be taken by the caller.
+func (rt *RequestTracker) addRequest(host, port, remoteAddr string, requestTime time.Time, rateLimitingWindowStartTime time.Time) *TrackerRequest {
 	requestData, has := rt.hostRequests[host]
 	if !has {
 		requestData = &hostIncomingRequests{
@@ -263,8 +263,8 @@ func (rt *RequestTracker) addAcceptedConnection(host, port, remoteAddr string, r
 	return requestData.add(host, port, remoteAddr, requestTime, rateLimitingWindowStartTime)
 }
 
-// removeAcceptedConnection removes an entry of the hostRequests map, or update the item within the map; it's syncornized via the hostRequestsMu mutex which is expected to be taken by the caller.
-func (rt *RequestTracker) removeAcceptedConnection(trackedRequest *TrackerRequest) {
+// removeRequest removes an entry of the hostRequests map, or update the item within the map; it's syncornized via the hostRequestsMu mutex which is expected to be taken by the caller.
+func (rt *RequestTracker) removeRequest(trackedRequest *TrackerRequest) {
 	hostRequests := rt.hostRequests[trackedRequest.remoteHost]
 	if hostRequests != nil {
 		hostRequests.remove(trackedRequest)
@@ -365,9 +365,9 @@ func (rt *RequestTracker) updateRequestRemoteAddr(request *http.Request, rateLim
 	request.RemoteAddr = origin + ":" + originalTrackedRequest.remotePort
 
 	rt.hostRequestsMu.Lock()
-	rt.removeAcceptedConnection(originalTrackedRequest)
+	rt.removeRequest(originalTrackedRequest)
 	// add the tracking with the new address
-	trackedRequest = rt.addAcceptedConnection(origin, trackedRequest.remotePort, request.RemoteAddr, trackedRequest.created, rateLimitingWindowStartTime)
+	trackedRequest = rt.addRequest(origin, trackedRequest.remotePort, request.RemoteAddr, trackedRequest.created, rateLimitingWindowStartTime)
 	rt.hostRequestsMu.Unlock()
 
 	rt.acceptedConnectionsMu.Lock()
