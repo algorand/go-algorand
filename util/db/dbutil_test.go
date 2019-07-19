@@ -21,11 +21,13 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -118,6 +120,8 @@ func TestDBConcurrency(t *testing.T) {
 	acc2, err := MakeAccessor(fn, true, false)
 	require.NoError(t, err)
 
+	defer cleanupSqliteDb(t, fn)
+
 	err = acc.Atomic(func(tx *sql.Tx) error {
 		_, err := tx.Exec("CREATE TABLE foo (a INTEGER, b INTEGER)")
 		return err
@@ -208,6 +212,20 @@ func TestDBConcurrency(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func cleanupSqliteDb(t *testing.T, path string) {
+	parts, err := filepath.Glob(path + "*")
+	if err != nil {
+		t.Errorf("%s*: could not glob, %s", path, err)
+		return
+	}
+	for _, part := range parts {
+		err = os.Remove(part)
+		if err != nil {
+			t.Errorf("%s: error cleaning up, %s", part, err)
+		}
+	}
+}
+
 func TestDBConcurrencyRW(t *testing.T) {
 	dbFolder := "/dev/shm"
 	os := runtime.GOOS
@@ -227,12 +245,15 @@ func TestDBConcurrencyRW(t *testing.T) {
 	acc2, err := MakeAccessor(fn, true, false)
 	require.NoError(t, err)
 
+	defer cleanupSqliteDb(t, fn)
+
 	err = acc.Atomic(func(tx *sql.Tx) error {
 		_, err := tx.Exec("CREATE TABLE t (a INTEGER PRIMARY KEY)")
 		return err
 	})
 	require.NoError(t, err)
 
+	started := make(chan struct{})
 	var lastInsert int64
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -245,6 +266,9 @@ func TestDBConcurrencyRW(t *testing.T) {
 				return err
 			})
 			atomic.StoreInt64(&lastInsert, i)
+			if i == 1 {
+				close(started)
+			}
 			require.NoError(t, errw)
 		}
 	}()
@@ -253,6 +277,12 @@ func TestDBConcurrencyRW(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			select {
+			case <-started:
+			case <-time.After(10 * time.Second):
+				t.Error("timeout")
+				return
+			}
 			for {
 				id := atomic.LoadInt64(&lastInsert)
 				if id == 0 {

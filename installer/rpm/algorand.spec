@@ -8,10 +8,6 @@ Requires:      yum-cron
 Requires:      systemd
 Requires(pre): shadow-utils
 
-## Skip BuildRequires for now because we are building using rpmbuild
-## on an Ubuntu machine.
-# BuildRequires: golang >= 1.12
-
 %define SRCDIR go-algorand-rpmbuild
 %define _buildshell /bin/bash
 
@@ -36,12 +32,14 @@ for f in algod algoh algokey carpenter catchupsrv diagcfg goal kmd msgpacktool n
 done
 
 mkdir -p %{buildroot}/var/lib/algorand
+chmod 775 %{buildroot}/var/lib/algorand
 for f in config.json.example system.json; do
   install -m 644 ${REPO_DIR}/installer/${f} %{buildroot}/var/lib/algorand/${f}
 done
 
 mkdir -p %{buildroot}/lib/systemd/system
 install -m 644 ${REPO_DIR}/installer/algorand.service %{buildroot}/lib/systemd/system/algorand.service
+install -m 644 ${REPO_DIR}/installer/algorand@.service %{buildroot}/lib/systemd/system/algorand@.service
 
 mkdir -p %{buildroot}/etc/cron.hourly
 install -m 755 ${REPO_DIR}/installer/rpm/0yum-algorand-hourly.cron %{buildroot}/etc/cron.hourly/0yum-algorand-hourly.cron
@@ -81,7 +79,7 @@ fi
 /usr/bin/msgpacktool
 /usr/bin/node_exporter
 /var/lib/algorand/config.json.example
-/var/lib/algorand/system.json
+%config(noreplace) /var/lib/algorand/system.json
 %config(noreplace) /var/lib/algorand/genesis.json
 %if %{RELEASE_GENESIS_PROCESS} != "x"
   /var/lib/algorand/genesis/devnet/genesis.json
@@ -89,6 +87,7 @@ fi
   /var/lib/algorand/genesis/mainnet/genesis.json
 %endif
 /lib/systemd/system/algorand.service
+/lib/systemd/system/algorand@.service
 %config(noreplace) /etc/cron.hourly/0yum-algorand-hourly.cron
 %config(noreplace) /etc/yum/yum-cron-algorand.conf
 /etc/pki/rpm-gpg/RPM-GPG-KEY-Algorand
@@ -96,45 +95,18 @@ fi
 
 %changelog
 
-## systemd macros from /usr/lib/rpm/macros.d/macros.systemd
-## copied here so we don't have to figure out how to install
-## this file on an Ubuntu build host.
-
-%define systemd_post() \
-if [ $1 -eq 1 ] ; then \
-        # Initial installation \
-        systemctl preset %{?*} >/dev/null 2>&1 || : \
-fi \
-%{nil}
-
-%define systemd_preun() \
-if [ $1 -eq 0 ] ; then \
-        # Package removal, not upgrade \
-        systemctl --no-reload disable %{?*} > /dev/null 2>&1 || : \
-        systemctl stop %{?*} > /dev/null 2>&1 || : \
-fi \
-%{nil}
-
-%define systemd_postun_with_restart() \
-systemctl daemon-reload >/dev/null 2>&1 || : \
-if [ $1 -ge 1 ] ; then \
-        # Package upgrade, not uninstall \
-        systemctl try-restart %{?*} >/dev/null 2>&1 || : \
-fi \
-%{nil}
-
 %pre
 getent passwd algorand >/dev/null || \
 	useradd --system --home-dir /var/lib/algorand --no-create-home algorand >/dev/null
-getent group nogroup >/dev/null || \
-	groupadd --system nogroup >/dev/null
 
 %post
-chown -R algorand /var/lib/algorand
-%systemd_post algorand.service
+chown -R algorand:algorand /var/lib/algorand
+%systemd_post algorand
 
 %preun
-%systemd_preun algorand.service
+%systemd_preun algorand
+%systemd_preun algorand@*
 
 %postun
-%systemd_postun_with_restart algorand.service
+%systemd_postun_with_restart algorand
+%systemd_postun_with_restart algorand@*

@@ -29,7 +29,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/daemon/algod/api/client/models"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/util"
@@ -278,15 +278,15 @@ var statusCmd = &cobra.Command{
 			}
 
 			fmt.Println(makeStatusString(stat))
-			if vers.GenesisID != nil {
-				fmt.Printf("Genesis ID: %s\n", *vers.GenesisID)
+			if vers.GenesisID != "" {
+				fmt.Printf("Genesis ID: %s\n", vers.GenesisID)
 			}
 			fmt.Printf("Genesis hash: %s\n", base64.StdEncoding.EncodeToString(vers.GenesisHash[:]))
 		})
 	},
 }
 
-func makeStatusString(stat models.NodeStatus) string {
+func makeStatusString(stat v1.NodeStatus) string {
 	lastRoundTime := fmt.Sprintf("%.1fs", time.Duration(stat.TimeSinceLastRound).Seconds())
 	catchupTime := fmt.Sprintf("%.1fs", time.Duration(stat.CatchupTime).Seconds())
 	return fmt.Sprintf(infoNodeStatus, stat.LastRound, lastRoundTime, catchupTime, stat.LastVersion, stat.NextVersion, stat.NextVersionRound, stat.NextVersionSupported)
