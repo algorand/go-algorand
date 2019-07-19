@@ -343,6 +343,11 @@ func TestConfigInvariant(t *testing.T) {
 	err = codecs.LoadObjectFromFile(filepath.Join(configsPath, "config-v4.json"), &c4)
 	a.NoError(err)
 	a.Equal(defaultLocalV4, c4)
+
+	c5 := Local{}
+	err = codecs.LoadObjectFromFile(filepath.Join(configsPath, "config-v5.json"), &c5)
+	a.NoError(err)
+	a.Equal(defaultLocalV5, c5)
 }
 
 func TestConfigLatestVersion(t *testing.T) {

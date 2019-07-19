@@ -21,7 +21,7 @@ import (
 	"time"
 )
 
-var defaultLocal = defaultLocalV4
+var defaultLocal = defaultLocalV5
 
 const configVersion = uint32(4)
 
@@ -45,6 +45,53 @@ const configVersion = uint32(4)
 // provide a migration implementation.
 //
 // !!! WARNING !!!
+
+var defaultLocalV5 = Local{
+	// DO NOT MODIFY THIS STRUCTURE IN ANY WAY - See WARNING at top of file
+	Version:                               4,
+	Archival:                              false,
+	BaseLoggerDebugLevel:                  4, // Was 1
+	BroadcastConnectionsLimit:             -1,
+	AnnounceParticipationKey:              true,
+	PriorityPeers:                         map[string]bool{},
+	CadaverSizeTarget:                     1073741824,
+	CatchupFailurePeerRefreshRate:         10,
+	CatchupParallelBlocks:                 50,
+	DeadlockDetection:                     0,
+	DNSBootstrapID:                        "<network>.algorand.network",
+	EnableAgreementReporting:              false,
+	EnableAgreementTimeMetrics:            false,
+	EnableIncomingMessageFilter:           false,
+	EnableMetricReporting:                 false,
+	EnableOutgoingNetworkMessageFiltering: true,
+	EnableTopAccountsReporting:            false,
+	EndpointAddress:                       "127.0.0.1:0",
+	GossipFanout:                          4,
+	IncomingConnectionsLimit:              10000, // Was -1
+	IncomingMessageFilterBucketCount:      5,
+	IncomingMessageFilterBucketSize:       512,
+	LogArchiveName:                        "node.archive.log",
+	LogSizeLimit:                          1073741824,
+	MaxConnectionsPerIP:                   30,
+	NetAddress:                            "",
+	NodeExporterListenAddress:             ":9100",
+	NodeExporterPath:                      "./node_exporter",
+	OutgoingMessageFilterBucketCount:      3,
+	OutgoingMessageFilterBucketSize:       128,
+	ReconnectTime:                         1 * time.Minute, // Was 60ns
+	ReservedFDs:                           256,
+	RestReadTimeoutSeconds:                15,
+	RestWriteTimeoutSeconds:               120,
+	RunHosted:                             false,
+	SuggestedFeeBlockHistory:              3,
+	SuggestedFeeSlidingWindowSize:         50,
+	TxPoolExponentialIncreaseFactor:       2,
+	TxPoolSize:                            50000,
+	TxSyncIntervalSeconds:                 60,
+	TxSyncTimeoutSeconds:                  30,
+	TxSyncServeResponseSize:               1000000,
+	// DO NOT MODIFY THIS STRUCTURE IN ANY WAY - See WARNING at top of file
+}
 
 var defaultLocalV4 = Local{
 	// DO NOT MODIFY THIS STRUCTURE IN ANY WAY - See WARNING at top of file
@@ -70,7 +117,6 @@ var defaultLocalV4 = Local{
 	IncomingConnectionsLimit:              10000, // Was -1
 	IncomingMessageFilterBucketCount:      5,
 	IncomingMessageFilterBucketSize:       512,
-	LogArchiveName:                        "node.archive.log",
 	LogSizeLimit:                          1073741824,
 	MaxConnectionsPerIP:                   30,
 	NetAddress:                            "",
@@ -286,13 +332,17 @@ func migrate(cfg Local) (newCfg Local, err error) {
 		if newCfg.AnnounceParticipationKey == defaultLocalV3.AnnounceParticipationKey {
 			newCfg.AnnounceParticipationKey = defaultLocalV4.AnnounceParticipationKey
 		}
-		if newCfg.LogArchiveName == defaultLocalV3.LogArchiveName {
-			newCfg.LogArchiveName = defaultLocalV4.LogArchiveName
-		}
 		if newCfg.PriorityPeers == nil {
 			newCfg.PriorityPeers = map[string]bool{}
 		}
 		newCfg.Version = 4
+	}
+	// Migrate 4 -> 5
+	if newCfg.Version == 4 {
+		if newCfg.LogArchiveName == defaultLocalV4.LogArchiveName {
+			newCfg.LogArchiveName = defaultLocalV5.LogArchiveName
+		}
+		newCfg.Version = 5
 	}
 
 	if newCfg.Version != configVersion {
