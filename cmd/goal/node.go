@@ -20,7 +20,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
@@ -422,6 +421,26 @@ var createCmd = &cobra.Command{
 			reportErrorf(errorNodeCreation, "passed network name invalid")
 		}
 
+		// validate and store passed options
+		localConfig := config.GetDefaultLocal()
+		if newNodeRelay != "" {
+			if isValidIP(newNodeRelay) {
+				localConfig.NetAddress = newNodeRelay
+			} else {
+				reportErrorf(errorNodeCreationIPFailure, newNodeRelay)
+			}
+		}
+		if listenIP != "" {
+			if isValidIP(listenIP) {
+				localConfig.EndpointAddress = listenIP
+			} else {
+				reportErrorf(errorNodeCreationIPFailure, listenIP)
+			}
+		}
+		localConfig.Archival = newNodeArchival || newNodeRelay != "" || newNodeIndexer
+		localConfig.IsIndexerActive = newNodeIndexer
+		localConfig.RunHosted = runUnderHost
+
 		// locate genesis block
 		exePath, err := util.ExeDir()
 		if err != nil {
@@ -453,34 +472,12 @@ var createCmd = &cobra.Command{
 		}
 
 		// copy genesis block to destination
-		genesisInput, err := ioutil.ReadFile(correctPath)
-		if err != nil {
-			reportErrorf(errorNodeCreation, err)
-		}
-		err = ioutil.WriteFile(destPath, genesisInput, 0666)
+		_, err = util.CopyFile(correctPath, destPath)
 		if err != nil {
 			reportErrorf(errorNodeCreation, err)
 		}
 
-		// build config and save to destination
-		localConfig := config.GetDefaultLocal()
-		localConfig.Archival = newNodeArchival || newNodeRelay != "" || newNodeIndexer
-		localConfig.IsIndexerActive = newNodeIndexer
-		localConfig.RunHosted = runUnderHost
-		if newNodeRelay != "" {
-			if isValidIP(newNodeRelay) {
-				localConfig.NetAddress = newNodeRelay
-			} else {
-				reportWarnf(warnNodeCreationIPFailure, newNodeRelay)
-			}
-		}
-		if listenIP != "" {
-			if isValidIP(listenIP) {
-				localConfig.EndpointAddress = listenIP
-			} else {
-				reportWarnf(warnNodeCreationIPFailure, listenIP)
-			}
-		}
+		// save config to destination
 		configDest := filepath.Join(newNodeDestination, "config.json")
 		err = codecs.SaveNonDefaultValuesToFile(configDest, localConfig, config.GetDefaultLocal(), nil, true)
 		if err != nil {

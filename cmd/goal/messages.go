@@ -58,7 +58,7 @@ const (
 	infoTryingToStopNode             = "Trying to stop the node..."
 	infoNodeSuccessfullyStopped      = "The node was successfully stopped."
 	infoNodeStatus                   = "Last committed block: %d\nTime since last block: %s\nSync Time: %s\nLast consensus protocol: %s\nNext consensus protocol: %s\nRound for next consensus protocol: %d\nNext consensus protocol supported: %v"
-	warnNodeCreationIPFailure        = "Parsing passed IP %v failed: need a valid IPv4 or IPv6 address with a specified port number. Acting as though IP was not supplied."
+	errorNodeCreationIPFailure       = "Parsing passed IP %v failed: need a valid IPv4 or IPv6 address with a specified port number"
 	errorNodeNotDetected             = "Algorand node does not appear to be running: %s"
 	errorNodeStatus                  = "Cannot contact Algorand node: %s."
 	errorNodeFailedToStart           = "Algorand node failed to start: %s"
