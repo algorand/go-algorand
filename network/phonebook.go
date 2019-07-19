@@ -49,18 +49,6 @@ type phonebookData struct {
 
 type phonebookEntries map[string]phonebookData
 
-// ArrayPhonebook is a simple wrapper on a slice of string with addresses
-type ArrayPhonebook struct {
-	Entries phonebookEntries
-}
-
-// MakeArrayPhonebook creates a ArrayPhonebook
-func MakeArrayPhonebook() ArrayPhonebook {
-	return ArrayPhonebook{
-		Entries: make(phonebookEntries, 0),
-	}
-}
-
 func (e *phonebookEntries) filterRetryTime(t time.Time) []string {
 	o := make([]string, 0, len(*e))
 	for addr, entry := range *e {
@@ -87,9 +75,16 @@ func (e *phonebookEntries) updateRetryAfter(addr string, retryAfter time.Time) {
 	(*e)[addr] = phonebookData{retryAfter: retryAfter}
 }
 
-// UpdateRetryAfter updates the retry-after field for the entries matching the given address
-func (p ArrayPhonebook) UpdateRetryAfter(addr string, retryAfter time.Time) {
-	p.Entries.updateRetryAfter(addr, retryAfter)
+// ArrayPhonebook is a simple wrapper on a slice of string with addresses
+type ArrayPhonebook struct {
+	Entries phonebookEntries
+}
+
+// MakeArrayPhonebook creates a ArrayPhonebook
+func MakeArrayPhonebook() *ArrayPhonebook {
+	return &ArrayPhonebook{
+		Entries: make(phonebookEntries, 0),
+	}
 }
 
 func shuffleStrings(set []string) {
@@ -121,8 +116,13 @@ func shuffleSelect(set []string, n int) []string {
 	return out
 }
 
+// UpdateRetryAfter updates the retry-after field for the entries matching the given address
+func (p *ArrayPhonebook) UpdateRetryAfter(addr string, retryAfter time.Time) {
+	p.Entries.updateRetryAfter(addr, retryAfter)
+}
+
 // GetAddresses returns up to N shuffled address
-func (p ArrayPhonebook) GetAddresses(n int) []string {
+func (p *ArrayPhonebook) GetAddresses(n int) []string {
 	return shuffleSelect(p.Entries.filterRetryTime(time.Now()), n)
 }
 
@@ -133,8 +133,8 @@ type ThreadsafePhonebook struct {
 }
 
 // MakeThreadsafePhonebook creates a ThreadsafePhonebook
-func MakeThreadsafePhonebook() ThreadsafePhonebook {
-	return ThreadsafePhonebook{
+func MakeThreadsafePhonebook() *ThreadsafePhonebook {
+	return &ThreadsafePhonebook{
 		entries: make(phonebookEntries, 0),
 	}
 }

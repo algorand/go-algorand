@@ -83,7 +83,7 @@ type AlgorandFullNode struct {
 
 	ledger    *data.Ledger
 	net       network.GossipNode
-	phonebook network.ThreadsafePhonebook
+	phonebook *network.ThreadsafePhonebook
 
 	transactionPool *pools.TransactionPool
 	txHandler       *data.TxHandler
@@ -153,7 +153,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookDir
 	node.phonebook.ReplacePeerList(addrs)
 
 	// tie network, block fetcher, and agreement services together
-	p2pNode, err := network.NewWebsocketNetwork(node.log, node.config, &node.phonebook, genesis.ID(), genesis.Network)
+	p2pNode, err := network.NewWebsocketNetwork(node.log, node.config, node.phonebook, genesis.ID(), genesis.Network)
 	if err != nil {
 		log.Errorf("could not create websocket node: %v", err)
 		return nil, err

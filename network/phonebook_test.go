@@ -89,7 +89,7 @@ func TestArrayPhonebookAll(t *testing.T) {
 	for _, e := range set {
 		ph.Entries[e] = phonebookData{}
 	}
-	testPhonebookAll(t, set, &ph)
+	testPhonebookAll(t, set, ph)
 }
 
 func TestArrayPhonebookUniform1(t *testing.T) {
@@ -98,7 +98,7 @@ func TestArrayPhonebookUniform1(t *testing.T) {
 	for _, e := range set {
 		ph.Entries[e] = phonebookData{}
 	}
-	testPhonebookUniform(t, set, &ph, 1)
+	testPhonebookUniform(t, set, ph, 1)
 }
 
 func TestArrayPhonebookUniform3(t *testing.T) {
@@ -107,7 +107,7 @@ func TestArrayPhonebookUniform3(t *testing.T) {
 	for _, e := range set {
 		ph.Entries[e] = phonebookData{}
 	}
-	testPhonebookUniform(t, set, &ph, 3)
+	testPhonebookUniform(t, set, ph, 3)
 }
 
 func extenderThread(th *ThreadsafePhonebook, more []string, wg *sync.WaitGroup, repetitions int) {
@@ -128,7 +128,7 @@ func TestThreadsafePhonebookExtension(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(5)
 	for ti := 0; ti < 5; ti++ {
-		go extenderThread(&ph, more, &wg, 1000)
+		go extenderThread(ph, more, &wg, 1000)
 	}
 	wg.Wait()
 
@@ -156,7 +156,7 @@ func TestThreadsafePhonebookExtensionLong(t *testing.T) {
 	const repetitions = 100
 	wg.Add(threads)
 	for i := 0; i < threads; i++ {
-		go threadTestThreadsafePhonebookExtensionLong(&wg, &ph, setSize, repetitions)
+		go threadTestThreadsafePhonebookExtensionLong(&wg, ph, setSize, repetitions)
 	}
 
 	wg.Wait()
@@ -175,8 +175,8 @@ func TestMultiPhonebook(t *testing.T) {
 		phb.Entries[e] = phonebookData{}
 	}
 	mp := MultiPhonebook{}
-	mp.AddPhonebook(&pha)
-	mp.AddPhonebook(&phb)
+	mp.AddPhonebook(pha)
+	mp.AddPhonebook(phb)
 
 	testPhonebookAll(t, set, &mp)
 	testPhonebookUniform(t, set, &mp, 1)
@@ -193,7 +193,7 @@ func BenchmarkThreadsafePhonebook(b *testing.B) {
 	wg.Add(threads)
 	repetitions := b.N / threads
 	for t := 0; t < threads; t++ {
-		go threadTestThreadsafePhonebookExtensionLong(&wg, &ph, 1000, repetitions)
+		go threadTestThreadsafePhonebookExtensionLong(&wg, ph, 1000, repetitions)
 	}
 	wg.Wait()
 }

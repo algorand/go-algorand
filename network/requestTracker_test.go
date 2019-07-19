@@ -51,7 +51,7 @@ func TestHostIncomingRequestsOrdering(t *testing.T) {
 		// make sure the item isn't there anymore.
 		for _, p := range hir.requests {
 			require.False(t, p == o)
-			require.Equal(t, hir.countConnections(now.Add(-time.Second), false), uint(len(hir.requests)))
+			require.Equal(t, hir.countConnections(now.Add(-time.Second), false)+hir.countConnections(now.Add(-time.Second), true), uint(len(hir.requests)))
 		}
 	}
 }
@@ -87,12 +87,12 @@ func TestRateLimiting(t *testing.T) {
 	clientsCount := int(defaultConfig.ConnectionsRateLimitingCount * 2)
 
 	networks := make([]*WebsocketNetwork, clientsCount)
-	phonebooks := make([]ArrayPhonebook, clientsCount)
+	phonebooks := make([]*ThreadsafePhonebook, clientsCount)
 	for i := 0; i < clientsCount; i++ {
 		networks[i] = makeTestWebsocketNodeWithConfig(t, noAddressConfig)
 		networks[i].config.GossipFanout = 1
-		phonebooks[i] = MakeArrayPhonebook()
-		phonebooks[i].Entries.ReplacePeerList([]string{addrA})
+		phonebooks[i] = MakeThreadsafePhonebook()
+		phonebooks[i].ReplacePeerList([]string{addrA})
 		networks[i].phonebook = phonebooks[i]
 		defer func(net *WebsocketNetwork, i int) {
 			t.Logf("stopping network %d", i)

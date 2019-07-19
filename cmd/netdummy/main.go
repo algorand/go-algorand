@@ -52,7 +52,7 @@ func main() {
 
 	var nodes []network.GossipNode
 	for i := 0; i < *numClients; i++ {
-		n, _ := network.NewWebsocketGossipNode(log, conf, &addrs, *genesisID, protocol.NetworkID(*networkID))
+		n, _ := network.NewWebsocketGossipNode(log, conf, addrs, *genesisID, protocol.NetworkID(*networkID))
 		n.Start()
 		nodes = append(nodes, n)
 	}

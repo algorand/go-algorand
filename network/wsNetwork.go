@@ -282,7 +282,7 @@ type WebsocketNetwork struct {
 	broadcastQueueBulk     chan broadcastRequest
 
 	phonebook    Phonebook
-	dnsPhonebook ThreadsafePhonebook
+	dnsPhonebook *ThreadsafePhonebook
 
 	GenesisID string
 	NetworkID protocol.NetworkID
@@ -1192,7 +1192,7 @@ func (wn *WebsocketNetwork) meshThread() {
 			wn.dnsPhonebook.MergePeerList(dnsAddrs)
 			mp, ok := wn.phonebook.(*MultiPhonebook)
 			if ok {
-				mp.AddPhonebook(&wn.dnsPhonebook)
+				mp.AddPhonebook(wn.dnsPhonebook)
 			}
 		} else {
 			wn.log.Debugf("got no DNS addrs for network %#v", wn.NetworkID)
