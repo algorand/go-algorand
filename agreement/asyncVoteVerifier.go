@@ -83,7 +83,7 @@ func MakeAsyncVoteVerifier(verificationPool execpool.BacklogPool) *AsyncVoteVeri
 }
 
 func (avv *AsyncVoteVerifier) worker() {
-	defer func() { close(avv.workerWaitCh) }()
+	defer close(avv.workerWaitCh)
 	for res := range avv.execpoolOut {
 		asyncResponse := res.(*asyncVerifyVoteResponse)
 		if asyncResponse != nil {
