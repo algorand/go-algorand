@@ -43,7 +43,7 @@ var exportCmd = &cobra.Command{
 		mnemonic := computeMnemonic(seed)
 
 		key := crypto.GenerateSignatureSecrets(seed)
-		publicKeyChecksummed := basics.Address(key.SignatureVerifier).GetChecksumAddress().String()
+		publicKeyChecksummed := basics.Address(key.SignatureVerifier).String()
 
 		fmt.Printf("Private key mnemonic: %s\n", mnemonic)
 		fmt.Printf("Public key: %s\n", publicKeyChecksummed)

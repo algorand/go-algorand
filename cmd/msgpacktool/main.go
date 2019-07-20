@@ -45,7 +45,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	
 	"github.com/algorand/go-algorand/util/msgpack"
 )
 

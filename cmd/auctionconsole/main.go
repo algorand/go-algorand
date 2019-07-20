@@ -294,8 +294,8 @@ func accountStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 type lastAuctionIDResponse struct {
-	AuctionKey client.ChecksumAddress `json:"auctionKey"`
-	AuctionID  uint64                 `json:"auctionID"`
+	AuctionKey basics.Address `json:"auctionKey"`
+	AuctionID  uint64         `json:"auctionID"`
 }
 
 func lastAuctionID(w http.ResponseWriter, r *http.Request) {
@@ -307,7 +307,7 @@ func lastAuctionID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sendJSON(w, lastAuctionIDResponse{
-		AuctionKey: client.ChecksumAddress(am.AuctionKey),
+		AuctionKey: am.AuctionKey,
 		AuctionID:  id,
 	})
 	return

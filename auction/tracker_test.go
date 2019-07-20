@@ -22,7 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/daemon/algod/api/client/models"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -42,7 +42,7 @@ const BankKey = 1
 const BidderKey = 2
 
 func genConfirmedTx(msg interface{}, round uint64, from, to basics.Address,
-	secret *crypto.SignatureSecrets) models.Transaction {
+	secret *crypto.SignatureSecrets) v1.Transaction {
 
 	nf := NoteField{}
 	switch v := msg.(type) {
@@ -60,11 +60,11 @@ func genConfirmedTx(msg interface{}, round uint64, from, to basics.Address,
 		nf.SignedParams = SignedParams{Params: v, Sig: secret.Sign(v)}
 
 	}
-	return models.Transaction{
+	return v1.Transaction{
 		ConfirmedRound: round,
-		From:           from.GetChecksumAddress().String(),
-		Payment: &models.PaymentTransactionType{
-			To: to.GetChecksumAddress().String(),
+		From:           from.String(),
+		Payment: &v1.PaymentTransactionType{
+			To: to.String(),
 		},
 		Note: protocol.Encode(nf),
 	}
@@ -80,7 +80,7 @@ func TestTracker_Transition(t *testing.T) {
 	p.AuctionKey = crypto.Digest(addrs[AuctionKey])
 	p.BankKey = crypto.Digest(addrs[BankKey])
 
-	am, err := MakeTracker(1, addrs[AuctionKey].GetChecksumAddress().String())
+	am, err := MakeTracker(1, addrs[AuctionKey].String())
 	require.NoError(t, err)
 
 	am.ProcessMessage(genConfirmedTx(p, 1, addrs[AuctionKey], addrs[AuctionKey], secrets[AuctionKey]))
@@ -137,7 +137,7 @@ func TestTracker_WrongParams(t *testing.T) {
 	p.AuctionKey = crypto.Digest(addrs[AuctionKey])
 	p.BankKey = crypto.Digest(addrs[BankKey])
 
-	am, err := MakeTracker(1, addrs[AuctionKey].GetChecksumAddress().String())
+	am, err := MakeTracker(1, addrs[AuctionKey].String())
 	require.NoError(t, err)
 
 	am.ProcessMessage(genConfirmedTx(p, 1, addrs[AuctionKey], addrs[AuctionKey], secrets[AuctionKey]))
@@ -198,7 +198,7 @@ func TestTracker_Transition_Settle_Start(t *testing.T) {
 	p.BankKey = crypto.Digest(addrs[BankKey])
 
 	am, err := MakeTracker(1,
-		addrs[AuctionKey].GetChecksumAddress().String())
+		addrs[AuctionKey].String())
 	require.NoError(t, err)
 
 	// Process settle
@@ -227,7 +227,7 @@ func TestTracker_Transition_Multiple_Auctions(t *testing.T) {
 	p.BankKey = crypto.Digest(addrs[BankKey])
 
 	am, err := MakeTracker(1,
-		addrs[AuctionKey].GetChecksumAddress().String())
+		addrs[AuctionKey].String())
 	require.NoError(t, err)
 
 	require.Equal(t, Uninitialized, am.AuctionState(p.AuctionID))
@@ -300,7 +300,7 @@ func TestTracker_Transition_DoubleStart(t *testing.T) {
 	p.BankKey = crypto.Digest(addrs[BankKey])
 
 	am, err := MakeTracker(1,
-		addrs[AuctionKey].GetChecksumAddress().String())
+		addrs[AuctionKey].String())
 	require.NoError(t, err)
 
 	am.ProcessMessage(genConfirmedTx(p, 1,
@@ -332,7 +332,7 @@ func TestTracker_Transition_NoBids(t *testing.T) {
 	p.BankKey = crypto.Digest(addrs[BankKey])
 
 	am, err := MakeTracker(1,
-		addrs[AuctionKey].GetChecksumAddress().String())
+		addrs[AuctionKey].String())
 	require.NoError(t, err)
 
 	am.ProcessMessage(genConfirmedTx(p, 1,
@@ -364,7 +364,7 @@ func TestTracker_Transition_Double_Settlement_Different(t *testing.T) {
 	p.BankKey = crypto.Digest(addrs[BankKey])
 
 	am, err := MakeTracker(1,
-		addrs[AuctionKey].GetChecksumAddress().String())
+		addrs[AuctionKey].String())
 	require.NoError(t, err)
 
 	am.ProcessMessage(genConfirmedTx(p, 1,
@@ -430,7 +430,7 @@ func TestTracker_Transition_Double_Settlement(t *testing.T) {
 	p.BankKey = crypto.Digest(addrs[BankKey])
 
 	am, err := MakeTracker(1,
-		addrs[AuctionKey].GetChecksumAddress().String())
+		addrs[AuctionKey].String())
 	require.NoError(t, err)
 
 	am.ProcessMessage(genConfirmedTx(p, 1,
@@ -491,7 +491,7 @@ func TestTracker_WrongAuctionIDInDeposit(t *testing.T) {
 	p.AuctionKey = crypto.Digest(addrs[AuctionKey])
 	p.BankKey = crypto.Digest(addrs[BankKey])
 
-	am, err := MakeTracker(1, addrs[AuctionKey].GetChecksumAddress().String())
+	am, err := MakeTracker(1, addrs[AuctionKey].String())
 	require.NoError(t, err)
 
 	am.ProcessMessage(genConfirmedTx(p, 1, addrs[AuctionKey], addrs[AuctionKey], secrets[AuctionKey]))
@@ -525,7 +525,7 @@ func TestTracker_WrongAuctionIDInBid(t *testing.T) {
 	p.AuctionKey = crypto.Digest(addrs[AuctionKey])
 	p.BankKey = crypto.Digest(addrs[BankKey])
 
-	am, err := MakeTracker(1, addrs[AuctionKey].GetChecksumAddress().String())
+	am, err := MakeTracker(1, addrs[AuctionKey].String())
 	require.NoError(t, err)
 
 	am.ProcessMessage(genConfirmedTx(p, 1, addrs[AuctionKey], addrs[AuctionKey], secrets[AuctionKey]))
@@ -571,7 +571,7 @@ func TestTracker_Cancel(t *testing.T) {
 	p.AuctionKey = crypto.Digest(addrs[AuctionKey])
 	p.BankKey = crypto.Digest(addrs[BankKey])
 
-	am, err := MakeTracker(1, addrs[AuctionKey].GetChecksumAddress().String())
+	am, err := MakeTracker(1, addrs[AuctionKey].String())
 	require.NoError(t, err)
 
 	am.ProcessMessage(genConfirmedTx(p, 1, addrs[AuctionKey], addrs[AuctionKey], secrets[AuctionKey]))

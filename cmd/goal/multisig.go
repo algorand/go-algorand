@@ -39,9 +39,9 @@ func init() {
 	multisigCmd.AddCommand(mergeSigCmd)
 
 	addSigCmd.Flags().StringVarP(&txFilename, "tx", "t", "", "Partially-signed transaction file to add signature to")
-	addSigCmd.Flags().StringVarP(&addr, "addr", "a", "", "Address of the key to sign with")
+	addSigCmd.Flags().StringVarP(&addr, "address", "a", "", "Address of the key to sign with")
 	addSigCmd.MarkFlagRequired("tx")
-	addSigCmd.MarkFlagRequired("addr")
+	addSigCmd.MarkFlagRequired("address")
 
 	mergeSigCmd.Flags().StringVarP(&txFilename, "out", "o", "", "Output file for merged transactions")
 	mergeSigCmd.MarkFlagRequired("out")
@@ -64,7 +64,7 @@ var addSigCmd = &cobra.Command{
 	Long:  `Start a multisig, or add a signature to an existing multisig, for a given transaction`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		data, err := ioutil.ReadFile(txFilename)
+		data, err := readFile(txFilename)
 		if err != nil {
 			reportErrorf(fileReadError, txFilename, err)
 		}
@@ -96,7 +96,7 @@ var addSigCmd = &cobra.Command{
 			outData = append(outData, protocol.Encode(stxn)...)
 		}
 
-		err = ioutil.WriteFile(txFilename, outData, 0600)
+		err = writeFile(txFilename, outData, 0600)
 		if err != nil {
 			reportErrorf(fileWriteError, txFilename, err)
 		}
@@ -168,7 +168,7 @@ var mergeSigCmd = &cobra.Command{
 			mergedData = append(mergedData, protocol.Encode(txn)...)
 		}
 
-		err := ioutil.WriteFile(txFilename, mergedData, 0600)
+		err := writeFile(txFilename, mergedData, 0600)
 		if err != nil {
 			reportErrorf(fileWriteError, txFilename, err)
 		}
@@ -183,7 +183,7 @@ func populateBlankMultisig(client libgoal.Client, dataDir string, walletName str
 		return stxn
 	}
 
-	multisigInfo, err := client.LookupMultisigAccount(wh, stxn.Txn.Sender.GetChecksumAddress().String())
+	multisigInfo, err := client.LookupMultisigAccount(wh, stxn.Txn.Sender.String())
 	if err != nil {
 		return stxn
 	}

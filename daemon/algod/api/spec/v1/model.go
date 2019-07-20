@@ -14,18 +14,12 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-// Package handlers defines models exposed by algod rest api
-//
-// IF YOU MODIFY THIS FILE: IMPORTANT
-// This is the ground truth for the API spec. Whenever you update this file,
-// make sure to update any clients if you make breaking changes. This includes
-// copying model changes into api/client/models/.
-package handlers
+// Package v1 defines models exposed by algod rest api
+package v1
 
-import (
-	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
-	"github.com/algorand/go-algorand/protocol"
-)
+// swagger:strfmt binary
+type bytes = []byte // note that we need to make this its own object to get the strfmt annotation to work properly. Otherwise swagger generates []uint8 instead of type binary
+// ^ one day we should probably fork swagger, to avoid this workaround.
 
 // NodeStatus contains the information about a node status
 // swagger:model NodeStatus
@@ -75,6 +69,35 @@ type TransactionID struct {
 	TxID string `json:"txId"`
 }
 
+// Participation Description
+// swagger:model Participation
+type Participation struct { // Round and Address fields are redundant if Participation embedded in Account. Exclude for now.
+	// ParticipationPK is the root participation public key (if any) currently registered for this round
+	//
+	// required: true
+	ParticipationPK bytes `json:"partpkb64"`
+
+	// VRFPK is the selection public key (if any) currently registered for this round
+	//
+	// required: true
+	VRFPK bytes `json:"vrfpkb64"`
+
+	// VoteFirst is the first round for which this participation is valid.
+	//
+	// required: true
+	VoteFirst uint64 `json:"votefst"`
+
+	// VoteLast is the last round for which this participation is valid.
+	//
+	// required: true
+	VoteLast uint64 `json:"votelst"`
+
+	// VoteKeyDilution is the number of subkeys in for each batch of participation keys.
+	//
+	// required: true
+	VoteKeyDilution uint64 `json:"votekd"`
+}
+
 // Account Description
 // swagger:model Account
 type Account struct {
@@ -105,7 +128,7 @@ type Account struct {
 	// required: true
 	AmountWithoutPendingRewards uint64 `json:"amountwithoutpendingrewards"`
 
-	// Rewards indicates the total rewards of MicroAlgos the account has recieved
+	// Rewards indicates the total rewards of MicroAlgos the account has received, including pending rewards.
 	//
 	// required: true
 	Rewards uint64 `json:"rewards"`
@@ -117,6 +140,13 @@ type Account struct {
 	//
 	// required: true
 	Status string `json:"status"`
+
+	// Participation is the participation information currently associated with the account, if any.
+	// This field is optional and may not be set even if participation information is registered.
+	// In future REST API versions, this field may become required.
+	//
+	// required: false
+	Participation Participation `json:"participation,omitempty"`
 }
 
 // Transaction contains all fields common to all transactions and serves as an envelope to all transactions
@@ -126,7 +156,7 @@ type Transaction struct {
 	// Type is the transaction type
 	//
 	// required: true
-	Type protocol.TxType `json:"type"`
+	Type string `json:"type"`
 
 	// TxID is the transaction ID
 	//
@@ -156,7 +186,7 @@ type Transaction struct {
 	// Note is a free form data
 	//
 	// required: false
-	Note lib.Bytes `json:"noteb64,omitempty"`
+	Note bytes `json:"noteb64,omitempty"`
 
 	// ConfirmedRound indicates the block number this transaction appeared in
 	//
@@ -190,7 +220,7 @@ type Transaction struct {
 	// Genesis hash
 	//
 	// required: true
-	GenesisHash lib.Bytes `json:"genesishashb64"`
+	GenesisHash bytes `json:"genesishashb64"`
 }
 
 // PaymentTransactionType contains the additional fields for a payment Transaction
@@ -270,7 +300,7 @@ type TransactionParams struct {
 	// Genesis hash
 	//
 	// required: true
-	GenesisHash lib.Bytes `json:"genesishashb64"`
+	GenesisHash bytes `json:"genesishashb64"`
 
 	// LastRound indicates the last round seen
 	//
@@ -282,6 +312,12 @@ type TransactionParams struct {
 	//
 	// required: true
 	ConsensusVersion string `json:"consensusVersion"`
+
+	// The minimum transaction fee (not per byte) required for the
+	// txn to validate for the current network protocol.
+	//
+	// required: false
+	MinTxnFee uint64 `json:"minFee"`
 }
 
 // Block contains a block information
