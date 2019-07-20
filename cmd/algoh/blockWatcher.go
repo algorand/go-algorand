@@ -20,7 +20,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/algorand/go-algorand/daemon/algod/api/client/models"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/logging"
 )
 
@@ -28,7 +28,7 @@ var log = logging.Base()
 
 type blockListener interface {
 	init(uint64)
-	onBlock(models.Block)
+	onBlock(v1.Block)
 }
 
 type blockWatcher struct {

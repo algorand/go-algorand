@@ -685,6 +685,13 @@ func loadConfig(reader io.Reader, config *Local) error {
 	return dec.Decode(config)
 }
 
+// DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
+func (cfg Local) DNSBootstrapArray(networkID protocol.NetworkID) (bootstrapArray []string) {
+	dnsBootstrapString := cfg.DNSBootstrap(networkID)
+	bootstrapArray = strings.Split(dnsBootstrapString, ";")
+	return
+}
+
 // DNSBootstrap returns the network-specific DNSBootstrap identifier
 func (cfg Local) DNSBootstrap(network protocol.NetworkID) string {
 	// if user hasn't modified the default DNSBootstrapID in the configuration

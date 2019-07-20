@@ -16,28 +16,14 @@
 
 package common
 
-import "github.com/algorand/go-algorand/daemon/algod/api/server/lib"
-
-// Version contains the current algod version.
-//
-// Note that we annotate this as a model so that legacy clients
-// can directly import a swagger generated Version model.
-// swagger:model Version
-type Version struct {
-	// required: true
-	Versions []string `json:"versions"`
-	// required: true
-	GenesisID string `json:"genesis_id"`
-	// required: true
-	GenesisHash lib.Bytes `json:"genesis_hash_b64"`
-}
+import "github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 
 // VersionsResponse is the response to 'GET /versions'
 //
 // swagger:response VersionsResponse
 type VersionsResponse struct {
 	// in: body
-	Body Version
+	Body common.Version
 }
 
 // GetError allows VersionResponse to satisfy the APIV1Response interface, even

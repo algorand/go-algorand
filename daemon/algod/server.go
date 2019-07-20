@@ -171,7 +171,7 @@ func (s *Server) Start() {
 
 	// use the data dir as the static file dir (for our API server), there's
 	// no need to separate the two yet. This lets us serve the swagger.json file.
-	apiHandler := apiServer.NewRouter(s.log, s.node, apiToken, s.RootPath)
+	apiHandler := apiServer.NewRouter(s.log, s.node, apiToken)
 
 	addr := cfg.EndpointAddress
 	if addr == "" {
@@ -245,6 +245,8 @@ func (s *Server) Stop() {
 
 	// Attempt to log a shutdown event before we exit...
 	s.log.Event(telemetryspec.ApplicationState, telemetryspec.ShutdownEvent)
+
+	s.node.Stop()
 
 	err := server.Shutdown(context.Background())
 	if err != nil {

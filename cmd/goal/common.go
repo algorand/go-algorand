@@ -18,6 +18,11 @@ package main
 
 import "github.com/spf13/cobra"
 
+const (
+	stdoutFilenameValue = "-"
+	stdinFileNameValue  = "-"
+)
+
 // validateNoPosArgsFn is a reusable cobra positional argument validation function
 // for generating proper error messages when commands see unexpected arguments when they expect no args.
 // We don't use cobra.NoArgs directly, in case we want to customize behavior later.

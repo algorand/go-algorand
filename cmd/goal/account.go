@@ -97,20 +97,20 @@ func init() {
 	newCmd.Flags().BoolVarP(&defaultAccount, "default", "f", false, "Set this account as the default one")
 
 	// Delete account flag
-	deleteCmd.Flags().StringVarP(&accountAddress, "addr", "a", "", "Address of account to delete")
-	deleteCmd.MarkFlagRequired("addr")
+	deleteCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Address of account to delete")
+	deleteCmd.MarkFlagRequired("address")
 
 	// New Multisig account flag
 	newMultisigCmd.Flags().Uint8VarP(&threshold, "threshold", "T", 1, "Number of signatures required to spend from this address")
 	newMultisigCmd.MarkFlagRequired("threshold")
 
 	// Delete multisig account flag
-	deleteMultisigCmd.Flags().StringVarP(&accountAddress, "addr", "a", "", "Address of multisig account to delete")
-	deleteMultisigCmd.MarkFlagRequired("addr")
+	deleteMultisigCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Address of multisig account to delete")
+	deleteMultisigCmd.MarkFlagRequired("address")
 
 	// Lookup info for multisig account flag
-	infoMultisigCmd.Flags().StringVarP(&accountAddress, "addr", "a", "", "Address of multisig account to look up")
-	infoMultisigCmd.MarkFlagRequired("addr")
+	infoMultisigCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Address of multisig account to look up")
+	infoMultisigCmd.MarkFlagRequired("address")
 
 	// Balance flags
 	balanceCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to retrieve balance (required)")
@@ -421,7 +421,7 @@ var listCmd = &cobra.Command{
 		// For each address, request information about it from algod
 		for _, addr := range addrs {
 			response, _ := client.AccountInformation(addr.Addr)
-			// it's okay to procede with out algod info
+			// it's okay to proceed without algod info
 
 			// Display this information to the user
 			if addr.Multisig {
@@ -509,7 +509,7 @@ var changeOnlineCmd = &cobra.Command{
 
 			part = &partkey
 			if accountAddress == "" {
-				accountAddress = part.Parent.GetChecksumAddress().String()
+				accountAddress = part.Parent.String()
 			}
 		}
 
@@ -533,65 +533,24 @@ func changeAccountOnlineStatus(acct string, part *algodAcct.Participation, goOnl
 		return err
 	}
 
-	if txFile == "" {
-		// Sign & broadcast the transaction
-		wh, pw := ensureWalletHandleMaybePassword(dataDir, wallet, true)
-		txid, err := client.SignAndBroadcastTransaction(wh, pw, utx)
-		if err != nil {
-			return fmt.Errorf(errorOnlineTX, err)
-		}
-		fmt.Printf("Transaction id for status change transaction: %s\n", txid)
-
-		if noWaitAfterSend {
-			fmt.Println("Note: status will not change until transaction is finalized")
-			return nil
-		}
-
-		// Get current round information
-		stat, err := client.Status()
-		if err != nil {
-			return fmt.Errorf(errorRequestFail, err)
-		}
-
-		for {
-			// Check if we know about the transaction yet
-			txn, err := client.PendingTransactionInformation(txid)
-			if err != nil {
-				return fmt.Errorf(errorRequestFail, err)
-			}
-
-			if txn.ConfirmedRound > 0 {
-				reportInfof(infoTxCommitted, txid, txn.ConfirmedRound)
-				break
-			}
-
-			if txn.PoolError != "" {
-				return fmt.Errorf(txPoolError, txid, txn.PoolError)
-			}
-
-			reportInfof(infoTxPending, txid, stat.LastRound)
-			stat, err = client.WaitForRound(stat.LastRound + 1)
-			if err != nil {
-				return fmt.Errorf(errorRequestFail, err)
-			}
-		}
-	} else {
-		// Wrap in a transactions.SignedTxn with an empty sig.
-		// This way protocol.Encode will encode the transaction type
-		stxn, err := transactions.AssembleSignedTxn(utx, crypto.Signature{}, crypto.MultisigSig{})
-		if err != nil {
-			return fmt.Errorf(errorConstructingTX, err)
-		}
-
-		stxn = populateBlankMultisig(client, dataDir, wallet, stxn)
-
-		// Write the SignedTxn to the output file
-		err = ioutil.WriteFile(txFile, protocol.Encode(stxn), 0600)
-		if err != nil {
-			return fmt.Errorf(fileWriteError, txFile, err)
-		}
+	if txFile != "" {
+		return writeTxnToFile(client, false, dataDir, wallet, utx, txFile)
 	}
-	return nil
+
+	// Sign & broadcast the transaction
+	wh, pw := ensureWalletHandleMaybePassword(dataDir, wallet, true)
+	txid, err := client.SignAndBroadcastTransaction(wh, pw, utx)
+	if err != nil {
+		return fmt.Errorf(errorOnlineTX, err)
+	}
+	fmt.Printf("Transaction id for status change transaction: %s\n", txid)
+
+	if noWaitAfterSend {
+		fmt.Println("Note: status will not change until transaction is finalized")
+		return nil
+	}
+
+	return waitForCommit(client, txid)
 }
 
 var addParticipationKeyCmd = &cobra.Command{
@@ -679,7 +638,7 @@ var renewParticipationKeyCmd = &cobra.Command{
 			reportErrorf(errorRequestFail, err)
 		}
 		for _, part := range parts {
-			if part.Address().GetChecksumAddress().String() == accountAddress {
+			if part.Address().String() == accountAddress {
 				if part.LastValid >= basics.Round(roundLastValid) {
 					reportErrorf(errExistingPartKey, roundLastValid, part.LastValid)
 				}
@@ -771,17 +730,17 @@ func renewPartKeysInDir(dataDir string, lastValidRound uint64, fee uint64, dilut
 	// Make sure we don't already have a partkey valid for (or after) specified roundLastValid
 	for _, renewPart := range renewAccounts {
 		if renewPart.LastValid >= basics.Round(lastValidRound) {
-			fmt.Printf("  Skipping account %s: Already has a part key valid beyond %d (currently %d)\n", renewPart.Address().GetChecksumAddress(), lastValidRound, renewPart.LastValid)
+			fmt.Printf("  Skipping account %s: Already has a part key valid beyond %d (currently %d)\n", renewPart.Address(), lastValidRound, renewPart.LastValid)
 			continue
 		}
 
 		// If the account's latest partkey expired before the current round, don't automatically renew and instead instruct the user to explicitly renew it.
 		if renewPart.LastValid < basics.Round(lastValidRound) {
-			fmt.Printf("  Skipping account %s: This account has part keys that have expired.  Please renew this account explicitly using 'renewpartkey'\n", renewPart.Address().GetChecksumAddress())
+			fmt.Printf("  Skipping account %s: This account has part keys that have expired.  Please renew this account explicitly using 'renewpartkey'\n", renewPart.Address())
 			continue
 		}
 
-		address := renewPart.Address().GetChecksumAddress().String()
+		address := renewPart.Address().String()
 		err = generateAndRegisterPartKey(address, currentRound, lastValidRound, proto.MaxTxnLife, fee, dilution, wallet, dataDir, client)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  Error renewing part key for account %s: %v\n", address, err)
@@ -813,11 +772,27 @@ var listParticipationKeysCmd = &cobra.Command{
 		}
 		sort.Strings(filenames)
 
-		rowFormat := "%-80s\t%-60s\t%12s\t%12s\t%12s\n"
-		fmt.Printf(rowFormat, "Filename", "Parent address", "First round", "Last round", "First key")
+		rowFormat := "%-10s\t%-80s\t%-60s\t%12s\t%12s\t%12s\n"
+		fmt.Printf(rowFormat, "Registered", "Filename", "Parent address", "First round", "Last round", "First key")
 		for _, fn := range filenames {
+			onlineInfoStr := "unknown"
+			onlineAccountInfo, err := client.AccountInformation(parts[fn].Address().GetUserAddress())
+			if err == nil {
+				votingBytes := parts[fn].Voting.OneTimeSignatureVerifier
+				vrfBytes := parts[fn].VRF.PK
+				if string(onlineAccountInfo.Participation.ParticipationPK) == string(votingBytes[:]) &&
+					(string(onlineAccountInfo.Participation.VRFPK) == string(vrfBytes[:])) &&
+					(onlineAccountInfo.Participation.VoteFirst == uint64(parts[fn].FirstValid)) &&
+					(onlineAccountInfo.Participation.VoteLast == uint64(parts[fn].LastValid)) &&
+					(onlineAccountInfo.Participation.VoteKeyDilution == parts[fn].KeyDilution) {
+					onlineInfoStr = "yes"
+				} else {
+					onlineInfoStr = "no"
+				}
+			}
+			// it's okay to proceed without algod info
 			first, last := parts[fn].ValidInterval()
-			fmt.Printf(rowFormat, fn, parts[fn].Address().GetUserAddress(),
+			fmt.Printf(rowFormat, onlineInfoStr, fn, parts[fn].Address().GetUserAddress(),
 				fmt.Sprintf("%d", first),
 				fmt.Sprintf("%d", last),
 				fmt.Sprintf("%d.%d", parts[fn].Voting.FirstBatch, parts[fn].Voting.FirstOffset))
@@ -1032,7 +1007,7 @@ var partkeyInfoCmd = &cobra.Command{
 			for filename, part := range parts {
 				fmt.Println("------------------------------------------------------------------")
 				info := partkeyInfo{
-					Address:         part.Address().GetChecksumAddress().String(),
+					Address:         part.Address().String(),
 					FirstValid:      part.FirstValid,
 					LastValid:       part.LastValid,
 					VoteID:          part.VotingSecrets().OneTimeSignatureVerifier,

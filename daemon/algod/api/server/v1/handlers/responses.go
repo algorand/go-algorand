@@ -30,6 +30,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/logging"
 )
 
@@ -70,7 +71,7 @@ func SendJSON(obj Response, w http.ResponseWriter, log logging.Logger) {
 // swagger:response StatusResponse
 type StatusResponse struct {
 	// in: body
-	Body *NodeStatus
+	Body *v1.NodeStatus
 }
 
 func (sr StatusResponse) getBody() interface{} {
@@ -82,7 +83,7 @@ func (sr StatusResponse) getBody() interface{} {
 // swagger:response TransactionIDResponse
 type TransactionIDResponse struct {
 	// in: body
-	Body *TransactionID
+	Body *v1.TransactionID
 }
 
 func (r TransactionIDResponse) getBody() interface{} {
@@ -94,7 +95,7 @@ func (r TransactionIDResponse) getBody() interface{} {
 // swagger:response AccountInformationResponse
 type AccountInformationResponse struct {
 	// in: body
-	Body *Account
+	Body *v1.Account
 }
 
 func (r AccountInformationResponse) getBody() interface{} {
@@ -106,7 +107,7 @@ func (r AccountInformationResponse) getBody() interface{} {
 // swagger:response TransactionResponse
 type TransactionResponse struct {
 	// in: body
-	Body *Transaction
+	Body *v1.Transaction
 }
 
 func (r TransactionResponse) getBody() interface{} {
@@ -118,7 +119,7 @@ func (r TransactionResponse) getBody() interface{} {
 // swagger:response TransactionsResponse
 type TransactionsResponse struct {
 	// in: body
-	Body *TransactionList
+	Body *v1.TransactionList
 }
 
 func (r TransactionsResponse) getBody() interface{} {
@@ -130,7 +131,7 @@ func (r TransactionsResponse) getBody() interface{} {
 // swagger:response TransactionFeeResponse
 type TransactionFeeResponse struct {
 	// in: body
-	Body *TransactionFee
+	Body *v1.TransactionFee
 }
 
 func (r TransactionFeeResponse) getBody() interface{} {
@@ -143,7 +144,7 @@ func (r TransactionFeeResponse) getBody() interface{} {
 // swagger:response TransactionParamsResponse
 type TransactionParamsResponse struct {
 	// in: body
-	Body *TransactionParams
+	Body *v1.TransactionParams
 }
 
 func (r TransactionParamsResponse) getBody() interface{} {
@@ -155,7 +156,7 @@ func (r TransactionParamsResponse) getBody() interface{} {
 // swagger:response BlockResponse
 type BlockResponse struct {
 	// in: body
-	Body *Block
+	Body *v1.Block
 }
 
 func (r BlockResponse) getBody() interface{} {
@@ -167,7 +168,7 @@ func (r BlockResponse) getBody() interface{} {
 // swagger:response SupplyResponse
 type SupplyResponse struct {
 	// in: body
-	Body *Supply
+	Body *v1.Supply
 }
 
 func (r SupplyResponse) getBody() interface{} {
@@ -182,7 +183,7 @@ func (r SupplyResponse) getBody() interface{} {
 // swagger:response PendingTransactionsResponse
 type PendingTransactionsResponse struct {
 	// in: body
-	Body *PendingTransactions
+	Body *v1.PendingTransactions
 }
 
 func (r PendingTransactionsResponse) getBody() interface{} {

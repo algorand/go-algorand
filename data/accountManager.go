@@ -98,7 +98,7 @@ func (manager *AccountManager) AddParticipation(participation account.Participat
 
 	manager.partIntervals[interval] = participation
 
-	addressString := address.GetChecksumAddress().String()
+	addressString := address.String()
 	manager.log.EventWithDetails(telemetryspec.Accounts, telemetryspec.PartKeyRegisteredEvent, telemetryspec.PartKeyRegisteredEventDetails{
 		Address:    addressString,
 		FirstValid: uint64(first),

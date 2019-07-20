@@ -193,7 +193,7 @@ func (t *topAccountListener) sendEvent() {
 	fCirculation := float64(t.onlineCirculation.ToUint64())
 	for _, account := range t.accounts[:] {
 		entry := make(map[string]interface{})
-		entry["address"] = account.Address.GetChecksumAddress().String()
+		entry["address"] = account.Address.String()
 		entry["balance"] = account.Algos.ToUint64()
 		entry["stake"] = float64(account.Algos.ToUint64()) / fCirculation
 		payload = append(payload, entry)

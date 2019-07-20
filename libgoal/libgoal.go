@@ -26,7 +26,8 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/daemon/algod/api/client/models"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/daemon/kmd/lib/kmdapi"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -410,7 +411,7 @@ func (c *Client) LookupMultisigAccount(walletHandle []byte, multisigAddr string)
 
 	var pks []string
 	for _, pk := range resp.PKs {
-		addr := basics.Address(pk).GetChecksumAddress().String()
+		addr := basics.Address(pk).String()
 		pks = append(pks, addr)
 	}
 
@@ -552,7 +553,7 @@ func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []by
 /* Algod Wrappers */
 
 // Status returns the node status
-func (c *Client) Status() (resp models.NodeStatus, err error) {
+func (c *Client) Status() (resp v1.NodeStatus, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.Status()
@@ -561,7 +562,7 @@ func (c *Client) Status() (resp models.NodeStatus, err error) {
 }
 
 // AccountInformation takes an address and returns its information
-func (c *Client) AccountInformation(account string) (resp models.Account, err error) {
+func (c *Client) AccountInformation(account string) (resp v1.Account, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.AccountInformation(account)
@@ -570,7 +571,7 @@ func (c *Client) AccountInformation(account string) (resp models.Account, err er
 }
 
 // TransactionInformation takes an address and associated txid and return its information
-func (c *Client) TransactionInformation(addr, txid string) (resp models.Transaction, err error) {
+func (c *Client) TransactionInformation(addr, txid string) (resp v1.Transaction, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.TransactionInformation(addr, txid)
@@ -580,7 +581,7 @@ func (c *Client) TransactionInformation(addr, txid string) (resp models.Transact
 
 // PendingTransactionInformation returns information about a recently issued
 // transaction based on its txid.
-func (c *Client) PendingTransactionInformation(txid string) (resp models.Transaction, err error) {
+func (c *Client) PendingTransactionInformation(txid string) (resp v1.Transaction, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.PendingTransactionInformation(txid)
@@ -589,7 +590,7 @@ func (c *Client) PendingTransactionInformation(txid string) (resp models.Transac
 }
 
 // Block takes a round and returns its block
-func (c *Client) Block(round uint64) (resp models.Block, err error) {
+func (c *Client) Block(round uint64) (resp v1.Block, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.Block(round)
@@ -607,7 +608,7 @@ func (c *Client) HealthCheck() error {
 }
 
 // WaitForRound takes a round, waits until it appears and returns its status. This function blocks.
-func (c *Client) WaitForRound(round uint64) (resp models.NodeStatus, err error) {
+func (c *Client) WaitForRound(round uint64) (resp v1.NodeStatus, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.StatusAfterBlock(round)
@@ -625,7 +626,7 @@ func (c *Client) GetBalance(address string) (uint64, error) {
 }
 
 // AlgodVersions return the list of supported API versions in algod
-func (c Client) AlgodVersions() (resp models.Version, err error) {
+func (c Client) AlgodVersions() (resp common.Version, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.Versions()
@@ -634,7 +635,7 @@ func (c Client) AlgodVersions() (resp models.Version, err error) {
 }
 
 // LedgerSupply returns the total number of algos in the system
-func (c Client) LedgerSupply() (resp models.Supply, err error) {
+func (c Client) LedgerSupply() (resp v1.Supply, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.LedgerSupply()
@@ -668,7 +669,7 @@ func (c *Client) SuggestedFee() (fee uint64, err error) {
 }
 
 // SuggestedParams returns the suggested parameters for a new transaction
-func (c *Client) SuggestedParams() (params models.TransactionParams, err error) {
+func (c *Client) SuggestedParams() (params v1.TransactionParams, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		params, err = algod.SuggestedParams()
@@ -678,7 +679,7 @@ func (c *Client) SuggestedParams() (params models.TransactionParams, err error) 
 
 // GetPendingTransactions gets a snapshot of current pending transactions on the node.
 // If maxTxns = 0, fetches as many transactions as possible.
-func (c *Client) GetPendingTransactions(maxTxns uint64) (resp models.PendingTransactions, err error) {
+func (c *Client) GetPendingTransactions(maxTxns uint64) (resp v1.PendingTransactions, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.GetPendingTransactions(maxTxns)
