@@ -89,8 +89,12 @@ func ReadTelemetryConfigOrDefault(dataDir *string, genesisID string) (cfg Teleme
 		cfg, err = LoadTelemetryConfig(configPath)
 	}
 	if err != nil {
-		err = nil
 		cfg = createTelemetryConfig()
+		if os.IsNotExist(err) {
+			err = nil
+		} else {
+			return
+		}
 	}
 	ch := config.GetCurrentVersion().Channel
 	// Should not happen, but default to "dev" if channel is unspecified.
