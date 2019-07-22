@@ -149,6 +149,7 @@ type BlockEvaluator struct {
 
 	block        bookkeeping.Block
 	totalTxBytes int
+	txGroups     map[crypto.Digest]transactions.TxGroup
 
 	verificationPool execpool.BacklogPool
 }
@@ -195,6 +196,7 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *eval
 		block:            bookkeeping.Block{BlockHeader: hdr},
 		proto:            proto,
 		genesisHash:      l.GenesisHash(),
+		txGroups:	  make(map[crypto.Digest]transactions.TxGroup),
 		verificationPool: executionPool,
 	}
 
@@ -316,6 +318,21 @@ func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn, ad *transact
 				return fmt.Errorf("transaction %v: failed to verify: %v", txn.ID(), err)
 			}
 		}
+
+		// Add to transaction group, if any.
+		if !txn.Txn.Group.IsZero() {
+			if !eval.proto.SupportTxGroups {
+				return fmt.Errorf("transaction groups not supported")
+			}
+
+			txWithoutGroup := txn.Txn
+			txWithoutGroup.Group = crypto.Digest{}
+			txWithoutGroup.ResetCaches()
+
+			group := eval.txGroups[txn.Txn.Group]
+			group.Transactions = append(group.Transactions, crypto.HashObj(txWithoutGroup))
+			eval.txGroups[txn.Txn.Group] = group
+		}
 	}
 
 	// Apply the transaction, updating the cow balances
@@ -412,6 +429,13 @@ func (eval *BlockEvaluator) finalValidation() error {
 		txnRoot := eval.block.Payset.Commit(eval.proto.PaysetCommitFlat)
 		if txnRoot != eval.block.TxnRoot {
 			return fmt.Errorf("txn root wrong: %v != %v", txnRoot, eval.block.TxnRoot)
+		}
+
+		// check transaction groups
+		for gid, group := range eval.txGroups {
+			if gid != crypto.HashObj(group) {
+				return fmt.Errorf("txgroup %v mismatch: %v", gid, group)
+			}
 		}
 	}
 

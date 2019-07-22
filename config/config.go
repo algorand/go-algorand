@@ -179,6 +179,9 @@ type ConsensusParams struct {
 
 	// domain-separated credentials
 	CredentialDomainSeparationEnabled bool
+
+	// transaction groups
+	SupportTxGroups bool
 }
 
 // Consensus tracks the protocol-level settings for different versions of the

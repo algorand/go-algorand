@@ -76,6 +76,11 @@ type Header struct {
 	Note        []byte            `codec:"note"` // Uniqueness or app-level data about txn
 	GenesisID   string            `codec:"gen"`
 	GenesisHash crypto.Digest     `codec:"gh"`
+
+	// Group specifies that this transaction is part of a
+	// transaction group (and, if so, specifies the hash
+	// of a TxGroup).
+	Group crypto.Digest `codec:"grp"`
 }
 
 // Transaction describes a transaction that can appear in a block.
@@ -112,6 +117,23 @@ type ApplyData struct {
 	SenderRewards   basics.MicroAlgos `codec:"rs"`
 	ReceiverRewards basics.MicroAlgos `codec:"rr"`
 	CloseRewards    basics.MicroAlgos `codec:"rc"`
+}
+
+// TxGroup describes a group of transactions that must appear
+// together in a specific order in a block.
+type TxGroup struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	// Transactions specifies a list of transactions that must appear
+	// together, sequentially, in a block in order for the group to be
+	// valid.  Each hash in the list is a hash of a transaction with
+	// the `Group` field omitted.
+	Transactions []crypto.Digest `codec:"txlist"`
+}
+
+// ToBeHashed implements the crypto.Hashable interface.
+func (tg TxGroup) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.TxGroup, protocol.Encode(tg)
 }
 
 // ToBeHashed implements the crypto.Hashable interface.
