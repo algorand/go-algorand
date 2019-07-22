@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data"
@@ -38,7 +40,6 @@ import (
 	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/execpool"
-	"github.com/stretchr/testify/require"
 )
 
 var expectedAgreementTime = 2*config.Protocol.BigLambda + 3*config.Protocol.SmallLambda + 2*time.Second
