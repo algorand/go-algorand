@@ -83,6 +83,10 @@ func TestRateLimiting(t *testing.T) {
 		NetworkID: config.Devtestnet,
 	}
 
+	// increase the IncomingConnectionsLimit/MaxConnectionsPerIP limits, since we don't want to test these.
+	wn.config.IncomingConnectionsLimit = int(defaultConfig.ConnectionsRateLimitingCount) * 5
+	wn.config.MaxConnectionsPerIP += int(defaultConfig.ConnectionsRateLimitingCount) * 5
+
 	wn.setup()
 	wn.eventualReadyDelay = time.Second
 
@@ -121,18 +125,30 @@ func TestRateLimiting(t *testing.T) {
 		networks[i].Start()
 	}
 	// wait for half the defaultConfig.ConnectionsRateLimitingWindowSeconds window.
-	time.Sleep(time.Duration(defaultConfig.ConnectionsRateLimitingWindowSeconds) * time.Second / 2)
-	connectedClients := 0
-	for i := 0; i < clientsCount; i++ {
-		// check if the channel is ready.
-		select {
-		case <-networks[i].Ready():
-			// it's closed, so this client got connected.
-			connectedClients++
-		default:
-			// not connected.
-			// test to see that the retryAfter is set.
-			require.Equal(t, 0, len(phonebooks[i].GetAddresses(1)))
+	//time.Sleep(time.Duration(defaultConfig.ConnectionsRateLimitingWindowSeconds) * time.Second / 2)
+	deadline := time.Now().Add(time.Duration(defaultConfig.ConnectionsRateLimitingCount) * 100 * time.Millisecond)
+
+	var connectedClients int
+	for time.Now().Before(deadline) {
+		connectedClients = 0
+		time.Sleep(100 * time.Millisecond)
+		for i := 0; i < clientsCount; i++ {
+			// check if the channel is ready.
+			readyCh := networks[i].Ready()
+			select {
+			case <-readyCh:
+				// it's closed, so this client got connected.
+				connectedClients++
+				phonebookLen := len(phonebooks[i].GetAddresses(1))
+				// if this channel is ready, than we should have an address, since it didn't get blocked.
+				require.Equal(t, 1, phonebookLen)
+			default:
+				// not ready yet.
+				// wait abit longer.
+			}
+		}
+		if connectedClients >= int(defaultConfig.ConnectionsRateLimitingCount) {
+			break
 		}
 	}
 
