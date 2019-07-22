@@ -7,6 +7,8 @@
     "CadaverSizeTarget": 1073741824,
     "CatchupFailurePeerRefreshRate": 10,
     "CatchupParallelBlocks": 50,
+    "ConnectionsRateLimitingWindowSeconds": 1,
+    "ConnectionsRateLimitingCount": 60,
     "DeadlockDetection": 0,
     "DNSBootstrapID": "<network>.algorand.network",
     "EnableAgreementReporting": false,
@@ -38,7 +40,5 @@
     "TxSyncIntervalSeconds": 60,
     "TxSyncTimeoutSeconds": 30,
     "TxSyncServeResponseSize": 1000000,
-    "SuggestedFeeSlidingWindowSize":  50,
-    "ConnectionsRateLimitingWindowSeconds": 1,
-    "ConnectionsRateLimitingCount": 10
+    "SuggestedFeeSlidingWindowSize":  50
 }
