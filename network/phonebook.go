@@ -69,7 +69,7 @@ func (e *phonebookEntries) updateRetryAfter(addr string, retryAfter time.Time) {
 	(*e)[addr] = phonebookData{retryAfter: retryAfter}
 }
 
-// ArrayPhonebook is a simple wrapper on a slice of string with addresses
+// ArrayPhonebook is a simple wrapper on a phonebookEntries map
 type ArrayPhonebook struct {
 	Entries phonebookEntries
 }
@@ -257,6 +257,13 @@ func (mp *MultiPhonebook) GetAddresses(n int) []string {
 		return out[:n]
 	}
 	return out
+}
+
+// GetPhonebook retrieves a phonebook by it's name
+func (mp *MultiPhonebook) GetPhonebook(bootstrapNetworkName string) (p Phonebook) {
+	mp.lock.Lock()
+	defer mp.lock.Unlock()
+	return mp.phonebookMap[bootstrapNetworkName]
 }
 
 // AddOrUpdatePhonebook adds or updates Phonebook in Phonebook map

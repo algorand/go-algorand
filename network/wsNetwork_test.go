@@ -104,7 +104,7 @@ func makeTestWebsocketNodeWithConfig(t testing.TB, conf config.Local) *Websocket
 	wn := &WebsocketNetwork{
 		log:       log,
 		config:    conf,
-		phonebook: emptyPhonebookSingleton,
+		phonebook: MakeMultiPhonebook(),
 		GenesisID: "go-test-network-genesis",
 		NetworkID: config.Devtestnet,
 	}
@@ -216,7 +216,7 @@ func TestWebsocketNetworkBasic(t *testing.T) {
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
-	netB.phonebook = &oneEntryPhonebook{addr: addrA}
+	netB.phonebook.AddOrUpdatePhonebook("default", &oneEntryPhonebook{addr: addrA})
 	netB.Start()
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 	counter := newMessageCounter(t, 2)
@@ -250,7 +250,7 @@ func TestWebsocketNetworkUnicast(t *testing.T) {
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
-	netB.phonebook = &oneEntryPhonebook{addr: addrA}
+	netB.phonebook.AddOrUpdatePhonebook("default", &oneEntryPhonebook{addr: addrA})
 	netB.Start()
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 	counter := newMessageCounter(t, 2)
@@ -292,7 +292,7 @@ func TestWebsocketNetworkNoAddress(t *testing.T) {
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
-	netB.phonebook = &oneEntryPhonebook{addr: addrA}
+	netB.phonebook.AddOrUpdatePhonebook("default", &oneEntryPhonebook{addr: addrA})
 	netB.Start()
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 	counter := newMessageCounter(t, 2)
@@ -328,7 +328,7 @@ func lineNetwork(t *testing.T, numNodes int) (nodes []*WebsocketNetwork, counter
 		if i > 0 {
 			addrPrev, postListen := nodes[i-1].Address()
 			require.True(t, postListen)
-			nodes[i].phonebook = &oneEntryPhonebook{addr: addrPrev}
+			nodes[i].phonebook.AddOrUpdatePhonebook("default", &oneEntryPhonebook{addr: addrPrev})
 			nodes[i].RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{Tag: debugTag, MessageHandler: &counters[i]}})
 		}
 		nodes[i].Start()
@@ -668,7 +668,7 @@ func makeTestFilterWebsocketNode(t *testing.T, nodename string) *WebsocketNetwor
 	wn := &WebsocketNetwork{
 		log:       logging.TestingLog(t).With("node", nodename),
 		config:    dc,
-		phonebook: emptyPhonebookSingleton,
+		phonebook: MakeMultiPhonebook(),
 		GenesisID: "go-test-network-genesis",
 		NetworkID: config.Devtestnet,
 	}
@@ -689,7 +689,7 @@ func TestDupFilter(t *testing.T) {
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
-	netB.phonebook = &oneEntryPhonebook{addr: addrA}
+	netB.phonebook.AddOrUpdatePhonebook("default", &oneEntryPhonebook{addr: addrA})
 	netB.Start()
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 	counter := &messageCounterHandler{t: t, limit: 1, done: make(chan struct{})}
@@ -702,7 +702,7 @@ func TestDupFilter(t *testing.T) {
 	require.True(t, postListen)
 	netC := makeTestFilterWebsocketNode(t, "c")
 	netC.config.GossipFanout = 1
-	netC.phonebook = &oneEntryPhonebook{addr: addrB}
+	netC.phonebook.AddOrUpdatePhonebook("default", &oneEntryPhonebook{addr: addrB})
 	netC.Start()
 	defer netC.Stop()
 
@@ -835,7 +835,7 @@ func BenchmarkWebsocketNetworkBasic(t *testing.B) {
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
-	netB.phonebook = &oneEntryPhonebook{addr: addrA}
+	netB.phonebook.AddOrUpdatePhonebook("default", &oneEntryPhonebook{addr: addrA})
 	netB.Start()
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 	returns := make(chan uint64, 100)
@@ -915,7 +915,7 @@ func TestWebsocketNetworkPrio(t *testing.T) {
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
-	netB.phonebook = &oneEntryPhonebook{addr: addrA}
+	netB.phonebook.AddOrUpdatePhonebook("default", &oneEntryPhonebook{addr: addrA})
 	netB.Start()
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 
@@ -959,7 +959,7 @@ func TestWebsocketNetworkPrioLimit(t *testing.T) {
 	netB := makeTestWebsocketNode(t)
 	netB.SetPrioScheme(&prioB)
 	netB.config.GossipFanout = 1
-	netB.phonebook = &oneEntryPhonebook{addr: addrA}
+	netB.phonebook.AddOrUpdatePhonebook("default", &oneEntryPhonebook{addr: addrA})
 	netB.RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{Tag: debugTag, MessageHandler: counterB}})
 	netB.Start()
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
@@ -972,7 +972,7 @@ func TestWebsocketNetworkPrioLimit(t *testing.T) {
 	netC := makeTestWebsocketNode(t)
 	netC.SetPrioScheme(&prioC)
 	netC.config.GossipFanout = 1
-	netC.phonebook = &oneEntryPhonebook{addr: addrA}
+	netC.phonebook.AddOrUpdatePhonebook("default", &oneEntryPhonebook{addr: addrA})
 	netC.RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{Tag: debugTag, MessageHandler: counterC}})
 	netC.Start()
 	defer func() { t.Log("stopping C"); netC.Stop(); t.Log("C done") }()
@@ -1040,7 +1040,7 @@ func TestWebsocketNetworkManyIdle(t *testing.T) {
 	for i := 0; i < numClients; i++ {
 		client := makeTestWebsocketNodeWithConfig(t, clientConf)
 		client.config.GossipFanout = 1
-		client.phonebook = &oneEntryPhonebook{addr: relayAddr}
+		client.phonebook.AddOrUpdatePhonebook("default", &oneEntryPhonebook{addr: relayAddr})
 		client.Start()
 		defer client.Stop()
 
@@ -1147,7 +1147,7 @@ func TestDelayedMessageDrop(t *testing.T) {
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
-	netB.phonebook = &oneEntryPhonebook{addr: addrA}
+	netB.phonebook.AddOrUpdatePhonebook("default", &oneEntryPhonebook{addr: addrA})
 	netB.Start()
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 	counter := newMessageCounter(t, 5)
@@ -1177,7 +1177,7 @@ func TestSlowPeerDisconnection(t *testing.T) {
 	wn := &WebsocketNetwork{
 		log:                            log,
 		config:                         defaultConfig,
-		phonebook:                      emptyPhonebookSingleton,
+		phonebook:                      MakeMultiPhonebook(),
 		GenesisID:                      "go-test-network-genesis",
 		NetworkID:                      config.Devtestnet,
 		slowWritingPeerMonitorInterval: time.Millisecond * 50,
@@ -1197,7 +1197,7 @@ func TestSlowPeerDisconnection(t *testing.T) {
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
-	netB.phonebook = &oneEntryPhonebook{addr: addrA}
+	netB.phonebook.AddOrUpdatePhonebook("default", &oneEntryPhonebook{addr: addrA})
 	netB.Start()
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 
@@ -1231,7 +1231,7 @@ func TestForceMessageRelaying(t *testing.T) {
 	wn := &WebsocketNetwork{
 		log:       log,
 		config:    defaultConfig,
-		phonebook: emptyPhonebookSingleton,
+		phonebook: MakeMultiPhonebook(),
 		GenesisID: "go-test-network-genesis",
 		NetworkID: config.Devtestnet,
 	}
@@ -1254,14 +1254,14 @@ func TestForceMessageRelaying(t *testing.T) {
 	noAddressConfig.NetAddress = ""
 	netB := makeTestWebsocketNodeWithConfig(t, noAddressConfig)
 	netB.config.GossipFanout = 1
-	netB.phonebook = &oneEntryPhonebook{addr: addrA}
+	netB.phonebook.AddOrUpdatePhonebook("default", &oneEntryPhonebook{addr: addrA})
 	netB.Start()
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 
 	noAddressConfig.ForceRelayMessages = true
 	netC := makeTestWebsocketNodeWithConfig(t, noAddressConfig)
 	netC.config.GossipFanout = 1
-	netC.phonebook = &oneEntryPhonebook{addr: addrA}
+	netC.phonebook.AddOrUpdatePhonebook("default", &oneEntryPhonebook{addr: addrA})
 	netC.Start()
 	defer func() { t.Log("stopping C"); netC.Stop(); t.Log("C done") }()
 

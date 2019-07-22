@@ -281,8 +281,7 @@ type WebsocketNetwork struct {
 	broadcastQueueHighPrio chan broadcastRequest
 	broadcastQueueBulk     chan broadcastRequest
 
-	phonebook     Phonebook
-	dnsPhonebooks map[string]*ThreadsafePhonebook
+	phonebook *MultiPhonebook
 
 	GenesisID string
 	NetworkID protocol.NetworkID
@@ -516,7 +515,6 @@ func (wn *WebsocketNetwork) setup() {
 	wn.upgrader.ReadBufferSize = 4096
 	wn.upgrader.WriteBufferSize = 4096
 	wn.upgrader.EnableCompression = false
-	wn.dnsPhonebooks = make(map[string]*ThreadsafePhonebook, 1)
 	wn.router = mux.NewRouter()
 	wn.router.Handle(GossipNetworkPath, wn)
 	wn.requestsTracker = makeRequestsTracker(wn.router, wn.log, wn.config)
@@ -1191,16 +1189,14 @@ func (wn *WebsocketNetwork) meshThread() {
 			dnsAddrs := wn.getDNSAddrs(dnsBootstrap)
 			if len(dnsAddrs) > 0 {
 				wn.log.Debugf("got %d dns addrs, %#v", len(dnsAddrs), dnsAddrs[:imin(5, len(dnsAddrs))])
-				dnsPhonebook := wn.dnsPhonebooks[dnsBootstrap]
+				dnsPhonebook := wn.phonebook.GetPhonebook(dnsBootstrap)
 				if dnsPhonebook == nil {
 					// create one, if we don't have one already.
 					dnsPhonebook = MakeThreadsafePhonebook()
-					wn.dnsPhonebooks[dnsBootstrap] = dnsPhonebook
+					wn.phonebook.AddOrUpdatePhonebook(dnsBootstrap, dnsPhonebook)
 				}
-				dnsPhonebook.MergePeerList(dnsAddrs)
-				mp, ok := wn.phonebook.(*MultiPhonebook)
-				if ok {
-					mp.AddOrUpdatePhonebook(dnsBootstrap, dnsPhonebook)
+				if tsPhonebook, ok := dnsPhonebook.(*ThreadsafePhonebook); ok {
+					tsPhonebook.MergePeerList(dnsAddrs)
 				}
 			} else {
 				wn.log.Infof("got no DNS addrs for network %s", wn.NetworkID)
