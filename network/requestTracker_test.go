@@ -27,13 +27,23 @@ import (
 	"github.com/algorand/go-algorand/logging"
 )
 
+func (ard *hostIncomingRequests) remove(trackedRequest *TrackerRequest) {
+	for i := range ard.requests {
+		if ard.requests[i] == trackedRequest {
+			// remove entry.
+			ard.requests = append(ard.requests[0:i], ard.requests[i+1:]...)
+			return
+		}
+	}
+}
 func TestHostIncomingRequestsOrdering(t *testing.T) {
 	// add 100 items to the hostIncomingRequests object, and make sure they are sorted.
 	hir := hostIncomingRequests{}
 	now := time.Now()
 	perm := rand.Perm(100)
 	for i := 0; i < 100; i++ {
-		hir.add("host", "port", "remoteaddr", now.Add(time.Duration(perm[i])*time.Minute), now.Add(-time.Second))
+		trackedRequest := makeTrackerRequest("remoteaddr", "host", "port", now.Add(time.Duration(perm[i])*time.Minute))
+		hir.add(trackedRequest)
 	}
 	require.Equal(t, 100, len(hir.requests))
 
@@ -51,7 +61,7 @@ func TestHostIncomingRequestsOrdering(t *testing.T) {
 		// make sure the item isn't there anymore.
 		for _, p := range hir.requests {
 			require.False(t, p == o)
-			require.Equal(t, hir.countConnections(now.Add(-time.Second), false)+hir.countConnections(now.Add(-time.Second), true), uint(len(hir.requests)))
+			require.Equal(t, hir.countConnections(now.Add(-time.Second)), uint(len(hir.requests)))
 		}
 	}
 }

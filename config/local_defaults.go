@@ -290,12 +290,6 @@ func migrate(cfg Local) (newCfg Local, err error) {
 		if newCfg.PriorityPeers == nil {
 			newCfg.PriorityPeers = map[string]bool{}
 		}
-		if newCfg.ConnectionsRateLimitingWindowSeconds == defaultLocalV3.ConnectionsRateLimitingWindowSeconds {
-			newCfg.ConnectionsRateLimitingWindowSeconds = defaultLocalV4.ConnectionsRateLimitingWindowSeconds
-		}
-		if newCfg.ConnectionsRateLimitingCount == defaultLocalV3.ConnectionsRateLimitingCount {
-			newCfg.ConnectionsRateLimitingCount = defaultLocalV4.ConnectionsRateLimitingCount
-		}
 		newCfg.Version = 4
 	}
 
