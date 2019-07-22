@@ -37,6 +37,9 @@ func (ard *hostIncomingRequests) remove(trackedRequest *TrackerRequest) {
 	}
 }
 func TestHostIncomingRequestsOrdering(t *testing.T) {
+	if defaultConfig.ConnectionsRateLimitingCount == 0 || defaultConfig.ConnectionsRateLimitingWindowSeconds == 0 {
+		t.Skip()
+	}
 	// add 100 items to the hostIncomingRequests object, and make sure they are sorted.
 	hir := hostIncomingRequests{}
 	now := time.Now()
@@ -67,6 +70,9 @@ func TestHostIncomingRequestsOrdering(t *testing.T) {
 }
 
 func TestRateLimiting(t *testing.T) {
+	if defaultConfig.ConnectionsRateLimitingCount == 0 || defaultConfig.ConnectionsRateLimitingWindowSeconds == 0 {
+		t.Skip()
+	}
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Level(defaultConfig.BaseLoggerDebugLevel))
 	wn := &WebsocketNetwork{

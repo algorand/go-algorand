@@ -48,6 +48,7 @@ type TrackerRequest struct {
 	otherPublicAddr    string
 }
 
+// makeTrackerRequest creates a new TrackerRequest.
 func makeTrackerRequest(remoteAddr, remoteHost, remotePort string, createTime time.Time) *TrackerRequest {
 	if remoteHost == "" {
 		remoteHost, remotePort, _ = net.SplitHostPort(remoteAddr)
@@ -79,6 +80,7 @@ func (ard *hostIncomingRequests) findTimestampIndex(t time.Time) int {
 	return i
 }
 
+// add adds the trackerRequest at the correct index within the sorted array.
 func (ard *hostIncomingRequests) add(trackerRequest *TrackerRequest) {
 	// find the new item index.
 	itemIdx := ard.findTimestampIndex(trackerRequest.created)
@@ -97,12 +99,59 @@ func (ard *hostIncomingRequests) add(trackerRequest *TrackerRequest) {
 	return
 }
 
+// countConnections counts the number of connection that we have that occured after the provided specified time
 func (ard *hostIncomingRequests) countConnections(rateLimitingWindowStartTime time.Time) (count uint) {
 	i := ard.findTimestampIndex(rateLimitingWindowStartTime)
 	return uint(len(ard.requests) - i)
 }
 
 type hostsIncomingMap map[string]*hostIncomingRequests
+
+// pruneRequests cleans stale items from the hostRequests maps
+func (him *hostsIncomingMap) pruneRequests(rateLimitingWindowStartTime time.Time) {
+	// try to eliminate as many entries from a *single* connection. the goal here is not to wipe it clean
+	// but rather to make a progressive cleanup.
+	var removeHost string
+
+	for host, requestData := range *him {
+		i := requestData.findTimestampIndex(rateLimitingWindowStartTime)
+		if i == 0 {
+			continue
+		}
+
+		requestData.requests = requestData.requests[i:]
+		if len(requestData.requests) == 0 {
+			// remove the entire key.
+			removeHost = host
+		}
+		break
+	}
+	if removeHost != "" {
+		delete(*him, removeHost)
+	}
+}
+
+// addRequest adds an entry to the hostRequests map, or update the item within the map
+func (him *hostsIncomingMap) addRequest(trackerRequest *TrackerRequest) {
+	requestData, has := (*him)[trackerRequest.remoteHost]
+	if !has {
+		requestData = &hostIncomingRequests{
+			remoteHost: trackerRequest.remoteHost,
+			requests:   make([]*TrackerRequest, 0, 1),
+		}
+		(*him)[trackerRequest.remoteHost] = requestData
+	}
+
+	requestData.add(trackerRequest)
+}
+
+// countOriginConnections counts the number of connection that were seen since rateLimitingWindowStartTime coming from the host rateLimitingWindowStartTime
+func (him *hostsIncomingMap) countOriginConnections(remoteHost string, rateLimitingWindowStartTime time.Time) uint {
+	if requestData, has := (*him)[remoteHost]; has {
+		return requestData.countConnections(rateLimitingWindowStartTime)
+	}
+	return 0
+}
 
 // RequestTracker tracks the incoming request connections
 type RequestTracker struct {
@@ -112,7 +161,7 @@ type RequestTracker struct {
 	// once we detect that we have a misconfigured UseForwardedForAddress, we set this and write an warning message.
 	misconfiguredUseForwardedForAddress bool
 
-	listener net.Listener
+	listener net.Listener // this is the downsteam listener
 
 	hostRequests        hostsIncomingMap             // maps a request host to a request data (i.e. "1.2.3.4" -> *hostIncomingRequests )
 	acceptedConnections map[net.Addr]*TrackerRequest // maps a local address interface  to a tracked request data (i.e. "1.2.3.4:1560" -> *TrackerRequest ); used to associate connection between the Accept and the ServeHTTP
@@ -123,6 +172,7 @@ type RequestTracker struct {
 	httpConnectionsMu deadlock.Mutex               // used to syncronize access to the httpHostRequests and httpConnections variables
 }
 
+// makeRequestsTracker creates a request tracker object.
 func makeRequestsTracker(downstreamHandler http.Handler, log logging.Logger, config config.Local) *RequestTracker {
 	return &RequestTracker{
 		downstreamHandler:   downstreamHandler,
@@ -214,52 +264,6 @@ func (rt *RequestTracker) pruneAcceptedConnections(pruneStartDate time.Time) {
 	}
 }
 
-// pruneRequests cleans stale items from the hostRequests maps; it's syncornized via the hostRequestsMu mutex which is expected to be taken by the caller.
-func (him *hostsIncomingMap) pruneRequests(rateLimitingWindowStartTime time.Time) {
-	// try to eliminate as many entries from a *single* connection. the goal here is not to wipe it clean
-	// but rather to make a progressive cleanup.
-	var removeHost string
-
-	for host, requestData := range *him {
-		i := requestData.findTimestampIndex(rateLimitingWindowStartTime)
-		if i == 0 {
-			continue
-		}
-
-		requestData.requests = requestData.requests[i:]
-		if len(requestData.requests) == 0 {
-			// remove the entire key.
-			removeHost = host
-		}
-		break
-	}
-	if removeHost != "" {
-		delete(*him, removeHost)
-	}
-}
-
-// addRequest adds an entry to the hostRequests map, or update the item within the map; it's syncornized via the hostRequestsMu mutex which is expected to be taken by the caller.
-func (him *hostsIncomingMap) addRequest(trackerRequest *TrackerRequest) {
-	requestData, has := (*him)[trackerRequest.remoteHost]
-	if !has {
-		requestData = &hostIncomingRequests{
-			remoteHost: trackerRequest.remoteHost,
-			requests:   make([]*TrackerRequest, 0, 1),
-		}
-		(*him)[trackerRequest.remoteHost] = requestData
-	}
-
-	requestData.add(trackerRequest)
-}
-
-// countOriginConnections counts the number of connection that were seen since rateLimitingWindowStartTime coming from the host rateLimitingWindowStartTime; it's syncornized via the hostRequestsMu mutex which is expected to be taken by the caller.
-func (him *hostsIncomingMap) countOriginConnections(remoteHost string, rateLimitingWindowStartTime time.Time) uint {
-	if requestData, has := (*him)[remoteHost]; has {
-		return requestData.countConnections(rateLimitingWindowStartTime)
-	}
-	return 0
-}
-
 // Close closes the listener.
 // Any blocked Accept operations will be unblocked and return errors.
 func (rt *RequestTracker) Close() error {
@@ -347,6 +351,7 @@ func (rt *RequestTracker) ServeHTTP(response http.ResponseWriter, request *http.
 
 }
 
+// updateRequestRemoteAddr updates the origin IP address in both the trackedRequest as well as in the request.RemoteAddr string
 func (rt *RequestTracker) updateRequestRemoteAddr(trackedRequest *TrackerRequest, request *http.Request) {
 	originIP := rt.getForwardedConnectionAddress(request.Header)
 	if originIP == nil {
