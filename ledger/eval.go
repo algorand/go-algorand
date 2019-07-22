@@ -196,7 +196,7 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *eval
 		block:            bookkeeping.Block{BlockHeader: hdr},
 		proto:            proto,
 		genesisHash:      l.GenesisHash(),
-		txGroups:	  make(map[crypto.Digest]transactions.TxGroup),
+		txGroups:         make(map[crypto.Digest]transactions.TxGroup),
 		verificationPool: executionPool,
 	}
 
@@ -319,19 +319,9 @@ func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn, ad *transact
 			}
 		}
 
-		// Add to transaction group, if any.
-		if !txn.Txn.Group.IsZero() {
-			if !eval.proto.SupportTxGroups {
-				return fmt.Errorf("transaction groups not supported")
-			}
-
-			txWithoutGroup := txn.Txn
-			txWithoutGroup.Group = crypto.Digest{}
-			txWithoutGroup.ResetCaches()
-
-			group := eval.txGroups[txn.Txn.Group]
-			group.Transactions = append(group.Transactions, crypto.HashObj(txWithoutGroup))
-			eval.txGroups[txn.Txn.Group] = group
+		// Verify that groups are supported.
+		if !txn.Txn.Group.IsZero() && !eval.proto.SupportTxGroups {
+			return fmt.Errorf("transaction groups not supported")
 		}
 	}
 
@@ -399,6 +389,17 @@ func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn, ad *transact
 			return fmt.Errorf("transaction %v: account %v balance %d below min %d",
 				txn.ID(), addr, dataNew.MicroAlgos.Raw, eval.proto.MinBalance)
 		}
+	}
+
+	// Add to txgroup, if any.
+	if !txn.Txn.Group.IsZero() {
+		txWithoutGroup := txn.Txn
+		txWithoutGroup.Group = crypto.Digest{}
+		txWithoutGroup.ResetCaches()
+
+		group := eval.txGroups[txn.Txn.Group]
+		group.Transactions = append(group.Transactions, crypto.HashObj(txWithoutGroup))
+		eval.txGroups[txn.Txn.Group] = group
 	}
 
 	// Remember this TXID (to detect duplicates)
