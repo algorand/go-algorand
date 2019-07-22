@@ -302,9 +302,6 @@ func (node *AlgorandFullNode) Start() {
 	node.mu.Lock()
 	defer node.mu.Unlock()
 
-	// initialize last round start time to current time
-	node.lastRoundTimestamp = time.Now()
-
 	// start accepting connections
 	node.net.Start()
 	node.config.NetAddress, _ = node.net.Address()
