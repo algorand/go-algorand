@@ -53,6 +53,7 @@ func init() {
 	clerkCmd.AddCommand(rawsendCmd)
 	clerkCmd.AddCommand(inspectCmd)
 	clerkCmd.AddCommand(signCmd)
+	clerkCmd.AddCommand(groupCmd)
 
 	// Wallet to be used for the clerk operation
 	clerkCmd.PersistentFlags().StringVarP(&walletName, "wallet", "w", "", "Set the wallet to be used for the selected operation")
@@ -84,6 +85,11 @@ func init() {
 	signCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Filename for writing the signed transaction")
 	signCmd.MarkFlagRequired("infile")
 	signCmd.MarkFlagRequired("outfile")
+
+	groupCmd.Flags().StringVarP(&txFilename, "infile", "i", "", "File storing transactions to be grouped")
+	groupCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Filename for writing the grouped transactions")
+	groupCmd.MarkFlagRequired("infile")
+	groupCmd.MarkFlagRequired("outfile")
 }
 
 var clerkCmd = &cobra.Command{
@@ -419,6 +425,52 @@ var signCmd = &cobra.Command{
 
 			outData = append(outData, protocol.Encode(signedTxn)...)
 		}
+		err = writeFile(outFilename, outData, 0600)
+		if err != nil {
+			reportErrorf(fileWriteError, outFilename, err)
+		}
+	},
+}
+
+var groupCmd = &cobra.Command{
+	Use:   "group",
+	Short: "Group transactions together",
+	Long:  `Form a transaction group.  The input file must contain one or more transactions that will form a group.  The output file will contain the same transactions, in order, with a group flag added to each transaction, which requires that the transactions must be committed together.`,
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, args []string) {
+		data, err := readFile(txFilename)
+		if err != nil {
+			reportErrorf(fileReadError, txFilename, err)
+		}
+
+		dec := protocol.NewDecoderBytes(data)
+
+		var txns []transactions.SignedTxn
+		var group transactions.TxGroup
+		for {
+			var txn transactions.SignedTxn
+			err = dec.Decode(&txn)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				reportErrorf(txDecodeError, txFilename, err)
+			}
+
+			if !txn.Txn.Group.IsZero() {
+				reportErrorf("Transaction %s is already part of a group.", txn.ID().String())
+			}
+
+			txns = append(txns, txn)
+			group.Transactions = append(group.Transactions, crypto.HashObj(txn.Txn))
+		}
+
+		var outData []byte
+		for _, txn := range txns {
+			txn.Txn.Group = crypto.HashObj(group)
+			outData = append(outData, protocol.Encode(txn)...)
+		}
+
 		err = writeFile(outFilename, outData, 0600)
 		if err != nil {
 			reportErrorf(fileWriteError, outFilename, err)
