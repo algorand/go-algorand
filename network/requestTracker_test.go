@@ -121,16 +121,16 @@ func TestRateLimiting(t *testing.T) {
 			t.Logf("network %d done", i)
 		}(networks[i], i)
 	}
+
+	deadline := time.Now().Add(time.Duration(defaultConfig.ConnectionsRateLimitingWindowSeconds) * time.Second)
+
 	for i := 0; i < clientsCount; i++ {
 		networks[i].Start()
 	}
-	// wait for half the defaultConfig.ConnectionsRateLimitingWindowSeconds window.
-	//time.Sleep(time.Duration(defaultConfig.ConnectionsRateLimitingWindowSeconds) * time.Second / 2)
-	deadline := time.Now().Add(time.Duration(defaultConfig.ConnectionsRateLimitingWindowSeconds) * time.Second)
 
 	var connectedClients int
 	timedOut := false
-	for time.Now().Before(deadline) {
+	for {
 		if time.Now().After(deadline) {
 			timedOut = true
 			break
