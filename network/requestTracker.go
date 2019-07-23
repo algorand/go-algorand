@@ -240,8 +240,11 @@ func (rt *RequestTracker) Accept() (conn net.Conn, err error) {
 func (rt *RequestTracker) sendBlockedConnectionResponse(conn net.Conn, requestTime time.Time) {
 	conn.SetReadDeadline(requestTime.Add(500 * time.Millisecond))
 	conn.SetWriteDeadline(requestTime.Add(500 * time.Millisecond))
-	var dummyBuffer [512]byte
-	conn.Read(dummyBuffer[:])
+	var dummyBuffer [1024]byte
+	var readingErr error
+	for readingErr == nil {
+		_, readingErr = conn.Read(dummyBuffer[:])
+	}
 	// this is not a normal - usually we want to wait for the HTTP handler to give the response; however, it seems that we're either getting requests faster than the
 	// http handler can handle, or getting requests that fails before the header retrieval is complete.
 	// in this case, we want to send our response right away and disconnect. If the client is currently still sending it's request, it might not know how to handle

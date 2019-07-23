@@ -153,6 +153,7 @@ func TestRateLimiting(t *testing.T) {
 			}
 		}
 		if connectedClients >= int(defaultConfig.ConnectionsRateLimitingCount) {
+			timedOut = time.Now().After(deadline)
 			break
 		}
 	}
