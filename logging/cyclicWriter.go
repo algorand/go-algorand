@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"text/template"
 	"time"
@@ -36,14 +37,15 @@ type CyclicFileWriter struct {
 	nextWrite uint64
 	limit     uint64
 	logStart  time.Time
+	maxLogAge time.Duration
 
 	archiveFilename *template.Template
 }
 
 // MakeCyclicFileWriter returns a writer that wraps a file to ensure it never grows too large
-func MakeCyclicFileWriter(liveLogFilePath string, archiveFilePath string, sizeLimitBytes uint64) *CyclicFileWriter {
+func MakeCyclicFileWriter(liveLogFilePath string, archiveFilePath string, sizeLimitBytes uint64, maxLogAge time.Duration) *CyclicFileWriter {
 	var err error
-	cyclic := CyclicFileWriter{writer: nil, liveLog: liveLogFilePath, nextWrite: 0, limit: sizeLimitBytes}
+	cyclic := CyclicFileWriter{writer: nil, liveLog: liveLogFilePath, nextWrite: 0, limit: sizeLimitBytes, maxLogAge: maxLogAge}
 	cyclic.archiveFilename = template.New("archiveFilename")
 	cyclic.archiveFilename, err = cyclic.archiveFilename.Parse(archiveFilePath)
 	if err != nil {
@@ -64,22 +66,24 @@ func MakeCyclicFileWriter(liveLogFilePath string, archiveFilePath string, sizeLi
 	return &cyclic
 }
 
+type archiveFilenameTemplateData struct {
+	Year      string
+	Month     string
+	Day       string
+	Hour      string
+	Minute    string
+	Second    string
+	EndYear   string
+	EndMonth  string
+	EndDay    string
+	EndHour   string
+	EndMinute string
+	EndSecond string
+}
+
 func (cyclic *CyclicFileWriter) getArchiveFilename(now time.Time) string {
 	buf := strings.Builder{}
-	cyclic.archiveFilename.Execute(&buf, struct {
-		Year      string
-		Month     string
-		Day       string
-		Hour      string
-		Minute    string
-		Second    string
-		EndYear   string
-		EndMonth  string
-		EndDay    string
-		EndHour   string
-		EndMinute string
-		EndSecond string
-	}{
+	cyclic.archiveFilename.Execute(&buf, archiveFilenameTemplateData{
 		fmt.Sprintf("%04d", cyclic.logStart.Year()),
 		fmt.Sprintf("%02d", cyclic.logStart.Month()),
 		fmt.Sprintf("%02d", cyclic.logStart.Day()),
@@ -92,6 +96,15 @@ func (cyclic *CyclicFileWriter) getArchiveFilename(now time.Time) string {
 		fmt.Sprintf("%02d", now.Hour()),
 		fmt.Sprintf("%02d", now.Minute()),
 		fmt.Sprintf("%02d", now.Second()),
+	})
+	return buf.String()
+}
+
+func (cyclic *CyclicFileWriter) getArchiveGlob() string {
+	buf := strings.Builder{}
+	cyclic.archiveFilename.Execute(&buf, archiveFilenameTemplateData{
+		"*", "*", "*", "*", "*", "*",
+		"*", "*", "*", "*", "*", "*",
 	})
 	return buf.String()
 }
@@ -119,6 +132,26 @@ func (cyclic *CyclicFileWriter) Write(p []byte) (n int, err error) {
 		// we don't have enough space to write the entry, so archive data
 		cyclic.writer.Close()
 		var err error
+		globPath := cyclic.getArchiveGlob()
+		oldarchives, err := filepath.Glob(globPath)
+		if err != nil && !os.IsNotExist(err) {
+			fmt.Fprintf(os.Stderr, "%s: glob err: %s\n", globPath, err)
+		} else if cyclic.maxLogAge != 0 {
+			tooOld := now.Add(-cyclic.maxLogAge)
+			for _, path := range oldarchives {
+				finfo, err := os.Stat(path)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "%s: stat: %s\n", path, err)
+					continue
+				}
+				if finfo.ModTime().Before(tooOld) {
+					err = os.Remove(path)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "%s: rm: %s\n", path, err)
+					}
+				}
+			}
+		}
 		archivePath := cyclic.getArchiveFilename(now)
 		shouldGz := false
 		shouldBz2 := false

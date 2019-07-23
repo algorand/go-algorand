@@ -68,7 +68,16 @@ func (s *Server) Initialize(cfg config.Local) error {
 	liveLog := filepath.Join(s.RootPath, "node.log")
 	archive := filepath.Join(s.RootPath, cfg.LogArchiveName)
 	fmt.Println("Logging to: ", liveLog)
-	logWriter := logging.MakeCyclicFileWriter(liveLog, archive, cfg.LogSizeLimit)
+	var maxLogAge time.Duration
+	var err error
+	if cfg.LogArchiveMaxAge != "" {
+		maxLogAge, err = time.ParseDuration(cfg.LogArchiveMaxAge)
+		if err != nil {
+			s.log.Errorf("invalid config LogArchiveMaxAge: %s", err)
+			maxLogAge = 0
+		}
+	}
+	logWriter := logging.MakeCyclicFileWriter(liveLog, archive, cfg.LogSizeLimit, maxLogAge)
 	s.log.SetOutput(logWriter)
 	s.log.SetJSONFormatter()
 	s.log.SetLevel(logging.Level(cfg.BaseLoggerDebugLevel))

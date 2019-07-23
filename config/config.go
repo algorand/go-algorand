@@ -533,6 +533,10 @@ type Local struct {
 	// default: "node.archive.log" (no rotation, clobbers previous archive)
 	LogArchiveName string
 
+	// LogArchiveMaxAge will be parsed by time.ParseDuration().
+	// Valid units are 's' seconds, 'm' minutes, 'h' hours
+	LogArchiveMaxAge string
+
 	// number of consecutive attempts to catchup after which we replace the peers we're connected to
 	CatchupFailurePeerRefreshRate int
 

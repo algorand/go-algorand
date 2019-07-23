@@ -30,9 +30,9 @@ const configVersion = uint32(4)
 // These versioned structures need to be maintained CAREFULLY and treated
 // like UNIVERSAL CONSTANTS - they should not be modified once committed.
 //
-// New fields may be added to the current defaultLocalV#. If they have
-// a value other than the type default zero value add them to the
-// migrate() function at the bottom fo this file.
+// New fields may be added to the current defaultLocalV# and should
+// also be added to installer/config.json.example and
+// test/testdata/configs/config-v{n}.json
 //
 // Changing a default value requires creating a new defaultLocalV# instance,
 // bump the version number (configVersion), and add appropriate migration and tests.
@@ -64,6 +64,7 @@ var defaultLocalV4 = Local{
 	IncomingMessageFilterBucketCount:      5,
 	IncomingMessageFilterBucketSize:       512,
 	LogArchiveName:                        "node.archive.log",
+	LogArchiveMaxAge:                      "",
 	LogSizeLimit:                          1073741824,
 	MaxConnectionsPerIP:                   30,
 	NetAddress:                            "",
