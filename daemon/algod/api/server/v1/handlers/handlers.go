@@ -56,10 +56,10 @@ func nodeStatus(node *node.AlgorandFullNode) (res v1.NodeStatus, err error) {
 }
 
 func txEncode(tx transactions.Transaction, ad transactions.ApplyData) (res v1.Transaction, err error) {
-	if tx.Type == protocol.PaymentTx {
+	switch tx.Type {
+	case protocol.PaymentTx:
 		return paymentTxEncode(tx, ad), nil
-	}
-	if tx.Type == protocol.KeyRegistrationTx {
+	case protocol.KeyRegistrationTx:
 		return keyregTxEncode(tx, ad), nil
 	}
 	return v1.Transaction{}, errors.New(errUnknownTransactionType)
