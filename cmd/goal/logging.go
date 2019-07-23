@@ -46,6 +46,7 @@ var loggingCmd = &cobra.Command{
 	Long:  `Enable/disable and configure Algorand remote logging`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
+		fmt.Fprintf(os.Stderr, "Warning: `goal logging` deprecated, use `diagcfg telemetry status`\n")
 		dataDir := ensureSingleDataDir()
 		cfg, err := logging.EnsureTelemetryConfig(&dataDir, "")
 
