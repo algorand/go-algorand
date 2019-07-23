@@ -30,6 +30,7 @@ import (
 	"net/url"
 	"path"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -279,8 +280,7 @@ type WebsocketNetwork struct {
 	broadcastQueueHighPrio chan broadcastRequest
 	broadcastQueueBulk     chan broadcastRequest
 
-	phonebook    Phonebook
-	dnsPhonebook ThreadsafePhonebook
+	phonebook Phonebook
 
 	GenesisID string
 	NetworkID protocol.NetworkID
@@ -1238,16 +1238,21 @@ func (wn *WebsocketNetwork) meshThread() {
 		}
 
 		// TODO: only do DNS fetch every N seconds? Honor DNS TTL? Trust DNS library we're using to handle caching and TTL?
-		dnsAddrs := wn.getDNSAddrs()
-		if len(dnsAddrs) > 0 {
-			wn.log.Debugf("got %d dns addrs, %#v", len(dnsAddrs), dnsAddrs[:imin(5, len(dnsAddrs))])
-			wn.dnsPhonebook.ReplacePeerList(dnsAddrs)
-			mp, ok := wn.phonebook.(*MultiPhonebook)
-			if ok {
-				mp.AddPhonebook(&wn.dnsPhonebook)
+		dnsBootstrapArray := wn.config.DNSBootstrapArray(wn.NetworkID)
+		for _, dnsBootstrap := range dnsBootstrapArray {
+			dnsAddrs := wn.getDNSAddrs(dnsBootstrap)
+			if len(dnsAddrs) > 0 {
+				wn.log.Debugf("got %d dns addrs, %#v", len(dnsAddrs), dnsAddrs[:imin(5, len(dnsAddrs))])
+				dnsPhonebook := &ThreadsafePhonebook{
+					addrs: dnsAddrs,
+				}
+				mp, ok := wn.phonebook.(*MultiPhonebook)
+				if ok {
+					mp.AddOrUpdatePhonebook(dnsBootstrap, dnsPhonebook)
+				}
+			} else {
+				wn.log.Infof("got no DNS addrs for network %s", wn.NetworkID)
 			}
-		} else {
-			wn.log.Debugf("got no DNS addrs for network %#v", wn.NetworkID)
 		}
 		desired := wn.config.GossipFanout
 		numOutgoing := wn.numOutgoingPeers() + wn.numOutgoingPending()
@@ -1385,8 +1390,7 @@ func (wn *WebsocketNetwork) peersToPing() []*wsPeer {
 	return out
 }
 
-func (wn *WebsocketNetwork) getDNSAddrs() []string {
-	dnsBootstrap := wn.config.DNSBootstrap(wn.NetworkID)
+func (wn *WebsocketNetwork) getDNSAddrs(dnsBootstrap string) []string {
 	srvPhonebook, err := wn.readFromBootstrap(dnsBootstrap)
 	if err != nil {
 		// only log this warning on testnet or devnet
@@ -1462,6 +1466,9 @@ const InstanceNameHeader = "X-Algorand-InstanceName"
 
 // PriorityChallengeHeader HTTP header informs a client about the challenge it should sign to increase network priority.
 const PriorityChallengeHeader = "X-Algorand-PriorityChallenge"
+
+// UserAgentHeader is the HTTP header identify the user agent.
+const UserAgentHeader = "User-Agent"
 
 var websocketsScheme = map[string]string{"http": "ws", "https": "wss"}
 
@@ -1560,6 +1567,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	defer wn.wg.Done()
 	requestHeader := make(http.Header)
 	wn.setHeaders(requestHeader)
+	SetUserAgentHeader(requestHeader)
 	myInstanceName := wn.log.GetInstanceName()
 	requestHeader.Set(InstanceNameHeader, myInstanceName)
 	conn, response, err := websocketDialer.DialContext(wn.ctx, gossipAddr, requestHeader)
@@ -1631,7 +1639,8 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 
 // NewWebsocketNetwork constructor for websockets based gossip network
 func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebook Phonebook, genesisID string, networkID protocol.NetworkID) (wn *WebsocketNetwork, err error) {
-	outerPhonebook := &MultiPhonebook{phonebooks: []Phonebook{phonebook}}
+	outerPhonebook := MakeMultiPhonebook()
+	outerPhonebook.AddOrUpdatePhonebook("default", phonebook)
 	wn = &WebsocketNetwork{log: log, config: config, phonebook: outerPhonebook, GenesisID: genesisID, NetworkID: networkID}
 
 	wn.setup()
@@ -1759,4 +1768,11 @@ func justHost(hostPort string) string {
 		return hostPort
 	}
 	return host
+}
+
+// SetUserAgentHeader adds the User-Agent header to the provided heades map.
+func SetUserAgentHeader(header http.Header) {
+	version := config.GetCurrentVersion()
+	ua := fmt.Sprintf("algod/%d.%d (%s; commit=%s; %d) %s(%s)", version.Major, version.Minor, version.Channel, version.CommitHash, version.BuildNumber, runtime.GOOS, runtime.GOARCH)
+	header.Set(UserAgentHeader, ua)
 }

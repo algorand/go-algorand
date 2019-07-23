@@ -1,7 +1,9 @@
 #!/bin/sh
 
-adduser --system --home /var/lib/algorand --no-create-home algorand >/dev/null
-chown -R algorand /var/lib/algorand
+adduser --system --group --home /var/lib/algorand --no-create-home algorand >/dev/null
+# prior versions didn't create this group and adduser above won't create it if the algorand user exists
+getent group algorand >/dev/null || groupadd --system algorand
+chown -R algorand:algorand /var/lib/algorand
 
 ## cat /usr/share/debhelper/autoscripts/postinst-systemd-enable | sed -e s,#UNITFILE#,algorand.service,
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
@@ -26,6 +28,7 @@ if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-decon
 		systemctl --system daemon-reload >/dev/null || true
 		if [ -n "$2" ]; then
 			_dh_action=restart
+			deb-systemd-invoke restart algorand@\* >/dev/null || true
 		else
 			_dh_action=start
 		fi

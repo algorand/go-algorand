@@ -182,7 +182,7 @@ func (l *Ledger) NextRound() basics.Round {
 	return l.LastRound() + 1
 }
 
-// BalanceRecord implements Ledger.BalanceRecord.
+// BalanceRecord implements Ledger.BalanceRecord. It applies pending rewards to returned amounts.
 func (l *Ledger) BalanceRecord(r basics.Round, addr basics.Address) (basics.BalanceRecord, error) {
 	data, err := l.Lookup(r, addr)
 	if err != nil {
@@ -193,40 +193,6 @@ func (l *Ledger) BalanceRecord(r basics.Round, addr basics.Address) (basics.Bala
 		Addr:        addr,
 		AccountData: data,
 	}, nil
-}
-
-// BalanceAndStatus returns Balance and DelegationStatus as one call
-func (l *Ledger) BalanceAndStatus(addr basics.Address) (money basics.MicroAlgos, rewards basics.MicroAlgos, moneyWithoutPendingRewards basics.MicroAlgos, status basics.Status, latest basics.Round, err error) {
-	latest = l.Latest()
-	data, err := l.Lookup(latest, addr)
-	if err != nil {
-		return
-	}
-
-	totals, err := l.Totals(latest)
-	if err != nil {
-		return
-	}
-
-	hdr, err := l.BlockHdr(latest)
-	if err != nil {
-		return
-	}
-	proto, ok := config.Consensus[hdr.CurrentProtocol]
-	if !ok {
-		err = ledger.ProtocolError(hdr.CurrentProtocol)
-	}
-
-	money, rewards = data.Money(proto, totals.RewardsLevel)
-	status = data.Status
-
-	dataWithoutRewards, err := l.LookupWithoutRewards(latest, addr)
-	if err != nil {
-		return
-	}
-	moneyWithoutPendingRewards = dataWithoutRewards.MicroAlgos
-
-	return
 }
 
 // Circulation implements agreement.Ledger.Circulation.

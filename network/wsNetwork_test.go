@@ -761,8 +761,8 @@ func TestGetPeers(t *testing.T) {
 	require.True(t, postListen)
 	t.Log(addrA)
 	phba := &oneEntryPhonebook{addrA}
-	phbMulti := &MultiPhonebook{}
-	phbMulti.AddPhonebook(phba)
+	phbMulti := MakeMultiPhonebook()
+	phbMulti.AddOrUpdatePhonebook("phba", phba)
 	netB.phonebook = phbMulti
 	netB.Start()
 	defer netB.Stop()
@@ -774,7 +774,7 @@ func TestGetPeers(t *testing.T) {
 	t.Log("b ready")
 
 	ph := ArrayPhonebook{[]string{"a", "b", "c"}}
-	phbMulti.AddPhonebook(&ph)
+	phbMulti.AddOrUpdatePhonebook("ph", &ph)
 
 	//addrB, _ := netB.Address()
 
@@ -1416,4 +1416,11 @@ func TestForceMessageRelaying(t *testing.T) {
 		require.Failf(t, "One or more messages failed to reach destination network", "%d > %d", 10, counter.count)
 	}
 
+}
+
+func TestSetUserAgentHeader(t *testing.T) {
+	headers := http.Header{}
+	SetUserAgentHeader(headers)
+	require.Equal(t, 1, len(headers))
+	t.Log(headers)
 }
