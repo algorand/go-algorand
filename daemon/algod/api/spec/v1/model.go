@@ -58,6 +58,10 @@ type NodeStatus struct {
 	//
 	// required: true
 	CatchupTime int64 `json:"catchupTime"`
+
+	// HasSyncedSinceStartup indicates whether a round has completed since startup
+	// Required: true
+	HasSyncedSinceStartup bool `json:"hasSyncedSinceStartup"`
 }
 
 // TransactionID Description

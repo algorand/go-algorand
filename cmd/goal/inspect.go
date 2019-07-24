@@ -32,8 +32,8 @@ import (
 type inspectSignedTxn struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Sig  crypto.Signature   `codec:"sig"`
-	Msig inspectMultisigSig `codec:"msig"`
+	Sig  crypto.Signature         `codec:"sig"`
+	Msig inspectMultisigSig       `codec:"msig"`
 	Txn  transactions.Transaction `codec:"txn"`
 }
 
