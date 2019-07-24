@@ -80,62 +80,45 @@ deps:
 
 # Regenerate algod swagger spec files
 ALGOD_API_SWAGGER_SPEC := daemon/algod/api/swagger.json
-ALGOD_API_FILES := $(shell find daemon/algod/api/server/common -type f) \
-	$(shell find daemon/algod/api/server/v1 -type f) \
+ALGOD_API_FILES := $(shell find daemon/algod/api/server/common daemon/algod/api/server/v1 daemon/algod/api/spec/v1 -type f) \
 	daemon/algod/api/server/router.go
 ALGOD_API_SWAGGER_INJECT := daemon/algod/api/server/lib/bundledSpecInject.go
 
 # Note that swagger.json requires the go-swagger dep.
 $(ALGOD_API_SWAGGER_SPEC): $(ALGOD_API_FILES)
-	$(info "regenerating swagger.json due to changes in algod/api/server")
-	@cd daemon/algod/api && \
+	cd daemon/algod/api && \
 		PATH=$(GOPATH)/bin:$$PATH \
 		go generate ./...
-	@{ \
-	echo "performing custom validation of swagger.json";\
-	algodProblem=$$(cat $(ALGOD_API_SWAGGER_SPEC) | jq -c '.definitions[].properties | select(. != null) | with_entries(select(.value.type=="array" and .value.items.format=="uint8")) | select(. != {}) | keys[]');\
-	if [ "$${algodProblem}" != "" ]; then\
-		echo "detected uint8 array in algod/swagger.json:$${algodProblem}. Did you mean to use format: binary?";\
-		echo "you will need to fix these swagger problems to allow build to proceed";\
-		exit 1;\
-	else\
-		echo "custom validation succeeded";\
-	fi;\
-	} \
 
-$(ALGOD_API_SWAGGER_INJECT): $(ALGOD_API_SWAGGER_SPEC)
+$(ALGOD_API_SWAGGER_INJECT): $(ALGOD_API_SWAGGER_SPEC) $(ALGOD_API_SWAGGER_SPEC).validated
 	./daemon/algod/api/server/lib/bundle_swagger_json.sh
 
 # Regenerate kmd swagger spec files
 KMD_API_SWAGGER_SPEC := daemon/kmd/api/swagger.json
-KMD_API_DIRS := $(shell find daemon/kmd/api/ -type d)
 KMD_API_FILES := $(shell find daemon/kmd/api/ -type f | grep -v $(KMD_API_SWAGGER_SPEC))
 KMD_API_SWAGGER_WRAPPER := kmdSwaggerWrappers.go
 KMD_API_SWAGGER_INJECT := daemon/kmd/lib/kmdapi/bundledSpecInject.go
 
-# Note that swagger.json requires the go-swagger dep.
-$(KMD_API_SWAGGER_SPEC): $(KMD_API_DIRS) $(KMD_API_FILES)
-	$(info "regenerating swagger.json due to changes in kmd")
-	@cd daemon/kmd/lib/kmdapi && \
-		python genSwaggerWrappers.py $(KMD_API_SWAGGER_WRAPPER) && \
-		cd daemon/kmd && \
+$(KMD_API_SWAGGER_SPEC): $(KMD_API_FILES)
+	cd daemon/kmd/lib/kmdapi && \
+		python genSwaggerWrappers.py $(KMD_API_SWAGGER_WRAPPER)
+	cd daemon/kmd && \
 		PATH=$(GOPATH)/bin:$$PATH \
-		go generate ./... && \
-		rm daemon/kmd/lib/kmdapi/$(KMD_API_SWAGGER_WRAPPER)
-	@{ \
-	echo "performing custom validation of swagger.json";\
-	kmdProblem=$$(cat $(KMD_API_SWAGGER_SPEC) | jq -c '.definitions[].properties | select(. != null) | with_entries(select(.value.type=="array" and .value.items.format=="uint8")) | select(. != {}) | keys[]');\
-	if [ "$${kmdProblem}" != "" ]; then\
-		echo "detected uint8 array in kmd/swagger.json:$${kmdProblem}. Did you mean to use format: binary?";\
-		echo "you will need to fix these swagger problems to allow build to proceed";\
-		exit 1;\
-	else\
-		echo "custom validation succeeded";\
-	fi;\
-	} \
+		go generate ./...
+	rm daemon/kmd/lib/kmdapi/$(KMD_API_SWAGGER_WRAPPER)
 
-$(KMD_API_SWAGGER_INJECT): $(KMD_API_SWAGGER_SPEC)
-	daemon/kmd/lib/kmdapi/bundle_swagger_json.sh
+%/swagger.json.validated: %/swagger.json
+	@problem=$$(cat $< | jq -c '.definitions[].properties | select(. != null) | with_entries(select(.value.type=="array" and .value.items.format=="uint8")) | select(. != {}) | keys[]'); \
+	if [ "$${problem}" != "" ]; then \
+		echo "detected uint8 array in $<:$${problem}. Did you mean to use format: binary?"; \
+		echo "you will need to fix these swagger problems to allow build to proceed"; \
+		exit 1; \
+	else \
+		touch $@; \
+	fi
+
+$(KMD_API_SWAGGER_INJECT): $(KMD_API_SWAGGER_SPEC) $(KMD_API_SWAGGER_SPEC).validated
+	./daemon/kmd/lib/kmdapi/bundle_swagger_json.sh
 
 # develop
 
@@ -190,7 +173,9 @@ testall: fulltest integration
 # generated files we should make sure we clean
 GENERATED_FILES := daemon/algod/api/bundledSpecInject.go \
 	daemon/algod/api/lib/bundledSpecInject.go \
-	daemon/kmd/lib/kmdapi/bundledSpecInject.go
+	daemon/kmd/lib/kmdapi/bundledSpecInject.go \
+	$(ALGOD_API_SWAGGER_SPEC) $(ALGOD_API_SWAGGER_SPEC).validated \
+	$(KMD_API_SWAGGER_SPEC) $(KMD_API_SWAGGER_SPEC).validated
 
 clean:
 	go clean -i ./...

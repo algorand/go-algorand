@@ -44,11 +44,10 @@ function check_deps() {
         echo "... vend missing"
     fi
 
-    if [ -f "${GOPATH}/bin/swagger" ]; then
-        SWAGGER_EXTRANEOUS=1
+    if [ ! -f "${GOPATH}/bin/swagger" ]; then
+        SWAGGER_MISSING=1
         ANY_MISSING=1
-        echo "... GOPATH/bin/swagger extraneous"
-        echo "... Ensure that you have installed a release build of go-swagger with brew or deb, or with configure_dev.sh"
+        echo "... swagger missing"
     fi
 
     return ${ANY_MISSING}
@@ -64,7 +63,7 @@ if [ ${GOLINT_MISSING} -ne 0 ]; then
     read -p "Install golint (using go get) (y/N): " OK
     if [ "$OK" = "y" ]; then
         echo "Installing golint..."
-        go get -u golang.org/x/lint/golint
+        cd / && go get -u golang.org/x/lint/golint
     fi
 fi
 
@@ -72,7 +71,7 @@ if [ ${STRINGER_MISSING} -ne 0 ]; then
     read -p "Install stringer (using go get) (y/N): " OK
     if [ "$OK" = "y" ]; then
         echo "Installing stringer..."
-        go get -u golang.org/x/tools/cmd/stringer
+        cd / && go get -u golang.org/x/tools/cmd/stringer
     fi
 fi
 
@@ -80,13 +79,16 @@ if [ ${VEND_MISSING} -ne 0 ]; then
     read -p "Install vend (using go get) (y/N): " OK
     if [ "$OK" = "y" ]; then
         echo "Installing vend..."
-        go get -u github.com/nomad-software/vend
+        cd / && go get -u github.com/nomad-software/vend
     fi
 fi
 
-if [ ${SWAGGER_EXTRANEOUS} -ne 0 ]; then
-    echo "Removing GOPATH/bin/swagger..."
-    go clean -i github.com/go-swagger/go-swagger/cmd/swagger
+if [ ${SWAGGER_MISSING} -ne 0 ]; then
+    read -p "Install swagger (using go get) (y/N): " OK
+    if [ "$OK" = "y" ]; then
+        echo "Installing swagger..."
+        cd / && go get -u github.com/go-swagger/go-swagger/cmd/swagger
+    fi
 fi
 
 check_deps
@@ -95,5 +97,5 @@ if [ $? -eq 0 ]; then
     exit 0
 else
     echo Required dependencies still missing. Build will probably fail.
-    exit 1
+    exit 0
 fi

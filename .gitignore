@@ -10,6 +10,7 @@ coverage.html
 
 # swagger
 swagger.json
+swagger.json.validated
 kmdSwaggerWrappers.go
 bundledSpecInject.go
 
