@@ -15,9 +15,6 @@
 
 export GOPATH=$(go env GOPATH)
 
-ROOT=${GOPATH}/src/github.com/algorand/go-algorand
-cd ${ROOT}
-
 ANY_MISSING=0
 # golint doesn't work with 'dep ensure' so we manually install it
 GOLINT_MISSING=0
