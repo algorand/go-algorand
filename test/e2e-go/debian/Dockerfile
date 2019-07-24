@@ -10,4 +10,4 @@ add-apt-repository "deb https://releases.algorand.com/deb/ stable main" && \
 apt-get update && \
 apt-get install -y apt-transport-https && \
 apt-get install -y algorand && \
-apt-get install -y expect && \
+apt-get install -y expect
