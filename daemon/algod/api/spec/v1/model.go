@@ -58,6 +58,10 @@ type NodeStatus struct {
 	//
 	// required: true
 	CatchupTime int64 `json:"catchupTime"`
+
+	// HasSyncedSinceStartup indicates whether a round has completed since startup
+	// Required: true
+	HasSyncedSinceStartup bool `json:"hasSyncedSinceStartup"`
 }
 
 // TransactionID Description
@@ -186,12 +190,12 @@ type Transaction struct {
 	// Note is a free form data
 	//
 	// required: false
-	Note bytes `json:"noteb64,omitempty"`
+	Note bytes `json:"noteb64"`
 
 	// ConfirmedRound indicates the block number this transaction appeared in
 	//
 	// required: false
-	ConfirmedRound uint64 `json:"round,omitempty"`
+	ConfirmedRound uint64 `json:"round"`
 
 	// PoolError indicates the transaction was evicted from this node's transaction
 	// pool (if non-empty).  A non-empty PoolError does not guarantee that the
@@ -199,7 +203,7 @@ type Transaction struct {
 	// transaction and may attempt to commit it in the future.
 	//
 	// required: false
-	PoolError string `json:"poolerror,omitempty"`
+	PoolError string `json:"poolerror"`
 
 	// This is a list of all supported transactions.
 	// To add another one, create a struct with XXXTransactionType and embed it here.
@@ -234,12 +238,12 @@ type PaymentTransactionType struct {
 	// CloseRemainderTo is the address the sender closed to
 	//
 	// required: false
-	CloseRemainderTo string `json:"close,omitempty"`
+	CloseRemainderTo string `json:"close"`
 
 	// CloseAmount is the amount sent to CloseRemainderTo, for committed transaction
 	//
 	// required: false
-	CloseAmount uint64 `json:"closeamount,omitempty"`
+	CloseAmount uint64 `json:"closeamount"`
 
 	// Amount is the amount of MicroAlgos intended to be transferred
 	//
