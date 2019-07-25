@@ -99,7 +99,7 @@ func TestGoalWithExpect(t *testing.T) {
 		t.Run(testName, func(t *testing.T) {
 			workingDir, algoDir, err := f.getTestDir(testName)
 			require.NoError(t, err)
-			//t.Logf("algoDir: %s\ntestDataDir:%s\n", algoDir, f.testDataDir)
+			t.Logf("algoDir: %s\ntestDataDir:%s\n", algoDir, f.testDataDir)
 			cmd := execCommand("expect", testName, algoDir, f.testDataDir)
 			out, err := cmd.CombinedOutput()
 			if err != nil {

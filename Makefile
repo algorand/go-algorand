@@ -16,6 +16,7 @@ EXTLDFLAGS := -static-libstdc++ -static-libgcc
 endif
 
 GOTAGS          := --tags "sqlite_unlock_notify sqlite_omit_load_extension"
+GOTRIMPATH	:= $(shell go help build | grep -q .-trimpath && echo -trimpath)
 
 GOLDFLAGS_BASE  := -X github.com/algorand/go-algorand/config.BuildNumber=$(BUILDNUMBER) \
 		 -X github.com/algorand/go-algorand/config.CommitHash=$(COMMITHASH) \
@@ -153,7 +154,7 @@ build: buildsrc gen
 
 buildsrc: $(SRCPATH)/crypto/lib/libsodium.a node_exporter NONGO_BIN deps $(ALGOD_API_SWAGGER_INJECT) $(KMD_API_SWAGGER_INJECT)
 	cd $(SRCPATH) && \
-		go install $(GOTAGS) -ldflags="$(GOLDFLAGS)" $(SOURCES)
+		go install $(GOTRIMPATH) $(GOTAGS) -ldflags="$(GOLDFLAGS)" $(SOURCES)
 	cd $(SRCPATH) && \
 		go vet $(UNIT_TEST_SOURCES) $(E2E_TEST_SOURCES)
 
@@ -166,8 +167,8 @@ SOURCES_RACE := github.com/algorand/go-algorand/cmd/kmd
 build-race: build
 	@mkdir -p $(GOPATH)/bin-race
 	cd $(SRCPATH) && \
-		GOBIN=$(GOPATH)/bin-race go install $(GOTAGS) -race -ldflags="$(GOLDFLAGS)" $(SOURCES) && \
-		GOBIN=$(GOPATH)/bin-race go install $(GOTAGS) -ldflags="$(GOLDFLAGS)" $(SOURCES_RACE)
+		GOBIN=$(GOPATH)/bin-race go install $(GOTRIMPATH) $(GOTAGS) -race -ldflags="$(GOLDFLAGS)" $(SOURCES) && \
+		GOBIN=$(GOPATH)/bin-race go install $(GOTRIMPATH) $(GOTAGS) -ldflags="$(GOLDFLAGS)" $(SOURCES_RACE)
 
 NONGO_BIN_FILES=$(GOPATH)/bin/find-nodes.sh $(GOPATH)/bin/update.sh $(GOPATH)/bin/updatekey.json $(GOPATH)/bin/COPYING
 

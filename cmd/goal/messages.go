@@ -57,7 +57,7 @@ const (
 	infoNodeAlreadyStarted           = "Algorand node was already started!"
 	infoTryingToStopNode             = "Trying to stop the node..."
 	infoNodeSuccessfullyStopped      = "The node was successfully stopped."
-	infoNodeStatus                   = "Last committed block: %d\nTime since last block: %s\nSync Time: %s\nLast consensus protocol: %s\nNext consensus protocol: %s\nRound for next consensus protocol: %d\nNext consensus protocol supported: %v"
+	infoNodeStatus                   = "Last committed block: %d\nTime since last block: %s\nSync Time: %s\nLast consensus protocol: %s\nNext consensus protocol: %s\nRound for next consensus protocol: %d\nNext consensus protocol supported: %v\nHas Synced Since Startup: %t"
 	errorNodeNotDetected             = "Algorand node does not appear to be running: %s"
 	errorNodeStatus                  = "Cannot contact Algorand node: %s."
 	errorNodeFailedToStart           = "Algorand node failed to start: %s"
