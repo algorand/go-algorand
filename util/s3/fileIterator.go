@@ -34,11 +34,11 @@ type fileIterator struct {
 	err error
 }
 
-func makeFileIterator(files []string, bucket string, subFolder string) s3manager.BatchUploadIterator {
+func makeFileIterator(files []string, bucket string, targetFolder string) s3manager.BatchUploadIterator {
 	return &fileIterator{
 		filePaths: files,
 		bucket:    bucket,
-		subFolder: subFolder,
+		subFolder: targetFolder,
 	}
 }
 

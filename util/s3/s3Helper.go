@@ -176,7 +176,7 @@ func validateS3Bucket(awsBucket string) (err error) {
 
 func checkCredentialsRequired(action string, bucketName string) (required bool) {
 	required = true
-    if action == downloadAction && bucketName == s3DefaultReleaseBucket {
+	if action == downloadAction && bucketName == s3DefaultReleaseBucket {
 		required = false
 	}
 	return
