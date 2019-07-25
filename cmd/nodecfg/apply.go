@@ -135,7 +135,7 @@ func doApply(rootDir string, rootNodeDir, channel string, hostName string, dnsNa
 
 func hostNeedsDNSName(config remote.HostConfig) bool {
 	for _, node := range config.Nodes {
-		if node.IsRelay || node.EnableMetrics {
+		if node.IsRelay() || node.EnableMetrics {
 			return true
 		}
 	}

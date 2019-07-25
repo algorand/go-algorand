@@ -25,7 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/client"
-	"github.com/algorand/go-algorand/daemon/algod/api/client/models"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/test/e2e-go/globals"
@@ -160,7 +160,7 @@ func (f *RestClientFixture) GetFirstAccount() (account string, err error) {
 }
 
 // GetRichestAccount returns the first account when calling GetWalletsSortedByBalance, which should be the richest account
-func (f *RestClientFixture) GetRichestAccount() (richest models.Account, err error) {
+func (f *RestClientFixture) GetRichestAccount() (richest v1.Account, err error) {
 	list, err := f.GetWalletsSortedByBalance()
 	if len(list) > 0 {
 		richest = list[0]
@@ -185,17 +185,17 @@ func (f *RestClientFixture) GetBalanceAndRound(account string) (balance uint64, 
 
 // GetWalletsSortedByBalance returns the Primary node's accounts sorted DESC by balance
 // the richest account will be at accounts[0]
-func (f *RestClientFixture) GetWalletsSortedByBalance() (accounts []models.Account, err error) {
+func (f *RestClientFixture) GetWalletsSortedByBalance() (accounts []v1.Account, err error) {
 	return f.getNodeWalletsSortedByBalance(f.LibGoalClient)
 }
 
 // GetNodeWalletsSortedByBalance returns the specified node's accounts sorted DESC by balance
 // the richest account will be at accounts[0]
-func (f *RestClientFixture) GetNodeWalletsSortedByBalance(nodeDataDir string) (accounts []models.Account, err error) {
+func (f *RestClientFixture) GetNodeWalletsSortedByBalance(nodeDataDir string) (accounts []v1.Account, err error) {
 	return f.getNodeWalletsSortedByBalance(f.GetLibGoalClientFromDataDir(nodeDataDir))
 }
 
-func (f *RestClientFixture) getNodeWalletsSortedByBalance(client libgoal.Client) (accounts []models.Account, err error) {
+func (f *RestClientFixture) getNodeWalletsSortedByBalance(client libgoal.Client) (accounts []v1.Account, err error) {
 	wh, err := client.GetUnencryptedWalletHandle()
 	if err != nil {
 		return
@@ -223,7 +223,7 @@ func (f *RestClientFixture) WaitForTxnConfirmation(roundTimeout uint64, accountA
 // WaitForConfirmedTxn waits until either the passed txid is confirmed
 // or until the passed roundTimeout passes
 // or until waiting for a round to pass times out
-func (f *RestClientFixture) WaitForConfirmedTxn(roundTimeout uint64, accountAddress, txid string) (txn models.Transaction, err error) {
+func (f *RestClientFixture) WaitForConfirmedTxn(roundTimeout uint64, accountAddress, txid string) (txn v1.Transaction, err error) {
 	client := f.AlgodClient
 	for {
 		// Get current round information
@@ -347,7 +347,7 @@ func (f *RestClientFixture) AssertValidTxid(txid string) {
 }
 
 // AccountListContainsAddress searches the passed account list for the passed account address
-func (f *RestClientFixture) AccountListContainsAddress(searchList []models.Account, address string) bool {
+func (f *RestClientFixture) AccountListContainsAddress(searchList []v1.Account, address string) bool {
 	for _, item := range searchList {
 		if item.Address == address {
 			return true

@@ -1,12 +1,12 @@
 [Unit]
-Description=Algorand daemon
+Description=Algorand daemon for mainnet in /var/lib/algorand
 After=network.target
 
 [Service]
 ExecStart=/usr/bin/algod -d /var/lib/algorand
 PIDFile=/var/lib/algorand/algod.pid
 User=algorand
-Group=nogroup
+Group=algorand
 Restart=always
 RestartSec=5s
 ProtectSystem=full

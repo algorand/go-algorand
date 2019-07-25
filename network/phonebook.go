@@ -114,10 +114,15 @@ func (p *ThreadsafePhonebook) ReplacePeerList(they []string) {
 	copy(p.addrs, they)
 }
 
-// MultiPhonebook contains several phonebooks
+// MultiPhonebook contains a map of phonebooks
 type MultiPhonebook struct {
-	phonebooks []Phonebook
-	lock       deadlock.RWMutex
+	phonebookMap map[string]*Phonebook
+	lock         deadlock.RWMutex
+}
+
+// MakeMultiPhonebook constructs and returns a new Multi Phonebook
+func MakeMultiPhonebook() *MultiPhonebook {
+	return &MultiPhonebook{phonebookMap: make(map[string]*Phonebook)}
 }
 
 // GetAddresses returns up to N address
@@ -125,34 +130,48 @@ type MultiPhonebook struct {
 func (mp *MultiPhonebook) GetAddresses(n int) []string {
 	mp.lock.RLock()
 	defer mp.lock.RUnlock()
-	if len(mp.phonebooks) == 1 {
-		return mp.phonebooks[0].GetAddresses(n)
-	}
-	sizes := make([]int, len(mp.phonebooks))
-	total := 0
-	addrs := make([][]string, len(mp.phonebooks))
-	for pi, p := range mp.phonebooks {
-		switch xp := p.(type) {
-		case *ArrayPhonebook:
-			sizes[pi] = len(xp.Entries)
-		case *ThreadsafePhonebook:
-			sizes[pi] = xp.Length()
-		default:
-			addrs[pi] = xp.GetAddresses(1000)
-			sizes[pi] = len(addrs[pi])
+
+	if len(mp.phonebookMap) == 1 {
+		for _, phonebook := range mp.phonebookMap {
+			return (*phonebook).GetAddresses(n)
 		}
-		total += sizes[pi]
 	}
-	all := make([]string, total)
-	pos := 0
+	sizes := make([]int, len(mp.phonebookMap))
+	total := 0
+	addrs := make([][]string, len(mp.phonebookMap))
+	names := make([]string, len(mp.phonebookMap))
+	i := 0
+	for name, p := range mp.phonebookMap {
+		names[i] = name
+		switch xp := (*p).(type) {
+		case *ArrayPhonebook:
+			sizes[i] = len(xp.Entries)
+		case *ThreadsafePhonebook:
+			sizes[i] = xp.Length()
+		default:
+			addrs[i] = xp.GetAddresses(1000)
+			sizes[i] = len(addrs[i])
+		}
+		total += sizes[i]
+		i++
+	}
+
+	addrSet := make(map[string]bool, total)
 	for pi, size := range sizes {
 		if addrs[pi] != nil {
-			copy(all[pos:], addrs[pi])
-			pos += len(addrs[pi])
+			mp.addAddressArrayToAdressSet(&addrSet, &(addrs[pi]))
 		} else {
-			xa := mp.phonebooks[pi].GetAddresses(size)
-			copy(all[pos:], xa)
-			pos += len(xa)
+			xa := (*mp.phonebookMap[names[pi]]).GetAddresses(size)
+			mp.addAddressArrayToAdressSet(&addrSet, &xa)
+		}
+	}
+	pos := 0
+	all := make([]string, len(addrSet))
+
+	for addr := range addrSet {
+		if addrSet[addr] {
+			all[pos] = addr
+			pos++
 		}
 	}
 	out := all[:pos]
@@ -163,14 +182,15 @@ func (mp *MultiPhonebook) GetAddresses(n int) []string {
 	return out
 }
 
-// AddPhonebook adds a Phonebook if it is new
-func (mp *MultiPhonebook) AddPhonebook(p Phonebook) {
+func (mp *MultiPhonebook) addAddressArrayToAdressSet(addrMap *map[string]bool, addrArray *[]string) {
+	for _, addr := range *addrArray {
+		(*addrMap)[addr] = true
+	}
+}
+
+// AddOrUpdatePhonebook adds or updates Phonebook in Phonebook map
+func (mp *MultiPhonebook) AddOrUpdatePhonebook(bootstrapNetworkName string, p Phonebook) {
 	mp.lock.Lock()
 	defer mp.lock.Unlock()
-	for _, op := range mp.phonebooks {
-		if op == p {
-			return
-		}
-	}
-	mp.phonebooks = append(mp.phonebooks, p)
+	mp.phonebookMap[bootstrapNetworkName] = &p
 }
