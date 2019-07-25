@@ -1196,7 +1196,7 @@ func (wn *WebsocketNetwork) meshThread() {
 					wn.phonebook.AddOrUpdatePhonebook(dnsBootstrap, dnsPhonebook)
 				}
 				if tsPhonebook, ok := dnsPhonebook.(*ThreadsafePhonebook); ok {
-					tsPhonebook.MergePeerList(dnsAddrs)
+					tsPhonebook.ReplacePeerList(dnsAddrs)
 				}
 			} else {
 				wn.log.Infof("got no DNS addrs for network %s", wn.NetworkID)

@@ -167,18 +167,11 @@ func (p *ThreadsafePhonebook) Length() int {
 	return len(p.entries)
 }
 
-// ReplacePeerList replaces set of addresses with that passed in.
-func (p *ThreadsafePhonebook) ReplacePeerList(they []string) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-	p.entries.ReplacePeerList(they)
-}
-
-// MergePeerList merges a set of addresses with that passed in.
+// ReplacePeerList merges a set of addresses with that passed in.
 // new entries in they are being added
 // existing items that aren't included in they are being removed
 // matching entries don't change
-func (p *ThreadsafePhonebook) MergePeerList(they []string) {
+func (p *ThreadsafePhonebook) ReplacePeerList(they []string) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -216,7 +209,6 @@ func MakeMultiPhonebook() *MultiPhonebook {
 }
 
 // GetAddresses returns up to N address
-// TODO: this implementation does a bunch of extra copying, make it more efficient
 func (mp *MultiPhonebook) GetAddresses(n int) []string {
 	mp.lock.RLock()
 	defer mp.lock.RUnlock()
@@ -226,32 +218,19 @@ func (mp *MultiPhonebook) GetAddresses(n int) []string {
 			return phonebook.GetAddresses(n)
 		}
 	}
-	sizes := make([]int, len(mp.phonebookMap))
-	total := 0
-	addrs := make([][]string, len(mp.phonebookMap))
 	uniqueEntries := make(map[string]bool, 0)
-	pi := -1
 	for _, p := range mp.phonebookMap {
-		pi++
-		phonebookAddrs := p.GetAddresses(getAllAddresses)
-		addrs[pi] = make([]string, 0, len(phonebookAddrs))
-		for _, addr := range phonebookAddrs {
-			if uniqueEntries[addr] {
-				continue
-			}
-			addrs[pi] = append(addrs[pi], addr)
+		for _, addr := range p.GetAddresses(getAllAddresses) {
 			uniqueEntries[addr] = true
 		}
-		sizes[pi] = len(addrs[pi])
-		total += sizes[pi]
 	}
-	all := make([]string, total)
-	pos := 0
-	for pi, sizei := range sizes {
-		copy(all[pos:], addrs[pi])
-		pos += sizei
+	out := make([]string, len(uniqueEntries))
+	i := 0
+	for k := range uniqueEntries {
+		out[i] = k
+		i++
 	}
-	out := all[:pos]
+
 	rand.Shuffle(len(out), func(i, j int) { t := out[i]; out[i] = out[j]; out[j] = t })
 	if n < len(out) {
 		return out[:n]
