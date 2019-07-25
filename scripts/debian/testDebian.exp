@@ -7,25 +7,33 @@ if { [catch {
     set TEST_DATA_DIR [lindex $argv 1]
 
     puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
-    puts "TEST_DATA_DIR: $TEST_DATA_DIR" 
+    puts "TEST_DATA_DIR: $TEST_DATA_DIR"
 
     set TIME_STAMP [clock seconds]
 
-    set TEST_ROOT_DIR $TEST_ALGO_DIR
-    set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR
+    set TEST_ROOT_DIR $TEST_ALGO_DIR/root
+    set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/Primary/
+    set NETWORK_NAME test_net_expect_$TIME_STAMP
+    set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/TwoNodes50Each.json"
 
     set ::GLOBAL_TEST_ALGO_DIR $TEST_ALGO_DIR
     set ::GLOBAL_TEST_ROOT_DIR $TEST_ROOT_DIR
-    set ::GLOBAL_NETWORK_NAME devnet
+    set ::GLOBAL_NETWORK_NAME $NETWORK_NAME
 
 
     puts "deb_setup starting"
 
 
-    set LS_OUTPUT [ eval exec ls /workdir ]
-    puts "ls output: $LS_OUTPUT"
-   
+    set WORKDIR_LS_OUTPUT [ eval exec ls /workdir ]
+    puts "workdir ls output: $WORKDIR_LS_OUTPUT"
+
     source  /expectdir/goalExpectCommon.exp
+
+   # Create network
+    ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    set TEST_ROOT_DIR_LS_OUTPUT [ eval exec ls $TEST_ROOT_DIR ]
+    puts "TEST_ROOT_DIR_LS_OUTPUT ls output: $TEST_ROOT_DIR_LS_OUTPUT"
 
     set PRIMARY_NODE_ADDRESS [ ::AlgorandGoal::GetAlgodNetworkAddress $TEST_PRIMARY_NODE_DIR ]
     puts "Primary Node Address: $PRIMARY_NODE_ADDRESS"
@@ -65,7 +73,7 @@ if { [catch {
     set ACCOUNT_2_ADDRESS [::AlgorandGoal::CreateAccountForWallet $WALLET_2_NAME $WALLET_2_PASSWORD $TEST_PRIMARY_NODE_DIR]
     ::AlgorandGoal::VerifyAccount $WALLET_2_NAME $WALLET_2_PASSWORD $ACCOUNT_2_ADDRESS $TEST_PRIMARY_NODE_DIR
 
-    # Check the balance of the account 
+    # Check the balance of the account
     ::AlgorandGoal::WaitForAccountBalance $WALLET_1_NAME $ACCOUNT_1_ADDRESS 0 $TEST_PRIMARY_NODE_DIR
 
     # Check to make sure that the transfer is reflected in the to account
@@ -81,6 +89,9 @@ if { [catch {
     # Delete an account
     ::AlgorandGoal::DeleteAccount $WALLET_1_NAME $ACCOUNT_1_ADDRESS
 
+    # Shutdown the network
+    ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ALGO_DIR $TEST_ROOT_DIR
+
     puts "Basic Goal Test Successful"
 
     exit 0
@@ -89,4 +100,3 @@ if { [catch {
    puts "Exception:  $EXCEPTION"
    exit 1
 }
-

@@ -104,7 +104,38 @@ mkdir -p ${HOME}/docker_test_resources
 if [ ! -f "${HOME}/docker_test_resources/gnupg2.2.9_centos7_amd64.tar.bz2" ]; then
     aws s3 cp s3://algorand-devops-misc/tools/gnupg2.2.9_centos7_amd64.tar.bz2 ${HOME}/docker_test_resources
 fi
-cp -p "${HOME}/key.gpg" "${HOME}/docker_test_resources/key.pub"
+#cp -p "${HOME}/key.gpg" "${HOME}/docker_test_resources/key.pub"
+#cp -p "${GOPATH}/src/github.com/algorand/go-algorand/installer/rpm/RPM-GPG-KEY-Algorand" "${HOME}/docker_test_resources/key.pub"
+export GNUPGHOME=${HOME}/tkey
+gpgconf --kill gpg-agent
+rm -rf ${GNUPGHOME}
+mkdir -p ${GNUPGHOME}
+chmod 700 ${GNUPGHOME}
+cat >${HOME}/tkey/keygenscript<<EOF
+Key-Type: default
+Subkey-Type: default
+Name-Real: Algorand developers
+Name-Email: dev@algorand.com
+Expire-Date: 0
+Passphrase: foogorand
+%transient-key
+EOF
+cat <<EOF>${GNUPGHOME}/gpg-agent.conf
+extra-socket ${GNUPGHOME}/S.gpg-agent.extra
+# inable unattended daemon mode
+allow-preset-passphrase
+# cache password 30 days
+default-cache-ttl 2592000
+max-cache-ttl 2592000
+EOF
+gpg --generate-key --batch ${HOME}/tkey/keygenscript
+gpg --export -a > "${HOME}/docker_test_resources/key.pub"
+
+gpgconf --kill gpg-agent
+gpgconf --launch gpg-agent
+
+KEYGRIP=$(gpg -K --with-keygrip --textmode|grep Keygrip|head -1|awk '{ print $3 }')
+echo foogorand|/usr/lib/gnupg/gpg-preset-passphrase --verbose --preset ${KEYGRIP}
 
 # copy previous installers into ~/docker_test_resources
 cd "${HOME}/docker_test_resources"
@@ -151,12 +182,17 @@ aptly -config=${HOME}/dummyaptly.conf publish snapshot -origin=Algorand -label=A
 (cd ${HOME}/dummyaptly/public && python3 ${GOPATH}/src/github.com/algorand/go-algorand/scripts/httpd.py --pid ${HOME}/phttpd.pid) &
 
 
-sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME}/docker_test_resources,dst=/stuff --mount type=bind,src=${GOPATH}/src,dst=/root/go/src --mount type=bind,src=/usr/local/go,dst=/usr/local/go ubuntu:16.04 bash /root/go/src/github.com/algorand/go-algorand/scripts/build_release_ubuntu_test_docker.sh"
+#sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME}/docker_test_resources,dst=/stuff --mount type=bind,src=${GOPATH}/src,dst=/root/go/src --mount type=bind,src=/usr/local/go,dst=/usr/local/go ubuntu:16.04 bash /root/go/src/github.com/algorand/go-algorand/scripts/build_release_ubuntu_test_docker.sh"
 sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME}/docker_test_resources,dst=/stuff --mount type=bind,src=${GOPATH}/src,dst=/root/go/src --mount type=bind,src=/usr/local/go,dst=/usr/local/go ubuntu:18.04 bash /root/go/src/github.com/algorand/go-algorand/scripts/build_release_ubuntu_test_docker.sh"
+
+export DC_IP
+
+DOCKER_COMMAND="${GOPATH}/src/github.com/algorand/go-algorand/scripts/debian/start_docker_debian_test.sh ${HOME}/docker_test_resources"
+sg docker "${DOCKER_COMMAND}"
 
 kill $(cat ${HOME}/phttpd.pid)
 
-date "+build_release done building ubuntu %Y%m%d_%H%M%S"
+echo "Completed TESTING debian installer!"
 
 # Run RPM bulid in Centos7 Docker container
 sg docker "docker build -t algocentosbuild - < ${GOPATH}/src/github.com/algorand/go-algorand/scripts/centos-build.Dockerfile"
@@ -189,4 +225,3 @@ kill $(cat ${HOME}/phttpd.pid)
 date "+build_release done building centos %Y%m%d_%H%M%S"
 
 # NEXT: build_release_sign.sh
-
