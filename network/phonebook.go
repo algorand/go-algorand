@@ -53,15 +53,31 @@ func (e *phonebookEntries) filterRetryTime(t time.Time) []string {
 	return o
 }
 
-// ReplacePeerList replaces set of addresses with that passed in.
+// ReplacePeerList merges a set of addresses with that passed in.
+// new entries in they are being added
+// existing items that aren't included in they are being removed
+// matching entries don't change
 func (e *phonebookEntries) ReplacePeerList(they []string) {
-	// clear current map.
+
+	// prepare a map of items we'd like to remove.
+	removeItems := make(map[string]bool, 0)
 	for k := range *e {
-		delete(*e, k)
+		removeItems[k] = true
 	}
 
-	for _, v := range they {
-		(*e)[v] = phonebookData{}
+	for _, addr := range they {
+		if _, has := (*e)[addr]; has {
+			// we already have this. do nothing.
+			delete(removeItems, addr)
+		} else {
+			// we don't have this item. add it.
+			(*e)[addr] = phonebookData{}
+		}
+	}
+
+	// remove items that were missing in they
+	for k := range removeItems {
+		delete((*e), k)
 	}
 }
 
@@ -174,27 +190,7 @@ func (p *ThreadsafePhonebook) Length() int {
 func (p *ThreadsafePhonebook) ReplacePeerList(they []string) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
-
-	// prepare a map of items we'd like to remove.
-	removeItems := make(map[string]bool, 0)
-	for k := range p.entries {
-		removeItems[k] = true
-	}
-
-	for _, addr := range they {
-		if _, has := p.entries[addr]; has {
-			// we already have this. do nothing.
-			delete(removeItems, addr)
-		} else {
-			// we don't have this item. add it.
-			p.entries[addr] = phonebookData{}
-		}
-	}
-
-	// remove items that were missing in they
-	for k := range removeItems {
-		delete(p.entries, k)
-	}
+	p.entries.ReplacePeerList(they)
 }
 
 // MultiPhonebook contains a map of phonebooks
