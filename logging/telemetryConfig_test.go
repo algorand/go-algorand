@@ -90,3 +90,22 @@ func Test_CreateSaveLoadTelemetryConfig(t *testing.T) {
 	a.Equal(config1.Password, config2.Password)
 
 }
+
+func Test_SanitizeTelemetryString(t *testing.T) {
+	type testcase struct {
+		input    string
+		expected string
+		parts    int
+	}
+
+	tests := []testcase {
+		{"no:change", "no:change", 2},
+		{"@@@@@@@remove(-some*&!-garbage", "remove-some-garbage", 1},
+		{"@@@@@@@remove(-some*&!-garbage:times-%two", "remove-some-garbage:times-two", 2},
+		{"this.needs.to.be.truncated.because.it.is.way.too.long", "this.needs.to.be.truncated.because.it.i", 1},
+	}
+
+	for _, test := range tests {
+		require.Equal(t, SanitizeTelemetryString(test.input, test.parts), test.expected)
+	}
+}
