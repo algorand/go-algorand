@@ -73,7 +73,6 @@ func makeTelemetryState(cfg TelemetryConfig, hookFactory hookFactory) (*telemetr
 // Cfg will always be valid.
 func EnsureTelemetryConfig(configDir *string, genesisID string) (TelemetryConfig, error) {
 	cfg, _, err := EnsureTelemetryConfigCreated(configDir, genesisID)
-	initializeConfig(&cfg)
 	return cfg, err
 }
 
@@ -85,6 +84,8 @@ func EnsureTelemetryConfigCreated(configDir *string, genesisID string) (Telemetr
 		var err error
 		configPath, err = config.GetConfigFilePath(loggingFilename)
 		if err != nil {
+			cfg := createTelemetryConfig()
+			initializeConfig(&cfg)
 			return createTelemetryConfig(), true, err
 		}
 	} else {
@@ -108,6 +109,8 @@ func EnsureTelemetryConfigCreated(configDir *string, genesisID string) (Telemetr
 		ch = "dev"
 	}
 	cfg.ChainID = fmt.Sprintf("%s-%s", ch, genesisID)
+
+	initializeConfig(&cfg)
 	return cfg, created, err
 }
 
