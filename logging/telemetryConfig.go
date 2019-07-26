@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/satori/go.uuid"
@@ -135,6 +136,21 @@ func loadTelemetryConfig(path string) (TelemetryConfig, error) {
 		}
 	}
 	cfg.FilePath = path
-	//cfg.Enable = telemetryOverride(cfg.Enable)
+
+	// Sanitize user-defined name.
+	if len(cfg.Name) > 0 {
+		// Limit to alphanumeric, and _-
+		reg, err := regexp.Compile("[^a-zA-Z0-9._-]+")
+		if err != nil {
+			return createTelemetryConfig(), err
+		}
+		cfg.Name = reg.ReplaceAllString(cfg.Name, "")
+
+		// Limit length
+		if len(cfg.Name) > 32 {
+			cfg.Name = cfg.Name[:32]
+		}
+	}
+
 	return cfg, err
 }
