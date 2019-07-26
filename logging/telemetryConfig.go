@@ -32,6 +32,15 @@ import (
 )
 
 var loggingFilename = "logging.config"
+var reg *regexp.Regexp
+
+func init() {
+	var err error
+	reg, err = regexp.Compile("[^a-zA-Z0-9._-]+")
+	if err != nil {
+		reg = nil
+	}
+}
 
 func elasticsearchEndpoint() string {
 	return "https://1ae9f9654b25441090fe5c48c833b95a.us-east-1.aws.found.io:9243"
@@ -121,6 +130,20 @@ func (cfg TelemetryConfig) getInstanceName() string {
 	return fmt.Sprintf("%s:", pathHashStr[:16])
 }
 
+func SanitizeTelemetryString(input string, maxParts int) string {
+	parts := strings.SplitN(input, ":", maxParts)
+	for i := range parts {
+		// Limit to alphanumeric, and _-
+		parts[i] = reg.ReplaceAllString(parts[i], "")
+
+		// Limit length to support up to an ipv6 address
+		if len(parts[i]) > 39 {
+			parts[i] = parts[i][:39]
+		}
+	}
+	return strings.Join(parts, ":")
+}
+
 func loadTelemetryConfig(path string) (TelemetryConfig, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -139,17 +162,7 @@ func loadTelemetryConfig(path string) (TelemetryConfig, error) {
 
 	// Sanitize user-defined name.
 	if len(cfg.Name) > 0 {
-		// Limit to alphanumeric, and _-
-		reg, err := regexp.Compile("[^a-zA-Z0-9._-]+")
-		if err != nil {
-			return createTelemetryConfig(), err
-		}
-		cfg.Name = reg.ReplaceAllString(cfg.Name, "")
-
-		// Limit length
-		if len(cfg.Name) > 32 {
-			cfg.Name = cfg.Name[:32]
-		}
+		cfg.Name = SanitizeTelemetryString(cfg.Name, 1)
 	}
 
 	return cfg, err
