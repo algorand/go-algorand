@@ -64,9 +64,6 @@ func makeTelemetryState(cfg TelemetryConfig, hookFactory hookFactory) (*telemetr
 	telemetry := &telemetryState{
 		history,
 		createAsyncHook(hook, 32, 100),
-		cfg.SessionGUID,
-		cfg.getHostName(),
-		cfg.getInstanceName(),
 	}
 	return telemetry, nil
 }
@@ -76,6 +73,7 @@ func makeTelemetryState(cfg TelemetryConfig, hookFactory hookFactory) (*telemetr
 // Cfg will always be valid.
 func EnsureTelemetryConfig(configDir *string, genesisID string) (TelemetryConfig, error) {
 	cfg, _, err := EnsureTelemetryConfigCreated(configDir, genesisID)
+	initializeConfig(&cfg)
 	return cfg, err
 }
 
@@ -154,8 +152,8 @@ func (t *telemetryState) logTelemetry(l logger, message string, details interfac
 	}
 
 	entry := l.entry.WithFields(Fields{
-		"session":      t.sessionGUID,
-		"instanceName": t.instanceName,
+		"session":      l.GetTelemetrySession(),
+		"instanceName": l.GetInstanceName(),
 	})
 	// Populate entry like logrus.entry.log() does
 	entry.Time = time.Now()

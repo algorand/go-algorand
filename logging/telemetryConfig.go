@@ -117,7 +117,7 @@ func (cfg TelemetryConfig) getInstanceName() string {
 
 	// NOTE: We used to report HASH:DataDir but DataDir is Personally Identifiable Information (PII)
 	// So we're removing it entirely to avoid GDPR issues.
-	return fmt.Sprintf("%s:", pathHashStr[:16])
+	return fmt.Sprintf("%s", pathHashStr[:16])
 }
 
 func loadTelemetryConfig(path string) (TelemetryConfig, error) {
