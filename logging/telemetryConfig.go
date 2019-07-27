@@ -134,7 +134,9 @@ func SanitizeTelemetryString(input string, maxParts int) string {
 	parts := strings.SplitN(input, ":", maxParts)
 	for i := range parts {
 		// Limit to alphanumeric, and _-
-		parts[i] = reg.ReplaceAllString(parts[i], "")
+		if reg != nil {
+			parts[i] = reg.ReplaceAllString(parts[i], "")
+		}
 
 		// Limit length to support up to an ipv6 address
 		if len(parts[i]) > 39 {
