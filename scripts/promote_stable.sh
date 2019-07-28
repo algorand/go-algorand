@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# promote_stable.sh - Promote the pending_* packages for stable channel
+# promote_stable.sh - Promote the build for stable channel
 #
 # Syntax:   promote_stable.sh
 #
@@ -34,9 +34,11 @@ init_s3cmd
 
 CHANNEL="stable"
 
-# Rename the _CHANNEL_ and CHANNEL-VARIANT pending files
-${S3CMD} ls s3://${S3_RELEASE_BUCKET}/pending_ | grep _${CHANNEL}[_-] | awk '{ print $4 }' | while read line; do
-    NEW_ARTIFACT_NAME=$(echo "$line" | sed -e 's/pending_//')
-    echo "Rename ${line} => ${NEW_ARTIFACT_NAME}"
-    ${S3CMD} mv ${line} ${NEW_ARTIFACT_NAME}
+# Move the _${CHANNEL}_ files from the build to the release bucket
+${S3CMD} ls s3://${S3_RELEASE_BUCKET}/channel/${CHANNEL}/ | grep _${CHANNEL}[_-] | awk '{ print $4 }' | while read line; do
+    NEW_ARTIFACT_NAME=$(echo "$line" | sed -e "s/${BUILD_BUCKET}/${RELEASE_BUCKET}/g")
+    echo "Copy ${line} => ${NEW_ARTIFACT_NAME}"
+    ${S3CMD} cp ${line} ${NEW_ARTIFACT_NAME}
+    echo "Deleting original file ${line}"
+    ${S3CMD} rm ${line}
 done
