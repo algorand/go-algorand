@@ -17,9 +17,6 @@
 // Package v1 defines models exposed by algod rest api
 package v1
 
-// swagger:strfmt binary
-type Bytes = []byte
-
 // NodeStatus contains the information about a node status
 // swagger:model NodeStatus
 type NodeStatus struct {
@@ -78,12 +75,14 @@ type Participation struct { // Round and Address fields are redundant if Partici
 	// ParticipationPK is the root participation public key (if any) currently registered for this round
 	//
 	// required: true
-	ParticipationPK bytes `json:"partpkb64"`
+	// swagger:strfmt byte
+	ParticipationPK []byte `json:"partpkb64"`
 
 	// VRFPK is the selection public key (if any) currently registered for this round
 	//
 	// required: true
-	VRFPK bytes `json:"vrfpkb64"`
+	// swagger:strfmt byte
+	VRFPK []byte `json:"vrfpkb64"`
 
 	// VoteFirst is the first round for which this participation is valid.
 	//
@@ -189,7 +188,8 @@ type Transaction struct {
 	// Note is a free form data
 	//
 	// required: false
-	Note bytes `json:"noteb64"`
+	// swagger:strfmt byte
+	Note []byte `json:"noteb64"`
 
 	// ConfirmedRound indicates the block number this transaction appeared in
 	//
@@ -223,7 +223,8 @@ type Transaction struct {
 	// Genesis hash
 	//
 	// required: true
-	GenesisHash Bytes `json:"genesishashb64"`
+	// swagger:strfmt byte
+	GenesisHash []byte `json:"genesishashb64"`
 }
 
 // PaymentTransactionType contains the additional fields for a payment Transaction
@@ -303,7 +304,8 @@ type TransactionParams struct {
 	// Genesis hash
 	//
 	// required: true
-	GenesisHash Bytes `json:"genesishashb64"`
+	// swagger:strfmt byte
+	GenesisHash []byte `json:"genesishashb64"`
 
 	// LastRound indicates the last round seen
 	//

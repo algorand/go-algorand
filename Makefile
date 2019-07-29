@@ -110,7 +110,7 @@ $(KMD_API_SWAGGER_SPEC): $(KMD_API_FILES)
 %/swagger.json.validated: %/swagger.json
 	@problem=$$(cat $< | jq -c '.definitions[].properties | select(. != null) | with_entries(select(.value.type=="array" and .value.items.format=="uint8")) | select(. != {}) | keys[]'); \
 	if [ "$${problem}" != "" ]; then \
-		echo "detected uint8 array in $<:$${problem}. Did you mean to use format: binary?"; \
+		echo "detected uint8 array in $<:\n$${problem}\nDid you mean to use \"type: string, format: byte\"?"; \
 		echo "you will need to fix these swagger problems to allow build to proceed"; \
 		exit 1; \
 	else \
