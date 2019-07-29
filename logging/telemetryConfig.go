@@ -100,7 +100,7 @@ func (cfg TelemetryConfig) Save(configPath string) error {
 // getHostName returns the HostName for telemetry (GUID:Name -- :Name is optional if blank)
 func (cfg TelemetryConfig) getHostName() string {
 	hostName := cfg.GUID
-	if len(cfg.Name) > 0 {
+	if cfg.Enable && len(cfg.Name) > 0 {
 		hostName += ":" + cfg.Name
 	}
 	return hostName
@@ -135,6 +135,6 @@ func loadTelemetryConfig(path string) (TelemetryConfig, error) {
 		}
 	}
 	cfg.FilePath = path
-	//cfg.Enable = telemetryOverride(cfg.Enable)
+	initializeConfig(cfg)
 	return cfg, err
 }
