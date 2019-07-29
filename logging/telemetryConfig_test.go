@@ -103,9 +103,10 @@ func Test_SanitizeTelemetryString(t *testing.T) {
 		{"@@@@@@@remove(-some*&!-garbage", "remove-some-garbage", 1},
 		{"@@@@@@@remove(-some*&!-garbage:times-%two", "remove-some-garbage:times-two", 2},
 		{"this.needs.to.be.truncated.because.it.is.way.too.long", "this.needs.to.be.truncated.because.it.i", 1},
+		{"2001:0db8:85a3:0000:0000:8a2e:0370:7334", "2001:0db8:85a3:0000:0000:8a2e:0370:7334", 1},
 	}
 
 	for _, test := range tests {
-		require.Equal(t, SanitizeTelemetryString(test.input, test.parts), test.expected)
+		require.Equal(t, test.expected, SanitizeTelemetryString(test.input, test.parts))
 	}
 }
