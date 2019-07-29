@@ -14,20 +14,23 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
+// Package common defines models exposed by algod rest api
 package common
 
-import "github.com/algorand/go-algorand/daemon/algod/api/spec/common"
+// swagger:strfmt binary
+type bytes = []byte // note that we need to make this its own object to get the strfmt annotation to work properly. Otherwise swagger generates []uint8 instead of type binary
+// ^ one day we should probably fork swagger, to avoid this workaround.
 
-// VersionsResponse is the response to 'GET /versions'
+// Version contains the current algod version.
 //
-// swagger:response VersionsResponse
-type VersionsResponse struct {
-	// in: body
-	Body common.Version
-}
-
-// GetError allows VersionResponse to satisfy the APIV1Response interface, even
-// though it can never return an error and is not versioned
-func (r VersionsResponse) GetError() error {
-	return nil
+// Note that we annotate this as a model so that legacy clients
+// can directly import a swagger generated Version model.
+// swagger:model Version
+type Version struct {
+	// required: true
+	Versions []string `json:"versions"`
+	// required: true
+	GenesisID string `json:"genesis_id"`
+	// required: true
+	GenesisHash bytes `json:"genesis_hash_b64"`
 }

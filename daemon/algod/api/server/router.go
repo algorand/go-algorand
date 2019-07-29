@@ -106,7 +106,7 @@ func registerHandlers(router *mux.Router, prefix string, routes lib.Routes, ctx 
 }
 
 // NewRouter builds and returns a new router from routes
-func NewRouter(logger logging.Logger, node node.Full, apiToken string, staticFileDir string) *mux.Router {
+func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, apiToken string) *mux.Router {
 	router := mux.NewRouter().StrictSlash(true)
 
 	// Middleware
@@ -115,7 +115,7 @@ func NewRouter(logger logging.Logger, node node.Full, apiToken string, staticFil
 	router.Use(middlewares.CORS)
 
 	// Request Context
-	ctx := lib.ReqContext{Node: node, Log: logger, StaticDataDir: staticFileDir}
+	ctx := lib.ReqContext{Node: node, Log: logger}
 
 	// Registers /debug/pprof handler under root path and under /urlAuth path
 	// to support header or url-provided token.

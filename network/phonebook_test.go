@@ -48,7 +48,7 @@ func testPhonebookAll(t *testing.T, set []string, ph Phonebook) {
 			}
 		}
 		if !ok {
-			t.Errorf("get missed %#v", known)
+			t.Errorf("get missed %#v; actual=%#v; set=%#v", known, actual, set)
 		}
 	}
 }
@@ -85,20 +85,29 @@ func testPhonebookUniform(t *testing.T, set []string, ph Phonebook, getsize int)
 
 func TestArrayPhonebookAll(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e"}
-	ph := ArrayPhonebook{set}
-	testPhonebookAll(t, set, &ph)
+	ph := MakeArrayPhonebook()
+	for _, e := range set {
+		ph.Entries[e] = phonebookData{}
+	}
+	testPhonebookAll(t, set, ph)
 }
 
 func TestArrayPhonebookUniform1(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e"}
-	ph := ArrayPhonebook{set}
-	testPhonebookUniform(t, set, &ph, 1)
+	ph := MakeArrayPhonebook()
+	for _, e := range set {
+		ph.Entries[e] = phonebookData{}
+	}
+	testPhonebookUniform(t, set, ph, 1)
 }
 
 func TestArrayPhonebookUniform3(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e"}
-	ph := ArrayPhonebook{set}
-	testPhonebookUniform(t, set, &ph, 3)
+	ph := MakeArrayPhonebook()
+	for _, e := range set {
+		ph.Entries[e] = phonebookData{}
+	}
+	testPhonebookUniform(t, set, ph, 3)
 }
 
 func extenderThread(th *ThreadsafePhonebook, more []string, wg *sync.WaitGroup, repetitions int) {
@@ -114,12 +123,12 @@ func extenderThread(th *ThreadsafePhonebook, more []string, wg *sync.WaitGroup, 
 func TestThreadsafePhonebookExtension(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e"}
 	more := []string{"f", "g", "h", "i", "j"}
-	ph := ThreadsafePhonebook{}
+	ph := MakeThreadsafePhonebook()
 	ph.ReplacePeerList(set)
 	wg := sync.WaitGroup{}
 	wg.Add(5)
 	for ti := 0; ti < 5; ti++ {
-		go extenderThread(&ph, more, &wg, 1000)
+		go extenderThread(ph, more, &wg, 1000)
 	}
 	wg.Wait()
 
@@ -140,14 +149,14 @@ func TestThreadsafePhonebookExtensionLong(t *testing.T) {
 		t.SkipNow()
 		return
 	}
-	ph := ThreadsafePhonebook{}
+	ph := MakeThreadsafePhonebook()
 	wg := sync.WaitGroup{}
 	const threads = 5
 	const setSize = 1000
 	const repetitions = 100
 	wg.Add(threads)
 	for i := 0; i < threads; i++ {
-		go threadTestThreadsafePhonebookExtensionLong(&wg, &ph, setSize, repetitions)
+		go threadTestThreadsafePhonebookExtensionLong(&wg, ph, setSize, repetitions)
 	}
 
 	wg.Wait()
@@ -157,19 +166,44 @@ func TestThreadsafePhonebookExtensionLong(t *testing.T) {
 
 func TestMultiPhonebook(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j"}
-	pha := ArrayPhonebook{set[:5]}
-	phb := ArrayPhonebook{set[5:]}
-	mp := MultiPhonebook{}
-	mp.AddPhonebook(&pha)
-	mp.AddPhonebook(&phb)
+	pha := MakeArrayPhonebook()
+	for _, e := range set[:5] {
+		pha.Entries[e] = phonebookData{}
+	}
+	phb := MakeArrayPhonebook()
+	for _, e := range set[5:] {
+		phb.Entries[e] = phonebookData{}
+	}
+	mp := MakeMultiPhonebook()
+	mp.AddOrUpdatePhonebook("pha", pha)
+	mp.AddOrUpdatePhonebook("phb", phb)
 
-	testPhonebookAll(t, set, &mp)
-	testPhonebookUniform(t, set, &mp, 1)
-	testPhonebookUniform(t, set, &mp, 3)
+	testPhonebookAll(t, set, mp)
+	testPhonebookUniform(t, set, mp, 1)
+	testPhonebookUniform(t, set, mp, 3)
+}
+
+func TestMultiPhonebookDuplicateFiltering(t *testing.T) {
+	set := []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j"}
+	pha := MakeArrayPhonebook()
+	for _, e := range set[:7] {
+		pha.Entries[e] = phonebookData{}
+	}
+	phb := MakeArrayPhonebook()
+	for _, e := range set[3:] {
+		phb.Entries[e] = phonebookData{}
+	}
+	mp := MakeMultiPhonebook()
+	mp.AddOrUpdatePhonebook("pha", pha)
+	mp.AddOrUpdatePhonebook("phb", phb)
+
+	testPhonebookAll(t, set, mp)
+	testPhonebookUniform(t, set, mp, 1)
+	testPhonebookUniform(t, set, mp, 3)
 }
 
 func BenchmarkThreadsafePhonebook(b *testing.B) {
-	ph := ThreadsafePhonebook{}
+	ph := MakeThreadsafePhonebook()
 	threads := 5
 	if b.N < threads {
 		threads = b.N
@@ -178,7 +212,7 @@ func BenchmarkThreadsafePhonebook(b *testing.B) {
 	wg.Add(threads)
 	repetitions := b.N / threads
 	for t := 0; t < threads; t++ {
-		go threadTestThreadsafePhonebookExtensionLong(&wg, &ph, 1000, repetitions)
+		go threadTestThreadsafePhonebookExtensionLong(&wg, ph, 1000, repetitions)
 	}
 	wg.Wait()
 }

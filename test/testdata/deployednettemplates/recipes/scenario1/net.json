@@ -5,7 +5,6 @@
 			"Nodes": [
 				{
 					"Name": "relay1",
-					"IsRelay": true,
 					"Wallets": null,
 					"NetAddress": "{{NetworkPort}}",
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -25,7 +24,6 @@
 			"Nodes": [
 				{
 					"Name": "relay2",
-					"IsRelay": true,
 					"Wallets": null,
 					"NetAddress": "{{NetworkPort}}",
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -45,7 +43,6 @@
 			"Nodes": [
 				{
 					"Name": "relay3",
-					"IsRelay": true,
 					"Wallets": null,
 					"NetAddress": "{{NetworkPort}}",
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -65,7 +62,6 @@
 			"Nodes": [
 				{
 					"Name": "relay4",
-					"IsRelay": true,
 					"Wallets": null,
 					"NetAddress": "{{NetworkPort}}",
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -85,7 +81,6 @@
 			"Nodes": [
 				{
 					"Name": "relay5",
-					"IsRelay": true,
 					"Wallets": null,
 					"NetAddress": "{{NetworkPort}}",
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -105,7 +100,6 @@
 			"Nodes": [
 				{
 					"Name": "node1",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet1",
@@ -166,7 +160,6 @@
 			"Nodes": [
 				{
 					"Name": "node2",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet2",
@@ -227,7 +220,6 @@
 			"Nodes": [
 				{
 					"Name": "node3",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet3",
@@ -288,7 +280,6 @@
 			"Nodes": [
 				{
 					"Name": "node4",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet4",
@@ -349,7 +340,6 @@
 			"Nodes": [
 				{
 					"Name": "node5",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet5",
@@ -410,7 +400,6 @@
 			"Nodes": [
 				{
 					"Name": "node6",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet6",
@@ -471,7 +460,6 @@
 			"Nodes": [
 				{
 					"Name": "node7",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet7",
@@ -532,7 +520,6 @@
 			"Nodes": [
 				{
 					"Name": "node8",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet8",
@@ -593,7 +580,6 @@
 			"Nodes": [
 				{
 					"Name": "node9",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet9",
@@ -654,7 +640,6 @@
 			"Nodes": [
 				{
 					"Name": "node10",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet10",
