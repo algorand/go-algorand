@@ -31,3 +31,6 @@ elif [ "${OS}" = "darwin" ]; then
 fi
 
 ${SCRIPTPATH}/configure_dev-deps.sh
+
+GOPATH=$(go env GOPATH)
+test -d "${GOPATH}/bin" || mkdir -p "${GOPATH}/bin"
