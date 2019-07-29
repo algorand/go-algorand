@@ -17,8 +17,12 @@
 package rpcs
 
 import (
+	"context"
+	"fmt"
+
 	"github.com/algorand/go-deadlock"
 
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
@@ -27,50 +31,96 @@ import (
 // WsFetcherService exists for the express purpose or providing a global
 // handler for fetcher gossip message response types
 type WsFetcherService struct {
-	log      logging.Logger
-	mu       deadlock.RWMutex
-	fetchers map[protocol.Tag]*WsFetcher
+	log             logging.Logger
+	mu              deadlock.RWMutex
+	pendingRequests map[string]chan WsGetBlockOut
 }
 
 func (fs *WsFetcherService) handleNetworkMsg(msg network.IncomingMessage) (out network.OutgoingMessage) {
 	// route message to appropriate wsFetcher (if registered)
-	fs.mu.RLock()
-	f := fs.fetchers[msg.Tag]
-	fs.mu.RUnlock()
-	if f == nil {
-		fs.log.Infof("WsFetcherService: no fetcher registered for tag (%v)", msg.Tag)
+	switch msg.Tag {
+	case protocol.UniCatchupResTag:
+	case protocol.UniEnsBlockResTag:
+	default:
+		fs.log.Warnf("WsFetcherService: no fetcher registered for tag (%v)", msg.Tag)
 		return
 	}
-	return f.HandleNetworkMsg(msg)
-}
 
-// RegisterWsFetcherForTag registers the given WsFetcher for the given tag, overwriting
-// any fetcher previously registered for that tag.
-func (fs *WsFetcherService) RegisterWsFetcherForTag(f *WsFetcher, tag protocol.Tag) {
-	fs.mu.Lock()
-	fs.fetchers[tag] = f
-	fs.mu.Unlock()
-}
+	uniPeer := msg.Sender.(network.UnicastPeer)
+	var resp WsGetBlockOut
 
-// UnregisterWsFetcherForTag clears the specified fetcher for the specified tag, if it exists.
-// We force the caller to pass in the fetcher, so that they don't unintentionally close another fetcher
-// that was registered before the first was closed.
-func (fs *WsFetcherService) UnregisterWsFetcherForTag(f *WsFetcher, tag protocol.Tag) {
-	fs.mu.Lock()
-	if fs.fetchers[tag] == f {
-		delete(fs.fetchers, tag)
+	if msg.Data == nil {
+		fs.log.Warnf("WsFetcherService(%v): request failed: catchup response no bytes sent", uniPeer.GetAddress())
+		out.Action = network.Disconnect
+		return
 	}
+
+	if decodeErr := protocol.Decode(msg.Data, &resp); decodeErr != nil {
+		fs.log.Infof("WsFetcherService(%v): request failed: unable to decode message : %v", uniPeer.GetAddress(), decodeErr)
+		out.Action = network.Disconnect
+		return
+	}
+
+	waitKey := makeKey(uniPeer, basics.Round(resp.Round), msg.Tag.Complement())
+	fs.mu.RLock()
+	f, hasWaitCh := fs.pendingRequests[waitKey]
+	fs.mu.RUnlock()
+	if !hasWaitCh {
+		if resp.Error == "" || len(resp.BlockBytes) == 0 {
+			fs.log.Infof("WsFetcherService: received a message response for a stale block request.  round %d, length %d, error : %s", resp.Round, len(resp.BlockBytes), resp.Error)
+		} else {
+			fs.log.Infof("WsFetcherService: received a message response for a stale block request.  round %d", resp.Round)
+		}
+		return
+	}
+
+	f <- resp
+	return
+}
+
+func makeKey(target network.UnicastPeer, round basics.Round, tag protocol.Tag) string {
+	return fmt.Sprintf("<%s>:%d:%s", target.GetAddress(), round, tag)
+
+}
+
+// RequestBlock send a request for block <round> and wait until it receives a response or a context expires.
+func (fs *WsFetcherService) RequestBlock(ctx context.Context, target network.UnicastPeer, round basics.Round, tag protocol.Tag) (WsGetBlockOut, error) {
+	waitCh := make(chan WsGetBlockOut, 1)
+	waitKey := makeKey(target, round, tag)
+
+	// register.
+	fs.mu.Lock()
+	fs.pendingRequests[waitKey] = waitCh
 	fs.mu.Unlock()
+
+	defer func() {
+		// unregister
+		fs.mu.Lock()
+		delete(fs.pendingRequests, waitKey)
+		fs.mu.Unlock()
+	}()
+
+	req := WsGetBlockRequest{Round: uint64(round)}
+	err := target.Unicast(ctx, protocol.Encode(req), tag)
+	if err != nil {
+		return WsGetBlockOut{}, fmt.Errorf("WsFetcherService.RequestBlock(%d): unicast failed, %v", round, err)
+	}
+	select {
+	case resp := <-waitCh:
+		return resp, nil
+	case <-ctx.Done():
+		return WsGetBlockOut{}, fmt.Errorf("WsFetcherService.RequestBlock(%d): cancelled by caller", round)
+	}
 }
 
 // RegisterWsFetcherService creates and returns a WsFetcherService that services gossip fetcher responses
 func RegisterWsFetcherService(log logging.Logger, registrar Registrar) *WsFetcherService {
 	service := new(WsFetcherService)
 	service.log = log
-	service.fetchers = make(map[protocol.Tag]*WsFetcher)
+	service.pendingRequests = make(map[string]chan WsGetBlockOut)
 	handlers := []network.TaggedMessageHandler{
-		{Tag: protocol.UniCatchupResTag, MessageHandler: network.HandlerFunc(service.handleNetworkMsg)},
-		{Tag: protocol.UniEnsBlockResTag, MessageHandler: network.HandlerFunc(service.handleNetworkMsg)},
+		{Tag: protocol.UniCatchupResTag, MessageHandler: network.HandlerFunc(service.handleNetworkMsg)},  // handles the response for a block catchup request
+		{Tag: protocol.UniEnsBlockResTag, MessageHandler: network.HandlerFunc(service.handleNetworkMsg)}, // handles the response for a block ensure digest request
 	}
 	registrar.RegisterHandlers(handlers)
 	return service
