@@ -130,6 +130,7 @@ func (cfg TelemetryConfig) getInstanceName() string {
 	return fmt.Sprintf("%s:", pathHashStr[:16])
 }
 
+// SanitizeTelemetryString applies sanitization rules and returns the sanitized string.
 func SanitizeTelemetryString(input string, maxParts int) string {
 	parts := strings.SplitN(input, ":", maxParts)
 	for i := range parts {

@@ -98,7 +98,7 @@ func Test_SanitizeTelemetryString(t *testing.T) {
 		parts    int
 	}
 
-	tests := []testcase {
+	tests := []testcase{
 		{"no:change", "no:change", 2},
 		{"@@@@@@@remove(-some*&!-garbage", "remove-some-garbage", 1},
 		{"@@@@@@@remove(-some*&!-garbage:times-%two", "remove-some-garbage:times-two", 2},
