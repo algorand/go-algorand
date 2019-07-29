@@ -27,6 +27,8 @@ BRANCHPARENT="$(git show-branch | grep '\*' | grep -v '${BRANCH}' | head -n1 | s
 
 if [ "${BRANCHPARENT}" = "rel/stable" ]; then
     echo "testnet"
+elif [ "${BRANCHPARENT}" = "rel/beta" ]; then
+    echo "beta"
 else
     echo "devnet"
 fi

@@ -27,7 +27,6 @@ rm -rf ${GOPATH}/src/github.com/algorand/go-algorand/crypto/lib
 
 cd ${GOPATH}/src/github.com/algorand/go-algorand
 export RELEASE_GENESIS_PROCESS=true
-export TRANSITION_TELEMETRY_BUILDS=true
 PLATFORM=$(./scripts/osarchtype.sh)
 PLATFORM_SPLIT=(${PLATFORM//\// })
 OS=${PLATFORM_SPLIT[0]}
@@ -70,7 +69,6 @@ export FULLVERSION=$(./scripts/compute_build_number.sh -f)
 # a bash user might `source build_env` to manually continue a broken build
 cat <<EOF>${HOME}/build_env
 export RELEASE_GENESIS_PROCESS=${RELEASE_GENESIS_PROCESS}
-export TRANSITION_TELEMETRY_BUILDS=${TRANSITION_TELEMETRY_BUILDS}
 PLATFORM=${PLATFORM}
 OS=${OS}
 ARCH=${ARCH}

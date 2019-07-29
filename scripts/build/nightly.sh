@@ -9,7 +9,6 @@ make -j4
 
 # Flag that we want release handling of genesis files
 export RELEASE_GENESIS_PROCESS=true
-export TRANSITION_TELEMETRY_BUILDS=true
 
 # Clone repo to temp location
 REPO_DIR=$(mktemp -d 2>/dev/null || mktemp -d -t "tmp")
@@ -39,7 +38,7 @@ git add ./genesistimestamp.dat ./buildnumber.dat
 git commit -m "Build ${BUILD_NUMBER} Data"
 git push
 
-TAG=rel/nightly-$(scripts/compute_build_number.sh -f)
+TAG=rel/beta-$(scripts/compute_build_number.sh -f)
 git tag -a ${TAG} -m "Genesis Timestamp: $(cat ./genesistimestamp.dat)"
 git push origin ${TAG}
 
