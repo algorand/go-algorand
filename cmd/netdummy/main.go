@@ -47,7 +47,8 @@ func main() {
 	log.SetLevel(logging.Debug)
 	log.SetOutput(os.Stderr)
 
-	addrs := &network.ArrayPhonebook{Entries: []string{*serverAddress}}
+	addrs := network.MakeArrayPhonebook()
+	addrs.Entries.ReplacePeerList([]string{*serverAddress})
 
 	var nodes []network.GossipNode
 	for i := 0; i < *numClients; i++ {
