@@ -36,6 +36,11 @@ type WsFetcherService struct {
 	pendingRequests map[string]chan WsGetBlockOut
 }
 
+func makePendingRequestKey(target network.UnicastPeer, round basics.Round, tag protocol.Tag) string {
+	return fmt.Sprintf("<%s>:%d:%s", target.GetAddress(), round, tag)
+
+}
+
 func (fs *WsFetcherService) handleNetworkMsg(msg network.IncomingMessage) (out network.OutgoingMessage) {
 	// route message to appropriate wsFetcher (if registered)
 	switch msg.Tag {
@@ -61,7 +66,7 @@ func (fs *WsFetcherService) handleNetworkMsg(msg network.IncomingMessage) (out n
 		return
 	}
 
-	waitKey := makeKey(uniPeer, basics.Round(resp.Round), msg.Tag.Complement())
+	waitKey := makePendingRequestKey(uniPeer, basics.Round(resp.Round), msg.Tag.Complement())
 	fs.mu.RLock()
 	f, hasWaitCh := fs.pendingRequests[waitKey]
 	fs.mu.RUnlock()
@@ -78,18 +83,18 @@ func (fs *WsFetcherService) handleNetworkMsg(msg network.IncomingMessage) (out n
 	return
 }
 
-func makeKey(target network.UnicastPeer, round basics.Round, tag protocol.Tag) string {
-	return fmt.Sprintf("<%s>:%d:%s", target.GetAddress(), round, tag)
-
-}
-
 // RequestBlock send a request for block <round> and wait until it receives a response or a context expires.
 func (fs *WsFetcherService) RequestBlock(ctx context.Context, target network.UnicastPeer, round basics.Round, tag protocol.Tag) (WsGetBlockOut, error) {
 	waitCh := make(chan WsGetBlockOut, 1)
-	waitKey := makeKey(target, round, tag)
+	waitKey := makePendingRequestKey(target, round, tag)
 
 	// register.
 	fs.mu.Lock()
+	if _, has := fs.pendingRequests[waitKey]; has {
+		// we already have a pending request for the same round and tag from the same peer
+		fs.mu.Unlock()
+		return WsGetBlockOut{}, fmt.Errorf("WsFetcherService.RequestBlock(%d): only single concurrent request for a round from a single peer(%s) is supported", round, target.GetAddress())
+	}
 	fs.pendingRequests[waitKey] = waitCh
 	fs.mu.Unlock()
 

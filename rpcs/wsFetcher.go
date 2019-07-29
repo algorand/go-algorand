@@ -102,12 +102,12 @@ func (wsf *WsFetcher) Close() {
 
 // a stub fetcherClient to satisfy the NetworkFetcher interface
 type wsFetcherClient struct {
-	target      network.UnicastPeer
-	tag         protocol.Tag
-	service     *WsFetcherService
-	pendingCtxs map[context.Context]context.CancelFunc
+	target      network.UnicastPeer                    // the peer where we're going to send the request.
+	tag         protocol.Tag                           // the tag that is associated with the request/
+	service     *WsFetcherService                      // the fetcher service. This is where we perform the actual request and waiting for the response.
+	pendingCtxs map[context.Context]context.CancelFunc // a map of all the current pending contexts.
 
-	closed bool
+	closed bool // a flag indicating that the fetcher will not perform additional block retrivals.
 
 	mu deadlock.Mutex
 }
