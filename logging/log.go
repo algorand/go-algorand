@@ -52,7 +52,7 @@ type Level uint32
 // Create a general Base logger
 var (
 	baseLogger      Logger
-	telemetryConfig *TelemetryConfig
+	telemetryConfig TelemetryConfig
 )
 
 const (
@@ -91,7 +91,7 @@ func init() {
 	Init()
 }
 
-func initializeConfig(cfg *TelemetryConfig) {
+func initializeConfig(cfg TelemetryConfig) {
 	telemetryConfig = cfg
 }
 
@@ -375,23 +375,14 @@ func (l logger) GetTelemetryEnabled() bool {
 }
 
 func (l logger) GetTelemetrySession() string {
-	if telemetryConfig == nil {
-		return ""
-	}
 	return telemetryConfig.SessionGUID
 }
 
 func (l logger) GetTelemetryHostName() string {
-	if telemetryConfig == nil {
-		return ""
-	}
 	return telemetryConfig.getHostName()
 }
 
 func (l logger) GetInstanceName() string {
-	if telemetryConfig == nil {
-		return ""
-	}
 	return telemetryConfig.getInstanceName()
 }
 

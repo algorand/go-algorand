@@ -38,18 +38,18 @@ func elasticsearchEndpoint() string {
 
 // TelemetryOverride Determines whether an override value is set and what it's value is.
 // The first return value is whether an override variable is found, if it is, the second is the override value.
-func TelemetryOverride(env string) (bool, bool) {
+func TelemetryOverride(env string) bool {
 	env = strings.ToLower(env)
 
 	if env == "1" || env == "true" {
-		return true, true
+		telemetryConfig.Enable = true
 	}
 
 	if env == "0" || env == "false" {
-		return true, false
+		telemetryConfig.Enable = false
 	}
 
-	return false, false
+	return telemetryConfig.Enable
 }
 
 // createTelemetryConfig creates a new TelemetryConfig structure with a generated GUID and the appropriate Telemetry endpoint.

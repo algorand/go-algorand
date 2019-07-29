@@ -85,7 +85,7 @@ func EnsureTelemetryConfigCreated(configDir *string, genesisID string) (Telemetr
 		configPath, err = config.GetConfigFilePath(loggingFilename)
 		if err != nil {
 			cfg := createTelemetryConfig()
-			initializeConfig(&cfg)
+			initializeConfig(cfg)
 			return createTelemetryConfig(), true, err
 		}
 	} else {
@@ -110,7 +110,7 @@ func EnsureTelemetryConfigCreated(configDir *string, genesisID string) (Telemetr
 	}
 	cfg.ChainID = fmt.Sprintf("%s-%s", ch, genesisID)
 
-	initializeConfig(&cfg)
+	initializeConfig(cfg)
 	return cfg, created, err
 }
 
