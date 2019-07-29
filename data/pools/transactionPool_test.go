@@ -45,16 +45,15 @@ type mockSpendableBalancesUnbounded struct {
 	exceptions map[basics.Address]uint64
 }
 
-func (b mockSpendableBalancesUnbounded) BalanceAndStatus(address basics.Address) (total basics.MicroAlgos, rewards basics.MicroAlgos, totalWithoutPendingRewards basics.MicroAlgos, status basics.Status, round basics.Round, err error) {
+func (b mockSpendableBalancesUnbounded) Lookup(r basics.Round, address basics.Address) (rec basics.AccountData, err error) {
 	if b.exceptions != nil {
 		if balance, has := b.exceptions[address]; has {
-			total = basics.MicroAlgos{Raw: balance}
+			rec.MicroAlgos = basics.MicroAlgos{Raw: balance}
 			return
 		}
 	}
-	total = basics.MicroAlgos{Raw: b.balance}
-	rewards = basics.MicroAlgos{Raw: 0}
-	round = 1
+	rec.MicroAlgos = basics.MicroAlgos{Raw: b.balance}
+	rec.RewardedMicroAlgos = basics.MicroAlgos{Raw: 0}
 	return
 }
 
@@ -72,7 +71,7 @@ func (b mockSpendableBalancesUnbounded) BlockHdr(basics.Round) (bookkeeping.Bloc
 	return bookkeeping.BlockHeader{}, nil
 }
 
-func (b mockSpendableBalancesUnbounded) LastRound() basics.Round {
+func (b mockSpendableBalancesUnbounded) Latest() basics.Round {
 	return 0
 }
 

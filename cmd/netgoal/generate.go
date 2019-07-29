@@ -18,6 +18,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"math/rand"
 	"os"
 	"regexp"
@@ -199,7 +200,9 @@ func generateNetworkTemplate(templateFilename string, wallets, relays, nodeHosts
 		newNode.NodeNameMatchRegex = ""
 		newNode.FractionApply = 0.0
 		newNode.Name = name
-		newNode.IsRelay = true
+		if newNode.NetAddress == "" {
+			return errors.New("relay template did not set NetAddress")
+		}
 		newNode.Wallets = nil
 		host.Nodes = append(host.Nodes, newNode)
 		network.Hosts = append(network.Hosts, host)

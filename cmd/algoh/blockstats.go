@@ -19,7 +19,7 @@ package main
 import (
 	"time"
 
-	"github.com/algorand/go-algorand/daemon/algod/api/client/models"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 )
 
@@ -34,7 +34,7 @@ type blockstats struct {
 func (stats *blockstats) init(block uint64) {
 }
 
-func (stats *blockstats) onBlock(block models.Block) {
+func (stats *blockstats) onBlock(block v1.Block) {
 	now := time.Now()
 
 	// Ensure we only create stats from consecutive blocks.
@@ -46,7 +46,7 @@ func (stats *blockstats) onBlock(block models.Block) {
 
 	// Grab unique users.
 	users := make(map[string]bool)
-	for _, tx := range block.Txns.Transactions {
+	for _, tx := range block.Transactions.Transactions {
 		users[tx.From] = true
 	}
 
@@ -60,7 +60,7 @@ func (stats *blockstats) onBlock(block models.Block) {
 		Hash:                block.Hash,
 		OriginalProposer:    block.Proposer,
 		Round:               block.Round,
-		Transactions:        uint64(len(block.Txns.Transactions)),
+		Transactions:        uint64(len(block.Transactions.Transactions)),
 		ActiveUsers:         uint64(len(users)),
 		AgreementDurationMs: uint64(duration.Nanoseconds() / 1000 / 1000),
 		NetworkDowntimeMs:   uint64(downtime.Nanoseconds() / 1000 / 1000),

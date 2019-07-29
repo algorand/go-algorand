@@ -22,7 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/daemon/algod/api/client/models"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -42,7 +42,7 @@ const BankKey = 1
 const BidderKey = 2
 
 func genConfirmedTx(msg interface{}, round uint64, from, to basics.Address,
-	secret *crypto.SignatureSecrets) models.Transaction {
+	secret *crypto.SignatureSecrets) v1.Transaction {
 
 	nf := NoteField{}
 	switch v := msg.(type) {
@@ -60,10 +60,10 @@ func genConfirmedTx(msg interface{}, round uint64, from, to basics.Address,
 		nf.SignedParams = SignedParams{Params: v, Sig: secret.Sign(v)}
 
 	}
-	return models.Transaction{
+	return v1.Transaction{
 		ConfirmedRound: round,
 		From:           from.String(),
-		Payment: &models.PaymentTransactionType{
+		Payment: &v1.PaymentTransactionType{
 			To: to.String(),
 		},
 		Note: protocol.Encode(nf),
