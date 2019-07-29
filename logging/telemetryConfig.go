@@ -33,10 +33,11 @@ import (
 
 var loggingFilename = "logging.config"
 var reg *regexp.Regexp
+const ipv6AddressLength := 39
 
 func init() {
 	var err error
-	reg, err = regexp.Compile("[^a-zA-Z0-9._-]+")
+	reg, err = regexp.Compile("[^a-zA-Z0-9._-:]+")
 	if err != nil {
 		reg = nil
 	}
@@ -132,16 +133,19 @@ func (cfg TelemetryConfig) getInstanceName() string {
 
 // SanitizeTelemetryString applies sanitization rules and returns the sanitized string.
 func SanitizeTelemetryString(input string, maxParts int) string {
+	// Truncate to a reasonable size.
+	input = input[:maxParts * 100]
+
+	// Limit to alphanumeric, and _-
+	if reg != nil {
+		input = reg.ReplaceAllString(input, "")
+	}
+
 	parts := strings.SplitN(input, ":", maxParts)
 	for i := range parts {
-		// Limit to alphanumeric, and _-
-		if reg != nil {
-			parts[i] = reg.ReplaceAllString(parts[i], "")
-		}
-
 		// Limit length to support up to an ipv6 address
-		if len(parts[i]) > 39 {
-			parts[i] = parts[i][:39]
+		if len(parts[i]) > ipv6AddressLength {
+			parts[i] = parts[i][:ipv6AddressLength]
 		}
 	}
 	return strings.Join(parts, ":")
