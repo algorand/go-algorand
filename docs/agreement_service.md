@@ -1,6 +1,6 @@
 # Agreement Service
 
-The Algorand Agreement Service manages the consensus protocol and is composed of the following components. 
+The Algorand Agreement Service manages the consensus protocol and is composed of the following components. Detailed implementation notes are in the [agreement README](../agreement/README.md).
 
 The agreement service learns what blocks the community has reached consensus on and writes them to the ledger. When your account is called upon to propose a block or serve on a committee, the agreement service handles that too. Other parts of the `agreement` package deal with related issues -- asking the network for blocks we're missing (and helping peers who are missing blocks), generally figuring out how to handle incoming messages from the network, etc. Most of the complicated logic lives in this package (along with most of the subtle concurrency issues). Reading the Algorand SOSP paper before diving into this package will be super helpful for understanding what's going on.
 

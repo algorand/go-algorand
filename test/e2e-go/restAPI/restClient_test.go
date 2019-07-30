@@ -30,7 +30,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
@@ -149,6 +152,7 @@ func waitForTransaction(t *testing.T, testClient libgoal.Client, fromAddress, tx
 		}
 		if err == nil {
 			require.NotEmpty(t, tx)
+			require.Empty(t, tx.PoolError)
 			if tx.ConfirmedRound > 0 {
 				return
 			}
@@ -397,6 +401,92 @@ func TestClientCanGetTransactionStatus(t *testing.T) {
 	t.Log(tx.ID().String())
 	_, err = waitForTransaction(t, testClient, someAddress, tx.ID().String(), 15*time.Second)
 	require.NoError(t, err)
+}
+
+func TestAccountBalance(t *testing.T) {
+	defer fixture.SetTestContext(t)()
+	testClient := fixture.LibGoalClient
+	waitForRoundOne(t, testClient)
+	wh, err := testClient.GetUnencryptedWalletHandle()
+	require.NoError(t, err)
+	addresses, err := testClient.ListAddresses(wh)
+	require.NoError(t, err)
+	_, someAddress := getMaxBalAddr(t, testClient, addresses)
+	if someAddress == "" {
+		t.Error("no addr with funds")
+	}
+
+	toAddress, err := testClient.GenerateAddress(wh)
+	require.NoError(t, err)
+	tx, err := testClient.SendPaymentFromWallet(wh, nil, someAddress, toAddress, 10000, 100000, nil, "", 0, 0)
+	require.NoError(t, err)
+	_, err = waitForTransaction(t, testClient, someAddress, tx.ID().String(), 15*time.Second)
+	require.NoError(t, err)
+
+	account, err := testClient.AccountInformation(toAddress)
+	require.NoError(t, err)
+	require.Equal(t, account.AmountWithoutPendingRewards, uint64(100000))
+	require.Truef(t, account.Amount >= 100000, "account must have received money, and account information endpoint must print it")
+}
+
+func TestAccountParticipationInfo(t *testing.T) {
+	defer fixture.SetTestContext(t)()
+	testClient := fixture.LibGoalClient
+	waitForRoundOne(t, testClient)
+	wh, err := testClient.GetUnencryptedWalletHandle()
+	require.NoError(t, err)
+	addresses, err := testClient.ListAddresses(wh)
+	require.NoError(t, err)
+	_, someAddress := getMaxBalAddr(t, testClient, addresses)
+	if someAddress == "" {
+		t.Error("no addr with funds")
+	}
+	require.NoError(t, err)
+	addr, err := basics.UnmarshalChecksumAddress(someAddress)
+
+	params, err := testClient.SuggestedParams()
+	require.NoError(t, err)
+
+	firstRound := basics.Round(params.LastRound + 1)
+	lastRound := basics.Round(params.LastRound + 1000)
+	dilution := uint64(100)
+	randomVotePKStr := randomString(32)
+	var votePK crypto.OneTimeSignatureVerifier
+	copy(votePK[:], []byte(randomVotePKStr))
+	randomSelPKStr := randomString(32)
+	var selPK crypto.VRFVerifier
+	copy(selPK[:], []byte(randomSelPKStr))
+	var gh crypto.Digest
+	copy(gh[:], params.GenesisHash)
+	tx := transactions.Transaction{
+		Type: protocol.KeyRegistrationTx,
+		Header: transactions.Header{
+			Sender:      addr,
+			Fee:         basics.MicroAlgos{Raw: 10000},
+			FirstValid:  firstRound,
+			LastValid:   lastRound,
+			GenesisHash: gh,
+		},
+		KeyregTxnFields: transactions.KeyregTxnFields{
+			VotePK:          votePK,
+			SelectionPK:     selPK,
+			VoteKeyDilution: dilution,
+			VoteFirst:       firstRound,
+			VoteLast:        lastRound,
+		},
+	}
+	txID, err := testClient.SignAndBroadcastTransaction(wh, nil, tx)
+	require.NoError(t, err)
+	_, err = waitForTransaction(t, testClient, someAddress, txID, 15*time.Second)
+	require.NoError(t, err)
+
+	account, err := testClient.AccountInformation(someAddress)
+	require.NoError(t, err)
+	require.Equal(t, randomVotePKStr, string(account.Participation.ParticipationPK), "API must print correct root voting key")
+	require.Equal(t, randomSelPKStr, string(account.Participation.VRFPK), "API must print correct vrf key")
+	require.Equal(t, uint64(firstRound), account.Participation.VoteFirst, "API must print correct first participation round")
+	require.Equal(t, uint64(lastRound), account.Participation.VoteLast, "API must print correct last participation round")
+	require.Equal(t, dilution, account.Participation.VoteKeyDilution, "API must print correct key dilution")
 }
 
 func TestSupply(t *testing.T) {

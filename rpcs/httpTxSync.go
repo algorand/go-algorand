@@ -120,6 +120,7 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txns []tr
 		return nil, err
 	}
 	request.Header.Set("Content-Type", requestContentType)
+	network.SetUserAgentHeader(request.Header)
 	request = request.WithContext(ctx)
 	response, err := client.Do(request)
 	if err != nil {
