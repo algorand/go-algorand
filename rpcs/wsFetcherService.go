@@ -114,7 +114,14 @@ func (fs *WsFetcherService) RequestBlock(ctx context.Context, target network.Uni
 	case resp := <-waitCh:
 		return resp, nil
 	case <-ctx.Done():
-		return WsGetBlockOut{}, fmt.Errorf("WsFetcherService.RequestBlock(%d): cancelled by caller", round)
+		switch ctx.Err() {
+		case context.DeadlineExceeded:
+			return WsGetBlockOut{}, fmt.Errorf("WsFetcherService.RequestBlock(%d): request to %s was timed out", round, target.GetAddress())
+		case context.Canceled:
+			return WsGetBlockOut{}, fmt.Errorf("WsFetcherService.RequestBlock(%d): request to %s was cancelled by context", round, target.GetAddress())
+		default:
+			return WsGetBlockOut{}, ctx.Err()
+		}
 	}
 }
 
