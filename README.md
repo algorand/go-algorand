@@ -90,7 +90,7 @@ The following packages provide core functionality to the `algod` and `kmd` daemo
 `daemon` defines the two daemons which provide Algorand clients with services:
 
   - `daemon/algod` holds the `algod` daemon, which implements a participating node.  `algod` allows a node to participate in the agreement protocol, submit and confirm transactions, and view the state of the Algorand Ledger.
-    - `daemon/algod/api` ([README](daemon/algod/api/README.md)) is the main REST interface for normal interactions with algod.
+    - `daemon/algod/api` ([README](daemon/algod/api/README.md)) is the REST interface used for interactions with algod.
   - `daemon/kmd` ([README](daemon/kmd/README.md)) holds the `kmd` daemon.  This daemon allows a node to sign transactions.  Because `kmd` is separate from `algod`, `kmd` allows a user to sign transactions on an air-gapped computer.
   
 The following packages allow developers to interface with the Algorand system:
