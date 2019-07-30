@@ -11,8 +11,8 @@ apt-get update
 apt-get install -y gnupg2 curl software-properties-common python3
 apt-key add /stuff/key.pub
 add-apt-repository -y "deb [trusted=yes] http://${DC_IP}:8111/ stable main"
-apt-get update --allow-unauthenticated
-apt-get install -y --allow-unauthenticated algorand
+apt-get update
+apt-get install -y algorand
 apt-get install -y expect
 
 algod -v

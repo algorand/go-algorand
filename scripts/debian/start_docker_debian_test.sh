@@ -3,17 +3,18 @@ set -x
 set -v
 echo "Starting start_docker.sh"
 TEST_NAME="DebianTest"
-TEST_DIR=/tmp/debian-installer-test
 echo "start docker test: " $TEST_NAME
+
+TEST_DIR=$(mktemp -d)
+trap "rm -rf $TEST_DIR" 0
 echo "test dir: " $TEST_DIR
 
+#set TMPDIR for aptly to use
 TMPDIR=$TEST_DIR
 KEY_DIR=$1
 echo "KEY_DIR: $KEY_DIR"
 echo "DC_IP: $DC_IP"
 STATUS=0
-
-mkdir -p  ${TEST_DIR}
 
 # run the docker container
 docker \
