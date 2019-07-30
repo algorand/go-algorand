@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -29,13 +30,24 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
+)
+
+// TxEncodingOrigin is an enum identifying the origin of a tx being encoded
+type TxEncodingOrigin int
+
+const (
+	//OriginNode is used when the tx comes from the node
+	OriginNode TxEncodingOrigin = 0
+
+	//OriginPending is used when the tx comes from the pending tx pool
+	OriginPending TxEncodingOrigin = 1
 )
 
 func nodeStatus(node *node.AlgorandFullNode) (res v1.NodeStatus, err error) {
@@ -55,14 +67,28 @@ func nodeStatus(node *node.AlgorandFullNode) (res v1.NodeStatus, err error) {
 	}, nil
 }
 
-func txEncode(tx transactions.Transaction, ad transactions.ApplyData) (res v1.Transaction, err error) {
+func txEncode(tx transactions.Transaction, ad transactions.ApplyData, origin TxEncodingOrigin, round basics.Round) (res v1.Transaction, err error) {
 	switch tx.Type {
 	case protocol.PaymentTx:
 		return paymentTxEncode(tx, ad), nil
 	case protocol.KeyRegistrationTx:
 		return keyregTxEncode(tx, ad), nil
+	default:
+		var msg strings.Builder
+
+		msg.WriteString(errUnknownTransactionType)
+
+		msg.WriteString(fmt.Sprintf(" [Type: %s", tx.Type))
+		switch origin {
+		case OriginNode:
+			msg.WriteString(fmt.Sprintf(" / Round: %d", round))
+		case OriginPending:
+			msg.WriteString(" / Pending pool")
+		}
+		msg.WriteString("]")
+
+		return v1.Transaction{}, errors.New(msg.String())
 	}
-	return v1.Transaction{}, errors.New(errUnknownTransactionType)
 }
 
 func paymentTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
@@ -110,7 +136,7 @@ func keyregTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.T
 		FirstRound:  uint64(tx.First()),
 		LastRound:   uint64(tx.Last()),
 		Note:        tx.Aux(),
-		Keyreg:     &keyreg,
+		Keyreg:      &keyreg,
 		FromRewards: ad.SenderRewards.Raw,
 		GenesisID:   tx.GenesisID,
 		GenesisHash: tx.GenesisHash[:],
@@ -118,7 +144,7 @@ func keyregTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.T
 }
 
 func txWithStatusEncode(tr node.TxnWithStatus) (res v1.Transaction, err error) {
-	s, err := txEncode(tr.Txn.Txn, tr.ApplyData)
+	s, err := txEncode(tr.Txn.Txn, tr.ApplyData, OriginNode, tr.ConfirmedRound)
 	if err != nil {
 		return v1.Transaction{}, err
 	}
@@ -595,7 +621,7 @@ func GetPendingTransactions(ctx lib.ReqContext, w http.ResponseWriter, r *http.R
 
 	responseTxs := make([]v1.Transaction, len(txs))
 	for i, twr := range txs {
-		responseTxs[i], err = txEncode(twr.Txn, transactions.ApplyData{})
+		responseTxs[i], err = txEncode(twr.Txn, transactions.ApplyData{}, OriginPending, 0)
 		if err != nil {
 			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpTransactionPool, ctx.Log)
 			return
