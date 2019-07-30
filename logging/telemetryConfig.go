@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"regexp"
 	"strings"
 
 	"github.com/satori/go.uuid"
@@ -32,16 +31,7 @@ import (
 )
 
 var loggingFilename = "logging.config"
-var reg *regexp.Regexp
 const ipv6AddressLength = 39
-
-func init() {
-	var err error
-	reg, err = regexp.Compile("[^a-zA-Z0-9:._-]+")
-	if err != nil {
-		reg = nil
-	}
-}
 
 func elasticsearchEndpoint() string {
 	return "https://1ae9f9654b25441090fe5c48c833b95a.us-east-1.aws.found.io:9243"
@@ -133,25 +123,12 @@ func (cfg TelemetryConfig) getInstanceName() string {
 
 // SanitizeTelemetryString applies sanitization rules and returns the sanitized string.
 func SanitizeTelemetryString(input string, maxParts int) string {
-	// Truncate to a reasonable size.
-	maxReasonableSize := maxParts * 100
+	// Truncate to a reasonable size, allowing some undefined separator.
+	maxReasonableSize := maxParts * ipv6AddressLength + maxParts - 1
 	if len(input) > maxReasonableSize {
 		input = input[:maxReasonableSize]
 	}
-
-	// Limit to alphanumeric, and _-
-	if reg != nil {
-		input = reg.ReplaceAllString(input, "")
-	}
-
-	parts := strings.SplitN(input, ":", maxParts)
-	for i := range parts {
-		// Limit length to support up to an ipv6 address
-		if len(parts[i]) > ipv6AddressLength {
-			parts[i] = parts[i][:ipv6AddressLength]
-		}
-	}
-	return strings.Join(parts, ":")
+	return input
 }
 
 func loadTelemetryConfig(path string) (TelemetryConfig, error) {
