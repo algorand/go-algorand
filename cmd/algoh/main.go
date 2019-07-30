@@ -286,10 +286,7 @@ func initTelemetry(genesisID string, log logging.Logger, dataDirectory string) {
 		}
 
 		// Apply telemetry override.
-		hasOverride, override := logging.TelemetryOverride(*telemetryOverride)
-		if hasOverride {
-			telemetryConfig.Enable = override
-		}
+		telemetryConfig.Enable = logging.TelemetryOverride(*telemetryOverride)
 
 		if telemetryConfig.Enable {
 			err = log.EnableTelemetry(telemetryConfig)
