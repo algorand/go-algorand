@@ -32,7 +32,7 @@ func TestCyclicWrite(t *testing.T) {
 
 	space := 1024
 	limit := uint64(space)
-	cyclicWriter := MakeCyclicFileWriter(liveFileName, archiveFileName, limit)
+	cyclicWriter := MakeCyclicFileWriter(liveFileName, archiveFileName, limit, 0)
 
 	firstWrite := make([]byte, space, space)
 	for i := 0; i < space; i++ {
