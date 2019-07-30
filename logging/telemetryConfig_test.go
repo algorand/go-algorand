@@ -90,3 +90,23 @@ func Test_CreateSaveLoadTelemetryConfig(t *testing.T) {
 	a.Equal(config1.Password, config2.Password)
 
 }
+
+func Test_SanitizeTelemetryString(t *testing.T) {
+	type testcase struct {
+		input    string
+		expected string
+		parts    int
+	}
+
+	tests := []testcase{
+		{"2001:0db8:85a3:0000:0000:8a2e:0370:7334", "2001:0db8:85a3:0000:0000:8a2e:0370:7334", 1},
+		{"2001:0db8:85a3:0000:0000:8a2e:0370:7334:9999", "2001:0db8:85a3:0000:0000:8a2e:0370:7334", 1},
+		{"this.needs.to.be.truncated.because.it.is.way.too.long", "this.needs.to.be.truncated.because.it.i", 1},
+		{"this.needs.to.be.truncated.because.it.is.way.too.long:two-parts-can-be-bigger", "this.needs.to.be.truncated.because.it.is.way.too.long:two-parts-can-be-bigger", 2},
+		{"this.needs.to.be.truncated.because.it.is.way.too.long:two-parts-can-be-bigger-but-there-is-still-a-limit", "this.needs.to.be.truncated.because.it.is.way.too.long:two-parts-can-be-bigger-b", 2},
+	}
+
+	for _, test := range tests {
+		require.Equal(t, test.expected, SanitizeTelemetryString(test.input, test.parts))
+	}
+}

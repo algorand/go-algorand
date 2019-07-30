@@ -51,7 +51,8 @@ type Level uint32
 
 // Create a general Base logger
 var (
-	baseLogger Logger
+	baseLogger      Logger
+	telemetryConfig TelemetryConfig
 )
 
 const (
@@ -88,6 +89,10 @@ func Init() {
 
 func init() {
 	Init()
+}
+
+func initializeConfig(cfg TelemetryConfig) {
+	telemetryConfig = cfg
 }
 
 // Fields maps logrus fields
@@ -370,24 +375,15 @@ func (l logger) GetTelemetryEnabled() bool {
 }
 
 func (l logger) GetTelemetrySession() string {
-	if l.loggerState.telemetry == nil {
-		return ""
-	}
-	return l.loggerState.telemetry.sessionGUID
+	return telemetryConfig.SessionGUID
 }
 
 func (l logger) GetTelemetryHostName() string {
-	if l.loggerState.telemetry == nil {
-		return ""
-	}
-	return l.loggerState.telemetry.hostName
+	return telemetryConfig.getHostName()
 }
 
 func (l logger) GetInstanceName() string {
-	if l.loggerState.telemetry == nil {
-		return ""
-	}
-	return l.loggerState.telemetry.instanceName
+	return telemetryConfig.getInstanceName()
 }
 
 func (l logger) Metrics(category telemetryspec.Category, metrics telemetryspec.MetricDetails, details interface{}) {
