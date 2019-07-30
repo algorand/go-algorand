@@ -73,7 +73,7 @@ func (s *Server) Initialize(cfg config.Local) error {
 	if cfg.LogArchiveMaxAge != "" {
 		maxLogAge, err = time.ParseDuration(cfg.LogArchiveMaxAge)
 		if err != nil {
-			s.log.Errorf("invalid config LogArchiveMaxAge: %s", err)
+			s.log.Fatalf("invalid config LogArchiveMaxAge: %s", err)
 			maxLogAge = 0
 		}
 	}

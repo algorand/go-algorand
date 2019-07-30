@@ -285,9 +285,6 @@ func migrate(cfg Local) (newCfg Local, err error) {
 		if newCfg.PriorityPeers == nil {
 			newCfg.PriorityPeers = map[string]bool{}
 		}
-		if newCfg.LogArchiveName == defaultLocalV3.LogArchiveName {
-			newCfg.LogArchiveName = defaultLocalV4.LogArchiveName
-		}
 		newCfg.Version = 4
 	}
 
