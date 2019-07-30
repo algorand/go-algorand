@@ -755,9 +755,9 @@ func (wn *WebsocketNetwork) checkServerResponseVariables(header http.Header, add
 
 // getCommonHeaders retreives the common headers for both incoming and outgoing connections from the provided headers.
 func getCommonHeaders(headers http.Header) (otherTelemetryGUID, otherInstanceName, otherPublicAddr string) {
-	otherTelemetryGUID = headers.Get(TelemetryIDHeader)
-	otherInstanceName = headers.Get(InstanceNameHeader)
-	otherPublicAddr = headers.Get(AddressHeader)
+	otherTelemetryGUID = logging.SanitizeTelemetryString(headers.Get(TelemetryIDHeader), 1)
+	otherInstanceName = logging.SanitizeTelemetryString(headers.Get(InstanceNameHeader), 2)
+	otherPublicAddr = logging.SanitizeTelemetryString(headers.Get(AddressHeader), 1)
 	return
 }
 
