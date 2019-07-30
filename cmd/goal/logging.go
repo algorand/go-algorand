@@ -24,11 +24,13 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
 )
 
 var (
-	nodeName string
+	nodeName   string
+	logChannel string
 )
 
 func init() {
@@ -38,6 +40,8 @@ func init() {
 
 	// Enable Logging : node name
 	enableCmd.Flags().StringVarP(&nodeName, "name", "n", "", "Friendly-name to use for node")
+
+	loggingSendCmd.Flags().StringVarP(&logChannel, "channel", "c", "", "Release channel for log file source")
 }
 
 var loggingCmd = &cobra.Command{
@@ -115,13 +119,19 @@ var loggingSendCmd = &cobra.Command{
 		}
 		timestamp := time.Now().UTC().Format("20060102150405")
 
+		if logChannel == "" {
+			logChannel = config.GetCurrentVersion().Channel
+		}
+
+		targetFolder := filepath.Join("channel", logChannel)
+
 		modifier := ""
 		counter := uint(1)
 		onDataDirs(func(dataDir string) {
 			dirname := filepath.Base(dataDir)
 			name := basename + cfg.GUID + "_" + dirname + "-" + timestamp + modifier + ".tar.gz"
 
-			for err := range logging.CollectAndUploadData(dataDir, name) {
+			for err := range logging.CollectAndUploadData(dataDir, name, targetFolder) {
 				fmt.Fprintf(os.Stderr, "%v\n", err)
 			}
 			modifier = fmt.Sprintf("-%d", counter)

@@ -180,7 +180,7 @@ func (s *Server) Start() {
 
 	// use the data dir as the static file dir (for our API server), there's
 	// no need to separate the two yet. This lets us serve the swagger.json file.
-	apiHandler := apiServer.NewRouter(s.log, s.node, apiToken, s.RootPath)
+	apiHandler := apiServer.NewRouter(s.log, s.node, apiToken)
 
 	addr := cfg.EndpointAddress
 	if addr == "" {

@@ -58,6 +58,10 @@ type NodeStatus struct {
 	//
 	// required: true
 	CatchupTime int64 `json:"catchupTime"`
+
+	// HasSyncedSinceStartup indicates whether a round has completed since startup
+	// Required: true
+	HasSyncedSinceStartup bool `json:"hasSyncedSinceStartup"`
 }
 
 // TransactionID Description
@@ -67,6 +71,35 @@ type TransactionID struct {
 	//
 	// required: true
 	TxID string `json:"txId"`
+}
+
+// Participation Description
+// swagger:model Participation
+type Participation struct { // Round and Address fields are redundant if Participation embedded in Account. Exclude for now.
+	// ParticipationPK is the root participation public key (if any) currently registered for this round
+	//
+	// required: true
+	ParticipationPK bytes `json:"partpkb64"`
+
+	// VRFPK is the selection public key (if any) currently registered for this round
+	//
+	// required: true
+	VRFPK bytes `json:"vrfpkb64"`
+
+	// VoteFirst is the first round for which this participation is valid.
+	//
+	// required: true
+	VoteFirst uint64 `json:"votefst"`
+
+	// VoteLast is the last round for which this participation is valid.
+	//
+	// required: true
+	VoteLast uint64 `json:"votelst"`
+
+	// VoteKeyDilution is the number of subkeys in for each batch of participation keys.
+	//
+	// required: true
+	VoteKeyDilution uint64 `json:"votekd"`
 }
 
 // Account Description
@@ -99,7 +132,7 @@ type Account struct {
 	// required: true
 	AmountWithoutPendingRewards uint64 `json:"amountwithoutpendingrewards"`
 
-	// Rewards indicates the total rewards of MicroAlgos the account has recieved
+	// Rewards indicates the total rewards of MicroAlgos the account has received, including pending rewards.
 	//
 	// required: true
 	Rewards uint64 `json:"rewards"`
@@ -111,6 +144,13 @@ type Account struct {
 	//
 	// required: true
 	Status string `json:"status"`
+
+	// Participation is the participation information currently associated with the account, if any.
+	// This field is optional and may not be set even if participation information is registered.
+	// In future REST API versions, this field may become required.
+	//
+	// required: false
+	Participation Participation `json:"participation,omitempty"`
 }
 
 // Transaction contains all fields common to all transactions and serves as an envelope to all transactions
@@ -150,12 +190,12 @@ type Transaction struct {
 	// Note is a free form data
 	//
 	// required: false
-	Note bytes `json:"noteb64,omitempty"`
+	Note bytes `json:"noteb64"`
 
 	// ConfirmedRound indicates the block number this transaction appeared in
 	//
 	// required: false
-	ConfirmedRound uint64 `json:"round,omitempty"`
+	ConfirmedRound uint64 `json:"round"`
 
 	// PoolError indicates the transaction was evicted from this node's transaction
 	// pool (if non-empty).  A non-empty PoolError does not guarantee that the
@@ -163,7 +203,7 @@ type Transaction struct {
 	// transaction and may attempt to commit it in the future.
 	//
 	// required: false
-	PoolError string `json:"poolerror,omitempty"`
+	PoolError string `json:"poolerror"`
 
 	// This is a list of all supported transactions.
 	// To add another one, create a struct with XXXTransactionType and embed it here.
@@ -198,12 +238,12 @@ type PaymentTransactionType struct {
 	// CloseRemainderTo is the address the sender closed to
 	//
 	// required: false
-	CloseRemainderTo string `json:"close,omitempty"`
+	CloseRemainderTo string `json:"close"`
 
 	// CloseAmount is the amount sent to CloseRemainderTo, for committed transaction
 	//
 	// required: false
-	CloseAmount uint64 `json:"closeamount,omitempty"`
+	CloseAmount uint64 `json:"closeamount"`
 
 	// Amount is the amount of MicroAlgos intended to be transferred
 	//

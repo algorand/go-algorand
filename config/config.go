@@ -629,6 +629,17 @@ type Local struct {
 
 	// ForceRelayMessages indicates whether the network library relay messages even in the case that no NetAddress was specified.
 	ForceRelayMessages bool
+
+	// ConnectionsRateLimitingWindowSeconds is being used in conjunction with ConnectionsRateLimitingCount;
+	// see ConnectionsRateLimitingCount description for further information. Providing a zero value
+	// in this variable disables the connection rate limiting.
+	ConnectionsRateLimitingWindowSeconds uint
+
+	// ConnectionsRateLimitingCount is being used along with ConnectionsRateLimitingWindowSeconds to determine if
+	// a connection request should be accepted or not. The gossip network examine all the incoming requests in the past
+	// ConnectionsRateLimitingWindowSeconds seconds that share the same origin. If the total count exceed the ConnectionsRateLimitingCount
+	// value, the connection is refused.
+	ConnectionsRateLimitingCount uint
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)
@@ -697,6 +708,13 @@ func mergeConfigFromFile(configpath string, source Local) (Local, error) {
 func loadConfig(reader io.Reader, config *Local) error {
 	dec := json.NewDecoder(reader)
 	return dec.Decode(config)
+}
+
+// DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
+func (cfg Local) DNSBootstrapArray(networkID protocol.NetworkID) (bootstrapArray []string) {
+	dnsBootstrapString := cfg.DNSBootstrap(networkID)
+	bootstrapArray = strings.Split(dnsBootstrapString, ";")
+	return
 }
 
 // DNSBootstrap returns the network-specific DNSBootstrap identifier

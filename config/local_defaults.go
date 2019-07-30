@@ -50,6 +50,8 @@ var defaultLocalV4 = Local{
 	CadaverSizeTarget:                     1073741824,
 	CatchupFailurePeerRefreshRate:         10,
 	CatchupParallelBlocks:                 50,
+	ConnectionsRateLimitingCount:          60,
+	ConnectionsRateLimitingWindowSeconds:  1,
 	DeadlockDetection:                     0,
 	DNSBootstrapID:                        "<network>.algorand.network",
 	EnableAgreementReporting:              false,
