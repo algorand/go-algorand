@@ -146,6 +146,7 @@ SNAPSHOT=algodummy-$(date +%Y%m%d_%H%M%S)
 aptly -config=${HOME}/dummyaptly.conf snapshot create ${SNAPSHOT} from repo algodummy
 aptly -config=${HOME}/dummyaptly.conf publish snapshot -origin=Algorand -label=Algorand ${SNAPSHOT}
 
+# TODO: make a trap-atexit subscript context in which if the `docker run` commands fail the httpd.py is killed so that the outer build_release.sh can exit and isn't waiting on the httpd.py subprocess forever
 (cd ${HOME}/dummyaptly/public && python3 ${GOPATH}/src/github.com/algorand/go-algorand/scripts/httpd.py --pid ${HOME}/phttpd.pid) &
 
 

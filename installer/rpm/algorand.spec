@@ -84,6 +84,7 @@ fi
 %if %{RELEASE_GENESIS_PROCESS} != "x"
   /var/lib/algorand/genesis/devnet/genesis.json
   /var/lib/algorand/genesis/testnet/genesis.json
+  /var/lib/algorand/genesis/beta/genesis.json
   /var/lib/algorand/genesis/mainnet/genesis.json
 %endif
 /lib/systemd/system/algorand.service
