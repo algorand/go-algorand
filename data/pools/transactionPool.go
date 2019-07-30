@@ -33,17 +33,16 @@ import (
 // TransactionPool is a struct maintaining a sanitized pool of transactions that are available for inclusion in
 // a Block.  We sanitize it by preventing duplicates and limiting the number of transactions retained for each account
 type TransactionPool struct {
-	mu                    deadlock.RWMutex
-	pendingTxns           []transactions.SignedTxn
-	pendingTxids          map[transactions.Txid]transactions.SignedTxn
-	expiredTxCount        map[basics.Round]int
-	pendingBlockEvaluator *ledger.BlockEvaluator
-	pendingBlockParams    config.ConsensusParams
-	numPendingWholeBlocks basics.Round
-	minFeeMultiplier      uint64
-	ledger                *ledger.Ledger
-	statusCache           *statusCache
-	logStats              bool
+	mu                     deadlock.RWMutex
+	pendingTxns            []transactions.SignedTxn
+	pendingTxids           map[transactions.Txid]transactions.SignedTxn
+	expiredTxCount         map[basics.Round]int
+	pendingBlockEvaluator  *ledger.BlockEvaluator
+	numPendingWholeBlocks  basics.Round
+	feeThresholdMultiplier uint64
+	ledger                 *ledger.Ledger
+	statusCache            *statusCache
+	logStats               bool
 }
 
 // MakeTransactionPool is the constructor, it uses Ledger to ensure that no account has pending transactions that together overspend.
@@ -141,16 +140,20 @@ func (pool *TransactionPool) test(t transactions.SignedTxn) error {
 		}
 	}
 
-	// The baseline threshold fee per byte is estimated based on a
-	// 1000-byte transaction size (which is an overestimate).  This
-	// means that, when the pool is not under load, the total MinFee
-	// dominates for sub-KB transactions, but once the pool comes
-	// under load, the fee-per-byte will quickly come to dominate.
-	feePerByte := pool.pendingBlockParams.MinTxnFee / 1000
+	// The baseline threshold fee per byte is 1, the smallest fee we can
+	// represent.  This amounts to a fee of 100 for a 100-byte txn, which
+	// is well below MinTxnFee (1000).  This means that, when the pool
+	// is not under load, the total MinFee dominates for small txns,
+	// but once the pool comes under load, the fee-per-byte will quickly
+	// come to dominate.
+	feePerByte := uint64(1)
 
-	// The threshold is multiplied by the minFeeMultiplier that tracks
-	// the load on the transaction pool over time.
-	feePerByte = feePerByte * pool.minFeeMultiplier
+	// The threshold is multiplied by the feeThresholdMultiplier that
+	// tracks the load on the transaction pool over time.  If the pool
+	// is mostly idle, feeThresholdMultiplier will be 0, and all txns
+	// are accepted (assuming the BlockEvaluator approves them, which
+	// requires a flat MinTxnFee).
+	feePerByte = feePerByte * pool.feeThresholdMultiplier
 
 	// The threshold grows exponentially if there are multiple blocks
 	// pending in the pool.
@@ -250,23 +253,25 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block) {
 
 	// Adjust the pool fee threshold.  The rules are:
 	// - If there was less than one full block in the pool, reduce
-	//   the multiplier by 2x.
+	//   the multiplier by 2x.  It will eventually go to 0, so that
+	//   only the flat MinTxnFee matters if the pool is idle.
 	// - If there were less than two full blocks in the pool, keep
 	//   the multiplier as-is.
 	// - If there were two or more full blocks in the pool, grow
-	//   the multiplier by 2x.
+	//   the multiplier by 2x (or increment by 1, if 0).
 	switch pool.numPendingWholeBlocks {
 	case 0:
-		pool.minFeeMultiplier = pool.minFeeMultiplier / 2
-		if pool.minFeeMultiplier == 0 {
-			pool.minFeeMultiplier = 1
-		}
+		pool.feeThresholdMultiplier = pool.feeThresholdMultiplier / 2
 
 	case 1:
 		// Keep the fee multiplier the same.
 
 	default:
-		pool.minFeeMultiplier = pool.minFeeMultiplier * 2
+		if pool.feeThresholdMultiplier == 0 {
+			pool.feeThresholdMultiplier = 1
+		} else {
+			pool.feeThresholdMultiplier = pool.feeThresholdMultiplier * 2
+		}
 	}
 
 	var stats telemetryspec.ProcessBlockMetrics
@@ -353,7 +358,6 @@ func (pool *TransactionPool) recomputeBlockEvaluator() (stats telemetryspec.Proc
 
 	next := bookkeeping.MakeBlock(prev)
 	pool.numPendingWholeBlocks = 0
-	pool.pendingBlockParams = config.Consensus[next.CurrentProtocol]
 	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, &alwaysVerifiedPool{}, nil)
 	if err != nil {
 		logging.Base().Warnf("TransactionPool.recomputeBlockEvaluator: cannot start evaluator: %v", err)
