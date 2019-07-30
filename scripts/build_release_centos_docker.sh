@@ -106,7 +106,7 @@ yum-config-manager --add-repo http://${DC_IP}:8111/algodummy.repo
 yum install -y algorand
 algod -v
 # check that the installed version is now the current version
-algod -v | grep -q ${FULLVERSION}.stable
+algod -v | grep -q ${FULLVERSION}.${CHANNEL}
 
 if [ ! -d /root/testnode ]; then
     mkdir -p /root/testnode
