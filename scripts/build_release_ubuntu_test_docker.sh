@@ -31,7 +31,7 @@ else
     cp -p /var/lib/algorand/genesis/testnet/genesis.json /root/testnode
 
     goal node start -d /root/testnode
-    goal node wait -d /root/testnode -w 60
+    goal node wait -d /root/testnode -w 120
     goal node stop -d /root/testnode
 fi
 
@@ -50,7 +50,7 @@ if [ ! -d /root/testnode ]; then
 fi
 
 goal node start -d /root/testnode
-goal node wait -d /root/testnode -w 60
+goal node wait -d /root/testnode -w 120
 goal node stop -d /root/testnode
 
 echo UBUNTU_DOCKER_TEST_OK
