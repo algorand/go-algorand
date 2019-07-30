@@ -38,24 +38,24 @@ type TransactionPool struct {
 	pendingTxids          map[transactions.Txid]transactions.SignedTxn
 	expiredTxCount        map[basics.Round]int
 	pendingBlockEvaluator *ledger.BlockEvaluator
-	nextPendingTxRound    basics.Round
+	pendingBlockParams    config.ConsensusParams
+	numPendingWholeBlocks basics.Round
+	minFeeMultiplier      uint64
 	ledger                *ledger.Ledger
 	statusCache           *statusCache
 	logStats              bool
 }
 
 // MakeTransactionPool is the constructor, it uses Ledger to ensure that no account has pending transactions that together overspend.
-// When the transaction pool is full, the priority of a new transaction must be at least exponentialPriorityGrowthFactor
-// times greater than the minimum-priority of a transaction already in the pool (otherwise the new transaction is discarded).
 //
-// The pool also contains status information for the last transactionPoolSize
+// The pool also contains status information for the last transactionPoolStatusSize
 // transactions that were removed from the pool without being committed.
-func MakeTransactionPool(ledger *ledger.Ledger, exponentialPriorityGrowthFactor uint64, transactionPoolSize int, logStats bool) *TransactionPool {
+func MakeTransactionPool(ledger *ledger.Ledger, transactionPoolStatusSize int, logStats bool) *TransactionPool {
 	pool := TransactionPool{
 		pendingTxids:   make(map[transactions.Txid]transactions.SignedTxn),
 		expiredTxCount: make(map[basics.Round]int),
 		ledger:         ledger,
-		statusCache:    makeStatusCache(transactionPoolSize),
+		statusCache:    makeStatusCache(transactionPoolStatusSize),
 		logStats:       logStats,
 	}
 	pool.recomputeBlockEvaluator()
@@ -125,7 +125,7 @@ func (pool *TransactionPool) test(t transactions.SignedTxn) error {
 		return fmt.Errorf("TransactionPool.test: no pending block evaluator")
 	}
 
-	tentativeRound := pool.nextPendingTxRound
+	tentativeRound := pool.pendingBlockEvaluator.Round() + pool.numPendingWholeBlocks
 	err := pool.pendingBlockEvaluator.TestTransaction(t, nil)
 	if err == ledger.ErrNoSpace {
 		tentativeRound++
@@ -141,8 +141,28 @@ func (pool *TransactionPool) test(t transactions.SignedTxn) error {
 		}
 	}
 
-	// check priority
-	// XXX waiting for an AIMD-style algorithm from Georgios
+	// The baseline threshold fee per byte is estimated based on a
+	// 1000-byte transaction size (which is an overestimate).  This
+	// means that, when the pool is not under load, the total MinFee
+	// dominates for sub-KB transactions, but once the pool comes
+	// under load, the fee-per-byte will quickly come to dominate.
+	feePerByte := pool.pendingBlockParams.MinTxnFee / 1000
+
+	// The threshold is multiplied by the minFeeMultiplier that tracks
+	// the load on the transaction pool over time.
+	feePerByte = feePerByte * pool.minFeeMultiplier
+
+	// The threshold grows exponentially if there are multiple blocks
+	// pending in the pool.
+	if pool.numPendingWholeBlocks > 1 {
+		feePerByte = feePerByte << (pool.numPendingWholeBlocks - 1)
+	}
+
+	feeThreshold := feePerByte * uint64(t.GetEncodedLength())
+	if t.Txn.Fee.Raw < feeThreshold {
+		return fmt.Errorf("fee %d below threshold %d (%d per byte * %d bytes)",
+			t.Txn.Fee, feeThreshold, feePerByte, t.GetEncodedLength())
+	}
 
 	return nil
 }
@@ -228,6 +248,27 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block) {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
+	// Adjust the pool fee threshold.  The rules are:
+	// - If there was less than one full block in the pool, reduce
+	//   the multiplier by 2x.
+	// - If there were less than two full blocks in the pool, keep
+	//   the multiplier as-is.
+	// - If there were two or more full blocks in the pool, grow
+	//   the multiplier by 2x.
+	switch pool.numPendingWholeBlocks {
+	case 0:
+		pool.minFeeMultiplier = pool.minFeeMultiplier / 2
+		if pool.minFeeMultiplier == 0 {
+			pool.minFeeMultiplier = 1
+		}
+
+	case 1:
+		// Keep the fee multiplier the same.
+
+	default:
+		pool.minFeeMultiplier = pool.minFeeMultiplier * 2
+	}
+
 	var stats telemetryspec.ProcessBlockMetrics
 	var knownCommitted uint
 	var unknownCommitted uint
@@ -274,9 +315,10 @@ func (*alwaysVerifiedPool) Verified(txn transactions.SignedTxn) bool {
 }
 
 func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(tx transactions.SignedTxn) error {
-	if tx.Txn.LastValid < pool.nextPendingTxRound {
+	r := pool.pendingBlockEvaluator.Round() + pool.numPendingWholeBlocks
+	if tx.Txn.LastValid < r {
 		return transactions.TxnDeadError{
-			Round:      pool.nextPendingTxRound,
+			Round:      r,
 			FirstValid: tx.Txn.FirstValid,
 			LastValid:  tx.Txn.LastValid,
 		}
@@ -288,7 +330,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(tx transactions.Sign
 func (pool *TransactionPool) addToPendingBlockEvaluator(tx transactions.SignedTxn) error {
 	err := pool.addToPendingBlockEvaluatorOnce(tx)
 	if err == ledger.ErrNoSpace {
-		pool.nextPendingTxRound++
+		pool.numPendingWholeBlocks++
 		pool.pendingBlockEvaluator.ResetTxnBytes()
 		err = pool.addToPendingBlockEvaluatorOnce(tx)
 	}
@@ -310,7 +352,8 @@ func (pool *TransactionPool) recomputeBlockEvaluator() (stats telemetryspec.Proc
 	}
 
 	next := bookkeeping.MakeBlock(prev)
-	pool.nextPendingTxRound = next.Round()
+	pool.numPendingWholeBlocks = 0
+	pool.pendingBlockParams = config.Consensus[next.CurrentProtocol]
 	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, &alwaysVerifiedPool{}, nil)
 	if err != nil {
 		logging.Base().Warnf("TransactionPool.recomputeBlockEvaluator: cannot start evaluator: %v", err)
