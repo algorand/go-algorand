@@ -366,3 +366,48 @@ func delayStartNode(node *AlgorandFullNode, peers []*AlgorandFullNode, delay tim
 		peer.net.RequestConnectOutgoing(false, nil)
 	}
 }
+
+func TestStatusReport_TimeSinceLastRound(t *testing.T) {
+	type fields struct {
+		LastRoundTimestamp time.Time
+	}
+
+	tests := []struct {
+		name      string
+		fields    fields
+		want      time.Duration
+		wantError bool
+	}{
+		// test cases
+		{
+			name: "test1",
+			fields: fields{
+				LastRoundTimestamp: time.Time{},
+			},
+			want:      time.Duration(0),
+			wantError: false,
+		},
+		{
+			name: "test2",
+			fields: fields{
+				LastRoundTimestamp: time.Now(),
+			},
+			want:      time.Duration(0),
+			wantError: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			status := StatusReport{
+				LastRoundTimestamp: tt.fields.LastRoundTimestamp,
+			}
+			if got := status.TimeSinceLastRound(); got != tt.want {
+				if !tt.wantError {
+					t.Errorf("StatusReport.TimeSinceLastRound() = %v, want = %v", got, tt.want)
+				}
+			} else if tt.wantError {
+				t.Errorf("StatusReport.TimeSinceLastRound() = %v, want != %v", got, tt.want)
+			}
+		})
+	}
+}

@@ -20,14 +20,16 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
+
+	"github.com/algorand/go-algorand/util/s3"
 )
 
 var sourcePath string
-var sendBucket string
+var uploadBucket string
 
 func init() {
 	sendCmd.Flags().StringVarP(&sourcePath, "sourcePath", "s", "", "Path containing versions to send (required)")
-	sendCmd.Flags().StringVarP(&sendBucket, "bucket", "b", "", "S3 bucket to send files to.")
+	sendCmd.Flags().StringVarP(&uploadBucket, "bucket", "b", "", "S3 bucket to upload files to.")
 	sendCmd.MarkFlagRequired("sourcePath")
 }
 
@@ -36,14 +38,17 @@ var sendCmd = &cobra.Command{
 	Short: "Upload versions to S3",
 	Long:  "Uploads *.tar.gz files from specified path",
 	Run: func(cmd *cobra.Command, args []string) {
-		s3, err := makeS3SessionForUpload(sendBucket)
+		if uploadBucket == "" {
+			uploadBucket = s3.GetS3ReleaseBucket()
+		}
+		s3Session, err := s3.MakeS3SessionForUploadWithBucket(uploadBucket)
 		if err != nil {
 			exitErrorf("Error creating s3 session %s", err.Error())
 		}
 
 		var files []string
 		if files, err = getPackageFilesInPath(sourcePath); err == nil {
-			err = s3.uploadFiles(files)
+			err = s3Session.UploadChannelFiles(channel, files)
 		}
 		if err != nil {
 			exitErrorf("Error uploading files", err.Error())

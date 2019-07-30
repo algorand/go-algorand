@@ -19,30 +19,40 @@ package logging
 import (
 	"archive/tar"
 	"compress/gzip"
+	"fmt"
 	"io"
 	"os"
 	"path"
 	"path/filepath"
 	"sync"
+
+	"github.com/algorand/go-algorand/util/s3"
 )
 
 // CollectAndUploadData combines all of the data files that we want packaged up and uploaded
 // for analysis and uploads the tarball to S3.
 // dataDir: the node's data directory containing the files of interest
 // bundleFilename: the name of the resulting tarball on S3
-func CollectAndUploadData(dataDir string, bundleFilename string) <-chan error {
+// targetFolder: the subfolder in the s3 bucket to store the file
+func CollectAndUploadData(dataDir string, bundleFilename string, targetFolder string) <-chan error {
 	errorChannel := make(chan error, 1)
 	pipeReader, pipeWriter := io.Pipe()
 	go func() {
-		s3, err := makeS3SessionForUpload()
+		// Close the error channel to signal completion
+		defer close(errorChannel)
+
+		bucket := s3.GetS3UploadBucket()
+		s3Session, err := s3.MakeS3SessionForUploadWithBucket(bucket)
 		if err != nil {
 			errorChannel <- err
 			return
 		}
 		wg := sync.WaitGroup{}
 		wg.Add(1)
+		targetFilename := filepath.Join(targetFolder, path.Base(bundleFilename))
 		go func() {
-			err = s3.uploadFileStream(bundleFilename, pipeReader)
+			fmt.Printf("Uploading to s3://%s/%s\n", bucket, targetFilename)
+			err = s3Session.UploadFileStream(targetFilename, pipeReader)
 			if err != nil {
 				errorChannel <- err
 			}
@@ -58,8 +68,6 @@ func CollectAndUploadData(dataDir string, bundleFilename string) <-chan error {
 		pipeWriter.Close()
 		// Now wait for reader (S3 uploader) to finish uploading
 		wg.Wait()
-		// Close the error channel to signal completion
-		close(errorChannel)
 	}()
 	return errorChannel
 }
