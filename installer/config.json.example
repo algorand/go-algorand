@@ -22,6 +22,8 @@
     "IncomingMessageFilterBucketCount": 5,
     "IncomingMessageFilterBucketSize": 512,
     "IsIndexerActive": false,
+    "LogArchiveMaxAge": "",
+    "LogArchiveName": "node.archive.log",
     "LogSizeLimit": 1073741824,
     "MaxConnectionsPerIP": 30,
     "NetAddress": "",

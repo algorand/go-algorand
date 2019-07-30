@@ -30,24 +30,17 @@ const configVersion = uint32(4)
 // These versioned structures need to be maintained CAREFULLY and treated
 // like UNIVERSAL CONSTANTS - they should not be modified once committed.
 //
-// Add fields or change defaults in a new defaultLocalV# instance,
+// New fields may be added to the current defaultLocalV# and should
+// also be added to installer/config.json.example and
+// test/testdata/configs/config-v{n}.json
+//
+// Changing a default value requires creating a new defaultLocalV# instance,
 // bump the version number (configVersion), and add appropriate migration and tests.
-//
-// EXCEPTION: If you are adding a new value whose default value is it's implicit default value
-//            it is safe / acceptable to add it without bumping the Config version.
-//
-// CLARIFICATION:
-//
-// If you need to add a parameter that has a default value different from its
-// zero value (eg int != 0, string != ""), you must bump the Config version.
-//
-// If you need to change a parameter's default, you must bump the Config version AND
-// provide a migration implementation.
 //
 // !!! WARNING !!!
 
 var defaultLocalV4 = Local{
-	// DO NOT MODIFY THIS STRUCTURE IN ANY WAY - See WARNING at top of file
+	// DO NOT MODIFY VALUES - New values may be added carefully - See WARNING at top of file
 	Version:                               4,
 	Archival:                              false,
 	BaseLoggerDebugLevel:                  4, // Was 1
@@ -57,6 +50,8 @@ var defaultLocalV4 = Local{
 	CadaverSizeTarget:                     1073741824,
 	CatchupFailurePeerRefreshRate:         10,
 	CatchupParallelBlocks:                 50,
+	ConnectionsRateLimitingCount:          60,
+	ConnectionsRateLimitingWindowSeconds:  1,
 	DeadlockDetection:                     0,
 	DNSBootstrapID:                        "<network>.algorand.network",
 	EnableAgreementReporting:              false,
@@ -70,6 +65,8 @@ var defaultLocalV4 = Local{
 	IncomingConnectionsLimit:              10000, // Was -1
 	IncomingMessageFilterBucketCount:      5,
 	IncomingMessageFilterBucketSize:       512,
+	LogArchiveName:                        "node.archive.log",
+	LogArchiveMaxAge:                      "",
 	LogSizeLimit:                          1073741824,
 	MaxConnectionsPerIP:                   30,
 	NetAddress:                            "",
@@ -89,13 +86,11 @@ var defaultLocalV4 = Local{
 	TxSyncIntervalSeconds:                 60,
 	TxSyncTimeoutSeconds:                  30,
 	TxSyncServeResponseSize:               1000000,
-	ConnectionsRateLimitingWindowSeconds:  1,
-	ConnectionsRateLimitingCount:          60,
-	// DO NOT MODIFY THIS STRUCTURE IN ANY WAY - See WARNING at top of file
+	// DO NOT MODIFY VALUES - New values may be added carefully - See WARNING at top of file
 }
 
 var defaultLocalV3 = Local{
-	// DO NOT MODIFY THIS STRUCTURE IN ANY WAY - See WARNING at top of file
+	// DO NOT MODIFY VALUES - New values may be added carefully - See WARNING at top of file
 	Version:                               3,
 	Archival:                              false,
 	BaseLoggerDebugLevel:                  4, // Was 1
@@ -133,11 +128,11 @@ var defaultLocalV3 = Local{
 	TxSyncTimeoutSeconds:                  30,
 	TxSyncServeResponseSize:               1000000,
 	IsIndexerActive:                       false,
-	// DO NOT MODIFY THIS STRUCTURE IN ANY WAY - See WARNING at top of file
+	// DO NOT MODIFY VALUES - New values may be added carefully - See WARNING at top of file
 }
 
 var defaultLocalV2 = Local{
-	// DO NOT MODIFY THIS STRUCTURE IN ANY WAY - See WARNING at top of file
+	// DO NOT MODIFY VALUES - New values may be added carefully - See WARNING at top of file
 	Version:                               2,
 	Archival:                              false,
 	BaseLoggerDebugLevel:                  4, // Was 1
@@ -167,11 +162,11 @@ var defaultLocalV2 = Local{
 	TxPoolSize:                            50000,
 	TxSyncIntervalSeconds:                 60,
 	TxSyncTimeoutSeconds:                  30,
-	// DO NOT MODIFY THIS STRUCTURE IN ANY WAY - See WARNING at top of file
+	// DO NOT MODIFY VALUES - New values may be added carefully - See WARNING at top of file
 }
 
 var defaultLocalV1 = Local{
-	// DO NOT MODIFY THIS STRUCTURE IN ANY WAY - See WARNING at top of file
+	// DO NOT MODIFY VALUES - New values may be added carefully - See WARNING at top of file
 	Version:                               1,
 	Archival:                              false,
 	BaseLoggerDebugLevel:                  4, // Was 1
@@ -200,11 +195,11 @@ var defaultLocalV1 = Local{
 	TxPoolSize:                            50000,
 	TxSyncIntervalSeconds:                 60,
 	TxSyncTimeoutSeconds:                  30,
-	// DO NOT MODIFY THIS STRUCTURE IN ANY WAY - See WARNING at top of file
+	// DO NOT MODIFY VALUES - New values may be added carefully - See WARNING at top of file
 }
 
 var defaultLocalV0 = Local{
-	// DO NOT MODIFY THIS STRUCTURE IN ANY WAY - See WARNING at top of file
+	// DO NOT MODIFY VALUES - New values may be added carefully - See WARNING at top of file
 	Version:                               0,
 	Archival:                              false,
 	BaseLoggerDebugLevel:                  1,
@@ -232,7 +227,7 @@ var defaultLocalV0 = Local{
 	TxPoolSize:                            50000,
 	TxSyncIntervalSeconds:                 60,
 	TxSyncTimeoutSeconds:                  30,
-	// DO NOT MODIFY THIS STRUCTURE IN ANY WAY - See WARNING at top of file
+	// DO NOT MODIFY VALUES - New values may be added carefully - See WARNING at top of file
 }
 
 func migrate(cfg Local) (newCfg Local, err error) {
