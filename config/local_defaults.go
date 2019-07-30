@@ -89,6 +89,8 @@ var defaultLocalV4 = Local{
 	TxSyncIntervalSeconds:                 60,
 	TxSyncTimeoutSeconds:                  30,
 	TxSyncServeResponseSize:               1000000,
+	ConnectionsRateLimitingWindowSeconds:  1,
+	ConnectionsRateLimitingCount:          60,
 	// DO NOT MODIFY THIS STRUCTURE IN ANY WAY - See WARNING at top of file
 }
 
