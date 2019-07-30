@@ -146,7 +146,7 @@ SNAPSHOT=algodummy-$(date +%Y%m%d_%H%M%S)
 aptly -config=${HOME}/dummyaptly.conf snapshot create ${SNAPSHOT} from repo algodummy
 aptly -config=${HOME}/dummyaptly.conf publish snapshot -origin=Algorand -label=Algorand ${SNAPSHOT}
 
-scripts/build_release_run_ubuntu_docker_build_test.sh
+${GOPATH}/src/github.com/algorand/go-algorand/scripts/build_release_run_ubuntu_docker_build_test.sh
 
 date "+build_release done building ubuntu %Y%m%d_%H%M%S"
 
