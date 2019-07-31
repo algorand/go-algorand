@@ -57,7 +57,7 @@ for bin in "${bin_files[@]}"; do
 done
 
 mkdir -p ${PKG_ROOT}/usr/lib/algorand
-lib_files=("updater" "find-nodes.sh" "updatekey.json")
+lib_files=("updater" "find-nodes.sh")
 for lib in "${lib_files[@]}"; do
     cp ${GOPATH}/bin/${lib} ${PKG_ROOT}/usr/lib/algorand
     chmod g-w ${PKG_ROOT}/usr/lib/algorand/${lib}

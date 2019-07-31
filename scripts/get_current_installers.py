@@ -14,7 +14,7 @@ def get_stage_release_set(response):
     for x in response['Contents']:
         path = x['Key']
         pre, fname = path.rsplit('/', 1)
-        if fname.startswith('tools_') or fname.startswith('install_') or fname.startswith('pending_'):
+        if fname.startswith('tools_') or fname.startswith('install_') or fname.startswith('node_'):
             continue
         if prefix is None:
             prefix = pre
