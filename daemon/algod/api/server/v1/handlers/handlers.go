@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -29,13 +30,24 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
+)
+
+// TxEncodingOrigin is an enum identifying the origin of a tx being encoded
+type TxEncodingOrigin int
+
+const (
+	//OriginNode is used when the tx comes from the node
+	OriginNode TxEncodingOrigin = 0
+
+	//OriginPending is used when the tx comes from the pending tx pool
+	OriginPending TxEncodingOrigin = 1
 )
 
 func nodeStatus(node *node.AlgorandFullNode) (res v1.NodeStatus, err error) {
@@ -53,6 +65,30 @@ func nodeStatus(node *node.AlgorandFullNode) (res v1.NodeStatus, err error) {
 		TimeSinceLastRound:   stat.TimeSinceLastRound().Nanoseconds(),
 		CatchupTime:          stat.CatchupTime.Nanoseconds(),
 	}, nil
+}
+
+func txEncode(tx transactions.Transaction, ad transactions.ApplyData, origin TxEncodingOrigin, round basics.Round) (res v1.Transaction, err error) {
+	switch tx.Type {
+	case protocol.PaymentTx:
+		return paymentTxEncode(tx, ad), nil
+	case protocol.KeyRegistrationTx:
+		return keyregTxEncode(tx, ad), nil
+	default:
+		var msg strings.Builder
+
+		msg.WriteString(errUnknownTransactionType)
+
+		msg.WriteString(fmt.Sprintf(" [Type: %s", tx.Type))
+		switch origin {
+		case OriginNode:
+			msg.WriteString(fmt.Sprintf(" / Round: %d", round))
+		case OriginPending:
+			msg.WriteString(" / Pending pool")
+		}
+		msg.WriteString("]")
+
+		return v1.Transaction{}, errors.New(msg.String())
+	}
 }
 
 func paymentTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
@@ -83,11 +119,38 @@ func paymentTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.
 	}
 }
 
-func txWithStatusEncode(tr node.TxnWithStatus) v1.Transaction {
-	s := paymentTxEncode(tr.Txn.Txn, tr.ApplyData)
+func keyregTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
+	keyreg := v1.KeyregTransactionType{
+		VotePK:          tx.KeyregTxnFields.VotePK[:],
+		SelectionPK:     tx.KeyregTxnFields.SelectionPK[:],
+		VoteFirst:       uint64(tx.KeyregTxnFields.VoteFirst),
+		VoteLast:        uint64(tx.KeyregTxnFields.VoteLast),
+		VoteKeyDilution: tx.KeyregTxnFields.VoteKeyDilution,
+	}
+
+	return v1.Transaction{
+		Type:        string(tx.Type),
+		TxID:        tx.ID().String(),
+		From:        tx.Src().String(),
+		Fee:         tx.TxFee().Raw,
+		FirstRound:  uint64(tx.First()),
+		LastRound:   uint64(tx.Last()),
+		Note:        tx.Aux(),
+		Keyreg:      &keyreg,
+		FromRewards: ad.SenderRewards.Raw,
+		GenesisID:   tx.GenesisID,
+		GenesisHash: tx.GenesisHash[:],
+	}
+}
+
+func txWithStatusEncode(tr node.TxnWithStatus) (res v1.Transaction, err error) {
+	s, err := txEncode(tr.Txn.Txn, tr.ApplyData, OriginNode, tr.ConfirmedRound)
+	if err != nil {
+		return v1.Transaction{}, err
+	}
 	s.ConfirmedRound = uint64(tr.ConfirmedRound)
 	s.PoolError = tr.PoolError
-	return s
+	return s, nil
 }
 
 func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error) {
@@ -129,7 +192,12 @@ func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error)
 			ConfirmedRound: b.Round(),
 			ApplyData:      txn.ApplyData,
 		}
-		txns = append(txns, txWithStatusEncode(tx))
+		encTx, err := txWithStatusEncode(tx)
+		if err != nil {
+			return v1.Block{}, err
+		}
+
+		txns = append(txns, encTx)
 	}
 
 	block.Transactions = v1.TransactionList{Transactions: txns}
@@ -422,7 +490,11 @@ func TransactionInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.R
 
 	if txn, ok := ctx.Node.GetTransaction(addr, txID, start, latestRound); ok {
 		var responseTxs v1.Transaction
-		responseTxs = txWithStatusEncode(txn)
+		responseTxs, err = txWithStatusEncode(txn)
+		if err != nil {
+			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToParseTransaction, ctx.Log)
+			return
+		}
 
 		response := TransactionResponse{
 			Body: &responseTxs,
@@ -488,8 +560,11 @@ func PendingTransactionInformation(ctx lib.ReqContext, w http.ResponseWriter, r 
 	}
 
 	if txn, ok := ctx.Node.GetPendingTransaction(txID); ok {
-		var responseTxs v1.Transaction
-		responseTxs = txWithStatusEncode(txn)
+		responseTxs, err := txWithStatusEncode(txn)
+		if err != nil {
+			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToParseTransaction, ctx.Log)
+			return
+		}
 
 		response := TransactionResponse{
 			Body: &responseTxs,
@@ -554,7 +629,11 @@ func GetPendingTransactions(ctx lib.ReqContext, w http.ResponseWriter, r *http.R
 
 	responseTxs := make([]v1.Transaction, len(txs))
 	for i, twr := range txs {
-		responseTxs[i] = paymentTxEncode(twr.Txn, transactions.ApplyData{})
+		responseTxs[i], err = txEncode(twr.Txn, transactions.ApplyData{}, OriginPending, 0)
+		if err != nil {
+			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpTransactionPool, ctx.Log)
+			return
+		}
 	}
 
 	response := PendingTransactionsResponse{
@@ -888,7 +967,11 @@ func Transactions(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 
 	responseTxs := make([]v1.Transaction, len(txs))
 	for i, twr := range txs {
-		responseTxs[i] = txWithStatusEncode(twr)
+		responseTxs[i], err = txWithStatusEncode(twr)
+		if err != nil {
+			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToParseTransaction, ctx.Log)
+			return
+		}
 	}
 
 	response := TransactionsResponse{
@@ -955,7 +1038,11 @@ func GetTransactionByID(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 
 	if txn, err := ctx.Node.GetTransactionByID(txID, basics.Round(rnd)); err == nil {
 		var responseTxs v1.Transaction
-		responseTxs = txWithStatusEncode(txn)
+		responseTxs, err = txWithStatusEncode(txn)
+		if err != nil {
+			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToParseTransaction, ctx.Log)
+			return
+		}
 
 		response := TransactionResponse{
 			Body: &responseTxs,

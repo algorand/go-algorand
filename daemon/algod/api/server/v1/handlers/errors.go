@@ -25,6 +25,8 @@ var (
 	errFailedToParseAddress                = "failed to parse the address"
 	errFailedLookingUpLedger               = "failed to retrieve information from the ledger"
 	errTransactionNotFound                 = "couldn't find the required transaction in the required range"
+	errUnknownTransactionType              = "found a transaction with an unknown type"
+	errFailedToParseTransaction            = "failed to parse transaction"
 	errFailedLookingUpTransactionPool      = "failed to retrieve information from the transaction pool"
 	errBlockHashBeenDeletedArchival        = "this is a non-archival node and the requested block has been already deleted"
 	errFailedGettingInformationFromIndexer = "failed retrieving information from the indexer"
