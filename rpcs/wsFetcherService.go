@@ -43,25 +43,25 @@ func makePendingRequestKey(target network.UnicastPeer, round basics.Round, tag p
 
 func (fs *WsFetcherService) handleNetworkMsg(msg network.IncomingMessage) (out network.OutgoingMessage) {
 	// route message to appropriate wsFetcher (if registered)
+	uniPeer := msg.Sender.(network.UnicastPeer)
 	switch msg.Tag {
 	case protocol.UniCatchupResTag:
 	case protocol.UniEnsBlockResTag:
 	default:
-		fs.log.Warnf("WsFetcherService: no fetcher registered for tag (%v)", msg.Tag)
+		fs.log.Warnf("WsFetcherService: unable to process message coming from '%s'; no fetcher registered for tag (%v)", uniPeer.GetAddress(), msg.Tag)
 		return
 	}
 
-	uniPeer := msg.Sender.(network.UnicastPeer)
 	var resp WsGetBlockOut
 
-	if msg.Data == nil {
-		fs.log.Warnf("WsFetcherService(%v): request failed: catchup response no bytes sent", uniPeer.GetAddress())
+	if len(msg.Data) == 0 {
+		fs.log.Warnf("WsFetcherService(%s): request failed: catchup response no bytes sent", uniPeer.GetAddress())
 		out.Action = network.Disconnect
 		return
 	}
 
 	if decodeErr := protocol.Decode(msg.Data, &resp); decodeErr != nil {
-		fs.log.Infof("WsFetcherService(%v): request failed: unable to decode message : %v", uniPeer.GetAddress(), decodeErr)
+		fs.log.Warnf("WsFetcherService(%s): request failed: unable to decode message : %v", uniPeer.GetAddress(), decodeErr)
 		out.Action = network.Disconnect
 		return
 	}
@@ -71,10 +71,10 @@ func (fs *WsFetcherService) handleNetworkMsg(msg network.IncomingMessage) (out n
 	f, hasWaitCh := fs.pendingRequests[waitKey]
 	fs.mu.RUnlock()
 	if !hasWaitCh {
-		if resp.Error == "" || len(resp.BlockBytes) == 0 {
-			fs.log.Infof("WsFetcherService: received a message response for a stale block request.  round %d, length %d, error : %s", resp.Round, len(resp.BlockBytes), resp.Error)
+		if resp.Error != "" {
+			fs.log.Infof("WsFetcherService: received a message response for a stale block request from '%s', round %d, length %d, error : '%s'", uniPeer.GetAddress(), resp.Round, len(resp.BlockBytes), resp.Error)
 		} else {
-			fs.log.Infof("WsFetcherService: received a message response for a stale block request.  round %d", resp.Round)
+			fs.log.Infof("WsFetcherService: received a message response for a stale block request from '%s', round %d, length %d", uniPeer.GetAddress(), resp.Round, len(resp.BlockBytes))
 		}
 		return
 	}
