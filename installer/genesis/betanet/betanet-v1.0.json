@@ -285,8 +285,8 @@
   ],
   "fees": "A7NMWS3NT3IUDMLVO26ULGXGIIOUQ3ND2TXSER6EBGRZNOBOUIQXHIBGDE",
   "id": "v1.0",
-  "network": "beta",
+  "network": "betanet",
   "proto": "https://github.com/algorand/spec/tree/a26ed78ed8f834e2b9ccb6eb7d3ee9f629a6e622",
   "rwd": "7777777777777777777777777777777777777777777777777774MSJUVU",
-  "timestamp": 1564371035
+  "timestamp": 1564572341
 }

@@ -84,7 +84,7 @@ done
 mkdir ${PKG_ROOT}/genesis
 
 if [ ! -z "${RELEASE_GENESIS_PROCESS}" ]; then
-    genesis_dirs=("devnet" "testnet" "mainnet" "beta")
+    genesis_dirs=("devnet" "testnet" "mainnet" "betanet")
     for dir in "${genesis_dirs[@]}"; do
         mkdir -p ${PKG_ROOT}/genesis/${dir}
         cp ${REPO_DIR}/installer/genesis/${dir}/genesis.json ${PKG_ROOT}/genesis/${dir}/

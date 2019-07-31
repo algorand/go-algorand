@@ -70,7 +70,7 @@ for data in "${data_files[@]}"; do
 done
 
 if [ ! -z "${RELEASE_GENESIS_PROCESS}" ]; then
-    genesis_dirs=("devnet" "testnet" "mainnet" "beta")
+    genesis_dirs=("devnet" "testnet" "mainnet" "betanet")
     for dir in "${genesis_dirs[@]}"; do
         mkdir -p ${PKG_ROOT}/var/lib/algorand/genesis/${dir}
         cp ${REPO_DIR}/installer/genesis/${dir}/genesis.json ${PKG_ROOT}/var/lib/algorand/genesis/${dir}/genesis.json

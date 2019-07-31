@@ -9,16 +9,16 @@ cd ${SRCPATH}
 make
 
 CHANNEL=beta
-RECIPE=${SRCPATH}/gen/networks/beta/source/recipe.json
-OUTPUT=${SRCPATH}/gen/networks/beta/config
+RECIPE=${SRCPATH}/gen/networks/betanet/source/recipe.json
+OUTPUT=${SRCPATH}/gen/networks/betanet/config
 
 rm -rf ${OUTPUT}
 
 mkdir -p ${OUTPUT}/genesisdata
-cp ${SRCPATH}/gen/beta/* ${OUTPUT}/genesisdata/
+cp ${SRCPATH}/gen/betanet/* ${OUTPUT}/genesisdata/
 rm ${OUTPUT}/genesisdata/genesis.dump
 
-${GOPATH}/bin/netgoal build --recipe "${RECIPE}" -n beta -r "${OUTPUT}" --use-existing-files --force
+${GOPATH}/bin/netgoal build --recipe "${RECIPE}" -n betanet -r "${OUTPUT}" --use-existing-files --force
 
 echo Uploading configuration package for channel ${CHANNEL}
-scripts/upload_config.sh ${OUTPUT} ${CHANNEL}
+S3_RELEASE_BUCKET=algorand-internal scripts/upload_config.sh ${OUTPUT} ${CHANNEL}
