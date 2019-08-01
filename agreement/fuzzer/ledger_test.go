@@ -134,6 +134,7 @@ type testLedger struct {
 	ensuringDigestMu      deadlock.Mutex
 	ensuringDigest        bool
 	ensuringDigestTry     chan struct{}
+	catchingUp            bool
 }
 
 func makeTestLedger(state map[basics.Address]basics.BalanceRecord, sync testLedgerSyncFunc) *testLedger {
@@ -278,6 +279,7 @@ func (l *testLedger) EnsureBlock(e bookkeeping.Block, c agreement.Certificate) {
 	}
 
 	l.notify(e.Round())
+	l.catchingUp = false
 }
 
 func (l *testLedger) EnsureDigest(c agreement.Certificate, quit chan struct{}, verifier *agreement.AsyncVoteVerifier) {
@@ -334,11 +336,12 @@ func (l *testLedger) EnsureDigest(c agreement.Certificate, quit chan struct{}, v
 }
 
 func (l *testLedger) ConsensusParams(r basics.Round) (config.ConsensusParams, error) {
-	return config.Consensus[protocol.ConsensusV7], nil
+	ver, _ := l.ConsensusVersion(r)
+	return config.Consensus[ver], nil
 }
 
 func (l *testLedger) ConsensusVersion(r basics.Round) (protocol.ConsensusVersion, error) {
-	return protocol.ConsensusV7, nil
+	return protocol.ConsensusCurrentVersion, nil
 }
 
 func (l *testLedger) TryEnsuringDigest() bool {
@@ -376,6 +379,7 @@ func (l *testLedger) Catchup(o *testLedger, targetNextRound basics.Round) {
 		l.entries[l.nextRound] = o.entries[l.nextRound]
 		l.certs[l.nextRound] = o.certs[l.nextRound]
 		l.nextRound++
+		//fmt.Printf("Catching up to round %d\n", l.nextRound)
 	}
 
 	o.mu.Unlock()
