@@ -28,7 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMakeDetailedUnknownTransactionType(t *testing.T) {
+func TestDecorateUnknownTransactionTypeError(t *testing.T) {
 	type TestCase struct {
 		err             error
 		txn             node.TxnWithStatus
@@ -67,7 +67,7 @@ func TestMakeDetailedUnknownTransactionType(t *testing.T) {
 		},
 	}
 	for _, testCase := range testCases {
-		outcome := makeDetailedUnknownTransactionType(testCase.err, testCase.txn)
+		outcome := decorateUnknownTransactionTypeError(testCase.err, testCase.txn)
 		require.Equal(t, outcome.Error(), testCase.expectedOutcome.Error())
 	}
 }

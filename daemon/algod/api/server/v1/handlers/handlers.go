@@ -55,9 +55,9 @@ func nodeStatus(node *node.AlgorandFullNode) (res v1.NodeStatus, err error) {
 	}, nil
 }
 
-// makeDetailedUnknownTransactionType takes an error of type errUnknownTransactionType and converts it into
-// errInvalidTransactionTypeLedger or errInvalidTransactionTypePending as needed.
-func makeDetailedUnknownTransactionType(err error, txs node.TxnWithStatus) error {
+// decorateUnknownTransactionTypeError takes an error of type errUnknownTransactionType and converts it into
+// either errInvalidTransactionTypeLedger or errInvalidTransactionTypePending as needed.
+func decorateUnknownTransactionTypeError(err error, txs node.TxnWithStatus) error {
 	if err.Error() != errUnknownTransactionType {
 		return err
 	}
@@ -136,7 +136,7 @@ func keyregTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.T
 func txWithStatusEncode(tr node.TxnWithStatus) (v1.Transaction, error) {
 	s, err := txEncode(tr.Txn.Txn, tr.ApplyData)
 	if err != nil {
-		err = makeDetailedUnknownTransactionType(err, tr)
+		err = decorateUnknownTransactionTypeError(err, tr)
 		return v1.Transaction{}, err
 	}
 	s.ConfirmedRound = uint64(tr.ConfirmedRound)
@@ -623,7 +623,7 @@ func GetPendingTransactions(ctx lib.ReqContext, w http.ResponseWriter, r *http.R
 		responseTxs[i], err = txEncode(twr.Txn, transactions.ApplyData{})
 		if err != nil {
 			// update the error as needed
-			err = makeDetailedUnknownTransactionType(err, node.TxnWithStatus{Txn: twr})
+			err = decorateUnknownTransactionTypeError(err, node.TxnWithStatus{Txn: twr})
 			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpTransactionPool, ctx.Log)
 			return
 		}
