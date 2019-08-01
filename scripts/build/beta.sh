@@ -2,7 +2,8 @@
 set -ev
 
 GOPATH=$(go env GOPATH)
-REPO_DIR=$(pwd)
+REPO_DIR=${GOPATH}/src/github.com/algorand/go-algorand
+cd ${REPO_DIR}
 
 # Run `make` to ensure `buildtools` is available
 make -j4
@@ -10,7 +11,7 @@ make -j4
 # Flag that we want release handling of genesis files
 export RELEASE_GENESIS_PROCESS=true
 
-git checkout rel/stable
+git checkout rel/beta
 
 # Disabled because we have static genesis files now
 #NETWORKS=("testnet" "mainnet")
@@ -36,7 +37,7 @@ git add -A
 git commit -m "Build ${BUILD_NUMBER}"
 git push
 
-TAG=rel/stable-$(scripts/compute_build_number.sh -f)
+TAG=rel/beta-$(scripts/compute_build_number.sh -f)
 if [ ! -z "${SIGNING_KEY_ADDR}" ]; then
     git tag -s -u "${SIGNING_KEY_ADDR}" ${TAG} -m "Genesis Timestamp: $(cat ./genesistimestamp.dat)"
 else

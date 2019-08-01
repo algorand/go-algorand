@@ -16,9 +16,9 @@ stages:
   - name: build_release
     if: branch =~ /^rel\// AND type != pull_request
   - name: deploy
-    if: (branch =~ /^rel\/nightly/ OR branch =~ /^rel\/dev/) AND type != pull_request
+    if: branch != rel/stable AND (branch =~ /^rel\//) AND type != pull_request
   - name: release
-    if: (branch != rel/stable AND branch =~ /^rel\//) AND type != pull_request
+    if: branch != rel/stable AND (branch =~ /^rel\//) AND type != pull_request
 
 jobs:
   include:

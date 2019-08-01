@@ -55,6 +55,32 @@ func nodeStatus(node *node.AlgorandFullNode) (res v1.NodeStatus, err error) {
 	}, nil
 }
 
+// decorateUnknownTransactionTypeError takes an error of type errUnknownTransactionType and converts it into
+// either errInvalidTransactionTypeLedger or errInvalidTransactionTypePending as needed.
+func decorateUnknownTransactionTypeError(err error, txs node.TxnWithStatus) error {
+	if err.Error() != errUnknownTransactionType {
+		return err
+	}
+	if txs.ConfirmedRound != basics.Round(0) {
+		return fmt.Errorf(errInvalidTransactionTypeLedger, txs.Txn.Txn.Type, txs.Txn.Txn.ID().String(), txs.ConfirmedRound)
+	}
+	return fmt.Errorf(errInvalidTransactionTypePending, txs.Txn.Txn.Type, txs.Txn.Txn.ID().String())
+}
+
+// txEncode copies the data fields of the internal transaction object and populate the v1.Transaction accordingly.
+// if unexpected transaction type is encountered, an error is returned. The caller is expected to ignore the returned
+// transaction when error is non-nil.
+func txEncode(tx transactions.Transaction, ad transactions.ApplyData) (v1.Transaction, error) {
+	switch tx.Type {
+	case protocol.PaymentTx:
+		return paymentTxEncode(tx, ad), nil
+	case protocol.KeyRegistrationTx:
+		return keyregTxEncode(tx, ad), nil
+	default:
+		return v1.Transaction{}, errors.New(errUnknownTransactionType)
+	}
+}
+
 func paymentTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
 	payment := v1.PaymentTransactionType{
 		To:           tx.Receiver.String(),
@@ -83,11 +109,39 @@ func paymentTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.
 	}
 }
 
-func txWithStatusEncode(tr node.TxnWithStatus) v1.Transaction {
-	s := paymentTxEncode(tr.Txn.Txn, tr.ApplyData)
+func keyregTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
+	keyreg := v1.KeyregTransactionType{
+		VotePK:          tx.KeyregTxnFields.VotePK[:],
+		SelectionPK:     tx.KeyregTxnFields.SelectionPK[:],
+		VoteFirst:       uint64(tx.KeyregTxnFields.VoteFirst),
+		VoteLast:        uint64(tx.KeyregTxnFields.VoteLast),
+		VoteKeyDilution: tx.KeyregTxnFields.VoteKeyDilution,
+	}
+
+	return v1.Transaction{
+		Type:        string(tx.Type),
+		TxID:        tx.ID().String(),
+		From:        tx.Src().String(),
+		Fee:         tx.TxFee().Raw,
+		FirstRound:  uint64(tx.First()),
+		LastRound:   uint64(tx.Last()),
+		Note:        tx.Aux(),
+		Keyreg:      &keyreg,
+		FromRewards: ad.SenderRewards.Raw,
+		GenesisID:   tx.GenesisID,
+		GenesisHash: tx.GenesisHash[:],
+	}
+}
+
+func txWithStatusEncode(tr node.TxnWithStatus) (v1.Transaction, error) {
+	s, err := txEncode(tr.Txn.Txn, tr.ApplyData)
+	if err != nil {
+		err = decorateUnknownTransactionTypeError(err, tr)
+		return v1.Transaction{}, err
+	}
 	s.ConfirmedRound = uint64(tr.ConfirmedRound)
 	s.PoolError = tr.PoolError
-	return s
+	return s, nil
 }
 
 func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error) {
@@ -129,7 +183,12 @@ func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error)
 			ConfirmedRound: b.Round(),
 			ApplyData:      txn.ApplyData,
 		}
-		txns = append(txns, txWithStatusEncode(tx))
+		encTx, err := txWithStatusEncode(tx)
+		if err != nil {
+			return v1.Block{}, err
+		}
+
+		txns = append(txns, encTx)
 	}
 
 	block.Transactions = v1.TransactionList{Transactions: txns}
@@ -422,7 +481,11 @@ func TransactionInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.R
 
 	if txn, ok := ctx.Node.GetTransaction(addr, txID, start, latestRound); ok {
 		var responseTxs v1.Transaction
-		responseTxs = txWithStatusEncode(txn)
+		responseTxs, err = txWithStatusEncode(txn)
+		if err != nil {
+			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToParseTransaction, ctx.Log)
+			return
+		}
 
 		response := TransactionResponse{
 			Body: &responseTxs,
@@ -488,8 +551,11 @@ func PendingTransactionInformation(ctx lib.ReqContext, w http.ResponseWriter, r 
 	}
 
 	if txn, ok := ctx.Node.GetPendingTransaction(txID); ok {
-		var responseTxs v1.Transaction
-		responseTxs = txWithStatusEncode(txn)
+		responseTxs, err := txWithStatusEncode(txn)
+		if err != nil {
+			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToParseTransaction, ctx.Log)
+			return
+		}
 
 		response := TransactionResponse{
 			Body: &responseTxs,
@@ -554,7 +620,13 @@ func GetPendingTransactions(ctx lib.ReqContext, w http.ResponseWriter, r *http.R
 
 	responseTxs := make([]v1.Transaction, len(txs))
 	for i, twr := range txs {
-		responseTxs[i] = paymentTxEncode(twr.Txn, transactions.ApplyData{})
+		responseTxs[i], err = txEncode(twr.Txn, transactions.ApplyData{})
+		if err != nil {
+			// update the error as needed
+			err = decorateUnknownTransactionTypeError(err, node.TxnWithStatus{Txn: twr})
+			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpTransactionPool, ctx.Log)
+			return
+		}
 	}
 
 	response := PendingTransactionsResponse{
@@ -888,7 +960,11 @@ func Transactions(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 
 	responseTxs := make([]v1.Transaction, len(txs))
 	for i, twr := range txs {
-		responseTxs[i] = txWithStatusEncode(twr)
+		responseTxs[i], err = txWithStatusEncode(twr)
+		if err != nil {
+			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToParseTransaction, ctx.Log)
+			return
+		}
 	}
 
 	response := TransactionsResponse{
@@ -955,7 +1031,11 @@ func GetTransactionByID(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 
 	if txn, err := ctx.Node.GetTransactionByID(txID, basics.Round(rnd)); err == nil {
 		var responseTxs v1.Transaction
-		responseTxs = txWithStatusEncode(txn)
+		responseTxs, err = txWithStatusEncode(txn)
+		if err != nil {
+			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToParseTransaction, ctx.Log)
+			return
+		}
 
 		response := TransactionResponse{
 			Body: &responseTxs,
