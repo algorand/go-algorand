@@ -278,12 +278,14 @@ type KeyregTransactionType struct {
 	// VotePK is the participation public key used in key registration transactions
 	//
 	// required: false
-	VotePK bytes `json:"votekey"`
+	// swagger:strfmt byte
+	VotePK []byte `json:"votekey"`
 
 	// SelectionPK is the VRF public key used in key registration transactions
 	//
 	// required: false
-	SelectionPK bytes `json:"selkey"`
+	// swagger:strfmt byte
+	SelectionPK []byte `json:"selkey"`
 
 	// VoteFirst is the first round this participation key is valid
 	//
