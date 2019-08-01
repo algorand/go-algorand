@@ -33,8 +33,7 @@ if [ ! -d "${PKG_ROOT}" ]; then
 fi
 
 export GOPATH=$(go env GOPATH)
-REPO_DIR=${GOPATH}/src/github.com/algorand/go-algorand
-cd ${REPO_DIR}
+REPO_DIR=$(pwd)
 
 echo "Building package for '${OS} - ${ARCH}'"
 

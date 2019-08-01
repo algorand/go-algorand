@@ -2,9 +2,7 @@
 
 # This script can only be run from a machine with SSH keys authorized on Relays R1, R2, R3, and D1
 
-export GOPATH=$(go env GOPATH)
-
-cd ${GOPATH}/src/github.com/algorand/go-algorand/gen/testnet
+cd gen/testnet
 
 scp ./r1-r-testnet.* algo@r1.algodev.network:/home/algo/algorand/testnet/data/relay
 scp ./r1-n-testnet.* algo@r1.algodev.network:/home/algo/algorand/testnet/data/node

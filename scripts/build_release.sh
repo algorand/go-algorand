@@ -90,7 +90,7 @@ sed 's/^export //g' < ${HOME}/build_env > ${HOME}/build_env_docker
 # Build!
 scripts/configure_dev.sh
 
-make ${GOPATH}/src/github.com/algorand/go-algorand/crypto/lib/libsodium.a
+make crypto/lib/libsodium.a
 
 make build
 

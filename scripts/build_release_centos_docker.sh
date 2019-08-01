@@ -32,7 +32,7 @@ if [ -f ${GOPATH}/src/github.com/algorand/go-algorand/crypto/libsodium-fork/Make
     (cd ${GOPATH}/src/github.com/algorand/go-algorand/crypto/libsodium-fork && make distclean)
 fi
 rm -rf ${GOPATH}/src/github.com/algorand/go-algorand/crypto/lib
-make ${GOPATH}/src/github.com/algorand/go-algorand/crypto/lib/libsodium.a
+make crypto/lib/libsodium.a
 
 make build
 

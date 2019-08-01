@@ -2,9 +2,7 @@
 
 set -e
 
-export GOPATH=$(go env GOPATH)
-cd ${GOPATH}/src/github.com/algorand
-SRCPATH=${GOPATH}/src/github.com/algorand/go-algorand
+SRCPATH=$(pwd)
 
 # Delete tmp folder so we don't include that in our context
 rm -rf ${SRCPATH}/tmp

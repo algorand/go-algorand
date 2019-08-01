@@ -40,7 +40,6 @@ function runGoLint() {
 }
 
 GOPATH=$(go env GOPATH)
-cd ${GOPATH}/src/github.com/algorand/go-algorand
 
 echo "Building libsodium-fork..."
 make crypto/lib/libsodium.a
