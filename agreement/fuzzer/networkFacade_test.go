@@ -380,7 +380,6 @@ func (n *NetworkFacade) TimeoutAt(d time.Duration) <-chan time.Time {
 	defer n.clockSync.Unlock()
 
 	targetTick := int(d / n.fuzzer.tickGranularity)
-
 	ch, have := n.clocks[targetTick]
 	if have {
 		return ch

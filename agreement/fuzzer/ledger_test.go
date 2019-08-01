@@ -379,7 +379,6 @@ func (l *testLedger) Catchup(o *testLedger, targetNextRound basics.Round) {
 		l.entries[l.nextRound] = o.entries[l.nextRound]
 		l.certs[l.nextRound] = o.certs[l.nextRound]
 		l.nextRound++
-		//fmt.Printf("Catching up to round %d\n", l.nextRound)
 	}
 
 	o.mu.Unlock()
