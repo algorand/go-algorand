@@ -31,6 +31,7 @@ import (
 )
 
 var loggingFilename = "logging.config"
+const ipv6AddressLength = 39
 
 func elasticsearchEndpoint() string {
 	return "https://1ae9f9654b25441090fe5c48c833b95a.us-east-1.aws.found.io:9243"
@@ -120,6 +121,16 @@ func (cfg TelemetryConfig) getInstanceName() string {
 	return fmt.Sprintf("%s", pathHashStr[:16])
 }
 
+// SanitizeTelemetryString applies sanitization rules and returns the sanitized string.
+func SanitizeTelemetryString(input string, maxParts int) string {
+	// Truncate to a reasonable size, allowing some undefined separator.
+	maxReasonableSize := maxParts * ipv6AddressLength + maxParts - 1
+	if len(input) > maxReasonableSize {
+		input = input[:maxReasonableSize]
+	}
+	return input
+}
+
 func loadTelemetryConfig(path string) (TelemetryConfig, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -135,6 +146,13 @@ func loadTelemetryConfig(path string) (TelemetryConfig, error) {
 		}
 	}
 	cfg.FilePath = path
+
+	// Sanitize user-defined name.
+	if len(cfg.Name) > 0 {
+		cfg.Name = SanitizeTelemetryString(cfg.Name, 1)
+	}
+
 	initializeConfig(cfg)
+  
 	return cfg, err
 }

@@ -18,7 +18,6 @@ package rpcs
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/algorand/go-deadlock"
@@ -43,8 +42,8 @@ type WsFetcher struct {
 	f       *NetworkFetcher
 	clients map[network.Peer]*wsFetcherClient
 
-	// cleanup
-	closeFn func(*WsFetcher)
+	// service
+	service *WsFetcherService
 
 	// metadata
 	log logging.Logger
@@ -54,7 +53,7 @@ type WsFetcher struct {
 // MakeWsFetcher creates a fetcher that fetches over the gossip network.
 // It instantiates a NetworkFetcher under the hood, registers as a handler for the given message tag,
 // and demuxes messages appropriately to the corresponding fetcher clients.
-func MakeWsFetcher(log logging.Logger, tag protocol.Tag, peers []network.Peer, closeFn func(*WsFetcher)) Fetcher {
+func MakeWsFetcher(log logging.Logger, tag protocol.Tag, peers []network.Peer, service *WsFetcherService) Fetcher {
 	f := &WsFetcher{
 		log: log,
 		tag: tag,
@@ -63,9 +62,10 @@ func MakeWsFetcher(log logging.Logger, tag protocol.Tag, peers []network.Peer, c
 	p := make([]FetcherClient, len(peers))
 	for i, peer := range peers {
 		fc := &wsFetcherClient{
-			target:    peer.(network.UnicastPeer),
-			tag:       f.tag,
-			listeners: map[uint64]chan WsGetBlockOut{},
+			target:      peer.(network.UnicastPeer),
+			tag:         f.tag,
+			pendingCtxs: make(map[context.Context]context.CancelFunc),
+			service:     service,
 		}
 		p[i] = fc
 		f.clients[peer] = fc
@@ -76,49 +76,8 @@ func MakeWsFetcher(log logging.Logger, tag protocol.Tag, peers []network.Peer, c
 		peers:           p,
 		log:             f.log,
 	}
-	f.closeFn = closeFn
+	f.service = service
 	return f
-}
-
-// HandleNetworkMsg is the entry point for replies from the network (routed from WsFetcherService).
-func (wsf *WsFetcher) HandleNetworkMsg(msg network.IncomingMessage) (n network.OutgoingMessage) {
-	if msg.Tag.Complement() != wsf.tag {
-		wsf.log.Errorf("WsFetcher: configuration failed. Handling mismatched tag type %v != %v", wsf.tag, msg.Tag)
-	}
-
-	var reqErr error
-	var resp WsGetBlockOut
-	uniPeer := msg.Sender.(network.UnicastPeer)
-	defer func() {
-		// drop useless peers
-		if reqErr != nil {
-			// the request fundamentally failed
-			wsf.log.Infof("WsFetcher(%v): request failed: %v", uniPeer.GetAddress(), reqErr)
-			wsf.mu.RLock()
-			client := wsf.clients[uniPeer]
-			wsf.mu.RUnlock()
-			client.Close()
-		}
-	}()
-
-	if msg.Data == nil {
-		reqErr = errors.New("catchup response no bytes sent")
-		return
-	}
-	reqErr = protocol.Decode(msg.Data, &resp)
-	if reqErr != nil {
-		return
-	}
-	wsf.log.Debugf("WsFetcher(%v): received message: %v", uniPeer.GetAddress(), reqErr)
-	// now, actually handle the block
-	wsf.mu.RLock()
-	client := wsf.clients[uniPeer]
-	wsf.mu.RUnlock()
-	clientCh := client.getChForRound(resp.Round)
-	if clientCh != nil {
-		clientCh <- resp
-	}
-	return
 }
 
 // FetchBlock implements Fetcher interface
@@ -139,66 +98,50 @@ func (wsf *WsFetcher) NumPeers() int {
 // Close calls a delegate close fn passed in by the parent of this fetcher
 func (wsf *WsFetcher) Close() {
 	wsf.f.Close()
-	if wsf.closeFn != nil {
-		wsf.closeFn(wsf)
-	}
 }
 
 // a stub fetcherClient to satisfy the NetworkFetcher interface
 type wsFetcherClient struct {
-	listeners map[uint64]chan WsGetBlockOut
-	target    network.UnicastPeer
-	tag       protocol.Tag
+	target      network.UnicastPeer                    // the peer where we're going to send the request.
+	tag         protocol.Tag                           // the tag that is associated with the request/
+	service     *WsFetcherService                      // the fetcher service. This is where we perform the actual request and waiting for the response.
+	pendingCtxs map[context.Context]context.CancelFunc // a map of all the current pending contexts.
 
-	closed bool
+	closed bool // a flag indicating that the fetcher will not perform additional block retrivals.
 
-	mu deadlock.RWMutex
-}
-
-func (w *wsFetcherClient) getChForRound(r uint64) chan WsGetBlockOut {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	if w.closed {
-		return nil
-	}
-	v, ok := w.listeners[r]
-	if !ok {
-		v = make(chan WsGetBlockOut, numBufferedInternalMsg)
-		w.listeners[r] = v
-	}
-	return v
+	mu deadlock.Mutex
 }
 
 // GetBlockBytes implements FetcherClient
 func (w *wsFetcherClient) GetBlockBytes(ctx context.Context, r basics.Round) ([]byte, error) {
-	listen := w.getChForRound(uint64(r))
-	if listen == nil {
-		return nil, fmt.Errorf("wsFetcherClient(%d): preconnection closed", r)
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.closed {
+		return nil, fmt.Errorf("wsFetcherClient(%d): shutdown", r)
 	}
+	childCtx, cancelFunc := context.WithCancel(ctx)
+	w.pendingCtxs[childCtx] = cancelFunc
+	w.mu.Unlock()
 
-	// unicast
-	req := WsGetBlockRequest{Round: uint64(r)}
-	err := w.target.Unicast(ctx, protocol.Encode(req), w.tag)
+	defer func() {
+		cancelFunc()
+		// note that we don't need to have additional Unlock here since
+		// we already have a defered Unlock above ( which executes in reversed order )
+		w.mu.Lock()
+		delete(w.pendingCtxs, childCtx)
+	}()
+
+	resp, err := w.service.RequestBlock(childCtx, w.target, r, w.tag)
 	if err != nil {
-		return nil, fmt.Errorf("wsFetcherClient(%d): unicast failed, %v", r, err)
+		return nil, err
 	}
-
-	// now, wait for reply
-	select {
-	case resp, ok := <-listen:
-		if !ok {
-			return nil, fmt.Errorf("wsFetcherClient(%d): connection closed", r)
-		}
-		if resp.Error != "" {
-			return nil, fmt.Errorf("wsFetcherClient(%d): server error, %v", r, resp.Error)
-		}
-		if resp.BlockBytes == nil {
-			return nil, fmt.Errorf("wsFetcherClient(%d): empty response", r)
-		}
-		return resp.BlockBytes, nil
-	case <-ctx.Done():
-		return nil, fmt.Errorf("wsFetcherClient(%d): cancelled by caller", r)
+	if resp.Error != "" {
+		return nil, fmt.Errorf("wsFetcherClient(%d): server error, %v", r, resp.Error)
 	}
+	if len(resp.BlockBytes) == 0 {
+		return nil, fmt.Errorf("wsFetcherClient(%d): empty response", r)
+	}
+	return resp.BlockBytes, nil
 }
 
 // Address implements FetcherClient
@@ -211,9 +154,9 @@ func (w *wsFetcherClient) Close() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.closed = true
-	for k, c := range w.listeners {
-		close(c)
-		delete(w.listeners, k)
+	for _, cancelFunc := range w.pendingCtxs {
+		cancelFunc()
 	}
+	w.pendingCtxs = make(map[context.Context]context.CancelFunc)
 	return nil
 }
