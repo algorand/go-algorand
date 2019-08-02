@@ -416,7 +416,7 @@ var createCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, _ []string) {
 
 		// validate network input
-		validNetworks := map[string]bool{"mainnet": true, "testnet": true, "devnet": true}
+		validNetworks := map[string]bool{"mainnet": true, "testnet": true, "devnet": true, "betanet": true}
 		if !validNetworks[newNodeNetwork] {
 			reportErrorf(errorNodeCreation, "passed network name invalid")
 		}
