@@ -75,6 +75,7 @@ func (rl *RequestLogger) logRequest(trackingWriter *trackingResponseWriter, requ
 		Request:      fmt.Sprintf("%s %s %s", request.Method, uri, request.Proto),
 		StatusCode:   uint64(trackingWriter.statusCode),
 		BodyLength:   uint64(trackingWriter.contentLen),
+		UserAgent:    request.Header.Get(UserAgentHeader),
 	}
 	rl.log.EventWithDetails(telemetryspec.Network, telemetryspec.HTTPRequestEvent, requestDetails)
 }

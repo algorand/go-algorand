@@ -251,4 +251,5 @@ type HTTPRequestDetails struct {
 	Request      string // The request string, i.e. "GET /apache_pb.gif HTTP/1.0"
 	StatusCode   uint64 // The response status code
 	BodyLength   uint64 // The returned body length, in bytes
+	UserAgent    string // The user-agent string ( if any )
 }
