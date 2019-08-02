@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 export GOPATH=$(go env GOPATH)
-cd ${GOPATH}/src/github.com/algorand/go-algorand
+cd "$(dirname "$0")"/..
 
 # If enlistment isn't clean, it's 'dev'
 ./scripts/check_clean_enlistment.sh

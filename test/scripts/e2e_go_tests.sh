@@ -6,10 +6,12 @@ set -e
 
 export GOPATH=$(go env GOPATH)
 export GO111MODULE=on
-REPO_DIR=${GOPATH}/src/github.com/algorand/go-algorand
+
+# Anchor our repo root reference location
+REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"/../..
 
 # Need bin-race binaries for e2e tests
-pushd ${REPO_DIR}
+pushd ${REPO_ROOT}
 make build-race -j4
 popd
 
@@ -29,8 +31,7 @@ fi
 echo "Test output can be found in ${TESTDIR}"
 
 if [ "${SRCROOT}" = "" ]; then
-    cd ${GOPATH}/src/github.com/algorand/go-algorand
-    export SRCROOT="$(pwd -P)"
+    export SRCROOT=${REPO_ROOT}
 fi
 
 if [ "${NODEBINDIR}" = "" ]; then
