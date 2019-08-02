@@ -50,6 +50,11 @@ type TestingT interface {
 	Name() string
 }
 
+type mockSpendableBalancesUnbounded struct {
+	balance    uint64
+	exceptions map[basics.Address]uint64
+}
+
 var minBalance = config.Consensus[protocol.ConsensusCurrentVersion].MinBalance
 var minFee = config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee
 
@@ -120,6 +125,125 @@ func initAccFixed(initAddrs []basics.Address, bal uint64) map[basics.Address]bas
 	return res
 }
 
+type mockLedger struct {
+	*ledger.Ledger
+}
+
+// BalanceAndStatus returns Balance and DelegationStatus as one call
+func (l *mockLedger) BalanceAndStatus(addr basics.Address) (money basics.MicroAlgos, rewards basics.MicroAlgos, moneyWithoutPendingRewards basics.MicroAlgos, status basics.Status, latest basics.Round, err error) {
+	latest = l.Latest()
+	data, err := l.Lookup(latest, addr)
+	if err != nil {
+		return
+	}
+
+	totals, err := l.Totals(latest)
+	if err != nil {
+		return
+	}
+
+	hdr, err := l.BlockHdr(latest)
+	if err != nil {
+		return
+	}
+	proto, ok := config.Consensus[hdr.CurrentProtocol]
+	if !ok {
+		err = ledger.ProtocolError(hdr.CurrentProtocol)
+	}
+
+	money, rewards = data.Money(proto, totals.RewardsLevel)
+	status = data.Status
+
+	dataWithoutRewards, err := l.LookupWithoutRewards(latest, addr)
+	if err != nil {
+		return
+	}
+	moneyWithoutPendingRewards = dataWithoutRewards.MicroAlgos
+
+	return
+}
+
+// Implements agreement.Ledger.ConsensusParams
+func (l *mockLedger) ConsensusParams(r basics.Round) (config.ConsensusParams, error) {
+	blockhdr, err := l.BlockHdr(r)
+	if err != nil {
+		return config.ConsensusParams{}, err
+	}
+	return config.Consensus[blockhdr.UpgradeState.CurrentProtocol], nil
+}
+
+func (l *mockLedger) LastRound() basics.Round {
+	return l.Latest()
+}
+
+func makeMockLedger(t TestingT, initAccounts map[basics.Address]basics.AccountData) *mockLedger {
+	var hash crypto.Digest
+	crypto.RandBytes(hash[:])
+
+	proto := protocol.ConsensusCurrentVersion
+	params := config.Consensus[proto]
+
+	var pool basics.Address
+	crypto.RandBytes(pool[:])
+	var poolData basics.AccountData
+	poolData.MicroAlgos.Raw = 1 << 32
+	initAccounts[pool] = poolData
+
+	initBlock := bookkeeping.Block{
+		BlockHeader: bookkeeping.BlockHeader{
+			TxnRoot:     transactions.Payset{}.Commit(params.PaysetCommitFlat),
+			GenesisID:   "pooltest",
+			GenesisHash: hash,
+			UpgradeState: bookkeeping.UpgradeState{
+				CurrentProtocol: proto,
+			},
+			RewardsState: bookkeeping.RewardsState{
+				FeeSink:     pool,
+				RewardsPool: pool,
+			},
+		},
+	}
+	initBlocks := []bookkeeping.Block{initBlock}
+
+	fn := fmt.Sprintf("/tmp/%s.%d.sqlite3", t.Name(), crypto.RandUint64())
+	l, err := ledger.OpenLedger(logging.Base(), fn, true, initBlocks, initAccounts, hash)
+	require.NoError(t, err)
+	return &mockLedger{l}
+}
+
+func newBlockEvaluator(t TestingT, l *mockLedger) *ledger.BlockEvaluator {
+	latest := l.Latest()
+	prev, err := l.BlockHdr(latest)
+	require.NoError(t, err)
+
+	next := bookkeeping.MakeBlock(prev)
+	eval, err := l.StartEvaluator(next.BlockHeader, &alwaysVerifiedPool{}, nil)
+	require.NoError(t, err)
+
+	return eval
+}
+
+func initAcc(initBalances map[basics.Address]uint64) map[basics.Address]basics.AccountData {
+	res := make(map[basics.Address]basics.AccountData)
+	for addr, bal := range initBalances {
+		var data basics.AccountData
+		data.MicroAlgos.Raw = bal
+		res[addr] = data
+	}
+	return res
+}
+
+func initAccFixed(initAddrs []basics.Address, bal uint64) map[basics.Address]basics.AccountData {
+	res := make(map[basics.Address]basics.AccountData)
+	for _, addr := range initAddrs {
+		var data basics.AccountData
+		data.MicroAlgos.Raw = bal
+		res[addr] = data
+	}
+	return res
+}
+
+const exponentialGrowth = 2
 const testPoolSize = 1000
 
 func TestMinBalanceOK(t *testing.T) {
@@ -832,7 +956,7 @@ func BenchmarkTransactionPoolPending(b *testing.B) {
 }
 
 func BenchmarkTransactionPoolSteadyState(b *testing.B) {
-	poolSize := 50000
+	poolSize := 100000
 
 	fmt.Printf("BenchmarkTransactionPoolSteadyState: N=%d\n", b.N)
 

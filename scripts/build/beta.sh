@@ -11,7 +11,7 @@ make -j4
 # Flag that we want release handling of genesis files
 export RELEASE_GENESIS_PROCESS=true
 
-git checkout rel/stable
+git checkout rel/beta
 
 # Disabled because we have static genesis files now
 #NETWORKS=("testnet" "mainnet")
@@ -37,7 +37,7 @@ git add -A
 git commit -m "Build ${BUILD_NUMBER}"
 git push
 
-TAG=rel/stable-$(scripts/compute_build_number.sh -f)
+TAG=rel/beta-$(scripts/compute_build_number.sh -f)
 if [ ! -z "${SIGNING_KEY_ADDR}" ]; then
     git tag -s -u "${SIGNING_KEY_ADDR}" ${TAG} -m "Genesis Timestamp: $(cat ./genesistimestamp.dat)"
 else
