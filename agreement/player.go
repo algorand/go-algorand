@@ -421,14 +421,23 @@ func (p *player) partitionPolicy(r routerHandle) (actions []action) {
 		bundlePeriod = b.Period
 		fallthrough
 	case p.Period == 0:
-		// generate new proposal as appropriate
-		res := stagedValue(*p, r, bundleRound, bundlePeriod)
-		if res.Committable {
-			transmit := compoundMessage{Proposal: res.Payload.u()}
-			r.t.logProposalRepropagate(res.Proposal, bundleRound, bundlePeriod)
+		resStaged := stagedValue(*p, r, bundleRound, bundlePeriod)
+		if resStaged.Committable {
+			transmit := compoundMessage{Proposal: resStaged.Payload.u()}
+			r.t.logProposalRepropagate(resStaged.Proposal, bundleRound, bundlePeriod)
 			a1 := broadcastAction(protocol.ProposalPayloadTag, transmit)
 			actions = append(actions, a1)
+		} else {
+			// even if there is no staged value, there may be a pinned value
+			resPinned := pinnedValue(*p, r, bundleRound)
+			if resPinned.PayloadOK {
+				transmit := compoundMessage{Proposal: resPinned.Payload.u()}
+				r.t.logProposalRepropagate(resPinned.Proposal, bundleRound, bundlePeriod)
+				a1 := broadcastAction(protocol.ProposalPayloadTag, transmit)
+				actions = append(actions, a1)
+			}
 		}
+
 	}
 	return
 }

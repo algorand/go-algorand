@@ -113,6 +113,9 @@ func (a networkAction) String() string {
 	if a.t() == ignore || a.t() == disconnect {
 		return fmt.Sprintf("%v: %5v", a.t().String(), a.Err)
 	}
+	if a.Tag == protocol.ProposalPayloadTag {
+		return fmt.Sprintf("%v: %2v: %5v", a.t().String(), a.Tag, a.CompoundMessage.Proposal.value())
+	}
 	return fmt.Sprintf("%v: %2v", a.t().String(), a.Tag)
 }
 
