@@ -316,6 +316,7 @@ type WebsocketNetwork struct {
 	slowWritingPeerMonitorInterval time.Duration
 
 	requestsTracker *RequestTracker
+	requestsLogger  *RequestLogger
 }
 
 type broadcastRequest struct {
@@ -518,7 +519,8 @@ func (wn *WebsocketNetwork) setup() {
 	wn.router = mux.NewRouter()
 	wn.router.Handle(GossipNetworkPath, wn)
 	wn.requestsTracker = makeRequestsTracker(wn.router, wn.log, wn.config)
-	wn.server.Handler = wn.requestsTracker
+	wn.requestsLogger = makeRequestLogger(wn.requestsTracker, wn.log)
+	wn.server.Handler = wn.requestsLogger
 	wn.server.ReadHeaderTimeout = httpServerReadHeaderTimeout
 	wn.server.WriteTimeout = httpServerWriteTimeout
 	wn.server.IdleTimeout = httpServerIdleTimeout
