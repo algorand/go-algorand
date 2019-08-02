@@ -28,7 +28,9 @@ import (
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 )
 
-// RequestLogger is a middleware helps logging all the incoming requests.
+// RequestLogger is a middleware helps logging all the incoming http requests.
+// The intended use is to place it at the bottom of the http processing. It will capture the status codes
+// set by the upsteam handlers and write the request info/response to the logger.
 type RequestLogger struct {
 	downsteamHandler    http.Handler
 	trackingWritersPool sync.Pool
@@ -103,6 +105,7 @@ func (trw *trackingResponseWriter) WriteHeader(statusCode int) {
 	trw.writer.WriteHeader(statusCode)
 	trw.statusCode = statusCode
 }
+
 func (trw *trackingResponseWriter) Reset(writer http.ResponseWriter) {
 	trw.statusCode = 0
 	trw.contentLen = 0
