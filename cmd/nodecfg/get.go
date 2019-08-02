@@ -29,12 +29,15 @@ import (
 
 var getChannel string
 var getRootDir string
+var configBucket string
 
 func init() {
 	getCmd.Flags().StringVarP(&getChannel, "channel", "c", "", "Channel for the nodes we are configuring")
 	getCmd.MarkFlagRequired("channel")
 
 	getCmd.Flags().StringVarP(&getRootDir, "rootdir", "r", "", "The rootdir containing the node configuration files")
+
+	getCmd.Flags().StringVarP(&configBucket, "bucket", "b", "", "S3 bucket to get configuration from.")
 }
 
 var getCmd = &cobra.Command{
@@ -68,5 +71,5 @@ func doGet(channel, rootDir string) (err error) {
 	if err = os.Mkdir(rootDir, 0700); err != nil {
 		return
 	}
-	return downloadAndExtractConfigPackage(channel, rootDir)
+	return downloadAndExtractConfigPackage(channel, rootDir, configBucket)
 }

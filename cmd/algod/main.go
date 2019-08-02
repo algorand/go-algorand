@@ -157,16 +157,13 @@ func main() {
 	// If ALGOTEST env variable is set, telemetry is disabled - allows disabling telemetry for tests
 	isTest := os.Getenv("ALGOTEST") != ""
 	if !isTest {
-		telemetryConfig, err := logging.EnsureTelemetryConfig(nil, genesis.ID())
+		telemetryConfig, err := logging.EnsureTelemetryConfig(&dataDir, genesis.ID())
 		if err != nil {
 			fmt.Fprintln(os.Stdout, "error loading telemetry config", err)
 		}
 
 		// Apply telemetry override.
-		hasOverride, override := logging.TelemetryOverride(*telemetryOverride)
-		if hasOverride {
-			telemetryConfig.Enable = override
-		}
+		telemetryConfig.Enable = logging.TelemetryOverride(*telemetryOverride)
 
 		if telemetryConfig.Enable {
 			// If session GUID specified, use it.

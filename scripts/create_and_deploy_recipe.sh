@@ -2,7 +2,7 @@
 
 # create_and_deploy_recipe.sh - Generates deployed network configuration (based on a recipe) and private build and pushes to S3
 #
-# Syntax:   create_and_deploy_recipe.sh -c <channel/network> [-n network] --recipe <recipe file> -r <rootdir> [--nodeploy] [--force] [-m genesisVersionModifier]"
+# Syntax:   create_and_deploy_recipe.sh -c <channel/network> [-n network] --recipe <recipe file> -r <rootdir> [--nodeploy] [--force] [-m genesisVersionModifier] [ -b <bucket> ]"
 #
 # Outputs:  <errors or warnings>
 #
@@ -18,8 +18,8 @@
 
 set -e
 
-if [[ "${S3_UPLOAD_ID}" = "" || "${S3_UPLOAD_SECRET}" = "" || "${S3_UPLOAD_BUCKET}" = "" ]]; then
-    echo "You need to export S3_UPLOAD_ID, S3_UPLOAD_SECRECT and S3_UPLOAD_BUCKET for this to work"
+if [[ "${AWS_ACCESS_KEY_ID}" = "" || "${AWS_SECRET_ACCESS_KEY}" = "" ]]; then
+    echo "You need to export your AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY for this to work"
     exit 1
 fi
 
@@ -34,6 +34,7 @@ ROOTDIR=""
 NO_DEPLOY=""
 FORCE_OPTION=""
 SCHEMA_MODIFIER=""
+BUCKET=""
 
 while [ "$1" != "" ]; do
     case "$1" in
@@ -63,6 +64,10 @@ while [ "$1" != "" ]; do
         --nodeploy)
             NO_DEPLOY="true"
             ;;
+        -b)
+            shift
+            BUCKET="$1"
+            ;;
         *)
             echo "Unknown option" "$1"
             exit 1
@@ -77,6 +82,12 @@ if [[ -z "${CHANNEL}" || -z "${RECIPEFILE}" || -z "${ROOTDIR}" ]]; then
     exit 1
 fi
 
+# Don't use environment variable for S3_RELEASE_BUCKET - default to algorand-internal for private deployments
+if [[ ! -z "${S3_RELEASE_BUCKET}" && -z "${BUCKET}" ]]; then
+    echo "Ignoring S3_RELEASE_BUCKET setting - defaulting to algorand-internal.  Use -b to override."
+fi
+S3_RELEASE_BUCKET="${BUCKET:-algorand-internal}"
+
 # if Network isn't specified, use the same string as Channel
 if [[ "${NETWORK}" = "" ]]; then
     NETWORK=${CHANNEL}
@@ -89,9 +100,10 @@ fi
 ${GOPATH}/bin/netgoal build -r "${ROOTDIR}" -n "${NETWORK}" --recipe "${RECIPEFILE}" "${FORCE_OPTION}" -m "${SCHEMA_MODIFIER}"
 
 # Package and upload the config package
+export S3_RELEASE_BUCKET="${S3_RELEASE_BUCKET}"
 ${SRCPATH}/scripts/upload_config.sh "${ROOTDIR}" "${CHANNEL}"
 
 if [ "${NO_DEPLOY}" = "" ]; then
     # Now generate a private build using our custom genesis.json and deploy it to S3 also
-    ${SRCPATH}/scripts/deploy_private_version.sh -c "${CHANNEL}" -f "${ROOTDIR}/genesisdata/genesis.json" -n "${NETWORK}"
+    ${SRCPATH}/scripts/deploy_private_version.sh -c "${CHANNEL}" -f "${ROOTDIR}/genesisdata/genesis.json" -n "${NETWORK}" -b "${S3_RELEASE_BUCKET}"
 fi
