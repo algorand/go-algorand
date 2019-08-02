@@ -17,6 +17,9 @@ bundledSpecInject.go
 # Exclude GoLand files
 .idea/
 
+# Exclude VSCode files
+.vscode/
+
 # Exclude go binaries built in-place
 cmd/algod/algod
 cmd/goal/goal
