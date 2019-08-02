@@ -30,7 +30,9 @@ import (
 	"github.com/algorand/go-algorand/config"
 )
 
-var loggingFilename = "logging.config"
+// TelemetryConfigFilename default file name for telemetry config "logging.config"
+var TelemetryConfigFilename = "logging.config"
+
 const ipv6AddressLength = 39
 
 func elasticsearchEndpoint() string {
@@ -54,7 +56,7 @@ func TelemetryOverride(env string) bool {
 }
 
 // createTelemetryConfig creates a new TelemetryConfig structure with a generated GUID and the appropriate Telemetry endpoint.
-// Note: This should only be used/persisted when initially creating 'loggingFilename'. Because the methods are called
+// Note: This should only be used/persisted when initially creating 'TelemetryConfigFilename'. Because the methods are called
 //       from various tools and goal commands and affect the future default settings for telemetry, we need to inject
 //       a "dev" branch check.
 func createTelemetryConfig() TelemetryConfig {
@@ -124,7 +126,7 @@ func (cfg TelemetryConfig) getInstanceName() string {
 // SanitizeTelemetryString applies sanitization rules and returns the sanitized string.
 func SanitizeTelemetryString(input string, maxParts int) string {
 	// Truncate to a reasonable size, allowing some undefined separator.
-	maxReasonableSize := maxParts * ipv6AddressLength + maxParts - 1
+	maxReasonableSize := maxParts*ipv6AddressLength + maxParts - 1
 	if len(input) > maxReasonableSize {
 		input = input[:maxReasonableSize]
 	}
@@ -153,6 +155,6 @@ func loadTelemetryConfig(path string) (TelemetryConfig, error) {
 	}
 
 	initializeConfig(cfg)
-  
+
 	return cfg, err
 }

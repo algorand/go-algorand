@@ -14,9 +14,14 @@ function install_or_upgrade {
 }
 
 if [ "${OS}" = "linux" ]; then
+    if [ -z "$(dpkg -l sudo 2>/dev/null | grep ^ii)" ] ; then
+	apt-get update
+	apt-get -y install sudo
+    fi
+	    
     echo "deb [trusted=yes] https://dl.bintray.com/go-swagger/goswagger-debian ubuntu main" | sudo tee /etc/apt/sources.list.d/goswagger.list
     sudo apt-get update
-    sudo apt-get -y install libboost-all-dev expect jq swagger
+    sudo apt-get -y install libboost-all-dev expect jq swagger autoconf
 elif [ "${OS}" = "darwin" ]; then
     brew update
     brew tap caskroom/cask

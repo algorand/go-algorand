@@ -46,14 +46,14 @@ func TestLoadDefaultConfig(t *testing.T) {
 	a := require.New(t)
 
 	configDir, err := ioutil.TempDir("", "testdir")
+	defer os.RemoveAll(configDir)
 	currentRoot := config.SetGlobalConfigFileRoot(configDir)
+	defer config.SetGlobalConfigFileRoot(currentRoot)
 
 	_, err = EnsureTelemetryConfig(nil, "")
 
 	a.Nil(err)
 
-	config.SetGlobalConfigFileRoot(currentRoot)
-	os.RemoveAll(configDir)
 }
 
 func isDefault(cfg TelemetryConfig) bool {
@@ -65,28 +65,88 @@ func isDefault(cfg TelemetryConfig) bool {
 	return cfg == defaultCfg
 }
 
-func TestEnsureErrorInvalidDirectory(t *testing.T) {
+func TestLoggingConfigDataDirFirst(t *testing.T) {
 	a := require.New(t)
+
+	globalConfigRoot, err := ioutil.TempDir("", "globalConfigRoot")
+	defer os.RemoveAll(globalConfigRoot)
+	oldConfigRoot := config.SetGlobalConfigFileRoot(globalConfigRoot)
+	defer config.SetGlobalConfigFileRoot(oldConfigRoot)
+	globalLoggingPath := filepath.Join(globalConfigRoot, TelemetryConfigFilename)
+
+	dataDir, err := ioutil.TempDir("", "dataDir")
+	defer os.RemoveAll(dataDir)
+	dataDirLoggingPath := filepath.Join(dataDir, TelemetryConfigFilename)
+
+	_, err = os.Stat(globalLoggingPath)
+	a.True(os.IsNotExist(err))
+	_, err = os.Stat(dataDirLoggingPath)
+	a.True(os.IsNotExist(err))
+
+	defaultCfg := createTelemetryConfig()
+	a.False(defaultCfg.Enable) // if the default becomes true, flip the logic in this test to make it more interesting.
+
+	fout, err := os.Create(dataDirLoggingPath)
+	a.Nil(err)
+	fout.Write([]byte("{\"Enable\":true}"))
+	fout.Close()
+
+	cfg, err := EnsureTelemetryConfig(&dataDir, "")
+	a.Nil(err)
+
+	_, err = os.Stat(globalLoggingPath)
+	a.True(os.IsNotExist(err))
+	_, err = os.Stat(dataDirLoggingPath)
+	a.Nil(err)
+
+	a.Equal(cfg.FilePath, dataDirLoggingPath)
+	a.NotEqual(cfg.GUID, defaultCfg.GUID)
+
+	// We got this from the tiny file we wrote to earlier.
+	a.True(cfg.Enable)
+
+	err = cfg.Save(cfg.FilePath)
+	a.Nil(err)
+}
+
+func TestLoggingConfigGlobalSecond(t *testing.T) {
+	a := require.New(t)
+
+	globalConfigRoot, err := ioutil.TempDir("", "globalConfigRoot")
+	defer os.RemoveAll(globalConfigRoot)
+	oldConfigRoot := config.SetGlobalConfigFileRoot(globalConfigRoot)
+	defer config.SetGlobalConfigFileRoot(oldConfigRoot)
+	globalLoggingPath := filepath.Join(globalConfigRoot, TelemetryConfigFilename)
+
+	_, err = os.Stat(globalLoggingPath)
+	a.True(os.IsNotExist(err))
 
 	cfgPath := "/missing-directory"
 	cfg, err := EnsureTelemetryConfig(&cfgPath, "")
 
-	a.True(os.IsNotExist(err)) // Should fail with FileNotExist making config, will fail when saved
+	a.Nil(err)
+	_, err = os.Stat(globalLoggingPath)
+	a.Nil(err)
 
 	// Returned cfg should be same as default except
 	// for the FilePath and GUID
 	defaultCfg := createTelemetryConfig()
-	a.Equal(cfg.FilePath, filepath.Join(cfgPath, loggingFilename))
+	a.Equal(cfg.FilePath, globalLoggingPath)
 	a.NotEqual(cfg.GUID, defaultCfg.GUID)
 
 	a.True(isDefault(cfg))
 
 	err = cfg.Save(cfg.FilePath)
-	a.NotNil(err)
+	a.Nil(err)
 }
 
 func TestSaveLoadConfig(t *testing.T) {
 	a := require.New(t)
+
+	globalConfigRoot, err := ioutil.TempDir("", "globalConfigRoot")
+	defer os.RemoveAll(globalConfigRoot)
+	oldConfigRoot := config.SetGlobalConfigFileRoot(globalConfigRoot)
+	defer config.SetGlobalConfigFileRoot(oldConfigRoot)
 
 	configDir, err := ioutil.TempDir("", "testdir")
 	os.RemoveAll(configDir)
