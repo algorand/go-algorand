@@ -82,6 +82,13 @@ func (rl *RequestLogger) logRequest(trackingWriter *trackingResponseWriter, requ
 	rl.log.EventWithDetails(telemetryspec.Network, telemetryspec.HTTPRequestEvent, requestDetails)
 }
 
+// SetStatusCode sets the status code of a given response writer without writing it to the underlaying writer object.
+func (rl *RequestLogger) SetStatusCode(writer http.ResponseWriter, statusCode int) {
+	if trackingWriter := writer.(*trackingResponseWriter); trackingWriter != nil {
+		trackingWriter.statusCode = statusCode
+	}
+}
+
 type trackingResponseWriter struct {
 	writer     http.ResponseWriter
 	statusCode int
@@ -119,12 +126,5 @@ func (trw *trackingResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error)
 		return nil, nil, fmt.Errorf("writer doesn't implement Hijacker interface")
 	}
 
-	conn, readerWriter, err := hijack.Hijack()
-
-	if err != nil {
-		// we don't really know this, but this connection is going to be switching protocol.
-		trw.statusCode = http.StatusSwitchingProtocols
-	}
-
-	return conn, readerWriter, err
+	return hijack.Hijack()
 }

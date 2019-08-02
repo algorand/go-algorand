@@ -887,6 +887,9 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 		return
 	}
 
+	// we want to tell the response object that the status was changed to 101 ( switching protocols ) so that it will be logged.
+	wn.requestsLogger.SetStatusCode(response, http.StatusSwitchingProtocols)
+
 	peer := &wsPeer{
 		wsPeerCore: wsPeerCore{
 			net:           wn,
