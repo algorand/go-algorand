@@ -82,7 +82,7 @@ ALGOD_API_FILES := $(shell find daemon/algod/api/server/common daemon/algod/api/
 ALGOD_API_SWAGGER_INJECT := daemon/algod/api/server/lib/bundledSpecInject.go
 
 # Note that swagger.json requires the go-swagger dep.
-$(ALGOD_API_SWAGGER_SPEC): $(ALGOD_API_FILES)
+$(ALGOD_API_SWAGGER_SPEC): $(ALGOD_API_FILES) crypto/lib/libsodium.a
 	cd daemon/algod/api && \
 		PATH=$(GOPATH)/bin:$$PATH \
 		go generate ./...
@@ -96,7 +96,7 @@ KMD_API_FILES := $(shell find daemon/kmd/api/ -type f | grep -v $(KMD_API_SWAGGE
 KMD_API_SWAGGER_WRAPPER := kmdSwaggerWrappers.go
 KMD_API_SWAGGER_INJECT := daemon/kmd/lib/kmdapi/bundledSpecInject.go
 
-$(KMD_API_SWAGGER_SPEC): $(KMD_API_FILES)
+$(KMD_API_SWAGGER_SPEC): $(KMD_API_FILES) crypto/lib/libsodium.a
 	cd daemon/kmd/lib/kmdapi && \
 		python genSwaggerWrappers.py $(KMD_API_SWAGGER_WRAPPER)
 	cd daemon/kmd && \
