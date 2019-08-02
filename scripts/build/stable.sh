@@ -10,7 +10,6 @@ make -j4
 
 # Flag that we want release handling of genesis files
 export RELEASE_GENESIS_PROCESS=true
-export TRANSITION_TELEMETRY_BUILDS=true
 
 git checkout rel/stable
 

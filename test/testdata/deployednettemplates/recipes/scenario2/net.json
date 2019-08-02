@@ -5,7 +5,6 @@
 			"Nodes": [
 				{
 					"Name": "relay1",
-					"IsRelay": true,
 					"Wallets": null,
 					"NetAddress": "{{NetworkPort}}",
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -25,7 +24,6 @@
 			"Nodes": [
 				{
 					"Name": "relay2",
-					"IsRelay": true,
 					"Wallets": null,
 					"NetAddress": "{{NetworkPort}}",
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -45,7 +43,6 @@
 			"Nodes": [
 				{
 					"Name": "relay3",
-					"IsRelay": true,
 					"Wallets": null,
 					"NetAddress": "{{NetworkPort}}",
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -65,7 +62,6 @@
 			"Nodes": [
 				{
 					"Name": "relay4",
-					"IsRelay": true,
 					"Wallets": null,
 					"NetAddress": "{{NetworkPort}}",
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -85,7 +81,6 @@
 			"Nodes": [
 				{
 					"Name": "relay5",
-					"IsRelay": true,
 					"Wallets": null,
 					"NetAddress": "{{NetworkPort}}",
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -105,7 +100,6 @@
 			"Nodes": [
 				{
 					"Name": "relay6",
-					"IsRelay": true,
 					"Wallets": null,
 					"NetAddress": "{{NetworkPort}}",
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -125,7 +119,6 @@
 			"Nodes": [
 				{
 					"Name": "relay7",
-					"IsRelay": true,
 					"Wallets": null,
 					"NetAddress": "{{NetworkPort}}",
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -145,7 +138,6 @@
 			"Nodes": [
 				{
 					"Name": "relay8",
-					"IsRelay": true,
 					"Wallets": null,
 					"NetAddress": "{{NetworkPort}}",
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -165,7 +157,6 @@
 			"Nodes": [
 				{
 					"Name": "relay9",
-					"IsRelay": true,
 					"Wallets": null,
 					"NetAddress": "{{NetworkPort}}",
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -185,7 +176,6 @@
 			"Nodes": [
 				{
 					"Name": "relay10",
-					"IsRelay": true,
 					"Wallets": null,
 					"NetAddress": "{{NetworkPort}}",
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -205,7 +195,6 @@
 			"Nodes": [
 				{
 					"Name": "node1",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet1",
@@ -259,7 +248,6 @@
 				},
 				{
 					"Name": "node21",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet2",
@@ -313,7 +301,6 @@
 				},
 				{
 					"Name": "node41",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet3",
@@ -367,7 +354,6 @@
 				},
 				{
 					"Name": "node61",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet4",
@@ -421,7 +407,6 @@
 				},
 				{
 					"Name": "node81",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet5",
@@ -480,7 +465,6 @@
 			"Nodes": [
 				{
 					"Name": "node2",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet6",
@@ -534,7 +518,6 @@
 				},
 				{
 					"Name": "node22",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet7",
@@ -588,7 +571,6 @@
 				},
 				{
 					"Name": "node42",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet8",
@@ -642,7 +624,6 @@
 				},
 				{
 					"Name": "node62",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet9",
@@ -696,7 +677,6 @@
 				},
 				{
 					"Name": "node82",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet10",
@@ -755,7 +735,6 @@
 			"Nodes": [
 				{
 					"Name": "node3",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet11",
@@ -809,7 +788,6 @@
 				},
 				{
 					"Name": "node23",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet12",
@@ -863,7 +841,6 @@
 				},
 				{
 					"Name": "node43",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet13",
@@ -917,7 +894,6 @@
 				},
 				{
 					"Name": "node63",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet14",
@@ -971,7 +947,6 @@
 				},
 				{
 					"Name": "node83",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet15",
@@ -1030,7 +1005,6 @@
 			"Nodes": [
 				{
 					"Name": "node4",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet16",
@@ -1084,7 +1058,6 @@
 				},
 				{
 					"Name": "node24",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet17",
@@ -1138,7 +1111,6 @@
 				},
 				{
 					"Name": "node44",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet18",
@@ -1192,7 +1164,6 @@
 				},
 				{
 					"Name": "node64",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet19",
@@ -1246,7 +1217,6 @@
 				},
 				{
 					"Name": "node84",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet20",
@@ -1305,7 +1275,6 @@
 			"Nodes": [
 				{
 					"Name": "node5",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet21",
@@ -1359,7 +1328,6 @@
 				},
 				{
 					"Name": "node25",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet22",
@@ -1413,7 +1381,6 @@
 				},
 				{
 					"Name": "node45",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet23",
@@ -1467,7 +1434,6 @@
 				},
 				{
 					"Name": "node65",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet24",
@@ -1521,7 +1487,6 @@
 				},
 				{
 					"Name": "node85",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet25",
@@ -1580,7 +1545,6 @@
 			"Nodes": [
 				{
 					"Name": "node6",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet26",
@@ -1634,7 +1598,6 @@
 				},
 				{
 					"Name": "node26",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet27",
@@ -1688,7 +1651,6 @@
 				},
 				{
 					"Name": "node46",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet28",
@@ -1742,7 +1704,6 @@
 				},
 				{
 					"Name": "node66",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet29",
@@ -1796,7 +1757,6 @@
 				},
 				{
 					"Name": "node86",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet30",
@@ -1855,7 +1815,6 @@
 			"Nodes": [
 				{
 					"Name": "node7",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet31",
@@ -1909,7 +1868,6 @@
 				},
 				{
 					"Name": "node27",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet32",
@@ -1963,7 +1921,6 @@
 				},
 				{
 					"Name": "node47",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet33",
@@ -2017,7 +1974,6 @@
 				},
 				{
 					"Name": "node67",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet34",
@@ -2071,7 +2027,6 @@
 				},
 				{
 					"Name": "node87",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet35",
@@ -2130,7 +2085,6 @@
 			"Nodes": [
 				{
 					"Name": "node8",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet36",
@@ -2184,7 +2138,6 @@
 				},
 				{
 					"Name": "node28",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet37",
@@ -2238,7 +2191,6 @@
 				},
 				{
 					"Name": "node48",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet38",
@@ -2292,7 +2244,6 @@
 				},
 				{
 					"Name": "node68",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet39",
@@ -2346,7 +2297,6 @@
 				},
 				{
 					"Name": "node88",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet40",
@@ -2405,7 +2355,6 @@
 			"Nodes": [
 				{
 					"Name": "node9",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet41",
@@ -2459,7 +2408,6 @@
 				},
 				{
 					"Name": "node29",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet42",
@@ -2513,7 +2461,6 @@
 				},
 				{
 					"Name": "node49",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet43",
@@ -2567,7 +2514,6 @@
 				},
 				{
 					"Name": "node69",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet44",
@@ -2621,7 +2567,6 @@
 				},
 				{
 					"Name": "node89",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet45",
@@ -2680,7 +2625,6 @@
 			"Nodes": [
 				{
 					"Name": "node10",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet46",
@@ -2734,7 +2678,6 @@
 				},
 				{
 					"Name": "node30",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet47",
@@ -2788,7 +2731,6 @@
 				},
 				{
 					"Name": "node50",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet48",
@@ -2842,7 +2784,6 @@
 				},
 				{
 					"Name": "node70",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet49",
@@ -2896,7 +2837,6 @@
 				},
 				{
 					"Name": "node90",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet50",
@@ -2955,7 +2895,6 @@
 			"Nodes": [
 				{
 					"Name": "node11",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet51",
@@ -3009,7 +2948,6 @@
 				},
 				{
 					"Name": "node31",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet52",
@@ -3063,7 +3001,6 @@
 				},
 				{
 					"Name": "node51",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet53",
@@ -3117,7 +3054,6 @@
 				},
 				{
 					"Name": "node71",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet54",
@@ -3171,7 +3107,6 @@
 				},
 				{
 					"Name": "node91",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet55",
@@ -3230,7 +3165,6 @@
 			"Nodes": [
 				{
 					"Name": "node12",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet56",
@@ -3284,7 +3218,6 @@
 				},
 				{
 					"Name": "node32",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet57",
@@ -3338,7 +3271,6 @@
 				},
 				{
 					"Name": "node52",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet58",
@@ -3392,7 +3324,6 @@
 				},
 				{
 					"Name": "node72",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet59",
@@ -3446,7 +3377,6 @@
 				},
 				{
 					"Name": "node92",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet60",
@@ -3505,7 +3435,6 @@
 			"Nodes": [
 				{
 					"Name": "node13",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet61",
@@ -3559,7 +3488,6 @@
 				},
 				{
 					"Name": "node33",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet62",
@@ -3613,7 +3541,6 @@
 				},
 				{
 					"Name": "node53",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet63",
@@ -3667,7 +3594,6 @@
 				},
 				{
 					"Name": "node73",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet64",
@@ -3721,7 +3647,6 @@
 				},
 				{
 					"Name": "node93",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet65",
@@ -3780,7 +3705,6 @@
 			"Nodes": [
 				{
 					"Name": "node14",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet66",
@@ -3834,7 +3758,6 @@
 				},
 				{
 					"Name": "node34",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet67",
@@ -3888,7 +3811,6 @@
 				},
 				{
 					"Name": "node54",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet68",
@@ -3942,7 +3864,6 @@
 				},
 				{
 					"Name": "node74",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet69",
@@ -3996,7 +3917,6 @@
 				},
 				{
 					"Name": "node94",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet70",
@@ -4055,7 +3975,6 @@
 			"Nodes": [
 				{
 					"Name": "node15",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet71",
@@ -4109,7 +4028,6 @@
 				},
 				{
 					"Name": "node35",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet72",
@@ -4163,7 +4081,6 @@
 				},
 				{
 					"Name": "node55",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet73",
@@ -4217,7 +4134,6 @@
 				},
 				{
 					"Name": "node75",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet74",
@@ -4271,7 +4187,6 @@
 				},
 				{
 					"Name": "node95",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet75",
@@ -4330,7 +4245,6 @@
 			"Nodes": [
 				{
 					"Name": "node16",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet76",
@@ -4384,7 +4298,6 @@
 				},
 				{
 					"Name": "node36",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet77",
@@ -4438,7 +4351,6 @@
 				},
 				{
 					"Name": "node56",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet78",
@@ -4492,7 +4404,6 @@
 				},
 				{
 					"Name": "node76",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet79",
@@ -4546,7 +4457,6 @@
 				},
 				{
 					"Name": "node96",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet80",
@@ -4605,7 +4515,6 @@
 			"Nodes": [
 				{
 					"Name": "node17",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet81",
@@ -4659,7 +4568,6 @@
 				},
 				{
 					"Name": "node37",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet82",
@@ -4713,7 +4621,6 @@
 				},
 				{
 					"Name": "node57",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet83",
@@ -4767,7 +4674,6 @@
 				},
 				{
 					"Name": "node77",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet84",
@@ -4821,7 +4727,6 @@
 				},
 				{
 					"Name": "node97",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet85",
@@ -4880,7 +4785,6 @@
 			"Nodes": [
 				{
 					"Name": "node18",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet86",
@@ -4934,7 +4838,6 @@
 				},
 				{
 					"Name": "node38",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet87",
@@ -4988,7 +4891,6 @@
 				},
 				{
 					"Name": "node58",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet88",
@@ -5042,7 +4944,6 @@
 				},
 				{
 					"Name": "node78",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet89",
@@ -5096,7 +4997,6 @@
 				},
 				{
 					"Name": "node98",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet90",
@@ -5155,7 +5055,6 @@
 			"Nodes": [
 				{
 					"Name": "node19",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet91",
@@ -5209,7 +5108,6 @@
 				},
 				{
 					"Name": "node39",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet92",
@@ -5263,7 +5161,6 @@
 				},
 				{
 					"Name": "node59",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet93",
@@ -5317,7 +5214,6 @@
 				},
 				{
 					"Name": "node79",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet94",
@@ -5371,7 +5267,6 @@
 				},
 				{
 					"Name": "node99",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet95",
@@ -5430,7 +5325,6 @@
 			"Nodes": [
 				{
 					"Name": "node20",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet96",
@@ -5484,7 +5378,6 @@
 				},
 				{
 					"Name": "node40",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet97",
@@ -5538,7 +5431,6 @@
 				},
 				{
 					"Name": "node60",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet98",
@@ -5592,7 +5484,6 @@
 				},
 				{
 					"Name": "node80",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet99",
@@ -5646,7 +5537,6 @@
 				},
 				{
 					"Name": "node100",
-					"IsRelay": false,
 					"Wallets": [
 						{
 							"Name": "Wallet100",

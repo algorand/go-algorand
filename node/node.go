@@ -53,14 +53,15 @@ const participationKeyCheckSecs = 60
 
 // StatusReport represents the current basic status of the node
 type StatusReport struct {
-	LastRound            basics.Round
-	LastVersion          protocol.ConsensusVersion
-	NextVersion          protocol.ConsensusVersion
-	NextVersionRound     basics.Round
-	NextVersionSupported bool
-	LastRoundTimestamp   time.Time
-	SynchronizingTime    time.Duration
-	CatchupTime          time.Duration
+	LastRound             basics.Round
+	LastVersion           protocol.ConsensusVersion
+	NextVersion           protocol.ConsensusVersion
+	NextVersionRound      basics.Round
+	NextVersionSupported  bool
+	LastRoundTimestamp    time.Time
+	SynchronizingTime     time.Duration
+	CatchupTime           time.Duration
+	HasSyncedSinceStartup bool
 }
 
 // TimeSinceLastRound returns the time since the last block was approved (locally), or 0 if no blocks seen
@@ -83,7 +84,7 @@ type AlgorandFullNode struct {
 
 	ledger    *data.Ledger
 	net       network.GossipNode
-	phonebook network.ThreadsafePhonebook
+	phonebook *network.ThreadsafePhonebook
 
 	transactionPool *pools.TransactionPool
 	txHandler       *data.TxHandler
@@ -101,7 +102,8 @@ type AlgorandFullNode struct {
 
 	log logging.Logger
 
-	lastRoundTimestamp time.Time
+	lastRoundTimestamp    time.Time
+	hasSyncedSinceStartup bool
 
 	txPoolSyncer *rpcs.TxSyncer
 
@@ -144,6 +146,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookDir
 	node.log = log.With("name", cfg.NetAddress)
 	node.genesisID = genesis.ID()
 	node.genesisHash = crypto.HashObj(genesis)
+	node.phonebook = network.MakeThreadsafePhonebook()
 
 	addrs, err := config.LoadPhonebook(phonebookDir)
 	if err != nil {
@@ -152,7 +155,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookDir
 	node.phonebook.ReplacePeerList(addrs)
 
 	// tie network, block fetcher, and agreement services together
-	p2pNode, err := network.NewWebsocketNetwork(node.log, node.config, &node.phonebook, genesis.ID(), genesis.Network)
+	p2pNode, err := network.NewWebsocketNetwork(node.log, node.config, node.phonebook, genesis.ID(), genesis.Network)
 	if err != nil {
 		log.Errorf("could not create websocket node: %v", err)
 		return nil, err
@@ -542,6 +545,7 @@ func (node *AlgorandFullNode) Status() (s StatusReport, err error) {
 	s.SynchronizingTime = node.syncer.SynchronizingTime()
 	s.LastRoundTimestamp = node.lastRoundTimestamp
 	s.CatchupTime = node.syncer.SynchronizingTime()
+	s.HasSyncedSinceStartup = node.hasSyncedSinceStartup
 	return
 }
 
@@ -688,6 +692,7 @@ func (node *AlgorandFullNode) OnNewBlock(block bookkeeping.Block) {
 	defer node.mu.Unlock()
 
 	node.lastRoundTimestamp = time.Now()
+	node.hasSyncedSinceStartup = true
 
 	// Wake up oldKeyDeletionThread(), non-blocking.
 	select {

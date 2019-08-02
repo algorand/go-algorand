@@ -58,6 +58,10 @@ type NodeStatus struct {
 	//
 	// required: true
 	CatchupTime int64 `json:"catchupTime"`
+
+	// HasSyncedSinceStartup indicates whether a round has completed since startup
+	// Required: true
+	HasSyncedSinceStartup bool `json:"hasSyncedSinceStartup"`
 }
 
 // TransactionID Description
@@ -186,12 +190,12 @@ type Transaction struct {
 	// Note is a free form data
 	//
 	// required: false
-	Note bytes `json:"noteb64,omitempty"`
+	Note bytes `json:"noteb64"`
 
 	// ConfirmedRound indicates the block number this transaction appeared in
 	//
 	// required: false
-	ConfirmedRound uint64 `json:"round,omitempty"`
+	ConfirmedRound uint64 `json:"round"`
 
 	// PoolError indicates the transaction was evicted from this node's transaction
 	// pool (if non-empty).  A non-empty PoolError does not guarantee that the
@@ -199,12 +203,21 @@ type Transaction struct {
 	// transaction and may attempt to commit it in the future.
 	//
 	// required: false
-	PoolError string `json:"poolerror,omitempty"`
+	PoolError string `json:"poolerror"`
 
 	// This is a list of all supported transactions.
 	// To add another one, create a struct with XXXTransactionType and embed it here.
 	// To prevent extraneous fields, all must have the "omitempty" tag.
+
+	// Payment contains the additional fields for a payment transaction.
+	//
+	// required: false
 	Payment *PaymentTransactionType `json:"payment,omitempty"`
+
+	// Keyreg contains the additional fields for a keyreg transaction.
+	//
+	// required: false
+	Keyreg  *KeyregTransactionType  `json:"keyreg,omitempty"`
 
 	// FromRewards is the amount of pending rewards applied to the From
 	// account as part of this transaction.
@@ -234,12 +247,12 @@ type PaymentTransactionType struct {
 	// CloseRemainderTo is the address the sender closed to
 	//
 	// required: false
-	CloseRemainderTo string `json:"close,omitempty"`
+	CloseRemainderTo string `json:"close"`
 
 	// CloseAmount is the amount sent to CloseRemainderTo, for committed transaction
 	//
 	// required: false
-	CloseAmount uint64 `json:"closeamount,omitempty"`
+	CloseAmount uint64 `json:"closeamount"`
 
 	// Amount is the amount of MicroAlgos intended to be transferred
 	//
@@ -257,6 +270,35 @@ type PaymentTransactionType struct {
 	//
 	// required: false
 	CloseRewards uint64 `json:"closerewards"`
+}
+
+// KeyregTransactionType contains the additional fields for a keyreg Transaction
+// swagger:model KeyregTransactionType
+type KeyregTransactionType struct {
+	// VotePK is the participation public key used in key registration transactions
+	//
+	// required: false
+	VotePK bytes `json:"votekey"`
+
+	// SelectionPK is the VRF public key used in key registration transactions
+	//
+	// required: false
+	SelectionPK bytes `json:"selkey"`
+
+	// VoteFirst is the first round this participation key is valid
+	//
+	// required: false
+	VoteFirst uint64 `json:"votefst"`
+
+	// VoteLast is the last round this participation key is valid
+	//
+	// required: false
+	VoteLast uint64 `json:"votelst"`
+
+	// VoteKeyDilution is the dilution for the 2-level participation key
+	//
+	// required: false
+	VoteKeyDilution uint64 `json:"votekd"`
 }
 
 // TransactionList contains a list of transactions

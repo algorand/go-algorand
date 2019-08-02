@@ -27,12 +27,11 @@ rm -rf ${GOPATH}/src/github.com/algorand/go-algorand/crypto/lib
 
 cd ${GOPATH}/src/github.com/algorand/go-algorand
 export RELEASE_GENESIS_PROCESS=true
-export TRANSITION_TELEMETRY_BUILDS=true
 PLATFORM=$(./scripts/osarchtype.sh)
 PLATFORM_SPLIT=(${PLATFORM//\// })
 OS=${PLATFORM_SPLIT[0]}
 ARCH=${PLATFORM_SPLIT[1]}
-export BRANCH=rel/stable
+export BRANCH=$(./scripts/compute_branch.sh)
 export CHANNEL=$(./scripts/compute_branch_channel.sh ${BRANCH})
 export DEFAULTNETWORK=$(./scripts/compute_branch_network.sh)
 export PKG_ROOT=${HOME}/node_pkg
@@ -70,7 +69,6 @@ export FULLVERSION=$(./scripts/compute_build_number.sh -f)
 # a bash user might `source build_env` to manually continue a broken build
 cat <<EOF>${HOME}/build_env
 export RELEASE_GENESIS_PROCESS=${RELEASE_GENESIS_PROCESS}
-export TRANSITION_TELEMETRY_BUILDS=${TRANSITION_TELEMETRY_BUILDS}
 PLATFORM=${PLATFORM}
 OS=${OS}
 ARCH=${ARCH}
@@ -148,13 +146,7 @@ SNAPSHOT=algodummy-$(date +%Y%m%d_%H%M%S)
 aptly -config=${HOME}/dummyaptly.conf snapshot create ${SNAPSHOT} from repo algodummy
 aptly -config=${HOME}/dummyaptly.conf publish snapshot -origin=Algorand -label=Algorand ${SNAPSHOT}
 
-(cd ${HOME}/dummyaptly/public && python3 ${GOPATH}/src/github.com/algorand/go-algorand/scripts/httpd.py --pid ${HOME}/phttpd.pid) &
-
-
-sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME}/docker_test_resources,dst=/stuff --mount type=bind,src=${GOPATH}/src,dst=/root/go/src --mount type=bind,src=/usr/local/go,dst=/usr/local/go ubuntu:16.04 bash /root/go/src/github.com/algorand/go-algorand/scripts/build_release_ubuntu_test_docker.sh"
-sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME}/docker_test_resources,dst=/stuff --mount type=bind,src=${GOPATH}/src,dst=/root/go/src --mount type=bind,src=/usr/local/go,dst=/usr/local/go ubuntu:18.04 bash /root/go/src/github.com/algorand/go-algorand/scripts/build_release_ubuntu_test_docker.sh"
-
-kill $(cat ${HOME}/phttpd.pid)
+${GOPATH}/src/github.com/algorand/go-algorand/scripts/build_release_run_ubuntu_docker_build_test.sh
 
 date "+build_release done building ubuntu %Y%m%d_%H%M%S"
 
@@ -181,10 +173,9 @@ gpgcheck=1
 gpgkey=https://releases.algorand.com/rpm/rpm_algorand.pub
 EOF
 (cd ${HOME}/dummyrepo && python3 ${GOPATH}/src/github.com/algorand/go-algorand/scripts/httpd.py --pid ${HOME}/phttpd.pid) &
+trap ${GOPATH}/src/github.com/algorand/go-algorand/scripts/kill_httpd.sh 0
 
 sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME}/.gnupg/S.gpg-agent,dst=/S.gpg-agent --mount type=bind,src=${HOME}/dummyrepo,dst=/dummyrepo --mount type=bind,src=${HOME}/docker_test_resources,dst=/stuff --mount type=bind,src=${GOPATH}/src,dst=/root/go/src --mount type=bind,src=${HOME},dst=/root/subhome --mount type=bind,src=/usr/local/go,dst=/usr/local/go algocentosbuild /root/go/src/github.com/algorand/go-algorand/scripts/build_release_centos_docker.sh"
-
-kill $(cat ${HOME}/phttpd.pid)
 
 date "+build_release done building centos %Y%m%d_%H%M%S"
 

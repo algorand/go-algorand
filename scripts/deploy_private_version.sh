@@ -47,7 +47,7 @@ while [ "$1" != "" ]; do
             ;;
         -b)
             shift
-            BUCKET=$1
+            BUCKET="$1"
             ;;
         *)
             echo "Unknown option" "$1"
@@ -58,10 +58,16 @@ while [ "$1" != "" ]; do
 done
 
 if [[ "${CHANNEL}" = "" || "${NETWORK}" = "" || "${DEFAULTNETWORK}" = "" && "${GENESISFILE}" = "" ]]; then
-    echo "Syntax: deploy_private_version -c <channel> [ -g <genesis-network> | -f <genesis-file> ] -n <network>"
+    echo "Syntax: deploy_private_version -c <channel> [ -g <genesis-network> | -f <genesis-file> ] -n <network> [ -b <bucket> ]"
     echo "e.g. deploy_private_version.sh -c TestCatchup -g testnet -n testnetwork"
     exit 1
 fi
+
+# Don't use environment variable for S3_RELEASE_BUCKET - default to algorand-internal for private deployments
+if [[ ! -z "${S3_RELEASE_BUCKET}" && -z "${BUCKET}" ]]; then
+    echo "Ignoring S3_RELEASE_BUCKET setting - defaulting to algorand-internal.  Use -b to override."
+fi
+S3_RELEASE_BUCKET="${BUCKET:-algorand-internal}"
 
 # If GENESISFILE specified, DEFAULTNETWORK doesn't really matter but we need to ensure we have one
 if [[ "${DEFAULTNETWORK}" = "" ]]; then
@@ -77,6 +83,7 @@ export BUILDCHANNEL=${CHANNEL}
 export DEFAULTNETWORK=${DEFAULTNETWORK}
 export FULLVERSION=$(./scripts/compute_build_number.sh -f)
 export PKG_ROOT=${HOME}/node_pkg
+export S3_RELEASE_BUCKET=${S3_RELEASE_BUCKET}
 
 if [[ $(uname) == "Darwin" ]]; then
     export NETWORK=${NETWORK}
@@ -99,4 +106,4 @@ fi
 export VARIATIONS="base"
 scripts/build_packages.sh $(./scripts/osarchtype.sh)
 
-scripts/upload_version.sh ${CHANNEL} ${PKG_ROOT} ${BUCKET}
+scripts/upload_version.sh ${CHANNEL} ${PKG_ROOT} ${S3_RELEASE_BUCKET}
