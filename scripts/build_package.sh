@@ -84,7 +84,7 @@ done
 mkdir ${PKG_ROOT}/genesis
 
 if [ ! -z "${RELEASE_GENESIS_PROCESS}" ]; then
-    genesis_dirs=("devnet" "testnet" "mainnet")
+    genesis_dirs=("devnet" "testnet" "mainnet" "betanet")
     for dir in "${genesis_dirs[@]}"; do
         mkdir -p ${PKG_ROOT}/genesis/${dir}
         cp ${REPO_DIR}/installer/genesis/${dir}/genesis.json ${PKG_ROOT}/genesis/${dir}/
@@ -94,7 +94,7 @@ if [ ! -z "${RELEASE_GENESIS_PROCESS}" ]; then
     # Copy the appropriate network genesis.json for our default (in root ./genesis folder)
     cp ${PKG_ROOT}/genesis/${DEFAULT_RELEASE_NETWORK}/genesis.json ${PKG_ROOT}/genesis
     if [ $? -ne 0 ]; then exit 1; fi
-elif [[ "${CHANNEL}" == "dev" || "${CHANNEL}" == "stable" || "${CHANNEL}" == "nightly" ]]; then
+elif [[ "${CHANNEL}" == "dev" || "${CHANNEL}" == "stable" || "${CHANNEL}" == "nightly" || "${CHANNEL}" == "beta" ]]; then
     cp ${REPO_DIR}/installer/genesis/${DEFAULTNETWORK}/genesis.json ${PKG_ROOT}/genesis/
     #${GOPATH}/bin/buildtools genesis ensure -n ${DEFAULTNETWORK} --source ${REPO_DIR}/gen/${DEFAULTNETWORK}/genesis.json --target ${PKG_ROOT}/genesis/genesis.json --releasedir ${REPO_DIR}/installer/genesis
     if [ $? -ne 0 ]; then exit 1; fi

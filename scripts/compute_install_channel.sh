@@ -8,6 +8,8 @@ fi
 
 if [ "${CHANNEL}" = "stable" ]; then
     echo "stable"
+elif [ "${CHANNEL}" = "beta" ]; then
+    echo "beta"
 else
     echo "nightly"
 fi
