@@ -6,8 +6,8 @@ WORKDIR /root
 RUN wget --quiet https://dl.google.com/go/go${GOLANG_VERSION}.linux-amd64.tar.gz && tar -xvf go${GOLANG_VERSION}.linux-amd64.tar.gz && mv go /usr/local
 ENV GOROOT=/usr/local/go \
     GOPATH=$HOME/go
-RUN mkdir -p $GOPATH/src/github.com/docker
-WORKDIR $GOPATH/src/github.com/docker
+RUN mkdir -p $GOPATH/src/github.com/algorand
+WORKDIR $GOPATH/src/github.com/algorand
 COPY ./go-algorand ./go-algorand/
 ENV PATH=$GOPATH/bin:$GOROOT/bin:$PATH \
     BRANCH=${BRANCH} \
@@ -16,6 +16,6 @@ ENV PATH=$GOPATH/bin:$GOROOT/bin:$PATH \
     DEFAULTNETWORK=${DEFAULTNETWORK} \
     FULLVERSION=${FULLVERSION} \
     PKG_ROOT=${PKG_ROOT}
-WORKDIR $GOPATH/src/github.com/docker/go-algorand
+WORKDIR $GOPATH/src/github.com/algorand/go-algorand
 RUN scripts/configure_dev-deps.sh && make deps && make clean && scripts/local_install.sh -n
 ENTRYPOINT ["/bin/bash"]
