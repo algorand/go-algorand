@@ -251,29 +251,6 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block) {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
-	// Adjust the pool fee threshold.  The rules are:
-	// - If there was less than one full block in the pool, reduce
-	//   the multiplier by 2x.  It will eventually go to 0, so that
-	//   only the flat MinTxnFee matters if the pool is idle.
-	// - If there were less than two full blocks in the pool, keep
-	//   the multiplier as-is.
-	// - If there were two or more full blocks in the pool, grow
-	//   the multiplier by 2x (or increment by 1, if 0).
-	switch pool.numPendingWholeBlocks {
-	case 0:
-		pool.feeThresholdMultiplier = pool.feeThresholdMultiplier / 2
-
-	case 1:
-		// Keep the fee multiplier the same.
-
-	default:
-		if pool.feeThresholdMultiplier == 0 {
-			pool.feeThresholdMultiplier = 1
-		} else {
-			pool.feeThresholdMultiplier = pool.feeThresholdMultiplier * 2
-		}
-	}
-
 	var stats telemetryspec.ProcessBlockMetrics
 	var knownCommitted uint
 	var unknownCommitted uint
@@ -292,6 +269,32 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block) {
 	}
 
 	if pool.pendingBlockEvaluator == nil || block.Round() >= pool.pendingBlockEvaluator.Round() {
+		// Adjust the pool fee threshold.  The rules are:
+		// - If there was less than one full block in the pool, reduce
+		//   the multiplier by 2x.  It will eventually go to 0, so that
+		//   only the flat MinTxnFee matters if the pool is idle.
+		// - If there were less than two full blocks in the pool, keep
+		//   the multiplier as-is.
+		// - If there were two or more full blocks in the pool, grow
+		//   the multiplier by 2x (or increment by 1, if 0).
+		switch pool.numPendingWholeBlocks {
+		case 0:
+			pool.feeThresholdMultiplier = pool.feeThresholdMultiplier / 2
+
+		case 1:
+			// Keep the fee multiplier the same.
+
+		default:
+			if pool.feeThresholdMultiplier == 0 {
+				pool.feeThresholdMultiplier = 1
+			} else {
+				pool.feeThresholdMultiplier = pool.feeThresholdMultiplier * 2
+			}
+		}
+
+		// Recompute the pool by starting from the new latest block.
+		// This has the side-effect of discarding transactions that
+		// have been committed (or that are otherwise no longer valid).
 		stats = pool.recomputeBlockEvaluator()
 	}
 
