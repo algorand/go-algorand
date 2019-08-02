@@ -1,5 +1,7 @@
 GOPATH		:= $(shell go env GOPATH)
 export GOPATH
+GO111MODULE	:= on
+export GO111MODULE
 UNAME		:= $(shell uname)
 SRCPATH     := $(shell pwd)
 

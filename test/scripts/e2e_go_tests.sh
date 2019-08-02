@@ -5,6 +5,7 @@ echo "######################################################################"
 set -e
 
 export GOPATH=$(go env GOPATH)
+export GO111MODULE=on
 REPO_DIR=${GOPATH}/src/github.com/algorand/go-algorand
 
 # Need bin-race binaries for e2e tests

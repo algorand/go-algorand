@@ -56,7 +56,7 @@ if [ ${GOLINT_MISSING} -ne 0 ]; then
     read -p "Install golint (using go get) (y/N): " OK
     if [ "$OK" = "y" ]; then
         echo "Installing golint..."
-        cd / && go get -u golang.org/x/lint/golint
+        GO111MODULE=off go get -u golang.org/x/lint/golint
     fi
 fi
 
@@ -64,7 +64,7 @@ if [ ${STRINGER_MISSING} -ne 0 ]; then
     read -p "Install stringer (using go get) (y/N): " OK
     if [ "$OK" = "y" ]; then
         echo "Installing stringer..."
-        cd / && go get -u golang.org/x/tools/cmd/stringer
+        GO111MODULE=off go get -u golang.org/x/tools/cmd/stringer
     fi
 fi
 
@@ -72,7 +72,7 @@ if [ ${SWAGGER_MISSING} -ne 0 ]; then
     read -p "Install swagger (using go get) (y/N): " OK
     if [ "$OK" = "y" ]; then
         echo "Installing swagger..."
-        cd / && go get -u github.com/go-swagger/go-swagger/cmd/swagger
+        GO111MODULE=off go get -u github.com/go-swagger/go-swagger/cmd/swagger
     fi
 fi
 

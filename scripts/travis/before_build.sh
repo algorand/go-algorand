@@ -39,7 +39,8 @@ function runGoLint() {
     return 1
 }
 
-GOPATH=$(go env GOPATH)
+export GOPATH=$(go env GOPATH)
+export GO111MODULE=on
 
 echo "Building libsodium-fork..."
 make crypto/lib/libsodium.a
