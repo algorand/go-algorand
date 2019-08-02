@@ -48,9 +48,6 @@ fixcheck: build
 lint: deps
 	$(GOPATH)/bin/golint `go list ./...`
 
-vend:
-	$(GOPATH)/bin/vend
-
 vet:
 	go vet ./...
 

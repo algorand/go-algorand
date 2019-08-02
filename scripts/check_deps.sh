@@ -20,7 +20,6 @@ ANY_MISSING=0
 GOLINT_MISSING=0
 STRINGER_MISSING=0
 SWAGGER_MISSING=0
-VEND_MISSING=0
 
 function check_deps() {
     ANY_MISSING=0
@@ -36,12 +35,6 @@ function check_deps() {
         STRINGER_MISSING=1
         ANY_MISSING=1
         echo "... stringer missing"
-    fi
-
-    if [ ! -f "${GOPATH}/bin/vend" ]; then
-        VEND_MISSING=1
-        ANY_MISSING=1
-        echo "... vend missing"
     fi
 
     if [ ! -f "${GOPATH}/bin/swagger" ]; then
@@ -72,14 +65,6 @@ if [ ${STRINGER_MISSING} -ne 0 ]; then
     if [ "$OK" = "y" ]; then
         echo "Installing stringer..."
         cd / && go get -u golang.org/x/tools/cmd/stringer
-    fi
-fi
-
-if [ ${VEND_MISSING} -ne 0 ]; then
-    read -p "Install vend (using go get) (y/N): " OK
-    if [ "$OK" = "y" ]; then
-        echo "Installing vend..."
-        cd / && go get -u github.com/nomad-software/vend
     fi
 fi
 
