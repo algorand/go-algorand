@@ -50,7 +50,9 @@ var loggingCmd = &cobra.Command{
 	Long:  `Enable/disable and configure Algorand remote logging`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		cfg, err := logging.EnsureTelemetryConfig(nil, "")
+		fmt.Fprintf(os.Stderr, "Warning: `goal logging` deprecated, use `diagcfg telemetry status`\n")
+		dataDir := ensureSingleDataDir()
+		cfg, err := logging.EnsureTelemetryConfig(&dataDir, "")
 
 		// If error loading config, can't disable / no need to disable
 		if err != nil {
@@ -70,7 +72,9 @@ var enableCmd = &cobra.Command{
 	Long:  `This will turn on remote logging. The "friendly name" for the node, used by logging, will be determined by -n nodename.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		cfg, err := logging.EnsureTelemetryConfig(nil, "")
+		fmt.Fprintf(os.Stderr, "Warning: `goal logging enable` deprecated, use `diagcfg telemetry enable`\n")
+		dataDir := ensureSingleDataDir()
+		cfg, err := logging.EnsureTelemetryConfig(&dataDir, "")
 		if err != nil {
 			fmt.Println(err)
 			return
@@ -90,7 +94,9 @@ var disableCmd = &cobra.Command{
 	Long:  `Disable Algorand remote logging`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		cfg, err := logging.EnsureTelemetryConfig(nil, "")
+		fmt.Fprintf(os.Stderr, "Warning: `goal logging disable` deprecated, use `diagcfg telemetry disable`\n")
+		dataDir := ensureSingleDataDir()
+		cfg, err := logging.EnsureTelemetryConfig(&dataDir, "")
 
 		// If error loading config, can't disable / no need to disable
 		if err != nil {
@@ -108,15 +114,6 @@ var loggingSendCmd = &cobra.Command{
 	Long:  `Upload logs and debugging information to Algorand for analysis. Ledger and wallet data are not included.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		cfg, err := logging.EnsureTelemetryConfig(nil, "")
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-		basename := cfg.Name
-		if len(basename) > 0 {
-			basename = basename + "-"
-		}
 		timestamp := time.Now().UTC().Format("20060102150405")
 
 		if logChannel == "" {
@@ -128,6 +125,15 @@ var loggingSendCmd = &cobra.Command{
 		modifier := ""
 		counter := uint(1)
 		onDataDirs(func(dataDir string) {
+			cfg, err := logging.EnsureTelemetryConfig(&dataDir, "")
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			basename := cfg.Name
+			if len(basename) > 0 {
+				basename = basename + "-"
+			}
 			dirname := filepath.Base(dataDir)
 			name := basename + cfg.GUID + "_" + dirname + "-" + timestamp + modifier + ".tar.gz"
 

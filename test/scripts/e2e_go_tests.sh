@@ -5,6 +5,7 @@ echo "######################################################################"
 set -e
 
 export GOPATH=$(go env GOPATH)
+export GO111MODULE=on
 
 # Anchor our repo root reference location
 REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"/../..

@@ -8,7 +8,6 @@ make -j4
 
 # Flag that we want release handling of genesis files
 export RELEASE_GENESIS_PROCESS=true
-export TRANSITION_TELEMETRY_BUILDS=true
 
 # Clone repo to temp location
 REPO_DIR=$(mktemp -d 2>/dev/null || mktemp -d -t "tmp")
