@@ -115,8 +115,8 @@ func (trw *trackingResponseWriter) Reset(writer http.ResponseWriter) {
 func (trw *trackingResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	hijack := trw.writer.(http.Hijacker)
 	if hijack == nil {
-		// not implmented; doesn't really happen
-		return nil, nil, fmt.Errorf("writer doesn't implment Hijacker interface")
+		// not implemented; doesn't really happen, but we want this for code-complete
+		return nil, nil, fmt.Errorf("writer doesn't implement Hijacker interface")
 	}
 
 	conn, readerWriter, err := hijack.Hijack()
