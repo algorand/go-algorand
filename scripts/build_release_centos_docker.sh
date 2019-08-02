@@ -19,19 +19,22 @@ mkdir -p ${HOME}/go/bin
 export GOPATH=${HOME}/go
 export PATH=${GOPATH}/bin:/usr/local/go/bin:${PATH}
 
+# Anchor our repo root reference location
+REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"/../..
+
 go install golang.org/x/lint/golint
 go install github.com/golang/dep/cmd/dep
 go install golang.org/x/tools/cmd/stringer
 go install github.com/go-swagger/go-swagger/cmd/swagger
 
 
-cd ${GOPATH}/src/github.com/algorand/go-algorand
+cd ${REPO_ROOT}
 
 # definitely rebuild libsodium which could link to external C libraries
-if [ -f ${GOPATH}/src/github.com/algorand/go-algorand/crypto/libsodium-fork/Makefile ]; then
-    (cd ${GOPATH}/src/github.com/algorand/go-algorand/crypto/libsodium-fork && make distclean)
+if [ -f ${REPO_ROOT}/crypto/libsodium-fork/Makefile ]; then
+    (cd ${REPO_ROOT}/crypto/libsodium-fork && make distclean)
 fi
-rm -rf ${GOPATH}/src/github.com/algorand/go-algorand/crypto/lib
+rm -rf ${REPO_ROOT}/crypto/lib
 make crypto/lib/libsodium.a
 
 make build
@@ -61,7 +64,7 @@ rm -f ${HOME}/.gnupg/S.gpg-agent
 (cd ~/.gnupg && ln -s /S.gpg-agent S.gpg-agent)
 
 gpg --import /stuff/key.pub
-gpg --import ${GOPATH}/src/github.com/algorand/go-algorand/installer/rpm/RPM-GPG-KEY-Algorand
+gpg --import ${REPO_ROOT}/installer/rpm/RPM-GPG-KEY-Algorand
 
 cat <<EOF>"${HOME}/.rpmmacros"
 %_gpg_name Algorand RPM <rpm@algorand.com>
