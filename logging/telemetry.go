@@ -19,6 +19,7 @@ package logging
 import (
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -64,35 +65,74 @@ func makeTelemetryState(cfg TelemetryConfig, hookFactory hookFactory) (*telemetr
 	telemetry := &telemetryState{
 		history,
 		createAsyncHook(hook, 32, 100),
-		cfg.SessionGUID,
-		cfg.getHostName(),
-		cfg.getInstanceName(),
 	}
 	return telemetry, nil
+}
+
+// ReadTelemetryConfigOrDefault reads telemetry config from file or defaults if no config file found.
+func ReadTelemetryConfigOrDefault(dataDir *string, genesisID string) (cfg TelemetryConfig, err error) {
+	err = nil
+	if dataDir != nil && *dataDir != "" {
+		configPath := filepath.Join(*dataDir, TelemetryConfigFilename)
+		cfg, err = LoadTelemetryConfig(configPath)
+	}
+	if err != nil && os.IsNotExist(err) {
+		var configPath string
+		configPath, err = config.GetConfigFilePath(TelemetryConfigFilename)
+		if err != nil {
+			cfg = createTelemetryConfig()
+			return
+		}
+		cfg, err = LoadTelemetryConfig(configPath)
+	}
+	if err != nil {
+		cfg = createTelemetryConfig()
+		if os.IsNotExist(err) {
+			err = nil
+		} else {
+			return
+		}
+	}
+	ch := config.GetCurrentVersion().Channel
+	// Should not happen, but default to "dev" if channel is unspecified.
+	if ch == "" {
+		ch = "dev"
+	}
+	cfg.ChainID = fmt.Sprintf("%s-%s", ch, genesisID)
+	return cfg, err
 }
 
 // EnsureTelemetryConfig creates a new TelemetryConfig structure with a generated GUID and the appropriate Telemetry endpoint
 // Err will be non-nil if the file doesn't exist, or if error loading.
 // Cfg will always be valid.
-func EnsureTelemetryConfig(configDir *string, genesisID string) (TelemetryConfig, error) {
-	cfg, _, err := EnsureTelemetryConfigCreated(configDir, genesisID)
+func EnsureTelemetryConfig(dataDir *string, genesisID string) (TelemetryConfig, error) {
+	cfg, _, err := EnsureTelemetryConfigCreated(dataDir, genesisID)
 	return cfg, err
 }
 
 // EnsureTelemetryConfigCreated is the same as EnsureTelemetryConfig but it also returns a bool indicating
 // whether EnsureTelemetryConfig had to create the config.
-func EnsureTelemetryConfigCreated(configDir *string, genesisID string) (TelemetryConfig, bool, error) {
-	var configPath string
-	if configDir == nil {
-		var err error
-		configPath, err = config.GetConfigFilePath(loggingFilename)
-		if err != nil {
-			return createTelemetryConfig(), true, err
+func EnsureTelemetryConfigCreated(dataDir *string, genesisID string) (TelemetryConfig, bool, error) {
+	configPath := ""
+	var cfg TelemetryConfig
+	var err error
+	if dataDir != nil && *dataDir != "" {
+		configPath = filepath.Join(*dataDir, TelemetryConfigFilename)
+		cfg, err = LoadTelemetryConfig(configPath)
+		if err != nil && os.IsNotExist(err) {
+			// if it just didn't exist, try again at the other path
+			configPath = ""
 		}
-	} else {
-		configPath = filepath.Join(*configDir, loggingFilename)
 	}
-	cfg, err := LoadTelemetryConfig(configPath)
+	if configPath == "" {
+		configPath, err = config.GetConfigFilePath(TelemetryConfigFilename)
+		if err != nil {
+			cfg := createTelemetryConfig()
+			initializeConfig(cfg)
+			return cfg, true, err
+		}
+		cfg, err = LoadTelemetryConfig(configPath)
+	}
 	created := false
 	if err != nil {
 		err = nil
@@ -110,6 +150,8 @@ func EnsureTelemetryConfigCreated(configDir *string, genesisID string) (Telemetr
 		ch = "dev"
 	}
 	cfg.ChainID = fmt.Sprintf("%s-%s", ch, genesisID)
+
+	initializeConfig(cfg)
 	return cfg, created, err
 }
 
@@ -154,8 +196,8 @@ func (t *telemetryState) logTelemetry(l logger, message string, details interfac
 	}
 
 	entry := l.entry.WithFields(Fields{
-		"session":      t.sessionGUID,
-		"instanceName": t.instanceName,
+		"session":      l.GetTelemetrySession(),
+		"instanceName": l.GetInstanceName(),
 	})
 	// Populate entry like logrus.entry.log() does
 	entry.Time = time.Now()

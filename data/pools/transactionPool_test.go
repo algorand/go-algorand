@@ -19,15 +19,19 @@ package pools
 import (
 	"fmt"
 	"math/rand"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -38,6 +42,12 @@ func keypair() *crypto.SignatureSecrets {
 	crypto.RandBytes(seed[:])
 	s := crypto.GenerateSignatureSecrets(seed)
 	return s
+}
+
+type TestingT interface {
+	Errorf(format string, args ...interface{})
+	FailNow()
+	Name() string
 }
 
 type mockSpendableBalancesUnbounded struct {
@@ -73,6 +83,124 @@ func (b mockSpendableBalancesUnbounded) BlockHdr(basics.Round) (bookkeeping.Bloc
 
 func (b mockSpendableBalancesUnbounded) Latest() basics.Round {
 	return 0
+}
+
+type mockLedger struct {
+	*ledger.Ledger
+}
+
+// BalanceAndStatus returns Balance and DelegationStatus as one call
+func (l *mockLedger) BalanceAndStatus(addr basics.Address) (money basics.MicroAlgos, rewards basics.MicroAlgos, moneyWithoutPendingRewards basics.MicroAlgos, status basics.Status, latest basics.Round, err error) {
+	latest = l.Latest()
+	data, err := l.Lookup(latest, addr)
+	if err != nil {
+		return
+	}
+
+	totals, err := l.Totals(latest)
+	if err != nil {
+		return
+	}
+
+	hdr, err := l.BlockHdr(latest)
+	if err != nil {
+		return
+	}
+	proto, ok := config.Consensus[hdr.CurrentProtocol]
+	if !ok {
+		err = ledger.ProtocolError(hdr.CurrentProtocol)
+	}
+
+	money, rewards = data.Money(proto, totals.RewardsLevel)
+	status = data.Status
+
+	dataWithoutRewards, err := l.LookupWithoutRewards(latest, addr)
+	if err != nil {
+		return
+	}
+	moneyWithoutPendingRewards = dataWithoutRewards.MicroAlgos
+
+	return
+}
+
+// Implements agreement.Ledger.ConsensusParams
+func (l *mockLedger) ConsensusParams(r basics.Round) (config.ConsensusParams, error) {
+	blockhdr, err := l.BlockHdr(r)
+	if err != nil {
+		return config.ConsensusParams{}, err
+	}
+	return config.Consensus[blockhdr.UpgradeState.CurrentProtocol], nil
+}
+
+func (l *mockLedger) LastRound() basics.Round {
+	return l.Latest()
+}
+
+func makeMockLedger(t TestingT, initAccounts map[basics.Address]basics.AccountData) *mockLedger {
+	var hash crypto.Digest
+	crypto.RandBytes(hash[:])
+
+	proto := protocol.ConsensusCurrentVersion
+	params := config.Consensus[proto]
+
+	var pool basics.Address
+	crypto.RandBytes(pool[:])
+	var poolData basics.AccountData
+	poolData.MicroAlgos.Raw = 1 << 32
+	initAccounts[pool] = poolData
+
+	initBlock := bookkeeping.Block{
+		BlockHeader: bookkeeping.BlockHeader{
+			TxnRoot:     transactions.Payset{}.Commit(params.PaysetCommitFlat),
+			GenesisID:   "pooltest",
+			GenesisHash: hash,
+			UpgradeState: bookkeeping.UpgradeState{
+				CurrentProtocol: proto,
+			},
+			RewardsState: bookkeeping.RewardsState{
+				FeeSink:     pool,
+				RewardsPool: pool,
+			},
+		},
+	}
+	initBlocks := []bookkeeping.Block{initBlock}
+
+	fn := fmt.Sprintf("/tmp/%s.%d.sqlite3", t.Name(), crypto.RandUint64())
+	l, err := ledger.OpenLedger(logging.Base(), fn, true, initBlocks, initAccounts, hash)
+	require.NoError(t, err)
+	return &mockLedger{l}
+}
+
+func newBlockEvaluator(t TestingT, l *mockLedger) *ledger.BlockEvaluator {
+	latest := l.Latest()
+	prev, err := l.BlockHdr(latest)
+	require.NoError(t, err)
+
+	next := bookkeeping.MakeBlock(prev)
+	eval, err := l.StartEvaluator(next.BlockHeader, &alwaysVerifiedPool{}, nil)
+	require.NoError(t, err)
+
+	return eval
+}
+
+func initAcc(initBalances map[basics.Address]uint64) map[basics.Address]basics.AccountData {
+	res := make(map[basics.Address]basics.AccountData)
+	for addr, bal := range initBalances {
+		var data basics.AccountData
+		data.MicroAlgos.Raw = bal
+		res[addr] = data
+	}
+	return res
+}
+
+func initAccFixed(initAddrs []basics.Address, bal uint64) map[basics.Address]basics.AccountData {
+	res := make(map[basics.Address]basics.AccountData)
+	for _, addr := range initAddrs {
+		var data basics.AccountData
+		data.MicroAlgos.Raw = bal
+		res[addr] = data
+	}
+	return res
 }
 
 const exponentialGrowth = 2
@@ -985,5 +1113,98 @@ func BenchmarkTransactionPoolPending(b *testing.B) {
 		b.Run(fmt.Sprintf("Pending-%d", bps), func(b *testing.B) {
 			sub(b, bps)
 		})
+	}
+}
+
+func BenchmarkTransactionPoolSteadyState(b *testing.B) {
+	poolSize := 100000
+
+	fmt.Printf("BenchmarkTransactionPoolSteadyState: N=%d\n", b.N)
+
+	numOfAccounts := 100
+	// Genereate accounts
+	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
+	addresses := make([]basics.Address, numOfAccounts)
+
+	for i := 0; i < numOfAccounts; i++ {
+		secret := keypair()
+		addr := basics.Address(secret.SignatureVerifier)
+		secrets[i] = secret
+		addresses[i] = addr
+	}
+
+	l := makeMockLedger(b, initAccFixed(addresses, 1<<32))
+	transactionPool := MakeTransactionPool(l, exponentialGrowth, poolSize, false)
+
+	var signedTransactions []transactions.SignedTxn
+	for i := 0; i < b.N; i++ {
+		var receiver basics.Address
+		crypto.RandBytes(receiver[:])
+		tx := transactions.Transaction{
+			Type: protocol.PaymentTx,
+			Header: transactions.Header{
+				Sender:      addresses[i%numOfAccounts],
+				Fee:         basics.MicroAlgos{Raw: uint64(rand.Int()%10000) + proto.MinTxnFee},
+				FirstValid:  0,
+				LastValid:   basics.Round(proto.MaxTxnLife),
+				GenesisHash: l.GenesisHash(),
+			},
+			PaymentTxnFields: transactions.PaymentTxnFields{
+				Receiver: receiver,
+				Amount:   basics.MicroAlgos{Raw: proto.MinBalance},
+			},
+		}
+		tx.Note = make([]byte, 8, 8)
+		crypto.RandBytes(tx.Note)
+
+		signedTx, err := transactions.AssembleSignedTxn(tx, crypto.Signature{}, crypto.MultisigSig{})
+		require.NoError(b, err)
+		signedTransactions = append(signedTransactions, signedTx)
+	}
+
+	b.StopTimer()
+	b.ResetTimer()
+	b.StartTimer()
+
+	poolTxnQueue := signedTransactions
+	var ledgerTxnQueue []transactions.SignedTxn
+
+	for len(poolTxnQueue) > 0 || len(ledgerTxnQueue) > 0 {
+		// Fill up txpool
+		for len(poolTxnQueue) > 0 {
+			stx := poolTxnQueue[0]
+			err := transactionPool.Remember(stx)
+			if err == nil {
+				poolTxnQueue = poolTxnQueue[1:]
+				ledgerTxnQueue = append(ledgerTxnQueue, stx)
+				continue
+			}
+			if strings.Contains(err.Error(), "transaction pool is full") {
+				break
+			}
+			require.NoError(b, err)
+		}
+
+		// Commit a block
+		eval := newBlockEvaluator(b, l)
+		for len(ledgerTxnQueue) > 0 {
+			stx := ledgerTxnQueue[0]
+			err := eval.Transaction(stx, nil)
+			if err == ledger.ErrNoSpace {
+				break
+			}
+			require.NoError(b, err)
+			ledgerTxnQueue = ledgerTxnQueue[1:]
+		}
+
+		blk, err := eval.GenerateBlock()
+		require.NoError(b, err)
+
+		err = l.AddValidatedBlock(*blk, agreement.Certificate{})
+		require.NoError(b, err)
+
+		transactionPool.OnNewBlock(blk.Block())
+
+		fmt.Printf("BenchmarkTransactionPoolSteadyState: committed block %d\n", blk.Block().Round())
 	}
 }
