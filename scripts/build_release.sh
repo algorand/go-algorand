@@ -98,9 +98,6 @@ make build
 export BUILD_DEB=1
 scripts/build_packages.sh "${PLATFORM}"
 
-# Anchor our repo root reference location
-REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"/..
-
 # Test .deb installer
 
 mkdir -p ${HOME}/docker_test_resources

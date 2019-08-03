@@ -31,7 +31,7 @@ GOLDFLAGS := $(GOLDFLAGS_BASE) \
 
 SOURCES := $(shell go list ./... | grep -v /go-algorand/test/)
 
-UNIT_TEST_SOURCES := $(sort $(shell go list ./... | grep -v /go-algorand/test/ | grep -v /go-algorand/vendor/ ))
+UNIT_TEST_SOURCES := $(sort $(shell go list ./... | grep -v /go-algorand/test/ ))
 E2E_TEST_SOURCES := $(shell cd test/e2e-go && go list ./...)
 
 default: build
@@ -42,10 +42,10 @@ fmt:
 	go fmt ./...
 
 fix: build
-	$(GOPATH)/bin/algofix `ls -d */ | grep -vw vendor`
+	$(GOPATH)/bin/algofix */
 
 fixcheck: build
-	$(GOPATH)/bin/algofix -error `ls -d */ | grep -vw vendor`
+	$(GOPATH)/bin/algofix -error */
 
 lint: deps
 	$(GOPATH)/bin/golint `go list ./...`
@@ -56,7 +56,7 @@ vet:
 sanity: vet fix lint fmt
 
 cover:
-		go test $(GOTAGS) -coverprofile=cover.out $(UNIT_TEST_SOURCES)
+	go test $(GOTAGS) -coverprofile=cover.out $(UNIT_TEST_SOURCES)
 
 prof:
 	cd node && go test $(GOTAGS) -cpuprofile=cpu.out -memprofile=mem.out -mutexprofile=mutex.out
