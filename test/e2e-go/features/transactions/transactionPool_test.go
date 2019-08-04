@@ -113,6 +113,8 @@ func TestTransactionPoolOrderingAndClearing(t *testing.T) {
 }
 
 func TestTransactionPoolExponentialFees(t *testing.T) {
+	t.Skip("new FIFO pool does not have exponential fee txn replacement")
+
 	t.Parallel()
 	r := require.New(t)
 
