@@ -30,7 +30,10 @@ import (
 	"github.com/algorand/go-algorand/config"
 )
 
-var loggingFilename = "logging.config"
+// TelemetryConfigFilename default file name for telemetry config "logging.config"
+var TelemetryConfigFilename = "logging.config"
+
+const ipv6AddressLength = 39
 
 func elasticsearchEndpoint() string {
 	return "https://1ae9f9654b25441090fe5c48c833b95a.us-east-1.aws.found.io:9243"
@@ -38,22 +41,22 @@ func elasticsearchEndpoint() string {
 
 // TelemetryOverride Determines whether an override value is set and what it's value is.
 // The first return value is whether an override variable is found, if it is, the second is the override value.
-func TelemetryOverride(env string) (bool, bool) {
+func TelemetryOverride(env string) bool {
 	env = strings.ToLower(env)
 
 	if env == "1" || env == "true" {
-		return true, true
+		telemetryConfig.Enable = true
 	}
 
 	if env == "0" || env == "false" {
-		return true, false
+		telemetryConfig.Enable = false
 	}
 
-	return false, false
+	return telemetryConfig.Enable
 }
 
 // createTelemetryConfig creates a new TelemetryConfig structure with a generated GUID and the appropriate Telemetry endpoint.
-// Note: This should only be used/persisted when initially creating 'loggingFilename'. Because the methods are called
+// Note: This should only be used/persisted when initially creating 'TelemetryConfigFilename'. Because the methods are called
 //       from various tools and goal commands and affect the future default settings for telemetry, we need to inject
 //       a "dev" branch check.
 func createTelemetryConfig() TelemetryConfig {
@@ -100,7 +103,7 @@ func (cfg TelemetryConfig) Save(configPath string) error {
 // getHostName returns the HostName for telemetry (GUID:Name -- :Name is optional if blank)
 func (cfg TelemetryConfig) getHostName() string {
 	hostName := cfg.GUID
-	if len(cfg.Name) > 0 {
+	if cfg.Enable && len(cfg.Name) > 0 {
 		hostName += ":" + cfg.Name
 	}
 	return hostName
@@ -117,7 +120,17 @@ func (cfg TelemetryConfig) getInstanceName() string {
 
 	// NOTE: We used to report HASH:DataDir but DataDir is Personally Identifiable Information (PII)
 	// So we're removing it entirely to avoid GDPR issues.
-	return fmt.Sprintf("%s:", pathHashStr[:16])
+	return fmt.Sprintf("%s", pathHashStr[:16])
+}
+
+// SanitizeTelemetryString applies sanitization rules and returns the sanitized string.
+func SanitizeTelemetryString(input string, maxParts int) string {
+	// Truncate to a reasonable size, allowing some undefined separator.
+	maxReasonableSize := maxParts*ipv6AddressLength + maxParts - 1
+	if len(input) > maxReasonableSize {
+		input = input[:maxReasonableSize]
+	}
+	return input
 }
 
 func loadTelemetryConfig(path string) (TelemetryConfig, error) {
@@ -135,6 +148,13 @@ func loadTelemetryConfig(path string) (TelemetryConfig, error) {
 		}
 	}
 	cfg.FilePath = path
-	//cfg.Enable = telemetryOverride(cfg.Enable)
+
+	// Sanitize user-defined name.
+	if len(cfg.Name) > 0 {
+		cfg.Name = SanitizeTelemetryString(cfg.Name, 1)
+	}
+
+	initializeConfig(cfg)
+
 	return cfg, err
 }

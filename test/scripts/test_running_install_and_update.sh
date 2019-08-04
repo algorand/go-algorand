@@ -8,8 +8,7 @@ set -e
 export ALGOTEST=1
 
 export GOPATH=$(go env GOPATH)
-REPO_DIR=${GOPATH}/src/github.com/algorand/go-algorand
-cd ${REPO_DIR}
+REPO_DIR=$(pwd)
 
 TESTDATA=./test/testdata
 

@@ -161,7 +161,8 @@ type APIV1POSTKeyListRequest struct {
 type APIV1POSTTransactionSignRequest struct {
 	APIV1RequestEnvelope
 	WalletHandleToken string `json:"wallet_handle_token"`
-	Transaction       Bytes  `json:"transaction"`
+	// swagger:strfmt byte
+	Transaction       []byte  `json:"transaction"`
 	WalletPassword    string `json:"wallet_password"`
 }
 
@@ -209,7 +210,8 @@ type APIV1DELETEMultisigRequest struct {
 type APIV1POSTMultisigTransactionSignRequest struct {
 	APIV1RequestEnvelope
 	WalletHandleToken string             `json:"wallet_handle_token"`
-	Transaction       Bytes              `json:"transaction"`
+	// swagger:strfmt byte
+	Transaction       []byte              `json:"transaction"`
 	PublicKey         crypto.PublicKey   `json:"public_key"`
 	PartialMsig       crypto.MultisigSig `json:"partial_multisig"`
 	WalletPassword    string             `json:"wallet_password"`

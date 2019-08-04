@@ -17,22 +17,24 @@ date "+build_release start %Y%m%d_%H%M%S"
 set -e
 set -x
 
+# Anchor our repo root reference location
+REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"/..
+
 # a previous docker centos build can leave junk owned by root. chown and clean
 sudo chown -R ${USER} ${GOPATH}
-if [ -f ${GOPATH}/src/github.com/algorand/go-algorand/crypto/libsodium-fork/Makefile ]; then
-    (cd ${GOPATH}/src/github.com/algorand/go-algorand/crypto/libsodium-fork && make distclean)
+if [ -f ${REPO_ROOT}/crypto/libsodium-fork/Makefile ]; then
+    (cd ${REPO_ROOT}/crypto/libsodium-fork && make distclean)
 fi
-rm -rf ${GOPATH}/src/github.com/algorand/go-algorand/crypto/lib
+rm -rf ${REPO_ROOT}/crypto/lib
 
 
-cd ${GOPATH}/src/github.com/algorand/go-algorand
+cd ${REPO_ROOT}
 export RELEASE_GENESIS_PROCESS=true
-export TRANSITION_TELEMETRY_BUILDS=true
 PLATFORM=$(./scripts/osarchtype.sh)
 PLATFORM_SPLIT=(${PLATFORM//\// })
 OS=${PLATFORM_SPLIT[0]}
 ARCH=${PLATFORM_SPLIT[1]}
-export BRANCH=rel/stable
+export BRANCH=$(./scripts/compute_branch.sh)
 export CHANNEL=$(./scripts/compute_branch_channel.sh ${BRANCH})
 export DEFAULTNETWORK=$(./scripts/compute_branch_network.sh)
 export PKG_ROOT=${HOME}/node_pkg
@@ -70,7 +72,6 @@ export FULLVERSION=$(./scripts/compute_build_number.sh -f)
 # a bash user might `source build_env` to manually continue a broken build
 cat <<EOF>${HOME}/build_env
 export RELEASE_GENESIS_PROCESS=${RELEASE_GENESIS_PROCESS}
-export TRANSITION_TELEMETRY_BUILDS=${TRANSITION_TELEMETRY_BUILDS}
 PLATFORM=${PLATFORM}
 OS=${OS}
 ARCH=${ARCH}
@@ -90,13 +91,12 @@ sed 's/^export //g' < ${HOME}/build_env > ${HOME}/build_env_docker
 # Build!
 scripts/configure_dev.sh
 
-make ${GOPATH}/src/github.com/algorand/go-algorand/crypto/lib/libsodium.a
+make crypto/lib/libsodium.a
 
 make build
 
 export BUILD_DEB=1
 scripts/build_packages.sh "${PLATFORM}"
-
 
 # Test .deb installer
 
@@ -111,7 +111,7 @@ cd "${HOME}/docker_test_resources"
 if [ "${TEST_UPGRADE}" == "no" ]; then
     echo "upgrade test disabled"
 else
-    python3 ${GOPATH}/src/github.com/algorand/go-algorand/scripts/get_current_installers.py "${S3_PREFIX}/${CHANNEL}"
+    python3 ${REPO_ROOT}/scripts/get_current_installers.py "${S3_PREFIX}/${CHANNEL}"
 fi
 
 echo "TEST_UPGRADE=${TEST_UPGRADE}" >> ${HOME}/build_env_docker
@@ -148,24 +148,18 @@ SNAPSHOT=algodummy-$(date +%Y%m%d_%H%M%S)
 aptly -config=${HOME}/dummyaptly.conf snapshot create ${SNAPSHOT} from repo algodummy
 aptly -config=${HOME}/dummyaptly.conf publish snapshot -origin=Algorand -label=Algorand ${SNAPSHOT}
 
-(cd ${HOME}/dummyaptly/public && python3 ${GOPATH}/src/github.com/algorand/go-algorand/scripts/httpd.py --pid ${HOME}/phttpd.pid) &
-
-
-sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME}/docker_test_resources,dst=/stuff --mount type=bind,src=${GOPATH}/src,dst=/root/go/src --mount type=bind,src=/usr/local/go,dst=/usr/local/go ubuntu:16.04 bash /root/go/src/github.com/algorand/go-algorand/scripts/build_release_ubuntu_test_docker.sh"
-sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME}/docker_test_resources,dst=/stuff --mount type=bind,src=${GOPATH}/src,dst=/root/go/src --mount type=bind,src=/usr/local/go,dst=/usr/local/go ubuntu:18.04 bash /root/go/src/github.com/algorand/go-algorand/scripts/build_release_ubuntu_test_docker.sh"
-
-kill $(cat ${HOME}/phttpd.pid)
+${REPO_ROOT}/scripts/build_release_run_ubuntu_docker_build_test.sh
 
 date "+build_release done building ubuntu %Y%m%d_%H%M%S"
 
 # Run RPM bulid in Centos7 Docker container
-sg docker "docker build -t algocentosbuild - < ${GOPATH}/src/github.com/algorand/go-algorand/scripts/centos-build.Dockerfile"
+sg docker "docker build -t algocentosbuild - < ${REPO_ROOT}/scripts/centos-build.Dockerfile"
 
 # cleanup our libsodium build
-if [ -f ${GOPATH}/src/github.com/algorand/go-algorand/crypto/libsodium-fork/Makefile ]; then
-    (cd ${GOPATH}/src/github.com/algorand/go-algorand/crypto/libsodium-fork && make distclean)
+if [ -f ${REPO_ROOT}/crypto/libsodium-fork/Makefile ]; then
+    (cd ${REPO_ROOT}/crypto/libsodium-fork && make distclean)
 fi
-rm -rf ${GOPATH}/src/github.com/algorand/go-algorand/crypto/lib
+rm -rf ${REPO_ROOT}/crypto/lib
 
 # do the RPM build, sign and validate it
 
@@ -180,11 +174,10 @@ enabled=1
 gpgcheck=1
 gpgkey=https://releases.algorand.com/rpm/rpm_algorand.pub
 EOF
-(cd ${HOME}/dummyrepo && python3 ${GOPATH}/src/github.com/algorand/go-algorand/scripts/httpd.py --pid ${HOME}/phttpd.pid) &
+(cd ${HOME}/dummyrepo && python3 ${REPO_ROOT}/scripts/httpd.py --pid ${HOME}/phttpd.pid) &
+trap ${REPO_ROOT}/scripts/kill_httpd.sh 0
 
 sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME}/.gnupg/S.gpg-agent,dst=/S.gpg-agent --mount type=bind,src=${HOME}/dummyrepo,dst=/dummyrepo --mount type=bind,src=${HOME}/docker_test_resources,dst=/stuff --mount type=bind,src=${GOPATH}/src,dst=/root/go/src --mount type=bind,src=${HOME},dst=/root/subhome --mount type=bind,src=/usr/local/go,dst=/usr/local/go algocentosbuild /root/go/src/github.com/algorand/go-algorand/scripts/build_release_centos_docker.sh"
-
-kill $(cat ${HOME}/phttpd.pid)
 
 date "+build_release done building centos %Y%m%d_%H%M%S"
 

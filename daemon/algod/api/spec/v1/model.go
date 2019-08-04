@@ -17,10 +17,6 @@
 // Package v1 defines models exposed by algod rest api
 package v1
 
-// swagger:strfmt binary
-type bytes = []byte // note that we need to make this its own object to get the strfmt annotation to work properly. Otherwise swagger generates []uint8 instead of type binary
-// ^ one day we should probably fork swagger, to avoid this workaround.
-
 // NodeStatus contains the information about a node status
 // swagger:model NodeStatus
 type NodeStatus struct {
@@ -58,6 +54,10 @@ type NodeStatus struct {
 	//
 	// required: true
 	CatchupTime int64 `json:"catchupTime"`
+
+	// HasSyncedSinceStartup indicates whether a round has completed since startup
+	// Required: true
+	HasSyncedSinceStartup bool `json:"hasSyncedSinceStartup"`
 }
 
 // TransactionID Description
@@ -75,12 +75,14 @@ type Participation struct { // Round and Address fields are redundant if Partici
 	// ParticipationPK is the root participation public key (if any) currently registered for this round
 	//
 	// required: true
-	ParticipationPK bytes `json:"partpkb64"`
+	// swagger:strfmt byte
+	ParticipationPK []byte `json:"partpkb64"`
 
 	// VRFPK is the selection public key (if any) currently registered for this round
 	//
 	// required: true
-	VRFPK bytes `json:"vrfpkb64"`
+	// swagger:strfmt byte
+	VRFPK []byte `json:"vrfpkb64"`
 
 	// VoteFirst is the first round for which this participation is valid.
 	//
@@ -186,12 +188,13 @@ type Transaction struct {
 	// Note is a free form data
 	//
 	// required: false
-	Note bytes `json:"noteb64,omitempty"`
+	// swagger:strfmt byte
+	Note []byte `json:"noteb64"`
 
 	// ConfirmedRound indicates the block number this transaction appeared in
 	//
 	// required: false
-	ConfirmedRound uint64 `json:"round,omitempty"`
+	ConfirmedRound uint64 `json:"round"`
 
 	// PoolError indicates the transaction was evicted from this node's transaction
 	// pool (if non-empty).  A non-empty PoolError does not guarantee that the
@@ -199,12 +202,21 @@ type Transaction struct {
 	// transaction and may attempt to commit it in the future.
 	//
 	// required: false
-	PoolError string `json:"poolerror,omitempty"`
+	PoolError string `json:"poolerror"`
 
 	// This is a list of all supported transactions.
 	// To add another one, create a struct with XXXTransactionType and embed it here.
 	// To prevent extraneous fields, all must have the "omitempty" tag.
+
+	// Payment contains the additional fields for a payment transaction.
+	//
+	// required: false
 	Payment *PaymentTransactionType `json:"payment,omitempty"`
+
+	// Keyreg contains the additional fields for a keyreg transaction.
+	//
+	// required: false
+	Keyreg  *KeyregTransactionType  `json:"keyreg,omitempty"`
 
 	// FromRewards is the amount of pending rewards applied to the From
 	// account as part of this transaction.
@@ -220,7 +232,8 @@ type Transaction struct {
 	// Genesis hash
 	//
 	// required: true
-	GenesisHash bytes `json:"genesishashb64"`
+	// swagger:strfmt byte
+	GenesisHash []byte `json:"genesishashb64"`
 }
 
 // PaymentTransactionType contains the additional fields for a payment Transaction
@@ -234,12 +247,12 @@ type PaymentTransactionType struct {
 	// CloseRemainderTo is the address the sender closed to
 	//
 	// required: false
-	CloseRemainderTo string `json:"close,omitempty"`
+	CloseRemainderTo string `json:"close"`
 
 	// CloseAmount is the amount sent to CloseRemainderTo, for committed transaction
 	//
 	// required: false
-	CloseAmount uint64 `json:"closeamount,omitempty"`
+	CloseAmount uint64 `json:"closeamount"`
 
 	// Amount is the amount of MicroAlgos intended to be transferred
 	//
@@ -257,6 +270,37 @@ type PaymentTransactionType struct {
 	//
 	// required: false
 	CloseRewards uint64 `json:"closerewards"`
+}
+
+// KeyregTransactionType contains the additional fields for a keyreg Transaction
+// swagger:model KeyregTransactionType
+type KeyregTransactionType struct {
+	// VotePK is the participation public key used in key registration transactions
+	//
+	// required: false
+	// swagger:strfmt byte
+	VotePK []byte `json:"votekey"`
+
+	// SelectionPK is the VRF public key used in key registration transactions
+	//
+	// required: false
+	// swagger:strfmt byte
+	SelectionPK []byte `json:"selkey"`
+
+	// VoteFirst is the first round this participation key is valid
+	//
+	// required: false
+	VoteFirst uint64 `json:"votefst"`
+
+	// VoteLast is the last round this participation key is valid
+	//
+	// required: false
+	VoteLast uint64 `json:"votelst"`
+
+	// VoteKeyDilution is the dilution for the 2-level participation key
+	//
+	// required: false
+	VoteKeyDilution uint64 `json:"votekd"`
 }
 
 // TransactionList contains a list of transactions
@@ -300,7 +344,8 @@ type TransactionParams struct {
 	// Genesis hash
 	//
 	// required: true
-	GenesisHash bytes `json:"genesishashb64"`
+	// swagger:strfmt byte
+	GenesisHash []byte `json:"genesishashb64"`
 
 	// LastRound indicates the last round seen
 	//

@@ -2,7 +2,7 @@
 set -e
 
 # upload_config.sh - Archives and uploads a netgoal configuration package from a specified directory
-#           NOTE: Will only work if you have the required S3_UPLOAD_ID/SECRET vars set
+#           NOTE: Will only work if you have the required AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY vars set
 #
 # Syntax:   upload_config.sh <config root directory> <channel>
 #
@@ -20,7 +20,6 @@ if [ "$#" -ne 2 ]; then
 fi
 
 export GOPATH=$(go env GOPATH)
-cd ${GOPATH}/src/github.com/algorand/go-algorand
 
 export CHANNEL=$2
 export FULLVERSION=$(./scripts/compute_build_number.sh -f)
@@ -31,5 +30,5 @@ TARFILE=${TEMPDIR}/config_${CHANNEL}_${FULLVERSION}.tar.gz
 cd $1
 tar -zcf ${TARFILE} * >/dev/null 2>&1
 
-${GOPATH}/bin/updater send -s ${TEMPDIR} -c ${CHANNEL}
+${GOPATH}/bin/updater send -s ${TEMPDIR} -c ${CHANNEL} -b "${S3_RELEASE_BUCKET}"
 rm ${TARFILE}

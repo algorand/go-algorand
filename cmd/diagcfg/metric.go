@@ -141,6 +141,7 @@ func metricEnableDisable(enable bool) {
 }
 
 func getConfigFilePath() (string, error) {
+	maybeUpdateDataDirFromEnv()
 	configFilePath := dataDir
 	if configFilePath == "" {
 		return "", fmt.Errorf("%s", metricDataDirectoryEmpty)
