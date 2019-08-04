@@ -2,9 +2,6 @@
 
 set -e
 
-export GOPATH=$(go env GOPATH)
-cd ${GOPATH}/src/github.com/algorand/go-algorand
-
 if [ "${BUILD_TYPE}" = "integration" ]; then
     ./test/scripts/run_integration_tests.sh
 elif [ "${TRAVIS_EVENT_TYPE}" = "cron" ] || [[ "${TRAVIS_BRANCH}" =~ ^rel/ ]]; then

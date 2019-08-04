@@ -17,6 +17,4 @@
 #
 # Examples: scripts/build_prod.sh
 
-cd ${GOPATH}/src/github.com/algorand/go-algorand
-
 make build

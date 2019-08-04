@@ -20,9 +20,6 @@
 
 set -e
 
-export GOPATH=$(go env GOPATH)
-cd ${GOPATH}/src/github.com/algorand/go-algorand
-
 if [ "$#" -lt 2 ]; then
     echo "Syntax: deploy_version <branch> <os>/<arch> ..."
     echo "e.g. deploy_version master darwin/amd64 linux/amd64"

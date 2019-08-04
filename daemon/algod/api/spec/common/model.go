@@ -17,10 +17,6 @@
 // Package common defines models exposed by algod rest api
 package common
 
-// swagger:strfmt binary
-type bytes = []byte // note that we need to make this its own object to get the strfmt annotation to work properly. Otherwise swagger generates []uint8 instead of type binary
-// ^ one day we should probably fork swagger, to avoid this workaround.
-
 // Version contains the current algod version.
 //
 // Note that we annotate this as a model so that legacy clients
@@ -32,5 +28,6 @@ type Version struct {
 	// required: true
 	GenesisID string `json:"genesis_id"`
 	// required: true
-	GenesisHash bytes `json:"genesis_hash_b64"`
+	// swagger:strfmt byte
+	GenesisHash []byte `json:"genesis_hash_b64"`
 }
