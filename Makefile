@@ -1,7 +1,9 @@
 GOPATH		:= $(shell go env GOPATH)
 export GOPATH
+GO111MODULE	:= on
+export GO111MODULE
 UNAME		:= $(shell uname)
-SRCPATH     := $(GOPATH)/src/github.com/algorand/go-algorand
+SRCPATH     := $(shell pwd)
 
 # If build number already set, use it - to ensure same build number across multiple platforms being built
 BUILDNUMBER      ?= $(shell GOPATH=$(GOPATH) ./scripts/compute_build_number.sh)
@@ -27,136 +29,103 @@ GOLDFLAGS_BASE  := -X github.com/algorand/go-algorand/config.BuildNumber=$(BUILD
 GOLDFLAGS := $(GOLDFLAGS_BASE) \
 		 -X github.com/algorand/go-algorand/config.Channel=$(BUILDCHANNEL)
 
-SOURCES := $(shell cd $(SRCPATH) && \
-		go list ./... | grep -v /go-algorand/test/)
+SOURCES := $(shell go list ./... | grep -v /go-algorand/test/)
 
-UNIT_TEST_SOURCES := $(sort $(shell cd $(SRCPATH) && go list ./... | grep -v /go-algorand/test/ | grep -v /go-algorand/vendor/ ))
-E2E_TEST_SOURCES := $(shell cd $(SRCPATH)/test/e2e-go && go list ./...)
+UNIT_TEST_SOURCES := $(sort $(shell go list ./... | grep -v /go-algorand/test/ ))
+E2E_TEST_SOURCES := $(shell cd test/e2e-go && go list ./...)
 
 default: build
 
 # tools
 
 fmt:
-	cd $(SRCPATH) && \
-		go fmt `go list ./... | grep -v /vendor/`
+	go fmt ./...
 
 fix: build
-	cd $(SRCPATH) && \
-		$(GOPATH)/bin/algofix `ls -d */ | grep -vw vendor`
+	$(GOPATH)/bin/algofix */
 
 fixcheck: build
-	cd $(SRCPATH) && \
-		$(GOPATH)/bin/algofix -error `ls -d */ | grep -vw vendor`
+	$(GOPATH)/bin/algofix -error */
 
 lint: deps
-	cd $(SRCPATH) && \
-		$(GOPATH)/bin/golint `go list ./... | grep -v /vendor/`
-
-depensure:
-	cd $(SRCPATH) && \
-		$(GOPATH)/bin/dep ensure
+	$(GOPATH)/bin/golint `go list ./...`
 
 vet:
-	cd $(SRCPATH) && \
-		go vet `go list ./... | grep -v /vendor/`
+	go vet ./...
 
 sanity: vet fix lint fmt
 
 cover:
-	cd $(SRCPATH) && \
-		go test $(GOTAGS) -coverprofile=cover.out $(UNIT_TEST_SOURCES)
+	go test $(GOTAGS) -coverprofile=cover.out $(UNIT_TEST_SOURCES)
 
 prof:
-	cd $(SRCPATH)/node && \
-		go test $(GOTAGS) -cpuprofile=cpu.out -memprofile=mem.out -mutexprofile=mutex.out
+	cd node && go test $(GOTAGS) -cpuprofile=cpu.out -memprofile=mem.out -mutexprofile=mutex.out
 
 generate: deps
-	cd $(SRCPATH) && \
-		PATH=$(GOPATH)/bin:$$PATH \
-		go generate `go list ./... | grep -v /vendor/`
+	PATH=$(GOPATH)/bin:$$PATH go generate ./...
 
 # build our fork of libsodium, placing artifacts into crypto/lib/ and crypto/include/
-$(SRCPATH)/crypto/lib/libsodium.a:
-	cd $(SRCPATH)/crypto/libsodium-fork && \
+crypto/lib/libsodium.a:
+	cd crypto/libsodium-fork && \
 		./autogen.sh && \
 		./configure --disable-shared --prefix="$(SRCPATH)/crypto/" && \
 		$(MAKE) && \
 		$(MAKE) install
 
 deps:
-	$(SRCPATH)/scripts/check_deps.sh
+	./scripts/check_deps.sh
 
 # artifacts
 
 # Regenerate algod swagger spec files
-ALGOD_API_SWAGGER_SPEC := $(SRCPATH)/daemon/algod/api/swagger.json
-ALGOD_API_FILES := $(shell find $(SRCPATH)/daemon/algod/api/server/common -type f) \
-	$(shell find $(SRCPATH)/daemon/algod/api/server/v1 -type f) \
-	$(SRCPATH)/daemon/algod/api/server/router.go
-ALGOD_API_SWAGGER_INJECT := $(SRCPATH)/daemon/algod/api/server/lib/bundledSpecInject.go
+ALGOD_API_SWAGGER_SPEC := daemon/algod/api/swagger.json
+ALGOD_API_FILES := $(shell find daemon/algod/api/server/common daemon/algod/api/server/v1 daemon/algod/api/spec/v1 -type f) \
+	daemon/algod/api/server/router.go
+ALGOD_API_SWAGGER_INJECT := daemon/algod/api/server/lib/bundledSpecInject.go
 
 # Note that swagger.json requires the go-swagger dep.
-$(ALGOD_API_SWAGGER_SPEC): $(ALGOD_API_FILES)
-	$(info "regenerating swagger.json due to changes in algod/api/server")
-	@cd $(SRCPATH)/daemon/algod/api && \
+$(ALGOD_API_SWAGGER_SPEC): $(ALGOD_API_FILES) crypto/lib/libsodium.a
+	cd daemon/algod/api && \
 		PATH=$(GOPATH)/bin:$$PATH \
 		go generate ./...
-	@{ \
-	echo "performing custom validation of swagger.json";\
-	algodProblem=$$(cat $(ALGOD_API_SWAGGER_SPEC) | jq -c '.definitions[].properties | select(. != null) | with_entries(select(.value.type=="array" and .value.items.format=="uint8")) | select(. != {}) | keys[]');\
-	if [ "$${algodProblem}" != "" ]; then\
-		echo "detected uint8 array in algod/swagger.json:$${algodProblem}. Did you mean to use format: binary?";\
-		echo "you will need to fix these swagger problems to allow build to proceed";\
-		exit 1;\
-	else\
-		echo "custom validation succeeded";\
-	fi;\
-	} \
 
-$(ALGOD_API_SWAGGER_INJECT): $(ALGOD_API_SWAGGER_SPEC)
-	$(SRCPATH)/daemon/algod/api/server/lib/bundle_swagger_json.sh
+$(ALGOD_API_SWAGGER_INJECT): $(ALGOD_API_SWAGGER_SPEC) $(ALGOD_API_SWAGGER_SPEC).validated
+	./daemon/algod/api/server/lib/bundle_swagger_json.sh
 
 # Regenerate kmd swagger spec files
-KMD_API_SWAGGER_SPEC := $(SRCPATH)/daemon/kmd/api/swagger.json
-KMD_API_DIRS := $(shell find $(SRCPATH)/daemon/kmd/api/ -type d)
-KMD_API_FILES := $(shell find $(SRCPATH)/daemon/kmd/api/ -type f | grep -v $(KMD_API_SWAGGER_SPEC))
+KMD_API_SWAGGER_SPEC := daemon/kmd/api/swagger.json
+KMD_API_FILES := $(shell find daemon/kmd/api/ -type f | grep -v $(KMD_API_SWAGGER_SPEC))
 KMD_API_SWAGGER_WRAPPER := kmdSwaggerWrappers.go
-KMD_API_SWAGGER_INJECT := $(SRCPATH)/daemon/kmd/lib/kmdapi/bundledSpecInject.go
+KMD_API_SWAGGER_INJECT := daemon/kmd/lib/kmdapi/bundledSpecInject.go
 
-# Note that swagger.json requires the go-swagger dep.
-$(KMD_API_SWAGGER_SPEC): $(KMD_API_DIRS) $(KMD_API_FILES)
-	$(info "regenerating swagger.json due to changes in kmd")
-	@cd $(SRCPATH)/daemon/kmd/lib/kmdapi && \
-		python genSwaggerWrappers.py $(KMD_API_SWAGGER_WRAPPER) && \
-		cd $(SRCPATH)/daemon/kmd && \
+$(KMD_API_SWAGGER_SPEC): $(KMD_API_FILES) crypto/lib/libsodium.a
+	cd daemon/kmd/lib/kmdapi && \
+		python genSwaggerWrappers.py $(KMD_API_SWAGGER_WRAPPER)
+	cd daemon/kmd && \
 		PATH=$(GOPATH)/bin:$$PATH \
-		go generate ./... && \
-		rm $(SRCPATH)/daemon/kmd/lib/kmdapi/$(KMD_API_SWAGGER_WRAPPER)
-	@{ \
-	echo "performing custom validation of swagger.json";\
-	kmdProblem=$$(cat $(KMD_API_SWAGGER_SPEC) | jq -c '.definitions[].properties | select(. != null) | with_entries(select(.value.type=="array" and .value.items.format=="uint8")) | select(. != {}) | keys[]');\
-	if [ "$${kmdProblem}" != "" ]; then\
-		echo "detected uint8 array in kmd/swagger.json:$${kmdProblem}. Did you mean to use format: binary?";\
-		echo "you will need to fix these swagger problems to allow build to proceed";\
-		exit 1;\
-	else\
-		echo "custom validation succeeded";\
-	fi;\
-	} \
+		go generate ./...
+	rm daemon/kmd/lib/kmdapi/$(KMD_API_SWAGGER_WRAPPER)
 
-$(KMD_API_SWAGGER_INJECT): $(KMD_API_SWAGGER_SPEC)
-	$(SRCPATH)/daemon/kmd/lib/kmdapi/bundle_swagger_json.sh
+%/swagger.json.validated: %/swagger.json
+	@problem=$$(cat $< | jq -c '.definitions[].properties | select(. != null) | with_entries(select(.value.type=="array" and .value.items.format=="uint8")) | select(. != {}) | keys[]'); \
+	if [ "$${problem}" != "" ]; then \
+		echo "detected uint8 array in $<:\n$${problem}\nDid you mean to use \"type: string, format: byte\"?"; \
+		echo "you will need to fix these swagger problems to allow build to proceed"; \
+		exit 1; \
+	else \
+		touch $@; \
+	fi
+
+$(KMD_API_SWAGGER_INJECT): $(KMD_API_SWAGGER_SPEC) $(KMD_API_SWAGGER_SPEC).validated
+	./daemon/kmd/lib/kmdapi/bundle_swagger_json.sh
 
 # develop
 
 build: buildsrc gen
 
-buildsrc: $(SRCPATH)/crypto/lib/libsodium.a node_exporter NONGO_BIN deps $(ALGOD_API_SWAGGER_INJECT) $(KMD_API_SWAGGER_INJECT)
-	cd $(SRCPATH) && \
-		go install $(GOTRIMPATH) $(GOTAGS) -ldflags="$(GOLDFLAGS)" $(SOURCES)
-	cd $(SRCPATH) && \
-		go vet $(UNIT_TEST_SOURCES) $(E2E_TEST_SOURCES)
+buildsrc: crypto/lib/libsodium.a node_exporter NONGO_BIN deps $(ALGOD_API_SWAGGER_INJECT) $(KMD_API_SWAGGER_INJECT)
+	go install $(GOTRIMPATH) $(GOTAGS) -ldflags="$(GOLDFLAGS)" $(SOURCES)
+	go vet $(UNIT_TEST_SOURCES) $(E2E_TEST_SOURCES)
 
 SOURCES_RACE := github.com/algorand/go-algorand/cmd/kmd
 
@@ -166,9 +135,8 @@ SOURCES_RACE := github.com/algorand/go-algorand/cmd/kmd
 ## the incredible performance impact of -race on Scrypt.
 build-race: build
 	@mkdir -p $(GOPATH)/bin-race
-	cd $(SRCPATH) && \
-		GOBIN=$(GOPATH)/bin-race go install $(GOTRIMPATH) $(GOTAGS) -race -ldflags="$(GOLDFLAGS)" $(SOURCES) && \
-		GOBIN=$(GOPATH)/bin-race go install $(GOTRIMPATH) $(GOTAGS) -ldflags="$(GOLDFLAGS)" $(SOURCES_RACE)
+	GOBIN=$(GOPATH)/bin-race go install $(GOTRIMPATH) $(GOTAGS) -race -ldflags="$(GOLDFLAGS)" $(SOURCES)
+	GOBIN=$(GOPATH)/bin-race go install $(GOTRIMPATH) $(GOTAGS) -ldflags="$(GOLDFLAGS)" $(SOURCES_RACE)
 
 NONGO_BIN_FILES=$(GOPATH)/bin/find-nodes.sh $(GOPATH)/bin/update.sh $(GOPATH)/bin/COPYING
 
@@ -184,44 +152,41 @@ $(GOPATH)/bin/%:
 	cp -f $< $@
 
 test: build
-	cd $(SRCPATH) && \
-		go test $(GOTAGS) -race $(UNIT_TEST_SOURCES)
+	go test $(GOTAGS) -race $(UNIT_TEST_SOURCES)
 
 fulltest: build-race
-	cd $(SRCPATH) && for PACKAGE_DIRECTORY in $(UNIT_TEST_SOURCES) ; do \
+	for PACKAGE_DIRECTORY in $(UNIT_TEST_SOURCES) ; do \
 		go test $(GOTAGS) -timeout 2000s -race $$PACKAGE_DIRECTORY; \
-		done
+	done
 
 shorttest: build-race $(addprefix short_test_target_, $(UNIT_TEST_SOURCES))
 
 $(addprefix short_test_target_, $(UNIT_TEST_SOURCES)): build
-	@cd $(SRCPATH) && \
-	go test $(GOTAGS) -short -timeout 2000s -race $(subst short_test_target_,,$@)
+	@go test $(GOTAGS) -short -timeout 2000s -race $(subst short_test_target_,,$@)
 
 integration: build-race
-	cd $(SRCPATH) && \
-		./test/scripts/run_integration_tests.sh
+	./test/scripts/run_integration_tests.sh
 
 testall: fulltest integration
 
 # generated files we should make sure we clean
-GENERATED_FILES := $(SRCPATH)/daemon/algod/api/bundledSpecInject.go \
-	$(SRCPATH)/daemon/algod/api/lib/bundledSpecInject.go \
-	$(SRCPATH)/daemon/kmd/lib/kmdapi/bundledSpecInject.go
+GENERATED_FILES := daemon/algod/api/bundledSpecInject.go \
+	daemon/algod/api/lib/bundledSpecInject.go \
+	daemon/kmd/lib/kmdapi/bundledSpecInject.go \
+	$(ALGOD_API_SWAGGER_SPEC) $(ALGOD_API_SWAGGER_SPEC).validated \
+	$(KMD_API_SWAGGER_SPEC) $(KMD_API_SWAGGER_SPEC).validated
 
 clean:
-	cd $(SRCPATH) && \
-		go clean -i ./...
+	go clean -i ./...
 	rm -f $(GOPATH)/bin/node_exporter
 	rm -f $(GENERATED_FILES)
 	cd crypto/libsodium-fork && \
 		test ! -e Makefile || make clean
-	rm -rf $(SRCPATH)/crypto/lib
+	rm -rf crypto/lib
 
 # clean without crypto
 cleango:
-	cd $(SRCPATH) && \
-		go clean -i ./...
+	go clean -i ./...
 	rm -f $(GOPATH)/bin/node_exporter
 	rm -f $(GENERATED_FILES)
 
@@ -232,14 +197,12 @@ node_exporter: $(GOPATH)/bin/node_exporter
 # The file is was taken from the S3 cloud and it traditionally stored at
 # /travis-build-artifacts-us-ea-1.algorand.network/algorand/node_exporter/latest/node_exporter-stable-linux-x86_64.tar.gz
 $(GOPATH)/bin/node_exporter:
-	cd $(GOPATH)/bin && \
-		tar -xzvf $(SRCPATH)/installer/external/node_exporter-stable-$(shell ./scripts/ostype.sh)-$(shell uname -m | tr '[:upper:]' '[:lower:]').tar.gz
+	tar -xzvf installer/external/node_exporter-stable-$(shell ./scripts/ostype.sh)-$(shell uname -m | tr '[:upper:]' '[:lower:]').tar.gz -C $(GOPATH)/bin
 
 # deploy
 
 deploy:
-	cd $(SRCPATH) && \
-		scripts/deploy_dev.sh
+	scripts/deploy_dev.sh
 
 .PRECIOUS: gen/%/genesis.json
 
@@ -247,12 +210,10 @@ deploy:
 NETWORKS = testnet devnet
 
 gen/%/genesis.dump: gen/%/genesis.json
-	cd $(SRCPATH) && \
-		./scripts/dump_genesis.sh $< > $@
+	./scripts/dump_genesis.sh $< > $@
 
-gen/%/genesis.json: gen/%.json $(SRCPATH)/gen/generate.go
-	cd $(SRCPATH) && \
-		$(GOPATH)/bin/genesis -n $(shell basename $(shell dirname $@)) -c $< -d $(subst $(SRCPATH)/,,$(subst .json,,$<))
+gen/%/genesis.json: gen/%.json gen/generate.go buildsrc
+	$(GOPATH)/bin/genesis -n $(shell basename $(shell dirname $@)) -c $< -d $(subst .json,,$<)
 
 gen: $(addsuffix gen, $(NETWORKS)) mainnetgen
 
@@ -260,16 +221,14 @@ $(addsuffix gen, $(NETWORKS)): %gen: gen/%/genesis.dump
 
 # mainnet
 
-$(SRCPATH)/gen/mainnet/genesis.dump: $(SRCPATH)/gen/mainnet/genesis.json
-	cd $(SRCPATH) && \
-		./scripts/dump_genesis.sh gen/mainnet/genesis.json > gen/mainnet/genesis.dump
+gen/mainnet/genesis.dump: gen/mainnet/genesis.json
+	./scripts/dump_genesis.sh gen/mainnet/genesis.json > gen/mainnet/genesis.dump
 
-mainnetgen: $(SRCPATH)/gen/mainnet/genesis.dump
+mainnetgen: gen/mainnet/genesis.dump
 
-$(SRCPATH)/gen/mainnet/genesis.json: $(SRCPATH)/gen/pregen/mainnet/genesis.csv buildsrc
-	cd $(SRCPATH) && \
-		mkdir -p gen/mainnet && \
-		cat $(SRCPATH)/gen/pregen/mainnet/genesis.csv | $(GOPATH)/bin/incorporate -m $(SRCPATH)/gen/pregen/mainnet/metadata.json > $(SRCPATH)/gen/mainnet/genesis.json
+gen/mainnet/genesis.json: gen/pregen/mainnet/genesis.csv buildsrc
+	mkdir -p gen/mainnet
+	cat gen/pregen/mainnet/genesis.csv | $(GOPATH)/bin/incorporate -m gen/pregen/mainnet/metadata.json > gen/mainnet/genesis.json
 
 capabilities: build
 	sudo setcap cap_ipc_lock+ep ${GOPATH}/bin/kmd
@@ -277,7 +236,6 @@ capabilities: build
 dump: $(addprefix gen/,$(addsuffix /genesis.dump, $(NETWORKS)))
 
 install: build
-	cd $(SRCPATH) && \
-		scripts/dev_install.sh -p ${GOPATH}/bin
+	scripts/dev_install.sh -p ${GOPATH}/bin
 
 .PHONY: default fmt vet lint sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN

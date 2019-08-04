@@ -1,8 +1,5 @@
 #!/usr/bin/env bash
 
-export GOPATH=$(go env GOPATH)
-cd ${GOPATH}/src/github.com/algorand/go-algorand
-
 TARGETBINDIR=""
 DATADIRSPEC=""
 
