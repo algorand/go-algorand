@@ -82,7 +82,7 @@ func init() {
 	createCmd.Flags().BoolVarP(&runUnderHost, "hosted", "H", localDefaults.RunHosted, "Configure the new node to run hosted by algoh")
 	createCmd.Flags().BoolVarP(&newNodeIndexer, "indexer", "i", localDefaults.IsIndexerActive, "Configure the new node to enable the indexer feature (implies --archival)")
 	createCmd.Flags().StringVar(&newNodeRelay, "relay", localDefaults.NetAddress, "Configure as a relay with specified listening address (NetAddress)")
-	createCmd.Flags().StringVar(&listenIP, "api", localDefaults.EndpointAddress, "REST API Endpoint")
+	createCmd.Flags().StringVar(&listenIP, "api", "", "REST API Endpoint")
 	createCmd.MarkFlagRequired("destination")
 	createCmd.MarkFlagRequired("network")
 }
