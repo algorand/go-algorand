@@ -3,8 +3,7 @@
 set -e
 
 export GOPATH=$(go env GOPATH)
-SRCPATH=${GOPATH}/src/github.com/algorand/go-algorand
-cd ${SRCPATH}
+SRCPATH=$(pwd)
 
 make
 

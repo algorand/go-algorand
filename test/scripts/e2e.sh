@@ -9,9 +9,6 @@ export ALGOTEST=1
 
 SCRIPT_PATH="$( cd "$(dirname "$0")" ; pwd -P )"
 
-export GOPATH=$(go env GOPATH)
-cd ${GOPATH}/src/github.com/algorand/go-algorand
-
 SRCROOT="$(pwd -P)"
 
 # Use same PKG_ROOT location as local_install.sh uses.

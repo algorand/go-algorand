@@ -2,8 +2,7 @@
 set -ev
 
 GOPATH=$(go env GOPATH)
-REPO_DIR=${GOPATH}/src/github.com/algorand/go-algorand
-cd ${REPO_DIR}
+REPO_DIR=$(pwd)
 
 # Run `make` to ensure `buildtools` is available
 make -j4

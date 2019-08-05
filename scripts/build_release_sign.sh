@@ -3,7 +3,10 @@
 set -e
 set -x
 
-cd ${GOPATH}/src/github.com/algorand/go-algorand
+# Anchor our repo root reference location
+REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"/..
+
+cd ${REPO_ROOT}
 
 # Tag Source
 TAG=${BRANCH}-${FULLVERSION}

@@ -7,9 +7,6 @@ set -e
 # Suppress telemetry reporting for tests
 export ALGOTEST=1
 
-export GOPATH=$(go env GOPATH)
-cd ${GOPATH}/src/github.com/algorand/go-algorand
-
 # Run more comprehensive tests (not just 'go test' tests)
 CHANNEL=$(./scripts/travis/channel_for_branch.sh)
 #./test/scripts/test_running_install_and_update.sh -c "${CHANNEL}"
