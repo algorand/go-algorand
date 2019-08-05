@@ -405,7 +405,7 @@ func isValidIP(userInput string) bool {
 	if host == "" {
 		return false
 	}
-	return isValidIP(host)
+	return net.ParseIP(host) != nil
 }
 
 var createCmd = &cobra.Command{
