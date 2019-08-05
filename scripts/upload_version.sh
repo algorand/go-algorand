@@ -22,7 +22,6 @@ fi
 CHANNEL=$1
 
 export GOPATH=$(go env GOPATH)
-cd ${GOPATH}/src/github.com/algorand/go-algorand
 if [[ "$#" -eq 2 ]]; then
     ${GOPATH}/bin/updater send -s "$2" -c ${CHANNEL}
 else

@@ -2,7 +2,6 @@
 set -e
 
 export GOPATH=$(go env GOPATH)
-cd ${GOPATH}/src/github.com/algorand/go-algorand
 
 # Run `make` to ensure `buildtools` is available
 make -j4

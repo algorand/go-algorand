@@ -54,7 +54,7 @@
 // Autogenerate the swagger json - automatically run by the 'make build' step.
 // Base path must be a fully specified package name (else, it seems that swagger feeds a relative path to
 // loader.Config.Import(), and that breaks the vendor directory if the source is symlinked from elsewhere)
-//go:generate swagger generate spec -o="../swagger.json" --base-path="github.com/algorand/go-algorand/daemon/algod/api/server"
+//go:generate swagger generate spec -o="../swagger.json"
 //go:generate swagger validate ../swagger.json --stop-on-error
 //go:generate ./lib/bundle_swagger_json.sh
 package server
