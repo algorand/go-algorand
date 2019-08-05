@@ -18,7 +18,11 @@
 set -e
 
 export GOPATH=$(go env GOPATH)
-export SRCPATH=${GOPATH}/src/github.com/algorand/go-algorand
+
+# Anchor our repo root reference location
+REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"/..
+
+export SRCPATH=${REPO_ROOT}
 cd ${SRCPATH}
 
 CHANNEL=""

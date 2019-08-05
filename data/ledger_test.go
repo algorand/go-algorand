@@ -107,7 +107,7 @@ func BenchmarkAssemblePayset(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		// generate transactions
 		const txPoolSize = 6000
-		tp := pools.MakeTransactionPool(l, 2, txPoolSize, false)
+		tp := pools.MakeTransactionPool(l.Ledger, txPoolSize, false)
 		errcount := 0
 		okcount := 0
 		var worstTxID transactions.Txid
