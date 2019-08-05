@@ -405,7 +405,7 @@ func isValidIP(userInput string) bool {
 	if host == "" {
 		return false
 	}
-	return isValidIP(host)
+	return net.ParseIP(host) != nil
 }
 
 var createCmd = &cobra.Command{
@@ -466,7 +466,7 @@ var createCmd = &cobra.Command{
 			reportErrorf(errorNodeCreation, "destination folder already exists")
 		}
 		destPath := filepath.Join(newNodeDestination, "genesis.json")
-		err = os.MkdirAll(newNodeDestination, 0666)
+		err = os.MkdirAll(newNodeDestination, 0766)
 		if err != nil {
 			reportErrorf(errorNodeCreation, "could not create destination folder")
 		}
