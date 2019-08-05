@@ -111,12 +111,12 @@ func (a networkAction) t() actionType {
 
 func (a networkAction) String() string {
 	if a.t() == ignore || a.t() == disconnect {
-		return fmt.Sprintf("%v: %5v", a.t().String(), a.Err)
+		return fmt.Sprintf("%s: %5v", a.t().String(), a.Err)
 	}
 	if a.Tag == protocol.ProposalPayloadTag {
-		return fmt.Sprintf("%v: %2v: %5v", a.t().String(), a.Tag, a.CompoundMessage.Proposal.value())
+		return fmt.Sprintf("%s: %2v: %5v", a.t().String(), a.Tag, a.CompoundMessage.Proposal.value())
 	}
-	return fmt.Sprintf("%v: %2v", a.t().String(), a.Tag)
+	return fmt.Sprintf("%s: %2v", a.t().String(), a.Tag)
 }
 
 func (a networkAction) do(ctx context.Context, s *Service) {
