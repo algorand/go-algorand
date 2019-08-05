@@ -21,9 +21,6 @@ fi
 
 set -x
 
-export GOPATH=$(go env GOPATH)
-cd ${GOPATH}/src/github.com/algorand/go-algorand
-
 if [ "${FULLVERSION}" = "" ]; then
     export FULLVERSION=$(./scripts/compute_build_number.sh -f)
 fi

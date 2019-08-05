@@ -39,14 +39,14 @@ function runGoLint() {
     return 1
 }
 
-GOPATH=$(go env GOPATH)
-cd ${GOPATH}/src/github.com/algorand/go-algorand
+export GOPATH=$(go env GOPATH)
+export GO111MODULE=on
 
 echo "Building libsodium-fork..."
-make "`pwd`/crypto/lib/libsodium.a"
+make crypto/lib/libsodium.a
 
 echo "Running go vet..."
-go vet `go list ./... | grep -v /vendor/ | grep -v /test/e2e-go/`
+go vet `go list ./... | grep -v /test/e2e-go/`
 
 echo "Running gofmt..."
 runGoFmt
