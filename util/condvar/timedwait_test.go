@@ -22,10 +22,12 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-deadlock"
 )
 
 func TestTimedWaitSignal(t *testing.T) {
-	var m sync.Mutex
+	var m deadlock.Mutex
 	var signal bool
 	c := sync.NewCond(&m)
 
@@ -49,7 +51,7 @@ func TestTimedWaitSignal(t *testing.T) {
 }
 
 func TestTimedWaitBroadcast(t *testing.T) {
-	var m sync.Mutex
+	var m deadlock.Mutex
 	var signal bool
 	c := sync.NewCond(&m)
 
@@ -73,7 +75,7 @@ func TestTimedWaitBroadcast(t *testing.T) {
 }
 
 func TestTimedWaitTimeout(t *testing.T) {
-	var m sync.Mutex
+	var m deadlock.Mutex
 	c := sync.NewCond(&m)
 
 	m.Lock()
