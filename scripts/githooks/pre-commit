@@ -2,8 +2,7 @@
 
 function runCheckGenesis() {
     echo >&2 "Checking to see if 'gen' needs to be run..."
-    GOPATH=$(go env GOPATH)
-    $GOPATH/src/github.com/algorand/go-algorand/scripts/check_genesis.sh
+    ./scripts/check_genesis.sh
 }
 
 runCheckGenesis

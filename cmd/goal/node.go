@@ -20,16 +20,20 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/daemon/algod/api/client/models"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/util"
+	"github.com/algorand/go-algorand/util/codecs"
 	"github.com/algorand/go-algorand/util/tokens"
 )
 
@@ -41,6 +45,11 @@ var runUnderHost bool
 var telemetryOverride string
 var maxPendingTransactions uint64
 var waitSec uint32
+var newNodeNetwork string
+var newNodeDestination string
+var newNodeArchival bool
+var newNodeIndexer bool
+var newNodeRelay string
 
 func init() {
 	nodeCmd.AddCommand(startCmd)
@@ -52,6 +61,7 @@ func init() {
 	nodeCmd.AddCommand(generateTokenCmd)
 	nodeCmd.AddCommand(pendingTxnsCmd)
 	nodeCmd.AddCommand(waitCmd)
+	nodeCmd.AddCommand(createCmd)
 
 	startCmd.Flags().StringVarP(&peerDial, "peer", "p", "", "Peer address to dial for initial connection")
 	startCmd.Flags().StringVarP(&listenIP, "listen", "l", "", "Endpoint / REST address to listen on")
@@ -64,8 +74,17 @@ func init() {
 	startCmd.Flags().StringVarP(&telemetryOverride, "telemetry", "t", "", `Enable telemetry if supported (Use "true", "false", "0" or "1")`)
 	restartCmd.Flags().StringVarP(&telemetryOverride, "telemetry", "t", "", `Enable telemetry if supported (Use "true", "false", "0" or "1")`)
 	pendingTxnsCmd.Flags().Uint64VarP(&maxPendingTransactions, "maxPendingTxn", "m", 0, "Cap the number of txns to fetch")
-
 	waitCmd.Flags().Uint32VarP(&waitSec, "waittime", "w", 5, "Time (in seconds) to wait for node to make progress")
+	createCmd.Flags().StringVar(&newNodeNetwork, "network", "", "Network the new node should point to")
+	createCmd.Flags().StringVar(&newNodeDestination, "destination", "", "Destination path for the new node")
+	localDefaults := config.GetDefaultLocal()
+	createCmd.Flags().BoolVarP(&newNodeArchival, "archival", "a", localDefaults.Archival, "Make the new node archival, storing all blocks")
+	createCmd.Flags().BoolVarP(&runUnderHost, "hosted", "H", localDefaults.RunHosted, "Configure the new node to run hosted by algoh")
+	createCmd.Flags().BoolVarP(&newNodeIndexer, "indexer", "i", localDefaults.IsIndexerActive, "Configure the new node to enable the indexer feature (implies --archival)")
+	createCmd.Flags().StringVar(&newNodeRelay, "relay", localDefaults.NetAddress, "Configure as a relay with specified listening address (NetAddress)")
+	createCmd.Flags().StringVar(&listenIP, "api", "", "REST API Endpoint")
+	createCmd.MarkFlagRequired("destination")
+	createCmd.MarkFlagRequired("network")
 }
 
 var nodeCmd = &cobra.Command{
@@ -259,18 +278,18 @@ var statusCmd = &cobra.Command{
 			}
 
 			fmt.Println(makeStatusString(stat))
-			if vers.GenesisID != nil {
-				fmt.Printf("Genesis ID: %s\n", *vers.GenesisID)
+			if vers.GenesisID != "" {
+				fmt.Printf("Genesis ID: %s\n", vers.GenesisID)
 			}
 			fmt.Printf("Genesis hash: %s\n", base64.StdEncoding.EncodeToString(vers.GenesisHash[:]))
 		})
 	},
 }
 
-func makeStatusString(stat models.NodeStatus) string {
+func makeStatusString(stat v1.NodeStatus) string {
 	lastRoundTime := fmt.Sprintf("%.1fs", time.Duration(stat.TimeSinceLastRound).Seconds())
 	catchupTime := fmt.Sprintf("%.1fs", time.Duration(stat.CatchupTime).Seconds())
-	return fmt.Sprintf(infoNodeStatus, stat.LastRound, lastRoundTime, catchupTime, stat.LastVersion, stat.NextVersion, stat.NextVersionRound, stat.NextVersionSupported)
+	return fmt.Sprintf(infoNodeStatus, stat.LastRound, lastRoundTime, catchupTime, stat.LastVersion, stat.NextVersion, stat.NextVersionRound, stat.NextVersionSupported, stat.HasSyncedSinceStartup)
 }
 
 var lastroundCmd = &cobra.Command{
@@ -371,6 +390,98 @@ var waitCmd = &cobra.Command{
 					os.Exit(0)
 				}
 			}
+		}
+	},
+}
+
+func isValidIP(userInput string) bool {
+	host, port, err := net.SplitHostPort(userInput)
+	if err != nil {
+		return false
+	}
+	if port == "" {
+		return false
+	}
+	if host == "" {
+		return false
+	}
+	return net.ParseIP(host) != nil
+}
+
+var createCmd = &cobra.Command{
+	Use:   "create",
+	Short: "create a node at the desired data directory for the desired network",
+	Long:  "create a node at the desired data directory for the desired network",
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, _ []string) {
+
+		// validate network input
+		validNetworks := map[string]bool{"mainnet": true, "testnet": true, "devnet": true, "betanet": true}
+		if !validNetworks[newNodeNetwork] {
+			reportErrorf(errorNodeCreation, "passed network name invalid")
+		}
+
+		// validate and store passed options
+		localConfig := config.GetDefaultLocal()
+		if newNodeRelay != "" {
+			if isValidIP(newNodeRelay) {
+				localConfig.NetAddress = newNodeRelay
+			} else {
+				reportErrorf(errorNodeCreationIPFailure, newNodeRelay)
+			}
+		}
+		if listenIP != "" {
+			if isValidIP(listenIP) {
+				localConfig.EndpointAddress = listenIP
+			} else {
+				reportErrorf(errorNodeCreationIPFailure, listenIP)
+			}
+		}
+		localConfig.Archival = newNodeArchival || newNodeRelay != "" || newNodeIndexer
+		localConfig.IsIndexerActive = newNodeIndexer
+		localConfig.RunHosted = runUnderHost
+
+		// locate genesis block
+		exePath, err := util.ExeDir()
+		if err != nil {
+			reportErrorln(errorNodeCreation, err)
+		}
+		firstChoicePath := filepath.Join(exePath, "genesisfiles", newNodeNetwork, "genesis.json")
+		secondChoicePath := filepath.Join("var", "lib", "algorand", "genesis", newNodeNetwork, "genesis.json")
+		thirdChoicePath := filepath.Join(exePath, "genesisfiles", "genesis", newNodeNetwork, "genesis.json")
+		paths := []string{firstChoicePath, secondChoicePath, thirdChoicePath}
+		correctPath := ""
+		for _, pathCandidate := range paths {
+			if util.FileExists(pathCandidate) {
+				correctPath = pathCandidate
+				break
+			}
+		}
+		if correctPath == "" {
+			reportErrorf("Could not find genesis.json file. Paths checked: %v", strings.Join(paths, ","))
+		}
+
+		// verify destination does not exist, and attempt to create destination folder
+		if util.FileExists(newNodeDestination) {
+			reportErrorf(errorNodeCreation, "destination folder already exists")
+		}
+		destPath := filepath.Join(newNodeDestination, "genesis.json")
+		err = os.MkdirAll(newNodeDestination, 0766)
+		if err != nil {
+			reportErrorf(errorNodeCreation, "could not create destination folder")
+		}
+
+		// copy genesis block to destination
+		_, err = util.CopyFile(correctPath, destPath)
+		if err != nil {
+			reportErrorf(errorNodeCreation, err)
+		}
+
+		// save config to destination
+		configDest := filepath.Join(newNodeDestination, "config.json")
+		err = codecs.SaveNonDefaultValuesToFile(configDest, localConfig, config.GetDefaultLocal(), nil, true)
+		if err != nil {
+			reportErrorf(errorNodeCreation, err)
 		}
 	},
 }

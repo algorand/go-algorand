@@ -55,7 +55,7 @@ type roundCowBase struct {
 }
 
 func (x *roundCowBase) lookup(addr basics.Address) (basics.AccountData, error) {
-	return x.l.lookupWithoutRewards(x.rnd, addr)
+	return x.l.LookupWithoutRewards(x.rnd, addr)
 }
 
 func (x *roundCowBase) isDup(firstValid basics.Round, txid transactions.Txid) (bool, error) {
@@ -159,7 +159,7 @@ type ledgerForEvaluator interface {
 	Lookup(basics.Round, basics.Address) (basics.AccountData, error)
 	Totals(basics.Round) (AccountTotals, error)
 	isDup(basics.Round, basics.Round, transactions.Txid) (bool, error)
-	lookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, error)
+	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, error)
 }
 
 // StartEvaluator creates a BlockEvaluator, given a ledger and a block header
@@ -274,10 +274,33 @@ func (eval *BlockEvaluator) Round() basics.Round {
 	return eval.block.Round()
 }
 
+// ResetTxnBytes resets the number of bytes tracked by the BlockEvaluator to
+// zero.  This is a specialized operation used by the transaction pool to
+// simulate the effect of putting pending transactions in multiple blocks.
+func (eval *BlockEvaluator) ResetTxnBytes() {
+	eval.totalTxBytes = 0
+}
+
 // Transaction tentatively adds a new transaction as part of this block evaluation.
 // If the transaction cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
 func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn, ad *transactions.ApplyData) error {
+	return eval.transaction(txn, ad, true)
+}
+
+// TestTransaction checks if a given transaction could be executed at this point
+// in the block evaluator, but does not actually add the transaction to the block
+// evaluator, or modify the block evaluator state in any other visible way.
+func (eval *BlockEvaluator) TestTransaction(txn transactions.SignedTxn, ad *transactions.ApplyData) error {
+	return eval.transaction(txn, ad, false)
+}
+
+// transaction tentatively executes a new transaction as part of this block evaluation.
+// If the transaction cannot be added to the block without violating some constraints,
+// an error is returned and the block evaluator state is unchanged.  If remember is true,
+// the transaction is added to the block evaluator state; otherwise, the block evaluator
+// is not modified and does not remember this transaction.
+func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad *transactions.ApplyData, remember bool) error {
 	var err error
 	var thisTxBytes int
 	cow := eval.state.child()
@@ -384,12 +407,15 @@ func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn, ad *transact
 		}
 	}
 
-	// Remember this TXID (to detect duplicates)
-	cow.addTx(txn.ID())
+	if remember {
+		// Remember this TXID (to detect duplicates)
+		cow.addTx(txn.ID())
 
-	eval.block.Payset = append(eval.block.Payset, txib)
-	eval.totalTxBytes += thisTxBytes
-	cow.commitToParent()
+		eval.block.Payset = append(eval.block.Payset, txib)
+		eval.totalTxBytes += thisTxBytes
+		cow.commitToParent()
+	}
+
 	return nil
 }
 

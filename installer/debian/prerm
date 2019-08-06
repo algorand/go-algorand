@@ -3,4 +3,5 @@
 ## cat /usr/share/debhelper/autoscripts/prerm-systemd-restart | sed -e s,#UNITFILES#,algorand.service,
 if [ -d /run/systemd/system ] && [ "$1" = remove ]; then
 	deb-systemd-invoke stop algorand.service >/dev/null || true
+	deb-systemd-invoke stop algorand@\* >/dev/null || true
 fi

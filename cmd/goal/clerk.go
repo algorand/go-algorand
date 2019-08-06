@@ -20,7 +20,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -185,7 +184,7 @@ func writeTxnToFile(client libgoal.Client, signTx bool, dataDir string, walletNa
 	}
 
 	// Write the SignedTxn to the output file
-	return ioutil.WriteFile(filename, protocol.Encode(stxn), 0600)
+	return writeFile(filename, protocol.Encode(stxn), 0600)
 }
 
 var sendCmd = &cobra.Command{
@@ -279,7 +278,7 @@ var rawsendCmd = &cobra.Command{
 			rejectsFilename = txFilename + ".rej"
 		}
 
-		data, err := ioutil.ReadFile(txFilename)
+		data, err := readFile(txFilename)
 		if err != nil {
 			reportErrorf(fileReadError, txFilename, err)
 		}
@@ -390,7 +389,7 @@ var inspectCmd = &cobra.Command{
 	Short: "print a transaction file",
 	Run: func(cmd *cobra.Command, args []string) {
 		for _, txFilename := range args {
-			data, err := ioutil.ReadFile(txFilename)
+			data, err := readFile(txFilename)
 			if err != nil {
 				reportErrorf(fileReadError, txFilename, err)
 			}
@@ -423,7 +422,7 @@ var signCmd = &cobra.Command{
 	Long:  `Sign the passed transaction file, which may contain one or more transactions. If the infile and the outfile are the same, this overwrites the file with the new, signed data.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		data, err := ioutil.ReadFile(txFilename)
+		data, err := readFile(txFilename)
 		if err != nil {
 			reportErrorf(fileReadError, txFilename, err)
 		}
@@ -452,7 +451,7 @@ var signCmd = &cobra.Command{
 
 			outData = append(outData, protocol.Encode(signedTxn)...)
 		}
-		err = ioutil.WriteFile(outFilename, outData, 0600)
+		err = writeFile(outFilename, outData, 0600)
 		if err != nil {
 			reportErrorf(fileWriteError, outFilename, err)
 		}

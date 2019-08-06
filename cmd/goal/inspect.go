@@ -32,9 +32,9 @@ import (
 type inspectSignedTxn struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Sig  crypto.Signature   `codec:"sig"`
-	Msig inspectMultisigSig `codec:"msig"`
-	Txn  inspectTransaction `codec:"txn"`
+	Sig  crypto.Signature         `codec:"sig"`
+	Msig inspectMultisigSig       `codec:"msig"`
+	Txn  transactions.Transaction `codec:"txn"`
 }
 
 // inspectMultisigSig is isomorphic to MultisigSig but uses different
@@ -56,41 +56,6 @@ type inspectMultisigSubsig struct {
 	Sig crypto.Signature `codec:"s"`
 }
 
-// inspectTransaction is isomorphic to Transaction but uses different
-// types to print public keys using algorand's address format in JSON.
-type inspectTransaction struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	Type protocol.TxType `codec:"type"`
-	inspectTxnHeader
-	transactions.KeyregTxnFields
-	inspectPaymentTxnFields
-}
-
-// inspectTxnHeader is isomorphic to Header but uses different
-// types to print public keys using algorand's address format in JSON.
-type inspectTxnHeader struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	Sender      basics.Address    `codec:"snd"`
-	Fee         basics.MicroAlgos `codec:"fee"`
-	FirstValid  basics.Round      `codec:"fv"`
-	LastValid   basics.Round      `codec:"lv"`
-	Note        []byte            `codec:"note"`
-	GenesisID   string            `codec:"gen"`
-	GenesisHash crypto.Digest     `codec:"gh"`
-}
-
-// inspectPaymentTxnFields is isomorphic to Header but uses different
-// types to print public keys using algorand's address format in JSON.
-type inspectPaymentTxnFields struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	Receiver         basics.Address    `codec:"rcv"`
-	Amount           basics.MicroAlgos `codec:"amt"`
-	CloseRemainderTo basics.Address    `codec:"close"`
-}
-
 func inspectTxn(stxn transactions.SignedTxn) (sti inspectSignedTxn, err error) {
 	sti = stxnToInspect(stxn)
 	if !reflect.DeepEqual(stxn, stxnFromInspect(sti)) {
@@ -106,7 +71,7 @@ func inspectTxn(stxn transactions.SignedTxn) (sti inspectSignedTxn, err error) {
 
 func stxnToInspect(stxn transactions.SignedTxn) inspectSignedTxn {
 	return inspectSignedTxn{
-		Txn:  txnToInspect(stxn.Txn),
+		Txn:  stxn.Txn,
 		Sig:  stxn.Sig,
 		Msig: msigToInspect(stxn.Msig),
 	}
@@ -114,7 +79,7 @@ func stxnToInspect(stxn transactions.SignedTxn) inspectSignedTxn {
 
 func stxnFromInspect(sti inspectSignedTxn) transactions.SignedTxn {
 	return transactions.SignedTxn{
-		Txn:  txnFromInspect(sti.Txn),
+		Txn:  sti.Txn,
 		Sig:  sti.Sig,
 		Msig: msigFromInspect(sti.Msig),
 	}
@@ -150,46 +115,4 @@ func msigFromInspect(msi inspectMultisigSig) crypto.MultisigSig {
 	}
 
 	return res
-}
-
-func txnToInspect(txn transactions.Transaction) inspectTransaction {
-	return inspectTransaction{
-		Type: txn.Type,
-		inspectTxnHeader: inspectTxnHeader{
-			Sender:      basics.Address(txn.Sender),
-			Fee:         txn.Fee,
-			FirstValid:  txn.FirstValid,
-			LastValid:   txn.LastValid,
-			Note:        txn.Note,
-			GenesisID:   txn.GenesisID,
-			GenesisHash: txn.GenesisHash,
-		},
-		KeyregTxnFields: txn.KeyregTxnFields,
-		inspectPaymentTxnFields: inspectPaymentTxnFields{
-			Receiver:         basics.Address(txn.Receiver),
-			Amount:           txn.Amount,
-			CloseRemainderTo: basics.Address(txn.CloseRemainderTo),
-		},
-	}
-}
-
-func txnFromInspect(txi inspectTransaction) transactions.Transaction {
-	return transactions.Transaction{
-		Type: txi.Type,
-		Header: transactions.Header{
-			Sender:      basics.Address(txi.Sender),
-			Fee:         txi.Fee,
-			FirstValid:  txi.FirstValid,
-			LastValid:   txi.LastValid,
-			Note:        txi.Note,
-			GenesisID:   txi.GenesisID,
-			GenesisHash: txi.GenesisHash,
-		},
-		KeyregTxnFields: txi.KeyregTxnFields,
-		PaymentTxnFields: transactions.PaymentTxnFields{
-			Receiver:         basics.Address(txi.Receiver),
-			Amount:           txi.Amount,
-			CloseRemainderTo: basics.Address(txi.CloseRemainderTo),
-		},
-	}
 }

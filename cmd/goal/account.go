@@ -97,20 +97,20 @@ func init() {
 	newCmd.Flags().BoolVarP(&defaultAccount, "default", "f", false, "Set this account as the default one")
 
 	// Delete account flag
-	deleteCmd.Flags().StringVarP(&accountAddress, "addr", "a", "", "Address of account to delete")
-	deleteCmd.MarkFlagRequired("addr")
+	deleteCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Address of account to delete")
+	deleteCmd.MarkFlagRequired("address")
 
 	// New Multisig account flag
 	newMultisigCmd.Flags().Uint8VarP(&threshold, "threshold", "T", 1, "Number of signatures required to spend from this address")
 	newMultisigCmd.MarkFlagRequired("threshold")
 
 	// Delete multisig account flag
-	deleteMultisigCmd.Flags().StringVarP(&accountAddress, "addr", "a", "", "Address of multisig account to delete")
-	deleteMultisigCmd.MarkFlagRequired("addr")
+	deleteMultisigCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Address of multisig account to delete")
+	deleteMultisigCmd.MarkFlagRequired("address")
 
 	// Lookup info for multisig account flag
-	infoMultisigCmd.Flags().StringVarP(&accountAddress, "addr", "a", "", "Address of multisig account to look up")
-	infoMultisigCmd.MarkFlagRequired("addr")
+	infoMultisigCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Address of multisig account to look up")
+	infoMultisigCmd.MarkFlagRequired("address")
 
 	// Balance flags
 	balanceCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to retrieve balance (required)")
@@ -421,7 +421,7 @@ var listCmd = &cobra.Command{
 		// For each address, request information about it from algod
 		for _, addr := range addrs {
 			response, _ := client.AccountInformation(addr.Addr)
-			// it's okay to procede with out algod info
+			// it's okay to proceed without algod info
 
 			// Display this information to the user
 			if addr.Multisig {
@@ -772,11 +772,27 @@ var listParticipationKeysCmd = &cobra.Command{
 		}
 		sort.Strings(filenames)
 
-		rowFormat := "%-80s\t%-60s\t%12s\t%12s\t%12s\n"
-		fmt.Printf(rowFormat, "Filename", "Parent address", "First round", "Last round", "First key")
+		rowFormat := "%-10s\t%-80s\t%-60s\t%12s\t%12s\t%12s\n"
+		fmt.Printf(rowFormat, "Registered", "Filename", "Parent address", "First round", "Last round", "First key")
 		for _, fn := range filenames {
+			onlineInfoStr := "unknown"
+			onlineAccountInfo, err := client.AccountInformation(parts[fn].Address().GetUserAddress())
+			if err == nil {
+				votingBytes := parts[fn].Voting.OneTimeSignatureVerifier
+				vrfBytes := parts[fn].VRF.PK
+				if string(onlineAccountInfo.Participation.ParticipationPK) == string(votingBytes[:]) &&
+					(string(onlineAccountInfo.Participation.VRFPK) == string(vrfBytes[:])) &&
+					(onlineAccountInfo.Participation.VoteFirst == uint64(parts[fn].FirstValid)) &&
+					(onlineAccountInfo.Participation.VoteLast == uint64(parts[fn].LastValid)) &&
+					(onlineAccountInfo.Participation.VoteKeyDilution == parts[fn].KeyDilution) {
+					onlineInfoStr = "yes"
+				} else {
+					onlineInfoStr = "no"
+				}
+			}
+			// it's okay to proceed without algod info
 			first, last := parts[fn].ValidInterval()
-			fmt.Printf(rowFormat, fn, parts[fn].Address().GetUserAddress(),
+			fmt.Printf(rowFormat, onlineInfoStr, fn, parts[fn].Address().GetUserAddress(),
 				fmt.Sprintf("%d", first),
 				fmt.Sprintf("%d", last),
 				fmt.Sprintf("%d.%d", parts[fn].Voting.FirstBatch, parts[fn].Voting.FirstOffset))

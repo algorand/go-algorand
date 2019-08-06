@@ -535,6 +535,20 @@ type Local struct {
 	// Log file size limit in bytes
 	LogSizeLimit uint64
 
+	// text/template for creating log archive filename.
+	// Available template vars:
+	// Time at start of log: {{.Year}} {{.Month}} {{.Day}} {{.Hour}} {{.Minute}} {{.Second}}
+	// Time at end of log: {{.EndYear}} {{.EndMonth}} {{.EndDay}} {{.EndHour}} {{.EndMinute}} {{.EndSecond}}
+	//
+	// If the filename ends with .gz or .bz2 it will be compressed.
+	//
+	// default: "node.archive.log" (no rotation, clobbers previous archive)
+	LogArchiveName string
+
+	// LogArchiveMaxAge will be parsed by time.ParseDuration().
+	// Valid units are 's' seconds, 'm' minutes, 'h' hours
+	LogArchiveMaxAge string
+
 	// number of consecutive attempts to catchup after which we replace the peers we're connected to
 	CatchupFailurePeerRefreshRate int
 
@@ -627,6 +641,17 @@ type Local struct {
 
 	// ForceRelayMessages indicates whether the network library relay messages even in the case that no NetAddress was specified.
 	ForceRelayMessages bool
+
+	// ConnectionsRateLimitingWindowSeconds is being used in conjunction with ConnectionsRateLimitingCount;
+	// see ConnectionsRateLimitingCount description for further information. Providing a zero value
+	// in this variable disables the connection rate limiting.
+	ConnectionsRateLimitingWindowSeconds uint
+
+	// ConnectionsRateLimitingCount is being used along with ConnectionsRateLimitingWindowSeconds to determine if
+	// a connection request should be accepted or not. The gossip network examine all the incoming requests in the past
+	// ConnectionsRateLimitingWindowSeconds seconds that share the same origin. If the total count exceed the ConnectionsRateLimitingCount
+	// value, the connection is refused.
+	ConnectionsRateLimitingCount uint
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)
@@ -695,6 +720,13 @@ func mergeConfigFromFile(configpath string, source Local) (Local, error) {
 func loadConfig(reader io.Reader, config *Local) error {
 	dec := json.NewDecoder(reader)
 	return dec.Decode(config)
+}
+
+// DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
+func (cfg Local) DNSBootstrapArray(networkID protocol.NetworkID) (bootstrapArray []string) {
+	dnsBootstrapString := cfg.DNSBootstrap(networkID)
+	bootstrapArray = strings.Split(dnsBootstrapString, ";")
+	return
 }
 
 // DNSBootstrap returns the network-specific DNSBootstrap identifier

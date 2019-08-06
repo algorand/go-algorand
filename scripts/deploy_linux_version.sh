@@ -12,8 +12,12 @@
 set -e
 
 export GOPATH=$(go env GOPATH)
-cd ${GOPATH}/src/github.com/algorand
-SRCPATH=${GOPATH}/src/github.com/algorand/go-algorand
+
+# Anchor our repo root reference location
+REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"/..
+
+cd ${REPO_ROOT}/..
+SRCPATH=${REPO_ROOT}
 
 TMPDIR="${SRCPATH}/tmp"
 
@@ -36,9 +40,8 @@ while [ "$1" != "" ]; do
     shift
 done
 
-
-if [ "${S3_UPLOAD_ID}" = "" ] || [ "${S3_UPLOAD_SECRET}" = "" ] || [ "${S3_UPLOAD_BUCKET}" = "" ]; then
-    echo "You need to export S3_UPLOAD_ID, S3_UPLOAD_SECRECT and S3_UPLOAD_BUCKET for this to work"
+if [ "${AWS_ACCESS_KEY_ID}" = "" ] || [ "${AWS_SECRET_ACCESS_KEY}" = "" ] || [ "${S3_RELEASE_BUCKET}" = "" ]; then
+    echo "You need to export AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and S3_RELEASE_BUCKET for this to work"
     exit 1
 fi
 
@@ -52,9 +55,14 @@ if [[ "${GENESISFILE}" != "" ]]; then
     GENESISFILE=${TMPDIR#"$SRCPATH/"}/${CHANNEL}.json
 fi
 
+# Since we don't know what our actual in-docker-build path is, we need to accommodate extra required /.. to root ourselves
+SUBDIR=${TMPDIR#"$SRCPATH/"}
+SUBDIRCOUNT=$(echo "${SUBDIR}" | tr -cd '/' | wc -c)
+RELPATHXTRA=$(printf -v UPDIR '%*s' ${SUBDIRCOUNT} ''; echo ${UPDIR// /\/..})
+
 echo \#!/bin/bash > ${TMPDIR}/deploy_linux_version_exec.sh
 echo SCRIPTPATH='$( cd "$(dirname "$0")" ; pwd -P )' >> ${TMPDIR}/deploy_linux_version_exec.sh
-echo cd \${GOPATH}/src/github.com/algorand/go-algorand >> ${TMPDIR}/deploy_linux_version_exec.sh
+echo cd \${SCRIPTPATH}/..${RELPATHXTRA} >> ${TMPDIR}/deploy_linux_version_exec.sh
 echo export BRANCH=${BRANCH} >> ${TMPDIR}/deploy_linux_version_exec.sh
 echo export CHANNEL=${CHANNEL} >> ${TMPDIR}/deploy_linux_version_exec.sh
 echo export BUILDCHANNEL=${BUILDCHANNEL} >> ${TMPDIR}/deploy_linux_version_exec.sh
@@ -62,13 +70,13 @@ echo export DEFAULTNETWORK=${DEFAULTNETWORK} >> ${TMPDIR}/deploy_linux_version_e
 echo export GENESISFILE=${GENESISFILE} >> ${TMPDIR}/deploy_linux_version_exec.sh
 echo export FULLVERSION=${FULLVERSION} >> ${TMPDIR}/deploy_linux_version_exec.sh
 echo export PKG_ROOT=${PKG_ROOT} >> ${TMPDIR}/deploy_linux_version_exec.sh
-echo export S3_UPLOAD_ID=${S3_UPLOAD_ID} >> ${TMPDIR}/deploy_linux_version_exec.sh
-echo export S3_UPLOAD_SECRET=${S3_UPLOAD_SECRET} >> ${TMPDIR}/deploy_linux_version_exec.sh
-echo export S3_UPLOAD_BUCKET=${S3_UPLOAD_BUCKET} >> ${TMPDIR}/deploy_linux_version_exec.sh
+echo export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} >> ${TMPDIR}/deploy_linux_version_exec.sh
+echo export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} >> ${TMPDIR}/deploy_linux_version_exec.sh
+echo export S3_RELEASE_BUCKET=${S3_RELEASE_BUCKET} >> ${TMPDIR}/deploy_linux_version_exec.sh
 echo export NETWORK=${NETWORK} >> ${TMPDIR}/deploy_linux_version_exec.sh
 
-echo scripts/deploy_private_version.sh -c \"${CHANNEL}\" -g \"${DEFAULTNETWORK}\" -n \"${NETWORK}\" -f \"${GENESISFILE}\" >> ${TMPDIR}/deploy_linux_version_exec.sh
+echo scripts/deploy_private_version.sh -c \"${CHANNEL}\" -g \"${DEFAULTNETWORK}\" -n \"${NETWORK}\" -f \"${GENESISFILE}\" -b \"${S3_RELEASE_BUCKET}\" >> ${TMPDIR}/deploy_linux_version_exec.sh
 chmod +x ${TMPDIR}/deploy_linux_version_exec.sh
 
-sed "s|TMPDIR|${TMPDIR#"$SRCPATH/"}|g" ${SRCPATH}/docker/build/Dockerfile-deploy > ${TMPDIR}/Dockerfile-deploy
+sed "s|TMPDIR|${SUBDIR}|g" ${SRCPATH}/docker/build/Dockerfile-deploy > ${TMPDIR}/Dockerfile-deploy
 docker build -f ${TMPDIR}/Dockerfile-deploy -t algorand-deploy .

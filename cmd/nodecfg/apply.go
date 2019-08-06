@@ -34,6 +34,7 @@ var applyHostName string
 var applyRootDir string
 var applyRootNodeDir string
 var applyPublicAddress string
+var nodeConfigBucket string
 
 func init() {
 	applyCmd.Flags().StringVarP(&applyChannel, "channel", "c", "", "Channel for the nodes we are configuring")
@@ -47,6 +48,8 @@ func init() {
 	applyCmd.Flags().StringVarP(&applyRootNodeDir, "rootnodedir", "n", "", "The root directory for node directories")
 
 	applyCmd.Flags().StringVarP(&applyPublicAddress, "publicaddress", "a", "", "The public address to use if registering Relay or for Metrics")
+
+	applyCmd.Flags().StringVarP(&nodeConfigBucket, "bucket", "b", "", "S3 bucket to get node configuration from.")
 }
 
 var applyCmd = &cobra.Command{
@@ -104,7 +107,7 @@ func doApply(rootDir string, rootNodeDir, channel string, hostName string, dnsNa
 		}
 		defer os.RemoveAll(rootDir)
 
-		if err = downloadAndExtractConfigPackage(channel, rootDir); err != nil {
+		if err = downloadAndExtractConfigPackage(channel, rootDir, nodeConfigBucket); err != nil {
 			return err
 		}
 	}
@@ -132,7 +135,7 @@ func doApply(rootDir string, rootNodeDir, channel string, hostName string, dnsNa
 
 func hostNeedsDNSName(config remote.HostConfig) bool {
 	for _, node := range config.Nodes {
-		if node.IsRelay || node.EnableMetrics {
+		if node.IsRelay() || node.EnableMetrics {
 			return true
 		}
 	}

@@ -53,14 +53,15 @@ const participationKeyCheckSecs = 60
 
 // StatusReport represents the current basic status of the node
 type StatusReport struct {
-	LastRound            basics.Round
-	LastVersion          protocol.ConsensusVersion
-	NextVersion          protocol.ConsensusVersion
-	NextVersionRound     basics.Round
-	NextVersionSupported bool
-	LastRoundTimestamp   time.Time
-	SynchronizingTime    time.Duration
-	CatchupTime          time.Duration
+	LastRound             basics.Round
+	LastVersion           protocol.ConsensusVersion
+	NextVersion           protocol.ConsensusVersion
+	NextVersionRound      basics.Round
+	NextVersionSupported  bool
+	LastRoundTimestamp    time.Time
+	SynchronizingTime     time.Duration
+	CatchupTime           time.Duration
+	HasSyncedSinceStartup bool
 }
 
 // TimeSinceLastRound returns the time since the last block was approved (locally), or 0 if no blocks seen
@@ -72,32 +73,7 @@ func (status StatusReport) TimeSinceLastRound() time.Duration {
 	return time.Since(status.LastRoundTimestamp)
 }
 
-// Full is an interface representing a Full Algorand Node
-type Full interface {
-	GetSupply() basics.SupplyDetail
-	GetBalanceAndStatus(address basics.Address) (money basics.MicroAlgos, rewards basics.MicroAlgos, moneyWithoutPendingRewards basics.MicroAlgos, status basics.Status, totalCurrency uint64, currencies map[basics.Address]uint64, round basics.Round, err error)
-	BroadcastSignedTxn(signed transactions.SignedTxn) (transactions.Txid, error)
-	ListTxns(address basics.Address, minRound basics.Round, maxRound basics.Round) ([]TxnWithStatus, error)
-	GetTransaction(address basics.Address, txID transactions.Txid, minRound basics.Round, maxRound basics.Round) (TxnWithStatus, bool)
-	GetPendingTransaction(txID transactions.Txid) (TxnWithStatus, bool)
-	SuggestedFee() basics.MicroAlgos
-	PoolStats() PoolStats
-	GetBlock(r basics.Round) (bookkeeping.Block, agreement.Certificate, error)
-	ExtendPeerList(args ...string)
-	LatestRound() basics.Round
-	WaitForRound(r basics.Round) chan struct{}
-	GetPendingTxnsFromPool() ([]transactions.SignedTxn, error)
-	Start()
-	Stop()
-	IsArchival() bool
-	Status() (StatusReport, error)
-	GenesisID() string
-	GenesisHash() crypto.Digest
-	Indexer() (*indexer.Indexer, error)
-	GetTransactionByID(txid transactions.Txid, rnd basics.Round) (TxnWithStatus, error)
-}
-
-// AlgorandFullNode is a concrete implementation of the Full interface
+// AlgorandFullNode specifies and implements a full Algorand node.
 type AlgorandFullNode struct {
 	nodeContextData
 
@@ -108,7 +84,7 @@ type AlgorandFullNode struct {
 
 	ledger    *data.Ledger
 	net       network.GossipNode
-	phonebook network.ThreadsafePhonebook
+	phonebook *network.ThreadsafePhonebook
 
 	transactionPool *pools.TransactionPool
 	txHandler       *data.TxHandler
@@ -126,7 +102,8 @@ type AlgorandFullNode struct {
 
 	log logging.Logger
 
-	lastRoundTimestamp time.Time
+	lastRoundTimestamp    time.Time
+	hasSyncedSinceStartup bool
 
 	txPoolSyncer *rpcs.TxSyncer
 
@@ -169,6 +146,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookDir
 	node.log = log.With("name", cfg.NetAddress)
 	node.genesisID = genesis.ID()
 	node.genesisHash = crypto.HashObj(genesis)
+	node.phonebook = network.MakeThreadsafePhonebook()
 
 	addrs, err := config.LoadPhonebook(phonebookDir)
 	if err != nil {
@@ -177,7 +155,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookDir
 	node.phonebook.ReplacePeerList(addrs)
 
 	// tie network, block fetcher, and agreement services together
-	p2pNode, err := network.NewWebsocketNetwork(node.log, node.config, &node.phonebook, genesis.ID(), genesis.Network)
+	p2pNode, err := network.NewWebsocketNetwork(node.log, node.config, node.phonebook, genesis.ID(), genesis.Network)
 	if err != nil {
 		log.Errorf("could not create websocket node: %v", err)
 		return nil, err
@@ -219,7 +197,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookDir
 	}
 
 	node.ledger.SetArchival(cfg.Archival)
-	node.transactionPool = pools.MakeTransactionPool(node.ledger, cfg.TxPoolExponentialIncreaseFactor, cfg.TxPoolSize, cfg.EnableAssembleStats)
+	node.transactionPool = pools.MakeTransactionPool(node.ledger.Ledger, cfg.TxPoolSize, cfg.EnableAssembleStats)
 	node.ledger.RegisterBlockListeners([]ledger.BlockListener{node.transactionPool})
 	node.txHandler = data.MakeTxHandler(node.transactionPool, node.ledger, node.net, node.genesisID, node.genesisHash, node.lowPriorityCryptoVerificationPool)
 	node.feeTracker, err = pools.MakeFeeTracker()
@@ -405,30 +383,14 @@ func (node *AlgorandFullNode) getExistingPartHandle(filename string) (db.Accesso
 	return db.Accessor{}, err
 }
 
-// GetSupply returns the current supply reported by the ledger
-func (node *AlgorandFullNode) GetSupply() basics.SupplyDetail {
-	latest := node.ledger.Latest()
-	totals, err := node.ledger.Totals(latest)
-
-	if err != nil {
-		node.log.Panicf("GetSupply(): round %d: no way to return error %v", latest, err)
-	}
-
-	return basics.SupplyDetail{
-		TotalMoney:  totals.Participating(),
-		OnlineMoney: totals.Online.Money,
-		Round:       latest,
-	}
-}
-
-// GetBalanceAndStatus returns both the Balance and the Delegator status of the account, in one call so they're from the same block
-func (node *AlgorandFullNode) GetBalanceAndStatus(address basics.Address) (money basics.MicroAlgos, rewards basics.MicroAlgos, moneyWithoutPendingRewards basics.MicroAlgos, status basics.Status, totalCurrency uint64, currencies map[basics.Address]uint64, round basics.Round, err error) {
-	return node.ledger.BalanceAndStatus(address)
+// Ledger exposes the node's ledger handle to the algod API code
+func (node *AlgorandFullNode) Ledger() *data.Ledger {
+	return node.ledger
 }
 
 // BroadcastSignedTxn broadcasts a transaction that has already been signed.
 func (node *AlgorandFullNode) BroadcastSignedTxn(signed transactions.SignedTxn) (transactions.Txid, error) {
-	lastRound := node.ledger.LastRound()
+	lastRound := node.ledger.Latest()
 	b, err := node.ledger.BlockHdr(lastRound)
 	if err != nil {
 		node.log.Errorf("could not get block header from last round %v: %v", lastRound, err)
@@ -541,13 +503,14 @@ func (node *AlgorandFullNode) GetPendingTransaction(txID transactions.Txid) (res
 	}
 
 	var maxLife basics.Round
-	proto, err := node.ledger.ConsensusParams(node.LatestRound())
+	latest := node.ledger.Latest()
+	proto, err := node.ledger.ConsensusParams(latest)
 	if err == nil {
 		maxLife = basics.Round(proto.MaxTxnLife)
 	} else {
-		node.log.Errorf("node.GetPendingTransaction: cannot get consensus params for latest round %v", node.LatestRound())
+		node.log.Errorf("node.GetPendingTransaction: cannot get consensus params for latest round %v", latest)
 	}
-	maxRound := node.LatestRound()
+	maxRound := latest
 	minRound := maxRound.SubSaturate(maxLife)
 
 	for r := minRound; r <= maxRound; r++ {
@@ -568,7 +531,7 @@ func (node *AlgorandFullNode) GetPendingTransaction(txID transactions.Txid) (res
 
 // Status returns a StatusReport structure reporting our status as Active and with our ledger's LastRound
 func (node *AlgorandFullNode) Status() (s StatusReport, err error) {
-	s.LastRound = node.ledger.LastRound()
+	s.LastRound = node.ledger.Latest()
 	b, err := node.ledger.BlockHdr(s.LastRound)
 	if err != nil {
 		return
@@ -582,6 +545,7 @@ func (node *AlgorandFullNode) Status() (s StatusReport, err error) {
 	s.SynchronizingTime = node.syncer.SynchronizingTime()
 	s.LastRoundTimestamp = node.lastRoundTimestamp
 	s.CatchupTime = node.syncer.SynchronizingTime()
+	s.HasSyncedSinceStartup = node.hasSyncedSinceStartup
 	return
 }
 
@@ -601,14 +565,9 @@ func (node *AlgorandFullNode) GenesisHash() crypto.Digest {
 	return node.genesisHash
 }
 
-// GetBlock returns the Block for the specified Round from our ledger, if present
-func (node *AlgorandFullNode) GetBlock(r basics.Round) (bookkeeping.Block, agreement.Certificate, error) {
-	return node.ledger.BlockCert(r)
-}
-
 // PoolStats returns a PoolStatus structure reporting stats about the transaction pool
 func (node *AlgorandFullNode) PoolStats() PoolStats {
-	r := node.ledger.LastRound()
+	r := node.ledger.Latest()
 	last, err := node.ledger.Block(r)
 	if err != nil {
 		node.log.Warnf("AlgorandFullNode: could not read ledger's last round: %v", err)
@@ -630,16 +589,6 @@ func (node *AlgorandFullNode) ExtendPeerList(peers ...string) {
 // ReplacePeerList replaces the current peer list with a different one
 func (node *AlgorandFullNode) ReplacePeerList(peers ...string) {
 	node.phonebook.ReplacePeerList(peers)
-}
-
-// LatestRound returns the latest round reported by our ledger
-func (node *AlgorandFullNode) LatestRound() basics.Round {
-	return node.ledger.LastRound()
-}
-
-// WaitForRound returns a channel that is signalled when the specified round has been written to the ledger
-func (node *AlgorandFullNode) WaitForRound(r basics.Round) chan struct{} {
-	return node.ledger.Wait(r)
 }
 
 // SuggestedFee returns the suggested fee per byte recommended to ensure a new transaction is processed in a timely fashion.
@@ -743,6 +692,7 @@ func (node *AlgorandFullNode) OnNewBlock(block bookkeeping.Block) {
 	defer node.mu.Unlock()
 
 	node.lastRoundTimestamp = time.Now()
+	node.hasSyncedSinceStartup = true
 
 	// Wake up oldKeyDeletionThread(), non-blocking.
 	select {

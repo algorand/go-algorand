@@ -363,6 +363,18 @@ func (n *Fuzzer) LedgerSync(l *testLedger, r basics.Round, c agreement.Certifica
 	return true
 }
 
+// set the catchup flag for the node so that we can continuesly catch up the node.
+// once the node is keeping up, this would get disabled.
+func (n *Fuzzer) StartCatchingUp(nodeID int) {
+	if nodeID == -1 {
+		for nodeID := range n.ledgers {
+			n.ledgers[nodeID].catchingUp = true
+		}
+	} else {
+		n.ledgers[nodeID].catchingUp = true
+	}
+}
+
 func (n *Fuzzer) Catchup(nodeID int) {
 	// find the ledger with the highest round.
 	highRoundLedger := n.ledgers[0]
@@ -484,6 +496,14 @@ func (n *Fuzzer) exhaustNetworkOperations() (networkActivity bool, ticks int) {
 	return
 }
 
+func (n *Fuzzer) checkCatchup() {
+	for nodeID, ledger := range n.ledgers {
+		if ledger.catchingUp {
+			n.Catchup(nodeID)
+		}
+	}
+}
+
 func (n *Fuzzer) runLoop(ticksCount, inactivityThreshold int, runResult *RunResult) bool {
 	clockAccelaration := int32(1)
 	networkInactivityCounter := 0
@@ -511,6 +531,8 @@ func (n *Fuzzer) runLoop(ticksCount, inactivityThreshold int, runResult *RunResu
 			clockAccelaration = 1
 		}
 		n.CheckBlockingEnsureDigest()
+
+		n.checkCatchup()
 	}
 	return true
 }
@@ -531,7 +553,7 @@ func (n *Fuzzer) Run(trialTicks, recoveryTicks, inactivityTicks int) (bool, *Run
 		return true, &runResult
 	}
 
-	n.Catchup(-1)
+	n.StartCatchingUp(-1)
 	n.RemoveFilters()
 
 	// perform the recovery phase

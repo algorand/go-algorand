@@ -54,7 +54,7 @@
 // Autogenerate the swagger json - automatically run by the 'make build' step.
 // Base path must be a fully specified package name (else, it seems that swagger feeds a relative path to
 // loader.Config.Import(), and that breaks the vendor directory if the source is symlinked from elsewhere)
-//go:generate swagger generate spec -o="../swagger.json" --base-path="github.com/algorand/go-algorand/daemon/algod/api/server"
+//go:generate swagger generate spec -o="../swagger.json"
 //go:generate swagger validate ../swagger.json --stop-on-error
 //go:generate ./lib/bundle_swagger_json.sh
 package server
@@ -106,7 +106,7 @@ func registerHandlers(router *mux.Router, prefix string, routes lib.Routes, ctx 
 }
 
 // NewRouter builds and returns a new router from routes
-func NewRouter(logger logging.Logger, node node.Full, apiToken string, staticFileDir string) *mux.Router {
+func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, apiToken string) *mux.Router {
 	router := mux.NewRouter().StrictSlash(true)
 
 	// Middleware
@@ -115,7 +115,7 @@ func NewRouter(logger logging.Logger, node node.Full, apiToken string, staticFil
 	router.Use(middlewares.CORS)
 
 	// Request Context
-	ctx := lib.ReqContext{Node: node, Log: logger, StaticDataDir: staticFileDir}
+	ctx := lib.ReqContext{Node: node, Log: logger}
 
 	// Registers /debug/pprof handler under root path and under /urlAuth path
 	// to support header or url-provided token.

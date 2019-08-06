@@ -21,10 +21,14 @@ import (
 )
 
 // APIV1Request is the interface that all API V1 requests must satisfy
-type APIV1Request interface{}
+//
+// swagger:ignore
+type APIV1Request interface{} // we need to tell swagger to ignore due to bug (go-swagger/issues/1436)
 
 // APIV1RequestEnvelope is a common envelope that all API V1 requests must embed
-type APIV1RequestEnvelope struct {
+//
+// swagger:ignore
+type APIV1RequestEnvelope struct { // we need to tell swagger to ignore due to bug (go-swagger/issues/1436)
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 }
 
@@ -157,7 +161,8 @@ type APIV1POSTKeyListRequest struct {
 type APIV1POSTTransactionSignRequest struct {
 	APIV1RequestEnvelope
 	WalletHandleToken string `json:"wallet_handle_token"`
-	Transaction       Bytes  `json:"transaction"`
+	// swagger:strfmt byte
+	Transaction       []byte  `json:"transaction"`
 	WalletPassword    string `json:"wallet_password"`
 }
 
@@ -205,7 +210,8 @@ type APIV1DELETEMultisigRequest struct {
 type APIV1POSTMultisigTransactionSignRequest struct {
 	APIV1RequestEnvelope
 	WalletHandleToken string             `json:"wallet_handle_token"`
-	Transaction       Bytes              `json:"transaction"`
+	// swagger:strfmt byte
+	Transaction       []byte              `json:"transaction"`
 	PublicKey         crypto.PublicKey   `json:"public_key"`
 	PartialMsig       crypto.MultisigSig `json:"partial_multisig"`
 	WalletPassword    string             `json:"wallet_password"`

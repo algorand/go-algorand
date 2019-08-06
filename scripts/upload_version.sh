@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # upload_version.sh - Uploads available update packages
-#           NOTE: Will only work if you have the required S3_UPLOAD_ID/SECRET vars set
+#           NOTE: Will only work if you have the required AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY vars set
 #
 # Syntax:   upload_version.sh <channel> <directory-with-packages>
 #
@@ -22,7 +22,6 @@ fi
 CHANNEL=$1
 
 export GOPATH=$(go env GOPATH)
-cd ${GOPATH}/src/github.com/algorand/go-algorand
 if [[ "$#" -eq 2 ]]; then
     ${GOPATH}/bin/updater send -s "$2" -c ${CHANNEL}
 else

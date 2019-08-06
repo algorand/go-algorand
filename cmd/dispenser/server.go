@@ -186,14 +186,14 @@ func dispense(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	txid, err := c.SendPaymentFromUnencryptedWallet(cfg.Source, target, uint64(cfg.Fee), uint64(cfg.Amount), nil)
+	tx, err := c.SendPaymentFromUnencryptedWallet(cfg.Source, target, uint64(cfg.Fee), uint64(cfg.Amount), nil)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to dispense money - %v", err), http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	json.NewEncoder(w).Encode(txid)
+	json.NewEncoder(w).Encode(tx.ID().String())
 }
 
 func main() {

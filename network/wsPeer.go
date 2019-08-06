@@ -145,6 +145,9 @@ type wsPeer struct {
 
 	prioAddress basics.Address
 	prioWeight  uint64
+
+	// createTime is the time at which the connection was established with the peer.
+	createTime time.Time
 }
 
 // HTTPPeer is what the opaque Peer might be.

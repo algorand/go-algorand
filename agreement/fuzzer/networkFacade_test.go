@@ -384,11 +384,18 @@ func (n *NetworkFacade) TimeoutAt(d time.Duration) <-chan time.Time {
 	if have {
 		return ch
 	}
-	n.clocks[targetTick] = make(chan time.Time)
+
+	ch = make(chan time.Time)
+	if targetTick == 0 {
+		close(ch)
+	} else {
+		n.clocks[targetTick] = ch
+	}
 	if n.debugMessages {
 		fmt.Printf("NetworkFacade service-%v TimeoutAt %d+%d=%d\n", n.nodeID, n.zeroClock, targetTick, targetTick+n.zeroClock)
 	}
-	return n.clocks[targetTick]
+
+	return ch
 }
 
 func (n *NetworkFacade) Encode() []byte {
@@ -458,6 +465,7 @@ func (n *NetworkFacade) Tick(newClockTime int) bool {
 		if (targetTick + n.zeroClock) <= (newClockTime) {
 			// this one has expired.
 			expiredClocks = append(expiredClocks, targetTick)
+			continue
 		}
 		if nextTimeoutTick == -1 || nextTimeoutTick > targetTick+n.zeroClock {
 			nextTimeoutTick = targetTick + n.zeroClock
@@ -475,7 +483,8 @@ func (n *NetworkFacade) Tick(newClockTime int) bool {
 		delete(n.clocks, targetTick)
 		//fmt.Printf("Node %v clock %v reached\n", n.nodeID, targetTick)
 	}
-	if len(expiredClocks) > 0 && len(n.clocks) == 0 {
+	const NumberOfDemuxClocks = 2
+	if len(expiredClocks) > 0 && len(n.clocks) < NumberOfDemuxClocks {
 		func() {
 			n.clockSync.Unlock()
 			defer n.clockSync.Lock()

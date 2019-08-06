@@ -10,9 +10,9 @@
 
 if [ "${TRAVIS_EVENT_TYPE}" = "cron" ] || [[ "${TRAVIS_BRANCH}" =~ ^rel/ ]]; then
     if [ "${BUILD_TYPE}" != "integration" ]; then
-        cd ${GOPATH}/src/github.com/algorand/go-algorand
+        cd "$(dirname "$0")"/../..
         make prof
         make cover
-        rm ${GOPATH}/src/github.com/algorand/go-algorand/node/node.test
+        rm ./node/node.test
     fi;
 fi;
