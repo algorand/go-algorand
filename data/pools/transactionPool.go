@@ -18,6 +18,8 @@ package pools
 
 import (
 	"fmt"
+	"sync"
+	"time"
 
 	"github.com/algorand/go-deadlock"
 
@@ -28,12 +30,14 @@ import (
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"github.com/algorand/go-algorand/util/condvar"
 )
 
 // TransactionPool is a struct maintaining a sanitized pool of transactions that are available for inclusion in
 // a Block.  We sanitize it by preventing duplicates and limiting the number of transactions retained for each account
 type TransactionPool struct {
 	mu                     deadlock.RWMutex
+	cond                   sync.Cond
 	pendingTxns            []transactions.SignedTxn
 	pendingTxids           map[transactions.Txid]transactions.SignedTxn
 	expiredTxCount         map[basics.Round]int
@@ -57,12 +61,17 @@ func MakeTransactionPool(ledger *ledger.Ledger, transactionPoolStatusSize int, l
 		statusCache:    makeStatusCache(transactionPoolStatusSize),
 		logStats:       logStats,
 	}
+	pool.cond.L = &pool.mu
 	pool.recomputeBlockEvaluator()
 	return &pool
 }
 
 // TODO I moved this number to be a constant in the module, we should consider putting it in the local config
 const expiredHistory = 10
+
+// timeoutOnNewBlock determines how long Test() and Remember() wait for
+// OnNewBlock() to process a new block that appears to be in the ledger.
+const timeoutOnNewBlock = time.Second
 
 // NumExpired returns the number of transactions that expired at the end of a round (only meaningful if cleanup has
 // been called for that round)
@@ -108,20 +117,34 @@ func (pool *TransactionPool) PendingCount() int {
 	return len(pool.pendingTxns)
 }
 
-// Test checks whether a transaction could be remembered in the pool, but does not actually store this transaction
-// in the pool
+// Test checks whether a transaction could be remembered in the pool,
+// but does not actually store this transaction in the pool.
 func (pool *TransactionPool) Test(t transactions.SignedTxn) error {
 	t.InitCaches()
 
-	pool.mu.RLock()
-	defer pool.mu.RUnlock()
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
 
 	return pool.test(t)
 }
 
+// test checks whether a transaction could be remembered in the pool,
+// but does not actually store this transaction in the pool.
+//
+// test assumes that pool.mu is locked.  It might release the lock
+// while it waits for OnNewBlock() to be called.
 func (pool *TransactionPool) test(t transactions.SignedTxn) error {
 	if pool.pendingBlockEvaluator == nil {
 		return fmt.Errorf("TransactionPool.test: no pending block evaluator")
+	}
+
+	// Make sure that the latest block has been processed by OnNewBlock().
+	// If not, we might be in a race, so wait a little bit for OnNewBlock()
+	// to catch up to the ledger.
+	latest := pool.ledger.Latest()
+	waitExpires := time.Now().Add(timeoutOnNewBlock)
+	for pool.pendingBlockEvaluator.Round() <= latest && time.Now().Before(waitExpires) {
+		condvar.TimedWait(&pool.cond, timeoutOnNewBlock)
 	}
 
 	tentativeRound := pool.pendingBlockEvaluator.Round() + pool.numPendingWholeBlocks
@@ -250,6 +273,7 @@ func (pool *TransactionPool) Verified(txn transactions.SignedTxn) bool {
 func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block) {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
+	defer pool.cond.Broadcast()
 
 	var stats telemetryspec.ProcessBlockMetrics
 	var knownCommitted uint
