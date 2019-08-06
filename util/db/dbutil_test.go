@@ -265,7 +265,7 @@ func TestDBConcurrencyRW(t *testing.T) {
 			testRoutineComplete <- struct{}{}
 		}()
 		var errw error
-		for i := int64(1); i < 10000 && errw == nil; i++ {
+		for i, timedLoop := int64(1), true; timedLoop && errw == nil; i++ {
 			errw = acc.Atomic(func(tx *sql.Tx) error {
 				_, err := tx.Exec("INSERT INTO t (a) VALUES (?)", i)
 				return err
@@ -279,7 +279,7 @@ func TestDBConcurrencyRW(t *testing.T) {
 			select {
 			case <-targetTestDurationTimer:
 				// abort the for loop.
-				i = 10000
+				timedLoop = false
 			default:
 				// keep going.
 			}
