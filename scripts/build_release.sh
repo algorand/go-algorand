@@ -95,6 +95,11 @@ make build
 export BUILD_DEB=1
 scripts/build_packages.sh "${PLATFORM}"
 
+# build docker release package
+pwd
+cd scripts/docker_release
+./build_algod_docker.sh ${HOME}/node_pkg/node_dev_linux-amd64_${FULLVERSION}.tar.gz
+cd ../..
 
 # Test .deb installer
 
