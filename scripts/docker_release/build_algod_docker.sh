@@ -2,7 +2,7 @@
 ALGOD_INSTALL_TAR_FILE=$1
 if [[ $ALGOD_INSTALL_TAR_FILE == "" ]]
 then
-   echo "specify location of base install file"
+   echo "specify filepath of base install file"
    exit 1
 fi
 
@@ -10,7 +10,7 @@ echo "building 'Dockerfile_algod_release' with install file $ALGOD_INSTALL_TAR_F
 cp $ALGOD_INSTALL_TAR_FILE ./temp_install.tar.gz
 docker build --build-arg ALGOD_INSTALL_TAR_FILE=temp_install.tar.gz . -t algorand/release -f Dockerfile_algod_release
 
-echo "pushing 'algorand/release:latest'"
+#echo "pushing 'algorand/release:latest'"
 #docker push algorand/release:latest
 
 mkdir -p algorand_pkg_${FULLVERSION}

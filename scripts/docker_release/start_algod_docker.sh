@@ -2,14 +2,14 @@
 
 if [[ $1 == "" ]]
 then
-   ALGORAND_NETWORK="devnet"
+   ALGORAND_NETWORK="testnet"
 else
    ALGORAND_NETWORK=$1
 fi
 
-if [[ ${ALGORAND_NETWORK} != "devnet" && ${ALGORAND_NETWORK} != "testnet" && ${ALGORAND_NETWORK} != "mainnet"  ]]
+if [[ ${ALGORAND_NETWORK} != "betanet" && ${ALGORAND_NETWORK} != "devnet" && ${ALGORAND_NETWORK} != "testnet" && ${ALGORAND_NETWORK} != "mainnet"  ]]
 then
-    echo "error, unrecognized network: ${ALGORAND_NETWORK}, please specify one of: devnet, testnet, mainnet"
+    echo "error, unrecognized network: ${ALGORAND_NETWORK}, please specify one of: betanet, devnet, testnet, mainnet"
     exit
 fi
 

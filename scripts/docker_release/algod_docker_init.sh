@@ -5,11 +5,11 @@ CONFIG_FILE="/root/node/data/config.json"
 
 echo "initializing docker container for algod network: '${ALGORAND_NETWORK}'"
 
-if [[ ${ALGORAND_NETWORK} != "devnet" && ${ALGORAND_NETWORK} != "testnet" && ${ALGORAND_NETWORK} != "mainnet"  ]]
+if [[ ${ALGORAND_NETWORK} != "betanet" &&  ${ALGORAND_NETWORK} != "devnet" && ${ALGORAND_NETWORK} != "testnet" && ${ALGORAND_NETWORK} != "mainnet"  ]]
 then
-    echo "error, unrecognized network: ${ALGORAND_NETWORK}, please specify one of: devnet, testnet, mainnet"
-    echo "defaulting to: 'devnet'"
-    ALGORAND_NETWORK="devnet"
+    echo "error, unrecognized network: ${ALGORAND_NETWORK}, please specify one of: betanet, devnet, testnet, mainnet"
+    echo "defaulting to: 'testnet'"
+    ALGORAND_NETWORK="testnet"
 fi
 
 
