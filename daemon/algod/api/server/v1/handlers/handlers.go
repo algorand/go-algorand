@@ -403,13 +403,11 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 		Amount:                      amount.Raw,
 		PendingRewards:              pendingRewards.Raw,
 		AmountWithoutPendingRewards: amountWithoutPendingRewards.Raw,
-		Rewards:                     rewards.Raw,
-		Status:                      status.String(),
-		ThisCurrencyTotal:	     record.ThisCurrencyTotal,
-		Currencies:		     currenciesStr,
 		Rewards:                     record.RewardedMicroAlgos.Raw,
 		Status:                      record.Status.String(),
 		Participation:               apiParticipation,
+		ThisCurrencyTotal:           record.ThisCurrencyTotal,
+		Currencies:                  currenciesStr,
 	}
 
 	SendJSON(AccountInformationResponse{&accountInfo}, w, ctx.Log)
