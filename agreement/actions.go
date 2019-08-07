@@ -46,6 +46,7 @@ const (
 
 	// ledger
 	ensure
+	stageDigest
 
 	// time
 	rezero
@@ -201,8 +202,9 @@ func (a cryptoAction) do(ctx context.Context, s *Service) {
 type ensureAction struct {
 	nonpersistent
 
-	Payload     proposal
-	PayloadOk   bool
+	// the payload that we will give to the ledger
+	Payload proposal
+	// the certificate proving commitment
 	Certificate Certificate
 }
 
@@ -233,26 +235,46 @@ func (a ensureAction) do(ctx context.Context, s *Service) {
 		s.Ledger.EnsureValidatedBlock(a.Payload.ve, a.Certificate)
 	} else {
 		block := a.Payload.Block
-		if !a.PayloadOk {
-			logEvent.Type = logspec.RoundWaiting
-			s.log.with(logEvent).Infof("round %v concluded without block for %v; waiting on ledger", a.Certificate.Round, a.Certificate.Proposal)
-			s.Ledger.EnsureDigest(a.Certificate, s.quit, s.voteVerifier)
-		} else {
-			logEvent.Type = logspec.RoundConcluded
-			s.log.with(logEvent).Infof("committed round %v with block %v", a.Certificate.Round, a.Certificate.Proposal)
-			s.log.EventWithDetails(telemetryspec.Agreement, telemetryspec.BlockAcceptedEvent, telemetryspec.BlockAcceptedEventDetails{
-				Address: a.Certificate.Proposal.OriginalProposer.String(),
-				Hash:    a.Certificate.Proposal.BlockDigest.String(),
-				Round:   uint64(a.Certificate.Round),
-			})
-			s.Ledger.EnsureBlock(block, a.Certificate)
-		}
+		logEvent.Type = logspec.RoundConcluded
+		s.log.with(logEvent).Infof("committed round %v with block %v", a.Certificate.Round, a.Certificate.Proposal)
+		s.log.EventWithDetails(telemetryspec.Agreement, telemetryspec.BlockAcceptedEvent, telemetryspec.BlockAcceptedEventDetails{
+			Address: a.Certificate.Proposal.OriginalProposer.String(),
+			Hash:    a.Certificate.Proposal.BlockDigest.String(),
+			Round:   uint64(a.Certificate.Round),
+		})
+		s.Ledger.EnsureBlock(block, a.Certificate)
 	}
 	logEventStart := logEvent
 	logEventStart.Type = logspec.RoundStart
 	s.log.with(logEventStart).Infof("finished round %v", a.Certificate.Round)
 	s.tracer.timeR().StartRound(a.Certificate.Round + 1)
 	s.tracer.timeR().RecStep(0, propose, bottom)
+}
+
+type stageDigestAction struct {
+	nonpersistent
+	// Certificate identifies a block and is a proof commitment
+	Certificate Certificate // a block digest is probably sufficient; keep certificate for now to match ledger interface
+}
+
+func (a stageDigestAction) t() actionType {
+	return stageDigest
+}
+
+func (a stageDigestAction) String() string {
+	return fmt.Sprintf("%s: %.5s", a.t().String(), a.Certificate.Proposal.BlockDigest.String())
+}
+
+func (a stageDigestAction) do(ctx context.Context, service *Service) {
+	logEvent := logspec.AgreementEvent{
+		Hash:   a.Certificate.Proposal.BlockDigest.String(),
+		Round:  uint64(a.Certificate.Round),
+		Period: uint64(a.Certificate.Period),
+		Sender: a.Certificate.Proposal.OriginalProposer.String(),
+		Type:   logspec.RoundWaiting,
+	}
+	service.log.with(logEvent).Infof("round %v concluded without block for %v; (async) waiting on ledger", a.Certificate.Round, a.Certificate.Proposal)
+	service.Ledger.EnsureDigest(a.Certificate, service.quit, service.voteVerifier)
 }
 
 type rezeroAction struct {
