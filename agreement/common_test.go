@@ -348,15 +348,18 @@ func (l *testLedger) EnsureDigest(c Certificate, quit chan struct{}, verifier *A
 		return
 	}
 
-	select {
-	case <-quit:
-		return
-	case <-l.Wait(r):
-		if !consistencyCheck() {
-			err := fmt.Errorf("Wait channel fired without matching block in round %v", r)
-			panic(err)
+	go func() {
+		select {
+		case <-quit:
+			return
+		case <-l.Wait(r):
+			if !consistencyCheck() {
+				err := fmt.Errorf("Wait channel fired without matching block in round %v", r)
+				panic(err)
+			}
 		}
-	}
+	}()
+	return
 }
 
 func (l *testLedger) ConsensusParams(r basics.Round) (config.ConsensusParams, error) {

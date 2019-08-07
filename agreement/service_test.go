@@ -1974,8 +1974,8 @@ func TestAgreementLargePeriods(t *testing.T) {
 func TestAgreementCertificateDoesNotStallSingleRelay(t *testing.T) {
 	numNodes := 10 // single relay, nine leaf nodes
 	relayId := nodeID(0)
-	baseNetwork, _, cleanupFn, services, clocks, _, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger) // baseledger, ledgers
-	//startRound := baseLedger.NextRound()
+	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
+	startRound := baseLedger.NextRound()
 	defer cleanupFn()
 	baseNetwork.makeRelays(relayId)
 	for i := 0; i < numNodes; i++ {
@@ -1985,9 +1985,16 @@ func TestAgreementCertificateDoesNotStallSingleRelay(t *testing.T) {
 	activityMonitor.waitForQuiet()
 	zeroes := expectNewPeriod(clocks, 0)
 	// run two rounds
-	for j := 0; j < 2; j++ {
-		zeroes = runRound(clocks, activityMonitor, zeroes)
-	}
+	zeroes = runRound(clocks, activityMonitor, zeroes)
+	// make sure relay does not see block proposal for round 3
+	baseNetwork.repairAll()
+	baseNetwork.intercept(func(params multicastParams) multicastParams {
+		if params.tag == protocol.ProposalPayloadTag {
+			params.exclude = relayId
+		}
+		return params
+	})
+	zeroes = runRound(clocks, activityMonitor, zeroes)
 
 	// Round 3:
 	// First partition the relay to prevent it from seeing certificate or block
@@ -2012,6 +2019,8 @@ func TestAgreementCertificateDoesNotStallSingleRelay(t *testing.T) {
 	// And with some hypothetical second relay the network achieves consensus on a certificate and block.
 	triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
 	zeroes = expectNewPeriod(clocks[1:], zeroes)
+	require.Equal(t, uint(3), clocks[0].(*testingClock).zeroes)
+	close(pocketCert)
 
 	// Round 4:
 	// Return to the relay topology
@@ -2025,17 +2034,29 @@ func TestAgreementCertificateDoesNotStallSingleRelay(t *testing.T) {
 	baseNetwork.finishAllMulticast()
 	activityMonitor.waitForActivity()
 	activityMonitor.waitForQuiet()
-	// this relay must still relay initial messages
+	// this relay must still relay initial messages. Note that payloads were already relayed with
+	// the previous global timeout.
 	triggerGlobalTimeout(filterTimeout, clocks[1:], activityMonitor)
 	zeroes = expectNewPeriod(clocks[1:], zeroes)
+	require.Equal(t, uint(3), clocks[0].(*testingClock).zeroes)
 
-	// Implementation TODOs:
-	// 1. stageDigestAction (two different actions - should do two different things)
-	// 2. on receiving certificate, do not block, but do set as freshest bundle
-	// 3. if cert is freshest bundle, make sure we set staged (for the period the cert is in); or, if
-	//    from the past, the payload must be pinned (by safety argument)
-	// 4. On receiving a payload, if a certificate is our freshest bundle, terminate this round.
-	// 5. On receiving a certificate, there is no need to send a next bottom vote?? (Note, if we were to send a next-value vote,
-	//    then either the value was pinned, or we already have the block.)
-	// 6. Is it worth bumping up partition policy? A block pull system would be much better here.
+	for i := 0; i < numNodes; i++ {
+		services[i].Shutdown()
+	}
+	const expectNumRounds = 4
+	for i := 1; i < numNodes; i++ {
+		if ledgers[i].NextRound() != startRound+round(expectNumRounds) {
+			panic("did not progress 4 rounds")
+		}
+	}
+	for j := 0; j < expectNumRounds; j++ {
+		ledger := ledgers[1].(*testLedger)
+		reference := ledger.entries[startRound+round(j)].Digest()
+		for i := 1; i < numNodes; i++ {
+			ledger := ledgers[i].(*testLedger)
+			if ledger.entries[startRound+round(j)].Digest() != reference {
+				panic("wrong block confirmed")
+			}
+		}
+	}
 }

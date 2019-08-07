@@ -59,9 +59,7 @@ func (m *proposalManager) handle(r routerHandle, p player, e event) event {
 		return m.handleMessageEvent(r, p, e.(filterableMessageEvent))
 	case roundInterruption:
 		return m.handleNewRound(r, p, e.(roundInterruptionEvent).Round)
-	case certThreshold:
-		return m.handleNewRound(r, p, e.(thresholdEvent).Round+1)
-	case softThreshold:
+	case softThreshold, certThreshold:
 		e := e.(thresholdEvent)
 		if p.Period < e.Period {
 			r = m.handleNewPeriod(r, p, e)

@@ -301,13 +301,13 @@ func (store *proposalStore) handle(r routerHandle, p player, e event) event {
 		}
 		return emptyEvent{}
 
-	case softThreshold:
+	case softThreshold, certThreshold:
 		te := e.(thresholdEvent)
-		// in particular, this will set te.Period.Staging = val(softThreshold)
-		// as a consequence, only val(softThreshold) will generate proposalAccepted in the future
-		// therefore store.Relevant[te.Period] will not be reset
+		// in particular, this will set te.Period.Staging = val(softThreshold/certThreshold)
+		// as a consequence, only val(softThreshold/certThreshold) will generate proposalAccepted in the future
+		// for this period, therefore store.Relevant[te.Period] will not be reset
 		e := r.dispatch(p, e, proposalMachinePeriod, te.Round, te.Period, 0).(proposalAcceptedEvent)
-		// return commitableEvent if ready; else, return proposalAcceptedEvent
+		// return committableEvent if ready; else, return proposalAcceptedEvent
 		if store.Assemblers[e.Proposal].Assembled {
 			authVote := store.Assemblers[e.Proposal].authenticator(p.Period)
 			return committableEvent{
