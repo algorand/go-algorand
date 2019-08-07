@@ -20,7 +20,7 @@ docker save --output algorand_pkg_${FULLVERSION}/algorand_docker_release_${FULLV
 
 echo "creating package jar file algod_docker_package_${FULLVERSION}.tar.gz"
 cp ./start_algod_docker.sh algorand_pkg_${FULLVERSION}/
-cp ./readme.md algorand_pkg_${FULLVERSION}/
+cp ./README.md algorand_pkg_${FULLVERSION}/
 tar cvf algorand_docker_package_${FULLVERSION}.tar.gz algorand_pkg_${FULLVERSION}
 
 echo "moving resulting docker package to ${HOME}/node_pkg/algorand_docker_package_${FULLVERSION}.tar.gz"
