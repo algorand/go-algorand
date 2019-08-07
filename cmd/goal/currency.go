@@ -34,6 +34,8 @@ var (
 	currencyFrozen   bool
 	currencyUnitName string
 	currencyManager  string
+	currencyClawback string
+	currencyFreezer  string
 
 	currencyNewManager  string
 	currencyNewReserve  string
@@ -47,6 +49,7 @@ func init() {
 	currencyCmd.AddCommand(configCurrencyCmd)
 	currencyCmd.AddCommand(sendCurrencyCmd)
 	currencyCmd.AddCommand(infoCurrencyCmd)
+	currencyCmd.AddCommand(freezeCurrencyCmd)
 
 	createCurrencyCmd.Flags().StringVar(&currencyCreator, "creator", "", "Account address for creating a sub-currency")
 	createCurrencyCmd.Flags().Uint64Var(&currencyTotal, "total", 0, "Total amount of tokens for created sub-currency")
@@ -76,7 +79,7 @@ func init() {
 	configCurrencyCmd.Flags().Uint64Var(&currencyID, "currency", 0, "Currency ID to configure")
 	configCurrencyCmd.Flags().StringVar(&currencyNewManager, "new-manager", "", "New manager address")
 	configCurrencyCmd.Flags().StringVar(&currencyNewReserve, "new-reserve", "", "New reserve address")
-	configCurrencyCmd.Flags().StringVar(&currencyNewFreezer, "new-freeze", "", "New freeze address")
+	configCurrencyCmd.Flags().StringVar(&currencyNewFreezer, "new-freezer", "", "New freeze address")
 	configCurrencyCmd.Flags().StringVar(&currencyNewClawback, "new-clawback", "", "New clawback address")
 	configCurrencyCmd.Flags().Uint64Var(&fee, "fee", 0, "The transaction fee (automatically determined by default), in microAlgos")
 	configCurrencyCmd.Flags().Uint64Var(&firstValid, "firstvalid", 0, "The first round where the transaction may be committed to the ledger")
@@ -86,6 +89,7 @@ func init() {
 	configCurrencyCmd.MarkFlagRequired("creator")
 	configCurrencyCmd.MarkFlagRequired("currency")
 
+	sendCurrencyCmd.Flags().StringVar(&currencyClawback, "clawback", "", "Address to issue a clawback transaction from (defaults to no clawback)")
 	sendCurrencyCmd.Flags().StringVar(&currencyCreator, "creator", "", "Account address for sub-currency creator")
 	sendCurrencyCmd.Flags().Uint64Var(&currencyID, "currency", 0, "ID of the sub-currency being transferred")
 	sendCurrencyCmd.Flags().StringVarP(&account, "from", "f", "", "Account address to send the money from (if not specified, uses default account)")
@@ -101,6 +105,22 @@ func init() {
 	sendCurrencyCmd.MarkFlagRequired("currency")
 	sendCurrencyCmd.MarkFlagRequired("to")
 	sendCurrencyCmd.MarkFlagRequired("amount")
+
+	freezeCurrencyCmd.Flags().StringVar(&currencyFreezer, "freezer", "", "Address to issue a freeze transaction from")
+	freezeCurrencyCmd.Flags().StringVar(&currencyCreator, "creator", "", "Account address for sub-currency creator")
+	freezeCurrencyCmd.Flags().Uint64Var(&currencyID, "currency", 0, "ID of the sub-currency being transferred")
+	freezeCurrencyCmd.Flags().StringVar(&account, "account", "", "Account address to freeze/unfreeze")
+	freezeCurrencyCmd.Flags().BoolVar(&currencyFrozen, "freeze", false, "Freeze or unfreeze")
+	freezeCurrencyCmd.Flags().Uint64Var(&fee, "fee", 0, "The transaction fee (automatically determined by default), in microAlgos")
+	freezeCurrencyCmd.Flags().Uint64Var(&firstValid, "firstvalid", 0, "The first round where the transaction may be committed to the ledger")
+	freezeCurrencyCmd.Flags().Uint64Var(&numValidRounds, "validrounds", 0, "The number of rounds for which the transaction will be valid")
+	freezeCurrencyCmd.Flags().StringVarP(&txFilename, "out", "o", "", "Write transaction to this file")
+	freezeCurrencyCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
+	freezeCurrencyCmd.MarkFlagRequired("freezer")
+	freezeCurrencyCmd.MarkFlagRequired("creator")
+	freezeCurrencyCmd.MarkFlagRequired("currency")
+	freezeCurrencyCmd.MarkFlagRequired("account")
+	freezeCurrencyCmd.MarkFlagRequired("freeze")
 
 	infoCurrencyCmd.Flags().Uint64Var(&currencyID, "currency", 0, "ID of the sub-currency to look up")
 	infoCurrencyCmd.Flags().StringVar(&currencyCreator, "creator", "", "Account address of the currency creator")
@@ -303,7 +323,7 @@ var configCurrencyCmd = &cobra.Command{
 			reportErrorf("Cannot parse address: %s", err)
 		}
 
-		if cmd.Flags().Changed("new-freeze") {
+		if cmd.Flags().Changed("new-freezer") {
 			tx.CurrencyParams.Freeze, err = basics.UnmarshalChecksumAddress(currencyNewFreezer)
 		} else {
 			tx.CurrencyParams.Freeze, err = basics.UnmarshalChecksumAddress(params.FreezeAddr)
@@ -387,6 +407,15 @@ var sendCurrencyCmd = &cobra.Command{
 			reportErrorf("Cannot parse currency creator %s: %s", creatorResolved, err)
 		}
 
+		if currencyClawback != "" {
+			tx.CurrencySender, err = basics.UnmarshalChecksumAddress(sender)
+			if err != nil {
+				reportErrorf("Cannot parse currency sender %s: %s", sender, err)
+			}
+
+			sender = accountList.getAddressByName(currencyClawback)
+		}
+
 		tx.CurrencyReceiver, err = basics.UnmarshalChecksumAddress(toAddressResolved)
 		if err != nil {
 			reportErrorf("Cannot parse recipient %s: %s", toAddressResolved, err)
@@ -402,6 +431,73 @@ var sendCurrencyCmd = &cobra.Command{
 
 		client := ensureFullClient(dataDir)
 		tx, err = client.FillUnsignedTxTemplate(sender, firstValid, numValidRounds, fee, tx)
+		if err != nil {
+			reportErrorf("Cannot construct transaction: %s", err)
+		}
+
+		if txFilename == "" {
+			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
+			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
+			if err != nil {
+				reportErrorf(errorSigningTX, err)
+			}
+
+			txid, err := client.BroadcastTransaction(signedTxn)
+			if err != nil {
+				reportErrorf(errorBroadcastingTX, err)
+			}
+
+			// Report tx details to user
+			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
+
+			if !noWaitAfterSend {
+				err = waitForCommit(client, txid)
+				if err != nil {
+					reportErrorf(err.Error())
+				}
+			}
+		} else {
+			err = writeTxnToFile(client, false, dataDir, walletName, tx, txFilename)
+			if err != nil {
+				reportErrorf(err.Error())
+			}
+		}
+	},
+}
+
+var freezeCurrencyCmd = &cobra.Command{
+	Use:   "freeze",
+	Short: "Freeze sub-currencies",
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, _ []string) {
+		dataDir := ensureSingleDataDir()
+		accountList := makeAccountsList(dataDir)
+
+		freezer := accountList.getAddressByName(currencyFreezer)
+		creatorResolved := accountList.getAddressByName(currencyCreator)
+		accountResolved := accountList.getAddressByName(account)
+
+		var err error
+		var tx transactions.Transaction
+		tx.Type = protocol.CurrencyFreezeTx
+		tx.FreezeCurrency = basics.CurrencyID{
+			Index: currencyID,
+		}
+
+		tx.FreezeCurrency.Creator, err = basics.UnmarshalChecksumAddress(creatorResolved)
+		if err != nil {
+			reportErrorf("Cannot parse currency creator %s: %s", creatorResolved, err)
+		}
+
+		tx.CurrencyFrozen = currencyFrozen
+
+		tx.FreezeAccount, err = basics.UnmarshalChecksumAddress(account)
+		if err != nil {
+			reportErrorf("Cannot parse account %s: %s", accountResolved, err)
+		}
+
+		client := ensureFullClient(dataDir)
+		tx, err = client.FillUnsignedTxTemplate(freezer, firstValid, numValidRounds, fee, tx)
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
