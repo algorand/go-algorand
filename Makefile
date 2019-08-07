@@ -29,10 +29,7 @@ GOLDFLAGS_BASE  := -X github.com/algorand/go-algorand/config.BuildNumber=$(BUILD
 GOLDFLAGS := $(GOLDFLAGS_BASE) \
 		 -X github.com/algorand/go-algorand/config.Channel=$(BUILDCHANNEL)
 
-SOURCES := $(shell go list ./... | grep -v /go-algorand/test/)
-
 UNIT_TEST_SOURCES := $(sort $(shell go list ./... | grep -v /go-algorand/test/ ))
-E2E_TEST_SOURCES := $(shell cd test/e2e-go && go list ./...)
 
 default: build
 
@@ -48,7 +45,7 @@ fixcheck: build
 	$(GOPATH)/bin/algofix -error */
 
 lint: deps
-	$(GOPATH)/bin/golint `go list ./...`
+	$(GOPATH)/bin/golint ./...
 
 vet:
 	go vet ./...
@@ -124,8 +121,8 @@ $(KMD_API_SWAGGER_INJECT): $(KMD_API_SWAGGER_SPEC) $(KMD_API_SWAGGER_SPEC).valid
 build: buildsrc gen
 
 buildsrc: crypto/lib/libsodium.a node_exporter NONGO_BIN deps $(ALGOD_API_SWAGGER_INJECT) $(KMD_API_SWAGGER_INJECT)
-	go install $(GOTRIMPATH) $(GOTAGS) -ldflags="$(GOLDFLAGS)" $(SOURCES)
-	go vet $(UNIT_TEST_SOURCES) $(E2E_TEST_SOURCES)
+	go install $(GOTRIMPATH) $(GOTAGS) -ldflags="$(GOLDFLAGS)" ./...
+	go vet ./...
 
 SOURCES_RACE := github.com/algorand/go-algorand/cmd/kmd
 
@@ -135,7 +132,7 @@ SOURCES_RACE := github.com/algorand/go-algorand/cmd/kmd
 ## the incredible performance impact of -race on Scrypt.
 build-race: build
 	@mkdir -p $(GOPATH)/bin-race
-	GOBIN=$(GOPATH)/bin-race go install $(GOTRIMPATH) $(GOTAGS) -race -ldflags="$(GOLDFLAGS)" $(SOURCES)
+	GOBIN=$(GOPATH)/bin-race go install $(GOTRIMPATH) $(GOTAGS) -race -ldflags="$(GOLDFLAGS)" ./...
 	GOBIN=$(GOPATH)/bin-race go install $(GOTRIMPATH) $(GOTAGS) -ldflags="$(GOLDFLAGS)" $(SOURCES_RACE)
 
 NONGO_BIN_FILES=$(GOPATH)/bin/find-nodes.sh $(GOPATH)/bin/update.sh $(GOPATH)/bin/COPYING
