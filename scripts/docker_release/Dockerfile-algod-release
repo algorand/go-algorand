@@ -9,7 +9,6 @@ WORKDIR /root/install
 RUN apt update && apt install -y ca-certificates curl --no-install-recommends
 
 WORKDIR /root/node
-#ADD offline_install_stable_linux-amd64.tar.gz .
 ADD $ALGOD_INSTALL_TAR_FILE .
 COPY algod_docker_init.sh .
 
