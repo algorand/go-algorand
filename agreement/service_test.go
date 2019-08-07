@@ -150,6 +150,7 @@ type testingNetwork struct {
 	compoundPocket    chan<- multicastParams
 	partitionedNodes  map[nodeID]bool
 	crownedNodes      map[nodeID]bool
+	relayNodes        map[nodeID]bool
 	interceptFn       multicastInterceptFn
 }
 
@@ -217,7 +218,7 @@ func (n *testingNetwork) multicast(tag protocol.Tag, data []byte, source nodeID,
 		tag, data, source, exclude = out.tag, out.data, out.source, out.exclude
 	}
 
-	if n.dropSoftVotes || n.dropSlowNextVotes || n.dropVotes || n.certVotePocket != nil || n.softVotePocket != nil || n.compoundPocket != nil || n.crownedNodes != nil {
+	if n.dropSoftVotes || n.dropSlowNextVotes || n.dropVotes || n.certVotePocket != nil || n.softVotePocket != nil || n.compoundPocket != nil {
 		if tag == protocol.ProposalPayloadTag {
 			r := bytes.NewBuffer(data)
 
@@ -298,13 +299,18 @@ func (n *testingNetwork) multicast(tag protocol.Tag, data []byte, source nodeID,
 			continue
 		}
 		if n.partitionedNodes != nil {
-			if n.partitionedNodes[source] != n.partitionedNodes[nodeID(i)] {
+			if n.partitionedNodes[source] != n.partitionedNodes[peerid] {
 				continue
 			}
 		}
 		if n.crownedNodes != nil {
-			if !n.crownedNodes[nodeID(i)] {
-				return
+			if !n.crownedNodes[peerid] {
+				continue
+			}
+		}
+		if n.relayNodes != nil {
+			if !n.relayNodes[source] && !n.relayNodes[peerid] {
+				continue
 			}
 		}
 
@@ -375,6 +381,7 @@ func (n *testingNetwork) repairAll() {
 	n.compoundPocket = nil
 	n.partitionedNodes = nil
 	n.crownedNodes = nil
+	n.relayNodes = nil
 	n.interceptFn = nil
 }
 
@@ -405,6 +412,16 @@ func (n *testingNetwork) crown(prophets ...nodeID) {
 	n.crownedNodes = make(map[nodeID]bool)
 	for i := 0; i < len(prophets); i++ {
 		n.crownedNodes[nodeID(i)] = true
+	}
+}
+
+// Star topology with the given nodes at the center; to revert, call repairAll
+func (n *testingNetwork) makeRelays(relays ...nodeID) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.relayNodes = make(map[nodeID]bool)
+	for i := 0; i < len(relays); i++ {
+		n.relayNodes[nodeID(i)] = true
 	}
 }
 
@@ -1949,4 +1966,76 @@ func TestAgreementLargePeriods(t *testing.T) {
 			}
 		}
 	}
+}
+
+// Receiving a certificate should not cause a node to stop relaying important messages
+// (such as blocks and pipelined messages for the next round)
+// Note that the stall will be resolved by catchup even if the relay blocks.
+func TestAgreementCertificateDoesNotStallSingleRelay(t *testing.T) {
+	numNodes := 10 // single relay, nine leaf nodes
+	relayId := nodeID(0)
+	baseNetwork, _, cleanupFn, services, clocks, _, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger) // baseledger, ledgers
+	//startRound := baseLedger.NextRound()
+	defer cleanupFn()
+	baseNetwork.makeRelays(relayId)
+	for i := 0; i < numNodes; i++ {
+		services[i].Start()
+	}
+	activityMonitor.waitForActivity()
+	activityMonitor.waitForQuiet()
+	zeroes := expectNewPeriod(clocks, 0)
+	// run two rounds
+	for j := 0; j < 2; j++ {
+		zeroes = runRound(clocks, activityMonitor, zeroes)
+	}
+
+	// Round 3:
+	// First partition the relay to prevent it from seeing certificate or block
+	baseNetwork.repairAll()
+	baseNetwork.partition(relayId)
+	// Get a copy of the certificate
+	pocketCert := make(chan multicastParams, 100)
+	baseNetwork.intercept(func(params multicastParams) multicastParams {
+		if params.tag == protocol.AgreementVoteTag {
+			r := bytes.NewBuffer(params.data)
+			var uv unauthenticatedVote
+			err := protocol.DecodeStream(r, &uv)
+			if err != nil {
+				panic(err)
+			}
+			if uv.R.Step == cert {
+				pocketCert <- params
+			}
+		}
+		return params
+	})
+	// And with some hypothetical second relay the network achieves consensus on a certificate and block.
+	triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
+	zeroes = expectNewPeriod(clocks[1:], zeroes)
+
+	// Round 4:
+	// Return to the relay topology
+	baseNetwork.repairAll()
+	baseNetwork.makeRelays(relayId)
+	// Trigger ensureDigest on the relay
+	baseNetwork.prepareAllMulticast()
+	for p := range pocketCert {
+		baseNetwork.multicast(p.tag, p.data, p.source, p.exclude)
+	}
+	baseNetwork.finishAllMulticast()
+	activityMonitor.waitForActivity()
+	activityMonitor.waitForQuiet()
+	// this relay must still relay initial messages
+	triggerGlobalTimeout(filterTimeout, clocks[1:], activityMonitor)
+	zeroes = expectNewPeriod(clocks[1:], zeroes)
+
+	// Implementation TODOs:
+	// 1. stageDigestAction (two different actions - should do two different things)
+	// 2. on receiving certificate, do not block, but do set as freshest bundle
+	// 3. if cert is freshest bundle, make sure we set staged (for the period the cert is in); or, if
+	//    from the past, the payload must be pinned (by safety argument)
+	// 4. On receiving a payload, if a certificate is our freshest bundle, terminate this round.
+	// 5. On receiving a certificate, there is no need to send a next bottom vote?? (Note, if we were to send a next-value vote,
+	//    then either the value was pinned, or we already have the block.)
+	// 6. Is it worth bumping up partition policy? A block pull system would be much better here.
 }
