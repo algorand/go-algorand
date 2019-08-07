@@ -1973,11 +1973,11 @@ func TestAgreementLargePeriods(t *testing.T) {
 // Note that the stall will be resolved by catchup even if the relay blocks.
 func TestAgreementCertificateDoesNotStallSingleRelay(t *testing.T) {
 	numNodes := 10 // single relay, nine leaf nodes
-	relayId := nodeID(0)
+	relayID := nodeID(0)
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	startRound := baseLedger.NextRound()
 	defer cleanupFn()
-	baseNetwork.makeRelays(relayId)
+	baseNetwork.makeRelays(relayID)
 	for i := 0; i < numNodes; i++ {
 		services[i].Start()
 	}
@@ -1990,7 +1990,7 @@ func TestAgreementCertificateDoesNotStallSingleRelay(t *testing.T) {
 	baseNetwork.repairAll()
 	baseNetwork.intercept(func(params multicastParams) multicastParams {
 		if params.tag == protocol.ProposalPayloadTag {
-			params.exclude = relayId
+			params.exclude = relayID
 		}
 		return params
 	})
@@ -1999,7 +1999,7 @@ func TestAgreementCertificateDoesNotStallSingleRelay(t *testing.T) {
 	// Round 3:
 	// First partition the relay to prevent it from seeing certificate or block
 	baseNetwork.repairAll()
-	baseNetwork.partition(relayId)
+	baseNetwork.partition(relayID)
 	// Get a copy of the certificate
 	pocketCert := make(chan multicastParams, 100)
 	baseNetwork.intercept(func(params multicastParams) multicastParams {
@@ -2025,7 +2025,7 @@ func TestAgreementCertificateDoesNotStallSingleRelay(t *testing.T) {
 	// Round 4:
 	// Return to the relay topology
 	baseNetwork.repairAll()
-	baseNetwork.makeRelays(relayId)
+	baseNetwork.makeRelays(relayID)
 	// Trigger ensureDigest on the relay
 	baseNetwork.prepareAllMulticast()
 	for p := range pocketCert {

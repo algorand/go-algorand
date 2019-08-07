@@ -166,7 +166,7 @@ func (l agreementLedger) EnsureDigest(cert agreement.Certificate, quit chan stru
 			// Ask the fetcher to get the block somehow
 			block, fetchedCert, err := l.FetchBlockByDigest(round, quit)
 			if err != nil {
-				if err == ongoingFetchError {
+				if err == errOngoingFetch {
 					// we currently cannot fetch the digest; just return, and no-op.
 					logging.Base().Debugf("Multiple EnsureDigests are fetching blocks; no-op for round %v", round)
 					return
@@ -233,9 +233,9 @@ func (l agreementLedger) innerFetch(fetcher rpcs.Fetcher, round basics.Round, qu
 	}
 }
 
-// ongoingFetchError is returned by FetchBlockByDigest if there is an ongoing fetch, which causes the
+// errOngoingFetch is returned by FetchBlockByDigest if there is an ongoing fetch, which causes the
 // fetch operation to be a no-op, because we can only have one fetcher per tag.
-var ongoingFetchError = errors.New("Ongoing fetch; can only fetch one digest at a time")
+var errOngoingFetch = errors.New("Ongoing fetch; can only fetch one digest at a time")
 
 // FetchBlockByDigest is a helper for EnsureDigest.
 // TODO This is a kludge. Instead we should have a service that sees what the ledger is waiting on, fetches it, and calls EnsureBlock on it.
@@ -243,7 +243,7 @@ var ongoingFetchError = errors.New("Ongoing fetch; can only fetch one digest at 
 func (l agreementLedger) FetchBlockByDigest(round basics.Round, quit chan struct{}) (bookkeeping.Block, agreement.Certificate, error) {
 	// Check if there is another ongoing FetchBlockByDigest call. If there is, this call becomes a no-op.
 	if !atomic.CompareAndSwapUint32(&l.ongoingFetchByDigest, 0, 1) {
-		return bookkeeping.Block{}, agreement.Certificate{}, ongoingFetchError
+		return bookkeeping.Block{}, agreement.Certificate{}, errOngoingFetch
 	}
 	fetcher := l.ff.NewOverGossip(protocol.UniEnsBlockReqTag)
 	defer func() {
