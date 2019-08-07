@@ -8,7 +8,7 @@ uint64_t sortition_binomial_cdf_walk(double n, double p, double ratio, uint64_t 
     double boundary = cdf(dist, j);
 
     // Found the correct boundary, break
-    if (ratio < boundary) {
+    if (ratio <= boundary) {
       return j;
     }
   }
