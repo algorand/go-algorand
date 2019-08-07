@@ -148,7 +148,8 @@ type BlockEvaluator struct {
 	genesisHash crypto.Digest
 
 	block        bookkeeping.Block
-	totalTxBytes int
+	blockTxBytes int
+	txnCounter   uint64
 
 	verificationPool execpool.BacklogPool
 }
@@ -204,6 +205,8 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *eval
 		if err != nil {
 			return nil, fmt.Errorf("can't evaluate block %v without previous header: %v", hdr.Round, err)
 		}
+
+		eval.txnCounter = eval.prevHeader.TxnCounter
 	}
 
 	prevTotals, err := l.Totals(eval.prevHeader.Round)
@@ -278,7 +281,7 @@ func (eval *BlockEvaluator) Round() basics.Round {
 // zero.  This is a specialized operation used by the transaction pool to
 // simulate the effect of putting pending transactions in multiple blocks.
 func (eval *BlockEvaluator) ResetTxnBytes() {
-	eval.totalTxBytes = 0
+	eval.blockTxBytes = 0
 }
 
 // Transaction tentatively adds a new transaction as part of this block evaluation.
@@ -342,7 +345,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad *transact
 	}
 
 	// Apply the transaction, updating the cow balances
-	applyData, err := txn.Txn.Apply(cow, spec)
+	applyData, err := txn.Txn.Apply(cow, spec, eval.txnCounter)
 	if err != nil {
 		return fmt.Errorf("transaction %v: %v", txn.ID(), err)
 	}
@@ -371,7 +374,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad *transact
 	}
 	if eval.validate {
 		thisTxBytes = len(protocol.Encode(txib))
-		if eval.totalTxBytes+thisTxBytes > eval.proto.MaxTxnBytesPerBlock {
+		if eval.blockTxBytes+thisTxBytes > eval.proto.MaxTxnBytesPerBlock {
 			return ErrNoSpace
 		}
 	}
@@ -412,7 +415,12 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad *transact
 		cow.addTx(txn.ID())
 
 		eval.block.Payset = append(eval.block.Payset, txib)
-		eval.totalTxBytes += thisTxBytes
+		eval.blockTxBytes += thisTxBytes
+
+		if eval.proto.TxnCounter {
+			eval.txnCounter++
+		}
+
 		cow.commitToParent()
 	}
 
@@ -425,6 +433,7 @@ func (eval *BlockEvaluator) endOfBlock() error {
 
 	if eval.generate {
 		eval.block.TxnRoot = eval.block.Payset.Commit(eval.proto.PaysetCommitFlat)
+		eval.block.TxnCounter = eval.txnCounter
 	}
 
 	cow.commitToParent()
@@ -438,6 +447,10 @@ func (eval *BlockEvaluator) finalValidation() error {
 		txnRoot := eval.block.Payset.Commit(eval.proto.PaysetCommitFlat)
 		if txnRoot != eval.block.TxnRoot {
 			return fmt.Errorf("txn root wrong: %v != %v", txnRoot, eval.block.TxnRoot)
+		}
+
+		if eval.block.TxnCounter != eval.txnCounter {
+			return fmt.Errorf("txn count wrong: %d != %d", eval.block.TxnCounter, eval.txnCounter)
 		}
 	}
 

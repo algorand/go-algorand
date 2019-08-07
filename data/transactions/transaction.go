@@ -346,7 +346,7 @@ func (tx Transaction) EstimateEncodedSize() int {
 }
 
 // Apply changes the balances according to this transaction.
-func (tx Transaction) Apply(balances Balances, spec SpecialAddresses) (ad ApplyData, err error) {
+func (tx Transaction) Apply(balances Balances, spec SpecialAddresses, ctr uint64) (ad ApplyData, err error) {
 	params := balances.ConsensusParams()
 
 	// move fee to pool

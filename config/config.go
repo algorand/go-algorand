@@ -182,6 +182,9 @@ type ConsensusParams struct {
 
 	// multi-currency support
 	MultiCurrency bool
+
+	// support sequential transaction counter TxnCounter
+	TxnCounter bool
 }
 
 // Consensus tracks the protocol-level settings for different versions of the
@@ -376,6 +379,7 @@ func initConsensusProtocols() {
 
 	// ConsensusV18 adds sub-currencies
 	v18 := v17
+	v18.TxnCounter = true
 	v18.MultiCurrency = true
 	v18.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
 	Consensus[protocol.ConsensusV18] = v18
