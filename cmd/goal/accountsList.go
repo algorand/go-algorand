@@ -224,14 +224,21 @@ func (accountList *AccountsList) outputAccount(addr string, acctInfo v1.Account,
 	if multisigInfo != nil {
 		fmt.Printf("\t[%d/%d multisig]", multisigInfo.Threshold, len(multisigInfo.PKs))
 	}
-	if acctInfo.ThisCurrencyTotal > 0 {
-		fmt.Printf("\t[sub-currency: %d units]", acctInfo.ThisCurrencyTotal)
+	if len(acctInfo.CurrencyParams) > 0 {
+		fmt.Printf("\t[created sub-currencies:")
+		for curid, params := range acctInfo.CurrencyParams {
+			fmt.Printf(" %d (%d %s)", curid, params.Total, params.UnitName)
+		}
 	}
 	if accountList.isDefault(addr) {
 		fmt.Printf("\t*Default")
 	}
 	fmt.Print("\n")
 	for curid, bal := range acctInfo.Currencies {
-		fmt.Printf("\t%20d units of sub-currency %s\n", bal, accountList.getNameByAddress(curid))
+		frozen := ""
+		if bal.Frozen {
+			frozen = " (frozen)"
+		}
+		fmt.Printf("\t%20d units of sub-currency %d%s\n", bal.Amount, curid, frozen)
 	}
 }

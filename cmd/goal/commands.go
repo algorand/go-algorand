@@ -61,6 +61,9 @@ func init() {
 	// clerk.go
 	rootCmd.AddCommand(clerkCmd)
 
+	// currency.go
+	rootCmd.AddCommand(currencyCmd)
+
 	// node.go
 	rootCmd.AddCommand(nodeCmd)
 

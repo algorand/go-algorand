@@ -150,18 +150,91 @@ type Account struct {
 	// required: false
 	Participation Participation `json:"participation,omitempty"`
 
-	// If this account created a sub-currency, ThisCurrencyTotal indicates the number of
-	// units of that currency that were created.
+	// CurrencyParams specifies the parameters of sub-currencies created by this account.
 	//
 	// required: false
-	ThisCurrencyTotal uint64 `json:"thiscurrencytotal,omitempty"`
+	CurrencyParams map[uint64]CurrencyParams `json:"thiscurrencytotal,omitempty"`
 
 	// Currencies specifies the holdings of sub-currencies by this account,
-	// indexed by the currency ID (the address of the account that created
-	// that sub-currency).
+	// indexed by the currency ID.
 	//
 	// required: false
-	Currencies map[string]uint64 `json:"currencies,omitempty"`
+	Currencies map[uint64]CurrencyHolding `json:"currencies,omitempty"`
+}
+
+// CurrencyParams specifies the parameters for a sub-currency.
+// swagger:model CurrencyParams
+type CurrencyParams struct {
+	// Creator specifies the address that created this sub-currency.
+	// This is the address where the parameters for this currency
+	// can be found, and also the address where unwanted currency
+	// units can be sent in the worst case.
+	//
+	// required: true
+	Creator string `json:"creator"`
+
+	// Total specifies the total number of units of this sub-currency.
+	//
+	// required: true
+	Total uint64 `json:"total"`
+
+	// DefaultFrozen specifies whether holdings in this sub-currency
+	// are frozen by default.
+	//
+	// required: false
+	DefaultFrozen bool `json:"defaultfrozen"`
+
+	// UnitName specifies the name of a unit of this sub-currency,
+	// as supplied by the creator.
+	//
+	// required: false
+	UnitName string `json:"unitname"`
+
+	// ManagerAddr specifies the address used to manage the keys of this
+	// sub-currency and to destroy it.
+	//
+	// required: false
+	ManagerAddr string `json:"managerkey"`
+
+	// ReserveAddr specifies the address holding reserve (non-minted)
+	// units of this sub-currency.
+	//
+	// required: false
+	ReserveAddr string `json:"reserveaddr"`
+
+	// FreezeAddr specifies the address used to freeze holdings of
+	// this currency.  If empty, freezing is not permitted.
+	//
+	// required: false
+	FreezeAddr string `json:"freezeaddr"`
+
+	// ClawbackAddr specifies the address used to clawback holdings of
+	// this currency.  If empty, clawback is not permitted.
+	//
+	// required: false
+	ClawbackAddr string `json:"clawbackaddr"`
+}
+
+// CurrencyHolding specifies the holdings of a particular sub-currency.
+// swagger:model CurrencyHolding
+type CurrencyHolding struct {
+	// Creator specifies the address that created this sub-currency.
+	// This is the address where the parameters for this currency
+	// can be found, and also the address where unwanted currency
+	// units can be sent in the worst case.
+	//
+	// required: true
+	Creator string `json:"creator"`
+
+	// Amount specifies the number of units held.
+	//
+	// required: true
+	Amount uint64 `json:"amount"`
+
+	// Frozen specifies whether this holding is frozen.
+	//
+	// required: false
+	Frozen bool `json:"frozen"`
 }
 
 // Transaction contains all fields common to all transactions and serves as an envelope to all transactions

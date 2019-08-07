@@ -382,11 +382,46 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	var currenciesStr map[string]uint64
+	var currencies map[uint64]v1.CurrencyHolding
 	if len(record.Currencies) > 0 {
-		currenciesStr = make(map[string]uint64)
-		for curid, bal := range record.Currencies {
-			currenciesStr[curid.String()] = bal
+		currencies = make(map[uint64]v1.CurrencyHolding)
+		for curid, holding := range record.Currencies {
+			currencies[curid.Index] = v1.CurrencyHolding{
+				Creator: curid.Creator.String(),
+				Amount:  holding.Amount,
+				Frozen:  holding.Frozen,
+			}
+		}
+	}
+
+	var currencyParams map[uint64]v1.CurrencyParams
+	if len(record.CurrencyParams) > 0 {
+		currencyParams = make(map[uint64]v1.CurrencyParams)
+		for idx, params := range record.CurrencyParams {
+			paramsModel := v1.CurrencyParams{
+				Creator:       addr.String(),
+				Total:         params.Total,
+				DefaultFrozen: params.DefaultFrozen,
+				UnitName:      string(params.UnitName[:]),
+			}
+
+			if !params.Manager.IsZero() {
+				paramsModel.ManagerAddr = params.Manager.String()
+			}
+
+			if !params.Reserve.IsZero() {
+				paramsModel.ReserveAddr = params.Reserve.String()
+			}
+
+			if !params.Freeze.IsZero() {
+				paramsModel.FreezeAddr = params.Freeze.String()
+			}
+
+			if !params.Clawback.IsZero() {
+				paramsModel.ClawbackAddr = params.Clawback.String()
+			}
+
+			currencyParams[idx] = paramsModel
 		}
 	}
 
@@ -406,8 +441,8 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 		Rewards:                     record.RewardedMicroAlgos.Raw,
 		Status:                      record.Status.String(),
 		Participation:               apiParticipation,
-		ThisCurrencyTotal:           record.ThisCurrencyTotal,
-		Currencies:                  currenciesStr,
+		CurrencyParams:              currencyParams,
+		Currencies:                  currencies,
 	}
 
 	SendJSON(AccountInformationResponse{&accountInfo}, w, ctx.Log)

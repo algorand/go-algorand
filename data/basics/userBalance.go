@@ -106,27 +106,36 @@ type AccountData struct {
 	VoteLastValid   Round  `codec:"voteLst"`
 	VoteKeyDilution uint64 `codec:"voteKD"`
 
-	// If this account created a sub-currency, ThisCurrencyTotal stores
-	// the number of tokens created in that sub-currency.  An account
-	// with a non-zero ThisCurrencyTotal cannot be closed, until the
-	// sub-currency is destroyed.  A sub-currency can be destroyed if
-	// this account holds ThisCurrencyTotal units of that currency (in
-	// the Currencies array below).
-	ThisCurrencyTotal uint64 `codec:"thiscur"`
-
-	// Currencies is the set of currencies that can be held by this
-	// account.  Currencies (i.e., slots in this map) are explicitly
-	// added and removed from an account by special transactions.
-	// Each currency bumps the required MinBalance in this account.
-	// An account that created a currency (i.e., ThisCurrencyTotal>0)
-	// must have its own currency in the Currencies map until that
-	// currency is destroyed.  The map is keyed by the CurrencyID,
-	// which is the address of the account that created the currency.
+	// If this account created a sub-currency, CurrencyParams stores
+	// the parameters defining that sub-currency.  The params are indexed
+	// by the Index of the CurrencyID; the Creator is this account's address.
+	//
+	// An account with any sub-currency in CurrencyParams cannot be
+	// closed, until the sub-currency is destroyed.  A sub-currency can
+	// be destroyed if this account holds CurrencyParams.Total units
+	// of that currency (in the Currencies array below).
 	//
 	// NOTE: do not modify this value in-place in existing AccountData
 	// structs; allocate a copy and modify that instead.  AccountData
 	// is expected to have copy-by-value semantics.
-	Currencies map[Address]uint64 `codec:"cur"`
+	CurrencyParams map[uint64]CurrencyParams `codec:"thiscur"`
+
+	// Currencies is the set of currencies that can be held by this
+	// account.  Currencies (i.e., slots in this map) are explicitly
+	// added and removed from an account by special transactions.
+	// The map is keyed by the CurrencyID, which is the address of
+	// the account that created the currency plus a unique counter
+	// to distinguish re-created currencies.
+	//
+	// Each currency bumps the required MinBalance in this account.
+	//
+	// An account that creates a currency must have its own currency
+	// in the Currencies map until that currency is destroyed.
+	//
+	// NOTE: do not modify this value in-place in existing AccountData
+	// structs; allocate a copy and modify that instead.  AccountData
+	// is expected to have copy-by-value semantics.
+	Currencies map[CurrencyID]CurrencyHolding `codec:"cur"`
 }
 
 // AccountDetail encapsulates meaningful details about a given account, for external consumption
@@ -149,6 +158,49 @@ type BalanceDetail struct {
 	TotalMoney  MicroAlgos
 	OnlineMoney MicroAlgos
 	Accounts    []AccountDetail
+}
+
+// CurrencyID is a name of a sub-currency.
+type CurrencyID struct {
+	Creator Address `codec:"c"`
+	Index   uint64  `codec:"i"`
+}
+
+// CurrencyHolding describes a sub-currency held by an account.
+type CurrencyHolding struct {
+	Amount uint64 `codec:"a"`
+	Frozen bool   `codec:"f"`
+}
+
+// CurrencyParams describes the parameters of a currency.
+type CurrencyParams struct {
+	// Total specifies the total number of units of this currency
+	// created.
+	Total uint64 `codec:"t"`
+
+	// DefaultFrozen specifies whether slots for this currency
+	// in user accounts are frozen by default or not.
+	DefaultFrozen bool `codec:"df"`
+
+	// UnitName specifies a hint for the name of a unit of
+	// this currency.
+	UnitName [8]byte `codec:"n"`
+
+	// Manager specifies an account that is allowed to change the
+	// non-zero addresses in this CurrencyParams.
+	Manager Address `codec:"m"`
+
+	// Reserve specifies an account whose holdings of this currency
+	// should be reported as "not minted".
+	Reserve Address `codec:"r"`
+
+	// Freeze specifies an account that is allowed to change the
+	// frozen state of holdings of this currency.
+	Freeze Address `codec:"f"`
+
+	// Clawback specifies an account that is allowed to take units
+	// of this currency from any account.
+	Clawback Address `codec:"c"`
 }
 
 // MakeAccountData returns a UserToken
