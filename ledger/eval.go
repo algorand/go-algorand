@@ -378,6 +378,10 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad *transact
 				return fmt.Errorf("transaction %v: failed to verify: %v", txn.ID(), err)
 			}
 		}
+
+		if !txn.Lsig.Blank() {
+			// TODO: evaluate logic against BlockEvaluator, ledger state, etc.
+		}
 	}
 
 	// Apply the transaction, updating the cow balances
