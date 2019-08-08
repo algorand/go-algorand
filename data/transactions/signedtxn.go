@@ -49,6 +49,7 @@ type SignedTxn struct {
 
 	Sig  crypto.Signature   `codec:"sig"`
 	Msig crypto.MultisigSig `codec:"msig"`
+	Lsig LogicSig           `codec:"lsig"`
 	Txn  Transaction        `codec:"txn"`
 
 	// The length of the encoded SignedTxn, used for computing the
@@ -172,18 +173,45 @@ func (s SignedTxn) Verify(spec SpecialAddresses, proto config.ConsensusParams) e
 		return errors.New("empty address")
 	}
 
-	if s.Sig != (crypto.Signature{}) && !s.Msig.Blank() {
-		return errors.New("signedtxn should only have one of Sig or Msig")
+	numSigs := 0
+	hasSig := false
+	hasMsig := false
+	hasLogicSig := false
+	if s.Sig != (crypto.Signature{}) {
+		numSigs++
+		hasSig = true
+	}
+	if !s.Msig.Blank() {
+		numSigs++
+		hasMsig = true
+	}
+	if !s.Lsig.Blank() {
+		numSigs++
+		hasLogicSig = true
+	}
+	if numSigs == 0 {
+		return errors.New("signedtxn has no sig")
+	}
+	if numSigs > 1 {
+		return errors.New("signedtxn should only have one of Sig or Msig or LogicSig")
 	}
 
-	if !crypto.SignatureVerifier(s.Txn.Src()).Verify(s.Txn, s.Sig) {
-		if ok, _ := crypto.MultisigVerify(s.Txn, crypto.Digest(s.Txn.Src()), s.Msig); !ok {
-			return errors.New("signature (and multisig) failed to verify")
+	if hasSig {
+		if crypto.SignatureVerifier(s.Txn.Src()).Verify(s.Txn, s.Sig) {
+			return nil
 		}
-		return nil
+		return errors.New("signature validation failed")
 	}
-	return nil
-
+	if hasMsig {
+		if ok, _ := crypto.MultisigVerify(s.Txn, crypto.Digest(s.Txn.Src()), s.Msig); ok {
+			return nil
+		}
+		return errors.New("multisig validation failed")
+	}
+	if hasLogicSig {
+		return s.Lsig.Verify(&s.Txn)
+	}
+	return errors.New("has one mystery sig. WAT?")
 }
 
 // PoolVerify verifies that a SignedTxn has a good signature and that the underlying
