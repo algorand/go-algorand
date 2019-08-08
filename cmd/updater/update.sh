@@ -138,7 +138,7 @@ function determine_current_version() {
 
 function check_for_update() {
     determine_current_version
-    LATEST="$(${SCRIPTPATH}/updater ver check -c ${CHANNEL} ${BUCKET})"
+    LATEST="$(${SCRIPTPATH}/updater ver check -c ${CHANNEL} ${BUCKET} | sed -n '2 p')"
     if [ $? -ne 0 ]; then
         echo No remote updates found
         return 1
