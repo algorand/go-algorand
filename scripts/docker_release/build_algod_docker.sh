@@ -24,6 +24,7 @@ cp ./README.md algorand_pkg_${FULLVERSION}/
 tar cvf algorand_docker_package_${FULLVERSION}.tar.gz algorand_pkg_${FULLVERSION}
 
 echo "moving resulting docker package to ${HOME}/node_pkg/algorand_docker_package_${FULLVERSION}.tar.gz"
+mkdir -p ${HOME}/node_pkg
 cp algorand_docker_package_${FULLVERSION}.tar.gz ${HOME}/node_pkg
 
 echo "cleaning up temporary files"
