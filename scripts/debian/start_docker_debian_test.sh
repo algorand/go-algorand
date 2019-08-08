@@ -1,16 +1,10 @@
 #!/bin/bash
 set -x
 set -v
-echo "Starting start_docker.sh"
+echo "Starting start_docker_debian_test.sh"
 TEST_NAME="DebianTest"
 echo "start docker test: " $TEST_NAME
 
-TEST_DIR=$(mktemp -d)
-trap "rm -rf $TEST_DIR" 0
-echo "test dir: " $TEST_DIR
-
-#set TMPDIR for aptly to use
-TMPDIR=$TEST_DIR
 KEY_DIR=$1
 echo "KEY_DIR: $KEY_DIR"
 echo "DC_IP: $DC_IP"
@@ -23,10 +17,11 @@ docker \
   --mount type=bind,src=${GOPATH}/src/github.com/algorand/go-algorand/test/e2e-go/cli/goal/expect,dst=/expectdir \
   --mount type=bind,src=${GOPATH}/src/github.com/algorand/go-algorand/test/testdata,dst=/testdata \
   --mount type=bind,src=${KEY_DIR},dst=/stuff \
-  -v type=bind,src=${TEST_DIR},dst=/testdir \
   debian:stable \
   bash /workdir/deb_test.sh
 
-echo "start_docker completed with status: " $STATUS
+STATUS=$?
+
+echo "start_docker_debian_test completed with status: " $STATUS
 
 exit $STATUS

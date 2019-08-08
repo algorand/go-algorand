@@ -2,7 +2,7 @@
 set -x
 set -v
 
-echo "deb_setup starting within docker container"
+echo "deb_test starting within docker container"
 
 export GOPATH=${HOME}/go
 export PATH=${GOPATH}/bin:/usr/local/go/bin:${PATH}
