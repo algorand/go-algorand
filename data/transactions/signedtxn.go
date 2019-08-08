@@ -173,6 +173,10 @@ func (s SignedTxn) Verify(spec SpecialAddresses, proto config.ConsensusParams) e
 		return errors.New("empty address")
 	}
 
+	return s.verifyCore()
+}
+
+func (s SignedTxn) verifyCore() error {
 	numSigs := 0
 	hasSig := false
 	hasMsig := false
@@ -244,12 +248,12 @@ func (s SignedTxn) PoolVerify(spec SpecialAddresses, proto config.ConsensusParam
 
 func (s SignedTxn) asyncVerify(arg interface{}) interface{} {
 	outCh := arg.(chan error)
-	if !crypto.SignatureVerifier(s.Txn.Src()).Verify(s.Txn, s.Sig) {
-		if ok, _ := crypto.MultisigVerify(s.Txn, crypto.Digest(s.Txn.Src()), s.Msig); !ok {
-			outCh <- errors.New("signature (and multisig) failed to verify")
-		}
+	err := s.verifyCore()
+	if err != nil {
+		outCh <- err
+	} else {
+		close(outCh)
 	}
-	close(outCh)
 	return nil
 }
 
