@@ -357,10 +357,12 @@ func (p *player) enterRound(r routerHandle, source event, target round) []action
 
 	newRoundEvent := source
 	// passing in a cert threshold to the proposalMachine is now ambiguous,
-	// so replace with an explicit new round event
-	if source.t() == certThreshold {
+	// so replace with an explicit new round event.
+	// In addition, handle a new source: payloadVerified (which can trigger new round if
+	// received after cert threshold)
+	if source.t() == certThreshold || source.t() == payloadVerified {
 		r.t.logRoundStart(*p, target)
-		newRoundEvent = roundInterruptionEvent{Round: source.(thresholdEvent).Round + 1}
+		newRoundEvent = roundInterruptionEvent{Round: target}
 	}
 	// this happens here so that the proposalMachine contract does not complain
 	e := r.dispatch(*p, newRoundEvent, proposalMachine, target, 0, 0)
@@ -566,7 +568,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 					cert := Certificate(freshestRes.Event.Bundle)
 					a0 := ensureAction{Payload: e.Input.Proposal, Certificate: cert}
 					actions = append(actions, a0)
-					as := p.enterRound(r, e, p.Round+1)
+					as := p.enterRound(r, delegatedE, cert.Round+1)
 					return append(actions, as...)
 				}
 			}
