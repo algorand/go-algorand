@@ -23,12 +23,15 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// LogicSig
+// LogicSig contains logic for validating a transaction.
+// LogicSig is signed by an account, allowing delegation of operations.
+// OR
+// LogicSig defines a contract account.
 type LogicSig struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	// Logic is an expression in a bytecode stack language.
-	// Logic signed by Sig or Msig
+	// Logic is an expression in a TBD language.
+	// Logic signed by Sig or Msig, OR hashed to be the Address of a contract account.
 	Logic []byte `codec:"lgc"`
 
 	Sig  crypto.Signature   `codec:"sig"`
@@ -38,10 +41,12 @@ type LogicSig struct {
 	Args [][]byte `codec:"arg"`
 }
 
+// Blank returns true if there is no content in this LogicSig
 func (lsig *LogicSig) Blank() bool {
 	return len(lsig.Logic) == 0
 }
 
+// ToBeHashed implements our crypto.Hashable interface
 func (lsig *LogicSig) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Logic, lsig.Logic
 }
@@ -84,5 +89,5 @@ func (lsig *LogicSig) Verify(txn *Transaction) error {
 		return errors.New("logic multisig validation failed")
 	}
 
-	return nil
+	return errors.New("inconsistent internal state verifying LogicSig")
 }
