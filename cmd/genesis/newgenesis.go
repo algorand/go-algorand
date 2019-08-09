@@ -28,13 +28,16 @@ import (
 var outDir = flag.String("d", "", "The directory containing the generated ledger and wallet files.")
 var netName = flag.String("n", "", "The name of the network for this ledger (will override config file).")
 var configFile = flag.String("c", "", "The config file containing the genesis ledger and wallets")
+var quiet = flag.Bool("q", false, "Skip verbose informational messages")
 
 func init() {
 	flag.Parse()
 }
 
 func main() {
-	fmt.Println("Network Name: " + *netName)
+	if !*quiet {
+		fmt.Println("Network Name: " + *netName)
+	}
 
 	cfgFile := *configFile
 	if !util.FileExists(cfgFile) {
@@ -50,7 +53,7 @@ func main() {
 		genesisData.NetworkName = *netName
 	}
 
-	err = gen.GenerateGenesisFiles(genesisData, *outDir)
+	err = gen.GenerateGenesisFiles(genesisData, *outDir, !*quiet)
 	if err != nil {
 		reportErrorf("Cannot write genesis files: %s", err)
 	}

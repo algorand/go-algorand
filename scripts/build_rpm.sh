@@ -16,8 +16,8 @@ set -x
 OUTDIR="$1"
 
 export GOPATH=$(go env GOPATH)
-export REPO_DIR=${GOPATH}/src/github.com/algorand/go-algorand
-cd ${REPO_DIR}
+
+cd "$(dirname "$0")"/..
 
 echo "Building RPM package"
 

@@ -20,7 +20,6 @@ if [ "$#" -ne 2 ]; then
 fi
 
 export GOPATH=$(go env GOPATH)
-cd ${GOPATH}/src/github.com/algorand/go-algorand
 
 export CHANNEL=$2
 export FULLVERSION=$(./scripts/compute_build_number.sh -f)

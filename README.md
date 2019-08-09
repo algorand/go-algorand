@@ -20,8 +20,6 @@ We currently strive to support Debian based distributions with Ubuntu 18.04 bein
 
 Initial environment setup:
 ```bash
-mkdir -p ${GOPATH}/src/github.com/algorand
-cd ${GOPATH}/src/github.com/algorand
 git clone https://github.com/algorand/go-algorand
 cd go-algorand
 sh ./scripts/configure_dev.sh
