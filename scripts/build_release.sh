@@ -97,9 +97,9 @@ scripts/build_packages.sh "${PLATFORM}"
 
 # build docker release package
 pwd
-cd scripts/docker_release
+cd ../docker/release
 ./build_algod_docker.sh ${HOME}/node_pkg/node_dev_linux-amd64_${FULLVERSION}.tar.gz
-cd ../..
+cd ../../scripts
 
 # Test .deb installer
 
