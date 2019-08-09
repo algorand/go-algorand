@@ -23,6 +23,16 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+// LogicSigLogic is a trivial wrapper object to organize hashing/signing the contained Logic expression
+type LogicSigLogic struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	// Logic is an expression in a TBD language.
+	Logic []byte `codec:"l"`
+
+	// Future implementations could be "l2":[]byte, etc.
+}
+
 // LogicSig contains logic for validating a transaction.
 // LogicSig is signed by an account, allowing delegation of operations.
 // OR
@@ -30,9 +40,8 @@ import (
 type LogicSig struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	// Logic is an expression in a TBD language.
-	// Logic signed by Sig or Msig, OR hashed to be the Address of a contract account.
-	Logic []byte `codec:"lgc"`
+	// LogicSigLogic signed by Sig or Msig, OR hashed to be the Address of a contract account.
+	Logic LogicSigLogic `codec:"l"`
 
 	Sig  crypto.Signature   `codec:"sig"`
 	Msig crypto.MultisigSig `codec:"msig"`
@@ -43,12 +52,12 @@ type LogicSig struct {
 
 // Blank returns true if there is no content in this LogicSig
 func (lsig *LogicSig) Blank() bool {
-	return len(lsig.Logic) == 0
+	return len(lsig.Logic.Logic) == 0
 }
 
 // ToBeHashed implements our crypto.Hashable interface
-func (lsig *LogicSig) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.Logic, lsig.Logic
+func (lsl *LogicSigLogic) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.Logic, protocol.Encode(lsl)
 }
 
 // Verify checks that the signature is valid. It does not evaluate the logic.
@@ -66,7 +75,7 @@ func (lsig *LogicSig) Verify(txn *Transaction) error {
 	}
 	if numSigs == 0 {
 		// if the txn.Sender == hash(Logic) then this is a (potentially) valid operation on a contract-only account
-		lhash := crypto.Hash(lsig.Logic)
+		lhash := crypto.HashObj(&lsig.Logic)
 		if crypto.Digest(txn.Sender) == lhash {
 			return nil
 		}
@@ -77,13 +86,13 @@ func (lsig *LogicSig) Verify(txn *Transaction) error {
 	}
 
 	if hasSig {
-		if crypto.SignatureVerifier(txn.Src()).Verify(lsig, lsig.Sig) {
+		if crypto.SignatureVerifier(txn.Src()).Verify(&lsig.Logic, lsig.Sig) {
 			return nil
 		}
 		return errors.New("logic signature validation failed")
 	}
 	if hasMsig {
-		if ok, _ := crypto.MultisigVerify(lsig, crypto.Digest(txn.Src()), lsig.Msig); ok {
+		if ok, _ := crypto.MultisigVerify(&lsig.Logic, crypto.Digest(txn.Src()), lsig.Msig); ok {
 			return nil
 		}
 		return errors.New("logic multisig validation failed")
