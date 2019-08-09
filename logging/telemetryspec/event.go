@@ -239,3 +239,17 @@ type BlockStatsEventDetails struct {
 	AgreementDurationMs uint64
 	NetworkDowntimeMs   uint64
 }
+
+// HTTPRequestEvent event
+const HTTPRequestEvent Event = "HTTPRequest"
+
+// HTTPRequestDetails contains details for the HTTPRequestEvent
+// This should resemble the Common Log Format, as it's being used as the source data for generating it.
+type HTTPRequestDetails struct {
+	Client       string // The ip address of the remote
+	InstanceName string // The node identifier
+	Request      string // The request string, i.e. "GET /apache_pb.gif HTTP/1.0"
+	StatusCode   uint64 // The response status code
+	BodyLength   uint64 // The returned body length, in bytes
+	UserAgent    string // The user-agent string ( if any )
+}

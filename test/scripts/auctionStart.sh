@@ -11,6 +11,9 @@ if [[ ! "$#" -eq 5 ]]; then
     exit 1
 fi
 
+# Anchor our repo root reference location
+REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"/../..
+
 # Ensure our required environment variables are set - in case running this script standalone
 CLEANUP_TEMPDIR=0
 WAIT_SECONDS=3
@@ -50,9 +53,7 @@ cd ${AUCTION_TESTDIR}
 echo "PWD" $(pwd)
 
 if [[ "${SRCROOT}" = "" ]]; then
-    pushd ${GOPATH}/src/github.com/algorand/go-algorand
-    export SRCROOT="$(pwd -P)"
-    popd
+    export SRCROOT=${REPO_ROOT}
 fi
 
 if [[ "${NODEBINDIR}" = "" ]]; then

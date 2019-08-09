@@ -50,93 +50,10 @@ type TestingT interface {
 	Name() string
 }
 
-type mockSpendableBalancesUnbounded struct {
-	balance    uint64
-	exceptions map[basics.Address]uint64
-}
+var minBalance = config.Consensus[protocol.ConsensusCurrentVersion].MinBalance
+var minFee = config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee
 
-func (b mockSpendableBalancesUnbounded) Lookup(r basics.Round, address basics.Address) (rec basics.AccountData, err error) {
-	if b.exceptions != nil {
-		if balance, has := b.exceptions[address]; has {
-			rec.MicroAlgos = basics.MicroAlgos{Raw: balance}
-			return
-		}
-	}
-	rec.MicroAlgos = basics.MicroAlgos{Raw: b.balance}
-	rec.RewardedMicroAlgos = basics.MicroAlgos{Raw: 0}
-	return
-}
-
-func (b mockSpendableBalancesUnbounded) Committed(transactions.SignedTxn) (bool, error) {
-	return false, nil
-}
-
-const mockBalancesMinBalance = 1000
-
-func (b mockSpendableBalancesUnbounded) ConsensusParams(basics.Round) (config.ConsensusParams, error) {
-	return config.ConsensusParams{MinBalance: mockBalancesMinBalance}, nil
-}
-
-func (b mockSpendableBalancesUnbounded) BlockHdr(basics.Round) (bookkeeping.BlockHeader, error) {
-	return bookkeeping.BlockHeader{}, nil
-}
-
-func (b mockSpendableBalancesUnbounded) Latest() basics.Round {
-	return 0
-}
-
-type mockLedger struct {
-	*ledger.Ledger
-}
-
-// BalanceAndStatus returns Balance and DelegationStatus as one call
-func (l *mockLedger) BalanceAndStatus(addr basics.Address) (money basics.MicroAlgos, rewards basics.MicroAlgos, moneyWithoutPendingRewards basics.MicroAlgos, status basics.Status, latest basics.Round, err error) {
-	latest = l.Latest()
-	data, err := l.Lookup(latest, addr)
-	if err != nil {
-		return
-	}
-
-	totals, err := l.Totals(latest)
-	if err != nil {
-		return
-	}
-
-	hdr, err := l.BlockHdr(latest)
-	if err != nil {
-		return
-	}
-	proto, ok := config.Consensus[hdr.CurrentProtocol]
-	if !ok {
-		err = ledger.ProtocolError(hdr.CurrentProtocol)
-	}
-
-	money, rewards = data.Money(proto, totals.RewardsLevel)
-	status = data.Status
-
-	dataWithoutRewards, err := l.LookupWithoutRewards(latest, addr)
-	if err != nil {
-		return
-	}
-	moneyWithoutPendingRewards = dataWithoutRewards.MicroAlgos
-
-	return
-}
-
-// Implements agreement.Ledger.ConsensusParams
-func (l *mockLedger) ConsensusParams(r basics.Round) (config.ConsensusParams, error) {
-	blockhdr, err := l.BlockHdr(r)
-	if err != nil {
-		return config.ConsensusParams{}, err
-	}
-	return config.Consensus[blockhdr.UpgradeState.CurrentProtocol], nil
-}
-
-func (l *mockLedger) LastRound() basics.Round {
-	return l.Latest()
-}
-
-func makeMockLedger(t TestingT, initAccounts map[basics.Address]basics.AccountData) *mockLedger {
+func makeMockLedger(t TestingT, initAccounts map[basics.Address]basics.AccountData) *ledger.Ledger {
 	var hash crypto.Digest
 	crypto.RandBytes(hash[:])
 
@@ -168,10 +85,10 @@ func makeMockLedger(t TestingT, initAccounts map[basics.Address]basics.AccountDa
 	fn := fmt.Sprintf("/tmp/%s.%d.sqlite3", t.Name(), crypto.RandUint64())
 	l, err := ledger.OpenLedger(logging.Base(), fn, true, initBlocks, initAccounts, hash)
 	require.NoError(t, err)
-	return &mockLedger{l}
+	return l
 }
 
-func newBlockEvaluator(t TestingT, l *mockLedger) *ledger.BlockEvaluator {
+func newBlockEvaluator(t TestingT, l *ledger.Ledger) *ledger.BlockEvaluator {
 	latest := l.Latest()
 	prev, err := l.BlockHdr(latest)
 	require.NoError(t, err)
@@ -203,7 +120,6 @@ func initAccFixed(initAddrs []basics.Address, bal uint64) map[basics.Address]bas
 	return res
 }
 
-const exponentialGrowth = 2
 const testPoolSize = 1000
 
 func TestMinBalanceOK(t *testing.T) {
@@ -220,23 +136,24 @@ func TestMinBalanceOK(t *testing.T) {
 	}
 
 	limitedAccounts := make(map[basics.Address]uint64)
-	limitedAccounts[addresses[0]] = 2*mockBalancesMinBalance + proto.MinTxnFee
-
-	transactionPool := MakeTransactionPool(mockSpendableBalancesUnbounded{balance: 1 << 60, exceptions: limitedAccounts}, exponentialGrowth, testPoolSize, false)
+	limitedAccounts[addresses[0]] = 2*minBalance + proto.MinTxnFee
+	ledger := makeMockLedger(t, initAcc(limitedAccounts))
+	transactionPool := MakeTransactionPool(ledger, testPoolSize, false)
 
 	// sender goes below min
 	tx := transactions.Transaction{
 		Type: protocol.PaymentTx,
 		Header: transactions.Header{
-			Sender:     addresses[0],
-			Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee},
-			FirstValid: 0,
-			LastValid:  basics.Round(proto.MaxTxnLife),
-			Note:       make([]byte, 2),
+			Sender:      addresses[0],
+			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee},
+			FirstValid:  0,
+			LastValid:   basics.Round(proto.MaxTxnLife),
+			Note:        make([]byte, 2),
+			GenesisHash: ledger.GenesisHash(),
 		},
 		PaymentTxnFields: transactions.PaymentTxnFields{
 			Receiver: addresses[1],
-			Amount:   basics.MicroAlgos{Raw: mockBalancesMinBalance},
+			Amount:   basics.MicroAlgos{Raw: minBalance},
 		},
 	}
 	signedTx := tx.Sign(secrets[0])
@@ -257,23 +174,24 @@ func TestSenderGoesBelowMinBalance(t *testing.T) {
 	}
 
 	limitedAccounts := make(map[basics.Address]uint64)
-	limitedAccounts[addresses[0]] = 2*mockBalancesMinBalance + proto.MinTxnFee
-
-	transactionPool := MakeTransactionPool(mockSpendableBalancesUnbounded{balance: 1 << 60, exceptions: limitedAccounts}, exponentialGrowth, testPoolSize, false)
+	limitedAccounts[addresses[0]] = 2*minBalance + proto.MinTxnFee
+	ledger := makeMockLedger(t, initAcc(limitedAccounts))
+	transactionPool := MakeTransactionPool(ledger, testPoolSize, false)
 
 	// sender goes below min
 	tx := transactions.Transaction{
 		Type: protocol.PaymentTx,
 		Header: transactions.Header{
-			Sender:     addresses[0],
-			Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee + 1},
-			FirstValid: 0,
-			LastValid:  basics.Round(proto.MaxTxnLife),
-			Note:       make([]byte, 2),
+			Sender:      addresses[0],
+			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee + 1},
+			FirstValid:  0,
+			LastValid:   basics.Round(proto.MaxTxnLife),
+			Note:        make([]byte, 2),
+			GenesisHash: ledger.GenesisHash(),
 		},
 		PaymentTxnFields: transactions.PaymentTxnFields{
 			Receiver: addresses[1],
-			Amount:   basics.MicroAlgos{Raw: mockBalancesMinBalance},
+			Amount:   basics.MicroAlgos{Raw: minBalance},
 		},
 	}
 	signedTx := tx.Sign(secrets[0])
@@ -294,23 +212,24 @@ func TestCloseAccount(t *testing.T) {
 	}
 
 	limitedAccounts := make(map[basics.Address]uint64)
-	limitedAccounts[addresses[0]] = 3*mockBalancesMinBalance + 2*proto.MinTxnFee
-
-	transactionPool := MakeTransactionPool(mockSpendableBalancesUnbounded{balance: 1 << 60, exceptions: limitedAccounts}, exponentialGrowth, testPoolSize, false)
+	limitedAccounts[addresses[0]] = 3*minBalance + 2*proto.MinTxnFee
+	ledger := makeMockLedger(t, initAcc(limitedAccounts))
+	transactionPool := MakeTransactionPool(ledger, testPoolSize, false)
 
 	// sender goes below min
 	closeTx := transactions.Transaction{
 		Type: protocol.PaymentTx,
 		Header: transactions.Header{
-			Sender:     addresses[0],
-			Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee},
-			FirstValid: 0,
-			LastValid:  basics.Round(proto.MaxTxnLife),
-			Note:       make([]byte, 2),
+			Sender:      addresses[0],
+			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee},
+			FirstValid:  0,
+			LastValid:   basics.Round(proto.MaxTxnLife),
+			Note:        make([]byte, 2),
+			GenesisHash: ledger.GenesisHash(),
 		},
 		PaymentTxnFields: transactions.PaymentTxnFields{
 			Receiver:         addresses[1],
-			Amount:           basics.MicroAlgos{Raw: mockBalancesMinBalance},
+			Amount:           basics.MicroAlgos{Raw: minBalance},
 			CloseRemainderTo: addresses[2],
 		},
 	}
@@ -321,22 +240,20 @@ func TestCloseAccount(t *testing.T) {
 	tx := transactions.Transaction{
 		Type: protocol.PaymentTx,
 		Header: transactions.Header{
-			Sender:     addresses[0],
-			Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee},
-			FirstValid: 0,
-			LastValid:  basics.Round(proto.MaxTxnLife),
-			Note:       make([]byte, 2),
+			Sender:      addresses[0],
+			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee},
+			FirstValid:  0,
+			LastValid:   basics.Round(proto.MaxTxnLife),
+			Note:        make([]byte, 2),
+			GenesisHash: ledger.GenesisHash(),
 		},
 		PaymentTxnFields: transactions.PaymentTxnFields{
 			Receiver: addresses[1],
-			Amount:   basics.MicroAlgos{Raw: mockBalancesMinBalance},
+			Amount:   basics.MicroAlgos{Raw: minBalance},
 		},
 	}
 	signedTx2 := tx.Sign(secrets[0])
 	require.Error(t, transactionPool.Remember(signedTx2))
-
-	transactionPool.Remove(closeTx.ID(), fmt.Errorf("removing close account tx"))
-	require.NoError(t, transactionPool.Remember(signedTx2))
 }
 
 func TestCloseAccountWhileTxIsPending(t *testing.T) {
@@ -353,23 +270,24 @@ func TestCloseAccountWhileTxIsPending(t *testing.T) {
 	}
 
 	limitedAccounts := make(map[basics.Address]uint64)
-	limitedAccounts[addresses[0]] = 2*mockBalancesMinBalance + 2*proto.MinTxnFee
-
-	transactionPool := MakeTransactionPool(mockSpendableBalancesUnbounded{balance: 1 << 60, exceptions: limitedAccounts}, exponentialGrowth, testPoolSize, false)
+	limitedAccounts[addresses[0]] = 2*minBalance + 2*proto.MinTxnFee - 1
+	ledger := makeMockLedger(t, initAcc(limitedAccounts))
+	transactionPool := MakeTransactionPool(ledger, testPoolSize, false)
 
 	// sender goes below min
 	tx := transactions.Transaction{
 		Type: protocol.PaymentTx,
 		Header: transactions.Header{
-			Sender:     addresses[0],
-			Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee},
-			FirstValid: 0,
-			LastValid:  basics.Round(proto.MaxTxnLife),
-			Note:       make([]byte, 2),
+			Sender:      addresses[0],
+			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee},
+			FirstValid:  0,
+			LastValid:   basics.Round(proto.MaxTxnLife),
+			Note:        make([]byte, 2),
+			GenesisHash: ledger.GenesisHash(),
 		},
 		PaymentTxnFields: transactions.PaymentTxnFields{
 			Receiver: addresses[1],
-			Amount:   basics.MicroAlgos{Raw: mockBalancesMinBalance},
+			Amount:   basics.MicroAlgos{Raw: minBalance},
 		},
 	}
 	signedTx := tx.Sign(secrets[0])
@@ -379,15 +297,16 @@ func TestCloseAccountWhileTxIsPending(t *testing.T) {
 	closeTx := transactions.Transaction{
 		Type: protocol.PaymentTx,
 		Header: transactions.Header{
-			Sender:     addresses[0],
-			Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee},
-			FirstValid: 0,
-			LastValid:  basics.Round(proto.MaxTxnLife),
-			Note:       make([]byte, 2),
+			Sender:      addresses[0],
+			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee},
+			FirstValid:  0,
+			LastValid:   basics.Round(proto.MaxTxnLife),
+			Note:        make([]byte, 2),
+			GenesisHash: ledger.GenesisHash(),
 		},
 		PaymentTxnFields: transactions.PaymentTxnFields{
 			Receiver:         addresses[1],
-			Amount:           basics.MicroAlgos{Raw: mockBalancesMinBalance},
+			Amount:           basics.MicroAlgos{Raw: minBalance},
 			CloseRemainderTo: addresses[2],
 		},
 	}
@@ -409,24 +328,25 @@ func TestClosingAccountBelowMinBalance(t *testing.T) {
 	}
 
 	limitedAccounts := make(map[basics.Address]uint64)
-	limitedAccounts[addresses[0]] = 2*mockBalancesMinBalance - 1 + proto.MinTxnFee
+	limitedAccounts[addresses[0]] = 2*minBalance - 1 + proto.MinTxnFee
 	limitedAccounts[addresses[2]] = 0
-
-	transactionPool := MakeTransactionPool(mockSpendableBalancesUnbounded{balance: 1 << 60, exceptions: limitedAccounts}, exponentialGrowth, testPoolSize, false)
+	ledger := makeMockLedger(t, initAcc(limitedAccounts))
+	transactionPool := MakeTransactionPool(ledger, testPoolSize, false)
 
 	// sender goes below min
 	closeTx := transactions.Transaction{
 		Type: protocol.PaymentTx,
 		Header: transactions.Header{
-			Sender:     addresses[0],
-			Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee},
-			FirstValid: 0,
-			LastValid:  basics.Round(proto.MaxTxnLife),
-			Note:       make([]byte, 2),
+			Sender:      addresses[0],
+			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee},
+			FirstValid:  0,
+			LastValid:   basics.Round(proto.MaxTxnLife),
+			Note:        make([]byte, 2),
+			GenesisHash: ledger.GenesisHash(),
 		},
 		PaymentTxnFields: transactions.PaymentTxnFields{
 			Receiver:         addresses[1],
-			Amount:           basics.MicroAlgos{Raw: mockBalancesMinBalance},
+			Amount:           basics.MicroAlgos{Raw: minBalance},
 			CloseRemainderTo: addresses[2],
 		},
 	}
@@ -449,22 +369,23 @@ func TestRecipientGoesBelowMinBalance(t *testing.T) {
 
 	limitedAccounts := make(map[basics.Address]uint64)
 	limitedAccounts[addresses[1]] = 0
-
-	transactionPool := MakeTransactionPool(mockSpendableBalancesUnbounded{balance: 1 << 60, exceptions: limitedAccounts}, exponentialGrowth, testPoolSize, false)
+	ledger := makeMockLedger(t, initAcc(limitedAccounts))
+	transactionPool := MakeTransactionPool(ledger, testPoolSize, false)
 
 	// sender goes below min
 	tx := transactions.Transaction{
 		Type: protocol.PaymentTx,
 		Header: transactions.Header{
-			Sender:     addresses[0],
-			Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee},
-			FirstValid: 0,
-			LastValid:  basics.Round(proto.MaxTxnLife),
-			Note:       make([]byte, 2),
+			Sender:      addresses[0],
+			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee},
+			FirstValid:  0,
+			LastValid:   basics.Round(proto.MaxTxnLife),
+			Note:        make([]byte, 2),
+			GenesisHash: ledger.GenesisHash(),
 		},
 		PaymentTxnFields: transactions.PaymentTxnFields{
 			Receiver: addresses[1],
-			Amount:   basics.MicroAlgos{Raw: mockBalancesMinBalance - 1},
+			Amount:   basics.MicroAlgos{Raw: minBalance - 1},
 		},
 	}
 	signedTx := tx.Sign(secrets[0])
@@ -484,9 +405,10 @@ func TestRememberForget(t *testing.T) {
 		addresses[i] = addr
 	}
 
-	transactionPool := MakeTransactionPool(mockSpendableBalancesUnbounded{balance: 1 << 60}, exponentialGrowth, testPoolSize, false)
-	var block bookkeeping.Block
-	block.Payset = make(transactions.Payset, 0)
+	ledger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
+	transactionPool := MakeTransactionPool(ledger, testPoolSize, false)
+
+	eval := newBlockEvaluator(t, ledger)
 
 	for i, sender := range addresses {
 		for j, receiver := range addresses {
@@ -494,11 +416,12 @@ func TestRememberForget(t *testing.T) {
 				tx := transactions.Transaction{
 					Type: protocol.PaymentTx,
 					Header: transactions.Header{
-						Sender:     sender,
-						Fee:        basics.MicroAlgos{Raw: uint64(rand.Int()%10000) + proto.MinTxnFee},
-						FirstValid: 0,
-						LastValid:  basics.Round(proto.MaxTxnLife),
-						Note:       make([]byte, 2),
+						Sender:      sender,
+						Fee:         basics.MicroAlgos{Raw: uint64(rand.Int()%10000) + proto.MinTxnFee},
+						FirstValid:  0,
+						LastValid:   basics.Round(proto.MaxTxnLife),
+						Note:        make([]byte, 2),
+						GenesisHash: ledger.GenesisHash(),
 					},
 					PaymentTxnFields: transactions.PaymentTxnFields{
 						Receiver: receiver,
@@ -509,9 +432,8 @@ func TestRememberForget(t *testing.T) {
 				tx.Note[1] = byte(j)
 				signedTx := tx.Sign(secrets[i])
 				transactionPool.Remember(signedTx)
-				txib, err := block.EncodeSignedTxn(signedTx, transactions.ApplyData{})
+				err := eval.Transaction(signedTx, nil)
 				require.NoError(t, err)
-				block.Payset = append(block.Payset, txib)
 			}
 		}
 	}
@@ -519,72 +441,16 @@ func TestRememberForget(t *testing.T) {
 	pending := transactionPool.Pending()
 	numberOfTxns := numOfAccounts*numOfAccounts - numOfAccounts
 	require.Len(t, pending, numberOfTxns)
-	transactionPool.OnNewBlock(block)
+
+	blk, err := eval.GenerateBlock()
+	require.NoError(t, err)
+
+	err = ledger.AddValidatedBlock(*blk, agreement.Certificate{})
+	require.NoError(t, err)
+	transactionPool.OnNewBlock(blk.Block())
+
 	pending = transactionPool.Pending()
 	require.Len(t, pending, 0)
-}
-
-func TestPendingIsOrdered(t *testing.T) {
-	numOfAccounts := 5
-	// Genereate accounts
-	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
-	addresses := make([]basics.Address, numOfAccounts)
-
-	for i := 0; i < numOfAccounts; i++ {
-		secret := keypair()
-		addr := basics.Address(secret.SignatureVerifier)
-		secrets[i] = secret
-		addresses[i] = addr
-	}
-
-	transactionPool := MakeTransactionPool(mockSpendableBalancesUnbounded{balance: 1 << 60}, exponentialGrowth, testPoolSize, false)
-
-	for i, sender := range addresses {
-		for j, receiver := range addresses {
-			if sender != receiver {
-				tx := transactions.Transaction{
-					Type: protocol.PaymentTx,
-					Header: transactions.Header{
-						Sender:     sender,
-						Fee:        basics.MicroAlgos{Raw: uint64(rand.Int()%10000) + proto.MinTxnFee},
-						FirstValid: 0,
-						LastValid:  basics.Round(proto.MaxTxnLife),
-						Note:       make([]byte, 2),
-					},
-					PaymentTxnFields: transactions.PaymentTxnFields{
-						Receiver: receiver,
-						Amount:   basics.MicroAlgos{Raw: 1},
-					},
-				}
-				tx.Note[0] = byte(i)
-				tx.Note[1] = byte(j)
-				signedTx := tx.Sign(secrets[i])
-				transactionPool.Remember(signedTx)
-			}
-		}
-	}
-
-	pending := transactionPool.Pending()
-	numberOfTxns := numOfAccounts*numOfAccounts - numOfAccounts
-	require.Len(t, pending, numberOfTxns)
-
-	last := pending[0].Txn.TxFee()
-	for i := 0; i < numberOfTxns; i++ {
-		require.False(t, last.LessThan(pending[i].Txn.TxFee()))
-		last = pending[i].Txn.TxFee()
-	}
-
-	ids := transactionPool.PendingTxIDs()
-	require.Equal(t, len(pending), len(ids))
-
-	idset := make(map[transactions.Txid]bool)
-
-	for _, id := range ids {
-		idset[id] = true
-	}
-	for _, tx := range pending {
-		require.True(t, idset[tx.ID()])
-	}
 }
 
 //	Test that clean up works
@@ -601,7 +467,8 @@ func TestCleanUp(t *testing.T) {
 		addresses[i] = addr
 	}
 
-	transactionPool := MakeTransactionPool(mockSpendableBalancesUnbounded{balance: 1 << 60}, exponentialGrowth, testPoolSize, false)
+	ledger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
+	transactionPool := MakeTransactionPool(ledger, testPoolSize, false)
 
 	issuedTransactions := 0
 	for i, sender := range addresses {
@@ -610,11 +477,12 @@ func TestCleanUp(t *testing.T) {
 				tx := transactions.Transaction{
 					Type: protocol.PaymentTx,
 					Header: transactions.Header{
-						Sender:     sender,
-						Fee:        basics.MicroAlgos{Raw: uint64(rand.Int()%10000) + proto.MinTxnFee},
-						FirstValid: 0,
-						LastValid:  5,
-						Note:       make([]byte, 2),
+						Sender:      sender,
+						Fee:         basics.MicroAlgos{Raw: uint64(rand.Int()%10000) + proto.MinTxnFee},
+						FirstValid:  0,
+						LastValid:   5,
+						Note:        make([]byte, 2),
+						GenesisHash: ledger.GenesisHash(),
 					},
 					PaymentTxnFields: transactions.PaymentTxnFields{
 						Receiver: receiver,
@@ -630,29 +498,32 @@ func TestCleanUp(t *testing.T) {
 		}
 	}
 
-	block := bookkeeping.Block{
-		BlockHeader: bookkeeping.BlockHeader{
-			Round: basics.Round(6),
-		},
+	for ledger.Latest() < 6 {
+		eval := newBlockEvaluator(t, ledger)
+		blk, err := eval.GenerateBlock()
+		require.NoError(t, err)
+
+		err = ledger.AddValidatedBlock(*blk, agreement.Certificate{})
+		require.NoError(t, err)
+
+		transactionPool.OnNewBlock(blk.Block())
 	}
-	block.CurrentProtocol = protocol.ConsensusCurrentVersion
-	transactionPool.OnNewBlock(block)
 
 	pending := transactionPool.Pending()
-
 	require.Zero(t, len(pending))
-	require.Zero(t, transactionPool.NumExpired(block.Round()-1))
-	require.Equal(t, issuedTransactions, transactionPool.NumExpired(block.Round()))
+	require.Zero(t, transactionPool.NumExpired(4))
+	require.Equal(t, issuedTransactions, transactionPool.NumExpired(5))
 
-	for r := block.Round(); r <= block.Round()+basics.Round(expiredHistory*proto.MaxTxnLife); r++ {
-		b := bookkeeping.Block{
-			BlockHeader: bookkeeping.BlockHeader{
-				Round: basics.Round(r),
-			},
-		}
-		b.CurrentProtocol = protocol.ConsensusCurrentVersion
-		transactionPool.OnNewBlock(b)
-		require.Zero(t, transactionPool.NumExpired(b.Round()))
+	for ledger.Latest() < 6+basics.Round(expiredHistory*proto.MaxTxnLife) {
+		eval := newBlockEvaluator(t, ledger)
+		blk, err := eval.GenerateBlock()
+		require.NoError(t, err)
+
+		err = ledger.AddValidatedBlock(*blk, agreement.Certificate{})
+		require.NoError(t, err)
+
+		transactionPool.OnNewBlock(blk.Block())
+		require.Zero(t, transactionPool.NumExpired(blk.Block().Round()))
 	}
 	require.Len(t, transactionPool.expiredTxCount, int(expiredHistory*proto.MaxTxnLife))
 }
@@ -670,12 +541,11 @@ func TestFixOverflowOnNewBlock(t *testing.T) {
 		addresses[i] = addr
 	}
 
-	balance := mockSpendableBalancesUnbounded{balance: 1 << 60}
-
-	transactionPool := MakeTransactionPool(&balance, exponentialGrowth, testPoolSize, false)
+	ledger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
+	transactionPool := MakeTransactionPool(ledger, testPoolSize, false)
 
 	overSpender := addresses[0]
-	overSpenderPendingSpend := make(accountsToPendingTransactions)
+	var overSpenderAmount uint64
 	savedTransactions := 0
 	for i, sender := range addresses {
 		amount := uint64(0)
@@ -684,11 +554,12 @@ func TestFixOverflowOnNewBlock(t *testing.T) {
 				tx := transactions.Transaction{
 					Type: protocol.PaymentTx,
 					Header: transactions.Header{
-						Sender:     sender,
-						Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee + amount},
-						FirstValid: 0,
-						LastValid:  10,
-						Note:       make([]byte, 0),
+						Sender:      sender,
+						Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee + amount},
+						FirstValid:  0,
+						LastValid:   10,
+						Note:        make([]byte, 0),
+						GenesisHash: ledger.GenesisHash(),
 					},
 					PaymentTxnFields: transactions.PaymentTxnFields{
 						Receiver: receiver,
@@ -698,9 +569,7 @@ func TestFixOverflowOnNewBlock(t *testing.T) {
 				amount++
 
 				if sender == overSpender {
-					pending, err := overSpenderPendingSpend.deductionsWithTransaction(tx)
-					require.NoError(t, err)
-					overSpenderPendingSpend.accountForTransactionDeductions(tx, pending)
+					overSpenderAmount += tx.Fee.Raw
 				}
 
 				signedTx := tx.Sign(secrets[i])
@@ -718,11 +587,12 @@ func TestFixOverflowOnNewBlock(t *testing.T) {
 	tx := transactions.Transaction{
 		Type: protocol.PaymentTx,
 		Header: transactions.Header{
-			Sender:     overSpender,
-			Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee},
-			FirstValid: 0,
-			LastValid:  10,
-			Note:       []byte{1},
+			Sender:      overSpender,
+			Fee:         basics.MicroAlgos{Raw: 1<<32 - proto.MinBalance - overSpenderAmount + proto.MinTxnFee},
+			FirstValid:  0,
+			LastValid:   10,
+			Note:        []byte{1},
+			GenesisHash: ledger.GenesisHash(),
 		},
 		PaymentTxnFields: transactions.PaymentTxnFields{
 			Receiver: recv,
@@ -731,106 +601,22 @@ func TestFixOverflowOnNewBlock(t *testing.T) {
 	}
 	signedTx := tx.Sign(secrets[0])
 
-	block := bookkeeping.Block{
-		BlockHeader: bookkeeping.BlockHeader{
-			Round: basics.Round(1),
-		},
-	}
-	txib, err := block.EncodeSignedTxn(signedTx, transactions.ApplyData{})
+	blockEval := newBlockEvaluator(t, ledger)
+	err := blockEval.Transaction(signedTx, nil)
 	require.NoError(t, err)
-	block.Payset = []transactions.SignedTxnInBlock{
-		txib,
-	}
 
 	// simulate this transaction was applied
-	balance.exceptions = make(map[basics.Address]uint64)
-	balance.exceptions[overSpender] = overSpenderPendingSpend[overSpender].deductions.amount.Raw - tx.TxFee().Raw - tx.TxAmount().Raw
+	block, err := blockEval.GenerateBlock()
+	require.NoError(t, err)
 
-	transactionPool.OnNewBlock(block)
+	err = ledger.AddValidatedBlock(*block, agreement.Certificate{})
+	require.NoError(t, err)
+
+	transactionPool.OnNewBlock(block.Block())
 
 	pending = transactionPool.Pending()
 	// only one transaction is missing
 	require.Len(t, pending, savedTransactions-1)
-
-	for _, tx := range pending {
-		// ensure it's the lowest priority one that is removed
-		if tx.Txn.Src() == overSpender {
-			require.True(t, tx.Txn.TxFee().Raw > proto.MinTxnFee)
-		}
-	}
-}
-
-func TestExponentialPriorityGrowth(t *testing.T) {
-	numOfAccounts := 5
-	// Genereate accounts
-	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
-	addresses := make([]basics.Address, numOfAccounts)
-
-	for i := 0; i < numOfAccounts; i++ {
-		secret := keypair()
-		addr := basics.Address(secret.SignatureVerifier)
-		secrets[i] = secret
-		addresses[i] = addr
-	}
-
-	poolSize := 2
-	transactionPool := MakeTransactionPool(mockSpendableBalancesUnbounded{balance: 1 << 60}, exponentialGrowth, poolSize, false)
-
-	sender := addresses[0]
-	receiver := addresses[1]
-
-	baseFee := uint64(2)
-	for i := 0; i < poolSize; i++ {
-		tx := transactions.Transaction{
-			Type: protocol.PaymentTx,
-			Header: transactions.Header{
-				Sender:     sender,
-				Fee:        basics.MicroAlgos{Raw: baseFee},
-				FirstValid: 0,
-				LastValid:  basics.Round(proto.MaxTxnLife),
-				Note:       []byte{byte(i)},
-			},
-			PaymentTxnFields: transactions.PaymentTxnFields{
-				Receiver: receiver,
-				Amount:   basics.MicroAlgos{Raw: 1},
-			},
-		}
-		signedTx := tx.Sign(secrets[0])
-		require.NoError(t, transactionPool.Remember(signedTx))
-	}
-
-	txLowFee := transactions.Transaction{
-		Type: protocol.PaymentTx,
-		Header: transactions.Header{
-			Sender:     sender,
-			Fee:        basics.MicroAlgos{Raw: baseFee*exponentialGrowth - 1},
-			FirstValid: 0,
-			LastValid:  basics.Round(proto.MaxTxnLife),
-			Note:       []byte{byte(poolSize + 1)},
-		},
-		PaymentTxnFields: transactions.PaymentTxnFields{
-			Receiver: receiver,
-			Amount:   basics.MicroAlgos{Raw: 1},
-		},
-	}
-	signed := txLowFee.Sign(secrets[0])
-	require.Error(t, transactionPool.Remember(signed))
-
-	txHighFee := transactions.Transaction{
-		Type: protocol.PaymentTx,
-		Header: transactions.Header{
-			Sender:     sender,
-			Fee:        basics.MicroAlgos{Raw: baseFee * exponentialGrowth},
-			FirstValid: 0,
-			LastValid:  basics.Round(proto.MaxTxnLife),
-			Note:       []byte{byte(poolSize + 2)},
-		},
-		PaymentTxnFields: transactions.PaymentTxnFields{
-			Receiver: receiver,
-			Amount:   basics.MicroAlgos{Raw: 1},
-		},
-	}
-	require.NoError(t, transactionPool.Remember(txHighFee.Sign(secrets[0])))
 }
 
 func TestOverspender(t *testing.T) {
@@ -846,22 +632,20 @@ func TestOverspender(t *testing.T) {
 		addresses[i] = addr
 	}
 
-	balance := mockSpendableBalancesUnbounded{balance: 1 << 60}
-
-	transactionPool := MakeTransactionPool(&balance, exponentialGrowth, testPoolSize, false)
-
 	overSpender := addresses[0]
-	overSpenderPendingSpend := make(accountsToPendingTransactions)
+	ledger := makeMockLedger(t, initAcc(map[basics.Address]uint64{overSpender: proto.MinTxnFee - 1}))
+	transactionPool := MakeTransactionPool(ledger, testPoolSize, false)
 
 	receiver := addresses[1]
 	tx := transactions.Transaction{
 		Type: protocol.PaymentTx,
 		Header: transactions.Header{
-			Sender:     overSpender,
-			Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee + 1},
-			FirstValid: 0,
-			LastValid:  10,
-			Note:       make([]byte, 0),
+			Sender:      overSpender,
+			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee + 1},
+			FirstValid:  0,
+			LastValid:   10,
+			Note:        make([]byte, 0),
+			GenesisHash: ledger.GenesisHash(),
 		},
 		PaymentTxnFields: transactions.PaymentTxnFields{
 			Receiver: receiver,
@@ -869,12 +653,6 @@ func TestOverspender(t *testing.T) {
 		},
 	}
 	signedTx := tx.Sign(secrets[0])
-
-	// simulate this transaction was applied
-	balance.exceptions = make(map[basics.Address]uint64)
-	limit, err := overSpenderPendingSpend.deductionsWithTransaction(tx)
-	require.NoError(t, err)
-	balance.exceptions[overSpender] = limit.amount.Raw
 
 	// consume the transaction of allowed limit
 	require.Error(t, transactionPool.Remember(signedTx))
@@ -883,11 +661,12 @@ func TestOverspender(t *testing.T) {
 	minTx := transactions.Transaction{
 		Type: protocol.PaymentTx,
 		Header: transactions.Header{
-			Sender:     overSpender,
-			Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee},
-			FirstValid: 0,
-			LastValid:  10,
-			Note:       make([]byte, 0),
+			Sender:      overSpender,
+			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee},
+			FirstValid:  0,
+			LastValid:   10,
+			Note:        make([]byte, 0),
+			GenesisHash: ledger.GenesisHash(),
 		},
 		PaymentTxnFields: transactions.PaymentTxnFields{
 			Receiver: receiver,
@@ -896,56 +675,6 @@ func TestOverspender(t *testing.T) {
 	}
 	signedMinTx := minTx.Sign(secrets[0])
 	require.Error(t, transactionPool.Remember(signedMinTx))
-}
-
-func TestAddError(t *testing.T) {
-	numOfAccounts := 2
-	// Genereate accounts
-	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
-	addresses := make([]basics.Address, numOfAccounts)
-
-	for i := 0; i < numOfAccounts; i++ {
-		secret := keypair()
-		addr := basics.Address(secret.SignatureVerifier)
-		secrets[i] = secret
-		addresses[i] = addr
-	}
-
-	balance := mockSpendableBalancesUnbounded{balance: 1 << 60}
-
-	transactionPool := MakeTransactionPool(&balance, exponentialGrowth, testPoolSize, false)
-
-	sender := addresses[0]
-	senderPendingSpend := make(accountsToPendingTransactions)
-
-	receiver := addresses[1]
-	tx := transactions.Transaction{
-		Type: protocol.PaymentTx,
-		Header: transactions.Header{
-			Sender:     sender,
-			Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee + 1},
-			FirstValid: 0,
-			LastValid:  10,
-			Note:       make([]byte, 0),
-		},
-		PaymentTxnFields: transactions.PaymentTxnFields{
-			Receiver: receiver,
-			Amount:   basics.MicroAlgos{Raw: 0},
-		},
-	}
-	signedTx := tx.Sign(secrets[0])
-
-	// simulate this transaction was applied
-	limit, err := senderPendingSpend.deductionsWithTransaction(tx)
-	require.NoError(t, err)
-	transactionPool.algosPendingSpend[sender] = pendingTransactions{
-		deductions: accountDeductions{
-			amount: basics.MicroAlgos{Raw: 0xffffffffffffffff - limit.amount.Raw + 1},
-		},
-	}
-
-	// overflow accounting, and result in error
-	require.Error(t, transactionPool.Remember(signedTx))
 }
 
 func TestRemove(t *testing.T) {
@@ -961,20 +690,20 @@ func TestRemove(t *testing.T) {
 		addresses[i] = addr
 	}
 
-	balance := mockSpendableBalancesUnbounded{balance: 1 << 60}
-
-	transactionPool := MakeTransactionPool(&balance, exponentialGrowth, testPoolSize, false)
+	ledger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
+	transactionPool := MakeTransactionPool(ledger, testPoolSize, false)
 
 	sender := addresses[0]
 	receiver := addresses[1]
 	tx := transactions.Transaction{
 		Type: protocol.PaymentTx,
 		Header: transactions.Header{
-			Sender:     sender,
-			Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee + 1},
-			FirstValid: 0,
-			LastValid:  10,
-			Note:       []byte{0},
+			Sender:      sender,
+			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee + 1},
+			FirstValid:  0,
+			LastValid:   10,
+			Note:        []byte{0},
+			GenesisHash: ledger.GenesisHash(),
 		},
 		PaymentTxnFields: transactions.PaymentTxnFields{
 			Receiver: receiver,
@@ -984,26 +713,6 @@ func TestRemove(t *testing.T) {
 	signedTx := tx.Sign(secrets[0])
 	require.NoError(t, transactionPool.Remember(signedTx))
 	require.Equal(t, transactionPool.Pending(), []transactions.SignedTxn{signedTx})
-
-	tx2 := transactions.Transaction{
-		Type: protocol.PaymentTx,
-		Header: transactions.Header{
-			Sender:     sender,
-			Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee + 1},
-			FirstValid: 0,
-			LastValid:  10,
-			Note:       []byte{1},
-		},
-		PaymentTxnFields: transactions.PaymentTxnFields{
-			Receiver: receiver,
-			Amount:   basics.MicroAlgos{Raw: 0},
-		},
-	}
-
-	// invalid remove
-	transactionPool.remove(tx2.ID(), nil)
-	require.Equal(t, transactionPool.Pending(), []transactions.SignedTxn{signedTx})
-
 }
 
 func BenchmarkTransactionPoolRemember(b *testing.B) {
@@ -1019,7 +728,8 @@ func BenchmarkTransactionPoolRemember(b *testing.B) {
 		addresses[i] = addr
 	}
 
-	transactionPool := MakeTransactionPool(mockSpendableBalancesUnbounded{balance: 1 << 60}, exponentialGrowth, b.N, false)
+	ledger := makeMockLedger(b, initAccFixed(addresses, 1<<32))
+	transactionPool := MakeTransactionPool(ledger, b.N, false)
 	signedTransactions := make([]transactions.SignedTxn, 0, b.N)
 	for i, sender := range addresses {
 		for j := 0; j < b.N/len(addresses); j++ {
@@ -1028,15 +738,16 @@ func BenchmarkTransactionPoolRemember(b *testing.B) {
 			tx := transactions.Transaction{
 				Type: protocol.PaymentTx,
 				Header: transactions.Header{
-					Sender:     sender,
-					Fee:        basics.MicroAlgos{Raw: uint64(rand.Int()%10000) + proto.MinTxnFee},
-					FirstValid: 0,
-					LastValid:  basics.Round(proto.MaxTxnLife),
-					Note:       make([]byte, 2),
+					Sender:      sender,
+					Fee:         basics.MicroAlgos{Raw: uint64(rand.Int()%10000) + proto.MinTxnFee},
+					FirstValid:  0,
+					LastValid:   basics.Round(proto.MaxTxnLife),
+					Note:        make([]byte, 2),
+					GenesisHash: ledger.GenesisHash(),
 				},
 				PaymentTxnFields: transactions.PaymentTxnFields{
 					Receiver: receiver,
-					Amount:   basics.MicroAlgos{Raw: 1},
+					Amount:   basics.MicroAlgos{Raw: proto.MinBalance},
 				},
 			}
 			tx.Note = make([]byte, 8, 8)
@@ -1049,7 +760,8 @@ func BenchmarkTransactionPoolRemember(b *testing.B) {
 	}
 	b.StopTimer()
 	b.ResetTimer()
-	transactionPool = MakeTransactionPool(mockSpendableBalancesUnbounded{balance: 1 << 60}, exponentialGrowth, b.N, false)
+	ledger = makeMockLedger(b, initAccFixed(addresses, 1<<32))
+	transactionPool = MakeTransactionPool(ledger, b.N, false)
 
 	b.StartTimer()
 	for _, signedTx := range signedTransactions {
@@ -1073,7 +785,9 @@ func BenchmarkTransactionPoolPending(b *testing.B) {
 	sub := func(b *testing.B, benchPoolSize int) {
 		b.StopTimer()
 		b.ResetTimer()
-		transactionPool := MakeTransactionPool(mockSpendableBalancesUnbounded{balance: 1 << 60}, exponentialGrowth, benchPoolSize, false)
+
+		ledger := makeMockLedger(b, initAccFixed(addresses, 1<<32))
+		transactionPool := MakeTransactionPool(ledger, benchPoolSize, false)
 		var block bookkeeping.Block
 		block.Payset = make(transactions.Payset, 0)
 
@@ -1084,15 +798,16 @@ func BenchmarkTransactionPoolPending(b *testing.B) {
 				tx := transactions.Transaction{
 					Type: protocol.PaymentTx,
 					Header: transactions.Header{
-						Sender:     sender,
-						Fee:        basics.MicroAlgos{Raw: uint64(rand.Int()%10000) + proto.MinTxnFee},
-						FirstValid: 0,
-						LastValid:  basics.Round(proto.MaxTxnLife),
-						Note:       make([]byte, 2),
+						Sender:      sender,
+						Fee:         basics.MicroAlgos{Raw: uint64(rand.Int()%10000) + proto.MinTxnFee},
+						FirstValid:  0,
+						LastValid:   basics.Round(proto.MaxTxnLife),
+						Note:        make([]byte, 2),
+						GenesisHash: ledger.GenesisHash(),
 					},
 					PaymentTxnFields: transactions.PaymentTxnFields{
 						Receiver: receiver,
-						Amount:   basics.MicroAlgos{Raw: 1},
+						Amount:   basics.MicroAlgos{Raw: proto.MinBalance},
 					},
 				}
 				tx.Note = make([]byte, 8, 8)
@@ -1122,7 +837,7 @@ func BenchmarkTransactionPoolSteadyState(b *testing.B) {
 	fmt.Printf("BenchmarkTransactionPoolSteadyState: N=%d\n", b.N)
 
 	numOfAccounts := 100
-	// Genereate accounts
+	// Generate accounts
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
 	addresses := make([]basics.Address, numOfAccounts)
 
@@ -1134,7 +849,7 @@ func BenchmarkTransactionPoolSteadyState(b *testing.B) {
 	}
 
 	l := makeMockLedger(b, initAccFixed(addresses, 1<<32))
-	transactionPool := MakeTransactionPool(l, exponentialGrowth, poolSize, false)
+	transactionPool := MakeTransactionPool(l, poolSize, false)
 
 	var signedTransactions []transactions.SignedTxn
 	for i := 0; i < b.N; i++ {

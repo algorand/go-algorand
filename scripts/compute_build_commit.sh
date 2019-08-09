@@ -1,8 +1,5 @@
 #!/bin/bash
 
-export GOPATH=$(go env GOPATH)
-cd ${GOPATH}/src/github.com/algorand/go-algorand
-
 # Pi build doesn't support recent enough git with support for --exclude
 # COMMIT=$(git describe --always --dirty=+ --exclude="*" 2>&1)
 
