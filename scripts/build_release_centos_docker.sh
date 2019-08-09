@@ -19,20 +19,23 @@ mkdir -p ${HOME}/go/bin
 export GOPATH=${HOME}/go
 export PATH=${GOPATH}/bin:/usr/local/go/bin:${PATH}
 
+# Anchor our repo root reference location
+REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"/../..
+
 go install golang.org/x/lint/golint
 go install github.com/golang/dep/cmd/dep
 go install golang.org/x/tools/cmd/stringer
 go install github.com/go-swagger/go-swagger/cmd/swagger
 
 
-cd ${GOPATH}/src/github.com/algorand/go-algorand
+cd ${REPO_ROOT}
 
 # definitely rebuild libsodium which could link to external C libraries
-if [ -f ${GOPATH}/src/github.com/algorand/go-algorand/crypto/libsodium-fork/Makefile ]; then
-    (cd ${GOPATH}/src/github.com/algorand/go-algorand/crypto/libsodium-fork && make distclean)
+if [ -f ${REPO_ROOT}/crypto/libsodium-fork/Makefile ]; then
+    (cd ${REPO_ROOT}/crypto/libsodium-fork && make distclean)
 fi
-rm -rf ${GOPATH}/src/github.com/algorand/go-algorand/crypto/lib
-make ${GOPATH}/src/github.com/algorand/go-algorand/crypto/lib/libsodium.a
+rm -rf ${REPO_ROOT}/crypto/lib
+make crypto/lib/libsodium.a
 
 make build
 
@@ -61,7 +64,7 @@ rm -f ${HOME}/.gnupg/S.gpg-agent
 (cd ~/.gnupg && ln -s /S.gpg-agent S.gpg-agent)
 
 gpg --import /stuff/key.pub
-gpg --import ${GOPATH}/src/github.com/algorand/go-algorand/installer/rpm/RPM-GPG-KEY-Algorand
+gpg --import ${REPO_ROOT}/installer/rpm/RPM-GPG-KEY-Algorand
 
 cat <<EOF>"${HOME}/.rpmmacros"
 %_gpg_name Algorand RPM <rpm@algorand.com>
@@ -96,7 +99,7 @@ if [ -f "${OLDRPM}" ]; then
     cp -p /var/lib/algorand/genesis/testnet/genesis.json /root/testnode
 
     goal node start -d /root/testnode
-    goal node wait -d /root/testnode -w 60
+    goal node wait -d /root/testnode -w 120
     goal node stop -d /root/testnode
 fi
 
@@ -106,7 +109,7 @@ yum-config-manager --add-repo http://${DC_IP}:8111/algodummy.repo
 yum install -y algorand
 algod -v
 # check that the installed version is now the current version
-algod -v | grep -q ${FULLVERSION}.stable
+algod -v | grep -q ${FULLVERSION}.${CHANNEL}
 
 if [ ! -d /root/testnode ]; then
     mkdir -p /root/testnode
@@ -114,7 +117,7 @@ if [ ! -d /root/testnode ]; then
 fi
 
 goal node start -d /root/testnode
-goal node wait -d /root/testnode -w 60
+goal node wait -d /root/testnode -w 120
 goal node stop -d /root/testnode
 
 

@@ -30,6 +30,7 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/logging"
@@ -148,15 +149,17 @@ var versionCmd = &cobra.Command{
 		onDataDirs(func(dataDir string) {
 			response, err := ensureAlgodClient(dataDir).AlgodVersions()
 			if err != nil {
-				panic(err)
+				fmt.Println(err)
+				os.Exit(1)
 			}
 			if !verboseVersionPrint {
 				fmt.Println(response.Versions)
-			} else {
-				fmt.Printf("Version: %v \n", response.Versions)
-				fmt.Printf("GenesisID: %v \n", response.GenesisID)
-				// fmt.Printf("Channel: %v \n", response.Channel)
-				// fmt.Printf("Commit: %v - #%v \n", response.Branch, response.CommitHash)
+				return
+			}
+			fmt.Printf("Version: %v \n", response.Versions)
+			fmt.Printf("GenesisID: %s \n", response.GenesisID)
+			if (response.Build != common.BuildVersion{}) {
+				fmt.Printf("Build: %d.%d.%d.%s [%s] (commit #%s)\n", response.Build.Major, response.Build.Minor, response.Build.BuildNumber, response.Build.Channel, response.Build.Branch, response.Build.CommitHash)
 			}
 		})
 	},
@@ -442,13 +445,36 @@ func reportWarnf(format string, args ...interface{}) {
 }
 
 func reportErrorln(args ...interface{}) {
-	fmt.Println(args...)
+	fmt.Fprintln(os.Stderr, args...)
 	// log.Warnln(args...)
 	os.Exit(1)
 }
 
 func reportErrorf(format string, args ...interface{}) {
-	fmt.Printf(format+"\n", args...)
+	fmt.Fprintf(os.Stderr, format+"\n", args...)
 	// log.Warnf(format, args...)
 	os.Exit(1)
+}
+
+// writeFile is a wrapper of ioutil.WriteFile which considers the special
+// case of stdout filename
+func writeFile(filename string, data []byte, perm os.FileMode) error {
+	var err error
+	if filename == stdoutFilenameValue {
+		// Write to Stdout
+		if _, err = os.Stdout.Write(data); err != nil {
+			return err
+		}
+		return nil
+	}
+	return ioutil.WriteFile(filename, data, perm)
+}
+
+// readFile is a wrapper of ioutil.ReadFile which consniders the
+// special case of stdin filename
+func readFile(filename string) ([]byte, error) {
+	if filename == stdinFileNameValue {
+		return ioutil.ReadAll(os.Stdin)
+	}
+	return ioutil.ReadFile(filename)
 }

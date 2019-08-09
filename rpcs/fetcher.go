@@ -129,11 +129,7 @@ func (factory NetworkFetcherFactory) NewOverGossip(tag protocol.Tag) Fetcher {
 		factory.log.Info("WsFetcherService not available; fetch over gossip disabled")
 		return factory.New()
 	}
-	cleanup := func(fetcher *WsFetcher) {
-		factory.fs.UnregisterWsFetcherForTag(fetcher, tag.Complement())
-	}
-	f := MakeWsFetcher(factory.log, tag, gossipPeers, cleanup)
-	factory.fs.RegisterWsFetcherForTag(f.(*WsFetcher), tag.Complement())
+	f := MakeWsFetcher(factory.log, tag, gossipPeers, factory.fs)
 	return &ComposedFetcher{fetchers: []Fetcher{factory.New(), f}}
 }
 

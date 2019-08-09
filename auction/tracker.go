@@ -27,7 +27,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/client"
-	"github.com/algorand/go-algorand/daemon/algod/api/client/models"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -95,7 +95,7 @@ func MakeTracker(startRound uint64, auctionKey string) (*Tracker, error) {
 
 // ProcessMessage gets a transaction, decodes its note field,
 // checks for signature validity and places it in Tracker.
-func (am *Tracker) ProcessMessage(txn models.Transaction) error {
+func (am *Tracker) ProcessMessage(txn v1.Transaction) error {
 	am.mu.Lock()
 	defer am.mu.Unlock()
 

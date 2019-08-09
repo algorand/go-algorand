@@ -20,8 +20,6 @@ We currently strive to support Debian based distributions with Ubuntu 18.04 bein
 
 Initial environment setup:
 ```bash
-mkdir -p ${GOPATH}/src/github.com/algorand
-cd ${GOPATH}/src/github.com/algorand
 git clone https://github.com/algorand/go-algorand
 cd go-algorand
 sh ./scripts/configure_dev.sh
@@ -80,21 +78,23 @@ The following packages provide core functionality to the `algod` and `kmd` daemo
 	 - `bookkeeping` defines blocks, which are batches of transactions atomically committed to Algorand.
 	 - `pools` implements the transaction pool.  The transaction pool holds transactions seen by a node in memory before they are proposed in a block.
 	 - `committee` implements the credentials that authenticate a participating account's membership in the agreement protocol.
-  - `ledger` contains the Algorand Ledger state machine, which holds the sequence of blocks.  The Ledger executes the state transitions that result from applying these blocks.  It answers queries on blocks (e.g., what transactions were in the last committed block?) and on accounts (e.g., what is my balance?).
+  - `ledger` ([README](ledger/README.md)) contains the Algorand Ledger state machine, which holds the sequence of blocks.  The Ledger executes the state transitions that result from applying these blocks.  It answers queries on blocks (e.g., what transactions were in the last committed block?) and on accounts (e.g., what is my balance?).
   - `protocol` declares constants used to identify protocol versions, tags for routing network messages, and prefixes for domain separation of cryptographic inputs.  It also implements the canonical encoder.
   - `network` contains the code for participating in a mesh network based on websockets. Maintains connection to some number of peers, (optionally) accepts connections from peers, sends point to point and broadcast messages, and receives messages routing them to various handler code (e.g. agreement/gossip/network.go registers three handlers).
      - `rpcs` contains the HTTP RPCs used by `algod` processes to query one another.
-  - `agreement` contains the agreement service, which implements Algorand's Byzantine Agreement protocol.  This protocol allows participating accounts to quickly confirm blocks in a fork-safe manner, provided that sufficient account stake is correctly executing the protocol.
+  - `agreement` ([README](agreement/README.md)) contains the agreement service, which implements Algorand's Byzantine Agreement protocol.  This protocol allows participating accounts to quickly confirm blocks in a fork-safe manner, provided that sufficient account stake is correctly executing the protocol.
   - `node` integrates the components above and handles initialization and shutdown.  It provides queries into these components.
 
 `daemon` defines the two daemons which provide Algorand clients with services:
 
   - `daemon/algod` holds the `algod` daemon, which implements a participating node.  `algod` allows a node to participate in the agreement protocol, submit and confirm transactions, and view the state of the Algorand Ledger.
-  - `daemon/kmd` holds the `kmd` daemon.  This daemon allows a node to sign transactions.  Because `kmd` is separate from `algod`, `kmd` allows a user to sign transactions on an air-gapped computer.
+    - `daemon/algod/api` ([README](daemon/algod/api/README.md)) is the REST interface used for interactions with algod.
+  - `daemon/kmd` ([README](daemon/kmd/README.md)) holds the `kmd` daemon.  This daemon allows a node to sign transactions.  Because `kmd` is separate from `algod`, `kmd` allows a user to sign transactions on an air-gapped computer.
   
 The following packages allow developers to interface with the Algorand system:
 
   - `cmd` holds the primary commands defining entry points into the system.
+    - `cmd/catchupsrv` ([README](cmd/catchupsrv/README.md)) is a tool to assist with processing historic blocks on a new node.
   - `libgoal` exports a Go interface useful for developers of Algorand clients.
   - `debug` holds secondary commands which assist developers during debugging.
   
@@ -105,7 +105,7 @@ The following packages contain tools to help Algorand developers deploy networks
   - `nodecontrol`
   - `tools`
   - `docker`
-  - `commandandcontrol`
+  - `commandandcontrol` ([README](commandandcontrol/README.md)) is a tool to automate a network of algod instances.
   - `components`
   - `netdeploy`
   

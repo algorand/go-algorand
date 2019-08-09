@@ -173,7 +173,11 @@ func (tx Header) Alive(tc TxnContext) error {
 	// Check round validity
 	round := tc.Round()
 	if round < tx.FirstValid || round > tx.LastValid {
-		return fmt.Errorf("txn dead: round %d outside of %d--%d", round, tx.FirstValid, tx.LastValid)
+		return TxnDeadError{
+			Round:      round,
+			FirstValid: tx.FirstValid,
+			LastValid:  tx.LastValid,
+		}
 	}
 
 	// Check genesis ID
@@ -303,28 +307,6 @@ func (tx Transaction) TxAmount() basics.MicroAlgos {
 	default:
 		return basics.MicroAlgos{Raw: 0}
 	}
-}
-
-// SenderDeduction returns the amount of MicroAlgos that must be deducted from the
-// sender's account and whether this transaction also empties the sender's account
-func (tx Transaction) SenderDeduction() (amount basics.MicroAlgos, empty bool, err error) {
-	// move fee to pool
-	amount = tx.Fee
-	switch tx.Type {
-	case protocol.PaymentTx:
-		var paymentAmount basics.MicroAlgos
-		paymentAmount, empty = tx.PaymentTxnFields.senderDeductions()
-		var overflow bool
-		amount, overflow = basics.OAddA(amount, paymentAmount)
-		if overflow {
-			err = fmt.Errorf("overflowed computing sender deduction for transaction %v (fee %v, amount %v)", tx.ID(), tx.Fee, paymentAmount)
-		}
-	case protocol.KeyRegistrationTx:
-		// no additional spend over the fee
-	default:
-		err = fmt.Errorf("unknown transaction type %v", tx.Type)
-	}
-	return
 }
 
 // EstimateEncodedSize returns the estimated encoded size of the transaction including the signature.

@@ -37,14 +37,6 @@ type PaymentTxnFields struct {
 	CloseRemainderTo basics.Address `codec:"close"`
 }
 
-func (payment PaymentTxnFields) senderDeductions() (amount basics.MicroAlgos, empty bool) {
-	amount = payment.Amount
-	if payment.CloseRemainderTo != (basics.Address{}) {
-		empty = true
-	}
-	return
-}
-
 func (payment PaymentTxnFields) checkSpender(header Header, spec SpecialAddresses, proto config.ConsensusParams) error {
 	if header.Sender == payment.CloseRemainderTo {
 		return fmt.Errorf("transaction cannot close account to its sender %v", header.Sender)

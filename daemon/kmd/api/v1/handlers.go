@@ -92,6 +92,12 @@ func getWalletsHandler(ctx reqContext, w http.ResponseWriter, r *http.Request) {
 	//    Description: Lists all of the wallets that kmd is aware of.
 	//    Produces:
 	//    - application/json
+	//    Parameters:
+	//    - name: List Wallet Request
+	//      in: body
+	//      required: false
+	//      schema:
+	//        "$ref": "#/definitions/ListWalletsRequest"
 	//    Responses:
 	//      "200":
 	//        "$ref": "#/responses/ListWalletsResponse"

@@ -24,7 +24,7 @@ import (
 	"os/user"
 	"path/filepath"
 
-	"github.com/algorand/go-algorand/daemon/algod/api/client/models"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/libgoal"
 )
@@ -204,7 +204,7 @@ func (accountList *AccountsList) loadList() {
 	}
 }
 
-func (accountList *AccountsList) outputAccount(addr string, acctInfo models.Account, multisigInfo *libgoal.MultisigInfo) {
+func (accountList *AccountsList) outputAccount(addr string, acctInfo v1.Account, multisigInfo *libgoal.MultisigInfo) {
 	if acctInfo.Address == "" {
 		fmt.Printf("[n/a]\t%s\t%s\t[n/a] microAlgos", accountList.getNameByAddress(addr), addr)
 	} else {

@@ -19,6 +19,7 @@ namespace eval ::AlgorandGoal {
   namespace export GetAlgodNetworkAddress
   namespace export GetKMDNetworkAddress
   namespace export GetLedgerSupply
+  namespace export WaitForRound
 
   # My Variables
    set version 1.0
@@ -209,7 +210,7 @@ proc ::AlgorandGoal::VerifyAccount { WALLET_NAME WALLET_PASSWORD ACCOUNT_ADDRESS
 
 # Delete an account
 proc ::AlgorandGoal::DeleteAccount { WALLET_NAME ACCOUNT_ADDRESS } {
-    spawn goal account delete --wallet $WALLET_NAME --addr $ACCOUNT_ADDRESS
+    spawn goal account delete --wallet $WALLET_NAME --address $ACCOUNT_ADDRESS
     expect {*}
 }
 
@@ -400,7 +401,7 @@ proc ::AlgorandGoal::CreateOneOfTwoMultisigForWallet { ADDRESS_1 ADDRESS_2 WALLE
 # Query info for a 1-of-2 multisig account, and verify
 proc ::AlgorandGoal::VerifyMultisigInfoForOneOfTwoMultisig { MULTISIG_ADDRESS ADDRESS_1 ADDRESS_2 WALLET_NAME TEST_PRIMARY_NODE_DIR } {
     if { [ catch {
-        spawn goal account multisig info --addr $MULTISIG_ADDRESS -d $TEST_PRIMARY_NODE_DIR -w $WALLET_NAME
+        spawn goal account multisig info --address $MULTISIG_ADDRESS -d $TEST_PRIMARY_NODE_DIR -w $WALLET_NAME
         expect {
             timeout { ::AlgorandGoal::Abort "Timed out querying info about multisig account $MULTISIG_ADDRESS"  }
             -re {Version: (\d+)\r\nThreshold: (\d+)\r\nPublic keys:\r\n  ([a-zA-Z0-9]+)\r\n  ([a-zA-Z0-9]+)\r\n} {
@@ -422,9 +423,62 @@ proc ::AlgorandGoal::VerifyMultisigInfoForOneOfTwoMultisig { MULTISIG_ADDRESS AD
 # Delete a multisig address
 proc ::AlgorandGoal::DeleteMultisigAccount { MULTISIG_ADDRESS TEST_PRIMARY_NODE_DIR } {
     if { [ catch {
-        spawn goal account multisig delete --addr $MULTISIG_ADDRESS -d $TEST_PRIMARY_NODE_DIR
+        spawn goal account multisig delete --address $MULTISIG_ADDRESS -d $TEST_PRIMARY_NODE_DIR
         expect {*}
     } EXCEPTION ] } {
        ::AlgorandGoal::Abort "ERROR in DeleteMultisigAccount: $EXCEPTION"
     }
+}
+
+# Wait for node to reach a specific round
+proc ::AlgorandGoal::WaitForRound { WAIT_FOR_ROUND_NUMBER TEST_PRIMARY_NODE_DIR } {
+
+   puts "node status waiting for Round $WAIT_FOR_ROUND_NUMBER "
+
+    if { [catch {
+    set i 0
+        while 1 {
+            incr i
+            exec sleep 5
+
+            # Check node status
+            puts "spawn node status  "
+            spawn goal node status -d $TEST_PRIMARY_NODE_DIR
+            expect {
+                timeout { ::AlgorandGoal::Abort "goal node status timed out"  }
+                -re {Last committed block: (\d+)} {set BLOCK $expect_out(1,string); exp_continue }
+                -re {Time since last block: ([0-9]*\.?[0-9]*)s} {set TIME_SINCE_LAST_BLOCK $expect_out(1,string); exp_continue }
+                -re {Sync Time: ([0-9]*\.?[0-9]*)s} {set SYNC_TIME $expect_out(1,string); exp_continue }
+                -re {Last consensus protocol: ([-+=.:/_a-zA-Z0-9]+)} {set LAST_CONSENSUS_PROTOCOL $expect_out(1,string); exp_continue }
+                -re {Next consensus protocol: ([-+=.:/_a-zA-Z0-9]+)} {set NEXT_CONSENSUS_PROTOCOL $expect_out(1,string); exp_continue }
+                -re {Round for next consensus protocol: (\d+)} {set ROUND_FOR_NEXT_CONSENSUS_PROTOCOL $expect_out(1,string); exp_continue }
+                -re {Next consensus protocol supported: (\w+)} {set NEXT_CONSENSUS_PROTOCOL_SUPPORTED $expect_out(1,string); exp_continue }
+                -re {Has Synced Since Startup: (\w+)} {set HAS_SYNCHED_SINCE_STARTUP $expect_out(1,string); exp_continue }
+                -re {Genesis ID: (\w+)} {set GENESIS_ID $expect_out(1,string); exp_continue }
+                -re {Genesis hash: (\w+)} {set GENESIS_HASH $expect_out(1,string); close }
+            }
+            puts "node status check complete"
+            puts "block: $BLOCK"
+            puts "time since last block: $TIME_SINCE_LAST_BLOCK"
+            puts "sync time: $SYNC_TIME"
+            puts "last consensus protocol: $LAST_CONSENSUS_PROTOCOL"
+            puts "next consensus protocol: $NEXT_CONSENSUS_PROTOCOL"
+            puts "round for next consensus protocol: $ROUND_FOR_NEXT_CONSENSUS_PROTOCOL"
+            puts "next consensus protocol supported: $NEXT_CONSENSUS_PROTOCOL_SUPPORTED"
+            puts "has synced since startup: $HAS_SYNCHED_SINCE_STARTUP"
+            puts "genesis id: $GENESIS_ID"
+            puts "genesis hash: $GENESIS_HASH"
+
+            # Check if the round number is reached
+            if { $BLOCK >= $WAIT_FOR_ROUND_NUMBER } {
+                puts "Reached Round number: $WAIT_FOR_ROUND_NUMBER"; break
+            } else {
+               puts "Curren Round: '$BLOCK' is less than wait for round: '$WAIT_FOR_ROUND_NUMBER'"
+               if { $i >= 10 } then { ::AlgorandGoal::Abort " Current Round $BLOCK did not reach $WAIT_FOR_ROUND_NUMBER   "; break;}
+            }
+        }
+    } EXCEPTION ] } {
+       ::AlgorandGoal::Abort "ERROR in WaitForRound: $EXCEPTION"
+    }
+    return $BLOCK
 }

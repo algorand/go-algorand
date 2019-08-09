@@ -21,11 +21,12 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"runtime"
-	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -80,6 +81,7 @@ func TestInMemoryDisposal(t *testing.T) {
 func TestInMemoryUniqueDB(t *testing.T) {
 	acc, err := MakeAccessor("fn.db", false, true)
 	require.NoError(t, err)
+	defer acc.Close()
 	err = acc.Atomic(func(tx *sql.Tx) error {
 		_, err := tx.Exec("create table Service (data blob)")
 		return err
@@ -95,6 +97,7 @@ func TestInMemoryUniqueDB(t *testing.T) {
 
 	anotherAcc, err := MakeAccessor("fn2.db", false, true)
 	require.NoError(t, err)
+	defer anotherAcc.Close()
 	err = anotherAcc.Atomic(func(tx *sql.Tx) error {
 		var nrows int
 		row := tx.QueryRow("select count(*) from Service")
@@ -105,18 +108,19 @@ func TestInMemoryUniqueDB(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
-	anotherAcc.Close()
-
-	acc.Close()
 }
 
 func TestDBConcurrency(t *testing.T) {
 	fn := fmt.Sprintf("/tmp/%s.%d.sqlite3", t.Name(), crypto.RandUint64())
+	defer cleanupSqliteDb(t, fn)
+
 	acc, err := MakeAccessor(fn, false, false)
 	require.NoError(t, err)
+	defer acc.Close()
 
 	acc2, err := MakeAccessor(fn, true, false)
 	require.NoError(t, err)
+	defer acc2.Close()
 
 	err = acc.Atomic(func(tx *sql.Tx) error {
 		_, err := tx.Exec("CREATE TABLE foo (a INTEGER, b INTEGER)")
@@ -208,6 +212,20 @@ func TestDBConcurrency(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func cleanupSqliteDb(t *testing.T, path string) {
+	parts, err := filepath.Glob(path + "*")
+	if err != nil {
+		t.Errorf("%s*: could not glob, %s", path, err)
+		return
+	}
+	for _, part := range parts {
+		err = os.Remove(part)
+		if err != nil {
+			t.Errorf("%s: error cleaning up, %s", part, err)
+		}
+	}
+}
+
 func TestDBConcurrencyRW(t *testing.T) {
 	dbFolder := "/dev/shm"
 	os := runtime.GOOS
@@ -221,11 +239,15 @@ func TestDBConcurrencyRW(t *testing.T) {
 
 	fn := fmt.Sprintf("/%s.%d.sqlite3", t.Name(), crypto.RandUint64())
 	fn = filepath.Join(dbFolder, fn)
+	defer cleanupSqliteDb(t, fn)
+
 	acc, err := MakeAccessor(fn, false, false)
 	require.NoError(t, err)
+	defer acc.Close()
 
 	acc2, err := MakeAccessor(fn, true, false)
 	require.NoError(t, err)
+	defer acc2.Close()
 
 	err = acc.Atomic(func(tx *sql.Tx) error {
 		_, err := tx.Exec("CREATE TABLE t (a INTEGER PRIMARY KEY)")
@@ -233,32 +255,57 @@ func TestDBConcurrencyRW(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	started := make(chan struct{})
 	var lastInsert int64
-	var wg sync.WaitGroup
-	wg.Add(1)
+	testRoutineComplete := make(chan struct{}, 3)
+	targetTestDurationTimer := time.After(15 * time.Second)
 	go func() {
-		defer wg.Done()
-		defer atomic.StoreInt64(&lastInsert, -1)
-		for i := int64(0); i < 10000; i++ {
-			errw := acc.Atomic(func(tx *sql.Tx) error {
+		defer func() {
+			atomic.StoreInt64(&lastInsert, -1)
+			testRoutineComplete <- struct{}{}
+		}()
+		var errw error
+		for i, timedLoop := int64(1), true; timedLoop && errw == nil; i++ {
+			errw = acc.Atomic(func(tx *sql.Tx) error {
 				_, err := tx.Exec("INSERT INTO t (a) VALUES (?)", i)
 				return err
 			})
-			atomic.StoreInt64(&lastInsert, i)
-			require.NoError(t, errw)
+			if errw == nil {
+				atomic.StoreInt64(&lastInsert, i)
+			}
+			if i == 1 {
+				close(started)
+			}
+			select {
+			case <-targetTestDurationTimer:
+				// abort the for loop.
+				timedLoop = false
+			default:
+				// keep going.
+			}
 		}
+		require.NoError(t, errw)
 	}()
 
 	for i := 0; i < 2; i++ {
-		wg.Add(1)
 		go func() {
-			defer wg.Done()
+			defer func() {
+				testRoutineComplete <- struct{}{}
+			}()
+			select {
+			case <-started:
+			case <-time.After(10 * time.Second):
+				t.Error("timeout")
+				return
+			}
 			for {
 				id := atomic.LoadInt64(&lastInsert)
 				if id == 0 {
-					continue
-				}
-				if id < 0 {
+					// we have yet to complete the first item insertion, yet,
+					// the "started" channel is closed. This happen only in case of
+					// an error during the insert ( which is reported above)
+					break
+				} else if id < 0 {
 					break
 				}
 				var x int64
@@ -273,5 +320,16 @@ func TestDBConcurrencyRW(t *testing.T) {
 		}()
 	}
 
-	wg.Wait()
+	testTimeout := time.After(3 * time.Minute)
+	for i := 0; i < 3; i++ {
+		select {
+		case <-testRoutineComplete:
+			// good. keep going.
+		case <-testTimeout:
+			// the test has timed out. we want to abort now with a failuire since we might be stuck in one of the goroutines above.
+			lastID := atomic.LoadInt64(&lastInsert)
+			t.Errorf("Test has timed out. Last id is %d.\n", lastID)
+		}
+	}
+
 }

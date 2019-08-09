@@ -15,7 +15,7 @@ TESTROLLBACK=""
 UNKNOWNARGS=()
 HOSTEDFLAG=""
 HOSTEDSPEC=""
-BUCKET="" # updater defaults to using 'updatekey.json' if bucket is not set.
+BUCKET=""
 GENESIS_NETWORK_DIR=""
 GENESIS_NETWORK_DIR_SPEC=""
 
@@ -138,7 +138,7 @@ function determine_current_version() {
 
 function check_for_update() {
     determine_current_version
-    LATEST="$(${SCRIPTPATH}/updater ver check -c ${CHANNEL} ${BUCKET})"
+    LATEST="$(${SCRIPTPATH}/updater ver check -c ${CHANNEL} ${BUCKET} | sed -n '2 p')"
     if [ $? -ne 0 ]; then
         echo No remote updates found
         return 1
@@ -238,7 +238,7 @@ function shutdown_node() {
 function backup_binaries() {
     echo Backing up current binary files...
     mkdir -p ${BINDIR}/backup
-    BACKUPFILES="algod kmd carpenter doberman goal update.sh updater updatekey.json diagcfg"
+    BACKUPFILES="algod kmd carpenter doberman goal update.sh updater diagcfg"
     # add node_exporter to the files list we're going to backup, but only we if had it previously deployed.
     [ -f ${BINDIR}/node_exporter ] && BACKUPFILES="${BACKUPFILES} node_exporter"
     tar -zcf ${BINDIR}/backup/bin-v${CURRENTVER}.tar.gz -C ${BINDIR} ${BACKUPFILES} >/dev/null 2>&1

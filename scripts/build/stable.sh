@@ -2,15 +2,13 @@
 set -ev
 
 GOPATH=$(go env GOPATH)
-REPO_DIR=${GOPATH}/src/github.com/algorand/go-algorand
-cd ${REPO_DIR}
+REPO_DIR=$(pwd)
 
 # Run `make` to ensure `buildtools` is available
 make -j4
 
 # Flag that we want release handling of genesis files
 export RELEASE_GENESIS_PROCESS=true
-export TRANSITION_TELEMETRY_BUILDS=true
 
 git checkout rel/stable
 

@@ -15,12 +15,15 @@
 # Examples: scripts/checkout_branch.sh master
 #           scripts/checkout_branch.sh dev/mybranch
 
-cd ${GOPATH}/src/github.com/algorand/go-algorand
-
 if [ "$#" -ne 1 ]; then
     echo "Syntax: checkout_branch <branch>"
     exit 1
 fi
+
+# Anchor our repo root reference location
+REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"/..
+
+cd ${REPO_ROOT}
 
 scripts/check_clean_enlistment.sh
 if [ $? -ne 0 ]; then

@@ -17,7 +17,6 @@
 package data
 
 import (
-	"container/heap"
 	"fmt"
 	"time"
 
@@ -182,7 +181,7 @@ func (l *Ledger) NextRound() basics.Round {
 	return l.LastRound() + 1
 }
 
-// BalanceRecord implements Ledger.BalanceRecord.
+// BalanceRecord implements Ledger.BalanceRecord. It applies pending rewards to returned amounts.
 func (l *Ledger) BalanceRecord(r basics.Round, addr basics.Address) (basics.BalanceRecord, error) {
 	data, err := l.Lookup(r, addr)
 	if err != nil {
@@ -193,40 +192,6 @@ func (l *Ledger) BalanceRecord(r basics.Round, addr basics.Address) (basics.Bala
 		Addr:        addr,
 		AccountData: data,
 	}, nil
-}
-
-// BalanceAndStatus returns Balance and DelegationStatus as one call
-func (l *Ledger) BalanceAndStatus(addr basics.Address) (money basics.MicroAlgos, rewards basics.MicroAlgos, moneyWithoutPendingRewards basics.MicroAlgos, status basics.Status, latest basics.Round, err error) {
-	latest = l.Latest()
-	data, err := l.Lookup(latest, addr)
-	if err != nil {
-		return
-	}
-
-	totals, err := l.Totals(latest)
-	if err != nil {
-		return
-	}
-
-	hdr, err := l.BlockHdr(latest)
-	if err != nil {
-		return
-	}
-	proto, ok := config.Consensus[hdr.CurrentProtocol]
-	if !ok {
-		err = ledger.ProtocolError(hdr.CurrentProtocol)
-	}
-
-	money, rewards = data.Money(proto, totals.RewardsLevel)
-	status = data.Status
-
-	dataWithoutRewards, err := l.LookupWithoutRewards(latest, addr)
-	if err != nil {
-		return
-	}
-	moneyWithoutPendingRewards = dataWithoutRewards.MicroAlgos
-
-	return
 }
 
 // Circulation implements agreement.Ledger.Circulation.
@@ -343,27 +308,22 @@ func (l *Ledger) EnsureBlock(block *bookkeeping.Block, c agreement.Certificate) 
 
 // AssemblePayset adds transactions to a BlockEvaluator.
 func (*Ledger) AssemblePayset(pool *pools.TransactionPool, eval *ledger.BlockEvaluator, deadline time.Time) (stats telemetryspec.AssembleBlockStats) {
-	pending := pool.PendingUnsorted()
-	pheap := txnHeap{make([]*transactions.SignedTxn, 0, len(pending))}
-	for i := range pending {
-		pheap.Add(&pending[i])
-	}
+	pending := pool.Pending()
 	stats.StartCount = len(pending)
 	stats.StopReason = telemetryspec.AssembleBlockEmpty
 	first := true
 	totalFees := uint64(0)
 
-	for true {
-		txn := pheap.Next()
-		if txn == nil {
-			break
-		}
+	for len(pending) > 0 {
+		txn := pending[0]
+		pending = pending[1:]
+
 		if time.Now().After(deadline) {
 			stats.StopReason = telemetryspec.AssembleBlockTimeout
 			break
 		}
 
-		err := eval.Transaction(*txn, nil)
+		err := eval.Transaction(txn, nil)
 		if err == ledger.ErrNoSpace {
 			stats.StopReason = telemetryspec.AssembleBlockFull
 			break
@@ -380,11 +340,9 @@ func (*Ledger) AssemblePayset(pool *pools.TransactionPool, eval *ledger.BlockEva
 				stats.CommittedCount++
 			case transactions.MinFeeError:
 				logAt = logging.Base().Info
-				pool.Remove(txn.ID(), err)
 				stats.InvalidCount++
 			default:
 				// logAt = Warn
-				pool.Remove(txn.ID(), err)
 				stats.InvalidCount++
 			}
 
@@ -430,56 +388,4 @@ func (*Ledger) AssemblePayset(pool *pools.TransactionPool, eval *ledger.BlockEva
 		}
 	}
 	return
-}
-
-type txnHeap struct {
-	they []*transactions.SignedTxn
-}
-
-func (th *txnHeap) Add(stxn *transactions.SignedTxn) {
-	heap.Push(th, stxn)
-}
-
-func (th *txnHeap) Next() *transactions.SignedTxn {
-	if len(th.they) == 0 {
-		return nil
-	}
-	out := heap.Pop(th)
-	return out.(*transactions.SignedTxn)
-}
-
-// Push implements heap.Interface
-func (th *txnHeap) Push(x interface{}) {
-	th.they = append(th.they, x.(*transactions.SignedTxn))
-}
-
-// Pop implements heap.Interface
-func (th *txnHeap) Pop() interface{} {
-	lasti := len(th.they) - 1
-	out := th.they[lasti]
-	th.they = th.they[:lasti]
-	return out
-}
-
-// Len is the number of elements in the collection.
-// heap.Interface sort.Interface
-func (th *txnHeap) Len() int {
-	return len(th.they)
-}
-
-// Less reports whether the element with
-// index i should sort before the element with index j.
-// heap.Interface sort.Interface
-func (th *txnHeap) Less(i, j int) bool {
-	// "container/heap" natural sort is least first.
-	// Reverse that to return highest Priority first by checking for (j < i)
-	return th.they[j].PtrPriority().LessThan(th.they[i].PtrPriority())
-}
-
-// Swap swaps the elements with indexes i and j.
-// heap.Interface sort.Interface
-func (th *txnHeap) Swap(i, j int) {
-	t := th.they[i]
-	th.they[i] = th.they[j]
-	th.they[j] = t
 }

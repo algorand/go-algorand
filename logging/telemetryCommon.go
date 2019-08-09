@@ -36,11 +36,8 @@ type TelemetryOperation struct {
 }
 
 type telemetryState struct {
-	history      *logBuffer
-	hook         *asyncTelemetryHook
-	sessionGUID  string
-	hostName     string
-	instanceName string
+	history *logBuffer
+	hook    *asyncTelemetryHook
 }
 
 // TelemetryConfig represents the configuration of Telemetry logging
