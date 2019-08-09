@@ -31,7 +31,7 @@ func (sv *stackValue) typeName() string {
 type evalContext struct {
 	stack   []stackValue
 	program []byte
-	pc      uint
+	pc      int
 	err     error
 	txn     *transactions.SignedTxn
 }
@@ -95,6 +95,10 @@ var opSpecs = []opSpec{
 	{0x13, 0xff, "!=", opNeq, []byte{opAny, opAny}, opUint},
 	{0x14, 0xff, "!", opNot, []byte{opUint}, opUint},
 	{0x15, 0xff, "len", opLen, []byte{opBytes}, opUint},
+	// TODO: signed
+	{0x17, 0xff, "btoi", opBtoi, []byte{opBytes}, opUint},
+
+	{0x20, 0xf8, "int", opInt, nil, opUint},
 }
 
 // direct opcode bytes
@@ -143,6 +147,9 @@ func (cx *evalContext) step() {
 		}
 	}
 	ops[opcode].op(cx)
+	if cx.err == nil {
+		cx.pc++
+	}
 }
 
 func opErr(cx *evalContext) {
@@ -333,6 +340,29 @@ func opLen(cx *evalContext) {
 	last := len(cx.stack) - 1
 	cx.stack[last].Uint = uint64(len(cx.stack[last].Bytes))
 	cx.stack[last].Bytes = nil
+}
+
+func opBtoi(cx *evalContext) {
+	last := len(cx.stack) - 1
+	ibytes := cx.stack[last].Bytes
+	value := uint64(0)
+	for _, b := range ibytes {
+		value = value << 8
+		value = value | (uint64(b) & 0x0ff)
+	}
+	cx.stack[last].Uint = value
+	cx.stack[last].Bytes = nil
+}
+
+func opInt(cx *evalContext) {
+	dataLen := int(cx.program[cx.pc] & 0x07)
+	value := uint64(0)
+	for i := 0; i < dataLen; i++ {
+		value = value << 8
+		value = value | (uint64(cx.program[cx.pc+1+i]) & 0x0ff)
+	}
+	cx.stack = append(cx.stack, stackValue{Uint: value})
+	cx.pc += dataLen
 }
 
 func op(cx *evalContext) {
