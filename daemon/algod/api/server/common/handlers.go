@@ -20,7 +20,9 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 )
 
 // SwaggerJSON is an httpHandler for route GET /swagger.json
@@ -78,14 +80,25 @@ func VersionsHandler(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request)
 	//     Responses:
 	//		200: VersionsResponse
 	gh := ctx.Node.GenesisHash()
+	currentVersion := config.GetCurrentVersion()
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	response := VersionsResponse{}
-	response.Body.Versions = []string{"v1"}
-	response.Body.GenesisID = ctx.Node.GenesisID()
-	response.Body.GenesisHash = gh[:]
-
+	response := VersionsResponse{
+		Body: common.Version{
+			Versions:    []string{"v1"},
+			GenesisID:   ctx.Node.GenesisID(),
+			GenesisHash: gh[:],
+			Build: common.BuildVersion{
+				Major:       currentVersion.Major,
+				Minor:       currentVersion.Minor,
+				BuildNumber: currentVersion.BuildNumber,
+				CommitHash:  currentVersion.CommitHash,
+				Branch:      currentVersion.Branch,
+				Channel:     currentVersion.Channel,
+			},
+		},
+	}
 	json.NewEncoder(w).Encode(response.Body)
 
 	return
