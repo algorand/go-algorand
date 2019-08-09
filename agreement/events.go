@@ -598,11 +598,11 @@ type pinnedValueEvent struct {
 	// Round is the round for which to query the current pinned value
 	Round round
 
-	// Proposal holds the staging value itself.
+	// Proposal holds the pinned value itself.
 	Proposal proposalValue
-	// Payload holds the payload, if one exists (which is the case if Committable is set).
+	// Payload holds the payload, if one exists (which is the case if PayloadOK is set).
 	Payload proposal
-	// PayloadOK is set if and only if the staging value is committable.
+	// PayloadOK is set if and only if a payload was received for the pinned value.
 	PayloadOK bool
 }
 

@@ -2366,7 +2366,7 @@ func TestPlayerAlwaysResynchsPinnedValue(t *testing.T) {
 	pWhite, pM, helper := setupP(t, r, p-2, soft)
 	payload, pV := helper.MakeRandomProposalPayload(t, r)
 
-	// store a payload for p - 1
+	// store a payload for period 10
 	vv := helper.MakeVerifiedVote(t, 0, r, p-2, propose, *pV)
 	inMsg := messageEvent{
 		T: voteVerified,

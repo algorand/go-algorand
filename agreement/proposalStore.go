@@ -179,6 +179,11 @@ func (store *proposalStore) underlying() listener {
 //
 // - A readStaging event is dispatched to the proposalMachinePeriod.  The proposalStore
 //   sets the matching proposal payload (if one exists) in the response.
+//
+// - A readPinned event is delivered when the player wants to query the current
+//   pinned proposalValue, and corresponding payload if one exists. This occurs
+//   during resynchronization when players may relay the pinned value.
+//   The event is handled exclusively by the proposalStore and not forwarded.
 func (store *proposalStore) handle(r routerHandle, p player, e event) event {
 	if store.Relevant == nil {
 		store.Relevant = make(map[period]proposalValue)
