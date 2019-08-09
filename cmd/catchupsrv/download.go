@@ -62,13 +62,10 @@ func blockToString(blk uint64) string {
 }
 
 // blockToFileName converts a block number into the filename in which it will be downloaded
-// When using subfolders, the string corresponding to the base-36 number padded with zeros
-// Otherwise it is just the base-36 number
+// namely the base-36 representation of the block number padded with zeros
+// so that the length of the filename is at least minLenBlockStr
 func blockToFileName(blk uint64) string {
-	if *subfoldersFlag {
-		return padLeftZeros(blockToString(blk), minLenBlockStr)
-	}
-	return blockToString(blk)
+	return padLeftZeros(blockToString(blk), minLenBlockStr)
 }
 
 // stringToBlock converts a base-36 string into a block number
@@ -81,18 +78,16 @@ func stringToBlock(s string) (uint64, error) {
 }
 
 // blockToPath converts a block number into the full path in which it will be downloaded
-// When using subfolders, the path is `0b/cd/0bcdef` for block `bcdef`
-// Otherwise the path is just `bcdef` for block `bcdef`
+// Examples:
+// - for block `bcdef`, the path is `0b/cd/0bcdef`
+// - for block `abcdefg`, the path is `abc/de/abcdefg`
 func blockToPath(blk uint64) string {
-	if *subfoldersFlag {
-		s := blockToFileName(blk)
-		return path.Join(
-			s[0:(len(s)+2-minLenBlockStr)],
-			s[(len(s)+2-minLenBlockStr):(len(s)+4-minLenBlockStr)],
-			s,
-		)
-	}
-	return blockToFileName(blk)
+	s := blockToFileName(blk)
+	return path.Join(
+		s[0:(len(s)+2-minLenBlockStr)],
+		s[(len(s)+2-minLenBlockStr):(len(s)+4-minLenBlockStr)],
+		s,
+	)
 }
 
 // stringBlockToPath is the same as blockToPath except it takes a (non-padded) base-36 block
@@ -148,18 +143,17 @@ func fetchBlock(server string, blk uint64) error {
 		return err
 	}
 
-	if *subfoldersFlag {
-		d := path.Dir(fn)
-		_, err = os.Stat(d)
-		if os.IsNotExist(err) {
-			// Create the folder if it does not exist
-			err = os.MkdirAll(d, 0777)
-			if err != nil {
-				panic(err)
-			}
-		} else if err != nil {
+	// Create the folder if needed
+	d := path.Dir(fn)
+	_, err = os.Stat(d)
+	if os.IsNotExist(err) {
+		// Create the folder if it does not exist
+		err = os.MkdirAll(d, 0777)
+		if err != nil {
 			panic(err)
 		}
+	} else if err != nil {
+		panic(err)
 	}
 
 	return ioutil.WriteFile(fn, body, 0666)
