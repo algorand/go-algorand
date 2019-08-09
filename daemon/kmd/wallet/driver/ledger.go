@@ -209,7 +209,31 @@ func (lw *LedgerWallet) SignTransaction(tx transactions.Transaction, pw []byte) 
 
 // MultisigSignTransaction implements the Wallet interface.
 func (lw *LedgerWallet) MultisigSignTransaction(tx transactions.Transaction, pk crypto.PublicKey, partial crypto.MultisigSig, pw []byte) (crypto.MultisigSig, error) {
-	return crypto.MultisigSig{}, errNotSupported
+	isValidKey := false
+	for i := 0; i < len(partial.Subsigs); i++ {
+		subsig := &partial.Subsigs[i]
+		if subsig.Key == pk {
+			isValidKey = true
+		}
+	}
+
+	if !isValidKey {
+		return partial, errMsigWrongKey
+	}
+
+	sig, err := lw.signTransactionHelper(tx)
+	if err != nil {
+		return partial, err
+	}
+
+	for i := 0; i < len(partial.Subsigs); i++ {
+		subsig := &partial.Subsigs[i]
+		if subsig.Key == pk {
+			subsig.Sig = sig
+		}
+	}
+
+	return partial, nil
 }
 
 func uint64le(i uint64) []byte {
