@@ -161,8 +161,9 @@ type APIV1POSTKeyListRequest struct {
 type APIV1POSTTransactionSignRequest struct {
 	APIV1RequestEnvelope
 	WalletHandleToken string `json:"wallet_handle_token"`
-	Transaction       Bytes  `json:"transaction"`
-	WalletPassword    string `json:"wallet_password"`
+	// swagger:strfmt byte
+	Transaction    []byte `json:"transaction"`
+	WalletPassword string `json:"wallet_password"`
 }
 
 // APIV1POSTMultisigListRequest is the request for `POST /v1/multisig/list`
@@ -208,9 +209,10 @@ type APIV1DELETEMultisigRequest struct {
 // swagger:model SignMultisigRequest
 type APIV1POSTMultisigTransactionSignRequest struct {
 	APIV1RequestEnvelope
-	WalletHandleToken string             `json:"wallet_handle_token"`
-	Transaction       Bytes              `json:"transaction"`
-	PublicKey         crypto.PublicKey   `json:"public_key"`
-	PartialMsig       crypto.MultisigSig `json:"partial_multisig"`
-	WalletPassword    string             `json:"wallet_password"`
+	WalletHandleToken string `json:"wallet_handle_token"`
+	// swagger:strfmt byte
+	Transaction    []byte             `json:"transaction"`
+	PublicKey      crypto.PublicKey   `json:"public_key"`
+	PartialMsig    crypto.MultisigSig `json:"partial_multisig"`
+	WalletPassword string             `json:"wallet_password"`
 }

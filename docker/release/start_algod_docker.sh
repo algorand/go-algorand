@@ -13,12 +13,14 @@ then
     exit
 fi
 
-ALGORAND_CONTAINER="algod-${ALGORAND_NETWORK}"
+CHANNEL_VERSION="%CHANNEL_VERSION%"
+ALGORAND_CONTAINER="algod_${CHANNEL_VERSION}_${ALGORAND_NETWORK}"
 ALGORAND_VOLUME="algod-data-${ALGORAND_NETWORK}"
+ALGORAND_IMAGE="algorand/algod_${CHANNEL_VERSION}:latest"
 
 echo "starting container '${ALGORAND_CONTAINER}' with volume: '${ALGORAND_VOLUME}'"
 
-docker run --name ${ALGORAND_CONTAINER} -d -e ALGORAND_NETWORK=${ALGORAND_NETWORK} --mount type=volume,source=${ALGORAND_VOLUME},dst=/root/node/data -t algorand/release:latest
+docker run --name ${ALGORAND_CONTAINER} -d -e ALGORAND_NETWORK=${ALGORAND_NETWORK} --mount type=volume,source=${ALGORAND_VOLUME},dst=/root/node/data -t ${ALGORAND_IMAGE}
 
 dockerRunStatus=$?
 if [ $dockerRunStatus -ne 0 ]; then
@@ -29,3 +31,5 @@ else
     echo "   docker exec -it  ${ALGORAND_CONTAINER} /bin/bash"
 fi
 exit $dockerRunStatus
+
+

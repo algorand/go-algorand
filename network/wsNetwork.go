@@ -316,6 +316,7 @@ type WebsocketNetwork struct {
 	slowWritingPeerMonitorInterval time.Duration
 
 	requestsTracker *RequestTracker
+	requestsLogger  *RequestLogger
 }
 
 type broadcastRequest struct {
@@ -518,7 +519,12 @@ func (wn *WebsocketNetwork) setup() {
 	wn.router = mux.NewRouter()
 	wn.router.Handle(GossipNetworkPath, wn)
 	wn.requestsTracker = makeRequestsTracker(wn.router, wn.log, wn.config)
-	wn.server.Handler = wn.requestsTracker
+	if wn.config.EnableRequestLogger {
+		wn.requestsLogger = makeRequestLogger(wn.requestsTracker, wn.log)
+		wn.server.Handler = wn.requestsLogger
+	} else {
+		wn.server.Handler = wn.requestsTracker
+	}
 	wn.server.ReadHeaderTimeout = httpServerReadHeaderTimeout
 	wn.server.WriteTimeout = httpServerWriteTimeout
 	wn.server.IdleTimeout = httpServerIdleTimeout
@@ -589,6 +595,13 @@ func (wn *WebsocketNetwork) rlimitIncomingConnections() error {
 	// Set rlim_cur to match IncomingConnectionsLimit
 	newLimit := uint64(wn.config.IncomingConnectionsLimit) + wn.config.ReservedFDs
 	if newLimit > lim.Cur {
+		if runtime.GOOS == "darwin" && newLimit > 10240 && lim.Max == 0x7fffffffffffffff {
+			// The max file limit is 10240, even though
+			// the max returned by Getrlimit is 1<<63-1.
+			// This is OPEN_MAX in sys/syslimits.h.
+			// see https://github.com/golang/go/issues/30401
+			newLimit = 10240
+		}
 		lim.Cur = newLimit
 		err = unix.Setrlimit(unix.RLIMIT_NOFILE, &lim)
 		if err != nil {
@@ -830,25 +843,31 @@ func (wn *WebsocketNetwork) checkIncomingConnectionVariables(response http.Respo
 	}
 
 	otherRandom := request.Header.Get(NodeRandomHeader)
-	if otherRandom == wn.RandomID || otherRandom == "" {
+	if otherRandom == "" {
 		// This is pretty harmless and some configurations of phonebooks or DNS records make this likely. Quietly filter it out.
 		var message string
-		if otherRandom == "" {
-			// missing header.
-			wn.log.Warnf("new peer %s did not include random ID header in request. mine=%s headers %#v", request.RemoteAddr, wn.RandomID, request.Header)
-			networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "missing random ID header"})
-			message = fmt.Sprintf("Request was missing a %s header", NodeRandomHeader)
-		} else {
-			wn.log.Debugf("new peer %s has same node random id, am I talking to myself? %s", request.RemoteAddr, wn.RandomID)
-			networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "matching random ID header"})
-			message = fmt.Sprintf("Request included matching %s=%s header", NodeRandomHeader, otherRandom)
-		}
+		// missing header.
+		wn.log.Warnf("new peer %s did not include random ID header in request. mine=%s headers %#v", request.RemoteAddr, wn.RandomID, request.Header)
+		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "missing random ID header"})
+		message = fmt.Sprintf("Request was missing a %s header", NodeRandomHeader)
 		response.WriteHeader(http.StatusPreconditionFailed)
 		n, err := response.Write([]byte(message))
 		if err != nil {
 			wn.log.Warnf("ws failed to write response '%s' : n = %d err = %v", message, n, err)
 		}
 		return http.StatusPreconditionFailed
+	} else if otherRandom == wn.RandomID {
+		// This is pretty harmless and some configurations of phonebooks or DNS records make this likely. Quietly filter it out.
+		var message string
+		wn.log.Debugf("new peer %s has same node random id, am I talking to myself? %s", request.RemoteAddr, wn.RandomID)
+		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "matching random ID header"})
+		message = fmt.Sprintf("Request included matching %s=%s header", NodeRandomHeader, otherRandom)
+		response.WriteHeader(http.StatusLoopDetected)
+		n, err := response.Write([]byte(message))
+		if err != nil {
+			wn.log.Warnf("ws failed to write response '%s' : n = %d err = %v", message, n, err)
+		}
+		return http.StatusLoopDetected
 	}
 	return http.StatusOK
 }
@@ -883,6 +902,11 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 		wn.log.Info("ws upgrade fail ", err)
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "ws upgrade fail"})
 		return
+	}
+
+	// we want to tell the response object that the status was changed to 101 ( switching protocols ) so that it will be logged.
+	if wn.requestsLogger != nil {
+		wn.requestsLogger.SetStatusCode(response, http.StatusSwitchingProtocols)
 	}
 
 	peer := &wsPeer{
@@ -1535,7 +1559,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 			// we're guaranteed to have a valid response object.
 			switch response.StatusCode {
 			case http.StatusPreconditionFailed:
-				wn.log.Warnf("ws connect(%s) fail - bad handshake, precondition failed : %s error : '%s'", gossipAddr, errString)
+				wn.log.Warnf("ws connect(%s) fail - bad handshake, precondition failed : '%s'", gossipAddr, errString)
 			case http.StatusLoopDetected:
 				wn.log.Infof("ws connect(%s) aborted due to connecting to self", gossipAddr)
 			case http.StatusTooManyRequests:

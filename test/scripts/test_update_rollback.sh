@@ -7,9 +7,6 @@ set -e
 # Suppress telemetry reporting for tests
 export ALGOTEST=1
 
-export GOPATH=$(go env GOPATH)
-cd ${GOPATH}/src/github.com/algorand/go-algorand
-
 # Use same PKG_ROOT location as local_install.sh uses.
 PKG_ROOT=$(pwd)/tmp/dev_pkg
 rm -rf ${PKG_ROOT} # Purge existing dir if present
