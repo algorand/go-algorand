@@ -59,6 +59,7 @@ var defaultLocalV4 = Local{
 	EnableIncomingMessageFilter:           false,
 	EnableMetricReporting:                 false,
 	EnableOutgoingNetworkMessageFiltering: true,
+	EnableRequestLogger:                   false,
 	EnableTopAccountsReporting:            false,
 	EndpointAddress:                       "127.0.0.1:0",
 	GossipFanout:                          4,
