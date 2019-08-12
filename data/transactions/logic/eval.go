@@ -3,8 +3,10 @@ package logic
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 
 	"golang.org/x/crypto/sha3"
 
@@ -33,17 +35,30 @@ func (sv *stackValue) typeName() string {
 	return "uint64"
 }
 
+func (sv *stackValue) String() string {
+	if sv.Bytes != nil {
+		return hex.EncodeToString(sv.Bytes)
+	}
+	return fmt.Sprintf("%d 0x%d", sv.Uint, sv.Uint)
+}
+
+type EvalParams struct {
+	// the transaction being evaluated
+	Txn *transactions.SignedTxn
+
+	// round for which eval is happenning
+	Round basics.Round
+
+	Trace io.Writer
+}
+
 type evalContext struct {
+	EvalParams
+
 	stack   []stackValue
 	program []byte // txn.Lsig.Logic ?
 	pc      int
 	err     error
-
-	// the transaction being evaluated
-	txn *transactions.SignedTxn
-
-	// round for which eval is happenning
-	round basics.Round
 }
 
 type opFunc func(cx *evalContext)
@@ -79,12 +94,21 @@ type opSpec struct {
 }
 
 // Eval checks to see if a transaction passes logic
-func Eval(logic []byte, txn *transactions.SignedTxn) bool {
+func Eval(logic []byte, params EvalParams) bool {
 	var cx evalContext
+	cx.EvalParams = params
 	cx.stack = make([]stackValue, 0, 10)
 	cx.program = logic
-	cx.txn = txn
-	return false
+	for (cx.err == nil) && (cx.pc < len(cx.program)) {
+		cx.step()
+	}
+	if cx.err != nil {
+		return false
+	}
+	if len(cx.stack) != 1 {
+		return false
+	}
+	return cx.stack[0].Bytes == nil && cx.stack[0].Uint != 0
 }
 
 // ops, some of which have a range of opcode for immediate value
@@ -167,6 +191,9 @@ func (cx *evalContext) step() {
 		}
 	}
 	ops[opcode].op(cx)
+	if cx.Trace != nil {
+		fmt.Fprintf(cx.Trace, "%3d %s => %s\n", cx.pc, ops[opcode].name, cx.stack[len(cx.stack)-1].String())
+	}
 	if cx.err == nil {
 		cx.pc++
 	}
@@ -338,6 +365,7 @@ func opEq(cx *evalContext) {
 	} else {
 		cx.stack[prev].Uint = 0
 	}
+	cx.stack[prev].Bytes = nil
 	cx.stack = cx.stack[:last]
 }
 
@@ -423,11 +451,11 @@ func opArg(cx *evalContext) {
 		value = value << 8
 		value = value | (uint64(cx.program[cx.pc+1+i]) & 0x0ff)
 	}
-	if value >= uint64(len(cx.txn.Lsig.Args)) {
-		cx.err = fmt.Errorf("cannot load arg[%d] of %d", value, len(cx.txn.Lsig.Args))
+	if value >= uint64(len(cx.Txn.Lsig.Args)) {
+		cx.err = fmt.Errorf("cannot load arg[%d] of %d", value, len(cx.Txn.Lsig.Args))
 		return
 	}
-	cx.stack = append(cx.stack, stackValue{Bytes: cx.txn.Lsig.Args[value]})
+	cx.stack = append(cx.stack, stackValue{Bytes: cx.Txn.Lsig.Args[value]})
 	cx.pc += dataLen
 }
 
@@ -473,7 +501,7 @@ func opTxn(cx *evalContext) {
 		value = value << 8
 		value = value | (uint64(cx.program[cx.pc+1+i]) & 0x0ff)
 	}
-	sv, err := cx.txnFieldToStack(cx.txn, value)
+	sv, err := cx.txnFieldToStack(cx.Txn, value)
 	if err != nil {
 		cx.err = err
 		return
@@ -492,7 +520,7 @@ func opGlobal(cx *evalContext) {
 	var sv stackValue
 	switch value {
 	case 0:
-		sv.Uint = uint64(cx.round)
+		sv.Uint = uint64(cx.Round)
 	case 1:
 		sv.Uint = config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee
 	case 2:

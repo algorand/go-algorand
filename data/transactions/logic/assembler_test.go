@@ -69,6 +69,16 @@ func TestAssembleInt(t *testing.T) {
 	require.Equal(t, "24cafebabe", s)
 }
 
+/*
+test values generated in Python
+python3
+import base64
+raw='abcdef'
+base64.b64encode(raw.encode())
+base64.b32encode(raw.encode())
+base64.b16encode(raw.encode())
+*/
+
 func TestAssembleBytes(t *testing.T) {
 	variations := []string{
 		"byte b32 MFRGGZDFMY======",

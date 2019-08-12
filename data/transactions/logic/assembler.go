@@ -2,6 +2,7 @@ package logic
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/base32"
 	"encoding/base64"
 	"encoding/hex"
@@ -153,6 +154,71 @@ func assembleArg(ops *OpStream, args []string) error {
 	return ops.Arg(val)
 }
 
+var TxnFieldNames = []string{
+	"Sender", "Fee", "FirstValid", "LastValid", "Note",
+	"Receiver", "Amount", "CloseRemainderTo", "VotePK", "SelectionPK",
+	"VoteFirst", "VoteLast", "VoteKeyDilution",
+}
+
+var TxnFields map[string]uint
+
+func assembleTxn(ops *OpStream, args []string) error {
+	if len(args) != 1 {
+		return errors.New("txn expects one argument")
+	}
+	val, ok := TxnFields[args[0]]
+	if !ok {
+		return fmt.Errorf("txn unknown arg %v", args[0])
+	}
+	return ops.Txn(uint64(val))
+}
+
+var GlobalFieldNames = []string{
+	"Round",
+	"MinTxnFee",
+	"MinBalance",
+	"MaxTxnLife",
+}
+var GlobalFields map[string]uint
+
+func assembleGlobal(ops *OpStream, args []string) error {
+	if len(args) != 1 {
+		return errors.New("global expects one argument")
+	}
+	val, ok := GlobalFields[args[0]]
+	if !ok {
+		return fmt.Errorf("global unknown arg %v", args[0])
+	}
+	return ops.Global(uint64(val))
+}
+
+var AccountFieldNames = []string{
+	"Balance",
+}
+var AccountFields map[string]uint
+
+func assembleAccount(ops *OpStream, args []string) error {
+	if len(args) != 1 {
+		return errors.New("account expects one argument")
+	}
+	val, ok := AccountFields[args[0]]
+	if !ok {
+		return fmt.Errorf("account unknown arg %v", args[0])
+	}
+	return ops.Account(uint64(val))
+}
+
+func assembleTxID(ops *OpStream, args []string) error {
+	if len(args) != 1 {
+		return errors.New("txnById expects one argument")
+	}
+	val, ok := TxnFields[args[0]]
+	if !ok {
+		return fmt.Errorf("txnById unknown arg %v", args[0])
+	}
+	return ops.TxID(uint64(val))
+}
+
 func init() {
 	simpleOps = make(map[string]byte)
 	for _, oi := range opSpecs {
@@ -160,10 +226,30 @@ func init() {
 			simpleOps[oi.name] = oi.opcode
 		}
 	}
+
 	argOps = make(map[string]func(*OpStream, []string) error)
 	argOps["int"] = assembleInt
 	argOps["byte"] = assembleByte
 	argOps["arg"] = assembleArg
+	argOps["txn"] = assembleTxn
+	argOps["global"] = assembleGlobal
+	argOps["account"] = assembleAccount
+	argOps["txnById"] = assembleTxID
+
+	TxnFields = make(map[string]uint)
+	for i, tfn := range TxnFieldNames {
+		TxnFields[tfn] = uint(i)
+	}
+
+	GlobalFields = make(map[string]uint)
+	for i, gfn := range GlobalFieldNames {
+		GlobalFields[gfn] = uint(i)
+	}
+
+	AccountFields = make(map[string]uint)
+	for i, gfn := range AccountFieldNames {
+		AccountFields[gfn] = uint(i)
+	}
 }
 
 type LineErrorWrapper struct {
@@ -212,4 +298,15 @@ func (ops *OpStream) Assemble(fin io.Reader) error {
 		return fmt.Errorf(":%d unknown opcode %v", lineNumber, opstring)
 	}
 	return nil
+}
+
+func AssembleString(text string) ([]byte, error) {
+	sr := strings.NewReader(text)
+	pbytes := bytes.Buffer{}
+	ops := OpStream{out: &pbytes}
+	err := ops.Assemble(sr)
+	if err != nil {
+		return nil, err
+	}
+	return pbytes.Bytes(), nil
 }
