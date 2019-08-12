@@ -51,7 +51,7 @@ type genesisAllocation struct {
 }
 
 // GenerateGenesisFiles generates the genesis.json file and wallet files for a give genesis configuration.
-func GenerateGenesisFiles(genesisData GenesisData, outDir string) error {
+func GenerateGenesisFiles(genesisData GenesisData, outDir string, verbose bool) error {
 	err := os.Mkdir(outDir, os.ModeDir|os.FileMode(0777))
 	if err != nil && os.IsNotExist(err) {
 		return fmt.Errorf("couldn't make output directory '%s': %v", outDir, err.Error())
@@ -93,11 +93,11 @@ func GenerateGenesisFiles(genesisData GenesisData, outDir string) error {
 		genesisData.RewardsPool = defaultPoolAddr
 	}
 
-	return generateGenesisFiles(outDir, proto, genesisData.NetworkName, genesisData.VersionModifier, allocation, genesisData.FirstPartKeyRound, genesisData.LastPartKeyRound, genesisData.FeeSink, genesisData.RewardsPool, genesisData.Comment)
+	return generateGenesisFiles(outDir, proto, genesisData.NetworkName, genesisData.VersionModifier, allocation, genesisData.FirstPartKeyRound, genesisData.LastPartKeyRound, genesisData.FeeSink, genesisData.RewardsPool, genesisData.Comment, verbose)
 }
 
 func generateGenesisFiles(outDir string, proto protocol.ConsensusVersion, netName string, schemaVersionModifier string,
-	allocation []genesisAllocation, firstWalletValid uint64, lastWalletValid uint64, feeSink, rewardsPool basics.Address, comment string) (err error) {
+	allocation []genesisAllocation, firstWalletValid uint64, lastWalletValid uint64, feeSink, rewardsPool basics.Address, comment string, verbose bool) (err error) {
 
 	genesisAddrs := make(map[string]basics.Address)
 	records := make(map[string]basics.AccountData)
@@ -130,7 +130,9 @@ func generateGenesisFiles(outDir string, proto protocol.ConsensusVersion, netNam
 		}
 
 		if rootkeyErr == nil && partkeyErr == nil {
-			fmt.Println("Reusing existing wallet:", wfilename, pfilename)
+			if verbose {
+				fmt.Println("Reusing existing wallet:", wfilename, pfilename)
+			}
 		} else {
 			// At this point either rootKeys is valid or rootkeyErr != nil
 			// Likewise, either partkey is valid or partkeyErr != nil
@@ -194,7 +196,10 @@ func generateGenesisFiles(outDir string, proto protocol.ConsensusVersion, netNam
 	genesisAddrs["FeeSink"] = feeSink
 	genesisAddrs["RewardsPool"] = rewardsPool
 
-	fmt.Println(proto, config.Consensus[proto].MinBalance)
+	if verbose {
+		fmt.Println(proto, config.Consensus[proto].MinBalance)
+	}
+
 	records["FeeSink"] = basics.AccountData{
 		Status:     basics.NotParticipating,
 		MicroAlgos: basics.MicroAlgos{Raw: config.Consensus[proto].MinBalance},
