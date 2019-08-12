@@ -127,6 +127,11 @@ func randomBlockHash() (h crypto.Digest) {
 	return
 }
 
+func randomVRFProof() (v crypto.VRFProof) {
+	rand.Read(v[:])
+	return
+}
+
 type signal struct {
 	ch    chan struct{}
 	fired bool
@@ -493,7 +498,7 @@ func (v *voteMakerHelper) MakeRandomProposalPayload(t *testing.T, r round) (*pro
 
 	var payload unauthenticatedProposal
 	payload.Block = ve.Block()
-	payload.SeedProof = crypto.VRFProof{}
+	payload.SeedProof = randomVRFProof()
 
 	propVal := proposalValue{
 		BlockDigest:    payload.Digest(),
