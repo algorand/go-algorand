@@ -6,7 +6,12 @@ import (
 	"errors"
 	"fmt"
 
+	"golang.org/x/crypto/sha3"
+
+	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 type stackValue struct {
@@ -30,10 +35,15 @@ func (sv *stackValue) typeName() string {
 
 type evalContext struct {
 	stack   []stackValue
-	program []byte
+	program []byte // txn.Lsig.Logic ?
 	pc      int
 	err     error
-	txn     *transactions.SignedTxn
+
+	// the transaction being evaluated
+	txn *transactions.SignedTxn
+
+	// round for which eval is happenning
+	round basics.Round
 }
 
 type opFunc func(cx *evalContext)
@@ -81,6 +91,7 @@ func Eval(logic []byte, txn *transactions.SignedTxn) bool {
 var opSpecs = []opSpec{
 	{0x00, 0xff, "err", opErr, nil, opNone},
 	{0x01, 0xff, "sha256", opSHA256, []byte{opBytes}, opBytes},
+	{0x02, 0xff, "keccak256", opKeccak256, []byte{opBytes}, opBytes},
 	{0x08, 0xff, "+", opPlus, []byte{opUint, opUint}, opUint},
 	{0x09, 0xff, "-", opMinus, []byte{opUint, opUint}, opUint},
 	{0x0a, 0xff, "/", opDiv, []byte{opUint, opUint}, opUint},
@@ -99,6 +110,12 @@ var opSpecs = []opSpec{
 	{0x17, 0xff, "btoi", opBtoi, []byte{opBytes}, opUint},
 
 	{0x20, 0xf8, "int", opInt, nil, opUint},
+	{0x28, 0xf8, "byte", opByte, nil, opBytes},
+	{0x30, 0xf8, "arg", opArg, nil, opBytes},
+	{0x38, 0xf8, "txn", opTxn, nil, opAny}, // TODO: check output type by subfield retrieved in txn,global,account,txid
+	{0x40, 0xf8, "global", opGlobal, nil, opAny},
+	{0x48, 0xf8, "account", opAccount, nil, opAny},
+	{0x50, 0xf8, "txid", opTxid, nil, opAny},
 }
 
 // direct opcode bytes
@@ -116,6 +133,9 @@ func init() {
 			for i := 0; i < 256; i++ {
 				opcode := byte(i)
 				if opcode&oi.mask == oi.opcode {
+					if ops[opcode].mask != 0 {
+						panic("colliding opcodes")
+					}
 					ops[opcode] = oi
 				}
 			}
@@ -152,6 +172,16 @@ func (cx *evalContext) step() {
 	}
 }
 
+func (cx *evalContext) lookup(addr basics.Address) (data basics.AccountData, err error) {
+	err = errors.New("TODO WRITEME")
+	return
+}
+
+func (cx *evalContext) getTransaction(txid []byte) (txn *transactions.SignedTxn, err error) {
+	err = errors.New("TODO WRITEME")
+	return
+}
+
 func opErr(cx *evalContext) {
 	cx.err = errors.New("error")
 }
@@ -159,6 +189,14 @@ func opErr(cx *evalContext) {
 func opSHA256(cx *evalContext) {
 	last := len(cx.stack) - 1
 	hash := sha256.Sum256(cx.stack[last].Bytes)
+	cx.stack[last].Bytes = hash[:]
+}
+
+// The Keccak256 variant of SHA-3 is implemented for compatibility with Ethereum
+func opKeccak256(cx *evalContext) {
+	last := len(cx.stack) - 1
+	hasher := sha3.NewLegacyKeccak256()
+	hash := hasher.Sum(cx.stack[last].Bytes)
 	cx.stack[last].Bytes = hash[:]
 }
 
@@ -365,5 +403,164 @@ func opInt(cx *evalContext) {
 	cx.pc += dataLen
 }
 
-func op(cx *evalContext) {
+func opByte(cx *evalContext) {
+	dataLen := int(cx.program[cx.pc] & 0x07)
+	value := uint64(0)
+	for i := 0; i < dataLen; i++ {
+		value = value << 8
+		value = value | (uint64(cx.program[cx.pc+1+i]) & 0x0ff)
+	}
+	start := cx.pc + 1 + dataLen
+	end := uint64(start) + value
+	cx.stack = append(cx.stack, stackValue{Bytes: cx.program[start:end]})
+	cx.pc = int(end - 1)
+}
+
+func opArg(cx *evalContext) {
+	dataLen := int(cx.program[cx.pc] & 0x07)
+	value := uint64(0)
+	for i := 0; i < dataLen; i++ {
+		value = value << 8
+		value = value | (uint64(cx.program[cx.pc+1+i]) & 0x0ff)
+	}
+	if value >= uint64(len(cx.txn.Lsig.Args)) {
+		cx.err = fmt.Errorf("cannot load arg[%d] of %d", value, len(cx.txn.Lsig.Args))
+		return
+	}
+	cx.stack = append(cx.stack, stackValue{Bytes: cx.txn.Lsig.Args[value]})
+	cx.pc += dataLen
+}
+
+func (cx *evalContext) txnFieldToStack(txn *transactions.SignedTxn, field uint64) (sv stackValue, err error) {
+	err = nil
+	switch field {
+	case 0:
+		sv.Bytes = txn.Txn.Sender[:]
+	case 1:
+		sv.Uint = txn.Txn.Fee.Raw
+	case 2:
+		sv.Uint = uint64(txn.Txn.FirstValid)
+	case 3:
+		sv.Uint = uint64(txn.Txn.LastValid)
+	case 4:
+		sv.Bytes = txn.Txn.Note
+	case 5:
+		sv.Bytes = txn.Txn.Receiver[:]
+	case 6:
+		sv.Uint = txn.Txn.Amount.Raw
+	case 7:
+		sv.Bytes = txn.Txn.CloseRemainderTo[:]
+	case 8:
+		sv.Bytes = txn.Txn.VotePK[:]
+	case 9:
+		sv.Bytes = txn.Txn.SelectionPK[:]
+	case 10:
+		sv.Uint = uint64(txn.Txn.VoteFirst)
+	case 11:
+		sv.Uint = uint64(txn.Txn.VoteLast)
+	case 12:
+		sv.Uint = txn.Txn.VoteKeyDilution
+	default:
+		err = fmt.Errorf("invalid arg field %d", field)
+	}
+	return
+}
+
+func opTxn(cx *evalContext) {
+	dataLen := int(cx.program[cx.pc] & 0x07)
+	value := uint64(0)
+	for i := 0; i < dataLen; i++ {
+		value = value << 8
+		value = value | (uint64(cx.program[cx.pc+1+i]) & 0x0ff)
+	}
+	sv, err := cx.txnFieldToStack(cx.txn, value)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	cx.stack = append(cx.stack, sv)
+	cx.pc += dataLen
+}
+
+func opGlobal(cx *evalContext) {
+	dataLen := int(cx.program[cx.pc] & 0x07)
+	value := uint64(0)
+	for i := 0; i < dataLen; i++ {
+		value = value << 8
+		value = value | (uint64(cx.program[cx.pc+1+i]) & 0x0ff)
+	}
+	var sv stackValue
+	switch value {
+	case 0:
+		sv.Uint = uint64(cx.round)
+	case 1:
+		sv.Uint = config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee
+	case 2:
+		sv.Uint = config.Consensus[protocol.ConsensusCurrentVersion].MinBalance
+	case 3:
+		sv.Uint = config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife
+	default:
+		cx.err = fmt.Errorf("invalid global[%d]", value)
+		return
+	}
+	cx.stack = append(cx.stack, sv)
+	cx.pc += dataLen
+}
+
+func opAccount(cx *evalContext) {
+	dataLen := int(cx.program[cx.pc] & 0x07)
+	value := uint64(0)
+	for i := 0; i < dataLen; i++ {
+		value = value << 8
+		value = value | (uint64(cx.program[cx.pc+1+i]) & 0x0ff)
+	}
+	// pop account addr
+	last := len(cx.stack) - 1
+	addrb := cx.stack[last].Bytes
+	var addr basics.Address
+	if len(addrb) == len(addr) {
+		copy(addr[:], addrb)
+	} else {
+		cx.err = errors.New("address argument wrong length")
+		return
+	}
+	data, err := cx.lookup(addr)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	var sv stackValue
+	switch value {
+	case 0:
+		sv.Uint = data.MicroAlgos.Raw
+	default:
+		cx.err = fmt.Errorf("invalid account field %d", value)
+		return
+	}
+	cx.stack[last] = sv
+	cx.pc += dataLen
+}
+
+func opTxid(cx *evalContext) {
+	dataLen := int(cx.program[cx.pc] & 0x07)
+	value := uint64(0)
+	for i := 0; i < dataLen; i++ {
+		value = value << 8
+		value = value | (uint64(cx.program[cx.pc+1+i]) & 0x0ff)
+	}
+	// pop txid addr
+	last := len(cx.stack) - 1
+	txid := cx.stack[last].Bytes
+	txn, err := cx.getTransaction(txid)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	sv, err := cx.txnFieldToStack(txn, value)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	cx.stack[last] = sv
+	cx.pc += dataLen
 }
