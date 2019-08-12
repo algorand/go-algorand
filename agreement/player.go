@@ -407,8 +407,10 @@ func (p *player) partitionPolicy(r routerHandle) (actions []action) {
 	// - The minority of honest nodes see a certThreshold (but without a block), in period p. Assume that
 	//   they are partitioned from the majority of honest nodes, until the majority reach p + 2.
 	// - The minority already has the freshest bundle, so will not advance to period p + 2. However, the
-	//   majority will also filter out the cert threshold (due to a stale period). The only way to resolve
-	//   this is to relay the pinned value, and then wait for catchup.
+	//   majority will also filter out the cert threshold (due to a stale period).
+	// - Now we relay the pinned value, and then can wait for catchup.
+	// - Another optimization is that we could allow cert bundles from stale periods to bypass the filter.
+	//   This may be worth implementing in the future.
 	bundleRound := p.Round
 	bundlePeriod := p.Period
 	switch {

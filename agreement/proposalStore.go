@@ -341,7 +341,7 @@ func (store *proposalStore) handle(r routerHandle, p player, e event) event {
 		return se
 	case readPinned:
 		se := e.(pinnedValueEvent)
-		ea := store.Assemblers[store.Pinned] // If pinned is bottom, commitable = false, payload = bottom
+		ea := store.Assemblers[store.Pinned] // If pinned is bottom, assembled/payloadOK = false, payload = bottom
 		se.Proposal = store.Pinned
 		se.PayloadOK = ea.Assembled
 		se.Payload = ea.Payload
