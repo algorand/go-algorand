@@ -103,9 +103,18 @@ func Eval(logic []byte, params EvalParams) bool {
 		cx.step()
 	}
 	if cx.err != nil {
+		if cx.Trace != nil {
+			fmt.Fprintf(cx.Trace, "%3d %s\n", cx.pc, cx.err)
+		}
 		return false
 	}
 	if len(cx.stack) != 1 {
+		if cx.Trace != nil {
+			fmt.Fprintf(cx.Trace, "end stack:\n")
+			for i, sv := range cx.stack {
+				fmt.Fprintf(cx.Trace, "[%d] %s\n", i, sv.String())
+			}
+		}
 		return false
 	}
 	return cx.stack[0].Bytes == nil && cx.stack[0].Uint != 0

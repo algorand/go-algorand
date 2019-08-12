@@ -11,6 +11,8 @@ import (
 	"io"
 	"strconv"
 	"strings"
+
+	"github.com/algorand/go-algorand/data/basics"
 )
 
 type Writer interface {
@@ -105,7 +107,7 @@ func assembleByte(ops *OpStream, args []string) error {
 		if close == -1 {
 			return errors.New("byte base32 arg lacks close paren")
 		}
-		val, err = base32.StdEncoding.DecodeString(arg[open+1 : close])
+		val, err = base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(arg[open+1 : close])
 		if err != nil {
 			return err
 		}
@@ -128,7 +130,7 @@ func assembleByte(ops *OpStream, args []string) error {
 		if len(args) < 2 {
 			return fmt.Errorf("need literal after 'byte %s'", arg)
 		}
-		val, err = base32.StdEncoding.DecodeString(args[1])
+		val, err = base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(args[1])
 		if err != nil {
 			return err
 		}
@@ -144,6 +146,19 @@ func assembleByte(ops *OpStream, args []string) error {
 		return fmt.Errorf("byte arg did not parse: %v", arg)
 	}
 	return ops.ByteLiteral(val)
+}
+
+// addr AOEU...
+// parses base32-with-checksum account address strings into a byte literal
+func assembleAddr(ops *OpStream, args []string) error {
+	if len(args) != 1 {
+		return errors.New("addr operation needs one argument")
+	}
+	addr, err := basics.UnmarshalChecksumAddress(args[0])
+	if err != nil {
+		return err
+	}
+	return ops.ByteLiteral(addr[:])
 }
 
 func assembleArg(ops *OpStream, args []string) error {
@@ -230,6 +245,7 @@ func init() {
 	argOps = make(map[string]func(*OpStream, []string) error)
 	argOps["int"] = assembleInt
 	argOps["byte"] = assembleByte
+	argOps["addr"] = assembleAddr
 	argOps["arg"] = assembleArg
 	argOps["txn"] = assembleTxn
 	argOps["global"] = assembleGlobal

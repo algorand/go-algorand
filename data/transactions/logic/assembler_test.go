@@ -81,10 +81,10 @@ base64.b16encode(raw.encode())
 
 func TestAssembleBytes(t *testing.T) {
 	variations := []string{
-		"byte b32 MFRGGZDFMY======",
-		"byte base32 MFRGGZDFMY======",
-		"byte base32(MFRGGZDFMY======)",
-		"byte b32(MFRGGZDFMY======)",
+		"byte b32 MFRGGZDFMY",
+		"byte base32 MFRGGZDFMY",
+		"byte base32(MFRGGZDFMY)",
+		"byte b32(MFRGGZDFMY)",
 		"byte b64 YWJjZGVm",
 		"byte base64 YWJjZGVm",
 		"byte b64(YWJjZGVm)",
