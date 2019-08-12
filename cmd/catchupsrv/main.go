@@ -18,14 +18,15 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"io/ioutil"
 	"net/http"
+	"path"
 	"strconv"
 
 	"github.com/algorand/websocket"
 	"github.com/gorilla/mux"
 
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/rpcs"
 )
@@ -35,6 +36,9 @@ var dirFlag = flag.String("dir", "", "Directory containing catchup blocks")
 
 func main() {
 	flag.Parse()
+
+	log := logging.Base()
+	log.SetLevel(logging.Info)
 
 	if *dirFlag == "" {
 		panic("Must specify -dir")
@@ -84,10 +88,24 @@ func main() {
 		roundStr := pathVars["round"]
 		genesisID := pathVars["genesisID"]
 
-		data, err := ioutil.ReadFile(fmt.Sprintf("%s/v%s/%s/block/%s",
-			*dirFlag, versionStr, genesisID, roundStr))
+		blkPath, err := stringBlockToPath(roundStr)
 		if err != nil {
-			fmt.Printf("%s %s: %v\n", r.Method, r.URL, err)
+			log.Infof("%s %s: %v", r.Method, r.URL, err)
+			http.NotFound(w, r)
+			return
+		}
+
+		data, err := ioutil.ReadFile(
+			path.Join(
+				*dirFlag,
+				"v"+versionStr,
+				genesisID,
+				"block",
+				blkPath,
+			),
+		)
+		if err != nil {
+			log.Infof("%s %s: %v", r.Method, r.URL, err)
 			http.NotFound(w, r)
 			return
 		}
