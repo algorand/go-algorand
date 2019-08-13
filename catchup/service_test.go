@@ -145,7 +145,7 @@ func (m *MockedFetcher) Close() { // noop
 }
 
 type mockedAuthenticator struct {
-	mu sync.Mutex
+	mu deadlock.Mutex
 
 	errorRound int
 	fail       bool
@@ -342,7 +342,7 @@ func TestServiceFetchBlocksMalformed(t *testing.T) {
 const defaultRewardUnit = 1e6
 
 type mockedLedger struct {
-	mu     sync.Mutex
+	mu     deadlock.Mutex
 	blocks []bookkeeping.Block
 	chans  map[basics.Round]chan struct{}
 }
