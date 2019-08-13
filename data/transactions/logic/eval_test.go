@@ -1,6 +1,7 @@
 package logic
 
 import (
+	"encoding/hex"
 	"strings"
 	"testing"
 
@@ -110,4 +111,20 @@ int 100000
 		t.Log(sb.String())
 	}
 	require.False(t, pass)
+}
+
+func TestU64Math(t *testing.T) {
+	program, err := AssembleString(`int 0x1234567812345678
+int 0x100000000
+/
+int 0x12345678
+==`)
+	require.NoError(t, err)
+	sb := strings.Builder{}
+	pass := Eval(program, EvalParams{Trace: &sb})
+	if !pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.True(t, pass)
 }

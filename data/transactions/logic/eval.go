@@ -430,24 +430,27 @@ func opBtoi(cx *evalContext) {
 	cx.stack[last].Bytes = nil
 }
 
-func opInt(cx *evalContext) {
-	dataLen := int(cx.program[cx.pc] & 0x07)
-	value := uint64(0)
+func (cx *evalContext) readImplicitValue() (dataLen int, value uint64) {
+	dataLen = int(cx.program[cx.pc] & 0x07)
+	if dataLen == 7 {
+		dataLen = 8
+	}
+	value = uint64(0)
 	for i := 0; i < dataLen; i++ {
 		value = value << 8
 		value = value | (uint64(cx.program[cx.pc+1+i]) & 0x0ff)
 	}
+	return
+}
+
+func opInt(cx *evalContext) {
+	dataLen, value := cx.readImplicitValue()
 	cx.stack = append(cx.stack, stackValue{Uint: value})
 	cx.pc += dataLen
 }
 
 func opByte(cx *evalContext) {
-	dataLen := int(cx.program[cx.pc] & 0x07)
-	value := uint64(0)
-	for i := 0; i < dataLen; i++ {
-		value = value << 8
-		value = value | (uint64(cx.program[cx.pc+1+i]) & 0x0ff)
-	}
+	dataLen, value := cx.readImplicitValue()
 	start := cx.pc + 1 + dataLen
 	end := uint64(start) + value
 	cx.stack = append(cx.stack, stackValue{Bytes: cx.program[start:end]})
@@ -455,12 +458,7 @@ func opByte(cx *evalContext) {
 }
 
 func opArg(cx *evalContext) {
-	dataLen := int(cx.program[cx.pc] & 0x07)
-	value := uint64(0)
-	for i := 0; i < dataLen; i++ {
-		value = value << 8
-		value = value | (uint64(cx.program[cx.pc+1+i]) & 0x0ff)
-	}
+	dataLen, value := cx.readImplicitValue()
 	if value >= uint64(len(cx.Txn.Lsig.Args)) {
 		cx.err = fmt.Errorf("cannot load arg[%d] of %d", value, len(cx.Txn.Lsig.Args))
 		return
@@ -505,12 +503,7 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.SignedTxn, field uint64
 }
 
 func opTxn(cx *evalContext) {
-	dataLen := int(cx.program[cx.pc] & 0x07)
-	value := uint64(0)
-	for i := 0; i < dataLen; i++ {
-		value = value << 8
-		value = value | (uint64(cx.program[cx.pc+1+i]) & 0x0ff)
-	}
+	dataLen, value := cx.readImplicitValue()
 	sv, err := cx.txnFieldToStack(cx.Txn, value)
 	if err != nil {
 		cx.err = err
@@ -521,12 +514,7 @@ func opTxn(cx *evalContext) {
 }
 
 func opGlobal(cx *evalContext) {
-	dataLen := int(cx.program[cx.pc] & 0x07)
-	value := uint64(0)
-	for i := 0; i < dataLen; i++ {
-		value = value << 8
-		value = value | (uint64(cx.program[cx.pc+1+i]) & 0x0ff)
-	}
+	dataLen, value := cx.readImplicitValue()
 	var sv stackValue
 	switch value {
 	case 0:
@@ -546,12 +534,7 @@ func opGlobal(cx *evalContext) {
 }
 
 func opAccount(cx *evalContext) {
-	dataLen := int(cx.program[cx.pc] & 0x07)
-	value := uint64(0)
-	for i := 0; i < dataLen; i++ {
-		value = value << 8
-		value = value | (uint64(cx.program[cx.pc+1+i]) & 0x0ff)
-	}
+	dataLen, value := cx.readImplicitValue()
 	// pop account addr
 	last := len(cx.stack) - 1
 	addrb := cx.stack[last].Bytes
@@ -580,12 +563,7 @@ func opAccount(cx *evalContext) {
 }
 
 func opTxid(cx *evalContext) {
-	dataLen := int(cx.program[cx.pc] & 0x07)
-	value := uint64(0)
-	for i := 0; i < dataLen; i++ {
-		value = value << 8
-		value = value | (uint64(cx.program[cx.pc+1+i]) & 0x0ff)
-	}
+	dataLen, value := cx.readImplicitValue()
 	// pop txid addr
 	last := len(cx.stack) - 1
 	txid := cx.stack[last].Bytes

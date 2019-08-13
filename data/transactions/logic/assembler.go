@@ -34,10 +34,17 @@ func (ops *OpStream) hiddenUint(opcode byte, val uint64) error {
 		vlen++
 		tv = tv >> 8
 	}
-	if vlen > 0x07 {
+	if vlen > 8 {
 		panic("uint val too big?")
 	}
-	ops.vubytes[0] = opcode | byte(vlen&0x07)
+	if vlen == 8 {
+		// 8 is encoded as 7 in the opcode.
+		// if we're loading 7 bytes, we load 8 bytes, not much waste.
+		// if we're loading 0 bytes, we get a handy 0 value.
+		ops.vubytes[0] = opcode | 0x07
+	} else {
+		ops.vubytes[0] = opcode | byte(vlen&0x07)
+	}
 	for i := uint(0); i < vlen; i++ {
 		ops.vubytes[i+1] = byte((val >> (8 * (vlen - i - 1))) & 0x0ff)
 	}

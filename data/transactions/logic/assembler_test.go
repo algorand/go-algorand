@@ -29,6 +29,7 @@ keccak256
 len
 btoi
 int 0x031337
+int 0x1234567812345678
 byte 0x1234
 global Round
 global MinTxnFee
@@ -65,6 +66,15 @@ func TestOpUint(t *testing.T) {
 	require.NoError(t, err)
 	s := hex.EncodeToString(pbytes.Bytes())
 	require.Equal(t, "24cafebabe", s)
+}
+
+func TestOpUint64(t *testing.T) {
+	pbytes := bytes.Buffer{}
+	ops := OpStream{out: &pbytes}
+	err := ops.Uint(0xcafebabecafebabe)
+	require.NoError(t, err)
+	s := hex.EncodeToString(pbytes.Bytes())
+	require.Equal(t, "27cafebabecafebabe", s)
 }
 
 func TestOpBytes(t *testing.T) {
