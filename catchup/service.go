@@ -73,6 +73,13 @@ type Service struct {
 	protocolErrorLogged bool
 }
 
+// A BlockAuthenticator authenticates blocks given a certificate.
+//
+// Note that Authenticate does not check if the block contents match
+// their header as it only checks the block header.  If the contents
+// have not been checked yet, callers should also call
+// block.ContentsMatchHeader and reject blocks that do not pass this
+// check.
 type BlockAuthenticator interface {
 	Authenticate(*bookkeeping.Block, *agreement.Certificate) error
 	Quit()
