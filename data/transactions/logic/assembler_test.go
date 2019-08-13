@@ -30,14 +30,32 @@ len
 btoi
 int 0x031337
 byte 0x1234
+global Round
+global MinTxnFee
+global MinBalance
+global MaxTxnLife
+txn Sender
+txn Fee
+txn FirstValid
+txn LastValid
+txn Note
+txn Receiver
+txn Amount
+txn CloseRemainderTo
+txn VotePK
+txn SelectionPK
+txn VoteFirst
+txn VoteLast
+arg 0
+arg 1
+account Balance
 `
 	sr := strings.NewReader(text)
 	pbytes := bytes.Buffer{}
 	ops := OpStream{out: &pbytes}
 	err := ops.Assemble(sr)
 	require.NoError(t, err)
-	s := hex.EncodeToString(pbytes.Bytes())
-	t.Log(s)
+	//t.Log(hex.EncodeToString(pbytes.Bytes()))
 }
 
 func TestOpUint(t *testing.T) {

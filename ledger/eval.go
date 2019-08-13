@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/execpool"
@@ -380,7 +381,12 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad *transact
 		}
 
 		if !txn.Lsig.Blank() {
-			// TODO: evaluate logic against BlockEvaluator, ledger state, etc.
+			// TODO: connect AccountData lookup and TxID lookup.
+			ep := logic.EvalParams{Txn: &txn, Round: eval.Round()}
+			pass := logic.Eval(txn.Lsig.Logic.Logic, ep)
+			if !pass {
+				return fmt.Errorf("transaction %v: rejected by logic", txn.ID())
+			}
 		}
 	}
 

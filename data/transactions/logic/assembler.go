@@ -15,11 +15,13 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 )
 
+// Writer is what we want here. Satisfied by bufio.Buffer
 type Writer interface {
 	Write([]byte) (int, error)
 	WriteByte(c byte) error
 }
 
+// OpStream is destination for program and scratch space
 type OpStream struct {
 	out     Writer
 	vubytes [9]byte
@@ -43,10 +45,12 @@ func (ops *OpStream) hiddenUint(opcode byte, val uint64) error {
 	return err
 }
 
+// Uint writes opcodes for loading a uint literal
 func (ops *OpStream) Uint(val uint64) error {
 	return ops.hiddenUint(0x20, val)
 }
 
+// ByteLiteral writes opcodes and data for loading a []byte literal
 func (ops *OpStream) ByteLiteral(val []byte) error {
 	if len(val) == 0 {
 		return ops.out.WriteByte(0x28)
@@ -59,22 +63,27 @@ func (ops *OpStream) ByteLiteral(val []byte) error {
 	return err
 }
 
+// Arg writes opcodes for loading from Lsig.Args
 func (ops *OpStream) Arg(val uint64) error {
 	return ops.hiddenUint(0x30, val)
 }
 
+// Txn writes opcodes for loading a field from the current transaction
 func (ops *OpStream) Txn(val uint64) error {
 	return ops.hiddenUint(0x38, val)
 }
 
+// Global writes opcodes for loading an evaluator-global field
 func (ops *OpStream) Global(val uint64) error {
 	return ops.hiddenUint(0x40, val)
 }
 
+// Account writes opcodes for loading a field from some account
 func (ops *OpStream) Account(val uint64) error {
 	return ops.hiddenUint(0x48, val)
 }
 
+// TxID writes opcodes for loading a field from some other transaction
 func (ops *OpStream) TxID(val uint64) error {
 	return ops.hiddenUint(0x50, val)
 }
@@ -148,7 +157,7 @@ func assembleByte(ops *OpStream, args []string) error {
 	return ops.ByteLiteral(val)
 }
 
-// addr AOEU...
+// addr A1EU...
 // parses base32-with-checksum account address strings into a byte literal
 func assembleAddr(ops *OpStream, args []string) error {
 	if len(args) != 1 {
@@ -169,54 +178,57 @@ func assembleArg(ops *OpStream, args []string) error {
 	return ops.Arg(val)
 }
 
+// TxnFieldNames are arguments to the 'txn' and 'txnById' opcodes
 var TxnFieldNames = []string{
 	"Sender", "Fee", "FirstValid", "LastValid", "Note",
 	"Receiver", "Amount", "CloseRemainderTo", "VotePK", "SelectionPK",
 	"VoteFirst", "VoteLast", "VoteKeyDilution",
 }
 
-var TxnFields map[string]uint
+var txnFields map[string]uint
 
 func assembleTxn(ops *OpStream, args []string) error {
 	if len(args) != 1 {
 		return errors.New("txn expects one argument")
 	}
-	val, ok := TxnFields[args[0]]
+	val, ok := txnFields[args[0]]
 	if !ok {
 		return fmt.Errorf("txn unknown arg %v", args[0])
 	}
 	return ops.Txn(uint64(val))
 }
 
+// GlobalFieldNames are arguments to the 'global' opcode
 var GlobalFieldNames = []string{
 	"Round",
 	"MinTxnFee",
 	"MinBalance",
 	"MaxTxnLife",
 }
-var GlobalFields map[string]uint
+var globalFields map[string]uint
 
 func assembleGlobal(ops *OpStream, args []string) error {
 	if len(args) != 1 {
 		return errors.New("global expects one argument")
 	}
-	val, ok := GlobalFields[args[0]]
+	val, ok := globalFields[args[0]]
 	if !ok {
 		return fmt.Errorf("global unknown arg %v", args[0])
 	}
 	return ops.Global(uint64(val))
 }
 
+// AccountFieldNames are arguments to the 'account' opcode
 var AccountFieldNames = []string{
 	"Balance",
 }
-var AccountFields map[string]uint
+var accountFields map[string]uint
 
 func assembleAccount(ops *OpStream, args []string) error {
 	if len(args) != 1 {
 		return errors.New("account expects one argument")
 	}
-	val, ok := AccountFields[args[0]]
+	val, ok := accountFields[args[0]]
 	if !ok {
 		return fmt.Errorf("account unknown arg %v", args[0])
 	}
@@ -227,7 +239,7 @@ func assembleTxID(ops *OpStream, args []string) error {
 	if len(args) != 1 {
 		return errors.New("txnById expects one argument")
 	}
-	val, ok := TxnFields[args[0]]
+	val, ok := txnFields[args[0]]
 	if !ok {
 		return fmt.Errorf("txnById unknown arg %v", args[0])
 	}
@@ -252,35 +264,37 @@ func init() {
 	argOps["account"] = assembleAccount
 	argOps["txnById"] = assembleTxID
 
-	TxnFields = make(map[string]uint)
+	txnFields = make(map[string]uint)
 	for i, tfn := range TxnFieldNames {
-		TxnFields[tfn] = uint(i)
+		txnFields[tfn] = uint(i)
 	}
 
-	GlobalFields = make(map[string]uint)
+	globalFields = make(map[string]uint)
 	for i, gfn := range GlobalFieldNames {
-		GlobalFields[gfn] = uint(i)
+		globalFields[gfn] = uint(i)
 	}
 
-	AccountFields = make(map[string]uint)
+	accountFields = make(map[string]uint)
 	for i, gfn := range AccountFieldNames {
-		AccountFields[gfn] = uint(i)
+		accountFields[gfn] = uint(i)
 	}
 }
 
-type LineErrorWrapper struct {
+type lineErrorWrapper struct {
 	Line int
 	Err  error
 }
 
-func (lew *LineErrorWrapper) Error() string {
+func (lew *lineErrorWrapper) Error() string {
 	return fmt.Sprintf(":%d %s", lew.Line, lew.Err.Error())
 }
 
 func lineErr(line int, err error) error {
-	return &LineErrorWrapper{Line: line, Err: err}
+	return &lineErrorWrapper{Line: line, Err: err}
 }
 
+// Assemble reads text from an input and writes bytecode out.
+// Single pass assembler, no forward references.
 func (ops *OpStream) Assemble(fin io.Reader) error {
 	scanner := bufio.NewScanner(fin)
 	lineNumber := 0
@@ -316,6 +330,7 @@ func (ops *OpStream) Assemble(fin io.Reader) error {
 	return nil
 }
 
+// AssembleString takes an entire program in a string and assembles it to bytecode
 func AssembleString(text string) ([]byte, error) {
 	sr := strings.NewReader(text)
 	pbytes := bytes.Buffer{}

@@ -42,6 +42,7 @@ func (sv *stackValue) String() string {
 	return fmt.Sprintf("%d 0x%d", sv.Uint, sv.Uint)
 }
 
+// EvalParams contains data that comes into condition evaluation.
 type EvalParams struct {
 	// the transaction being evaluated
 	Txn *transactions.SignedTxn
