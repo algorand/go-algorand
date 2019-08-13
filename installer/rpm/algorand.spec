@@ -68,6 +68,7 @@ else
 fi
 
 %files
+/usr/bin/algocfg
 /usr/bin/algod
 /usr/bin/algoh
 /usr/bin/algokey
