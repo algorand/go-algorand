@@ -19,6 +19,6 @@ package main
 const (
 	// General
 	errorNoDataDirectory     = "Data directory not specified.  Please use -d or set $ALGORAND_DATA in your environment. Exiting."
-	errorOneDataDirSupported = "One one data directory can be specified for this command."
+	errorOneDataDirSupported = "Only one data directory can be specified for this command."
 	infoDataDir              = "[Data Directory: %s]"
 )
