@@ -135,7 +135,7 @@ build-race: build
 	GOBIN=$(GOPATH)/bin-race go install $(GOTRIMPATH) $(GOTAGS) -race -ldflags="$(GOLDFLAGS)" ./...
 	GOBIN=$(GOPATH)/bin-race go install $(GOTRIMPATH) $(GOTAGS) -ldflags="$(GOLDFLAGS)" $(SOURCES_RACE)
 
-NONGO_BIN_FILES=$(GOPATH)/bin/find-nodes.sh $(GOPATH)/bin/update.sh $(GOPATH)/bin/COPYING
+NONGO_BIN_FILES=$(GOPATH)/bin/find-nodes.sh $(GOPATH)/bin/update.sh $(GOPATH)/bin/COPYING $(GOPATH)/bin/ddconfig.sh
 
 NONGO_BIN: $(NONGO_BIN_FILES)
 
@@ -144,6 +144,8 @@ $(GOPATH)/bin/find-nodes.sh: scripts/find-nodes.sh
 $(GOPATH)/bin/update.sh: cmd/updater/update.sh
 
 $(GOPATH)/bin/COPYING: COPYING
+
+$(GOPATH)/bin/ddconfig.sh: scripts/ddconfig.sh
 
 $(GOPATH)/bin/%:
 	cp -f $< $@
