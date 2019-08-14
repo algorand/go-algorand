@@ -31,7 +31,7 @@ import (
 
 var (
 	setParameterArg string
-	setValueArg string
+	setValueArg     string
 )
 
 func init() {
@@ -51,7 +51,7 @@ var setCmd = &cobra.Command{
 		anyError := false
 		onDataDirs(func(dataDir string) {
 			cfg, err := config.LoadConfigFromDisk(dataDir)
-			if err != nil {
+			if err != nil && !os.IsNotExist(err) {
 				reportWarnf("Error loading config file from '%s'", dataDir)
 				anyError = true
 				return
