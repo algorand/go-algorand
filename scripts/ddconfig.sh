@@ -142,16 +142,6 @@ instances:
 EOF
 
 sudo mv ~/conf.yaml.tmp /etc/datadog-agent/conf.d/prometheus.d/conf.yaml
-#PCFG=/etc/datadog-agent/conf.d/prometheus.d/conf.yaml
-#sudo echo "init_config:" > ${PCFG}
-#sudo echo "" >> ${PCFG}
-#sudo echo "instances:" >> ${PCFG}
-#sudo echo "  - prometheus_url: http://localhost:$(PORT)/metrics" >> ${PCFG}
-#sudo echo "    extra_headers:" >> ${PCFG}
-#sudo echo "      X-Algo-API-Token: ${ALGOD_TOKEN}" >> ${PCFG}
-#sudo echo "    namespace: algod" >> ${PCFG}
-#sudo echo "    metrics:" >> ${PCFG}
-#sudo echo "      - algod*" >> ${PCFG}
 
 # Restart datadog agent to pick up hostname and prometheus settings
 sudo systemctl restart datadog-agent
