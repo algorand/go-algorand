@@ -23,8 +23,26 @@ type Writer interface {
 
 // OpStream is destination for program and scratch space
 type OpStream struct {
-	out     Writer
+	Out     Writer
 	vubytes [9]byte
+
+	// Keep a stack of the types of what we would push and pop to typecheck a program
+	typeStack []byte
+}
+
+func (ops *OpStream) tpush(argType byte) {
+	ops.typeStack = append(ops.typeStack, argType)
+}
+
+func (ops *OpStream) tpop() (argType byte) {
+	if len(ops.typeStack) == 0 {
+		argType = opNone
+		return
+	}
+	last := len(ops.typeStack) - 1
+	argType = ops.typeStack[last]
+	ops.typeStack = ops.typeStack[:last]
+	return
 }
 
 func (ops *OpStream) hiddenUint(opcode byte, val uint64) error {
@@ -48,50 +66,57 @@ func (ops *OpStream) hiddenUint(opcode byte, val uint64) error {
 	for i := uint(0); i < vlen; i++ {
 		ops.vubytes[i+1] = byte((val >> (8 * (vlen - i - 1))) & 0x0ff)
 	}
-	_, err := ops.out.Write(ops.vubytes[0 : 1+vlen])
+	_, err := ops.Out.Write(ops.vubytes[0 : 1+vlen])
 	return err
 }
 
 // Uint writes opcodes for loading a uint literal
 func (ops *OpStream) Uint(val uint64) error {
+	ops.tpush(opUint)
 	return ops.hiddenUint(0x20, val)
 }
 
 // ByteLiteral writes opcodes and data for loading a []byte literal
 func (ops *OpStream) ByteLiteral(val []byte) error {
+	ops.tpush(opBytes)
 	if len(val) == 0 {
-		return ops.out.WriteByte(0x28)
+		return ops.Out.WriteByte(0x28)
 	}
 	err := ops.hiddenUint(0x28, uint64(len(val)))
 	if err != nil {
 		return err
 	}
-	_, err = ops.out.Write(val)
+	_, err = ops.Out.Write(val)
 	return err
 }
 
 // Arg writes opcodes for loading from Lsig.Args
 func (ops *OpStream) Arg(val uint64) error {
+	ops.tpush(opBytes)
 	return ops.hiddenUint(0x30, val)
 }
 
 // Txn writes opcodes for loading a field from the current transaction
 func (ops *OpStream) Txn(val uint64) error {
+	ops.tpush(opAny)
 	return ops.hiddenUint(0x38, val)
 }
 
 // Global writes opcodes for loading an evaluator-global field
 func (ops *OpStream) Global(val uint64) error {
+	ops.tpush(opAny)
 	return ops.hiddenUint(0x40, val)
 }
 
 // Account writes opcodes for loading a field from some account
 func (ops *OpStream) Account(val uint64) error {
+	ops.tpush(opAny)
 	return ops.hiddenUint(0x48, val)
 }
 
 // TxID writes opcodes for loading a field from some other transaction
 func (ops *OpStream) TxID(val uint64) error {
+	ops.tpush(opAny)
 	return ops.hiddenUint(0x50, val)
 }
 
@@ -300,6 +325,15 @@ func lineErr(line int, err error) error {
 	return &lineErrorWrapper{Line: line, Err: err}
 }
 
+func typecheck(expected, got byte) bool {
+	// Some ops push 'any' and we wait for run time to see what it is.
+	// Some of those 'any' are based on fields that we _could_ know now but haven't written a more detailed system of typecheck for (yet).
+	if (expected == opAny) || (got == opAny) {
+		return true
+	}
+	return expected == got
+}
+
 // Assemble reads text from an input and writes bytecode out.
 // Single pass assembler, no forward references.
 func (ops *OpStream) Assemble(fin io.Reader) error {
@@ -318,7 +352,17 @@ func (ops *OpStream) Assemble(fin io.Reader) error {
 		opstring := fields[0]
 		opcode, ok := simpleOps[opstring]
 		if ok {
-			err := ops.out.WriteByte(opcode)
+			spec := opsByOpcode[opcode]
+			for i, argType := range spec.args {
+				stype := ops.tpop()
+				if !typecheck(argType, stype) {
+					return fmt.Errorf(":%d %s arg %d wanted type %s got %s", lineNumber, spec.name, i, argTypeName(argType), argTypeName(stype))
+				}
+			}
+			if spec.returns != opNone {
+				ops.tpush(spec.returns)
+			}
+			err := ops.Out.WriteByte(opcode)
 			if err != nil {
 				return lineErr(lineNumber, err)
 			}
@@ -334,6 +378,7 @@ func (ops *OpStream) Assemble(fin io.Reader) error {
 		}
 		return fmt.Errorf(":%d unknown opcode %v", lineNumber, opstring)
 	}
+	// TODO: warn if expected resulting stack is not len==1 ?
 	return nil
 }
 
@@ -341,7 +386,7 @@ func (ops *OpStream) Assemble(fin io.Reader) error {
 func AssembleString(text string) ([]byte, error) {
 	sr := strings.NewReader(text)
 	pbytes := bytes.Buffer{}
-	ops := OpStream{out: &pbytes}
+	ops := OpStream{Out: &pbytes}
 	err := ops.Assemble(sr)
 	if err != nil {
 		return nil, err

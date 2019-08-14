@@ -11,30 +11,11 @@ import (
 
 func TestAssemble(t *testing.T) {
 	text := `err
-sha256
-keccak256
-+
--
-/
-*
-<
->
-<=
->=
-&&
-||
-==
-!=
-!
-len
-btoi
-int 0x031337
-int 0x1234567812345678
-byte 0x1234
 global Round
 global MinTxnFee
 global MinBalance
 global MaxTxnLife
+byte 0x1234
 txn Sender
 txn Fee
 txn FirstValid
@@ -50,10 +31,44 @@ txn VoteLast
 arg 0
 arg 1
 account Balance
+sha256
+keccak256
+int 0x031337
+int 0x1234567812345678
++
+// extra int pushes to satisfy typechecking on the ops that pop two ints
+int 0
+-
+int 2
+/
+int 1
+*
+int 1
+<
+int 1
+>
+int 1
+<=
+int 1
+>=
+int 1
+&&
+int 1
+||
+int 1
+==
+int 1
+!=
+int 1
+!
+byte 0x4242
+len
+byte 0x4242
+btoi
 `
 	sr := strings.NewReader(text)
 	pbytes := bytes.Buffer{}
-	ops := OpStream{out: &pbytes}
+	ops := OpStream{Out: &pbytes}
 	err := ops.Assemble(sr)
 	require.NoError(t, err)
 	//t.Log(hex.EncodeToString(pbytes.Bytes()))
@@ -61,7 +76,7 @@ account Balance
 
 func TestOpUint(t *testing.T) {
 	pbytes := bytes.Buffer{}
-	ops := OpStream{out: &pbytes}
+	ops := OpStream{Out: &pbytes}
 	err := ops.Uint(0xcafebabe)
 	require.NoError(t, err)
 	s := hex.EncodeToString(pbytes.Bytes())
@@ -70,7 +85,7 @@ func TestOpUint(t *testing.T) {
 
 func TestOpUint64(t *testing.T) {
 	pbytes := bytes.Buffer{}
-	ops := OpStream{out: &pbytes}
+	ops := OpStream{Out: &pbytes}
 	err := ops.Uint(0xcafebabecafebabe)
 	require.NoError(t, err)
 	s := hex.EncodeToString(pbytes.Bytes())
@@ -79,7 +94,7 @@ func TestOpUint64(t *testing.T) {
 
 func TestOpBytes(t *testing.T) {
 	pbytes := bytes.Buffer{}
-	ops := OpStream{out: &pbytes}
+	ops := OpStream{Out: &pbytes}
 	err := ops.ByteLiteral([]byte("abcdef"))
 	require.NoError(t, err)
 	s := hex.EncodeToString(pbytes.Bytes())
@@ -90,7 +105,7 @@ func TestAssembleInt(t *testing.T) {
 	text := "int 0xcafebabe"
 	sr := strings.NewReader(text)
 	pbytes := bytes.Buffer{}
-	ops := OpStream{out: &pbytes}
+	ops := OpStream{Out: &pbytes}
 	err := ops.Assemble(sr)
 	require.NoError(t, err)
 	s := hex.EncodeToString(pbytes.Bytes())
@@ -122,7 +137,7 @@ func TestAssembleBytes(t *testing.T) {
 	for _, vi := range variations {
 		sr := strings.NewReader(vi)
 		pbytes := bytes.Buffer{}
-		ops := OpStream{out: &pbytes}
+		ops := OpStream{Out: &pbytes}
 		err := ops.Assemble(sr)
 		require.NoError(t, err)
 		s := hex.EncodeToString(pbytes.Bytes())

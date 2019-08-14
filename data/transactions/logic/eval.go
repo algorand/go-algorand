@@ -148,18 +148,20 @@ var opSpecs = []opSpec{
 	{0x30, 0xf8, "arg", opArg, nil, opBytes},
 	{0x38, 0xf8, "txn", opTxn, nil, opAny}, // TODO: check output type by subfield retrieved in txn,global,account,txid
 	{0x40, 0xf8, "global", opGlobal, nil, opAny},
-	{0x48, 0xf8, "account", opAccount, nil, opAny},
-	{0x50, 0xf8, "txid", opTxid, nil, opAny},
+	{0x48, 0xf8, "account", opAccount, []byte{opBytes}, opAny},
+	{0x50, 0xf8, "txid", opTxid, []byte{opBytes}, opAny},
 }
 
 // direct opcode bytes
-var ops []opSpec
+//var ops []opSpec
+// alternate name, same as 'ops', to get around shadowing in some code here
+var opsByOpcode []opSpec
 
 func init() {
-	ops = make([]opSpec, 256)
+	opsByOpcode = make([]opSpec, 256)
 	for _, oi := range opSpecs {
 		if oi.mask == 0xff {
-			ops[oi.opcode] = oi
+			opsByOpcode[oi.opcode] = oi
 		} else {
 			if oi.opcode&oi.mask != oi.opcode {
 				panic("bad opcode")
@@ -167,10 +169,10 @@ func init() {
 			for i := 0; i < 256; i++ {
 				opcode := byte(i)
 				if opcode&oi.mask == oi.opcode {
-					if ops[opcode].mask != 0 {
+					if opsByOpcode[opcode].mask != 0 {
 						panic("colliding opcodes")
 					}
-					ops[opcode] = oi
+					opsByOpcode[opcode] = oi
 				}
 			}
 		}
@@ -186,23 +188,23 @@ func opCompat(expected, got byte) bool {
 
 func (cx *evalContext) step() {
 	opcode := cx.program[cx.pc]
-	argsTypes := ops[opcode].args
+	argsTypes := opsByOpcode[opcode].args
 	if len(argsTypes) >= 0 {
 		// check args for stack underflow and types
 		if len(cx.stack) < len(argsTypes) {
-			cx.err = fmt.Errorf("stack underflow in %s", ops[opcode].name)
+			cx.err = fmt.Errorf("stack underflow in %s", opsByOpcode[opcode].name)
 			return
 		}
 		first := len(cx.stack) - len(argsTypes)
 		for i, argType := range argsTypes {
 			if !opCompat(argType, cx.stack[first+i].argType()) {
-				cx.err = fmt.Errorf("%s arg %d wanted %s but got %s", ops[opcode].name, i, argTypeName(argType), cx.stack[first+i].typeName())
+				cx.err = fmt.Errorf("%s arg %d wanted %s but got %s", opsByOpcode[opcode].name, i, argTypeName(argType), cx.stack[first+i].typeName())
 			}
 		}
 	}
-	ops[opcode].op(cx)
+	opsByOpcode[opcode].op(cx)
 	if cx.Trace != nil {
-		fmt.Fprintf(cx.Trace, "%3d %s => %s\n", cx.pc, ops[opcode].name, cx.stack[len(cx.stack)-1].String())
+		fmt.Fprintf(cx.Trace, "%3d %s => %s\n", cx.pc, opsByOpcode[opcode].name, cx.stack[len(cx.stack)-1].String())
 	}
 	if cx.err == nil {
 		cx.pc++
@@ -421,6 +423,10 @@ func opLen(cx *evalContext) {
 func opBtoi(cx *evalContext) {
 	last := len(cx.stack) - 1
 	ibytes := cx.stack[last].Bytes
+	if len(ibytes) > 8 {
+		cx.err = fmt.Errorf("btoi arg too long, got [%d]bytes", len(ibytes))
+		return
+	}
 	value := uint64(0)
 	for _, b := range ibytes {
 		value = value << 8

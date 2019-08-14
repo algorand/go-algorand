@@ -17,6 +17,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -25,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
 
@@ -46,6 +48,7 @@ var (
 	sign            bool
 	closeToAddress  string
 	noWaitAfterSend bool
+	noProgramOutput bool
 )
 
 func init() {
@@ -53,6 +56,7 @@ func init() {
 	clerkCmd.AddCommand(rawsendCmd)
 	clerkCmd.AddCommand(inspectCmd)
 	clerkCmd.AddCommand(signCmd)
+	clerkCmd.AddCommand(compileCmd)
 
 	// Wallet to be used for the clerk operation
 	clerkCmd.PersistentFlags().StringVarP(&walletName, "wallet", "w", "", "Set the wallet to be used for the selected operation")
@@ -84,6 +88,8 @@ func init() {
 	signCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Filename for writing the signed transaction")
 	signCmd.MarkFlagRequired("infile")
 	signCmd.MarkFlagRequired("outfile")
+
+	compileCmd.Flags().BoolVarP(&noProgramOutput, "no-out", "n", false, "don't write contract program binary")
 }
 
 var clerkCmd = &cobra.Command{
@@ -422,6 +428,46 @@ var signCmd = &cobra.Command{
 		err = writeFile(outFilename, outData, 0600)
 		if err != nil {
 			reportErrorf(fileWriteError, outFilename, err)
+		}
+	},
+}
+
+var compileCmd = &cobra.Command{
+	Use:   "compile",
+	Short: "compile a contract program",
+	Long:  "compile a contract program, report it's address",
+	Run: func(cmd *cobra.Command, args []string) {
+		for _, fname := range args {
+			fin, err := os.Open(fname)
+			if err != nil {
+				reportErrorf("%s: %s\n", fname, err)
+			}
+			pbytes := bytes.Buffer{}
+			ops := logic.OpStream{Out: &pbytes}
+			err = ops.Assemble(fin)
+			if err != nil {
+				reportErrorf("%s: %s\n", fname, err)
+			}
+			fin.Close()
+			program := pbytes.Bytes()
+			if !noProgramOutput {
+				outname := fmt.Sprintf("%s.tok", fname)
+				fout, err := os.Create(outname)
+				if err != nil {
+					reportErrorf("%s: %s\n", outname, err)
+				}
+				_, err = fout.Write(program)
+				if err != nil {
+					reportErrorf("%s: %s\n", outname, err)
+				}
+				err = fout.Close()
+				if err != nil {
+					reportErrorf("%s: %s\n", outname, err)
+				}
+			}
+			pd := crypto.Hash(program)
+			addr := basics.Address(pd)
+			fmt.Printf("%s: %s\n", fname, addr.String())
 		}
 	},
 }
