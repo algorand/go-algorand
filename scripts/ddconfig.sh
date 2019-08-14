@@ -2,8 +2,8 @@
 
 set -ex
 
-SCRIPTPATH="$( pushd "$(dirname "$0")" ; pwd -P )" >/dev/null
-popd >/dev/null
+SCRIPTPATH="$(cd "$(dirname "$0")" ; pwd -P )" >/dev/null
+pwd
 
 function ShowSyntaxAndExit() {
     echo "ddconfig - enable or disable DataDog for use with an Algorand host"
@@ -27,7 +27,6 @@ APIKEY=
 # ddconfig enable -p 8880 -n r-aa.mainnet -k <apikey> -d ~/algorand/node
 
 CMD="$1"
-shift
 
 if [[ "${CMD}" = "disable" ]]; then
     DisableAndExit
@@ -36,6 +35,8 @@ fi
 if [[ "${CMD}" != "enable" ]]; then
     ShowSyntaxAndExit
 fi
+
+shift
 
 while [[ "$1" != "" ]]; do
     case "$1" in
@@ -49,7 +50,7 @@ while [[ "$1" != "" ]]; do
         -p)
             shift
             PORT=$1
-            PORT=$(echo $1 | grep -o ":[0-9]*" | tr -d ":")
+            PORT=$(echo $1 | grep -o "[0-9]*")
             if [[ -z "${PORT}" ]]; then
                 echo "Port value does not appear to be valid.  Specify just the port (eg -p 8000)"
                 exit 1
@@ -103,37 +104,54 @@ fi
 # Apply the algod changes and restart it
 # Install DataDog agent, configure it, and restart it
 
-${SCRIPTPATH}/diagcfg metric disable
+${SCRIPTPATH}/diagcfg metric disable -d ""${DATADIR}""
 
-$(${SCRIPTPATH}/algocfg set -p EndpointAddress -d "$DATADIR" -v "${ADDRESS}:${PORT}"
+${SCRIPTPATH}/algocfg set -p EndpointAddress -d "$DATADIR" -v "${ADDRESS}:${PORT}"
 
-${SCRIPTPATH}/goal node restart -d ${DATADIR}
+${SCRIPTPATH}/goal node stop -d ${DATADIR}
 pkill node_exporter || true
+
+if [[ ! -f "${DATADIR}/algod.token" ]]; then
+    ${SCRIPTPATH}/goal node generatetoken -d ${DATADIR}
+fi
+
+ALGOD_TOKEN=$(cat "${DATADIR}/algod.token")
+${SCRIPTPATH}/goal node start -d ${DATADIR}
+
 
 # Install DataDog Agent
 DD_API_KEY=${APIKEY} bash -c "$(curl -L https://raw.githubusercontent.com/DataDog/datadog-agent/master/cmd/agent/install_script.sh)"
 
 # Remove existing "hostname:" line if any, then append the new one
-sudo sed /[[:space:]#]hostname:/d /etc/datadog-agent/datadog.yaml | sed /^hostname:/d > /etc/datadog-agent/datadog.yaml.tmp
-sudo echo "hostname: $HOSTNAME" >> /etc/datadog-agent/datadog.yaml.tmp
-sudo mv /etc/datadog-agent/datadog.yaml.tmp /etc/datadog-agent/datadog.yaml
-
-set ALGOD_PORT=8880
-set ALGOD_TOKEN$(cat "${DATADIR}/algod.token)"
+sudo sed /[[:space:]#]hostname:/d /etc/datadog-agent/datadog.yaml | sudo sed /^hostname:/d > ~/datadog.yaml.tmp
+sudo echo "hostname: $HOSTNAME" >> ~/datadog.yaml.tmp
+sudo mv ~/datadog.yaml.tmp /etc/datadog-agent/datadog.yaml
 
 sudo mkdir -p /etc/datadog-agent/conf.d/prometheus.d
 
-sudo cat <<EOF>/etc/datadog-agent/conf.d/prometheus.d/conf.yaml
+cat <<EOF>~/conf.yaml.tmp
 init_config:
  
 instances:
-  - prometheus_url: http://localhost:$(ALGOD_PORT)/metrics
+  - prometheus_url: http://localhost:${PORT}/metrics
     extra_headers:
-      X-Algo-API-Token: ${ALGOD_TOKEN)
+      X-Algo-API-Token: ${ALGOD_TOKEN}
     namespace: algod
     metrics:
       - algod*
 EOF
+
+sudo mv ~/conf.yaml.tmp /etc/datadog-agent/conf.d/prometheus.d/conf.yaml
+#PCFG=/etc/datadog-agent/conf.d/prometheus.d/conf.yaml
+#sudo echo "init_config:" > ${PCFG}
+#sudo echo "" >> ${PCFG}
+#sudo echo "instances:" >> ${PCFG}
+#sudo echo "  - prometheus_url: http://localhost:$(PORT)/metrics" >> ${PCFG}
+#sudo echo "    extra_headers:" >> ${PCFG}
+#sudo echo "      X-Algo-API-Token: ${ALGOD_TOKEN}" >> ${PCFG}
+#sudo echo "    namespace: algod" >> ${PCFG}
+#sudo echo "    metrics:" >> ${PCFG}
+#sudo echo "      - algod*" >> ${PCFG}
 
 # Restart datadog agent to pick up hostname and prometheus settings
 sudo systemctl restart datadog-agent
