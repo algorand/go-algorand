@@ -5,10 +5,10 @@ set -ex
 SCRIPTPATH="$( pushd "$(dirname "$0")" ; pwd -P )" >/dev/null
 popd >/dev/null
 
-function ShowSyntax() {
-    echo "ddcfg - enable or disable DataDog for use with an Algorand host"
-    echo "Syntax: ddcfg enable -d <datadir> -p <port> -n <hostname> -k <apikey>"
-    echo "Syntax: ddcfg disable"
+function ShowSyntaxAndExit() {
+    echo "ddconfig - enable or disable DataDog for use with an Algorand host"
+    echo "Syntax: ddconfig enable -d <datadir> -p <port> -n <hostname> -k <apikey>"
+    echo "Syntax: ddconfig disable"
     echo "Do not run as root / sudo - you will be prompted to elevate if necessary"
     exit 2
 }
@@ -24,15 +24,20 @@ PORT=
 HOSTNAME=
 APIKEY=
 
-# ddcfg enable -p 8880 -n r-aa.mainnet -k <apikey> -d ~/algorand/node
+# ddconfig enable -p 8880 -n r-aa.mainnet -k <apikey> -d ~/algorand/node
 
 CMD="$1"
+shift
 
-if [ "${CMD}" = "disable" ]; then
+if [[ "${CMD}" = "disable" ]]; then
     DisableAndExit
 fi
 
-while [ "$1" != "" ]; do
+if [[ "${CMD}" != "enable" ]]; then
+    ShowSyntaxAndExit
+fi
+
+while [[ "$1" != "" ]]; do
     case "$1" in
         -d)
             shift
@@ -45,7 +50,7 @@ while [ "$1" != "" ]; do
             shift
             PORT=$1
             PORT=$(echo $1 | grep -o ":[0-9]*" | tr -d ":")
-            if [ -z "${PORT}" ]; then
+            if [[ -z "${PORT}" ]]; then
                 echo "Port value does not appear to be valid.  Specify just the port (eg -p 8000)"
                 exit 1
             fi
@@ -59,7 +64,7 @@ while [ "$1" != "" ]; do
             APIKEY=$1
             ;;
         -h)
-            ShowSyntax
+            ShowSyntaxAndExit
             ;;
         *)
             echo "Unknown option:" "$1"
@@ -69,13 +74,13 @@ while [ "$1" != "" ]; do
 done
 
 if [[ -z "${DATADIR}" || -z "${HOSTNAME}" || -z "${APIKEY}" ]]; then
-    ShowSyntax
+    ShowSyntaxAndExit
 fi
 
-ENDPOINT=$($SCRIPTPATH/algocfg get -p EndpointAddress -d "$DATADIR")
+ENDPOINT=$(${SCRIPTPATH}/algocfg get -p EndpointAddress -d "$DATADIR")
 ADDRESS=$(echo ${ENDPOINT} | grep -o "[0-9\.]*:" | tr -d ":")
 
-if [ -z "${PORT}" ]; then
+if [[ -z "${PORT}" ]]; then
     PORT=$(echo ${ENDPOINT} | grep -o ":[0-9]*" | tr -d ":")
     if [[ -z "${PORT}" || "${PORT}" = "0" ]]; then
         echo "Port not specified and not already configured - please specify a port to use with `-p`"
@@ -84,12 +89,12 @@ if [ -z "${PORT}" ]; then
 fi
 
 # Validate the APIKEY - should be 32 alphanum (lowercase) chars
-if [ "${#APIKEY}" != "32" ]; then
+if [[ "${#APIKEY}" != "32" ]]; then
     echo "API Key specified should be 32 characters long"
     exit 1
 fi
 FILTEREDKEY=$(echo ${APIKEY} | grep -o "[0-9a-f]*")
-if [ "${APIKEY}" != "${FILTEREDKEY}" ]; then
+if [[ "${APIKEY}" != "${FILTEREDKEY}" ]]; then
     echo "API Key specified should contain only lowercase characters or numbers"
     exit 1
 fi
@@ -100,7 +105,7 @@ fi
 
 ${SCRIPTPATH}/diagcfg metric disable
 
-$($SCRIPTPATH/algocfg set -p EndpointAddress -d "$DATADIR" -v "${ADDRESS}:${PORT}"
+$(${SCRIPTPATH}/algocfg set -p EndpointAddress -d "$DATADIR" -v "${ADDRESS}:${PORT}"
 
 ${SCRIPTPATH}/goal node restart -d ${DATADIR}
 pkill node_exporter || true
