@@ -40,6 +40,19 @@ import (
 
 const blockQueryPeerLimit = 10
 
+type blockAuthenticatorImpl struct {
+	*data.Ledger
+	*agreement.AsyncVoteVerifier
+}
+
+func (i blockAuthenticatorImpl) Authenticate(block *bookkeeping.Block, cert *agreement.Certificate) error {
+	return cert.Authenticate(*block, i.Ledger, i.AsyncVoteVerifier)
+}
+
+func (i blockAuthenticatorImpl) Quit() {
+	i.AsyncVoteVerifier.Quit()
+}
+
 type blockValidatorImpl struct {
 	l                *data.Ledger
 	tp               *pools.TransactionPool
