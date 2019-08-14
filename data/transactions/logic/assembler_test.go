@@ -35,6 +35,9 @@ sha256
 keccak256
 int 0x031337
 int 0x1234567812345678
+int 0x0034567812345678
+int 0x0000567812345678
+int 0x0000007812345678
 +
 // extra int pushes to satisfy typechecking on the ops that pop two ints
 int 0
@@ -71,7 +74,13 @@ btoi
 	ops := OpStream{Out: &pbytes}
 	err := ops.Assemble(sr)
 	require.NoError(t, err)
-	//t.Log(hex.EncodeToString(pbytes.Bytes()))
+	// check that compilation is stable over time and we assemble to the same bytes this month that we did last month.
+	expectedBytes, _ := hex.DecodeString("00404101410241032902123438390139023903390439053906390739083909390a390b3031014801022303133727123456781234567827345678123456782656781234567825781234567808200921020a21010b21010c21010d21010e21010f21011021011121011221011321011429024242152902424217")
+	if bytes.Compare(expectedBytes, pbytes.Bytes()) != 0 {
+		// this print is for convenience if the program has been changed. the hex string can be copy pasted back in as a new expected result.
+		t.Log(hex.EncodeToString(pbytes.Bytes()))
+	}
+	require.Equal(t, expectedBytes, pbytes.Bytes())
 }
 
 func TestOpUint(t *testing.T) {
