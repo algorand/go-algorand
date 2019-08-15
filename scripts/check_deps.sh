@@ -14,6 +14,7 @@
 # Examples: scripts/checkout_deps.sh
 
 export GOPATH=$(go env GOPATH)
+GOPATH1=$(echo $GOPATH | cut -d: -f1)
 
 ANY_MISSING=0
 # golint doesn't work with 'dep ensure' so we manually install it
@@ -25,19 +26,19 @@ function check_deps() {
     ANY_MISSING=0
     GOLINT_MISSING=0
 
-    if [ ! -f "${GOPATH}/bin/golint" ]; then
+    if [ ! -f "${GOPATH1}/bin/golint" ]; then
         GOLINT_MISSING=1
         ANY_MISSING=1
         echo "... golint missing"
     fi
 
-    if [ ! -f "${GOPATH}/bin/stringer" ]; then
+    if [ ! -f "${GOPATH1}/bin/stringer" ]; then
         STRINGER_MISSING=1
         ANY_MISSING=1
         echo "... stringer missing"
     fi
 
-    if [ ! -f "${GOPATH}/bin/swagger" ]; then
+    if [ ! -f "${GOPATH1}/bin/swagger" ]; then
         SWAGGER_MISSING=1
         ANY_MISSING=1
         echo "... swagger missing"
