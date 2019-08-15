@@ -216,7 +216,7 @@ type Transaction struct {
 	// Keyreg contains the additional fields for a keyreg transaction.
 	//
 	// required: false
-	Keyreg  *KeyregTransactionType  `json:"keyreg,omitempty"`
+	Keyreg *KeyregTransactionType `json:"keyreg,omitempty"`
 
 	// FromRewards is the amount of pending rewards applied to the From
 	// account as part of this transaction.
