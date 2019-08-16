@@ -35,6 +35,10 @@ func corsMiddleware(allowedOrigins []string) func(http.Handler) http.Handler {
 			for _, allowedOrigin := range allowedOrigins {
 				if subtle.ConstantTimeCompare([]byte(origin), []byte(allowedOrigin)) == 1 {
 					found = allowedOrigin
+					break
+				} else if allowedOrigin == "*" {
+					found = origin
+					break
 				}
 			}
 

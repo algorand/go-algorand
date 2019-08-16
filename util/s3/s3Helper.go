@@ -38,13 +38,13 @@ import (
 )
 
 const (
-	s3UploadBucketEnvVariable   = "S3_UPLOAD_BUCKET"
-	s3ReleaseBucketEnvVariable  = "S3_RELEASE_BUCKET"
-	s3RegionEnvVariable         = "S3_REGION"
+	s3UploadBucketEnvVariable  = "S3_UPLOAD_BUCKET"
+	s3ReleaseBucketEnvVariable = "S3_RELEASE_BUCKET"
+	s3RegionEnvVariable        = "S3_REGION"
 
-	s3DefaultReleaseBucket  = "algorand-releases"
-	s3DefaultUploadBucket   = "algorand-uploads"
-	s3DefaultRegion         = "us-east-1"
+	s3DefaultReleaseBucket = "algorand-releases"
+	s3DefaultUploadBucket  = "algorand-uploads"
+	s3DefaultRegion        = "us-east-1"
 
 	downloadAction = "download"
 	uploadAction   = "upload"
@@ -251,10 +251,10 @@ func (helper *Helper) UploadFiles(subFolder string, files []string) error {
 
 // GetPackageVersion return the package version
 func (helper *Helper) GetPackageVersion(channel string, pkg string, specificVersion uint64) (maxVersion uint64, maxVersionName string, err error) {
-		osName := runtime.GOOS
-		arch := runtime.GOARCH
-		prefix := fmt.Sprintf("%s_%s_%s-%s", pkg, channel, osName, arch)
-		return helper.GetPackageFilesVersion(channel, prefix, specificVersion)
+	osName := runtime.GOOS
+	arch := runtime.GOARCH
+	prefix := fmt.Sprintf("%s_%s_%s-%s", pkg, channel, osName, arch)
+	return helper.GetPackageFilesVersion(channel, prefix, specificVersion)
 }
 
 // GetPackageFilesVersion return the package version
