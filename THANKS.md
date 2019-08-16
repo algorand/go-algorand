@@ -11,3 +11,6 @@ In no particular order:
 - scnale
 - jsign
 - RomitKumar
+
+### Bug Reports
+- Nanyan
