@@ -12,6 +12,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -47,8 +48,7 @@ type EvalParams struct {
 	// the transaction being evaluated
 	Txn *transactions.SignedTxn
 
-	// round for which eval is happenning
-	Round basics.Round
+	Block *bookkeeping.Block
 
 	Trace io.Writer
 }
@@ -524,13 +524,19 @@ func opGlobal(cx *evalContext) {
 	var sv stackValue
 	switch value {
 	case 0:
-		sv.Uint = uint64(cx.Round)
+		if cx.Block != nil {
+			sv.Uint = uint64(cx.Block.Round())
+		}
 	case 1:
 		sv.Uint = config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee
 	case 2:
 		sv.Uint = config.Consensus[protocol.ConsensusCurrentVersion].MinBalance
 	case 3:
 		sv.Uint = config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife
+	case 4:
+		if cx.Block != nil {
+			sv.Uint = uint64(cx.Block.BlockHeader.TimeStamp)
+		}
 	default:
 		cx.err = fmt.Errorf("invalid global[%d]", value)
 		return

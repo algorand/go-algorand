@@ -382,8 +382,8 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad *transact
 
 		if !txn.Lsig.Blank() {
 			// TODO: connect AccountData lookup and TxID lookup.
-			ep := logic.EvalParams{Txn: &txn, Round: eval.Round()}
-			pass := logic.Eval(txn.Lsig.Logic.Logic, ep)
+			ep := logic.EvalParams{Txn: &txn, Block: &eval.block}
+			pass := logic.Eval(txn.Lsig.Logic, ep)
 			if !pass {
 				return fmt.Errorf("transaction %v: rejected by logic", txn.ID())
 			}

@@ -63,6 +63,9 @@ func (ops *OpStream) hiddenUint(opcode byte, val uint64) error {
 	} else {
 		ops.vubytes[0] = opcode | byte(vlen&0x07)
 	}
+	if vlen == 7 {
+		vlen = 8
+	}
 	for i := uint(0); i < vlen; i++ {
 		ops.vubytes[i+1] = byte((val >> (8 * (vlen - i - 1))) & 0x0ff)
 	}
@@ -236,6 +239,7 @@ var GlobalFieldNames = []string{
 	"MinTxnFee",
 	"MinBalance",
 	"MaxTxnLife",
+	"TimeStamp",
 }
 var globalFields map[string]uint
 
