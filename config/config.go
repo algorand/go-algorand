@@ -183,6 +183,9 @@ type ConsensusParams struct {
 	// multi-currency support
 	MultiCurrency bool
 
+	// max subcurrencies per account
+	MaxCurrenciesPerAccount int
+
 	// support sequential transaction counter TxnCounter
 	TxnCounter bool
 }
@@ -377,14 +380,14 @@ func initConsensusProtocols() {
 	// v16 can be upgraded to v17.
 	v16.ApprovedUpgrades[protocol.ConsensusV17] = true
 
-	// ConsensusV18 adds transaction counting and sub-currencies.
-	v18 := v17
-	v18.TxnCounter = true
-	v18.MultiCurrency = true
-	v18.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
-	Consensus[protocol.ConsensusV18] = v18
-
-	// v17 cannot be upgraded to v18 yet.
+	// ConsensusSubCurrency adds transaction counting and sub-currencies.
+	vSubCur := v17
+	vSubCur.TxnCounter = true
+	vSubCur.MultiCurrency = true
+	vSubCur.MaxCurrenciesPerAccount = 100
+	vSubCur.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	Consensus[protocol.ConsensusSubCurrency] = vSubCur
+	// v17 cannot be upgraded to vSubCur.
 }
 
 func initConsensusTestProtocols() {

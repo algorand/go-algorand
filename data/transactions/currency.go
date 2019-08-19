@@ -133,6 +133,11 @@ func (cc CurrencyConfigTxnFields) apply(header Header, balances Balances, spec S
 		record.Currencies[cid] = basics.CurrencyHolding{
 			Amount: cc.CurrencyParams.Total,
 		}
+
+		if len(record.Currencies) > balances.ConsensusParams().MaxCurrenciesPerAccount {
+			return fmt.Errorf("too many currencies in account: %d > %d", len(record.Currencies), balances.ConsensusParams().MaxCurrenciesPerAccount)
+		}
+
 		return balances.Put(record)
 	}
 
@@ -243,6 +248,10 @@ func (ct CurrencyTransferTxnFields) apply(header Header, balances Balances, spec
 		err = balances.Put(snd)
 		if err != nil {
 			return err
+		}
+
+		if len(snd.Currencies) > balances.ConsensusParams().MaxCurrenciesPerAccount {
+			return fmt.Errorf("too many currencies in account: %d > %d", len(snd.Currencies), balances.ConsensusParams().MaxCurrenciesPerAccount)
 		}
 
 		rcv, err := balances.Get(ct.CurrencyReceiver)
