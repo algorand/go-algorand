@@ -316,6 +316,7 @@ type WebsocketNetwork struct {
 	slowWritingPeerMonitorInterval time.Duration
 
 	requestsTracker *RequestTracker
+	requestsLogger  *RequestLogger
 }
 
 type broadcastRequest struct {
@@ -518,7 +519,12 @@ func (wn *WebsocketNetwork) setup() {
 	wn.router = mux.NewRouter()
 	wn.router.Handle(GossipNetworkPath, wn)
 	wn.requestsTracker = makeRequestsTracker(wn.router, wn.log, wn.config)
-	wn.server.Handler = wn.requestsTracker
+	if wn.config.EnableRequestLogger {
+		wn.requestsLogger = makeRequestLogger(wn.requestsTracker, wn.log)
+		wn.server.Handler = wn.requestsLogger
+	} else {
+		wn.server.Handler = wn.requestsTracker
+	}
 	wn.server.ReadHeaderTimeout = httpServerReadHeaderTimeout
 	wn.server.WriteTimeout = httpServerWriteTimeout
 	wn.server.IdleTimeout = httpServerIdleTimeout
@@ -589,6 +595,13 @@ func (wn *WebsocketNetwork) rlimitIncomingConnections() error {
 	// Set rlim_cur to match IncomingConnectionsLimit
 	newLimit := uint64(wn.config.IncomingConnectionsLimit) + wn.config.ReservedFDs
 	if newLimit > lim.Cur {
+		if runtime.GOOS == "darwin" && newLimit > 10240 && lim.Max == 0x7fffffffffffffff {
+			// The max file limit is 10240, even though
+			// the max returned by Getrlimit is 1<<63-1.
+			// This is OPEN_MAX in sys/syslimits.h.
+			// see https://github.com/golang/go/issues/30401
+			newLimit = 10240
+		}
 		lim.Cur = newLimit
 		err = unix.Setrlimit(unix.RLIMIT_NOFILE, &lim)
 		if err != nil {
@@ -889,6 +902,11 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 		wn.log.Info("ws upgrade fail ", err)
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "ws upgrade fail"})
 		return
+	}
+
+	// we want to tell the response object that the status was changed to 101 ( switching protocols ) so that it will be logged.
+	if wn.requestsLogger != nil {
+		wn.requestsLogger.SetStatusCode(response, http.StatusSwitchingProtocols)
 	}
 
 	peer := &wsPeer{

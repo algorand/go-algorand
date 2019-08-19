@@ -643,6 +643,9 @@ type Local struct {
 	// ConnectionsRateLimitingWindowSeconds seconds that share the same origin. If the total count exceed the ConnectionsRateLimitingCount
 	// value, the connection is refused.
 	ConnectionsRateLimitingCount uint
+
+	// EnableRequestLogger enabled the logging of the incoming requests to the telemetry server.
+	EnableRequestLogger bool
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)
