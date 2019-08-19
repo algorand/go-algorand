@@ -162,7 +162,9 @@ func SaveNonDefaultValuesToFile(filename string, object, defaultObject interface
 	}
 	defer outFile.Close()
 	writer := bufio.NewWriter(outFile)
-	_, err = writer.WriteString(strings.Join(newFile, "\n"))
+	combined := strings.Join(newFile, "\n")
+	combined = strings.TrimRight(combined, "\r\n ")
+	_, err = writer.WriteString(combined)
 	if err == nil {
 		writer.Flush()
 	}

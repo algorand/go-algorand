@@ -401,7 +401,7 @@ func (n *testingNetwork) partition(part ...nodeID) {
 	// different mechanism than n.connected map
 	n.partitionedNodes = make(map[nodeID]bool)
 	for i := 0; i < len(part); i++ {
-		n.partitionedNodes[nodeID(i)] = true
+		n.partitionedNodes[part[i]] = true
 	}
 }
 
@@ -425,7 +425,9 @@ func (n *testingNetwork) makeRelays(relays ...nodeID) {
 	}
 }
 
-// intercept messages from the given sources, replacing them with our own
+// intercept messages from the given sources, replacing them with our own.
+// if, in the returned params, the message is tagged UnknownMsgTag, the testing
+// network drops the message.
 func (n *testingNetwork) intercept(f multicastInterceptFn) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
@@ -1918,17 +1920,6 @@ func TestAgreementLargePeriods(t *testing.T) {
 			zeroes = expectNoNewPeriod(clocks, zeroes)
 
 			baseNetwork.repairAll()
-			// intercept all proposals for the next period; replace with unexpected
-			baseNetwork.intercept(func(params multicastParams) multicastParams {
-				if params.tag == protocol.AgreementVoteTag {
-					var uv unauthenticatedVote
-					err := protocol.Decode(params.data, &uv)
-					if err != nil {
-						panic(err)
-					}
-				}
-				return params
-			})
 			triggerGlobalTimeout(deadlineTimeout, clocks, activityMonitor)
 			zeroes = expectNewPeriod(clocks, zeroes)
 			require.Equal(t, 4+p, int(zeroes))
