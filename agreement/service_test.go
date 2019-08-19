@@ -1971,6 +1971,7 @@ func TestAgreementLargePeriods(t *testing.T) {
 // Receiving a certificate should not cause a node to stop relaying important messages
 // (such as blocks and pipelined messages for the next round)
 // Note that the stall will be resolved by catchup even if the relay blocks.
+// todo: this is currently broken on travis, but not locally for some reason.
 func TestAgreementCertificateDoesNotStallSingleRelay(t *testing.T) {
 	numNodes := 10 // single relay, nine leaf nodes
 	relayID := nodeID(0)

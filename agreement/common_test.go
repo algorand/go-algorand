@@ -330,35 +330,18 @@ func (l *testLedger) EnsureBlock(e bookkeeping.Block, c Certificate) {
 
 func (l *testLedger) EnsureDigest(c Certificate, quit chan struct{}, verifier *AsyncVoteVerifier) {
 	r := c.Round
-	consistencyCheck := func() bool {
-		l.mu.Lock()
-		defer l.mu.Unlock()
+	l.mu.Lock()
+	defer l.mu.Unlock()
 
-		if r < l.nextRound {
-			if l.entries[r].Digest() != c.Proposal.BlockDigest {
-				err := fmt.Errorf("testLedger.EnsureDigest called with conflicting entries in round %v", r)
-				panic(err)
-			}
-			return true
+	if r < l.nextRound {
+		if l.entries[r].Digest() != c.Proposal.BlockDigest {
+			err := fmt.Errorf("testLedger.EnsureDigest called with conflicting entries in round %v", r)
+			panic(err)
 		}
-		return false
 	}
-
-	if consistencyCheck() {
-		return
-	}
-
-	go func() {
-		select {
-		case <-quit:
-			return
-		case <-l.Wait(r):
-			if !consistencyCheck() {
-				err := fmt.Errorf("Wait channel fired without matching block in round %v", r)
-				panic(err)
-			}
-		}
-	}()
+	// the mock ledger does not actually need to wait for the block.
+	// Agreement should function properly even if it never happens.
+	// No test right now expects the ledger to eventually ensure digest (we can add one if need be)
 	return
 }
 

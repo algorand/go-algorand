@@ -213,7 +213,7 @@ func (a ensureAction) t() actionType {
 }
 
 func (a ensureAction) String() string {
-	return fmt.Sprintf("%v: %.5v", a.t().String(), a.Payload.Digest().String())
+	return fmt.Sprintf("%s: %.5s: %v, %v, %.5s", a.t().String(), a.Payload.Digest().String(), a.Certificate.Round, a.Certificate.Period, a.Certificate.Proposal.BlockDigest.String())
 }
 
 func (a ensureAction) do(ctx context.Context, s *Service) {
@@ -262,7 +262,7 @@ func (a stageDigestAction) t() actionType {
 }
 
 func (a stageDigestAction) String() string {
-	return fmt.Sprintf("%s: %.5s", a.t().String(), a.Certificate.Proposal.BlockDigest.String())
+	return fmt.Sprintf("%s: %.5s. %v. %v", a.t().String(), a.Certificate.Proposal.BlockDigest.String(), a.Certificate.Round, a.Certificate.Period)
 }
 
 func (a stageDigestAction) do(ctx context.Context, service *Service) {
