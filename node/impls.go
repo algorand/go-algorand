@@ -174,53 +174,58 @@ func (l agreementLedger) EnsureDigest(cert agreement.Certificate, quit chan stru
 	blockHash := bookkeeping.BlockHash(cert.Proposal.BlockDigest) // semantic digest (i.e., hash of the block header), not byte-for-byte digest
 	logging.Base().Debug("consensus was reached on a block we don't have yet: ", blockHash)
 
-	go func() {
-		for {
-			// Ask the fetcher to get the block somehow
-			block, fetchedCert, err := l.FetchBlockByDigest(round, quit)
-			if err != nil {
-				if err == errOngoingFetch {
-					// we currently cannot fetch the digest; just return, and no-op.
-					logging.Base().Debugf("Multiple EnsureDigests are fetching blocks; no-op for round %v", round)
-					return
-				}
-				select {
-				case <-quit:
-					logging.Base().Debugf("EnsureDigest was asked to quit before we could acquire the block")
-					return
-				default:
-				}
-				logging.Base().Panicf("EnsureDigest could not acquire block, fetcher errored out: %v", err)
-			}
+	// asynchronously attempt to ask the fetcher to get the block; this will loop until quit.
+	go l.EnsureDigestHelper(round, blockHash, cert, verifier, quit)
+}
 
-			if block.Hash() == blockHash && block.ContentsMatchHeader() {
-				l.EnsureBlock(block, cert)
+// EnsureDigestHelper does the actual work for EnsureDigest and is called asynchronously. Concurrency safe.
+func (l agreementLedger) EnsureDigestHelper(round basics.Round, blockHash bookkeeping.BlockHash, cert agreement.Certificate,
+	verifier *agreement.AsyncVoteVerifier, quit chan struct{}) {
+	for {
+		// Ask the fetcher to get the block somehow
+		block, fetchedCert, err := l.FetchBlockByDigest(round, quit) // can be called simultaneously
+		if err != nil {
+			if err == errOngoingFetch {
+				// we currently cannot fetch the digest; just return, and no-op.
+				logging.Base().Debugf("Multiple EnsureDigests are fetching blocks; no-op for round %v", round)
 				return
 			}
-			// Otherwise, fetcher gave us the wrong block
-			logging.Base().Warnf("fetcher gave us bad/wrong block (for round %d): fetched hash %v; want hash %v", round, block.Hash(), blockHash)
-
-			// As a failsafe, if the cert we fetched is valid but for the wrong block, panic as loudly as possible
-			if cert.Round == fetchedCert.Round &&
-				cert.Proposal.BlockDigest != fetchedCert.Proposal.BlockDigest &&
-				fetchedCert.Authenticate(block, l, verifier) == nil {
-				s := "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
-				s += "!!!!!!!!!! FORK DETECTED !!!!!!!!!!!\n"
-				s += "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
-				s += "EnsureDigest called with a cert authenticating block with hash %v.\n"
-				s += "We fetched a valid cert authenticating a different block, %v. This indicates a fork.\n\n"
-				s += "Cert from our agreement service:\n%#v\n\n"
-				s += "Cert from the fetcher:\n%#v\n\n"
-				s += "Block from the fetcher:\n%#v\n\n"
-				s += "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
-				s += "!!!!!!!!!! FORK DETECTED !!!!!!!!!!!\n"
-				s += "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
-				s = fmt.Sprintf(s, cert.Proposal.BlockDigest, fetchedCert.Proposal.BlockDigest, cert, fetchedCert, block)
-				fmt.Println(s)
-				logging.Base().Error(s)
+			select {
+			case <-quit:
+				logging.Base().Debugf("EnsureDigest was asked to quit before we could acquire the block")
+				return
+			default:
 			}
+			logging.Base().Panicf("EnsureDigest could not acquire block, fetcher errored out: %v", err)
 		}
-	}()
+
+		if block.Hash() == blockHash && block.ContentsMatchHeader() {
+			l.EnsureBlock(block, cert)
+			return
+		}
+		// Otherwise, fetcher gave us the wrong block
+		logging.Base().Warnf("fetcher gave us bad/wrong block (for round %d): fetched hash %v; want hash %v", round, block.Hash(), blockHash)
+
+		// As a failsafe, if the cert we fetched is valid but for the wrong block, panic as loudly as possible
+		if cert.Round == fetchedCert.Round &&
+			cert.Proposal.BlockDigest != fetchedCert.Proposal.BlockDigest &&
+			fetchedCert.Authenticate(block, l, verifier) == nil {
+			s := "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
+			s += "!!!!!!!!!! FORK DETECTED !!!!!!!!!!!\n"
+			s += "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
+			s += "EnsureDigest called with a cert authenticating block with hash %v.\n"
+			s += "We fetched a valid cert authenticating a different block, %v. This indicates a fork.\n\n"
+			s += "Cert from our agreement service:\n%#v\n\n"
+			s += "Cert from the fetcher:\n%#v\n\n"
+			s += "Block from the fetcher:\n%#v\n\n"
+			s += "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
+			s += "!!!!!!!!!! FORK DETECTED !!!!!!!!!!!\n"
+			s += "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
+			s = fmt.Sprintf(s, cert.Proposal.BlockDigest, fetchedCert.Proposal.BlockDigest, cert, fetchedCert, block)
+			fmt.Println(s)
+			logging.Base().Error(s)
+		}
+	}
 }
 
 func (l agreementLedger) innerFetch(fetcher rpcs.Fetcher, round basics.Round, quit chan struct{}) (*bookkeeping.Block, *agreement.Certificate, error) {
