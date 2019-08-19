@@ -281,7 +281,8 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block) {
 
 	payset, err := block.DecodePayset()
 	if err == nil {
-		for _, tx := range payset {
+		for _, txad := range payset {
+			tx := txad.SignedTxn
 			txid := tx.ID()
 			_, ok := pool.pendingTxids[txid]
 			if ok {

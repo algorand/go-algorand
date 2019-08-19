@@ -503,7 +503,7 @@ func (l *Ledger) eval(ctx context.Context, blk bookkeeping.Block, aux *evalAux, 
 
 	// TODO: batch tx sig verification: ingest blk.Payset and output a list of ValidatedTx
 	// Next, transactions
-	payset, err := blk.DecodePaysetWithAD()
+	payset, err := blk.DecodePayset()
 	if err != nil {
 		return stateDelta{}, evalAux{}, err
 	}

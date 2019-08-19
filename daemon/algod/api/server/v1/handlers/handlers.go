@@ -172,7 +172,7 @@ func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error)
 
 	// Transactions
 	var txns []v1.Transaction
-	payset, err := b.DecodePaysetWithAD()
+	payset, err := b.DecodePayset()
 	if err != nil {
 		return v1.Block{}, err
 	}

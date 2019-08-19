@@ -64,7 +64,8 @@ func (t *txTail) loadFromDisk(l ledgerForTracker) error {
 			txids: make(map[transactions.Txid]struct{}),
 			proto: config.Consensus[blk.CurrentProtocol],
 		}
-		for _, tx := range payset {
+		for _, txad := range payset {
+			tx := txad.SignedTxn
 			t.recent[old].txids[tx.ID()] = struct{}{}
 		}
 	}

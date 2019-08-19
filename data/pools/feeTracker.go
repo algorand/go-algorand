@@ -73,7 +73,8 @@ func (ft *FeeTracker) ProcessBlock(block bookkeeping.Block) {
 	}
 
 	fees := make([]float64, len(payset))
-	for i, tx := range payset {
+	for i, txad := range payset {
+		tx := txad.SignedTxn
 		fees[i] = ft.processTransaction(tx)
 	}
 

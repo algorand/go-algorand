@@ -468,21 +468,8 @@ func (block Block) ContentsMatchHeader() bool {
 	return block.Payset.Commit(proto.PaysetCommitFlat) == block.TxnRoot
 }
 
-// DecodePayset decodes block.Payset using DecodeSignedTxn (and ignores ApplyData).
-func (block Block) DecodePayset() ([]transactions.SignedTxn, error) {
-	res := make([]transactions.SignedTxn, len(block.Payset))
-	for i, txib := range block.Payset {
-		var err error
-		res[i], _, err = block.DecodeSignedTxn(txib)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return res, nil
-}
-
-// DecodePaysetWithAD decodes block.Payset using DecodeSignedTxn
-func (block Block) DecodePaysetWithAD() ([]transactions.SignedTxnWithAD, error) {
+// DecodePayset decodes block.Payset using DecodeSignedTxn
+func (block Block) DecodePayset() ([]transactions.SignedTxnWithAD, error) {
 	res := make([]transactions.SignedTxnWithAD, len(block.Payset))
 	for i, txib := range block.Payset {
 		var err error
