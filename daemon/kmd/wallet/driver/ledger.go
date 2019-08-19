@@ -341,6 +341,7 @@ func (lw *LedgerWallet) signDataHelper(data []byte) (sig crypto.Signature, err e
 	lw.mu.Lock()
 	defer lw.mu.Unlock()
 
+	// TODO: this is probably wrong and needs extending the client code on the device
 	reply, err := lw.dev.Exchange(data)
 	if err != nil {
 		return

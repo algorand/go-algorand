@@ -117,6 +117,9 @@ func getPathAndMethod(req kmdapi.APIV1Request) (reqPath string, reqMethod string
 	case kmdapi.APIV1POSTKeyListRequest:
 		reqPath = "v1/key/list"
 		reqMethod = "POST"
+	case kmdapi.APIV1POSTDataSignRequest:
+		reqPath = "v1/data/sign"
+		reqMethod = "POST"
 	case kmdapi.APIV1POSTTransactionSignRequest:
 		reqPath = "v1/transaction/sign"
 		reqMethod = "POST"
@@ -131,6 +134,9 @@ func getPathAndMethod(req kmdapi.APIV1Request) (reqPath string, reqMethod string
 		reqMethod = "POST"
 	case kmdapi.APIV1POSTMultisigTransactionSignRequest:
 		reqPath = "v1/multisig/sign"
+		reqMethod = "POST"
+	case kmdapi.APIV1POSTMultisigDataSignRequest:
+		reqPath = "v1/multisig/signdata"
 		reqMethod = "POST"
 	case kmdapi.APIV1DELETEMultisigRequest:
 		reqPath = "v1/multisig"

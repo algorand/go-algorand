@@ -153,6 +153,20 @@ func (kcl KMDClient) MultisigSignTransaction(walletHandle, pw []byte, tx []byte,
 	return
 }
 
+// MultisigSignData wraps kmdapi.APIV1POSTMultisigDataSignRequest
+func (kcl KMDClient) MultisigSignData(walletHandle, pw []byte, addr string, data []byte, pk crypto.PublicKey, partial crypto.MultisigSig) (resp kmdapi.APIV1POSTMultisigDataSignResponse, err error) {
+	req := kmdapi.APIV1POSTMultisigDataSignRequest{
+		WalletHandleToken: string(walletHandle),
+		WalletPassword:    string(pw),
+		Data:              data,
+		Address:           addr,
+		PublicKey:         pk,
+		PartialMsig:       partial,
+	}
+	err = kcl.DoV1Request(req, &resp)
+	return
+}
+
 // RenewWalletHandle wraps kmdapi.APIV1POSTKeyListRequest
 func (kcl KMDClient) RenewWalletHandle(walletHandle []byte) (resp kmdapi.APIV1POSTWalletRenewResponse, err error) {
 	req := kmdapi.APIV1POSTWalletRenewRequest{
@@ -189,6 +203,18 @@ func (kcl KMDClient) SignTransaction(walletHandle, pw []byte, tx transactions.Tr
 		WalletHandleToken: string(walletHandle),
 		WalletPassword:    string(pw),
 		Transaction:       txBytes,
+	}
+	err = kcl.DoV1Request(req, &resp)
+	return
+}
+
+// SignData wraps kmdapi.APIV1POSTDataSignRequest
+func (kcl KMDClient) SignData(walletHandle, pw []byte, addr string, data []byte) (resp kmdapi.APIV1POSTDataSignResponse, err error) {
+	req := kmdapi.APIV1POSTDataSignRequest{
+		WalletHandleToken: string(walletHandle),
+		WalletPassword:    string(pw),
+		Data:              data,
+		Address:           addr,
 	}
 	err = kcl.DoV1Request(req, &resp)
 	return
