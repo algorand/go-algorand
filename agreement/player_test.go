@@ -2800,7 +2800,7 @@ func TestPlayer_PayloadAfterCertThresholdCommits(t *testing.T) {
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r, p, cert)
 
-	_, pV := helper.MakeRandomProposalPayload(t, r)
+	pP, pV := helper.MakeRandomProposalPayload(t, r)
 	// send a bundle - individual votes will get filtered.
 	votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
@@ -2831,7 +2831,24 @@ func TestPlayer_PayloadAfterCertThresholdCommits(t *testing.T) {
 	require.Equalf(t, p+2, pWhite.Period, "player should have changed periods but didn't")
 	commitEvent := ev(stageDigestAction{Certificate: Certificate(bun)})
 	require.Truef(t, pM.getTrace().Contains(commitEvent), "Player should have staged something but didn't")
+	pM.resetTrace()
 
+	// now, deliver payload, commit.
+	inMsg = messageEvent{
+		T: payloadVerified,
+		Input: message{
+			Proposal:                *pP,
+			UnauthenticatedProposal: pP.u(),
+		},
+		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+	}
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+	require.Equalf(t, r+1, pWhite.Round, "player did not enter new round... bad!")
+	require.Equalf(t, period(0), pWhite.Period, "player should have entered period 0 but didn't")
+	commitEvent = ev(ensureAction{Certificate: Certificate(bun), Payload: *pP})
+	require.Truef(t, pM.getTrace().Contains(commitEvent), "Player should have committed but didn't")
 }
 
 func TestPlayerAlwaysResynchsPinnedValue(t *testing.T) {
