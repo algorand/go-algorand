@@ -858,6 +858,64 @@ func postTransactionSignHandler(ctx reqContext, w http.ResponseWriter, r *http.R
 	successResponse(w, resp)
 }
 
+// postDataSignHandler handles `POST /v1/data/sign`
+func postDataSignHandler(ctx reqContext, w http.ResponseWriter, r *http.Request) {
+	// swagger:operation POST /v1/data/sign SignData
+	//---
+	//    Summary: Sign data
+	//    Description: >
+	//      Signs the passed data with a key from the wallet, determined
+	//      by the sender encoded in the transaction.
+	//    Produces:
+	//    - application/json
+	//    Parameters:
+	//      - name: Sign Data Request
+	//        in: body
+	//        required: true
+	//        schema:
+	//          "$ref": "#/definitions/SignDataRequest"
+	//    Responses:
+	//      "200":
+	//        "$ref": "#/responses/SignDataResponse"
+	var req kmdapi.APIV1POSTDataSignRequest
+
+	// Decode the request
+	decoder := protocol.NewJSONDecoder(r.Body)
+	err := decoder.Decode(&req)
+	if err != nil {
+		errorResponse(w, http.StatusBadRequest, errCouldNotDecode)
+		return
+	}
+
+	// Fetch the wallet from the WalletHandleToken
+	wallet, _, err := ctx.sm.AuthWithWalletHandleToken([]byte(req.WalletHandleToken))
+	if err != nil {
+		errorResponse(w, http.StatusUnauthorized, err)
+		return
+	}
+
+	// Decode the address
+	reqAddr, err := basics.UnmarshalChecksumAddress(req.Address)
+	if err != nil {
+		errorResponse(w, http.StatusBadRequest, errCouldNotDecodeAddress)
+		return
+	}
+
+	stx, err := wallet.SignData(req.Data, crypto.Digest(reqAddr), []byte(req.WalletPassword))
+	if err != nil {
+		errorResponse(w, http.StatusBadRequest, err)
+		return
+	}
+
+	// Build the response
+	resp := kmdapi.APIV1POSTDataSignResponse{
+		Signature: stx,
+	}
+
+	// Return and encode the response
+	successResponse(w, resp)
+}
+
 // postMultisigListHandler handles `POST /v1/multisig/list`
 func postMultisigListHandler(ctx reqContext, w http.ResponseWriter, r *http.Request) {
 	// swagger:operation POST /v1/multisig/list ListMultisg
@@ -1084,6 +1142,65 @@ func postMultisigTransactionSignHandler(ctx reqContext, w http.ResponseWriter, r
 	successResponse(w, resp)
 }
 
+// postMultisigDataSignHandler handles `POST /v1/multisig/sign`
+func postMultisigDataSignHandler(ctx reqContext, w http.ResponseWriter, r *http.Request) {
+	// swagger:operation POST /v1/multisig/sign SignMultisigData
+	//---
+	//    Summary: Sign a multisig transaction
+	//    Description: >
+	//      Start a multisig signature, or add a signature to a partially completed
+	//      multisig signature object.
+	//    Produces:
+	//    - application/json
+	//    Parameters:
+	//      - name: Sign Multisig Data Request
+	//        in: body
+	//        required: true
+	//        schema:
+	//          "$ref": "#/definitions/SignMultisigRequest"
+	//    Responses:
+	//      "200":
+	//        "$ref": "#/responses/SignMultisigResponse"
+	var req kmdapi.APIV1POSTMultisigDataSignRequest
+
+	// Decode the request
+	decoder := protocol.NewJSONDecoder(r.Body)
+	err := decoder.Decode(&req)
+	if err != nil {
+		errorResponse(w, http.StatusBadRequest, errCouldNotDecode)
+		return
+	}
+
+	// Fetch the wallet from the WalletHandleToken
+	wallet, _, err := ctx.sm.AuthWithWalletHandleToken([]byte(req.WalletHandleToken))
+	if err != nil {
+		errorResponse(w, http.StatusUnauthorized, err)
+		return
+	}
+
+	// Decode the address
+	reqAddr, err := basics.UnmarshalChecksumAddress(req.Address)
+	if err != nil {
+		errorResponse(w, http.StatusBadRequest, errCouldNotDecodeAddress)
+		return
+	}
+
+	// Sign the transaction
+	msig, err := wallet.MultisigSignData(req.Data, crypto.Digest(reqAddr), req.PublicKey, req.PartialMsig, []byte(req.WalletPassword))
+	if err != nil {
+		errorResponse(w, http.StatusBadRequest, err)
+		return
+	}
+
+	// Build the response
+	resp := kmdapi.APIV1POSTMultisigDataSignResponse{
+		Multisig: protocol.Encode(msig),
+	}
+
+	// Return and encode the response
+	successResponse(w, resp)
+}
+
 // deleteMultisigHandler handles `DELETE /v1/multisig`
 func deleteMultisigHandler(ctx reqContext, w http.ResponseWriter, r *http.Request) {
 	// swagger:operation DELETE /v1/multisig DeleteMultisig
@@ -1192,9 +1309,11 @@ func RegisterHandlers(router *mux.Router, sm *session.Manager, log logging.Logge
 
 	router.HandleFunc("/multisig/list", wrapCtx(ctx, postMultisigListHandler)).Methods("POST")
 	router.HandleFunc("/multisig/sign", wrapCtx(ctx, postMultisigTransactionSignHandler)).Methods("POST")
+	router.HandleFunc("/multisig/signdata", wrapCtx(ctx, postMultisigDataSignHandler)).Methods("POST")
 	router.HandleFunc("/multisig/import", wrapCtx(ctx, postMultisigImportHandler)).Methods("POST")
 	router.HandleFunc("/multisig/export", wrapCtx(ctx, postMultisigExportHandler)).Methods("POST")
 	router.HandleFunc("/multisig", wrapCtx(ctx, deleteMultisigHandler)).Methods("DELETE")
 
 	router.HandleFunc("/transaction/sign", wrapCtx(ctx, postTransactionSignHandler)).Methods("POST")
+	router.HandleFunc("/data/sign", wrapCtx(ctx, postDataSignHandler)).Methods("POST")
 }

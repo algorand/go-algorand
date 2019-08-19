@@ -166,6 +166,18 @@ type APIV1POSTTransactionSignRequest struct {
 	WalletPassword string `json:"wallet_password"`
 }
 
+// APIV1POSTDataSignRequest is the request for `POST /v1/data/sign`
+//
+// swagger:model SignDataRequest
+type APIV1POSTDataSignRequest struct {
+	APIV1RequestEnvelope
+	WalletHandleToken string `json:"wallet_handle_token"`
+	Address           string `json:"address"`
+	// swagger:strfmt byte
+	Data           []byte `json:"data"`
+	WalletPassword string `json:"wallet_password"`
+}
+
 // APIV1POSTMultisigListRequest is the request for `POST /v1/multisig/list`
 //
 // swagger:model ListMultisigRequest
@@ -212,6 +224,20 @@ type APIV1POSTMultisigTransactionSignRequest struct {
 	WalletHandleToken string `json:"wallet_handle_token"`
 	// swagger:strfmt byte
 	Transaction    []byte             `json:"transaction"`
+	PublicKey      crypto.PublicKey   `json:"public_key"`
+	PartialMsig    crypto.MultisigSig `json:"partial_multisig"`
+	WalletPassword string             `json:"wallet_password"`
+}
+
+// APIV1POSTMultisigDataSignRequest is the request for `POST /v1/multisig/signdata`
+//
+// swagger:model SignDataMultisigRequest
+type APIV1POSTMultisigDataSignRequest struct {
+	APIV1RequestEnvelope
+	WalletHandleToken string `json:"wallet_handle_token"`
+	Address           string `json:"address"`
+	// swagger:strfmt byte
+	Data           []byte             `json:"data"`
 	PublicKey      crypto.PublicKey   `json:"public_key"`
 	PartialMsig    crypto.MultisigSig `json:"partial_multisig"`
 	WalletPassword string             `json:"wallet_password"`

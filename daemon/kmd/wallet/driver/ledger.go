@@ -207,6 +207,16 @@ func (lw *LedgerWallet) SignTransaction(tx transactions.Transaction, pw []byte) 
 	}), nil
 }
 
+// SignData implements the Wallet interface.
+func (lw *LedgerWallet) SignData(data []byte, src crypto.Digest, pw []byte) ([]byte, error) {
+	sig, err := lw.signDataHelper(data)
+	if err != nil {
+		return nil, err
+	}
+
+	return sig[:], nil
+}
+
 // MultisigSignTransaction implements the Wallet interface.
 func (lw *LedgerWallet) MultisigSignTransaction(tx transactions.Transaction, pk crypto.PublicKey, partial crypto.MultisigSig, pw []byte) (crypto.MultisigSig, error) {
 	isValidKey := false
@@ -222,6 +232,35 @@ func (lw *LedgerWallet) MultisigSignTransaction(tx transactions.Transaction, pk 
 	}
 
 	sig, err := lw.signTransactionHelper(tx)
+	if err != nil {
+		return partial, err
+	}
+
+	for i := 0; i < len(partial.Subsigs); i++ {
+		subsig := &partial.Subsigs[i]
+		if subsig.Key == pk {
+			subsig.Sig = sig
+		}
+	}
+
+	return partial, nil
+}
+
+// MultisigSignData implements the Wallet interface.
+func (lw *LedgerWallet) MultisigSignData(data []byte, src crypto.Digest, pk crypto.PublicKey, partial crypto.MultisigSig, pw []byte) (crypto.MultisigSig, error) {
+	isValidKey := false
+	for i := 0; i < len(partial.Subsigs); i++ {
+		subsig := &partial.Subsigs[i]
+		if subsig.Key == pk {
+			isValidKey = true
+		}
+	}
+
+	if !isValidKey {
+		return partial, errMsigWrongKey
+	}
+
+	sig, err := lw.signDataHelper(data)
 	if err != nil {
 		return partial, err
 	}
@@ -290,6 +329,19 @@ func (lw *LedgerWallet) signTransactionHelper(tx transactions.Transaction) (sig 
 	}
 
 	reply, err := lw.dev.Exchange(msg)
+	if err != nil {
+		return
+	}
+
+	copy(sig[:], reply)
+	return
+}
+
+func (lw *LedgerWallet) signDataHelper(data []byte) (sig crypto.Signature, err error) {
+	lw.mu.Lock()
+	defer lw.mu.Unlock()
+
+	reply, err := lw.dev.Exchange(data)
 	if err != nil {
 		return
 	}
