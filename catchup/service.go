@@ -25,7 +25,6 @@ import (
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger"
@@ -34,23 +33,36 @@ import (
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
-	"github.com/algorand/go-algorand/util/execpool"
 )
 
 const catchupPeersForSync = 10
+
+// Ledger represents the interface of a block database which the
+// catchup server should interact with.
+type Ledger interface {
+	NextRound() basics.Round
+	LastRound() basics.Round
+	Wait(basics.Round) chan struct{}
+	AddBlock(bookkeeping.Block, agreement.Certificate) error
+	ConsensusParams(basics.Round) (config.ConsensusParams, error)
+
+	// only needed to support tests
+	Block(basics.Round) (bookkeeping.Block, error)
+	BlockCert(basics.Round) (bookkeeping.Block, agreement.Certificate, error)
+}
 
 // Service represents the catchup service. Once started and until it is stopped, it ensures that the ledger is up to date with network.
 type Service struct {
 	syncStartNS     int64 // at top of struct to keep 64 bit aligned for atomic.* ops
 	cfg             config.Local
-	ledger          *data.Ledger
+	ledger          Ledger
 	fetcherFactory  rpcs.FetcherFactory
 	ctx             context.Context
 	cancel          func()
 	done            chan struct{}
 	log             logging.Logger
 	net             network.GossipNode
-	certVerifier    *agreement.AsyncVoteVerifier
+	auth            BlockAuthenticator
 	parallelBlocks  uint64
 	deadlineTimeout time.Duration
 
@@ -61,19 +73,31 @@ type Service struct {
 	protocolErrorLogged bool
 }
 
+// A BlockAuthenticator authenticates blocks given a certificate.
+//
+// Note that Authenticate does not check if the block contents match
+// their header as it only checks the block header.  If the contents
+// have not been checked yet, callers should also call
+// block.ContentsMatchHeader and reject blocks that do not pass this
+// check.
+type BlockAuthenticator interface {
+	Authenticate(*bookkeeping.Block, *agreement.Certificate) error
+	Quit()
+}
+
 // MakeService creates a catchup service instance from its constituent components
 // If wsf is nil, then fetch over gossip is disabled.
-func MakeService(log logging.Logger, config config.Local, net network.GossipNode, ledger *data.Ledger, wsf *rpcs.WsFetcherService, verificationExecPool execpool.BacklogPool) (s *Service) {
+func MakeService(log logging.Logger, config config.Local, net network.GossipNode, ledger Ledger, wsf *rpcs.WsFetcherService, auth BlockAuthenticator) (s *Service) {
 	s = &Service{}
 	s.ctx, s.cancel = context.WithCancel(context.Background())
 	s.cfg = config
 	s.fetcherFactory = rpcs.MakeNetworkFetcherFactory(net, catchupPeersForSync, wsf)
 	s.ledger = ledger
 	s.net = net
+	s.auth = auth
 
 	s.log = log.With("Context", "sync")
 	s.InitialSyncDone = make(chan struct{})
-	s.certVerifier = agreement.MakeAsyncVoteVerifier(verificationExecPool)
 	s.parallelBlocks = config.CatchupParallelBlocks
 	s.deadlineTimeout = agreement.DeadlineTimeout()
 	return s
@@ -92,7 +116,7 @@ func (s *Service) Stop() {
 	if atomic.CompareAndSwapUint32(&s.initialSyncNotified, 0, 1) {
 		close(s.InitialSyncDone)
 	}
-	s.certVerifier.Quit()
+	s.auth.Quit()
 }
 
 // IsSynchronizing returns true if we're currently executing a sync() call - either initial catchup
@@ -193,7 +217,7 @@ func (s *Service) fetchAndWrite(fetcher rpcs.Fetcher, r basics.Round, prevFetchC
 			}
 		}
 
-		err = cert.Authenticate(*block, s.ledger, s.certVerifier)
+		err = s.auth.Authenticate(block, cert)
 		if err != nil {
 			s.log.Warnf("fetchAndWrite(%v): cert did not authenticate block (attempt %d): %v", r, i, err)
 			client.Close()
