@@ -227,7 +227,13 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			return err
 		}
 	case protocol.KeyRegistrationTx:
-		// All OK
+		// check that, if this tx is marking an account nonparticipating, it supplies no key (as though it were trying to go offline)
+		if tx.KeyregTxnFields.Nonparticipation {
+			suppliesNullKeys := tx.KeyregTxnFields.VotePK == crypto.OneTimeSignatureVerifier{} || tx.KeyregTxnFields.SelectionPK == crypto.VRFVerifier{}
+			if !suppliesNullKeys {
+				return fmt.Errorf("transaction tries to register keys to go online, but nonparticipatory flag is set")
+			}
+		}
 
 	default:
 		return fmt.Errorf("unknown tx type %v", tx.Type)
