@@ -1112,14 +1112,14 @@ func (sw *SQLiteWallet) SignTransaction(tx transactions.Transaction, pw []byte) 
 	return
 }
 
-type rawHashBytes []byte
+type programBytes []byte
 
-func (rhb *rawHashBytes) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.HashID(""), []byte(*rhb)
+func (rhb *programBytes) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.Program, []byte(*rhb)
 }
 
-// SignData signs the passed data for the src address
-func (sw *SQLiteWallet) SignData(data []byte, src crypto.Digest, pw []byte) (stx []byte, err error) {
+// SignProgram signs the passed data for the src address
+func (sw *SQLiteWallet) SignProgram(data []byte, src crypto.Digest, pw []byte) (stx []byte, err error) {
 	// Check the password
 	err = sw.CheckPassword(pw)
 	if err != nil {
@@ -1139,9 +1139,9 @@ func (sw *SQLiteWallet) SignData(data []byte, src crypto.Digest, pw []byte) (stx
 		return
 	}
 
-	hb := rawHashBytes(data)
+	progb := programBytes(data)
 	// Sign the transaction
-	sig := secrets.Sign(&hb)
+	sig := secrets.Sign(&progb)
 	stx = sig[:]
 	return
 }
@@ -1235,10 +1235,10 @@ func (sw *SQLiteWallet) MultisigSignTransaction(tx transactions.Transaction, pk 
 	return
 }
 
-// MultisigSignData starts a multisig signature or adds a signature to a
+// MultisigSignProgram starts a multisig signature or adds a signature to a
 // partially signed multisig transaction signature of the passed transaction
 // using the key
-func (sw *SQLiteWallet) MultisigSignData(data []byte, src crypto.Digest, pk crypto.PublicKey, partial crypto.MultisigSig, pw []byte) (sig crypto.MultisigSig, err error) {
+func (sw *SQLiteWallet) MultisigSignProgram(data []byte, src crypto.Digest, pk crypto.PublicKey, partial crypto.MultisigSig, pw []byte) (sig crypto.MultisigSig, err error) {
 	// Check the password
 	err = sw.CheckPassword(pw)
 	if err != nil {
@@ -1273,8 +1273,8 @@ func (sw *SQLiteWallet) MultisigSignData(data []byte, src crypto.Digest, pk cryp
 
 		// Sign the transaction
 		from := src
-		rhb := rawHashBytes(data)
-		sig, err = crypto.MultisigSign(&rhb, from, version, threshold, pks, *secrets)
+		progb := programBytes(data)
+		sig, err = crypto.MultisigSign(&progb, from, version, threshold, pks, *secrets)
 		return
 	}
 
@@ -1317,8 +1317,8 @@ func (sw *SQLiteWallet) MultisigSignData(data []byte, src crypto.Digest, pk cryp
 
 	// Sign the transaction, and merge the multisig into the partial
 	version, threshold, pks := partial.Preimage()
-	rhb := rawHashBytes(data)
-	msig2, err := crypto.MultisigSign(&rhb, addr, version, threshold, pks, *secrets)
+	progb := programBytes(data)
+	msig2, err := crypto.MultisigSign(&progb, addr, version, threshold, pks, *secrets)
 	if err != nil {
 		return
 	}

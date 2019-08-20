@@ -207,9 +207,9 @@ func (lw *LedgerWallet) SignTransaction(tx transactions.Transaction, pw []byte) 
 	}), nil
 }
 
-// SignData implements the Wallet interface.
-func (lw *LedgerWallet) SignData(data []byte, src crypto.Digest, pw []byte) ([]byte, error) {
-	sig, err := lw.signDataHelper(data)
+// SignProgram implements the Wallet interface.
+func (lw *LedgerWallet) SignProgram(data []byte, src crypto.Digest, pw []byte) ([]byte, error) {
+	sig, err := lw.signProgramHelper(data)
 	if err != nil {
 		return nil, err
 	}
@@ -246,8 +246,8 @@ func (lw *LedgerWallet) MultisigSignTransaction(tx transactions.Transaction, pk 
 	return partial, nil
 }
 
-// MultisigSignData implements the Wallet interface.
-func (lw *LedgerWallet) MultisigSignData(data []byte, src crypto.Digest, pk crypto.PublicKey, partial crypto.MultisigSig, pw []byte) (crypto.MultisigSig, error) {
+// MultisigSignProgram implements the Wallet interface.
+func (lw *LedgerWallet) MultisigSignProgram(data []byte, src crypto.Digest, pk crypto.PublicKey, partial crypto.MultisigSig, pw []byte) (crypto.MultisigSig, error) {
 	isValidKey := false
 	for i := 0; i < len(partial.Subsigs); i++ {
 		subsig := &partial.Subsigs[i]
@@ -260,7 +260,7 @@ func (lw *LedgerWallet) MultisigSignData(data []byte, src crypto.Digest, pk cryp
 		return partial, errMsigWrongKey
 	}
 
-	sig, err := lw.signDataHelper(data)
+	sig, err := lw.signProgramHelper(data)
 	if err != nil {
 		return partial, err
 	}
@@ -337,7 +337,7 @@ func (lw *LedgerWallet) signTransactionHelper(tx transactions.Transaction) (sig 
 	return
 }
 
-func (lw *LedgerWallet) signDataHelper(data []byte) (sig crypto.Signature, err error) {
+func (lw *LedgerWallet) signProgramHelper(data []byte) (sig crypto.Signature, err error) {
 	lw.mu.Lock()
 	defer lw.mu.Unlock()
 

@@ -152,9 +152,9 @@ type APIV1POSTTransactionSignResponse struct {
 	SignedTransaction []byte `json:"signed_transaction"`
 }
 
-// APIV1POSTDataSignResponse is the repsonse to `POST /v1/data/sign`
-// friendly:SignDataResponse
-type APIV1POSTDataSignResponse struct {
+// APIV1POSTProgramSignResponse is the repsonse to `POST /v1/data/sign`
+// friendly:SignProgramResponse
+type APIV1POSTProgramSignResponse struct {
 	APIV1ResponseEnvelope
 
 	// swagger:strfmt byte
@@ -199,9 +199,9 @@ type APIV1POSTMultisigTransactionSignResponse struct {
 	Multisig []byte `json:"multisig"`
 }
 
-// APIV1POSTMultisigDataSignResponse is the response to `POST /v1/multisig/signdata`
+// APIV1POSTMultisigProgramSignResponse is the response to `POST /v1/multisig/signdata`
 // friendly:SignMultisigResponse
-type APIV1POSTMultisigDataSignResponse struct {
+type APIV1POSTMultisigProgramSignResponse struct {
 	APIV1ResponseEnvelope
 
 	// swagger:strfmt byte

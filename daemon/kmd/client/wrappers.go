@@ -153,12 +153,12 @@ func (kcl KMDClient) MultisigSignTransaction(walletHandle, pw []byte, tx []byte,
 	return
 }
 
-// MultisigSignData wraps kmdapi.APIV1POSTMultisigDataSignRequest
-func (kcl KMDClient) MultisigSignData(walletHandle, pw []byte, addr string, data []byte, pk crypto.PublicKey, partial crypto.MultisigSig) (resp kmdapi.APIV1POSTMultisigDataSignResponse, err error) {
-	req := kmdapi.APIV1POSTMultisigDataSignRequest{
+// MultisigSignProgram wraps kmdapi.APIV1POSTMultisigProgramSignRequest
+func (kcl KMDClient) MultisigSignProgram(walletHandle, pw []byte, addr string, data []byte, pk crypto.PublicKey, partial crypto.MultisigSig) (resp kmdapi.APIV1POSTMultisigProgramSignResponse, err error) {
+	req := kmdapi.APIV1POSTMultisigProgramSignRequest{
 		WalletHandleToken: string(walletHandle),
 		WalletPassword:    string(pw),
-		Data:              data,
+		Program:           data,
 		Address:           addr,
 		PublicKey:         pk,
 		PartialMsig:       partial,
@@ -208,12 +208,12 @@ func (kcl KMDClient) SignTransaction(walletHandle, pw []byte, tx transactions.Tr
 	return
 }
 
-// SignData wraps kmdapi.APIV1POSTDataSignRequest
-func (kcl KMDClient) SignData(walletHandle, pw []byte, addr string, data []byte) (resp kmdapi.APIV1POSTDataSignResponse, err error) {
-	req := kmdapi.APIV1POSTDataSignRequest{
+// SignProgram wraps kmdapi.APIV1POSTProgramSignRequest
+func (kcl KMDClient) SignProgram(walletHandle, pw []byte, addr string, data []byte) (resp kmdapi.APIV1POSTProgramSignResponse, err error) {
+	req := kmdapi.APIV1POSTProgramSignRequest{
 		WalletHandleToken: string(walletHandle),
 		WalletPassword:    string(pw),
-		Data:              data,
+		Program:           data,
 		Address:           addr,
 	}
 	err = kcl.DoV1Request(req, &resp)

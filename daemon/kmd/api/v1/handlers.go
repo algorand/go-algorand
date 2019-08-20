@@ -858,9 +858,9 @@ func postTransactionSignHandler(ctx reqContext, w http.ResponseWriter, r *http.R
 	successResponse(w, resp)
 }
 
-// postDataSignHandler handles `POST /v1/data/sign`
-func postDataSignHandler(ctx reqContext, w http.ResponseWriter, r *http.Request) {
-	// swagger:operation POST /v1/data/sign SignData
+// postProgramSignHandler handles `POST /v1/data/sign`
+func postProgramSignHandler(ctx reqContext, w http.ResponseWriter, r *http.Request) {
+	// swagger:operation POST /v1/data/sign SignProgram
 	//---
 	//    Summary: Sign data
 	//    Description: >
@@ -869,15 +869,15 @@ func postDataSignHandler(ctx reqContext, w http.ResponseWriter, r *http.Request)
 	//    Produces:
 	//    - application/json
 	//    Parameters:
-	//      - name: Sign Data Request
+	//      - name: Sign Program Request
 	//        in: body
 	//        required: true
 	//        schema:
-	//          "$ref": "#/definitions/SignDataRequest"
+	//          "$ref": "#/definitions/SignProgramRequest"
 	//    Responses:
 	//      "200":
-	//        "$ref": "#/responses/SignDataResponse"
-	var req kmdapi.APIV1POSTDataSignRequest
+	//        "$ref": "#/responses/SignProgramResponse"
+	var req kmdapi.APIV1POSTProgramSignRequest
 
 	// Decode the request
 	decoder := protocol.NewJSONDecoder(r.Body)
@@ -901,14 +901,14 @@ func postDataSignHandler(ctx reqContext, w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	stx, err := wallet.SignData(req.Data, crypto.Digest(reqAddr), []byte(req.WalletPassword))
+	stx, err := wallet.SignProgram(req.Program, crypto.Digest(reqAddr), []byte(req.WalletPassword))
 	if err != nil {
 		errorResponse(w, http.StatusBadRequest, err)
 		return
 	}
 
 	// Build the response
-	resp := kmdapi.APIV1POSTDataSignResponse{
+	resp := kmdapi.APIV1POSTProgramSignResponse{
 		Signature: stx,
 	}
 
@@ -1142,9 +1142,9 @@ func postMultisigTransactionSignHandler(ctx reqContext, w http.ResponseWriter, r
 	successResponse(w, resp)
 }
 
-// postMultisigDataSignHandler handles `POST /v1/multisig/sign`
-func postMultisigDataSignHandler(ctx reqContext, w http.ResponseWriter, r *http.Request) {
-	// swagger:operation POST /v1/multisig/sign SignMultisigData
+// postMultisigProgramSignHandler handles `POST /v1/multisig/sign`
+func postMultisigProgramSignHandler(ctx reqContext, w http.ResponseWriter, r *http.Request) {
+	// swagger:operation POST /v1/multisig/sign SignMultisigProgram
 	//---
 	//    Summary: Sign a multisig transaction
 	//    Description: >
@@ -1153,7 +1153,7 @@ func postMultisigDataSignHandler(ctx reqContext, w http.ResponseWriter, r *http.
 	//    Produces:
 	//    - application/json
 	//    Parameters:
-	//      - name: Sign Multisig Data Request
+	//      - name: Sign Multisig Program Request
 	//        in: body
 	//        required: true
 	//        schema:
@@ -1161,7 +1161,7 @@ func postMultisigDataSignHandler(ctx reqContext, w http.ResponseWriter, r *http.
 	//    Responses:
 	//      "200":
 	//        "$ref": "#/responses/SignMultisigResponse"
-	var req kmdapi.APIV1POSTMultisigDataSignRequest
+	var req kmdapi.APIV1POSTMultisigProgramSignRequest
 
 	// Decode the request
 	decoder := protocol.NewJSONDecoder(r.Body)
@@ -1186,14 +1186,14 @@ func postMultisigDataSignHandler(ctx reqContext, w http.ResponseWriter, r *http.
 	}
 
 	// Sign the transaction
-	msig, err := wallet.MultisigSignData(req.Data, crypto.Digest(reqAddr), req.PublicKey, req.PartialMsig, []byte(req.WalletPassword))
+	msig, err := wallet.MultisigSignProgram(req.Program, crypto.Digest(reqAddr), req.PublicKey, req.PartialMsig, []byte(req.WalletPassword))
 	if err != nil {
 		errorResponse(w, http.StatusBadRequest, err)
 		return
 	}
 
 	// Build the response
-	resp := kmdapi.APIV1POSTMultisigDataSignResponse{
+	resp := kmdapi.APIV1POSTMultisigProgramSignResponse{
 		Multisig: protocol.Encode(msig),
 	}
 
@@ -1309,11 +1309,11 @@ func RegisterHandlers(router *mux.Router, sm *session.Manager, log logging.Logge
 
 	router.HandleFunc("/multisig/list", wrapCtx(ctx, postMultisigListHandler)).Methods("POST")
 	router.HandleFunc("/multisig/sign", wrapCtx(ctx, postMultisigTransactionSignHandler)).Methods("POST")
-	router.HandleFunc("/multisig/signdata", wrapCtx(ctx, postMultisigDataSignHandler)).Methods("POST")
+	router.HandleFunc("/multisig/signdata", wrapCtx(ctx, postMultisigProgramSignHandler)).Methods("POST")
 	router.HandleFunc("/multisig/import", wrapCtx(ctx, postMultisigImportHandler)).Methods("POST")
 	router.HandleFunc("/multisig/export", wrapCtx(ctx, postMultisigExportHandler)).Methods("POST")
 	router.HandleFunc("/multisig", wrapCtx(ctx, deleteMultisigHandler)).Methods("DELETE")
 
 	router.HandleFunc("/transaction/sign", wrapCtx(ctx, postTransactionSignHandler)).Methods("POST")
-	router.HandleFunc("/data/sign", wrapCtx(ctx, postDataSignHandler)).Methods("POST")
+	router.HandleFunc("/data/sign", wrapCtx(ctx, postProgramSignHandler)).Methods("POST")
 }

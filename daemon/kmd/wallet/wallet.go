@@ -55,8 +55,8 @@ type Wallet interface {
 
 	MultisigSignTransaction(tx transactions.Transaction, pk crypto.PublicKey, partial crypto.MultisigSig, pw []byte) (crypto.MultisigSig, error)
 
-	SignData(data []byte, src crypto.Digest, pw []byte) ([]byte, error)
-	MultisigSignData(data []byte, src crypto.Digest, pk crypto.PublicKey, partial crypto.MultisigSig, pw []byte) (crypto.MultisigSig, error)
+	SignProgram(program []byte, src crypto.Digest, pw []byte) ([]byte, error)
+	MultisigSignProgram(program []byte, src crypto.Digest, pk crypto.PublicKey, partial crypto.MultisigSig, pw []byte) (crypto.MultisigSig, error)
 }
 
 // Metadata represents high-level information about a wallet, like its name, id
