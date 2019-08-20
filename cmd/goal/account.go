@@ -489,7 +489,6 @@ var changeOnlineCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		// Pull the current round for use in our new transactions
 		dataDir := ensureSingleDataDir()
 		client := ensureFullClient(dataDir)
 
