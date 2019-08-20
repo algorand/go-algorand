@@ -49,6 +49,7 @@ var (
 	closeToAddress  string
 	noWaitAfterSend bool
 	noProgramOutput bool
+	signProgram     bool
 )
 
 func init() {
@@ -90,6 +91,9 @@ func init() {
 	signCmd.MarkFlagRequired("outfile")
 
 	compileCmd.Flags().BoolVarP(&noProgramOutput, "no-out", "n", false, "don't write contract program binary")
+	compileCmd.Flags().BoolVarP(&signProgram, "sign", "s", false, "sign program, output is a binary signed LogicSig record")
+	compileCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Filename to write program bytes or signed LogicSig to")
+	compileCmd.Flags().StringVarP(&account, "account", "a", "", "Account address to sign the program (If not specified, uses default account)")
 }
 
 var clerkCmd = &cobra.Command{
@@ -450,13 +454,37 @@ var compileCmd = &cobra.Command{
 			}
 			fin.Close()
 			program := pbytes.Bytes()
+			outblob := program
+			outname := outFilename
+			if outname == "" {
+				outname = fmt.Sprintf("%s.tok", fname)
+			}
+			if signProgram {
+				dataDir := ensureSingleDataDir()
+				accountList := makeAccountsList(dataDir)
+				client := ensureKmdClient(dataDir)
+				wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
+
+				// Check if from was specified, else use default
+				if account == "" {
+					account = accountList.getDefaultAccount()
+					fmt.Printf("will use default account: %v\n", account)
+				}
+				signingAddressResolved := accountList.getAddressByName(account)
+
+				signature, err := client.SignProgramWithWallet(wh, pw, signingAddressResolved, program)
+				if err != nil {
+					reportErrorf(errorSigningTX, err)
+				}
+				ls := transactions.LogicSig{Logic: program, Sig: signature}
+				outblob = protocol.Encode(ls)
+			}
 			if !noProgramOutput {
-				outname := fmt.Sprintf("%s.tok", fname)
 				fout, err := os.Create(outname)
 				if err != nil {
 					reportErrorf("%s: %s\n", outname, err)
 				}
-				_, err = fout.Write(program)
+				_, err = fout.Write(outblob)
 				if err != nil {
 					reportErrorf("%s: %s\n", outname, err)
 				}
@@ -465,9 +493,11 @@ var compileCmd = &cobra.Command{
 					reportErrorf("%s: %s\n", outname, err)
 				}
 			}
-			pd := crypto.Hash(program)
-			addr := basics.Address(pd)
-			fmt.Printf("%s: %s\n", fname, addr.String())
+			if !signProgram {
+				pd := transactions.HashProgram(program)
+				addr := basics.Address(pd)
+				fmt.Printf("%s: %s\n", fname, addr.String())
+			}
 		}
 	},
 }

@@ -45,6 +45,23 @@ func (c *Client) SignTransactionWithWallet(walletHandle, pw []byte, utx transact
 	return
 }
 
+// SignProgramWithWallet signs the passed transaction with keys from the wallet associated with the passed walletHandle
+func (c *Client) SignProgramWithWallet(walletHandle, pw []byte, addr string, program []byte) (signature crypto.Signature, err error) {
+	kmd, err := c.ensureKmdClient()
+	if err != nil {
+		return
+	}
+
+	// Sign the transaction
+	resp, err := kmd.SignProgram(walletHandle, pw, addr, program)
+	if err != nil {
+		return
+	}
+
+	copy(resp.Signature, signature[:])
+	return
+}
+
 // MultisigSignTransactionWithWallet creates a multisig (or adds to an existing partial multisig, if one is provided), signing with the key corresponding to the given address and using the specified wallet
 // TODO instead of returning MultisigSigs, accept and return blobs
 func (c *Client) MultisigSignTransactionWithWallet(walletHandle, pw []byte, utx transactions.Transaction, signerAddr string, partial crypto.MultisigSig) (msig crypto.MultisigSig, err error) {

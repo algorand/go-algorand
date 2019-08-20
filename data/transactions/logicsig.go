@@ -26,7 +26,12 @@ import (
 type logicBytecodeV1 []byte
 
 func (lsl logicBytecodeV1) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.Logic, []byte(lsl)
+	return protocol.Program, []byte(lsl)
+}
+
+func HashProgram(program []byte) crypto.Digest {
+	pb := logicBytecodeV1(program)
+	return crypto.HashObj(&pb)
 }
 
 // LogicSig contains logic for validating a transaction.

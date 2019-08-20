@@ -33,7 +33,6 @@ const (
 	BalanceRecord     HashID = "BR"
 	Credential        HashID = "CR"
 	Genesis           HashID = "GE"
-	Logic             HashID = "LO"
 	Message           HashID = "MX"
 	NetPrioResponse   HashID = "NPR"
 	OneTimeSigKey1    HashID = "OT1"
