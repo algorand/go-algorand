@@ -85,6 +85,12 @@ func TestKeyregApply(t *testing.T) {
 	_, err = tx.Apply(mockBal, SpecialAddresses{FeeSink: feeSink})
 	require.NoError(t, err)
 
+	// Going from online to nonparticipatory should be okay
+	tx.KeyregTxnFields = KeyregTxnFields{}
+	tx.KeyregTxnFields.Nonparticipation = true
+	_, err = tx.Apply(mockBal, SpecialAddresses{FeeSink: feeSink})
+	require.NoError(t, err)
+
 	// Nonparticipatory accounts should not be able to change status
 	mockBal.addrs[src] = basics.BalanceRecord{Addr: src, AccountData: basics.AccountData{Status: basics.NotParticipating}}
 	_, err = tx.Apply(mockBal, SpecialAddresses{FeeSink: feeSink})
