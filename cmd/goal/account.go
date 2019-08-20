@@ -1038,12 +1038,10 @@ var markNonparticipatingCmd = &cobra.Command{
 
 		dataDir := ensureSingleDataDir()
 		client := ensureFullClient(dataDir)
-		utx, err := client.MakeUnsignedGoOfflineTx(accountAddress, statusChangeFirstRound, statusChangeValidRounds, transactionFee)
+		utx, err := client.MakeUnsignedBecomeNonparticipatingTx(accountAddress, statusChangeFirstRound, statusChangeValidRounds, transactionFee)
 		if err != nil {
 			reportErrorf(errorConstructingTX, err)
 		}
-		// a nonparticipating transaction is as a go-offline transaction, with the non-part flag set
-		utx.KeyregTxnFields.Nonparticipation = true
 
 		if statusChangeTxFile != "" {
 			err = writeTxnToFile(client, false, dataDir, walletName, utx, statusChangeTxFile)
