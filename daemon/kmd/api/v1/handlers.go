@@ -858,9 +858,9 @@ func postTransactionSignHandler(ctx reqContext, w http.ResponseWriter, r *http.R
 	successResponse(w, resp)
 }
 
-// postProgramSignHandler handles `POST /v1/data/sign`
+// postProgramSignHandler handles `POST /v1/program/sign`
 func postProgramSignHandler(ctx reqContext, w http.ResponseWriter, r *http.Request) {
-	// swagger:operation POST /v1/data/sign SignProgram
+	// swagger:operation POST /v1/program/sign SignProgram
 	//---
 	//    Summary: Sign data
 	//    Description: >
@@ -1142,7 +1142,7 @@ func postMultisigTransactionSignHandler(ctx reqContext, w http.ResponseWriter, r
 	successResponse(w, resp)
 }
 
-// postMultisigProgramSignHandler handles `POST /v1/multisig/sign`
+// postMultisigProgramSignHandler handles `POST /v1/multisig/signprogram`
 func postMultisigProgramSignHandler(ctx reqContext, w http.ResponseWriter, r *http.Request) {
 	// swagger:operation POST /v1/multisig/sign SignMultisigProgram
 	//---
@@ -1309,11 +1309,11 @@ func RegisterHandlers(router *mux.Router, sm *session.Manager, log logging.Logge
 
 	router.HandleFunc("/multisig/list", wrapCtx(ctx, postMultisigListHandler)).Methods("POST")
 	router.HandleFunc("/multisig/sign", wrapCtx(ctx, postMultisigTransactionSignHandler)).Methods("POST")
-	router.HandleFunc("/multisig/signdata", wrapCtx(ctx, postMultisigProgramSignHandler)).Methods("POST")
+	router.HandleFunc("/multisig/signprogram", wrapCtx(ctx, postMultisigProgramSignHandler)).Methods("POST")
 	router.HandleFunc("/multisig/import", wrapCtx(ctx, postMultisigImportHandler)).Methods("POST")
 	router.HandleFunc("/multisig/export", wrapCtx(ctx, postMultisigExportHandler)).Methods("POST")
 	router.HandleFunc("/multisig", wrapCtx(ctx, deleteMultisigHandler)).Methods("DELETE")
 
 	router.HandleFunc("/transaction/sign", wrapCtx(ctx, postTransactionSignHandler)).Methods("POST")
-	router.HandleFunc("/data/sign", wrapCtx(ctx, postProgramSignHandler)).Methods("POST")
+	router.HandleFunc("/program/sign", wrapCtx(ctx, postProgramSignHandler)).Methods("POST")
 }

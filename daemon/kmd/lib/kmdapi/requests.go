@@ -166,7 +166,7 @@ type APIV1POSTTransactionSignRequest struct {
 	WalletPassword string `json:"wallet_password"`
 }
 
-// APIV1POSTProgramSignRequest is the request for `POST /v1/data/sign`
+// APIV1POSTProgramSignRequest is the request for `POST /v1/program/sign`
 //
 // swagger:model SignProgramRequest
 type APIV1POSTProgramSignRequest struct {
@@ -229,7 +229,7 @@ type APIV1POSTMultisigTransactionSignRequest struct {
 	WalletPassword string             `json:"wallet_password"`
 }
 
-// APIV1POSTMultisigProgramSignRequest is the request for `POST /v1/multisig/signdata`
+// APIV1POSTMultisigProgramSignRequest is the request for `POST /v1/multisig/signprogram`
 //
 // swagger:model SignProgramMultisigRequest
 type APIV1POSTMultisigProgramSignRequest struct {
