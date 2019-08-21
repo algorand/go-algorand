@@ -1966,7 +1966,6 @@ func TestAgreementCertificateDoesNotStallSingleRelay(t *testing.T) {
 	numNodes := 10 // single relay, nine leaf nodes
 	relayID := nodeID(0)
 	baseNetwork, _, cleanupFn, services, clocks, _, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
-	//startRound := baseLedger.NextRound()
 	defer cleanupFn()
 	baseNetwork.makeRelays(relayID)
 	for i := 0; i < numNodes; i++ {
@@ -1977,16 +1976,38 @@ func TestAgreementCertificateDoesNotStallSingleRelay(t *testing.T) {
 	zeroes := expectNewPeriod(clocks, 0)
 	// run two rounds
 	zeroes = runRound(clocks, activityMonitor, zeroes)
-	// make sure relay does not see block proposal for round 3
-	baseNetwork.repairAll()
+	zeroes = runRound(clocks, activityMonitor, zeroes)
+
+	//numNodes := 10 // single relay, nine leaf nodes
+	//relayID := nodeID(0)
+	//baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
+	//startRound := baseLedger.NextRound()
+	//defer cleanupFn()
+	//baseNetwork.makeRelays(relayID)
+	//for i := 0; i < numNodes; i++ {
+	//	services[i].Start()
+	//}
+	//activityMonitor.waitForActivity()
+	//activityMonitor.waitForQuiet()
+	//zeroes := expectNewPeriod(clocks, 0)
+	//// run two rounds
+	//zeroes = runRound(clocks, activityMonitor, zeroes)
+	//// make sure relay does not see block proposal for round 3
+	//baseNetwork.repairAll()
 	//baseNetwork.intercept(func(params multicastParams) multicastParams {
 	//	if params.tag == protocol.ProposalPayloadTag {
-	//		params.exclude = relayID
+	//		var tp transmittedPayload
+	//		err := protocol.DecodeStream(bytes.NewBuffer(params.data), &tp)
+	//		if err != nil {
+	//			panic(err)
+	//		}
+	//		if tp.Round() == basics.Round(startRound+2) {
+	//			params.exclude = relayID
+	//		}
 	//	}
 	//	return params
 	//})
-	zeroes = runRound(clocks, activityMonitor, zeroes)
-	// experiment: does the above code block fail on travis? (can't replicate locally)
+	//zeroes = runRound(clocks, activityMonitor, zeroes)
 	//
 	//// Round 3:
 	//// First partition the relay to prevent it from seeing certificate or block
