@@ -411,7 +411,7 @@ func (n *testingNetwork) crown(prophets ...nodeID) {
 	defer n.mu.Unlock()
 	n.crownedNodes = make(map[nodeID]bool)
 	for i := 0; i < len(prophets); i++ {
-		n.crownedNodes[nodeID(i)] = true
+		n.crownedNodes[prophets[i]] = true
 	}
 }
 
@@ -421,7 +421,7 @@ func (n *testingNetwork) makeRelays(relays ...nodeID) {
 	defer n.mu.Unlock()
 	n.relayNodes = make(map[nodeID]bool)
 	for i := 0; i < len(relays); i++ {
-		n.relayNodes[nodeID(i)] = true
+		n.relayNodes[relays[i]] = true
 	}
 }
 
