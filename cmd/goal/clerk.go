@@ -50,6 +50,7 @@ var (
 	noWaitAfterSend bool
 	noProgramOutput bool
 	signProgram     bool
+	programSource   string
 )
 
 func init() {
@@ -75,6 +76,7 @@ func init() {
 	sendCmd.Flags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
 	sendCmd.Flags().StringVarP(&closeToAddress, "close-to", "c", "", "Close account and send remainder to this address")
 	sendCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
+	sendCmd.Flags().StringVarP(&programSource, "from-program", "F", "", "Program source to use as account logic")
 
 	sendCmd.MarkFlagRequired("to")
 	sendCmd.MarkFlagRequired("amount")
@@ -179,13 +181,22 @@ var sendCmd = &cobra.Command{
 		dataDir := ensureSingleDataDir()
 		accountList := makeAccountsList(dataDir)
 
-		// Check if from was specified, else use default
-		if account == "" {
-			account = accountList.getDefaultAccount()
-		}
+		var fromAddressResolved string
+		var program []byte = nil
+		if programSource != "" {
+			program = assembleFile(programSource)
+			ph := transactions.HashProgram(program)
+			pha := basics.Address(ph)
+			fromAddressResolved = pha.String()
+		} else {
+			// Check if from was specified, else use default
+			if account == "" {
+				account = accountList.getDefaultAccount()
+			}
 
-		// Resolving friendly names
-		fromAddressResolved := accountList.getAddressByName(account)
+			// Resolving friendly names
+			fromAddressResolved = accountList.getAddressByName(account)
+		}
 		toAddressResolved := accountList.getAddressByName(toAddress)
 
 		// Parse notes field
@@ -211,18 +222,35 @@ var sendCmd = &cobra.Command{
 		}
 
 		client := ensureFullClient(dataDir)
+		payment, err := client.ConstructPayment(fromAddressResolved, toAddressResolved, fee, amount, noteBytes, closeToAddressResolved, basics.Round(firstValid), basics.Round(lastValid))
+		if err != nil {
+			reportErrorf(errorConstructingTX, err)
+		}
 		if txFilename == "" {
 			// Sign and broadcast the tx
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			tx, err := client.SendPaymentFromWallet(wh, pw, fromAddressResolved, toAddressResolved, fee, amount, noteBytes, closeToAddressResolved, basics.Round(firstValid), basics.Round(lastValid))
-
-			// update information from Transaction
-			txid := tx.ID().String()
-			fee = tx.Fee.Raw
+			var stx transactions.SignedTxn
+			if program != nil {
+				stx = transactions.SignedTxn{
+					Txn: payment,
+					Lsig: transactions.LogicSig{
+						Logic: program,
+					},
+				}
+			} else {
+				stx, err = client.SignTransactionWithWallet(wh, pw, payment)
+				if err != nil {
+					reportErrorf(errorSigningTX, err)
+				}
+			}
+			txid, err := client.BroadcastTransaction(stx)
 
 			if err != nil {
 				reportErrorf(errorBroadcastingTX, err)
 			}
+
+			// update information from Transaction
+			fee = stx.Txn.Fee.Raw
 
 			// Report tx details to user
 			reportInfof(infoTxIssued, amount, fromAddressResolved, toAddressResolved, txid, fee)
@@ -234,10 +262,6 @@ var sendCmd = &cobra.Command{
 				}
 			}
 		} else {
-			payment, err := client.ConstructPayment(fromAddressResolved, toAddressResolved, fee, amount, noteBytes, closeToAddressResolved, basics.Round(firstValid), basics.Round(lastValid))
-			if err != nil {
-				reportErrorf(errorConstructingTX, err)
-			}
 			err = writeTxnToFile(client, sign, dataDir, walletName, payment, txFilename)
 			if err != nil {
 				reportErrorf(err.Error())
@@ -436,24 +460,28 @@ var signCmd = &cobra.Command{
 	},
 }
 
+func assembleFile(fname string) (program []byte) {
+	fin, err := os.Open(fname)
+	if err != nil {
+		reportErrorf("%s: %s\n", fname, err)
+	}
+	pbytes := bytes.Buffer{}
+	ops := logic.OpStream{Out: &pbytes}
+	err = ops.Assemble(fin)
+	if err != nil {
+		reportErrorf("%s: %s\n", fname, err)
+	}
+	fin.Close()
+	return pbytes.Bytes()
+}
+
 var compileCmd = &cobra.Command{
 	Use:   "compile",
 	Short: "compile a contract program",
 	Long:  "compile a contract program, report it's address",
 	Run: func(cmd *cobra.Command, args []string) {
 		for _, fname := range args {
-			fin, err := os.Open(fname)
-			if err != nil {
-				reportErrorf("%s: %s\n", fname, err)
-			}
-			pbytes := bytes.Buffer{}
-			ops := logic.OpStream{Out: &pbytes}
-			err = ops.Assemble(fin)
-			if err != nil {
-				reportErrorf("%s: %s\n", fname, err)
-			}
-			fin.Close()
-			program := pbytes.Bytes()
+			program := assembleFile(fname)
 			outblob := program
 			outname := outFilename
 			if outname == "" {
