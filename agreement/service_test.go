@@ -1979,12 +1979,12 @@ func TestAgreementCertificateDoesNotStallSingleRelay(t *testing.T) {
 	zeroes = runRound(clocks, activityMonitor, zeroes)
 	// make sure relay does not see block proposal for round 3
 	baseNetwork.repairAll()
-	baseNetwork.intercept(func(params multicastParams) multicastParams {
-		if params.tag == protocol.ProposalPayloadTag {
-			params.exclude = relayID
-		}
-		return params
-	})
+	//baseNetwork.intercept(func(params multicastParams) multicastParams {
+	//	if params.tag == protocol.ProposalPayloadTag {
+	//		params.exclude = relayID
+	//	}
+	//	return params
+	//})
 	zeroes = runRound(clocks, activityMonitor, zeroes)
 	// experiment: does the above code block fail on travis? (can't replicate locally)
 	//
