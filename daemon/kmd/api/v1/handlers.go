@@ -862,10 +862,10 @@ func postTransactionSignHandler(ctx reqContext, w http.ResponseWriter, r *http.R
 func postProgramSignHandler(ctx reqContext, w http.ResponseWriter, r *http.Request) {
 	// swagger:operation POST /v1/program/sign SignProgram
 	//---
-	//    Summary: Sign data
+	//    Summary: Sign program
 	//    Description: >
-	//      Signs the passed data with a key from the wallet, determined
-	//      by the sender encoded in the transaction.
+	//      Signs the passed program with a key from the wallet, determined
+	//      by the account named in the request.
 	//    Produces:
 	//    - application/json
 	//    Parameters:
@@ -1144,9 +1144,9 @@ func postMultisigTransactionSignHandler(ctx reqContext, w http.ResponseWriter, r
 
 // postMultisigProgramSignHandler handles `POST /v1/multisig/signprogram`
 func postMultisigProgramSignHandler(ctx reqContext, w http.ResponseWriter, r *http.Request) {
-	// swagger:operation POST /v1/multisig/sign SignMultisigProgram
+	// swagger:operation POST /v1/multisig/signprogram SignMultisigProgram
 	//---
-	//    Summary: Sign a multisig transaction
+	//    Summary: Sign a program for a multisig account
 	//    Description: >
 	//      Start a multisig signature, or add a signature to a partially completed
 	//      multisig signature object.
@@ -1157,10 +1157,10 @@ func postMultisigProgramSignHandler(ctx reqContext, w http.ResponseWriter, r *ht
 	//        in: body
 	//        required: true
 	//        schema:
-	//          "$ref": "#/definitions/SignMultisigRequest"
+	//          "$ref": "#/definitions/SignProgramMultisigRequest"
 	//    Responses:
 	//      "200":
-	//        "$ref": "#/responses/SignMultisigResponse"
+	//        "$ref": "#/responses/SignProgramMultisigResponse"
 	var req kmdapi.APIV1POSTMultisigProgramSignRequest
 
 	// Decode the request

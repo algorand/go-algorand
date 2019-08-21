@@ -200,7 +200,7 @@ type APIV1POSTMultisigTransactionSignResponse struct {
 }
 
 // APIV1POSTMultisigProgramSignResponse is the response to `POST /v1/multisig/signdata`
-// friendly:SignMultisigResponse
+// friendly:SignProgramMultisigResponse
 type APIV1POSTMultisigProgramSignResponse struct {
 	APIV1ResponseEnvelope
 
