@@ -240,7 +240,7 @@ func (ct CurrencyTransferTxnFields) apply(header Header, balances Balances, spec
 		}
 
 		if ct.CurrencyAmount > 0 && sndHolding.Frozen && !clawback {
-			return fmt.Errorf("sub-currency frozen")
+			return fmt.Errorf("sub-currency frozen in sender")
 		}
 
 		sndHolding.Amount -= ct.CurrencyAmount
@@ -264,6 +264,11 @@ func (ct CurrencyTransferTxnFields) apply(header Header, balances Balances, spec
 		if !ok {
 			return fmt.Errorf("sub-currency not present in receiver account")
 		}
+
+		if ct.CurrencyAmount > 0 && rcvHolding.Frozen {
+			return fmt.Errorf("sub-currency frozen in recipient")
+		}
+
 		rcvHolding.Amount += ct.CurrencyAmount
 		rcv.Currencies[ct.XferCurrency] = rcvHolding
 		err = balances.Put(rcv)
@@ -293,7 +298,7 @@ func (ct CurrencyTransferTxnFields) apply(header Header, balances Balances, spec
 
 		if sndHolding.Amount > 0 {
 			if sndHolding.Frozen && !clawback {
-				return fmt.Errorf("sub-currency frozen")
+				return fmt.Errorf("sub-currency frozen in sender")
 			}
 
 			rcv, err := balances.Get(ct.CurrencyCloseTo)
@@ -306,6 +311,11 @@ func (ct CurrencyTransferTxnFields) apply(header Header, balances Balances, spec
 			if !ok {
 				return fmt.Errorf("sub-currency not present in close-to account")
 			}
+
+			if rcvHolding.Frozen {
+				return fmt.Errorf("sub-currency frozen in recipient")
+			}
+
 			rcvHolding.Amount += sndHolding.Amount
 			rcv.Currencies[ct.XferCurrency] = rcvHolding
 			err = balances.Put(rcv)
