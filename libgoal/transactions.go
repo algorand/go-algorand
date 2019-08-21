@@ -58,7 +58,7 @@ func (c *Client) SignProgramWithWallet(walletHandle, pw []byte, addr string, pro
 		return
 	}
 
-	copy(resp.Signature, signature[:])
+	copy(signature[:], resp.Signature)
 	return
 }
 
