@@ -18,7 +18,6 @@ package transactions
 
 import (
 	"fmt"
-
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 )
@@ -57,7 +56,7 @@ func (keyreg KeyregTxnFields) apply(header Header, balances Balances, spec Speci
 	record.VoteID = keyreg.VotePK
 	record.SelectionID = keyreg.SelectionPK
 	if (keyreg.VotePK == crypto.OneTimeSignatureVerifier{} || keyreg.SelectionPK == crypto.VRFVerifier{}) {
-		if keyreg.Nonparticipation {
+		if balances.ConsensusParams().SupportBecomeNonParticipatingTransactions && keyreg.Nonparticipation {
 			record.Status = basics.NotParticipating
 		} else {
 			record.Status = basics.Offline
