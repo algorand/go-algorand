@@ -226,23 +226,28 @@ var sendCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf(errorConstructingTX, err)
 		}
+		var stx transactions.SignedTxn
+		if program != nil {
+			stx = transactions.SignedTxn{
+				Txn: payment,
+				Lsig: transactions.LogicSig{
+					Logic: program,
+				},
+			}
+		} else if sign || txFilename == "" {
+			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
+			stx, err = client.SignTransactionWithWallet(wh, pw, payment)
+			if err != nil {
+				reportErrorf(errorSigningTX, err)
+			}
+		} else {
+			stx = transactions.SignedTxn{
+				Txn: payment,
+			}
+			stx = populateBlankMultisig(client, dataDir, walletName, stx)
+		}
 		if txFilename == "" {
 			// Sign and broadcast the tx
-			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			var stx transactions.SignedTxn
-			if program != nil {
-				stx = transactions.SignedTxn{
-					Txn: payment,
-					Lsig: transactions.LogicSig{
-						Logic: program,
-					},
-				}
-			} else {
-				stx, err = client.SignTransactionWithWallet(wh, pw, payment)
-				if err != nil {
-					reportErrorf(errorSigningTX, err)
-				}
-			}
 			txid, err := client.BroadcastTransaction(stx)
 
 			if err != nil {
@@ -262,7 +267,7 @@ var sendCmd = &cobra.Command{
 				}
 			}
 		} else {
-			err = writeTxnToFile(client, sign, dataDir, walletName, payment, txFilename)
+			err = writeFile(txFilename, protocol.Encode(stx), 0600)
 			if err != nil {
 				reportErrorf(err.Error())
 			}
