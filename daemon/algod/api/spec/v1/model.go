@@ -304,6 +304,21 @@ type Transaction struct {
 	// required: false
 	Keyreg *KeyregTransactionType `json:"keyreg,omitempty"`
 
+	// CurrencyConfig contains the additional fields for a currency config transaction.
+	//
+	// required: false
+	CurrencyConfig *CurrencyConfigTransactionType `json:"curcfg,omitempty"`
+
+	// CurrencyTransfer contains the additional fields for a currency transfer transaction.
+	//
+	// required: false
+	CurrencyTransfer *CurrencyTransferTransactionType `json:"curxfer,omitempty"`
+
+	// CurrencyFreeze contains the additional fields for a currency freeze transaction.
+	//
+	// required: false
+	CurrencyFreeze *CurrencyFreezeTransactionType `json:"curfrz,omitempty"`
+
 	// FromRewards is the amount of pending rewards applied to the From
 	// account as part of this transaction.
 	//
@@ -387,6 +402,78 @@ type KeyregTransactionType struct {
 	//
 	// required: false
 	VoteKeyDilution uint64 `json:"votekd"`
+}
+
+// CurrencyConfigTransactionType contains the additional fields for a currency config transaction
+// swagger:model CurrencyConfigTransactionType
+type CurrencyConfigTransactionType struct {
+	// CurrencyID is the currency being configured (or empty if creating)
+	//
+	// required: false
+	CurrencyID uint64 `json:"id"`
+
+	// Params specifies the new currency parameters (or empty if deleting)
+	//
+	// required: false
+	Params CurrencyParams `json:"params"`
+}
+
+// CurrencyTransferTransactionType contains the additional fields for a currency transfer transaction
+// swagger:model CurrencyTransferTransactionType
+type CurrencyTransferTransactionType struct {
+	// CurrencyID is the currency being configured (or empty if creating)
+	//
+	// required: true
+	CurrencyID uint64 `json:"id"`
+
+	// Creator is the address of the currency creator.
+	//
+	// required: true
+	Creator string `json:"creator"`
+
+	// Amount is the amount being transferred.
+	//
+	// required: true
+	Amount uint64 `json:"amt"`
+
+	// Sender is the source account (if using clawback).
+	//
+	// required: false
+	Sender string `json:"snd"`
+
+	// Receiver is the recipient account.
+	//
+	// required: true
+	Receiver string `json:"rcv"`
+
+	// CloseTo is the destination for remaining funds (if closing).
+	//
+	// required: false
+	CloseTo string `json:"closeto"`
+}
+
+// CurrencyFreezeTransactionType contains the additional fields for a currency freeze transaction
+// swagger:model CurrencyFreezeTransactionType
+type CurrencyFreezeTransactionType struct {
+	// CurrencyID is the currency being configured (or empty if creating)
+	//
+	// required: true
+	CurrencyID uint64 `json:"id"`
+
+	// Creator is the address of the currency creator.
+	//
+	// required: true
+	Creator string `json:"creator"`
+
+	// Account specifies the account where the currency is being frozen or thawed.
+	//
+	// required: true
+	Account string `json:"acct"`
+
+	// NewFreezeStatus specifies the new freeze status.
+	//
+	// required: true
+	NewFreezeStatus bool `json:"freeze"`
 }
 
 // TransactionList contains a list of transactions

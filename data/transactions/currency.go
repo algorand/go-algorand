@@ -126,7 +126,7 @@ func (cc CurrencyConfigTxnFields) apply(header Header, balances Balances, spec S
 
 		cid := basics.CurrencyID{
 			Creator: header.Sender,
-			Index:   txnCounter,
+			Index:   txnCounter + 1, // Ensure index is never zero
 		}
 
 		record.CurrencyParams[cid.Index] = cc.CurrencyParams

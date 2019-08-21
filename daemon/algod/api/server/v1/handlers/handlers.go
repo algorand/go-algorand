@@ -71,14 +71,33 @@ func decorateUnknownTransactionTypeError(err error, txs node.TxnWithStatus) erro
 // if unexpected transaction type is encountered, an error is returned. The caller is expected to ignore the returned
 // transaction when error is non-nil.
 func txEncode(tx transactions.Transaction, ad transactions.ApplyData) (v1.Transaction, error) {
+	var res v1.Transaction
 	switch tx.Type {
 	case protocol.PaymentTx:
-		return paymentTxEncode(tx, ad), nil
+		res = paymentTxEncode(tx, ad)
 	case protocol.KeyRegistrationTx:
-		return keyregTxEncode(tx, ad), nil
+		res = keyregTxEncode(tx, ad)
+	case protocol.CurrencyConfigTx:
+		res = currencyConfigTxEncode(tx, ad)
+	case protocol.CurrencyTransferTx:
+		res = currencyTransferTxEncode(tx, ad)
+	case protocol.CurrencyFreezeTx:
+		res = currencyFreezeTxEncode(tx, ad)
 	default:
-		return v1.Transaction{}, errors.New(errUnknownTransactionType)
+		return res, errors.New(errUnknownTransactionType)
 	}
+
+	res.Type = string(tx.Type)
+	res.TxID = tx.ID().String()
+	res.From = tx.Src().String()
+	res.Fee = tx.TxFee().Raw
+	res.FirstRound = uint64(tx.First())
+	res.LastRound = uint64(tx.Last())
+	res.Note = tx.Aux()
+	res.FromRewards = ad.SenderRewards.Raw
+	res.GenesisID = tx.GenesisID
+	res.GenesisHash = tx.GenesisHash[:]
+	return res, nil
 }
 
 func paymentTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
@@ -95,17 +114,7 @@ func paymentTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.
 	}
 
 	return v1.Transaction{
-		Type:        string(tx.Type),
-		TxID:        tx.ID().String(),
-		From:        tx.Src().String(),
-		Fee:         tx.TxFee().Raw,
-		FirstRound:  uint64(tx.First()),
-		LastRound:   uint64(tx.Last()),
-		Note:        tx.Aux(),
-		Payment:     &payment,
-		FromRewards: ad.SenderRewards.Raw,
-		GenesisID:   tx.GenesisID,
-		GenesisHash: tx.GenesisHash[:],
+		Payment: &payment,
 	}
 }
 
@@ -119,17 +128,80 @@ func keyregTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.T
 	}
 
 	return v1.Transaction{
-		Type:        string(tx.Type),
-		TxID:        tx.ID().String(),
-		From:        tx.Src().String(),
-		Fee:         tx.TxFee().Raw,
-		FirstRound:  uint64(tx.First()),
-		LastRound:   uint64(tx.Last()),
-		Note:        tx.Aux(),
-		Keyreg:      &keyreg,
-		FromRewards: ad.SenderRewards.Raw,
-		GenesisID:   tx.GenesisID,
-		GenesisHash: tx.GenesisHash[:],
+		Keyreg: &keyreg,
+	}
+}
+
+func currencyParams(creator basics.Address, params basics.CurrencyParams) v1.CurrencyParams {
+	paramsModel := v1.CurrencyParams{
+		Creator:       creator.String(),
+		Total:         params.Total,
+		DefaultFrozen: params.DefaultFrozen,
+		UnitName:      string(params.UnitName[:]),
+	}
+
+	if !params.Manager.IsZero() {
+		paramsModel.ManagerAddr = params.Manager.String()
+	}
+
+	if !params.Reserve.IsZero() {
+		paramsModel.ReserveAddr = params.Reserve.String()
+	}
+
+	if !params.Freeze.IsZero() {
+		paramsModel.FreezeAddr = params.Freeze.String()
+	}
+
+	if !params.Clawback.IsZero() {
+		paramsModel.ClawbackAddr = params.Clawback.String()
+	}
+
+	return paramsModel
+}
+
+func currencyConfigTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
+	config := v1.CurrencyConfigTransactionType{
+		CurrencyID: tx.CurrencyConfigTxnFields.ConfigCurrency.Index,
+		Params: currencyParams(tx.CurrencyConfigTxnFields.ConfigCurrency.Creator,
+			tx.CurrencyConfigTxnFields.CurrencyParams),
+	}
+
+	return v1.Transaction{
+		CurrencyConfig: &config,
+	}
+}
+
+func currencyTransferTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
+	xfer := v1.CurrencyTransferTransactionType{
+		CurrencyID: tx.CurrencyTransferTxnFields.XferCurrency.Index,
+		Creator:    tx.CurrencyTransferTxnFields.XferCurrency.Creator.String(),
+		Amount:     tx.CurrencyTransferTxnFields.CurrencyAmount,
+		Receiver:   tx.CurrencyTransferTxnFields.CurrencyReceiver.String(),
+	}
+
+	if !tx.CurrencyTransferTxnFields.CurrencySender.IsZero() {
+		xfer.Sender = tx.CurrencyTransferTxnFields.CurrencySender.String()
+	}
+
+	if !tx.CurrencyTransferTxnFields.CurrencyCloseTo.IsZero() {
+		xfer.CloseTo = tx.CurrencyTransferTxnFields.CurrencyCloseTo.String()
+	}
+
+	return v1.Transaction{
+		CurrencyTransfer: &xfer,
+	}
+}
+
+func currencyFreezeTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
+	freeze := v1.CurrencyFreezeTransactionType{
+		CurrencyID:      tx.CurrencyFreezeTxnFields.FreezeCurrency.Index,
+		Creator:         tx.CurrencyFreezeTxnFields.FreezeCurrency.Creator.String(),
+		Account:         tx.CurrencyFreezeTxnFields.FreezeAccount.String(),
+		NewFreezeStatus: tx.CurrencyFreezeTxnFields.CurrencyFrozen,
+	}
+
+	return v1.Transaction{
+		CurrencyFreeze: &freeze,
 	}
 }
 
@@ -394,34 +466,11 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	var currencyParams map[uint64]v1.CurrencyParams
+	var thisCurrencyParams map[uint64]v1.CurrencyParams
 	if len(record.CurrencyParams) > 0 {
-		currencyParams = make(map[uint64]v1.CurrencyParams)
+		thisCurrencyParams = make(map[uint64]v1.CurrencyParams)
 		for idx, params := range record.CurrencyParams {
-			paramsModel := v1.CurrencyParams{
-				Creator:       addr.String(),
-				Total:         params.Total,
-				DefaultFrozen: params.DefaultFrozen,
-				UnitName:      string(params.UnitName[:]),
-			}
-
-			if !params.Manager.IsZero() {
-				paramsModel.ManagerAddr = params.Manager.String()
-			}
-
-			if !params.Reserve.IsZero() {
-				paramsModel.ReserveAddr = params.Reserve.String()
-			}
-
-			if !params.Freeze.IsZero() {
-				paramsModel.FreezeAddr = params.Freeze.String()
-			}
-
-			if !params.Clawback.IsZero() {
-				paramsModel.ClawbackAddr = params.Clawback.String()
-			}
-
-			currencyParams[idx] = paramsModel
+			thisCurrencyParams[idx] = currencyParams(addr, params)
 		}
 	}
 
@@ -441,7 +490,7 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 		Rewards:                     record.RewardedMicroAlgos.Raw,
 		Status:                      record.Status.String(),
 		Participation:               apiParticipation,
-		CurrencyParams:              currencyParams,
+		CurrencyParams:              thisCurrencyParams,
 		Currencies:                  currencies,
 	}
 
