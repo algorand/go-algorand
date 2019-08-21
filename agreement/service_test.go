@@ -150,6 +150,7 @@ type testingNetwork struct {
 	compoundPocket    chan<- multicastParams
 	partitionedNodes  map[nodeID]bool
 	crownedNodes      map[nodeID]bool
+	relayNodes        map[nodeID]bool
 	interceptFn       multicastInterceptFn
 }
 
@@ -217,7 +218,7 @@ func (n *testingNetwork) multicast(tag protocol.Tag, data []byte, source nodeID,
 		tag, data, source, exclude = out.tag, out.data, out.source, out.exclude
 	}
 
-	if n.dropSoftVotes || n.dropSlowNextVotes || n.dropVotes || n.certVotePocket != nil || n.softVotePocket != nil || n.compoundPocket != nil || n.crownedNodes != nil {
+	if n.dropSoftVotes || n.dropSlowNextVotes || n.dropVotes || n.certVotePocket != nil || n.softVotePocket != nil || n.compoundPocket != nil {
 		if tag == protocol.ProposalPayloadTag {
 			r := bytes.NewBuffer(data)
 
@@ -307,6 +308,11 @@ func (n *testingNetwork) multicast(tag protocol.Tag, data []byte, source nodeID,
 				return
 			}
 		}
+		if n.relayNodes != nil {
+			if !n.relayNodes[source] && !n.relayNodes[peerid] {
+				return
+			}
+		}
 
 		// we should have incremented tokenizerCoserviceType
 		n.monitors[peerid].inc(tokenizerCoserviceType)
@@ -375,6 +381,7 @@ func (n *testingNetwork) repairAll() {
 	n.compoundPocket = nil
 	n.partitionedNodes = nil
 	n.crownedNodes = nil
+	n.relayNodes = nil
 	n.interceptFn = nil
 }
 
@@ -404,7 +411,17 @@ func (n *testingNetwork) crown(prophets ...nodeID) {
 	defer n.mu.Unlock()
 	n.crownedNodes = make(map[nodeID]bool)
 	for i := 0; i < len(prophets); i++ {
-		n.crownedNodes[nodeID(i)] = true
+		n.crownedNodes[prophets[i]] = true
+	}
+}
+
+// Star topology with the given nodes at the center; to revert, call repairAll
+func (n *testingNetwork) makeRelays(relays ...nodeID) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.relayNodes = make(map[nodeID]bool)
+	for i := 0; i < len(relays); i++ {
+		n.relayNodes[relays[i]] = true
 	}
 }
 
@@ -1940,4 +1957,23 @@ func TestAgreementLargePeriods(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestAgreementRelayTopologyDoesNotStall(t *testing.T) {
+	numNodes := 10 // single relay, nine leaf nodes
+	relayID := nodeID(0)
+	baseNetwork, _, cleanupFn, services, clocks, _, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
+	defer cleanupFn()
+	baseNetwork.makeRelays(relayID)
+	for i := 0; i < numNodes; i++ {
+		services[i].Start()
+	}
+	activityMonitor.waitForActivity()
+	activityMonitor.waitForQuiet()
+	zeroes := expectNewPeriod(clocks, 0)
+	// run two rounds
+	zeroes = runRound(clocks, activityMonitor, zeroes)
+	// remove relay topology for the last filter timeout
+	baseNetwork.repairAll()
+	zeroes = runRound(clocks, activityMonitor, zeroes)
 }
