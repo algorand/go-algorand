@@ -100,13 +100,13 @@ func testAccountsCanChangeOnlineState(t *testing.T, templatePath string) {
 	a.NoError(err, "should be able to make become-nonparticipating tx")
 	wh, err = client.GetUnencryptedWalletHandle()
 	nonparticipatingTxID, err := client.SignAndBroadcastTransaction(wh, nil, becomeNonparticpatingUTx)
-	a.NoError(err, "should be no errors when marking nonparticipating")
+	a.NoError(err, "should be  no errors when marking nonparticipating")
 
 	txidsForStatusChange := make(map[string]string)
 	txidsForStatusChange[onlineTxID] = initiallyOffline
 	txidsForStatusChange[offlineTxID] = initiallyOnline
 	txidsForStatusChange[nonparticipatingTxID] = becomesNonparticipating
-	txnConfirmationDeadline := curRound + uint64(5)
+	txnConfirmationDeadline := curRound + uint64(10)
 	confirmed := fixture.WaitForAllTxnsToConfirm(txnConfirmationDeadline, txidsForStatusChange)
 	a.True(confirmed, "Transactions failed to confirm.")
 
