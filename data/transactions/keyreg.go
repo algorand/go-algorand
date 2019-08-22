@@ -56,8 +56,12 @@ func (keyreg KeyregTxnFields) apply(header Header, balances Balances, spec Speci
 	record.VoteID = keyreg.VotePK
 	record.SelectionID = keyreg.SelectionPK
 	if (keyreg.VotePK == crypto.OneTimeSignatureVerifier{} || keyreg.SelectionPK == crypto.VRFVerifier{}) {
-		if balances.ConsensusParams().SupportBecomeNonParticipatingTransactions && keyreg.Nonparticipation {
-			record.Status = basics.NotParticipating
+		if keyreg.Nonparticipation {
+			if balances.ConsensusParams().SupportBecomeNonParticipatingTransactions {
+				record.Status = basics.NotParticipating
+			} else {
+				return fmt.Errorf("transaction tries to mark an account as nonparticipating, but that transaction is not supported")
+			}
 		} else {
 			record.Status = basics.Offline
 		}
