@@ -882,58 +882,30 @@ func simulateAgreementWithLedgerFactory(t *testing.T, numNodes int, numRounds in
 }
 
 func TestAgreementSynchronous1(t *testing.T) {
-	// if testing.Short() {
-	// 	t.Skip("Skipping agreement integration test")
-	// }
-
 	simulateAgreement(t, 1, 5, disabled)
 }
 
 func TestAgreementSynchronous2(t *testing.T) {
-	// if testing.Short() {
-	// 	t.Skip("Skipping agreement integration test")
-	// }
-
 	simulateAgreement(t, 2, 5, disabled)
 }
 
 func TestAgreementSynchronous3(t *testing.T) {
-	// if testing.Short() {
-	// 	t.Skip("Skipping agreement integration test")
-	// }
-
 	simulateAgreement(t, 3, 5, disabled)
 }
 
 func TestAgreementSynchronous4(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping agreement integration test")
-	}
-
 	simulateAgreement(t, 4, 5, disabled)
 }
 
 func TestAgreementSynchronous5(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping agreement integration test")
-	}
-
 	simulateAgreement(t, 5, 5, disabled)
 }
 
 func TestAgreementSynchronous10(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping agreement integration test")
-	}
-
 	simulateAgreement(t, 10, 5, disabled)
 }
 
 func TestAgreementSynchronous5_50(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping agreement integration test")
-	}
-
 	simulateAgreement(t, 5, 50, disabled)
 }
 
