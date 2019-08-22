@@ -1941,3 +1941,17 @@ func TestAgreementLargePeriods(t *testing.T) {
 		}
 	}
 }
+
+func TestAgreementBasic10NodeStall(t *testing.T) {
+	numNodes := 10
+	_, _, cleanupFn, services, clocks, _, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
+	defer cleanupFn()
+	for i := 0; i < numNodes; i++ {
+		services[i].Start()
+	}
+	activityMonitor.waitForActivity()
+	activityMonitor.waitForQuiet()
+	zeroes := expectNewPeriod(clocks, 0)
+	// run a single round
+	zeroes = runRound(clocks, activityMonitor, zeroes)
+}
