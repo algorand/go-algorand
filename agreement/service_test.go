@@ -299,18 +299,18 @@ func (n *testingNetwork) multicast(tag protocol.Tag, data []byte, source nodeID,
 			continue
 		}
 		if n.partitionedNodes != nil {
-			if n.partitionedNodes[source] != n.partitionedNodes[nodeID(i)] {
+			if n.partitionedNodes[source] != n.partitionedNodes[peerid] {
 				continue
 			}
 		}
 		if n.crownedNodes != nil {
-			if !n.crownedNodes[nodeID(i)] {
-				return
+			if !n.crownedNodes[peerid] {
+				continue
 			}
 		}
 		if n.relayNodes != nil {
 			if !n.relayNodes[source] && !n.relayNodes[peerid] {
-				return
+				continue
 			}
 		}
 
@@ -1957,6 +1957,22 @@ func TestAgreementLargePeriods(t *testing.T) {
 			}
 		}
 	}
+}
+
+
+func TestAgreementBasic10NodeStall(t *testing.T) {
+	numNodes := 10
+	relayID := nodeID(0)
+	_, _, cleanupFn, services, clocks, _, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
+	defer cleanupFn()
+	for i := 0; i < numNodes; i++ {
+		services[i].Start()
+	}
+	activityMonitor.waitForActivity()
+	activityMonitor.waitForQuiet()
+	zeroes := expectNewPeriod(clocks, 0)
+	// run a single round
+	zeroes = runRound(clocks, activityMonitor, zeroes)
 }
 
 func TestAgreementRelayTopologyDoesNotStall(t *testing.T) {
