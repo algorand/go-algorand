@@ -227,14 +227,14 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			return err
 		}
 	case protocol.KeyRegistrationTx:
-		// if the transaction has the Nonparticipation flag high, but the protocol does not support
-		// that type of transaction, it is invalid.
-		if !proto.SupportBecomeNonParticipatingTransactions && tx.KeyregTxnFields.Nonparticipation {
-			return fmt.Errorf("transaction tries to mark an account as nonparticipating, but that transaction is not supported")
-		}
 		// check that, if this tx is marking an account nonparticipating,
 		// it supplies no key (as though it were trying to go offline)
 		if tx.KeyregTxnFields.Nonparticipation {
+			if !proto.SupportBecomeNonParticipatingTransactions {
+				// if the transaction has the Nonparticipation flag high, but the protocol does not support
+				// that type of transaction, it is invalid.
+				return fmt.Errorf("transaction tries to mark an account as nonparticipating, but that transaction is not supported")
+			}
 			suppliesNullKeys := tx.KeyregTxnFields.VotePK == crypto.OneTimeSignatureVerifier{} || tx.KeyregTxnFields.SelectionPK == crypto.VRFVerifier{}
 			if !suppliesNullKeys {
 				return fmt.Errorf("transaction tries to register keys to go online, but nonparticipatory flag is set")

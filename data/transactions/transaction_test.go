@@ -65,7 +65,7 @@ func generateDummyGoNonparticpatingTransaction(addr basics.Address) (tx Transact
 			FirstValid: 1,
 			LastValid:  300,
 		},
-		KeyregTxnFields: KeyregTxnFields{},
+		KeyregTxnFields: KeyregTxnFields{Nonparticipation: true},
 	}
 	tx.KeyregTxnFields.VoteFirst = 1
 	tx.KeyregTxnFields.VoteLast = 300
@@ -86,8 +86,9 @@ func TestGoOnlineGoNonparticipatingContradiction(t *testing.T) {
 	// Also generate a new VRF key
 	vrf := crypto.GenerateVRFSecrets()
 	tx.KeyregTxnFields = KeyregTxnFields{
-		VotePK:      v.OneTimeSignatureVerifier,
-		SelectionPK: vrf.PK,
+		VotePK:           v.OneTimeSignatureVerifier,
+		SelectionPK:      vrf.PK,
+		Nonparticipation: true,
 	}
 	// this tx tries to both register keys to go online, and mark an account as non-participating.
 	// it is not well-formed.
@@ -102,7 +103,6 @@ func TestGoNonparticipatingWellFormed(t *testing.T) {
 	require.NoError(t, err)
 
 	tx := generateDummyGoNonparticpatingTransaction(addr)
-
 	curProto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	// this tx is well-formed
