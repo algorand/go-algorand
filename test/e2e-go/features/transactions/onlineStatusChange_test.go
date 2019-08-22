@@ -96,16 +96,24 @@ func testAccountsCanChangeOnlineState(t *testing.T, templatePath string) {
 	offlineTxID, err := client.SignAndBroadcastTransaction(wh, nil, goOfflineUTx)
 	a.NoError(err, "should be no errors when going offline")
 
-	becomeNonparticpatingUTx, err := client.MakeUnsignedBecomeNonparticipatingTx(initiallyOnline, curRound, transactionValidityPeriod, transactionFee)
-	a.NoError(err, "should be able to make become-nonparticipating tx")
-	wh, err = client.GetUnencryptedWalletHandle()
-	nonparticipatingTxID, err := client.SignAndBroadcastTransaction(wh, nil, becomeNonparticpatingUTx)
-	a.NoError(err, "should be  no errors when marking nonparticipating")
+	consensusParams, err := client.ConsensusParams(curRound)
+	a.NoError(err)
+	doNonparticipationTest := consensusParams.SupportBecomeNonParticipatingTransactions
+	nonparticipatingTxID := ""
+	if doNonparticipationTest {
+		becomeNonparticpatingUTx, err := client.MakeUnsignedBecomeNonparticipatingTx(initiallyOnline, curRound, transactionValidityPeriod, transactionFee)
+		a.NoError(err, "should be able to make become-nonparticipating tx")
+		wh, err = client.GetUnencryptedWalletHandle()
+		nonparticipatingTxID, err = client.SignAndBroadcastTransaction(wh, nil, becomeNonparticpatingUTx)
+		a.NoError(err, "should be  no errors when marking nonparticipating")
+	}
 
 	txidsForStatusChange := make(map[string]string)
 	txidsForStatusChange[onlineTxID] = initiallyOffline
 	txidsForStatusChange[offlineTxID] = initiallyOnline
-	txidsForStatusChange[nonparticipatingTxID] = becomesNonparticipating
+	if doNonparticipationTest {
+		txidsForStatusChange[nonparticipatingTxID] = becomesNonparticipating
+	}
 	txnConfirmationDeadline := curRound + uint64(10)
 	confirmed := fixture.WaitForAllTxnsToConfirm(txnConfirmationDeadline, txidsForStatusChange)
 	a.True(confirmed, "Transactions failed to confirm.")
@@ -123,8 +131,10 @@ func testAccountsCanChangeOnlineState(t *testing.T, templatePath string) {
 	a.NoError(err)
 	a.Equal(initiallyOnlineAccountStatus.Status, basics.Offline.String())
 
-	// assert that becomesNonparticipating is no longer participating
-	unmarkedAccountStatus, err = client.AccountInformation(becomesNonparticipating)
-	a.NoError(err)
-	a.Equal(unmarkedAccountStatus.Status, basics.NotParticipating.String())
+	if doNonparticipationTest {
+		// assert that becomesNonparticipating is no longer participating
+		unmarkedAccountStatus, err = client.AccountInformation(becomesNonparticipating)
+		a.NoError(err)
+		a.Equal(unmarkedAccountStatus.Status, basics.NotParticipating.String())
+	}
 }
