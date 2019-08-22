@@ -106,6 +106,7 @@ func testAccountsCanChangeOnlineState(t *testing.T, templatePath string) {
 		wh, err = client.GetUnencryptedWalletHandle()
 		nonparticipatingTxID, err = client.SignAndBroadcastTransaction(wh, nil, becomeNonparticpatingUTx)
 		a.NoError(err, "should be  no errors when marking nonparticipating")
+		_, curRound = fixture.GetBalanceAndRound(initiallyOnline)
 	}
 
 	txidsForStatusChange := make(map[string]string)
@@ -114,7 +115,7 @@ func testAccountsCanChangeOnlineState(t *testing.T, templatePath string) {
 	if doNonparticipationTest {
 		txidsForStatusChange[nonparticipatingTxID] = becomesNonparticipating
 	}
-	txnConfirmationDeadline := curRound + uint64(10)
+	txnConfirmationDeadline := curRound + uint64(20)
 	confirmed := fixture.WaitForAllTxnsToConfirm(txnConfirmationDeadline, txidsForStatusChange)
 	a.True(confirmed, "Transactions failed to confirm.")
 
