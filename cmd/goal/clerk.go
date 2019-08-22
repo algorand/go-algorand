@@ -51,6 +51,7 @@ var (
 	noProgramOutput bool
 	signProgram     bool
 	programSource   string
+	argB64Strings   []string
 )
 
 func init() {
@@ -77,6 +78,7 @@ func init() {
 	sendCmd.Flags().StringVarP(&closeToAddress, "close-to", "c", "", "Close account and send remainder to this address")
 	sendCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
 	sendCmd.Flags().StringVarP(&programSource, "from-program", "F", "", "Program source to use as account logic")
+	sendCmd.Flags().StringSliceVar(&argB64Strings, "argb64", nil, "base64 encoded args to pass to transaction logic")
 
 	sendCmd.MarkFlagRequired("to")
 	sendCmd.MarkFlagRequired("amount")
@@ -183,11 +185,26 @@ var sendCmd = &cobra.Command{
 
 		var fromAddressResolved string
 		var program []byte = nil
+		var programArgs [][]byte = nil
 		if programSource != "" {
 			program = assembleFile(programSource)
 			ph := transactions.HashProgram(program)
 			pha := basics.Address(ph)
 			fromAddressResolved = pha.String()
+			if len(argB64Strings) > 0 {
+				programArgs = make([][]byte, len(argB64Strings))
+				for i, argstr := range argB64Strings {
+					if argstr == "" {
+						programArgs[i] = []byte{}
+						continue
+					}
+					var err error
+					programArgs[i], err = base64.StdEncoding.DecodeString(argstr)
+					if err != nil {
+						reportErrorf("arg[%d] decode error: %s", i, err)
+					}
+				}
+			}
 		} else {
 			// Check if from was specified, else use default
 			if account == "" {
@@ -232,6 +249,7 @@ var sendCmd = &cobra.Command{
 				Txn: payment,
 				Lsig: transactions.LogicSig{
 					Logic: program,
+					Args:  programArgs,
 				},
 			}
 		} else if sign || txFilename == "" {
