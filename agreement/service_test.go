@@ -1959,10 +1959,8 @@ func TestAgreementLargePeriods(t *testing.T) {
 	}
 }
 
-
 func TestAgreementBasic10NodeStall(t *testing.T) {
 	numNodes := 10
-	relayID := nodeID(0)
 	_, _, cleanupFn, services, clocks, _, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	defer cleanupFn()
 	for i := 0; i < numNodes; i++ {
