@@ -922,9 +922,9 @@ func TestAgreementSynchronous5(t *testing.T) {
 }
 
 func TestAgreementSynchronous10(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping agreement integration test")
-	}
+	//if testing.Short() {
+	//	t.Skip("Skipping agreement integration test")
+	//}
 
 	simulateAgreement(t, 10, 5, disabled)
 }
@@ -1942,8 +1942,14 @@ func TestAgreementLargePeriods(t *testing.T) {
 	}
 }
 
-func TestAgreementBasic5NodeStall(t *testing.T) {
-	numNodes := 5
+func runSingleRound(t *testing.T, numNodes int) (x int) {
+	defer func() {
+		s := recover()
+		if s != nil {
+			fmt.Println(s)
+			x = numNodes
+		}
+	}()
 	_, _, cleanupFn, services, clocks, _, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	defer cleanupFn()
 	for i := 0; i < numNodes; i++ {
@@ -1954,46 +1960,22 @@ func TestAgreementBasic5NodeStall(t *testing.T) {
 	zeroes := expectNewPeriod(clocks, 0)
 	// run a single round
 	zeroes = runRound(clocks, activityMonitor, zeroes)
-}
-
-func TestAgreementBasic8NodeStall(t *testing.T) {
-	numNodes := 8
-	_, _, cleanupFn, services, clocks, _, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
-	defer cleanupFn()
-	for i := 0; i < numNodes; i++ {
-		services[i].Start()
-	}
-	activityMonitor.waitForActivity()
-	activityMonitor.waitForQuiet()
-	zeroes := expectNewPeriod(clocks, 0)
-	// run a single round
-	zeroes = runRound(clocks, activityMonitor, zeroes)
-}
-
-func TestAgreementBasic9NodeStall(t *testing.T) {
-	numNodes := 9
-	_, _, cleanupFn, services, clocks, _, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
-	defer cleanupFn()
-	for i := 0; i < numNodes; i++ {
-		services[i].Start()
-	}
-	activityMonitor.waitForActivity()
-	activityMonitor.waitForQuiet()
-	zeroes := expectNewPeriod(clocks, 0)
-	// run a single round
-	zeroes = runRound(clocks, activityMonitor, zeroes)
+	return
 }
 
 func TestAgreementBasic10NodeStall(t *testing.T) {
-	numNodes := 10
-	_, _, cleanupFn, services, clocks, _, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
-	defer cleanupFn()
-	for i := 0; i < numNodes; i++ {
-		services[i].Start()
+	panicked := false
+	broken := make([]int, 0)
+	for numNodes := 1; numNodes <= 10; numNodes++ {
+		x := runSingleRound(t, numNodes)
+		if x != 0 {
+			panicked = true
+			broken = append(broken, numNodes)
+		}
 	}
-	activityMonitor.waitForActivity()
-	activityMonitor.waitForQuiet()
-	zeroes := expectNewPeriod(clocks, 0)
-	// run a single round
-	zeroes = runRound(clocks, activityMonitor, zeroes)
+	if panicked {
+		str := fmt.Sprintf("indices: %v failed", broken)
+		panic(str)
+	}
+
 }
