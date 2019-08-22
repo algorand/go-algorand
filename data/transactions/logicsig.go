@@ -29,6 +29,8 @@ func (lsl logicBytecodeV1) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Program, []byte(lsl)
 }
 
+// HashProgram takes program bytes and returns the Digest
+// This Digest can be used as an Address for a logic controlled account.
 func HashProgram(program []byte) crypto.Digest {
 	pb := logicBytecodeV1(program)
 	return crypto.HashObj(&pb)
