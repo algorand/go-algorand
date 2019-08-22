@@ -18,6 +18,7 @@ package driver
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 
 	"github.com/algorand/go-deadlock"
@@ -338,15 +339,7 @@ func (lw *LedgerWallet) signTransactionHelper(tx transactions.Transaction) (sig 
 }
 
 func (lw *LedgerWallet) signProgramHelper(data []byte) (sig crypto.Signature, err error) {
-	lw.mu.Lock()
-	defer lw.mu.Unlock()
-
-	// TODO: this is probably wrong and needs extending the client code on the device
-	reply, err := lw.dev.Exchange(data)
-	if err != nil {
-		return
-	}
-
-	copy(sig[:], reply)
+	// TODO: extend client side code for signing program
+	err = errors.New("signing programs not yet implemented for ledger wallet")
 	return
 }
