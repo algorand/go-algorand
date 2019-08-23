@@ -31,9 +31,9 @@ const (
 	ProposalPayloadTag Tag = "PP"
 	TxnTag             Tag = "TX"
 	UniCatchupReqTag   Tag = "UC"
-	UniCatchupResTag   Tag = "UT"
 	UniEnsBlockReqTag  Tag = "UE"
 	UniEnsBlockResTag  Tag = "US"
+	UniCatchupResTag   Tag = "UT"
 	VoteBundleTag      Tag = "VB"
 )
 
