@@ -258,10 +258,11 @@ func (au *accountUpdates) committedUpTo(rnd basics.Round) basics.Round {
 	// Keep track of how many changes to each account we flush to the
 	// account DB, so that we can drop the corresponding refcounts in
 	// au.accounts.
-	flushcount := make(map[basics.Address]int)
+	var flushcount map[basics.Address]int
 
 	offset := uint64(newBase - au.dbRound)
 	err := au.dbs.wdb.Atomic(func(tx *sql.Tx) error {
+		flushcount = make(map[basics.Address]int)
 		for i := uint64(0); i < offset; i++ {
 			rnd := au.dbRound + basics.Round(i) + 1
 			err := accountsNewRound(tx, rnd, au.deltas[i], au.roundTotals[i+1].RewardsLevel, au.protos[i+1])
