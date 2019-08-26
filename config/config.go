@@ -182,6 +182,9 @@ type ConsensusParams struct {
 
 	// transaction groups
 	SupportTxGroups bool
+
+	// max group size
+	MaxTxGroupSize int
 }
 
 // Consensus tracks the protocol-level settings for different versions of the
@@ -254,6 +257,8 @@ func initConsensusProtocols() {
 		SeedRefreshInterval: 100,
 
 		MaxBalLookback: 320,
+
+		MaxTxGroupSize: 1,
 	}
 
 	v7.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}

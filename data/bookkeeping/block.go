@@ -481,7 +481,7 @@ func (block Block) DecodePaysetGroups() ([][]transactions.SignedTxnWithAD, error
 			return nil, err
 		}
 
-		if lastGroup != nil && lastGroup[0].SignedTxn.Txn.Group != stxnad.SignedTxn.Txn.Group {
+		if lastGroup != nil && (lastGroup[0].SignedTxn.Txn.Group != stxnad.SignedTxn.Txn.Group || lastGroup[0].SignedTxn.Txn.Group.IsZero()) {
 			res = append(res, lastGroup)
 			lastGroup = nil
 		}

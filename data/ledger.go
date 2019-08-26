@@ -323,7 +323,7 @@ func (*Ledger) AssemblePayset(pool *pools.TransactionPool, eval *ledger.BlockEva
 			break
 		}
 
-		err := eval.Transaction(txn, nil)
+		err := eval.Transaction(txn, transactions.ApplyData{})
 		if err == ledger.ErrNoSpace {
 			stats.StopReason = telemetryspec.AssembleBlockFull
 			break
