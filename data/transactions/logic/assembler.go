@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/base32"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -23,8 +24,10 @@ type Writer interface {
 
 // OpStream is destination for program and scratch space
 type OpStream struct {
-	Out     Writer
+	Out     bytes.Buffer
 	vubytes [9]byte
+	intc    []uint64
+	bytec   [][]byte
 
 	// Keep a stack of the types of what we would push and pop to typecheck a program
 	typeStack []byte
@@ -45,86 +48,133 @@ func (ops *OpStream) tpop() (argType byte) {
 	return
 }
 
-func (ops *OpStream) hiddenUint(opcode byte, val uint64) error {
-	vlen := uint(0)
-	tv := val
-	for tv > 0 {
-		vlen++
-		tv = tv >> 8
+func (ops *OpStream) Intc(constIndex uint) error {
+	switch constIndex {
+	case 0:
+		ops.Out.WriteByte(0x22) // intc_0
+	case 1:
+		ops.Out.WriteByte(0x23) // intc_1
+	case 2:
+		ops.Out.WriteByte(0x24) // intc_2
+	case 3:
+		ops.Out.WriteByte(0x25) // intc_3
+	default:
+		if constIndex > 0xff {
+			return errors.New("cannot have more than 256 int constants")
+		}
+		ops.Out.WriteByte(0x21) // intc
+		ops.Out.WriteByte(uint8(constIndex))
 	}
-	if vlen > 8 {
-		panic("uint val too big?")
-	}
-	if vlen == 8 {
-		// 8 is encoded as 7 in the opcode.
-		// if we're loading 7 bytes, we load 8 bytes, not much waste.
-		// if we're loading 0 bytes, we get a handy 0 value.
-		ops.vubytes[0] = opcode | 0x07
-	} else {
-		ops.vubytes[0] = opcode | byte(vlen&0x07)
-	}
-	if vlen == 7 {
-		vlen = 8
-	}
-	for i := uint(0); i < vlen; i++ {
-		ops.vubytes[i+1] = byte((val >> (8 * (vlen - i - 1))) & 0x0ff)
-	}
-	_, err := ops.Out.Write(ops.vubytes[0 : 1+vlen])
-	return err
+	ops.tpush(opUint)
+	return nil
 }
 
 // Uint writes opcodes for loading a uint literal
 func (ops *OpStream) Uint(val uint64) error {
-	ops.tpush(opUint)
-	return ops.hiddenUint(0x20, val)
+	found := false
+	var constIndex uint
+	for i, cv := range ops.intc {
+		if cv == val {
+			constIndex = uint(i)
+			found = true
+			break
+		}
+	}
+	if !found {
+		constIndex = uint(len(ops.intc))
+		ops.intc = append(ops.intc, val)
+	}
+	return ops.Intc(constIndex)
+}
+
+func (ops *OpStream) Bytec(constIndex uint) error {
+	switch constIndex {
+	case 0:
+		ops.Out.WriteByte(0x28) // bytec_0
+	case 1:
+		ops.Out.WriteByte(0x29) // bytec_1
+	case 2:
+		ops.Out.WriteByte(0x2a) // bytec_2
+	case 3:
+		ops.Out.WriteByte(0x2b) // bytec_3
+	default:
+		if constIndex > 0xff {
+			return errors.New("cannot have more than 256 byte constants")
+		}
+		ops.Out.WriteByte(0x27) // bytec
+		ops.Out.WriteByte(uint8(constIndex))
+	}
+	ops.tpush(opBytes)
+	return nil
 }
 
 // ByteLiteral writes opcodes and data for loading a []byte literal
+// Values are accumulated so that they can be put into a bytecblock
 func (ops *OpStream) ByteLiteral(val []byte) error {
-	ops.tpush(opBytes)
-	if len(val) == 0 {
-		return ops.Out.WriteByte(0x28)
+	found := false
+	var constIndex uint
+	for i, cv := range ops.bytec {
+		if bytes.Compare(cv, val) == 0 {
+			found = true
+			constIndex = uint(i)
+			break
+		}
 	}
-	err := ops.hiddenUint(0x28, uint64(len(val)))
-	if err != nil {
-		return err
+	if !found {
+		constIndex = uint(len(ops.bytec))
+		ops.bytec = append(ops.bytec, val)
 	}
-	_, err = ops.Out.Write(val)
-	return err
+	return ops.Bytec(constIndex)
 }
 
 // Arg writes opcodes for loading from Lsig.Args
 func (ops *OpStream) Arg(val uint64) error {
+	switch val {
+	case 0:
+		ops.Out.WriteByte(0x2d) // arg_0
+	case 1:
+		ops.Out.WriteByte(0x2e) // arg_1
+	case 2:
+		ops.Out.WriteByte(0x2f) // arg_2
+	case 3:
+		ops.Out.WriteByte(0x30) // arg_3
+	default:
+		if val > 0xff {
+			return errors.New("cannot have more than 256 args")
+		}
+		ops.Out.WriteByte(0x2c)
+		ops.Out.WriteByte(uint8(val))
+	}
 	ops.tpush(opBytes)
-	return ops.hiddenUint(0x30, val)
+	return nil
 }
 
 // Txn writes opcodes for loading a field from the current transaction
 func (ops *OpStream) Txn(val uint64) error {
-	ops.tpush(opAny)
-	return ops.hiddenUint(0x38, val)
+	if val >= uint64(len(TxnFieldNames)) {
+		return errors.New("invalid txn field")
+	}
+	ops.Out.WriteByte(0x31)
+	ops.Out.WriteByte(uint8(val))
+	ops.tpush(TxnFieldTypes[val])
+	return nil
 }
 
 // Global writes opcodes for loading an evaluator-global field
 func (ops *OpStream) Global(val uint64) error {
-	ops.tpush(opAny)
-	return ops.hiddenUint(0x40, val)
+	if val >= uint64(len(GlobalFieldNames)) {
+		return errors.New("invalid txn field")
+	}
+	ops.Out.WriteByte(0x32)
+	ops.Out.WriteByte(uint8(val))
+	ops.tpush(GlobalFieldTypes[val])
+	return nil
 }
 
-// Account writes opcodes for loading a field from some account
-func (ops *OpStream) Account(val uint64) error {
-	ops.tpush(opAny)
-	return ops.hiddenUint(0x48, val)
-}
-
-// TxID writes opcodes for loading a field from some other transaction
-func (ops *OpStream) TxID(val uint64) error {
-	ops.tpush(opAny)
-	return ops.hiddenUint(0x50, val)
-}
-
+// simpleOps are just an opcode, no immediate, working on the stack
 var simpleOps map[string]byte
 
+// argOps take an immediate value and need to parse that argument from assembler code
 var argOps map[string]func(*OpStream, []string) error
 
 func assembleInt(ops *OpStream, args []string) error {
@@ -133,6 +183,81 @@ func assembleInt(ops *OpStream, args []string) error {
 		return err
 	}
 	return ops.Uint(val)
+}
+
+// Explicit invocation of const lookup and push
+func assembleIntC(ops *OpStream, args []string) error {
+	constIndex, err := strconv.ParseUint(args[0], 0, 64)
+	if err != nil {
+		return err
+	}
+	return ops.Intc(uint(constIndex))
+}
+func assembleByteC(ops *OpStream, args []string) error {
+	constIndex, err := strconv.ParseUint(args[0], 0, 64)
+	if err != nil {
+		return err
+	}
+	return ops.Bytec(uint(constIndex))
+}
+
+func parseBinaryArgs(args []string) (val []byte, consumed int, err error) {
+	arg := args[0]
+	if strings.HasPrefix(arg, "base32(") || strings.HasPrefix(arg, "b32(") {
+		open := strings.IndexRune(arg, '(')
+		close := strings.IndexRune(arg, ')')
+		if close == -1 {
+			err = errors.New("byte base32 arg lacks close paren")
+			return
+		}
+		val, err = base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(arg[open+1 : close])
+		if err != nil {
+			return
+		}
+		consumed = 1
+	} else if strings.HasPrefix(arg, "base64(") || strings.HasPrefix(arg, "b64(") {
+		open := strings.IndexRune(arg, '(')
+		close := strings.IndexRune(arg, ')')
+		if close == -1 {
+			err = errors.New("byte base64 arg lacks close paren")
+			return
+		}
+		val, err = base64.StdEncoding.DecodeString(arg[open+1 : close])
+		if err != nil {
+			return
+		}
+		consumed = 1
+	} else if strings.HasPrefix(arg, "0x") {
+		val, err = hex.DecodeString(arg[2:])
+		if err != nil {
+			return
+		}
+		consumed = 1
+	} else if arg == "base32" || arg == "b32" {
+		if len(args) < 2 {
+			err = fmt.Errorf("need literal after 'byte %s'", arg)
+			return
+		}
+		val, err = base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(args[1])
+		if err != nil {
+			return
+		}
+		consumed = 2
+	} else if arg == "base64" || arg == "b64" {
+		if len(args) < 2 {
+			err = fmt.Errorf("need literal after 'byte %s'", arg)
+			return
+		}
+		val, err = base64.StdEncoding.DecodeString(args[1])
+		if err != nil {
+			return
+		}
+		consumed = 2
+	} else {
+		err = fmt.Errorf("byte arg did not parse: %v", arg)
+		return
+	}
+	return
 }
 
 // byte {base64,b64,base32,b32}(...)
@@ -144,52 +269,50 @@ func assembleByte(ops *OpStream, args []string) error {
 	if len(args) == 0 {
 		return errors.New("byte operation needs byte literal argument")
 	}
-	arg := args[0]
-	if strings.HasPrefix(arg, "base32(") || strings.HasPrefix(arg, "b32(") {
-		open := strings.IndexRune(arg, '(')
-		close := strings.IndexRune(arg, ')')
-		if close == -1 {
-			return errors.New("byte base32 arg lacks close paren")
-		}
-		val, err = base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(arg[open+1 : close])
-		if err != nil {
-			return err
-		}
-	} else if strings.HasPrefix(arg, "base64(") || strings.HasPrefix(arg, "b64(") {
-		open := strings.IndexRune(arg, '(')
-		close := strings.IndexRune(arg, ')')
-		if close == -1 {
-			return errors.New("byte base64 arg lacks close paren")
-		}
-		val, err = base64.StdEncoding.DecodeString(arg[open+1 : close])
-		if err != nil {
-			return err
-		}
-	} else if strings.HasPrefix(arg, "0x") {
-		val, err = hex.DecodeString(arg[2:])
-		if err != nil {
-			return err
-		}
-	} else if arg == "base32" || arg == "b32" {
-		if len(args) < 2 {
-			return fmt.Errorf("need literal after 'byte %s'", arg)
-		}
-		val, err = base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(args[1])
-		if err != nil {
-			return err
-		}
-	} else if arg == "base64" || arg == "b64" {
-		if len(args) < 2 {
-			return fmt.Errorf("need literal after 'byte %s'", arg)
-		}
-		val, err = base64.StdEncoding.DecodeString(args[1])
-		if err != nil {
-			return err
-		}
-	} else {
-		return fmt.Errorf("byte arg did not parse: %v", arg)
+	val, _, err = parseBinaryArgs(args)
+	if err != nil {
+		return err
 	}
 	return ops.ByteLiteral(val)
+}
+
+func assembleIntCBlock(ops *OpStream, args []string) error {
+	ops.Out.WriteByte(0x20) // intcblock
+	var scratch [11]byte
+	l := binary.PutUvarint(scratch[:], uint64(len(args)))
+	ops.Out.Write(scratch[:l])
+	for _, xs := range args {
+		cu, err := strconv.ParseUint(xs, 0, 64)
+		if err != nil {
+			return err
+		}
+		l = binary.PutUvarint(scratch[:], cu)
+		ops.Out.Write(scratch[:l])
+	}
+	return nil
+}
+
+func assembleByteCBlock(ops *OpStream, args []string) error {
+	ops.Out.WriteByte(0x26) // bytecblock
+	bvals := make([][]byte, 0, len(args))
+	rest := args
+	for len(rest) > 0 {
+		val, consumed, err := parseBinaryArgs(rest)
+		if err != nil {
+			return err
+		}
+		bvals = append(bvals, val)
+		rest = rest[consumed:]
+	}
+	var scratch [11]byte
+	l := binary.PutUvarint(scratch[:], uint64(len(bvals)))
+	ops.Out.Write(scratch[:l])
+	for _, bv := range bvals {
+		l := binary.PutUvarint(scratch[:], uint64(len(bv)))
+		ops.Out.Write(scratch[:l])
+		ops.Out.Write(bv)
+	}
+	return nil
 }
 
 // addr A1EU...
@@ -220,6 +343,13 @@ var TxnFieldNames = []string{
 	"VoteFirst", "VoteLast", "VoteKeyDilution",
 }
 
+// TxnFieldTypes is opBytes or opUint parallel to TxnFieldNames
+var TxnFieldTypes = []byte{
+	opBytes, opUint, opUint, opUint, opBytes,
+	opBytes, opUint, opBytes, opBytes, opBytes,
+	opUint, opUint, opUint,
+}
+
 var txnFields map[string]uint
 
 func assembleTxn(ops *OpStream, args []string) error {
@@ -241,6 +371,16 @@ var GlobalFieldNames = []string{
 	"MaxTxnLife",
 	"TimeStamp",
 }
+
+// GlobalFieldTypes is opUint opBytes in parallel with GlobalFieldNames
+var GlobalFieldTypes = []byte{
+	opUint,
+	opUint,
+	opUint,
+	opUint,
+	opUint,
+}
+
 var globalFields map[string]uint
 
 func assembleGlobal(ops *OpStream, args []string) error {
@@ -260,28 +400,6 @@ var AccountFieldNames = []string{
 }
 var accountFields map[string]uint
 
-func assembleAccount(ops *OpStream, args []string) error {
-	if len(args) != 1 {
-		return errors.New("account expects one argument")
-	}
-	val, ok := accountFields[args[0]]
-	if !ok {
-		return fmt.Errorf("account unknown arg %v", args[0])
-	}
-	return ops.Account(uint64(val))
-}
-
-func assembleTxID(ops *OpStream, args []string) error {
-	if len(args) != 1 {
-		return errors.New("txnById expects one argument")
-	}
-	val, ok := txnFields[args[0]]
-	if !ok {
-		return fmt.Errorf("txnById unknown arg %v", args[0])
-	}
-	return ops.TxID(uint64(val))
-}
-
 func init() {
 	simpleOps = make(map[string]byte)
 	for _, oi := range opSpecs {
@@ -292,13 +410,19 @@ func init() {
 
 	argOps = make(map[string]func(*OpStream, []string) error)
 	argOps["int"] = assembleInt
+	argOps["intc"] = assembleIntC
+	argOps["intcblock"] = assembleIntCBlock
 	argOps["byte"] = assembleByte
-	argOps["addr"] = assembleAddr
+	argOps["bytec"] = assembleByteC
+	argOps["bytecblock"] = assembleByteCBlock
+	argOps["addr"] = assembleAddr // parse basics.Address, actually just another []byte constant
 	argOps["arg"] = assembleArg
 	argOps["txn"] = assembleTxn
 	argOps["global"] = assembleGlobal
-	argOps["account"] = assembleAccount
-	argOps["txnById"] = assembleTxID
+	// TODO: implement account balance lookup
+	//argOps["account"] = assembleAccount
+	// TODO: implement lookup on other transactions (in txn group?)
+	//argOps["txnById"] = assembleTxID
 
 	txnFields = make(map[string]uint)
 	for i, tfn := range TxnFieldNames {
@@ -354,6 +478,14 @@ func (ops *OpStream) Assemble(fin io.Reader) error {
 		}
 		fields := strings.Fields(line)
 		opstring := fields[0]
+		argf, ok := argOps[opstring]
+		if ok {
+			err := argf(ops, fields[1:])
+			if err != nil {
+				return lineErr(lineNumber, err)
+			}
+			continue
+		}
 		opcode, ok := simpleOps[opstring]
 		if ok {
 			spec := opsByOpcode[opcode]
@@ -372,28 +504,62 @@ func (ops *OpStream) Assemble(fin io.Reader) error {
 			}
 			continue
 		}
-		argf, ok := argOps[opstring]
-		if ok {
-			err := argf(ops, fields[1:])
-			if err != nil {
-				return lineErr(lineNumber, err)
-			}
-			continue
-		}
 		return fmt.Errorf(":%d unknown opcode %v", lineNumber, opstring)
 	}
 	// TODO: warn if expected resulting stack is not len==1 ?
 	return nil
 }
 
+func (ops *OpStream) Bytes() (program []byte, err error) {
+	var scratch [11]byte
+	prebytes := bytes.Buffer{}
+	if len(ops.intc) > 0 {
+		prebytes.WriteByte(0x20) // intcblock
+		vlen := binary.PutUvarint(scratch[:], uint64(len(ops.intc)))
+		prebytes.Write(scratch[:vlen])
+		for _, iv := range ops.intc {
+			vlen = binary.PutUvarint(scratch[:], iv)
+			prebytes.Write(scratch[:vlen])
+		}
+	}
+	if len(ops.bytec) > 0 {
+		prebytes.WriteByte(0x26) // bytecblock
+		vlen := binary.PutUvarint(scratch[:], uint64(len(ops.bytec)))
+		prebytes.Write(scratch[:vlen])
+		for _, bv := range ops.bytec {
+			vlen = binary.PutUvarint(scratch[:], uint64(len(bv)))
+			prebytes.Write(scratch[:vlen])
+			prebytes.Write(bv)
+		}
+	}
+	if prebytes.Len() == 0 {
+		program = ops.Out.Bytes()
+		return
+	}
+	pbl := prebytes.Len()
+	outl := ops.Out.Len()
+	out := make([]byte, pbl+outl)
+	pl, err := prebytes.Read(out)
+	if pl != pbl || err != nil {
+		err = fmt.Errorf("wat: %d prebytes, %d to buffer? err=%s", pbl, pl, err)
+		return
+	}
+	ol, err := ops.Out.Read(out[pl:])
+	if ol != outl || err != nil {
+		err = fmt.Errorf("%d program bytes but %d to buffer. err=%s", outl, ol, err)
+		return
+	}
+	program = out
+	return
+}
+
 // AssembleString takes an entire program in a string and assembles it to bytecode
 func AssembleString(text string) ([]byte, error) {
 	sr := strings.NewReader(text)
-	pbytes := bytes.Buffer{}
-	ops := OpStream{Out: &pbytes}
+	ops := OpStream{}
 	err := ops.Assemble(sr)
 	if err != nil {
 		return nil, err
 	}
-	return pbytes.Bytes(), nil
+	return ops.Bytes()
 }

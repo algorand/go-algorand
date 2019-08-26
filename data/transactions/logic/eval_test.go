@@ -74,6 +74,7 @@ int 100000
 	ep := EvalParams{Txn: &txn, Trace: &sb, Block: &block}
 	pass := Eval(program, ep)
 	if pass {
+		t.Log(hex.EncodeToString(program))
 		t.Log(sb.String())
 	}
 	require.False(t, pass)
@@ -83,6 +84,7 @@ int 100000
 	ep = EvalParams{Txn: &txn, Trace: &sb, Block: &block}
 	pass = Eval(program, ep)
 	if !pass {
+		t.Log(hex.EncodeToString(program))
 		t.Log(sb.String())
 	}
 	require.True(t, pass)
@@ -93,6 +95,7 @@ int 100000
 	ep = EvalParams{Txn: &txn, Trace: &sb, Block: &block}
 	pass = Eval(program, ep)
 	if pass {
+		t.Log(hex.EncodeToString(program))
 		t.Log(sb.String())
 	}
 	require.False(t, pass)
@@ -103,6 +106,7 @@ int 100000
 	ep = EvalParams{Txn: &txn, Trace: &sb, Block: &block}
 	pass = Eval(program, ep)
 	if !pass {
+		t.Log(hex.EncodeToString(program))
 		t.Log(sb.String())
 	}
 	require.True(t, pass)
@@ -114,6 +118,7 @@ int 100000
 	ep = EvalParams{Txn: &txn, Trace: &sb, Block: &block}
 	pass = Eval(program, ep)
 	if pass {
+		t.Log(hex.EncodeToString(program))
 		t.Log(sb.String())
 	}
 	require.False(t, pass)

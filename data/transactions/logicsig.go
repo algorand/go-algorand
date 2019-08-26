@@ -58,8 +58,14 @@ func (lsig *LogicSig) Blank() bool {
 	return len(lsig.Logic) == 0
 }
 
+// LogicSigMaxProgramLength should move to consensus params
+const LogicSigMaxProgramLength = 1000
+
 // Verify checks that the signature is valid. It does not evaluate the logic.
 func (lsig *LogicSig) Verify(txn *Transaction) error {
+	if len(lsig.Logic) > LogicSigMaxProgramLength {
+		return errors.New("LogicSig.Logic too long")
+	}
 	hasSig := false
 	hasMsig := false
 	numSigs := 0

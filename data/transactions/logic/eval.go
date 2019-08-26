@@ -3,6 +3,7 @@ package logic
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -11,7 +12,6 @@ import (
 	"golang.org/x/crypto/sha3"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
@@ -59,7 +59,10 @@ type evalContext struct {
 	stack   []stackValue
 	program []byte // txn.Lsig.Logic ?
 	pc      int
+	nextpc  int
 	err     error
+	intc    []uint64
+	bytec   [][]byte
 }
 
 type opFunc func(cx *evalContext)
@@ -87,11 +90,11 @@ func argTypeName(argType byte) string {
 
 type opSpec struct {
 	opcode  byte
-	mask    byte
+	mask    byte // allow for immediate value in opcode bits, mask the opcode part that is constant
 	name    string
-	op      opFunc
-	args    []byte
-	returns byte
+	op      opFunc // evaluate the op
+	args    []byte // what gets popped from the stack
+	returns byte   // what gets pushed to the stack
 }
 
 // Eval checks to see if a transaction passes logic
@@ -142,19 +145,34 @@ var opSpecs = []opSpec{
 	{0x15, 0xff, "len", opLen, []byte{opBytes}, opUint},
 	// TODO: signed
 	{0x17, 0xff, "btoi", opBtoi, []byte{opBytes}, opUint},
+	{0x18, 0xff, "%", opModulo, []byte{opUint, opUint}, opUint},
+	{0x19, 0xff, "|", opBitOr, []byte{opUint, opUint}, opUint},
+	{0x1a, 0xff, "&", opBitAnd, []byte{opUint, opUint}, opUint},
+	{0x1b, 0xff, "^", opBitXor, []byte{opUint, opUint}, opUint},
+	{0x1c, 0xff, "~", opBitNot, []byte{opUint}, opUint},
 
-	{0x20, 0xf8, "int", opInt, nil, opUint},
-	{0x28, 0xf8, "byte", opByte, nil, opBytes},
-	{0x30, 0xf8, "arg", opArg, nil, opBytes},
-	{0x38, 0xf8, "txn", opTxn, nil, opAny}, // TODO: check output type by subfield retrieved in txn,global,account,txid
-	{0x40, 0xf8, "global", opGlobal, nil, opAny},
-	{0x48, 0xf8, "account", opAccount, []byte{opBytes}, opAny},
-	{0x50, 0xf8, "txid", opTxid, []byte{opBytes}, opAny},
+	{0x20, 0xff, "intcblock", opIntConstBlock, nil, opNone},
+	{0x21, 0xff, "intc", opIntConstLoad, nil, opUint},
+	{0x22, 0xff, "intc_0", opIntConst0, nil, opUint},
+	{0x23, 0xff, "intc_1", opIntConst1, nil, opUint},
+	{0x24, 0xff, "intc_2", opIntConst2, nil, opUint},
+	{0x25, 0xff, "intc_3", opIntConst3, nil, opUint},
+	{0x26, 0xff, "bytecblock", opByteConstBlock, nil, opNone},
+	{0x27, 0xff, "bytec", opByteConstLoad, nil, opBytes},
+	{0x28, 0xff, "bytec_0", opByteConst0, nil, opBytes},
+	{0x29, 0xff, "bytec_1", opByteConst1, nil, opBytes},
+	{0x2a, 0xff, "bytec_2", opByteConst2, nil, opBytes},
+	{0x2b, 0xff, "bytec_3", opByteConst3, nil, opBytes},
+	{0x2c, 0xff, "arg", opArg, nil, opBytes},
+	{0x2d, 0xff, "arg_0", opArg0, nil, opBytes},
+	{0x2e, 0xff, "arg_1", opArg1, nil, opBytes},
+	{0x2f, 0xff, "arg_2", opArg2, nil, opBytes},
+	{0x30, 0xff, "arg_3", opArg3, nil, opBytes},
+	{0x31, 0xff, "txn", opTxn, nil, opAny},       // TODO: check output type by subfield retrieved in txn,global,account,txid
+	{0x32, 0xff, "global", opGlobal, nil, opAny}, // TODO: check output type against specific field
 }
 
 // direct opcode bytes
-//var ops []opSpec
-// alternate name, same as 'ops', to get around shadowing in some code here
 var opsByOpcode []opSpec
 
 func init() {
@@ -186,6 +204,9 @@ func opCompat(expected, got byte) bool {
 	return expected == got
 }
 
+// MaxStackDepth should move to consensus params
+const MaxStackDepth = 1000
+
 func (cx *evalContext) step() {
 	opcode := cx.program[cx.pc]
 	argsTypes := opsByOpcode[opcode].args
@@ -204,21 +225,25 @@ func (cx *evalContext) step() {
 	}
 	opsByOpcode[opcode].op(cx)
 	if cx.Trace != nil {
-		fmt.Fprintf(cx.Trace, "%3d %s => %s\n", cx.pc, opsByOpcode[opcode].name, cx.stack[len(cx.stack)-1].String())
+		if len(cx.stack) == 0 {
+			fmt.Fprintf(cx.Trace, "%3d %s => %s\n", cx.pc, opsByOpcode[opcode].name, "<empty stack>")
+		} else {
+			fmt.Fprintf(cx.Trace, "%3d %s => %s\n", cx.pc, opsByOpcode[opcode].name, cx.stack[len(cx.stack)-1].String())
+		}
 	}
-	if cx.err == nil {
+	if cx.err != nil {
+		return
+	}
+	if len(cx.stack) > MaxStackDepth {
+		cx.err = errors.New("stack overflow")
+		return
+	}
+	if cx.nextpc != 0 {
+		cx.pc = cx.nextpc
+		cx.nextpc = 0
+	} else {
 		cx.pc++
 	}
-}
-
-func (cx *evalContext) lookup(addr basics.Address) (data basics.AccountData, err error) {
-	err = errors.New("TODO WRITEME")
-	return
-}
-
-func (cx *evalContext) getTransaction(txid []byte) (txn *transactions.SignedTxn, err error) {
-	err = errors.New("TODO WRITEME")
-	return
 }
 
 func opErr(cx *evalContext) {
@@ -269,6 +294,17 @@ func opDiv(cx *evalContext) {
 		return
 	}
 	cx.stack[prev].Uint /= cx.stack[last].Uint
+	cx.stack = cx.stack[:last]
+}
+
+func opModulo(cx *evalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+	if cx.stack[last].Uint == 0 {
+		cx.err = errors.New("% 0")
+		return
+	}
+	cx.stack[prev].Uint = cx.stack[prev].Uint % cx.stack[last].Uint
 	cx.stack = cx.stack[:last]
 }
 
@@ -436,41 +472,145 @@ func opBtoi(cx *evalContext) {
 	cx.stack[last].Bytes = nil
 }
 
-func (cx *evalContext) readImplicitValue() (dataLen int, value uint64) {
-	dataLen = int(cx.program[cx.pc] & 0x07)
-	if dataLen == 7 {
-		dataLen = 8
-	}
-	value = uint64(0)
-	for i := 0; i < dataLen; i++ {
-		value = value << 8
-		value = value | (uint64(cx.program[cx.pc+1+i]) & 0x0ff)
-	}
-	return
+func opBitOr(cx *evalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+	cx.stack[prev].Uint = cx.stack[prev].Uint | cx.stack[last].Uint
+	cx.stack = cx.stack[:last]
 }
 
-func opInt(cx *evalContext) {
-	dataLen, value := cx.readImplicitValue()
-	cx.stack = append(cx.stack, stackValue{Uint: value})
-	cx.pc += dataLen
+func opBitAnd(cx *evalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+	cx.stack[prev].Uint = cx.stack[prev].Uint & cx.stack[last].Uint
+	cx.stack = cx.stack[:last]
 }
 
-func opByte(cx *evalContext) {
-	dataLen, value := cx.readImplicitValue()
-	start := cx.pc + 1 + dataLen
-	end := uint64(start) + value
-	cx.stack = append(cx.stack, stackValue{Bytes: cx.program[start:end]})
-	cx.pc = int(end - 1)
+func opBitXor(cx *evalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+	cx.stack[prev].Uint = cx.stack[prev].Uint ^ cx.stack[last].Uint
+	cx.stack = cx.stack[:last]
 }
 
-func opArg(cx *evalContext) {
-	dataLen, value := cx.readImplicitValue()
-	if value >= uint64(len(cx.Txn.Lsig.Args)) {
-		cx.err = fmt.Errorf("cannot load arg[%d] of %d", value, len(cx.Txn.Lsig.Args))
+func opBitNot(cx *evalContext) {
+	last := len(cx.stack) - 1
+	cx.stack[last].Uint = cx.stack[last].Uint ^ 0xffffffffffffffff
+}
+
+func opIntConstBlock(cx *evalContext) {
+	pos := cx.pc + 1
+	numInts, bytesUsed := binary.Uvarint(cx.program[pos:])
+	if bytesUsed <= 0 {
+		cx.err = fmt.Errorf("could not decode int const block size at pc=%d", pos)
 		return
 	}
-	cx.stack = append(cx.stack, stackValue{Bytes: cx.Txn.Lsig.Args[value]})
-	cx.pc += dataLen
+	pos += bytesUsed
+	cx.intc = make([]uint64, numInts)
+	for i := uint64(0); i < numInts; i++ {
+		cx.intc[i], bytesUsed = binary.Uvarint(cx.program[pos:])
+		if bytesUsed <= 0 {
+			cx.err = fmt.Errorf("could not decode int const[%d] at pc=%d", i, pos)
+			return
+		}
+		pos += bytesUsed
+	}
+	cx.nextpc = pos
+}
+func opIntConstN(cx *evalContext, n uint) {
+	if n >= uint(len(cx.intc)) {
+		cx.err = fmt.Errorf("intc [%d] beyond %d constants", n, len(cx.intc))
+		return
+	}
+	cx.stack = append(cx.stack, stackValue{Uint: cx.intc[n]})
+}
+func opIntConstLoad(cx *evalContext) {
+	n := uint(cx.program[cx.pc+1])
+	opIntConstN(cx, n)
+	cx.nextpc = cx.pc + 2
+}
+func opIntConst0(cx *evalContext) {
+	opIntConstN(cx, 0)
+}
+func opIntConst1(cx *evalContext) {
+	opIntConstN(cx, 1)
+}
+func opIntConst2(cx *evalContext) {
+	opIntConstN(cx, 2)
+}
+func opIntConst3(cx *evalContext) {
+	opIntConstN(cx, 3)
+}
+
+func opByteConstBlock(cx *evalContext) {
+	pos := cx.pc + 1
+	numItems, bytesUsed := binary.Uvarint(cx.program[pos:])
+	if bytesUsed <= 0 {
+		cx.err = fmt.Errorf("could not decode []byte const block size at pc=%d", pos)
+		return
+	}
+	pos += bytesUsed
+	cx.bytec = make([][]byte, numItems)
+	for i := uint64(0); i < numItems; i++ {
+		itemLen, bytesUsed := binary.Uvarint(cx.program[pos:])
+		if bytesUsed <= 0 {
+			cx.err = fmt.Errorf("could not decode []byte const[%d] at pc=%d", i, pos)
+			return
+		}
+		pos += bytesUsed
+		cx.bytec[i] = cx.program[pos : pos+int(itemLen)]
+		pos += int(itemLen)
+	}
+	cx.nextpc = pos
+}
+func opByteConstN(cx *evalContext, n uint) {
+	if n >= uint(len(cx.bytec)) {
+		cx.err = fmt.Errorf("bytec [%d] beyond %d constants", n, len(cx.bytec))
+		return
+	}
+	cx.stack = append(cx.stack, stackValue{Bytes: cx.bytec[n]})
+}
+func opByteConstLoad(cx *evalContext) {
+	n := uint(cx.program[cx.pc+1])
+	opByteConstN(cx, n)
+	cx.nextpc = cx.pc + 2
+}
+func opByteConst0(cx *evalContext) {
+	opByteConstN(cx, 0)
+}
+func opByteConst1(cx *evalContext) {
+	opByteConstN(cx, 1)
+}
+func opByteConst2(cx *evalContext) {
+	opByteConstN(cx, 2)
+}
+func opByteConst3(cx *evalContext) {
+	opByteConstN(cx, 3)
+}
+
+func opArgN(cx *evalContext, n uint64) {
+	if n >= uint64(len(cx.Txn.Lsig.Args)) {
+		cx.err = fmt.Errorf("cannot load arg[%d] of %d", n, len(cx.Txn.Lsig.Args))
+		return
+	}
+	cx.stack = append(cx.stack, stackValue{Bytes: cx.Txn.Lsig.Args[n]})
+}
+func opArg(cx *evalContext) {
+	n := uint64(cx.program[cx.pc+1])
+	opArgN(cx, n)
+	cx.nextpc = cx.pc + 2
+}
+func opArg0(cx *evalContext) {
+	opArgN(cx, 0)
+}
+func opArg1(cx *evalContext) {
+	opArgN(cx, 1)
+}
+func opArg2(cx *evalContext) {
+	opArgN(cx, 2)
+}
+func opArg3(cx *evalContext) {
+	opArgN(cx, 3)
 }
 
 func (cx *evalContext) txnFieldToStack(txn *transactions.SignedTxn, field uint64) (sv stackValue, err error) {
@@ -503,26 +643,26 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.SignedTxn, field uint64
 	case 12:
 		sv.Uint = txn.Txn.VoteKeyDilution
 	default:
-		err = fmt.Errorf("invalid arg field %d", field)
+		err = fmt.Errorf("invalid txn field %d", field)
 	}
 	return
 }
 
 func opTxn(cx *evalContext) {
-	dataLen, value := cx.readImplicitValue()
+	value := uint64(cx.program[cx.pc+1])
 	sv, err := cx.txnFieldToStack(cx.Txn, value)
 	if err != nil {
 		cx.err = err
 		return
 	}
 	cx.stack = append(cx.stack, sv)
-	cx.pc += dataLen
+	cx.nextpc = cx.pc + 2
 }
 
 func opGlobal(cx *evalContext) {
-	dataLen, value := cx.readImplicitValue()
+	gindex := uint64(cx.program[cx.pc+1])
 	var sv stackValue
-	switch value {
+	switch gindex {
 	case 0:
 		if cx.Block != nil {
 			sv.Uint = uint64(cx.Block.Round())
@@ -538,57 +678,9 @@ func opGlobal(cx *evalContext) {
 			sv.Uint = uint64(cx.Block.BlockHeader.TimeStamp)
 		}
 	default:
-		cx.err = fmt.Errorf("invalid global[%d]", value)
+		cx.err = fmt.Errorf("invalid global[%d]", gindex)
 		return
 	}
 	cx.stack = append(cx.stack, sv)
-	cx.pc += dataLen
-}
-
-func opAccount(cx *evalContext) {
-	dataLen, value := cx.readImplicitValue()
-	// pop account addr
-	last := len(cx.stack) - 1
-	addrb := cx.stack[last].Bytes
-	var addr basics.Address
-	if len(addrb) == len(addr) {
-		copy(addr[:], addrb)
-	} else {
-		cx.err = errors.New("address argument wrong length")
-		return
-	}
-	data, err := cx.lookup(addr)
-	if err != nil {
-		cx.err = err
-		return
-	}
-	var sv stackValue
-	switch value {
-	case 0:
-		sv.Uint = data.MicroAlgos.Raw
-	default:
-		cx.err = fmt.Errorf("invalid account field %d", value)
-		return
-	}
-	cx.stack[last] = sv
-	cx.pc += dataLen
-}
-
-func opTxid(cx *evalContext) {
-	dataLen, value := cx.readImplicitValue()
-	// pop txid addr
-	last := len(cx.stack) - 1
-	txid := cx.stack[last].Bytes
-	txn, err := cx.getTransaction(txid)
-	if err != nil {
-		cx.err = err
-		return
-	}
-	sv, err := cx.txnFieldToStack(txn, value)
-	if err != nil {
-		cx.err = err
-		return
-	}
-	cx.stack[last] = sv
-	cx.pc += dataLen
+	cx.nextpc = cx.pc + 2
 }

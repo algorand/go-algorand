@@ -3,7 +3,6 @@ package logic
 import (
 	"bytes"
 	"encoding/hex"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -31,7 +30,7 @@ txn VoteFirst
 txn VoteLast
 arg 0
 arg 1
-account Balance
+//account Balance
 sha256
 keccak256
 int 0x031337
@@ -70,56 +69,52 @@ len
 byte 0x4242
 btoi
 `
-	sr := strings.NewReader(text)
-	pbytes := bytes.Buffer{}
-	ops := OpStream{Out: &pbytes}
-	err := ops.Assemble(sr)
+	program, err := AssembleString(text)
 	require.NoError(t, err)
 	// check that compilation is stable over time and we assemble to the same bytes this month that we did last month.
-	expectedBytes, _ := hex.DecodeString("004041014102410341042902123438390139023903390439053906390739083909390a390b303101480102230313372712345678123456782700345678123456782656781234567825781234567808200921020a21010b21010c21010d21010e21010f21011021011121011221011321011429024242152902424217")
-	if bytes.Compare(expectedBytes, pbytes.Bytes()) != 0 {
+	expectedBytes, _ := hex.DecodeString("2008b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f00020126020212340242420032003201320232033204283100310131023103310431053106310731083109310a310b2d2e01022223242521040821050921060a21070b21070c21070d21070e21070f21071021071121071221071321071429152917")
+	if bytes.Compare(expectedBytes, program) != 0 {
 		// this print is for convenience if the program has been changed. the hex string can be copy pasted back in as a new expected result.
-		t.Log(hex.EncodeToString(pbytes.Bytes()))
+		t.Log(hex.EncodeToString(program))
 	}
-	require.Equal(t, expectedBytes, pbytes.Bytes())
+	require.Equal(t, expectedBytes, program)
 }
 
 func TestOpUint(t *testing.T) {
-	pbytes := bytes.Buffer{}
-	ops := OpStream{Out: &pbytes}
+	ops := OpStream{}
 	err := ops.Uint(0xcafebabe)
 	require.NoError(t, err)
-	s := hex.EncodeToString(pbytes.Bytes())
-	require.Equal(t, "24cafebabe", s)
+	program, err := ops.Bytes()
+	require.NoError(t, err)
+	s := hex.EncodeToString(program)
+	require.Equal(t, "2001bef5fad70c22", s)
 }
 
 func TestOpUint64(t *testing.T) {
-	pbytes := bytes.Buffer{}
-	ops := OpStream{Out: &pbytes}
+	ops := OpStream{}
 	err := ops.Uint(0xcafebabecafebabe)
 	require.NoError(t, err)
-	s := hex.EncodeToString(pbytes.Bytes())
-	require.Equal(t, "27cafebabecafebabe", s)
+	program, err := ops.Bytes()
+	require.NoError(t, err)
+	s := hex.EncodeToString(program)
+	require.Equal(t, "2001bef5fad7ecd7aeffca0122", s)
 }
 
 func TestOpBytes(t *testing.T) {
-	pbytes := bytes.Buffer{}
-	ops := OpStream{Out: &pbytes}
+	ops := OpStream{}
 	err := ops.ByteLiteral([]byte("abcdef"))
+	program, err := ops.Bytes()
 	require.NoError(t, err)
-	s := hex.EncodeToString(pbytes.Bytes())
-	require.Equal(t, "2906616263646566", s)
+	s := hex.EncodeToString(program)
+	require.Equal(t, "26010661626364656628", s)
 }
 
 func TestAssembleInt(t *testing.T) {
 	text := "int 0xcafebabe"
-	sr := strings.NewReader(text)
-	pbytes := bytes.Buffer{}
-	ops := OpStream{Out: &pbytes}
-	err := ops.Assemble(sr)
+	program, err := AssembleString(text)
 	require.NoError(t, err)
-	s := hex.EncodeToString(pbytes.Bytes())
-	require.Equal(t, "24cafebabe", s)
+	s := hex.EncodeToString(program)
+	require.Equal(t, "2001bef5fad70c22", s)
 }
 
 /*
@@ -145,12 +140,9 @@ func TestAssembleBytes(t *testing.T) {
 		"byte 0x616263646566",
 	}
 	for _, vi := range variations {
-		sr := strings.NewReader(vi)
-		pbytes := bytes.Buffer{}
-		ops := OpStream{Out: &pbytes}
-		err := ops.Assemble(sr)
+		program, err := AssembleString(vi)
 		require.NoError(t, err)
-		s := hex.EncodeToString(pbytes.Bytes())
-		require.Equal(t, "2906616263646566", s)
+		s := hex.EncodeToString(program)
+		require.Equal(t, "26010661626364656628", s)
 	}
 }
