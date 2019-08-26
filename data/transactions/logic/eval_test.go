@@ -140,6 +140,21 @@ int 0x12345678
 	require.True(t, pass)
 }
 
+func TestBtoi(t *testing.T) {
+	program, err := AssembleString(`int 0x1234567812345678
+byte 0x1234567812345678
+btoi
+==`)
+	require.NoError(t, err)
+	sb := strings.Builder{}
+	pass := Eval(program, EvalParams{Trace: &sb})
+	if !pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.True(t, pass)
+}
+
 /*
 import random
 
