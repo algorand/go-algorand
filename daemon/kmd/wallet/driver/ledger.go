@@ -225,6 +225,7 @@ func (lw *LedgerWallet) MultisigSignTransaction(tx transactions.Transaction, pk 
 		subsig := &partial.Subsigs[i]
 		if subsig.Key == pk {
 			isValidKey = true
+			break
 		}
 	}
 
@@ -254,6 +255,7 @@ func (lw *LedgerWallet) MultisigSignProgram(data []byte, src crypto.Digest, pk c
 		subsig := &partial.Subsigs[i]
 		if subsig.Key == pk {
 			isValidKey = true
+			break
 		}
 	}
 
