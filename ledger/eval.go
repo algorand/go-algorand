@@ -262,7 +262,7 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *eval
 	testnetGenesisHash, _ := crypto.DigestFromString("JBR3KGFEWPEE5SAQ6IWU6EEBZMHXD4CZU6WCBXWGF57XBZIJHIRA")
 	if hdr.Round == 1499995 && eval.genesisHash == testnetGenesisHash {
 		bankAddr, _ := basics.UnmarshalChecksumAddress("GD64YIY3TWGDMCNPP553DZPPR6LDUSFQOIJVFDPPXWEG3FVOJCCDBBHU5A") // testnet bank address.
-		amount := basics.MicroAlgos{Raw: 20000000}
+		amount := basics.MicroAlgos{Raw: 20000000000}
 		err = eval.state.Move(bankAddr, poolAddr, amount, nil, nil)
 		if err != nil {
 			return nil, fmt.Errorf("unable to move funds from testnet bank to incentive pool: %v", err)
