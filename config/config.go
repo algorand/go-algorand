@@ -380,14 +380,14 @@ func initConsensusProtocols() {
 	// v16 can be upgraded to v17.
 	v16.ApprovedUpgrades[protocol.ConsensusV17] = true
 
-	// ConsensusSubCurrency adds transaction counting and sub-currencies.
-	vSubCur := v17
-	vSubCur.TxnCounter = true
-	vSubCur.MultiCurrency = true
-	vSubCur.MaxCurrenciesPerAccount = 100
-	vSubCur.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
-	Consensus[protocol.ConsensusSubCurrency] = vSubCur
-	// v17 cannot be upgraded to vSubCur.
+	// ConsensusFuture is used to test features that are implemented
+	// but not yet released in a production protocol version.
+	vFuture := v17
+	vFuture.TxnCounter = true
+	vFuture.MultiCurrency = true
+	vFuture.MaxCurrenciesPerAccount = 100
+	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	Consensus[protocol.ConsensusFuture] = vFuture
 }
 
 func initConsensusTestProtocols() {
