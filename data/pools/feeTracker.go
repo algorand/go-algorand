@@ -67,7 +67,7 @@ func (ft *FeeTracker) ProcessBlock(block bookkeeping.Block) {
 	}
 
 	// Get the median of the block
-	payset, err := block.DecodePayset()
+	payset, err := block.DecodePaysetFlat()
 	if err != nil {
 		return
 	}

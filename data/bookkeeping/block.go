@@ -468,8 +468,35 @@ func (block Block) ContentsMatchHeader() bool {
 	return block.Payset.Commit(proto.PaysetCommitFlat) == block.TxnRoot
 }
 
-// DecodePayset decodes block.Payset using DecodeSignedTxn
-func (block Block) DecodePayset() ([]transactions.SignedTxnWithAD, error) {
+// DecodePaysetGroups decodes block.Payset using DecodeSignedTxn, and returns
+// the transactions in groups.
+func (block Block) DecodePaysetGroups() ([][]transactions.SignedTxnWithAD, error) {
+	var res [][]transactions.SignedTxnWithAD
+	var lastGroup []transactions.SignedTxnWithAD
+	for _, txib := range block.Payset {
+		var err error
+		var stxnad transactions.SignedTxnWithAD
+		stxnad.SignedTxn, stxnad.ApplyData, err = block.DecodeSignedTxn(txib)
+		if err != nil {
+			return nil, err
+		}
+
+		if lastGroup != nil && lastGroup[0].SignedTxn.Txn.Group != stxnad.SignedTxn.Txn.Group {
+			res = append(res, lastGroup)
+			lastGroup = nil
+		}
+
+		lastGroup = append(lastGroup, stxnad)
+	}
+	if lastGroup != nil {
+		res = append(res, lastGroup)
+	}
+	return res, nil
+}
+
+// DecodePaysetFlat decodes block.Payset using DecodeSignedTxn, and
+// flattens groups.
+func (block Block) DecodePaysetFlat() ([]transactions.SignedTxnWithAD, error) {
 	res := make([]transactions.SignedTxnWithAD, len(block.Payset))
 	for i, txib := range block.Payset {
 		var err error

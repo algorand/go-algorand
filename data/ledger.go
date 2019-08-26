@@ -138,7 +138,7 @@ func (l *Ledger) AddressTxns(id basics.Address, r basics.Round) ([]transactions.
 	proto := config.Consensus[blk.CurrentProtocol]
 
 	var res []transactions.SignedTxnWithAD
-	payset, err := blk.DecodePayset()
+	payset, err := blk.DecodePaysetFlat()
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +158,7 @@ func (l *Ledger) LookupTxid(txid transactions.Txid, r basics.Round) (stxn transa
 		return transactions.SignedTxnWithAD{}, false, err
 	}
 
-	payset, err := blk.DecodePayset()
+	payset, err := blk.DecodePaysetFlat()
 	if err != nil {
 		return transactions.SignedTxnWithAD{}, false, err
 	}

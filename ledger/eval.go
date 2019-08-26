@@ -149,7 +149,6 @@ type BlockEvaluator struct {
 
 	block        bookkeeping.Block
 	totalTxBytes int
-	txGroups     map[crypto.Digest]transactions.TxGroup
 
 	verificationPool execpool.BacklogPool
 }
@@ -196,7 +195,6 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *eval
 		block:            bookkeeping.Block{BlockHeader: hdr},
 		proto:            proto,
 		genesisHash:      l.GenesisHash(),
-		txGroups:         make(map[crypto.Digest]transactions.TxGroup),
 		verificationPool: executionPool,
 	}
 
@@ -415,16 +413,19 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad *transact
 	}
 
 	if remember {
+/*
+XXX
 		// Add to txgroup, if any.
 		if !txn.Txn.Group.IsZero() {
 			txWithoutGroup := txn.Txn
 			txWithoutGroup.Group = crypto.Digest{}
 			txWithoutGroup.ResetCaches()
 
-			group := eval.txGroups[txn.Txn.Group]
-			group.Transactions = append(group.Transactions, crypto.HashObj(txWithoutGroup))
-			eval.txGroups[txn.Txn.Group] = group
+			// group := eval.txGroups[txn.Txn.Group]
+			// group.Transactions = append(group.Transactions, crypto.HashObj(txWithoutGroup))
+			// eval.txGroups[txn.Txn.Group] = group
 		}
+*/
 
 		// Remember this TXID (to detect duplicates)
 		cow.addTx(txn.ID())
@@ -456,13 +457,6 @@ func (eval *BlockEvaluator) finalValidation() error {
 		txnRoot := eval.block.Payset.Commit(eval.proto.PaysetCommitFlat)
 		if txnRoot != eval.block.TxnRoot {
 			return fmt.Errorf("txn root wrong: %v != %v", txnRoot, eval.block.TxnRoot)
-		}
-
-		// check transaction groups
-		for gid, group := range eval.txGroups {
-			if gid != crypto.HashObj(group) {
-				return fmt.Errorf("txgroup %v mismatch: %v", gid, group)
-			}
 		}
 	}
 
@@ -502,8 +496,9 @@ func (l *Ledger) eval(ctx context.Context, blk bookkeeping.Block, aux *evalAux, 
 	}
 
 	// TODO: batch tx sig verification: ingest blk.Payset and output a list of ValidatedTx
+
 	// Next, transactions
-	payset, err := blk.DecodePayset()
+	payset, err := blk.DecodePaysetFlat()
 	if err != nil {
 		return stateDelta{}, evalAux{}, err
 	}

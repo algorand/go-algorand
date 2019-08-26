@@ -96,7 +96,7 @@ func (t *topAccountListener) update(b bookkeeping.Block, balances basics.Balance
 	// Lookup map for updated accounts.
 	accountSet := make(map[basics.Address]bool)
 
-	payset, err := b.DecodePayset()
+	payset, err := b.DecodePaysetFlat()
 	if err != nil {
 		return
 	}

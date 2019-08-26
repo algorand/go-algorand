@@ -118,7 +118,7 @@ func (idb *DB) AddBlock(b bookkeeping.Block) error {
 		}
 		defer stmt.Close()
 
-		payset, err := b.DecodePayset()
+		payset, err := b.DecodePaysetFlat()
 		if err != nil {
 			return err
 		}

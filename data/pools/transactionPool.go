@@ -279,7 +279,7 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block) {
 	var knownCommitted uint
 	var unknownCommitted uint
 
-	payset, err := block.DecodePayset()
+	payset, err := block.DecodePaysetFlat()
 	if err == nil {
 		for _, txad := range payset {
 			tx := txad.SignedTxn

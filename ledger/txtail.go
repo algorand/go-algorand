@@ -55,7 +55,7 @@ func (t *txTail) loadFromDisk(l ledgerForTracker) error {
 			return err
 		}
 
-		payset, err := blk.DecodePayset()
+		payset, err := blk.DecodePaysetFlat()
 		if err != nil {
 			return err
 		}
