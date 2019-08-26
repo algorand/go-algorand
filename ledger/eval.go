@@ -247,13 +247,13 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *eval
 	// Withdraw rewards from the incentive pool
 	var ot basics.OverflowTracker
 	rewardsPerUnit := ot.Sub(eval.block.BlockHeader.RewardsLevel, eval.prevHeader.RewardsLevel)
+	if ot.Overflowed {
+		return nil, fmt.Errorf("overflowed subtracting rewards(%d, %d) levels for block %v", eval.block.BlockHeader.RewardsLevel, eval.prevHeader.RewardsLevel, hdr.Round)
+	}
+
 	poolOld, err := eval.state.Get(poolAddr)
 	if err != nil {
 		return nil, err
-	}
-
-	if ot.Overflowed {
-		return nil, fmt.Errorf("overflowed subtracting rewards(%d, %d) levels for block %v", eval.block.BlockHeader.RewardsLevel, eval.prevHeader.RewardsLevel, hdr.Round)
 	}
 
 	poolNew := poolOld
