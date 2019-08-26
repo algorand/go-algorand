@@ -304,9 +304,6 @@ func (eval *BlockEvaluator) workaroundOverspentRewards(rewardPoolBalance basics.
 		return
 	}
 	poolOld, err = eval.state.Get(eval.prevHeader.RewardsPool)
-	if err != nil {
-		return
-	}
 
 	return
 }
