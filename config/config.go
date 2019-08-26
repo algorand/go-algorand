@@ -179,6 +179,9 @@ type ConsensusParams struct {
 
 	// domain-separated credentials
 	CredentialDomainSeparationEnabled bool
+
+	// fix the rewards calculation by avoiding subtracting too much from the rewards pool
+	PendingResidueRewards bool
 }
 
 // Consensus tracks the protocol-level settings for different versions of the
@@ -370,6 +373,15 @@ func initConsensusProtocols() {
 
 	// v16 can be upgraded to v17.
 	v16.ApprovedUpgrades[protocol.ConsensusV17] = true
+
+	// ConsensusV18 contains the PendingResidueRewards fix.
+	ConsensusV18 := v17
+	ConsensusV18.PendingResidueRewards = true
+	ConsensusV18.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+
+	// v17 can be upgraded to v18.
+	v17.ApprovedUpgrades[protocol.ConsensusV18] = true
+
 }
 
 func initConsensusTestProtocols() {

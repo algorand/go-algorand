@@ -252,8 +252,32 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *eval
 		return nil, err
 	}
 
+	if ot.Overflowed {
+		return nil, fmt.Errorf("overflowed subtracting rewards(%d, %d) levels for block %v", eval.block.BlockHeader.RewardsLevel, eval.prevHeader.RewardsLevel, hdr.Round)
+	}
+
 	poolNew := poolOld
+
+	// hotfix for testnet stall 08/26/2019; move some algos from testnet bank to rewards pool to give it enough time until protocol upgrade occur.
+	testnetGenesisHash, _ := crypto.DigestFromString("JBR3KGFEWPEE5SAQ6IWU6EEBZMHXD4CZU6WCBXWGF57XBZIJHIRA")
+	if hdr.Round == 1499995 && eval.genesisHash == testnetGenesisHash {
+		bankAddr, _ := basics.UnmarshalChecksumAddress("GD64YIY3TWGDMCNPP553DZPPR6LDUSFQOIJVFDPPXWEG3FVOJCCDBBHU5A") // testnet bank address.
+		amount := basics.MicroAlgos{Raw: 20000000}
+		err = eval.state.Move(bankAddr, poolAddr, amount, nil, nil)
+		if err != nil {
+			return nil, fmt.Errorf("unable to move funds from testnet bank to incentive pool: %v", err)
+		}
+		poolOld, err = eval.state.Get(poolAddr)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	poolNew.MicroAlgos = ot.SubA(poolOld.MicroAlgos, basics.MicroAlgos{Raw: ot.Mul(prevTotals.RewardUnits(), rewardsPerUnit)})
+	if ot.Overflowed {
+		return nil, fmt.Errorf("overflowed subtracting reward unit for block %v", hdr.Round)
+	}
+
 	err = eval.state.Put(poolNew)
 	if err != nil {
 		return nil, err

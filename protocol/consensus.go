@@ -94,6 +94,11 @@ const ConsensusV17 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/5615adc36bad610c7f165fa2967f4ecfa75125f0",
 )
 
+// ConsensusV18 adds a corrected PendingResidueRewards to prevent overspending rewards pool
+const ConsensusV18 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/tobediscussed.",
+)
+
 // !!! ********************* !!!
 // !!! *** Please update ConsensusCurrentVersion when adding new protocol versions *** !!!
 // !!! ********************* !!!
