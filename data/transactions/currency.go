@@ -118,15 +118,18 @@ func (cc CurrencyConfigTxnFields) apply(header Header, balances Balances, spec S
 		record.Currencies = clone(record.Currencies)
 		record.CurrencyParams = cloneParams(record.CurrencyParams)
 
+		// Ensure index is never zero
+		newidx := txnCounter + 1
+
 		// Sanity check that there isn't a currency with this counter value.
-		_, present := record.CurrencyParams[txnCounter]
+		_, present := record.CurrencyParams[newidx]
 		if present {
-			return fmt.Errorf("already found a sub-currency with txnCounter=%d", txnCounter)
+			return fmt.Errorf("already found a sub-currency with index %d", newidx)
 		}
 
 		cid := basics.CurrencyID{
 			Creator: header.Sender,
-			Index:   txnCounter + 1, // Ensure index is never zero
+			Index:   newidx,
 		}
 
 		record.CurrencyParams[cid.Index] = cc.CurrencyParams
