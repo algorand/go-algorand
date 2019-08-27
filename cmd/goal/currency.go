@@ -55,6 +55,7 @@ func init() {
 	createCurrencyCmd.Flags().Uint64Var(&firstValid, "firstvalid", 0, "The first round where the transaction may be committed to the ledger")
 	createCurrencyCmd.Flags().Uint64Var(&numValidRounds, "validrounds", 0, "The number of rounds for which the transaction will be valid")
 	createCurrencyCmd.Flags().StringVarP(&txFilename, "out", "o", "", "Write transaction to this file")
+	createCurrencyCmd.Flags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
 	createCurrencyCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
 	createCurrencyCmd.MarkFlagRequired("creator")
 	createCurrencyCmd.MarkFlagRequired("total")
@@ -66,6 +67,7 @@ func init() {
 	destroyCurrencyCmd.Flags().Uint64Var(&firstValid, "firstvalid", 0, "The first round where the transaction may be committed to the ledger")
 	destroyCurrencyCmd.Flags().Uint64Var(&numValidRounds, "validrounds", 0, "The number of rounds for which the transaction will be valid")
 	destroyCurrencyCmd.Flags().StringVarP(&txFilename, "out", "o", "", "Write transaction to this file")
+	destroyCurrencyCmd.Flags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
 	destroyCurrencyCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
 	destroyCurrencyCmd.MarkFlagRequired("creator")
 	destroyCurrencyCmd.MarkFlagRequired("currency")
@@ -81,6 +83,7 @@ func init() {
 	configCurrencyCmd.Flags().Uint64Var(&firstValid, "firstvalid", 0, "The first round where the transaction may be committed to the ledger")
 	configCurrencyCmd.Flags().Uint64Var(&numValidRounds, "validrounds", 0, "The number of rounds for which the transaction will be valid")
 	configCurrencyCmd.Flags().StringVarP(&txFilename, "out", "o", "", "Write transaction to this file")
+	configCurrencyCmd.Flags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
 	configCurrencyCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
 	configCurrencyCmd.MarkFlagRequired("creator")
 	configCurrencyCmd.MarkFlagRequired("currency")
@@ -96,6 +99,7 @@ func init() {
 	sendCurrencyCmd.Flags().Uint64Var(&firstValid, "firstvalid", 0, "The first round where the transaction may be committed to the ledger")
 	sendCurrencyCmd.Flags().Uint64Var(&numValidRounds, "validrounds", 0, "The number of rounds for which the transaction will be valid")
 	sendCurrencyCmd.Flags().StringVarP(&txFilename, "out", "o", "", "Write transaction to this file")
+	sendCurrencyCmd.Flags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
 	sendCurrencyCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
 	sendCurrencyCmd.MarkFlagRequired("creator")
 	sendCurrencyCmd.MarkFlagRequired("currency")
@@ -111,6 +115,7 @@ func init() {
 	freezeCurrencyCmd.Flags().Uint64Var(&firstValid, "firstvalid", 0, "The first round where the transaction may be committed to the ledger")
 	freezeCurrencyCmd.Flags().Uint64Var(&numValidRounds, "validrounds", 0, "The number of rounds for which the transaction will be valid")
 	freezeCurrencyCmd.Flags().StringVarP(&txFilename, "out", "o", "", "Write transaction to this file")
+	freezeCurrencyCmd.Flags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
 	freezeCurrencyCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
 	freezeCurrencyCmd.MarkFlagRequired("freezer")
 	freezeCurrencyCmd.MarkFlagRequired("creator")
@@ -176,7 +181,7 @@ var createCurrencyCmd = &cobra.Command{
 				}
 			}
 		} else {
-			err = writeTxnToFile(client, false, dataDir, walletName, tx, txFilename)
+			err = writeTxnToFile(client, sign, dataDir, walletName, tx, txFilename)
 			if err != nil {
 				reportErrorf(err.Error())
 			}
@@ -232,7 +237,7 @@ var destroyCurrencyCmd = &cobra.Command{
 				}
 			}
 		} else {
-			err = writeTxnToFile(client, false, dataDir, walletName, tx, txFilename)
+			err = writeTxnToFile(client, sign, dataDir, walletName, tx, txFilename)
 			if err != nil {
 				reportErrorf(err.Error())
 			}
@@ -305,7 +310,7 @@ var configCurrencyCmd = &cobra.Command{
 				}
 			}
 		} else {
-			err = writeTxnToFile(client, false, dataDir, walletName, tx, txFilename)
+			err = writeTxnToFile(client, sign, dataDir, walletName, tx, txFilename)
 			if err != nil {
 				reportErrorf(err.Error())
 			}
@@ -375,7 +380,7 @@ var sendCurrencyCmd = &cobra.Command{
 				}
 			}
 		} else {
-			err = writeTxnToFile(client, false, dataDir, walletName, tx, txFilename)
+			err = writeTxnToFile(client, sign, dataDir, walletName, tx, txFilename)
 			if err != nil {
 				reportErrorf(err.Error())
 			}
@@ -428,7 +433,7 @@ var freezeCurrencyCmd = &cobra.Command{
 				}
 			}
 		} else {
-			err = writeTxnToFile(client, false, dataDir, walletName, tx, txFilename)
+			err = writeTxnToFile(client, sign, dataDir, walletName, tx, txFilename)
 			if err != nil {
 				reportErrorf(err.Error())
 			}
