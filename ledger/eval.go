@@ -367,8 +367,8 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	// If we had a non-zero Group value, check that all group members are present.
 	if group.Transactions != nil {
 		if txgroup[0].SignedTxn.Txn.Group != crypto.HashObj(group) {
-			return fmt.Errorf("transactionGroup: incomplete group: %v != %v",
-				txgroup[0].SignedTxn.Txn.Group, crypto.HashObj(group))
+			return fmt.Errorf("transactionGroup: incomplete group: %v != %v (%v)",
+				txgroup[0].SignedTxn.Txn.Group, crypto.HashObj(group), group)
 		}
 	}
 
@@ -551,19 +551,19 @@ func (l *Ledger) eval(ctx context.Context, blk bookkeeping.Block, aux *evalAux, 
 	// TODO: batch tx sig verification: ingest blk.Payset and output a list of ValidatedTx
 
 	// Next, transactions
-	payset, err := blk.DecodePaysetFlat()
+	paysetgroups, err := blk.DecodePaysetGroups()
 	if err != nil {
 		return stateDelta{}, evalAux{}, err
 	}
 
-	for _, txn := range payset {
+	for _, txgroup := range paysetgroups {
 		select {
 		case <-ctx.Done():
 			return stateDelta{}, evalAux{}, ctx.Err()
 		default:
 		}
 
-		err = eval.Transaction(txn.SignedTxn, txn.ApplyData)
+		err = eval.TransactionGroup(txgroup)
 		if err != nil {
 			return stateDelta{}, evalAux{}, err
 		}

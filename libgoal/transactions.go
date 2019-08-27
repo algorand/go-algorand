@@ -18,6 +18,7 @@ package libgoal
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -76,6 +77,15 @@ func (c *Client) BroadcastTransaction(stx transactions.SignedTxn) (txid string, 
 		return
 	}
 	return resp.TxID, nil
+}
+
+// BroadcastTransactionGroup broadcasts a signed transaction group to the network using algod
+func (c *Client) BroadcastTransactionGroup(txgroup []transactions.SignedTxn) error {
+	algod, err := c.ensureAlgodClient()
+	if err != nil {
+		return err
+	}
+	return algod.SendRawTransactionGroup(txgroup)
 }
 
 // SignAndBroadcastTransaction signs the unsigned transaction with keys from the default wallet, and broadcasts it
@@ -219,4 +229,19 @@ func (c *Client) MakeUnsignedGoOfflineTx(address string, round, txValidRounds, f
 		goOfflineTransaction.ResetCaches()
 	}
 	return goOfflineTransaction, nil
+}
+
+// GroupID computes the group ID for a group of transactions.
+func (c *Client) GroupID(txgroup []transactions.Transaction) (gid crypto.Digest, err error) {
+	var group transactions.TxGroup
+	for _, tx := range txgroup {
+		if !tx.Group.IsZero() {
+			err = fmt.Errorf("tx %v already has a group %v", tx, tx.Group)
+			return
+		}
+
+		group.Transactions = append(group.Transactions, crypto.HashObj(tx))
+	}
+
+	return crypto.HashObj(group), nil
 }
