@@ -20,21 +20,7 @@ import (
 	"errors"
 
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/protocol"
 )
-
-type logicBytecodeV1 []byte
-
-func (lsl logicBytecodeV1) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.Program, []byte(lsl)
-}
-
-// HashProgram takes program bytes and returns the Digest
-// This Digest can be used as an Address for a logic controlled account.
-func HashProgram(program []byte) crypto.Digest {
-	pb := logicBytecodeV1(program)
-	return crypto.HashObj(&pb)
-}
 
 // LogicSig contains logic for validating a transaction.
 // LogicSig is signed by an account, allowing delegation of operations.
@@ -79,7 +65,7 @@ func (lsig *LogicSig) Verify(txn *Transaction) error {
 	}
 	if numSigs == 0 {
 		// if the txn.Sender == hash(Logic) then this is a (potentially) valid operation on a contract-only account
-		program := logicBytecodeV1(lsig.Logic)
+		program := Program(lsig.Logic)
 		lhash := crypto.HashObj(&program)
 		if crypto.Digest(txn.Sender) == lhash {
 			return nil
@@ -91,14 +77,14 @@ func (lsig *LogicSig) Verify(txn *Transaction) error {
 	}
 
 	if hasSig {
-		program := logicBytecodeV1(lsig.Logic)
+		program := Program(lsig.Logic)
 		if crypto.SignatureVerifier(txn.Src()).Verify(&program, lsig.Sig) {
 			return nil
 		}
 		return errors.New("logic signature validation failed")
 	}
 	if hasMsig {
-		program := logicBytecodeV1(lsig.Logic)
+		program := Program(lsig.Logic)
 		if ok, _ := crypto.MultisigVerify(&program, crypto.Digest(txn.Src()), lsig.Msig); ok {
 			return nil
 		}

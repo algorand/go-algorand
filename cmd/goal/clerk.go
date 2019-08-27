@@ -17,7 +17,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -488,14 +487,17 @@ func assembleFile(fname string) (program []byte) {
 	if err != nil {
 		reportErrorf("%s: %s\n", fname, err)
 	}
-	pbytes := bytes.Buffer{}
-	ops := logic.OpStream{Out: &pbytes}
+	ops := logic.OpStream{}
 	err = ops.Assemble(fin)
 	if err != nil {
 		reportErrorf("%s: %s\n", fname, err)
 	}
 	fin.Close()
-	return pbytes.Bytes()
+	program, err = ops.Bytes()
+	if err != nil {
+		reportErrorf("%s: %s\n", fname, err)
+	}
+	return program
 }
 
 var compileCmd = &cobra.Command{

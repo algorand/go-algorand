@@ -48,6 +48,7 @@ func (ops *OpStream) tpop() (argType byte) {
 	return
 }
 
+// Intc writes opcodes for loading a uint64 constant onto the stack.
 func (ops *OpStream) Intc(constIndex uint) error {
 	switch constIndex {
 	case 0:
@@ -87,6 +88,7 @@ func (ops *OpStream) Uint(val uint64) error {
 	return ops.Intc(constIndex)
 }
 
+// Bytec writes opcodes for loading a []byte constant onto the stack.
 func (ops *OpStream) Bytec(constIndex uint) error {
 	switch constIndex {
 	case 0:
@@ -462,9 +464,9 @@ func typecheck(expected, got byte) bool {
 	return expected == got
 }
 
-// Assemble reads text from an input and writes bytecode out.
-// Single pass assembler, no forward references.
+// Assemble reads text from an input and accumulates the program
 func (ops *OpStream) Assemble(fin io.Reader) error {
+	// Single pass assembler, no forward references.
 	scanner := bufio.NewScanner(fin)
 	lineNumber := 0
 	for scanner.Scan() {
@@ -510,6 +512,7 @@ func (ops *OpStream) Assemble(fin io.Reader) error {
 	return nil
 }
 
+// Bytes returns the finished program bytes
 func (ops *OpStream) Bytes() (program []byte, err error) {
 	var scratch [11]byte
 	prebytes := bytes.Buffer{}
