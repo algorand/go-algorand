@@ -19,10 +19,6 @@ package main
 import (
 	"fmt"
 
-	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/protocol"
-
 	"github.com/spf13/cobra"
 )
 
@@ -148,25 +144,10 @@ var createCurrencyCmd = &cobra.Command{
 		accountList := makeAccountsList(dataDir)
 		creator := accountList.getAddressByName(currencyCreator)
 
-		creatorRaw, err := basics.UnmarshalChecksumAddress(creator)
+		tx, err := client.MakeUnsignedCurrencyCreateTx(currencyTotal, currencyFrozen, creator, creator, creator, creator, currencyUnitName)
 		if err != nil {
-			reportErrorf("Cannot parse address %s: %s", creator, err)
+			reportErrorf("Cannot construct transaction: %s", err)
 		}
-
-		var tx transactions.Transaction
-		tx.Type = protocol.CurrencyConfigTx
-		tx.CurrencyParams = basics.CurrencyParams{
-			Total:         currencyTotal,
-			DefaultFrozen: currencyFrozen,
-			Manager:       creatorRaw,
-			Reserve:       creatorRaw,
-			Freeze:        creatorRaw,
-			Clawback:      creatorRaw,
-		}
-		if len(currencyUnitName) > len(tx.CurrencyParams.UnitName) {
-			reportErrorf("Currency unit name %s too long (max %d bytes)", currencyUnitName, len(tx.CurrencyParams.UnitName))
-		}
-		copy(tx.CurrencyParams.UnitName[:], []byte(currencyUnitName))
 
 		tx, err = client.FillUnsignedTxTemplate(creator, firstValid, numValidRounds, fee, tx)
 		if err != nil {
@@ -219,16 +200,9 @@ var destroyCurrencyCmd = &cobra.Command{
 		creator := accountList.getAddressByName(currencyCreator)
 		manager := accountList.getAddressByName(currencyManager)
 
-		creatorRaw, err := basics.UnmarshalChecksumAddress(creator)
+		tx, err := client.MakeUnsignedCurrencyDestroyTx(creator, currencyID)
 		if err != nil {
-			reportErrorf("Cannot parse address %s: %s", creator, err)
-		}
-
-		var tx transactions.Transaction
-		tx.Type = protocol.CurrencyConfigTx
-		tx.ConfigCurrency = basics.CurrencyID{
-			Creator: creatorRaw,
-			Index:   currencyID,
+			reportErrorf("Cannot construct transaction: %s", err)
 		}
 
 		tx, err = client.FillUnsignedTxTemplate(manager, firstValid, numValidRounds, fee, tx)
@@ -282,63 +256,26 @@ var configCurrencyCmd = &cobra.Command{
 		creator := accountList.getAddressByName(currencyCreator)
 		manager := accountList.getAddressByName(currencyManager)
 
-		creatorRaw, err := basics.UnmarshalChecksumAddress(creator)
-		if err != nil {
-			reportErrorf("Cannot parse address %s: %s", creator, err)
-		}
-
-		// Fetch the current state, to fill in as a template
-		current, err := client.AccountInformation(creator)
-		if err != nil {
-			reportErrorf(errorRequestFail, err)
-		}
-
-		params, ok := current.CurrencyParams[currencyID]
-		if !ok {
-			reportErrorf("Currency ID %d not found in account %s", currencyID, creator)
-		}
-
-		var tx transactions.Transaction
-		tx.Type = protocol.CurrencyConfigTx
-		tx.ConfigCurrency = basics.CurrencyID{
-			Creator: creatorRaw,
-			Index:   currencyID,
-		}
-
+		var newManager, newReserve, newFreeze, newClawback *string
 		if cmd.Flags().Changed("new-manager") {
-			tx.CurrencyParams.Manager, err = basics.UnmarshalChecksumAddress(currencyNewManager)
-		} else {
-			tx.CurrencyParams.Manager, err = basics.UnmarshalChecksumAddress(params.ManagerAddr)
-		}
-		if err != nil {
-			reportErrorf("Cannot parse address: %s", err)
+			newManager = &currencyNewManager
 		}
 
 		if cmd.Flags().Changed("new-reserve") {
-			tx.CurrencyParams.Reserve, err = basics.UnmarshalChecksumAddress(currencyNewReserve)
-		} else {
-			tx.CurrencyParams.Reserve, err = basics.UnmarshalChecksumAddress(params.ReserveAddr)
-		}
-		if err != nil {
-			reportErrorf("Cannot parse address: %s", err)
+			newReserve = &currencyNewReserve
 		}
 
 		if cmd.Flags().Changed("new-freezer") {
-			tx.CurrencyParams.Freeze, err = basics.UnmarshalChecksumAddress(currencyNewFreezer)
-		} else {
-			tx.CurrencyParams.Freeze, err = basics.UnmarshalChecksumAddress(params.FreezeAddr)
-		}
-		if err != nil {
-			reportErrorf("Cannot parse address: %s", err)
+			newFreeze = &currencyNewFreezer
 		}
 
 		if cmd.Flags().Changed("new-clawback") {
-			tx.CurrencyParams.Clawback, err = basics.UnmarshalChecksumAddress(currencyNewClawback)
-		} else {
-			tx.CurrencyParams.Clawback, err = basics.UnmarshalChecksumAddress(params.ClawbackAddr)
+			newClawback = &currencyNewClawback
 		}
+
+		tx, err := client.MakeUnsignedCurrencyConfigTx(creator, currencyID, newManager, newReserve, newFreeze, newClawback)
 		if err != nil {
-			reportErrorf("Cannot parse address: %s", err)
+			reportErrorf("Cannot construct transaction: %s", err)
 		}
 
 		tx, err = client.FillUnsignedTxTemplate(manager, firstValid, numValidRounds, fee, tx)
@@ -394,42 +331,23 @@ var sendCurrencyCmd = &cobra.Command{
 		toAddressResolved := accountList.getAddressByName(toAddress)
 		creatorResolved := accountList.getAddressByName(currencyCreator)
 
-		var err error
-		var tx transactions.Transaction
-		tx.Type = protocol.CurrencyTransferTx
-		tx.CurrencyAmount = amount
-		tx.XferCurrency = basics.CurrencyID{
-			Index: currencyID,
-		}
-
-		tx.XferCurrency.Creator, err = basics.UnmarshalChecksumAddress(creatorResolved)
-		if err != nil {
-			reportErrorf("Cannot parse currency creator %s: %s", creatorResolved, err)
-		}
-
+		var senderForClawback string
 		if currencyClawback != "" {
-			tx.CurrencySender, err = basics.UnmarshalChecksumAddress(sender)
-			if err != nil {
-				reportErrorf("Cannot parse currency sender %s: %s", sender, err)
-			}
-
+			senderForClawback = sender
 			sender = accountList.getAddressByName(currencyClawback)
 		}
 
-		tx.CurrencyReceiver, err = basics.UnmarshalChecksumAddress(toAddressResolved)
-		if err != nil {
-			reportErrorf("Cannot parse recipient %s: %s", toAddressResolved, err)
-		}
-
+		var closeToAddressResolved string
 		if closeToAddress != "" {
-			closeToAddressResolved := accountList.getAddressByName(closeToAddress)
-			tx.CurrencyCloseTo, err = basics.UnmarshalChecksumAddress(closeToAddressResolved)
-			if err != nil {
-				reportErrorf("Cannot parse close address %s: %s", closeToAddressResolved, err)
-			}
+			closeToAddressResolved = accountList.getAddressByName(closeToAddress)
 		}
 
 		client := ensureFullClient(dataDir)
+		tx, err := client.MakeUnsignedCurrencySendTx(creatorResolved, currencyID, amount, toAddressResolved, closeToAddressResolved, senderForClawback)
+		if err != nil {
+			reportErrorf("Cannot construct transaction: %s", err)
+		}
+
 		tx, err = client.FillUnsignedTxTemplate(sender, firstValid, numValidRounds, fee, tx)
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
@@ -477,26 +395,12 @@ var freezeCurrencyCmd = &cobra.Command{
 		creatorResolved := accountList.getAddressByName(currencyCreator)
 		accountResolved := accountList.getAddressByName(account)
 
-		var err error
-		var tx transactions.Transaction
-		tx.Type = protocol.CurrencyFreezeTx
-		tx.FreezeCurrency = basics.CurrencyID{
-			Index: currencyID,
-		}
-
-		tx.FreezeCurrency.Creator, err = basics.UnmarshalChecksumAddress(creatorResolved)
-		if err != nil {
-			reportErrorf("Cannot parse currency creator %s: %s", creatorResolved, err)
-		}
-
-		tx.CurrencyFrozen = currencyFrozen
-
-		tx.FreezeAccount, err = basics.UnmarshalChecksumAddress(account)
-		if err != nil {
-			reportErrorf("Cannot parse account %s: %s", accountResolved, err)
-		}
-
 		client := ensureFullClient(dataDir)
+		tx, err := client.MakeUnsignedCurrencyFreezeTx(creatorResolved, currencyID, accountResolved, currencyFrozen)
+		if err != nil {
+			reportErrorf("Cannot construct transaction: %s", err)
+		}
+
 		tx, err = client.FillUnsignedTxTemplate(freezer, firstValid, numValidRounds, fee, tx)
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
