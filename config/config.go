@@ -378,6 +378,14 @@ func initConsensusProtocols() {
 
 	// v16 can be upgraded to v17.
 	v16.ApprovedUpgrades[protocol.ConsensusV17] = true
+
+	// ConsensusFuture is used to test features that are implemented
+	// but not yet released in a production protocol version.
+	vFuture := v17
+	vFuture.SupportTxGroups = true
+	vFuture.MaxTxGroupSize = 16
+	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	Consensus[protocol.ConsensusFuture] = vFuture
 }
 
 func initConsensusTestProtocols() {
