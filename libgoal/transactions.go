@@ -398,24 +398,32 @@ func (c *Client) MakeUnsignedCurrencyConfigTx(creator string, index uint64, newM
 		return tx, err
 	}
 
-	tx.CurrencyParams.Manager, err = basics.UnmarshalChecksumAddress(*newManager)
-	if err != nil {
-		return tx, err
+	if *newManager != "" {
+		tx.CurrencyParams.Manager, err = basics.UnmarshalChecksumAddress(*newManager)
+		if err != nil {
+			return tx, err
+		}
 	}
 
-	tx.CurrencyParams.Reserve, err = basics.UnmarshalChecksumAddress(*newReserve)
-	if err != nil {
-		return tx, err
+	if *newReserve != "" {
+		tx.CurrencyParams.Reserve, err = basics.UnmarshalChecksumAddress(*newReserve)
+		if err != nil {
+			return tx, err
+		}
 	}
 
-	tx.CurrencyParams.Freeze, err = basics.UnmarshalChecksumAddress(*newFreeze)
-	if err != nil {
-		return tx, err
+	if *newFreeze != "" {
+		tx.CurrencyParams.Freeze, err = basics.UnmarshalChecksumAddress(*newFreeze)
+		if err != nil {
+			return tx, err
+		}
 	}
 
-	tx.CurrencyParams.Clawback, err = basics.UnmarshalChecksumAddress(*newClawback)
-	if err != nil {
-		return tx, err
+	if *newClawback != "" {
+		tx.CurrencyParams.Clawback, err = basics.UnmarshalChecksumAddress(*newClawback)
+		if err != nil {
+			return tx, err
+		}
 	}
 
 	return tx, nil

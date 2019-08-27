@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -137,8 +138,9 @@ func currencyParams(creator basics.Address, params basics.CurrencyParams) v1.Cur
 		Creator:       creator.String(),
 		Total:         params.Total,
 		DefaultFrozen: params.DefaultFrozen,
-		UnitName:      string(params.UnitName[:]),
 	}
+
+	paramsModel.UnitName = strings.TrimRight(string(params.UnitName[:]), "\x00")
 
 	if !params.Manager.IsZero() {
 		paramsModel.ManagerAddr = params.Manager.String()
