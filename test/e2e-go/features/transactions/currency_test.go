@@ -57,39 +57,39 @@ func TestCurrencyConfig(t *testing.T) {
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
 	defer fixture.Shutdown()
 
-	client0 := fixture.LibGoalClient
-	accountList0, err := fixture.GetWalletsSortedByBalance()
+	client := fixture.LibGoalClient
+	accountList, err := fixture.GetWalletsSortedByBalance()
 	a.NoError(err)
-	account0 := accountList0[0].Address
-	wh, err := client0.GetUnencryptedWalletHandle()
-	a.NoError(err)
-
-	manager, err := client0.GenerateAddress(wh)
+	account0 := accountList[0].Address
+	wh, err := client.GetUnencryptedWalletHandle()
 	a.NoError(err)
 
-	reserve, err := client0.GenerateAddress(wh)
+	manager, err := client.GenerateAddress(wh)
 	a.NoError(err)
 
-	freeze, err := client0.GenerateAddress(wh)
+	reserve, err := client.GenerateAddress(wh)
 	a.NoError(err)
 
-	clawback, err := client0.GenerateAddress(wh)
+	freeze, err := client.GenerateAddress(wh)
+	a.NoError(err)
+
+	clawback, err := client.GenerateAddress(wh)
 	a.NoError(err)
 
 	// Fund the manager, so it can issue transactions later on
-	_, err = client0.SendPaymentFromUnencryptedWallet(account0, manager, 0, 100000000, nil)
+	_, err = client.SendPaymentFromUnencryptedWallet(account0, manager, 0, 100000000, nil)
 	a.NoError(err)
 
 	// There should be no currencies to start with
-	info, err := client0.AccountInformation(account0)
+	info, err := client.AccountInformation(account0)
 	a.NoError(err)
 	a.Equal(len(info.CurrencyParams), 0)
 
 	// Create max number of currencies
 	txids := make(map[string]string)
 	for i := 0; i < config.Consensus[protocol.ConsensusFuture].MaxCurrenciesPerAccount; i++ {
-		tx, err := client0.MakeUnsignedCurrencyCreateTx(1+uint64(i), false, manager, reserve, freeze, clawback, fmt.Sprintf("test%d", i))
-		txid, err := helperFillSignBroadcast(client0, wh, account0, tx, err)
+		tx, err := client.MakeUnsignedCurrencyCreateTx(1+uint64(i), false, manager, reserve, freeze, clawback, fmt.Sprintf("test%d", i))
+		txid, err := helperFillSignBroadcast(client, wh, account0, tx, err)
 		a.NoError(err)
 		txids[txid] = account0
 	}
@@ -99,12 +99,12 @@ func TestCurrencyConfig(t *testing.T) {
 	a.True(confirmed, "creating max number of currencies")
 
 	// Creating more currencies should return an error
-	tx, err := client0.MakeUnsignedCurrencyCreateTx(1, false, manager, reserve, freeze, clawback, fmt.Sprintf("toomany"))
-	_, err = helperFillSignBroadcast(client0, wh, account0, tx, err)
+	tx, err := client.MakeUnsignedCurrencyCreateTx(1, false, manager, reserve, freeze, clawback, fmt.Sprintf("toomany"))
+	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
 	a.Error(err)
 
 	// Check that currencies are visible
-	info, err = client0.AccountInformation(account0)
+	info, err = client.AccountInformation(account0)
 	a.NoError(err)
 	a.Equal(len(info.CurrencyParams), config.Consensus[protocol.ConsensusFuture].MaxCurrenciesPerAccount)
 	var currencies []currencyIDParams
@@ -121,38 +121,38 @@ func TestCurrencyConfig(t *testing.T) {
 	var empty string
 	txids = make(map[string]string)
 
-	tx, err = client0.MakeUnsignedCurrencyConfigTx(account0, currencies[0].idx, &account0, nil, nil, nil)
-	txid, err := helperFillSignBroadcast(client0, wh, manager, tx, err)
+	tx, err = client.MakeUnsignedCurrencyConfigTx(account0, currencies[0].idx, &account0, nil, nil, nil)
+	txid, err := helperFillSignBroadcast(client, wh, manager, tx, err)
 	a.NoError(err)
 	txids[txid] = manager
 
-	tx, err = client0.MakeUnsignedCurrencyConfigTx(account0, currencies[1].idx, nil, &account0, nil, nil)
-	txid, err = helperFillSignBroadcast(client0, wh, manager, tx, err)
+	tx, err = client.MakeUnsignedCurrencyConfigTx(account0, currencies[1].idx, nil, &account0, nil, nil)
+	txid, err = helperFillSignBroadcast(client, wh, manager, tx, err)
 	a.NoError(err)
 	txids[txid] = manager
 
-	tx, err = client0.MakeUnsignedCurrencyConfigTx(account0, currencies[2].idx, nil, nil, &account0, nil)
-	txid, err = helperFillSignBroadcast(client0, wh, manager, tx, err)
+	tx, err = client.MakeUnsignedCurrencyConfigTx(account0, currencies[2].idx, nil, nil, &account0, nil)
+	txid, err = helperFillSignBroadcast(client, wh, manager, tx, err)
 	a.NoError(err)
 	txids[txid] = manager
 
-	tx, err = client0.MakeUnsignedCurrencyConfigTx(account0, currencies[3].idx, nil, nil, nil, &account0)
-	txid, err = helperFillSignBroadcast(client0, wh, manager, tx, err)
+	tx, err = client.MakeUnsignedCurrencyConfigTx(account0, currencies[3].idx, nil, nil, nil, &account0)
+	txid, err = helperFillSignBroadcast(client, wh, manager, tx, err)
 	a.NoError(err)
 	txids[txid] = manager
 
-	tx, err = client0.MakeUnsignedCurrencyConfigTx(account0, currencies[4].idx, nil, &empty, nil, nil)
-	txid, err = helperFillSignBroadcast(client0, wh, manager, tx, err)
+	tx, err = client.MakeUnsignedCurrencyConfigTx(account0, currencies[4].idx, nil, &empty, nil, nil)
+	txid, err = helperFillSignBroadcast(client, wh, manager, tx, err)
 	a.NoError(err)
 	txids[txid] = manager
 
-	tx, err = client0.MakeUnsignedCurrencyConfigTx(account0, currencies[5].idx, nil, nil, &empty, nil)
-	txid, err = helperFillSignBroadcast(client0, wh, manager, tx, err)
+	tx, err = client.MakeUnsignedCurrencyConfigTx(account0, currencies[5].idx, nil, nil, &empty, nil)
+	txid, err = helperFillSignBroadcast(client, wh, manager, tx, err)
 	a.NoError(err)
 	txids[txid] = manager
 
-	tx, err = client0.MakeUnsignedCurrencyConfigTx(account0, currencies[6].idx, nil, nil, nil, &empty)
-	txid, err = helperFillSignBroadcast(client0, wh, manager, tx, err)
+	tx, err = client.MakeUnsignedCurrencyConfigTx(account0, currencies[6].idx, nil, nil, nil, &empty)
+	txid, err = helperFillSignBroadcast(client, wh, manager, tx, err)
 	a.NoError(err)
 	txids[txid] = manager
 
@@ -160,7 +160,7 @@ func TestCurrencyConfig(t *testing.T) {
 	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+5, txids)
 	a.True(confirmed, "changing keys")
 
-	info, err = client0.AccountInformation(account0)
+	info, err = client.AccountInformation(account0)
 	a.NoError(err)
 	a.Equal(len(info.CurrencyParams), config.Consensus[protocol.ConsensusFuture].MaxCurrenciesPerAccount)
 	for idx, cp := range info.CurrencyParams {
@@ -198,18 +198,18 @@ func TestCurrencyConfig(t *testing.T) {
 	}
 
 	// Should not be able to close account before destroying currencies
-	_, err = client0.SendPaymentFromWallet(wh, nil, account0, "", 0, 0, nil, reserve, 0, 0)
+	_, err = client.SendPaymentFromWallet(wh, nil, account0, "", 0, 0, nil, reserve, 0, 0)
 	a.Error(err)
 
 	// Destroy currencies
 	txids = make(map[string]string)
 	for idx := range info.CurrencyParams {
-		tx, err := client0.MakeUnsignedCurrencyDestroyTx(account0, idx)
+		tx, err := client.MakeUnsignedCurrencyDestroyTx(account0, idx)
 		sender := manager
 		if idx == currencies[0].idx {
 			sender = account0
 		}
-		txid, err := helperFillSignBroadcast(client0, wh, sender, tx, err)
+		txid, err := helperFillSignBroadcast(client, wh, sender, tx, err)
 		a.NoError(err)
 		txids[txid] = sender
 	}
@@ -219,6 +219,199 @@ func TestCurrencyConfig(t *testing.T) {
 	a.True(confirmed, "destroying currencies")
 
 	// Should be able to close now
-	_, err = client0.SendPaymentFromWallet(wh, nil, account0, "", 0, 0, nil, reserve, 0, 0)
+	_, err = client.SendPaymentFromWallet(wh, nil, account0, "", 0, 0, nil, reserve, 0, 0)
+	a.NoError(err)
+}
+
+func TestCurrencySend(t *testing.T) {
+	t.Parallel()
+	a := require.New(t)
+
+	var fixture fixtures.RestClientFixture
+	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
+	defer fixture.Shutdown()
+
+	client := fixture.LibGoalClient
+	accountList, err := fixture.GetWalletsSortedByBalance()
+	a.NoError(err)
+	account0 := accountList[0].Address
+	wh, err := client.GetUnencryptedWalletHandle()
+	a.NoError(err)
+
+	manager, err := client.GenerateAddress(wh)
+	a.NoError(err)
+
+	reserve, err := client.GenerateAddress(wh)
+	a.NoError(err)
+
+	freeze, err := client.GenerateAddress(wh)
+	a.NoError(err)
+
+	clawback, err := client.GenerateAddress(wh)
+	a.NoError(err)
+
+	extra, err := client.GenerateAddress(wh)
+	a.NoError(err)
+
+	// Fund the manager, freeze, clawback, and extra, so they can issue transactions later on
+	_, err = client.SendPaymentFromUnencryptedWallet(account0, manager, 0, 100000000, nil)
+	a.NoError(err)
+	_, err = client.SendPaymentFromUnencryptedWallet(account0, freeze, 0, 100000000, nil)
+	a.NoError(err)
+	_, err = client.SendPaymentFromUnencryptedWallet(account0, clawback, 0, 100000000, nil)
+	a.NoError(err)
+	_, err = client.SendPaymentFromUnencryptedWallet(account0, extra, 0, 100000000, nil)
+	a.NoError(err)
+
+	// Create two currencies: one with default-freeze, and one without default-freeze
+	txids := make(map[string]string)
+
+	tx, err := client.MakeUnsignedCurrencyCreateTx(100, false, manager, reserve, freeze, clawback, "nofreeze")
+	txid, err := helperFillSignBroadcast(client, wh, account0, tx, err)
+	a.NoError(err)
+	txids[txid] = account0
+
+	tx, err = client.MakeUnsignedCurrencyCreateTx(100, true, manager, reserve, freeze, clawback, "frozen")
+	txid, err = helperFillSignBroadcast(client, wh, account0, tx, err)
+	a.NoError(err)
+	txids[txid] = account0
+
+	_, curRound := fixture.GetBalanceAndRound(account0)
+	confirmed := fixture.WaitForAllTxnsToConfirm(curRound+5, txids)
+	a.True(confirmed, "creating currencies")
+
+	info, err := client.AccountInformation(account0)
+	a.NoError(err)
+	a.Equal(len(info.CurrencyParams), 2)
+	var frozenIdx, nonFrozenIdx uint64
+	for idx, cp := range info.CurrencyParams {
+		if cp.UnitName == "frozen" {
+			frozenIdx = idx
+		}
+
+		if cp.UnitName == "nofreeze" {
+			nonFrozenIdx = idx
+		}
+	}
+
+	// Sending currency to account that hasn't opted in should fail, but
+	// after opting in, should succeed for non-frozen currency.
+	tx, err = client.MakeUnsignedCurrencySendTx(account0, nonFrozenIdx, 1, extra, "", "")
+	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
+	a.Error(err)
+
+	txids = make(map[string]string)
+	tx, err = client.MakeUnsignedCurrencySendTx(account0, frozenIdx, 0, extra, "", "")
+	txid, err = helperFillSignBroadcast(client, wh, extra, tx, err)
+	a.NoError(err)
+	txids[txid] = extra
+
+	tx, err = client.MakeUnsignedCurrencySendTx(account0, nonFrozenIdx, 0, extra, "", "")
+	txid, err = helperFillSignBroadcast(client, wh, extra, tx, err)
+	a.NoError(err)
+	txids[txid] = extra
+
+	tx, err = client.MakeUnsignedCurrencySendTx(account0, frozenIdx, 1, extra, "", "")
+	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
+	a.Error(err)
+
+	tx, err = client.MakeUnsignedCurrencySendTx(account0, nonFrozenIdx, 10, extra, "", "")
+	txid, err = helperFillSignBroadcast(client, wh, account0, tx, err)
+	a.NoError(err)
+	txids[txid] = account0
+
+	_, curRound = fixture.GetBalanceAndRound(account0)
+	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+5, txids)
+	a.True(confirmed, "creating currency slots")
+
+	info, err = client.AccountInformation(extra)
+	a.NoError(err)
+	a.Equal(len(info.Currencies), 2)
+	a.Equal(info.Currencies[frozenIdx].Amount, uint64(0))
+	a.Equal(info.Currencies[frozenIdx].Frozen, true)
+	a.Equal(info.Currencies[nonFrozenIdx].Amount, uint64(10))
+	a.Equal(info.Currencies[nonFrozenIdx].Frozen, false)
+
+	// Should not be able to send more than is available
+	tx, err = client.MakeUnsignedCurrencySendTx(account0, nonFrozenIdx, 11, extra, "", "")
+	_, err = helperFillSignBroadcast(client, wh, extra, tx, err)
+	a.Error(err)
+
+	tx, err = client.MakeUnsignedCurrencySendTx(account0, nonFrozenIdx, 10, extra, "", "")
+	_, err = helperFillSignBroadcast(client, wh, extra, tx, err)
+	a.NoError(err)
+
+	// Swap frozen status on the extra account (and the wrong address should not
+	// be able to change frozen status)
+	tx, err = client.MakeUnsignedCurrencyFreezeTx(account0, nonFrozenIdx, extra, true)
+	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
+	a.Error(err)
+
+	tx, err = client.MakeUnsignedCurrencyFreezeTx(account0, nonFrozenIdx, extra, true)
+	_, err = helperFillSignBroadcast(client, wh, freeze, tx, err)
+	a.NoError(err)
+
+	tx, err = client.MakeUnsignedCurrencyFreezeTx(account0, frozenIdx, extra, false)
+	_, err = helperFillSignBroadcast(client, wh, freeze, tx, err)
+	a.NoError(err)
+
+	// Should be able to send money to the now-unfrozen account,
+	// but should not be able to send money from the now-frozen account.
+	tx, err = client.MakeUnsignedCurrencySendTx(account0, frozenIdx, 10, extra, "", "")
+	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
+	a.NoError(err)
+
+	tx, err = client.MakeUnsignedCurrencySendTx(account0, nonFrozenIdx, 1, extra, "", "")
+	_, err = helperFillSignBroadcast(client, wh, extra, tx, err)
+	a.Error(err)
+
+	// Clawback should be able to claim money out of both frozen and non-frozen accounts,
+	// and the wrong address should not be able to clawback.
+	txids = make(map[string]string)
+	tx, err = client.MakeUnsignedCurrencySendTx(account0, frozenIdx, 5, account0, "", extra)
+	txid, err = helperFillSignBroadcast(client, wh, clawback, tx, err)
+	a.NoError(err)
+	txids[txid] = clawback
+
+	tx, err = client.MakeUnsignedCurrencySendTx(account0, nonFrozenIdx, 5, account0, "", extra)
+	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
+	a.Error(err)
+
+	tx, err = client.MakeUnsignedCurrencySendTx(account0, nonFrozenIdx, 5, account0, "", extra)
+	txid, err = helperFillSignBroadcast(client, wh, clawback, tx, err)
+	a.NoError(err)
+	txids[txid] = clawback
+
+	_, curRound = fixture.GetBalanceAndRound(account0)
+	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+5, txids)
+	a.True(confirmed, "clawback")
+
+	// Check that the currency balances are correct
+	info, err = client.AccountInformation(account0)
+	a.NoError(err)
+	a.Equal(len(info.Currencies), 2)
+	a.Equal(info.Currencies[frozenIdx].Amount, uint64(95))
+	a.Equal(info.Currencies[nonFrozenIdx].Amount, uint64(95))
+
+	info, err = client.AccountInformation(extra)
+	a.NoError(err)
+	a.Equal(len(info.Currencies), 2)
+	a.Equal(info.Currencies[frozenIdx].Amount, uint64(5))
+	a.Equal(info.Currencies[nonFrozenIdx].Amount, uint64(5))
+
+	// Should be able to close out currency slots and close entire account.
+	tx, err = client.MakeUnsignedCurrencyFreezeTx(account0, nonFrozenIdx, extra, false)
+	_, err = helperFillSignBroadcast(client, wh, freeze, tx, err)
+	a.NoError(err)
+
+	tx, err = client.MakeUnsignedCurrencySendTx(account0, nonFrozenIdx, 0, "", account0, "")
+	_, err = helperFillSignBroadcast(client, wh, extra, tx, err)
+	a.NoError(err)
+
+	tx, err = client.MakeUnsignedCurrencySendTx(account0, frozenIdx, 0, "", account0, "")
+	_, err = helperFillSignBroadcast(client, wh, extra, tx, err)
+	a.NoError(err)
+
+	_, err = client.SendPaymentFromWallet(wh, nil, extra, "", 0, 0, nil, account0, 0, 0)
 	a.NoError(err)
 }
