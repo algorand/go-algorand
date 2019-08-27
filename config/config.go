@@ -375,9 +375,10 @@ func initConsensusProtocols() {
 	v16.ApprovedUpgrades[protocol.ConsensusV17] = true
 
 	// ConsensusV18 contains the PendingResidueRewards fix.
-	ConsensusV18 := v17
-	ConsensusV18.PendingResidueRewards = true
-	ConsensusV18.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	v18 := v17
+	v18.PendingResidueRewards = true
+	v18.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	Consensus[protocol.ConsensusV18] = v18
 
 	// v17 can be upgraded to v18.
 	v17.ApprovedUpgrades[protocol.ConsensusV18] = true
