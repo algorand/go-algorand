@@ -183,7 +183,7 @@ type ConsensusParams struct {
 	// multi-currency support
 	MultiCurrency bool
 
-	// max subcurrencies per account
+	// max number of currencies per account
 	MaxCurrenciesPerAccount int
 
 	// support sequential transaction counter TxnCounter

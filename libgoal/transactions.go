@@ -446,9 +446,11 @@ func (c *Client) MakeUnsignedCurrencySendTx(creator string, index uint64, amount
 		return tx, err
 	}
 
-	tx.CurrencyReceiver, err = basics.UnmarshalChecksumAddress(recipient)
-	if err != nil {
-		return tx, err
+	if recipient != "" {
+		tx.CurrencyReceiver, err = basics.UnmarshalChecksumAddress(recipient)
+		if err != nil {
+			return tx, err
+		}
 	}
 
 	if closeTo != "" {

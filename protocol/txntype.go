@@ -29,13 +29,13 @@ const (
 	// KeyRegistrationTx indicates a transaction that registers participation keys
 	KeyRegistrationTx TxType = "keyreg"
 
-	// CurrencyConfigTx creates, re-configures, or destroys a sub-currency
+	// CurrencyConfigTx creates, re-configures, or destroys a currency
 	CurrencyConfigTx TxType = "curcfg"
 
-	// CurrencyTransferTx transfers sub-currency units between accounts (optionally closing)
+	// CurrencyTransferTx transfers currency units between accounts (optionally closing)
 	CurrencyTransferTx TxType = "curxfer"
 
-	// CurrencyFreezeTx changes the freeze status of a sub-currency
+	// CurrencyFreezeTx changes the freeze status of a currency
 	CurrencyFreezeTx TxType = "curfrz"
 
 	// UnknownTx signals an error

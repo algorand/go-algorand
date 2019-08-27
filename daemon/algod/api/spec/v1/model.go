@@ -150,22 +150,22 @@ type Account struct {
 	// required: false
 	Participation Participation `json:"participation,omitempty"`
 
-	// CurrencyParams specifies the parameters of sub-currencies created by this account.
+	// CurrencyParams specifies the parameters of currencies created by this account.
 	//
 	// required: false
 	CurrencyParams map[uint64]CurrencyParams `json:"thiscurrencytotal,omitempty"`
 
-	// Currencies specifies the holdings of sub-currencies by this account,
+	// Currencies specifies the holdings of currencies by this account,
 	// indexed by the currency ID.
 	//
 	// required: false
 	Currencies map[uint64]CurrencyHolding `json:"currencies,omitempty"`
 }
 
-// CurrencyParams specifies the parameters for a sub-currency.
+// CurrencyParams specifies the parameters for a currency.
 // swagger:model CurrencyParams
 type CurrencyParams struct {
-	// Creator specifies the address that created this sub-currency.
+	// Creator specifies the address that created this currency.
 	// This is the address where the parameters for this currency
 	// can be found, and also the address where unwanted currency
 	// units can be sent in the worst case.
@@ -173,31 +173,31 @@ type CurrencyParams struct {
 	// required: true
 	Creator string `json:"creator"`
 
-	// Total specifies the total number of units of this sub-currency.
+	// Total specifies the total number of units of this currency.
 	//
 	// required: true
 	Total uint64 `json:"total"`
 
-	// DefaultFrozen specifies whether holdings in this sub-currency
+	// DefaultFrozen specifies whether holdings in this currency
 	// are frozen by default.
 	//
 	// required: false
 	DefaultFrozen bool `json:"defaultfrozen"`
 
-	// UnitName specifies the name of a unit of this sub-currency,
+	// UnitName specifies the name of a unit of this currency,
 	// as supplied by the creator.
 	//
 	// required: false
 	UnitName string `json:"unitname"`
 
 	// ManagerAddr specifies the address used to manage the keys of this
-	// sub-currency and to destroy it.
+	// currency and to destroy it.
 	//
 	// required: false
 	ManagerAddr string `json:"managerkey"`
 
 	// ReserveAddr specifies the address holding reserve (non-minted)
-	// units of this sub-currency.
+	// units of this currency.
 	//
 	// required: false
 	ReserveAddr string `json:"reserveaddr"`
@@ -215,10 +215,10 @@ type CurrencyParams struct {
 	ClawbackAddr string `json:"clawbackaddr"`
 }
 
-// CurrencyHolding specifies the holdings of a particular sub-currency.
+// CurrencyHolding specifies the holdings of a particular currency.
 // swagger:model CurrencyHolding
 type CurrencyHolding struct {
-	// Creator specifies the address that created this sub-currency.
+	// Creator specifies the address that created this currency.
 	// This is the address where the parameters for this currency
 	// can be found, and also the address where unwanted currency
 	// units can be sent in the worst case.

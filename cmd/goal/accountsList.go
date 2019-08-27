@@ -225,7 +225,7 @@ func (accountList *AccountsList) outputAccount(addr string, acctInfo v1.Account,
 		fmt.Printf("\t[%d/%d multisig]", multisigInfo.Threshold, len(multisigInfo.PKs))
 	}
 	if len(acctInfo.CurrencyParams) > 0 {
-		fmt.Printf("\t[created sub-currencies:")
+		fmt.Printf("\t[created currencies:")
 		for curid, params := range acctInfo.CurrencyParams {
 			fmt.Printf(" %d (%d %s)", curid, params.Total, params.UnitName)
 		}
@@ -239,6 +239,6 @@ func (accountList *AccountsList) outputAccount(addr string, acctInfo v1.Account,
 		if bal.Frozen {
 			frozen = " (frozen)"
 		}
-		fmt.Printf("\t%20d units of sub-currency %d%s\n", bal.Amount, curid, frozen)
+		fmt.Printf("\t%20d units of currency %d%s\n", bal.Amount, curid, frozen)
 	}
 }

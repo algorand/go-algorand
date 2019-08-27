@@ -47,8 +47,8 @@ func init() {
 	currencyCmd.AddCommand(infoCurrencyCmd)
 	currencyCmd.AddCommand(freezeCurrencyCmd)
 
-	createCurrencyCmd.Flags().StringVar(&currencyCreator, "creator", "", "Account address for creating a sub-currency")
-	createCurrencyCmd.Flags().Uint64Var(&currencyTotal, "total", 0, "Total amount of tokens for created sub-currency")
+	createCurrencyCmd.Flags().StringVar(&currencyCreator, "creator", "", "Account address for creating a currency")
+	createCurrencyCmd.Flags().Uint64Var(&currencyTotal, "total", 0, "Total amount of tokens for created currency")
 	createCurrencyCmd.Flags().BoolVar(&currencyFrozen, "defaultfrozen", false, "Freeze or not freeze holdings by default")
 	createCurrencyCmd.Flags().StringVar(&currencyUnitName, "unitname", "", "Name for the unit of currency")
 	createCurrencyCmd.Flags().Uint64Var(&fee, "fee", 0, "The transaction fee (automatically determined by default), in microAlgos")
@@ -60,7 +60,7 @@ func init() {
 	createCurrencyCmd.MarkFlagRequired("total")
 
 	destroyCurrencyCmd.Flags().StringVar(&currencyManager, "manager", "", "Manager account to issue the destroy transaction (defaults to creator)")
-	destroyCurrencyCmd.Flags().StringVar(&currencyCreator, "creator", "", "Account address for sub-currency to destroy")
+	destroyCurrencyCmd.Flags().StringVar(&currencyCreator, "creator", "", "Account address for currency to destroy")
 	destroyCurrencyCmd.Flags().Uint64Var(&currencyID, "currency", 0, "Currency ID to destroy")
 	destroyCurrencyCmd.Flags().Uint64Var(&fee, "fee", 0, "The transaction fee (automatically determined by default), in microAlgos")
 	destroyCurrencyCmd.Flags().Uint64Var(&firstValid, "firstvalid", 0, "The first round where the transaction may be committed to the ledger")
@@ -71,7 +71,7 @@ func init() {
 	destroyCurrencyCmd.MarkFlagRequired("currency")
 
 	configCurrencyCmd.Flags().StringVar(&currencyManager, "manager", "", "Manager account to issue the config transaction (defaults to creator)")
-	configCurrencyCmd.Flags().StringVar(&currencyCreator, "creator", "", "Account address for sub-currency to configure")
+	configCurrencyCmd.Flags().StringVar(&currencyCreator, "creator", "", "Account address for currency to configure")
 	configCurrencyCmd.Flags().Uint64Var(&currencyID, "currency", 0, "Currency ID to configure")
 	configCurrencyCmd.Flags().StringVar(&currencyNewManager, "new-manager", "", "New manager address")
 	configCurrencyCmd.Flags().StringVar(&currencyNewReserve, "new-reserve", "", "New reserve address")
@@ -86,12 +86,12 @@ func init() {
 	configCurrencyCmd.MarkFlagRequired("currency")
 
 	sendCurrencyCmd.Flags().StringVar(&currencyClawback, "clawback", "", "Address to issue a clawback transaction from (defaults to no clawback)")
-	sendCurrencyCmd.Flags().StringVar(&currencyCreator, "creator", "", "Account address for sub-currency creator")
-	sendCurrencyCmd.Flags().Uint64Var(&currencyID, "currency", 0, "ID of the sub-currency being transferred")
+	sendCurrencyCmd.Flags().StringVar(&currencyCreator, "creator", "", "Account address for currency creator")
+	sendCurrencyCmd.Flags().Uint64Var(&currencyID, "currency", 0, "ID of the currency being transferred")
 	sendCurrencyCmd.Flags().StringVarP(&account, "from", "f", "", "Account address to send the money from (if not specified, uses default account)")
 	sendCurrencyCmd.Flags().StringVarP(&toAddress, "to", "t", "", "Address to send to money to (required)")
 	sendCurrencyCmd.Flags().Uint64VarP(&amount, "amount", "a", 0, "The amount to be transferred (required), in microAlgos")
-	sendCurrencyCmd.Flags().StringVarP(&closeToAddress, "close-to", "c", "", "Close sub-currency account and send remainder to this address")
+	sendCurrencyCmd.Flags().StringVarP(&closeToAddress, "close-to", "c", "", "Close currency account and send remainder to this address")
 	sendCurrencyCmd.Flags().Uint64Var(&fee, "fee", 0, "The transaction fee (automatically determined by default), in microAlgos")
 	sendCurrencyCmd.Flags().Uint64Var(&firstValid, "firstvalid", 0, "The first round where the transaction may be committed to the ledger")
 	sendCurrencyCmd.Flags().Uint64Var(&numValidRounds, "validrounds", 0, "The number of rounds for which the transaction will be valid")
@@ -103,8 +103,8 @@ func init() {
 	sendCurrencyCmd.MarkFlagRequired("amount")
 
 	freezeCurrencyCmd.Flags().StringVar(&currencyFreezer, "freezer", "", "Address to issue a freeze transaction from")
-	freezeCurrencyCmd.Flags().StringVar(&currencyCreator, "creator", "", "Account address for sub-currency creator")
-	freezeCurrencyCmd.Flags().Uint64Var(&currencyID, "currency", 0, "ID of the sub-currency being transferred")
+	freezeCurrencyCmd.Flags().StringVar(&currencyCreator, "creator", "", "Account address for currency creator")
+	freezeCurrencyCmd.Flags().Uint64Var(&currencyID, "currency", 0, "ID of the currency being transferred")
 	freezeCurrencyCmd.Flags().StringVar(&account, "account", "", "Account address to freeze/unfreeze")
 	freezeCurrencyCmd.Flags().BoolVar(&currencyFrozen, "freeze", false, "Freeze or unfreeze")
 	freezeCurrencyCmd.Flags().Uint64Var(&fee, "fee", 0, "The transaction fee (automatically determined by default), in microAlgos")
@@ -118,7 +118,7 @@ func init() {
 	freezeCurrencyCmd.MarkFlagRequired("account")
 	freezeCurrencyCmd.MarkFlagRequired("freeze")
 
-	infoCurrencyCmd.Flags().Uint64Var(&currencyID, "currency", 0, "ID of the sub-currency to look up")
+	infoCurrencyCmd.Flags().Uint64Var(&currencyID, "currency", 0, "ID of the currency to look up")
 	infoCurrencyCmd.Flags().StringVar(&currencyCreator, "creator", "", "Account address of the currency creator")
 	infoCurrencyCmd.MarkFlagRequired("currency")
 	infoCurrencyCmd.MarkFlagRequired("creator")
@@ -126,7 +126,7 @@ func init() {
 
 var currencyCmd = &cobra.Command{
 	Use:   "currency",
-	Short: "Manage sub-currencies",
+	Short: "Manage currencies",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		// If no arguments passed, we should fallback to help
@@ -136,7 +136,7 @@ var currencyCmd = &cobra.Command{
 
 var createCurrencyCmd = &cobra.Command{
 	Use:   "create",
-	Short: "Create a sub-currency",
+	Short: "Create a currency",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		dataDir := ensureSingleDataDir()
@@ -186,7 +186,7 @@ var createCurrencyCmd = &cobra.Command{
 
 var destroyCurrencyCmd = &cobra.Command{
 	Use:   "destroy",
-	Short: "Destroy a sub-currency",
+	Short: "Destroy a currency",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		dataDir := ensureSingleDataDir()
@@ -242,7 +242,7 @@ var destroyCurrencyCmd = &cobra.Command{
 
 var configCurrencyCmd = &cobra.Command{
 	Use:   "config",
-	Short: "Configure a sub-currency",
+	Short: "Configure a currency",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		dataDir := ensureSingleDataDir()
@@ -315,8 +315,8 @@ var configCurrencyCmd = &cobra.Command{
 
 var sendCurrencyCmd = &cobra.Command{
 	Use:   "send",
-	Short: "Transfer sub-currencies",
-	Long:  "Transfer sub-currency holdings.  Use a zero self-transfer to add a sub-currency to an account in the first place.",
+	Short: "Transfer currencies",
+	Long:  "Transfer currency holdings.  Use a zero self-transfer to add a currency to an account in the first place.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		dataDir := ensureSingleDataDir()
@@ -385,7 +385,7 @@ var sendCurrencyCmd = &cobra.Command{
 
 var freezeCurrencyCmd = &cobra.Command{
 	Use:   "freeze",
-	Short: "Freeze sub-currencies",
+	Short: "Freeze currencies",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		dataDir := ensureSingleDataDir()
@@ -438,7 +438,7 @@ var freezeCurrencyCmd = &cobra.Command{
 
 var infoCurrencyCmd = &cobra.Command{
 	Use:   "info",
-	Short: "Look up current parameters for a sub-currency",
+	Short: "Look up current parameters for a currency",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		dataDir := ensureSingleDataDir()

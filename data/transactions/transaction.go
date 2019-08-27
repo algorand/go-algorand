@@ -235,17 +235,17 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 
 	case protocol.CurrencyConfigTx:
 		if !proto.MultiCurrency {
-			return fmt.Errorf("sub-currency transaction not supported")
+			return fmt.Errorf("currency transaction not supported")
 		}
 
 	case protocol.CurrencyTransferTx:
 		if !proto.MultiCurrency {
-			return fmt.Errorf("sub-currency transaction not supported")
+			return fmt.Errorf("currency transaction not supported")
 		}
 
 	case protocol.CurrencyFreezeTx:
 		if !proto.MultiCurrency {
-			return fmt.Errorf("sub-currency transaction not supported")
+			return fmt.Errorf("currency transaction not supported")
 		}
 
 	default:

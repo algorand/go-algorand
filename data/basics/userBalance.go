@@ -106,12 +106,12 @@ type AccountData struct {
 	VoteLastValid   Round  `codec:"voteLst"`
 	VoteKeyDilution uint64 `codec:"voteKD"`
 
-	// If this account created a sub-currency, CurrencyParams stores
-	// the parameters defining that sub-currency.  The params are indexed
+	// If this account created a currency, CurrencyParams stores
+	// the parameters defining that currency.  The params are indexed
 	// by the Index of the CurrencyID; the Creator is this account's address.
 	//
-	// An account with any sub-currency in CurrencyParams cannot be
-	// closed, until the sub-currency is destroyed.  A sub-currency can
+	// An account with any currency in CurrencyParams cannot be
+	// closed, until the currency is destroyed.  A currency can
 	// be destroyed if this account holds CurrencyParams.Total units
 	// of that currency (in the Currencies array below).
 	//
@@ -160,13 +160,13 @@ type BalanceDetail struct {
 	Accounts    []AccountDetail
 }
 
-// CurrencyID is a name of a sub-currency.
+// CurrencyID is a name of a currency.
 type CurrencyID struct {
 	Creator Address `codec:"c"`
 	Index   uint64  `codec:"i"`
 }
 
-// CurrencyHolding describes a sub-currency held by an account.
+// CurrencyHolding describes a currency held by an account.
 type CurrencyHolding struct {
 	Amount uint64 `codec:"a"`
 	Frozen bool   `codec:"f"`

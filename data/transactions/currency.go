@@ -22,7 +22,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 )
 
-// CurrencyConfigTxnFields captures the fields used for sub-currency
+// CurrencyConfigTxnFields captures the fields used for currency
 // allocation, re-configuration, and destruction.
 type CurrencyConfigTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
@@ -36,14 +36,14 @@ type CurrencyConfigTxnFields struct {
 	CurrencyParams basics.CurrencyParams `codec:"cpar"`
 }
 
-// CurrencyTransferTxnFields captures the fields used for sub-currency transfers.
+// CurrencyTransferTxnFields captures the fields used for currency transfers.
 type CurrencyTransferTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	XferCurrency basics.CurrencyID `codec:"xcid"`
 
-	// CurrencyAmount is the amount of sub-currency to transfer.
-	// A zero amount transferred to self allocates that sub-currency
+	// CurrencyAmount is the amount of currency to transfer.
+	// A zero amount transferred to self allocates that currency
 	// in the account's Currencies map.
 	CurrencyAmount uint64 `codec:"camt"`
 
@@ -56,18 +56,18 @@ type CurrencyTransferTxnFields struct {
 	// CurrencyReceiver is the recipient of the transfer.
 	CurrencyReceiver basics.Address `codec:"crcv"`
 
-	// CurrencyCloseTo indicates that the sub-currency should be removed
+	// CurrencyCloseTo indicates that the currency should be removed
 	// from the account's Currencies map, and specifies where the remaining
 	// currency holdings should be transferred.  It's always valid to transfer
 	// remaining currency holdings to the CurrencyID account.
 	CurrencyCloseTo basics.Address `codec:"cclose"`
 }
 
-// CurrencyFreezeTxnFields captures the fields used for freezing sub-currency slots.
+// CurrencyFreezeTxnFields captures the fields used for freezing currency slots.
 type CurrencyFreezeTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	// Account is the address of the account whose sub-currency
+	// Account is the address of the account whose currency
 	// slot is being frozen or un-frozen.
 	FreezeAccount basics.Address `codec:"cadd"`
 
@@ -110,7 +110,7 @@ func getParams(balances Balances, cid basics.CurrencyID) (basics.CurrencyParams,
 
 func (cc CurrencyConfigTxnFields) apply(header Header, balances Balances, spec SpecialAddresses, ad *ApplyData, txnCounter uint64) error {
 	if cc.ConfigCurrency == (basics.CurrencyID{}) {
-		// Allocating a sub-currency.
+		// Allocating a currency.
 		record, err := balances.Get(header.Sender)
 		if err != nil {
 			return err
@@ -124,7 +124,7 @@ func (cc CurrencyConfigTxnFields) apply(header Header, balances Balances, spec S
 		// Sanity check that there isn't a currency with this counter value.
 		_, present := record.CurrencyParams[newidx]
 		if present {
-			return fmt.Errorf("already found a sub-currency with index %d", newidx)
+			return fmt.Errorf("already found a currency with index %d", newidx)
 		}
 
 		cid := basics.CurrencyID{
@@ -163,16 +163,16 @@ func (cc CurrencyConfigTxnFields) apply(header Header, balances Balances, spec S
 	record.CurrencyParams = cloneParams(record.CurrencyParams)
 
 	if cc.CurrencyParams == (basics.CurrencyParams{}) {
-		// Destroying a sub-currency.  The creator account must hold
-		// the entire outstanding sub-currency amount.
+		// Destroying a currency.  The creator account must hold
+		// the entire outstanding currency amount.
 		if record.Currencies[cc.ConfigCurrency].Amount != params.Total {
-			return fmt.Errorf("cannot destroy sub-currency: holding only %d/%d", record.Currencies[cc.ConfigCurrency].Amount, params.Total)
+			return fmt.Errorf("cannot destroy currency: holding only %d/%d", record.Currencies[cc.ConfigCurrency].Amount, params.Total)
 		}
 
 		delete(record.Currencies, cc.ConfigCurrency)
 		delete(record.CurrencyParams, cc.ConfigCurrency.Index)
 	} else {
-		// Changing keys in a sub-currency.
+		// Changing keys in a currency.
 		if !params.Manager.IsZero() {
 			params.Manager = cc.CurrencyParams.Manager
 		}
@@ -224,10 +224,10 @@ func (ct CurrencyTransferTxnFields) apply(header Header, balances Balances, spec
 		snd.Currencies = clone(snd.Currencies)
 		sndHolding, ok := snd.Currencies[ct.XferCurrency]
 		if !ok {
-			// Allocating a slot for sub-currency (self-transfer of zero amount).
+			// Allocating a slot for currency (self-transfer of zero amount).
 			// Initialize holding with default Frozen value.
 			if clawback {
-				return fmt.Errorf("cannot allocate sub-currency slot via clawback")
+				return fmt.Errorf("cannot allocate currency slot via clawback")
 			}
 
 			params, err := getParams(balances, ct.XferCurrency)
@@ -239,11 +239,11 @@ func (ct CurrencyTransferTxnFields) apply(header Header, balances Balances, spec
 		}
 
 		if sndHolding.Amount < ct.CurrencyAmount {
-			return fmt.Errorf("sub-currency balance %d less than transfer amount %d", sndHolding.Amount, ct.CurrencyAmount)
+			return fmt.Errorf("currency balance %d less than transfer amount %d", sndHolding.Amount, ct.CurrencyAmount)
 		}
 
 		if ct.CurrencyAmount > 0 && sndHolding.Frozen && !clawback {
-			return fmt.Errorf("sub-currency frozen in sender")
+			return fmt.Errorf("currency frozen in sender")
 		}
 
 		sndHolding.Amount -= ct.CurrencyAmount
@@ -265,11 +265,11 @@ func (ct CurrencyTransferTxnFields) apply(header Header, balances Balances, spec
 		rcv.Currencies = clone(rcv.Currencies)
 		rcvHolding, ok := rcv.Currencies[ct.XferCurrency]
 		if !ok {
-			return fmt.Errorf("sub-currency not present in receiver account")
+			return fmt.Errorf("currency not present in receiver account")
 		}
 
 		if ct.CurrencyAmount > 0 && rcvHolding.Frozen {
-			return fmt.Errorf("sub-currency frozen in recipient")
+			return fmt.Errorf("currency frozen in recipient")
 		}
 
 		rcvHolding.Amount += ct.CurrencyAmount
@@ -283,7 +283,7 @@ func (ct CurrencyTransferTxnFields) apply(header Header, balances Balances, spec
 	if ct.CurrencyCloseTo != (basics.Address{}) {
 		// Cannot close currency ID allocated by this account; must use destroy.
 		if ct.XferCurrency.Creator == source {
-			return fmt.Errorf("cannot close sub-currency ID in allocating account")
+			return fmt.Errorf("cannot close currency ID in allocating account")
 		}
 
 		snd, err := balances.Get(source)
@@ -301,7 +301,7 @@ func (ct CurrencyTransferTxnFields) apply(header Header, balances Balances, spec
 
 		if sndHolding.Amount > 0 {
 			if sndHolding.Frozen && !clawback {
-				return fmt.Errorf("sub-currency frozen in sender")
+				return fmt.Errorf("currency frozen in sender")
 			}
 
 			rcv, err := balances.Get(ct.CurrencyCloseTo)
@@ -312,11 +312,11 @@ func (ct CurrencyTransferTxnFields) apply(header Header, balances Balances, spec
 			rcv.Currencies = clone(rcv.Currencies)
 			rcvHolding, ok := rcv.Currencies[ct.XferCurrency]
 			if !ok {
-				return fmt.Errorf("sub-currency not present in close-to account")
+				return fmt.Errorf("currency not present in close-to account")
 			}
 
 			if rcvHolding.Frozen {
-				return fmt.Errorf("sub-currency frozen in recipient")
+				return fmt.Errorf("currency frozen in recipient")
 			}
 
 			rcvHolding.Amount += sndHolding.Amount
