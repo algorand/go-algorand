@@ -3,6 +3,7 @@ package logic
 import (
 	"bytes"
 	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -129,6 +130,7 @@ var opSpecs = []opSpec{
 	{0x00, 0xff, "err", opErr, nil, opNone},
 	{0x01, 0xff, "sha256", opSHA256, []byte{opBytes}, opBytes},
 	{0x02, 0xff, "keccak256", opKeccak256, []byte{opBytes}, opBytes},
+	{0x03, 0xff, "sha512_256", opSHA512_256, []byte{opBytes}, opBytes},
 	{0x08, 0xff, "+", opPlus, []byte{opUint, opUint}, opUint},
 	{0x09, 0xff, "-", opMinus, []byte{opUint, opUint}, opUint},
 	{0x0a, 0xff, "/", opDiv, []byte{opUint, opUint}, opUint},
@@ -261,6 +263,18 @@ func opKeccak256(cx *evalContext) {
 	last := len(cx.stack) - 1
 	hasher := sha3.NewLegacyKeccak256()
 	hash := hasher.Sum(cx.stack[last].Bytes)
+	cx.stack[last].Bytes = hash[:]
+}
+
+// This is the hash commonly used in Algorand in crypto/util.go Hash()
+//
+// It is explicitly implemented here in terms of the specific hash for
+// stability and portability in case the rest of Algorand ever moves
+// to a different default hash. For stability of this language, at
+// that time a new opcode should be made with the new hash.
+func opSHA512_256(cx *evalContext) {
+	last := len(cx.stack) - 1
+	hash := sha512.Sum512_256(cx.stack[last].Bytes)
 	cx.stack[last].Bytes = hash[:]
 }
 
