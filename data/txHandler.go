@@ -205,15 +205,16 @@ func (handler *TxHandler) asyncVerifySignature(arg interface{}) interface{} {
 
 func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) network.OutgoingMessage {
 	dec := protocol.NewDecoderBytes(rawmsg.Data)
-	unverifiedTxGroup := make([]transactions.SignedTxn, 0, 1)
+	ntx := 0
+	unverifiedTxGroup := make([]transactions.SignedTxn, 1)
 	for {
-		if len(unverifiedTxGroup) == cap(unverifiedTxGroup) {
-			n := make([]transactions.SignedTxn, len(unverifiedTxGroup), cap(unverifiedTxGroup)*2)
+		if len(unverifiedTxGroup) == ntx {
+			n := make([]transactions.SignedTxn, len(unverifiedTxGroup)*2)
 			copy(n, unverifiedTxGroup)
 			unverifiedTxGroup = n
 		}
 
-		err := dec.Decode(&unverifiedTxGroup[len(unverifiedTxGroup)])
+		err := dec.Decode(&unverifiedTxGroup[ntx])
 		if err == io.EOF {
 			break
 		}
@@ -221,13 +222,13 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 			logging.Base().Warnf("Received a non-decodable txn: %v", err)
 			return network.OutgoingMessage{Action: network.Disconnect}
 		}
-
-		unverifiedTxGroup = unverifiedTxGroup[:len(unverifiedTxGroup)+1]
+		ntx++
 	}
-	if len(unverifiedTxGroup) == 0 {
+	if ntx == 0 {
 		logging.Base().Warnf("Received empty tx group")
 		return network.OutgoingMessage{Action: network.Disconnect}
 	}
+	unverifiedTxGroup = unverifiedTxGroup[:ntx]
 
 	select {
 	case handler.backlogQueue <- &txBacklogMsg{
