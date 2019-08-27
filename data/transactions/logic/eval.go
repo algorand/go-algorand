@@ -1,3 +1,19 @@
+// Copyright (C) 2019 Algorand, Inc.
+// This file is part of go-algorand
+//
+// go-algorand is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// go-algorand is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
 package logic
 
 import (
@@ -126,6 +142,8 @@ func Eval(logic []byte, params EvalParams) bool {
 }
 
 // ops, some of which have a range of opcode for immediate value
+//
+// Any changes should be reflected in README.md which serves as the language spec.
 var opSpecs = []opSpec{
 	{0x00, 0xff, "err", opErr, nil, opNone},
 	{0x01, 0xff, "sha256", opSHA256, []byte{opBytes}, opBytes},
@@ -172,6 +190,10 @@ var opSpecs = []opSpec{
 	{0x30, 0xff, "arg_3", opArg3, nil, opBytes},
 	{0x31, 0xff, "txn", opTxn, nil, opAny},       // TODO: check output type by subfield retrieved in txn,global,account,txid
 	{0x32, 0xff, "global", opGlobal, nil, opAny}, // TODO: check output type against specific field
+
+	{0x40, 0xff, "bnz", opBnz, []byte{opUint}, opNone},
+	{0x48, 0xff, "pop", opPop, []byte{opAny}, opNone},
+	{0x49, 0xff, "dup", opDup, []byte{opAny}, opAny},
 }
 
 // direct opcode bytes
@@ -625,6 +647,27 @@ func opArg2(cx *evalContext) {
 }
 func opArg3(cx *evalContext) {
 	opArgN(cx, 3)
+}
+
+func opBnz(cx *evalContext) {
+	last := len(cx.stack) - 1
+	cx.nextpc = cx.pc + 2
+	isNonZero := cx.stack[last].Uint != 0
+	cx.stack = cx.stack[:last] // pop
+	if isNonZero {
+		cx.nextpc += int(cx.program[cx.pc+1])
+	}
+}
+
+func opPop(cx *evalContext) {
+	last := len(cx.stack) - 1
+	cx.stack = cx.stack[:last]
+}
+
+func opDup(cx *evalContext) {
+	last := len(cx.stack) - 1
+	sv := cx.stack[last]
+	cx.stack = append(cx.stack, sv)
 }
 
 func (cx *evalContext) txnFieldToStack(txn *transactions.SignedTxn, field uint64) (sv stackValue, err error) {

@@ -1,3 +1,19 @@
+// Copyright (C) 2019 Algorand, Inc.
+// This file is part of go-algorand
+//
+// go-algorand is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// go-algorand is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
 package logic
 
 import (
@@ -81,13 +97,16 @@ byte 0x4242
 btoi
 bytec 1
 len
+bnz there
 bytec 1
 sha512_256
+there:
+pop
 `
 	program, err := AssembleString(text)
 	require.NoError(t, err)
 	// check that compilation is stable over time and we assemble to the same bytes this month that we did last month.
-	expectedBytes, _ := hex.DecodeString("2005b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f26040212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d024242003200320132023203320428292929292a3100310131023103310431053106310731083109310a310b2d2e0102222324252104082209240a230b230c230d230e230f231023112312231323142b1729152903")
+	expectedBytes, _ := hex.DecodeString("2005b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f26040212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d024242003200320132023203320428292929292a3100310131023103310431053106310731083109310a310b2d2e0102222324252104082209240a230b230c230d230e230f231023112312231323142b1729154002290348")
 	if bytes.Compare(expectedBytes, program) != 0 {
 		// this print is for convenience if the program has been changed. the hex string can be copy pasted back in as a new expected result.
 		t.Log(hex.EncodeToString(program))
@@ -160,4 +179,21 @@ func TestAssembleBytes(t *testing.T) {
 		s := hex.EncodeToString(program)
 		require.Equal(t, "26010661626364656628", s)
 	}
+}
+
+func TestAssembleRejectNegJump(t *testing.T) {
+	text := `wat:
+int 1
+bnz wat`
+	program, err := AssembleString(text)
+	require.Error(t, err)
+	require.Nil(t, program)
+}
+
+func TestAssembleRejectUnkLabel(t *testing.T) {
+	text := `int 1
+bnz nowhere`
+	program, err := AssembleString(text)
+	require.Error(t, err)
+	require.Nil(t, program)
 }

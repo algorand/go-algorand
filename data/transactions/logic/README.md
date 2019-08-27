@@ -35,6 +35,7 @@ For two-argument ops, `A` is the previous element on the stack and `B` is the la
 | err | 0x00 | Error. Panic immediately. This is primarily a fencepost against accidental zero bytes getting compiled into programs. |
 | sha256 | 0x01 | Pop bytes X, push bytes sha256 hash of X |
 | keccack256 | 0x02 | Pop bytes X, push bytes keccack256 hash of X |
+| sha512_256 | 0x03 | Pop bytes X, push bytes sha512_256 hash of X |
 | + | 0x08 | Add uint64 A + uint64 B. Panic on overflow |
 | - | 0x09 | Subtract uint64 - uint64 B. Panic if result would be less than 0. |
 | / | 0x0a | Divide uint64 A / uint64  B. Panic if B == 0. |
@@ -113,6 +114,15 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 4 | BlockTime | uint64 |
 
 
+### Flow Control
+
+| Op | Byte | Description |
+| --- | --- | --- |
+| bnz | 0x40 | branch if not zero. next byte is offset if branch is taken. pop uint64 X. if X != 0, next instruction at (current pc + 2 + program[pc+1]) |
+| pop | 0x48 | Pop anything. Discard it. |
+| dup | 0x49 | Any last element of the stack becomes the last two elements of the stack. |
+
+
 # Assembler Syntax
 
 The assembler parses line by line. Ops that just use the stack appear on a line by themselves. Ops that take arguments are the op and then whitespace and then any argument or arguments.
@@ -141,3 +151,16 @@ byte 0x0123456789abcdef...
 `intcblock` may be explictily assembled. It will conflict with the assembler gathering `int` psuedo-ops into a `intcblock` program prefix, but may be used in code only has explicit `intc` references. `intcblock` should be followed by space separated int contsants all on one line.
 
 `bytecblock` may be explicitly assembled. It will conflict with the assembler if there are any `byte` psudo-ops but may be used if only explicit `bytec` references are used. `bytecblock` should be followed with byte contants all on one line, either 'encoding value' pairs (`b64 AAA...`) or 0x prefix or function-style values (`base64(...)`).
+
+## Labels and Branches
+
+A label is defined by any string not some other op or keyword and ending in ':'. A label can be an argument (without the trailing ':') to a branch instruction.
+
+Example:
+```
+int 1
+bnz safe
+err
+safe:
+pop
+```

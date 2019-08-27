@@ -1,3 +1,19 @@
+// Copyright (C) 2019 Algorand, Inc.
+// This file is part of go-algorand
+//
+// go-algorand is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// go-algorand is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
 package logic
 
 import (
@@ -22,6 +38,15 @@ type Writer interface {
 	WriteByte(c byte) error
 }
 
+type labelReference struct {
+	sourceLine int
+
+	// position of the opcode start that refers to the label
+	position int
+
+	label string
+}
+
 // OpStream is destination for program and scratch space
 type OpStream struct {
 	Out     bytes.Buffer
@@ -31,8 +56,25 @@ type OpStream struct {
 
 	// Keep a stack of the types of what we would push and pop to typecheck a program
 	typeStack []byte
+
+	// current sourceLine during assembly
+	sourceLine int
+
+	// map label string to position within Out buffer
+	labels map[string]int
+
+	labelReferences []labelReference
 }
 
+func (ops *OpStream) SetLabelHere(label string) {
+	if ops.labels == nil {
+		ops.labels = make(map[string]int)
+	}
+	ops.labels[label] = ops.Out.Len()
+}
+func (ops *OpStream) ReferToLabel(sourceLine, pc int, label string) {
+	ops.labelReferences = append(ops.labelReferences, labelReference{sourceLine, pc, label})
+}
 func (ops *OpStream) tpush(argType byte) {
 	ops.typeStack = append(ops.typeStack, argType)
 }
@@ -338,6 +380,16 @@ func assembleArg(ops *OpStream, args []string) error {
 	return ops.Arg(val)
 }
 
+func assembleBnz(ops *OpStream, args []string) error {
+	if len(args) != 1 {
+		return errors.New("bnz operation needs label argument")
+	}
+	ops.ReferToLabel(ops.sourceLine, ops.Out.Len(), args[0])
+	ops.Out.WriteByte(0x40)
+	ops.Out.WriteByte(0)
+	return nil
+}
+
 // TxnFieldNames are arguments to the 'txn' and 'txnById' opcodes
 var TxnFieldNames = []string{
 	"Sender", "Fee", "FirstValid", "LastValid", "Note",
@@ -421,6 +473,7 @@ func init() {
 	argOps["arg"] = assembleArg
 	argOps["txn"] = assembleTxn
 	argOps["global"] = assembleGlobal
+	argOps["bnz"] = assembleBnz
 	// TODO: implement account balance lookup
 	//argOps["account"] = assembleAccount
 	// TODO: implement lookup on other transactions (in txn group?)
@@ -466,11 +519,10 @@ func typecheck(expected, got byte) bool {
 
 // Assemble reads text from an input and accumulates the program
 func (ops *OpStream) Assemble(fin io.Reader) error {
-	// Single pass assembler, no forward references.
 	scanner := bufio.NewScanner(fin)
-	lineNumber := 0
+	ops.sourceLine = 0
 	for scanner.Scan() {
-		lineNumber++
+		ops.sourceLine++
 		line := scanner.Text()
 		if len(line) == 0 {
 			continue
@@ -484,7 +536,7 @@ func (ops *OpStream) Assemble(fin io.Reader) error {
 		if ok {
 			err := argf(ops, fields[1:])
 			if err != nil {
-				return lineErr(lineNumber, err)
+				return lineErr(ops.sourceLine, err)
 			}
 			continue
 		}
@@ -494,7 +546,7 @@ func (ops *OpStream) Assemble(fin io.Reader) error {
 			for i, argType := range spec.args {
 				stype := ops.tpop()
 				if !typecheck(argType, stype) {
-					return fmt.Errorf(":%d %s arg %d wanted type %s got %s", lineNumber, spec.name, i, argTypeName(argType), argTypeName(stype))
+					return fmt.Errorf(":%d %s arg %d wanted type %s got %s", ops.sourceLine, spec.name, i, argTypeName(argType), argTypeName(stype))
 				}
 			}
 			if spec.returns != opNone {
@@ -502,13 +554,44 @@ func (ops *OpStream) Assemble(fin io.Reader) error {
 			}
 			err := ops.Out.WriteByte(opcode)
 			if err != nil {
-				return lineErr(lineNumber, err)
+				return lineErr(ops.sourceLine, err)
 			}
 			continue
 		}
-		return fmt.Errorf(":%d unknown opcode %v", lineNumber, opstring)
+		if opstring[len(opstring)-1] == ':' {
+			// create a label
+			ops.SetLabelHere(opstring[:len(opstring)-1])
+			continue
+		}
+		return fmt.Errorf(":%d unknown opcode %v", ops.sourceLine, opstring)
 	}
 	// TODO: warn if expected resulting stack is not len==1 ?
+	return ops.resolveLabels()
+}
+
+func (ops *OpStream) resolveLabels() (err error) {
+	if len(ops.labelReferences) == 0 {
+		return nil
+	}
+	raw := ops.Out.Bytes()
+	for _, lr := range ops.labelReferences {
+		dest, ok := ops.labels[lr.label]
+		if !ok {
+			return fmt.Errorf(":%d reference to undefined label %v", lr.sourceLine, lr.label)
+		}
+		// all branch instructions (currently) are opcode byte and offset byte, and the destination is relative to the next pc as if the branch was a no-op
+		naturalPc := lr.position + 2
+		if dest < naturalPc {
+			return fmt.Errorf(":%d label %v is before reference but only forward jumps are allowed", lr.sourceLine, lr.label)
+		}
+		jump := dest - naturalPc
+		if jump > 127 {
+			return fmt.Errorf(":%d label %v is too far away", lr.sourceLine, lr.label)
+		}
+		raw[lr.position+1] = uint8(jump)
+	}
+	ops.Out.Reset()
+	ops.Out.Write(raw)
 	return nil
 }
 
