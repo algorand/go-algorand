@@ -311,12 +311,6 @@ func TestSignTransaction(t *testing.T) {
 	// require.NoError(t, stx.Verify())
 }
 
-type programHashable []byte
-
-func (ph programHashable) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.Program, []byte(ph)
-}
-
 func TestSignProgram(t *testing.T) {
 	t.Parallel()
 	var f fixtures.KMDFixture
@@ -359,7 +353,7 @@ func TestSignProgram(t *testing.T) {
 	copy(sig[:], resp1.Signature)
 	require.NotEqual(t, sig, crypto.Signature{})
 
-	ph := programHashable(program)
+	ph := transactions.Program(program)
 	require.True(t, secrets.SignatureVerifier.Verify(ph, sig))
 }
 

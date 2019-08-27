@@ -278,7 +278,7 @@ func TestMultisigSignProgram(t *testing.T) {
 	err = protocol.Decode(resp3.Multisig, &msig)
 	require.NoError(t, err)
 
-	ok, err := crypto.MultisigVerify(programHashable(program), crypto.Digest(msigAddr), msig)
+	ok, err := crypto.MultisigVerify(transactions.Program(program), crypto.Digest(msigAddr), msig)
 	require.NoError(t, err)
 	require.True(t, ok)
 }
