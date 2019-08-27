@@ -89,6 +89,6 @@ func BenchmarkTxHandlerProcessDecoded(b *testing.B) {
 	txHandler := MakeTxHandler(tp, l, &mocks.MockNetwork{}, "", crypto.Digest{}, backlogPool)
 	b.StartTimer()
 	for _, signedTxn := range signedTransactions {
-		txHandler.processDecoded(signedTxn)
+		txHandler.processDecoded([]transactions.SignedTxn{signedTxn})
 	}
 }
