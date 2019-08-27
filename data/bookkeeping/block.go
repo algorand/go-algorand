@@ -508,6 +508,31 @@ func (block Block) DecodePaysetFlat() ([]transactions.SignedTxnWithAD, error) {
 	return res, nil
 }
 
+// SignedTxnsToGroups splits a slice of SignedTxns into groups.
+func SignedTxnsToGroups(txns []transactions.SignedTxn) (res [][]transactions.SignedTxn) {
+	var lastGroup []transactions.SignedTxn
+	for _, tx := range txns {
+		if lastGroup != nil && (lastGroup[0].Txn.Group != tx.Txn.Group || lastGroup[0].Txn.Group.IsZero()) {
+			res = append(res, lastGroup)
+			lastGroup = nil
+		}
+
+		lastGroup = append(lastGroup, tx)
+	}
+	if lastGroup != nil {
+		res = append(res, lastGroup)
+	}
+	return res
+}
+
+// SignedTxnGroupsFlatten combines all groups into a flat slice of SignedTxns.
+func SignedTxnGroupsFlatten(txgroups [][]transactions.SignedTxn) (res []transactions.SignedTxn) {
+	for _, txgroup := range txgroups {
+		res = append(res, txgroup...)
+	}
+	return res
+}
+
 // NextVersionInfo returns information about the next expected protocol version.
 // If no upgrade is scheduled, return the current protocol.
 func (bh BlockHeader) NextVersionInfo() (ver protocol.ConsensusVersion, rnd basics.Round, supported bool) {
