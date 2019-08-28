@@ -304,18 +304,22 @@ var configCurrencyCmd = &cobra.Command{
 
 		var newManager, newReserve, newFreeze, newClawback *string
 		if cmd.Flags().Changed("new-manager") {
+			currencyNewManager = accountList.getAddressByName(currencyNewManager)
 			newManager = &currencyNewManager
 		}
 
 		if cmd.Flags().Changed("new-reserve") {
+			currencyNewReserve = accountList.getAddressByName(currencyNewReserve)
 			newReserve = &currencyNewReserve
 		}
 
 		if cmd.Flags().Changed("new-freezer") {
+			currencyNewFreezer = accountList.getAddressByName(currencyNewFreezer)
 			newFreeze = &currencyNewFreezer
 		}
 
 		if cmd.Flags().Changed("new-clawback") {
+			currencyNewClawback = accountList.getAddressByName(currencyNewClawback)
 			newClawback = &currencyNewClawback
 		}
 
