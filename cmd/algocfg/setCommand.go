@@ -31,7 +31,7 @@ import (
 
 var (
 	setParameterArg string
-	setValueArg string
+	setValueArg     string
 )
 
 func init() {
