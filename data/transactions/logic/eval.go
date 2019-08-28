@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"crypto/sha512"
-	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -535,24 +534,9 @@ func opBitNot(cx *evalContext) {
 }
 
 func opIntConstBlock(cx *evalContext) {
-	pos := cx.pc + 1
-	numInts, bytesUsed := binary.Uvarint(cx.program[pos:])
-	if bytesUsed <= 0 {
-		cx.err = fmt.Errorf("could not decode int const block size at pc=%d", pos)
-		return
-	}
-	pos += bytesUsed
-	cx.intc = make([]uint64, numInts)
-	for i := uint64(0); i < numInts; i++ {
-		cx.intc[i], bytesUsed = binary.Uvarint(cx.program[pos:])
-		if bytesUsed <= 0 {
-			cx.err = fmt.Errorf("could not decode int const[%d] at pc=%d", i, pos)
-			return
-		}
-		pos += bytesUsed
-	}
-	cx.nextpc = pos
+	cx.intc, cx.nextpc, cx.err = parseIntcblock(cx.program, cx.pc)
 }
+
 func opIntConstN(cx *evalContext, n uint) {
 	if n >= uint(len(cx.intc)) {
 		cx.err = fmt.Errorf("intc [%d] beyond %d constants", n, len(cx.intc))
@@ -579,25 +563,7 @@ func opIntConst3(cx *evalContext) {
 }
 
 func opByteConstBlock(cx *evalContext) {
-	pos := cx.pc + 1
-	numItems, bytesUsed := binary.Uvarint(cx.program[pos:])
-	if bytesUsed <= 0 {
-		cx.err = fmt.Errorf("could not decode []byte const block size at pc=%d", pos)
-		return
-	}
-	pos += bytesUsed
-	cx.bytec = make([][]byte, numItems)
-	for i := uint64(0); i < numItems; i++ {
-		itemLen, bytesUsed := binary.Uvarint(cx.program[pos:])
-		if bytesUsed <= 0 {
-			cx.err = fmt.Errorf("could not decode []byte const[%d] at pc=%d", i, pos)
-			return
-		}
-		pos += bytesUsed
-		cx.bytec[i] = cx.program[pos : pos+int(itemLen)]
-		pos += int(itemLen)
-	}
-	cx.nextpc = pos
+	cx.bytec, cx.nextpc, cx.err = parseBytecBlock(cx.program, cx.pc)
 }
 func opByteConstN(cx *evalContext, n uint) {
 	if n >= uint(len(cx.bytec)) {

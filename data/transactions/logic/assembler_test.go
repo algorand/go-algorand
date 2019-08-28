@@ -24,16 +24,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Check that assembly output is stable across time.
-func TestAssemble(t *testing.T) {
-	// UPDATE PROCEDURE:
-	// Run test. It should pass. If test is not passing, do not change this test, fix the assembler first.
-	// Extend this test program text. It is preferrable to append instructions to the end so that the program byte hex is visually similar and also simply extended by some new bytes.
-	// Copy hex string from failing test output into source.
-	// Run test. It should pass.
-	//
-	// This doesn't have to be a sensible program to run, it just has to compile.
-	text := `err
+// used by TestAssemble and others, see UPDATE PROCEDURE in TestAssemble()
+const bigTestAssembleNonsenseProgram = `err
 global Round
 global MinTxnFee
 global MinBalance
@@ -103,7 +95,17 @@ sha512_256
 there:
 pop
 `
-	program, err := AssembleString(text)
+
+// Check that assembly output is stable across time.
+func TestAssemble(t *testing.T) {
+	// UPDATE PROCEDURE:
+	// Run test. It should pass. If test is not passing, do not change this test, fix the assembler first.
+	// Extend this test program text. It is preferrable to append instructions to the end so that the program byte hex is visually similar and also simply extended by some new bytes.
+	// Copy hex string from failing test output into source.
+	// Run test. It should pass.
+	//
+	// This doesn't have to be a sensible program to run, it just has to compile.
+	program, err := AssembleString(bigTestAssembleNonsenseProgram)
 	require.NoError(t, err)
 	// check that compilation is stable over time and we assemble to the same bytes this month that we did last month.
 	expectedBytes, _ := hex.DecodeString("2005b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f26040212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d024242003200320132023203320428292929292a3100310131023103310431053106310731083109310a310b2d2e0102222324252104082209240a230b230c230d230e230f231023112312231323142b1729154002290348")
@@ -196,4 +198,65 @@ bnz nowhere`
 	program, err := AssembleString(text)
 	require.Error(t, err)
 	require.Nil(t, program)
+}
+
+func TestAssembleDisassemble(t *testing.T) {
+	// Specifically constructed program text that should be recreated by Disassemble()
+	// TODO: disassemble to int/byte psuedo-ops instead of raw intcblock/bytecblock/intc/bytec
+	text := `intcblock 0 1 2 3 4 5
+bytecblock 0xcafed00d 0x1337 0x2001 0xdeadbeef 0x70077007
+intc_1
+intc_0
++
+intc 4
+*
+bytec_1
+bytec_0
+==
+bytec 4
+len
++
+arg_0
+len
+arg 5
+len
++
+global Round
+global MinTxnFee
+global MinBalance
+global MaxTxnLife
+global TimeStamp
+txn Sender
+txn Fee
+txn FirstValid
+txn LastValid
+txn Note
+txn Receiver
+txn Amount
+txn CloseRemainderTo
+txn VotePK
+txn SelectionPK
+txn VoteFirst
+txn VoteLast
+`
+	program, err := AssembleString(text)
+	require.NoError(t, err)
+	t2, err := Disassemble(program)
+	require.Equal(t, text, t2)
+	require.NoError(t, err)
+}
+
+func TestAssembleDisassembleCycle(t *testing.T) {
+	// Test that disassembly re-assembles to the same program bytes.
+	// It disassembly won't necessarily perfectly recreate the source text, but assembling the result of Disassemble() should be the same program bytes.
+	program, err := AssembleString(bigTestAssembleNonsenseProgram)
+	require.NoError(t, err)
+	t2, err := Disassemble(program)
+	require.NoError(t, err)
+	p2, err := AssembleString(t2)
+	if err != nil {
+		t.Log(t2)
+	}
+	require.NoError(t, err)
+	require.Equal(t, program, p2)
 }

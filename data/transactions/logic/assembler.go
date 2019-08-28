@@ -215,12 +215,6 @@ func (ops *OpStream) Global(val uint64) error {
 	return nil
 }
 
-// simpleOps are just an opcode, no immediate, working on the stack
-var simpleOps map[string]byte
-
-// argOps take an immediate value and need to parse that argument from assembler code
-var argOps map[string]func(*OpStream, []string) error
-
 func assembleInt(ops *OpStream, args []string) error {
 	val, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
@@ -454,11 +448,17 @@ var AccountFieldNames = []string{
 }
 var accountFields map[string]uint
 
+// opcodesByName maps name to base opcode. Sometimes this is all we need.
+var opcodesByName map[string]byte
+
+// argOps take an immediate value and need to parse that argument from assembler code
+var argOps map[string]func(*OpStream, []string) error
+
 func init() {
-	simpleOps = make(map[string]byte)
+	opcodesByName = make(map[string]byte)
 	for _, oi := range opSpecs {
 		if oi.mask == 0xff {
-			simpleOps[oi.name] = oi.opcode
+			opcodesByName[oi.name] = oi.opcode
 		}
 	}
 
@@ -540,7 +540,7 @@ func (ops *OpStream) Assemble(fin io.Reader) error {
 			}
 			continue
 		}
-		opcode, ok := simpleOps[opstring]
+		opcode, ok := opcodesByName[opstring]
 		if ok {
 			spec := opsByOpcode[opcode]
 			for i, argType := range spec.args {
@@ -648,4 +648,211 @@ func AssembleString(text string) ([]byte, error) {
 		return nil, err
 	}
 	return ops.Bytes()
+}
+
+type disassembleState struct {
+	program       []byte
+	pc            int
+	out           io.Writer
+	labelCount    int
+	pendingLabels map[int]string
+
+	nextpc int
+	err    error
+}
+
+func (dis *disassembleState) putLabel(label string, target int) {
+	if dis.pendingLabels == nil {
+		dis.pendingLabels = make(map[int]string)
+	}
+	dis.pendingLabels[target] = label
+}
+
+type disassembleFunc func(dis *disassembleState)
+
+type disassembler struct {
+	name    string
+	handler disassembleFunc
+}
+
+var disassemblers = []disassembler{
+	{"intcblock", disIntcblock},
+	{"intc", disIntc},
+	{"bytecblock", disBytecblock},
+	{"bytec", disBytec},
+	{"arg", disArg},
+	{"txn", disTxn},
+	{"global", disGlobal},
+	{"bnz", disBnz},
+}
+
+var disByName map[string]disassembler
+
+func init() {
+	disByName = make(map[string]disassembler)
+	for _, dis := range disassemblers {
+		disByName[dis.name] = dis
+	}
+}
+
+func parseIntcblock(program []byte, pc int) (intc []uint64, nextpc int, err error) {
+	pos := pc + 1
+	numInts, bytesUsed := binary.Uvarint(program[pos:])
+	if bytesUsed <= 0 {
+		err = fmt.Errorf("could not decode int const block size at pc=%d", pos)
+		return
+	}
+	pos += bytesUsed
+	intc = make([]uint64, numInts)
+	for i := uint64(0); i < numInts; i++ {
+		intc[i], bytesUsed = binary.Uvarint(program[pos:])
+		if bytesUsed <= 0 {
+			err = fmt.Errorf("could not decode int const[%d] at pc=%d", i, pos)
+			return
+		}
+		pos += bytesUsed
+	}
+	nextpc = pos
+	return
+}
+
+func parseBytecBlock(program []byte, pc int) (bytec [][]byte, nextpc int, err error) {
+	pos := pc + 1
+	numItems, bytesUsed := binary.Uvarint(program[pos:])
+	if bytesUsed <= 0 {
+		err = fmt.Errorf("could not decode []byte const block size at pc=%d", pos)
+		return
+	}
+	pos += bytesUsed
+	bytec = make([][]byte, numItems)
+	for i := uint64(0); i < numItems; i++ {
+		itemLen, bytesUsed := binary.Uvarint(program[pos:])
+		if bytesUsed <= 0 {
+			err = fmt.Errorf("could not decode []byte const[%d] at pc=%d", i, pos)
+			return
+		}
+		pos += bytesUsed
+		bytec[i] = program[pos : pos+int(itemLen)]
+		pos += int(itemLen)
+	}
+	nextpc = pos
+	return
+}
+
+func disIntcblock(dis *disassembleState) {
+	var intc []uint64
+	intc, dis.nextpc, dis.err = parseIntcblock(dis.program, dis.pc)
+	if dis.err != nil {
+		return
+	}
+	_, dis.err = fmt.Fprintf(dis.out, "intcblock")
+	if dis.err != nil {
+		return
+	}
+	for _, iv := range intc {
+		_, dis.err = fmt.Fprintf(dis.out, " %d", iv)
+		if dis.err != nil {
+			return
+		}
+	}
+	_, dis.err = dis.out.Write([]byte("\n"))
+}
+
+func disIntc(dis *disassembleState) {
+	dis.nextpc = dis.pc + 2
+	_, dis.err = fmt.Fprintf(dis.out, "intc %d\n", dis.program[dis.pc+1])
+}
+
+func disBytecblock(dis *disassembleState) {
+	var bytec [][]byte
+	bytec, dis.nextpc, dis.err = parseBytecBlock(dis.program, dis.pc)
+	if dis.err != nil {
+		return
+	}
+	_, dis.err = fmt.Fprintf(dis.out, "bytecblock")
+	if dis.err != nil {
+		return
+	}
+	for _, bv := range bytec {
+		_, dis.err = fmt.Fprintf(dis.out, " 0x%s", hex.EncodeToString(bv))
+		if dis.err != nil {
+			return
+		}
+	}
+	_, dis.err = dis.out.Write([]byte("\n"))
+}
+
+func disBytec(dis *disassembleState) {
+	dis.nextpc = dis.pc + 2
+	_, dis.err = fmt.Fprintf(dis.out, "bytec %d\n", dis.program[dis.pc+1])
+}
+
+func disArg(dis *disassembleState) {
+	dis.nextpc = dis.pc + 2
+	_, dis.err = fmt.Fprintf(dis.out, "arg %d\n", dis.program[dis.pc+1])
+}
+
+func disTxn(dis *disassembleState) {
+	dis.nextpc = dis.pc + 2
+	txarg := dis.program[dis.pc+1]
+	if int(txarg) >= len(TxnFieldNames) {
+		dis.err = fmt.Errorf("invalid txn arg index %d at pc=%d", txarg, dis.pc)
+		return
+	}
+	_, dis.err = fmt.Fprintf(dis.out, "txn %s\n", TxnFieldNames[txarg])
+}
+
+func disGlobal(dis *disassembleState) {
+	dis.nextpc = dis.pc + 2
+	garg := dis.program[dis.pc+1]
+	if int(garg) >= len(GlobalFieldNames) {
+		dis.err = fmt.Errorf("invalid global arg index %d at pc=%d", garg, dis.pc)
+		return
+	}
+	_, dis.err = fmt.Fprintf(dis.out, "global %s\n", GlobalFieldNames[garg])
+}
+
+func disBnz(dis *disassembleState) {
+	dis.nextpc = dis.pc + 2
+	target := int(dis.program[dis.pc+1]) + dis.pc + 2
+	dis.labelCount++
+	label := fmt.Sprintf("label%d", dis.labelCount)
+	dis.putLabel(label, target)
+	_, dis.err = fmt.Fprintf(dis.out, "bnz %s\n", label)
+}
+
+func Disassemble(program []byte) (text string, err error) {
+	out := strings.Builder{}
+	dis := disassembleState{program: program, out: &out}
+	for dis.pc < len(program) {
+		label, hasLabel := dis.pendingLabels[dis.pc]
+		if hasLabel {
+			_, dis.err = fmt.Fprintf(dis.out, "%s:\n", label)
+			if dis.err != nil {
+				return "", dis.err
+			}
+		}
+		op := opsByOpcode[program[dis.pc]]
+		nd, hasDis := disByName[op.name]
+		if hasDis {
+			nd.handler(&dis)
+			if dis.err != nil {
+				return "", dis.err
+			}
+			dis.pc = dis.nextpc
+			continue
+		}
+		if op.name == "" {
+			msg := fmt.Sprintf("invalid opcode %02x at pc=%d", program[dis.pc], dis.pc)
+			out.WriteString(msg)
+			out.WriteRune('\n')
+			text = out.String()
+			err = errors.New(msg)
+			return
+		}
+		out.WriteString(op.name)
+		out.WriteRune('\n')
+		dis.pc++
+	}
+	return out.String(), nil
 }
