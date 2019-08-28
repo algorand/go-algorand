@@ -234,11 +234,4 @@ func (accountList *AccountsList) outputAccount(addr string, acctInfo v1.Account,
 		fmt.Printf("\t*Default")
 	}
 	fmt.Print("\n")
-	for curid, bal := range acctInfo.Currencies {
-		frozen := ""
-		if bal.Frozen {
-			frozen = " (frozen)"
-		}
-		fmt.Printf("\t%20d units of currency %d%s\n", bal.Amount, curid, frozen)
-	}
 }
