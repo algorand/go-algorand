@@ -3,9 +3,6 @@ set -e
 
 export GOPATH=$(go env GOPATH)
 
-# Run `make` to ensure `buildtools` is available
-make -j4
-
 # Flag that we want release handling of genesis files
 export RELEASE_GENESIS_PROCESS=true
 
@@ -17,11 +14,6 @@ pushd ${REPO_DIR}
 
 git checkout rel/nightly
 git merge origin/master -m "FI from master"
-
-# Disabled because we have static genesis files now
-#DEFAULTNETWORK="devnet"
-#${GOPATH}/bin/buildtools genesis ensure --release -n ${DEFAULTNETWORK} --source ${REPO_DIR}/gen/${DEFAULTNETWORK}/genesis.json  --releasedir ${REPO_DIR}/installer/genesis
-#git add ${REPO_DIR}/installer/genesis/${DEFAULTNETWORK}/*
 
 # Update version file for this build
 BUILD_NUMBER=
