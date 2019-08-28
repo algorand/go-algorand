@@ -311,6 +311,52 @@ func TestSignTransaction(t *testing.T) {
 	// require.NoError(t, stx.Verify())
 }
 
+func TestSignProgram(t *testing.T) {
+	t.Parallel()
+	var f fixtures.KMDFixture
+	walletHandleToken := f.SetupWithWallet(t)
+	defer f.Shutdown()
+
+	// Generate a key outside of kmd
+	seed := crypto.Seed{}
+	crypto.RandBytes(seed[:])
+	secrets := crypto.GenerateSignatureSecrets(seed)
+	pk := crypto.Digest(secrets.SignatureVerifier)
+
+	// Import the key
+	req0 := kmdapi.APIV1POSTKeyImportRequest{
+		WalletHandleToken: walletHandleToken,
+		PrivateKey:        crypto.PrivateKey(secrets.SK),
+	}
+	resp0 := kmdapi.APIV1POSTKeyImportResponse{}
+	err := f.Client.DoV1Request(req0, &resp0)
+	require.NoError(t, err)
+
+	program := []byte("blah blah blah, not a real program, just some bytes to sign, kmd does not have a program interpreter to know if the program is legitimate, but it _does_ prefix the program with protocol.Program and we can verify that here below")
+
+	addr := basics.Address(pk)
+
+	// Request a signature
+	req1 := kmdapi.APIV1POSTProgramSignRequest{
+		WalletHandleToken: walletHandleToken,
+		Address:           addr.String(),
+		Program:           program,
+		WalletPassword:    f.WalletPassword,
+	}
+	resp1 := kmdapi.APIV1POSTProgramSignResponse{}
+	err = f.Client.DoV1Request(req1, &resp1)
+	require.NoError(t, err)
+
+	// SignedTxn signature should not be empty
+	require.NotEmpty(t, len(resp1.Signature), 0)
+	var sig crypto.Signature
+	copy(sig[:], resp1.Signature)
+	require.NotEqual(t, sig, crypto.Signature{})
+
+	ph := transactions.Program(program)
+	require.True(t, secrets.SignatureVerifier.Verify(ph, sig))
+}
+
 func BenchmarkSignTransaction(b *testing.B) {
 	var f fixtures.KMDFixture
 	walletHandleToken := f.SetupWithWallet(b)
