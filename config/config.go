@@ -374,14 +374,11 @@ func initConsensusProtocols() {
 	// v16 can be upgraded to v17.
 	v16.ApprovedUpgrades[protocol.ConsensusV17] = true
 
-	// ConsensusV18 adds the ability to make accounts nonparticipating.
-	v18 := v17
-	v18.SupportBecomeNonParticipatingTransactions = true
-	v18.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
-	Consensus[protocol.ConsensusV18] = v18
-
-	// v17 can be upgraded to v18.
-	v17.ApprovedUpgrades[protocol.ConsensusV18] = true
+	// ConsensusVFuture adds the ability to make accounts nonparticipating.
+	vFuture := v17
+	vFuture.SupportBecomeNonParticipatingTransactions = true
+	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	Consensus[protocol.ConsensusVFuture] = vFuture
 
 }
 
