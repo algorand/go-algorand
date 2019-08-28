@@ -1031,8 +1031,8 @@ var partkeyInfoCmd = &cobra.Command{
 
 var markNonparticipatingCmd = &cobra.Command{
 	Use:   "marknonparticipating",
-	Short: "Mark an account as not participating",
-	Long:  "Mark an account as not participating (as opposed to Online or Offline). Once marked, the account can never go online or offline, it is forever nonparticipating.",
+	Short: "Permanently mark an account as not participating (i.e. offline and earns no rewards)",
+	Long:  "Permanently mark an account as not participating (as opposed to Online or Offline). Once marked, the account can never go online or offline, it is forever nonparticipating, and it will never earn rewards on its balance.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 
