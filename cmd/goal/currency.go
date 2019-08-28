@@ -20,6 +20,8 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+
+	"github.com/algorand/go-algorand/libgoal"
 )
 
 var (
@@ -62,7 +64,8 @@ func init() {
 
 	destroyCurrencyCmd.Flags().StringVar(&currencyManager, "manager", "", "Manager account to issue the destroy transaction (defaults to creator)")
 	destroyCurrencyCmd.Flags().StringVar(&currencyCreator, "creator", "", "Account address for currency to destroy")
-	destroyCurrencyCmd.Flags().Uint64Var(&currencyID, "currency", 0, "Currency ID to destroy")
+	destroyCurrencyCmd.Flags().Uint64Var(&currencyID, "currencyid", 0, "Currency ID to destroy")
+	destroyCurrencyCmd.Flags().StringVar(&currencyUnitName, "currency", "", "Unit name of currency to destroy")
 	destroyCurrencyCmd.Flags().Uint64Var(&fee, "fee", 0, "The transaction fee (automatically determined by default), in microAlgos")
 	destroyCurrencyCmd.Flags().Uint64Var(&firstValid, "firstvalid", 0, "The first round where the transaction may be committed to the ledger")
 	destroyCurrencyCmd.Flags().Uint64Var(&numValidRounds, "validrounds", 0, "The number of rounds for which the transaction will be valid")
@@ -70,11 +73,11 @@ func init() {
 	destroyCurrencyCmd.Flags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
 	destroyCurrencyCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
 	destroyCurrencyCmd.MarkFlagRequired("creator")
-	destroyCurrencyCmd.MarkFlagRequired("currency")
 
 	configCurrencyCmd.Flags().StringVar(&currencyManager, "manager", "", "Manager account to issue the config transaction (defaults to creator)")
 	configCurrencyCmd.Flags().StringVar(&currencyCreator, "creator", "", "Account address for currency to configure")
-	configCurrencyCmd.Flags().Uint64Var(&currencyID, "currency", 0, "Currency ID to configure")
+	configCurrencyCmd.Flags().Uint64Var(&currencyID, "currencyid", 0, "Currency ID to configure")
+	configCurrencyCmd.Flags().StringVar(&currencyUnitName, "currency", "", "Unit name of currency to configure")
 	configCurrencyCmd.Flags().StringVar(&currencyNewManager, "new-manager", "", "New manager address")
 	configCurrencyCmd.Flags().StringVar(&currencyNewReserve, "new-reserve", "", "New reserve address")
 	configCurrencyCmd.Flags().StringVar(&currencyNewFreezer, "new-freezer", "", "New freeze address")
@@ -86,11 +89,11 @@ func init() {
 	configCurrencyCmd.Flags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
 	configCurrencyCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
 	configCurrencyCmd.MarkFlagRequired("creator")
-	configCurrencyCmd.MarkFlagRequired("currency")
 
 	sendCurrencyCmd.Flags().StringVar(&currencyClawback, "clawback", "", "Address to issue a clawback transaction from (defaults to no clawback)")
 	sendCurrencyCmd.Flags().StringVar(&currencyCreator, "creator", "", "Account address for currency creator")
-	sendCurrencyCmd.Flags().Uint64Var(&currencyID, "currency", 0, "ID of the currency being transferred")
+	sendCurrencyCmd.Flags().Uint64Var(&currencyID, "currencyid", 0, "ID of the currency being transferred")
+	sendCurrencyCmd.Flags().StringVar(&currencyUnitName, "currency", "", "Unit name of the currency being transferred")
 	sendCurrencyCmd.Flags().StringVarP(&account, "from", "f", "", "Account address to send the money from (if not specified, uses default account)")
 	sendCurrencyCmd.Flags().StringVarP(&toAddress, "to", "t", "", "Address to send to money to (required)")
 	sendCurrencyCmd.Flags().Uint64VarP(&amount, "amount", "a", 0, "The amount to be transferred (required), in microAlgos")
@@ -102,13 +105,13 @@ func init() {
 	sendCurrencyCmd.Flags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
 	sendCurrencyCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
 	sendCurrencyCmd.MarkFlagRequired("creator")
-	sendCurrencyCmd.MarkFlagRequired("currency")
 	sendCurrencyCmd.MarkFlagRequired("to")
 	sendCurrencyCmd.MarkFlagRequired("amount")
 
 	freezeCurrencyCmd.Flags().StringVar(&currencyFreezer, "freezer", "", "Address to issue a freeze transaction from")
 	freezeCurrencyCmd.Flags().StringVar(&currencyCreator, "creator", "", "Account address for currency creator")
-	freezeCurrencyCmd.Flags().Uint64Var(&currencyID, "currency", 0, "ID of the currency being transferred")
+	freezeCurrencyCmd.Flags().Uint64Var(&currencyID, "currencyid", 0, "ID of the currency being frozen")
+	freezeCurrencyCmd.Flags().StringVar(&currencyUnitName, "currency", "", "Unit name of the currency being frozen")
 	freezeCurrencyCmd.Flags().StringVar(&account, "account", "", "Account address to freeze/unfreeze")
 	freezeCurrencyCmd.Flags().BoolVar(&currencyFrozen, "freeze", false, "Freeze or unfreeze")
 	freezeCurrencyCmd.Flags().Uint64Var(&fee, "fee", 0, "The transaction fee (automatically determined by default), in microAlgos")
@@ -119,13 +122,12 @@ func init() {
 	freezeCurrencyCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
 	freezeCurrencyCmd.MarkFlagRequired("freezer")
 	freezeCurrencyCmd.MarkFlagRequired("creator")
-	freezeCurrencyCmd.MarkFlagRequired("currency")
 	freezeCurrencyCmd.MarkFlagRequired("account")
 	freezeCurrencyCmd.MarkFlagRequired("freeze")
 
-	infoCurrencyCmd.Flags().Uint64Var(&currencyID, "currency", 0, "ID of the currency to look up")
+	infoCurrencyCmd.Flags().Uint64Var(&currencyID, "currencyid", 0, "ID of the currency to look up")
+	infoCurrencyCmd.Flags().StringVar(&currencyUnitName, "currency", "", "Unit name of the currency to look up")
 	infoCurrencyCmd.Flags().StringVar(&currencyCreator, "creator", "", "Account address of the currency creator")
-	infoCurrencyCmd.MarkFlagRequired("currency")
 	infoCurrencyCmd.MarkFlagRequired("creator")
 }
 
@@ -137,6 +139,41 @@ var currencyCmd = &cobra.Command{
 		// If no arguments passed, we should fallback to help
 		cmd.HelpFunc()(cmd, args)
 	},
+}
+
+func lookupCurrencyID(cmd *cobra.Command, creator string, client libgoal.Client) {
+	if cmd.Flags().Changed("currencyid") && cmd.Flags().Changed("currency") {
+		reportErrorf("Only one of -currencyid and -currency can be specified")
+	}
+
+	if cmd.Flags().Changed("currencyid") {
+		return
+	}
+
+	if !cmd.Flags().Changed("currency") {
+		reportErrorf("One of -currencyid and -currency must be specified")
+	}
+
+	response, err := client.AccountInformation(creator)
+	if err != nil {
+		reportErrorf(errorRequestFail, err)
+	}
+
+	nmatch := 0
+	for id, params := range response.CurrencyParams {
+		if params.UnitName == currencyUnitName {
+			currencyID = id
+			nmatch++
+		}
+	}
+
+	if nmatch == 0 {
+		reportErrorf("No matches for currency unit name %s in creator %s", currencyUnitName, creator)
+	}
+
+	if nmatch > 1 {
+		reportErrorf("Multiple matches for currency unit name %s in creator %s", currencyUnitName, creator)
+	}
 }
 
 var createCurrencyCmd = &cobra.Command{
@@ -205,6 +242,8 @@ var destroyCurrencyCmd = &cobra.Command{
 		creator := accountList.getAddressByName(currencyCreator)
 		manager := accountList.getAddressByName(currencyManager)
 
+		lookupCurrencyID(cmd, creator, client)
+
 		tx, err := client.MakeUnsignedCurrencyDestroyTx(creator, currencyID)
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
@@ -260,6 +299,8 @@ var configCurrencyCmd = &cobra.Command{
 
 		creator := accountList.getAddressByName(currencyCreator)
 		manager := accountList.getAddressByName(currencyManager)
+
+		lookupCurrencyID(cmd, creator, client)
 
 		var newManager, newReserve, newFreeze, newClawback *string
 		if cmd.Flags().Changed("new-manager") {
@@ -325,6 +366,7 @@ var sendCurrencyCmd = &cobra.Command{
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		dataDir := ensureSingleDataDir()
+		client := ensureFullClient(dataDir)
 		accountList := makeAccountsList(dataDir)
 
 		// Check if from was specified, else use default
@@ -335,6 +377,8 @@ var sendCurrencyCmd = &cobra.Command{
 		sender := accountList.getAddressByName(account)
 		toAddressResolved := accountList.getAddressByName(toAddress)
 		creatorResolved := accountList.getAddressByName(currencyCreator)
+
+		lookupCurrencyID(cmd, creatorResolved, client)
 
 		var senderForClawback string
 		if currencyClawback != "" {
@@ -347,7 +391,6 @@ var sendCurrencyCmd = &cobra.Command{
 			closeToAddressResolved = accountList.getAddressByName(closeToAddress)
 		}
 
-		client := ensureFullClient(dataDir)
 		tx, err := client.MakeUnsignedCurrencySendTx(creatorResolved, currencyID, amount, toAddressResolved, closeToAddressResolved, senderForClawback)
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
@@ -394,13 +437,15 @@ var freezeCurrencyCmd = &cobra.Command{
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		dataDir := ensureSingleDataDir()
+		client := ensureFullClient(dataDir)
 		accountList := makeAccountsList(dataDir)
 
 		freezer := accountList.getAddressByName(currencyFreezer)
 		creatorResolved := accountList.getAddressByName(currencyCreator)
 		accountResolved := accountList.getAddressByName(account)
 
-		client := ensureFullClient(dataDir)
+		lookupCurrencyID(cmd, creatorResolved, client)
+
 		tx, err := client.MakeUnsignedCurrencyFreezeTx(creatorResolved, currencyID, accountResolved, currencyFrozen)
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
@@ -450,6 +495,8 @@ var infoCurrencyCmd = &cobra.Command{
 		client := ensureFullClient(dataDir)
 		accountList := makeAccountsList(dataDir)
 		creator := accountList.getAddressByName(currencyCreator)
+
+		lookupCurrencyID(cmd, creator, client)
 
 		response, err := client.AccountInformation(creator)
 		if err != nil {
