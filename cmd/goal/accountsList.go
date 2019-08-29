@@ -229,6 +229,7 @@ func (accountList *AccountsList) outputAccount(addr string, acctInfo v1.Account,
 		for curid, params := range acctInfo.CurrencyParams {
 			fmt.Printf(" %d (%d %s)", curid, params.Total, params.UnitName)
 		}
+		fmt.Printf("]")
 	}
 	if accountList.isDefault(addr) {
 		fmt.Printf("\t*Default")
