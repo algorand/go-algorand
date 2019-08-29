@@ -101,15 +101,12 @@ func (s *IndexSuite) TestIndexer_GetRoundByTXID() {
 
 func (s *IndexSuite) TestIndexer_GetRoundsByAddress() {
 	var count int
-	for _, txn := range s.txns {
-		if txn.Txn.Sender == s.addrs[0] || txn.Txn.Receiver == s.addrs[0] {
-			count++
-		}
-	}
 
 	res, err := s.idx.GetRoundsByAddress(s.addrs[0].GetUserAddress(), uint64(count))
 	require.NoError(s.T(), err)
-	require.Equal(s.T(), count, len(res))
+
+	// Should be equal to the number of blocks.
+	require.Equal(s.T(), 10, len(res))
 }
 
 func (s *IndexSuite) TestIndexer_DuplicateRounds() {
