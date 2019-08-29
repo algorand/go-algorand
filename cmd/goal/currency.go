@@ -58,6 +58,8 @@ func init() {
 	createCurrencyCmd.Flags().Uint64Var(&numValidRounds, "validrounds", 0, "The number of rounds for which the transaction will be valid")
 	createCurrencyCmd.Flags().StringVarP(&txFilename, "out", "o", "", "Write transaction to this file")
 	createCurrencyCmd.Flags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
+	createCurrencyCmd.Flags().StringVar(&noteBase64, "noteb64", "", "Note (URL-base64 encoded)")
+	createCurrencyCmd.Flags().StringVarP(&noteText, "note", "n", "", "Note text (ignored if --noteb64 used also)")
 	createCurrencyCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
 	createCurrencyCmd.MarkFlagRequired("creator")
 	createCurrencyCmd.MarkFlagRequired("total")
@@ -71,6 +73,8 @@ func init() {
 	destroyCurrencyCmd.Flags().Uint64Var(&numValidRounds, "validrounds", 0, "The number of rounds for which the transaction will be valid")
 	destroyCurrencyCmd.Flags().StringVarP(&txFilename, "out", "o", "", "Write transaction to this file")
 	destroyCurrencyCmd.Flags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
+	destroyCurrencyCmd.Flags().StringVar(&noteBase64, "noteb64", "", "Note (URL-base64 encoded)")
+	destroyCurrencyCmd.Flags().StringVarP(&noteText, "note", "n", "", "Note text (ignored if --noteb64 used also)")
 	destroyCurrencyCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
 	destroyCurrencyCmd.MarkFlagRequired("creator")
 
@@ -87,6 +91,8 @@ func init() {
 	configCurrencyCmd.Flags().Uint64Var(&numValidRounds, "validrounds", 0, "The number of rounds for which the transaction will be valid")
 	configCurrencyCmd.Flags().StringVarP(&txFilename, "out", "o", "", "Write transaction to this file")
 	configCurrencyCmd.Flags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
+	configCurrencyCmd.Flags().StringVar(&noteBase64, "noteb64", "", "Note (URL-base64 encoded)")
+	configCurrencyCmd.Flags().StringVarP(&noteText, "note", "n", "", "Note text (ignored if --noteb64 used also)")
 	configCurrencyCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
 	configCurrencyCmd.MarkFlagRequired("creator")
 
@@ -103,6 +109,8 @@ func init() {
 	sendCurrencyCmd.Flags().Uint64Var(&numValidRounds, "validrounds", 0, "The number of rounds for which the transaction will be valid")
 	sendCurrencyCmd.Flags().StringVarP(&txFilename, "out", "o", "", "Write transaction to this file")
 	sendCurrencyCmd.Flags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
+	sendCurrencyCmd.Flags().StringVar(&noteBase64, "noteb64", "", "Note (URL-base64 encoded)")
+	sendCurrencyCmd.Flags().StringVarP(&noteText, "note", "n", "", "Note text (ignored if --noteb64 used also)")
 	sendCurrencyCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
 	sendCurrencyCmd.MarkFlagRequired("creator")
 	sendCurrencyCmd.MarkFlagRequired("to")
@@ -119,6 +127,8 @@ func init() {
 	freezeCurrencyCmd.Flags().Uint64Var(&numValidRounds, "validrounds", 0, "The number of rounds for which the transaction will be valid")
 	freezeCurrencyCmd.Flags().StringVarP(&txFilename, "out", "o", "", "Write transaction to this file")
 	freezeCurrencyCmd.Flags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
+	freezeCurrencyCmd.Flags().StringVar(&noteBase64, "noteb64", "", "Note (URL-base64 encoded)")
+	freezeCurrencyCmd.Flags().StringVarP(&noteText, "note", "n", "", "Note text (ignored if --noteb64 used also)")
 	freezeCurrencyCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
 	freezeCurrencyCmd.MarkFlagRequired("freezer")
 	freezeCurrencyCmd.MarkFlagRequired("creator")
@@ -191,6 +201,8 @@ var createCurrencyCmd = &cobra.Command{
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
 
+		tx.Note = parseNoteField(cmd)
+
 		tx, err = client.FillUnsignedTxTemplate(creator, firstValid, numValidRounds, fee, tx)
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
@@ -248,6 +260,8 @@ var destroyCurrencyCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
+
+		tx.Note = parseNoteField(cmd)
 
 		tx, err = client.FillUnsignedTxTemplate(manager, firstValid, numValidRounds, fee, tx)
 		if err != nil {
@@ -328,6 +342,8 @@ var configCurrencyCmd = &cobra.Command{
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
 
+		tx.Note = parseNoteField(cmd)
+
 		tx, err = client.FillUnsignedTxTemplate(manager, firstValid, numValidRounds, fee, tx)
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
@@ -400,6 +416,8 @@ var sendCurrencyCmd = &cobra.Command{
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
 
+		tx.Note = parseNoteField(cmd)
+
 		tx, err = client.FillUnsignedTxTemplate(sender, firstValid, numValidRounds, fee, tx)
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
@@ -454,6 +472,8 @@ var freezeCurrencyCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
+
+		tx.Note = parseNoteField(cmd)
 
 		tx, err = client.FillUnsignedTxTemplate(freezer, firstValid, numValidRounds, fee, tx)
 		if err != nil {
