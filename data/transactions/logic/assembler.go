@@ -55,7 +55,7 @@ type OpStream struct {
 	bytec   [][]byte
 
 	// Keep a stack of the types of what we would push and pop to typecheck a program
-	typeStack []byte
+	typeStack []StackType
 
 	// current sourceLine during assembly
 	sourceLine int
@@ -66,22 +66,26 @@ type OpStream struct {
 	labelReferences []labelReference
 }
 
+// SetLabelHere inserts a label reference to point to the next instruction
 func (ops *OpStream) SetLabelHere(label string) {
 	if ops.labels == nil {
 		ops.labels = make(map[string]int)
 	}
 	ops.labels[label] = ops.Out.Len()
 }
+
+// ReferToLabel records an opcode label refence to resolve later
 func (ops *OpStream) ReferToLabel(sourceLine, pc int, label string) {
 	ops.labelReferences = append(ops.labelReferences, labelReference{sourceLine, pc, label})
 }
-func (ops *OpStream) tpush(argType byte) {
+
+func (ops *OpStream) tpush(argType StackType) {
 	ops.typeStack = append(ops.typeStack, argType)
 }
 
-func (ops *OpStream) tpop() (argType byte) {
+func (ops *OpStream) tpop() (argType StackType) {
 	if len(ops.typeStack) == 0 {
-		argType = opNone
+		argType = StackNone
 		return
 	}
 	last := len(ops.typeStack) - 1
@@ -108,7 +112,7 @@ func (ops *OpStream) Intc(constIndex uint) error {
 		ops.Out.WriteByte(0x21) // intc
 		ops.Out.WriteByte(uint8(constIndex))
 	}
-	ops.tpush(opUint)
+	ops.tpush(StackUint64)
 	return nil
 }
 
@@ -148,7 +152,7 @@ func (ops *OpStream) Bytec(constIndex uint) error {
 		ops.Out.WriteByte(0x27) // bytec
 		ops.Out.WriteByte(uint8(constIndex))
 	}
-	ops.tpush(opBytes)
+	ops.tpush(StackBytes)
 	return nil
 }
 
@@ -189,7 +193,7 @@ func (ops *OpStream) Arg(val uint64) error {
 		ops.Out.WriteByte(0x2c)
 		ops.Out.WriteByte(uint8(val))
 	}
-	ops.tpush(opBytes)
+	ops.tpush(StackBytes)
 	return nil
 }
 
@@ -391,11 +395,11 @@ var TxnFieldNames = []string{
 	"VoteFirst", "VoteLast", "VoteKeyDilution",
 }
 
-// TxnFieldTypes is opBytes or opUint parallel to TxnFieldNames
-var TxnFieldTypes = []byte{
-	opBytes, opUint, opUint, opUint, opBytes,
-	opBytes, opUint, opBytes, opBytes, opBytes,
-	opUint, opUint, opUint,
+// TxnFieldTypes is StackBytes or StackUint64 parallel to TxnFieldNames
+var TxnFieldTypes = []StackType{
+	StackBytes, StackUint64, StackUint64, StackUint64, StackBytes,
+	StackBytes, StackUint64, StackBytes, StackBytes, StackBytes,
+	StackUint64, StackUint64, StackUint64,
 }
 
 var txnFields map[string]uint
@@ -420,13 +424,13 @@ var GlobalFieldNames = []string{
 	"TimeStamp",
 }
 
-// GlobalFieldTypes is opUint opBytes in parallel with GlobalFieldNames
-var GlobalFieldTypes = []byte{
-	opUint,
-	opUint,
-	opUint,
-	opUint,
-	opUint,
+// GlobalFieldTypes is StackUint64 StackBytes in parallel with GlobalFieldNames
+var GlobalFieldTypes = []StackType{
+	StackUint64,
+	StackUint64,
+	StackUint64,
+	StackUint64,
+	StackUint64,
 }
 
 var globalFields map[string]uint
@@ -456,10 +460,8 @@ var argOps map[string]func(*OpStream, []string) error
 
 func init() {
 	opcodesByName = make(map[string]byte)
-	for _, oi := range opSpecs {
-		if oi.mask == 0xff {
-			opcodesByName[oi.name] = oi.opcode
-		}
+	for _, oi := range OpSpecs {
+		opcodesByName[oi.Name] = oi.Opcode
 	}
 
 	argOps = make(map[string]func(*OpStream, []string) error)
@@ -508,10 +510,10 @@ func lineErr(line int, err error) error {
 	return &lineErrorWrapper{Line: line, Err: err}
 }
 
-func typecheck(expected, got byte) bool {
+func typecheck(expected, got StackType) bool {
 	// Some ops push 'any' and we wait for run time to see what it is.
 	// Some of those 'any' are based on fields that we _could_ know now but haven't written a more detailed system of typecheck for (yet).
-	if (expected == opAny) || (got == opAny) {
+	if (expected == StackAny) || (got == StackAny) {
 		return true
 	}
 	return expected == got
@@ -543,14 +545,14 @@ func (ops *OpStream) Assemble(fin io.Reader) error {
 		opcode, ok := opcodesByName[opstring]
 		if ok {
 			spec := opsByOpcode[opcode]
-			for i, argType := range spec.args {
+			for i, argType := range spec.Args {
 				stype := ops.tpop()
 				if !typecheck(argType, stype) {
-					return fmt.Errorf(":%d %s arg %d wanted type %s got %s", ops.sourceLine, spec.name, i, argTypeName(argType), argTypeName(stype))
+					return fmt.Errorf(":%d %s arg %d wanted type %s got %s", ops.sourceLine, spec.Name, i, argType.String(), stype.String())
 				}
 			}
-			if spec.returns != opNone {
-				ops.tpush(spec.returns)
+			if spec.Returns != StackNone {
+				ops.tpush(spec.Returns)
 			}
 			err := ops.Out.WriteByte(opcode)
 			if err != nil {
@@ -821,6 +823,8 @@ func disBnz(dis *disassembleState) {
 	_, dis.err = fmt.Fprintf(dis.out, "bnz %s\n", label)
 }
 
+// Disassemble produces a text form of program bytes.
+// AssembleString(Disassemble()) should result in the same program bytes.
 func Disassemble(program []byte) (text string, err error) {
 	out := strings.Builder{}
 	dis := disassembleState{program: program, out: &out}
@@ -833,7 +837,7 @@ func Disassemble(program []byte) (text string, err error) {
 			}
 		}
 		op := opsByOpcode[program[dis.pc]]
-		nd, hasDis := disByName[op.name]
+		nd, hasDis := disByName[op.Name]
 		if hasDis {
 			nd.handler(&dis)
 			if dis.err != nil {
@@ -842,7 +846,7 @@ func Disassemble(program []byte) (text string, err error) {
 			dis.pc = dis.nextpc
 			continue
 		}
-		if op.name == "" {
+		if op.Name == "" {
 			msg := fmt.Sprintf("invalid opcode %02x at pc=%d", program[dis.pc], dis.pc)
 			out.WriteString(msg)
 			out.WriteRune('\n')
@@ -850,7 +854,7 @@ func Disassemble(program []byte) (text string, err error) {
 			err = errors.New(msg)
 			return
 		}
-		out.WriteString(op.name)
+		out.WriteString(op.Name)
 		out.WriteRune('\n')
 		dis.pc++
 	}
