@@ -108,7 +108,7 @@ func TestAssemble(t *testing.T) {
 	program, err := AssembleString(bigTestAssembleNonsenseProgram)
 	require.NoError(t, err)
 	// check that compilation is stable over time and we assemble to the same bytes this month that we did last month.
-	expectedBytes, _ := hex.DecodeString("2005b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f26040212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d024242003200320132023203320428292929292a3100310131023103310431053106310731083109310a310b2d2e0102222324252104082209240a230b230c230d230e230f231023112312231323142b1729154002290348")
+	expectedBytes, _ := hex.DecodeString("2005b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f26040212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d024242003200320132023203320428292929292a3100310131023103310431053106310731083109310a310b2d2e0102222324252104082209240a230b230c230d230e230f231023112312231323142b172915400002290348")
 	if bytes.Compare(expectedBytes, program) != 0 {
 		// this print is for convenience if the program has been changed. the hex string can be copy pasted back in as a new expected result.
 		t.Log(hex.EncodeToString(program))

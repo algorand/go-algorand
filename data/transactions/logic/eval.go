@@ -613,11 +613,16 @@ func opArg3(cx *evalContext) {
 
 func opBnz(cx *evalContext) {
 	last := len(cx.stack) - 1
-	cx.nextpc = cx.pc + 2
+	cx.nextpc = cx.pc + 3
 	isNonZero := cx.stack[last].Uint != 0
 	cx.stack = cx.stack[:last] // pop
 	if isNonZero {
-		cx.nextpc += int(cx.program[cx.pc+1])
+		offset := (uint(cx.program[cx.pc+1]) << 8) | uint(cx.program[cx.pc+2])
+		if offset > 0x7fff {
+			cx.err = fmt.Errorf("bnz offset %x too large", offset)
+			return
+		}
+		cx.nextpc += int(offset)
 	}
 }
 

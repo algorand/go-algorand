@@ -385,6 +385,7 @@ func assembleBnz(ops *OpStream, args []string) error {
 	ops.ReferToLabel(ops.sourceLine, ops.Out.Len(), args[0])
 	ops.Out.WriteByte(0x40)
 	ops.Out.WriteByte(0)
+	ops.Out.WriteByte(0)
 	return nil
 }
 
@@ -581,16 +582,17 @@ func (ops *OpStream) resolveLabels() (err error) {
 		if !ok {
 			return fmt.Errorf(":%d reference to undefined label %v", lr.sourceLine, lr.label)
 		}
-		// all branch instructions (currently) are opcode byte and offset byte, and the destination is relative to the next pc as if the branch was a no-op
-		naturalPc := lr.position + 2
+		// all branch instructions (currently) are opcode byte and 2 offset bytes, and the destination is relative to the next pc as if the branch was a no-op
+		naturalPc := lr.position + 3
 		if dest < naturalPc {
 			return fmt.Errorf(":%d label %v is before reference but only forward jumps are allowed", lr.sourceLine, lr.label)
 		}
 		jump := dest - naturalPc
-		if jump > 127 {
+		if jump > 0x7fff {
 			return fmt.Errorf(":%d label %v is too far away", lr.sourceLine, lr.label)
 		}
-		raw[lr.position+1] = uint8(jump)
+		raw[lr.position+1] = uint8(jump >> 8)
+		raw[lr.position+2] = uint8(jump & 0x0ff)
 	}
 	ops.Out.Reset()
 	ops.Out.Write(raw)
@@ -815,8 +817,9 @@ func disGlobal(dis *disassembleState) {
 }
 
 func disBnz(dis *disassembleState) {
-	dis.nextpc = dis.pc + 2
-	target := int(dis.program[dis.pc+1]) + dis.pc + 2
+	dis.nextpc = dis.pc + 3
+	offset := (uint(dis.program[dis.pc+1]) << 8) | uint(dis.program[dis.pc+2])
+	target := int(offset) + dis.pc + 3
 	dis.labelCount++
 	label := fmt.Sprintf("label%d", dis.labelCount)
 	dis.putLabel(label, target)

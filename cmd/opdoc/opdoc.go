@@ -80,12 +80,12 @@ var opcodeExtraList = []stringString{
 	{"arg", "{uint8 arg index N}"},
 	{"txn", "{uint8 transaction field index}"},
 	{"global", "{uint8 global field index}"},
-	{"bnz", "{0..127 forward branch offset}"},
+	{"bnz", "{0..0x7fff forward branch offset, big endian}"},
 }
 var opcodeExtras map[string]string
 
 var opDocExtraList = []stringString{
-	{"bnz", "for a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 2 + N`, else procede to next instruction at `pc + 2`"},
+	{"bnz", "for a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else procede to next instruction at `pc + 3`"},
 	{"intcblock", "`intcblock` loads following program bytes into an array of integer constants in the evaluator. These integer constants can be referred to by `intc` and `intc_*` which will push the value onto the stack."},
 	{"bytecblock", "`bytecblock` loads the following program bytes into an array of byte string constants in the evaluator. These constants can be referred to by `bytec` and `bytec_*` which will push the value onto the stack."},
 }
