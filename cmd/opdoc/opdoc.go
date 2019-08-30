@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/algorand/go-algorand/data/transactions/logic"
 )
@@ -26,10 +27,10 @@ var opDocList = []stringString{
 	{"sha256", "SHA256 hash of value, yields [32]byte"},
 	{"keccak256", "Keccac256 hash of value, yields [32]byte"},
 	{"sha512_256", "SHA512_256 hash of value, yields [32]byte"},
-	{"+", "A plus B"},
-	{"-", "A minus B"},
-	{"/", "A divided by B"},
-	{"*", "A times B"},
+	{"+", "A plus B. Panic on overflow."},
+	{"-", "A minus B. Panic if B > A."},
+	{"/", "A divided by B. Panic if B == 0."},
+	{"*", "A times B. Panic on overflow."},
 	{"<", "A less than B => {0 or 1}"},
 	{">", "A greater than B => {0 or 1}"},
 	{"<=", "A less than or equal to B => {0 or 1}"},
@@ -41,7 +42,7 @@ var opDocList = []stringString{
 	{"!", "X == 0 yields 1; else 0"},
 	{"len", "yields length of byte value"},
 	{"btoi", "converts bytes as big endian to uint64"},
-	{"%", "A modulo B"},
+	{"%", "A modulo B. Panic if B == 0."},
 	{"|", "A bitwise-or B"},
 	{"&", "A bitwise-and B"},
 	{"^", "A bitwise-xor B"},
@@ -92,34 +93,80 @@ var opDocExtraList = []stringString{
 
 var opDocExtras map[string]string
 
+type opGroup struct {
+	groupName string
+	ops       []string
+}
+
+func (og *opGroup) markdownTable(out io.Writer) {
+	fmt.Fprint(out, `| Op | Description |
+| --- | --- | --- |
+`)
+	// TODO: sort by logic.OpSpecs[].Opcode
+	for _, opname := range og.ops {
+		fmt.Fprintf(out, "| `%s` | %s |\n", markdownTableEscape(opname), markdownTableEscape(opDocs[opname]))
+	}
+}
+
+func markdownTableEscape(x string) string {
+	return strings.ReplaceAll(x, "|", "\\|")
+}
+
+var opGroupList = []opGroup{
+	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "==", "!=", "!", "len", "btoi", "%", "|", "&", "^", "~"}},
+	{"Loading Values", []string{"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "global"}},
+	{"Flow Control", []string{"err", "bnz", "pop", "dup"}},
+}
+
+func checkGroupCoverage() {
+	opsSeen := make(map[string]bool)
+	for _, op := range logic.OpSpecs {
+		opsSeen[op.Name] = false
+	}
+	for _, og := range opGroupList {
+		for _, name := range og.ops {
+			_, exists := opsSeen[name]
+			if !exists {
+				fmt.Fprintf(os.Stderr, "error: op %#v in group list but not in logic.OpSpecs\n", name)
+				continue
+			}
+			opsSeen[name] = true
+		}
+	}
+	for name, seen := range opsSeen {
+		if !seen {
+			fmt.Fprintf(os.Stderr, "warning: op %#v not in any group list\n", name)
+		}
+	}
+}
+
 func init() {
 	opDocs = stringStringListToMap(opDocList)
 	opcodeExtras = stringStringListToMap(opcodeExtraList)
 	opDocExtras = stringStringListToMap(opDocExtraList)
 }
 
-func transactionFieldsMarkdown(out io.Writer) {
-	fmt.Fprintf(out, "\n`txn` Fields:\n\n| Index | Name | Type |\n")
+func fieldTableMarkdown(out io.Writer, names []string, types []logic.StackType) {
+	fmt.Fprintf(out, "| Index | Name | Type |\n")
 	fmt.Fprintf(out, "| --- | --- | --- |\n")
-	for i, name := range logic.TxnFieldNames {
-		gfType := logic.TxnFieldTypes[i]
-		fmt.Fprintf(out, "| %d | %s | %s |\n", i, name, gfType.String())
+	for i, name := range names {
+		gfType := types[i]
+		fmt.Fprintf(out, "| %d | %s | %s |\n", i, markdownTableEscape(name), markdownTableEscape(gfType.String()))
 	}
 	out.Write([]byte("\n"))
+}
+
+func transactionFieldsMarkdown(out io.Writer) {
+	fmt.Fprintf(out, "\n`txn` Fields:\n\n")
+	fieldTableMarkdown(out, logic.TxnFieldNames, logic.TxnFieldTypes)
 }
 
 func globalFieldsMarkdown(out io.Writer) {
-	fmt.Fprintf(out, "\n`global` Fields:\n\n| Index | Name | Type |\n")
-	fmt.Fprintf(out, "| --- | --- | --- |\n")
-	for i, name := range logic.GlobalFieldNames {
-		gfType := logic.GlobalFieldTypes[i]
-		fmt.Fprintf(out, "| %d | %s | %s |\n", i, name, gfType.String())
-	}
-	out.Write([]byte("\n"))
+	fmt.Fprintf(out, "\n`global` Fields:\n\n")
+	fieldTableMarkdown(out, logic.GlobalFieldNames, logic.GlobalFieldTypes)
 }
 
 func opToMarkdown(out io.Writer, op *logic.OpSpec) (err error) {
-	//fmt.Fprintf(out, "{%#v, %#v},\n", op.name, op.doc)
 
 	opextra := opcodeExtras[op.Name]
 	fmt.Fprintf(out, "\n## %s\n- Opcode: 0x%02x %s\n", op.Name, op.Opcode, opextra)
@@ -151,6 +198,7 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec) (err error) {
 }
 
 func opsToMarkdown(out io.Writer) (err error) {
+	out.Write([]byte("# Opcodes\n\n"))
 	for i := range logic.OpSpecs {
 		err = opToMarkdown(out, &logic.OpSpecs[i])
 		if err != nil {
@@ -160,5 +208,22 @@ func opsToMarkdown(out io.Writer) (err error) {
 	return
 }
 func main() {
-	opsToMarkdown(os.Stdout)
+	checkGroupCoverage()
+	opcodesMd, _ := os.Create("opcodes.md")
+	opsToMarkdown(opcodesMd)
+	opcodesMd.Close()
+	for _, og := range opGroupList {
+		fname := fmt.Sprintf("%s.md", og.groupName)
+		fname = strings.ReplaceAll(fname, " ", "_")
+		fout, _ := os.Create(fname)
+		og.markdownTable(fout)
+		fout.Close()
+	}
+	txnfields, _ := os.Create("txn_fields.md")
+	fieldTableMarkdown(txnfields, logic.TxnFieldNames, logic.TxnFieldTypes)
+	txnfields.Close()
+
+	globalfields, _ := os.Create("global_fields.md")
+	fieldTableMarkdown(globalfields, logic.GlobalFieldNames, logic.GlobalFieldTypes)
+	globalfields.Close()
 }
