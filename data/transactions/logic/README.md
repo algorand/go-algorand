@@ -35,7 +35,7 @@ For one-argument ops, `X` is the last element on the stack.
 For two-argument ops, `A` is the previous element on the stack and `B` is the last element on the stack. These typically result in popping A and B from the stack and pushing the result.
 
 | Op | Description |
-| --- | --- | --- |
+| --- | --- |
 | `sha256` | SHA256 hash of value, yields [32]byte |
 | `keccak256` | Keccac256 hash of value, yields [32]byte |
 | `sha512_256` | SHA512_256 hash of value, yields [32]byte |
@@ -67,7 +67,7 @@ Opcodes for getting data onto the stack.
 Some of these have immediate data in the byte or bytes after the opcode.
 
 | Op | Description |
-| --- | --- | --- |
+| --- | --- |
 | `intcblock` | load block of uint64 constants |
 | `intc` | push value from uint64 constants to stack by index into constants |
 | `intc_0` | push uint64 constant 0 to stack |
@@ -122,7 +122,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 ### Flow Control
 
 | Op | Description |
-| --- | --- | --- |
+| --- | --- |
 | `err` | Error. Panic immediately. This is primarily a fencepost against accidental zero bytes getting compiled into programs. |
 | `bnz` | branch if value is not zero |
 | `pop` | discard value from stack |

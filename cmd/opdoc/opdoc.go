@@ -119,7 +119,7 @@ type opGroup struct {
 
 func (og *opGroup) markdownTable(out io.Writer) {
 	fmt.Fprint(out, `| Op | Description |
-| --- | --- | --- |
+| --- | --- |
 `)
 	// TODO: sort by logic.OpSpecs[].Opcode
 	for _, opname := range og.ops {
