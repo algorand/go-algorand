@@ -78,7 +78,7 @@ func (msig MultisigSig) Preimage() (version, threshold uint8, pks []PublicKey) {
 const multiSigString = "MultisigAddr"
 const maxMultisig = 255
 
-// MultisigAddrGen identifes the exact group, version,
+// MultisigAddrGen identifies the exact group, version,
 // and devices (Public keys) that it requires to sign
 // Hash("MultisigAddr" || version uint8 || threshold uint8 || PK1 || PK2 || ...)
 func MultisigAddrGen(version, threshold uint8, pk []PublicKey) (addr Digest, err error) {
@@ -99,7 +99,7 @@ func MultisigAddrGen(version, threshold uint8, pk []PublicKey) (addr Digest, err
 	return Hash(buffer), nil
 }
 
-// MultisigAddrGenWithSubsigs is similiar to MultisigAddrGen
+// MultisigAddrGenWithSubsigs is similar to MultisigAddrGen
 // except the input is []Subsig rather than []PublicKey
 func MultisigAddrGenWithSubsigs(version uint8, threshold uint8,
 	subsigs []MultisigSubsig) (addr Digest, err error) {

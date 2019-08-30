@@ -18,6 +18,7 @@ package indexer
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/algorand/go-algorand/data/basics"
@@ -122,23 +123,38 @@ func (idx *Indexer) Start() error {
 }
 
 func (idx *Indexer) update(round basics.Round) {
+	errorRepetition := 0
+	const errorQuietPeriod = 50
 	for {
 		select {
 		// Wait on the block
 		case <-idx.l.Wait(round + 1):
 			b, err := idx.l.Block(round + 1)
 			if err != nil {
-				logging.Base().Errorf("failed fetching block %d, trying again in 0.5 seconds", round+1)
-				time.Sleep(time.Millisecond * 500)
-			} else {
-				err = idx.NewBlock(b)
-				if err != nil {
-					logging.Base().Errorf("failed write block %d, trying again in 0.5 seconds", round+1)
-					time.Sleep(time.Millisecond * 500)
-				} else {
-					round++
+				message := fmt.Sprintf("failed fetching block %d, trying again in 0.5 seconds", round + 1)
+				if errorRepetition > errorQuietPeriod {
+					message = fmt.Sprintf("%s: %v", message, err)
 				}
+				logging.Base().Errorf(message)
+				time.Sleep(time.Millisecond * 500)
+				errorRepetition++
+				break
 			}
+
+			err = idx.NewBlock(b)
+			if err != nil {
+				message := fmt.Sprintf("failed write block %d, trying again in 0.5 seconds", round + 1)
+				if errorRepetition > errorQuietPeriod {
+					message = fmt.Sprintf("%s: %v", message, err)
+				}
+				logging.Base().Errorf(message)
+				time.Sleep(time.Millisecond * 500)
+				errorRepetition++
+				break
+			}
+
+			round++
+			errorRepetition = 0
 
 		case <-idx.ctx.Done():
 			return
