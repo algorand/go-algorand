@@ -22,7 +22,7 @@ Constants are pushed onto the stack by `intc`, `intc_[0123]`, `bytec`, and `byte
 
 ## Operations
 
-Most operation work with only one type of argument, uint64 or bytes, and panic if the wrong type value is on the stack.
+Most operations work with only one type of argument, uint64 or bytes, and panic if the wrong type value is on the stack.
 
 This summary is supplemented by more detail in the [opcodes document](opcodes.md).
 
@@ -30,7 +30,7 @@ Some operations 'panic' and immediately end execution of the program. A transact
 
 ### Arithmetic
 
-For one-argument ops, `X` is the last element on the stack.
+For one-argument ops, `X` is the last element on the stack, which is typically replaced by a new value.
 
 For two-argument ops, `A` is the previous element on the stack and `B` is the last element on the stack. These typically result in popping A and B from the stack and pushing the result.
 

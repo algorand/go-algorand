@@ -29,6 +29,7 @@ import (
 )
 
 func TestTrivialMath(t *testing.T) {
+	t.Parallel()
 	program, err := AssembleString(`int 2
 int 3
 +
@@ -40,6 +41,7 @@ int 5
 }
 
 func TestSha256EqArg(t *testing.T) {
+	t.Parallel()
 	program, err := AssembleString(`arg 0
 sha256
 byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
@@ -56,6 +58,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 }
 
 func TestTLHC(t *testing.T) {
+	t.Parallel()
 	a1, _ := basics.UnmarshalChecksumAddress("OC6IROKUJ7YCU5NV76AZJEDKYQG33V2CJ7HAPVQ4ENTAGMLIOINSQ6EKGE")
 	a2, _ := basics.UnmarshalChecksumAddress("RWXCBB73XJITATVQFOI7MVUUQOL2PFDDSDUMW4H4T2SNSX4SEUOQ2MM7F4")
 	program, err := AssembleString(`txn CloseRemainderTo
@@ -141,6 +144,7 @@ int 100000
 }
 
 func TestU64Math(t *testing.T) {
+	t.Parallel()
 	program, err := AssembleString(`int 0x1234567812345678
 int 0x100000000
 /
@@ -157,6 +161,7 @@ int 0x12345678
 }
 
 func TestBtoi(t *testing.T) {
+	t.Parallel()
 	program, err := AssembleString(`int 0x1234567812345678
 byte 0x1234567812345678
 btoi
@@ -172,6 +177,7 @@ btoi
 }
 
 func TestBnz(t *testing.T) {
+	t.Parallel()
 	program, err := AssembleString(`int 1
 dup
 bnz safe
@@ -186,6 +192,91 @@ safe:
 		t.Log(sb.String())
 	}
 	require.True(t, pass)
+}
+
+func TestSubUnderflow(t *testing.T) {
+	t.Parallel()
+	program, err := AssembleString(`int 1
+int 0x100000000
+-
+pop
+int 1`)
+	require.NoError(t, err)
+	sb := strings.Builder{}
+	pass := Eval(program, EvalParams{Trace: &sb})
+	if pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.False(t, pass)
+}
+
+func TestAddOverflow(t *testing.T) {
+	t.Parallel()
+	program, err := AssembleString(`int 0xf000000000000000
+int 0x1111111111111111
++
+pop
+int 1`)
+	require.NoError(t, err)
+	sb := strings.Builder{}
+	pass := Eval(program, EvalParams{Trace: &sb})
+	if pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.False(t, pass)
+}
+
+func TestMulOverflow(t *testing.T) {
+	t.Parallel()
+	program, err := AssembleString(`int 0x111111111
+int 0x222222222
+*
+pop
+int 1`)
+	require.NoError(t, err)
+	sb := strings.Builder{}
+	pass := Eval(program, EvalParams{Trace: &sb})
+	if pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.False(t, pass)
+}
+
+func TestDivZero(t *testing.T) {
+	t.Parallel()
+	program, err := AssembleString(`int 0x111111111
+int 0
+/
+pop
+int 1`)
+	require.NoError(t, err)
+	sb := strings.Builder{}
+	pass := Eval(program, EvalParams{Trace: &sb})
+	if pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.False(t, pass)
+}
+
+func TestModZero(t *testing.T) {
+	t.Parallel()
+	program, err := AssembleString(`int 0x111111111
+int 0
+%
+pop
+int 1`)
+	require.NoError(t, err)
+	sb := strings.Builder{}
+	pass := Eval(program, EvalParams{Trace: &sb})
+	if pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.False(t, pass)
 }
 
 /*
