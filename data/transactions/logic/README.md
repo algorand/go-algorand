@@ -36,30 +36,29 @@ For two-argument ops, `A` is the previous element on the stack and `B` is the la
 
 | Op | Description |
 | --- | --- | --- |
-| err | Error. Panic immediately. This is primarily a fencepost against accidental zero bytes getting compiled into programs. |
-| sha256 | Pop bytes X, push bytes sha256 hash of X |
-| keccack256 | Pop bytes X, push bytes keccack256 hash of X |
-| sha512_256 | Pop bytes X, push bytes sha512_256 hash of X |
-| + | Add uint64 A + uint64 B. Panic on overflow |
-| - | Subtract uint64 - uint64 B. Panic if result would be less than 0. |
-| / | Divide uint64 A / uint64  B. Panic if B == 0. |
-| * | Multiply uint64 A * uint64 B. Panic on overflow. |
-| < | Compare uint64 A < uint64 B. Push 1 or 0. |
-| > | Compare uint64 A > uint64 B. Push 1 or 0. |
-| <= | Compare uint64 A <= uint64 B. Push 1 or 0. |
-| >= | Compare uint64 A >= uint64 B. Push 1 or 0. |
-| && | If uint64 A and uint64 B are both non-zero, push 1, else push 0. |
-| &#124;&#124; | If uint64 A or uint64 B are either non-zero, push 1, else push 0. |
-| == | Compare A equal to B (any type as long as both the same type). Push 1 or 0. |
-| != | Compare A not equal to B (any type as long as both the same type). Push 1 or 0. |
-| ! | Pop uint64 X. If zero push 1, else push 0. |
-| len | Pop bytes X. Push uint64 length of X. |
-| btoi | Pop bytes X. X may be 0 to 8 bytes. Interpret as big-endian bytes of unsigned int. Push uint64. |
-| % | Modulo uint64 A % uint64 B. Panic if B == 0. |
-| &#124; | Bitwise or uint64 A &#124; uint64 B. |
-| & | Bitwise and uint64 A & uint64 B. |
-| ^ | Bitwise XOR uint64 A ^ uint64 B. |
-| ~ | Bitwise not uint64 X. |
+| `sha256` | SHA256 hash of value, yields [32]byte |
+| `keccak256` | Keccac256 hash of value, yields [32]byte |
+| `sha512_256` | SHA512_256 hash of value, yields [32]byte |
+| `+` | A plus B. Panic on overflow. |
+| `-` | A minus B. Panic if B > A. |
+| `/` | A divided by B. Panic if B == 0. |
+| `*` | A times B. Panic on overflow. |
+| `<` | A less than B => {0 or 1} |
+| `>` | A greater than B => {0 or 1} |
+| `<=` | A less than or equal to B => {0 or 1} |
+| `>=` | A greater than or equal to B => {0 or 1} |
+| `&&` | A is not zero and B is not zero => {0 or 1} |
+| `\|\|` | A is not zero or B is not zero => {0 or 1} |
+| `==` | A is equal to B => {0 or 1} |
+| `!=` | A is not equal to B => {0 or 1} |
+| `!` | X == 0 yields 1; else 0 |
+| `len` | yields length of byte value |
+| `btoi` | converts bytes as big endian to uint64 |
+| `%` | A modulo B. Panic if B == 0. |
+| `\|` | A bitwise-or B |
+| `&` | A bitwise-and B |
+| `^` | A bitwise-xor B |
+| `~` | bitwise invert value |
 
 ### Loading Values
 
@@ -69,63 +68,65 @@ Some of these have immediate data in the byte or bytes after the opcode.
 
 | Op | Description |
 | --- | --- | --- |
-| intcblock | Load next bytes into uint64 constant space. See section "Constants" above |
-| intc | Next byte is index into int constant space. Push that uint64. |
-| intc_0 | Push intConstant[0] |
-| intc_1 | Push intConstant[1] |
-| intc_2 | Push intConstant[2] |
-| intc_3 | Push intConstant[3] |
-| bytecblock | Load next bytes into bytes constant space. See section "Constants" above |
-| bytec | Next byte is index into bytes constant space. Push that bytes value. |
-| bytec_0 | Push byteConstant[0] |
-| bytec_1 | Push byteConstant[1] |
-| bytec_2 | Push byteConstant[2] |
-| bytec_3 | Push byteConstant[3] |
-| arg | Next byte is index into LogicSig.Args array. Push that bytes value. |
-| arg_0 | Push LogicSig.Args[0] |
-| arg_1 | Push LogicSig.Args[1] |
-| arg_2 | Push LogicSig.Args[2] |
-| arg_3 | Push LogicSig.Args[3] |
-| txn | Next byte is index into transaction fields. Push a field from the current transaction (may be uint64 or bytes) onto the stack. See table of transaction fields below. |
-| global | Next byte is index into global fields. Push a field from the global (may be uint64 or bytes) onto the stack. See table of global fields below. |
+| `intcblock` | load block of uint64 constants |
+| `intc` | push value from uint64 constants to stack by index into constants |
+| `intc_0` | push uint64 constant 0 to stack |
+| `intc_1` | push uint64 constant 1 to stack |
+| `intc_2` | push uint64 constant 2 to stack |
+| `intc_3` | push uint64 constant 3 to stack |
+| `bytecblock` | load block of byte-array constants |
+| `bytec` | push bytes constant to stack by index into constants |
+| `bytec_0` | push bytes constant 0 to stack |
+| `bytec_1` | push bytes constant 1 to stack |
+| `bytec_2` | push bytes constant 2 to stack |
+| `bytec_3` | push bytes constant 3 to stack |
+| `arg` | push LogicSig.Args[N] value to stack by index |
+| `arg_0` | push LogicSig.Args[0] to stack |
+| `arg_1` | push LogicSig.Args[1] to stack |
+| `arg_2` | push LogicSig.Args[2] to stack |
+| `arg_3` | push LogicSig.Args[3] to stack |
+| `txn` | push field from current transaction to stack |
+| `global` | push value from globals to stack |
 
 **Transaction Fields**
 
-| Number | Name | Type |
+| Index | Name | Type |
 | --- | --- | --- |
-| 0 | Sender | bytes |
+| 0 | Sender | []byte |
 | 1 | Fee | uint64 |
 | 2 | FirstValid | uint64 |
 | 3 | LastValid | uint64 |
-| 4 | Note | bytes |
-| 5 | Receiver | bytes |
+| 4 | Note | []byte |
+| 5 | Receiver | []byte |
 | 6 | Amount | uint64 |
-| 7 | CloseRemainderTo | bytes |
-| 8 | VotePK | bytes |
-| 9 | SelectionPK | bytes |
+| 7 | CloseRemainderTo | []byte |
+| 8 | VotePK | []byte |
+| 9 | SelectionPK | []byte |
 | 10 | VoteFirst | uint64 |
 | 11 | VoteLast | uint64 |
 | 12 | VoteKeyDilution | uint64 |
 
+
 **Global Fields**
 
-| Number | Name | Type |
+| Index | Name | Type |
 | --- | --- | --- |
 | 0 | Round | uint64 |
 | 1 | MinTxnFee | uint64 |
 | 2 | MinBalance | uint64 |
 | 3 | MaxTxnLife | uint64 |
-| 4 | BlockTime | uint64 |
+| 4 | TimeStamp | uint64 |
+
 
 
 ### Flow Control
 
 | Op | Description |
-| --- | --- |
-| bnz | branch if not zero. next byte is offset if branch is taken. pop uint64 X. if X != 0, next instruction at (current pc + 2 + program[pc+1]) |
-| pop | Pop anything. Discard it. |
-| dup | Any last element of the stack becomes the last two elements of the stack. |
-
+| --- | --- | --- |
+| `err` | Error. Panic immediately. This is primarily a fencepost against accidental zero bytes getting compiled into programs. |
+| `bnz` | branch if value is not zero |
+| `pop` | discard value from stack |
+| `dup` | duplicate last value on stack |
 
 # Assembler Syntax
 

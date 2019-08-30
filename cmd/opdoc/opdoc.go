@@ -73,6 +73,25 @@ var opDocList = []stringString{
 
 var opDocs map[string]string
 
+func checkOpDocs() {
+	opsSeen := make(map[string]bool)
+	for _, op := range logic.OpSpecs {
+		opsSeen[op.Name] = false
+	}
+	for _, od := range opDocList {
+		_, exists := opsSeen[od.a]
+		if !exists {
+			fmt.Fprintf(os.Stderr, "error: doc for op %#v that does not exist in logic.OpSpecs", od.a)
+		}
+		opsSeen[od.a] = true
+	}
+	for op, seen := range opsSeen {
+		if !seen {
+			fmt.Fprintf(os.Stderr, "error: doc for op %#v missing", op)
+		}
+	}
+}
+
 var opcodeExtraList = []stringString{
 	{"intcblock", "{varuint length} [{varuint value}, ...]"},
 	{"intc", "{uint8 int constant index}"},
@@ -208,6 +227,7 @@ func opsToMarkdown(out io.Writer) (err error) {
 	return
 }
 func main() {
+	checkOpDocs()
 	checkGroupCoverage()
 	opcodesMd, _ := os.Create("opcodes.md")
 	opsToMarkdown(opcodesMd)
