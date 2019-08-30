@@ -49,8 +49,8 @@ txn VotePK
 txn SelectionPK
 txn VoteFirst
 txn VoteLast
-arg 0
-arg 1
+arg 0 // comment
+arg 1 //comment
 //account Balance
 sha256
 keccak256
@@ -59,10 +59,10 @@ int 0x1234567812345678
 int 0x0034567812345678
 int 0x0000567812345678
 int 0x0000007812345678
-+
++ // comment
 // extra int pushes to satisfy typechecking on the ops that pop two ints
 intc 0
--
+- //comment
 intc 2
 /
 intc 1

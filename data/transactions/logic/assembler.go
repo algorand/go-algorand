@@ -520,6 +520,15 @@ func typecheck(expected, got StackType) bool {
 	return expected == got
 }
 
+func filterFieldsForLineComment(fields []string) []string {
+	for i, s := range fields {
+		if strings.HasPrefix(s, "//") {
+			return fields[:i]
+		}
+	}
+	return fields
+}
+
 // Assemble reads text from an input and accumulates the program
 func (ops *OpStream) Assemble(fin io.Reader) error {
 	scanner := bufio.NewScanner(fin)
@@ -534,6 +543,10 @@ func (ops *OpStream) Assemble(fin io.Reader) error {
 			continue
 		}
 		fields := strings.Fields(line)
+		fields = filterFieldsForLineComment(fields)
+		if len(fields) == 0 {
+			continue
+		}
 		opstring := fields[0]
 		argf, ok := argOps[opstring]
 		if ok {
