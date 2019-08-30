@@ -49,6 +49,8 @@
 - Pushes: uint64
 - A times B. Panic on overflow.
 
+It is worth noting that there are 10,000,000,000,000,000 micro-Algos in the total supply, or a bit less than 2^54. When doing rational math, e.g. (A * (N/D)) as ((A * N) / D) one should limit the numerator to less than 2^10 to be completely sure there won't be overflow.
+
 ## <
 - Opcode: 0x0c 
 - Pops: *... stack*, {uint64 A}, {uint64 B}
