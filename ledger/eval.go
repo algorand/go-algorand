@@ -252,13 +252,27 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *eval
 	// Withdraw rewards from the incentive pool
 	var ot basics.OverflowTracker
 	rewardsPerUnit := ot.Sub(eval.block.BlockHeader.RewardsLevel, eval.prevHeader.RewardsLevel)
+	if ot.Overflowed {
+		return nil, fmt.Errorf("overflowed subtracting rewards(%d, %d) levels for block %v", eval.block.BlockHeader.RewardsLevel, eval.prevHeader.RewardsLevel, hdr.Round)
+	}
+
 	poolOld, err := eval.state.Get(poolAddr, true)
+	if err != nil {
+		return nil, err
+	}
+
+	// hotfix for testnet stall 08/26/2019; move some algos from testnet bank to rewards pool to give it enough time until protocol upgrade occur.
+	poolOld, err = eval.workaroundOverspentRewards(poolOld, hdr.Round)
 	if err != nil {
 		return nil, err
 	}
 
 	poolNew := poolOld
 	poolNew.MicroAlgos = ot.SubA(poolOld.MicroAlgos, basics.MicroAlgos{Raw: ot.Mul(prevTotals.RewardUnits(), rewardsPerUnit)})
+	if ot.Overflowed {
+		return nil, fmt.Errorf("overflowed subtracting reward unit for block %v", hdr.Round)
+	}
+
 	err = eval.state.Put(poolNew)
 	if err != nil {
 		return nil, err
@@ -272,6 +286,31 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *eval
 	}
 
 	return eval, nil
+}
+
+// hotfix for testnet stall 08/26/2019; move some algos from testnet bank to rewards pool to give it enough time until protocol upgrade occur.
+func (eval *BlockEvaluator) workaroundOverspentRewards(rewardPoolBalance basics.BalanceRecord, headerRound basics.Round) (poolOld basics.BalanceRecord, err error) {
+	// verify that we patch the correct round.
+	if headerRound != 1499995 {
+		return rewardPoolBalance, nil
+	}
+	// verify that we're patching the correct genesis ( i.e. testnet )
+	testnetGenesisHash, _ := crypto.DigestFromString("JBR3KGFEWPEE5SAQ6IWU6EEBZMHXD4CZU6WCBXWGF57XBZIJHIRA")
+	if eval.genesisHash != testnetGenesisHash {
+		return rewardPoolBalance, nil
+	}
+
+	// get the testnet bank ( dispenser ) account address.
+	bankAddr, _ := basics.UnmarshalChecksumAddress("GD64YIY3TWGDMCNPP553DZPPR6LDUSFQOIJVFDPPXWEG3FVOJCCDBBHU5A")
+	amount := basics.MicroAlgos{Raw: 20000000000}
+	err = eval.state.Move(bankAddr, eval.prevHeader.RewardsPool, amount, nil, nil)
+	if err != nil {
+		err = fmt.Errorf("unable to move funds from testnet bank to incentive pool: %v", err)
+		return
+	}
+	poolOld, err = eval.state.Get(eval.prevHeader.RewardsPool)
+
+	return
 }
 
 // Round returns the round number of the block being evaluated by the BlockEvaluator.

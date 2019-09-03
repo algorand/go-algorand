@@ -18,6 +18,7 @@ package driver
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 
 	"github.com/algorand/go-deadlock"
@@ -207,6 +208,16 @@ func (lw *LedgerWallet) SignTransaction(tx transactions.Transaction, pw []byte) 
 	}), nil
 }
 
+// SignProgram implements the Wallet interface.
+func (lw *LedgerWallet) SignProgram(data []byte, src crypto.Digest, pw []byte) ([]byte, error) {
+	sig, err := lw.signProgramHelper(data)
+	if err != nil {
+		return nil, err
+	}
+
+	return sig[:], nil
+}
+
 // MultisigSignTransaction implements the Wallet interface.
 func (lw *LedgerWallet) MultisigSignTransaction(tx transactions.Transaction, pk crypto.PublicKey, partial crypto.MultisigSig, pw []byte) (crypto.MultisigSig, error) {
 	isValidKey := false
@@ -214,6 +225,7 @@ func (lw *LedgerWallet) MultisigSignTransaction(tx transactions.Transaction, pk 
 		subsig := &partial.Subsigs[i]
 		if subsig.Key == pk {
 			isValidKey = true
+			break
 		}
 	}
 
@@ -222,6 +234,36 @@ func (lw *LedgerWallet) MultisigSignTransaction(tx transactions.Transaction, pk 
 	}
 
 	sig, err := lw.signTransactionHelper(tx)
+	if err != nil {
+		return partial, err
+	}
+
+	for i := 0; i < len(partial.Subsigs); i++ {
+		subsig := &partial.Subsigs[i]
+		if subsig.Key == pk {
+			subsig.Sig = sig
+		}
+	}
+
+	return partial, nil
+}
+
+// MultisigSignProgram implements the Wallet interface.
+func (lw *LedgerWallet) MultisigSignProgram(data []byte, src crypto.Digest, pk crypto.PublicKey, partial crypto.MultisigSig, pw []byte) (crypto.MultisigSig, error) {
+	isValidKey := false
+	for i := 0; i < len(partial.Subsigs); i++ {
+		subsig := &partial.Subsigs[i]
+		if subsig.Key == pk {
+			isValidKey = true
+			break
+		}
+	}
+
+	if !isValidKey {
+		return partial, errMsigWrongKey
+	}
+
+	sig, err := lw.signProgramHelper(data)
 	if err != nil {
 		return partial, err
 	}
@@ -295,5 +337,11 @@ func (lw *LedgerWallet) signTransactionHelper(tx transactions.Transaction) (sig 
 	}
 
 	copy(sig[:], reply)
+	return
+}
+
+func (lw *LedgerWallet) signProgramHelper(data []byte) (sig crypto.Signature, err error) {
+	// TODO: extend client side code for signing program
+	err = errors.New("signing programs not yet implemented for ledger wallet")
 	return
 }

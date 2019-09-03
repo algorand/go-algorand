@@ -57,6 +57,14 @@ make sanity
 
 Once the software is built you'll find binaries in `${GOPATH}/bin`, and a data directory will be initialized at `~/.algorand`. Start your node with `${GOPATH}/bin/goal node start -d ~/.algorand`, use `${GOPATH}/bin/carpenter -d ~/.algorand` to see activity. Refer to the [developer website][developer site url] for how to use the different tools.
 
+#### Providing your own data directory
+You can run a node out of other directories than `~/.algorand` and join networks other than mainnet. Just make a new directory and copy into it the `genesis.json` file for the network. For example:
+```bash
+mkdir ~/testnet_data
+cp installer/genesis/testnet/genesis.json ~/testnet_data/genesis.json
+${GOPATH}/bin/goal node start -d ~/testnet_data
+```
+Genesis files for mainnet, testnet, and betanet can be found in `installer/genesis/`.
 
 ## Contributing (Code, Documentation, Bugs, Etc) ##
 

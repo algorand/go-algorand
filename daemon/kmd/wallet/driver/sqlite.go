@@ -1112,6 +1112,34 @@ func (sw *SQLiteWallet) SignTransaction(tx transactions.Transaction, pw []byte) 
 	return
 }
 
+// SignProgram signs the passed data for the src address
+func (sw *SQLiteWallet) SignProgram(data []byte, src crypto.Digest, pw []byte) (stx []byte, err error) {
+	// Check the password
+	err = sw.CheckPassword(pw)
+	if err != nil {
+		return
+	}
+
+	// Fetch the required key
+	sk, err := sw.fetchSecretKey(crypto.Digest(src))
+	if err != nil {
+		return
+	}
+
+	// Generate the signature secrets
+	secrets, err := crypto.SecretKeyToSignatureSecrets(sk)
+	if err != nil {
+		err = errSKToPK
+		return
+	}
+
+	progb := transactions.Program(data)
+	// Sign the transaction
+	sig := secrets.Sign(&progb)
+	stx = sig[:]
+	return
+}
+
 // MultisigSignTransaction starts a multisig signature or adds a signature to a
 // partially signed multisig transaction signature of the passed transaction
 // using the key
@@ -1194,6 +1222,97 @@ func (sw *SQLiteWallet) MultisigSignTransaction(tx transactions.Transaction, pk 
 	// Sign the transaction, and merge the multisig into the partial
 	version, threshold, pks := partial.Preimage()
 	msig2, err := crypto.MultisigSign(tx, addr, version, threshold, pks, *secrets)
+	if err != nil {
+		return
+	}
+	sig, err = crypto.MultisigMerge(partial, msig2)
+	return
+}
+
+// MultisigSignProgram starts a multisig signature or adds a signature to a
+// partially signed multisig transaction signature of the passed transaction
+// using the key
+func (sw *SQLiteWallet) MultisigSignProgram(data []byte, src crypto.Digest, pk crypto.PublicKey, partial crypto.MultisigSig, pw []byte) (sig crypto.MultisigSig, err error) {
+	// Check the password
+	err = sw.CheckPassword(pw)
+	if err != nil {
+		return
+	}
+
+	if partial.Version == 0 && partial.Threshold == 0 && len(partial.Subsigs) == 0 {
+		// We weren't given a partial multisig, so create a new one
+
+		// Look up the preimage in the database
+		var pks []crypto.PublicKey
+		var version, threshold uint8
+		version, threshold, pks, err = sw.LookupMultisigPreimage(src)
+		if err != nil {
+			return
+		}
+
+		// Fetch the required secret key
+		var sk crypto.PrivateKey
+		sk, err = sw.fetchSecretKey(publicKeyToAddress(pk))
+		if err != nil {
+			return
+		}
+
+		// Convert the secret key to crypto.SignatureSecrets
+		var secrets *crypto.SignatureSecrets
+		secrets, err = crypto.SecretKeyToSignatureSecrets(sk)
+		if err != nil {
+			err = errSKToPK
+			return
+		}
+
+		// Sign the transaction
+		from := src
+		progb := transactions.Program(data)
+		sig, err = crypto.MultisigSign(&progb, from, version, threshold, pks, *secrets)
+		return
+	}
+
+	// We were given a partial multisig, so add to it
+
+	// Check preimage matches tx src address
+	var addr crypto.Digest
+	addr, err = crypto.MultisigAddrGenWithSubsigs(partial.Version, partial.Threshold, partial.Subsigs)
+	if err != nil {
+		return
+	}
+	if addr != src {
+		err = errMsigWrongAddr
+		return
+	}
+
+	// Check that key is one of the ones in the preimage
+	err = errMsigWrongKey
+	for _, subsig := range partial.Subsigs {
+		if pk == subsig.Key {
+			err = nil
+			break
+		}
+	}
+	if err != nil {
+		return
+	}
+
+	// Fetch the required secret key
+	sk, err := sw.fetchSecretKey(publicKeyToAddress(pk))
+	if err != nil {
+		return
+	}
+
+	// Convert the secret key to crypto.SignatureSecrets
+	secrets, err := crypto.SecretKeyToSignatureSecrets(sk)
+	if err != nil {
+		return
+	}
+
+	// Sign the transaction, and merge the multisig into the partial
+	version, threshold, pks := partial.Preimage()
+	progb := transactions.Program(data)
+	msig2, err := crypto.MultisigSign(&progb, addr, version, threshold, pks, *secrets)
 	if err != nil {
 		return
 	}
