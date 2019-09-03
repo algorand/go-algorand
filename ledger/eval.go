@@ -308,7 +308,7 @@ func (eval *BlockEvaluator) workaroundOverspentRewards(rewardPoolBalance basics.
 		err = fmt.Errorf("unable to move funds from testnet bank to incentive pool: %v", err)
 		return
 	}
-	poolOld, err = eval.state.Get(eval.prevHeader.RewardsPool)
+	poolOld, err = eval.state.Get(eval.prevHeader.RewardsPool, true)
 
 	return
 }
