@@ -238,15 +238,16 @@ func (ct CurrencyTransferTxnFields) apply(header Header, balances Balances, spec
 			sndHolding.Frozen = params.DefaultFrozen
 		}
 
-		if sndHolding.Amount < ct.CurrencyAmount {
-			return fmt.Errorf("currency balance %d less than transfer amount %d", sndHolding.Amount, ct.CurrencyAmount)
-		}
-
 		if ct.CurrencyAmount > 0 && sndHolding.Frozen && !clawback {
 			return fmt.Errorf("currency frozen in sender")
 		}
 
-		sndHolding.Amount -= ct.CurrencyAmount
+		var overflowed bool
+		sndHolding.Amount, overflowed = basics.OSub(sndHolding.Amount, ct.CurrencyAmount)
+		if overflowed {
+			return fmt.Errorf("underflow: currency balance %d less than transfer amount %d", sndHolding.Amount, ct.CurrencyAmount)
+		}
+
 		snd.Currencies[ct.XferCurrency] = sndHolding
 		err = balances.Put(snd)
 		if err != nil {
@@ -272,7 +273,11 @@ func (ct CurrencyTransferTxnFields) apply(header Header, balances Balances, spec
 			return fmt.Errorf("currency frozen in recipient")
 		}
 
-		rcvHolding.Amount += ct.CurrencyAmount
+		rcvHolding.Amount, overflowed = basics.OAdd(rcvHolding.Amount, ct.CurrencyAmount)
+		if overflowed {
+			return fmt.Errorf("overflow on adding %d to receiver amount %d", ct.CurrencyAmount, rcvHolding.Amount)
+		}
+
 		rcv.Currencies[ct.XferCurrency] = rcvHolding
 		err = balances.Put(rcv)
 		if err != nil {
@@ -319,7 +324,12 @@ func (ct CurrencyTransferTxnFields) apply(header Header, balances Balances, spec
 				return fmt.Errorf("currency frozen in recipient")
 			}
 
-			rcvHolding.Amount += sndHolding.Amount
+			var overflowed bool
+			rcvHolding.Amount, overflowed = basics.OAdd(rcvHolding.Amount, sndHolding.Amount)
+			if overflowed {
+				return fmt.Errorf("overflow on adding closing balance %d to receiver amount %d", sndHolding.Amount, rcvHolding.Amount)
+			}
+
 			rcv.Currencies[ct.XferCurrency] = rcvHolding
 			err = balances.Put(rcv)
 			if err != nil {
