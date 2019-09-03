@@ -76,7 +76,7 @@ type mockBalances struct {
 	protocol.ConsensusVersion
 }
 
-func (balances mockBalances) Get(basics.Address) (basics.BalanceRecord, error) {
+func (balances mockBalances) Get(basics.Address, bool) (basics.BalanceRecord, error) {
 	return basics.BalanceRecord{}, nil
 }
 

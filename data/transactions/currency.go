@@ -95,7 +95,7 @@ func cloneParams(m map[uint64]basics.CurrencyParams) map[uint64]basics.CurrencyP
 }
 
 func getParams(balances Balances, cid basics.CurrencyID) (basics.CurrencyParams, error) {
-	creator, err := balances.Get(cid.Creator)
+	creator, err := balances.Get(cid.Creator, false)
 	if err != nil {
 		return basics.CurrencyParams{}, err
 	}
@@ -111,7 +111,7 @@ func getParams(balances Balances, cid basics.CurrencyID) (basics.CurrencyParams,
 func (cc CurrencyConfigTxnFields) apply(header Header, balances Balances, spec SpecialAddresses, ad *ApplyData, txnCounter uint64) error {
 	if cc.ConfigCurrency == (basics.CurrencyID{}) {
 		// Allocating a currency.
-		record, err := balances.Get(header.Sender)
+		record, err := balances.Get(header.Sender, false)
 		if err != nil {
 			return err
 		}
@@ -154,7 +154,7 @@ func (cc CurrencyConfigTxnFields) apply(header Header, balances Balances, spec S
 		return fmt.Errorf("transaction issued by %v, not manager key %v", header.Sender, params.Manager)
 	}
 
-	record, err := balances.Get(cc.ConfigCurrency.Creator)
+	record, err := balances.Get(cc.ConfigCurrency.Creator, false)
 	if err != nil {
 		return err
 	}
@@ -216,7 +216,7 @@ func (ct CurrencyTransferTxnFields) apply(header Header, balances Balances, spec
 	}
 
 	if ct.CurrencyAmount > 0 || ct.CurrencyReceiver != (basics.Address{}) {
-		snd, err := balances.Get(source)
+		snd, err := balances.Get(source, false)
 		if err != nil {
 			return err
 		}
@@ -257,7 +257,7 @@ func (ct CurrencyTransferTxnFields) apply(header Header, balances Balances, spec
 			return fmt.Errorf("too many currencies in account: %d > %d", len(snd.Currencies), balances.ConsensusParams().MaxCurrenciesPerAccount)
 		}
 
-		rcv, err := balances.Get(ct.CurrencyReceiver)
+		rcv, err := balances.Get(ct.CurrencyReceiver, false)
 		if err != nil {
 			return err
 		}
@@ -286,7 +286,7 @@ func (ct CurrencyTransferTxnFields) apply(header Header, balances Balances, spec
 			return fmt.Errorf("cannot close currency ID in allocating account")
 		}
 
-		snd, err := balances.Get(source)
+		snd, err := balances.Get(source, false)
 		if err != nil {
 			return err
 		}
@@ -304,7 +304,7 @@ func (ct CurrencyTransferTxnFields) apply(header Header, balances Balances, spec
 				return fmt.Errorf("currency frozen in sender")
 			}
 
-			rcv, err := balances.Get(ct.CurrencyCloseTo)
+			rcv, err := balances.Get(ct.CurrencyCloseTo, false)
 			if err != nil {
 				return err
 			}
@@ -343,7 +343,7 @@ func (cf CurrencyFreezeTxnFields) apply(header Header, balances Balances, spec S
 	}
 
 	// Get the account to be frozen/unfrozen.
-	record, err := balances.Get(cf.FreezeAccount)
+	record, err := balances.Get(cf.FreezeAccount, false)
 	if err != nil {
 		return err
 	}

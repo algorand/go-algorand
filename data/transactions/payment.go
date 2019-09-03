@@ -71,7 +71,7 @@ func (payment PaymentTxnFields) apply(header Header, balances Balances, spec Spe
 	}
 
 	if payment.CloseRemainderTo != (basics.Address{}) {
-		rec, err := balances.Get(header.Sender)
+		rec, err := balances.Get(header.Sender, true)
 		if err != nil {
 			return err
 		}
@@ -84,7 +84,7 @@ func (payment PaymentTxnFields) apply(header Header, balances Balances, spec Spe
 		}
 
 		// Confirm that we have no balance left
-		rec, err = balances.Get(header.Sender)
+		rec, err = balances.Get(header.Sender, true)
 		if !rec.AccountData.MicroAlgos.IsZero() {
 			return fmt.Errorf("balance %d still not zero after CloseRemainderTo", rec.AccountData.MicroAlgos.Raw)
 		}

@@ -63,12 +63,14 @@ func (x *roundCowBase) isDup(firstValid basics.Round, txid transactions.Txid) (b
 }
 
 // wrappers for roundCowState to satisfy the (current) transactions.Balances interface
-func (cs *roundCowState) Get(addr basics.Address) (basics.BalanceRecord, error) {
+func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (basics.BalanceRecord, error) {
 	acctdata, err := cs.lookup(addr)
 	if err != nil {
 		return basics.BalanceRecord{}, err
 	}
-	acctdata = acctdata.WithUpdatedRewards(cs.proto, cs.rewardsLevel())
+	if withPendingRewards {
+		acctdata = acctdata.WithUpdatedRewards(cs.proto, cs.rewardsLevel())
+	}
 	return basics.BalanceRecord{Addr: addr, AccountData: acctdata}, nil
 }
 
@@ -250,7 +252,7 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *eval
 	// Withdraw rewards from the incentive pool
 	var ot basics.OverflowTracker
 	rewardsPerUnit := ot.Sub(eval.block.BlockHeader.RewardsLevel, eval.prevHeader.RewardsLevel)
-	poolOld, err := eval.state.Get(poolAddr)
+	poolOld, err := eval.state.Get(poolAddr, true)
 	if err != nil {
 		return nil, err
 	}

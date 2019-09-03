@@ -51,8 +51,9 @@ type SpecialAddresses struct {
 type Balances interface {
 	// Get looks up the balance record for an address
 	// If the account is known to be empty, then err should be nil and the returned balance record should have the given address and empty AccountData
+	// withPendingRewards specifies whether pending rewards should be applied.
 	// A non-nil error means the lookup is impossible (e.g., if the database doesn't have necessary state anymore)
-	Get(basics.Address) (basics.BalanceRecord, error)
+	Get(addr basics.Address, withPendingRewards bool) (basics.BalanceRecord, error)
 
 	Put(basics.BalanceRecord) error
 

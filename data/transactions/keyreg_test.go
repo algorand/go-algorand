@@ -34,7 +34,7 @@ type keyregTestBalances struct {
 	version protocol.ConsensusVersion
 }
 
-func (balances keyregTestBalances) Get(addr basics.Address) (basics.BalanceRecord, error) {
+func (balances keyregTestBalances) Get(addr basics.Address, withPendingRewards bool) (basics.BalanceRecord, error) {
 	return balances.addrs[addr], nil
 }
 
