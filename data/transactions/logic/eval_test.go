@@ -17,6 +17,7 @@
 package logic
 
 import (
+	"encoding/base64"
 	"encoding/hex"
 	"strings"
 	"testing"
@@ -59,11 +60,16 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 
 func TestTLHC(t *testing.T) {
 	t.Parallel()
-	a1, _ := basics.UnmarshalChecksumAddress("OC6IROKUJ7YCU5NV76AZJEDKYQG33V2CJ7HAPVQ4ENTAGMLIOINSQ6EKGE")
-	a2, _ := basics.UnmarshalChecksumAddress("RWXCBB73XJITATVQFOI7MVUUQOL2PFDDSDUMW4H4T2SNSX4SEUOQ2MM7F4")
+	a1, _ := basics.UnmarshalChecksumAddress("DFPKC2SJP3OTFVJFMCD356YB7BOT4SJZTGWLIPPFEWL3ZABUFLTOY6ILYE")
+	a2, _ := basics.UnmarshalChecksumAddress("YYKRMERAFXMXCDWMBNR6BUUWQXDCUR53FPUGXLUYS7VNASRTJW2ENQ7BMQ")
+	secret, _ := base64.StdEncoding.DecodeString("xPUB+DJir1wsH7g2iEY1QwYqHqYH1vUJtzZKW4RxXsY=")
 	program, err := AssembleString(`txn CloseRemainderTo
-addr OC6IROKUJ7YCU5NV76AZJEDKYQG33V2CJ7HAPVQ4ENTAGMLIOINSQ6EKGE
+addr DFPKC2SJP3OTFVJFMCD356YB7BOT4SJZTGWLIPPFEWL3ZABUFLTOY6ILYE
 ==
+txn Receiver
+addr DFPKC2SJP3OTFVJFMCD356YB7BOT4SJZTGWLIPPFEWL3ZABUFLTOY6ILYE
+==
+&&
 arg 0
 len
 int 32
@@ -71,14 +77,18 @@ int 32
 &&
 arg 0
 sha256
-byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
+byte base64 r8St7smOQ0LV55o8AUmGGrpgnYwVmg4wCxeLA/H8Z+s=
 ==
 &&
 txn CloseRemainderTo
-addr RWXCBB73XJITATVQFOI7MVUUQOL2PFDDSDUMW4H4T2SNSX4SEUOQ2MM7F4
+addr YYKRMERAFXMXCDWMBNR6BUUWQXDCUR53FPUGXLUYS7VNASRTJW2ENQ7BMQ
 ==
+txn Receiver
+addr YYKRMERAFXMXCDWMBNR6BUUWQXDCUR53FPUGXLUYS7VNASRTJW2ENQ7BMQ
+==
+&&
 global Round
-int 100000
+int 3000
 >
 &&
 ||`)
@@ -86,7 +96,7 @@ int 100000
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = program
 	// right answer
-	txn.Lsig.Args = [][]byte{[]byte("=0\x97S\x85H\xe9\x91B\xfd\xdb;1\xf5Z\xaec?\xae\xf2I\x93\x08\x12\x94\xaa~\x06\x08\x849b")}
+	txn.Lsig.Args = [][]byte{secret}
 	sb := strings.Builder{}
 	block := bookkeeping.Block{}
 	block.BlockHeader.Round = 999999
@@ -98,6 +108,7 @@ int 100000
 	}
 	require.False(t, pass)
 
+	txn.Txn.Receiver = a2
 	txn.Txn.CloseRemainderTo = a2
 	sb = strings.Builder{}
 	ep = EvalParams{Txn: &txn, Trace: &sb, Block: &block}
@@ -108,6 +119,7 @@ int 100000
 	}
 	require.True(t, pass)
 
+	txn.Txn.Receiver = a2
 	txn.Txn.CloseRemainderTo = a2
 	sb = strings.Builder{}
 	block.BlockHeader.Round = 1
@@ -119,6 +131,7 @@ int 100000
 	}
 	require.False(t, pass)
 
+	txn.Txn.Receiver = a1
 	txn.Txn.CloseRemainderTo = a1
 	sb = strings.Builder{}
 	block.BlockHeader.Round = 999999
