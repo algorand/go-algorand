@@ -613,14 +613,21 @@ func TestProposalStoreHandle(t *testing.T) {
 	require.Equal(t, testProposalStore.Pinned, returnEvent.(committableEvent).Proposal)
 
 	testStagingValueEvent := stagingValueEvent{
-		Round:       player.Round,
-		Period:      player.Period,
-		Proposal:    proposalV,
-		Payload:     proposalPayload,
-		Committable: false,
+		Round:  player.Round,
+		Period: player.Period,
 	}
-
 	returnEvent = testProposalStore.handle(rHandle, player, testStagingValueEvent)
+	require.Equal(t, proposalV, returnEvent.(stagingValueEvent).Proposal)
+	require.Equal(t, proposalPayload, returnEvent.(stagingValueEvent).Payload)
+	require.True(t, returnEvent.(stagingValueEvent).Committable)
+
+	testPinnedValueEvent := pinnedValueEvent{
+		Round: player.Round,
+	}
+	returnEvent = testProposalStore.handle(rHandle, player, testPinnedValueEvent)
+	require.Equal(t, proposalV, returnEvent.(pinnedValueEvent).Proposal)
+	require.Equal(t, proposalPayload, returnEvent.(pinnedValueEvent).Payload)
+	require.True(t, returnEvent.(pinnedValueEvent).PayloadOK)
 
 	msg = message{Tag: protocol.ProposalPayloadTag, Proposal: proposalPayload, UnauthenticatedProposal: proposalPayload.unauthenticatedProposal}
 	testEvent = messageEvent{T: roundInterruption, Input: msg}
@@ -632,6 +639,58 @@ func TestProposalStoreHandle(t *testing.T) {
 
 	// test trim
 	testProposalStore.trim(player)
+}
+
+func TestProposalStoreGetPinnedValue(t *testing.T) {
+	// create proposal Store
+	player, router, accounts, factory, ledger := testPlayerSetup()
+	testBlockFactory, err := factory.AssembleBlock(player.Round, time.Now().Add(time.Minute))
+	require.NoError(t, err, "Could not generate a proposal for round %v: %v", player.Round, err)
+	accountIndex := 0
+	// create a route handler for the proposal store
+	rHandle := routerHandle{
+		t:   &proposalStoreTracer,
+		r:   &router,
+		src: proposalMachinePeriod,
+	}
+	payloadV, proposalV, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, player.Period, ledger)
+
+	testProposalStore := proposalStore{
+		Relevant:   map[period]proposalValue{},
+		Pinned:     proposalV,
+		Assemblers: map[proposalValue]blockAssembler{},
+	}
+
+	// Check that we get pinned value, but no block; payloadOK must be false
+	testPinnedValueEvent := pinnedValueEvent{
+		Round: player.Round,
+	}
+	returnEvent := testProposalStore.handle(rHandle, player, testPinnedValueEvent)
+	require.Equal(t, proposalV, returnEvent.(pinnedValueEvent).Proposal)
+	require.Falsef(t, returnEvent.(pinnedValueEvent).PayloadOK, "Get pinned value cannot set payloadOK if no block assembled")
+	require.Equal(t, proposal{}.value(), returnEvent.(pinnedValueEvent).Payload.value())
+
+	// now, assemble it. This is unfortunately, quite white box
+	// even w.r.t. the proposalStore, until we have the infra for blackbox proposal store testing.
+	var ea blockAssembler
+	testProposalStore.Assemblers[proposalV] = ea
+	msgP1 := message{
+		Tag:                     protocol.ProposalPayloadTag,
+		Proposal:                payloadV,
+		UnauthenticatedProposal: payloadV.u(),
+	}
+	assemblePayloadEv := messageEvent{T: payloadVerified, Input: msgP1}
+	returnEvent = testProposalStore.handle(rHandle, player, assemblePayloadEv)
+	require.Equal(t, payloadAccepted, returnEvent.t())
+
+	// Getting pinned value should now also return block
+	testPinnedValueEvent = pinnedValueEvent{
+		Round: player.Round,
+	}
+	returnEvent = testProposalStore.handle(rHandle, player, testPinnedValueEvent)
+	require.Equal(t, proposalV, returnEvent.(pinnedValueEvent).Proposal)
+	require.Equal(t, proposalV, returnEvent.(pinnedValueEvent).Payload.value())
+	require.Truef(t, returnEvent.(pinnedValueEvent).PayloadOK, "Get Pinned Value must get assembled block")
 }
 
 func TestProposalStoreRegressionBlockRedeliveryBug_b29ea57(t *testing.T) {

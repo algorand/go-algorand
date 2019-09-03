@@ -245,7 +245,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookDir
 	}
 	node.algorandService = agreement.MakeService(agreementParameters)
 
-	node.syncer = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.wsFetcherService, node.lowPriorityCryptoVerificationPool)
+	node.syncer = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.wsFetcherService, blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)})
 	node.txPoolSyncer = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
 
 	err = node.loadParticipationKeys()

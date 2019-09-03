@@ -109,7 +109,37 @@ mkdir -p ${HOME}/docker_test_resources
 if [ ! -f "${HOME}/docker_test_resources/gnupg2.2.9_centos7_amd64.tar.bz2" ]; then
     aws s3 cp s3://algorand-devops-misc/tools/gnupg2.2.9_centos7_amd64.tar.bz2 ${HOME}/docker_test_resources
 fi
-cp -p "${HOME}/key.gpg" "${HOME}/docker_test_resources/key.pub"
+
+export GNUPGHOME=${HOME}/tkey
+gpgconf --kill gpg-agent
+rm -rf ${GNUPGHOME}
+mkdir -p ${GNUPGHOME}
+chmod 700 ${GNUPGHOME}
+cat >${HOME}/tkey/keygenscript<<EOF
+Key-Type: default
+Subkey-Type: default
+Name-Real: Algorand developers
+Name-Email: dev@algorand.com
+Expire-Date: 0
+Passphrase: foogorand
+%transient-key
+EOF
+cat <<EOF>${GNUPGHOME}/gpg-agent.conf
+extra-socket ${GNUPGHOME}/S.gpg-agent.extra
+# inable unattended daemon mode
+allow-preset-passphrase
+# cache password 30 days
+default-cache-ttl 2592000
+max-cache-ttl 2592000
+EOF
+gpg --generate-key --batch ${HOME}/tkey/keygenscript
+gpg --export -a > "${HOME}/docker_test_resources/key.pub"
+
+gpgconf --kill gpg-agent
+gpgconf --launch gpg-agent
+
+KEYGRIP=$(gpg -K --with-keygrip --textmode|grep Keygrip|head -1|awk '{ print $3 }')
+echo foogorand|/usr/lib/gnupg/gpg-preset-passphrase --verbose --preset ${KEYGRIP}
 
 # copy previous installers into ~/docker_test_resources
 cd "${HOME}/docker_test_resources"

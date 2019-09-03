@@ -9,8 +9,8 @@ D=$(mktemp -d)
 trap "rm -r $D" 0
 
 GENJSON="$1"
-GOPATH=$(go env GOPATH)
-$GOPATH/bin/algod -d $D -g "$GENJSON" -x >/dev/null
+GOPATH1=$(go env GOPATH | cut -d: -f1)
+$GOPATH1/bin/algod -d $D -g "$GENJSON" -x >/dev/null
 LEDGERS=$D/*/ledger.*sqlite
 
 for LEDGER in $LEDGERS; do
