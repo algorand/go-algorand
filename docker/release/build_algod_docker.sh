@@ -1,9 +1,28 @@
 #!/usr/bin/env bash
 ALGOD_INSTALL_TAR_FILE=$1
+
+if [[ -z "$CHANNEL" ]];
+then
+  echo 'Missing CHANNEL environment setting.'
+  exit 1
+fi
+if [[ -z "$FULLVERSION" ]];
+then
+  echo 'Missing FULLVERSION environment setting.'
+  exit 1
+fi
+
 if [[ $ALGOD_INSTALL_TAR_FILE == "" ]]
 then
    echo "specify filepath of base install file"
    exit 1
+fi
+
+if [ -f "$ALGOD_INSTALL_TAR_FILE" ]; then
+    echo "using install file $ALGOD_INSTALL_TAR_FILE"
+else
+    echo "error, $ALGOD_INSTALL_TAR_FILE does not exist"
+    exit 1
 fi
 
 INPUT_ALGOD_TAR_FILE="temp_install.tar.gz"
@@ -37,7 +56,7 @@ fi
 
 echo "creating docker package tar file ${DOCKER_PKG_FILE}"
 cp ./${START_ALGOD_FILE} ${PKG_DIR}/
-cp ./README.md ${PKG_DIR}/
+cp ./deploy_README.md ${PKG_DIR}/README.md
 sed -i.bak "s/%CHANNEL_VERSION%/${CHANNEL_VERSION}/g" ${PKG_DIR}/${START_ALGOD_FILE} && rm ${PKG_DIR}/${START_ALGOD_FILE}.bak
 
 tar cvf ${DOCKER_PKG_FILE} ${PKG_DIR}
