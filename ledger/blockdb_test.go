@@ -80,6 +80,16 @@ func checkBlockDB(t *testing.T, tx *sql.Tx, blocks []blockEntry) {
 		require.Equal(t, latest, basics.Round(len(blocks))-1)
 	}
 
+	count, err := blockCount(tx)
+	if len(blocks) == 0 {
+		require.Error(t, err)
+		require.Equal(t, int(count), 0)
+	} else {
+		require.NoError(t, err)
+		require.Equal(t, int(count), len(blocks))
+	}
+
+
 	for rnd := basics.Round(0); rnd < basics.Round(len(blocks)); rnd++ {
 		blk, err := blockGet(tx, rnd)
 		require.NoError(t, err)

@@ -208,6 +208,22 @@ func blockLatest(tx *sql.Tx) (basics.Round, error) {
 	return 0, fmt.Errorf("no blocks present")
 }
 
+// Returns amount of blocks in Block DB
+// At least one row (genesis block) must present, empty table is threated as error
+func blockCount(tx *sql.Tx) (uint64, error) {
+	var count sql.NullInt64
+	err := tx.QueryRow("SELECT COUNT(rnd) FROM blocks").Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+
+	if !count.Valid || count.Int64 == 0 {
+		return 0, fmt.Errorf("no blocks present")
+	}
+
+	return uint64(count.Int64), nil
+}
+
 func blockForgetBefore(tx *sql.Tx, rnd basics.Round) error {
 	next, err := blockNext(tx)
 	if err != nil {
