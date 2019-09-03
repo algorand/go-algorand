@@ -166,7 +166,7 @@ func (cc CurrencyConfigTxnFields) apply(header Header, balances Balances, spec S
 		// Destroying a currency.  The creator account must hold
 		// the entire outstanding currency amount.
 		if record.Currencies[cc.ConfigCurrency].Amount != params.Total {
-			return fmt.Errorf("cannot destroy currency: holding only %d/%d", record.Currencies[cc.ConfigCurrency].Amount, params.Total)
+			return fmt.Errorf("cannot destroy currency: creator is holding only %d/%d", record.Currencies[cc.ConfigCurrency].Amount, params.Total)
 		}
 
 		delete(record.Currencies, cc.ConfigCurrency)
@@ -192,6 +192,66 @@ func (cc CurrencyConfigTxnFields) apply(header Header, balances Balances, spec S
 	return balances.Put(record)
 }
 
+func takeOut(balances Balances, addr basics.Address, currency basics.CurrencyID, amount uint64, bypassFreeze bool) error {
+	if amount == 0 {
+		return nil
+	}
+
+	snd, err := balances.Get(addr, false)
+	if err != nil {
+		return err
+	}
+
+	snd.Currencies = clone(snd.Currencies)
+	sndHolding, ok := snd.Currencies[currency]
+	if !ok {
+		return fmt.Errorf("currency %v missing from %v", currency, addr)
+	}
+
+	if sndHolding.Frozen && !bypassFreeze {
+		return fmt.Errorf("currency %v frozen in %v", currency, addr)
+	}
+
+	var overflowed bool
+	sndHolding.Amount, overflowed = basics.OSub(sndHolding.Amount, amount)
+	if overflowed {
+		return fmt.Errorf("underflow on subtracting %d from sender amount %d", amount, sndHolding.Amount)
+	}
+
+	snd.Currencies[currency] = sndHolding
+	return balances.Put(snd)
+}
+
+func putIn(balances Balances, addr basics.Address, currency basics.CurrencyID, amount uint64, bypassFreeze bool) error {
+	if amount == 0 {
+		return nil
+	}
+
+	rcv, err := balances.Get(addr, false)
+	if err != nil {
+		return err
+	}
+
+	rcv.Currencies = clone(rcv.Currencies)
+	rcvHolding, ok := rcv.Currencies[currency]
+	if !ok {
+		return fmt.Errorf("currency %v missing from %v", currency, addr)
+	}
+
+	if rcvHolding.Frozen && !bypassFreeze {
+		return fmt.Errorf("currency frozen in recipient")
+	}
+
+	var overflowed bool
+	rcvHolding.Amount, overflowed = basics.OAdd(rcvHolding.Amount, amount)
+	if overflowed {
+		return fmt.Errorf("overflow on adding %d to receiver amount %d", amount, rcvHolding.Amount)
+	}
+
+	rcv.Currencies[currency] = rcvHolding
+	return balances.Put(rcv)
+}
+
 func (ct CurrencyTransferTxnFields) apply(header Header, balances Balances, spec SpecialAddresses, ad *ApplyData) error {
 	// Default to sending from the transaction sender's account.
 	source := header.Sender
@@ -215,7 +275,8 @@ func (ct CurrencyTransferTxnFields) apply(header Header, balances Balances, spec
 		clawback = true
 	}
 
-	if ct.CurrencyAmount > 0 || ct.CurrencyReceiver != (basics.Address{}) {
+	// Allocate a slot for currency (self-transfer of zero amount).
+	if ct.CurrencyAmount == 0 && ct.CurrencyReceiver == source && !clawback {
 		snd, err := balances.Get(source, false)
 		if err != nil {
 			return err
@@ -224,65 +285,38 @@ func (ct CurrencyTransferTxnFields) apply(header Header, balances Balances, spec
 		snd.Currencies = clone(snd.Currencies)
 		sndHolding, ok := snd.Currencies[ct.XferCurrency]
 		if !ok {
-			// Allocating a slot for currency (self-transfer of zero amount).
 			// Initialize holding with default Frozen value.
-			if clawback {
-				return fmt.Errorf("cannot allocate currency slot via clawback")
-			}
-
 			params, err := getParams(balances, ct.XferCurrency)
 			if err != nil {
 				return err
 			}
 
 			sndHolding.Frozen = params.DefaultFrozen
-		}
+			snd.Currencies[ct.XferCurrency] = sndHolding
 
-		if ct.CurrencyAmount > 0 && sndHolding.Frozen && !clawback {
-			return fmt.Errorf("currency frozen in sender")
-		}
+			if len(snd.Currencies) > balances.ConsensusParams().MaxCurrenciesPerAccount {
+				return fmt.Errorf("too many currencies in account: %d > %d", len(snd.Currencies), balances.ConsensusParams().MaxCurrenciesPerAccount)
+			}
 
-		var overflowed bool
-		sndHolding.Amount, overflowed = basics.OSub(sndHolding.Amount, ct.CurrencyAmount)
-		if overflowed {
-			return fmt.Errorf("underflow: currency balance %d less than transfer amount %d", sndHolding.Amount, ct.CurrencyAmount)
+			err = balances.Put(snd)
+			if err != nil {
+				return err
+			}
 		}
+	}
 
-		snd.Currencies[ct.XferCurrency] = sndHolding
-		err = balances.Put(snd)
-		if err != nil {
-			return err
-		}
+	// Actually move the currency.  Zero transfers return right away
+	// without looking up accounts, so it's fine to have a zero transfer
+	// to an all-zero address (e.g., when the only meaningful part of
+	// the transaction is the close-to address).
+	err := takeOut(balances, source, ct.XferCurrency, ct.CurrencyAmount, clawback)
+	if err != nil {
+		return err
+	}
 
-		if len(snd.Currencies) > balances.ConsensusParams().MaxCurrenciesPerAccount {
-			return fmt.Errorf("too many currencies in account: %d > %d", len(snd.Currencies), balances.ConsensusParams().MaxCurrenciesPerAccount)
-		}
-
-		rcv, err := balances.Get(ct.CurrencyReceiver, false)
-		if err != nil {
-			return err
-		}
-
-		rcv.Currencies = clone(rcv.Currencies)
-		rcvHolding, ok := rcv.Currencies[ct.XferCurrency]
-		if !ok {
-			return fmt.Errorf("currency not present in receiver account")
-		}
-
-		if ct.CurrencyAmount > 0 && rcvHolding.Frozen {
-			return fmt.Errorf("currency frozen in recipient")
-		}
-
-		rcvHolding.Amount, overflowed = basics.OAdd(rcvHolding.Amount, ct.CurrencyAmount)
-		if overflowed {
-			return fmt.Errorf("overflow on adding %d to receiver amount %d", ct.CurrencyAmount, rcvHolding.Amount)
-		}
-
-		rcv.Currencies[ct.XferCurrency] = rcvHolding
-		err = balances.Put(rcv)
-		if err != nil {
-			return err
-		}
+	err = putIn(balances, ct.CurrencyReceiver, ct.XferCurrency, ct.CurrencyAmount, clawback)
+	if err != nil {
+		return err
 	}
 
 	if ct.CurrencyCloseTo != (basics.Address{}) {
@@ -291,50 +325,49 @@ func (ct CurrencyTransferTxnFields) apply(header Header, balances Balances, spec
 			return fmt.Errorf("cannot close currency ID in allocating account")
 		}
 
+		// Cannot close by clawback.
+		if clawback {
+			return fmt.Errorf("cannot close currency by clawback")
+		}
+
+		// Figure out how much balance to move.
 		snd, err := balances.Get(source, false)
 		if err != nil {
 			return err
 		}
 
-		snd.Currencies = clone(snd.Currencies)
-		sndHolding := snd.Currencies[ct.XferCurrency]
-		delete(snd.Currencies, ct.XferCurrency)
-		err = balances.Put(snd)
+		sndHolding, ok := snd.Currencies[ct.XferCurrency]
+		if !ok {
+			return fmt.Errorf("currency %v not present in account %v", ct.XferCurrency, source)
+		}
+
+		// Move the balance out.
+		err = takeOut(balances, source, ct.XferCurrency, sndHolding.Amount, clawback)
 		if err != nil {
 			return err
 		}
 
-		if sndHolding.Amount > 0 {
-			if sndHolding.Frozen && !clawback {
-				return fmt.Errorf("currency frozen in sender")
-			}
+		err = putIn(balances, ct.CurrencyCloseTo, ct.XferCurrency, sndHolding.Amount, clawback)
+		if err != nil {
+			return err
+		}
 
-			rcv, err := balances.Get(ct.CurrencyCloseTo, false)
-			if err != nil {
-				return err
-			}
+		// Delete the slot from the account.
+		snd, err = balances.Get(source, false)
+		if err != nil {
+			return err
+		}
 
-			rcv.Currencies = clone(rcv.Currencies)
-			rcvHolding, ok := rcv.Currencies[ct.XferCurrency]
-			if !ok {
-				return fmt.Errorf("currency not present in close-to account")
-			}
+		snd.Currencies = clone(snd.Currencies)
+		sndHolding = snd.Currencies[ct.XferCurrency]
+		if sndHolding.Amount != 0 {
+			return fmt.Errorf("currency %v not zero (%d) after closing", ct.XferCurrency, sndHolding.Amount)
+		}
 
-			if rcvHolding.Frozen {
-				return fmt.Errorf("currency frozen in recipient")
-			}
-
-			var overflowed bool
-			rcvHolding.Amount, overflowed = basics.OAdd(rcvHolding.Amount, sndHolding.Amount)
-			if overflowed {
-				return fmt.Errorf("overflow on adding closing balance %d to receiver amount %d", sndHolding.Amount, rcvHolding.Amount)
-			}
-
-			rcv.Currencies[ct.XferCurrency] = rcvHolding
-			err = balances.Put(rcv)
-			if err != nil {
-				return err
-			}
+		delete(snd.Currencies, ct.XferCurrency)
+		err = balances.Put(snd)
+		if err != nil {
+			return err
 		}
 	}
 
