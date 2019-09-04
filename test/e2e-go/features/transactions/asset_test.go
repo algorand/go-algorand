@@ -41,7 +41,8 @@ func helperFillSignBroadcast(client libgoal.Client, wh []byte, sender string, tx
 		return "", err
 	}
 
-	tx, err = client.FillUnsignedTxTemplate(sender, 0, 0, 0, tx)
+	// we're sending many txns, so might need to raise the fee
+	tx, err = client.FillUnsignedTxTemplate(sender, 0, 0, 1000000, tx)
 	if err != nil {
 		return "", err
 	}
@@ -77,7 +78,7 @@ func TestAssetConfig(t *testing.T) {
 	a.NoError(err)
 
 	// Fund the manager, so it can issue transactions later on
-	_, err = client.SendPaymentFromUnencryptedWallet(account0, manager, 0, 100000000, nil)
+	_, err = client.SendPaymentFromUnencryptedWallet(account0, manager, 0, 10000000000, nil)
 	a.NoError(err)
 
 	// There should be no assets to start with
@@ -117,6 +118,11 @@ func TestAssetConfig(t *testing.T) {
 		a.Equal(cp.FreezeAddr, freeze)
 		a.Equal(cp.ClawbackAddr, clawback)
 	}
+
+	// re-generate wh, since this test takes a while and sometimes
+	// the wallet handle expires.
+	wh, err = client.GetUnencryptedWalletHandle()
+	a.NoError(err)
 
 	// Test changing various keys
 	var empty string
@@ -220,6 +226,11 @@ func TestAssetConfig(t *testing.T) {
 	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+5, txids)
 	a.True(confirmed, "destroying assets")
 
+	// re-generate wh, since this test takes a while and sometimes
+	// the wallet handle expires.
+	wh, err = client.GetUnencryptedWalletHandle()
+	a.NoError(err)
+
 	// Should be able to close now
 	_, err = client.SendPaymentFromWallet(wh, nil, account0, "", 0, 0, nil, reserve, 0, 0)
 	a.NoError(err)
@@ -256,13 +267,13 @@ func TestAssetSend(t *testing.T) {
 	a.NoError(err)
 
 	// Fund the manager, freeze, clawback, and extra, so they can issue transactions later on
-	_, err = client.SendPaymentFromUnencryptedWallet(account0, manager, 0, 100000000, nil)
+	_, err = client.SendPaymentFromUnencryptedWallet(account0, manager, 0, 10000000000, nil)
 	a.NoError(err)
-	_, err = client.SendPaymentFromUnencryptedWallet(account0, freeze, 0, 100000000, nil)
+	_, err = client.SendPaymentFromUnencryptedWallet(account0, freeze, 0, 10000000000, nil)
 	a.NoError(err)
-	_, err = client.SendPaymentFromUnencryptedWallet(account0, clawback, 0, 100000000, nil)
+	_, err = client.SendPaymentFromUnencryptedWallet(account0, clawback, 0, 10000000000, nil)
 	a.NoError(err)
-	_, err = client.SendPaymentFromUnencryptedWallet(account0, extra, 0, 100000000, nil)
+	_, err = client.SendPaymentFromUnencryptedWallet(account0, extra, 0, 10000000000, nil)
 	a.NoError(err)
 
 	// Create two assets: one with default-freeze, and one without default-freeze

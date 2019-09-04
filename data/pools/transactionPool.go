@@ -47,6 +47,12 @@ type TransactionPool struct {
 	ledger                 *ledger.Ledger
 	statusCache            *statusCache
 	logStats               bool
+
+	// To ensure that Pending() can return quickly (even if we are in the
+	// middle of rebuilding the pool in OnNewBlock), we store an extra
+	// reference to the pendingTxns slice that can be returned right away.
+	snapshotMu deadlock.Mutex
+	snapshotPendingTxns []transactions.SignedTxn
 }
 
 // MakeTransactionPool is the constructor, it uses Ledger to ensure that no account has pending transactions that together overspend.
@@ -98,23 +104,31 @@ func (pool *TransactionPool) PendingTxIDs() []transactions.Txid {
 // Pending returns a list of transactions that should be proposed
 // in the next block, in order.
 func (pool *TransactionPool) Pending() []transactions.SignedTxn {
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
+	pool.snapshotMu.Lock()
+	defer pool.snapshotMu.Unlock()
 
-	txns := make([]transactions.SignedTxn, len(pool.pendingTxns))
+	txns := make([]transactions.SignedTxn, len(pool.snapshotPendingTxns))
 	i := 0
-	for _, tx := range pool.pendingTxns {
+	for _, tx := range pool.snapshotPendingTxns {
 		txns[i] = tx
 		i++
 	}
 	return txns
 }
 
+// updatePendingSnapshot saves a copy of the current list of pending transactions.
+func (pool *TransactionPool) updatePendingSnapshot() {
+	pool.snapshotMu.Lock()
+	defer pool.snapshotMu.Unlock()
+
+	pool.snapshotPendingTxns = pool.pendingTxns
+}
+
 // PendingCount returns the number of transactions currently pending in the pool.
 func (pool *TransactionPool) PendingCount() int {
-	pool.mu.RLock()
-	defer pool.mu.RUnlock()
-	return len(pool.pendingTxns)
+	pool.snapshotMu.Lock()
+	defer pool.snapshotMu.Unlock()
+	return len(pool.snapshotPendingTxns)
 }
 
 // Test checks whether a transaction could be remembered in the pool,
@@ -215,6 +229,7 @@ func (pool *TransactionPool) Remember(t transactions.SignedTxn) error {
 		return fmt.Errorf("TransactionPool.Remember: %v", err)
 	}
 
+	pool.updatePendingSnapshot()
 	return nil
 }
 
@@ -410,5 +425,6 @@ func (pool *TransactionPool) recomputeBlockEvaluator() (stats telemetryspec.Proc
 		}
 	}
 
+	pool.updatePendingSnapshot()
 	return
 }
