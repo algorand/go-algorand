@@ -180,6 +180,9 @@ type ConsensusParams struct {
 	// domain-separated credentials
 	CredentialDomainSeparationEnabled bool
 
+	// fix the rewards calculation by avoiding subtracting too much from the rewards pool
+	PendingResidueRewards bool
+
 	// asset support
 	Asset bool
 
@@ -383,6 +386,7 @@ func initConsensusProtocols() {
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
 	vFuture := v17
+	vFuture.PendingResidueRewards = true
 	vFuture.TxnCounter = true
 	vFuture.Asset = true
 	vFuture.MaxAssetsPerAccount = 1000

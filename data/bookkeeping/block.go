@@ -235,8 +235,20 @@ func (s RewardsState) NextRewardsState(nextRound basics.Round, nextProto config.
 	res = s
 
 	if nextRound == s.RewardsRecalculationRound {
+		maxSpentOver := nextProto.MinBalance
+		overflowed := false
+
+		if nextProto.PendingResidueRewards {
+			maxSpentOver, overflowed = basics.OAdd(maxSpentOver, s.RewardsResidue)
+			if overflowed {
+				logging.Base().Errorf("overflowed when trying to accumulate MinBalance(%d) and RewardsResidue(%d) for round %d (state %+v)", nextProto.MinBalance, s.RewardsResidue, nextRound, s)
+				// this should never happen, but if it does, adjust the maxSpentOver so that we will have no rewards.
+				maxSpentOver = incentivePoolBalance.Raw
+			}
+		}
+
 		// it is time to refresh the rewards rate
-		newRate, overflowed := basics.OSub(incentivePoolBalance.Raw, nextProto.MinBalance)
+		newRate, overflowed := basics.OSub(incentivePoolBalance.Raw, maxSpentOver)
 		if overflowed {
 			logging.Base().Errorf("overflowed when trying to refresh RewardsRate for round %v (state %+v)", nextRound, s)
 			newRate = 0
