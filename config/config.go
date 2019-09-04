@@ -180,11 +180,11 @@ type ConsensusParams struct {
 	// domain-separated credentials
 	CredentialDomainSeparationEnabled bool
 
-	// multi-currency support
-	MultiCurrency bool
+	// asset support
+	Asset bool
 
-	// max number of currencies per account
-	MaxCurrenciesPerAccount int
+	// max number of assets per account
+	MaxAssetsPerAccount int
 
 	// support sequential transaction counter TxnCounter
 	TxnCounter bool
@@ -384,8 +384,8 @@ func initConsensusProtocols() {
 	// but not yet released in a production protocol version.
 	vFuture := v17
 	vFuture.TxnCounter = true
-	vFuture.MultiCurrency = true
-	vFuture.MaxCurrenciesPerAccount = 100
+	vFuture.Asset = true
+	vFuture.MaxAssetsPerAccount = 100
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

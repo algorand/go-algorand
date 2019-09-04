@@ -78,12 +78,12 @@ func txEncode(tx transactions.Transaction, ad transactions.ApplyData) (v1.Transa
 		res = paymentTxEncode(tx, ad)
 	case protocol.KeyRegistrationTx:
 		res = keyregTxEncode(tx, ad)
-	case protocol.CurrencyConfigTx:
-		res = currencyConfigTxEncode(tx, ad)
-	case protocol.CurrencyTransferTx:
-		res = currencyTransferTxEncode(tx, ad)
-	case protocol.CurrencyFreezeTx:
-		res = currencyFreezeTxEncode(tx, ad)
+	case protocol.AssetConfigTx:
+		res = assetConfigTxEncode(tx, ad)
+	case protocol.AssetTransferTx:
+		res = assetTransferTxEncode(tx, ad)
+	case protocol.AssetFreezeTx:
+		res = assetFreezeTxEncode(tx, ad)
 	default:
 		return res, errors.New(errUnknownTransactionType)
 	}
@@ -133,8 +133,8 @@ func keyregTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.T
 	}
 }
 
-func currencyParams(creator basics.Address, params basics.CurrencyParams) v1.CurrencyParams {
-	paramsModel := v1.CurrencyParams{
+func assetParams(creator basics.Address, params basics.AssetParams) v1.AssetParams {
+	paramsModel := v1.AssetParams{
 		Creator:       creator.String(),
 		Total:         params.Total,
 		DefaultFrozen: params.DefaultFrozen,
@@ -161,49 +161,49 @@ func currencyParams(creator basics.Address, params basics.CurrencyParams) v1.Cur
 	return paramsModel
 }
 
-func currencyConfigTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
-	config := v1.CurrencyConfigTransactionType{
-		CurrencyID: tx.CurrencyConfigTxnFields.ConfigCurrency.Index,
-		Params: currencyParams(tx.CurrencyConfigTxnFields.ConfigCurrency.Creator,
-			tx.CurrencyConfigTxnFields.CurrencyParams),
+func assetConfigTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
+	config := v1.AssetConfigTransactionType{
+		AssetID: tx.AssetConfigTxnFields.ConfigAsset.Index,
+		Params: assetParams(tx.AssetConfigTxnFields.ConfigAsset.Creator,
+			tx.AssetConfigTxnFields.AssetParams),
 	}
 
 	return v1.Transaction{
-		CurrencyConfig: &config,
+		AssetConfig: &config,
 	}
 }
 
-func currencyTransferTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
-	xfer := v1.CurrencyTransferTransactionType{
-		CurrencyID: tx.CurrencyTransferTxnFields.XferCurrency.Index,
-		Creator:    tx.CurrencyTransferTxnFields.XferCurrency.Creator.String(),
-		Amount:     tx.CurrencyTransferTxnFields.CurrencyAmount,
-		Receiver:   tx.CurrencyTransferTxnFields.CurrencyReceiver.String(),
+func assetTransferTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
+	xfer := v1.AssetTransferTransactionType{
+		AssetID:  tx.AssetTransferTxnFields.XferAsset.Index,
+		Creator:  tx.AssetTransferTxnFields.XferAsset.Creator.String(),
+		Amount:   tx.AssetTransferTxnFields.AssetAmount,
+		Receiver: tx.AssetTransferTxnFields.AssetReceiver.String(),
 	}
 
-	if !tx.CurrencyTransferTxnFields.CurrencySender.IsZero() {
-		xfer.Sender = tx.CurrencyTransferTxnFields.CurrencySender.String()
+	if !tx.AssetTransferTxnFields.AssetSender.IsZero() {
+		xfer.Sender = tx.AssetTransferTxnFields.AssetSender.String()
 	}
 
-	if !tx.CurrencyTransferTxnFields.CurrencyCloseTo.IsZero() {
-		xfer.CloseTo = tx.CurrencyTransferTxnFields.CurrencyCloseTo.String()
+	if !tx.AssetTransferTxnFields.AssetCloseTo.IsZero() {
+		xfer.CloseTo = tx.AssetTransferTxnFields.AssetCloseTo.String()
 	}
 
 	return v1.Transaction{
-		CurrencyTransfer: &xfer,
+		AssetTransfer: &xfer,
 	}
 }
 
-func currencyFreezeTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
-	freeze := v1.CurrencyFreezeTransactionType{
-		CurrencyID:      tx.CurrencyFreezeTxnFields.FreezeCurrency.Index,
-		Creator:         tx.CurrencyFreezeTxnFields.FreezeCurrency.Creator.String(),
-		Account:         tx.CurrencyFreezeTxnFields.FreezeAccount.String(),
-		NewFreezeStatus: tx.CurrencyFreezeTxnFields.CurrencyFrozen,
+func assetFreezeTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
+	freeze := v1.AssetFreezeTransactionType{
+		AssetID:         tx.AssetFreezeTxnFields.FreezeAsset.Index,
+		Creator:         tx.AssetFreezeTxnFields.FreezeAsset.Creator.String(),
+		Account:         tx.AssetFreezeTxnFields.FreezeAccount.String(),
+		NewFreezeStatus: tx.AssetFreezeTxnFields.AssetFrozen,
 	}
 
 	return v1.Transaction{
-		CurrencyFreeze: &freeze,
+		AssetFreeze: &freeze,
 	}
 }
 
@@ -456,11 +456,11 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	var currencies map[uint64]v1.CurrencyHolding
-	if len(record.Currencies) > 0 {
-		currencies = make(map[uint64]v1.CurrencyHolding)
-		for curid, holding := range record.Currencies {
-			currencies[curid.Index] = v1.CurrencyHolding{
+	var assets map[uint64]v1.AssetHolding
+	if len(record.Assets) > 0 {
+		assets = make(map[uint64]v1.AssetHolding)
+		for curid, holding := range record.Assets {
+			assets[curid.Index] = v1.AssetHolding{
 				Creator: curid.Creator.String(),
 				Amount:  holding.Amount,
 				Frozen:  holding.Frozen,
@@ -468,11 +468,11 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	var thisCurrencyParams map[uint64]v1.CurrencyParams
-	if len(record.CurrencyParams) > 0 {
-		thisCurrencyParams = make(map[uint64]v1.CurrencyParams)
-		for idx, params := range record.CurrencyParams {
-			thisCurrencyParams[idx] = currencyParams(addr, params)
+	var thisAssetParams map[uint64]v1.AssetParams
+	if len(record.AssetParams) > 0 {
+		thisAssetParams = make(map[uint64]v1.AssetParams)
+		for idx, params := range record.AssetParams {
+			thisAssetParams[idx] = assetParams(addr, params)
 		}
 	}
 
@@ -492,8 +492,8 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 		Rewards:                     record.RewardedMicroAlgos.Raw,
 		Status:                      record.Status.String(),
 		Participation:               apiParticipation,
-		CurrencyParams:              thisCurrencyParams,
-		Currencies:                  currencies,
+		AssetParams:                 thisAssetParams,
+		Assets:                      assets,
 	}
 
 	SendJSON(AccountInformationResponse{&accountInfo}, w, ctx.Log)

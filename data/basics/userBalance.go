@@ -106,36 +106,36 @@ type AccountData struct {
 	VoteLastValid   Round  `codec:"voteLst"`
 	VoteKeyDilution uint64 `codec:"voteKD"`
 
-	// If this account created a currency, CurrencyParams stores
-	// the parameters defining that currency.  The params are indexed
-	// by the Index of the CurrencyID; the Creator is this account's address.
+	// If this account created an asset, AssetParams stores
+	// the parameters defining that asset.  The params are indexed
+	// by the Index of the AssetID; the Creator is this account's address.
 	//
-	// An account with any currency in CurrencyParams cannot be
-	// closed, until the currency is destroyed.  A currency can
-	// be destroyed if this account holds CurrencyParams.Total units
-	// of that currency (in the Currencies array below).
+	// An account with any asset in AssetParams cannot be
+	// closed, until the asset is destroyed.  An asset can
+	// be destroyed if this account holds AssetParams.Total units
+	// of that asset (in the Assets array below).
 	//
 	// NOTE: do not modify this value in-place in existing AccountData
 	// structs; allocate a copy and modify that instead.  AccountData
 	// is expected to have copy-by-value semantics.
-	CurrencyParams map[uint64]CurrencyParams `codec:"thiscur"`
+	AssetParams map[uint64]AssetParams `codec:"apar"`
 
-	// Currencies is the set of currencies that can be held by this
-	// account.  Currencies (i.e., slots in this map) are explicitly
+	// Assets is the set of assets that can be held by this
+	// account.  Assets (i.e., slots in this map) are explicitly
 	// added and removed from an account by special transactions.
-	// The map is keyed by the CurrencyID, which is the address of
-	// the account that created the currency plus a unique counter
-	// to distinguish re-created currencies.
+	// The map is keyed by the AssetID, which is the address of
+	// the account that created the asset plus a unique counter
+	// to distinguish re-created assets.
 	//
-	// Each currency bumps the required MinBalance in this account.
+	// Each asset bumps the required MinBalance in this account.
 	//
-	// An account that creates a currency must have its own currency
-	// in the Currencies map until that currency is destroyed.
+	// An account that creates an asset must have its own asset
+	// in the Assets map until that asset is destroyed.
 	//
 	// NOTE: do not modify this value in-place in existing AccountData
 	// structs; allocate a copy and modify that instead.  AccountData
 	// is expected to have copy-by-value semantics.
-	Currencies map[CurrencyID]CurrencyHolding `codec:"cur"`
+	Assets map[AssetID]AssetHolding `codec:"asset"`
 }
 
 // AccountDetail encapsulates meaningful details about a given account, for external consumption
@@ -160,46 +160,46 @@ type BalanceDetail struct {
 	Accounts    []AccountDetail
 }
 
-// CurrencyID is a name of a currency.
-type CurrencyID struct {
+// AssetID is a name of an asset.
+type AssetID struct {
 	Creator Address `codec:"c"`
 	Index   uint64  `codec:"i"`
 }
 
-// CurrencyHolding describes a currency held by an account.
-type CurrencyHolding struct {
+// AssetHolding describes an asset held by an account.
+type AssetHolding struct {
 	Amount uint64 `codec:"a"`
 	Frozen bool   `codec:"f"`
 }
 
-// CurrencyParams describes the parameters of a currency.
-type CurrencyParams struct {
-	// Total specifies the total number of units of this currency
+// AssetParams describes the parameters of an asset.
+type AssetParams struct {
+	// Total specifies the total number of units of this asset
 	// created.
 	Total uint64 `codec:"t"`
 
-	// DefaultFrozen specifies whether slots for this currency
+	// DefaultFrozen specifies whether slots for this asset
 	// in user accounts are frozen by default or not.
 	DefaultFrozen bool `codec:"df"`
 
 	// UnitName specifies a hint for the name of a unit of
-	// this currency.
+	// this asset.
 	UnitName [8]byte `codec:"n"`
 
 	// Manager specifies an account that is allowed to change the
-	// non-zero addresses in this CurrencyParams.
+	// non-zero addresses in this AssetParams.
 	Manager Address `codec:"m"`
 
-	// Reserve specifies an account whose holdings of this currency
+	// Reserve specifies an account whose holdings of this asset
 	// should be reported as "not minted".
 	Reserve Address `codec:"r"`
 
 	// Freeze specifies an account that is allowed to change the
-	// frozen state of holdings of this currency.
+	// frozen state of holdings of this asset.
 	Freeze Address `codec:"f"`
 
 	// Clawback specifies an account that is allowed to take units
-	// of this currency from any account.
+	// of this asset from any account.
 	Clawback Address `codec:"c"`
 }
 
@@ -258,8 +258,8 @@ func (u AccountData) KeyDilution(proto config.ConsensusParams) uint64 {
 
 // IsZero checks if an AccountData value is the same as its zero value.
 func (u AccountData) IsZero() bool {
-	if u.Currencies != nil && len(u.Currencies) == 0 {
-		u.Currencies = nil
+	if u.Assets != nil && len(u.Assets) == 0 {
+		u.Assets = nil
 	}
 
 	return reflect.DeepEqual(u, AccountData{})

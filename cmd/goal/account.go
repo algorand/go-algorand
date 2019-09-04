@@ -436,7 +436,7 @@ var listCmd = &cobra.Command{
 				accountList.outputAccount(addr.Addr, response, nil)
 			}
 
-			for curid, bal := range response.Currencies {
+			for aid, bal := range response.Assets {
 				frozen := ""
 				if bal.Frozen {
 					frozen = ", frozen"
@@ -445,13 +445,13 @@ var listCmd = &cobra.Command{
 				unitName := "units"
 				creatorInfo, err := client.AccountInformation(bal.Creator)
 				if err == nil {
-					params, ok := creatorInfo.CurrencyParams[curid]
+					params, ok := creatorInfo.AssetParams[aid]
 					if ok {
 						unitName = params.UnitName
 					}
 				}
 
-				fmt.Printf("\t%20d %-8s (creator %s, ID %d%s)\n", bal.Amount, unitName, bal.Creator, curid, frozen)
+				fmt.Printf("\t%20d %-8s (creator %s, ID %d%s)\n", bal.Amount, unitName, bal.Creator, aid, frozen)
 			}
 		}
 	},

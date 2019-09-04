@@ -89,9 +89,9 @@ func (payment PaymentTxnFields) apply(header Header, balances Balances, spec Spe
 			return fmt.Errorf("balance %d still not zero after CloseRemainderTo", rec.AccountData.MicroAlgos.Raw)
 		}
 
-		// Confirm that there is no currency-related state in the account
-		if len(rec.Currencies) > 0 {
-			return fmt.Errorf("cannot close: %d outstanding currencies", len(rec.Currencies))
+		// Confirm that there is no asset-related state in the account
+		if len(rec.Assets) > 0 {
+			return fmt.Errorf("cannot close: %d outstanding assets", len(rec.Assets))
 		}
 
 		// Clear out entire account record, to allow the DB to GC it

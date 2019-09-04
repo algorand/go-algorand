@@ -29,14 +29,14 @@ const (
 	// KeyRegistrationTx indicates a transaction that registers participation keys
 	KeyRegistrationTx TxType = "keyreg"
 
-	// CurrencyConfigTx creates, re-configures, or destroys a currency
-	CurrencyConfigTx TxType = "curcfg"
+	// AssetConfigTx creates, re-configures, or destroys an asset
+	AssetConfigTx TxType = "acfg"
 
-	// CurrencyTransferTx transfers currency units between accounts (optionally closing)
-	CurrencyTransferTx TxType = "curxfer"
+	// AssetTransferTx transfers assets between accounts (optionally closing)
+	AssetTransferTx TxType = "axfer"
 
-	// CurrencyFreezeTx changes the freeze status of a currency
-	CurrencyFreezeTx TxType = "curfrz"
+	// AssetFreezeTx changes the freeze status of an asset
+	AssetFreezeTx TxType = "afrz"
 
 	// UnknownTx signals an error
 	UnknownTx TxType = "unknown"

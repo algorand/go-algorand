@@ -283,69 +283,69 @@ func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, numValidRound
 	return tx, nil
 }
 
-// MakeUnsignedCurrencyCreateTx creates a tx template for creating
-// a currency.
+// MakeUnsignedAssetCreateTx creates a tx template for creating
+// an asset.
 //
 // Call FillUnsignedTxTemplate afterwards to fill out common fields in
 // the resulting transaction template.
-func (c *Client) MakeUnsignedCurrencyCreateTx(total uint64, defaultFrozen bool, manager string, reserve string, freeze string, clawback string, unitName string) (transactions.Transaction, error) {
+func (c *Client) MakeUnsignedAssetCreateTx(total uint64, defaultFrozen bool, manager string, reserve string, freeze string, clawback string, unitName string) (transactions.Transaction, error) {
 	var tx transactions.Transaction
 	var err error
 
-	tx.Type = protocol.CurrencyConfigTx
-	tx.CurrencyParams = basics.CurrencyParams{
+	tx.Type = protocol.AssetConfigTx
+	tx.AssetParams = basics.AssetParams{
 		Total:         total,
 		DefaultFrozen: defaultFrozen,
 	}
 
 	if manager != "" {
-		tx.CurrencyParams.Manager, err = basics.UnmarshalChecksumAddress(manager)
+		tx.AssetParams.Manager, err = basics.UnmarshalChecksumAddress(manager)
 		if err != nil {
 			return tx, err
 		}
 	}
 
 	if reserve != "" {
-		tx.CurrencyParams.Reserve, err = basics.UnmarshalChecksumAddress(reserve)
+		tx.AssetParams.Reserve, err = basics.UnmarshalChecksumAddress(reserve)
 		if err != nil {
 			return tx, err
 		}
 	}
 
 	if freeze != "" {
-		tx.CurrencyParams.Freeze, err = basics.UnmarshalChecksumAddress(freeze)
+		tx.AssetParams.Freeze, err = basics.UnmarshalChecksumAddress(freeze)
 		if err != nil {
 			return tx, err
 		}
 	}
 
 	if clawback != "" {
-		tx.CurrencyParams.Clawback, err = basics.UnmarshalChecksumAddress(clawback)
+		tx.AssetParams.Clawback, err = basics.UnmarshalChecksumAddress(clawback)
 		if err != nil {
 			return tx, err
 		}
 	}
 
-	if len(unitName) > len(tx.CurrencyParams.UnitName) {
-		return tx, fmt.Errorf("currency unit name %s too long (max %d bytes)", unitName, len(tx.CurrencyParams.UnitName))
+	if len(unitName) > len(tx.AssetParams.UnitName) {
+		return tx, fmt.Errorf("asset unit name %s too long (max %d bytes)", unitName, len(tx.AssetParams.UnitName))
 	}
-	copy(tx.CurrencyParams.UnitName[:], []byte(unitName))
+	copy(tx.AssetParams.UnitName[:], []byte(unitName))
 
 	return tx, nil
 }
 
-// MakeUnsignedCurrencyDestroyTx creates a tx template for destroying
-// a currency.
+// MakeUnsignedAssetDestroyTx creates a tx template for destroying
+// an asset.
 //
 // Call FillUnsignedTxTemplate afterwards to fill out common fields in
 // the resulting transaction template.
-func (c *Client) MakeUnsignedCurrencyDestroyTx(creator string, index uint64) (transactions.Transaction, error) {
+func (c *Client) MakeUnsignedAssetDestroyTx(creator string, index uint64) (transactions.Transaction, error) {
 	var tx transactions.Transaction
 	var err error
 
-	tx.Type = protocol.CurrencyConfigTx
-	tx.ConfigCurrency.Index = index
-	tx.ConfigCurrency.Creator, err = basics.UnmarshalChecksumAddress(creator)
+	tx.Type = protocol.AssetConfigTx
+	tx.ConfigAsset.Index = index
+	tx.ConfigAsset.Creator, err = basics.UnmarshalChecksumAddress(creator)
 	if err != nil {
 		return tx, err
 	}
@@ -353,14 +353,14 @@ func (c *Client) MakeUnsignedCurrencyDestroyTx(creator string, index uint64) (tr
 	return tx, nil
 }
 
-// MakeUnsignedCurrencyConfigTx creates a tx template for changing the
-// keys for a currency.  A nil pointer for a new key argument means no
+// MakeUnsignedAssetConfigTx creates a tx template for changing the
+// keys for an asset.  A nil pointer for a new key argument means no
 // change to existing key.  An empty string means a zero key (which
 // cannot be changed after becoming zero).
 //
 // Call FillUnsignedTxTemplate afterwards to fill out common fields in
 // the resulting transaction template.
-func (c *Client) MakeUnsignedCurrencyConfigTx(creator string, index uint64, newManager *string, newReserve *string, newFreeze *string, newClawback *string) (transactions.Transaction, error) {
+func (c *Client) MakeUnsignedAssetConfigTx(creator string, index uint64, newManager *string, newReserve *string, newFreeze *string, newClawback *string) (transactions.Transaction, error) {
 	var tx transactions.Transaction
 	var err error
 
@@ -370,9 +370,9 @@ func (c *Client) MakeUnsignedCurrencyConfigTx(creator string, index uint64, newM
 		return tx, err
 	}
 
-	params, ok := current.CurrencyParams[index]
+	params, ok := current.AssetParams[index]
 	if !ok {
-		return tx, fmt.Errorf("currency ID %d not found in account %s", index, creator)
+		return tx, fmt.Errorf("asset ID %d not found in account %s", index, creator)
 	}
 
 	if newManager == nil {
@@ -391,36 +391,36 @@ func (c *Client) MakeUnsignedCurrencyConfigTx(creator string, index uint64, newM
 		newClawback = &params.ClawbackAddr
 	}
 
-	tx.Type = protocol.CurrencyConfigTx
-	tx.ConfigCurrency.Index = index
-	tx.ConfigCurrency.Creator, err = basics.UnmarshalChecksumAddress(creator)
+	tx.Type = protocol.AssetConfigTx
+	tx.ConfigAsset.Index = index
+	tx.ConfigAsset.Creator, err = basics.UnmarshalChecksumAddress(creator)
 	if err != nil {
 		return tx, err
 	}
 
 	if *newManager != "" {
-		tx.CurrencyParams.Manager, err = basics.UnmarshalChecksumAddress(*newManager)
+		tx.AssetParams.Manager, err = basics.UnmarshalChecksumAddress(*newManager)
 		if err != nil {
 			return tx, err
 		}
 	}
 
 	if *newReserve != "" {
-		tx.CurrencyParams.Reserve, err = basics.UnmarshalChecksumAddress(*newReserve)
+		tx.AssetParams.Reserve, err = basics.UnmarshalChecksumAddress(*newReserve)
 		if err != nil {
 			return tx, err
 		}
 	}
 
 	if *newFreeze != "" {
-		tx.CurrencyParams.Freeze, err = basics.UnmarshalChecksumAddress(*newFreeze)
+		tx.AssetParams.Freeze, err = basics.UnmarshalChecksumAddress(*newFreeze)
 		if err != nil {
 			return tx, err
 		}
 	}
 
 	if *newClawback != "" {
-		tx.CurrencyParams.Clawback, err = basics.UnmarshalChecksumAddress(*newClawback)
+		tx.AssetParams.Clawback, err = basics.UnmarshalChecksumAddress(*newClawback)
 		if err != nil {
 			return tx, err
 		}
@@ -429,39 +429,39 @@ func (c *Client) MakeUnsignedCurrencyConfigTx(creator string, index uint64, newM
 	return tx, nil
 }
 
-// MakeUnsignedCurrencySendTx creates a tx template for sending currency.
-// To allocate a slot for a particular currency, send a zero amount to self.
+// MakeUnsignedAssetSendTx creates a tx template for sending assets.
+// To allocate a slot for a particular asset, send a zero amount to self.
 //
 // Call FillUnsignedTxTemplate afterwards to fill out common fields in
 // the resulting transaction template.
-func (c *Client) MakeUnsignedCurrencySendTx(creator string, index uint64, amount uint64, recipient string, closeTo string, senderForClawback string) (transactions.Transaction, error) {
+func (c *Client) MakeUnsignedAssetSendTx(creator string, index uint64, amount uint64, recipient string, closeTo string, senderForClawback string) (transactions.Transaction, error) {
 	var tx transactions.Transaction
 	var err error
 
-	tx.Type = protocol.CurrencyTransferTx
-	tx.CurrencyAmount = amount
-	tx.XferCurrency.Index = index
-	tx.XferCurrency.Creator, err = basics.UnmarshalChecksumAddress(creator)
+	tx.Type = protocol.AssetTransferTx
+	tx.AssetAmount = amount
+	tx.XferAsset.Index = index
+	tx.XferAsset.Creator, err = basics.UnmarshalChecksumAddress(creator)
 	if err != nil {
 		return tx, err
 	}
 
 	if recipient != "" {
-		tx.CurrencyReceiver, err = basics.UnmarshalChecksumAddress(recipient)
+		tx.AssetReceiver, err = basics.UnmarshalChecksumAddress(recipient)
 		if err != nil {
 			return tx, err
 		}
 	}
 
 	if closeTo != "" {
-		tx.CurrencyCloseTo, err = basics.UnmarshalChecksumAddress(closeTo)
+		tx.AssetCloseTo, err = basics.UnmarshalChecksumAddress(closeTo)
 		if err != nil {
 			return tx, err
 		}
 	}
 
 	if senderForClawback != "" {
-		tx.CurrencySender, err = basics.UnmarshalChecksumAddress(senderForClawback)
+		tx.AssetSender, err = basics.UnmarshalChecksumAddress(senderForClawback)
 		if err != nil {
 			return tx, err
 		}
@@ -470,17 +470,17 @@ func (c *Client) MakeUnsignedCurrencySendTx(creator string, index uint64, amount
 	return tx, nil
 }
 
-// MakeUnsignedCurrencyFreezeTx creates a tx template for freezing currency.
+// MakeUnsignedAssetFreezeTx creates a tx template for freezing assets.
 //
 // Call FillUnsignedTxTemplate afterwards to fill out common fields in
 // the resulting transaction template.
-func (c *Client) MakeUnsignedCurrencyFreezeTx(creator string, index uint64, accountToChange string, newFreezeSetting bool) (transactions.Transaction, error) {
+func (c *Client) MakeUnsignedAssetFreezeTx(creator string, index uint64, accountToChange string, newFreezeSetting bool) (transactions.Transaction, error) {
 	var tx transactions.Transaction
 	var err error
 
-	tx.Type = protocol.CurrencyFreezeTx
-	tx.FreezeCurrency.Index = index
-	tx.FreezeCurrency.Creator, err = basics.UnmarshalChecksumAddress(creator)
+	tx.Type = protocol.AssetFreezeTx
+	tx.FreezeAsset.Index = index
+	tx.FreezeAsset.Creator, err = basics.UnmarshalChecksumAddress(creator)
 	if err != nil {
 		return tx, err
 	}
@@ -490,7 +490,7 @@ func (c *Client) MakeUnsignedCurrencyFreezeTx(creator string, index uint64, acco
 		return tx, err
 	}
 
-	tx.CurrencyFrozen = newFreezeSetting
+	tx.AssetFrozen = newFreezeSetting
 
 	return tx, nil
 }

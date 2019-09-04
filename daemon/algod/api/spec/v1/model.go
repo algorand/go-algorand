@@ -150,77 +150,77 @@ type Account struct {
 	// required: false
 	Participation Participation `json:"participation,omitempty"`
 
-	// CurrencyParams specifies the parameters of currencies created by this account.
+	// AssetParams specifies the parameters of assets created by this account.
 	//
 	// required: false
-	CurrencyParams map[uint64]CurrencyParams `json:"thiscurrencytotal,omitempty"`
+	AssetParams map[uint64]AssetParams `json:"thisassettotal,omitempty"`
 
-	// Currencies specifies the holdings of currencies by this account,
-	// indexed by the currency ID.
+	// Assets specifies the holdings of assets by this account,
+	// indexed by the asset ID.
 	//
 	// required: false
-	Currencies map[uint64]CurrencyHolding `json:"currencies,omitempty"`
+	Assets map[uint64]AssetHolding `json:"assets,omitempty"`
 }
 
-// CurrencyParams specifies the parameters for a currency.
-// swagger:model CurrencyParams
-type CurrencyParams struct {
-	// Creator specifies the address that created this currency.
-	// This is the address where the parameters for this currency
-	// can be found, and also the address where unwanted currency
+// AssetParams specifies the parameters for an asset.
+// swagger:model AssetParams
+type AssetParams struct {
+	// Creator specifies the address that created this asset.
+	// This is the address where the parameters for this asset
+	// can be found, and also the address where unwanted asset
 	// units can be sent in the worst case.
 	//
 	// required: true
 	Creator string `json:"creator"`
 
-	// Total specifies the total number of units of this currency.
+	// Total specifies the total number of units of this asset.
 	//
 	// required: true
 	Total uint64 `json:"total"`
 
-	// DefaultFrozen specifies whether holdings in this currency
+	// DefaultFrozen specifies whether holdings in this asset
 	// are frozen by default.
 	//
 	// required: false
 	DefaultFrozen bool `json:"defaultfrozen"`
 
-	// UnitName specifies the name of a unit of this currency,
+	// UnitName specifies the name of a unit of this asset,
 	// as supplied by the creator.
 	//
 	// required: false
 	UnitName string `json:"unitname"`
 
 	// ManagerAddr specifies the address used to manage the keys of this
-	// currency and to destroy it.
+	// asset and to destroy it.
 	//
 	// required: false
 	ManagerAddr string `json:"managerkey"`
 
 	// ReserveAddr specifies the address holding reserve (non-minted)
-	// units of this currency.
+	// units of this asset.
 	//
 	// required: false
 	ReserveAddr string `json:"reserveaddr"`
 
 	// FreezeAddr specifies the address used to freeze holdings of
-	// this currency.  If empty, freezing is not permitted.
+	// this asset.  If empty, freezing is not permitted.
 	//
 	// required: false
 	FreezeAddr string `json:"freezeaddr"`
 
 	// ClawbackAddr specifies the address used to clawback holdings of
-	// this currency.  If empty, clawback is not permitted.
+	// this asset.  If empty, clawback is not permitted.
 	//
 	// required: false
 	ClawbackAddr string `json:"clawbackaddr"`
 }
 
-// CurrencyHolding specifies the holdings of a particular currency.
-// swagger:model CurrencyHolding
-type CurrencyHolding struct {
-	// Creator specifies the address that created this currency.
-	// This is the address where the parameters for this currency
-	// can be found, and also the address where unwanted currency
+// AssetHolding specifies the holdings of a particular asset.
+// swagger:model AssetHolding
+type AssetHolding struct {
+	// Creator specifies the address that created this asset.
+	// This is the address where the parameters for this asset
+	// can be found, and also the address where unwanted asset
 	// units can be sent in the worst case.
 	//
 	// required: true
@@ -304,20 +304,20 @@ type Transaction struct {
 	// required: false
 	Keyreg *KeyregTransactionType `json:"keyreg,omitempty"`
 
-	// CurrencyConfig contains the additional fields for a currency config transaction.
+	// AssetConfig contains the additional fields for an asset config transaction.
 	//
 	// required: false
-	CurrencyConfig *CurrencyConfigTransactionType `json:"curcfg,omitempty"`
+	AssetConfig *AssetConfigTransactionType `json:"curcfg,omitempty"`
 
-	// CurrencyTransfer contains the additional fields for a currency transfer transaction.
+	// AssetTransfer contains the additional fields for an asset transfer transaction.
 	//
 	// required: false
-	CurrencyTransfer *CurrencyTransferTransactionType `json:"curxfer,omitempty"`
+	AssetTransfer *AssetTransferTransactionType `json:"curxfer,omitempty"`
 
-	// CurrencyFreeze contains the additional fields for a currency freeze transaction.
+	// AssetFreeze contains the additional fields for an asset freeze transaction.
 	//
 	// required: false
-	CurrencyFreeze *CurrencyFreezeTransactionType `json:"curfrz,omitempty"`
+	AssetFreeze *AssetFreezeTransactionType `json:"curfrz,omitempty"`
 
 	// FromRewards is the amount of pending rewards applied to the From
 	// account as part of this transaction.
@@ -404,29 +404,29 @@ type KeyregTransactionType struct {
 	VoteKeyDilution uint64 `json:"votekd"`
 }
 
-// CurrencyConfigTransactionType contains the additional fields for a currency config transaction
-// swagger:model CurrencyConfigTransactionType
-type CurrencyConfigTransactionType struct {
-	// CurrencyID is the currency being configured (or empty if creating)
+// AssetConfigTransactionType contains the additional fields for an asset config transaction
+// swagger:model AssetConfigTransactionType
+type AssetConfigTransactionType struct {
+	// AssetID is the asset being configured (or empty if creating)
 	//
 	// required: false
-	CurrencyID uint64 `json:"id"`
+	AssetID uint64 `json:"id"`
 
-	// Params specifies the new currency parameters (or empty if deleting)
+	// Params specifies the new asset parameters (or empty if deleting)
 	//
 	// required: false
-	Params CurrencyParams `json:"params"`
+	Params AssetParams `json:"params"`
 }
 
-// CurrencyTransferTransactionType contains the additional fields for a currency transfer transaction
-// swagger:model CurrencyTransferTransactionType
-type CurrencyTransferTransactionType struct {
-	// CurrencyID is the currency being configured (or empty if creating)
+// AssetTransferTransactionType contains the additional fields for an asset transfer transaction
+// swagger:model AssetTransferTransactionType
+type AssetTransferTransactionType struct {
+	// AssetID is the asset being configured (or empty if creating)
 	//
 	// required: true
-	CurrencyID uint64 `json:"id"`
+	AssetID uint64 `json:"id"`
 
-	// Creator is the address of the currency creator.
+	// Creator is the address of the asset creator.
 	//
 	// required: true
 	Creator string `json:"creator"`
@@ -452,20 +452,20 @@ type CurrencyTransferTransactionType struct {
 	CloseTo string `json:"closeto"`
 }
 
-// CurrencyFreezeTransactionType contains the additional fields for a currency freeze transaction
-// swagger:model CurrencyFreezeTransactionType
-type CurrencyFreezeTransactionType struct {
-	// CurrencyID is the currency being configured (or empty if creating)
+// AssetFreezeTransactionType contains the additional fields for an asset freeze transaction
+// swagger:model AssetFreezeTransactionType
+type AssetFreezeTransactionType struct {
+	// AssetID is the asset being configured (or empty if creating)
 	//
 	// required: true
-	CurrencyID uint64 `json:"id"`
+	AssetID uint64 `json:"id"`
 
-	// Creator is the address of the currency creator.
+	// Creator is the address of the asset creator.
 	//
 	// required: true
 	Creator string `json:"creator"`
 
-	// Account specifies the account where the currency is being frozen or thawed.
+	// Account specifies the account where the asset is being frozen or thawed.
 	//
 	// required: true
 	Account string `json:"acct"`

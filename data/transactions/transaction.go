@@ -92,9 +92,9 @@ type Transaction struct {
 	// Fields for different types of transactions
 	KeyregTxnFields
 	PaymentTxnFields
-	CurrencyConfigTxnFields
-	CurrencyTransferTxnFields
-	CurrencyFreezeTxnFields
+	AssetConfigTxnFields
+	AssetTransferTxnFields
+	AssetFreezeTxnFields
 
 	// The transaction's Txid is computed when we decode,
 	// and cached here, to avoid needlessly recomputing it.
@@ -234,19 +234,19 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 	case protocol.KeyRegistrationTx:
 		// All OK
 
-	case protocol.CurrencyConfigTx:
-		if !proto.MultiCurrency {
-			return fmt.Errorf("currency transaction not supported")
+	case protocol.AssetConfigTx:
+		if !proto.Asset {
+			return fmt.Errorf("asset transaction not supported")
 		}
 
-	case protocol.CurrencyTransferTx:
-		if !proto.MultiCurrency {
-			return fmt.Errorf("currency transaction not supported")
+	case protocol.AssetTransferTx:
+		if !proto.Asset {
+			return fmt.Errorf("asset transaction not supported")
 		}
 
-	case protocol.CurrencyFreezeTx:
-		if !proto.MultiCurrency {
-			return fmt.Errorf("currency transaction not supported")
+	case protocol.AssetFreezeTx:
+		if !proto.Asset {
+			return fmt.Errorf("asset transaction not supported")
 		}
 
 	default:
@@ -262,16 +262,16 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		nonZeroFields[protocol.KeyRegistrationTx] = true
 	}
 
-	if tx.CurrencyConfigTxnFields != (CurrencyConfigTxnFields{}) {
-		nonZeroFields[protocol.CurrencyConfigTx] = true
+	if tx.AssetConfigTxnFields != (AssetConfigTxnFields{}) {
+		nonZeroFields[protocol.AssetConfigTx] = true
 	}
 
-	if tx.CurrencyTransferTxnFields != (CurrencyTransferTxnFields{}) {
-		nonZeroFields[protocol.CurrencyTransferTx] = true
+	if tx.AssetTransferTxnFields != (AssetTransferTxnFields{}) {
+		nonZeroFields[protocol.AssetTransferTx] = true
 	}
 
-	if tx.CurrencyFreezeTxnFields != (CurrencyFreezeTxnFields{}) {
-		nonZeroFields[protocol.CurrencyFreezeTx] = true
+	if tx.AssetFreezeTxnFields != (AssetFreezeTxnFields{}) {
+		nonZeroFields[protocol.AssetFreezeTx] = true
 	}
 
 	for t, nonZero := range nonZeroFields {
@@ -325,10 +325,10 @@ func (tx Transaction) RelevantAddrs(spec SpecialAddresses, proto config.Consensu
 		if tx.PaymentTxnFields.CloseRemainderTo != (basics.Address{}) {
 			addrs = append(addrs, tx.PaymentTxnFields.CloseRemainderTo)
 		}
-	case protocol.CurrencyTransferTx:
-		addrs = append(addrs, tx.CurrencyTransferTxnFields.CurrencyReceiver)
-		if tx.CurrencyTransferTxnFields.CurrencyCloseTo != (basics.Address{}) {
-			addrs = append(addrs, tx.CurrencyTransferTxnFields.CurrencyCloseTo)
+	case protocol.AssetTransferTx:
+		addrs = append(addrs, tx.AssetTransferTxnFields.AssetReceiver)
+		if tx.AssetTransferTxnFields.AssetCloseTo != (basics.Address{}) {
+			addrs = append(addrs, tx.AssetTransferTxnFields.AssetCloseTo)
 		}
 	}
 
@@ -373,14 +373,14 @@ func (tx Transaction) Apply(balances Balances, spec SpecialAddresses, ctr uint64
 	case protocol.KeyRegistrationTx:
 		err = tx.KeyregTxnFields.apply(tx.Header, balances, spec, &ad)
 
-	case protocol.CurrencyConfigTx:
-		err = tx.CurrencyConfigTxnFields.apply(tx.Header, balances, spec, &ad, ctr)
+	case protocol.AssetConfigTx:
+		err = tx.AssetConfigTxnFields.apply(tx.Header, balances, spec, &ad, ctr)
 
-	case protocol.CurrencyTransferTx:
-		err = tx.CurrencyTransferTxnFields.apply(tx.Header, balances, spec, &ad)
+	case protocol.AssetTransferTx:
+		err = tx.AssetTransferTxnFields.apply(tx.Header, balances, spec, &ad)
 
-	case protocol.CurrencyFreezeTx:
-		err = tx.CurrencyFreezeTxnFields.apply(tx.Header, balances, spec, &ad)
+	case protocol.AssetFreezeTx:
+		err = tx.AssetFreezeTxnFields.apply(tx.Header, balances, spec, &ad)
 
 	default:
 		err = fmt.Errorf("Unknown transaction type %v", tx.Type)

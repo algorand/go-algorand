@@ -224,9 +224,9 @@ func (accountList *AccountsList) outputAccount(addr string, acctInfo v1.Account,
 	if multisigInfo != nil {
 		fmt.Printf("\t[%d/%d multisig]", multisigInfo.Threshold, len(multisigInfo.PKs))
 	}
-	if len(acctInfo.CurrencyParams) > 0 {
-		fmt.Printf("\t[created currencies:")
-		for curid, params := range acctInfo.CurrencyParams {
+	if len(acctInfo.AssetParams) > 0 {
+		fmt.Printf("\t[created assets:")
+		for curid, params := range acctInfo.AssetParams {
 			fmt.Printf(" %d (%d %s)", curid, params.Total, params.UnitName)
 		}
 		fmt.Printf("]")
