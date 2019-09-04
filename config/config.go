@@ -385,7 +385,7 @@ func initConsensusProtocols() {
 	vFuture := v17
 	vFuture.TxnCounter = true
 	vFuture.Asset = true
-	vFuture.MaxAssetsPerAccount = 100
+	vFuture.MaxAssetsPerAccount = 1000
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
