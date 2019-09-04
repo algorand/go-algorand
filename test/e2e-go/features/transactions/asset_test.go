@@ -96,7 +96,7 @@ func TestAssetConfig(t *testing.T) {
 	}
 
 	_, curRound := fixture.GetBalanceAndRound(account0)
-	confirmed := fixture.WaitForAllTxnsToConfirm(curRound+5, txids)
+	confirmed := fixture.WaitForAllTxnsToConfirm(curRound+20, txids)
 	a.True(confirmed, "creating max number of assets")
 
 	// Creating more assets should return an error
@@ -164,7 +164,7 @@ func TestAssetConfig(t *testing.T) {
 	txids[txid] = manager
 
 	_, curRound = fixture.GetBalanceAndRound(account0)
-	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+5, txids)
+	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+20, txids)
 	a.True(confirmed, "changing keys")
 
 	info, err = client.AccountInformation(account0)
@@ -223,7 +223,7 @@ func TestAssetConfig(t *testing.T) {
 	}
 
 	_, curRound = fixture.GetBalanceAndRound(account0)
-	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+5, txids)
+	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+20, txids)
 	a.True(confirmed, "destroying assets")
 
 	// re-generate wh, since this test takes a while and sometimes
@@ -290,7 +290,7 @@ func TestAssetSend(t *testing.T) {
 	txids[txid] = account0
 
 	_, curRound := fixture.GetBalanceAndRound(account0)
-	confirmed := fixture.WaitForAllTxnsToConfirm(curRound+5, txids)
+	confirmed := fixture.WaitForAllTxnsToConfirm(curRound+20, txids)
 	a.True(confirmed, "creating assets")
 
 	info, err := client.AccountInformation(account0)
@@ -334,7 +334,7 @@ func TestAssetSend(t *testing.T) {
 	txids[txid] = account0
 
 	_, curRound = fixture.GetBalanceAndRound(account0)
-	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+5, txids)
+	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+20, txids)
 	a.True(confirmed, "creating asset slots")
 
 	info, err = client.AccountInformation(extra)
@@ -396,7 +396,7 @@ func TestAssetSend(t *testing.T) {
 	txids[txid] = clawback
 
 	_, curRound = fixture.GetBalanceAndRound(account0)
-	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+5, txids)
+	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+20, txids)
 	a.True(confirmed, "clawback")
 
 	// Check that the asset balances are correct
