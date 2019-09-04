@@ -31,6 +31,7 @@ var (
 	assetTotal     uint64
 	assetFrozen    bool
 	assetUnitName  string
+	assetName      string
 	assetManager   string
 	assetClawback  string
 	assetFreezer   string
@@ -53,6 +54,7 @@ func init() {
 	createAssetCmd.Flags().Uint64Var(&assetTotal, "total", 0, "Total amount of tokens for created asset")
 	createAssetCmd.Flags().BoolVar(&assetFrozen, "defaultfrozen", false, "Freeze or not freeze holdings by default")
 	createAssetCmd.Flags().StringVar(&assetUnitName, "unitname", "", "Name for the unit of asset")
+	createAssetCmd.Flags().StringVar(&assetName, "name", "", "Name for the entire asset")
 	createAssetCmd.Flags().Uint64Var(&fee, "fee", 0, "The transaction fee (automatically determined by default), in microAlgos")
 	createAssetCmd.Flags().Uint64Var(&firstValid, "firstvalid", 0, "The first round where the transaction may be committed to the ledger")
 	createAssetCmd.Flags().Uint64Var(&numValidRounds, "validrounds", 0, "The number of rounds for which the transaction will be valid")
@@ -196,7 +198,7 @@ var createAssetCmd = &cobra.Command{
 		accountList := makeAccountsList(dataDir)
 		creator := accountList.getAddressByName(assetCreator)
 
-		tx, err := client.MakeUnsignedAssetCreateTx(assetTotal, assetFrozen, creator, creator, creator, creator, assetUnitName)
+		tx, err := client.MakeUnsignedAssetCreateTx(assetTotal, assetFrozen, creator, creator, creator, creator, assetUnitName, assetName)
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
@@ -542,6 +544,7 @@ var infoAssetCmd = &cobra.Command{
 
 		fmt.Printf("Asset ID:         %d\n", assetID)
 		fmt.Printf("Creator:          %s\n", params.Creator)
+		fmt.Printf("Asset name:       %s\n", params.AssetName)
 		fmt.Printf("Unit name:        %s\n", params.UnitName)
 		fmt.Printf("Maximum issue:    %d %s\n", params.Total, params.UnitName)
 		fmt.Printf("Reserve amount:   %d %s\n", reserve.Assets[assetID].Amount, params.UnitName)

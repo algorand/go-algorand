@@ -184,7 +184,10 @@ type AssetParams struct {
 
 	// UnitName specifies a hint for the name of a unit of
 	// this asset.
-	UnitName [8]byte `codec:"n"`
+	UnitName [8]byte `codec:"un"`
+
+	// AssetName specifies a hint for the name of the asset.
+	AssetName [32]byte `codec:"an"`
 
 	// Manager specifies an account that is allowed to change the
 	// non-zero addresses in this AssetParams.

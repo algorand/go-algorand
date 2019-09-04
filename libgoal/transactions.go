@@ -288,7 +288,7 @@ func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, numValidRound
 //
 // Call FillUnsignedTxTemplate afterwards to fill out common fields in
 // the resulting transaction template.
-func (c *Client) MakeUnsignedAssetCreateTx(total uint64, defaultFrozen bool, manager string, reserve string, freeze string, clawback string, unitName string) (transactions.Transaction, error) {
+func (c *Client) MakeUnsignedAssetCreateTx(total uint64, defaultFrozen bool, manager string, reserve string, freeze string, clawback string, unitName string, assetName string) (transactions.Transaction, error) {
 	var tx transactions.Transaction
 	var err error
 
@@ -330,6 +330,11 @@ func (c *Client) MakeUnsignedAssetCreateTx(total uint64, defaultFrozen bool, man
 		return tx, fmt.Errorf("asset unit name %s too long (max %d bytes)", unitName, len(tx.AssetParams.UnitName))
 	}
 	copy(tx.AssetParams.UnitName[:], []byte(unitName))
+
+	if len(assetName) > len(tx.AssetParams.AssetName) {
+		return tx, fmt.Errorf("asset name %s too long (max %d bytes)", assetName, len(tx.AssetParams.AssetName))
+	}
+	copy(tx.AssetParams.AssetName[:], []byte(assetName))
 
 	return tx, nil
 }

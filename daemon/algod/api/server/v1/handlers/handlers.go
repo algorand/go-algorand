@@ -141,6 +141,7 @@ func assetParams(creator basics.Address, params basics.AssetParams) v1.AssetPara
 	}
 
 	paramsModel.UnitName = strings.TrimRight(string(params.UnitName[:]), "\x00")
+	paramsModel.AssetName = strings.TrimRight(string(params.AssetName[:]), "\x00")
 
 	if !params.Manager.IsZero() {
 		paramsModel.ManagerAddr = params.Manager.String()

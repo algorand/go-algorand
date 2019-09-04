@@ -190,6 +190,12 @@ type AssetParams struct {
 	// required: false
 	UnitName string `json:"unitname"`
 
+	// AssetName specifies the name of this asset,
+	// as supplied by the creator.
+	//
+	// required: false
+	AssetName string `json:"assetname"`
+
 	// ManagerAddr specifies the address used to manage the keys of this
 	// asset and to destroy it.
 	//

@@ -88,7 +88,7 @@ func TestAssetConfig(t *testing.T) {
 	// Create max number of assets
 	txids := make(map[string]string)
 	for i := 0; i < config.Consensus[protocol.ConsensusFuture].MaxAssetsPerAccount; i++ {
-		tx, err := client.MakeUnsignedAssetCreateTx(1+uint64(i), false, manager, reserve, freeze, clawback, fmt.Sprintf("test%d", i))
+		tx, err := client.MakeUnsignedAssetCreateTx(1+uint64(i), false, manager, reserve, freeze, clawback, fmt.Sprintf("test%d", i), fmt.Sprintf("testname%d", i))
 		txid, err := helperFillSignBroadcast(client, wh, account0, tx, err)
 		a.NoError(err)
 		txids[txid] = account0
@@ -99,7 +99,7 @@ func TestAssetConfig(t *testing.T) {
 	a.True(confirmed, "creating max number of assets")
 
 	// Creating more assets should return an error
-	tx, err := client.MakeUnsignedAssetCreateTx(1, false, manager, reserve, freeze, clawback, fmt.Sprintf("toomany"))
+	tx, err := client.MakeUnsignedAssetCreateTx(1, false, manager, reserve, freeze, clawback, fmt.Sprintf("toomany"), fmt.Sprintf("toomany"))
 	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
 	a.Error(err)
 
@@ -111,6 +111,7 @@ func TestAssetConfig(t *testing.T) {
 	for idx, cp := range info.AssetParams {
 		assets = append(assets, assetIDParams{idx, cp})
 		a.Equal(cp.UnitName, fmt.Sprintf("test%d", cp.Total-1))
+		a.Equal(cp.AssetName, fmt.Sprintf("testname%d", cp.Total-1))
 		a.Equal(cp.ManagerAddr, manager)
 		a.Equal(cp.ReserveAddr, reserve)
 		a.Equal(cp.FreezeAddr, freeze)
@@ -165,6 +166,7 @@ func TestAssetConfig(t *testing.T) {
 	a.Equal(len(info.AssetParams), config.Consensus[protocol.ConsensusFuture].MaxAssetsPerAccount)
 	for idx, cp := range info.AssetParams {
 		a.Equal(cp.UnitName, fmt.Sprintf("test%d", cp.Total-1))
+		a.Equal(cp.AssetName, fmt.Sprintf("testname%d", cp.Total-1))
 
 		if idx == assets[0].idx {
 			a.Equal(cp.ManagerAddr, account0)
@@ -266,12 +268,12 @@ func TestAssetSend(t *testing.T) {
 	// Create two assets: one with default-freeze, and one without default-freeze
 	txids := make(map[string]string)
 
-	tx, err := client.MakeUnsignedAssetCreateTx(100, false, manager, reserve, freeze, clawback, "nofreeze")
+	tx, err := client.MakeUnsignedAssetCreateTx(100, false, manager, reserve, freeze, clawback, "nofreeze", "xx")
 	txid, err := helperFillSignBroadcast(client, wh, account0, tx, err)
 	a.NoError(err)
 	txids[txid] = account0
 
-	tx, err = client.MakeUnsignedAssetCreateTx(100, true, manager, reserve, freeze, clawback, "frozen")
+	tx, err = client.MakeUnsignedAssetCreateTx(100, true, manager, reserve, freeze, clawback, "frozen", "xx")
 	txid, err = helperFillSignBroadcast(client, wh, account0, tx, err)
 	a.NoError(err)
 	txids[txid] = account0

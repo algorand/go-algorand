@@ -443,15 +443,17 @@ var listCmd = &cobra.Command{
 				}
 
 				unitName := "units"
+				assetName := ""
 				creatorInfo, err := client.AccountInformation(bal.Creator)
 				if err == nil {
 					params, ok := creatorInfo.AssetParams[aid]
 					if ok {
 						unitName = params.UnitName
+						assetName = fmt.Sprintf(", name %s", params.AssetName)
 					}
 				}
 
-				fmt.Printf("\t%20d %-8s (creator %s, ID %d%s)\n", bal.Amount, unitName, bal.Creator, aid, frozen)
+				fmt.Printf("\t%20d %-8s (creator %s, ID %d%s%s)\n", bal.Amount, unitName, bal.Creator, aid, assetName, frozen)
 			}
 		}
 	},
