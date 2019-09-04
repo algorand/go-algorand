@@ -174,7 +174,7 @@ func (idb *DB) GetTransactionByID(txid string) (Transaction, error) {
 // if top is 0, it will return 25 transactions by default
 func (idb *DB) GetTransactionsRoundsByAddr(addr string, top uint64) ([]uint64, error) {
 	query := `
-		SELECT 
+		SELECT DISTINCT
 			round
 		FROM
 			transactions
@@ -220,7 +220,7 @@ func (idb *DB) GetTransactionsRoundsByAddr(addr string, top uint64) ([]uint64, e
 // if top is 0, it will return 100 transactions by default
 func (idb *DB) GetTransactionsRoundsByAddrAndDate(addr string, top uint64, from, to int64) ([]uint64, error) {
 	query := `
-		SELECT
+		SELECT DISTINCT
 			round
 		FROM
 			transactions

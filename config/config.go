@@ -180,6 +180,9 @@ type ConsensusParams struct {
 	// domain-separated credentials
 	CredentialDomainSeparationEnabled bool
 
+	// fix the rewards calculation by avoiding subtracting too much from the rewards pool
+	PendingResidueRewards bool
+
 	// transaction groups
 	SupportTxGroups bool
 
@@ -382,6 +385,7 @@ func initConsensusProtocols() {
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
 	vFuture := v17
+	vFuture.PendingResidueRewards = true
 	vFuture.SupportTxGroups = true
 	vFuture.MaxTxGroupSize = 16
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}

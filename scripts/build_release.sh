@@ -98,6 +98,11 @@ make build
 export BUILD_DEB=1
 scripts/build_packages.sh "${PLATFORM}"
 
+# build docker release package
+cd ${REPO_ROOT}/docker/release
+./build_algod_docker.sh ${HOME}/node_pkg/node_${CHANNEL}_linux-amd64_${FULLVERSION}.tar.gz
+cd ${REPO_ROOT}/scripts
+
 # Test .deb installer
 
 mkdir -p ${HOME}/docker_test_resources
@@ -212,4 +217,3 @@ sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind
 date "+build_release done building centos %Y%m%d_%H%M%S"
 
 # NEXT: build_release_sign.sh
-

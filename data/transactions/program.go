@@ -13,36 +13,25 @@
 //
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
-package main
+
+package transactions
 
 import (
-	"fmt"
-	"os"
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/protocol"
 )
 
-func reportInfoln(args ...interface{}) {
-	fmt.Println(args...)
+// Program is byte code to be interpreted for validating transactions.
+type Program []byte
+
+// ToBeHashed implements crypto.Hashable
+func (lsl Program) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.Program, []byte(lsl)
 }
 
-func reportInfof(format string, args ...interface{}) {
-	fmt.Printf(format+"\n", args...)
-}
-
-func reportWarnln(args ...interface{}) {
-	fmt.Print("Warning: ")
-	fmt.Println(args...)
-}
-
-func reportWarnf(format string, args ...interface{}) {
-	fmt.Printf("Warning: "+format+"\n", args...)
-}
-
-func reportErrorln(args ...interface{}) {
-	fmt.Fprintln(os.Stderr, args...)
-	os.Exit(1)
-}
-
-func reportErrorf(format string, args ...interface{}) {
-	fmt.Fprintf(os.Stderr, format+"\n", args...)
-	os.Exit(1)
+// HashProgram takes program bytes and returns the Digest
+// This Digest can be used as an Address for a logic controlled account.
+func HashProgram(program []byte) crypto.Digest {
+	pb := Program(program)
+	return crypto.HashObj(&pb)
 }

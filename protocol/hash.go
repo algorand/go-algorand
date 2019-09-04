@@ -39,6 +39,7 @@ const (
 	OneTimeSigKey2    HashID = "OT2"
 	PaysetFlat        HashID = "PF"
 	Payload           HashID = "PL"
+	Program           HashID = "Program"
 	ProposerSeed      HashID = "PS"
 	Seed              HashID = "SD"
 	TestHashable      HashID = "TE"
