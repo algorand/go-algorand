@@ -38,6 +38,10 @@ var blockSchema = []string{
 		auxdata blob)`,
 }
 
+var blockResetExprs = []string{
+	`DROP TABLE blocks`,
+}
+
 func blockInit(tx *sql.Tx, initBlocks []bookkeeping.Block) error {
 	for _, tableCreate := range blockSchema {
 		_, err := tx.Exec(tableCreate)
@@ -64,6 +68,16 @@ func blockInit(tx *sql.Tx, initBlocks []bookkeeping.Block) error {
 		}
 	}
 
+	return nil
+}
+
+func blockResetDB(tx *sql.Tx) error {
+	for _, stmt := range blockResetExprs {
+		_, err := tx.Exec(stmt)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

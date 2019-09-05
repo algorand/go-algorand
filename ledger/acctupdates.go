@@ -90,16 +90,37 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 		return fmt.Errorf("accountUpdates.loadFromDisk: initAccounts not set")
 	}
 
+	latest := l.Latest()
 	err := au.dbs.wdb.Atomic(func(tx *sql.Tx) error {
 		var err0 error
-		err0 = accountsInit(tx, au.initAccounts, au.initProto)
+		initAux := func() (basics.Round, error) {
+			err := accountsInit(tx, au.initAccounts, au.initProto)
+			if err != nil {
+				return 0, err
+			}
+
+			rnd, err := accountsRound(tx)
+			if err0 != nil {
+				return 0, err
+			}
+			return rnd, nil
+		}
+
+		au.dbRound, err0 = initAux()
 		if err0 != nil {
 			return err0
 		}
-
-		au.dbRound, err0 = accountsRound(tx)
-		if err0 != nil {
-			return err0
+		// Check for blocks DB and tracker DB un-sync
+		if au.dbRound > latest {
+			// TODO: add assertions about non-archival to archival switch?
+			err0 = accountsReset(tx)
+			if err0 != nil {
+				return err0
+			}
+			au.dbRound, err0 = initAux()
+			if err0 != nil {
+				return err0
+			}
 		}
 
 		totals, err0 := accountsTotals(tx)
@@ -125,7 +146,6 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 	}
 	au.protos = []config.ConsensusParams{config.Consensus[hdr.CurrentProtocol]}
 
-	latest := l.Latest()
 	au.deltas = nil
 	au.accounts = make(map[basics.Address]modifiedAccount)
 	loaded := au.dbRound

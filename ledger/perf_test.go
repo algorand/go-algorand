@@ -35,7 +35,7 @@ import (
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
-func genesis(naccts int) ([]bookkeeping.Block, map[basics.Address]basics.AccountData, []basics.Address, []*crypto.SignatureSecrets) {
+func genesis(naccts int) (InitState, []basics.Address, []*crypto.SignatureSecrets) {
 	blk := bookkeeping.Block{}
 	blk.CurrentProtocol = protocol.ConsensusCurrentVersion
 	blk.BlockHeader.GenesisID = "test"
@@ -72,7 +72,9 @@ func genesis(naccts int) ([]bookkeeping.Block, map[basics.Address]basics.Account
 	sinkdata.Status = basics.NotParticipating
 	accts[testSinkAddr] = sinkdata
 
-	return blks, accts, addrs, keys
+	genesisHash := blks[0].BlockHeader.GenesisHash
+
+	return InitState{blks, accts, genesisHash}, addrs, keys
 }
 
 func BenchmarkManyAccounts(b *testing.B) {
@@ -80,13 +82,16 @@ func BenchmarkManyAccounts(b *testing.B) {
 
 	b.StopTimer()
 
-	blks, accts, addrs, _ := genesis(1)
+	seed, addrs, _ := genesis(1)
 	addr := addrs[0]
 
 	dbName := fmt.Sprintf("%s.%d", b.Name(), crypto.RandUint64())
-	l, err := OpenLedger(logging.Base(), dbName, true, blks, accts, crypto.Digest{})
+	const inMem = true
+	const archival = true
+	l, err := OpenLedger(logging.Base(), dbName, inMem, seed, archival)
 	require.NoError(b, err)
 
+	blks := seed.InitBlocks
 	blk := blks[len(blks)-1]
 	for i := 0; i < b.N; i++ {
 		blk = bookkeeping.MakeBlock(blk.BlockHeader)
@@ -127,15 +132,18 @@ func BenchmarkManyAccounts(b *testing.B) {
 func BenchmarkValidate(b *testing.B) {
 	b.StopTimer()
 
-	blks, accts, addrs, keys := genesis(10000)
+	seed, addrs, keys := genesis(10000)
 
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
 	dbName := fmt.Sprintf("%s.%d", b.Name(), crypto.RandUint64())
-	l, err := OpenLedger(logging.Base(), dbName, true, blks, accts, crypto.Digest{})
+	const inMem = true
+	const archival = true
+	l, err := OpenLedger(logging.Base(), dbName, inMem, seed, archival)
 	require.NoError(b, err)
 
+	blks := seed.InitBlocks
 	blk := blks[len(blks)-1]
 	for i := 0; i < b.N; i++ {
 		newblk := bookkeeping.MakeBlock(blk.BlockHeader)

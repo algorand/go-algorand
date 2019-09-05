@@ -83,7 +83,10 @@ func makeMockLedger(t TestingT, initAccounts map[basics.Address]basics.AccountDa
 	initBlocks := []bookkeeping.Block{initBlock}
 
 	fn := fmt.Sprintf("/tmp/%s.%d.sqlite3", t.Name(), crypto.RandUint64())
-	l, err := ledger.OpenLedger(logging.Base(), fn, true, initBlocks, initAccounts, hash)
+	const inMem = true
+	const archival = true
+	seed := ledger.InitState{InitBlocks: initBlocks, InitAccounts: initAccounts, GenesisHash: hash}
+	l, err := ledger.OpenLedger(logging.Base(), fn, true, seed, archival)
 	require.NoError(t, err)
 	return l
 }

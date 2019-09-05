@@ -93,7 +93,11 @@ func makeGenesisBlocks(proto protocol.ConsensusVersion, genesisBal GenesisBalanc
 
 // LoadLedger creates a Ledger object to represent the ledger with the
 // specified database file prefix, initializing it if necessary.
-func LoadLedger(log logging.Logger, dbFilenamePrefix string, memory bool, genesisProto protocol.ConsensusVersion, genesisBal GenesisBalances, genesisID string, genesisHash crypto.Digest, blockListeners []ledger.BlockListener) (*Ledger, error) {
+func LoadLedger(
+	log logging.Logger, dbFilenamePrefix string, memory bool,
+	genesisProto protocol.ConsensusVersion, genesisBal GenesisBalances, genesisID string, genesisHash crypto.Digest,
+	blockListeners []ledger.BlockListener, isArchival bool,
+) (*Ledger, error) {
 	if genesisBal.balances == nil {
 		genesisBal.balances = make(map[basics.Address]basics.AccountData)
 	}
@@ -113,9 +117,14 @@ func LoadLedger(log logging.Logger, dbFilenamePrefix string, memory bool, genesi
 	l := &Ledger{
 		log: log,
 	}
+	ledgerSeed := ledger.InitState{
+		InitBlocks:   genBlocks,
+		InitAccounts: genesisBal.balances,
+		GenesisHash:  genesisHash,
+	}
 	l.log.Debugf("Initializing Ledger(%s)", dbFilenamePrefix)
 
-	ll, err := ledger.OpenLedger(log, dbFilenamePrefix, memory, genBlocks, genesisBal.balances, genesisHash)
+	ll, err := ledger.OpenLedger(log, dbFilenamePrefix, memory, ledgerSeed, isArchival)
 	if err != nil {
 		return nil, err
 	}

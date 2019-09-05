@@ -48,7 +48,9 @@ func BenchmarkServiceFetchBlocks(b *testing.B) {
 	net := &mocks.MockNetwork{}
 
 	for i := 0; i < b.N; i++ {
-		local, err := data.LoadLedger(logging.Base(), b.Name()+"empty"+strconv.Itoa(i), true, protocol.ConsensusCurrentVersion, genesisBalances, "", crypto.Digest{}, nil)
+		archival := true
+		inMem := true
+		local, err := data.LoadLedger(logging.Base(), b.Name()+"empty"+strconv.Itoa(i), inMem, protocol.ConsensusCurrentVersion, genesisBalances, "", crypto.Digest{}, nil, archival)
 		require.NoError(b, err)
 
 		// Make Service
@@ -126,7 +128,9 @@ func benchenv(t testing.TB, numAccounts, numBlocks int) (ledger, emptyLedger *da
 
 	var err error
 	genesisBalances = data.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
-	emptyLedger, err = data.LoadLedger(logging.Base(), t.Name()+"empty", true, protocol.ConsensusCurrentVersion, genesisBalances, "", crypto.Digest{}, nil)
+	const inMem = true
+	const archival = true
+	emptyLedger, err = data.LoadLedger(logging.Base(), t.Name()+"empty", inMem, protocol.ConsensusCurrentVersion, genesisBalances, "", crypto.Digest{}, nil, archival)
 	require.NoError(t, err)
 
 	ledger, err = datatest.FabricateLedger(logging.Base(), t.Name(), parts, genesisBalances, emptyLedger.LastRound()+basics.Round(numBlocks))

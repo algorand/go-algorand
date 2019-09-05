@@ -52,6 +52,12 @@ var accountsSchema = []string{
 		data blob)`,
 }
 
+var accountsResetExprs = []string{
+	`DROP TABLE acctrounds`,
+	`DROP TABLE accounttotals`,
+	`DROP TABLE accountbase`,
+}
+
 type accountDelta struct {
 	old basics.AccountData
 	new basics.AccountData
@@ -102,6 +108,16 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 		}
 	}
 
+	return nil
+}
+
+func accountsReset(tx *sql.Tx) error {
+	for _, stmt := range accountsResetExprs {
+		_, err := tx.Exec(stmt)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
