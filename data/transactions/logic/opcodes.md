@@ -301,7 +301,7 @@ It is worth noting that there are 10,000,000,000,000,000 micro-Algos in the tota
 - Pushes: None
 - branch if value is not zero
 
-for a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else procede to next instruction at `pc + 3`
+for a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else proceed to next instruction at `pc + 3`
 
 ## pop
 - Opcode: 0x48 

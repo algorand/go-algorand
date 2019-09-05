@@ -20,6 +20,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -51,6 +52,8 @@ var (
 	signProgram     bool
 	programSource   string
 	argB64Strings   []string
+	disassesmble    bool
+	progByteFile    string
 )
 
 func init() {
@@ -77,6 +80,7 @@ func init() {
 	sendCmd.Flags().StringVarP(&closeToAddress, "close-to", "c", "", "Close account and send remainder to this address")
 	sendCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
 	sendCmd.Flags().StringVarP(&programSource, "from-program", "F", "", "Program source to use as account logic")
+	sendCmd.Flags().StringVarP(&progByteFile, "from-program-bytes", "P", "", "Program binary to use as account logic")
 	sendCmd.Flags().StringSliceVar(&argB64Strings, "argb64", nil, "base64 encoded args to pass to transaction logic")
 
 	sendCmd.MarkFlagRequired("to")
@@ -93,6 +97,7 @@ func init() {
 	signCmd.MarkFlagRequired("infile")
 	signCmd.MarkFlagRequired("outfile")
 
+	compileCmd.Flags().BoolVarP(&disassesmble, "disassemble", "D", false, "disassemble a compiled program")
 	compileCmd.Flags().BoolVarP(&noProgramOutput, "no-out", "n", false, "don't write contract program binary")
 	compileCmd.Flags().BoolVarP(&signProgram, "sign", "s", false, "sign program, output is a binary signed LogicSig record")
 	compileCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Filename to write program bytes or signed LogicSig to")
@@ -185,8 +190,19 @@ var sendCmd = &cobra.Command{
 		var fromAddressResolved string
 		var program []byte = nil
 		var programArgs [][]byte = nil
-		if programSource != "" {
+		var err error
+		if progByteFile != "" {
+			if programSource != "" {
+				reportErrorln("should not have both --from-program/-F and --from-program-bytes/-P")
+			}
+			program, err = readFile(progByteFile)
+			if err != nil {
+				reportErrorf("%s: %s", progByteFile, err)
+			}
+		} else if programSource != "" {
 			program = assembleFile(programSource)
+		}
+		if program != nil {
 			ph := transactions.HashProgram(program)
 			pha := basics.Address(ph)
 			fromAddressResolved = pha.String()
@@ -217,7 +233,6 @@ var sendCmd = &cobra.Command{
 
 		// Parse notes field
 		var noteBytes []byte
-		var err error
 		if cmd.Flags().Changed("noteb64") {
 			noteBytes, err = base64.StdEncoding.DecodeString(noteBase64)
 			if err != nil {
@@ -483,21 +498,34 @@ var signCmd = &cobra.Command{
 }
 
 func assembleFile(fname string) (program []byte) {
-	fin, err := os.Open(fname)
+	text, err := readFile(fname)
 	if err != nil {
 		reportErrorf("%s: %s\n", fname, err)
 	}
-	ops := logic.OpStream{}
-	err = ops.Assemble(fin)
-	if err != nil {
-		reportErrorf("%s: %s\n", fname, err)
-	}
-	fin.Close()
-	program, err = ops.Bytes()
+	program, err = logic.AssembleString(string(text))
 	if err != nil {
 		reportErrorf("%s: %s\n", fname, err)
 	}
 	return program
+}
+
+func disassembleFile(fname, outname string) {
+	program, err := readFile(fname)
+	if err != nil {
+		reportErrorf("%s: %s\n", fname, err)
+	}
+	text, err := logic.Disassemble(program)
+	if err != nil {
+		reportErrorf("%s: %s\n", fname, err)
+	}
+	if outname == "" {
+		os.Stdout.Write([]byte(text))
+	} else {
+		err = ioutil.WriteFile(outname, []byte(text), 0666)
+		if err != nil {
+			reportErrorf("%s: %s\n", outname, err)
+		}
+	}
 }
 
 var compileCmd = &cobra.Command{
@@ -506,6 +534,10 @@ var compileCmd = &cobra.Command{
 	Long:  "compile a contract program, report it's address",
 	Run: func(cmd *cobra.Command, args []string) {
 		for _, fname := range args {
+			if disassesmble {
+				disassembleFile(fname, outFilename)
+				continue
+			}
 			program := assembleFile(fname)
 			outblob := program
 			outname := outFilename

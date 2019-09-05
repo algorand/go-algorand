@@ -349,6 +349,7 @@ func opMul(cx *evalContext) {
 		cx.err = errors.New("* overflowed")
 		return
 	}
+	cx.stack[prev].Uint = v
 	cx.stack = cx.stack[:last]
 }
 

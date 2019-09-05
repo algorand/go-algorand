@@ -134,9 +134,9 @@ The assembler parses line by line. Ops that just use the stack appear on a line 
 
 "`//`" prefixes a line comment.
 
-## Constants and Psuedo-Ops
+## Constants and Pseudo-Ops
 
-A few psuedo-ops simplify writing code. `int` and `byte` and `addr` followed by a constant record the constant to a `intcblock` or `bytecblock` at the beginning of code and insert an `intc` or `bytec` reference where the instruction appears to load that value. `addr` parses an Algorand account address base32 and converts it to a regular bytes constant.
+A few pseudo-ops simplify writing code. `int` and `byte` and `addr` followed by a constant record the constant to a `intcblock` or `bytecblock` at the beginning of code and insert an `intc` or `bytec` reference where the instruction appears to load that value. `addr` parses an Algorand account address base32 and converts it to a regular bytes constant.
 
 `byte` constants are:
 ```
@@ -153,9 +153,9 @@ byte 0x0123456789abcdef...
 
 `int` constants may be `0x` prefixed for hex, `0` prefixed for octal, or decimal numbers.
 
-`intcblock` may be explictily assembled. It will conflict with the assembler gathering `int` psuedo-ops into a `intcblock` program prefix, but may be used in code only has explicit `intc` references. `intcblock` should be followed by space separated int contsants all on one line.
+`intcblock` may be explictily assembled. It will conflict with the assembler gathering `int` pseudo-ops into a `intcblock` program prefix, but may be used in code only has explicit `intc` references. `intcblock` should be followed by space separated int constants all on one line.
 
-`bytecblock` may be explicitly assembled. It will conflict with the assembler if there are any `byte` psudo-ops but may be used if only explicit `bytec` references are used. `bytecblock` should be followed with byte contants all on one line, either 'encoding value' pairs (`b64 AAA...`) or 0x prefix or function-style values (`base64(...)`).
+`bytecblock` may be explicitly assembled. It will conflict with the assembler if there are any `byte` pseudo-ops but may be used if only explicit `bytec` references are used. `bytecblock` should be followed with byte contants all on one line, either 'encoding value' pairs (`b64 AAA...`) or 0x prefix or function-style values (`base64(...)`).
 
 ## Labels and Branches
 

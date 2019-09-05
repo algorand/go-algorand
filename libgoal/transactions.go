@@ -82,6 +82,28 @@ func (c *Client) MultisigSignTransactionWithWallet(walletHandle, pw []byte, utx 
 	return
 }
 
+// MultisigSignProgramWithWallet creates a multisig (or adds to an existing partial multisig, if one is provided), signing with the key corresponding to the given address and using the specified wallet
+func (c *Client) MultisigSignProgramWithWallet(walletHandle, pw, program []byte, signerAddr string, partial crypto.MultisigSig) (msig crypto.MultisigSig, err error) {
+	addr, err := basics.UnmarshalChecksumAddress(signerAddr)
+	if err != nil {
+		return
+	}
+	kmd, err := c.ensureKmdClient()
+	if err != nil {
+		return
+	}
+	msigAddr, err := crypto.MultisigAddrGenWithSubsigs(partial.Version, partial.Threshold, partial.Subsigs)
+	if err != nil {
+		return
+	}
+	resp, err := kmd.MultisigSignProgram(walletHandle, pw, basics.Address(msigAddr).String(), program, crypto.PublicKey(addr), partial)
+	if err != nil {
+		return
+	}
+	err = protocol.Decode(resp.Multisig, &msig)
+	return
+}
+
 // BroadcastTransaction broadcasts a signed transaction to the network using algod
 func (c *Client) BroadcastTransaction(stx transactions.SignedTxn) (txid string, err error) {
 	algod, err := c.ensureAlgodClient()

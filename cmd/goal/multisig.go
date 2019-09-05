@@ -17,6 +17,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"io/ioutil"
 
@@ -25,23 +26,35 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
 )
 
 var (
-	addr string
+	addr         string
+	msigAddr     string
+	logicSigFile string
 )
 
 func init() {
 	clerkCmd.AddCommand(multisigCmd)
 	multisigCmd.AddCommand(addSigCmd)
 	multisigCmd.AddCommand(mergeSigCmd)
+	multisigCmd.AddCommand(signProgramCmd)
 
 	addSigCmd.Flags().StringVarP(&txFilename, "tx", "t", "", "Partially-signed transaction file to add signature to")
 	addSigCmd.Flags().StringVarP(&addr, "address", "a", "", "Address of the key to sign with")
 	addSigCmd.MarkFlagRequired("tx")
 	addSigCmd.MarkFlagRequired("address")
+
+	signProgramCmd.Flags().StringVarP(&programSource, "program", "p", "", "Program source to be compiled and signed")
+	signProgramCmd.Flags().StringVarP(&progByteFile, "program-bytes", "P", "", "Program binary to be signed")
+	signProgramCmd.Flags().StringVarP(&logicSigFile, "lsig", "L", "", "Partial LogicSig to add signature to")
+	signProgramCmd.Flags().StringVarP(&addr, "address", "a", "", "Address of the key to sign with")
+	signProgramCmd.Flags().StringVarP(&msigAddr, "msig-address", "A", "", "Multi-Sig Address that signing address is part of")
+	signProgramCmd.Flags().StringVarP(&outFilename, "lsig-out", "o", "", "File to write partial Lsig to")
+	signProgramCmd.MarkFlagRequired("address")
 
 	mergeSigCmd.Flags().StringVarP(&txFilename, "out", "o", "", "Output file for merged transactions")
 	mergeSigCmd.MarkFlagRequired("out")
@@ -64,6 +77,7 @@ var addSigCmd = &cobra.Command{
 	Long:  `Start a multisig, or add a signature to an existing multisig, for a given transaction`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
+
 		data, err := readFile(txFilename)
 		if err != nil {
 			reportErrorf(fileReadError, txFilename, err)
@@ -99,6 +113,86 @@ var addSigCmd = &cobra.Command{
 		err = writeFile(txFilename, outData, 0600)
 		if err != nil {
 			reportErrorf(fileWriteError, txFilename, err)
+		}
+	},
+}
+
+var signProgramCmd = &cobra.Command{
+	Use:   "signprogram -t TXFILE -a ADDR",
+	Short: "Add a signature to a multisig LogicSig",
+	Long:  `Start a multisig LogicSig, or add a signature to an existing multisig, for a given program`,
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, _ []string) {
+		dataDir := ensureSingleDataDir()
+		client := ensureKmdClient(dataDir)
+		wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
+		var program []byte
+		outname := outFilename
+		var lsig transactions.LogicSig
+		gotPartial := false
+		if programSource != "" {
+			text, err := readFile(programSource)
+			if err != nil {
+				reportErrorf(fileReadError, programSource, err)
+			}
+			program, err = logic.AssembleString(string(text))
+			if err != nil {
+				reportErrorf("%s: %s", programSource, err)
+			}
+			if outname == "" {
+				outname = fmt.Sprintf("%s.lsig", programSource)
+			}
+			lsig.Logic = program
+		} else if logicSigFile != "" {
+			var err error
+			program, err = readFile(logicSigFile)
+			if err != nil {
+				reportErrorf(fileReadError, logicSigFile, err)
+			}
+			err = protocol.Decode(program, &lsig)
+			if err != nil {
+				reportErrorf("%s: %s", logicSigFile, err)
+			}
+			program = lsig.Logic
+			if outname == "" {
+				outname = logicSigFile
+			}
+			gotPartial = true
+		} else if progByteFile != "" {
+			var err error
+			program, err = readFile(progByteFile)
+			if err != nil {
+				reportErrorf(fileReadError, progByteFile, err)
+			}
+			lsig = transactions.LogicSig{}
+			if outname == "" {
+				outname = fmt.Sprintf("%s.lsig", progByteFile)
+			}
+			lsig.Logic = program
+		}
+		if !gotPartial {
+			if msigAddr == "" {
+				reportErrorf("--msig-address/-A required when partial LogicSig not available")
+			}
+			multisigInfo, err := client.LookupMultisigAccount(wh, msigAddr)
+			if err != nil {
+				reportErrorf("could not lookup multisig address", err)
+			}
+			msig, err := msigInfoToMsig(multisigInfo)
+			if err != nil {
+				reportErrorf("internal err processing msig: %s", err)
+			}
+			lsig.Msig = msig
+		}
+		msig, err := client.MultisigSignProgramWithWallet(wh, pw, program, addr, lsig.Msig)
+		if err != nil {
+			reportErrorf(errorSigningTX, err)
+		}
+		lsig.Msig = msig
+		lsigblob := protocol.Encode(lsig)
+		err = writeFile(outname, lsigblob, 0600)
+		if err != nil {
+			reportErrorf("%s: %s", outname, err)
 		}
 	},
 }
@@ -175,6 +269,20 @@ var mergeSigCmd = &cobra.Command{
 	},
 }
 
+func msigInfoToMsig(multisigInfo libgoal.MultisigInfo) (msig crypto.MultisigSig, err error) {
+	var pks []crypto.PublicKey
+	for _, pk := range multisigInfo.PKs {
+		var addr basics.Address
+		addr, err = basics.UnmarshalChecksumAddress(pk)
+		if err != nil {
+			return
+		}
+		pks = append(pks, crypto.PublicKey(addr))
+	}
+	msig = crypto.MultisigPreimageFromPKs(multisigInfo.Version, multisigInfo.Threshold, pks)
+	return
+}
+
 func populateBlankMultisig(client libgoal.Client, dataDir string, walletName string, stxn transactions.SignedTxn) transactions.SignedTxn {
 	// Check if we have a multisig account, and if so, populate with
 	// a blank multisig.  This allows `algokey multisig` to work.
@@ -188,14 +296,6 @@ func populateBlankMultisig(client libgoal.Client, dataDir string, walletName str
 		return stxn
 	}
 
-	var pks []crypto.PublicKey
-	for _, pk := range multisigInfo.PKs {
-		addr, err := basics.UnmarshalChecksumAddress(pk)
-		if err != nil {
-			return stxn
-		}
-		pks = append(pks, crypto.PublicKey(addr))
-	}
-	stxn.Msig = crypto.MultisigPreimageFromPKs(multisigInfo.Version, multisigInfo.Threshold, pks)
+	stxn.Msig, _ = msigInfoToMsig(multisigInfo)
 	return stxn
 }

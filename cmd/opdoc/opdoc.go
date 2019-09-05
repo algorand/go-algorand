@@ -15,7 +15,7 @@ type stringString struct {
 }
 
 func stringStringListToMap(they []stringString) map[string]string {
-	out := make(map[string]string)
+	out := make(map[string]string, len(they))
 	for _, v := range they {
 		out[v.a] = v.b
 	}
@@ -74,7 +74,7 @@ var opDocList = []stringString{
 var opDocs map[string]string
 
 func checkOpDocs() {
-	opsSeen := make(map[string]bool)
+	opsSeen := make(map[string]bool, len(logic.OpSpecs))
 	for _, op := range logic.OpSpecs {
 		opsSeen[op.Name] = false
 	}
@@ -139,7 +139,7 @@ var opGroupList = []opGroup{
 }
 
 func checkGroupCoverage() {
-	opsSeen := make(map[string]bool)
+	opsSeen := make(map[string]bool, len(logic.OpSpecs))
 	for _, op := range logic.OpSpecs {
 		opsSeen[op.Name] = false
 	}
