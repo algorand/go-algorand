@@ -94,6 +94,12 @@ const ConsensusV17 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/5615adc36bad610c7f165fa2967f4ecfa75125f0",
 )
 
+// ConsensusFuture is a protocol that should not appear in any production
+// network, but is used to test features before they are released.
+const ConsensusFuture = ConsensusVersion(
+	"future",
+)
+
 // !!! ********************* !!!
 // !!! *** Please update ConsensusCurrentVersion when adding new protocol versions *** !!!
 // !!! ********************* !!!
