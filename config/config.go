@@ -179,6 +179,9 @@ type ConsensusParams struct {
 
 	// domain-separated credentials
 	CredentialDomainSeparationEnabled bool
+
+	// 0 for no support, otherwise highest version supported
+	LogicSigVersion uint64
 }
 
 // Consensus tracks the protocol-level settings for different versions of the

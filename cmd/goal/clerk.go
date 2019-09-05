@@ -54,6 +54,7 @@ var (
 	argB64Strings   []string
 	disassesmble    bool
 	progByteFile    string
+	logicSigFile    string
 )
 
 func init() {
@@ -94,6 +95,8 @@ func init() {
 
 	signCmd.Flags().StringVarP(&txFilename, "infile", "i", "", "Partially-signed transaction file to add signature to")
 	signCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Filename for writing the signed transaction")
+	signCmd.Flags().StringVarP(&programSource, "program", "p", "", "Program source to use as account logic")
+	signCmd.Flags().StringVarP(&logicSigFile, "logic-sig", "L", "", "LogicSig to apply to transaction")
 	signCmd.MarkFlagRequired("infile")
 	signCmd.MarkFlagRequired("outfile")
 
@@ -466,12 +469,38 @@ var signCmd = &cobra.Command{
 			reportErrorf(fileReadError, txFilename, err)
 		}
 
-		dataDir := ensureSingleDataDir()
-		client := ensureKmdClient(dataDir)
-		wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
+		var lsig transactions.LogicSig
+
+		var client libgoal.Client
+		var wh []byte
+		var pw []byte
+
+		if programSource != "" {
+			if logicSigFile != "" {
+				reportErrorln("goal clerk sign should have at most one of --program/-p or --logic-sig/-L")
+			}
+			lsig.Logic = assembleFile(programSource)
+		} else if logicSigFile != "" {
+			lsigBytes, err := readFile(logicSigFile)
+			if err != nil {
+				reportErrorf("%s: read failed, %s", logicSigFile, err)
+			}
+			err = protocol.Decode(lsigBytes, &lsig)
+			if err != nil {
+				reportErrorf("%s: decode failed, %s", logicSigFile, err)
+			}
+		}
+		// TODO: add Args to lsig
+		if lsig.Logic == nil {
+			// sign the usual way
+			dataDir := ensureSingleDataDir()
+			client = ensureKmdClient(dataDir)
+			wh, pw = ensureWalletHandleMaybePassword(dataDir, walletName, true)
+		}
 
 		var outData []byte
 		dec := protocol.NewDecoderBytes(data)
+		count := 0
 		for {
 			// transaction file comes in as a SignedTxn with no signature
 			var unsignedTxn transactions.SignedTxn
@@ -483,12 +512,24 @@ var signCmd = &cobra.Command{
 				reportErrorf(txDecodeError, txFilename, err)
 			}
 
-			signedTxn, err := client.SignTransactionWithWallet(wh, pw, unsignedTxn.Txn)
-			if err != nil {
-				reportErrorf(errorSigningTX, err)
+			var signedTxn transactions.SignedTxn
+			if lsig.Logic != nil {
+				err = lsig.Verify(&unsignedTxn.Txn)
+				if err != nil {
+					reportErrorf("%s: txn[%d] error %s", txFilename, count, err)
+				}
+				signedTxn.Txn = unsignedTxn.Txn
+				signedTxn.Lsig = lsig
+			} else {
+				// sign the usual way
+				signedTxn, err = client.SignTransactionWithWallet(wh, pw, unsignedTxn.Txn)
+				if err != nil {
+					reportErrorf(errorSigningTX, err)
+				}
 			}
 
 			outData = append(outData, protocol.Encode(signedTxn)...)
+			count++
 		}
 		err = writeFile(outFilename, outData, 0600)
 		if err != nil {
@@ -514,9 +555,26 @@ func disassembleFile(fname, outname string) {
 	if err != nil {
 		reportErrorf("%s: %s\n", fname, err)
 	}
+	// try parsing it as a msgpack LogicSig
+	var lsig transactions.LogicSig
+	err = protocol.Decode(program, &lsig)
+	extra := ""
+	if err == nil {
+		// success, extract program to disassemble
+		program = lsig.Logic
+		if lsig.Sig != (crypto.Signature{}) || (!lsig.Msig.Blank()) || len(lsig.Args) > 0 {
+			nologic := lsig
+			nologic.Logic = nil
+			ilsig := lsigToInspect(nologic)
+			extra = "LogicSig: " + string(protocol.EncodeJSON(ilsig))
+		}
+	}
 	text, err := logic.Disassemble(program)
 	if err != nil {
 		reportErrorf("%s: %s\n", fname, err)
+	}
+	if extra != "" {
+		text = text + extra + "\n"
 	}
 	if outname == "" {
 		os.Stdout.Write([]byte(text))

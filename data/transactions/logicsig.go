@@ -29,7 +29,7 @@ import (
 type LogicSig struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	// LogicSigLogic signed by Sig or Msig, OR hashed to be the Address of a contract account.
+	// Logic signed by Sig or Msig, OR hashed to be the Address of an account.
 	Logic []byte `codec:"l"`
 
 	Sig  crypto.Signature   `codec:"sig"`

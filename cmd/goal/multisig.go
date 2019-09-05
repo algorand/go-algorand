@@ -32,9 +32,8 @@ import (
 )
 
 var (
-	addr         string
-	msigAddr     string
-	logicSigFile string
+	addr     string
+	msigAddr string
 )
 
 func init() {
