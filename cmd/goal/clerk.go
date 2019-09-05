@@ -97,6 +97,7 @@ func init() {
 	signCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Filename for writing the signed transaction")
 	signCmd.Flags().StringVarP(&programSource, "program", "p", "", "Program source to use as account logic")
 	signCmd.Flags().StringVarP(&logicSigFile, "logic-sig", "L", "", "LogicSig to apply to transaction")
+	signCmd.Flags().StringSliceVar(&argB64Strings, "argb64", nil, "base64 encoded args to pass to transaction logic")
 	signCmd.MarkFlagRequired("infile")
 	signCmd.MarkFlagRequired("outfile")
 
@@ -176,6 +177,25 @@ func writeTxnToFile(client libgoal.Client, signTx bool, dataDir string, walletNa
 	return writeFile(filename, protocol.Encode(stxn), 0600)
 }
 
+func getProgramArgs() [][]byte {
+	if len(argB64Strings) == 0 {
+		return nil
+	}
+	programArgs := make([][]byte, len(argB64Strings))
+	for i, argstr := range argB64Strings {
+		if argstr == "" {
+			programArgs[i] = []byte{}
+			continue
+		}
+		var err error
+		programArgs[i], err = base64.StdEncoding.DecodeString(argstr)
+		if err != nil {
+			reportErrorf("arg[%d] decode error: %s", i, err)
+		}
+	}
+	return programArgs
+}
+
 var sendCmd = &cobra.Command{
 	Use:   "send",
 	Short: "Send money to an address",
@@ -209,20 +229,7 @@ var sendCmd = &cobra.Command{
 			ph := transactions.HashProgram(program)
 			pha := basics.Address(ph)
 			fromAddressResolved = pha.String()
-			if len(argB64Strings) > 0 {
-				programArgs = make([][]byte, len(argB64Strings))
-				for i, argstr := range argB64Strings {
-					if argstr == "" {
-						programArgs[i] = []byte{}
-						continue
-					}
-					var err error
-					programArgs[i], err = base64.StdEncoding.DecodeString(argstr)
-					if err != nil {
-						reportErrorf("arg[%d] decode error: %s", i, err)
-					}
-				}
-			}
+			programArgs = getProgramArgs()
 		} else {
 			// Check if from was specified, else use default
 			if account == "" {
@@ -480,6 +487,7 @@ var signCmd = &cobra.Command{
 				reportErrorln("goal clerk sign should have at most one of --program/-p or --logic-sig/-L")
 			}
 			lsig.Logic = assembleFile(programSource)
+			lsig.Args = getProgramArgs()
 		} else if logicSigFile != "" {
 			lsigBytes, err := readFile(logicSigFile)
 			if err != nil {
@@ -489,8 +497,8 @@ var signCmd = &cobra.Command{
 			if err != nil {
 				reportErrorf("%s: decode failed, %s", logicSigFile, err)
 			}
+			lsig.Args = getProgramArgs()
 		}
-		// TODO: add Args to lsig
 		if lsig.Logic == nil {
 			// sign the usual way
 			dataDir := ensureSingleDataDir()
