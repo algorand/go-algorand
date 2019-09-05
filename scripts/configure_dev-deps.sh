@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -x
+set -ex
 
 GO111MODULE=off go get -u golang.org/x/lint/golint
 GO111MODULE=off go get -u golang.org/x/tools/cmd/stringer
