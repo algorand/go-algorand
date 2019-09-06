@@ -43,7 +43,7 @@ func init() {
 }
 
 func TestBlockEvaluator(t *testing.T) {
-	seed, addrs, keys := genesis(10)
+	genesisInitState, addrs, keys := genesis(10)
 
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
@@ -51,10 +51,10 @@ func TestBlockEvaluator(t *testing.T) {
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	const inMem = true
 	const archival = true
-	l, err := OpenLedger(logging.Base(), dbName, inMem, seed, archival)
+	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, archival)
 	require.NoError(t, err)
 
-	blks := seed.InitBlocks
+	blks := genesisInitState.Blocks
 	newBlock := bookkeeping.MakeBlock(blks[len(blks)-1].BlockHeader)
 	eval, err := l.StartEvaluator(newBlock.BlockHeader, nil, backlogPool)
 	require.NoError(t, err)
@@ -112,7 +112,7 @@ func TestBlockEvaluator(t *testing.T) {
 	validatedBlock, err := eval.GenerateBlock()
 	require.NoError(t, err)
 
-	accts := seed.InitAccounts
+	accts := genesisInitState.Accounts
 	bal0 := accts[addrs[0]]
 	bal1 := accts[addrs[1]]
 	bal2 := accts[addrs[2]]

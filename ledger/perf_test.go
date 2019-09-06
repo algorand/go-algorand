@@ -82,16 +82,16 @@ func BenchmarkManyAccounts(b *testing.B) {
 
 	b.StopTimer()
 
-	seed, addrs, _ := genesis(1)
+	genesisInitState, addrs, _ := genesis(1)
 	addr := addrs[0]
 
 	dbName := fmt.Sprintf("%s.%d", b.Name(), crypto.RandUint64())
 	const inMem = true
 	const archival = true
-	l, err := OpenLedger(logging.Base(), dbName, inMem, seed, archival)
+	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, archival)
 	require.NoError(b, err)
 
-	blks := seed.InitBlocks
+	blks := genesisInitState.Blocks
 	blk := blks[len(blks)-1]
 	for i := 0; i < b.N; i++ {
 		blk = bookkeeping.MakeBlock(blk.BlockHeader)
@@ -132,7 +132,7 @@ func BenchmarkManyAccounts(b *testing.B) {
 func BenchmarkValidate(b *testing.B) {
 	b.StopTimer()
 
-	seed, addrs, keys := genesis(10000)
+	genesisInitState, addrs, keys := genesis(10000)
 
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
@@ -140,10 +140,10 @@ func BenchmarkValidate(b *testing.B) {
 	dbName := fmt.Sprintf("%s.%d", b.Name(), crypto.RandUint64())
 	const inMem = true
 	const archival = true
-	l, err := OpenLedger(logging.Base(), dbName, inMem, seed, archival)
+	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, archival)
 	require.NoError(b, err)
 
-	blks := seed.InitBlocks
+	blks := genesisInitState.Blocks
 	blk := blks[len(blks)-1]
 	for i := 0; i < b.N; i++ {
 		newblk := bookkeeping.MakeBlock(blk.BlockHeader)

@@ -77,7 +77,7 @@ func (wl *wrappedLedger) trackerLog() logging.Logger {
 	return wl.l.trackerLog()
 }
 
-func getInitState() (seed InitState) {
+func getInitState() (genesisInitState InitState) {
 	blk := bookkeeping.Block{}
 	blk.CurrentProtocol = protocol.ConsensusCurrentVersion
 	blk.RewardsPool = testPoolAddr
@@ -87,10 +87,10 @@ func getInitState() (seed InitState) {
 	accts[testPoolAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 1234567890})
 	accts[testSinkAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 1234567890})
 
-	seed.InitAccounts = accts
-	seed.InitBlocks = []bookkeeping.Block{blk}
-	seed.GenesisHash = crypto.Digest{}
-	return seed
+	genesisInitState.Accounts = accts
+	genesisInitState.Blocks = []bookkeeping.Block{blk}
+	genesisInitState.GenesisHash = crypto.Digest{}
+	return genesisInitState
 }
 
 func TestArchival(t *testing.T) {
@@ -103,17 +103,17 @@ func TestArchival(t *testing.T) {
 	// which affect participationTracker.committedUpTo()'s return value.
 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	seed := getInitState()
+	genesisInitState := getInitState()
 	const inMem = true
 	const archival = true
-	l, err := OpenLedger(logging.Base(), dbName, inMem, seed, archival)
+	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, archival)
 	require.NoError(t, err)
 	wl := &wrappedLedger{
 		l: l,
 	}
 
 	nonZeroMinSaves := 0
-	blk := seed.InitBlocks[0]
+	blk := genesisInitState.Blocks[0]
 
 	for i := 0; i < 2000; i++ {
 		blk.BlockHeader.Round++
@@ -156,24 +156,19 @@ func TestArchivalRestart(t *testing.T) {
 	dbPrefix := filepath.Join(dbTempDir, dbName)
 	defer os.RemoveAll(dbTempDir)
 
-	seed := getInitState()
+	genesisInitState := getInitState()
 	const inMem = false // use persistent storage
 	const archival = true
 
-	l, err := OpenLedger(logging.Base(), dbPrefix, inMem, seed, archival)
+	l, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
 	require.NoError(t, err)
-	blk := seed.InitBlocks[0]
+	blk := genesisInitState.Blocks[0]
 
 	const maxBlocks = 2000
 	for i := 0; i < maxBlocks; i++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 		l.AddBlock(blk, agreement.Certificate{})
-
-		// Don't bother checking the trackers every round -- it's too slow..
-		if crypto.RandUint64()%23 > 0 {
-			continue
-		}
 	}
 	l.WaitForCommit(blk.Round())
 
@@ -193,7 +188,7 @@ func TestArchivalRestart(t *testing.T) {
 	// close and reopen the same DB, ensure latest/earliest are not changed
 	l.Close()
 
-	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, seed, archival)
+	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
 	require.NoError(t, err)
 
 	err = l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
@@ -218,24 +213,19 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	dbPrefix := filepath.Join(dbTempDir, dbName)
 	defer os.RemoveAll(dbTempDir)
 
-	seed := getInitState()
+	genesisInitState := getInitState()
 	const inMem = false // use persistent storage
 	archival := false
 
-	l, err := OpenLedger(logging.Base(), dbPrefix, inMem, seed, archival)
+	l, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
 	require.NoError(t, err)
-	blk := seed.InitBlocks[0]
+	blk := genesisInitState.Blocks[0]
 
 	const maxBlocks = 2000
 	for i := 0; i < maxBlocks; i++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 		l.AddBlock(blk, agreement.Certificate{})
-
-		// Don't bother checking the trackers every round -- it's too slow..
-		if crypto.RandUint64()%23 > 0 {
-			continue
-		}
 	}
 	l.WaitForCommit(blk.Round())
 
@@ -256,7 +246,7 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	l.Close()
 
 	archival = true
-	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, seed, archival)
+	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
 	require.NoError(t, err)
 
 	err = l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {

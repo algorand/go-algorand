@@ -70,23 +70,23 @@ type Ledger struct {
 
 // InitState structure defines blockchain init params
 type InitState struct {
-	InitBlocks   []bookkeeping.Block
-	InitAccounts map[basics.Address]basics.AccountData
-	GenesisHash  crypto.Digest
+	Blocks      []bookkeeping.Block
+	Accounts    map[basics.Address]basics.AccountData
+	GenesisHash crypto.Digest
 }
 
 // OpenLedger creates a Ledger object, using SQLite database filenames
-// based on dbPathPrefix (in-memory if dbMem is true). seed.initBlocks and
-// seed.initAccounts specify the initial blocks and accounts to use if the
+// based on dbPathPrefix (in-memory if dbMem is true). genesisInitState.Blocks and
+// genesisInitState.Accounts specify the initial blocks and accounts to use if the
 // database wasn't initialized before.
 func OpenLedger(
-	log logging.Logger, dbPathPrefix string, dbMem bool, seed InitState, isArchival bool,
+	log logging.Logger, dbPathPrefix string, dbMem bool, genesisInitState InitState, isArchival bool,
 ) (*Ledger, error) {
 	var err error
 	l := &Ledger{
 		log:         log,
 		archival:    isArchival,
-		genesisHash: seed.GenesisHash,
+		genesisHash: genesisInitState.GenesisHash,
 	}
 
 	l.headerCache.maxEntries = 10
@@ -106,7 +106,7 @@ func OpenLedger(
 	}
 
 	err = l.blockDBs.wdb.Atomic(func(tx *sql.Tx) error {
-		return initBlocksDB(tx, l, seed.InitBlocks, isArchival)
+		return initBlocksDB(tx, l, genesisInitState.Blocks, isArchival)
 	})
 	if err != nil {
 		return nil, err
@@ -118,14 +118,14 @@ func OpenLedger(
 	}
 
 	// Accounts are special because they get an initialization argument (initAccounts).
-	initAccounts := seed.InitAccounts
+	initAccounts := genesisInitState.Accounts
 	if initAccounts == nil {
 		initAccounts = make(map[basics.Address]basics.AccountData)
 	}
 
-	if len(seed.InitBlocks) != 0 {
+	if len(genesisInitState.Blocks) != 0 {
 		// only needed if not initialized yet
-		l.accts.initProto = config.Consensus[seed.InitBlocks[0].CurrentProtocol]
+		l.accts.initProto = config.Consensus[genesisInitState.Blocks[0].CurrentProtocol]
 	}
 	l.accts.initAccounts = initAccounts
 
@@ -154,10 +154,10 @@ func OpenLedger(
 		}
 
 		params := config.Consensus[hdr.CurrentProtocol]
-		if params.SupportGenesisHash && hdr.GenesisHash != seed.GenesisHash {
+		if params.SupportGenesisHash && hdr.GenesisHash != genesisInitState.GenesisHash {
 			return fmt.Errorf(
 				"latest block %d genesis hash %v does not match expected genesis hash %v",
-				latest, hdr.GenesisHash, seed.GenesisHash,
+				latest, hdr.GenesisHash, genesisInitState.GenesisHash,
 			)
 		}
 

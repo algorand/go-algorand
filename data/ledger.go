@@ -117,14 +117,14 @@ func LoadLedger(
 	l := &Ledger{
 		log: log,
 	}
-	ledgerSeed := ledger.InitState{
-		InitBlocks:   genBlocks,
-		InitAccounts: genesisBal.balances,
-		GenesisHash:  genesisHash,
+	genesisInitState := ledger.InitState{
+		Blocks:      genBlocks,
+		Accounts:    genesisBal.balances,
+		GenesisHash: genesisHash,
 	}
 	l.log.Debugf("Initializing Ledger(%s)", dbFilenamePrefix)
 
-	ll, err := ledger.OpenLedger(log, dbFilenamePrefix, memory, ledgerSeed, isArchival)
+	ll, err := ledger.OpenLedger(log, dbFilenamePrefix, memory, genesisInitState, isArchival)
 	if err != nil {
 		return nil, err
 	}

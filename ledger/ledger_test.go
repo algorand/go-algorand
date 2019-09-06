@@ -59,7 +59,7 @@ func sign(secrets map[basics.Address]*crypto.SignatureSecrets, t transactions.Tr
 	}
 }
 
-func testGenerateInitState(t *testing.T, proto protocol.ConsensusVersion) (seed InitState, initKeys map[basics.Address]*crypto.SignatureSecrets) {
+func testGenerateInitState(t *testing.T, proto protocol.ConsensusVersion) (genesisInitState InitState, initKeys map[basics.Address]*crypto.SignatureSecrets) {
 	params := config.Consensus[proto]
 	poolAddr := testPoolAddr
 	sinkAddr := testSinkAddr
@@ -76,18 +76,18 @@ func testGenerateInitState(t *testing.T, proto protocol.ConsensusVersion) (seed 
 	}
 
 	initKeys = make(map[basics.Address]*crypto.SignatureSecrets)
-	seed.InitAccounts = make(map[basics.Address]basics.AccountData)
+	genesisInitState.Accounts = make(map[basics.Address]basics.AccountData)
 	for i := range genaddrs {
 		initKeys[genaddrs[i]] = gensecrets[i]
 		// Give each account quite a bit more balance than MinFee or MinBalance
-		seed.InitAccounts[genaddrs[i]] = basics.MakeAccountData(basics.Online, basics.MicroAlgos{Raw: uint64((i + 100) * 100000)})
+		genesisInitState.Accounts[genaddrs[i]] = basics.MakeAccountData(basics.Online, basics.MicroAlgos{Raw: uint64((i + 100) * 100000)})
 	}
 	initKeys[poolAddr] = poolSecret
-	seed.InitAccounts[poolAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 1234567})
+	genesisInitState.Accounts[poolAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 1234567})
 	initKeys[sinkAddr] = sinkSecret
-	seed.InitAccounts[sinkAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 7654321})
+	genesisInitState.Accounts[sinkAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 7654321})
 
-	incentivePoolBalanceAtGenesis := seed.InitAccounts[poolAddr].MicroAlgos
+	incentivePoolBalanceAtGenesis := genesisInitState.Accounts[poolAddr].MicroAlgos
 	initialRewardsPerRound := incentivePoolBalanceAtGenesis.Raw / uint64(params.RewardsRateRefreshInterval)
 	var emptyPayset transactions.Payset
 	blk := bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{
@@ -98,20 +98,20 @@ func testGenerateInitState(t *testing.T, proto protocol.ConsensusVersion) (seed 
 	if params.SupportGenesisHash {
 		blk.BlockHeader.GenesisHash = crypto.Hash([]byte(t.Name()))
 	}
-	seed.InitBlocks = append(seed.InitBlocks, blk)
-	seed.InitBlocks[0].RewardsPool = poolAddr
-	seed.InitBlocks[0].FeeSink = sinkAddr
-	seed.InitBlocks[0].CurrentProtocol = proto
-	seed.InitBlocks[0].RewardsRate = initialRewardsPerRound
+	genesisInitState.Blocks = append(genesisInitState.Blocks, blk)
+	genesisInitState.Blocks[0].RewardsPool = poolAddr
+	genesisInitState.Blocks[0].FeeSink = sinkAddr
+	genesisInitState.Blocks[0].CurrentProtocol = proto
+	genesisInitState.Blocks[0].RewardsRate = initialRewardsPerRound
 
 	for i := 1; i < 300; i++ {
-		next := bookkeeping.MakeBlock(seed.InitBlocks[i-1].BlockHeader)
-		next.RewardsState = seed.InitBlocks[i-1].NextRewardsState(basics.Round(i), params, incentivePoolBalanceAtGenesis, 0)
-		next.TimeStamp = seed.InitBlocks[i-1].TimeStamp
-		seed.InitBlocks = append(seed.InitBlocks, next)
+		next := bookkeeping.MakeBlock(genesisInitState.Blocks[i-1].BlockHeader)
+		next.RewardsState = genesisInitState.Blocks[i-1].NextRewardsState(basics.Round(i), params, incentivePoolBalanceAtGenesis, 0)
+		next.TimeStamp = genesisInitState.Blocks[i-1].TimeStamp
+		genesisInitState.Blocks = append(genesisInitState.Blocks, next)
 	}
 
-	seed.GenesisHash = crypto.Hash([]byte(t.Name()))
+	genesisInitState.GenesisHash = crypto.Hash([]byte(t.Name()))
 
 	return
 }
@@ -214,7 +214,7 @@ func TestLedgerBlockHeaders(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	poolAddr := testPoolAddr
 	var totalRewardUnits uint64
-	for _, acctdata := range seed.InitAccounts {
+	for _, acctdata := range seed.Accounts {
 		totalRewardUnits += acctdata.MicroAlgos.RewardUnits(proto)
 	}
 	poolBal, err := l.Lookup(l.Latest(), poolAddr)
@@ -336,17 +336,17 @@ func TestLedgerSingleTx(t *testing.T) {
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
-	seed, initSecrets := testGenerateInitState(t, protocol.ConsensusV7)
+	genesisInitState, initSecrets := testGenerateInitState(t, protocol.ConsensusV7)
 	const inMem = true
 	const archival = true
-	l, err := OpenLedger(logging.Base(), t.Name(), inMem, seed, archival)
+	l, err := OpenLedger(logging.Base(), t.Name(), inMem, genesisInitState, archival)
 	a.NoError(err, "could not open ledger")
 
 	proto := config.Consensus[protocol.ConsensusV7]
 	poolAddr := testPoolAddr
 	sinkAddr := testSinkAddr
 
-	initAccounts := seed.InitAccounts
+	initAccounts := genesisInitState.Accounts
 	var addrList []basics.Address
 	for addr := range initAccounts {
 		if addr != poolAddr && addr != sinkAddr {
@@ -520,10 +520,10 @@ func TestLedgerSingleTxApplyData(t *testing.T) {
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
-	seed, initSecrets := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
+	genesisInitState, initSecrets := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
 	const inMem = true
 	const archival = true
-	l, err := OpenLedger(logging.Base(), t.Name(), inMem, seed, archival)
+	l, err := OpenLedger(logging.Base(), t.Name(), inMem, genesisInitState, archival)
 	a.NoError(err, "could not open ledger")
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -531,7 +531,7 @@ func TestLedgerSingleTxApplyData(t *testing.T) {
 	sinkAddr := testSinkAddr
 
 	var addrList []basics.Address
-	initAccounts := seed.InitAccounts
+	initAccounts := genesisInitState.Accounts
 	for addr := range initAccounts {
 		if addr != poolAddr && addr != sinkAddr {
 			addrList = append(addrList, addr)
