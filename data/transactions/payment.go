@@ -94,6 +94,13 @@ func (payment PaymentTxnFields) apply(header Header, balances Balances, spec Spe
 			return fmt.Errorf("cannot close: %d outstanding assets", len(rec.Assets))
 		}
 
+		if len(rec.AssetParams) > 0 {
+			// This should be impossible because every asset created
+			// by an account (in AssetParams) must also appear in Assets,
+			// which we checked above.
+			return fmt.Errorf("cannot close: %d outstanding created assets", len(rec.AssetParams))
+		}
+
 		// Clear out entire account record, to allow the DB to GC it
 		rec.AccountData = basics.AccountData{}
 		err = balances.Put(rec)
