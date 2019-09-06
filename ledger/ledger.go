@@ -106,7 +106,7 @@ func OpenLedger(
 	}
 
 	err = l.blockDBs.wdb.Atomic(func(tx *sql.Tx) error {
-		return initLedgerDB(tx, seed.InitBlocks, isArchival)
+		return initBlocksDB(tx, l, seed.InitBlocks, isArchival)
 	})
 	if err != nil {
 		return nil, err
@@ -210,7 +210,7 @@ func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs dbPair, blockDBs 
 // - creates and populates it with genesis blocks
 // - ensures DB is in good shape for archival mode and resets it it not
 // - does nothing if everything looks good
-func initLedgerDB(tx *sql.Tx, initBlocks []bookkeeping.Block, isArchival bool) (err error) {
+func initBlocksDB(tx *sql.Tx, l *Ledger, initBlocks []bookkeeping.Block, isArchival bool) (err error) {
 	err = blockInit(tx, initBlocks)
 	if err != nil {
 		return err
@@ -230,6 +230,7 @@ func initLedgerDB(tx *sql.Tx, initBlocks []bookkeeping.Block, isArchival bool) (
 		// Detect possible problem - archival node needs all block but have only subsequence of them
 		// So drop the table and init it again
 		if count != uint64(latest)+1 { // start with round zero, rounds numbered sequentially
+			l.log.Warnf("resetting blocks DB (expected %v blocks but have only %v)", uint64(latest)+1, count)
 			err := blockResetDB(tx)
 			if err != nil {
 				return err

@@ -112,7 +112,7 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 		}
 		// Check for blocks DB and tracker DB un-sync
 		if au.dbRound > latest {
-			// TODO: add assertions about non-archival to archival switch?
+			au.log.Warnf("resetting accounts DB (on round %v, but blocks DB's latest is %v)", au.dbRound, latest)
 			err0 = accountsReset(tx)
 			if err0 != nil {
 				return err0
