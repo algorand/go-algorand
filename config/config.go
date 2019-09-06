@@ -373,6 +373,14 @@ func initConsensusProtocols() {
 
 	// v16 can be upgraded to v17.
 	v16.ApprovedUpgrades[protocol.ConsensusV17] = true
+
+	vNext := v17
+	vNext.LogicSigVersion = 1
+	vNext.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	Consensus[protocol.ConsensusVNext] = vNext
+
+	// v17 can be upgraded to v18.
+	v17.ApprovedUpgrades[protocol.ConsensusVNext] = true
 }
 
 func initConsensusTestProtocols() {

@@ -50,6 +50,7 @@ type labelReference struct {
 // OpStream is destination for program and scratch space
 type OpStream struct {
 	Out     bytes.Buffer
+	Version uint64
 	vubytes [9]byte
 	intc    []uint64
 	bytec   [][]byte
@@ -477,10 +478,6 @@ func init() {
 	argOps["txn"] = assembleTxn
 	argOps["global"] = assembleGlobal
 	argOps["bnz"] = assembleBnz
-	// TODO: implement account balance lookup
-	//argOps["account"] = assembleAccount
-	// TODO: implement lookup on other transactions (in txn group?)
-	//argOps["txnById"] = assembleTxID
 
 	txnFields = make(map[string]uint)
 	for i, tfn := range TxnFieldNames {
@@ -612,10 +609,21 @@ func (ops *OpStream) resolveLabels() (err error) {
 	return nil
 }
 
+// AssemblerDefaultVersion what version of code do we emit by default
+const AssemblerDefaultVersion = 1
+
 // Bytes returns the finished program bytes
 func (ops *OpStream) Bytes() (program []byte, err error) {
 	var scratch [11]byte
 	prebytes := bytes.Buffer{}
+	// TODO: configurable what version to compile for in case we're near a version boundary?
+	version := ops.Version
+	if version == 0 {
+		//version = config.Consensus[protocol.ConsensusCurrentVersion].LogicSigVersion
+		version = AssemblerDefaultVersion
+	}
+	vlen := binary.PutUvarint(scratch[:], version)
+	prebytes.Write(scratch[:vlen])
 	if len(ops.intc) > 0 {
 		prebytes.WriteByte(0x20) // intcblock
 		vlen := binary.PutUvarint(scratch[:], uint64(len(ops.intc)))
@@ -844,6 +852,9 @@ func disBnz(dis *disassembleState) {
 func Disassemble(program []byte) (text string, err error) {
 	out := strings.Builder{}
 	dis := disassembleState{program: program, out: &out}
+	version, vlen := binary.Uvarint(program)
+	fmt.Fprintf(dis.out, "// version %d\n", version)
+	dis.pc = vlen
 	for dis.pc < len(program) {
 		label, hasLabel := dis.pendingLabels[dis.pc]
 		if hasLabel {

@@ -169,3 +169,9 @@ err
 safe:
 pop
 ```
+
+## Encoding and Versioning
+
+A program starts with a varuint declaring the version of the compiled code. Any addition, removal, or change of opcode behavior increments the version. For the most part opcode behavior should not change, addition will be infrequent (not likely more often than every three months and less often as the language matures), and removal should be very rare.
+
+For version 1, subsequent bytes after the varuint are program opcode bytes. Future versions could put other metadata following the version identifier.

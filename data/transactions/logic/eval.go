@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"crypto/sha512"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -30,8 +31,10 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/protocol"
 )
+
+// EvalMaxVersion is the max version we can interpret and run
+const EvalMaxVersion = 1
 
 // stackValue is the type for the operand stack.
 // Each stackValue is either a valid []byte value or a uint64 value.
@@ -69,6 +72,8 @@ type EvalParams struct {
 
 	Block *bookkeeping.Block
 
+	Proto *config.ConsensusParams
+
 	Trace io.Writer
 }
 
@@ -82,6 +87,7 @@ type evalContext struct {
 	err     error
 	intc    []uint64
 	bytec   [][]byte
+	version uint64
 }
 
 type opFunc func(cx *evalContext)
@@ -127,6 +133,17 @@ type OpSpec struct {
 // Eval checks to see if a transaction passes logic
 func Eval(logic []byte, params EvalParams) bool {
 	var cx evalContext
+	version, vlen := binary.Uvarint(logic)
+	if version > EvalMaxVersion {
+		cx.err = fmt.Errorf("program version %d greater than max supported version %d", version, EvalMaxVersion)
+		return false
+	}
+	if (params.Proto != nil) && (version > params.Proto.LogicSigVersion) {
+		cx.err = fmt.Errorf("program version %d greater than protocol supported version %d", version, params.Proto.LogicSigVersion)
+		return false
+	}
+	cx.version = version
+	cx.pc = vlen
 	cx.EvalParams = params
 	cx.stack = make([]stackValue, 0, 10)
 	cx.program = logic
@@ -693,11 +710,11 @@ func opGlobal(cx *evalContext) {
 			sv.Uint = uint64(cx.Block.Round())
 		}
 	case 1:
-		sv.Uint = config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee
+		sv.Uint = cx.Proto.MinTxnFee
 	case 2:
-		sv.Uint = config.Consensus[protocol.ConsensusCurrentVersion].MinBalance
+		sv.Uint = cx.Proto.MinBalance
 	case 3:
-		sv.Uint = config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife
+		sv.Uint = cx.Proto.MaxTxnLife
 	case 4:
 		if cx.Block != nil {
 			sv.Uint = uint64(cx.Block.BlockHeader.TimeStamp)

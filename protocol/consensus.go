@@ -94,13 +94,16 @@ const ConsensusV17 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/5615adc36bad610c7f165fa2967f4ecfa75125f0",
 )
 
+// ConsensusVNext stand-in for protocol with LogicSig and TEAL v1
+const ConsensusVNext = ConsensusVersion("NEXT!")
+
 // !!! ********************* !!!
 // !!! *** Please update ConsensusCurrentVersion when adding new protocol versions *** !!!
 // !!! ********************* !!!
 
 // ConsensusCurrentVersion is the latest version and should be used
 // when a specific version is not provided.
-const ConsensusCurrentVersion = ConsensusV17
+const ConsensusCurrentVersion = ConsensusVNext
 
 // ConsensusTest0 is a version of ConsensusV0 used for testing
 // (it has different approved upgrade paths).
