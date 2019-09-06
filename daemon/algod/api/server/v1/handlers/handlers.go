@@ -610,6 +610,23 @@ func GetPendingTransactions(ctx lib.ReqContext, w http.ResponseWriter, r *http.R
 		return
 	}
 
+	queryAddr := r.FormValue("addr")
+	txns := make([]transactions.SignedTxn, 0)
+	if queryAddr != "" {
+		addr, err := basics.UnmarshalChecksumAddress(queryAddr)
+		if err != nil {
+			lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errFailedToParseAddress), errFailedToParseAddress, ctx.Log)
+			return
+		}
+
+		for _, tx := range txs {
+			if tx.Txn.Receiver == addr || tx.Txn.Sender == addr {
+				txns = append(txns, tx)
+			}
+		}
+		txs = txns
+	}
+
 	totalTxns := uint64(len(txs))
 	if max > 0 && totalTxns > max {
 		// we expose this truncating mechanism for the client only, for the flexibility
