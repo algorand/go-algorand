@@ -93,7 +93,7 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 	latest := l.Latest()
 	err := au.dbs.wdb.Atomic(func(tx *sql.Tx) error {
 		var err0 error
-		au.dbRound, err0 = au.accountInitialize(tx)
+		au.dbRound, err0 = au.accountsInitialize(tx)
 		if err0 != nil {
 			return err0
 		}
@@ -104,7 +104,7 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 			if err0 != nil {
 				return err0
 			}
-			au.dbRound, err0 = au.accountInitialize(tx)
+			au.dbRound, err0 = au.accountsInitialize(tx)
 			if err0 != nil {
 				return err0
 			}
@@ -157,7 +157,7 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 }
 
 // Initialize accounts DB if needed and return account round
-func (au *accountUpdates) accountInitialize(tx *sql.Tx) (basics.Round, error) {
+func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 	err := accountsInit(tx, au.initAccounts, au.initProto)
 	if err != nil {
 		return 0, err

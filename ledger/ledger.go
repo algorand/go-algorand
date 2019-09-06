@@ -208,7 +208,7 @@ func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs dbPair, blockDBs 
 
 // initLedgerDB performs DB initialization:
 // - creates and populates it with genesis blocks
-// - ensures DB is in good shape for archival mode and resets it it not
+// - ensures DB is in good shape for archival mode and resets it if not
 // - does nothing if everything looks good
 func initBlocksDB(tx *sql.Tx, l *Ledger, initBlocks []bookkeeping.Block, isArchival bool) (err error) {
 	err = blockInit(tx, initBlocks)

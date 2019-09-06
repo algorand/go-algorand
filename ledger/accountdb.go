@@ -53,9 +53,9 @@ var accountsSchema = []string{
 }
 
 var accountsResetExprs = []string{
-	`DROP TABLE acctrounds`,
-	`DROP TABLE accounttotals`,
-	`DROP TABLE accountbase`,
+	`DROP TABLE IF EXISTS acctrounds`,
+	`DROP TABLE IF EXISTS accounttotals`,
+	`DROP TABLE IF EXISTS accountbase`,
 }
 
 type accountDelta struct {
