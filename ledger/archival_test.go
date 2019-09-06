@@ -175,25 +175,22 @@ func TestArchivalRestart(t *testing.T) {
 			continue
 		}
 	}
-
 	l.WaitForCommit(blk.Round())
 
-	var latest basics.Round
-	var count uint64
+	var latest, earliest basics.Round
 	err = l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
 		latest, err = blockLatest(tx)
 		require.NoError(t, err)
 
-		count, err = blockCount(tx)
+		earliest, err = blockEarliest(tx)
 		require.NoError(t, err)
 		return err
 	})
 	require.NoError(t, err)
+	require.Equal(t, basics.Round(maxBlocks), latest)
+	require.Equal(t, basics.Round(0), earliest)
 
-	require.Equal(t, uint64(maxBlocks)+1, count)
-	require.Equal(t, uint64(latest)+1, count)
-
-	// close and reopen the same DB, ensure invariant count == latest + 1 is held
+	// close and reopen the same DB, ensure latest/earliest are not changed
 	l.Close()
 
 	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, seed, archival)
@@ -203,12 +200,13 @@ func TestArchivalRestart(t *testing.T) {
 		latest, err = blockLatest(tx)
 		require.NoError(t, err)
 
-		count, err = blockCount(tx)
+		earliest, err = blockEarliest(tx)
 		require.NoError(t, err)
 		return err
 	})
 	require.NoError(t, err)
-	require.Equal(t, uint64(latest)+1, count)
+	require.Equal(t, basics.Round(maxBlocks), latest)
+	require.Equal(t, basics.Round(0), earliest)
 }
 
 func TestArchivalFromNonArchival(t *testing.T) {
@@ -241,19 +239,18 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	}
 	l.WaitForCommit(blk.Round())
 
-	var latest basics.Round
-	var count uint64
+	var latest, earliest basics.Round
 	err = l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
 		latest, err = blockLatest(tx)
 		require.NoError(t, err)
 
-		count, err = blockCount(tx)
+		earliest, err = blockEarliest(tx)
 		require.NoError(t, err)
 		return err
 	})
 	require.NoError(t, err)
-	require.Equal(t, maxBlocks, int(latest))
-	require.True(t, int(count) < maxBlocks+1, fmt.Sprintf("%d < %d", int(count), maxBlocks))
+	require.Equal(t, basics.Round(maxBlocks), latest)
+	require.True(t, basics.Round(0) < earliest, fmt.Sprintf("%d < %d", basics.Round(0), earliest))
 
 	// close and reopen the same DB, ensure the DB truncated
 	l.Close()
@@ -266,13 +263,13 @@ func TestArchivalFromNonArchival(t *testing.T) {
 		latest, err = blockLatest(tx)
 		require.NoError(t, err)
 
-		count, err = blockCount(tx)
+		earliest, err = blockEarliest(tx)
 		require.NoError(t, err)
 		return err
 	})
 	require.NoError(t, err)
-	require.Equal(t, 1, int(count))
-	require.Equal(t, 0, int(latest))
+	require.Equal(t, basics.Round(0), earliest)
+	require.Equal(t, basics.Round(0), latest)
 }
 
 func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Round, error) {

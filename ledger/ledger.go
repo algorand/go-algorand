@@ -218,19 +218,15 @@ func initBlocksDB(tx *sql.Tx, l *Ledger, initBlocks []bookkeeping.Block, isArchi
 
 	// in archival mode check if DB contains all blocks up to the latest
 	if isArchival {
-		latest, err := blockLatest(tx)
-		if err != nil {
-			return err
-		}
-		count, err := blockCount(tx)
+		earliest, err := blockEarliest(tx)
 		if err != nil {
 			return err
 		}
 
 		// Detect possible problem - archival node needs all block but have only subsequence of them
-		// So drop the table and init it again
-		if count != uint64(latest)+1 { // start with round zero, rounds numbered sequentially
-			l.log.Warnf("resetting blocks DB (expected %v blocks but have only %v)", uint64(latest)+1, count)
+		// So reset the DB and init it again
+		if earliest != basics.Round(0) {
+			l.log.Warnf("resetting blocks DB (earliest block is %v)", earliest)
 			err := blockResetDB(tx)
 			if err != nil {
 				return err
