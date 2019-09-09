@@ -52,6 +52,9 @@ type roundCowBase struct {
 
 	// The round number of the previous block, for looking up prior state.
 	rnd basics.Round
+
+	// TxnCounter from previous block header.
+	txnCount uint64
 }
 
 func (x *roundCowBase) lookup(addr basics.Address) (basics.AccountData, error) {
@@ -60,6 +63,10 @@ func (x *roundCowBase) lookup(addr basics.Address) (basics.AccountData, error) {
 
 func (x *roundCowBase) isDup(firstValid basics.Round, txid transactions.Txid) (bool, error) {
 	return x.l.isDup(firstValid, x.rnd, txid)
+}
+
+func (x *roundCowBase) txnCounter() uint64 {
+	return x.txnCount
 }
 
 // wrappers for roundCowState to satisfy the (current) transactions.Balances interface
@@ -151,7 +158,6 @@ type BlockEvaluator struct {
 
 	block        bookkeeping.Block
 	blockTxBytes int
-	txnCounter   uint64
 
 	verificationPool execpool.BacklogPool
 }
@@ -208,7 +214,7 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *eval
 			return nil, fmt.Errorf("can't evaluate block %v without previous header: %v", hdr.Round, err)
 		}
 
-		eval.txnCounter = eval.prevHeader.TxnCounter
+		base.txnCount = eval.prevHeader.TxnCounter
 	}
 
 	prevTotals, err := l.Totals(eval.prevHeader.Round)
@@ -473,7 +479,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 	}
 
 	// Apply the transaction, updating the cow balances
-	applyData, err := txn.Txn.Apply(cow, spec, eval.txnCounter)
+	applyData, err := txn.Txn.Apply(cow, spec, cow.txnCounter())
 	if err != nil {
 		return fmt.Errorf("transaction %v: %v", txn.ID(), err)
 	}
@@ -537,14 +543,15 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 
 // Call "endOfBlock" after all the block's rewards and transactions are processed. Applies any deferred balance updates.
 func (eval *BlockEvaluator) endOfBlock() error {
-	cow := eval.state.child()
-
 	if eval.generate {
 		eval.block.TxnRoot = eval.block.Payset.Commit(eval.proto.PaysetCommitFlat)
-		eval.block.TxnCounter = eval.txnCounter
+		if eval.proto.TxnCounter {
+			eval.block.TxnCounter = eval.state.txnCounter()
+		} else {
+			eval.block.TxnCounter = 0
+		}
 	}
 
-	cow.commitToParent()
 	return nil
 }
 
@@ -557,8 +564,12 @@ func (eval *BlockEvaluator) finalValidation() error {
 			return fmt.Errorf("txn root wrong: %v != %v", txnRoot, eval.block.TxnRoot)
 		}
 
-		if eval.block.TxnCounter != eval.txnCounter {
-			return fmt.Errorf("txn count wrong: %d != %d", eval.block.TxnCounter, eval.txnCounter)
+		var expectedTxnCount uint64
+		if eval.proto.TxnCounter {
+			expectedTxnCount = eval.state.txnCounter()
+		}
+		if eval.block.TxnCounter != expectedTxnCount {
+			return fmt.Errorf("txn count wrong: %d != %d", eval.block.TxnCounter, expectedTxnCount)
 		}
 	}
 
