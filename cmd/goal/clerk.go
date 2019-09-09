@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -54,6 +55,7 @@ func init() {
 	clerkCmd.AddCommand(inspectCmd)
 	clerkCmd.AddCommand(signCmd)
 	clerkCmd.AddCommand(groupCmd)
+	clerkCmd.AddCommand(splitCmd)
 
 	// Wallet to be used for the clerk operation
 	clerkCmd.PersistentFlags().StringVarP(&walletName, "wallet", "w", "", "Set the wallet to be used for the selected operation")
@@ -90,6 +92,11 @@ func init() {
 	groupCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Filename for writing the grouped transactions")
 	groupCmd.MarkFlagRequired("infile")
 	groupCmd.MarkFlagRequired("outfile")
+
+	splitCmd.Flags().StringVarP(&txFilename, "infile", "i", "", "File storing transactions to be split")
+	splitCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Base filename for writing the individual transactions; each transaction will be written to filename-N.ext")
+	splitCmd.MarkFlagRequired("infile")
+	splitCmd.MarkFlagRequired("outfile")
 }
 
 var clerkCmd = &cobra.Command{
@@ -480,6 +487,46 @@ var groupCmd = &cobra.Command{
 		err = writeFile(outFilename, outData, 0600)
 		if err != nil {
 			reportErrorf(fileWriteError, outFilename, err)
+		}
+	},
+}
+
+var splitCmd = &cobra.Command{
+	Use:   "split",
+	Short: "Split a file containing many transactions into one transaction per file",
+	Long:  `Split a file containing many transactions.  The input file must contain one or more transactions.  These transactions will be written to individual files.`,
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, args []string) {
+		data, err := readFile(txFilename)
+		if err != nil {
+			reportErrorf(fileReadError, txFilename, err)
+		}
+
+		dec := protocol.NewDecoderBytes(data)
+
+		var txns []transactions.SignedTxn
+		for {
+			var txn transactions.SignedTxn
+			err = dec.Decode(&txn)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				reportErrorf(txDecodeError, txFilename, err)
+			}
+
+			txns = append(txns, txn)
+		}
+
+		outExt := filepath.Ext(outFilename)
+		outBase := outFilename[:len(outFilename)-len(outExt)]
+		for idx, txn := range txns {
+			fn := fmt.Sprintf("%s-%d%s", outBase, idx, outExt)
+			err = writeFile(fn, protocol.Encode(txn), 0600)
+			if err != nil {
+				reportErrorf(fileWriteError, outFilename, err)
+			}
+			fmt.Printf("Wrote transaction %d to %s\n", idx, fn)
 		}
 	},
 }
