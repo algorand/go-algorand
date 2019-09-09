@@ -89,6 +89,11 @@ func TestAssetConfig(t *testing.T) {
 	// Create max number of assets
 	txids := make(map[string]string)
 	for i := 0; i < config.Consensus[protocol.ConsensusFuture].MaxAssetsPerAccount; i++ {
+		// re-generate wh, since this test takes a while and sometimes
+		// the wallet handle expires.
+		wh, err = client.GetUnencryptedWalletHandle()
+		a.NoError(err)
+
 		tx, err := client.MakeUnsignedAssetCreateTx(1+uint64(i), false, manager, reserve, freeze, clawback, fmt.Sprintf("test%d", i), fmt.Sprintf("testname%d", i))
 		txid, err := helperFillSignBroadcast(client, wh, account0, tx, err)
 		a.NoError(err)
@@ -98,6 +103,11 @@ func TestAssetConfig(t *testing.T) {
 	_, curRound := fixture.GetBalanceAndRound(account0)
 	confirmed := fixture.WaitForAllTxnsToConfirm(curRound+20, txids)
 	a.True(confirmed, "creating max number of assets")
+
+	// re-generate wh, since this test takes a while and sometimes
+	// the wallet handle expires.
+	wh, err = client.GetUnencryptedWalletHandle()
+	a.NoError(err)
 
 	// Creating more assets should return an error
 	tx, err := client.MakeUnsignedAssetCreateTx(1, false, manager, reserve, freeze, clawback, fmt.Sprintf("toomany"), fmt.Sprintf("toomany"))
@@ -205,6 +215,11 @@ func TestAssetConfig(t *testing.T) {
 		}
 	}
 
+	// re-generate wh, since this test takes a while and sometimes
+	// the wallet handle expires.
+	wh, err = client.GetUnencryptedWalletHandle()
+	a.NoError(err)
+
 	// Should not be able to close account before destroying assets
 	_, err = client.SendPaymentFromWallet(wh, nil, account0, "", 0, 0, nil, reserve, 0, 0)
 	a.Error(err)
@@ -212,6 +227,11 @@ func TestAssetConfig(t *testing.T) {
 	// Destroy assets
 	txids = make(map[string]string)
 	for idx := range info.AssetParams {
+		// re-generate wh, since this test takes a while and sometimes
+		// the wallet handle expires.
+		wh, err = client.GetUnencryptedWalletHandle()
+		a.NoError(err)
+
 		tx, err := client.MakeUnsignedAssetDestroyTx(account0, idx)
 		sender := manager
 		if idx == assets[0].idx {
