@@ -22,7 +22,7 @@ Initial environment setup:
 ```bash
 git clone https://github.com/algorand/go-algorand
 cd go-algorand
-sh ./scripts/configure_dev.sh
+./scripts/configure_dev.sh
 ```
 
 At this point you are ready to build go-algorand. We use `make` and have a number of targets to automate common tasks.
