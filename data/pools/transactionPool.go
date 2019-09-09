@@ -145,6 +145,9 @@ func (pool *TransactionPool) test(t transactions.SignedTxn) error {
 	waitExpires := time.Now().Add(timeoutOnNewBlock)
 	for pool.pendingBlockEvaluator.Round() <= latest && time.Now().Before(waitExpires) {
 		condvar.TimedWait(&pool.cond, timeoutOnNewBlock)
+		if pool.pendingBlockEvaluator == nil {
+			return fmt.Errorf("TransactionPool.test: no pending block evaluator")
+		}
 	}
 
 	tentativeRound := pool.pendingBlockEvaluator.Round() + pool.numPendingWholeBlocks
