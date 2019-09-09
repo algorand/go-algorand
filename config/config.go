@@ -416,6 +416,7 @@ func initConsensusTestProtocols() {
 	}
 
 	testBigBlocks := Consensus[protocol.ConsensusCurrentVersion]
+	testBigBlocks.MaxTxnBytesPerBlock = 100000000
 	testBigBlocks.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
 	Consensus[protocol.ConsensusTestBigBlocks] = testBigBlocks
 
