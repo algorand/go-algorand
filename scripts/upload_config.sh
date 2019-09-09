@@ -21,8 +21,11 @@ fi
 
 export GOPATH=$(go env GOPATH)
 
+SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
+SRCPATH=${SCRIPTPATH}/..
+
 export CHANNEL=$2
-export FULLVERSION=$(./scripts/compute_build_number.sh -f)
+export FULLVERSION=$($SRCPATH/scripts/compute_build_number.sh -f)
 
 TEMPDIR=$(mktemp -d 2>/dev/null || mktemp -d -t "tmp")
 TARFILE=${TEMPDIR}/config_${CHANNEL}_${FULLVERSION}.tar.gz
