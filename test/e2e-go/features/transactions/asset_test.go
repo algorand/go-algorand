@@ -98,6 +98,15 @@ func TestAssetConfig(t *testing.T) {
 		txid, err := helperFillSignBroadcast(client, wh, account0, tx, err)
 		a.NoError(err)
 		txids[txid] = account0
+
+		// Travis is slow, so help it along by waiting every once in a while
+		// for these transactions to commit..
+		if (i % 50) == 0 {
+			_, curRound := fixture.GetBalanceAndRound(account0)
+			confirmed := fixture.WaitForAllTxnsToConfirm(curRound+20, txids)
+			a.True(confirmed)
+			txids = make(map[string]string)
+		}
 	}
 
 	_, curRound := fixture.GetBalanceAndRound(account0)
@@ -240,6 +249,15 @@ func TestAssetConfig(t *testing.T) {
 		txid, err := helperFillSignBroadcast(client, wh, sender, tx, err)
 		a.NoError(err)
 		txids[txid] = sender
+
+		// Travis is slow, so help it along by waiting every once in a while
+		// for these transactions to commit..
+		if (idx % 50) == 0 {
+			_, curRound = fixture.GetBalanceAndRound(account0)
+			confirmed = fixture.WaitForAllTxnsToConfirm(curRound+20, txids)
+			a.True(confirmed)
+			txids = make(map[string]string)
+		}
 	}
 
 	_, curRound = fixture.GetBalanceAndRound(account0)
