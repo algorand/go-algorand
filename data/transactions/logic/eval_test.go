@@ -37,6 +37,9 @@ int 3
 int 5
 ==`)
 	require.NoError(t, err)
+	cost, err := Check(program, EvalParams{})
+	require.NoError(t, err)
+	require.True(t, cost < 1000)
 	pass := Eval(program, EvalParams{})
 	require.True(t, pass)
 }
@@ -53,6 +56,9 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	txn.Lsig.Args = [][]byte{[]byte("=0\x97S\x85H\xe9\x91B\xfd\xdb;1\xf5Z\xaec?\xae\xf2I\x93\x08\x12\x94\xaa~\x06\x08\x849b")}
 	sb := strings.Builder{}
 	ep := EvalParams{Txn: &txn, Trace: &sb}
+	cost, err := Check(program, ep)
+	require.NoError(t, err)
+	require.True(t, cost < 1000)
 	pass := Eval(program, ep)
 	require.True(t, pass)
 	//t.Log(sb.String())
@@ -101,6 +107,9 @@ int 3000
 	block := bookkeeping.Block{}
 	block.BlockHeader.Round = 999999
 	ep := EvalParams{Txn: &txn, Trace: &sb, Block: &block}
+	cost, err := Check(program, ep)
+	require.NoError(t, err)
+	require.True(t, cost < 1000)
 	pass := Eval(program, ep)
 	if pass {
 		t.Log(hex.EncodeToString(program))
@@ -215,6 +224,9 @@ int 0x100000000
 pop
 int 1`)
 	require.NoError(t, err)
+	cost, err := Check(program, EvalParams{})
+	require.NoError(t, err)
+	require.True(t, cost < 1000)
 	sb := strings.Builder{}
 	pass := Eval(program, EvalParams{Trace: &sb})
 	if pass {
@@ -232,6 +244,9 @@ int 0x1111111111111111
 pop
 int 1`)
 	require.NoError(t, err)
+	cost, err := Check(program, EvalParams{})
+	require.NoError(t, err)
+	require.True(t, cost < 1000)
 	sb := strings.Builder{}
 	pass := Eval(program, EvalParams{Trace: &sb})
 	if pass {
@@ -249,6 +264,9 @@ int 0x222222222
 pop
 int 1`)
 	require.NoError(t, err)
+	cost, err := Check(program, EvalParams{})
+	require.NoError(t, err)
+	require.True(t, cost < 1000)
 	sb := strings.Builder{}
 	pass := Eval(program, EvalParams{Trace: &sb})
 	if pass {
@@ -266,6 +284,9 @@ int 0
 pop
 int 1`)
 	require.NoError(t, err)
+	cost, err := Check(program, EvalParams{})
+	require.NoError(t, err)
+	require.True(t, cost < 1000)
 	sb := strings.Builder{}
 	pass := Eval(program, EvalParams{Trace: &sb})
 	if pass {
@@ -283,6 +304,9 @@ int 0
 pop
 int 1`)
 	require.NoError(t, err)
+	cost, err := Check(program, EvalParams{})
+	require.NoError(t, err)
+	require.True(t, cost < 1000)
 	sb := strings.Builder{}
 	pass := Eval(program, EvalParams{Trace: &sb})
 	if pass {
@@ -433,6 +457,9 @@ int 28939890412103745
 func BenchmarkAdd(b *testing.B) {
 	program, err := AssembleString(addBenchmarkSource)
 	require.NoError(b, err)
+	cost, err := Check(program, EvalParams{})
+	require.NoError(b, err)
+	require.True(b, cost < 1000)
 	//b.Logf("%d bytes of program", len(program))
 	//b.Log(hex.EncodeToString(program))
 	b.StopTimer()
@@ -458,6 +485,9 @@ func BenchmarkSha256(b *testing.B) {
 	sb.WriteString("len\nint 0\n>\n")
 	program, err := AssembleString(sb.String())
 	require.NoError(b, err)
+	cost, err := Check(program, EvalParams{})
+	require.NoError(b, err)
+	require.True(b, cost > 1000)
 	//b.Logf("%d bytes of program", len(program))
 	//b.Log(hex.EncodeToString(program))
 	b.StopTimer()
@@ -483,6 +513,9 @@ func BenchmarkKeccak256(b *testing.B) {
 	sb.WriteString("len\nint 0\n>\n")
 	program, err := AssembleString(sb.String())
 	require.NoError(b, err)
+	cost, err := Check(program, EvalParams{})
+	require.NoError(b, err)
+	require.True(b, cost > 1000)
 	//b.Logf("%d bytes of program", len(program))
 	//b.Log(hex.EncodeToString(program))
 	b.StopTimer()
@@ -508,6 +541,9 @@ func BenchmarkSha512_256(b *testing.B) {
 	sb.WriteString("len\nint 0\n>\n")
 	program, err := AssembleString(sb.String())
 	require.NoError(b, err)
+	cost, err := Check(program, EvalParams{})
+	require.NoError(b, err)
+	require.True(b, cost > 1000)
 	//b.Logf("%d bytes of program", len(program))
 	//b.Log(hex.EncodeToString(program))
 	b.StopTimer()

@@ -131,9 +131,9 @@ type OpSpec struct {
 }
 
 // Eval checks to see if a transaction passes logic
-func Eval(logic []byte, params EvalParams) bool {
+func Eval(program []byte, params EvalParams) bool {
 	var cx evalContext
-	version, vlen := binary.Uvarint(logic)
+	version, vlen := binary.Uvarint(program)
 	if version > EvalMaxVersion {
 		cx.err = fmt.Errorf("program version %d greater than max supported version %d", version, EvalMaxVersion)
 		return false
@@ -146,7 +146,7 @@ func Eval(logic []byte, params EvalParams) bool {
 	cx.pc = vlen
 	cx.EvalParams = params
 	cx.stack = make([]stackValue, 0, 10)
-	cx.program = logic
+	cx.program = program
 	for (cx.err == nil) && (cx.pc < len(cx.program)) {
 		cx.step()
 	}
@@ -166,6 +166,42 @@ func Eval(logic []byte, params EvalParams) bool {
 		return false
 	}
 	return cx.stack[0].Bytes == nil && cx.stack[0].Uint != 0
+}
+
+// Check should be faster than Eval.
+// Returns 'cost' which is an estimate of relative execution time.
+func Check(program []byte, params EvalParams) (cost int, err error) {
+	var cx evalContext
+	version, vlen := binary.Uvarint(program)
+	if version > EvalMaxVersion {
+		err = fmt.Errorf("program version %d greater than max supported version %d", version, EvalMaxVersion)
+		return
+	}
+	if (params.Proto != nil) && (version > params.Proto.LogicSigVersion) {
+		err = fmt.Errorf("program version %d greater than protocol supported version %d", version, params.Proto.LogicSigVersion)
+		return
+	}
+	cx.version = version
+	cx.pc = vlen
+	cx.stack = make([]stackValue, 0, 10)
+	cx.program = program
+	for (cx.err == nil) && (cx.pc < len(cx.program)) {
+		cost += cx.checkStep()
+	}
+	if len(cx.stack) != 1 {
+		if cx.Trace != nil {
+			fmt.Fprintf(cx.Trace, "end stack:\n")
+			for i, sv := range cx.stack {
+				fmt.Fprintf(cx.Trace, "[%d] %s\n", i, sv.String())
+			}
+		}
+		return
+	}
+	if cx.stack[0].Bytes != nil {
+		err = errors.New("program would end with bytes on stack")
+		return
+	}
+	return
 }
 
 // OpSpecs is the table of operations that can be assembled and evaluated.
@@ -190,7 +226,6 @@ var OpSpecs = []OpSpec{
 	{0x13, "!=", opNeq, []StackType{StackAny, StackAny}, StackUint64},
 	{0x14, "!", opNot, []StackType{StackUint64}, StackUint64},
 	{0x15, "len", opLen, []StackType{StackBytes}, StackUint64},
-	// TODO: signed
 	{0x17, "btoi", opBtoi, []StackType{StackBytes}, StackUint64},
 	{0x18, "%", opModulo, []StackType{StackUint64, StackUint64}, StackUint64},
 	{0x19, "|", opBitOr, []StackType{StackUint64, StackUint64}, StackUint64},
@@ -226,10 +261,51 @@ var OpSpecs = []OpSpec{
 // direct opcode bytes
 var opsByOpcode []OpSpec
 
+type opCheckFunc func(cx *evalContext) int
+
+// opSize records the length in bytes for an op that is constant-length but not length 1
+type opSize struct {
+	name      string
+	cost      int
+	size      int
+	checkFunc opCheckFunc
+}
+
+// opSizes records the size of ops that are constant size but not 1
+var opSizes = []opSize{
+	{"sha256", 100, 1, nil},
+	{"keccak256", 320, 1, nil},
+	{"sha512_256", 120, 1, nil},
+	{"bnz", 1, 3, nil},
+	{"intc", 1, 2, nil},
+	{"bytec", 1, 2, nil},
+	{"arg", 1, 2, nil},
+	{"txn", 1, 2, nil},
+	{"global", 1, 2, nil},
+	{"intcblock", 0, 0, checkIntConstBlock},
+	{"bytecblock", 0, 0, checkByteConstBlock},
+}
+
+var opSizeByOpcode []opSize
+
 func init() {
 	opsByOpcode = make([]OpSpec, 256)
 	for _, oi := range OpSpecs {
 		opsByOpcode[oi.Opcode] = oi
+	}
+
+	opSizeByName := make(map[string]*opSize, len(opSizes))
+	for i, oz := range opSizes {
+		opSizeByName[oz.name] = &opSizes[i]
+	}
+	opSizeByOpcode = make([]opSize, 256)
+	for _, oi := range OpSpecs {
+		oz := opSizeByName[oi.Name]
+		if oz == nil {
+			opSizeByOpcode[oi.Opcode] = opSize{oi.Name, 1, 1, nil}
+		} else {
+			opSizeByOpcode[oi.Opcode] = *oz
+		}
 	}
 }
 
@@ -243,14 +319,18 @@ func opCompat(expected, got StackType) bool {
 // MaxStackDepth should move to consensus params
 const MaxStackDepth = 1000
 
-func (cx *evalContext) step() {
+func (cx *evalContext) preStep() bool {
 	opcode := cx.program[cx.pc]
+	if opsByOpcode[opcode].op == nil {
+		cx.err = fmt.Errorf("%3d illegal opcode %02x", cx.pc, opcode)
+		return false
+	}
 	argsTypes := opsByOpcode[opcode].Args
 	if len(argsTypes) >= 0 {
 		// check args for stack underflow and types
 		if len(cx.stack) < len(argsTypes) {
 			cx.err = fmt.Errorf("stack underflow in %s", opsByOpcode[opcode].Name)
-			return
+			return false
 		}
 		first := len(cx.stack) - len(argsTypes)
 		for i, argType := range argsTypes {
@@ -259,12 +339,15 @@ func (cx *evalContext) step() {
 			}
 		}
 	}
-	opf := opsByOpcode[opcode]
-	if opf.op == nil {
-		cx.err = fmt.Errorf("%3d illegal opcode %02x", cx.pc, opcode)
+	return true
+}
+
+func (cx *evalContext) step() {
+	if !cx.preStep() {
 		return
 	}
-	opf.op(cx)
+	opcode := cx.program[cx.pc]
+	opsByOpcode[opcode].op(cx)
 	if cx.Trace != nil {
 		if len(cx.stack) == 0 {
 			fmt.Fprintf(cx.Trace, "%3d %s => %s\n", cx.pc, opsByOpcode[opcode].Name, "<empty stack>")
@@ -285,6 +368,27 @@ func (cx *evalContext) step() {
 	} else {
 		cx.pc++
 	}
+}
+
+func (cx *evalContext) checkStep() (cost int) {
+	if !cx.preStep() {
+		return 0
+	}
+	opcode := cx.program[cx.pc]
+	oz := opSizeByOpcode[opcode]
+	if oz.checkFunc != nil {
+		cost = oz.checkFunc(cx)
+		if cx.nextpc != 0 {
+			cx.pc = cx.nextpc
+			cx.nextpc = 0
+		} else {
+			cx.pc++
+		}
+	} else {
+		cost = oz.cost
+		cx.pc += oz.size
+	}
+	return 0
 }
 
 func opErr(cx *evalContext) {
@@ -558,6 +662,11 @@ func opIntConstBlock(cx *evalContext) {
 	cx.intc, cx.nextpc, cx.err = parseIntcblock(cx.program, cx.pc)
 }
 
+func checkIntConstBlock(cx *evalContext) int {
+	cx.intc, cx.nextpc, cx.err = parseIntcblock(cx.program, cx.pc)
+	return 1
+}
+
 func opIntConstN(cx *evalContext, n uint) {
 	if n >= uint(len(cx.intc)) {
 		cx.err = fmt.Errorf("intc [%d] beyond %d constants", n, len(cx.intc))
@@ -586,6 +695,12 @@ func opIntConst3(cx *evalContext) {
 func opByteConstBlock(cx *evalContext) {
 	cx.bytec, cx.nextpc, cx.err = parseBytecBlock(cx.program, cx.pc)
 }
+
+func checkByteConstBlock(cx *evalContext) int {
+	cx.bytec, cx.nextpc, cx.err = parseBytecBlock(cx.program, cx.pc)
+	return 1
+}
+
 func opByteConstN(cx *evalContext, n uint) {
 	if n >= uint(len(cx.bytec)) {
 		cx.err = fmt.Errorf("bytec [%d] beyond %d constants", n, len(cx.bytec))
