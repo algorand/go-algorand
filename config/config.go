@@ -422,17 +422,9 @@ func initConsensusTestProtocols() {
 		ApprovedUpgrades: map[protocol.ConsensusVersion]bool{},
 	}
 
-	Consensus[protocol.ConsensusTestBigBlocks] = ConsensusParams{
-		UpgradeVoteRounds:   10000,
-		UpgradeThreshold:    9000,
-		UpgradeWaitRounds:   10000,
-		MaxVersionStringLen: 64,
-
-		MaxTxnBytesPerBlock: 100000000,
-		DefaultKeyDilution:  10000,
-
-		ApprovedUpgrades: map[protocol.ConsensusVersion]bool{},
-	}
+	testBigBlocks := Consensus[protocol.ConsensusCurrentVersion]
+	testBigBlocks.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	Consensus[protocol.ConsensusTestBigBlocks] = testBigBlocks
 
 	rapidRecalcParams := Consensus[protocol.ConsensusCurrentVersion]
 	rapidRecalcParams.RewardsRateRefreshInterval = 25

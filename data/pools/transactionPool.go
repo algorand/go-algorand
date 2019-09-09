@@ -36,10 +36,8 @@ import (
 // TransactionPool is a struct maintaining a sanitized pool of transactions that are available for inclusion in
 // a Block.  We sanitize it by preventing duplicates and limiting the number of transactions retained for each account
 type TransactionPool struct {
-	mu                     deadlock.RWMutex
+	mu                     deadlock.Mutex
 	cond                   sync.Cond
-	pendingTxns            []transactions.SignedTxn
-	pendingTxids           map[transactions.Txid]transactions.SignedTxn
 	expiredTxCount         map[basics.Round]int
 	pendingBlockEvaluator  *ledger.BlockEvaluator
 	numPendingWholeBlocks  basics.Round
@@ -48,11 +46,18 @@ type TransactionPool struct {
 	statusCache            *statusCache
 	logStats               bool
 
-	// To ensure that Pending() can return quickly (even if we are in the
-	// middle of rebuilding the pool in OnNewBlock), we store an extra
-	// reference to the pendingTxns slice that can be returned right away.
-	snapshotMu deadlock.Mutex
-	snapshotPendingTxns []transactions.SignedTxn
+	// pendingMu protects pendingTxns and pendingTxids
+	pendingMu    deadlock.RWMutex
+	pendingTxns  []transactions.SignedTxn
+	pendingTxids map[transactions.Txid]transactions.SignedTxn
+
+	// Calls to remember() add transactions to rememberedTxns and
+	// rememberedTxids.  Calling rememberCommit() adds them to the
+	// pendingTxns and pendingTxids.  This allows us to batch the
+	// changes in OnNewBlock() without preventing a concurrent call
+	// to Pending() or Verified().
+	rememberedTxns  []transactions.SignedTxn
+	rememberedTxids map[transactions.Txid]transactions.SignedTxn
 }
 
 // MakeTransactionPool is the constructor, it uses Ledger to ensure that no account has pending transactions that together overspend.
@@ -61,11 +66,12 @@ type TransactionPool struct {
 // transactions that were removed from the pool without being committed.
 func MakeTransactionPool(ledger *ledger.Ledger, transactionPoolStatusSize int, logStats bool) *TransactionPool {
 	pool := TransactionPool{
-		pendingTxids:   make(map[transactions.Txid]transactions.SignedTxn),
-		expiredTxCount: make(map[basics.Round]int),
-		ledger:         ledger,
-		statusCache:    makeStatusCache(transactionPoolStatusSize),
-		logStats:       logStats,
+		pendingTxids:    make(map[transactions.Txid]transactions.SignedTxn),
+		rememberedTxids: make(map[transactions.Txid]transactions.SignedTxn),
+		expiredTxCount:  make(map[basics.Round]int),
+		ledger:          ledger,
+		statusCache:     makeStatusCache(transactionPoolStatusSize),
+		logStats:        logStats,
 	}
 	pool.cond.L = &pool.mu
 	pool.recomputeBlockEvaluator()
@@ -82,15 +88,15 @@ const timeoutOnNewBlock = time.Second
 // NumExpired returns the number of transactions that expired at the end of a round (only meaningful if cleanup has
 // been called for that round)
 func (pool *TransactionPool) NumExpired(round basics.Round) int {
-	pool.mu.RLock()
-	defer pool.mu.RUnlock()
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
 	return pool.expiredTxCount[round]
 }
 
 // PendingTxIDs return the IDs of all pending transactions
 func (pool *TransactionPool) PendingTxIDs() []transactions.Txid {
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
+	pool.pendingMu.RLock()
+	defer pool.pendingMu.RUnlock()
 
 	ids := make([]transactions.Txid, len(pool.pendingTxns))
 	i := 0
@@ -104,31 +110,46 @@ func (pool *TransactionPool) PendingTxIDs() []transactions.Txid {
 // Pending returns a list of transactions that should be proposed
 // in the next block, in order.
 func (pool *TransactionPool) Pending() []transactions.SignedTxn {
-	pool.snapshotMu.Lock()
-	defer pool.snapshotMu.Unlock()
+	pool.pendingMu.RLock()
+	defer pool.pendingMu.RUnlock()
 
-	txns := make([]transactions.SignedTxn, len(pool.snapshotPendingTxns))
+	txns := make([]transactions.SignedTxn, len(pool.pendingTxns))
 	i := 0
-	for _, tx := range pool.snapshotPendingTxns {
+	for _, tx := range pool.pendingTxns {
 		txns[i] = tx
 		i++
 	}
 	return txns
 }
 
-// updatePendingSnapshot saves a copy of the current list of pending transactions.
-func (pool *TransactionPool) updatePendingSnapshot() {
-	pool.snapshotMu.Lock()
-	defer pool.snapshotMu.Unlock()
+// rememberCommit() saves the changes added by remember to
+// pendingTxns and pendingTxids.  The caller is assumed to
+// be holding pool.mu.  flush indicates whether previous
+// pendingTxns and pendingTxids should be flushed out and
+// replaced altogether by rememberedTxns and rememberedTxids.
+func (pool *TransactionPool) rememberCommit(flush bool) {
+	pool.pendingMu.Lock()
+	defer pool.pendingMu.Unlock()
 
-	pool.snapshotPendingTxns = pool.pendingTxns
+	if flush {
+		pool.pendingTxns = pool.rememberedTxns
+		pool.pendingTxids = pool.rememberedTxids
+	} else {
+		pool.pendingTxns = append(pool.pendingTxns, pool.rememberedTxns...)
+		for txid, txn := range pool.rememberedTxids {
+			pool.pendingTxids[txid] = txn
+		}
+	}
+
+	pool.rememberedTxns = nil
+	pool.rememberedTxids = make(map[transactions.Txid]transactions.SignedTxn)
 }
 
 // PendingCount returns the number of transactions currently pending in the pool.
 func (pool *TransactionPool) PendingCount() int {
-	pool.snapshotMu.Lock()
-	defer pool.snapshotMu.Unlock()
-	return len(pool.snapshotPendingTxns)
+	pool.pendingMu.RLock()
+	defer pool.pendingMu.RUnlock()
+	return len(pool.pendingTxns)
 }
 
 // Test checks whether a transaction could be remembered in the pool,
@@ -203,8 +224,8 @@ func (pool *TransactionPool) test(t transactions.SignedTxn) error {
 
 	feeThreshold := feePerByte * uint64(t.GetEncodedLength())
 	if t.Txn.Fee.Raw < feeThreshold {
-		return fmt.Errorf("fee %d below threshold %d (%d per byte * %d bytes)",
-			t.Txn.Fee, feeThreshold, feePerByte, t.GetEncodedLength())
+		return fmt.Errorf("fee %d below threshold %d (%d per byte * %d bytes) (multiplier %d, pending blocks %d)",
+			t.Txn.Fee, feeThreshold, feePerByte, t.GetEncodedLength(), pool.feeThresholdMultiplier, pool.numPendingWholeBlocks)
 	}
 
 	return nil
@@ -232,7 +253,7 @@ func (pool *TransactionPool) Remember(t transactions.SignedTxn) error {
 		return fmt.Errorf("TransactionPool.Remember: %v", err)
 	}
 
-	pool.updatePendingSnapshot()
+	pool.rememberCommit(false)
 	return nil
 }
 
@@ -243,8 +264,8 @@ func (pool *TransactionPool) remember(t transactions.SignedTxn) error {
 		return err
 	}
 
-	pool.pendingTxns = append(pool.pendingTxns, t)
-	pool.pendingTxids[t.ID()] = t
+	pool.rememberedTxns = append(pool.rememberedTxns, t)
+	pool.rememberedTxids[t.ID()] = t
 	return nil
 }
 
@@ -256,8 +277,11 @@ func (pool *TransactionPool) Lookup(txid transactions.Txid) (tx transactions.Sig
 	if pool == nil {
 		return transactions.SignedTxn{}, "", false
 	}
-	pool.mu.RLock()
-	defer pool.mu.RUnlock()
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	pool.pendingMu.RLock()
+	defer pool.pendingMu.RUnlock()
 
 	tx, inPool := pool.pendingTxids[txid]
 	if inPool {
@@ -277,8 +301,8 @@ func (pool *TransactionPool) Verified(txn transactions.SignedTxn) bool {
 	if pool == nil {
 		return false
 	}
-	pool.mu.RLock()
-	defer pool.mu.RUnlock()
+	pool.pendingMu.RLock()
+	defer pool.pendingMu.RUnlock()
 	pendingSigTxn, ok := pool.pendingTxids[txn.ID()]
 	if !ok {
 		return false
@@ -299,6 +323,7 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block) {
 
 	payset, err := block.DecodePayset()
 	if err == nil {
+		pool.pendingMu.RLock()
 		for _, tx := range payset {
 			txid := tx.ID()
 			_, ok := pool.pendingTxids[txid]
@@ -308,6 +333,7 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block) {
 				unknownCommitted++
 			}
 		}
+		pool.pendingMu.RUnlock()
 	}
 
 	if pool.pendingBlockEvaluator == nil || block.Round() >= pool.pendingBlockEvaluator.Round() {
@@ -410,9 +436,9 @@ func (pool *TransactionPool) recomputeBlockEvaluator() (stats telemetryspec.Proc
 	}
 
 	// Feed the transactions in order.
+	pool.pendingMu.RLock()
 	txns := pool.pendingTxns
-	pool.pendingTxns = nil
-	pool.pendingTxids = make(map[transactions.Txid]transactions.SignedTxn)
+	pool.pendingMu.RUnlock()
 
 	for _, tx := range txns {
 		err := pool.remember(tx)
@@ -428,6 +454,6 @@ func (pool *TransactionPool) recomputeBlockEvaluator() (stats telemetryspec.Proc
 		}
 	}
 
-	pool.updatePendingSnapshot()
+	pool.rememberCommit(true)
 	return
 }
