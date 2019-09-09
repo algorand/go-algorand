@@ -472,3 +472,53 @@ func BenchmarkSha256(b *testing.B) {
 		require.True(b, pass)
 	}
 }
+
+func BenchmarkKeccak256(b *testing.B) {
+	const firstline = "addr OC6IROKUJ7YCU5NV76AZJEDKYQG33V2CJ7HAPVQ4ENTAGMLIOINSQ6EKGE\n"
+	sb := strings.Builder{}
+	sb.WriteString(firstline)
+	for i := 0; i < 900; i++ {
+		sb.WriteString("keccak256\n")
+	}
+	sb.WriteString("len\nint 0\n>\n")
+	program, err := AssembleString(sb.String())
+	require.NoError(b, err)
+	//b.Logf("%d bytes of program", len(program))
+	//b.Log(hex.EncodeToString(program))
+	b.StopTimer()
+	b.ResetTimer()
+	b.StartTimer()
+	sb = strings.Builder{}
+	for i := 0; i < b.N; i++ {
+		pass := Eval(program, EvalParams{})
+		if !pass {
+			b.Log(sb.String())
+		}
+		require.True(b, pass)
+	}
+}
+
+func BenchmarkSha512_256(b *testing.B) {
+	const firstline = "addr OC6IROKUJ7YCU5NV76AZJEDKYQG33V2CJ7HAPVQ4ENTAGMLIOINSQ6EKGE\n"
+	sb := strings.Builder{}
+	sb.WriteString(firstline)
+	for i := 0; i < 900; i++ {
+		sb.WriteString("sha512_256\n")
+	}
+	sb.WriteString("len\nint 0\n>\n")
+	program, err := AssembleString(sb.String())
+	require.NoError(b, err)
+	//b.Logf("%d bytes of program", len(program))
+	//b.Log(hex.EncodeToString(program))
+	b.StopTimer()
+	b.ResetTimer()
+	b.StartTimer()
+	sb = strings.Builder{}
+	for i := 0; i < b.N; i++ {
+		pass := Eval(program, EvalParams{})
+		if !pass {
+			b.Log(sb.String())
+		}
+		require.True(b, pass)
+	}
+}

@@ -189,7 +189,7 @@ func globalFieldsMarkdown(out io.Writer) {
 func opToMarkdown(out io.Writer, op *logic.OpSpec) (err error) {
 
 	opextra := opcodeExtras[op.Name]
-	fmt.Fprintf(out, "\n## %s\n- Opcode: 0x%02x %s\n", op.Name, op.Opcode, opextra)
+	fmt.Fprintf(out, "\n## %s\n\n- Opcode: 0x%02x %s\n", op.Name, op.Opcode, opextra)
 	if op.Args == nil {
 		fmt.Fprintf(out, "- Pops: None\n")
 	} else if len(op.Args) == 1 {
@@ -230,7 +230,7 @@ func opsToMarkdown(out io.Writer) (err error) {
 func main() {
 	checkOpDocs()
 	checkGroupCoverage()
-	opcodesMd, _ := os.Create("opcodes.md")
+	opcodesMd, _ := os.Create("TEAL_opcodes.md")
 	opsToMarkdown(opcodesMd)
 	opcodesMd.Close()
 	for _, og := range opGroupList {

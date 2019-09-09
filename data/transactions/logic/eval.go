@@ -259,7 +259,12 @@ func (cx *evalContext) step() {
 			}
 		}
 	}
-	opsByOpcode[opcode].op(cx)
+	opf := opsByOpcode[opcode]
+	if opf.op == nil {
+		cx.err = fmt.Errorf("%3d illegal opcode %02x", cx.pc, opcode)
+		return
+	}
+	opf.op(cx)
 	if cx.Trace != nil {
 		if len(cx.stack) == 0 {
 			fmt.Fprintf(cx.Trace, "%3d %s => %s\n", cx.pc, opsByOpcode[opcode].Name, "<empty stack>")
@@ -296,8 +301,10 @@ func opSHA256(cx *evalContext) {
 func opKeccak256(cx *evalContext) {
 	last := len(cx.stack) - 1
 	hasher := sha3.NewLegacyKeccak256()
-	hash := hasher.Sum(cx.stack[last].Bytes)
-	cx.stack[last].Bytes = hash[:]
+	hasher.Write(cx.stack[last].Bytes)
+	hv := make([]byte, 0, hasher.Size())
+	hv = hasher.Sum(hv)
+	cx.stack[last].Bytes = hv
 }
 
 // This is the hash commonly used in Algorand in crypto/util.go Hash()
