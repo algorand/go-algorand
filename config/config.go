@@ -182,6 +182,15 @@ type ConsensusParams struct {
 
 	// fix the rewards calculation by avoiding subtracting too much from the rewards pool
 	PendingResidueRewards bool
+
+	// asset support
+	Asset bool
+
+	// max number of assets per account
+	MaxAssetsPerAccount int
+
+	// support sequential transaction counter TxnCounter
+	TxnCounter bool
 }
 
 // Consensus tracks the protocol-level settings for different versions of the
@@ -376,15 +385,13 @@ func initConsensusProtocols() {
 
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	// vFuture contains the PendingResidueRewards fix.
 	vFuture := v17
 	vFuture.PendingResidueRewards = true
+	vFuture.TxnCounter = true
+	vFuture.Asset = true
+	vFuture.MaxAssetsPerAccount = 1000
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
 	Consensus[protocol.ConsensusFuture] = vFuture
-
-	// v17 can be upgraded to vFuture.
-	// this is a placeholder; do not enable this.
-	// v17.ApprovedUpgrades[protocol.ConsensusFuture] = true
 }
 
 func initConsensusTestProtocols() {
@@ -415,17 +422,10 @@ func initConsensusTestProtocols() {
 		ApprovedUpgrades: map[protocol.ConsensusVersion]bool{},
 	}
 
-	Consensus[protocol.ConsensusTestBigBlocks] = ConsensusParams{
-		UpgradeVoteRounds:   10000,
-		UpgradeThreshold:    9000,
-		UpgradeWaitRounds:   10000,
-		MaxVersionStringLen: 64,
-
-		MaxTxnBytesPerBlock: 100000000,
-		DefaultKeyDilution:  10000,
-
-		ApprovedUpgrades: map[protocol.ConsensusVersion]bool{},
-	}
+	testBigBlocks := Consensus[protocol.ConsensusCurrentVersion]
+	testBigBlocks.MaxTxnBytesPerBlock = 100000000
+	testBigBlocks.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	Consensus[protocol.ConsensusTestBigBlocks] = testBigBlocks
 
 	rapidRecalcParams := Consensus[protocol.ConsensusCurrentVersion]
 	rapidRecalcParams.RewardsRateRefreshInterval = 25
