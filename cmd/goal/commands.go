@@ -201,7 +201,6 @@ var reportCmd = &cobra.Command{
 		}
 		fmt.Println(string(data))
 
-		fmt.Println("Genesis ID from genesis.json:")
 		dirs := getDataDirs()
 		report := len(dirs) > 1
 		for _, dir := range dirs {
@@ -213,7 +212,7 @@ var reportCmd = &cobra.Command{
 				fmt.Println(err)
 				os.Exit(1)
 			}
-			fmt.Println(genesis.ID())
+			fmt.Printf("Genesis ID from genesis.json: %s\n", genesis.ID())
 		}
 		fmt.Println()
 		onDataDirs(getStatus)
