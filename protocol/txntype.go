@@ -29,6 +29,15 @@ const (
 	// KeyRegistrationTx indicates a transaction that registers participation keys
 	KeyRegistrationTx TxType = "keyreg"
 
+	// AssetConfigTx creates, re-configures, or destroys an asset
+	AssetConfigTx TxType = "acfg"
+
+	// AssetTransferTx transfers assets between accounts (optionally closing)
+	AssetTransferTx TxType = "axfer"
+
+	// AssetFreezeTx changes the freeze status of an asset
+	AssetFreezeTx TxType = "afrz"
+
 	// UnknownTx signals an error
 	UnknownTx TxType = "unknown"
 )

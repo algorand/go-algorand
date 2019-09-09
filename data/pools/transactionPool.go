@@ -36,10 +36,8 @@ import (
 // TransactionPool is a struct maintaining a sanitized pool of transactions that are available for inclusion in
 // a Block.  We sanitize it by preventing duplicates and limiting the number of transactions retained for each account
 type TransactionPool struct {
-	mu                     deadlock.RWMutex
+	mu                     deadlock.Mutex
 	cond                   sync.Cond
-	pendingTxGroups        [][]transactions.SignedTxn
-	pendingTxids           map[transactions.Txid]transactions.SignedTxn
 	expiredTxCount         map[basics.Round]int
 	pendingBlockEvaluator  *ledger.BlockEvaluator
 	numPendingWholeBlocks  basics.Round
@@ -47,6 +45,19 @@ type TransactionPool struct {
 	ledger                 *ledger.Ledger
 	statusCache            *statusCache
 	logStats               bool
+
+	// pendingMu protects pendingTxGroups and pendingTxids
+	pendingMu    deadlock.RWMutex
+	pendingTxGroups  [][]transactions.SignedTxn
+	pendingTxids map[transactions.Txid]transactions.SignedTxn
+
+	// Calls to remember() add transactions to rememberedTxGroups and
+	// rememberedTxids.  Calling rememberCommit() adds them to the
+	// pendingTxGroups and pendingTxids.  This allows us to batch the
+	// changes in OnNewBlock() without preventing a concurrent call
+	// to Pending() or Verified().
+	rememberedTxGroups  [][]transactions.SignedTxn
+	rememberedTxids map[transactions.Txid]transactions.SignedTxn
 }
 
 // MakeTransactionPool is the constructor, it uses Ledger to ensure that no account has pending transactions that together overspend.
@@ -55,11 +66,12 @@ type TransactionPool struct {
 // transactions that were removed from the pool without being committed.
 func MakeTransactionPool(ledger *ledger.Ledger, transactionPoolStatusSize int, logStats bool) *TransactionPool {
 	pool := TransactionPool{
-		pendingTxids:   make(map[transactions.Txid]transactions.SignedTxn),
-		expiredTxCount: make(map[basics.Round]int),
-		ledger:         ledger,
-		statusCache:    makeStatusCache(transactionPoolStatusSize),
-		logStats:       logStats,
+		pendingTxids:    make(map[transactions.Txid]transactions.SignedTxn),
+		rememberedTxids: make(map[transactions.Txid]transactions.SignedTxn),
+		expiredTxCount:  make(map[basics.Round]int),
+		ledger:          ledger,
+		statusCache:     makeStatusCache(transactionPoolStatusSize),
+		logStats:        logStats,
 	}
 	pool.cond.L = &pool.mu
 	pool.recomputeBlockEvaluator()
@@ -76,15 +88,15 @@ const timeoutOnNewBlock = time.Second
 // NumExpired returns the number of transactions that expired at the end of a round (only meaningful if cleanup has
 // been called for that round)
 func (pool *TransactionPool) NumExpired(round basics.Round) int {
-	pool.mu.RLock()
-	defer pool.mu.RUnlock()
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
 	return pool.expiredTxCount[round]
 }
 
 // PendingTxIDs return the IDs of all pending transactions
 func (pool *TransactionPool) PendingTxIDs() []transactions.Txid {
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
+	pool.pendingMu.RLock()
+	defer pool.pendingMu.RUnlock()
 
 	ids := make([]transactions.Txid, len(pool.pendingTxids))
 	i := 0
@@ -98,8 +110,8 @@ func (pool *TransactionPool) PendingTxIDs() []transactions.Txid {
 // Pending returns a list of transaction groups that should be proposed
 // in the next block, in order.
 func (pool *TransactionPool) Pending() [][]transactions.SignedTxn {
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
+	pool.pendingMu.RLock()
+	defer pool.pendingMu.RUnlock()
 
 	txgroups := make([][]transactions.SignedTxn, len(pool.pendingTxGroups))
 	i := 0
@@ -115,10 +127,33 @@ func (pool *TransactionPool) Pending() [][]transactions.SignedTxn {
 	return txgroups
 }
 
+// rememberCommit() saves the changes added by remember to
+// pendingTxGroups and pendingTxids.  The caller is assumed to
+// be holding pool.mu.  flush indicates whether previous
+// pendingTxGroups and pendingTxids should be flushed out and
+// replaced altogether by rememberedTxGroups and rememberedTxids.
+func (pool *TransactionPool) rememberCommit(flush bool) {
+	pool.pendingMu.Lock()
+	defer pool.pendingMu.Unlock()
+
+	if flush {
+		pool.pendingTxGroups = pool.rememberedTxGroups
+		pool.pendingTxids = pool.rememberedTxids
+	} else {
+		pool.pendingTxGroups = append(pool.pendingTxGroups, pool.rememberedTxGroups...)
+		for txid, txn := range pool.rememberedTxids {
+			pool.pendingTxids[txid] = txn
+		}
+	}
+
+	pool.rememberedTxGroups = nil
+	pool.rememberedTxids = make(map[transactions.Txid]transactions.SignedTxn)
+}
+
 // PendingCount returns the number of transactions currently pending in the pool.
 func (pool *TransactionPool) PendingCount() int {
-	pool.mu.RLock()
-	defer pool.mu.RUnlock()
+	pool.pendingMu.RLock()
+	defer pool.pendingMu.RUnlock()
 
 	var count int
 	for _, txgroup := range pool.pendingTxGroups {
@@ -242,6 +277,7 @@ func (pool *TransactionPool) Remember(txgroup []transactions.SignedTxn) error {
 		return fmt.Errorf("TransactionPool.Remember: %v", err)
 	}
 
+	pool.rememberCommit(false)
 	return nil
 }
 
@@ -252,9 +288,9 @@ func (pool *TransactionPool) remember(txgroup []transactions.SignedTxn) error {
 		return err
 	}
 
-	pool.pendingTxGroups = append(pool.pendingTxGroups, txgroup)
+	pool.rememberedTxGroups = append(pool.rememberedTxGroups, txgroup)
 	for _, t := range txgroup {
-		pool.pendingTxids[t.ID()] = t
+		pool.rememberedTxids[t.ID()] = t
 	}
 	return nil
 }
@@ -267,8 +303,11 @@ func (pool *TransactionPool) Lookup(txid transactions.Txid) (tx transactions.Sig
 	if pool == nil {
 		return transactions.SignedTxn{}, "", false
 	}
-	pool.mu.RLock()
-	defer pool.mu.RUnlock()
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	pool.pendingMu.RLock()
+	defer pool.pendingMu.RUnlock()
 
 	tx, inPool := pool.pendingTxids[txid]
 	if inPool {
@@ -288,8 +327,8 @@ func (pool *TransactionPool) Verified(txn transactions.SignedTxn) bool {
 	if pool == nil {
 		return false
 	}
-	pool.mu.RLock()
-	defer pool.mu.RUnlock()
+	pool.pendingMu.RLock()
+	defer pool.pendingMu.RUnlock()
 	pendingSigTxn, ok := pool.pendingTxids[txn.ID()]
 	if !ok {
 		return false
@@ -310,6 +349,7 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block) {
 
 	payset, err := block.DecodePaysetFlat()
 	if err == nil {
+		pool.pendingMu.RLock()
 		for _, txad := range payset {
 			tx := txad.SignedTxn
 			txid := tx.ID()
@@ -320,6 +360,7 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block) {
 				unknownCommitted++
 			}
 		}
+		pool.pendingMu.RUnlock()
 	}
 
 	if pool.pendingBlockEvaluator == nil || block.Round() >= pool.pendingBlockEvaluator.Round() {
@@ -428,9 +469,9 @@ func (pool *TransactionPool) recomputeBlockEvaluator() (stats telemetryspec.Proc
 	}
 
 	// Feed the transactions in order.
+	pool.pendingMu.RLock()
 	txgroups := pool.pendingTxGroups
-	pool.pendingTxGroups = nil
-	pool.pendingTxids = make(map[transactions.Txid]transactions.SignedTxn)
+	pool.pendingMu.RUnlock()
 
 	for _, txgroup := range txgroups {
 		err := pool.remember(txgroup)
@@ -448,5 +489,6 @@ func (pool *TransactionPool) recomputeBlockEvaluator() (stats telemetryspec.Proc
 		}
 	}
 
+	pool.rememberCommit(true)
 	return
 }

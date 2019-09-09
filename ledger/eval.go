@@ -63,12 +63,14 @@ func (x *roundCowBase) isDup(firstValid basics.Round, txid transactions.Txid) (b
 }
 
 // wrappers for roundCowState to satisfy the (current) transactions.Balances interface
-func (cs *roundCowState) Get(addr basics.Address) (basics.BalanceRecord, error) {
+func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (basics.BalanceRecord, error) {
 	acctdata, err := cs.lookup(addr)
 	if err != nil {
 		return basics.BalanceRecord{}, err
 	}
-	acctdata = acctdata.WithUpdatedRewards(cs.proto, cs.rewardsLevel())
+	if withPendingRewards {
+		acctdata = acctdata.WithUpdatedRewards(cs.proto, cs.rewardsLevel())
+	}
 	return basics.BalanceRecord{Addr: addr, AccountData: acctdata}, nil
 }
 
@@ -148,7 +150,8 @@ type BlockEvaluator struct {
 	genesisHash crypto.Digest
 
 	block        bookkeeping.Block
-	totalTxBytes int
+	blockTxBytes int
+	txnCounter   uint64
 
 	verificationPool execpool.BacklogPool
 }
@@ -204,6 +207,8 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *eval
 		if err != nil {
 			return nil, fmt.Errorf("can't evaluate block %v without previous header: %v", hdr.Round, err)
 		}
+
+		eval.txnCounter = eval.prevHeader.TxnCounter
 	}
 
 	prevTotals, err := l.Totals(eval.prevHeader.Round)
@@ -251,7 +256,7 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *eval
 		return nil, fmt.Errorf("overflowed subtracting rewards(%d, %d) levels for block %v", eval.block.BlockHeader.RewardsLevel, eval.prevHeader.RewardsLevel, hdr.Round)
 	}
 
-	poolOld, err := eval.state.Get(poolAddr)
+	poolOld, err := eval.state.Get(poolAddr, true)
 	if err != nil {
 		return nil, err
 	}
@@ -303,7 +308,7 @@ func (eval *BlockEvaluator) workaroundOverspentRewards(rewardPoolBalance basics.
 		err = fmt.Errorf("unable to move funds from testnet bank to incentive pool: %v", err)
 		return
 	}
-	poolOld, err = eval.state.Get(eval.prevHeader.RewardsPool)
+	poolOld, err = eval.state.Get(eval.prevHeader.RewardsPool, true)
 
 	return
 }
@@ -317,7 +322,7 @@ func (eval *BlockEvaluator) Round() basics.Round {
 // zero.  This is a specialized operation used by the transaction pool to
 // simulate the effect of putting pending transactions in multiple blocks.
 func (eval *BlockEvaluator) ResetTxnBytes() {
-	eval.totalTxBytes = 0
+	eval.blockTxBytes = 0
 }
 
 // Transaction tentatively adds a new transaction as part of this block evaluation.
@@ -383,7 +388,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 
 		if eval.validate {
 			groupTxBytes += len(protocol.Encode(txib))
-			if eval.totalTxBytes+groupTxBytes > eval.proto.MaxTxnBytesPerBlock {
+			if eval.blockTxBytes+groupTxBytes > eval.proto.MaxTxnBytesPerBlock {
 				return ErrNoSpace
 			}
 		}
@@ -413,7 +418,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 
 	if remember {
 		eval.block.Payset = append(eval.block.Payset, txibs...)
-		eval.totalTxBytes += groupTxBytes
+		eval.blockTxBytes += groupTxBytes
 		cow.commitToParent()
 	}
 
@@ -468,7 +473,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 	}
 
 	// Apply the transaction, updating the cow balances
-	applyData, err := txn.Txn.Apply(cow, spec)
+	applyData, err := txn.Txn.Apply(cow, spec, eval.txnCounter)
 	if err != nil {
 		return fmt.Errorf("transaction %v: %v", txn.ID(), err)
 	}
@@ -505,7 +510,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 		// It's always OK to have the account move to an empty state,
 		// because the accounts DB can delete it.  Otherwise, we will
 		// enforce MinBalance.
-		if data == (basics.AccountData{}) {
+		if data.IsZero() {
 			continue
 		}
 
@@ -518,9 +523,9 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 		}
 
 		dataNew := data.WithUpdatedRewards(eval.proto, rewardlvl)
-		if dataNew.MicroAlgos.Raw < eval.proto.MinBalance {
-			return fmt.Errorf("transaction %v: account %v balance %d below min %d",
-				txn.ID(), addr, dataNew.MicroAlgos.Raw, eval.proto.MinBalance)
+		if dataNew.MicroAlgos.Raw < basics.MulSaturate(eval.proto.MinBalance, uint64(1+len(dataNew.Assets))) {
+			return fmt.Errorf("transaction %v: account %v balance %d below min %d (%d assets)",
+				txn.ID(), addr, dataNew.MicroAlgos.Raw, eval.proto.MinBalance, len(dataNew.Assets))
 		}
 	}
 
@@ -536,6 +541,7 @@ func (eval *BlockEvaluator) endOfBlock() error {
 
 	if eval.generate {
 		eval.block.TxnRoot = eval.block.Payset.Commit(eval.proto.PaysetCommitFlat)
+		eval.block.TxnCounter = eval.txnCounter
 	}
 
 	cow.commitToParent()
@@ -549,6 +555,10 @@ func (eval *BlockEvaluator) finalValidation() error {
 		txnRoot := eval.block.Payset.Commit(eval.proto.PaysetCommitFlat)
 		if txnRoot != eval.block.TxnRoot {
 			return fmt.Errorf("txn root wrong: %v != %v", txnRoot, eval.block.TxnRoot)
+		}
+
+		if eval.block.TxnCounter != eval.txnCounter {
+			return fmt.Errorf("txn count wrong: %d != %d", eval.block.TxnCounter, eval.txnCounter)
 		}
 	}
 
