@@ -94,9 +94,6 @@ func OpenLedger(
 	defer func() {
 		if err != nil {
 			l.Close()
-			if l.blockQ != nil {
-				l.blockQ.close()
-			}
 		}
 	}()
 
@@ -244,9 +241,12 @@ func initBlocksDB(tx *sql.Tx, l *Ledger, initBlocks []bookkeeping.Block, isArchi
 // and goroutines used by trackers).
 func (l *Ledger) Close() {
 	l.trackerDBs.close()
-	l.blockQ.close()
 	l.blockDBs.close()
 	l.trackers.close()
+	if l.blockQ != nil {
+		l.blockQ.close()
+		l.blockQ = nil
+	}
 }
 
 // RegisterBlockListeners registers listeners that will be called when a
