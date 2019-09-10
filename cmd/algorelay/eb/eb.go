@@ -18,8 +18,8 @@ package eb
 
 // Relay represents the configuration data necessary for a single Relay
 type Relay struct {
-	ID             int64 // db key injected when loaded
-	Address        string
+	ID             int64  // db key injected when loaded
+	Address        string // ip or dns name; use to be called IPOrDNSName.
 	MetricsEnabled bool
 	CheckSuccess   bool   // true if check was successful
 	DNSAlias       string // DNS Alias name used
