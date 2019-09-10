@@ -93,7 +93,9 @@ func BenchmarkAssemblePayset(b *testing.B) {
 	require.Equal(b, len(genesis), numUsers+1)
 	genBal := MakeGenesisBalances(genesis, sinkAddr, poolAddr)
 	ledgerName := fmt.Sprintf("%s-mem-%d", b.Name(), b.N)
-	ledger, err := LoadLedger(log, ledgerName, true, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil)
+	const inMem = true
+	const archival = true
+	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, archival)
 	require.NoError(b, err)
 
 	l := ledger
