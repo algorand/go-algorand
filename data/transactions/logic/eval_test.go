@@ -19,6 +19,8 @@ package logic
 import (
 	"encoding/base64"
 	"encoding/hex"
+	"fmt"
+	"github.com/algorand/go-algorand/crypto"
 	"strings"
 	"testing"
 
@@ -472,3 +474,43 @@ func BenchmarkSha256(b *testing.B) {
 		require.True(b, pass)
 	}
 }
+
+func TestEd25519verify(t *testing.T) {
+	t.Parallel()
+	var s crypto.Seed
+	crypto.RandBytes(s[:])
+	c := crypto.GenerateSignatureSecrets(s)
+	msg := "52fdfc072182654f163f5f0f9a621d729566c74d"
+	data, err := hex.DecodeString(msg)
+	require.NoError(t, err)
+	pk := basics.Address(c.SignatureVerifier)
+	pkStr := pk.String()
+	program, err := AssembleString(fmt.Sprintf(`arg 0
+arg 1
+addr %s
+ed25519verify`, pkStr))
+	require.NoError(t, err)
+	sig := c.SignBytes(data)
+	var txn transactions.SignedTxn
+	txn.Lsig.Logic = program
+	txn.Lsig.Args = [][]byte{data, sig[:]}
+	sb := strings.Builder{}
+	ep := EvalParams{Txn: &txn, Trace: &sb}
+	pass := Eval(program, ep)
+	if !pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.True(t, pass)
+
+	// flip a bit and it should not pass
+	msg1 := "62fdfc072182654f163f5f0f9a621d729566c74d"
+	data1, err := hex.DecodeString(msg1)
+	require.NoError(t, err)
+	txn.Lsig.Args = [][]byte{data1, sig[:]}
+	sb1 := strings.Builder{}
+	ep1 := EvalParams{Txn: &txn, Trace: &sb1}
+	pass1 := Eval(program, ep1)
+	require.False(t, pass1)
+}
+
