@@ -105,7 +105,9 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*L
 	bootstrap := MakeGenesisBalances(genesis, poolAddr, sinkAddr)
 
 	// generate test transactions
-	ledger, err := LoadLedger(logging.Base(), t.Name(), true, protocol.ConsensusCurrentVersion, bootstrap, genesisID, genesisHash, nil)
+	const inMem = true
+	const archival = true
+	ledger, err := LoadLedger(logging.Base(), t.Name(), inMem, protocol.ConsensusCurrentVersion, bootstrap, genesisID, genesisHash, nil, archival)
 	if err != nil {
 		panic(err)
 	}
