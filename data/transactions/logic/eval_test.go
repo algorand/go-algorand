@@ -1305,12 +1305,13 @@ ed25519verify`, pkStr))
 	txn.Lsig.Args = [][]byte{data, sig[:]}
 	sb := strings.Builder{}
 	ep := EvalParams{Txn: &txn, Trace: &sb}
-	pass := Eval(program, ep)
+	pass, err := Eval(program, ep)
 	if !pass {
 		t.Log(hex.EncodeToString(program))
 		t.Log(sb.String())
 	}
 	require.True(t, pass)
+	require.NoError(t, err)
 
 	// flip a bit and it should not pass
 	msg1 := "62fdfc072182654f163f5f0f9a621d729566c74d"
@@ -1319,7 +1320,8 @@ ed25519verify`, pkStr))
 	txn.Lsig.Args = [][]byte{data1, sig[:]}
 	sb1 := strings.Builder{}
 	ep1 := EvalParams{Txn: &txn, Trace: &sb1}
-	pass1 := Eval(program, ep1)
+	pass1, err := Eval(program, ep1)
 	require.False(t, pass1)
+	require.NoError(t, err)
 }
 
