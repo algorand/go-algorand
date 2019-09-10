@@ -25,6 +25,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
@@ -273,7 +274,8 @@ var rawsendCmd = &cobra.Command{
 		dec := protocol.NewDecoderBytes(data)
 		client := ensureAlgodClient(ensureSingleDataDir())
 
-		txns := make(map[transactions.Txid]transactions.SignedTxn)
+		txnIDs := make(map[transactions.Txid]transactions.SignedTxn)
+		var txns []transactions.SignedTxn
 		for {
 			var txn transactions.SignedTxn
 			err = dec.Decode(&txn)
@@ -284,27 +286,35 @@ var rawsendCmd = &cobra.Command{
 				reportErrorf(txDecodeError, txFilename, err)
 			}
 
-			_, present := txns[txn.ID()]
+			_, present := txnIDs[txn.ID()]
 			if present {
 				reportErrorf(txDupError, txn.ID().String(), txFilename)
 			}
 
-			txns[txn.ID()] = txn
+			txnIDs[txn.ID()] = txn
+			txns = append(txns, txn)
 		}
+
+		txgroups := bookkeeping.SignedTxnsToGroups(txns)
 
 		txnErrors := make(map[transactions.Txid]string)
 		pendingTxns := make(map[transactions.Txid]string)
-		for txid, txn := range txns {
+		for _, txgroup := range txgroups {
 			// Broadcast the transaction
-			txidStr, err := client.BroadcastTransaction(txn)
+			err := client.BroadcastTransactionGroup(txgroup)
 			if err != nil {
-				txnErrors[txid] = err.Error()
+				for _, txn := range txgroup {
+					txnErrors[txn.ID()] = err.Error()
+				}
 				reportWarnf(errorBroadcastingTX, err)
 				continue
 			}
 
-			reportInfof(infoRawTxIssued, txidStr)
-			pendingTxns[txid] = txidStr
+			for _, txn := range txgroup {
+				txidStr := txn.ID().String()
+				reportInfof(infoRawTxIssued, txidStr)
+				pendingTxns[txn.ID()] = txidStr
+			}
 		}
 
 		if noWaitAfterSend {
@@ -350,9 +360,17 @@ var rawsendCmd = &cobra.Command{
 			fmt.Printf("Encountered errors in sending %d transactions:\n", len(txnErrors))
 
 			var rejectsData []byte
-			for txid, errmsg := range txnErrors {
+			// Loop over transactions in the same order as the original file,
+			// to preserve transaction groups.
+			for _, txn := range txns {
+				txid := txn.ID()
+				errmsg, ok := txnErrors[txid]
+				if !ok {
+					continue
+				}
+
 				fmt.Printf("  %s: %s\n", txid, errmsg)
-				rejectsData = append(rejectsData, protocol.Encode(txns[txid])...)
+				rejectsData = append(rejectsData, protocol.Encode(txn)...)
 			}
 
 			f, err := os.OpenFile(rejectsFilename, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
