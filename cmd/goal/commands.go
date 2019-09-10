@@ -98,9 +98,7 @@ var rootCmd = &cobra.Command{
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		if versionCheck {
-			version := config.GetCurrentVersion()
-			fmt.Printf("%d\n%s.%s [%s] (commit #%s)\n%s\n", version.AsUInt64(), version.String(),
-				version.Channel, version.Branch, version.GetCommitHash(), config.GetLicenseInfo())
+			config.PrintVersionAndLicense()
 			return
 		}
 		//If no arguments passed, we should fallback to help
@@ -191,9 +189,8 @@ var reportCmd = &cobra.Command{
 	Long:  "Produces report helpful for debugging",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
-		version := config.GetCurrentVersion()
-		fmt.Printf("%d\n%s.%s [%s] (commit #%s)\n%s\n\n", version.AsUInt64(), version.String(),
-			version.Channel, version.Branch, version.GetCommitHash(), config.GetLicenseInfo())
+		config.PrintVersionAndLicense()
+		fmt.Println()
 		data, err := exec.Command("uname", "-a").CombinedOutput()
 		if err != nil {
 			fmt.Println(err)
