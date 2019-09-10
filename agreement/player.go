@@ -398,20 +398,19 @@ func (p *player) partitionPolicy(r routerHandle) (actions []action) {
 		actions = append(actions, a0)
 	}
 
-	/*
-	 * Important Comment:
-	 * The spec, in particular, says that during resynchronization, we must relay
-	 * the pinned payload on resynchronization. In addition, on receiving a next bundle,
-	 * we must set the pinned value.
-	 * The implementation currently does not follow the spec, and instead relies on the
-	 * Reproposal Payload mechanism (where players relay payloads on seeing reproposals)
-	 * to synchronize knowledge of Payloads across the network. In particular, this seems
-	 * to violate a termination invariant under common-case synchrony, since relaying Payloads
-	 * is now mildly delayed and we can enter periods in this strange case.
-	 * - There is significant conversation to be had around here, and pinned values,
-	 * to decide on the best course of action. For now, I will leave the implementation as-is
-	 * and defer to this future conversation as a todo.
-	 */
+	// On resynchronization, first try relaying the staged proposal from the same period as
+	// the freshest bundle. If that does not exist, for instance if we saw two next quorums in a row,
+	// then we fall back to relaying the pinned value, for liveness.
+	// One specific scenario where this is essential, assuming we handle ensure digest asynchronously:
+	// - Let the majority of honest nodes cert vote, and then see a next value quorum, and enter p + 1.
+	// - They see another next value quorum, and enter p + 2.
+	// - The minority of honest nodes see a certThreshold (but without a block), in period p. Assume that
+	//   they are partitioned from the majority of honest nodes, until the majority reach p + 2.
+	// - The minority already has the freshest bundle, so will not advance to period p + 2. However, the
+	//   majority will also filter out the cert threshold (due to a stale period).
+	// - Now we relay the pinned value, and then can wait for catchup.
+	// - Another optimization is that we could allow cert bundles from stale periods to bypass the filter.
+	//   This may be worth implementing in the future.
 	bundleRound := p.Round
 	bundlePeriod := p.Period
 	switch {
@@ -421,14 +420,23 @@ func (p *player) partitionPolicy(r routerHandle) (actions []action) {
 		bundlePeriod = b.Period
 		fallthrough
 	case p.Period == 0:
-		// generate new proposal as appropriate
-		res := stagedValue(*p, r, bundleRound, bundlePeriod)
-		if res.Committable {
-			transmit := compoundMessage{Proposal: res.Payload.u()}
-			r.t.logProposalRepropagate(res.Proposal, bundleRound, bundlePeriod)
+		resStaged := stagedValue(*p, r, bundleRound, bundlePeriod)
+		if resStaged.Committable {
+			transmit := compoundMessage{Proposal: resStaged.Payload.u()}
+			r.t.logProposalRepropagate(resStaged.Proposal, bundleRound, bundlePeriod)
 			a1 := broadcastAction(protocol.ProposalPayloadTag, transmit)
 			actions = append(actions, a1)
+		} else {
+			// even if there is no staged value, there may be a pinned value
+			resPinned := pinnedValue(*p, r, bundleRound)
+			if resPinned.PayloadOK {
+				transmit := compoundMessage{Proposal: resPinned.Payload.u()}
+				r.t.logProposalRepropagate(resPinned.Proposal, bundleRound, bundlePeriod)
+				a1 := broadcastAction(protocol.ProposalPayloadTag, transmit)
+				actions = append(actions, a1)
+			}
 		}
+
 	}
 	return
 }

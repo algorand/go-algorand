@@ -222,3 +222,63 @@ func TestMultisigSign(t *testing.T) {
 	// err = stxn.Verify()
 	// require.NoError(t, err)
 }
+
+func TestMultisigSignProgram(t *testing.T) {
+	t.Parallel()
+	var f fixtures.KMDFixture
+	walletHandleToken := f.SetupWithWallet(t)
+	defer f.Shutdown()
+
+	resp, err := f.Client.GenerateKey([]byte(walletHandleToken))
+	require.NoError(t, err)
+	pk1 := addrToPK(t, resp.Address)
+	resp, err = f.Client.GenerateKey([]byte(walletHandleToken))
+	require.NoError(t, err)
+	pk2 := addrToPK(t, resp.Address)
+	pk3 := crypto.PublicKey{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1} // some public key we haven't imported
+
+	// Create a 2-of-3 multisig account from the three public keys
+	resp1, err := f.Client.ImportMultisigAddr([]byte(walletHandleToken), 1, 2, []crypto.PublicKey{pk1, pk2, pk3})
+
+	require.NoError(t, err)
+	msigAddr := addrToPK(t, resp1.Address)
+
+	program := []byte("blah blah blah, not a real program, just some bytes to sign, kmd does not have a program interpreter to know if the program is legitimate, but it _does_ prefix the program with protocol.Program and we can verify that here below")
+
+	// Try to sign
+	req2 := kmdapi.APIV1POSTMultisigProgramSignRequest{
+		WalletHandleToken: walletHandleToken,
+		Program:           program,
+		Address:           basics.Address(msigAddr).String(),
+		PublicKey:         pk1,
+		PartialMsig:       crypto.MultisigSig{},
+		WalletPassword:    f.WalletPassword,
+	}
+	resp2 := kmdapi.APIV1POSTMultisigProgramSignResponse{}
+	err = f.Client.DoV1Request(req2, &resp2)
+	require.NoError(t, err)
+
+	var msig crypto.MultisigSig
+	err = protocol.Decode(resp2.Multisig, &msig)
+	require.NoError(t, err)
+
+	// Try to add another signature
+	req3 := kmdapi.APIV1POSTMultisigProgramSignRequest{
+		WalletHandleToken: walletHandleToken,
+		Program:           program,
+		Address:           basics.Address(msigAddr).String(),
+		PublicKey:         pk2,
+		PartialMsig:       msig,
+		WalletPassword:    f.WalletPassword,
+	}
+	resp3 := kmdapi.APIV1POSTMultisigProgramSignResponse{}
+	err = f.Client.DoV1Request(req3, &resp3)
+	require.NoError(t, err)
+
+	err = protocol.Decode(resp3.Multisig, &msig)
+	require.NoError(t, err)
+
+	ok, err := crypto.MultisigVerify(transactions.Program(program), crypto.Digest(msigAddr), msig)
+	require.NoError(t, err)
+	require.True(t, ok)
+}

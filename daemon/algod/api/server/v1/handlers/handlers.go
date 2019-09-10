@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -71,14 +72,33 @@ func decorateUnknownTransactionTypeError(err error, txs node.TxnWithStatus) erro
 // if unexpected transaction type is encountered, an error is returned. The caller is expected to ignore the returned
 // transaction when error is non-nil.
 func txEncode(tx transactions.Transaction, ad transactions.ApplyData) (v1.Transaction, error) {
+	var res v1.Transaction
 	switch tx.Type {
 	case protocol.PaymentTx:
-		return paymentTxEncode(tx, ad), nil
+		res = paymentTxEncode(tx, ad)
 	case protocol.KeyRegistrationTx:
-		return keyregTxEncode(tx, ad), nil
+		res = keyregTxEncode(tx, ad)
+	case protocol.AssetConfigTx:
+		res = assetConfigTxEncode(tx, ad)
+	case protocol.AssetTransferTx:
+		res = assetTransferTxEncode(tx, ad)
+	case protocol.AssetFreezeTx:
+		res = assetFreezeTxEncode(tx, ad)
 	default:
-		return v1.Transaction{}, errors.New(errUnknownTransactionType)
+		return res, errors.New(errUnknownTransactionType)
 	}
+
+	res.Type = string(tx.Type)
+	res.TxID = tx.ID().String()
+	res.From = tx.Src().String()
+	res.Fee = tx.TxFee().Raw
+	res.FirstRound = uint64(tx.First())
+	res.LastRound = uint64(tx.Last())
+	res.Note = tx.Aux()
+	res.FromRewards = ad.SenderRewards.Raw
+	res.GenesisID = tx.GenesisID
+	res.GenesisHash = tx.GenesisHash[:]
+	return res, nil
 }
 
 func paymentTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
@@ -95,17 +115,7 @@ func paymentTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.
 	}
 
 	return v1.Transaction{
-		Type:        string(tx.Type),
-		TxID:        tx.ID().String(),
-		From:        tx.Src().String(),
-		Fee:         tx.TxFee().Raw,
-		FirstRound:  uint64(tx.First()),
-		LastRound:   uint64(tx.Last()),
-		Note:        tx.Aux(),
-		Payment:     &payment,
-		FromRewards: ad.SenderRewards.Raw,
-		GenesisID:   tx.GenesisID,
-		GenesisHash: tx.GenesisHash[:],
+		Payment: &payment,
 	}
 }
 
@@ -119,17 +129,82 @@ func keyregTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.T
 	}
 
 	return v1.Transaction{
-		Type:        string(tx.Type),
-		TxID:        tx.ID().String(),
-		From:        tx.Src().String(),
-		Fee:         tx.TxFee().Raw,
-		FirstRound:  uint64(tx.First()),
-		LastRound:   uint64(tx.Last()),
-		Note:        tx.Aux(),
-		Keyreg:      &keyreg,
-		FromRewards: ad.SenderRewards.Raw,
-		GenesisID:   tx.GenesisID,
-		GenesisHash: tx.GenesisHash[:],
+		Keyreg: &keyreg,
+	}
+}
+
+func assetParams(creator basics.Address, params basics.AssetParams) v1.AssetParams {
+	paramsModel := v1.AssetParams{
+		Creator:       creator.String(),
+		Total:         params.Total,
+		DefaultFrozen: params.DefaultFrozen,
+	}
+
+	paramsModel.UnitName = strings.TrimRight(string(params.UnitName[:]), "\x00")
+	paramsModel.AssetName = strings.TrimRight(string(params.AssetName[:]), "\x00")
+
+	if !params.Manager.IsZero() {
+		paramsModel.ManagerAddr = params.Manager.String()
+	}
+
+	if !params.Reserve.IsZero() {
+		paramsModel.ReserveAddr = params.Reserve.String()
+	}
+
+	if !params.Freeze.IsZero() {
+		paramsModel.FreezeAddr = params.Freeze.String()
+	}
+
+	if !params.Clawback.IsZero() {
+		paramsModel.ClawbackAddr = params.Clawback.String()
+	}
+
+	return paramsModel
+}
+
+func assetConfigTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
+	config := v1.AssetConfigTransactionType{
+		AssetID: tx.AssetConfigTxnFields.ConfigAsset.Index,
+		Params: assetParams(tx.AssetConfigTxnFields.ConfigAsset.Creator,
+			tx.AssetConfigTxnFields.AssetParams),
+	}
+
+	return v1.Transaction{
+		AssetConfig: &config,
+	}
+}
+
+func assetTransferTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
+	xfer := v1.AssetTransferTransactionType{
+		AssetID:  tx.AssetTransferTxnFields.XferAsset.Index,
+		Creator:  tx.AssetTransferTxnFields.XferAsset.Creator.String(),
+		Amount:   tx.AssetTransferTxnFields.AssetAmount,
+		Receiver: tx.AssetTransferTxnFields.AssetReceiver.String(),
+	}
+
+	if !tx.AssetTransferTxnFields.AssetSender.IsZero() {
+		xfer.Sender = tx.AssetTransferTxnFields.AssetSender.String()
+	}
+
+	if !tx.AssetTransferTxnFields.AssetCloseTo.IsZero() {
+		xfer.CloseTo = tx.AssetTransferTxnFields.AssetCloseTo.String()
+	}
+
+	return v1.Transaction{
+		AssetTransfer: &xfer,
+	}
+}
+
+func assetFreezeTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
+	freeze := v1.AssetFreezeTransactionType{
+		AssetID:         tx.AssetFreezeTxnFields.FreezeAsset.Index,
+		Creator:         tx.AssetFreezeTxnFields.FreezeAsset.Creator.String(),
+		Account:         tx.AssetFreezeTxnFields.FreezeAccount.String(),
+		NewFreezeStatus: tx.AssetFreezeTxnFields.AssetFrozen,
+	}
+
+	return v1.Transaction{
+		AssetFreeze: &freeze,
 	}
 }
 
@@ -382,6 +457,26 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	var assets map[uint64]v1.AssetHolding
+	if len(record.Assets) > 0 {
+		assets = make(map[uint64]v1.AssetHolding)
+		for curid, holding := range record.Assets {
+			assets[curid.Index] = v1.AssetHolding{
+				Creator: curid.Creator.String(),
+				Amount:  holding.Amount,
+				Frozen:  holding.Frozen,
+			}
+		}
+	}
+
+	var thisAssetParams map[uint64]v1.AssetParams
+	if len(record.AssetParams) > 0 {
+		thisAssetParams = make(map[uint64]v1.AssetParams)
+		for idx, params := range record.AssetParams {
+			thisAssetParams[idx] = assetParams(addr, params)
+		}
+	}
+
 	apiParticipation := v1.Participation{
 		ParticipationPK: record.VoteID[:],
 		VRFPK:           record.SelectionID[:],
@@ -398,6 +493,8 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 		Rewards:                     record.RewardedMicroAlgos.Raw,
 		Status:                      record.Status.String(),
 		Participation:               apiParticipation,
+		AssetParams:                 thisAssetParams,
+		Assets:                      assets,
 	}
 
 	SendJSON(AccountInformationResponse{&accountInfo}, w, ctx.Log)

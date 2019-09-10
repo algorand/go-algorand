@@ -95,7 +95,7 @@ proc ::AlgorandGoal::StartNetwork { NETWORK_NAME NETWORK_TEMPLATE TEST_ALGO_DIR 
 
 # Stop the network
 proc ::AlgorandGoal::StopNetwork { NETWORK_NAME TEST_ALGO_DIR TEST_ROOT_DIR } {
-    set timeout 30
+    set timeout 60
     puts "Stopping network: $NETWORK_NAME"
     spawn goal network stop -d $TEST_ALGO_DIR -r $TEST_ROOT_DIR
     expect {

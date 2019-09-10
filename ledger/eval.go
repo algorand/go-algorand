@@ -63,12 +63,14 @@ func (x *roundCowBase) isDup(firstValid basics.Round, txid transactions.Txid) (b
 }
 
 // wrappers for roundCowState to satisfy the (current) transactions.Balances interface
-func (cs *roundCowState) Get(addr basics.Address) (basics.BalanceRecord, error) {
+func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (basics.BalanceRecord, error) {
 	acctdata, err := cs.lookup(addr)
 	if err != nil {
 		return basics.BalanceRecord{}, err
 	}
-	acctdata = acctdata.WithUpdatedRewards(cs.proto, cs.rewardsLevel())
+	if withPendingRewards {
+		acctdata = acctdata.WithUpdatedRewards(cs.proto, cs.rewardsLevel())
+	}
 	return basics.BalanceRecord{Addr: addr, AccountData: acctdata}, nil
 }
 
@@ -148,7 +150,8 @@ type BlockEvaluator struct {
 	genesisHash crypto.Digest
 
 	block        bookkeeping.Block
-	totalTxBytes int
+	blockTxBytes int
+	txnCounter   uint64
 
 	verificationPool execpool.BacklogPool
 }
@@ -204,6 +207,8 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *eval
 		if err != nil {
 			return nil, fmt.Errorf("can't evaluate block %v without previous header: %v", hdr.Round, err)
 		}
+
+		eval.txnCounter = eval.prevHeader.TxnCounter
 	}
 
 	prevTotals, err := l.Totals(eval.prevHeader.Round)
@@ -247,13 +252,27 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *eval
 	// Withdraw rewards from the incentive pool
 	var ot basics.OverflowTracker
 	rewardsPerUnit := ot.Sub(eval.block.BlockHeader.RewardsLevel, eval.prevHeader.RewardsLevel)
-	poolOld, err := eval.state.Get(poolAddr)
+	if ot.Overflowed {
+		return nil, fmt.Errorf("overflowed subtracting rewards(%d, %d) levels for block %v", eval.block.BlockHeader.RewardsLevel, eval.prevHeader.RewardsLevel, hdr.Round)
+	}
+
+	poolOld, err := eval.state.Get(poolAddr, true)
+	if err != nil {
+		return nil, err
+	}
+
+	// hotfix for testnet stall 08/26/2019; move some algos from testnet bank to rewards pool to give it enough time until protocol upgrade occur.
+	poolOld, err = eval.workaroundOverspentRewards(poolOld, hdr.Round)
 	if err != nil {
 		return nil, err
 	}
 
 	poolNew := poolOld
 	poolNew.MicroAlgos = ot.SubA(poolOld.MicroAlgos, basics.MicroAlgos{Raw: ot.Mul(prevTotals.RewardUnits(), rewardsPerUnit)})
+	if ot.Overflowed {
+		return nil, fmt.Errorf("overflowed subtracting reward unit for block %v", hdr.Round)
+	}
+
 	err = eval.state.Put(poolNew)
 	if err != nil {
 		return nil, err
@@ -269,6 +288,31 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *eval
 	return eval, nil
 }
 
+// hotfix for testnet stall 08/26/2019; move some algos from testnet bank to rewards pool to give it enough time until protocol upgrade occur.
+func (eval *BlockEvaluator) workaroundOverspentRewards(rewardPoolBalance basics.BalanceRecord, headerRound basics.Round) (poolOld basics.BalanceRecord, err error) {
+	// verify that we patch the correct round.
+	if headerRound != 1499995 {
+		return rewardPoolBalance, nil
+	}
+	// verify that we're patching the correct genesis ( i.e. testnet )
+	testnetGenesisHash, _ := crypto.DigestFromString("JBR3KGFEWPEE5SAQ6IWU6EEBZMHXD4CZU6WCBXWGF57XBZIJHIRA")
+	if eval.genesisHash != testnetGenesisHash {
+		return rewardPoolBalance, nil
+	}
+
+	// get the testnet bank ( dispenser ) account address.
+	bankAddr, _ := basics.UnmarshalChecksumAddress("GD64YIY3TWGDMCNPP553DZPPR6LDUSFQOIJVFDPPXWEG3FVOJCCDBBHU5A")
+	amount := basics.MicroAlgos{Raw: 20000000000}
+	err = eval.state.Move(bankAddr, eval.prevHeader.RewardsPool, amount, nil, nil)
+	if err != nil {
+		err = fmt.Errorf("unable to move funds from testnet bank to incentive pool: %v", err)
+		return
+	}
+	poolOld, err = eval.state.Get(eval.prevHeader.RewardsPool, true)
+
+	return
+}
+
 // Round returns the round number of the block being evaluated by the BlockEvaluator.
 func (eval *BlockEvaluator) Round() basics.Round {
 	return eval.block.Round()
@@ -278,7 +322,7 @@ func (eval *BlockEvaluator) Round() basics.Round {
 // zero.  This is a specialized operation used by the transaction pool to
 // simulate the effect of putting pending transactions in multiple blocks.
 func (eval *BlockEvaluator) ResetTxnBytes() {
-	eval.totalTxBytes = 0
+	eval.blockTxBytes = 0
 }
 
 // Transaction tentatively adds a new transaction as part of this block evaluation.
@@ -342,7 +386,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad *transact
 	}
 
 	// Apply the transaction, updating the cow balances
-	applyData, err := txn.Txn.Apply(cow, spec)
+	applyData, err := txn.Txn.Apply(cow, spec, eval.txnCounter)
 	if err != nil {
 		return fmt.Errorf("transaction %v: %v", txn.ID(), err)
 	}
@@ -371,7 +415,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad *transact
 	}
 	if eval.validate {
 		thisTxBytes = len(protocol.Encode(txib))
-		if eval.totalTxBytes+thisTxBytes > eval.proto.MaxTxnBytesPerBlock {
+		if eval.blockTxBytes+thisTxBytes > eval.proto.MaxTxnBytesPerBlock {
 			return ErrNoSpace
 		}
 	}
@@ -388,7 +432,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad *transact
 		// It's always OK to have the account move to an empty state,
 		// because the accounts DB can delete it.  Otherwise, we will
 		// enforce MinBalance.
-		if data == (basics.AccountData{}) {
+		if data.IsZero() {
 			continue
 		}
 
@@ -401,9 +445,9 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad *transact
 		}
 
 		dataNew := data.WithUpdatedRewards(eval.proto, rewardlvl)
-		if dataNew.MicroAlgos.Raw < eval.proto.MinBalance {
-			return fmt.Errorf("transaction %v: account %v balance %d below min %d",
-				txn.ID(), addr, dataNew.MicroAlgos.Raw, eval.proto.MinBalance)
+		if dataNew.MicroAlgos.Raw < basics.MulSaturate(eval.proto.MinBalance, uint64(1+len(dataNew.Assets))) {
+			return fmt.Errorf("transaction %v: account %v balance %d below min %d (%d assets)",
+				txn.ID(), addr, dataNew.MicroAlgos.Raw, eval.proto.MinBalance, len(dataNew.Assets))
 		}
 	}
 
@@ -412,7 +456,12 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad *transact
 		cow.addTx(txn.ID())
 
 		eval.block.Payset = append(eval.block.Payset, txib)
-		eval.totalTxBytes += thisTxBytes
+		eval.blockTxBytes += thisTxBytes
+
+		if eval.proto.TxnCounter {
+			eval.txnCounter++
+		}
+
 		cow.commitToParent()
 	}
 
@@ -425,6 +474,7 @@ func (eval *BlockEvaluator) endOfBlock() error {
 
 	if eval.generate {
 		eval.block.TxnRoot = eval.block.Payset.Commit(eval.proto.PaysetCommitFlat)
+		eval.block.TxnCounter = eval.txnCounter
 	}
 
 	cow.commitToParent()
@@ -438,6 +488,10 @@ func (eval *BlockEvaluator) finalValidation() error {
 		txnRoot := eval.block.Payset.Commit(eval.proto.PaysetCommitFlat)
 		if txnRoot != eval.block.TxnRoot {
 			return fmt.Errorf("txn root wrong: %v != %v", txnRoot, eval.block.TxnRoot)
+		}
+
+		if eval.block.TxnCounter != eval.txnCounter {
+			return fmt.Errorf("txn count wrong: %d != %d", eval.block.TxnCounter, eval.txnCounter)
 		}
 	}
 

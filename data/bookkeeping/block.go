@@ -111,6 +111,16 @@ type (
 		// the new block's UpgradeVote.
 		UpgradeState
 		UpgradeVote
+
+		// TxnCounter counts the number of transactions committed in the
+		// ledger, from the time at which support for this feature was
+		// introduced.
+		//
+		// Specifically, TxnCounter is the number of the next transaction
+		// that will be committed after this block.  It is 0 when no
+		// transactions have ever been committed (since TxnCounter
+		// started being supported).
+		TxnCounter uint64 `codec:"tc"`
 	}
 
 	// RewardsState represents the global parameters controlling the rate
@@ -225,8 +235,20 @@ func (s RewardsState) NextRewardsState(nextRound basics.Round, nextProto config.
 	res = s
 
 	if nextRound == s.RewardsRecalculationRound {
+		maxSpentOver := nextProto.MinBalance
+		overflowed := false
+
+		if nextProto.PendingResidueRewards {
+			maxSpentOver, overflowed = basics.OAdd(maxSpentOver, s.RewardsResidue)
+			if overflowed {
+				logging.Base().Errorf("overflowed when trying to accumulate MinBalance(%d) and RewardsResidue(%d) for round %d (state %+v)", nextProto.MinBalance, s.RewardsResidue, nextRound, s)
+				// this should never happen, but if it does, adjust the maxSpentOver so that we will have no rewards.
+				maxSpentOver = incentivePoolBalance.Raw
+			}
+		}
+
 		// it is time to refresh the rewards rate
-		newRate, overflowed := basics.OSub(incentivePoolBalance.Raw, nextProto.MinBalance)
+		newRate, overflowed := basics.OSub(incentivePoolBalance.Raw, maxSpentOver)
 		if overflowed {
 			logging.Base().Errorf("overflowed when trying to refresh RewardsRate for round %v (state %+v)", nextRound, s)
 			newRate = 0
