@@ -98,21 +98,21 @@ func testGenerateInitState(t *testing.T, proto protocol.ConsensusVersion) (genes
 	if params.SupportGenesisHash {
 		blk.BlockHeader.GenesisHash = crypto.Hash([]byte(t.Name()))
 	}
-	initBlocks := make([]bookkeeping.Block, 0, 300)
-	initBlocks = append(initBlocks, blk)
-	initBlocks[0].RewardsPool = poolAddr
-	initBlocks[0].FeeSink = sinkAddr
-	initBlocks[0].CurrentProtocol = proto
-	initBlocks[0].RewardsRate = initialRewardsPerRound
 
-	for i := 1; i < 300; i++ {
-		next := bookkeeping.MakeBlock(initBlocks[i-1].BlockHeader)
-		next.RewardsState = initBlocks[i-1].NextRewardsState(basics.Round(i), params, incentivePoolBalanceAtGenesis, 0)
-		next.TimeStamp = initBlocks[i-1].TimeStamp
-		initBlocks = append(initBlocks, next)
+	initBlock := bookkeeping.Block{
+		BlockHeader: bookkeeping.BlockHeader{
+			RewardsState: bookkeeping.RewardsState{
+				RewardsRate: initialRewardsPerRound,
+				RewardsPool: poolAddr,
+				FeeSink:     sinkAddr,
+			},
+			UpgradeState: bookkeeping.UpgradeState{
+				CurrentProtocol: proto,
+			},
+		},
 	}
 
-	genesisInitState.Blocks = initBlocks
+	genesisInitState.Block = initBlock
 	genesisInitState.Accounts = initAccounts
 	genesisInitState.GenesisHash = crypto.Hash([]byte(t.Name()))
 

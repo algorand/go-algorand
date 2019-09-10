@@ -70,7 +70,7 @@ type Ledger struct {
 
 // InitState structure defines blockchain init params
 type InitState struct {
-	Blocks      []bookkeeping.Block
+	Block       bookkeeping.Block
 	Accounts    map[basics.Address]basics.AccountData
 	GenesisHash crypto.Digest
 }
@@ -106,7 +106,7 @@ func OpenLedger(
 	}
 
 	err = l.blockDBs.wdb.Atomic(func(tx *sql.Tx) error {
-		return initBlocksDB(tx, l, genesisInitState.Blocks, isArchival)
+		return initBlocksDB(tx, l, []bookkeeping.Block{genesisInitState.Block}, isArchival)
 	})
 	if err != nil {
 		return nil, err
@@ -123,10 +123,7 @@ func OpenLedger(
 		initAccounts = make(map[basics.Address]basics.AccountData)
 	}
 
-	if len(genesisInitState.Blocks) != 0 {
-		// only needed if not initialized yet
-		l.accts.initProto = config.Consensus[genesisInitState.Blocks[0].CurrentProtocol]
-	}
+	l.accts.initProto = config.Consensus[genesisInitState.Block.CurrentProtocol]
 	l.accts.initAccounts = initAccounts
 
 	l.trackers.register(&l.accts)
