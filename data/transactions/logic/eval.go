@@ -167,7 +167,10 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 		}
 		return false, fmt.Errorf("stack len is %d instead of 1", len(cx.stack))
 	}
-	return cx.stack[0].Bytes == nil && cx.stack[0].Uint != 0, nil
+	if cx.stack[0].Bytes != nil {
+		return false, errors.New("stack finished with bytes not int")
+	}
+	return cx.stack[0].Uint != 0, nil
 }
 
 // Check should be faster than Eval.
