@@ -41,7 +41,7 @@ func (keyreg KeyregTxnFields) apply(header Header, balances Balances, spec Speci
 	}
 
 	// Get the user's balance entry
-	record, err := balances.Get(header.Sender)
+	record, err := balances.Get(header.Sender, false)
 	if err != nil {
 		return err
 	}
