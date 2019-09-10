@@ -190,13 +190,12 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookDir
 	node.cryptoPool = execpool.MakePool(node)
 	node.lowPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.LowPriority, node)
 	node.highPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.HighPriority, node)
-	node.ledger, err = data.LoadLedger(node.log, ledgerPathnamePrefix, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, blockListeners)
+	node.ledger, err = data.LoadLedger(node.log, ledgerPathnamePrefix, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, blockListeners, cfg.Archival)
 	if err != nil {
 		log.Errorf("Cannot initialize ledger (%s): %v", ledgerPathnamePrefix, err)
 		return nil, err
 	}
 
-	node.ledger.SetArchival(cfg.Archival)
 	node.transactionPool = pools.MakeTransactionPool(node.ledger.Ledger, cfg.TxPoolSize, cfg.EnableAssembleStats)
 	node.ledger.RegisterBlockListeners([]ledger.BlockListener{node.transactionPool})
 	node.txHandler = data.MakeTxHandler(node.transactionPool, node.ledger, node.net, node.genesisID, node.genesisHash, node.lowPriorityCryptoVerificationPool)
