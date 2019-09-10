@@ -133,16 +133,16 @@ type OpSpec struct {
 }
 
 // Eval checks to see if a transaction passes logic
-func Eval(program []byte, params EvalParams) bool {
+func Eval(program []byte, params EvalParams) (pass bool, err error) {
 	var cx evalContext
 	version, vlen := binary.Uvarint(program)
 	if version > EvalMaxVersion {
 		cx.err = fmt.Errorf("program version %d greater than max supported version %d", version, EvalMaxVersion)
-		return false
+		return false, cx.err
 	}
 	if (params.Proto != nil) && (version > params.Proto.LogicSigVersion) {
 		cx.err = fmt.Errorf("program version %d greater than protocol supported version %d", version, params.Proto.LogicSigVersion)
-		return false
+		return false, cx.err
 	}
 	cx.version = version
 	cx.pc = vlen
@@ -156,7 +156,7 @@ func Eval(program []byte, params EvalParams) bool {
 		if cx.Trace != nil {
 			fmt.Fprintf(cx.Trace, "%3d %s\n", cx.pc, cx.err)
 		}
-		return false
+		return false, cx.err
 	}
 	if len(cx.stack) != 1 {
 		if cx.Trace != nil {
@@ -165,9 +165,9 @@ func Eval(program []byte, params EvalParams) bool {
 				fmt.Fprintf(cx.Trace, "[%d] %s\n", i, sv.String())
 			}
 		}
-		return false
+		return false, fmt.Errorf("stack len is %d instead of 1", len(cx.stack))
 	}
-	return cx.stack[0].Bytes == nil && cx.stack[0].Uint != 0
+	return cx.stack[0].Bytes == nil && cx.stack[0].Uint != 0, nil
 }
 
 // Check should be faster than Eval.
