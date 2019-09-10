@@ -36,8 +36,8 @@ type TelemetryOperation struct {
 }
 
 type telemetryState struct {
-	history      *logBuffer
-	hook         *asyncTelemetryHook
+	history *logBuffer
+	hook    *asyncTelemetryHook
 }
 
 // TelemetryConfig represents the configuration of Telemetry logging

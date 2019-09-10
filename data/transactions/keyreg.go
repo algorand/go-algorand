@@ -41,9 +41,14 @@ func (keyreg KeyregTxnFields) apply(header Header, balances Balances, spec Speci
 	}
 
 	// Get the user's balance entry
-	record, err := balances.Get(header.Sender)
+	record, err := balances.Get(header.Sender, false)
 	if err != nil {
 		return err
+	}
+
+	// non-participatory accounts cannot be brought online (or offline)
+	if record.Status == basics.NotParticipating {
+		return fmt.Errorf("cannot change online/offline status of non-participating account %v", header.Sender)
 	}
 
 	// Update the registered keys and mark account as online (or, if the voting or selection keys are zero, offline)

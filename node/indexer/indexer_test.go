@@ -47,28 +47,40 @@ func (s *IndexSuite) SetupSuite() {
 	s.idx, err = MakeIndexer(".", &TestLedger{}, true)
 	require.NoError(s.T(), err)
 
-	// Gen some simple txn
-	for i := 2; i < 10; i++ {
-		_, s.txns, s.secrets, s.addrs = generateTestObjects(5000, 100)
+	numOfTransactions := 5000
+	numOfAccounts := 10
+	numOfBlocks := 10
+
+	require.Equal(s.T(), 0, numOfTransactions%numOfBlocks, "Number of transaction must be "+
+		"divisible by the number of blocks")
+
+	_, s.txns, s.secrets, s.addrs = generateTestObjects(numOfTransactions, numOfAccounts)
+
+	// Gen some simple blocks
+	for i := 0; i < numOfBlocks; i++ {
 		var txnEnc []transactions.SignedTxnInBlock
 		b := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
-				Round:     basics.Round(uint64(i)),
+				Round:     basics.Round(uint64(i + 2)),
 				TimeStamp: time.Now().Unix(),
 			},
 		}
-		for _, tx := range s.txns {
-			txib, err := b.EncodeSignedTxn(tx, transactions.ApplyData{})
+
+		chunkSize := numOfTransactions / numOfBlocks
+		for t := i * chunkSize; t < (i+1)*chunkSize; t++ {
+
+			txid, err := b.EncodeSignedTxn(s.txns[t], transactions.ApplyData{})
 			require.NoError(s.T(), err)
-			txnEnc = append(txnEnc, txib)
+			txnEnc = append(txnEnc, txid)
 		}
+
 		b.Payset = txnEnc
 		err = s.idx.NewBlock(b)
 		require.NoError(s.T(), err)
 
 		r, err := s.idx.LastBlock()
 		require.NoError(s.T(), err)
-		require.Equal(s.T(), basics.Round(i), r)
+		require.Equal(s.T(), basics.Round(i+2), r)
 	}
 }
 
@@ -80,26 +92,36 @@ func (s *IndexSuite) TearDownSuite() {
 
 func (s *IndexSuite) TestIndexer_GetRoundByTXID() {
 	txID := s.txns[0].ID().String()
-	goldenRound := uint64(9)
 
-	round, err := s.idx.GetRoundByTXID(txID)
+	_, err := s.idx.GetRoundByTXID(txID)
 
 	require.NoError(s.T(), err)
-	require.Equal(s.T(), goldenRound, round)
 
 }
 
 func (s *IndexSuite) TestIndexer_GetRoundsByAddress() {
 	var count int
-	for _, txn := range s.txns {
-		if txn.Txn.Sender == s.addrs[0] || txn.Txn.Receiver == s.addrs[0] {
-			count++
-		}
-	}
 
 	res, err := s.idx.GetRoundsByAddress(s.addrs[0].GetUserAddress(), uint64(count))
 	require.NoError(s.T(), err)
-	require.Equal(s.T(), count, len(res))
+
+	// Should be equal to the number of blocks.
+	require.Equal(s.T(), 10, len(res))
+}
+
+func (s *IndexSuite) TestIndexer_DuplicateRounds() {
+	// Get Transactions (we're guranteed to have more than one txn per address per block)
+
+	res, err := s.idx.GetRoundsByAddress(s.addrs[0].String(), 100)
+
+	require.NoError(s.T(), err)
+
+	// Check for dups
+	seen := make(map[uint64]bool)
+	for _, b := range res {
+		require.False(s.T(), seen[b])
+		seen[b] = true
+	}
 }
 
 func TestExampleTestSuite(t *testing.T) {

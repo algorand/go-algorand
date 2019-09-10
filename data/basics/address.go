@@ -96,3 +96,8 @@ func (addr *Address) UnmarshalText(text []byte) error {
 	}
 	return err
 }
+
+// IsZero checks if an address is the zero value.
+func (addr Address) IsZero() bool {
+	return addr == Address{}
+}
