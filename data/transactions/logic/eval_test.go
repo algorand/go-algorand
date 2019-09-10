@@ -108,6 +108,10 @@ int 3000
 	block.BlockHeader.Round = 999999
 	ep := EvalParams{Txn: &txn, Trace: &sb, Block: &block}
 	cost, err := Check(program, ep)
+	if err != nil {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
 	pass := Eval(program, ep)
@@ -284,10 +288,14 @@ int 0
 pop
 int 1`)
 	require.NoError(t, err)
-	cost, err := Check(program, EvalParams{})
+	sb := strings.Builder{}
+	cost, err := Check(program, EvalParams{Trace: &sb})
+	if err != nil {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
-	sb := strings.Builder{}
 	pass := Eval(program, EvalParams{Trace: &sb})
 	if pass {
 		t.Log(hex.EncodeToString(program))
@@ -306,6 +314,191 @@ int 1`)
 	require.NoError(t, err)
 	cost, err := Check(program, EvalParams{})
 	require.NoError(t, err)
+	require.True(t, cost < 1000)
+	sb := strings.Builder{}
+	pass := Eval(program, EvalParams{Trace: &sb})
+	if pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.False(t, pass)
+}
+
+func TestModSubMulOk(t *testing.T) {
+	t.Parallel()
+	program, err := AssembleString(`int 35
+int 16
+%
+int 1
+-
+int 2
+*
+int 4
+==`)
+	require.NoError(t, err)
+	cost, err := Check(program, EvalParams{})
+	require.NoError(t, err)
+	require.True(t, cost < 1000)
+	sb := strings.Builder{}
+	pass := Eval(program, EvalParams{Trace: &sb})
+	if !pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.True(t, pass)
+}
+
+func TestBitOps(t *testing.T) {
+	t.Parallel()
+	program, err := AssembleString(`int 0x17
+int 0x3e
+& // == 0x16
+int 0x0a
+^ // == 0x1c
+int 0x0f
+~
+&
+int 0x300
+|
+int 0x310
+==`)
+	require.NoError(t, err)
+	cost, err := Check(program, EvalParams{})
+	require.NoError(t, err)
+	require.True(t, cost < 1000)
+	sb := strings.Builder{}
+	pass := Eval(program, EvalParams{Trace: &sb})
+	if !pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.True(t, pass)
+}
+
+func TestCompares(t *testing.T) {
+	t.Parallel()
+	program, err := AssembleString(`int 35
+int 16
+>
+int 1
+int 2
+>
+!
+!
+!
+&&
+int 1
+int 2
+<
+int 35
+int 1
+<
+!
+&&
+&&
+int 2
+int 2
+<=
+int 16
+int 1
+<=
+!
+&&
+&&
+int 2
+int 2
+>=
+int 1
+int 16
+>=
+!
+&&
+&&
+int 2
+int 1
+!=
+&&
+byte 0xaaaa
+byte 0xbbbb
+==
+!
+&&
+byte 0x1337
+byte 0x1337
+==
+byte 0xabba
+byte 0xabba
+!=
+!
+&&
+byte 0xcafe
+byte 0xf00d
+!=
+&&
+&&`)
+	require.NoError(t, err)
+	cost, err := Check(program, EvalParams{})
+	require.NoError(t, err)
+	require.True(t, cost < 1000)
+	sb := strings.Builder{}
+	pass := Eval(program, EvalParams{Trace: &sb})
+	if !pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.True(t, pass)
+}
+
+func TestKeccak256(t *testing.T) {
+	t.Parallel()
+	/*
+		pip install sha3
+		import sha3
+		blob=b'fnord'
+		sha3.keccak_256(blob).hexdigest()
+	*/
+	program, err := AssembleString(`byte 0x666E6F7264
+keccak256
+byte 0xc195eca25a6f4c82bfba0287082ddb0d602ae9230f9cf1f1a40b68f8e2c41567
+==`)
+	require.NoError(t, err)
+	cost, err := Check(program, EvalParams{})
+	require.NoError(t, err)
+	require.True(t, cost < 1000)
+	sb := strings.Builder{}
+	pass := Eval(program, EvalParams{Trace: &sb})
+	if !pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.True(t, pass)
+}
+
+func TestWrongStackTypeRuntime(t *testing.T) {
+	t.Parallel()
+	program, err := AssembleString(`int 1`)
+	require.NoError(t, err)
+	program = append(program, 0x01, 0x15) // sha256, len
+	cost, err := Check(program, EvalParams{})
+	//require.Error(t, err) // Check should know the type stack was wrong
+	require.True(t, cost < 1000)
+	sb := strings.Builder{}
+	pass := Eval(program, EvalParams{Trace: &sb})
+	if pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.False(t, pass)
+}
+
+func TestWrongStackTypeRuntime2(t *testing.T) {
+	t.Parallel()
+	program, err := AssembleString(`byte 0x1234
+int 1`)
+	require.NoError(t, err)
+	program = append(program, 0x08) // +
+	cost, err := Check(program, EvalParams{})
+	//require.Error(t, err) // Check should know the type stack was wrong
 	require.True(t, cost < 1000)
 	sb := strings.Builder{}
 	pass := Eval(program, EvalParams{Trace: &sb})

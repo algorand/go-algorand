@@ -62,7 +62,7 @@ func (sv *stackValue) String() string {
 	if sv.Bytes != nil {
 		return hex.EncodeToString(sv.Bytes)
 	}
-	return fmt.Sprintf("%d 0x%d", sv.Uint, sv.Uint)
+	return fmt.Sprintf("%d 0x%x", sv.Uint, sv.Uint)
 }
 
 // EvalParams contains data that comes into condition evaluation.
@@ -88,6 +88,8 @@ type evalContext struct {
 	intc    []uint64
 	bytec   [][]byte
 	version uint64
+
+	checkStack []StackType
 }
 
 type opFunc func(cx *evalContext)
@@ -183,21 +185,28 @@ func Check(program []byte, params EvalParams) (cost int, err error) {
 	}
 	cx.version = version
 	cx.pc = vlen
-	cx.stack = make([]stackValue, 0, 10)
+	cx.EvalParams = params
+	cx.checkStack = make([]StackType, 0, 10)
 	cx.program = program
 	for (cx.err == nil) && (cx.pc < len(cx.program)) {
 		cost += cx.checkStep()
 	}
-	if len(cx.stack) != 1 {
+	if cx.err != nil {
+		err = fmt.Errorf("%3d %s", cx.pc, cx.err)
+		return
+	}
+	if len(cx.checkStack) != 1 {
 		if cx.Trace != nil {
 			fmt.Fprintf(cx.Trace, "end stack:\n")
-			for i, sv := range cx.stack {
+			for i, sv := range cx.checkStack {
 				fmt.Fprintf(cx.Trace, "[%d] %s\n", i, sv.String())
 			}
 		}
+		err = fmt.Errorf("end stack size %d != 1", len(cx.checkStack))
 		return
 	}
-	if cx.stack[0].Bytes != nil {
+	lastElemType := cx.checkStack[len(cx.checkStack)-1]
+	if lastElemType != StackUint64 && lastElemType != StackAny {
 		err = errors.New("program would end with bytes on stack")
 		return
 	}
@@ -319,18 +328,18 @@ func opCompat(expected, got StackType) bool {
 // MaxStackDepth should move to consensus params
 const MaxStackDepth = 1000
 
-func (cx *evalContext) preStep() bool {
+func (cx *evalContext) step() {
 	opcode := cx.program[cx.pc]
 	if opsByOpcode[opcode].op == nil {
 		cx.err = fmt.Errorf("%3d illegal opcode %02x", cx.pc, opcode)
-		return false
+		return
 	}
 	argsTypes := opsByOpcode[opcode].Args
 	if len(argsTypes) >= 0 {
 		// check args for stack underflow and types
 		if len(cx.stack) < len(argsTypes) {
 			cx.err = fmt.Errorf("stack underflow in %s", opsByOpcode[opcode].Name)
-			return false
+			return
 		}
 		first := len(cx.stack) - len(argsTypes)
 		for i, argType := range argsTypes {
@@ -339,14 +348,6 @@ func (cx *evalContext) preStep() bool {
 			}
 		}
 	}
-	return true
-}
-
-func (cx *evalContext) step() {
-	if !cx.preStep() {
-		return
-	}
-	opcode := cx.program[cx.pc]
 	opsByOpcode[opcode].op(cx)
 	if cx.Trace != nil {
 		if len(cx.stack) == 0 {
@@ -371,10 +372,29 @@ func (cx *evalContext) step() {
 }
 
 func (cx *evalContext) checkStep() (cost int) {
-	if !cx.preStep() {
+	opcode := cx.program[cx.pc]
+	if opsByOpcode[opcode].op == nil {
+		cx.err = fmt.Errorf("%3d illegal opcode %02x", cx.pc, opcode)
 		return 0
 	}
-	opcode := cx.program[cx.pc]
+	argsTypes := opsByOpcode[opcode].Args
+	if len(argsTypes) >= 0 {
+		// check args for stack underflow and types
+		if len(cx.checkStack) < len(argsTypes) {
+			cx.err = fmt.Errorf("stack underflow in %s", opsByOpcode[opcode].Name)
+			return 0
+		}
+		first := len(cx.checkStack) - len(argsTypes)
+		for i, argType := range argsTypes {
+			if !typecheck(argType, cx.checkStack[first+i]) {
+				cx.err = fmt.Errorf("%s arg %d wanted %s but got %s", opsByOpcode[opcode].Name, i, argType.String(), cx.checkStack[first+i].String())
+			}
+		}
+	}
+	poplen := len(opsByOpcode[opcode].Args)
+	if poplen > 0 {
+		cx.checkStack = cx.checkStack[:len(cx.checkStack)-poplen]
+	}
 	oz := opSizeByOpcode[opcode]
 	if oz.checkFunc != nil {
 		cost = oz.checkFunc(cx)
@@ -387,6 +407,19 @@ func (cx *evalContext) checkStep() (cost int) {
 	} else {
 		cost = oz.cost
 		cx.pc += oz.size
+	}
+	if cx.err != nil {
+		return 0
+	}
+	if opsByOpcode[opcode].Returns != StackNone {
+		cx.checkStack = append(cx.checkStack, opsByOpcode[opcode].Returns)
+	}
+	if cx.Trace != nil {
+		if len(cx.checkStack) == 0 {
+			fmt.Fprintf(cx.Trace, "%3d %s => %s\n", cx.pc, opsByOpcode[opcode].Name, "<empty stack>")
+		} else {
+			fmt.Fprintf(cx.Trace, "%3d %s => %s\n", cx.pc, opsByOpcode[opcode].Name, cx.checkStack[len(cx.checkStack)-1].String())
+		}
 	}
 	return 0
 }
@@ -589,6 +622,7 @@ func opNeq(cx *evalContext) {
 	var cond bool
 	if ta == StackBytes {
 		cond = bytes.Compare(cx.stack[prev].Bytes, cx.stack[last].Bytes) != 0
+		cx.stack[prev].Bytes = nil
 	} else {
 		cond = cx.stack[prev].Uint != cx.stack[last].Uint
 	}
