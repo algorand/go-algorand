@@ -424,7 +424,7 @@ func (cx *evalContext) checkStep() (cost int) {
 			fmt.Fprintf(cx.Trace, "%3d %s => %s\n", cx.pc, opsByOpcode[opcode].Name, cx.checkStack[len(cx.checkStack)-1].String())
 		}
 	}
-	return 0
+	return
 }
 
 func opErr(cx *evalContext) {
