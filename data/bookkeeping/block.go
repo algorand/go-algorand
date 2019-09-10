@@ -111,6 +111,16 @@ type (
 		// the new block's UpgradeVote.
 		UpgradeState
 		UpgradeVote
+
+		// TxnCounter counts the number of transactions committed in the
+		// ledger, from the time at which support for this feature was
+		// introduced.
+		//
+		// Specifically, TxnCounter is the number of the next transaction
+		// that will be committed after this block.  It is 0 when no
+		// transactions have ever been committed (since TxnCounter
+		// started being supported).
+		TxnCounter uint64 `codec:"tc"`
 	}
 
 	// RewardsState represents the global parameters controlling the rate
