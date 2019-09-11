@@ -677,9 +677,11 @@ func GetPendingTransactionsByAddress(ctx lib.ReqContext, w http.ResponseWriter, 
 	//       401: { description: Invalid API Token }
 	//       default: { description: Unknown Error }
 
-	max, err := strconv.ParseUint(r.FormValue("max"), 10, 64)
-	if err != nil {
-		max = 0
+	queryMax := r.FormValue("max")
+	max, err := strconv.ParseUint(queryMax, 10, 64)
+	if queryMax != "" && err != nil {
+		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errFailedToParseMaxValue), errFailedToParseMaxValue, ctx.Log)
+		return
 	}
 
 	queryAddr := mux.Vars(r)["addr"]
@@ -701,8 +703,13 @@ func GetPendingTransactionsByAddress(ctx lib.ReqContext, w http.ResponseWriter, 
 	}
 
 	responseTxs := make([]v1.Transaction, 0)
-	for _, twr := range txs {
+	for i, twr := range txs {
 		if twr.Txn.Sender == addr || twr.Txn.Receiver == addr {
+			// truncate in case max was passed
+			if max > 0 && uint64(i) > max {
+				break
+			}
+
 			tx, err := txEncode(twr.Txn, transactions.ApplyData{})
 			responseTxs = append(responseTxs, tx)
 			if err != nil {
@@ -714,20 +721,12 @@ func GetPendingTransactionsByAddress(ctx lib.ReqContext, w http.ResponseWriter, 
 		}
 	}
 
-	totalTxns := uint64(len(responseTxs))
-	if max > 0 && totalTxns > max {
-		// we expose this truncating mechanism for the client only, for the flexibility
-		// to avoid dumping the whole pool over REST or in a cli. There is no need to optimize
-		// fetching a smaller transaction set at a lower level.
-		responseTxs = responseTxs[:max]
-	}
-
 	response := PendingTransactionsResponse{
 		Body: &v1.PendingTransactions{
 			TruncatedTxns: v1.TransactionList{
 				Transactions: responseTxs,
 			},
-			TotalTxns: totalTxns,
+			TotalTxns: uint64(len(responseTxs)),
 		},
 	}
 
