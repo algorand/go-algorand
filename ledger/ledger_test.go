@@ -90,17 +90,11 @@ func testGenerateInitState(t *testing.T, proto protocol.ConsensusVersion) (genes
 	incentivePoolBalanceAtGenesis := initAccounts[poolAddr].MicroAlgos
 	initialRewardsPerRound := incentivePoolBalanceAtGenesis.Raw / uint64(params.RewardsRateRefreshInterval)
 	var emptyPayset transactions.Payset
-	blk := bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{
-		GenesisID: t.Name(),
-		Round:     0,
-		TxnRoot:   emptyPayset.Commit(params.PaysetCommitFlat),
-	}}
-	if params.SupportGenesisHash {
-		blk.BlockHeader.GenesisHash = crypto.Hash([]byte(t.Name()))
-	}
 
 	initBlock := bookkeeping.Block{
 		BlockHeader: bookkeeping.BlockHeader{
+			GenesisID: t.Name(),
+			Round:     0,
 			RewardsState: bookkeeping.RewardsState{
 				RewardsRate: initialRewardsPerRound,
 				RewardsPool: poolAddr,
@@ -109,8 +103,11 @@ func testGenerateInitState(t *testing.T, proto protocol.ConsensusVersion) (genes
 			UpgradeState: bookkeeping.UpgradeState{
 				CurrentProtocol: proto,
 			},
-			GenesisHash: blk.BlockHeader.GenesisHash,
+			TxnRoot: emptyPayset.Commit(params.PaysetCommitFlat),
 		},
+	}
+	if params.SupportGenesisHash {
+		initBlock.BlockHeader.GenesisHash = crypto.Hash([]byte(t.Name()))
 	}
 
 	genesisInitState.Block = initBlock
@@ -364,8 +361,8 @@ func TestLedgerSingleTx(t *testing.T) {
 	correctTxHeader := transactions.Header{
 		Sender:     addrList[0],
 		Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
-		FirstValid: 10,
-		LastValid:  l.Latest() * 2,
+		FirstValid: l.Latest() + 1,
+		LastValid:  l.Latest() + 10,
 		GenesisID:  t.Name(),
 	}
 
@@ -549,8 +546,8 @@ func TestLedgerSingleTxApplyData(t *testing.T) {
 	correctTxHeader := transactions.Header{
 		Sender:      addrList[0],
 		Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
-		FirstValid:  10,
-		LastValid:   l.Latest() * 2,
+		FirstValid:  l.Latest() + 1,
+		LastValid:   l.Latest() + 10,
 		GenesisID:   t.Name(),
 		GenesisHash: crypto.Hash([]byte(t.Name())),
 	}
