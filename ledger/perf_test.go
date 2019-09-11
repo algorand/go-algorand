@@ -89,6 +89,7 @@ func BenchmarkManyAccounts(b *testing.B) {
 	const archival = true
 	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, archival)
 	require.NoError(b, err)
+	defer l.Close()
 
 	blk := genesisInitState.Block
 	for i := 0; i < b.N; i++ {
@@ -140,6 +141,7 @@ func BenchmarkValidate(b *testing.B) {
 	const archival = true
 	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, archival)
 	require.NoError(b, err)
+	defer l.Close()
 
 	blk := genesisInitState.Block
 	for i := 0; i < b.N; i++ {

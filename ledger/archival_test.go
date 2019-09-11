@@ -108,6 +108,7 @@ func TestArchival(t *testing.T) {
 	const archival = true
 	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, archival)
 	require.NoError(t, err)
+	defer l.Close()
 	wl := &wrappedLedger{
 		l: l,
 	}
@@ -190,6 +191,7 @@ func TestArchivalRestart(t *testing.T) {
 
 	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
 	require.NoError(t, err)
+	defer l.Close()
 
 	err = l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
 		latest, err = blockLatest(tx)
@@ -248,6 +250,7 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	archival = true
 	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
 	require.NoError(t, err)
+	defer l.Close()
 
 	err = l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
 		latest, err = blockLatest(tx)

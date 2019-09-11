@@ -53,6 +53,7 @@ func TestBlockEvaluator(t *testing.T) {
 	const archival = true
 	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, archival)
 	require.NoError(t, err)
+	defer l.Close()
 
 	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
 	eval, err := l.StartEvaluator(newBlock.BlockHeader, nil, backlogPool)
