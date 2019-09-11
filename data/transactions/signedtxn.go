@@ -173,10 +173,10 @@ func (s SignedTxn) Verify(spec SpecialAddresses, proto config.ConsensusParams) e
 		return errors.New("empty address")
 	}
 
-	return s.verifyCore()
+	return s.verifyCore(&proto)
 }
 
-func (s SignedTxn) verifyCore() error {
+func (s SignedTxn) verifyCore(proto *config.ConsensusParams) error {
 	numSigs := 0
 	hasSig := false
 	hasMsig := false
@@ -213,7 +213,7 @@ func (s SignedTxn) verifyCore() error {
 		return errors.New("multisig validation failed")
 	}
 	if hasLogicSig {
-		return s.Lsig.Verify(&s.Txn)
+		return s.Lsig.Verify(proto, &s.Txn)
 	}
 	return errors.New("has one mystery sig. WAT?")
 }
@@ -239,20 +239,26 @@ func (s SignedTxn) PoolVerify(spec SpecialAddresses, proto config.ConsensusParam
 	}
 
 	outCh := make(chan error, 1)
-	verificationPool.EnqueueBacklog(context.Background(), s.asyncVerify, outCh, nil)
+	cx := asyncVerifyContext{outCh, &proto}
+	verificationPool.EnqueueBacklog(context.Background(), s.asyncVerify, &cx, nil)
 	if err, hasErr := <-outCh; hasErr {
 		return err
 	}
 	return nil
 }
 
+type asyncVerifyContext struct {
+	outCh chan error
+	proto *config.ConsensusParams
+}
+
 func (s SignedTxn) asyncVerify(arg interface{}) interface{} {
-	outCh := arg.(chan error)
-	err := s.verifyCore()
+	cx := arg.(*asyncVerifyContext)
+	err := s.verifyCore(cx.proto)
 	if err != nil {
-		outCh <- err
+		cx.outCh <- err
 	} else {
-		close(outCh)
+		close(cx.outCh)
 	}
 	return nil
 }

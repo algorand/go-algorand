@@ -17,8 +17,10 @@
 package transactions
 
 import (
+	"encoding/binary"
 	"errors"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 )
 
@@ -44,12 +46,29 @@ func (lsig *LogicSig) Blank() bool {
 	return len(lsig.Logic) == 0
 }
 
-// LogicSigMaxProgramLength should move to consensus params
-const LogicSigMaxProgramLength = 1000
+// Len returns the length of Logic plus the length of the Args
+// This is limited by config.ConsensusParams.LogicSigMaxSize
+func (lsig *LogicSig) Len() int {
+	lsiglen := len(lsig.Logic)
+	for _, arg := range lsig.Args {
+		lsiglen += len(arg)
+	}
+	return lsiglen
+}
 
 // Verify checks that the signature is valid. It does not evaluate the logic.
-func (lsig *LogicSig) Verify(txn *Transaction) error {
-	if len(lsig.Logic) > LogicSigMaxProgramLength {
+func (lsig *LogicSig) Verify(proto *config.ConsensusParams, txn *Transaction) error {
+	if len(lsig.Logic) == 0 {
+		return errors.New("LogicSig.Logic empty")
+	}
+	version, vlen := binary.Uvarint(lsig.Logic)
+	if vlen < 0 {
+		return errors.New("LogicSig.Logic bad version")
+	}
+	if version > proto.LogicSigVersion {
+		return errors.New("LogicSig.Logic version too new")
+	}
+	if uint64(lsig.Len()) > proto.LogicSigMaxSize {
 		return errors.New("LogicSig.Logic too long")
 	}
 	hasSig := false

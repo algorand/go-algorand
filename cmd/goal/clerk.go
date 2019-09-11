@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"os"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -529,7 +530,8 @@ var signCmd = &cobra.Command{
 
 			var signedTxn transactions.SignedTxn
 			if lsig.Logic != nil {
-				err = lsig.Verify(&unsignedTxn.Txn)
+				proto := config.Consensus[protocol.ConsensusCurrentVersion]
+				err = lsig.Verify(&proto, &unsignedTxn.Txn)
 				if err != nil {
 					reportErrorf("%s: txn[%d] error %s", txFilename, count, err)
 				}
