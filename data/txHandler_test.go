@@ -18,12 +18,12 @@ package data
 
 import (
 	"fmt"
-	"github.com/algorand/go-algorand/components/mocks"
 	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/components/mocks"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -63,7 +63,9 @@ func BenchmarkTxHandlerProcessDecoded(b *testing.B) {
 	require.Equal(b, len(genesis), numUsers+1)
 	genBal := MakeGenesisBalances(genesis, sinkAddr, poolAddr)
 	ledgerName := fmt.Sprintf("%s-mem-%d", b.Name(), b.N)
-	ledger, err := LoadLedger(log, ledgerName, true, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil)
+	const inMem = true
+	const archival = true
+	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, archival)
 	require.NoError(b, err)
 
 	l := ledger

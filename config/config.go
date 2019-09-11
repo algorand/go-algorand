@@ -383,10 +383,19 @@ func initConsensusProtocols() {
 	// v16 can be upgraded to v17.
 	v16.ApprovedUpgrades[protocol.ConsensusV17] = true
 
+	// ConsensusV18 points to reward calculation spec commit
+	v18 := v17
+	v18.PendingResidueRewards = true
+	v18.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	Consensus[protocol.ConsensusV18] = v18
+
+	// v17 can be upgraded to v18.
+	// for now, I will leave this gated out.
+	// v17.ApprovedUpgrades[protocol.ConsensusV18] = true
+
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v17
-	vFuture.PendingResidueRewards = true
+	vFuture := v18
 	vFuture.TxnCounter = true
 	vFuture.Asset = true
 	vFuture.MaxAssetsPerAccount = 1000

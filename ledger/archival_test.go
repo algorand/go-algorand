@@ -17,7 +17,11 @@
 package ledger
 
 import (
+	"database/sql"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -73,15 +77,7 @@ func (wl *wrappedLedger) trackerLog() logging.Logger {
 	return wl.l.trackerLog()
 }
 
-func TestArchival(t *testing.T) {
-	// This test ensures that trackers return the correct value from
-	// committedUpTo() -- that is, if they return round rnd, then they
-	// do not ask for any round before rnd on a subsequent call to
-	// loadFromDisk().
-	//
-	// We generate mostly empty blocks, with the exception of timestamps,
-	// which affect participationTracker.committedUpTo()'s return value.
-
+func getInitState() (genesisInitState InitState) {
 	blk := bookkeeping.Block{}
 	blk.CurrentProtocol = protocol.ConsensusCurrentVersion
 	blk.RewardsPool = testPoolAddr
@@ -91,14 +87,33 @@ func TestArchival(t *testing.T) {
 	accts[testPoolAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 1234567890})
 	accts[testSinkAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 1234567890})
 
+	genesisInitState.Accounts = accts
+	genesisInitState.Blocks = []bookkeeping.Block{blk}
+	genesisInitState.GenesisHash = crypto.Digest{}
+	return genesisInitState
+}
+
+func TestArchival(t *testing.T) {
+	// This test ensures that trackers return the correct value from
+	// committedUpTo() -- that is, if they return round rnd, then they
+	// do not ask for any round before rnd on a subsequent call to
+	// loadFromDisk().
+	//
+	// We generate mostly empty blocks, with the exception of timestamps,
+	// which affect participationTracker.committedUpTo()'s return value.
+
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	l, err := OpenLedger(logging.Base(), dbName, true, []bookkeeping.Block{blk}, accts, crypto.Digest{})
+	genesisInitState := getInitState()
+	const inMem = true
+	const archival = true
+	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, archival)
 	require.NoError(t, err)
 	wl := &wrappedLedger{
 		l: l,
 	}
 
 	nonZeroMinSaves := 0
+	blk := genesisInitState.Blocks[0]
 
 	for i := 0; i < 2000; i++ {
 		blk.BlockHeader.Round++
@@ -130,6 +145,121 @@ func TestArchival(t *testing.T) {
 	}
 
 	t.Error("Did not observe every tracker GCing the ledger")
+}
+
+func TestArchivalRestart(t *testing.T) {
+	// Start in archival mode, add 2K blocks, restart, ensure all blocks are there
+
+	dbTempDir, err := ioutil.TempDir("", "testdir"+t.Name())
+	require.NoError(t, err)
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	dbPrefix := filepath.Join(dbTempDir, dbName)
+	defer os.RemoveAll(dbTempDir)
+
+	genesisInitState := getInitState()
+	const inMem = false // use persistent storage
+	const archival = true
+
+	l, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
+	require.NoError(t, err)
+	blk := genesisInitState.Blocks[0]
+
+	const maxBlocks = 2000
+	for i := 0; i < maxBlocks; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+		l.AddBlock(blk, agreement.Certificate{})
+	}
+	l.WaitForCommit(blk.Round())
+
+	var latest, earliest basics.Round
+	err = l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
+		latest, err = blockLatest(tx)
+		require.NoError(t, err)
+
+		earliest, err = blockEarliest(tx)
+		require.NoError(t, err)
+		return err
+	})
+	require.NoError(t, err)
+	require.Equal(t, basics.Round(maxBlocks), latest)
+	require.Equal(t, basics.Round(0), earliest)
+
+	// close and reopen the same DB, ensure latest/earliest are not changed
+	l.Close()
+
+	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
+	require.NoError(t, err)
+
+	err = l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
+		latest, err = blockLatest(tx)
+		require.NoError(t, err)
+
+		earliest, err = blockEarliest(tx)
+		require.NoError(t, err)
+		return err
+	})
+	require.NoError(t, err)
+	require.Equal(t, basics.Round(maxBlocks), latest)
+	require.Equal(t, basics.Round(0), earliest)
+}
+
+func TestArchivalFromNonArchival(t *testing.T) {
+	// Start in non-archival mode, add 2K blocks, restart in archival mode ensure only genesis block is there
+
+	dbTempDir, err := ioutil.TempDir(os.TempDir(), "testdir")
+	require.NoError(t, err)
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	dbPrefix := filepath.Join(dbTempDir, dbName)
+	defer os.RemoveAll(dbTempDir)
+
+	genesisInitState := getInitState()
+	const inMem = false // use persistent storage
+	archival := false
+
+	l, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
+	require.NoError(t, err)
+	blk := genesisInitState.Blocks[0]
+
+	const maxBlocks = 2000
+	for i := 0; i < maxBlocks; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+		l.AddBlock(blk, agreement.Certificate{})
+	}
+	l.WaitForCommit(blk.Round())
+
+	var latest, earliest basics.Round
+	err = l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
+		latest, err = blockLatest(tx)
+		require.NoError(t, err)
+
+		earliest, err = blockEarliest(tx)
+		require.NoError(t, err)
+		return err
+	})
+	require.NoError(t, err)
+	require.Equal(t, basics.Round(maxBlocks), latest)
+	require.True(t, basics.Round(0) < earliest, fmt.Sprintf("%d < %d", basics.Round(0), earliest))
+
+	// close and reopen the same DB, ensure the DB truncated
+	l.Close()
+
+	archival = true
+	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
+	require.NoError(t, err)
+
+	err = l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
+		latest, err = blockLatest(tx)
+		require.NoError(t, err)
+
+		earliest, err = blockEarliest(tx)
+		require.NoError(t, err)
+		return err
+	})
+	require.NoError(t, err)
+	require.Equal(t, basics.Round(0), earliest)
+	require.Equal(t, basics.Round(0), latest)
 }
 
 func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Round, error) {
