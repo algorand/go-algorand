@@ -33,7 +33,9 @@ var roundDeadline = 0 * time.Second
 
 // FabricateLedger is a test-only helper to create a new in-memory Ledger and run the protocol through the specified Round with the given accounts
 func FabricateLedger(log logging.Logger, ledgerName string, accounts []account.Participation, genesis data.GenesisBalances, lastRound basics.Round) (*data.Ledger, error) {
-	ledger, err := data.LoadLedger(log, ledgerName, true, protocol.ConsensusCurrentVersion, genesis, "", crypto.Digest{}, nil)
+	const inMem = true
+	const archival = true
+	ledger, err := data.LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genesis, "", crypto.Digest{}, nil, archival)
 	if err != nil {
 		return nil, err
 	}

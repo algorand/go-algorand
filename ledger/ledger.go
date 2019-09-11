@@ -49,7 +49,6 @@ type Ledger struct {
 
 	// archival determines whether the ledger keeps all blocks forever
 	// (archival mode) or trims older blocks to save space (non-archival).
-	// The default is archival mode; it can be changed by SetArchival().
 	archival bool
 
 	// genesisHash stores the genesis hash for this ledger.
@@ -69,16 +68,25 @@ type Ledger struct {
 	headerCache heapLRUCache
 }
 
+// InitState structure defines blockchain init params
+type InitState struct {
+	Blocks      []bookkeeping.Block
+	Accounts    map[basics.Address]basics.AccountData
+	GenesisHash crypto.Digest
+}
+
 // OpenLedger creates a Ledger object, using SQLite database filenames
-// based on dbPathPrefix (in-memory if dbMem is true).  initBlocks and
-// initAccounts specify the initial blocks and accounts to use if the
+// based on dbPathPrefix (in-memory if dbMem is true). genesisInitState.Blocks and
+// genesisInitState.Accounts specify the initial blocks and accounts to use if the
 // database wasn't initialized before.
-func OpenLedger(log logging.Logger, dbPathPrefix string, dbMem bool, initBlocks []bookkeeping.Block, initAccounts map[basics.Address]basics.AccountData, genesisHash crypto.Digest) (*Ledger, error) {
+func OpenLedger(
+	log logging.Logger, dbPathPrefix string, dbMem bool, genesisInitState InitState, isArchival bool,
+) (*Ledger, error) {
 	var err error
 	l := &Ledger{
 		log:         log,
-		archival:    true,
-		genesisHash: genesisHash,
+		archival:    isArchival,
+		genesisHash: genesisInitState.GenesisHash,
 	}
 
 	l.headerCache.maxEntries = 10
@@ -86,47 +94,16 @@ func OpenLedger(log logging.Logger, dbPathPrefix string, dbMem bool, initBlocks 
 	defer func() {
 		if err != nil {
 			l.Close()
-			if l.blockQ != nil {
-				l.blockQ.close()
-			}
 		}
 	}()
 
-	// Backwards compatibility: we used to store both blocks and tracker
-	// state in a single SQLite db file.
-	var trackerDBFilename string
-	var blockDBFilename string
-
-	commonDBFilename := dbPathPrefix + ".sqlite"
-	if !dbMem {
-		_, err = os.Stat(commonDBFilename)
-	}
-
-	if !dbMem && os.IsNotExist(err) {
-		// No common file, so use two separate files for blocks and tracker.
-		trackerDBFilename = dbPathPrefix + ".tracker.sqlite"
-		blockDBFilename = dbPathPrefix + ".block.sqlite"
-	} else if err == nil {
-		// Legacy common file exists (or testing in-memory, where performance
-		// doesn't matter), use same database for everything.
-		trackerDBFilename = commonDBFilename
-		blockDBFilename = commonDBFilename
-	} else {
-		return nil, err
-	}
-
-	l.trackerDBs, err = dbOpen(trackerDBFilename, dbMem)
-	if err != nil {
-		return nil, err
-	}
-
-	l.blockDBs, err = dbOpen(blockDBFilename, dbMem)
+	l.trackerDBs, l.blockDBs, err = openLedgerDB(dbPathPrefix, dbMem)
 	if err != nil {
 		return nil, err
 	}
 
 	err = l.blockDBs.wdb.Atomic(func(tx *sql.Tx) error {
-		return blockInit(tx, initBlocks)
+		return initBlocksDB(tx, l, genesisInitState.Blocks, isArchival)
 	})
 	if err != nil {
 		return nil, err
@@ -138,13 +115,14 @@ func OpenLedger(log logging.Logger, dbPathPrefix string, dbMem bool, initBlocks 
 	}
 
 	// Accounts are special because they get an initialization argument (initAccounts).
+	initAccounts := genesisInitState.Accounts
 	if initAccounts == nil {
 		initAccounts = make(map[basics.Address]basics.AccountData)
 	}
 
-	if len(initBlocks) != 0 {
+	if len(genesisInitState.Blocks) != 0 {
 		// only needed if not initialized yet
-		l.accts.initProto = config.Consensus[initBlocks[0].CurrentProtocol]
+		l.accts.initProto = config.Consensus[genesisInitState.Blocks[0].CurrentProtocol]
 	}
 	l.accts.initAccounts = initAccounts
 
@@ -173,8 +151,11 @@ func OpenLedger(log logging.Logger, dbPathPrefix string, dbMem bool, initBlocks 
 		}
 
 		params := config.Consensus[hdr.CurrentProtocol]
-		if params.SupportGenesisHash && hdr.GenesisHash != genesisHash {
-			return fmt.Errorf("latest block %d genesis hash %v does not match expected genesis hash %v", latest, hdr.GenesisHash, genesisHash)
+		if params.SupportGenesisHash && hdr.GenesisHash != genesisInitState.GenesisHash {
+			return fmt.Errorf(
+				"latest block %d genesis hash %v does not match expected genesis hash %v",
+				latest, hdr.GenesisHash, genesisInitState.GenesisHash,
+			)
 		}
 
 		return nil
@@ -186,17 +167,86 @@ func OpenLedger(log logging.Logger, dbPathPrefix string, dbMem bool, initBlocks 
 	return l, nil
 }
 
+func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs dbPair, blockDBs dbPair, err error) {
+	// Backwards compatibility: we used to store both blocks and tracker
+	// state in a single SQLite db file.
+	var trackerDBFilename string
+	var blockDBFilename string
+
+	commonDBFilename := dbPathPrefix + ".sqlite"
+	if !dbMem {
+		_, err = os.Stat(commonDBFilename)
+	}
+
+	if !dbMem && os.IsNotExist(err) {
+		// No common file, so use two separate files for blocks and tracker.
+		trackerDBFilename = dbPathPrefix + ".tracker.sqlite"
+		blockDBFilename = dbPathPrefix + ".block.sqlite"
+	} else if err == nil {
+		// Legacy common file exists (or testing in-memory, where performance
+		// doesn't matter), use same database for everything.
+		trackerDBFilename = commonDBFilename
+		blockDBFilename = commonDBFilename
+	} else {
+		return
+	}
+
+	trackerDBs, err = dbOpen(trackerDBFilename, dbMem)
+	if err != nil {
+		return
+	}
+
+	blockDBs, err = dbOpen(blockDBFilename, dbMem)
+	if err != nil {
+		return
+	}
+	return
+}
+
+// initLedgerDB performs DB initialization:
+// - creates and populates it with genesis blocks
+// - ensures DB is in good shape for archival mode and resets it if not
+// - does nothing if everything looks good
+func initBlocksDB(tx *sql.Tx, l *Ledger, initBlocks []bookkeeping.Block, isArchival bool) (err error) {
+	err = blockInit(tx, initBlocks)
+	if err != nil {
+		return err
+	}
+
+	// in archival mode check if DB contains all blocks up to the latest
+	if isArchival {
+		earliest, err := blockEarliest(tx)
+		if err != nil {
+			return err
+		}
+
+		// Detect possible problem - archival node needs all block but have only subsequence of them
+		// So reset the DB and init it again
+		if earliest != basics.Round(0) {
+			l.log.Warnf("resetting blocks DB (earliest block is %v)", earliest)
+			err := blockResetDB(tx)
+			if err != nil {
+				return err
+			}
+			err = blockInit(tx, initBlocks)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // Close reclaims resources used by the ledger (namely, the database connection
 // and goroutines used by trackers).
 func (l *Ledger) Close() {
 	l.trackerDBs.close()
 	l.blockDBs.close()
 	l.trackers.close()
-}
-
-// SetArchival sets whether the ledger should operate in archival mode or not.
-func (l *Ledger) SetArchival(a bool) {
-	l.archival = a
+	if l.blockQ != nil {
+		l.blockQ.close()
+		l.blockQ = nil
+	}
 }
 
 // RegisterBlockListeners registers listeners that will be called when a
@@ -308,7 +358,7 @@ func (l *Ledger) BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err er
 	return
 }
 
-// EncodedBlockCert returns the encoded block and the corresponding encodded certificate of the block for round rnd.
+// EncodedBlockCert returns the encoded block and the corresponding encoded certificate of the block for round rnd.
 func (l *Ledger) EncodedBlockCert(rnd basics.Round) (blk []byte, cert []byte, err error) {
 	return l.blockQ.getEncodedBlockCert(rnd)
 }

@@ -94,8 +94,16 @@ const ConsensusV17 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/5615adc36bad610c7f165fa2967f4ecfa75125f0",
 )
 
-// ConsensusVNext stand-in for protocol with LogicSig and TEAL v1
-const ConsensusVNext = ConsensusVersion("NEXT!")
+// ConsensusV18 points to reward calculation spec commit
+const ConsensusV18 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/6c6bd668be0ab14098e51b37e806c509f7b7e31f",
+)
+
+// ConsensusFuture is a protocol that should not appear in any production
+// network, but is used to test features before they are released.
+const ConsensusFuture = ConsensusVersion(
+	"future",
+)
 
 // !!! ********************* !!!
 // !!! *** Please update ConsensusCurrentVersion when adding new protocol versions *** !!!

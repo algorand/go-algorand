@@ -69,4 +69,3 @@ func onDataDirs(action func(dataDir string)) {
 		action(dir)
 	}
 }
-

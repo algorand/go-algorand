@@ -196,6 +196,25 @@ func getProgramArgs() [][]byte {
 	return programArgs
 }
 
+func parseNoteField(cmd *cobra.Command) []byte {
+	if cmd.Flags().Changed("noteb64") {
+		noteBytes, err := base64.StdEncoding.DecodeString(noteBase64)
+		if err != nil {
+			reportErrorf(malformedNote, noteBase64, err)
+		}
+		return noteBytes
+	}
+
+	if cmd.Flags().Changed("note") {
+		return []byte(noteText)
+	}
+
+	// Make sure that back-to-back, similar transactions will have a different txid
+	noteBytes := make([]byte, 8)
+	crypto.RandBytes(noteBytes[:])
+	return noteBytes
+}
+
 var sendCmd = &cobra.Command{
 	Use:   "send",
 	Short: "Send money to an address",
@@ -242,19 +261,7 @@ var sendCmd = &cobra.Command{
 		toAddressResolved := accountList.getAddressByName(toAddress)
 
 		// Parse notes field
-		var noteBytes []byte
-		if cmd.Flags().Changed("noteb64") {
-			noteBytes, err = base64.StdEncoding.DecodeString(noteBase64)
-			if err != nil {
-				reportErrorf(malformedNote, noteBase64, err)
-			}
-		} else if cmd.Flags().Changed("note") {
-			noteBytes = []byte(noteText)
-		} else {
-			// Make sure that back-to-back, similar transactions will have a different txid
-			noteBytes = make([]byte, 8)
-			crypto.RandBytes(noteBytes[:])
-		}
+		noteBytes := parseNoteField(cmd)
 
 		// If closing an account, resolve that address as well
 		var closeToAddressResolved string
