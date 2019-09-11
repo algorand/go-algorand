@@ -109,6 +109,7 @@ func testGenerateInitState(t *testing.T, proto protocol.ConsensusVersion) (genes
 			UpgradeState: bookkeeping.UpgradeState{
 				CurrentProtocol: proto,
 			},
+			GenesisHash: blk.BlockHeader.GenesisHash,
 		},
 	}
 

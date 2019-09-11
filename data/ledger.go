@@ -47,7 +47,7 @@ type Ledger struct {
 	log logging.Logger
 }
 
-func makeGenesisBlocks(proto protocol.ConsensusVersion, genesisBal GenesisBalances, genesisID string, genesisHash crypto.Digest) (bookkeeping.Block, error) {
+func makeGenesisBlock(proto protocol.ConsensusVersion, genesisBal GenesisBalances, genesisID string, genesisHash crypto.Digest) (bookkeeping.Block, error) {
 	params, ok := config.Consensus[proto]
 	if !ok {
 		return bookkeeping.Block{}, fmt.Errorf("unsupported protocol %s", proto)
@@ -100,7 +100,7 @@ func LoadLedger(
 	if genesisBal.balances == nil {
 		genesisBal.balances = make(map[basics.Address]basics.AccountData)
 	}
-	genBlock, err := makeGenesisBlocks(genesisProto, genesisBal, genesisID, genesisHash)
+	genBlock, err := makeGenesisBlock(genesisProto, genesisBal, genesisID, genesisHash)
 	if err != nil {
 		return nil, err
 	}
