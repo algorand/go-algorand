@@ -1289,7 +1289,7 @@ func TestEd25519verify(t *testing.T) {
 	var s crypto.Seed
 	crypto.RandBytes(s[:])
 	c := crypto.GenerateSignatureSecrets(s)
-	msg := "52fdfc072182654f163f5f0f9a621d729566c74d"
+	msg := "62fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
 	data, err := hex.DecodeString(msg)
 	require.NoError(t, err)
 	pk := basics.Address(c.SignatureVerifier)
@@ -1299,10 +1299,10 @@ arg 1
 addr %s
 ed25519verify`, pkStr))
 	require.NoError(t, err)
-	sig := c.SignBytes(data)
+	sig := c.SignBytes(data[:])
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = program
-	txn.Lsig.Args = [][]byte{data, sig[:]}
+	txn.Lsig.Args = [][]byte{data[:], sig[:]}
 	sb := strings.Builder{}
 	ep := EvalParams{Txn: &txn, Trace: &sb}
 	pass, err := Eval(program, ep)
@@ -1314,7 +1314,7 @@ ed25519verify`, pkStr))
 	require.NoError(t, err)
 
 	// flip a bit and it should not pass
-	msg1 := "62fdfc072182654f163f5f0f9a621d729566c74d"
+	msg1 := "52fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
 	data1, err := hex.DecodeString(msg1)
 	require.NoError(t, err)
 	txn.Lsig.Args = [][]byte{data1, sig[:]}
@@ -1325,3 +1325,6 @@ ed25519verify`, pkStr))
 	require.NoError(t, err)
 }
 
+func benchEd25519Verify(b *testing.B){
+
+}
