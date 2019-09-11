@@ -480,9 +480,12 @@ func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []by
 		return transactions.Transaction{}, err
 	}
 
-	toAddr, err := basics.UnmarshalChecksumAddress(to)
-	if err != nil {
-		return transactions.Transaction{}, err
+	var toAddr basics.Address
+	if to != "" {
+		toAddr, err = basics.UnmarshalChecksumAddress(to)
+		if err != nil {
+			return transactions.Transaction{}, err
+		}
 	}
 
 	// Get current round, protocol, genesis ID

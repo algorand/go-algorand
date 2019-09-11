@@ -38,6 +38,10 @@ var blockSchema = []string{
 		auxdata blob)`,
 }
 
+var blockResetExprs = []string{
+	`DROP TABLE IF EXISTS blocks`,
+}
+
 func blockInit(tx *sql.Tx, initBlocks []bookkeeping.Block) error {
 	for _, tableCreate := range blockSchema {
 		_, err := tx.Exec(tableCreate)
@@ -64,6 +68,16 @@ func blockInit(tx *sql.Tx, initBlocks []bookkeeping.Block) error {
 		}
 	}
 
+	return nil
+}
+
+func blockResetDB(tx *sql.Tx) error {
+	for _, stmt := range blockResetExprs {
+		_, err := tx.Exec(stmt)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -203,6 +217,20 @@ func blockLatest(tx *sql.Tx) (basics.Round, error) {
 
 	if max.Valid {
 		return basics.Round(max.Int64), nil
+	}
+
+	return 0, fmt.Errorf("no blocks present")
+}
+
+func blockEarliest(tx *sql.Tx) (basics.Round, error) {
+	var min sql.NullInt64
+	err := tx.QueryRow("SELECT MIN(rnd) FROM blocks").Scan(&min)
+	if err != nil {
+		return 0, err
+	}
+
+	if min.Valid {
+		return basics.Round(min.Int64), nil
 	}
 
 	return 0, fmt.Errorf("no blocks present")

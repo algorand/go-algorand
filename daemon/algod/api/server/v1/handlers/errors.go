@@ -25,6 +25,7 @@ var (
 	errFailedParsingRoundNumber            = "failed to parse the round number"
 	errFailedToParseAddress                = "failed to parse the address"
 	errFailedToParseTransaction            = "failed to parse transaction"
+	errFailedToParseMaxValue               = "failed to parase max value"
 	errInternalFailure                     = "internal failure"
 	errIndexerNotRunning                   = "indexer isn't running, this call is disabled"
 	errInvalidTransactionTypeLedger        = "a transaction with invalid type field was found in ledger - type %s, transaction #%s, round %d"
