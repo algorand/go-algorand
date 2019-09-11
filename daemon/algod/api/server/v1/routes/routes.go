@@ -112,6 +112,13 @@ var Routes = lib.Routes{
 		HandlerFunc: handlers.PendingTransactionInformation,
 	},
 
+	lib.Route{
+		Name:        "pending-transaction-information-by-address",
+		Method:      "GET",
+		Path:        "/account/{addr}/transactions/pending",
+		HandlerFunc: handlers.GetPendingTransactionsByAddress,
+	},
+
 	// ----- This can only be active when indexer is live
 
 	lib.Route{
