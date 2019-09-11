@@ -1325,6 +1325,35 @@ ed25519verify`, pkStr))
 	require.NoError(t, err)
 }
 
-func benchEd25519Verify(b *testing.B){
-
+func BenchmarkEd25519Verify(b *testing.B){
+	sb := strings.Builder{}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		var s crypto.Seed
+		crypto.RandBytes(s[:])
+		c := crypto.GenerateSignatureSecrets(s)
+		var data [32]byte
+		crypto.RandBytes(data[:])
+		pk := basics.Address(c.SignatureVerifier)
+		pkStr := pk.String()
+		program, err := AssembleString(fmt.Sprintf(`arg 0
+arg 1
+addr %s
+ed25519verify`, pkStr))
+		require.NoError(b, err)
+		sig := c.SignBytes(data[:])
+		var txn transactions.SignedTxn
+		txn.Lsig.Logic = program
+		txn.Lsig.Args = [][]byte{data[:], sig[:]}
+		ep := EvalParams{Txn: &txn, Trace: &sb}
+		b.StartTimer()
+		pass, err := Eval(program, ep)
+		if !pass {
+			b.Log(hex.EncodeToString(program))
+			b.Log(sb.String())
+		}
+		require.True(b, pass)
+		require.NoError(b, err)
+	}
 }
