@@ -610,23 +610,6 @@ func GetPendingTransactions(ctx lib.ReqContext, w http.ResponseWriter, r *http.R
 		return
 	}
 
-	queryAddr := r.FormValue("addr")
-	txns := make([]transactions.SignedTxn, 0)
-	if queryAddr != "" {
-		addr, err := basics.UnmarshalChecksumAddress(queryAddr)
-		if err != nil {
-			lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errFailedToParseAddress), errFailedToParseAddress, ctx.Log)
-			return
-		}
-
-		for _, tx := range txs {
-			if tx.Txn.Receiver == addr || tx.Txn.Sender == addr {
-				txns = append(txns, tx)
-			}
-		}
-		txs = txns
-	}
-
 	totalTxns := uint64(len(txs))
 	if max > 0 && totalTxns > max {
 		// we expose this truncating mechanism for the client only, for the flexibility
@@ -644,6 +627,99 @@ func GetPendingTransactions(ctx lib.ReqContext, w http.ResponseWriter, r *http.R
 			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpTransactionPool, ctx.Log)
 			return
 		}
+	}
+
+	response := PendingTransactionsResponse{
+		Body: &v1.PendingTransactions{
+			TruncatedTxns: v1.TransactionList{
+				Transactions: responseTxs,
+			},
+			TotalTxns: totalTxns,
+		},
+	}
+
+	SendJSON(response, w, ctx.Log)
+}
+
+// GetPendingTransactionsByAddress is an httpHandler for route GET /v1/account/addr:[A-Z0-9]{KeyLength}}/transactions/pending.
+func GetPendingTransactionsByAddress(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
+	// swagger:operation GET /v1/account/{addr}/transactions/pending GetPendingTransactions
+	// ---
+	//     Summary: Get a list of unconfirmed transactions currently in the transaction pool by address.
+	//     Description: >
+	//       Get the list of pending transactions by address, sorted by priority,
+	//       in decreasing order, truncated at the end at MAX. If MAX = 0,
+	//       returns all pending transactions.
+	//     Produces:
+	//     - application/json
+	//     Schemes:
+	//     - http
+	//     Parameters:
+	//       - name: address
+	//         in: path
+	//         type: string
+	//         pattern: "[A-Z0-9]{58}"
+	//         required: true
+	//         description: An account public key
+	//       - name: max
+	//         in: query
+	//         type: integer
+	//         format: int64
+	//         minimum: 0
+	//         required: false
+	//         description: Truncated number of transactions to display. If max=0, returns all pending txns.
+	//     Responses:
+	//       "200":
+	//         "$ref": '#/responses/PendingTransactionsResponse'
+	//       500:
+	//         description: Internal Error
+	//         schema: {type: string}
+	//       401: { description: Invalid API Token }
+	//       default: { description: Unknown Error }
+
+	max, err := strconv.ParseUint(r.FormValue("max"), 10, 64)
+	if err != nil {
+		max = 0
+	}
+
+	queryAddr := mux.Vars(r)["addr"]
+	if queryAddr == "" {
+		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errNoAccountSpecified), errNoAccountSpecified, ctx.Log)
+		return
+	}
+
+	addr, err := basics.UnmarshalChecksumAddress(queryAddr)
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusBadRequest, err, errFailedToParseAddress, ctx.Log)
+		return
+	}
+
+	txs, err := ctx.Node.GetPendingTxnsFromPool()
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpTransactionPool, ctx.Log)
+		return
+	}
+
+	responseTxs := make([]v1.Transaction, 0)
+	for _, twr := range txs {
+		if twr.Txn.Sender == addr || twr.Txn.Receiver == addr {
+			tx, err := txEncode(twr.Txn, transactions.ApplyData{})
+			responseTxs = append(responseTxs, tx)
+			if err != nil {
+				// update the error as needed
+				err = decorateUnknownTransactionTypeError(err, node.TxnWithStatus{Txn: twr})
+				lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpTransactionPool, ctx.Log)
+				return
+			}
+		}
+	}
+
+	totalTxns := uint64(len(responseTxs))
+	if max > 0 && totalTxns > max {
+		// we expose this truncating mechanism for the client only, for the flexibility
+		// to avoid dumping the whole pool over REST or in a cli. There is no need to optimize
+		// fetching a smaller transaction set at a lower level.
+		responseTxs = responseTxs[:max]
 	}
 
 	response := PendingTransactionsResponse{
