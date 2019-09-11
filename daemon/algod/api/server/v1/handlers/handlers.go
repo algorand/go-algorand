@@ -643,7 +643,7 @@ func GetPendingTransactions(ctx lib.ReqContext, w http.ResponseWriter, r *http.R
 
 // GetPendingTransactionsByAddress is an httpHandler for route GET /v1/account/addr:[A-Z0-9]{KeyLength}}/transactions/pending.
 func GetPendingTransactionsByAddress(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
-	// swagger:operation GET /v1/account/{addr}/transactions/pending GetPendingTransactions
+	// swagger:operation GET /v1/account/{addr}/transactions/pending GetPendingTransactionsByAddress
 	// ---
 	//     Summary: Get a list of unconfirmed transactions currently in the transaction pool by address.
 	//     Description: >
@@ -655,7 +655,7 @@ func GetPendingTransactionsByAddress(ctx lib.ReqContext, w http.ResponseWriter, 
 	//     Schemes:
 	//     - http
 	//     Parameters:
-	//       - name: address
+	//       - name: addr
 	//         in: path
 	//         type: string
 	//         pattern: "[A-Z0-9]{58}"
