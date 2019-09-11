@@ -43,7 +43,6 @@ func genesis(naccts int) (InitState, []basics.Address, []*crypto.SignatureSecret
 	blk.RewardsPool = testPoolAddr
 	crypto.RandBytes(blk.BlockHeader.GenesisHash[:])
 
-	blks := []bookkeeping.Block{blk}
 	addrs := []basics.Address{}
 	keys := []*crypto.SignatureSecrets{}
 	accts := make(map[basics.Address]basics.AccountData)
@@ -72,9 +71,9 @@ func genesis(naccts int) (InitState, []basics.Address, []*crypto.SignatureSecret
 	sinkdata.Status = basics.NotParticipating
 	accts[testSinkAddr] = sinkdata
 
-	genesisHash := blks[0].BlockHeader.GenesisHash
+	genesisHash := blk.BlockHeader.GenesisHash
 
-	return InitState{blks, accts, genesisHash}, addrs, keys
+	return InitState{blk, accts, genesisHash}, addrs, keys
 }
 
 func BenchmarkManyAccounts(b *testing.B) {
@@ -92,8 +91,7 @@ func BenchmarkManyAccounts(b *testing.B) {
 	require.NoError(b, err)
 	defer l.Close()
 
-	blks := genesisInitState.Blocks
-	blk := blks[len(blks)-1]
+	blk := genesisInitState.Block
 	for i := 0; i < b.N; i++ {
 		blk = bookkeeping.MakeBlock(blk.BlockHeader)
 
@@ -145,8 +143,7 @@ func BenchmarkValidate(b *testing.B) {
 	require.NoError(b, err)
 	defer l.Close()
 
-	blks := genesisInitState.Blocks
-	blk := blks[len(blks)-1]
+	blk := genesisInitState.Block
 	for i := 0; i < b.N; i++ {
 		newblk := bookkeeping.MakeBlock(blk.BlockHeader)
 
