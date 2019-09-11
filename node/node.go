@@ -387,8 +387,8 @@ func (node *AlgorandFullNode) Ledger() *data.Ledger {
 	return node.ledger
 }
 
-// BroadcastSignedTxn broadcasts a transaction that has already been signed.
-func (node *AlgorandFullNode) BroadcastSignedTxn(signed transactions.SignedTxn) (transactions.Txid, error) {
+// BroadcastSignedTxGroup broadcasts a transaction group that has already been signed.
+func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error {
 	lastRound := node.ledger.Latest()
 	b, err := node.ledger.BlockHdr(lastRound)
 	if err != nil {
@@ -400,24 +400,32 @@ func (node *AlgorandFullNode) BroadcastSignedTxn(signed transactions.SignedTxn) 
 	}
 	proto := config.Consensus[b.CurrentProtocol]
 
-	err = signed.Verify(spec, proto)
-	if err != nil {
-		node.log.Warnf("malformed transaction: %v - transaction was %+v", err, signed)
-		return transactions.Txid{}, err
+	for _, tx := range txgroup {
+		err = tx.Verify(spec, proto)
+		if err != nil {
+			node.log.Warnf("malformed transaction: %v - transaction was %+v", err, tx)
+			return err
+		}
 	}
-	err = node.transactionPool.Remember(signed)
+	err = node.transactionPool.Remember(txgroup)
 	if err != nil {
-		node.log.Infof("rejected by local pool: %v - transaction was %+v", err, signed)
-		return transactions.Txid{}, err
+		node.log.Infof("rejected by local pool: %v - transaction group was %+v", err, txgroup)
+		return err
 	}
 
-	err = node.net.Broadcast(context.TODO(), protocol.TxnTag, protocol.Encode(signed), true, nil)
-	if err != nil {
-		node.log.Infof("failure broadcasting transaction to network: %v - transaction was %+v", err, signed)
-		return transactions.Txid{}, err
+	var enc []byte
+	var txids []transactions.Txid
+	for _, tx := range txgroup {
+		enc = append(enc, protocol.Encode(tx)...)
+		txids = append(txids, tx.ID())
 	}
-	node.log.Infof("Sent signed tx %s", signed.ID())
-	return signed.ID(), nil
+	err = node.net.Broadcast(context.TODO(), protocol.TxnTag, enc, true, nil)
+	if err != nil {
+		node.log.Infof("failure broadcasting transaction to network: %v - transaction group was %+v", err, txgroup)
+		return err
+	}
+	node.log.Infof("Sent signed tx group with IDs %v", txids)
+	return nil
 }
 
 // ListTxns returns SignedTxns associated with a specific account in a range of Rounds (inclusive).
@@ -599,7 +607,7 @@ func (node *AlgorandFullNode) SuggestedFee() basics.MicroAlgos {
 // GetPendingTxnsFromPool returns a snapshot of every pending transactions from the node's transaction pool in a slice.
 // Transactions are sorted in decreasing order. If no transactions, returns an empty slice.
 func (node *AlgorandFullNode) GetPendingTxnsFromPool() ([]transactions.SignedTxn, error) {
-	return node.transactionPool.Pending(), nil
+	return bookkeeping.SignedTxnGroupsFlatten(node.transactionPool.Pending()), nil
 }
 
 // Reload participation keys from disk periodically

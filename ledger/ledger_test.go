@@ -193,8 +193,9 @@ func TestLedgerBasic(t *testing.T) {
 	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
 	const inMem = true
 	const archival = true
-	_, err := OpenLedger(logging.Base(), t.Name(), inMem, genesisInitState, archival)
+	l, err := OpenLedger(logging.Base(), t.Name(), inMem, genesisInitState, archival)
 	require.NoError(t, err, "could not open ledger")
+	defer l.Close()
 }
 
 func TestLedgerBlockHeaders(t *testing.T) {
@@ -208,6 +209,7 @@ func TestLedgerBlockHeaders(t *testing.T) {
 	const archival = true
 	l, err := OpenLedger(logging.Base(), t.Name(), inMem, genesisInitState, archival)
 	a.NoError(err, "could not open ledger")
+	defer l.Close()
 
 	lastBlock, err := l.Block(l.Latest())
 	a.NoError(err, "could not get last block")
@@ -344,6 +346,7 @@ func TestLedgerSingleTx(t *testing.T) {
 	const archival = true
 	l, err := OpenLedger(logging.Base(), t.Name(), inMem, genesisInitState, archival)
 	a.NoError(err, "could not open ledger")
+	defer l.Close()
 
 	proto := config.Consensus[protocol.ConsensusV7]
 	poolAddr := testPoolAddr
@@ -528,6 +531,7 @@ func TestLedgerSingleTxApplyData(t *testing.T) {
 	const archival = true
 	l, err := OpenLedger(logging.Base(), t.Name(), inMem, genesisInitState, archival)
 	a.NoError(err, "could not open ledger")
+	defer l.Close()
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	poolAddr := testPoolAddr
