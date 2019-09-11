@@ -267,6 +267,19 @@ func (client RestClient) SendRawTransaction(txn transactions.SignedTxn) (respons
 	return
 }
 
+// SendRawTransactionGroup gets a SignedTxn group and broadcasts it to the network
+func (client RestClient) SendRawTransactionGroup(txgroup []transactions.SignedTxn) error {
+	// response is not terribly useful: it's the txid of the first transaction,
+	// which can be computed by the client anyway..
+	var enc []byte
+	for _, tx := range txgroup {
+		enc = append(enc, protocol.Encode(tx)...)
+	}
+
+	var response v1.TransactionID
+	return client.post(&response, "/transactions", enc)
+}
+
 // Block gets the block info for the given round
 func (client RestClient) Block(round uint64) (response v1.Block, err error) {
 	err = client.get(&response, fmt.Sprintf("/block/%d", round), nil)

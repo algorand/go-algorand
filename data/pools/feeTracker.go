@@ -76,13 +76,14 @@ func (ft *FeeTracker) ProcessBlock(block bookkeeping.Block) {
 	}
 
 	// Get the median of the block
-	payset, err := block.DecodePayset()
+	payset, err := block.DecodePaysetFlat()
 	if err != nil {
 		return
 	}
 
 	fees := make([]float64, len(payset))
-	for i, tx := range payset {
+	for i, txad := range payset {
+		tx := txad.SignedTxn
 		fees[i] = ft.processTransaction(tx)
 	}
 

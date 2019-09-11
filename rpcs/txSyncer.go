@@ -32,12 +32,12 @@ import (
 // PendingTxAggregate is a container of pending transactions
 type PendingTxAggregate interface {
 	PendingTxIDs() []transactions.Txid
-	Pending() []transactions.SignedTxn
+	Pending() [][]transactions.SignedTxn
 }
 
 // TxSyncClient abstracts sync-ing pending transactions from a peer.
 type TxSyncClient interface {
-	Sync(ctx context.Context, bloom *bloom.Filter) (txns []transactions.SignedTxn, err error)
+	Sync(ctx context.Context, bloom *bloom.Filter) (txns [][]transactions.SignedTxn, err error)
 	Address() string
 	Close() error
 }
@@ -127,23 +127,35 @@ func (syncer *TxSyncer) syncFromClient(client TxSyncClient) error {
 
 	ctx, cf := context.WithTimeout(syncer.ctx, syncer.syncTimeout)
 	defer cf()
-	txns, err := client.Sync(ctx, filter)
+	txgroups, err := client.Sync(ctx, filter)
 	if err != nil {
 		return fmt.Errorf("TxSyncer.Sync: peer %v error %v", client.Address(), err)
 	}
 
 	// test to see if all the transaction that we've received honor the bloom filter constraints
 	// that we've requested.
-	for _, tx := range txns {
-		tx.InitCaches()
-		txID := tx.ID()
-		if filter.Test(txID[:]) {
-			// we just found a transaction that shouldn't have been included in the response.
-			client.Close()
-			return fmt.Errorf("TxSyncer.Sync: peer %v sent a transaction that was included in the bloom filter", client.Address())
+	for _, txgroup := range txgroups {
+		var txnsInFilter int
+		for i := range txgroup {
+			txgroup[i].InitCaches()
+			txID := txgroup[i].ID()
+			if filter.Test(txID[:]) {
+				// we just found a transaction that shouldn't have been
+				// included in the response.  maybe this is a false positive
+				// and other transactions in the group aren't included in the
+				// bloom filter, though.
+				txnsInFilter++
+			}
 		}
+
+		// if the entire group was in the bloom filter, report an error.
+		if txnsInFilter == len(txgroup) {
+			client.Close()
+			return fmt.Errorf("TxSyncer.Sync: peer %v sent a transaction group that was entirely included in the bloom filter", client.Address())
+		}
+
 		// send the transaction to the trasaction pool
-		if syncer.handler.Handle(tx) != nil {
+		if syncer.handler.Handle(txgroup) != nil {
 			client.Close()
 			return fmt.Errorf("TxSyncer.Sync: peer %v sent invalid transaction", client.Address())
 		}

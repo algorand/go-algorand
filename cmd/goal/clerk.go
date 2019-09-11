@@ -21,9 +21,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
@@ -53,6 +55,8 @@ func init() {
 	clerkCmd.AddCommand(rawsendCmd)
 	clerkCmd.AddCommand(inspectCmd)
 	clerkCmd.AddCommand(signCmd)
+	clerkCmd.AddCommand(groupCmd)
+	clerkCmd.AddCommand(splitCmd)
 
 	// Wallet to be used for the clerk operation
 	clerkCmd.PersistentFlags().StringVarP(&walletName, "wallet", "w", "", "Set the wallet to be used for the selected operation")
@@ -84,6 +88,16 @@ func init() {
 	signCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Filename for writing the signed transaction")
 	signCmd.MarkFlagRequired("infile")
 	signCmd.MarkFlagRequired("outfile")
+
+	groupCmd.Flags().StringVarP(&txFilename, "infile", "i", "", "File storing transactions to be grouped")
+	groupCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Filename for writing the grouped transactions")
+	groupCmd.MarkFlagRequired("infile")
+	groupCmd.MarkFlagRequired("outfile")
+
+	splitCmd.Flags().StringVarP(&txFilename, "infile", "i", "", "File storing transactions to be split")
+	splitCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Base filename for writing the individual transactions; each transaction will be written to filename-N.ext")
+	splitCmd.MarkFlagRequired("infile")
+	splitCmd.MarkFlagRequired("outfile")
 }
 
 var clerkCmd = &cobra.Command{
@@ -260,7 +274,8 @@ var rawsendCmd = &cobra.Command{
 		dec := protocol.NewDecoderBytes(data)
 		client := ensureAlgodClient(ensureSingleDataDir())
 
-		txns := make(map[transactions.Txid]transactions.SignedTxn)
+		txnIDs := make(map[transactions.Txid]transactions.SignedTxn)
+		var txns []transactions.SignedTxn
 		for {
 			var txn transactions.SignedTxn
 			err = dec.Decode(&txn)
@@ -271,27 +286,35 @@ var rawsendCmd = &cobra.Command{
 				reportErrorf(txDecodeError, txFilename, err)
 			}
 
-			_, present := txns[txn.ID()]
+			_, present := txnIDs[txn.ID()]
 			if present {
 				reportErrorf(txDupError, txn.ID().String(), txFilename)
 			}
 
-			txns[txn.ID()] = txn
+			txnIDs[txn.ID()] = txn
+			txns = append(txns, txn)
 		}
+
+		txgroups := bookkeeping.SignedTxnsToGroups(txns)
 
 		txnErrors := make(map[transactions.Txid]string)
 		pendingTxns := make(map[transactions.Txid]string)
-		for txid, txn := range txns {
+		for _, txgroup := range txgroups {
 			// Broadcast the transaction
-			txidStr, err := client.BroadcastTransaction(txn)
+			err := client.BroadcastTransactionGroup(txgroup)
 			if err != nil {
-				txnErrors[txid] = err.Error()
+				for _, txn := range txgroup {
+					txnErrors[txn.ID()] = err.Error()
+				}
 				reportWarnf(errorBroadcastingTX, err)
 				continue
 			}
 
-			reportInfof(infoRawTxIssued, txidStr)
-			pendingTxns[txid] = txidStr
+			for _, txn := range txgroup {
+				txidStr := txn.ID().String()
+				reportInfof(infoRawTxIssued, txidStr)
+				pendingTxns[txn.ID()] = txidStr
+			}
 		}
 
 		if noWaitAfterSend {
@@ -337,9 +360,17 @@ var rawsendCmd = &cobra.Command{
 			fmt.Printf("Encountered errors in sending %d transactions:\n", len(txnErrors))
 
 			var rejectsData []byte
-			for txid, errmsg := range txnErrors {
+			// Loop over transactions in the same order as the original file,
+			// to preserve transaction groups.
+			for _, txn := range txns {
+				txid := txn.ID()
+				errmsg, ok := txnErrors[txid]
+				if !ok {
+					continue
+				}
+
 				fmt.Printf("  %s: %s\n", txid, errmsg)
-				rejectsData = append(rejectsData, protocol.Encode(txns[txid])...)
+				rejectsData = append(rejectsData, protocol.Encode(txn)...)
 			}
 
 			f, err := os.OpenFile(rejectsFilename, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
@@ -428,6 +459,92 @@ var signCmd = &cobra.Command{
 		err = writeFile(outFilename, outData, 0600)
 		if err != nil {
 			reportErrorf(fileWriteError, outFilename, err)
+		}
+	},
+}
+
+var groupCmd = &cobra.Command{
+	Use:   "group",
+	Short: "Group transactions together",
+	Long:  `Form a transaction group.  The input file must contain one or more transactions that will form a group.  The output file will contain the same transactions, in order, with a group flag added to each transaction, which requires that the transactions must be committed together.`,
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, args []string) {
+		data, err := readFile(txFilename)
+		if err != nil {
+			reportErrorf(fileReadError, txFilename, err)
+		}
+
+		dec := protocol.NewDecoderBytes(data)
+
+		var txns []transactions.SignedTxn
+		var group transactions.TxGroup
+		for {
+			var txn transactions.SignedTxn
+			err = dec.Decode(&txn)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				reportErrorf(txDecodeError, txFilename, err)
+			}
+
+			if !txn.Txn.Group.IsZero() {
+				reportErrorf("Transaction %s is already part of a group.", txn.ID().String())
+			}
+
+			txns = append(txns, txn)
+			group.Transactions = append(group.Transactions, crypto.HashObj(txn.Txn))
+		}
+
+		var outData []byte
+		for _, txn := range txns {
+			txn.Txn.Group = crypto.HashObj(group)
+			outData = append(outData, protocol.Encode(txn)...)
+		}
+
+		err = writeFile(outFilename, outData, 0600)
+		if err != nil {
+			reportErrorf(fileWriteError, outFilename, err)
+		}
+	},
+}
+
+var splitCmd = &cobra.Command{
+	Use:   "split",
+	Short: "Split a file containing many transactions into one transaction per file",
+	Long:  `Split a file containing many transactions.  The input file must contain one or more transactions.  These transactions will be written to individual files.`,
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, args []string) {
+		data, err := readFile(txFilename)
+		if err != nil {
+			reportErrorf(fileReadError, txFilename, err)
+		}
+
+		dec := protocol.NewDecoderBytes(data)
+
+		var txns []transactions.SignedTxn
+		for {
+			var txn transactions.SignedTxn
+			err = dec.Decode(&txn)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				reportErrorf(txDecodeError, txFilename, err)
+			}
+
+			txns = append(txns, txn)
+		}
+
+		outExt := filepath.Ext(outFilename)
+		outBase := outFilename[:len(outFilename)-len(outExt)]
+		for idx, txn := range txns {
+			fn := fmt.Sprintf("%s-%d%s", outBase, idx, outExt)
+			err = writeFile(fn, protocol.Encode(txn), 0600)
+			if err != nil {
+				reportErrorf(fileWriteError, outFilename, err)
+			}
+			fmt.Printf("Wrote transaction %d to %s\n", idx, fn)
 		}
 	},
 }
