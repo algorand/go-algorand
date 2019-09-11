@@ -490,21 +490,35 @@ func (block Block) ContentsMatchHeader() bool {
 	return block.Payset.Commit(proto.PaysetCommitFlat) == block.TxnRoot
 }
 
-// DecodePayset decodes block.Payset using DecodeSignedTxn (and ignores ApplyData).
-func (block Block) DecodePayset() ([]transactions.SignedTxn, error) {
-	res := make([]transactions.SignedTxn, len(block.Payset))
-	for i, txib := range block.Payset {
+// DecodePaysetGroups decodes block.Payset using DecodeSignedTxn, and returns
+// the transactions in groups.
+func (block Block) DecodePaysetGroups() ([][]transactions.SignedTxnWithAD, error) {
+	var res [][]transactions.SignedTxnWithAD
+	var lastGroup []transactions.SignedTxnWithAD
+	for _, txib := range block.Payset {
 		var err error
-		res[i], _, err = block.DecodeSignedTxn(txib)
+		var stxnad transactions.SignedTxnWithAD
+		stxnad.SignedTxn, stxnad.ApplyData, err = block.DecodeSignedTxn(txib)
 		if err != nil {
 			return nil, err
 		}
+
+		if lastGroup != nil && (lastGroup[0].SignedTxn.Txn.Group != stxnad.SignedTxn.Txn.Group || lastGroup[0].SignedTxn.Txn.Group.IsZero()) {
+			res = append(res, lastGroup)
+			lastGroup = nil
+		}
+
+		lastGroup = append(lastGroup, stxnad)
+	}
+	if lastGroup != nil {
+		res = append(res, lastGroup)
 	}
 	return res, nil
 }
 
-// DecodePaysetWithAD decodes block.Payset using DecodeSignedTxn
-func (block Block) DecodePaysetWithAD() ([]transactions.SignedTxnWithAD, error) {
+// DecodePaysetFlat decodes block.Payset using DecodeSignedTxn, and
+// flattens groups.
+func (block Block) DecodePaysetFlat() ([]transactions.SignedTxnWithAD, error) {
 	res := make([]transactions.SignedTxnWithAD, len(block.Payset))
 	for i, txib := range block.Payset {
 		var err error
@@ -514,6 +528,31 @@ func (block Block) DecodePaysetWithAD() ([]transactions.SignedTxnWithAD, error) 
 		}
 	}
 	return res, nil
+}
+
+// SignedTxnsToGroups splits a slice of SignedTxns into groups.
+func SignedTxnsToGroups(txns []transactions.SignedTxn) (res [][]transactions.SignedTxn) {
+	var lastGroup []transactions.SignedTxn
+	for _, tx := range txns {
+		if lastGroup != nil && (lastGroup[0].Txn.Group != tx.Txn.Group || lastGroup[0].Txn.Group.IsZero()) {
+			res = append(res, lastGroup)
+			lastGroup = nil
+		}
+
+		lastGroup = append(lastGroup, tx)
+	}
+	if lastGroup != nil {
+		res = append(res, lastGroup)
+	}
+	return res
+}
+
+// SignedTxnGroupsFlatten combines all groups into a flat slice of SignedTxns.
+func SignedTxnGroupsFlatten(txgroups [][]transactions.SignedTxn) (res []transactions.SignedTxn) {
+	for _, txgroup := range txgroups {
+		res = append(res, txgroup...)
+	}
+	return res
 }
 
 // NextVersionInfo returns information about the next expected protocol version.
