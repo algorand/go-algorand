@@ -118,11 +118,12 @@ func (idb *DB) AddBlock(b bookkeeping.Block) error {
 		}
 		defer stmt.Close()
 
-		payset, err := b.DecodePayset()
+		payset, err := b.DecodePaysetFlat()
 		if err != nil {
 			return err
 		}
-		for _, txn := range payset {
+		for _, txad := range payset {
+			txn := txad.SignedTxn
 			_, err = stmt.Exec(txn.ID().String(), txn.Txn.Sender.String(), txn.Txn.Receiver.String(), b.Round(), b.TimeStamp)
 			if err != nil {
 				return err

@@ -193,7 +193,7 @@ var checkCmd = &cobra.Command{
 			const checkOnly = true
 			name, port, err := ensureRelayStatus(checkOnly, relay, nameDomainArg, srvDomainArg, defaultPortArg, context)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "[%d] ERROR: %s: %s\n", relay.ID, relay.IPOrDNSName, err)
+				fmt.Fprintf(os.Stderr, "[%d] ERROR: %s: %s\n", relay.ID, relay.Address, err)
 				results = append(results, checkResult{
 					ID:      relay.ID,
 					Success: false,
@@ -201,7 +201,7 @@ var checkCmd = &cobra.Command{
 				})
 				anyCheckError = true
 			} else {
-				fmt.Printf("[%d] OK: %s -> %s:%d\n", relay.ID, relay.IPOrDNSName, name, port)
+				fmt.Printf("[%d] OK: %s -> %s:%d\n", relay.ID, relay.Address, name, port)
 				results = append(results, checkResult{
 					ID:      relay.ID,
 					Success: true,
@@ -242,14 +242,14 @@ var updateCmd = &cobra.Command{
 			}
 
 			if !relay.CheckSuccess {
-				fmt.Printf("[%d] OK: Skipping NotSuccessful %s\n", relay.ID, relay.IPOrDNSName)
+				fmt.Printf("[%d] OK: Skipping NotSuccessful %s\n", relay.ID, relay.Address)
 				// Don't output results if skipped
 				continue
 			}
 			const checkOnly = false
 			name, port, err := ensureRelayStatus(checkOnly, relay, nameDomainArg, srvDomainArg, defaultPortArg, context)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "[%d] ERROR: %s: %s\n", relay.ID, relay.IPOrDNSName, err)
+				fmt.Fprintf(os.Stderr, "[%d] ERROR: %s: %s\n", relay.ID, relay.Address, err)
 				results = append(results, checkResult{
 					ID:      relay.ID,
 					Success: false,
@@ -257,7 +257,7 @@ var updateCmd = &cobra.Command{
 				})
 				anyUpdateError = true
 			} else {
-				fmt.Printf("[%d] OK: %s -> %s:%d\n", relay.ID, relay.IPOrDNSName, name, port)
+				fmt.Printf("[%d] OK: %s -> %s:%d\n", relay.ID, relay.Address, name, port)
 				results = append(results, checkResult{
 					ID:      relay.ID,
 					Success: true,
@@ -282,9 +282,9 @@ var updateCmd = &cobra.Command{
 
 func ensureRelayStatus(checkOnly bool, relay eb.Relay, nameDomain string, srvDomain string, defaultPort uint16, ctx *dnsContext) (srvName string, srvPort uint16, err error) {
 	var port uint16
-	target, portString, err := net.SplitHostPort(relay.IPOrDNSName)
+	target, portString, err := net.SplitHostPort(relay.Address)
 	if err != nil {
-		target = relay.IPOrDNSName
+		target = relay.Address
 		port = defaultPort
 	} else {
 		var port64 uint64
@@ -295,8 +295,13 @@ func ensureRelayStatus(checkOnly bool, relay eb.Relay, nameDomain string, srvDom
 		port = uint16(port64)
 	}
 
+	if target == "" {
+		err = fmt.Errorf("'%s' - target host is empty", relay.Address)
+		return
+	}
+
 	if port == 0 {
-		err = fmt.Errorf("%s - port cannot be zero", relay.IPOrDNSName)
+		err = fmt.Errorf("%s - port cannot be zero", relay.Address)
 		return
 	}
 

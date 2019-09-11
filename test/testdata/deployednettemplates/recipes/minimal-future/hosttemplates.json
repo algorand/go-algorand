@@ -1,0 +1,10 @@
+{
+  "Hosts": [
+    {
+      "Name": "AWS-US-EAST-1-Small",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "t2.micro"
+    }
+  ]
+}
