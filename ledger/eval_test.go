@@ -55,12 +55,11 @@ func TestBlockEvaluator(t *testing.T) {
 	require.NoError(t, err)
 	defer l.Close()
 
-	blks := genesisInitState.Blocks
-	newBlock := bookkeeping.MakeBlock(blks[len(blks)-1].BlockHeader)
+	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
 	eval, err := l.StartEvaluator(newBlock.BlockHeader, nil, backlogPool)
 	require.NoError(t, err)
 
-	genHash := blks[0].BlockHeader.GenesisHash
+	genHash := genesisInitState.Block.BlockHeader.GenesisHash
 	txn := transactions.Transaction{
 		Type: protocol.PaymentTx,
 		Header: transactions.Header{
