@@ -37,7 +37,37 @@ var rootCmd = &cobra.Command{
 	},
 }
 
+type exitError struct {
+	error
+
+	exitCode     int
+	errorMessage string
+}
+
+func makeExitError(exitCode int, errMsg string, errArgs ...interface{}) exitError {
+	ee := exitError{
+		exitCode:     exitCode,
+		errorMessage: fmt.Sprintf(errMsg, errArgs...),
+	}
+	return ee
+}
+
+func (e exitError) Error() string {
+	return e.errorMessage
+}
+
 func main() {
+	defer func() {
+		if err := recover(); err != nil {
+			switch exitErr := err.(type) {
+			case exitError:
+				fmt.Println(exitErr.Error())
+				os.Exit(exitErr.exitCode)
+			default:
+				panic(err)
+			}
+		}
+	}()
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
