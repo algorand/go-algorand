@@ -24,8 +24,9 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"golang.org/x/crypto/sha3"
 	"io"
+
+	"golang.org/x/crypto/sha3"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
