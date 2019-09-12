@@ -124,15 +124,6 @@ func (st StackType) String() string {
 	return "internal error, unknown type"
 }
 
-// OpSpec defines one byte opcode
-type OpSpec struct {
-	Opcode  byte
-	Name    string
-	op      opFunc      // evaluate the op
-	Args    []StackType // what gets popped from the stack
-	Returns StackType   // what gets pushed to the stack
-}
-
 // Eval checks to see if a transaction passes logic
 func Eval(program []byte, params EvalParams) (pass bool, err error) {
 	var cx evalContext
@@ -215,6 +206,15 @@ func Check(program []byte, params EvalParams) (cost int, err error) {
 		return
 	}
 	return
+}
+
+// OpSpec defines one byte opcode
+type OpSpec struct {
+	Opcode  byte
+	Name    string
+	op      opFunc      // evaluate the op
+	Args    []StackType // what gets popped from the stack
+	Returns StackType   // what gets pushed to the stack
 }
 
 // OpSpecs is the table of operations that can be assembled and evaluated.
@@ -888,9 +888,9 @@ func opGlobal(cx *evalContext) {
 	cx.nextpc = cx.pc + 2
 }
 
-func opEd25519verify(cx *evalContext){
+func opEd25519verify(cx *evalContext) {
 	last := len(cx.stack) - 1 // index of PK
-	prev := last -1           // index of signature
+	prev := last - 1          // index of signature
 	pprev := prev - 1         // index of data
 
 	var sv crypto.SignatureVerifier

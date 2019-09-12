@@ -1,0 +1,62 @@
+// Copyright (C) 2019 Algorand, Inc.
+// This file is part of go-algorand
+//
+// go-algorand is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// go-algorand is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
+package logic
+
+import (
+	"testing"
+)
+
+func TestOpDocs(t *testing.T) {
+	opsSeen := make(map[string]bool, len(OpSpecs))
+	for _, op := range OpSpecs {
+		opsSeen[op.Name] = false
+	}
+	for _, od := range opDocList {
+		_, exists := opsSeen[od.a]
+		if !exists {
+			t.Errorf("error: doc for op %#v that does not exist in OpSpecs", od.a)
+		}
+		opsSeen[od.a] = true
+	}
+	for op, seen := range opsSeen {
+		if !seen {
+			t.Errorf("error: doc for op %#v missing", op)
+		}
+	}
+}
+
+func TestOpGroupCoverage(t *testing.T) {
+	opsSeen := make(map[string]bool, len(OpSpecs))
+	for _, op := range OpSpecs {
+		opsSeen[op.Name] = false
+	}
+	for _, og := range OpGroupList {
+		for _, name := range og.Ops {
+			_, exists := opsSeen[name]
+			if !exists {
+				t.Errorf("error: op %#v in group list but not in OpSpecs\n", name)
+				continue
+			}
+			opsSeen[name] = true
+		}
+	}
+	for name, seen := range opsSeen {
+		if !seen {
+			t.Errorf("warning: op %#v not in any group list\n", name)
+		}
+	}
+}
