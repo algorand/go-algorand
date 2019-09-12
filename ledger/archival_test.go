@@ -88,7 +88,7 @@ func getInitState() (genesisInitState InitState) {
 	accts[testSinkAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 1234567890})
 
 	genesisInitState.Accounts = accts
-	genesisInitState.Blocks = []bookkeeping.Block{blk}
+	genesisInitState.Block = blk
 	genesisInitState.GenesisHash = crypto.Digest{}
 	return genesisInitState
 }
@@ -108,12 +108,13 @@ func TestArchival(t *testing.T) {
 	const archival = true
 	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, archival)
 	require.NoError(t, err)
+	defer l.Close()
 	wl := &wrappedLedger{
 		l: l,
 	}
 
 	nonZeroMinSaves := 0
-	blk := genesisInitState.Blocks[0]
+	blk := genesisInitState.Block
 
 	for i := 0; i < 2000; i++ {
 		blk.BlockHeader.Round++
@@ -162,7 +163,7 @@ func TestArchivalRestart(t *testing.T) {
 
 	l, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
 	require.NoError(t, err)
-	blk := genesisInitState.Blocks[0]
+	blk := genesisInitState.Block
 
 	const maxBlocks = 2000
 	for i := 0; i < maxBlocks; i++ {
@@ -190,6 +191,7 @@ func TestArchivalRestart(t *testing.T) {
 
 	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
 	require.NoError(t, err)
+	defer l.Close()
 
 	err = l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
 		latest, err = blockLatest(tx)
@@ -219,7 +221,7 @@ func TestArchivalFromNonArchival(t *testing.T) {
 
 	l, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
 	require.NoError(t, err)
-	blk := genesisInitState.Blocks[0]
+	blk := genesisInitState.Block
 
 	const maxBlocks = 2000
 	for i := 0; i < maxBlocks; i++ {
@@ -248,6 +250,7 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	archival = true
 	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
 	require.NoError(t, err)
+	defer l.Close()
 
 	err = l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
 		latest, err = blockLatest(tx)

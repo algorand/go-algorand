@@ -191,6 +191,12 @@ type ConsensusParams struct {
 
 	// support sequential transaction counter TxnCounter
 	TxnCounter bool
+
+	// transaction groups
+	SupportTxGroups bool
+
+	// max group size
+	MaxTxGroupSize int
 }
 
 // Consensus tracks the protocol-level settings for different versions of the
@@ -263,6 +269,8 @@ func initConsensusProtocols() {
 		SeedRefreshInterval: 100,
 
 		MaxBalLookback: 320,
+
+		MaxTxGroupSize: 1,
 	}
 
 	v7.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
@@ -399,6 +407,8 @@ func initConsensusProtocols() {
 	vFuture.TxnCounter = true
 	vFuture.Asset = true
 	vFuture.MaxAssetsPerAccount = 1000
+	vFuture.SupportTxGroups = true
+	vFuture.MaxTxGroupSize = 16
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

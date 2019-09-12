@@ -38,6 +38,10 @@ func (ml *mockLedger) isDup(firstValid basics.Round, txn transactions.Txid) (boo
 	return false, nil
 }
 
+func (ml *mockLedger) txnCounter() uint64 {
+	return 0
+}
+
 func checkCow(t *testing.T, cow *roundCowState, accts map[basics.Address]basics.AccountData) {
 	for addr, data := range accts {
 		d, err := cow.lookup(addr)

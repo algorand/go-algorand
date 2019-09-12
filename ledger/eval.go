@@ -52,6 +52,9 @@ type roundCowBase struct {
 
 	// The round number of the previous block, for looking up prior state.
 	rnd basics.Round
+
+	// TxnCounter from previous block header.
+	txnCount uint64
 }
 
 func (x *roundCowBase) lookup(addr basics.Address) (basics.AccountData, error) {
@@ -60,6 +63,10 @@ func (x *roundCowBase) lookup(addr basics.Address) (basics.AccountData, error) {
 
 func (x *roundCowBase) isDup(firstValid basics.Round, txid transactions.Txid) (bool, error) {
 	return x.l.isDup(firstValid, x.rnd, txid)
+}
+
+func (x *roundCowBase) txnCounter() uint64 {
+	return x.txnCount
 }
 
 // wrappers for roundCowState to satisfy the (current) transactions.Balances interface
@@ -151,7 +158,6 @@ type BlockEvaluator struct {
 
 	block        bookkeeping.Block
 	blockTxBytes int
-	txnCounter   uint64
 
 	verificationPool execpool.BacklogPool
 }
@@ -208,7 +214,7 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *eval
 			return nil, fmt.Errorf("can't evaluate block %v without previous header: %v", hdr.Round, err)
 		}
 
-		eval.txnCounter = eval.prevHeader.TxnCounter
+		base.txnCount = eval.prevHeader.TxnCounter
 	}
 
 	prevTotals, err := l.Totals(eval.prevHeader.Round)
@@ -328,26 +334,108 @@ func (eval *BlockEvaluator) ResetTxnBytes() {
 // Transaction tentatively adds a new transaction as part of this block evaluation.
 // If the transaction cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn, ad *transactions.ApplyData) error {
-	return eval.transaction(txn, ad, true)
+func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn, ad transactions.ApplyData) error {
+	return eval.transactionGroup([]transactions.SignedTxnWithAD{
+		transactions.SignedTxnWithAD{
+			SignedTxn: txn,
+			ApplyData: ad,
+		},
+	}, true)
 }
 
-// TestTransaction checks if a given transaction could be executed at this point
-// in the block evaluator, but does not actually add the transaction to the block
+// TransactionGroup tentatively adds a new transaction group as part of this block evaluation.
+// If the transaction group cannot be added to the block without violating some constraints,
+// an error is returned and the block evaluator state is unchanged.
+func (eval *BlockEvaluator) TransactionGroup(txads []transactions.SignedTxnWithAD) error {
+	return eval.transactionGroup(txads, true)
+}
+
+// TestTransactionGroup checks if a given transaction group could be executed at this
+// point in the block evaluator, but does not actually add the transactions to the block
 // evaluator, or modify the block evaluator state in any other visible way.
-func (eval *BlockEvaluator) TestTransaction(txn transactions.SignedTxn, ad *transactions.ApplyData) error {
-	return eval.transaction(txn, ad, false)
+func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTxn) error {
+	txads := make([]transactions.SignedTxnWithAD, len(txgroup))
+	for i := range txgroup {
+		txads[i].SignedTxn = txgroup[i]
+	}
+	return eval.transactionGroup(txads, false)
+}
+
+// transactionGroup tentatively executes a group of transactions as part of this block evaluation.
+// If the transaction group cannot be added to the block without violating some constraints,
+// an error is returned and the block evaluator state is unchanged.  If remember is true,
+// the transaction group is added to the block evaluator state; otherwise, the block evaluator
+// is not modified and does not remember this transaction group.
+func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWithAD, remember bool) error {
+	// Nothing to do if there are no transactions.
+	if len(txgroup) == 0 {
+		return nil
+	}
+
+	if len(txgroup) > eval.proto.MaxTxGroupSize {
+		return fmt.Errorf("group size %d exceeds maximum %d", len(txgroup), eval.proto.MaxTxGroupSize)
+	}
+
+	var txibs []transactions.SignedTxnInBlock
+	var group transactions.TxGroup
+	var groupTxBytes int
+
+	cow := eval.state.child()
+
+	for _, txad := range txgroup {
+		var txib transactions.SignedTxnInBlock
+
+		err := eval.transaction(txad.SignedTxn, txad.ApplyData, cow, &txib)
+		if err != nil {
+			return err
+		}
+
+		txibs = append(txibs, txib)
+
+		if eval.validate {
+			groupTxBytes += len(protocol.Encode(txib))
+			if eval.blockTxBytes+groupTxBytes > eval.proto.MaxTxnBytesPerBlock {
+				return ErrNoSpace
+			}
+		}
+
+		// Make sure all transactions in group have the same group value
+		if txad.SignedTxn.Txn.Group != txgroup[0].SignedTxn.Txn.Group {
+			return fmt.Errorf("transactionGroup: inconsistent group values: %v != %v",
+				txad.SignedTxn.Txn.Group, txgroup[0].SignedTxn.Txn.Group)
+		}
+
+		if !txad.SignedTxn.Txn.Group.IsZero() {
+			txWithoutGroup := txad.SignedTxn.Txn
+			txWithoutGroup.Group = crypto.Digest{}
+			txWithoutGroup.ResetCaches()
+
+			group.Transactions = append(group.Transactions, crypto.HashObj(txWithoutGroup))
+		}
+	}
+
+	// If we had a non-zero Group value, check that all group members are present.
+	if group.Transactions != nil {
+		if txgroup[0].SignedTxn.Txn.Group != crypto.HashObj(group) {
+			return fmt.Errorf("transactionGroup: incomplete group: %v != %v (%v)",
+				txgroup[0].SignedTxn.Txn.Group, crypto.HashObj(group), group)
+		}
+	}
+
+	if remember {
+		eval.block.Payset = append(eval.block.Payset, txibs...)
+		eval.blockTxBytes += groupTxBytes
+		cow.commitToParent()
+	}
+
+	return nil
 }
 
 // transaction tentatively executes a new transaction as part of this block evaluation.
 // If the transaction cannot be added to the block without violating some constraints,
-// an error is returned and the block evaluator state is unchanged.  If remember is true,
-// the transaction is added to the block evaluator state; otherwise, the block evaluator
-// is not modified and does not remember this transaction.
-func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad *transactions.ApplyData, remember bool) error {
+// an error is returned and the block evaluator state is unchanged.
+func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transactions.ApplyData, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
 	var err error
-	var thisTxBytes int
-	cow := eval.state.child()
 
 	spec := transactions.SpecialAddresses{
 		FeeSink:     eval.block.BlockHeader.FeeSink,
@@ -383,10 +471,15 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad *transact
 				return fmt.Errorf("transaction %v: failed to verify: %v", txn.ID(), err)
 			}
 		}
+
+		// Verify that groups are supported.
+		if !txn.Txn.Group.IsZero() && !eval.proto.SupportTxGroups {
+			return fmt.Errorf("transaction groups not supported")
+		}
 	}
 
 	// Apply the transaction, updating the cow balances
-	applyData, err := txn.Txn.Apply(cow, spec, eval.txnCounter)
+	applyData, err := txn.Txn.Apply(cow, spec, cow.txnCounter())
 	if err != nil {
 		return fmt.Errorf("transaction %v: %v", txn.ID(), err)
 	}
@@ -394,30 +487,21 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad *transact
 	// Validate applyData if we are validating an existing block.
 	// If we are validating and generating, we have no ApplyData yet.
 	if eval.validate && !eval.generate {
-		if ad == nil {
-			return fmt.Errorf("transaction %v: no applyData for validation", txn.ID())
-		}
 		if eval.proto.ApplyData {
-			if *ad != applyData {
-				return fmt.Errorf("transaction %v: applyData mismatch: %v != %v", txn.ID(), *ad, applyData)
+			if ad != applyData {
+				return fmt.Errorf("transaction %v: applyData mismatch: %v != %v", txn.ID(), ad, applyData)
 			}
 		} else {
-			if *ad != (transactions.ApplyData{}) {
+			if ad != (transactions.ApplyData{}) {
 				return fmt.Errorf("transaction %v: applyData not supported", txn.ID())
 			}
 		}
 	}
 
 	// Check if the transaction fits in the block, now that we can encode it.
-	txib, err := eval.block.EncodeSignedTxn(txn, applyData)
+	*txib, err = eval.block.EncodeSignedTxn(txn, applyData)
 	if err != nil {
 		return err
-	}
-	if eval.validate {
-		thisTxBytes = len(protocol.Encode(txib))
-		if eval.blockTxBytes+thisTxBytes > eval.proto.MaxTxnBytesPerBlock {
-			return ErrNoSpace
-		}
 	}
 
 	// Check if any affected accounts dipped below MinBalance (unless they are
@@ -451,33 +535,23 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad *transact
 		}
 	}
 
-	if remember {
-		// Remember this TXID (to detect duplicates)
-		cow.addTx(txn.ID())
-
-		eval.block.Payset = append(eval.block.Payset, txib)
-		eval.blockTxBytes += thisTxBytes
-
-		if eval.proto.TxnCounter {
-			eval.txnCounter++
-		}
-
-		cow.commitToParent()
-	}
+	// Remember this TXID (to detect duplicates)
+	cow.addTx(txn.ID())
 
 	return nil
 }
 
 // Call "endOfBlock" after all the block's rewards and transactions are processed. Applies any deferred balance updates.
 func (eval *BlockEvaluator) endOfBlock() error {
-	cow := eval.state.child()
-
 	if eval.generate {
 		eval.block.TxnRoot = eval.block.Payset.Commit(eval.proto.PaysetCommitFlat)
-		eval.block.TxnCounter = eval.txnCounter
+		if eval.proto.TxnCounter {
+			eval.block.TxnCounter = eval.state.txnCounter()
+		} else {
+			eval.block.TxnCounter = 0
+		}
 	}
 
-	cow.commitToParent()
 	return nil
 }
 
@@ -490,8 +564,12 @@ func (eval *BlockEvaluator) finalValidation() error {
 			return fmt.Errorf("txn root wrong: %v != %v", txnRoot, eval.block.TxnRoot)
 		}
 
-		if eval.block.TxnCounter != eval.txnCounter {
-			return fmt.Errorf("txn count wrong: %d != %d", eval.block.TxnCounter, eval.txnCounter)
+		var expectedTxnCount uint64
+		if eval.proto.TxnCounter {
+			expectedTxnCount = eval.state.txnCounter()
+		}
+		if eval.block.TxnCounter != expectedTxnCount {
+			return fmt.Errorf("txn count wrong: %d != %d", eval.block.TxnCounter, expectedTxnCount)
 		}
 	}
 
@@ -531,20 +609,21 @@ func (l *Ledger) eval(ctx context.Context, blk bookkeeping.Block, aux *evalAux, 
 	}
 
 	// TODO: batch tx sig verification: ingest blk.Payset and output a list of ValidatedTx
+
 	// Next, transactions
-	payset, err := blk.DecodePaysetWithAD()
+	paysetgroups, err := blk.DecodePaysetGroups()
 	if err != nil {
 		return stateDelta{}, evalAux{}, err
 	}
 
-	for _, txn := range payset {
+	for _, txgroup := range paysetgroups {
 		select {
 		case <-ctx.Done():
 			return stateDelta{}, evalAux{}, ctx.Err()
 		default:
 		}
 
-		err = eval.Transaction(txn.SignedTxn, &txn.ApplyData)
+		err = eval.TransactionGroup(txgroup)
 		if err != nil {
 			return stateDelta{}, evalAux{}, err
 		}
