@@ -1175,7 +1175,7 @@ int 28939890412103745
 +
 `
 
-func BenchmarkAdd(b *testing.B) {
+func BenchmarkAddx64(b *testing.B) {
 	program, err := AssembleString(addBenchmarkSource)
 	require.NoError(b, err)
 	cost, err := Check(program, EvalParams{})
@@ -1197,7 +1197,29 @@ func BenchmarkAdd(b *testing.B) {
 	}
 }
 
-func BenchmarkSha256(b *testing.B) {
+func BenchmarkNopPassx1(b *testing.B) {
+	program, err := AssembleString("int 1")
+	require.NoError(b, err)
+	cost, err := Check(program, EvalParams{})
+	require.NoError(b, err)
+	require.True(b, cost < 1000)
+	//b.Logf("%d bytes of program", len(program))
+	//b.Log(hex.EncodeToString(program))
+	b.StopTimer()
+	b.ResetTimer()
+	b.StartTimer()
+	sb := strings.Builder{} // Trace: &sb
+	for i := 0; i < b.N; i++ {
+		pass, err := Eval(program, EvalParams{})
+		if !pass {
+			b.Log(sb.String())
+		}
+		require.NoError(b, err)
+		require.True(b, pass)
+	}
+}
+
+func BenchmarkSha256x900(b *testing.B) {
 	const firstline = "addr OC6IROKUJ7YCU5NV76AZJEDKYQG33V2CJ7HAPVQ4ENTAGMLIOINSQ6EKGE\n"
 	sb := strings.Builder{}
 	sb.WriteString(firstline)
@@ -1226,7 +1248,7 @@ func BenchmarkSha256(b *testing.B) {
 	}
 }
 
-func BenchmarkKeccak256(b *testing.B) {
+func BenchmarkKeccak256x900(b *testing.B) {
 	const firstline = "addr OC6IROKUJ7YCU5NV76AZJEDKYQG33V2CJ7HAPVQ4ENTAGMLIOINSQ6EKGE\n"
 	sb := strings.Builder{}
 	sb.WriteString(firstline)
@@ -1255,7 +1277,7 @@ func BenchmarkKeccak256(b *testing.B) {
 	}
 }
 
-func BenchmarkSha512_256(b *testing.B) {
+func BenchmarkSha512_256x900(b *testing.B) {
 	const firstline = "addr OC6IROKUJ7YCU5NV76AZJEDKYQG33V2CJ7HAPVQ4ENTAGMLIOINSQ6EKGE\n"
 	sb := strings.Builder{}
 	sb.WriteString(firstline)
@@ -1325,18 +1347,18 @@ ed25519verify`, pkStr))
 	require.NoError(t, err)
 }
 
-func BenchmarkEd25519Verify(b *testing.B){
+func BenchmarkEd25519Verifyx1(b *testing.B) {
 	//benchmark setup
 	var data [][32]byte
 	var programs [][]byte
 	var signatures []crypto.Signature
 
 	for i := 0; i < b.N; i++ {
-		var buffer [32]byte				//generate data to be signed
+		var buffer [32]byte //generate data to be signed
 		crypto.RandBytes(buffer[:])
 		data = append(data, buffer)
 
-		var s crypto.Seed				//generate programs and signatures
+		var s crypto.Seed //generate programs and signatures
 		crypto.RandBytes(s[:])
 		secret := crypto.GenerateSignatureSecrets(s)
 		pk := basics.Address(secret.SignatureVerifier)

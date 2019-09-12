@@ -35,7 +35,7 @@ var opDocList = []stringString{
 	{"sha256", "SHA256 hash of value, yields [32]byte"},
 	{"keccak256", "Keccac256 hash of value, yields [32]byte"},
 	{"sha512_256", "SHA512_256 hash of value, yields [32]byte"},
-	{"ed25519verify", "for (data, signature, pubkey) verify the signature of the data against the pubkey"},
+	{"ed25519verify", "for (data, signature, pubkey) verify the signature of the data against the pubkey => {0 or 1}"},
 	{"+", "A plus B. Panic on overflow."},
 	{"-", "A minus B. Panic if B > A."},
 	{"/", "A divided by B. Panic if B == 0."},

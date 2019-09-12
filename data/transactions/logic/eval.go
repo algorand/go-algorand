@@ -125,6 +125,7 @@ func (st StackType) String() string {
 }
 
 // Eval checks to see if a transaction passes logic
+// A program passes succesfully if it finishes with one int element on the stack that is non-zero.
 func Eval(program []byte, params EvalParams) (pass bool, err error) {
 	var cx evalContext
 	version, vlen := binary.Uvarint(program)
@@ -287,9 +288,10 @@ type opSize struct {
 
 // opSizes records the size of ops that are constant size but not 1
 var opSizes = []opSize{
-	{"sha256", 100, 1, nil},
-	{"keccak256", 320, 1, nil},
-	{"sha512_256", 120, 1, nil},
+	{"sha256", 7, 1, nil},
+	{"keccak256", 26, 1, nil},
+	{"sha512_256", 9, 1, nil},
+	{"ed25519verify", 1900, 1, nil},
 	{"bnz", 1, 3, nil},
 	{"intc", 1, 2, nil},
 	{"bytec", 1, 2, nil},
