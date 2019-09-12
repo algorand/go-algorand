@@ -76,7 +76,7 @@ func main() {
 	config.UpdateVersionDataDir(absolutePath)
 
 	if *versionCheck {
-		config.PrintVersionAndLicense()
+		fmt.Println(config.FormatVersionAndLicense())
 		return
 	}
 

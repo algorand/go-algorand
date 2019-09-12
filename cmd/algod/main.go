@@ -74,7 +74,7 @@ func main() {
 	}
 
 	if *versionCheck {
-		config.PrintVersionAndLicense()
+		fmt.Println(config.FormatVersionAndLicense())
 		return
 	}
 
