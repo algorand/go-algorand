@@ -24,12 +24,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/algorand/go-algorand/crypto"
+	"golang.org/x/crypto/sha3"
 	"io"
 
-	"golang.org/x/crypto/sha3"
-
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 )
@@ -895,24 +894,23 @@ func opEd25519verify(cx *evalContext){
 
 	var sv crypto.SignatureVerifier
 	if len(cx.stack[last].Bytes) != len(sv) {
-		cx.err = fmt.Errorf("invalid public key")
+		cx.err = errors.New("invalid public key")
 		return
 	}
 	copy(sv[:], cx.stack[last].Bytes)
 
 	var sig crypto.Signature
 	if len(cx.stack[prev].Bytes) != len(sig) {
-		cx.err = fmt.Errorf("invalid signature")
+		cx.err = errors.New("invalid signature")
 		return
 	}
 	copy(sig[:], cx.stack[prev].Bytes)
 
 	if sv.VerifyBytes(cx.stack[pprev].Bytes, sig) {
-		cx.stack[pprev].Bytes = nil
 		cx.stack[pprev].Uint = 1
 	} else {
-		cx.stack[pprev].Bytes = nil
 		cx.stack[pprev].Uint = 0
 	}
+	cx.stack[pprev].Bytes = nil
 	cx.stack = cx.stack[:prev]
 }

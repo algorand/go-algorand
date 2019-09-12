@@ -21,13 +21,13 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"github.com/algorand/go-algorand/crypto"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -1326,31 +1326,41 @@ ed25519verify`, pkStr))
 }
 
 func BenchmarkEd25519Verify(b *testing.B){
-	sb := strings.Builder{}
-	b.ResetTimer()
+	//benchmark setup
+	var data [][32]byte
+	var programs [][]byte
+	var signatures []crypto.Signature
+
 	for i := 0; i < b.N; i++ {
-		b.StopTimer()
-		var s crypto.Seed
+		var buffer [32]byte				//generate data to be signed
+		crypto.RandBytes(buffer[:])
+		data = append(data, buffer)
+
+		var s crypto.Seed				//generate programs and signatures
 		crypto.RandBytes(s[:])
-		c := crypto.GenerateSignatureSecrets(s)
-		var data [32]byte
-		crypto.RandBytes(data[:])
-		pk := basics.Address(c.SignatureVerifier)
+		secret := crypto.GenerateSignatureSecrets(s)
+		pk := basics.Address(secret.SignatureVerifier)
 		pkStr := pk.String()
 		program, err := AssembleString(fmt.Sprintf(`arg 0
 arg 1
 addr %s
 ed25519verify`, pkStr))
 		require.NoError(b, err)
-		sig := c.SignBytes(data[:])
+		programs = append(programs, program)
+		sig := secret.SignBytes(buffer[:])
+		signatures = append(signatures, sig)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
 		var txn transactions.SignedTxn
-		txn.Lsig.Logic = program
-		txn.Lsig.Args = [][]byte{data[:], sig[:]}
+		txn.Lsig.Logic = programs[i]
+		txn.Lsig.Args = [][]byte{data[i][:], signatures[i][:]}
+		sb := strings.Builder{}
 		ep := EvalParams{Txn: &txn, Trace: &sb}
-		b.StartTimer()
-		pass, err := Eval(program, ep)
+		pass, err := Eval(programs[i], ep)
 		if !pass {
-			b.Log(hex.EncodeToString(program))
+			b.Log(hex.EncodeToString(programs[i]))
 			b.Log(sb.String())
 		}
 		require.True(b, pass)
