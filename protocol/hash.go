@@ -43,6 +43,7 @@ const (
 	ProposerSeed      HashID = "PS"
 	Seed              HashID = "SD"
 	TestHashable      HashID = "TE"
+	TxGroup		  HashID = "TG"
 	Transaction       HashID = "TX"
 	Vote              HashID = "VO"
 )

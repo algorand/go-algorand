@@ -90,29 +90,27 @@ func testGenerateInitState(t *testing.T, proto protocol.ConsensusVersion) (genes
 	incentivePoolBalanceAtGenesis := initAccounts[poolAddr].MicroAlgos
 	initialRewardsPerRound := incentivePoolBalanceAtGenesis.Raw / uint64(params.RewardsRateRefreshInterval)
 	var emptyPayset transactions.Payset
-	blk := bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{
-		GenesisID: t.Name(),
-		Round:     0,
-		TxnRoot:   emptyPayset.Commit(params.PaysetCommitFlat),
-	}}
+
+	initBlock := bookkeeping.Block{
+		BlockHeader: bookkeeping.BlockHeader{
+			GenesisID: t.Name(),
+			Round:     0,
+			RewardsState: bookkeeping.RewardsState{
+				RewardsRate: initialRewardsPerRound,
+				RewardsPool: poolAddr,
+				FeeSink:     sinkAddr,
+			},
+			UpgradeState: bookkeeping.UpgradeState{
+				CurrentProtocol: proto,
+			},
+			TxnRoot: emptyPayset.Commit(params.PaysetCommitFlat),
+		},
+	}
 	if params.SupportGenesisHash {
-		blk.BlockHeader.GenesisHash = crypto.Hash([]byte(t.Name()))
-	}
-	initBlocks := make([]bookkeeping.Block, 0, 300)
-	initBlocks = append(initBlocks, blk)
-	initBlocks[0].RewardsPool = poolAddr
-	initBlocks[0].FeeSink = sinkAddr
-	initBlocks[0].CurrentProtocol = proto
-	initBlocks[0].RewardsRate = initialRewardsPerRound
-
-	for i := 1; i < 300; i++ {
-		next := bookkeeping.MakeBlock(initBlocks[i-1].BlockHeader)
-		next.RewardsState = initBlocks[i-1].NextRewardsState(basics.Round(i), params, incentivePoolBalanceAtGenesis, 0)
-		next.TimeStamp = initBlocks[i-1].TimeStamp
-		initBlocks = append(initBlocks, next)
+		initBlock.BlockHeader.GenesisHash = crypto.Hash([]byte(t.Name()))
 	}
 
-	genesisInitState.Blocks = initBlocks
+	genesisInitState.Block = initBlock
 	genesisInitState.Accounts = initAccounts
 	genesisInitState.GenesisHash = crypto.Hash([]byte(t.Name()))
 
@@ -363,8 +361,8 @@ func TestLedgerSingleTx(t *testing.T) {
 	correctTxHeader := transactions.Header{
 		Sender:     addrList[0],
 		Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
-		FirstValid: 10,
-		LastValid:  l.Latest() * 2,
+		FirstValid: l.Latest() + 1,
+		LastValid:  l.Latest() + 10,
 		GenesisID:  t.Name(),
 	}
 
@@ -548,8 +546,8 @@ func TestLedgerSingleTxApplyData(t *testing.T) {
 	correctTxHeader := transactions.Header{
 		Sender:      addrList[0],
 		Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
-		FirstValid:  10,
-		LastValid:   l.Latest() * 2,
+		FirstValid:  l.Latest() + 1,
+		LastValid:   l.Latest() + 10,
 		GenesisID:   t.Name(),
 		GenesisHash: crypto.Hash([]byte(t.Name())),
 	}

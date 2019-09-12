@@ -102,9 +102,7 @@ func (cred UnauthenticatedCredential) Verify(proto config.ConsensusParams, m Mem
 		logging.Base().Panicf("UnauthenticatedCredential.Verify: total money = %v, but user money = %v", m.TotalMoney, userMoney)
 	} else if m.TotalMoney.IsZero() || expectedSelection == 0 || expectedSelection > float64(m.TotalMoney.Raw) {
 		logging.Base().Panicf("UnauthenticatedCredential.Verify: m.TotalMoney %v, expectedSelection %v", m.TotalMoney.Raw, expectedSelection)
-	} else if userMoney.IsZero() {
-		// weight = 0
-	} else {
+	} else if !userMoney.IsZero() {
 		weight = sortition.Select(userMoney.Raw, m.TotalMoney.Raw, expectedSelection, h)
 	}
 
