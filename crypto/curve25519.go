@@ -171,12 +171,12 @@ func GenerateSignatureSecrets(seed Seed) *SignatureSecrets {
 // cryptographic secrets.
 func (s *SignatureSecrets) Sign(message Hashable) Signature {
 	cryptoSigSecretsSignTotal.Inc(map[string]string{})
-	return s.signBytes(hashRep(message))
+	return s.SignBytes(hashRep(message))
 }
 
-// signBytes signs a message directly, without first hashing.
+// SignBytes signs a message directly, without first hashing.
 // Caller is responsible for domain separation.
-func (s *SignatureSecrets) signBytes(message []byte) Signature {
+func (s *SignatureSecrets) SignBytes(message []byte) Signature {
 	cryptoSigSecretsSignBytesTotal.Inc(map[string]string{})
 	return Signature(ed25519Sign(ed25519PrivateKey(s.SK), message))
 }
@@ -191,10 +191,10 @@ func (v SignatureVerifier) Verify(message Hashable, sig Signature) bool {
 	return ed25519Verify(ed25519PublicKey(v), hashRep(message), ed25519Signature(sig))
 }
 
-// verifyBytes verifies a signature, where the message is not hashed first.
+// VerifyBytes verifies a signature, where the message is not hashed first.
 // Caller is responsible for domain separation.
 // If the message is a Hashable, Verify() can be used instead.
-func (v SignatureVerifier) verifyBytes(message []byte, sig Signature) bool {
+func (v SignatureVerifier) VerifyBytes(message []byte, sig Signature) bool {
 	cryptoSigSecretsVerifyBytesTotal.Inc(map[string]string{})
 	return ed25519Verify(ed25519PublicKey(v), message, ed25519Signature(sig))
 }

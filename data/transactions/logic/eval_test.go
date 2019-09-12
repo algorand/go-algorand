@@ -20,12 +20,14 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -1279,5 +1281,89 @@ func BenchmarkSha512_256(b *testing.B) {
 		}
 		require.NoError(b, err)
 		require.True(b, pass)
+	}
+}
+
+func TestEd25519verify(t *testing.T) {
+	t.Parallel()
+	var s crypto.Seed
+	crypto.RandBytes(s[:])
+	c := crypto.GenerateSignatureSecrets(s)
+	msg := "62fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
+	data, err := hex.DecodeString(msg)
+	require.NoError(t, err)
+	pk := basics.Address(c.SignatureVerifier)
+	pkStr := pk.String()
+	program, err := AssembleString(fmt.Sprintf(`arg 0
+arg 1
+addr %s
+ed25519verify`, pkStr))
+	require.NoError(t, err)
+	sig := c.SignBytes(data[:])
+	var txn transactions.SignedTxn
+	txn.Lsig.Logic = program
+	txn.Lsig.Args = [][]byte{data[:], sig[:]}
+	sb := strings.Builder{}
+	ep := EvalParams{Txn: &txn, Trace: &sb}
+	pass, err := Eval(program, ep)
+	if !pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.True(t, pass)
+	require.NoError(t, err)
+
+	// flip a bit and it should not pass
+	msg1 := "52fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
+	data1, err := hex.DecodeString(msg1)
+	require.NoError(t, err)
+	txn.Lsig.Args = [][]byte{data1, sig[:]}
+	sb1 := strings.Builder{}
+	ep1 := EvalParams{Txn: &txn, Trace: &sb1}
+	pass1, err := Eval(program, ep1)
+	require.False(t, pass1)
+	require.NoError(t, err)
+}
+
+func BenchmarkEd25519Verify(b *testing.B){
+	//benchmark setup
+	var data [][32]byte
+	var programs [][]byte
+	var signatures []crypto.Signature
+
+	for i := 0; i < b.N; i++ {
+		var buffer [32]byte				//generate data to be signed
+		crypto.RandBytes(buffer[:])
+		data = append(data, buffer)
+
+		var s crypto.Seed				//generate programs and signatures
+		crypto.RandBytes(s[:])
+		secret := crypto.GenerateSignatureSecrets(s)
+		pk := basics.Address(secret.SignatureVerifier)
+		pkStr := pk.String()
+		program, err := AssembleString(fmt.Sprintf(`arg 0
+arg 1
+addr %s
+ed25519verify`, pkStr))
+		require.NoError(b, err)
+		programs = append(programs, program)
+		sig := secret.SignBytes(buffer[:])
+		signatures = append(signatures, sig)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		var txn transactions.SignedTxn
+		txn.Lsig.Logic = programs[i]
+		txn.Lsig.Args = [][]byte{data[i][:], signatures[i][:]}
+		sb := strings.Builder{}
+		ep := EvalParams{Txn: &txn, Trace: &sb}
+		pass, err := Eval(programs[i], ep)
+		if !pass {
+			b.Log(hex.EncodeToString(programs[i]))
+			b.Log(sb.String())
+		}
+		require.True(b, pass)
+		require.NoError(b, err)
 	}
 }

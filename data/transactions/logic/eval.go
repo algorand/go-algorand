@@ -29,6 +29,7 @@ import (
 	"golang.org/x/crypto/sha3"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 )
@@ -224,6 +225,7 @@ var OpSpecs = []OpSpec{
 	{0x01, "sha256", opSHA256, []StackType{StackBytes}, StackBytes},
 	{0x02, "keccak256", opKeccak256, []StackType{StackBytes}, StackBytes},
 	{0x03, "sha512_256", opSHA512_256, []StackType{StackBytes}, StackBytes},
+	{0x04, "ed25519verify", opEd25519verify, []StackType{StackBytes, StackBytes, StackBytes}, StackUint64},
 	{0x08, "+", opPlus, []StackType{StackUint64, StackUint64}, StackUint64},
 	{0x09, "-", opMinus, []StackType{StackUint64, StackUint64}, StackUint64},
 	{0x0a, "/", opDiv, []StackType{StackUint64, StackUint64}, StackUint64},
@@ -884,4 +886,32 @@ func opGlobal(cx *evalContext) {
 	}
 	cx.stack = append(cx.stack, sv)
 	cx.nextpc = cx.pc + 2
+}
+
+func opEd25519verify(cx *evalContext){
+	last := len(cx.stack) - 1 // index of PK
+	prev := last -1           // index of signature
+	pprev := prev - 1         // index of data
+
+	var sv crypto.SignatureVerifier
+	if len(cx.stack[last].Bytes) != len(sv) {
+		cx.err = errors.New("invalid public key")
+		return
+	}
+	copy(sv[:], cx.stack[last].Bytes)
+
+	var sig crypto.Signature
+	if len(cx.stack[prev].Bytes) != len(sig) {
+		cx.err = errors.New("invalid signature")
+		return
+	}
+	copy(sig[:], cx.stack[prev].Bytes)
+
+	if sv.VerifyBytes(cx.stack[pprev].Bytes, sig) {
+		cx.stack[pprev].Uint = 1
+	} else {
+		cx.stack[pprev].Uint = 0
+	}
+	cx.stack[pprev].Bytes = nil
+	cx.stack = cx.stack[:prev]
 }
