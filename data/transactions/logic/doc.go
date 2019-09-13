@@ -82,6 +82,7 @@ var opDocList = []stringString{
 
 var opDocByName map[string]string
 
+// OpDoc returns a description of the op
 func OpDoc(opName string) string {
 	if opDocByName == nil {
 		opDocByName = stringStringListToMap(opDocList)
@@ -102,6 +103,7 @@ var opcodeImmediateNoteList = []stringString{
 }
 var opcodeImmediateNotes map[string]string
 
+// OpImmediateNote returns a short string about immediate data which follows the op byte
 func OpImmediateNote(opName string) string {
 	if opcodeImmediateNotes == nil {
 		opcodeImmediateNotes = stringStringListToMap(opcodeImmediateNoteList)
@@ -119,6 +121,7 @@ var opDocExtraList = []stringString{
 
 var opDocExtras map[string]string
 
+// OpDocExtra returns extra documentation text about an op
 func OpDocExtra(opName string) string {
 	if opDocExtras == nil {
 		opDocExtras = stringStringListToMap(opDocExtraList)
@@ -133,6 +136,7 @@ type OpGroup struct {
 	Ops       []string
 }
 
+// OpGroupList is groupings of ops for documentation purposes.
 var OpGroupList = []OpGroup{
 	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "==", "!=", "!", "len", "btoi", "%", "|", "&", "^", "~"}},
 	{"Loading Values", []string{"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "global"}},
@@ -141,6 +145,7 @@ var OpGroupList = []OpGroup{
 
 var opCostByName map[string]int
 
+// OpCost returns the relative cost score for an op
 func OpCost(opName string) int {
 	if opCostByName == nil {
 		onn := make(map[string]int, len(opSizes))
