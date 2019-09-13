@@ -741,6 +741,27 @@ func parseIntcblock(program []byte, pc int) (intc []uint64, nextpc int, err erro
 	return
 }
 
+func checkIntConstBlock(cx *evalContext) int {
+	pos := cx.pc + 1
+	numInts, bytesUsed := binary.Uvarint(cx.program[pos:])
+	if bytesUsed <= 0 {
+		cx.err = fmt.Errorf("could not decode int const block size at pc=%d", pos)
+		return 1
+	}
+	pos += bytesUsed
+	//intc = make([]uint64, numInts)
+	for i := uint64(0); i < numInts; i++ {
+		_, bytesUsed = binary.Uvarint(cx.program[pos:])
+		if bytesUsed <= 0 {
+			cx.err = fmt.Errorf("could not decode int const[%d] at pc=%d", i, pos)
+			return 1
+		}
+		pos += bytesUsed
+	}
+	cx.nextpc = pos
+	return 1
+}
+
 func parseBytecBlock(program []byte, pc int) (bytec [][]byte, nextpc int, err error) {
 	pos := pc + 1
 	numItems, bytesUsed := binary.Uvarint(program[pos:])
@@ -762,6 +783,29 @@ func parseBytecBlock(program []byte, pc int) (bytec [][]byte, nextpc int, err er
 	}
 	nextpc = pos
 	return
+}
+
+func checkByteConstBlock(cx *evalContext) int {
+	pos := cx.pc + 1
+	numItems, bytesUsed := binary.Uvarint(cx.program[pos:])
+	if bytesUsed <= 0 {
+		cx.err = fmt.Errorf("could not decode []byte const block size at pc=%d", pos)
+		return 1
+	}
+	pos += bytesUsed
+	//bytec = make([][]byte, numItems)
+	for i := uint64(0); i < numItems; i++ {
+		itemLen, bytesUsed := binary.Uvarint(cx.program[pos:])
+		if bytesUsed <= 0 {
+			cx.err = fmt.Errorf("could not decode []byte const[%d] at pc=%d", i, pos)
+			return 1
+		}
+		pos += bytesUsed
+		//bytec[i] = program[pos : pos+int(itemLen)]
+		pos += int(itemLen)
+	}
+	cx.nextpc = pos
+	return 1
 }
 
 func disIntcblock(dis *disassembleState) {

@@ -703,11 +703,6 @@ func opIntConstBlock(cx *evalContext) {
 	cx.intc, cx.nextpc, cx.err = parseIntcblock(cx.program, cx.pc)
 }
 
-func checkIntConstBlock(cx *evalContext) int {
-	cx.intc, cx.nextpc, cx.err = parseIntcblock(cx.program, cx.pc)
-	return 1
-}
-
 func opIntConstN(cx *evalContext, n uint) {
 	if n >= uint(len(cx.intc)) {
 		cx.err = fmt.Errorf("intc [%d] beyond %d constants", n, len(cx.intc))
@@ -735,11 +730,6 @@ func opIntConst3(cx *evalContext) {
 
 func opByteConstBlock(cx *evalContext) {
 	cx.bytec, cx.nextpc, cx.err = parseBytecBlock(cx.program, cx.pc)
-}
-
-func checkByteConstBlock(cx *evalContext) int {
-	cx.bytec, cx.nextpc, cx.err = parseBytecBlock(cx.program, cx.pc)
-	return 1
 }
 
 func opByteConstN(cx *evalContext, n uint) {

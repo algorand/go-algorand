@@ -1181,48 +1181,208 @@ int 28939890412103745
 +
 `
 
-func BenchmarkAddx64(b *testing.B) {
-	program, err := AssembleString(addBenchmarkSource)
+/*
+import random
+
+def foo():
+    print('int {}'.format(random.randint(0,0x01ffffffffffffff)))
+    for i in range(63):
+        print('int {}'.format(random.randint(0,0x01ffffffffffffff)))
+        print('+')
+*/
+const addBenchmark2Source = `int 8371863094338737
+int 29595196041051360
++
+int 139118528533666612
++
+int 1421009403968912
++
+int 907617584182604
++
+int 8610485121810683
++
+int 56818679638570570
++
+int 22722200339071385
++
+int 128025265808578871
++
+int 30214594087062427
++
+int 70941633792780019
++
+int 68616285258830882
++
+int 95617532397241262
++
+int 137803932055116903
++
+int 1240289092018042
++
+int 114673410328755260
++
+int 67006610117006306
++
+int 108421978090249937
++
+int 78170195495060544
++
+int 109275909558212614
++
+int 66046923927123871
++
+int 85038805453063903
++
+int 60775346571260341
++
+int 22114958484139378
++
+int 52262205171951711
++
+int 33857856730782173
++
+int 71141287912053397
++
+int 119377806837197308
++
+int 71417754584546836
++
+int 122806020139022328
++
+int 36646716042861244
++
+int 99968579159521499
++
+int 35488485222921935
++
+int 16751897248756917
++
+int 141620224053202253
++
+int 13915744590935845
++
+int 47411828952734632
++
+int 94685514634950476
++
+int 125511802479415110
++
+int 34477253888878684
++
+int 16061684214002734
++
+int 58318330808434953
++
+int 410385592781599
++
+int 143008385493466625
++
+int 103852750058221787
++
+int 129643830537163971
++
+int 100586050355894544
++
+int 128489246083999182
++
+int 84841243787957913
++
+int 7286131447045084
++
+int 36477256468337911
++
+int 44619578152091966
++
+int 53048951105105392
++
+int 138234731403382207
++
+int 54350808956391553
++
+int 106338486498394095
++
+int 111905698472755554
++
+int 40677661094001844
++
+int 20981945982205996
++
+int 49847844071908901
++
+int 39461620270393089
++
+int 25635555040376697
++
+int 37469742568207216
++
+int 142791994204213819
++
+`
+
+func benchmarkBasicProgram(b *testing.B, source string) {
+	program, err := AssembleString(source)
 	require.NoError(b, err)
 	cost, err := Check(program, EvalParams{})
 	require.NoError(b, err)
 	require.True(b, cost < 1000)
 	//b.Logf("%d bytes of program", len(program))
 	//b.Log(hex.EncodeToString(program))
-	b.StopTimer()
 	b.ResetTimer()
-	b.StartTimer()
 	sb := strings.Builder{} // Trace: &sb
 	for i := 0; i < b.N; i++ {
 		pass, err := Eval(program, EvalParams{})
 		if !pass {
 			b.Log(sb.String())
 		}
-		require.NoError(b, err)
-		require.True(b, pass)
+		// require is super slow but makes useful error messages, wrap it in a check that makes the benchmark run a bunch faster
+		if err != nil {
+			require.NoError(b, err)
+		}
+		if !pass {
+			require.True(b, pass)
+		}
+	}
+}
+
+func benchmarkExpensiveProgram(b *testing.B, source string) {
+	program, err := AssembleString(source)
+	require.NoError(b, err)
+	cost, err := Check(program, EvalParams{})
+	require.NoError(b, err)
+	require.True(b, cost > 1000)
+	//b.Logf("%d bytes of program", len(program))
+	//b.Log(hex.EncodeToString(program))
+	b.ResetTimer()
+	sb := strings.Builder{} // Trace: &sb
+	for i := 0; i < b.N; i++ {
+		pass, err := Eval(program, EvalParams{})
+		if !pass {
+			b.Log(sb.String())
+		}
+		// require is super slow but makes useful error messages, wrap it in a check that makes the benchmark run a bunch faster
+		if err != nil {
+			require.NoError(b, err)
+		}
+		if !pass {
+			require.True(b, pass)
+		}
+	}
+}
+
+func BenchmarkAddx64(b *testing.B) {
+	progs := [][]string{
+		[]string{"add long stack", addBenchmarkSource},
+		[]string{"add small stack", addBenchmark2Source},
+	}
+	for _, pp := range progs {
+		b.Run(pp[0], func(b *testing.B) {
+			benchmarkBasicProgram(b, pp[1])
+		})
 	}
 }
 
 func BenchmarkNopPassx1(b *testing.B) {
-	program, err := AssembleString("int 1")
-	require.NoError(b, err)
-	cost, err := Check(program, EvalParams{})
-	require.NoError(b, err)
-	require.True(b, cost < 1000)
-	//b.Logf("%d bytes of program", len(program))
-	//b.Log(hex.EncodeToString(program))
-	b.StopTimer()
-	b.ResetTimer()
-	b.StartTimer()
-	sb := strings.Builder{} // Trace: &sb
-	for i := 0; i < b.N; i++ {
-		pass, err := Eval(program, EvalParams{})
-		if !pass {
-			b.Log(sb.String())
-		}
-		require.NoError(b, err)
-		require.True(b, pass)
-	}
+	benchmarkBasicProgram(b, "int 1")
 }
 
 func BenchmarkSha256x900(b *testing.B) {
@@ -1233,25 +1393,7 @@ func BenchmarkSha256x900(b *testing.B) {
 		sb.WriteString("sha256\n")
 	}
 	sb.WriteString("len\nint 0\n>\n")
-	program, err := AssembleString(sb.String())
-	require.NoError(b, err)
-	cost, err := Check(program, EvalParams{})
-	require.NoError(b, err)
-	require.True(b, cost > 1000)
-	//b.Logf("%d bytes of program", len(program))
-	//b.Log(hex.EncodeToString(program))
-	b.StopTimer()
-	b.ResetTimer()
-	b.StartTimer()
-	sb = strings.Builder{}
-	for i := 0; i < b.N; i++ {
-		pass, err := Eval(program, EvalParams{})
-		if !pass {
-			b.Log(sb.String())
-		}
-		require.NoError(b, err)
-		require.True(b, pass)
-	}
+	benchmarkExpensiveProgram(b, sb.String())
 }
 
 func BenchmarkKeccak256x900(b *testing.B) {
@@ -1262,25 +1404,7 @@ func BenchmarkKeccak256x900(b *testing.B) {
 		sb.WriteString("keccak256\n")
 	}
 	sb.WriteString("len\nint 0\n>\n")
-	program, err := AssembleString(sb.String())
-	require.NoError(b, err)
-	cost, err := Check(program, EvalParams{})
-	require.NoError(b, err)
-	require.True(b, cost > 1000)
-	//b.Logf("%d bytes of program", len(program))
-	//b.Log(hex.EncodeToString(program))
-	b.StopTimer()
-	b.ResetTimer()
-	b.StartTimer()
-	sb = strings.Builder{}
-	for i := 0; i < b.N; i++ {
-		pass, err := Eval(program, EvalParams{})
-		if !pass {
-			b.Log(sb.String())
-		}
-		require.NoError(b, err)
-		require.True(b, pass)
-	}
+	benchmarkExpensiveProgram(b, sb.String())
 }
 
 func BenchmarkSha512_256x900(b *testing.B) {
@@ -1291,25 +1415,7 @@ func BenchmarkSha512_256x900(b *testing.B) {
 		sb.WriteString("sha512_256\n")
 	}
 	sb.WriteString("len\nint 0\n>\n")
-	program, err := AssembleString(sb.String())
-	require.NoError(b, err)
-	cost, err := Check(program, EvalParams{})
-	require.NoError(b, err)
-	require.True(b, cost > 1000)
-	//b.Logf("%d bytes of program", len(program))
-	//b.Log(hex.EncodeToString(program))
-	b.StopTimer()
-	b.ResetTimer()
-	b.StartTimer()
-	sb = strings.Builder{}
-	for i := 0; i < b.N; i++ {
-		pass, err := Eval(program, EvalParams{})
-		if !pass {
-			b.Log(sb.String())
-		}
-		require.NoError(b, err)
-		require.True(b, pass)
-	}
+	benchmarkExpensiveProgram(b, sb.String())
 }
 
 func TestEd25519verify(t *testing.T) {
@@ -1391,17 +1497,22 @@ ed25519verify`, pkStr))
 			b.Log(hex.EncodeToString(programs[i]))
 			b.Log(sb.String())
 		}
-		require.True(b, pass)
-		require.NoError(b, err)
+		if err != nil {
+			require.NoError(b, err)
+		}
+		if !pass {
+			require.True(b, pass)
+		}
 	}
 }
 
-func BenchmarkCheckx4(b *testing.B) {
+func BenchmarkCheckx5(b *testing.B) {
 	sourcePrograms := []string{
 		tlhcProgramText,
 		testTxnProgramText,
 		testCompareProgramText,
 		addBenchmarkSource,
+		addBenchmark2Source,
 	}
 
 	programs := make([][]byte, len(sourcePrograms))
@@ -1414,7 +1525,9 @@ func BenchmarkCheckx4(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		for _, program := range programs {
 			_, err = Check(program, EvalParams{})
-			require.NoError(b, err)
+			if err != nil {
+				require.NoError(b, err)
+			}
 		}
 	}
 }
