@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+BUILD_REQUEST=$1
+OUTPUTFILE=$2
+BUCKET=$3
+NO_SIGN=$4
+
+
+# TODO..
