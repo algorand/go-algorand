@@ -69,12 +69,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	require.NoError(t, err)
 }
 
-func TestTLHC(t *testing.T) {
-	t.Parallel()
-	a1, _ := basics.UnmarshalChecksumAddress("DFPKC2SJP3OTFVJFMCD356YB7BOT4SJZTGWLIPPFEWL3ZABUFLTOY6ILYE")
-	a2, _ := basics.UnmarshalChecksumAddress("YYKRMERAFXMXCDWMBNR6BUUWQXDCUR53FPUGXLUYS7VNASRTJW2ENQ7BMQ")
-	secret, _ := base64.StdEncoding.DecodeString("xPUB+DJir1wsH7g2iEY1QwYqHqYH1vUJtzZKW4RxXsY=")
-	program, err := AssembleString(`txn CloseRemainderTo
+const tlhcProgramText = `txn CloseRemainderTo
 addr DFPKC2SJP3OTFVJFMCD356YB7BOT4SJZTGWLIPPFEWL3ZABUFLTOY6ILYE
 ==
 txn Receiver
@@ -102,7 +97,14 @@ global Round
 int 3000
 >
 &&
-||`)
+||`
+
+func TestTLHC(t *testing.T) {
+	t.Parallel()
+	a1, _ := basics.UnmarshalChecksumAddress("DFPKC2SJP3OTFVJFMCD356YB7BOT4SJZTGWLIPPFEWL3ZABUFLTOY6ILYE")
+	a2, _ := basics.UnmarshalChecksumAddress("YYKRMERAFXMXCDWMBNR6BUUWQXDCUR53FPUGXLUYS7VNASRTJW2ENQ7BMQ")
+	secret, _ := base64.StdEncoding.DecodeString("xPUB+DJir1wsH7g2iEY1QwYqHqYH1vUJtzZKW4RxXsY=")
+	program, err := AssembleString(tlhcProgramText)
 	require.NoError(t, err)
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = program
@@ -653,9 +655,7 @@ int 2069
 	require.True(t, pass)
 }
 
-func TestTxn(t *testing.T) {
-	t.Parallel()
-	program, err := AssembleString(`txn Sender
+const testTxnProgramText = `txn Sender
 arg 0
 ==
 txn Receiver
@@ -705,7 +705,11 @@ int 17776
 txn VoteKeyDilution
 int 1
 ==
-&&`)
+&&`
+
+func TestTxn(t *testing.T) {
+	t.Parallel()
+	program, err := AssembleString(testTxnProgramText)
 	require.NoError(t, err)
 	cost, err := Check(program, EvalParams{})
 	require.NoError(t, err)
@@ -771,9 +775,7 @@ int 0x310
 	require.True(t, pass)
 }
 
-func TestCompares(t *testing.T) {
-	t.Parallel()
-	program, err := AssembleString(`int 35
+const testCompareProgramText = `int 35
 int 16
 >
 int 1
@@ -831,7 +833,11 @@ byte 0xcafe
 byte 0xf00d
 !=
 &&
-&&`)
+&&`
+
+func TestCompares(t *testing.T) {
+	t.Parallel()
+	program, err := AssembleString(testCompareProgramText)
 	require.NoError(t, err)
 	cost, err := Check(program, EvalParams{})
 	require.NoError(t, err)
@@ -1387,5 +1393,28 @@ ed25519verify`, pkStr))
 		}
 		require.True(b, pass)
 		require.NoError(b, err)
+	}
+}
+
+func BenchmarkCheckx4(b *testing.B) {
+	sourcePrograms := []string{
+		tlhcProgramText,
+		testTxnProgramText,
+		testCompareProgramText,
+		addBenchmarkSource,
+	}
+
+	programs := make([][]byte, len(sourcePrograms))
+	var err error
+	for i, text := range sourcePrograms {
+		programs[i], err = AssembleString(text)
+		require.NoError(b, err)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for _, program := range programs {
+			_, err = Check(program, EvalParams{})
+			require.NoError(b, err)
+		}
 	}
 }

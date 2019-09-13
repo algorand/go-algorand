@@ -138,3 +138,22 @@ var OpGroupList = []OpGroup{
 	{"Loading Values", []string{"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "global"}},
 	{"Flow Control", []string{"err", "bnz", "pop", "dup"}},
 }
+
+var opCostByName map[string]int
+
+func OpCost(opName string) int {
+	if opCostByName == nil {
+		onn := make(map[string]int, len(opSizes))
+		for _, oz := range opSizes {
+			if oz.cost != 1 {
+				onn[oz.name] = oz.cost
+			}
+		}
+		opCostByName = onn
+	}
+	cost, hit := opCostByName[opName]
+	if hit {
+		return cost
+	}
+	return 1
+}

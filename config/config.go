@@ -197,6 +197,9 @@ type ConsensusParams struct {
 
 	// len(LogicSig.Logic) + len(LogicSig.Args[*]) must be less than this
 	LogicSigMaxSize uint64
+
+	// sum of estimated op cost must be less than this
+	LogicSigMaxCost uint64
 }
 
 // Consensus tracks the protocol-level settings for different versions of the
@@ -406,6 +409,7 @@ func initConsensusProtocols() {
 	vFuture.Asset = true
 	vFuture.LogicSigVersion = 1
 	vFuture.LogicSigMaxSize = 1000
+	vFuture.LogicSigMaxCost = 20000
 	vFuture.MaxAssetsPerAccount = 1000
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
 	Consensus[protocol.ConsensusFuture] = vFuture

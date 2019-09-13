@@ -298,8 +298,8 @@ var opSizes = []opSize{
 	{"arg", 1, 2, nil},
 	{"txn", 1, 2, nil},
 	{"global", 1, 2, nil},
-	{"intcblock", 0, 0, checkIntConstBlock},
-	{"bytecblock", 0, 0, checkByteConstBlock},
+	{"intcblock", 1, 0, checkIntConstBlock},
+	{"bytecblock", 1, 0, checkByteConstBlock},
 }
 
 var opSizeByOpcode []opSize

@@ -68,6 +68,7 @@ func globalFieldsMarkdown(out io.Writer) {
 func opToMarkdown(out io.Writer, op *logic.OpSpec) (err error) {
 
 	opextra := logic.OpImmediateNote(op.Name)
+	cost := logic.OpCost(op.Name)
 	fmt.Fprintf(out, "\n## %s\n\n- Opcode: 0x%02x %s\n", op.Name, op.Opcode, opextra)
 	if op.Args == nil {
 		fmt.Fprintf(out, "- Pops: None\n")
@@ -84,6 +85,9 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec) (err error) {
 	}
 	fmt.Fprintf(out, "- Pushes: %s\n", op.Returns.String())
 	fmt.Fprintf(out, "- %s\n", logic.OpDoc(op.Name))
+	if cost != 1 {
+		fmt.Fprintf(out, "- **Cost**: %d\n", cost)
+	}
 	ode := logic.OpDocExtra(op.Name)
 	if ode != "" {
 		fmt.Fprintf(out, "\n%s\n", ode)

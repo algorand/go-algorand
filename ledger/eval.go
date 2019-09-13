@@ -379,7 +379,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad *transact
 
 		// Properly signed?
 		if eval.txcache == nil || !eval.txcache.Verified(txn) {
-			err = txn.PoolVerify(spec, eval.proto, eval.verificationPool)
+			err = TxnPoolVerify(&txn, spec, eval.proto, eval.verificationPool)
 			if err != nil {
 				return fmt.Errorf("transaction %v: failed to verify: %v", txn.ID(), err)
 			}

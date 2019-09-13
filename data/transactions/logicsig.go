@@ -71,6 +71,14 @@ func (lsig *LogicSig) Verify(proto *config.ConsensusParams, txn *Transaction) er
 	if uint64(lsig.Len()) > proto.LogicSigMaxSize {
 		return errors.New("LogicSig.Logic too long")
 	}
+
+	// TODO: figure out how to fix circularity and enable this
+	// ep := logic.EvalParams{Txn: txn, Proto: proto}
+	// cost, err := logic.Check(txn.Lsig.Logic, ep)
+	// if cost > proto.LogicSigMaxCost {
+	// 	return fmt.Errorf("LogicSig.Logic too slow, %d > %d", cost, proto.LogicSigMaxCost)
+	// }
+
 	hasSig := false
 	hasMsig := false
 	numSigs := 0
