@@ -96,18 +96,26 @@ if [[ $(uname) == "Darwin" ]]; then
     exit
 fi
 
-# modify genesis.json to use a custom network name to prevent SRV record resolving
-TEMPDIR=$(mktemp -d 2>/dev/null || mktemp -d -t "tmp")
-cp gen/${DEFAULTNETWORK}/genesis.json ${TEMPDIR}
-trap "cp ${TEMPDIR}/genesis.json gen/${DEFAULTNETWORK};rm -rf ${TEMPDIR}" 0
-if [[ "${GENESISFILE}" = "" ]]; then
-    sed "s/${DEFAULTNETWORK}/${NETWORK}/" ${TEMPDIR}/genesis.json > gen/${DEFAULTNETWORK}/genesis.json
-else
-    cp ${GENESISFILE} gen/${DEFAULTNETWORK}/genesis.json
+if [[ ${SKIP_DEPLOY == "" ]]; then
+
+    # modify genesis.json to use a custom network name to prevent SRV record resolving
+    TEMPDIR=$(mktemp -d 2>/dev/null || mktemp -d -t "tmp")
+    cp gen/${DEFAULTNETWORK}/genesis.json ${TEMPDIR}
+    trap "cp ${TEMPDIR}/genesis.json gen/${DEFAULTNETWORK};rm -rf ${TEMPDIR}" 0
+    if [[ "${GENESISFILE}" = "" ]]; then
+        sed "s/${DEFAULTNETWORK}/${NETWORK}/" ${TEMPDIR}/genesis.json > gen/${DEFAULTNETWORK}/genesis.json
+    else
+        cp ${GENESISFILE} gen/${DEFAULTNETWORK}/genesis.json
+    fi
+
 fi
 
-# For private builds, always build the base version (with telemetry)
-export VARIATIONS="base"
-scripts/build_packages.sh $(./scripts/osarchtype.sh)
+if [[ ${SKIP_BUILD == "" ]]; then
 
-scripts/upload_version.sh ${CHANNEL} ${PKG_ROOT} ${S3_RELEASE_BUCKET}
+    # For private builds, always build the base version (with telemetry)
+    export VARIATIONS="base"
+    scripts/build_packages.sh $(./scripts/osarchtype.sh)
+
+    scripts/upload_version.sh ${CHANNEL} ${PKG_ROOT} ${S3_RELEASE_BUCKET}
+
+fi
