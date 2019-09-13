@@ -15,6 +15,7 @@
 # TRAVIS_COMMIT
 # TRAVIS_BUILD_NUMBER
 # BUILD_REQUESTS_BUCKET
+# BUILD_PULL_EQUESTS_BUCKET
 #
 
 if [ "${BUILD_TYPE}" != "external_build" ]; then
@@ -27,9 +28,16 @@ if [ "${TARGET_PLATFORM}" != "linux-arm64" ]; then
     exit 1
 fi
 
-if [ "${BUILD_REQUESTS_BUCKET}" = "" ]; then
-    echo "error: BUILD_REQUESTS_BUCKET was not specified."
-    exit 1
+if [ "${TRAVIS_PULL_REQUEST}" = "false" ]; then
+    if [ "${BUILD_REQUESTS_BUCKET}" = "" ]; then
+        echo "error: BUILD_REQUESTS_BUCKET was not specified."
+        exit 1
+    fi
+else
+    if [ "${BUILD_PULL_EQUESTS_BUCKET}" = "" ]; then
+        echo "error: BUILD_PULL_EQUESTS_BUCKET was not specified."
+        exit 1
+    fi
 fi
 
 sudo apt-get install awscli
