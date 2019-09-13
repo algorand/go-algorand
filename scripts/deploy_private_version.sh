@@ -96,7 +96,7 @@ if [[ $(uname) == "Darwin" ]]; then
     exit
 fi
 
-if [[ ${SKIP_DEPLOY == "" ]]; then
+if [[ ${SKIP_DEPLOY} == "" ]]; then
 
     # modify genesis.json to use a custom network name to prevent SRV record resolving
     TEMPDIR=$(mktemp -d 2>/dev/null || mktemp -d -t "tmp")
@@ -110,7 +110,7 @@ if [[ ${SKIP_DEPLOY == "" ]]; then
 
 fi
 
-if [[ ${SKIP_BUILD == "" ]]; then
+if [[ ${SKIP_BUILD} == "" ]]; then
 
     # For private builds, always build the base version (with telemetry)
     export VARIATIONS="base"
