@@ -18,6 +18,9 @@
 # BUILD_PULL_EQUESTS_BUCKET
 #
 
+# exit on error
+set -e
+
 if [ "${BUILD_TYPE}" != "external_build" ]; then
     echo "error: wrong build type specified '${BUILD_TYPE}'"
     exit 1
@@ -45,11 +48,33 @@ sudo apt-get install awscli
 echo "{ \"TRAVIS_BRANCH\" = \"${TRAVIS_BRANCH}\", \"TRAVIS_COMMIT\"=\"${TRAVIS_COMMIT}\" }" > ${TRAVIS_BUILD_NUMBER}.json
 
 if [ "${TRAVIS_PULL_REQUEST}" = "false" ]; then
-    aws s3 cp ${TRAVIS_BUILD_NUMBER}.json s3://${BUILD_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${TRAVIS_BUILD_NUMBER}.json
+    BUILD_REQUEST_PATH=s3://${BUILD_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${TRAVIS_BUILD_NUMBER}.json
+    NO_SIGN_REQUEST=
 else
-    aws s3 cp ${TRAVIS_BUILD_NUMBER}.json s3://${BUILD_PULL_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${TRAVIS_BUILD_NUMBER}.json --no-sign-request
+    BUILD_REQUEST_PATH=s3://${BUILD_PULL_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${TRAVIS_BUILD_NUMBER}.json
+    NO_SIGN_REQUEST=--no-sign-request
 fi
 
+aws s3 cp ${TRAVIS_BUILD_NUMBER}.json ${BUILD_REQUEST_PATH} ${NO_SIGN_REQUEST}
 
+# don't exit on error. we will test the error code.
+set +e
 
+echo "Waiting for build to start..."
+end=$((SECONDS+30))
+BUILD_STARTED=false
+while [ $SECONDS -lt $end ]; do
+    PENDING_BUILD=$(aws s3 ls ${BUILD_REQUEST_PATH} ${NO_SIGN_REQUEST} | wc -l | sed 's/[[:space:]]//g')
+    if [ "${PENDING_BUILD}" != "1" ]; do
+        BUILD_STARTED=true
+        break
+    fi
+done
+
+if [ "${BUILD_STARTED}" = "false" ]; do
+    echo "Builder failed to kick off within elapsed time; aborting"
+    exit 1
+fi
+
+echo "TODO : Wait until builder is done and print out builder output"
 
