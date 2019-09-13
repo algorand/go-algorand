@@ -34,10 +34,14 @@ fi
 
 sudo apt-get install awscli
 # create build request
-export AWS_ACCESS_KEY_ID=AKIAYH3ME2LO4SEAJTTV
-export AWS_SECRET_ACCESS_KEY=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
 echo "{ \"TRAVIS_BRANCH\" = \"${TRAVIS_BRANCH}\", \"TRAVIS_COMMIT\"=\"${TRAVIS_COMMIT}\" }" > ${TRAVIS_BUILD_NUMBER}.json
-aws s3 cp ${TRAVIS_BUILD_NUMBER}.json s3://${BUILD_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${TRAVIS_BUILD_NUMBER}.json
+
+if [ "${TRAVIS_PULL_REQUEST}" = "false" ]; then
+    aws s3 cp ${TRAVIS_BUILD_NUMBER}.json s3://${BUILD_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${TRAVIS_BUILD_NUMBER}.json
+else
+    aws s3 cp ${TRAVIS_BUILD_NUMBER}.json s3://${BUILD_PULL_EQUESTS_BUCKET}/${TARGET_PLATFORM}/${TRAVIS_BUILD_NUMBER}.json --no-sign-request
+fi
+
 
 
 
