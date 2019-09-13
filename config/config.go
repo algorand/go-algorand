@@ -179,6 +179,24 @@ type ConsensusParams struct {
 
 	// domain-separated credentials
 	CredentialDomainSeparationEnabled bool
+
+	// fix the rewards calculation by avoiding subtracting too much from the rewards pool
+	PendingResidueRewards bool
+
+	// asset support
+	Asset bool
+
+	// max number of assets per account
+	MaxAssetsPerAccount int
+
+	// support sequential transaction counter TxnCounter
+	TxnCounter bool
+
+	// transaction groups
+	SupportTxGroups bool
+
+	// max group size
+	MaxTxGroupSize int
 }
 
 // Consensus tracks the protocol-level settings for different versions of the
@@ -251,6 +269,8 @@ func initConsensusProtocols() {
 		SeedRefreshInterval: 100,
 
 		MaxBalLookback: 320,
+
+		MaxTxGroupSize: 1,
 	}
 
 	v7.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
@@ -370,6 +390,27 @@ func initConsensusProtocols() {
 
 	// v16 can be upgraded to v17.
 	v16.ApprovedUpgrades[protocol.ConsensusV17] = true
+
+	// ConsensusV18 points to reward calculation spec commit
+	v18 := v17
+	v18.PendingResidueRewards = true
+	v18.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	Consensus[protocol.ConsensusV18] = v18
+
+	// v17 can be upgraded to v18.
+	// for now, I will leave this gated out.
+	// v17.ApprovedUpgrades[protocol.ConsensusV18] = true
+
+	// ConsensusFuture is used to test features that are implemented
+	// but not yet released in a production protocol version.
+	vFuture := v18
+	vFuture.TxnCounter = true
+	vFuture.Asset = true
+	vFuture.MaxAssetsPerAccount = 1000
+	vFuture.SupportTxGroups = true
+	vFuture.MaxTxGroupSize = 16
+	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	Consensus[protocol.ConsensusFuture] = vFuture
 }
 
 func initConsensusTestProtocols() {
@@ -400,17 +441,10 @@ func initConsensusTestProtocols() {
 		ApprovedUpgrades: map[protocol.ConsensusVersion]bool{},
 	}
 
-	Consensus[protocol.ConsensusTestBigBlocks] = ConsensusParams{
-		UpgradeVoteRounds:   10000,
-		UpgradeThreshold:    9000,
-		UpgradeWaitRounds:   10000,
-		MaxVersionStringLen: 64,
-
-		MaxTxnBytesPerBlock: 100000000,
-		DefaultKeyDilution:  10000,
-
-		ApprovedUpgrades: map[protocol.ConsensusVersion]bool{},
-	}
+	testBigBlocks := Consensus[protocol.ConsensusCurrentVersion]
+	testBigBlocks.MaxTxnBytesPerBlock = 100000000
+	testBigBlocks.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	Consensus[protocol.ConsensusTestBigBlocks] = testBigBlocks
 
 	rapidRecalcParams := Consensus[protocol.ConsensusCurrentVersion]
 	rapidRecalcParams.RewardsRateRefreshInterval = 25

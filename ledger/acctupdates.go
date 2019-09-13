@@ -90,16 +90,24 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 		return fmt.Errorf("accountUpdates.loadFromDisk: initAccounts not set")
 	}
 
+	latest := l.Latest()
 	err := au.dbs.wdb.Atomic(func(tx *sql.Tx) error {
 		var err0 error
-		err0 = accountsInit(tx, au.initAccounts, au.initProto)
+		au.dbRound, err0 = au.accountsInitialize(tx)
 		if err0 != nil {
 			return err0
 		}
-
-		au.dbRound, err0 = accountsRound(tx)
-		if err0 != nil {
-			return err0
+		// Check for blocks DB and tracker DB un-sync
+		if au.dbRound > latest {
+			au.log.Warnf("resetting accounts DB (on round %v, but blocks DB's latest is %v)", au.dbRound, latest)
+			err0 = accountsReset(tx)
+			if err0 != nil {
+				return err0
+			}
+			au.dbRound, err0 = au.accountsInitialize(tx)
+			if err0 != nil {
+				return err0
+			}
 		}
 
 		totals, err0 := accountsTotals(tx)
@@ -125,7 +133,6 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 	}
 	au.protos = []config.ConsensusParams{config.Consensus[hdr.CurrentProtocol]}
 
-	latest := l.Latest()
 	au.deltas = nil
 	au.accounts = make(map[basics.Address]modifiedAccount)
 	loaded := au.dbRound
@@ -147,6 +154,20 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 	}
 
 	return nil
+}
+
+// Initialize accounts DB if needed and return account round
+func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
+	err := accountsInit(tx, au.initAccounts, au.initProto)
+	if err != nil {
+		return 0, err
+	}
+
+	rnd, err := accountsRound(tx)
+	if err != nil {
+		return 0, err
+	}
+	return rnd, nil
 }
 
 func (au *accountUpdates) close() {

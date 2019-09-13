@@ -47,10 +47,10 @@ type Ledger struct {
 	log logging.Logger
 }
 
-func makeGenesisBlocks(proto protocol.ConsensusVersion, genesisBal GenesisBalances, genesisID string, genesisHash crypto.Digest) ([]bookkeeping.Block, error) {
+func makeGenesisBlock(proto protocol.ConsensusVersion, genesisBal GenesisBalances, genesisID string, genesisHash crypto.Digest) (bookkeeping.Block, error) {
 	params, ok := config.Consensus[proto]
 	if !ok {
-		return nil, fmt.Errorf("unsupported protocol %s", proto)
+		return bookkeeping.Block{}, fmt.Errorf("unsupported protocol %s", proto)
 	}
 
 	poolAddr := basics.Address(genesisBal.rewardsPool)
@@ -87,17 +87,20 @@ func makeGenesisBlocks(proto protocol.ConsensusVersion, genesisBal GenesisBalanc
 		blk.BlockHeader.GenesisHash = genesisHash
 	}
 
-	blocks := []bookkeeping.Block{blk}
-	return blocks, nil
+	return blk, nil
 }
 
 // LoadLedger creates a Ledger object to represent the ledger with the
 // specified database file prefix, initializing it if necessary.
-func LoadLedger(log logging.Logger, dbFilenamePrefix string, memory bool, genesisProto protocol.ConsensusVersion, genesisBal GenesisBalances, genesisID string, genesisHash crypto.Digest, blockListeners []ledger.BlockListener) (*Ledger, error) {
+func LoadLedger(
+	log logging.Logger, dbFilenamePrefix string, memory bool,
+	genesisProto protocol.ConsensusVersion, genesisBal GenesisBalances, genesisID string, genesisHash crypto.Digest,
+	blockListeners []ledger.BlockListener, isArchival bool,
+) (*Ledger, error) {
 	if genesisBal.balances == nil {
 		genesisBal.balances = make(map[basics.Address]basics.AccountData)
 	}
-	genBlocks, err := makeGenesisBlocks(genesisProto, genesisBal, genesisID, genesisHash)
+	genBlock, err := makeGenesisBlock(genesisProto, genesisBal, genesisID, genesisHash)
 	if err != nil {
 		return nil, err
 	}
@@ -113,9 +116,14 @@ func LoadLedger(log logging.Logger, dbFilenamePrefix string, memory bool, genesi
 	l := &Ledger{
 		log: log,
 	}
+	genesisInitState := ledger.InitState{
+		Block:       genBlock,
+		Accounts:    genesisBal.balances,
+		GenesisHash: genesisHash,
+	}
 	l.log.Debugf("Initializing Ledger(%s)", dbFilenamePrefix)
 
-	ll, err := ledger.OpenLedger(log, dbFilenamePrefix, memory, genBlocks, genesisBal.balances, genesisHash)
+	ll, err := ledger.OpenLedger(log, dbFilenamePrefix, memory, genesisInitState, isArchival)
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +146,7 @@ func (l *Ledger) AddressTxns(id basics.Address, r basics.Round) ([]transactions.
 	proto := config.Consensus[blk.CurrentProtocol]
 
 	var res []transactions.SignedTxnWithAD
-	payset, err := blk.DecodePaysetWithAD()
+	payset, err := blk.DecodePaysetFlat()
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +166,7 @@ func (l *Ledger) LookupTxid(txid transactions.Txid, r basics.Round) (stxn transa
 		return transactions.SignedTxnWithAD{}, false, err
 	}
 
-	payset, err := blk.DecodePaysetWithAD()
+	payset, err := blk.DecodePaysetFlat()
 	if err != nil {
 		return transactions.SignedTxnWithAD{}, false, err
 	}
@@ -315,7 +323,7 @@ func (*Ledger) AssemblePayset(pool *pools.TransactionPool, eval *ledger.BlockEva
 	totalFees := uint64(0)
 
 	for len(pending) > 0 {
-		txn := pending[0]
+		txgroup := pending[0]
 		pending = pending[1:]
 
 		if time.Now().After(deadline) {
@@ -323,7 +331,11 @@ func (*Ledger) AssemblePayset(pool *pools.TransactionPool, eval *ledger.BlockEva
 			break
 		}
 
-		err := eval.Transaction(txn, nil)
+		txgroupad := make([]transactions.SignedTxnWithAD, len(txgroup))
+		for i, tx := range txgroup {
+			txgroupad[i].SignedTxn = tx
+		}
+		err := eval.TransactionGroup(txgroupad)
 		if err == ledger.ErrNoSpace {
 			stats.StopReason = telemetryspec.AssembleBlockFull
 			break
@@ -348,39 +360,41 @@ func (*Ledger) AssemblePayset(pool *pools.TransactionPool, eval *ledger.BlockEva
 
 			logAt(msg)
 		} else {
-			fee := txn.Txn.Fee.Raw
-			encodedLen := txn.GetEncodedLength()
-			priority := uint64(txn.PtrPriority())
+			for _, txn := range txgroup {
+				fee := txn.Txn.Fee.Raw
+				encodedLen := txn.GetEncodedLength()
+				priority := uint64(txn.PtrPriority())
 
-			stats.IncludedCount++
-			totalFees += fee
+				stats.IncludedCount++
+				totalFees += fee
 
-			if first {
-				first = false
-				stats.MinFee = fee
-				stats.MaxFee = fee
-				stats.MinLength = encodedLen
-				stats.MaxLength = encodedLen
-				stats.MinPriority = priority
-				stats.MaxPriority = priority
-			} else {
-				if fee < stats.MinFee {
+				if first {
+					first = false
 					stats.MinFee = fee
-				} else if fee > stats.MaxFee {
 					stats.MaxFee = fee
-				}
-				if encodedLen < stats.MinLength {
 					stats.MinLength = encodedLen
-				} else if encodedLen > stats.MaxLength {
 					stats.MaxLength = encodedLen
-				}
-				if priority < stats.MinPriority {
 					stats.MinPriority = priority
-				} else if priority > stats.MaxPriority {
 					stats.MaxPriority = priority
+				} else {
+					if fee < stats.MinFee {
+						stats.MinFee = fee
+					} else if fee > stats.MaxFee {
+						stats.MaxFee = fee
+					}
+					if encodedLen < stats.MinLength {
+						stats.MinLength = encodedLen
+					} else if encodedLen > stats.MaxLength {
+						stats.MaxLength = encodedLen
+					}
+					if priority < stats.MinPriority {
+						stats.MinPriority = priority
+					} else if priority > stats.MaxPriority {
+						stats.MaxPriority = priority
+					}
 				}
+				stats.TotalLength += uint64(encodedLen)
 			}
-			stats.TotalLength += uint64(encodedLen)
 		}
 
 		if stats.IncludedCount != 0 {

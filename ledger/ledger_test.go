@@ -59,7 +59,7 @@ func sign(secrets map[basics.Address]*crypto.SignatureSecrets, t transactions.Tr
 	}
 }
 
-func testGenerateInitState(t *testing.T, proto protocol.ConsensusVersion) (initBlocks []bookkeeping.Block, initAccounts map[basics.Address]basics.AccountData, initKeys map[basics.Address]*crypto.SignatureSecrets) {
+func testGenerateInitState(t *testing.T, proto protocol.ConsensusVersion) (genesisInitState InitState, initKeys map[basics.Address]*crypto.SignatureSecrets) {
 	params := config.Consensus[proto]
 	poolAddr := testPoolAddr
 	sinkAddr := testSinkAddr
@@ -76,7 +76,7 @@ func testGenerateInitState(t *testing.T, proto protocol.ConsensusVersion) (initB
 	}
 
 	initKeys = make(map[basics.Address]*crypto.SignatureSecrets)
-	initAccounts = make(map[basics.Address]basics.AccountData)
+	initAccounts := make(map[basics.Address]basics.AccountData)
 	for i := range genaddrs {
 		initKeys[genaddrs[i]] = gensecrets[i]
 		// Give each account quite a bit more balance than MinFee or MinBalance
@@ -90,26 +90,29 @@ func testGenerateInitState(t *testing.T, proto protocol.ConsensusVersion) (initB
 	incentivePoolBalanceAtGenesis := initAccounts[poolAddr].MicroAlgos
 	initialRewardsPerRound := incentivePoolBalanceAtGenesis.Raw / uint64(params.RewardsRateRefreshInterval)
 	var emptyPayset transactions.Payset
-	blk := bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{
-		GenesisID: t.Name(),
-		Round:     0,
-		TxnRoot:   emptyPayset.Commit(params.PaysetCommitFlat),
-	}}
-	if params.SupportGenesisHash {
-		blk.BlockHeader.GenesisHash = crypto.Hash([]byte(t.Name()))
-	}
-	initBlocks = append(initBlocks, blk)
-	initBlocks[0].RewardsPool = poolAddr
-	initBlocks[0].FeeSink = sinkAddr
-	initBlocks[0].CurrentProtocol = proto
-	initBlocks[0].RewardsRate = initialRewardsPerRound
 
-	for i := 1; i < 300; i++ {
-		next := bookkeeping.MakeBlock(initBlocks[i-1].BlockHeader)
-		next.RewardsState = initBlocks[i-1].NextRewardsState(basics.Round(i), params, incentivePoolBalanceAtGenesis, 0)
-		next.TimeStamp = initBlocks[i-1].TimeStamp
-		initBlocks = append(initBlocks, next)
+	initBlock := bookkeeping.Block{
+		BlockHeader: bookkeeping.BlockHeader{
+			GenesisID: t.Name(),
+			Round:     0,
+			RewardsState: bookkeeping.RewardsState{
+				RewardsRate: initialRewardsPerRound,
+				RewardsPool: poolAddr,
+				FeeSink:     sinkAddr,
+			},
+			UpgradeState: bookkeeping.UpgradeState{
+				CurrentProtocol: proto,
+			},
+			TxnRoot: emptyPayset.Commit(params.PaysetCommitFlat),
+		},
 	}
+	if params.SupportGenesisHash {
+		initBlock.BlockHeader.GenesisHash = crypto.Hash([]byte(t.Name()))
+	}
+
+	genesisInitState.Block = initBlock
+	genesisInitState.Accounts = initAccounts
+	genesisInitState.GenesisHash = crypto.Hash([]byte(t.Name()))
 
 	return
 }
@@ -185,9 +188,12 @@ func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics
 }
 
 func TestLedgerBasic(t *testing.T) {
-	initBlocks, initAccounts, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
-	_, err := OpenLedger(logging.Base(), t.Name(), true, initBlocks, initAccounts, crypto.Hash([]byte(t.Name())))
+	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
+	const inMem = true
+	const archival = true
+	l, err := OpenLedger(logging.Base(), t.Name(), inMem, genesisInitState, archival)
 	require.NoError(t, err, "could not open ledger")
+	defer l.Close()
 }
 
 func TestLedgerBlockHeaders(t *testing.T) {
@@ -196,9 +202,12 @@ func TestLedgerBlockHeaders(t *testing.T) {
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
-	initBlocks, initAccounts, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
-	l, err := OpenLedger(logging.Base(), t.Name(), true, initBlocks, initAccounts, crypto.Hash([]byte(t.Name())))
+	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
+	const inMem = true
+	const archival = true
+	l, err := OpenLedger(logging.Base(), t.Name(), inMem, genesisInitState, archival)
 	a.NoError(err, "could not open ledger")
+	defer l.Close()
 
 	lastBlock, err := l.Block(l.Latest())
 	a.NoError(err, "could not get last block")
@@ -208,7 +217,7 @@ func TestLedgerBlockHeaders(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	poolAddr := testPoolAddr
 	var totalRewardUnits uint64
-	for _, acctdata := range initAccounts {
+	for _, acctdata := range genesisInitState.Accounts {
 		totalRewardUnits += acctdata.MicroAlgos.RewardUnits(proto)
 	}
 	poolBal, err := l.Lookup(l.Latest(), poolAddr)
@@ -330,14 +339,18 @@ func TestLedgerSingleTx(t *testing.T) {
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
-	initBlocks, initAccounts, initSecrets := testGenerateInitState(t, protocol.ConsensusV7)
-	l, err := OpenLedger(logging.Base(), t.Name(), true, initBlocks, initAccounts, crypto.Hash([]byte(t.Name())))
+	genesisInitState, initSecrets := testGenerateInitState(t, protocol.ConsensusV7)
+	const inMem = true
+	const archival = true
+	l, err := OpenLedger(logging.Base(), t.Name(), inMem, genesisInitState, archival)
 	a.NoError(err, "could not open ledger")
+	defer l.Close()
 
 	proto := config.Consensus[protocol.ConsensusV7]
 	poolAddr := testPoolAddr
 	sinkAddr := testSinkAddr
 
+	initAccounts := genesisInitState.Accounts
 	var addrList []basics.Address
 	for addr := range initAccounts {
 		if addr != poolAddr && addr != sinkAddr {
@@ -348,8 +361,8 @@ func TestLedgerSingleTx(t *testing.T) {
 	correctTxHeader := transactions.Header{
 		Sender:     addrList[0],
 		Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
-		FirstValid: 10,
-		LastValid:  l.Latest() * 2,
+		FirstValid: l.Latest() + 1,
+		LastValid:  l.Latest() + 10,
 		GenesisID:  t.Name(),
 	}
 
@@ -511,15 +524,19 @@ func TestLedgerSingleTxApplyData(t *testing.T) {
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
-	initBlocks, initAccounts, initSecrets := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
-	l, err := OpenLedger(logging.Base(), t.Name(), true, initBlocks, initAccounts, crypto.Hash([]byte(t.Name())))
+	genesisInitState, initSecrets := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
+	const inMem = true
+	const archival = true
+	l, err := OpenLedger(logging.Base(), t.Name(), inMem, genesisInitState, archival)
 	a.NoError(err, "could not open ledger")
+	defer l.Close()
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	poolAddr := testPoolAddr
 	sinkAddr := testSinkAddr
 
 	var addrList []basics.Address
+	initAccounts := genesisInitState.Accounts
 	for addr := range initAccounts {
 		if addr != poolAddr && addr != sinkAddr {
 			addrList = append(addrList, addr)
@@ -529,8 +546,8 @@ func TestLedgerSingleTxApplyData(t *testing.T) {
 	correctTxHeader := transactions.Header{
 		Sender:      addrList[0],
 		Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
-		FirstValid:  10,
-		LastValid:   l.Latest() * 2,
+		FirstValid:  l.Latest() + 1,
+		LastValid:   l.Latest() + 10,
 		GenesisID:   t.Name(),
 		GenesisHash: crypto.Hash([]byte(t.Name())),
 	}

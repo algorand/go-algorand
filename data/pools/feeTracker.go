@@ -19,6 +19,8 @@ package pools
 import (
 	"sort"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -35,6 +37,7 @@ var (
 
 // FeeTracker keeps track of the fees on the ledger and provides suggested fee
 type FeeTracker struct {
+	mu   deadlock.Mutex
 	ewma *EWMA
 }
 
@@ -55,11 +58,17 @@ func MakeFeeTracker() (*FeeTracker, error) {
 
 // EstimateFee returns the current suggested fee per byte
 func (ft *FeeTracker) EstimateFee() basics.MicroAlgos {
+	ft.mu.Lock()
+	defer ft.mu.Unlock()
+
 	return basics.MicroAlgos{Raw: ft.ewma.Value()}
 }
 
 // ProcessBlock takes a block and update the current suggested fee
 func (ft *FeeTracker) ProcessBlock(block bookkeeping.Block) {
+	ft.mu.Lock()
+	defer ft.mu.Unlock()
+
 	// If the block is less than half full, drive the suggested fee down rapidly. Suggested Fee may fall to zero, but algod API client will be responsible for submitting transactions with at least MinTxnFee
 	if len(protocol.Encode(block.Payset)) < config.Consensus[block.CurrentProtocol].MaxTxnBytesPerBlock/2 {
 		ft.ewma.Add(1)
@@ -67,13 +76,14 @@ func (ft *FeeTracker) ProcessBlock(block bookkeeping.Block) {
 	}
 
 	// Get the median of the block
-	payset, err := block.DecodePayset()
+	payset, err := block.DecodePaysetFlat()
 	if err != nil {
 		return
 	}
 
 	fees := make([]float64, len(payset))
-	for i, tx := range payset {
+	for i, txad := range payset {
+		tx := txad.SignedTxn
 		fees[i] = ft.processTransaction(tx)
 	}
 
