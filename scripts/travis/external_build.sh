@@ -69,9 +69,10 @@ while [ $SECONDS -lt $end ]; do
         BUILD_STARTED=true
         break
     fi
+    sleep 1s
 done
 
-if [ "${BUILD_STARTED}" = "false" ]; do
+if [ "${BUILD_STARTED}" = "false" ]; then
     echo "Builder failed to kick off within elapsed time; aborting"
     exit 1
 fi
