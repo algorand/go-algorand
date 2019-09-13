@@ -18,10 +18,17 @@
 #
 
 if [ "${BUILD_TYPE}" != "external_build" ]; then
+    echo "error: wrong build type specified '${BUILD_TYPE}'"
     exit 1
 fi
 
 if [ "${TARGET_PLATFORM}" != "linux-arm64" ]; then
+    echo "error: unsupported platform '${TARGET_PLATFORM}'"
+    exit 1
+fi
+
+if [ "${BUILD_REQUESTS_BUCKET}" = "" ]; then
+    echo "error: BUILD_REQUESTS_BUCKET was not specified."
     exit 1
 fi
 
