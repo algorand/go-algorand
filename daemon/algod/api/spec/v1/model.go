@@ -341,6 +341,12 @@ type Transaction struct {
 	// required: true
 	// swagger:strfmt byte
 	GenesisHash []byte `json:"genesishashb64"`
+
+	// Group
+	//
+	// required: false
+	// swagger:strfmt byte
+	Group []byte `json:"group"`
 }
 
 // PaymentTransactionType contains the additional fields for a payment Transaction

@@ -42,7 +42,7 @@ type MockRunner struct {
 	done          chan *rpc.Call
 	failWithNil   bool
 	failWithError bool
-	transactions  []transactions.SignedTxn
+	txgroups      [][]transactions.SignedTxn
 }
 
 const goExecTime = 100 * time.Millisecond
@@ -62,7 +62,7 @@ func (client *MockRPCClient) Close() error {
 func (client *MockRPCClient) Address() string {
 	return "mock.address."
 }
-func (client *MockRPCClient) Sync(ctx context.Context, bloom *bloom.Filter) (txns []transactions.SignedTxn, err error) {
+func (client *MockRPCClient) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups [][]transactions.SignedTxn, err error) {
 	client.log.Info("MockRPCClient.Sync")
 	select {
 	case <-ctx.Done():
@@ -75,7 +75,7 @@ func (client *MockRPCClient) Sync(ctx context.Context, bloom *bloom.Filter) (txn
 	if client.client.failWithError {
 		return nil, errors.New("failing call")
 	}
-	return client.client.transactions, nil
+	return client.client.txgroups, nil
 }
 func (client *MockRPCClient) GetBlockBytes(ctx context.Context, r basics.Round) (data []byte, err error) {
 	return nil, nil

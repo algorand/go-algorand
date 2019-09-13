@@ -192,6 +192,12 @@ type ConsensusParams struct {
 	// support sequential transaction counter TxnCounter
 	TxnCounter bool
 
+	// transaction groups
+	SupportTxGroups bool
+
+	// max group size
+	MaxTxGroupSize int
+
 	// 0 for no support, otherwise highest version supported
 	LogicSigVersion uint64
 
@@ -272,6 +278,8 @@ func initConsensusProtocols() {
 		SeedRefreshInterval: 100,
 
 		MaxBalLookback: 320,
+
+		MaxTxGroupSize: 1,
 	}
 
 	v7.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
@@ -411,6 +419,8 @@ func initConsensusProtocols() {
 	vFuture.LogicSigMaxSize = 1000
 	vFuture.LogicSigMaxCost = 20000
 	vFuture.MaxAssetsPerAccount = 1000
+	vFuture.SupportTxGroups = true
+	vFuture.MaxTxGroupSize = 16
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

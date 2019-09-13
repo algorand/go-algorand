@@ -55,12 +55,11 @@ func TestBlockEvaluator(t *testing.T) {
 	require.NoError(t, err)
 	defer l.Close()
 
-	blks := genesisInitState.Blocks
-	newBlock := bookkeeping.MakeBlock(blks[len(blks)-1].BlockHeader)
+	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
 	eval, err := l.StartEvaluator(newBlock.BlockHeader, nil, backlogPool)
 	require.NoError(t, err)
 
-	genHash := blks[0].BlockHeader.GenesisHash
+	genHash := genesisInitState.Block.BlockHeader.GenesisHash
 	txn := transactions.Transaction{
 		Type: protocol.PaymentTx,
 		Header: transactions.Header{
@@ -80,17 +79,17 @@ func TestBlockEvaluator(t *testing.T) {
 	st := transactions.SignedTxn{
 		Txn: txn,
 	}
-	err = eval.Transaction(st, nil)
+	err = eval.Transaction(st, transactions.ApplyData{})
 	require.Error(t, err)
 
 	// Random signature should fail
 	crypto.RandBytes(st.Sig[:])
-	err = eval.Transaction(st, nil)
+	err = eval.Transaction(st, transactions.ApplyData{})
 	require.Error(t, err)
 
 	// Correct signature should work
 	st = txn.Sign(keys[0])
-	err = eval.Transaction(st, &transactions.ApplyData{})
+	err = eval.Transaction(st, transactions.ApplyData{})
 	require.NoError(t, err)
 
 	selfTxn := transactions.Transaction{
@@ -107,7 +106,7 @@ func TestBlockEvaluator(t *testing.T) {
 			Amount:   basics.MicroAlgos{Raw: 100},
 		},
 	}
-	err = eval.Transaction(selfTxn.Sign(keys[2]), &transactions.ApplyData{})
+	err = eval.Transaction(selfTxn.Sign(keys[2]), transactions.ApplyData{})
 	require.NoError(t, err)
 
 	validatedBlock, err := eval.GenerateBlock()

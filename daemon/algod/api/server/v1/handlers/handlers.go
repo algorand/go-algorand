@@ -19,6 +19,7 @@ package handlers
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -98,6 +99,7 @@ func txEncode(tx transactions.Transaction, ad transactions.ApplyData) (v1.Transa
 	res.FromRewards = ad.SenderRewards.Raw
 	res.GenesisID = tx.GenesisID
 	res.GenesisHash = tx.GenesisHash[:]
+	res.Group = tx.Group[:]
 	return res, nil
 }
 
@@ -247,7 +249,7 @@ func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error)
 
 	// Transactions
 	var txns []v1.Transaction
-	payset, err := b.DecodePaysetWithAD()
+	payset, err := b.DecodePaysetFlat()
 	if err != nil {
 		return v1.Block{}, err
 	}
@@ -378,19 +380,35 @@ func RawTransaction(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) 
 	//         schema: {type: string}
 	//       401: { description: Invalid API Token }
 	//       default: { description: Unknown Error }
-	var st transactions.SignedTxn
-	err := protocol.NewDecoder(r.Body).Decode(&st)
+	var txgroup []transactions.SignedTxn
+	dec := protocol.NewDecoder(r.Body)
+	for {
+		var st transactions.SignedTxn
+		err := dec.Decode(&st)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			lib.ErrorResponse(w, http.StatusBadRequest, err, err.Error(), ctx.Log)
+			return
+		}
+		txgroup = append(txgroup, st)
+	}
+
+	if len(txgroup) == 0 {
+		err := errors.New("empty txgroup")
+		lib.ErrorResponse(w, http.StatusBadRequest, err, err.Error(), ctx.Log)
+		return
+	}
+
+	err := ctx.Node.BroadcastSignedTxGroup(txgroup)
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusBadRequest, err, err.Error(), ctx.Log)
 		return
 	}
 
-	txid, err := ctx.Node.BroadcastSignedTxn(st)
-	if err != nil {
-		lib.ErrorResponse(w, http.StatusBadRequest, err, err.Error(), ctx.Log)
-		return
-	}
-
+	// For backwards compatibility, return txid of first tx in group
+	txid := txgroup[0].ID()
 	SendJSON(TransactionIDResponse{&v1.TransactionID{TxID: txid.String()}}, w, ctx.Log)
 }
 
