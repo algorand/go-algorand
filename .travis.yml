@@ -40,6 +40,13 @@ jobs:
       script:
         - scripts/travis/build.sh || travis_terminate 1;
         - travis_wait 90 scripts/travis/test.sh
+    - # same stage, parallel job
+      os: linux
+      env:
+        - BUILD_TYPE: "external_build"
+        - TARGET_PLATFORM: "linux-arm64"
+      script:
+        - scripts/travis/external_build.sh || travis_terminate 1;
 
     - stage: build_release
       os: linux
