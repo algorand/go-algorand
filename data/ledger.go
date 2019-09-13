@@ -47,10 +47,10 @@ type Ledger struct {
 	log logging.Logger
 }
 
-func makeGenesisBlocks(proto protocol.ConsensusVersion, genesisBal GenesisBalances, genesisID string, genesisHash crypto.Digest) ([]bookkeeping.Block, error) {
+func makeGenesisBlock(proto protocol.ConsensusVersion, genesisBal GenesisBalances, genesisID string, genesisHash crypto.Digest) (bookkeeping.Block, error) {
 	params, ok := config.Consensus[proto]
 	if !ok {
-		return nil, fmt.Errorf("unsupported protocol %s", proto)
+		return bookkeeping.Block{}, fmt.Errorf("unsupported protocol %s", proto)
 	}
 
 	poolAddr := basics.Address(genesisBal.rewardsPool)
@@ -87,8 +87,7 @@ func makeGenesisBlocks(proto protocol.ConsensusVersion, genesisBal GenesisBalanc
 		blk.BlockHeader.GenesisHash = genesisHash
 	}
 
-	blocks := []bookkeeping.Block{blk}
-	return blocks, nil
+	return blk, nil
 }
 
 // LoadLedger creates a Ledger object to represent the ledger with the
@@ -101,7 +100,7 @@ func LoadLedger(
 	if genesisBal.balances == nil {
 		genesisBal.balances = make(map[basics.Address]basics.AccountData)
 	}
-	genBlocks, err := makeGenesisBlocks(genesisProto, genesisBal, genesisID, genesisHash)
+	genBlock, err := makeGenesisBlock(genesisProto, genesisBal, genesisID, genesisHash)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +117,7 @@ func LoadLedger(
 		log: log,
 	}
 	genesisInitState := ledger.InitState{
-		Blocks:      genBlocks,
+		Block:       genBlock,
 		Accounts:    genesisBal.balances,
 		GenesisHash: genesisHash,
 	}
