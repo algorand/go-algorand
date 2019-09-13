@@ -21,6 +21,8 @@ stages:
     if: branch != rel/stable AND (branch =~ /^rel\//) AND type != pull_request
 
 jobs:
+  allow_failures:
+    - name: External ARM64 Build
   include:
     - stage: build_commit
       os: linux
@@ -41,6 +43,7 @@ jobs:
         - scripts/travis/build.sh || travis_terminate 1;
         - travis_wait 90 scripts/travis/test.sh
     - # same stage, parallel job
+      name: External ARM64 Build
       os: linux
       env:
         - BUILD_TYPE: "external_build"
