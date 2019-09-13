@@ -34,8 +34,8 @@ if [ "${TRAVIS_PULL_REQUEST}" = "false" ]; then
         exit 1
     fi
 else
-    if [ "${BUILD_PULL_EQUESTS_BUCKET}" = "" ]; then
-        echo "error: BUILD_PULL_EQUESTS_BUCKET was not specified."
+    if [ "${BUILD_PULL_REQUESTS_BUCKET}" = "" ]; then
+        echo "error: BUILD_PULL_REQUESTS_BUCKET was not specified."
         exit 1
     fi
 fi
@@ -47,7 +47,7 @@ echo "{ \"TRAVIS_BRANCH\" = \"${TRAVIS_BRANCH}\", \"TRAVIS_COMMIT\"=\"${TRAVIS_C
 if [ "${TRAVIS_PULL_REQUEST}" = "false" ]; then
     aws s3 cp ${TRAVIS_BUILD_NUMBER}.json s3://${BUILD_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${TRAVIS_BUILD_NUMBER}.json
 else
-    aws s3 cp ${TRAVIS_BUILD_NUMBER}.json s3://${BUILD_PULL_EQUESTS_BUCKET}/${TARGET_PLATFORM}/${TRAVIS_BUILD_NUMBER}.json --no-sign-request
+    aws s3 cp ${TRAVIS_BUILD_NUMBER}.json s3://${BUILD_PULL_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${TRAVIS_BUILD_NUMBER}.json --no-sign-request
 fi
 
 
