@@ -49,9 +49,11 @@ echo "{ \"TRAVIS_BRANCH\" = \"${TRAVIS_BRANCH}\", \"TRAVIS_COMMIT\"=\"${TRAVIS_C
 
 if [ "${TRAVIS_PULL_REQUEST}" = "false" ]; then
     BUILD_REQUEST_PATH=s3://${BUILD_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${TRAVIS_BUILD_NUMBER}.json
+    BUILD_COMPLETE_PATH=s3://${BUILD_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${TRAVIS_BUILD_NUMBER}-completed.json
     NO_SIGN_REQUEST=
 else
     BUILD_REQUEST_PATH=s3://${BUILD_PULL_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${TRAVIS_BUILD_NUMBER}.json
+    BUILD_COMPLETE_PATH=s3://${BUILD_PULL_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${TRAVIS_BUILD_NUMBER}-completed.json
     NO_SIGN_REQUEST=--no-sign-request
 fi
 
@@ -77,5 +79,26 @@ if [ "${BUILD_STARTED}" = "false" ]; then
     exit 1
 fi
 
-echo "TODO : Wait until builder is done and print out builder output"
+echo "Waiting for build to complete..."
+end=$((SECONDS+30))
+BUILD_COMPLETE=false
+while [ $SECONDS -lt $end ]; do
+    GET_SUCCESS=$(aws s3 cp ${BUILD_COMPLETE_PATH} . ${NO_SIGN_REQUEST})
+    if [ "${GET_SUCCESS}" = "0" ]; then
+        BUILD_COMPLETE=true
+        break
+    fi
+    sleep 1s
+done
 
+if [ "${BUILD_COMPLETE}" = "false" ]; then
+    echo "Builder failed to finish building within elapsed time; aborting"
+    exit 1
+fi
+
+BUILD_ERROR=$(cat ./${TRAVIS_BUILD_NUMBER}-completed.json | jq '.error')
+cat ./${TRAVIS_BUILD_NUMBER}-completed.json | jq -r '.log'
+
+if [ "${BUILD_ERROR}" != "0" ]; then
+    exit 1
+fi
