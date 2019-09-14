@@ -79,4 +79,5 @@ echo "${SGID}" > sgid
 echo "${INSTANCE_NAME}" > instance
 echo "${INSTANCE_ID}" > instance-id
 echo "ARM64BuilderKey${INSTANCE_NUMBER}" > key-name
+chmod 400 key.pem
 

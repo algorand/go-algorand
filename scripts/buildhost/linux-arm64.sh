@@ -16,6 +16,13 @@ if [ "$?" != "0" ]; then
     exit 1
 fi
 
+BRANCH=$(cat $BUILD_REQUEST | jq -r '.TRAVIS_BRANCH')
+COMMIT_HASH=$(cat $BUILD_REQUEST | jq -r '.TRAVIS_COMMIT')
+
+
+ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) git clone https://github.com/algorand/go-algorand -b ${BRANCH}
+ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) git checkout ${COMMIT_HASH}
+
 if [ "$OUTPUTFILE" != "" ]; then
     echo "{ \"error\": 1, \"log\":\"The requested operation is not yet functional\"}" > ./result.json
 

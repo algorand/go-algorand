@@ -45,7 +45,7 @@ fi
 
 sudo apt-get install awscli
 # create build request
-echo "{ \"TRAVIS_BRANCH\" = \"${TRAVIS_BRANCH}\", \"TRAVIS_COMMIT\"=\"${TRAVIS_COMMIT}\" }" > ${TRAVIS_BUILD_NUMBER}.json
+echo "{ \"TRAVIS_BRANCH\" : \"${TRAVIS_BRANCH}\", \"TRAVIS_COMMIT\" : \"${TRAVIS_COMMIT}\" }" > ${TRAVIS_BUILD_NUMBER}.json
 
 if [ "${TRAVIS_PULL_REQUEST}" = "false" ]; then
     BUILD_REQUEST_PATH=s3://${BUILD_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${TRAVIS_BUILD_NUMBER}.json

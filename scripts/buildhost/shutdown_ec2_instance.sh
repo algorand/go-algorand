@@ -47,4 +47,5 @@ done
 aws ec2 delete-key-pair --key-name "${KEY_NAME}" --region ${AWS_REGION}
 
 aws ec2 delete-security-group --group-id "${SGID}" --region ${AWS_REGION}
-rm instance2.json key.pem sgid instance-id instance key-name
+rm instance2.json sgid instance-id instance key-name
+rm -f key.pem
