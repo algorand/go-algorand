@@ -14,7 +14,7 @@ if [ "${OS}" = "linux" ]; then
         go version
         if [ "$?" != "0" ]; then
             # go is not installed ?
-            wget https://dl.google.com/go/go1.12.9.linux-arm64.tar.gz
+            wget -q https://dl.google.com/go/go1.12.9.linux-arm64.tar.gz
             if [ "$?" = "0" ]; then
                 set -e
                 sudo tar -C /usr/local -xzf ./go1.12.9.linux-arm64.tar.gz

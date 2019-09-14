@@ -86,6 +86,7 @@ fi
 
 echo "Waiting for build to complete..."
 end=$((SECONDS+1200))
+minute_end=$((SECONDS+60))
 BUILD_COMPLETE=false
 while [ $SECONDS -lt $end ]; do
     GET_OUTPUT=$(aws s3 cp ${BUILD_COMPLETE_PATH} . ${NO_SIGN_REQUEST} 2> /dev/null)
@@ -93,6 +94,10 @@ while [ $SECONDS -lt $end ]; do
         echo "${GET_OUTPUT}"
         BUILD_COMPLETE=true
         break
+    fi
+    if [ $SECONDS -gt $minute_end ]; then
+        minute_end=$((SECONDS+60))
+        echo "Still waiting for build to complete..."
     fi
     sleep 1s
 done
