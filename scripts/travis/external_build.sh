@@ -45,7 +45,7 @@ fi
 
 sudo apt-get install awscli
 # create build request
-echo "{ \"TRAVIS_BRANCH\" : \"${TRAVIS_BRANCH}\", \"TRAVIS_COMMIT\" : \"${TRAVIS_COMMIT}\" }" > ${TRAVIS_BUILD_NUMBER}.json
+echo "{ \"TRAVIS_BRANCH\" : \"${TRAVIS_BRANCH}\", \"TRAVIS_COMMIT\" : \"${TRAVIS_COMMIT}\", \"TRAVIS_PULL_REQUEST\" : \"${TRAVIS_PULL_REQUEST}\" }" > ${TRAVIS_BUILD_NUMBER}.json
 
 if [ "${TRAVIS_PULL_REQUEST}" = "false" ]; then
     BUILD_REQUEST_PATH=s3://${BUILD_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${TRAVIS_BUILD_NUMBER}.json
@@ -80,7 +80,7 @@ if [ "${BUILD_STARTED}" = "false" ]; then
 fi
 
 echo "Waiting for build to complete..."
-end=$((SECONDS+90))
+end=$((SECONDS+1200))
 BUILD_COMPLETE=false
 while [ $SECONDS -lt $end ]; do
     GET_OUTPUT=$(aws s3 cp ${BUILD_COMPLETE_PATH} . ${NO_SIGN_REQUEST})

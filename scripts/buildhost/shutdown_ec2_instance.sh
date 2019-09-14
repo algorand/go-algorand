@@ -22,7 +22,12 @@ echo "Waiting for instance to terminate"
 end=$((SECONDS+1200))
 while [ $SECONDS -lt $end ]; do
     aws ec2 terminate-instances --instance-ids ${INSTANCE_ID} --region ${AWS_REGION} > instance2.json
+    INSTANCE_CODE=$(cat instance2.json | jq '.TerminatingInstances[].CurrentState.Code')
     INSTANCE_STATE=$(cat instance2.json | jq '.TerminatingInstances[].CurrentState.Name')
+    if [ "${INSTANCE_CODE}" = "48" ]; then
+        echo "Instance terminated"
+        break
+    fi
     if [ "${INSTANCE_STATE}" != "" ]; then
         echo "Instance is ${INSTANCE_STATE}"
     else

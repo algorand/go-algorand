@@ -46,20 +46,24 @@ checkBucket () {
 
     aws s3 ls --recursive s3://${BUCKET} ${NO_SIGN} | awk '{print $4}' | grep -ve "-completed\.json" | grep -ve "/$" > buildRequests
     if [ "$?" != "0" ]; then
+        rm buildRequests
         return 1
     fi
 
     REQUESTS_COUNT=$(cat buildRequests | wc -l | sed 's/[[:space:]]//g')
     if [ "$?" != "0" ]; then
+        rm buildRequests
         return 1
     fi
 
     if [ "${REQUESTS_COUNT}" = "0" ]; then
         # nothing to do.
+        rm buildRequests
         return 0
     fi
 
     FIRST_FILE=$(head -1 buildRequests)
+    rm buildRequests
     mkdir -p tmp
     aws s3 cp s3://${BUCKET}/${FIRST_FILE} ./tmp/${FIRST_FILE} ${NO_SIGN}
     if [ "$?" != "0" ]; then
