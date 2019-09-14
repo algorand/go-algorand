@@ -19,19 +19,21 @@
 AWS_REGION=$1
 AWS_AMI=$2
 INSTANCE_NUMBER=$RANDOM
+KEY_NAME="BuilderInstanceKey_${INSTANCE_NUMBER}"
+SECURITY_GROUP_NAME="BuilderMachineSSH_${INSTANCE_NUMBER}"
 
-SGID=$(aws ec2 create-security-group --group-name EC2SecurityGroup${INSTANCE_NUMBER} --description "Security Group for ARM64 ephermal build machine to allow port 22" --region ${AWS_REGION} | jq -r '.GroupId')
+SGID=$(aws ec2 create-security-group --group-name ${SECURITY_GROUP_NAME} --description "Security Group for ephermal build machine to allow port 22" --region ${AWS_REGION} | jq -r '.GroupId')
 if [ "$?" != "0" ]; then
     exit 1
 fi
 
-aws ec2 authorize-security-group-ingress --group-name EC2SecurityGroup${INSTANCE_NUMBER} --protocol tcp --port 22 --cidr 0.0.0.0/0 --region ${AWS_REGION}
+aws ec2 authorize-security-group-ingress --group-name ${SECURITY_GROUP_NAME} --protocol tcp --port 22 --cidr 0.0.0.0/0 --region ${AWS_REGION}
 if [ "$?" != "0" ]; then
     aws ec2 delete-security-group --group-id "${SGID}" --region ${AWS_REGION}
     exit 1
 fi
 
-aws ec2 create-key-pair --key-name "ARM64BuilderKey${INSTANCE_NUMBER}" --region ${AWS_REGION} | jq -r '.KeyMaterial' > key.pem
+aws ec2 create-key-pair --key-name "${KEY_NAME}" --region ${AWS_REGION} | jq -r '.KeyMaterial' > key.pem
 if [ "$?" != "0" ]; then
     aws ec2 delete-security-group --group-id "${SGID}" --region ${AWS_REGION}
     rm key.pem
@@ -40,9 +42,9 @@ fi
 
 
 
-aws ec2 run-instances --image-id ${AWS_AMI} --key-name "ARM64BuilderKey${INSTANCE_NUMBER}" --security-groups EC2SecurityGroup${INSTANCE_NUMBER} --instance-type a1.2xlarge --block-device-mappings DeviceName=/dev/sdh,Ebs={VolumeSize=100} --count 1 --region ${AWS_REGION} > instance.json
+aws ec2 run-instances --image-id ${AWS_AMI} --key-name "${KEY_NAME}" --security-groups ${SECURITY_GROUP_NAME} --instance-type a1.2xlarge --block-device-mappings DeviceName=/dev/sdh,Ebs={VolumeSize=100} --count 1 --region ${AWS_REGION} > instance.json
 if [ "$?" != "0" ]; then
-    aws ec2 delete-key-pair --key-name "ARM64BuilderKey${INSTANCE_NUMBER}" --region ${AWS_REGION}
+    aws ec2 delete-key-pair --key-name "${KEY_NAME}" --region ${AWS_REGION}
     aws ec2 delete-security-group --group-id "${SGID}" --region ${AWS_REGION}
     rm key.pem
     exit 1
@@ -78,7 +80,7 @@ rm instance.json instance2.json
 echo "${SGID}" > sgid
 echo "${INSTANCE_NAME}" > instance
 echo "${INSTANCE_ID}" > instance-id
-echo "ARM64BuilderKey${INSTANCE_NUMBER}" > key-name
+echo "${KEY_NAME}" > key-name
 chmod 400 key.pem
 
 
@@ -88,7 +90,12 @@ while [ $SECONDS -lt $end ]; do
     ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) "uname"
     if [ "$?" = "0" ]; then
         echo "SSH connection ready"
-        break
+        exit 0
     fi
     sleep 1s
 done
+
+echo "error: Unable to establish SSH connection"
+rm -f key.pem
+rm sgid instance instance-id key-name
+exit 1

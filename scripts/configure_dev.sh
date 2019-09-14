@@ -15,8 +15,8 @@ function install_or_upgrade {
 
 if [ "${OS}" = "linux" ]; then
     if [ -z "$(dpkg -l sudo 2>/dev/null | grep ^ii)" ] ; then
-	apt-get update
-	apt-get -y install sudo
+	    apt-get update
+	    apt-get -y install sudo
     fi
 
     sudo apt-get update

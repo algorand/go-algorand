@@ -34,9 +34,9 @@ if [ "${PULL_REQUEST}" = "false" ]; then
 else
     ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) "cd go-algorand; git fetch origin +refs/pull/${PULL_REQUEST}/merge; git checkout -qf FETCH_HEAD"
 fi
-ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) "cd go-algorand; ./scripts/travis/build.sh" 2>&1 > build_log.txt
+ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) "export DEBIAN_FRONTEND=noninteractive; cd go-algorand; ./scripts/travis/build.sh" 2>&1 > build_log.txt
 ERR=$?
-if [ "$OUTPUTFILE" != "" ]; then
+if [ "${OUTPUTFILE}" != "" ]; then
     echo "{ \"error\": ${ERR} }" > ./err_file.json
     jq --rawfile texts build_log.txt '.log=$texts' ./err_file.json > ./result.json
     aws s3 cp ./result.json s3://${BUCKET}/${OUTPUTFILE} ${NO_SIGN}
