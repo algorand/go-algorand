@@ -57,6 +57,11 @@ else
     NO_SIGN_REQUEST=--no-sign-request
 fi
 
+set +e
+# remove if it's already there, so the new build would replace it.
+aws s3 rm ${BUILD_COMPLETE_PATH} ${NO_SIGN_REQUEST}
+
+set -e
 aws s3 cp ${TRAVIS_BUILD_NUMBER}.json ${BUILD_REQUEST_PATH} ${NO_SIGN_REQUEST}
 
 # don't exit on error. we will test the error code.
@@ -83,7 +88,7 @@ echo "Waiting for build to complete..."
 end=$((SECONDS+1200))
 BUILD_COMPLETE=false
 while [ $SECONDS -lt $end ]; do
-    GET_OUTPUT=$(aws s3 cp ${BUILD_COMPLETE_PATH} . ${NO_SIGN_REQUEST})
+    GET_OUTPUT=$(aws s3 cp ${BUILD_COMPLETE_PATH} . ${NO_SIGN_REQUEST} 2> /dev/null)
     if [ "$?" = "0" ]; then
         echo "${GET_OUTPUT}"
         BUILD_COMPLETE=true

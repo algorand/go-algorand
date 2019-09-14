@@ -81,3 +81,14 @@ echo "${INSTANCE_ID}" > instance-id
 echo "ARM64BuilderKey${INSTANCE_NUMBER}" > key-name
 chmod 400 key.pem
 
+
+echo "Waiting for SSH connection"
+end=$((SECONDS+90))
+while [ $SECONDS -lt $end ]; do
+    ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) "uname"
+    if [ "$?" = "0" ]; then
+        echo "SSH connection ready"
+        break
+    fi
+    sleep 1s
+done

@@ -80,21 +80,22 @@ checkBucket () {
     fi
 
     ARCH=$(echo "${FIRST_FILE}" | cut -d "/" -f 1)
-    ARCH_BUILDER="./${ARCH}-builder.sh"
+    ARCH_BUILDER="./${ARCH}.sh"
     if [ ! -f "${ARCH_BUILDER}" ]; then
         # invalid architecture
+        echo "builder for architecture ${ARCH} could not be found"
         rm -rf tmp
         return 1
     fi
 
     TEMPDIR=$(mktemp -d 2>/dev/null || mktemp -d -t "tmp")
     FILENAME=$(echo "${FIRST_FILE}" | cut -d "/" -f 2)
-    cp ./tmp/${FIRST_FILE} ${TEMPDIR}/FILENAME
+    cp ./tmp/${FIRST_FILE} ${TEMPDIR}/${FILENAME}
     rm -rf tmp
 
     OUTPUTFILE=${FIRST_FILE/.json/-completed.json}
 
-    ${ARCH_BUILDER} ${TEMPDIR}/FILENAME ${OUTPUTFILE} ${BUCKET} ${NO_SIGN} &
+    ${ARCH_BUILDER} ${TEMPDIR}/${FILENAME} ${OUTPUTFILE} ${BUCKET} ${NO_SIGN} &
     return 0
 }
 

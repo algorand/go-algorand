@@ -4,8 +4,12 @@ BUILD_REQUEST=$1
 OUTPUTFILE=$2
 BUCKET=$3
 NO_SIGN=$4
+echo "linux-arm64 $1 $2 $3 $4"
 
+SCRIPTPATH=$(pwd)
 TMPPATH=$(dirname ${BUILD_REQUEST})
+pushd .
+cd ${TMPPATH}
 
 AWS_REGION="us-west-2"
 AWS_LINUX_AMI="ami-0c579621aaac8bade"
@@ -13,8 +17,10 @@ INSTANCE_NUMBER=$RANDOM
 
 set +e
 
-./start_ec2_instance.sh ${AWS_REGION} ${AWS_LINUX_AMI}
+${SCRIPTPATH}/start_ec2_instance.sh ${AWS_REGION} ${AWS_LINUX_AMI}
 if [ "$?" != "0" ]; then
+    popd
+    rm -rf ${TMPPATH}
     exit 1
 fi
 
@@ -39,9 +45,12 @@ if [ "$OUTPUTFILE" != "" ]; then
 fi
 rm build_log.txt
 
-./shutdown_ec2_instance.sh ${AWS_REGION}
+${SCRIPTPATH}/shutdown_ec2_instance.sh ${AWS_REGION}
 if [ "$?" != "0" ]; then
+    popd
+    rm -rf ${TMPPATH}
     exit 1
 fi
 
+popd
 rm -rf ${TMPPATH}
