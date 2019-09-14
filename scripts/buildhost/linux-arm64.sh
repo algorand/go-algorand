@@ -34,8 +34,7 @@ if [ "${PULL_REQUEST}" = "false" ]; then
 else
     ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) "cd go-algorand; git fetch origin +refs/pull/${PULL_REQUEST}/merge; git checkout -qf FETCH_HEAD"
 fi
-ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) "go-algorand/scripts/travis/configure_dev.sh"
-ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) "cd go-algorand; make -j4 2>&1" 2>&1 > build_log.txt
+ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) "cd go-algorand; ./scripts/travis/build.sh" 2>&1 > build_log.txt
 ERR=$?
 if [ "$OUTPUTFILE" != "" ]; then
     echo "{ \"error\": ${ERR} }" > ./err_file.json
