@@ -18,6 +18,7 @@
 
 AWS_REGION=$1
 AWS_AMI=$2
+AWS_INSTANCE_TYPE=$3
 INSTANCE_NUMBER=$RANDOM
 KEY_NAME="BuilderInstanceKey_${INSTANCE_NUMBER}"
 SECURITY_GROUP_NAME="BuilderMachineSSH_${INSTANCE_NUMBER}"
@@ -33,6 +34,13 @@ if [ "$?" != "0" ]; then
     exit 1
 fi
 
+aws ec2 authorize-security-group-ingress --group-name ${SECURITY_GROUP_NAME} --protocol tcp --port 5022 --cidr 0.0.0.0/0 --region ${AWS_REGION}
+if [ "$?" != "0" ]; then
+    aws ec2 delete-security-group --group-id "${SGID}" --region ${AWS_REGION}
+    exit 1
+fi
+
+rm -f key.pem
 aws ec2 create-key-pair --key-name "${KEY_NAME}" --region ${AWS_REGION} | jq -r '.KeyMaterial' > key.pem
 if [ "$?" != "0" ]; then
     aws ec2 delete-security-group --group-id "${SGID}" --region ${AWS_REGION}
@@ -40,9 +48,7 @@ if [ "$?" != "0" ]; then
     exit 1
 fi
 
-
-
-aws ec2 run-instances --image-id ${AWS_AMI} --key-name "${KEY_NAME}" --security-groups ${SECURITY_GROUP_NAME} --instance-type a1.2xlarge --block-device-mappings DeviceName=/dev/sdh,Ebs={VolumeSize=100} --count 1 --region ${AWS_REGION} > instance.json
+aws ec2 run-instances --image-id ${AWS_AMI} --key-name "${KEY_NAME}" --security-groups ${SECURITY_GROUP_NAME} --instance-type "${AWS_INSTANCE_TYPE}" --block-device-mappings DeviceName=/dev/sdh,Ebs={VolumeSize=100} --count 1 --region ${AWS_REGION} > instance.json
 if [ "$?" != "0" ]; then
     aws ec2 delete-key-pair --key-name "${KEY_NAME}" --region ${AWS_REGION}
     aws ec2 delete-security-group --group-id "${SGID}" --region ${AWS_REGION}

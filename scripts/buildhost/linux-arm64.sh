@@ -13,11 +13,12 @@ cd ${TMPPATH}
 
 AWS_REGION="us-west-2"
 AWS_LINUX_AMI="ami-0c579621aaac8bade"
+AWS_INSTANCE_TYPE="a1.2xlarge"
 INSTANCE_NUMBER=$RANDOM
 
 set +e
 
-${SCRIPTPATH}/start_ec2_instance.sh ${AWS_REGION} ${AWS_LINUX_AMI}
+${SCRIPTPATH}/start_ec2_instance.sh ${AWS_REGION} ${AWS_LINUX_AMI} ${AWS_INSTANCE_TYPE}
 if [ "$?" != "0" ]; then
     popd
     rm -rf ${TMPPATH}
