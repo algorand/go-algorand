@@ -26,7 +26,7 @@ if [ "${BUILD_TYPE}" != "external_build" ]; then
     exit 1
 fi
 
-if [ "${TARGET_PLATFORM}" != "linux-arm64" ]; then
+if [ "${TARGET_PLATFORM}" != "linux-arm64" ] && [ "${TARGET_PLATFORM}" != "linux-arm" ]; then
     echo "error: unsupported platform '${TARGET_PLATFORM}'"
     exit 1
 fi
