@@ -386,7 +386,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	for _, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
-		err := eval.transaction(txad.SignedTxn, txad.ApplyData, cow, &txib)
+		err := eval.transaction(txad.SignedTxn, txad.ApplyData, txgroup, cow, &txib)
 		if err != nil {
 			return err
 		}
@@ -435,7 +435,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 // transaction tentatively executes a new transaction as part of this block evaluation.
 // If the transaction cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transactions.ApplyData, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
+func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transactions.ApplyData, txgroup []transactions.SignedTxnWithAD, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
 	var err error
 
 	spec := transactions.SpecialAddresses{
@@ -479,8 +479,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 		}
 
 		if !txn.Lsig.Blank() {
-			// TODO: connect AccountData lookup and TxID lookup.
-			ep := logic.EvalParams{Txn: &txn, Block: &eval.block, Proto: &eval.proto}
+			ep := logic.EvalParams{Txn: &txn, Block: &eval.block, Proto: &eval.proto, TxnGoup: txgroup}
 			pass, err := logic.Eval(txn.Lsig.Logic, ep)
 			if !pass {
 				return fmt.Errorf("transaction %v: rejected by logic (%s)", txn.ID(), err)

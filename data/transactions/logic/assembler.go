@@ -209,6 +209,21 @@ func (ops *OpStream) Txn(val uint64) error {
 	return nil
 }
 
+// Gtxn writes opcodes for loading a field from the current transaction
+func (ops *OpStream) Gtxn(gid, val uint64) error {
+	if val >= uint64(len(TxnFieldNames)) {
+		return errors.New("invalid txn field")
+	}
+	if gid > 255 {
+		return errors.New("gtxn cannot look up beyond group index 255")
+	}
+	ops.Out.WriteByte(0x33)
+	ops.Out.WriteByte(uint8(gid))
+	ops.Out.WriteByte(uint8(val))
+	ops.tpush(TxnFieldTypes[val])
+	return nil
+}
+
 // Global writes opcodes for loading an evaluator-global field
 func (ops *OpStream) Global(val uint64) error {
 	if val >= uint64(len(GlobalFieldNames)) {
@@ -417,6 +432,21 @@ func assembleTxn(ops *OpStream, args []string) error {
 	return ops.Txn(uint64(val))
 }
 
+func assembleGtxn(ops *OpStream, args []string) error {
+	if len(args) != 2 {
+		return errors.New("gtxn expects two arguments")
+	}
+	gtid, err := strconv.ParseUint(args[0], 0, 64)
+	if err != nil {
+		return err
+	}
+	val, ok := txnFields[args[1]]
+	if !ok {
+		return fmt.Errorf("gtxn unknown arg %v", args[0])
+	}
+	return ops.Gtxn(gtid, uint64(val))
+}
+
 // GlobalFieldNames are arguments to the 'global' opcode
 var GlobalFieldNames = []string{
 	"Round",
@@ -476,6 +506,7 @@ func init() {
 	argOps["addr"] = assembleAddr // parse basics.Address, actually just another []byte constant
 	argOps["arg"] = assembleArg
 	argOps["txn"] = assembleTxn
+	argOps["gtxn"] = assembleGtxn
 	argOps["global"] = assembleGlobal
 	argOps["bnz"] = assembleBnz
 

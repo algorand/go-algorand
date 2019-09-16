@@ -76,6 +76,8 @@ type EvalParams struct {
 	Proto *config.ConsensusParams
 
 	Trace io.Writer
+
+	TxnGoup []transactions.SignedTxnWithAD
 }
 
 type evalContext struct {
@@ -267,6 +269,7 @@ var OpSpecs = []OpSpec{
 	{0x30, "arg_3", opArg3, nil, StackBytes},
 	{0x31, "txn", opTxn, nil, StackAny},       // TODO: check output type by subfield retrieved in txn,global,account,txid
 	{0x32, "global", opGlobal, nil, StackAny}, // TODO: check output type against specific field
+	{0x33, "gtxn", opGtxn, nil, StackAny},     // TODO: check output type by subfield retrieved in txn,global,account,txid
 
 	{0x40, "bnz", opBnz, []StackType{StackUint64}, StackNone},
 	{0x48, "pop", opPop, []StackType{StackAny}, StackNone},
@@ -297,6 +300,7 @@ var opSizes = []opSize{
 	{"bytec", 1, 2, nil},
 	{"arg", 1, 2, nil},
 	{"txn", 1, 2, nil},
+	{"gtxn", 1, 3, nil},
 	{"global", 1, 2, nil},
 	{"intcblock", 1, 0, checkIntConstBlock},
 	{"bytecblock", 1, 0, checkByteConstBlock},
@@ -808,35 +812,35 @@ func opDup(cx *evalContext) {
 	cx.stack = append(cx.stack, sv)
 }
 
-func (cx *evalContext) txnFieldToStack(txn *transactions.SignedTxn, field uint64) (sv stackValue, err error) {
+func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint64) (sv stackValue, err error) {
 	err = nil
 	switch field {
 	case 0:
-		sv.Bytes = txn.Txn.Sender[:]
+		sv.Bytes = txn.Sender[:]
 	case 1:
-		sv.Uint = txn.Txn.Fee.Raw
+		sv.Uint = txn.Fee.Raw
 	case 2:
-		sv.Uint = uint64(txn.Txn.FirstValid)
+		sv.Uint = uint64(txn.FirstValid)
 	case 3:
-		sv.Uint = uint64(txn.Txn.LastValid)
+		sv.Uint = uint64(txn.LastValid)
 	case 4:
-		sv.Bytes = txn.Txn.Note
+		sv.Bytes = txn.Note
 	case 5:
-		sv.Bytes = txn.Txn.Receiver[:]
+		sv.Bytes = txn.Receiver[:]
 	case 6:
-		sv.Uint = txn.Txn.Amount.Raw
+		sv.Uint = txn.Amount.Raw
 	case 7:
-		sv.Bytes = txn.Txn.CloseRemainderTo[:]
+		sv.Bytes = txn.CloseRemainderTo[:]
 	case 8:
-		sv.Bytes = txn.Txn.VotePK[:]
+		sv.Bytes = txn.VotePK[:]
 	case 9:
-		sv.Bytes = txn.Txn.SelectionPK[:]
+		sv.Bytes = txn.SelectionPK[:]
 	case 10:
-		sv.Uint = uint64(txn.Txn.VoteFirst)
+		sv.Uint = uint64(txn.VoteFirst)
 	case 11:
-		sv.Uint = uint64(txn.Txn.VoteLast)
+		sv.Uint = uint64(txn.VoteLast)
 	case 12:
-		sv.Uint = txn.Txn.VoteKeyDilution
+		sv.Uint = txn.VoteKeyDilution
 	default:
 		err = fmt.Errorf("invalid txn field %d", field)
 	}
@@ -844,14 +848,31 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.SignedTxn, field uint64
 }
 
 func opTxn(cx *evalContext) {
-	value := uint64(cx.program[cx.pc+1])
-	sv, err := cx.txnFieldToStack(cx.Txn, value)
+	field := uint64(cx.program[cx.pc+1])
+	sv, err := cx.txnFieldToStack(&cx.Txn.Txn, field)
 	if err != nil {
 		cx.err = err
 		return
 	}
 	cx.stack = append(cx.stack, sv)
 	cx.nextpc = cx.pc + 2
+}
+
+func opGtxn(cx *evalContext) {
+	gtxid := int(uint(cx.program[cx.pc+1]))
+	if gtxid >= len(cx.TxnGoup) {
+		cx.err = fmt.Errorf("gtxn lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGoup))
+		return
+	}
+	tx := &cx.TxnGoup[gtxid].Txn
+	field := uint64(cx.program[cx.pc+2])
+	sv, err := cx.txnFieldToStack(tx, field)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	cx.stack = append(cx.stack, sv)
+	cx.nextpc = cx.pc + 3
 }
 
 func opGlobal(cx *evalContext) {

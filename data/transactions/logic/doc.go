@@ -74,6 +74,7 @@ var opDocList = []stringString{
 	{"arg_2", "push LogicSig.Args[2] to stack"},
 	{"arg_3", "push LogicSig.Args[3] to stack"},
 	{"txn", "push field from current transaction to stack"},
+	{"gtxn", "push field to the stack from a transaction in the current transaction group"},
 	{"global", "push value from globals to stack"},
 	{"bnz", "branch if value is not zero"},
 	{"pop", "discard value from stack"},
@@ -98,6 +99,7 @@ var opcodeImmediateNoteList = []stringString{
 	{"bytec", "{uint8 byte constant index}"},
 	{"arg", "{uint8 arg index N}"},
 	{"txn", "{uint8 transaction field index}"},
+	{"gtxn", "{uint8 transaction group index}{uint8 transaction field index}"},
 	{"global", "{uint8 global field index}"},
 	{"bnz", "{0..0x7fff forward branch offset, big endian}"},
 }
@@ -139,7 +141,7 @@ type OpGroup struct {
 // OpGroupList is groupings of ops for documentation purposes.
 var OpGroupList = []OpGroup{
 	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "==", "!=", "!", "len", "btoi", "%", "|", "&", "^", "~"}},
-	{"Loading Values", []string{"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "global"}},
+	{"Loading Values", []string{"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "global"}},
 	{"Flow Control", []string{"err", "bnz", "pop", "dup"}},
 }
 

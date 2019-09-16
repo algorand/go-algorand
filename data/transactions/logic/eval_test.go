@@ -747,6 +747,97 @@ func TestTxn(t *testing.T) {
 	require.True(t, pass)
 }
 
+func TestGtxn(t *testing.T) {
+	t.Parallel()
+	program, err := AssembleString(`gtxn 1 Amount
+int 42
+==
+gtxn 1 Fee
+int 1066
+==
+&&
+gtxn 1 FirstValid
+int 42
+==
+&&
+gtxn 1 LastValid
+int 1066
+==
+&&
+gtxn 1 Sender
+arg 1
+==
+&&
+gtxn 1 Receiver
+arg 0
+==
+&&
+gtxn 0 Sender
+txn Sender
+==
+&&
+txn Sender
+arg 0
+==
+&&
+gtxn 0 Receiver
+txn Receiver
+==
+&&
+txn Receiver
+arg 1
+==
+&&`)
+	require.NoError(t, err)
+	sb := strings.Builder{}
+	cost, err := Check(program, EvalParams{Trace: &sb})
+	if err != nil {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.NoError(t, err)
+	require.True(t, cost < 1000)
+	txgroup := make([]transactions.SignedTxnWithAD, 2)
+	var txn transactions.SignedTxn
+	copy(txn.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
+	copy(txn.Txn.Receiver[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01"))
+	copy(txn.Txn.CloseRemainderTo[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02"))
+	copy(txn.Txn.VotePK[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui03"))
+	copy(txn.Txn.SelectionPK[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui04"))
+	txn.Txn.Note = []byte("fnord")
+	txn.Txn.Fee.Raw = 1337
+	txn.Txn.FirstValid = 42
+	txn.Txn.LastValid = 1066
+	txn.Txn.Amount.Raw = 1000000
+	txn.Txn.VoteFirst = 1317
+	txn.Txn.VoteLast = 17776
+	txn.Txn.VoteKeyDilution = 1
+	txgroup[0].SignedTxn = txn
+	txgroup[1].Txn.Amount.Raw = 42
+	txgroup[1].Txn.Fee.Raw = 1066
+	txgroup[1].Txn.FirstValid = 42
+	txgroup[1].Txn.LastValid = 1066
+	txgroup[1].Txn.Sender = txn.Txn.Receiver
+	txgroup[1].Txn.Receiver = txn.Txn.Sender
+	txn.Lsig.Logic = program
+	txn.Lsig.Args = [][]byte{
+		txn.Txn.Sender[:],
+		txn.Txn.Receiver[:],
+		txn.Txn.CloseRemainderTo[:],
+		txn.Txn.VotePK[:],
+		txn.Txn.SelectionPK[:],
+		txn.Txn.Note,
+	}
+	sb = strings.Builder{}
+	pass, err := Eval(program, EvalParams{Trace: &sb, Txn: &txn, TxnGoup: txgroup})
+	if !pass || err != nil {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.NoError(t, err)
+	require.True(t, pass)
+}
+
 func TestBitOps(t *testing.T) {
 	t.Parallel()
 	program, err := AssembleString(`int 0x17
