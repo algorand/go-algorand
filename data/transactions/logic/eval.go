@@ -30,6 +30,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 )
@@ -875,6 +876,8 @@ func opGtxn(cx *evalContext) {
 	cx.nextpc = cx.pc + 3
 }
 
+var zeroAddress basics.Address
+
 func opGlobal(cx *evalContext) {
 	gindex := uint64(cx.program[cx.pc+1])
 	var sv stackValue
@@ -893,6 +896,8 @@ func opGlobal(cx *evalContext) {
 		if cx.Block != nil {
 			sv.Uint = uint64(cx.Block.BlockHeader.TimeStamp)
 		}
+	case 5:
+		sv.Bytes = zeroAddress[:]
 	default:
 		cx.err = fmt.Errorf("invalid global[%d]", gindex)
 		return

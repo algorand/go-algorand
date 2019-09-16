@@ -454,6 +454,7 @@ var GlobalFieldNames = []string{
 	"MinBalance",
 	"MaxTxnLife",
 	"TimeStamp",
+	"ZeroAddress",
 }
 
 // GlobalFieldTypes is StackUint64 StackBytes in parallel with GlobalFieldNames
@@ -463,6 +464,7 @@ var GlobalFieldTypes = []StackType{
 	StackUint64,
 	StackUint64,
 	StackUint64,
+	StackBytes,
 }
 
 var globalFields map[string]uint

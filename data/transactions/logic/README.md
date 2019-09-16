@@ -129,6 +129,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 2 | MinBalance | uint64 |
 | 3 | MaxTxnLife | uint64 |
 | 4 | TimeStamp | uint64 |
+| 5 | ZeroAddress | []byte |
 
 
 

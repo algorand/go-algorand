@@ -671,6 +671,10 @@ global MaxTxnLife
 int 999
 ==
 &&
+global ZeroAddress
+txn CloseRemainderTo
+==
+&&
 global TimeStamp
 int 2069
 ==
