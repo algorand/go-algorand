@@ -29,13 +29,13 @@ BRANCH=$(cat $BUILD_REQUEST | jq -r '.TRAVIS_BRANCH')
 COMMIT_HASH=$(cat $BUILD_REQUEST | jq -r '.TRAVIS_COMMIT')
 PULL_REQUEST=$(cat $BUILD_REQUEST | jq -r '.TRAVIS_PULL_REQUEST')
 
-ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) git clone --depth=50 https://github.com/algorand/go-algorand -b ${BRANCH}
+ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) git clone --depth=50 https://github.com/algorand/go-algorand -b ${BRANCH} go/src/github.com/algorand/go-algorand
 if [ "${PULL_REQUEST}" = "false" ]; then
-    ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) "cd go-algorand; git checkout ${COMMIT_HASH}"
+    ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) "cd go/src/github.com/algorand/go-algorand; git checkout ${COMMIT_HASH}"
 else
-    ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) "cd go-algorand; git fetch origin +refs/pull/${PULL_REQUEST}/merge; git checkout -qf FETCH_HEAD"
+    ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) "cd go/src/github.com/algorand/go-algorand; git fetch origin +refs/pull/${PULL_REQUEST}/merge; git checkout -qf FETCH_HEAD"
 fi
-ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) "export DEBIAN_FRONTEND=noninteractive; cd go-algorand; ./scripts/travis/build.sh" 2>&1 > build_log.txt
+ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) "export DEBIAN_FRONTEND=noninteractive; cd go/src/github.com/algorand/go-algorand; ./scripts/travis/build.sh" 2>&1 > build_log.txt
 ERR=$?
 if [ "${OUTPUTFILE}" != "" ]; then
     echo "{ \"error\": ${ERR} }" > ./err_file.json

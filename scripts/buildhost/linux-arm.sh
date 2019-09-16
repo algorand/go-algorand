@@ -20,7 +20,7 @@ AWS_REGION="us-west-2"
 # the following is the base linux AMI
 #AWS_LINUX_AMI="ami-06f2f779464715dc5"
 # this is the private AMI that contains the RasPI VM running on port 5022
-AWS_LINUX_AMI="ami-03c43eb13e354b8f4"
+AWS_LINUX_AMI="ami-077aa2f293886f758"
 AWS_INSTANCE_TYPE="t2.2xlarge"
 INSTANCE_NUMBER=$RANDOM
 
@@ -36,6 +36,7 @@ fi
 scp -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance):/home/ubuntu/armv6_stretch/id_rsa ./id_rsa
 
 
+
 echo "Waiting for RasPI SSH connection"
 end=$((SECONDS+90))
 while [ $SECONDS -lt $end ]; do
@@ -47,25 +48,17 @@ while [ $SECONDS -lt $end ]; do
     sleep 1s
 done
 
-exit 0
-
-
-
-
-
-
-
 BRANCH=$(cat $BUILD_REQUEST | jq -r '.TRAVIS_BRANCH')
 COMMIT_HASH=$(cat $BUILD_REQUEST | jq -r '.TRAVIS_COMMIT')
 PULL_REQUEST=$(cat $BUILD_REQUEST | jq -r '.TRAVIS_PULL_REQUEST')
 
-ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) git clone --depth=50 https://github.com/algorand/go-algorand -b ${BRANCH}
+ssh -i id_rsa -o "StrictHostKeyChecking no" -p 5022 pi@$(cat instance) git clone --depth=50 https://github.com/algorand/go-algorand -b ${BRANCH} go/src/github.com/algorand/go-algorand
 if [ "${PULL_REQUEST}" = "false" ]; then
-    ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) "cd go-algorand; git checkout ${COMMIT_HASH}"
+    ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) "cd go/src/github.com/algorand/go-algorand; git checkout ${COMMIT_HASH}"
 else
-    ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) "cd go-algorand; git fetch origin +refs/pull/${PULL_REQUEST}/merge; git checkout -qf FETCH_HEAD"
+    ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) "cd go/src/github.com/algorand/go-algorand; git fetch origin +refs/pull/${PULL_REQUEST}/merge; git checkout -qf FETCH_HEAD"
 fi
-ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) "export DEBIAN_FRONTEND=noninteractive; cd go-algorand; ./scripts/travis/build.sh" 2>&1 > build_log.txt
+ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) "export DEBIAN_FRONTEND=noninteractive; cd go/src/github.com/algorand/go-algorand; ./scripts/travis/build.sh" 2>&1 > build_log.txt
 ERR=$?
 if [ "${OUTPUTFILE}" != "" ]; then
     echo "{ \"error\": ${ERR} }" > ./err_file.json

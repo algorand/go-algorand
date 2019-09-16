@@ -13,6 +13,12 @@
 #
 
 AWS_REGION=$1
+
+if [ "${AWS_REGION}" = "" ]; then
+    echo "Missing AWS_REGION argument"
+    exit 1
+fi
+
 SGID=$(cat sgid)
 INSTANCE_ID=$(cat instance-id)
 INSTANCE_NAME=$(cat instance)
