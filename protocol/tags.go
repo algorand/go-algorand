@@ -20,7 +20,6 @@ package protocol
 // e.g., the agreement service can register to handle agreements with the Agreement tag.
 type Tag string
 
-
 // Tags, in lexicographic sort order of tag values to avoid duplicates.
 const (
 	UnknownMsgTag      Tag = "??"
