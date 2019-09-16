@@ -111,6 +111,16 @@ type (
 		// the new block's UpgradeVote.
 		UpgradeState
 		UpgradeVote
+
+		// TxnCounter counts the number of transactions committed in the
+		// ledger, from the time at which support for this feature was
+		// introduced.
+		//
+		// Specifically, TxnCounter is the number of the next transaction
+		// that will be committed after this block.  It is 0 when no
+		// transactions have ever been committed (since TxnCounter
+		// started being supported).
+		TxnCounter uint64 `codec:"tc"`
 	}
 
 	// RewardsState represents the global parameters controlling the rate
@@ -225,8 +235,20 @@ func (s RewardsState) NextRewardsState(nextRound basics.Round, nextProto config.
 	res = s
 
 	if nextRound == s.RewardsRecalculationRound {
+		maxSpentOver := nextProto.MinBalance
+		overflowed := false
+
+		if nextProto.PendingResidueRewards {
+			maxSpentOver, overflowed = basics.OAdd(maxSpentOver, s.RewardsResidue)
+			if overflowed {
+				logging.Base().Errorf("overflowed when trying to accumulate MinBalance(%d) and RewardsResidue(%d) for round %d (state %+v)", nextProto.MinBalance, s.RewardsResidue, nextRound, s)
+				// this should never happen, but if it does, adjust the maxSpentOver so that we will have no rewards.
+				maxSpentOver = incentivePoolBalance.Raw
+			}
+		}
+
 		// it is time to refresh the rewards rate
-		newRate, overflowed := basics.OSub(incentivePoolBalance.Raw, nextProto.MinBalance)
+		newRate, overflowed := basics.OSub(incentivePoolBalance.Raw, maxSpentOver)
 		if overflowed {
 			logging.Base().Errorf("overflowed when trying to refresh RewardsRate for round %v (state %+v)", nextRound, s)
 			newRate = 0
@@ -468,21 +490,35 @@ func (block Block) ContentsMatchHeader() bool {
 	return block.Payset.Commit(proto.PaysetCommitFlat) == block.TxnRoot
 }
 
-// DecodePayset decodes block.Payset using DecodeSignedTxn (and ignores ApplyData).
-func (block Block) DecodePayset() ([]transactions.SignedTxn, error) {
-	res := make([]transactions.SignedTxn, len(block.Payset))
-	for i, txib := range block.Payset {
+// DecodePaysetGroups decodes block.Payset using DecodeSignedTxn, and returns
+// the transactions in groups.
+func (block Block) DecodePaysetGroups() ([][]transactions.SignedTxnWithAD, error) {
+	var res [][]transactions.SignedTxnWithAD
+	var lastGroup []transactions.SignedTxnWithAD
+	for _, txib := range block.Payset {
 		var err error
-		res[i], _, err = block.DecodeSignedTxn(txib)
+		var stxnad transactions.SignedTxnWithAD
+		stxnad.SignedTxn, stxnad.ApplyData, err = block.DecodeSignedTxn(txib)
 		if err != nil {
 			return nil, err
 		}
+
+		if lastGroup != nil && (lastGroup[0].SignedTxn.Txn.Group != stxnad.SignedTxn.Txn.Group || lastGroup[0].SignedTxn.Txn.Group.IsZero()) {
+			res = append(res, lastGroup)
+			lastGroup = nil
+		}
+
+		lastGroup = append(lastGroup, stxnad)
+	}
+	if lastGroup != nil {
+		res = append(res, lastGroup)
 	}
 	return res, nil
 }
 
-// DecodePaysetWithAD decodes block.Payset using DecodeSignedTxn
-func (block Block) DecodePaysetWithAD() ([]transactions.SignedTxnWithAD, error) {
+// DecodePaysetFlat decodes block.Payset using DecodeSignedTxn, and
+// flattens groups.
+func (block Block) DecodePaysetFlat() ([]transactions.SignedTxnWithAD, error) {
 	res := make([]transactions.SignedTxnWithAD, len(block.Payset))
 	for i, txib := range block.Payset {
 		var err error
@@ -492,6 +528,31 @@ func (block Block) DecodePaysetWithAD() ([]transactions.SignedTxnWithAD, error) 
 		}
 	}
 	return res, nil
+}
+
+// SignedTxnsToGroups splits a slice of SignedTxns into groups.
+func SignedTxnsToGroups(txns []transactions.SignedTxn) (res [][]transactions.SignedTxn) {
+	var lastGroup []transactions.SignedTxn
+	for _, tx := range txns {
+		if lastGroup != nil && (lastGroup[0].Txn.Group != tx.Txn.Group || lastGroup[0].Txn.Group.IsZero()) {
+			res = append(res, lastGroup)
+			lastGroup = nil
+		}
+
+		lastGroup = append(lastGroup, tx)
+	}
+	if lastGroup != nil {
+		res = append(res, lastGroup)
+	}
+	return res
+}
+
+// SignedTxnGroupsFlatten combines all groups into a flat slice of SignedTxns.
+func SignedTxnGroupsFlatten(txgroups [][]transactions.SignedTxn) (res []transactions.SignedTxn) {
+	for _, txgroup := range txgroups {
+		res = append(res, txgroup...)
+	}
+	return res
 }
 
 // NextVersionInfo returns information about the next expected protocol version.

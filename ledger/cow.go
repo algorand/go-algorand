@@ -35,6 +35,7 @@ import (
 type roundCowParent interface {
 	lookup(basics.Address) (basics.AccountData, error)
 	isDup(basics.Round, transactions.Txid) (bool, error)
+	txnCounter() uint64
 }
 
 type roundCowState struct {
@@ -48,7 +49,7 @@ type stateDelta struct {
 	// modified accounts
 	accts map[basics.Address]accountDelta
 
-	// new Txids for the txtail
+	// new Txids for the txtail and TxnCounter
 	txids map[transactions.Txid]struct{}
 
 	// new block header; read-only
@@ -88,6 +89,10 @@ func (cb *roundCowState) isDup(firstValid basics.Round, txid transactions.Txid) 
 	}
 
 	return cb.lookupParent.isDup(firstValid, txid)
+}
+
+func (cb *roundCowState) txnCounter() uint64 {
+	return cb.lookupParent.txnCounter() + uint64(len(cb.mods.txids))
 }
 
 func (cb *roundCowState) put(addr basics.Address, old basics.AccountData, new basics.AccountData) {

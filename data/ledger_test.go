@@ -85,10 +85,17 @@ func BenchmarkAssemblePayset(b *testing.B) {
 		//b.Log(addr)
 	}
 
-	require.Equal(b, len(genesis), numUsers)
-	genBal := MakeGenesisBalances(genesis, poolAddr, sinkAddr)
+	genesis[poolAddr] = basics.AccountData{
+		Status:     basics.NotParticipating,
+		MicroAlgos: basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinBalance},
+	}
+
+	require.Equal(b, len(genesis), numUsers+1)
+	genBal := MakeGenesisBalances(genesis, sinkAddr, poolAddr)
 	ledgerName := fmt.Sprintf("%s-mem-%d", b.Name(), b.N)
-	ledger, err := LoadLedger(log, ledgerName, true, protocol.ConsensusCurrentVersion, genBal, "", crypto.Digest{}, nil)
+	const inMem = true
+	const archival = true
+	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, archival)
 	require.NoError(b, err)
 
 	l := ledger
@@ -119,11 +126,12 @@ func BenchmarkAssemblePayset(b *testing.B) {
 			tx := transactions.Transaction{
 				Type: protocol.PaymentTx,
 				Header: transactions.Header{
-					Sender:     addresses[sourcei],
-					Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
-					FirstValid: 0,
-					LastValid:  basics.Round(proto.MaxTxnLife),
-					Note:       make([]byte, 2),
+					Sender:      addresses[sourcei],
+					Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+					FirstValid:  0,
+					LastValid:   basics.Round(proto.MaxTxnLife),
+					Note:        make([]byte, 2),
+					GenesisHash: genesisHash,
 				},
 				PaymentTxnFields: transactions.PaymentTxnFields{
 					Receiver: addresses[desti],
@@ -138,7 +146,7 @@ func BenchmarkAssemblePayset(b *testing.B) {
 			if okcount == 0 {
 				worstTxID = signedTx.ID()
 			}
-			err := tp.Remember(signedTx)
+			err := tp.Remember([]transactions.SignedTxn{signedTx})
 			if err != nil {
 				errcount++
 				b.Logf("(%d/%d) could not send [%d] %s -> [%d] %s: %s", errcount, okcount, sourcei, addresses[sourcei], desti, addresses[desti], err)

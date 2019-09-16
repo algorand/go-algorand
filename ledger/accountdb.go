@@ -52,6 +52,12 @@ var accountsSchema = []string{
 		data blob)`,
 }
 
+var accountsResetExprs = []string{
+	`DROP TABLE IF EXISTS acctrounds`,
+	`DROP TABLE IF EXISTS accounttotals`,
+	`DROP TABLE IF EXISTS accountbase`,
+}
+
 type accountDelta struct {
 	old basics.AccountData
 	new basics.AccountData
@@ -102,6 +108,16 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 		}
 	}
 
+	return nil
+}
+
+func accountsReset(tx *sql.Tx) error {
+	for _, stmt := range accountsResetExprs {
+		_, err := tx.Exec(stmt)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -230,7 +246,7 @@ func accountsNewRound(tx *sql.Tx, rnd basics.Round, updates map[basics.Address]a
 	defer replaceStmt.Close()
 
 	for addr, data := range updates {
-		if (data.new == basics.AccountData{}) {
+		if data.new.IsZero() {
 			// prune empty accounts
 			_, err = deleteStmt.Exec(addr[:])
 		} else {

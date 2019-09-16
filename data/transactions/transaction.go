@@ -51,8 +51,9 @@ type SpecialAddresses struct {
 type Balances interface {
 	// Get looks up the balance record for an address
 	// If the account is known to be empty, then err should be nil and the returned balance record should have the given address and empty AccountData
+	// withPendingRewards specifies whether pending rewards should be applied.
 	// A non-nil error means the lookup is impossible (e.g., if the database doesn't have necessary state anymore)
-	Get(basics.Address) (basics.BalanceRecord, error)
+	Get(addr basics.Address, withPendingRewards bool) (basics.BalanceRecord, error)
 
 	Put(basics.BalanceRecord) error
 
@@ -76,6 +77,11 @@ type Header struct {
 	Note        []byte            `codec:"note"` // Uniqueness or app-level data about txn
 	GenesisID   string            `codec:"gen"`
 	GenesisHash crypto.Digest     `codec:"gh"`
+
+	// Group specifies that this transaction is part of a
+	// transaction group (and, if so, specifies the hash
+	// of a TxGroup).
+	Group crypto.Digest `codec:"grp"`
 }
 
 // Transaction describes a transaction that can appear in a block.
@@ -91,6 +97,9 @@ type Transaction struct {
 	// Fields for different types of transactions
 	KeyregTxnFields
 	PaymentTxnFields
+	AssetConfigTxnFields
+	AssetTransferTxnFields
+	AssetFreezeTxnFields
 
 	// The transaction's Txid is computed when we decode,
 	// and cached here, to avoid needlessly recomputing it.
@@ -112,6 +121,23 @@ type ApplyData struct {
 	SenderRewards   basics.MicroAlgos `codec:"rs"`
 	ReceiverRewards basics.MicroAlgos `codec:"rr"`
 	CloseRewards    basics.MicroAlgos `codec:"rc"`
+}
+
+// TxGroup describes a group of transactions that must appear
+// together in a specific order in a block.
+type TxGroup struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	// Transactions specifies a list of transactions that must appear
+	// together, sequentially, in a block in order for the group to be
+	// valid.  Each hash in the list is a hash of a transaction with
+	// the `Group` field omitted.
+	Transactions []crypto.Digest `codec:"txlist"`
+}
+
+// ToBeHashed implements the crypto.Hashable interface.
+func (tg TxGroup) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.TxGroup, protocol.Encode(tg)
 }
 
 // ToBeHashed implements the crypto.Hashable interface.
@@ -226,6 +252,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		if err != nil {
 			return err
 		}
+
 	case protocol.KeyRegistrationTx:
 		// check that, if this tx is marking an account nonparticipating,
 		// it supplies no key (as though it were trying to go offline)
@@ -241,6 +268,21 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			}
 		}
 
+	case protocol.AssetConfigTx:
+		if !proto.Asset {
+			return fmt.Errorf("asset transaction not supported")
+		}
+
+	case protocol.AssetTransferTx:
+		if !proto.Asset {
+			return fmt.Errorf("asset transaction not supported")
+		}
+
+	case protocol.AssetFreezeTx:
+		if !proto.Asset {
+			return fmt.Errorf("asset transaction not supported")
+		}
+
 	default:
 		return fmt.Errorf("unknown tx type %v", tx.Type)
 	}
@@ -252,6 +294,18 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 
 	if tx.KeyregTxnFields != (KeyregTxnFields{}) {
 		nonZeroFields[protocol.KeyRegistrationTx] = true
+	}
+
+	if tx.AssetConfigTxnFields != (AssetConfigTxnFields{}) {
+		nonZeroFields[protocol.AssetConfigTx] = true
+	}
+
+	if tx.AssetTransferTxnFields != (AssetTransferTxnFields{}) {
+		nonZeroFields[protocol.AssetTransferTx] = true
+	}
+
+	if tx.AssetFreezeTxnFields != (AssetFreezeTxnFields{}) {
+		nonZeroFields[protocol.AssetFreezeTx] = true
 	}
 
 	for t, nonZero := range nonZeroFields {
@@ -305,6 +359,11 @@ func (tx Transaction) RelevantAddrs(spec SpecialAddresses, proto config.Consensu
 		if tx.PaymentTxnFields.CloseRemainderTo != (basics.Address{}) {
 			addrs = append(addrs, tx.PaymentTxnFields.CloseRemainderTo)
 		}
+	case protocol.AssetTransferTx:
+		addrs = append(addrs, tx.AssetTransferTxnFields.AssetReceiver)
+		if tx.AssetTransferTxnFields.AssetCloseTo != (basics.Address{}) {
+			addrs = append(addrs, tx.AssetTransferTxnFields.AssetCloseTo)
+		}
 	}
 
 	return addrs
@@ -332,7 +391,7 @@ func (tx Transaction) EstimateEncodedSize() int {
 }
 
 // Apply changes the balances according to this transaction.
-func (tx Transaction) Apply(balances Balances, spec SpecialAddresses) (ad ApplyData, err error) {
+func (tx Transaction) Apply(balances Balances, spec SpecialAddresses, ctr uint64) (ad ApplyData, err error) {
 	params := balances.ConsensusParams()
 
 	// move fee to pool
@@ -347,6 +406,15 @@ func (tx Transaction) Apply(balances Balances, spec SpecialAddresses) (ad ApplyD
 
 	case protocol.KeyRegistrationTx:
 		err = tx.KeyregTxnFields.apply(tx.Header, balances, spec, &ad)
+
+	case protocol.AssetConfigTx:
+		err = tx.AssetConfigTxnFields.apply(tx.Header, balances, spec, &ad, ctr)
+
+	case protocol.AssetTransferTx:
+		err = tx.AssetTransferTxnFields.apply(tx.Header, balances, spec, &ad)
+
+	case protocol.AssetFreezeTx:
+		err = tx.AssetFreezeTxnFields.apply(tx.Header, balances, spec, &ad)
 
 	default:
 		err = fmt.Errorf("Unknown transaction type %v", tx.Type)

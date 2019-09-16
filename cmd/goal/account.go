@@ -444,6 +444,26 @@ var listCmd = &cobra.Command{
 			} else {
 				accountList.outputAccount(addr.Addr, response, nil)
 			}
+
+			for aid, bal := range response.Assets {
+				frozen := ""
+				if bal.Frozen {
+					frozen = ", frozen"
+				}
+
+				unitName := "units"
+				assetName := ""
+				creatorInfo, err := client.AccountInformation(bal.Creator)
+				if err == nil {
+					params, ok := creatorInfo.AssetParams[aid]
+					if ok {
+						unitName = params.UnitName
+						assetName = fmt.Sprintf(", name %s", params.AssetName)
+					}
+				}
+
+				fmt.Printf("\t%20d %-8s (creator %s, ID %d%s%s)\n", bal.Amount, unitName, bal.Creator, aid, assetName, frozen)
+			}
 		}
 	},
 }
