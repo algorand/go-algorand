@@ -98,6 +98,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `arg_2` | push LogicSig.Args[2] to stack |
 | `arg_3` | push LogicSig.Args[3] to stack |
 | `txn` | push field from current transaction to stack |
+| `gtxn` | push field to the stack from a transaction in the current transaction group |
 | `global` | push value from globals to stack |
 
 **Transaction Fields**

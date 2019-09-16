@@ -97,7 +97,11 @@ global Round
 int 3000
 >
 &&
-||`
+||
+txn Fee
+int 1000000
+<
+&&`
 
 func TestTLHC(t *testing.T) {
 	t.Parallel()
@@ -548,6 +552,48 @@ func TestTxnBadField(t *testing.T) {
 	txn.Lsig.Logic = program
 	txn.Lsig.Args = nil
 	pass, err := Eval(program, EvalParams{Trace: &sb, Txn: &txn})
+	if pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.Error(t, err)
+	require.False(t, pass)
+}
+
+func TestGtxnBadIndex(t *testing.T) {
+	t.Parallel()
+	program := []byte{0x01, 0x33, 0x1, 0x01}
+	cost, err := Check(program, EvalParams{})
+	//require.Error(t, err)
+	require.True(t, cost < 1000)
+	sb := strings.Builder{}
+	var txn transactions.SignedTxn
+	txn.Lsig.Logic = program
+	txn.Lsig.Args = nil
+	txgroup := make([]transactions.SignedTxnWithAD, 1)
+	txgroup[0].SignedTxn = txn
+	pass, err := Eval(program, EvalParams{Trace: &sb, Txn: &txn, TxnGoup: txgroup})
+	if pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.Error(t, err)
+	require.False(t, pass)
+}
+
+func TestGtxnBadField(t *testing.T) {
+	t.Parallel()
+	program := []byte{0x01, 0x33, 0x0, 0x7f}
+	cost, err := Check(program, EvalParams{})
+	//require.Error(t, err)
+	require.True(t, cost < 1000)
+	sb := strings.Builder{}
+	var txn transactions.SignedTxn
+	txn.Lsig.Logic = program
+	txn.Lsig.Args = nil
+	txgroup := make([]transactions.SignedTxnWithAD, 1)
+	txgroup[0].SignedTxn = txn
+	pass, err := Eval(program, EvalParams{Trace: &sb, Txn: &txn, TxnGoup: txgroup})
 	if pass {
 		t.Log(hex.EncodeToString(program))
 		t.Log(sb.String())
@@ -1537,6 +1583,12 @@ ed25519verify`, pkStr))
 	}
 	require.True(t, pass)
 	require.NoError(t, err)
+
+	// short sig will fail
+	txn.Lsig.Args[1] = sig[1:]
+	pass, err = Eval(program, EvalParams{Txn: &txn})
+	require.False(t, pass)
+	require.Error(t, err)
 
 	// flip a bit and it should not pass
 	msg1 := "52fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"

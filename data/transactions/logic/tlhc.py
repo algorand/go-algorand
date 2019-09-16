@@ -34,7 +34,11 @@ global Round
 int {timeout_round}
 >
 &&
-||'''
+||
+txn Fee
+int 1000000
+<
+&&'''
 
 def tlhc(sender, to, timeout_round, hash_secret, hashop='sha256'):
     if isinstance(hash_secret, bytes):
