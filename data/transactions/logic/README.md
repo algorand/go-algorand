@@ -118,6 +118,12 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 10 | VoteFirst | uint64 |
 | 11 | VoteLast | uint64 |
 | 12 | VoteKeyDilution | uint64 |
+| 13 | Type | []byte |
+| 14 | XferAsset | []byte |
+| 15 | AssetAmount | uint64 |
+| 16 | AssetSender | []byte |
+| 17 | AssetReceiver | []byte |
+| 18 | AssetCloseTo | []byte |
 
 
 **Global Fields**

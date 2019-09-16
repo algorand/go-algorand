@@ -842,6 +842,20 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint
 		sv.Uint = uint64(txn.VoteLast)
 	case 12:
 		sv.Uint = txn.VoteKeyDilution
+	case 13:
+		sv.Bytes = []byte(txn.Type)
+	case 14:
+		sv.Bytes = make([]byte, 40)
+		copy(sv.Bytes, txn.XferAsset.Creator[:])
+		binary.BigEndian.PutUint64(sv.Bytes[32:], txn.XferAsset.Index)
+	case 15:
+		sv.Uint = txn.AssetAmount
+	case 16:
+		sv.Bytes = txn.AssetSender[:]
+	case 17:
+		sv.Bytes = txn.AssetReceiver[:]
+	case 18:
+		sv.Bytes = txn.AssetCloseTo[:]
 	default:
 		err = fmt.Errorf("invalid txn field %d", field)
 	}

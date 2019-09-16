@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 func TestTrivialMath(t *testing.T) {
@@ -755,6 +756,14 @@ int 17776
 txn VoteKeyDilution
 int 1
 ==
+&&
+txn Type
+byte 0x41414141
+==
+&&
+txn XferAsset
+arg 6
+==
 &&`
 
 func TestTxn(t *testing.T) {
@@ -770,6 +779,10 @@ func TestTxn(t *testing.T) {
 	copy(txn.Txn.CloseRemainderTo[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02"))
 	copy(txn.Txn.VotePK[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui03"))
 	copy(txn.Txn.SelectionPK[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui04"))
+	creator := "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui05"
+	copy(txn.Txn.XferAsset.Creator[:], []byte(creator))
+	txn.Txn.XferAsset.Index = 1
+	// This is not a valid transaction to have all these fields set this way
 	txn.Txn.Note = []byte("fnord")
 	txn.Txn.Fee.Raw = 1337
 	txn.Txn.FirstValid = 42
@@ -778,6 +791,7 @@ func TestTxn(t *testing.T) {
 	txn.Txn.VoteFirst = 1317
 	txn.Txn.VoteLast = 17776
 	txn.Txn.VoteKeyDilution = 1
+	txn.Txn.Type = protocol.TxType("AAAA")
 	txn.Lsig.Logic = program
 	txn.Lsig.Args = [][]byte{
 		txn.Txn.Sender[:],
@@ -786,6 +800,7 @@ func TestTxn(t *testing.T) {
 		txn.Txn.VotePK[:],
 		txn.Txn.SelectionPK[:],
 		txn.Txn.Note,
+		append([]byte(creator), 0, 0, 0, 0, 0, 0, 0, 1),
 	}
 	sb := strings.Builder{}
 	pass, err := Eval(program, EvalParams{Trace: &sb, Txn: &txn})
