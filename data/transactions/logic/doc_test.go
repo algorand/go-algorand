@@ -18,6 +18,8 @@ package logic
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestOpDocs(t *testing.T) {
@@ -59,4 +61,32 @@ func TestOpGroupCoverage(t *testing.T) {
 			t.Errorf("warning: op %#v not in any group list\n", name)
 		}
 	}
+}
+
+func TestOpDoc(t *testing.T) {
+	xd := OpDoc("txn")
+	require.NotEmpty(t, xd)
+	xd = OpDoc("NOT AN ISTRUCTION")
+	require.Empty(t, xd)
+}
+
+func TestOpImmediateNote(t *testing.T) {
+	xd := OpImmediateNote("txn")
+	require.NotEmpty(t, xd)
+	xd = OpImmediateNote("+")
+	require.Empty(t, xd)
+}
+
+func TestOpDocExtra(t *testing.T) {
+	xd := OpDocExtra("bnz")
+	require.NotEmpty(t, xd)
+	xd = OpDocExtra("txn")
+	require.Empty(t, xd)
+}
+
+func TestOpCost(t *testing.T) {
+	c := OpCost("+")
+	require.Equal(t, 1, c)
+	c = OpCost("sha256")
+	require.True(t, c > 1)
 }
