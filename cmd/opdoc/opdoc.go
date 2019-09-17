@@ -108,6 +108,7 @@ func opsToMarkdown(out io.Writer) (err error) {
 	return
 }
 
+// OpRecord is a consolidated record of things about an Op
 type OpRecord struct {
 	Opcode  byte
 	Name    string
@@ -124,6 +125,7 @@ type OpRecord struct {
 	Groups        []string
 }
 
+// LanguageSpec records the ops of the language at some version
 type LanguageSpec struct {
 	EvalMaxVersion  int
 	LogicSigVersion uint64
