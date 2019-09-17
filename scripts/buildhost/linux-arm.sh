@@ -51,24 +51,24 @@ BRANCH=$(cat $BUILD_REQUEST | jq -r '.TRAVIS_BRANCH')
 COMMIT_HASH=$(cat $BUILD_REQUEST | jq -r '.TRAVIS_COMMIT')
 PULL_REQUEST=$(cat $BUILD_REQUEST | jq -r '.TRAVIS_PULL_REQUEST')
 
-echo > exescript << EOF
+cat << EOF > exescript
 git clone --depth=50 https://github.com/algorand/go-algorand -b ${BRANCH} go/src/github.com/algorand/go-algorand
 cd go/src/github.com/algorand/go-algorand
 EOF
-
 if [ "${PULL_REQUEST}" = "false" ]; then
-    echo >> exescript << EOF
+    cat << FOE >> exescript
 git checkout ${COMMIT_HASH}
-EOF
+FOE
 else
-    echo >> exescript << EOF
+    cat << FOE >> exescript
 git fetch origin +refs/pull/${PULL_REQUEST}/merge; git checkout -qf FETCH_HEAD
-EOF
+FOE
 fi
-    echo >> exescript << EOF
+cat << FOE >> exescript
 export DEBIAN_FRONTEND=noninteractive
  ./scripts/travis/build.sh
-EOF
+FOE
+
 ssh -i id_rsa -o "StrictHostKeyChecking no" -p 5022 pi@$(cat instance) 'bash -s' < exescript 2>&1 | aws s3 cp - s3://${BUCKET}/${LOGFILE} ${NO_SIGN}
 ERR=$?
 if [ "${OUTPUTFILE}" != "" ]; then
