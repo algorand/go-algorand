@@ -50,10 +50,12 @@ echo "{ \"TRAVIS_BRANCH\" : \"${TRAVIS_BRANCH}\", \"TRAVIS_COMMIT\" : \"${TRAVIS
 if [ "${TRAVIS_PULL_REQUEST}" = "false" ]; then
     BUILD_REQUEST_PATH=s3://${BUILD_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${TRAVIS_BUILD_NUMBER}.json
     BUILD_COMPLETE_PATH=s3://${BUILD_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${TRAVIS_BUILD_NUMBER}-completed.json
+    BUILD_LOG_PATH=s3://${BUILD_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${TRAVIS_BUILD_NUMBER}-log.txt
     NO_SIGN_REQUEST=
 else
     BUILD_REQUEST_PATH=s3://${BUILD_PULL_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${TRAVIS_BUILD_NUMBER}.json
     BUILD_COMPLETE_PATH=s3://${BUILD_PULL_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${TRAVIS_BUILD_NUMBER}-completed.json
+    BUILD_LOG_PATH=s3://${BUILD_PULL_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${TRAVIS_BUILD_NUMBER}-log.txt
     NO_SIGN_REQUEST=--no-sign-request
 fi
 
@@ -85,15 +87,23 @@ if [ "${BUILD_STARTED}" = "false" ]; then
 fi
 
 echo "Waiting for build to complete..."
-end=$((SECONDS+1200))
+end=$((SECONDS+7200))
 minute_end=$((SECONDS+60))
 BUILD_COMPLETE=false
+LOG_PRINT_COMPLETE=false
 while [ $SECONDS -lt $end ]; do
     GET_OUTPUT=$(aws s3 cp ${BUILD_COMPLETE_PATH} . ${NO_SIGN_REQUEST} 2> /dev/null)
     if [ "$?" = "0" ]; then
         echo "${GET_OUTPUT}"
         BUILD_COMPLETE=true
         break
+    fi
+    if [ "${LOG_PRINT_COMPLETE}" = "false" ]; then
+        aws s3 ls ${BUILD_LOG_PATH} . ${NO_SIGN_REQUEST} 2> /dev/null
+        if [ "$?" = "0" ]; then
+            LOG_PRINT_COMPLETE=true
+             aws s3 cp ${BUILD_LOG_PATH} - ${NO_SIGN_REQUEST} | cat
+        fi
     fi
     if [ $SECONDS -gt $minute_end ]; then
         minute_end=$((SECONDS+60))

@@ -35,15 +35,12 @@ fi
 
 scp -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance):/home/ubuntu/armv6_stretch/id_rsa ./id_rsa
 
-
-
 echo "Waiting for RasPI SSH connection"
 end=$((SECONDS+90))
 while [ $SECONDS -lt $end ]; do
     ssh -i id_rsa -o "StrictHostKeyChecking no" -p 5022 pi@$(cat instance) "uname -a"
     if [ "$?" = "0" ]; then
         echo "RasPI SSH connection ready"
-        exit 0
     fi
     sleep 1s
 done
@@ -54,11 +51,11 @@ PULL_REQUEST=$(cat $BUILD_REQUEST | jq -r '.TRAVIS_PULL_REQUEST')
 
 ssh -i id_rsa -o "StrictHostKeyChecking no" -p 5022 pi@$(cat instance) git clone --depth=50 https://github.com/algorand/go-algorand -b ${BRANCH} go/src/github.com/algorand/go-algorand
 if [ "${PULL_REQUEST}" = "false" ]; then
-    ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) "cd go/src/github.com/algorand/go-algorand; git checkout ${COMMIT_HASH}"
+    ssh -i id_rsa -o "StrictHostKeyChecking no" -p 5022 pi@$(cat instance) "cd go/src/github.com/algorand/go-algorand; git checkout ${COMMIT_HASH}"
 else
-    ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) "cd go/src/github.com/algorand/go-algorand; git fetch origin +refs/pull/${PULL_REQUEST}/merge; git checkout -qf FETCH_HEAD"
+    ssh -i id_rsa -o "StrictHostKeyChecking no" -p 5022 pi@$(cat instance) "cd go/src/github.com/algorand/go-algorand; git fetch origin +refs/pull/${PULL_REQUEST}/merge; git checkout -qf FETCH_HEAD"
 fi
-ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) "export DEBIAN_FRONTEND=noninteractive; cd go/src/github.com/algorand/go-algorand; ./scripts/travis/build.sh" 2>&1 > build_log.txt
+ssh -i id_rsa -o "StrictHostKeyChecking no" -p 5022 pi@$(cat instance) "export DEBIAN_FRONTEND=noninteractive; cd go/src/github.com/algorand/go-algorand; ./scripts/travis/build.sh" 2>&1 > build_log.txt
 ERR=$?
 if [ "${OUTPUTFILE}" != "" ]; then
     echo "{ \"error\": ${ERR} }" > ./err_file.json
