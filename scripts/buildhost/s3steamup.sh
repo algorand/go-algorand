@@ -5,7 +5,7 @@ NO_SIGN=$2
 
 SEQ=1
 while read line; do
-        echo line >> buffile
+        echo "${line}" >> buffile
         if [[ $(find buffile -type f -size +1024c 2>/dev/null) ]]; then
                 aws s3 cp buffile ${DEST}-${SEQ} ${NO_SIGN}
                 rm -f buffile
