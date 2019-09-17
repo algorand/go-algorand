@@ -103,7 +103,7 @@ while [ $SECONDS -lt $end ]; do
         break
     fi
     
-    aws s3 ls ${BUILD_LOG_PATH}-${LOG_SEQ} ${NO_SIGN_REQUEST} 2> /dev/null
+    aws s3 ls ${BUILD_LOG_PATH}-${LOG_SEQ} ${NO_SIGN_REQUEST} 2> /dev/null > /dev/null
     if [ "$?" = "0" ]; then
         aws s3 cp ${BUILD_LOG_PATH}-${LOG_SEQ} - ${NO_SIGN_REQUEST} | cat
         if [ "$?" = "0" ]; then
@@ -119,7 +119,7 @@ while [ $SECONDS -lt $end ]; do
     sleep 1s
 done
 
-aws s3 ls ${BUILD_LOG_PATH}-${LOG_SEQ} . ${NO_SIGN_REQUEST} 2> /dev/null
+aws s3 ls ${BUILD_LOG_PATH}-${LOG_SEQ} . ${NO_SIGN_REQUEST} 2> /dev/null > /dev/null
 if [ "$?" = "0" ]; then
     aws s3 cp ${BUILD_LOG_PATH}-${LOG_SEQ} - ${NO_SIGN_REQUEST} | cat
 fi
