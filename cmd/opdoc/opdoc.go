@@ -17,12 +17,15 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"strings"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 func opGroupMarkdownTable(og *logic.OpGroup, out io.Writer) {
@@ -37,12 +40,6 @@ func opGroupMarkdownTable(og *logic.OpGroup, out io.Writer) {
 
 func markdownTableEscape(x string) string {
 	return strings.ReplaceAll(x, "|", "\\|")
-}
-
-func init() {
-	//opDocByName = stringStringListToMap(opDocList)
-	//opcodeImmediateNotes = stringStringListToMap(opcodeImmediateNoteList)
-	//opDocExtras = stringStringListToMap(opDocExtraList)
 }
 
 func fieldTableMarkdown(out io.Writer, names []string, types []logic.StackType) {
@@ -110,16 +107,63 @@ func opsToMarkdown(out io.Writer) (err error) {
 	}
 	return
 }
+
+type OpRecord struct {
+	Opcode  byte
+	Name    string
+	Args    []logic.StackType `json:",omitempty"`
+	Returns logic.StackType
+	Cost    int
+
+	ArgEnum      []string          `json:",omitempty"`
+	ArgEnumTypes []logic.StackType `json:",omitempty"`
+
+	Doc           string
+	DocExtra      string `json:",omitempty"`
+	ImmediateNote string `json:",omitempty"`
+	Groups        []string
+}
+
+type LanguageSpec struct {
+	EvalMaxVersion  int
+	LogicSigVersion uint64
+	Ops             []OpRecord
+}
+
+func argEnum(name string) []string {
+	if name == "txn" || name == "gtxn" {
+		return logic.TxnFieldNames
+	}
+	if name == "global" {
+		return logic.GlobalFieldNames
+	}
+	return nil
+}
+
+func argEnumTypes(name string) []logic.StackType {
+	if name == "txn" || name == "gtxn" {
+		return logic.TxnFieldTypes
+	}
+	if name == "global" {
+		return logic.GlobalFieldTypes
+	}
+	return nil
+}
+
 func main() {
 	opcodesMd, _ := os.Create("TEAL_opcodes.md")
 	opsToMarkdown(opcodesMd)
 	opcodesMd.Close()
+	opGroups := make(map[string][]string, len(logic.OpSpecs))
 	for _, og := range logic.OpGroupList {
 		fname := fmt.Sprintf("%s.md", og.GroupName)
 		fname = strings.ReplaceAll(fname, " ", "_")
 		fout, _ := os.Create(fname)
 		opGroupMarkdownTable(&og, fout)
 		fout.Close()
+		for _, opname := range og.Ops {
+			opGroups[opname] = append(opGroups[opname], og.GroupName)
+		}
 	}
 	txnfields, _ := os.Create("txn_fields.md")
 	fieldTableMarkdown(txnfields, logic.TxnFieldNames, logic.TxnFieldTypes)
@@ -128,4 +172,27 @@ func main() {
 	globalfields, _ := os.Create("global_fields.md")
 	fieldTableMarkdown(globalfields, logic.GlobalFieldNames, logic.GlobalFieldTypes)
 	globalfields.Close()
+
+	records := make([]OpRecord, len(logic.OpSpecs))
+	for i, spec := range logic.OpSpecs {
+		records[i].Opcode = spec.Opcode
+		records[i].Name = spec.Name
+		records[i].Args = spec.Args
+		records[i].Returns = spec.Returns
+		records[i].Cost = logic.OpCost(spec.Name)
+		records[i].ArgEnum = argEnum(spec.Name)
+		records[i].ArgEnumTypes = argEnumTypes(spec.Name)
+		records[i].Doc = logic.OpDoc(spec.Name)
+		records[i].DocExtra = logic.OpDocExtra(spec.Name)
+		records[i].ImmediateNote = logic.OpImmediateNote(spec.Name)
+		records[i].Groups = opGroups[spec.Name]
+	}
+	langspecjs, _ := os.Create("langspec.json")
+	enc := json.NewEncoder(langspecjs)
+	enc.Encode(LanguageSpec{
+		EvalMaxVersion:  logic.EvalMaxVersion,
+		LogicSigVersion: config.Consensus[protocol.ConsensusCurrentVersion].LogicSigVersion,
+		Ops:             records,
+	})
+
 }
