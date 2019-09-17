@@ -10,11 +10,11 @@ SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 
 sudo apt-get update -y
 sudo apt-get install awscli -y
-sudo apt-get install pq -y
+sudo apt-get install jq -y
 
 
 if [ ! -f ${SCRIPTPATH}/service_env.sh ]; then
-  cp ${SCRIPTPATH}/env.sh ${SCRIPTPATH}/service_env.sh
+  cp -p ${SCRIPTPATH}/env.sh ${SCRIPTPATH}/service_env.sh
 fi
 sudo cp ${SCRIPTPATH}/buildhost.service /etc/systemd/system/
 sudo echo "WorkingDirectory=${SCRIPTPATH}" >> /etc/systemd/system/buildhost.service
