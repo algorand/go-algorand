@@ -219,6 +219,7 @@ type OpSpec struct {
 	op      opFunc      // evaluate the op
 	Args    []StackType // what gets popped from the stack
 	Returns StackType   // what gets pushed to the stack
+	// TODO: change Returns type to []StackType, change signature of `dup` to {any} -> {any,any} instead of {} -> {any}
 }
 
 // OpSpecs is the table of operations that can be assembled and evaluated.

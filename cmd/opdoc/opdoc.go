@@ -111,12 +111,12 @@ func opsToMarkdown(out io.Writer) (err error) {
 type OpRecord struct {
 	Opcode  byte
 	Name    string
-	Args    []logic.StackType `json:",omitempty"`
-	Returns logic.StackType
+	Args    string `json:",omitempty"`
+	Returns string `json:",omitempty"`
 	Cost    int
 
-	ArgEnum      []string          `json:",omitempty"`
-	ArgEnumTypes []logic.StackType `json:",omitempty"`
+	ArgEnum      []string `json:",omitempty"`
+	ArgEnumTypes string   `json:",omitempty"`
 
 	Doc           string
 	DocExtra      string `json:",omitempty"`
@@ -140,14 +140,36 @@ func argEnum(name string) []string {
 	return nil
 }
 
-func argEnumTypes(name string) []logic.StackType {
+func typeString(types []logic.StackType) string {
+	out := make([]byte, len(types))
+	for i, t := range types {
+		switch t {
+		case logic.StackUint64:
+			out[i] = 'U'
+		case logic.StackBytes:
+			out[i] = 'B'
+		case logic.StackAny:
+			out[i] = '.'
+		case logic.StackNone:
+			if i == 0 && len(types) == 1 {
+				return ""
+			}
+			panic("unexpected StackNone in opdoc typeString")
+		default:
+			panic("unexpected type in opdoc typeString")
+		}
+	}
+	return string(out)
+}
+
+func argEnumTypes(name string) string {
 	if name == "txn" || name == "gtxn" {
-		return logic.TxnFieldTypes
+		return typeString(logic.TxnFieldTypes)
 	}
 	if name == "global" {
-		return logic.GlobalFieldTypes
+		return typeString(logic.GlobalFieldTypes)
 	}
-	return nil
+	return ""
 }
 
 func main() {
@@ -177,8 +199,8 @@ func main() {
 	for i, spec := range logic.OpSpecs {
 		records[i].Opcode = spec.Opcode
 		records[i].Name = spec.Name
-		records[i].Args = spec.Args
-		records[i].Returns = spec.Returns
+		records[i].Args = typeString(spec.Args)
+		records[i].Returns = typeString([]logic.StackType{spec.Returns})
 		records[i].Cost = logic.OpCost(spec.Name)
 		records[i].ArgEnum = argEnum(spec.Name)
 		records[i].ArgEnumTypes = argEnumTypes(spec.Name)
