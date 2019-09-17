@@ -50,10 +50,15 @@ done
 BRANCH=$(cat $BUILD_REQUEST | jq -r '.TRAVIS_BRANCH')
 COMMIT_HASH=$(cat $BUILD_REQUEST | jq -r '.TRAVIS_COMMIT')
 PULL_REQUEST=$(cat $BUILD_REQUEST | jq -r '.TRAVIS_PULL_REQUEST')
+BUILD_AWS_ACCESS_KEY_ID=$(cat $BUILD_REQUEST | jq -r '.AWS_ACCESS_KEY_ID')
+BUILD_AWS_SECRET_ACCESS_KEY=$(cat $BUILD_REQUEST | jq -r '.AWS_SECRET_ACCESS_KEY')
+
 
 cat << EOF > exescript
 git clone --depth=50 https://github.com/algorand/go-algorand -b ${BRANCH} go/src/github.com/algorand/go-algorand
 cd go/src/github.com/algorand/go-algorand
+export AWS_ACCESS_KEY_ID=${BUILD_AWS_ACCESS_KEY_ID}
+export AWS_SECRET_ACCESS_KEY=${BUILD_AWS_SECRET_ACCESS_KEY}
 EOF
 if [ "${PULL_REQUEST}" = "false" ]; then
     cat << FOE >> exescript
