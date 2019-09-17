@@ -764,6 +764,22 @@ byte 0x41414141
 txn XferAsset
 arg 6
 ==
+&&
+txn AssetAmount
+int 1234
+==
+&&
+txn AssetSender
+arg 1
+==
+&&
+txn AssetReceiver
+arg 2
+==
+&&
+txn AssetCloseTo
+arg 0
+==
 &&`
 
 func TestTxn(t *testing.T) {
@@ -792,6 +808,10 @@ func TestTxn(t *testing.T) {
 	txn.Txn.VoteLast = 17776
 	txn.Txn.VoteKeyDilution = 1
 	txn.Txn.Type = protocol.TxType("AAAA")
+	txn.Txn.AssetAmount = 1234
+	txn.Txn.AssetSender = txn.Txn.Receiver
+	txn.Txn.AssetReceiver = txn.Txn.CloseRemainderTo
+	txn.Txn.AssetCloseTo = txn.Txn.Sender
 	txn.Lsig.Logic = program
 	txn.Lsig.Args = [][]byte{
 		txn.Txn.Sender[:],

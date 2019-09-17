@@ -80,7 +80,7 @@ func TestOpImmediateNote(t *testing.T) {
 func TestOpDocExtra(t *testing.T) {
 	xd := OpDocExtra("bnz")
 	require.NotEmpty(t, xd)
-	xd = OpDocExtra("txn")
+	xd = OpDocExtra("+")
 	require.Empty(t, xd)
 }
 
