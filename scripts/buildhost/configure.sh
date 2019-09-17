@@ -9,9 +9,13 @@ fi
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 
 sudo apt-get update -y
-sudo apt-get install awscli -y
 sudo apt-get install jq -y
 
+# install the awscli using the python installer to work around
+# the uploading zero length files issue. see https://github.com/aws/aws-cli/issues/2403
+sudo apt install python-pip -y
+sudo pip install awscli
+sudo ln -s /usr/local/bin/aws /usr/bin/aws
 
 if [ ! -f ${SCRIPTPATH}/service_env.sh ]; then
   cp -p ${SCRIPTPATH}/env.sh ${SCRIPTPATH}/service_env.sh
