@@ -73,7 +73,7 @@ aws s3 cp ${TRAVIS_BUILD_NUMBER}.json ${BUILD_REQUEST_PATH} ${NO_SIGN_REQUEST}
 set +e
 
 echo "Waiting for build to start..."
-end=$((SECONDS+60))
+end=$((SECONDS+600))
 BUILD_STARTED=false
 while [ $SECONDS -lt $end ]; do
     PENDING_BUILD=$(aws s3 ls ${BUILD_REQUEST_PATH} ${NO_SIGN_REQUEST} | wc -l | sed 's/[[:space:]]//g')
