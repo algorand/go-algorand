@@ -2,9 +2,10 @@
 
 BUILD_REQUEST=$1
 OUTPUTFILE=$2
-BUCKET=$3
-NO_SIGN=$4
-echo "linux-arm $1 $2 $3 $4"
+LOGFILE=$3
+BUCKET=$4
+NO_SIGN=$5
+echo "linux-arm $1 $2 $3 $4 $5"
 
 if [ "${BUILD_REQUEST}" = "" ]; then
     echo "Missing BUILD_REQUEST argument"
@@ -50,13 +51,25 @@ BRANCH=$(cat $BUILD_REQUEST | jq -r '.TRAVIS_BRANCH')
 COMMIT_HASH=$(cat $BUILD_REQUEST | jq -r '.TRAVIS_COMMIT')
 PULL_REQUEST=$(cat $BUILD_REQUEST | jq -r '.TRAVIS_PULL_REQUEST')
 
-ssh -i id_rsa -o "StrictHostKeyChecking no" -p 5022 pi@$(cat instance) git clone --depth=50 https://github.com/algorand/go-algorand -b ${BRANCH} go/src/github.com/algorand/go-algorand
+echo > exescript << EOF
+git clone --depth=50 https://github.com/algorand/go-algorand -b ${BRANCH} go/src/github.com/algorand/go-algorand
+cd go/src/github.com/algorand/go-algorand
+EOF
+
 if [ "${PULL_REQUEST}" = "false" ]; then
-    ssh -i id_rsa -o "StrictHostKeyChecking no" -p 5022 pi@$(cat instance) "cd go/src/github.com/algorand/go-algorand; git checkout ${COMMIT_HASH}"
+    echo >> exescript << EOF
+git checkout ${COMMIT_HASH}
+EOF
 else
-    ssh -i id_rsa -o "StrictHostKeyChecking no" -p 5022 pi@$(cat instance) "cd go/src/github.com/algorand/go-algorand; git fetch origin +refs/pull/${PULL_REQUEST}/merge; git checkout -qf FETCH_HEAD"
+    echo >> exescript << EOF
+git fetch origin +refs/pull/${PULL_REQUEST}/merge; git checkout -qf FETCH_HEAD
+EOF
 fi
-ssh -i id_rsa -o "StrictHostKeyChecking no" -p 5022 pi@$(cat instance) "export DEBIAN_FRONTEND=noninteractive; cd go/src/github.com/algorand/go-algorand; ./scripts/travis/build.sh" 2>&1 > build_log.txt
+    echo >> exescript << EOF
+export DEBIAN_FRONTEND=noninteractive
+ ./scripts/travis/build.sh
+EOF
+ssh -i id_rsa -o "StrictHostKeyChecking no" -p 5022 pi@$(cat instance) $(cat exescript) 2>&1 | aws s3 cp - s3://${BUCKET}/${LOGFILE} ${NO_SIGN}
 ERR=$?
 if [ "${OUTPUTFILE}" != "" ]; then
     echo "{ \"error\": ${ERR} }" > ./err_file.json

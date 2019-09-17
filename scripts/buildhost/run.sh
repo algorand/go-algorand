@@ -94,8 +94,9 @@ checkBucket () {
     rm -rf tmp
 
     OUTPUTFILE=${FIRST_FILE/.json/-completed.json}
+    LOGFILE=${FIRST_FILE/.json/-log.txt}
 
-    ${ARCH_BUILDER} ${TEMPDIR}/${FILENAME} ${OUTPUTFILE} ${BUCKET} ${NO_SIGN} &
+    ${ARCH_BUILDER} ${TEMPDIR}/${FILENAME} ${OUTPUTFILE} ${LOGFILE} ${BUCKET} ${NO_SIGN} &
     return 0
 }
 
