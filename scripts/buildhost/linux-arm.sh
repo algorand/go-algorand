@@ -72,12 +72,8 @@ EOF
 ssh -i id_rsa -o "StrictHostKeyChecking no" -p 5022 pi@$(cat instance) $(cat exescript) 2>&1 | aws s3 cp - s3://${BUCKET}/${LOGFILE} ${NO_SIGN}
 ERR=$?
 if [ "${OUTPUTFILE}" != "" ]; then
-    echo "{ \"error\": ${ERR} }" > ./err_file.json
-    jq --rawfile texts build_log.txt '.log=$texts' ./err_file.json > ./result.json
-    aws s3 cp ./result.json s3://${BUCKET}/${OUTPUTFILE} ${NO_SIGN}
-    rm err_file.json result.json
+    echo "{ \"error\": ${ERR}, \"log\": \"\" }" | aws s3 cp - s3://${BUCKET}/${OUTPUTFILE} ${NO_SIGN}
 fi
-rm build_log.txt
 
 ${SCRIPTPATH}/shutdown_ec2_instance.sh ${AWS_REGION}
 if [ "$?" != "0" ]; then
