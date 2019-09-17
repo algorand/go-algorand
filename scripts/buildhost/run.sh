@@ -44,7 +44,7 @@ checkBucket () {
     local BUCKET=$1
     local NO_SIGN=$2
 
-    aws s3 ls --recursive s3://${BUCKET} ${NO_SIGN} | awk '{print $4}' | grep -e "[0-9]+\.json" | grep -ve "/$" > buildRequests
+    aws s3 ls --recursive s3://${BUCKET} ${NO_SIGN} | awk '{print $4}' | grep -E '.*\/[0-9]+\.json' | grep -ve "/$" > buildRequests
     if [ "$?" != "0" ]; then
         rm buildRequests
         return 1
