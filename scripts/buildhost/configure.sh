@@ -5,20 +5,26 @@ if [ "$EUID" -ne 0 ]
   exit
 fi
 
+
+SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
+
 sudo apt-get update -y
 sudo apt-get install awscli -y
 sudo apt-get install pq -y
 
 
-cp env.sh service_env.sh
-sudo cp ./buildhost.service /etc/systemd/system/
-WD=$(pwd)
-sudo echo "WorkingDirectory=${WD}" >> /etc/systemd/system/buildhost.service
-sudo echo "ExecStart=/bin/bash ./run.sh" >> /etc/systemd/system/buildhost.service
-sudo echo "EnvironmentFile=${WD}/service_env.sh" >> /etc/systemd/system/buildhost.service
+if [ ! -f ${SCRIPTPATH}/service_env.sh ]; then
+  cp ${SCRIPTPATH}/env.sh ${SCRIPTPATH}/service_env.sh
+fi
+sudo cp ${SCRIPTPATH}/buildhost.service /etc/systemd/system/
+sudo echo "WorkingDirectory=${SCRIPTPATH}" >> /etc/systemd/system/buildhost.service
+sudo echo "ExecStart=/bin/bash ${SCRIPTPATH}/run.sh" >> /etc/systemd/system/buildhost.service
+sudo echo "EnvironmentFile=${SCRIPTPATH}/service_env.sh" >> /etc/systemd/system/buildhost.service
 
-systemctl enable buildhost
-systemctl start buildhost
+sudo systemctl enable buildhost
+echo "Installation complete. Please edit the service_env.sh file and start the service:"
+echo "nano ${SCRIPTPATH}/service_env.sh"
+echo "sudo systemctl start buildhost"
 
 
 
