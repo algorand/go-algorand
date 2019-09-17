@@ -41,6 +41,7 @@ while [ $SECONDS -lt $end ]; do
     ssh -i id_rsa -o "StrictHostKeyChecking no" -p 5022 pi@$(cat instance) "uname -a"
     if [ "$?" = "0" ]; then
         echo "RasPI SSH connection ready"
+        break
     fi
     sleep 1s
 done
