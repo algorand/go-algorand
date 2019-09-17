@@ -53,7 +53,7 @@ echo "{ \"TRAVIS_BRANCH\" : \"${TRAVIS_BRANCH}\", \"TRAVIS_COMMIT\" : \"${TRAVIS
 if [ "${TRAVIS_PULL_REQUEST}" = "false" ]; then
     BUILD_REQUEST_PATH=s3://${BUILD_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${TRAVIS_BUILD_NUMBER}.json
     BUILD_COMPLETE_PATH=s3://${BUILD_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${TRAVIS_BUILD_NUMBER}-completed.json
-    BUILD_LOG_PATH=s3://${BUILD_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${TRAVIS_BUILD_NUMBER}-log.txt
+    BUILD_LOG_PATH=s3://${BUILD_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${TRAVIS_BUILD_NUMBER}-log
     NO_SIGN_REQUEST=
 else
     BUILD_REQUEST_PATH=s3://${BUILD_PULL_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${TRAVIS_BUILD_NUMBER}.json
@@ -106,6 +106,9 @@ while [ $SECONDS -lt $end ]; do
     aws s3 ls ${BUILD_LOG_PATH}-${LOG_SEQ} . ${NO_SIGN_REQUEST} 2> /dev/null
     if [ "$?" = "0" ]; then
         aws s3 cp ${BUILD_LOG_PATH}-${LOG_SEQ} - ${NO_SIGN_REQUEST} | cat
+        if [ "$?" = "0" ]; then
+            minute_end=$((SECONDS+60))
+        fi
         ((LOG_SEQ++))
     fi
 
