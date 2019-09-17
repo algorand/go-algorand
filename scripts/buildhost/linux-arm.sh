@@ -74,7 +74,7 @@ export DEBIAN_FRONTEND=noninteractive
  ./scripts/travis/build.sh
 FOE
 
-ssh -i id_rsa -o "StrictHostKeyChecking no" -p 5022 pi@$(cat instance) 'bash -s' < exescript 2>&1 | ./s3streamup.sh ${BUCKET}/${LOGFILE} ${NO_SIGN}
+ssh -i id_rsa -o "StrictHostKeyChecking no" -p 5022 pi@$(cat instance) 'bash -s' < exescript 2>&1 | $(SCRIPTPATH)/s3streamup.sh ${BUCKET}/${LOGFILE} ${NO_SIGN}
 ERR=$?
 if [ "${OUTPUTFILE}" != "" ]; then
     echo "{ \"error\": ${ERR}, \"log\": \"\" }" | aws s3 cp - s3://${BUCKET}/${OUTPUTFILE} ${NO_SIGN}
