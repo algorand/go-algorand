@@ -16,7 +16,7 @@ TEAL runs in Algorand nodes as part of testing a proposed transaction to see if 
 
 A program is an authorized program one of two ways: The SHA512_256 hash of the program (prefixed by "Program") is equal to the transaction Sender address; OR the program (prefixed by "Program") has a valid signature or multi-signature from the transaction Sender address.
 
-The TEAL bytecode plus the length of any Args must add up to less than 1000 bytes. Each TEAL op has an associated cost estimate and the program cost estimate must totall less than 20000. Most ops have an estimated cost of 1, but a few slow crypto ops are much higher.
+The TEAL bytecode plus the length of any Args must add up to less than 1000 bytes. Each TEAL op has an associated cost estimate and the program cost estimate must total less than 20000. Most ops have an estimated cost of 1, but a few slow crypto ops are much higher.
 
 The TEAL program has access to data from the transaction it is attached to, any transactions in a transaction group it is part of, and a few global values like the current Round number, block Timestamp, and some consensus paramaters.
 
