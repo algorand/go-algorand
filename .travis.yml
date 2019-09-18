@@ -21,6 +21,9 @@ stages:
     if: branch != rel/stable AND (branch =~ /^rel\//) AND type != pull_request
 
 jobs:
+  allow_failures:
+    - name: External ARM64 Build
+    - name: External ARM64 Deploy
   include:
     - stage: build_commit
       os: linux
@@ -40,6 +43,14 @@ jobs:
       script:
         - scripts/travis/build.sh || travis_terminate 1;
         - travis_wait 90 scripts/travis/test.sh
+    - # same stage, parallel job
+      name: External ARM64 Build
+      os: linux
+      env:
+        - BUILD_TYPE: "external_build"
+        - TARGET_PLATFORM: "linux-arm64"
+      script:
+        - scripts/travis/external_build.sh ./scripts/travis/build.sh || travis_terminate 1;
 
     - stage: build_release
       os: linux
@@ -60,11 +71,21 @@ jobs:
         - travis_wait 90 scripts/travis/test.sh
 
     - stage: deploy
+      name: Ubuntu Deploy
       os: linux
       script: scripts/travis/deploy_packages.sh
     - # same stage, parallel job
+      name: MacOS Deploy
       os: osx
       script: scripts/travis/deploy_packages.sh
+    - # same stage, parallel job
+      name: External ARM64 Deploy
+      os: linux
+      env:
+        - BUILD_TYPE: "external_build"
+        - TARGET_PLATFORM: "linux-arm64"
+      script:
+        - scripts/travis/external_build.sh ./scripts/travis/deploy_packages.sh
 
     - stage: release
       script: scripts/travis/release_packages.sh
