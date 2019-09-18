@@ -98,15 +98,15 @@ if [[ "${NETWORK}" = "" ]]; then
 fi
 
 
-    # Build so we've got up-to-date binaries
-    (cd ${SRCPATH} && make)
+# Build so we've got up-to-date binaries
+(cd ${SRCPATH} && make)
 
 
 # Create Cloudspec configuration
-if [[ ${SKIP_CLOUDSPEC} != "true" ]]; then
+#if [[ ${SKIP_CLOUDSPEC} != "true" ]]; then
     # Generate the nodecfg package directory
     ${GOPATH}/bin/netgoal build -r "${ROOTDIR}" -n "${NETWORK}" --recipe "${RECIPEFILE}" "${FORCE_OPTION}" -m "${SCHEMA_MODIFIER}"
-fi
+#fi
 
 # Build and Deploy binaries
 if [[ ${SKIP_BUILD_DEPLOY} != "true" ]]; then
