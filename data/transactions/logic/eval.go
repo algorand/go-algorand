@@ -218,64 +218,70 @@ type OpSpec struct {
 	Name    string
 	op      opFunc      // evaluate the op
 	Args    []StackType // what gets popped from the stack
-	Returns StackType   // what gets pushed to the stack
-	// TODO: change Returns type to []StackType, change signature of `dup` to {any} -> {any,any} instead of {} -> {any}
+	Returns []StackType // what gets pushed to the stack
 }
+
+var oneBytes = []StackType{StackBytes}
+var threeBytes = []StackType{StackBytes, StackBytes, StackBytes}
+var oneInt = []StackType{StackUint64}
+var twoInts = []StackType{StackUint64, StackUint64}
+var oneAny = []StackType{StackAny}
+var twoAny = []StackType{StackAny, StackAny}
 
 // OpSpecs is the table of operations that can be assembled and evaluated.
 //
 // Any changes should be reflected in README.md which serves as the language spec.
 var OpSpecs = []OpSpec{
-	{0x00, "err", opErr, nil, StackNone},
-	{0x01, "sha256", opSHA256, []StackType{StackBytes}, StackBytes},
-	{0x02, "keccak256", opKeccak256, []StackType{StackBytes}, StackBytes},
-	{0x03, "sha512_256", opSHA512_256, []StackType{StackBytes}, StackBytes},
-	{0x04, "ed25519verify", opEd25519verify, []StackType{StackBytes, StackBytes, StackBytes}, StackUint64},
-	{0x08, "+", opPlus, []StackType{StackUint64, StackUint64}, StackUint64},
-	{0x09, "-", opMinus, []StackType{StackUint64, StackUint64}, StackUint64},
-	{0x0a, "/", opDiv, []StackType{StackUint64, StackUint64}, StackUint64},
-	{0x0b, "*", opMul, []StackType{StackUint64, StackUint64}, StackUint64},
-	{0x0c, "<", opLt, []StackType{StackUint64, StackUint64}, StackUint64},
-	{0x0d, ">", opGt, []StackType{StackUint64, StackUint64}, StackUint64},
-	{0x0e, "<=", opLe, []StackType{StackUint64, StackUint64}, StackUint64},
-	{0x0f, ">=", opGe, []StackType{StackUint64, StackUint64}, StackUint64},
-	{0x10, "&&", opAnd, []StackType{StackUint64, StackUint64}, StackUint64},
-	{0x11, "||", opOr, []StackType{StackUint64, StackUint64}, StackUint64},
-	{0x12, "==", opEq, []StackType{StackAny, StackAny}, StackUint64},
-	{0x13, "!=", opNeq, []StackType{StackAny, StackAny}, StackUint64},
-	{0x14, "!", opNot, []StackType{StackUint64}, StackUint64},
-	{0x15, "len", opLen, []StackType{StackBytes}, StackUint64},
-	{0x17, "btoi", opBtoi, []StackType{StackBytes}, StackUint64},
-	{0x18, "%", opModulo, []StackType{StackUint64, StackUint64}, StackUint64},
-	{0x19, "|", opBitOr, []StackType{StackUint64, StackUint64}, StackUint64},
-	{0x1a, "&", opBitAnd, []StackType{StackUint64, StackUint64}, StackUint64},
-	{0x1b, "^", opBitXor, []StackType{StackUint64, StackUint64}, StackUint64},
-	{0x1c, "~", opBitNot, []StackType{StackUint64}, StackUint64},
+	{0x00, "err", opErr, nil, nil},
+	{0x01, "sha256", opSHA256, oneBytes, oneBytes},
+	{0x02, "keccak256", opKeccak256, oneBytes, oneBytes},
+	{0x03, "sha512_256", opSHA512_256, oneBytes, oneBytes},
+	{0x04, "ed25519verify", opEd25519verify, threeBytes, oneInt},
+	{0x08, "+", opPlus, twoInts, oneInt},
+	{0x09, "-", opMinus, twoInts, oneInt},
+	{0x0a, "/", opDiv, twoInts, oneInt},
+	{0x0b, "*", opMul, twoInts, oneInt},
+	{0x0c, "<", opLt, twoInts, oneInt},
+	{0x0d, ">", opGt, twoInts, oneInt},
+	{0x0e, "<=", opLe, twoInts, oneInt},
+	{0x0f, ">=", opGe, twoInts, oneInt},
+	{0x10, "&&", opAnd, twoInts, oneInt},
+	{0x11, "||", opOr, twoInts, oneInt},
+	{0x12, "==", opEq, twoAny, oneInt},
+	{0x13, "!=", opNeq, twoAny, oneInt},
+	{0x14, "!", opNot, oneInt, oneInt},
+	{0x15, "len", opLen, oneBytes, oneInt},
+	{0x17, "btoi", opBtoi, oneBytes, oneInt},
+	{0x18, "%", opModulo, twoInts, oneInt},
+	{0x19, "|", opBitOr, twoInts, oneInt},
+	{0x1a, "&", opBitAnd, twoInts, oneInt},
+	{0x1b, "^", opBitXor, twoInts, oneInt},
+	{0x1c, "~", opBitNot, oneInt, oneInt},
 
-	{0x20, "intcblock", opIntConstBlock, nil, StackNone},
-	{0x21, "intc", opIntConstLoad, nil, StackUint64},
-	{0x22, "intc_0", opIntConst0, nil, StackUint64},
-	{0x23, "intc_1", opIntConst1, nil, StackUint64},
-	{0x24, "intc_2", opIntConst2, nil, StackUint64},
-	{0x25, "intc_3", opIntConst3, nil, StackUint64},
-	{0x26, "bytecblock", opByteConstBlock, nil, StackNone},
-	{0x27, "bytec", opByteConstLoad, nil, StackBytes},
-	{0x28, "bytec_0", opByteConst0, nil, StackBytes},
-	{0x29, "bytec_1", opByteConst1, nil, StackBytes},
-	{0x2a, "bytec_2", opByteConst2, nil, StackBytes},
-	{0x2b, "bytec_3", opByteConst3, nil, StackBytes},
-	{0x2c, "arg", opArg, nil, StackBytes},
-	{0x2d, "arg_0", opArg0, nil, StackBytes},
-	{0x2e, "arg_1", opArg1, nil, StackBytes},
-	{0x2f, "arg_2", opArg2, nil, StackBytes},
-	{0x30, "arg_3", opArg3, nil, StackBytes},
-	{0x31, "txn", opTxn, nil, StackAny},       // TODO: check output type by subfield retrieved in txn,global,account,txid
-	{0x32, "global", opGlobal, nil, StackAny}, // TODO: check output type against specific field
-	{0x33, "gtxn", opGtxn, nil, StackAny},     // TODO: check output type by subfield retrieved in txn,global,account,txid
+	{0x20, "intcblock", opIntConstBlock, nil, nil},
+	{0x21, "intc", opIntConstLoad, nil, oneInt},
+	{0x22, "intc_0", opIntConst0, nil, oneInt},
+	{0x23, "intc_1", opIntConst1, nil, oneInt},
+	{0x24, "intc_2", opIntConst2, nil, oneInt},
+	{0x25, "intc_3", opIntConst3, nil, oneInt},
+	{0x26, "bytecblock", opByteConstBlock, nil, nil},
+	{0x27, "bytec", opByteConstLoad, nil, oneBytes},
+	{0x28, "bytec_0", opByteConst0, nil, oneBytes},
+	{0x29, "bytec_1", opByteConst1, nil, oneBytes},
+	{0x2a, "bytec_2", opByteConst2, nil, oneBytes},
+	{0x2b, "bytec_3", opByteConst3, nil, oneBytes},
+	{0x2c, "arg", opArg, nil, oneBytes},
+	{0x2d, "arg_0", opArg0, nil, oneBytes},
+	{0x2e, "arg_1", opArg1, nil, oneBytes},
+	{0x2f, "arg_2", opArg2, nil, oneBytes},
+	{0x30, "arg_3", opArg3, nil, oneBytes},
+	{0x31, "txn", opTxn, nil, oneAny},       // TODO: check output type by subfield retrieved in txn,global,account,txid
+	{0x32, "global", opGlobal, nil, oneAny}, // TODO: check output type against specific field
+	{0x33, "gtxn", opGtxn, nil, oneAny},     // TODO: check output type by subfield retrieved in txn,global,account,txid
 
-	{0x40, "bnz", opBnz, []StackType{StackUint64}, StackNone},
-	{0x48, "pop", opPop, []StackType{StackAny}, StackNone},
-	{0x49, "dup", opDup, nil, StackAny},
+	{0x40, "bnz", opBnz, oneInt, nil},
+	{0x48, "pop", opPop, oneAny, nil},
+	{0x49, "dup", opDup, oneAny, twoAny},
 }
 
 // direct opcode bytes
@@ -424,8 +430,8 @@ func (cx *evalContext) checkStep() (cost int) {
 	if cx.err != nil {
 		return 0
 	}
-	if opsByOpcode[opcode].Returns != StackNone {
-		cx.checkStack = append(cx.checkStack, opsByOpcode[opcode].Returns)
+	if opsByOpcode[opcode].Returns != nil {
+		cx.checkStack = append(cx.checkStack, opsByOpcode[opcode].Returns...)
 	}
 	if cx.Trace != nil {
 		if len(cx.checkStack) == 0 {

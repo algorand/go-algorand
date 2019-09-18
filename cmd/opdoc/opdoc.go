@@ -68,7 +68,7 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec) (err error) {
 	cost := logic.OpCost(op.Name)
 	fmt.Fprintf(out, "\n## %s\n\n- Opcode: 0x%02x %s\n", op.Name, op.Opcode, opextra)
 	if op.Args == nil {
-		fmt.Fprintf(out, "- Pops: None\n")
+		fmt.Fprintf(out, "- Pops: _None_\n")
 	} else if len(op.Args) == 1 {
 		fmt.Fprintf(out, "- Pops: *... stack*, %s\n", op.Args[0].String())
 	} else if len(op.Args) == 2 {
@@ -80,7 +80,17 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec) (err error) {
 		}
 		out.Write([]byte("\n"))
 	}
-	fmt.Fprintf(out, "- Pushes: %s\n", op.Returns.String())
+	if op.Returns == nil {
+		fmt.Fprintf(out, "- Pushes: _None_\n")
+	} else if len(op.Returns) == 1 {
+		fmt.Fprintf(out, "- Pushes: %s\n", op.Returns[0].String())
+	} else {
+		fmt.Fprintf(out, "- Pushes: %s", op.Returns[0].String())
+		for _, rt := range op.Returns[1:] {
+			fmt.Fprintf(out, ", %s", rt.String())
+		}
+		fmt.Fprintf(out, "\n")
+	}
 	fmt.Fprintf(out, "- %s\n", logic.OpDoc(op.Name))
 	if cost != 1 {
 		fmt.Fprintf(out, "- **Cost**: %d\n", cost)
@@ -202,7 +212,7 @@ func main() {
 		records[i].Opcode = spec.Opcode
 		records[i].Name = spec.Name
 		records[i].Args = typeString(spec.Args)
-		records[i].Returns = typeString([]logic.StackType{spec.Returns})
+		records[i].Returns = typeString(spec.Returns)
 		records[i].Cost = logic.OpCost(spec.Name)
 		records[i].ArgEnum = argEnum(spec.Name)
 		records[i].ArgEnumTypes = argEnumTypes(spec.Name)

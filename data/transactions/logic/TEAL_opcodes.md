@@ -6,8 +6,8 @@ Ops have a 'cost' of 1 unless otherwise specified.
 ## err
 
 - Opcode: 0x00 
-- Pops: None
-- Pushes: None
+- Pops: _None_
+- Pushes: _None_
 - Error. Panic immediately. This is primarily a fencepost against accidental zero bytes getting compiled into programs.
 
 ## sha256
@@ -187,8 +187,8 @@ It is worth noting that there are 10,000,000,000,000,000 micro-Algos in the tota
 ## intcblock
 
 - Opcode: 0x20 {varuint length} [{varuint value}, ...]
-- Pops: None
-- Pushes: None
+- Pops: _None_
+- Pushes: _None_
 - load block of uint64 constants
 
 `intcblock` loads following program bytes into an array of integer constants in the evaluator. These integer constants can be referred to by `intc` and `intc_*` which will push the value onto the stack.
@@ -196,43 +196,43 @@ It is worth noting that there are 10,000,000,000,000,000 micro-Algos in the tota
 ## intc
 
 - Opcode: 0x21 {uint8 int constant index}
-- Pops: None
+- Pops: _None_
 - Pushes: uint64
 - push value from uint64 constants to stack by index into constants
 
 ## intc_0
 
 - Opcode: 0x22 
-- Pops: None
+- Pops: _None_
 - Pushes: uint64
 - push uint64 constant 0 to stack
 
 ## intc_1
 
 - Opcode: 0x23 
-- Pops: None
+- Pops: _None_
 - Pushes: uint64
 - push uint64 constant 1 to stack
 
 ## intc_2
 
 - Opcode: 0x24 
-- Pops: None
+- Pops: _None_
 - Pushes: uint64
 - push uint64 constant 2 to stack
 
 ## intc_3
 
 - Opcode: 0x25 
-- Pops: None
+- Pops: _None_
 - Pushes: uint64
 - push uint64 constant 3 to stack
 
 ## bytecblock
 
 - Opcode: 0x26 {varuint length} [({varuint value length} bytes), ...]
-- Pops: None
-- Pushes: None
+- Pops: _None_
+- Pushes: _None_
 - load block of byte-array constants
 
 `bytecblock` loads the following program bytes into an array of byte string constants in the evaluator. These constants can be referred to by `bytec` and `bytec_*` which will push the value onto the stack.
@@ -240,77 +240,77 @@ It is worth noting that there are 10,000,000,000,000,000 micro-Algos in the tota
 ## bytec
 
 - Opcode: 0x27 {uint8 byte constant index}
-- Pops: None
+- Pops: _None_
 - Pushes: []byte
 - push bytes constant to stack by index into constants
 
 ## bytec_0
 
 - Opcode: 0x28 
-- Pops: None
+- Pops: _None_
 - Pushes: []byte
 - push bytes constant 0 to stack
 
 ## bytec_1
 
 - Opcode: 0x29 
-- Pops: None
+- Pops: _None_
 - Pushes: []byte
 - push bytes constant 1 to stack
 
 ## bytec_2
 
 - Opcode: 0x2a 
-- Pops: None
+- Pops: _None_
 - Pushes: []byte
 - push bytes constant 2 to stack
 
 ## bytec_3
 
 - Opcode: 0x2b 
-- Pops: None
+- Pops: _None_
 - Pushes: []byte
 - push bytes constant 3 to stack
 
 ## arg
 
 - Opcode: 0x2c {uint8 arg index N}
-- Pops: None
+- Pops: _None_
 - Pushes: []byte
 - push LogicSig.Args[N] value to stack by index
 
 ## arg_0
 
 - Opcode: 0x2d 
-- Pops: None
+- Pops: _None_
 - Pushes: []byte
 - push LogicSig.Args[0] to stack
 
 ## arg_1
 
 - Opcode: 0x2e 
-- Pops: None
+- Pops: _None_
 - Pushes: []byte
 - push LogicSig.Args[1] to stack
 
 ## arg_2
 
 - Opcode: 0x2f 
-- Pops: None
+- Pops: _None_
 - Pushes: []byte
 - push LogicSig.Args[2] to stack
 
 ## arg_3
 
 - Opcode: 0x30 
-- Pops: None
+- Pops: _None_
 - Pushes: []byte
 - push LogicSig.Args[3] to stack
 
 ## txn
 
 - Opcode: 0x31 {uint8 transaction field index}
-- Pops: None
+- Pops: _None_
 - Pushes: any
 - push field from current transaction to stack
 
@@ -344,7 +344,7 @@ Most fields are a simple copy of a uint64 or byte string value. `XferAsset` is t
 ## global
 
 - Opcode: 0x32 {uint8 global field index}
-- Pops: None
+- Pops: _None_
 - Pushes: any
 - push value from globals to stack
 
@@ -363,7 +363,7 @@ Most fields are a simple copy of a uint64 or byte string value. `XferAsset` is t
 ## gtxn
 
 - Opcode: 0x33 {uint8 transaction group index}{uint8 transaction field index}
-- Pops: None
+- Pops: _None_
 - Pushes: any
 - push field to the stack from a transaction in the current transaction group
 
@@ -373,7 +373,7 @@ for notes on transaction fields available, see `txn`
 
 - Opcode: 0x40 {0..0x7fff forward branch offset, big endian}
 - Pops: *... stack*, uint64
-- Pushes: None
+- Pushes: _None_
 - branch if value is not zero
 
 for a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else proceed to next instruction at `pc + 3`
@@ -382,12 +382,12 @@ for a bnz instruction at `pc`, if the last element of the stack is not zero then
 
 - Opcode: 0x48 
 - Pops: *... stack*, any
-- Pushes: None
+- Pushes: _None_
 - discard value from stack
 
 ## dup
 
 - Opcode: 0x49 
-- Pops: None
-- Pushes: any
+- Pops: *... stack*, any
+- Pushes: any, any
 - duplicate last value on stack

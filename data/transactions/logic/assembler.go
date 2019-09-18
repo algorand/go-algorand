@@ -84,6 +84,10 @@ func (ops *OpStream) tpush(argType StackType) {
 	ops.typeStack = append(ops.typeStack, argType)
 }
 
+func (ops *OpStream) tpusha(argType []StackType) {
+	ops.typeStack = append(ops.typeStack, argType...)
+}
+
 func (ops *OpStream) tpop() (argType StackType) {
 	if len(ops.typeStack) == 0 {
 		argType = StackNone
@@ -601,8 +605,8 @@ func (ops *OpStream) Assemble(fin io.Reader) error {
 					return fmt.Errorf(":%d %s arg %d wanted type %s got %s", ops.sourceLine, spec.Name, i, argType.String(), stype.String())
 				}
 			}
-			if spec.Returns != StackNone {
-				ops.tpush(spec.Returns)
+			if spec.Returns != nil {
+				ops.tpusha(spec.Returns)
 			}
 			err := ops.Out.WriteByte(opcode)
 			if err != nil {
