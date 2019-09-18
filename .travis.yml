@@ -51,6 +51,14 @@ jobs:
         - TARGET_PLATFORM: "linux-arm64"
       script:
         - scripts/travis/external_build.sh ./scripts/travis/build.sh || travis_terminate 1;
+    - # same stage, parallel job
+      name: External ARM64 Integration test
+      os: linux
+      env:
+        - BUILD_TYPE: "external_build"
+        - TARGET_PLATFORM: "linux-arm64"
+      script:
+        - scripts/travis/external_build.sh ./scripts/travis/integration_test.sh
 
     - stage: build_release
       os: linux
