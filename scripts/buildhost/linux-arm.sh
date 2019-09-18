@@ -76,11 +76,16 @@ if [ "${RASPI_SERVICE_STOPPED}" = "false" ]; then
     exitWithError 1 "Unable to stop raspi service"
 fi
 
-ssh -i key.pem -tt -o "StrictHostKeyChecking no" ubuntu@$(cat instance) 'bash -s' < ${SCRIPTPATH}/nvme.sh >> /home/ubuntu/nvme.log
+scp -i key.pem -o "StrictHostKeyChecking no" ${SCRIPTPATH}/nvme.sh ubuntu@$(cat instance):/home/ubuntu/nvme.sh
+if [ "$?" != "0" ]; then
+    exitWithError 1 "unable to upload nvme script"
+fi
+
+ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) "./nvme.sh" >> /home/ubuntu/nvme.log
 if [ "$?" != "0" ]; then
     exitWithError 1 "nvme initialization failed"
 fi
-ssh -i key.pem -tt -o "StrictHostKeyChecking no" ubuntu@$(cat instance) "sudo systemctl start raspi"
+ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) "sudo systemctl start raspi"
 if [ "$?" != "0" ]; then
     exitWithError 1 "unable to restart raspi service"
 fi
