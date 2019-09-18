@@ -7,7 +7,7 @@ SEQ=1
 SEND_NEXT=$((SECONDS+10))
 BUFFER=
 while read line; do
-        BUFFER=${BUFFER}${line}
+        BUFFER=${BUFFER}${line}$'\n'
         if [ ${#BUFFER} -gt 10240 ]; then
                 echo "${BUFFER}" | aws s3 cp - ${DEST}-${SEQ} ${NO_SIGN}
                 ((SEQ++))

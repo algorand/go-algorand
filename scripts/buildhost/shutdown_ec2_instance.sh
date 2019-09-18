@@ -55,8 +55,13 @@ while [ $SECONDS -lt $end ]; do
     sleep 10s
 done
 
-aws ec2 delete-key-pair --key-name "${KEY_NAME}" --region ${AWS_REGION}
+if [ "${KEY_NAME}" != "" ]; then
+    aws ec2 delete-key-pair --key-name "${KEY_NAME}" --region ${AWS_REGION}
+fi
 
-aws ec2 delete-security-group --group-id "${SGID}" --region ${AWS_REGION}
+if [ "${SGID}" != "" ]; then
+    aws ec2 delete-security-group --group-id "${SGID}" --region ${AWS_REGION}
+fi
+
 rm instance2.json sgid instance-id instance key-name
 rm -f key.pem
