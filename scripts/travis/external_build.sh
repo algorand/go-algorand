@@ -97,5 +97,5 @@ if [ "${BUILD_STARTED}" = "false" ]; then
 fi
 
 echo "Waiting for build to complete..."
-./external_build_printlog.sh ${BUILD_LOG_PATH} ${BUILD_COMPLETE_PATH} ${NO_SIGN_REQUEST}
-exit ?$
+./scripts/travis/external_build_printlog.sh ${BUILD_LOG_PATH} ${BUILD_COMPLETE_PATH} ${NO_SIGN_REQUEST}
+exit $?
