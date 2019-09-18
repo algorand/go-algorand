@@ -22,7 +22,8 @@ AWS_REGION="us-west-2"
 #AWS_LINUX_AMI="ami-06f2f779464715dc5"
 # this is the private AMI that contains the RasPI VM running on port 5022
 AWS_LINUX_AMI="ami-077aa2f293886f758"
-AWS_INSTANCE_TYPE="t3a.xlarge"
+#AWS_INSTANCE_TYPE="t3a.xlarge"
+AWS_INSTANCE_TYPE="i3.xlarge"
 INSTANCE_NUMBER=$RANDOM
 
 set +e
@@ -39,7 +40,21 @@ scp -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance):/home/ubuntu
 echo "Waiting for RasPI SSH connection"
 end=$((SECONDS+90))
 while [ $SECONDS -lt $end ]; do
-    ssh -i id_rsa -o "StrictHostKeyChecking no" -p 5022 pi@$(cat instance) "uname -a"
+    ssh -i id_rsa -o "StrictHostKeyChecking no" -p 5022 pi@$(cat instance) "sudo systemctl stop raspi"
+    if [ "$?" = "0" ]; then
+        echo "RasPI SSH connection ready"
+        break
+    fi
+    sleep 1s
+done
+
+ssh -i id_rsa -tt -o "StrictHostKeyChecking no" -p 5022 pi@$(cat instance) 'bash -s' < nvme.sh >> /home/ubuntu/nvme.log
+ssh -i id_rsa -tt -o "StrictHostKeyChecking no" -p 5022 pi@$(cat instance) 'sudo systemctl start raspi'
+
+echo "Waiting for RasPI SSH connection"
+end=$((SECONDS+90))
+while [ $SECONDS -lt $end ]; do
+    ssh -i id_rsa -o "StrictHostKeyChecking no" -p 5022 pi@$(cat instance) "sudo systemctl stop raspi"
     if [ "$?" = "0" ]; then
         echo "RasPI SSH connection ready"
         break

@@ -46,19 +46,19 @@ checkBucket () {
 
     aws s3 ls --recursive s3://${BUCKET} ${NO_SIGN} | awk '{print $4}' | grep -E '.*\/[0-9]+\.json' | grep -ve "/$" > buildRequests
     if [ "$?" != "0" ]; then
-        rm buildRequests
+        rm -f buildRequests
         return 1
     fi
 
     REQUESTS_COUNT=$(cat buildRequests | wc -l | sed 's/[[:space:]]//g')
     if [ "$?" != "0" ]; then
-        rm buildRequests
+        rm -f buildRequests
         return 1
     fi
 
     if [ "${REQUESTS_COUNT}" = "0" ]; then
         # nothing to do.
-        rm buildRequests
+        rm -f buildRequests
         return 0
     fi
 
@@ -100,9 +100,43 @@ checkBucket () {
     return 0
 }
 
+cleanupS3 () {
+    local BUCKET=$1
+    local NO_SIGN=$2
+    aws s3 ls --recursive s3://${BUCKET} ${NO_SIGN} > buildRequests
+    if [ "$?" != "0" ]; then
+        rm buildRequests
+        return 1
+    fi
+    # current time = date +"%Y-%m-%d %H:%M:%S"
+    # ten hours ago : date -d " - 12 hours " +"%Y-%m-%d %H:%M:%S"
+    # the above doesn't work on mac, but works well on ubuntu
+    REF_TIME=$(date -d " - 12 hours " +"%Y-%m-%d %H:%M:%S")
+    REF_TIME="${REF_TIME/ /.}"
+    while read line; do
+        FILE_TIME="${line:0:19}"
+        FILE_TIME="${FILE_TIME/ /.}"
+        if [[ "${FILE_TIME}" < "${REF_TIME}" ]];then
+            # this is where we want to delete the file.
+            FILE_NAME="${line:31}"
+            aws s3 rm s3://${BUCKET}/${FILE_NAME} ${NO_SIGN}
+        fi
+    done < buildRequests
+    rm -f buildRequests
+    return 0
+}
+
+# run the cleanup every two hours.
+NEXT_S3_CLEANUP=$((SECONDS+7200))
 while true; do
     checkBucket ${BUILD_REQUESTS_BUCKET}
     checkBucket ${BUILD_PULL_REQUESTS_BUCKET} ${NO_SIGN_REQUEST}
+    
+    if [ $SECONDS -gt $NEXT_S3_CLEANUP ]; then
+        cleanupS3 ${BUILD_REQUESTS_BUCKET}
+        cleanupS3 ${BUILD_PULL_REQUESTS_BUCKET} ${NO_SIGN_REQUEST}
+        NEXT_S3_CLEANUP=$((SECONDS+7200))
+    fi
     sleep 0.5s
 done
 
