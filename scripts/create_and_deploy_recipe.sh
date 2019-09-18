@@ -2,7 +2,7 @@
 
 # create_and_deploy_recipe.sh - Generates deployed network configuration (based on a recipe) and private build and pushes to S3
 #
-# Syntax:   create_and_deploy_recipe.sh -c <channel/network> [-n network] --recipe <recipe file> -r <rootdir> [--nodeploy] [--skip-build-deploy] [--force] [-m genesisVersionModifier] [ -b <bucket> ]"
+# Syntax:   create_and_deploy_recipe.sh -c <channel/network> [-n network] --recipe <recipe file> -r <rootdir> [--nodeploy] [--skip-build] [--force] [-m genesisVersionModifier] [ -b <bucket> ]"
 #
 # Outputs:  <errors or warnings>
 #
@@ -39,6 +39,7 @@ NO_DEPLOY=""
 FORCE_OPTION=""
 SCHEMA_MODIFIER=""
 BUCKET=""
+SKIP_BUILD=""
 
 while [ "$1" != "" ]; do
     case "$1" in
@@ -72,8 +73,8 @@ while [ "$1" != "" ]; do
             shift
             BUCKET="$1"
             ;;
-        --skip-build-deploy)
-            SKIP_BUILD_DEPLOY="true"
+        --skip-build)
+            SKIP_BUILD="true"
             ;;
         *)
             echo "Unknown option" "$1"
@@ -101,7 +102,7 @@ if [[ "${NETWORK}" = "" ]]; then
 fi
 
 # Build binaries
-if [[ "${SKIP_BUILD_DEPLOY}" != "true" || ! -f ${GOPATH}/bin/netgoal ]]; then
+if [[ "${SKIP_BUILD}" != "true" || ! -f ${GOPATH}/bin/netgoal ]]; then
     # Build so we've got up-to-date binaries
     (cd ${SRCPATH} && make)
 fi
@@ -113,10 +114,8 @@ ${GOPATH}/bin/netgoal build -r "${ROOTDIR}" -n "${NETWORK}" --recipe "${RECIPEFI
 export S3_RELEASE_BUCKET="${S3_RELEASE_BUCKET}"
 ${SRCPATH}/scripts/upload_config.sh "${ROOTDIR}" "${CHANNEL}"
 
-# Build and Deploy binaries
-if [[ "${SKIP_BUILD_DEPLOY}" != "true" ]]; then
-    if [ "${NO_DEPLOY}" = "" ]; then
-        # Now generate a private build using our custom genesis.json and deploy it to S3 also
-        ${SRCPATH}/scripts/deploy_private_version.sh -c "${CHANNEL}" -f "${ROOTDIR}/genesisdata/genesis.json" -n "${NETWORK}" -b "${S3_RELEASE_BUCKET}"
-    fi
+# Deploy binaries
+if [ "${NO_DEPLOY}" = "" ]; then
+    # Now generate a private build using our custom genesis.json and deploy it to S3 also
+    ${SRCPATH}/scripts/deploy_private_version.sh -c "${CHANNEL}" -f "${ROOTDIR}/genesisdata/genesis.json" -n "${NETWORK}" -b "${S3_RELEASE_BUCKET}"
 fi
