@@ -106,7 +106,6 @@ else
     cp ${GENESISFILE} gen/${DEFAULTNETWORK}/genesis.json
 fi
 
-
 # For private builds, always build the base version (with telemetry)
 export VARIATIONS="base"
 scripts/build_packages.sh $(./scripts/osarchtype.sh)

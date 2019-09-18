@@ -72,8 +72,7 @@ while [ "$1" != "" ]; do
             shift
             BUCKET="$1"
             ;;
-        --SKIP_BUILD_DEPLOY)
-            shift
+        --skip-build-deploy)
             SKIP_BUILD_DEPLOY="true"
             ;;
         *)
@@ -101,8 +100,8 @@ if [[ "${NETWORK}" = "" ]]; then
     NETWORK=${CHANNEL}
 fi
 
-# Build and Deploy binaries
-if [[ ${SKIP_BUILD_DEPLOY} != "true" ]]; then
+# Build binaries
+if [[ "${SKIP_BUILD_DEPLOY}" != "true" && ! -f ${GOPATH}/bin/netgoal ]]; then
     # Build so we've got up-to-date binaries
     (cd ${SRCPATH} && make)
 fi
@@ -115,7 +114,7 @@ export S3_RELEASE_BUCKET="${S3_RELEASE_BUCKET}"
 ${SRCPATH}/scripts/upload_config.sh "${ROOTDIR}" "${CHANNEL}"
 
 # Build and Deploy binaries
-if [[ ${SKIP_BUILD_DEPLOY} != "true" ]]; then
+if [[ "${SKIP_BUILD_DEPLOY}" != "true" ]]; then
     if [ "${NO_DEPLOY}" = "" ]; then
         # Now generate a private build using our custom genesis.json and deploy it to S3 also
         ${SRCPATH}/scripts/deploy_private_version.sh -c "${CHANNEL}" -f "${ROOTDIR}/genesisdata/genesis.json" -n "${NETWORK}" -b "${S3_RELEASE_BUCKET}"
