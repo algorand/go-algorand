@@ -2,7 +2,7 @@
 
 # create_and_deploy_recipe.sh - Generates deployed network configuration (based on a recipe) and private build and pushes to S3
 #
-# Syntax:   create_and_deploy_recipe.sh -c <channel/network> [-n network] --recipe <recipe file> -r <rootdir> [--nodeploy] [--force] [-m genesisVersionModifier] [ -b <bucket> ]"
+# Syntax:   create_and_deploy_recipe.sh -c <channel/network> [-n network] --recipe <recipe file> -r <rootdir> [--nodeploy] [--skip-build-deploy] [--force] [-m genesisVersionModifier] [ -b <bucket> ]"
 #
 # Outputs:  <errors or warnings>
 #
@@ -101,7 +101,7 @@ if [[ "${NETWORK}" = "" ]]; then
 fi
 
 # Build binaries
-if [[ "${SKIP_BUILD_DEPLOY}" != "true" && ! -f ${GOPATH}/bin/netgoal ]]; then
+if [[ "${SKIP_BUILD_DEPLOY}" != "true" || ! -f ${GOPATH}/bin/netgoal ]]; then
     # Build so we've got up-to-date binaries
     (cd ${SRCPATH} && make)
 fi
