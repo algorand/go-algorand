@@ -103,13 +103,6 @@ BUILD_COMPLETE=false
 LOG_PRINT_COMPLETE=false
 LOG_SEQ=1
 while [ $SECONDS -lt $end ]; do
-    GET_OUTPUT=$(aws s3 cp ${BUILD_COMPLETE_PATH} . ${NO_SIGN_REQUEST} 2> /dev/null)
-    if [ "$?" = "0" ]; then
-        echo "${GET_OUTPUT}"
-        BUILD_COMPLETE=true
-        break
-    fi
-    
     aws s3 ls ${BUILD_LOG_PATH}-${LOG_SEQ} ${NO_SIGN_REQUEST} 2> /dev/null > /dev/null
     if [ "$?" = "0" ]; then
         aws s3 cp ${BUILD_LOG_PATH}-${LOG_SEQ} - ${NO_SIGN_REQUEST} | cat
@@ -117,6 +110,13 @@ while [ $SECONDS -lt $end ]; do
             minute_end=$((SECONDS+60))
         fi
         ((LOG_SEQ++))
+    else
+        GET_OUTPUT=$(aws s3 cp ${BUILD_COMPLETE_PATH} . ${NO_SIGN_REQUEST} 2> /dev/null)
+        if [ "$?" = "0" ]; then
+            echo "${GET_OUTPUT}"
+            BUILD_COMPLETE=true
+            break
+        fi
     fi
 
     if [ $SECONDS -gt $minute_end ]; then

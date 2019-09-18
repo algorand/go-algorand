@@ -28,39 +28,79 @@ INSTANCE_NUMBER=$RANDOM
 
 set +e
 
-${SCRIPTPATH}/start_ec2_instance.sh ${AWS_REGION} ${AWS_LINUX_AMI} ${AWS_INSTANCE_TYPE}
-if [ "$?" != "0" ]; then
+exitWithError() {
+    local ERROR_CODE=$1
+    local ERROR_MESSAGE=$2
+
+    if [ "${OUTPUTFILE}" != "" ]; then
+        echo "{ \"error\": ${ERROR_CODE}, \"log\": \"${ERROR_MESSAGE}\" }" | aws s3 cp - s3://${BUCKET}/${OUTPUTFILE} ${NO_SIGN}
+    fi
+
+    ${SCRIPTPATH}/shutdown_ec2_instance.sh ${AWS_REGION}
+    if [ "$?" != "0" ]; then
+        popd
+        rm -rf ${TMPPATH}
+        exit 1
+    fi
+
     popd
     rm -rf ${TMPPATH}
-    exit 1
+    exit ${ERROR_CODE}
+}
+
+${SCRIPTPATH}/start_ec2_instance.sh ${AWS_REGION} ${AWS_LINUX_AMI} ${AWS_INSTANCE_TYPE}
+if [ "$?" != "0" ]; then
+    exitWithError $? "Unable to start EC2 instance"
 fi
 
 scp -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance):/home/ubuntu/armv6_stretch/id_rsa ./id_rsa
+if [ "$?" != "0" ]; then
+    exitWithError $? "Unable to retreive RasPI credentials from EC2 instance"
+fi
+
 
 echo "Stopping raspi service"
 end=$((SECONDS+90))
+RASPI_SERVICE_STOPPED=false
 while [ $SECONDS -lt $end ]; do
     ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) "sudo systemctl stop raspi" 2>/dev/null
     if [ "$?" = "0" ]; then
         echo "RasPI is stopped"
+        RASPI_SERVICE_STOPPED=true
         break
     fi
     sleep 1s
 done
 
+if [ "${RASPI_SERVICE_STOPPED}" = "false" ]; then
+    exitWithError 1 "Unable to stop raspi service"
+fi
+
 ssh -i key.pem -tt -o "StrictHostKeyChecking no" ubuntu@$(cat instance) 'bash -s' < ${SCRIPTPATH}/nvme.sh >> /home/ubuntu/nvme.log
-ssh -i key.pem -tt -o "StrictHostKeyChecking no" ubuntu@$(cat instance) 'sudo systemctl start raspi'
+if [ "$?" != "0" ]; then
+    exitWithError 1 "nvme initialization failed"
+fi
+ssh -i key.pem -tt -o "StrictHostKeyChecking no" ubuntu@$(cat instance) "sudo systemctl start raspi"
+if [ "$?" != "0" ]; then
+    exitWithError 1 "unable to restart raspi service"
+fi
 
 echo "Waiting for RasPI SSH connection"
 end=$((SECONDS+90))
+RASPI_READY=false
 while [ $SECONDS -lt $end ]; do
     ssh -i id_rsa -o "StrictHostKeyChecking no" -p 5022 pi@$(cat instance) "uname -a" 2>/dev/null
     if [ "$?" = "0" ]; then
         echo "RasPI SSH connection ready"
+        RASPI_READY=true
         break
     fi
     sleep 1s
 done
+
+if [ "${RASPI_READY}" = "false" ]; then
+    exitWithError 1 "Timed out waiting for raspi service to start"
+fi
 
 BRANCH=$(cat $BUILD_REQUEST | jq -r '.TRAVIS_BRANCH')
 COMMIT_HASH=$(cat $BUILD_REQUEST | jq -r '.TRAVIS_COMMIT')
@@ -91,16 +131,6 @@ FOE
 
 ssh -i id_rsa -tt -o "StrictHostKeyChecking no" -p 5022 pi@$(cat instance) 'bash -s' < exescript 2>&1 | ${SCRIPTPATH}/s3streamup.sh s3://${BUCKET}/${LOGFILE} ${NO_SIGN}
 ERR=$?
-if [ "${OUTPUTFILE}" != "" ]; then
-    echo "{ \"error\": ${ERR}, \"log\": \"\" }" | aws s3 cp - s3://${BUCKET}/${OUTPUTFILE} ${NO_SIGN}
-fi
 
-${SCRIPTPATH}/shutdown_ec2_instance.sh ${AWS_REGION}
-if [ "$?" != "0" ]; then
-    popd
-    rm -rf ${TMPPATH}
-    exit 1
-fi
+exitWithError ${ERR} ""
 
-popd
-rm -rf ${TMPPATH}
