@@ -72,6 +72,10 @@ while [ "$1" != "" ]; do
             shift
             BUCKET="$1"
             ;;
+        --SKIP_BUILD_DEPLOY)
+            shift
+            SKIP_BUILD_DEPLOY="true"
+            ;;
         *)
             echo "Unknown option" "$1"
             exit 1
@@ -99,19 +103,16 @@ fi
 
 # Build and Deploy binaries
 if [[ ${SKIP_BUILD_DEPLOY} != "true" ]]; then
-# Build so we've got up-to-date binaries
-(cd ${SRCPATH} && make)
+    # Build so we've got up-to-date binaries
+    (cd ${SRCPATH} && make)
 fi
 
-# Create Cloudspec configuration
-#if [[ ${SKIP_CLOUDSPEC} != "true" ]]; then
-    # Generate the nodecfg package directory
-    ${GOPATH}/bin/netgoal build -r "${ROOTDIR}" -n "${NETWORK}" --recipe "${RECIPEFILE}" "${FORCE_OPTION}" -m "${SCHEMA_MODIFIER}"
+# Generate the nodecfg package directory
+${GOPATH}/bin/netgoal build -r "${ROOTDIR}" -n "${NETWORK}" --recipe "${RECIPEFILE}" "${FORCE_OPTION}" -m "${SCHEMA_MODIFIER}"
 
-    # Package and upload the config package
-    export S3_RELEASE_BUCKET="${S3_RELEASE_BUCKET}"
-    ${SRCPATH}/scripts/upload_config.sh "${ROOTDIR}" "${CHANNEL}"
-#fi
+# Package and upload the config package
+export S3_RELEASE_BUCKET="${S3_RELEASE_BUCKET}"
+${SRCPATH}/scripts/upload_config.sh "${ROOTDIR}" "${CHANNEL}"
 
 # Build and Deploy binaries
 if [[ ${SKIP_BUILD_DEPLOY} != "true" ]]; then
