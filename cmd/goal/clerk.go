@@ -23,6 +23,8 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -58,6 +60,8 @@ var (
 	disassesmble    bool
 	progByteFile    string
 	logicSigFile    string
+	round           uint64
+	timeStamp       int64
 )
 
 func init() {
@@ -68,6 +72,7 @@ func init() {
 	clerkCmd.AddCommand(groupCmd)
 	clerkCmd.AddCommand(splitCmd)
 	clerkCmd.AddCommand(compileCmd)
+	clerkCmd.AddCommand(dryrunCmd)
 
 	// Wallet to be used for the clerk operation
 	clerkCmd.PersistentFlags().StringVarP(&walletName, "wallet", "w", "", "Set the wallet to be used for the selected operation")
@@ -121,6 +126,10 @@ func init() {
 	compileCmd.Flags().BoolVarP(&signProgram, "sign", "s", false, "sign program, output is a binary signed LogicSig record")
 	compileCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Filename to write program bytes or signed LogicSig to")
 	compileCmd.Flags().StringVarP(&account, "account", "a", "", "Account address to sign the program (If not specified, uses default account)")
+
+	dryrunCmd.Flags().StringVarP(&txFilename, "txfile", "t", "", "transaction or transaction-group to test")
+	dryrunCmd.Flags().Uint64VarP(&round, "round", "r", 1, "round number to simulate")
+	dryrunCmd.Flags().Int64VarP(&timeStamp, "time-stamp", "S", 0, "unix time stamp simulate (default now)")
 }
 
 var clerkCmd = &cobra.Command{
@@ -776,5 +785,60 @@ var compileCmd = &cobra.Command{
 				fmt.Printf("%s: %s\n", fname, addr.String())
 			}
 		}
+	},
+}
+
+var dryrunCmd = &cobra.Command{
+	Use:   "dryrun",
+	Short: "test a program offline",
+	Long:  "test a program offline under various conditions and verbosity",
+	Run: func(cmd *cobra.Command, args []string) {
+		data, err := readFile(txFilename)
+		if err != nil {
+			reportErrorf(fileReadError, txFilename, err)
+		}
+		dec := protocol.NewDecoderBytes(data)
+		stxns := make([]transactions.SignedTxn, 0, 10)
+		for {
+			var txn transactions.SignedTxn
+			err = dec.Decode(&txn)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				reportErrorf(txDecodeError, txFilename, err)
+			}
+			stxns = append(stxns, txn)
+		}
+		txgroup := make([]transactions.SignedTxnWithAD, len(stxns))
+		for i, st := range stxns {
+			txgroup[i].SignedTxn = st
+		}
+		if timeStamp == 0 {
+			timeStamp = time.Now().Unix()
+		}
+		block := bookkeeping.Block{}
+		block.BlockHeader.Round = basics.Round(round)
+		block.BlockHeader.TimeStamp = timeStamp
+		proto := config.Consensus[protocol.ConsensusCurrentVersion]
+		for i, txn := range txgroup {
+			if txn.Lsig.Blank() {
+				continue
+			}
+			sb := strings.Builder{}
+			ep := logic.EvalParams{Trace: &sb, Txn: &txn.SignedTxn, Block: &block, Proto: &proto}
+			pass, err := logic.Eval(txn.Lsig.Logic, ep)
+			// TODO: optionally include `inspect` output here?
+			fmt.Fprintf(os.Stdout, "tx[%d] trace:\n%s\n", i, sb.String())
+			if pass {
+				fmt.Fprintf(os.Stdout, " - pass -\n")
+			} else {
+				fmt.Fprintf(os.Stdout, "REJECT\n")
+			}
+			if err != nil {
+				fmt.Fprintf(os.Stdout, "ERROR: %s\n", err.Error())
+			}
+		}
+
 	},
 }
