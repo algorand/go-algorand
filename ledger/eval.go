@@ -383,7 +383,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 
 	cow := eval.state.child()
 
-	for _, txad := range txgroup {
+	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
 		err := eval.transaction(txad.SignedTxn, txad.ApplyData, txgroup, cow, &txib)
@@ -412,6 +412,8 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 			txWithoutGroup.ResetCaches()
 
 			group.Transactions = append(group.Transactions, crypto.HashObj(txWithoutGroup))
+		} else if len(txgroup) > 1 {
+			return fmt.Errorf("transactionGroup: [%d] had zero Group but was submitted in a group of %d", gi, len(txgroup))
 		}
 	}
 

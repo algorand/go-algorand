@@ -18,6 +18,7 @@ package ledger
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -129,7 +130,7 @@ func (l *Ledger) appendUnvalidated(blk bookkeeping.Block) error {
 
 	vb, err := l.Validate(context.Background(), blk, DummyVerifiedTxnCache{}, backlogPool)
 	if err != nil {
-		return err
+		return fmt.Errorf("appendUnvalidated error in Validate: %s", err.Error())
 	}
 
 	return l.AddValidatedBlock(*vb, agreement.Certificate{})
@@ -167,6 +168,7 @@ func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics
 		UpgradeState: lastBlock.UpgradeState,
 		// Seed:       does not matter,
 		// UpgradeVote: empty,
+		TxnCounter: lastBlock.TxnCounter,
 	}
 
 	if proto.SupportGenesisHash {
@@ -177,9 +179,10 @@ func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics
 	blk.BlockHeader = correctBlkHeader
 	txib, err := blk.EncodeSignedTxn(stx, ad)
 	if err != nil {
-		return err
+		return fmt.Errorf("could not sign txn: %s", err.Error())
 	}
 	blk.Payset = append(blk.Payset, txib)
+	blk.TxnCounter++
 	blk.TxnRoot = blk.Payset.Commit(proto.PaysetCommitFlat)
 	blk.RewardsPool = testPoolAddr
 	blk.FeeSink = testSinkAddr
