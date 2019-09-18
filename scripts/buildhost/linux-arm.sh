@@ -18,11 +18,8 @@ pushd .
 cd ${TMPPATH}
 
 AWS_REGION="us-west-2"
-# the following is the base linux AMI
-#AWS_LINUX_AMI="ami-06f2f779464715dc5"
 # this is the private AMI that contains the RasPI VM running on port 5022
 AWS_LINUX_AMI="ami-077aa2f293886f758"
-#AWS_INSTANCE_TYPE="t3a.xlarge"
 AWS_INSTANCE_TYPE="i3.xlarge"
 INSTANCE_NUMBER=$RANDOM
 

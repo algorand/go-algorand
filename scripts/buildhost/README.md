@@ -8,7 +8,7 @@ buildhost
 run the following on a fresh image:
 
 ```bash
-git clone https://github.com/tsachiherman/go-algorand -b tsachi/arm64build
+git clone https://github.com/algorand/go-algorand
 cd go-algorand/scripts/buildhost
 sudo ./configure.sh
 ```

@@ -1,5 +1,15 @@
 #!/usr/bin/env bash
 
+# configure.sh - Configure a new EC2 machine as a buildhost
+#
+# Syntax:   configure.sh
+#
+# Usage:    Should only be used when deploying a new build host.
+#
+# Examples: scripts/buildhost/configure.sh
+#
+
+
 if [ "$EUID" -ne 0 ]
   then echo "Please run as root"
   exit
