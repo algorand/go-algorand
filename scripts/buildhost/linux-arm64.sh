@@ -24,11 +24,29 @@ INSTANCE_NUMBER=$RANDOM
 
 set +e
 
-${SCRIPTPATH}/start_ec2_instance.sh ${AWS_REGION} ${AWS_LINUX_AMI} ${AWS_INSTANCE_TYPE}
-if [ "$?" != "0" ]; then
+exitWithError() {
+    local ERROR_CODE=$1
+    local ERROR_MESSAGE=$2
+
+    if [ "${OUTPUTFILE}" != "" ]; then
+        echo "{ \"error\": ${ERROR_CODE}, \"log\": \"${ERROR_MESSAGE}\" }" | aws s3 cp - s3://${BUCKET}/${OUTPUTFILE} ${NO_SIGN}
+    fi
+
+    ${SCRIPTPATH}/shutdown_ec2_instance.sh ${AWS_REGION}
+    if [ "$?" != "0" ]; then
+        popd
+        rm -rf ${TMPPATH}
+        exit 1
+    fi
+
     popd
     rm -rf ${TMPPATH}
-    exit 1
+    exit ${ERROR_CODE}
+}
+
+${SCRIPTPATH}/start_ec2_instance.sh ${AWS_REGION} ${AWS_LINUX_AMI} ${AWS_INSTANCE_TYPE}
+if [ "$?" != "0" ]; then
+    exitWithError $? "Unable to start EC2 instance"
 fi
 
 BRANCH=$(cat $BUILD_REQUEST | jq -r '.TRAVIS_BRANCH')
@@ -60,16 +78,4 @@ FOE
 
 ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) 'bash -s' < exescript 2>&1 | ${SCRIPTPATH}/s3streamup.sh s3://${BUCKET}/${LOGFILE} ${NO_SIGN}
 ERR=$?
-if [ "${OUTPUTFILE}" != "" ]; then
-    echo "{ \"error\": ${ERR}, \"log\": \"\" }" | aws s3 cp - s3://${BUCKET}/${OUTPUTFILE} ${NO_SIGN}
-fi
-
-${SCRIPTPATH}/shutdown_ec2_instance.sh ${AWS_REGION}
-if [ "$?" != "0" ]; then
-    popd
-    rm -rf ${TMPPATH}
-    exit 1
-fi
-
-popd
-rm -rf ${TMPPATH}
+exitWithError ${ERR} ""
