@@ -37,24 +37,24 @@ fi
 
 scp -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance):/home/ubuntu/armv6_stretch/id_rsa ./id_rsa
 
-echo "Waiting for RasPI SSH connection"
+echo "Stopping raspi service"
 end=$((SECONDS+90))
 while [ $SECONDS -lt $end ]; do
-    ssh -i id_rsa -o "StrictHostKeyChecking no" -p 5022 pi@$(cat instance) "sudo systemctl stop raspi"
+    ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) "sudo systemctl stop raspi" 2>/dev/null
     if [ "$?" = "0" ]; then
-        echo "RasPI SSH connection ready"
+        echo "RasPI is stopped"
         break
     fi
     sleep 1s
 done
 
-ssh -i id_rsa -tt -o "StrictHostKeyChecking no" -p 5022 pi@$(cat instance) 'bash -s' < nvme.sh >> /home/ubuntu/nvme.log
-ssh -i id_rsa -tt -o "StrictHostKeyChecking no" -p 5022 pi@$(cat instance) 'sudo systemctl start raspi'
+ssh -i key.pem -tt -o "StrictHostKeyChecking no" ubuntu@$(cat instance) 'bash -s' < ${SCRIPTPATH}/nvme.sh >> /home/ubuntu/nvme.log
+ssh -i key.pem -tt -o "StrictHostKeyChecking no" ubuntu@$(cat instance) 'sudo systemctl start raspi'
 
 echo "Waiting for RasPI SSH connection"
 end=$((SECONDS+90))
 while [ $SECONDS -lt $end ]; do
-    ssh -i id_rsa -o "StrictHostKeyChecking no" -p 5022 pi@$(cat instance) "sudo systemctl stop raspi"
+    ssh -i id_rsa -o "StrictHostKeyChecking no" -p 5022 pi@$(cat instance) "uname -a" 2>/dev/null
     if [ "$?" = "0" ]; then
         echo "RasPI SSH connection ready"
         break
