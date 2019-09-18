@@ -97,10 +97,11 @@ if [[ "${NETWORK}" = "" ]]; then
     NETWORK=${CHANNEL}
 fi
 
-
+# Build and Deploy binaries
+if [[ ${SKIP_BUILD_DEPLOY} != "true" ]]; then
 # Build so we've got up-to-date binaries
 (cd ${SRCPATH} && make)
-
+fi
 
 # Create Cloudspec configuration
 #if [[ ${SKIP_CLOUDSPEC} != "true" ]]; then
