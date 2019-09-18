@@ -104,17 +104,17 @@ if [[ ${SKIP_BUILD_DEPLOY} != "true" ]]; then
 fi
 
 # Create Cloudspec configuration
-#if [[ ${SKIP_CLOUDSPEC} != "true" ]]; then
+if [[ ${SKIP_CLOUDSPEC} != "true" ]]; then
     # Generate the nodecfg package directory
     ${GOPATH}/bin/netgoal build -r "${ROOTDIR}" -n "${NETWORK}" --recipe "${RECIPEFILE}" "${FORCE_OPTION}" -m "${SCHEMA_MODIFIER}"
-#fi
 
-# Build and Deploy binaries
-if [[ ${SKIP_BUILD_DEPLOY} != "true" ]]; then
     # Package and upload the config package
     export S3_RELEASE_BUCKET="${S3_RELEASE_BUCKET}"
     ${SRCPATH}/scripts/upload_config.sh "${ROOTDIR}" "${CHANNEL}"
+fi
 
+# Build and Deploy binaries
+if [[ ${SKIP_BUILD_DEPLOY} != "true" ]]; then
     if [ "${NO_DEPLOY}" = "" ]; then
         # Now generate a private build using our custom genesis.json and deploy it to S3 also
         ${SRCPATH}/scripts/deploy_private_version.sh -c "${CHANNEL}" -f "${ROOTDIR}/genesisdata/genesis.json" -n "${NETWORK}" -b "${S3_RELEASE_BUCKET}"
