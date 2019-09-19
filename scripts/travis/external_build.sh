@@ -52,7 +52,6 @@ if [ "${BUILD_TARGET}" = "" ]; then
     exit 1
 fi
 
-sudo apt-get install awscli
 BUILDID=${TRAVIS_JOB_NUMBER/./000}
 
 # create build request

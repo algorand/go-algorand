@@ -48,6 +48,10 @@ jobs:
       env:
         - BUILD_TYPE: "external_build"
         - TARGET_PLATFORM: "linux-arm64"
+      addons:
+        apt:
+          packages:
+            - awscli
       script:
         - scripts/travis/external_build.sh ./scripts/travis/build_test.sh
     - # same stage, parallel job
@@ -56,12 +60,12 @@ jobs:
       env:
         - BUILD_TYPE: "external_build"
         - TARGET_PLATFORM: "linux-arm64"
-      script:
-        - scripts/travis/external_build.sh ./scripts/travis/integration_test.sh
       addons:
         apt:
           packages:
             - awscli
+      script:
+        - scripts/travis/external_build.sh ./scripts/travis/integration_test.sh
 
     - stage: build_release
       os: linux
@@ -84,6 +88,10 @@ jobs:
       env:
         - BUILD_TYPE: "external_build"
         - TARGET_PLATFORM: "linux-arm64"
+      addons:
+        apt:
+          packages:
+            - awscli
       script:
         - scripts/travis/external_build.sh ./scripts/travis/integration_test.sh
 
@@ -101,6 +109,10 @@ jobs:
       env:
         - BUILD_TYPE: "external_build"
         - TARGET_PLATFORM: "linux-arm64"
+      addons:
+        apt:
+          packages:
+            - awscli
       script:
         - scripts/travis/external_build.sh ./scripts/travis/deploy_packages.sh
 
