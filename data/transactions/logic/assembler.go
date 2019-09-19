@@ -30,6 +30,7 @@ import (
 	"strings"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // Writer is what we want here. Satisfied by bufio.Buffer
@@ -414,9 +415,10 @@ var TxnFieldNames = []string{
 	"Sender", "Fee", "FirstValid", "LastValid", "Note",
 	"Receiver", "Amount", "CloseRemainderTo", "VotePK", "SelectionPK",
 	"VoteFirst", "VoteLast", "VoteKeyDilution",
-	"Type",
+	"Type", "TypeEnum",
 	"XferAsset", "AssetAmount",
 	"AssetSender", "AssetReceiver", "AssetCloseTo",
+	"GroupIndex",
 }
 
 // TxnFieldTypes is StackBytes or StackUint64 parallel to TxnFieldNames
@@ -424,12 +426,26 @@ var TxnFieldTypes = []StackType{
 	StackBytes, StackUint64, StackUint64, StackUint64, StackBytes,
 	StackBytes, StackUint64, StackBytes, StackBytes, StackBytes,
 	StackUint64, StackUint64, StackUint64,
-	StackBytes,
+	StackBytes, StackUint64,
 	StackBytes, StackUint64,
 	StackBytes, StackBytes, StackBytes,
+	StackUint64,
 }
 
 var txnFields map[string]uint
+
+// TxnTypeNames is the values of Txn.Type in enum order
+var TxnTypeNames = []string{
+	string(protocol.UnknownTx),
+	string(protocol.PaymentTx),
+	string(protocol.KeyRegistrationTx),
+	string(protocol.AssetConfigTx),
+	string(protocol.AssetTransferTx),
+	string(protocol.AssetFreezeTx),
+}
+
+// map TxnTypeName to its enum index, for `txn TypeEnum`
+var txnTypeIndexes map[string]int
 
 func assembleTxn(ops *OpStream, args []string) error {
 	if len(args) != 1 {
@@ -465,6 +481,7 @@ var GlobalFieldNames = []string{
 	"MaxTxnLife",
 	"TimeStamp",
 	"ZeroAddress",
+	"GroupSize",
 }
 
 // GlobalFieldTypes is StackUint64 StackBytes in parallel with GlobalFieldNames
@@ -475,6 +492,7 @@ var GlobalFieldTypes = []StackType{
 	StackUint64,
 	StackUint64,
 	StackBytes,
+	StackUint64,
 }
 
 var globalFields map[string]uint
@@ -535,6 +553,11 @@ func init() {
 	accountFields = make(map[string]uint)
 	for i, gfn := range AccountFieldNames {
 		accountFields[gfn] = uint(i)
+	}
+
+	txnTypeIndexes = make(map[string]int, len(TxnTypeNames))
+	for i, tt := range TxnTypeNames {
+		txnTypeIndexes[tt] = i
 	}
 }
 

@@ -80,6 +80,9 @@ type EvalParams struct {
 	Trace io.Writer
 
 	TxnGoup []transactions.SignedTxnWithAD
+
+	// GroupIndex should point to Txn within TxnGroup
+	GroupIndex int
 }
 
 type evalContext struct {
@@ -817,6 +820,10 @@ func checkBnz(cx *evalContext) int {
 	}
 	cx.nextpc = cx.pc + 3
 	target := cx.nextpc + int(offset)
+	if target >= len(cx.program) {
+		cx.err = errors.New("bnz target beyond end of program")
+		return 1
+	}
 	cx.branchTargets = append(cx.branchTargets, target)
 	sort.Ints(cx.branchTargets)
 	return 1
@@ -879,17 +886,21 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint
 	case 13:
 		sv.Bytes = []byte(txn.Type)
 	case 14:
+		sv.Uint = uint64(txnTypeIndexes[string(txn.Type)])
+	case 15:
 		sv.Bytes = make([]byte, 40)
 		copy(sv.Bytes, txn.XferAsset.Creator[:])
 		binary.BigEndian.PutUint64(sv.Bytes[32:], txn.XferAsset.Index)
-	case 15:
-		sv.Uint = txn.AssetAmount
 	case 16:
-		sv.Bytes = txn.AssetSender[:]
+		sv.Uint = txn.AssetAmount
 	case 17:
-		sv.Bytes = txn.AssetReceiver[:]
+		sv.Bytes = txn.AssetSender[:]
 	case 18:
+		sv.Bytes = txn.AssetReceiver[:]
+	case 19:
 		sv.Bytes = txn.AssetCloseTo[:]
+	case 20:
+		panic("GroupIndex should be handled outside txnFieldToStack")
 	default:
 		err = fmt.Errorf("invalid txn field %d", field)
 	}
@@ -898,10 +909,16 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint
 
 func opTxn(cx *evalContext) {
 	field := uint64(cx.program[cx.pc+1])
-	sv, err := cx.txnFieldToStack(&cx.Txn.Txn, field)
-	if err != nil {
-		cx.err = err
-		return
+	var sv stackValue
+	var err error
+	if field == 20 {
+		sv.Uint = uint64(cx.GroupIndex)
+	} else {
+		sv, err = cx.txnFieldToStack(&cx.Txn.Txn, field)
+		if err != nil {
+			cx.err = err
+			return
+		}
 	}
 	cx.stack = append(cx.stack, sv)
 	cx.nextpc = cx.pc + 2
@@ -915,10 +932,17 @@ func opGtxn(cx *evalContext) {
 	}
 	tx := &cx.TxnGoup[gtxid].Txn
 	field := uint64(cx.program[cx.pc+2])
-	sv, err := cx.txnFieldToStack(tx, field)
-	if err != nil {
-		cx.err = err
-		return
+	var sv stackValue
+	var err error
+	if field == 20 {
+		// GroupIndex; asking this when we just specified it is _dumb_, but oh well
+		sv.Uint = uint64(gtxid)
+	} else {
+		sv, err = cx.txnFieldToStack(tx, field)
+		if err != nil {
+			cx.err = err
+			return
+		}
 	}
 	cx.stack = append(cx.stack, sv)
 	cx.nextpc = cx.pc + 3
@@ -946,6 +970,8 @@ func opGlobal(cx *evalContext) {
 		}
 	case 5:
 		sv.Bytes = zeroAddress[:]
+	case 6:
+		sv.Uint = uint64(len(cx.TxnGoup))
 	default:
 		cx.err = fmt.Errorf("invalid global[%d]", gindex)
 		return

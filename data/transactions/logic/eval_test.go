@@ -762,7 +762,11 @@ int 1
 ==
 &&
 txn Type
-byte 0x41414141
+byte 0x706179
+==
+&&
+txn TypeEnum
+int 1
 ==
 &&
 txn XferAsset
@@ -783,6 +787,10 @@ arg 2
 &&
 txn AssetCloseTo
 arg 0
+==
+&&
+txn GroupIndex
+int 3
 ==
 &&`
 
@@ -811,7 +819,7 @@ func TestTxn(t *testing.T) {
 	txn.Txn.VoteFirst = 1317
 	txn.Txn.VoteLast = 17776
 	txn.Txn.VoteKeyDilution = 1
-	txn.Txn.Type = protocol.TxType("AAAA")
+	txn.Txn.Type = protocol.PaymentTx
 	txn.Txn.AssetAmount = 1234
 	txn.Txn.AssetSender = txn.Txn.Receiver
 	txn.Txn.AssetReceiver = txn.Txn.CloseRemainderTo
@@ -827,7 +835,7 @@ func TestTxn(t *testing.T) {
 		append([]byte(creator), 0, 0, 0, 0, 0, 0, 0, 1),
 	}
 	sb := strings.Builder{}
-	pass, err := Eval(program, EvalParams{Trace: &sb, Txn: &txn})
+	pass, err := Eval(program, EvalParams{Trace: &sb, Txn: &txn, GroupIndex: 3})
 	if !pass {
 		t.Log(hex.EncodeToString(program))
 		t.Log(sb.String())
@@ -875,6 +883,18 @@ txn Receiver
 &&
 txn Receiver
 arg 1
+==
+&&
+gtxn 0 GroupIndex
+int 0
+==
+&&
+gtxn 1 GroupIndex
+int 1
+==
+&&
+global GroupSize
+int 2
 ==
 &&`)
 	require.NoError(t, err)
@@ -1239,6 +1259,48 @@ int 1`)
 	_, err = Check(program, EvalParams{})
 	require.Error(t, err)
 	require.True(t, strings.Contains(err.Error(), "aligned"))
+	pass, err := Eval(program, EvalParams{})
+	require.Error(t, err)
+	require.False(t, pass)
+}
+
+func TestBranchTooFar(t *testing.T) {
+	t.Parallel()
+	program, err := AssembleString(`int 1
+bnz done
+bytecblock 0x01234576 0xababcdcd 0xf000baad
+done:
+int 1`)
+	require.NoError(t, err)
+	//t.Log(hex.EncodeToString(program))
+	canonicalProgramBytes, err := hex.DecodeString("01200101224000112603040123457604ababcdcd04f000baad22")
+	require.NoError(t, err)
+	require.Equal(t, program, canonicalProgramBytes)
+	program[7] = 200 // clobber the branch offset to be beyond the end of the program
+	_, err = Check(program, EvalParams{})
+	require.Error(t, err)
+	require.True(t, strings.Contains(err.Error(), "beyond end of program"))
+	pass, err := Eval(program, EvalParams{})
+	require.Error(t, err)
+	require.False(t, pass)
+}
+
+func TestBranchTooLarge(t *testing.T) {
+	t.Parallel()
+	program, err := AssembleString(`int 1
+bnz done
+bytecblock 0x01234576 0xababcdcd 0xf000baad
+done:
+int 1`)
+	require.NoError(t, err)
+	//t.Log(hex.EncodeToString(program))
+	canonicalProgramBytes, err := hex.DecodeString("01200101224000112603040123457604ababcdcd04f000baad22")
+	require.NoError(t, err)
+	require.Equal(t, program, canonicalProgramBytes)
+	program[6] = 0xff // clobber the branch offset
+	_, err = Check(program, EvalParams{})
+	require.Error(t, err)
+	require.True(t, strings.Contains(err.Error(), "too large"))
 	pass, err := Eval(program, EvalParams{})
 	require.Error(t, err)
 	require.False(t, pass)

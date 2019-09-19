@@ -334,11 +334,25 @@ Most fields are a simple copy of a uint64 or byte string value. `XferAsset` is t
 | 11 | VoteLast | uint64 |
 | 12 | VoteKeyDilution | uint64 |
 | 13 | Type | []byte |
-| 14 | XferAsset | []byte |
-| 15 | AssetAmount | uint64 |
-| 16 | AssetSender | []byte |
-| 17 | AssetReceiver | []byte |
-| 18 | AssetCloseTo | []byte |
+| 14 | TypeEnum | uint64 |
+| 15 | XferAsset | []byte |
+| 16 | AssetAmount | uint64 |
+| 17 | AssetSender | []byte |
+| 18 | AssetReceiver | []byte |
+| 19 | AssetCloseTo | []byte |
+| 20 | GroupIndex | uint64 |
+
+
+TypeEnum mapping:
+
+| Index | Name |
+| --- | --- |
+| 0 | unknown |
+| 1 | pay |
+| 2 | keyreg |
+| 3 | acfg |
+| 4 | axfer |
+| 5 | afrz |
 
 
 ## global
@@ -358,6 +372,7 @@ Most fields are a simple copy of a uint64 or byte string value. `XferAsset` is t
 | 3 | MaxTxnLife | uint64 |
 | 4 | TimeStamp | uint64 |
 | 5 | ZeroAddress | []byte |
+| 6 | GroupSize | uint64 |
 
 
 ## gtxn
