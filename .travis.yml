@@ -58,6 +58,10 @@ jobs:
         - TARGET_PLATFORM: "linux-arm64"
       script:
         - scripts/travis/external_build.sh ./scripts/travis/integration_test.sh
+      addons:
+        apt:
+          packages:
+            - aws-cli
 
     - stage: build_release
       os: linux
