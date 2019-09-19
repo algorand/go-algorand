@@ -31,6 +31,7 @@ global MinTxnFee
 global MinBalance
 global MaxTxnLife
 global TimeStamp
+global ZeroAddress
 byte 0x1234
 byte base64 aGVsbG8gd29ybGQh
 byte base64(aGVsbG8gd29ybGQh)
@@ -49,6 +50,32 @@ txn VotePK
 txn SelectionPK
 txn VoteFirst
 txn VoteLast
+txn VoteKeyDilution
+txn Type
+txn XferAsset
+txn AssetAmount
+txn AssetSender
+txn AssetReceiver
+txn AssetCloseTo
+gtxn 0 Sender
+gtxn 0 Fee
+gtxn 0 FirstValid
+gtxn 0 LastValid
+gtxn 0 Note
+gtxn 0 Receiver
+gtxn 0 Amount
+gtxn 0 CloseRemainderTo
+gtxn 0 VotePK
+gtxn 0 SelectionPK
+gtxn 0 VoteFirst
+gtxn 0 VoteLast
+gtxn 0 VoteKeyDilution
+gtxn 0 Type
+gtxn 0 XferAsset
+gtxn 0 AssetAmount
+gtxn 0 AssetSender
+gtxn 0 AssetReceiver
+gtxn 0 AssetCloseTo
 arg 0 // comment
 arg 1 //comment
 //account Balance
@@ -108,7 +135,7 @@ func TestAssemble(t *testing.T) {
 	program, err := AssembleString(bigTestAssembleNonsenseProgram)
 	require.NoError(t, err)
 	// check that compilation is stable over time and we assemble to the same bytes this month that we did last month.
-	expectedBytes, _ := hex.DecodeString("012005b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f26040212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d024242003200320132023203320428292929292a3100310131023103310431053106310731083109310a310b2d2e0102222324252104082209240a230b230c230d230e230f231023112312231323142b172915400002290348")
+	expectedBytes, _ := hex.DecodeString("012005b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f26040212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d0242420032003201320232033204320528292929292a3100310131023103310431053106310731083109310a310b310c310d310e310f31103111311233000033000133000233000333000433000533000633000733000833000933000a33000b33000c33000d33000e33000f3300103300113300122d2e0102222324252104082209240a230b230c230d230e230f231023112312231323142b172915400002290348")
 	if bytes.Compare(expectedBytes, program) != 0 {
 		// this print is for convenience if the program has been changed. the hex string can be copy pasted back in as a new expected result.
 		t.Log(hex.EncodeToString(program))
@@ -239,6 +266,7 @@ txn VotePK
 txn SelectionPK
 txn VoteFirst
 txn VoteLast
+gtxn 12 Fee
 `
 	program, err := AssembleString(text)
 	require.NoError(t, err)

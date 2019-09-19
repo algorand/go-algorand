@@ -750,6 +750,7 @@ var disassemblers = []disassembler{
 	{"bytec", disBytec},
 	{"arg", disArg},
 	{"txn", disTxn},
+	{"gtxn", disGtxn},
 	{"global", disGlobal},
 	{"bnz", disBnz},
 }
@@ -912,6 +913,17 @@ func disTxn(dis *disassembleState) {
 		return
 	}
 	_, dis.err = fmt.Fprintf(dis.out, "txn %s\n", TxnFieldNames[txarg])
+}
+
+func disGtxn(dis *disassembleState) {
+	dis.nextpc = dis.pc + 3
+	gi := dis.program[dis.pc+1]
+	txarg := dis.program[dis.pc+2]
+	if int(txarg) >= len(TxnFieldNames) {
+		dis.err = fmt.Errorf("invalid txn arg index %d at pc=%d", txarg, dis.pc)
+		return
+	}
+	_, dis.err = fmt.Fprintf(dis.out, "gtxn %d %s\n", gi, TxnFieldNames[txarg])
 }
 
 func disGlobal(dis *disassembleState) {
