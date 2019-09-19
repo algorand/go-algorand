@@ -61,7 +61,7 @@ jobs:
       addons:
         apt:
           packages:
-            - aws-cli
+            - awscli
 
     - stage: build_release
       os: linux
