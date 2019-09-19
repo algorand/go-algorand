@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 
-# integration_test.sh - Performs pre-build checks on the branch
+# build_test.sh - Performs a build & test on the branch
 #
-# Syntax:   integration_test.sh
+# Syntax:   build_test.sh
 #
 # Usage:    Can be used by either Travis or an ephermal build machine
 #
-# Examples: scripts/travis/integration_test.sh
+# Examples: scripts/travis/build_test.sh
 set -e
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
-export BUILD_TYPE="integration"
+
 if [ "${USER}" = "travis" ]; then
     # we're running on a travis machine
     ${SCRIPTPATH}/build.sh || travis_terminate 1

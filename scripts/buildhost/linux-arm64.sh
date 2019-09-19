@@ -61,6 +61,9 @@ git clone --depth=50 https://github.com/algorand/go-algorand -b ${BRANCH} go/src
 cd go/src/github.com/algorand/go-algorand
 export AWS_ACCESS_KEY_ID=${BUILD_AWS_ACCESS_KEY_ID}
 export AWS_SECRET_ACCESS_KEY=${BUILD_AWS_SECRET_ACCESS_KEY}
+export TRAVIS_BRANCH=${BRANCH}
+export TRAVIS_COMMIT=${COMMIT_HASH}
+export TRAVIS_PULL_REQUEST=${PULL_REQUEST}
 EOF
 if [ "${PULL_REQUEST}" = "false" ]; then
     cat << FOE >> exescript

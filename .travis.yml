@@ -34,15 +34,11 @@ jobs:
     - stage: build_pr
       os: linux
       script:
-        - scripts/travis/build.sh || travis_terminate 1;
-        - travis_wait 90 scripts/travis/test.sh
+        - scripts/travis/build_test.sh
     - # same stage, parallel job
       os: linux
-      env:
-        - BUILD_TYPE: "integration"
       script:
-        - scripts/travis/build.sh || travis_terminate 1;
-        - travis_wait 90 scripts/travis/test.sh
+        - ./scripts/travis/integration_test.sh
     - # same stage, parallel job
       name: External ARM64 Build
       os: linux
@@ -50,7 +46,7 @@ jobs:
         - BUILD_TYPE: "external_build"
         - TARGET_PLATFORM: "linux-arm64"
       script:
-        - scripts/travis/external_build.sh ./scripts/travis/build.sh || travis_terminate 1;
+        - scripts/travis/external_build.sh ./scripts/travis/build_test.sh
     - # same stage, parallel job
       name: External ARM64 Integration test
       os: linux
@@ -63,20 +59,24 @@ jobs:
     - stage: build_release
       os: linux
       script:
-        - scripts/travis/build.sh || travis_terminate 1;
-        - travis_wait 90 scripts/travis/test.sh
+        - ./scripts/travis/build_test.sh
     - # same stage, parallel job
       os: linux
-      env:
-        - BUILD_TYPE: "integration"
       script:
-        - scripts/travis/build.sh || travis_terminate 1;
-        - travis_wait 90 scripts/travis/test.sh
+        - ./scripts/travis/integration_test.sh
     - # same stage, parallel job
       os: osx
       script:
         - scripts/travis/build.sh || travis_terminate 1;
         - travis_wait 90 scripts/travis/test.sh
+    - # same stage, parallel job
+      name: External ARM64 Integration test
+      os: linux
+      env:
+        - BUILD_TYPE: "external_build"
+        - TARGET_PLATFORM: "linux-arm64"
+      script:
+        - scripts/travis/external_build.sh ./scripts/travis/integration_test.sh
 
     - stage: deploy
       name: Ubuntu Deploy
