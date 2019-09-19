@@ -827,6 +827,7 @@ var dryrunCmd = &cobra.Command{
 			}
 			sb := strings.Builder{}
 			ep := logic.EvalParams{Trace: &sb, Txn: &txn.SignedTxn, Block: &block, Proto: &proto}
+			// TODO: also logic.Check() to get cost estimate and make sure it passes that
 			pass, err := logic.Eval(txn.Lsig.Logic, ep)
 			// TODO: optionally include `inspect` output here?
 			fmt.Fprintf(os.Stdout, "tx[%d] trace:\n%s\n", i, sb.String())

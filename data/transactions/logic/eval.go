@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 
 	"golang.org/x/crypto/sha3"
 
@@ -94,6 +95,10 @@ type evalContext struct {
 	version uint64
 
 	checkStack []StackType
+
+	// Ordered set of pc values that a branch could go to.
+	// If Check pc skips a target, the source branch was invalid!
+	branchTargets []int
 }
 
 type opFunc func(cx *evalContext)
@@ -303,7 +308,7 @@ var opSizes = []opSize{
 	{"keccak256", 26, 1, nil},
 	{"sha512_256", 9, 1, nil},
 	{"ed25519verify", 1900, 1, nil},
-	{"bnz", 1, 3, nil},
+	{"bnz", 1, 3, checkBnz},
 	{"intc", 1, 2, nil},
 	{"bytec", 1, 2, nil},
 	{"arg", 1, 2, nil},
@@ -421,7 +426,7 @@ func (cx *evalContext) checkStep() (cost int) {
 			cx.pc = cx.nextpc
 			cx.nextpc = 0
 		} else {
-			cx.pc++
+			cx.pc += oz.size
 		}
 	} else {
 		cost = oz.cost
@@ -429,6 +434,16 @@ func (cx *evalContext) checkStep() (cost int) {
 	}
 	if cx.err != nil {
 		return 0
+	}
+	if len(cx.branchTargets) > 0 {
+		if cx.branchTargets[0] < cx.pc {
+			cx.err = fmt.Errorf("branch target at %d not an aligned instruction", cx.branchTargets[0])
+			return 0
+		}
+		for len(cx.branchTargets) > 0 && cx.branchTargets[0] == cx.pc {
+			// checks okay
+			cx.branchTargets = cx.branchTargets[1:]
+		}
 	}
 	if opsByOpcode[opcode].Returns != nil {
 		cx.checkStack = append(cx.checkStack, opsByOpcode[opcode].Returns...)
@@ -794,6 +809,18 @@ func opArg3(cx *evalContext) {
 	opArgN(cx, 3)
 }
 
+func checkBnz(cx *evalContext) int {
+	offset := (uint(cx.program[cx.pc+1]) << 8) | uint(cx.program[cx.pc+2])
+	if offset > 0x7fff {
+		cx.err = fmt.Errorf("bnz offset %x too large", offset)
+		return 1
+	}
+	cx.nextpc = cx.pc + 3
+	target := cx.nextpc + int(offset)
+	cx.branchTargets = append(cx.branchTargets, target)
+	sort.Ints(cx.branchTargets)
+	return 1
+}
 func opBnz(cx *evalContext) {
 	last := len(cx.stack) - 1
 	cx.nextpc = cx.pc + 3

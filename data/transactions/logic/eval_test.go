@@ -1219,6 +1219,27 @@ func TestProgramProtoForbidden(t *testing.T) {
 	require.False(t, pass)
 }
 
+func TestMisalignedBranch(t *testing.T) {
+	t.Parallel()
+	program, err := AssembleString(`int 1
+bnz done
+bytecblock 0x01234576 0xababcdcd 0xf000baad
+done:
+int 1`)
+	require.NoError(t, err)
+	//t.Log(hex.EncodeToString(program))
+	canonicalProgramBytes, err := hex.DecodeString("01200101224000112603040123457604ababcdcd04f000baad22")
+	require.NoError(t, err)
+	require.Equal(t, program, canonicalProgramBytes)
+	program[7] = 3 // clobber the branch offset to be in the middle of the bytecblock
+	_, err = Check(program, EvalParams{})
+	require.Error(t, err)
+	require.True(t, strings.Contains(err.Error(), "aligned"))
+	pass, err := Eval(program, EvalParams{})
+	require.Error(t, err)
+	require.False(t, pass)
+}
+
 /*
 import random
 

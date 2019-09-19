@@ -72,6 +72,12 @@ Unlock a hash contract, send from the escrow account governed by the program. To
 goal clerk send -a 1000 -c DFPKC2SJP3OTFVJFMCD356YB7BOT4SJZTGWLIPPFEWL3ZABUFLTOY6ILYE --to DFPKC2SJP3OTFVJFMCD356YB7BOT4SJZTGWLIPPFEWL3ZABUFLTOY6ILYE --from-program tlhc.teal --argb64 "90GwXNJlVYGvgNwUl9eIUW21E/5vRu9/uqaCkw67sQk="
 ```
 
+Debug a transaction with logic:
+
+```
+goal clerk send -a 1000 -c DFPKC2SJP3OTFVJFMCD356YB7BOT4SJZTGWLIPPFEWL3ZABUFLTOY6ILYE --to DFPKC2SJP3OTFVJFMCD356YB7BOT4SJZTGWLIPPFEWL3ZABUFLTOY6ILYE --from-program tlhc.teal --argb64 "90GwXNJlVYGvgNwUl9eIUW21E/5vRu9/uqaCkw67sQk=" -o /tmp/a.stxn
+goal clerk dryrun --round 31337 -t /tmp/a.stxn
+```
 
 ## LogicSic signed by a MultiSig account
 
