@@ -63,13 +63,13 @@ if [ "${TRAVIS_PULL_REQUEST}" = "false" ]; then
     BUILD_COMPLETE_PATH=s3://${BUILD_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${BUILDID}-completed.json
     BUILD_LOG_PATH=s3://${BUILD_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${BUILDID}-log
     NO_SIGN_REQUEST=
-    echo "Build request : $(cat ${BUILDID}.json)"
+    echo "Build request : { \"TRAVIS_BRANCH\" : \"${TRAVIS_BRANCH}\", \"TRAVIS_COMMIT\" : \"${TRAVIS_COMMIT}\", \"TRAVIS_PULL_REQUEST\" : \"${TRAVIS_PULL_REQUEST}\", \"AWS_ACCESS_KEY_ID\" : \"*****\", \"AWS_SECRET_ACCESS_KEY\" : \"*****\", \"EXEC\":\"${BUILD_TARGET}\" }"    
 else
     BUILD_REQUEST_PATH=s3://${BUILD_PULL_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${BUILDID}.json
     BUILD_COMPLETE_PATH=s3://${BUILD_PULL_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${BUILDID}-completed.json
     BUILD_LOG_PATH=s3://${BUILD_PULL_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${BUILDID}-log
     NO_SIGN_REQUEST=--no-sign-request
-    echo "Build request : { \"TRAVIS_BRANCH\" : \"${TRAVIS_BRANCH}\", \"TRAVIS_COMMIT\" : \"${TRAVIS_COMMIT}\", \"TRAVIS_PULL_REQUEST\" : \"${TRAVIS_PULL_REQUEST}\", \"AWS_ACCESS_KEY_ID\" : \"*****\", \"AWS_SECRET_ACCESS_KEY\" : \"*****\", \"EXEC\":\"${BUILD_TARGET}\" }"
+    echo "Build request : $(cat ${BUILDID}.json)"
 fi
 
 set +e

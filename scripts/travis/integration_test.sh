@@ -4,9 +4,19 @@
 #
 # Syntax:   integration_test.sh
 #
-# Usage:    Should only be used by Travis
+# Usage:    Can be used by either Travis or an ephermal build machine
 #
 # Examples: scripts/travis/integration_test.sh
+set -e
 
-./scripts/travis/build.sh || travis_terminate 1;
-travis_wait 90 ./scripts/travis/test.sh
+SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
+
+if [ "${USER}" = "travis" ]; then
+    # we're running on a travis machine
+    ${SCRIPTPATH}/build.sh || travis_terminate 1
+    travis_wait 90 ${SCRIPTPATH}/test.sh
+else
+    # we're running on an ephermal build machine
+    ${SCRIPTPATH}/build.sh
+    ${SCRIPTPATH}/test.sh
+fi
