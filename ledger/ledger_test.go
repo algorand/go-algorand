@@ -175,6 +175,10 @@ func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics
 		correctBlkHeader.GenesisHash = crypto.Hash([]byte(t.Name()))
 	}
 
+	if proto.TxnCounter {
+		correctBlkHeader.TxnCounter = lastBlock.TxnCounter + 1
+	}
+
 	var blk bookkeeping.Block
 	blk.BlockHeader = correctBlkHeader
 	txib, err := blk.EncodeSignedTxn(stx, ad)
