@@ -242,8 +242,12 @@ dup
 bnz safe
 err
 safe:
-`)
+int 1
++`)
 	require.NoError(t, err)
+	cost, err := Check(program, EvalParams{})
+	require.NoError(t, err)
+	require.True(t, cost < 1000)
 	sb := strings.Builder{}
 	pass, err := Eval(program, EvalParams{Trace: &sb})
 	if !pass {
