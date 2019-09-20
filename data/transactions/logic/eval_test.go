@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/rand"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -193,6 +194,59 @@ int 0x12345678
 	require.NoError(t, err)
 	sb := strings.Builder{}
 	pass, err := Eval(program, EvalParams{Trace: &sb})
+	if !pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.True(t, pass)
+	require.NoError(t, err)
+}
+
+func TestRand(t *testing.T) {
+	t.Parallel()
+	program, err := AssembleString(`rand
+arg 0
+btoi
+==
+rand
+arg 1
+btoi
+==
+&&
+rand
+arg 2
+btoi
+==
+&&
+rand
+arg 3
+btoi
+==
+&&
+rand
+arg 4
+btoi
+==
+&&`)
+	require.NoError(t, err)
+	sb := strings.Builder{}
+	// seeded sequence should be stable across implementations and versions
+	randSource := rand.NewSource(0x0123456789abcdef)
+	expectedInts := []uint64{
+		11614196903575913537,
+		2603152994703666600,
+		3221160932620505002,
+		5542497255562294835,
+		7340252461523725163,
+	}
+	var txn transactions.SignedTxn
+	txn.Lsig.Logic = program
+	txn.Lsig.Args = make([][]byte, 5)
+	for i, v := range expectedInts {
+		txn.Lsig.Args[i] = make([]byte, 8)
+		binary.BigEndian.PutUint64(txn.Lsig.Args[i], v)
+	}
+	pass, err := Eval(program, EvalParams{Txn: &txn, Trace: &sb, Source: randSource})
 	if !pass {
 		t.Log(hex.EncodeToString(program))
 		t.Log(sb.String())
@@ -1617,10 +1671,11 @@ func benchmarkBasicProgram(b *testing.B, source string) {
 	require.True(b, cost < 1000)
 	//b.Logf("%d bytes of program", len(program))
 	//b.Log(hex.EncodeToString(program))
+	randSource := rand.NewSource(0x0123456789abcdef)
 	b.ResetTimer()
 	sb := strings.Builder{} // Trace: &sb
 	for i := 0; i < b.N; i++ {
-		pass, err := Eval(program, EvalParams{})
+		pass, err := Eval(program, EvalParams{Source: randSource})
 		if !pass {
 			b.Log(sb.String())
 		}
@@ -1673,6 +1728,16 @@ func BenchmarkAddx64(b *testing.B) {
 
 func BenchmarkNopPassx1(b *testing.B) {
 	benchmarkBasicProgram(b, "int 1")
+}
+
+func BenchmarkRandx450(b *testing.B) {
+	const firstline = "rand\n"
+	sb := strings.Builder{}
+	sb.WriteString(firstline)
+	for i := 0; i < 450; i++ {
+		sb.WriteString("rand\n^\n")
+	}
+	benchmarkBasicProgram(b, sb.String())
 }
 
 func BenchmarkSha256x900(b *testing.B) {

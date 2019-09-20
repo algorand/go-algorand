@@ -42,6 +42,15 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - for (data, signature, pubkey) verify the signature of the data against the pubkey => {0 or 1}
 - **Cost**: 1900
 
+## rand
+
+- Opcode: 0x05 
+- Pops: _None_
+- Pushes: uint64
+- push random uint64 to stack. based on block.Seed and PCG RNG
+
+Uses PCG random number generator. http://www.pcg-random.org/
+
 ## +
 
 - Opcode: 0x08 

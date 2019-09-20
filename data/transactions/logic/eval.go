@@ -68,6 +68,11 @@ func (sv *stackValue) String() string {
 	return fmt.Sprintf("%d 0x%x", sv.Uint, sv.Uint)
 }
 
+// Like math/rand.Source64, but we don't need to see Seed() or Int63()
+type Source64 interface {
+	Uint64() uint64
+}
+
 // EvalParams contains data that comes into condition evaluation.
 type EvalParams struct {
 	// the transaction being evaluated
@@ -83,6 +88,8 @@ type EvalParams struct {
 
 	// GroupIndex should point to Txn within TxnGroup
 	GroupIndex int
+
+	Source Source64
 }
 
 type evalContext struct {
@@ -250,6 +257,7 @@ var OpSpecs = []OpSpec{
 	{0x02, "keccak256", opKeccak256, oneBytes, oneBytes},
 	{0x03, "sha512_256", opSHA512_256, oneBytes, oneBytes},
 	{0x04, "ed25519verify", opEd25519verify, threeBytes, oneInt},
+	{0x05, "rand", opRand, nil, oneInt},
 	{0x08, "+", opPlus, twoInts, oneInt},
 	{0x09, "-", opMinus, twoInts, oneInt},
 	{0x0a, "/", opDiv, twoInts, oneInt},
@@ -500,6 +508,10 @@ func opSHA512_256(cx *evalContext) {
 	last := len(cx.stack) - 1
 	hash := sha512.Sum512_256(cx.stack[last].Bytes)
 	cx.stack[last].Bytes = hash[:]
+}
+
+func opRand(cx *evalContext) {
+	cx.stack = append(cx.stack, stackValue{Uint: cx.Source.Uint64()})
 }
 
 func opPlus(cx *evalContext) {
