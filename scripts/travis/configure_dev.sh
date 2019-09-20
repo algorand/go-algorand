@@ -11,7 +11,7 @@ ARCH=$(${SCRIPTPATH}/../archtype.sh)
 if [ "${OS}" = "linux" ]; then
     if [[ "${ARCH}" = "arm64" ]]; then
         sudo apt-get -y install sqlite3
-        go version
+        go version 2>/dev/null
         if [ "$?" != "0" ]; then
             echo "Go cannot be found; downloading..."
             # go is not installed ?
@@ -32,7 +32,7 @@ if [ "${OS}" = "linux" ]; then
     fi
     if [[ "${ARCH}" = "arm" ]]; then
         sudo apt-get -y install sqlite3
-        go version
+        go version 2>/dev/null
         if [ "$?" != "0" ]; then
             echo "Go cannot be found; downloading..."
             # go is not installed ?
@@ -54,3 +54,4 @@ if [ "${OS}" = "linux" ]; then
 fi
 
 ${SCRIPTPATH}/../configure_dev.sh
+exit $?
