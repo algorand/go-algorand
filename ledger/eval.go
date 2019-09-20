@@ -203,7 +203,7 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *eval
 	}
 
 	randSource := &rand.PCGSource{}
-	randSource.Seed(binary.LittleEndian.Uint64(hdr.Seed))
+	randSource.Seed(binary.LittleEndian.Uint64(hdr.Seed[:]))
 	eval := &BlockEvaluator{
 		aux:              aux,
 		validate:         validate,
