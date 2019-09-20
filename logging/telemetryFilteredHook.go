@@ -29,11 +29,12 @@ type telemetryFilteredHook struct {
 	history         *logBuffer
 	sessionGUID     string
 	factory         hookFactory
+	levels          []logrus.Level
 }
 
 // newFilteredTelemetryHook creates a hook filter for ensuring telemetry events are
 // always included by the wrapped log hook.
-func newTelemetryFilteredHook(cfg TelemetryConfig, hook logrus.Hook, reportLogLevel logrus.Level, history *logBuffer, sessionGUID string, factory hookFactory) (logrus.Hook, error) {
+func newTelemetryFilteredHook(cfg TelemetryConfig, hook logrus.Hook, reportLogLevel logrus.Level, history *logBuffer, sessionGUID string, factory hookFactory, levels []logrus.Level) (logrus.Hook, error) {
 	filteredHook := &telemetryFilteredHook{
 		cfg,
 		hook,
@@ -41,6 +42,7 @@ func newTelemetryFilteredHook(cfg TelemetryConfig, hook logrus.Hook, reportLogLe
 		history,
 		sessionGUID,
 		factory,
+		levels,
 	}
 	return filteredHook, nil
 }
@@ -79,5 +81,9 @@ func (hook *telemetryFilteredHook) Fire(entry *logrus.Entry) error {
 
 // Levels Required for logrus hook interface
 func (hook *telemetryFilteredHook) Levels() []logrus.Level {
-	return hook.wrappedHook.Levels()
+	if hook.wrappedHook != nil {
+		return hook.wrappedHook.Levels()
+	} else {
+		return hook.levels
+	}
 }

@@ -35,10 +35,6 @@ var TelemetryConfigFilename = "logging.config"
 
 const ipv6AddressLength = 39
 
-func elasticsearchEndpoint() string {
-	return "https://1ae9f9654b25441090fe5c48c833b95a.us-east-1.aws.found.io:9243"
-}
-
 // TelemetryOverride Determines whether an override value is set and what it's value is.
 // The first return value is whether an override variable is found, if it is, the second is the override value.
 func TelemetryOverride(env string) bool {
@@ -65,7 +61,7 @@ func createTelemetryConfig() TelemetryConfig {
 	return TelemetryConfig{
 		Enable:             enable,
 		GUID:               uuid.NewV4().String(),
-		URI:                elasticsearchEndpoint(),
+		URI:                "",
 		MinLogLevel:        logrus.WarnLevel,
 		ReportHistoryLevel: logrus.WarnLevel,
 		LogHistoryDepth:    100,
@@ -91,9 +87,10 @@ func (cfg TelemetryConfig) Save(configPath string) error {
 	sanitizedCfg.FilePath = ""
 
 	// If using default URI, don't save that - so we pick up the current default in the future
-	if sanitizedCfg.URI == elasticsearchEndpoint() {
-		sanitizedCfg.URI = ""
-	}
+	// TODO: How to make sure we don't have the SRV endpoint to logging.config?
+	//if sanitizedCfg.URI == elasticsearchEndpoint() {
+	//	sanitizedCfg.URI = ""
+	//}
 
 	enc := json.NewEncoder(f)
 	err = enc.Encode(sanitizedCfg)
@@ -142,11 +139,6 @@ func loadTelemetryConfig(path string) (TelemetryConfig, error) {
 	cfg := createTelemetryConfig()
 	dec := json.NewDecoder(f)
 	err = dec.Decode(&cfg)
-	if err == nil {
-		if len(cfg.URI) == 0 {
-			cfg.URI = elasticsearchEndpoint()
-		}
-	}
 	cfg.FilePath = path
 
 	// Sanitize user-defined name.

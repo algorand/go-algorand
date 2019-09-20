@@ -36,9 +36,9 @@ type TelemetryOperation struct {
 }
 
 type telemetryState struct {
-	history *logBuffer
-	config  *TelemetryConfig
-	hook    *asyncTelemetryHook
+	history        *logBuffer
+	config         *TelemetryConfig
+	hook           *asyncTelemetryHook
 }
 
 // TelemetryConfig represents the configuration of Telemetry logging
@@ -65,6 +65,8 @@ type asyncTelemetryHook struct {
 	entries       chan *logrus.Entry
 	quit          chan struct{}
 	maxQueueDepth int
+	levels        []logrus.Level
+	ready         bool
 }
 
 type hookFactory func(cfg TelemetryConfig) (logrus.Hook, error)

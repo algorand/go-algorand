@@ -18,7 +18,6 @@ package logging
 
 import (
 	"fmt"
-
 	"github.com/olivere/elastic"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/sohlich/elogrus.v3"
@@ -28,12 +27,14 @@ import (
 
 var telemetryDrops = metrics.MakeCounter(metrics.MetricName{Name: "algod_telemetry_drops_total", Description: "telemetry messages not sent to server"})
 
-func createAsyncHook(wrappedHook logrus.Hook, channelDepth uint, maxQueueDepth int) *asyncTelemetryHook {
+func createAsyncHook(wrappedHook logrus.Hook, channelDepth uint, maxQueueDepth int, levels []logrus.Level) *asyncTelemetryHook {
 	hook := &asyncTelemetryHook{
 		wrappedHook:   wrappedHook,
 		entries:       make(chan *logrus.Entry, channelDepth),
 		quit:          make(chan struct{}),
 		maxQueueDepth: maxQueueDepth,
+		levels:        levels,
+		ready:         false,
 	}
 
 	go func() {
@@ -41,11 +42,11 @@ func createAsyncHook(wrappedHook logrus.Hook, channelDepth uint, maxQueueDepth i
 
 		exit := false
 		for !exit {
-			exit = !hook.waitForEvent()
+			exit = !hook.waitForEventAndReady()
 
 			hasEvents := true
 
-			for hasEvents {
+			for hasEvents && hook.ready {
 				select {
 				case entry := <-hook.entries:
 					hook.appendEntry(entry)
@@ -74,6 +75,8 @@ func createAsyncHook(wrappedHook logrus.Hook, channelDepth uint, maxQueueDepth i
 func (hook *asyncTelemetryHook) appendEntry(entry *logrus.Entry) {
 	hook.Lock()
 	defer hook.Unlock()
+	// TODO: If there are errors at startup, before the telemetry URL is set, this can fill up. Should we prioritize
+	//       startup / heartbeat events?
 	if len(hook.pending) >= hook.maxQueueDepth {
 		hook.pending = hook.pending[1:]
 		hook.wg.Done()
@@ -81,14 +84,16 @@ func (hook *asyncTelemetryHook) appendEntry(entry *logrus.Entry) {
 	hook.pending = append(hook.pending, entry)
 }
 
-func (hook *asyncTelemetryHook) waitForEvent() bool {
-	select {
-	case <-hook.quit:
-		return false
-	case entry := <-hook.entries:
-		hook.appendEntry(entry)
-		return true
+func (hook *asyncTelemetryHook) waitForEventAndReady() bool {
+	for !hook.ready {
+		select {
+		case <-hook.quit:
+			return false
+		case entry := <-hook.entries:
+			hook.appendEntry(entry)
+		}
 	}
+	return true
 }
 
 // Fire is required to implement logrus hook interface
@@ -108,7 +113,11 @@ func (hook *asyncTelemetryHook) Fire(entry *logrus.Entry) error {
 
 // Levels Required for logrus hook interface
 func (hook *asyncTelemetryHook) Levels() []logrus.Level {
-	return hook.wrappedHook.Levels()
+	if (hook.wrappedHook != nil) {
+		return hook.wrappedHook.Levels()
+	} else {
+		return hook.levels
+	}
 }
 
 func (hook *asyncTelemetryHook) Close() {
@@ -122,6 +131,10 @@ func (hook *asyncTelemetryHook) Flush() {
 }
 
 func createElasticHook(cfg TelemetryConfig) (hook logrus.Hook, err error) {
+	if cfg.URI == "" {
+		return nil, nil
+	}
+
 	client, err := elastic.NewClient(elastic.SetURL(cfg.URI),
 		elastic.SetBasicAuth(cfg.UserName, cfg.Password),
 		elastic.SetSniff(false),
@@ -146,13 +159,17 @@ func createTelemetryHook(cfg TelemetryConfig, history *logBuffer, hookFactory ho
 		return nil, err
 	}
 
-	filteredHook, err := newTelemetryFilteredHook(cfg, hook, cfg.ReportHistoryLevel, history, cfg.SessionGUID, hookFactory)
+	filteredHook, err := newTelemetryFilteredHook(cfg, hook, cfg.ReportHistoryLevel, history, cfg.SessionGUID, hookFactory, makeLevels(cfg.MinLogLevel))
 
 	return filteredHook, err
 }
 
 // Note: This will be removed with the externalized telemetry project.
 func (hook *asyncTelemetryHook) UpdateHookURL(url string) {
+	if hook.wrappedHook == nil {
+		return
+	}
+
 	tfh, ok := hook.wrappedHook.(*telemetryFilteredHook)
 	if ok {
 		hook.Lock()
@@ -160,8 +177,11 @@ func (hook *asyncTelemetryHook) UpdateHookURL(url string) {
 
 		tfh.telemetryConfig.URI = url
 		newHook, err := tfh.factory(tfh.telemetryConfig)
-		if err == nil {
+		if err == nil && newHook != nil {
 			tfh.wrappedHook = newHook
+			hook.ready = true
 		}
 	}
+
+	// TODO: Fire some sort of "telemetry url updated" event to get the async telemetry hook to trigger.
 }
