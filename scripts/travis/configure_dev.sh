@@ -54,3 +54,4 @@ if [ "${OS}" = "linux" ]; then
 fi
 
 ${SCRIPTPATH}/../configure_dev.sh
+exit $?
