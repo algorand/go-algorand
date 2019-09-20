@@ -23,20 +23,24 @@ import (
 )
 
 type telemetryFilteredHook struct {
-	wrappedHook    logrus.Hook
-	reportLogLevel logrus.Level
-	history        *logBuffer
-	sessionGUID    string
+	telemetryConfig TelemetryConfig
+	wrappedHook     logrus.Hook
+	reportLogLevel  logrus.Level
+	history         *logBuffer
+	sessionGUID     string
+	factory         hookFactory
 }
 
 // newFilteredTelemetryHook creates a hook filter for ensuring telemetry events are
 // always included by the wrapped log hook.
-func newTelemetryFilteredHook(hook logrus.Hook, reportLogLevel logrus.Level, history *logBuffer, sessionGUID string) (logrus.Hook, error) {
+func newTelemetryFilteredHook(cfg TelemetryConfig, hook logrus.Hook, reportLogLevel logrus.Level, history *logBuffer, sessionGUID string, factory hookFactory) (logrus.Hook, error) {
 	filteredHook := &telemetryFilteredHook{
+		cfg,
 		hook,
 		reportLogLevel,
 		history,
 		sessionGUID,
+		factory,
 	}
 	return filteredHook, nil
 }

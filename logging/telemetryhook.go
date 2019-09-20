@@ -73,12 +73,12 @@ func createAsyncHook(wrappedHook logrus.Hook, channelDepth uint, maxQueueDepth i
 
 func (hook *asyncTelemetryHook) appendEntry(entry *logrus.Entry) {
 	hook.Lock()
+	defer hook.Unlock()
 	if len(hook.pending) >= hook.maxQueueDepth {
 		hook.pending = hook.pending[1:]
 		hook.wg.Done()
 	}
 	hook.pending = append(hook.pending, entry)
-	hook.Unlock()
 }
 
 func (hook *asyncTelemetryHook) waitForEvent() bool {
@@ -146,7 +146,22 @@ func createTelemetryHook(cfg TelemetryConfig, history *logBuffer, hookFactory ho
 		return nil, err
 	}
 
-	filteredHook, err := newTelemetryFilteredHook(hook, cfg.ReportHistoryLevel, history, cfg.SessionGUID)
+	filteredHook, err := newTelemetryFilteredHook(cfg, hook, cfg.ReportHistoryLevel, history, cfg.SessionGUID, hookFactory)
 
 	return filteredHook, err
+}
+
+// Note: This will be removed with the externalized telemetry project.
+func (hook *asyncTelemetryHook) UpdateHookURL(url string) {
+	tfh, ok := hook.wrappedHook.(*telemetryFilteredHook)
+	if ok {
+		hook.Lock()
+		defer hook.Unlock()
+
+		tfh.telemetryConfig.URI = url
+		newHook, err := tfh.factory(tfh.telemetryConfig)
+		if err == nil {
+			tfh.wrappedHook = newHook
+		}
+	}
 }
