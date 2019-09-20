@@ -975,6 +975,33 @@ int 0x310
 	require.True(t, pass)
 }
 
+func TestLoadStore(t *testing.T) {
+	t.Parallel()
+	program, err := AssembleString(`int 37
+byte 0xabbacafe
+store 42
+int 37
+==
+store 0
+load 42
+byte 0xabbacafe
+==
+load 0
+&&`)
+	require.NoError(t, err)
+	cost, err := Check(program, EvalParams{})
+	require.NoError(t, err)
+	require.True(t, cost < 1000)
+	sb := strings.Builder{}
+	pass, err := Eval(program, EvalParams{Trace: &sb})
+	if !pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.NoError(t, err)
+	require.True(t, pass)
+}
+
 const testCompareProgramText = `int 35
 int 16
 >

@@ -96,6 +96,7 @@ type evalContext struct {
 	intc    []uint64
 	bytec   [][]byte
 	version uint64
+	scratch [256]stackValue
 
 	checkStack []StackType
 
@@ -148,6 +149,10 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 		cx.err = fmt.Errorf("program version %d greater than protocol supported version %d", version, params.Proto.LogicSigVersion)
 		return false, cx.err
 	}
+	// TODO: if EvalMaxVersion > version, ensure that inaccessible
+	// fields as of the program's version are zero or other
+	// default value so that no one is hiding unexpected
+	// operations from an old program.
 	cx.version = version
 	cx.pc = vlen
 	cx.EvalParams = params
@@ -286,6 +291,8 @@ var OpSpecs = []OpSpec{
 	{0x31, "txn", opTxn, nil, oneAny},       // TODO: check output type by subfield retrieved in txn,global,account,txid
 	{0x32, "global", opGlobal, nil, oneAny}, // TODO: check output type against specific field
 	{0x33, "gtxn", opGtxn, nil, oneAny},     // TODO: check output type by subfield retrieved in txn,global,account,txid
+	{0x34, "load", opLoad, nil, oneAny},
+	{0x35, "store", opStore, oneAny, nil},
 
 	{0x40, "bnz", opBnz, oneInt, nil},
 	{0x48, "pop", opPop, oneAny, nil},
@@ -320,6 +327,8 @@ var opSizes = []opSize{
 	{"global", 1, 2, nil},
 	{"intcblock", 1, 0, checkIntConstBlock},
 	{"bytecblock", 1, 0, checkByteConstBlock},
+	{"load", 1, 2, nil},
+	{"store", 1, 2, nil},
 }
 
 var opSizeByOpcode []opSize
@@ -1006,4 +1015,18 @@ func opEd25519verify(cx *evalContext) {
 	}
 	cx.stack[pprev].Bytes = nil
 	cx.stack = cx.stack[:prev]
+}
+
+func opLoad(cx *evalContext) {
+	gindex := int(uint(cx.program[cx.pc+1]))
+	cx.stack = append(cx.stack, cx.scratch[gindex])
+	cx.nextpc = cx.pc + 2
+}
+
+func opStore(cx *evalContext) {
+	gindex := int(uint(cx.program[cx.pc+1]))
+	last := len(cx.stack) - 1
+	cx.scratch[gindex] = cx.stack[last]
+	cx.stack = cx.stack[:last]
+	cx.nextpc = cx.pc + 2
 }

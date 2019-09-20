@@ -6,9 +6,13 @@ TEAL programs should be short, at most 1000 bytes including all constants and op
 
 ## The Stack
 
-The stack starts empty and contains values of either uint64 or bytes. (`bytes` implemented in Go as a []byte slice)
+The stack starts empty and contains values of either uint64 or bytes. (`bytes` implemented in Go as a []byte slice) Most operations act on the stack, popping arguments from it and pushing results to it.
 
 The maximum stack depth is currently 1000.
+
+## Scratch Space
+
+In addition to the stack there are 256 positions of scratch space, also uint64-bytes union values, accessed by the `load` and `store` ops moving data from or to scratch space, respectively.
 
 ## Execution Environment
 
@@ -100,6 +104,8 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `txn` | push field from current transaction to stack |
 | `gtxn` | push field to the stack from a transaction in the current transaction group |
 | `global` | push value from globals to stack |
+| `load` | copy a value from scratch space to the stack |
+| `store` | pop a value from the stack and store to scratch space |
 
 **Transaction Fields**
 

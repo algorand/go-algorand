@@ -384,6 +384,20 @@ TypeEnum mapping:
 
 for notes on transaction fields available, see `txn`
 
+## load
+
+- Opcode: 0x34 {uint8 position in scratch space to load from}
+- Pops: _None_
+- Pushes: any
+- copy a value from scratch space to the stack
+
+## store
+
+- Opcode: 0x35 {uint8 position in scratch space to store to}
+- Pops: *... stack*, any
+- Pushes: _None_
+- pop a value from the stack and store to scratch space
+
 ## bnz
 
 - Opcode: 0x40 {0..0x7fff forward branch offset, big endian}

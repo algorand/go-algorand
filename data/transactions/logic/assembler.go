@@ -410,6 +410,32 @@ func assembleBnz(ops *OpStream, args []string) error {
 	return nil
 }
 
+func assembleLoad(ops *OpStream, args []string) error {
+	val, err := strconv.ParseUint(args[0], 0, 64)
+	if err != nil {
+		return err
+	}
+	if val > 255 {
+		return errors.New("load limited to 0..255")
+	}
+	ops.Out.WriteByte(0x34)
+	ops.Out.WriteByte(byte(val))
+	return nil
+}
+
+func assembleStore(ops *OpStream, args []string) error {
+	val, err := strconv.ParseUint(args[0], 0, 64)
+	if err != nil {
+		return err
+	}
+	if val > 255 {
+		return errors.New("store limited to 0..255")
+	}
+	ops.Out.WriteByte(0x35)
+	ops.Out.WriteByte(byte(val))
+	return nil
+}
+
 // TxnFieldNames are arguments to the 'txn' and 'txnById' opcodes
 var TxnFieldNames = []string{
 	"Sender", "Fee", "FirstValid", "LastValid", "Note",
@@ -539,6 +565,8 @@ func init() {
 	argOps["gtxn"] = assembleGtxn
 	argOps["global"] = assembleGlobal
 	argOps["bnz"] = assembleBnz
+	argOps["load"] = assembleLoad
+	argOps["store"] = assembleStore
 
 	txnFields = make(map[string]uint)
 	for i, tfn := range TxnFieldNames {
@@ -776,6 +804,8 @@ var disassemblers = []disassembler{
 	{"gtxn", disGtxn},
 	{"global", disGlobal},
 	{"bnz", disBnz},
+	{"load", disLoad},
+	{"store", disStore},
 }
 
 var disByName map[string]disassembler
@@ -967,6 +997,18 @@ func disBnz(dis *disassembleState) {
 	label := fmt.Sprintf("label%d", dis.labelCount)
 	dis.putLabel(label, target)
 	_, dis.err = fmt.Fprintf(dis.out, "bnz %s\n", label)
+}
+
+func disLoad(dis *disassembleState) {
+	n := uint(dis.program[dis.pc+1])
+	dis.nextpc = dis.pc + 2
+	_, dis.err = fmt.Fprintf(dis.out, "load %d\n", n)
+}
+
+func disStore(dis *disassembleState) {
+	n := uint(dis.program[dis.pc+1])
+	dis.nextpc = dis.pc + 2
+	_, dis.err = fmt.Fprintf(dis.out, "store %d\n", n)
 }
 
 // Disassemble produces a text form of program bytes.
