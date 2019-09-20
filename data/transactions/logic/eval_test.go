@@ -202,6 +202,12 @@ int 0x12345678
 	require.NoError(t, err)
 }
 
+func newSource(seed uint64) Source64 {
+	out := &rand.PCGSource{}
+	out.Seed(seed)
+	return out
+}
+
 func TestRand(t *testing.T) {
 	t.Parallel()
 	program, err := AssembleString(`rand
@@ -231,7 +237,7 @@ btoi
 	require.NoError(t, err)
 	sb := strings.Builder{}
 	// seeded sequence should be stable across implementations and versions
-	randSource := rand.NewSource(0x0123456789abcdef)
+	randSource := newSource(0x0123456789abcdef)
 	expectedInts := []uint64{
 		11614196903575913537,
 		2603152994703666600,
@@ -1671,7 +1677,7 @@ func benchmarkBasicProgram(b *testing.B, source string) {
 	require.True(b, cost < 1000)
 	//b.Logf("%d bytes of program", len(program))
 	//b.Log(hex.EncodeToString(program))
-	randSource := rand.NewSource(0x0123456789abcdef)
+	randSource := newSource(0x0123456789abcdef)
 	b.ResetTimer()
 	sb := strings.Builder{} // Trace: &sb
 	for i := 0; i < b.N; i++ {

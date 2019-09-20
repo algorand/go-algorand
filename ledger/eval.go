@@ -202,6 +202,8 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *eval
 		rnd: hdr.Round - 1,
 	}
 
+	randSource := &rand.PCGSource{}
+	randSource.Seed(binary.LittleEndian.Uint64(hdr.Seed))
 	eval := &BlockEvaluator{
 		aux:              aux,
 		validate:         validate,
@@ -211,7 +213,7 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *eval
 		proto:            proto,
 		genesisHash:      l.GenesisHash(),
 		verificationPool: executionPool,
-		source:           rand.NewSource(binary.LittleEndian.Uint64(hdr.Seed)),
+		source:           randSource,
 	}
 
 	if hdr.Round > 0 {
