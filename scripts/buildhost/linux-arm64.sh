@@ -55,19 +55,21 @@ PULL_REQUEST=$(cat $BUILD_REQUEST | jq -r '.TRAVIS_PULL_REQUEST')
 BUILD_AWS_ACCESS_KEY_ID=$(cat $BUILD_REQUEST | jq -r '.AWS_ACCESS_KEY_ID')
 BUILD_AWS_SECRET_ACCESS_KEY=$(cat $BUILD_REQUEST | jq -r '.AWS_SECRET_ACCESS_KEY')
 EXEC=$(cat $BUILD_REQUEST | jq -r '.EXEC')
+S3_RELEASE_BUCKET=$(cat $BUILD_REQUEST | jq -r '.S3_RELEASE_BUCKET')
 
 cat << EOF > exescript
-git clone --depth=50 https://github.com/algorand/go-algorand -b ${BRANCH} go/src/github.com/algorand/go-algorand
+git clone --depth=50 --branch ${BRANCH} https://github.com/algorand/go-algorand go/src/github.com/algorand/go-algorand
 cd go/src/github.com/algorand/go-algorand
 export AWS_ACCESS_KEY_ID=${BUILD_AWS_ACCESS_KEY_ID}
 export AWS_SECRET_ACCESS_KEY=${BUILD_AWS_SECRET_ACCESS_KEY}
 export TRAVIS_BRANCH=${BRANCH}
 export TRAVIS_COMMIT=${COMMIT_HASH}
 export TRAVIS_PULL_REQUEST=${PULL_REQUEST}
+export S3_RELEASE_BUCKET=${S3_RELEASE_BUCKET}
 EOF
 if [ "${PULL_REQUEST}" = "false" ]; then
     cat << FOE >> exescript
-git checkout ${COMMIT_HASH}
+git checkout -qf ${COMMIT_HASH}
 FOE
 else
     cat << FOE >> exescript
