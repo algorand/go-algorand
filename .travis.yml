@@ -83,7 +83,7 @@ jobs:
       script:
         - scripts/travis/build_test.sh
     - # same stage, parallel job
-      name: External ARM64 Integration test
+      name: External ARM64 Integration Test
       os: linux
       env:
         - BUILD_TYPE: "external_build"
