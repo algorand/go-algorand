@@ -410,12 +410,12 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 			txWithoutGroup.Group = crypto.Digest{}
 			txWithoutGroup.ResetCaches()
 
-			group.Transactions = append(group.Transactions, crypto.HashObj(txWithoutGroup))
+			group.TxGroupHashes = append(group.TxGroupHashes, crypto.HashObj(txWithoutGroup))
 		}
 	}
 
 	// If we had a non-zero Group value, check that all group members are present.
-	if group.Transactions != nil {
+	if group.TxGroupHashes != nil {
 		if txgroup[0].SignedTxn.Txn.Group != crypto.HashObj(group) {
 			return fmt.Errorf("transactionGroup: incomplete group: %v != %v (%v)",
 				txgroup[0].SignedTxn.Txn.Group, crypto.HashObj(group), group)
