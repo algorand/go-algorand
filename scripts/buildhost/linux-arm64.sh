@@ -81,6 +81,7 @@ export DEBIAN_FRONTEND=noninteractive
 ${EXEC}
 FOE
 
+set -o pipefail
 ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) 'bash -s' < exescript 2>&1 | ${SCRIPTPATH}/s3streamup.sh s3://${BUCKET}/${LOGFILE} ${NO_SIGN}
 ERR=$?
 exitWithError ${ERR} ""

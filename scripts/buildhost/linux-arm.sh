@@ -136,6 +136,7 @@ export DEBIAN_FRONTEND=noninteractive
 ${EXEC}
 FOE
 
+set -o pipefail
 ssh -i id_rsa -tt -o "StrictHostKeyChecking no" -p 5022 pi@$(cat instance) 'bash -s' < exescript 2>&1 | ${SCRIPTPATH}/s3streamup.sh s3://${BUCKET}/${LOGFILE} ${NO_SIGN}
 ERR=$?
 
