@@ -379,6 +379,61 @@ int 1`)
 	require.Error(t, err)
 }
 
+func TestMulwImpl(t *testing.T) {
+	t.Parallel()
+	high, low, err := opMulwImpl(1, 2)
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), high)
+	require.Equal(t, uint64(2), low)
+
+	high, low, err = opMulwImpl(0x111111111, 0x222222222)
+	require.NoError(t, err)
+	require.Equal(t, uint64(2), high)
+	require.Equal(t, uint64(0x468acf130eca8642), low)
+
+	high, low, err = opMulwImpl(1, 0)
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), high)
+	require.Equal(t, uint64(0), low)
+
+	high, low, err = opMulwImpl((1<<64)-1, (1<<64)-1)
+	require.NoError(t, err)
+	require.Equal(t, uint64(0xfffffffffffffffe), high)
+	require.Equal(t, uint64(1), low)
+}
+
+func TestMulw(t *testing.T) {
+	t.Parallel()
+	// multiply two numbers, ensure high is 2 and low is 0x468acf130eca8642
+	program, err := AssembleString(`int 0x111111111
+int 0x222222222
+mulw
+int 0x468acf130eca8642  // compare low (top of the stack)
+==
+bnz continue
+err
+continue:
+int 2                   // compare high
+==
+bnz done
+err
+done:
+int 1                   // ret 1
+`)
+	require.NoError(t, err)
+	cost, err := Check(program, EvalParams{})
+	require.NoError(t, err)
+	require.True(t, cost < 1000)
+	sb := strings.Builder{}
+	pass, err := Eval(program, EvalParams{Trace: &sb})
+	if !pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.True(t, pass)
+	require.NoError(t, err)
+}
+
 func TestDivZero(t *testing.T) {
 	t.Parallel()
 	program, err := AssembleString(`int 0x111111111

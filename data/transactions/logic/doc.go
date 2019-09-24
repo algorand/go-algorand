@@ -57,6 +57,7 @@ var opDocList = []stringString{
 	{"&", "A bitwise-and B"},
 	{"^", "A bitwise-xor B"},
 	{"~", "bitwise invert value"},
+	{"mulw", "A times B out to 128-bit long result as low (top) and high uint64 values on the stack"},
 	{"intcblock", "load block of uint64 constants"},
 	{"intc", "push value from uint64 constants to stack by index into constants"},
 	{"intc_0", "push uint64 constant 0 to stack"},
@@ -148,7 +149,7 @@ type OpGroup struct {
 
 // OpGroupList is groupings of ops for documentation purposes.
 var OpGroupList = []OpGroup{
-	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "rand", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "==", "!=", "!", "len", "btoi", "%", "|", "&", "^", "~"}},
+	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "rand", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "==", "!=", "!", "len", "btoi", "%", "|", "&", "^", "~", "mulw"}},
 	{"Loading Values", []string{"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "global", "load", "store"}},
 	{"Flow Control", []string{"err", "bnz", "pop", "dup"}},
 }
