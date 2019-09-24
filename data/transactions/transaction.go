@@ -89,7 +89,7 @@ type Header struct {
 	// pair of the transaction until the LastValid round passes.  While this
 	// transaction possesses the lock, no other transaction specifying this
 	// lock can be confirmed.
-	Excludes uint32 `codec:"lock"`
+	Excludes uint64 `codec:"lock"`
 }
 
 // Transaction describes a transaction that can appear in a block.

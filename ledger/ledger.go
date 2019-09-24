@@ -461,5 +461,5 @@ func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, aux evalAux) (stateD
 // transaction lock.
 type txlock struct {
 	sender   basics.Address
-	excludes uint32
+	excludes uint64
 }
