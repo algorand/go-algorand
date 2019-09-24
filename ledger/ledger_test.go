@@ -168,11 +168,14 @@ func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics
 		UpgradeState: lastBlock.UpgradeState,
 		// Seed:       does not matter,
 		// UpgradeVote: empty,
-		TxnCounter: lastBlock.TxnCounter,
 	}
 
 	if proto.SupportGenesisHash {
 		correctBlkHeader.GenesisHash = crypto.Hash([]byte(t.Name()))
+	}
+
+	if proto.TxnCounter {
+		correctBlkHeader.TxnCounter = lastBlock.TxnCounter + 1
 	}
 
 	var blk bookkeeping.Block
@@ -182,7 +185,6 @@ func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics
 		return fmt.Errorf("could not sign txn: %s", err.Error())
 	}
 	blk.Payset = append(blk.Payset, txib)
-	blk.TxnCounter++
 	blk.TxnRoot = blk.Payset.Commit(proto.PaysetCommitFlat)
 	blk.RewardsPool = testPoolAddr
 	blk.FeeSink = testSinkAddr

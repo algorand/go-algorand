@@ -17,6 +17,7 @@
 package logic
 
 import (
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
@@ -25,7 +26,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/rand"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -202,12 +202,6 @@ int 0x12345678
 	require.NoError(t, err)
 }
 
-func newSource(seed uint64) Source64 {
-	out := &rand.PCGSource{}
-	out.Seed(seed)
-	return out
-}
-
 func TestRand(t *testing.T) {
 	t.Parallel()
 	program, err := AssembleString(`rand
@@ -237,13 +231,12 @@ btoi
 	require.NoError(t, err)
 	sb := strings.Builder{}
 	// seeded sequence should be stable across implementations and versions
-	randSource := newSource(0x0123456789abcdef)
 	expectedInts := []uint64{
-		11614196903575913537,
-		2603152994703666600,
-		3221160932620505002,
-		5542497255562294835,
-		7340252461523725163,
+		678322472239279674,
+		2755610692717026382,
+		7031121088374348129,
+		5887010214291542478,
+		16538017124883863159,
 	}
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = program
@@ -252,7 +245,12 @@ btoi
 		txn.Lsig.Args[i] = make([]byte, 8)
 		binary.BigEndian.PutUint64(txn.Lsig.Args[i], v)
 	}
-	pass, err := Eval(program, EvalParams{Txn: &txn, Trace: &sb, Source: randSource})
+	pass, err := Eval(program, EvalParams{
+		Txn:      &txn,
+		Trace:    &sb,
+		Seed:     []byte(benchSeed),
+		MoreSeed: []byte(benchMore),
+	})
 	if !pass {
 		t.Log(hex.EncodeToString(program))
 		t.Log(sb.String())
@@ -1677,11 +1675,10 @@ func benchmarkBasicProgram(b *testing.B, source string) {
 	require.True(b, cost < 1000)
 	//b.Logf("%d bytes of program", len(program))
 	//b.Log(hex.EncodeToString(program))
-	randSource := newSource(0x0123456789abcdef)
 	b.ResetTimer()
 	sb := strings.Builder{} // Trace: &sb
 	for i := 0; i < b.N; i++ {
-		pass, err := Eval(program, EvalParams{Source: randSource})
+		pass, err := Eval(program, EvalParams{Seed: []byte(benchSeed), MoreSeed: []byte(benchMore)})
 		if !pass {
 			b.Log(sb.String())
 		}
@@ -1744,6 +1741,16 @@ func BenchmarkRandx450(b *testing.B) {
 		sb.WriteString("rand\n^\n")
 	}
 	benchmarkBasicProgram(b, sb.String())
+}
+
+func BenchmarkSha256Raw(b *testing.B) {
+	addr, _ := basics.UnmarshalChecksumAddress("OC6IROKUJ7YCU5NV76AZJEDKYQG33V2CJ7HAPVQ4ENTAGMLIOINSQ6EKGE")
+	a := addr[:]
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		t := sha256.Sum256(a)
+		a = t[:]
+	}
 }
 
 func BenchmarkSha256x900(b *testing.B) {

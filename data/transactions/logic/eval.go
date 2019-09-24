@@ -89,7 +89,10 @@ type EvalParams struct {
 	// GroupIndex should point to Txn within TxnGroup
 	GroupIndex int
 
-	Source Source64
+	// pseudo random number generator, or seed parts
+	Source   Source64
+	Seed     []byte
+	MoreSeed []byte
 }
 
 type evalContext struct {
@@ -511,6 +514,14 @@ func opSHA512_256(cx *evalContext) {
 }
 
 func opRand(cx *evalContext) {
+	if cx.Source == nil {
+		rng, err := NewChaCha20RNG(cx.Seed, cx.MoreSeed)
+		if err != nil {
+			cx.err = fmt.Errorf("could not initialize rng (%s)", err)
+			return
+		}
+		cx.Source = rng
+	}
 	cx.stack = append(cx.stack, stackValue{Uint: cx.Source.Uint64()})
 }
 

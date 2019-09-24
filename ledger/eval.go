@@ -18,11 +18,8 @@ package ledger
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
-
-	"golang.org/x/exp/rand"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -164,8 +161,6 @@ type BlockEvaluator struct {
 	blockTxBytes int
 
 	verificationPool execpool.BacklogPool
-
-	source rand.Source
 }
 
 type ledgerForEvaluator interface {
@@ -202,8 +197,6 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *eval
 		rnd: hdr.Round - 1,
 	}
 
-	randSource := &rand.PCGSource{}
-	randSource.Seed(binary.LittleEndian.Uint64(hdr.Seed[:]))
 	eval := &BlockEvaluator{
 		aux:              aux,
 		validate:         validate,
@@ -213,7 +206,6 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *eval
 		proto:            proto,
 		genesisHash:      l.GenesisHash(),
 		verificationPool: executionPool,
-		source:           randSource,
 	}
 
 	if hdr.Round > 0 {
@@ -461,7 +453,8 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 		}
 
 		// Transaction already in the ledger?
-		dup, err := cow.isDup(txn.Txn.First(), txn.ID())
+		txid := txn.ID()
+		dup, err := cow.isDup(txn.Txn.First(), txid)
 		if err != nil {
 			return err
 		}
@@ -489,7 +482,15 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 		}
 
 		if !txn.Lsig.Blank() {
-			ep := logic.EvalParams{Txn: &txn, Block: &eval.block, Proto: &eval.proto, TxnGoup: txgroup, GroupIndex: groupIndex, Source: eval.source}
+			ep := logic.EvalParams{
+				Txn:        &txn,
+				Block:      &eval.block,
+				Proto:      &eval.proto,
+				TxnGoup:    txgroup,
+				GroupIndex: groupIndex,
+				Seed:       eval.prevHeader.Seed[:],
+				MoreSeed:   txid[:],
+			}
 			pass, err := logic.Eval(txn.Lsig.Logic, ep)
 			if !pass {
 				return fmt.Errorf("transaction %v: rejected by logic (%s)", txn.ID(), err)
