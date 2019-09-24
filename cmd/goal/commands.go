@@ -21,6 +21,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"os/user"
 	"path/filepath"
 	"strings"
@@ -47,11 +48,15 @@ var verboseVersionPrint bool
 
 var kmdDataDirFlag string
 
+var versionCheck bool
+
 func init() {
 	// infile
 	rootCmd.AddCommand(versionCmd)
 	versionCmd.Flags().BoolVarP(&verboseVersionPrint, "verbose", "v", false, "Print all version info available")
+	rootCmd.Flags().BoolVarP(&versionCheck, "version", "v", false, "Display and write current build version and exit")
 	rootCmd.AddCommand(licenseCmd)
+	rootCmd.AddCommand(reportCmd)
 
 	// account.go
 	rootCmd.AddCommand(accountCmd)
@@ -95,8 +100,11 @@ var rootCmd = &cobra.Command{
 	Long:  `GOAL is the CLI for interacting Algorand software instance. The binary 'goal' is installed alongside the algod binary and is considered an integral part of the complete installation. The binaries should be used in tandem - you should not try to use a version of goal with a different version of algod.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
+		if versionCheck {
+			fmt.Println(config.FormatVersionAndLicense())
+			return
+		}
 		//If no arguments passed, we should fallback to help
-
 		cmd.HelpFunc()(cmd, args)
 	},
 }
@@ -175,6 +183,39 @@ var licenseCmd = &cobra.Command{
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println(config.GetLicenseInfo())
+	},
+}
+
+var reportCmd = &cobra.Command{
+	Use:   "report",
+	Short: "",
+	Long:  "Produces report helpful for debugging",
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println(config.FormatVersionAndLicense())
+		fmt.Println()
+		data, err := exec.Command("uname", "-a").CombinedOutput()
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		fmt.Println(string(data))
+
+		dirs := getDataDirs()
+		report := len(dirs) > 1
+		for _, dir := range dirs {
+			if report {
+				reportInfof(infoDataDir, dir)
+			}
+			genesis, err := readGenesis(dir)
+			if err != nil {
+				fmt.Println(err)
+				os.Exit(1)
+			}
+			fmt.Printf("Genesis ID from genesis.json: %s\n", genesis.ID())
+		}
+		fmt.Println()
+		onDataDirs(getStatus)
 	},
 }
 
