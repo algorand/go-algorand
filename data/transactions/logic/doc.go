@@ -36,7 +36,7 @@ var opDocList = []stringString{
 	{"keccak256", "Keccac256 hash of value, yields [32]byte"},
 	{"sha512_256", "SHA512_256 hash of value, yields [32]byte"},
 	{"ed25519verify", "for (data, signature, pubkey) verify the signature of the data against the pubkey => {0 or 1}"},
-	{"rand", "push random uint64 to stack. based on block.Seed and PCG RNG"},
+	{"rand", "push random uint64 to stack"},
 	{"+", "A plus B. Panic on overflow."},
 	{"-", "A minus B. Panic if B > A."},
 	{"/", "A divided by B. Panic if B == 0."},
@@ -126,7 +126,7 @@ var opDocExtraList = []stringString{
 	{"*", "It is worth noting that there are 10,000,000,000,000,000 micro-Algos in the total supply, or a bit less than 2^54. When doing rational math, e.g. (A * (N/D)) as ((A * N) / D) one should limit the numerator to less than 2^10 to be completely sure there won't be overflow."},
 	{"txn", "Most fields are a simple copy of a uint64 or byte string value. `XferAsset` is the concatenation of the AssetID Creator Address (32 bytes) and the big-endian bytes of the uint64 AssetID Index for a total of 40 bytes."},
 	{"gtxn", "for notes on transaction fields available, see `txn`"},
-	{"rand", "Uses PCG random number generator. http://www.pcg-random.org/"},
+	{"rand", "Random number generator based on the ChaCha20 algorithm. Seeded with the previous block's `Seed` value and the current transaction ID."},
 }
 
 var opDocExtras map[string]string

@@ -47,9 +47,10 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - Opcode: 0x05 
 - Pops: _None_
 - Pushes: uint64
-- push random uint64 to stack. based on block.Seed and PCG RNG
+- push random uint64 to stack
+- **Cost**: 3
 
-Uses PCG random number generator. http://www.pcg-random.org/
+Random number generator based on the ChaCha20 algorithm. Seeded with the previous block's `Seed` value and the current transaction ID.
 
 ## +
 
