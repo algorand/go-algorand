@@ -41,7 +41,7 @@ Most operations work with only one type of argument, uint64 or bytes, and panic 
 
 This summary is supplemented by more detail in the [opcodes document](TEAL_opcodes.md).
 
-Some operations 'panic' and immediately end execution of the program. A transaction checked a program that panics is not valid.
+Some operations 'panic' and immediately end execution of the program. A transaction checked by a program that panics is not valid.
 
 ### Arithmetic
 
@@ -134,6 +134,8 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 19 | AssetCloseTo | []byte |
 | 20 | GroupIndex | uint64 |
 
+
+Additional details in the [opcodes document](TEAL_opcodes.md#txn) on the `txn` op.
 
 **Global Fields**
 

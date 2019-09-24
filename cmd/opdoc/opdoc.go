@@ -80,8 +80,6 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec) (err error) {
 		fmt.Fprintf(out, "- Pops: _None_\n")
 	} else if len(op.Args) == 1 {
 		fmt.Fprintf(out, "- Pops: *... stack*, %s\n", op.Args[0].String())
-	} else if len(op.Args) == 2 {
-		fmt.Fprintf(out, "- Pops: *... stack*, {%s A}, {%s B}\n", op.Args[0].String(), op.Args[1].String())
 	} else {
 		fmt.Fprintf(out, "- Pops: *... stack*, {%s A}", op.Args[0].String())
 		for i, v := range op.Args[1:] {
@@ -91,8 +89,6 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec) (err error) {
 	}
 	if op.Returns == nil {
 		fmt.Fprintf(out, "- Pushes: _None_\n")
-	} else if len(op.Returns) == 1 {
-		fmt.Fprintf(out, "- Pushes: %s\n", op.Returns[0].String())
 	} else {
 		fmt.Fprintf(out, "- Pushes: %s", op.Returns[0].String())
 		for _, rt := range op.Returns[1:] {
