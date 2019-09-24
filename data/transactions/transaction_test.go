@@ -105,6 +105,10 @@ func TestGoNonparticipatingWellFormed(t *testing.T) {
 	tx := generateDummyGoNonparticpatingTransaction(addr)
 	curProto := config.Consensus[protocol.ConsensusCurrentVersion]
 
+	if !curProto.SupportBecomeNonParticipatingTransactions {
+		t.Skipf("Skipping rest of test because current protocol version %v does not support become-nonparticipating transactions", protocol.ConsensusCurrentVersion)
+	}
+
 	// this tx is well-formed
 	feeSink := basics.Address{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1, 0x75, 0x76, 0xbd, 0x45, 0x9a, 0xe6, 0x42, 0x1d, 0x48, 0x6d, 0xa3, 0xd4, 0xef, 0x22, 0x47, 0xc4, 0x9, 0xa3, 0x96, 0xb8, 0x2e, 0xa2, 0x21}
 	err = tx.WellFormed(SpecialAddresses{FeeSink: feeSink}, curProto)
