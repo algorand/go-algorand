@@ -8,6 +8,7 @@
 #
 # Examples: scripts/travis/deploy_packages.sh
 
+set -e
 scripts/travis/build.sh
 
 export RELEASE_GENESIS_PROCESS=true

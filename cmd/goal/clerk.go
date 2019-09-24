@@ -625,7 +625,7 @@ var groupCmd = &cobra.Command{
 			}
 
 			txns = append(txns, txn)
-			group.Transactions = append(group.Transactions, crypto.HashObj(txn.Txn))
+			group.TxGroupHashes = append(group.TxGroupHashes, crypto.HashObj(txn.Txn))
 		}
 
 		var outData []byte

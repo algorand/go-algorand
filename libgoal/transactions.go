@@ -557,7 +557,7 @@ func (c *Client) GroupID(txgroup []transactions.Transaction) (gid crypto.Digest,
 			return
 		}
 
-		group.Transactions = append(group.Transactions, crypto.HashObj(tx))
+		group.TxGroupHashes = append(group.TxGroupHashes, crypto.HashObj(tx))
 	}
 
 	return crypto.HashObj(group), nil
