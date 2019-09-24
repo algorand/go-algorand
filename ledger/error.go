@@ -50,7 +50,8 @@ type ProtocolError protocol.ConsensusVersion
 
 // Error satisfies builtin interface `error`
 func (err ProtocolError) Error() string {
-	return fmt.Sprintf("protocol not supported: %s", err)
+	proto := protocol.ConsensusVersion(err)
+	return fmt.Sprintf("protocol not supported: %s", proto)
 }
 
 // ErrNoEntry is used to indicate that a block is not present in the ledger.

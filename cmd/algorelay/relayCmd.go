@@ -53,7 +53,7 @@ func init() {
 	cfEmail = os.Getenv("CLOUDFLARE_EMAIL")
 	cfAuthKey = os.Getenv("CLOUDFLARE_AUTH_KEY")
 	if cfEmail == "" || cfAuthKey == "" {
-		panic("One or more credentials missing from ENV")
+		panic(makeExitError(1, "One or more credentials missing from ENV"))
 	}
 
 	rootCmd.AddCommand(checkCmd)
@@ -97,7 +97,7 @@ func loadRelays(file string) []eb.Relay {
 	var relays []eb.Relay
 	err := codecs.LoadObjectFromFile(file, &relays)
 	if err != nil {
-		panic(err)
+		panic(makeExitError(1, err.Error()))
 	}
 	return relays
 }
@@ -128,27 +128,27 @@ func makeDNSContext() *dnsContext {
 
 	nameZoneID, err := cloudflareCred.GetZoneID(context.Background(), nameDomainArg)
 	if err != nil {
-		panic(err)
+		panic(makeExitError(1, err.Error()))
 	}
 
 	nameEntries, err := getReverseMappedEntries(nameZoneID, nameRecordTypes)
 	if err != nil {
-		panic(err)
+		panic(makeExitError(1, err.Error()))
 	}
 
 	srvZoneID, err := cloudflareCred.GetZoneID(context.Background(), srvDomainArg)
 	if err != nil {
-		panic(err)
+		panic(makeExitError(1, err.Error()))
 	}
 
 	bootstrap, err := getSrvRecords("_algobootstrap", dnsBootstrapArg+"."+srvDomainArg, srvZoneID)
 	if err != nil {
-		panic(err)
+		panic(makeExitError(1, err.Error()))
 	}
 
 	metrics, err := getSrvRecords("_metrics", srvDomainArg, srvZoneID)
 	if err != nil {
-		panic(err)
+		panic(makeExitError(1, err.Error()))
 	}
 
 	return &dnsContext{
@@ -484,7 +484,7 @@ func getSrvRecords(serviceName string, networkName, zoneID string) (service srvS
 		var port64 uint64
 		port64, err = strconv.ParseUint(portString, 10, 16)
 		if err != nil {
-			panic(fmt.Sprintf("Invalid SRV Port for %s: %s", target, portString))
+			panic(makeExitError(1, fmt.Sprintf("Invalid SRV Port for %s: %s", target, portString)))
 		}
 		port := uint16(port64)
 

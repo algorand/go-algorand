@@ -128,11 +128,11 @@ type ApplyData struct {
 type TxGroup struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	// Transactions specifies a list of transactions that must appear
+	// TxGroupHashes specifies a list of hashes of transactions that must appear
 	// together, sequentially, in a block in order for the group to be
 	// valid.  Each hash in the list is a hash of a transaction with
 	// the `Group` field omitted.
-	Transactions []crypto.Digest `codec:"txlist"`
+	TxGroupHashes []crypto.Digest `codec:"txlist"`
 }
 
 // ToBeHashed implements the crypto.Hashable interface.

@@ -85,7 +85,7 @@ func TestTracker_Transition(t *testing.T) {
 
 	am.ProcessMessage(genConfirmedTx(p, 1, addrs[AuctionKey], addrs[AuctionKey], secrets[AuctionKey]))
 
-	require.Equal(t, Active, am.AuctionState(p.AuctionID))
+	require.Equal(t, Active, am.auctionState(p.AuctionID))
 	require.Equal(t, p, am.Auctions[p.AuctionID].Params())
 
 	// Place a deposit
@@ -99,7 +99,7 @@ func TestTracker_Transition(t *testing.T) {
 
 	am.ProcessMessage(genConfirmedTx(d0, 1001, addrs[BankKey], addrs[AuctionKey], secrets[BankKey]))
 
-	require.Equal(t, Active, am.AuctionState(p.AuctionID))
+	require.Equal(t, Active, am.auctionState(p.AuctionID))
 
 	b0 := Bid{
 		BidderKey:   crypto.Digest(addrs[BidderKey]),
@@ -112,7 +112,7 @@ func TestTracker_Transition(t *testing.T) {
 
 	am.ProcessMessage(genConfirmedTx(b0, 1100,
 		addrs[BidderKey], addrs[AuctionKey], secrets[BidderKey]))
-	require.Equal(t, Active, am.AuctionState(p.AuctionID))
+	require.Equal(t, Active, am.auctionState(p.AuctionID))
 
 	o := am.Auctions[p.AuctionID].Settle(false)
 	h := crypto.HashObj(o)
@@ -124,7 +124,7 @@ func TestTracker_Transition(t *testing.T) {
 	am.ProcessMessage(genConfirmedTx(s, 1401,
 		addrs[AuctionKey], addrs[AuctionKey], secrets[AuctionKey]))
 
-	require.Equal(t, Settled, am.AuctionState(p.AuctionID))
+	require.Equal(t, Settled, am.auctionState(p.AuctionID))
 }
 
 func TestTracker_WrongParams(t *testing.T) {
@@ -142,7 +142,7 @@ func TestTracker_WrongParams(t *testing.T) {
 
 	am.ProcessMessage(genConfirmedTx(p, 1, addrs[AuctionKey], addrs[AuctionKey], secrets[AuctionKey]))
 
-	require.Equal(t, Active, am.AuctionState(p.AuctionID))
+	require.Equal(t, Active, am.auctionState(p.AuctionID))
 	require.Equal(t, p, am.Auctions[p.AuctionID].Params())
 
 	// Place a deposit
@@ -156,7 +156,7 @@ func TestTracker_WrongParams(t *testing.T) {
 
 	am.ProcessMessage(genConfirmedTx(d0, 1001, addrs[BankKey], addrs[AuctionKey], secrets[BankKey]))
 
-	require.Equal(t, Active, am.AuctionState(p.AuctionID))
+	require.Equal(t, Active, am.auctionState(p.AuctionID))
 
 	b0 := Bid{
 		BidderKey:   crypto.Digest(addrs[BidderKey]),
@@ -169,7 +169,7 @@ func TestTracker_WrongParams(t *testing.T) {
 
 	am.ProcessMessage(genConfirmedTx(b0, 1100,
 		addrs[BidderKey], addrs[AuctionKey], secrets[BidderKey]))
-	require.Equal(t, Active, am.AuctionState(p.AuctionID))
+	require.Equal(t, Active, am.auctionState(p.AuctionID))
 
 	o := am.Auctions[p.AuctionID].Settle(false)
 	h := crypto.HashObj(o)
@@ -181,7 +181,7 @@ func TestTracker_WrongParams(t *testing.T) {
 	am.ProcessMessage(genConfirmedTx(s, 1401,
 		addrs[AuctionKey], addrs[AuctionKey], secrets[AuctionKey]))
 
-	require.Equal(t, Settled, am.AuctionState(p.AuctionID))
+	require.Equal(t, Settled, am.auctionState(p.AuctionID))
 
 	p2 := mkParams2()
 	p2.AuctionID = 8
@@ -207,12 +207,12 @@ func TestTracker_Transition_Settle_Start(t *testing.T) {
 	am.ProcessMessage(genConfirmedTx(s, 1,
 		addrs[AuctionKey], addrs[AuctionKey], secrets[AuctionKey]))
 
-	require.Equal(t, Uninitialized, am.AuctionState(p.AuctionID))
+	require.Equal(t, Uninitialized, am.auctionState(p.AuctionID))
 
 	am.ProcessMessage(genConfirmedTx(p, 2,
 		addrs[AuctionKey], addrs[AuctionKey], secrets[AuctionKey]))
 
-	require.Equal(t, State(Active), am.AuctionState(p.AuctionID))
+	require.Equal(t, State(Active), am.auctionState(p.AuctionID))
 	require.Equal(t, p, am.Auctions[p.AuctionID].Params())
 }
 
@@ -230,12 +230,12 @@ func TestTracker_Transition_Multiple_Auctions(t *testing.T) {
 		addrs[AuctionKey].String())
 	require.NoError(t, err)
 
-	require.Equal(t, Uninitialized, am.AuctionState(p.AuctionID))
+	require.Equal(t, Uninitialized, am.auctionState(p.AuctionID))
 
 	am.ProcessMessage(genConfirmedTx(p, p.FirstRound-5,
 		addrs[AuctionKey], addrs[AuctionKey], secrets[AuctionKey]))
 
-	require.Equal(t, Active, am.AuctionState(p.AuctionID))
+	require.Equal(t, Active, am.auctionState(p.AuctionID))
 	require.Equal(t, p, am.Auctions[p.AuctionID].Params())
 
 	for i := 0; i < 10; i++ {
@@ -250,7 +250,7 @@ func TestTracker_Transition_Multiple_Auctions(t *testing.T) {
 
 		am.ProcessMessage(genConfirmedTx(d0, am.Auctions[am.lastAuction].Params().DepositRound+1,
 			addrs[BankKey], addrs[AuctionKey], secrets[BankKey]))
-		require.Equal(t, Active, am.AuctionState(am.lastAuction))
+		require.Equal(t, Active, am.auctionState(am.lastAuction))
 
 		b0 := Bid{
 			BidderKey:   crypto.Digest(addrs[BidderKey]),
@@ -263,7 +263,7 @@ func TestTracker_Transition_Multiple_Auctions(t *testing.T) {
 
 		am.ProcessMessage(genConfirmedTx(b0, am.Auctions[am.lastAuction].Params().FirstRound+1,
 			addrs[BidderKey], addrs[AuctionKey], secrets[BidderKey]))
-		require.Equal(t, Active, am.AuctionState(am.lastAuction))
+		require.Equal(t, Active, am.auctionState(am.lastAuction))
 
 		o := am.Auctions[am.lastAuction].Settle(false)
 		h := crypto.HashObj(o)
@@ -274,7 +274,7 @@ func TestTracker_Transition_Multiple_Auctions(t *testing.T) {
 
 		am.ProcessMessage(genConfirmedTx(s, am.Auctions[am.lastAuction].LastRound(), addrs[AuctionKey], addrs[AuctionKey], secrets[AuctionKey]))
 
-		require.Equal(t, Settled, am.AuctionState(p.AuctionID))
+		require.Equal(t, Settled, am.auctionState(p.AuctionID))
 
 		nextP := am.Auctions[am.lastAuction].Params()
 
@@ -306,7 +306,7 @@ func TestTracker_Transition_DoubleStart(t *testing.T) {
 	am.ProcessMessage(genConfirmedTx(p, 1,
 		addrs[AuctionKey], addrs[AuctionKey], secrets[AuctionKey]))
 
-	require.Equal(t, State(Active), am.AuctionState(p.AuctionID))
+	require.Equal(t, State(Active), am.auctionState(p.AuctionID))
 	require.Equal(t, p, am.Auctions[p.AuctionID].Params())
 
 	p2 := mkParams2()
@@ -338,7 +338,7 @@ func TestTracker_Transition_NoBids(t *testing.T) {
 	am.ProcessMessage(genConfirmedTx(p, 1,
 		addrs[AuctionKey], addrs[AuctionKey], secrets[AuctionKey]))
 
-	require.Equal(t, Active, am.AuctionState(p.AuctionID))
+	require.Equal(t, Active, am.auctionState(p.AuctionID))
 	require.Equal(t, p, am.Auctions[p.AuctionID].Params())
 
 	o := am.Auctions[p.AuctionID].Settle(false)
@@ -350,7 +350,7 @@ func TestTracker_Transition_NoBids(t *testing.T) {
 	am.ProcessMessage(genConfirmedTx(s, 1401, addrs[AuctionKey],
 		addrs[AuctionKey], secrets[AuctionKey]))
 
-	require.Equal(t, Settled, am.AuctionState(p.AuctionID))
+	require.Equal(t, Settled, am.auctionState(p.AuctionID))
 }
 
 func TestTracker_Transition_Double_Settlement_Different(t *testing.T) {
@@ -370,7 +370,7 @@ func TestTracker_Transition_Double_Settlement_Different(t *testing.T) {
 	am.ProcessMessage(genConfirmedTx(p, 1,
 		addrs[AuctionKey], addrs[AuctionKey], secrets[AuctionKey]))
 
-	require.Equal(t, Active, am.AuctionState(p.AuctionID))
+	require.Equal(t, Active, am.auctionState(p.AuctionID))
 	require.Equal(t, p, am.Auctions[p.AuctionID].Params())
 
 	// Place a deposit
@@ -384,7 +384,7 @@ func TestTracker_Transition_Double_Settlement_Different(t *testing.T) {
 
 	am.ProcessMessage(genConfirmedTx(d0, 1001,
 		addrs[BankKey], addrs[AuctionKey], secrets[BankKey]))
-	require.Equal(t, Active, am.AuctionState(p.AuctionID))
+	require.Equal(t, Active, am.auctionState(p.AuctionID))
 
 	b0 := Bid{
 		BidderKey:   crypto.Digest(addrs[BidderKey]),
@@ -397,7 +397,7 @@ func TestTracker_Transition_Double_Settlement_Different(t *testing.T) {
 
 	am.ProcessMessage(genConfirmedTx(b0, 1100,
 		addrs[BidderKey], addrs[AuctionKey], secrets[BidderKey]))
-	require.Equal(t, Active, am.AuctionState(p.AuctionID))
+	require.Equal(t, Active, am.auctionState(p.AuctionID))
 
 	o := am.Auctions[p.AuctionID].Settle(false)
 	h := crypto.HashObj(o)
@@ -408,13 +408,13 @@ func TestTracker_Transition_Double_Settlement_Different(t *testing.T) {
 	am.ProcessMessage(genConfirmedTx(s, 1401, addrs[AuctionKey],
 		addrs[AuctionKey], secrets[AuctionKey]))
 
-	require.Equal(t, Settled, am.AuctionState(p.AuctionID))
+	require.Equal(t, Settled, am.auctionState(p.AuctionID))
 
 	s = Settlement{AuctionID: 5, AuctionKey: crypto.Digest(addrs[AuctionKey]), Cleared: !o.Cleared, OutcomesHash: h}
 
 	am.ProcessMessage(genConfirmedTx(s, 1401, addrs[AuctionKey], addrs[AuctionKey], secrets[AuctionKey]))
 
-	require.Equal(t, Settled, am.AuctionState(p.AuctionID))
+	require.Equal(t, Settled, am.auctionState(p.AuctionID))
 	require.Equal(t, *am.Auctions[p.AuctionID].Outcome, o)
 
 }
@@ -436,7 +436,7 @@ func TestTracker_Transition_Double_Settlement(t *testing.T) {
 	am.ProcessMessage(genConfirmedTx(p, 1,
 		addrs[AuctionKey], addrs[AuctionKey], secrets[AuctionKey]))
 
-	require.Equal(t, Active, am.AuctionState(p.AuctionID))
+	require.Equal(t, Active, am.auctionState(p.AuctionID))
 	require.Equal(t, p, am.Auctions[p.AuctionID].Params())
 
 	// Place a deposit
@@ -450,7 +450,7 @@ func TestTracker_Transition_Double_Settlement(t *testing.T) {
 
 	am.ProcessMessage(genConfirmedTx(d0, 1001,
 		addrs[BankKey], addrs[AuctionKey], secrets[BankKey]))
-	require.Equal(t, Active, am.AuctionState(p.AuctionID))
+	require.Equal(t, Active, am.auctionState(p.AuctionID))
 
 	b0 := Bid{
 		BidderKey:   crypto.Digest(addrs[BidderKey]),
@@ -463,7 +463,7 @@ func TestTracker_Transition_Double_Settlement(t *testing.T) {
 
 	am.ProcessMessage(genConfirmedTx(b0, 1100,
 		addrs[BidderKey], addrs[AuctionKey], secrets[BidderKey]))
-	require.Equal(t, Active, am.AuctionState(p.AuctionID))
+	require.Equal(t, Active, am.auctionState(p.AuctionID))
 
 	o := am.Auctions[p.AuctionID].Settle(false)
 	h := crypto.HashObj(o)
@@ -474,10 +474,10 @@ func TestTracker_Transition_Double_Settlement(t *testing.T) {
 	am.ProcessMessage(genConfirmedTx(s, 1401, addrs[AuctionKey],
 		addrs[AuctionKey], secrets[AuctionKey]))
 
-	require.Equal(t, Settled, am.AuctionState(p.AuctionID))
+	require.Equal(t, Settled, am.auctionState(p.AuctionID))
 
 	s = Settlement{AuctionID: 5, AuctionKey: crypto.Digest(addrs[AuctionKey]), Cleared: o.Cleared, OutcomesHash: h}
-	require.Equal(t, Settled, am.AuctionState(p.AuctionID))
+	require.Equal(t, Settled, am.auctionState(p.AuctionID))
 
 }
 
@@ -496,7 +496,7 @@ func TestTracker_WrongAuctionIDInDeposit(t *testing.T) {
 
 	am.ProcessMessage(genConfirmedTx(p, 1, addrs[AuctionKey], addrs[AuctionKey], secrets[AuctionKey]))
 
-	require.Equal(t, Active, am.AuctionState(p.AuctionID))
+	require.Equal(t, Active, am.auctionState(p.AuctionID))
 	require.Equal(t, p, am.Auctions[p.AuctionID].Params())
 
 	// Place a deposit
@@ -530,7 +530,7 @@ func TestTracker_WrongAuctionIDInBid(t *testing.T) {
 
 	am.ProcessMessage(genConfirmedTx(p, 1, addrs[AuctionKey], addrs[AuctionKey], secrets[AuctionKey]))
 
-	require.Equal(t, Active, am.AuctionState(p.AuctionID))
+	require.Equal(t, Active, am.auctionState(p.AuctionID))
 	require.Equal(t, p, am.Auctions[p.AuctionID].Params())
 
 	// Place a deposit
@@ -576,7 +576,7 @@ func TestTracker_Cancel(t *testing.T) {
 
 	am.ProcessMessage(genConfirmedTx(p, 1, addrs[AuctionKey], addrs[AuctionKey], secrets[AuctionKey]))
 
-	require.Equal(t, Active, am.AuctionState(p.AuctionID))
+	require.Equal(t, Active, am.auctionState(p.AuctionID))
 	require.Equal(t, p, am.Auctions[p.AuctionID].Params())
 
 	// Place a deposit
@@ -590,7 +590,7 @@ func TestTracker_Cancel(t *testing.T) {
 
 	am.ProcessMessage(genConfirmedTx(d0, 1001, addrs[BankKey], addrs[AuctionKey], secrets[BankKey]))
 
-	require.Equal(t, Active, am.AuctionState(p.AuctionID))
+	require.Equal(t, Active, am.auctionState(p.AuctionID))
 
 	b0 := Bid{
 		BidderKey:   crypto.Digest(addrs[BidderKey]),
@@ -603,7 +603,7 @@ func TestTracker_Cancel(t *testing.T) {
 
 	am.ProcessMessage(genConfirmedTx(b0, 1100,
 		addrs[BidderKey], addrs[AuctionKey], secrets[BidderKey]))
-	require.Equal(t, Active, am.AuctionState(p.AuctionID))
+	require.Equal(t, Active, am.auctionState(p.AuctionID))
 
 	o := am.Auctions[p.AuctionID].Settle(true)
 	h := crypto.HashObj(o)
@@ -614,7 +614,7 @@ func TestTracker_Cancel(t *testing.T) {
 	am.ProcessMessage(genConfirmedTx(s, 1401,
 		addrs[AuctionKey], addrs[AuctionKey], secrets[AuctionKey]))
 
-	require.Equal(t, Settled, am.AuctionState(p.AuctionID))
+	require.Equal(t, Settled, am.auctionState(p.AuctionID))
 }
 
 func keypair() *crypto.SignatureSecrets {
