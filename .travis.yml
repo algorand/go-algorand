@@ -124,6 +124,10 @@ cache:
   directories:
     - crypto/lib
 
+before_install:
+  # Disable sometimes-broken sources.list in Travis base images
+  - sudo rm -vf /etc/apt/sources.list.d/*
+
 addons:
   apt:
     packages:
