@@ -19,6 +19,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/algorand/go-algorand/network"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -272,20 +273,39 @@ func main() {
 		telemetryURL := ""
 
 		go func() {
+			i := 0
 			values := make(map[string]string)
 			for {
-				if s.GetTelemetryAddress() != nil && (*s.GetTelemetryAddress() != telemetryURL) {
-					telemetryURL = *(s.GetTelemetryAddress())
-					log.UpdateTelemetryURL(telemetryURL)
+				i++
+
+				// Check for new telemetry URL once a minute
+				bootstrapArray := cfg.DNSBootstrapArray(s.Genesis.Network)
+				for _, bootstrapId := range bootstrapArray {
+					telemetrySRV := fmt.Sprintf("telemetry.%s", bootstrapId)
+					addrs, err := network.ReadFromBootstrap(telemetrySRV, cfg.FallbackDNSResolverAddress)
+					if err != nil {
+						log.Warn("An issue occurred reading telemetry entry for: %s", telemetrySRV)
+					}
+
+					if len(addrs) == 0 {
+						log.Warn("No telemetry entry for: %s", telemetrySRV)
+					} else if  addrs[0] != telemetryURL {
+							telemetryURL = addrs[0]
+							log.UpdateTelemetryURL(telemetryURL)
+					}
 				}
 
-				metrics.DefaultRegistry().AddMetrics(values)
+				// Send heartbeat event once evety 10 minutes
+				if i == 10 {
+					metrics.DefaultRegistry().AddMetrics(values)
 
-				heartbeatDetails := telemetryspec.HeartbeatEventDetails{
-					Metrics: values,
+					heartbeatDetails := telemetryspec.HeartbeatEventDetails{
+						Metrics: values,
+					}
+
+					log.EventWithDetails(telemetryspec.ApplicationState, telemetryspec.HeartbeatEvent, heartbeatDetails)
+					i = 0
 				}
-
-				log.EventWithDetails(telemetryspec.ApplicationState, telemetryspec.HeartbeatEvent, heartbeatDetails)
 				<-ticker.C
 			}
 		}()

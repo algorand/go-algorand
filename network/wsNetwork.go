@@ -173,9 +173,6 @@ type GossipNode interface {
 
 	// ClearHandlers deregisters all the existing message handlers.
 	ClearHandlers()
-
-	// GetTelemetryAddress returns a telemetry URL
-	GetTelemetryAddress() *string
 }
 
 // IncomingMessage represents a message arriving from some peer in our p2p network
@@ -285,7 +282,6 @@ type WebsocketNetwork struct {
 	broadcastQueueBulk     chan broadcastRequest
 
 	phonebook *MultiPhonebook
-	telemetry *string
 
 	GenesisID string
 	NetworkID protocol.NetworkID
@@ -1229,11 +1225,6 @@ func (wn *WebsocketNetwork) meshThread() {
 			} else {
 				wn.log.Infof("got no DNS addrs for network %s", wn.NetworkID)
 			}
-
-			telemetryAddress := wn.getTelemetryAddress(dnsBootstrap)
-			if telemetryAddress != nil {
-				wn.telemetry = telemetryAddress
-			}
 		}
 		desired := wn.config.GossipFanout
 		numOutgoing := wn.numOutgoingPeers() + wn.numOutgoingPending()
@@ -1371,24 +1362,8 @@ func (wn *WebsocketNetwork) peersToPing() []*wsPeer {
 	return out
 }
 
-func (wn *WebsocketNetwork) getTelemetryAddress(dnsBootstrap string) *string {
-	addrs, err := wn.readFromBootstrap(fmt.Sprintf("telemetry.%s", dnsBootstrap))
-
-	if err != nil {
-		wn.log.Warn("Unable to fetch telemetry address: %s", err)
-		return nil
-	}
-
-	if len(addrs) == 0 {
-		wn.log.Warn("No telemetry address found for network: ", dnsBootstrap)
-		return nil
-	}
-
-	return &(addrs[0])
-}
-
 func (wn *WebsocketNetwork) getDNSAddrs(dnsBootstrap string) []string {
-	srvPhonebook, err := wn.readFromBootstrap(dnsBootstrap)
+	srvPhonebook, err := ReadFromBootstrap(dnsBootstrap, wn.config.FallbackDNSResolverAddress)
 	if err != nil {
 		// only log this warning on testnet or devnet
 		if wn.NetworkID == config.Devnet || wn.NetworkID == config.Testnet {
@@ -1399,9 +1374,11 @@ func (wn *WebsocketNetwork) getDNSAddrs(dnsBootstrap string) []string {
 	return srvPhonebook
 }
 
-func (wn *WebsocketNetwork) readFromBootstrap(bootstrapID string) (addrs []string, err error) {
+// ReadFromBootstrap is a helper to collect SRV addresses for a given bootstrapID.
+func ReadFromBootstrap(bootstrapID string, fallbackDNSResolverAddress string) (addrs []string, err error) {
+	log := logging.Base()
 	if bootstrapID == "" {
-		wn.log.Debug("no dns lookup due to empty bootstrapID")
+		log.Debug("no dns lookup due to empty bootstrapID")
 		return
 	}
 
@@ -1411,19 +1388,19 @@ func (wn *WebsocketNetwork) readFromBootstrap(bootstrapID string) (addrs []strin
 		// try to resolve the address. If it's an dotted-numbers format, it would return that right away.
 		// if it's a named address, we would attempt to parse it and might fail.
 		// ( failing isn't that bad; the resolver would internally try to use 8.8.8.8 instead )
-		if DNSIPAddr, err2 := net.ResolveIPAddr("ip", wn.config.FallbackDNSResolverAddress); err2 == nil {
+		if DNSIPAddr, err2 := net.ResolveIPAddr("ip", fallbackDNSResolverAddress); err2 == nil {
 			resolver.DNSAddress = *DNSIPAddr
 		} else {
-			wn.log.Infof("readFromBootstrap: Failed to resolve fallback DNS resolver address '%s': %v; falling back to default fallback resolver address", wn.config.FallbackDNSResolverAddress, err2)
+			log.Infof("ReadFromBootstrap: Failed to resolve fallback DNS resolver address '%s': %v; falling back to default fallback resolver address", fallbackDNSResolverAddress, err2)
 		}
 
 		_, records, err = resolver.LookupSRV(context.Background(), "algobootstrap", "tcp", bootstrapID)
 		if err != nil {
-			wn.log.Warnf("readFromBootstrap: DNS LookupSRV failed when using system resolver(%v) as well as via %s due to %v", sysLookupErr, resolver.EffectiveResolverDNS(), err)
+			log.Warnf("ReadFromBootstrap: DNS LookupSRV failed when using system resolver(%v) as well as via %s due to %v", sysLookupErr, resolver.EffectiveResolverDNS(), err)
 			return
 		}
 		// we succeeded when using the public dns. log this.
-		wn.log.Infof("readFromBootstrap: DNS LookupSRV failed when using the system resolver(%v); using public DNS(%s) server directly instead.", sysLookupErr, resolver.EffectiveResolverDNS())
+		log.Infof("ReadFromBootstrap: DNS LookupSRV failed when using the system resolver(%v); using public DNS(%s) server directly instead.", sysLookupErr, resolver.EffectiveResolverDNS())
 	}
 	for _, srv := range records {
 		// empty target won't take us far; skip these
@@ -1769,10 +1746,6 @@ func (wn *WebsocketNetwork) countPeersSetGauges() {
 	}
 	networkIncomingConnections.Set(float64(numIn), nil)
 	networkOutgoingConnections.Set(float64(numOut), nil)
-}
-
-func (wn *WebsocketNetwork) GetTelemetryAddress() *string {
-	return wn.telemetry
 }
 
 func justHost(hostPort string) string {
