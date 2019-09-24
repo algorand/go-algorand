@@ -770,3 +770,7 @@ func (node *AlgorandFullNode) GetTransactionByID(txid transactions.Txid, rnd bas
 		ApplyData:      stx.ApplyData,
 	}, nil
 }
+
+func (node *AlgorandFullNode) GetTelemetryAddress() *string {
+	return node.net.GetTelemetryAddress()
+}

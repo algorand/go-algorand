@@ -284,3 +284,7 @@ func (s *Server) Stop() {
 func (s *Server) OverridePhonebook(dialOverride ...string) {
 	s.node.ReplacePeerList(dialOverride...)
 }
+
+func (s *Server) GetTelemetryAddress() *string {
+	return s.node.GetTelemetryAddress()
+}

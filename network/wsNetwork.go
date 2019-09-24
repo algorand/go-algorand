@@ -173,6 +173,9 @@ type GossipNode interface {
 
 	// ClearHandlers deregisters all the existing message handlers.
 	ClearHandlers()
+
+	// GetTelemetryAddress returns a telemetry URL
+	GetTelemetryAddress() *string
 }
 
 // IncomingMessage represents a message arriving from some peer in our p2p network
@@ -282,6 +285,7 @@ type WebsocketNetwork struct {
 	broadcastQueueBulk     chan broadcastRequest
 
 	phonebook *MultiPhonebook
+	telemetry *string
 
 	GenesisID string
 	NetworkID protocol.NetworkID
@@ -1225,6 +1229,11 @@ func (wn *WebsocketNetwork) meshThread() {
 			} else {
 				wn.log.Infof("got no DNS addrs for network %s", wn.NetworkID)
 			}
+
+			telemetryAddress := wn.getTelemetryAddress(dnsBootstrap)
+			if telemetryAddress != nil {
+				wn.telemetry = telemetryAddress
+			}
 		}
 		desired := wn.config.GossipFanout
 		numOutgoing := wn.numOutgoingPeers() + wn.numOutgoingPending()
@@ -1360,6 +1369,22 @@ func (wn *WebsocketNetwork) peersToPing() []*wsPeer {
 		wn.log.Infof("ping times min=%f mean=%f median=%f max=%f", min, mean, median, max)
 	}
 	return out
+}
+
+func (wn *WebsocketNetwork) getTelemetryAddress(dnsBootstrap string) *string {
+	addrs, err := wn.readFromBootstrap(fmt.Sprintf("telemetry.%s", dnsBootstrap))
+
+	if err != nil {
+		wn.log.Warn("Unable to fetch telemetry address: %s", err)
+		return nil
+	}
+
+	if len(addrs) == 0 {
+		wn.log.Warn("No telemetry address found for network: ", dnsBootstrap)
+		return nil
+	}
+
+	return &(addrs[0])
 }
 
 func (wn *WebsocketNetwork) getDNSAddrs(dnsBootstrap string) []string {
@@ -1744,6 +1769,10 @@ func (wn *WebsocketNetwork) countPeersSetGauges() {
 	}
 	networkIncomingConnections.Set(float64(numIn), nil)
 	networkOutgoingConnections.Set(float64(numOut), nil)
+}
+
+func (wn *WebsocketNetwork) GetTelemetryAddress() *string {
+	return wn.telemetry
 }
 
 func justHost(hostPort string) string {

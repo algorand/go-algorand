@@ -261,6 +261,11 @@ func (n *NetworkFacade) ClearHandlers() {
 	n.mux.ClearHandlers()
 }
 
+// GetTelemetryAddress returns a telemetry URL
+func (n *NetworkFacade) GetTelemetryAddress() *string {
+	return nil
+}
+
 // SetDownstreamFilter sets the downstream filter.
 func (n *NetworkFacade) SetDownstreamFilter(f DownstreamFilter) {
 	n.downstreamMu.Lock()

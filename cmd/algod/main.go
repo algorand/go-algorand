@@ -176,34 +176,6 @@ func main() {
 			if err != nil {
 				fmt.Fprintln(os.Stdout, "error creating telemetry hook", err)
 			}
-
-			if log.GetTelemetryEnabled() {
-				currentVersion := config.GetCurrentVersion()
-				startupDetails := telemetryspec.StartupEventDetails{
-					Version:      currentVersion.String(),
-					CommitHash:   currentVersion.CommitHash,
-					Branch:       currentVersion.Branch,
-					Channel:      currentVersion.Channel,
-					InstanceHash: crypto.Hash([]byte(absolutePath)).String(),
-				}
-
-				log.EventWithDetails(telemetryspec.ApplicationState, telemetryspec.StartupEvent, startupDetails)
-				// Send a heartbeat event every 10 minutes as a sign of life
-				ticker := time.NewTicker(10 * time.Minute)
-				go func() {
-					values := make(map[string]string)
-					for {
-						metrics.DefaultRegistry().AddMetrics(values)
-
-						heartbeatDetails := telemetryspec.HeartbeatEventDetails{
-							Metrics: values,
-						}
-
-						log.EventWithDetails(telemetryspec.ApplicationState, telemetryspec.HeartbeatEvent, heartbeatDetails)
-						<-ticker.C
-					}
-				}()
-			}
 		}
 	}
 
@@ -282,6 +254,42 @@ func main() {
 		deadlockState = "disabled"
 	}
 	fmt.Fprintf(os.Stdout, "Deadlock detection is set to: %s (Default state is '%s')\n", deadlockState, config.DefaultDeadlock)
+
+
+	if log.GetTelemetryEnabled() {
+		currentVersion := config.GetCurrentVersion()
+		startupDetails := telemetryspec.StartupEventDetails{
+			Version:      currentVersion.String(),
+			CommitHash:   currentVersion.CommitHash,
+			Branch:       currentVersion.Branch,
+			Channel:      currentVersion.Channel,
+			InstanceHash: crypto.Hash([]byte(absolutePath)).String(),
+		}
+
+		log.EventWithDetails(telemetryspec.ApplicationState, telemetryspec.StartupEvent, startupDetails)
+		// Send a heartbeat event every 10 minutes as a sign of life
+		ticker := time.NewTicker(1 * time.Minute)
+		telemetryURL := ""
+
+		go func() {
+			values := make(map[string]string)
+			for {
+				if s.GetTelemetryAddress() != nil && (*s.GetTelemetryAddress() != telemetryURL) {
+					telemetryURL = *(s.GetTelemetryAddress())
+					log.UpdateTelemetryURL(telemetryURL)
+				}
+
+				metrics.DefaultRegistry().AddMetrics(values)
+
+				heartbeatDetails := telemetryspec.HeartbeatEventDetails{
+					Metrics: values,
+				}
+
+				log.EventWithDetails(telemetryspec.ApplicationState, telemetryspec.HeartbeatEvent, heartbeatDetails)
+				<-ticker.C
+			}
+		}()
+	}
 
 	s.Start()
 }

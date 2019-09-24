@@ -87,3 +87,8 @@ func (network *MockNetwork) ClearHandlers() {
 // RegisterHTTPHandler - empty implementation
 func (network *MockNetwork) RegisterHTTPHandler(path string, handler http.Handler) {
 }
+
+// GetTelemetryAddress returns a telemetry Address
+func (network *MockNetwork) GetTelemetryAddress() *string {
+	return nil
+}
