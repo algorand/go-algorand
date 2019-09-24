@@ -18,5 +18,5 @@ func BenchmarkChaCha20Rng(b *testing.B) {
 		v += rng.Uint64()
 	}
 	b.StopTimer()
-	b.Log(v)
+	require.True(b, v != 0)
 }

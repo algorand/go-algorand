@@ -324,11 +324,13 @@ type opSize struct {
 }
 
 // opSizes records the size of ops that are constant size but not 1
+// Also records time 'cost' and custom check functions.
 var opSizes = []opSize{
 	{"sha256", 7, 1, nil},
 	{"keccak256", 26, 1, nil},
 	{"sha512_256", 9, 1, nil},
 	{"ed25519verify", 1900, 1, nil},
+	{"rand", 3, 1, nil},
 	{"bnz", 1, 3, checkBnz},
 	{"intc", 1, 2, nil},
 	{"bytec", 1, 2, nil},
