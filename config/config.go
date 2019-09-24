@@ -197,6 +197,9 @@ type ConsensusParams struct {
 
 	// max group size
 	MaxTxGroupSize int
+
+	// support for transaction locks
+	SupportTransactionLocks bool
 }
 
 // Consensus tracks the protocol-level settings for different versions of the
@@ -409,6 +412,7 @@ func initConsensusProtocols() {
 	vFuture.MaxAssetsPerAccount = 1000
 	vFuture.SupportTxGroups = true
 	vFuture.MaxTxGroupSize = 16
+	vFuture.SupportTransactionLocks = true
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

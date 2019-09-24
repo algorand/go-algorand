@@ -82,6 +82,14 @@ type Header struct {
 	// transaction group (and, if so, specifies the hash
 	// of a TxGroup).
 	Group crypto.Digest `codec:"grp"`
+
+	// Excludes (i.e., the transaction lock) enforces mutual exclusion of
+	// transactions.  If this field is nonzero, then once the transaction is
+	// confirmed, it acquires the lock identified by the (Sender, Excludes)
+	// pair of the transaction until the LastValid round passes.  While this
+	// transaction possesses the lock, no other transaction specifying this
+	// lock can be confirmed.
+	Excludes uint32 `codec:"lock"`
 }
 
 // Transaction describes a transaction that can appear in a block.
@@ -317,6 +325,9 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 	if tx.Sender == spec.RewardsPool {
 		// this check is just to be safe, but reaching here seems impossible, since it requires computing a preimage of rwpool
 		return fmt.Errorf("transaction from incentive pool is invalid")
+	}
+	if !proto.SupportTransactionLocks && tx.Excludes != 0 {
+		return fmt.Errorf("transaction tried to acquire lock %d but protocol does not support transaction locks", tx.Excludes)
 	}
 	return nil
 }
