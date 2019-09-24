@@ -415,7 +415,7 @@ for notes on transaction fields available, see `txn`
 - Pushes: _None_
 - branch if value is not zero
 
-for a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else proceed to next instruction at `pc + 3`
+For a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else proceed to next instruction at `pc + 3`. Branch targets must be well aligned instructions. (e.g. Branching to the second byte of a 2 byte op will be rejected.)
 
 ## pop
 
