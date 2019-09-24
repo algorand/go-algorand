@@ -76,10 +76,7 @@ func main() {
 	config.UpdateVersionDataDir(absolutePath)
 
 	if *versionCheck {
-		version := config.GetCurrentVersion()
-		versionInfo := version.AsUInt64()
-		fmt.Printf("%d\n%s.%s [%s] (commit #%s)\n", versionInfo, version.String(),
-			version.Channel, version.Branch, version.GetCommitHash())
+		fmt.Println(config.FormatVersionAndLicense())
 		return
 	}
 
