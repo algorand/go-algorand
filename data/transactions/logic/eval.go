@@ -68,7 +68,7 @@ func (sv *stackValue) String() string {
 	return fmt.Sprintf("%d 0x%x", sv.Uint, sv.Uint)
 }
 
-// Like math/rand.Source64, but we don't need to see Seed() or Int63()
+// Source64 is like math/rand.Source64, but we don't need to see Seed() or Int63()
 type Source64 interface {
 	Uint64() uint64
 }
