@@ -37,6 +37,10 @@ func TestAccountsCanChangeOnlineStateV7(t *testing.T) {
 	testAccountsCanChangeOnlineState(t, filepath.Join("nettemplates", "TwoNodesPartlyOfflineV7.json"))
 }
 
+func TestAccountsCanChangeOnlineStateInTheFuture(t *testing.T) {
+	testAccountsCanChangeOnlineState(t, filepath.Join("nettemplates", "TwoNodesPartlyOfflineVFuture.json"))
+}
+
 func testAccountsCanChangeOnlineState(t *testing.T, templatePath string) {
 
 	t.Parallel()
