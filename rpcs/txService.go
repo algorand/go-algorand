@@ -33,12 +33,12 @@ import (
 
 // TxService provides a service that allows a remote caller to retrieve missing pending transactions
 type TxService struct {
-	pool        PendingTxAggregate
+	pool            PendingTxAggregate
 	pendingTxGroups [][]transactions.SignedTxn
-	lastUpdate  int64
-	mu          deadlock.RWMutex
-	genesisID   string
-	log         logging.Logger
+	lastUpdate      int64
+	mu              deadlock.RWMutex
+	genesisID       string
+	log             logging.Logger
 	// limit the amount of data we're going to process on this request.
 	// the request body should include the bloom filter encoding. This would
 	// protect the server from calls that include large body requests.
