@@ -394,6 +394,7 @@ func (cx *evalContext) step() {
 		for i, argType := range argsTypes {
 			if !opCompat(argType, cx.stack[first+i].argType()) {
 				cx.err = fmt.Errorf("%s arg %d wanted %s but got %s", opsByOpcode[opcode].Name, i, argType.String(), cx.stack[first+i].typeName())
+				return
 			}
 		}
 	}

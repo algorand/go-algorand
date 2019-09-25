@@ -33,7 +33,7 @@ func stringStringListToMap(they []stringString) map[string]string {
 var opDocList = []stringString{
 	{"err", "Error. Panic immediately. This is primarily a fencepost against accidental zero bytes getting compiled into programs."},
 	{"sha256", "SHA256 hash of value, yields [32]byte"},
-	{"keccak256", "Keccac256 hash of value, yields [32]byte"},
+	{"keccak256", "Keccak256 hash of value, yields [32]byte"},
 	{"sha512_256", "SHA512_256 hash of value, yields [32]byte"},
 	{"ed25519verify", "for (data, signature, pubkey) verify the signature of the data against the pubkey => {0 or 1}"},
 	{"rand", "push random uint64 to stack"},
