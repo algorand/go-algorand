@@ -180,6 +180,9 @@ type ConsensusParams struct {
 	// domain-separated credentials
 	CredentialDomainSeparationEnabled bool
 
+	// support for transactions that mark an account non-participating
+	SupportBecomeNonParticipatingTransactions bool
+
 	// fix the rewards calculation by avoiding subtracting too much from the rewards pool
 	PendingResidueRewards bool
 
@@ -413,6 +416,7 @@ func initConsensusProtocols() {
 	vFuture.SupportTxGroups = true
 	vFuture.MaxTxGroupSize = 16
 	vFuture.SupportTransactionLeases = true
+	vFuture.SupportBecomeNonParticipatingTransactions = true
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
