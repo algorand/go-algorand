@@ -698,6 +698,12 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 		correctPayLease.Note[0] = 1
 		correctPayLease.LastValid += 10
 		a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "added payment transaction with matching transaction lease")
+		correctPayLeaseOther := correctPayLease
+		correctPayLeaseOther.Sender = addrList[4]
+		a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLeaseOther, ad), "could not add payment transaction with matching lease but different sender")
+		correctPayLeaseOther = correctPayLease
+		correctPayLeaseOther.Lease[0]++
+		a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLeaseOther, ad), "could not add payment transaction with matching sender but different lease")
 
 		for l.Latest() <= leaseReleaseRound {
 			var totalRewardUnits uint64
@@ -736,7 +742,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 			a.NoError(l.appendUnvalidated(correctBlock), "could not add block with correct header")
 		}
 
-		a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "could not add payment transaction after lease was released")
+		a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "could not add payment transaction after lease was dropped")
 	} else {
 		a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "added payment transaction with transaction lease unsupported by protocol version")
 	}
