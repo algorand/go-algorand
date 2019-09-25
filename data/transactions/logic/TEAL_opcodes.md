@@ -194,6 +194,13 @@ It is worth noting that there are 10,000,000,000,000,000 micro-Algos in the tota
 - Pushes: uint64
 - bitwise invert value
 
+## mulw
+
+- Opcode: 0x1d
+- Pops: *... stack*, {uint64 A}, {uint64 B}
+- Pushes: {uint64 high}, {uint64 low}
+- A times B out to 128-bit long result
+
 ## intcblock
 
 - Opcode: 0x20 {varuint length} [{varuint value}, ...]

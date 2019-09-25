@@ -66,7 +66,7 @@ func TestOpGroupCoverage(t *testing.T) {
 func TestOpDoc(t *testing.T) {
 	xd := OpDoc("txn")
 	require.NotEmpty(t, xd)
-	xd = OpDoc("NOT AN ISTRUCTION")
+	xd = OpDoc("NOT AN INSTRUCTION")
 	require.Empty(t, xd)
 }
 

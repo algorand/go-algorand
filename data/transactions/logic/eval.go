@@ -25,6 +25,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
+	"math/big"
 	"sort"
 
 	"golang.org/x/crypto/sha3"
@@ -281,6 +283,7 @@ var OpSpecs = []OpSpec{
 	{0x1a, "&", opBitAnd, twoInts, oneInt},
 	{0x1b, "^", opBitXor, twoInts, oneInt},
 	{0x1c, "~", opBitNot, oneInt, oneInt},
+	{0x1d, "mulw", opMulw, twoInts, twoInts},
 
 	{0x20, "intcblock", opIntConstBlock, nil, nil},
 	{0x21, "intc", opIntConstLoad, nil, oneInt},
@@ -584,6 +587,38 @@ func opMul(cx *evalContext) {
 	}
 	cx.stack[prev].Uint = v
 	cx.stack = cx.stack[:last]
+}
+
+func opMulwImpl(x, y uint64) (high64 uint64, low64 uint64, err error) {
+	var a, b, v big.Int
+	a.SetUint64(x)
+	b.SetUint64(y)
+	v.Mul(&a, &b)
+
+	var maxUint, high, low big.Int
+	maxUint.SetUint64(math.MaxUint64)
+	low.And(&v, &maxUint)
+	high.Rsh(&v, 64)
+	if !low.IsUint64() || !high.IsUint64() {
+		err = errors.New("mulw overflowed")
+		return
+	}
+
+	high64 = high.Uint64()
+	low64 = low.Uint64()
+	return
+}
+
+func opMulw(cx *evalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+	high, low, err := opMulwImpl(cx.stack[prev].Uint, cx.stack[last].Uint)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	cx.stack[prev].Uint = high
+	cx.stack[last].Uint = low
 }
 
 func opLt(cx *evalContext) {
