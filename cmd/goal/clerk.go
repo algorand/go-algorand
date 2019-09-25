@@ -754,6 +754,9 @@ var compileCmd = &cobra.Command{
 				// Check if from was specified, else use default
 				if account == "" {
 					account = accountList.getDefaultAccount()
+					if account == "" {
+						reportErrorln("no default account set. set one with 'goal account -f' or specify an account with '-a'.")
+					}
 					fmt.Printf("will use default account: %v\n", account)
 				}
 				signingAddressResolved := accountList.getAddressByName(account)
