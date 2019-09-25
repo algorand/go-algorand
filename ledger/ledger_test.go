@@ -686,7 +686,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 
 	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctKeyreg, ad), "added duplicate tx")
 
-	leaseReleaseRound := l.Latest() + 2
+	leaseReleaseRound := l.Latest() + 10
 	correctPayLease := correctPay
 	correctPayLease.Sender = addrList[3]
 	correctPayLease.Lease[0] = 1
@@ -705,7 +705,9 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 		correctPayLeaseOther.Lease[0]++
 		a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLeaseOther, ad), "could not add payment transaction with matching sender but different lease")
 
-		for l.Latest() <= leaseReleaseRound {
+		for l.Latest() < leaseReleaseRound {
+			a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "added payment transaction with matching transaction lease")
+
 			var totalRewardUnits uint64
 			for _, acctdata := range initAccounts {
 				totalRewardUnits += acctdata.MicroAlgos.RewardUnits(proto)
