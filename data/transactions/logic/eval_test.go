@@ -905,6 +905,10 @@ arg 0
 txn GroupIndex
 int 3
 ==
+&&
+txn TxID
+arg 7
+==
 &&`
 
 func TestTxn(t *testing.T) {
@@ -938,6 +942,7 @@ func TestTxn(t *testing.T) {
 	txn.Txn.AssetReceiver = txn.Txn.CloseRemainderTo
 	txn.Txn.AssetCloseTo = txn.Txn.Sender
 	txn.Lsig.Logic = program
+	txid := txn.Txn.ID()
 	txn.Lsig.Args = [][]byte{
 		txn.Txn.Sender[:],
 		txn.Txn.Receiver[:],
@@ -946,6 +951,7 @@ func TestTxn(t *testing.T) {
 		txn.Txn.SelectionPK[:],
 		txn.Txn.Note,
 		append([]byte(creator), 0, 0, 0, 0, 0, 0, 0, 1),
+		txid[:],
 	}
 	sb := strings.Builder{}
 	pass, err := Eval(program, EvalParams{Trace: &sb, Txn: &txn, GroupIndex: 3})

@@ -971,6 +971,9 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint
 		sv.Bytes = txn.AssetCloseTo[:]
 	case 20:
 		panic("GroupIndex should be handled outside txnFieldToStack")
+	case 21:
+		txid := txn.ID()
+		sv.Bytes = txid[:]
 	default:
 		err = fmt.Errorf("invalid txn field %d", field)
 	}

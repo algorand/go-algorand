@@ -23,7 +23,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - Opcode: 0x02 
 - Pops: *... stack*, []byte
 - Pushes: []byte
-- Keccac256 hash of value, yields [32]byte
+- Keccak256 hash of value, yields [32]byte
 - **Cost**: 26
 
 ## sha512_256
@@ -196,10 +196,10 @@ It is worth noting that there are 10,000,000,000,000,000 micro-Algos in the tota
 
 ## mulw
 
-- Opcode: 0x1d
+- Opcode: 0x1d 
 - Pops: *... stack*, {uint64 A}, {uint64 B}
-- Pushes: {uint64 high}, {uint64 low}
-- A times B out to 128-bit long result
+- Pushes: uint64, uint64
+- A times B out to 128-bit long result as low (top) and high uint64 values on the stack
 
 ## intcblock
 
@@ -358,6 +358,7 @@ Most fields are a simple copy of a uint64 or byte string value. `XferAsset` is t
 | 18 | AssetReceiver | []byte |
 | 19 | AssetCloseTo | []byte |
 | 20 | GroupIndex | uint64 |
+| 21 | TxID | []byte |
 
 
 TypeEnum mapping:

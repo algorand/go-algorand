@@ -52,7 +52,7 @@ For two-argument ops, `A` is the previous element on the stack and `B` is the la
 | Op | Description |
 | --- | --- |
 | `sha256` | SHA256 hash of value, yields [32]byte |
-| `keccak256` | Keccac256 hash of value, yields [32]byte |
+| `keccak256` | Keccak256 hash of value, yields [32]byte |
 | `sha512_256` | SHA512_256 hash of value, yields [32]byte |
 | `ed25519verify` | for (data, signature, pubkey) verify the signature of the data against the pubkey => {0 or 1} |
 | `rand` | push random uint64 to stack |
@@ -76,6 +76,7 @@ For two-argument ops, `A` is the previous element on the stack and `B` is the la
 | `&` | A bitwise-and B |
 | `^` | A bitwise-xor B |
 | `~` | bitwise invert value |
+| `mulw` | A times B out to 128-bit long result as low (top) and high uint64 values on the stack |
 
 ### Loading Values
 
@@ -133,6 +134,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 18 | AssetReceiver | []byte |
 | 19 | AssetCloseTo | []byte |
 | 20 | GroupIndex | uint64 |
+| 21 | TxID | []byte |
 
 
 Additional details in the [opcodes document](TEAL_opcodes.md#txn) on the `txn` op.
