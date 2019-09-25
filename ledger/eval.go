@@ -64,7 +64,7 @@ func (x *roundCowBase) lookup(addr basics.Address) (basics.AccountData, error) {
 	return x.l.LookupWithoutRewards(x.rnd, addr)
 }
 
-func (x *roundCowBase) isDup(firstValid basics.Round, txid transactions.Txid, txl txlock) (bool, error) {
+func (x *roundCowBase) isDup(firstValid basics.Round, txid transactions.Txid, txl txlease) (bool, error) {
 	return x.l.isDup(x.proto, x.rnd+1, firstValid, x.rnd, txid, txl)
 }
 
@@ -170,7 +170,7 @@ type ledgerForEvaluator interface {
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
 	Lookup(basics.Round, basics.Address) (basics.AccountData, error)
 	Totals(basics.Round) (AccountTotals, error)
-	isDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, txlock) (bool, error)
+	isDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, txlease) (bool, error)
 	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, error)
 }
 
@@ -454,7 +454,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 		}
 
 		// Transaction already in the ledger?
-		dup, err := cow.isDup(txn.Txn.First(), txn.ID(), txlock{sender: txn.Txn.Sender, excludes: txn.Txn.Excludes})
+		dup, err := cow.isDup(txn.Txn.First(), txn.ID(), txlease{sender: txn.Txn.Sender, lease: txn.Txn.Lease})
 		if err != nil {
 			return err
 		}

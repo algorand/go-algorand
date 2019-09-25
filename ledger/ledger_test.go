@@ -686,20 +686,20 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 
 	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctKeyreg, ad), "added duplicate tx")
 
-	lockReleaseRound := l.Latest() + 2
-	correctPayLock := correctPay
-	correctPayLock.Sender = addrList[3]
-	correctPayLock.Excludes = 1
-	correctPayLock.LastValid = lockReleaseRound
-	if proto.SupportTransactionLocks {
-		a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLock, ad), "could not add payment transaction with payment lock")
+	leaseReleaseRound := l.Latest() + 2
+	correctPayLease := correctPay
+	correctPayLease.Sender = addrList[3]
+	correctPayLease.Lease[0] = 1
+	correctPayLease.LastValid = leaseReleaseRound
+	if proto.SupportTransactionLeases {
+		a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "could not add payment transaction with payment lease")
 
-		correctPayLock.Note = make([]byte, 1)
-		correctPayLock.Note[0] = 1
-		correctPayLock.LastValid += 10
-		a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLock, ad), "added payment transaction with matching transaction lock")
+		correctPayLease.Note = make([]byte, 1)
+		correctPayLease.Note[0] = 1
+		correctPayLease.LastValid += 10
+		a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "added payment transaction with matching transaction lease")
 
-		for l.Latest() <= lockReleaseRound {
+		for l.Latest() <= leaseReleaseRound {
 			var totalRewardUnits uint64
 			for _, acctdata := range initAccounts {
 				totalRewardUnits += acctdata.MicroAlgos.RewardUnits(proto)
@@ -736,9 +736,9 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 			a.NoError(l.appendUnvalidated(correctBlock), "could not add block with correct header")
 		}
 
-		a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLock, ad), "could not add payment transaction after lock was released")
+		a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "could not add payment transaction after lease was released")
 	} else {
-		a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLock, ad), "added payment transaction with transaction lock unsupported by protocol version")
+		a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "added payment transaction with transaction lease unsupported by protocol version")
 	}
 }
 
@@ -746,7 +746,7 @@ func TestLedgerSingleTxApplyData(t *testing.T) {
 	testLedgerSingleTxApplyData(t, protocol.ConsensusCurrentVersion)
 }
 
-// SupportTransactionLocks was introduced after v18.
+// SupportTransactionLeases was introduced after v18.
 func TestLedgerSingleTxApplyDataV18(t *testing.T) {
 	testLedgerSingleTxApplyData(t, protocol.ConsensusV18)
 }

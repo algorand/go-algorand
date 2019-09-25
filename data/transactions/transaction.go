@@ -83,13 +83,12 @@ type Header struct {
 	// of a TxGroup).
 	Group crypto.Digest `codec:"grp"`
 
-	// Excludes (i.e., the transaction lock) enforces mutual exclusion of
-	// transactions.  If this field is nonzero, then once the transaction is
-	// confirmed, it acquires the lock identified by the (Sender, Excludes)
-	// pair of the transaction until the LastValid round passes.  While this
-	// transaction possesses the lock, no other transaction specifying this
-	// lock can be confirmed.
-	Excludes uint64 `codec:"lock"`
+	// Lease enforces mutual exclusion of transactions.  If this field is
+	// nonzero, then once the transaction is confirmed, it acquires the
+	// lease identified by the (Sender, Lease) pair of the transaction until
+	// the LastValid round passes.  While this transaction possesses the
+	// lease, no other transaction specifying this lease can be confirmed.
+	Lease [32]byte `codec:"lx"`
 }
 
 // Transaction describes a transaction that can appear in a block.
@@ -326,8 +325,8 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		// this check is just to be safe, but reaching here seems impossible, since it requires computing a preimage of rwpool
 		return fmt.Errorf("transaction from incentive pool is invalid")
 	}
-	if !proto.SupportTransactionLocks && tx.Excludes != 0 {
-		return fmt.Errorf("transaction tried to acquire lock %d but protocol does not support transaction locks", tx.Excludes)
+	if !proto.SupportTransactionLeases && (tx.Lease != [32]byte{}) {
+		return fmt.Errorf("transaction tried to acquire lease %d but protocol does not support transaction leases", tx.Lease)
 	}
 	return nil
 }

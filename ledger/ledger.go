@@ -305,7 +305,7 @@ func (l *Ledger) Totals(rnd basics.Round) (AccountTotals, error) {
 	return l.accts.totals(rnd)
 }
 
-func (l *Ledger) isDup(currentProto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl txlock) (bool, error) {
+func (l *Ledger) isDup(currentProto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl txlease) (bool, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 	return l.txTail.isDup(currentProto, current, firstValid, lastValid, txid, txl)
@@ -328,8 +328,8 @@ func (l *Ledger) LatestCommitted() basics.Round {
 func (l *Ledger) Committed(currentProto config.ConsensusParams, txn transactions.SignedTxn) (bool, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	// do not check for whether lock would excluded this
-	txl := txlock{sender: txn.Txn.Sender, excludes: 0}
+	// do not check for whether lease would excluded this
+	txl := txlease{sender: txn.Txn.Sender}
 	return l.txTail.isDup(currentProto, l.Latest()+1, txn.Txn.First(), l.Latest(), txn.ID(), txl)
 }
 
@@ -457,9 +457,9 @@ func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, aux evalAux) (stateD
 	return delta, err
 }
 
-// A txlock is a transaction (sender, excludes) pair which uniquely specifies a
-// transaction lock.
-type txlock struct {
-	sender   basics.Address
-	excludes uint64
+// A txlease is a transaction (sender, lease) pair which uniquely specifies a
+// transaction lease.
+type txlease struct {
+	sender basics.Address
+	lease  [32]byte
 }
