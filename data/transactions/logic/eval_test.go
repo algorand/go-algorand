@@ -259,6 +259,23 @@ btoi
 	require.NoError(t, err)
 }
 
+func TestItob(t *testing.T) {
+	t.Parallel()
+	program, err := AssembleString(`byte 0x1234567812345678
+int 0x1234567812345678
+itob
+==`)
+	require.NoError(t, err)
+	sb := strings.Builder{}
+	pass, err := Eval(program, EvalParams{Trace: &sb})
+	if !pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.NoError(t, err)
+	require.True(t, pass)
+}
+
 func TestBtoi(t *testing.T) {
 	t.Parallel()
 	program, err := AssembleString(`int 0x1234567812345678

@@ -70,6 +70,7 @@ For two-argument ops, `A` is the previous element on the stack and `B` is the la
 | `!=` | A is not equal to B => {0 or 1} |
 | `!` | X == 0 yields 1; else 0 |
 | `len` | yields length of byte value |
+| `itob` | converts uint64 to big endian bytes |
 | `btoi` | converts bytes as big endian to uint64 |
 | `%` | A modulo B. Panic if B == 0. |
 | `\|` | A bitwise-or B |

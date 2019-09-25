@@ -152,6 +152,13 @@ It is worth noting that there are 10,000,000,000,000,000 micro-Algos in the tota
 - Pushes: uint64
 - yields length of byte value
 
+## itob
+
+- Opcode: 0x16 
+- Pops: *... stack*, uint64
+- Pushes: []byte
+- converts uint64 to big endian bytes
+
 ## btoi
 
 - Opcode: 0x17 

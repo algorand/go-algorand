@@ -277,6 +277,7 @@ var OpSpecs = []OpSpec{
 	{0x13, "!=", opNeq, twoAny, oneInt},
 	{0x14, "!", opNot, oneInt, oneInt},
 	{0x15, "len", opLen, oneBytes, oneInt},
+	{0x16, "itob", opItob, oneInt, oneBytes},
 	{0x17, "btoi", opBtoi, oneBytes, oneInt},
 	{0x18, "%", opModulo, twoInts, oneInt},
 	{0x19, "|", opBitOr, twoInts, oneInt},
@@ -755,6 +756,13 @@ func opLen(cx *evalContext) {
 	last := len(cx.stack) - 1
 	cx.stack[last].Uint = uint64(len(cx.stack[last].Bytes))
 	cx.stack[last].Bytes = nil
+}
+
+func opItob(cx *evalContext) {
+	last := len(cx.stack) - 1
+	ibytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(ibytes, cx.stack[last].Uint)
+	cx.stack[last].Bytes = ibytes
 }
 
 func opBtoi(cx *evalContext) {

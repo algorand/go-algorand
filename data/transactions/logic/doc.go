@@ -51,6 +51,7 @@ var opDocList = []stringString{
 	{"!=", "A is not equal to B => {0 or 1}"},
 	{"!", "X == 0 yields 1; else 0"},
 	{"len", "yields length of byte value"},
+	{"itob", "converts uint64 to big endian bytes"},
 	{"btoi", "converts bytes as big endian to uint64"},
 	{"%", "A modulo B. Panic if B == 0."},
 	{"|", "A bitwise-or B"},
@@ -149,7 +150,7 @@ type OpGroup struct {
 
 // OpGroupList is groupings of ops for documentation purposes.
 var OpGroupList = []OpGroup{
-	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "rand", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "==", "!=", "!", "len", "btoi", "%", "|", "&", "^", "~", "mulw"}},
+	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "rand", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw"}},
 	{"Loading Values", []string{"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "global", "load", "store"}},
 	{"Flow Control", []string{"err", "bnz", "pop", "dup"}},
 }
