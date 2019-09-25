@@ -755,7 +755,7 @@ var compileCmd = &cobra.Command{
 				if account == "" {
 					account = accountList.getDefaultAccount()
 					if account == "" {
-						reportErrorln("cannot find a default account")
+						reportErrorln("no default account set. set one with 'goal account -f' or specify an account with '-a'.")
 					}
 					fmt.Printf("will use default account: %v\n", account)
 				}
