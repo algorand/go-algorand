@@ -20,6 +20,7 @@ namespace eval ::AlgorandGoal {
   namespace export GetKMDNetworkAddress
   namespace export GetLedgerSupply
   namespace export WaitForRound
+  namespace export Report
 
   # My Variables
    set version 1.0
@@ -481,4 +482,19 @@ proc ::AlgorandGoal::WaitForRound { WAIT_FOR_ROUND_NUMBER TEST_PRIMARY_NODE_DIR 
        ::AlgorandGoal::Abort "ERROR in WaitForRound: $EXCEPTION"
     }
     return $BLOCK
+}
+
+# Generate report
+proc ::AlgorandGoal::Report { TEST_PRIMARY_NODE_DIR } {
+    if { [ catch {
+        spawn goal report -d $TEST_PRIMARY_NODE_DIR
+        expect {
+            timeout { ::AlgorandGoal::Abort "goal report timed out"  }
+            "source code available at https://github.com/algorand/go-algorand" {puts "goal -v ok"}
+            -re {Genesis ID from genesis.json: *} {puts "genesis ID from genesis.json ok"}
+            -re {Last commited block: (\d+)} {puts "status check ok"}
+        }
+    } EXCEPTION ] } {
+    ::AlgorandGoal::Abort "ERROR in GetLedgerSupply: $EXCEPTION"
+    }
 }

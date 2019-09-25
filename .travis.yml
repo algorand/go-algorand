@@ -16,7 +16,7 @@ stages:
   - name: build_release
     if: branch =~ /^rel\// AND type != pull_request
   - name: deploy
-    if: branch != rel/stable AND (branch =~ /^rel\//) AND type != pull_request
+    if: branch =~ /^rel\// AND type != pull_request
   - name: release
     if: branch != rel/stable AND (branch =~ /^rel\//) AND type != pull_request
 
@@ -66,6 +66,12 @@ jobs:
             - awscli
       script:
         - scripts/travis/external_build.sh ./scripts/travis/integration_test.sh
+    - # same stage, parallel job
+      os: osx
+      osx_image: xcode11
+      name: Darwin AMD64 Build
+      script:
+        - scripts/travis/build_test.sh
 
     - stage: build_release
       os: linux
@@ -79,7 +85,8 @@ jobs:
         - ./scripts/travis/integration_test.sh
     - # same stage, parallel job
       os: osx
-      name: Drawin AMD64 Build
+      osx_image: xcode11
+      name: Darwin AMD64 Build
       script:
         - scripts/travis/build_test.sh
     - # same stage, parallel job
@@ -102,6 +109,7 @@ jobs:
     - # same stage, parallel job
       name: MacOS Deploy
       os: osx
+      osx_image: xcode11
       script: scripts/travis/deploy_packages.sh
     - # same stage, parallel job
       name: External ARM64 Deploy
@@ -124,6 +132,10 @@ cache:
   directories:
     - crypto/lib
 
+before_install:
+  # Disable sometimes-broken sources.list in Travis base images
+  - sudo rm -vf /etc/apt/sources.list.d/*
+
 addons:
   apt:
     packages:
@@ -133,7 +145,7 @@ addons:
   artifacts:
     s3_region: "us-east-1"
     paths:
-      - $(git ls-files -o | grep -v crypto/libsodium-fork | grep -v crypto/lib/ | grep -v ^gen/ | tr "\n" ":")
+      - $(git ls-files -o | grep -v crypto/libsodium-fork | grep -v crypto/lib/ | grep -v ^gen/ | grep -v swagger.json.validated | tr "\n" ":")
 
 notifications:
   slack:
