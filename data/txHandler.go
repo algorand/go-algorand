@@ -286,7 +286,7 @@ func (handler *TxHandler) checkAlreadyCommitted(tx *txBacklogMsg) (processingDon
 			return true
 		}
 
-		committed, err := handler.ledger.Committed(txn)
+		committed, err := handler.ledger.Committed(tx.proto, txn)
 		if err != nil {
 			logging.Base().Errorf("Could not verify committed status of txn %v: %v", txn, err)
 			return true
