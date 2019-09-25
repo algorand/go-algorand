@@ -326,7 +326,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		return fmt.Errorf("transaction from incentive pool is invalid")
 	}
 	if !proto.SupportTransactionLeases && (tx.Lease != [32]byte{}) {
-		return fmt.Errorf("transaction tried to acquire lease %d but protocol does not support transaction leases", tx.Lease)
+		return fmt.Errorf("transaction tried to acquire lease %v but protocol does not support transaction leases", tx.Lease)
 	}
 	return nil
 }
