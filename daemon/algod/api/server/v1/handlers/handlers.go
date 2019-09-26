@@ -911,11 +911,6 @@ func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if uint64(len(record.AssetParams)) <= queryIndex {
-		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errFailedRetrievingAsset), errFailedRetrievingAsset, ctx.Log)
-		return
-	}
-
 	thisAssetParams := assetParams(addr, record.AssetParams[queryIndex])
 
 	SendJSON(AssetInformationResponse{&thisAssetParams}, w, ctx.Log)
