@@ -122,7 +122,7 @@ var Routes = lib.Routes{
 	lib.Route{
 		Name:        "asset-information-by-address",
 		Method:      "GET",
-		Path:        fmt.Sprintf("/account/{addr:[A-Z0-9]{%d}}/assets/{index}", KeyLength),
+		Path:        fmt.Sprintf("/account/{addr:[A-Z0-9]{%d}}/assets/{index:[0-9]+}", KeyLength),
 		HandlerFunc: handlers.AssetInformation,
 	},
 

@@ -848,7 +848,7 @@ func GetPendingTransactionsByAddress(ctx lib.ReqContext, w http.ResponseWriter, 
 	SendJSON(response, w, ctx.Log)
 }
 
-// AssetInformation is an httpHandler for route GET /v1/account/{addr:[A-Z0-9]{KeyLength}}/assets/{index}
+// AssetInformation is an httpHandler for route GET /v1//account/{addr:[A-Z0-9]{%d}}/assets/{index:[0-9]+}
 func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	// swagger:operation GET /v1/account/{creator}/assets/{index} AssetInformation
 	// ---
