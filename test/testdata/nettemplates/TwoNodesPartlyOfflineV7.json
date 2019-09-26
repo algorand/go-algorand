@@ -2,6 +2,7 @@
   "Genesis": {
     "NetworkName": "tbd",
     "ConsensusProtocol": "v7",
+    "PartKeyDilution": 100,
     "Wallets": [
       {
         "Name": "Offline1",

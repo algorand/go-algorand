@@ -1,6 +1,7 @@
 {
   "Genesis": {
     "NetworkName": "oneOnline",
+    "PartKeyDilution": 100,
     "Wallets": [
       {
         "Name": "Wallet1",

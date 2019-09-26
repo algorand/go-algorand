@@ -2,6 +2,7 @@
     "Genesis": {
         "NetworkName": "tbd",
         "ConsensusProtocol": "test-fast-upgrade-v12",
+        "PartKeyDilution": 100,
         "Wallets": [
             {
                 "Name": "Wallet1",

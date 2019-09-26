@@ -1,6 +1,7 @@
 {
     "Genesis": {
         "NetworkName": "tbd",
+        "PartKeyDilution": 100,
         "Wallets": [
             {
                 "Name": "20pct",
