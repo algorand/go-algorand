@@ -923,6 +923,27 @@ func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request
 		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errFailedRetrievingAsset), errFailedRetrievingAsset, ctx.Log)
 		return
 	}
+
+	assetFound = false
+	var thisAssetParams v1.AssetParams
+	if len(record.AssetParams) > 0 {
+		for idx, params := range record.AssetParams {
+			if idx == queryIndex {
+				thisAssetParams = assetParams(addr, params)
+			}
+		}
+	}
+	if !assetFound {
+		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errFailedRetrievingAsset), errFailedRetrievingAsset, ctx.Log)
+		return
+	}
+
+	assetInfo := v1.Asset{
+		AssetParams: thisAssetParams,
+		Assets:      assets,
+	}
+
+	SendJSON(AssetInformationResponse{&assetInfo}, w, ctx.Log)
 }
 
 // SuggestedFee is an httpHandler for route GET /v1/transactions/fee
