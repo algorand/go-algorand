@@ -91,6 +91,9 @@ type EvalParams struct {
 	// GroupIndex should point to Txn within TxnGroup
 	GroupIndex int
 
+	// for each sender in TxnGroup, its BalanceRecord
+	GroupSenders []basics.BalanceRecord
+
 	// pseudo random number generator, or seed parts
 	Source   Source64
 	Seed     []byte
@@ -982,6 +985,8 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint
 	case 21:
 		txid := txn.ID()
 		sv.Bytes = txid[:]
+	case 22:
+		sv.Uint = cx.GroupSenders[cx.GroupIndex].MicroAlgos.Raw
 	default:
 		err = fmt.Errorf("invalid txn field %d", field)
 	}
@@ -1014,6 +1019,8 @@ func opGtxn(cx *evalContext) {
 	if field == 20 {
 		// GroupIndex; asking this when we just specified it is _dumb_, but oh well
 		sv.Uint = uint64(gtxid)
+	} else if field == 22 {
+		sv.Uint = cx.GroupSenders[gtxid].MicroAlgos.Raw
 	} else {
 		sv, err = cx.txnFieldToStack(tx, field)
 		if err != nil {

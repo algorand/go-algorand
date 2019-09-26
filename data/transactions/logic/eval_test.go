@@ -949,6 +949,10 @@ int 3
 txn TxID
 arg 7
 ==
+&&
+txn SenderBalance
+int 4160
+==
 &&`
 
 func TestTxn(t *testing.T) {
@@ -998,8 +1002,10 @@ func TestTxn(t *testing.T) {
 		append([]byte(creator), 0, 0, 0, 0, 0, 0, 0, 1),
 		txid[:],
 	}
+	recs := make([]basics.BalanceRecord, 4)
+	recs[3].MicroAlgos.Raw = 4160
 	sb := strings.Builder{}
-	pass, err := Eval(program, EvalParams{Trace: &sb, Txn: &txn, GroupIndex: 3})
+	pass, err := Eval(program, EvalParams{Trace: &sb, Txn: &txn, GroupSenders: recs, GroupIndex: 3})
 	if !pass {
 		t.Log(hex.EncodeToString(program))
 		t.Log(sb.String())
@@ -1494,6 +1500,33 @@ int 1`)
 	require.True(t, strings.Contains(err.Error(), "too large"))
 	pass, err := Eval(program, EvalParams{})
 	require.Error(t, err)
+	require.False(t, pass)
+}
+
+func TestFetchSenderBalance(t *testing.T) {
+	t.Parallel()
+	bal := uint64(30000)
+	program, err := AssembleString(fmt.Sprintf(`int %d
+txn SenderBalance
+==`, bal))
+	require.NoError(t, err)
+	//t.Log(hex.EncodeToString(program))
+	canonicalProgramBytes, err := hex.DecodeString("012001b0ea0122311612")
+	require.NoError(t, err)
+	require.Equal(t, program, canonicalProgramBytes)
+
+	_, err = Check(program, EvalParams{})
+	require.NoError(t, err)
+
+	params := EvalParams{GroupSenders: make([]basics.BalanceRecord, 1), Txn: new(transactions.SignedTxn)}
+	params.GroupSenders[0].MicroAlgos.Raw = bal
+	pass, err := Eval(program, params)
+	require.NoError(t, err)
+	require.True(t, pass)
+
+	params.GroupSenders[0].MicroAlgos.Raw = bal + 1
+	pass, err = Eval(program, params)
+	require.NoError(t, err)
 	require.False(t, pass)
 }
 
