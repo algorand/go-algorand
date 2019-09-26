@@ -848,14 +848,14 @@ func GetPendingTransactionsByAddress(ctx lib.ReqContext, w http.ResponseWriter, 
 	SendJSON(response, w, ctx.Log)
 }
 
-// AssetInformation is an httpHandler for route GET /v1/asset/{addr:[A-Z0-9]{KeyLength}}
+// AssetInformation is an httpHandler for route GET /v1/account/{addr:[A-Z0-9]{KeyLength}}/assets/{index}
 func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
-	// swagger:operation GET /v1/asset/{address} AssetInformation
+	// swagger:operation GET /v1/account/{creator}/assets/{index} AssetInformation
 	// ---
 	//     Summary: Get asset information.
 	//     Description: >
-	//	   	 Given the asset creator's public key, this call returns the asset's manager,
-	//		 reserve, freeze, and clawback addresses
+	//       Given the asset creator's public key, this call returns the asset's manager,
+	//       reserve, freeze, and clawback addresses
 	//     Produces:
 	//     - application/json
 	//     Schemes:
@@ -867,6 +867,12 @@ func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request
 	//         pattern: "[A-Z0-9]{58}"
 	//         required: true
 	//         description: Asset creator public key
+	//       - name: index
+	//         in: path
+	//         type: integer
+	//         format: int64
+	//         required: true
+	//         description: Asset index
 	//     Responses:
 	//       200:
 	//         "$ref": '#/responses/AssetInformationResponse'
@@ -905,30 +911,13 @@ func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	var assetHolding v1.AssetHolding
 	assetFound := false
-	if len(record.Assets) > 0 {
-		for curid, holding := range record.Assets {
-			if curid.Index == queryIndex {
-				assetHolding = v1.AssetHolding{
-					Creator: curid.Creator.String(),
-					Amount:  holding.Amount,
-					Frozen:  holding.Frozen,
-				}
-				assetFound = true
-			}
-		}
-	if !assetFound {
-		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errFailedRetrievingAsset), errFailedRetrievingAsset, ctx.Log)
-		return
-	}
-
-	assetFound = false
 	var thisAssetParams v1.AssetParams
 	if len(record.AssetParams) > 0 {
 		for idx, params := range record.AssetParams {
 			if idx == queryIndex {
 				thisAssetParams = assetParams(addr, params)
+				assetFound = true
 			}
 		}
 	}
@@ -937,12 +926,7 @@ func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	assetInfo := v1.Asset{
-		AssetParams: thisAssetParams,
-		Assets:      assets,
-	}
-
-	SendJSON(AssetInformationResponse{&assetInfo}, w, ctx.Log)
+	SendJSON(AssetInformationResponse{&thisAssetParams}, w, ctx.Log)
 }
 
 // SuggestedFee is an httpHandler for route GET /v1/transactions/fee
