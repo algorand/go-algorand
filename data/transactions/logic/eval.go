@@ -978,7 +978,7 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint
 	case 19:
 		sv.Bytes = txn.AssetCloseTo[:]
 	case 20:
-		panic("GroupIndex should be handled outside txnFieldToStack")
+		sv.Uint = uint64(cx.GroupIndex)
 	case 21:
 		txid := txn.ID()
 		sv.Bytes = txid[:]
@@ -992,14 +992,10 @@ func opTxn(cx *evalContext) {
 	field := uint64(cx.program[cx.pc+1])
 	var sv stackValue
 	var err error
-	if field == 20 {
-		sv.Uint = uint64(cx.GroupIndex)
-	} else {
-		sv, err = cx.txnFieldToStack(&cx.Txn.Txn, field)
-		if err != nil {
-			cx.err = err
-			return
-		}
+	sv, err = cx.txnFieldToStack(&cx.Txn.Txn, field)
+	if err != nil {
+		cx.err = err
+		return
 	}
 	cx.stack = append(cx.stack, sv)
 	cx.nextpc = cx.pc + 2

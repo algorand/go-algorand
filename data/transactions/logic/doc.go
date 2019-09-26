@@ -129,6 +129,7 @@ var opDocExtraList = []stringString{
 	{"txn", "Most fields are a simple copy of a uint64 or byte string value. `XferAsset` is the concatenation of the AssetID Creator Address (32 bytes) and the big-endian bytes of the uint64 AssetID Index for a total of 40 bytes."},
 	{"gtxn", "for notes on transaction fields available, see `txn`"},
 	{"rand", "Random number generator based on the ChaCha20 algorithm. Seeded with the previous block's `Seed` value and the current transaction ID."},
+	{"btoi", "`btoi` panics if the input is longer than 8 bytes"},
 }
 
 var opDocExtras map[string]string

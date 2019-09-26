@@ -166,6 +166,8 @@ It is worth noting that there are 10,000,000,000,000,000 micro-Algos in the tota
 - Pushes: uint64
 - converts bytes as big endian to uint64
 
+`btoi` panics if the input is longer than 8 bytes
+
 ## %
 
 - Opcode: 0x18 
