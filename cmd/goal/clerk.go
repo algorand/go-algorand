@@ -798,7 +798,7 @@ var dryrunCmd = &cobra.Command{
 	Short: "test a program offline",
 	Long:  "test a program offline under various conditions and verbosity",
 	Run: func(cmd *cobra.Command, args []string) {
-		seed, err := base64.DecodeString(seedBase64)
+		seed, err := base64.StdEncoding.DecodeString(seedBase64)
 		if err != nil {
 			reportErrorf("invalid seed: %s", err)
 		}
