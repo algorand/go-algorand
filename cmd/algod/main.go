@@ -73,13 +73,12 @@ func main() {
 		rand.Seed(time.Now().UnixNano())
 	}
 
-	version := config.GetCurrentVersion()
 	if *versionCheck {
-		fmt.Printf("%d\n%s.%s [%s] (commit #%s)\n%s\n", version.AsUInt64(), version.String(),
-			version.Channel, version.Branch, version.GetCommitHash(), config.GetLicenseInfo())
+		fmt.Println(config.FormatVersionAndLicense())
 		return
 	}
 
+	version := config.GetCurrentVersion()
 	heartbeatGauge := metrics.MakeStringGauge()
 	heartbeatGauge.Set("version", version.String())
 	heartbeatGauge.Set("version-num", strconv.FormatUint(version.AsUInt64(), 10))

@@ -523,20 +523,20 @@ func TestLedgerSingleTx(t *testing.T) {
 	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctKeyreg, ad), "added duplicate tx")
 }
 
-func TestLedgerSingleTxApplyData(t *testing.T) {
+func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion) {
 	a := require.New(t)
 
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
-	genesisInitState, initSecrets := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
+	genesisInitState, initSecrets := testGenerateInitState(t, version)
 	const inMem = true
 	const archival = true
 	l, err := OpenLedger(logging.Base(), t.Name(), inMem, genesisInitState, archival)
 	a.NoError(err, "could not open ledger")
 	defer l.Close()
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	proto := config.Consensus[version]
 	poolAddr := testPoolAddr
 	sinkAddr := testSinkAddr
 
@@ -686,4 +686,80 @@ func TestLedgerSingleTxApplyData(t *testing.T) {
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctKeyreg, ad), "could not add key registration")
 
 	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctKeyreg, ad), "added duplicate tx")
+
+	leaseReleaseRound := l.Latest() + 10
+	correctPayLease := correctPay
+	correctPayLease.Sender = addrList[3]
+	correctPayLease.Lease[0] = 1
+	correctPayLease.LastValid = leaseReleaseRound
+	if proto.SupportTransactionLeases {
+		a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "could not add payment transaction with payment lease")
+
+		correctPayLease.Note = make([]byte, 1)
+		correctPayLease.Note[0] = 1
+		correctPayLease.LastValid += 10
+		a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "added payment transaction with matching transaction lease")
+		correctPayLeaseOther := correctPayLease
+		correctPayLeaseOther.Sender = addrList[4]
+		a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLeaseOther, ad), "could not add payment transaction with matching lease but different sender")
+		correctPayLeaseOther = correctPayLease
+		correctPayLeaseOther.Lease[0]++
+		a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLeaseOther, ad), "could not add payment transaction with matching sender but different lease")
+
+		for l.Latest() < leaseReleaseRound {
+			a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "added payment transaction with matching transaction lease")
+
+			var totalRewardUnits uint64
+			for _, acctdata := range initAccounts {
+				totalRewardUnits += acctdata.MicroAlgos.RewardUnits(proto)
+			}
+			poolBal, err := l.Lookup(l.Latest(), testPoolAddr)
+			a.NoError(err, "could not get incentive pool balance")
+			var emptyPayset transactions.Payset
+			lastBlock, err := l.Block(l.Latest())
+			a.NoError(err, "could not get last block")
+
+			correctHeader := bookkeeping.BlockHeader{
+				GenesisID:    t.Name(),
+				Round:        l.Latest() + 1,
+				Branch:       lastBlock.Hash(),
+				TxnRoot:      emptyPayset.Commit(proto.PaysetCommitFlat),
+				TimeStamp:    0,
+				RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits),
+				UpgradeState: lastBlock.UpgradeState,
+				// Seed:       does not matter,
+				// UpgradeVote: empty,
+			}
+			correctHeader.RewardsPool = testPoolAddr
+			correctHeader.FeeSink = testSinkAddr
+
+			if proto.SupportGenesisHash {
+				correctHeader.GenesisHash = crypto.Hash([]byte(t.Name()))
+			}
+
+			if proto.TxnCounter {
+				correctHeader.TxnCounter = lastBlock.TxnCounter
+			}
+
+			correctBlock := bookkeeping.Block{BlockHeader: correctHeader}
+			a.NoError(l.appendUnvalidated(correctBlock), "could not add block with correct header")
+		}
+
+		a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "could not add payment transaction after lease was dropped")
+	} else {
+		a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "added payment transaction with transaction lease unsupported by protocol version")
+	}
+}
+
+func TestLedgerSingleTxApplyData(t *testing.T) {
+	testLedgerSingleTxApplyData(t, protocol.ConsensusCurrentVersion)
+}
+
+// SupportTransactionLeases was introduced after v18.
+func TestLedgerSingleTxApplyDataV18(t *testing.T) {
+	testLedgerSingleTxApplyData(t, protocol.ConsensusV18)
+}
+
+func TestLedgerSingleTxApplyDataFuture(t *testing.T) {
+	testLedgerSingleTxApplyData(t, protocol.ConsensusFuture)
 }

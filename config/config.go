@@ -180,6 +180,9 @@ type ConsensusParams struct {
 	// domain-separated credentials
 	CredentialDomainSeparationEnabled bool
 
+	// support for transactions that mark an account non-participating
+	SupportBecomeNonParticipatingTransactions bool
+
 	// fix the rewards calculation by avoiding subtracting too much from the rewards pool
 	PendingResidueRewards bool
 
@@ -197,6 +200,9 @@ type ConsensusParams struct {
 
 	// max group size
 	MaxTxGroupSize int
+
+	// support for transaction leases
+	SupportTransactionLeases bool
 
 	// 0 for no support, otherwise highest version supported
 	LogicSigVersion uint64
@@ -421,6 +427,8 @@ func initConsensusProtocols() {
 	vFuture.MaxAssetsPerAccount = 1000
 	vFuture.SupportTxGroups = true
 	vFuture.MaxTxGroupSize = 16
+	vFuture.SupportTransactionLeases = true
+	vFuture.SupportBecomeNonParticipatingTransactions = true
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

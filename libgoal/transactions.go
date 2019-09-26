@@ -270,6 +270,70 @@ func (c *Client) MakeUnsignedGoOfflineTx(address string, round, txValidRounds, f
 	return goOfflineTransaction, nil
 }
 
+// MakeUnsignedBecomeNonparticipatingTx creates a transaction that will mark an account as non-participating
+func (c *Client) MakeUnsignedBecomeNonparticipatingTx(address string, round, txValidRounds, fee uint64) (transactions.Transaction, error) {
+	// Parse the address
+	parsedAddr, err := basics.UnmarshalChecksumAddress(address)
+	if err != nil {
+		return transactions.Transaction{}, err
+	}
+
+	params, err := c.SuggestedParams()
+	if err != nil {
+		return transactions.Transaction{}, err
+	}
+
+	cparams, ok := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
+	if !ok {
+		return transactions.Transaction{}, errors.New("unknown consensus version")
+	}
+
+	// Determine the last round this tx will be valid
+	if round == 0 {
+		round = params.LastRound + 1
+	}
+
+	if txValidRounds == 0 {
+		txValidRounds = cparams.MaxTxnLife
+	}
+
+	parsedRound := basics.Round(round)
+	parsedTXValidRounds := basics.Round(txValidRounds)
+	lastRound := parsedRound + parsedTXValidRounds
+	parsedFee := basics.MicroAlgos{Raw: fee}
+
+	becomeNonparticipatingTransaction := transactions.Transaction{
+		Type: protocol.KeyRegistrationTx,
+		Header: transactions.Header{
+			Sender:     parsedAddr,
+			Fee:        parsedFee,
+			FirstValid: parsedRound,
+			LastValid:  lastRound,
+		},
+	}
+	if cparams.SupportGenesisHash {
+		var genHash crypto.Digest
+		copy(genHash[:], params.GenesisHash)
+		becomeNonparticipatingTransaction.GenesisHash = genHash
+		// Recompute the TXID
+		becomeNonparticipatingTransaction.ResetCaches()
+	}
+	becomeNonparticipatingTransaction.KeyregTxnFields.Nonparticipation = true
+
+	// Default to the suggested fee, if the caller didn't supply it
+	// Fee is tricky, should taken care last. We encode the final transaction to get the size post signing and encoding
+	// Then, we multiply it by the suggested fee per byte.
+	if fee == 0 {
+		becomeNonparticipatingTransaction.Fee = basics.MulAIntSaturate(basics.MicroAlgos{Raw: params.Fee}, becomeNonparticipatingTransaction.EstimateEncodedSize())
+		if becomeNonparticipatingTransaction.Fee.Raw < cparams.MinTxnFee {
+			becomeNonparticipatingTransaction.Fee.Raw = cparams.MinTxnFee
+		}
+		// Recompute the TXID
+		becomeNonparticipatingTransaction.ResetCaches()
+	}
+	return becomeNonparticipatingTransaction, nil
+}
+
 // FillUnsignedTxTemplate fills in header fields in a partially-filled-in transaction.
 func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, numValidRounds, fee uint64, tx transactions.Transaction) (transactions.Transaction, error) {
 	// Parse the address

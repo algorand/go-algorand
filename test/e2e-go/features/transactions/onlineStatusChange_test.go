@@ -37,6 +37,10 @@ func TestAccountsCanChangeOnlineStateV7(t *testing.T) {
 	testAccountsCanChangeOnlineState(t, filepath.Join("nettemplates", "TwoNodesPartlyOfflineV7.json"))
 }
 
+func TestAccountsCanChangeOnlineStateInTheFuture(t *testing.T) {
+	testAccountsCanChangeOnlineState(t, filepath.Join("nettemplates", "TwoNodesPartlyOfflineVFuture.json"))
+}
+
 func testAccountsCanChangeOnlineState(t *testing.T, templatePath string) {
 
 	t.Parallel()
@@ -51,8 +55,9 @@ func testAccountsCanChangeOnlineState(t *testing.T, templatePath string) {
 	accountList, err := fixture.GetWalletsSortedByBalance()
 	a.NoError(err)
 
-	initiallyOnline := accountList[0].Address  // 35% stake
-	initiallyOffline := accountList[1].Address // 20% stake
+	initiallyOnline := accountList[0].Address         // 35% stake
+	initiallyOffline := accountList[1].Address        // 20% stake
+	becomesNonparticipating := accountList[2].Address // 10% stake
 
 	// assert that initiallyOfflineAccount is offline
 	initiallyOfflineAccountStatus, err := client.AccountInformation(initiallyOffline)
@@ -63,6 +68,11 @@ func testAccountsCanChangeOnlineState(t *testing.T, templatePath string) {
 	initiallyOnlineAccountStatus, err := client.AccountInformation(initiallyOnline)
 	a.NoError(err)
 	a.Equal(initiallyOnlineAccountStatus.Status, basics.Online.String())
+
+	// assert that the account that will become nonparticipating hasn't yet been marked as such
+	unmarkedAccountStatus, err := client.AccountInformation(becomesNonparticipating)
+	a.NoError(err)
+	a.NotEqual(unmarkedAccountStatus.Status, basics.NotParticipating.String())
 
 	// get the current round for partkey creation
 	_, curRound := fixture.GetBalanceAndRound(initiallyOnline)
@@ -88,11 +98,26 @@ func testAccountsCanChangeOnlineState(t *testing.T, templatePath string) {
 	a.NoError(err, "should be able to make go offline tx")
 	wh, err = client.GetUnencryptedWalletHandle()
 	offlineTxID, err := client.SignAndBroadcastTransaction(wh, nil, goOfflineUTx)
-	a.NoError(err, "should be no errors when using partkey to go online")
+	a.NoError(err, "should be no errors when going offline")
+
+	consensusParams, err := client.ConsensusParams(curRound)
+	a.NoError(err)
+	doNonparticipationTest := consensusParams.SupportBecomeNonParticipatingTransactions
+	nonparticipatingTxID := ""
+	if doNonparticipationTest {
+		becomeNonparticpatingUTx, err := client.MakeUnsignedBecomeNonparticipatingTx(becomesNonparticipating, curRound, transactionValidityPeriod, transactionFee)
+		a.NoError(err, "should be able to make become-nonparticipating tx")
+		wh, err = client.GetUnencryptedWalletHandle()
+		nonparticipatingTxID, err = client.SignAndBroadcastTransaction(wh, nil, becomeNonparticpatingUTx)
+		a.NoError(err, "should be  no errors when marking nonparticipating")
+	}
 
 	txidsForStatusChange := make(map[string]string)
 	txidsForStatusChange[onlineTxID] = initiallyOffline
 	txidsForStatusChange[offlineTxID] = initiallyOnline
+	if doNonparticipationTest {
+		txidsForStatusChange[nonparticipatingTxID] = becomesNonparticipating
+	}
 	txnConfirmationDeadline := curRound + uint64(5)
 	confirmed := fixture.WaitForAllTxnsToConfirm(txnConfirmationDeadline, txidsForStatusChange)
 	a.True(confirmed, "Transactions failed to confirm.")
@@ -109,4 +134,11 @@ func testAccountsCanChangeOnlineState(t *testing.T, templatePath string) {
 	initiallyOnlineAccountStatus, err = client.AccountInformation(initiallyOnline)
 	a.NoError(err)
 	a.Equal(initiallyOnlineAccountStatus.Status, basics.Offline.String())
+
+	if doNonparticipationTest {
+		// assert that becomesNonparticipating is no longer participating
+		unmarkedAccountStatus, err = client.AccountInformation(becomesNonparticipating)
+		a.NoError(err)
+		a.Equal(unmarkedAccountStatus.Status, basics.NotParticipating.String())
+	}
 }
