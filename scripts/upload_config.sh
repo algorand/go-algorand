@@ -10,12 +10,18 @@ set -e
 #
 # ExitCode: 0 = Update succeeded
 #
-# Usage:    Should be used to package and upload a prepared netgoal configuration directory
+# Usage:    Should be used to package and upload a prepared netgoal configuration directory.
+#           Expects target S3 bucket to be set as S3_RELEASE_BUCKET environment variable.
 #
 # Examples: scripts/upload_config.sh ~/MyTest1 david-test
 
 if [ "$#" -ne 2 ]; then
     echo "Syntax: upload_config <config root directory> <channel>"
+    exit 1
+fi
+
+if [[ -z "${S3_RELEASE_BUCKET}" ]]; then
+    echo "Target S3 bucket must be set as S3_RELEASE_BUCKET env var"
     exit 1
 fi
 
