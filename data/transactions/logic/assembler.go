@@ -444,7 +444,7 @@ var TxnFieldNames = []string{
 	"Type", "TypeEnum",
 	"XferAsset", "AssetAmount",
 	"AssetSender", "AssetReceiver", "AssetCloseTo",
-	"GroupIndex", "TxID",
+	"GroupIndex", "TxID", "SenderBalance",
 }
 
 // TxnFieldTypes is StackBytes or StackUint64 parallel to TxnFieldNames
@@ -455,7 +455,7 @@ var TxnFieldTypes = []StackType{
 	StackBytes, StackUint64,
 	StackBytes, StackUint64,
 	StackBytes, StackBytes, StackBytes,
-	StackUint64, StackBytes,
+	StackUint64, StackBytes, StackUint64,
 }
 
 var txnFields map[string]uint

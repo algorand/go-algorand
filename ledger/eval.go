@@ -486,14 +486,23 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 		}
 
 		if !txn.Lsig.Blank() {
+			recs := make([]basics.BalanceRecord, len(txgroup))
+			for i := range recs {
+				var err error
+				recs[i], err = cow.Get(txgroup[i].Txn.Sender)
+				if err != nil {
+					return fmt.Errorf("transaction %v: cannot get sender record: %v", txn.ID(), err)
+				}
+			}
 			ep := logic.EvalParams{
-				Txn:        &txn,
-				Block:      &eval.block,
-				Proto:      &eval.proto,
-				TxnGroup:   txgroup,
-				GroupIndex: groupIndex,
-				Seed:       eval.prevHeader.Seed[:],
-				MoreSeed:   txid[:],
+				Txn:          &txn,
+				Block:        &eval.block,
+				Proto:        &eval.proto,
+				TxnGroup:     txgroup,
+				GroupIndex:   groupIndex,
+				GroupSenders: recs,
+				Seed:         eval.prevHeader.Seed[:],
+				MoreSeed:     txid[:],
 			}
 			pass, err := logic.Eval(txn.Lsig.Logic, ep)
 			if !pass {
