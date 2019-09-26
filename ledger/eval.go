@@ -55,14 +55,17 @@ type roundCowBase struct {
 
 	// TxnCounter from previous block header.
 	txnCount uint64
+
+	// The current protocol consensus params.
+	proto config.ConsensusParams
 }
 
 func (x *roundCowBase) lookup(addr basics.Address) (basics.AccountData, error) {
 	return x.l.LookupWithoutRewards(x.rnd, addr)
 }
 
-func (x *roundCowBase) isDup(firstValid basics.Round, txid transactions.Txid) (bool, error) {
-	return x.l.isDup(firstValid, x.rnd, txid)
+func (x *roundCowBase) isDup(firstValid basics.Round, txid transactions.Txid, txl txlease) (bool, error) {
+	return x.l.isDup(x.proto, x.rnd+1, firstValid, x.rnd, txid, txl)
 }
 
 func (x *roundCowBase) txnCounter() uint64 {
@@ -167,7 +170,7 @@ type ledgerForEvaluator interface {
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
 	Lookup(basics.Round, basics.Address) (basics.AccountData, error)
 	Totals(basics.Round) (AccountTotals, error)
-	isDup(basics.Round, basics.Round, transactions.Txid) (bool, error)
+	isDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, txlease) (bool, error)
 	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, error)
 }
 
@@ -193,7 +196,8 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *eval
 		// the block at this round below, so underflow will be caught.
 		// If we are not validating, we must have previously checked
 		// an agreement.Certificate attesting that hdr is valid.
-		rnd: hdr.Round - 1,
+		rnd:   hdr.Round - 1,
+		proto: proto,
 	}
 
 	eval := &BlockEvaluator{
@@ -450,7 +454,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 		}
 
 		// Transaction already in the ledger?
-		dup, err := cow.isDup(txn.Txn.First(), txn.ID())
+		dup, err := cow.isDup(txn.Txn.First(), txn.ID(), txlease{sender: txn.Txn.Sender, lease: txn.Txn.Lease})
 		if err != nil {
 			return err
 		}
@@ -535,8 +539,8 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 		}
 	}
 
-	// Remember this TXID (to detect duplicates)
-	cow.addTx(txn.ID())
+	// Remember this txn
+	cow.addTx(txn.Txn)
 
 	return nil
 }
