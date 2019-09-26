@@ -939,8 +939,6 @@ func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	thisAssetParams := assetParams(addr, record.AssetParams[queryIndex])
-
 	SendJSON(AssetInformationResponse{&thisAssetParams}, w, ctx.Log)
 }
 
