@@ -227,6 +227,17 @@ func TestAssetConfig(t *testing.T) {
 		} else {
 			a.Equal(cp.ClawbackAddr, clawback)
 		}
+
+		assetInfo, err := client.AssetInformation(cp.Creator, idx)
+		a.NoError(err)
+		a.Equal(cp.Creator, assetInfo.Creator)
+		a.Equal(cp.AssetName, assetInfo.AssetName)
+		a.Equal(cp.UnitName, assetInfo.UnitName)
+		a.Equal(cp.ManagerAddr, assetInfo.ManagerAddr)
+		a.Equal(cp.ReserveAddr, assetInfo.ReserveAddr)
+		a.Equal(cp.FreezeAddr, assetInfo.FreezeAddr)
+		a.Equal(cp.ClawbackAddr, assetInfo.ClawbackAddr)
+
 	}
 
 	// re-generate wh, since this test takes a while and sometimes
