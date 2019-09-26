@@ -489,7 +489,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 			recs := make([]basics.BalanceRecord, len(txgroup))
 			for i := range recs {
 				var err error
-				recs[i], err = cow.Get(txgroup[i].Txn.Sender)
+				recs[i], err = cow.Get(txgroup[i].Txn.Sender, true)
 				if err != nil {
 					return fmt.Errorf("transaction %v: cannot get sender record: %v", txn.ID(), err)
 				}
