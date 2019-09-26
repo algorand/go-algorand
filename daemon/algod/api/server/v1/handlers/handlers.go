@@ -911,20 +911,12 @@ func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	assetFound := false
-	var thisAssetParams v1.AssetParams
-	if len(record.AssetParams) > 0 {
-		for idx, params := range record.AssetParams {
-			if idx == queryIndex {
-				thisAssetParams = assetParams(addr, params)
-				assetFound = true
-			}
-		}
-	}
-	if !assetFound {
+	if uint64(len(record.AssetParams)) <= queryIndex {
 		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errFailedRetrievingAsset), errFailedRetrievingAsset, ctx.Log)
 		return
 	}
+
+	thisAssetParams := assetParams(addr, record.AssetParams[queryIndex])
 
 	SendJSON(AssetInformationResponse{&thisAssetParams}, w, ctx.Log)
 }
