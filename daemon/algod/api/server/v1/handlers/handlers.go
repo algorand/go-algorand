@@ -930,6 +930,7 @@ func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request
 		for idx, params := range record.AssetParams {
 			if idx == queryIndex {
 				thisAssetParams = assetParams(addr, params)
+				assetFound = true
 			}
 		}
 	}
@@ -938,12 +939,7 @@ func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	assetInfo := v1.Asset{
-		AssetParams: thisAssetParams,
-		Assets:      assets,
-	}
-
-	SendJSON(AssetInformationResponse{&assetInfo}, w, ctx.Log)
+	SendJSON(AssetInformationResponse{&thisAssetParams}, w, ctx.Log)
 }
 
 // Assets is an httpHandler for route GET /v1/assets

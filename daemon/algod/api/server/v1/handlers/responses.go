@@ -213,15 +213,3 @@ type PendingTransactionsResponse struct {
 func (r PendingTransactionsResponse) getBody() interface{} {
 	return r.Body
 }
-
-// AssetInformationResponse contains asset information
-//
-// swagger:response AssetInformationResponse
-type AssetInformationResponse struct {
-	// in: body
-	Body *v1.Asset
-}
-
-func (r AssetInformationResponse) getBody() interface{} {
-	return r.Body
-}
