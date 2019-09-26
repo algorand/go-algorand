@@ -130,6 +130,9 @@ var signProgramCmd = &cobra.Command{
 		var lsig transactions.LogicSig
 		gotPartial := false
 		if programSource != "" {
+			if logicSigFile != "" || progByteFile != "" {
+				reportErrorf(multisigProgramCollision)
+			}
 			text, err := readFile(programSource)
 			if err != nil {
 				reportErrorf(fileReadError, programSource, err)
@@ -143,6 +146,9 @@ var signProgramCmd = &cobra.Command{
 			}
 			lsig.Logic = program
 		} else if logicSigFile != "" {
+			if progByteFile != "" {
+				reportErrorf(multisigProgramCollision)
+			}
 			var err error
 			program, err = readFile(logicSigFile)
 			if err != nil {

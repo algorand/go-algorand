@@ -62,6 +62,7 @@ var (
 	logicSigFile    string
 	round           uint64
 	timeStamp       int64
+	seedBase64      string
 )
 
 func init() {
@@ -130,6 +131,7 @@ func init() {
 	dryrunCmd.Flags().StringVarP(&txFilename, "txfile", "t", "", "transaction or transaction-group to test")
 	dryrunCmd.Flags().Uint64VarP(&round, "round", "r", 1, "round number to simulate")
 	dryrunCmd.Flags().Int64VarP(&timeStamp, "time-stamp", "S", 0, "unix time stamp simulate (default now)")
+	dryrunCmd.Flags().StringVarP(&seedBase64, "seed", "R", "2JNZvkCE2KFv3wVbEIEsPPNR64ttpaWuD5NEIXqXc3g=", "base64 bytes to seed random number generator with")
 }
 
 var clerkCmd = &cobra.Command{
@@ -796,6 +798,10 @@ var dryrunCmd = &cobra.Command{
 	Short: "test a program offline",
 	Long:  "test a program offline under various conditions and verbosity",
 	Run: func(cmd *cobra.Command, args []string) {
+		seed, err := base64.DecodeString(seedBase64)
+		if err != nil {
+			reportErrorf("invalid seed: %s", err)
+		}
 		data, err := readFile(txFilename)
 		if err != nil {
 			reportErrorf(fileReadError, txFilename, err)
@@ -828,8 +834,18 @@ var dryrunCmd = &cobra.Command{
 			if txn.Lsig.Blank() {
 				continue
 			}
+			txid := txn.ID()
 			sb := strings.Builder{}
-			ep := logic.EvalParams{Trace: &sb, Txn: &txn.SignedTxn, Block: &block, Proto: &proto}
+			ep := logic.EvalParams{
+				Txn:        &txn.SignedTxn,
+				Block:      &block,
+				Proto:      &proto,
+				Trace:      &sb,
+				TxnGroup:   txgroup,
+				GroupIndex: i,
+				Seed:       seed,
+				MoreSeed:   txid[:],
+			}
 			// TODO: also logic.Check() to get cost estimate and make sure it passes that
 			pass, err := logic.Eval(txn.Lsig.Logic, ep)
 			// TODO: optionally include `inspect` output here?

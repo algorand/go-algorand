@@ -341,7 +341,7 @@ func assembleByte(ops *OpStream, args []string) error {
 
 func assembleIntCBlock(ops *OpStream, args []string) error {
 	ops.Out.WriteByte(0x20) // intcblock
-	var scratch [11]byte
+	var scratch [binary.MaxVarintLen64]byte
 	l := binary.PutUvarint(scratch[:], uint64(len(args)))
 	ops.Out.Write(scratch[:l])
 	for _, xs := range args {
@@ -367,7 +367,7 @@ func assembleByteCBlock(ops *OpStream, args []string) error {
 		bvals = append(bvals, val)
 		rest = rest[consumed:]
 	}
-	var scratch [11]byte
+	var scratch [binary.MaxVarintLen64]byte
 	l := binary.PutUvarint(scratch[:], uint64(len(bvals)))
 	ops.Out.Write(scratch[:l])
 	for _, bv := range bvals {
@@ -708,7 +708,7 @@ const AssemblerDefaultVersion = 1
 
 // Bytes returns the finished program bytes
 func (ops *OpStream) Bytes() (program []byte, err error) {
-	var scratch [11]byte
+	var scratch [binary.MaxVarintLen64]byte
 	prebytes := bytes.Buffer{}
 	// TODO: configurable what version to compile for in case we're near a version boundary?
 	version := ops.Version

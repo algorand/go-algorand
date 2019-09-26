@@ -58,6 +58,8 @@ type inspectMultisigSubsig struct {
 	Sig crypto.Signature `codec:"s"`
 }
 
+// similar to data/transactions/logicsig.go LogicSig but uses types
+// that format better as JSON.
 type inspectLogicSig struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 

@@ -106,6 +106,8 @@ const (
 	infoNetworkStopped       = "Network Stopped under %s"
 	infoNetworkDeleted       = "Network Deleted under %s"
 
+	multisigProgramCollision = "should have at most one of --program/-p | --program-bytes/-P | --lsig/-L"
+
 	// Wallet
 	infoRecoveryPrompt           = "Please type your recovery mnemonic below, and hit return when you are done: "
 	infoChoosePasswordPrompt     = "Please choose a password for wallet '%s': "

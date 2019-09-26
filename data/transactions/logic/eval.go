@@ -478,6 +478,10 @@ func (cx *evalContext) checkStep() (cost int) {
 	if opsByOpcode[opcode].Returns != nil {
 		cx.checkStack = append(cx.checkStack, opsByOpcode[opcode].Returns...)
 	}
+	if len(cx.checkStack) > MaxStackDepth {
+		cx.err = errors.New("stack overflow")
+		return
+	}
 	if cx.Trace != nil {
 		if len(cx.checkStack) == 0 {
 			fmt.Fprintf(cx.Trace, "%3d %s => %s\n", cx.pc, opsByOpcode[opcode].Name, "<empty stack>")
