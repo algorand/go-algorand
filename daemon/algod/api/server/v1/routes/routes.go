@@ -119,6 +119,13 @@ var Routes = lib.Routes{
 		HandlerFunc: handlers.GetPendingTransactionsByAddress,
 	},
 
+	lib.Route{
+		Name:        "asset-information-by-address",
+		Method:      "GET",
+		Path:        fmt.Sprintf("/assets/{addr:[A-Z0-9]{%d}}/{index}", KeyLength),
+		HandlerFunc: handlers.AssetInformation,
+	},
+
 	// ----- This can only be active when indexer is live
 
 	lib.Route{
