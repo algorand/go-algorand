@@ -162,6 +162,21 @@ type Account struct {
 	Assets map[uint64]AssetHolding `json:"assets,omitempty"`
 }
 
+// Asset Description
+// swagger:model Asset
+type Asset struct {
+	// AssetParams specifies the parameters of assets created by this account.
+	//
+	// required: false
+	AssetParams AssetParams `json:"assetParams,omitempty"`
+
+	// Assets specifies the holdings of assets by this account,
+	// indexed by the asset ID.
+	//
+	// required: false
+	Assets AssetHolding `json:"assetHolding,omitempty"`
+}
+
 // AssetParams specifies the parameters for an asset.
 // swagger:model AssetParams
 type AssetParams struct {
