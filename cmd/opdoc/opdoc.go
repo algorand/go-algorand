@@ -191,6 +191,28 @@ func argEnumTypes(name string) string {
 	return ""
 }
 
+func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
+	records := make([]OpRecord, len(logic.OpSpecs))
+	for i, spec := range logic.OpSpecs {
+		records[i].Opcode = spec.Opcode
+		records[i].Name = spec.Name
+		records[i].Args = typeString(spec.Args)
+		records[i].Returns = typeString(spec.Returns)
+		records[i].Cost = logic.OpCost(spec.Name)
+		records[i].ArgEnum = argEnum(spec.Name)
+		records[i].ArgEnumTypes = argEnumTypes(spec.Name)
+		records[i].Doc = logic.OpDoc(spec.Name)
+		records[i].DocExtra = logic.OpDocExtra(spec.Name)
+		records[i].ImmediateNote = logic.OpImmediateNote(spec.Name)
+		records[i].Groups = opGroups[spec.Name]
+	}
+	return &LanguageSpec{
+		EvalMaxVersion:  logic.EvalMaxVersion,
+		LogicSigVersion: config.Consensus[protocol.ConsensusCurrentVersion].LogicSigVersion,
+		Ops:             records,
+	}
+}
+
 func main() {
 	opcodesMd, _ := os.Create("TEAL_opcodes.md")
 	opsToMarkdown(opcodesMd)
@@ -214,26 +236,8 @@ func main() {
 	fieldTableMarkdown(globalfields, logic.GlobalFieldNames, logic.GlobalFieldTypes)
 	globalfields.Close()
 
-	records := make([]OpRecord, len(logic.OpSpecs))
-	for i, spec := range logic.OpSpecs {
-		records[i].Opcode = spec.Opcode
-		records[i].Name = spec.Name
-		records[i].Args = typeString(spec.Args)
-		records[i].Returns = typeString(spec.Returns)
-		records[i].Cost = logic.OpCost(spec.Name)
-		records[i].ArgEnum = argEnum(spec.Name)
-		records[i].ArgEnumTypes = argEnumTypes(spec.Name)
-		records[i].Doc = logic.OpDoc(spec.Name)
-		records[i].DocExtra = logic.OpDocExtra(spec.Name)
-		records[i].ImmediateNote = logic.OpImmediateNote(spec.Name)
-		records[i].Groups = opGroups[spec.Name]
-	}
 	langspecjs, _ := os.Create("langspec.json")
 	enc := json.NewEncoder(langspecjs)
-	enc.Encode(LanguageSpec{
-		EvalMaxVersion:  logic.EvalMaxVersion,
-		LogicSigVersion: config.Consensus[protocol.ConsensusCurrentVersion].LogicSigVersion,
-		Ops:             records,
-	})
-
+	enc.Encode(buildLanguageSpec(opGroups))
+	langspecjs.Close()
 }
