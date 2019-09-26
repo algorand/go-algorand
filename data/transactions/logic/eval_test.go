@@ -707,7 +707,7 @@ func TestGtxnBadIndex(t *testing.T) {
 	txn.Lsig.Args = nil
 	txgroup := make([]transactions.SignedTxnWithAD, 1)
 	txgroup[0].SignedTxn = txn
-	pass, err := Eval(program, EvalParams{Trace: &sb, Txn: &txn, TxnGoup: txgroup})
+	pass, err := Eval(program, EvalParams{Trace: &sb, Txn: &txn, TxnGroup: txgroup})
 	if pass {
 		t.Log(hex.EncodeToString(program))
 		t.Log(sb.String())
@@ -728,7 +728,7 @@ func TestGtxnBadField(t *testing.T) {
 	txn.Lsig.Args = nil
 	txgroup := make([]transactions.SignedTxnWithAD, 1)
 	txgroup[0].SignedTxn = txn
-	pass, err := Eval(program, EvalParams{Trace: &sb, Txn: &txn, TxnGoup: txgroup})
+	pass, err := Eval(program, EvalParams{Trace: &sb, Txn: &txn, TxnGroup: txgroup})
 	if pass {
 		t.Log(hex.EncodeToString(program))
 		t.Log(sb.String())
@@ -793,9 +793,7 @@ int 9
 	require.True(t, pass)
 }
 
-func TestGlobal(t *testing.T) {
-	t.Parallel()
-	program, err := AssembleString(`global MinTxnFee
+const globalTestProgram = `global MinTxnFee
 int 123
 ==
 global MinBalance
@@ -813,13 +811,32 @@ txn CloseRemainderTo
 global TimeStamp
 int 2069
 ==
-&&`)
+&&
+global Round
+int 999999
+==
+&&
+global GroupSize
+int 1
+==
+&&`
+
+func TestGlobal(t *testing.T) {
+	t.Parallel()
+	for _, globalField := range GlobalFieldNames {
+		if !strings.Contains(globalTestProgram, globalField) {
+			t.Errorf("TestGlobal missing field %v", globalField)
+		}
+	}
+	program, err := AssembleString(globalTestProgram)
 	require.NoError(t, err)
 	cost, err := Check(program, EvalParams{})
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = program
+	txgroup := make([]transactions.SignedTxnWithAD, 1)
+	txgroup[0].SignedTxn = txn
 	sb := strings.Builder{}
 	block := bookkeeping.Block{}
 	block.BlockHeader.Round = 999999
@@ -830,7 +847,13 @@ int 2069
 		MaxTxnLife:      999,
 		LogicSigVersion: 1,
 	}
-	ep := EvalParams{Trace: &sb, Txn: &txn, Block: &block, Proto: &proto}
+	ep := EvalParams{
+		Trace:    &sb,
+		Txn:      &txn,
+		Block:    &block,
+		Proto:    &proto,
+		TxnGroup: txgroup,
+	}
 	pass, err := Eval(program, ep)
 	if !pass {
 		t.Log(hex.EncodeToString(program))
@@ -930,6 +953,11 @@ arg 7
 
 func TestTxn(t *testing.T) {
 	t.Parallel()
+	for _, txnField := range TxnFieldNames {
+		if !strings.Contains(testTxnProgramText, txnField) {
+			t.Errorf("TestTxn missing field %v", txnField)
+		}
+	}
 	program, err := AssembleString(testTxnProgramText)
 	require.NoError(t, err)
 	cost, err := Check(program, EvalParams{})
@@ -1074,7 +1102,7 @@ int 2
 		txn.Txn.Note,
 	}
 	sb = strings.Builder{}
-	pass, err := Eval(program, EvalParams{Trace: &sb, Txn: &txn, TxnGoup: txgroup})
+	pass, err := Eval(program, EvalParams{Trace: &sb, Txn: &txn, TxnGroup: txgroup})
 	if !pass || err != nil {
 		t.Log(hex.EncodeToString(program))
 		t.Log(sb.String())

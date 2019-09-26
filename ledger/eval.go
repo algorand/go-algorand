@@ -486,7 +486,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 				Txn:        &txn,
 				Block:      &eval.block,
 				Proto:      &eval.proto,
-				TxnGoup:    txgroup,
+				TxnGroup:   txgroup,
 				GroupIndex: groupIndex,
 				Seed:       eval.prevHeader.Seed[:],
 				MoreSeed:   txid[:],

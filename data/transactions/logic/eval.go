@@ -86,7 +86,7 @@ type EvalParams struct {
 
 	Trace io.Writer
 
-	TxnGoup []transactions.SignedTxnWithAD
+	TxnGroup []transactions.SignedTxnWithAD
 
 	// GroupIndex should point to Txn within TxnGroup
 	GroupIndex int
@@ -1003,11 +1003,11 @@ func opTxn(cx *evalContext) {
 
 func opGtxn(cx *evalContext) {
 	gtxid := int(uint(cx.program[cx.pc+1]))
-	if gtxid >= len(cx.TxnGoup) {
-		cx.err = fmt.Errorf("gtxn lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGoup))
+	if gtxid >= len(cx.TxnGroup) {
+		cx.err = fmt.Errorf("gtxn lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
 		return
 	}
-	tx := &cx.TxnGoup[gtxid].Txn
+	tx := &cx.TxnGroup[gtxid].Txn
 	field := uint64(cx.program[cx.pc+2])
 	var sv stackValue
 	var err error
@@ -1048,7 +1048,7 @@ func opGlobal(cx *evalContext) {
 	case 5:
 		sv.Bytes = zeroAddress[:]
 	case 6:
-		sv.Uint = uint64(len(cx.TxnGoup))
+		sv.Uint = uint64(len(cx.TxnGroup))
 	default:
 		cx.err = fmt.Errorf("invalid global[%d]", gindex)
 		return
