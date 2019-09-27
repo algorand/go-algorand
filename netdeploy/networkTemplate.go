@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/algorand/go-algorand/config"
@@ -160,6 +161,11 @@ func loadTemplate(templateFile string) (NetworkTemplate, error) {
 		return template, err
 	}
 	defer f.Close()
+
+	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+		// for arm machines, use smaller key dilution
+		template.Genesis.PartKeyDilution = 100
+	}
 
 	err = loadTemplateFromReader(f, &template)
 	return template, err
