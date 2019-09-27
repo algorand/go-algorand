@@ -30,7 +30,7 @@ import (
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
-// TxnPoolVerify verifies that a SignedTxn has a good signature and that the underlying
+// TxnPool verifies that a SignedTxn has a good signature and that the underlying
 // transaction is properly constructed.
 // Note that this does not check whether a payset is valid against the ledger:
 // a SignedTxn may be well-formed, but a payset might contain an overspend.
@@ -59,7 +59,7 @@ func TxnPool(s *transactions.SignedTxn, spec transactions.SpecialAddresses, prot
 	return nil
 }
 
-// TxnVerify verifies a SignedTxn as being signed and having no obviously inconsistent data.
+// Txn verifies a SignedTxn as being signed and having no obviously inconsistent data.
 // Block-assembly time checks of LogicSig and accounting rules may still block the txn.
 func Txn(s *transactions.SignedTxn, spec transactions.SpecialAddresses, proto config.ConsensusParams) error {
 	if err := s.Txn.WellFormed(spec, proto); err != nil {
@@ -133,7 +133,7 @@ func stxnVerifyCore(s *transactions.SignedTxn, proto *config.ConsensusParams) er
 	return errors.New("has one mystery sig. WAT?")
 }
 
-// LogicSigVerify checks that the signature is valid and that the program is basically well formed.
+// LogicSig checks that the signature is valid and that the program is basically well formed.
 // It does not evaluate the logic.
 func LogicSig(lsig *transactions.LogicSig, proto *config.ConsensusParams, stxn *transactions.SignedTxn) error {
 	if len(lsig.Logic) == 0 {
