@@ -17,10 +17,6 @@
 package transactions
 
 import (
-	"encoding/binary"
-	"errors"
-
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 )
 
@@ -54,69 +50,4 @@ func (lsig *LogicSig) Len() int {
 		lsiglen += len(arg)
 	}
 	return lsiglen
-}
-
-// Verify checks that the signature is valid. It does not evaluate the logic.
-func (lsig *LogicSig) Verify(proto *config.ConsensusParams, txn *Transaction) error {
-	if len(lsig.Logic) == 0 {
-		return errors.New("LogicSig.Logic empty")
-	}
-	version, vlen := binary.Uvarint(lsig.Logic)
-	if vlen < 0 {
-		return errors.New("LogicSig.Logic bad version")
-	}
-	if version > proto.LogicSigVersion {
-		return errors.New("LogicSig.Logic version too new")
-	}
-	if uint64(lsig.Len()) > proto.LogicSigMaxSize {
-		return errors.New("LogicSig.Logic too long")
-	}
-
-	// TODO: figure out how to fix circularity and enable this
-	// ep := logic.EvalParams{Txn: txn, Proto: proto}
-	// cost, err := logic.Check(txn.Lsig.Logic, ep)
-	// if cost > proto.LogicSigMaxCost {
-	// 	return fmt.Errorf("LogicSig.Logic too slow, %d > %d", cost, proto.LogicSigMaxCost)
-	// }
-
-	hasSig := false
-	hasMsig := false
-	numSigs := 0
-	if lsig.Sig != (crypto.Signature{}) {
-		hasSig = true
-		numSigs++
-	}
-	if !lsig.Msig.Blank() {
-		hasMsig = true
-		numSigs++
-	}
-	if numSigs == 0 {
-		// if the txn.Sender == hash(Logic) then this is a (potentially) valid operation on a contract-only account
-		program := Program(lsig.Logic)
-		lhash := crypto.HashObj(&program)
-		if crypto.Digest(txn.Sender) == lhash {
-			return nil
-		}
-		return errors.New("LogicNot signed and not a Logic-only account")
-	}
-	if numSigs > 1 {
-		return errors.New("LogicSig should only have one of Sig or Msig but has more than one")
-	}
-
-	if hasSig {
-		program := Program(lsig.Logic)
-		if crypto.SignatureVerifier(txn.Src()).Verify(&program, lsig.Sig) {
-			return nil
-		}
-		return errors.New("logic signature validation failed")
-	}
-	if hasMsig {
-		program := Program(lsig.Logic)
-		if ok, _ := crypto.MultisigVerify(&program, crypto.Digest(txn.Src()), lsig.Msig); ok {
-			return nil
-		}
-		return errors.New("logic multisig validation failed")
-	}
-
-	return errors.New("inconsistent internal state verifying LogicSig")
 }

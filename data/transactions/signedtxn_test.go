@@ -21,7 +21,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -69,8 +68,7 @@ func TestDecodeNil(t *testing.T) {
 	var st SignedTxn
 	err := protocol.Decode(nilEncoding, &st)
 	if err == nil {
-		// These three functions used to panic when run on a zero value of SignedTxn.
-		st.Verify(spec, config.Consensus[protocol.ConsensusCurrentVersion])
+		// These two functions used to panic when run on a zero value of SignedTxn.
 		st.ID()
 		st.Priority()
 	}

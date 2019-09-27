@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/execpool"
@@ -474,7 +475,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 
 		// Properly signed?
 		if eval.txcache == nil || !eval.txcache.Verified(txn) {
-			err = TxnPoolVerify(&txn, spec, eval.proto, eval.verificationPool)
+			err = verify.TxnPool(&txn, spec, eval.proto, eval.verificationPool)
 			if err != nil {
 				return fmt.Errorf("transaction %v: failed to verify: %v", txn.ID(), err)
 			}

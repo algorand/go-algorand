@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package ledger
+package verify
 
 import (
 	"context"
@@ -30,15 +30,13 @@ import (
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
-// TODO: this is a copy of code from transactions/signedtxn.go and transactions/logicsig.go so that I could break a circularity and add logic.Check() to the LogicSigVerify. If this code stays here, delete it from the other place.
-
 // TxnPoolVerify verifies that a SignedTxn has a good signature and that the underlying
 // transaction is properly constructed.
 // Note that this does not check whether a payset is valid against the ledger:
 // a SignedTxn may be well-formed, but a payset might contain an overspend.
 //
 // This version of verify is performing the verification over the provided execution pool.
-func TxnPoolVerify(s *transactions.SignedTxn, spec transactions.SpecialAddresses, proto config.ConsensusParams, verificationPool execpool.BacklogPool) error {
+func TxnPool(s *transactions.SignedTxn, spec transactions.SpecialAddresses, proto config.ConsensusParams, verificationPool execpool.BacklogPool) error {
 	if err := s.Txn.WellFormed(spec, proto); err != nil {
 		return err
 	}
@@ -59,6 +57,21 @@ func TxnPoolVerify(s *transactions.SignedTxn, spec transactions.SpecialAddresses
 		return err
 	}
 	return nil
+}
+
+// TxnVerify verifies a SignedTxn as being signed and having no obviously inconsistent data.
+// Block-assembly time checks of LogicSig and accounting rules may still block the txn.
+func Txn(s *transactions.SignedTxn, spec transactions.SpecialAddresses, proto config.ConsensusParams) error {
+	if err := s.Txn.WellFormed(spec, proto); err != nil {
+		return err
+	}
+
+	zeroAddress := basics.Address{}
+	if s.Txn.Src() == zeroAddress {
+		return errors.New("empty address")
+	}
+
+	return stxnVerifyCore(s, &proto)
 }
 
 type asyncVerifyContext struct {
@@ -115,13 +128,14 @@ func stxnVerifyCore(s *transactions.SignedTxn, proto *config.ConsensusParams) er
 		return errors.New("multisig validation failed")
 	}
 	if hasLogicSig {
-		return lsigVerify(&s.Lsig, proto, s)
+		return LogicSig(&s.Lsig, proto, s)
 	}
 	return errors.New("has one mystery sig. WAT?")
 }
 
-// Verify checks that the signature is valid. It does not evaluate the logic.
-func lsigVerify(lsig *transactions.LogicSig, proto *config.ConsensusParams, stxn *transactions.SignedTxn) error {
+// LogicSigVerify checks that the signature is valid and that the program is basically well formed.
+// It does not evaluate the logic.
+func LogicSig(lsig *transactions.LogicSig, proto *config.ConsensusParams, stxn *transactions.SignedTxn) error {
 	if len(lsig.Logic) == 0 {
 		return errors.New("LogicSig.Logic empty")
 	}
