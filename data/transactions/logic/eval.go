@@ -991,6 +991,8 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint
 		sv.Bytes = txid[:]
 	case 22:
 		sv.Uint = cx.GroupSenders[cx.GroupIndex].MicroAlgos.Raw
+	case 23:
+		sv.Bytes = txn.Lease[:]
 	default:
 		err = fmt.Errorf("invalid txn field %d", field)
 	}

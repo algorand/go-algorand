@@ -953,6 +953,10 @@ arg 7
 txn SenderBalance
 int 4160
 ==
+&&
+txn Lease
+arg 8
+==
 &&`
 
 func TestTxn(t *testing.T) {
@@ -978,6 +982,7 @@ func TestTxn(t *testing.T) {
 	txn.Txn.XferAsset.Index = 1
 	// This is not a valid transaction to have all these fields set this way
 	txn.Txn.Note = []byte("fnord")
+	copy(txn.Txn.Lease[:], []byte("woofwoof"))
 	txn.Txn.Fee.Raw = 1337
 	txn.Txn.FirstValid = 42
 	txn.Txn.LastValid = 1066
@@ -1001,6 +1006,7 @@ func TestTxn(t *testing.T) {
 		txn.Txn.Note,
 		append([]byte(creator), 0, 0, 0, 0, 0, 0, 0, 1),
 		txid[:],
+		txn.Txn.Lease[:],
 	}
 	recs := make([]basics.BalanceRecord, 4)
 	recs[3].MicroAlgos.Raw = 4160
