@@ -401,7 +401,7 @@ func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.Sign
 	proto := config.Consensus[b.CurrentProtocol]
 
 	for _, tx := range txgroup {
-		err = tx.Verify(spec, proto)
+		err = ledger.TxnVerify(&tx, spec, proto)
 		if err != nil {
 			node.log.Warnf("malformed transaction: %v - transaction was %+v", err, tx)
 			return err

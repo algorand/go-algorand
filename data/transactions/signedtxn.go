@@ -17,15 +17,15 @@
 package transactions
 
 import (
-	"context"
+	//"context"
 	"errors"
 
-	"github.com/algorand/go-algorand/config"
+	//"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/util/execpool"
+	//"github.com/algorand/go-algorand/util/execpool"
 )
 
 // SignedTxn wraps a transaction and a signature.
@@ -159,6 +159,9 @@ func (s *SignedTxn) PtrPriority() TxnPriority {
 	return TxnPriority(basics.MulSaturate(s.Txn.TxFee().Raw, uint64(maxTxnBytesForPriority/encodingLen)))
 }
 
+/*
+TODO: cleanup, moved to ledger/txnVerify.go
+
 // Verify that a SignedTxn has a good signature and that the underlying
 // transaction is properly constructed.
 // Note that this does not check whether a payset is valid against the ledger:
@@ -262,6 +265,7 @@ func (s SignedTxn) asyncVerify(arg interface{}) interface{} {
 	}
 	return nil
 }
+*/
 
 // AssembleSignedTxn assembles a multisig-signed transaction from a transaction an optional sig, and an optional multisig.
 // No signature checking is done -- for example, this might only be a partial multisig

@@ -17,10 +17,10 @@
 package transactions
 
 import (
-	"encoding/binary"
-	"errors"
+	//"encoding/binary"
+	//"errors"
 
-	"github.com/algorand/go-algorand/config"
+	//"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 )
 
@@ -56,6 +56,8 @@ func (lsig *LogicSig) Len() int {
 	return lsiglen
 }
 
+/*
+TODO: cleanup, moved to ledger/txnVerify.go
 // Verify checks that the signature is valid. It does not evaluate the logic.
 func (lsig *LogicSig) Verify(proto *config.ConsensusParams, txn *Transaction) error {
 	if len(lsig.Logic) == 0 {
@@ -73,11 +75,12 @@ func (lsig *LogicSig) Verify(proto *config.ConsensusParams, txn *Transaction) er
 	}
 
 	// TODO: figure out how to fix circularity and enable this
-	// ep := logic.EvalParams{Txn: txn, Proto: proto}
-	// cost, err := logic.Check(txn.Lsig.Logic, ep)
-	// if cost > proto.LogicSigMaxCost {
-	// 	return fmt.Errorf("LogicSig.Logic too slow, %d > %d", cost, proto.LogicSigMaxCost)
-	// }
+	// cannot import data/transactions/logic because of what it depends on making a loop here.
+	ep := logic.EvalParams{Txn: txn, Proto: proto}
+	cost, err := logic.Check(txn.Lsig.Logic, ep)
+	if cost > proto.LogicSigMaxCost {
+		return fmt.Errorf("LogicSig.Logic too slow, %d > %d", cost, proto.LogicSigMaxCost)
+	}
 
 	hasSig := false
 	hasMsig := false
@@ -120,3 +123,4 @@ func (lsig *LogicSig) Verify(proto *config.ConsensusParams, txn *Transaction) er
 
 	return errors.New("inconsistent internal state verifying LogicSig")
 }
+*/

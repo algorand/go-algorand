@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
 
@@ -573,7 +574,8 @@ var signCmd = &cobra.Command{
 			var signedTxn transactions.SignedTxn
 			if lsig.Logic != nil {
 				proto := config.Consensus[protocol.ConsensusCurrentVersion]
-				err = lsig.Verify(&proto, &unsignedTxn.Txn)
+				//err = lsig.Verify(&proto, &unsignedTxn.Txn)
+				err = ledger.LogicSigVerify(&lsig, &proto, &unsignedTxn)
 				if err != nil {
 					reportErrorf("%s: txn[%d] error %s", txFilename, count, err)
 				}

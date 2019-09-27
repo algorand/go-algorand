@@ -263,6 +263,8 @@ func TestPaymentSelfClose(t *testing.T) {
 	require.Error(t, tx.WellFormed(spec, config.Consensus[protocol.ConsensusCurrentVersion]))
 }
 
+/*
+TODO: cleanup, moved to ledger/txnVerify_test.go
 func TestSignedPayment(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
@@ -281,6 +283,7 @@ func TestSignedPayment(t *testing.T) {
 
 	require.True(t, crypto.SignatureVerifier(addr).Verify(payment, stxn.Sig), "signature on the transaction is not the signature of the hash of the transaction under the spender's key")
 }
+*/
 
 /*
 func TestTxnValidation(t *testing.T) {
@@ -367,6 +370,8 @@ func TestTxnValidation(t *testing.T) {
 }
 */
 
+/*
+TODO: cleanup, moved to ledger/txnVerify_test.go
 func TestTxnValidationEncodeDecode(t *testing.T) {
 	_, signed, _, _ := generateTestObjects(100, 50)
 
@@ -385,3 +390,4 @@ func TestTxnValidationEncodeDecode(t *testing.T) {
 		}
 	}
 }
+*/

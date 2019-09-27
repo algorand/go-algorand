@@ -61,6 +61,21 @@ func TxnPoolVerify(s *transactions.SignedTxn, spec transactions.SpecialAddresses
 	return nil
 }
 
+// TxnVerify verifies a SignedTxn as being signed and having no obviously inconsistent data.
+// Block-assembly time checks of LogicSig and accounting rules may still block the txn.
+func TxnVerify(s *transactions.SignedTxn, spec transactions.SpecialAddresses, proto config.ConsensusParams) error {
+	if err := s.Txn.WellFormed(spec, proto); err != nil {
+		return err
+	}
+
+	zeroAddress := basics.Address{}
+	if s.Txn.Src() == zeroAddress {
+		return errors.New("empty address")
+	}
+
+	return stxnVerifyCore(s, &proto)
+}
+
 type asyncVerifyContext struct {
 	s     *transactions.SignedTxn
 	outCh chan error
@@ -115,13 +130,14 @@ func stxnVerifyCore(s *transactions.SignedTxn, proto *config.ConsensusParams) er
 		return errors.New("multisig validation failed")
 	}
 	if hasLogicSig {
-		return lsigVerify(&s.Lsig, proto, s)
+		return LogicSigVerify(&s.Lsig, proto, s)
 	}
 	return errors.New("has one mystery sig. WAT?")
 }
 
-// Verify checks that the signature is valid. It does not evaluate the logic.
-func lsigVerify(lsig *transactions.LogicSig, proto *config.ConsensusParams, stxn *transactions.SignedTxn) error {
+// LogicSigVerify checks that the signature is valid and that the program is basically well formed.
+// It does not evaluate the logic.
+func LogicSigVerify(lsig *transactions.LogicSig, proto *config.ConsensusParams, stxn *transactions.SignedTxn) error {
 	if len(lsig.Logic) == 0 {
 		return errors.New("LogicSig.Logic empty")
 	}
