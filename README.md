@@ -25,7 +25,7 @@ We currently strive to support Debian based distributions with Ubuntu 18.04
 being our official release target. Our core engineering team uses Linux and OSX,
 so both environments are well supported for development.
 
-[Homebrew (brew)](https://brew.sh) must be installed before
+OSX only: [Homebrew (brew)](https://brew.sh) must be installed before
 continuing. [Here](https://docs.brew.sh/Installation) are the installation
 requirements.
 
@@ -170,7 +170,7 @@ of their own:
   - `nodecontrol`
   - `tools`
   - `docker`
-  - `commandandcontrol` ([README](commandandcontrol/README.md)) is a tool to
+  - `commandandcontrol` ([README](test/commandandcontrol/README.md)) is a tool to
     automate a network of algod instances.
   - `components`
   - `netdeploy`
