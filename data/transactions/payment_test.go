@@ -264,28 +264,6 @@ func TestPaymentSelfClose(t *testing.T) {
 }
 
 /*
-TODO: cleanup, moved to ledger/txnVerify_test.go
-func TestSignedPayment(t *testing.T) {
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-
-	payments, stxns, secrets, addrs := generateTestObjects(1, 1)
-	payment, stxn, secret, addr := payments[0], stxns[0], secrets[0], addrs[0]
-
-	require.NoError(t, payment.WellFormed(spec, proto), "generateTestObjects generated an invalid payment")
-	require.NoError(t, stxn.Verify(spec, proto), "generateTestObjects generated a bad signedtxn")
-
-	stxn2 := payment.Sign(secret)
-	require.Equal(t, stxn2.Sig, stxn.Sig, "got two different signatures for the same transaction (our signing function is deterministic)")
-
-	stxn2.MessUpSigForTesting()
-	require.Equal(t, stxn.ID(), stxn2.ID(), "changing sig caused txid to change")
-	require.Error(t, stxn2.Verify(spec, proto), "verify succeeded with bad sig")
-
-	require.True(t, crypto.SignatureVerifier(addr).Verify(payment, stxn.Sig), "signature on the transaction is not the signature of the hash of the transaction under the spender's key")
-}
-*/
-
-/*
 func TestTxnValidation(t *testing.T) {
 	_, signed, _, _ := generateTestObjects(100, 50)
 	tc := ExplicitTxnContext{
@@ -365,28 +343,6 @@ func TestTxnValidation(t *testing.T) {
 
 		if i > 5 {
 			break
-		}
-	}
-}
-*/
-
-/*
-TODO: cleanup, moved to ledger/txnVerify_test.go
-func TestTxnValidationEncodeDecode(t *testing.T) {
-	_, signed, _, _ := generateTestObjects(100, 50)
-
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	for _, txn := range signed {
-		if txn.Verify(spec, proto) != nil {
-			t.Errorf("signed transaction %#v did not verify", txn)
-		}
-
-		x := protocol.Encode(txn)
-		var signedTx SignedTxn
-		protocol.Decode(x, &signedTx)
-
-		if signedTx.Verify(spec, proto) != nil {
-			t.Errorf("signed transaction %#v did not verify", txn)
 		}
 	}
 }

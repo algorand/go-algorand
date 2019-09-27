@@ -21,7 +21,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	//"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
 )

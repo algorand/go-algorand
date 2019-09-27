@@ -574,7 +574,6 @@ var signCmd = &cobra.Command{
 			var signedTxn transactions.SignedTxn
 			if lsig.Logic != nil {
 				proto := config.Consensus[protocol.ConsensusCurrentVersion]
-				//err = lsig.Verify(&proto, &unsignedTxn.Txn)
 				err = ledger.LogicSigVerify(&lsig, &proto, &unsignedTxn)
 				if err != nil {
 					reportErrorf("%s: txn[%d] error %s", txFilename, count, err)

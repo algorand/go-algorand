@@ -189,7 +189,6 @@ func (handler *TxHandler) backlogWorker() {
 func (handler *TxHandler) asyncVerifySignature(arg interface{}) interface{} {
 	tx := arg.(*txBacklogMsg)
 	for _, txn := range tx.unverifiedTxGroup {
-		//tx.verificationErr = txn.Verify(tx.spec, tx.proto)
 		tx.verificationErr = ledger.TxnVerify(&txn, tx.spec, tx.proto)
 		if tx.verificationErr != nil {
 			break
@@ -312,7 +311,6 @@ func (handler *TxHandler) processDecoded(unverifiedTxGroup []transactions.Signed
 	}
 
 	for _, txn := range unverifiedTxGroup {
-		//err := txn.PoolVerify(tx.spec, tx.proto, handler.txVerificationPool)
 		err := ledger.TxnPoolVerify(&txn, tx.spec, tx.proto, handler.txVerificationPool)
 		if err != nil {
 			// transaction is invalid
