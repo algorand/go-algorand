@@ -81,22 +81,28 @@ func (part Participation) OverlapsInterval(first, last basics.Round) bool {
 }
 
 // DeleteOldKeys securely deletes ephemeral keys for rounds strictly older than the given round.
-func (part Participation) DeleteOldKeys(current basics.Round, proto config.ConsensusParams) error {
+func (part Participation) DeleteOldKeys(current basics.Round, proto config.ConsensusParams) <-chan error {
 	keyDilution := part.KeyDilution
 	if keyDilution == 0 {
 		keyDilution = proto.DefaultKeyDilution
 	}
 
 	part.Voting.DeleteBeforeFineGrained(basics.OneTimeIDForRound(current, keyDilution), keyDilution)
-	raw := protocol.Encode(part.Voting.Snapshot())
 
-	return part.Store.Atomic(func(tx *sql.Tx) error {
-		_, err := tx.Exec("UPDATE ParticipationAccount SET voting=?", raw)
-		if err != nil {
-			return fmt.Errorf("Participation.DeleteOldKeys: failed to update account: %v", err)
-		}
-		return nil
-	})
+	errorCh := make(chan error, 1)
+	deleteOldKeys := func(encodedVotingSecrets []byte) {
+		errorCh <- part.Store.Atomic(func(tx *sql.Tx) error {
+			_, err := tx.Exec("UPDATE ParticipationAccount SET voting=?", encodedVotingSecrets)
+			if err != nil {
+				return fmt.Errorf("Participation.DeleteOldKeys: failed to update account: %v", err)
+			}
+			return nil
+		})
+		close(errorCh)
+	}
+	encodedVotingSecrets := protocol.Encode(part.Voting.Snapshot())
+	go deleteOldKeys(encodedVotingSecrets)
+	return errorCh
 }
 
 // PersistNewParent writes a new parent address to the partkey database.

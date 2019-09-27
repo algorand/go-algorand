@@ -221,7 +221,11 @@ func (c *Client) InstallParticipationKeys(inputfile string) (part account.Partic
 	// disk blocks, but regardless of whether that works, we
 	// delete the input file.  The consensus protocol version
 	// is irrelevant for the maxuint64 round number we pass in.
-	partkey.DeleteOldKeys(basics.Round(math.MaxUint64), config.Consensus[protocol.ConsensusCurrentVersion])
+	errCh := partkey.DeleteOldKeys(basics.Round(math.MaxUint64), config.Consensus[protocol.ConsensusCurrentVersion])
+	err = <-errCh
+	if err != nil {
+		return
+	}
 	os.Remove(inputfile)
 
 	return newpartkey, newdbpath, nil
