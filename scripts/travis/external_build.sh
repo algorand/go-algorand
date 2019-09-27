@@ -74,6 +74,9 @@ fi
 set +e
 # remove if it's already there, so the new build would replace it.
 aws s3 rm ${BUILD_COMPLETE_PATH} ${NO_SIGN_REQUEST}
+# delete the first log for this build task. The build host would
+# delete any n+1 log file before creating the n-th log file.
+aws s3 rm ${BUILD_LOG_PATH}-1 ${NO_SIGN_REQUEST}
 
 set -e
 aws s3 cp ${BUILDID}.json ${BUILD_REQUEST_PATH} ${NO_SIGN_REQUEST}
