@@ -28,9 +28,9 @@ import (
 
 	"github.com/algorand/websocket"
 
-	"github.com/algorand/go-algorand/commandandcontrol/cc_agent/component"
-	"github.com/algorand/go-algorand/commandandcontrol/lib"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/test/commandandcontrol/cc_agent/component"
+	"github.com/algorand/go-algorand/test/commandandcontrol/lib"
 )
 
 type arrayFlags []string
