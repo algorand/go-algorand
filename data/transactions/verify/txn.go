@@ -30,8 +30,6 @@ import (
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
-// TODO: this is a copy of code from transactions/signedtxn.go and transactions/logicsig.go so that I could break a circularity and add logic.Check() to the LogicSigVerify. If this code stays here, delete it from the other place.
-
 // TxnPoolVerify verifies that a SignedTxn has a good signature and that the underlying
 // transaction is properly constructed.
 // Note that this does not check whether a payset is valid against the ledger:
