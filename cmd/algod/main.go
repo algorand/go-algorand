@@ -273,8 +273,10 @@ func main() {
 		telemetryURL := ""
 
 		go func() {
-			i := 0
-			values := make(map[string]string)
+			heartbeatInterval := 10
+
+			// Initialize to heartbeatInterval so we send out an event on the first iteration.
+			i := heartbeatInterval
 			for {
 				i++
 
@@ -285,18 +287,17 @@ func main() {
 					addrs, err := network.ReadFromBootstrap(telemetrySRV, cfg.FallbackDNSResolverAddress)
 					if err != nil {
 						log.Warn("An issue occurred reading telemetry entry for: %s", telemetrySRV)
-					}
-
-					if len(addrs) == 0 {
+					} else if len(addrs) == 0 {
 						log.Warn("No telemetry entry for: %s", telemetrySRV)
-					} else if  addrs[0] != telemetryURL {
+					} else if addrs[0] != telemetryURL {
 							telemetryURL = addrs[0]
 							log.UpdateTelemetryURL(telemetryURL)
 					}
 				}
 
-				// Send heartbeat event once evety 10 minutes
-				if i == 10 {
+				// Send heartbeat event once every 10 minutes
+				if i >= 10 {
+					values := make(map[string]string)
 					metrics.DefaultRegistry().AddMetrics(values)
 
 					heartbeatDetails := telemetryspec.HeartbeatEventDetails{
