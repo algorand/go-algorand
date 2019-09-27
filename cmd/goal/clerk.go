@@ -835,9 +835,14 @@ var dryrunCmd = &cobra.Command{
 			if txn.Lsig.Blank() {
 				continue
 			}
+			ep := logic.EvalParams{Txn: &txn.SignedTxn, Proto: &proto}
+			cost, err := logic.Check(txn.Lsig.Logic, ep)
+			if err != nil {
+				reportErrorf("program failed Check: %s")
+			}
 			txid := txn.ID()
 			sb := strings.Builder{}
-			ep := logic.EvalParams{
+			ep = logic.EvalParams{
 				Txn:        &txn.SignedTxn,
 				Block:      &block,
 				Proto:      &proto,
@@ -847,10 +852,9 @@ var dryrunCmd = &cobra.Command{
 				Seed:       seed,
 				MoreSeed:   txid[:],
 			}
-			// TODO: also logic.Check() to get cost estimate and make sure it passes that
 			pass, err := logic.Eval(txn.Lsig.Logic, ep)
 			// TODO: optionally include `inspect` output here?
-			fmt.Fprintf(os.Stdout, "tx[%d] trace:\n%s\n", i, sb.String())
+			fmt.Fprintf(os.Stdout, "tx[%d] cost=%d trace:\n%s\n", i, cost, sb.String())
 			if pass {
 				fmt.Fprintf(os.Stdout, " - pass -\n")
 			} else {
