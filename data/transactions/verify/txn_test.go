@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package ledger
+package verify
 
 import (
 	"math/rand"
@@ -91,14 +91,14 @@ func TestSignedPayment(t *testing.T) {
 	payment, stxn, secret, addr := payments[0], stxns[0], secrets[0], addrs[0]
 
 	require.NoError(t, payment.WellFormed(spec, proto), "generateTestObjects generated an invalid payment")
-	require.NoError(t, TxnVerify(&stxn, spec, proto), "generateTestObjects generated a bad signedtxn")
+	require.NoError(t, Txn(&stxn, spec, proto), "generateTestObjects generated a bad signedtxn")
 
 	stxn2 := payment.Sign(secret)
 	require.Equal(t, stxn2.Sig, stxn.Sig, "got two different signatures for the same transaction (our signing function is deterministic)")
 
 	stxn2.MessUpSigForTesting()
 	require.Equal(t, stxn.ID(), stxn2.ID(), "changing sig caused txid to change")
-	require.Error(t, TxnVerify(&stxn2, spec, proto), "verify succeeded with bad sig")
+	require.Error(t, Txn(&stxn2, spec, proto), "verify succeeded with bad sig")
 
 	require.True(t, crypto.SignatureVerifier(addr).Verify(payment, stxn.Sig), "signature on the transaction is not the signature of the hash of the transaction under the spender's key")
 }
@@ -108,7 +108,7 @@ func TestTxnValidationEncodeDecode(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	for _, txn := range signed {
-		if TxnVerify(&txn, spec, proto) != nil {
+		if Txn(&txn, spec, proto) != nil {
 			t.Errorf("signed transaction %#v did not verify", txn)
 		}
 
@@ -116,7 +116,7 @@ func TestTxnValidationEncodeDecode(t *testing.T) {
 		var signedTx transactions.SignedTxn
 		protocol.Decode(x, &signedTx)
 
-		if TxnVerify(&signedTx, spec, proto) != nil {
+		if Txn(&signedTx, spec, proto) != nil {
 			t.Errorf("signed transaction %#v did not verify", txn)
 		}
 	}
@@ -132,6 +132,6 @@ func TestDecodeNil(t *testing.T) {
 	err := protocol.Decode(nilEncoding, &st)
 	if err == nil {
 		// This used to panic when run on a zero value of SignedTxn.
-		TxnVerify(&st, spec, config.Consensus[protocol.ConsensusCurrentVersion])
+		Txn(&st, spec, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 }

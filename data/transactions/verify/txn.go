@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package ledger
+package verify
 
 import (
 	"context"
@@ -38,7 +38,7 @@ import (
 // a SignedTxn may be well-formed, but a payset might contain an overspend.
 //
 // This version of verify is performing the verification over the provided execution pool.
-func TxnPoolVerify(s *transactions.SignedTxn, spec transactions.SpecialAddresses, proto config.ConsensusParams, verificationPool execpool.BacklogPool) error {
+func TxnPool(s *transactions.SignedTxn, spec transactions.SpecialAddresses, proto config.ConsensusParams, verificationPool execpool.BacklogPool) error {
 	if err := s.Txn.WellFormed(spec, proto); err != nil {
 		return err
 	}
@@ -63,7 +63,7 @@ func TxnPoolVerify(s *transactions.SignedTxn, spec transactions.SpecialAddresses
 
 // TxnVerify verifies a SignedTxn as being signed and having no obviously inconsistent data.
 // Block-assembly time checks of LogicSig and accounting rules may still block the txn.
-func TxnVerify(s *transactions.SignedTxn, spec transactions.SpecialAddresses, proto config.ConsensusParams) error {
+func Txn(s *transactions.SignedTxn, spec transactions.SpecialAddresses, proto config.ConsensusParams) error {
 	if err := s.Txn.WellFormed(spec, proto); err != nil {
 		return err
 	}
@@ -130,14 +130,14 @@ func stxnVerifyCore(s *transactions.SignedTxn, proto *config.ConsensusParams) er
 		return errors.New("multisig validation failed")
 	}
 	if hasLogicSig {
-		return LogicSigVerify(&s.Lsig, proto, s)
+		return LogicSig(&s.Lsig, proto, s)
 	}
 	return errors.New("has one mystery sig. WAT?")
 }
 
 // LogicSigVerify checks that the signature is valid and that the program is basically well formed.
 // It does not evaluate the logic.
-func LogicSigVerify(lsig *transactions.LogicSig, proto *config.ConsensusParams, stxn *transactions.SignedTxn) error {
+func LogicSig(lsig *transactions.LogicSig, proto *config.ConsensusParams, stxn *transactions.SignedTxn) error {
 	if len(lsig.Logic) == 0 {
 		return errors.New("LogicSig.Logic empty")
 	}
