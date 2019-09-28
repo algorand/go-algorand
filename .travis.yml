@@ -45,7 +45,8 @@ jobs:
       osx_image: xcode11
       name: Darwin AMD64 Build
       script:
-        - scripts/travis/build_test.sh
+        - scripts/travis/build.sh || travis_terminate 1;
+        - travis_wait 90 scripts/travis/test.sh
 
     - stage: build_release
       os: linux
