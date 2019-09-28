@@ -93,11 +93,11 @@ func GenerateGenesisFiles(genesisData GenesisData, outDir string, verbose bool) 
 		genesisData.RewardsPool = defaultPoolAddr
 	}
 
-	return generateGenesisFiles(outDir, proto, genesisData.NetworkName, genesisData.VersionModifier, allocation, genesisData.FirstPartKeyRound, genesisData.LastPartKeyRound, genesisData.FeeSink, genesisData.RewardsPool, genesisData.Comment, verbose)
+	return generateGenesisFiles(outDir, proto, genesisData.NetworkName, genesisData.VersionModifier, allocation, genesisData.FirstPartKeyRound, genesisData.LastPartKeyRound, genesisData.PartKeyDilution, genesisData.FeeSink, genesisData.RewardsPool, genesisData.Comment, verbose)
 }
 
 func generateGenesisFiles(outDir string, proto protocol.ConsensusVersion, netName string, schemaVersionModifier string,
-	allocation []genesisAllocation, firstWalletValid uint64, lastWalletValid uint64, feeSink, rewardsPool basics.Address, comment string, verbose bool) (err error) {
+	allocation []genesisAllocation, firstWalletValid uint64, lastWalletValid uint64, partKeyDilution uint64, feeSink, rewardsPool basics.Address, comment string, verbose bool) (err error) {
 
 	genesisAddrs := make(map[string]basics.Address)
 	records := make(map[string]basics.AccountData)
@@ -105,6 +105,9 @@ func generateGenesisFiles(outDir string, proto protocol.ConsensusVersion, netNam
 	params, ok := config.Consensus[proto]
 	if !ok {
 		return fmt.Errorf("protocol %s not supported", proto)
+	}
+	if partKeyDilution == 0 {
+		partKeyDilution = params.DefaultKeyDilution
 	}
 
 	// Sort account names alphabetically
@@ -162,7 +165,7 @@ func generateGenesisFiles(outDir string, proto protocol.ConsensusVersion, netNam
 					return
 				}
 
-				part, err = account.FillDBWithParticipationKeys(partDB, root.Address(), basics.Round(firstWalletValid), basics.Round(lastWalletValid), params.DefaultKeyDilution)
+				part, err = account.FillDBWithParticipationKeys(partDB, root.Address(), basics.Round(firstWalletValid), basics.Round(lastWalletValid), partKeyDilution)
 				if err != nil {
 					err = fmt.Errorf("could not generate new participation file %s: %v", pfilename, err)
 					os.Remove(pfilename)
