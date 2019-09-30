@@ -25,6 +25,8 @@ if { [catch {
     set NODE_NAME [exec ls $TEST_ALGO_DIR/data]
     set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/$NODE_NAME
 
+    exec sleep 5
+
     # use goal node status command to wait for round 5
     ::AlgorandGoal::WaitForRound 5 $TEST_PRIMARY_NODE_DIR
 
