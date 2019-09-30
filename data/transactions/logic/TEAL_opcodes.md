@@ -340,7 +340,7 @@ It is worth noting that there are 10,000,000,000,000,000 micro-Algos in the tota
 - Pushes: any
 - push field from current transaction to stack
 
-Most fields are a simple copy of a uint64 or byte string value. `XferAsset` is the concatenation of the AssetID Creator Address (32 bytes) and the big-endian bytes of the uint64 AssetID Index for a total of 40 bytes.
+Most fields are a simple copy of a uint64 or byte string value. `XferAsset` is the concatenation of the AssetID Creator Address (32 bytes) and the big-endian bytes of the uint64 AssetID Index for a total of 40 bytes. `SenderBalance` is the uin64 balance of the sender, with rewards factored in, at the time of execution.
 
 `txn` Fields:
 
@@ -368,6 +368,8 @@ Most fields are a simple copy of a uint64 or byte string value. `XferAsset` is t
 | 19 | AssetCloseTo | []byte |
 | 20 | GroupIndex | uint64 |
 | 21 | TxID | []byte |
+| 22 | SenderBalance | uint64 |
+| 23 | Lease | []byte |
 
 
 TypeEnum mapping:

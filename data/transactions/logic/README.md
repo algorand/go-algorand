@@ -136,6 +136,8 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 19 | AssetCloseTo | []byte |
 | 20 | GroupIndex | uint64 |
 | 21 | TxID | []byte |
+| 22 | SenderBalance | uint64 |
+| 23 | Lease | []byte |
 
 
 Additional details in the [opcodes document](TEAL_opcodes.md#txn) on the `txn` op.
