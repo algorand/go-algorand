@@ -6,6 +6,10 @@
 #
 # Based on the travis-ci/travis-build
 
+ANSI_RED="\033[31;1m"
+ANSI_GREEN="\033[32;1m"
+ANSI_RESET="\033[0m"
+
 travis_jigger() {
   # helper method for travis_wait()
   local cmd_pid=$1
