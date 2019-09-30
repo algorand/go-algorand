@@ -16,7 +16,7 @@ stages:
   - name: build_release
     if: branch =~ /^rel\// AND type != pull_request
   - name: deploy
-    if: branch =~ /^rel\/nightly/ AND type != pull_request
+    if: branch =~ /^rel\// AND type != pull_request
   - name: release
     if: branch =~ /^rel\/nightly/ AND type != pull_request
 
@@ -40,6 +40,13 @@ jobs:
 #      script:
 #        - scripts/travis/build.sh || travis_terminate 1;
 #        - travis_wait 90 scripts/travis/test.sh
+    - # same stage, parallel job
+      os: osx
+      osx_image: xcode11
+      name: Darwin AMD64 Build
+      script:
+        - scripts/travis/build.sh || travis_terminate 1;
+        - travis_wait 90 scripts/travis/test.sh
 
     - stage: build_release
       os: linux
@@ -55,6 +62,8 @@ jobs:
 #        - travis_wait 90 scripts/travis/test.sh
     - # same stage, parallel job
       os: osx
+      osx_image: xcode11
+      name: Darwin AMD64 Build
       script:
         - scripts/travis/build.sh || travis_terminate 1;
         - travis_wait 90 scripts/travis/test.sh
@@ -64,6 +73,7 @@ jobs:
       script: scripts/travis/deploy_packages.sh
     - # same stage, parallel job
       os: osx
+      osx_image: xcode11
       script: scripts/travis/deploy_packages.sh
 
     - stage: release
@@ -83,7 +93,7 @@ addons:
   artifacts:
     s3_region: "us-east-1"
     paths:
-      - $(git ls-files -o | grep -v crypto/libsodium-fork | grep -v crypto/lib/ | tr "\n" ":")
+      - $(git ls-files -o | grep -v crypto/libsodium-fork | grep -v crypto/lib/ | grep -v swagger.json.validated | tr "\n" ":")
 
 notifications:
   slack:
