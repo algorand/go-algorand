@@ -473,7 +473,7 @@ proc ::AlgorandGoal::WaitForRound { WAIT_FOR_ROUND_NUMBER TEST_PRIMARY_NODE_DIR 
             if { $BLOCK >= $WAIT_FOR_ROUND_NUMBER } {
                 puts "Reached Round number: $WAIT_FOR_ROUND_NUMBER"; break
             } else {
-               puts "Curren Round: '$BLOCK' is less than wait for round: '$WAIT_FOR_ROUND_NUMBER'"
+               puts "Current Round: '$BLOCK' is less than wait for round: '$WAIT_FOR_ROUND_NUMBER'"
                if { $i >= 10 } then { ::AlgorandGoal::Abort " Current Round $BLOCK did not reach $WAIT_FOR_ROUND_NUMBER   "; break;}
             }
         }
