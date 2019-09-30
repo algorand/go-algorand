@@ -114,3 +114,9 @@ Apply the logic sig to the transaction, supply arguments. The finished signed tr
 ```
 goal clerk sign -L /tmp/p3.lsig -i /tmp/tx4 -o /tmp/tx4ls --argb64 AA== --argb64 BA== --argb64 CA==
 ```
+
+Create/send a transaction signed by a LogicSig in one step:
+
+```
+goal clerk send -o /tmp/tx4 -f DFPKC2SJP3OTFVJFMCD356YB7BOT4SJZTGWLIPPFEWL3ZABUFLTOY6ILYE -a 1000 -t WNZPUHLHS2JGC7LDYUSX2ZDXS7RF37Y7ZNRAHSFRS6MO63JF3S3M27YR7U -L /tmp/p3.lsig
+```
