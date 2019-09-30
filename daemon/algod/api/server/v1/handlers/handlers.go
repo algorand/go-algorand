@@ -848,7 +848,7 @@ func GetPendingTransactionsByAddress(ctx lib.ReqContext, w http.ResponseWriter, 
 	SendJSON(response, w, ctx.Log)
 }
 
-// AssetInformation is an httpHandler for route GET /v1//account/{addr:[A-Z0-9]{%d}}/assets/{index:[0-9]+}
+// AssetInformation is an httpHandler for route GET /v1/account/{creator:[A-Z0-9]{%d}}/assets/{index:[0-9]+}
 func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	// swagger:operation GET /v1/account/{creator}/assets/{index} AssetInformation
 	// ---
@@ -903,9 +903,9 @@ func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	myLedger := ctx.Node.Ledger()
-	lastRound := myLedger.Latest()
-	record, err := myLedger.Lookup(lastRound, basics.Address(addr))
+	ledger := ctx.Node.Ledger()
+	lastRound := ledger.Latest()
+	record, err := ledger.Lookup(lastRound, basics.Address(addr))
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
 		return
