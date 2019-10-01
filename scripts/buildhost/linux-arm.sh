@@ -52,10 +52,10 @@ fi
 
 scp -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance):/home/ubuntu/armv6_stretch/id_rsa ./id_rsa
 if [ "$?" != "0" ]; then
-    exitWithError $? "Unable to retreive RasPI credentials from EC2 instance"
+    exitWithError $? "Unable to retreive RasPI credentials from EC2 instance at $(cat instance)"
 fi
 
-echo "Waiting for RasPI SSH connection"
+echo "Waiting for RasPI SSH connection at $(cat instance)"
 end=$((SECONDS+1200))
 RASPI_READY=false
 while [ $SECONDS -lt $end ]; do
@@ -69,7 +69,7 @@ while [ $SECONDS -lt $end ]; do
 done
 
 if [ "${RASPI_READY}" = "false" ]; then
-    exitWithError 1 "Timed out waiting for raspi service to start"
+    exitWithError 1 "Timed out waiting for raspi service to start on $(cat instance)"
 fi
 
 BRANCH=$(cat $BUILD_REQUEST | jq -r '.TRAVIS_BRANCH')

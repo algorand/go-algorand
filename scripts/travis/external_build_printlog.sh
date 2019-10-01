@@ -25,10 +25,11 @@ while [ $SECONDS -lt $end ]; do
     aws s3 ls ${BUILD_LOG_PATH}-${LOG_SEQ} ${NO_SIGN_REQUEST} 2> /dev/null > /dev/null
     if [ "$?" = "0" ]; then
         aws s3 cp ${BUILD_LOG_PATH}-${LOG_SEQ} - ${NO_SIGN_REQUEST} | cat
+        ((LOG_SEQ++))
         if [ "$?" = "0" ]; then
             minute_end=$((SECONDS+60))
+            continue
         fi
-        ((LOG_SEQ++))
     else
         GET_OUTPUT=$(aws s3 cp ${BUILD_COMPLETE_PATH} ./build-completed.json ${NO_SIGN_REQUEST} 2> /dev/null)
         if [ "$?" = "0" ]; then
