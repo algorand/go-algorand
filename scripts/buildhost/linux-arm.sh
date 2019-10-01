@@ -19,7 +19,7 @@ cd ${TMPPATH}
 
 AWS_REGION="us-west-2"
 # this is the private AMI that contains the RasPI VM running on port 5022
-AWS_LINUX_AMI="ami-077aa2f293886f758"
+AWS_LINUX_AMI="ami-06d66a9a0ebacc6ae"
 AWS_INSTANCE_TYPE="i3.xlarge"
 INSTANCE_NUMBER=$RANDOM
 
@@ -55,40 +55,8 @@ if [ "$?" != "0" ]; then
     exitWithError $? "Unable to retreive RasPI credentials from EC2 instance"
 fi
 
-
-echo "Stopping raspi service"
-end=$((SECONDS+90))
-RASPI_SERVICE_STOPPED=false
-while [ $SECONDS -lt $end ]; do
-    ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) "sudo systemctl stop raspi" 2>/dev/null
-    if [ "$?" = "0" ]; then
-        echo "RasPI is stopped"
-        RASPI_SERVICE_STOPPED=true
-        break
-    fi
-    sleep 1s
-done
-
-if [ "${RASPI_SERVICE_STOPPED}" = "false" ]; then
-    exitWithError 1 "Unable to stop raspi service"
-fi
-
-scp -i key.pem -o "StrictHostKeyChecking no" ${SCRIPTPATH}/nvme.sh ubuntu@$(cat instance):/home/ubuntu/nvme.sh
-if [ "$?" != "0" ]; then
-    exitWithError 1 "unable to upload nvme script"
-fi
-
-ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) "./nvme.sh" >> /home/ubuntu/nvme.log
-if [ "$?" != "0" ]; then
-    exitWithError 1 "nvme initialization failed"
-fi
-ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) "sudo systemctl start raspi"
-if [ "$?" != "0" ]; then
-    exitWithError 1 "unable to restart raspi service"
-fi
-
 echo "Waiting for RasPI SSH connection"
-end=$((SECONDS+90))
+end=$((SECONDS+600))
 RASPI_READY=false
 while [ $SECONDS -lt $end ]; do
     ssh -i id_rsa -o "StrictHostKeyChecking no" -p 5022 pi@$(cat instance) "uname -a" 2>/dev/null
@@ -97,7 +65,7 @@ while [ $SECONDS -lt $end ]; do
         RASPI_READY=true
         break
     fi
-    sleep 1s
+    sleep 4s
 done
 
 if [ "${RASPI_READY}" = "false" ]; then
