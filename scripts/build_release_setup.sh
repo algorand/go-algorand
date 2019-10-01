@@ -49,11 +49,11 @@ if [ "${DISTRIB_ID}" = "Ubuntu" ]; then
 	echo "WARNING: Ubuntu 16.04 is DEPRECATED"
 	sudo apt-get install -y autoconf awscli docker.io g++ fakeroot git gnupg2 gpgv2 make nfs-common python3 rpm sqlite3 python3-boto3
 	cat <<EOF>${HOME}/gpgbin/gpg
-##!/usr/bin/env bash
+#!/usr/bin/env bash
 exec /usr/bin/gpg2 "\$@"
 EOF
 	cat <<EOF>${HOME}/gpgbin/gpgv
-##!/usr/bin/env bash
+#!/usr/bin/env bash
 exec /usr/bin/gpgv2 "\$@"
 EOF
 	chmod +x ${HOME}/gpgbin/*
