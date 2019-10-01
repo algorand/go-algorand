@@ -49,9 +49,9 @@ export TIMESTAMP=${TIMESTAMP}
 # To ensure deterministic availability of testnet (stable) builds, prefix the packages
 # with "pending_" so updater will not detect the package before we rename it.
 GATE_PREFIX=""
-# if [[ "${CHANNEL}" = "stable" || "${CHANNEL}" = "nightly" ]]; then
-#     GATE_PREFIX="pending_"
-# fi
+if [[ "${CHANNEL}" = "stable" ]]; then
+    GATE_PREFIX="pending_"
+fi
 
 VERSION_COMPONENTS=(${FULLVERSION//\./ })
 export BUILDNUMBER=${VERSION_COMPONENTS[2]}
