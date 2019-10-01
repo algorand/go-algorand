@@ -56,7 +56,7 @@ if [ "$?" != "0" ]; then
 fi
 
 echo "Waiting for RasPI SSH connection"
-end=$((SECONDS+600))
+end=$((SECONDS+1200))
 RASPI_READY=false
 while [ $SECONDS -lt $end ]; do
     ssh -i id_rsa -o "StrictHostKeyChecking no" -p 5022 pi@$(cat instance) "uname -a" 2>/dev/null
