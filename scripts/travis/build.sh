@@ -10,7 +10,7 @@ for (( attempt=1; attempt<=5; attempt++ ))
 do
     scripts/travis/configure_dev.sh
     ERR=$?
-    if [ "$?" == "0" ]; then
+    if [ "${ERR}" == "0" ]; then
         CONFIGURE_SUCCESS=true
         break
     fi
