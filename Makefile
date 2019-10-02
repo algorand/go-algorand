@@ -30,7 +30,7 @@ GOLDFLAGS_BASE  := -X github.com/algorand/go-algorand/config.BuildNumber=$(BUILD
 GOLDFLAGS := $(GOLDFLAGS_BASE) \
 		 -X github.com/algorand/go-algorand/config.Channel=$(BUILDCHANNEL)
 
-UNIT_TEST_SOURCES := $(sort $(shell go list ./... | grep -v /go-algorand/test/ ))
+UNIT_TEST_SOURCES := $(sort $(shell GO111MODULE=off go list ./... | grep -v /go-algorand/test/ ))
 
 default: build
 
