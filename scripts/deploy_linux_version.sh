@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # deploy_linux_version.sh - Compiles the current branch on macos using docker
 #

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -e
 
 # upload_config.sh - Archives and uploads a netgoal configuration package from a specified directory

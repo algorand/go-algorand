@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -x
 set -v
 echo "Starting start_docker_debian_test.sh"

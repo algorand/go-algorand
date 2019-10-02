@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # deploy_private_version.sh - Performs a complete build/packaging of a specific branch, for specified platforms.
 #
