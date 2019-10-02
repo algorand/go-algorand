@@ -85,13 +85,18 @@ aws s3 cp "${BUILDID}.json" "${BUILD_REQUEST_PATH}" "${NO_SIGN_REQUEST}"
 set +e
 
 echo "Waiting for build to start..."
-end=$((SECONDS+600))
+endWait=$((SECONDS+600))
+msgTimer=$((SECONDS+60))
 BUILD_STARTED=false
-while [ $SECONDS -lt $end ]; do
+while [ $SECONDS -lt $endWait ]; do
     PENDING_BUILD=$(aws s3 ls "${BUILD_REQUEST_PATH}" "${NO_SIGN_REQUEST}" | wc -l | sed 's/[[:space:]]//g')
     if [ "${PENDING_BUILD}" != "1" ]; then
         BUILD_STARTED=true
         break
+    fi
+    if [ $SECONDS -gt $msgTimer ]; then
+        msgTimer=$((SECONDS+60))
+        echo "Still waiting for build to start..."
     fi
     sleep 1s
 done

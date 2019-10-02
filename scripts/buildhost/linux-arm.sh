@@ -19,7 +19,7 @@ cd ${TMPPATH}
 
 AWS_REGION="us-west-2"
 # this is the private AMI that contains the RasPI VM running on port 5022
-AWS_LINUX_AMI="ami-0d78e971e4b3387e6"
+AWS_LINUX_AMI="ami-03e5779af5ce2dde3"
 AWS_INSTANCE_TYPE="i3.xlarge"
 INSTANCE_NUMBER=$RANDOM
 
@@ -47,12 +47,12 @@ exitWithError() {
 
 ${SCRIPTPATH}/start_ec2_instance.sh ${AWS_REGION} ${AWS_LINUX_AMI} ${AWS_INSTANCE_TYPE}
 if [ "$?" != "0" ]; then
-    exitWithError $? "Unable to start EC2 instance"
+    exitWithError 1 "Unable to start EC2 instance"
 fi
 
 scp -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance):/home/ubuntu/armv6_stretch/id_rsa ./id_rsa
 if [ "$?" != "0" ]; then
-    exitWithError $? "Unable to retreive RasPI credentials from EC2 instance at $(cat instance)"
+    exitWithError 1 "Unable to retreive RasPI credentials from EC2 instance at $(cat instance)"
 fi
 
 echo "Waiting for RasPI SSH connection at $(cat instance)"

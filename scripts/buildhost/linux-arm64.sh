@@ -46,7 +46,7 @@ exitWithError() {
 
 ${SCRIPTPATH}/start_ec2_instance.sh ${AWS_REGION} ${AWS_LINUX_AMI} ${AWS_INSTANCE_TYPE}
 if [ "$?" != "0" ]; then
-    exitWithError $? "Unable to start EC2 instance"
+    exitWithError 1 "Unable to start EC2 instance"
 fi
 
 BRANCH=$(cat $BUILD_REQUEST | jq -r '.TRAVIS_BRANCH')
