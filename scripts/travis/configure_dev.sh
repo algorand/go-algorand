@@ -5,8 +5,8 @@ set +e
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 
-OS=$(${SCRIPTPATH}/../ostype.sh)
-ARCH=$(${SCRIPTPATH}/../archtype.sh)
+OS=$("${SCRIPTPATH}/../ostype.sh")
+ARCH=$("${SCRIPTPATH}/../archtype.sh")
 
 if [ "${OS}" = "linux" ]; then
     if [[ "${ARCH}" = "arm64" ]]; then
@@ -57,5 +57,5 @@ if [ "${OS}" = "linux" ]; then
     fi
 fi
 
-${SCRIPTPATH}/../configure_dev.sh
+"${SCRIPTPATH}/../configure_dev.sh"
 exit $?
