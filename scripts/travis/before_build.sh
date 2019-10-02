@@ -28,7 +28,7 @@ function runGoFmt() {
 }
 
 function runGoLint() {
-    warningCount=$($GOPATH/bin/golint `GO111MODULE=off go list ./... | grep -v /vendor/ | grep -v /test/e2e-go/` | wc -l)
+    warningCount=$($GOPATH/bin/golint `go list ./... | grep -v /vendor/ | grep -v /test/e2e-go/` | wc -l)
     if [ $warningCount -eq 0 ]; then
         return 0
     fi
@@ -45,8 +45,10 @@ export GO111MODULE=on
 echo "Building libsodium-fork..."
 make crypto/lib/libsodium.a
 
+GO111MODULE=off
+
 echo "Running go vet..."
-go vet `GO111MODULE=off go list ./... | grep -v /test/e2e-go/`
+go vet $(go list ./... | grep -v /test/e2e-go/)
 
 echo "Running gofmt..."
 runGoFmt
