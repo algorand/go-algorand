@@ -28,8 +28,8 @@ function runGoFmt() {
 }
 
 function runGoLint() {
-    warningCount=$($GOPATH/bin/golint `go list ./... | grep -v /vendor/ | grep -v /test/e2e-go/` | wc -l)
-    if [ $warningCount -eq 0 ]; then
+    warningCount=$("$GOPATH"/bin/golint $(go list ./... | grep -v /vendor/ | grep -v /test/e2e-go/) | wc -l)
+    if [ "$warningCount" = "0" ]; then
         return 0
     fi
 
@@ -39,22 +39,23 @@ function runGoLint() {
     return 1
 }
 
-export GOPATH=$(go env GOPATH)
+GOPATH=$(go env GOPATH)
+export GOPATH
 export GO111MODULE=on
 
 echo "Building libsodium-fork..."
 make crypto/lib/libsodium.a
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
-OS=$(${SCRIPTPATH}/../ostype.sh)
-ARCH=$(${SCRIPTPATH}/../archtype.sh)
+OS=$("${SCRIPTPATH}"/../ostype.sh)
+ARCH=$("${SCRIPTPATH}"/../archtype.sh)
 
 if [ "${OS}-${ARCH}" != "linux-arm" ]; then
     echo "Running go vet..."
     go vet $(go list ./... | grep -v /test/e2e-go/)
 else
     echo "Skipping running 'go vet' for arm builds"
-if
+fi
 
 echo "Running gofmt..."
 runGoFmt
