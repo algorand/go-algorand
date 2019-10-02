@@ -85,7 +85,7 @@ FOE
 set -o pipefail
 ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) 'bash -s' < exescript 2>&1 | ${SCRIPTPATH}/s3streamup.sh s3://${BUCKET}/${LOGFILE} ${NO_SIGN}
 ERR=$?
-if [ "${ERR}"= "0" ]; then
+if [ "${ERR}" = "0" ]; then
     exitWithError ${ERR} ""
 else
     exitWithError ${ERR} "Failed building with error code ${ERR} on $(cat instance)"
