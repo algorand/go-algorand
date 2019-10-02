@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # create_and_deploy_private_version.sh - Generates deployed network configuration and private build and pushes to S3
 #

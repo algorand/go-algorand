@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # Copyright (c) 2016 Travis CI GmbH <contact@travis-ci.org>
 #

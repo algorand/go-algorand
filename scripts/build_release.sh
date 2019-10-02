@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # This script needs to be run in a terminal with a human watching to
 # be prompted for GPG key password at a couple points.
