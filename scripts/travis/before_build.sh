@@ -45,13 +45,21 @@ export GO111MODULE=on
 echo "Building libsodium-fork..."
 make crypto/lib/libsodium.a
 
-GO111MODULE=off
+SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
+OS=$(${SCRIPTPATH}/../ostype.sh)
+ARCH=$(${SCRIPTPATH}/../archtype.sh)
 
-echo "Running go vet..."
-go vet $(go list ./... | grep -v /test/e2e-go/)
+if [ "${OS}-${ARCH}" != "linux-arm" ]; then
+    echo "Running go vet..."
+    go vet $(go list ./... | grep -v /test/e2e-go/)
+else
+    echo "Skipping running 'go vet' for arm builds"
+if
 
 echo "Running gofmt..."
 runGoFmt
+
+GO111MODULE=off
 
 echo "Running golint..."
 runGoLint
