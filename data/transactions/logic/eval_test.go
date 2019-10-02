@@ -1421,6 +1421,41 @@ func TestIllegalOp(t *testing.T) {
 	require.False(t, pass)
 }
 
+const panicString = "out of memory, buffer overrun, stack overflow, divide by zero, halt and catch fire"
+
+func opPanic(cx *evalContext) {
+	panic(panicString)
+}
+
+func TestPanic(t *testing.T) {
+	program, err := AssembleString(`int 1`)
+	require.NoError(t, err)
+	var hackedOpcode int
+	var oldSpec OpSpec
+	for opcode, spec := range opsByOpcode {
+		if spec.op == nil {
+			hackedOpcode = opcode
+			oldSpec = spec
+			opsByOpcode[opcode].op = opPanic
+			program = append(program, byte(opcode))
+			break
+		}
+	}
+	sb := strings.Builder{}
+	pass, err := Eval(program, EvalParams{Trace: &sb})
+	if pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.False(t, pass)
+	if pe, ok := err.(PanicError); ok {
+		require.Equal(t, panicString, pe.PanicValue)
+	} else {
+		t.Errorf("expected PanicError object but got %T %#v", err, err)
+	}
+	opsByOpcode[hackedOpcode] = oldSpec
+}
+
 func TestProgramTooNew(t *testing.T) {
 	t.Parallel()
 	var program [12]byte

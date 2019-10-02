@@ -151,9 +151,24 @@ func (st StackType) String() string {
 	return "internal error, unknown type"
 }
 
+// PanicError wraps a recover() catching a panic()
+type PanicError struct {
+	PanicValue interface{}
+}
+
+func (pe PanicError) Error() string {
+	return fmt.Sprintf("panic in TEAL Eval: %v", pe.PanicValue)
+}
+
 // Eval checks to see if a transaction passes logic
 // A program passes succesfully if it finishes with one int element on the stack that is non-zero.
 func Eval(program []byte, params EvalParams) (pass bool, err error) {
+	defer func() {
+		if x := recover(); x != nil {
+			pass = false
+			err = PanicError{x}
+		}
+	}()
 	var cx evalContext
 	version, vlen := binary.Uvarint(program)
 	if version > EvalMaxVersion {
