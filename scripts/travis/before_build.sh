@@ -28,7 +28,7 @@ function runGoFmt() {
 }
 
 function runGoLint() {
-    warningCount=$("$GOPATH"/bin/golint $(go list ./... | grep -v /vendor/ | grep -v /test/e2e-go/) | wc -l)
+    warningCount=$("$GOPATH"/bin/golint $(GO111MODULE=off go list ./... | grep -v /vendor/ | grep -v /test/e2e-go/) | wc -l)
     if [ "$warningCount" = "0" ]; then
         return 0
     fi
@@ -56,7 +56,7 @@ if [ "${OS}-${ARCH}" = "linux-arm" ]; then
 fi
 
 echo "Running go vet..."
-go vet $(go list ./... | grep -v /test/e2e-go/)
+go vet $(GO111MODULE=off go list ./... | grep -v /test/e2e-go/)
 
 echo "Running gofmt..."
 runGoFmt
