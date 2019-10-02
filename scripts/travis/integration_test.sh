@@ -20,3 +20,5 @@ else
     ${SCRIPTPATH}/build.sh
     ${SCRIPTPATH}/test.sh
 fi
+
+echo "Integration test completed successfully"

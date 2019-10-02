@@ -79,7 +79,7 @@ fi
 cat << FOE >> exescript
 export DEBIAN_FRONTEND=noninteractive
 ${EXEC}
-exit $?
+exit \$?
 FOE
 
 set -o pipefail
