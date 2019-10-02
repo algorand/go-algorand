@@ -17,6 +17,8 @@
 package transactions
 
 import (
+	"bytes"
+
 	"github.com/algorand/go-algorand/crypto"
 )
 
@@ -50,4 +52,24 @@ func (lsig *LogicSig) Len() int {
 		lsiglen += len(arg)
 	}
 	return lsiglen
+}
+
+// Equal returns true if both LogicSig are equivalent
+func (lsig *LogicSig) Equal(b *LogicSig) bool {
+	if len(lsig.Logic) == 0 && len(b.Logic) == 0 {
+		return true
+	}
+	sigs := lsig.Sig == b.Sig && lsig.Msig.Equal(b.Msig)
+	if !sigs {
+		return false
+	}
+	if len(lsig.Args) != len(b.Args) {
+		return false
+	}
+	for i, a := range lsig.Args {
+		if !bytes.Equal(a, b.Args[i]) {
+			return false
+		}
+	}
+	return true
 }
