@@ -90,3 +90,10 @@ func TestOpCost(t *testing.T) {
 	c = OpCost("sha256")
 	require.True(t, c > 1)
 }
+
+func TestOpSize(t *testing.T) {
+	c := OpSize("+")
+	require.Equal(t, 1, c)
+	c = OpSize("intc")
+	require.Equal(t, 2, c)
+}

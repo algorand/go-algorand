@@ -51,14 +51,30 @@ def main():
     ap.add_argument('-t', '--to', required=True)
     ap.add_argument('-r', '--timeout-round', type=int, required=True)
     ap.add_argument('-H', '--hash', dest='hashop', choices=('sha256','keccack256'), default='sha256')
+    ap.add_argument('-o', '--out', default=None, help='file to write teal script source to. default stdout')
+    ap.add_argument('-s', '--secret', default=None, help='file to write secret comment to. default stderr')
     args = ap.parse_args()
 
     secret = os.urandom(32)
     hasher = hashlib.new(args.hashop)
     hasher.update(secret)
     code = tlhc(sender=args.sender, to=args.to, timeout_round=args.timeout_round, hash_secret=hasher.digest(), hashop=args.hashop)
-    sys.stderr.write('// secret base64 {} hex {}\n'.format(base64.b64encode(secret).decode(), base64.b16encode(secret).decode()))
-    print(code)
+    secretout = sys.stderr
+    if args.secret:
+        secretout = open(args.secret, 'wt')
+    out = sys.stdout
+    if args.out:
+        out = open(args.out, 'wt')
+    secretout.write('// secret base64 {} hex {}\n'.format(base64.b64encode(secret).decode(), base64.b16encode(secret).decode()))
+    out.write(code)
+    try:
+        out.close()
+    except Exeption as e:
+        print(e)
+    try:
+        secretout.close():
+    except Exeption as e:
+        print(e)
     return
 
 if __name__ == '__main__':

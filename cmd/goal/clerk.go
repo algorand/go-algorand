@@ -751,7 +751,7 @@ func disassembleFile(fname, outname string) {
 var compileCmd = &cobra.Command{
 	Use:   "compile",
 	Short: "compile a contract program",
-	Long:  "compile a contract program, report it's address",
+	Long:  "compile a contract program, report its address",
 	Run: func(cmd *cobra.Command, args []string) {
 		for _, fname := range args {
 			if disassesmble {

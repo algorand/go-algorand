@@ -175,3 +175,23 @@ func OpCost(opName string) int {
 	}
 	return 1
 }
+
+var opSizeByName map[string]int
+
+// OpSize returns the number of bytes for an op. 0 for variable.
+func OpSize(opName string) int {
+	if opSizeByName == nil {
+		onn := make(map[string]int, len(opSizes))
+		for _, oz := range opSizes {
+			if oz.size != 1 {
+				onn[oz.name] = oz.size
+			}
+		}
+		opSizeByName = onn
+	}
+	cost, hit := opSizeByName[opName]
+	if hit {
+		return cost
+	}
+	return 1
+}
