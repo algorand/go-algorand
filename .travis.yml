@@ -25,6 +25,7 @@ jobs:
     - name: External ARM64 Build
     - name: External ARM64 Deploy
     - name: External ARM64 Integration Test
+    - name: External ARM Build
   include:
     - stage: build_commit
       os: linux
