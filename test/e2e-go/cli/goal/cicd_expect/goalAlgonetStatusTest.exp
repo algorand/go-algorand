@@ -15,8 +15,8 @@ if { [catch {
     puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
     puts "TEST_DATA_DIR: $TEST_DATA_DIR"
 
-    if { [file isdirectory $TEST_ALGO_DIR"] == 1 { ::AlgorandGoal::Abort "ERROR, Algo root dir not found: $TEST_ALGO_DIR" } }
-    if { [file isdirectory $TEST_DATA_DIR"] == 1 { ::AlgorandGoal::Abort "ERROR, Algo data dir not found: $TEST_DATA_DIR" } }
+    if { [file isdirectory $TEST_ALGO_DIR] == 1 { ::AlgorandGoal::Abort "ERROR, Algo root dir not found: $TEST_ALGO_DIR" } }
+    if { [file isdirectory $TEST_DATA_DIR] == 1 { ::AlgorandGoal::Abort "ERROR, Algo data dir not found: $TEST_DATA_DIR" } }
 
     set TIME_STAMP [clock seconds]
 
