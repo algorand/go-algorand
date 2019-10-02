@@ -24,8 +24,9 @@ while [ $SECONDS -lt $end ]; do
     aws s3 ls "${BUILD_LOG_PATH}"-"${LOG_SEQ}" "${NO_SIGN_REQUEST}" 2> /dev/null > /dev/null
     if [ "$?" = "0" ]; then
         while true ; do
-            aws s3 cp "${BUILD_LOG_PATH}"-"${LOG_SEQ}" - "${NO_SIGN_REQUEST}" | cat
+            LOG_CHUNK=$(aws s3 cp "${BUILD_LOG_PATH}"-"${LOG_SEQ}" - "${NO_SIGN_REQUEST}" 2> /dev/null)
             if [ "$?" = "0" ]; then
+                echo "${LOG_CHUNK}"
                 ((LOG_SEQ++))
             else
                 break
@@ -50,7 +51,10 @@ done
 
 aws s3 ls "${BUILD_LOG_PATH}"-"${LOG_SEQ}" . "${NO_SIGN_REQUEST}" 2> /dev/null > /dev/null
 if [ "$?" = "0" ]; then
-    aws s3 cp "${BUILD_LOG_PATH}"-"${LOG_SEQ}" - "${NO_SIGN_REQUEST}" | cat
+    LOG_CHUNK=$(aws s3 cp "${BUILD_LOG_PATH}"-"${LOG_SEQ}" - "${NO_SIGN_REQUEST}" 2> /dev/null)
+    if [ "$?" = "0" ]; then
+        echo "${LOG_CHUNK}"
+    fi
 fi
 
 if [ "${BUILD_COMPLETE}" = "false" ]; then
