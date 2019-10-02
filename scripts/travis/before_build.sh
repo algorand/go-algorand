@@ -28,12 +28,12 @@ function runGoFmt() {
 }
 
 function runGoLint() {
-    warningCount=$("$GOPATH"/bin/golint $(GO111MODULE=off go list ./... | grep -v /vendor/ | grep -v /test/e2e-go/) | wc -l)
-    if [ "$warningCount" = "0" ]; then
+    warningCount=$("$GOPATH"/bin/golint $(GO111MODULE=off go list ./... | grep -v /vendor/ | grep -v /test/e2e-go/) | wc -l | tr -d ' ')
+    if [ "${warningCount}" = "0" ]; then
         return 0
     fi
 
-    echo >&2 "golint must be clean.  Please run the following to list issues:"
+    echo >&2 "golint must be clean.  Please run the following to list issues(${warningCount}):"
     echo >&2 " make lint"
 
     return 1
