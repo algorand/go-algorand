@@ -50,17 +50,16 @@ SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 OS=$("${SCRIPTPATH}"/../ostype.sh)
 ARCH=$("${SCRIPTPATH}"/../archtype.sh)
 
-if [ "${OS}-${ARCH}" != "linux-arm" ]; then
-    echo "Running go vet..."
-    go vet $(go list ./... | grep -v /test/e2e-go/)
-else
-    echo "Skipping running 'go vet' for arm builds"
+if [ "${OS}-${ARCH}" = "linux-arm" ]; then
+    echo "Skipping running 'go vet'/gofmt/golint for arm builds"
+    exit 0
 fi
+
+echo "Running go vet..."
+go vet $(go list ./... | grep -v /test/e2e-go/)
 
 echo "Running gofmt..."
 runGoFmt
-
-GO111MODULE=off
 
 echo "Running golint..."
 runGoLint
