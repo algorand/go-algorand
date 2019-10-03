@@ -105,9 +105,25 @@ ${EXEC}
 exit \$?
 FOE
 
+timeout_monitor() {
+    local timeout=$1 # in minutes
+    local count=0
+    while [ $count -lt $timeout ]; do
+        count=$(($count + 1))
+        sleep 60s
+    done
+    # at this point, we want to terminate the EC2 instance.
+    exitWithError 1 "EC2 instance $(cat instance) timed out after ${timeout} minutes"
+}
+
+timeout_monitor 360 &
+timeout_monitor_pid=$!
+
 set -o pipefail
 ssh -i id_rsa -tt -o "StrictHostKeyChecking no" -p 5022 pi@$(cat instance) 'bash -s' < exescript 2>&1 | ${SCRIPTPATH}/s3streamup.sh s3://${BUCKET}/${LOGFILE} ${NO_SIGN}
 ERR=$?
+
+ps -p$timeout_monitor_pid &>/dev/null && kill $timeout_monitor_pid
 
 exitWithError ${ERR} ""
 

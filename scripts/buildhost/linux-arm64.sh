@@ -93,7 +93,7 @@ timeout_monitor() {
     exitWithError 1 "EC2 instance $(cat instance) timed out after ${timeout} minutes"
 }
 
-timeout_monitor 12 &
+timeout_monitor 360 &
 timeout_monitor_pid=$!
 
 set -o pipefail
