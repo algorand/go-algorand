@@ -101,10 +101,6 @@ $(ALGOD_API_SWAGGER_SPEC): $(ALGOD_API_FILES) crypto/lib/libsodium.a
 
 endif
 
-
-
-
-
 $(ALGOD_API_SWAGGER_INJECT): $(ALGOD_API_SWAGGER_SPEC) $(ALGOD_API_SWAGGER_SPEC).validated
 	./daemon/algod/api/server/lib/bundle_swagger_json.sh
 
