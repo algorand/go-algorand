@@ -5,6 +5,7 @@ GO111MODULE	:= on
 export GO111MODULE
 UNAME		:= $(shell uname)
 SRCPATH     := $(shell pwd)
+ARCH        := $(shell ./scripts/archtype.sh)
 
 # If build number already set, use it - to ensure same build number across multiple platforms being built
 BUILDNUMBER      ?= $(shell ./scripts/compute_build_number.sh)
@@ -121,9 +122,21 @@ $(KMD_API_SWAGGER_INJECT): $(KMD_API_SWAGGER_SPEC) $(KMD_API_SWAGGER_SPEC).valid
 
 build: buildsrc gen
 
+ifeq ($(ARCH), arm)
+
+buildsrc: crypto/lib/libsodium.a node_exporter NONGO_BIN deps $(ALGOD_API_SWAGGER_INJECT) $(KMD_API_SWAGGER_INJECT) $(addprefix buildsrc_target_, $(UNIT_TEST_SOURCES))
+
+$(addprefix buildsrc_target_, $(UNIT_TEST_SOURCES)): crypto/lib/libsodium.a node_exporter NONGO_BIN deps $(ALGOD_API_SWAGGER_INJECT) $(KMD_API_SWAGGER_INJECT)
+	@echo "Buulding $(subst buildsrc_target_,,$@)..."
+	@go install $(GOTRIMPATH) $(GOTAGS) -ldflags="$(GOLDFLAGS)" $(subst buildsrc_target_,,$@)
+
+else
+
 buildsrc: crypto/lib/libsodium.a node_exporter NONGO_BIN deps $(ALGOD_API_SWAGGER_INJECT) $(KMD_API_SWAGGER_INJECT)
 	go install $(GOTRIMPATH) $(GOTAGS) -ldflags="$(GOLDFLAGS)" ./...
 	go vet ./...
+
+endif
 
 SOURCES_RACE := github.com/algorand/go-algorand/cmd/kmd
 
@@ -238,4 +251,4 @@ dump: $(addprefix gen/,$(addsuffix /genesis.dump, $(NETWORKS)))
 install: build
 	scripts/dev_install.sh -p $(GOPATH1)/bin
 
-.PHONY: default fmt vet lint sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN
+.PHONY: default fmt vet lint sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN $(addprefix buildsrc_target_, $(UNIT_TEST_SOURCES))
