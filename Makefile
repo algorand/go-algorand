@@ -85,7 +85,6 @@ ALGOD_API_SWAGGER_INJECT := daemon/algod/api/server/lib/bundledSpecInject.go
 $(ALGOD_API_SWAGGER_SPEC): $(ALGOD_API_FILES) crypto/lib/libsodium.a
 	cd daemon/algod/api && \
 		PATH=$(GOPATH1)/bin:$$PATH \
-		GO111MODULE=off \
 		go generate ./...
 
 $(ALGOD_API_SWAGGER_INJECT): $(ALGOD_API_SWAGGER_SPEC) $(ALGOD_API_SWAGGER_SPEC).validated
