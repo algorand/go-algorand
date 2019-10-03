@@ -85,6 +85,9 @@ ALGOD_API_SWAGGER_INJECT := daemon/algod/api/server/lib/bundledSpecInject.go
 
 ifeq ($(ARCH), arm)
 
+# On RasberryPI emulated machines, we have limited amount of RAM; invoking the compiler over all of the modules would
+# result in high memory consumption, and would end up with "out of memory". To work around that, we break the generation
+# into per-module pieces.
 $(addprefix generate_algod_api_target_, $(ALGOD_API_PACKAGES)): $(ALGOD_API_FILES) crypto/lib/libsodium.a
 	@echo "Generating $(subst generate_algod_api_target_,,$@)..."
 	@cd daemon/algod/api && PATH=$(GOPATH1)/bin:$$PATH ; go generate $(subst generate_algod_api_target_,,$@)
@@ -137,6 +140,9 @@ build: buildsrc gen
 
 ifeq ($(ARCH), arm)
 
+# On RasberryPI emulated machines, we have limited amount of RAM; invoking the compiler over all of the modules would
+# result in high memory consumption, and would end up with "out of memory". To work around that, we break the "go install"
+# into per-module pieces.
 buildsrc: crypto/lib/libsodium.a node_exporter NONGO_BIN deps $(ALGOD_API_SWAGGER_INJECT) $(KMD_API_SWAGGER_INJECT) $(addprefix buildsrc_target_, $(UNIT_TEST_SOURCES))
 
 $(addprefix buildsrc_target_, $(UNIT_TEST_SOURCES)): crypto/lib/libsodium.a node_exporter NONGO_BIN deps $(ALGOD_API_SWAGGER_INJECT) $(KMD_API_SWAGGER_INJECT)
