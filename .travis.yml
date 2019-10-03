@@ -25,6 +25,8 @@ jobs:
     - name: External ARM64 Build
     - name: External ARM64 Deploy
     - name: External ARM64 Integration Test
+    - name: External ARM Build
+    - name: External ARM Deploy
   include:
     - stage: build_commit
       os: linux
@@ -69,7 +71,7 @@ jobs:
     - # same stage, parallel job
       os: osx
       osx_image: xcode11
-      name: Darwin AMD64 Build
+      name: MacOS AMD64 Build
       script:
         - scripts/travis/build_test.sh
 
@@ -86,7 +88,7 @@ jobs:
     - # same stage, parallel job
       os: osx
       osx_image: xcode11
-      name: Darwin AMD64 Build
+      name: MacOS AMD64 Build
       script:
         - scripts/travis/build_test.sh
     - # same stage, parallel job
@@ -117,6 +119,18 @@ jobs:
       env:
         - BUILD_TYPE: "external_build"
         - TARGET_PLATFORM: "linux-arm64"
+      addons:
+        apt:
+          packages:
+            - awscli
+      script:
+        - scripts/travis/external_build.sh ./scripts/travis/deploy_packages.sh
+    - # same stage, parallel job
+      name: External ARM Deploy
+      os: linux
+      env:
+        - BUILD_TYPE: "external_build"
+        - TARGET_PLATFORM: "linux-arm"
       addons:
         apt:
           packages:
