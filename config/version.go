@@ -110,6 +110,13 @@ func GetCurrentVersion() Version {
 	return currentVersion
 }
 
+// FormatVersionAndLicense prints current version and license information
+func FormatVersionAndLicense() string {
+	version := GetCurrentVersion()
+	return fmt.Sprintf("%d\n%s.%s [%s] (commit #%s)\n%s\n", version.AsUInt64(), version.String(),
+		version.Channel, version.Branch, version.GetCommitHash(), GetLicenseInfo())
+}
+
 // SetCurrentVersion allows replacing the current global Version structure (for the application)
 func SetCurrentVersion(version Version) {
 	currentVersion = version
