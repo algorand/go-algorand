@@ -72,13 +72,19 @@ while [ "$1" != "" ]; do
     shift
 done
 
-if [ "${#TESTPATTERNS[@]}" -eq 0 ]; then
-    go test -race -timeout 1h -v ${SHORTTEST} ./...
-else
-    for TEST in ${TESTPATTERNS[@]}; do
-        go test -race -timeout 1h -v ${SHORTTEST} -run ${TEST} ./...
-    done
-fi
+# if [ "${#TESTPATTERNS[@]}" -eq 0 ]; then
+#     go test -race -timeout 1h -v ${SHORTTEST} ./...
+# else
+#     for TEST in ${TESTPATTERNS[@]}; do
+#         go test -race -timeout 1h -v ${SHORTTEST} -run ${TEST} ./...
+#     done
+# fi
+
+echo "----------HERE------------"
+
+cd /Users/Michelle/go/src/github.com/algorand/go-algorand/test/e2e-go/features/partitionRecovery
+go test -run TestPartitionHalfOffline
+cd -
 
 if [ ${CLEANUP_TEMPDIR} -ne 0 ]; then
     rm -rf ${TEMPDIR}
