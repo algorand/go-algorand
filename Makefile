@@ -32,6 +32,7 @@ GOLDFLAGS := $(GOLDFLAGS_BASE) \
 		 -X github.com/algorand/go-algorand/config.Channel=$(BUILDCHANNEL)
 
 UNIT_TEST_SOURCES := $(sort $(shell GO111MODULE=off go list ./... | grep -v /go-algorand/test/ ))
+ALGOD_API_PACKAGES := $(sort $(shell GO111MODULE=off cd daemon/algod/api; go list ./... ))
 
 default: build
 
@@ -82,11 +83,27 @@ ALGOD_API_FILES := $(shell find daemon/algod/api/server/common daemon/algod/api/
 	daemon/algod/api/server/router.go
 ALGOD_API_SWAGGER_INJECT := daemon/algod/api/server/lib/bundledSpecInject.go
 
+ifeq ($(ARCH), arm)
+
+$(addprefix generate_algod_api_target_, $(ALGOD_API_PACKAGES)): $(ALGOD_API_FILES) crypto/lib/libsodium.a
+	@echo "Generating $(subst generate_algod_api_target_,,$@)..."
+	@cd daemon/algod/api && PATH=$(GOPATH1)/bin:$$PATH ; go generate $(subst generate_algod_api_target_,,$@)
+
+$(ALGOD_API_SWAGGER_SPEC): $(ALGOD_API_FILES) crypto/lib/libsodium.a $(addprefix generate_algod_api_target_, $(ALGOD_API_PACKAGES))
+
+else
+
 # Note that swagger.json requires the go-swagger dep.
 $(ALGOD_API_SWAGGER_SPEC): $(ALGOD_API_FILES) crypto/lib/libsodium.a
 	cd daemon/algod/api && \
 		PATH=$(GOPATH1)/bin:$$PATH \
 		go generate ./...
+
+endif
+
+
+
+
 
 $(ALGOD_API_SWAGGER_INJECT): $(ALGOD_API_SWAGGER_SPEC) $(ALGOD_API_SWAGGER_SPEC).validated
 	./daemon/algod/api/server/lib/bundle_swagger_json.sh
@@ -127,7 +144,7 @@ ifeq ($(ARCH), arm)
 buildsrc: crypto/lib/libsodium.a node_exporter NONGO_BIN deps $(ALGOD_API_SWAGGER_INJECT) $(KMD_API_SWAGGER_INJECT) $(addprefix buildsrc_target_, $(UNIT_TEST_SOURCES))
 
 $(addprefix buildsrc_target_, $(UNIT_TEST_SOURCES)): crypto/lib/libsodium.a node_exporter NONGO_BIN deps $(ALGOD_API_SWAGGER_INJECT) $(KMD_API_SWAGGER_INJECT)
-	@echo "Buulding $(subst buildsrc_target_,,$@)..."
+	@echo "Building $(subst buildsrc_target_,,$@)..."
 	@go install $(GOTRIMPATH) $(GOTAGS) -ldflags="$(GOLDFLAGS)" $(subst buildsrc_target_,,$@)
 
 else
@@ -251,4 +268,4 @@ dump: $(addprefix gen/,$(addsuffix /genesis.dump, $(NETWORKS)))
 install: build
 	scripts/dev_install.sh -p $(GOPATH1)/bin
 
-.PHONY: default fmt vet lint sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN $(addprefix buildsrc_target_, $(UNIT_TEST_SOURCES))
+.PHONY: default fmt vet lint sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN $(addprefix buildsrc_target_, $(UNIT_TEST_SOURCES)) $(addprefix generate_algod_api_target_, $(ALGOD_API_PACKAGES))
