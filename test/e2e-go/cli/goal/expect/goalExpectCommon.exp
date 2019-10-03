@@ -439,7 +439,7 @@ proc ::AlgorandGoal::WaitForRound { WAIT_FOR_ROUND_NUMBER TEST_PRIMARY_NODE_DIR 
     set i 0
         while 1 {
             incr i
-            exec sleep 5
+            exec sleep 10
 
             # Check node status
             puts "spawn node status  "
