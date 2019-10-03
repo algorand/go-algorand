@@ -47,17 +47,17 @@ type TransactionPool struct {
 	logStats               bool
 
 	// pendingMu protects pendingTxGroups and pendingTxids
-	pendingMu    deadlock.RWMutex
-	pendingTxGroups  [][]transactions.SignedTxn
-	pendingTxids map[transactions.Txid]transactions.SignedTxn
+	pendingMu       deadlock.RWMutex
+	pendingTxGroups [][]transactions.SignedTxn
+	pendingTxids    map[transactions.Txid]transactions.SignedTxn
 
 	// Calls to remember() add transactions to rememberedTxGroups and
 	// rememberedTxids.  Calling rememberCommit() adds them to the
 	// pendingTxGroups and pendingTxids.  This allows us to batch the
 	// changes in OnNewBlock() without preventing a concurrent call
 	// to Pending() or Verified().
-	rememberedTxGroups  [][]transactions.SignedTxn
-	rememberedTxids map[transactions.Txid]transactions.SignedTxn
+	rememberedTxGroups [][]transactions.SignedTxn
+	rememberedTxids    map[transactions.Txid]transactions.SignedTxn
 }
 
 // MakeTransactionPool is the constructor, it uses Ledger to ensure that no account has pending transactions that together overspend.

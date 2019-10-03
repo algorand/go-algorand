@@ -27,11 +27,12 @@ import (
 type KeyregTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	VotePK          crypto.OneTimeSignatureVerifier `codec:"votekey"`
-	SelectionPK     crypto.VRFVerifier              `codec:"selkey"`
-	VoteFirst       basics.Round                    `codec:"votefst"`
-	VoteLast        basics.Round                    `codec:"votelst"`
-	VoteKeyDilution uint64                          `codec:"votekd"`
+	VotePK           crypto.OneTimeSignatureVerifier `codec:"votekey"`
+	SelectionPK      crypto.VRFVerifier              `codec:"selkey"`
+	VoteFirst        basics.Round                    `codec:"votefst"`
+	VoteLast         basics.Round                    `codec:"votelst"`
+	VoteKeyDilution  uint64                          `codec:"votekd"`
+	Nonparticipation bool                            `codec:"nonpart"`
 }
 
 // Apply changes the balances according to this transaction.
@@ -51,11 +52,20 @@ func (keyreg KeyregTxnFields) apply(header Header, balances Balances, spec Speci
 		return fmt.Errorf("cannot change online/offline status of non-participating account %v", header.Sender)
 	}
 
-	// Update the registered keys and mark account as online (or, if the voting or selection keys are zero, offline)
+	// Update the registered keys and mark account as online
+	// (or, if the voting or selection keys are zero, offline/not-participating)
 	record.VoteID = keyreg.VotePK
 	record.SelectionID = keyreg.SelectionPK
 	if (keyreg.VotePK == crypto.OneTimeSignatureVerifier{} || keyreg.SelectionPK == crypto.VRFVerifier{}) {
-		record.Status = basics.Offline
+		if keyreg.Nonparticipation {
+			if balances.ConsensusParams().SupportBecomeNonParticipatingTransactions {
+				record.Status = basics.NotParticipating
+			} else {
+				return fmt.Errorf("transaction tries to mark an account as nonparticipating, but that transaction is not supported")
+			}
+		} else {
+			record.Status = basics.Offline
+		}
 		record.VoteFirstValid = 0
 		record.VoteLastValid = 0
 		record.VoteKeyDilution = 0

@@ -23,8 +23,8 @@ import (
 
 	"github.com/algorand/websocket"
 
-	"github.com/algorand/go-algorand/commandandcontrol/lib"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/test/commandandcontrol/lib"
 )
 
 var addr = flag.String("addr", "localhost:8080", "http service address")

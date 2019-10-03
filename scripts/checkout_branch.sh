@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # checkout_branch.sh - Safely switches enlistment to the specified remote branch, checked out locally
 #           Verifies the enlistment is completely clean to ensure nothing will be clobbered or lost

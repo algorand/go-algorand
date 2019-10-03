@@ -3,19 +3,25 @@
 # turn off exit on error
 set +e
 
+CONFIGURE_SUCCESS=false
+
 # travis sometimes fail to download a dependency. trying multiple times might help.
 for (( attempt=1; attempt<=5; attempt++ ))
 do
     scripts/travis/configure_dev.sh
-    CONFIGURE_ERRORCODE="$?"
-    if [ "${CONFIGURE_ERRORCODE}" == "0" ]
-    then
+    ERR=$?
+    if [ "$?" == "0" ]; then
+        CONFIGURE_SUCCESS=true
         break
     fi
-    echo "Running configure_dev.sh resulted in exit code ${CONFIGURE_ERRORCODE}; retrying in 3 seconds"
+    echo "Running configure_dev.sh resulted in exit code ${ERR}; retrying in 3 seconds"
     sleep 3s
 done
 
+if [ "${CONFIGURE_SUCCESS}" = "false" ]; then
+    echo "Attempted to configure the environment multiple times, and failed. See above logs for details."
+    exit 1
+fi
 
 set -e
 scripts/travis/before_build.sh

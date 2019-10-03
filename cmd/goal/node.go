@@ -266,24 +266,26 @@ var statusCmd = &cobra.Command{
 	Long:  `Show the current status of the running Algorand node`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		onDataDirs(func(dataDir string) {
-			client := ensureAlgodClient(dataDir)
-			stat, err := client.Status()
-			if err != nil {
-				reportErrorf(errorNodeStatus, err)
-			}
-			vers, err := client.AlgodVersions()
-			if err != nil {
-				reportErrorf(errorNodeStatus, err)
-			}
-
-			fmt.Println(makeStatusString(stat))
-			if vers.GenesisID != "" {
-				fmt.Printf("Genesis ID: %s\n", vers.GenesisID)
-			}
-			fmt.Printf("Genesis hash: %s\n", base64.StdEncoding.EncodeToString(vers.GenesisHash[:]))
-		})
+		onDataDirs(getStatus)
 	},
+}
+
+func getStatus(dataDir string) {
+	client := ensureAlgodClient(dataDir)
+	stat, err := client.Status()
+	if err != nil {
+		reportErrorf(errorNodeStatus, err)
+	}
+	vers, err := client.AlgodVersions()
+	if err != nil {
+		reportErrorf(errorNodeStatus, err)
+	}
+
+	fmt.Println(makeStatusString(stat))
+	if vers.GenesisID != "" {
+		fmt.Printf("Genesis ID: %s\n", vers.GenesisID)
+	}
+	fmt.Printf("Genesis hash: %s\n", base64.StdEncoding.EncodeToString(vers.GenesisHash[:]))
 }
 
 func makeStatusString(stat v1.NodeStatus) string {

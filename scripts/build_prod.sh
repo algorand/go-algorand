@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # build_prod.sh - Used to build production (Release) versions of our binaries.  This script ensures the build number
 #           and current commit hash are baked into the algod binary.
