@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # deploy_version.sh - Performs a complete build/packaging of a specific branch, for specified platforms.
 #           Unless SkipCleanCheck is set in environment, it first requires a clean fully-sync'd
