@@ -884,7 +884,7 @@ func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request
 	//         schema: {type: string}
 	//       401: { description: Invalid API Token }
 	//       default: { description: Unknown Error }
-	queryAddr := mux.Vars(r)["addr"]
+	queryAddr := mux.Vars(r)["creator"]
 	queryIndex, err := strconv.ParseUint(mux.Vars(r)["index"], 10, 64)
 
 	if err != nil {
@@ -908,6 +908,12 @@ func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request
 	record, err := ledger.Lookup(lastRound, basics.Address(addr))
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
+		return
+	}
+
+	_, ok := record.AssetParams[queryIndex]
+	if !ok {
+		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errFailedRetrievingAsset), errFailedRetrievingAsset, ctx.Log)
 		return
 	}
 
