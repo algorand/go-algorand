@@ -33,6 +33,7 @@ if [ "${OS}" = "linux" ]; then
         sudo apt-get -y install sqlite3
     fi
     if [[ "${ARCH}" = "arm" ]]; then
+        sudo sh -c 'echo "CONF_SWAPSIZE=1024" > /etc/dphys-swapfile; dphys-swapfile setup; dphys-swapfile swapon'
         go version 2>/dev/null
         if [ "$?" != "0" ]; then
             echo "Go cannot be found; downloading..."
