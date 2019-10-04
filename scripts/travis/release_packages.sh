@@ -21,7 +21,7 @@ function init_s3cmd() {
     SEDARGS="-e s,-ACCESS_KEY-,${AWS_ACCESS_KEY_ID}, -e s,-SECRET_KEY-,${AWS_SECRET_ACCESS_KEY}, -e s,-S3_BUCKET-,${S3_RELEASE_BUCKET},"
 
     cat "${SCRIPTPATH}/../s3cfg.template" \
-      | sed "${SEDARGS}" \
+      | sed ${SEDARGS} \
       > "${HOME}/.s3cfg"
 
     CHANNEL=$(./scripts/compute_branch_channel.sh "${TRAVIS_BRANCH}")
