@@ -127,12 +127,13 @@ func TestTLHC(t *testing.T) {
 	}
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
-	pass, _ := Eval(program, ep)
+	pass, err := Eval(program, ep)
 	if pass {
 		t.Log(hex.EncodeToString(program))
 		t.Log(sb.String())
 	}
 	require.False(t, pass)
+	isNotPanic(t, err)
 
 	txn.Txn.Receiver = a2
 	txn.Txn.CloseRemainderTo = a2
@@ -151,12 +152,13 @@ func TestTLHC(t *testing.T) {
 	sb = strings.Builder{}
 	block.BlockHeader.Round = 1
 	ep = EvalParams{Txn: &txn, Trace: &sb, Block: &block}
-	pass, _ = Eval(program, ep)
+	pass, err = Eval(program, ep)
 	if pass {
 		t.Log(hex.EncodeToString(program))
 		t.Log(sb.String())
 	}
 	require.False(t, pass)
+	isNotPanic(t, err)
 
 	txn.Txn.Receiver = a1
 	txn.Txn.CloseRemainderTo = a1
@@ -176,12 +178,13 @@ func TestTLHC(t *testing.T) {
 	sb = strings.Builder{}
 	block.BlockHeader.Round = 1
 	ep = EvalParams{Txn: &txn, Trace: &sb, Block: &block}
-	pass, _ = Eval(program, ep)
+	pass, err = Eval(program, ep)
 	if pass {
 		t.Log(hex.EncodeToString(program))
 		t.Log(sb.String())
 	}
 	require.False(t, pass)
+	isNotPanic(t, err)
 }
 
 func TestU64Math(t *testing.T) {
@@ -308,6 +311,7 @@ btoi
 	}
 	require.False(t, pass)
 	require.Error(t, err)
+	isNotPanic(t, err)
 }
 
 func TestBnz(t *testing.T) {
@@ -352,6 +356,7 @@ int 1`)
 	}
 	require.False(t, pass)
 	require.Error(t, err)
+	isNotPanic(t, err)
 }
 
 func TestAddOverflow(t *testing.T) {
@@ -373,6 +378,7 @@ int 1`)
 	}
 	require.False(t, pass)
 	require.Error(t, err)
+	isNotPanic(t, err)
 }
 
 func TestMulOverflow(t *testing.T) {
@@ -394,6 +400,7 @@ int 1`)
 	}
 	require.False(t, pass)
 	require.Error(t, err)
+	isNotPanic(t, err)
 }
 
 func TestMulwImpl(t *testing.T) {
@@ -474,6 +481,7 @@ int 1`)
 	}
 	require.False(t, pass)
 	require.Error(t, err)
+	isNotPanic(t, err)
 }
 
 func TestModZero(t *testing.T) {
@@ -495,6 +503,7 @@ int 1`)
 	}
 	require.False(t, pass)
 	require.Error(t, err)
+	isNotPanic(t, err)
 }
 
 func TestErr(t *testing.T) {
@@ -513,6 +522,7 @@ int 1`)
 	}
 	require.False(t, pass)
 	require.Error(t, err)
+	isNotPanic(t, err)
 }
 
 func TestModSubMulOk(t *testing.T) {
@@ -575,6 +585,7 @@ int 1`)
 	}
 	require.Error(t, err)
 	require.False(t, pass)
+	isNotPanic(t, err)
 }
 
 func TestStackBytesLeftover(t *testing.T) {
@@ -592,6 +603,7 @@ func TestStackBytesLeftover(t *testing.T) {
 	}
 	require.Error(t, err)
 	require.False(t, pass)
+	isNotPanic(t, err)
 }
 
 func TestStackEmpty(t *testing.T) {
@@ -612,6 +624,7 @@ pop`)
 	}
 	require.Error(t, err)
 	require.False(t, pass)
+	isNotPanic(t, err)
 }
 
 func TestArgTooFar(t *testing.T) {
@@ -633,6 +646,7 @@ btoi`)
 	}
 	require.Error(t, err)
 	require.False(t, pass)
+	isNotPanic(t, err)
 }
 
 func TestIntcTooFar(t *testing.T) {
@@ -653,6 +667,7 @@ func TestIntcTooFar(t *testing.T) {
 	}
 	require.Error(t, err)
 	require.False(t, pass)
+	isNotPanic(t, err)
 }
 
 func TestBytecTooFar(t *testing.T) {
@@ -674,6 +689,7 @@ btoi`)
 	}
 	require.Error(t, err)
 	require.False(t, pass)
+	isNotPanic(t, err)
 }
 
 func TestTxnBadField(t *testing.T) {
@@ -693,6 +709,7 @@ func TestTxnBadField(t *testing.T) {
 	}
 	require.Error(t, err)
 	require.False(t, pass)
+	isNotPanic(t, err)
 }
 
 func TestGtxnBadIndex(t *testing.T) {
@@ -714,6 +731,7 @@ func TestGtxnBadIndex(t *testing.T) {
 	}
 	require.Error(t, err)
 	require.False(t, pass)
+	isNotPanic(t, err)
 }
 
 func TestGtxnBadField(t *testing.T) {
@@ -735,6 +753,7 @@ func TestGtxnBadField(t *testing.T) {
 	}
 	require.Error(t, err)
 	require.False(t, pass)
+	isNotPanic(t, err)
 }
 
 func TestGlobalBadField(t *testing.T) {
@@ -754,6 +773,7 @@ func TestGlobalBadField(t *testing.T) {
 	}
 	require.Error(t, err)
 	require.False(t, pass)
+	isNotPanic(t, err)
 }
 
 func TestArg(t *testing.T) {
@@ -1500,6 +1520,7 @@ func TestProgramTooNew(t *testing.T) {
 	pass, err := Eval(program[:vlen], EvalParams{})
 	require.Error(t, err)
 	require.False(t, pass)
+	isNotPanic(t, err)
 }
 
 func TestProgramProtoForbidden(t *testing.T) {
@@ -1514,6 +1535,7 @@ func TestProgramProtoForbidden(t *testing.T) {
 	pass, err := Eval(program[:vlen], EvalParams{Proto: &proto})
 	require.Error(t, err)
 	require.False(t, pass)
+	isNotPanic(t, err)
 }
 
 func TestMisalignedBranch(t *testing.T) {
@@ -1535,6 +1557,7 @@ int 1`)
 	pass, err := Eval(program, EvalParams{})
 	require.Error(t, err)
 	require.False(t, pass)
+	isNotPanic(t, err)
 }
 
 func TestBranchTooFar(t *testing.T) {
@@ -1556,6 +1579,7 @@ int 1`)
 	pass, err := Eval(program, EvalParams{})
 	require.Error(t, err)
 	require.False(t, pass)
+	isNotPanic(t, err)
 }
 
 func TestBranchTooLarge(t *testing.T) {
@@ -1577,6 +1601,7 @@ int 1`)
 	pass, err := Eval(program, EvalParams{})
 	require.Error(t, err)
 	require.False(t, pass)
+	isNotPanic(t, err)
 }
 
 func TestFetchSenderBalance(t *testing.T) {
@@ -1604,6 +1629,7 @@ txn SenderBalance
 	pass, err = Eval(program, params)
 	require.NoError(t, err)
 	require.False(t, pass)
+	isNotPanic(t, err)
 }
 
 /*
@@ -2035,6 +2061,7 @@ ed25519verify`, pkStr))
 	pass, err = Eval(program, EvalParams{Txn: &txn})
 	require.False(t, pass)
 	require.Error(t, err)
+	isNotPanic(t, err)
 
 	// flip a bit and it should not pass
 	msg1 := "52fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
@@ -2046,6 +2073,7 @@ ed25519verify`, pkStr))
 	pass1, err := Eval(program, ep1)
 	require.False(t, pass1)
 	require.NoError(t, err)
+	isNotPanic(t, err)
 }
 
 func BenchmarkEd25519Verifyx1(b *testing.B) {
