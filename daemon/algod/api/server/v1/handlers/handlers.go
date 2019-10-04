@@ -911,15 +911,13 @@ func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	_, ok := record.AssetParams[queryIndex]
-	if !ok {
+	if asset, ok := record.AssetParams[queryIndex]; ok {
+		thisAssetParams := assetParams(addr, asset)
+		SendJSON(AssetInformationResponse{&thisAssetParams}, w, ctx.Log)
+	} else {
 		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errFailedRetrievingAsset), errFailedRetrievingAsset, ctx.Log)
 		return
 	}
-
-	thisAssetParams := assetParams(addr, record.AssetParams[queryIndex])
-
-	SendJSON(AssetInformationResponse{&thisAssetParams}, w, ctx.Log)
 }
 
 // SuggestedFee is an httpHandler for route GET /v1/transactions/fee
