@@ -175,6 +175,10 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 	}()
 	var cx evalContext
 	version, vlen := binary.Uvarint(program)
+	if vlen < 0 {
+		cx.err = errors.New("invalid version")
+		return false, cx.err
+	}
 	if version > EvalMaxVersion {
 		cx.err = fmt.Errorf("program version %d greater than max supported version %d", version, EvalMaxVersion)
 		return false, cx.err
@@ -229,6 +233,10 @@ func Check(program []byte, params EvalParams) (cost int, err error) {
 	}()
 	var cx evalContext
 	version, vlen := binary.Uvarint(program)
+	if vlen < 0 {
+		cx.err = errors.New("invalid version")
+		return 0, cx.err
+	}
 	if version > EvalMaxVersion {
 		err = fmt.Errorf("program version %d greater than max supported version %d", version, EvalMaxVersion)
 		return
