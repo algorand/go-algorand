@@ -21,10 +21,10 @@ minute_end=$((SECONDS+60))
 BUILD_COMPLETE=false
 LOG_SEQ=1
 while [ $SECONDS -lt $end ]; do
-    aws s3 ls "${BUILD_LOG_PATH}"-"${LOG_SEQ}" "${NO_SIGN_REQUEST}" 2> /dev/null > /dev/null
+    aws s3 ls "${BUILD_LOG_PATH}"-"${LOG_SEQ}" ${NO_SIGN_REQUEST} 2> /dev/null > /dev/null
     if [ "$?" = "0" ]; then
         while true ; do
-            LOG_CHUNK=$(aws s3 cp "${BUILD_LOG_PATH}"-"${LOG_SEQ}" - "${NO_SIGN_REQUEST}" 2> /dev/null)
+            LOG_CHUNK=$(aws s3 cp "${BUILD_LOG_PATH}"-"${LOG_SEQ}" - ${NO_SIGN_REQUEST} 2> /dev/null)
             if [ "$?" = "0" ]; then
                 echo "${LOG_CHUNK}"
                 ((LOG_SEQ++))
@@ -34,7 +34,7 @@ while [ $SECONDS -lt $end ]; do
         done
         minute_end=$((SECONDS+60))
     else
-        GET_OUTPUT=$(aws s3 cp "${BUILD_COMPLETE_PATH}" ./build-completed.json "${NO_SIGN_REQUEST}" 2> /dev/null)
+        GET_OUTPUT=$(aws s3 cp "${BUILD_COMPLETE_PATH}" ./build-completed.json ${NO_SIGN_REQUEST} 2> /dev/null)
         if [ "$?" = "0" ]; then
             echo "${GET_OUTPUT}"
             BUILD_COMPLETE=true
@@ -49,9 +49,9 @@ while [ $SECONDS -lt $end ]; do
     sleep 1s
 done
 
-aws s3 ls "${BUILD_LOG_PATH}"-"${LOG_SEQ}" . "${NO_SIGN_REQUEST}" 2> /dev/null > /dev/null
+aws s3 ls "${BUILD_LOG_PATH}"-"${LOG_SEQ}" . ${NO_SIGN_REQUEST} 2> /dev/null > /dev/null
 if [ "$?" = "0" ]; then
-    LOG_CHUNK=$(aws s3 cp "${BUILD_LOG_PATH}"-"${LOG_SEQ}" - "${NO_SIGN_REQUEST}" 2> /dev/null)
+    LOG_CHUNK=$(aws s3 cp "${BUILD_LOG_PATH}"-"${LOG_SEQ}" - ${NO_SIGN_REQUEST} 2> /dev/null)
     if [ "$?" = "0" ]; then
         echo "${LOG_CHUNK}"
     fi
