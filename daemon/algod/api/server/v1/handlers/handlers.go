@@ -938,10 +938,6 @@ func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request
 		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errFailedRetrievingAsset), errFailedRetrievingAsset, ctx.Log)
 		return
 	}
-
-	thisAssetParams := assetParams(addr, record.AssetParams[queryIndex])
-
-	SendJSON(AssetInformationResponse{&thisAssetParams}, w, ctx.Log)
 }
 
 // Assets is an httpHandler for route GET /v1/assets
