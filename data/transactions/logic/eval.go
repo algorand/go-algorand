@@ -617,7 +617,7 @@ func opMul(cx *evalContext) {
 	a := cx.stack[prev].Uint
 	b := cx.stack[last].Uint
 	v := a * b
-	if v/a != b {
+	if (a != 0) && (b != 0) && (v/a != b) {
 		cx.err = errors.New("* overflowed")
 		return
 	}
