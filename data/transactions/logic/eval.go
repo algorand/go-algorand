@@ -219,6 +219,14 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 // Check should be faster than Eval.
 // Returns 'cost' which is an estimate of relative execution time.
 func Check(program []byte, params EvalParams) (cost int, err error) {
+	defer func() {
+		if x := recover(); x != nil {
+			buf := make([]byte, 16*1024)
+			stlen := runtime.Stack(buf, false)
+			cost = 0
+			err = PanicError{x, string(buf[:stlen])}
+		}
+	}()
 	var cx evalContext
 	version, vlen := binary.Uvarint(program)
 	if version > EvalMaxVersion {
