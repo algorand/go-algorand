@@ -29,6 +29,7 @@ import (
 	"math/big"
 	"runtime"
 	"sort"
+	"strings"
 
 	"golang.org/x/crypto/sha3"
 
@@ -170,7 +171,13 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 			buf := make([]byte, 16*1024)
 			stlen := runtime.Stack(buf, false)
 			pass = false
-			err = PanicError{x, string(buf[:stlen])}
+			errstr := string(buf[:stlen])
+			if params.Trace != nil {
+				if sb, ok := params.Trace.(*strings.Builder); ok {
+					errstr += sb.String()
+				}
+			}
+			err = PanicError{x, errstr}
 		}
 	}()
 	var cx evalContext
