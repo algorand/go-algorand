@@ -134,6 +134,7 @@ func init() {
 	dryrunCmd.Flags().Uint64VarP(&round, "round", "r", 1, "round number to simulate")
 	dryrunCmd.Flags().Int64VarP(&timeStamp, "time-stamp", "S", 0, "unix time stamp simulate (default now)")
 	dryrunCmd.Flags().StringVarP(&seedBase64, "seed", "R", "2JNZvkCE2KFv3wVbEIEsPPNR64ttpaWuD5NEIXqXc3g=", "base64 bytes to seed random number generator with")
+	dryrunCmd.MarkFlagRequired("txfile")
 }
 
 var clerkCmd = &cobra.Command{
@@ -310,6 +311,12 @@ var sendCmd = &cobra.Command{
 		}
 		var stx transactions.SignedTxn
 		if lsig.Logic != nil {
+			proto := config.Consensus[protocol.ConsensusCurrentVersion]
+			unsignedTxn := transactions.SignedTxn{Txn: payment}
+			err = verify.LogicSig(&lsig, &proto, &unsignedTxn)
+			if err != nil {
+				reportErrorf("%s: txn[0] error %s", txFilename, err)
+			}
 			stx = transactions.SignedTxn{
 				Txn:  payment,
 				Lsig: lsig,
