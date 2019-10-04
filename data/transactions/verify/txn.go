@@ -140,7 +140,7 @@ func LogicSig(lsig *transactions.LogicSig, proto *config.ConsensusParams, stxn *
 		return errors.New("LogicSig.Logic empty")
 	}
 	version, vlen := binary.Uvarint(lsig.Logic)
-	if vlen < 0 {
+	if vlen <= 0 {
 		return errors.New("LogicSig.Logic bad version")
 	}
 	if version > proto.LogicSigVersion {

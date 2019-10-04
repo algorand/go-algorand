@@ -1534,6 +1534,8 @@ func TestPanic(t *testing.T) {
 	require.False(t, pass)
 	if pe, ok := err.(PanicError); ok {
 		require.Equal(t, panicString, pe.PanicValue)
+		pes := pe.Error()
+		require.True(t, strings.Contains(pes, "panic"))
 	} else {
 		t.Errorf("expected PanicError object but got %T %#v", err, err)
 	}
@@ -1546,7 +1548,21 @@ func TestProgramTooNew(t *testing.T) {
 	vlen := binary.PutUvarint(program[:], EvalMaxVersion+1)
 	_, err := Check(program[:vlen], EvalParams{})
 	require.Error(t, err)
+	isNotPanic(t, err)
 	pass, err := Eval(program[:vlen], EvalParams{})
+	require.Error(t, err)
+	require.False(t, pass)
+	isNotPanic(t, err)
+}
+
+func TestInvalidVersion(t *testing.T) {
+	t.Parallel()
+	program, err := hex.DecodeString("ffffffffffffffffffffffff")
+	require.NoError(t, err)
+	_, err = Check(program, EvalParams{})
+	require.Error(t, err)
+	isNotPanic(t, err)
+	pass, err := Eval(program, EvalParams{})
 	require.Error(t, err)
 	require.False(t, pass)
 	isNotPanic(t, err)

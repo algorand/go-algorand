@@ -1041,7 +1041,7 @@ func Disassemble(program []byte) (text string, err error) {
 	out := strings.Builder{}
 	dis := disassembleState{program: program, out: &out}
 	version, vlen := binary.Uvarint(program)
-	if vlen < 0 {
+	if vlen <= 0 {
 		fmt.Fprintf(dis.out, "// invalid version\n")
 		return out.String(), nil
 	}
