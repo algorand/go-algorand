@@ -556,10 +556,11 @@ func TestPop(t *testing.T) {
 int 0
 pop`)
 	require.NoError(t, err)
-	cost, err := Check(program, EvalParams{})
+	sb := strings.Builder{}
+	cost, err := Check(program, EvalParams{Trace: &sb})
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
-	sb := strings.Builder{}
+	sb = strings.Builder{}
 	pass, err := Eval(program, EvalParams{Trace: &sb})
 	if !pass {
 		t.Log(hex.EncodeToString(program))
@@ -574,10 +575,11 @@ func TestStackLeftover(t *testing.T) {
 	program, err := AssembleString(`int 1
 int 1`)
 	require.NoError(t, err)
-	cost, err := Check(program, EvalParams{})
+	sb := strings.Builder{}
+	cost, err := Check(program, EvalParams{Trace: &sb})
 	require.Error(t, err)
 	require.True(t, cost < 1000)
-	sb := strings.Builder{}
+	sb = strings.Builder{}
 	pass, err := Eval(program, EvalParams{Trace: &sb})
 	if pass {
 		t.Log(hex.EncodeToString(program))
@@ -592,10 +594,11 @@ func TestStackBytesLeftover(t *testing.T) {
 	t.Parallel()
 	program, err := AssembleString(`byte 0x10101010`)
 	require.NoError(t, err)
-	cost, err := Check(program, EvalParams{})
+	sb := strings.Builder{}
+	cost, err := Check(program, EvalParams{Trace: &sb})
 	require.Error(t, err)
 	require.True(t, cost < 1000)
-	sb := strings.Builder{}
+	sb = strings.Builder{}
 	pass, err := Eval(program, EvalParams{Trace: &sb})
 	if pass {
 		t.Log(hex.EncodeToString(program))
