@@ -18,7 +18,7 @@ if [ "${OS}" = "linux" ]; then
     sudo apt-get -y install libboost-all-dev expect jq
 elif [ "${OS}" = "darwin" ]; then
     brew update
-    brew tap caskroom/cask
+    brew tap homebrew/cask
     install_or_upgrade pkg-config
     install_or_upgrade boost
     install_or_upgrade jq
