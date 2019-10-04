@@ -27,6 +27,7 @@ import (
 	"io"
 	"math"
 	"math/big"
+	"runtime"
 	"sort"
 
 	"golang.org/x/crypto/sha3"
@@ -154,10 +155,11 @@ func (st StackType) String() string {
 // PanicError wraps a recover() catching a panic()
 type PanicError struct {
 	PanicValue interface{}
+	StackTrace string
 }
 
 func (pe PanicError) Error() string {
-	return fmt.Sprintf("panic in TEAL Eval: %v", pe.PanicValue)
+	return fmt.Sprintf("panic in TEAL Eval: %v\n%s", pe.PanicValue, pe.StackTrace)
 }
 
 // Eval checks to see if a transaction passes logic
@@ -165,8 +167,10 @@ func (pe PanicError) Error() string {
 func Eval(program []byte, params EvalParams) (pass bool, err error) {
 	defer func() {
 		if x := recover(); x != nil {
+			buf := make([]byte, 16*1024)
+			stlen := runtime.Stack(buf, false)
 			pass = false
-			err = PanicError{x}
+			err = PanicError{x, string(buf[:stlen])}
 		}
 	}()
 	var cx evalContext
@@ -420,6 +424,11 @@ func (cx *evalContext) step() {
 			}
 		}
 	}
+	oz := opSizeByOpcode[opcode]
+	if oz.size != 0 && (cx.pc+oz.size > len(cx.program)) {
+		cx.err = fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, opsByOpcode[opcode].Name)
+		return
+	}
 	opsByOpcode[opcode].op(cx)
 	if cx.Trace != nil {
 		if len(cx.stack) == 0 {
@@ -468,6 +477,10 @@ func (cx *evalContext) checkStep() (cost int) {
 		cx.checkStack = cx.checkStack[:len(cx.checkStack)-poplen]
 	}
 	oz := opSizeByOpcode[opcode]
+	if oz.size != 0 && (cx.pc+oz.size > len(cx.program)) {
+		cx.err = fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, opsByOpcode[opcode].Name)
+		return 0
+	}
 	if oz.checkFunc != nil {
 		cost = oz.checkFunc(cx)
 		if cx.nextpc != 0 {

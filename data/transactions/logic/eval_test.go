@@ -1311,6 +1311,15 @@ byte 0x98D2C31612EA500279B6753E5F6E780CA63EBA8274049664DAD66A2565ED1D2A
 	require.True(t, pass)
 }
 
+func isNotPanic(t *testing.T, err error) {
+	if err == nil {
+		return
+	}
+	if pe, ok := err.(PanicError); ok {
+		t.Error(pe)
+	}
+}
+
 func TestStackUnderflow(t *testing.T) {
 	t.Parallel()
 	program, err := AssembleString(`int 1`)
@@ -1326,6 +1335,7 @@ func TestStackUnderflow(t *testing.T) {
 		t.Log(sb.String())
 	}
 	require.False(t, pass)
+	isNotPanic(t, err)
 }
 
 func TestWrongStackTypeRuntime(t *testing.T) {
@@ -1343,6 +1353,7 @@ func TestWrongStackTypeRuntime(t *testing.T) {
 		t.Log(sb.String())
 	}
 	require.False(t, pass)
+	isNotPanic(t, err)
 }
 
 func TestEqMismatch(t *testing.T) {
@@ -1361,6 +1372,7 @@ int 1`)
 		t.Log(sb.String())
 	}
 	require.False(t, pass)
+	isNotPanic(t, err)
 }
 
 func TestNeqMismatch(t *testing.T) {
@@ -1379,6 +1391,7 @@ int 1`)
 		t.Log(sb.String())
 	}
 	require.False(t, pass)
+	isNotPanic(t, err)
 }
 
 func TestWrongStackTypeRuntime2(t *testing.T) {
@@ -1397,6 +1410,7 @@ int 1`)
 		t.Log(sb.String())
 	}
 	require.False(t, pass)
+	isNotPanic(t, err)
 }
 
 func TestIllegalOp(t *testing.T) {
@@ -1419,6 +1433,27 @@ func TestIllegalOp(t *testing.T) {
 		t.Log(sb.String())
 	}
 	require.False(t, pass)
+	isNotPanic(t, err)
+}
+
+func TestShortProgram(t *testing.T) {
+	t.Parallel()
+	program, err := AssembleString(`int 1
+bnz done
+done:`)
+	require.NoError(t, err)
+	program = program[:len(program)-1]
+	cost, err := Check(program, EvalParams{})
+	require.Error(t, err)
+	require.True(t, cost < 1000)
+	sb := strings.Builder{}
+	pass, err := Eval(program, EvalParams{Trace: &sb})
+	if pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.False(t, pass)
+	isNotPanic(t, err)
 }
 
 const panicString = "out of memory, buffer overrun, stack overflow, divide by zero, halt and catch fire"
