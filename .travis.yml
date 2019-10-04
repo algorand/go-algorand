@@ -68,18 +68,6 @@ jobs:
             - awscli
       script:
         - scripts/travis/external_build.sh ./scripts/travis/integration_test.sh
-    - # same stage, parallel job
-      name: External ARM Build
-      os: linux
-      env:
-        - BUILD_TYPE: "external_build"
-        - TARGET_PLATFORM: "linux-arm"
-      addons:
-        apt:
-          packages:
-            - awscli
-      script:
-        - scripts/travis/external_build.sh ./scripts/travis/build_test.sh
     - # same stage, parallel job
       os: osx
       osx_image: xcode11
