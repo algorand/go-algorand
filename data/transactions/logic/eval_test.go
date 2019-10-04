@@ -1476,6 +1476,35 @@ done:`)
 	isNotPanic(t, err)
 }
 
+func TestShortBytecblock(t *testing.T) {
+	t.Parallel()
+	sources := []string{
+		"0126",
+		"012602",
+		"01260201",
+		"01260201ff",
+		"01260201ff01",
+	}
+	for _, src := range sources {
+		t.Run(src, func(t *testing.T) {
+			program, err := hex.DecodeString(src)
+			program = program[:len(program)-1]
+			cost, err := Check(program, EvalParams{})
+			require.Error(t, err)
+			isNotPanic(t, err)
+			require.True(t, cost < 1000)
+			sb := strings.Builder{}
+			pass, err := Eval(program, EvalParams{Trace: &sb})
+			if pass {
+				t.Log(hex.EncodeToString(program))
+				t.Log(sb.String())
+			}
+			require.False(t, pass)
+			isNotPanic(t, err)
+		})
+	}
+}
+
 const panicString = "out of memory, buffer overrun, stack overflow, divide by zero, halt and catch fire"
 
 func opPanic(cx *evalContext) {

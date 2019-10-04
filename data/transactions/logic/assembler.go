@@ -867,14 +867,26 @@ func parseBytecBlock(program []byte, pc int) (bytec [][]byte, nextpc int, err er
 		return
 	}
 	pos += bytesUsed
+	if pos >= len(program) {
+		err = fmt.Errorf("bytecblock ran past end of program")
+		return
+	}
 	bytec = make([][]byte, numItems)
 	for i := uint64(0); i < numItems; i++ {
+		if pos >= len(program) {
+			err = fmt.Errorf("bytecblock ran past end of program")
+			return
+		}
 		itemLen, bytesUsed := binary.Uvarint(program[pos:])
 		if bytesUsed <= 0 {
 			err = fmt.Errorf("could not decode []byte const[%d] at pc=%d", i, pos)
 			return
 		}
 		pos += bytesUsed
+		if pos >= len(program) {
+			err = fmt.Errorf("bytecblock ran past end of program")
+			return
+		}
 		bytec[i] = program[pos : pos+int(itemLen)]
 		pos += int(itemLen)
 	}
@@ -890,14 +902,26 @@ func checkByteConstBlock(cx *evalContext) int {
 		return 1
 	}
 	pos += bytesUsed
+	if pos >= len(cx.program) {
+		cx.err = fmt.Errorf("bytecblock ran past end of program")
+		return 0
+	}
 	//bytec = make([][]byte, numItems)
 	for i := uint64(0); i < numItems; i++ {
+		if pos >= len(cx.program) {
+			cx.err = fmt.Errorf("bytecblock ran past end of program")
+			return 0
+		}
 		itemLen, bytesUsed := binary.Uvarint(cx.program[pos:])
 		if bytesUsed <= 0 {
 			cx.err = fmt.Errorf("could not decode []byte const[%d] at pc=%d", i, pos)
 			return 1
 		}
 		pos += bytesUsed
+		if pos >= len(cx.program) {
+			cx.err = fmt.Errorf("bytecblock ran past end of program")
+			return 0
+		}
 		//bytec[i] = program[pos : pos+int(itemLen)]
 		pos += int(itemLen)
 	}
