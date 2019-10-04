@@ -19,7 +19,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/tools/network"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -208,6 +208,7 @@ func main() {
 	}
 
 	// If overriding peers, disable SRV lookup
+	telemetryDNSBootstrapID := cfg.DNSBootstrapID
 	var peerOverrideArray []string
 	if *peerOverride != "" {
 		peerOverrideArray = strings.Split(*peerOverride, ";")
@@ -258,6 +259,13 @@ func main() {
 
 
 	if log.GetTelemetryEnabled() {
+		// Make a copy of config and reset DNSBootstrapID in case it was disabled.
+		cfgCopy := cfg
+		cfgCopy.DNSBootstrapID = telemetryDNSBootstrapID
+
+		// Periodically check SRV records for new telemetry URI
+		go srvUpdaterLoop(1 * time.Minute, cfgCopy, s.Genesis.Network, log)
+
 		currentVersion := config.GetCurrentVersion()
 		startupDetails := telemetryspec.StartupEventDetails{
 			Version:      currentVersion.String(),
@@ -268,47 +276,22 @@ func main() {
 		}
 
 		log.EventWithDetails(telemetryspec.ApplicationState, telemetryspec.StartupEvent, startupDetails)
+
 		// Send a heartbeat event every 10 minutes as a sign of life
-		ticker := time.NewTicker(1 * time.Minute)
-		telemetryURL := ""
-
+		ticker := time.NewTicker(10 * time.Minute)
 		go func() {
-			heartbeatInterval := 10
-
-			// Initialize to heartbeatInterval so we send out an event on the first iteration.
-			i := heartbeatInterval
 			for {
-				i++
+				values := make(map[string]string)
+				metrics.DefaultRegistry().AddMetrics(values)
 
-				// Check for new telemetry URL once a minute
-				bootstrapArray := cfg.DNSBootstrapArray(s.Genesis.Network)
-				for _, bootstrapId := range bootstrapArray {
-					telemetrySRV := fmt.Sprintf("telemetry.%s", bootstrapId)
-					addrs, err := network.ReadFromBootstrap(telemetrySRV, cfg.FallbackDNSResolverAddress)
-					if err != nil {
-						log.Warn("An issue occurred reading telemetry entry for: %s", telemetrySRV)
-					} else if len(addrs) == 0 {
-						log.Warn("No telemetry entry for: %s", telemetrySRV)
-					} else if addrs[0] != telemetryURL {
-							telemetryURL = addrs[0]
-							log.UpdateTelemetryURL(telemetryURL)
-					}
+				heartbeatDetails := telemetryspec.HeartbeatEventDetails{
+					Metrics: values,
 				}
 
-				// Send heartbeat event once every 10 minutes
-				if i >= 10 {
-					values := make(map[string]string)
-					metrics.DefaultRegistry().AddMetrics(values)
+				log.EventWithDetails(telemetryspec.ApplicationState, telemetryspec.HeartbeatEvent, heartbeatDetails)
 
-					heartbeatDetails := telemetryspec.HeartbeatEventDetails{
-						Metrics: values,
-					}
-
-					log.EventWithDetails(telemetryspec.ApplicationState, telemetryspec.HeartbeatEvent, heartbeatDetails)
-					i = 0
-				}
 				<-ticker.C
-			}
+		    }
 		}()
 	}
 
@@ -325,4 +308,26 @@ func resolveDataDir() string {
 		dir = *dataDirectory
 	}
 	return dir
+}
+
+func srvUpdaterLoop(interval time.Duration, cfg config.Local, genesisNetwork protocol.NetworkID, log logging.Logger) {
+	ticker := time.NewTicker(interval)
+
+	// Check for new telemetry URL once a minute
+	for {
+		bootstrapArray := cfg.DNSBootstrapArray(genesisNetwork)
+		for _, bootstrapId := range bootstrapArray {
+			telemetrySRV := fmt.Sprintf("telemetry.%s", bootstrapId)
+			addrs, err := network.ReadFromBootstrap(telemetrySRV, cfg.FallbackDNSResolverAddress)
+			if err != nil {
+				log.Warn("An issue occurred reading telemetry entry for: %s", telemetrySRV)
+			} else if len(addrs) == 0 {
+				log.Warn("No telemetry entry for: %s", telemetrySRV)
+			} else if addrs[0] != log.GetTelemetryURI() {
+				log.UpdateTelemetryURL(addrs[0])
+			}
+		}
+
+		<- ticker.C
+	}
 }

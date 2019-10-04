@@ -31,10 +31,13 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/client"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/nodecontrol"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/shared/algoh"
+	"github.com/algorand/go-algorand/tools/network"
 	"github.com/algorand/go-algorand/util"
 )
 
@@ -65,7 +68,7 @@ func main() {
 	flag.Parse()
 	nc := getNodeController()
 
-	genesisID, err := nc.GetGenesisID()
+	genesis, err := nc.GetGenesis()
 	if err != nil {
 		fmt.Fprintln(os.Stdout, "error loading telemetry config", err)
 		return
@@ -104,7 +107,7 @@ func main() {
 	validateConfig(algohConfig)
 
 	log := logging.Base()
-	configureLogging(genesisID, log, absolutePath)
+	configureLogging(genesis, log, absolutePath)
 	defer log.CloseTelemetry()
 
 	exeDir, err = util.ExeDir()
@@ -252,7 +255,7 @@ func getNodeController() nodecontrol.NodeController {
 	return nc
 }
 
-func configureLogging(genesisID string, log logging.Logger, rootPath string) {
+func configureLogging(genesis bookkeeping.Genesis, log logging.Logger, rootPath string) {
 	log = logging.Base()
 
 	liveLog := fmt.Sprintf("%s/host.log", rootPath)
@@ -265,7 +268,7 @@ func configureLogging(genesisID string, log logging.Logger, rootPath string) {
 	log.SetJSONFormatter()
 	log.SetLevel(logging.Debug)
 
-	initTelemetry(genesisID, log, rootPath)
+	initTelemetry(genesis, log, rootPath)
 
 	// if we have the telemetry enabled, we want to use it's sessionid as part of the
 	// collected metrics decorations.
@@ -274,12 +277,12 @@ func configureLogging(genesisID string, log logging.Logger, rootPath string) {
 	fmt.Fprintln(writer, "++++++++++++++++++++++++++++++++++++++++")
 }
 
-func initTelemetry(genesisID string, log logging.Logger, dataDirectory string) {
+func initTelemetry(genesis bookkeeping.Genesis, log logging.Logger, dataDirectory string) {
 	// Enable telemetry hook in daemon to send logs to cloud
 	// If ALGOTEST env variable is set, telemetry is disabled - allows disabling telemetry for tests
 	isTest := os.Getenv("ALGOTEST") != ""
 	if !isTest {
-		telemetryConfig, err := logging.EnsureTelemetryConfig(&dataDirectory, genesisID)
+		telemetryConfig, err := logging.EnsureTelemetryConfig(&dataDirectory, genesis.ID())
 		if err != nil {
 			fmt.Fprintln(os.Stdout, "error loading telemetry config", err)
 			return
@@ -294,13 +297,23 @@ func initTelemetry(genesisID string, log logging.Logger, dataDirectory string) {
 				fmt.Fprintln(os.Stdout, "error creating telemetry hook", err)
 				return
 			}
-			// For privacy concerns, we don't want to provide the full data directory to telemetry.
-			// But to be useful where multiple nodes are installed for convenience, we should be
-			// able to discriminate between instances with the last letter of the path.
-			if dataDirectory != "" {
-				dataDirectory = dataDirectory[len(dataDirectory)-1:]
-			}
+
 			if log.GetTelemetryEnabled() {
+				cfg, err := config.LoadConfigFromDisk(dataDirectory)
+				if err != nil && !os.IsNotExist(err) {
+					log.Fatalf("Cannot load config: %v", err)
+				}
+
+				// Periodically check SRV records for new telemetry URI
+				go srvUpdaterLoop(1 * time.Minute, cfg, genesis.Network, log)
+
+				// For privacy concerns, we don't want to provide the full data directory to telemetry.
+				// But to be useful where multiple nodes are installed for convenience, we should be
+				// able to discriminate between instances with the last letter of the path.
+				if dataDirectory != "" {
+					dataDirectory = dataDirectory[len(dataDirectory)-1:]
+				}
+
 				currentVersion := config.GetCurrentVersion()
 				startupDetails := telemetryspec.StartupEventDetails{
 					Version:      currentVersion.String(),
@@ -361,5 +374,27 @@ func validateConfig(config algoh.HostConfig) {
 	// Enforce a reasonable deadman timeout
 	if config.DeadManTimeSec > 0 && config.DeadManTimeSec < 30 {
 		reportErrorf("Config.DeadManTimeSec should be >= 30 seconds (set to %v)\n", config.DeadManTimeSec)
+	}
+}
+
+func srvUpdaterLoop(interval time.Duration, cfg config.Local, genesisNetwork protocol.NetworkID, log logging.Logger) {
+	ticker := time.NewTicker(interval)
+
+	// Check for new telemetry URL once a minute
+	for {
+		bootstrapArray := cfg.DNSBootstrapArray(genesisNetwork)
+		for _, bootstrapId := range bootstrapArray {
+			telemetrySRV := fmt.Sprintf("telemetry.%s", bootstrapId)
+			addrs, err := network.ReadFromBootstrap(telemetrySRV, cfg.FallbackDNSResolverAddress)
+			if err != nil {
+				log.Warn("An issue occurred reading telemetry entry for: %s", telemetrySRV)
+			} else if len(addrs) == 0 {
+				log.Warn("No telemetry entry for: %s", telemetrySRV)
+			} else if addrs[0] != log.GetTelemetryURI() {
+				log.UpdateTelemetryURL(addrs[0])
+			}
+		}
+
+		<- ticker.C
 	}
 }

@@ -35,7 +35,7 @@ func TestTelemetryConfig(t *testing.T) {
 	cfg := createTelemetryConfig()
 	expectedEnabled := false
 	a.Equal(expectedEnabled, cfg.Enable)
-	a.Equal(elasticsearchEndpoint(), cfg.URI)
+	a.Equal("", cfg.URI)
 	a.NotZero(len(cfg.GUID))
 	a.Equal(logrus.WarnLevel, cfg.MinLogLevel)
 	a.Equal(logrus.WarnLevel, cfg.ReportHistoryLevel)

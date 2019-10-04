@@ -21,6 +21,7 @@ import (
 	"github.com/olivere/elastic"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/sohlich/elogrus.v3"
+	"time"
 
 	"github.com/algorand/go-algorand/util/metrics"
 )
@@ -89,14 +90,19 @@ func (hook *asyncTelemetryHook) appendEntry(entry *logrus.Entry) {
 }
 
 func (hook *asyncTelemetryHook) waitForEventAndReady() bool {
-	for !hook.ready {
+	ticker := time.NewTicker(time.Second)
+
+	for !hook.ready || len(hook.pending) == 0 {
 		select {
 		case <-hook.quit:
 			return false
 		case entry := <-hook.entries:
 			hook.appendEntry(entry)
+		case <- ticker.C:
+			// Check ready flag again.
 		}
 	}
+
 	return true
 }
 
