@@ -73,13 +73,13 @@ fi
 
 set +e
 # remove if it's already there, so the new build would replace it.
-aws s3 rm "${BUILD_COMPLETE_PATH}" "${NO_SIGN_REQUEST}"
+aws s3 rm "${BUILD_COMPLETE_PATH}" ${NO_SIGN_REQUEST}
 # delete the first log for this build task. The build host would
 # delete any n+1 log file before creating the n-th log file.
-aws s3 rm "${BUILD_LOG_PATH}"-1 "${NO_SIGN_REQUEST}"
+aws s3 rm "${BUILD_LOG_PATH}"-1 ${NO_SIGN_REQUEST}
 
 set -e
-aws s3 cp "${BUILDID}.json" "${BUILD_REQUEST_PATH}" "${NO_SIGN_REQUEST}"
+aws s3 cp "${BUILDID}.json" "${BUILD_REQUEST_PATH}" ${NO_SIGN_REQUEST}
 
 # don't exit on error. we will test the error code.
 set +e
@@ -89,7 +89,7 @@ endWait=$((SECONDS+600))
 msgTimer=$((SECONDS+60))
 BUILD_STARTED=false
 while [ $SECONDS -lt $endWait ]; do
-    PENDING_BUILD=$(aws s3 ls "${BUILD_REQUEST_PATH}" "${NO_SIGN_REQUEST}" | wc -l | sed 's/[[:space:]]//g')
+    PENDING_BUILD=$(aws s3 ls "${BUILD_REQUEST_PATH}" ${NO_SIGN_REQUEST} | wc -l | sed 's/[[:space:]]//g')
     if [ "${PENDING_BUILD}" != "1" ]; then
         BUILD_STARTED=true
         break
@@ -107,5 +107,5 @@ if [ "${BUILD_STARTED}" = "false" ]; then
 fi
 
 echo "Waiting for build to complete..."
-./scripts/travis/external_build_printlog.sh "${BUILD_LOG_PATH}" "${BUILD_COMPLETE_PATH}" "${NO_SIGN_REQUEST}"
+./scripts/travis/external_build_printlog.sh "${BUILD_LOG_PATH}" "${BUILD_COMPLETE_PATH}" ${NO_SIGN_REQUEST}
 exit $?
