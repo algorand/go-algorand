@@ -147,8 +147,13 @@ buildsrc: crypto/lib/libsodium.a node_exporter NONGO_BIN deps $(ALGOD_API_SWAGGE
 
 $(addprefix buildsrc_target_, $(UNIT_TEST_SOURCES)): crypto/lib/libsodium.a node_exporter NONGO_BIN deps $(ALGOD_API_SWAGGER_INJECT) $(KMD_API_SWAGGER_INJECT)
 	@echo "Building $(subst buildsrc_target_,,$@)..."
-	go get -u -insecure $(subst buildsrc_target_,,$@)
-	go install $(GOTRIMPATH) $(GOTAGS) -ldflags="$(GOLDFLAGS)" $(subst buildsrc_target_,,$@)
+	set +e; while true ; do \
+		go install $(GOTRIMPATH) $(GOTAGS) -ldflags="$(GOLDFLAGS)" $(subst buildsrc_target_,,$@) \
+		if [ "$?" = 0 ]; then \
+			break \
+		fi \
+	done
+
 
 else
 
