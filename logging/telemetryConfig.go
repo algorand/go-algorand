@@ -86,12 +86,6 @@ func (cfg TelemetryConfig) Save(configPath string) error {
 	sanitizedCfg := cfg
 	sanitizedCfg.FilePath = ""
 
-	// If using default URI, don't save that - so we pick up the current default in the future
-	// TODO: How to make sure we don't have the SRV endpoint to logging.config?
-	//if sanitizedCfg.URI == elasticsearchEndpoint() {
-	//	sanitizedCfg.URI = ""
-	//}
-
 	enc := json.NewEncoder(f)
 	err = enc.Encode(sanitizedCfg)
 	return err
