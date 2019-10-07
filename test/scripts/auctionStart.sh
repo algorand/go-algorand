@@ -126,6 +126,10 @@ export PRIMARY_ACCOUNT=$(cat ${ALGOTESTDIR}/accountlist.out | ( while read accou
 do
     account_key=$(awk '{print $3}' <<< ${account})
     account_balance=$(awk '{print $4}' <<< ${account})
+    if [ "${account_balance}" = "[n/a]" ]; then
+        echo "ERROR: unable to retrieve available funds for account ${account_key}"
+        exit 1
+    fi
     if [[ ${max_balance} -lt ${account_balance} ]]; then
        max_balance=${account_balance}
        primary_account=${account_key}

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 function runCheckGenesis() {
     echo >&2 "Checking to see if 'gen' needs to be run..."

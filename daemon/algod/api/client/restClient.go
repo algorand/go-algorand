@@ -227,6 +227,12 @@ func (client RestClient) AccountInformation(address string) (response v1.Account
 	return
 }
 
+// AssetInformation gets the AssetInformationResponse associated with the passed asset creator and index
+func (client RestClient) AssetInformation(creator string, index uint64) (response v1.AssetParams, err error) {
+	err = client.get(&response, fmt.Sprintf("/account/%s/assets/%d", creator, index), nil)
+	return
+}
+
 // TransactionInformation gets information about a specific transaction involving a specific account
 func (client RestClient) TransactionInformation(accountAddress, transactionID string) (response v1.Transaction, err error) {
 	transactionID = stripTransaction(transactionID)

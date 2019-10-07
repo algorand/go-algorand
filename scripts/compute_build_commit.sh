@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Pi build doesn't support recent enough git with support for --exclude
 # COMMIT=$(git describe --always --dirty=+ --exclude="*" 2>&1)

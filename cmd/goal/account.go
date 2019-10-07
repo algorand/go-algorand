@@ -40,26 +40,26 @@ import (
 )
 
 var (
-	accountAddress     string
-	walletName         string
-	defaultAccountName string
-	defaultAccount     bool
-	unencryptedWallet  bool
-	online             bool
-	accountName        string
-	transactionFee     uint64
-	onlineFirstRound   uint64
-	onlineValidRounds  uint64
-	onlineTxFile       string
-	roundFirstValid    uint64
-	roundLastValid     uint64
-	keyDilution        uint64
-	threshold          uint8
-	partKeyOutDir      string
-	partKeyFile        string
-	partKeyDeleteInput bool
-	importDefault      bool
-	mnemonic           string
+	accountAddress          string
+	walletName              string
+	defaultAccountName      string
+	defaultAccount          bool
+	unencryptedWallet       bool
+	online                  bool
+	accountName             string
+	transactionFee          uint64
+	statusChangeFirstRound  uint64
+	statusChangeValidRounds uint64
+	statusChangeTxFile      string
+	roundFirstValid         uint64
+	roundLastValid          uint64
+	keyDilution             uint64
+	threshold               uint8
+	partKeyOutDir           string
+	partKeyFile             string
+	partKeyDeleteInput      bool
+	importDefault           bool
+	mnemonic                string
 )
 
 func init() {
@@ -77,6 +77,7 @@ func init() {
 	accountCmd.AddCommand(exportCmd)
 	accountCmd.AddCommand(importRootKeysCmd)
 	accountCmd.AddCommand(accountMultisigCmd)
+	accountCmd.AddCommand(markNonparticipatingCmd)
 
 	accountMultisigCmd.AddCommand(newMultisigCmd)
 	accountMultisigCmd.AddCommand(deleteMultisigCmd)
@@ -126,9 +127,9 @@ func init() {
 	changeOnlineCmd.Flags().BoolVarP(&online, "online", "o", true, "Set this account to online or offline")
 	changeOnlineCmd.MarkFlagRequired("online")
 	changeOnlineCmd.Flags().Uint64VarP(&transactionFee, "fee", "f", 0, "The Fee to set on the status change transaction (defaults to suggested fee)")
-	changeOnlineCmd.Flags().Uint64VarP(&onlineFirstRound, "firstRound", "", 0, "FirstValid for the status change transaction (0 for current)")
-	changeOnlineCmd.Flags().Uint64VarP(&onlineValidRounds, "validRounds", "v", 0, "The validity period for the status change transaction")
-	changeOnlineCmd.Flags().StringVarP(&onlineTxFile, "txfile", "t", "", "Write status change transaction to this file")
+	changeOnlineCmd.Flags().Uint64VarP(&statusChangeFirstRound, "firstRound", "", 0, "FirstValid for the status change transaction (0 for current)")
+	changeOnlineCmd.Flags().Uint64VarP(&statusChangeValidRounds, "validRounds", "v", 0, "The validity period for the status change transaction")
+	changeOnlineCmd.Flags().StringVarP(&statusChangeTxFile, "txfile", "t", "", "Write status change transaction to this file")
 	changeOnlineCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
 
 	// addParticipationKey flags
@@ -170,6 +171,14 @@ func init() {
 	renewAllParticipationKeyCmd.MarkFlagRequired("roundLastValid")
 	renewAllParticipationKeyCmd.Flags().Uint64VarP(&keyDilution, "keyDilution", "", 0, "Key dilution for two-level participation keys")
 	renewAllParticipationKeyCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
+
+	// markNonparticipatingCmd flags
+	markNonparticipatingCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to change")
+	markNonparticipatingCmd.Flags().Uint64VarP(&transactionFee, "fee", "f", 0, "The Fee to set on the status change transaction (defaults to suggested fee)")
+	markNonparticipatingCmd.Flags().Uint64VarP(&statusChangeFirstRound, "firstRound", "", 0, "FirstValid for the status change transaction (0 for current)")
+	markNonparticipatingCmd.Flags().Uint64VarP(&statusChangeValidRounds, "validRounds", "v", 0, "The validity period for the status change transaction")
+	markNonparticipatingCmd.Flags().StringVarP(&statusChangeTxFile, "txfile", "t", "", "Write status change transaction to this file, rather than posting to network")
+	markNonparticipatingCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
 }
 
 var accountCmd = &cobra.Command{
@@ -509,7 +518,6 @@ var changeOnlineCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		// Pull the current round for use in our new transactions
 		dataDir := ensureSingleDataDir()
 		client := ensureFullClient(dataDir)
 
@@ -533,7 +541,7 @@ var changeOnlineCmd = &cobra.Command{
 			}
 		}
 
-		err := changeAccountOnlineStatus(accountAddress, part, online, onlineTxFile, walletName, onlineFirstRound, onlineValidRounds, transactionFee, dataDir, client)
+		err := changeAccountOnlineStatus(accountAddress, part, online, statusChangeTxFile, walletName, statusChangeFirstRound, statusChangeValidRounds, transactionFee, dataDir, client)
 		if err != nil {
 			reportErrorf(err.Error())
 		}
@@ -1038,5 +1046,47 @@ var partkeyInfoCmd = &cobra.Command{
 				fmt.Printf("File: %s\n%s\n", filename, string(infoString))
 			}
 		})
+	},
+}
+
+var markNonparticipatingCmd = &cobra.Command{
+	Use:   "marknonparticipating",
+	Short: "Permanently mark an account as not participating (i.e. offline and earns no rewards)",
+	Long:  "Permanently mark an account as not participating (as opposed to Online or Offline). Once marked, the account can never go online or offline, it is forever nonparticipating, and it will never earn rewards on its balance.",
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, args []string) {
+
+		dataDir := ensureSingleDataDir()
+		client := ensureFullClient(dataDir)
+		utx, err := client.MakeUnsignedBecomeNonparticipatingTx(accountAddress, statusChangeFirstRound, statusChangeValidRounds, transactionFee)
+		if err != nil {
+			reportErrorf(errorConstructingTX, err)
+		}
+
+		if statusChangeTxFile != "" {
+			err = writeTxnToFile(client, false, dataDir, walletName, utx, statusChangeTxFile)
+			if err != nil {
+				reportErrorf(fileWriteError, statusChangeTxFile, err)
+			}
+			return
+		}
+
+		// Sign & broadcast the transaction
+		wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
+		txid, err := client.SignAndBroadcastTransaction(wh, pw, utx)
+		if err != nil {
+			reportErrorf(errorOnlineTX, err)
+		}
+		fmt.Printf("Transaction id for mark-nonparticipating transaction: %s\n", txid)
+
+		if noWaitAfterSend {
+			fmt.Println("Note: status will not change until transaction is finalized")
+			return
+		}
+
+		err = waitForCommit(client, txid)
+		if err != nil {
+			reportErrorf("error waiting for transaction to be committed: %v", err)
+		}
 	},
 }

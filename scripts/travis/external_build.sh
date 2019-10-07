@@ -13,7 +13,7 @@
 # TARGET_PLATFORM
 # TRAVIS_BRANCH
 # TRAVIS_COMMIT
-# TRAVIS_BUILD_NUMBER
+# TRAVIS_JOB_NUMBER
 # BUILD_REQUESTS_BUCKET
 # BUILD_PULL_REQUESTS_BUCKET
 # AWS_ACCESS_KEY_ID (optional)
@@ -52,41 +52,51 @@ if [ "${BUILD_TARGET}" = "" ]; then
     exit 1
 fi
 
-sudo apt-get install awscli
+BUILDID=${TRAVIS_JOB_NUMBER/./000}
 
 # create build request
-echo "{ \"TRAVIS_BRANCH\" : \"${TRAVIS_BRANCH}\", \"TRAVIS_COMMIT\" : \"${TRAVIS_COMMIT}\", \"TRAVIS_PULL_REQUEST\" : \"${TRAVIS_PULL_REQUEST}\", \"AWS_ACCESS_KEY_ID\" : \"${AWS_ACCESS_KEY_ID}\", \"AWS_SECRET_ACCESS_KEY\" : \"${AWS_SECRET_ACCESS_KEY}\", \"EXEC\":\"${BUILD_TARGET}\" }" > ${TRAVIS_BUILD_NUMBER}.json
+echo "{ \"S3_RELEASE_BUCKET\" : \"${S3_RELEASE_BUCKET}\", \"TRAVIS_BRANCH\" : \"${TRAVIS_BRANCH}\", \"TRAVIS_COMMIT\" : \"${TRAVIS_COMMIT}\", \"TRAVIS_PULL_REQUEST\" : \"${TRAVIS_PULL_REQUEST}\", \"AWS_ACCESS_KEY_ID\" : \"${AWS_ACCESS_KEY_ID}\", \"AWS_SECRET_ACCESS_KEY\" : \"${AWS_SECRET_ACCESS_KEY}\", \"EXEC\":\"${BUILD_TARGET}\" }" > "${BUILDID}.json"
 
 if [ "${TRAVIS_PULL_REQUEST}" = "false" ]; then
-    BUILD_REQUEST_PATH=s3://${BUILD_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${TRAVIS_BUILD_NUMBER}.json
-    BUILD_COMPLETE_PATH=s3://${BUILD_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${TRAVIS_BUILD_NUMBER}-completed.json
-    BUILD_LOG_PATH=s3://${BUILD_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${TRAVIS_BUILD_NUMBER}-log
+    BUILD_REQUEST_PATH=s3://${BUILD_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${BUILDID}.json
+    BUILD_COMPLETE_PATH=s3://${BUILD_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${BUILDID}-completed.json
+    BUILD_LOG_PATH=s3://${BUILD_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${BUILDID}-log
     NO_SIGN_REQUEST=
+    echo "Build request : { \"S3_RELEASE_BUCKET\" : \"${S3_RELEASE_BUCKET}\", \"TRAVIS_BRANCH\" : \"${TRAVIS_BRANCH}\", \"TRAVIS_COMMIT\" : \"${TRAVIS_COMMIT}\", \"TRAVIS_PULL_REQUEST\" : \"${TRAVIS_PULL_REQUEST}\", \"AWS_ACCESS_KEY_ID\" : \"*****\", \"AWS_SECRET_ACCESS_KEY\" : \"*****\", \"EXEC\":\"${BUILD_TARGET}\" }"    
 else
-    BUILD_REQUEST_PATH=s3://${BUILD_PULL_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${TRAVIS_BUILD_NUMBER}.json
-    BUILD_COMPLETE_PATH=s3://${BUILD_PULL_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${TRAVIS_BUILD_NUMBER}-completed.json
-    BUILD_LOG_PATH=s3://${BUILD_PULL_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${TRAVIS_BUILD_NUMBER}-log
+    BUILD_REQUEST_PATH=s3://${BUILD_PULL_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${BUILDID}.json
+    BUILD_COMPLETE_PATH=s3://${BUILD_PULL_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${BUILDID}-completed.json
+    BUILD_LOG_PATH=s3://${BUILD_PULL_REQUESTS_BUCKET}/${TARGET_PLATFORM}/${BUILDID}-log
     NO_SIGN_REQUEST=--no-sign-request
+    echo "Build request : $(cat "${BUILDID}.json")"
 fi
 
 set +e
 # remove if it's already there, so the new build would replace it.
-aws s3 rm ${BUILD_COMPLETE_PATH} ${NO_SIGN_REQUEST}
+aws s3 rm "${BUILD_COMPLETE_PATH}" ${NO_SIGN_REQUEST}
+# delete the first log for this build task. The build host would
+# delete any n+1 log file before creating the n-th log file.
+aws s3 rm "${BUILD_LOG_PATH}"-1 ${NO_SIGN_REQUEST}
 
 set -e
-aws s3 cp ${TRAVIS_BUILD_NUMBER}.json ${BUILD_REQUEST_PATH} ${NO_SIGN_REQUEST}
+aws s3 cp "${BUILDID}.json" "${BUILD_REQUEST_PATH}" ${NO_SIGN_REQUEST}
 
 # don't exit on error. we will test the error code.
 set +e
 
 echo "Waiting for build to start..."
-end=$((SECONDS+600))
+endWait=$((SECONDS+600))
+msgTimer=$((SECONDS+60))
 BUILD_STARTED=false
-while [ $SECONDS -lt $end ]; do
-    PENDING_BUILD=$(aws s3 ls ${BUILD_REQUEST_PATH} ${NO_SIGN_REQUEST} | wc -l | sed 's/[[:space:]]//g')
+while [ $SECONDS -lt $endWait ]; do
+    PENDING_BUILD=$(aws s3 ls "${BUILD_REQUEST_PATH}" ${NO_SIGN_REQUEST} | wc -l | sed 's/[[:space:]]//g')
     if [ "${PENDING_BUILD}" != "1" ]; then
         BUILD_STARTED=true
         break
+    fi
+    if [ $SECONDS -gt $msgTimer ]; then
+        msgTimer=$((SECONDS+60))
+        echo "Still waiting for build to start..."
     fi
     sleep 1s
 done
@@ -97,5 +107,5 @@ if [ "${BUILD_STARTED}" = "false" ]; then
 fi
 
 echo "Waiting for build to complete..."
-./scripts/travis/external_build_printlog.sh ${BUILD_LOG_PATH} ${BUILD_COMPLETE_PATH} ${NO_SIGN_REQUEST}
+./scripts/travis/external_build_printlog.sh "${BUILD_LOG_PATH}" "${BUILD_COMPLETE_PATH}" ${NO_SIGN_REQUEST}
 exit $?

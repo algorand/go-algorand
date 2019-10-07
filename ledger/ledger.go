@@ -305,10 +305,10 @@ func (l *Ledger) Totals(rnd basics.Round) (AccountTotals, error) {
 	return l.accts.totals(rnd)
 }
 
-func (l *Ledger) isDup(firstValid basics.Round, lastValid basics.Round, txid transactions.Txid) (bool, error) {
+func (l *Ledger) isDup(currentProto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl txlease) (bool, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.txTail.isDup(firstValid, lastValid, txid)
+	return l.txTail.isDup(currentProto, current, firstValid, lastValid, txid, txl)
 }
 
 // Latest returns the latest known block round added to the ledger.
@@ -325,10 +325,12 @@ func (l *Ledger) LatestCommitted() basics.Round {
 
 // Committed uses the transaction tail tracker to check if txn already
 // appeared in a block.
-func (l *Ledger) Committed(txn transactions.SignedTxn) (bool, error) {
+func (l *Ledger) Committed(currentProto config.ConsensusParams, txn transactions.SignedTxn) (bool, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.txTail.isDup(txn.Txn.First(), l.Latest(), txn.ID())
+	// do not check for whether lease would excluded this
+	txl := txlease{sender: txn.Txn.Sender}
+	return l.txTail.isDup(currentProto, l.Latest()+1, txn.Txn.First(), l.Latest(), txn.ID(), txl)
 }
 
 func (l *Ledger) blockAux(rnd basics.Round) (bookkeeping.Block, evalAux, error) {
@@ -453,4 +455,11 @@ func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, aux evalAux) (stateD
 	// passing nil as the verificationPool is ok since we've asking the evaluator to skip verification.
 	delta, _, err := l.eval(context.Background(), blk, &aux, false, nil, nil)
 	return delta, err
+}
+
+// A txlease is a transaction (sender, lease) pair which uniquely specifies a
+// transaction lease.
+type txlease struct {
+	sender basics.Address
+	lease  [32]byte
 }

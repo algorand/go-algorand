@@ -577,6 +577,15 @@ func (c *Client) AccountInformation(account string) (resp v1.Account, err error)
 	return
 }
 
+// AssetInformation takes an asset's creator and index and returns its information
+func (c *Client) AssetInformation(creator string, index uint64) (resp v1.AssetParams, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		resp, err = algod.AssetInformation(creator, index)
+	}
+	return
+}
+
 // TransactionInformation takes an address and associated txid and return its information
 func (c *Client) TransactionInformation(addr, txid string) (resp v1.Transaction, err error) {
 	algod, err := c.ensureAlgodClient()

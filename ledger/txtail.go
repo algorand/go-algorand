@@ -26,8 +26,9 @@ import (
 )
 
 type roundTxMembers struct {
-	txids map[transactions.Txid]struct{}
-	proto config.ConsensusParams
+	txids    map[transactions.Txid]struct{}
+	txleases map[txlease]basics.Round // map of transaction lease to when it expires
+	proto    config.ConsensusParams
 }
 
 type txTail struct {
@@ -61,12 +62,14 @@ func (t *txTail) loadFromDisk(l ledgerForTracker) error {
 		}
 
 		t.recent[old] = roundTxMembers{
-			txids: make(map[transactions.Txid]struct{}),
-			proto: config.Consensus[blk.CurrentProtocol],
+			txids:    make(map[transactions.Txid]struct{}),
+			txleases: make(map[txlease]basics.Round),
+			proto:    config.Consensus[blk.CurrentProtocol],
 		}
 		for _, txad := range payset {
 			tx := txad.SignedTxn
 			t.recent[old].txids[tx.ID()] = struct{}{}
+			t.recent[old].txleases[txlease{sender: tx.Txn.Sender, lease: tx.Txn.Lease}] = tx.Txn.LastValid
 		}
 	}
 
@@ -85,8 +88,9 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta stateDelta) {
 	}
 
 	t.recent[rnd] = roundTxMembers{
-		txids: delta.txids,
-		proto: config.Consensus[blk.CurrentProtocol],
+		txids:    delta.txids,
+		txleases: delta.txleases,
+		proto:    config.Consensus[blk.CurrentProtocol],
 	}
 }
 
@@ -101,7 +105,7 @@ func (t *txTail) committedUpTo(rnd basics.Round) basics.Round {
 	return (rnd + 1).SubSaturate(maxlife)
 }
 
-func (t *txTail) isDup(firstValid basics.Round, lastValid basics.Round, txid transactions.Txid) (bool, error) {
+func (t *txTail) isDup(proto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl txlease) (bool, error) {
 	for rnd := firstValid; rnd <= lastValid; rnd++ {
 		rndtxs := t.recent[rnd].txids
 		if rndtxs == nil {
@@ -112,6 +116,14 @@ func (t *txTail) isDup(firstValid basics.Round, lastValid basics.Round, txid tra
 		if present {
 			return true, nil
 		}
+
+		if proto.SupportTransactionLeases && (txl.lease != [32]byte{}) {
+			expires, ok := t.recent[rnd].txleases[txl]
+			if ok && current <= expires {
+				return true, nil
+			}
+		}
+
 	}
 
 	return false, nil

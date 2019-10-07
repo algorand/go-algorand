@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # This script exists to give a trap atexit context for killing the httpd so that we're not waiting on that
 
