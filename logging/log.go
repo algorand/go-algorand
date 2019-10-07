@@ -154,7 +154,7 @@ type Logger interface {
 	AddHook(hook logrus.Hook)
 
 	EnableTelemetry(cfg TelemetryConfig) error
-	UpdateTelemetryURL(url string)
+	UpdateTelemetryURI(uri string)
 	GetTelemetryEnabled() bool
 	Metrics(category telemetryspec.Category, metrics telemetryspec.MetricDetails, details interface{})
 	Event(category telemetryspec.Category, identifier telemetryspec.Event)
@@ -372,8 +372,8 @@ func (l logger) EnableTelemetry(cfg TelemetryConfig) (err error) {
 	return EnableTelemetry(cfg, &l)
 }
 
-func (l logger) UpdateTelemetryURL(url string) {
-	l.loggerState.telemetry.hook.UpdateHookURL(url)
+func (l logger) UpdateTelemetryURI(uri string) {
+	l.loggerState.telemetry.hook.UpdateHookURI(uri)
 }
 
 func (l logger) GetTelemetryEnabled() bool {

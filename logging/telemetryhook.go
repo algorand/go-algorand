@@ -81,7 +81,7 @@ func createAsyncHookLevels(wrappedHook logrus.Hook, channelDepth uint, maxQueueD
 func (hook *asyncTelemetryHook) appendEntry(entry *logrus.Entry) {
 	hook.Lock()
 	defer hook.Unlock()
-	// TODO: If there are errors at startup, before the telemetry URL is set, this can fill up. Should we prioritize
+	// TODO: If there are errors at startup, before the telemetry URI is set, this can fill up. Should we prioritize
 	//       startup / heartbeat events?
 	if len(hook.pending) >= hook.maxQueueDepth {
 		hook.pending = hook.pending[1:]
@@ -176,7 +176,7 @@ func createTelemetryHook(cfg TelemetryConfig, history *logBuffer, hookFactory ho
 }
 
 // Note: This will be removed with the externalized telemetry project.
-func (hook *asyncTelemetryHook) UpdateHookURL(url string) {
+func (hook *asyncTelemetryHook) UpdateHookURI(uri string) {
 	if hook.wrappedHook == nil {
 		return
 	}
@@ -186,7 +186,7 @@ func (hook *asyncTelemetryHook) UpdateHookURL(url string) {
 		hook.Lock()
 		defer hook.Unlock()
 
-		tfh.telemetryConfig.URI = url
+		tfh.telemetryConfig.URI = uri
 		newHook, err := tfh.factory(tfh.telemetryConfig)
 
 		if err == nil && newHook != nil {

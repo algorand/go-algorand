@@ -377,7 +377,7 @@ func validateConfig(config algoh.HostConfig) {
 func srvUpdaterLoop(interval time.Duration, cfg config.Local, genesisNetwork protocol.NetworkID, log logging.Logger) {
 	ticker := time.NewTicker(interval)
 
-	// Check for new telemetry URL once a minute
+	// Check for new telemetry URI once a minute
 	for {
 		bootstrapArray := cfg.DNSBootstrapArray(genesisNetwork)
 		for _, bootstrapId := range bootstrapArray {
@@ -388,7 +388,7 @@ func srvUpdaterLoop(interval time.Duration, cfg config.Local, genesisNetwork pro
 			} else if len(addrs) == 0 {
 				log.Warn("No telemetry entry for: %s", telemetrySRV)
 			} else if addrs[0] != log.GetTelemetryURI() {
-				log.UpdateTelemetryURL(addrs[0])
+				log.UpdateTelemetryURI(addrs[0])
 			}
 		}
 
