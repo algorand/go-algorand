@@ -35,7 +35,6 @@ logger.Info("New wallet was created")
 package logging
 
 import (
-	"fmt"
 	"io"
 	"runtime"
 	"runtime/debug"
@@ -375,7 +374,6 @@ func (l logger) EnableTelemetry(cfg TelemetryConfig) (err error) {
 
 func (l logger) UpdateTelemetryURL(url string) {
 	l.loggerState.telemetry.hook.UpdateHookURL(url)
-	fmt.Printf("Updating telemetry URL: %s\n", url)
 }
 
 func (l logger) GetTelemetryEnabled() bool {

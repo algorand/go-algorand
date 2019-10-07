@@ -18,10 +18,11 @@ package logging
 
 import (
 	"fmt"
+	"time"
+
 	"github.com/olivere/elastic"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/sohlich/elogrus.v3"
-	"time"
 
 	"github.com/algorand/go-algorand/util/metrics"
 )
@@ -51,7 +52,7 @@ func createAsyncHookLevels(wrappedHook logrus.Hook, channelDepth uint, maxQueueD
 
 			hasEvents := true
 
-			for hasEvents && hook.ready {
+			for hasEvents {
 				select {
 				case entry := <-hook.entries:
 					hook.appendEntry(entry)
@@ -192,6 +193,4 @@ func (hook *asyncTelemetryHook) UpdateHookURL(url string) {
 			hook.ready = true
 		}
 	}
-
-	// TODO: Fire some sort of "telemetry url updated" event to get the async telemetry hook to trigger.
 }
