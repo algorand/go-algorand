@@ -302,7 +302,7 @@ func initTelemetry(genesis bookkeeping.Genesis, log logging.Logger, dataDirector
 				}
 
 				// Periodically check SRV records for new telemetry URI
-				go srvUpdaterLoop(1 * time.Minute, cfg, genesis.Network, log)
+				go srvUpdaterLoop(1*time.Minute, cfg, genesis.Network, log)
 
 				// For privacy concerns, we don't want to provide the full data directory to telemetry.
 				// But to be useful where multiple nodes are installed for convenience, we should be
@@ -392,6 +392,6 @@ func srvUpdaterLoop(interval time.Duration, cfg config.Local, genesisNetwork pro
 			}
 		}
 
-		<- ticker.C
+		<-ticker.C
 	}
 }

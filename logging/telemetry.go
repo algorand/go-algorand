@@ -79,7 +79,6 @@ func makeTelemetryState(cfg TelemetryConfig, hookFactory hookFactory) (*telemetr
 		return nil, err
 	}
 
-
 	telemetry := &telemetryState{
 		history,
 		&cfg,

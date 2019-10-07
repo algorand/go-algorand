@@ -256,14 +256,13 @@ func main() {
 	}
 	fmt.Fprintf(os.Stdout, "Deadlock detection is set to: %s (Default state is '%s')\n", deadlockState, config.DefaultDeadlock)
 
-
 	if log.GetTelemetryEnabled() {
 		// Make a copy of config and reset DNSBootstrapID in case it was disabled.
 		cfgCopy := cfg
 		cfgCopy.DNSBootstrapID = telemetryDNSBootstrapID
 
 		// Periodically check SRV records for new telemetry URI
-		go srvUpdaterLoop(1 * time.Minute, cfgCopy, s.Genesis.Network, log)
+		go srvUpdaterLoop(1*time.Minute, cfgCopy, s.Genesis.Network, log)
 
 		currentVersion := config.GetCurrentVersion()
 		startupDetails := telemetryspec.StartupEventDetails{
@@ -290,7 +289,7 @@ func main() {
 				log.EventWithDetails(telemetryspec.ApplicationState, telemetryspec.HeartbeatEvent, heartbeatDetails)
 
 				<-ticker.C
-		    }
+			}
 		}()
 	}
 
@@ -327,6 +326,6 @@ func srvUpdaterLoop(interval time.Duration, cfg config.Local, genesisNetwork pro
 			}
 		}
 
-		<- ticker.C
+		<-ticker.C
 	}
 }

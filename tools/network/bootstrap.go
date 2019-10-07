@@ -50,4 +50,3 @@ func ReadFromBootstrap(bootstrapID string, fallbackDNSResolverAddress string) (a
 	}
 	return
 }
-

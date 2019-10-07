@@ -99,7 +99,7 @@ func (hook *asyncTelemetryHook) waitForEventAndReady() bool {
 			return false
 		case entry := <-hook.entries:
 			hook.appendEntry(entry)
-		case <- ticker.C:
+		case <-ticker.C:
 			// Check ready flag again.
 		}
 	}
@@ -124,7 +124,7 @@ func (hook *asyncTelemetryHook) Fire(entry *logrus.Entry) error {
 
 // Levels Required for logrus hook interface
 func (hook *asyncTelemetryHook) Levels() []logrus.Level {
-	if (hook.wrappedHook != nil) {
+	if hook.wrappedHook != nil {
 		return hook.wrappedHook.Levels()
 	} else {
 		return hook.levels
@@ -188,6 +188,7 @@ func (hook *asyncTelemetryHook) UpdateHookURL(url string) {
 
 		tfh.telemetryConfig.URI = url
 		newHook, err := tfh.factory(tfh.telemetryConfig)
+
 		if err == nil && newHook != nil {
 			tfh.wrappedHook = newHook
 			hook.ready = true
