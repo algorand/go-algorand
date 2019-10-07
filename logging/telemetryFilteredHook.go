@@ -83,7 +83,7 @@ func (hook *telemetryFilteredHook) Fire(entry *logrus.Entry) error {
 func (hook *telemetryFilteredHook) Levels() []logrus.Level {
 	if hook.wrappedHook != nil {
 		return hook.wrappedHook.Levels()
-	} else {
-		return hook.levels
 	}
+
+	return hook.levels
 }

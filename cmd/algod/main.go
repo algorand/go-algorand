@@ -314,8 +314,8 @@ func srvUpdaterLoop(interval time.Duration, cfg config.Local, genesisNetwork pro
 	// Check for new telemetry URI once a minute
 	for {
 		bootstrapArray := cfg.DNSBootstrapArray(genesisNetwork)
-		for _, bootstrapId := range bootstrapArray {
-			telemetrySRV := fmt.Sprintf("telemetry.%s", bootstrapId)
+		for _, bootstrapID := range bootstrapArray {
+			telemetrySRV := fmt.Sprintf("telemetry.%s", bootstrapID)
 			addrs, err := network.ReadFromBootstrap(telemetrySRV, cfg.FallbackDNSResolverAddress)
 			if err != nil {
 				log.Warn("An issue occurred reading telemetry entry for: %s", telemetrySRV)

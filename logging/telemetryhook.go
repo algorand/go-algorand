@@ -126,9 +126,9 @@ func (hook *asyncTelemetryHook) Fire(entry *logrus.Entry) error {
 func (hook *asyncTelemetryHook) Levels() []logrus.Level {
 	if hook.wrappedHook != nil {
 		return hook.wrappedHook.Levels()
-	} else {
-		return hook.levels
 	}
+
+	return hook.levels
 }
 
 func (hook *asyncTelemetryHook) Close() {

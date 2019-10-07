@@ -303,7 +303,7 @@ func (nc NodeController) Clone(targetDir string, copyLedger bool) (err error) {
 	return
 }
 
-// GetGenesisID returns the current genesis directory ID for our instance
+// GetGenesis returns the current genesis for our instance
 func (nc NodeController) GetGenesis() (bookkeeping.Genesis, error) {
 	var genesis bookkeeping.Genesis
 
