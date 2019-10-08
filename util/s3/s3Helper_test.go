@@ -229,4 +229,7 @@ func TestGetPartsFromVersion(t *testing.T) {
 		require.Equal(t, test.expMinor, actualMinor, test.name)
 		require.Equal(t, test.expPatch, actualPatch, test.name)
 	}
+
+	_, _, _, err := GetVersionPartsFromVersion(1<<32 - 1)
+	require.Error(t, err, "Versions less than 1.0.0 should not be parsed.")
 }
