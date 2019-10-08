@@ -138,7 +138,7 @@ $(KMD_API_SWAGGER_INJECT): $(KMD_API_SWAGGER_SPEC) $(KMD_API_SWAGGER_SPEC).valid
 
 build: buildsrc gen
 
-ifeq ($(ARCH), arm)
+ifeq ($(ARCH), arm-disabled)
 
 # On RasberryPI emulated machines, we have limited amount of RAM; invoking the compiler over all of the modules would
 # result in high memory consumption, and would end up with "out of memory". To work around that, we break the "go install"
