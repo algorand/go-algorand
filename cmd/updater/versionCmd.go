@@ -80,7 +80,7 @@ var checkCmd = &cobra.Command{
 			if semanticOutput {
 				major, minor, patch, err := s3.GetVersionPartsFromVersion(version)
 				if err != nil {
-					exitErrorf( "Problem converting '%d' to a semantic version string: %v", version, err)
+					exitErrorf("Problem converting '%d' to a semantic version string: %v", version, err)
 				}
 				fmt.Fprintf(os.Stdout, "%d.%d.%d\n", major, minor, patch)
 			} else {
