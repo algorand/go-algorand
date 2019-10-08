@@ -322,3 +322,21 @@ func GetVersionFromName(name string) (version uint64, err error) {
 	}
 	return
 }
+
+func GetVersionPartsFromVersion(version uint64) (major uint64, minor uint64, patch uint64, err error) {
+	val := version
+
+	if val < 2^32 {
+		err = errors.New("Versions below 1.0.0 not supported.")
+		return
+	}
+
+	modVal := uint64(1<<16)
+
+	patch = val % modVal
+	val >>= 16
+	minor = val % modVal
+	val >>= 16
+	major = val
+	return
+}

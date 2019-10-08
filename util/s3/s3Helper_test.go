@@ -20,6 +20,8 @@ import (
 	"os"
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestGetS3UploadBucket(t *testing.T) {
@@ -178,5 +180,53 @@ func TestMakeS3SessionForDownloadWithBucket(t *testing.T) {
 				t.Errorf("MakeS3SessionForDownloadWithBucket() = %v, want %v", gotHelper, tt.wantHelper)
 			}
 		})
+	}
+}
+
+func TestGetVersionFromName(t *testing.T) {
+	type args struct {
+		name     string
+		version  string
+		expected uint64
+	}
+	tests := []args {
+		args{name: "test 1 (major)", version: "_1.0.0", expected: 1 * 1<<32 },
+		args{name: "test 2 (major)", version: "_2.0.0", expected: 2 * 1<<32 },
+		args{name: "test 3 (minor)", version: "_1.1.0", expected: 1 * 1<<32 + 1 * 1<<16 },
+		args{name: "test 4 (minor)", version: "_1.2.0", expected: 1 * 1<<32 + 2 * 1<<16 },
+		args{name: "test 5 (patch)", version: "_1.0.1", expected: 1 * 1<<32 + 1 },
+		args{name: "test 6 (patch)", version: "_1.0.2", expected: 1 * 1<<32 + 2 },
+	}
+
+	for _, test := range tests {
+		actual, err := GetVersionFromName(test.version)
+		require.NoError(t, err, test.name)
+		require.Equal(t, test.expected, actual, test.name)
+	}
+}
+
+func TestGetPartsFromVersion(t *testing.T) {
+	type args struct {
+		name     string
+		version  uint64
+		expMajor uint64
+		expMinor uint64
+		expPatch uint64
+	}
+	tests := []args {
+		args{name: "test 1 (major)", version: 1 * 1<<32, expMajor: 1, expMinor: 0, expPatch: 0 },
+		args{name: "test 2 (major)", version: 2 * 1<<32, expMajor: 2, expMinor: 0, expPatch: 0 },
+		args{name: "test 3 (minor)", version: 1 * 1<<32 + 1 * 1<<16, expMajor: 1, expMinor: 1, expPatch: 0 },
+		args{name: "test 4 (minor)", version: 1 * 1<<32 + 2 * 1<<16, expMajor: 1, expMinor: 2, expPatch: 0 },
+		args{name: "test 5 (patch)", version: 1 * 1<<32 + 1, expMajor: 1, expMinor: 0, expPatch: 1 },
+		args{name: "test 6 (patch)", version: 1 * 1<<32 + 2, expMajor: 1, expMinor: 0, expPatch: 2 },
+	}
+
+	for _, test := range tests {
+		actualMajor, actualMinor, actualPatch, err := GetVersionPartsFromVersion(test.version)
+		require.NoError(t, err, test.name)
+		require.Equal(t, test.expMajor, actualMajor, test.name)
+		require.Equal(t, test.expMinor, actualMinor, test.name)
+		require.Equal(t, test.expPatch, actualPatch, test.name)
 	}
 }

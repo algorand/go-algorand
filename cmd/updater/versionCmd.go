@@ -29,6 +29,7 @@ var (
 	destFile        string
 	versionBucket   string
 	specificVersion uint64
+	semanticOutput  bool
 )
 
 func init() {
@@ -36,10 +37,11 @@ func init() {
 	versionCmd.AddCommand(getCmd)
 
 	checkCmd.Flags().StringVarP(&versionBucket, "bucket", "b", "", "S3 bucket containing updates.")
+	checkCmd.Flags().BoolVarP(&semanticOutput, "semantic", "s", false, "Human readable semantic version output.")
 
-	getCmd.Flags().StringVarP(&destFile, "outputFile", "o", "", "Path for downloaded file (required)")
+	getCmd.Flags().StringVarP(&destFile, "outputFile", "o", "", "Path for downloaded file (required).")
 	getCmd.Flags().StringVarP(&versionBucket, "bucket", "b", "", "S3 bucket containing updates.")
-	getCmd.Flags().Uint64VarP(&specificVersion, "version", "v", 0, "Specific version to download")
+	getCmd.Flags().Uint64VarP(&specificVersion, "version", "v", 0, "Specific version to download.")
 	getCmd.MarkFlagRequired("outputFile")
 }
 
@@ -75,7 +77,15 @@ var checkCmd = &cobra.Command{
 				os.Exit(1)
 			}
 
-			fmt.Fprintf(os.Stdout, "%d\n", version)
+			if semanticOutput {
+				major, minor, patch, err := s3.GetVersionPartsFromVersion(version)
+				if err != nil {
+					exitErrorf( "Problem converting '%d' to a semantic version string: %v", version, err)
+				}
+				fmt.Fprintf(os.Stdout, "%d.%d.%d\n", major, minor, patch)
+			} else {
+				fmt.Fprintf(os.Stdout, "%d\n", version)
+			}
 		}
 	},
 }
