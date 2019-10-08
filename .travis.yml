@@ -31,8 +31,7 @@ jobs:
     - stage: build_commit
       os: linux
       script:
-        - scripts/travis/build.sh || travis_terminate 1;
-        - travis_wait 90 scripts/travis/test.sh
+        - scripts/travis/build_test.sh
 
     - stage: build_pr
       os: linux

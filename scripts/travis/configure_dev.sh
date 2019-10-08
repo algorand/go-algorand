@@ -54,10 +54,7 @@ if [ "${OS}" = "linux" ]; then
         fi
         set -e
         sudo apt-get update -y
-        sudo apt-get upgrade -y
         sudo apt-get -y install sqlite3 libssl-dev git apt-transport-https openssl
-        git config --global http.postBuffer 524288000
-        git config --global http.sslVerify false
     fi
 fi
 
