@@ -190,12 +190,12 @@ func TestGetVersionFromName(t *testing.T) {
 		expected uint64
 	}
 	tests := []args{
-		args{name: "test 1 (major)", version: "_1.0.0", expected: 1 * 1 << 32},
-		args{name: "test 2 (major)", version: "_2.0.0", expected: 2 * 1 << 32},
-		args{name: "test 3 (minor)", version: "_1.1.0", expected: 1*1<<32 + 1*1<<16},
-		args{name: "test 4 (minor)", version: "_1.2.0", expected: 1*1<<32 + 2*1<<16},
-		args{name: "test 5 (patch)", version: "_1.0.1", expected: 1*1<<32 + 1},
-		args{name: "test 6 (patch)", version: "_1.0.2", expected: 1*1<<32 + 2},
+		{name: "test 1 (major)", version: "_1.0.0", expected: 1 * 1 << 32},
+		{name: "test 2 (major)", version: "_2.0.0", expected: 2 * 1 << 32},
+		{name: "test 3 (minor)", version: "_1.1.0", expected: 1*1<<32 + 1*1<<16},
+		{name: "test 4 (minor)", version: "_1.2.0", expected: 1*1<<32 + 2*1<<16},
+		{name: "test 5 (patch)", version: "_1.0.1", expected: 1*1<<32 + 1},
+		{name: "test 6 (patch)", version: "_1.0.2", expected: 1*1<<32 + 2},
 	}
 
 	for _, test := range tests {
@@ -214,12 +214,12 @@ func TestGetPartsFromVersion(t *testing.T) {
 		expPatch uint64
 	}
 	tests := []args{
-		args{name: "test 1 (major)", version: 1 * 1 << 32, expMajor: 1, expMinor: 0, expPatch: 0},
-		args{name: "test 2 (major)", version: 2 * 1 << 32, expMajor: 2, expMinor: 0, expPatch: 0},
-		args{name: "test 3 (minor)", version: 1*1<<32 + 1*1<<16, expMajor: 1, expMinor: 1, expPatch: 0},
-		args{name: "test 4 (minor)", version: 1*1<<32 + 2*1<<16, expMajor: 1, expMinor: 2, expPatch: 0},
-		args{name: "test 5 (patch)", version: 1*1<<32 + 1, expMajor: 1, expMinor: 0, expPatch: 1},
-		args{name: "test 6 (patch)", version: 1*1<<32 + 2, expMajor: 1, expMinor: 0, expPatch: 2},
+		{name: "test 1 (major)", version: 1 * 1 << 32, expMajor: 1, expMinor: 0, expPatch: 0},
+		{name: "test 2 (major)", version: 2 * 1 << 32, expMajor: 2, expMinor: 0, expPatch: 0},
+		{name: "test 3 (minor)", version: 1*1<<32 + 1*1<<16, expMajor: 1, expMinor: 1, expPatch: 0},
+		{name: "test 4 (minor)", version: 1*1<<32 + 2*1<<16, expMajor: 1, expMinor: 2, expPatch: 0},
+		{name: "test 5 (patch)", version: 1*1<<32 + 1, expMajor: 1, expMinor: 0, expPatch: 1},
+		{name: "test 6 (patch)", version: 1*1<<32 + 2, expMajor: 1, expMinor: 0, expPatch: 2},
 	}
 
 	for _, test := range tests {
