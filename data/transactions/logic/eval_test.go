@@ -1338,6 +1338,7 @@ func isNotPanic(t *testing.T, err error) {
 	if err == nil {
 		return
 	}
+	t.Log(err)
 	if pe, ok := err.(PanicError); ok {
 		t.Error(pe)
 	}
@@ -1481,17 +1482,12 @@ done:`)
 
 func TestShortBytecblock(t *testing.T) {
 	t.Parallel()
-	sources := []string{
-		"0126",
-		"012602",
-		"01260201",
-		"01260201ff",
-		"01260201ff01",
-	}
-	for _, src := range sources {
-		t.Run(src, func(t *testing.T) {
-			program, err := hex.DecodeString(src)
-			program = program[:len(program)-1]
+	fullprogram, err := AssembleString(`bytecblock 0x123456 0xababcdcd`)
+	require.NoError(t, err)
+	fullprogram[2] = 50 // fake 50 elements
+	for i := 2; i < len(fullprogram); i++ {
+		program := fullprogram[:i]
+		t.Run(hex.EncodeToString(program), func(t *testing.T) {
 			cost, err := Check(program, EvalParams{})
 			require.Error(t, err)
 			isNotPanic(t, err)
@@ -1961,7 +1957,7 @@ func benchmarkBasicProgram(b *testing.B, source string) {
 	require.NoError(b, err)
 	cost, err := Check(program, EvalParams{})
 	require.NoError(b, err)
-	require.True(b, cost < 1000)
+	require.True(b, cost < 2000)
 	//b.Logf("%d bytes of program", len(program))
 	//b.Log(hex.EncodeToString(program))
 	b.ResetTimer()

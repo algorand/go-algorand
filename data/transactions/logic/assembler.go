@@ -867,6 +867,8 @@ func checkIntConstBlock(cx *evalContext) int {
 	return 1
 }
 
+var errShortBytecblock = errors.New("bytecblock ran past end of program")
+
 func parseBytecBlock(program []byte, pc int) (bytec [][]byte, nextpc int, err error) {
 	pos := pc + 1
 	numItems, bytesUsed := binary.Uvarint(program[pos:])
@@ -878,7 +880,7 @@ func parseBytecBlock(program []byte, pc int) (bytec [][]byte, nextpc int, err er
 	bytec = make([][]byte, numItems)
 	for i := uint64(0); i < numItems; i++ {
 		if pos >= len(program) {
-			err = fmt.Errorf("bytecblock ran past end of program")
+			err = errShortBytecblock
 			return
 		}
 		itemLen, bytesUsed := binary.Uvarint(program[pos:])
@@ -888,7 +890,11 @@ func parseBytecBlock(program []byte, pc int) (bytec [][]byte, nextpc int, err er
 		}
 		pos += bytesUsed
 		if pos >= len(program) {
-			err = fmt.Errorf("bytecblock ran past end of program")
+			err = errShortBytecblock
+			return
+		}
+		if pos+int(itemLen) > len(program) {
+			err = errShortBytecblock
 			return
 		}
 		bytec[i] = program[pos : pos+int(itemLen)]
@@ -909,7 +915,7 @@ func checkByteConstBlock(cx *evalContext) int {
 	//bytec = make([][]byte, numItems)
 	for i := uint64(0); i < numItems; i++ {
 		if pos >= len(cx.program) {
-			cx.err = fmt.Errorf("bytecblock ran past end of program")
+			cx.err = errShortBytecblock
 			return 0
 		}
 		itemLen, bytesUsed := binary.Uvarint(cx.program[pos:])
@@ -919,7 +925,11 @@ func checkByteConstBlock(cx *evalContext) int {
 		}
 		pos += bytesUsed
 		if pos >= len(cx.program) {
-			cx.err = fmt.Errorf("bytecblock ran past end of program")
+			cx.err = errShortBytecblock
+			return 0
+		}
+		if pos+int(itemLen) > len(cx.program) {
+			cx.err = errShortBytecblock
 			return 0
 		}
 		//bytec[i] = program[pos : pos+int(itemLen)]
