@@ -189,7 +189,7 @@ func dispense(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tx, err := c.SendPaymentFromUnencryptedWallet(cfg.Source, target, uint64(cfg.Fee), uint64(cfg.Amount), nil)
+	tx, err := c.SendPaymentFromUnencryptedWallet(cfg.Source, target, uint64(cfg.Fee), uint64(cfg.Amount), [32]byte{}, nil)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to dispense money - %v", err), http.StatusInternalServerError)
 		return

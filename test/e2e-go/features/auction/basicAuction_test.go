@@ -227,7 +227,7 @@ func TestStartAndEndAuctionTenUsersOneBidEach(t *testing.T) {
 	walletHandle, _, err := fixture.GetDefaultWalletAndPassword()
 	for i := 0; i < numBids; i++ {
 		newAccount, _ := libGoalClient.GenerateAddress(walletHandle)
-		tx, _ := libGoalClient.SendPaymentFromUnencryptedWallet(fundingAccount, newAccount, txnFee, fundingAmount, nil)
+		tx, _ := libGoalClient.SendPaymentFromUnencryptedWallet(fundingAccount, newAccount, txnFee, fundingAmount, [32]byte{}, nil)
 		txidsToAccounts[tx.ID().String()] = newAccount
 		bidders = append(bidders, newAccount)
 	}
@@ -320,7 +320,7 @@ func TestStartAndEndAuctionTenUsersTenBidsEach(t *testing.T) {
 	var bidders []string
 	for i := 0; i < numBidders; i++ {
 		newAccount, _ := libGoalClient.GenerateAddress(walletHandle)
-		tx, _ := libGoalClient.SendPaymentFromUnencryptedWallet(fundingAccount, newAccount, txnFee, fundingAmount, nil)
+		tx, _ := libGoalClient.SendPaymentFromUnencryptedWallet(fundingAccount, newAccount, txnFee, fundingAmount, [32]byte{}, nil)
 		txidsToAccounts[tx.ID().String()] = newAccount
 		bidders = append(bidders, newAccount)
 	}

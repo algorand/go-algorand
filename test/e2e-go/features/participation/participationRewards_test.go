@@ -66,7 +66,7 @@ func spendToNonParticipating(t *testing.T, fixture *fixtures.RestClientFixture, 
 	// move a lot of Algos to a non participating account -- the incentive pool
 	poolAddr := basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff} // hardcoded; change if the pool address changes
 	pd := poolAddr
-	drainTx, err := fixture.LibGoalClient.SendPaymentFromUnencryptedWallet(account, pd.String(), minFee, balance-balance/100-minFee, nil)
+	drainTx, err := fixture.LibGoalClient.SendPaymentFromUnencryptedWallet(account, pd.String(), minFee, balance-balance/100-minFee, [32]byte{}, nil)
 	require.NoError(t, err)
 	fixture.WaitForAllTxnsToConfirm(lastRound+uint64(10), map[string]string{drainTx.ID().String(): account})
 	return balance / 100
@@ -104,10 +104,10 @@ func TestOnlineOfflineRewards(t *testing.T) {
 	// do a balance poke by moving funds b/w accounts. this will cause balances to reflect received rewards
 	pokeAmount := uint64(1)
 	txidsAndAddresses := make(map[string]string)
-	tx1, err := onlineClient.SendPaymentFromUnencryptedWallet(onlineAccount, offlineAccount, minFee, pokeAmount, nil)
+	tx1, err := onlineClient.SendPaymentFromUnencryptedWallet(onlineAccount, offlineAccount, minFee, pokeAmount, [32]byte{}, nil)
 	txidsAndAddresses[tx1.ID().String()] = onlineAccount
 	r.NoError(err)
-	tx2, err := offlineClient.SendPaymentFromUnencryptedWallet(offlineAccount, onlineAccount, minFee, pokeAmount, nil)
+	tx2, err := offlineClient.SendPaymentFromUnencryptedWallet(offlineAccount, onlineAccount, minFee, pokeAmount, [32]byte{}, nil)
 	txidsAndAddresses[tx2.ID().String()] = offlineAccount
 	r.NoError(err)
 	fixture.WaitForAllTxnsToConfirm(rewardRound+uint64(10), txidsAndAddresses)
@@ -162,7 +162,7 @@ func TestPartkeyOnlyRewards(t *testing.T) {
 	r.NoError(fixture.WaitForRoundWithTimeout(rewardRound))
 
 	// do a balance poke by moving funds b/w accounts. this will cause balances to reflect received rewards
-	tx, err := fixture.LibGoalClient.SendPaymentFromUnencryptedWallet(richAccount.Address, account.String(), minFee, minBalance, nil)
+	tx, err := fixture.LibGoalClient.SendPaymentFromUnencryptedWallet(richAccount.Address, account.String(), minFee, minBalance, [32]byte{}, nil)
 	r.NoError(err)
 	fixture.WaitForTxnConfirmation(arbitraryPostGenesisRound+uint64(10), tx.ID().String(), richAccount.Address)
 	finalBalance, err := client.GetBalance(account.String())
@@ -214,7 +214,7 @@ func TestRewardUnitThreshold(t *testing.T) {
 	r.False(overflow)
 	r.True(lessThanRewardUnit >= minBalance, "change this test to have a new account with X reward units and compute its rewards")
 
-	tx, err := fixture.LibGoalClient.SendPaymentFromUnencryptedWallet(richAccount.Address, newAccount, txnFee, lessThanRewardUnit, nil)
+	tx, err := fixture.LibGoalClient.SendPaymentFromUnencryptedWallet(richAccount.Address, newAccount, txnFee, lessThanRewardUnit, [32]byte{}, nil)
 	r.NoError(err)
 	fixture.WaitForAllTxnsToConfirm(initialRound+uint64(10), map[string]string{tx.ID().String(): richAccount.Address})
 	initialBalanceNewAccount = lessThanRewardUnit
@@ -252,12 +252,12 @@ func TestRewardUnitThreshold(t *testing.T) {
 
 	// Poke poorAccount, so rewards are no longer pending.
 	txidsAndAddresses := make(map[string]string)
-	tx1, err := fixture.LibGoalClient.SendPaymentFromUnencryptedWallet(richAccount.Address, poorAccount, txnFee, amountRichAccountPokesWith, nil)
+	tx1, err := fixture.LibGoalClient.SendPaymentFromUnencryptedWallet(richAccount.Address, poorAccount, txnFee, amountRichAccountPokesWith, [32]byte{}, nil)
 	txidsAndAddresses[tx1.ID().String()] = richAccount.Address
 	r.NoError(err)
 
 	// Push newAccount balance above rewardUnit threshold.
-	tx2, err := fixture.LibGoalClient.SendPaymentFromUnencryptedWallet(richAccount.Address, newAccount, txnFee, amountRichAccountPokesWith, nil)
+	tx2, err := fixture.LibGoalClient.SendPaymentFromUnencryptedWallet(richAccount.Address, newAccount, txnFee, amountRichAccountPokesWith, [32]byte{}, nil)
 	r.NoError(err)
 	txidsAndAddresses[tx2.ID().String()] = richAccount.Address
 	fixture.WaitForAllTxnsToConfirm(rewardRound+uint64(10), txidsAndAddresses)

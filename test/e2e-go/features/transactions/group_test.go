@@ -48,10 +48,10 @@ func TestGroupTransactions(t *testing.T) {
 	a.NoError(err)
 
 	// construct transactions for sending money to account1 and account2
-	tx1, err := client.ConstructPayment(account0, account1, 0, 1000000, nil, "", 0, 0)
+	tx1, err := client.ConstructPayment(account0, account1, 0, 1000000, nil, "", [32]byte{}, 0, 0)
 	a.NoError(err)
 
-	tx2, err := client.ConstructPayment(account0, account2, 0, 2000000, nil, "", 0, 0)
+	tx2, err := client.ConstructPayment(account0, account2, 0, 2000000, nil, "", [32]byte{}, 0, 0)
 	a.NoError(err)
 
 	// group them

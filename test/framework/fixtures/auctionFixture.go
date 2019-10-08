@@ -910,7 +910,7 @@ func (f *AuctionFixture) MakeAndPostBidAndDepositWithWallet(walletHandle []byte,
 
 	libGoalClient := f.GetLibGoalClient()
 
-	tx, err := libGoalClient.SendPaymentFromUnencryptedWallet(biddingAccount, auctionKey, transactionFee, amountToPay, unitedBlob)
+	tx, err := libGoalClient.SendPaymentFromUnencryptedWallet(biddingAccount, auctionKey, transactionFee, amountToPay, [32]byte{}, unitedBlob)
 	txid = tx.ID().String()
 
 	if err != nil {

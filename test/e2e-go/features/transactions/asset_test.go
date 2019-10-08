@@ -78,7 +78,7 @@ func TestAssetConfig(t *testing.T) {
 	a.NoError(err)
 
 	// Fund the manager, so it can issue transactions later on
-	_, err = client.SendPaymentFromUnencryptedWallet(account0, manager, 0, 10000000000, nil)
+	_, err = client.SendPaymentFromUnencryptedWallet(account0, manager, 0, 10000000000, [32]byte{}, nil)
 	a.NoError(err)
 
 	// There should be no assets to start with
@@ -230,7 +230,7 @@ func TestAssetConfig(t *testing.T) {
 	a.NoError(err)
 
 	// Should not be able to close account before destroying assets
-	_, err = client.SendPaymentFromWallet(wh, nil, account0, "", 0, 0, nil, reserve, 0, 0)
+	_, err = client.SendPaymentFromWallet(wh, nil, account0, "", 0, 0, nil, reserve, [32]byte{}, 0, 0)
 	a.Error(err)
 
 	// Destroy assets
@@ -270,7 +270,7 @@ func TestAssetConfig(t *testing.T) {
 	a.NoError(err)
 
 	// Should be able to close now
-	_, err = client.SendPaymentFromWallet(wh, nil, account0, "", 0, 0, nil, reserve, 0, 0)
+	_, err = client.SendPaymentFromWallet(wh, nil, account0, "", 0, 0, nil, reserve, [32]byte{}, 0, 0)
 	a.NoError(err)
 }
 
@@ -302,7 +302,7 @@ func TestAssetInformation(t *testing.T) {
 	a.NoError(err)
 
 	// Fund the manager, so it can issue transactions later on
-	_, err = client.SendPaymentFromUnencryptedWallet(account0, manager, 0, 10000000000, nil)
+	_, err = client.SendPaymentFromUnencryptedWallet(account0, manager, 0, 10000000000, [32]byte{}, nil)
 	a.NoError(err)
 
 	// There should be no assets to start with
@@ -346,7 +346,7 @@ func TestAssetInformation(t *testing.T) {
 	a.True(confirmed, "destroying assets")
 
 	// Close account
-	_, err = client.SendPaymentFromWallet(wh, nil, account0, "", 0, 0, nil, reserve, 0, 0)
+	_, err = client.SendPaymentFromWallet(wh, nil, account0, "", 0, 0, nil, reserve, [32]byte{}, 0, 0)
 	a.NoError(err)
 }
 
@@ -381,13 +381,13 @@ func TestAssetSend(t *testing.T) {
 	a.NoError(err)
 
 	// Fund the manager, freeze, clawback, and extra, so they can issue transactions later on
-	_, err = client.SendPaymentFromUnencryptedWallet(account0, manager, 0, 10000000000, nil)
+	_, err = client.SendPaymentFromUnencryptedWallet(account0, manager, 0, 10000000000, [32]byte{}, nil)
 	a.NoError(err)
-	_, err = client.SendPaymentFromUnencryptedWallet(account0, freeze, 0, 10000000000, nil)
+	_, err = client.SendPaymentFromUnencryptedWallet(account0, freeze, 0, 10000000000, [32]byte{}, nil)
 	a.NoError(err)
-	_, err = client.SendPaymentFromUnencryptedWallet(account0, clawback, 0, 10000000000, nil)
+	_, err = client.SendPaymentFromUnencryptedWallet(account0, clawback, 0, 10000000000, [32]byte{}, nil)
 	a.NoError(err)
-	_, err = client.SendPaymentFromUnencryptedWallet(account0, extra, 0, 10000000000, nil)
+	_, err = client.SendPaymentFromUnencryptedWallet(account0, extra, 0, 10000000000, [32]byte{}, nil)
 	a.NoError(err)
 
 	// Create two assets: one with default-freeze, and one without default-freeze
@@ -539,6 +539,6 @@ func TestAssetSend(t *testing.T) {
 	_, err = helperFillSignBroadcast(client, wh, extra, tx, err)
 	a.NoError(err)
 
-	_, err = client.SendPaymentFromWallet(wh, nil, extra, "", 0, 0, nil, account0, 0, 0)
+	_, err = client.SendPaymentFromWallet(wh, nil, extra, "", 0, 0, nil, account0, [32]byte{}, 0, 0)
 	a.NoError(err)
 }

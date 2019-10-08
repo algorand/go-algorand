@@ -207,7 +207,7 @@ func doBenchTemplate(b *testing.B, template string, moneynode string) {
 			// clears, we can infer that all previous transactions also cleared.
 			var tx transactions.Transaction
 			for {
-				tx, err = c.SendPaymentFromUnencryptedWallet(addr, addr, config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee, 0, nil)
+				tx, err = c.SendPaymentFromUnencryptedWallet(addr, addr, config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee, 0, [32]byte{}, nil)
 				if err == nil {
 					break
 				}

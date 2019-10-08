@@ -58,11 +58,11 @@ func TestAccountsCanClose(t *testing.T) {
 	a.NoError(err)
 
 	// Transfer some money to acct0 and wait.
-	tx, err := client.SendPaymentFromUnencryptedWallet(baseAcct, acct0, 1000, 10000000, nil)
+	tx, err := client.SendPaymentFromUnencryptedWallet(baseAcct, acct0, 1000, 10000000, [32]byte{}, nil)
 	a.NoError(err)
 	fixture.WaitForConfirmedTxn(status.LastRound+10, baseAcct, tx.ID().String())
 
-	tx, err = client.SendPaymentFromWallet(walletHandle, nil, acct0, acct1, 1000, 1000000, nil, acct2, 0, 0)
+	tx, err = client.SendPaymentFromWallet(walletHandle, nil, acct0, acct1, 1000, 1000000, nil, acct2, [32]byte{}, 0, 0)
 	a.NoError(err)
 	fixture.WaitForConfirmedTxn(status.LastRound+10, acct0, tx.ID().String())
 

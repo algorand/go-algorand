@@ -83,10 +83,10 @@ func testAccountsCanSendMoney(t *testing.T, templatePath string) {
 
 	txidsToAddresses := make(map[string]string)
 	for i := 0; i < numberOfSends; i++ {
-		pongTx, err := pongClient.SendPaymentFromUnencryptedWallet(pongAccount, pingAccount, transactionFee, amountPongSendsPing, GenerateRandomBytes(8))
+		pongTx, err := pongClient.SendPaymentFromUnencryptedWallet(pongAccount, pingAccount, transactionFee, amountPongSendsPing, [32]byte{}, GenerateRandomBytes(8))
 		txidsToAddresses[pongTx.ID().String()] = pongAccount
 		a.NoError(err, "fixture should be able to send money (pong -> ping), error on send number %v", i)
-		pingTx, err := pingClient.SendPaymentFromUnencryptedWallet(pingAccount, pongAccount, transactionFee, amountPingSendsPong, GenerateRandomBytes(8))
+		pingTx, err := pingClient.SendPaymentFromUnencryptedWallet(pingAccount, pongAccount, transactionFee, amountPingSendsPong, [32]byte{}, GenerateRandomBytes(8))
 		txidsToAddresses[pingTx.ID().String()] = pingAccount
 		a.NoError(err, "fixture should be able to send money (ping -> pong), error on send number %v", i)
 		expectedPingBalance = expectedPingBalance - transactionFee - amountPingSendsPong + amountPongSendsPing

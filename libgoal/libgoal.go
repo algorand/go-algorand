@@ -429,9 +429,9 @@ type MultisigInfo struct {
 }
 
 // SendPaymentFromWallet signs a transaction using the given wallet and returns the resulted transaction id
-func (c *Client) SendPaymentFromWallet(walletHandle, pw []byte, from, to string, fee, amount uint64, note []byte, closeTo string, firstValid, lastValid basics.Round) (transactions.Transaction, error) {
+func (c *Client) SendPaymentFromWallet(walletHandle, pw []byte, from, to string, fee, amount uint64, note []byte, closeTo string, lease [32]byte, firstValid, lastValid basics.Round) (transactions.Transaction, error) {
 	// Build the transaction
-	tx, err := c.ConstructPayment(from, to, fee, amount, note, closeTo, firstValid, lastValid)
+	tx, err := c.ConstructPayment(from, to, fee, amount, note, closeTo, lease, firstValid, lastValid)
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
@@ -474,7 +474,7 @@ func (c *Client) signAndBroadcastTransactionWithWallet(walletHandle, pw []byte, 
 // If the fee is 0, the function will use the suggested one form the network
 // if the lastValid is 0, firstValid + maxTxnLifetime will be used
 // if the firstValid is 0, lastRound + 1 will be used
-func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []byte, closeTo string, firstValid, lastValid basics.Round) (transactions.Transaction, error) {
+func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []byte, closeTo string, lease [32]byte, firstValid, lastValid basics.Round) (transactions.Transaction, error) {
 	fromAddr, err := basics.UnmarshalChecksumAddress(from)
 	if err != nil {
 		return transactions.Transaction{}, err
@@ -513,6 +513,7 @@ func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []by
 			Fee:        basics.MicroAlgos{Raw: fee},
 			FirstValid: firstValid,
 			LastValid:  lastValid,
+			Lease:      lease,
 			Note:       note,
 		},
 		PaymentTxnFields: transactions.PaymentTxnFields{
