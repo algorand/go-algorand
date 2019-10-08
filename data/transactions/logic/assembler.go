@@ -893,7 +893,7 @@ func parseBytecBlock(program []byte, pc int) (bytec [][]byte, nextpc int, err er
 			err = errShortBytecblock
 			return
 		}
-		if pos+int(itemLen) > len(program) {
+		if uint64(pos)+itemLen > uint64(len(program)) {
 			err = errShortBytecblock
 			return
 		}
@@ -928,7 +928,7 @@ func checkByteConstBlock(cx *evalContext) int {
 			cx.err = errShortBytecblock
 			return 0
 		}
-		if pos+int(itemLen) > len(cx.program) {
+		if uint64(pos)+itemLen > uint64(len(cx.program)) {
 			cx.err = errShortBytecblock
 			return 0
 		}
