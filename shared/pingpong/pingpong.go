@@ -58,7 +58,7 @@ func fundAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpConfi
 				return fmt.Errorf("source account has insufficient funds %d - needs %d", srcFunds, toSend)
 			}
 			srcFunds -= toSend
-			_, err := client.SendPaymentFromUnencryptedWallet(cfg.SrcAccount, addr, fee, toSend, [32]byte{}, nil)
+			_, err := client.SendPaymentFromUnencryptedWallet(cfg.SrcAccount, addr, fee, toSend, nil)
 			if err != nil {
 				return err
 			}
@@ -199,7 +199,7 @@ func sendFromTo(fromList, toList []string, client libgoal.Client, cfg PpConfig) 
 		crypto.RandBytes(noteField[tagLen:])
 
 		sentCount++
-		_, sendErr := client.SendPaymentFromUnencryptedWallet(from, to, fee, amt, [32]byte{}, noteField[:])
+		_, sendErr := client.SendPaymentFromUnencryptedWallet(from, to, fee, amt, noteField[:])
 		if sendErr != nil && !cfg.Quiet {
 			fmt.Fprintf(os.Stderr, "error sending transaction: %v\n", err)
 		} else {

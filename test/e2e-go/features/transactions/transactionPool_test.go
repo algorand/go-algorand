@@ -63,7 +63,7 @@ func TestTransactionPoolOrderingAndClearing(t *testing.T) {
 		newAccount, err := c.GenerateAddress(wh)
 		r.NoError(err, "should be able to generate new address")
 		txnFee := uint64(rand.Int()%10000) + minTxnFee
-		tx, err := c.SendPaymentFromUnencryptedWallet(sourceAccount.Address, newAccount, txnFee, minAcctBalance, [32]byte{}, nil)
+		tx, err := c.SendPaymentFromUnencryptedWallet(sourceAccount.Address, newAccount, txnFee, minAcctBalance, nil)
 		r.NoError(err)
 		fixture.AssertValidTxid(tx.ID().String())
 		pendingTxids = append(pendingTxids, tx.ID().String())
@@ -143,7 +143,7 @@ func TestTransactionPoolExponentialFees(t *testing.T) {
 	for i := 0; i < transactionPoolSize; i++ {
 		newAccount, err := c.GenerateAddress(wh)
 		r.NoError(err, "should be able to generate new address")
-		tx, err := c.SendPaymentFromUnencryptedWallet(sourceAccount.Address, newAccount, txnFee, minAcctBalance, [32]byte{}, nil)
+		tx, err := c.SendPaymentFromUnencryptedWallet(sourceAccount.Address, newAccount, txnFee, minAcctBalance, nil)
 		r.NoError(err, "got an error on number %d", i)
 		fixture.AssertValidTxid(tx.ID().String())
 	}
@@ -152,7 +152,7 @@ func TestTransactionPoolExponentialFees(t *testing.T) {
 	// try to add another one without increasing the fee to see an error.
 	newAccount, err := c.GenerateAddress(wh)
 	r.NoError(err, "should be able to generate new address")
-	_, err = c.SendPaymentFromUnencryptedWallet(sourceAccount.Address, newAccount, txnFee, minAcctBalance, [32]byte{}, nil)
+	_, err = c.SendPaymentFromUnencryptedWallet(sourceAccount.Address, newAccount, txnFee, minAcctBalance, nil)
 	r.Error(err, "should not be able to add a 50001th txn")
 	// replace as many transactions as we can and see no error.
 	// (will have to abort early, of course, because we cannot go all the way up to 2^50000 algos fee.)
@@ -164,7 +164,7 @@ func TestTransactionPoolExponentialFees(t *testing.T) {
 		}
 		newAccount, err := c.GenerateAddress(wh)
 		r.NoError(err, "should be able to generate new address")
-		tx, err := c.SendPaymentFromUnencryptedWallet(sourceAccount.Address, newAccount, txnFee, minAcctBalance, [32]byte{}, nil)
+		tx, err := c.SendPaymentFromUnencryptedWallet(sourceAccount.Address, newAccount, txnFee, minAcctBalance, nil)
 		r.NoError(err, "should be able to add exponentially-more-fee-paying transaction to pool")
 		fixture.AssertValidTxid(tx.ID().String())
 	}

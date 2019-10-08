@@ -276,7 +276,7 @@ func (f *RestClientFixture) SendMoneyAndWait(curRound, amountToSend, transaction
 // SendMoneyAndWaitFromWallet is as above, but for a specific wallet
 func (f *RestClientFixture) SendMoneyAndWaitFromWallet(walletHandle, walletPassword []byte, curRound, amountToSend, transactionFee uint64, fromAccount, toAccount string) (fundingTxid string) {
 	client := f.LibGoalClient
-	fundingTx, err := client.SendPaymentFromWallet(walletHandle, walletPassword, fromAccount, toAccount, transactionFee, amountToSend, nil, "", [32]byte{}, 0, 0)
+	fundingTx, err := client.SendPaymentFromWallet(walletHandle, walletPassword, fromAccount, toAccount, transactionFee, amountToSend, nil, "", 0, 0)
 	require.NoError(f.t, err, "client should be able to send money from rich to poor account")
 	require.NotEmpty(f.t, fundingTx.ID().String(), "transaction ID should not be empty")
 	waitingDeadline := curRound + uint64(5)

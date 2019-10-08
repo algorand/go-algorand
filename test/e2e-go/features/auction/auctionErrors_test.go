@@ -94,7 +94,7 @@ func TestInvalidDeposit(t *testing.T) {
 
 	libGoalClient := fixture.GetLibGoalClient()
 
-	trx, err := libGoalClient.SendPaymentFromUnencryptedWallet(biddingAccount, auctionKey, transactionFee, amountToPay, [32]byte{}, unitedBlob)
+	trx, err := libGoalClient.SendPaymentFromUnencryptedWallet(biddingAccount, auctionKey, transactionFee, amountToPay, unitedBlob)
 	r.NoError(err)
 	fixture.AssertValidTxid(trx.ID().String())
 
@@ -162,7 +162,7 @@ func TestNoDepositAssociatedWithBid(t *testing.T) {
 
 	libGoalClient := fixture.GetLibGoalClient()
 
-	tx, err := libGoalClient.SendPaymentFromUnencryptedWallet(biddingAccount, auctionKey, transactionFee, amountToPay, [32]byte{}, bidBlob) // note: no deposit blob!
+	tx, err := libGoalClient.SendPaymentFromUnencryptedWallet(biddingAccount, auctionKey, transactionFee, amountToPay, bidBlob) // note: no deposit blob!
 	r.NoError(err)
 	fixture.AssertValidTxid(tx.ID().String())
 
@@ -238,7 +238,7 @@ func TestDeadbeatBid(t *testing.T) {
 
 	libGoalClient := fixture.GetLibGoalClient()
 
-	tx, err := libGoalClient.SendPaymentFromUnencryptedWallet(biddingAccount, auctionKey, transactionFee, amountToPay, [32]byte{}, unitedBlob)
+	tx, err := libGoalClient.SendPaymentFromUnencryptedWallet(biddingAccount, auctionKey, transactionFee, amountToPay, unitedBlob)
 	// note that only the note is corrupted, so the transaction should post as normal.
 	r.NoError(err)
 	fixture.AssertValidTxid(tx.ID().String())
@@ -299,7 +299,7 @@ func TestStartAndPartitionAuctionTenUsersTenBidsEach(t *testing.T) {
 	var bidders []string
 	for i := 0; i < numBidders; i++ {
 		newAccount, _ := libGoalClient.GenerateAddress(walletHandle)
-		tx, _ := libGoalClient.SendPaymentFromUnencryptedWallet(fundingAccount, newAccount, txnFee, fundingAmount, [32]byte{}, nil)
+		tx, _ := libGoalClient.SendPaymentFromUnencryptedWallet(fundingAccount, newAccount, txnFee, fundingAmount, nil)
 		txidsToAccounts[tx.ID().String()] = newAccount
 		bidders = append(bidders, newAccount)
 	}

@@ -29,13 +29,13 @@ var unencryptedWalletDriver = "sqlite"
 var UnencryptedWalletName = []byte("unencrypted-default-wallet")
 
 // SendPaymentFromUnencryptedWallet signs a transaction using the default wallet and returns the resulted transaction id
-func (c *Client) SendPaymentFromUnencryptedWallet(from, to string, fee, amount uint64, lease [32]byte, note []byte) (transactions.Transaction, error) {
+func (c *Client) SendPaymentFromUnencryptedWallet(from, to string, fee, amount uint64, note []byte) (transactions.Transaction, error) {
 	wh, err := c.GetUnencryptedWalletHandle()
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
 
-	return c.SendPaymentFromWallet(wh, nil, from, to, fee, amount, note, "", lease, 0, 0)
+	return c.SendPaymentFromWallet(wh, nil, from, to, fee, amount, note, "", 0, 0)
 }
 
 // GetUnencryptedWalletHandle returns the unencrypted wallet handle. If there

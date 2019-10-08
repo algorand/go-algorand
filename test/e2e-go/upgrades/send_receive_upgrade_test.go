@@ -120,11 +120,11 @@ func testAccountsCanSendMoneyAcrossUpgrade(t *testing.T, templatePath string) {
 
 	startTime := time.Now()
 	for curStatus.LastVersion == initialStatus.LastVersion {
-		pongTx, err := pongClient.SendPaymentFromUnencryptedWallet(pongAccount, pingAccount, transactionFee, amountPongSendsPing, [32]byte{}, GenerateRandomBytes(8))
+		pongTx, err := pongClient.SendPaymentFromUnencryptedWallet(pongAccount, pingAccount, transactionFee, amountPongSendsPing, GenerateRandomBytes(8))
 		a.NoError(err, "fixture should be able to send money (pong -> ping)")
 		pongTxids = append(pongTxids, pongTx.ID().String())
 
-		pingTx, err := pingClient.SendPaymentFromUnencryptedWallet(pingAccount, pongAccount, transactionFee, amountPingSendsPong, [32]byte{}, GenerateRandomBytes(8))
+		pingTx, err := pingClient.SendPaymentFromUnencryptedWallet(pingAccount, pongAccount, transactionFee, amountPingSendsPong, GenerateRandomBytes(8))
 		a.NoError(err, "fixture should be able to send money (ping -> pong)")
 		pingTxids = append(pingTxids, pingTx.ID().String())
 
@@ -143,11 +143,11 @@ func testAccountsCanSendMoneyAcrossUpgrade(t *testing.T, templatePath string) {
 
 	// submit a few more transactions to make sure payments work in new protocol
 	for i := 0; i < 20; i++ {
-		pongTx, err := pongClient.SendPaymentFromUnencryptedWallet(pongAccount, pingAccount, transactionFee, amountPongSendsPing, [32]byte{}, GenerateRandomBytes(8))
+		pongTx, err := pongClient.SendPaymentFromUnencryptedWallet(pongAccount, pingAccount, transactionFee, amountPongSendsPing, GenerateRandomBytes(8))
 		a.NoError(err, "fixture should be able to send money (pong -> ping)")
 		pongTxids = append(pongTxids, pongTx.ID().String())
 
-		pingTx, err := pingClient.SendPaymentFromUnencryptedWallet(pingAccount, pongAccount, transactionFee, amountPingSendsPong, [32]byte{}, GenerateRandomBytes(8))
+		pingTx, err := pingClient.SendPaymentFromUnencryptedWallet(pingAccount, pongAccount, transactionFee, amountPingSendsPong, GenerateRandomBytes(8))
 		a.NoError(err, "fixture should be able to send money (ping -> pong)")
 		pingTxids = append(pingTxids, pingTx.ID().String())
 

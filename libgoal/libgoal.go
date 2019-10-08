@@ -429,7 +429,12 @@ type MultisigInfo struct {
 }
 
 // SendPaymentFromWallet signs a transaction using the given wallet and returns the resulted transaction id
-func (c *Client) SendPaymentFromWallet(walletHandle, pw []byte, from, to string, fee, amount uint64, note []byte, closeTo string, lease [32]byte, firstValid, lastValid basics.Round) (transactions.Transaction, error) {
+func (c *Client) SendPaymentFromWallet(walletHandle, pw []byte, from, to string, fee, amount uint64, note []byte, closeTo string, firstValid, lastValid basics.Round) (transactions.Transaction, error) {
+	return c.SendPaymentFromWalletWithLease(walletHandle, pw, from, to, fee, amount, note, closeTo, [32]byte{}, firstValid, lastValid)
+}
+
+// SendPaymentFromWalletWithLease is like SendPaymentFromWallet, but with a custom lease.
+func (c *Client) SendPaymentFromWalletWithLease(walletHandle, pw []byte, from, to string, fee, amount uint64, note []byte, closeTo string, lease [32]byte, firstValid, lastValid basics.Round) (transactions.Transaction, error) {
 	// Build the transaction
 	tx, err := c.ConstructPayment(from, to, fee, amount, note, closeTo, lease, firstValid, lastValid)
 	if err != nil {

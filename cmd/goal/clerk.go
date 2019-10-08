@@ -214,15 +214,17 @@ var sendCmd = &cobra.Command{
 		toAddressResolved := accountList.getAddressByName(toAddress)
 
 		// Parse lease field
-		leaseBytesRaw, err := base64.StdEncoding.DecodeString(lease)
-		if err != nil {
-			reportErrorf(malformedLease, lease, err)
-		}
-		if len(leaseBytesRaw) != 32 {
-			reportErrorf(malformedLease, lease, fmt.Errorf("lease length %d != 32", len(leaseBytesRaw)))
-		}
 		var leaseBytes [32]byte
-		copy(leaseBytes[:], leaseBytesRaw)
+		if cmd.Flags().Changed("lease") {
+			leaseBytesRaw, err := base64.StdEncoding.DecodeString(lease)
+			if err != nil {
+				reportErrorf(malformedLease, lease, err)
+			}
+			if len(leaseBytesRaw) != 32 {
+				reportErrorf(malformedLease, lease, fmt.Errorf("lease length %d != 32", len(leaseBytesRaw)))
+			}
+			copy(leaseBytes[:], leaseBytesRaw)
+		}
 
 		// Parse notes field
 		noteBytes := parseNoteField(cmd)
@@ -237,7 +239,7 @@ var sendCmd = &cobra.Command{
 		if txFilename == "" {
 			// Sign and broadcast the tx
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			tx, err := client.SendPaymentFromWallet(wh, pw, fromAddressResolved, toAddressResolved, fee, amount, noteBytes, closeToAddressResolved, leaseBytes, basics.Round(firstValid), basics.Round(lastValid))
+			tx, err := client.SendPaymentFromWalletWithLease(wh, pw, fromAddressResolved, toAddressResolved, fee, amount, noteBytes, closeToAddressResolved, leaseBytes, basics.Round(firstValid), basics.Round(lastValid))
 
 			// update information from Transaction
 			txid := tx.ID().String()
