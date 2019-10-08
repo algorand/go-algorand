@@ -506,8 +506,11 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 				MoreSeed:     txid[:],
 			}
 			pass, err := logic.Eval(txn.Lsig.Logic, ep)
+			if err != nil {
+				return fmt.Errorf("transaction %v: rejected by logic err=%s", txn.ID(), err)
+			}
 			if !pass {
-				return fmt.Errorf("transaction %v: rejected by logic (%s)", txn.ID(), err)
+				return fmt.Errorf("transaction %v: rejected by logic", txn.ID())
 			}
 		}
 	}
