@@ -60,7 +60,7 @@ touch gen/generate.go
 
 if [ "${OS}-${ARCH}" = "linux-arm" ]; then
     # for arm, build just the basic distro
-    MAKE_DEBUG_OPTION="1"
+    MAKE_DEBUG_OPTION=""
 fi
 
 if [ "${MAKE_DEBUG_OPTION}" != "" ]; then
