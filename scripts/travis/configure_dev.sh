@@ -54,7 +54,7 @@ if [ "${OS}" = "linux" ]; then
         fi
         set -e
         sudo apt-get update -y
-        sudo apt-get -y install sqlite3 libssl-dev git apt-transport-https openssl
+        sudo apt-get -y install sqlite3
     fi
 fi
 
