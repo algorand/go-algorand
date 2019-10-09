@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/usr/bin/env bash
 
 # build_deb.sh - Build a .deb package for one platform.
 #
@@ -6,6 +6,7 @@
 #
 # Examples: scripts/build_deb.sh amd64
 
+set -e
 if [ ! "$#" -eq 2 ]; then
     echo "Syntax: build_deb.sh <arch> <output directory>"
     exit 1

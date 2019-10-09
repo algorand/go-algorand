@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 set -ex
 
@@ -16,6 +16,22 @@ function DisableAndExit() {
     sudo systemctl stop datadog-agent
     sudo systemctl disable datadog-agent
     exit 0
+}
+
+function PrintEndpointAddress() {
+  if [[ -f "$1/algocfg" ]]; then
+    echo $($1/algocfg get -p EndpointAddress -d "$2")
+  else
+    echo $(cat $2/config.json|grep EndpointAddress|cut -f 4 -d\")
+  fi
+}
+
+function SetEndpointAddress() {
+  if [[ -f "$1/algocfg" ]]; then
+    $($1/algocfg set -p EndpointAddress -d "$2" -v "$3")
+  else
+    $(sed -i -e 's/.*EndpointAddress.*/    "EndpointAddress": "'"$3"'","/' "$2/config.json")
+  fi
 }
 
 DATADIR=
@@ -77,7 +93,7 @@ if [[ -z "${DATADIR}" || -z "${HOSTNAME}" || -z "${APIKEY}" ]]; then
     ShowSyntaxAndExit
 fi
 
-ENDPOINT=$(${SCRIPTPATH}/algocfg get -p EndpointAddress -d "$DATADIR")
+ENDPOINT="$(PrintEndpointAddress $SCRIPTPATH $DATADIR)"
 ADDRESS=$(echo ${ENDPOINT} | grep -o "[0-9\.]*:" | tr -d ":")
 
 if [[ -z "${PORT}" ]]; then
@@ -105,7 +121,7 @@ fi
 
 ${SCRIPTPATH}/diagcfg metric disable -d "${DATADIR}"
 
-${SCRIPTPATH}/algocfg set -p EndpointAddress -d "$DATADIR" -v "${ADDRESS}:${PORT}"
+SetEndpointAddress $SCRIPTPATH $DATADIR "${ADDRESS}:${PORT}"
 
 ${SCRIPTPATH}/goal node stop -d ${DATADIR}
 pkill node_exporter || true

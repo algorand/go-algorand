@@ -5,6 +5,7 @@ GO111MODULE	:= on
 export GO111MODULE
 UNAME		:= $(shell uname)
 SRCPATH     := $(shell pwd)
+ARCH        := $(shell ./scripts/archtype.sh)
 
 # If build number already set, use it - to ensure same build number across multiple platforms being built
 BUILDNUMBER      ?= $(shell ./scripts/compute_build_number.sh)
@@ -30,7 +31,8 @@ GOLDFLAGS_BASE  := -X github.com/algorand/go-algorand/config.BuildNumber=$(BUILD
 GOLDFLAGS := $(GOLDFLAGS_BASE) \
 		 -X github.com/algorand/go-algorand/config.Channel=$(BUILDCHANNEL)
 
-UNIT_TEST_SOURCES := $(sort $(shell go list ./... | grep -v /go-algorand/test/ ))
+UNIT_TEST_SOURCES := $(sort $(shell GO111MODULE=off go list ./... | grep -v /go-algorand/test/ ))
+ALGOD_API_PACKAGES := $(sort $(shell GO111MODULE=off cd daemon/algod/api; go list ./... ))
 
 default: build
 
@@ -81,11 +83,26 @@ ALGOD_API_FILES := $(shell find daemon/algod/api/server/common daemon/algod/api/
 	daemon/algod/api/server/router.go
 ALGOD_API_SWAGGER_INJECT := daemon/algod/api/server/lib/bundledSpecInject.go
 
+ifeq ($(ARCH), arm)
+
+# On RasberryPI emulated machines, we have limited amount of RAM; invoking the compiler over all of the modules would
+# result in high memory consumption, and would end up with "out of memory". To work around that, we break the generation
+# into per-module pieces.
+$(addprefix generate_algod_api_target_, $(ALGOD_API_PACKAGES)): $(ALGOD_API_FILES) crypto/lib/libsodium.a
+	@echo "Generating $(subst generate_algod_api_target_,,$@)..."
+	@cd daemon/algod/api && PATH=$(GOPATH1)/bin:$$PATH ; go generate $(subst generate_algod_api_target_,,$@)
+
+$(ALGOD_API_SWAGGER_SPEC): $(ALGOD_API_FILES) crypto/lib/libsodium.a $(addprefix generate_algod_api_target_, $(ALGOD_API_PACKAGES))
+
+else
+
 # Note that swagger.json requires the go-swagger dep.
 $(ALGOD_API_SWAGGER_SPEC): $(ALGOD_API_FILES) crypto/lib/libsodium.a
 	cd daemon/algod/api && \
 		PATH=$(GOPATH1)/bin:$$PATH \
 		go generate ./...
+
+endif
 
 $(ALGOD_API_SWAGGER_INJECT): $(ALGOD_API_SWAGGER_SPEC) $(ALGOD_API_SWAGGER_SPEC).validated
 	./daemon/algod/api/server/lib/bundle_swagger_json.sh
@@ -121,9 +138,24 @@ $(KMD_API_SWAGGER_INJECT): $(KMD_API_SWAGGER_SPEC) $(KMD_API_SWAGGER_SPEC).valid
 
 build: buildsrc gen
 
+ifeq ($(ARCH), arm)
+
+# On RasberryPI emulated machines, we have limited amount of RAM; invoking the compiler over all of the modules would
+# result in high memory consumption, and would end up with "out of memory". To work around that, we break the "go install"
+# into per-module pieces.
+buildsrc: crypto/lib/libsodium.a node_exporter NONGO_BIN deps $(ALGOD_API_SWAGGER_INJECT) $(KMD_API_SWAGGER_INJECT) $(addprefix buildsrc_target_, $(UNIT_TEST_SOURCES))
+
+$(addprefix buildsrc_target_, $(UNIT_TEST_SOURCES)): crypto/lib/libsodium.a node_exporter NONGO_BIN deps $(ALGOD_API_SWAGGER_INJECT) $(KMD_API_SWAGGER_INJECT)
+	@echo "Building $(subst buildsrc_target_,,$@)..."
+	@go install $(GOTRIMPATH) $(GOTAGS) -ldflags="$(GOLDFLAGS)" $(subst buildsrc_target_,,$@)
+
+else
+
 buildsrc: crypto/lib/libsodium.a node_exporter NONGO_BIN deps $(ALGOD_API_SWAGGER_INJECT) $(KMD_API_SWAGGER_INJECT)
 	go install $(GOTRIMPATH) $(GOTAGS) -ldflags="$(GOLDFLAGS)" ./...
 	go vet ./...
+
+endif
 
 SOURCES_RACE := github.com/algorand/go-algorand/cmd/kmd
 
@@ -238,4 +270,4 @@ dump: $(addprefix gen/,$(addsuffix /genesis.dump, $(NETWORKS)))
 install: build
 	scripts/dev_install.sh -p $(GOPATH1)/bin
 
-.PHONY: default fmt vet lint sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN
+.PHONY: default fmt vet lint sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN $(addprefix buildsrc_target_, $(UNIT_TEST_SOURCES)) $(addprefix generate_algod_api_target_, $(ALGOD_API_PACKAGES))

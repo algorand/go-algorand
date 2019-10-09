@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # build centos rpm from inside docker
 #
 # mount src from outside

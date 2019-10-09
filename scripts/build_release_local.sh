@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # This is a file of commands to copy and paste to run build_release.sh on an AWS EC2 instance.
 # Should work on Ubuntu 16.04 ro 18.04

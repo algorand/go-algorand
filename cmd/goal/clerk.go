@@ -51,6 +51,7 @@ var (
 	rejectsFilename string
 	noteBase64      string
 	noteText        string
+	lease           string
 	sign            bool
 	closeToAddress  string
 	noWaitAfterSend bool
@@ -88,6 +89,7 @@ func init() {
 	sendCmd.Flags().Uint64Var(&lastValid, "lastvalid", 0, "The last round where the transaction may be committed to the ledger")
 	sendCmd.Flags().StringVar(&noteBase64, "noteb64", "", "Note (URL-base64 encoded)")
 	sendCmd.Flags().StringVarP(&noteText, "note", "n", "", "Note text (ignored if --noteb64 used also)")
+	sendCmd.Flags().StringVarP(&lease, "lease", "x", "", "Lease value (base64, optional): no transaction may also acquire this lease until lastvalid")
 	sendCmd.Flags().StringVarP(&txFilename, "out", "o", "", "Dump an unsigned tx to the given file. In order to dump a signed transaction, pass -s")
 	sendCmd.Flags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
 	sendCmd.Flags().StringVarP(&closeToAddress, "close-to", "c", "", "Close account and send remainder to this address")
@@ -294,6 +296,19 @@ var sendCmd = &cobra.Command{
 			fromAddressResolved = accountList.getAddressByName(account)
 		}
 		toAddressResolved := accountList.getAddressByName(toAddress)
+
+		// Parse lease field
+		var leaseBytes [32]byte
+		if cmd.Flags().Changed("lease") {
+			leaseBytesRaw, err := base64.StdEncoding.DecodeString(lease)
+			if err != nil {
+				reportErrorf(malformedLease, lease, err)
+			}
+			if len(leaseBytesRaw) != 32 {
+				reportErrorf(malformedLease, lease, fmt.Errorf("lease length %d != 32", len(leaseBytesRaw)))
+			}
+			copy(leaseBytes[:], leaseBytesRaw)
+		}
 
 		// Parse notes field
 		noteBytes := parseNoteField(cmd)

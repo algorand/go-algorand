@@ -79,6 +79,7 @@ const (
 	infoTxCommitted = "Transaction %s committed in round %d"
 	infoTxPending   = "Transaction %s still pending as of round %d"
 	malformedNote   = "Cannot base64-decode note %s: %s"
+	malformedLease  = "Cannot base64-decode lease %s: %s"
 	fileReadError   = "Cannot read file %s: %s"
 	fileWriteError  = "Cannot write file %s: %s"
 	txDecodeError   = "Cannot decode transactions from %s: %s"
