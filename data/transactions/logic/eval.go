@@ -168,6 +168,7 @@ func (pe PanicError) Error() string {
 
 var errLoopDetected = errors.New("loop detected")
 var errCostTooHigh = errors.New("LogicSigMaxCost exceded")
+var errLogicSignNotSupported = errors.New("LogicSig not supported")
 
 // Eval checks to see if a transaction passes logic
 // A program passes succesfully if it finishes with one int element on the stack that is non-zero.
@@ -186,6 +187,10 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 			err = PanicError{x, errstr}
 		}
 	}()
+	if (params.Proto != nil) && (params.Proto.LogicSigVersion == 0) {
+		err = errLogicSignNotSupported
+		return
+	}
 	var cx evalContext
 	version, vlen := binary.Uvarint(program)
 	if vlen <= 0 {
@@ -257,6 +262,10 @@ func Check(program []byte, params EvalParams) (cost int, err error) {
 			err = PanicError{x, errstr}
 		}
 	}()
+	if (params.Proto != nil) && (params.Proto.LogicSigVersion == 0) {
+		err = errLogicSignNotSupported
+		return
+	}
 	var cx evalContext
 	version, vlen := binary.Uvarint(program)
 	if vlen <= 0 {
