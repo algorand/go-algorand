@@ -18,8 +18,6 @@ package logging
 
 import (
 	"fmt"
-	"time"
-
 	"github.com/olivere/elastic"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/sohlich/elogrus.v3"
@@ -78,7 +76,7 @@ func createAsyncHookLevels(wrappedHook logrus.Hook, channelDepth uint, maxQueueD
 	return hook
 }
 
-func (hook *asyncTelemetryHook) appendEntry(entry *logrus.Entry) {
+func (hook *asyncTelemetryHook) appendEntry(entry *logrus.Entry) bool {
 	hook.Lock()
 	defer hook.Unlock()
 	// TODO: If there are errors at startup, before the telemetry URI is set, this can fill up. Should we prioritize
@@ -88,23 +86,34 @@ func (hook *asyncTelemetryHook) appendEntry(entry *logrus.Entry) {
 		hook.wg.Done()
 	}
 	hook.pending = append(hook.pending, entry)
+
+	// Return ready here to avoid taking the lock again.
+	return hook.ready
 }
 
 func (hook *asyncTelemetryHook) waitForEventAndReady() bool {
-	ticker := time.NewTicker(time.Second)
-
-	for !hook.ready || len(hook.pending) == 0 {
+	for {
 		select {
 		case <-hook.quit:
 			return false
 		case entry := <-hook.entries:
-			hook.appendEntry(entry)
-		case <-ticker.C:
-			// Check ready flag again.
+			ready := hook.appendEntry(entry)
+
+			// Otherwise keep waiting for the URL to update.
+			if ready {
+				return true
+			}
+		case <-hook.urlUpdate:
+			hook.Lock()
+			hasEvents := len(hook.pending) > 0
+			hook.Unlock()
+
+			// Otherwise keep waiting for an entry.
+			if hasEvents {
+				return true
+			}
 		}
 	}
-
-	return true
 }
 
 // Fire is required to implement logrus hook interface
@@ -184,7 +193,6 @@ func (hook *asyncTelemetryHook) UpdateHookURI(uri string) {
 	tfh, ok := hook.wrappedHook.(*telemetryFilteredHook)
 	if ok {
 		hook.Lock()
-		defer hook.Unlock()
 
 		tfh.telemetryConfig.URI = uri
 		newHook, err := tfh.factory(tfh.telemetryConfig)
@@ -193,5 +201,11 @@ func (hook *asyncTelemetryHook) UpdateHookURI(uri string) {
 			tfh.wrappedHook = newHook
 			hook.ready = true
 		}
+
+		// Need to unlock before sending event to hook.urlUpdate
+		hook.Unlock()
+
+		// Notify event listener.
+		hook.urlUpdate <- true
 	}
 }
