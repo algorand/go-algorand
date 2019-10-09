@@ -320,7 +320,7 @@ var sendCmd = &cobra.Command{
 		}
 
 		client := ensureFullClient(dataDir)
-		payment, err := client.ConstructPayment(fromAddressResolved, toAddressResolved, fee, amount, noteBytes, closeToAddressResolved, basics.Round(firstValid), basics.Round(lastValid))
+		payment, err := client.ConstructPayment(fromAddressResolved, toAddressResolved, fee, amount, noteBytes, closeToAddressResolved, leaseBytes, basics.Round(firstValid), basics.Round(lastValid))
 		if err != nil {
 			reportErrorf(errorConstructingTX, err)
 		}

@@ -1,0 +1,55 @@
+gtxn 0 TypeEnum
+int 1
+==
+gtxn 0 Fee
+int TMPL_FEE
+<
+gtxn 0 CloseRemainderTo
+addr TMPL_OWN
+==
+global GroupSize
+int 1
+==
+gtxn 0 FirstValid
+int TMPL_TIMEOUT
+>
+gtxn 0 Receiver
+global ZeroAddress
+==
+&&
+&&
+global GroupSize
+int 2
+==
+gtxn 0 Amount
+int TMPL_MINTRD
+>
+gtxn 1 TypeEnum
+int 4
+==
+gtxn 1 XferAsset
+byte base64 TMPL_ASSET
+==
+gtxn 1 AssetReceiver
+addr TMPL_OWN
+==
+gtxn 1 AssetSender
+global ZeroAddress
+==
+TMPL_RATN
+gtxn 0 Amount
+*
+TMPL_RATD
+gtxn 1 AssetAmount
+*
+<
+&&
+&&
+&&
+&&
+&&
+&&
+||
+&&
+&&
+&&
