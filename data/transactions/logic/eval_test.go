@@ -1506,21 +1506,29 @@ func TestShortBytecblock(t *testing.T) {
 
 func TestShortBytecblock2(t *testing.T) {
 	t.Parallel()
-	src := "01260180fe83f88fe0bf80ff01aa"
-	program, err := hex.DecodeString(src)
-	require.NoError(t, err)
-	cost, err := Check(program, EvalParams{})
-	require.Error(t, err)
-	isNotPanic(t, err)
-	require.True(t, cost < 1000)
-	sb := strings.Builder{}
-	pass, err := Eval(program, EvalParams{Trace: &sb})
-	if pass {
-		t.Log(hex.EncodeToString(program))
-		t.Log(sb.String())
+	sources := []string{
+		"01260180fe83f88fe0bf80ff01aa",
+		"0026efbfbdefbfbd02",
+		"0026efbfbdefbfbd30",
 	}
-	require.False(t, pass)
-	isNotPanic(t, err)
+	for _, src := range sources {
+		t.Run(src, func(t *testing.T) {
+			program, err := hex.DecodeString(src)
+			require.NoError(t, err)
+			cost, err := Check(program, EvalParams{})
+			require.Error(t, err)
+			isNotPanic(t, err)
+			require.True(t, cost < 1000)
+			sb := strings.Builder{}
+			pass, err := Eval(program, EvalParams{Trace: &sb})
+			if pass {
+				t.Log(hex.EncodeToString(program))
+				t.Log(sb.String())
+			}
+			require.False(t, pass)
+			isNotPanic(t, err)
+		})
+	}
 }
 
 const panicString = "out of memory, buffer overrun, stack overflow, divide by zero, halt and catch fire"
