@@ -358,7 +358,12 @@ var sendCmd = &cobra.Command{
 		}
 		if txFilename == "" {
 			// Sign and broadcast the tx
-			txid, err := client.BroadcastTransaction(stx)
+			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
+			tx, err := client.SendPaymentFromWalletWithLease(wh, pw, fromAddressResolved, toAddressResolved, fee, amount, noteBytes, closeToAddressResolved, leaseBytes, basics.Round(firstValid), basics.Round(lastValid))
+
+			// update information from Transaction
+			txid := tx.ID().String()
+			fee = tx.Fee.Raw
 
 			if err != nil {
 				reportErrorf(errorBroadcastingTX, err)
@@ -377,7 +382,11 @@ var sendCmd = &cobra.Command{
 				}
 			}
 		} else {
-			err = writeFile(txFilename, protocol.Encode(stx), 0600)
+			payment, err := client.ConstructPayment(fromAddressResolved, toAddressResolved, fee, amount, noteBytes, closeToAddressResolved, leaseBytes, basics.Round(firstValid), basics.Round(lastValid))
+			if err != nil {
+				reportErrorf(errorConstructingTX, err)
+			}
+			err = writeTxnToFile(client, sign, dataDir, walletName, payment, txFilename)
 			if err != nil {
 				reportErrorf(err.Error())
 			}
