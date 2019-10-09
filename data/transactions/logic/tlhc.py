@@ -30,7 +30,7 @@ txn Receiver
 addr {sender}
 ==
 &&
-global Round
+txn FirstValid
 int {timeout_round}
 >
 &&
@@ -72,7 +72,7 @@ def main():
     except Exeption as e:
         print(e)
     try:
-        secretout.close():
+        secretout.close()
     except Exeption as e:
         print(e)
     return
