@@ -817,6 +817,8 @@ func init() {
 	}
 }
 
+var errTooManyIntc = errors.New("intcblock with too many items")
+
 func parseIntcblock(program []byte, pc int) (intc []uint64, nextpc int, err error) {
 	pos := pc + 1
 	numInts, bytesUsed := binary.Uvarint(program[pos:])
@@ -825,6 +827,10 @@ func parseIntcblock(program []byte, pc int) (intc []uint64, nextpc int, err erro
 		return
 	}
 	pos += bytesUsed
+	if numInts > uint64(len(program)) {
+		err = errTooManyIntc
+		return
+	}
 	intc = make([]uint64, numInts)
 	for i := uint64(0); i < numInts; i++ {
 		if pos >= len(program) {
@@ -868,6 +874,7 @@ func checkIntConstBlock(cx *evalContext) int {
 }
 
 var errShortBytecblock = errors.New("bytecblock ran past end of program")
+var errTooManyItems = errors.New("bytecblock with too many items")
 
 func parseBytecBlock(program []byte, pc int) (bytec [][]byte, nextpc int, err error) {
 	pos := pc + 1
@@ -877,6 +884,10 @@ func parseBytecBlock(program []byte, pc int) (bytec [][]byte, nextpc int, err er
 		return
 	}
 	pos += bytesUsed
+	if numItems > uint64(len(program)) {
+		err = errTooManyItems
+		return
+	}
 	bytec = make([][]byte, numItems)
 	for i := uint64(0); i < numItems; i++ {
 		if pos >= len(program) {
@@ -912,6 +923,10 @@ func checkByteConstBlock(cx *evalContext) int {
 		return 1
 	}
 	pos += bytesUsed
+	if numItems > uint64(len(cx.program)) {
+		cx.err = errTooManyItems
+		return 0
+	}
 	//bytec = make([][]byte, numItems)
 	for i := uint64(0); i < numItems; i++ {
 		if pos >= len(cx.program) {
