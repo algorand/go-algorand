@@ -817,6 +817,8 @@ func init() {
 	}
 }
 
+var errTooManyIntc = errors.New("intcblock with too many items")
+
 func parseIntcblock(program []byte, pc int) (intc []uint64, nextpc int, err error) {
 	pos := pc + 1
 	numInts, bytesUsed := binary.Uvarint(program[pos:])
@@ -825,6 +827,10 @@ func parseIntcblock(program []byte, pc int) (intc []uint64, nextpc int, err erro
 		return
 	}
 	pos += bytesUsed
+	if numInts > uint64(len(program)) {
+		err = errTooManyIntc
+		return
+	}
 	intc = make([]uint64, numInts)
 	for i := uint64(0); i < numInts; i++ {
 		if pos >= len(program) {
