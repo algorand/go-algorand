@@ -39,6 +39,7 @@ func createAsyncHookLevels(wrappedHook logrus.Hook, channelDepth uint, maxQueueD
 		maxQueueDepth: maxQueueDepth,
 		levels:        levels,
 		ready:         false,
+		urlUpdate:     make(chan bool),
 	}
 
 	go func() {
@@ -184,10 +185,11 @@ func createTelemetryHook(cfg TelemetryConfig, history *logBuffer, hookFactory ho
 	return filteredHook, err
 }
 
-// Note: This will be removed with the externalized telemetry project.
-func (hook *asyncTelemetryHook) UpdateHookURI(uri string) {
+// Note: This will be removed with the externalized telemetry project. Return whether or not the URI was successfully
+//       updated.
+func (hook *asyncTelemetryHook) UpdateHookURI(uri string) bool {
 	if hook.wrappedHook == nil {
-		return
+		return false
 	}
 
 	tfh, ok := hook.wrappedHook.(*telemetryFilteredHook)
@@ -207,5 +209,8 @@ func (hook *asyncTelemetryHook) UpdateHookURI(uri string) {
 
 		// Notify event listener.
 		hook.urlUpdate <- true
+
+		return true
 	}
+	return false
 }

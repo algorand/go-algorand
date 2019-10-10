@@ -261,8 +261,10 @@ func main() {
 		cfgCopy := cfg
 		cfgCopy.DNSBootstrapID = telemetryDNSBootstrapID
 
-		// Periodically check SRV records for new telemetry URI
-		go srvUpdaterLoop(1*time.Minute, cfgCopy, s.Genesis.Network, log)
+		// If the telemetry URI is not set, periodically check SRV records for new telemetry URI
+		if log.GetTelemetryURI() == "" {
+			network.StartSRVUpdateService(time.Minute, cfg, s.Genesis.Network, log)
+		}
 
 		currentVersion := config.GetCurrentVersion()
 		startupDetails := telemetryspec.StartupEventDetails{
@@ -306,26 +308,4 @@ func resolveDataDir() string {
 		dir = *dataDirectory
 	}
 	return dir
-}
-
-func srvUpdaterLoop(interval time.Duration, cfg config.Local, genesisNetwork protocol.NetworkID, log logging.Logger) {
-	ticker := time.NewTicker(interval)
-
-	// Check for new telemetry URI once a minute
-	for {
-		bootstrapArray := cfg.DNSBootstrapArray(genesisNetwork)
-		for _, bootstrapID := range bootstrapArray {
-			telemetrySRV := fmt.Sprintf("telemetry.%s", bootstrapID)
-			addrs, err := network.ReadFromBootstrap(telemetrySRV, cfg.FallbackDNSResolverAddress)
-			if err != nil {
-				log.Warn("An issue occurred reading telemetry entry for: %s", telemetrySRV)
-			} else if len(addrs) == 0 {
-				log.Warn("No telemetry entry for: %s", telemetrySRV)
-			} else if addrs[0] != log.GetTelemetryURI() {
-				log.UpdateTelemetryURI(addrs[0])
-			}
-		}
-
-		<-ticker.C
-	}
 }

@@ -81,7 +81,6 @@ func makeTelemetryState(cfg TelemetryConfig, hookFactory hookFactory) (*telemetr
 
 	telemetry := &telemetryState{
 		history,
-		&cfg,
 		createAsyncHookLevels(hook, 32, 100, makeLevels(cfg.MinLogLevel)),
 	}
 	return telemetry, nil

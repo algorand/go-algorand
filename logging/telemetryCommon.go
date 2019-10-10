@@ -37,7 +37,6 @@ type TelemetryOperation struct {
 
 type telemetryState struct {
 	history *logBuffer
-	config  *TelemetryConfig
 	hook    *asyncTelemetryHook
 }
 
