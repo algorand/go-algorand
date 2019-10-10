@@ -332,11 +332,9 @@ func GetVersionPartsFromVersion(version uint64) (major uint64, minor uint64, pat
 		return
 	}
 
-	modVal := uint64(1 << 16)
-
-	patch = val % modVal
+	patch = val & 0xffff
 	val >>= 16
-	minor = val % modVal
+	minor = val & 0xffff
 	val >>= 16
 	major = val
 	return
