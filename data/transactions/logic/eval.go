@@ -209,7 +209,7 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 		cx.err = fmt.Errorf("program version %d greater than max supported version %d", version, EvalMaxVersion)
 		return false, cx.err
 	}
-	if (params.Proto != nil) && (version > params.Proto.LogicSigVersion) {
+	if (params.Proto == nil) || (version > params.Proto.LogicSigVersion) {
 		cx.err = fmt.Errorf("program version %d greater than protocol supported version %d", version, params.Proto.LogicSigVersion)
 		return false, cx.err
 	}
@@ -228,7 +228,7 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 		if cx.stepCount > len(cx.program) {
 			return false, errLoopDetected
 		}
-		if params.Proto != nil && uint64(cx.cost) > params.Proto.LogicSigMaxCost {
+		if params.Proto == nil || uint64(cx.cost) > params.Proto.LogicSigMaxCost {
 			return false, errCostTooHigh
 		}
 	}
@@ -270,7 +270,7 @@ func Check(program []byte, params EvalParams) (cost int, err error) {
 			err = PanicError{x, errstr}
 		}
 	}()
-	if (params.Proto != nil) && (params.Proto.LogicSigVersion == 0) {
+	if (params.Proto == nil) || (params.Proto.LogicSigVersion == 0) {
 		err = errLogicSignNotSupported
 		return
 	}
@@ -284,7 +284,7 @@ func Check(program []byte, params EvalParams) (cost int, err error) {
 		err = fmt.Errorf("program version %d greater than max supported version %d", version, EvalMaxVersion)
 		return
 	}
-	if (params.Proto != nil) && (version > params.Proto.LogicSigVersion) {
+	if (params.Proto == nil) || (version > params.Proto.LogicSigVersion) {
 		err = fmt.Errorf("program version %d greater than protocol supported version %d", version, params.Proto.LogicSigVersion)
 		return
 	}
