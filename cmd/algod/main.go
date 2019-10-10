@@ -257,13 +257,16 @@ func main() {
 	fmt.Fprintf(os.Stdout, "Deadlock detection is set to: %s (Default state is '%s')\n", deadlockState, config.DefaultDeadlock)
 
 	if log.GetTelemetryEnabled() {
+		done := make(chan struct{})
+		defer close(done)
+
 		// Make a copy of config and reset DNSBootstrapID in case it was disabled.
 		cfgCopy := cfg
 		cfgCopy.DNSBootstrapID = telemetryDNSBootstrapID
 
 		// If the telemetry URI is not set, periodically check SRV records for new telemetry URI
 		if log.GetTelemetryURI() == "" {
-			network.StartSRVUpdateService(time.Minute, cfg, s.Genesis.Network, log)
+			network.StartTelemetryURIUpdateService(time.Minute, cfg, s.Genesis.Network, log, done)
 		}
 
 		currentVersion := config.GetCurrentVersion()
@@ -278,9 +281,11 @@ func main() {
 		log.EventWithDetails(telemetryspec.ApplicationState, telemetryspec.StartupEvent, startupDetails)
 
 		// Send a heartbeat event every 10 minutes as a sign of life
-		ticker := time.NewTicker(10 * time.Minute)
 		go func() {
-			for {
+			ticker := time.NewTicker(10 * time.Minute)
+			defer ticker.Stop()
+
+			sendHeartbeat := func() {
 				values := make(map[string]string)
 				metrics.DefaultRegistry().AddMetrics(values)
 
@@ -289,8 +294,17 @@ func main() {
 				}
 
 				log.EventWithDetails(telemetryspec.ApplicationState, telemetryspec.HeartbeatEvent, heartbeatDetails)
+			}
 
-				<-ticker.C
+			// Send initial heartbeat, followed by one every 10 minutes.
+			sendHeartbeat()
+			for {
+				select {
+					case <-ticker.C:
+						sendHeartbeat()
+					case <-done:
+						return
+				}
 			}
 		}()
 	}

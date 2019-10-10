@@ -9,23 +9,33 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-func StartSRVUpdateService(interval time.Duration, cfg config.Local, genesisNetwork protocol.NetworkID, log logging.Logger) {
+func StartTelemetryURIUpdateService(interval time.Duration, cfg config.Local, genesisNetwork protocol.NetworkID, log logging.Logger, abort chan struct{}) {
 	go func() {
 		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
 
-		for {
-			uri := getTelemetryURI(cfg, genesisNetwork, log)
+		updateTelemetryURI := func() {
+			uri := lookupTelemetryURI(cfg, genesisNetwork, log)
 
 			if uri != "" && uri != log.GetTelemetryURI() {
 				log.UpdateTelemetryURI(uri)
 			}
+		}
 
-			<-ticker.C
+		// Update the telemetry URI immediatly, followed by once every <interval>
+		updateTelemetryURI()
+		for {
+			select {
+				case <-ticker.C:
+					updateTelemetryURI()
+				case <-abort:
+					return
+			}
 		}
 	}()
 }
 
-func getTelemetryURI(cfg config.Local, genesisNetwork protocol.NetworkID, log logging.Logger) string {
+func lookupTelemetryURI(cfg config.Local, genesisNetwork protocol.NetworkID, log logging.Logger) string {
 	bootstrapArray := cfg.DNSBootstrapArray(genesisNetwork)
 	for _, bootstrapID := range bootstrapArray {
 		telemetrySRV := fmt.Sprintf("telemetry.%s", bootstrapID)
