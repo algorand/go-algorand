@@ -12,4 +12,6 @@ set -e
 scripts/travis/build.sh
 
 export RELEASE_GENESIS_PROCESS=true
+export NO_BUILD=true
+export SkipCleanCheck=1
 scripts/deploy_version.sh ${TRAVIS_BRANCH} $(./scripts/osarchtype.sh)
