@@ -374,4 +374,3 @@ func validateConfig(config algoh.HostConfig) {
 		reportErrorf("Config.DeadManTimeSec should be >= 30 seconds (set to %v)\n", config.DeadManTimeSec)
 	}
 }
-

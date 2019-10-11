@@ -8,7 +8,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 )
 
-// ReadFromBootstrap is a helper to collect SRV addresses for a given name.
+// ReadFromSRV is a helper to collect SRV addresses for a given name.
 func ReadFromSRV(service string, name string, fallbackDNSResolverAddress string) (addrs []string, err error) {
 	log := logging.Base()
 	if name == "" {

@@ -8,6 +8,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+// StartTelemetryURIUpdateService starts a go routine which queries SRV records for a telemetry URI every <interval>
 func StartTelemetryURIUpdateService(interval time.Duration, cfg config.Local, genesisNetwork protocol.NetworkID, log logging.Logger, abort chan struct{}) {
 	go func() {
 		ticker := time.NewTicker(interval)
@@ -25,10 +26,10 @@ func StartTelemetryURIUpdateService(interval time.Duration, cfg config.Local, ge
 		updateTelemetryURI()
 		for {
 			select {
-				case <-ticker.C:
-					updateTelemetryURI()
-				case <-abort:
-					return
+			case <-ticker.C:
+				updateTelemetryURI()
+			case <-abort:
+				return
 			}
 		}
 	}()

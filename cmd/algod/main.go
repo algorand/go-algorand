@@ -300,10 +300,10 @@ func main() {
 			sendHeartbeat()
 			for {
 				select {
-					case <-ticker.C:
-						sendHeartbeat()
-					case <-done:
-						return
+				case <-ticker.C:
+					sendHeartbeat()
+				case <-done:
+					return
 				}
 			}
 		}()
