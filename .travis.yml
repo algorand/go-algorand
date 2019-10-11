@@ -73,6 +73,12 @@ jobs:
       name: MacOS AMD64 Build
       script:
         - scripts/travis/build_test.sh
+    - # dummy stage for testing release packages.
+      script: scripts/travis/release_packages.sh
+      addons:
+        apt:
+          packages:
+            - python-dateutil
 
     - stage: build_release
       os: linux
@@ -139,6 +145,10 @@ jobs:
 
     - stage: release
       script: scripts/travis/release_packages.sh
+      addons:
+        apt:
+          packages:
+            - python-dateutil
 
 # Don't rebuild libsodium every time
 cache:
