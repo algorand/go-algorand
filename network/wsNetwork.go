@@ -1363,7 +1363,7 @@ func (wn *WebsocketNetwork) peersToPing() []*wsPeer {
 }
 
 func (wn *WebsocketNetwork) getDNSAddrs(dnsBootstrap string) []string {
-	srvPhonebook, err := tools_network.ReadFromBootstrap(dnsBootstrap, wn.config.FallbackDNSResolverAddress)
+	srvPhonebook, err := tools_network.ReadFromSRV("algobootstrap", dnsBootstrap, wn.config.FallbackDNSResolverAddress)
 	if err != nil {
 		// only log this warning on testnet or devnet
 		if wn.NetworkID == config.Devnet || wn.NetworkID == config.Testnet {

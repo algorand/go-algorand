@@ -1,7 +1,6 @@
 package network
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -22,7 +21,7 @@ func StartTelemetryURIUpdateService(interval time.Duration, cfg config.Local, ge
 			}
 		}
 
-		// Update the telemetry URI immediatly, followed by once every <interval>
+		// Update telemetry right away, followed by once every <interval>
 		updateTelemetryURI()
 		for {
 			select {
@@ -37,16 +36,18 @@ func StartTelemetryURIUpdateService(interval time.Duration, cfg config.Local, ge
 
 func lookupTelemetryURI(cfg config.Local, genesisNetwork protocol.NetworkID, log logging.Logger) string {
 	bootstrapArray := cfg.DNSBootstrapArray(genesisNetwork)
+	bootstrapArray = append(bootstrapArray, "default.algodev.network")
 	for _, bootstrapID := range bootstrapArray {
-		telemetrySRV := fmt.Sprintf("telemetry.%s", bootstrapID)
-		addrs, err := ReadFromBootstrap(telemetrySRV, cfg.FallbackDNSResolverAddress)
+		addrs, err := ReadFromSRV("telemetry", bootstrapID, cfg.FallbackDNSResolverAddress)
 		if err != nil {
-			log.Warn("An issue occurred reading telemetry entry for: %s", telemetrySRV)
+			log.Warn("An issue occurred reading telemetry entry for: %s", bootstrapID)
 		} else if len(addrs) == 0 {
-			log.Warn("No telemetry entry for: %s", telemetrySRV)
+			log.Warn("No telemetry entry for: %s", bootstrapID)
 		} else if addrs[0] != log.GetTelemetryURI() {
 			return addrs[0]
 		}
 	}
+
+	log.Warn("No telemetry URI was found.")
 	return ""
 }
