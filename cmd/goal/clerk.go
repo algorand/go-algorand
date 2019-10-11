@@ -868,7 +868,7 @@ var dryrunCmd = &cobra.Command{
 		block := bookkeeping.Block{}
 		block.BlockHeader.Round = basics.Round(round)
 		block.BlockHeader.TimeStamp = timeStamp
-		proto := config.Consensus[protocol.ConsensusCurrentVersion]
+		proto := config.Consensus[protocol.ConsensusFuture]
 		for i, txn := range txgroup {
 			if txn.Lsig.Blank() {
 				continue
@@ -876,7 +876,7 @@ var dryrunCmd = &cobra.Command{
 			ep := logic.EvalParams{Txn: &txn.SignedTxn, Proto: &proto}
 			cost, err := logic.Check(txn.Lsig.Logic, ep)
 			if err != nil {
-				reportErrorf("program failed Check: %s")
+				reportErrorf("program failed Check: %s", err)
 			}
 			txid := txn.ID()
 			sb := strings.Builder{}
