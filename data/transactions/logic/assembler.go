@@ -856,6 +856,10 @@ func checkIntConstBlock(cx *evalContext) int {
 		return 1
 	}
 	pos += bytesUsed
+	if numInts > uint64(len(cx.program)) {
+		cx.err = errTooManyIntc
+		return 0
+	}
 	//intc = make([]uint64, numInts)
 	for i := uint64(0); i < numInts; i++ {
 		if pos >= len(cx.program) {
@@ -904,7 +908,8 @@ func parseBytecBlock(program []byte, pc int) (bytec [][]byte, nextpc int, err er
 			err = errShortBytecblock
 			return
 		}
-		if uint64(pos)+itemLen > uint64(len(program)) {
+		end := uint64(pos) + itemLen
+		if end > uint64(len(program)) || end < uint64(pos) {
 			err = errShortBytecblock
 			return
 		}
@@ -943,7 +948,8 @@ func checkByteConstBlock(cx *evalContext) int {
 			cx.err = errShortBytecblock
 			return 0
 		}
-		if uint64(pos)+itemLen > uint64(len(cx.program)) {
+		end := uint64(pos) + itemLen
+		if end > uint64(len(cx.program)) || end < uint64(pos) {
 			cx.err = errShortBytecblock
 			return 0
 		}
@@ -1081,6 +1087,14 @@ func Disassemble(program []byte) (text string, err error) {
 			}
 		}
 		op := opsByOpcode[program[dis.pc]]
+		if op.Name == "" {
+			msg := fmt.Sprintf("invalid opcode %02x at pc=%d", program[dis.pc], dis.pc)
+			out.WriteString(msg)
+			out.WriteRune('\n')
+			text = out.String()
+			err = errors.New(msg)
+			return
+		}
 		nd, hasDis := disByName[op.Name]
 		if hasDis {
 			nd.handler(&dis)
@@ -1089,14 +1103,6 @@ func Disassemble(program []byte) (text string, err error) {
 			}
 			dis.pc = dis.nextpc
 			continue
-		}
-		if op.Name == "" {
-			msg := fmt.Sprintf("invalid opcode %02x at pc=%d", program[dis.pc], dis.pc)
-			out.WriteString(msg)
-			out.WriteRune('\n')
-			text = out.String()
-			err = errors.New(msg)
-			return
 		}
 		out.WriteString(op.Name)
 		out.WriteRune('\n')

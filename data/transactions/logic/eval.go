@@ -115,6 +115,9 @@ type evalContext struct {
 	version uint64
 	scratch [256]stackValue
 
+	stepCount int
+	cost      int
+
 	checkStack []StackType
 
 	// Ordered set of pc values that a branch could go to.
@@ -163,6 +166,10 @@ func (pe PanicError) Error() string {
 	return fmt.Sprintf("panic in TEAL Eval: %v\n%s", pe.PanicValue, pe.StackTrace)
 }
 
+var errLoopDetected = errors.New("loop detected")
+var errCostTooHigh = errors.New("LogicSigMaxCost exceded")
+var errLogicSignNotSupported = errors.New("LogicSig not supported")
+
 // Eval checks to see if a transaction passes logic
 // A program passes succesfully if it finishes with one int element on the stack that is non-zero.
 func Eval(program []byte, params EvalParams) (pass bool, err error) {
@@ -180,6 +187,10 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 			err = PanicError{x, errstr}
 		}
 	}()
+	if (params.Proto != nil) && (params.Proto.LogicSigVersion == 0) {
+		err = errLogicSignNotSupported
+		return
+	}
 	var cx evalContext
 	version, vlen := binary.Uvarint(program)
 	if vlen <= 0 {
@@ -205,6 +216,13 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 	cx.program = program
 	for (cx.err == nil) && (cx.pc < len(cx.program)) {
 		cx.step()
+		cx.stepCount++
+		if cx.stepCount > len(cx.program) {
+			return false, errLoopDetected
+		}
+		if params.Proto != nil && uint64(cx.cost) > params.Proto.LogicSigMaxCost {
+			return false, errCostTooHigh
+		}
 	}
 	if cx.err != nil {
 		if cx.Trace != nil {
@@ -235,9 +253,19 @@ func Check(program []byte, params EvalParams) (cost int, err error) {
 			buf := make([]byte, 16*1024)
 			stlen := runtime.Stack(buf, false)
 			cost = 0
-			err = PanicError{x, string(buf[:stlen])}
+			errstr := string(buf[:stlen])
+			if params.Trace != nil {
+				if sb, ok := params.Trace.(*strings.Builder); ok {
+					errstr += sb.String()
+				}
+			}
+			err = PanicError{x, errstr}
 		}
 	}()
+	if (params.Proto != nil) && (params.Proto.LogicSigVersion == 0) {
+		err = errLogicSignNotSupported
+		return
+	}
 	var cx evalContext
 	version, vlen := binary.Uvarint(program)
 	if vlen <= 0 {
@@ -452,6 +480,7 @@ func (cx *evalContext) step() {
 		cx.err = fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, opsByOpcode[opcode].Name)
 		return
 	}
+	cx.cost += oz.cost
 	opsByOpcode[opcode].op(cx)
 	if cx.Trace != nil {
 		if len(cx.stack) == 0 {
@@ -479,14 +508,14 @@ func (cx *evalContext) checkStep() (cost int) {
 	opcode := cx.program[cx.pc]
 	if opsByOpcode[opcode].op == nil {
 		cx.err = fmt.Errorf("%3d illegal opcode %02x", cx.pc, opcode)
-		return 0
+		return 1
 	}
 	argsTypes := opsByOpcode[opcode].Args
 	if len(argsTypes) >= 0 {
 		// check args for stack underflow and types
 		if len(cx.checkStack) < len(argsTypes) {
 			cx.err = fmt.Errorf("stack underflow in %s", opsByOpcode[opcode].Name)
-			return 0
+			return 1
 		}
 		first := len(cx.checkStack) - len(argsTypes)
 		for i, argType := range argsTypes {
@@ -502,7 +531,7 @@ func (cx *evalContext) checkStep() (cost int) {
 	oz := opSizeByOpcode[opcode]
 	if oz.size != 0 && (cx.pc+oz.size > len(cx.program)) {
 		cx.err = fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, opsByOpcode[opcode].Name)
-		return 0
+		return 1
 	}
 	if oz.checkFunc != nil {
 		cost = oz.checkFunc(cx)
@@ -517,12 +546,12 @@ func (cx *evalContext) checkStep() (cost int) {
 		cx.pc += oz.size
 	}
 	if cx.err != nil {
-		return 0
+		return 1
 	}
 	if len(cx.branchTargets) > 0 {
 		if cx.branchTargets[0] < cx.pc {
 			cx.err = fmt.Errorf("branch target at %d not an aligned instruction", cx.branchTargets[0])
-			return 0
+			return 1
 		}
 		for len(cx.branchTargets) > 0 && cx.branchTargets[0] == cx.pc {
 			// checks okay

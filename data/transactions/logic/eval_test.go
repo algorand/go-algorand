@@ -869,6 +869,7 @@ func TestGlobal(t *testing.T) {
 		MinBalance:      1000000,
 		MaxTxnLife:      999,
 		LogicSigVersion: 1,
+		LogicSigMaxCost: 20000,
 	}
 	ep := EvalParams{
 		Trace:    &sb,
@@ -1536,22 +1537,38 @@ const panicString = "out of memory, buffer overrun, stack overflow, divide by ze
 func opPanic(cx *evalContext) {
 	panic(panicString)
 }
+func checkPanic(cx *evalContext) int {
+	panic(panicString)
+}
 
 func TestPanic(t *testing.T) {
 	program, err := AssembleString(`int 1`)
 	require.NoError(t, err)
 	var hackedOpcode int
 	var oldSpec OpSpec
+	var oldOz opSize
 	for opcode, spec := range opsByOpcode {
 		if spec.op == nil {
 			hackedOpcode = opcode
 			oldSpec = spec
 			opsByOpcode[opcode].op = opPanic
 			program = append(program, byte(opcode))
+			oldOz = opSizeByOpcode[opcode]
+			opSizeByOpcode[opcode].checkFunc = checkPanic
 			break
 		}
 	}
 	sb := strings.Builder{}
+	_, err = Check(program, EvalParams{Trace: &sb})
+	require.Error(t, err)
+	if pe, ok := err.(PanicError); ok {
+		require.Equal(t, panicString, pe.PanicValue)
+		pes := pe.Error()
+		require.True(t, strings.Contains(pes, "panic"))
+	} else {
+		t.Errorf("expected PanicError object but got %T %#v", err, err)
+	}
+	sb = strings.Builder{}
 	pass, err := Eval(program, EvalParams{Trace: &sb})
 	if pass {
 		t.Log(hex.EncodeToString(program))
@@ -1566,6 +1583,7 @@ func TestPanic(t *testing.T) {
 		t.Errorf("expected PanicError object but got %T %#v", err, err)
 	}
 	opsByOpcode[hackedOpcode] = oldSpec
+	opSizeByOpcode[hackedOpcode] = oldOz
 }
 
 func TestProgramTooNew(t *testing.T) {
