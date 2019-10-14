@@ -49,7 +49,6 @@ var saveConfig bool
 var useDefault bool
 var quietish bool
 var logicProg string
-var logicArgs [][]byte
 var randomNote bool
 var txnPerSec uint64
 
@@ -186,6 +185,12 @@ var runCmd = &cobra.Command{
 		}
 		if randomNote {
 			cfg.RandomNote = true
+		}
+		if logicProg != "" {
+			cfg.Program, err = ioutil.ReadFile(logicProg)
+			if err != nil {
+				reportErrorf("Error opening logic program: %v\n", err)
+			}
 		}
 
 		reportInfof("Preparing to initialize PingPong with config:\n")
