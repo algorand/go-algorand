@@ -26,6 +26,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/libgoal"
 )
 
@@ -207,7 +208,30 @@ func sendFromTo(fromList, toList []string, client libgoal.Client, cfg PpConfig) 
 		crypto.RandBytes(noteField[tagLen:])
 
 		sentCount++
-		_, sendErr := client.SendPaymentFromUnencryptedWallet(from, to, fee, amt, noteField[:])
+
+		// Construct payment transaction
+		var txn transactions.Transaction
+		txn, err = client.ConstructPayment(from, to, fee, amt, noteField[:], "", 0, 0)
+		if err != nil {
+			return
+		}
+
+		// Get wallet handle token
+		var h []byte
+		h, err = client.GetWalletHandleTokenCached(libgoal.UnencryptedWalletName, nil)
+		if err != nil {
+			return
+		}
+
+		// Sign transaction
+		var stxn transactions.SignedTxn
+		stxn, err = client.SignTransactionWithWallet(h, nil, txn)
+		if err != nil {
+			return
+		}
+
+		// Broadcast transaction
+		_, sendErr := client.BroadcastTransaction(stxn)
 		if sendErr != nil && !cfg.Quiet {
 			fmt.Fprintf(os.Stderr, "error sending transaction: %v\n", err)
 		} else {
