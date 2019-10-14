@@ -17,7 +17,9 @@
 package basics
 
 import (
+	"fmt"
 	"reflect"
+	"strconv"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -280,4 +282,39 @@ type BalanceRecord struct {
 // ToBeHashed implements the crypto.Hashable interface
 func (u BalanceRecord) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.BalanceRecord, protocol.Encode(u)
+}
+
+// String returns a string representation of the asset ID.
+func (id AssetID) String() string {
+	return fmt.Sprintf("%s/%d", id.Creator, id.Index)
+}
+
+// MarshalText returns the full assetID as an array of bytes.
+func (id AssetID) MarshalText() ([]byte, error) {
+	return []byte(id.String()), nil
+}
+
+// UnmarshalText initializes the assetID from an array of bytes.
+func (id *AssetID) UnmarshalText(text []byte) error {
+	address, err := UnmarshalChecksumAddress(string(text[:58]))
+	if err != nil {
+		return err
+	}
+
+	index, err := strconv.ParseUint(string(text[59:]), 10, 0)
+	if err != nil {
+		return err
+	}
+
+	assetID := AssetID{Creator: address, Index: index}
+	canonical, err := assetID.MarshalText()
+	if err != nil {
+		return err
+	}
+	if string(canonical) != string(text) {
+		return fmt.Errorf("asset %s is non-canonical", string(text))
+	}
+
+	*id = assetID
+	return nil
 }

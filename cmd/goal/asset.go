@@ -21,6 +21,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/libgoal"
 )
 
@@ -542,8 +543,14 @@ var infoAssetCmd = &cobra.Command{
 			}
 		}
 
-		fmt.Printf("Asset ID:         %d\n", assetID)
+		creatorAddr, err := basics.UnmarshalChecksumAddress(params.Creator)
+		if err != nil {
+			reportErrorf("can't unmarshal creator address", err)
+		}
+
+		fmt.Printf("Asset ID (index): %d\n", assetID)
 		fmt.Printf("Creator:          %s\n", params.Creator)
+		fmt.Printf("Asset ID (full):  %s\n", basics.AssetID{Creator: creatorAddr, Index: assetID})
 		fmt.Printf("Asset name:       %s\n", params.AssetName)
 		fmt.Printf("Unit name:        %s\n", params.UnitName)
 		fmt.Printf("Maximum issue:    %d %s\n", params.Total, params.UnitName)
