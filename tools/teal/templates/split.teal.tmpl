@@ -1,6 +1,10 @@
 txn TypeEnum
 int 1
 ==
+txn Fee
+int TMPL_FEE
+<
+&&
 global GroupSize
 int 2
 ==
@@ -11,13 +15,9 @@ addr TMPL_OWN
 txn Receiver
 global ZeroAddress
 ==
-txn Fee
-int TMPL_FEE
-<
 txn FirstValid
 int TMPL_TIMEOUT
 >
-&&
 &&
 &&
 int 1
@@ -30,9 +30,6 @@ gtxn 1 Sender
 txn CloseRemainderTo
 global ZeroAddress
 ==
-txn Fee
-int TMPL_FEE
-<
 gtxn 0 Receiver
 addr TMPL_RCV1
 ==
@@ -51,7 +48,6 @@ int TMPL_RATD
 gtxn 0 Amount
 int TMPL_MINPAY
 >
-&&
 &&
 &&
 &&

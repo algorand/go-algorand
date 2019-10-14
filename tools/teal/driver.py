@@ -28,6 +28,8 @@ specs_args = {
     "TMPL_X": "string to use for the transaction lease (defaults to \"tmpl\")",
     "TMPL_RATN": "fraction of money to be paid to the first recipient: numerator",
     "TMPL_RATD": "fraction of money to be paid to the first recipient: denominator",
+    "TMPL_SWAPN": "limit order exchange rate (for N algos, want rate * N coin): numerator",
+    "TMPL_SWAPD": "limit order exchange rate (for N algos, want rate * N coin): denominator",
     "TMPL_RCV1": "first recipient of the split payment",
     "TMPL_RCV2": "second recipient of the split payment",
     "TMPL_MINPAY": "minimum amount to be paid out of the account",

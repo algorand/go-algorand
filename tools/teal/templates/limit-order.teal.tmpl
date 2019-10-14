@@ -8,19 +8,12 @@ gtxn 0 CloseRemainderTo
 addr TMPL_OWN
 ==
 global GroupSize
+int 3
+<
+global GroupSize
 int 1
 ==
-gtxn 0 FirstValid
-int TMPL_TIMEOUT
->
-gtxn 0 Receiver
-global ZeroAddress
-==
-&&
-&&
-global GroupSize
-int 2
-==
+bnz label2
 gtxn 0 Amount
 int TMPL_MINTRD
 >
@@ -28,7 +21,7 @@ gtxn 1 TypeEnum
 int 4
 ==
 gtxn 1 XferAsset
-byte base64 TMPL_ASSET
+int TMPL_ASSET
 ==
 gtxn 1 AssetReceiver
 addr TMPL_OWN
@@ -36,10 +29,10 @@ addr TMPL_OWN
 gtxn 1 AssetSender
 global ZeroAddress
 ==
-TMPL_RATN
+int TMPL_SWAPN
 gtxn 0 Amount
 *
-TMPL_RATD
+int TMPL_SWAPD
 gtxn 1 AssetAmount
 *
 <
@@ -48,8 +41,19 @@ gtxn 1 AssetAmount
 &&
 &&
 &&
+int 1
+bnz label3
+pop // check bug workaround
+label2:
+gtxn 0 FirstValid
+int TMPL_TIMEOUT
+>
+gtxn 0 Receiver
+global ZeroAddress
+==
 &&
-||
+label3:
+&&
 &&
 &&
 &&
