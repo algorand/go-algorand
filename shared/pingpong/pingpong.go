@@ -218,16 +218,31 @@ func sendFromTo(fromList, toList []string, client libgoal.Client, cfg PpConfig) 
 
 		// Get wallet handle token
 		var h []byte
-		h, err = client.GetWalletHandleTokenCached(libgoal.UnencryptedWalletName, nil)
+		h, err = client.GetUnencryptedWalletHandle()
 		if err != nil {
 			return
 		}
 
-		// Sign transaction
 		var stxn transactions.SignedTxn
-		stxn, err = client.SignTransactionWithWallet(h, nil, txn)
-		if err != nil {
-			return
+		var psig crypto.Signature
+
+		if len(cfg.Program) > 0 {
+			// If there's a program, sign it and use that in a lsig
+			psig, err = client.SignProgramWithWallet(h, nil, from, cfg.Program)
+			if err != nil {
+				return
+			}
+			// Fill in signed transaction
+			stxn.Txn = txn
+			stxn.Lsig.Logic = cfg.Program
+			stxn.Lsig.Sig = psig
+			stxn.Lsig.Args = cfg.LogicArgs
+		} else {
+			// Otherwise, just sign the transaction like normal
+			stxn, err = client.SignTransactionWithWallet(h, nil, txn)
+			if err != nil {
+				return
+			}
 		}
 
 		// Broadcast transaction
