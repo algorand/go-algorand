@@ -1064,9 +1064,7 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint
 	case 14:
 		sv.Uint = uint64(txnTypeIndexes[string(txn.Type)])
 	case 15:
-		sv.Bytes = make([]byte, 40)
-		copy(sv.Bytes, txn.XferAsset.Creator[:])
-		binary.BigEndian.PutUint64(sv.Bytes[32:], txn.XferAsset.Index)
+		sv.Uint = txn.XferAsset.Index
 	case 16:
 		sv.Uint = txn.AssetAmount
 	case 17:
