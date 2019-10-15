@@ -48,6 +48,7 @@ var refreshTime string
 var saveConfig bool
 var useDefault bool
 var quietish bool
+var logicProg string
 var randomNote bool
 
 func init() {
@@ -69,6 +70,7 @@ func init() {
 	runCmd.Flags().StringVar(&runTime, "run", "", "Duration of time (seconds) to run transfers before resting (0 means non-stop)")
 	runCmd.Flags().StringVar(&restTime, "rest", "", "Duration of time (seconds) to rest between transfer periods (0 means no rest)")
 	runCmd.Flags().StringVar(&refreshTime, "refresh", "", "Duration of time (seconds) between refilling accounts with money (0 means no refresh)")
+	runCmd.Flags().StringVar(&logicProg, "program", "", "File containing the compiled program to include as a logic sig")
 	runCmd.Flags().BoolVar(&saveConfig, "save", false, "Save the effective configuration to disk")
 	runCmd.Flags().BoolVar(&useDefault, "reset", false, "Reset to the default configuration (not read from disk)")
 	runCmd.Flags().BoolVar(&quietish, "quiet", false, "quietish stdout logging")
@@ -175,6 +177,12 @@ var runCmd = &cobra.Command{
 		}
 		if randomNote {
 			cfg.RandomNote = true
+		}
+		if logicProg != "" {
+			cfg.Program, err = ioutil.ReadFile(logicProg)
+			if err != nil {
+				reportErrorf("Error opening logic program: %v\n", err)
+			}
 		}
 
 		reportInfof("Preparing to initialize PingPong with config:\n")
