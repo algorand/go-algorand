@@ -44,7 +44,7 @@ func lookupTelemetryURI(cfg config.Local, genesisNetwork protocol.NetworkID, log
 			log.Warn("An issue occurred reading telemetry entry for: %s", bootstrapID)
 		} else if len(addrs) == 0 {
 			log.Warn("No telemetry entry for: %s", bootstrapID)
-		} else if addrs[0] != log.GetTelemetryURI() {
+		} else {
 			return addrs[0]
 		}
 	}

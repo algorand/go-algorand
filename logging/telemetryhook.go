@@ -18,7 +18,9 @@ package logging
 
 import (
 	"fmt"
+
 	"github.com/olivere/elastic"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/sohlich/elogrus.v3"
 
@@ -58,7 +60,7 @@ func createAsyncHookLevels(wrappedHook logrus.Hook, channelDepth uint, maxQueueD
 				default:
 					hook.Lock()
 					var entry *logrus.Entry
-					if len(hook.pending) > 0 {
+					if len(hook.pending) > 0 && hook.ready {
 						entry = hook.pending[0]
 						hook.pending = hook.pending[1:]
 					}
@@ -152,6 +154,8 @@ func (hook *asyncTelemetryHook) Flush() {
 }
 
 func createElasticHook(cfg TelemetryConfig) (hook logrus.Hook, err error) {
+	// Returning an error here causes issues... need the hooks to be created even if the elastic hook fails so that
+	// things can recover later.
 	if cfg.URI == "" {
 		return nil, nil
 	}
@@ -165,6 +169,10 @@ func createElasticHook(cfg TelemetryConfig) (hook logrus.Hook, err error) {
 	}
 	hostName := cfg.getHostName()
 	hook, err = elogrus.NewElasticHook(client, hostName, cfg.MinLogLevel, cfg.ChainID)
+
+	if err == nil && hook == nil {
+		return hook, errors.New("NewElasticHook failed with no error")
+	}
 	return hook, err
 }
 
@@ -188,6 +196,8 @@ func createTelemetryHook(cfg TelemetryConfig, history *logBuffer, hookFactory ho
 // Note: This will be removed with the externalized telemetry project. Return whether or not the URI was successfully
 //       updated.
 func (hook *asyncTelemetryHook) UpdateHookURI(uri string) bool {
+	updated := false
+
 	if hook.wrappedHook == nil {
 		return false
 	}
@@ -196,21 +206,24 @@ func (hook *asyncTelemetryHook) UpdateHookURI(uri string) bool {
 	if ok {
 		hook.Lock()
 
-		tfh.telemetryConfig.URI = uri
-		newHook, err := tfh.factory(tfh.telemetryConfig)
+		copy := tfh.telemetryConfig
+		copy.URI = uri
+		newHook, err := tfh.factory(copy)
 
 		if err == nil && newHook != nil {
 			tfh.wrappedHook = newHook
+			tfh.telemetryConfig.URI = uri
 			hook.ready = true
+			updated = true
 		}
 
 		// Need to unlock before sending event to hook.urlUpdate
 		hook.Unlock()
 
-		// Notify event listener.
-		hook.urlUpdate <- true
-
-		return true
+		// Notify event listener if the hook was created.
+		if updated {
+			hook.urlUpdate <- true
+		}
 	}
-	return false
+	return updated
 }
