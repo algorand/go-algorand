@@ -45,6 +45,8 @@ type PpConfig struct {
 	MinAccountFunds uint64
 	Quiet           bool
 	RandomNote      bool
+	Program         []byte
+	LogicArgs       [][]byte
 }
 
 // DefaultConfig object for Ping Pong
