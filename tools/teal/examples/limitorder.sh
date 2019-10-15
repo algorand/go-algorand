@@ -38,6 +38,8 @@ goal clerk send --from SKXZDBHECM6AS73GVPGJHMIRDMJKEAN5TUGMUPSKJCQ44E6M6TC2H2UJ3
 # > Transaction Q564JY6YWGROG7QK6CCFFYIH4JT3OJ7S6GCBQDW3RMRG3JQ6HWMQ still pending as of round 151473
 # > Transaction Q564JY6YWGROG7QK6CCFFYIH4JT3OJ7S6GCBQDW3RMRG3JQ6HWMQ committed in round 151475
 
+# at this point, Alice can publish limit.teal, and anyone can fill the order without interaction from her
+
 # build the group transaction
 # the first payment sends money (Algos) from Alice's escrow to the recipient (we'll call him Bob), closing the rest of the account to Alice
 # the second payment sends money (the asset) from the Bob to the Alice
