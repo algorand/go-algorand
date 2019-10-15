@@ -861,7 +861,7 @@ var dryrunCmd = &cobra.Command{
 			ep := logic.EvalParams{Txn: &txn.SignedTxn, Proto: &proto}
 			cost, err := logic.Check(txn.Lsig.Logic, ep)
 			if err != nil {
-				reportErrorf("program failed Check: %s")
+				reportErrorf("program failed Check: %s", err)
 			}
 			txid := txn.ID()
 			sb := strings.Builder{}
