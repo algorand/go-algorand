@@ -253,7 +253,7 @@ func (helper *Helper) UploadFiles(subFolder string, files []string) error {
 func (helper *Helper) GetPackageVersion(channel string, pkg string, specificVersion uint64) (maxVersion uint64, maxVersionName string, err error) {
 	osName := runtime.GOOS
 	arch := runtime.GOARCH
-	prefix := fmt.Sprintf("%s_%s_%s-%s", pkg, channel, osName, arch)
+	prefix := fmt.Sprintf("%s_%s_%s-%s_", pkg, channel, osName, arch)
 	return helper.GetPackageFilesVersion(channel, prefix, specificVersion)
 }
 
