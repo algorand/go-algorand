@@ -1339,7 +1339,6 @@ func isNotPanic(t *testing.T, err error) {
 	if err == nil {
 		return
 	}
-	t.Log(err)
 	if pe, ok := err.(PanicError); ok {
 		t.Error(pe)
 	}
