@@ -203,7 +203,7 @@ func sendFromTo(fromList, toList []string, client libgoal.Client, cfg PpConfig) 
 
 		// Construct payment transaction
 		var txn transactions.Transaction
-		txn, err = client.ConstructPayment(from, to, fee, amt, noteField[:], "", 0, 0)
+		txn, err = client.ConstructPayment(from, to, fee, amt, noteField[:], "", [32]byte{}, 0, 0)
 		if err != nil {
 			return
 		}
