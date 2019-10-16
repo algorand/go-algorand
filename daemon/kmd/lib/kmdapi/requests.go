@@ -162,8 +162,20 @@ type APIV1POSTTransactionSignRequest struct {
 	APIV1RequestEnvelope
 	WalletHandleToken string `json:"wallet_handle_token"`
 	// swagger:strfmt byte
-	Transaction       []byte  `json:"transaction"`
-	WalletPassword    string `json:"wallet_password"`
+	Transaction    []byte `json:"transaction"`
+	WalletPassword string `json:"wallet_password"`
+}
+
+// APIV1POSTProgramSignRequest is the request for `POST /v1/program/sign`
+//
+// swagger:model SignProgramRequest
+type APIV1POSTProgramSignRequest struct {
+	APIV1RequestEnvelope
+	WalletHandleToken string `json:"wallet_handle_token"`
+	Address           string `json:"address"`
+	// swagger:strfmt byte
+	Program        []byte `json:"data"`
+	WalletPassword string `json:"wallet_password"`
 }
 
 // APIV1POSTMultisigListRequest is the request for `POST /v1/multisig/list`
@@ -209,10 +221,24 @@ type APIV1DELETEMultisigRequest struct {
 // swagger:model SignMultisigRequest
 type APIV1POSTMultisigTransactionSignRequest struct {
 	APIV1RequestEnvelope
-	WalletHandleToken string             `json:"wallet_handle_token"`
+	WalletHandleToken string `json:"wallet_handle_token"`
 	// swagger:strfmt byte
-	Transaction       []byte              `json:"transaction"`
-	PublicKey         crypto.PublicKey   `json:"public_key"`
-	PartialMsig       crypto.MultisigSig `json:"partial_multisig"`
-	WalletPassword    string             `json:"wallet_password"`
+	Transaction    []byte             `json:"transaction"`
+	PublicKey      crypto.PublicKey   `json:"public_key"`
+	PartialMsig    crypto.MultisigSig `json:"partial_multisig"`
+	WalletPassword string             `json:"wallet_password"`
+}
+
+// APIV1POSTMultisigProgramSignRequest is the request for `POST /v1/multisig/signprogram`
+//
+// swagger:model SignProgramMultisigRequest
+type APIV1POSTMultisigProgramSignRequest struct {
+	APIV1RequestEnvelope
+	WalletHandleToken string `json:"wallet_handle_token"`
+	Address           string `json:"address"`
+	// swagger:strfmt byte
+	Program        []byte             `json:"data"`
+	PublicKey      crypto.PublicKey   `json:"public_key"`
+	PartialMsig    crypto.MultisigSig `json:"partial_multisig"`
+	WalletPassword string             `json:"wallet_password"`
 }

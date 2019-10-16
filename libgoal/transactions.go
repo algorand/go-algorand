@@ -18,6 +18,7 @@ package libgoal
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -45,6 +46,23 @@ func (c *Client) SignTransactionWithWallet(walletHandle, pw []byte, utx transact
 	return
 }
 
+// SignProgramWithWallet signs the passed transaction with keys from the wallet associated with the passed walletHandle
+func (c *Client) SignProgramWithWallet(walletHandle, pw []byte, addr string, program []byte) (signature crypto.Signature, err error) {
+	kmd, err := c.ensureKmdClient()
+	if err != nil {
+		return
+	}
+
+	// Sign the transaction
+	resp, err := kmd.SignProgram(walletHandle, pw, addr, program)
+	if err != nil {
+		return
+	}
+
+	copy(signature[:], resp.Signature)
+	return
+}
+
 // MultisigSignTransactionWithWallet creates a multisig (or adds to an existing partial multisig, if one is provided), signing with the key corresponding to the given address and using the specified wallet
 // TODO instead of returning MultisigSigs, accept and return blobs
 func (c *Client) MultisigSignTransactionWithWallet(walletHandle, pw []byte, utx transactions.Transaction, signerAddr string, partial crypto.MultisigSig) (msig crypto.MultisigSig, err error) {
@@ -65,6 +83,28 @@ func (c *Client) MultisigSignTransactionWithWallet(walletHandle, pw []byte, utx 
 	return
 }
 
+// MultisigSignProgramWithWallet creates a multisig (or adds to an existing partial multisig, if one is provided), signing with the key corresponding to the given address and using the specified wallet
+func (c *Client) MultisigSignProgramWithWallet(walletHandle, pw, program []byte, signerAddr string, partial crypto.MultisigSig) (msig crypto.MultisigSig, err error) {
+	addr, err := basics.UnmarshalChecksumAddress(signerAddr)
+	if err != nil {
+		return
+	}
+	kmd, err := c.ensureKmdClient()
+	if err != nil {
+		return
+	}
+	msigAddr, err := crypto.MultisigAddrGenWithSubsigs(partial.Version, partial.Threshold, partial.Subsigs)
+	if err != nil {
+		return
+	}
+	resp, err := kmd.MultisigSignProgram(walletHandle, pw, basics.Address(msigAddr).String(), program, crypto.PublicKey(addr), partial)
+	if err != nil {
+		return
+	}
+	err = protocol.Decode(resp.Multisig, &msig)
+	return
+}
+
 // BroadcastTransaction broadcasts a signed transaction to the network using algod
 func (c *Client) BroadcastTransaction(stx transactions.SignedTxn) (txid string, err error) {
 	algod, err := c.ensureAlgodClient()
@@ -76,6 +116,15 @@ func (c *Client) BroadcastTransaction(stx transactions.SignedTxn) (txid string, 
 		return
 	}
 	return resp.TxID, nil
+}
+
+// BroadcastTransactionGroup broadcasts a signed transaction group to the network using algod
+func (c *Client) BroadcastTransactionGroup(txgroup []transactions.SignedTxn) error {
+	algod, err := c.ensureAlgodClient()
+	if err != nil {
+		return err
+	}
+	return algod.SendRawTransactionGroup(txgroup)
 }
 
 // SignAndBroadcastTransaction signs the unsigned transaction with keys from the default wallet, and broadcasts it
@@ -219,4 +268,361 @@ func (c *Client) MakeUnsignedGoOfflineTx(address string, round, txValidRounds, f
 		goOfflineTransaction.ResetCaches()
 	}
 	return goOfflineTransaction, nil
+}
+
+// MakeUnsignedBecomeNonparticipatingTx creates a transaction that will mark an account as non-participating
+func (c *Client) MakeUnsignedBecomeNonparticipatingTx(address string, round, txValidRounds, fee uint64) (transactions.Transaction, error) {
+	// Parse the address
+	parsedAddr, err := basics.UnmarshalChecksumAddress(address)
+	if err != nil {
+		return transactions.Transaction{}, err
+	}
+
+	params, err := c.SuggestedParams()
+	if err != nil {
+		return transactions.Transaction{}, err
+	}
+
+	cparams, ok := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
+	if !ok {
+		return transactions.Transaction{}, errors.New("unknown consensus version")
+	}
+
+	// Determine the last round this tx will be valid
+	if round == 0 {
+		round = params.LastRound + 1
+	}
+
+	if txValidRounds == 0 {
+		txValidRounds = cparams.MaxTxnLife
+	}
+
+	parsedRound := basics.Round(round)
+	parsedTXValidRounds := basics.Round(txValidRounds)
+	lastRound := parsedRound + parsedTXValidRounds
+	parsedFee := basics.MicroAlgos{Raw: fee}
+
+	becomeNonparticipatingTransaction := transactions.Transaction{
+		Type: protocol.KeyRegistrationTx,
+		Header: transactions.Header{
+			Sender:     parsedAddr,
+			Fee:        parsedFee,
+			FirstValid: parsedRound,
+			LastValid:  lastRound,
+		},
+	}
+	if cparams.SupportGenesisHash {
+		var genHash crypto.Digest
+		copy(genHash[:], params.GenesisHash)
+		becomeNonparticipatingTransaction.GenesisHash = genHash
+		// Recompute the TXID
+		becomeNonparticipatingTransaction.ResetCaches()
+	}
+	becomeNonparticipatingTransaction.KeyregTxnFields.Nonparticipation = true
+
+	// Default to the suggested fee, if the caller didn't supply it
+	// Fee is tricky, should taken care last. We encode the final transaction to get the size post signing and encoding
+	// Then, we multiply it by the suggested fee per byte.
+	if fee == 0 {
+		becomeNonparticipatingTransaction.Fee = basics.MulAIntSaturate(basics.MicroAlgos{Raw: params.Fee}, becomeNonparticipatingTransaction.EstimateEncodedSize())
+		if becomeNonparticipatingTransaction.Fee.Raw < cparams.MinTxnFee {
+			becomeNonparticipatingTransaction.Fee.Raw = cparams.MinTxnFee
+		}
+		// Recompute the TXID
+		becomeNonparticipatingTransaction.ResetCaches()
+	}
+	return becomeNonparticipatingTransaction, nil
+}
+
+// FillUnsignedTxTemplate fills in header fields in a partially-filled-in transaction.
+func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, numValidRounds, fee uint64, tx transactions.Transaction) (transactions.Transaction, error) {
+	// Parse the address
+	parsedAddr, err := basics.UnmarshalChecksumAddress(sender)
+	if err != nil {
+		return transactions.Transaction{}, err
+	}
+
+	params, err := c.SuggestedParams()
+	if err != nil {
+		return transactions.Transaction{}, err
+	}
+
+	cparams, ok := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
+	if !ok {
+		return transactions.Transaction{}, errors.New("unknown consensus version")
+	}
+
+	// Determine the last round this tx will be valid
+	if firstValid == 0 {
+		firstValid = params.LastRound + 1
+	}
+
+	if numValidRounds == 0 {
+		numValidRounds = cparams.MaxTxnLife
+	}
+
+	parsedFirstValid := basics.Round(firstValid)
+	parsedLastValid := basics.Round(firstValid + numValidRounds)
+	parsedFee := basics.MicroAlgos{Raw: fee}
+
+	tx.Header = transactions.Header{
+		Sender:     parsedAddr,
+		Fee:        parsedFee,
+		FirstValid: parsedFirstValid,
+		LastValid:  parsedLastValid,
+	}
+
+	if cparams.SupportGenesisHash {
+		var genHash crypto.Digest
+		copy(genHash[:], params.GenesisHash)
+		tx.GenesisHash = genHash
+	}
+
+	// Default to the suggested fee, if the caller didn't supply it
+	// Fee is tricky, should taken care last. We encode the final
+	// transaction to get the size post signing and encoding.
+	// Then, we multiply it by the suggested fee per byte.
+	if fee == 0 {
+		tx.Fee = basics.MulAIntSaturate(basics.MicroAlgos{Raw: params.Fee}, tx.EstimateEncodedSize())
+		if tx.Fee.Raw < cparams.MinTxnFee {
+			tx.Fee.Raw = cparams.MinTxnFee
+		}
+	}
+
+	// Recompute the TXID
+	tx.ResetCaches()
+
+	return tx, nil
+}
+
+// MakeUnsignedAssetCreateTx creates a tx template for creating
+// an asset.
+//
+// Call FillUnsignedTxTemplate afterwards to fill out common fields in
+// the resulting transaction template.
+func (c *Client) MakeUnsignedAssetCreateTx(total uint64, defaultFrozen bool, manager string, reserve string, freeze string, clawback string, unitName string, assetName string) (transactions.Transaction, error) {
+	var tx transactions.Transaction
+	var err error
+
+	tx.Type = protocol.AssetConfigTx
+	tx.AssetParams = basics.AssetParams{
+		Total:         total,
+		DefaultFrozen: defaultFrozen,
+	}
+
+	if manager != "" {
+		tx.AssetParams.Manager, err = basics.UnmarshalChecksumAddress(manager)
+		if err != nil {
+			return tx, err
+		}
+	}
+
+	if reserve != "" {
+		tx.AssetParams.Reserve, err = basics.UnmarshalChecksumAddress(reserve)
+		if err != nil {
+			return tx, err
+		}
+	}
+
+	if freeze != "" {
+		tx.AssetParams.Freeze, err = basics.UnmarshalChecksumAddress(freeze)
+		if err != nil {
+			return tx, err
+		}
+	}
+
+	if clawback != "" {
+		tx.AssetParams.Clawback, err = basics.UnmarshalChecksumAddress(clawback)
+		if err != nil {
+			return tx, err
+		}
+	}
+
+	if len(unitName) > len(tx.AssetParams.UnitName) {
+		return tx, fmt.Errorf("asset unit name %s too long (max %d bytes)", unitName, len(tx.AssetParams.UnitName))
+	}
+	copy(tx.AssetParams.UnitName[:], []byte(unitName))
+
+	if len(assetName) > len(tx.AssetParams.AssetName) {
+		return tx, fmt.Errorf("asset name %s too long (max %d bytes)", assetName, len(tx.AssetParams.AssetName))
+	}
+	copy(tx.AssetParams.AssetName[:], []byte(assetName))
+
+	return tx, nil
+}
+
+// MakeUnsignedAssetDestroyTx creates a tx template for destroying
+// an asset.
+//
+// Call FillUnsignedTxTemplate afterwards to fill out common fields in
+// the resulting transaction template.
+func (c *Client) MakeUnsignedAssetDestroyTx(creator string, index uint64) (transactions.Transaction, error) {
+	var tx transactions.Transaction
+	var err error
+
+	tx.Type = protocol.AssetConfigTx
+	tx.ConfigAsset.Index = index
+	tx.ConfigAsset.Creator, err = basics.UnmarshalChecksumAddress(creator)
+	if err != nil {
+		return tx, err
+	}
+
+	return tx, nil
+}
+
+// MakeUnsignedAssetConfigTx creates a tx template for changing the
+// keys for an asset.  A nil pointer for a new key argument means no
+// change to existing key.  An empty string means a zero key (which
+// cannot be changed after becoming zero).
+//
+// Call FillUnsignedTxTemplate afterwards to fill out common fields in
+// the resulting transaction template.
+func (c *Client) MakeUnsignedAssetConfigTx(creator string, index uint64, newManager *string, newReserve *string, newFreeze *string, newClawback *string) (transactions.Transaction, error) {
+	var tx transactions.Transaction
+	var err error
+
+	// Fetch the current state, to fill in as a template
+	current, err := c.AccountInformation(creator)
+	if err != nil {
+		return tx, err
+	}
+
+	params, ok := current.AssetParams[index]
+	if !ok {
+		return tx, fmt.Errorf("asset ID %d not found in account %s", index, creator)
+	}
+
+	if newManager == nil {
+		newManager = &params.ManagerAddr
+	}
+
+	if newReserve == nil {
+		newReserve = &params.ReserveAddr
+	}
+
+	if newFreeze == nil {
+		newFreeze = &params.FreezeAddr
+	}
+
+	if newClawback == nil {
+		newClawback = &params.ClawbackAddr
+	}
+
+	tx.Type = protocol.AssetConfigTx
+	tx.ConfigAsset.Index = index
+	tx.ConfigAsset.Creator, err = basics.UnmarshalChecksumAddress(creator)
+	if err != nil {
+		return tx, err
+	}
+
+	if *newManager != "" {
+		tx.AssetParams.Manager, err = basics.UnmarshalChecksumAddress(*newManager)
+		if err != nil {
+			return tx, err
+		}
+	}
+
+	if *newReserve != "" {
+		tx.AssetParams.Reserve, err = basics.UnmarshalChecksumAddress(*newReserve)
+		if err != nil {
+			return tx, err
+		}
+	}
+
+	if *newFreeze != "" {
+		tx.AssetParams.Freeze, err = basics.UnmarshalChecksumAddress(*newFreeze)
+		if err != nil {
+			return tx, err
+		}
+	}
+
+	if *newClawback != "" {
+		tx.AssetParams.Clawback, err = basics.UnmarshalChecksumAddress(*newClawback)
+		if err != nil {
+			return tx, err
+		}
+	}
+
+	return tx, nil
+}
+
+// MakeUnsignedAssetSendTx creates a tx template for sending assets.
+// To allocate a slot for a particular asset, send a zero amount to self.
+//
+// Call FillUnsignedTxTemplate afterwards to fill out common fields in
+// the resulting transaction template.
+func (c *Client) MakeUnsignedAssetSendTx(creator string, index uint64, amount uint64, recipient string, closeTo string, senderForClawback string) (transactions.Transaction, error) {
+	var tx transactions.Transaction
+	var err error
+
+	tx.Type = protocol.AssetTransferTx
+	tx.AssetAmount = amount
+	tx.XferAsset.Index = index
+	tx.XferAsset.Creator, err = basics.UnmarshalChecksumAddress(creator)
+	if err != nil {
+		return tx, err
+	}
+
+	if recipient != "" {
+		tx.AssetReceiver, err = basics.UnmarshalChecksumAddress(recipient)
+		if err != nil {
+			return tx, err
+		}
+	}
+
+	if closeTo != "" {
+		tx.AssetCloseTo, err = basics.UnmarshalChecksumAddress(closeTo)
+		if err != nil {
+			return tx, err
+		}
+	}
+
+	if senderForClawback != "" {
+		tx.AssetSender, err = basics.UnmarshalChecksumAddress(senderForClawback)
+		if err != nil {
+			return tx, err
+		}
+	}
+
+	return tx, nil
+}
+
+// MakeUnsignedAssetFreezeTx creates a tx template for freezing assets.
+//
+// Call FillUnsignedTxTemplate afterwards to fill out common fields in
+// the resulting transaction template.
+func (c *Client) MakeUnsignedAssetFreezeTx(creator string, index uint64, accountToChange string, newFreezeSetting bool) (transactions.Transaction, error) {
+	var tx transactions.Transaction
+	var err error
+
+	tx.Type = protocol.AssetFreezeTx
+	tx.FreezeAsset.Index = index
+	tx.FreezeAsset.Creator, err = basics.UnmarshalChecksumAddress(creator)
+	if err != nil {
+		return tx, err
+	}
+
+	tx.FreezeAccount, err = basics.UnmarshalChecksumAddress(accountToChange)
+	if err != nil {
+		return tx, err
+	}
+
+	tx.AssetFrozen = newFreezeSetting
+
+	return tx, nil
+}
+
+// GroupID computes the group ID for a group of transactions.
+func (c *Client) GroupID(txgroup []transactions.Transaction) (gid crypto.Digest, err error) {
+	var group transactions.TxGroup
+	for _, tx := range txgroup {
+		if !tx.Group.IsZero() {
+			err = fmt.Errorf("tx %v already has a group %v", tx, tx.Group)
+			return
+		}
+
+		group.TxGroupHashes = append(group.TxGroupHashes, crypto.HashObj(tx))
+	}
+
+	return crypto.HashObj(group), nil
 }

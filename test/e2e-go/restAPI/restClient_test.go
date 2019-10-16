@@ -629,7 +629,7 @@ func TestSendingLowFeeFails(t *testing.T) {
 		t.Errorf("balance too low %d < %d", someBal, sendAmount)
 	}
 	toAddress := getDestAddr(t, testClient, addresses, someAddress, wh)
-	utx, err := testClient.ConstructPayment(someAddress, toAddress, 1, sendAmount, nil, "", 0, 0)
+	utx, err := testClient.ConstructPayment(someAddress, toAddress, 1, sendAmount, nil, "", [32]byte{}, 0, 0)
 	require.NoError(t, err)
 	utx.Fee.Raw = 1
 	stx, err := testClient.SignTransactionWithWallet(wh, nil, utx)

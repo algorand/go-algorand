@@ -34,8 +34,12 @@ func (ml *mockLedger) lookup(addr basics.Address) (basics.AccountData, error) {
 	return ml.balanceMap[addr], nil
 }
 
-func (ml *mockLedger) isDup(firstValid basics.Round, txn transactions.Txid) (bool, error) {
+func (ml *mockLedger) isDup(firstValid basics.Round, txn transactions.Txid, txl txlease) (bool, error) {
 	return false, nil
+}
+
+func (ml *mockLedger) txnCounter() uint64 {
+	return 0
 }
 
 func checkCow(t *testing.T, cow *roundCowState, accts map[basics.Address]basics.AccountData) {

@@ -33,6 +33,8 @@ import (
 
 var sinkAddr = basics.Address{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1, 0x75, 0x76, 0xbd, 0x45, 0x9a, 0xe6, 0x42, 0x1d, 0x48, 0x6d, 0xa3, 0xd4, 0xef, 0x22, 0x47, 0xc4, 0x9, 0xa3, 0x96, 0xb8, 0x2e, 0xa2, 0x21}
 var poolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
+var genesisHash = crypto.Digest{0xff, 0xfe, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe}
+var genesisID = "testingid"
 
 const defaultRewardUnit = 1e6
 
@@ -103,7 +105,9 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*L
 	bootstrap := MakeGenesisBalances(genesis, poolAddr, sinkAddr)
 
 	// generate test transactions
-	ledger, err := LoadLedger(logging.Base(), t.Name(), true, protocol.ConsensusCurrentVersion, bootstrap, "", crypto.Digest{}, nil)
+	const inMem = true
+	const archival = true
+	ledger, err := LoadLedger(logging.Base(), t.Name(), inMem, protocol.ConsensusCurrentVersion, bootstrap, genesisID, genesisHash, nil, archival)
 	if err != nil {
 		panic(err)
 	}
@@ -141,11 +145,12 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*L
 		t := transactions.Transaction{
 			Type: protocol.PaymentTx,
 			Header: transactions.Header{
-				Sender:     saddr,
-				Fee:        fee,
-				FirstValid: ledger.LastRound(),
-				LastValid:  ledger.LastRound() + lastValid,
-				Note:       make([]byte, 4),
+				Sender:      saddr,
+				Fee:         fee,
+				FirstValid:  ledger.LastRound(),
+				LastValid:   ledger.LastRound() + lastValid,
+				Note:        make([]byte, 4),
+				GenesisHash: genesisHash,
 			},
 			PaymentTxnFields: transactions.PaymentTxnFields{
 				Receiver: raddr,

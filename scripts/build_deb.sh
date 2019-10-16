@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/usr/bin/env bash
 
 # build_deb.sh - Build a .deb package for one platform.
 #
@@ -6,6 +6,7 @@
 #
 # Examples: scripts/build_deb.sh amd64
 
+set -e
 if [ ! "$#" -eq 2 ]; then
     echo "Syntax: build_deb.sh <arch> <output directory>"
     exit 1
@@ -47,7 +48,7 @@ mkdir -p ${PKG_ROOT}/usr/bin
 
 if [ "${VARIATION}" = "" ]; then
     # NOTE: keep in sync with installer/rpm/algorand.spec
-    bin_files=("algod" "algoh" "algokey" "carpenter" "catchupsrv" "diagcfg" "goal" "kmd" "msgpacktool" "node_exporter")
+    bin_files=("algocfg" "algod" "algoh" "algokey" "carpenter" "catchupsrv" "ddconfig.sh" "diagcfg" "goal" "kmd" "msgpacktool" "node_exporter")
 fi
 
 for bin in "${bin_files[@]}"; do

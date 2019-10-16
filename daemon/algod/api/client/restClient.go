@@ -227,6 +227,12 @@ func (client RestClient) AccountInformation(address string) (response v1.Account
 	return
 }
 
+// AssetInformation gets the AssetInformationResponse associated with the passed asset creator and index
+func (client RestClient) AssetInformation(creator string, index uint64) (response v1.AssetParams, err error) {
+	err = client.get(&response, fmt.Sprintf("/account/%s/assets/%d", creator, index), nil)
+	return
+}
+
 // TransactionInformation gets information about a specific transaction involving a specific account
 func (client RestClient) TransactionInformation(accountAddress, transactionID string) (response v1.Transaction, err error) {
 	transactionID = stripTransaction(transactionID)
@@ -265,6 +271,19 @@ func (client RestClient) SuggestedParams() (response v1.TransactionParams, err e
 func (client RestClient) SendRawTransaction(txn transactions.SignedTxn) (response v1.TransactionID, err error) {
 	err = client.post(&response, "/transactions", protocol.Encode(txn))
 	return
+}
+
+// SendRawTransactionGroup gets a SignedTxn group and broadcasts it to the network
+func (client RestClient) SendRawTransactionGroup(txgroup []transactions.SignedTxn) error {
+	// response is not terribly useful: it's the txid of the first transaction,
+	// which can be computed by the client anyway..
+	var enc []byte
+	for _, tx := range txgroup {
+		enc = append(enc, protocol.Encode(tx)...)
+	}
+
+	var response v1.TransactionID
+	return client.post(&response, "/transactions", enc)
 }
 
 // Block gets the block info for the given round

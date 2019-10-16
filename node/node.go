@@ -36,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
@@ -190,13 +191,12 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookDir
 	node.cryptoPool = execpool.MakePool(node)
 	node.lowPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.LowPriority, node)
 	node.highPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.HighPriority, node)
-	node.ledger, err = data.LoadLedger(node.log, ledgerPathnamePrefix, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, blockListeners)
+	node.ledger, err = data.LoadLedger(node.log, ledgerPathnamePrefix, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, blockListeners, cfg.Archival)
 	if err != nil {
 		log.Errorf("Cannot initialize ledger (%s): %v", ledgerPathnamePrefix, err)
 		return nil, err
 	}
 
-	node.ledger.SetArchival(cfg.Archival)
 	node.transactionPool = pools.MakeTransactionPool(node.ledger.Ledger, cfg.TxPoolSize, cfg.EnableAssembleStats)
 	node.ledger.RegisterBlockListeners([]ledger.BlockListener{node.transactionPool})
 	node.txHandler = data.MakeTxHandler(node.transactionPool, node.ledger, node.net, node.genesisID, node.genesisHash, node.lowPriorityCryptoVerificationPool)
@@ -245,7 +245,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookDir
 	}
 	node.algorandService = agreement.MakeService(agreementParameters)
 
-	node.syncer = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.wsFetcherService, node.lowPriorityCryptoVerificationPool)
+	node.syncer = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.wsFetcherService, blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)})
 	node.txPoolSyncer = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
 
 	err = node.loadParticipationKeys()
@@ -388,8 +388,8 @@ func (node *AlgorandFullNode) Ledger() *data.Ledger {
 	return node.ledger
 }
 
-// BroadcastSignedTxn broadcasts a transaction that has already been signed.
-func (node *AlgorandFullNode) BroadcastSignedTxn(signed transactions.SignedTxn) (transactions.Txid, error) {
+// BroadcastSignedTxGroup broadcasts a transaction group that has already been signed.
+func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error {
 	lastRound := node.ledger.Latest()
 	b, err := node.ledger.BlockHdr(lastRound)
 	if err != nil {
@@ -401,24 +401,32 @@ func (node *AlgorandFullNode) BroadcastSignedTxn(signed transactions.SignedTxn) 
 	}
 	proto := config.Consensus[b.CurrentProtocol]
 
-	err = signed.Verify(spec, proto)
-	if err != nil {
-		node.log.Warnf("malformed transaction: %v - transaction was %+v", err, signed)
-		return transactions.Txid{}, err
+	for _, tx := range txgroup {
+		err = verify.Txn(&tx, spec, proto)
+		if err != nil {
+			node.log.Warnf("malformed transaction: %v - transaction was %+v", err, tx)
+			return err
+		}
 	}
-	err = node.transactionPool.Remember(signed)
+	err = node.transactionPool.Remember(txgroup)
 	if err != nil {
-		node.log.Infof("rejected by local pool: %v - transaction was %+v", err, signed)
-		return transactions.Txid{}, err
+		node.log.Infof("rejected by local pool: %v - transaction group was %+v", err, txgroup)
+		return err
 	}
 
-	err = node.net.Broadcast(context.TODO(), protocol.TxnTag, protocol.Encode(signed), true, nil)
-	if err != nil {
-		node.log.Infof("failure broadcasting transaction to network: %v - transaction was %+v", err, signed)
-		return transactions.Txid{}, err
+	var enc []byte
+	var txids []transactions.Txid
+	for _, tx := range txgroup {
+		enc = append(enc, protocol.Encode(tx)...)
+		txids = append(txids, tx.ID())
 	}
-	node.log.Infof("Sent signed tx %s", signed.ID())
-	return signed.ID(), nil
+	err = node.net.Broadcast(context.TODO(), protocol.TxnTag, enc, true, nil)
+	if err != nil {
+		node.log.Infof("failure broadcasting transaction to network: %v - transaction group was %+v", err, txgroup)
+		return err
+	}
+	node.log.Infof("Sent signed tx group with IDs %v", txids)
+	return nil
 }
 
 // ListTxns returns SignedTxns associated with a specific account in a range of Rounds (inclusive).
@@ -600,7 +608,7 @@ func (node *AlgorandFullNode) SuggestedFee() basics.MicroAlgos {
 // GetPendingTxnsFromPool returns a snapshot of every pending transactions from the node's transaction pool in a slice.
 // Transactions are sorted in decreasing order. If no transactions, returns an empty slice.
 func (node *AlgorandFullNode) GetPendingTxnsFromPool() ([]transactions.SignedTxn, error) {
-	return node.transactionPool.Pending(), nil
+	return bookkeeping.SignedTxnGroupsFlatten(node.transactionPool.Pending()), nil
 }
 
 // Reload participation keys from disk periodically

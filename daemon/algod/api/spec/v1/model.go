@@ -149,6 +149,98 @@ type Account struct {
 	//
 	// required: false
 	Participation Participation `json:"participation,omitempty"`
+
+	// AssetParams specifies the parameters of assets created by this account.
+	//
+	// required: false
+	AssetParams map[uint64]AssetParams `json:"thisassettotal,omitempty"`
+
+	// Assets specifies the holdings of assets by this account,
+	// indexed by the asset ID.
+	//
+	// required: false
+	Assets map[uint64]AssetHolding `json:"assets,omitempty"`
+}
+
+// AssetParams specifies the parameters for an asset.
+// swagger:model AssetParams
+type AssetParams struct {
+	// Creator specifies the address that created this asset.
+	// This is the address where the parameters for this asset
+	// can be found, and also the address where unwanted asset
+	// units can be sent in the worst case.
+	//
+	// required: true
+	Creator string `json:"creator"`
+
+	// Total specifies the total number of units of this asset.
+	//
+	// required: true
+	Total uint64 `json:"total"`
+
+	// DefaultFrozen specifies whether holdings in this asset
+	// are frozen by default.
+	//
+	// required: false
+	DefaultFrozen bool `json:"defaultfrozen"`
+
+	// UnitName specifies the name of a unit of this asset,
+	// as supplied by the creator.
+	//
+	// required: false
+	UnitName string `json:"unitname"`
+
+	// AssetName specifies the name of this asset,
+	// as supplied by the creator.
+	//
+	// required: false
+	AssetName string `json:"assetname"`
+
+	// ManagerAddr specifies the address used to manage the keys of this
+	// asset and to destroy it.
+	//
+	// required: false
+	ManagerAddr string `json:"managerkey"`
+
+	// ReserveAddr specifies the address holding reserve (non-minted)
+	// units of this asset.
+	//
+	// required: false
+	ReserveAddr string `json:"reserveaddr"`
+
+	// FreezeAddr specifies the address used to freeze holdings of
+	// this asset.  If empty, freezing is not permitted.
+	//
+	// required: false
+	FreezeAddr string `json:"freezeaddr"`
+
+	// ClawbackAddr specifies the address used to clawback holdings of
+	// this asset.  If empty, clawback is not permitted.
+	//
+	// required: false
+	ClawbackAddr string `json:"clawbackaddr"`
+}
+
+// AssetHolding specifies the holdings of a particular asset.
+// swagger:model AssetHolding
+type AssetHolding struct {
+	// Creator specifies the address that created this asset.
+	// This is the address where the parameters for this asset
+	// can be found, and also the address where unwanted asset
+	// units can be sent in the worst case.
+	//
+	// required: true
+	Creator string `json:"creator"`
+
+	// Amount specifies the number of units held.
+	//
+	// required: true
+	Amount uint64 `json:"amount"`
+
+	// Frozen specifies whether this holding is frozen.
+	//
+	// required: false
+	Frozen bool `json:"frozen"`
 }
 
 // Transaction contains all fields common to all transactions and serves as an envelope to all transactions
@@ -216,7 +308,22 @@ type Transaction struct {
 	// Keyreg contains the additional fields for a keyreg transaction.
 	//
 	// required: false
-	Keyreg  *KeyregTransactionType  `json:"keyreg,omitempty"`
+	Keyreg *KeyregTransactionType `json:"keyreg,omitempty"`
+
+	// AssetConfig contains the additional fields for an asset config transaction.
+	//
+	// required: false
+	AssetConfig *AssetConfigTransactionType `json:"curcfg,omitempty"`
+
+	// AssetTransfer contains the additional fields for an asset transfer transaction.
+	//
+	// required: false
+	AssetTransfer *AssetTransferTransactionType `json:"curxfer,omitempty"`
+
+	// AssetFreeze contains the additional fields for an asset freeze transaction.
+	//
+	// required: false
+	AssetFreeze *AssetFreezeTransactionType `json:"curfrz,omitempty"`
 
 	// FromRewards is the amount of pending rewards applied to the From
 	// account as part of this transaction.
@@ -234,6 +341,12 @@ type Transaction struct {
 	// required: true
 	// swagger:strfmt byte
 	GenesisHash []byte `json:"genesishashb64"`
+
+	// Group
+	//
+	// required: false
+	// swagger:strfmt byte
+	Group []byte `json:"group"`
 }
 
 // PaymentTransactionType contains the additional fields for a payment Transaction
@@ -301,6 +414,78 @@ type KeyregTransactionType struct {
 	//
 	// required: false
 	VoteKeyDilution uint64 `json:"votekd"`
+}
+
+// AssetConfigTransactionType contains the additional fields for an asset config transaction
+// swagger:model AssetConfigTransactionType
+type AssetConfigTransactionType struct {
+	// AssetID is the asset being configured (or empty if creating)
+	//
+	// required: false
+	AssetID uint64 `json:"id"`
+
+	// Params specifies the new asset parameters (or empty if deleting)
+	//
+	// required: false
+	Params AssetParams `json:"params"`
+}
+
+// AssetTransferTransactionType contains the additional fields for an asset transfer transaction
+// swagger:model AssetTransferTransactionType
+type AssetTransferTransactionType struct {
+	// AssetID is the asset being configured (or empty if creating)
+	//
+	// required: true
+	AssetID uint64 `json:"id"`
+
+	// Creator is the address of the asset creator.
+	//
+	// required: true
+	Creator string `json:"creator"`
+
+	// Amount is the amount being transferred.
+	//
+	// required: true
+	Amount uint64 `json:"amt"`
+
+	// Sender is the source account (if using clawback).
+	//
+	// required: false
+	Sender string `json:"snd"`
+
+	// Receiver is the recipient account.
+	//
+	// required: true
+	Receiver string `json:"rcv"`
+
+	// CloseTo is the destination for remaining funds (if closing).
+	//
+	// required: false
+	CloseTo string `json:"closeto"`
+}
+
+// AssetFreezeTransactionType contains the additional fields for an asset freeze transaction
+// swagger:model AssetFreezeTransactionType
+type AssetFreezeTransactionType struct {
+	// AssetID is the asset being configured (or empty if creating)
+	//
+	// required: true
+	AssetID uint64 `json:"id"`
+
+	// Creator is the address of the asset creator.
+	//
+	// required: true
+	Creator string `json:"creator"`
+
+	// Account specifies the account where the asset is being frozen or thawed.
+	//
+	// required: true
+	Account string `json:"acct"`
+
+	// NewFreezeStatus specifies the new freeze status.
+	//
+	// required: true
+	NewFreezeStatus bool `json:"freeze"`
 }
 
 // TransactionList contains a list of transactions

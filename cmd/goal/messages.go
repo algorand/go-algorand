@@ -19,7 +19,7 @@ package main
 const (
 	// General
 	errorNoDataDirectory     = "Data directory not specified.  Please use -d or set $ALGORAND_DATA in your environment. Exiting."
-	errorOneDataDirSupported = "One one data directory can be specified for this command."
+	errorOneDataDirSupported = "Only one data directory can be specified for this command."
 	errorRequestFail         = "Error processing command: %s"
 	errorGenesisIDFail       = "Error determining kmd folder (%s). Ensure the node is running in %s."
 	errorDirectoryNotExist   = "Specified directory '%s' does not exist."
@@ -79,6 +79,7 @@ const (
 	infoTxCommitted = "Transaction %s committed in round %d"
 	infoTxPending   = "Transaction %s still pending as of round %d"
 	malformedNote   = "Cannot base64-decode note %s: %s"
+	malformedLease  = "Cannot base64-decode lease %s: %s"
 	fileReadError   = "Cannot read file %s: %s"
 	fileWriteError  = "Cannot write file %s: %s"
 	txDecodeError   = "Cannot decode transactions from %s: %s"
@@ -105,6 +106,8 @@ const (
 	infoNetworkStarted       = "Network Started under %s"
 	infoNetworkStopped       = "Network Stopped under %s"
 	infoNetworkDeleted       = "Network Deleted under %s"
+
+	multisigProgramCollision = "should have at most one of --program/-p | --program-bytes/-P | --lsig/-L"
 
 	// Wallet
 	infoRecoveryPrompt           = "Please type your recovery mnemonic below, and hit return when you are done: "

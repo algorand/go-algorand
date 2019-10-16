@@ -96,12 +96,13 @@ func (t *topAccountListener) update(b bookkeeping.Block, balances basics.Balance
 	// Lookup map for updated accounts.
 	accountSet := make(map[basics.Address]bool)
 
-	payset, err := b.DecodePayset()
+	payset, err := b.DecodePaysetFlat()
 	if err != nil {
 		return
 	}
 
-	for _, tx := range payset {
+	for _, txad := range payset {
+		tx := txad.SignedTxn
 		if tx.Txn.Type == protocol.PaymentTx {
 			accountSet[tx.Txn.Receiver] = true
 			if tx.Txn.CloseRemainderTo != (basics.Address{}) {

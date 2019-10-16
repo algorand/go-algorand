@@ -20,6 +20,7 @@ namespace eval ::AlgorandGoal {
   namespace export GetKMDNetworkAddress
   namespace export GetLedgerSupply
   namespace export WaitForRound
+  namespace export Report
 
   # My Variables
    set version 1.0
@@ -42,7 +43,7 @@ package require Tcl 8.0
 proc ::AlgorandGoal::Abort { ERROR } {
     puts "Aborting with Error: $ERROR"
 
-    if { $::GLOBAL_TEST_ALGO_DIR != "" && $::GLOBAL_TEST_ROOT_DIR != "" } {
+    if { "$::GLOBAL_TEST_ALGO_DIR" != "" && "$::GLOBAL_TEST_ROOT_DIR" != "" } {
         # terminate child algod processes, if there are active child processes the test will hang on a test failure
         puts "GLOBAL_TEST_ALGO_DIR $::GLOBAL_TEST_ALGO_DIR"
         puts "GLOBAL_TEST_ROOT_DIR $::GLOBAL_TEST_ROOT_DIR"
@@ -95,7 +96,7 @@ proc ::AlgorandGoal::StartNetwork { NETWORK_NAME NETWORK_TEMPLATE TEST_ALGO_DIR 
 
 # Stop the network
 proc ::AlgorandGoal::StopNetwork { NETWORK_NAME TEST_ALGO_DIR TEST_ROOT_DIR } {
-    set timeout 30
+    set timeout 60
     puts "Stopping network: $NETWORK_NAME"
     spawn goal network stop -d $TEST_ALGO_DIR -r $TEST_ROOT_DIR
     expect {
@@ -439,13 +440,14 @@ proc ::AlgorandGoal::WaitForRound { WAIT_FOR_ROUND_NUMBER TEST_PRIMARY_NODE_DIR 
     set i 0
         while 1 {
             incr i
-            exec sleep 5
+            exec sleep 10
 
             # Check node status
             puts "spawn node status  "
             spawn goal node status -d $TEST_PRIMARY_NODE_DIR
             expect {
                 timeout { ::AlgorandGoal::Abort "goal node status timed out"  }
+                -re {Cannot contact Algorand node: (\d+)} {set BLOCK 0 ; close }
                 -re {Last committed block: (\d+)} {set BLOCK $expect_out(1,string); exp_continue }
                 -re {Time since last block: ([0-9]*\.?[0-9]*)s} {set TIME_SINCE_LAST_BLOCK $expect_out(1,string); exp_continue }
                 -re {Sync Time: ([0-9]*\.?[0-9]*)s} {set SYNC_TIME $expect_out(1,string); exp_continue }
@@ -457,23 +459,25 @@ proc ::AlgorandGoal::WaitForRound { WAIT_FOR_ROUND_NUMBER TEST_PRIMARY_NODE_DIR 
                 -re {Genesis ID: (\w+)} {set GENESIS_ID $expect_out(1,string); exp_continue }
                 -re {Genesis hash: (\w+)} {set GENESIS_HASH $expect_out(1,string); close }
             }
-            puts "node status check complete"
-            puts "block: $BLOCK"
-            puts "time since last block: $TIME_SINCE_LAST_BLOCK"
-            puts "sync time: $SYNC_TIME"
-            puts "last consensus protocol: $LAST_CONSENSUS_PROTOCOL"
-            puts "next consensus protocol: $NEXT_CONSENSUS_PROTOCOL"
-            puts "round for next consensus protocol: $ROUND_FOR_NEXT_CONSENSUS_PROTOCOL"
-            puts "next consensus protocol supported: $NEXT_CONSENSUS_PROTOCOL_SUPPORTED"
-            puts "has synced since startup: $HAS_SYNCHED_SINCE_STARTUP"
-            puts "genesis id: $GENESIS_ID"
-            puts "genesis hash: $GENESIS_HASH"
+            if { $BLOCK > 0 } {
+                puts "node status check complete"
+                puts "block: $BLOCK"
+                puts "time since last block: $TIME_SINCE_LAST_BLOCK"
+                puts "sync time: $SYNC_TIME"
+                puts "last consensus protocol: $LAST_CONSENSUS_PROTOCOL"
+                puts "next consensus protocol: $NEXT_CONSENSUS_PROTOCOL"
+                puts "round for next consensus protocol: $ROUND_FOR_NEXT_CONSENSUS_PROTOCOL"
+                puts "next consensus protocol supported: $NEXT_CONSENSUS_PROTOCOL_SUPPORTED"
+                puts "has synced since startup: $HAS_SYNCHED_SINCE_STARTUP"
+                puts "genesis id: $GENESIS_ID"
+                puts "genesis hash: $GENESIS_HASH"
+            }
 
             # Check if the round number is reached
             if { $BLOCK >= $WAIT_FOR_ROUND_NUMBER } {
                 puts "Reached Round number: $WAIT_FOR_ROUND_NUMBER"; break
             } else {
-               puts "Curren Round: '$BLOCK' is less than wait for round: '$WAIT_FOR_ROUND_NUMBER'"
+               puts "Current Round: '$BLOCK' is less than wait for round: '$WAIT_FOR_ROUND_NUMBER'"
                if { $i >= 10 } then { ::AlgorandGoal::Abort " Current Round $BLOCK did not reach $WAIT_FOR_ROUND_NUMBER   "; break;}
             }
         }
@@ -481,4 +485,19 @@ proc ::AlgorandGoal::WaitForRound { WAIT_FOR_ROUND_NUMBER TEST_PRIMARY_NODE_DIR 
        ::AlgorandGoal::Abort "ERROR in WaitForRound: $EXCEPTION"
     }
     return $BLOCK
+}
+
+# Generate report
+proc ::AlgorandGoal::Report { TEST_PRIMARY_NODE_DIR } {
+    if { [ catch {
+        spawn goal report -d $TEST_PRIMARY_NODE_DIR
+        expect {
+            timeout { ::AlgorandGoal::Abort "goal report timed out"  }
+            "source code available at https://github.com/algorand/go-algorand" {puts "goal -v ok"}
+            -re {Genesis ID from genesis.json: *} {puts "genesis ID from genesis.json ok"}
+            -re {Last commited block: (\d+)} {puts "status check ok"}
+        }
+    } EXCEPTION ] } {
+    ::AlgorandGoal::Abort "ERROR in GetLedgerSupply: $EXCEPTION"
+    }
 }

@@ -63,25 +63,29 @@ const (
 // - Closed -> Settled | Settlement
 // - Settled -> Active | Params
 type Tracker struct {
-	// Auction is map from AuctionID to a RunningAuction
+	// Auctions is a map from AuctionID to a RunningAuction.
+	// It may not be modified after initialization.
 	Auctions map[uint64]*SerializedRunningAuction
 
-	// AuctionKey is the Auctioneer's address
+	// AuctionKey is the Auctioneer's address.
+	// It may not be modified after initialization.
 	AuctionKey basics.Address
 
-	// LastRound indicates the last round the tracker has seen
-	LastRound uint64
+	// lastRound indicates the last round the tracker has seen.
+	lastRound uint64
 
-	// lastAuction indicates the last auction the tracker has seen
+	// lastAuction indicates the last auction the tracker has seen.
 	lastAuction uint64
 
+	// Auctions and AuctionKey are constant after initialization,
+	// so this guards access to lastRound and lastAuction.
 	mu deadlock.Mutex
 }
 
 // MakeTracker initialized an Tracker
 func MakeTracker(startRound uint64, auctionKey string) (*Tracker, error) {
 	am := Tracker{}
-	am.LastRound = startRound
+	am.lastRound = startRound
 
 	ak, err := basics.UnmarshalChecksumAddress(auctionKey)
 	if err != nil {
@@ -165,7 +169,7 @@ func (am *Tracker) ProcessMessage(txn v1.Transaction) error {
 			}
 
 		case NoteSettlement:
-			s := am.AuctionState(msg.SignedSettlement.Settlement.AuctionID)
+			s := am.auctionState(msg.SignedSettlement.Settlement.AuctionID)
 			if s == Uninitialized || s == Settled {
 				log.Warnf("Got a settlement but the auction state is %v, dropping message.", s)
 				continue
@@ -195,7 +199,7 @@ func (am *Tracker) ProcessMessage(txn v1.Transaction) error {
 }
 
 func (am *Tracker) placeParams(params Params, rnd uint64) bool {
-	if am.AuctionState(am.lastAuction) == Active {
+	if am.auctionState(am.lastAuction) == Active {
 		log.Panicf("Got a start auction message before the auction was settled - %v", params)
 	}
 
@@ -211,7 +215,7 @@ func (am *Tracker) placeParams(params Params, rnd uint64) bool {
 }
 
 func (am *Tracker) placeBid(bid Bid, rnd uint64) (err error) {
-	if am.AuctionState(bid.AuctionID) != Active {
+	if am.auctionState(bid.AuctionID) != Active {
 		err = fmt.Errorf("auction %d is not active for bid %+v", bid.AuctionID, bid)
 		log.Error(err)
 		return
@@ -220,7 +224,7 @@ func (am *Tracker) placeBid(bid Bid, rnd uint64) (err error) {
 }
 
 func (am *Tracker) placeDeposit(deposit Deposit, rnd uint64) (err error) {
-	if am.AuctionState(deposit.AuctionID) != Active {
+	if am.auctionState(deposit.AuctionID) != Active {
 		err = fmt.Errorf("auction %d is not active for deposit %+v", deposit.AuctionID, deposit)
 		log.Error(err)
 		return
@@ -239,7 +243,8 @@ func (am *Tracker) placeSettlement(settlement Settlement, rnd uint64) bool {
 }
 
 // AuctionState returns the current auction state
-func (am *Tracker) AuctionState(id uint64) State {
+
+func (am *Tracker) auctionState(id uint64) State {
 	var auction *SerializedRunningAuction
 	var ok bool
 
@@ -251,7 +256,7 @@ func (am *Tracker) AuctionState(id uint64) State {
 		return Settled
 	}
 
-	if am.LastRound >= auction.LastRound() {
+	if am.lastRound >= auction.LastRound() {
 		return Closed
 	}
 
@@ -272,6 +277,9 @@ func (am *Tracker) LiveUpdate(rc client.RestClient) {
 func (am *Tracker) LiveUpdateWithContext(ctx context.Context, wg *sync.WaitGroup, rc client.RestClient) {
 	defer wg.Done()
 
+	am.mu.Lock()
+	lastRound := am.lastRound
+	am.mu.Unlock()
 	for {
 		// break from loop if context is canceled
 		if ctx.Err() != nil {
@@ -279,8 +287,8 @@ func (am *Tracker) LiveUpdateWithContext(ctx context.Context, wg *sync.WaitGroup
 			return
 		}
 
-		log.Debugf("waiting for block after round %v", am.LastRound)
-		status, err := rc.StatusAfterBlock(am.LastRound)
+		log.Debugf("waiting for block after round %v", lastRound)
+		status, err := rc.StatusAfterBlock(lastRound)
 		if err != nil {
 			log.Warnf("StatusAfterBlock returned an error: %v", err)
 			fmt.Println(err)
@@ -288,9 +296,9 @@ func (am *Tracker) LiveUpdateWithContext(ctx context.Context, wg *sync.WaitGroup
 		}
 
 		log.Debugf("Getting transactions for %d-%d",
-			am.LastRound+1, status.LastRound)
+			lastRound+1, status.LastRound)
 
-		transactions, err := rc.TransactionsByAddr(am.AuctionKey.String(), am.LastRound+1, status.LastRound, math.MaxUint64)
+		transactions, err := rc.TransactionsByAddr(am.AuctionKey.String(), lastRound+1, status.LastRound, math.MaxUint64)
 		if err != nil {
 			log.Error(err)
 			fmt.Println(err)
@@ -305,12 +313,18 @@ func (am *Tracker) LiveUpdateWithContext(ctx context.Context, wg *sync.WaitGroup
 			}
 		}
 
-		am.LastRound = status.LastRound
+		am.mu.Lock()
+		lastRound = status.LastRound
+		am.lastRound = status.LastRound
+		am.mu.Unlock()
 	}
 }
 
 // LastAuctionID returns the last known auction ID
 func (am *Tracker) LastAuctionID() (uint64, error) {
+	am.mu.Lock()
+	defer am.mu.Unlock()
+
 	if am.lastAuction == 0 {
 		return 0, errors.New("no auction has been seen yet")
 	}
