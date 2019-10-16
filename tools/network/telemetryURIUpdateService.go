@@ -15,10 +15,10 @@ func StartTelemetryURIUpdateService(interval time.Duration, cfg config.Local, ge
 		defer ticker.Stop()
 
 		updateTelemetryURI := func() {
-			uri := lookupTelemetryURI(cfg, genesisNetwork, log)
+			endpoint := lookupTelemetryEndpoint(cfg, genesisNetwork, log)
 
-			if uri != "" && uri != log.GetTelemetryURI() {
-				log.UpdateTelemetryURI(uri)
+			if endpoint != "" && endpoint != log.GetTelemetryURI() {
+				log.UpdateTelemetryURI(endpoint)
 			}
 		}
 
@@ -35,7 +35,7 @@ func StartTelemetryURIUpdateService(interval time.Duration, cfg config.Local, ge
 	}()
 }
 
-func lookupTelemetryURI(cfg config.Local, genesisNetwork protocol.NetworkID, log logging.Logger) string {
+func lookupTelemetryEndpoint(cfg config.Local, genesisNetwork protocol.NetworkID, log logging.Logger) string {
 	bootstrapArray := cfg.DNSBootstrapArray(genesisNetwork)
 	bootstrapArray = append(bootstrapArray, "default.algodev.network")
 	for _, bootstrapID := range bootstrapArray {
@@ -49,6 +49,6 @@ func lookupTelemetryURI(cfg config.Local, genesisNetwork protocol.NetworkID, log
 		}
 	}
 
-	log.Warn("No telemetry URI was found.")
+	log.Warn("No telemetry endpoint was found.")
 	return ""
 }
