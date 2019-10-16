@@ -64,6 +64,9 @@ type asyncTelemetryHook struct {
 	entries       chan *logrus.Entry
 	quit          chan struct{}
 	maxQueueDepth int
+	levels        []logrus.Level
+	ready         bool
+	urlUpdate     chan bool
 }
 
 type hookFactory func(cfg TelemetryConfig) (logrus.Hook, error)
