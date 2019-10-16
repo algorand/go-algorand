@@ -1,0 +1,52 @@
+#!/usr/bin/expect -f
+set err 0
+log_user 1
+
+if { [catch {
+
+    set ::GLOBAL_TEST_ALGO_DIR ""
+    set ::GLOBAL_TEST_ROOT_DIR ""
+    set ::GLOBAL_NETWORK_NAME ""
+
+    source  ../expect/goalExpectCommon.exp
+    set TEST_ALGO_DIR [lindex $argv 0]
+    set TEST_DATA_DIR [lindex $argv 1]
+
+    puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
+    puts "TEST_DATA_DIR: $TEST_DATA_DIR"
+
+    if { [file isdirectory $TEST_ALGO_DIR] == 0 } { ::AlgorandGoal::Abort "ERROR, Algo root dir not found: $TEST_ALGO_DIR" }
+    if { [file isdirectory $TEST_DATA_DIR] == 0 } { ::AlgorandGoal::Abort "ERROR, Algo data dir not found: $TEST_DATA_DIR" }
+
+    set TIME_STAMP [clock seconds]
+
+    set TEST_ROOT_DIR $TEST_ALGO_DIR/data
+
+    set NODE_NAME [exec ls $TEST_ALGO_DIR/data]
+    set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/$NODE_NAME
+
+    # use goal node status command to wait for round 5
+    ::AlgorandGoal::WaitForRound 5 $TEST_PRIMARY_NODE_DIR
+
+    set PRIMARY_NODE_ADDRESS [ ::AlgorandGoal::GetAlgodNetworkAddress $TEST_PRIMARY_NODE_DIR ]
+    puts "Primary Node Address: $PRIMARY_NODE_ADDRESS"
+
+    set PRIMARY_WALLET_NAME unencrypted-default-wallet
+
+    # Determine primary account
+    set PRIMARY_ACCOUNT_ADDRESS [::AlgorandGoal::GetHighestFundedAccountForWallet $PRIMARY_WALLET_NAME  $TEST_PRIMARY_NODE_DIR]
+
+    # Check the balance of the primary account
+    set PRIMARY_ACCOUNT_BALANCE [::AlgorandGoal::GetAccountBalance $PRIMARY_WALLET_NAME $PRIMARY_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR]
+    puts "Primary Account Balance: $PRIMARY_ACCOUNT_BALANCE"
+
+    # Get Ledger Supply
+    ::AlgorandGoal::GetLedgerSupply $TEST_PRIMARY_NODE_DIR
+
+    puts "Basic Goal Test Successful"
+
+    exit 0
+
+} EXCEPTION ] } {
+   ::AlgorandGoal::Abort "ERROR in Goal Node Status test: $EXCEPTION"
+}

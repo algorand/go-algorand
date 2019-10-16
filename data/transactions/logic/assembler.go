@@ -69,15 +69,11 @@ type OpStream struct {
 }
 
 // SetLabelHere inserts a label reference to point to the next instruction
-func (ops *OpStream) SetLabelHere(label string) error {
+func (ops *OpStream) SetLabelHere(label string) {
 	if ops.labels == nil {
 		ops.labels = make(map[string]int)
 	}
-	if _, ok := ops.labels[label]; ok {
-		return fmt.Errorf("duplicate label %s", label)
-	}
 	ops.labels[label] = ops.Out.Len()
-	return nil
 }
 
 // ReferToLabel records an opcode label refence to resolve later
@@ -268,6 +264,19 @@ func assembleByteC(ops *OpStream, args []string) error {
 	return ops.Bytec(uint(constIndex))
 }
 
+func base32DecdodeAnyPadding(x string) (val []byte, err error) {
+	val, err = base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(x)
+	if err != nil {
+		// try again with standard padding
+		var e2 error
+		val, e2 = base32.StdEncoding.DecodeString(x)
+		if e2 == nil {
+			err = nil
+		}
+	}
+	return
+}
+
 func parseBinaryArgs(args []string) (val []byte, consumed int, err error) {
 	arg := args[0]
 	if strings.HasPrefix(arg, "base32(") || strings.HasPrefix(arg, "b32(") {
@@ -277,7 +286,7 @@ func parseBinaryArgs(args []string) (val []byte, consumed int, err error) {
 			err = errors.New("byte base32 arg lacks close paren")
 			return
 		}
-		val, err = base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(arg[open+1 : close])
+		val, err = base32DecdodeAnyPadding(arg[open+1 : close])
 		if err != nil {
 			return
 		}
@@ -305,7 +314,7 @@ func parseBinaryArgs(args []string) (val []byte, consumed int, err error) {
 			err = fmt.Errorf("need literal after 'byte %s'", arg)
 			return
 		}
-		val, err = base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(args[1])
+		val, err = base32DecdodeAnyPadding(args[1])
 		if err != nil {
 			return
 		}
@@ -419,7 +428,7 @@ func assembleLoad(ops *OpStream, args []string) error {
 	if err != nil {
 		return err
 	}
-	if val > EvalMaxScratchSize {
+	if val > 255 {
 		return errors.New("load limited to 0..255")
 	}
 	ops.Out.WriteByte(0x34)
@@ -432,7 +441,7 @@ func assembleStore(ops *OpStream, args []string) error {
 	if err != nil {
 		return err
 	}
-	if val > EvalMaxScratchSize {
+	if val > 255 {
 		return errors.New("store limited to 0..255")
 	}
 	ops.Out.WriteByte(0x35)
@@ -483,7 +492,7 @@ func assembleTxn(ops *OpStream, args []string) error {
 	}
 	val, ok := txnFields[args[0]]
 	if !ok {
-		return fmt.Errorf("txn unknown arg %s", args[0])
+		return fmt.Errorf("txn unknown arg %v", args[0])
 	}
 	return ops.Txn(uint64(val))
 }
@@ -498,7 +507,7 @@ func assembleGtxn(ops *OpStream, args []string) error {
 	}
 	val, ok := txnFields[args[1]]
 	if !ok {
-		return fmt.Errorf("gtxn unknown arg %s", args[0])
+		return fmt.Errorf("gtxn unknown arg %v", args[0])
 	}
 	return ops.Gtxn(gtid, uint64(val))
 }
@@ -657,8 +666,7 @@ func (ops *OpStream) Assemble(fin io.Reader) error {
 			for i, argType := range spec.Args {
 				stype := ops.tpop()
 				if !typecheck(argType, stype) {
-					err := fmt.Errorf("%s arg %d wanted type %s got %s", spec.Name, i, argType.String(), stype.String())
-					return lineErr(ops.sourceLine, err)
+					return fmt.Errorf(":%d %s arg %d wanted type %s got %s", ops.sourceLine, spec.Name, i, argType.String(), stype.String())
 				}
 			}
 			if spec.Returns != nil {
@@ -672,14 +680,10 @@ func (ops *OpStream) Assemble(fin io.Reader) error {
 		}
 		if opstring[len(opstring)-1] == ':' {
 			// create a label
-			err := ops.SetLabelHere(opstring[:len(opstring)-1])
-			if err != nil {
-				return lineErr(ops.sourceLine, err)
-			}
+			ops.SetLabelHere(opstring[:len(opstring)-1])
 			continue
 		}
-		err := fmt.Errorf("unknown opcode %v", opstring)
-		return lineErr(ops.sourceLine, err)
+		return fmt.Errorf(":%d unknown opcode %v", ops.sourceLine, opstring)
 	}
 	// TODO: warn if expected resulting stack is not len==1 ?
 	return ops.resolveLabels()

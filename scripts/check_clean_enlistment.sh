@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # check_clean_enlistment.sh - Checks the git status of the enlistment to see if it's clean.
 #

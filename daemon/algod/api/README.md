@@ -26,14 +26,14 @@ so that we can generate models without pointers. (This is more compatible with t
 current model we use. We may want to use pointers instead, eventually)
     - make sure you populate the `default` property in order to generate a model 
     without a pointer field
-- `go-swagger` does not support OpenAPI 3.0. It only supports OpenAI 2.0. There 
+- `go-swagger` does not support OpenAPI 3.0. It only supports OpenAPI 2.0. There 
 does not seem to be another tool that allows us to generate a swagger spec from 
 code. It may be worth writing our own, eventually.
 - `go-swagger` does not support embedded structs.
     - in fact, `go-swagger` is generally very strange. The source -> spec generation
      looks fairly immature. Here are some (undocumented) tips:
         - every `swagger:response` type must contain a single field (e.g. `Body` or 
-        `Payloard`) that is the actual data type you want to return. So the `response` 
+        `Payload`) that is the actual data type you want to return. So the `response` 
         type is a wrapper, which makes sense, except the clients that `go-swagger`
          generate automatically unwrap the underlying value. So this is very weird, 
          and undocumented.
