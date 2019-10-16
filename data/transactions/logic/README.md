@@ -55,7 +55,6 @@ For two-argument ops, `A` is the previous element on the stack and `B` is the la
 | `keccak256` | Keccak256 hash of value, yields [32]byte |
 | `sha512_256` | SHA512_256 hash of value, yields [32]byte |
 | `ed25519verify` | for (data, signature, pubkey) verify the signature of the data against the pubkey => {0 or 1} |
-| `rand` | push random uint64 to stack |
 | `+` | A plus B. Panic on overflow. |
 | `-` | A minus B. Panic if B > A. |
 | `/` | A divided by B. Panic if B == 0. |
@@ -117,27 +116,27 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 0 | Sender | []byte |
 | 1 | Fee | uint64 |
 | 2 | FirstValid | uint64 |
-| 3 | LastValid | uint64 |
-| 4 | Note | []byte |
-| 5 | Receiver | []byte |
-| 6 | Amount | uint64 |
-| 7 | CloseRemainderTo | []byte |
-| 8 | VotePK | []byte |
-| 9 | SelectionPK | []byte |
-| 10 | VoteFirst | uint64 |
-| 11 | VoteLast | uint64 |
-| 12 | VoteKeyDilution | uint64 |
-| 13 | Type | []byte |
-| 14 | TypeEnum | uint64 |
-| 15 | XferAsset | []byte |
-| 16 | AssetAmount | uint64 |
-| 17 | AssetSender | []byte |
-| 18 | AssetReceiver | []byte |
-| 19 | AssetCloseTo | []byte |
-| 20 | GroupIndex | uint64 |
-| 21 | TxID | []byte |
-| 22 | SenderBalance | uint64 |
-| 23 | Lease | []byte |
+| 3 | FirstValidTime | uint64 |
+| 4 | LastValid | uint64 |
+| 5 | Note | []byte |
+| 6 | Lease | []byte |
+| 7 | Receiver | []byte |
+| 8 | Amount | uint64 |
+| 9 | CloseRemainderTo | []byte |
+| 10 | VotePK | []byte |
+| 11 | SelectionPK | []byte |
+| 12 | VoteFirst | uint64 |
+| 13 | VoteLast | uint64 |
+| 14 | VoteKeyDilution | uint64 |
+| 15 | Type | []byte |
+| 16 | TypeEnum | uint64 |
+| 17 | XferAsset | []byte |
+| 18 | AssetAmount | uint64 |
+| 19 | AssetSender | []byte |
+| 20 | AssetReceiver | []byte |
+| 21 | AssetCloseTo | []byte |
+| 22 | GroupIndex | uint64 |
+| 23 | TxID | []byte |
 
 
 Additional details in the [opcodes document](TEAL_opcodes.md#txn) on the `txn` op.
@@ -146,13 +145,11 @@ Additional details in the [opcodes document](TEAL_opcodes.md#txn) on the `txn` o
 
 | Index | Name | Type |
 | --- | --- | --- |
-| 0 | Round | uint64 |
-| 1 | MinTxnFee | uint64 |
-| 2 | MinBalance | uint64 |
-| 3 | MaxTxnLife | uint64 |
-| 4 | TimeStamp | uint64 |
-| 5 | ZeroAddress | []byte |
-| 6 | GroupSize | uint64 |
+| 0 | MinTxnFee | uint64 |
+| 1 | MinBalance | uint64 |
+| 2 | MaxTxnLife | uint64 |
+| 3 | ZeroAddress | []byte |
+| 4 | GroupSize | uint64 |
 
 
 

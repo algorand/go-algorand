@@ -94,7 +94,9 @@ type EvalParams struct {
 	GroupIndex int
 
 	// for each sender in TxnGroup, its BalanceRecord
-	GroupSenders []basics.BalanceRecord
+	//GroupSenders []basics.BalanceRecord
+
+	FirstValidTimeStamp uint64
 
 	// pseudo random number generator, or seed parts
 	Source   Source64
@@ -335,7 +337,7 @@ var OpSpecs = []OpSpec{
 	{0x02, "keccak256", opKeccak256, oneBytes, oneBytes},
 	{0x03, "sha512_256", opSHA512_256, oneBytes, oneBytes},
 	{0x04, "ed25519verify", opEd25519verify, threeBytes, oneInt},
-	{0x05, "rand", opRand, nil, oneInt},
+	//{0x05, "rand", opRand, nil, oneInt},
 	{0x08, "+", opPlus, twoInts, oneInt},
 	{0x09, "-", opMinus, twoInts, oneInt},
 	{0x0a, "/", opDiv, twoInts, oneInt},
@@ -607,6 +609,8 @@ func opSHA512_256(cx *evalContext) {
 	cx.stack[last].Bytes = hash[:]
 }
 
+/*
+TODO: disabled until a better design can be found. Seed should be as little as possible under control of transaction submitter and block proposer.
 func opRand(cx *evalContext) {
 	if cx.Source == nil {
 		rng, err := NewChaCha20RNG(cx.Seed, cx.MoreSeed)
@@ -618,6 +622,7 @@ func opRand(cx *evalContext) {
 	}
 	cx.stack = append(cx.stack, stackValue{Uint: cx.Source.Uint64()})
 }
+*/
 
 func opPlus(cx *evalContext) {
 	last := len(cx.stack) - 1
@@ -1021,57 +1026,59 @@ func opDup(cx *evalContext) {
 
 func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint64) (sv stackValue, err error) {
 	err = nil
-	switch field {
-	case 0:
+	switch TxnField(field) {
+	case Sender:
 		sv.Bytes = txn.Sender[:]
-	case 1:
+	case Fee:
 		sv.Uint = txn.Fee.Raw
-	case 2:
+	case FirstValid:
 		sv.Uint = uint64(txn.FirstValid)
-	case 3:
+	case FirstValidTime:
+		sv.Uint = cx.FirstValidTimeStamp
+	case LastValid:
 		sv.Uint = uint64(txn.LastValid)
-	case 4:
+	case Note:
 		sv.Bytes = txn.Note
-	case 5:
+	case Receiver:
 		sv.Bytes = txn.Receiver[:]
-	case 6:
+	case Amount:
 		sv.Uint = txn.Amount.Raw
-	case 7:
+	case CloseRemainderTo:
 		sv.Bytes = txn.CloseRemainderTo[:]
-	case 8:
+	case VotePK:
 		sv.Bytes = txn.VotePK[:]
-	case 9:
+	case SelectionPK:
 		sv.Bytes = txn.SelectionPK[:]
-	case 10:
+	case VoteFirst:
 		sv.Uint = uint64(txn.VoteFirst)
-	case 11:
+	case VoteLast:
 		sv.Uint = uint64(txn.VoteLast)
-	case 12:
+	case VoteKeyDilution:
 		sv.Uint = txn.VoteKeyDilution
-	case 13:
+	case Type:
 		sv.Bytes = []byte(txn.Type)
-	case 14:
+	case TypeEnum:
 		sv.Uint = uint64(txnTypeIndexes[string(txn.Type)])
-	case 15:
+	case XferAsset:
 		sv.Bytes = make([]byte, 40)
 		copy(sv.Bytes, txn.XferAsset.Creator[:])
 		binary.BigEndian.PutUint64(sv.Bytes[32:], txn.XferAsset.Index)
-	case 16:
+	case AssetAmount:
 		sv.Uint = txn.AssetAmount
-	case 17:
+	case AssetSender:
 		sv.Bytes = txn.AssetSender[:]
-	case 18:
+	case AssetReceiver:
 		sv.Bytes = txn.AssetReceiver[:]
-	case 19:
+	case AssetCloseTo:
 		sv.Bytes = txn.AssetCloseTo[:]
-	case 20:
+	case GroupIndex:
 		sv.Uint = uint64(cx.GroupIndex)
-	case 21:
+	case TxID:
 		txid := txn.ID()
 		sv.Bytes = txid[:]
-	case 22:
-		sv.Uint = cx.GroupSenders[cx.GroupIndex].MicroAlgos.Raw
-	case 23:
+	/*case 22: // SenderBalance
+	sv.Uint = cx.GroupSenders[cx.GroupIndex].MicroAlgos.Raw*/
+	case Lease:
 		sv.Bytes = txn.Lease[:]
 	default:
 		err = fmt.Errorf("invalid txn field %d", field)
@@ -1102,11 +1109,11 @@ func opGtxn(cx *evalContext) {
 	field := uint64(cx.program[cx.pc+2])
 	var sv stackValue
 	var err error
-	if field == 20 {
+	if TxnField(field) == GroupIndex {
 		// GroupIndex; asking this when we just specified it is _dumb_, but oh well
 		sv.Uint = uint64(gtxid)
-	} else if field == 22 {
-		sv.Uint = cx.GroupSenders[gtxid].MicroAlgos.Raw
+		/*} else if field == 22 {
+		sv.Uint = cx.GroupSenders[gtxid].MicroAlgos.Raw*/
 	} else {
 		sv, err = cx.txnFieldToStack(tx, field)
 		if err != nil {
@@ -1123,24 +1130,24 @@ var zeroAddress basics.Address
 func opGlobal(cx *evalContext) {
 	gindex := uint64(cx.program[cx.pc+1])
 	var sv stackValue
-	switch gindex {
-	case 0:
-		if cx.Block != nil {
-			sv.Uint = uint64(cx.Block.Round())
-		}
-	case 1:
+	switch GlobalField(gindex) {
+	/*case 0:
+	if cx.Block != nil {
+		sv.Uint = uint64(cx.Block.Round())
+	}*/
+	case MinTxnFee:
 		sv.Uint = cx.Proto.MinTxnFee
-	case 2:
+	case MinBalance:
 		sv.Uint = cx.Proto.MinBalance
-	case 3:
+	case MaxTxnLife:
 		sv.Uint = cx.Proto.MaxTxnLife
-	case 4:
-		if cx.Block != nil {
-			sv.Uint = uint64(cx.Block.BlockHeader.TimeStamp)
-		}
-	case 5:
+	/*case 4:
+	if cx.Block != nil {
+		sv.Uint = uint64(cx.Block.BlockHeader.TimeStamp)
+	}*/
+	case ZeroAddress:
 		sv.Bytes = zeroAddress[:]
-	case 6:
+	case GroupSize:
 		sv.Uint = uint64(len(cx.TxnGroup))
 	default:
 		cx.err = fmt.Errorf("invalid global[%d]", gindex)

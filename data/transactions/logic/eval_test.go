@@ -95,7 +95,7 @@ txn Receiver
 addr YYKRMERAFXMXCDWMBNR6BUUWQXDCUR53FPUGXLUYS7VNASRTJW2ENQ7BMQ
 ==
 &&
-global Round
+txn FirstValid
 int 3000
 >
 &&
@@ -118,7 +118,7 @@ func TestTLHC(t *testing.T) {
 	txn.Lsig.Args = [][]byte{secret}
 	sb := strings.Builder{}
 	block := bookkeeping.Block{}
-	block.BlockHeader.Round = 999999
+	txn.Txn.FirstValid = 999999
 	ep := EvalParams{Txn: &txn, Trace: &sb, Block: &block}
 	cost, err := Check(program, ep)
 	if err != nil {
@@ -150,7 +150,7 @@ func TestTLHC(t *testing.T) {
 	txn.Txn.Receiver = a2
 	txn.Txn.CloseRemainderTo = a2
 	sb = strings.Builder{}
-	block.BlockHeader.Round = 1
+	txn.Txn.FirstValid = 1
 	ep = EvalParams{Txn: &txn, Trace: &sb, Block: &block}
 	pass, err = Eval(program, ep)
 	if pass {
@@ -163,7 +163,7 @@ func TestTLHC(t *testing.T) {
 	txn.Txn.Receiver = a1
 	txn.Txn.CloseRemainderTo = a1
 	sb = strings.Builder{}
-	block.BlockHeader.Round = 999999
+	txn.Txn.FirstValid = 999999
 	ep = EvalParams{Txn: &txn, Trace: &sb, Block: &block}
 	pass, err = Eval(program, ep)
 	if !pass {
@@ -205,6 +205,8 @@ int 0x12345678
 	require.NoError(t, err)
 }
 
+/*
+TODO: rand disabled pending better implementation
 func TestRand(t *testing.T) {
 	t.Parallel()
 	program, err := AssembleString(`rand
@@ -261,6 +263,7 @@ btoi
 	require.True(t, pass)
 	require.NoError(t, err)
 }
+*/
 
 func TestItob(t *testing.T) {
 	t.Parallel()
@@ -830,14 +833,14 @@ int 999
 global ZeroAddress
 txn CloseRemainderTo
 ==
-&&
-global TimeStamp
-int 2069
-==
-&&
-global Round
-int 999999
-==
+//&&
+//global TimeStamp
+//int 2069
+//==
+//&&
+//global Round
+//int 999999
+//==
 &&
 global GroupSize
 int 1
@@ -918,6 +921,10 @@ txn FirstValid
 int 42
 ==
 &&
+txn FirstValidTime
+int 210
+==
+&&
 txn LastValid
 int 1066
 ==
@@ -973,10 +980,10 @@ int 3
 txn TxID
 arg 7
 ==
-&&
-txn SenderBalance
-int 4160
-==
+//&&
+//txn SenderBalance
+//int 4160
+//==
 &&
 txn Lease
 arg 8
@@ -1035,7 +1042,7 @@ func TestTxn(t *testing.T) {
 	recs := make([]basics.BalanceRecord, 4)
 	recs[3].MicroAlgos.Raw = 4160
 	sb := strings.Builder{}
-	pass, err := Eval(program, EvalParams{Trace: &sb, Txn: &txn, GroupSenders: recs, GroupIndex: 3})
+	pass, err := Eval(program, EvalParams{Trace: &sb, Txn: &txn, GroupIndex: 3, FirstValidTimeStamp: 210})
 	if !pass {
 		t.Log(hex.EncodeToString(program))
 		t.Log(sb.String())
@@ -1692,6 +1699,7 @@ int 1`)
 	isNotPanic(t, err)
 }
 
+/*
 func TestFetchSenderBalance(t *testing.T) {
 	t.Parallel()
 	bal := uint64(30000)
@@ -1719,6 +1727,7 @@ txn SenderBalance
 	require.False(t, pass)
 	isNotPanic(t, err)
 }
+*/
 
 /*
 import random

@@ -165,6 +165,8 @@ type BlockEvaluator struct {
 	blockTxBytes int
 
 	verificationPool execpool.BacklogPool
+
+	l ledgerForEvaluator
 }
 
 type ledgerForEvaluator interface {
@@ -211,6 +213,7 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *eval
 		proto:            proto,
 		genesisHash:      l.GenesisHash(),
 		verificationPool: executionPool,
+		l:                l,
 	}
 
 	if hdr.Round > 0 {
@@ -487,23 +490,27 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 		}
 
 		if !txn.Lsig.Blank() {
-			recs := make([]basics.BalanceRecord, len(txgroup))
-			for i := range recs {
-				var err error
-				recs[i], err = cow.Get(txgroup[i].Txn.Sender, true)
+			firstValid := basics.Round(txn.Txn.FirstValid)
+			var hdr bookkeeping.BlockHeader
+			var err error
+			if eval.block.BlockHeader.Round == firstValid {
+				hdr = eval.block.BlockHeader
+			} else {
+				// TODO: move this into some lazy evaluator for the few scripts that actually use `txn FirstValidTime` ?
+				hdr, err = eval.l.BlockHdr(firstValid)
 				if err != nil {
-					return fmt.Errorf("transaction %v: cannot get sender record: %v", txn.ID(), err)
+					return fmt.Errorf("could not fetch BlockHdr for FirstValid=%d (current=%d): %s", txn.Txn.FirstValid, eval.block.BlockHeader.Round, err)
 				}
 			}
 			ep := logic.EvalParams{
-				Txn:          &txn,
-				Block:        &eval.block,
-				Proto:        &eval.proto,
-				TxnGroup:     txgroup,
-				GroupIndex:   groupIndex,
-				GroupSenders: recs,
-				Seed:         eval.prevHeader.Seed[:],
-				MoreSeed:     txid[:],
+				Txn:        &txn,
+				Block:      &eval.block,
+				Proto:      &eval.proto,
+				TxnGroup:   txgroup,
+				GroupIndex: groupIndex,
+				//Seed: hdr.Seed[:], // disabled until `rand` op restructured
+				//MoreSeed: txid[:],
+				FirstValidTimeStamp: uint64(hdr.TimeStamp),
 			}
 			pass, err := logic.Eval(txn.Lsig.Logic, ep)
 			if err != nil {
