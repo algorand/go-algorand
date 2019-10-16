@@ -49,6 +49,11 @@ func newTelemetryFilteredHook(cfg TelemetryConfig, hook logrus.Hook, reportLogLe
 
 // Fire is required to implement logrus hook interface
 func (hook *telemetryFilteredHook) Fire(entry *logrus.Entry) error {
+	// Just in case
+	if hook.wrappedHook == nil {
+		return errors.New("The wrapped hook has not been initialized.")
+	}
+
 	// Don't include log history when logging debug.Stack() - just pass it through.
 	if entry.Level == logrus.ErrorLevel && strings.HasPrefix(entry.Message, stackPrefix) {
 		return hook.wrappedHook.Fire(entry)

@@ -20,7 +20,6 @@ import (
 	"fmt"
 
 	"github.com/olivere/elastic"
-	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/sohlich/elogrus.v3"
 
@@ -34,13 +33,17 @@ func createAsyncHook(wrappedHook logrus.Hook, channelDepth uint, maxQueueDepth i
 }
 
 func createAsyncHookLevels(wrappedHook logrus.Hook, channelDepth uint, maxQueueDepth int, levels []logrus.Level) *asyncTelemetryHook {
+	// one time check to see if the wrappedHook is ready (true for mocked telemetry)
+	tfh, ok := wrappedHook.(*telemetryFilteredHook)
+	ready := ok && tfh.wrappedHook != nil
+
 	hook := &asyncTelemetryHook{
 		wrappedHook:   wrappedHook,
 		entries:       make(chan *logrus.Entry, channelDepth),
 		quit:          make(chan struct{}),
 		maxQueueDepth: maxQueueDepth,
 		levels:        levels,
-		ready:         false,
+		ready:         ready,
 		urlUpdate:     make(chan bool),
 	}
 
@@ -170,9 +173,6 @@ func createElasticHook(cfg TelemetryConfig) (hook logrus.Hook, err error) {
 	hostName := cfg.getHostName()
 	hook, err = elogrus.NewElasticHook(client, hostName, cfg.MinLogLevel, cfg.ChainID)
 
-	if err == nil && hook == nil {
-		return hook, errors.New("NewElasticHook failed with no error")
-	}
 	return hook, err
 }
 
