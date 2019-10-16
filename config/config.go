@@ -413,22 +413,27 @@ func initConsensusProtocols() {
 	Consensus[protocol.ConsensusV18] = v18
 
 	// v17 can be upgraded to v18.
-	// for now, I will leave this gated out.
-	// v17.ApprovedUpgrades[protocol.ConsensusV18] = true
+	v17.ApprovedUpgrades[protocol.ConsensusV18] = true
+
+	v19 := v18
+	v19.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	v19.TxnCounter = true
+	v19.Asset = true
+	v19.LogicSigVersion = 1
+	v19.LogicSigMaxSize = 1000
+	v19.LogicSigMaxCost = 20000
+	v19.MaxAssetsPerAccount = 1000
+	v19.SupportTxGroups = true
+	v19.MaxTxGroupSize = 16
+	v19.SupportTransactionLeases = true
+	v19.SupportBecomeNonParticipatingTransactions = true
+
+	// v18 can be upgraded to v19.
+	v18.ApprovedUpgrades[protocol.ConsensusV19] = true
 
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v18
-	vFuture.TxnCounter = true
-	vFuture.Asset = true
-	vFuture.LogicSigVersion = 1
-	vFuture.LogicSigMaxSize = 1000
-	vFuture.LogicSigMaxCost = 20000
-	vFuture.MaxAssetsPerAccount = 1000
-	vFuture.SupportTxGroups = true
-	vFuture.MaxTxGroupSize = 16
-	vFuture.SupportTransactionLeases = true
-	vFuture.SupportBecomeNonParticipatingTransactions = true
+	vFuture := v19
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

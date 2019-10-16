@@ -99,6 +99,11 @@ const ConsensusV18 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/6c6bd668be0ab14098e51b37e806c509f7b7e31f",
 )
 
+// ConsensusV19 needs to be updated with actual spec
+const ConsensusV19 = ConsensusVersion(
+	"next",
+)
+
 // ConsensusFuture is a protocol that should not appear in any production
 // network, but is used to test features before they are released.
 const ConsensusFuture = ConsensusVersion(
@@ -111,7 +116,7 @@ const ConsensusFuture = ConsensusVersion(
 
 // ConsensusCurrentVersion is the latest version and should be used
 // when a specific version is not provided.
-const ConsensusCurrentVersion = ConsensusV17
+const ConsensusCurrentVersion = ConsensusV19
 
 // ConsensusTest0 is a version of ConsensusV0 used for testing
 // (it has different approved upgrade paths).
