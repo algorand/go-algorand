@@ -322,3 +322,20 @@ func GetVersionFromName(name string) (version uint64, err error) {
 	}
 	return
 }
+
+// GetVersionPartsFromVersion converts the merged version number back into parts.
+func GetVersionPartsFromVersion(version uint64) (major uint64, minor uint64, patch uint64, err error) {
+	val := version
+
+	if val < 1<<32 {
+		err = errors.New("versions below 1.0.0 not supported")
+		return
+	}
+
+	patch = val & 0xffff
+	val >>= 16
+	minor = val & 0xffff
+	val >>= 16
+	major = val
+	return
+}
