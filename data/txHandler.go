@@ -111,15 +111,6 @@ func (handler *TxHandler) Stop() {
 	handler.backlogWg.Wait()
 }
 
-func reencode(raw []byte) ([]byte, error) {
-	var tmpTxnGroup []transactions.SignedTxn
-	err := protocol.Decode(raw, &tmpTxnGroup)
-	if err != nil {
-		return nil, err
-	}
-	return protocol.Encode(tmpTxnGroup), nil
-}
-
 // backlogWorker is the worker go routine that process the incoming messages from the postVerificationQueue and backlogQueue channels
 // and dispatches them further.
 func (handler *TxHandler) backlogWorker() {
@@ -147,13 +138,8 @@ func (handler *TxHandler) backlogWorker() {
 				continue
 			}
 
-			reencoded, err := reencode(wi.rawmsg.Data)
-			if err != nil {
-				logging.Base().Debugf("could not reencode txns from network: %v", err)
-				continue
-			}
-
-			handler.net.Relay(handler.ctx, protocol.TxnTag, reencoded, false, wi.rawmsg.Sender)
+			// We reencode here instead of using rawmsg.Data to avoid broadcasting non-canonical encodings
+			handler.net.Relay(handler.ctx, protocol.TxnTag, protocol.Encode(verifiedTxGroup), false, wi.rawmsg.Sender)
 
 			// restart the loop so that we could empty out the post verification queue.
 			continue
@@ -195,13 +181,8 @@ func (handler *TxHandler) backlogWorker() {
 				continue
 			}
 
-			reencoded, err := reencode(wi.rawmsg.Data)
-			if err != nil {
-				logging.Base().Debugf("could not reencode txns from network: %v", err)
-				continue
-			}
-
-			handler.net.Relay(handler.ctx, protocol.TxnTag, reencoded, false, wi.rawmsg.Sender)
+			// We reencode here instead of using rawmsg.Data to avoid broadcasting non-canonical encodings
+			handler.net.Relay(handler.ctx, protocol.TxnTag, protocol.Encode(verifiedTxGroup), false, wi.rawmsg.Sender)
 		case <-handler.ctx.Done():
 			return
 		}
