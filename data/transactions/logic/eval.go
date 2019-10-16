@@ -93,15 +93,7 @@ type EvalParams struct {
 	// GroupIndex should point to Txn within TxnGroup
 	GroupIndex int
 
-	// for each sender in TxnGroup, its BalanceRecord
-	//GroupSenders []basics.BalanceRecord
-
 	FirstValidTimeStamp uint64
-
-	// pseudo random number generator, or seed parts
-	Source   Source64
-	Seed     []byte
-	MoreSeed []byte
 }
 
 type evalContext struct {

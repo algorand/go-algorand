@@ -503,13 +503,11 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 				}
 			}
 			ep := logic.EvalParams{
-				Txn:        &txn,
-				Block:      &eval.block,
-				Proto:      &eval.proto,
-				TxnGroup:   txgroup,
-				GroupIndex: groupIndex,
-				//Seed: hdr.Seed[:], // disabled until `rand` op restructured
-				//MoreSeed: txid[:],
+				Txn:                 &txn,
+				Block:               &eval.block,
+				Proto:               &eval.proto,
+				TxnGroup:            txgroup,
+				GroupIndex:          groupIndex,
 				FirstValidTimeStamp: uint64(hdr.TimeStamp),
 			}
 			pass, err := logic.Eval(txn.Lsig.Logic, ep)

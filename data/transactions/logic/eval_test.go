@@ -2016,7 +2016,7 @@ func benchmarkBasicProgram(b *testing.B, source string) {
 	b.ResetTimer()
 	sb := strings.Builder{} // Trace: &sb
 	for i := 0; i < b.N; i++ {
-		pass, err := Eval(program, EvalParams{Seed: []byte(benchSeed), MoreSeed: []byte(benchMore)})
+		pass, err := Eval(program, EvalParams{})
 		if !pass {
 			b.Log(sb.String())
 		}
