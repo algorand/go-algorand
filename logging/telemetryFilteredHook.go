@@ -52,7 +52,7 @@ func newTelemetryFilteredHook(cfg TelemetryConfig, hook logrus.Hook, reportLogLe
 func (hook *telemetryFilteredHook) Fire(entry *logrus.Entry) error {
 	// Just in case
 	if hook.wrappedHook == nil {
-		return errors.New("The wrapped hook has not been initialized.")
+		return errors.New("the wrapped hook has not been initialized")
 	}
 
 	// Don't include log history when logging debug.Stack() - just pass it through.
