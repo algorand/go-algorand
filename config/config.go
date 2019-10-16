@@ -427,6 +427,7 @@ func initConsensusProtocols() {
 	v19.MaxTxGroupSize = 16
 	v19.SupportTransactionLeases = true
 	v19.SupportBecomeNonParticipatingTransactions = true
+	Consensus[protocol.ConsensusV19] = v19
 
 	// v18 can be upgraded to v19.
 	v18.ApprovedUpgrades[protocol.ConsensusV19] = true
