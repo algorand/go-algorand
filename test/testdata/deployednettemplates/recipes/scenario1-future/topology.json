@@ -1,0 +1,64 @@
+{
+  "Hosts": [
+    {
+      "Name": "R1",
+      "Template": "AWS-US-EAST-1-Large"
+    },
+    {
+      "Name": "R2",
+      "Template": "AWS-US-EAST-1-Large"
+    },
+    {
+      "Name": "R3",
+      "Template": "AWS-US-EAST-1-Large"
+    },
+    {
+      "Name": "R4",
+      "Template": "AWS-US-EAST-1-Large"
+    },
+    {
+      "Name": "R5",
+      "Template": "AWS-US-EAST-1-Large"
+    },
+    {
+      "Name": "N1",
+      "Template": "AWS-US-EAST-1-Small"
+    },
+    {
+      "Name": "N2",
+      "Template": "AWS-US-EAST-1-Small"
+    },
+    {
+      "Name": "N3",
+      "Template": "AWS-US-EAST-1-Small"
+    },
+    {
+      "Name": "N4",
+      "Template": "AWS-US-EAST-1-Small"
+    },
+    {
+      "Name": "N5",
+      "Template": "AWS-US-EAST-1-Small"
+    },
+    {
+      "Name": "N6",
+      "Template": "AWS-US-EAST-1-Small"
+    },
+    {
+      "Name": "N7",
+      "Template": "AWS-US-EAST-1-Small"
+    },
+    {
+      "Name": "N8",
+      "Template": "AWS-US-EAST-1-Small"
+    },
+    {
+      "Name": "N9",
+      "Template": "AWS-US-EAST-1-Small"
+    },
+    {
+      "Name": "N10",
+      "Template": "AWS-US-EAST-1-Small"
+    }
+  ]
+}
