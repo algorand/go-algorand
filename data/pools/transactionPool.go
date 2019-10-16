@@ -334,7 +334,7 @@ func (pool *TransactionPool) Verified(txn transactions.SignedTxn) bool {
 		return false
 	}
 
-	return pendingSigTxn.Sig == txn.Sig && pendingSigTxn.Msig.Equal(txn.Msig)
+	return pendingSigTxn.Sig == txn.Sig && pendingSigTxn.Msig.Equal(txn.Msig) && pendingSigTxn.Lsig.Equal(&txn.Lsig)
 }
 
 // OnNewBlock excises transactions from the pool that are included in the specified Block or if they've expired

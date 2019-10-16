@@ -23,6 +23,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -34,6 +35,7 @@ type inspectSignedTxn struct {
 
 	Sig  crypto.Signature         `codec:"sig"`
 	Msig inspectMultisigSig       `codec:"msig"`
+	Lsig inspectLogicSig          `codec:"lsig"`
 	Txn  transactions.Transaction `codec:"txn"`
 }
 
@@ -56,6 +58,48 @@ type inspectMultisigSubsig struct {
 	Sig crypto.Signature `codec:"s"`
 }
 
+// similar to data/transactions/logicsig.go LogicSig but uses types
+// that format better as JSON.
+type inspectLogicSig struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	// Logic signed by Sig or Msig, OR hashed to be the Address of an account.
+	Logic inspectProgram `codec:"l"`
+
+	Sig  crypto.Signature   `codec:"sig"`
+	Msig inspectMultisigSig `codec:"msig"`
+
+	// Args are not signed, but checked by Logic
+	Args [][]byte `codec:"arg"`
+}
+
+type inspectProgram []byte
+
+func (prog inspectProgram) String() string {
+	text, err := logic.Disassemble([]byte(prog))
+	if err != nil {
+		return err.Error()
+	}
+	return text
+}
+
+func (prog inspectProgram) GoString() string {
+	return prog.String()
+}
+
+func (prog inspectProgram) MarshalText() ([]byte, error) {
+	text, err := logic.Disassemble([]byte(prog))
+	return []byte(text), err
+}
+
+func (prog *inspectProgram) UnmarshalText(text []byte) error {
+	program, err := logic.AssembleString(string(text))
+	if err == nil {
+		*prog = program
+	}
+	return err
+}
+
 func inspectTxn(stxn transactions.SignedTxn) (sti inspectSignedTxn, err error) {
 	sti = stxnToInspect(stxn)
 	if !reflect.DeepEqual(stxn, stxnFromInspect(sti)) {
@@ -74,6 +118,7 @@ func stxnToInspect(stxn transactions.SignedTxn) inspectSignedTxn {
 		Txn:  stxn.Txn,
 		Sig:  stxn.Sig,
 		Msig: msigToInspect(stxn.Msig),
+		Lsig: lsigToInspect(stxn.Lsig),
 	}
 }
 
@@ -82,6 +127,7 @@ func stxnFromInspect(sti inspectSignedTxn) transactions.SignedTxn {
 		Txn:  sti.Txn,
 		Sig:  sti.Sig,
 		Msig: msigFromInspect(sti.Msig),
+		Lsig: lsigFromInspect(sti.Lsig),
 	}
 }
 
@@ -115,4 +161,22 @@ func msigFromInspect(msi inspectMultisigSig) crypto.MultisigSig {
 	}
 
 	return res
+}
+
+func lsigToInspect(lsig transactions.LogicSig) inspectLogicSig {
+	return inspectLogicSig{
+		Logic: inspectProgram(lsig.Logic),
+		Sig:   lsig.Sig,
+		Msig:  msigToInspect(lsig.Msig),
+		Args:  lsig.Args,
+	}
+}
+
+func lsigFromInspect(lsig inspectLogicSig) transactions.LogicSig {
+	return transactions.LogicSig{
+		Logic: []byte(lsig.Logic),
+		Sig:   lsig.Sig,
+		Msig:  msigFromInspect(lsig.Msig),
+		Args:  lsig.Args,
+	}
 }

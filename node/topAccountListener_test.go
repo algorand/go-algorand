@@ -54,7 +54,7 @@ func TestUpdateTopAccounts(t *testing.T) {
 	input = []basics.AccountDetail{onlineDetail(byte(0), 1), onlineDetail(byte(1), 10)}
 	topN = updateTopAccounts(topN, input)
 
-	if err := verify([]uint64{10, 1}, topN); err != nil {
+	if err := verifyAccountBalances([]uint64{10, 1}, topN); err != nil {
 		t.Error(err)
 	}
 
@@ -69,7 +69,7 @@ func TestUpdateTopAccounts(t *testing.T) {
 	}
 	topN = updateTopAccounts(topN, input)
 
-	if err := verify([]uint64{14, 13, 12, 11}, topN); err != nil {
+	if err := verifyAccountBalances([]uint64{14, 13, 12, 11}, topN); err != nil {
 		t.Error(err)
 	}
 
@@ -84,7 +84,7 @@ func TestUpdateTopAccounts(t *testing.T) {
 	}
 	topN = updateTopAccounts(topN, input)
 
-	if err := verify([]uint64{15, 14, 13, 12}, topN); err != nil {
+	if err := verifyAccountBalances([]uint64{15, 14, 13, 12}, topN); err != nil {
 		t.Error(err)
 	}
 
@@ -99,7 +99,7 @@ func TestUpdateTopAccounts(t *testing.T) {
 	}
 	topN = updateTopAccounts(topN, input)
 
-	if err := verify([]uint64{15, 14, 13, 12}, topN); err != nil {
+	if err := verifyAccountBalances([]uint64{15, 14, 13, 12}, topN); err != nil {
 		t.Error(err)
 	}
 
@@ -114,7 +114,7 @@ func TestUpdateTopAccounts(t *testing.T) {
 	}
 	topN = updateTopAccounts(topN, input)
 
-	if err := verify([]uint64{15, 14, 13, 12}, topN); err != nil {
+	if err := verifyAccountBalances([]uint64{15, 14, 13, 12}, topN); err != nil {
 		t.Error(err)
 	}
 
@@ -130,7 +130,7 @@ func TestUpdateTopAccounts(t *testing.T) {
 	}
 	topN = updateTopAccounts(topN, input)
 
-	if err := verify([]uint64{15, 14, 13, 12}, topN); err != nil {
+	if err := verifyAccountBalances([]uint64{15, 14, 13, 12}, topN); err != nil {
 		t.Error(err)
 	}
 }
@@ -322,7 +322,7 @@ func getInt(detail basics.AccountDetail) uint64 {
 	return uint64([32]byte(detail.Address)[0])
 }
 
-func verify(expected []uint64, actual []basics.AccountDetail) error {
+func verifyAccountBalances(expected []uint64, actual []basics.AccountDetail) error {
 	if len(expected) != len(actual) {
 		return &errorString{fmt.Sprintf("Lengths do not equal: expected(%d) != actual(%d)", len(expected), len(actual))}
 	}
@@ -349,5 +349,5 @@ func verifyListener(listener topAccountListener, expected []uint64, online uint6
 		return &errorString{fmt.Sprintf("Unexpected total circulation: actual(%d) != expected(%d)", listener.totalCirculation.Raw, total)}
 	}
 
-	return verify(expected, listener.accounts)
+	return verifyAccountBalances(expected, listener.accounts)
 }

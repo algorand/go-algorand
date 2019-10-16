@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
@@ -188,7 +189,7 @@ func (handler *TxHandler) backlogWorker() {
 func (handler *TxHandler) asyncVerifySignature(arg interface{}) interface{} {
 	tx := arg.(*txBacklogMsg)
 	for _, txn := range tx.unverifiedTxGroup {
-		tx.verificationErr = txn.Verify(tx.spec, tx.proto)
+		tx.verificationErr = verify.Txn(&txn, tx.spec, tx.proto)
 		if tx.verificationErr != nil {
 			break
 		}
@@ -310,7 +311,7 @@ func (handler *TxHandler) processDecoded(unverifiedTxGroup []transactions.Signed
 	}
 
 	for _, txn := range unverifiedTxGroup {
-		err := txn.PoolVerify(tx.spec, tx.proto, handler.txVerificationPool)
+		err := verify.TxnPool(&txn, tx.spec, tx.proto, handler.txVerificationPool)
 		if err != nil {
 			// transaction is invalid
 			logging.Base().Warnf("Received a malformed txn %v in group %v: %v", txn, unverifiedTxGroup, err)

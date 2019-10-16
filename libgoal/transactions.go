@@ -46,6 +46,23 @@ func (c *Client) SignTransactionWithWallet(walletHandle, pw []byte, utx transact
 	return
 }
 
+// SignProgramWithWallet signs the passed transaction with keys from the wallet associated with the passed walletHandle
+func (c *Client) SignProgramWithWallet(walletHandle, pw []byte, addr string, program []byte) (signature crypto.Signature, err error) {
+	kmd, err := c.ensureKmdClient()
+	if err != nil {
+		return
+	}
+
+	// Sign the transaction
+	resp, err := kmd.SignProgram(walletHandle, pw, addr, program)
+	if err != nil {
+		return
+	}
+
+	copy(signature[:], resp.Signature)
+	return
+}
+
 // MultisigSignTransactionWithWallet creates a multisig (or adds to an existing partial multisig, if one is provided), signing with the key corresponding to the given address and using the specified wallet
 // TODO instead of returning MultisigSigs, accept and return blobs
 func (c *Client) MultisigSignTransactionWithWallet(walletHandle, pw []byte, utx transactions.Transaction, signerAddr string, partial crypto.MultisigSig) (msig crypto.MultisigSig, err error) {
@@ -59,6 +76,28 @@ func (c *Client) MultisigSignTransactionWithWallet(walletHandle, pw []byte, utx 
 		return
 	}
 	resp, err := kmd.MultisigSignTransaction(walletHandle, pw, txBytes, crypto.PublicKey(addr), partial)
+	if err != nil {
+		return
+	}
+	err = protocol.Decode(resp.Multisig, &msig)
+	return
+}
+
+// MultisigSignProgramWithWallet creates a multisig (or adds to an existing partial multisig, if one is provided), signing with the key corresponding to the given address and using the specified wallet
+func (c *Client) MultisigSignProgramWithWallet(walletHandle, pw, program []byte, signerAddr string, partial crypto.MultisigSig) (msig crypto.MultisigSig, err error) {
+	addr, err := basics.UnmarshalChecksumAddress(signerAddr)
+	if err != nil {
+		return
+	}
+	kmd, err := c.ensureKmdClient()
+	if err != nil {
+		return
+	}
+	msigAddr, err := crypto.MultisigAddrGenWithSubsigs(partial.Version, partial.Threshold, partial.Subsigs)
+	if err != nil {
+		return
+	}
+	resp, err := kmd.MultisigSignProgram(walletHandle, pw, basics.Address(msigAddr).String(), program, crypto.PublicKey(addr), partial)
 	if err != nil {
 		return
 	}
