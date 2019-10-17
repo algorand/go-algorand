@@ -303,30 +303,31 @@ func (nc NodeController) Clone(targetDir string, copyLedger bool) (err error) {
 	return
 }
 
-// GetGenesisID returns the current genesis directory ID for our instance
-func (nc NodeController) GetGenesisID() (string, error) {
+// GetGenesis returns the current genesis for our instance
+func (nc NodeController) GetGenesis() (bookkeeping.Genesis, error) {
+	var genesis bookkeeping.Genesis
+
 	genesisFile := filepath.Join(nc.GetDataDir(), config.GenesisJSONFile)
 	genesisText, err := ioutil.ReadFile(genesisFile)
 	if err != nil {
-		return "", err
+		return genesis, err
 	}
 
-	var genesis bookkeeping.Genesis
 	err = protocol.DecodeJSON(genesisText, &genesis)
 	if err != nil {
-		return "", err
+		return genesis, err
 	}
 
-	return genesis.ID(), nil
+	return genesis, nil
 }
 
 // GetGenesisDir returns the current genesis directory for our instance
 func (nc NodeController) GetGenesisDir() (string, error) {
-	genesisID, err := nc.GetGenesisID()
+	genesis, err := nc.GetGenesis()
 	if err != nil {
 		return "", err
 	}
-	genesisDir := filepath.Join(nc.GetDataDir(), genesisID)
+	genesisDir := filepath.Join(nc.GetDataDir(), genesis.ID())
 	return genesisDir, nil
 }
 
