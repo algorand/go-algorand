@@ -46,10 +46,6 @@ func TxnPool(s *transactions.SignedTxn, spec transactions.SpecialAddresses, prot
 		return errors.New("empty address")
 	}
 
-	if s.Sig != (crypto.Signature{}) && !s.Msig.Blank() {
-		return errors.New("signedtxn should only have one of Sig or Msig")
-	}
-
 	outCh := make(chan error, 1)
 	cx := asyncVerifyContext{s, outCh, &proto}
 	verificationPool.EnqueueBacklog(context.Background(), stxnAsyncVerify, &cx, nil)
