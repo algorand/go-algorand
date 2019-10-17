@@ -139,7 +139,7 @@ func TestMinBalanceOK(t *testing.T) {
 	limitedAccounts := make(map[basics.Address]uint64)
 	limitedAccounts[addresses[0]] = 2*minBalance + proto.MinTxnFee
 	ledger := makeMockLedger(t, initAcc(limitedAccounts))
-	transactionPool := MakeTransactionPool(ledger, testPoolSize, false)
+	transactionPool := MakeTransactionPool(ledger, testPoolSize, false, 2)
 
 	// sender goes below min
 	tx := transactions.Transaction{
@@ -177,7 +177,7 @@ func TestSenderGoesBelowMinBalance(t *testing.T) {
 	limitedAccounts := make(map[basics.Address]uint64)
 	limitedAccounts[addresses[0]] = 2*minBalance + proto.MinTxnFee
 	ledger := makeMockLedger(t, initAcc(limitedAccounts))
-	transactionPool := MakeTransactionPool(ledger, testPoolSize, false)
+	transactionPool := MakeTransactionPool(ledger, testPoolSize, false, 2)
 
 	// sender goes below min
 	tx := transactions.Transaction{
@@ -215,7 +215,7 @@ func TestCloseAccount(t *testing.T) {
 	limitedAccounts := make(map[basics.Address]uint64)
 	limitedAccounts[addresses[0]] = 3*minBalance + 2*proto.MinTxnFee
 	ledger := makeMockLedger(t, initAcc(limitedAccounts))
-	transactionPool := MakeTransactionPool(ledger, testPoolSize, false)
+	transactionPool := MakeTransactionPool(ledger, testPoolSize, false, 2)
 
 	// sender goes below min
 	closeTx := transactions.Transaction{
@@ -273,7 +273,7 @@ func TestCloseAccountWhileTxIsPending(t *testing.T) {
 	limitedAccounts := make(map[basics.Address]uint64)
 	limitedAccounts[addresses[0]] = 2*minBalance + 2*proto.MinTxnFee - 1
 	ledger := makeMockLedger(t, initAcc(limitedAccounts))
-	transactionPool := MakeTransactionPool(ledger, testPoolSize, false)
+	transactionPool := MakeTransactionPool(ledger, testPoolSize, false, 2)
 
 	// sender goes below min
 	tx := transactions.Transaction{
@@ -332,7 +332,7 @@ func TestClosingAccountBelowMinBalance(t *testing.T) {
 	limitedAccounts[addresses[0]] = 2*minBalance - 1 + proto.MinTxnFee
 	limitedAccounts[addresses[2]] = 0
 	ledger := makeMockLedger(t, initAcc(limitedAccounts))
-	transactionPool := MakeTransactionPool(ledger, testPoolSize, false)
+	transactionPool := MakeTransactionPool(ledger, testPoolSize, false, 2)
 
 	// sender goes below min
 	closeTx := transactions.Transaction{
@@ -371,7 +371,7 @@ func TestRecipientGoesBelowMinBalance(t *testing.T) {
 	limitedAccounts := make(map[basics.Address]uint64)
 	limitedAccounts[addresses[1]] = 0
 	ledger := makeMockLedger(t, initAcc(limitedAccounts))
-	transactionPool := MakeTransactionPool(ledger, testPoolSize, false)
+	transactionPool := MakeTransactionPool(ledger, testPoolSize, false, 2)
 
 	// sender goes below min
 	tx := transactions.Transaction{
@@ -407,7 +407,7 @@ func TestRememberForget(t *testing.T) {
 	}
 
 	ledger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
-	transactionPool := MakeTransactionPool(ledger, testPoolSize, false)
+	transactionPool := MakeTransactionPool(ledger, testPoolSize, false, 2)
 
 	eval := newBlockEvaluator(t, ledger)
 
@@ -469,7 +469,7 @@ func TestCleanUp(t *testing.T) {
 	}
 
 	ledger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
-	transactionPool := MakeTransactionPool(ledger, testPoolSize, false)
+	transactionPool := MakeTransactionPool(ledger, testPoolSize, false, 2)
 
 	issuedTransactions := 0
 	for i, sender := range addresses {
@@ -543,7 +543,7 @@ func TestFixOverflowOnNewBlock(t *testing.T) {
 	}
 
 	ledger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
-	transactionPool := MakeTransactionPool(ledger, testPoolSize, false)
+	transactionPool := MakeTransactionPool(ledger, testPoolSize, false, 2)
 
 	overSpender := addresses[0]
 	var overSpenderAmount uint64
@@ -635,7 +635,7 @@ func TestOverspender(t *testing.T) {
 
 	overSpender := addresses[0]
 	ledger := makeMockLedger(t, initAcc(map[basics.Address]uint64{overSpender: proto.MinTxnFee - 1}))
-	transactionPool := MakeTransactionPool(ledger, testPoolSize, false)
+	transactionPool := MakeTransactionPool(ledger, testPoolSize, false, 2)
 
 	receiver := addresses[1]
 	tx := transactions.Transaction{
@@ -692,7 +692,7 @@ func TestRemove(t *testing.T) {
 	}
 
 	ledger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
-	transactionPool := MakeTransactionPool(ledger, testPoolSize, false)
+	transactionPool := MakeTransactionPool(ledger, testPoolSize, false, 2)
 
 	sender := addresses[0]
 	receiver := addresses[1]
@@ -730,7 +730,7 @@ func BenchmarkTransactionPoolRememberOne(b *testing.B) {
 	}
 
 	ledger := makeMockLedger(b, initAccFixed(addresses, 1<<32))
-	transactionPool := MakeTransactionPool(ledger, b.N, false)
+	transactionPool := MakeTransactionPool(ledger, b.N, false, 2)
 	signedTransactions := make([]transactions.SignedTxn, 0, b.N)
 	for i, sender := range addresses {
 		for j := 0; j < b.N/len(addresses); j++ {
@@ -762,7 +762,7 @@ func BenchmarkTransactionPoolRememberOne(b *testing.B) {
 	b.StopTimer()
 	b.ResetTimer()
 	ledger = makeMockLedger(b, initAccFixed(addresses, 1<<32))
-	transactionPool = MakeTransactionPool(ledger, b.N, false)
+	transactionPool = MakeTransactionPool(ledger, b.N, false, 2)
 
 	b.StartTimer()
 	for _, signedTx := range signedTransactions {
@@ -788,7 +788,7 @@ func BenchmarkTransactionPoolPending(b *testing.B) {
 		b.ResetTimer()
 
 		ledger := makeMockLedger(b, initAccFixed(addresses, 1<<32))
-		transactionPool := MakeTransactionPool(ledger, benchPoolSize, false)
+		transactionPool := MakeTransactionPool(ledger, benchPoolSize, false, 2)
 		var block bookkeeping.Block
 		block.Payset = make(transactions.Payset, 0)
 
@@ -850,7 +850,7 @@ func BenchmarkTransactionPoolSteadyState(b *testing.B) {
 	}
 
 	l := makeMockLedger(b, initAccFixed(addresses, 1<<32))
-	transactionPool := MakeTransactionPool(l, poolSize, false)
+	transactionPool := MakeTransactionPool(l, poolSize, false, 2)
 
 	var signedTransactions []transactions.SignedTxn
 	for i := 0; i < b.N; i++ {

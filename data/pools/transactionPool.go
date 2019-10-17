@@ -45,6 +45,7 @@ type TransactionPool struct {
 	ledger                 *ledger.Ledger
 	statusCache            *statusCache
 	logStats               bool
+	expFeeFactor           uint64
 
 	// pendingMu protects pendingTxGroups and pendingTxids
 	pendingMu       deadlock.RWMutex
@@ -64,7 +65,7 @@ type TransactionPool struct {
 //
 // The pool also contains status information for the last transactionPoolStatusSize
 // transactions that were removed from the pool without being committed.
-func MakeTransactionPool(ledger *ledger.Ledger, transactionPoolStatusSize int, logStats bool) *TransactionPool {
+func MakeTransactionPool(ledger *ledger.Ledger, transactionPoolStatusSize int, logStats bool, expFeeFactor uint64) *TransactionPool {
 	pool := TransactionPool{
 		pendingTxids:    make(map[transactions.Txid]transactions.SignedTxn),
 		rememberedTxids: make(map[transactions.Txid]transactions.SignedTxn),
@@ -72,6 +73,7 @@ func MakeTransactionPool(ledger *ledger.Ledger, transactionPoolStatusSize int, l
 		ledger:          ledger,
 		statusCache:     makeStatusCache(transactionPoolStatusSize),
 		logStats:        logStats,
+		expFeeFactor:    expFeeFactor,
 	}
 	pool.cond.L = &pool.mu
 	pool.recomputeBlockEvaluator()
@@ -233,7 +235,11 @@ func (pool *TransactionPool) test(txgroup []transactions.SignedTxn) error {
 	// The threshold grows exponentially if there are multiple blocks
 	// pending in the pool.
 	if pool.numPendingWholeBlocks > 1 {
-		feePerByte = feePerByte << (pool.numPendingWholeBlocks - 1)
+		// golang has no convenient integer exponentiation, so we just
+		// do this in a loop
+		for i := 0; i < int(pool.numPendingWholeBlocks)-1; i++ {
+			feePerByte *= pool.expFeeFactor
+		}
 	}
 
 	for _, t := range txgroup {

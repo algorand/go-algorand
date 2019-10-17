@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # Copyright (c) 2016 Travis CI GmbH <contact@travis-ci.org>
 #
@@ -59,14 +59,13 @@ travis_wait() {
   } || return 1
 
   if [ $result -eq 0 ]; then
-    echo -e "\n${ANSI_GREEN}The command \"$cmd\" exited with $result.${ANSI_RESET}"
+    echo -e "\n${ANSI_GREEN}The command \"$cmd\" exited with $result.${ANSI_RESET}\n${ANSI_GREEN}Log:${ANSI_RESET}\n"
+    tail -n 200 "${log_file}"
   else
-    echo -e "\n${ANSI_RED}The command \"$cmd\" exited with $result.${ANSI_RESET}"
+    echo -e "\n${ANSI_RED}The command \"$cmd\" exited with $result.${ANSI_RESET}\n${ANSI_GREEN}Log:${ANSI_RESET}\n"
+    cat "${log_file}"
   fi
-
-  echo -e "\n${ANSI_GREEN}Log:${ANSI_RESET}\n"
-  tail -n 200 $log_file
-
+  rm -f "${log_file}"
   return $result
 }
 

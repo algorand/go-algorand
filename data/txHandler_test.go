@@ -71,7 +71,7 @@ func BenchmarkTxHandlerProcessDecoded(b *testing.B) {
 	l := ledger
 
 	const txPoolSize = 20000
-	tp := pools.MakeTransactionPool(l.Ledger, txPoolSize, false)
+	tp := pools.MakeTransactionPool(l.Ledger, txPoolSize, false, 2)
 	signedTransactions := make([]transactions.SignedTxn, 0, b.N)
 	for i := 0; i < b.N/numUsers; i++ {
 		for u := 0; u < numUsers; u++ {

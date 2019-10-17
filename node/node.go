@@ -197,7 +197,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookDir
 		return nil, err
 	}
 
-	node.transactionPool = pools.MakeTransactionPool(node.ledger.Ledger, cfg.TxPoolSize, cfg.EnableAssembleStats)
+	node.transactionPool = pools.MakeTransactionPool(node.ledger.Ledger, cfg.TxPoolSize, cfg.EnableAssembleStats, cfg.TxPoolExponentialIncreaseFactor)
 	node.ledger.RegisterBlockListeners([]ledger.BlockListener{node.transactionPool})
 	node.txHandler = data.MakeTxHandler(node.transactionPool, node.ledger, node.net, node.genesisID, node.genesisHash, node.lowPriorityCryptoVerificationPool)
 	node.feeTracker, err = pools.MakeFeeTracker()

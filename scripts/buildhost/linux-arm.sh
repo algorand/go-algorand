@@ -19,7 +19,7 @@ cd ${TMPPATH}
 
 AWS_REGION="us-west-2"
 # this is the private AMI that contains the RasPI VM running on port 5022
-AWS_LINUX_AMI="ami-077aa2f293886f758"
+AWS_LINUX_AMI="ami-092a4cbb66cbd47f7"
 AWS_INSTANCE_TYPE="i3.xlarge"
 INSTANCE_NUMBER=$RANDOM
 
@@ -47,48 +47,16 @@ exitWithError() {
 
 ${SCRIPTPATH}/start_ec2_instance.sh ${AWS_REGION} ${AWS_LINUX_AMI} ${AWS_INSTANCE_TYPE}
 if [ "$?" != "0" ]; then
-    exitWithError $? "Unable to start EC2 instance"
+    exitWithError 1 "Unable to start EC2 instance"
 fi
 
 scp -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance):/home/ubuntu/armv6_stretch/id_rsa ./id_rsa
 if [ "$?" != "0" ]; then
-    exitWithError $? "Unable to retreive RasPI credentials from EC2 instance"
+    exitWithError 1 "Unable to retreive RasPI credentials from EC2 instance at $(cat instance)"
 fi
 
-
-echo "Stopping raspi service"
-end=$((SECONDS+90))
-RASPI_SERVICE_STOPPED=false
-while [ $SECONDS -lt $end ]; do
-    ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) "sudo systemctl stop raspi" 2>/dev/null
-    if [ "$?" = "0" ]; then
-        echo "RasPI is stopped"
-        RASPI_SERVICE_STOPPED=true
-        break
-    fi
-    sleep 1s
-done
-
-if [ "${RASPI_SERVICE_STOPPED}" = "false" ]; then
-    exitWithError 1 "Unable to stop raspi service"
-fi
-
-scp -i key.pem -o "StrictHostKeyChecking no" ${SCRIPTPATH}/nvme.sh ubuntu@$(cat instance):/home/ubuntu/nvme.sh
-if [ "$?" != "0" ]; then
-    exitWithError 1 "unable to upload nvme script"
-fi
-
-ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) "./nvme.sh" >> /home/ubuntu/nvme.log
-if [ "$?" != "0" ]; then
-    exitWithError 1 "nvme initialization failed"
-fi
-ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) "sudo systemctl start raspi"
-if [ "$?" != "0" ]; then
-    exitWithError 1 "unable to restart raspi service"
-fi
-
-echo "Waiting for RasPI SSH connection"
-end=$((SECONDS+90))
+echo "Waiting for RasPI SSH connection at $(cat instance)"
+end=$((SECONDS+1200))
 RASPI_READY=false
 while [ $SECONDS -lt $end ]; do
     ssh -i id_rsa -o "StrictHostKeyChecking no" -p 5022 pi@$(cat instance) "uname -a" 2>/dev/null
@@ -97,11 +65,11 @@ while [ $SECONDS -lt $end ]; do
         RASPI_READY=true
         break
     fi
-    sleep 1s
+    sleep 4s
 done
 
 if [ "${RASPI_READY}" = "false" ]; then
-    exitWithError 1 "Timed out waiting for raspi service to start"
+    exitWithError 1 "Timed out waiting for raspi service to start on $(cat instance)"
 fi
 
 BRANCH=$(cat $BUILD_REQUEST | jq -r '.TRAVIS_BRANCH')
@@ -134,11 +102,28 @@ fi
 cat << FOE >> exescript
 export DEBIAN_FRONTEND=noninteractive
 ${EXEC}
+exit \$?
 FOE
+
+timeout_monitor() {
+    local timeout=$1 # in minutes
+    local count=0
+    while [ $count -lt $timeout ]; do
+        count=$(($count + 1))
+        sleep 60s
+    done
+    # at this point, we want to terminate the EC2 instance.
+    exitWithError 1 "EC2 instance $(cat instance) timed out after ${timeout} minutes"
+}
+
+timeout_monitor 360 &
+timeout_monitor_pid=$!
 
 set -o pipefail
 ssh -i id_rsa -tt -o "StrictHostKeyChecking no" -p 5022 pi@$(cat instance) 'bash -s' < exescript 2>&1 | ${SCRIPTPATH}/s3streamup.sh s3://${BUCKET}/${LOGFILE} ${NO_SIGN}
 ERR=$?
+
+ps -p$timeout_monitor_pid &>/dev/null && kill $timeout_monitor_pid
 
 exitWithError ${ERR} ""
 
