@@ -88,6 +88,33 @@ func stxnAsyncVerify(arg interface{}) interface{} {
 }
 
 func stxnVerifyCore(s *transactions.SignedTxn, proto *config.ConsensusParams) error {
+	// Check for non-empty fields that are not yet enabled
+	if !proto.Asset {
+		reject := false
+		if (s.Txn.AssetConfigTxnFields != transactions.AssetConfigTxnFields{}) {
+			reject = true
+		}
+		if (s.Txn.AssetTransferTxnFields != transactions.AssetTransferTxnFields{}) {
+			reject = true
+		}
+		if (s.Txn.AssetFreezeTxnFields != transactions.AssetFreezeTxnFields{}) {
+			reject = true
+		}
+		if reject {
+			return errors.New("assets not yet enabled")
+		}
+	}
+	if !proto.SupportTxGroups {
+		if s.Txn.Group != (crypto.Digest{}) {
+			return errors.New("txn groups not yet enabled")
+		}
+	}
+	if !proto.SupportTransactionLeases {
+		if s.Txn.Lease != ([32]byte{}) {
+			return errors.New("leases not yet enabled")
+		}
+	}
+
 	numSigs := 0
 	hasSig := false
 	hasMsig := false
