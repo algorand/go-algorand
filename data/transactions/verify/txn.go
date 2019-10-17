@@ -136,6 +136,9 @@ func stxnVerifyCore(s *transactions.SignedTxn, proto *config.ConsensusParams) er
 // LogicSig checks that the signature is valid and that the program is basically well formed.
 // It does not evaluate the logic.
 func LogicSig(lsig *transactions.LogicSig, proto *config.ConsensusParams, stxn *transactions.SignedTxn) error {
+	if proto.LogicSigVersion == 0 {
+		return errors.New("LogicSig not enabled")
+	}
 	if len(lsig.Logic) == 0 {
 		return errors.New("LogicSig.Logic empty")
 	}
