@@ -467,23 +467,12 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 			return TransactionInLedgerError{txn.ID()}
 		}
 
-		// Well-formed on its own?
-		err = txn.Txn.WellFormed(spec, eval.proto)
-		if err != nil {
-			return fmt.Errorf("transaction %v: malformed: %v", txn.ID(), err)
-		}
-
-		// Properly signed?
+		// Well-formed and signed properly?
 		if eval.txcache == nil || !eval.txcache.Verified(txn) {
 			err = verify.TxnPool(&txn, spec, eval.proto, eval.verificationPool)
 			if err != nil {
 				return fmt.Errorf("transaction %v: failed to verify: %v", txn.ID(), err)
 			}
-		}
-
-		// Verify that groups are supported.
-		if !txn.Txn.Group.IsZero() && !eval.proto.SupportTxGroups {
-			return fmt.Errorf("transaction groups not supported")
 		}
 
 		if !txn.Lsig.Blank() {
