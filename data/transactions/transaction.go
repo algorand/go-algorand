@@ -91,6 +91,19 @@ type Header struct {
 	Lease [32]byte `codec:"lx"`
 }
 
+// HeaderV17 captures the fields common to every transaction type.
+type HeaderV17 struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Sender      basics.Address    `codec:"snd"`
+	Fee         basics.MicroAlgos `codec:"fee"`
+	FirstValid  basics.Round      `codec:"fv"`
+	LastValid   basics.Round      `codec:"lv"`
+	Note        []byte            `codec:"note"` // Uniqueness or app-level data about txn
+	GenesisID   string            `codec:"gen"`
+	GenesisHash crypto.Digest     `codec:"gh"`
+}
+
 // Transaction describes a transaction that can appear in a block.
 type Transaction struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
@@ -107,6 +120,29 @@ type Transaction struct {
 	AssetConfigTxnFields
 	AssetTransferTxnFields
 	AssetFreezeTxnFields
+
+	// The transaction's Txid is computed when we decode,
+	// and cached here, to avoid needlessly recomputing it.
+	cachedTxid Txid
+
+	// The valid flag indicates if this transaction was
+	// correctly decoded.
+	valid bool
+}
+
+// TransactionV17 describes a transaction that can appear in a block.
+type TransactionV17 struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	// Type of transaction
+	Type protocol.TxType `codec:"type"`
+
+	// Common fields for all types of transactions
+	HeaderV17
+
+	// Fields for different types of transactions
+	KeyregTxnFields
+	PaymentTxnFields
 
 	// The transaction's Txid is computed when we decode,
 	// and cached here, to avoid needlessly recomputing it.

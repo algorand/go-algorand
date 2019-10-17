@@ -205,31 +205,53 @@ func (handler *TxHandler) asyncVerifySignature(arg interface{}) interface{} {
 }
 
 func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) network.OutgoingMessage {
-	dec := protocol.NewDecoderBytes(rawmsg.Data)
-	ntx := 0
 	unverifiedTxGroup := make([]transactions.SignedTxn, 1)
-	for {
-		if len(unverifiedTxGroup) == ntx {
-			n := make([]transactions.SignedTxn, len(unverifiedTxGroup)*2)
-			copy(n, unverifiedTxGroup)
-			unverifiedTxGroup = n
-		}
+	if handler.getLatestsConsensusProtocol().TxnCounter {
+		dec := protocol.NewDecoderBytes(rawmsg.Data)
+		ntx := 0
+		for {
+			if len(unverifiedTxGroup) == ntx {
+				n := make([]transactions.SignedTxn, len(unverifiedTxGroup)*2)
+				copy(n, unverifiedTxGroup)
+				unverifiedTxGroup = n
+			}
 
-		err := dec.Decode(&unverifiedTxGroup[ntx])
-		if err == io.EOF {
-			break
+			err := dec.Decode(&unverifiedTxGroup[ntx])
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				logging.Base().Warnf("Received a non-decodable txn: %v", err)
+				return network.OutgoingMessage{Action: network.Disconnect}
+			}
+			ntx++
 		}
+		if ntx == 0 {
+			logging.Base().Warnf("Received empty tx group")
+			return network.OutgoingMessage{Action: network.Disconnect}
+		}
+		unverifiedTxGroup = unverifiedTxGroup[:ntx]
+	} else {
+		// use the old style transactions.
+		var unverifiedTxn transactions.SignedTxnV17
+		err := protocol.Decode(rawmsg.Data, &unverifiedTxn)
 		if err != nil {
 			logging.Base().Warnf("Received a non-decodable txn: %v", err)
 			return network.OutgoingMessage{Action: network.Disconnect}
 		}
-		ntx++
+		unverifiedTxGroup[0].Sig = unverifiedTxn.Sig
+		unverifiedTxGroup[0].Msig = unverifiedTxn.Msig
+		unverifiedTxGroup[0].Txn.KeyregTxnFields = unverifiedTxn.Txn.KeyregTxnFields
+		unverifiedTxGroup[0].Txn.PaymentTxnFields = unverifiedTxn.Txn.PaymentTxnFields
+		unverifiedTxGroup[0].Txn.Type = unverifiedTxn.Txn.Type
+		unverifiedTxGroup[0].Txn.Sender = unverifiedTxn.Txn.Sender
+		unverifiedTxGroup[0].Txn.Fee = unverifiedTxn.Txn.Fee
+		unverifiedTxGroup[0].Txn.FirstValid = unverifiedTxn.Txn.FirstValid
+		unverifiedTxGroup[0].Txn.LastValid = unverifiedTxn.Txn.LastValid
+		unverifiedTxGroup[0].Txn.Note = unverifiedTxn.Txn.Note
+		unverifiedTxGroup[0].Txn.GenesisID = unverifiedTxn.Txn.GenesisID
+		unverifiedTxGroup[0].Txn.GenesisHash = unverifiedTxn.Txn.GenesisHash
 	}
-	if ntx == 0 {
-		logging.Base().Warnf("Received empty tx group")
-		return network.OutgoingMessage{Action: network.Disconnect}
-	}
-	unverifiedTxGroup = unverifiedTxGroup[:ntx]
 
 	select {
 	case handler.backlogQueue <- &txBacklogMsg{
@@ -243,6 +265,18 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 	}
 
 	return network.OutgoingMessage{Action: network.Ignore}
+}
+
+// returns the ConsensusParams for the latests block in the ledger, or the default one if the one in the ledger doesn't exists.
+// todo - this could be substentially improved.
+func (handler *TxHandler) getLatestsConsensusProtocol() config.ConsensusParams {
+	latest := handler.ledger.Latest()
+	latestHdr, err := handler.ledger.BlockHdr(latest)
+	if err != nil {
+		logging.Base().Warnf("Could not get header for previous block %v: %v", latest, err)
+		return config.Consensus[protocol.ConsensusCurrentVersion]
+	}
+	return config.Consensus[latestHdr.CurrentProtocol]
 }
 
 // checkAlreadyCommitted test to see if the given transaction ( in the txBacklogMsg ) was already commited, and

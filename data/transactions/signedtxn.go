@@ -54,6 +54,19 @@ type SignedTxn struct {
 	cachedEncodingLen int
 }
 
+// SignedTxnV17 structure is maintained for backward compatibility with v17 of the protocol version.
+type SignedTxnV17 struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Sig  crypto.Signature   `codec:"sig"`
+	Msig crypto.MultisigSig `codec:"msig"`
+	Txn  TransactionV17     `codec:"txn"`
+
+	// The length of the encoded SignedTxn, used for computing the
+	// transaction's priority in the transaction pool.
+	cachedEncodingLen int
+}
+
 // SignedTxnInBlock is how a signed transaction is encoded in a block.
 type SignedTxnInBlock struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
