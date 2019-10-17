@@ -180,7 +180,7 @@ func TestSenderGoesBelowMinBalance(t *testing.T) {
 	}
 
 	limitedAccounts := make(map[basics.Address]uint64)
-	limitedAccounts[addresses[0]] = 3*minBalance + 2*proto.MinTxnFee
+	limitedAccounts[addresses[0]] = 2*minBalance + proto.MinTxnFee
 	ledger := makeMockLedger(t, initAcc(limitedAccounts))
 	transactionPool := MakeTransactionPool(ledger, testPoolSize, false)
 
