@@ -1,6 +1,6 @@
 # Transaction Execution Approval Language (TEAL)
 
-TEAL is a bytecode based stack language that executes inside Algorand transactions to check the parameters of the transaction and approve the transaction as if by a signature.
+TEAL is a bytecode based stack language that executes inside Algorand transactions to check the parameters of the transaction and approve the transaction as if by a signature. Programs have read-only access to the transaction they are attached to, transactions in their atomic transaction group, and a few global values. Programs cannot modify or create transactions, only reject or approve them. Approval is signaled by finishing with the stack containing a single non-zero uint64 value.
 
 TEAL programs should be short and run fast as they are run in-line along with signature checking, transaction balance rule checking, and other checks during block assembly and validation. Many useful programs are less than 100 instructions.
 
@@ -16,13 +16,19 @@ In addition to the stack there are 256 positions of scratch space, also uint64-b
 
 ## Execution Environment
 
-TEAL runs in Algorand nodes as part of testing a proposed transaction to see if it is valid and authorized to be committed into a block. If an authorized program executes and finishes with a single non-zero uint64 value on the stack then that program has validated the transaction it is attached to.
+TEAL runs in Algorand nodes as part of testing a proposed transaction to see if it is valid and authorized to be committed into a block.
 
-A program is an authorized program one of two ways: The SHA512_256 hash of the program (prefixed by "Program") is equal to the transaction Sender address; OR the program (prefixed by "Program") has a valid signature or multi-signature from the transaction Sender address.
+If an authorized program executes and finishes with a single non-zero uint64 value on the stack then that program has validated the transaction it is attached to.
+
+The TEAL program has access to data from the transaction it is attached to (`txn` op), any transactions in a transaction group it is part of (`gtxn` op), and a few global values like consensus parameters (`global` op). Some "Args" may be attached to a transaction being validated by a TEAL program. Args are an array of byte strings. A common pattern would be to have the key to unlock some contract as an Arg. The args are recorded on the blockchain, thus publishing the secret as is needed by a time-locked-hash-contract swap pattern.
+
+A program can either authorize some delegated action on a normal private key signed or multisig account or be wholly in charge of a contract account.
+
+* If the account has signed the program (an ed25519 signature on "Program" concatenated with the program bytes) then if the program returns true the transaction is authorized as if the account had signed it. This allows an account to hand out a signed program so that other users can carry out delegated actions which are approved by the program.
+* If the SHA512_256 hash of the program (prefixed by "Program") is equal to the transaction Sender address then this is a contract account wholly controlled by the program. No other signature is necessary or possible. The only way to execute a transaction against the contract account is for the program to approve it.
 
 The TEAL bytecode plus the length of any Args must add up to less than 1000 bytes (consensus parameter LogicSigMaxSize). Each TEAL op has an associated cost estimate and the program cost estimate must total less than 20000 (consensus parameter LogicSigMaxCost). Most ops have an estimated cost of 1, but a few slow crypto ops are much higher.
 
-The TEAL program has access to data from the transaction it is attached to, any transactions in a transaction group it is part of, and a few global values like the current Round number, block Timestamp, and some consensus parameters.
 
 
 ## Constants
@@ -38,10 +44,19 @@ Constants are pushed onto the stack by `intc`, `intc_[0123]`, `bytec`, and `byte
 ## Operations
 
 Most operations work with only one type of argument, uint64 or bytes, and panic if the wrong type value is on the stack.
+The instruction set was designed to execute calculator-like expressions.
+What might be a one line expression with various parenthesized clauses should be efficiently representable in TEAL.
+
+Looping is not possible, by design, to ensure predictably fast execution.
+There is a branch instruction (`bnz`, branch if not zero) which allows forward branching only so that some code may be skipped.
+
+Many programs need only a few dozen instructions. The instruction set has some optimization built in. `intc`, `bytec`, and `arg` take an immediate value byte, making a 2-byte op to load a value onto the stack, but they also have single byte versions for loading values 0, 1, 2, and 3. Any program will benefit from having a few common values loaded with a smaller one byte opcode, and many programs won't even need more than those 4 values. Cryptographic hashes and `ed25519verify` are single byte opcodes with powerful libraries behind them. These operations still take more time than other ops (and this is reflected in the cost of each op and the cost limit of a program) but are efficient in compiled code space.
 
 This summary is supplemented by more detail in the [opcodes document](TEAL_opcodes.md).
 
-Some operations 'panic' and immediately end execution of the program. A transaction checked by a program that panics is not valid.
+Some operations 'panic' and immediately end execution of the program.
+A transaction checked by a program that panics is not valid.
+A contract account governed by a buggy program might not have a way to get assets back out of it. Code carefully.
 
 ### Arithmetic
 
@@ -213,3 +228,15 @@ For version 1, subsequent bytes after the varuint are program opcode bytes. Futu
 ## Varuint
 
 A '[proto-buf style variable length unsigned int](https://developers.google.com/protocol-buffers/docs/encoding#varint)' is encoded with 7 data bits per byte and the high bit is 1 if there is a following byte and 0 for the last byte. The lowest order 7 bits are in the first byte, followed by successively higher groups of 7 bits.
+
+# What TEAL Cannot Do
+
+Current design and implementation limitations to be aware of.
+
+* TEAL cannot create or change a transaction, only approve or reject.
+ *TEAL cannot lookup balances of Algos or other assets. (Standard transaction accounting will apply after TEAL has run and authorized a transaction. A TEAL-approved transaction could still be invalid by other accounting rules just as a standard signed transaction could be invalid. e.g. I can't give away money I don't have.)
+* TEAL cannot access information in previous blocks. TEAL cannot access most information in other transactions in the current block. (TEAL can access fields of the transaction it is attached to and the transactions in an atomic transaction group.)
+* TEAL cannot know exactly what round the current transaction will commit in (but it is somewhere in FirstValid through LastValid).
+* TEAL cannot know exactly what time its transaction is committed. (`txn FirstValidTime` should be approximately the 'unix time' seconds since 1970-01-01 00:00:00 UTC of the block at FirstValid, but there are conditions in which this time may drift and slowly re-align to close to accurate time.)
+* TEAL cannot loop. It's branch instruction `bnz` "branch if not zero" can only branch forward so as to skip some code.
+* TEAL cannot recurse. There is no subroutine jump operation.
