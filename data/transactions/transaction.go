@@ -340,6 +340,9 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 	if !proto.SupportTransactionLeases && (tx.Lease != [32]byte{}) {
 		return fmt.Errorf("transaction tried to acquire lease %v but protocol does not support transaction leases", tx.Lease)
 	}
+	if !proto.SupportTxGroups && (tx.Group != crypto.Digest{}) {
+		return fmt.Errorf("transaction has group but groups not yet enabled")
+	}
 	return nil
 }
 
