@@ -1163,16 +1163,16 @@ func opGlobal(cx *evalContext) {
 	cx.nextpc = cx.pc + 2
 }
 
-// LogicMsg is data meant to be signed and then verified
-// with the ed25519verify opcode.
-type LogicMsg struct {
+// Msg is data meant to be signed and then verified with the
+// ed25519verify opcode.
+type Msg struct {
 	_struct     struct{}      `codec:",omitempty,omitemptyarray"`
 	ProgramHash crypto.Digest `codec:"p"`
 	Data        []byte        `codec:"d"`
 }
 
 // ToBeHashed implements crypto.Hashable
-func (msg LogicMsg) ToBeHashed() (protocol.HashID, []byte) {
+func (msg Msg) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.ProgramData, append(msg.ProgramHash[:], msg.Data...)
 }
 
@@ -1195,7 +1195,7 @@ func opEd25519verify(cx *evalContext) {
 	}
 	copy(sig[:], cx.stack[prev].Bytes)
 
-	msg := LogicMsg{ProgramHash: cx.programHash, Data: cx.stack[pprev].Bytes}
+	msg := Msg{ProgramHash: cx.programHash, Data: cx.stack[pprev].Bytes}
 	if sv.Verify(msg, sig) {
 		cx.stack[pprev].Uint = 1
 	} else {
