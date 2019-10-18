@@ -60,6 +60,10 @@ type accountUpdates struct {
 	// address that appears in deltas.
 	accounts map[basics.Address]modifiedAccount
 
+	// assetCreators stores a map of asset indices to creator addresses
+	// for any new assets that appear in deltas
+	assetCreators map[basics.AssetIndex]basics.Address
+
 	// protos stores consensus parameters dbRound and every
 	// round after it; i.e., protos is one longer than deltas.
 	protos []config.ConsensusParams
@@ -254,6 +258,18 @@ func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address
 	return
 }
 
+func (au *accountUpdates) lookupAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error) {
+	// Check if we already have the asset/creator in memory. Asset indices
+	// are unique, so we don't need to scan through deltas (as in lookup)
+	creator, ok := au.assetCreators[assetIdx]
+	if ok {
+		return creator, nil
+	}
+
+	// Check the database
+	return au.accountsq.lookupAssetCreator(assetIdx)
+}
+
 func (au *accountUpdates) committedUpTo(rnd basics.Round) basics.Round {
 	lookback := basics.Round(au.protos[len(au.protos)-1].MaxBalLookback)
 	if rnd < lookback {
@@ -280,16 +296,19 @@ func (au *accountUpdates) committedUpTo(rnd basics.Round) basics.Round {
 	// account DB, so that we can drop the corresponding refcounts in
 	// au.accounts.
 	var flushcount map[basics.Address]int
+	var flushedAssets [][]basics.AssetIndex
 
 	offset := uint64(newBase - au.dbRound)
 	err := au.dbs.wdb.Atomic(func(tx *sql.Tx) error {
 		flushcount = make(map[basics.Address]int)
 		for i := uint64(0); i < offset; i++ {
 			rnd := au.dbRound + basics.Round(i) + 1
-			err := accountsNewRound(tx, rnd, au.deltas[i], au.roundTotals[i+1].RewardsLevel, au.protos[i+1])
+			flushed, err := accountsNewRound(tx, rnd, au.deltas[i], au.roundTotals[i+1].RewardsLevel, au.protos[i+1])
 			if err != nil {
 				return err
 			}
+
+			flushedAssets = append(flushedAssets, flushed)
 
 			for addr := range au.deltas[i] {
 				flushcount[addr] = flushcount[addr] + 1
@@ -319,6 +338,14 @@ func (au *accountUpdates) committedUpTo(rnd basics.Round) basics.Round {
 			delete(au.accounts, addr)
 		} else {
 			au.accounts[addr] = macct
+		}
+	}
+
+	// Drop in-memory cache of assetCreators for assets that have been
+	// flushed to disk
+	for _, flushed := range(flushedAssets) {
+		for _, aidx := range(flushed) {
+			delete(au.assetCreators, flushed)
 		}
 	}
 
@@ -359,6 +386,15 @@ func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta stateDelta) {
 		macct.ndeltas++
 		macct.data = data.new
 		au.accounts[addr] = macct
+
+		// Get which asset indexes were created and deleted
+		created, deleted := getChangedAssetIndices(data)
+		for _, aidx := range(created) {
+			assetCreators[aidx] = addr
+		}
+		for _, aidx := range(deleted) {
+			delete(assetCreators, aidx)
+		}
 	}
 	if ot.Overflowed {
 		au.log.Panicf("accountUpdates: newBlock %d overflowed totals", rnd)

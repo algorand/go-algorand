@@ -50,12 +50,16 @@ var accountsSchema = []string{
 	`CREATE TABLE IF NOT EXISTS accountbase (
 		address blob primary key,
 		data blob)`,
+	`CREATE TABLE IF NOT EXISTS assetcreators (
+		asset integer primary key,
+		creator blob)`,
 }
 
 var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS acctrounds`,
 	`DROP TABLE IF EXISTS accounttotals`,
 	`DROP TABLE IF EXISTS accountbase`,
+	`DROP TABLE IF EXISTS assetcreators`,
 }
 
 type accountDelta struct {
@@ -135,7 +139,19 @@ func accountsDbInit(q db.Queryable) (*accountsDbQueries, error) {
 		return nil, err
 	}
 
+	qs.lookupAssetCreatorStmt, err = q.Prepare("SELECT creator FROM assetcreators WHERE asset=?")
+	if err != nil {
+		return nil, err
+	}
+
 	return qs, nil
+}
+
+func (qs *accountsDbQueries) lookupAssetCreator(assetIdx basics.AssetIndex) (addr basics.Address, err error) {
+	err = db.Retry(func() error {
+		return qs.lookupAssetCreatorStmt.QueryRow(assetIdx).Scan(&addr)
+	})
+	return
 }
 
 func (qs *accountsDbQueries) lookup(addr basics.Address) (data basics.AccountData, err error) {
@@ -214,36 +230,69 @@ func accountsPutTotals(tx *sql.Tx, totals AccountTotals) error {
 	return err
 }
 
-func accountsNewRound(tx *sql.Tx, rnd basics.Round, updates map[basics.Address]accountDelta, rewardsLevel uint64, proto config.ConsensusParams) error {
+// getChangedAssetIndices takes an accountDelta and returns which AssetIndices
+// were created and which were deleted
+func getChangedAssetIndices(delta accountDelta) ([]basics.AssetIndex created, deleted) {
+	// Get assets that were created
+	for idx := range(accountDelta.new.Assets) {
+		// AssetParams are now the balance record now, but _weren't_ before
+		if _, ok := accountDelta.old.Assets[idx]; !ok {
+			created = append(created, idx)
+		}
+	}
+
+	// Get assets that were deleted
+	for idx := range(accountDelta.old.Assets) {
+		// AssetParams were in the balance record, but _aren't_ anymore
+		if _, ok := accountDelta.new.Assets[idx]; !ok {
+			deleted = append(deleted, idx)
+		}
+	}
+}
+
+func accountsNewRound(tx *sql.Tx, rnd basics.Round, updates map[basics.Address]accountDelta, rewardsLevel uint64, proto config.ConsensusParams) (flushedAssets []basics.AssetIndex, err error) {
 	var base basics.Round
-	err := tx.QueryRow("SELECT rnd FROM acctrounds WHERE id='acctbase'").Scan(&base)
+	err = tx.QueryRow("SELECT rnd FROM acctrounds WHERE id='acctbase'").Scan(&base)
 	if err != nil {
-		return err
+		return
 	}
 
 	if rnd != base+1 {
-		return fmt.Errorf("newRound %d is not immediately after base %d", rnd, base)
+		err = fmt.Errorf("newRound %d is not immediately after base %d", rnd, base)
+		return
 	}
 
 	var ot basics.OverflowTracker
 	totals, err := accountsTotals(tx)
 	if err != nil {
-		return err
+		return
 	}
 
 	totals.applyRewards(rewardsLevel, &ot)
 
 	deleteStmt, err := tx.Prepare("DELETE FROM accountbase WHERE address=?")
 	if err != nil {
-		return err
+		return
 	}
 	defer deleteStmt.Close()
 
 	replaceStmt, err := tx.Prepare("REPLACE INTO accountbase (address, data) VALUES (?, ?)")
 	if err != nil {
-		return err
+		return
 	}
 	defer replaceStmt.Close()
+
+	insertAssetIdxStmt, err := tx.Prepare("INSERT INTO assetcreators (asset, creator) VALUES (?, ?)")
+	if err != nil {
+		return
+	}
+	defer insertAssetIdxStmt.Close()
+
+	deleteAssetIdxStmt, err := tx.Prepare("DELETE FROM assetcreators WHERE asset=?")
+	if err != nil {
+		return
+	}
+	defer deleteAssetIdxStmt.Close()
 
 	for addr, data := range updates {
 		if data.new.IsZero() {
@@ -253,7 +302,27 @@ func accountsNewRound(tx *sql.Tx, rnd basics.Round, updates map[basics.Address]a
 			_, err = replaceStmt.Exec(addr[:], protocol.Encode(data.new))
 		}
 		if err != nil {
-			return err
+			return
+		}
+
+		// Get which asset indexes were created and deleted
+		created, deleted := getChangedAssetIndices(data)
+
+		// Add created assets to the creator lookup table
+		for _, aidx := range(created) {
+			_, err = insertAssetIdxStmt.Exec(aidx, addr[:])
+			if err != nil {
+				return
+			}
+			flushedAssets = append(flushedAssets, aidx)
+		}
+
+		// Remove deleted assets from the creator lookup table
+		for _, aidx := range(deleted) {
+			_, err = deleteAssetIdxStmt.Exec(aidx)
+			if err != nil {
+				return
+			}
 		}
 
 		totals.delAccount(proto, data.old, &ot)
@@ -261,27 +330,28 @@ func accountsNewRound(tx *sql.Tx, rnd basics.Round, updates map[basics.Address]a
 	}
 
 	if ot.Overflowed {
-		return fmt.Errorf("overflow computing totals")
+		return flushedAssets, fmt.Errorf("overflow computing totals")
 	}
 
 	res, err := tx.Exec("UPDATE acctrounds SET rnd=? WHERE id='acctbase'", rnd)
 	if err != nil {
-		return err
+		return
 	}
 
 	aff, err := res.RowsAffected()
 	if err != nil {
-		return err
+		return
 	}
 
 	if aff != 1 {
-		return fmt.Errorf("accountsNewRound: expected to update 1 row but got %d", aff)
+		err = fmt.Errorf("accountsNewRound: expected to update 1 row but got %d", aff)
+		return
 	}
 
 	err = accountsPutTotals(tx, totals)
 	if err != nil {
-		return err
+		return
 	}
 
-	return nil
+	return
 }
