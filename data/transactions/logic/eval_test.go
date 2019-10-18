@@ -2130,7 +2130,7 @@ arg 1
 addr %s
 ed25519verify`, pkStr))
 	require.NoError(t, err)
-	sig := c.Sign(LogicMsg{
+	sig := c.Sign(Msg{
 		ProgramHash: crypto.HashObj(Program(program)),
 		Data:        data[:],
 	})
