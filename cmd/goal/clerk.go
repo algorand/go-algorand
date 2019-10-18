@@ -282,7 +282,7 @@ var sendCmd = &cobra.Command{
 			lsigFromArgs(&lsig)
 		}
 		if program != nil {
-			ph := transactions.HashProgram(program)
+			ph := logic.HashProgram(program)
 			pha := basics.Address(ph)
 			fromAddressResolved = pha.String()
 			programArgs = getProgramArgs()
@@ -823,7 +823,7 @@ var compileCmd = &cobra.Command{
 				}
 			}
 			if !signProgram {
-				pd := transactions.HashProgram(program)
+				pd := logic.HashProgram(program)
 				addr := basics.Address(pd)
 				fmt.Printf("%s: %s\n", fname, addr.String())
 			}

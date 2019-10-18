@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/daemon/kmd/lib/kmdapi"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 )
@@ -353,7 +354,7 @@ func TestSignProgram(t *testing.T) {
 	copy(sig[:], resp1.Signature)
 	require.NotEqual(t, sig, crypto.Signature{})
 
-	ph := transactions.Program(program)
+	ph := logic.Program(program)
 	require.True(t, secrets.SignatureVerifier.Verify(ph, sig))
 }
 
