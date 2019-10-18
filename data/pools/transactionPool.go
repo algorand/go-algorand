@@ -339,16 +339,17 @@ func (pool *TransactionPool) Verified(txn transactions.SignedTxn) bool {
 		return false
 	}
 
-	ok = pendingSigTxn.Sig == txn.Sig && pendingSigTxn.Msig.Equal(txn.Msig) && pendingSigTxn.Lsig.Equal(&txn.Lsig)
-	fmt.Printf("%s Verified %v\n", txn.ID().String(), ok)
-	return ok
+	return pendingSigTxn.Sig == txn.Sig && pendingSigTxn.Msig.Equal(txn.Msig) && pendingSigTxn.Lsig.Equal(&txn.Lsig)
 }
 
+// EvalOk for LogicSig Eval of a txn by txid, returns the SignedTxn, error string, and found.
 func (pool *TransactionPool) EvalOk(txid transactions.Txid) (tx transactions.SignedTxn, txErr string, found bool) {
 	pool.lcmu.RLock()
 	defer pool.lcmu.RUnlock()
 	return pool.lsigCache.check(txid)
 }
+
+// EvalRemember sets an error string from LogicSig Eval for some SignedTxn
 func (pool *TransactionPool) EvalRemember(tx transactions.SignedTxn, errString string) {
 	pool.lcmu.Lock()
 	defer pool.lcmu.Unlock()
