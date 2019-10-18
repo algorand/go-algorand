@@ -205,66 +205,6 @@ int 0x12345678
 	require.NoError(t, err)
 }
 
-/*
-TODO: rand disabled pending better implementation
-func TestRand(t *testing.T) {
-	t.Parallel()
-	program, err := AssembleString(`rand
-arg 0
-btoi
-==
-rand
-arg 1
-btoi
-==
-&&
-rand
-arg 2
-btoi
-==
-&&
-rand
-arg 3
-btoi
-==
-&&
-rand
-arg 4
-btoi
-==
-&&`)
-	require.NoError(t, err)
-	sb := strings.Builder{}
-	// seeded sequence should be stable across implementations and versions
-	expectedInts := []uint64{
-		678322472239279674,
-		2755610692717026382,
-		7031121088374348129,
-		5887010214291542478,
-		16538017124883863159,
-	}
-	var txn transactions.SignedTxn
-	txn.Lsig.Logic = program
-	txn.Lsig.Args = make([][]byte, 5)
-	for i, v := range expectedInts {
-		txn.Lsig.Args[i] = make([]byte, 8)
-		binary.BigEndian.PutUint64(txn.Lsig.Args[i], v)
-	}
-	pass, err := Eval(program, EvalParams{
-		Txn:      &txn,
-		Trace:    &sb,
-		Seed:     []byte(benchSeed),
-		MoreSeed: []byte(benchMore),
-	})
-	if !pass {
-		t.Log(hex.EncodeToString(program))
-		t.Log(sb.String())
-	}
-	require.True(t, pass)
-	require.NoError(t, err)
-}
-*/
-
 func TestItob(t *testing.T) {
 	t.Parallel()
 	program, err := AssembleString(`byte 0x1234567812345678
@@ -2069,16 +2009,6 @@ func BenchmarkAddx64(b *testing.B) {
 
 func BenchmarkNopPassx1(b *testing.B) {
 	benchmarkBasicProgram(b, "int 1")
-}
-
-func BenchmarkRandx450(b *testing.B) {
-	const firstline = "rand\n"
-	sb := strings.Builder{}
-	sb.WriteString(firstline)
-	for i := 0; i < 450; i++ {
-		sb.WriteString("rand\n^\n")
-	}
-	benchmarkBasicProgram(b, sb.String())
 }
 
 func BenchmarkSha256Raw(b *testing.B) {

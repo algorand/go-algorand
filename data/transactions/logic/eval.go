@@ -72,11 +72,6 @@ func (sv *stackValue) String() string {
 	return fmt.Sprintf("%d 0x%x", sv.Uint, sv.Uint)
 }
 
-// Source64 is like math/rand.Source64, but we don't need to see Seed() or Int63()
-type Source64 interface {
-	Uint64() uint64
-}
-
 // EvalParams contains data that comes into condition evaluation.
 type EvalParams struct {
 	// the transaction being evaluated
@@ -329,7 +324,6 @@ var OpSpecs = []OpSpec{
 	{0x02, "keccak256", opKeccak256, oneBytes, oneBytes},
 	{0x03, "sha512_256", opSHA512_256, oneBytes, oneBytes},
 	{0x04, "ed25519verify", opEd25519verify, threeBytes, oneInt},
-	//{0x05, "rand", opRand, nil, oneInt},
 	{0x08, "+", opPlus, twoInts, oneInt},
 	{0x09, "-", opMinus, twoInts, oneInt},
 	{0x0a, "/", opDiv, twoInts, oneInt},
@@ -401,7 +395,6 @@ var opSizes = []opSize{
 	{"keccak256", 26, 1, nil},
 	{"sha512_256", 9, 1, nil},
 	{"ed25519verify", 1900, 1, nil},
-	{"rand", 3, 1, nil},
 	{"bnz", 1, 3, checkBnz},
 	{"intc", 1, 2, nil},
 	{"bytec", 1, 2, nil},
@@ -600,21 +593,6 @@ func opSHA512_256(cx *evalContext) {
 	hash := sha512.Sum512_256(cx.stack[last].Bytes)
 	cx.stack[last].Bytes = hash[:]
 }
-
-/*
-TODO: disabled until a better design can be found. Seed should be as little as possible under control of transaction submitter and block proposer.
-func opRand(cx *evalContext) {
-	if cx.Source == nil {
-		rng, err := NewChaCha20RNG(cx.Seed, cx.MoreSeed)
-		if err != nil {
-			cx.err = fmt.Errorf("could not initialize rng (%s)", err)
-			return
-		}
-		cx.Source = rng
-	}
-	cx.stack = append(cx.stack, stackValue{Uint: cx.Source.Uint64()})
-}
-*/
 
 func opPlus(cx *evalContext) {
 	last := len(cx.stack) - 1
