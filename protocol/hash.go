@@ -40,6 +40,7 @@ const (
 	PaysetFlat        HashID = "PF"
 	Payload           HashID = "PL"
 	Program           HashID = "Program"
+	ProgramData       HashID = "ProgData"
 	ProposerSeed      HashID = "PS"
 	Seed              HashID = "SD"
 	TestHashable      HashID = "TE"

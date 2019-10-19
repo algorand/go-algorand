@@ -172,7 +172,7 @@ func LogicSig(lsig *transactions.LogicSig, proto *config.ConsensusParams, stxn *
 	}
 	if numSigs == 0 {
 		// if the txn.Sender == hash(Logic) then this is a (potentially) valid operation on a contract-only account
-		program := transactions.Program(lsig.Logic)
+		program := logic.Program(lsig.Logic)
 		lhash := crypto.HashObj(&program)
 		if crypto.Digest(stxn.Txn.Sender) == lhash {
 			return nil
@@ -184,14 +184,14 @@ func LogicSig(lsig *transactions.LogicSig, proto *config.ConsensusParams, stxn *
 	}
 
 	if hasSig {
-		program := transactions.Program(lsig.Logic)
+		program := logic.Program(lsig.Logic)
 		if crypto.SignatureVerifier(stxn.Txn.Src()).Verify(&program, lsig.Sig) {
 			return nil
 		}
 		return errors.New("logic signature validation failed")
 	}
 	if hasMsig {
-		program := transactions.Program(lsig.Logic)
+		program := logic.Program(lsig.Logic)
 		if ok, _ := crypto.MultisigVerify(&program, crypto.Digest(stxn.Txn.Src()), lsig.Msig); ok {
 			return nil
 		}
