@@ -153,10 +153,10 @@ func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uin
 			}
 
 			localTimeDelta := time.Now().Sub(startTime)
-			currentTps := float64(totalSent)/localTimeDelta.Seconds()
+			currentTps := float64(totalSent) / localTimeDelta.Seconds()
 			if currentTps > float64(cfg.TxnPerSec) {
 				sleepSec := float64(totalSent)/float64(cfg.TxnPerSec) - localTimeDelta.Seconds()
-				sleepTime := time.Duration(int64(math.Round(sleepSec * 1000))) * time.Millisecond
+				sleepTime := time.Duration(int64(math.Round(sleepSec*1000))) * time.Millisecond
 				time.Sleep(sleepTime)
 			}
 		}

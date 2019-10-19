@@ -221,7 +221,7 @@ func TestSenderGoesBelowMinBalanceDueToAssets(t *testing.T) {
 	limitedAccounts := make(map[basics.Address]uint64)
 	limitedAccounts[addresses[0]] = 3*minBalance + 2*proto.MinTxnFee
 	ledger := makeMockLedgerFuture(t, initAcc(limitedAccounts))
-	transactionPool := MakeTransactionPool(ledger, testPoolSize, false)
+	transactionPool := MakeTransactionPool(ledger, testPoolSize, false, 2)
 
 	assetTx := transactions.Transaction{
 		Type: protocol.AssetConfigTx,
