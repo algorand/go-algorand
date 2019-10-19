@@ -50,6 +50,7 @@ var useDefault bool
 var quietish bool
 var logicProg string
 var randomNote bool
+var txnPerSec uint64
 
 func init() {
 	rootCmd.AddCommand(runCmd)
@@ -59,6 +60,7 @@ func init() {
 	runCmd.Flags().Uint32VarP(&numAccounts, "numaccounts", "n", 0, "The number of accounts to include in the transfers")
 	runCmd.Flags().Uint64VarP(&maxAmount, "ma", "a", 0, "The (max) amount to be transferred")
 	runCmd.Flags().Uint64VarP(&minAccountFunds, "minaccount", "", 0, "The minimum amount to fund a test account with")
+	runCmd.Flags().Uint64VarP(&txnPerSec, "tps", "t", 200, "Number of Txn per second that pingpong sends")
 	runCmd.Flags().Int64VarP(&maxFee, "mf", "f", -1, "The MAX fee to be used for transactions, a value of '0' tells the server to use a suggested fee.")
 	runCmd.Flags().Uint64VarP(&minFee, "minf", "m", 1000, "The MIN fee to be used for randomFee transactions")
 	runCmd.Flags().BoolVar(&randomAmount, "ra", false, "Set to enable random amounts (up to maxamount)")
@@ -124,6 +126,13 @@ var runCmd = &cobra.Command{
 		if minAccountFunds > 0 {
 			cfg.MinAccountFunds = minAccountFunds
 		}
+
+		if txnPerSec == 0 {
+			reportErrorf("cannot set tps to 0")
+		}else if txnPerSec != 200 {
+			cfg.TxnPerSec = txnPerSec
+		}
+
 		if randomFee {
 			if cfg.MinFee > cfg.MaxFee {
 				reportErrorf("Cannot use randomFee with --minf > --mf.\n")
