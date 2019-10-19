@@ -19,6 +19,8 @@ BUCKET=""
 GENESIS_NETWORK_DIR=""
 GENESIS_NETWORK_DIR_SPEC=""
 
+set -o pipefail
+
 # If someone set the environment variable asking us to cleanup
 # when we're done, install a trap to do so
 # We use an environment variable instead of an arg because
@@ -132,7 +134,7 @@ function validate_channel_specified() {
 }
 
 function determine_current_version() {
-    CURRENTVER="$(( ${BINDIR}/algod -v || echo 0 ) | head -n 1)"
+    CURRENTVER="$(( ${BINDIR}/algod -v 2>/dev/null || echo 0 ) | head -n 1)"
     echo Current Version = ${CURRENTVER}
 }
 
@@ -140,7 +142,7 @@ function check_for_update() {
     determine_current_version
     LATEST="$(${SCRIPTPATH}/updater ver check -c ${CHANNEL} ${BUCKET} | sed -n '2 p')"
     if [ $? -ne 0 ]; then
-        echo No remote updates found
+        echo "No remote updates found"
         return 1
     fi
 

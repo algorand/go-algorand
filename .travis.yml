@@ -17,8 +17,6 @@ stages:
     if: branch =~ /^rel\// AND type != pull_request
   - name: deploy
     if: branch =~ /^rel\// AND type != pull_request
-  - name: release
-    if: branch != rel/stable AND (branch =~ /^rel\//) AND type != pull_request
 
 jobs:
   allow_failures:
@@ -31,8 +29,7 @@ jobs:
     - stage: build_commit
       os: linux
       script:
-        - scripts/travis/build.sh || travis_terminate 1;
-        - travis_wait 90 scripts/travis/test.sh
+        - scripts/travis/build_test.sh
 
     - stage: build_pr
       os: linux
@@ -137,9 +134,6 @@ jobs:
             - awscli
       script:
         - scripts/travis/external_build.sh ./scripts/travis/deploy_packages.sh
-
-    - stage: release
-      script: scripts/travis/release_packages.sh
 
 # Don't rebuild libsodium every time
 cache:

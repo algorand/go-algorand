@@ -357,7 +357,7 @@ var sendCmd = &cobra.Command{
 			stx = populateBlankMultisig(client, dataDir, walletName, stx)
 		}
 		if txFilename == "" {
-			// update information from Transaction
+			// Sign and broadcast the tx
 			txid, err := client.BroadcastTransaction(stx)
 
 			if err != nil {

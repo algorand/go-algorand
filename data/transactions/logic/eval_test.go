@@ -251,7 +251,8 @@ btoi
 		txn.Lsig.Args[i] = make([]byte, 8)
 		binary.BigEndian.PutUint64(txn.Lsig.Args[i], v)
 	}
-	pass, err := Eval(program, EvalParams{Proto: &defaultEvalProto,
+	pass, err := Eval(program, EvalParams{
+		Proto:    &defaultEvalProto,
 		Txn:      &txn,
 		Trace:    &sb,
 		Seed:     []byte(benchSeed),
@@ -1342,7 +1343,6 @@ func isNotPanic(t *testing.T, err error) {
 	if err == nil {
 		return
 	}
-	t.Log(err)
 	if pe, ok := err.(PanicError); ok {
 		t.Error(pe)
 	}
@@ -2134,7 +2134,7 @@ arg 1
 addr %s
 ed25519verify`, pkStr))
 	require.NoError(t, err)
-	sig := c.Sign(LogicMsg{
+	sig := c.Sign(Msg{
 		ProgramHash: crypto.HashObj(Program(program)),
 		Data:        data[:],
 	})
