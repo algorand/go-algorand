@@ -212,7 +212,7 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 		cx.err = fmt.Errorf("program version %d greater than max supported version %d", version, EvalMaxVersion)
 		return false, cx.err
 	}
-	if (params.Proto == nil) || (version > params.Proto.LogicSigVersion) {
+	if version > params.Proto.LogicSigVersion {
 		cx.err = fmt.Errorf("program version %d greater than protocol supported version %d", version, params.Proto.LogicSigVersion)
 		return false, cx.err
 	}
@@ -288,7 +288,7 @@ func Check(program []byte, params EvalParams) (cost int, err error) {
 		err = fmt.Errorf("program version %d greater than max supported version %d", version, EvalMaxVersion)
 		return
 	}
-	if (params.Proto == nil) || (version > params.Proto.LogicSigVersion) {
+	if version > params.Proto.LogicSigVersion {
 		err = fmt.Errorf("program version %d greater than protocol supported version %d", version, params.Proto.LogicSigVersion)
 		return
 	}
