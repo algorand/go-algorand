@@ -127,7 +127,7 @@ var runCmd = &cobra.Command{
 
 		if txnPerSec == 0 {
 			reportErrorf("cannot set tps to 0")
-		}else if txnPerSec != 200 {
+		} else if txnPerSec != 200 {
 			cfg.TxnPerSec = txnPerSec
 		}
 
