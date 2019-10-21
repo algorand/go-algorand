@@ -308,7 +308,7 @@ func accountsNewRound(tx *sql.Tx, rnd basics.Round, updates map[basics.Address]a
 			return
 		}
 
-		// Get which asset indexes were created and deleted
+		// Get which asset indices were created and deleted
 		created, deleted := getChangedAssetIndices(data)
 
 		// Add created assets to the creator lookup table

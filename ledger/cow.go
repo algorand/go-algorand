@@ -137,7 +137,7 @@ func (cb *roundCowState) put(addr basics.Address, old basics.AccountData, new ba
 		cb.mods.accts[addr] = accountDelta{old: old, new: new}
 	}
 
-	// Get which asset indexes were created and deleted, and update state
+	// Get which asset indices were created and deleted, and update state
 	// to reflect that
 	created, deleted := getChangedAssetIndices(accountDelta{old: old, new: new})
 	for _, aidx := range created {
