@@ -44,6 +44,35 @@ func defaultEvalParams() EvalParams {
 	return EvalParams{Proto: &proto, Trace: &strings.Builder{}, Txn: &transactions.SignedTxn{}}
 }
 
+func TestTooManyArgs(t *testing.T) {
+	t.Parallel()
+	program, err := AssembleString(`int 1`)
+	require.NoError(t, err)
+	var txn transactions.SignedTxn
+	txn.Lsig.Logic = program
+	args := [EvalMaxArgs+1][]byte{}
+	txn.Lsig.Args = args[:]
+	sb := strings.Builder{}
+	proto := defaultEvalProto()
+	pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn})
+	require.Error(t, err)
+	require.False(t, pass)
+}
+
+func TestWrongProtoVersion(t *testing.T) {
+	t.Parallel()
+	program, err := AssembleString(`int 1`)
+	require.NoError(t, err)
+	var txn transactions.SignedTxn
+	txn.Lsig.Logic = program
+	sb := strings.Builder{}
+	proto := defaultEvalProto()
+	proto.LogicSigVersion = 0
+	pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn})
+	require.Error(t, err)
+	require.False(t, pass)
+}
+
 func TestTrivialMath(t *testing.T) {
 	t.Parallel()
 	program, err := AssembleString(`int 2
