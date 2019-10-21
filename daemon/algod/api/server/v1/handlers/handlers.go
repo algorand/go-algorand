@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -72,7 +73,7 @@ func decorateUnknownTransactionTypeError(err error, txs node.TxnWithStatus) erro
 // txEncode copies the data fields of the internal transaction object and populate the v1.Transaction accordingly.
 // if unexpected transaction type is encountered, an error is returned. The caller is expected to ignore the returned
 // transaction when error is non-nil.
-func txEncode(tx transactions.Transaction, ad transactions.ApplyData) (v1.Transaction, error) {
+func txEncode(l *data.Ledger, tx transactions.Transaction, ad transactions.ApplyData) (v1.Transaction, error) {
 	var res v1.Transaction
 	switch tx.Type {
 	case protocol.PaymentTx:
@@ -80,7 +81,7 @@ func txEncode(tx transactions.Transaction, ad transactions.ApplyData) (v1.Transa
 	case protocol.KeyRegistrationTx:
 		res = keyregTxEncode(tx, ad)
 	case protocol.AssetConfigTx:
-		res = assetConfigTxEncode(tx, ad)
+		res = assetConfigTxEncode(l, tx, ad)
 	case protocol.AssetTransferTx:
 		res = assetTransferTxEncode(tx, ad)
 	case protocol.AssetFreezeTx:
@@ -135,7 +136,9 @@ func keyregTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.T
 	}
 }
 
-func assetParams(creator basics.Address, params basics.AssetParams) v1.AssetParams {
+func assetParams(l *data.Ledger, aidx basics.AssetIndex, params basics.AssetParams) v1.AssetParams {
+	creator, _ := l.GetAssetCreator(aidx)
+
 	paramsModel := v1.AssetParams{
 		Creator:       creator.String(),
 		Total:         params.Total,
@@ -164,10 +167,10 @@ func assetParams(creator basics.Address, params basics.AssetParams) v1.AssetPara
 	return paramsModel
 }
 
-func assetConfigTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
+func assetConfigTxEncode(l *data.Ledger, tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
 	config := v1.AssetConfigTransactionType{
-		AssetID: tx.AssetConfigTxnFields.ConfigAsset.Index,
-		Params: assetParams(tx.AssetConfigTxnFields.ConfigAsset.Creator,
+		AssetID: uint64(tx.AssetConfigTxnFields.ConfigAsset),
+		Params: assetParams(l, tx.AssetConfigTxnFields.ConfigAsset,
 			tx.AssetConfigTxnFields.AssetParams),
 	}
 
@@ -178,8 +181,7 @@ func assetConfigTxEncode(tx transactions.Transaction, ad transactions.ApplyData)
 
 func assetTransferTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
 	xfer := v1.AssetTransferTransactionType{
-		AssetID:  tx.AssetTransferTxnFields.XferAsset.Index,
-		Creator:  tx.AssetTransferTxnFields.XferAsset.Creator.String(),
+		AssetID:  uint64(tx.AssetTransferTxnFields.XferAsset),
 		Amount:   tx.AssetTransferTxnFields.AssetAmount,
 		Receiver: tx.AssetTransferTxnFields.AssetReceiver.String(),
 	}
@@ -199,8 +201,7 @@ func assetTransferTxEncode(tx transactions.Transaction, ad transactions.ApplyDat
 
 func assetFreezeTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
 	freeze := v1.AssetFreezeTransactionType{
-		AssetID:         tx.AssetFreezeTxnFields.FreezeAsset.Index,
-		Creator:         tx.AssetFreezeTxnFields.FreezeAsset.Creator.String(),
+		AssetID:         uint64(tx.AssetFreezeTxnFields.FreezeAsset),
 		Account:         tx.AssetFreezeTxnFields.FreezeAccount.String(),
 		NewFreezeStatus: tx.AssetFreezeTxnFields.AssetFrozen,
 	}
@@ -210,8 +211,8 @@ func assetFreezeTxEncode(tx transactions.Transaction, ad transactions.ApplyData)
 	}
 }
 
-func txWithStatusEncode(tr node.TxnWithStatus) (v1.Transaction, error) {
-	s, err := txEncode(tr.Txn.Txn, tr.ApplyData)
+func txWithStatusEncode(l *data.Ledger, tr node.TxnWithStatus) (v1.Transaction, error) {
+	s, err := txEncode(l, tr.Txn.Txn, tr.ApplyData)
 	if err != nil {
 		err = decorateUnknownTransactionTypeError(err, tr)
 		return v1.Transaction{}, err
@@ -221,7 +222,7 @@ func txWithStatusEncode(tr node.TxnWithStatus) (v1.Transaction, error) {
 	return s, nil
 }
 
-func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error) {
+func blockEncode(l *data.Ledger, b bookkeeping.Block, c agreement.Certificate) (v1.Block, error) {
 	block := v1.Block{
 		Hash:              crypto.Digest(b.Hash()).String(),
 		PreviousBlockHash: crypto.Digest(b.Branch).String(),
@@ -260,7 +261,7 @@ func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error)
 			ConfirmedRound: b.Round(),
 			ApplyData:      txn.ApplyData,
 		}
-		encTx, err := txWithStatusEncode(tx)
+		encTx, err := txWithStatusEncode(l, tx)
 		if err != nil {
 			return v1.Block{}, err
 		}
@@ -479,8 +480,7 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 	if len(record.Assets) > 0 {
 		assets = make(map[uint64]v1.AssetHolding)
 		for curid, holding := range record.Assets {
-			assets[curid.Index] = v1.AssetHolding{
-				Creator: curid.Creator.String(),
+			assets[uint64(curid)] = v1.AssetHolding{
 				Amount:  holding.Amount,
 				Frozen:  holding.Frozen,
 			}
@@ -491,7 +491,7 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 	if len(record.AssetParams) > 0 {
 		thisAssetParams = make(map[uint64]v1.AssetParams)
 		for idx, params := range record.AssetParams {
-			thisAssetParams[idx] = assetParams(addr, params)
+			thisAssetParams[uint64(idx)] = assetParams(myLedger, idx, params)
 		}
 	}
 
@@ -579,7 +579,8 @@ func TransactionInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.R
 		return
 	}
 
-	latestRound := ctx.Node.Ledger().Latest()
+	ledger := ctx.Node.Ledger()
+	latestRound := ledger.Latest()
 	stat, err := ctx.Node.Status()
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
@@ -596,7 +597,7 @@ func TransactionInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.R
 
 	if txn, ok := ctx.Node.GetTransaction(addr, txID, start, latestRound); ok {
 		var responseTxs v1.Transaction
-		responseTxs, err = txWithStatusEncode(txn)
+		responseTxs, err = txWithStatusEncode(ledger, txn)
 		if err != nil {
 			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToParseTransaction, ctx.Log)
 			return
@@ -665,8 +666,9 @@ func PendingTransactionInformation(ctx lib.ReqContext, w http.ResponseWriter, r 
 		return
 	}
 
+	ledger := ctx.Node.Ledger()
 	if txn, ok := ctx.Node.GetPendingTransaction(txID); ok {
-		responseTxs, err := txWithStatusEncode(txn)
+		responseTxs, err := txWithStatusEncode(ledger, txn)
 		if err != nil {
 			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToParseTransaction, ctx.Log)
 			return
@@ -734,8 +736,9 @@ func GetPendingTransactions(ctx lib.ReqContext, w http.ResponseWriter, r *http.R
 	}
 
 	responseTxs := make([]v1.Transaction, len(txs))
+	ledger := ctx.Node.Ledger()
 	for i, twr := range txs {
-		responseTxs[i], err = txEncode(twr.Txn, transactions.ApplyData{})
+		responseTxs[i], err = txEncode(ledger, twr.Txn, transactions.ApplyData{})
 		if err != nil {
 			// update the error as needed
 			err = decorateUnknownTransactionTypeError(err, node.TxnWithStatus{Txn: twr})
@@ -818,6 +821,7 @@ func GetPendingTransactionsByAddress(ctx lib.ReqContext, w http.ResponseWriter, 
 	}
 
 	responseTxs := make([]v1.Transaction, 0)
+	ledger := ctx.Node.Ledger()
 	for i, twr := range txs {
 		if twr.Txn.Sender == addr || twr.Txn.Receiver == addr {
 			// truncate in case max was passed
@@ -825,7 +829,7 @@ func GetPendingTransactionsByAddress(ctx lib.ReqContext, w http.ResponseWriter, 
 				break
 			}
 
-			tx, err := txEncode(twr.Txn, transactions.ApplyData{})
+			tx, err := txEncode(ledger, twr.Txn, transactions.ApplyData{})
 			responseTxs = append(responseTxs, tx)
 			if err != nil {
 				// update the error as needed
@@ -911,8 +915,9 @@ func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if asset, ok := record.AssetParams[queryIndex]; ok {
-		thisAssetParams := assetParams(addr, asset)
+	aidx := basics.AssetIndex(queryIndex)
+	if asset, ok := record.AssetParams[aidx]; ok {
+		thisAssetParams := assetParams(ledger, aidx, asset)
 		SendJSON(AssetInformationResponse{&thisAssetParams}, w, ctx.Log)
 	} else {
 		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errFailedRetrievingAsset), errFailedRetrievingAsset, ctx.Log)
@@ -1012,12 +1017,13 @@ func GetBlock(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b, c, err := ctx.Node.Ledger().BlockCert(basics.Round(queryRound))
+	ledger := ctx.Node.Ledger()
+	b, c, err := ledger.BlockCert(basics.Round(queryRound))
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
 		return
 	}
-	block, err := blockEncode(b, c)
+	block, err := blockEncode(ledger, b, c)
 
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errInternalFailure, ctx.Log)
@@ -1238,8 +1244,9 @@ func Transactions(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	}
 
 	responseTxs := make([]v1.Transaction, len(txs))
+	ledger := ctx.Node.Ledger()
 	for i, twr := range txs {
-		responseTxs[i], err = txWithStatusEncode(twr)
+		responseTxs[i], err = txWithStatusEncode(ledger, twr)
 		if err != nil {
 			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToParseTransaction, ctx.Log)
 			return
@@ -1308,9 +1315,10 @@ func GetTransactionByID(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	ledger := ctx.Node.Ledger()
 	if txn, err := ctx.Node.GetTransactionByID(txID, basics.Round(rnd)); err == nil {
 		var responseTxs v1.Transaction
-		responseTxs, err = txWithStatusEncode(txn)
+		responseTxs, err = txWithStatusEncode(ledger, txn)
 		if err != nil {
 			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToParseTransaction, ctx.Log)
 			return
