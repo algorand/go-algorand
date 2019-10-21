@@ -438,11 +438,6 @@ type AssetTransferTransactionType struct {
 	// required: true
 	AssetID uint64 `json:"id"`
 
-	// Creator is the address of the asset creator.
-	//
-	// required: true
-	Creator string `json:"creator"`
-
 	// Amount is the amount being transferred.
 	//
 	// required: true
@@ -471,11 +466,6 @@ type AssetFreezeTransactionType struct {
 	//
 	// required: true
 	AssetID uint64 `json:"id"`
-
-	// Creator is the address of the asset creator.
-	//
-	// required: true
-	Creator string `json:"creator"`
 
 	// Account specifies the account where the asset is being frozen or thawed.
 	//
