@@ -65,11 +65,7 @@ type accountUpdates struct {
 	assetCreators map[basics.AssetIndex]basics.Address
 
 	// assetsToDelete stores a set of asset indices that are queued for
-	// deletion. This isn't needed for correctness since asset indices are
-	// only ever used to look up asset creators, whose "accounts" entry will
-	// always correctly reflect the existence of the asset. But without this
-	// we might hit the database to find the asset creator, only to find that
-	// the asset has been deleted.
+	// deletion as of the latest round
 	assetsToDelete map[basics.AssetIndex]bool
 
 	// protos stores consensus parameters dbRound and every
@@ -268,10 +264,18 @@ func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address
 	return
 }
 
-func (au *accountUpdates) GetAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error) {
-	// Check if we already have the asset/creator in cache. Asset indices
-	// can only be created or deleted once, so we don't need to scan
-	// backwards through deltas like we do in lookup.
+func (au *accountUpdates) GetAssetCreator(rnd basics.Round, assetIdx basics.AssetIndex) (basics.Address, error) {
+	offset, err := au.roundOffset(rnd)
+	if err != nil {
+		return basics.Address{}, err
+	}
+
+	// We only store information about asset creation/deletion for the latest round
+	if offset != uint64(len(au.deltas)) {
+		return basics.Address{}, fmt.Errorf("round too old")
+	}
+
+	// Check if we already have the asset/creator in cache
 	creator, ok := au.assetCreators[assetIdx]
 	if ok {
 		return creator, nil

@@ -63,7 +63,7 @@ type roundCowBase struct {
 }
 
 func (x *roundCowBase) GetAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error) {
-	return x.l.GetAssetCreator(assetIdx)
+	return x.l.GetAssetCreator(x.rnd, assetIdx)
 }
 
 func (x *roundCowBase) lookup(addr basics.Address) (basics.AccountData, error) {
@@ -178,7 +178,7 @@ type ledgerForEvaluator interface {
 	Totals(basics.Round) (AccountTotals, error)
 	isDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, txlease) (bool, error)
 	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, error)
-	GetAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error)
+	GetAssetCreator(basics.Round, basics.AssetIndex) (basics.Address, error)
 }
 
 // StartEvaluator creates a BlockEvaluator, given a ledger and a block header
