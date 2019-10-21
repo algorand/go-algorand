@@ -350,7 +350,7 @@ func generateWalletGenesis(filename string, wallets, npnHosts int) error {
 			Name:  "Wallet" + strconv.Itoa(i+1), // Wallet names are 1-based for this template
 			Stake: stake,
 		}
-		if i < (wallets / 2) {
+		if (i < (wallets / 2)) || (npnHosts == 0) {
 			w.Online = true
 		}
 		stakeSum += stake
