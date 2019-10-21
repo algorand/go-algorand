@@ -268,13 +268,21 @@ func (l *Ledger) notifyCommit(r basics.Round) basics.Round {
 	return minToSave
 }
 
-// GetAssetCreator looks up the asset creator given the numerical asset ID.
-// This is necessary so that we can retrieve the AssetParams from the creator's
-// balance record.
-func (l *Ledger) GetAssetCreator(rnd basics.Round, assetIdx basics.AssetIndex) (basics.Address, error) {
+// GetAssetCreatorForRound looks up the asset creator given the numerical asset
+// ID. This is necessary so that we can retrieve the AssetParams from the
+// creator's balance record.
+func (l *Ledger) GetAssetCreatorForRound(rnd basics.Round, assetIdx basics.AssetIndex) (basics.Address, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 	return l.accts.GetAssetCreator(rnd, assetIdx)
+}
+
+// GetAssetCreator is like GetAssetCreatorForRound, but for the latest round
+// and race free with respect to ledger.Latest()
+func (l *Ledger) GetAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.accts.GetAssetCreator(l.blockQ.latest(), assetIdx)
 }
 
 // Lookup uses the accounts tracker to return the account state for a

@@ -141,7 +141,7 @@ func keyregTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.T
 }
 
 func assetParams(l *data.Ledger, aidx basics.AssetIndex, params basics.AssetParams) (v1.AssetParams, error) {
-	creator, err := l.GetAssetCreator(l.Latest(), aidx)
+	creator, err := l.GetAssetCreator(aidx)
 	if err != nil {
 		return v1.AssetParams{}, err
 	}
@@ -491,7 +491,7 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 	if len(record.Assets) > 0 {
 		assets = make(map[uint64]v1.AssetHolding)
 		for curid, holding := range record.Assets {
-			creator, err := myLedger.GetAssetCreator(myLedger.Latest(), curid)
+			creator, err := myLedger.GetAssetCreator(curid)
 			if err != nil {
 				lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToGetAssetCreator, ctx.Log)
 				return
@@ -913,7 +913,7 @@ func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request
 
 	ledger := ctx.Node.Ledger()
 	aidx := basics.AssetIndex(queryIndex)
-	creator, err := ledger.GetAssetCreator(ledger.Latest(), aidx)
+	creator, err := ledger.GetAssetCreator(aidx)
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToGetAssetCreator, ctx.Log)
 		return
