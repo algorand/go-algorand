@@ -38,7 +38,7 @@ type roundCowParent interface {
 	lookup(basics.Address) (basics.AccountData, error)
 	isDup(basics.Round, transactions.Txid, txlease) (bool, error)
 	txnCounter() uint64
-	GetAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error)
+	getAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error)
 }
 
 type roundCowState struct {
@@ -88,7 +88,7 @@ func (cb *roundCowState) rewardsLevel() uint64 {
 	return cb.mods.hdr.RewardsLevel
 }
 
-func (cb *roundCowState) GetAssetCreator(aidx basics.AssetIndex) (basics.Address, error) {
+func (cb *roundCowState) getAssetCreator(aidx basics.AssetIndex) (basics.Address, error) {
 	c, ok := cb.mods.assetCreators[aidx]
 	if ok {
 		return c, nil
@@ -97,7 +97,7 @@ func (cb *roundCowState) GetAssetCreator(aidx basics.AssetIndex) (basics.Address
 	if ok {
 		return basics.Address{}, fmt.Errorf("asset %v has been deleted", aidx)
 	}
-	return cb.lookupParent.GetAssetCreator(aidx)
+	return cb.lookupParent.getAssetCreator(aidx)
 }
 
 func (cb *roundCowState) lookup(addr basics.Address) (data basics.AccountData, err error) {

@@ -62,7 +62,7 @@ type roundCowBase struct {
 	proto config.ConsensusParams
 }
 
-func (x *roundCowBase) GetAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error) {
+func (x *roundCowBase) getAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error) {
 	return x.l.GetAssetCreatorForRound(x.rnd, assetIdx)
 }
 
@@ -76,6 +76,10 @@ func (x *roundCowBase) isDup(firstValid basics.Round, txid transactions.Txid, tx
 
 func (x *roundCowBase) txnCounter() uint64 {
 	return x.txnCount
+}
+
+func (cs *roundCowState) GetAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error) {
+	return cs.getAssetCreator(assetIdx)
 }
 
 // wrappers for roundCowState to satisfy the (current) transactions.Balances interface
