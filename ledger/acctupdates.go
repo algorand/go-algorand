@@ -147,6 +147,8 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 
 	au.deltas = nil
 	au.accounts = make(map[basics.Address]modifiedAccount)
+	au.assetCreators = make(map[basics.AssetIndex]basics.Address)
+	au.assetsToDelete = make(map[basics.AssetIndex]bool)
 	loaded := au.dbRound
 	for loaded < latest {
 		next := loaded + 1
