@@ -31,7 +31,7 @@ import (
 // accountsDbQueries is used to cache a prepared SQL statement to look up
 // the state of a single account.
 type accountsDbQueries struct {
-	lookupStmt *sql.Stmt
+	lookupStmt             *sql.Stmt
 	lookupAssetCreatorStmt *sql.Stmt
 }
 
@@ -235,7 +235,7 @@ func accountsPutTotals(tx *sql.Tx, totals AccountTotals) error {
 // were created and which were deleted
 func getChangedAssetIndices(delta accountDelta) (created, deleted []basics.AssetIndex) {
 	// Get assets that were created
-	for idx := range(delta.new.AssetParams) {
+	for idx := range delta.new.AssetParams {
 		// AssetParams are in now the balance record now, but _weren't_ before
 		if _, ok := delta.old.AssetParams[idx]; !ok {
 			created = append(created, idx)
@@ -243,7 +243,7 @@ func getChangedAssetIndices(delta accountDelta) (created, deleted []basics.Asset
 	}
 
 	// Get assets that were deleted
-	for idx := range(delta.old.AssetParams) {
+	for idx := range delta.old.AssetParams {
 		// AssetParams were in the balance record, but _aren't_ anymore
 		if _, ok := delta.new.AssetParams[idx]; !ok {
 			deleted = append(deleted, idx)
@@ -312,7 +312,7 @@ func accountsNewRound(tx *sql.Tx, rnd basics.Round, updates map[basics.Address]a
 		created, deleted := getChangedAssetIndices(data)
 
 		// Add created assets to the creator lookup table
-		for _, aidx := range(created) {
+		for _, aidx := range created {
 			_, err = insertAssetIdxStmt.Exec(aidx, addr[:])
 			if err != nil {
 				return
@@ -321,7 +321,7 @@ func accountsNewRound(tx *sql.Tx, rnd basics.Round, updates map[basics.Address]a
 		}
 
 		// Remove deleted assets from the creator lookup table
-		for _, aidx := range(deleted) {
+		for _, aidx := range deleted {
 			_, err = deleteAssetIdxStmt.Exec(aidx)
 			if err != nil {
 				return

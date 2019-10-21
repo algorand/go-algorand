@@ -358,8 +358,8 @@ func (au *accountUpdates) committedUpTo(rnd basics.Round) basics.Round {
 
 	// Drop in-memory cache for assets whose creation or deletion has been
 	// flushed to disk
-	for _, flushed := range(flushedAssets) {
-		for _, aidx := range(flushed) {
+	for _, flushed := range flushedAssets {
+		for _, aidx := range flushed {
 			delete(au.assetCreators, aidx)
 			delete(au.assetsToDelete, aidx)
 		}
@@ -405,10 +405,10 @@ func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta stateDelta) {
 
 		// Get which asset indices were created and deleted in this accountDelta
 		created, deleted := getChangedAssetIndices(data)
-		for _, aidx := range(created) {
+		for _, aidx := range created {
 			au.assetCreators[aidx] = addr
 		}
-		for _, aidx := range(deleted) {
+		for _, aidx := range deleted {
 			// If the asset was created and deleted before we've flushed
 			// the asset index to disk, we can just remove it from the
 			// assetCreators map

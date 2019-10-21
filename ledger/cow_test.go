@@ -38,6 +38,10 @@ func (ml *mockLedger) isDup(firstValid basics.Round, txn transactions.Txid, txl 
 	return false, nil
 }
 
+func (ml *mockLedger) GetAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error) {
+	return basics.Address{}, nil
+}
+
 func (ml *mockLedger) txnCounter() uint64 {
 	return 0
 }
