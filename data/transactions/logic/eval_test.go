@@ -1001,7 +1001,6 @@ func TestTxn(t *testing.T) {
 	copy(txn.Txn.CloseRemainderTo[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02"))
 	copy(txn.Txn.VotePK[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui03"))
 	copy(txn.Txn.SelectionPK[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui04"))
-	creator := "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui05"
 	txn.Txn.XferAsset = 1
 	// This is not a valid transaction to have all these fields set this way
 	txn.Txn.Note = []byte("fnord")
@@ -1027,7 +1026,7 @@ func TestTxn(t *testing.T) {
 		txn.Txn.VotePK[:],
 		txn.Txn.SelectionPK[:],
 		txn.Txn.Note,
-		append([]byte(creator), 0, 0, 0, 0, 0, 0, 0, 1),
+		[]byte{0, 0, 0, 0, 0, 0, 0, 1},
 		txid[:],
 		txn.Txn.Lease[:],
 	}
