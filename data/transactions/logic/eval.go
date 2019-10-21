@@ -1046,8 +1046,6 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint
 	case TxID:
 		txid := txn.ID()
 		sv.Bytes = txid[:]
-	/*case 22: // SenderBalance
-	sv.Uint = cx.GroupSenders[cx.GroupIndex].MicroAlgos.Raw*/
 	case Lease:
 		sv.Bytes = txn.Lease[:]
 	default:
@@ -1082,8 +1080,6 @@ func opGtxn(cx *evalContext) {
 	if TxnField(field) == GroupIndex {
 		// GroupIndex; asking this when we just specified it is _dumb_, but oh well
 		sv.Uint = uint64(gtxid)
-		/*} else if field == 22 {
-		sv.Uint = cx.GroupSenders[gtxid].MicroAlgos.Raw*/
 	} else {
 		sv, err = cx.txnFieldToStack(tx, field)
 		if err != nil {
@@ -1101,20 +1097,12 @@ func opGlobal(cx *evalContext) {
 	gindex := uint64(cx.program[cx.pc+1])
 	var sv stackValue
 	switch GlobalField(gindex) {
-	/*case 0:
-	if cx.Block != nil {
-		sv.Uint = uint64(cx.Block.Round())
-	}*/
 	case MinTxnFee:
 		sv.Uint = cx.Proto.MinTxnFee
 	case MinBalance:
 		sv.Uint = cx.Proto.MinBalance
 	case MaxTxnLife:
 		sv.Uint = cx.Proto.MaxTxnLife
-	/*case 4:
-	if cx.Block != nil {
-		sv.Uint = uint64(cx.Block.BlockHeader.TimeStamp)
-	}*/
 	case ZeroAddress:
 		sv.Bytes = zeroAddress[:]
 	case GroupSize:

@@ -27,11 +27,9 @@ import (
 
 // used by TestAssemble and others, see UPDATE PROCEDURE in TestAssemble()
 const bigTestAssembleNonsenseProgram = `err
-//global Round
 global MinTxnFee
 global MinBalance
 global MaxTxnLife
-//global TimeStamp
 global ZeroAddress
 byte 0x1234
 byte base64 aGVsbG8gd29ybGQh
@@ -80,7 +78,6 @@ gtxn 0 AssetReceiver
 gtxn 0 AssetCloseTo
 arg 0 // comment
 arg 1 //comment
-//account Balance
 sha256
 keccak256
 int 0x031337
