@@ -234,7 +234,6 @@ func TestSenderGoesBelowMinBalanceDueToAssets(t *testing.T) {
 			GenesisHash: ledger.GenesisHash(),
 		},
 		AssetConfigTxnFields: transactions.AssetConfigTxnFields{
-			ConfigAsset: basics.AssetID{},
 			AssetParams: basics.AssetParams{
 				Total:         100,
 				DefaultFrozen: false,
