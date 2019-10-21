@@ -150,6 +150,14 @@ func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uin
 
 				refreshTime = refreshTime.Add(cfg.RefreshTime)
 			}
+
+			localTimeDelta := time.Now().Sub(startTime)
+			currentTps := float64(totalSent) / localTimeDelta.Seconds()
+			if currentTps > float64(cfg.TxnPerSec) {
+				sleepSec := float64(totalSent)/float64(cfg.TxnPerSec) - localTimeDelta.Seconds()
+				sleepTime := time.Duration(int64(math.Round(sleepSec*1000))) * time.Millisecond
+				time.Sleep(sleepTime)
+			}
 		}
 		timeDelta := time.Now().Sub(startTime)
 		fmt.Fprintf(os.Stdout, "Sent %d transactions (%d attempted) in %d seconds\n", totalSucceeded, totalSent, int(math.Round(timeDelta.Seconds())))
