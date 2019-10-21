@@ -343,10 +343,11 @@ func (pool *TransactionPool) Verified(txn transactions.SignedTxn) bool {
 }
 
 // EvalOk for LogicSig Eval of a txn by txid, returns the SignedTxn, error string, and found.
-func (pool *TransactionPool) EvalOk(txid transactions.Txid) (tx transactions.SignedTxn, txErr string, found bool) {
+func (pool *TransactionPool) EvalOk(txid transactions.Txid) (txErr string, found bool) {
 	pool.lcmu.RLock()
 	defer pool.lcmu.RUnlock()
-	return pool.lsigCache.check(txid)
+	_, txErr, found = pool.lsigCache.check(txid)
+	return
 }
 
 // EvalRemember sets an error string from LogicSig Eval for some SignedTxn
@@ -437,7 +438,7 @@ type alwaysVerifiedPool struct {
 func (*alwaysVerifiedPool) Verified(txn transactions.SignedTxn) bool {
 	return true
 }
-func (pool *alwaysVerifiedPool) EvalOk(txid transactions.Txid) (tx transactions.SignedTxn, errStr string, found bool) {
+func (pool *alwaysVerifiedPool) EvalOk(txid transactions.Txid) (errStr string, found bool) {
 	return pool.pool.EvalOk(txid)
 }
 func (pool *alwaysVerifiedPool) EvalRemember(txn transactions.SignedTxn, errStr string) {

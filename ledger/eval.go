@@ -47,7 +47,7 @@ type evalAux struct {
 // pool object.
 type VerifiedTxnCache interface {
 	Verified(txn transactions.SignedTxn) bool
-	EvalOk(txid transactions.Txid) (tx transactions.SignedTxn, txErr string, found bool)
+	EvalOk(txid transactions.Txid) (txErr string, found bool)
 	EvalRemember(tx transactions.SignedTxn, errString string)
 }
 
@@ -494,7 +494,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 
 		needCheckLsig := !txn.Lsig.Blank()
 		if needCheckLsig {
-			_, errStr, found := eval.txcache.EvalOk(txid)
+			errStr, found := eval.txcache.EvalOk(txid)
 			if found {
 				if errStr == "" {
 					needCheckLsig = false
