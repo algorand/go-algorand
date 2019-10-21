@@ -38,6 +38,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // EvalMaxVersion is the max version we can interpret and run
@@ -123,6 +124,8 @@ type evalContext struct {
 	// Ordered set of pc values that a branch could go to.
 	// If Check pc skips a target, the source branch was invalid!
 	branchTargets []int
+
+	programHash crypto.Digest
 }
 
 type opFunc func(cx *evalContext)
@@ -214,6 +217,7 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 	cx.EvalParams = params
 	cx.stack = make([]stackValue, 0, 10)
 	cx.program = program
+	cx.programHash = crypto.HashObj(Program(program))
 	for (cx.err == nil) && (cx.pc < len(cx.program)) {
 		cx.step()
 		cx.stepCount++
@@ -1149,6 +1153,19 @@ func opGlobal(cx *evalContext) {
 	cx.nextpc = cx.pc + 2
 }
 
+// Msg is data meant to be signed and then verified with the
+// ed25519verify opcode.
+type Msg struct {
+	_struct     struct{}      `codec:",omitempty,omitemptyarray"`
+	ProgramHash crypto.Digest `codec:"p"`
+	Data        []byte        `codec:"d"`
+}
+
+// ToBeHashed implements crypto.Hashable
+func (msg Msg) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.ProgramData, append(msg.ProgramHash[:], msg.Data...)
+}
+
 func opEd25519verify(cx *evalContext) {
 	last := len(cx.stack) - 1 // index of PK
 	prev := last - 1          // index of signature
@@ -1168,7 +1185,8 @@ func opEd25519verify(cx *evalContext) {
 	}
 	copy(sig[:], cx.stack[prev].Bytes)
 
-	if sv.VerifyBytes(cx.stack[pprev].Bytes, sig) {
+	msg := Msg{ProgramHash: cx.programHash, Data: cx.stack[pprev].Bytes}
+	if sv.Verify(msg, sig) {
 		cx.stack[pprev].Uint = 1
 	} else {
 		cx.stack[pprev].Uint = 0

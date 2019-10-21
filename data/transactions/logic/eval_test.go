@@ -2129,7 +2129,10 @@ arg 1
 addr %s
 ed25519verify`, pkStr))
 	require.NoError(t, err)
-	sig := c.SignBytes(data[:])
+	sig := c.Sign(Msg{
+		ProgramHash: crypto.HashObj(Program(program)),
+		Data:        data[:],
+	})
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = program
 	txn.Lsig.Args = [][]byte{data[:], sig[:]}
