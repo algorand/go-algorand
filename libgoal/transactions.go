@@ -456,17 +456,10 @@ func (c *Client) MakeUnsignedAssetCreateTx(total uint64, defaultFrozen bool, man
 //
 // Call FillUnsignedTxTemplate afterwards to fill out common fields in
 // the resulting transaction template.
-func (c *Client) MakeUnsignedAssetDestroyTx(creator string, index uint64) (transactions.Transaction, error) {
+func (c *Client) MakeUnsignedAssetDestroyTx(index uint64) (transactions.Transaction, error) {
 	var tx transactions.Transaction
-	var err error
-
 	tx.Type = protocol.AssetConfigTx
-	tx.ConfigAsset.Index = index
-	tx.ConfigAsset.Creator, err = basics.UnmarshalChecksumAddress(creator)
-	if err != nil {
-		return tx, err
-	}
-
+	tx.ConfigAsset = basics.AssetIndex(index)
 	return tx, nil
 }
 
@@ -509,11 +502,7 @@ func (c *Client) MakeUnsignedAssetConfigTx(creator string, index uint64, newMana
 	}
 
 	tx.Type = protocol.AssetConfigTx
-	tx.ConfigAsset.Index = index
-	tx.ConfigAsset.Creator, err = basics.UnmarshalChecksumAddress(creator)
-	if err != nil {
-		return tx, err
-	}
+	tx.ConfigAsset = basics.AssetIndex(index)
 
 	if *newManager != "" {
 		tx.AssetParams.Manager, err = basics.UnmarshalChecksumAddress(*newManager)
@@ -551,17 +540,13 @@ func (c *Client) MakeUnsignedAssetConfigTx(creator string, index uint64, newMana
 //
 // Call FillUnsignedTxTemplate afterwards to fill out common fields in
 // the resulting transaction template.
-func (c *Client) MakeUnsignedAssetSendTx(creator string, index uint64, amount uint64, recipient string, closeTo string, senderForClawback string) (transactions.Transaction, error) {
+func (c *Client) MakeUnsignedAssetSendTx(index uint64, amount uint64, recipient string, closeTo string, senderForClawback string) (transactions.Transaction, error) {
 	var tx transactions.Transaction
 	var err error
 
 	tx.Type = protocol.AssetTransferTx
 	tx.AssetAmount = amount
-	tx.XferAsset.Index = index
-	tx.XferAsset.Creator, err = basics.UnmarshalChecksumAddress(creator)
-	if err != nil {
-		return tx, err
-	}
+	tx.XferAsset = basics.AssetIndex(index)
 
 	if recipient != "" {
 		tx.AssetReceiver, err = basics.UnmarshalChecksumAddress(recipient)
@@ -591,16 +576,12 @@ func (c *Client) MakeUnsignedAssetSendTx(creator string, index uint64, amount ui
 //
 // Call FillUnsignedTxTemplate afterwards to fill out common fields in
 // the resulting transaction template.
-func (c *Client) MakeUnsignedAssetFreezeTx(creator string, index uint64, accountToChange string, newFreezeSetting bool) (transactions.Transaction, error) {
+func (c *Client) MakeUnsignedAssetFreezeTx(index uint64, accountToChange string, newFreezeSetting bool) (transactions.Transaction, error) {
 	var tx transactions.Transaction
 	var err error
 
 	tx.Type = protocol.AssetFreezeTx
-	tx.FreezeAsset.Index = index
-	tx.FreezeAsset.Creator, err = basics.UnmarshalChecksumAddress(creator)
-	if err != nil {
-		return tx, err
-	}
+	tx.FreezeAsset = basics.AssetIndex(index)
 
 	tx.FreezeAccount, err = basics.UnmarshalChecksumAddress(accountToChange)
 	if err != nil {

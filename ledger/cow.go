@@ -17,6 +17,8 @@
 package ledger
 
 import (
+	"fmt"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -36,6 +38,7 @@ type roundCowParent interface {
 	lookup(basics.Address) (basics.AccountData, error)
 	isDup(basics.Round, transactions.Txid, txlease) (bool, error)
 	txnCounter() uint64
+	GetAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error)
 }
 
 type roundCowState struct {
@@ -55,6 +58,12 @@ type stateDelta struct {
 	// new txleases for the txtail mapped to expiration
 	txleases map[txlease]basics.Round
 
+	// new assets creator lookup table
+	assetCreators map[basics.AssetIndex]basics.Address
+
+	// assets queued for deletion
+	deletedAssets map[basics.AssetIndex]bool
+
 	// new block header; read-only
 	hdr *bookkeeping.BlockHeader
 }
@@ -65,16 +74,30 @@ func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader) *roundCowS
 		commitParent: nil,
 		proto:        config.Consensus[hdr.CurrentProtocol],
 		mods: stateDelta{
-			accts:    make(map[basics.Address]accountDelta),
-			txids:    make(map[transactions.Txid]struct{}),
-			txleases: make(map[txlease]basics.Round),
-			hdr:      &hdr,
+			accts:         make(map[basics.Address]accountDelta),
+			txids:         make(map[transactions.Txid]struct{}),
+			txleases:      make(map[txlease]basics.Round),
+			assetCreators: make(map[basics.AssetIndex]basics.Address),
+			deletedAssets: make(map[basics.AssetIndex]bool),
+			hdr:           &hdr,
 		},
 	}
 }
 
 func (cb *roundCowState) rewardsLevel() uint64 {
 	return cb.mods.hdr.RewardsLevel
+}
+
+func (cs *roundCowState) GetAssetCreator(aidx basics.AssetIndex) (basics.Address, error) {
+	c, ok := cs.mods.assetCreators[aidx]
+	if ok {
+		return c, nil
+	}
+	_, ok = cs.mods.deletedAssets[aidx]
+	if ok {
+		return basics.Address{}, fmt.Errorf("asset %v has been deleted", aidx)
+	}
+	return cs.lookupParent.GetAssetCreator(aidx)
 }
 
 func (cb *roundCowState) lookup(addr basics.Address) (data basics.AccountData, err error) {
@@ -113,6 +136,20 @@ func (cb *roundCowState) put(addr basics.Address, old basics.AccountData, new ba
 	} else {
 		cb.mods.accts[addr] = accountDelta{old: old, new: new}
 	}
+
+	// Get which asset indexes were created and deleted, and update state
+	// to reflect that
+	created, deleted := getChangedAssetIndices(accountDelta{old: old, new: new})
+	for _, aidx := range(created) {
+		cb.mods.assetCreators[aidx] = addr
+	}
+	for _, aidx := range(deleted) {
+		if _, ok := cb.mods.assetCreators[aidx]; ok {
+			delete(cb.mods.assetCreators, aidx)
+			break
+		}
+		cb.mods.deletedAssets[aidx] = true
+	}
 }
 
 func (cb *roundCowState) addTx(txn transactions.Transaction) {
@@ -126,10 +163,12 @@ func (cb *roundCowState) child() *roundCowState {
 		commitParent: cb,
 		proto:        cb.proto,
 		mods: stateDelta{
-			accts:    make(map[basics.Address]accountDelta),
-			txids:    make(map[transactions.Txid]struct{}),
-			txleases: make(map[txlease]basics.Round),
-			hdr:      cb.mods.hdr,
+			accts:         make(map[basics.Address]accountDelta),
+			txids:         make(map[transactions.Txid]struct{}),
+			txleases:      make(map[txlease]basics.Round),
+			assetCreators: make(map[basics.AssetIndex]basics.Address),
+			deletedAssets: make(map[basics.AssetIndex]bool),
+			hdr:           cb.mods.hdr,
 		},
 	}
 }
@@ -152,6 +191,12 @@ func (cb *roundCowState) commitToParent() {
 	}
 	for txl, expires := range cb.mods.txleases {
 		cb.commitParent.mods.txleases[txl] = expires
+	}
+	for aidx, creator := range cb.mods.assetCreators {
+		cb.commitParent.mods.assetCreators[aidx] = creator
+	}
+	for aidx := range cb.mods.deletedAssets {
+		cb.commitParent.mods.deletedAssets[aidx] = true
 	}
 }
 

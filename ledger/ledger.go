@@ -268,6 +268,12 @@ func (l *Ledger) notifyCommit(r basics.Round) basics.Round {
 	return minToSave
 }
 
+func (l *Ledger) GetAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.accts.GetAssetCreator(assetIdx)
+}
+
 // Lookup uses the accounts tracker to return the account state for a
 // given account in a particular round.  The account values reflect
 // the changes of all blocks up to and including rnd.

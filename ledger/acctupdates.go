@@ -64,6 +64,14 @@ type accountUpdates struct {
 	// for any new assets that appear in deltas
 	assetCreators map[basics.AssetIndex]basics.Address
 
+	// assetsToDelete stores a set of asset indices that are queued for
+	// deletion. This isn't needed for correctness since asset indices are
+	// only ever used to look up asset creators, whose "accounts" entry will
+	// always correctly reflect the existence of the asset. But without this
+	// we might hit the database to find the asset creator, only to find that
+	// the asset has been deleted.
+	assetsToDelete map[basics.AssetIndex]bool
+
 	// protos stores consensus parameters dbRound and every
 	// round after it; i.e., protos is one longer than deltas.
 	protos []config.ConsensusParams
@@ -258,12 +266,19 @@ func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address
 	return
 }
 
-func (au *accountUpdates) lookupAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error) {
-	// Check if we already have the asset/creator in memory. Asset indices
-	// are unique, so we don't need to scan through deltas (as in lookup)
+func (au *accountUpdates) GetAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error) {
+	// Check if we already have the asset/creator in cache. Asset indices
+	// can only be created or deleted once, so we don't need to scan
+	// backwards through deltas like we do in lookup.
 	creator, ok := au.assetCreators[assetIdx]
 	if ok {
 		return creator, nil
+	}
+
+	// Ensure the asset isn't queued for deletion
+	_, ok = au.assetsToDelete[assetIdx]
+	if ok {
+		return basics.Address{}, fmt.Errorf("asset %v has been deleted", assetIdx)
 	}
 
 	// Check the database
@@ -341,11 +356,12 @@ func (au *accountUpdates) committedUpTo(rnd basics.Round) basics.Round {
 		}
 	}
 
-	// Drop in-memory cache of assetCreators for assets that have been
+	// Drop in-memory cache for assets whose creation or deletion has been
 	// flushed to disk
 	for _, flushed := range(flushedAssets) {
 		for _, aidx := range(flushed) {
-			delete(au.assetCreators, flushed)
+			delete(au.assetCreators, aidx)
+			delete(au.assetsToDelete, aidx)
 		}
 	}
 
@@ -387,15 +403,24 @@ func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta stateDelta) {
 		macct.data = data.new
 		au.accounts[addr] = macct
 
-		// Get which asset indexes were created and deleted
+		// Get which asset indices were created and deleted in this accountDelta
 		created, deleted := getChangedAssetIndices(data)
 		for _, aidx := range(created) {
-			assetCreators[aidx] = addr
+			au.assetCreators[aidx] = addr
 		}
 		for _, aidx := range(deleted) {
-			delete(assetCreators, aidx)
+			// If the asset was created and deleted before we've flushed
+			// the asset index to disk, we can just remove it from the
+			// assetCreators map
+			if _, ok := au.assetCreators[aidx]; ok {
+				delete(au.assetCreators, aidx)
+				break
+			}
+			// Asset index must be on disk, mark it for deletion
+			au.assetsToDelete[aidx] = true
 		}
 	}
+
 	if ot.Overflowed {
 		au.log.Panicf("accountUpdates: newBlock %d overflowed totals", rnd)
 	}

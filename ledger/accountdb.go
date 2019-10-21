@@ -32,6 +32,7 @@ import (
 // the state of a single account.
 type accountsDbQueries struct {
 	lookupStmt *sql.Stmt
+	lookupAssetCreatorStmt *sql.Stmt
 }
 
 var accountsSchema = []string{
@@ -232,22 +233,24 @@ func accountsPutTotals(tx *sql.Tx, totals AccountTotals) error {
 
 // getChangedAssetIndices takes an accountDelta and returns which AssetIndices
 // were created and which were deleted
-func getChangedAssetIndices(delta accountDelta) ([]basics.AssetIndex created, deleted) {
+func getChangedAssetIndices(delta accountDelta) (created, deleted []basics.AssetIndex) {
 	// Get assets that were created
-	for idx := range(accountDelta.new.Assets) {
-		// AssetParams are now the balance record now, but _weren't_ before
-		if _, ok := accountDelta.old.Assets[idx]; !ok {
+	for idx := range(delta.new.AssetParams) {
+		// AssetParams are in now the balance record now, but _weren't_ before
+		if _, ok := delta.old.AssetParams[idx]; !ok {
 			created = append(created, idx)
 		}
 	}
 
 	// Get assets that were deleted
-	for idx := range(accountDelta.old.Assets) {
+	for idx := range(delta.old.AssetParams) {
 		// AssetParams were in the balance record, but _aren't_ anymore
-		if _, ok := accountDelta.new.Assets[idx]; !ok {
+		if _, ok := delta.new.AssetParams[idx]; !ok {
 			deleted = append(deleted, idx)
 		}
 	}
+
+	return
 }
 
 func accountsNewRound(tx *sql.Tx, rnd basics.Round, updates map[basics.Address]accountDelta, rewardsLevel uint64, proto config.ConsensusParams) (flushedAssets []basics.AssetIndex, err error) {
@@ -323,6 +326,7 @@ func accountsNewRound(tx *sql.Tx, rnd basics.Round, updates map[basics.Address]a
 			if err != nil {
 				return
 			}
+			flushedAssets = append(flushedAssets, aidx)
 		}
 
 		totals.delAccount(proto, data.old, &ot)

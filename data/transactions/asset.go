@@ -28,8 +28,8 @@ type AssetConfigTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	// ConfigAsset is the asset being configured or destroyed.
-	// A zero value (including the creator address) means allocation.
-	ConfigAsset basics.AssetID `codec:"caid"`
+	// A zero value means allocation
+	ConfigAsset basics.AssetIndex `codec:"caid"`
 
 	// AssetParams are the parameters for the asset being
 	// created or re-configured.  A zero value means destruction.
@@ -40,7 +40,7 @@ type AssetConfigTxnFields struct {
 type AssetTransferTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	XferAsset basics.AssetID `codec:"xaid"`
+	XferAsset basics.AssetIndex `codec:"xaid"`
 
 	// AssetAmount is the amount of asset to transfer.
 	// A zero amount transferred to self allocates that asset
@@ -59,7 +59,7 @@ type AssetTransferTxnFields struct {
 	// AssetCloseTo indicates that the asset should be removed
 	// from the account's Assets map, and specifies where the remaining
 	// asset holdings should be transferred.  It's always valid to transfer
-	// remaining asset holdings to the AssetID account.
+	// remaining asset holdings to the creator account.
 	AssetCloseTo basics.Address `codec:"aclose"`
 }
 
@@ -72,44 +72,49 @@ type AssetFreezeTxnFields struct {
 	FreezeAccount basics.Address `codec:"fadd"`
 
 	// FreezeAsset is the asset ID being frozen or un-frozen.
-	FreezeAsset basics.AssetID `codec:"faid"`
+	FreezeAsset basics.AssetIndex `codec:"faid"`
 
 	// AssetFrozen is the new frozen value.
 	AssetFrozen bool `codec:"afrz"`
 }
 
-func clone(m map[basics.AssetID]basics.AssetHolding) map[basics.AssetID]basics.AssetHolding {
-	res := make(map[basics.AssetID]basics.AssetHolding)
+func clone(m map[basics.AssetIndex]basics.AssetHolding) map[basics.AssetIndex]basics.AssetHolding {
+	res := make(map[basics.AssetIndex]basics.AssetHolding)
 	for id, val := range m {
 		res[id] = val
 	}
 	return res
 }
 
-func cloneParams(m map[uint64]basics.AssetParams) map[uint64]basics.AssetParams {
-	res := make(map[uint64]basics.AssetParams)
+func cloneParams(m map[basics.AssetIndex]basics.AssetParams) map[basics.AssetIndex]basics.AssetParams {
+	res := make(map[basics.AssetIndex]basics.AssetParams)
 	for id, val := range m {
 		res[id] = val
 	}
 	return res
 }
 
-func getParams(balances Balances, cid basics.AssetID) (basics.AssetParams, error) {
-	creator, err := balances.Get(cid.Creator, false)
+func getParams(balances Balances, aidx basics.AssetIndex) (basics.AssetParams, basics.Address, error) {
+	creatorAddr, err := balances.GetAssetCreator(aidx)
 	if err != nil {
-		return basics.AssetParams{}, err
+		return basics.AssetParams{}, basics.Address{}, err
 	}
 
-	curr, ok := creator.AssetParams[cid.Index]
+	creator, err := balances.Get(creatorAddr, false)
+	if err != nil {
+		return basics.AssetParams{}, basics.Address{}, err
+	}
+
+	curr, ok := creator.AssetParams[aidx]
 	if !ok {
-		return basics.AssetParams{}, fmt.Errorf("asset index %d not found in account %v", cid.Index, cid.Creator)
+		return basics.AssetParams{}, basics.Address{}, fmt.Errorf("asset index %d not found in account %v", aidx, creator)
 	}
 
-	return curr, nil
+	return curr, creatorAddr, nil
 }
 
 func (cc AssetConfigTxnFields) apply(header Header, balances Balances, spec SpecialAddresses, ad *ApplyData, txnCounter uint64) error {
-	if cc.ConfigAsset == (basics.AssetID{}) {
+	if cc.ConfigAsset == 0 {
 		// Allocating an asset.
 		record, err := balances.Get(header.Sender, false)
 		if err != nil {
@@ -119,7 +124,7 @@ func (cc AssetConfigTxnFields) apply(header Header, balances Balances, spec Spec
 		record.AssetParams = cloneParams(record.AssetParams)
 
 		// Ensure index is never zero
-		newidx := txnCounter + 1
+		newidx := basics.AssetIndex(txnCounter + 1)
 
 		// Sanity check that there isn't an asset with this counter value.
 		_, present := record.AssetParams[newidx]
@@ -127,13 +132,8 @@ func (cc AssetConfigTxnFields) apply(header Header, balances Balances, spec Spec
 			return fmt.Errorf("already found asset with index %d", newidx)
 		}
 
-		cid := basics.AssetID{
-			Creator: header.Sender,
-			Index:   newidx,
-		}
-
-		record.AssetParams[cid.Index] = cc.AssetParams
-		record.Assets[cid] = basics.AssetHolding{
+		record.AssetParams[newidx] = cc.AssetParams
+		record.Assets[newidx] = basics.AssetHolding{
 			Amount: cc.AssetParams.Total,
 		}
 
@@ -145,7 +145,7 @@ func (cc AssetConfigTxnFields) apply(header Header, balances Balances, spec Spec
 	}
 
 	// Re-configuration and destroying must be done by the manager key.
-	params, err := getParams(balances, cc.ConfigAsset)
+	params, creator, err := getParams(balances, cc.ConfigAsset)
 	if err != nil {
 		return err
 	}
@@ -154,7 +154,7 @@ func (cc AssetConfigTxnFields) apply(header Header, balances Balances, spec Spec
 		return fmt.Errorf("transaction issued by %v, not manager key %v", header.Sender, params.Manager)
 	}
 
-	record, err := balances.Get(cc.ConfigAsset.Creator, false)
+	record, err := balances.Get(creator, false)
 	if err != nil {
 		return err
 	}
@@ -170,7 +170,7 @@ func (cc AssetConfigTxnFields) apply(header Header, balances Balances, spec Spec
 		}
 
 		delete(record.Assets, cc.ConfigAsset)
-		delete(record.AssetParams, cc.ConfigAsset.Index)
+		delete(record.AssetParams, cc.ConfigAsset)
 	} else {
 		// Changing keys in an asset.
 		if !params.Manager.IsZero() {
@@ -186,13 +186,13 @@ func (cc AssetConfigTxnFields) apply(header Header, balances Balances, spec Spec
 			params.Clawback = cc.AssetParams.Clawback
 		}
 
-		record.AssetParams[cc.ConfigAsset.Index] = params
+		record.AssetParams[cc.ConfigAsset] = params
 	}
 
 	return balances.Put(record)
 }
 
-func takeOut(balances Balances, addr basics.Address, asset basics.AssetID, amount uint64, bypassFreeze bool) error {
+func takeOut(balances Balances, addr basics.Address, asset basics.AssetIndex, amount uint64, bypassFreeze bool) error {
 	if amount == 0 {
 		return nil
 	}
@@ -222,7 +222,7 @@ func takeOut(balances Balances, addr basics.Address, asset basics.AssetID, amoun
 	return balances.Put(snd)
 }
 
-func putIn(balances Balances, addr basics.Address, asset basics.AssetID, amount uint64, bypassFreeze bool) error {
+func putIn(balances Balances, addr basics.Address, asset basics.AssetIndex, amount uint64, bypassFreeze bool) error {
 	if amount == 0 {
 		return nil
 	}
@@ -260,7 +260,7 @@ func (ct AssetTransferTxnFields) apply(header Header, balances Balances, spec Sp
 	if !ct.AssetSender.IsZero() {
 		// Clawback transaction.  Check that the transaction sender
 		// is the Clawback address for this asset.
-		params, err := getParams(balances, ct.XferAsset)
+		params, _, err := getParams(balances, ct.XferAsset)
 		if err != nil {
 			return err
 		}
@@ -286,7 +286,7 @@ func (ct AssetTransferTxnFields) apply(header Header, balances Balances, spec Sp
 		sndHolding, ok := snd.Assets[ct.XferAsset]
 		if !ok {
 			// Initialize holding with default Frozen value.
-			params, err := getParams(balances, ct.XferAsset)
+			params, _, err := getParams(balances, ct.XferAsset)
 			if err != nil {
 				return err
 			}
@@ -320,8 +320,13 @@ func (ct AssetTransferTxnFields) apply(header Header, balances Balances, spec Sp
 	}
 
 	if ct.AssetCloseTo != (basics.Address{}) {
+		creatorAddr, err := balances.GetAssetCreator(ct.XferAsset)
+		if err != nil {
+			return fmt.Errorf("failed to find asset creator: %v", creatorAddr)
+		}
+
 		// Cannot close asset ID allocated by this account; must use destroy.
-		if ct.XferAsset.Creator == source {
+		if creatorAddr == source {
 			return fmt.Errorf("cannot close asset ID in allocating account")
 		}
 
@@ -376,7 +381,7 @@ func (ct AssetTransferTxnFields) apply(header Header, balances Balances, spec Sp
 
 func (cf AssetFreezeTxnFields) apply(header Header, balances Balances, spec SpecialAddresses, ad *ApplyData) error {
 	// Only the Freeze address can change the freeze value.
-	params, err := getParams(balances, cf.FreezeAsset)
+	params, _, err := getParams(balances, cf.FreezeAsset)
 	if err != nil {
 		return err
 	}
