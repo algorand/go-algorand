@@ -114,7 +114,10 @@ func BenchmarkAssemblePayset(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		// generate transactions
 		const txPoolSize = 6000
-		tp := pools.MakeTransactionPool(l.Ledger, txPoolSize, false, 2)
+		cfg := config.GetDefaultLocal()
+		cfg.TxPoolSize = txPoolSize
+		cfg.EnableAssembleStats = false
+		tp := pools.MakeTransactionPool(l.Ledger, cfg)
 		errcount := 0
 		okcount := 0
 		var worstTxID transactions.Txid

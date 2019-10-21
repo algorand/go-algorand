@@ -65,15 +65,18 @@ type TransactionPool struct {
 //
 // The pool also contains status information for the last transactionPoolStatusSize
 // transactions that were removed from the pool without being committed.
-func MakeTransactionPool(ledger *ledger.Ledger, transactionPoolStatusSize int, logStats bool, expFeeFactor uint64) *TransactionPool {
+func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local) *TransactionPool {
+	if cfg.TxPoolExponentialIncreaseFactor < 1 {
+		cfg.TxPoolExponentialIncreaseFactor = 1
+	}
 	pool := TransactionPool{
 		pendingTxids:    make(map[transactions.Txid]transactions.SignedTxn),
 		rememberedTxids: make(map[transactions.Txid]transactions.SignedTxn),
 		expiredTxCount:  make(map[basics.Round]int),
 		ledger:          ledger,
-		statusCache:     makeStatusCache(transactionPoolStatusSize),
-		logStats:        logStats,
-		expFeeFactor:    expFeeFactor,
+		statusCache:     makeStatusCache(cfg.TxPoolSize),
+		logStats:        cfg.EnableAssembleStats,
+		expFeeFactor:    cfg.TxPoolExponentialIncreaseFactor,
 	}
 	pool.cond.L = &pool.mu
 	pool.recomputeBlockEvaluator()
