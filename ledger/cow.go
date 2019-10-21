@@ -88,16 +88,16 @@ func (cb *roundCowState) rewardsLevel() uint64 {
 	return cb.mods.hdr.RewardsLevel
 }
 
-func (cs *roundCowState) GetAssetCreator(aidx basics.AssetIndex) (basics.Address, error) {
-	c, ok := cs.mods.assetCreators[aidx]
+func (cb *roundCowState) GetAssetCreator(aidx basics.AssetIndex) (basics.Address, error) {
+	c, ok := cb.mods.assetCreators[aidx]
 	if ok {
 		return c, nil
 	}
-	_, ok = cs.mods.deletedAssets[aidx]
+	_, ok = cb.mods.deletedAssets[aidx]
 	if ok {
 		return basics.Address{}, fmt.Errorf("asset %v has been deleted", aidx)
 	}
-	return cs.lookupParent.GetAssetCreator(aidx)
+	return cb.lookupParent.GetAssetCreator(aidx)
 }
 
 func (cb *roundCowState) lookup(addr basics.Address) (data basics.AccountData, err error) {
