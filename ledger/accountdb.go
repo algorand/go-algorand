@@ -334,7 +334,8 @@ func accountsNewRound(tx *sql.Tx, rnd basics.Round, updates map[basics.Address]a
 	}
 
 	if ot.Overflowed {
-		return flushedAssets, fmt.Errorf("overflow computing totals")
+		err = fmt.Errorf("overflow computing totals")
+		return
 	}
 
 	res, err := tx.Exec("UPDATE acctrounds SET rnd=? WHERE id='acctbase'", rnd)
