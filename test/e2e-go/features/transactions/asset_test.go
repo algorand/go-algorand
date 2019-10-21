@@ -327,7 +327,7 @@ func TestAssetInformation(t *testing.T) {
 	info, err = client.AccountInformation(account0)
 	a.NoError(err)
 	for idx, cp := range info.AssetParams {
-		assetInfo, err := client.AssetInformation(cp.Creator, idx)
+		assetInfo, err := client.AssetInformation(idx)
 		a.NoError(err)
 		a.Equal(cp, assetInfo)
 	}

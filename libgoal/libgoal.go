@@ -583,11 +583,20 @@ func (c *Client) AccountInformation(account string) (resp v1.Account, err error)
 	return
 }
 
-// AssetInformation takes an asset's creator and index and returns its information
-func (c *Client) AssetInformation(creator string, index uint64) (resp v1.AssetParams, err error) {
+// AssetInformation takes an asset's index and returns its information
+func (c *Client) AssetInformation(index uint64) (resp v1.AssetParams, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
-		resp, err = algod.AssetInformation(creator, index)
+		resp, err = algod.AssetInformation(index)
+	}
+	return
+}
+
+// AssetInformationWithCreator takes an asset's index and creator and returns its information
+func (c *Client) AssetInformationWithCreator(creator string, index uint64) (resp v1.AssetParams, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		resp, err = algod.AssetInformationWithCreator(creator, index)
 	}
 	return
 }
