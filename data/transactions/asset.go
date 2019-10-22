@@ -305,26 +305,17 @@ func (ct AssetTransferTxnFields) apply(header Header, balances Balances, spec Sp
 		}
 	}
 
-	// Are we spending our whole balance to the asset creator?
-	var closeToCreator bool
-	if (ct.AssetReceiver == ct.XferAsset.Creator) && (ct.AssetCloseTo == ct.XferAsset.Creator) {
-		closeToCreator = true
-	}
-
-	// Freezes are bypassed during clawbacks and when we close out our whole
-	// asset holding to the creator
-	bypassFreeze := clawback || closeToCreator
-
 	// Actually move the asset.  Zero transfers return right away
 	// without looking up accounts, so it's fine to have a zero transfer
 	// to an all-zero address (e.g., when the only meaningful part of
-	// the transaction is the close-to address).
-	err := takeOut(balances, source, ct.XferAsset, ct.AssetAmount, bypassFreeze)
+	// the transaction is the close-to address). Similarly, takeOut and
+	// putIn will succeed for zero transfers on frozen asset holdings
+	err := takeOut(balances, source, ct.XferAsset, ct.AssetAmount, clawback)
 	if err != nil {
 		return err
 	}
 
-	err = putIn(balances, ct.AssetReceiver, ct.XferAsset, ct.AssetAmount, bypassFreeze)
+	err = putIn(balances, ct.AssetReceiver, ct.XferAsset, ct.AssetAmount, clawback)
 	if err != nil {
 		return err
 	}
@@ -338,6 +329,12 @@ func (ct AssetTransferTxnFields) apply(header Header, balances Balances, spec Sp
 		// Cannot close by clawback.
 		if clawback {
 			return fmt.Errorf("cannot close asset by clawback")
+		}
+
+		// Allow closing out to the asset creator even when frozen
+		var bypassFreeze bool
+		if ct.AssetCloseTo == ct.XferAsset.Creator {
+			bypassFreeze = true
 		}
 
 		// Figure out how much balance to move.
