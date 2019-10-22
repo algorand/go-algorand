@@ -73,19 +73,15 @@ func decorateUnknownTransactionTypeError(err error, txs node.TxnWithStatus) erro
 // txEncode copies the data fields of the internal transaction object and populate the v1.Transaction accordingly.
 // if unexpected transaction type is encountered, an error is returned. The caller is expected to ignore the returned
 // transaction when error is non-nil.
-func txEncode(l *data.Ledger, tx transactions.Transaction, ad transactions.ApplyData) (v1.Transaction, error) {
+func txEncode(tx transactions.Transaction, ad transactions.ApplyData) (v1.Transaction, error) {
 	var res v1.Transaction
-	var err error
 	switch tx.Type {
 	case protocol.PaymentTx:
 		res = paymentTxEncode(tx, ad)
 	case protocol.KeyRegistrationTx:
 		res = keyregTxEncode(tx, ad)
 	case protocol.AssetConfigTx:
-		res, err = assetConfigTxEncode(l, tx, ad)
-		if err != nil {
-			return v1.Transaction{}, err
-		}
+		res = assetConfigTxEncode(tx, ad)
 	case protocol.AssetTransferTx:
 		res = assetTransferTxEncode(tx, ad)
 	case protocol.AssetFreezeTx:
@@ -140,12 +136,7 @@ func keyregTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.T
 	}
 }
 
-func assetParams(l *data.Ledger, aidx basics.AssetIndex, params basics.AssetParams) (v1.AssetParams, error) {
-	creator, err := l.GetAssetCreator(aidx)
-	if err != nil {
-		return v1.AssetParams{}, err
-	}
-
+func assetParams(creator basics.Address, aidx basics.AssetIndex, params basics.AssetParams) v1.AssetParams {
 	paramsModel := v1.AssetParams{
 		Creator:       creator.String(),
 		Total:         params.Total,
@@ -171,14 +162,11 @@ func assetParams(l *data.Ledger, aidx basics.AssetIndex, params basics.AssetPara
 		paramsModel.ClawbackAddr = params.Clawback.String()
 	}
 
-	return paramsModel, nil
+	return paramsModel
 }
 
-func assetConfigTxEncode(l *data.Ledger, tx transactions.Transaction, ad transactions.ApplyData) (v1.Transaction, error) {
-	params, err := assetParams(l, tx.AssetConfigTxnFields.ConfigAsset, tx.AssetConfigTxnFields.AssetParams)
-	if err != nil {
-		return v1.Transaction{}, err
-	}
+func assetConfigTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
+	params := assetParams(basics.Address{}, tx.AssetConfigTxnFields.ConfigAsset, tx.AssetConfigTxnFields.AssetParams)
 
 	config := v1.AssetConfigTransactionType{
 		AssetID: uint64(tx.AssetConfigTxnFields.ConfigAsset),
@@ -187,7 +175,7 @@ func assetConfigTxEncode(l *data.Ledger, tx transactions.Transaction, ad transac
 
 	return v1.Transaction{
 		AssetConfig: &config,
-	}, nil
+	}
 }
 
 func assetTransferTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
@@ -222,8 +210,8 @@ func assetFreezeTxEncode(tx transactions.Transaction, ad transactions.ApplyData)
 	}
 }
 
-func txWithStatusEncode(l *data.Ledger, tr node.TxnWithStatus) (v1.Transaction, error) {
-	s, err := txEncode(l, tr.Txn.Txn, tr.ApplyData)
+func txWithStatusEncode(tr node.TxnWithStatus) (v1.Transaction, error) {
+	s, err := txEncode(tr.Txn.Txn, tr.ApplyData)
 	if err != nil {
 		err = decorateUnknownTransactionTypeError(err, tr)
 		return v1.Transaction{}, err
@@ -272,7 +260,7 @@ func blockEncode(l *data.Ledger, b bookkeeping.Block, c agreement.Certificate) (
 			ConfirmedRound: b.Round(),
 			ApplyData:      txn.ApplyData,
 		}
-		encTx, err := txWithStatusEncode(l, tx)
+		encTx, err := txWithStatusEncode(tx)
 		if err != nil {
 			return v1.Block{}, err
 		}
@@ -508,12 +496,12 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 	if len(record.AssetParams) > 0 {
 		thisAssetParams = make(map[uint64]v1.AssetParams)
 		for idx, params := range record.AssetParams {
-			params, err := assetParams(myLedger, idx, params)
+			creator, err := myLedger.GetAssetCreator(idx)
 			if err != nil {
-				lib.ErrorResponse(w, http.StatusInternalServerError, err, err.Error(), ctx.Log)
+				lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToGetAssetCreator, ctx.Log)
 				return
 			}
-			thisAssetParams[uint64(idx)] = params
+			thisAssetParams[uint64(idx)] = assetParams(creator, idx, params)
 		}
 	}
 
@@ -619,7 +607,7 @@ func TransactionInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.R
 
 	if txn, ok := ctx.Node.GetTransaction(addr, txID, start, latestRound); ok {
 		var responseTxs v1.Transaction
-		responseTxs, err = txWithStatusEncode(ledger, txn)
+		responseTxs, err = txWithStatusEncode(txn)
 		if err != nil {
 			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToParseTransaction, ctx.Log)
 			return
@@ -688,9 +676,8 @@ func PendingTransactionInformation(ctx lib.ReqContext, w http.ResponseWriter, r 
 		return
 	}
 
-	ledger := ctx.Node.Ledger()
 	if txn, ok := ctx.Node.GetPendingTransaction(txID); ok {
-		responseTxs, err := txWithStatusEncode(ledger, txn)
+		responseTxs, err := txWithStatusEncode(txn)
 		if err != nil {
 			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToParseTransaction, ctx.Log)
 			return
@@ -758,9 +745,8 @@ func GetPendingTransactions(ctx lib.ReqContext, w http.ResponseWriter, r *http.R
 	}
 
 	responseTxs := make([]v1.Transaction, len(txs))
-	ledger := ctx.Node.Ledger()
 	for i, twr := range txs {
-		responseTxs[i], err = txEncode(ledger, twr.Txn, transactions.ApplyData{})
+		responseTxs[i], err = txEncode(twr.Txn, transactions.ApplyData{})
 		if err != nil {
 			// update the error as needed
 			err = decorateUnknownTransactionTypeError(err, node.TxnWithStatus{Txn: twr})
@@ -843,7 +829,6 @@ func GetPendingTransactionsByAddress(ctx lib.ReqContext, w http.ResponseWriter, 
 	}
 
 	responseTxs := make([]v1.Transaction, 0)
-	ledger := ctx.Node.Ledger()
 	for i, twr := range txs {
 		if twr.Txn.Sender == addr || twr.Txn.Receiver == addr {
 			// truncate in case max was passed
@@ -851,7 +836,7 @@ func GetPendingTransactionsByAddress(ctx lib.ReqContext, w http.ResponseWriter, 
 				break
 			}
 
-			tx, err := txEncode(ledger, twr.Txn, transactions.ApplyData{})
+			tx, err := txEncode(twr.Txn, transactions.ApplyData{})
 			responseTxs = append(responseTxs, tx)
 			if err != nil {
 				// update the error as needed
@@ -915,7 +900,7 @@ func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request
 	aidx := basics.AssetIndex(queryIndex)
 	creator, err := ledger.GetAssetCreator(aidx)
 	if err != nil {
-		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToGetAssetCreator, ctx.Log)
+		lib.ErrorResponse(w, http.StatusNotFound, err, errFailedToGetAssetCreator, ctx.Log)
 		return
 	}
 
@@ -927,11 +912,7 @@ func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request
 	}
 
 	if asset, ok := record.AssetParams[aidx]; ok {
-		thisAssetParams, err := assetParams(ledger, aidx, asset)
-		if err != nil {
-			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToGetAssetCreator, ctx.Log)
-			return
-		}
+		thisAssetParams := assetParams(creator, aidx, asset)
 		SendJSON(AssetInformationResponse{&thisAssetParams}, w, ctx.Log)
 	} else {
 		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errFailedRetrievingAsset), errFailedRetrievingAsset, ctx.Log)
@@ -1004,11 +985,12 @@ func AssetInformationWithCreator(ctx lib.ReqContext, w http.ResponseWriter, r *h
 
 	aidx := basics.AssetIndex(queryIndex)
 	if asset, ok := record.AssetParams[aidx]; ok {
-		thisAssetParams, err := assetParams(ledger, aidx, asset)
+		creator, err := ledger.GetAssetCreator(aidx)
 		if err != nil {
 			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToGetAssetCreator, ctx.Log)
 			return
 		}
+		thisAssetParams := assetParams(creator, aidx, asset)
 		SendJSON(AssetInformationResponse{&thisAssetParams}, w, ctx.Log)
 	} else {
 		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errFailedRetrievingAsset), errFailedRetrievingAsset, ctx.Log)
@@ -1335,9 +1317,8 @@ func Transactions(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	}
 
 	responseTxs := make([]v1.Transaction, len(txs))
-	ledger := ctx.Node.Ledger()
 	for i, twr := range txs {
-		responseTxs[i], err = txWithStatusEncode(ledger, twr)
+		responseTxs[i], err = txWithStatusEncode(twr)
 		if err != nil {
 			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToParseTransaction, ctx.Log)
 			return
@@ -1406,10 +1387,9 @@ func GetTransactionByID(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	ledger := ctx.Node.Ledger()
 	if txn, err := ctx.Node.GetTransactionByID(txID, basics.Round(rnd)); err == nil {
 		var responseTxs v1.Transaction
-		responseTxs, err = txWithStatusEncode(ledger, txn)
+		responseTxs, err = txWithStatusEncode(txn)
 		if err != nil {
 			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToParseTransaction, ctx.Log)
 			return
