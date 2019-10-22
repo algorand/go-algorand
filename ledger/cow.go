@@ -59,10 +59,7 @@ type stateDelta struct {
 	txleases map[txlease]basics.Round
 
 	// new assets creator lookup table
-	assetCreators map[basics.AssetIndex]basics.Address
-
-	// assets queued for deletion
-	deletedAssets map[basics.AssetIndex]bool
+	assets map[basics.AssetIndex]modifiedAsset
 
 	// new block header; read-only
 	hdr *bookkeeping.BlockHeader
@@ -74,12 +71,11 @@ func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader) *roundCowS
 		commitParent: nil,
 		proto:        config.Consensus[hdr.CurrentProtocol],
 		mods: stateDelta{
-			accts:         make(map[basics.Address]accountDelta),
-			txids:         make(map[transactions.Txid]struct{}),
-			txleases:      make(map[txlease]basics.Round),
-			assetCreators: make(map[basics.AssetIndex]basics.Address),
-			deletedAssets: make(map[basics.AssetIndex]bool),
-			hdr:           &hdr,
+			accts:    make(map[basics.Address]accountDelta),
+			txids:    make(map[transactions.Txid]struct{}),
+			txleases: make(map[txlease]basics.Round),
+			assets:   make(map[basics.AssetIndex]modifiedAsset),
+			hdr:      &hdr,
 		},
 	}
 }
@@ -89,13 +85,12 @@ func (cb *roundCowState) rewardsLevel() uint64 {
 }
 
 func (cb *roundCowState) getAssetCreator(aidx basics.AssetIndex) (basics.Address, error) {
-	c, ok := cb.mods.assetCreators[aidx]
+	delta, ok := cb.mods.assets[aidx]
 	if ok {
-		return c, nil
-	}
-	_, ok = cb.mods.deletedAssets[aidx]
-	if ok {
-		return basics.Address{}, fmt.Errorf("asset %v has been deleted", aidx)
+		if delta.created {
+			return delta.creator, nil
+		}
+		return basics.Address{}, fmt.Errorf("asset %d has been deleted", aidx)
 	}
 	return cb.lookupParent.getAssetCreator(aidx)
 }
@@ -138,14 +133,9 @@ func (cb *roundCowState) put(addr basics.Address, old basics.AccountData, new ba
 	}
 
 	// Get which asset indices were created and deleted, and update state
-	// to reflect that
 	assetDeltas := getChangedAssetIndices(addr, accountDelta{old: old, new: new})
 	for aidx, delta := range assetDeltas {
-		if delta.created {
-			cb.mods.assetCreators[aidx] = addr
-		} else {
-			cb.mods.deletedAssets[aidx] = true
-		}
+		cb.mods.assets[aidx] = delta
 	}
 }
 
@@ -160,12 +150,11 @@ func (cb *roundCowState) child() *roundCowState {
 		commitParent: cb,
 		proto:        cb.proto,
 		mods: stateDelta{
-			accts:         make(map[basics.Address]accountDelta),
-			txids:         make(map[transactions.Txid]struct{}),
-			txleases:      make(map[txlease]basics.Round),
-			assetCreators: make(map[basics.AssetIndex]basics.Address),
-			deletedAssets: make(map[basics.AssetIndex]bool),
-			hdr:           cb.mods.hdr,
+			accts:    make(map[basics.Address]accountDelta),
+			txids:    make(map[transactions.Txid]struct{}),
+			txleases: make(map[txlease]basics.Round),
+			assets:   make(map[basics.AssetIndex]modifiedAsset),
+			hdr:      cb.mods.hdr,
 		},
 	}
 }
@@ -189,11 +178,8 @@ func (cb *roundCowState) commitToParent() {
 	for txl, expires := range cb.mods.txleases {
 		cb.commitParent.mods.txleases[txl] = expires
 	}
-	for aidx, creator := range cb.mods.assetCreators {
-		cb.commitParent.mods.assetCreators[aidx] = creator
-	}
-	for aidx := range cb.mods.deletedAssets {
-		cb.commitParent.mods.deletedAssets[aidx] = true
+	for aidx, delta := range cb.mods.assets {
+		cb.commitParent.mods.assets[aidx] = delta
 	}
 }
 
