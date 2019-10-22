@@ -233,12 +233,16 @@ func accountsPutTotals(tx *sql.Tx, totals AccountTotals) error {
 
 // getChangedAssetIndices takes an accountDelta and returns which AssetIndices
 // were created and which were deleted
-func getChangedAssetIndices(delta accountDelta) (created, deleted []basics.AssetIndex) {
+func getChangedAssetIndices(delta accountDelta) map[basics.AssetIndex]modifiedAsset {
+	assetMods := make(map[basics.AssetIndex]modifiedAsset)
+
 	// Get assets that were created
 	for idx := range delta.new.AssetParams {
 		// AssetParams are in now the balance record now, but _weren't_ before
 		if _, ok := delta.old.AssetParams[idx]; !ok {
-			created = append(created, idx)
+			assetMods[idx] = modifiedAsset {
+				created: true,
+			}
 		}
 	}
 
@@ -246,14 +250,16 @@ func getChangedAssetIndices(delta accountDelta) (created, deleted []basics.Asset
 	for idx := range delta.old.AssetParams {
 		// AssetParams were in the balance record, but _aren't_ anymore
 		if _, ok := delta.new.AssetParams[idx]; !ok {
-			deleted = append(deleted, idx)
+			assetMods[idx] = modifiedAsset {
+				created: false,
+			}
 		}
 	}
 
-	return
+	return assetMods
 }
 
-func accountsNewRound(tx *sql.Tx, rnd basics.Round, updates map[basics.Address]accountDelta, rewardsLevel uint64, proto config.ConsensusParams) (flushedAssets []basics.AssetIndex, err error) {
+func accountsNewRound(tx *sql.Tx, rnd basics.Round, updates map[basics.Address]accountDelta, rewardsLevel uint64, proto config.ConsensusParams) (err error) {
 	var base basics.Round
 	err = tx.QueryRow("SELECT rnd FROM acctrounds WHERE id='acctbase'").Scan(&base)
 	if err != nil {
@@ -306,27 +312,6 @@ func accountsNewRound(tx *sql.Tx, rnd basics.Round, updates map[basics.Address]a
 		}
 		if err != nil {
 			return
-		}
-
-		// Get which asset indices were created and deleted
-		created, deleted := getChangedAssetIndices(data)
-
-		// Add created assets to the creator lookup table
-		for _, aidx := range created {
-			_, err = insertAssetIdxStmt.Exec(aidx, addr[:])
-			if err != nil {
-				return
-			}
-			flushedAssets = append(flushedAssets, aidx)
-		}
-
-		// Remove deleted assets from the creator lookup table
-		for _, aidx := range deleted {
-			_, err = deleteAssetIdxStmt.Exec(aidx)
-			if err != nil {
-				return
-			}
-			flushedAssets = append(flushedAssets, aidx)
 		}
 
 		totals.delAccount(proto, data.old, &ot)
