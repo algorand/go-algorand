@@ -281,7 +281,8 @@ func (au *accountUpdates) getAssetCreatorForRound(rnd basics.Round, aidx basics.
 		return basics.Address{}, err
 	}
 
-	// We only store information about asset creation/deletion for the latest round
+	// If this is the most recent round, au.assets has will have the latest
+	// state and we can skip scanning backwards over assetDeltas
 	if offset == uint64(len(au.deltas)) {
 		// Check if we already have the asset/creator in cache
 		assetDelta, ok := au.assets[aidx]
