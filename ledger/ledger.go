@@ -274,7 +274,7 @@ func (l *Ledger) notifyCommit(r basics.Round) basics.Round {
 func (l *Ledger) GetAssetCreatorForRound(rnd basics.Round, assetIdx basics.AssetIndex) (basics.Address, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.GetAssetCreator(rnd, assetIdx)
+	return l.accts.getAssetCreatorForRound(rnd, assetIdx)
 }
 
 // GetAssetCreator is like GetAssetCreatorForRound, but for the latest round
@@ -282,7 +282,7 @@ func (l *Ledger) GetAssetCreatorForRound(rnd basics.Round, assetIdx basics.Asset
 func (l *Ledger) GetAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.GetAssetCreator(l.blockQ.latest(), assetIdx)
+	return l.accts.getAssetCreatorForRound(l.blockQ.latest(), assetIdx)
 }
 
 // Lookup uses the accounts tracker to return the account state for a

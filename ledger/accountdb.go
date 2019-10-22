@@ -150,8 +150,19 @@ func accountsDbInit(q db.Queryable) (*accountsDbQueries, error) {
 
 func (qs *accountsDbQueries) lookupAssetCreator(assetIdx basics.AssetIndex) (addr basics.Address, err error) {
 	err = db.Retry(func() error {
-		return qs.lookupAssetCreatorStmt.QueryRow(assetIdx).Scan(&addr)
+		err := qs.lookupAssetCreatorStmt.QueryRow(assetIdx).Scan(&addr)
+		if err == nil {
+			return nil
+		}
+
+		if err == sql.ErrNoRows {
+			// Return the zero value of data
+			return nil
+		}
+
+		return nil
 	})
+
 	return
 }
 

@@ -264,7 +264,7 @@ func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address
 	return
 }
 
-func (au *accountUpdates) GetAssetCreator(rnd basics.Round, assetIdx basics.AssetIndex) (basics.Address, error) {
+func (au *accountUpdates) getAssetCreatorForRound(rnd basics.Round, assetIdx basics.AssetIndex) (basics.Address, error) {
 	offset, err := au.roundOffset(rnd)
 	if err != nil {
 		return basics.Address{}, err
