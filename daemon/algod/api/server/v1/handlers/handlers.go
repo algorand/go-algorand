@@ -32,7 +32,6 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
-	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -224,7 +223,7 @@ func txWithStatusEncode(tr node.TxnWithStatus) (v1.Transaction, error) {
 	return s, nil
 }
 
-func blockEncode(l *data.Ledger, b bookkeeping.Block, c agreement.Certificate) (v1.Block, error) {
+func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error) {
 	block := v1.Block{
 		Hash:              crypto.Digest(b.Hash()).String(),
 		PreviousBlockHash: crypto.Digest(b.Branch).String(),
@@ -1094,7 +1093,7 @@ func GetBlock(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
 		return
 	}
-	block, err := blockEncode(ledger, b, c)
+	block, err := blockEncode(b, c)
 
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errInternalFailure, ctx.Log)
