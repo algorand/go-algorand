@@ -198,7 +198,7 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 		err = errLogicSignNotSupported
 		return
 	}
-	if len(params.Txn.Lsig.Args) > EvalMaxArgs {
+	if params.Txn.Lsig.Args != nil && len(params.Txn.Lsig.Args) > EvalMaxArgs {
 		err = errTooManyArgs
 		return
 	}
@@ -232,7 +232,7 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 		if cx.stepCount > len(cx.program) {
 			return false, errLoopDetected
 		}
-		if params.Proto == nil || uint64(cx.cost) > params.Proto.LogicSigMaxCost {
+		if uint64(cx.cost) > params.Proto.LogicSigMaxCost {
 			return false, errCostTooHigh
 		}
 	}
