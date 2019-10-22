@@ -441,13 +441,14 @@ func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta stateDelta) {
 		macct.data = data.new
 		au.accounts[addr] = macct
 
-		adeltas := getChangedAssetIndices(data)
+		adeltas := getChangedAssetIndices(addr, data)
 		for aidx, delta := range adeltas {
 			masset := au.assets[aidx]
 			masset.creator = addr
 			masset.created = delta.created
 			masset.ndeltas++
 			au.assets[aidx] = masset
+
 			newAssetDeltas[aidx] = delta
 		}
 	}

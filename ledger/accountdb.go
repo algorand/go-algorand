@@ -233,7 +233,7 @@ func accountsPutTotals(tx *sql.Tx, totals AccountTotals) error {
 
 // getChangedAssetIndices takes an accountDelta and returns which AssetIndices
 // were created and which were deleted
-func getChangedAssetIndices(delta accountDelta) map[basics.AssetIndex]modifiedAsset {
+func getChangedAssetIndices(creator basics.Address, delta accountDelta) map[basics.AssetIndex]modifiedAsset {
 	assetMods := make(map[basics.AssetIndex]modifiedAsset)
 
 	// Get assets that were created
@@ -242,6 +242,7 @@ func getChangedAssetIndices(delta accountDelta) map[basics.AssetIndex]modifiedAs
 		if _, ok := delta.old.AssetParams[idx]; !ok {
 			assetMods[idx] = modifiedAsset {
 				created: true,
+				creator: creator,
 			}
 		}
 	}
@@ -252,6 +253,7 @@ func getChangedAssetIndices(delta accountDelta) map[basics.AssetIndex]modifiedAs
 		if _, ok := delta.new.AssetParams[idx]; !ok {
 			assetMods[idx] = modifiedAsset {
 				created: false,
+				creator: creator,
 			}
 		}
 	}
