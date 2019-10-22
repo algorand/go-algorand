@@ -269,7 +269,7 @@ func checkSrvRecord(dnsBootstrap string) {
 func doDeleteDNS(network string, noPrompt bool, excludePattern string) bool {
 
 	validNetworks := map[string]bool{"mainnet": true, "testnet": true, "devnet": true, "betanet": true}
-	if !validNetworks[network] {
+	if validNetworks[network] {
 		fmt.Fprintf(os.Stderr, "Deletion of network '%s' using this tool is not allowed\n", network)
 		return false
 	}
