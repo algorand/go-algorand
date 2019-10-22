@@ -980,7 +980,7 @@ func AssetInformationWithCreator(ctx lib.ReqContext, w http.ResponseWriter, r *h
 
 	ledger := ctx.Node.Ledger()
 	lastRound := ledger.Latest()
-	record, err := ledger.Lookup(lastRound, basics.Address(addr))
+	record, err := ledger.Lookup(lastRound, addr)
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
 		return
@@ -988,7 +988,7 @@ func AssetInformationWithCreator(ctx lib.ReqContext, w http.ResponseWriter, r *h
 
 	aidx := basics.AssetIndex(queryIndex)
 	if asset, ok := record.AssetParams[aidx]; ok {
-		thisAssetParams := assetParams(basics.Address(addr), aidx, asset)
+		thisAssetParams := assetParams(addr, aidx, asset)
 		SendJSON(AssetInformationResponse{&thisAssetParams}, w, ctx.Log)
 	} else {
 		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errFailedRetrievingAsset), errFailedRetrievingAsset, ctx.Log)
