@@ -203,6 +203,15 @@ type ConsensusParams struct {
 
 	// support for transaction leases
 	SupportTransactionLeases bool
+
+	// 0 for no support, otherwise highest version supported
+	LogicSigVersion uint64
+
+	// len(LogicSig.Logic) + len(LogicSig.Args[*]) must be less than this
+	LogicSigMaxSize uint64
+
+	// sum of estimated op cost must be less than this
+	LogicSigMaxCost uint64
 }
 
 // Consensus tracks the protocol-level settings for different versions of the
@@ -412,6 +421,9 @@ func initConsensusProtocols() {
 	vFuture := v18
 	vFuture.TxnCounter = true
 	vFuture.Asset = true
+	vFuture.LogicSigVersion = 1
+	vFuture.LogicSigMaxSize = 1000
+	vFuture.LogicSigMaxCost = 20000
 	vFuture.MaxAssetsPerAccount = 1000
 	vFuture.SupportTxGroups = true
 	vFuture.MaxTxGroupSize = 16
@@ -603,7 +615,7 @@ type Local struct {
 	// The fallback DNS resolver address that would be used if the system resolver would fail to retrieve SRV records
 	FallbackDNSResolverAddress string
 
-	// if the transaction pool is full, a new transaction must beat the minimum priority transaction by at least this factor
+	// exponential increase factor of transaction pool's fee threshold, should always be 2 in production
 	TxPoolExponentialIncreaseFactor uint64
 
 	SuggestedFeeBlockHistory int

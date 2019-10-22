@@ -27,6 +27,8 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/execpool"
@@ -386,10 +388,10 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 
 	cow := eval.state.child()
 
-	for _, txad := range txgroup {
+	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
-		err := eval.transaction(txad.SignedTxn, txad.ApplyData, cow, &txib)
+		err := eval.transaction(txad.SignedTxn, txad.ApplyData, txgroup, gi, cow, &txib)
 		if err != nil {
 			return err
 		}
@@ -415,6 +417,8 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 			txWithoutGroup.ResetCaches()
 
 			group.TxGroupHashes = append(group.TxGroupHashes, crypto.HashObj(txWithoutGroup))
+		} else if len(txgroup) > 1 {
+			return fmt.Errorf("transactionGroup: [%d] had zero Group but was submitted in a group of %d", gi, len(txgroup))
 		}
 	}
 
@@ -438,7 +442,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 // transaction tentatively executes a new transaction as part of this block evaluation.
 // If the transaction cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transactions.ApplyData, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
+func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transactions.ApplyData, txgroup []transactions.SignedTxnWithAD, groupIndex int, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
 	var err error
 
 	spec := transactions.SpecialAddresses{
@@ -454,7 +458,8 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 		}
 
 		// Transaction already in the ledger?
-		dup, err := cow.isDup(txn.Txn.First(), txn.ID(), txlease{sender: txn.Txn.Sender, lease: txn.Txn.Lease})
+		txid := txn.ID()
+		dup, err := cow.isDup(txn.Txn.First(), txid, txlease{sender: txn.Txn.Sender, lease: txn.Txn.Lease})
 		if err != nil {
 			return err
 		}
@@ -470,7 +475,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 
 		// Properly signed?
 		if eval.txcache == nil || !eval.txcache.Verified(txn) {
-			err = txn.PoolVerify(spec, eval.proto, eval.verificationPool)
+			err = verify.TxnPool(&txn, spec, eval.proto, eval.verificationPool)
 			if err != nil {
 				return fmt.Errorf("transaction %v: failed to verify: %v", txn.ID(), err)
 			}
@@ -479,6 +484,34 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 		// Verify that groups are supported.
 		if !txn.Txn.Group.IsZero() && !eval.proto.SupportTxGroups {
 			return fmt.Errorf("transaction groups not supported")
+		}
+
+		if !txn.Lsig.Blank() {
+			recs := make([]basics.BalanceRecord, len(txgroup))
+			for i := range recs {
+				var err error
+				recs[i], err = cow.Get(txgroup[i].Txn.Sender, true)
+				if err != nil {
+					return fmt.Errorf("transaction %v: cannot get sender record: %v", txn.ID(), err)
+				}
+			}
+			ep := logic.EvalParams{
+				Txn:          &txn,
+				Block:        &eval.block,
+				Proto:        &eval.proto,
+				TxnGroup:     txgroup,
+				GroupIndex:   groupIndex,
+				GroupSenders: recs,
+				Seed:         eval.prevHeader.Seed[:],
+				MoreSeed:     txid[:],
+			}
+			pass, err := logic.Eval(txn.Lsig.Logic, ep)
+			if err != nil {
+				return fmt.Errorf("transaction %v: rejected by logic err=%s", txn.ID(), err)
+			}
+			if !pass {
+				return fmt.Errorf("transaction %v: rejected by logic", txn.ID())
+			}
 		}
 	}
 
@@ -533,9 +566,10 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 		}
 
 		dataNew := data.WithUpdatedRewards(eval.proto, rewardlvl)
-		if dataNew.MicroAlgos.Raw < basics.MulSaturate(eval.proto.MinBalance, uint64(1+len(dataNew.Assets))) {
+		effectiveMinBalance := basics.MulSaturate(eval.proto.MinBalance, uint64(1+len(dataNew.Assets)))
+		if dataNew.MicroAlgos.Raw < effectiveMinBalance {
 			return fmt.Errorf("transaction %v: account %v balance %d below min %d (%d assets)",
-				txn.ID(), addr, dataNew.MicroAlgos.Raw, eval.proto.MinBalance, len(dataNew.Assets))
+				txn.ID(), addr, dataNew.MicroAlgos.Raw, effectiveMinBalance, len(dataNew.Assets))
 		}
 	}
 

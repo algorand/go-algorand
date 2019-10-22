@@ -243,7 +243,11 @@ func (c *Client) getAlgodClient() (algodclient.RestClient, error) {
 }
 
 func (c *Client) ensureGenesisID() (string, error) {
-	return c.nc.GetGenesisID()
+	genesis, err := c.nc.GetGenesis()
+	if err != nil {
+		return "", err
+	}
+	return genesis.ID(), nil
 }
 
 // GenesisID fetches the genesis ID for the running algod node
@@ -430,8 +434,13 @@ type MultisigInfo struct {
 
 // SendPaymentFromWallet signs a transaction using the given wallet and returns the resulted transaction id
 func (c *Client) SendPaymentFromWallet(walletHandle, pw []byte, from, to string, fee, amount uint64, note []byte, closeTo string, firstValid, lastValid basics.Round) (transactions.Transaction, error) {
+	return c.SendPaymentFromWalletWithLease(walletHandle, pw, from, to, fee, amount, note, closeTo, [32]byte{}, firstValid, lastValid)
+}
+
+// SendPaymentFromWalletWithLease is like SendPaymentFromWallet, but with a custom lease.
+func (c *Client) SendPaymentFromWalletWithLease(walletHandle, pw []byte, from, to string, fee, amount uint64, note []byte, closeTo string, lease [32]byte, firstValid, lastValid basics.Round) (transactions.Transaction, error) {
 	// Build the transaction
-	tx, err := c.ConstructPayment(from, to, fee, amount, note, closeTo, firstValid, lastValid)
+	tx, err := c.ConstructPayment(from, to, fee, amount, note, closeTo, lease, firstValid, lastValid)
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
@@ -474,7 +483,7 @@ func (c *Client) signAndBroadcastTransactionWithWallet(walletHandle, pw []byte, 
 // If the fee is 0, the function will use the suggested one form the network
 // if the lastValid is 0, firstValid + maxTxnLifetime will be used
 // if the firstValid is 0, lastRound + 1 will be used
-func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []byte, closeTo string, firstValid, lastValid basics.Round) (transactions.Transaction, error) {
+func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []byte, closeTo string, lease [32]byte, firstValid, lastValid basics.Round) (transactions.Transaction, error) {
 	fromAddr, err := basics.UnmarshalChecksumAddress(from)
 	if err != nil {
 		return transactions.Transaction{}, err
@@ -513,6 +522,7 @@ func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []by
 			Fee:        basics.MicroAlgos{Raw: fee},
 			FirstValid: firstValid,
 			LastValid:  lastValid,
+			Lease:      lease,
 			Note:       note,
 		},
 		PaymentTxnFields: transactions.PaymentTxnFields{
@@ -569,6 +579,15 @@ func (c *Client) AccountInformation(account string) (resp v1.Account, err error)
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.AccountInformation(account)
+	}
+	return
+}
+
+// AssetInformation takes an asset's creator and index and returns its information
+func (c *Client) AssetInformation(creator string, index uint64) (resp v1.AssetParams, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		resp, err = algod.AssetInformation(creator, index)
 	}
 	return
 }

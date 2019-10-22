@@ -46,7 +46,7 @@ exitWithError() {
 
 ${SCRIPTPATH}/start_ec2_instance.sh ${AWS_REGION} ${AWS_LINUX_AMI} ${AWS_INSTANCE_TYPE}
 if [ "$?" != "0" ]; then
-    exitWithError $? "Unable to start EC2 instance"
+    exitWithError 1 "Unable to start EC2 instance"
 fi
 
 BRANCH=$(cat $BUILD_REQUEST | jq -r '.TRAVIS_BRANCH')
@@ -79,9 +79,30 @@ fi
 cat << FOE >> exescript
 export DEBIAN_FRONTEND=noninteractive
 ${EXEC}
+exit \$?
 FOE
+
+timeout_monitor() {
+    local timeout=$1 # in minutes
+    local count=0
+    while [ $count -lt $timeout ]; do
+        count=$(($count + 1))
+        sleep 60s
+    done
+    # at this point, we want to terminate the EC2 instance.
+    exitWithError 1 "EC2 instance $(cat instance) timed out after ${timeout} minutes"
+}
+
+timeout_monitor 360 &
+timeout_monitor_pid=$!
 
 set -o pipefail
 ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) 'bash -s' < exescript 2>&1 | ${SCRIPTPATH}/s3streamup.sh s3://${BUCKET}/${LOGFILE} ${NO_SIGN}
 ERR=$?
-exitWithError ${ERR} ""
+ps -p$timeout_monitor_pid &>/dev/null && kill $timeout_monitor_pid
+if [ "${ERR}" = "0" ]; then
+    exitWithError ${ERR} ""
+else
+    exitWithError ${ERR} "Failed building with error code ${ERR} on $(cat instance)"
+fi
+
