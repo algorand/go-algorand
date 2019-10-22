@@ -164,12 +164,6 @@ type BalanceDetail struct {
 // up the creator of the asset, whose balance record contains the AssetParams
 type AssetIndex uint64
 
-// AssetID is fully qualified name of an asset.
-type AssetID struct {
-	Creator Address    `codec:"c"`
-	Index   AssetIndex `codec:"i"`
-}
-
 // AssetHolding describes an asset held by an account.
 type AssetHolding struct {
 	Amount uint64 `codec:"a"`
