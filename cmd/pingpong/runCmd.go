@@ -129,7 +129,7 @@ var runCmd = &cobra.Command{
 			reportErrorf("cannot set tps to 0")
 		}
 		cfg.TxnPerSec = txnPerSec
-		
+
 		if randomFee {
 			if cfg.MinFee > cfg.MaxFee {
 				reportErrorf("Cannot use randomFee with --minf > --mf.\n")
