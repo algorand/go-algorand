@@ -453,16 +453,28 @@ var listCmd = &cobra.Command{
 
 				unitName := "units"
 				assetName := ""
+				assetURL := ""
+				assetMetadata := ""
 				creatorInfo, err := client.AccountInformation(bal.Creator)
 				if err == nil {
 					params, ok := creatorInfo.AssetParams[aid]
 					if ok {
-						unitName = params.UnitName
-						assetName = fmt.Sprintf(", name %s", params.AssetName)
+						if params.UnitName != "" {
+							unitName = params.UnitName
+						}
+						if params.AssetName != "" {
+							assetName = fmt.Sprintf(", name %s", params.AssetName)
+						}
+						if params.URL != "" {
+							assetURL = fmt.Sprintf(", url %s", params.URL)
+						}
+						if params.MetadataHash != nil {
+							assetMetadata = fmt.Sprintf(", metadata %x", params.MetadataHash)
+						}
 					}
 				}
 
-				fmt.Printf("\t%20d %-8s (creator %s, ID %d%s%s)\n", bal.Amount, unitName, bal.Creator, aid, assetName, frozen)
+				fmt.Printf("\t%20d %-8s (creator %s, ID %d%s%s%s%s)\n", bal.Amount, unitName, bal.Creator, aid, assetName, assetURL, assetMetadata, frozen)
 			}
 		}
 	},
