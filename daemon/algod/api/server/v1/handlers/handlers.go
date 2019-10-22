@@ -988,12 +988,7 @@ func AssetInformationWithCreator(ctx lib.ReqContext, w http.ResponseWriter, r *h
 
 	aidx := basics.AssetIndex(queryIndex)
 	if asset, ok := record.AssetParams[aidx]; ok {
-		creator, err := ledger.GetAssetCreator(aidx)
-		if err != nil {
-			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToGetAssetCreator, ctx.Log)
-			return
-		}
-		thisAssetParams := assetParams(creator, aidx, asset)
+		thisAssetParams := assetParams(basics.Address(addr), aidx, asset)
 		SendJSON(AssetInformationResponse{&thisAssetParams}, w, ctx.Log)
 	} else {
 		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errFailedRetrievingAsset), errFailedRetrievingAsset, ctx.Log)
