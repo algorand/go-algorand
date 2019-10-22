@@ -5,12 +5,11 @@ set +e
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 
-OS=$(${SCRIPTPATH}/../ostype.sh)
-ARCH=$(${SCRIPTPATH}/../archtype.sh)
+OS=$("${SCRIPTPATH}/../ostype.sh")
+ARCH=$("${SCRIPTPATH}/../archtype.sh")
 
 if [ "${OS}" = "linux" ]; then
     if [[ "${ARCH}" = "arm64" ]]; then
-        sudo apt-get -y install sqlite3
         go version 2>/dev/null
         if [ "$?" != "0" ]; then
             echo "Go cannot be found; downloading..."
@@ -29,9 +28,12 @@ if [ "${OS}" = "linux" ]; then
                 exit 1
             fi
         fi
+        set -e
+        sudo apt-get update -y
+        sudo apt-get -y install sqlite3
     fi
     if [[ "${ARCH}" = "arm" ]]; then
-        sudo apt-get -y install sqlite3
+        sudo sh -c 'echo "CONF_SWAPSIZE=1024" > /etc/dphys-swapfile; dphys-swapfile setup; dphys-swapfile swapon'
         go version 2>/dev/null
         if [ "$?" != "0" ]; then
             echo "Go cannot be found; downloading..."
@@ -50,8 +52,11 @@ if [ "${OS}" = "linux" ]; then
                 exit 1
             fi
         fi
+        set -e
+        sudo apt-get update -y
+        sudo apt-get -y install sqlite3
     fi
 fi
 
-${SCRIPTPATH}/../configure_dev.sh
+"${SCRIPTPATH}/../configure_dev.sh"
 exit $?

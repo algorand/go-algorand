@@ -52,6 +52,23 @@ func enableTelemetryState(telemetry *telemetryState, l *logger) {
 	l.setOutput(telemetry.wrapOutput(l.getOutput()))
 }
 
+func makeLevels(min logrus.Level) []logrus.Level {
+	levels := []logrus.Level{}
+	for _, l := range []logrus.Level{
+		logrus.PanicLevel,
+		logrus.FatalLevel,
+		logrus.ErrorLevel,
+		logrus.WarnLevel,
+		logrus.InfoLevel,
+		logrus.DebugLevel,
+	} {
+		if l <= min {
+			levels = append(levels, l)
+		}
+	}
+	return levels
+}
+
 func makeTelemetryState(cfg TelemetryConfig, hookFactory hookFactory) (*telemetryState, error) {
 	history := createLogBuffer(cfg.LogHistoryDepth)
 	if cfg.SessionGUID == "" {
@@ -64,7 +81,7 @@ func makeTelemetryState(cfg TelemetryConfig, hookFactory hookFactory) (*telemetr
 
 	telemetry := &telemetryState{
 		history,
-		createAsyncHook(hook, 32, 100),
+		createAsyncHookLevels(hook, 32, 100, makeLevels(cfg.MinLogLevel)),
 	}
 	return telemetry, nil
 }

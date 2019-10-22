@@ -36,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
@@ -196,7 +197,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookDir
 		return nil, err
 	}
 
-	node.transactionPool = pools.MakeTransactionPool(node.ledger.Ledger, cfg.TxPoolSize, cfg.EnableAssembleStats)
+	node.transactionPool = pools.MakeTransactionPool(node.ledger.Ledger, cfg)
 	node.ledger.RegisterBlockListeners([]ledger.BlockListener{node.transactionPool})
 	node.txHandler = data.MakeTxHandler(node.transactionPool, node.ledger, node.net, node.genesisID, node.genesisHash, node.lowPriorityCryptoVerificationPool)
 	node.feeTracker, err = pools.MakeFeeTracker()
@@ -401,7 +402,7 @@ func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.Sign
 	proto := config.Consensus[b.CurrentProtocol]
 
 	for _, tx := range txgroup {
-		err = tx.Verify(spec, proto)
+		err = verify.Txn(&tx, spec, proto)
 		if err != nil {
 			node.log.Warnf("malformed transaction: %v - transaction was %+v", err, tx)
 			return err

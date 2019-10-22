@@ -58,7 +58,7 @@ func BenchmarkSendPayment(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			var nonce [8]byte
 			crypto.RandBytes(nonce[:])
-			tx, err = c.ConstructPayment(addr, addr, 1, 1, nonce[:], "", 0, 0)
+			tx, err = c.ConstructPayment(addr, addr, 1, 1, nonce[:], "", [32]byte{}, 0, 0)
 			require.NoError(b, err)
 		}
 	})

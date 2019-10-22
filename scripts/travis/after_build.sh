@@ -10,7 +10,7 @@
 
 if [ "${TRAVIS_EVENT_TYPE}" = "cron" ] || [[ "${TRAVIS_BRANCH}" =~ ^rel/ ]]; then
     if [ "${BUILD_TYPE}" != "integration" ]; then
-        cd "$(dirname "$0")"/../..
+        cd "$(dirname "$0")"/../.. || exit 1
         make prof
         make cover
         rm ./node/node.test
