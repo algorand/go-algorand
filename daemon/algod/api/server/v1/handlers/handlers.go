@@ -868,8 +868,8 @@ func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request
 	// ---
 	//     Summary: Get asset information.
 	//     Description: >
-	//       Given the asset creator's public key, this call returns the asset's manager,
-	//       reserve, freeze, and clawback addresses
+	//       Given the asset's unique index, this call returns the asset's creator,
+	//       manager, reserve, freeze, and clawback addresses
 	//     Produces:
 	//     - application/json
 	//     Schemes:
@@ -929,8 +929,8 @@ func AssetInformationWithCreator(ctx lib.ReqContext, w http.ResponseWriter, r *h
 	// ---
 	//     Summary: Get asset information.
 	//     Description: >
-	//       Given the asset creator's public key, this call returns the asset's manager,
-	//       reserve, freeze, and clawback addresses
+	//       Given the asset creator's public key and unique asset ID, this call
+	//       returns the asset's manager, reserve, freeze, and clawback addresses
 	//     Produces:
 	//     - application/json
 	//     Schemes:
