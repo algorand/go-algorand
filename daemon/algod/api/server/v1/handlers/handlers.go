@@ -138,13 +138,16 @@ func keyregTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.T
 
 func assetParams(creator basics.Address, aidx basics.AssetIndex, params basics.AssetParams) v1.AssetParams {
 	paramsModel := v1.AssetParams{
-		Creator:       creator.String(),
 		Total:         params.Total,
 		DefaultFrozen: params.DefaultFrozen,
 	}
 
 	paramsModel.UnitName = strings.TrimRight(string(params.UnitName[:]), "\x00")
 	paramsModel.AssetName = strings.TrimRight(string(params.AssetName[:]), "\x00")
+
+	if !creator.IsZero() {
+		paramsModel.Creator = creator.String()
+	}
 
 	if !params.Manager.IsZero() {
 		paramsModel.ManagerAddr = params.Manager.String()
