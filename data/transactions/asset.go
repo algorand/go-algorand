@@ -338,7 +338,7 @@ func (ct AssetTransferTxnFields) apply(header Header, balances Balances, spec Sp
 
 		// Allow closing out to the asset creator even when frozen
 		var bypassFreeze bool
-		if ct.AssetCloseTo == ct.XferAsset.Creator {
+		if ct.AssetCloseTo == creatorAddr {
 			bypassFreeze = true
 		}
 
