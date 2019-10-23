@@ -491,7 +491,7 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 				creator = creatorAddr.String()
 			} else {
 				// Asset may have been deleted, so we can no
-				// longer fetch th ecreator
+				// longer fetch the creator
 				creator = ""
 			}
 			assets[uint64(curid)] = v1.AssetHolding{
@@ -506,12 +506,7 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 	if len(record.AssetParams) > 0 {
 		thisAssetParams = make(map[uint64]v1.AssetParams)
 		for idx, params := range record.AssetParams {
-			creator, err := myLedger.GetAssetCreator(idx)
-			if err != nil {
-				lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToGetAssetCreator, ctx.Log)
-				return
-			}
-			thisAssetParams[uint64(idx)] = assetParams(creator, params)
+			thisAssetParams[uint64(idx)] = assetParams(addr, params)
 		}
 	}
 
