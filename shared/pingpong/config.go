@@ -48,7 +48,7 @@ type PpConfig struct {
 	RandomNote      bool
 	Program         []byte
 	LogicArgs       [][]byte
-	GroupSize 	    uint32
+	GroupSize       uint32
 }
 
 // DefaultConfig object for Ping Pong

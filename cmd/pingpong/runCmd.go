@@ -201,7 +201,7 @@ var runCmd = &cobra.Command{
 				programStr = tealLight
 			case "normal":
 				programStr = tealNormal
-				bytes, err  := base64.StdEncoding.DecodeString("iZWMx72KvU6Bw6sPAWQFL96YH+VMrBA0XKWD9XbZOZI=")
+				bytes, err := base64.StdEncoding.DecodeString("iZWMx72KvU6Bw6sPAWQFL96YH+VMrBA0XKWD9XbZOZI=")
 				if err != nil {
 					reportErrorf("Internal error, cannot decode.")
 				}

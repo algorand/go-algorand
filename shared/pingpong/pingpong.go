@@ -204,13 +204,13 @@ func sendFromTo(fromList, toList []string, client libgoal.Client, cfg PpConfig) 
 			if consErr != nil {
 				err = consErr
 				return
- 			}
+			}
 
- 			// Sign txn
- 			stxn, signErr := signTxn(from, txn, client, cfg)
- 			if signErr != nil {
- 				err = signErr
- 				return
+			// Sign txn
+			stxn, signErr := signTxn(from, txn, client, cfg)
+			if signErr != nil {
+				err = signErr
+				return
 			}
 			_, sendErr = client.BroadcastTransaction(stxn)
 		} else {
@@ -218,7 +218,7 @@ func sendFromTo(fromList, toList []string, client libgoal.Client, cfg PpConfig) 
 			var txGroup []transactions.Transaction
 			for j := 0; j < int(cfg.GroupSize); j++ {
 				var txn transactions.Transaction
-				if j % 2 == 0 {
+				if j%2 == 0 {
 					txn, err = constructTxn(from, to, fee, amt, client, cfg)
 
 				} else {
@@ -242,11 +242,11 @@ func sendFromTo(fromList, toList []string, client libgoal.Client, cfg PpConfig) 
 			}
 
 			// Sign each transaction
-			var stxGroup [] transactions.SignedTxn
+			var stxGroup []transactions.SignedTxn
 			for j, txn := range txGroup {
 				txn.Group = gid
 				var lf string
-				if j % 2 == 0 {
+				if j%2 == 0 {
 					lf = from
 				} else {
 					lf = to
@@ -278,7 +278,7 @@ func sendFromTo(fromList, toList []string, client libgoal.Client, cfg PpConfig) 
 	return
 }
 
-func constructTxn(from, to string, fee, amt uint64, client libgoal.Client, cfg PpConfig)(txn transactions.Transaction, err error) {
+func constructTxn(from, to string, fee, amt uint64, client libgoal.Client, cfg PpConfig) (txn transactions.Transaction, err error) {
 	var noteField []byte
 	const pingpongTag = "pingpong"
 	const tagLen = uint32(len(pingpongTag))
@@ -301,7 +301,7 @@ func constructTxn(from, to string, fee, amt uint64, client libgoal.Client, cfg P
 	return
 }
 
-func signTxn(from string, txn transactions.Transaction, client libgoal.Client, cfg PpConfig)(stxn transactions.SignedTxn, err error){
+func signTxn(from string, txn transactions.Transaction, client libgoal.Client, cfg PpConfig) (stxn transactions.SignedTxn, err error) {
 	// Get wallet handle token
 	var h []byte
 	h, err = client.GetUnencryptedWalletHandle()

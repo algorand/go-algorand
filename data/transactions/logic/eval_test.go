@@ -57,14 +57,13 @@ func defaultEvalParams(sb *strings.Builder, txn *transactions.SignedTxn) EvalPar
 	return EvalParams{Proto: &proto, Trace: sb, Txn: pt}
 }
 
-
 func TestTooManyArgs(t *testing.T) {
 	t.Parallel()
 	program, err := AssembleString(`int 1`)
 	require.NoError(t, err)
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = program
-	args := [EvalMaxArgs+1][]byte{}
+	args := [EvalMaxArgs + 1][]byte{}
 	txn.Lsig.Args = args[:]
 	sb := strings.Builder{}
 	pass, err := Eval(program, defaultEvalParams(&sb, &txn))
