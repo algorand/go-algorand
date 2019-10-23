@@ -94,23 +94,24 @@ func cloneParams(m map[basics.AssetIndex]basics.AssetParams) map[basics.AssetInd
 	return res
 }
 
-func getParams(balances Balances, aidx basics.AssetIndex) (basics.AssetParams, basics.Address, error) {
-	creatorAddr, err := balances.GetAssetCreator(aidx)
+func getParams(balances Balances, aidx basics.AssetIndex) (params basics.AssetParams, creator basics.Address, err error) {
+	creator, err = balances.GetAssetCreator(aidx)
 	if err != nil {
-		return basics.AssetParams{}, basics.Address{}, err
+		return
 	}
 
-	creator, err := balances.Get(creatorAddr, false)
+	creatorRecord, err := balances.Get(creator, false)
 	if err != nil {
-		return basics.AssetParams{}, basics.Address{}, err
+		return
 	}
 
-	curr, ok := creator.AssetParams[aidx]
+	params, ok := creatorRecord.AssetParams[aidx]
 	if !ok {
-		return basics.AssetParams{}, basics.Address{}, fmt.Errorf("asset index %d not found in account %v", aidx, creator)
+		err = fmt.Errorf("asset index %d not found in account %s", aidx, creator.String())
+		return
 	}
 
-	return curr, creatorAddr, nil
+	return
 }
 
 func (cc AssetConfigTxnFields) apply(header Header, balances Balances, spec SpecialAddresses, ad *ApplyData, txnCounter uint64) error {
