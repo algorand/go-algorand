@@ -297,7 +297,7 @@ func TestArchivalAssets(t *testing.T) {
 
 	tx1, err := client.MakeUnsignedAssetDestroyTx(maxBlocks)
 	require.NoError(t, err)
-	tx1.Sender = creators[maxBlocks - 1]
+	tx1.Sender = creators[maxBlocks-1]
 
 	// start mining the block with the deletion txn
 	blk.BlockHeader.Round++
@@ -318,7 +318,7 @@ func TestArchivalAssets(t *testing.T) {
 	// check that we can still fetch creator for all created assets except first and last
 	for i := 0; i < maxBlocks; i++ {
 		c, err := l.GetAssetCreator(basics.AssetIndex(i + 1))
-		if i == 0 || i == maxBlocks - 1 {
+		if i == 0 || i == maxBlocks-1 {
 			require.Error(t, err)
 			require.Equal(t, basics.Address{}, c)
 		} else {
@@ -347,7 +347,7 @@ func TestArchivalAssets(t *testing.T) {
 	// check that we can still fetch creator for all created assets except first and last
 	for i := 0; i < maxBlocks; i++ {
 		c, err := l.GetAssetCreator(basics.AssetIndex(i + 1))
-		if i == 0 || i == maxBlocks - 1 {
+		if i == 0 || i == maxBlocks-1 {
 			require.Error(t, err)
 			require.Equal(t, basics.Address{}, c)
 		} else {
@@ -358,9 +358,9 @@ func TestArchivalAssets(t *testing.T) {
 }
 
 func makeSignedTxnInBlock(tx transactions.Transaction) transactions.SignedTxnInBlock {
-	return transactions.SignedTxnInBlock {
-		SignedTxnWithAD: transactions.SignedTxnWithAD {
-			SignedTxn: transactions.SignedTxn {
+	return transactions.SignedTxnInBlock{
+		SignedTxnWithAD: transactions.SignedTxnWithAD{
+			SignedTxn: transactions.SignedTxn{
 				Txn: tx,
 			},
 		},

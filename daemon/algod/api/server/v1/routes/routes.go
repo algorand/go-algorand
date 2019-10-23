@@ -126,6 +126,13 @@ var Routes = lib.Routes{
 		HandlerFunc: handlers.AssetInformation,
 	},
 
+	lib.Route{
+		Name:        "list-assets",
+		Method:      "GET",
+		Path:        fmt.Sprintf("/assets"),
+		HandlerFunc: handlers.Assets,
+	},
+
 	// ----- This can only be active when indexer is live
 
 	lib.Route{
