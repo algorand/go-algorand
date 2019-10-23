@@ -77,6 +77,9 @@ func TestAssetConfig(t *testing.T) {
 	clawback, err := client.GenerateAddress(wh)
 	a.NoError(err)
 
+	assetURL := "foo://bar"
+	assetMetadataHash := []byte("ISTHISTHEREALLIFEISTHISJUSTFANTA")
+
 	// Fund the manager, so it can issue transactions later on
 	_, err = client.SendPaymentFromUnencryptedWallet(account0, manager, 0, 10000000000, nil)
 	a.NoError(err)
@@ -94,7 +97,7 @@ func TestAssetConfig(t *testing.T) {
 		wh, err = client.GetUnencryptedWalletHandle()
 		a.NoError(err)
 
-		tx, err := client.MakeUnsignedAssetCreateTx(1+uint64(i), false, manager, reserve, freeze, clawback, fmt.Sprintf("test%d", i), fmt.Sprintf("testname%d", i))
+		tx, err := client.MakeUnsignedAssetCreateTx(1+uint64(i), false, manager, reserve, freeze, clawback, fmt.Sprintf("test%d", i), fmt.Sprintf("testname%d", i), assetURL, assetMetadataHash)
 		txid, err := helperFillSignBroadcast(client, wh, account0, tx, err)
 		a.NoError(err)
 		txids[txid] = account0
@@ -119,7 +122,7 @@ func TestAssetConfig(t *testing.T) {
 	a.NoError(err)
 
 	// Creating more assets should return an error
-	tx, err := client.MakeUnsignedAssetCreateTx(1, false, manager, reserve, freeze, clawback, fmt.Sprintf("toomany"), fmt.Sprintf("toomany"))
+	tx, err := client.MakeUnsignedAssetCreateTx(1, false, manager, reserve, freeze, clawback, fmt.Sprintf("toomany"), fmt.Sprintf("toomany"), assetURL, assetMetadataHash)
 	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
 	a.Error(err)
 
@@ -136,6 +139,8 @@ func TestAssetConfig(t *testing.T) {
 		a.Equal(cp.ReserveAddr, reserve)
 		a.Equal(cp.FreezeAddr, freeze)
 		a.Equal(cp.ClawbackAddr, clawback)
+		a.Equal(cp.MetadataHash, assetMetadataHash)
+		a.Equal(cp.URL, assetURL)
 	}
 
 	// re-generate wh, since this test takes a while and sometimes
@@ -313,7 +318,7 @@ func TestAssetInformation(t *testing.T) {
 	// Create some assets
 	txids := make(map[string]string)
 	for i := 0; i < 16; i++ {
-		tx, err := client.MakeUnsignedAssetCreateTx(1+uint64(i), false, manager, reserve, freeze, clawback, fmt.Sprintf("test%d", i), fmt.Sprintf("testname%d", i))
+		tx, err := client.MakeUnsignedAssetCreateTx(1+uint64(i), false, manager, reserve, freeze, clawback, fmt.Sprintf("test%d", i), fmt.Sprintf("testname%d", i), "foo://bar", nil)
 		txid, err := helperFillSignBroadcast(client, wh, account0, tx, err)
 		a.NoError(err)
 		txids[txid] = account0
@@ -393,12 +398,12 @@ func TestAssetSend(t *testing.T) {
 	// Create two assets: one with default-freeze, and one without default-freeze
 	txids := make(map[string]string)
 
-	tx, err := client.MakeUnsignedAssetCreateTx(100, false, manager, reserve, freeze, clawback, "nofreeze", "xx")
+	tx, err := client.MakeUnsignedAssetCreateTx(100, false, manager, reserve, freeze, clawback, "nofreeze", "xx", "foo://bar", nil)
 	txid, err := helperFillSignBroadcast(client, wh, account0, tx, err)
 	a.NoError(err)
 	txids[txid] = account0
 
-	tx, err = client.MakeUnsignedAssetCreateTx(100, true, manager, reserve, freeze, clawback, "frozen", "xx")
+	tx, err = client.MakeUnsignedAssetCreateTx(100, true, manager, reserve, freeze, clawback, "frozen", "xx", "foo://bar", nil)
 	txid, err = helperFillSignBroadcast(client, wh, account0, tx, err)
 	a.NoError(err)
 	txids[txid] = account0
