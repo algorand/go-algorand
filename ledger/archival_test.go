@@ -295,22 +295,22 @@ func TestArchivalAssets(t *testing.T) {
 	require.NoError(t, err)
 	tx0.Sender = creators[0]
 
-	// Mine the block
 	tx1, err := client.MakeUnsignedAssetDestroyTx(maxBlocks)
 	require.NoError(t, err)
 	tx1.Sender = creators[maxBlocks - 1]
 
+	// start mining the block with the deletion txn
 	blk.BlockHeader.Round++
 	blk.BlockHeader.TxnCounter++
 	blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 
-	// Make a payset
+	// make a payset
 	var payset transactions.Payset
 	payset = append(payset, makeSignedTxnInBlock(tx0))
 	payset = append(payset, makeSignedTxnInBlock(tx1))
 	blk.Payset = payset
 
-	// Add the block
+	// add the block
 	err = l.AddBlock(blk, agreement.Certificate{})
 	require.NoError(t, err)
 	l.WaitForCommit(blk.Round())
