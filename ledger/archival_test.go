@@ -260,15 +260,7 @@ func TestArchivalAssets(t *testing.T) {
 
 		// Make a payset
 		var payset transactions.Payset
-		stxnib := transactions.SignedTxnInBlock {
-			SignedTxnWithAD: transactions.SignedTxnWithAD {
-				SignedTxn: transactions.SignedTxn {
-					Txn: tx,
-					Sig: crypto.Signature{1},
-				},
-			},
-			HasGenesisID: true,
-		}
+		stxnib := makeSignedTxnInBlock(tx)
 		payset = append(payset, stxnib)
 		blk.Payset = payset
 
@@ -296,6 +288,54 @@ func TestArchivalAssets(t *testing.T) {
 		c, err := l.GetAssetCreator(basics.AssetIndex(i + 1))
 		require.NoError(t, err)
 		require.Equal(t, creators[i], c)
+	}
+
+	// delete an old asset and a new asset
+	tx0, err := client.MakeUnsignedAssetDestroyTx(1)
+	require.NoError(t, err)
+	tx0.Sender = creators[0]
+
+	// Mine the block
+	tx1, err := client.MakeUnsignedAssetDestroyTx(maxBlocks)
+	require.NoError(t, err)
+	tx1.Sender = creators[maxBlocks - 1]
+
+	blk.BlockHeader.Round++
+	blk.BlockHeader.TxnCounter++
+	blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+
+	// Make a payset
+	var payset transactions.Payset
+	payset = append(payset, makeSignedTxnInBlock(tx0))
+	payset = append(payset, makeSignedTxnInBlock(tx1))
+	blk.Payset = payset
+
+	// Add the block
+	err = l.AddBlock(blk, agreement.Certificate{})
+	require.NoError(t, err)
+	l.WaitForCommit(blk.Round())
+
+	// check that we can still fetch creator for all created assets except first and last
+	for i := 0; i < maxBlocks; i++ {
+		c, err := l.GetAssetCreator(basics.AssetIndex(i + 1))
+		if i == 0 || i == maxBlocks - 1 {
+			require.Error(t, err)
+			require.Equal(t, basics.Address{}, c)
+		} else {
+			require.NoError(t, err)
+			require.Equal(t, creators[i], c)
+		}
+	}
+}
+
+func makeSignedTxnInBlock(tx transactions.Transaction) transactions.SignedTxnInBlock {
+	return transactions.SignedTxnInBlock {
+		SignedTxnWithAD: transactions.SignedTxnWithAD {
+			SignedTxn: transactions.SignedTxn {
+				Txn: tx,
+			},
+		},
+		HasGenesisID: true,
 	}
 }
 
