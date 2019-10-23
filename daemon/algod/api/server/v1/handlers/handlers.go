@@ -485,13 +485,17 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 	if len(record.Assets) > 0 {
 		assets = make(map[uint64]v1.AssetHolding)
 		for curid, holding := range record.Assets {
-			creator, err := myLedger.GetAssetCreator(curid)
-			if err != nil {
-				lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToGetAssetCreator, ctx.Log)
-				return
+			var creator string
+			creatorAddr, err := myLedger.GetAssetCreator(curid)
+			if err == nil {
+				creator = creatorAddr.String()
+			} else {
+				// Asset may have been deleted, so we can no
+				// longer fetch th ecreator
+				creator = ""
 			}
 			assets[uint64(curid)] = v1.AssetHolding{
-				Creator: creator.String(),
+				Creator: creator,
 				Amount:  holding.Amount,
 				Frozen:  holding.Frozen,
 			}
