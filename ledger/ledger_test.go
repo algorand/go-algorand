@@ -123,6 +123,11 @@ type DummyVerifiedTxnCache struct{}
 func (x DummyVerifiedTxnCache) Verified(txn transactions.SignedTxn) bool {
 	return false
 }
+func (x DummyVerifiedTxnCache) EvalOk(txid transactions.Txid) (errStr string, found bool) {
+	return "", false
+}
+func (x DummyVerifiedTxnCache) EvalRemember(txn transactions.SignedTxn, errStr string) {
+}
 
 func (l *Ledger) appendUnvalidated(blk bookkeeping.Block) error {
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
