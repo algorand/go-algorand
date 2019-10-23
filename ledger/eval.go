@@ -64,6 +64,10 @@ type roundCowBase struct {
 	proto config.ConsensusParams
 }
 
+func (x *roundCowBase) getAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error) {
+	return x.l.GetAssetCreatorForRound(x.rnd, assetIdx)
+}
+
 func (x *roundCowBase) lookup(addr basics.Address) (basics.AccountData, error) {
 	return x.l.LookupWithoutRewards(x.rnd, addr)
 }
@@ -74,6 +78,10 @@ func (x *roundCowBase) isDup(firstValid basics.Round, txid transactions.Txid, tx
 
 func (x *roundCowBase) txnCounter() uint64 {
 	return x.txnCount
+}
+
+func (cs *roundCowState) GetAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error) {
+	return cs.getAssetCreator(assetIdx)
 }
 
 // wrappers for roundCowState to satisfy the (current) transactions.Balances interface
@@ -178,6 +186,7 @@ type ledgerForEvaluator interface {
 	Totals(basics.Round) (AccountTotals, error)
 	isDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, txlease) (bool, error)
 	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, error)
+	GetAssetCreatorForRound(basics.Round, basics.AssetIndex) (basics.Address, error)
 }
 
 // StartEvaluator creates a BlockEvaluator, given a ledger and a block header

@@ -272,7 +272,7 @@ var destroyAssetCmd = &cobra.Command{
 
 		lookupAssetID(cmd, creator, client)
 
-		tx, err := client.MakeUnsignedAssetDestroyTx(creator, assetID)
+		tx, err := client.MakeUnsignedAssetDestroyTx(assetID)
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
@@ -427,7 +427,7 @@ var sendAssetCmd = &cobra.Command{
 			closeToAddressResolved = accountList.getAddressByName(closeToAddress)
 		}
 
-		tx, err := client.MakeUnsignedAssetSendTx(creatorResolved, assetID, amount, toAddressResolved, closeToAddressResolved, senderForClawback)
+		tx, err := client.MakeUnsignedAssetSendTx(assetID, amount, toAddressResolved, closeToAddressResolved, senderForClawback)
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
@@ -484,7 +484,7 @@ var freezeAssetCmd = &cobra.Command{
 
 		lookupAssetID(cmd, creatorResolved, client)
 
-		tx, err := client.MakeUnsignedAssetFreezeTx(creatorResolved, assetID, accountResolved, assetFrozen)
+		tx, err := client.MakeUnsignedAssetFreezeTx(assetID, accountResolved, assetFrozen)
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}

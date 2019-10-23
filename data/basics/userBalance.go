@@ -118,7 +118,7 @@ type AccountData struct {
 	// NOTE: do not modify this value in-place in existing AccountData
 	// structs; allocate a copy and modify that instead.  AccountData
 	// is expected to have copy-by-value semantics.
-	AssetParams map[uint64]AssetParams `codec:"apar"`
+	AssetParams map[AssetIndex]AssetParams `codec:"apar"`
 
 	// Assets is the set of assets that can be held by this
 	// account.  Assets (i.e., slots in this map) are explicitly
@@ -135,7 +135,7 @@ type AccountData struct {
 	// NOTE: do not modify this value in-place in existing AccountData
 	// structs; allocate a copy and modify that instead.  AccountData
 	// is expected to have copy-by-value semantics.
-	Assets map[AssetID]AssetHolding `codec:"asset"`
+	Assets map[AssetIndex]AssetHolding `codec:"asset"`
 }
 
 // AccountDetail encapsulates meaningful details about a given account, for external consumption
@@ -160,11 +160,9 @@ type BalanceDetail struct {
 	Accounts    []AccountDetail
 }
 
-// AssetID is a name of an asset.
-type AssetID struct {
-	Creator Address `codec:"c"`
-	Index   uint64  `codec:"i"`
-}
+// AssetIndex is the unique integer index of an asset that can be used to look
+// up the creator of the asset, whose balance record contains the AssetParams
+type AssetIndex uint64
 
 // AssetHolding describes an asset held by an account.
 type AssetHolding struct {

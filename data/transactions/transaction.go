@@ -55,6 +55,10 @@ type Balances interface {
 	// A non-nil error means the lookup is impossible (e.g., if the database doesn't have necessary state anymore)
 	Get(addr basics.Address, withPendingRewards bool) (basics.BalanceRecord, error)
 
+	// GetAssetCreator gets the address of the account whose balance record
+	// contains the asset params
+	GetAssetCreator(aidx basics.AssetIndex) (basics.Address, error)
+
 	Put(basics.BalanceRecord) error
 
 	// Move MicroAlgos from one account to another, doing all necessary overflow checking (convenience method)
