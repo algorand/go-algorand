@@ -400,7 +400,7 @@ func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, numValidRound
 //
 // Call FillUnsignedTxTemplate afterwards to fill out common fields in
 // the resulting transaction template.
-func (c *Client) MakeUnsignedAssetCreateTx(total uint64, defaultFrozen bool, manager string, reserve string, freeze string, clawback string, unitName string, assetName string) (transactions.Transaction, error) {
+func (c *Client) MakeUnsignedAssetCreateTx(total uint64, defaultFrozen bool, manager string, reserve string, freeze string, clawback string, unitName string, assetName string, url string, metadataHash []byte) (transactions.Transaction, error) {
 	var tx transactions.Transaction
 	var err error
 
@@ -437,6 +437,16 @@ func (c *Client) MakeUnsignedAssetCreateTx(total uint64, defaultFrozen bool, man
 			return tx, err
 		}
 	}
+
+	if len(url) > len(tx.AssetParams.URL) {
+		return tx, fmt.Errorf("asset url %s is too long (max %d bytes)", url, len(tx.AssetParams.URL))
+	}
+	copy(tx.AssetParams.URL[:], []byte(url))
+
+	if len(metadataHash) > len(tx.AssetParams.MetadataHash) {
+		return tx, fmt.Errorf("asset metadata hash %x too long (max %d bytes)", metadataHash, len(tx.AssetParams.MetadataHash))
+	}
+	copy(tx.AssetParams.MetadataHash[:], metadataHash)
 
 	if len(unitName) > len(tx.AssetParams.UnitName) {
 		return tx, fmt.Errorf("asset unit name %s too long (max %d bytes)", unitName, len(tx.AssetParams.UnitName))

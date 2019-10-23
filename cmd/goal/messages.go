@@ -74,6 +74,9 @@ const (
 	infoDataDir                      = "[Data Directory: %s]"
 	errLoadingConfig                 = "Error loading Config file from '%s': %v"
 
+	// Asset
+	malformedMetadataHash = "Cannot base64-decode metadata hash %s: %s"
+
 	// Clerk
 	infoTxIssued    = "Sent %d MicroAlgos from account %s to address %s, transaction ID: %s. Fee set to %d"
 	infoTxCommitted = "Transaction %s committed in round %d"
