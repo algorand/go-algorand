@@ -187,6 +187,14 @@ type AssetParams struct {
 	// AssetName specifies a hint for the name of the asset.
 	AssetName [32]byte `codec:"an"`
 
+	// URL specifies a URL where more information about the asset can be
+	// retrieved
+	URL [32]byte `codec:"au"`
+
+	// MetadataHash specifies a commitment to some unspecified asset
+	// metadata. The format of this metadata is up to the application.
+	MetadataHash [32]byte `codec:"am"`
+
 	// Manager specifies an account that is allowed to change the
 	// non-zero addresses in this AssetParams.
 	Manager Address `codec:"m"`

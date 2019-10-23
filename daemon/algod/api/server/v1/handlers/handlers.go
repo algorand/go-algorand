@@ -143,6 +143,10 @@ func assetParams(creator basics.Address, params basics.AssetParams) v1.AssetPara
 
 	paramsModel.UnitName = strings.TrimRight(string(params.UnitName[:]), "\x00")
 	paramsModel.AssetName = strings.TrimRight(string(params.AssetName[:]), "\x00")
+	paramsModel.URL = strings.TrimRight(string(params.URL[:]), "\x00")
+	if params.MetadataHash != [32]byte{} {
+		paramsModel.MetadataHash = params.MetadataHash[:]
+	}
 
 	if !creator.IsZero() {
 		paramsModel.Creator = creator.String()
