@@ -318,6 +318,18 @@ func accountsNewRound(tx *sql.Tx, rnd basics.Round, updates map[basics.Address]a
 
 		totals.delAccount(proto, data.old, &ot)
 		totals.addAccount(proto, data.new, &ot)
+
+		adeltas := getChangedAssetIndices(addr, data)
+		for aidx, delta := range adeltas {
+			if delta.created {
+				_, err = insertAssetIdxStmt.Exec(aidx, addr[:])
+			} else {
+				_, err = deleteAssetIdxStmt.Exec(aidx)
+			}
+			if err != nil {
+				return
+			}
+		}
 	}
 
 	if ot.Overflowed {
