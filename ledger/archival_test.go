@@ -326,6 +326,35 @@ func TestArchivalAssets(t *testing.T) {
 			require.Equal(t, creators[i], c)
 		}
 	}
+
+	// Mine another maxBlocks blocks
+	for i := 0; i < maxBlocks; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TxnCounter++
+		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+		blk.Payset = nil
+		err = l.AddBlock(blk, agreement.Certificate{})
+		require.NoError(t, err)
+	}
+	l.WaitForCommit(blk.Round())
+
+	// close and reopen the same DB
+	l.Close()
+	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
+	require.NoError(t, err)
+	defer l.Close()
+
+	// check that we can still fetch creator for all created assets except first and last
+	for i := 0; i < maxBlocks; i++ {
+		c, err := l.GetAssetCreator(basics.AssetIndex(i + 1))
+		if i == 0 || i == maxBlocks - 1 {
+			require.Error(t, err)
+			require.Equal(t, basics.Address{}, c)
+		} else {
+			require.NoError(t, err)
+			require.Equal(t, creators[i], c)
+		}
+	}
 }
 
 func makeSignedTxnInBlock(tx transactions.Transaction) transactions.SignedTxnInBlock {
