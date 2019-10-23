@@ -243,7 +243,11 @@ func (c *Client) getAlgodClient() (algodclient.RestClient, error) {
 }
 
 func (c *Client) ensureGenesisID() (string, error) {
-	return c.nc.GetGenesisID()
+	genesis, err := c.nc.GetGenesis()
+	if err != nil {
+		return "", err
+	}
+	return genesis.ID(), nil
 }
 
 // GenesisID fetches the genesis ID for the running algod node

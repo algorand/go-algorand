@@ -46,10 +46,6 @@ func TxnPool(s *transactions.SignedTxn, spec transactions.SpecialAddresses, prot
 		return errors.New("empty address")
 	}
 
-	if s.Sig != (crypto.Signature{}) && !s.Msig.Blank() {
-		return errors.New("signedtxn should only have one of Sig or Msig")
-	}
-
 	outCh := make(chan error, 1)
 	cx := asyncVerifyContext{s, outCh, &proto}
 	verificationPool.EnqueueBacklog(context.Background(), stxnAsyncVerify, &cx, nil)
@@ -136,6 +132,9 @@ func stxnVerifyCore(s *transactions.SignedTxn, proto *config.ConsensusParams) er
 // LogicSig checks that the signature is valid and that the program is basically well formed.
 // It does not evaluate the logic.
 func LogicSig(lsig *transactions.LogicSig, proto *config.ConsensusParams, stxn *transactions.SignedTxn) error {
+	if proto.LogicSigVersion == 0 {
+		return errors.New("LogicSig not enabled")
+	}
 	if len(lsig.Logic) == 0 {
 		return errors.New("LogicSig.Logic empty")
 	}
@@ -172,7 +171,7 @@ func LogicSig(lsig *transactions.LogicSig, proto *config.ConsensusParams, stxn *
 	}
 	if numSigs == 0 {
 		// if the txn.Sender == hash(Logic) then this is a (potentially) valid operation on a contract-only account
-		program := transactions.Program(lsig.Logic)
+		program := logic.Program(lsig.Logic)
 		lhash := crypto.HashObj(&program)
 		if crypto.Digest(stxn.Txn.Sender) == lhash {
 			return nil
@@ -184,14 +183,14 @@ func LogicSig(lsig *transactions.LogicSig, proto *config.ConsensusParams, stxn *
 	}
 
 	if hasSig {
-		program := transactions.Program(lsig.Logic)
+		program := logic.Program(lsig.Logic)
 		if crypto.SignatureVerifier(stxn.Txn.Src()).Verify(&program, lsig.Sig) {
 			return nil
 		}
 		return errors.New("logic signature validation failed")
 	}
 	if hasMsig {
-		program := transactions.Program(lsig.Logic)
+		program := logic.Program(lsig.Logic)
 		if ok, _ := crypto.MultisigVerify(&program, crypto.Digest(stxn.Txn.Src()), lsig.Msig); ok {
 			return nil
 		}

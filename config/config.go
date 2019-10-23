@@ -621,7 +621,7 @@ type Local struct {
 	// The fallback DNS resolver address that would be used if the system resolver would fail to retrieve SRV records
 	FallbackDNSResolverAddress string
 
-	// if the transaction pool is full, a new transaction must beat the minimum priority transaction by at least this factor
+	// exponential increase factor of transaction pool's fee threshold, should always be 2 in production
 	TxPoolExponentialIncreaseFactor uint64
 
 	SuggestedFeeBlockHistory int
