@@ -135,7 +135,7 @@ func keyregTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.T
 	}
 }
 
-func assetParams(creator basics.Address, aidx basics.AssetIndex, params basics.AssetParams) v1.AssetParams {
+func assetParams(creator basics.Address, params basics.AssetParams) v1.AssetParams {
 	paramsModel := v1.AssetParams{
 		Total:         params.Total,
 		DefaultFrozen: params.DefaultFrozen,
@@ -168,7 +168,7 @@ func assetParams(creator basics.Address, aidx basics.AssetIndex, params basics.A
 }
 
 func assetConfigTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
-	params := assetParams(basics.Address{}, tx.AssetConfigTxnFields.ConfigAsset, tx.AssetConfigTxnFields.AssetParams)
+	params := assetParams(basics.Address{}, tx.AssetConfigTxnFields.AssetParams)
 
 	config := v1.AssetConfigTransactionType{
 		AssetID: uint64(tx.AssetConfigTxnFields.ConfigAsset),
@@ -503,7 +503,7 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 				lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToGetAssetCreator, ctx.Log)
 				return
 			}
-			thisAssetParams[uint64(idx)] = assetParams(creator, idx, params)
+			thisAssetParams[uint64(idx)] = assetParams(creator, params)
 		}
 	}
 
@@ -914,7 +914,7 @@ func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request
 	}
 
 	if asset, ok := record.AssetParams[aidx]; ok {
-		thisAssetParams := assetParams(creator, aidx, asset)
+		thisAssetParams := assetParams(creator, asset)
 		SendJSON(AssetInformationResponse{&thisAssetParams}, w, ctx.Log)
 	} else {
 		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errFailedRetrievingAsset), errFailedRetrievingAsset, ctx.Log)
