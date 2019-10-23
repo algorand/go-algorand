@@ -308,7 +308,7 @@ func (au *accountUpdates) listAssets(maxAssetIdx basics.AssetIndex, maxResults u
 	var res []basics.AssetLocator
 	for _, loc := range unsyncedAssets {
 		if uint64(len(res)) == maxResults {
-			break
+			return res, nil
 		}
 		res = append(res, loc)
 	}
@@ -325,7 +325,7 @@ func (au *accountUpdates) listAssets(maxAssetIdx basics.AssetIndex, maxResults u
 	for _, loc := range dbResults {
 		// Check if we have enough results
 		if uint64(len(res)) == maxResults {
-			break
+			return res, nil
 		}
 
 		// Asset was deleted
