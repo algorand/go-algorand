@@ -18,7 +18,9 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -51,6 +53,7 @@ var quietish bool
 var logicProg string
 var randomNote bool
 var txnPerSec uint64
+var teal string
 
 func init() {
 	rootCmd.AddCommand(runCmd)
@@ -77,6 +80,7 @@ func init() {
 	runCmd.Flags().BoolVar(&useDefault, "reset", false, "Reset to the default configuration (not read from disk)")
 	runCmd.Flags().BoolVar(&quietish, "quiet", false, "quietish stdout logging")
 	runCmd.Flags().BoolVar(&randomNote, "randomnote", false, "generates a random byte array between 0-1024 bytes long")
+	runCmd.Flags().StringVar(&teal, "teal", "", "teal test scenario, can be light, normal, or heavy, this overrides --program")
 }
 
 var runCmd = &cobra.Command{
@@ -186,6 +190,31 @@ var runCmd = &cobra.Command{
 		if randomNote {
 			cfg.RandomNote = true
 		}
+
+		if teal != "" {
+			logicProg = ""
+			var programStr string
+			switch teal {
+			case "light":
+				programStr = tealLight
+			case "normal":
+				programStr = tealNormal
+				bytes, err  := base64.StdEncoding.DecodeString("iZWMx72KvU6Bw6sPAWQFL96YH+VMrBA0XKWD9XbZOZI=")
+				if err != nil {
+					reportErrorf("Internal error, cannot decode.")
+				}
+				cfg.LogicArgs = [][]byte{bytes}
+			case "heavy":
+				programStr = tealHeavy
+			default:
+				reportErrorf("Invalid argument for --teal: %v\n", teal)
+			}
+			cfg.Program, err = logic.AssembleString(programStr)
+			if err != nil {
+				reportErrorf("Internal error, cannot assemble %v \n", programStr)
+			}
+		}
+
 		if logicProg != "" {
 			cfg.Program, err = ioutil.ReadFile(logicProg)
 			if err != nil {
