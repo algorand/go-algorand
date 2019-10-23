@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/daemon/kmd/lib/kmdapi"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 )
@@ -278,7 +279,7 @@ func TestMultisigSignProgram(t *testing.T) {
 	err = protocol.Decode(resp3.Multisig, &msig)
 	require.NoError(t, err)
 
-	ok, err := crypto.MultisigVerify(transactions.Program(program), crypto.Digest(msigAddr), msig)
+	ok, err := crypto.MultisigVerify(logic.Program(program), crypto.Digest(msigAddr), msig)
 	require.NoError(t, err)
 	require.True(t, ok)
 }

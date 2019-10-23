@@ -45,6 +45,7 @@ type TransactionPool struct {
 	ledger                 *ledger.Ledger
 	statusCache            *statusCache
 	logStats               bool
+	expFeeFactor           uint64
 
 	// pendingMu protects pendingTxGroups and pendingTxids
 	pendingMu       deadlock.RWMutex
@@ -68,15 +69,19 @@ type TransactionPool struct {
 //
 // The pool also contains status information for the last transactionPoolStatusSize
 // transactions that were removed from the pool without being committed.
-func MakeTransactionPool(ledger *ledger.Ledger, transactionPoolStatusSize int, logStats bool) *TransactionPool {
+func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local) *TransactionPool {
+	if cfg.TxPoolExponentialIncreaseFactor < 1 {
+		cfg.TxPoolExponentialIncreaseFactor = 1
+	}
 	pool := TransactionPool{
 		pendingTxids:    make(map[transactions.Txid]transactions.SignedTxn),
 		rememberedTxids: make(map[transactions.Txid]transactions.SignedTxn),
 		expiredTxCount:  make(map[basics.Round]int),
 		ledger:          ledger,
-		statusCache:     makeStatusCache(transactionPoolStatusSize),
-		logStats:        logStats,
-		lsigCache:       makeStatusCache(transactionPoolStatusSize),
+		statusCache:     makeStatusCache(cfg.TxPoolSize),
+		logStats:        cfg.EnableAssembleStats,
+		expFeeFactor:    cfg.TxPoolExponentialIncreaseFactor,
+		lsigCache:       makeStatusCache(cfg.TxPoolSize),
 	}
 	pool.cond.L = &pool.mu
 	pool.recomputeBlockEvaluator()
@@ -235,12 +240,6 @@ func (pool *TransactionPool) test(txgroup []transactions.SignedTxn) error {
 	// requires a flat MinTxnFee).
 	feePerByte = feePerByte * pool.feeThresholdMultiplier
 
-	// The threshold grows exponentially if there are multiple blocks
-	// pending in the pool.
-	if pool.numPendingWholeBlocks > 1 {
-		feePerByte = feePerByte << (pool.numPendingWholeBlocks - 1)
-	}
-
 	for _, t := range txgroup {
 		feeThreshold := feePerByte * uint64(t.GetEncodedLength())
 		if t.Txn.Fee.Raw < feeThreshold {
@@ -394,7 +393,7 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block) {
 		//   the multiplier by 2x (or increment by 1, if 0).
 		switch pool.numPendingWholeBlocks {
 		case 0:
-			pool.feeThresholdMultiplier = pool.feeThresholdMultiplier / 2
+			pool.feeThresholdMultiplier = pool.feeThresholdMultiplier / pool.expFeeFactor
 
 		case 1:
 			// Keep the fee multiplier the same.
@@ -403,7 +402,7 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block) {
 			if pool.feeThresholdMultiplier == 0 {
 				pool.feeThresholdMultiplier = 1
 			} else {
-				pool.feeThresholdMultiplier = pool.feeThresholdMultiplier * 2
+				pool.feeThresholdMultiplier = pool.feeThresholdMultiplier * pool.expFeeFactor
 			}
 		}
 
