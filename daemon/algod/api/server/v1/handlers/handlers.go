@@ -930,7 +930,7 @@ func Assets(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	// swagger:operation GET /v1/assets Assets
 	// ---
 	//     Summary: List assets
-	//     Description: Returns list of up to `num` assets, where the maximum assetIdx is <= `assetIdx`
+	//     Description: Returns list of up to `max` assets, where the maximum assetIdx is <= `assetIdx`
 	//     Produces:
 	//     - application/json
 	//     Schemes:
@@ -943,7 +943,7 @@ func Assets(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	//         minimum: 0
 	//         required: false
 	//         description: Fetch assets with asset index <= assetIdx. If zero, fetch most recent assets.
-	//       - name: num
+	//       - name: max
 	//         in: query
 	//         type: integer
 	//         format: int64
