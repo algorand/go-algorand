@@ -395,7 +395,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -417,7 +416,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -439,7 +437,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -461,7 +458,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -483,7 +479,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -510,7 +505,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -532,7 +526,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -554,7 +547,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -576,7 +568,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -598,7 +589,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -625,7 +615,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -647,7 +636,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -669,7 +657,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -691,7 +678,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -713,7 +699,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -740,7 +725,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -762,7 +746,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -784,7 +767,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -806,7 +788,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -828,7 +809,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -855,7 +835,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -877,7 +856,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -899,7 +877,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -921,7 +898,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -943,7 +919,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -970,7 +945,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -992,7 +966,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1014,7 +987,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1036,7 +1008,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1058,7 +1029,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1085,7 +1055,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1107,7 +1076,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1129,7 +1097,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1151,7 +1118,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1173,7 +1139,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1200,7 +1165,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1222,7 +1186,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1244,7 +1207,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1266,7 +1228,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1288,7 +1249,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1315,7 +1275,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1337,7 +1296,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1359,7 +1317,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1381,7 +1338,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1403,7 +1359,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1430,7 +1385,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1452,7 +1406,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1474,7 +1427,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1496,7 +1448,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1518,7 +1469,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1545,7 +1495,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1567,7 +1516,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1589,7 +1537,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1611,7 +1558,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1633,7 +1579,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1660,7 +1605,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1682,7 +1626,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1704,7 +1647,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1726,7 +1668,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1748,7 +1689,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1775,7 +1715,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1797,7 +1736,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1819,7 +1757,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1841,7 +1778,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1863,7 +1799,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1890,7 +1825,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1912,7 +1846,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1934,7 +1867,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1956,7 +1888,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -1978,7 +1909,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2005,7 +1935,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2027,7 +1956,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2049,7 +1977,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2071,7 +1998,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2093,7 +2019,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2120,7 +2045,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2142,7 +2066,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2164,7 +2087,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2186,7 +2108,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2208,7 +2129,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2235,7 +2155,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2257,7 +2176,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2279,7 +2197,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2301,7 +2218,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2323,7 +2239,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2350,7 +2265,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2372,7 +2286,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2394,7 +2307,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2416,7 +2328,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2438,7 +2349,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2465,7 +2375,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2487,7 +2396,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2509,7 +2417,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2531,7 +2438,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2553,7 +2459,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2580,7 +2485,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2602,7 +2506,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2624,7 +2527,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2646,7 +2548,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2668,7 +2569,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2695,7 +2595,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2717,7 +2616,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2739,7 +2637,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2761,7 +2658,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2783,7 +2679,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2810,7 +2705,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2832,7 +2726,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2854,7 +2747,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2876,7 +2768,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2898,7 +2789,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2925,7 +2815,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2947,7 +2836,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2969,7 +2857,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -2991,7 +2878,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3013,7 +2899,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3040,7 +2925,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3062,7 +2946,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3084,7 +2967,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3106,7 +2988,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3128,7 +3009,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3155,7 +3035,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3177,7 +3056,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3199,7 +3077,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3221,7 +3098,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3243,7 +3119,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3270,7 +3145,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3292,7 +3166,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3314,7 +3187,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3336,7 +3208,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3358,7 +3229,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3385,7 +3255,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3407,7 +3276,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3429,7 +3297,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3451,7 +3318,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3473,7 +3339,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3500,7 +3365,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3522,7 +3386,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3544,7 +3407,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3566,7 +3428,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3588,7 +3449,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3615,7 +3475,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3637,7 +3496,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3659,7 +3517,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3681,7 +3538,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3703,7 +3559,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3730,7 +3585,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3752,7 +3606,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3774,7 +3627,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3796,7 +3648,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3818,7 +3669,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3845,7 +3695,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3867,7 +3716,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3889,7 +3737,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3911,7 +3758,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3933,7 +3779,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3960,7 +3805,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -3982,7 +3826,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4004,7 +3847,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4026,7 +3868,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4048,7 +3889,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4075,7 +3915,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4097,7 +3936,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4119,7 +3957,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4141,7 +3978,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4163,7 +3999,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4190,7 +4025,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4212,7 +4046,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4234,7 +4067,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4256,7 +4088,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4278,7 +4109,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4305,7 +4135,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4327,7 +4156,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4349,7 +4177,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4371,7 +4198,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4393,7 +4219,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4420,7 +4245,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4442,7 +4266,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4464,7 +4287,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4486,7 +4308,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4508,7 +4329,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4535,7 +4355,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4557,7 +4376,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4579,7 +4397,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4601,7 +4418,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4623,7 +4439,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4650,7 +4465,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4672,7 +4486,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4694,7 +4507,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4716,7 +4528,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4738,7 +4549,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4765,7 +4575,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4787,7 +4596,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4809,7 +4617,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4831,7 +4638,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4853,7 +4659,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4880,7 +4685,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4902,7 +4706,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4924,7 +4727,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4946,7 +4748,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
@@ -4968,7 +4769,6 @@
 							"ParticipationOnly": false
 						}
 					],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
