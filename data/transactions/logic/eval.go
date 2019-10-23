@@ -44,6 +44,9 @@ import (
 // EvalMaxVersion is the max version we can interpret and run
 const EvalMaxVersion = 1
 
+// EvalMaxArgs is the maximum number of arguments to an LSig
+const EvalMaxArgs = 255
+
 // stackValue is the type for the operand stack.
 // Each stackValue is either a valid []byte value or a uint64 value.
 // If (.Bytes != nil) the stackValue is a []byte value, otherwise uint64 value.
@@ -161,6 +164,7 @@ func (pe PanicError) Error() string {
 var errLoopDetected = errors.New("loop detected")
 var errCostTooHigh = errors.New("LogicSigMaxCost exceded")
 var errLogicSignNotSupported = errors.New("LogicSig not supported")
+var errTooManyArgs = errors.New("LogicSig has too many arguments")
 
 // Eval checks to see if a transaction passes logic
 // A program passes succesfully if it finishes with one int element on the stack that is non-zero.
@@ -179,8 +183,12 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 			err = PanicError{x, errstr}
 		}
 	}()
-	if (params.Proto != nil) && (params.Proto.LogicSigVersion == 0) {
+	if (params.Proto == nil) || (params.Proto.LogicSigVersion == 0) {
 		err = errLogicSignNotSupported
+		return
+	}
+	if params.Txn.Lsig.Args != nil && len(params.Txn.Lsig.Args) > EvalMaxArgs {
+		err = errTooManyArgs
 		return
 	}
 	var cx evalContext
@@ -193,7 +201,7 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 		cx.err = fmt.Errorf("program version %d greater than max supported version %d", version, EvalMaxVersion)
 		return false, cx.err
 	}
-	if (params.Proto != nil) && (version > params.Proto.LogicSigVersion) {
+	if version > params.Proto.LogicSigVersion {
 		cx.err = fmt.Errorf("program version %d greater than protocol supported version %d", version, params.Proto.LogicSigVersion)
 		return false, cx.err
 	}
@@ -213,7 +221,7 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 		if cx.stepCount > len(cx.program) {
 			return false, errLoopDetected
 		}
-		if params.Proto != nil && uint64(cx.cost) > params.Proto.LogicSigMaxCost {
+		if uint64(cx.cost) > params.Proto.LogicSigMaxCost {
 			return false, errCostTooHigh
 		}
 	}
@@ -255,7 +263,7 @@ func Check(program []byte, params EvalParams) (cost int, err error) {
 			err = PanicError{x, errstr}
 		}
 	}()
-	if (params.Proto != nil) && (params.Proto.LogicSigVersion == 0) {
+	if (params.Proto == nil) || (params.Proto.LogicSigVersion == 0) {
 		err = errLogicSignNotSupported
 		return
 	}
@@ -269,7 +277,7 @@ func Check(program []byte, params EvalParams) (cost int, err error) {
 		err = fmt.Errorf("program version %d greater than max supported version %d", version, EvalMaxVersion)
 		return
 	}
-	if (params.Proto != nil) && (version > params.Proto.LogicSigVersion) {
+	if version > params.Proto.LogicSigVersion {
 		err = fmt.Errorf("program version %d greater than protocol supported version %d", version, params.Proto.LogicSigVersion)
 		return
 	}
