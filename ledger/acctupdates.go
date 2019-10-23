@@ -42,6 +42,18 @@ type modifiedAccount struct {
 	ndeltas int
 }
 
+type modifiedAsset struct {
+	// Created if true, deleted if false
+	created bool
+
+	// Creator is the creator of the asset
+	creator basics.Address
+
+	// Keeps track of how many times this asset appears in
+	// accountUpdates.assetDeltas
+	ndeltas int
+}
+
 type accountUpdates struct {
 	// Connection to the database.
 	dbs dbPair
@@ -59,6 +71,13 @@ type accountUpdates struct {
 	// accounts stores the most recent account state for every
 	// address that appears in deltas.
 	accounts map[basics.Address]modifiedAccount
+
+	// assetDeltas stores asset updates for every round after dbRound.
+	assetDeltas []map[basics.AssetIndex]modifiedAsset
+
+	// assets stores the most recent asset state for every asset
+	// that appears in assetDeltas
+	assets map[basics.AssetIndex]modifiedAsset
 
 	// protos stores consensus parameters dbRound and every
 	// round after it; i.e., protos is one longer than deltas.
@@ -134,7 +153,9 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 	au.protos = []config.ConsensusParams{config.Consensus[hdr.CurrentProtocol]}
 
 	au.deltas = nil
+	au.assetDeltas = nil
 	au.accounts = make(map[basics.Address]modifiedAccount)
+	au.assets = make(map[basics.AssetIndex]modifiedAsset)
 	loaded := au.dbRound
 	for loaded < latest {
 		next := loaded + 1
@@ -254,6 +275,40 @@ func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address
 	return
 }
 
+func (au *accountUpdates) getAssetCreatorForRound(rnd basics.Round, aidx basics.AssetIndex) (basics.Address, error) {
+	offset, err := au.roundOffset(rnd)
+	if err != nil {
+		return basics.Address{}, err
+	}
+
+	// If this is the most recent round, au.assets has will have the latest
+	// state and we can skip scanning backwards over assetDeltas
+	if offset == uint64(len(au.deltas)) {
+		// Check if we already have the asset/creator in cache
+		assetDelta, ok := au.assets[aidx]
+		if ok {
+			if assetDelta.created {
+				return assetDelta.creator, nil
+			}
+			return basics.Address{}, fmt.Errorf("asset %v has been deleted", aidx)
+		}
+	} else {
+		for offset > 0 {
+			offset--
+			assetDelta, ok := au.assetDeltas[offset][aidx]
+			if ok {
+				if assetDelta.created {
+					return assetDelta.creator, nil
+				}
+				return basics.Address{}, fmt.Errorf("asset %v has been deleted", aidx)
+			}
+		}
+	}
+
+	// Check the database
+	return au.accountsq.lookupAssetCreator(aidx)
+}
+
 func (au *accountUpdates) committedUpTo(rnd basics.Round) basics.Round {
 	lookback := basics.Round(au.protos[len(au.protos)-1].MaxBalLookback)
 	if rnd < lookback {
@@ -280,15 +335,21 @@ func (au *accountUpdates) committedUpTo(rnd basics.Round) basics.Round {
 	// account DB, so that we can drop the corresponding refcounts in
 	// au.accounts.
 	var flushcount map[basics.Address]int
+	var assetFlushcount map[basics.AssetIndex]int
 
 	offset := uint64(newBase - au.dbRound)
 	err := au.dbs.wdb.Atomic(func(tx *sql.Tx) error {
 		flushcount = make(map[basics.Address]int)
+		assetFlushcount = make(map[basics.AssetIndex]int)
 		for i := uint64(0); i < offset; i++ {
 			rnd := au.dbRound + basics.Round(i) + 1
 			err := accountsNewRound(tx, rnd, au.deltas[i], au.roundTotals[i+1].RewardsLevel, au.protos[i+1])
 			if err != nil {
 				return err
+			}
+
+			for aidx := range au.assetDeltas[i] {
+				assetFlushcount[aidx] = assetFlushcount[aidx] + 1
 			}
 
 			for addr := range au.deltas[i] {
@@ -322,9 +383,28 @@ func (au *accountUpdates) committedUpTo(rnd basics.Round) basics.Round {
 		}
 	}
 
+	for aidx, cnt := range assetFlushcount {
+		masset, ok := au.assets[aidx]
+		if !ok {
+			au.log.Panicf("inconsistency: flushed %d changes to asset %d, but not in au.assets", cnt, aidx)
+		}
+
+		if cnt > masset.ndeltas {
+			au.log.Panicf("inconsistency: flushed %d changes to asset %d, but au.assets had %d", cnt, aidx, masset.ndeltas)
+		}
+
+		masset.ndeltas -= cnt
+		if masset.ndeltas == 0 {
+			delete(au.assets, aidx)
+		} else {
+			au.assets[aidx] = masset
+		}
+	}
+
 	au.deltas = au.deltas[offset:]
 	au.protos = au.protos[offset:]
 	au.roundTotals = au.roundTotals[offset:]
+	au.assetDeltas = au.assetDeltas[offset:]
 	au.dbRound = newBase
 	au.lastFlushTime = flushTime
 	return au.dbRound
@@ -345,12 +425,14 @@ func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta stateDelta) {
 
 	au.deltas = append(au.deltas, delta.accts)
 	au.protos = append(au.protos, proto)
+	au.assetDeltas = append(au.assetDeltas, make(map[basics.AssetIndex]modifiedAsset))
 
 	var ot basics.OverflowTracker
 	newTotals := au.roundTotals[len(au.roundTotals)-1]
 	allBefore := newTotals.All()
-
 	newTotals.applyRewards(delta.hdr.RewardsLevel, &ot)
+	newAssetDeltas := au.assetDeltas[len(au.assetDeltas)-1]
+
 	for addr, data := range delta.accts {
 		newTotals.delAccount(proto, data.old, &ot)
 		newTotals.addAccount(proto, data.new, &ot)
@@ -359,7 +441,19 @@ func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta stateDelta) {
 		macct.ndeltas++
 		macct.data = data.new
 		au.accounts[addr] = macct
+
+		adeltas := getChangedAssetIndices(addr, data)
+		for aidx, delta := range adeltas {
+			masset := au.assets[aidx]
+			masset.creator = addr
+			masset.created = delta.created
+			masset.ndeltas++
+			au.assets[aidx] = masset
+
+			newAssetDeltas[aidx] = delta
+		}
 	}
+
 	if ot.Overflowed {
 		au.log.Panicf("accountUpdates: newBlock %d overflowed totals", rnd)
 	}
