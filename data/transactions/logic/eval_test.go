@@ -57,14 +57,13 @@ func defaultEvalParams(sb *strings.Builder, txn *transactions.SignedTxn) EvalPar
 	return EvalParams{Proto: &proto, Trace: sb, Txn: pt}
 }
 
-
 func TestTooManyArgs(t *testing.T) {
 	t.Parallel()
 	program, err := AssembleString(`int 1`)
 	require.NoError(t, err)
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = program
-	args := [EvalMaxArgs+1][]byte{}
+	args := [EvalMaxArgs + 1][]byte{}
 	txn.Lsig.Args = args[:]
 	sb := strings.Builder{}
 	pass, err := Eval(program, defaultEvalParams(&sb, &txn))
@@ -149,7 +148,7 @@ txn Receiver
 addr YYKRMERAFXMXCDWMBNR6BUUWQXDCUR53FPUGXLUYS7VNASRTJW2ENQ7BMQ
 ==
 &&
-global Round
+txn FirstValid
 int 3000
 >
 &&
@@ -170,9 +169,9 @@ func TestTLHC(t *testing.T) {
 	txn.Lsig.Logic = program
 	// right answer
 	txn.Lsig.Args = [][]byte{secret}
+	txn.Txn.FirstValid = 999999
 	sb := strings.Builder{}
 	block := bookkeeping.Block{}
-	block.BlockHeader.Round = 999999
 	proto := defaultEvalProto()
 	ep := EvalParams{Proto: &proto, Txn: &txn, Trace: &sb, Block: &block}
 	cost, err := Check(program, ep)
@@ -205,7 +204,7 @@ func TestTLHC(t *testing.T) {
 	txn.Txn.Receiver = a2
 	txn.Txn.CloseRemainderTo = a2
 	sb = strings.Builder{}
-	block.BlockHeader.Round = 1
+	txn.Txn.FirstValid = 1
 	ep = EvalParams{Proto: &proto, Txn: &txn, Trace: &sb, Block: &block}
 	pass, err = Eval(program, ep)
 	if pass {
@@ -218,7 +217,7 @@ func TestTLHC(t *testing.T) {
 	txn.Txn.Receiver = a1
 	txn.Txn.CloseRemainderTo = a1
 	sb = strings.Builder{}
-	block.BlockHeader.Round = 999999
+	txn.Txn.FirstValid = 999999
 	ep = EvalParams{Proto: &proto, Txn: &txn, Trace: &sb, Block: &block}
 	pass, err = Eval(program, ep)
 	if !pass {
@@ -252,64 +251,6 @@ int 0x12345678
 	require.NoError(t, err)
 	sb := strings.Builder{}
 	pass, err := Eval(program, defaultEvalParams(&sb, nil))
-	if !pass {
-		t.Log(hex.EncodeToString(program))
-		t.Log(sb.String())
-	}
-	require.True(t, pass)
-	require.NoError(t, err)
-}
-
-func TestRand(t *testing.T) {
-	t.Parallel()
-	program, err := AssembleString(`rand
-arg 0
-btoi
-==
-rand
-arg 1
-btoi
-==
-&&
-rand
-arg 2
-btoi
-==
-&&
-rand
-arg 3
-btoi
-==
-&&
-rand
-arg 4
-btoi
-==
-&&`)
-	require.NoError(t, err)
-	sb := strings.Builder{}
-	// seeded sequence should be stable across implementations and versions
-	expectedInts := []uint64{
-		678322472239279674,
-		2755610692717026382,
-		7031121088374348129,
-		5887010214291542478,
-		16538017124883863159,
-	}
-	var txn transactions.SignedTxn
-	txn.Lsig.Logic = program
-	txn.Lsig.Args = make([][]byte, 5)
-	for i, v := range expectedInts {
-		txn.Lsig.Args[i] = make([]byte, 8)
-		binary.BigEndian.PutUint64(txn.Lsig.Args[i], v)
-	}
-	proto := defaultEvalProto()
-	pass, err := Eval(program, EvalParams{Proto: &proto,
-		Txn:      &txn,
-		Trace:    &sb,
-		Seed:     []byte(benchSeed),
-		MoreSeed: []byte(benchMore),
-	})
 	if !pass {
 		t.Log(hex.EncodeToString(program))
 		t.Log(sb.String())
@@ -890,14 +831,14 @@ int 999
 global ZeroAddress
 txn CloseRemainderTo
 ==
-&&
-global TimeStamp
-int 2069
-==
-&&
-global Round
-int 999999
-==
+//&&
+//global TimeStamp
+//int 2069
+//==
+//&&
+//global Round
+//int 999999
+//==
 &&
 global GroupSize
 int 1
@@ -978,6 +919,10 @@ txn FirstValid
 int 42
 ==
 &&
+txn FirstValidTime
+int 210
+==
+&&
 txn LastValid
 int 1066
 ==
@@ -1032,10 +977,6 @@ int 3
 &&
 txn TxID
 arg 7
-==
-&&
-txn SenderBalance
-int 4160
 ==
 &&
 txn Lease
@@ -1096,7 +1037,7 @@ func TestTxn(t *testing.T) {
 	recs[3].MicroAlgos.Raw = 4160
 	sb := strings.Builder{}
 	proto := defaultEvalProto()
-	pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, GroupSenders: recs, GroupIndex: 3})
+	pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, GroupIndex: 3, FirstValidTimeStamp: 210})
 	if !pass {
 		t.Log(hex.EncodeToString(program))
 		t.Log(sb.String())
@@ -1756,35 +1697,6 @@ int 1`)
 	isNotPanic(t, err)
 }
 
-func TestFetchSenderBalance(t *testing.T) {
-	t.Parallel()
-	bal := uint64(30000)
-	program, err := AssembleString(fmt.Sprintf(`int %d
-txn SenderBalance
-==`, bal))
-	require.NoError(t, err)
-	//t.Log(hex.EncodeToString(program))
-	canonicalProgramBytes, err := hex.DecodeString("012001b0ea0122311612")
-	require.NoError(t, err)
-	require.Equal(t, program, canonicalProgramBytes)
-
-	_, err = Check(program, defaultEvalParams(nil, nil))
-	require.NoError(t, err)
-
-	proto := defaultEvalProto()
-	params := EvalParams{Proto: &proto, GroupSenders: make([]basics.BalanceRecord, 1), Txn: new(transactions.SignedTxn)}
-	params.GroupSenders[0].MicroAlgos.Raw = bal
-	pass, err := Eval(program, params)
-	require.NoError(t, err)
-	require.True(t, pass)
-
-	params.GroupSenders[0].MicroAlgos.Raw = bal + 1
-	pass, err = Eval(program, params)
-	require.NoError(t, err)
-	require.False(t, pass)
-	isNotPanic(t, err)
-}
-
 /*
 import random
 
@@ -2073,7 +1985,7 @@ func benchmarkBasicProgram(b *testing.B, source string) {
 	b.ResetTimer()
 	sb := strings.Builder{} // Trace: &sb
 	for i := 0; i < b.N; i++ {
-		pass, err := Eval(program, EvalParams{Proto: &proto, Seed: []byte(benchSeed), MoreSeed: []byte(benchMore)})
+		pass, err := Eval(program, EvalParams{Proto: &proto})
 		if !pass {
 			b.Log(sb.String())
 		}
@@ -2126,16 +2038,6 @@ func BenchmarkAddx64(b *testing.B) {
 
 func BenchmarkNopPassx1(b *testing.B) {
 	benchmarkBasicProgram(b, "int 1")
-}
-
-func BenchmarkRandx450(b *testing.B) {
-	const firstline = "rand\n"
-	sb := strings.Builder{}
-	sb.WriteString(firstline)
-	for i := 0; i < 450; i++ {
-		sb.WriteString("rand\n^\n")
-	}
-	benchmarkBasicProgram(b, sb.String())
 }
 
 func BenchmarkSha256Raw(b *testing.B) {
