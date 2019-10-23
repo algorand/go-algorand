@@ -54,6 +54,7 @@ var logicProg string
 var randomNote bool
 var txnPerSec uint64
 var teal string
+var groupSize uint32
 
 func init() {
 	rootCmd.AddCommand(runCmd)
@@ -81,6 +82,7 @@ func init() {
 	runCmd.Flags().BoolVar(&quietish, "quiet", false, "quietish stdout logging")
 	runCmd.Flags().BoolVar(&randomNote, "randomnote", false, "generates a random byte array between 0-1024 bytes long")
 	runCmd.Flags().StringVar(&teal, "teal", "", "teal test scenario, can be light, normal, or heavy, this overrides --program")
+	runCmd.Flags().Uint32Var(&groupSize, "groupsize", 1, "The number of transactions in each group")
 }
 
 var runCmd = &cobra.Command{
@@ -220,6 +222,12 @@ var runCmd = &cobra.Command{
 			if err != nil {
 				reportErrorf("Error opening logic program: %v\n", err)
 			}
+		}
+
+		if groupSize > 0 && groupSize <= 16 {
+			cfg.GroupSize = groupSize
+		} else {
+			reportErrorf("Invalid group size: %v\n", groupSize)
 		}
 
 		reportInfof("Preparing to initialize PingPong with config:\n")
