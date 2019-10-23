@@ -17,6 +17,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -25,16 +26,18 @@ import (
 )
 
 var (
-	numValidRounds uint64
-	assetID        uint64
-	assetCreator   string
-	assetTotal     uint64
-	assetFrozen    bool
-	assetUnitName  string
-	assetName      string
-	assetManager   string
-	assetClawback  string
-	assetFreezer   string
+	numValidRounds          uint64
+	assetID                 uint64
+	assetCreator            string
+	assetTotal              uint64
+	assetFrozen             bool
+	assetUnitName           string
+	assetMetadataHashBase64 string
+	assetURL                string
+	assetName               string
+	assetManager            string
+	assetClawback           string
+	assetFreezer            string
 
 	assetNewManager  string
 	assetNewReserve  string
@@ -58,6 +61,8 @@ func init() {
 	createAssetCmd.Flags().Uint64Var(&fee, "fee", 0, "The transaction fee (automatically determined by default), in microAlgos")
 	createAssetCmd.Flags().Uint64Var(&firstValid, "firstvalid", 0, "The first round where the transaction may be committed to the ledger")
 	createAssetCmd.Flags().Uint64Var(&numValidRounds, "validrounds", 0, "The number of rounds for which the transaction will be valid")
+	createAssetCmd.Flags().StringVar(&assetURL, "asseturl", "", "URL where user can access more information about the asset (max 32 bytes)")
+	createAssetCmd.Flags().StringVar(&assetMetadataHashBase64, "assetmetadatab64", "", "base-64 encoded 32-byte commitment to asset metadata")
 	createAssetCmd.Flags().StringVarP(&txFilename, "out", "o", "", "Write transaction to this file")
 	createAssetCmd.Flags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
 	createAssetCmd.Flags().StringVar(&noteBase64, "noteb64", "", "Note (URL-base64 encoded)")
@@ -198,7 +203,16 @@ var createAssetCmd = &cobra.Command{
 		accountList := makeAccountsList(dataDir)
 		creator := accountList.getAddressByName(assetCreator)
 
-		tx, err := client.MakeUnsignedAssetCreateTx(assetTotal, assetFrozen, creator, creator, creator, creator, assetUnitName, assetName)
+		var err error
+		var assetMetadataHash []byte
+		if assetMetadataHashBase64 != "" {
+			assetMetadataHash, err = base64.StdEncoding.DecodeString(assetMetadataHashBase64)
+			if err != nil {
+				reportErrorf(malformedMetadataHash, assetMetadataHashBase64, err)
+			}
+		}
+
+		tx, err := client.MakeUnsignedAssetCreateTx(assetTotal, assetFrozen, creator, creator, creator, creator, assetUnitName, assetName, assetURL, assetMetadataHash)
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}

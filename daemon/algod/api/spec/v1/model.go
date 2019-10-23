@@ -196,6 +196,19 @@ type AssetParams struct {
 	// required: false
 	AssetName string `json:"assetname"`
 
+	// URL specifies a URL where more information about the asset can be
+	// retrieved
+	//
+	// required: false
+	URL string `json:"url"`
+
+	// MetadataHash specifies a commitment to some unspecified asset
+	// metadata. The format of this metadata is up to the application.
+	//
+	// required: false
+	// swagger:strfmt byte
+	MetadataHash []byte `json:"metadatahash"`
+
 	// ManagerAddr specifies the address used to manage the keys of this
 	// asset and to destroy it.
 	//
