@@ -861,9 +861,9 @@ func GetPendingTransactionsByAddress(ctx lib.ReqContext, w http.ResponseWriter, 
 	SendJSON(response, w, ctx.Log)
 }
 
-// AssetInformation is an httpHandler for route GET /v1/assets/{index:[0-9]+}
+// AssetInformation is an httpHandler for route GET /v1/asset/{index:[0-9]+}
 func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
-	// swagger:operation GET /v1/assets/{index} AssetInformation
+	// swagger:operation GET /v1/asset/{index} AssetInformation
 	// ---
 	//     Summary: Get asset information.
 	//     Description: >
@@ -915,79 +915,6 @@ func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request
 
 	if asset, ok := record.AssetParams[aidx]; ok {
 		thisAssetParams := assetParams(creator, aidx, asset)
-		SendJSON(AssetInformationResponse{&thisAssetParams}, w, ctx.Log)
-	} else {
-		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errFailedRetrievingAsset), errFailedRetrievingAsset, ctx.Log)
-		return
-	}
-}
-
-// AssetInformationWithCreator is an httpHandler for route GET /v1/account/{creator:[A-Z0-9]{%d}}/assets/{index:[0-9]+}
-func AssetInformationWithCreator(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
-	// swagger:operation GET /v1/account/{creator}/assets/{index} AssetInformationWithCreator
-	// ---
-	//     Summary: Get asset information.
-	//     Description: >
-	//       Given the asset creator's public key and unique asset ID, this call
-	//       returns the asset's manager, reserve, freeze, and clawback addresses
-	//     Produces:
-	//     - application/json
-	//     Schemes:
-	//     - http
-	//     Parameters:
-	//       - name: creator
-	//         in: path
-	//         type: string
-	//         pattern: "[A-Z0-9]{58}"
-	//         required: true
-	//         description: Asset creator public key
-	//       - name: index
-	//         in: path
-	//         type: integer
-	//         format: int64
-	//         required: true
-	//         description: Asset index
-	//     Responses:
-	//       200:
-	//         "$ref": '#/responses/AssetInformationResponse'
-	//       400:
-	//         description: Bad Request
-	//         schema: {type: string}
-	//       500:
-	//         description: Internal Error
-	//         schema: {type: string}
-	//       401: { description: Invalid API Token }
-	//       default: { description: Unknown Error }
-	queryAddr := mux.Vars(r)["creator"]
-	queryIndex, err := strconv.ParseUint(mux.Vars(r)["index"], 10, 64)
-
-	if err != nil {
-		lib.ErrorResponse(w, http.StatusBadRequest, err, errFailedToParseAssetIndex, ctx.Log)
-		return
-	}
-
-	if queryAddr == "" {
-		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errNoAccountSpecified), errNoAccountSpecified, ctx.Log)
-		return
-	}
-
-	addr, err := basics.UnmarshalChecksumAddress(queryAddr)
-	if err != nil {
-		lib.ErrorResponse(w, http.StatusBadRequest, err, errFailedToParseAddress, ctx.Log)
-		return
-	}
-
-	ledger := ctx.Node.Ledger()
-	lastRound := ledger.Latest()
-	record, err := ledger.Lookup(lastRound, addr)
-	if err != nil {
-		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
-		return
-	}
-
-	aidx := basics.AssetIndex(queryIndex)
-	if asset, ok := record.AssetParams[aidx]; ok {
-		thisAssetParams := assetParams(addr, aidx, asset)
 		SendJSON(AssetInformationResponse{&thisAssetParams}, w, ctx.Log)
 	} else {
 		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errFailedRetrievingAsset), errFailedRetrievingAsset, ctx.Log)
