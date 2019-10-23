@@ -303,13 +303,6 @@ func (au *accountUpdates) listAssets(maxAssetIdx basics.AssetIndex, maxResults u
 		}
 	}
 
-	// Fetch up to maxResults + len(deletedAssets) from the database, so we
-	// have enough extras in case assets were deleted
-	dbResults, err := au.accountsq.listAssets(maxAssetIdx, maxResults+uint64(len(deletedAssets)))
-	if err != nil {
-		return nil, err
-	}
-
 	// Check in-memory created assets, which will always be larger than anything
 	// in the database
 	var res []basics.AssetLocator
@@ -318,6 +311,14 @@ func (au *accountUpdates) listAssets(maxAssetIdx basics.AssetIndex, maxResults u
 			break
 		}
 		res = append(res, loc)
+	}
+
+	// Fetch up to maxResults - len(res) + len(deletedAssets) from the database, so we
+	// have enough extras in case assets were deleted
+	numToFetch := maxResults - uint64(len(res)) + uint64(len(deletedAssets))
+	dbResults, err := au.accountsq.listAssets(maxAssetIdx, numToFetch)
+	if err != nil {
+		return nil, err
 	}
 
 	// Now we merge the database results with the in-memory results

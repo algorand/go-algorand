@@ -981,10 +981,10 @@ func Assets(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-        // If assetIdx is 0, we want the most recent assets, so make it intmax
-        if assetIdx == 0 {
-                assetIdx = (1 << 63) - 1
-        }
+	// If assetIdx is 0, we want the most recent assets, so make it intmax
+	if assetIdx == 0 {
+		assetIdx = (1 << 63) - 1
+	}
 
 	// Query asset range from the database
 	ledger := ctx.Node.Ledger()
