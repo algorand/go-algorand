@@ -33,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/daemon/kmd/config"
 	"github.com/algorand/go-algorand/daemon/kmd/wallet"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-codec/codec"
 )
@@ -1133,7 +1134,7 @@ func (sw *SQLiteWallet) SignProgram(data []byte, src crypto.Digest, pw []byte) (
 		return
 	}
 
-	progb := transactions.Program(data)
+	progb := logic.Program(data)
 	// Sign the transaction
 	sig := secrets.Sign(&progb)
 	stx = sig[:]
@@ -1267,7 +1268,7 @@ func (sw *SQLiteWallet) MultisigSignProgram(data []byte, src crypto.Digest, pk c
 
 		// Sign the transaction
 		from := src
-		progb := transactions.Program(data)
+		progb := logic.Program(data)
 		sig, err = crypto.MultisigSign(&progb, from, version, threshold, pks, *secrets)
 		return
 	}
@@ -1311,7 +1312,7 @@ func (sw *SQLiteWallet) MultisigSignProgram(data []byte, src crypto.Digest, pk c
 
 	// Sign the transaction, and merge the multisig into the partial
 	version, threshold, pks := partial.Preimage()
-	progb := transactions.Program(data)
+	progb := logic.Program(data)
 	msig2, err := crypto.MultisigSign(&progb, addr, version, threshold, pks, *secrets)
 	if err != nil {
 		return

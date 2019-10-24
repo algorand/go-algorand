@@ -31,6 +31,9 @@ for LEDGER in $LEDGERS; do
       participationperiods)
         SORT=period
         ;;
+      assetcreators)
+        SORT=asset
+        ;;
       *)
         echo "Unknown table $T" >&2
         exit 1

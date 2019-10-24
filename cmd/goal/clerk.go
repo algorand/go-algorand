@@ -282,7 +282,7 @@ var sendCmd = &cobra.Command{
 			lsigFromArgs(&lsig)
 		}
 		if program != nil {
-			ph := transactions.HashProgram(program)
+			ph := logic.HashProgram(program)
 			pha := basics.Address(ph)
 			fromAddressResolved = pha.String()
 			programArgs = getProgramArgs()
@@ -823,7 +823,7 @@ var compileCmd = &cobra.Command{
 				}
 			}
 			if !signProgram {
-				pd := transactions.HashProgram(program)
+				pd := logic.HashProgram(program)
 				addr := basics.Address(pd)
 				fmt.Printf("%s: %s\n", fname, addr.String())
 			}
@@ -836,10 +836,6 @@ var dryrunCmd = &cobra.Command{
 	Short: "test a program offline",
 	Long:  "test a program offline under various conditions and verbosity",
 	Run: func(cmd *cobra.Command, args []string) {
-		seed, err := base64.StdEncoding.DecodeString(seedBase64)
-		if err != nil {
-			reportErrorf("invalid seed: %s", err)
-		}
 		data, err := readFile(txFilename)
 		if err != nil {
 			reportErrorf(fileReadError, txFilename, err)
@@ -877,7 +873,6 @@ var dryrunCmd = &cobra.Command{
 			if err != nil {
 				reportErrorf("program failed Check: %s", err)
 			}
-			txid := txn.ID()
 			sb := strings.Builder{}
 			ep = logic.EvalParams{
 				Txn:        &txn.SignedTxn,
@@ -886,8 +881,6 @@ var dryrunCmd = &cobra.Command{
 				Trace:      &sb,
 				TxnGroup:   txgroup,
 				GroupIndex: i,
-				Seed:       seed,
-				MoreSeed:   txid[:],
 			}
 			pass, err := logic.Eval(txn.Lsig.Logic, ep)
 			// TODO: optionally include `inspect` output here?

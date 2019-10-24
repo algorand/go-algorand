@@ -80,6 +80,10 @@ func (balances mockBalances) Get(basics.Address, bool) (basics.BalanceRecord, er
 	return basics.BalanceRecord{}, nil
 }
 
+func (balances mockBalances) GetAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error) {
+	return basics.Address{}, nil
+}
+
 func (balances mockBalances) Put(basics.BalanceRecord) error {
 	return nil
 }
