@@ -923,21 +923,6 @@ func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request
 		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errFailedRetrievingAsset), errFailedRetrievingAsset, ctx.Log)
 		return
 	}
-
-	assetFound = false
-	var thisAssetParams v1.AssetParams
-	if len(record.AssetParams) > 0 {
-		for idx, params := range record.AssetParams {
-			if idx == queryIndex {
-				thisAssetParams = assetParams(addr, params)
-				assetFound = true
-			}
-		}
-	}
-	if !assetFound {
-		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errFailedRetrievingAsset), errFailedRetrievingAsset, ctx.Log)
-		return
-	}
 }
 
 // Assets is an httpHandler for route GET /v1/assets
