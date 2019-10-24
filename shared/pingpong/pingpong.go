@@ -49,7 +49,7 @@ func PrepareAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]u
 func fundAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpConfig) error {
 	srcFunds := accounts[cfg.SrcAccount]
 
-	// Fee of 0 will make cuase the function to use the suggested one by network
+	// Fee of 0 will make cause the function to use the suggested one by network
 	fee := uint64(0)
 
 	for addr, balance := range accounts {
@@ -182,10 +182,6 @@ func sendFromTo(fromList, toList []string, accounts map[string]uint64, client li
 			fee = rand.Uint64()%(cfg.MaxFee-cfg.MinFee) + cfg.MinFee
 		}
 
-		if !cfg.Quiet {
-			fmt.Fprintf(os.Stdout, "Sending %d : %s -> %s\n", amt, from, toList[i])
-		}
-
 		to := toList[i]
 		if cfg.RandomizeDst {
 			var addr basics.Address
@@ -193,71 +189,99 @@ func sendFromTo(fromList, toList []string, accounts map[string]uint64, client li
 			to = addr.String()
 		}
 
-		var noteField []byte
-		const pingpongTag = "pingpong"
-		const tagLen = uint32(len(pingpongTag))
-		const randomBaseLen = uint32(8)
-		const maxNoteFieldLen = uint32(1024)
-		var noteLength = uint32(tagLen) + randomBaseLen
-		// if random note flag set, then append a random number of additional bytes
-		if cfg.RandomNote {
-			noteLength = noteLength + rand.Uint32()%(maxNoteFieldLen-noteLength)
-		}
-		noteField = make([]byte, noteLength, noteLength)
-		copy(noteField, pingpongTag)
-		crypto.RandBytes(noteField[tagLen:])
-
-		// Construct payment transaction
-		var txn transactions.Transaction
-		txn, err = client.ConstructPayment(from, to, fee, amt, noteField[:], "", [32]byte{}, 0, 0)
-		if err != nil {
-			return
-		}
-
-		if accounts[from] <= (txn.Fee.Raw + amt + cfg.MinAccountFunds) {
-			fmt.Fprintf(os.Stdout, "Skipping sending %d : %s -> %s; Current cost too high.\n", amt, from, toList[i])
-			continue
-		}
-
-		// Get wallet handle token
-		var h []byte
-		h, err = client.GetUnencryptedWalletHandle()
-		if err != nil {
-			return
-		}
-
-		var stxn transactions.SignedTxn
-		var psig crypto.Signature
-
-		if len(cfg.Program) > 0 {
-			// If there's a program, sign it and use that in a lsig
-			psig, err = client.SignProgramWithWallet(h, nil, from, cfg.Program)
-			if err != nil {
-				return
-			}
-			// Fill in signed transaction
-			stxn.Txn = txn
-			stxn.Lsig.Logic = cfg.Program
-			stxn.Lsig.Sig = psig
-			stxn.Lsig.Args = cfg.LogicArgs
-		} else {
-			// Otherwise, just sign the transaction like normal
-			stxn, err = client.SignTransactionWithWallet(h, nil, txn)
-			if err != nil {
-				return
-			}
-		}
-
-		sentCount++
-
 		// Broadcast transaction
-		_, sendErr := client.BroadcastTransaction(stxn)
+		var sendErr error
+		fromBalanceChange := int64(0)
+		toBalanceChange := int64(0)
+		if cfg.GroupSize == 1 {
+
+			if !cfg.Quiet {
+				fmt.Fprintf(os.Stdout, "Sending %d : %s -> %s\n", amt, from, toList[i])
+			}
+
+			// Construct single txn
+			txn, consErr := constructTxn(from, to, fee, amt, client, cfg)
+			if consErr != nil {
+				err = consErr
+				return
+			}
+
+			// would we have enough money after taking into account the current updated fees ?
+			if accounts[from] <= (txn.Fee.Raw + amt + cfg.MinAccountFunds) {
+				fmt.Fprintf(os.Stdout, "Skipping sending %d : %s -> %s; Current cost too high.\n", amt, from, toList[i])
+				continue
+			}
+			fromBalanceChange = -int64(txn.Fee.Raw + amt)
+			toBalanceChange = int64(amt)
+
+			// Sign txn
+			stxn, signErr := signTxn(from, txn, client, cfg)
+			if signErr != nil {
+				err = signErr
+				return
+			}
+
+			sentCount++
+			_, sendErr = client.BroadcastTransaction(stxn)
+		} else {
+			// Generate txn group
+			var txGroup []transactions.Transaction
+			for j := 0; j < int(cfg.GroupSize); j++ {
+				var txn transactions.Transaction
+				if j%2 == 0 {
+					txn, err = constructTxn(from, to, fee, amt, client, cfg)
+					fromBalanceChange -= int64(txn.Fee.Raw + amt)
+					toBalanceChange += int64(amt)
+				} else {
+					txn, err = constructTxn(to, from, fee, amt, client, cfg)
+					toBalanceChange -= int64(txn.Fee.Raw + amt)
+					fromBalanceChange += int64(amt)
+				}
+				if err != nil {
+					return
+				}
+				txGroup = append(txGroup, txn)
+			}
+
+			// Generate group ID
+			gid, gidErr := client.GroupID(txGroup)
+			if gidErr != nil {
+				err = gidErr
+				return
+			}
+
+			if !cfg.Quiet {
+				fmt.Fprintf(os.Stdout, "Sending TxnGroup: ID %v, size %v \n", gid, len(txGroup))
+			}
+
+			// Sign each transaction
+			var stxGroup []transactions.SignedTxn
+			for j, txn := range txGroup {
+				txn.Group = gid
+				var lf string
+				if j%2 == 0 {
+					lf = from
+				} else {
+					lf = to
+				}
+				stxn, signErr := signTxn(lf, txn, client, cfg)
+				if signErr != nil {
+					err = signErr
+					return
+				}
+				stxGroup = append(stxGroup, stxn)
+			}
+
+			sentCount++
+			sendErr = client.BroadcastTransactionGroup(stxGroup)
+		}
+
 		if sendErr != nil && !cfg.Quiet {
 			fmt.Fprintf(os.Stderr, "error sending transaction: %v\n", sendErr)
 		} else {
 			successCount++
-			accounts[from] -= txn.Fee.Raw + amt
-			accounts[to] += amt
+			accounts[from] = uint64(fromBalanceChange + int64(accounts[from]))
+			accounts[to] = uint64(toBalanceChange + int64(accounts[to]))
 		}
 		if sendErr != nil {
 			err = sendErr
@@ -265,6 +289,60 @@ func sendFromTo(fromList, toList []string, accounts map[string]uint64, client li
 		}
 		if cfg.DelayBetweenTxn > 0 {
 			time.Sleep(cfg.DelayBetweenTxn)
+		}
+	}
+	return
+}
+
+func constructTxn(from, to string, fee, amt uint64, client libgoal.Client, cfg PpConfig) (txn transactions.Transaction, err error) {
+	var noteField []byte
+	const pingpongTag = "pingpong"
+	const tagLen = uint32(len(pingpongTag))
+	const randomBaseLen = uint32(8)
+	const maxNoteFieldLen = uint32(1024)
+	var noteLength = uint32(tagLen) + randomBaseLen
+	// if random note flag set, then append a random number of additional bytes
+	if cfg.RandomNote {
+		noteLength = noteLength + rand.Uint32()%(maxNoteFieldLen-noteLength)
+	}
+	noteField = make([]byte, noteLength, noteLength)
+	copy(noteField, pingpongTag)
+	crypto.RandBytes(noteField[tagLen:])
+
+	// Construct payment transaction
+	txn, err = client.ConstructPayment(from, to, fee, amt, noteField[:], "", [32]byte{}, 0, 0)
+	if err != nil {
+		return
+	}
+	return
+}
+
+func signTxn(from string, txn transactions.Transaction, client libgoal.Client, cfg PpConfig) (stxn transactions.SignedTxn, err error) {
+	// Get wallet handle token
+	var h []byte
+	h, err = client.GetUnencryptedWalletHandle()
+	if err != nil {
+		return
+	}
+
+	var psig crypto.Signature
+
+	if len(cfg.Program) > 0 {
+		// If there's a program, sign it and use that in a lsig
+		psig, err = client.SignProgramWithWallet(h, nil, from, cfg.Program)
+		if err != nil {
+			return
+		}
+		// Fill in signed transaction
+		stxn.Txn = txn
+		stxn.Lsig.Logic = cfg.Program
+		stxn.Lsig.Sig = psig
+		stxn.Lsig.Args = cfg.LogicArgs
+	} else {
+		// Otherwise, just sign the transaction like normal
+		stxn, err = client.SignTransactionWithWallet(h, nil, txn)
+		if err != nil {
+			return
 		}
 	}
 	return
