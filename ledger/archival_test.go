@@ -17,6 +17,7 @@
 package ledger
 
 import (
+	"crypto/rand"
 	"database/sql"
 	"fmt"
 	"io/ioutil"
@@ -31,6 +32,8 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -204,6 +207,165 @@ func TestArchivalRestart(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, basics.Round(maxBlocks), latest)
 	require.Equal(t, basics.Round(0), earliest)
+}
+
+func TestArchivalAssets(t *testing.T) {
+	// Start in archival mode, add 2K blocks with asset txns, restart, ensure all
+	// assets are there in index
+
+	dbTempDir, err := ioutil.TempDir("", "testdir"+t.Name())
+	require.NoError(t, err)
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	dbPrefix := filepath.Join(dbTempDir, dbName)
+	defer os.RemoveAll(dbTempDir)
+
+	genesisInitState := getInitState()
+
+	// Enable assets
+	genesisInitState.Block.BlockHeader.GenesisHash = crypto.Digest{}
+	genesisInitState.Block.CurrentProtocol = protocol.ConsensusFuture
+	genesisInitState.GenesisHash = crypto.Digest{1}
+	genesisInitState.Block.BlockHeader.GenesisHash = crypto.Digest{1}
+
+	const maxBlocks = 2000
+	var creators []basics.Address
+	for i := 0; i < maxBlocks; i++ {
+		creator := basics.Address{}
+		_, err = rand.Read(creator[:])
+		require.NoError(t, err)
+		creators = append(creators, creator)
+
+		// Give creators money for min balance
+		genesisInitState.Accounts[creator] = basics.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890})
+	}
+
+	const inMem = false // use persistent storage
+	const archival = true
+
+	l, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
+	require.NoError(t, err)
+	blk := genesisInitState.Block
+
+	client := libgoal.Client{}
+	for i := 0; i < maxBlocks; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TxnCounter++
+		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+
+		// Make a transaction that will create an asset
+		creatorEncoded := creators[i].String()
+		tx, err := client.MakeUnsignedAssetCreateTx(100, false, creatorEncoded, creatorEncoded, creatorEncoded, creatorEncoded, "m", "m", "", nil)
+		require.NoError(t, err)
+		tx.Sender = creators[i]
+
+		// Make a payset
+		var payset transactions.Payset
+		stxnib := makeSignedTxnInBlock(tx)
+		payset = append(payset, stxnib)
+		blk.Payset = payset
+
+		// Add the block
+		err = l.AddBlock(blk, agreement.Certificate{})
+		require.NoError(t, err)
+	}
+	l.WaitForCommit(blk.Round())
+
+	// check that we can fetch creator for all created assets
+	for i := 0; i < maxBlocks; i++ {
+		c, err := l.GetAssetCreator(basics.AssetIndex(i + 1))
+		require.NoError(t, err)
+		require.Equal(t, creators[i], c)
+	}
+
+	// close and reopen the same DB
+	l.Close()
+	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
+	require.NoError(t, err)
+	defer l.Close()
+
+	// check that we can still fetch creator for all created assets
+	for i := 0; i < maxBlocks; i++ {
+		c, err := l.GetAssetCreator(basics.AssetIndex(i + 1))
+		require.NoError(t, err)
+		require.Equal(t, creators[i], c)
+	}
+
+	// delete an old asset and a new asset
+	tx0, err := client.MakeUnsignedAssetDestroyTx(1)
+	require.NoError(t, err)
+	tx0.Sender = creators[0]
+
+	tx1, err := client.MakeUnsignedAssetDestroyTx(maxBlocks)
+	require.NoError(t, err)
+	tx1.Sender = creators[maxBlocks - 1]
+
+	// start mining the block with the deletion txn
+	blk.BlockHeader.Round++
+	blk.BlockHeader.TxnCounter++
+	blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+
+	// make a payset
+	var payset transactions.Payset
+	payset = append(payset, makeSignedTxnInBlock(tx0))
+	payset = append(payset, makeSignedTxnInBlock(tx1))
+	blk.Payset = payset
+
+	// add the block
+	err = l.AddBlock(blk, agreement.Certificate{})
+	require.NoError(t, err)
+	l.WaitForCommit(blk.Round())
+
+	// check that we can still fetch creator for all created assets except first and last
+	for i := 0; i < maxBlocks; i++ {
+		c, err := l.GetAssetCreator(basics.AssetIndex(i + 1))
+		if i == 0 || i == maxBlocks - 1 {
+			require.Error(t, err)
+			require.Equal(t, basics.Address{}, c)
+		} else {
+			require.NoError(t, err)
+			require.Equal(t, creators[i], c)
+		}
+	}
+
+	// Mine another maxBlocks blocks
+	for i := 0; i < maxBlocks; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TxnCounter++
+		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+		blk.Payset = nil
+		err = l.AddBlock(blk, agreement.Certificate{})
+		require.NoError(t, err)
+	}
+	l.WaitForCommit(blk.Round())
+
+	// close and reopen the same DB
+	l.Close()
+	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
+	require.NoError(t, err)
+	defer l.Close()
+
+	// check that we can still fetch creator for all created assets except first and last
+	for i := 0; i < maxBlocks; i++ {
+		c, err := l.GetAssetCreator(basics.AssetIndex(i + 1))
+		if i == 0 || i == maxBlocks - 1 {
+			require.Error(t, err)
+			require.Equal(t, basics.Address{}, c)
+		} else {
+			require.NoError(t, err)
+			require.Equal(t, creators[i], c)
+		}
+	}
+}
+
+func makeSignedTxnInBlock(tx transactions.Transaction) transactions.SignedTxnInBlock {
+	return transactions.SignedTxnInBlock {
+		SignedTxnWithAD: transactions.SignedTxnWithAD {
+			SignedTxn: transactions.SignedTxn {
+				Txn: tx,
+			},
+		},
+		HasGenesisID: true,
+	}
 }
 
 func TestArchivalFromNonArchival(t *testing.T) {
