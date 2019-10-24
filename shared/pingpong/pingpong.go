@@ -133,10 +133,10 @@ func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uin
 
 		var totalSent, totalSucceeded uint64
 		for !time.Now().After(stopTime) {
-			fromList := listSufficientAccounts(accounts, (cfg.MaxAmt+cfg.MaxFee)*2, cfg.SrcAccount)
+			fromList := listSufficientAccounts(accounts, cfg.MinAccountFunds+(cfg.MaxAmt+cfg.MaxFee)*2, cfg.SrcAccount)
 			toList := listSufficientAccounts(accounts, 0, cfg.SrcAccount)
 
-			sent, succeded, err := sendFromTo(fromList, toList, ac, cfg)
+			sent, succeded, err := sendFromTo(fromList, toList, accounts, ac, cfg)
 			totalSent += sent
 			totalSucceeded += succeded
 			if err != nil {
@@ -169,7 +169,7 @@ func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uin
 	}
 }
 
-func sendFromTo(fromList, toList []string, client libgoal.Client, cfg PpConfig) (sentCount, successCount uint64, err error) {
+func sendFromTo(fromList, toList []string, accounts map[string]uint64, client libgoal.Client, cfg PpConfig) (sentCount, successCount uint64, err error) {
 	amt := cfg.MaxAmt
 	fee := cfg.MaxFee
 
@@ -207,13 +207,16 @@ func sendFromTo(fromList, toList []string, client libgoal.Client, cfg PpConfig) 
 		copy(noteField, pingpongTag)
 		crypto.RandBytes(noteField[tagLen:])
 
-		sentCount++
-
 		// Construct payment transaction
 		var txn transactions.Transaction
 		txn, err = client.ConstructPayment(from, to, fee, amt, noteField[:], "", [32]byte{}, 0, 0)
 		if err != nil {
 			return
+		}
+
+		if accounts[from] <= (txn.Fee.Raw + amt + cfg.MinAccountFunds) {
+			fmt.Fprintf(os.Stdout, "Skipping sending %d : %s -> %s; Current cost too high.\n", amt, from, toList[i])
+			continue
 		}
 
 		// Get wallet handle token
@@ -245,12 +248,16 @@ func sendFromTo(fromList, toList []string, client libgoal.Client, cfg PpConfig) 
 			}
 		}
 
+		sentCount++
+
 		// Broadcast transaction
 		_, sendErr := client.BroadcastTransaction(stxn)
 		if sendErr != nil && !cfg.Quiet {
-			fmt.Fprintf(os.Stderr, "error sending transaction: %v\n", err)
+			fmt.Fprintf(os.Stderr, "error sending transaction: %v\n", sendErr)
 		} else {
 			successCount++
+			accounts[from] -= txn.Fee.Raw + amt
+			accounts[to] += amt
 		}
 		if sendErr != nil {
 			err = sendErr
