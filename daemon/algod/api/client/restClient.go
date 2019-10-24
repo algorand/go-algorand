@@ -221,15 +221,15 @@ func (client RestClient) TransactionsByAddr(addr string, first, last, max uint64
 	return
 }
 
-// AccountInformation also gets the AccountInformationResponse associated with the passed address
-func (client RestClient) AccountInformation(address string) (response v1.Account, err error) {
-	err = client.get(&response, fmt.Sprintf("/account/%s", address), nil)
+// AssetInformation gets the AssetInformationResponse associated with the passed asset index
+func (client RestClient) AssetInformation(index uint64) (response v1.AssetParams, err error) {
+	err = client.get(&response, fmt.Sprintf("/asset/%d", index), nil)
 	return
 }
 
-// AssetInformation gets the AssetInformationResponse associated with the passed asset creator and index
-func (client RestClient) AssetInformation(creator string, index uint64) (response v1.AssetParams, err error) {
-	err = client.get(&response, fmt.Sprintf("/account/%s/assets/%d", creator, index), nil)
+// AccountInformation also gets the AccountInformationResponse associated with the passed address
+func (client RestClient) AccountInformation(address string) (response v1.Account, err error) {
+	err = client.get(&response, fmt.Sprintf("/account/%s", address), nil)
 	return
 }
 

@@ -38,10 +38,14 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // EvalMaxVersion is the max version we can interpret and run
 const EvalMaxVersion = 1
+
+// EvalMaxArgs is the maximum number of arguments to an LSig
+const EvalMaxArgs = 255
 
 // stackValue is the type for the operand stack.
 // Each stackValue is either a valid []byte value or a uint64 value.
@@ -72,11 +76,6 @@ func (sv *stackValue) String() string {
 	return fmt.Sprintf("%d 0x%x", sv.Uint, sv.Uint)
 }
 
-// Source64 is like math/rand.Source64, but we don't need to see Seed() or Int63()
-type Source64 interface {
-	Uint64() uint64
-}
-
 // EvalParams contains data that comes into condition evaluation.
 type EvalParams struct {
 	// the transaction being evaluated
@@ -93,13 +92,7 @@ type EvalParams struct {
 	// GroupIndex should point to Txn within TxnGroup
 	GroupIndex int
 
-	// for each sender in TxnGroup, its BalanceRecord
-	GroupSenders []basics.BalanceRecord
-
-	// pseudo random number generator, or seed parts
-	Source   Source64
-	Seed     []byte
-	MoreSeed []byte
+	FirstValidTimeStamp uint64
 }
 
 type evalContext struct {
@@ -123,6 +116,8 @@ type evalContext struct {
 	// Ordered set of pc values that a branch could go to.
 	// If Check pc skips a target, the source branch was invalid!
 	branchTargets []int
+
+	programHash crypto.Digest
 }
 
 type opFunc func(cx *evalContext)
@@ -169,6 +164,7 @@ func (pe PanicError) Error() string {
 var errLoopDetected = errors.New("loop detected")
 var errCostTooHigh = errors.New("LogicSigMaxCost exceded")
 var errLogicSignNotSupported = errors.New("LogicSig not supported")
+var errTooManyArgs = errors.New("LogicSig has too many arguments")
 
 // Eval checks to see if a transaction passes logic
 // A program passes succesfully if it finishes with one int element on the stack that is non-zero.
@@ -187,8 +183,12 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 			err = PanicError{x, errstr}
 		}
 	}()
-	if (params.Proto != nil) && (params.Proto.LogicSigVersion == 0) {
+	if (params.Proto == nil) || (params.Proto.LogicSigVersion == 0) {
 		err = errLogicSignNotSupported
+		return
+	}
+	if params.Txn.Lsig.Args != nil && len(params.Txn.Lsig.Args) > EvalMaxArgs {
+		err = errTooManyArgs
 		return
 	}
 	var cx evalContext
@@ -201,7 +201,7 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 		cx.err = fmt.Errorf("program version %d greater than max supported version %d", version, EvalMaxVersion)
 		return false, cx.err
 	}
-	if (params.Proto != nil) && (version > params.Proto.LogicSigVersion) {
+	if version > params.Proto.LogicSigVersion {
 		cx.err = fmt.Errorf("program version %d greater than protocol supported version %d", version, params.Proto.LogicSigVersion)
 		return false, cx.err
 	}
@@ -214,13 +214,14 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 	cx.EvalParams = params
 	cx.stack = make([]stackValue, 0, 10)
 	cx.program = program
+	cx.programHash = crypto.HashObj(Program(program))
 	for (cx.err == nil) && (cx.pc < len(cx.program)) {
 		cx.step()
 		cx.stepCount++
 		if cx.stepCount > len(cx.program) {
 			return false, errLoopDetected
 		}
-		if params.Proto != nil && uint64(cx.cost) > params.Proto.LogicSigMaxCost {
+		if uint64(cx.cost) > params.Proto.LogicSigMaxCost {
 			return false, errCostTooHigh
 		}
 	}
@@ -262,7 +263,7 @@ func Check(program []byte, params EvalParams) (cost int, err error) {
 			err = PanicError{x, errstr}
 		}
 	}()
-	if (params.Proto != nil) && (params.Proto.LogicSigVersion == 0) {
+	if (params.Proto == nil) || (params.Proto.LogicSigVersion == 0) {
 		err = errLogicSignNotSupported
 		return
 	}
@@ -276,7 +277,7 @@ func Check(program []byte, params EvalParams) (cost int, err error) {
 		err = fmt.Errorf("program version %d greater than max supported version %d", version, EvalMaxVersion)
 		return
 	}
-	if (params.Proto != nil) && (version > params.Proto.LogicSigVersion) {
+	if version > params.Proto.LogicSigVersion {
 		err = fmt.Errorf("program version %d greater than protocol supported version %d", version, params.Proto.LogicSigVersion)
 		return
 	}
@@ -335,7 +336,6 @@ var OpSpecs = []OpSpec{
 	{0x02, "keccak256", opKeccak256, oneBytes, oneBytes},
 	{0x03, "sha512_256", opSHA512_256, oneBytes, oneBytes},
 	{0x04, "ed25519verify", opEd25519verify, threeBytes, oneInt},
-	{0x05, "rand", opRand, nil, oneInt},
 	{0x08, "+", opPlus, twoInts, oneInt},
 	{0x09, "-", opMinus, twoInts, oneInt},
 	{0x0a, "/", opDiv, twoInts, oneInt},
@@ -407,7 +407,6 @@ var opSizes = []opSize{
 	{"keccak256", 26, 1, nil},
 	{"sha512_256", 9, 1, nil},
 	{"ed25519verify", 1900, 1, nil},
-	{"rand", 3, 1, nil},
 	{"bnz", 1, 3, checkBnz},
 	{"intc", 1, 2, nil},
 	{"bytec", 1, 2, nil},
@@ -605,18 +604,6 @@ func opSHA512_256(cx *evalContext) {
 	last := len(cx.stack) - 1
 	hash := sha512.Sum512_256(cx.stack[last].Bytes)
 	cx.stack[last].Bytes = hash[:]
-}
-
-func opRand(cx *evalContext) {
-	if cx.Source == nil {
-		rng, err := NewChaCha20RNG(cx.Seed, cx.MoreSeed)
-		if err != nil {
-			cx.err = fmt.Errorf("could not initialize rng (%s)", err)
-			return
-		}
-		cx.Source = rng
-	}
-	cx.stack = append(cx.stack, stackValue{Uint: cx.Source.Uint64()})
 }
 
 func opPlus(cx *evalContext) {
@@ -1021,57 +1008,56 @@ func opDup(cx *evalContext) {
 
 func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint64) (sv stackValue, err error) {
 	err = nil
-	switch field {
-	case 0:
+	switch TxnField(field) {
+	case Sender:
 		sv.Bytes = txn.Sender[:]
-	case 1:
+	case Fee:
 		sv.Uint = txn.Fee.Raw
-	case 2:
+	case FirstValid:
 		sv.Uint = uint64(txn.FirstValid)
-	case 3:
+	case FirstValidTime:
+		sv.Uint = cx.FirstValidTimeStamp
+	case LastValid:
 		sv.Uint = uint64(txn.LastValid)
-	case 4:
+	case Note:
 		sv.Bytes = txn.Note
-	case 5:
+	case Receiver:
 		sv.Bytes = txn.Receiver[:]
-	case 6:
+	case Amount:
 		sv.Uint = txn.Amount.Raw
-	case 7:
+	case CloseRemainderTo:
 		sv.Bytes = txn.CloseRemainderTo[:]
-	case 8:
+	case VotePK:
 		sv.Bytes = txn.VotePK[:]
-	case 9:
+	case SelectionPK:
 		sv.Bytes = txn.SelectionPK[:]
-	case 10:
+	case VoteFirst:
 		sv.Uint = uint64(txn.VoteFirst)
-	case 11:
+	case VoteLast:
 		sv.Uint = uint64(txn.VoteLast)
-	case 12:
+	case VoteKeyDilution:
 		sv.Uint = txn.VoteKeyDilution
-	case 13:
+	case Type:
 		sv.Bytes = []byte(txn.Type)
-	case 14:
+	case TypeEnum:
 		sv.Uint = uint64(txnTypeIndexes[string(txn.Type)])
-	case 15:
-		sv.Bytes = make([]byte, 40)
-		copy(sv.Bytes, txn.XferAsset.Creator[:])
-		binary.BigEndian.PutUint64(sv.Bytes[32:], txn.XferAsset.Index)
-	case 16:
+	case XferAsset:
+		sv.Bytes = make([]byte, 8)
+		binary.BigEndian.PutUint64(sv.Bytes[:], uint64(txn.XferAsset))
+	case AssetAmount:
 		sv.Uint = txn.AssetAmount
-	case 17:
+	case AssetSender:
 		sv.Bytes = txn.AssetSender[:]
-	case 18:
+	case AssetReceiver:
 		sv.Bytes = txn.AssetReceiver[:]
-	case 19:
+	case AssetCloseTo:
 		sv.Bytes = txn.AssetCloseTo[:]
-	case 20:
+	case GroupIndex:
 		sv.Uint = uint64(cx.GroupIndex)
-	case 21:
+	case TxID:
 		txid := txn.ID()
 		sv.Bytes = txid[:]
-	case 22:
-		sv.Uint = cx.GroupSenders[cx.GroupIndex].MicroAlgos.Raw
-	case 23:
+	case Lease:
 		sv.Bytes = txn.Lease[:]
 	default:
 		err = fmt.Errorf("invalid txn field %d", field)
@@ -1102,11 +1088,9 @@ func opGtxn(cx *evalContext) {
 	field := uint64(cx.program[cx.pc+2])
 	var sv stackValue
 	var err error
-	if field == 20 {
+	if TxnField(field) == GroupIndex {
 		// GroupIndex; asking this when we just specified it is _dumb_, but oh well
 		sv.Uint = uint64(gtxid)
-	} else if field == 22 {
-		sv.Uint = cx.GroupSenders[gtxid].MicroAlgos.Raw
 	} else {
 		sv, err = cx.txnFieldToStack(tx, field)
 		if err != nil {
@@ -1123,24 +1107,16 @@ var zeroAddress basics.Address
 func opGlobal(cx *evalContext) {
 	gindex := uint64(cx.program[cx.pc+1])
 	var sv stackValue
-	switch gindex {
-	case 0:
-		if cx.Block != nil {
-			sv.Uint = uint64(cx.Block.Round())
-		}
-	case 1:
+	switch GlobalField(gindex) {
+	case MinTxnFee:
 		sv.Uint = cx.Proto.MinTxnFee
-	case 2:
+	case MinBalance:
 		sv.Uint = cx.Proto.MinBalance
-	case 3:
+	case MaxTxnLife:
 		sv.Uint = cx.Proto.MaxTxnLife
-	case 4:
-		if cx.Block != nil {
-			sv.Uint = uint64(cx.Block.BlockHeader.TimeStamp)
-		}
-	case 5:
+	case ZeroAddress:
 		sv.Bytes = zeroAddress[:]
-	case 6:
+	case GroupSize:
 		sv.Uint = uint64(len(cx.TxnGroup))
 	default:
 		cx.err = fmt.Errorf("invalid global[%d]", gindex)
@@ -1148,6 +1124,19 @@ func opGlobal(cx *evalContext) {
 	}
 	cx.stack = append(cx.stack, sv)
 	cx.nextpc = cx.pc + 2
+}
+
+// Msg is data meant to be signed and then verified with the
+// ed25519verify opcode.
+type Msg struct {
+	_struct     struct{}      `codec:",omitempty,omitemptyarray"`
+	ProgramHash crypto.Digest `codec:"p"`
+	Data        []byte        `codec:"d"`
+}
+
+// ToBeHashed implements crypto.Hashable
+func (msg Msg) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.ProgramData, append(msg.ProgramHash[:], msg.Data...)
 }
 
 func opEd25519verify(cx *evalContext) {
@@ -1169,7 +1158,8 @@ func opEd25519verify(cx *evalContext) {
 	}
 	copy(sig[:], cx.stack[prev].Bytes)
 
-	if sv.VerifyBytes(cx.stack[pprev].Bytes, sig) {
+	msg := Msg{ProgramHash: cx.programHash, Data: cx.stack[pprev].Bytes}
+	if sv.Verify(msg, sig) {
 		cx.stack[pprev].Uint = 1
 	} else {
 		cx.stack[pprev].Uint = 0
