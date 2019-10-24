@@ -18,7 +18,9 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -48,8 +50,11 @@ var refreshTime string
 var saveConfig bool
 var useDefault bool
 var quietish bool
+var logicProg string
 var randomNote bool
 var txnPerSec uint64
+var teal string
+var groupSize uint32
 
 func init() {
 	rootCmd.AddCommand(runCmd)
@@ -71,10 +76,13 @@ func init() {
 	runCmd.Flags().StringVar(&runTime, "run", "", "Duration of time (seconds) to run transfers before resting (0 means non-stop)")
 	runCmd.Flags().StringVar(&restTime, "rest", "", "Duration of time (seconds) to rest between transfer periods (0 means no rest)")
 	runCmd.Flags().StringVar(&refreshTime, "refresh", "", "Duration of time (seconds) between refilling accounts with money (0 means no refresh)")
+	runCmd.Flags().StringVar(&logicProg, "program", "", "File containing the compiled program to include as a logic sig")
 	runCmd.Flags().BoolVar(&saveConfig, "save", false, "Save the effective configuration to disk")
 	runCmd.Flags().BoolVar(&useDefault, "reset", false, "Reset to the default configuration (not read from disk)")
 	runCmd.Flags().BoolVar(&quietish, "quiet", false, "quietish stdout logging")
 	runCmd.Flags().BoolVar(&randomNote, "randomnote", false, "generates a random byte array between 0-1024 bytes long")
+	runCmd.Flags().StringVar(&teal, "teal", "", "teal test scenario, can be light, normal, or heavy, this overrides --program")
+	runCmd.Flags().Uint32Var(&groupSize, "groupsize", 1, "The number of transactions in each group")
 }
 
 var runCmd = &cobra.Command{
@@ -183,6 +191,43 @@ var runCmd = &cobra.Command{
 		}
 		if randomNote {
 			cfg.RandomNote = true
+		}
+
+		if teal != "" {
+			logicProg = ""
+			var programStr string
+			switch teal {
+			case "light":
+				programStr = tealLight
+			case "normal":
+				programStr = tealNormal
+				bytes, err := base64.StdEncoding.DecodeString("iZWMx72KvU6Bw6sPAWQFL96YH+VMrBA0XKWD9XbZOZI=")
+				if err != nil {
+					reportErrorf("Internal error, cannot decode.")
+				}
+				cfg.LogicArgs = [][]byte{bytes}
+			case "heavy":
+				programStr = tealHeavy
+			default:
+				reportErrorf("Invalid argument for --teal: %v\n", teal)
+			}
+			cfg.Program, err = logic.AssembleString(programStr)
+			if err != nil {
+				reportErrorf("Internal error, cannot assemble %v \n", programStr)
+			}
+		}
+
+		if logicProg != "" {
+			cfg.Program, err = ioutil.ReadFile(logicProg)
+			if err != nil {
+				reportErrorf("Error opening logic program: %v\n", err)
+			}
+		}
+
+		if groupSize > 0 && groupSize <= 16 {
+			cfg.GroupSize = groupSize
+		} else {
+			reportErrorf("Invalid group size: %v\n", groupSize)
 		}
 
 		reportInfof("Preparing to initialize PingPong with config:\n")

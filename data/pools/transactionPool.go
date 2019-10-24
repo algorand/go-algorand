@@ -59,6 +59,10 @@ type TransactionPool struct {
 	// to Pending() or Verified().
 	rememberedTxGroups [][]transactions.SignedTxn
 	rememberedTxids    map[transactions.Txid]transactions.SignedTxn
+
+	// result of logic.Eval()
+	lsigCache *statusCache
+	lcmu      deadlock.RWMutex
 }
 
 // MakeTransactionPool is the constructor, it uses Ledger to ensure that no account has pending transactions that together overspend.
@@ -77,6 +81,7 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local) *TransactionPo
 		statusCache:     makeStatusCache(cfg.TxPoolSize),
 		logStats:        cfg.EnableAssembleStats,
 		expFeeFactor:    cfg.TxPoolExponentialIncreaseFactor,
+		lsigCache:       makeStatusCache(cfg.TxPoolSize),
 	}
 	pool.cond.L = &pool.mu
 	pool.recomputeBlockEvaluator()
@@ -336,6 +341,21 @@ func (pool *TransactionPool) Verified(txn transactions.SignedTxn) bool {
 	return pendingSigTxn.Sig == txn.Sig && pendingSigTxn.Msig.Equal(txn.Msig) && pendingSigTxn.Lsig.Equal(&txn.Lsig)
 }
 
+// EvalOk for LogicSig Eval of a txn by txid, returns the SignedTxn, error string, and found.
+func (pool *TransactionPool) EvalOk(txid transactions.Txid) (txErr string, found bool) {
+	pool.lcmu.RLock()
+	defer pool.lcmu.RUnlock()
+	_, txErr, found = pool.lsigCache.check(txid)
+	return
+}
+
+// EvalRemember sets an error string from LogicSig Eval for some SignedTxn
+func (pool *TransactionPool) EvalRemember(tx transactions.SignedTxn, errString string) {
+	pool.lcmu.Lock()
+	defer pool.lcmu.Unlock()
+	pool.lsigCache.put(tx, errString)
+}
+
 // OnNewBlock excises transactions from the pool that are included in the specified Block or if they've expired
 func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block) {
 	pool.mu.Lock()
@@ -410,10 +430,18 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block) {
 
 // alwaysVerifiedPool implements ledger.VerifiedTxnCache and returns every
 // transaction as verified.
-type alwaysVerifiedPool struct{}
+type alwaysVerifiedPool struct {
+	pool *TransactionPool
+}
 
 func (*alwaysVerifiedPool) Verified(txn transactions.SignedTxn) bool {
 	return true
+}
+func (pool *alwaysVerifiedPool) EvalOk(txid transactions.Txid) (errStr string, found bool) {
+	return pool.pool.EvalOk(txid)
+}
+func (pool *alwaysVerifiedPool) EvalRemember(txn transactions.SignedTxn, errStr string) {
+	pool.pool.EvalRemember(txn, errStr)
 }
 
 func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactions.SignedTxn) error {
@@ -461,7 +489,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator() (stats telemetryspec.Proc
 
 	next := bookkeeping.MakeBlock(prev)
 	pool.numPendingWholeBlocks = 0
-	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, &alwaysVerifiedPool{}, nil)
+	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, &alwaysVerifiedPool{pool}, nil)
 	if err != nil {
 		logging.Base().Warnf("TransactionPool.recomputeBlockEvaluator: cannot start evaluator: %v", err)
 		return

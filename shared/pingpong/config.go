@@ -46,6 +46,9 @@ type PpConfig struct {
 	MinAccountFunds uint64
 	Quiet           bool
 	RandomNote      bool
+	Program         []byte
+	LogicArgs       [][]byte
+	GroupSize       uint32
 }
 
 // DefaultConfig object for Ping Pong
@@ -64,6 +67,7 @@ var DefaultConfig = PpConfig{
 	RestTime:        1 * time.Hour, // Long default rest to avoid accidental DoS
 	RefreshTime:     10 * time.Second,
 	MinAccountFunds: 100000,
+	GroupSize:       1,
 }
 
 // LoadConfigFromFile reads and loads Ping Pong configuration
