@@ -137,13 +137,20 @@ func keyregTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.T
 
 func assetParams(creator basics.Address, params basics.AssetParams) v1.AssetParams {
 	paramsModel := v1.AssetParams{
-		Creator:       creator.String(),
 		Total:         params.Total,
 		DefaultFrozen: params.DefaultFrozen,
 	}
 
 	paramsModel.UnitName = strings.TrimRight(string(params.UnitName[:]), "\x00")
 	paramsModel.AssetName = strings.TrimRight(string(params.AssetName[:]), "\x00")
+	paramsModel.URL = strings.TrimRight(string(params.URL[:]), "\x00")
+	if params.MetadataHash != [32]byte{} {
+		paramsModel.MetadataHash = params.MetadataHash[:]
+	}
+
+	if !creator.IsZero() {
+		paramsModel.Creator = creator.String()
+	}
 
 	if !params.Manager.IsZero() {
 		paramsModel.ManagerAddr = params.Manager.String()
@@ -165,10 +172,11 @@ func assetParams(creator basics.Address, params basics.AssetParams) v1.AssetPara
 }
 
 func assetConfigTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
+	params := assetParams(basics.Address{}, tx.AssetConfigTxnFields.AssetParams)
+
 	config := v1.AssetConfigTransactionType{
-		AssetID: tx.AssetConfigTxnFields.ConfigAsset.Index,
-		Params: assetParams(tx.AssetConfigTxnFields.ConfigAsset.Creator,
-			tx.AssetConfigTxnFields.AssetParams),
+		AssetID: uint64(tx.AssetConfigTxnFields.ConfigAsset),
+		Params:  params,
 	}
 
 	return v1.Transaction{
@@ -178,8 +186,7 @@ func assetConfigTxEncode(tx transactions.Transaction, ad transactions.ApplyData)
 
 func assetTransferTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
 	xfer := v1.AssetTransferTransactionType{
-		AssetID:  tx.AssetTransferTxnFields.XferAsset.Index,
-		Creator:  tx.AssetTransferTxnFields.XferAsset.Creator.String(),
+		AssetID:  uint64(tx.AssetTransferTxnFields.XferAsset),
 		Amount:   tx.AssetTransferTxnFields.AssetAmount,
 		Receiver: tx.AssetTransferTxnFields.AssetReceiver.String(),
 	}
@@ -199,8 +206,7 @@ func assetTransferTxEncode(tx transactions.Transaction, ad transactions.ApplyDat
 
 func assetFreezeTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
 	freeze := v1.AssetFreezeTransactionType{
-		AssetID:         tx.AssetFreezeTxnFields.FreezeAsset.Index,
-		Creator:         tx.AssetFreezeTxnFields.FreezeAsset.Creator.String(),
+		AssetID:         uint64(tx.AssetFreezeTxnFields.FreezeAsset),
 		Account:         tx.AssetFreezeTxnFields.FreezeAccount.String(),
 		NewFreezeStatus: tx.AssetFreezeTxnFields.AssetFrozen,
 	}
@@ -479,8 +485,17 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 	if len(record.Assets) > 0 {
 		assets = make(map[uint64]v1.AssetHolding)
 		for curid, holding := range record.Assets {
-			assets[curid.Index] = v1.AssetHolding{
-				Creator: curid.Creator.String(),
+			var creator string
+			creatorAddr, err := myLedger.GetAssetCreator(curid)
+			if err == nil {
+				creator = creatorAddr.String()
+			} else {
+				// Asset may have been deleted, so we can no
+				// longer fetch the creator
+				creator = ""
+			}
+			assets[uint64(curid)] = v1.AssetHolding{
+				Creator: creator,
 				Amount:  holding.Amount,
 				Frozen:  holding.Frozen,
 			}
@@ -491,7 +506,7 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 	if len(record.AssetParams) > 0 {
 		thisAssetParams = make(map[uint64]v1.AssetParams)
 		for idx, params := range record.AssetParams {
-			thisAssetParams[idx] = assetParams(addr, params)
+			thisAssetParams[uint64(idx)] = assetParams(addr, params)
 		}
 	}
 
@@ -579,7 +594,8 @@ func TransactionInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.R
 		return
 	}
 
-	latestRound := ctx.Node.Ledger().Latest()
+	ledger := ctx.Node.Ledger()
+	latestRound := ledger.Latest()
 	stat, err := ctx.Node.Status()
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
@@ -848,25 +864,19 @@ func GetPendingTransactionsByAddress(ctx lib.ReqContext, w http.ResponseWriter, 
 	SendJSON(response, w, ctx.Log)
 }
 
-// AssetInformation is an httpHandler for route GET /v1/account/{creator:[A-Z0-9]{%d}}/assets/{index:[0-9]+}
+// AssetInformation is an httpHandler for route GET /v1/asset/{index:[0-9]+}
 func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
-	// swagger:operation GET /v1/account/{creator}/assets/{index} AssetInformation
+	// swagger:operation GET /v1/asset/{index} AssetInformation
 	// ---
 	//     Summary: Get asset information.
 	//     Description: >
-	//       Given the asset creator's public key, this call returns the asset's manager,
-	//       reserve, freeze, and clawback addresses
+	//       Given the asset's unique index, this call returns the asset's creator,
+	//       manager, reserve, freeze, and clawback addresses
 	//     Produces:
 	//     - application/json
 	//     Schemes:
 	//     - http
 	//     Parameters:
-	//       - name: creator
-	//         in: path
-	//         type: string
-	//         pattern: "[A-Z0-9]{58}"
-	//         required: true
-	//         description: Asset creator public key
 	//       - name: index
 	//         in: path
 	//         type: integer
@@ -884,7 +894,6 @@ func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request
 	//         schema: {type: string}
 	//       401: { description: Invalid API Token }
 	//       default: { description: Unknown Error }
-	queryAddr := mux.Vars(r)["creator"]
 	queryIndex, err := strconv.ParseUint(mux.Vars(r)["index"], 10, 64)
 
 	if err != nil {
@@ -892,27 +901,23 @@ func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if queryAddr == "" {
-		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errNoAccountSpecified), errNoAccountSpecified, ctx.Log)
-		return
-	}
-
-	addr, err := basics.UnmarshalChecksumAddress(queryAddr)
-	if err != nil {
-		lib.ErrorResponse(w, http.StatusBadRequest, err, errFailedToParseAddress, ctx.Log)
-		return
-	}
-
 	ledger := ctx.Node.Ledger()
+	aidx := basics.AssetIndex(queryIndex)
+	creator, err := ledger.GetAssetCreator(aidx)
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusNotFound, err, errFailedToGetAssetCreator, ctx.Log)
+		return
+	}
+
 	lastRound := ledger.Latest()
-	record, err := ledger.Lookup(lastRound, basics.Address(addr))
+	record, err := ledger.Lookup(lastRound, creator)
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
 		return
 	}
 
-	if asset, ok := record.AssetParams[queryIndex]; ok {
-		thisAssetParams := assetParams(addr, asset)
+	if asset, ok := record.AssetParams[aidx]; ok {
+		thisAssetParams := assetParams(creator, asset)
 		SendJSON(AssetInformationResponse{&thisAssetParams}, w, ctx.Log)
 	} else {
 		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errFailedRetrievingAsset), errFailedRetrievingAsset, ctx.Log)
@@ -1012,7 +1017,8 @@ func GetBlock(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b, c, err := ctx.Node.Ledger().BlockCert(basics.Round(queryRound))
+	ledger := ctx.Node.Ledger()
+	b, c, err := ledger.BlockCert(basics.Round(queryRound))
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
 		return
