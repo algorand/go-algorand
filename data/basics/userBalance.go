@@ -172,6 +172,8 @@ type AssetHolding struct {
 
 // AssetParams describes the parameters of an asset.
 type AssetParams struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	// Total specifies the total number of units of this asset
 	// created.
 	Total uint64 `codec:"t"`
