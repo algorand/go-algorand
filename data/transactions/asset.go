@@ -151,8 +151,8 @@ func (cc AssetConfigTxnFields) apply(header Header, balances Balances, spec Spec
 		return err
 	}
 
-	if header.Sender != params.Manager {
-		return fmt.Errorf("transaction issued by %v, not manager key %v", header.Sender, params.Manager)
+	if params.Manager.IsZero() || (header.Sender != params.Manager) {
+		return fmt.Errorf("transaction issued by %v, manager key %v", header.Sender, params.Manager)
 	}
 
 	record, err := balances.Get(creator, false)
@@ -266,8 +266,8 @@ func (ct AssetTransferTxnFields) apply(header Header, balances Balances, spec Sp
 			return err
 		}
 
-		if header.Sender != params.Clawback {
-			return fmt.Errorf("clawback not allowed: sender %v != clawback %v", header.Sender, params.Clawback)
+		if params.Clawback.IsZero() || (header.Sender != params.Clawback) {
+			return fmt.Errorf("clawback not allowed: sender %v, clawback %v", header.Sender, params.Clawback)
 		}
 
 		// Transaction sent from the correct clawback address,
@@ -394,8 +394,8 @@ func (cf AssetFreezeTxnFields) apply(header Header, balances Balances, spec Spec
 		return err
 	}
 
-	if header.Sender != params.Freeze {
-		return fmt.Errorf("freeze not allowed: sender %v != freeze %v", header.Sender, params.Freeze)
+	if params.Freeze.IsZero() || (header.Sender != params.Freeze) {
+		return fmt.Errorf("freeze not allowed: sender %v, freeze %v", header.Sender, params.Freeze)
 	}
 
 	// Get the account to be frozen/unfrozen.
