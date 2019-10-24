@@ -196,7 +196,7 @@ func sendFromTo(fromList, toList []string, accounts map[string]uint64, client li
 		if cfg.GroupSize == 1 {
 
 			if !cfg.Quiet {
-				fmt.Fprintf(os.Stdout, "Sending %d : %s -> %s\n", amt, from, toList[i])
+				fmt.Fprintf(os.Stdout, "Sending %d : %s -> %s\n", amt, from, to)
 			}
 
 			// Construct single txn
@@ -208,7 +208,7 @@ func sendFromTo(fromList, toList []string, accounts map[string]uint64, client li
 
 			// would we have enough money after taking into account the current updated fees ?
 			if accounts[from] <= (txn.Fee.Raw + amt + cfg.MinAccountFunds) {
-				fmt.Fprintf(os.Stdout, "Skipping sending %d : %s -> %s; Current cost too high.\n", amt, from, toList[i])
+				fmt.Fprintf(os.Stdout, "Skipping sending %d : %s -> %s; Current cost too high.\n", amt, from, to)
 				continue
 			}
 			fromBalanceChange = -int64(txn.Fee.Raw + amt)
@@ -241,6 +241,16 @@ func sendFromTo(fromList, toList []string, accounts map[string]uint64, client li
 					return
 				}
 				txGroup = append(txGroup, txn)
+			}
+
+			// would we have enough money after taking into account the current updated fees ?
+			if int64(accounts[from])+fromBalanceChange <= int64(cfg.MinAccountFunds) {
+				fmt.Fprintf(os.Stdout, "Skipping sending %d : %s -> %s; Current cost too high.\n", amt, from, to)
+				continue
+			}
+			if int64(accounts[to])+toBalanceChange <= int64(cfg.MinAccountFunds) {
+				fmt.Fprintf(os.Stdout, "Skipping sending back %d : %s -> %s; Current cost too high.\n", amt, to, from)
+				continue
 			}
 
 			// Generate group ID
