@@ -31,6 +31,7 @@ import (
 // accountsDbQueries is used to cache a prepared SQL statement to look up
 // the state of a single account.
 type accountsDbQueries struct {
+	listAssetsStmt         *sql.Stmt
 	lookupStmt             *sql.Stmt
 	lookupAssetCreatorStmt *sql.Stmt
 }
@@ -135,6 +136,11 @@ func accountsDbInit(q db.Queryable) (*accountsDbQueries, error) {
 	var err error
 	qs := &accountsDbQueries{}
 
+	qs.listAssetsStmt, err = q.Prepare("SELECT asset, creator FROM assetcreators WHERE asset <= ? ORDER BY asset desc LIMIT ?")
+	if err != nil {
+		return nil, err
+	}
+
 	qs.lookupStmt, err = q.Prepare("SELECT data FROM accountbase WHERE address=?")
 	if err != nil {
 		return nil, err
@@ -146,6 +152,31 @@ func accountsDbInit(q db.Queryable) (*accountsDbQueries, error) {
 	}
 
 	return qs, nil
+}
+
+func (qs *accountsDbQueries) listAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) (results []basics.AssetLocator, err error) {
+	err = db.Retry(func() error {
+		// Query for assets in range
+		rows, err := qs.listAssetsStmt.Query(maxAssetIdx, maxResults)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		// For each row, copy into a new AssetLocator and append to results
+		var buf []byte
+		var al basics.AssetLocator
+		for rows.Next() {
+			err := rows.Scan(&al.Index, &buf)
+			if err != nil {
+				return err
+			}
+			copy(al.Creator[:], buf)
+			results = append(results, al)
+		}
+		return nil
+	})
+	return
 }
 
 func (qs *accountsDbQueries) lookupAssetCreator(assetIdx basics.AssetIndex) (addr basics.Address, err error) {
@@ -246,7 +277,7 @@ func getChangedAssetIndices(creator basics.Address, delta accountDelta) map[basi
 	for idx := range delta.new.AssetParams {
 		// AssetParams are in now the balance record now, but _weren't_ before
 		if _, ok := delta.old.AssetParams[idx]; !ok {
-			assetMods[idx] = modifiedAsset {
+			assetMods[idx] = modifiedAsset{
 				created: true,
 				creator: creator,
 			}
@@ -257,7 +288,7 @@ func getChangedAssetIndices(creator basics.Address, delta accountDelta) map[basi
 	for idx := range delta.old.AssetParams {
 		// AssetParams were in the balance record, but _aren't_ anymore
 		if _, ok := delta.new.AssetParams[idx]; !ok {
-			assetMods[idx] = modifiedAsset {
+			assetMods[idx] = modifiedAsset{
 				created: false,
 				creator: creator,
 			}

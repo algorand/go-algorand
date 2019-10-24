@@ -214,6 +214,11 @@ type transactionsByAddrParams struct {
 	Max        uint64 `url:"max"`
 }
 
+type assetsParams struct {
+	AssetIdx uint64 `url:"assetIdx"`
+	Max      uint64 `url:"max"`
+}
+
 // TransactionsByAddr returns all transactions for a PK [addr] in the [first,
 // last] rounds range.
 func (client RestClient) TransactionsByAddr(addr string, first, last, max uint64) (response v1.TransactionList, err error) {
@@ -224,6 +229,12 @@ func (client RestClient) TransactionsByAddr(addr string, first, last, max uint64
 // AssetInformation gets the AssetInformationResponse associated with the passed asset index
 func (client RestClient) AssetInformation(index uint64) (response v1.AssetParams, err error) {
 	err = client.get(&response, fmt.Sprintf("/asset/%d", index), nil)
+	return
+}
+
+// Assets gets up to max assets with maximum asset index assetIdx
+func (client RestClient) Assets(assetIdx, max uint64) (response v1.AssetList, err error) {
+	err = client.get(&response, "/assets", assetsParams{assetIdx, max})
 	return
 }
 

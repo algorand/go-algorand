@@ -925,6 +925,103 @@ func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request
 	}
 }
 
+// Assets is an httpHandler for route GET /v1/assets
+func Assets(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
+	// swagger:operation GET /v1/assets Assets
+	// ---
+	//     Summary: List assets
+	//     Description: Returns list of up to `max` assets, where the maximum assetIdx is <= `assetIdx`
+	//     Produces:
+	//     - application/json
+	//     Schemes:
+	//     - http
+	//     Parameters:
+	//       - name: assetIdx
+	//         in: query
+	//         type: integer
+	//         format: int64
+	//         minimum: 0
+	//         required: false
+	//         description: Fetch assets with asset index <= assetIdx. If zero, fetch most recent assets.
+	//       - name: max
+	//         in: query
+	//         type: integer
+	//         format: int64
+	//         minimum: 0
+	//         maximum: 100
+	//         required: false
+	//         description: Fetch no more than this many assets
+	//     Responses:
+	//       200:
+	//         "$ref": '#/responses/AssetsResponse'
+	//       400:
+	//         description: Bad Request
+	//         schema: {type: string}
+	//       500:
+	//         description: Internal Error
+	//         schema: {type: string}
+	//       401: { description: Invalid API Token }
+	//       default: { description: Unknown Error }
+
+	const maxAssetsToList = 100
+
+	// Parse max assets to fetch from db
+	max, err := strconv.ParseInt(r.FormValue("max"), 10, 64)
+	if err != nil || max < 0 || max > maxAssetsToList {
+		err := fmt.Errorf(errFailedParsingMaxAssetsToList, 0, maxAssetsToList)
+		lib.ErrorResponse(w, http.StatusBadRequest, err, err.Error(), ctx.Log)
+		return
+	}
+
+	// Parse maximum asset idx
+	assetIdx, err := strconv.ParseInt(r.FormValue("assetIdx"), 10, 64)
+	if err != nil || assetIdx < 0 {
+		errs := errFailedParsingAssetIdx
+		lib.ErrorResponse(w, http.StatusBadRequest, errors.New(errs), errs, ctx.Log)
+		return
+	}
+
+	// If assetIdx is 0, we want the most recent assets, so make it intmax
+	if assetIdx == 0 {
+		assetIdx = (1 << 63) - 1
+	}
+
+	// Query asset range from the database
+	ledger := ctx.Node.Ledger()
+	alocs, err := ledger.ListAssets(basics.AssetIndex(assetIdx), uint64(max))
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingAsset, ctx.Log)
+		return
+	}
+
+	// Fill in the asset models
+	lastRound := ledger.Latest()
+	var result v1.AssetList
+	for _, aloc := range alocs {
+		// Fetch the asset parameters
+		creatorRecord, err := ledger.Lookup(lastRound, aloc.Creator)
+		if err != nil {
+			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
+			return
+		}
+
+		// Ensure no race with asset deletion
+		rp, ok := creatorRecord.AssetParams[aloc.Index]
+		if !ok {
+			continue
+		}
+
+		// Append the result
+		params := assetParams(aloc.Creator, rp)
+		result.Assets = append(result.Assets, v1.Asset{
+			AssetIndex:  uint64(aloc.Index),
+			AssetParams: params,
+		})
+	}
+
+	SendJSON(AssetsResponse{&result}, w, ctx.Log)
+}
+
 // SuggestedFee is an httpHandler for route GET /v1/transactions/fee
 func SuggestedFee(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	// swagger:operation GET /v1/transactions/fee SuggestedFee
