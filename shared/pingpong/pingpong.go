@@ -133,10 +133,10 @@ func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uin
 
 		var totalSent, totalSucceeded uint64
 		for !time.Now().After(stopTime) {
-			fromList := listSufficientAccounts(accounts, (cfg.MaxAmt+cfg.MaxFee)*2, cfg.SrcAccount)
+			fromList := listSufficientAccounts(accounts, cfg.MinAccountFunds+(cfg.MaxAmt+cfg.MaxFee)*2, cfg.SrcAccount)
 			toList := listSufficientAccounts(accounts, 0, cfg.SrcAccount)
 
-			sent, succeded, err := sendFromTo(fromList, toList, ac, cfg)
+			sent, succeded, err := sendFromTo(fromList, toList, accounts, ac, cfg)
 			totalSent += sent
 			totalSucceeded += succeded
 			if err != nil {
@@ -169,7 +169,7 @@ func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uin
 	}
 }
 
-func sendFromTo(fromList, toList []string, client libgoal.Client, cfg PpConfig) (sentCount, successCount uint64, err error) {
+func sendFromTo(fromList, toList []string, accounts map[string]uint64, client libgoal.Client, cfg PpConfig) (sentCount, successCount uint64, err error) {
 	amt := cfg.MaxAmt
 	fee := cfg.MaxFee
 
@@ -189,14 +189,14 @@ func sendFromTo(fromList, toList []string, client libgoal.Client, cfg PpConfig) 
 			to = addr.String()
 		}
 
-		sentCount++
-
 		// Broadcast transaction
 		var sendErr error
+		fromBalanceChange := int64(0)
+		toBalanceChange := int64(0)
 		if cfg.GroupSize == 1 {
 
 			if !cfg.Quiet {
-				fmt.Fprintf(os.Stdout, "Sending %d : %s -> %s\n", amt, from, toList[i])
+				fmt.Fprintf(os.Stdout, "Sending %d : %s -> %s\n", amt, from, to)
 			}
 
 			// Construct single txn
@@ -206,12 +206,22 @@ func sendFromTo(fromList, toList []string, client libgoal.Client, cfg PpConfig) 
 				return
 			}
 
+			// would we have enough money after taking into account the current updated fees ?
+			if accounts[from] <= (txn.Fee.Raw + amt + cfg.MinAccountFunds) {
+				fmt.Fprintf(os.Stdout, "Skipping sending %d : %s -> %s; Current cost too high.\n", amt, from, to)
+				continue
+			}
+			fromBalanceChange = -int64(txn.Fee.Raw + amt)
+			toBalanceChange = int64(amt)
+
 			// Sign txn
 			stxn, signErr := signTxn(from, txn, client, cfg)
 			if signErr != nil {
 				err = signErr
 				return
 			}
+
+			sentCount++
 			_, sendErr = client.BroadcastTransaction(stxn)
 		} else {
 			// Generate txn group
@@ -220,14 +230,27 @@ func sendFromTo(fromList, toList []string, client libgoal.Client, cfg PpConfig) 
 				var txn transactions.Transaction
 				if j%2 == 0 {
 					txn, err = constructTxn(from, to, fee, amt, client, cfg)
-
+					fromBalanceChange -= int64(txn.Fee.Raw + amt)
+					toBalanceChange += int64(amt)
 				} else {
 					txn, err = constructTxn(to, from, fee, amt, client, cfg)
+					toBalanceChange -= int64(txn.Fee.Raw + amt)
+					fromBalanceChange += int64(amt)
 				}
 				if err != nil {
 					return
 				}
 				txGroup = append(txGroup, txn)
+			}
+
+			// would we have enough money after taking into account the current updated fees ?
+			if int64(accounts[from])+fromBalanceChange <= int64(cfg.MinAccountFunds) {
+				fmt.Fprintf(os.Stdout, "Skipping sending %d : %s -> %s; Current cost too high.\n", amt, from, to)
+				continue
+			}
+			if int64(accounts[to])+toBalanceChange <= int64(cfg.MinAccountFunds) {
+				fmt.Fprintf(os.Stdout, "Skipping sending back %d : %s -> %s; Current cost too high.\n", amt, to, from)
+				continue
 			}
 
 			// Generate group ID
@@ -259,13 +282,16 @@ func sendFromTo(fromList, toList []string, client libgoal.Client, cfg PpConfig) 
 				stxGroup = append(stxGroup, stxn)
 			}
 
+			sentCount++
 			sendErr = client.BroadcastTransactionGroup(stxGroup)
 		}
 
 		if sendErr != nil && !cfg.Quiet {
-			fmt.Fprintf(os.Stderr, "error sending transaction: %v\n", err)
+			fmt.Fprintf(os.Stderr, "error sending transaction: %v\n", sendErr)
 		} else {
 			successCount++
+			accounts[from] = uint64(fromBalanceChange + int64(accounts[from]))
+			accounts[to] = uint64(toBalanceChange + int64(accounts[to]))
 		}
 		if sendErr != nil {
 			err = sendErr
