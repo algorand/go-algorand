@@ -273,6 +273,9 @@ len
 global MinTxnFee
 global MinBalance
 global MaxTxnLife
+global ZeroAddress
+global GroupSize
+global LogicSigVersion
 txn Sender
 txn Fee
 txn FirstValid
@@ -285,8 +288,30 @@ txn VotePK
 txn SelectionPK
 txn VoteFirst
 txn VoteLast
+txn FirstValidTime
+txn Lease
+txn VoteKeyDilution
+txn Type
+txn TypeEnum
+txn XferAsset
+txn AssetAmount
+txn AssetSender
+txn AssetReceiver
+txn AssetCloseTo
+txn GroupIndex
+txn TxID
 gtxn 12 Fee
 `
+	for _, globalField := range GlobalFieldNames {
+		if !strings.Contains(text, globalField) {
+			t.Errorf("TestAssembleDisassemble missing field global %v", globalField)
+		}
+	}
+	for _, txnField := range TxnFieldNames {
+		if !strings.Contains(text, txnField) {
+			t.Errorf("TestAssembleDisassemble missing field txn %v", txnField)
+		}
+	}
 	program, err := AssembleString(text)
 	require.NoError(t, err)
 	t2, err := Disassemble(program)

@@ -831,16 +831,12 @@ int 999
 global ZeroAddress
 txn CloseRemainderTo
 ==
-//&&
-//global TimeStamp
-//int 2069
-//==
-//&&
-//global Round
-//int 999999
-//==
 &&
 global GroupSize
+int 1
+==
+&&
+global LogicSigVersion
 int 1
 ==
 &&`

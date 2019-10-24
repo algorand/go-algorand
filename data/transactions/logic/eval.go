@@ -1118,6 +1118,8 @@ func opGlobal(cx *evalContext) {
 		sv.Bytes = zeroAddress[:]
 	case GroupSize:
 		sv.Uint = uint64(len(cx.TxnGroup))
+	case LogicSigVersion:
+		sv.Uint = cx.Proto.LogicSigVersion
 	default:
 		cx.err = fmt.Errorf("invalid global[%d]", gindex)
 		return
