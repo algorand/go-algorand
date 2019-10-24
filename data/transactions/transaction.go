@@ -341,6 +341,9 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		// this check is just to be safe, but reaching here seems impossible, since it requires computing a preimage of rwpool
 		return fmt.Errorf("transaction from incentive pool is invalid")
 	}
+	if tx.Sender == (basics.Address{}) {
+		return fmt.Errorf("transaction cannot have zero sender")
+	}
 	if !proto.SupportTransactionLeases && (tx.Lease != [32]byte{}) {
 		return fmt.Errorf("transaction tried to acquire lease %v but protocol does not support transaction leases", tx.Lease)
 	}
