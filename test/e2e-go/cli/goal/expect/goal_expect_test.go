@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"bytes"
 
 	"github.com/stretchr/testify/require"
 )
@@ -100,10 +101,12 @@ func TestGoalWithExpect(t *testing.T) {
 			workingDir, algoDir, err := f.getTestDir(testName)
 			require.NoError(t, err)
 			t.Logf("algoDir: %s\ntestDataDir:%s\n", algoDir, f.testDataDir)
+			var out bytes.Buffer
 			cmd := execCommand("expect", testName, algoDir, f.testDataDir)
-			out, err := cmd.CombinedOutput()
+			cmd.Stdout = &out
+			err = cmd.Run()
 			if err != nil {
-				t.Logf("err running '%s': %s\noutput: %s", testName, err, out)
+				t.Logf("err running '%s': %s\noutput: %s", testName, err, out.String())
 				t.Fail()
 			} else {
 				//t.Logf("out: %s", out)
