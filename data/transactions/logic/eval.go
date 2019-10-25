@@ -38,6 +38,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -181,6 +182,7 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 				}
 			}
 			err = PanicError{x, errstr}
+			logging.Base().Errorf("recovered panic in Eval: %s", err)
 		}
 	}()
 	if (params.Proto == nil) || (params.Proto.LogicSigVersion == 0) {
@@ -261,6 +263,7 @@ func Check(program []byte, params EvalParams) (cost int, err error) {
 				}
 			}
 			err = PanicError{x, errstr}
+			logging.Base().Errorf("recovered panic in Check: %s", err)
 		}
 	}()
 	if (params.Proto == nil) || (params.Proto.LogicSigVersion == 0) {
