@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/condvar"
 )
 
@@ -46,7 +47,7 @@ type TransactionPool struct {
 	statusCache            *statusCache
 	logStats               bool
 	expFeeFactor           uint64
-	poolProtocol           protocol.ConsensusVersion
+	currentProtocol        protocol.ConsensusVersion
 
 	// pendingMu protects pendingTxGroups and pendingTxids
 	pendingMu       deadlock.RWMutex
@@ -83,6 +84,13 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local) *TransactionPo
 		logStats:        cfg.EnableAssembleStats,
 		expFeeFactor:    cfg.TxPoolExponentialIncreaseFactor,
 		lsigCache:       makeStatusCache(cfg.TxPoolSize),
+	}
+	hdr, err := pool.ledger.BlockHdr(pool.ledger.Latest())
+	if err == nil {
+		pool.currentProtocol = hdr.CurrentProtocol
+	} else {
+		logging.Base().Errorf("ledger not ready at MakeTransactionPool: %s", err)
+		return nil
 	}
 	pool.cond.L = &pool.mu
 	pool.recomputeBlockEvaluator()
@@ -366,6 +374,14 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block) {
 	var stats telemetryspec.ProcessBlockMetrics
 	var knownCommitted uint
 	var unknownCommitted uint
+
+	if block.CurrentProtocol != pool.currentProtocol {
+		// invalidate caches that could depend on protocol
+		pool.lcmu.Lock()
+		pool.lsigCache.clear()
+		pool.lcmu.Unlock()
+		pool.currentProtocol = block.CurrentProtocol
+	}
 
 	payset, err := block.DecodePaysetFlat()
 	if err == nil {

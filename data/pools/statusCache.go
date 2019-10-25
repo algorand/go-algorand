@@ -33,8 +33,8 @@ type statusCache struct {
 
 func makeStatusCache(sz int) *statusCache {
 	return &statusCache{
-		cur:  map[transactions.Txid]statusCacheEntry{},
-		prev: map[transactions.Txid]statusCacheEntry{},
+		cur:  make(map[transactions.Txid]statusCacheEntry, sz),
+		prev: make(map[transactions.Txid]statusCacheEntry, 0),
 		sz:   sz,
 	}
 }
@@ -52,11 +52,16 @@ func (sc *statusCache) check(txid transactions.Txid) (tx transactions.SignedTxn,
 func (sc *statusCache) put(tx transactions.SignedTxn, txErr string) {
 	if len(sc.cur) >= sc.sz {
 		sc.prev = sc.cur
-		sc.cur = map[transactions.Txid]statusCacheEntry{}
+		sc.cur = make(map[transactions.Txid]statusCacheEntry, sc.sz)
 	}
 
 	sc.cur[tx.ID()] = statusCacheEntry{
 		tx:    tx,
 		txErr: txErr,
 	}
+}
+
+func (sc *statusCache) clear() {
+	sc.cur = make(map[transactions.Txid]statusCacheEntry, sc.sz)
+	sc.prev = make(map[transactions.Txid]statusCacheEntry, 0)
 }
