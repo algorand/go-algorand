@@ -35,6 +35,16 @@ func TestSignVerifyEmptyMessage(t *testing.T) {
 	}
 }
 
+func TestVerifyZeros(t *testing.T) {
+	var pk SignatureVerifier
+	var sig Signature
+	for x := byte(0); x < 255; x++ {
+		if pk.VerifyBytes([]byte{x}, sig) {
+			t.Errorf("Zero sig with zero pk successfully verified message %x", x)
+		}
+	}
+}
+
 func TestGenerateSignatureSecrets(t *testing.T) {
 	var s Seed
 	RandBytes(s[:])
