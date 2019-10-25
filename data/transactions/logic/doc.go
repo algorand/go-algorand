@@ -207,6 +207,7 @@ var typeEnumDescriptions = []stringString{
 	{string(protocol.AssetFreezeTx), "Asset Freeze"},
 }
 
+// TypeNameDescription returns extra description about a low level protocol transaction Type string
 func TypeNameDescription(typeName string) string {
 	for _, ted := range typeEnumDescriptions {
 		if typeName == ted.a {
