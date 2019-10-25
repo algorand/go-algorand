@@ -164,6 +164,14 @@ type BalanceDetail struct {
 // up the creator of the asset, whose balance record contains the AssetParams
 type AssetIndex uint64
 
+// AssetLocator stores both the asset creator, whose balance record contains
+// the asset parameters, and the asset index, which is the key into those
+// parameters
+type AssetLocator struct {
+	Creator Address
+	Index   AssetIndex
+}
+
 // AssetHolding describes an asset held by an account.
 type AssetHolding struct {
 	Amount uint64 `codec:"a"`
@@ -172,6 +180,8 @@ type AssetHolding struct {
 
 // AssetParams describes the parameters of an asset.
 type AssetParams struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	// Total specifies the total number of units of this asset
 	// created.
 	Total uint64 `codec:"t"`

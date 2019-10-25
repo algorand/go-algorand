@@ -211,7 +211,7 @@ func TestArchivalRestart(t *testing.T) {
 
 func TestArchivalAssets(t *testing.T) {
 	// Start in archival mode, add 2K blocks with asset txns, restart, ensure all
-	// assets are there in index
+	// assets are there in index unless they were deleted
 
 	dbTempDir, err := ioutil.TempDir("", "testdir"+t.Name())
 	require.NoError(t, err)
@@ -227,6 +227,15 @@ func TestArchivalAssets(t *testing.T) {
 	genesisInitState.GenesisHash = crypto.Digest{1}
 	genesisInitState.Block.BlockHeader.GenesisHash = crypto.Digest{1}
 
+	// true = created, false = deleted
+	assetIdxs := make(map[basics.AssetIndex]bool)
+	assetCreators := make(map[basics.AssetIndex]basics.Address)
+
+	// keep track of existing/deleted assets for sanity check at end
+	var expectedExisting int
+	var expectedDeleted int
+
+	// give creators money for min balance
 	const maxBlocks = 2000
 	var creators []basics.Address
 	for i := 0; i < maxBlocks; i++ {
@@ -234,35 +243,52 @@ func TestArchivalAssets(t *testing.T) {
 		_, err = rand.Read(creator[:])
 		require.NoError(t, err)
 		creators = append(creators, creator)
-
-		// Give creators money for min balance
 		genesisInitState.Accounts[creator] = basics.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890})
 	}
 
+	// open ledger
 	const inMem = false // use persistent storage
 	const archival = true
-
 	l, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
 	require.NoError(t, err)
 	blk := genesisInitState.Block
 
+	// create assets
 	client := libgoal.Client{}
 	for i := 0; i < maxBlocks; i++ {
 		blk.BlockHeader.Round++
-		blk.BlockHeader.TxnCounter++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 
-		// Make a transaction that will create an asset
+		// make a transaction that will create an asset
 		creatorEncoded := creators[i].String()
 		tx, err := client.MakeUnsignedAssetCreateTx(100, false, creatorEncoded, creatorEncoded, creatorEncoded, creatorEncoded, "m", "m", "", nil)
 		require.NoError(t, err)
 		tx.Sender = creators[i]
+		createdAssetIdx := basics.AssetIndex(blk.BlockHeader.TxnCounter + 1)
+		expectedExisting++
 
-		// Make a payset
+		// mark asset as created for checking later
+		assetIdxs[createdAssetIdx] = true
+		assetCreators[createdAssetIdx] = tx.Sender
+		blk.BlockHeader.TxnCounter++
+
+		// make a payset
 		var payset transactions.Payset
 		stxnib := makeSignedTxnInBlock(tx)
 		payset = append(payset, stxnib)
 		blk.Payset = payset
+
+		// for one of the assets, delete it in the same block
+		if i == maxBlocks/2 {
+			tx0, err := client.MakeUnsignedAssetDestroyTx(blk.BlockHeader.TxnCounter)
+			require.NoError(t, err)
+			tx0.Sender = assetCreators[createdAssetIdx]
+			blk.Payset = append(blk.Payset, makeSignedTxnInBlock(tx0))
+			assetIdxs[createdAssetIdx] = false
+			blk.BlockHeader.TxnCounter++
+			expectedExisting--
+			expectedDeleted++
+		}
 
 		// Add the block
 		err = l.AddBlock(blk, agreement.Certificate{})
@@ -270,12 +296,24 @@ func TestArchivalAssets(t *testing.T) {
 	}
 	l.WaitForCommit(blk.Round())
 
-	// check that we can fetch creator for all created assets
-	for i := 0; i < maxBlocks; i++ {
-		c, err := l.GetAssetCreator(basics.AssetIndex(i + 1))
-		require.NoError(t, err)
-		require.Equal(t, creators[i], c)
+	// check that we can fetch creator for all created assets and can't for
+	// deleted assets
+	var existing, deleted int
+	for aidx, status := range assetIdxs {
+		c, err := l.GetAssetCreator(aidx)
+		if status {
+			require.NoError(t, err)
+			require.Equal(t, assetCreators[aidx], c)
+			existing++
+		} else {
+			require.Error(t, err)
+			require.Equal(t, basics.Address{}, c)
+			deleted++
+		}
 	}
+	require.Equal(t, expectedExisting, existing)
+	require.Equal(t, expectedDeleted, deleted)
+	require.Equal(t, len(assetIdxs), existing+deleted)
 
 	// close and reopen the same DB
 	l.Close()
@@ -283,25 +321,47 @@ func TestArchivalAssets(t *testing.T) {
 	require.NoError(t, err)
 	defer l.Close()
 
-	// check that we can still fetch creator for all created assets
-	for i := 0; i < maxBlocks; i++ {
-		c, err := l.GetAssetCreator(basics.AssetIndex(i + 1))
-		require.NoError(t, err)
-		require.Equal(t, creators[i], c)
+	// check that we can fetch creator for all created assets and can't for
+	// deleted assets
+	existing = 0
+	deleted = 0
+	for aidx, status := range assetIdxs {
+		c, err := l.GetAssetCreator(aidx)
+		if status {
+			require.NoError(t, err)
+			require.Equal(t, assetCreators[aidx], c)
+			existing++
+		} else {
+			require.Error(t, err)
+			require.Equal(t, basics.Address{}, c)
+			deleted++
+		}
 	}
+	require.Equal(t, expectedExisting, existing)
+	require.Equal(t, expectedDeleted, deleted)
+	require.Equal(t, len(assetIdxs), existing+deleted)
 
 	// delete an old asset and a new asset
-	tx0, err := client.MakeUnsignedAssetDestroyTx(1)
+	assetToDelete := basics.AssetIndex(1)
+	tx0, err := client.MakeUnsignedAssetDestroyTx(uint64(assetToDelete))
 	require.NoError(t, err)
-	tx0.Sender = creators[0]
-
-	tx1, err := client.MakeUnsignedAssetDestroyTx(maxBlocks)
-	require.NoError(t, err)
-	tx1.Sender = creators[maxBlocks - 1]
-
-	// start mining the block with the deletion txn
-	blk.BlockHeader.Round++
+	tx0.Sender = assetCreators[assetToDelete]
+	assetIdxs[assetToDelete] = false
 	blk.BlockHeader.TxnCounter++
+	expectedExisting--
+	expectedDeleted++
+
+	assetToDelete = basics.AssetIndex(maxBlocks)
+	tx1, err := client.MakeUnsignedAssetDestroyTx(uint64(assetToDelete))
+	require.NoError(t, err)
+	tx1.Sender = assetCreators[assetToDelete]
+	assetIdxs[assetToDelete] = false
+	blk.BlockHeader.TxnCounter++
+	expectedExisting--
+	expectedDeleted++
+
+	// start mining a block with the deletion txns
+	blk.BlockHeader.Round++
 	blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 
 	// make a payset
@@ -315,22 +375,29 @@ func TestArchivalAssets(t *testing.T) {
 	require.NoError(t, err)
 	l.WaitForCommit(blk.Round())
 
-	// check that we can still fetch creator for all created assets except first and last
-	for i := 0; i < maxBlocks; i++ {
-		c, err := l.GetAssetCreator(basics.AssetIndex(i + 1))
-		if i == 0 || i == maxBlocks - 1 {
+	// check that we can fetch creator for all created assets and can't for
+	// deleted assets
+	existing = 0
+	deleted = 0
+	for aidx, status := range assetIdxs {
+		c, err := l.GetAssetCreator(aidx)
+		if status {
+			require.NoError(t, err)
+			require.Equal(t, assetCreators[aidx], c)
+			existing++
+		} else {
 			require.Error(t, err)
 			require.Equal(t, basics.Address{}, c)
-		} else {
-			require.NoError(t, err)
-			require.Equal(t, creators[i], c)
+			deleted++
 		}
 	}
+	require.Equal(t, expectedExisting, existing)
+	require.Equal(t, expectedDeleted, deleted)
+	require.Equal(t, len(assetIdxs), existing+deleted)
 
 	// Mine another maxBlocks blocks
 	for i := 0; i < maxBlocks; i++ {
 		blk.BlockHeader.Round++
-		blk.BlockHeader.TxnCounter++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 		blk.Payset = nil
 		err = l.AddBlock(blk, agreement.Certificate{})
@@ -344,23 +411,31 @@ func TestArchivalAssets(t *testing.T) {
 	require.NoError(t, err)
 	defer l.Close()
 
-	// check that we can still fetch creator for all created assets except first and last
-	for i := 0; i < maxBlocks; i++ {
-		c, err := l.GetAssetCreator(basics.AssetIndex(i + 1))
-		if i == 0 || i == maxBlocks - 1 {
+	// check that we can fetch creator for all created assets and can't for
+	// deleted assets
+	existing = 0
+	deleted = 0
+	for aidx, status := range assetIdxs {
+		c, err := l.GetAssetCreator(aidx)
+		if status {
+			require.NoError(t, err)
+			require.Equal(t, assetCreators[aidx], c)
+			existing++
+		} else {
 			require.Error(t, err)
 			require.Equal(t, basics.Address{}, c)
-		} else {
-			require.NoError(t, err)
-			require.Equal(t, creators[i], c)
+			deleted++
 		}
 	}
+	require.Equal(t, expectedExisting, existing)
+	require.Equal(t, expectedDeleted, deleted)
+	require.Equal(t, len(assetIdxs), existing+deleted)
 }
 
 func makeSignedTxnInBlock(tx transactions.Transaction) transactions.SignedTxnInBlock {
-	return transactions.SignedTxnInBlock {
-		SignedTxnWithAD: transactions.SignedTxnWithAD {
-			SignedTxn: transactions.SignedTxn {
+	return transactions.SignedTxnInBlock{
+		SignedTxnWithAD: transactions.SignedTxnWithAD{
+			SignedTxn: transactions.SignedTxn{
 				Txn: tx,
 			},
 		},

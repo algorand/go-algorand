@@ -18,7 +18,7 @@ byte base64 iZWMx72KvU6Bw6sPAWQFL96YH+VMrBA0XKWD9XbZOZI=
 txn Receiver
 addr 7JOPVEP3ABJUW5YZ5WFIONLPWTZ5MYX5HFK4K7JLGSIAG7RRB42MNLQ224
 ==
-global Round
+txn FirstValid
 int 0
 >
 &&
@@ -82,5 +82,3 @@ ed25519verify
 &&
 int 1
 ||`
-
-
