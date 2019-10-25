@@ -18,12 +18,13 @@ package pingpong
 
 import (
 	"fmt"
+	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"sort"
 
 	"github.com/algorand/go-algorand/libgoal"
 )
 
-func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]uint64, cfg PpConfig, err error) {
+func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]uint64, assetParams map[uint64]v1.AssetParams, cfg PpConfig, err error) {
 	accounts = make(map[string]uint64)
 	cfg = initCfg
 
@@ -36,9 +37,10 @@ func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]ui
 	addresses, err := ac.ListAddresses(wallet)
 
 	if err != nil {
-		return nil, PpConfig{}, err
+		return nil, nil, PpConfig{}, err
 	}
 
+	// find either srcAccount or the richest account
 	for _, addr := range addresses {
 		if addr == cfg.SrcAccount {
 			srcAcctPresent = true
@@ -46,7 +48,7 @@ func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]ui
 
 		amount, err := ac.GetBalance(addr)
 		if err != nil {
-			return nil, PpConfig{}, err
+			return nil, nil, PpConfig{}, err
 		}
 
 		amt := amount
@@ -56,7 +58,7 @@ func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]ui
 		}
 		accounts[addr] = amt
 		if !initCfg.Quiet {
-			fmt.Printf("Found local account: %s -> %v", addr, amt)
+			fmt.Printf("Found local account: %s -> %v\n", addr, amt)
 		}
 	}
 
@@ -93,6 +95,94 @@ func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]ui
 			return
 		}
 	}
+
+	// Get wallet handle token
+	var h []byte
+	h, err = ac.GetUnencryptedWalletHandle()
+	if err != nil {
+		return
+	}
+
+	// create assets in srcAccount
+	for i := 0; i < int(cfg.NumAsset); i ++ {
+		tx, createErr := ac.MakeUnsignedAssetCreateTx(1000, false, cfg.SrcAccount, cfg.SrcAccount, cfg.SrcAccount, cfg.SrcAccount, "ping", "pong", "", []byte{})
+		if createErr != nil {
+			fmt.Printf("Cannot make asset create txn\n")
+			err = createErr
+			return
+		}
+		tx, err = ac.FillUnsignedTxTemplate(cfg.SrcAccount, 0, 0, cfg.MaxFee, tx)
+		if err != nil {
+			fmt.Printf("Cannot fill asset creation txn\n")
+			return
+		}
+
+		signedTxn, signErr := ac.SignTransactionWithWallet(h, nil, tx)
+		if signErr != nil {
+			fmt.Printf("Cannot sign asset creation txn\n")
+			err = signErr
+			return
+		}
+
+		txid, broadcastErr := ac.BroadcastTransaction(signedTxn)
+		if broadcastErr != nil {
+			fmt.Printf("Cannot broadcast asset creation txn\n")
+			err = broadcastErr
+			return
+		}
+
+		if !cfg.Quiet {
+			fmt.Printf("Create a new asset, txid: %v\n", txid)
+		}
+		accounts[cfg.SrcAccount] -= cfg.MaxFee
+	}
+
+	// get these assets
+	account, accountErr := ac.AccountInformation(cfg.SrcAccount)
+	if accountErr != nil {
+		fmt.Printf("Cannot lookup source account")
+		err = accountErr
+		return
+	}
+	assetParams = account.AssetParams
+	fmt.Printf("size of assetParams %v \n", len(assetParams))
+
+	for k, _ := range assetParams {
+		for addr, _ := range accounts {
+			tx, sendErr := ac.MakeUnsignedAssetSendTx(k, 0, addr, "", "")
+			if sendErr != nil {
+				fmt.Printf("Cannot initiate asset %v in account %v\n", k, addr)
+				err = sendErr
+				return
+			}
+
+			tx, err = ac.FillUnsignedTxTemplate(addr, 0, 0, cfg.MaxFee, tx)
+			if err != nil {
+				fmt.Printf("Cannot fill asset %v init txn in account %v\n", k, addr)
+				return
+			}
+
+			signedTxn, signErr := ac.SignTransactionWithWallet(h, nil, tx)
+			if signErr != nil {
+				fmt.Printf("Cannot sign asset %v init txn in account %v\n", k, addr)
+				err = signErr
+				return
+			}
+
+			_, broadcastErr := ac.BroadcastTransaction(signedTxn)
+			if broadcastErr != nil {
+				fmt.Printf("Cannot broadcast asset %v init txn in account %v\n", k, addr)
+				err = broadcastErr
+				return
+			}
+
+			if !cfg.Quiet {
+				fmt.Printf("Init asset %v in account %v\n", k, addr)
+			}
+			accounts[addr] -= cfg.MaxFee
+		}
+	}
+
 	return
 }
 

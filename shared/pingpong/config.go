@@ -49,6 +49,7 @@ type PpConfig struct {
 	Program         []byte
 	LogicArgs       [][]byte
 	GroupSize       uint32
+	NumAsset        uint32
 }
 
 // DefaultConfig object for Ping Pong
@@ -68,6 +69,7 @@ var DefaultConfig = PpConfig{
 	RefreshTime:     10 * time.Second,
 	MinAccountFunds: 100000,
 	GroupSize:       1,
+	NumAsset:        0,
 }
 
 // LoadConfigFromFile reads and loads Ping Pong configuration

@@ -19,6 +19,7 @@ package pingpong
 import (
 	"context"
 	"fmt"
+	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"math"
 	"math/rand"
 	"os"
@@ -30,10 +31,10 @@ import (
 	"github.com/algorand/go-algorand/libgoal"
 )
 
-// PrepareAccounts to set up accounts required for Ping Pong run
-func PrepareAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]uint64, cfg PpConfig, err error) {
+// PrepareAccounts to set up accounts and asset accounts required for Ping Pong run
+func PrepareAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]uint64, assetParams map[uint64]v1.AssetParams, cfg PpConfig, err error) {
 	cfg = initCfg
-	accounts, cfg, err = ensureAccounts(ac, cfg)
+	accounts, assetParams, cfg, err = ensureAccounts(ac, cfg)
 	if err != nil {
 		return
 	}
@@ -98,7 +99,7 @@ func listSufficientAccounts(accounts map[string]uint64, minimumAmount uint64, ex
 }
 
 // RunPingPong starts ping pong process
-func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uint64, cfg PpConfig) {
+func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uint64, assetParam map[uint64]v1.AssetParams, cfg PpConfig) {
 	// Infinite loop given:
 	//  - accounts -> map of accounts to include in transfers (including src account, which we don't want to use)
 	//  - cfg      -> configuration for how to proceed
@@ -136,7 +137,7 @@ func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uin
 			fromList := listSufficientAccounts(accounts, cfg.MinAccountFunds+(cfg.MaxAmt+cfg.MaxFee)*2, cfg.SrcAccount)
 			toList := listSufficientAccounts(accounts, 0, cfg.SrcAccount)
 
-			sent, succeded, err := sendFromTo(fromList, toList, accounts, ac, cfg)
+			sent, succeded, err := sendFromTo(fromList, toList, accounts, assetParam, ac, cfg)
 			totalSent += sent
 			totalSucceeded += succeded
 			if err != nil {
@@ -169,7 +170,7 @@ func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uin
 	}
 }
 
-func sendFromTo(fromList, toList []string, accounts map[string]uint64, client libgoal.Client, cfg PpConfig) (sentCount, successCount uint64, err error) {
+func sendFromTo(fromList, toList []string, accounts map[string]uint64, assetParams map[uint64]v1.AssetParams, client libgoal.Client, cfg PpConfig) (sentCount, successCount uint64, err error) {
 	amt := cfg.MaxAmt
 	fee := cfg.MaxFee
 
@@ -193,14 +194,12 @@ func sendFromTo(fromList, toList []string, accounts map[string]uint64, client li
 		var sendErr error
 		fromBalanceChange := int64(0)
 		toBalanceChange := int64(0)
+		if cfg.NumAsset > 0 {
+			amt = 0
+		}
 		if cfg.GroupSize == 1 {
-
-			if !cfg.Quiet {
-				fmt.Fprintf(os.Stdout, "Sending %d : %s -> %s\n", amt, from, to)
-			}
-
 			// Construct single txn
-			txn, consErr := constructTxn(from, to, fee, amt, client, cfg)
+			txn, consErr := constructTxn(from, to, fee, amt, assetParams, client, cfg)
 			if consErr != nil {
 				err = consErr
 				return
@@ -229,11 +228,11 @@ func sendFromTo(fromList, toList []string, accounts map[string]uint64, client li
 			for j := 0; j < int(cfg.GroupSize); j++ {
 				var txn transactions.Transaction
 				if j%2 == 0 {
-					txn, err = constructTxn(from, to, fee, amt, client, cfg)
+					txn, err = constructTxn(from, to, fee, amt, assetParams, client, cfg)
 					fromBalanceChange -= int64(txn.Fee.Raw + amt)
 					toBalanceChange += int64(amt)
 				} else {
-					txn, err = constructTxn(to, from, fee, amt, client, cfg)
+					txn, err = constructTxn(to, from, fee, amt, assetParams, client, cfg)
 					toBalanceChange -= int64(txn.Fee.Raw + amt)
 					fromBalanceChange += int64(amt)
 				}
@@ -304,7 +303,7 @@ func sendFromTo(fromList, toList []string, accounts map[string]uint64, client li
 	return
 }
 
-func constructTxn(from, to string, fee, amt uint64, client libgoal.Client, cfg PpConfig) (txn transactions.Transaction, err error) {
+func constructTxn(from, to string, fee, amt uint64, assetParams map[uint64]v1.AssetParams, client libgoal.Client, cfg PpConfig) (txn transactions.Transaction, err error) {
 	var noteField []byte
 	const pingpongTag = "pingpong"
 	const tagLen = uint32(len(pingpongTag))
@@ -320,7 +319,27 @@ func constructTxn(from, to string, fee, amt uint64, client libgoal.Client, cfg P
 	crypto.RandBytes(noteField[tagLen:])
 
 	// Construct payment transaction
-	txn, err = client.ConstructPayment(from, to, fee, amt, noteField[:], "", [32]byte{}, 0, 0)
+	if cfg.NumAsset == 0 {
+		txn, err = client.ConstructPayment(from, to, fee, amt, noteField[:], "", [32]byte{}, 0, 0)
+		if !cfg.Quiet {
+			fmt.Fprintf(os.Stdout, "Sending %d : %s -> %s\n", amt, from, to)
+		}
+	} else {
+		var assetID uint64
+		for k := range assetParams {
+			assetID = k
+			break
+		}
+		txn, err = client.MakeUnsignedAssetSendTx(assetID, amt, to, "", "")
+		if err != nil {
+			return
+		}
+		txn.Note = noteField[:]
+		txn, err = client.FillUnsignedTxTemplate(from, 0, 0, cfg.MaxFee, txn)
+		if !cfg.Quiet {
+			fmt.Fprintf(os.Stdout, "Sending %d asset %d: %s -> %s\n", 0, assetID, from, to)
+		}
+	}
 	if err != nil {
 		return
 	}
