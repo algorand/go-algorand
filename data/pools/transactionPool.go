@@ -46,6 +46,7 @@ type TransactionPool struct {
 	statusCache            *statusCache
 	logStats               bool
 	expFeeFactor           uint64
+	poolProtocol           protocol.ConsensusVersion
 
 	// pendingMu protects pendingTxGroups and pendingTxids
 	pendingMu       deadlock.RWMutex
