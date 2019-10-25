@@ -181,8 +181,8 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 					errstr += sb.String()
 				}
 			}
-			logging.Base().Errorf("recovered panic in Eval: %s", errstr)
 			err = PanicError{x, errstr}
+			logging.Base().Errorf("recovered panic in Eval: %s", err)
 		}
 	}()
 	if (params.Proto == nil) || (params.Proto.LogicSigVersion == 0) {
@@ -262,8 +262,8 @@ func Check(program []byte, params EvalParams) (cost int, err error) {
 					errstr += sb.String()
 				}
 			}
-			logging.Base().Errorf("recovered panic in Check: %s", errstr)
 			err = PanicError{x, errstr}
+			logging.Base().Errorf("recovered panic in Check: %s", err)
 		}
 	}()
 	if (params.Proto == nil) || (params.Proto.LogicSigVersion == 0) {
