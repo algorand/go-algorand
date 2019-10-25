@@ -952,7 +952,7 @@ int 1
 ==
 &&
 txn XferAsset
-arg 6
+int 10
 ==
 &&
 txn AssetAmount
@@ -1002,7 +1002,7 @@ func TestTxn(t *testing.T) {
 	copy(txn.Txn.CloseRemainderTo[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02"))
 	copy(txn.Txn.VotePK[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui03"))
 	copy(txn.Txn.SelectionPK[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui04"))
-	txn.Txn.XferAsset = 1
+	txn.Txn.XferAsset = 10
 	// This is not a valid transaction to have all these fields set this way
 	txn.Txn.Note = []byte("fnord")
 	copy(txn.Txn.Lease[:], []byte("woofwoof"))

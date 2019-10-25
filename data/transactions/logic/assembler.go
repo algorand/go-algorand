@@ -534,7 +534,7 @@ var txnFieldTypePairs = []txnFieldType{
 	{VoteKeyDilution, StackUint64},
 	{Type, StackBytes},
 	{TypeEnum, StackUint64},
-	{XferAsset, StackBytes},
+	{XferAsset, StackUint64},
 	{AssetAmount, StackUint64},
 	{AssetSender, StackBytes},
 	{AssetReceiver, StackBytes},
