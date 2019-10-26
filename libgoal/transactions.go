@@ -365,12 +365,10 @@ func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, numValidRound
 	parsedLastValid := basics.Round(firstValid + numValidRounds)
 	parsedFee := basics.MicroAlgos{Raw: fee}
 
-	tx.Header = transactions.Header{
-		Sender:     parsedAddr,
-		Fee:        parsedFee,
-		FirstValid: parsedFirstValid,
-		LastValid:  parsedLastValid,
-	}
+	tx.Header.Sender = parsedAddr
+	tx.Header.Fee = parsedFee
+	tx.Header.FirstValid = parsedFirstValid
+	tx.Header.LastValid = parsedLastValid
 
 	if cparams.SupportGenesisHash {
 		var genHash crypto.Digest
