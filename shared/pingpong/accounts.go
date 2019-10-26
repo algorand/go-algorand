@@ -103,8 +103,18 @@ func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]ui
 		return
 	}
 
+	// get existing assets
+	account, accountErr := ac.AccountInformation(cfg.SrcAccount)
+	if accountErr != nil {
+		fmt.Printf("Cannot lookup source account")
+		err = accountErr
+		return
+	}
+
+	toCreate := int(cfg.NumAsset) - len(account.AssetParams)
+
 	// create assets in srcAccount
-	for i := 0; i < int(cfg.NumAsset); i ++ {
+	for i := 0; i < toCreate; i ++ {
 		tx, createErr := ac.MakeUnsignedAssetCreateTx(1000, false, cfg.SrcAccount, cfg.SrcAccount, cfg.SrcAccount, cfg.SrcAccount, "ping", "pong", "", []byte{})
 		if createErr != nil {
 			fmt.Printf("Cannot make asset create txn\n")
@@ -134,18 +144,17 @@ func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]ui
 		if !cfg.Quiet {
 			fmt.Printf("Create a new asset, txid: %v\n", txid)
 		}
-		accounts[cfg.SrcAccount] -= cfg.MaxFee
+		accounts[cfg.SrcAccount] -= tx.Fee.Raw
 	}
 
 	// get these assets
-	account, accountErr := ac.AccountInformation(cfg.SrcAccount)
+	account, accountErr = ac.AccountInformation(cfg.SrcAccount)
 	if accountErr != nil {
 		fmt.Printf("Cannot lookup source account")
 		err = accountErr
 		return
 	}
 	assetParams = account.AssetParams
-	fmt.Printf("size of assetParams %v \n", len(assetParams))
 
 	for k, _ := range assetParams {
 		for addr, _ := range accounts {
@@ -179,7 +188,7 @@ func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]ui
 			if !cfg.Quiet {
 				fmt.Printf("Init asset %v in account %v\n", k, addr)
 			}
-			accounts[addr] -= cfg.MaxFee
+			accounts[addr] -= tx.Fee.Raw
 		}
 	}
 
