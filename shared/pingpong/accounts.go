@@ -18,6 +18,7 @@ package pingpong
 
 import (
 	"fmt"
+	"github.com/algorand/go-algorand/crypto"
 	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"sort"
 
@@ -115,7 +116,10 @@ func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]ui
 
 	// create assets in srcAccount
 	for i := 0; i < toCreate; i ++ {
-		tx, createErr := ac.MakeUnsignedAssetCreateTx(1000, false, cfg.SrcAccount, cfg.SrcAccount, cfg.SrcAccount, cfg.SrcAccount, "ping", "pong", "", []byte{})
+		var metaLen = 32
+		meta := make([]byte, metaLen, metaLen)
+		crypto.RandBytes(meta[:])
+		tx, createErr := ac.MakeUnsignedAssetCreateTx(1000, false, cfg.SrcAccount, cfg.SrcAccount, cfg.SrcAccount, cfg.SrcAccount, "ping", "pong", "", meta)
 		if createErr != nil {
 			fmt.Printf("Cannot make asset create txn\n")
 			err = createErr
@@ -156,8 +160,19 @@ func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]ui
 	}
 	assetParams = account.AssetParams
 
-	for k, _ := range assetParams {
-		for addr, _ := range accounts {
+	for addr, _ := range accounts {
+		addrAccount, addrErr := ac.AccountInformation(cfg.SrcAccount)
+		if addrErr != nil {
+			fmt.Printf("Cannot lookup source account")
+			err = addrErr
+			return
+		}
+		for k, _ := range assetParams {
+			// if addr already opened this asset, skip
+			if _, ok := addrAccount.Assets[k]; ok {
+				continue
+			}
+   			// init asset k in addr
 			tx, sendErr := ac.MakeUnsignedAssetSendTx(k, 0, addr, "", "")
 			if sendErr != nil {
 				fmt.Printf("Cannot initiate asset %v in account %v\n", k, addr)
