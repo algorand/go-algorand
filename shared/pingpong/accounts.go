@@ -115,7 +115,7 @@ func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]ui
 	toCreate := int(cfg.NumAsset) - len(account.AssetParams)
 
 	// create assets in srcAccount
-	for i := 0; i < toCreate; i ++ {
+	for i := 0; i < toCreate; i++ {
 		var metaLen = 32
 		meta := make([]byte, metaLen, metaLen)
 		crypto.RandBytes(meta[:])
@@ -160,19 +160,19 @@ func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]ui
 	}
 	assetParams = account.AssetParams
 
-	for addr, _ := range accounts {
+	for addr := range accounts {
 		addrAccount, addrErr := ac.AccountInformation(cfg.SrcAccount)
 		if addrErr != nil {
 			fmt.Printf("Cannot lookup source account")
 			err = addrErr
 			return
 		}
-		for k, _ := range assetParams {
+		for k := range assetParams {
 			// if addr already opened this asset, skip
 			if _, ok := addrAccount.Assets[k]; ok {
 				continue
 			}
-   			// init asset k in addr
+			// init asset k in addr
 			tx, sendErr := ac.MakeUnsignedAssetSendTx(k, 0, addr, "", "")
 			if sendErr != nil {
 				fmt.Printf("Cannot initiate asset %v in account %v\n", k, addr)
