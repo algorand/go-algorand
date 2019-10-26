@@ -16,6 +16,10 @@
 
 package logic
 
+import (
+	"github.com/algorand/go-algorand/protocol"
+)
+
 type stringString struct {
 	a string
 	b string
@@ -125,7 +129,6 @@ var opDocExtraList = []stringString{
 	{"intcblock", "`intcblock` loads following program bytes into an array of integer constants in the evaluator. These integer constants can be referred to by `intc` and `intc_*` which will push the value onto the stack."},
 	{"bytecblock", "`bytecblock` loads the following program bytes into an array of byte string constants in the evaluator. These constants can be referred to by `bytec` and `bytec_*` which will push the value onto the stack."},
 	{"*", "It is worth noting that there are 10,000,000,000,000,000 micro-Algos in the total supply, or a bit less than 2^54. When doing rational math, e.g. (A * (N/D)) as ((A * N) / D) one should limit the numerator to less than 2^10 to be completely sure there won't be overflow."},
-	{"txn", "Most fields are a simple copy of a uint64 or byte string value. `XferAsset` is the concatenation of the AssetID Creator Address (32 bytes) and the big-endian bytes of the uint64 AssetID Index for a total of 40 bytes. `SenderBalance` is the uin64 balance of the sender, with rewards factored in, at the time of execution."},
 	{"gtxn", "for notes on transaction fields available, see `txn`"},
 	{"btoi", "`btoi` panics if the input is longer than 8 bytes"},
 }
@@ -192,4 +195,24 @@ func OpSize(opName string) int {
 		return cost
 	}
 	return 1
+}
+
+// see assembler.go TxnTypeNames
+var typeEnumDescriptions = []stringString{
+	{string(protocol.UnknownTx), "Unknown type. Invalid transaction."},
+	{string(protocol.PaymentTx), "Payment"},
+	{string(protocol.KeyRegistrationTx), "Key Registration"},
+	{string(protocol.AssetConfigTx), "Asset Config"},
+	{string(protocol.AssetTransferTx), "Asset Transfer"},
+	{string(protocol.AssetFreezeTx), "Asset Freeze"},
+}
+
+// TypeNameDescription returns extra description about a low level protocol transaction Type string
+func TypeNameDescription(typeName string) string {
+	for _, ted := range typeEnumDescriptions {
+		if typeName == ted.a {
+			return ted.b
+		}
+	}
+	return "invalid type name"
 }

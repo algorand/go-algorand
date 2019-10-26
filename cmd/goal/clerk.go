@@ -183,27 +183,32 @@ func waitForCommit(client libgoal.Client, txid string) error {
 	return nil
 }
 
-func writeTxnToFile(client libgoal.Client, signTx bool, dataDir string, walletName string, tx transactions.Transaction, filename string) error {
-	var err error
-	var stxn transactions.SignedTxn
+func createSignedTransaction(client libgoal.Client, signTx bool, dataDir string, walletName string, tx transactions.Transaction) (stxn transactions.SignedTxn, err error) {
 	if signTx {
 		// Sign the transaction
 		wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
 		stxn, err = client.SignTransactionWithWallet(wh, pw, tx)
 		if err != nil {
-			return err
+			return
 		}
 	} else {
 		// Wrap in a transactions.SignedTxn with an empty sig.
 		// This way protocol.Encode will encode the transaction type
 		stxn, err = transactions.AssembleSignedTxn(tx, crypto.Signature{}, crypto.MultisigSig{})
 		if err != nil {
-			return err
+			return
 		}
 
 		stxn = populateBlankMultisig(client, dataDir, walletName, stxn)
 	}
+	return
+}
 
+func writeTxnToFile(client libgoal.Client, signTx bool, dataDir string, walletName string, tx transactions.Transaction, filename string) error {
+	stxn, err := createSignedTransaction(client, signTx, dataDir, walletName, tx)
+	if err != nil {
+		return err
+	}
 	// Write the SignedTxn to the output file
 	return writeFile(filename, protocol.Encode(stxn), 0600)
 }
@@ -344,20 +349,16 @@ var sendCmd = &cobra.Command{
 					Args:  programArgs,
 				},
 			}
-		} else if sign || txFilename == "" {
-			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			stx, err = client.SignTransactionWithWallet(wh, pw, payment)
+		} else {
+			signTx := sign || (txFilename == "")
+			stx, err = createSignedTransaction(client, signTx, dataDir, walletName, payment)
 			if err != nil {
 				reportErrorf(errorSigningTX, err)
 			}
-		} else {
-			stx = transactions.SignedTxn{
-				Txn: payment,
-			}
-			stx = populateBlankMultisig(client, dataDir, walletName, stx)
 		}
+
 		if txFilename == "" {
-			// Sign and broadcast the tx
+			// Broadcast the tx
 			txid, err := client.BroadcastTransaction(stx)
 
 			if err != nil {
@@ -377,6 +378,7 @@ var sendCmd = &cobra.Command{
 				}
 			}
 		} else {
+			err = writeFile(txFilename, protocol.Encode(stx), 0600)
 			if err != nil {
 				reportErrorf(err.Error())
 			}
