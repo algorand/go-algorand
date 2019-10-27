@@ -122,19 +122,11 @@ func (pool *TransactionPool) PendingTxIDs() []transactions.Txid {
 func (pool *TransactionPool) Pending() [][]transactions.SignedTxn {
 	pool.pendingMu.RLock()
 	defer pool.pendingMu.RUnlock()
+	// note that this operation is safe for the sole reason that arrays in go are immutable.
+	// if the underlaying array need to be expanded, the actual underlaying array would need
+	// to be reallocated.
+	return pool.pendingTxGroups
 
-	txgroups := make([][]transactions.SignedTxn, len(pool.pendingTxGroups))
-	i := 0
-	for _, txgroup := range pool.pendingTxGroups {
-		txgroupCopy := make([]transactions.SignedTxn, len(txgroup))
-		for j, tx := range txgroup {
-			txgroupCopy[j] = tx
-		}
-
-		txgroups[i] = txgroupCopy
-		i++
-	}
-	return txgroups
 }
 
 // rememberCommit() saves the changes added by remember to
