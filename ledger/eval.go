@@ -339,6 +339,11 @@ func (eval *BlockEvaluator) workaroundOverspentRewards(rewardPoolBalance basics.
 	return
 }
 
+// IsDup returns true if the transaction was included in the specified round.
+func (eval *BlockEvaluator) IsDup(txn transactions.SignedTxn, round basics.Round) (bool, error) {
+	return eval.l.isDup(eval.proto, basics.Round(0), round, round, txn.ID(), txlease{})
+}
+
 // Round returns the round number of the block being evaluated by the BlockEvaluator.
 func (eval *BlockEvaluator) Round() basics.Round {
 	return eval.block.Round()

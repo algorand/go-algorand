@@ -315,7 +315,7 @@ func (l *Ledger) EnsureBlock(block *bookkeeping.Block, c agreement.Certificate) 
 }
 
 // AssemblePayset adds transactions to a BlockEvaluator.
-func (*Ledger) AssemblePayset(pool *pools.TransactionPool, eval *ledger.BlockEvaluator, deadline time.Time) (stats telemetryspec.AssembleBlockStats) {
+func (l *Ledger) AssemblePayset(pool *pools.TransactionPool, eval *ledger.BlockEvaluator, deadline time.Time) (stats telemetryspec.AssembleBlockStats) {
 	pending := pool.Pending()
 	stats.StartCount = len(pending)
 	stats.StopReason = telemetryspec.AssembleBlockEmpty
@@ -325,6 +325,16 @@ func (*Ledger) AssemblePayset(pool *pools.TransactionPool, eval *ledger.BlockEva
 	for len(pending) > 0 {
 		txgroup := pending[0]
 		pending = pending[1:]
+
+		if len(txgroup) == 0 {
+			stats.InvalidCount++
+			continue
+		}
+
+		if dup, err := eval.IsDup(txgroup[0], l.Latest()); err == nil && dup {
+			stats.EarlyCommittedCount++
+			continue
+		}
 
 		if time.Now().After(deadline) {
 			stats.StopReason = telemetryspec.AssembleBlockTimeout
@@ -341,24 +351,17 @@ func (*Ledger) AssemblePayset(pool *pools.TransactionPool, eval *ledger.BlockEva
 			break
 		}
 		if err != nil {
-			msg := fmt.Sprintf("Cannot add pending transaction to block: %v", err)
-
-			logAt := logging.Base().Warn
-
 			// GOAL2-255: Don't warn for common case of txn already being in ledger
 			switch err.(type) {
 			case ledger.TransactionInLedgerError:
-				logAt = logging.Base().Debug
 				stats.CommittedCount++
 			case transactions.MinFeeError:
-				logAt = logging.Base().Info
 				stats.InvalidCount++
+				logging.Base().Infof("Cannot add pending transaction to block: %v", err)
 			default:
-				// logAt = Warn
 				stats.InvalidCount++
+				logging.Base().Warnf("Cannot add pending transaction to block: %v", err)
 			}
-
-			logAt(msg)
 		} else {
 			for _, txn := range txgroup {
 				fee := txn.Txn.Fee.Raw
@@ -396,10 +399,9 @@ func (*Ledger) AssemblePayset(pool *pools.TransactionPool, eval *ledger.BlockEva
 				stats.TotalLength += uint64(encodedLen)
 			}
 		}
-
-		if stats.IncludedCount != 0 {
-			stats.AverageFee = totalFees / uint64(stats.IncludedCount)
-		}
+	}
+	if stats.IncludedCount != 0 {
+		stats.AverageFee = totalFees / uint64(stats.IncludedCount)
 	}
 	return
 }
