@@ -34,15 +34,15 @@ const (
 	ledgerWalletDriverName    = "ledger"
 	ledgerWalletDriverVersion = 1
 
-	ledger_CLA                 = uint8(0x80)
-	ledger_INS_GET_PUBLIC_KEY  = uint8(0x03)
-	ledger_INS_SIGN_PAYMENT_V2 = uint8(0x04)
-	ledger_INS_SIGN_KEYREG_V2  = uint8(0x05)
-	ledger_INS_SIGN_MSGPACK    = uint8(0x08)
-	ledger_P1_FIRST            = uint8(0x00)
-	ledger_P1_MORE             = uint8(0x80)
-	ledger_P2_LAST             = uint8(0x00)
-	ledger_P2_MORE             = uint8(0x80)
+	ledgerClass            = uint8(0x80)
+	ledgerInsGetPublicKey  = uint8(0x03)
+	ledgerInsSignPaymentV2 = uint8(0x04)
+	ledgerInsSignKeyregV2  = uint8(0x05)
+	ledgerInsSignMsgpack   = uint8(0x08)
+	ledgerP1first          = uint8(0x00)
+	ledgerP1more           = uint8(0x80)
+	ledgerP2last           = uint8(0x00)
+	ledgerP2more           = uint8(0x80)
 )
 
 var ledgerWalletSupportedTxs = []protocol.TxType{protocol.PaymentTx, protocol.KeyRegistrationTx}
@@ -155,7 +155,7 @@ func (lw *LedgerWallet) ListKeys() ([]crypto.Digest, error) {
 	lw.mu.Lock()
 	defer lw.mu.Unlock()
 
-	reply, err := lw.dev.Exchange([]byte{ledger_CLA, ledger_INS_GET_PUBLIC_KEY, 0x00, 0x00, 0x00})
+	reply, err := lw.dev.Exchange([]byte{ledgerClass, ledgerInsGetPublicKey, 0x00, 0x00, 0x00})
 	if err != nil {
 		return nil, err
 	}
@@ -318,24 +318,24 @@ func (lw *LedgerWallet) sendTransactionMsgpack(tx transactions.Transaction) (sig
 	var reply []byte
 
 	tosend := protocol.Encode(tx)
-	p1 := ledger_P1_FIRST
-	p2 := ledger_P2_MORE
+	p1 := ledgerP1first
+	p2 := ledgerP2more
 
 	// As a precaution, make sure that chunk + 5-byte APDU header
 	// fits in 8-bit length fields.
 	const chunkSize = 250
 
-	for p2 != ledger_P2_LAST {
+	for p2 != ledgerP2last {
 		var chunk []byte
 		if len(tosend) > chunkSize {
 			chunk = tosend[:chunkSize]
 		} else {
 			chunk = tosend
-			p2 = ledger_P2_LAST
+			p2 = ledgerP2last
 		}
 
 		var msg []byte
-		msg = append(msg, ledger_CLA, ledger_INS_SIGN_MSGPACK, p1, p2, uint8(len(chunk)))
+		msg = append(msg, ledgerClass, ledgerInsSignMsgpack, p1, p2, uint8(len(chunk)))
 		msg = append(msg, chunk...)
 
 		reply, err = lw.dev.Exchange(msg)
@@ -344,7 +344,7 @@ func (lw *LedgerWallet) sendTransactionMsgpack(tx transactions.Transaction) (sig
 		}
 
 		tosend = tosend[len(chunk):]
-		p1 = ledger_P1_MORE
+		p1 = ledgerP1more
 	}
 
 	if len(reply) > len(sig) {
@@ -360,13 +360,13 @@ func (lw *LedgerWallet) sendTransactionMsgpack(tx transactions.Transaction) (sig
 
 func (lw *LedgerWallet) sendTransactionOldStyle(tx transactions.Transaction) (sig crypto.Signature, err error) {
 	var msg []byte
-	msg = append(msg, ledger_CLA)
+	msg = append(msg, ledgerClass)
 
 	switch tx.Type {
 	case protocol.PaymentTx:
-		msg = append(msg, ledger_INS_SIGN_PAYMENT_V2)
+		msg = append(msg, ledgerInsSignPaymentV2)
 	case protocol.KeyRegistrationTx:
-		msg = append(msg, ledger_INS_SIGN_KEYREG_V2)
+		msg = append(msg, ledgerInsSignKeyregV2)
 	default:
 		err = fmt.Errorf("transaction type %s not supported", tx.Type)
 		return
