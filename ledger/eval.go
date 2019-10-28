@@ -557,6 +557,14 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 	// completely zero, which means the account will be deleted.)
 	rewardlvl := cow.rewardsLevel()
 	for _, addr := range cow.modifiedAccounts() {
+		// Skip FeeSink and RewardsPool MinBalance checks here.
+		// There's only two accounts, so space isn't an issue, and we don't
+		// expect them to have low balances, but if they do, it may cause
+		// surprises for every transaction.
+		if addr == spec.FeeSink || addr == spec.RewardsPool {
+			continue
+		}
+
 		data, err := cow.lookup(addr)
 		if err != nil {
 			return err
@@ -566,14 +574,6 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 		// because the accounts DB can delete it.  Otherwise, we will
 		// enforce MinBalance.
 		if data.IsZero() {
-			continue
-		}
-
-		// Skip FeeSink and RewardsPool MinBalance checks here.
-		// There's only two accounts, so space isn't an issue, and we don't
-		// expect them to have low balances, but if they do, it may cause
-		// surprises for every transaction.
-		if addr == spec.FeeSink || addr == spec.RewardsPool {
 			continue
 		}
 
