@@ -51,6 +51,12 @@ func PrepareAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]u
 		}
 	}
 
+	// we need to fund Accounts again since prepareAssets spends
+	err = fundAccounts(accounts, ac, cfg)
+	if err != nil {
+		return
+	}
+
 	return
 }
 
@@ -59,10 +65,10 @@ func fundAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpConfi
 
 	// Fee of 0 will make cause the function to use the suggested one by network
 	fee := uint64(0)
-
+	minFund := cfg.MinAccountFunds+(cfg.MaxAmt+cfg.MaxFee)*300
 	for addr, balance := range accounts {
-		if balance < cfg.MinAccountFunds {
-			toSend := cfg.MinAccountFunds - balance
+		if balance < minFund {
+			toSend := minFund - balance
 			if srcFunds <= toSend {
 				return fmt.Errorf("source account has insufficient funds %d - needs %d", srcFunds, toSend)
 			}
@@ -71,9 +77,9 @@ func fundAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpConfi
 			if err != nil {
 				return err
 			}
+			accounts[addr] = minFund
 		}
 	}
-
 	return nil
 }
 
@@ -180,7 +186,6 @@ func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uin
 func sendFromTo(fromList, toList []string, accounts map[string]uint64, assetParams map[uint64]v1.AssetParams, client libgoal.Client, cfg PpConfig) (sentCount, successCount uint64, err error) {
 	amt := cfg.MaxAmt
 	fee := cfg.MaxFee
-
 	for i, from := range fromList {
 		if cfg.RandomizeAmt {
 			amt = rand.Uint64()%cfg.MaxAmt + 1
