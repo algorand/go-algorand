@@ -1,17 +1,11 @@
 txn TypeEnum
 int 2
 ==
-txn CloseRemainderTo
-global ZeroAddress
-==
-txn Receiver
-global ZeroAddress
-==
-txn Amount
-int 0
-==
 txn Fee
 int TMPL_FEE
+<
+txn LastValid
+int TMPL_EXPIRE
 <
 txn LastValid
 int TMPL_DUR
@@ -30,8 +24,6 @@ txn TxID
 arg_0
 addr TMPL_AUTH
 ed25519verify
-&&
-&&
 &&
 &&
 &&

@@ -35,6 +35,7 @@ specs_args = {
     "TMPL_MINPAY": "minimum amount to be paid out of the account",
     "TMPL_HASHFN": "hash function used to implement the swap",
     "TMPL_TIMEOUT": "round at which the escrow times out",
+    "TMPL_EXPIRE": "round at which the delegate logic expires",
     "TMPL_ESC": "owner to whom to refund the escrow funds",
     "TMPL_HASHIMG": "intended hash image which unlocks the escrow",
     "TMPL_FV": "first valid round of the transaction",
