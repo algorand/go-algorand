@@ -21,18 +21,16 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-type lsigEvalSubcache struct {
-	they map[protocol.ConsensusVersion]map[transactions.Txid]error
-}
+type lsigEvalSubcache map[protocol.ConsensusVersion]map[transactions.Txid]error
 
-func (les *lsigEvalSubcache) get(cvers protocol.ConsensusVersion, txid transactions.Txid) (err error, found bool) {
-	if les == nil || les.they == nil {
+func (les lsigEvalSubcache) get(cvers protocol.ConsensusVersion, txid transactions.Txid) (found bool, err error) {
+	if les == nil {
 		found = false
 		err = nil
 		return
 	}
 	var byvers map[transactions.Txid]error
-	byvers, found = les.they[cvers]
+	byvers, found = les[cvers]
 	if !found {
 		return
 	}
@@ -40,44 +38,40 @@ func (les *lsigEvalSubcache) get(cvers protocol.ConsensusVersion, txid transacti
 	return
 }
 
-func (les *lsigEvalSubcache) put(cvers protocol.ConsensusVersion, txid transactions.Txid, err error, size int) {
-	if les.they == nil {
-		les.they = make(map[protocol.ConsensusVersion]map[transactions.Txid]error, 2)
-	}
-	//var byvers map[transactions.Txid]error
-	byvers, found := les.they[cvers]
+func (les lsigEvalSubcache) put(cvers protocol.ConsensusVersion, txid transactions.Txid, err error, size int) {
+	byvers, found := les[cvers]
 	if !found {
 		byvers = make(map[transactions.Txid]error, size)
-		les.they[cvers] = byvers
+		les[cvers] = byvers
 	}
 	byvers[txid] = err
 }
 
-func (les *lsigEvalSubcache) size() int {
+func (les lsigEvalSubcache) size() int {
 	sum := 0
-	for _, byvers := range les.they {
+	for _, byvers := range les {
 		sum += len(byvers)
 	}
 	return sum
 }
 
 type lsigEvalCache struct {
-	cur  *lsigEvalSubcache
-	prev *lsigEvalSubcache
+	cur  lsigEvalSubcache
+	prev lsigEvalSubcache
 	size int
 }
 
 func makeLsigEvalCache(poolSize int) *lsigEvalCache {
 	out := &lsigEvalCache{
-		cur:  new(lsigEvalSubcache),
+		cur:  make(map[protocol.ConsensusVersion]map[transactions.Txid]error, 2),
 		prev: nil,
 		size: poolSize,
 	}
 	return out
 }
 
-func (lec *lsigEvalCache) get(cvers protocol.ConsensusVersion, txid transactions.Txid) (err error, found bool) {
-	err, found = lec.cur.get(cvers, txid)
+func (lec *lsigEvalCache) get(cvers protocol.ConsensusVersion, txid transactions.Txid) (found bool, err error) {
+	found, err = lec.cur.get(cvers, txid)
 	if found {
 		return
 	}
@@ -88,6 +82,6 @@ func (lec *lsigEvalCache) put(cvers protocol.ConsensusVersion, txid transactions
 	lec.cur.put(cvers, txid, err, lec.size)
 	if lec.cur.size() > lec.size {
 		lec.prev = lec.cur
-		lec.cur = new(lsigEvalSubcache)
+		lec.cur = make(map[protocol.ConsensusVersion]map[transactions.Txid]error, 2)
 	}
 }

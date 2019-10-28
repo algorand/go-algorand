@@ -123,8 +123,8 @@ type DummyVerifiedTxnCache struct{}
 func (x DummyVerifiedTxnCache) Verified(txn transactions.SignedTxn) bool {
 	return false
 }
-func (x DummyVerifiedTxnCache) EvalOk(cvers protocol.ConsensusVersion, txid transactions.Txid) (err error, found bool) {
-	return nil, false
+func (x DummyVerifiedTxnCache) EvalOk(cvers protocol.ConsensusVersion, txid transactions.Txid) (found bool, err error) {
+	return false, nil
 }
 func (x DummyVerifiedTxnCache) EvalRemember(cvers protocol.ConsensusVersion, txid transactions.Txid, err error) {
 }

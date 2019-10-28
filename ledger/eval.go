@@ -47,7 +47,7 @@ type evalAux struct {
 // pool object.
 type VerifiedTxnCache interface {
 	Verified(txn transactions.SignedTxn) bool
-	EvalOk(cvers protocol.ConsensusVersion, txid transactions.Txid) (txErr error, found bool)
+	EvalOk(cvers protocol.ConsensusVersion, txid transactions.Txid) (found bool, txErr error)
 	EvalRemember(cvers protocol.ConsensusVersion, txid transactions.Txid, err error)
 }
 
@@ -503,7 +503,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 
 		needCheckLsig := !txn.Lsig.Blank()
 		if needCheckLsig {
-			txErr, found := eval.txcache.EvalOk(eval.block.CurrentProtocol, txid)
+			found, txErr := eval.txcache.EvalOk(eval.block.CurrentProtocol, txid)
 			if found {
 				if txErr == nil {
 					needCheckLsig = false
