@@ -140,7 +140,7 @@ func (c *Client) SignAndBroadcastTransaction(walletHandle, pw []byte, utx transa
 }
 
 // MakeUnsignedGoOnlineTx creates a transaction that will bring an address online using available participation keys
-func (c *Client) MakeUnsignedGoOnlineTx(address string, part *account.Participation, round, txValidRounds, fee uint64) (transactions.Transaction, error) {
+func (c *Client) MakeUnsignedGoOnlineTx(address string, part *account.Participation, round, txValidRounds, fee uint64, leaseBytes [32]byte) (transactions.Transaction, error) {
 	// Parse the address
 	parsedAddr, err := basics.UnmarshalChecksumAddress(address)
 	if err != nil {
@@ -183,7 +183,7 @@ func (c *Client) MakeUnsignedGoOnlineTx(address string, part *account.Participat
 	lastRound := parsedRound + parsedTXValidRounds
 	parsedFee := basics.MicroAlgos{Raw: fee}
 
-	goOnlineTransaction := part.GenerateRegistrationTransaction(parsedFee, parsedRound, lastRound, cparams)
+	goOnlineTransaction := part.GenerateRegistrationTransaction(parsedFee, parsedRound, lastRound, leaseBytes, cparams)
 	if cparams.SupportGenesisHash {
 		var genHash crypto.Digest
 		copy(genHash[:], params.GenesisHash)
@@ -208,7 +208,7 @@ func (c *Client) MakeUnsignedGoOnlineTx(address string, part *account.Participat
 }
 
 // MakeUnsignedGoOfflineTx creates a transaction that will bring an address offline
-func (c *Client) MakeUnsignedGoOfflineTx(address string, round, txValidRounds, fee uint64) (transactions.Transaction, error) {
+func (c *Client) MakeUnsignedGoOfflineTx(address string, round, txValidRounds, fee uint64, leaseBytes [32]byte) (transactions.Transaction, error) {
 	// Parse the address
 	parsedAddr, err := basics.UnmarshalChecksumAddress(address)
 	if err != nil {
@@ -246,6 +246,7 @@ func (c *Client) MakeUnsignedGoOfflineTx(address string, round, txValidRounds, f
 			Fee:        parsedFee,
 			FirstValid: parsedRound,
 			LastValid:  lastRound,
+			Lease:      leaseBytes,
 		},
 	}
 	if cparams.SupportGenesisHash {
