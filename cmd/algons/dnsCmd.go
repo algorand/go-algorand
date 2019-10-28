@@ -294,7 +294,7 @@ func doDeleteDNS(network string, noPrompt bool, excludePattern string, includePa
 			return false
 		}
 
-		for k, _ := range restrictedNetworks {
+		for k := range restrictedNetworks {
 			if includeRegex != nil {
 				if includeRegex.MatchString(k) {
 					fmt.Fprintf(os.Stderr, "specified include pattern ('%s') matches a restricted network: %s", includePattern, k)
@@ -330,8 +330,8 @@ func doDeleteDNS(network string, noPrompt bool, excludePattern string, includePa
 	}
 
 	for _, service := range services {
-		name := service+"._tcp."+network+".algodev.network"
-		if includeRegex != nil  && network == "" {
+		name := service + "._tcp." + network + ".algodev.network"
+		if includeRegex != nil && network == "" {
 			name = ""
 		}
 
@@ -376,7 +376,7 @@ func doDeleteDNS(network string, noPrompt bool, excludePattern string, includePa
 					}
 				}
 
-				if includeRegex == nil || includeRegex.MatchString(r.Name){
+				if includeRegex == nil || includeRegex.MatchString(r.Name) {
 					fmt.Printf("Found DNS '%s' record: %s\n", recordType, r.Name)
 					idsToDelete[r.ID] = r.Name
 				}
