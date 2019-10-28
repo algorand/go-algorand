@@ -50,6 +50,7 @@ type PpConfig struct {
 	LogicArgs       [][]byte
 	GroupSize       uint32
 	NumAsset        uint32
+	MinAccountAsset uint64
 }
 
 // DefaultConfig object for Ping Pong
@@ -70,6 +71,7 @@ var DefaultConfig = PpConfig{
 	MinAccountFunds: 100000,
 	GroupSize:       1,
 	NumAsset:        0,
+	MinAccountAsset: 10000000,
 }
 
 // LoadConfigFromFile reads and loads Ping Pong configuration

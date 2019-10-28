@@ -20,12 +20,12 @@ import (
 	"fmt"
 	"github.com/algorand/go-algorand/crypto"
 	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
-	"sort"
-
 	"github.com/algorand/go-algorand/libgoal"
+	"sort"
+	"time"
 )
 
-func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]uint64, assetParams map[uint64]v1.AssetParams, cfg PpConfig, err error) {
+func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]uint64,  cfg PpConfig, err error) {
 	accounts = make(map[string]uint64)
 	cfg = initCfg
 
@@ -38,7 +38,7 @@ func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]ui
 	addresses, err := ac.ListAddresses(wallet)
 
 	if err != nil {
-		return nil, nil, PpConfig{}, err
+		return nil, PpConfig{}, err
 	}
 
 	// find either srcAccount or the richest account
@@ -49,7 +49,7 @@ func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]ui
 
 		amount, err := ac.GetBalance(addr)
 		if err != nil {
-			return nil, nil, PpConfig{}, err
+			return nil, PpConfig{}, err
 		}
 
 		amt := amount
@@ -97,13 +97,12 @@ func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]ui
 		}
 	}
 
-	// return if we don't need to set up assets
-	if cfg.NumAsset == 0 {
-		return
-	}
+	return
+}
 
+func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConfig) (assetParams map[uint64]v1.AssetParams, err error) {
 	// get existing assets
-	account, accountErr := ac.AccountInformation(cfg.SrcAccount)
+	account, accountErr := client.AccountInformation(cfg.SrcAccount)
 	if accountErr != nil {
 		fmt.Printf("Cannot lookup source account")
 		err = accountErr
@@ -112,7 +111,7 @@ func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]ui
 
 	// Get wallet handle token
 	var h []byte
-	h, err = ac.GetUnencryptedWalletHandle()
+	h, err = client.GetUnencryptedWalletHandle()
 	if err != nil {
 		return
 	}
@@ -124,26 +123,31 @@ func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]ui
 		var metaLen = 32
 		meta := make([]byte, metaLen, metaLen)
 		crypto.RandBytes(meta[:])
-		tx, createErr := ac.MakeUnsignedAssetCreateTx(1000, false, cfg.SrcAccount, cfg.SrcAccount, cfg.SrcAccount, cfg.SrcAccount, "ping", "pong", "", meta)
+		totalSupply := cfg.MinAccountAsset * uint64(cfg.NumPartAccounts) * 9
+		if totalSupply < cfg.MinAccountAsset { //overflow
+			fmt.Printf("Too many NumPartAccounts")
+			return
+		}
+		tx, createErr := client.MakeUnsignedAssetCreateTx(totalSupply, false, cfg.SrcAccount, cfg.SrcAccount, cfg.SrcAccount, cfg.SrcAccount, "ping", "pong", "", meta)
 		if createErr != nil {
 			fmt.Printf("Cannot make asset create txn\n")
 			err = createErr
 			return
 		}
-		tx, err = ac.FillUnsignedTxTemplate(cfg.SrcAccount, 0, 0, cfg.MaxFee, tx)
+		tx, err = client.FillUnsignedTxTemplate(cfg.SrcAccount, 0, 0, cfg.MaxFee, tx)
 		if err != nil {
 			fmt.Printf("Cannot fill asset creation txn\n")
 			return
 		}
 
-		signedTxn, signErr := ac.SignTransactionWithWallet(h, nil, tx)
+		signedTxn, signErr := client.SignTransactionWithWallet(h, nil, tx)
 		if signErr != nil {
 			fmt.Printf("Cannot sign asset creation txn\n")
 			err = signErr
 			return
 		}
 
-		txid, broadcastErr := ac.BroadcastTransaction(signedTxn)
+		txid, broadcastErr := client.BroadcastTransaction(signedTxn)
 		if broadcastErr != nil {
 			fmt.Printf("Cannot broadcast asset creation txn\n")
 			err = broadcastErr
@@ -151,67 +155,113 @@ func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]ui
 		}
 
 		if !cfg.Quiet {
-			fmt.Printf("Create a new asset, txid: %v\n", txid)
+			fmt.Printf("Create a new asset: supply=%d, txid=%s\n", totalSupply, txid)
 		}
 		accounts[cfg.SrcAccount] -= tx.Fee.Raw
 	}
 
 	// get these assets
-	account, accountErr = ac.AccountInformation(cfg.SrcAccount)
-	if accountErr != nil {
-		fmt.Printf("Cannot lookup source account")
-		err = accountErr
-		return
+	for {
+		account, accountErr = client.AccountInformation(cfg.SrcAccount)
+		if accountErr != nil {
+			fmt.Printf("Cannot lookup source account")
+			err = accountErr
+			return
+		}
+		if len(account.AssetParams) >= int(cfg.NumAsset) {
+			break
+		}
+		time.Sleep(time.Second)
 	}
+
 	assetParams = account.AssetParams
 
 	for addr := range accounts {
-		addrAccount, addrErr := ac.AccountInformation(cfg.SrcAccount)
+		addrAccount, addrErr := client.AccountInformation(addr)
 		if addrErr != nil {
 			fmt.Printf("Cannot lookup source account")
 			err = addrErr
 			return
 		}
+
 		for k := range assetParams {
 			// if addr already opened this asset, skip
-			if _, ok := addrAccount.Assets[k]; ok {
+			if _, ok := addrAccount.Assets[k]; !ok {
+				// init asset k in addr
+				tx, sendErr := client.MakeUnsignedAssetSendTx(k, 0, addr, "", "")
+				if sendErr != nil {
+					fmt.Printf("Cannot initiate asset %v in account %v\n", k, addr)
+					err = sendErr
+					return
+				}
+
+				tx, err = client.FillUnsignedTxTemplate(addr, 0, 0, cfg.MaxFee, tx)
+				if err != nil {
+					fmt.Printf("Cannot fill asset %v init txn in account %v\n", k, addr)
+					return
+				}
+
+				signedTxn, signErr := client.SignTransactionWithWallet(h, nil, tx)
+				if signErr != nil {
+					fmt.Printf("Cannot sign asset %v init txn in account %v\n", k, addr)
+					err = signErr
+					return
+				}
+
+				_, broadcastErr := client.BroadcastTransaction(signedTxn)
+				if broadcastErr != nil {
+					fmt.Printf("Cannot broadcast asset %v init txn in account %v\n", k, addr)
+					err = broadcastErr
+					return
+				}
+
+				if !cfg.Quiet {
+					fmt.Printf("Init asset %v in account %v\n", k, addr)
+				}
+				accounts[addr] -= tx.Fee.Raw
+			}
+
+			// fund asset
+			var assetAmt uint64
+			if asset, ok := addrAccount.Assets[k]; ok {
+				if asset.Amount > cfg.MinAccountAsset {
+					assetAmt = 0
+				} else {
+					assetAmt = cfg.MinAccountAsset - asset.Amount
+				}
+			} else {
+				assetAmt = cfg.MinAccountAsset
+			}
+
+			if assetAmt == 0 {
 				continue
 			}
-			// init asset k in addr
-			tx, sendErr := ac.MakeUnsignedAssetSendTx(k, 0, addr, "", "")
+
+			tx, sendErr := constructTxn(cfg.SrcAccount, addr, cfg.MaxFee, assetAmt, k, client, cfg)
 			if sendErr != nil {
 				fmt.Printf("Cannot initiate asset %v in account %v\n", k, addr)
 				err = sendErr
 				return
 			}
-
-			tx, err = ac.FillUnsignedTxTemplate(addr, 0, 0, cfg.MaxFee, tx)
-			if err != nil {
-				fmt.Printf("Cannot fill asset %v init txn in account %v\n", k, addr)
-				return
-			}
-
-			signedTxn, signErr := ac.SignTransactionWithWallet(h, nil, tx)
+			stxn, signErr := signTxn(cfg.SrcAccount, tx, client, cfg)
 			if signErr != nil {
-				fmt.Printf("Cannot sign asset %v init txn in account %v\n", k, addr)
+				fmt.Printf("Cannot sign asset %v init fund txn in account %v\n", k, addr)
 				err = signErr
 				return
 			}
-
-			_, broadcastErr := ac.BroadcastTransaction(signedTxn)
+			_, broadcastErr := client.BroadcastTransaction(stxn)
 			if broadcastErr != nil {
-				fmt.Printf("Cannot broadcast asset %v init txn in account %v\n", k, addr)
+				fmt.Printf("Cannot broadcast asset %v init fund txn in account %v\n", k, addr)
 				err = broadcastErr
 				return
 			}
-
 			if !cfg.Quiet {
-				fmt.Printf("Init asset %v in account %v\n", k, addr)
+				fmt.Printf("Fund %d asset %d to account %s\n", assetAmt, k, addr)
 			}
-			accounts[addr] -= tx.Fee.Raw
+			accounts[cfg.SrcAccount] -= tx.Fee.Raw
 		}
-	}
 
+	}
 	return
 }
 
