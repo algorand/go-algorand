@@ -305,7 +305,7 @@ func doDeleteDNS(network string, noPrompt bool, excludePattern string, includePa
 	}
 
 	if network == "" && includeRegex == nil {
-		fmt.Fprintf(os.Stderr, "\"network\" or \"include\" required.")
+		fmt.Fprintf(os.Stderr, "\"network\" or \"include\" required.\n")
 		return false
 	}
 
