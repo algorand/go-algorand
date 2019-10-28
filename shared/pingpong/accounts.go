@@ -97,10 +97,8 @@ func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]ui
 		}
 	}
 
-	// Get wallet handle token
-	var h []byte
-	h, err = ac.GetUnencryptedWalletHandle()
-	if err != nil {
+	// return if we don't need to set up assets
+	if cfg.NumAsset == 0 {
 		return
 	}
 
@@ -109,6 +107,13 @@ func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]ui
 	if accountErr != nil {
 		fmt.Printf("Cannot lookup source account")
 		err = accountErr
+		return
+	}
+
+	// Get wallet handle token
+	var h []byte
+	h, err = ac.GetUnencryptedWalletHandle()
+	if err != nil {
 		return
 	}
 

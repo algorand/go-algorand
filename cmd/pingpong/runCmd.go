@@ -235,7 +235,7 @@ var runCmd = &cobra.Command{
 		if numAsset <= 1000 {
 			cfg.NumAsset = numAsset
 		} else {
-			reportErrorf("Invalid number of asset: %v\n", numAsset)
+			reportErrorf("Invalid number of asset: %d, (valid number: 1 - 1000)\n", numAsset)
 		}
 
 		reportInfof("Preparing to initialize PingPong with config:\n")

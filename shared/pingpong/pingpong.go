@@ -19,13 +19,13 @@ package pingpong
 import (
 	"context"
 	"fmt"
-	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"math"
 	"math/rand"
 	"os"
 	"time"
 
 	"github.com/algorand/go-algorand/crypto"
+	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/libgoal"
@@ -326,10 +326,16 @@ func constructTxn(from, to string, fee, amt uint64, assetParams map[uint64]v1.As
 		}
 	} else {
 		var assetID uint64
+		rindex := rand.Intn(len(assetParams))
+		i := 0
 		for k := range assetParams {
-			assetID = k
-			break
+			if i == rindex {
+				assetID = k
+				break
+			}
+			i++
 		}
+
 		txn, err = client.MakeUnsignedAssetSendTx(assetID, amt, to, "", "")
 		if err != nil {
 			return
