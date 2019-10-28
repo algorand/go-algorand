@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/condvar"
 )
 
@@ -61,7 +62,7 @@ type TransactionPool struct {
 	rememberedTxids    map[transactions.Txid]transactions.SignedTxn
 
 	// result of logic.Eval()
-	lsigCache *statusCache
+	lsigCache *lsigEvalCache
 	lcmu      deadlock.RWMutex
 }
 
@@ -81,7 +82,7 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local) *TransactionPo
 		statusCache:     makeStatusCache(cfg.TxPoolSize),
 		logStats:        cfg.EnableAssembleStats,
 		expFeeFactor:    cfg.TxPoolExponentialIncreaseFactor,
-		lsigCache:       makeStatusCache(cfg.TxPoolSize),
+		lsigCache:       makeLsigEvalCache(cfg.TxPoolSize),
 	}
 	pool.cond.L = &pool.mu
 	pool.recomputeBlockEvaluator()
@@ -334,18 +335,17 @@ func (pool *TransactionPool) Verified(txn transactions.SignedTxn) bool {
 }
 
 // EvalOk for LogicSig Eval of a txn by txid, returns the SignedTxn, error string, and found.
-func (pool *TransactionPool) EvalOk(txid transactions.Txid) (txErr string, found bool) {
+func (pool *TransactionPool) EvalOk(cvers protocol.ConsensusVersion, txid transactions.Txid) (found bool, err error) {
 	pool.lcmu.RLock()
 	defer pool.lcmu.RUnlock()
-	_, txErr, found = pool.lsigCache.check(txid)
-	return
+	return pool.lsigCache.get(cvers, txid)
 }
 
 // EvalRemember sets an error string from LogicSig Eval for some SignedTxn
-func (pool *TransactionPool) EvalRemember(tx transactions.SignedTxn, errString string) {
+func (pool *TransactionPool) EvalRemember(cvers protocol.ConsensusVersion, txid transactions.Txid, err error) {
 	pool.lcmu.Lock()
 	defer pool.lcmu.Unlock()
-	pool.lsigCache.put(tx, errString)
+	pool.lsigCache.put(cvers, txid, err)
 }
 
 // OnNewBlock excises transactions from the pool that are included in the specified Block or if they've expired
@@ -429,11 +429,11 @@ type alwaysVerifiedPool struct {
 func (*alwaysVerifiedPool) Verified(txn transactions.SignedTxn) bool {
 	return true
 }
-func (pool *alwaysVerifiedPool) EvalOk(txid transactions.Txid) (errStr string, found bool) {
-	return pool.pool.EvalOk(txid)
+func (pool *alwaysVerifiedPool) EvalOk(cvers protocol.ConsensusVersion, txid transactions.Txid) (txfound bool, err error) {
+	return pool.pool.EvalOk(cvers, txid)
 }
-func (pool *alwaysVerifiedPool) EvalRemember(txn transactions.SignedTxn, errStr string) {
-	pool.pool.EvalRemember(txn, errStr)
+func (pool *alwaysVerifiedPool) EvalRemember(cvers protocol.ConsensusVersion, txid transactions.Txid, txErr error) {
+	pool.pool.EvalRemember(cvers, txid, txErr)
 }
 
 func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactions.SignedTxn) error {
