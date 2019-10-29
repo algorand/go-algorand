@@ -975,11 +975,11 @@ int 3
 ==
 &&
 txn TxID
-arg 6
+arg 7
 ==
 &&
 txn Lease
-arg 7
+arg 8
 ==
 &&`
 
