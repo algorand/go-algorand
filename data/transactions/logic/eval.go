@@ -90,7 +90,7 @@ type EvalParams struct {
 	// GroupIndex should point to Txn within TxnGroup
 	GroupIndex int
 
-	FirstValidTimeStamp uint64
+	FirstValidTimeStampSource func() int64
 }
 
 type evalContext struct {
@@ -164,6 +164,15 @@ var errCostTooHigh = errors.New("LogicSigMaxCost exceded")
 var errLogicSignNotSupported = errors.New("LogicSig not supported")
 var errTooManyArgs = errors.New("LogicSig has too many arguments")
 
+var debugLogger logging.Logger
+
+func log() logging.Logger {
+	if debugLogger != nil {
+		return debugLogger
+	}
+	return logging.Base()
+}
+
 // Eval checks to see if a transaction passes logic
 // A program passes succesfully if it finishes with one int element on the stack that is non-zero.
 func Eval(program []byte, params EvalParams) (pass bool, err error) {
@@ -179,7 +188,7 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 				}
 			}
 			err = PanicError{x, errstr}
-			logging.Base().Errorf("recovered panic in Eval: %s", err)
+			log().Errorf("recovered panic in Eval: %s", err)
 		}
 	}()
 	if (params.Proto == nil) || (params.Proto.LogicSigVersion == 0) {
@@ -260,7 +269,7 @@ func Check(program []byte, params EvalParams) (cost int, err error) {
 				}
 			}
 			err = PanicError{x, errstr}
-			logging.Base().Errorf("recovered panic in Check: %s", err)
+			log().Errorf("recovered panic in Check: %s", err)
 		}
 	}()
 	if (params.Proto == nil) || (params.Proto.LogicSigVersion == 0) {
@@ -1016,7 +1025,12 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint
 	case FirstValid:
 		sv.Uint = uint64(txn.FirstValid)
 	case FirstValidTime:
-		sv.Uint = cx.FirstValidTimeStamp
+		ts := cx.FirstValidTimeStampSource()
+		if ts < 0 {
+			sv.Uint = 0
+		} else {
+			sv.Uint = uint64(ts)
+		}
 	case LastValid:
 		sv.Uint = uint64(txn.LastValid)
 	case Note:

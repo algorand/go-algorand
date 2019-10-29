@@ -342,14 +342,21 @@ func (pool *TransactionPool) EvalOk(cvers protocol.ConsensusVersion, txid transa
 }
 
 // EvalRemember sets an error string from LogicSig Eval for some SignedTxn
-func (pool *TransactionPool) EvalRemember(cvers protocol.ConsensusVersion, txid transactions.Txid, err error) {
+func (pool *TransactionPool) EvalRemember(cvers protocol.ConsensusVersion, txid transactions.Txid, firstValid basics.Round, firstValidTimestamp int64, err error) {
 	pool.lcmu.Lock()
 	defer pool.lcmu.Unlock()
-	pool.lsigCache.put(cvers, txid, err)
+	pool.lsigCache.put(cvers, txid, firstValid, firstValidTimestamp, err)
+}
+
+func (pool *TransactionPool) lsigCacheBlockCheck(round basics.Round, timestamp int64) {
+	pool.lcmu.Lock()
+	defer pool.lcmu.Unlock()
+	pool.lsigCache.roundCheck(round, timestamp)
 }
 
 // OnNewBlock excises transactions from the pool that are included in the specified Block or if they've expired
 func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block) {
+	pool.lsigCacheBlockCheck(block.Round(), block.TimeStamp)
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 	defer pool.cond.Broadcast()
@@ -432,8 +439,8 @@ func (*alwaysVerifiedPool) Verified(txn transactions.SignedTxn) bool {
 func (pool *alwaysVerifiedPool) EvalOk(cvers protocol.ConsensusVersion, txid transactions.Txid) (txfound bool, err error) {
 	return pool.pool.EvalOk(cvers, txid)
 }
-func (pool *alwaysVerifiedPool) EvalRemember(cvers protocol.ConsensusVersion, txid transactions.Txid, txErr error) {
-	pool.pool.EvalRemember(cvers, txid, txErr)
+func (pool *alwaysVerifiedPool) EvalRemember(cvers protocol.ConsensusVersion, txid transactions.Txid, firstValid basics.Round, firstValidTimestamp int64, txErr error) {
+	pool.pool.EvalRemember(cvers, txid, firstValid, firstValidTimestamp, txErr)
 }
 
 func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactions.SignedTxn) error {

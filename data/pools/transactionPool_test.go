@@ -1004,7 +1004,7 @@ func TestLogicSigCache(t *testing.T) {
 			Logic: program,
 		},
 	}
-	transactionPool.lsigCache.put(protocol.ConsensusCurrentVersion, signedTx.ID(), nil)
+	transactionPool.lsigCache.put(protocol.ConsensusCurrentVersion, signedTx.ID(), 0, 0, nil)
 	err = transactionPool.RememberOne(signedTx)
 	require.NoError(t, err)
 }

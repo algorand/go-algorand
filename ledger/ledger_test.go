@@ -126,7 +126,7 @@ func (x DummyVerifiedTxnCache) Verified(txn transactions.SignedTxn) bool {
 func (x DummyVerifiedTxnCache) EvalOk(cvers protocol.ConsensusVersion, txid transactions.Txid) (found bool, err error) {
 	return false, nil
 }
-func (x DummyVerifiedTxnCache) EvalRemember(cvers protocol.ConsensusVersion, txid transactions.Txid, err error) {
+func (x DummyVerifiedTxnCache) EvalRemember(cvers protocol.ConsensusVersion, txid transactions.Txid, firstValid basics.Round, firstValidTimestamp int64, err error) {
 }
 
 func (l *Ledger) appendUnvalidated(blk bookkeeping.Block) error {

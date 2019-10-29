@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -1034,7 +1035,8 @@ func TestTxn(t *testing.T) {
 	recs[3].MicroAlgos.Raw = 4160
 	sb := strings.Builder{}
 	proto := defaultEvalProto()
-	pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, GroupIndex: 3, FirstValidTimeStamp: 210})
+	fvtss := func() int64 { return 210 }
+	pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, GroupIndex: 3, FirstValidTimeStampSource: fvtss})
 	if !pass {
 		t.Log(hex.EncodeToString(program))
 		t.Log(sb.String())
@@ -1541,6 +1543,10 @@ func checkPanic(cx *evalContext) int {
 }
 
 func TestPanic(t *testing.T) {
+	debugLogger = logging.TestingLog(t)
+	defer func() {
+		debugLogger = nil
+	}()
 	program, err := AssembleString(`int 1`)
 	require.NoError(t, err)
 	var hackedOpcode int

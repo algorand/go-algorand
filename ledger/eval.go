@@ -48,7 +48,7 @@ type evalAux struct {
 type VerifiedTxnCache interface {
 	Verified(txn transactions.SignedTxn) bool
 	EvalOk(cvers protocol.ConsensusVersion, txid transactions.Txid) (found bool, txErr error)
-	EvalRemember(cvers protocol.ConsensusVersion, txid transactions.Txid, err error)
+	EvalRemember(cvers protocol.ConsensusVersion, txid transactions.Txid, firstValid basics.Round, firstValidTimestamp int64, err error)
 }
 
 type roundCowBase struct {
@@ -513,12 +513,12 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 			}
 		}
 		if needCheckLsig {
-			err = eval.checkLogicSig(txn, txgroup, groupIndex)
+			firstValid, firstValidTimestamp, err := eval.checkLogicSig(txn, txgroup, groupIndex)
 			if err != nil {
-				eval.txcache.EvalRemember(eval.block.CurrentProtocol, txid, err)
+				eval.txcache.EvalRemember(eval.block.CurrentProtocol, txid, firstValid, firstValidTimestamp, err)
 				return err
 			}
-			eval.txcache.EvalRemember(eval.block.CurrentProtocol, txid, nil)
+			eval.txcache.EvalRemember(eval.block.CurrentProtocol, txid, firstValid, firstValidTimestamp, nil)
 		}
 	}
 
@@ -586,33 +586,49 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 	return nil
 }
 
-func (eval *BlockEvaluator) checkLogicSig(txn transactions.SignedTxn, txgroup []transactions.SignedTxnWithAD, groupIndex int) (err error) {
-	firstValid := basics.Round(txn.Txn.FirstValid)
-	var hdr bookkeeping.BlockHeader
-	if eval.block.BlockHeader.Round == firstValid {
-		hdr = eval.block.BlockHeader
-	} else {
-		// TODO: move this into some lazy evaluator for the few scripts that actually use `txn FirstValidTime` ?
-		hdr, err = eval.l.BlockHdr(firstValid)
-		if err != nil {
-			return fmt.Errorf("could not fetch BlockHdr for FirstValid=%d (current=%d): %s", txn.Txn.FirstValid, eval.block.BlockHeader.Round, err)
+func (eval *BlockEvaluator) checkLogicSig(txn transactions.SignedTxn, txgroup []transactions.SignedTxnWithAD, groupIndex int) (firstValid basics.Round, firstValidTimestamp int64, err error) {
+	firstValid = basics.Round(txn.Txn.FirstValid)
+	firstValidTimestamp = int64(0)
+	var fvErr error
+	var firstValidSource = func() int64 {
+		if firstValidTimestamp != 0 {
+			return firstValidTimestamp
 		}
+		var hdr bookkeeping.BlockHeader
+		if eval.block.BlockHeader.Round == firstValid {
+			hdr = eval.block.BlockHeader
+		} else {
+			hdr, err = eval.l.BlockHdr(firstValid)
+			if err != nil {
+				fvErr = fmt.Errorf("could not fetch BlockHdr for FirstValid=%d (current=%d): %s", txn.Txn.FirstValid, eval.block.BlockHeader.Round, err)
+				return 0
+			}
+		}
+		firstValidTimestamp = hdr.TimeStamp
+		return firstValidTimestamp
 	}
 	ep := logic.EvalParams{
-		Txn:                 &txn,
-		Proto:               &eval.proto,
-		TxnGroup:            txgroup,
-		GroupIndex:          groupIndex,
-		FirstValidTimeStamp: uint64(hdr.TimeStamp),
+		Txn:                       &txn,
+		Proto:                     &eval.proto,
+		TxnGroup:                  txgroup,
+		GroupIndex:                groupIndex,
+		FirstValidTimeStampSource: firstValidSource,
+		//FirstValidTimeStamp: uint64(hdr.TimeStamp),
 	}
 	pass, err := logic.Eval(txn.Lsig.Logic, ep)
+	if fvErr != nil {
+		err = fvErr
+		return
+	}
 	if err != nil {
-		return fmt.Errorf("transaction %v: rejected by logic err=%s", txn.ID(), err)
+		err = fmt.Errorf("transaction %v: rejected by logic err=%s", txn.ID(), err)
+		return
 	}
 	if !pass {
-		return fmt.Errorf("transaction %v: rejected by logic", txn.ID())
+		err = fmt.Errorf("transaction %v: rejected by logic", txn.ID())
+		return
 	}
-	return nil
+	return
 }
 
 // Call "endOfBlock" after all the block's rewards and transactions are processed. Applies any deferred balance updates.
