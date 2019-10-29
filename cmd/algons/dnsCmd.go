@@ -343,7 +343,7 @@ func doDeleteDNS(network string, noPrompt bool, excludePattern string, includePa
 			if name != "" {
 				fmt.Fprintf(os.Stderr, "Error listing SRV '%s' entries: %v\n", service, err)
 			} else {
-				fmt.Fprintf(os.Stderr, "Error listing SRV '%s' entries: %v\n", service, err)
+				fmt.Fprintf(os.Stderr, "Error listing SRV entries: %v\n", err)
 			}
 			os.Exit(1)
 		}
