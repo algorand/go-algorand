@@ -133,7 +133,7 @@ func (part Participation) VotingSigner() crypto.OneTimeSigner {
 }
 
 // GenerateRegistrationTransaction returns a transaction object for registering a Participation with its parent.
-func (part Participation) GenerateRegistrationTransaction(fee basics.MicroAlgos, txnFirstValid, txnLastValid basics.Round, params config.ConsensusParams) transactions.Transaction {
+func (part Participation) GenerateRegistrationTransaction(fee basics.MicroAlgos, txnFirstValid, txnLastValid basics.Round, leaseBytes [32]byte, params config.ConsensusParams) transactions.Transaction {
 	t := transactions.Transaction{
 		Type: protocol.KeyRegistrationTx,
 		Header: transactions.Header{
@@ -141,6 +141,7 @@ func (part Participation) GenerateRegistrationTransaction(fee basics.MicroAlgos,
 			Fee:        fee,
 			FirstValid: txnFirstValid,
 			LastValid:  txnLastValid,
+			Lease:      leaseBytes,
 		},
 		KeyregTxnFields: transactions.KeyregTxnFields{
 			VotePK:      part.Voting.OneTimeSignatureVerifier,
