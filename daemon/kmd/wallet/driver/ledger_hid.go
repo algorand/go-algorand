@@ -36,7 +36,7 @@ type LedgerUSBError uint16
 
 // Error satisfies builtin interface `error`
 func (err LedgerUSBError) Error() string {
-	return fmt.Sprintf("unexpected status %x", err)
+	return fmt.Sprintf("Exchange: unexpected status 0x%x", err)
 }
 
 // Protocol reference:
