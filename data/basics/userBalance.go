@@ -192,14 +192,14 @@ type AssetParams struct {
 
 	// UnitName specifies a hint for the name of a unit of
 	// this asset.
-	UnitName [8]byte `codec:"un"`
+	UnitName string `codec:"un"`
 
 	// AssetName specifies a hint for the name of the asset.
-	AssetName [32]byte `codec:"an"`
+	AssetName string `codec:"an"`
 
 	// URL specifies a URL where more information about the asset can be
 	// retrieved
-	URL [32]byte `codec:"au"`
+	URL string `codec:"au"`
 
 	// MetadataHash specifies a commitment to some unspecified asset
 	// metadata. The format of this metadata is up to the application.

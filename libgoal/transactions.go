@@ -436,25 +436,36 @@ func (c *Client) MakeUnsignedAssetCreateTx(total uint64, defaultFrozen bool, man
 		}
 	}
 
-	if len(url) > len(tx.AssetParams.URL) {
+	// Get consensus params so we can get max field lengths
+	params, err := c.SuggestedParams()
+	if err != nil {
+		return transactions.Transaction{}, err
+	}
+
+	cparams, ok := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
+	if !ok {
+		return transactions.Transaction{}, errors.New("unknown consensus version")
+	}
+
+	if len(url) > cparams.MaxAssetURLBytes {
 		return tx, fmt.Errorf("asset url %s is too long (max %d bytes)", url, len(tx.AssetParams.URL))
 	}
-	copy(tx.AssetParams.URL[:], []byte(url))
+	tx.AssetParams.URL = url
 
 	if len(metadataHash) > len(tx.AssetParams.MetadataHash) {
 		return tx, fmt.Errorf("asset metadata hash %x too long (max %d bytes)", metadataHash, len(tx.AssetParams.MetadataHash))
 	}
 	copy(tx.AssetParams.MetadataHash[:], metadataHash)
 
-	if len(unitName) > len(tx.AssetParams.UnitName) {
+	if len(unitName) > cparams.MaxAssetUnitNameBytes {
 		return tx, fmt.Errorf("asset unit name %s too long (max %d bytes)", unitName, len(tx.AssetParams.UnitName))
 	}
-	copy(tx.AssetParams.UnitName[:], []byte(unitName))
+	tx.AssetParams.UnitName = unitName
 
-	if len(assetName) > len(tx.AssetParams.AssetName) {
+	if len(assetName) > cparams.MaxAssetNameBytes {
 		return tx, fmt.Errorf("asset name %s too long (max %d bytes)", assetName, len(tx.AssetParams.AssetName))
 	}
-	copy(tx.AssetParams.AssetName[:], []byte(assetName))
+	tx.AssetParams.AssetName = assetName
 
 	return tx, nil
 }
