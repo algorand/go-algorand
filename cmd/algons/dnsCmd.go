@@ -319,7 +319,7 @@ func doDeleteDNS(network string, noPrompt bool, excludePattern string, includePa
 
 	idsToDelete := make(map[string]string) // Maps record ID to Name
 	services := []string{"_algobootstrap", "_metrics"}
-	servicesRegexp, err := regexp.Compile("(algobootstrap|_metrics)._tcp.*algodev.network")
+	servicesRegexp, err := regexp.Compile("^(_algobootstrap|_metrics)\\._tcp\\..*algodev.network$")
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to create services expression: %v", err)
@@ -330,15 +330,21 @@ func doDeleteDNS(network string, noPrompt bool, excludePattern string, includePa
 	}
 
 	for _, service := range services {
-		name := service + "._tcp." + network + ".algodev.network"
+		var name string
 		if includeRegex != nil && network == "" {
 			name = ""
+		} else {
+			name = service + "._tcp." + network + ".algodev.network"
 		}
 
 		records, err := cloudflareDNS.ListDNSRecord(context.Background(), "SRV", name, "", "", "", "")
 
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error listing SRV entries: %v\n", err)
+			if name != "" {
+				fmt.Fprintf(os.Stderr, "Error listing SRV '%s' entries: %v\n", service, err)
+			} else {
+				fmt.Fprintf(os.Stderr, "Error listing SRV '%s' entries: %v\n", service, err)
+			}
 			os.Exit(1)
 		}
 		for _, r := range records {
@@ -356,9 +362,11 @@ func doDeleteDNS(network string, noPrompt bool, excludePattern string, includePa
 		}
 	}
 
-	networkSuffix := "." + network + ".algodev.network"
+	var networkSuffix string
 	if network == "" {
 		networkSuffix = ".algodev.network"
+	} else {
+		networkSuffix = "." + network + ".algodev.network"
 	}
 
 	for _, recordType := range []string{"A", "CNAME"} {
