@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"io/ioutil"
 	"time"
 
@@ -121,11 +122,12 @@ func (componentInstance *PingPongComponentInstance) startPingPong(cfg *pingpong.
 	log.Infof("Preparing to initialize PingPong with config: %+v\n", cfg)
 
 	var accounts map[string]uint64
+	var assetParams map[uint64]v1.AssetParams
 	var resultCfg pingpong.PpConfig
 
 	// Initialize accounts if necessary, this may take several attempts while previous transactions to settle
 	for i := 0; i < 10; i++ {
-		accounts, resultCfg, err = pingpong.PrepareAccounts(ac, *cfg)
+		accounts, assetParams, resultCfg, err = pingpong.PrepareAccounts(ac, *cfg)
 		if err == nil {
 			break
 		} else {
@@ -144,7 +146,7 @@ func (componentInstance *PingPongComponentInstance) startPingPong(cfg *pingpong.
 	componentInstance.ctx, componentInstance.cancelFunc = context.WithCancel(context.Background())
 
 	// Kick off the real processing
-	go pingpong.RunPingPong(componentInstance.ctx, ac, accounts, resultCfg)
+	go pingpong.RunPingPong(componentInstance.ctx, ac, accounts, assetParams, resultCfg)
 
 	return
 }
