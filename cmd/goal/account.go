@@ -184,6 +184,20 @@ func init() {
 	markNonparticipatingCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
 }
 
+func scLeaseBytes(cmd *cobra.Command) (leaseBytes [32]byte) {
+	if cmd.Flags().Changed("lease") {
+		leaseBytesRaw, err := base64.StdEncoding.DecodeString(statusChangeLease)
+		if err != nil {
+			reportErrorf(malformedLease, lease, err)
+		}
+		if len(leaseBytesRaw) != 32 {
+			reportErrorf(malformedLease, lease, fmt.Errorf("lease length %d != 32", len(leaseBytesRaw)))
+		}
+		copy(leaseBytes[:], leaseBytesRaw)
+	}
+	return
+}
+
 var accountCmd = &cobra.Command{
 	Use:   "account",
 	Short: "Control and manage Algorand accounts",
@@ -556,19 +570,7 @@ var changeOnlineCmd = &cobra.Command{
 			}
 		}
 
-		var leaseBytes [32]byte
-		if cmd.Flags().Changed("lease") {
-			leaseBytesRaw, err := base64.StdEncoding.DecodeString(statusChangeLease)
-			if err != nil {
-				reportErrorf(malformedLease, lease, err)
-			}
-			if len(leaseBytesRaw) != 32 {
-				reportErrorf(malformedLease, lease, fmt.Errorf("lease length %d != 32", len(leaseBytesRaw)))
-			}
-			copy(leaseBytes[:], leaseBytesRaw)
-		}
-
-		err := changeAccountOnlineStatus(accountAddress, part, online, statusChangeTxFile, walletName, statusChangeFirstRound, statusChangeValidRounds, transactionFee, leaseBytes, dataDir, client)
+		err := changeAccountOnlineStatus(accountAddress, part, online, statusChangeTxFile, walletName, statusChangeFirstRound, statusChangeValidRounds, transactionFee, scLeaseBytes(cmd), dataDir, client)
 		if err != nil {
 			reportErrorf(err.Error())
 		}
@@ -700,19 +702,7 @@ var renewParticipationKeyCmd = &cobra.Command{
 			}
 		}
 
-		var leaseBytes [32]byte
-		if cmd.Flags().Changed("lease") {
-			leaseBytesRaw, err := base64.StdEncoding.DecodeString(statusChangeLease)
-			if err != nil {
-				reportErrorf(malformedLease, lease, err)
-			}
-			if len(leaseBytesRaw) != 32 {
-				reportErrorf(malformedLease, lease, fmt.Errorf("lease length %d != 32", len(leaseBytesRaw)))
-			}
-			copy(leaseBytes[:], leaseBytesRaw)
-		}
-
-		err = generateAndRegisterPartKey(accountAddress, currentRound, roundLastValid, proto.MaxTxnLife, transactionFee, leaseBytes, keyDilution, walletName, dataDir, client)
+		err = generateAndRegisterPartKey(accountAddress, currentRound, roundLastValid, proto.MaxTxnLife, transactionFee, scLeaseBytes(cmd), keyDilution, walletName, dataDir, client)
 		if err != nil {
 			reportErrorf(err.Error())
 		}
@@ -745,21 +735,9 @@ var renewAllParticipationKeyCmd = &cobra.Command{
 	Long:  `Generate new participation keys for all existing accounts with participation keys and register them`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
-		var leaseBytes [32]byte
-		if cmd.Flags().Changed("lease") {
-			leaseBytesRaw, err := base64.StdEncoding.DecodeString(statusChangeLease)
-			if err != nil {
-				reportErrorf(malformedLease, lease, err)
-			}
-			if len(leaseBytesRaw) != 32 {
-				reportErrorf(malformedLease, lease, fmt.Errorf("lease length %d != 32", len(leaseBytesRaw)))
-			}
-			copy(leaseBytes[:], leaseBytesRaw)
-		}
-
 		onDataDirs(func(dataDir string) {
 			fmt.Printf("Renewing participation keys in %s...\n", dataDir)
-			err := renewPartKeysInDir(dataDir, roundLastValid, transactionFee, leaseBytes, keyDilution, walletName)
+			err := renewPartKeysInDir(dataDir, roundLastValid, transactionFee, scLeaseBytes(cmd), keyDilution, walletName)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "  Error: %s\n", err)
 			}
