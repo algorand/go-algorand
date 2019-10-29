@@ -600,7 +600,6 @@ func (eval *BlockEvaluator) checkLogicSig(txn transactions.SignedTxn, txgroup []
 	}
 	ep := logic.EvalParams{
 		Txn:                 &txn,
-		Block:               &eval.block,
 		Proto:               &eval.proto,
 		TxnGroup:            txgroup,
 		GroupIndex:          groupIndex,
