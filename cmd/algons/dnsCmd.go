@@ -41,6 +41,7 @@ var (
 	recordType     string
 	noPrompt       bool
 	excludePattern string
+	includePattern string
 	exportNetwork  string
 	outputFilename string
 )
@@ -61,9 +62,9 @@ func init() {
 	addCmd.MarkFlagRequired("to")
 
 	deleteCmd.Flags().StringVarP(&deleteNetwork, "network", "n", "", "Network name for records to delete")
-	deleteCmd.MarkFlagRequired("network")
 	deleteCmd.Flags().BoolVarP(&noPrompt, "no-prompt", "y", false, "No prompting for records deletion")
 	deleteCmd.Flags().StringVarP(&excludePattern, "exclude", "e", "", "name records exclude pattern")
+	deleteCmd.Flags().StringVarP(&includePattern, "include", "i", "", "name records include pattern, any matches are added to network records")
 
 	listRecordsCmd.Flags().StringVarP(&listNetwork, "network", "n", "", "Domain name for records to list")
 	listRecordsCmd.Flags().StringVarP(&recordType, "recordType", "t", "", "DNS record type to list (A, CNAME, SRV)")
@@ -165,7 +166,7 @@ var deleteCmd = &cobra.Command{
 	Use:   "delete",
 	Short: "Delete DNS and SRV records for a specified network",
 	Run: func(cmd *cobra.Command, args []string) {
-		if !doDeleteDNS(deleteNetwork, noPrompt, excludePattern) {
+		if !doDeleteDNS(deleteNetwork, noPrompt, excludePattern, includePattern) {
 			os.Exit(1)
 		}
 	},
@@ -266,10 +267,10 @@ func checkSrvRecord(dnsBootstrap string) {
 	}
 }
 
-func doDeleteDNS(network string, noPrompt bool, excludePattern string) bool {
+func doDeleteDNS(network string, noPrompt bool, excludePattern string, includePattern string) bool {
 
-	validNetworks := map[string]bool{"mainnet": true, "testnet": true, "devnet": true, "betanet": true}
-	if validNetworks[network] {
+	restrictedNetworks := map[string]bool{"mainnet": true, "testnet": true, "devnet": true, "betanet": true}
+	if restrictedNetworks[network] {
 		fmt.Fprintf(os.Stderr, "Deletion of network '%s' using this tool is not allowed\n", network)
 		return false
 	}
@@ -284,6 +285,30 @@ func doDeleteDNS(network string, noPrompt bool, excludePattern string) bool {
 		}
 	}
 
+	var includeRegex *regexp.Regexp
+	if includePattern != "" {
+		var err error
+		includeRegex, err = regexp.Compile(includePattern)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "specified regular expression include pattern ('%s') is not a valid regular expression : %v", includePattern, err)
+			return false
+		}
+
+		for k := range restrictedNetworks {
+			if includeRegex != nil {
+				if includeRegex.MatchString(k) {
+					fmt.Fprintf(os.Stderr, "specified include pattern ('%s') matches a restricted network: %s", includePattern, k)
+					return false
+				}
+			}
+		}
+	}
+
+	if network == "" && includeRegex == nil {
+		fmt.Fprintf(os.Stderr, "\"network\" or \"include\" required.\n")
+		return false
+	}
+
 	cfZoneID, cfEmail, cfKey, err := getClouldflareCredentials()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error getting DNS credentials: %v", err)
@@ -293,26 +318,56 @@ func doDeleteDNS(network string, noPrompt bool, excludePattern string) bool {
 	cloudflareDNS := cloudflare.NewDNS(cfZoneID, cfEmail, cfKey)
 
 	idsToDelete := make(map[string]string) // Maps record ID to Name
+	services := []string{"_algobootstrap", "_metrics"}
+	servicesRegexp, err := regexp.Compile("^(_algobootstrap|_metrics)\\._tcp\\..*algodev.network$")
 
-	for _, service := range []string{"_algobootstrap", "_metrics"} {
-		records, err := cloudflareDNS.ListDNSRecord(context.Background(), "SRV", service+"._tcp."+network+".algodev.network", "", "", "", "")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to create services expression: %v", err)
+	}
+
+	if includeRegex != nil {
+		services = []string{"N/A when using an include pattern"}
+	}
+
+	for _, service := range services {
+		var name string
+		if includeRegex != nil && network == "" {
+			name = ""
+		} else {
+			name = service + "._tcp." + network + ".algodev.network"
+		}
+
+		records, err := cloudflareDNS.ListDNSRecord(context.Background(), "SRV", name, "", "", "", "")
+
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error listing SRV '%s' entries: %v\n", service, err)
+			if name != "" {
+				fmt.Fprintf(os.Stderr, "Error listing SRV '%s' entries: %v\n", service, err)
+			} else {
+				fmt.Fprintf(os.Stderr, "Error listing SRV entries: %v\n", err)
+			}
 			os.Exit(1)
 		}
 		for _, r := range records {
 			if excludeRegex != nil {
 				if excludeRegex.MatchString(r.Name) {
-					fmt.Printf("Excluding SRV '%s' record: %s\n", service, r.Name)
+					fmt.Printf("Excluding SRV record: %s\n", r.Name)
 					continue
 				}
 			}
-			fmt.Printf("Found SRV '%s' record: %s\n", service, r.Name)
-			idsToDelete[r.ID] = r.Name
+
+			if includeRegex == nil || (includeRegex.MatchString(r.Name) && servicesRegexp.MatchString(r.Name)) {
+				fmt.Printf("Found SRV record: %s\n", r.Name)
+				idsToDelete[r.ID] = r.Name
+			}
 		}
 	}
 
-	networkSuffix := "." + network + ".algodev.network"
+	var networkSuffix string
+	if network == "" {
+		networkSuffix = ".algodev.network"
+	} else {
+		networkSuffix = "." + network + ".algodev.network"
+	}
 
 	for _, recordType := range []string{"A", "CNAME"} {
 		records, err := cloudflareDNS.ListDNSRecord(context.Background(), recordType, "", "", "", "", "")
@@ -328,8 +383,11 @@ func doDeleteDNS(network string, noPrompt bool, excludePattern string) bool {
 						continue
 					}
 				}
-				fmt.Printf("Found DNS '%s' record: %s\n", recordType, r.Name)
-				idsToDelete[r.ID] = r.Name
+
+				if includeRegex == nil || includeRegex.MatchString(r.Name) {
+					fmt.Printf("Found DNS '%s' record: %s\n", recordType, r.Name)
+					idsToDelete[r.ID] = r.Name
+				}
 			}
 		}
 	}
