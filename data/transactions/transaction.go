@@ -55,6 +55,10 @@ type Balances interface {
 	// A non-nil error means the lookup is impossible (e.g., if the database doesn't have necessary state anymore)
 	Get(addr basics.Address, withPendingRewards bool) (basics.BalanceRecord, error)
 
+	// GetAssetCreator gets the address of the account whose balance record
+	// contains the asset params
+	GetAssetCreator(aidx basics.AssetIndex) (basics.Address, error)
+
 	Put(basics.BalanceRecord) error
 
 	// Move MicroAlgos from one account to another, doing all necessary overflow checking (convenience method)
@@ -337,8 +341,14 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		// this check is just to be safe, but reaching here seems impossible, since it requires computing a preimage of rwpool
 		return fmt.Errorf("transaction from incentive pool is invalid")
 	}
+	if tx.Sender == (basics.Address{}) {
+		return fmt.Errorf("transaction cannot have zero sender")
+	}
 	if !proto.SupportTransactionLeases && (tx.Lease != [32]byte{}) {
 		return fmt.Errorf("transaction tried to acquire lease %v but protocol does not support transaction leases", tx.Lease)
+	}
+	if !proto.SupportTxGroups && (tx.Group != crypto.Digest{}) {
+		return fmt.Errorf("transaction has group but groups not yet enabled")
 	}
 	return nil
 }

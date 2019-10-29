@@ -38,6 +38,7 @@ type PpConfig struct {
 	MaxFee          uint64
 	MinFee          uint64
 	MaxAmt          uint64
+	TxnPerSec       uint64
 	NumPartAccounts uint32
 	RunTime         time.Duration
 	RestTime        time.Duration
@@ -47,6 +48,9 @@ type PpConfig struct {
 	RandomNote      bool
 	Program         []byte
 	LogicArgs       [][]byte
+	GroupSize       uint32
+	NumAsset        uint32
+	MinAccountAsset uint64
 }
 
 // DefaultConfig object for Ping Pong
@@ -59,11 +63,15 @@ var DefaultConfig = PpConfig{
 	MaxFee:          10000,
 	MinFee:          1000,
 	MaxAmt:          1000,
+	TxnPerSec:       200,
 	NumPartAccounts: 10,
 	RunTime:         10 * time.Second,
 	RestTime:        1 * time.Hour, // Long default rest to avoid accidental DoS
 	RefreshTime:     10 * time.Second,
 	MinAccountFunds: 100000,
+	GroupSize:       1,
+	NumAsset:        0,
+	MinAccountAsset: 10000000,
 }
 
 // LoadConfigFromFile reads and loads Ping Pong configuration

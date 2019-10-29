@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/condvar"
 )
 
@@ -45,6 +46,7 @@ type TransactionPool struct {
 	ledger                 *ledger.Ledger
 	statusCache            *statusCache
 	logStats               bool
+	expFeeFactor           uint64
 
 	// pendingMu protects pendingTxGroups and pendingTxids
 	pendingMu       deadlock.RWMutex
@@ -58,20 +60,29 @@ type TransactionPool struct {
 	// to Pending() or Verified().
 	rememberedTxGroups [][]transactions.SignedTxn
 	rememberedTxids    map[transactions.Txid]transactions.SignedTxn
+
+	// result of logic.Eval()
+	lsigCache *lsigEvalCache
+	lcmu      deadlock.RWMutex
 }
 
 // MakeTransactionPool is the constructor, it uses Ledger to ensure that no account has pending transactions that together overspend.
 //
 // The pool also contains status information for the last transactionPoolStatusSize
 // transactions that were removed from the pool without being committed.
-func MakeTransactionPool(ledger *ledger.Ledger, transactionPoolStatusSize int, logStats bool) *TransactionPool {
+func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local) *TransactionPool {
+	if cfg.TxPoolExponentialIncreaseFactor < 1 {
+		cfg.TxPoolExponentialIncreaseFactor = 1
+	}
 	pool := TransactionPool{
 		pendingTxids:    make(map[transactions.Txid]transactions.SignedTxn),
 		rememberedTxids: make(map[transactions.Txid]transactions.SignedTxn),
 		expiredTxCount:  make(map[basics.Round]int),
 		ledger:          ledger,
-		statusCache:     makeStatusCache(transactionPoolStatusSize),
-		logStats:        logStats,
+		statusCache:     makeStatusCache(cfg.TxPoolSize),
+		logStats:        cfg.EnableAssembleStats,
+		expFeeFactor:    cfg.TxPoolExponentialIncreaseFactor,
+		lsigCache:       makeLsigEvalCache(cfg.TxPoolSize),
 	}
 	pool.cond.L = &pool.mu
 	pool.recomputeBlockEvaluator()
@@ -112,19 +123,11 @@ func (pool *TransactionPool) PendingTxIDs() []transactions.Txid {
 func (pool *TransactionPool) Pending() [][]transactions.SignedTxn {
 	pool.pendingMu.RLock()
 	defer pool.pendingMu.RUnlock()
+	// note that this operation is safe for the sole reason that arrays in go are immutable.
+	// if the underlaying array need to be expanded, the actual underlaying array would need
+	// to be reallocated.
+	return pool.pendingTxGroups
 
-	txgroups := make([][]transactions.SignedTxn, len(pool.pendingTxGroups))
-	i := 0
-	for _, txgroup := range pool.pendingTxGroups {
-		txgroupCopy := make([]transactions.SignedTxn, len(txgroup))
-		for j, tx := range txgroup {
-			txgroupCopy[j] = tx
-		}
-
-		txgroups[i] = txgroupCopy
-		i++
-	}
-	return txgroups
 }
 
 // rememberCommit() saves the changes added by remember to
@@ -230,12 +233,6 @@ func (pool *TransactionPool) test(txgroup []transactions.SignedTxn) error {
 	// requires a flat MinTxnFee).
 	feePerByte = feePerByte * pool.feeThresholdMultiplier
 
-	// The threshold grows exponentially if there are multiple blocks
-	// pending in the pool.
-	if pool.numPendingWholeBlocks > 1 {
-		feePerByte = feePerByte << (pool.numPendingWholeBlocks - 1)
-	}
-
 	for _, t := range txgroup {
 		feeThreshold := feePerByte * uint64(t.GetEncodedLength())
 		if t.Txn.Fee.Raw < feeThreshold {
@@ -337,6 +334,20 @@ func (pool *TransactionPool) Verified(txn transactions.SignedTxn) bool {
 	return pendingSigTxn.Sig == txn.Sig && pendingSigTxn.Msig.Equal(txn.Msig) && pendingSigTxn.Lsig.Equal(&txn.Lsig)
 }
 
+// EvalOk for LogicSig Eval of a txn by txid, returns the SignedTxn, error string, and found.
+func (pool *TransactionPool) EvalOk(cvers protocol.ConsensusVersion, txid transactions.Txid) (found bool, err error) {
+	pool.lcmu.RLock()
+	defer pool.lcmu.RUnlock()
+	return pool.lsigCache.get(cvers, txid)
+}
+
+// EvalRemember sets an error string from LogicSig Eval for some SignedTxn
+func (pool *TransactionPool) EvalRemember(cvers protocol.ConsensusVersion, txid transactions.Txid, err error) {
+	pool.lcmu.Lock()
+	defer pool.lcmu.Unlock()
+	pool.lsigCache.put(cvers, txid, err)
+}
+
 // OnNewBlock excises transactions from the pool that are included in the specified Block or if they've expired
 func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block) {
 	pool.mu.Lock()
@@ -374,7 +385,7 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block) {
 		//   the multiplier by 2x (or increment by 1, if 0).
 		switch pool.numPendingWholeBlocks {
 		case 0:
-			pool.feeThresholdMultiplier = pool.feeThresholdMultiplier / 2
+			pool.feeThresholdMultiplier = pool.feeThresholdMultiplier / pool.expFeeFactor
 
 		case 1:
 			// Keep the fee multiplier the same.
@@ -383,7 +394,7 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block) {
 			if pool.feeThresholdMultiplier == 0 {
 				pool.feeThresholdMultiplier = 1
 			} else {
-				pool.feeThresholdMultiplier = pool.feeThresholdMultiplier * 2
+				pool.feeThresholdMultiplier = pool.feeThresholdMultiplier * pool.expFeeFactor
 			}
 		}
 
@@ -411,10 +422,18 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block) {
 
 // alwaysVerifiedPool implements ledger.VerifiedTxnCache and returns every
 // transaction as verified.
-type alwaysVerifiedPool struct{}
+type alwaysVerifiedPool struct {
+	pool *TransactionPool
+}
 
 func (*alwaysVerifiedPool) Verified(txn transactions.SignedTxn) bool {
 	return true
+}
+func (pool *alwaysVerifiedPool) EvalOk(cvers protocol.ConsensusVersion, txid transactions.Txid) (txfound bool, err error) {
+	return pool.pool.EvalOk(cvers, txid)
+}
+func (pool *alwaysVerifiedPool) EvalRemember(cvers protocol.ConsensusVersion, txid transactions.Txid, txErr error) {
+	pool.pool.EvalRemember(cvers, txid, txErr)
 }
 
 func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactions.SignedTxn) error {
@@ -462,7 +481,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator() (stats telemetryspec.Proc
 
 	next := bookkeeping.MakeBlock(prev)
 	pool.numPendingWholeBlocks = 0
-	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, &alwaysVerifiedPool{}, nil)
+	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, &alwaysVerifiedPool{pool}, nil)
 	if err != nil {
 		logging.Base().Warnf("TransactionPool.recomputeBlockEvaluator: cannot start evaluator: %v", err)
 		return

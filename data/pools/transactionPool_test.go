@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -144,7 +145,10 @@ func TestMinBalanceOK(t *testing.T) {
 	limitedAccounts := make(map[basics.Address]uint64)
 	limitedAccounts[addresses[0]] = 2*minBalance + proto.MinTxnFee
 	ledger := makeMockLedger(t, initAcc(limitedAccounts))
-	transactionPool := MakeTransactionPool(ledger, testPoolSize, false)
+	cfg := config.GetDefaultLocal()
+	cfg.TxPoolSize = testPoolSize
+	cfg.EnableAssembleStats = false
+	transactionPool := MakeTransactionPool(ledger, cfg)
 
 	// sender goes below min
 	tx := transactions.Transaction{
@@ -182,7 +186,10 @@ func TestSenderGoesBelowMinBalance(t *testing.T) {
 	limitedAccounts := make(map[basics.Address]uint64)
 	limitedAccounts[addresses[0]] = 2*minBalance + proto.MinTxnFee
 	ledger := makeMockLedger(t, initAcc(limitedAccounts))
-	transactionPool := MakeTransactionPool(ledger, testPoolSize, false)
+	cfg := config.GetDefaultLocal()
+	cfg.TxPoolSize = testPoolSize
+	cfg.EnableAssembleStats = false
+	transactionPool := MakeTransactionPool(ledger, cfg)
 
 	// sender goes below min
 	tx := transactions.Transaction{
@@ -221,7 +228,10 @@ func TestSenderGoesBelowMinBalanceDueToAssets(t *testing.T) {
 	limitedAccounts := make(map[basics.Address]uint64)
 	limitedAccounts[addresses[0]] = 3*minBalance + 2*proto.MinTxnFee
 	ledger := makeMockLedgerFuture(t, initAcc(limitedAccounts))
-	transactionPool := MakeTransactionPool(ledger, testPoolSize, false)
+	cfg := config.GetDefaultLocal()
+	cfg.TxPoolSize = testPoolSize
+	cfg.EnableAssembleStats = false
+	transactionPool := MakeTransactionPool(ledger, cfg)
 
 	assetTx := transactions.Transaction{
 		Type: protocol.AssetConfigTx,
@@ -234,7 +244,6 @@ func TestSenderGoesBelowMinBalanceDueToAssets(t *testing.T) {
 			GenesisHash: ledger.GenesisHash(),
 		},
 		AssetConfigTxnFields: transactions.AssetConfigTxnFields{
-			ConfigAsset: basics.AssetID{},
 			AssetParams: basics.AssetParams{
 				Total:         100,
 				DefaultFrozen: false,
@@ -288,7 +297,10 @@ func TestCloseAccount(t *testing.T) {
 	limitedAccounts := make(map[basics.Address]uint64)
 	limitedAccounts[addresses[0]] = 3*minBalance + 2*proto.MinTxnFee
 	ledger := makeMockLedger(t, initAcc(limitedAccounts))
-	transactionPool := MakeTransactionPool(ledger, testPoolSize, false)
+	cfg := config.GetDefaultLocal()
+	cfg.TxPoolSize = testPoolSize
+	cfg.EnableAssembleStats = false
+	transactionPool := MakeTransactionPool(ledger, cfg)
 
 	// sender goes below min
 	closeTx := transactions.Transaction{
@@ -346,7 +358,10 @@ func TestCloseAccountWhileTxIsPending(t *testing.T) {
 	limitedAccounts := make(map[basics.Address]uint64)
 	limitedAccounts[addresses[0]] = 2*minBalance + 2*proto.MinTxnFee - 1
 	ledger := makeMockLedger(t, initAcc(limitedAccounts))
-	transactionPool := MakeTransactionPool(ledger, testPoolSize, false)
+	cfg := config.GetDefaultLocal()
+	cfg.TxPoolSize = testPoolSize
+	cfg.EnableAssembleStats = false
+	transactionPool := MakeTransactionPool(ledger, cfg)
 
 	// sender goes below min
 	tx := transactions.Transaction{
@@ -405,7 +420,10 @@ func TestClosingAccountBelowMinBalance(t *testing.T) {
 	limitedAccounts[addresses[0]] = 2*minBalance - 1 + proto.MinTxnFee
 	limitedAccounts[addresses[2]] = 0
 	ledger := makeMockLedger(t, initAcc(limitedAccounts))
-	transactionPool := MakeTransactionPool(ledger, testPoolSize, false)
+	cfg := config.GetDefaultLocal()
+	cfg.TxPoolSize = testPoolSize
+	cfg.EnableAssembleStats = false
+	transactionPool := MakeTransactionPool(ledger, cfg)
 
 	// sender goes below min
 	closeTx := transactions.Transaction{
@@ -444,7 +462,10 @@ func TestRecipientGoesBelowMinBalance(t *testing.T) {
 	limitedAccounts := make(map[basics.Address]uint64)
 	limitedAccounts[addresses[1]] = 0
 	ledger := makeMockLedger(t, initAcc(limitedAccounts))
-	transactionPool := MakeTransactionPool(ledger, testPoolSize, false)
+	cfg := config.GetDefaultLocal()
+	cfg.TxPoolSize = testPoolSize
+	cfg.EnableAssembleStats = false
+	transactionPool := MakeTransactionPool(ledger, cfg)
 
 	// sender goes below min
 	tx := transactions.Transaction{
@@ -480,7 +501,10 @@ func TestRememberForget(t *testing.T) {
 	}
 
 	ledger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
-	transactionPool := MakeTransactionPool(ledger, testPoolSize, false)
+	cfg := config.GetDefaultLocal()
+	cfg.TxPoolSize = testPoolSize
+	cfg.EnableAssembleStats = false
+	transactionPool := MakeTransactionPool(ledger, cfg)
 
 	eval := newBlockEvaluator(t, ledger)
 
@@ -542,7 +566,10 @@ func TestCleanUp(t *testing.T) {
 	}
 
 	ledger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
-	transactionPool := MakeTransactionPool(ledger, testPoolSize, false)
+	cfg := config.GetDefaultLocal()
+	cfg.TxPoolSize = testPoolSize
+	cfg.EnableAssembleStats = false
+	transactionPool := MakeTransactionPool(ledger, cfg)
 
 	issuedTransactions := 0
 	for i, sender := range addresses {
@@ -616,7 +643,10 @@ func TestFixOverflowOnNewBlock(t *testing.T) {
 	}
 
 	ledger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
-	transactionPool := MakeTransactionPool(ledger, testPoolSize, false)
+	cfg := config.GetDefaultLocal()
+	cfg.TxPoolSize = testPoolSize
+	cfg.EnableAssembleStats = false
+	transactionPool := MakeTransactionPool(ledger, cfg)
 
 	overSpender := addresses[0]
 	var overSpenderAmount uint64
@@ -708,7 +738,10 @@ func TestOverspender(t *testing.T) {
 
 	overSpender := addresses[0]
 	ledger := makeMockLedger(t, initAcc(map[basics.Address]uint64{overSpender: proto.MinTxnFee - 1}))
-	transactionPool := MakeTransactionPool(ledger, testPoolSize, false)
+	cfg := config.GetDefaultLocal()
+	cfg.TxPoolSize = testPoolSize
+	cfg.EnableAssembleStats = false
+	transactionPool := MakeTransactionPool(ledger, cfg)
 
 	receiver := addresses[1]
 	tx := transactions.Transaction{
@@ -765,7 +798,10 @@ func TestRemove(t *testing.T) {
 	}
 
 	ledger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
-	transactionPool := MakeTransactionPool(ledger, testPoolSize, false)
+	cfg := config.GetDefaultLocal()
+	cfg.TxPoolSize = testPoolSize
+	cfg.EnableAssembleStats = false
+	transactionPool := MakeTransactionPool(ledger, cfg)
 
 	sender := addresses[0]
 	receiver := addresses[1]
@@ -789,6 +825,190 @@ func TestRemove(t *testing.T) {
 	require.Equal(t, transactionPool.Pending(), [][]transactions.SignedTxn{[]transactions.SignedTxn{signedTx}})
 }
 
+func TestLogicSigOK(t *testing.T) {
+	oparams := config.Consensus[protocol.ConsensusCurrentVersion]
+	params := oparams
+	params.LogicSigMaxCost = 20000
+	params.LogicSigMaxSize = 1000
+	params.LogicSigVersion = 1
+	config.Consensus[protocol.ConsensusCurrentVersion] = params
+	defer func() {
+		config.Consensus[protocol.ConsensusCurrentVersion] = oparams
+	}()
+	numOfAccounts := 5
+	addresses := make([]basics.Address, numOfAccounts)
+
+	for i := 0; i < numOfAccounts; i++ {
+		secret := keypair()
+		addr := basics.Address(secret.SignatureVerifier)
+		addresses[i] = addr
+	}
+
+	src := `int 1`
+	program, err := logic.AssembleString(src)
+	require.NoError(t, err)
+	programAddress := logic.HashProgram(program)
+	addresses[0] = basics.Address(programAddress)
+
+	limitedAccounts := make(map[basics.Address]uint64)
+	limitedAccounts[addresses[0]] = 2*minBalance + proto.MinTxnFee
+	ledger := makeMockLedger(t, initAcc(limitedAccounts))
+	cfg := config.GetDefaultLocal()
+	cfg.TxPoolSize = testPoolSize
+	cfg.EnableAssembleStats = false
+	transactionPool := MakeTransactionPool(ledger, cfg)
+
+	// sender goes below min
+	tx := transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender:      addresses[0],
+			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee},
+			FirstValid:  0,
+			LastValid:   basics.Round(proto.MaxTxnLife),
+			Note:        make([]byte, 2),
+			GenesisHash: ledger.GenesisHash(),
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: addresses[1],
+			Amount:   basics.MicroAlgos{Raw: minBalance},
+		},
+	}
+	signedTx := transactions.SignedTxn{
+		Txn: tx,
+		Lsig: transactions.LogicSig{
+			Logic: program,
+		},
+	}
+	require.NoError(t, transactionPool.RememberOne(signedTx))
+}
+
+func TestLogicSigReject(t *testing.T) {
+	oparams := config.Consensus[protocol.ConsensusCurrentVersion]
+	params := oparams
+	params.LogicSigMaxCost = 20000
+	params.LogicSigMaxSize = 1000
+	params.LogicSigVersion = 1
+	config.Consensus[protocol.ConsensusCurrentVersion] = params
+	defer func() {
+		config.Consensus[protocol.ConsensusCurrentVersion] = oparams
+	}()
+	numOfAccounts := 5
+	// Genereate accounts
+	//secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
+	addresses := make([]basics.Address, numOfAccounts)
+
+	for i := 0; i < numOfAccounts; i++ {
+		secret := keypair()
+		addr := basics.Address(secret.SignatureVerifier)
+		//secrets[i] = secret
+		addresses[i] = addr
+	}
+
+	src := `int 0`
+	program, err := logic.AssembleString(src)
+	require.NoError(t, err)
+	programAddress := logic.HashProgram(program)
+	addresses[0] = basics.Address(programAddress)
+
+	limitedAccounts := make(map[basics.Address]uint64)
+	limitedAccounts[addresses[0]] = 2*minBalance + proto.MinTxnFee
+	ledger := makeMockLedger(t, initAcc(limitedAccounts))
+	cfg := config.GetDefaultLocal()
+	cfg.TxPoolSize = testPoolSize
+	cfg.EnableAssembleStats = false
+	transactionPool := MakeTransactionPool(ledger, cfg)
+
+	// sender goes below min
+	tx := transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender:      addresses[0],
+			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee},
+			FirstValid:  0,
+			LastValid:   basics.Round(proto.MaxTxnLife),
+			Note:        make([]byte, 2),
+			GenesisHash: ledger.GenesisHash(),
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: addresses[1],
+			Amount:   basics.MicroAlgos{Raw: minBalance},
+		},
+	}
+	signedTx := transactions.SignedTxn{
+		Txn: tx,
+		Lsig: transactions.LogicSig{
+			Logic: program,
+		},
+	}
+	err = transactionPool.RememberOne(signedTx)
+	require.Error(t, err)
+}
+
+func TestLogicSigCache(t *testing.T) {
+	// hack in a cache entry that passes for a program that would reject
+	oparams := config.Consensus[protocol.ConsensusCurrentVersion]
+	params := oparams
+	params.LogicSigMaxCost = 20000
+	params.LogicSigMaxSize = 1000
+	params.LogicSigVersion = 1
+	config.Consensus[protocol.ConsensusCurrentVersion] = params
+	defer func() {
+		config.Consensus[protocol.ConsensusCurrentVersion] = oparams
+	}()
+	numOfAccounts := 5
+	// Genereate accounts
+	//secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
+	addresses := make([]basics.Address, numOfAccounts)
+
+	for i := 0; i < numOfAccounts; i++ {
+		secret := keypair()
+		addr := basics.Address(secret.SignatureVerifier)
+		//secrets[i] = secret
+		addresses[i] = addr
+	}
+
+	src := `int 0`
+	program, err := logic.AssembleString(src)
+	require.NoError(t, err)
+	programAddress := logic.HashProgram(program)
+	addresses[0] = basics.Address(programAddress)
+
+	limitedAccounts := make(map[basics.Address]uint64)
+	limitedAccounts[addresses[0]] = 2*minBalance + proto.MinTxnFee
+	ledger := makeMockLedger(t, initAcc(limitedAccounts))
+	cfg := config.GetDefaultLocal()
+	cfg.TxPoolSize = testPoolSize
+	cfg.EnableAssembleStats = false
+	transactionPool := MakeTransactionPool(ledger, cfg)
+
+	// sender goes below min
+	tx := transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender:      addresses[0],
+			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee},
+			FirstValid:  0,
+			LastValid:   basics.Round(proto.MaxTxnLife),
+			Note:        make([]byte, 2),
+			GenesisHash: ledger.GenesisHash(),
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: addresses[1],
+			Amount:   basics.MicroAlgos{Raw: minBalance},
+		},
+	}
+	signedTx := transactions.SignedTxn{
+		Txn: tx,
+		Lsig: transactions.LogicSig{
+			Logic: program,
+		},
+	}
+	transactionPool.lsigCache.put(protocol.ConsensusCurrentVersion, signedTx.ID(), nil)
+	err = transactionPool.RememberOne(signedTx)
+	require.NoError(t, err)
+}
+
 func BenchmarkTransactionPoolRememberOne(b *testing.B) {
 	numOfAccounts := 5
 	// Generate accounts
@@ -803,7 +1023,10 @@ func BenchmarkTransactionPoolRememberOne(b *testing.B) {
 	}
 
 	ledger := makeMockLedger(b, initAccFixed(addresses, 1<<32))
-	transactionPool := MakeTransactionPool(ledger, b.N, false)
+	cfg := config.GetDefaultLocal()
+	cfg.TxPoolSize = b.N
+	cfg.EnableAssembleStats = false
+	transactionPool := MakeTransactionPool(ledger, cfg)
 	signedTransactions := make([]transactions.SignedTxn, 0, b.N)
 	for i, sender := range addresses {
 		for j := 0; j < b.N/len(addresses); j++ {
@@ -835,7 +1058,7 @@ func BenchmarkTransactionPoolRememberOne(b *testing.B) {
 	b.StopTimer()
 	b.ResetTimer()
 	ledger = makeMockLedger(b, initAccFixed(addresses, 1<<32))
-	transactionPool = MakeTransactionPool(ledger, b.N, false)
+	transactionPool = MakeTransactionPool(ledger, cfg)
 
 	b.StartTimer()
 	for _, signedTx := range signedTransactions {
@@ -861,7 +1084,10 @@ func BenchmarkTransactionPoolPending(b *testing.B) {
 		b.ResetTimer()
 
 		ledger := makeMockLedger(b, initAccFixed(addresses, 1<<32))
-		transactionPool := MakeTransactionPool(ledger, benchPoolSize, false)
+		cfg := config.GetDefaultLocal()
+		cfg.TxPoolSize = benchPoolSize
+		cfg.EnableAssembleStats = false
+		transactionPool := MakeTransactionPool(ledger, cfg)
 		var block bookkeeping.Block
 		block.Payset = make(transactions.Payset, 0)
 
@@ -923,7 +1149,10 @@ func BenchmarkTransactionPoolSteadyState(b *testing.B) {
 	}
 
 	l := makeMockLedger(b, initAccFixed(addresses, 1<<32))
-	transactionPool := MakeTransactionPool(l, poolSize, false)
+	cfg := config.GetDefaultLocal()
+	cfg.TxPoolSize = poolSize
+	cfg.EnableAssembleStats = false
+	transactionPool := MakeTransactionPool(l, cfg)
 
 	var signedTransactions []transactions.SignedTxn
 	for i := 0; i < b.N; i++ {

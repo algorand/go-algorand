@@ -17,6 +17,8 @@
 package ledger
 
 import (
+	"fmt"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -36,6 +38,7 @@ type roundCowParent interface {
 	lookup(basics.Address) (basics.AccountData, error)
 	isDup(basics.Round, transactions.Txid, txlease) (bool, error)
 	txnCounter() uint64
+	getAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error)
 }
 
 type roundCowState struct {
@@ -55,6 +58,9 @@ type stateDelta struct {
 	// new txleases for the txtail mapped to expiration
 	txleases map[txlease]basics.Round
 
+	// new assets creator lookup table
+	assets map[basics.AssetIndex]modifiedAsset
+
 	// new block header; read-only
 	hdr *bookkeeping.BlockHeader
 }
@@ -68,6 +74,7 @@ func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader) *roundCowS
 			accts:    make(map[basics.Address]accountDelta),
 			txids:    make(map[transactions.Txid]struct{}),
 			txleases: make(map[txlease]basics.Round),
+			assets:   make(map[basics.AssetIndex]modifiedAsset),
 			hdr:      &hdr,
 		},
 	}
@@ -75,6 +82,17 @@ func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader) *roundCowS
 
 func (cb *roundCowState) rewardsLevel() uint64 {
 	return cb.mods.hdr.RewardsLevel
+}
+
+func (cb *roundCowState) getAssetCreator(aidx basics.AssetIndex) (basics.Address, error) {
+	delta, ok := cb.mods.assets[aidx]
+	if ok {
+		if delta.created {
+			return delta.creator, nil
+		}
+		return basics.Address{}, fmt.Errorf("asset %d has been deleted", aidx)
+	}
+	return cb.lookupParent.getAssetCreator(aidx)
 }
 
 func (cb *roundCowState) lookup(addr basics.Address) (data basics.AccountData, err error) {
@@ -113,6 +131,12 @@ func (cb *roundCowState) put(addr basics.Address, old basics.AccountData, new ba
 	} else {
 		cb.mods.accts[addr] = accountDelta{old: old, new: new}
 	}
+
+	// Get which asset indices were created and deleted, and update state
+	assetDeltas := getChangedAssetIndices(addr, accountDelta{old: old, new: new})
+	for aidx, delta := range assetDeltas {
+		cb.mods.assets[aidx] = delta
+	}
 }
 
 func (cb *roundCowState) addTx(txn transactions.Transaction) {
@@ -129,6 +153,7 @@ func (cb *roundCowState) child() *roundCowState {
 			accts:    make(map[basics.Address]accountDelta),
 			txids:    make(map[transactions.Txid]struct{}),
 			txleases: make(map[txlease]basics.Round),
+			assets:   make(map[basics.AssetIndex]modifiedAsset),
 			hdr:      cb.mods.hdr,
 		},
 	}
@@ -152,6 +177,9 @@ func (cb *roundCowState) commitToParent() {
 	}
 	for txl, expires := range cb.mods.txleases {
 		cb.commitParent.mods.txleases[txl] = expires
+	}
+	for aidx, delta := range cb.mods.assets {
+		cb.commitParent.mods.assets[aidx] = delta
 	}
 }
 
