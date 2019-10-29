@@ -344,7 +344,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		return fmt.Errorf("transaction asset unit name too big: %d > %d", len(tx.AssetConfigTxnFields.AssetParams.UnitName), proto.MaxAssetUnitNameBytes)
 	}
 	if len(tx.AssetConfigTxnFields.AssetParams.URL) > proto.MaxAssetURLBytes {
-		return fmt.Errorf("transaction asset unit name too big: %d > %d", len(tx.AssetConfigTxnFields.AssetParams.URL), proto.MaxAssetURLBytes)
+		return fmt.Errorf("transaction asset url too big: %d > %d", len(tx.AssetConfigTxnFields.AssetParams.URL), proto.MaxAssetURLBytes)
 	}
 	if tx.Sender == spec.RewardsPool {
 		// this check is just to be safe, but reaching here seems impossible, since it requires computing a preimage of rwpool
