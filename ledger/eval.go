@@ -587,10 +587,11 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 }
 
 func (eval *BlockEvaluator) checkLogicSig(txn transactions.SignedTxn, txgroup []transactions.SignedTxnWithAD, groupIndex int) (err error) {
-	firstValid := basics.Round(txn.Txn.FirstValid - 1)
-	var hdr bookkeeping.BlockHeader
+	if txn.Txn.FirstValid == 0 {
+		return errors.New("LogicSig does not work with FirstValid==0")
+	}
 	// TODO: move this into some lazy evaluator for the few scripts that actually use `txn FirstValidTime` ?
-	hdr, err = eval.l.BlockHdr(firstValid)
+	hdr, err := eval.l.BlockHdr(basics.Round(txn.Txn.FirstValid - 1))
 	if err != nil {
 		return fmt.Errorf("could not fetch BlockHdr for FirstValid-1=%d (current=%d): %s", txn.Txn.FirstValid-1, eval.block.BlockHeader.Round, err)
 	}
