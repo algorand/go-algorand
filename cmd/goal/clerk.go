@@ -571,7 +571,7 @@ func getProto(versArg string) config.ConsensusParams {
 	}
 	proto, ok := config.Consensus[cvers]
 	if !ok {
-		fmt.Fprintf(os.Stderr, "invalid consensus version. possible versions:\n")
+		fmt.Fprintf(os.Stderr, "Invalid consensus version. Possible versions:\n")
 		for xvers := range config.Consensus {
 			fmt.Fprintf(os.Stderr, "\t%s\n", xvers)
 		}
