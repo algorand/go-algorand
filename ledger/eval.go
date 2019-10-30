@@ -47,8 +47,8 @@ type evalAux struct {
 // pool object.
 type VerifiedTxnCache interface {
 	Verified(txn transactions.SignedTxn) bool
-	EvalOk(txid transactions.Txid) (txErr string, found bool)
-	EvalRemember(tx transactions.SignedTxn, errString string)
+	EvalOk(cvers protocol.ConsensusVersion, txid transactions.Txid) (found bool, txErr error)
+	EvalRemember(cvers protocol.ConsensusVersion, txid transactions.Txid, err error)
 }
 
 type roundCowBase struct {
@@ -503,22 +503,22 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 
 		needCheckLsig := !txn.Lsig.Blank()
 		if needCheckLsig {
-			errStr, found := eval.txcache.EvalOk(txid)
+			found, txErr := eval.txcache.EvalOk(eval.block.CurrentProtocol, txid)
 			if found {
-				if errStr == "" {
+				if txErr == nil {
 					needCheckLsig = false
 				} else {
-					return errors.New(errStr)
+					return txErr
 				}
 			}
 		}
 		if needCheckLsig {
 			err = eval.checkLogicSig(txn, txgroup, groupIndex)
 			if err != nil {
-				eval.txcache.EvalRemember(txn, err.Error())
+				eval.txcache.EvalRemember(eval.block.CurrentProtocol, txid, err)
 				return err
 			}
-			eval.txcache.EvalRemember(txn, "")
+			eval.txcache.EvalRemember(eval.block.CurrentProtocol, txid, nil)
 		}
 	}
 
@@ -600,7 +600,6 @@ func (eval *BlockEvaluator) checkLogicSig(txn transactions.SignedTxn, txgroup []
 	}
 	ep := logic.EvalParams{
 		Txn:                 &txn,
-		Block:               &eval.block,
 		Proto:               &eval.proto,
 		TxnGroup:            txgroup,
 		GroupIndex:          groupIndex,
