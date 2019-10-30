@@ -162,6 +162,20 @@ type Account struct {
 	Assets map[uint64]AssetHolding `json:"assets,omitempty"`
 }
 
+// Asset specifies both the unique identifier and the parameters for an asset
+// swagger:model Asset
+type Asset struct {
+	// AssetIndex is the unique asset identifier
+	//
+	// required: true
+	AssetIndex uint64
+
+	// AssetParams specifies the parameters of asset referred to by AssetIndex
+	//
+	// required: true
+	AssetParams AssetParams
+}
+
 // AssetParams specifies the parameters for an asset.
 // swagger:model AssetParams
 type AssetParams struct {
@@ -498,6 +512,15 @@ type TransactionList struct {
 	//
 	// required: true
 	Transactions []Transaction `json:"transactions,omitempty"`
+}
+
+// AssetList contains a list of assets
+// swagger:model AssetList
+type AssetList struct {
+	// AssetList is a list of assets
+	//
+	// required: true
+	Assets []Asset `json:"assets,omitempty"`
 }
 
 // TransactionFee contains the suggested fee

@@ -97,10 +97,18 @@ proc ::AlgorandGoal::StartNetwork { NETWORK_NAME NETWORK_TEMPLATE TEST_ALGO_DIR 
 # Stop the network
 proc ::AlgorandGoal::StopNetwork { NETWORK_NAME TEST_ALGO_DIR TEST_ROOT_DIR } {
     set timeout 60
+    set NETWORK_STOP_MESSAGE ""
     puts "Stopping network: $NETWORK_NAME"
     spawn goal network stop -d $TEST_ALGO_DIR -r $TEST_ROOT_DIR
     expect {
-        timeout { close; ::AlgorandGoal::Abort "Failed to shutdown network" }
+        timeout {
+	    close;
+	    puts "Failed to shutdown network"
+	    puts "GLOBAL_TEST_ALGO_DIR $::GLOBAL_TEST_ALGO_DIR"
+	    puts "GLOBAL_TEST_ROOT_DIR $::GLOBAL_TEST_ROOT_DIR"
+	    puts "GLOBAL_NETWORK_NAME $::GLOBAL_NETWORK_NAME"
+	    exit 1;
+	}
         "Network Stopped under*" {set NETWORK_STOP_MESSAGE $expect_out(buffer); close}
     }
     puts $NETWORK_STOP_MESSAGE

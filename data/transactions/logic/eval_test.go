@@ -173,7 +173,7 @@ func TestTLHC(t *testing.T) {
 	sb := strings.Builder{}
 	block := bookkeeping.Block{}
 	proto := defaultEvalProto()
-	ep := EvalParams{Proto: &proto, Txn: &txn, Trace: &sb, Block: &block}
+	ep := EvalParams{Proto: &proto, Txn: &txn, Trace: &sb}
 	cost, err := Check(program, ep)
 	if err != nil {
 		t.Log(hex.EncodeToString(program))
@@ -192,7 +192,7 @@ func TestTLHC(t *testing.T) {
 	txn.Txn.Receiver = a2
 	txn.Txn.CloseRemainderTo = a2
 	sb = strings.Builder{}
-	ep = EvalParams{Proto: &proto, Txn: &txn, Trace: &sb, Block: &block}
+	ep = EvalParams{Proto: &proto, Txn: &txn, Trace: &sb}
 	pass, err = Eval(program, ep)
 	if !pass {
 		t.Log(hex.EncodeToString(program))
@@ -205,7 +205,7 @@ func TestTLHC(t *testing.T) {
 	txn.Txn.CloseRemainderTo = a2
 	sb = strings.Builder{}
 	txn.Txn.FirstValid = 1
-	ep = EvalParams{Proto: &proto, Txn: &txn, Trace: &sb, Block: &block}
+	ep = EvalParams{Proto: &proto, Txn: &txn, Trace: &sb}
 	pass, err = Eval(program, ep)
 	if pass {
 		t.Log(hex.EncodeToString(program))
@@ -218,7 +218,7 @@ func TestTLHC(t *testing.T) {
 	txn.Txn.CloseRemainderTo = a1
 	sb = strings.Builder{}
 	txn.Txn.FirstValid = 999999
-	ep = EvalParams{Proto: &proto, Txn: &txn, Trace: &sb, Block: &block}
+	ep = EvalParams{Proto: &proto, Txn: &txn, Trace: &sb}
 	pass, err = Eval(program, ep)
 	if !pass {
 		t.Log(hex.EncodeToString(program))
@@ -231,7 +231,7 @@ func TestTLHC(t *testing.T) {
 	txn.Lsig.Args = [][]byte{[]byte("=0\x97S\x85H\xe9\x91B\xfd\xdb;1\xf5Z\xaec?\xae\xf2I\x93\x08\x12\x94\xaa~\x06\x08\x849a")}
 	sb = strings.Builder{}
 	block.BlockHeader.Round = 1
-	ep = EvalParams{Proto: &proto, Txn: &txn, Trace: &sb, Block: &block}
+	ep = EvalParams{Proto: &proto, Txn: &txn, Trace: &sb}
 	pass, err = Eval(program, ep)
 	if pass {
 		t.Log(hex.EncodeToString(program))
@@ -875,7 +875,6 @@ func TestGlobal(t *testing.T) {
 	ep := EvalParams{
 		Trace:    &sb,
 		Txn:      &txn,
-		Block:    &block,
 		Proto:    &proto,
 		TxnGroup: txgroup,
 	}
@@ -952,7 +951,7 @@ int 1
 ==
 &&
 txn XferAsset
-arg 6
+int 10
 ==
 &&
 txn AssetAmount
@@ -1002,7 +1001,7 @@ func TestTxn(t *testing.T) {
 	copy(txn.Txn.CloseRemainderTo[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02"))
 	copy(txn.Txn.VotePK[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui03"))
 	copy(txn.Txn.SelectionPK[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui04"))
-	txn.Txn.XferAsset = 1
+	txn.Txn.XferAsset = 10
 	// This is not a valid transaction to have all these fields set this way
 	txn.Txn.Note = []byte("fnord")
 	copy(txn.Txn.Lease[:], []byte("woofwoof"))

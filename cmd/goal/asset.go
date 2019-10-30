@@ -68,8 +68,8 @@ func init() {
 	createAssetCmd.Flags().StringVar(&noteBase64, "noteb64", "", "Note (URL-base64 encoded)")
 	createAssetCmd.Flags().StringVarP(&noteText, "note", "n", "", "Note text (ignored if --noteb64 used also)")
 	createAssetCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
-	createAssetCmd.MarkFlagRequired("creator")
 	createAssetCmd.MarkFlagRequired("total")
+	createAssetCmd.MarkFlagRequired("creator")
 
 	destroyAssetCmd.Flags().StringVar(&assetManager, "manager", "", "Manager account to issue the destroy transaction (defaults to creator)")
 	destroyAssetCmd.Flags().StringVar(&assetCreator, "creator", "", "Account address for asset to destroy")
@@ -83,7 +83,6 @@ func init() {
 	destroyAssetCmd.Flags().StringVar(&noteBase64, "noteb64", "", "Note (URL-base64 encoded)")
 	destroyAssetCmd.Flags().StringVarP(&noteText, "note", "n", "", "Note text (ignored if --noteb64 used also)")
 	destroyAssetCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
-	destroyAssetCmd.MarkFlagRequired("creator")
 
 	configAssetCmd.Flags().StringVar(&assetManager, "manager", "", "Manager account to issue the config transaction (defaults to creator)")
 	configAssetCmd.Flags().StringVar(&assetCreator, "creator", "", "Account address for asset to configure")
@@ -101,7 +100,6 @@ func init() {
 	configAssetCmd.Flags().StringVar(&noteBase64, "noteb64", "", "Note (URL-base64 encoded)")
 	configAssetCmd.Flags().StringVarP(&noteText, "note", "n", "", "Note text (ignored if --noteb64 used also)")
 	configAssetCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
-	configAssetCmd.MarkFlagRequired("creator")
 
 	sendAssetCmd.Flags().StringVar(&assetClawback, "clawback", "", "Address to issue a clawback transaction from (defaults to no clawback)")
 	sendAssetCmd.Flags().StringVar(&assetCreator, "creator", "", "Account address for asset creator")
@@ -119,7 +117,6 @@ func init() {
 	sendAssetCmd.Flags().StringVar(&noteBase64, "noteb64", "", "Note (URL-base64 encoded)")
 	sendAssetCmd.Flags().StringVarP(&noteText, "note", "n", "", "Note text (ignored if --noteb64 used also)")
 	sendAssetCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
-	sendAssetCmd.MarkFlagRequired("creator")
 	sendAssetCmd.MarkFlagRequired("to")
 	sendAssetCmd.MarkFlagRequired("amount")
 
@@ -138,14 +135,12 @@ func init() {
 	freezeAssetCmd.Flags().StringVarP(&noteText, "note", "n", "", "Note text (ignored if --noteb64 used also)")
 	freezeAssetCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
 	freezeAssetCmd.MarkFlagRequired("freezer")
-	freezeAssetCmd.MarkFlagRequired("creator")
 	freezeAssetCmd.MarkFlagRequired("account")
 	freezeAssetCmd.MarkFlagRequired("freeze")
 
 	infoAssetCmd.Flags().Uint64Var(&assetID, "assetid", 0, "ID of the asset to look up")
 	infoAssetCmd.Flags().StringVar(&assetUnitName, "asset", "", "Unit name of the asset to look up")
 	infoAssetCmd.Flags().StringVar(&assetCreator, "creator", "", "Account address of the asset creator")
-	infoAssetCmd.MarkFlagRequired("creator")
 }
 
 var assetCmd = &cobra.Command{
@@ -160,7 +155,7 @@ var assetCmd = &cobra.Command{
 
 func lookupAssetID(cmd *cobra.Command, creator string, client libgoal.Client) {
 	if cmd.Flags().Changed("assetid") && cmd.Flags().Changed("asset") {
-		reportErrorf("Only one of -assetid and -asset can be specified")
+		reportErrorf("Only one of [-assetid] or [-asset and -creator] can be specified")
 	}
 
 	if cmd.Flags().Changed("assetid") {
@@ -168,7 +163,13 @@ func lookupAssetID(cmd *cobra.Command, creator string, client libgoal.Client) {
 	}
 
 	if !cmd.Flags().Changed("asset") {
-		reportErrorf("One of -assetid and -asset must be specified")
+		reportErrorf("Either [-assetid] or [-asset and -creator]  must be specified")
+	}
+
+	if !cmd.Flags().Changed("creator") {
+		reportErrorf("Asset creator must be specified if finding asset by name. " +
+			"Use the asset's integer identifier (-assetid) if the " +
+			"creator account is unknown.")
 	}
 
 	response, err := client.AccountInformation(creator)
@@ -538,22 +539,18 @@ var infoAssetCmd = &cobra.Command{
 
 		lookupAssetID(cmd, creator, client)
 
-		response, err := client.AccountInformation(creator)
+		params, err := client.AssetInformation(assetID)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
 
-		params, ok := response.AssetParams[assetID]
-		if !ok {
-			reportErrorf("Asset ID %d not found in account %s", assetID, creator)
+		if params.ReserveAddr == "" {
+			params.ReserveAddr = params.Creator
 		}
 
-		reserve := response
-		if params.ReserveAddr != "" {
-			reserve, err = client.AccountInformation(params.ReserveAddr)
-			if err != nil {
-				reportErrorf(errorRequestFail, err)
-			}
+		reserve, err := client.AccountInformation(params.ReserveAddr)
+		if err != nil {
+			reportErrorf(errorRequestFail, err)
 		}
 
 		fmt.Printf("Asset ID:         %d\n", assetID)
