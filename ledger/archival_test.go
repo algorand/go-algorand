@@ -209,6 +209,38 @@ func TestArchivalRestart(t *testing.T) {
 	require.Equal(t, basics.Round(0), earliest)
 }
 
+func makeUnsignedAssetCreateTx(total uint64, defaultFrozen bool, manager string, reserve string, freeze string, clawback string, unitName string, assetName string, url string, metadataHash []byte) (transactions.Transaction, error) {
+	var tx transactions.Transaction
+	var err error
+
+	tx.Type = protocol.AssetConfigTx
+	tx.AssetParams = basics.AssetParams{
+		Total:         total,
+		DefaultFrozen: defaultFrozen,
+	}
+	tx.AssetParams.Manager, err = basics.UnmarshalChecksumAddress(manager)
+	if err != nil {
+		return tx, err
+	}
+	tx.AssetParams.Reserve, err = basics.UnmarshalChecksumAddress(reserve)
+	if err != nil {
+		return tx, err
+	}
+	tx.AssetParams.Freeze, err = basics.UnmarshalChecksumAddress(freeze)
+	if err != nil {
+		return tx, err
+	}
+	tx.AssetParams.Clawback, err = basics.UnmarshalChecksumAddress(clawback)
+	if err != nil {
+		return tx, err
+	}
+	tx.AssetParams.URL = url
+	copy(tx.AssetParams.MetadataHash[:], metadataHash)
+	tx.AssetParams.UnitName = unitName
+	tx.AssetParams.AssetName = assetName
+	return tx, nil
+}
+
 func TestArchivalAssets(t *testing.T) {
 	// Start in archival mode, add 2K blocks with asset txns, restart, ensure all
 	// assets are there in index unless they were deleted
@@ -261,7 +293,7 @@ func TestArchivalAssets(t *testing.T) {
 
 		// make a transaction that will create an asset
 		creatorEncoded := creators[i].String()
-		tx, err := client.MakeUnsignedAssetCreateTx(100, false, creatorEncoded, creatorEncoded, creatorEncoded, creatorEncoded, "m", "m", "", nil)
+		tx, err := makeUnsignedAssetCreateTx(100, false, creatorEncoded, creatorEncoded, creatorEncoded, creatorEncoded, "m", "m", "", nil)
 		require.NoError(t, err)
 		tx.Sender = creators[i]
 		createdAssetIdx := basics.AssetIndex(blk.BlockHeader.TxnCounter + 1)
