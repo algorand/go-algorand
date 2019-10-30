@@ -30,6 +30,15 @@ type LedgerUSB struct {
 	hiddev *hid.Device
 }
 
+// LedgerUSBError is a wrapper around the two-byte error code that the Ledger
+// protocol returns.
+type LedgerUSBError uint16
+
+// Error satisfies builtin interface `error`
+func (err LedgerUSBError) Error() string {
+	return fmt.Sprintf("Exchange: unexpected status 0x%x", err)
+}
+
 // Protocol reference:
 // https://github.com/LedgerHQ/blue-loader-python/blob/master/ledgerblue/comm.py (see HIDDongleHIDAPI)
 // https://github.com/LedgerHQ/blue-loader-python/blob/master/ledgerblue/ledgerWrapper.py (see wrapCommandAPDU)
@@ -172,7 +181,7 @@ func (l *LedgerUSB) Exchange(msg []byte) ([]byte, error) {
 		// See various hints about what the error status might mean in
 		// HIDDongleHIDAPI.exchange():
 		// https://github.com/LedgerHQ/blue-loader-python/blob/master/ledgerblue/comm.py
-		return nil, fmt.Errorf("Exchange: unexpected status %x", replyStat)
+		return nil, LedgerUSBError(replyStat)
 	}
 
 	return replyMsg, nil

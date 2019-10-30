@@ -192,6 +192,15 @@ type ConsensusParams struct {
 	// max number of assets per account
 	MaxAssetsPerAccount int
 
+	// max length of asset name
+	MaxAssetNameBytes int
+
+	// max length of asset unit name
+	MaxAssetUnitNameBytes int
+
+	// max length of asset url
+	MaxAssetURLBytes int
+
 	// support sequential transaction counter TxnCounter
 	TxnCounter bool
 
@@ -425,6 +434,9 @@ func initConsensusProtocols() {
 	vFuture.LogicSigMaxSize = 1000
 	vFuture.LogicSigMaxCost = 20000
 	vFuture.MaxAssetsPerAccount = 1000
+	vFuture.MaxAssetNameBytes = 32
+	vFuture.MaxAssetUnitNameBytes = 8
+	vFuture.MaxAssetURLBytes = 32
 	vFuture.SupportTxGroups = true
 	vFuture.MaxTxGroupSize = 16
 	vFuture.SupportTransactionLeases = true

@@ -878,7 +878,6 @@ var dryrunCmd = &cobra.Command{
 			sb := strings.Builder{}
 			ep = logic.EvalParams{
 				Txn:        &txn.SignedTxn,
-				Block:      &block,
 				Proto:      &proto,
 				Trace:      &sb,
 				TxnGroup:   txgroup,

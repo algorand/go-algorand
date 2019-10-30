@@ -114,7 +114,7 @@ proc ::AlgorandGoal::StopNetwork { NETWORK_NAME TEST_ALGO_DIR TEST_ROOT_DIR } {
 	      puts "GLOBAL_TEST_ROOT_DIR $::GLOBAL_TEST_ROOT_DIR"
 	      puts "GLOBAL_NETWORK_NAME $::GLOBAL_NETWORK_NAME"
 	      exit 1
-	      }
+	    }
         "Network Stopped under*" {set NETWORK_STOP_MESSAGE $expect_out(buffer); close}
     }
     puts $NETWORK_STOP_MESSAGE
