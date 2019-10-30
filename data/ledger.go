@@ -324,7 +324,7 @@ func (l *Ledger) AssemblePayset(pool *pools.TransactionPool, eval *ledger.BlockE
 
 	// retrieve a list of all the previously known txid in the current round. We want to retrieve it here so we could avoid
 	// exercising the ledger read lock.
-	prevRoundTxIds := eval.GetRoundTxIds(l.Latest())
+	prevRoundTxIds := l.GetRoundTxIds(l.Latest())
 
 	for len(pending) > 0 {
 		txgroup := pending[0]

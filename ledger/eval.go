@@ -185,7 +185,7 @@ type ledgerForEvaluator interface {
 	Lookup(basics.Round, basics.Address) (basics.AccountData, error)
 	Totals(basics.Round) (AccountTotals, error)
 	isDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, txlease) (bool, error)
-	getRoundTxIds(rnd basics.Round) (txMap map[transactions.Txid]bool)
+	GetRoundTxIds(rnd basics.Round) (txMap map[transactions.Txid]bool)
 	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, error)
 	GetAssetCreatorForRound(basics.Round, basics.AssetIndex) (basics.Address, error)
 }
@@ -338,11 +338,6 @@ func (eval *BlockEvaluator) workaroundOverspentRewards(rewardPoolBalance basics.
 	poolOld, err = eval.state.Get(eval.prevHeader.RewardsPool, true)
 
 	return
-}
-
-// GetRoundTxIds returns a map of the transactions ids that we have for the given round
-func (eval *BlockEvaluator) GetRoundTxIds(round basics.Round) (txMap map[transactions.Txid]bool) {
-	return eval.l.getRoundTxIds(round)
 }
 
 // Round returns the round number of the block being evaluated by the BlockEvaluator.

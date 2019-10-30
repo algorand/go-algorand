@@ -338,7 +338,7 @@ func (l *Ledger) isDup(currentProto config.ConsensusParams, current basics.Round
 }
 
 // returns a map of the transactions ids that we have for the given round
-func (l *Ledger) getRoundTxIds(rnd basics.Round) (txMap map[transactions.Txid]bool) {
+func (l *Ledger) GetRoundTxIds(rnd basics.Round) (txMap map[transactions.Txid]bool) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 	return l.txTail.getRoundTxIds(rnd)
