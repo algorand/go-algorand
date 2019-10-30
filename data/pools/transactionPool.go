@@ -233,15 +233,20 @@ func (pool *TransactionPool) test(txgroup []transactions.SignedTxn) error {
 	// requires a flat MinTxnFee).
 	feePerByte = feePerByte * pool.feeThresholdMultiplier
 
+	// The feePerByte should be bumped to 1 to make the exponentially
+	// threshold growing valid.
+	if (feePerByte == 0) && pool.numPendingWholeBlocks > 0 {
+		feePerByte = uint64(1)
+	}
+
 	// The threshold grows exponentially if there are multiple blocks
 	// pending in the pool.
-	if pool.numPendingWholeBlocks > 1 {
-		// golang has no convenient integer exponentiation, so we just
-		// do this in a loop
-		for i := 0; i < int(pool.numPendingWholeBlocks)-1; i++ {
-			feePerByte *= pool.expFeeFactor
-		}
+	// golang has no convenient integer exponentiation, so we just
+	// do this in a loop
+	for i := 0; i < int(pool.numPendingWholeBlocks)-1; i++ {
+		feePerByte *= pool.expFeeFactor
 	}
+
 
 	for _, t := range txgroup {
 		feeThreshold := feePerByte * uint64(t.GetEncodedLength())
