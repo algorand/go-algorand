@@ -65,7 +65,7 @@ proc ::AlgorandGoal::StartNetwork { NETWORK_NAME NETWORK_TEMPLATE TEST_ALGO_DIR 
         puts "network create $NETWORK_NAME"
         spawn goal network create --network $NETWORK_NAME --template $NETWORK_TEMPLATE --datadir $TEST_ALGO_DIR --rootdir $TEST_ROOT_DIR
         expect {
-            timeout { close; ::AlgorandGoal::Abort "Failed to create network" }
+            timeout { close; ::AlgorandGoal::Abort "Timed out creating network" }
             "^Network $NETWORK_NAME created under*" { puts "Network $NETWORK_NAME created" ; close  }
             close
         }
@@ -74,7 +74,7 @@ proc ::AlgorandGoal::StartNetwork { NETWORK_NAME NETWORK_TEMPLATE TEST_ALGO_DIR 
         puts "network start $NETWORK_NAME"
         spawn goal network start -d $TEST_ALGO_DIR -r $TEST_ROOT_DIR
         expect {
-            timeout { close; ::AlgorandGoal::Abort "Failed to start network"  }
+            timeout { close; ::AlgorandGoal::Abort "Timed out starting network"  }
             "*Network started under* { puts "Network $NETWORK_NAME started"  ;close  }
             close
         }
@@ -83,7 +83,7 @@ proc ::AlgorandGoal::StartNetwork { NETWORK_NAME NETWORK_TEMPLATE TEST_ALGO_DIR 
         puts "network status $NETWORK_NAME"
         spawn goal network status -d $TEST_ALGO_DIR -r $TEST_ROOT_DIR
         expect {
-            timeout { close; ::AlgorandGoal::Abort "Failed to get network status"  }
+            timeout { close; ::AlgorandGoal::Abort "Timed out retrieving network status"  }
             "*Error getting status*" { close; ::AlgorandGoal::Abort "error getting network status: $expect_out(buffer)""}
             "^Network Started under*"   { puts "Network $NETWORK_NAME status ok"; close }
             close
@@ -100,7 +100,7 @@ proc ::AlgorandGoal::StopNetwork { NETWORK_NAME TEST_ALGO_DIR TEST_ROOT_DIR } {
     puts "Stopping network: $NETWORK_NAME"
     spawn goal network stop -d $TEST_ALGO_DIR -r $TEST_ROOT_DIR
     expect {
-        timeout { close; ::AlgorandGoal::Abort "Failed to shutdown network" }
+        timeout { close; ::AlgorandGoal::Abort "Timed out shutting down network" }
         "Network Stopped under*" {set NETWORK_STOP_MESSAGE $expect_out(buffer); close}
     }
     puts $NETWORK_STOP_MESSAGE
@@ -113,23 +113,23 @@ proc ::AlgorandGoal::CreateWallet { WALLET_NAME WALLET_PASSWORD TEST_PRIMARY_NOD
         spawn goal wallet new $WALLET_NAME -d $TEST_PRIMARY_NODE_DIR
 
         expect {
-            timeout {::AlgorandGoal::Abort "CreateWallet failed"  }
+            timeout {::AlgorandGoal::Abort "Timed out CreateWallet password"  }
             "Please choose a password for wallet*" { send "$WALLET_PASSWORD\r" }
         }
         expect {
-            timeout {::AlgorandGoal::Abort "CreateWallet failed"  }
+            timeout {::AlgorandGoal::Abort "Timed out CreateWallet confirmation"  }
             "Please confirm*" { send "$WALLET_PASSWORD\r"}
         }
         expect {
-             timeout {::AlgorandGoal::Abort "CreateWallet failed"  }
+             timeout {::AlgorandGoal::Abort "Timed out CreateWallet see it now"  }
              "Would you like to see it now? (Y/n):" { send "y\r" }
         }
         expect {
-              timeout {::AlgorandGoal::Abort "CreateWallet failed"  }
+              timeout {::AlgorandGoal::Abort "Timed out CreateWallet keep info safe"  }
               "Keep this information safe -- never share it with anyone!" {}
         }
         expect {
-             timeout {::AlgorandGoal::Abort "CreateWallet failed"  }
+             timeout {::AlgorandGoal::Abort "Timed out CreateWallet pass phrase"  }
              -re {32m([a-z ]+)} {set WALLET_PASS_PHRASE $expect_out(1,string); close;}
         }
     } EXCEPTION ] } {
