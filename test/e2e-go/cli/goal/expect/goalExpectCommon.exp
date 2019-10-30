@@ -451,7 +451,7 @@ proc ::AlgorandGoal::WaitForRound { WAIT_FOR_ROUND_NUMBER TEST_PRIMARY_NODE_DIR 
    puts "node status waiting for Round $WAIT_FOR_ROUND_NUMBER "
 
     if { [catch {
-    set i 0
+        set i 0
         while 1 {
             incr i
             exec sleep 10
@@ -461,7 +461,7 @@ proc ::AlgorandGoal::WaitForRound { WAIT_FOR_ROUND_NUMBER TEST_PRIMARY_NODE_DIR 
             spawn goal node status -d $TEST_PRIMARY_NODE_DIR
             expect {
                 timeout { ::AlgorandGoal::Abort "goal node status timed out"  }
-                -re {Cannot contact Algorand node: (\d+)} {set BLOCK 0 ; close }
+                -re {Cannot contact Algorand node: (\d+)} {set BLOCK 0; close }
                 -re {Last committed block: (\d+)} {set BLOCK $expect_out(1,string); exp_continue }
                 -re {Time since last block: ([0-9]*\.?[0-9]*)s} {set TIME_SINCE_LAST_BLOCK $expect_out(1,string); exp_continue }
                 -re {Sync Time: ([0-9]*\.?[0-9]*)s} {set SYNC_TIME $expect_out(1,string); exp_continue }
@@ -471,8 +471,7 @@ proc ::AlgorandGoal::WaitForRound { WAIT_FOR_ROUND_NUMBER TEST_PRIMARY_NODE_DIR 
                 -re {Next consensus protocol supported: (\w+)} {set NEXT_CONSENSUS_PROTOCOL_SUPPORTED $expect_out(1,string); exp_continue }
                 -re {Has Synced Since Startup: (\w+)} {set HAS_SYNCHED_SINCE_STARTUP $expect_out(1,string); exp_continue }
                 -re {Genesis ID: (\w+)} {set GENESIS_ID $expect_out(1,string); exp_continue }
-                -re {Genesis hash: (\w+)} {set GENESIS_HASH $expect_out(1,string); exp_continue }
-                eof {close}
+                -re {Genesis hash: (\w+)} {set GENESIS_HASH $expect_out(1,string); close }
             }
             if { $BLOCK > 0 } {
                 puts "node status check complete"
