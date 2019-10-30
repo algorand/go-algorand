@@ -587,24 +587,23 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 }
 
 func (eval *BlockEvaluator) checkLogicSig(txn transactions.SignedTxn, txgroup []transactions.SignedTxnWithAD, groupIndex int) (err error) {
-	firstValid := basics.Round(txn.Txn.FirstValid)
+	firstValid := basics.Round(txn.Txn.FirstValid - 1)
 	var hdr bookkeeping.BlockHeader
-	if eval.block.BlockHeader.Round == firstValid {
-		hdr = eval.block.BlockHeader
-	} else {
-		// TODO: move this into some lazy evaluator for the few scripts that actually use `txn FirstValidTime` ?
-		hdr, err = eval.l.BlockHdr(firstValid)
-		if err != nil {
-			return fmt.Errorf("could not fetch BlockHdr for FirstValid=%d (current=%d): %s", txn.Txn.FirstValid, eval.block.BlockHeader.Round, err)
-		}
+	// TODO: move this into some lazy evaluator for the few scripts that actually use `txn FirstValidTime` ?
+	hdr, err = eval.l.BlockHdr(firstValid)
+	if err != nil {
+		return fmt.Errorf("could not fetch BlockHdr for FirstValid-1=%d (current=%d): %s", txn.Txn.FirstValid-1, eval.block.BlockHeader.Round, err)
 	}
 	ep := logic.EvalParams{
-		Txn:                 &txn,
-		Proto:               &eval.proto,
-		TxnGroup:            txgroup,
-		GroupIndex:          groupIndex,
-		FirstValidTimeStamp: uint64(hdr.TimeStamp),
+		Txn:        &txn,
+		Proto:      &eval.proto,
+		TxnGroup:   txgroup,
+		GroupIndex: groupIndex,
 	}
+	if hdr.TimeStamp < 0 {
+		return fmt.Errorf("cannot evaluate LogicSig before 1970 at TimeStamp %d", hdr.TimeStamp)
+	}
+	ep.FirstValidTimeStamp = uint64(hdr.TimeStamp)
 	pass, err := logic.Eval(txn.Lsig.Logic, ep)
 	if err != nil {
 		return fmt.Errorf("transaction %v: rejected by logic err=%s", txn.ID(), err)

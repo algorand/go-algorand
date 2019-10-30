@@ -372,6 +372,8 @@ TypeEnum mapping:
 | 5 | afrz | Asset Freeze |
 
 
+FirstValidTime is actually the time of the round before FirstValid which should be about 5 seconds before the FirstValid round. Subtle implementation details make it much faster to serve details of an already completed round.
+
 ## global
 
 - Opcode: 0x32 {uint8 global field index}
