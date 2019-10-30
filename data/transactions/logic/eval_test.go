@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -1541,6 +1542,8 @@ func checkPanic(cx *evalContext) int {
 }
 
 func TestPanic(t *testing.T) {
+	debugLogger = logging.TestingLog(t)
+	defer func() { debugLogger = nil }()
 	program, err := AssembleString(`int 1`)
 	require.NoError(t, err)
 	var hackedOpcode int
