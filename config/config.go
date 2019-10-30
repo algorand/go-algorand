@@ -743,6 +743,8 @@ func loadConfigFromFile(configFile string) (c Local, err error) {
 	}
 
 	// Migrate in case defaults were changed
+	// If a config file does not have version, it is assumed to be zero.
+	// All fields listed in migrate() might be changed if an actual value matches to default value from a previous version.
 	c, err = migrate(c)
 	return
 }
