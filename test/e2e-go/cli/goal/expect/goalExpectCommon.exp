@@ -55,12 +55,13 @@ proc ::AlgorandGoal::Abort { ERROR } {
 
 # Start the network
 proc ::AlgorandGoal::StartNetwork { NETWORK_NAME NETWORK_TEMPLATE TEST_ALGO_DIR TEST_ROOT_DIR } {
-    if { [catch {
-        set ::GLOBAL_TEST_ALGO_DIR $TEST_ALGO_DIR
-        set ::GLOBAL_TEST_ROOT_DIR $TEST_ROOT_DIR
-        set ::GLOBAL_NETWORK_NAME $NETWORK_NAME
+    set ::GLOBAL_TEST_ALGO_DIR $TEST_ALGO_DIR
+    set ::GLOBAL_TEST_ROOT_DIR $TEST_ROOT_DIR
+    set ::GLOBAL_NETWORK_NAME $NETWORK_NAME
 
-        set timeout 90
+    set timeout 90
+
+    if { [catch {
         # Create network
         puts "network create $NETWORK_NAME"
         spawn goal network create --network $NETWORK_NAME --template $NETWORK_TEMPLATE --datadir $TEST_ALGO_DIR --rootdir $TEST_ROOT_DIR
@@ -78,7 +79,12 @@ proc ::AlgorandGoal::StartNetwork { NETWORK_NAME NETWORK_TEMPLATE TEST_ALGO_DIR 
             "*Network started under* { puts "Network $NETWORK_NAME started"  ;close  }
             close
         }
+    } EXCEPTION ] } {
+       puts "ERROR in StartNetwork: $EXCEPTION"
+       exit 1
+    }
 
+    if { [catch {
         # Check network status
         puts "network status $NETWORK_NAME"
         spawn goal network status -d $TEST_ALGO_DIR -r $TEST_ROOT_DIR
@@ -102,12 +108,12 @@ proc ::AlgorandGoal::StopNetwork { NETWORK_NAME TEST_ALGO_DIR TEST_ROOT_DIR } {
     spawn goal network stop -d $TEST_ALGO_DIR -r $TEST_ROOT_DIR
     expect {
         timeout {
-	      close;
+	      close
 	      puts "Timed out shutting down network"
 	      puts "GLOBAL_TEST_ALGO_DIR $::GLOBAL_TEST_ALGO_DIR"
 	      puts "GLOBAL_TEST_ROOT_DIR $::GLOBAL_TEST_ROOT_DIR"
 	      puts "GLOBAL_NETWORK_NAME $::GLOBAL_NETWORK_NAME"
-	      exit 1;
+	      exit 1
 	      }
         "Network Stopped under*" {set NETWORK_STOP_MESSAGE $expect_out(buffer); close}
     }
@@ -270,7 +276,7 @@ proc ::AlgorandGoal::AccountTransfer { FROM_WALLET_NAME FROM_WALLET_PASSWORD FRO
         set TRANSACTION_ID "NOT SET"
         spawn goal clerk send --fee $FEE_AMOUNT --wallet $FROM_WALLET_NAME --amount $TRANSFER_AMOUNT --from $FROM_ACCOUNT_ADDRESS --to $TO_ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR -N
         expect {
-            timeout { ::AlgorandGoal::Abort "Failed to transfer funds"  }
+            timeout { close; ::AlgorandGoal::Abort "Timed out transfering funds"  }
             "Please enter the password for wallet '$FROM_WALLET_NAME':" { send "$FROM_WALLET_PASSWORD\r" }
             -re {[A-Z0-9]{52}} {set TRANSACTION_ID $expect_out(0,string); close }
         }
