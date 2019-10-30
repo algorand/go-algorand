@@ -739,9 +739,9 @@ func (node *AlgorandFullNode) oldKeyDeletionThread() {
 		} else {
 			proto := config.Consensus[hdr.CurrentProtocol]
 
-			node.mu.Lock()
+			//node.mu.Lock()
 			node.accountManager.DeleteOldKeys(r+1, proto)
-			node.mu.Unlock()
+			//node.mu.Unlock()
 		}
 	}
 }
