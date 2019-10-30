@@ -235,7 +235,7 @@ func (pool *TransactionPool) test(txgroup []transactions.SignedTxn) error {
 
 	// The feePerByte should be bumped to 1 to make the exponentially
 	// threshold growing valid.
-	if (feePerByte == 0) && pool.numPendingWholeBlocks > 0 {
+	if feePerByte == 0 && pool.numPendingWholeBlocks > 0 {
 		feePerByte = uint64(1)
 	}
 
@@ -246,7 +246,6 @@ func (pool *TransactionPool) test(txgroup []transactions.SignedTxn) error {
 	for i := 0; i < int(pool.numPendingWholeBlocks)-1; i++ {
 		feePerByte *= pool.expFeeFactor
 	}
-
 
 	for _, t := range txgroup {
 		feeThreshold := feePerByte * uint64(t.GetEncodedLength())
