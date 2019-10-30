@@ -41,15 +41,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-var debugLogger logging.Logger
-
-func log() logging.Logger {
-	if debugLogger != nil {
-		return debugLogger
-	}
-	return logging.Base()
-}
-
 // EvalMaxVersion is the max version we can interpret and run
 const EvalMaxVersion = 1
 
@@ -100,6 +91,15 @@ type EvalParams struct {
 	GroupIndex int
 
 	FirstValidTimeStamp uint64
+
+	Logger logging.Logger
+}
+
+func (ep EvalParams) log() logging.Logger {
+	if ep.Logger != nil {
+		return ep.Logger
+	}
+	return logging.Base()
 }
 
 type evalContext struct {
@@ -188,7 +188,7 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 				}
 			}
 			err = PanicError{x, errstr}
-			log().Errorf("recovered panic in Eval: %s", err)
+			params.log().Errorf("recovered panic in Eval: %s", err)
 		}
 	}()
 	if (params.Proto == nil) || (params.Proto.LogicSigVersion == 0) {
@@ -269,7 +269,7 @@ func Check(program []byte, params EvalParams) (cost int, err error) {
 				}
 			}
 			err = PanicError{x, errstr}
-			log().Errorf("recovered panic in Check: %s", err)
+			params.log().Errorf("recovered panic in Check: %s", err)
 		}
 	}()
 	if (params.Proto == nil) || (params.Proto.LogicSigVersion == 0) {

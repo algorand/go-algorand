@@ -1542,8 +1542,7 @@ func checkPanic(cx *evalContext) int {
 }
 
 func TestPanic(t *testing.T) {
-	debugLogger = logging.TestingLog(t)
-	defer func() { debugLogger = nil }()
+	log := logging.TestingLog(t)
 	program, err := AssembleString(`int 1`)
 	require.NoError(t, err)
 	var hackedOpcode int
@@ -1561,7 +1560,9 @@ func TestPanic(t *testing.T) {
 		}
 	}
 	sb := strings.Builder{}
-	_, err = Check(program, defaultEvalParams(&sb, nil))
+	params := defaultEvalParams(&sb, nil)
+	params.Logger = log
+	_, err = Check(program, params)
 	require.Error(t, err)
 	if pe, ok := err.(PanicError); ok {
 		require.Equal(t, panicString, pe.PanicValue)
@@ -1573,7 +1574,9 @@ func TestPanic(t *testing.T) {
 	sb = strings.Builder{}
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = program
-	pass, err := Eval(program, defaultEvalParams(&sb, &txn))
+	params = defaultEvalParams(&sb, &txn)
+	params.Logger = log
+	pass, err := Eval(program, params)
 	if pass {
 		t.Log(hex.EncodeToString(program))
 		t.Log(sb.String())
