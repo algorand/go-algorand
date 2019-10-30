@@ -330,8 +330,6 @@ It is worth noting that there are 10,000,000,000,000,000 micro-Algos in the tota
 - Pushes: any
 - push field from current transaction to stack
 
-Most fields are a simple copy of a uint64 or byte string value. `XferAsset` is the concatenation of the AssetID Creator Address (32 bytes) and the big-endian bytes of the uint64 AssetID Index for a total of 40 bytes. `SenderBalance` is the uin64 balance of the sender, with rewards factored in, at the time of execution.
-
 `txn` Fields:
 
 | Index | Name | Type |
@@ -353,7 +351,7 @@ Most fields are a simple copy of a uint64 or byte string value. `XferAsset` is t
 | 14 | VoteKeyDilution | uint64 |
 | 15 | Type | []byte |
 | 16 | TypeEnum | uint64 |
-| 17 | XferAsset | []byte |
+| 17 | XferAsset | uint64 |
 | 18 | AssetAmount | uint64 |
 | 19 | AssetSender | []byte |
 | 20 | AssetReceiver | []byte |
@@ -364,14 +362,14 @@ Most fields are a simple copy of a uint64 or byte string value. `XferAsset` is t
 
 TypeEnum mapping:
 
-| Index | Name |
-| --- | --- |
-| 0 | unknown |
-| 1 | pay |
-| 2 | keyreg |
-| 3 | acfg |
-| 4 | axfer |
-| 5 | afrz |
+| Index | "Type" string | Description |
+| --- | --- | --- |
+| 0 | unknown | Unknown type. Invalid transaction. |
+| 1 | pay | Payment |
+| 2 | keyreg | Key Registration |
+| 3 | acfg | Asset Config |
+| 4 | axfer | Asset Transfer |
+| 5 | afrz | Asset Freeze |
 
 
 ## global

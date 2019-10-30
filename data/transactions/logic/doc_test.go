@@ -97,3 +97,12 @@ func TestOpSize(t *testing.T) {
 	c = OpSize("intc")
 	require.Equal(t, 2, c)
 }
+
+func TestTypeNameDescription(t *testing.T) {
+	require.Equal(t, len(TxnTypeNames), len(typeEnumDescriptions))
+	for i, a := range TxnTypeNames {
+		b := TypeNameDescription(a)
+		require.Equal(t, b, typeEnumDescriptions[i].b)
+	}
+	require.Equal(t, "invalid type name", TypeNameDescription("invalid type name"))
+}
