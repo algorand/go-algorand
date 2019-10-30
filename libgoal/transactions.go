@@ -449,7 +449,7 @@ func (c *Client) MakeUnsignedAssetCreateTx(total uint64, defaultFrozen bool, man
 	}
 
 	if len(url) > cparams.MaxAssetURLBytes {
-		return tx, fmt.Errorf("asset url %s is too long (max %d bytes)", url, len(tx.AssetParams.URL))
+		return tx, fmt.Errorf("asset url %s is too long (max %d bytes)", url, cparams.MaxAssetURLBytes)
 	}
 	tx.AssetParams.URL = url
 
@@ -459,12 +459,12 @@ func (c *Client) MakeUnsignedAssetCreateTx(total uint64, defaultFrozen bool, man
 	copy(tx.AssetParams.MetadataHash[:], metadataHash)
 
 	if len(unitName) > cparams.MaxAssetUnitNameBytes {
-		return tx, fmt.Errorf("asset unit name %s too long (max %d bytes)", unitName, len(tx.AssetParams.UnitName))
+		return tx, fmt.Errorf("asset unit name %s too long (max %d bytes)", unitName, cparams.MaxAssetUnitNameBytes)
 	}
 	tx.AssetParams.UnitName = unitName
 
 	if len(assetName) > cparams.MaxAssetNameBytes {
-		return tx, fmt.Errorf("asset name %s too long (max %d bytes)", assetName, len(tx.AssetParams.AssetName))
+		return tx, fmt.Errorf("asset name %s too long (max %d bytes)", assetName, cparams.MaxAssetNameBytes)
 	}
 	tx.AssetParams.AssetName = assetName
 
