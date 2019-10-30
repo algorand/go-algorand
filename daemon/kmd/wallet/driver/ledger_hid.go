@@ -23,6 +23,20 @@ import (
 	"github.com/karalabe/hid"
 )
 
+// deviceID holds a vendor ID and product ID for a USB device
+type deviceID struct {
+	vendor  uint16
+	product uint16
+}
+
+// ledgerDeviceIDs contains the device IDs we're scanning for
+var ledgerDeviceIDs = [...]deviceID{
+	// Ledger Nano S
+	deviceID{0x2c97, 0x0001},
+	// Ledger Nano X
+	deviceID{0x2c97, 0x0004},
+}
+
 // LedgerUSB is a wrapper around a Ledger USB HID device, used to implement
 // the protocol used for sending messages to the application running on the
 // Ledger hardware wallet.
@@ -199,15 +213,17 @@ func LedgerEnumerate() ([]LedgerUSB, error) {
 	}
 
 	var devs []LedgerUSB
-	for _, info := range hid.Enumerate(0x2c97, 0x0001) {
-		dev, err := info.Open()
-		if err != nil {
-			return nil, err
-		}
+	for _, did := range ledgerDeviceIDs {
+		for _, info := range hid.Enumerate(did.vendor, did.product) {
+			dev, err := info.Open()
+			if err != nil {
+				return nil, err
+			}
 
-		devs = append(devs, LedgerUSB{
-			hiddev: dev,
-		})
+			devs = append(devs, LedgerUSB{
+				hiddev: dev,
+			})
+		}
 	}
 
 	return devs, nil
