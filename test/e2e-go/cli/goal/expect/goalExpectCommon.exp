@@ -60,7 +60,7 @@ proc ::AlgorandGoal::StartNetwork { NETWORK_NAME NETWORK_TEMPLATE TEST_ALGO_DIR 
         set ::GLOBAL_TEST_ROOT_DIR $TEST_ROOT_DIR
         set ::GLOBAL_NETWORK_NAME $NETWORK_NAME
 
-        set timeout 30
+        set timeout 90
         # Create network
         puts "network create $NETWORK_NAME"
         spawn goal network create --network $NETWORK_NAME --template $NETWORK_TEMPLATE --datadir $TEST_ALGO_DIR --rootdir $TEST_ROOT_DIR
