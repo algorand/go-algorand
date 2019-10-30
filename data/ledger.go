@@ -322,6 +322,10 @@ func (l *Ledger) AssemblePayset(pool *pools.TransactionPool, eval *ledger.BlockE
 	first := true
 	totalFees := uint64(0)
 
+	// retrieve a list of all the previously known txid in the current round. We want to retrieve it here so we could avoid
+	// exercising the ledger read lock.
+	prevRoundTxIds := eval.GetRoundTxIds(l.Latest())
+
 	for len(pending) > 0 {
 		txgroup := pending[0]
 		pending = pending[1:]
@@ -331,7 +335,9 @@ func (l *Ledger) AssemblePayset(pool *pools.TransactionPool, eval *ledger.BlockE
 			continue
 		}
 
-		if dup, err := eval.IsDup(txgroup[0], l.Latest()); err == nil && dup {
+		// if we already had this tx in the previous round, and haven't removed it yet from the txpool, that's fine.
+		// just skip that one.
+		if prevRoundTxIds[txgroup[0].ID()] {
 			stats.EarlyCommittedCount++
 			continue
 		}
