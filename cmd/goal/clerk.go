@@ -133,7 +133,7 @@ func init() {
 	compileCmd.Flags().StringVarP(&account, "account", "a", "", "Account address to sign the program (If not specified, uses default account)")
 
 	dryrunCmd.Flags().StringVarP(&txFilename, "txfile", "t", "", "transaction or transaction-group to test")
-	dryrunCmd.Flags().Int64VarP(&timeStamp, "time-stamp", "S", 0, "value for txn FirstValidTime (default now)")
+	dryrunCmd.Flags().Int64VarP(&timeStamp, "time-stamp", "S", 0, "unix time value for txn FirstValidTime (default now)")
 	dryrunCmd.Flags().StringVarP(&protoVersion, "proto", "P", "", "consensus protocol version id string")
 	dryrunCmd.MarkFlagRequired("txfile")
 }
