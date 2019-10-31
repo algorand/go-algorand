@@ -91,6 +91,15 @@ type EvalParams struct {
 	GroupIndex int
 
 	FirstValidTimeStamp uint64
+
+	Logger logging.Logger
+}
+
+func (ep EvalParams) log() logging.Logger {
+	if ep.Logger != nil {
+		return ep.Logger
+	}
+	return logging.Base()
 }
 
 type evalContext struct {
@@ -179,7 +188,7 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 				}
 			}
 			err = PanicError{x, errstr}
-			logging.Base().Errorf("recovered panic in Eval: %s", err)
+			params.log().Errorf("recovered panic in Eval: %s", err)
 		}
 	}()
 	if (params.Proto == nil) || (params.Proto.LogicSigVersion == 0) {
@@ -260,7 +269,7 @@ func Check(program []byte, params EvalParams) (cost int, err error) {
 				}
 			}
 			err = PanicError{x, errstr}
-			logging.Base().Errorf("recovered panic in Check: %s", err)
+			params.log().Errorf("recovered panic in Check: %s", err)
 		}
 	}()
 	if (params.Proto == nil) || (params.Proto.LogicSigVersion == 0) {

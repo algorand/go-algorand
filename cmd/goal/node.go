@@ -33,7 +33,6 @@ import (
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/util"
-	"github.com/algorand/go-algorand/util/codecs"
 	"github.com/algorand/go-algorand/util/tokens"
 )
 
@@ -480,8 +479,7 @@ var createCmd = &cobra.Command{
 		}
 
 		// save config to destination
-		configDest := filepath.Join(newNodeDestination, "config.json")
-		err = codecs.SaveNonDefaultValuesToFile(configDest, localConfig, config.GetDefaultLocal(), nil, true)
+		err = localConfig.SaveToDisk(newNodeDestination)
 		if err != nil {
 			reportErrorf(errorNodeCreation, err)
 		}
