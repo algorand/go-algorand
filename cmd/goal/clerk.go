@@ -64,7 +64,7 @@ var (
 	logicSigFile    string
 	round           uint64
 	timeStamp       int64
-	seedBase64      string
+	protoVersion    string
 )
 
 func init() {
@@ -113,6 +113,7 @@ func init() {
 	signCmd.Flags().StringVarP(&programSource, "program", "p", "", "Program source to use as account logic")
 	signCmd.Flags().StringVarP(&logicSigFile, "logic-sig", "L", "", "LogicSig to apply to transaction")
 	signCmd.Flags().StringSliceVar(&argB64Strings, "argb64", nil, "base64 encoded args to pass to transaction logic")
+	signCmd.Flags().StringVarP(&protoVersion, "proto", "P", "", "consensus protocol version id string")
 	signCmd.MarkFlagRequired("infile")
 	signCmd.MarkFlagRequired("outfile")
 
@@ -135,7 +136,7 @@ func init() {
 	dryrunCmd.Flags().StringVarP(&txFilename, "txfile", "t", "", "transaction or transaction-group to test")
 	dryrunCmd.Flags().Uint64VarP(&round, "round", "r", 1, "round number to simulate")
 	dryrunCmd.Flags().Int64VarP(&timeStamp, "time-stamp", "S", 0, "unix time stamp simulate (default now)")
-	dryrunCmd.Flags().StringVarP(&seedBase64, "seed", "R", "2JNZvkCE2KFv3wVbEIEsPPNR64ttpaWuD5NEIXqXc3g=", "base64 bytes to seed random number generator with")
+	dryrunCmd.Flags().StringVarP(&protoVersion, "proto", "P", "", "consensus protocol version id string")
 	dryrunCmd.MarkFlagRequired("txfile")
 }
 
@@ -563,6 +564,22 @@ func lsigFromArgs(lsig *transactions.LogicSig) {
 	lsig.Args = getProgramArgs()
 }
 
+func getProto(versArg string) config.ConsensusParams {
+	cvers := protocol.ConsensusCurrentVersion
+	if protoVersion != "" {
+		cvers = protocol.ConsensusVersion(protoVersion)
+	}
+	proto, ok := config.Consensus[cvers]
+	if !ok {
+		fmt.Fprintf(os.Stderr, "Invalid consensus version. Possible versions:\n")
+		for xvers := range config.Consensus {
+			fmt.Fprintf(os.Stderr, "\t%s\n", xvers)
+		}
+		os.Exit(1)
+	}
+	return proto
+}
+
 var signCmd = &cobra.Command{
 	Use:   "sign -i INFILE -o OUTFILE",
 	Short: "Sign a transaction file",
@@ -612,7 +629,7 @@ var signCmd = &cobra.Command{
 
 			var signedTxn transactions.SignedTxn
 			if lsig.Logic != nil {
-				proto := config.Consensus[protocol.ConsensusCurrentVersion]
+				proto := getProto(protoVersion)
 				err = verify.LogicSig(&lsig, &proto, &unsignedTxn)
 				if err != nil {
 					reportErrorf("%s: txn[%d] error %s", txFilename, count, err)
@@ -865,7 +882,7 @@ var dryrunCmd = &cobra.Command{
 		block := bookkeeping.Block{}
 		block.BlockHeader.Round = basics.Round(round)
 		block.BlockHeader.TimeStamp = timeStamp
-		proto := config.Consensus[protocol.ConsensusCurrentVersion]
+		proto := getProto(protoVersion)
 		for i, txn := range txgroup {
 			if txn.Lsig.Blank() {
 				continue
