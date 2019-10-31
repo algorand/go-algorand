@@ -17,6 +17,7 @@
 package ledger
 
 import (
+	"crypto/rand"
 	"database/sql"
 	"fmt"
 	"io/ioutil"
@@ -31,6 +32,8 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -204,6 +207,272 @@ func TestArchivalRestart(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, basics.Round(maxBlocks), latest)
 	require.Equal(t, basics.Round(0), earliest)
+}
+
+func makeUnsignedAssetCreateTx(total uint64, defaultFrozen bool, manager string, reserve string, freeze string, clawback string, unitName string, assetName string, url string, metadataHash []byte) (transactions.Transaction, error) {
+	var tx transactions.Transaction
+	var err error
+
+	tx.Type = protocol.AssetConfigTx
+	tx.AssetParams = basics.AssetParams{
+		Total:         total,
+		DefaultFrozen: defaultFrozen,
+	}
+	tx.AssetParams.Manager, err = basics.UnmarshalChecksumAddress(manager)
+	if err != nil {
+		return tx, err
+	}
+	tx.AssetParams.Reserve, err = basics.UnmarshalChecksumAddress(reserve)
+	if err != nil {
+		return tx, err
+	}
+	tx.AssetParams.Freeze, err = basics.UnmarshalChecksumAddress(freeze)
+	if err != nil {
+		return tx, err
+	}
+	tx.AssetParams.Clawback, err = basics.UnmarshalChecksumAddress(clawback)
+	if err != nil {
+		return tx, err
+	}
+	tx.AssetParams.URL = url
+	copy(tx.AssetParams.MetadataHash[:], metadataHash)
+	tx.AssetParams.UnitName = unitName
+	tx.AssetParams.AssetName = assetName
+	return tx, nil
+}
+
+func TestArchivalAssets(t *testing.T) {
+	// Start in archival mode, add 2K blocks with asset txns, restart, ensure all
+	// assets are there in index unless they were deleted
+
+	dbTempDir, err := ioutil.TempDir("", "testdir"+t.Name())
+	require.NoError(t, err)
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	dbPrefix := filepath.Join(dbTempDir, dbName)
+	defer os.RemoveAll(dbTempDir)
+
+	genesisInitState := getInitState()
+
+	// Enable assets
+	genesisInitState.Block.BlockHeader.GenesisHash = crypto.Digest{}
+	genesisInitState.Block.CurrentProtocol = protocol.ConsensusFuture
+	genesisInitState.GenesisHash = crypto.Digest{1}
+	genesisInitState.Block.BlockHeader.GenesisHash = crypto.Digest{1}
+
+	// true = created, false = deleted
+	assetIdxs := make(map[basics.AssetIndex]bool)
+	assetCreators := make(map[basics.AssetIndex]basics.Address)
+
+	// keep track of existing/deleted assets for sanity check at end
+	var expectedExisting int
+	var expectedDeleted int
+
+	// give creators money for min balance
+	const maxBlocks = 2000
+	var creators []basics.Address
+	for i := 0; i < maxBlocks; i++ {
+		creator := basics.Address{}
+		_, err = rand.Read(creator[:])
+		require.NoError(t, err)
+		creators = append(creators, creator)
+		genesisInitState.Accounts[creator] = basics.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890})
+	}
+
+	// open ledger
+	const inMem = false // use persistent storage
+	const archival = true
+	l, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
+	require.NoError(t, err)
+	blk := genesisInitState.Block
+
+	// create assets
+	client := libgoal.Client{}
+	for i := 0; i < maxBlocks; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+
+		// make a transaction that will create an asset
+		creatorEncoded := creators[i].String()
+		tx, err := makeUnsignedAssetCreateTx(100, false, creatorEncoded, creatorEncoded, creatorEncoded, creatorEncoded, "m", "m", "", nil)
+		require.NoError(t, err)
+		tx.Sender = creators[i]
+		createdAssetIdx := basics.AssetIndex(blk.BlockHeader.TxnCounter + 1)
+		expectedExisting++
+
+		// mark asset as created for checking later
+		assetIdxs[createdAssetIdx] = true
+		assetCreators[createdAssetIdx] = tx.Sender
+		blk.BlockHeader.TxnCounter++
+
+		// make a payset
+		var payset transactions.Payset
+		stxnib := makeSignedTxnInBlock(tx)
+		payset = append(payset, stxnib)
+		blk.Payset = payset
+
+		// for one of the assets, delete it in the same block
+		if i == maxBlocks/2 {
+			tx0, err := client.MakeUnsignedAssetDestroyTx(blk.BlockHeader.TxnCounter)
+			require.NoError(t, err)
+			tx0.Sender = assetCreators[createdAssetIdx]
+			blk.Payset = append(blk.Payset, makeSignedTxnInBlock(tx0))
+			assetIdxs[createdAssetIdx] = false
+			blk.BlockHeader.TxnCounter++
+			expectedExisting--
+			expectedDeleted++
+		}
+
+		// Add the block
+		err = l.AddBlock(blk, agreement.Certificate{})
+		require.NoError(t, err)
+	}
+	l.WaitForCommit(blk.Round())
+
+	// check that we can fetch creator for all created assets and can't for
+	// deleted assets
+	var existing, deleted int
+	for aidx, status := range assetIdxs {
+		c, err := l.GetAssetCreator(aidx)
+		if status {
+			require.NoError(t, err)
+			require.Equal(t, assetCreators[aidx], c)
+			existing++
+		} else {
+			require.Error(t, err)
+			require.Equal(t, basics.Address{}, c)
+			deleted++
+		}
+	}
+	require.Equal(t, expectedExisting, existing)
+	require.Equal(t, expectedDeleted, deleted)
+	require.Equal(t, len(assetIdxs), existing+deleted)
+
+	// close and reopen the same DB
+	l.Close()
+	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
+	require.NoError(t, err)
+	defer l.Close()
+
+	// check that we can fetch creator for all created assets and can't for
+	// deleted assets
+	existing = 0
+	deleted = 0
+	for aidx, status := range assetIdxs {
+		c, err := l.GetAssetCreator(aidx)
+		if status {
+			require.NoError(t, err)
+			require.Equal(t, assetCreators[aidx], c)
+			existing++
+		} else {
+			require.Error(t, err)
+			require.Equal(t, basics.Address{}, c)
+			deleted++
+		}
+	}
+	require.Equal(t, expectedExisting, existing)
+	require.Equal(t, expectedDeleted, deleted)
+	require.Equal(t, len(assetIdxs), existing+deleted)
+
+	// delete an old asset and a new asset
+	assetToDelete := basics.AssetIndex(1)
+	tx0, err := client.MakeUnsignedAssetDestroyTx(uint64(assetToDelete))
+	require.NoError(t, err)
+	tx0.Sender = assetCreators[assetToDelete]
+	assetIdxs[assetToDelete] = false
+	blk.BlockHeader.TxnCounter++
+	expectedExisting--
+	expectedDeleted++
+
+	assetToDelete = basics.AssetIndex(maxBlocks)
+	tx1, err := client.MakeUnsignedAssetDestroyTx(uint64(assetToDelete))
+	require.NoError(t, err)
+	tx1.Sender = assetCreators[assetToDelete]
+	assetIdxs[assetToDelete] = false
+	blk.BlockHeader.TxnCounter++
+	expectedExisting--
+	expectedDeleted++
+
+	// start mining a block with the deletion txns
+	blk.BlockHeader.Round++
+	blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+
+	// make a payset
+	var payset transactions.Payset
+	payset = append(payset, makeSignedTxnInBlock(tx0))
+	payset = append(payset, makeSignedTxnInBlock(tx1))
+	blk.Payset = payset
+
+	// add the block
+	err = l.AddBlock(blk, agreement.Certificate{})
+	require.NoError(t, err)
+	l.WaitForCommit(blk.Round())
+
+	// check that we can fetch creator for all created assets and can't for
+	// deleted assets
+	existing = 0
+	deleted = 0
+	for aidx, status := range assetIdxs {
+		c, err := l.GetAssetCreator(aidx)
+		if status {
+			require.NoError(t, err)
+			require.Equal(t, assetCreators[aidx], c)
+			existing++
+		} else {
+			require.Error(t, err)
+			require.Equal(t, basics.Address{}, c)
+			deleted++
+		}
+	}
+	require.Equal(t, expectedExisting, existing)
+	require.Equal(t, expectedDeleted, deleted)
+	require.Equal(t, len(assetIdxs), existing+deleted)
+
+	// Mine another maxBlocks blocks
+	for i := 0; i < maxBlocks; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+		blk.Payset = nil
+		err = l.AddBlock(blk, agreement.Certificate{})
+		require.NoError(t, err)
+	}
+	l.WaitForCommit(blk.Round())
+
+	// close and reopen the same DB
+	l.Close()
+	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
+	require.NoError(t, err)
+	defer l.Close()
+
+	// check that we can fetch creator for all created assets and can't for
+	// deleted assets
+	existing = 0
+	deleted = 0
+	for aidx, status := range assetIdxs {
+		c, err := l.GetAssetCreator(aidx)
+		if status {
+			require.NoError(t, err)
+			require.Equal(t, assetCreators[aidx], c)
+			existing++
+		} else {
+			require.Error(t, err)
+			require.Equal(t, basics.Address{}, c)
+			deleted++
+		}
+	}
+	require.Equal(t, expectedExisting, existing)
+	require.Equal(t, expectedDeleted, deleted)
+	require.Equal(t, len(assetIdxs), existing+deleted)
+}
+
+func makeSignedTxnInBlock(tx transactions.Transaction) transactions.SignedTxnInBlock {
+	return transactions.SignedTxnInBlock{
+		SignedTxnWithAD: transactions.SignedTxnWithAD{
+			SignedTxn: transactions.SignedTxn{
+				Txn: tx,
+			},
+		},
+		HasGenesisID: true,
+	}
 }
 
 func TestArchivalFromNonArchival(t *testing.T) {

@@ -1,10 +1,9 @@
 {
-    "APIEndpoint": "{{APIEndpoint}}",
     "APIToken": "{{APIToken}}",
     "EnableBlockStats": true,
     "EnableTelemetry": true,
     "TelemetryURI": "{{TelemetryURI}}",
     "EnableMetrics": true,
     "MetricsURI": "{{MetricsURI}}",
-    "ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4  }"
+    "ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4  }"
 }

@@ -192,6 +192,15 @@ type ConsensusParams struct {
 	// max number of assets per account
 	MaxAssetsPerAccount int
 
+	// max length of asset name
+	MaxAssetNameBytes int
+
+	// max length of asset unit name
+	MaxAssetUnitNameBytes int
+
+	// max length of asset url
+	MaxAssetURLBytes int
+
 	// support sequential transaction counter TxnCounter
 	TxnCounter bool
 
@@ -410,27 +419,31 @@ func initConsensusProtocols() {
 	v18 := v17
 	v18.PendingResidueRewards = true
 	v18.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	v18.TxnCounter = true
+	v18.Asset = true
+	v18.LogicSigVersion = 1
+	v18.LogicSigMaxSize = 1000
+	v18.LogicSigMaxCost = 20000
+	v18.MaxAssetsPerAccount = 1000
+	v18.SupportTxGroups = true
+	v18.MaxTxGroupSize = 16
+	v18.SupportTransactionLeases = true
+	v18.SupportBecomeNonParticipatingTransactions = true
+	v18.MaxAssetNameBytes = 32
+	v18.MaxAssetUnitNameBytes = 8
+	v18.MaxAssetURLBytes = 32
 	Consensus[protocol.ConsensusV18] = v18
 
-	// v17 can be upgraded to v18.
-	v17.ApprovedUpgrades[protocol.ConsensusV18] = true
-
+	// ConsensusV19 is the official spec commit ( teal, assets, group tx )
 	v19 := v18
 	v19.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
-	v19.TxnCounter = true
-	v19.Asset = true
-	v19.LogicSigVersion = 1
-	v19.LogicSigMaxSize = 1000
-	v19.LogicSigMaxCost = 20000
-	v19.MaxAssetsPerAccount = 1000
-	v19.SupportTxGroups = true
-	v19.MaxTxGroupSize = 16
-	v19.SupportTransactionLeases = true
-	v19.SupportBecomeNonParticipatingTransactions = true
+
 	Consensus[protocol.ConsensusV19] = v19
 
 	// v18 can be upgraded to v19.
 	v18.ApprovedUpgrades[protocol.ConsensusV19] = true
+	// v17 can be upgraded to v18.
+	v17.ApprovedUpgrades[protocol.ConsensusV19] = true
 
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
@@ -737,6 +750,8 @@ func loadConfigFromFile(configFile string) (c Local, err error) {
 	}
 
 	// Migrate in case defaults were changed
+	// If a config file does not have version, it is assumed to be zero.
+	// All fields listed in migrate() might be changed if an actual value matches to default value from a previous version.
 	c, err = migrate(c)
 	return
 }

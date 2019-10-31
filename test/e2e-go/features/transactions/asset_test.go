@@ -246,7 +246,7 @@ func TestAssetConfig(t *testing.T) {
 		wh, err = client.GetUnencryptedWalletHandle()
 		a.NoError(err)
 
-		tx, err := client.MakeUnsignedAssetDestroyTx(account0, idx)
+		tx, err := client.MakeUnsignedAssetDestroyTx(idx)
 		sender := manager
 		if idx == assets[0].idx {
 			sender = account0
@@ -332,7 +332,7 @@ func TestAssetInformation(t *testing.T) {
 	info, err = client.AccountInformation(account0)
 	a.NoError(err)
 	for idx, cp := range info.AssetParams {
-		assetInfo, err := client.AssetInformation(cp.Creator, idx)
+		assetInfo, err := client.AssetInformation(idx)
 		a.NoError(err)
 		a.Equal(cp, assetInfo)
 	}
@@ -340,7 +340,7 @@ func TestAssetInformation(t *testing.T) {
 	// Destroy assets
 	txids = make(map[string]string)
 	for idx := range info.AssetParams {
-		tx, err := client.MakeUnsignedAssetDestroyTx(account0, idx)
+		tx, err := client.MakeUnsignedAssetDestroyTx(idx)
 		txid, err := helperFillSignBroadcast(client, wh, manager, tx, err)
 		a.NoError(err)
 		txids[txid] = manager
@@ -428,26 +428,26 @@ func TestAssetSend(t *testing.T) {
 
 	// Sending assets to account that hasn't opted in should fail, but
 	// after opting in, should succeed for non-frozen asset.
-	tx, err = client.MakeUnsignedAssetSendTx(account0, nonFrozenIdx, 1, extra, "", "")
+	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 1, extra, "", "")
 	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
 	a.Error(err)
 
 	txids = make(map[string]string)
-	tx, err = client.MakeUnsignedAssetSendTx(account0, frozenIdx, 0, extra, "", "")
+	tx, err = client.MakeUnsignedAssetSendTx(frozenIdx, 0, extra, "", "")
 	txid, err = helperFillSignBroadcast(client, wh, extra, tx, err)
 	a.NoError(err)
 	txids[txid] = extra
 
-	tx, err = client.MakeUnsignedAssetSendTx(account0, nonFrozenIdx, 0, extra, "", "")
+	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 0, extra, "", "")
 	txid, err = helperFillSignBroadcast(client, wh, extra, tx, err)
 	a.NoError(err)
 	txids[txid] = extra
 
-	tx, err = client.MakeUnsignedAssetSendTx(account0, frozenIdx, 1, extra, "", "")
+	tx, err = client.MakeUnsignedAssetSendTx(frozenIdx, 1, extra, "", "")
 	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
 	a.Error(err)
 
-	tx, err = client.MakeUnsignedAssetSendTx(account0, nonFrozenIdx, 10, extra, "", "")
+	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 10, extra, "", "")
 	txid, err = helperFillSignBroadcast(client, wh, account0, tx, err)
 	a.NoError(err)
 	txids[txid] = account0
@@ -465,51 +465,51 @@ func TestAssetSend(t *testing.T) {
 	a.Equal(info.Assets[nonFrozenIdx].Frozen, false)
 
 	// Should not be able to send more than is available
-	tx, err = client.MakeUnsignedAssetSendTx(account0, nonFrozenIdx, 11, extra, "", "")
+	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 11, extra, "", "")
 	_, err = helperFillSignBroadcast(client, wh, extra, tx, err)
 	a.Error(err)
 
-	tx, err = client.MakeUnsignedAssetSendTx(account0, nonFrozenIdx, 10, extra, "", "")
+	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 10, extra, "", "")
 	_, err = helperFillSignBroadcast(client, wh, extra, tx, err)
 	a.NoError(err)
 
 	// Swap frozen status on the extra account (and the wrong address should not
 	// be able to change frozen status)
-	tx, err = client.MakeUnsignedAssetFreezeTx(account0, nonFrozenIdx, extra, true)
+	tx, err = client.MakeUnsignedAssetFreezeTx(nonFrozenIdx, extra, true)
 	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
 	a.Error(err)
 
-	tx, err = client.MakeUnsignedAssetFreezeTx(account0, nonFrozenIdx, extra, true)
+	tx, err = client.MakeUnsignedAssetFreezeTx(nonFrozenIdx, extra, true)
 	_, err = helperFillSignBroadcast(client, wh, freeze, tx, err)
 	a.NoError(err)
 
-	tx, err = client.MakeUnsignedAssetFreezeTx(account0, frozenIdx, extra, false)
+	tx, err = client.MakeUnsignedAssetFreezeTx(frozenIdx, extra, false)
 	_, err = helperFillSignBroadcast(client, wh, freeze, tx, err)
 	a.NoError(err)
 
 	// Should be able to send money to the now-unfrozen account,
 	// but should not be able to send money from the now-frozen account.
-	tx, err = client.MakeUnsignedAssetSendTx(account0, frozenIdx, 10, extra, "", "")
+	tx, err = client.MakeUnsignedAssetSendTx(frozenIdx, 10, extra, "", "")
 	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
 	a.NoError(err)
 
-	tx, err = client.MakeUnsignedAssetSendTx(account0, nonFrozenIdx, 1, extra, "", "")
+	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 1, extra, "", "")
 	_, err = helperFillSignBroadcast(client, wh, extra, tx, err)
 	a.Error(err)
 
 	// Clawback should be able to claim money out of both frozen and non-frozen accounts,
 	// and the wrong address should not be able to clawback.
 	txids = make(map[string]string)
-	tx, err = client.MakeUnsignedAssetSendTx(account0, frozenIdx, 5, account0, "", extra)
+	tx, err = client.MakeUnsignedAssetSendTx(frozenIdx, 5, account0, "", extra)
 	txid, err = helperFillSignBroadcast(client, wh, clawback, tx, err)
 	a.NoError(err)
 	txids[txid] = clawback
 
-	tx, err = client.MakeUnsignedAssetSendTx(account0, nonFrozenIdx, 5, account0, "", extra)
+	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 5, account0, "", extra)
 	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
 	a.Error(err)
 
-	tx, err = client.MakeUnsignedAssetSendTx(account0, nonFrozenIdx, 5, account0, "", extra)
+	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 5, account0, "", extra)
 	txid, err = helperFillSignBroadcast(client, wh, clawback, tx, err)
 	a.NoError(err)
 	txids[txid] = clawback
@@ -532,15 +532,15 @@ func TestAssetSend(t *testing.T) {
 	a.Equal(info.Assets[nonFrozenIdx].Amount, uint64(5))
 
 	// Should be able to close out asset slots and close entire account.
-	tx, err = client.MakeUnsignedAssetFreezeTx(account0, nonFrozenIdx, extra, false)
+	tx, err = client.MakeUnsignedAssetFreezeTx(nonFrozenIdx, extra, false)
 	_, err = helperFillSignBroadcast(client, wh, freeze, tx, err)
 	a.NoError(err)
 
-	tx, err = client.MakeUnsignedAssetSendTx(account0, nonFrozenIdx, 0, "", account0, "")
+	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 0, "", account0, "")
 	_, err = helperFillSignBroadcast(client, wh, extra, tx, err)
 	a.NoError(err)
 
-	tx, err = client.MakeUnsignedAssetSendTx(account0, frozenIdx, 0, "", account0, "")
+	tx, err = client.MakeUnsignedAssetSendTx(frozenIdx, 0, "", account0, "")
 	_, err = helperFillSignBroadcast(client, wh, extra, tx, err)
 	a.NoError(err)
 

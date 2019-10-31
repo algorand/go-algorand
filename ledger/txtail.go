@@ -128,3 +128,12 @@ func (t *txTail) isDup(proto config.ConsensusParams, current basics.Round, first
 
 	return false, nil
 }
+
+func (t *txTail) getRoundTxIds(rnd basics.Round) (txMap map[transactions.Txid]bool) {
+	rndtxs := t.recent[rnd].txids
+	txMap = make(map[transactions.Txid]bool, len(rndtxs))
+	for txid := range rndtxs {
+		txMap[txid] = true
+	}
+	return
+}

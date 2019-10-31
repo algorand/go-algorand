@@ -18,6 +18,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/base64"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -48,6 +49,7 @@ var (
 	online                  bool
 	accountName             string
 	transactionFee          uint64
+	statusChangeLease       string
 	statusChangeFirstRound  uint64
 	statusChangeValidRounds uint64
 	statusChangeTxFile      string
@@ -129,6 +131,7 @@ func init() {
 	changeOnlineCmd.Flags().Uint64VarP(&transactionFee, "fee", "f", 0, "The Fee to set on the status change transaction (defaults to suggested fee)")
 	changeOnlineCmd.Flags().Uint64VarP(&statusChangeFirstRound, "firstRound", "", 0, "FirstValid for the status change transaction (0 for current)")
 	changeOnlineCmd.Flags().Uint64VarP(&statusChangeValidRounds, "validRounds", "v", 0, "The validity period for the status change transaction")
+	changeOnlineCmd.Flags().StringVarP(&statusChangeLease, "lease", "x", "", "Lease value (base64, optional): no transaction may also acquire this lease until lastvalid")
 	changeOnlineCmd.Flags().StringVarP(&statusChangeTxFile, "txfile", "t", "", "Write status change transaction to this file")
 	changeOnlineCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
 
@@ -179,6 +182,20 @@ func init() {
 	markNonparticipatingCmd.Flags().Uint64VarP(&statusChangeValidRounds, "validRounds", "v", 0, "The validity period for the status change transaction")
 	markNonparticipatingCmd.Flags().StringVarP(&statusChangeTxFile, "txfile", "t", "", "Write status change transaction to this file, rather than posting to network")
 	markNonparticipatingCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
+}
+
+func scLeaseBytes(cmd *cobra.Command) (leaseBytes [32]byte) {
+	if cmd.Flags().Changed("lease") {
+		leaseBytesRaw, err := base64.StdEncoding.DecodeString(statusChangeLease)
+		if err != nil {
+			reportErrorf(malformedLease, lease, err)
+		}
+		if len(leaseBytesRaw) != 32 {
+			reportErrorf(malformedLease, lease, fmt.Errorf("lease length %d != 32", len(leaseBytesRaw)))
+		}
+		copy(leaseBytes[:], leaseBytesRaw)
+	}
+	return
 }
 
 var accountCmd = &cobra.Command{
@@ -553,21 +570,21 @@ var changeOnlineCmd = &cobra.Command{
 			}
 		}
 
-		err := changeAccountOnlineStatus(accountAddress, part, online, statusChangeTxFile, walletName, statusChangeFirstRound, statusChangeValidRounds, transactionFee, dataDir, client)
+		err := changeAccountOnlineStatus(accountAddress, part, online, statusChangeTxFile, walletName, statusChangeFirstRound, statusChangeValidRounds, transactionFee, scLeaseBytes(cmd), dataDir, client)
 		if err != nil {
 			reportErrorf(err.Error())
 		}
 	},
 }
 
-func changeAccountOnlineStatus(acct string, part *algodAcct.Participation, goOnline bool, txFile string, wallet string, firstTxRound, validTxRounds, fee uint64, dataDir string, client libgoal.Client) error {
+func changeAccountOnlineStatus(acct string, part *algodAcct.Participation, goOnline bool, txFile string, wallet string, firstTxRound, validTxRounds, fee uint64, leaseBytes [32]byte, dataDir string, client libgoal.Client) error {
 	// Generate an unsigned online/offline tx
 	var utx transactions.Transaction
 	var err error
 	if goOnline {
-		utx, err = client.MakeUnsignedGoOnlineTx(acct, part, firstTxRound, validTxRounds, fee)
+		utx, err = client.MakeUnsignedGoOnlineTx(acct, part, firstTxRound, validTxRounds, fee, leaseBytes)
 	} else {
-		utx, err = client.MakeUnsignedGoOfflineTx(acct, firstTxRound, validTxRounds, fee)
+		utx, err = client.MakeUnsignedGoOfflineTx(acct, firstTxRound, validTxRounds, fee, leaseBytes)
 	}
 	if err != nil {
 		return err
@@ -685,14 +702,14 @@ var renewParticipationKeyCmd = &cobra.Command{
 			}
 		}
 
-		err = generateAndRegisterPartKey(accountAddress, currentRound, roundLastValid, proto.MaxTxnLife, transactionFee, keyDilution, walletName, dataDir, client)
+		err = generateAndRegisterPartKey(accountAddress, currentRound, roundLastValid, proto.MaxTxnLife, transactionFee, scLeaseBytes(cmd), keyDilution, walletName, dataDir, client)
 		if err != nil {
 			reportErrorf(err.Error())
 		}
 	},
 }
 
-func generateAndRegisterPartKey(address string, currentRound, lastValidRound, maxTxnLife uint64, fee, dilution uint64, wallet string, dataDir string, client libgoal.Client) error {
+func generateAndRegisterPartKey(address string, currentRound, lastValidRound, maxTxnLife uint64, fee uint64, leaseBytes [32]byte, dilution uint64, wallet string, dataDir string, client libgoal.Client) error {
 	// Generate a participation keys database and install it
 	part, keyPath, err := client.GenParticipationKeysTo(address, currentRound, lastValidRound, dilution, "")
 	if err != nil {
@@ -703,7 +720,7 @@ func generateAndRegisterPartKey(address string, currentRound, lastValidRound, ma
 	// Now register it as our new online participation key
 	goOnline := true
 	txFile := ""
-	err = changeAccountOnlineStatus(address, &part, goOnline, txFile, wallet, currentRound, maxTxnLife, fee, dataDir, client)
+	err = changeAccountOnlineStatus(address, &part, goOnline, txFile, wallet, currentRound, maxTxnLife, fee, leaseBytes, dataDir, client)
 	if err != nil {
 		part.Close()
 		os.Remove(keyPath)
@@ -718,10 +735,9 @@ var renewAllParticipationKeyCmd = &cobra.Command{
 	Long:  `Generate new participation keys for all existing accounts with participation keys and register them`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
-
 		onDataDirs(func(dataDir string) {
 			fmt.Printf("Renewing participation keys in %s...\n", dataDir)
-			err := renewPartKeysInDir(dataDir, roundLastValid, transactionFee, keyDilution, walletName)
+			err := renewPartKeysInDir(dataDir, roundLastValid, transactionFee, scLeaseBytes(cmd), keyDilution, walletName)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "  Error: %s\n", err)
 			}
@@ -729,7 +745,7 @@ var renewAllParticipationKeyCmd = &cobra.Command{
 	},
 }
 
-func renewPartKeysInDir(dataDir string, lastValidRound uint64, fee uint64, dilution uint64, wallet string) error {
+func renewPartKeysInDir(dataDir string, lastValidRound uint64, fee uint64, leaseBytes [32]byte, dilution uint64, wallet string) error {
 	client := ensureAlgodClient(dataDir)
 
 	// Build list of accounts to renew from all accounts with part keys present
@@ -781,7 +797,7 @@ func renewPartKeysInDir(dataDir string, lastValidRound uint64, fee uint64, dilut
 		}
 
 		address := renewPart.Address().String()
-		err = generateAndRegisterPartKey(address, currentRound, lastValidRound, proto.MaxTxnLife, fee, dilution, wallet, dataDir, client)
+		err = generateAndRegisterPartKey(address, currentRound, lastValidRound, proto.MaxTxnLife, fee, leaseBytes, dilution, wallet, dataDir, client)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  Error renewing part key for account %s: %v\n", address, err)
 			anyErrors = true

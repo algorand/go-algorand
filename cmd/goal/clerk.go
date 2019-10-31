@@ -64,7 +64,7 @@ var (
 	logicSigFile    string
 	round           uint64
 	timeStamp       int64
-	seedBase64      string
+	protoVersion    string
 )
 
 func init() {
@@ -113,6 +113,7 @@ func init() {
 	signCmd.Flags().StringVarP(&programSource, "program", "p", "", "Program source to use as account logic")
 	signCmd.Flags().StringVarP(&logicSigFile, "logic-sig", "L", "", "LogicSig to apply to transaction")
 	signCmd.Flags().StringSliceVar(&argB64Strings, "argb64", nil, "base64 encoded args to pass to transaction logic")
+	signCmd.Flags().StringVarP(&protoVersion, "proto", "P", "", "consensus protocol version id string")
 	signCmd.MarkFlagRequired("infile")
 	signCmd.MarkFlagRequired("outfile")
 
@@ -135,7 +136,7 @@ func init() {
 	dryrunCmd.Flags().StringVarP(&txFilename, "txfile", "t", "", "transaction or transaction-group to test")
 	dryrunCmd.Flags().Uint64VarP(&round, "round", "r", 1, "round number to simulate")
 	dryrunCmd.Flags().Int64VarP(&timeStamp, "time-stamp", "S", 0, "unix time stamp simulate (default now)")
-	dryrunCmd.Flags().StringVarP(&seedBase64, "seed", "R", "2JNZvkCE2KFv3wVbEIEsPPNR64ttpaWuD5NEIXqXc3g=", "base64 bytes to seed random number generator with")
+	dryrunCmd.Flags().StringVarP(&protoVersion, "proto", "P", "", "consensus protocol version id string")
 	dryrunCmd.MarkFlagRequired("txfile")
 }
 
@@ -183,27 +184,32 @@ func waitForCommit(client libgoal.Client, txid string) error {
 	return nil
 }
 
-func writeTxnToFile(client libgoal.Client, signTx bool, dataDir string, walletName string, tx transactions.Transaction, filename string) error {
-	var err error
-	var stxn transactions.SignedTxn
+func createSignedTransaction(client libgoal.Client, signTx bool, dataDir string, walletName string, tx transactions.Transaction) (stxn transactions.SignedTxn, err error) {
 	if signTx {
 		// Sign the transaction
 		wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
 		stxn, err = client.SignTransactionWithWallet(wh, pw, tx)
 		if err != nil {
-			return err
+			return
 		}
 	} else {
 		// Wrap in a transactions.SignedTxn with an empty sig.
 		// This way protocol.Encode will encode the transaction type
 		stxn, err = transactions.AssembleSignedTxn(tx, crypto.Signature{}, crypto.MultisigSig{})
 		if err != nil {
-			return err
+			return
 		}
 
 		stxn = populateBlankMultisig(client, dataDir, walletName, stxn)
 	}
+	return
+}
 
+func writeTxnToFile(client libgoal.Client, signTx bool, dataDir string, walletName string, tx transactions.Transaction, filename string) error {
+	stxn, err := createSignedTransaction(client, signTx, dataDir, walletName, tx)
+	if err != nil {
+		return err
+	}
 	// Write the SignedTxn to the output file
 	return writeFile(filename, protocol.Encode(stxn), 0600)
 }
@@ -344,20 +350,16 @@ var sendCmd = &cobra.Command{
 					Args:  programArgs,
 				},
 			}
-		} else if sign || txFilename == "" {
-			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			stx, err = client.SignTransactionWithWallet(wh, pw, payment)
+		} else {
+			signTx := sign || (txFilename == "")
+			stx, err = createSignedTransaction(client, signTx, dataDir, walletName, payment)
 			if err != nil {
 				reportErrorf(errorSigningTX, err)
 			}
-		} else {
-			stx = transactions.SignedTxn{
-				Txn: payment,
-			}
-			stx = populateBlankMultisig(client, dataDir, walletName, stx)
 		}
+
 		if txFilename == "" {
-			// Sign and broadcast the tx
+			// Broadcast the tx
 			txid, err := client.BroadcastTransaction(stx)
 
 			if err != nil {
@@ -377,6 +379,7 @@ var sendCmd = &cobra.Command{
 				}
 			}
 		} else {
+			err = writeFile(txFilename, protocol.Encode(stx), 0600)
 			if err != nil {
 				reportErrorf(err.Error())
 			}
@@ -561,6 +564,22 @@ func lsigFromArgs(lsig *transactions.LogicSig) {
 	lsig.Args = getProgramArgs()
 }
 
+func getProto(versArg string) config.ConsensusParams {
+	cvers := protocol.ConsensusCurrentVersion
+	if protoVersion != "" {
+		cvers = protocol.ConsensusVersion(protoVersion)
+	}
+	proto, ok := config.Consensus[cvers]
+	if !ok {
+		fmt.Fprintf(os.Stderr, "Invalid consensus version. Possible versions:\n")
+		for xvers := range config.Consensus {
+			fmt.Fprintf(os.Stderr, "\t%s\n", xvers)
+		}
+		os.Exit(1)
+	}
+	return proto
+}
+
 var signCmd = &cobra.Command{
 	Use:   "sign -i INFILE -o OUTFILE",
 	Short: "Sign a transaction file",
@@ -610,7 +629,7 @@ var signCmd = &cobra.Command{
 
 			var signedTxn transactions.SignedTxn
 			if lsig.Logic != nil {
-				proto := config.Consensus[protocol.ConsensusCurrentVersion]
+				proto := getProto(protoVersion)
 				err = verify.LogicSig(&lsig, &proto, &unsignedTxn)
 				if err != nil {
 					reportErrorf("%s: txn[%d] error %s", txFilename, count, err)
@@ -836,10 +855,6 @@ var dryrunCmd = &cobra.Command{
 	Short: "test a program offline",
 	Long:  "test a program offline under various conditions and verbosity",
 	Run: func(cmd *cobra.Command, args []string) {
-		seed, err := base64.StdEncoding.DecodeString(seedBase64)
-		if err != nil {
-			reportErrorf("invalid seed: %s", err)
-		}
 		data, err := readFile(txFilename)
 		if err != nil {
 			reportErrorf(fileReadError, txFilename, err)
@@ -867,7 +882,7 @@ var dryrunCmd = &cobra.Command{
 		block := bookkeeping.Block{}
 		block.BlockHeader.Round = basics.Round(round)
 		block.BlockHeader.TimeStamp = timeStamp
-		proto := config.Consensus[protocol.ConsensusCurrentVersion]
+		proto := getProto(protoVersion)
 		for i, txn := range txgroup {
 			if txn.Lsig.Blank() {
 				continue
@@ -877,17 +892,13 @@ var dryrunCmd = &cobra.Command{
 			if err != nil {
 				reportErrorf("program failed Check: %s", err)
 			}
-			txid := txn.ID()
 			sb := strings.Builder{}
 			ep = logic.EvalParams{
 				Txn:        &txn.SignedTxn,
-				Block:      &block,
 				Proto:      &proto,
 				Trace:      &sb,
 				TxnGroup:   txgroup,
 				GroupIndex: i,
-				Seed:       seed,
-				MoreSeed:   txid[:],
 			}
 			pass, err := logic.Eval(txn.Lsig.Logic, ep)
 			// TODO: optionally include `inspect` output here?

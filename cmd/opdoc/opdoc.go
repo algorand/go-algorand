@@ -42,11 +42,11 @@ func markdownTableEscape(x string) string {
 	return strings.ReplaceAll(x, "|", "\\|")
 }
 
-func enumTableMarkdown(out io.Writer, names []string) {
-	fmt.Fprintf(out, "| Index | Name |\n")
-	fmt.Fprintf(out, "| --- | --- |\n")
-	for i, name := range names {
-		fmt.Fprintf(out, "| %d | %s |\n", i, markdownTableEscape(name))
+func typeEnumTableMarkdown(out io.Writer) {
+	fmt.Fprintf(out, "| Index | \"Type\" string | Description |\n")
+	fmt.Fprintf(out, "| --- | --- | --- |\n")
+	for i, name := range logic.TxnTypeNames {
+		fmt.Fprintf(out, "| %d | %s | %s |\n", i, markdownTableEscape(name), logic.TypeNameDescription(name))
 	}
 	out.Write([]byte("\n"))
 }
@@ -109,7 +109,7 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec) (err error) {
 	} else if op.Name == "txn" {
 		transactionFieldsMarkdown(out)
 		fmt.Fprintf(out, "\nTypeEnum mapping:\n\n")
-		enumTableMarkdown(out, logic.TxnTypeNames)
+		typeEnumTableMarkdown(out)
 	}
 	return nil
 }

@@ -140,7 +140,7 @@ func (c *Client) SignAndBroadcastTransaction(walletHandle, pw []byte, utx transa
 }
 
 // MakeUnsignedGoOnlineTx creates a transaction that will bring an address online using available participation keys
-func (c *Client) MakeUnsignedGoOnlineTx(address string, part *account.Participation, round, txValidRounds, fee uint64) (transactions.Transaction, error) {
+func (c *Client) MakeUnsignedGoOnlineTx(address string, part *account.Participation, round, txValidRounds, fee uint64, leaseBytes [32]byte) (transactions.Transaction, error) {
 	// Parse the address
 	parsedAddr, err := basics.UnmarshalChecksumAddress(address)
 	if err != nil {
@@ -183,7 +183,7 @@ func (c *Client) MakeUnsignedGoOnlineTx(address string, part *account.Participat
 	lastRound := parsedRound + parsedTXValidRounds
 	parsedFee := basics.MicroAlgos{Raw: fee}
 
-	goOnlineTransaction := part.GenerateRegistrationTransaction(parsedFee, parsedRound, lastRound, cparams)
+	goOnlineTransaction := part.GenerateRegistrationTransaction(parsedFee, parsedRound, lastRound, leaseBytes, cparams)
 	if cparams.SupportGenesisHash {
 		var genHash crypto.Digest
 		copy(genHash[:], params.GenesisHash)
@@ -208,7 +208,7 @@ func (c *Client) MakeUnsignedGoOnlineTx(address string, part *account.Participat
 }
 
 // MakeUnsignedGoOfflineTx creates a transaction that will bring an address offline
-func (c *Client) MakeUnsignedGoOfflineTx(address string, round, txValidRounds, fee uint64) (transactions.Transaction, error) {
+func (c *Client) MakeUnsignedGoOfflineTx(address string, round, txValidRounds, fee uint64, leaseBytes [32]byte) (transactions.Transaction, error) {
 	// Parse the address
 	parsedAddr, err := basics.UnmarshalChecksumAddress(address)
 	if err != nil {
@@ -246,6 +246,7 @@ func (c *Client) MakeUnsignedGoOfflineTx(address string, round, txValidRounds, f
 			Fee:        parsedFee,
 			FirstValid: parsedRound,
 			LastValid:  lastRound,
+			Lease:      leaseBytes,
 		},
 	}
 	if cparams.SupportGenesisHash {
@@ -365,12 +366,10 @@ func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, numValidRound
 	parsedLastValid := basics.Round(firstValid + numValidRounds)
 	parsedFee := basics.MicroAlgos{Raw: fee}
 
-	tx.Header = transactions.Header{
-		Sender:     parsedAddr,
-		Fee:        parsedFee,
-		FirstValid: parsedFirstValid,
-		LastValid:  parsedLastValid,
-	}
+	tx.Header.Sender = parsedAddr
+	tx.Header.Fee = parsedFee
+	tx.Header.FirstValid = parsedFirstValid
+	tx.Header.LastValid = parsedLastValid
 
 	if cparams.SupportGenesisHash {
 		var genHash crypto.Digest
@@ -438,25 +437,36 @@ func (c *Client) MakeUnsignedAssetCreateTx(total uint64, defaultFrozen bool, man
 		}
 	}
 
-	if len(url) > len(tx.AssetParams.URL) {
-		return tx, fmt.Errorf("asset url %s is too long (max %d bytes)", url, len(tx.AssetParams.URL))
+	// Get consensus params so we can get max field lengths
+	params, err := c.SuggestedParams()
+	if err != nil {
+		return transactions.Transaction{}, err
 	}
-	copy(tx.AssetParams.URL[:], []byte(url))
+
+	cparams, ok := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
+	if !ok {
+		return transactions.Transaction{}, errors.New("unknown consensus version")
+	}
+
+	if len(url) > cparams.MaxAssetURLBytes {
+		return tx, fmt.Errorf("asset url %s is too long (max %d bytes)", url, cparams.MaxAssetURLBytes)
+	}
+	tx.AssetParams.URL = url
 
 	if len(metadataHash) > len(tx.AssetParams.MetadataHash) {
 		return tx, fmt.Errorf("asset metadata hash %x too long (max %d bytes)", metadataHash, len(tx.AssetParams.MetadataHash))
 	}
 	copy(tx.AssetParams.MetadataHash[:], metadataHash)
 
-	if len(unitName) > len(tx.AssetParams.UnitName) {
-		return tx, fmt.Errorf("asset unit name %s too long (max %d bytes)", unitName, len(tx.AssetParams.UnitName))
+	if len(unitName) > cparams.MaxAssetUnitNameBytes {
+		return tx, fmt.Errorf("asset unit name %s too long (max %d bytes)", unitName, cparams.MaxAssetUnitNameBytes)
 	}
-	copy(tx.AssetParams.UnitName[:], []byte(unitName))
+	tx.AssetParams.UnitName = unitName
 
-	if len(assetName) > len(tx.AssetParams.AssetName) {
-		return tx, fmt.Errorf("asset name %s too long (max %d bytes)", assetName, len(tx.AssetParams.AssetName))
+	if len(assetName) > cparams.MaxAssetNameBytes {
+		return tx, fmt.Errorf("asset name %s too long (max %d bytes)", assetName, cparams.MaxAssetNameBytes)
 	}
-	copy(tx.AssetParams.AssetName[:], []byte(assetName))
+	tx.AssetParams.AssetName = assetName
 
 	return tx, nil
 }
@@ -466,17 +476,10 @@ func (c *Client) MakeUnsignedAssetCreateTx(total uint64, defaultFrozen bool, man
 //
 // Call FillUnsignedTxTemplate afterwards to fill out common fields in
 // the resulting transaction template.
-func (c *Client) MakeUnsignedAssetDestroyTx(creator string, index uint64) (transactions.Transaction, error) {
+func (c *Client) MakeUnsignedAssetDestroyTx(index uint64) (transactions.Transaction, error) {
 	var tx transactions.Transaction
-	var err error
-
 	tx.Type = protocol.AssetConfigTx
-	tx.ConfigAsset.Index = index
-	tx.ConfigAsset.Creator, err = basics.UnmarshalChecksumAddress(creator)
-	if err != nil {
-		return tx, err
-	}
-
+	tx.ConfigAsset = basics.AssetIndex(index)
 	return tx, nil
 }
 
@@ -519,11 +522,7 @@ func (c *Client) MakeUnsignedAssetConfigTx(creator string, index uint64, newMana
 	}
 
 	tx.Type = protocol.AssetConfigTx
-	tx.ConfigAsset.Index = index
-	tx.ConfigAsset.Creator, err = basics.UnmarshalChecksumAddress(creator)
-	if err != nil {
-		return tx, err
-	}
+	tx.ConfigAsset = basics.AssetIndex(index)
 
 	if *newManager != "" {
 		tx.AssetParams.Manager, err = basics.UnmarshalChecksumAddress(*newManager)
@@ -561,17 +560,13 @@ func (c *Client) MakeUnsignedAssetConfigTx(creator string, index uint64, newMana
 //
 // Call FillUnsignedTxTemplate afterwards to fill out common fields in
 // the resulting transaction template.
-func (c *Client) MakeUnsignedAssetSendTx(creator string, index uint64, amount uint64, recipient string, closeTo string, senderForClawback string) (transactions.Transaction, error) {
+func (c *Client) MakeUnsignedAssetSendTx(index uint64, amount uint64, recipient string, closeTo string, senderForClawback string) (transactions.Transaction, error) {
 	var tx transactions.Transaction
 	var err error
 
 	tx.Type = protocol.AssetTransferTx
 	tx.AssetAmount = amount
-	tx.XferAsset.Index = index
-	tx.XferAsset.Creator, err = basics.UnmarshalChecksumAddress(creator)
-	if err != nil {
-		return tx, err
-	}
+	tx.XferAsset = basics.AssetIndex(index)
 
 	if recipient != "" {
 		tx.AssetReceiver, err = basics.UnmarshalChecksumAddress(recipient)
@@ -601,16 +596,12 @@ func (c *Client) MakeUnsignedAssetSendTx(creator string, index uint64, amount ui
 //
 // Call FillUnsignedTxTemplate afterwards to fill out common fields in
 // the resulting transaction template.
-func (c *Client) MakeUnsignedAssetFreezeTx(creator string, index uint64, accountToChange string, newFreezeSetting bool) (transactions.Transaction, error) {
+func (c *Client) MakeUnsignedAssetFreezeTx(index uint64, accountToChange string, newFreezeSetting bool) (transactions.Transaction, error) {
 	var tx transactions.Transaction
 	var err error
 
 	tx.Type = protocol.AssetFreezeTx
-	tx.FreezeAsset.Index = index
-	tx.FreezeAsset.Creator, err = basics.UnmarshalChecksumAddress(creator)
-	if err != nil {
-		return tx, err
-	}
+	tx.FreezeAsset = basics.AssetIndex(index)
 
 	tx.FreezeAccount, err = basics.UnmarshalChecksumAddress(accountToChange)
 	if err != nil {
