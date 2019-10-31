@@ -39,7 +39,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - Opcode: 0x04 
 - Pops: *... stack*, {[]byte A}, {[]byte B}, {[]byte C}
 - Pushes: uint64
-- for (data, signature, pubkey) verify the signature of the data against the pubkey => {0 or 1}
+- for (data, signature, pubkey) verify the signature of ("ProgData" || program_hash || data) against the pubkey => {0 or 1}
 - **Cost**: 1900
 
 ## +
