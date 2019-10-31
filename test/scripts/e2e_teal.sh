@@ -1,0 +1,82 @@
+#!/bin/bash
+
+set -e
+set -x
+
+TEMPDIR=$(mktemp -d)
+trap "rm -rf $TEMPDIR" 0
+
+NETDIR=${TEMPDIR}/net
+
+export PATH=${BINDIR}:${PATH}
+
+${BINDIR}/goal network create -r ${NETDIR} -n tbd -t ${GOPATH}/src/github.com/algorand/go-algorand/test/testdata/nettemplates/TwoNodes50EachFuture.json
+
+${BINDIR}/goal network start -r ${NETDIR}
+
+# replaces prior trap0
+trap "${BINDIR}/goal network stop -r ${NETDIR}; rm -rf ${TEMPDIR}" 0
+
+export ALGORAND_DATA=${NETDIR}/Node
+
+ACCOUNT=$(${BINDIR}/goal account list|awk '{ print $3 }')
+
+# prints:
+# Created new account with address UCTHHNBEAUWHDQWQI5DGQCTB7AR4CSVNU5YNPROAYQIT3Y3LKVDFAA5M6Q
+ACCOUNTB=$(${BINDIR}/goal account new|awk '{ print $6 }')
+
+ROUND=$(${BINDIR}/goal node status | grep 'Last committed block:'|awk '{ print $4 }')
+TIMEOUT_ROUND=$((${ROUND} + 7))
+
+# timeout after 7 rounds
+python ${GOPATH}/src/github.com/algorand/go-algorand/data/transactions/logic/tlhc.py --from ${ACCOUNT} --to ${ACCOUNTB} --timeout-round ${TIMEOUT_ROUND} > ${TEMPDIR}/tlhc.teal 2> ${TEMPDIR}/tlhc.teal.secret
+
+cat ${TEMPDIR}/tlhc.teal
+
+ACCOUNT_TLHC=$(${BINDIR}/goal clerk compile -n ${TEMPDIR}/tlhc.teal|awk '{ print $2 }')
+
+${BINDIR}/goal clerk send --amount 1000000 --from ${ACCOUNT} --to ${ACCOUNT_TLHC}
+
+set +e
+
+# this will be rejected until after the round is late
+${BINDIR}/goal clerk send --from-program ${TEMPDIR}/tlhc.teal --to ${ACCOUNT} --close-to ${ACCOUNT} --amount 1 --argb64 AA==
+if [ $? -eq 0 ]; then
+    echo "early refund should have failed"
+    exit 1
+fi
+
+TLHC_SECRET=$(awk '{ print $4 }'<${TEMPDIR}/tlhc.teal.secret)
+
+# this will be rejected until after the timeout round
+${BINDIR}/goal clerk send --from-program ${TEMPDIR}/tlhc.teal --to ${ACCOUNT} --close-to ${ACCOUNT} --amount 1 --argb64 ${TLHC_SECRET}
+if [ $? -eq 0 ]; then
+    echo "early refund with secret should have failed"
+    exit 1
+fi
+
+set -e
+# this should pass
+${BINDIR}/goal clerk send --from-program ${TEMPDIR}/tlhc.teal --to ${ACCOUNTB} --close-to ${ACCOUNTB} --amount 1 --argb64 ${TLHC_SECRET}
+set +e
+
+# but it should fail the second time because the money was spent
+${BINDIR}/goal clerk send --from-program ${TEMPDIR}/tlhc.teal --to ${ACCOUNTB} --close-to ${ACCOUNTB} --amount 1 --argb64 ${TLHC_SECRET}
+if [ $? -eq 0 ]; then
+    echo "empty spend should have failed"
+    exit 1
+fi
+
+set -e
+${BINDIR}/goal clerk send --amount 1000000 --from ${ACCOUNT} --to ${ACCOUNT_TLHC}
+
+# timeout round should pass. some of the 35 seconds was eaten by prior ops.
+CROUND=$(${BINDIR}/goal node status | grep 'Last committed block:'|awk '{ print $4 }')
+while [ $CROUND -lt $TIMEOUT_ROUND ]; do
+    ${BINDIR}/goal node wait
+    CROUND=$(${BINDIR}/goal node status | grep 'Last committed block:'|awk '{ print $4 }')
+done
+
+${BINDIR}/goal clerk send --from-program ${TEMPDIR}/tlhc.teal --to ${ACCOUNT} --close-to ${ACCOUNT} --amount 1 --argb64 AA==
+
+echo "OK"
