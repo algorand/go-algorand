@@ -62,7 +62,6 @@ var (
 	disassesmble    bool
 	progByteFile    string
 	logicSigFile    string
-	round           uint64
 	timeStamp       int64
 	protoVersion    string
 )
@@ -134,8 +133,7 @@ func init() {
 	compileCmd.Flags().StringVarP(&account, "account", "a", "", "Account address to sign the program (If not specified, uses default account)")
 
 	dryrunCmd.Flags().StringVarP(&txFilename, "txfile", "t", "", "transaction or transaction-group to test")
-	dryrunCmd.Flags().Uint64VarP(&round, "round", "r", 1, "round number to simulate")
-	dryrunCmd.Flags().Int64VarP(&timeStamp, "time-stamp", "S", 0, "unix time stamp simulate (default now)")
+	dryrunCmd.Flags().Int64VarP(&timeStamp, "time-stamp", "S", 0, "unix time value for txn FirstValidTime (default now)")
 	dryrunCmd.Flags().StringVarP(&protoVersion, "proto", "P", "", "consensus protocol version id string")
 	dryrunCmd.MarkFlagRequired("txfile")
 }
@@ -566,8 +564,8 @@ func lsigFromArgs(lsig *transactions.LogicSig) {
 
 func getProto(versArg string) config.ConsensusParams {
 	cvers := protocol.ConsensusCurrentVersion
-	if protoVersion != "" {
-		cvers = protocol.ConsensusVersion(protoVersion)
+	if versArg != "" {
+		cvers = protocol.ConsensusVersion(versArg)
 	}
 	proto, ok := config.Consensus[cvers]
 	if !ok {
@@ -876,12 +874,9 @@ var dryrunCmd = &cobra.Command{
 		for i, st := range stxns {
 			txgroup[i].SignedTxn = st
 		}
-		if timeStamp == 0 {
+		if timeStamp <= 0 {
 			timeStamp = time.Now().Unix()
 		}
-		block := bookkeeping.Block{}
-		block.BlockHeader.Round = basics.Round(round)
-		block.BlockHeader.TimeStamp = timeStamp
 		proto := getProto(protoVersion)
 		for i, txn := range txgroup {
 			if txn.Lsig.Blank() {
@@ -894,11 +889,12 @@ var dryrunCmd = &cobra.Command{
 			}
 			sb := strings.Builder{}
 			ep = logic.EvalParams{
-				Txn:        &txn.SignedTxn,
-				Proto:      &proto,
-				Trace:      &sb,
-				TxnGroup:   txgroup,
-				GroupIndex: i,
+				Txn:                 &txn.SignedTxn,
+				Proto:               &proto,
+				Trace:               &sb,
+				TxnGroup:            txgroup,
+				GroupIndex:          i,
+				FirstValidTimeStamp: uint64(timeStamp),
 			}
 			pass, err := logic.Eval(txn.Lsig.Logic, ep)
 			// TODO: optionally include `inspect` output here?
