@@ -864,7 +864,7 @@ func TestLogicSigOK(t *testing.T) {
 		Header: transactions.Header{
 			Sender:      addresses[0],
 			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee},
-			FirstValid:  0,
+			FirstValid:  1,
 			LastValid:   basics.Round(proto.MaxTxnLife),
 			Note:        make([]byte, 2),
 			GenesisHash: ledger.GenesisHash(),
