@@ -22,6 +22,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -493,16 +494,26 @@ func (c *Client) MakeUnsignedAssetDestroyTx(index uint64) (transactions.Transact
 func (c *Client) MakeUnsignedAssetConfigTx(creator string, index uint64, newManager *string, newReserve *string, newFreeze *string, newClawback *string) (transactions.Transaction, error) {
 	var tx transactions.Transaction
 	var err error
+	var ok bool
 
-	// Fetch the current state, to fill in as a template
-	current, err := c.AccountInformation(creator)
-	if err != nil {
-		return tx, err
-	}
+	// If the creator was passed in blank, look up asset info by index
+	var params v1.AssetParams
+	if creator == "" {
+		params, err = c.AssetInformation(index)
+		if err != nil {
+			return tx, err
+		}
+	} else {
+		// Fetch the current state, to fill in as a template
+		current, err := c.AccountInformation(creator)
+		if err != nil {
+			return tx, err
+		}
 
-	params, ok := current.AssetParams[index]
-	if !ok {
-		return tx, fmt.Errorf("asset ID %d not found in account %s", index, creator)
+		params, ok = current.AssetParams[index]
+		if !ok {
+			return tx, fmt.Errorf("asset ID %d not found in account %s", index, creator)
+		}
 	}
 
 	if newManager == nil {
