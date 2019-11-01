@@ -42,16 +42,6 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - for (data, signature, pubkey) verify the signature of the data against the pubkey => {0 or 1}
 - **Cost**: 1900
 
-## rand
-
-- Opcode: 0x05 
-- Pops: _None_
-- Pushes: uint64
-- push random uint64 to stack
-- **Cost**: 3
-
-Random number generator based on the ChaCha20 algorithm. Seeded with the previous block's `Seed` value and the current transaction ID.
-
 ## +
 
 - Opcode: 0x08 
@@ -340,8 +330,6 @@ It is worth noting that there are 10,000,000,000,000,000 micro-Algos in the tota
 - Pushes: any
 - push field from current transaction to stack
 
-Most fields are a simple copy of a uint64 or byte string value. `XferAsset` is the concatenation of the AssetID Creator Address (32 bytes) and the big-endian bytes of the uint64 AssetID Index for a total of 40 bytes. `SenderBalance` is the uin64 balance of the sender, with rewards factored in, at the time of execution.
-
 `txn` Fields:
 
 | Index | Name | Type |
@@ -349,39 +337,39 @@ Most fields are a simple copy of a uint64 or byte string value. `XferAsset` is t
 | 0 | Sender | []byte |
 | 1 | Fee | uint64 |
 | 2 | FirstValid | uint64 |
-| 3 | LastValid | uint64 |
-| 4 | Note | []byte |
-| 5 | Receiver | []byte |
-| 6 | Amount | uint64 |
-| 7 | CloseRemainderTo | []byte |
-| 8 | VotePK | []byte |
-| 9 | SelectionPK | []byte |
-| 10 | VoteFirst | uint64 |
-| 11 | VoteLast | uint64 |
-| 12 | VoteKeyDilution | uint64 |
-| 13 | Type | []byte |
-| 14 | TypeEnum | uint64 |
-| 15 | XferAsset | []byte |
-| 16 | AssetAmount | uint64 |
-| 17 | AssetSender | []byte |
-| 18 | AssetReceiver | []byte |
-| 19 | AssetCloseTo | []byte |
-| 20 | GroupIndex | uint64 |
-| 21 | TxID | []byte |
-| 22 | SenderBalance | uint64 |
-| 23 | Lease | []byte |
+| 3 | FirstValidTime | uint64 |
+| 4 | LastValid | uint64 |
+| 5 | Note | []byte |
+| 6 | Lease | []byte |
+| 7 | Receiver | []byte |
+| 8 | Amount | uint64 |
+| 9 | CloseRemainderTo | []byte |
+| 10 | VotePK | []byte |
+| 11 | SelectionPK | []byte |
+| 12 | VoteFirst | uint64 |
+| 13 | VoteLast | uint64 |
+| 14 | VoteKeyDilution | uint64 |
+| 15 | Type | []byte |
+| 16 | TypeEnum | uint64 |
+| 17 | XferAsset | uint64 |
+| 18 | AssetAmount | uint64 |
+| 19 | AssetSender | []byte |
+| 20 | AssetReceiver | []byte |
+| 21 | AssetCloseTo | []byte |
+| 22 | GroupIndex | uint64 |
+| 23 | TxID | []byte |
 
 
 TypeEnum mapping:
 
-| Index | Name |
-| --- | --- |
-| 0 | unknown |
-| 1 | pay |
-| 2 | keyreg |
-| 3 | acfg |
-| 4 | axfer |
-| 5 | afrz |
+| Index | "Type" string | Description |
+| --- | --- | --- |
+| 0 | unknown | Unknown type. Invalid transaction. |
+| 1 | pay | Payment |
+| 2 | keyreg | Key Registration |
+| 3 | acfg | Asset Config |
+| 4 | axfer | Asset Transfer |
+| 5 | afrz | Asset Freeze |
 
 
 ## global
@@ -395,13 +383,11 @@ TypeEnum mapping:
 
 | Index | Name | Type |
 | --- | --- | --- |
-| 0 | Round | uint64 |
-| 1 | MinTxnFee | uint64 |
-| 2 | MinBalance | uint64 |
-| 3 | MaxTxnLife | uint64 |
-| 4 | TimeStamp | uint64 |
-| 5 | ZeroAddress | []byte |
-| 6 | GroupSize | uint64 |
+| 0 | MinTxnFee | uint64 |
+| 1 | MinBalance | uint64 |
+| 2 | MaxTxnLife | uint64 |
+| 3 | ZeroAddress | []byte |
+| 4 | GroupSize | uint64 |
 
 
 ## gtxn

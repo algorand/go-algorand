@@ -13,10 +13,10 @@ git checkout rel/stable
 BUILD_NUMBER=
 if [ -e buildnumber.dat ]; then
     BUILD_NUMBER=$(cat ./buildnumber.dat)
+    BUILD_NUMBER=$((${BUILD_NUMBER} + 1))
 else
     BUILD_NUMBER=0
 fi
-BUILD_NUMBER=$((${BUILD_NUMBER} + 1))
 echo ${BUILD_NUMBER} > ./buildnumber.dat
 
 # Build before committing - the pre-commit checks can fail otherwise

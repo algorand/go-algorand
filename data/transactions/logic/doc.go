@@ -16,6 +16,10 @@
 
 package logic
 
+import (
+	"github.com/algorand/go-algorand/protocol"
+)
+
 type stringString struct {
 	a string
 	b string
@@ -36,7 +40,6 @@ var opDocList = []stringString{
 	{"keccak256", "Keccak256 hash of value, yields [32]byte"},
 	{"sha512_256", "SHA512_256 hash of value, yields [32]byte"},
 	{"ed25519verify", "for (data, signature, pubkey) verify the signature of the data against the pubkey => {0 or 1}"},
-	{"rand", "push random uint64 to stack"},
 	{"+", "A plus B. Panic on overflow."},
 	{"-", "A minus B. Panic if B > A."},
 	{"/", "A divided by B. Panic if B == 0."},
@@ -126,9 +129,7 @@ var opDocExtraList = []stringString{
 	{"intcblock", "`intcblock` loads following program bytes into an array of integer constants in the evaluator. These integer constants can be referred to by `intc` and `intc_*` which will push the value onto the stack."},
 	{"bytecblock", "`bytecblock` loads the following program bytes into an array of byte string constants in the evaluator. These constants can be referred to by `bytec` and `bytec_*` which will push the value onto the stack."},
 	{"*", "It is worth noting that there are 10,000,000,000,000,000 micro-Algos in the total supply, or a bit less than 2^54. When doing rational math, e.g. (A * (N/D)) as ((A * N) / D) one should limit the numerator to less than 2^10 to be completely sure there won't be overflow."},
-	{"txn", "Most fields are a simple copy of a uint64 or byte string value. `XferAsset` is the uint64 AssetID Index, which uniquely identifies the asset. `SenderBalance` is the uin64 balance of the sender, with rewards factored in, at the time of execution."},
 	{"gtxn", "for notes on transaction fields available, see `txn`"},
-	{"rand", "Random number generator based on the ChaCha20 algorithm. Seeded with the previous block's `Seed` value and the current transaction ID."},
 	{"btoi", "`btoi` panics if the input is longer than 8 bytes"},
 }
 
@@ -151,7 +152,7 @@ type OpGroup struct {
 
 // OpGroupList is groupings of ops for documentation purposes.
 var OpGroupList = []OpGroup{
-	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "rand", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw"}},
+	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw"}},
 	{"Loading Values", []string{"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "global", "load", "store"}},
 	{"Flow Control", []string{"err", "bnz", "pop", "dup"}},
 }
@@ -194,4 +195,24 @@ func OpSize(opName string) int {
 		return cost
 	}
 	return 1
+}
+
+// see assembler.go TxnTypeNames
+var typeEnumDescriptions = []stringString{
+	{string(protocol.UnknownTx), "Unknown type. Invalid transaction."},
+	{string(protocol.PaymentTx), "Payment"},
+	{string(protocol.KeyRegistrationTx), "Key Registration"},
+	{string(protocol.AssetConfigTx), "Asset Config"},
+	{string(protocol.AssetTransferTx), "Asset Transfer"},
+	{string(protocol.AssetFreezeTx), "Asset Freeze"},
+}
+
+// TypeNameDescription returns extra description about a low level protocol transaction Type string
+func TypeNameDescription(typeName string) string {
+	for _, ted := range typeEnumDescriptions {
+		if typeName == ted.a {
+			return ted.b
+		}
+	}
+	return "invalid type name"
 }

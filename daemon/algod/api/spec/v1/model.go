@@ -162,6 +162,20 @@ type Account struct {
 	Assets map[uint64]AssetHolding `json:"assets,omitempty"`
 }
 
+// Asset specifies both the unique identifier and the parameters for an asset
+// swagger:model Asset
+type Asset struct {
+	// AssetIndex is the unique asset identifier
+	//
+	// required: true
+	AssetIndex uint64
+
+	// AssetParams specifies the parameters of asset referred to by AssetIndex
+	//
+	// required: true
+	AssetParams AssetParams
+}
+
 // AssetParams specifies the parameters for an asset.
 // swagger:model AssetParams
 type AssetParams struct {
@@ -195,6 +209,19 @@ type AssetParams struct {
 	//
 	// required: false
 	AssetName string `json:"assetname"`
+
+	// URL specifies a URL where more information about the asset can be
+	// retrieved
+	//
+	// required: false
+	URL string `json:"url"`
+
+	// MetadataHash specifies a commitment to some unspecified asset
+	// metadata. The format of this metadata is up to the application.
+	//
+	// required: false
+	// swagger:strfmt byte
+	MetadataHash []byte `json:"metadatahash"`
 
 	// ManagerAddr specifies the address used to manage the keys of this
 	// asset and to destroy it.
@@ -438,11 +465,6 @@ type AssetTransferTransactionType struct {
 	// required: true
 	AssetID uint64 `json:"id"`
 
-	// Creator is the address of the asset creator.
-	//
-	// required: true
-	Creator string `json:"creator"`
-
 	// Amount is the amount being transferred.
 	//
 	// required: true
@@ -472,11 +494,6 @@ type AssetFreezeTransactionType struct {
 	// required: true
 	AssetID uint64 `json:"id"`
 
-	// Creator is the address of the asset creator.
-	//
-	// required: true
-	Creator string `json:"creator"`
-
 	// Account specifies the account where the asset is being frozen or thawed.
 	//
 	// required: true
@@ -495,6 +512,15 @@ type TransactionList struct {
 	//
 	// required: true
 	Transactions []Transaction `json:"transactions,omitempty"`
+}
+
+// AssetList contains a list of assets
+// swagger:model AssetList
+type AssetList struct {
+	// AssetList is a list of assets
+	//
+	// required: true
+	Assets []Asset `json:"assets,omitempty"`
 }
 
 // TransactionFee contains the suggested fee

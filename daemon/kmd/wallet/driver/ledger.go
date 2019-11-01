@@ -33,6 +33,16 @@ import (
 const (
 	ledgerWalletDriverName    = "ledger"
 	ledgerWalletDriverVersion = 1
+
+	ledgerClass            = uint8(0x80)
+	ledgerInsGetPublicKey  = uint8(0x03)
+	ledgerInsSignPaymentV2 = uint8(0x04)
+	ledgerInsSignKeyregV2  = uint8(0x05)
+	ledgerInsSignMsgpack   = uint8(0x08)
+	ledgerP1first          = uint8(0x00)
+	ledgerP1more           = uint8(0x80)
+	ledgerP2last           = uint8(0x00)
+	ledgerP2more           = uint8(0x80)
 )
 
 var ledgerWalletSupportedTxs = []protocol.TxType{protocol.PaymentTx, protocol.KeyRegistrationTx}
@@ -133,7 +143,7 @@ func (lw *LedgerWallet) Metadata() (wallet.Metadata, error) {
 	info := lw.dev.USBInfo()
 	return wallet.Metadata{
 		ID:                    []byte(info.Path),
-		Name:                  []byte(fmt.Sprintf("%s %s (serial %s)", info.Manufacturer, info.Product, info.Serial)),
+		Name:                  []byte(fmt.Sprintf("%s %s (serial %s, path %s)", info.Manufacturer, info.Product, info.Serial, info.Path)),
 		DriverName:            ledgerWalletDriverName,
 		DriverVersion:         ledgerWalletDriverVersion,
 		SupportedTransactions: ledgerWalletSupportedTxs,
@@ -145,7 +155,7 @@ func (lw *LedgerWallet) ListKeys() ([]crypto.Digest, error) {
 	lw.mu.Lock()
 	defer lw.mu.Unlock()
 
-	reply, err := lw.dev.Exchange([]byte{0x80, 0x03, 0x00, 0x00, 0x00})
+	reply, err := lw.dev.Exchange([]byte{ledgerClass, ledgerInsGetPublicKey, 0x00, 0x00, 0x00})
 	if err != nil {
 		return nil, err
 	}
@@ -288,14 +298,75 @@ func (lw *LedgerWallet) signTransactionHelper(tx transactions.Transaction) (sig 
 	lw.mu.Lock()
 	defer lw.mu.Unlock()
 
+	sig, err = lw.sendTransactionMsgpack(tx)
+	if err == nil {
+		return
+	}
+
+	ledgerErr, ok := err.(LedgerUSBError)
+	if ok && ledgerErr == 0x6d00 {
+		// We tried to send a msgpack-encoded transaction to the device,
+		// but it doesn't support the new-style opcode, so fall back
+		// to old-style encoding.
+		sig, err = lw.sendTransactionOldStyle(tx)
+	}
+
+	return
+}
+
+func (lw *LedgerWallet) sendTransactionMsgpack(tx transactions.Transaction) (sig crypto.Signature, err error) {
+	var reply []byte
+
+	tosend := protocol.Encode(tx)
+	p1 := ledgerP1first
+	p2 := ledgerP2more
+
+	// As a precaution, make sure that chunk + 5-byte APDU header
+	// fits in 8-bit length fields.
+	const chunkSize = 250
+
+	for p2 != ledgerP2last {
+		var chunk []byte
+		if len(tosend) > chunkSize {
+			chunk = tosend[:chunkSize]
+		} else {
+			chunk = tosend
+			p2 = ledgerP2last
+		}
+
+		var msg []byte
+		msg = append(msg, ledgerClass, ledgerInsSignMsgpack, p1, p2, uint8(len(chunk)))
+		msg = append(msg, chunk...)
+
+		reply, err = lw.dev.Exchange(msg)
+		if err != nil {
+			return
+		}
+
+		tosend = tosend[len(chunk):]
+		p1 = ledgerP1more
+	}
+
+	if len(reply) > len(sig) {
+		// Error related to transaction decoding.
+		errmsg := string(reply[len(sig)+1:])
+		err = errors.New(errmsg)
+		return
+	}
+
+	copy(sig[:], reply)
+	return
+}
+
+func (lw *LedgerWallet) sendTransactionOldStyle(tx transactions.Transaction) (sig crypto.Signature, err error) {
 	var msg []byte
-	msg = append(msg, 0x80)
+	msg = append(msg, ledgerClass)
 
 	switch tx.Type {
 	case protocol.PaymentTx:
-		msg = append(msg, 0x04)
+		msg = append(msg, ledgerInsSignPaymentV2)
 	case protocol.KeyRegistrationTx:
-		msg = append(msg, 0x05)
+		msg = append(msg, ledgerInsSignKeyregV2)
 	default:
 		err = fmt.Errorf("transaction type %s not supported", tx.Type)
 		return
