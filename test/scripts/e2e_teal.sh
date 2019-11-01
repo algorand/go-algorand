@@ -79,11 +79,11 @@ done
 
 ${BINDIR}/goal clerk send --from-program ${TEMPDIR}/tlhc.teal --to ${ACCOUNT} --close-to ${ACCOUNT} --amount 1 --argb64 AA==
 
-cat >${TEMPDIR}true.teal<<EOF
+cat >${TEMPDIR}/true.teal<<EOF
 int 1
 EOF
 
-${BINDIR}/goal clerk compile -o ${TEMPDIR}/true.lsig -s -a ${ACCOUNT} ${TEMPDIR}true.teal
+${BINDIR}/goal clerk compile -o ${TEMPDIR}/true.lsig -s -a ${ACCOUNT} ${TEMPDIR}/true.teal
 
 ${BINDIR}/goal clerk send -f ${ACCOUNT} -t ${ACCOUNTB} -a 1000000 -L ${TEMPDIR}/true.lsig
 
@@ -93,5 +93,18 @@ ${BINDIR}/goal clerk sign -L ${TEMPDIR}/true.lsig -i ${TEMPDIR}/one.tx -o ${TEMP
 
 ${BINDIR}/goal clerk rawsend -f ${TEMPDIR}/one.stx
 
+${BINDIR}/goal clerk dryrun -t ${TEMPDIR}/one.stx
+
+ACCOUNT_TRUE=$(${BINDIR}/goal clerk compile -n ${TEMPDIR}/true.teal|awk '{ print $2 }')
+
+${BINDIR}/goal clerk send --amount 1000000 --from ${ACCOUNT} --to ${ACCOUNT_TRUE}
+
+${BINDIR}/goal clerk send --amount 10 --from-program ${TEMPDIR}/true.teal --to ${ACCOUNTB}
+
+${BINDIR}/goal clerk send --amount 10 --from ${ACCOUNT_TRUE} --to ${ACCOUNTB} -o ${TEMPDIR}/true.tx
+
+${BINDIR}/goal clerk sign -i ${TEMPDIR}/true.tx -o ${TEMPDIR}/true.stx --program ${TEMPDIR}/true.teal
+
+${BINDIR}/goal clerk rawsend -f ${TEMPDIR}/true.stx
 
 echo "OK"
