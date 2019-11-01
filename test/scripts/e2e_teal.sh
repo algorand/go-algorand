@@ -107,4 +107,21 @@ ${BINDIR}/goal clerk sign -i ${TEMPDIR}/true.tx -o ${TEMPDIR}/true.stx --program
 
 ${BINDIR}/goal clerk rawsend -f ${TEMPDIR}/true.stx
 
+${BINDIR}/goal clerk inspect ${TEMPDIR}/true.stx
+
+${BINDIR}/goal clerk compile -D ${TEMPDIR}/true.lsig
+
+ACCOUNTC=$(${BINDIR}/goal account new|awk '{ print $6 }')
+
+ACCOUNTM=$(${BINDIR}/goal account multisig new -T 2 ${ACCOUNT} ${ACCOUNTB} ${ACCOUNTC}|awk '{ print $6 }')
+
+
+${BINDIR}/goal clerk multisig signprogram -p ${TEMPDIR}/true.teal -a ${ACCOUNT} -A ${ACCOUNTM} -o ${TEMPDIR}/mtrue.lsig
+
+${BINDIR}/goal clerk multisig signprogram -L ${TEMPDIR}/mtrue.lsig -a ${ACCOUNTC}
+
+${BINDIR}/goal clerk send --amount 1000000 --from ${ACCOUNT} --to ${ACCOUNTM}
+
+${BINDIR}/goal clerk send --amount 200000 --from ${ACCOUNTM} --to ${ACCOUNTC} -L ${TEMPDIR}/mtrue.lsig
+
 echo "OK"
