@@ -32,10 +32,15 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/execpool"
+	"github.com/algorand/go-algorand/util/metrics"
 )
 
 // ErrNoSpace indicates insufficient space for transaction in block
 var ErrNoSpace = errors.New("block does not have space for transaction")
+
+var logicGoodTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_logic_ok", Description: "Total transaction scripts executed and accepted"})
+var logicRejTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_logic_rej", Description: "Total transaction scripts executed and rejected"})
+var logicErrTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_logic_err", Description: "Total transaction scripts executed and errored"})
 
 // evalAux is left after removing explicit reward claims,
 // in case we need this infrastructure in the future.
@@ -588,31 +593,34 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 }
 
 func (eval *BlockEvaluator) checkLogicSig(txn transactions.SignedTxn, txgroup []transactions.SignedTxnWithAD, groupIndex int) (err error) {
-	firstValid := basics.Round(txn.Txn.FirstValid)
-	var hdr bookkeeping.BlockHeader
-	if eval.block.BlockHeader.Round == firstValid {
-		hdr = eval.block.BlockHeader
-	} else {
-		// TODO: move this into some lazy evaluator for the few scripts that actually use `txn FirstValidTime` ?
-		hdr, err = eval.l.BlockHdr(firstValid)
-		if err != nil {
-			return fmt.Errorf("could not fetch BlockHdr for FirstValid=%d (current=%d): %s", txn.Txn.FirstValid, eval.block.BlockHeader.Round, err)
-		}
+	if txn.Txn.FirstValid == 0 {
+		return errors.New("LogicSig does not work with FirstValid==0")
+	}
+	// TODO: move this into some lazy evaluator for the few scripts that actually use `txn FirstValidTime` ?
+	hdr, err := eval.l.BlockHdr(basics.Round(txn.Txn.FirstValid - 1))
+	if err != nil {
+		return fmt.Errorf("could not fetch BlockHdr for FirstValid-1=%d (current=%d): %s", txn.Txn.FirstValid-1, eval.block.BlockHeader.Round, err)
 	}
 	ep := logic.EvalParams{
-		Txn:                 &txn,
-		Proto:               &eval.proto,
-		TxnGroup:            txgroup,
-		GroupIndex:          groupIndex,
-		FirstValidTimeStamp: uint64(hdr.TimeStamp),
+		Txn:        &txn,
+		Proto:      &eval.proto,
+		TxnGroup:   txgroup,
+		GroupIndex: groupIndex,
 	}
+	if hdr.TimeStamp < 0 {
+		return fmt.Errorf("cannot evaluate LogicSig before 1970 at TimeStamp %d", hdr.TimeStamp)
+	}
+	ep.FirstValidTimeStamp = uint64(hdr.TimeStamp)
 	pass, err := logic.Eval(txn.Lsig.Logic, ep)
 	if err != nil {
+		logicErrTotal.Inc(nil)
 		return fmt.Errorf("transaction %v: rejected by logic err=%s", txn.ID(), err)
 	}
 	if !pass {
+		logicRejTotal.Inc(nil)
 		return fmt.Errorf("transaction %v: rejected by logic", txn.ID())
 	}
+	logicGoodTotal.Inc(nil)
 	return nil
 }
 
