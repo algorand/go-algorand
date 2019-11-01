@@ -1,0 +1,178 @@
+#!/usr/bin/expect -f
+set err 0
+log_user 1
+
+if { [catch {
+    source  goalExpectCommon.exp
+    set TEST_ALGO_DIR [lindex $argv 0]
+    set TEST_DATA_DIR [lindex $argv 1]
+
+    puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
+    puts "TEST_DATA_DIR: $TEST_DATA_DIR"
+
+    set TIME_STAMP [clock seconds]
+
+    set TEST_ROOT_DIR $TEST_ALGO_DIR/root
+    set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/Primary/
+    set NETWORK_NAME test_net_expect_$TIME_STAMP
+    set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/TwoNodes50EachFuture.json"
+
+    # Create network
+    ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    set PRIMARY_NODE_ADDRESS [ ::AlgorandGoal::GetAlgodNetworkAddress $TEST_PRIMARY_NODE_DIR ]
+    puts "Primary Node Address: $PRIMARY_NODE_ADDRESS"
+
+    set PRIMARY_WALLET_NAME unencrypted-default-wallet
+
+    # Determine primary account
+    set PRIMARY_ACCOUNT_ADDRESS [::AlgorandGoal::GetHighestFundedAccountForWallet $PRIMARY_WALLET_NAME  $TEST_PRIMARY_NODE_DIR]
+
+    # Check the balance of the primary account
+    set PRIMARY_ACCOUNT_BALANCE [::AlgorandGoal::GetAccountBalance $PRIMARY_WALLET_NAME $PRIMARY_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR]
+    puts "Primary Account Balance: $PRIMARY_ACCOUNT_BALANCE"
+
+    # Check the rewards of the primary account
+    set PRIMARY_ACCOUNT_EARNINGS [::AlgorandGoal::GetAccountRewards $PRIMARY_WALLET_NAME $PRIMARY_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR]
+    puts "Primary Account Rewards: $PRIMARY_ACCOUNT_EARNINGS"
+
+    # Create wallet #1
+    set WALLET_1_NAME Wallet_1_$TIME_STAMP
+    set WALLET_1_PASSWORD 1234
+    set WALLET_1_PASSPHRASE [::AlgorandGoal::CreateWallet $WALLET_1_NAME $WALLET_1_PASSWORD $TEST_PRIMARY_NODE_DIR]
+    puts "WALLET_1_PASSPHRASE: $WALLET_1_PASSPHRASE"
+    ::AlgorandGoal::VerifyWallet $WALLET_1_NAME  $TEST_PRIMARY_NODE_DIR
+
+    # Associate a new account with the wallet
+    set ACCOUNT_1_ADDRESS [::AlgorandGoal::CreateAccountForWallet $WALLET_1_NAME $WALLET_1_PASSWORD $TEST_PRIMARY_NODE_DIR]
+    ::AlgorandGoal::VerifyAccount $WALLET_1_NAME $WALLET_1_PASSWORD $ACCOUNT_1_ADDRESS $TEST_PRIMARY_NODE_DIR
+
+    # Create wallet #2
+    set WALLET_2_NAME Wallet_2_$TIME_STAMP
+    set WALLET_2_PASSWORD 12345678
+    set WALLET_2_PASSPHRASE [::AlgorandGoal::CreateWallet $WALLET_2_NAME $WALLET_2_PASSWORD $TEST_PRIMARY_NODE_DIR]
+    puts "WALLET_2_PASSPHRASE: $WALLET_2_PASSPHRASE"
+    ::AlgorandGoal::VerifyWallet $WALLET_2_NAME  $TEST_PRIMARY_NODE_DIR
+
+    # Associate a new account with the wallet
+    set ACCOUNT_2_ADDRESS [::AlgorandGoal::CreateAccountForWallet $WALLET_2_NAME $WALLET_2_PASSWORD $TEST_PRIMARY_NODE_DIR]
+    ::AlgorandGoal::VerifyAccount $WALLET_2_NAME $WALLET_2_PASSWORD $ACCOUNT_2_ADDRESS $TEST_PRIMARY_NODE_DIR
+
+    # -------------------------- setup accounts ----------------------------------
+    
+    # Transfer Algos from primary account to account 1
+    set MIN_BALANCE 1000000
+    set TRANSFER_AMOUNT  [expr {1000 * $MIN_BALANCE}]
+    set FEE_AMOUNT 1000
+    set TRANSACTION_ID [::AlgorandGoal::AccountTransfer $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS $TRANSFER_AMOUNT $ACCOUNT_1_ADDRESS $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR]
+
+    # Print the transaction id
+    puts "TRANSACTION_ID 1: $TRANSACTION_ID"
+
+    # Check to make sure that the transfer is reflected in the to account
+    ::AlgorandGoal::WaitForAccountBalance $WALLET_1_NAME $ACCOUNT_1_ADDRESS $TRANSFER_AMOUNT $TEST_PRIMARY_NODE_DIR
+
+    # Transfer Algos from primary account to account 2
+    set TRANSACTION_ID [::AlgorandGoal::AccountTransfer $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS $TRANSFER_AMOUNT $ACCOUNT_2_ADDRESS $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR]
+
+    # Print the transaction id
+    puts "TRANSACTION_ID 2: $TRANSACTION_ID"
+
+    # Check to make sure that the transfer is reflected in the to account
+    ::AlgorandGoal::WaitForAccountBalance $WALLET_2_NAME $ACCOUNT_2_ADDRESS $TRANSFER_AMOUNT $TEST_PRIMARY_NODE_DIR
+
+    # -------------------------- asset setup  ----------------------------------
+
+    # create duckcoin
+    set TOTAL_SUPPLY 1000000000
+    set UNIT_NAME "duckcoin"
+    ::AlgorandGoal::AssetCreate $ACCOUNT_1_ADDRESS $WALLET_1_NAME $WALLET_1_PASSWORD $TOTAL_SUPPLY $UNIT_NAME $TEST_PRIMARY_NODE_DIR
+
+    # wait about 4 rounds
+    set ASSET_CREATE_WAIT 20
+    puts "Wait $ASSET_CREATE_WAIT for asset creation"
+    exec sleep $ASSET_CREATE_WAIT
+
+    # get asset id
+    set ASSET_ID [::AlgorandGoal::AssetLookup $ACCOUNT_1_ADDRESS $UNIT_NAME $TEST_PRIMARY_NODE_DIR]
+    puts "Created asset $ASSET_ID"
+
+    # allow account 2 to accept this asset by sending 0 duckcoin to self
+    ::AlgorandGoal::AssetTransfer $WALLET_2_NAME $WALLET_2_PASSWORD $ACCOUNT_2_ADDRESS $ACCOUNT_2_ADDRESS $ASSET_ID 0 $TEST_PRIMARY_NODE_DIR
+    
+
+    # -------------------------- generate teal form template  ----------------------------------
+
+    # swtich to teal template folder
+    set WORK_DIR [exec pwd]
+    puts "Current Dir: $WORK_DIR"
+    set TEAL_DIR "$TEST_DATA_DIR/../../tools/teal"
+    cd $TEAL_DIR
+        
+    # generate teal assembly
+    set SWAP_N 3
+    set SWAP_D 2
+    set MIN_TRD 1000
+    set FEE 100000
+    set TIME_OUT 150000
+    set TEAL_SOURCE "$TEST_ROOT_DIR/limit.teal"
+    ::AlgorandGoal::LimitOrder "driver.py" $SWAP_N $SWAP_D $MIN_TRD $ACCOUNT_2_ADDRESS $FEE $TIME_OUT $ASSET_ID $TEAL_SOURCE 
+    cd $WORK_DIR
+    
+    # compile teal assembly to bytecode
+    set CONTRACT_HASH [::AlgorandGoal::TealCompile $TEAL_SOURCE]
+
+    # -------------------------- limit order  ----------------------------------
+    
+    # initialize the escrow by sending 1000000 microAlgos into it
+    set CONTRACT_MICRO_ALGO 1000000 
+    set TRANSACTION_ID [::AlgorandGoal::AccountTransfer $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS $CONTRACT_MICRO_ALGO $CONTRACT_HASH $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR]
+    puts "Fund contract account on transaction $TRANSACTION_ID"
+
+     # Check to make sure that the transfer is reflected in the to account
+    ::AlgorandGoal::WaitForAccountBalance $WALLET_1_NAME $CONTRACT_HASH $CONTRACT_MICRO_ALGO $TEST_PRIMARY_NODE_DIR
+
+    # at this point, Alice can publish limit.teal, and anyone can fill the order without interaction from her
+    # build the group transaction
+    # the first payment sends money (Algos) from Alice's escrow to the recipient (we'll call him Bob), closing the rest of the account to Alice
+    # the second payment sends money (the asset) from the Bob to the Alice
+    set LIMIT_TXN_1 "$TEST_ROOT_DIR/limit1.tx"
+    ::AlgorandGoal::TealTxnCreate $TEAL_SOURCE $ACCOUNT_1_ADDRESS $ACCOUNT_2_ADDRESS 2000 $TEST_PRIMARY_NODE_DIR $LIMIT_TXN_1 
+
+    set LIMIT_TXN_2 "$TEST_ROOT_DIR/limit2.tx"
+    ::AlgorandGoal::CreateAssetTransfer $ACCOUNT_1_ADDRESS $ACCOUNT_2_ADDRESS $ASSET_ID 20000 $TEST_PRIMARY_NODE_DIR $LIMIT_TXN_2 
+
+    set LIMIT_CMB "$TEST_ROOT_DIR/limitcmb.tx"
+    exec cat $LIMIT_TXN_1 $LIMIT_TXN_2 > $LIMIT_CMB
+    
+    set GROUP_TX_UNSIGNED "$TEST_ROOT_DIR/limitgrp.tx"
+    ::AlgorandGoal::AssembleGroup $LIMIT_CMB $GROUP_TX_UNSIGNED
+
+    # Bob must sign his half of the transaction (Alice's half is authorized by the logic program's escrow)
+    # we must resplit the transaction (but this time they have the group fields set correctly)
+
+    set RAW_TX "$TEST_ROOT_DIR/limitraw.tx"
+    exec goal clerk split -i $GROUP_TX_UNSIGNED -o $RAW_TX 
+
+    set RAW_TX_0 "$TEST_ROOT_DIR/limitraw-0.tx"
+    set RAW_TX_1 "$TEST_ROOT_DIR/limitraw-1.tx"
+    set RAW_STX_1 "$TEST_ROOT_DIR/limitraw-1.stx"
+    ::AlgorandGoal::SignTransaction $WALLET_1_NAME $WALLET_1_PASSWORD $RAW_TX_1 $RAW_STX_1 $TEST_PRIMARY_NODE_DIR
+
+    # regroup the transactions and send the combined signed transactions to the network
+    set LIMIT_STX "$TEST_ROOT_DIR/limitraw.stx"
+    exec cat $RAW_TX_0 $RAW_STX_1 > $LIMIT_STX
+
+    set RAW_TRANSACTION_ID [::AlgorandGoal::RawSend $LIMIT_STX $TEST_PRIMARY_NODE_DIR]
+    puts "send limit order transaction in $RAW_TRANSACTION_ID"
+
+    # Shutdown the network
+    ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    puts "Limit Order Test Successful"
+
+    exit 0
+
+} EXCEPTION ] } {
+   ::AlgorandGoal::Abort "ERROR in limitOrderTest: $EXCEPTION"
+}
