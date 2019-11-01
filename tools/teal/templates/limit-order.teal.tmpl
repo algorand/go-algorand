@@ -1,10 +1,13 @@
-gtxn 0 TypeEnum
+global GroupIndex
+int 0
+==
+txn TypeEnum
 int 1
 ==
-gtxn 0 Fee
+txn Fee
 int TMPL_FEE
 <
-gtxn 0 CloseRemainderTo
+txn CloseRemainderTo
 addr TMPL_OWN
 ==
 global GroupSize
@@ -13,8 +16,8 @@ int 3
 global GroupSize
 int 1
 ==
-bnz label2
-gtxn 0 Amount
+bnz label6
+txn Amount
 int TMPL_MINTRD
 >
 gtxn 1 TypeEnum
@@ -30,7 +33,7 @@ gtxn 1 AssetSender
 global ZeroAddress
 ==
 int TMPL_SWAPN
-gtxn 0 Amount
+txn Amount
 *
 int TMPL_SWAPD
 gtxn 1 AssetAmount
@@ -42,17 +45,22 @@ gtxn 1 AssetAmount
 &&
 &&
 int 1
-bnz label3
+bnz label7
 pop // check bug workaround
-label2:
-gtxn 0 FirstValid
+label6:
+txn FirstValid
 int TMPL_TIMEOUT
 >
-gtxn 0 Receiver
+txn Receiver
 global ZeroAddress
 ==
+txn Amount
+int 0
+==
 &&
-label3:
+&&
+label7:
+&&
 &&
 &&
 &&

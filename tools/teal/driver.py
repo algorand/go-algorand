@@ -4,13 +4,11 @@ import argparse
 import os
 
 specs_templates = {
-    "limit-order": "open a limit order to exchange algos for an asset",
-    # "limit-order-fill": "open a limit order to exchange an asset for algos",
     "dynamic-fee": "place a transaction with an unspecified fee",
     "delegate-key-registration": "delegate key-registration authority to some key",
-    "periodic-payment": "delegate periodic spending authority to some key",
 
     "periodic-payment-escrow": "open an escrow for periodic payments",
+    "limit-order": "open a limit order to exchange algos for an asset",
     "atomic-swap": "open an escrow for a cross-chain hash-locked atomic swap",
     "split": "open an escrow for splitting money between different accounts",
 }
