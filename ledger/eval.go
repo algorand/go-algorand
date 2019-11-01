@@ -32,10 +32,15 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/execpool"
+	"github.com/algorand/go-algorand/util/metrics"
 )
 
 // ErrNoSpace indicates insufficient space for transaction in block
 var ErrNoSpace = errors.New("block does not have space for transaction")
+
+var logicGoodTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_logic_ok", Description: "Total transaction scripts executed and accepted"})
+var logicRejTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_logic_rej", Description: "Total transaction scripts executed and rejected"})
+var logicErrTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_logic_err", Description: "Total transaction scripts executed and errored"})
 
 // evalAux is left after removing explicit reward claims,
 // in case we need this infrastructure in the future.
@@ -608,11 +613,14 @@ func (eval *BlockEvaluator) checkLogicSig(txn transactions.SignedTxn, txgroup []
 	ep.FirstValidTimeStamp = uint64(hdr.TimeStamp)
 	pass, err := logic.Eval(txn.Lsig.Logic, ep)
 	if err != nil {
+		logicErrTotal.Inc(nil)
 		return fmt.Errorf("transaction %v: rejected by logic err=%s", txn.ID(), err)
 	}
 	if !pass {
+		logicRejTotal.Inc(nil)
 		return fmt.Errorf("transaction %v: rejected by logic", txn.ID())
 	}
+	logicGoodTotal.Inc(nil)
 	return nil
 }
 

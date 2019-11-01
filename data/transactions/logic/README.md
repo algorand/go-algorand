@@ -69,7 +69,7 @@ For two-argument ops, `A` is the previous element on the stack and `B` is the la
 | `sha256` | SHA256 hash of value, yields [32]byte |
 | `keccak256` | Keccak256 hash of value, yields [32]byte |
 | `sha512_256` | SHA512_256 hash of value, yields [32]byte |
-| `ed25519verify` | for (data, signature, pubkey) verify the signature of the data against the pubkey => {0 or 1} |
+| `ed25519verify` | for (data, signature, pubkey) verify the signature of ("ProgData" \|\| program_hash \|\| data) against the pubkey => {0 or 1} |
 | `+` | A plus B. Panic on overflow. |
 | `-` | A minus B. Panic if B > A. |
 | `/` | A divided by B. Panic if B == 0. |
