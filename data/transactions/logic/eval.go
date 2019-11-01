@@ -47,6 +47,9 @@ const EvalMaxVersion = 1
 // EvalMaxArgs is the maximum number of arguments to an LSig
 const EvalMaxArgs = 255
 
+// EvalMaxScratchSize is the maximum number of scratch slots.
+const EvalMaxScratchSize = 255
+
 // stackValue is the type for the operand stack.
 // Each stackValue is either a valid []byte value or a uint64 value.
 // If (.Bytes != nil) the stackValue is a []byte value, otherwise uint64 value.

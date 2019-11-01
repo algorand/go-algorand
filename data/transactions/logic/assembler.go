@@ -69,11 +69,15 @@ type OpStream struct {
 }
 
 // SetLabelHere inserts a label reference to point to the next instruction
-func (ops *OpStream) SetLabelHere(label string) {
+func (ops *OpStream) SetLabelHere(label string) error {
 	if ops.labels == nil {
 		ops.labels = make(map[string]int)
 	}
+	if _, ok := ops.labels[label]; ok {
+		return fmt.Errorf("duplicate label %s", label)
+	}
 	ops.labels[label] = ops.Out.Len()
+	return nil
 }
 
 // ReferToLabel records an opcode label refence to resolve later
@@ -428,7 +432,7 @@ func assembleLoad(ops *OpStream, args []string) error {
 	if err != nil {
 		return err
 	}
-	if val > 255 {
+	if val > EvalMaxScratchSize {
 		return errors.New("load limited to 0..255")
 	}
 	ops.Out.WriteByte(0x34)
@@ -441,7 +445,7 @@ func assembleStore(ops *OpStream, args []string) error {
 	if err != nil {
 		return err
 	}
-	if val > 255 {
+	if val > EvalMaxScratchSize {
 		return errors.New("store limited to 0..255")
 	}
 	ops.Out.WriteByte(0x35)
@@ -565,7 +569,7 @@ func assembleTxn(ops *OpStream, args []string) error {
 	}
 	val, ok := txnFields[args[0]]
 	if !ok {
-		return fmt.Errorf("txn unknown arg %v", args[0])
+		return fmt.Errorf("txn unknown arg %s", args[0])
 	}
 	return ops.Txn(uint64(val))
 }
@@ -580,7 +584,7 @@ func assembleGtxn(ops *OpStream, args []string) error {
 	}
 	val, ok := txnFields[args[1]]
 	if !ok {
-		return fmt.Errorf("gtxn unknown arg %v", args[0])
+		return fmt.Errorf("gtxn unknown arg %s", args[0])
 	}
 	return ops.Gtxn(gtid, uint64(val))
 }
@@ -775,7 +779,8 @@ func (ops *OpStream) Assemble(fin io.Reader) error {
 			for i, argType := range spec.Args {
 				stype := ops.tpop()
 				if !typecheck(argType, stype) {
-					return fmt.Errorf(":%d %s arg %d wanted type %s got %s", ops.sourceLine, spec.Name, i, argType.String(), stype.String())
+					err := fmt.Errorf("%s arg %d wanted type %s got %s", spec.Name, i, argType.String(), stype.String())
+					return lineErr(ops.sourceLine, err)
 				}
 			}
 			if spec.Returns != nil {
@@ -789,10 +794,14 @@ func (ops *OpStream) Assemble(fin io.Reader) error {
 		}
 		if opstring[len(opstring)-1] == ':' {
 			// create a label
-			ops.SetLabelHere(opstring[:len(opstring)-1])
+			err := ops.SetLabelHere(opstring[:len(opstring)-1])
+			if err != nil {
+				return lineErr(ops.sourceLine, err)
+			}
 			continue
 		}
-		return fmt.Errorf(":%d unknown opcode %v", ops.sourceLine, opstring)
+		err := fmt.Errorf("unknown opcode %v", opstring)
+		return lineErr(ops.sourceLine, err)
 	}
 	// TODO: warn if expected resulting stack is not len==1 ?
 	return ops.resolveLabels()
