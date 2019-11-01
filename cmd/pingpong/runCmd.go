@@ -194,12 +194,6 @@ var runCmd = &cobra.Command{
 		if randomNote {
 			cfg.RandomNote = true
 		}
-		if logicProg != "" {
-			cfg.Program, err = ioutil.ReadFile(logicProg)
-			if err != nil {
-				reportErrorf("Error opening logic program: %v\n", err)
-			}
-		}
 
 		if teal != "" {
 			logicProg = ""
