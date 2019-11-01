@@ -14,9 +14,9 @@ stages:
   - name: build_pr
     if: type = pull_request
   - name: build_release
-    if: branch =~ /^rel\// AND type != pull_request
+    if: tag IS present AND branch =~ /^rel\// AND type != pull_request
   - name: deploy
-    if: branch =~ /^rel\// AND type != pull_request
+    if: tag IS present AND branch =~ /^rel\// AND type != pull_request
 
 jobs:
   allow_failures:
