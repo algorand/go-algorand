@@ -62,9 +62,8 @@ var (
 	disassesmble    bool
 	progByteFile    string
 	logicSigFile    string
-	round           uint64
 	timeStamp       int64
-	seedBase64      string
+	protoVersion    string
 )
 
 func init() {
@@ -113,6 +112,7 @@ func init() {
 	signCmd.Flags().StringVarP(&programSource, "program", "p", "", "Program source to use as account logic")
 	signCmd.Flags().StringVarP(&logicSigFile, "logic-sig", "L", "", "LogicSig to apply to transaction")
 	signCmd.Flags().StringSliceVar(&argB64Strings, "argb64", nil, "base64 encoded args to pass to transaction logic")
+	signCmd.Flags().StringVarP(&protoVersion, "proto", "P", "", "consensus protocol version id string")
 	signCmd.MarkFlagRequired("infile")
 	signCmd.MarkFlagRequired("outfile")
 
@@ -133,9 +133,8 @@ func init() {
 	compileCmd.Flags().StringVarP(&account, "account", "a", "", "Account address to sign the program (If not specified, uses default account)")
 
 	dryrunCmd.Flags().StringVarP(&txFilename, "txfile", "t", "", "transaction or transaction-group to test")
-	dryrunCmd.Flags().Uint64VarP(&round, "round", "r", 1, "round number to simulate")
-	dryrunCmd.Flags().Int64VarP(&timeStamp, "time-stamp", "S", 0, "unix time stamp simulate (default now)")
-	dryrunCmd.Flags().StringVarP(&seedBase64, "seed", "R", "2JNZvkCE2KFv3wVbEIEsPPNR64ttpaWuD5NEIXqXc3g=", "base64 bytes to seed random number generator with")
+	dryrunCmd.Flags().Int64VarP(&timeStamp, "time-stamp", "S", 0, "unix time value for txn FirstValidTime (default now)")
+	dryrunCmd.Flags().StringVarP(&protoVersion, "proto", "P", "", "consensus protocol version id string")
 	dryrunCmd.MarkFlagRequired("txfile")
 }
 
@@ -563,6 +562,22 @@ func lsigFromArgs(lsig *transactions.LogicSig) {
 	lsig.Args = getProgramArgs()
 }
 
+func getProto(versArg string) config.ConsensusParams {
+	cvers := protocol.ConsensusCurrentVersion
+	if versArg != "" {
+		cvers = protocol.ConsensusVersion(versArg)
+	}
+	proto, ok := config.Consensus[cvers]
+	if !ok {
+		fmt.Fprintf(os.Stderr, "Invalid consensus version. Possible versions:\n")
+		for xvers := range config.Consensus {
+			fmt.Fprintf(os.Stderr, "\t%s\n", xvers)
+		}
+		os.Exit(1)
+	}
+	return proto
+}
+
 var signCmd = &cobra.Command{
 	Use:   "sign -i INFILE -o OUTFILE",
 	Short: "Sign a transaction file",
@@ -612,7 +627,7 @@ var signCmd = &cobra.Command{
 
 			var signedTxn transactions.SignedTxn
 			if lsig.Logic != nil {
-				proto := config.Consensus[protocol.ConsensusCurrentVersion]
+				proto := getProto(protoVersion)
 				err = verify.LogicSig(&lsig, &proto, &unsignedTxn)
 				if err != nil {
 					reportErrorf("%s: txn[%d] error %s", txFilename, count, err)
@@ -859,13 +874,10 @@ var dryrunCmd = &cobra.Command{
 		for i, st := range stxns {
 			txgroup[i].SignedTxn = st
 		}
-		if timeStamp == 0 {
+		if timeStamp <= 0 {
 			timeStamp = time.Now().Unix()
 		}
-		block := bookkeeping.Block{}
-		block.BlockHeader.Round = basics.Round(round)
-		block.BlockHeader.TimeStamp = timeStamp
-		proto := config.Consensus[protocol.ConsensusCurrentVersion]
+		proto := getProto(protoVersion)
 		for i, txn := range txgroup {
 			if txn.Lsig.Blank() {
 				continue
@@ -877,11 +889,12 @@ var dryrunCmd = &cobra.Command{
 			}
 			sb := strings.Builder{}
 			ep = logic.EvalParams{
-				Txn:        &txn.SignedTxn,
-				Proto:      &proto,
-				Trace:      &sb,
-				TxnGroup:   txgroup,
-				GroupIndex: i,
+				Txn:                 &txn.SignedTxn,
+				Proto:               &proto,
+				Trace:               &sb,
+				TxnGroup:            txgroup,
+				GroupIndex:          i,
+				FirstValidTimeStamp: uint64(timeStamp),
 			}
 			pass, err := logic.Eval(txn.Lsig.Logic, ep)
 			// TODO: optionally include `inspect` output here?

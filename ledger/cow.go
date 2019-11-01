@@ -184,9 +184,11 @@ func (cb *roundCowState) commitToParent() {
 }
 
 func (cb *roundCowState) modifiedAccounts() []basics.Address {
-	var res []basics.Address
+	res := make([]basics.Address, len(cb.mods.accts))
+	i := 0
 	for addr := range cb.mods.accts {
-		res = append(res, addr)
+		res[i] = addr
+		i++
 	}
 	return res
 }
