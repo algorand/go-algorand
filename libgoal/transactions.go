@@ -22,6 +22,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -437,25 +438,36 @@ func (c *Client) MakeUnsignedAssetCreateTx(total uint64, defaultFrozen bool, man
 		}
 	}
 
-	if len(url) > len(tx.AssetParams.URL) {
-		return tx, fmt.Errorf("asset url %s is too long (max %d bytes)", url, len(tx.AssetParams.URL))
+	// Get consensus params so we can get max field lengths
+	params, err := c.SuggestedParams()
+	if err != nil {
+		return transactions.Transaction{}, err
 	}
-	copy(tx.AssetParams.URL[:], []byte(url))
+
+	cparams, ok := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
+	if !ok {
+		return transactions.Transaction{}, errors.New("unknown consensus version")
+	}
+
+	if len(url) > cparams.MaxAssetURLBytes {
+		return tx, fmt.Errorf("asset url %s is too long (max %d bytes)", url, cparams.MaxAssetURLBytes)
+	}
+	tx.AssetParams.URL = url
 
 	if len(metadataHash) > len(tx.AssetParams.MetadataHash) {
 		return tx, fmt.Errorf("asset metadata hash %x too long (max %d bytes)", metadataHash, len(tx.AssetParams.MetadataHash))
 	}
 	copy(tx.AssetParams.MetadataHash[:], metadataHash)
 
-	if len(unitName) > len(tx.AssetParams.UnitName) {
-		return tx, fmt.Errorf("asset unit name %s too long (max %d bytes)", unitName, len(tx.AssetParams.UnitName))
+	if len(unitName) > cparams.MaxAssetUnitNameBytes {
+		return tx, fmt.Errorf("asset unit name %s too long (max %d bytes)", unitName, cparams.MaxAssetUnitNameBytes)
 	}
-	copy(tx.AssetParams.UnitName[:], []byte(unitName))
+	tx.AssetParams.UnitName = unitName
 
-	if len(assetName) > len(tx.AssetParams.AssetName) {
-		return tx, fmt.Errorf("asset name %s too long (max %d bytes)", assetName, len(tx.AssetParams.AssetName))
+	if len(assetName) > cparams.MaxAssetNameBytes {
+		return tx, fmt.Errorf("asset name %s too long (max %d bytes)", assetName, cparams.MaxAssetNameBytes)
 	}
-	copy(tx.AssetParams.AssetName[:], []byte(assetName))
+	tx.AssetParams.AssetName = assetName
 
 	return tx, nil
 }
@@ -482,16 +494,26 @@ func (c *Client) MakeUnsignedAssetDestroyTx(index uint64) (transactions.Transact
 func (c *Client) MakeUnsignedAssetConfigTx(creator string, index uint64, newManager *string, newReserve *string, newFreeze *string, newClawback *string) (transactions.Transaction, error) {
 	var tx transactions.Transaction
 	var err error
+	var ok bool
 
-	// Fetch the current state, to fill in as a template
-	current, err := c.AccountInformation(creator)
-	if err != nil {
-		return tx, err
-	}
+	// If the creator was passed in blank, look up asset info by index
+	var params v1.AssetParams
+	if creator == "" {
+		params, err = c.AssetInformation(index)
+		if err != nil {
+			return tx, err
+		}
+	} else {
+		// Fetch the current state, to fill in as a template
+		current, err := c.AccountInformation(creator)
+		if err != nil {
+			return tx, err
+		}
 
-	params, ok := current.AssetParams[index]
-	if !ok {
-		return tx, fmt.Errorf("asset ID %d not found in account %s", index, creator)
+		params, ok = current.AssetParams[index]
+		if !ok {
+			return tx, fmt.Errorf("asset ID %d not found in account %s", index, creator)
+		}
 	}
 
 	if newManager == nil {
