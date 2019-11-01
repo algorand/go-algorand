@@ -1,5 +1,7 @@
 #!/bin/bash
 
+date '+e2e_teal start %Y%m%d_%H%M%S'
+
 set -e
 set -x
 
@@ -124,4 +126,4 @@ ${BINDIR}/goal clerk send --amount 1000000 --from ${ACCOUNT} --to ${ACCOUNTM}
 
 ${BINDIR}/goal clerk send --amount 200000 --from ${ACCOUNTM} --to ${ACCOUNTC} -L ${TEMPDIR}/mtrue.lsig
 
-echo "OK"
+date '+e2e_teal OK %Y%m%d_%H%M%S'
