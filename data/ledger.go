@@ -315,16 +315,32 @@ func (l *Ledger) EnsureBlock(block *bookkeeping.Block, c agreement.Certificate) 
 }
 
 // AssemblePayset adds transactions to a BlockEvaluator.
-func (*Ledger) AssemblePayset(pool *pools.TransactionPool, eval *ledger.BlockEvaluator, deadline time.Time) (stats telemetryspec.AssembleBlockStats) {
+func (l *Ledger) AssemblePayset(pool *pools.TransactionPool, eval *ledger.BlockEvaluator, deadline time.Time) (stats telemetryspec.AssembleBlockStats) {
 	pending := pool.Pending()
 	stats.StartCount = len(pending)
 	stats.StopReason = telemetryspec.AssembleBlockEmpty
 	first := true
 	totalFees := uint64(0)
 
+	// retrieve a list of all the previously known txid in the current round. We want to retrieve it here so we could avoid
+	// exercising the ledger read lock.
+	prevRoundTxIds := l.GetRoundTxIds(l.Latest())
+
 	for len(pending) > 0 {
 		txgroup := pending[0]
 		pending = pending[1:]
+
+		if len(txgroup) == 0 {
+			stats.InvalidCount++
+			continue
+		}
+
+		// if we already had this tx in the previous round, and haven't removed it yet from the txpool, that's fine.
+		// just skip that one.
+		if prevRoundTxIds[txgroup[0].ID()] {
+			stats.EarlyCommittedCount++
+			continue
+		}
 
 		if time.Now().After(deadline) {
 			stats.StopReason = telemetryspec.AssembleBlockTimeout
@@ -341,7 +357,6 @@ func (*Ledger) AssemblePayset(pool *pools.TransactionPool, eval *ledger.BlockEva
 			break
 		}
 		if err != nil {
-
 			// GOAL2-255: Don't warn for common case of txn already being in ledger
 			switch err.(type) {
 			case ledger.TransactionInLedgerError:
@@ -353,7 +368,6 @@ func (*Ledger) AssemblePayset(pool *pools.TransactionPool, eval *ledger.BlockEva
 				stats.InvalidCount++
 				logging.Base().Warnf("Cannot add pending transaction to block: %v", err)
 			}
-
 		} else {
 			for _, txn := range txgroup {
 				fee := txn.Txn.Fee.Raw

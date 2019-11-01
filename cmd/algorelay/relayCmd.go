@@ -97,6 +97,7 @@ func loadRelays(file string) []eb.Relay {
 	var relays []eb.Relay
 	err := codecs.LoadObjectFromFile(file, &relays)
 	if err != nil {
+		err = fmt.Errorf("Unable to load relays file - %v", err)
 		panic(makeExitError(1, err.Error()))
 	}
 	return relays

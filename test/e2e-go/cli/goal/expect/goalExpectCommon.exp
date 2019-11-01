@@ -55,17 +55,18 @@ proc ::AlgorandGoal::Abort { ERROR } {
 
 # Start the network
 proc ::AlgorandGoal::StartNetwork { NETWORK_NAME NETWORK_TEMPLATE TEST_ALGO_DIR TEST_ROOT_DIR } {
-    if { [catch {
-        set ::GLOBAL_TEST_ALGO_DIR $TEST_ALGO_DIR
-        set ::GLOBAL_TEST_ROOT_DIR $TEST_ROOT_DIR
-        set ::GLOBAL_NETWORK_NAME $NETWORK_NAME
+    set ::GLOBAL_TEST_ALGO_DIR $TEST_ALGO_DIR
+    set ::GLOBAL_TEST_ROOT_DIR $TEST_ROOT_DIR
+    set ::GLOBAL_NETWORK_NAME $NETWORK_NAME
 
-        set timeout 30
+    set timeout 30
+
+    if { [catch {
         # Create network
         puts "network create $NETWORK_NAME"
         spawn goal network create --network $NETWORK_NAME --template $NETWORK_TEMPLATE --datadir $TEST_ALGO_DIR --rootdir $TEST_ROOT_DIR
         expect {
-            timeout { close; ::AlgorandGoal::Abort "Failed to create network" }
+            timeout { close; ::AlgorandGoal::Abort "Timed out creating network" }
             "^Network $NETWORK_NAME created under*" { puts "Network $NETWORK_NAME created" ; close  }
             close
         }
@@ -74,16 +75,21 @@ proc ::AlgorandGoal::StartNetwork { NETWORK_NAME NETWORK_TEMPLATE TEST_ALGO_DIR 
         puts "network start $NETWORK_NAME"
         spawn goal network start -d $TEST_ALGO_DIR -r $TEST_ROOT_DIR
         expect {
-            timeout { close; ::AlgorandGoal::Abort "Failed to start network"  }
+            timeout { close; ::AlgorandGoal::Abort "Timed out starting network"  }
             "*Network started under* { puts "Network $NETWORK_NAME started"  ;close  }
             close
         }
+    } EXCEPTION ] } {
+       puts "ERROR in StartNetwork: $EXCEPTION"
+       exit 1
+    }
 
+    if { [catch {
         # Check network status
         puts "network status $NETWORK_NAME"
         spawn goal network status -d $TEST_ALGO_DIR -r $TEST_ROOT_DIR
         expect {
-            timeout { close; ::AlgorandGoal::Abort "Failed to get network status"  }
+            timeout { close; ::AlgorandGoal::Abort "Timed out retrieving network status"  }
             "*Error getting status*" { close; ::AlgorandGoal::Abort "error getting network status: $expect_out(buffer)""}
             "^Network Started under*"   { puts "Network $NETWORK_NAME status ok"; close }
             close
@@ -102,13 +108,13 @@ proc ::AlgorandGoal::StopNetwork { NETWORK_NAME TEST_ALGO_DIR TEST_ROOT_DIR } {
     spawn goal network stop -d $TEST_ALGO_DIR -r $TEST_ROOT_DIR
     expect {
         timeout {
-	    close;
-	    puts "Failed to shutdown network"
-	    puts "GLOBAL_TEST_ALGO_DIR $::GLOBAL_TEST_ALGO_DIR"
-	    puts "GLOBAL_TEST_ROOT_DIR $::GLOBAL_TEST_ROOT_DIR"
-	    puts "GLOBAL_NETWORK_NAME $::GLOBAL_NETWORK_NAME"
-	    exit 1;
-	}
+	      close
+	      puts "Timed out shutting down network"
+	      puts "GLOBAL_TEST_ALGO_DIR $::GLOBAL_TEST_ALGO_DIR"
+	      puts "GLOBAL_TEST_ROOT_DIR $::GLOBAL_TEST_ROOT_DIR"
+	      puts "GLOBAL_NETWORK_NAME $::GLOBAL_NETWORK_NAME"
+	      exit 1
+	    }
         "Network Stopped under*" {set NETWORK_STOP_MESSAGE $expect_out(buffer); close}
     }
     puts $NETWORK_STOP_MESSAGE
@@ -121,23 +127,23 @@ proc ::AlgorandGoal::CreateWallet { WALLET_NAME WALLET_PASSWORD TEST_PRIMARY_NOD
         spawn goal wallet new $WALLET_NAME -d $TEST_PRIMARY_NODE_DIR
 
         expect {
-            timeout {::AlgorandGoal::Abort "CreateWallet failed"  }
+            timeout {::AlgorandGoal::Abort "Timed out CreateWallet password"  }
             "Please choose a password for wallet*" { send "$WALLET_PASSWORD\r" }
         }
         expect {
-            timeout {::AlgorandGoal::Abort "CreateWallet failed"  }
+            timeout {::AlgorandGoal::Abort "Timed out CreateWallet confirmation"  }
             "Please confirm*" { send "$WALLET_PASSWORD\r"}
         }
         expect {
-             timeout {::AlgorandGoal::Abort "CreateWallet failed"  }
+             timeout {::AlgorandGoal::Abort "Timed out CreateWallet see it now"  }
              "Would you like to see it now? (Y/n):" { send "y\r" }
         }
         expect {
-              timeout {::AlgorandGoal::Abort "CreateWallet failed"  }
+              timeout {::AlgorandGoal::Abort "Timed out CreateWallet keep info safe"  }
               "Keep this information safe -- never share it with anyone!" {}
         }
         expect {
-             timeout {::AlgorandGoal::Abort "CreateWallet failed"  }
+             timeout {::AlgorandGoal::Abort "Timed out CreateWallet pass phrase"  }
              -re {32m([a-z ]+)} {set WALLET_PASS_PHRASE $expect_out(1,string); close;}
         }
     } EXCEPTION ] } {
@@ -151,7 +157,7 @@ proc ::AlgorandGoal::VerifyWallet { WALLET_NAME TEST_PRIMARY_NODE_DIR } {
     if { [catch {
         spawn goal wallet list -d $TEST_PRIMARY_NODE_DIR
         expect {
-             timeout { ::AlgorandGoal::Abort "Failed to see expected input for spawn goal wallet list" }
+             timeout { ::AlgorandGoal::Abort "Timed out seeing expected input for spawn goal wallet list" }
              "*$WALLET_NAME*" {close}
         }
     } EXCEPTION ] } {
@@ -188,7 +194,7 @@ proc ::AlgorandGoal::CreateAccountForWallet { WALLET_NAME WALLET_PASSWORD TEST_P
         spawn goal account new -w $WALLET_NAME -d $TEST_PRIMARY_NODE_DIR
         while 1 {
             expect {
-                timeout { break; ::AlgorandGoal::Abort "Failed to see new account created for wallet $WALLET_NAME" }
+                timeout { break; ::AlgorandGoal::Abort "Timed out seeing new account created for wallet $WALLET_NAME" }
                 "Please enter the password for wallet*" { send "$WALLET_PASSWORD\r" }
                  -re {Created new account with address ([a-zA-Z0-9]+)} {set ACCOUNT_ADDRESS $expect_out(1,string) ;close; break }
             }
@@ -206,7 +212,7 @@ proc ::AlgorandGoal::VerifyAccount { WALLET_NAME WALLET_PASSWORD ACCOUNT_ADDRESS
         spawn goal account list -w $WALLET_NAME -d $TEST_PRIMARY_NODE_DIR
         while 1 {
             expect {
-                timeout {break; ::AlgorandGoal::Abort "Failed to see expected account: $ACCOUNT_ADDRESS"}
+                timeout {break; ::AlgorandGoal::Abort "Timed out seeing expected account: $ACCOUNT_ADDRESS"}
                 "Please enter the password for wallet*" { send "$WALLET_PASSWORD\r" }
                 -re {\t([A-Z0-9]+)\t([A-Z0-9]+)} {set RETURN_ACCOUNT_ADDRESS $expect_out(1,string); break  }
             }
@@ -243,7 +249,7 @@ proc ::AlgorandGoal::GetAccountBalance { WALLET_NAME ACCOUNT_ADDRESS TEST_PRIMAR
     if { [ catch {
         spawn goal account balance -w $WALLET_NAME -a $ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR
         expect {
-            timeout { ::AlgorandGoal::Abort "Failed to get account balance for wallet $WALLET_NAME and account $ACCOUNT_ADDRESS"  }
+            timeout { ::AlgorandGoal::Abort "Timed out retrieving account balance for wallet $WALLET_NAME and account $ACCOUNT_ADDRESS"  }
             -re {\d+} {set ACCOUNT_BALANCE  $expect_out(0,string)}
         }
         puts "Wallet: $WALLET_NAME, Account: $ACCOUNT_ADDRESS, Balance: $ACCOUNT_BALANCE"
@@ -257,7 +263,7 @@ proc ::AlgorandGoal::GetAccountBalance { WALLET_NAME ACCOUNT_ADDRESS TEST_PRIMAR
 proc ::AlgorandGoal::GetAccountRewards { WALLET_NAME ACCOUNT_ADDRESS TEST_PRIMARY_NODE_DIR } {
     spawn goal account rewards -w $WALLET_NAME -a $ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR
     expect {
-        timeout { ::AlgorandGoal::Abort "Failed to get account rewards for wallet $WALLET_NAME and account $ACCOUNT_ADDRESS"  }
+        timeout { ::AlgorandGoal::Abort "Timed out retrieving account rewards for wallet $WALLET_NAME and account $ACCOUNT_ADDRESS"  }
         -re {\d+} {set ACCOUNT_EARNINGS  $expect_out(0,string)}
     }
     puts "Wallet: $WALLET_NAME, Account: $ACCOUNT_ADDRESS, Rewards: $ACCOUNT_EARNINGS"
@@ -270,7 +276,7 @@ proc ::AlgorandGoal::AccountTransfer { FROM_WALLET_NAME FROM_WALLET_PASSWORD FRO
         set TRANSACTION_ID "NOT SET"
         spawn goal clerk send --fee $FEE_AMOUNT --wallet $FROM_WALLET_NAME --amount $TRANSFER_AMOUNT --from $FROM_ACCOUNT_ADDRESS --to $TO_ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR -N
         expect {
-            timeout { ::AlgorandGoal::Abort "Failed to transfer funds"  }
+            timeout { close; ::AlgorandGoal::Abort "Timed out transfering funds"  }
             "Please enter the password for wallet '$FROM_WALLET_NAME':" { send "$FROM_WALLET_PASSWORD\r" }
             -re {[A-Z0-9]{52}} {set TRANSACTION_ID $expect_out(0,string); close }
         }
@@ -291,7 +297,7 @@ proc ::AlgorandGoal::WaitForAccountBalance { WALLET_NAME ACCOUNT_ADDRESS EXPECTE
             # Retrieve the target account balance
             spawn goal account balance -a $ACCOUNT_ADDRESS -w $WALLET_NAME -d $TEST_PRIMARY_NODE_DIR
             expect {
-                timeout { ::AlgorandGoal::Abort "Failed to get account balance"  }
+                timeout { ::AlgorandGoal::Abort "Timed out retrieving account balance"  }
                 -re {(\d+)} {set ACCOUNT_BALANCE $expect_out(0,string); close }
             }
             puts "Account Balance: $ACCOUNT_BALANCE"
@@ -317,7 +323,7 @@ proc ::AlgorandGoal::GetHighestFundedAccountForWallet { WALLET_NAME NODE_DIR } {
         set ACCOUNT_BALANCE 0
         set ACCOUNT_ADDRESS "NONE"
         expect {
-            timeout { ::AlgorandGoal::Abort "Failed to find primary wallet: $WALLET_NAME"  }
+            timeout { ::AlgorandGoal::Abort "Timed out finding primary wallet: $WALLET_NAME"  }
             -re {\[online\]\t([a-zA-Z0-9]+)\t([a-zA-Z0-9]+)\t([0-9]+)} {
                     set CURRENT_ACCOUNT_ADDRESS $expect_out(2,string);
                     set  CURRENT_ACCOUNT_BALANCE $expect_out(3,string);
@@ -445,7 +451,7 @@ proc ::AlgorandGoal::WaitForRound { WAIT_FOR_ROUND_NUMBER TEST_PRIMARY_NODE_DIR 
    puts "node status waiting for Round $WAIT_FOR_ROUND_NUMBER "
 
     if { [catch {
-    set i 0
+        set i 0
         while 1 {
             incr i
             exec sleep 10
@@ -455,7 +461,7 @@ proc ::AlgorandGoal::WaitForRound { WAIT_FOR_ROUND_NUMBER TEST_PRIMARY_NODE_DIR 
             spawn goal node status -d $TEST_PRIMARY_NODE_DIR
             expect {
                 timeout { ::AlgorandGoal::Abort "goal node status timed out"  }
-                -re {Cannot contact Algorand node: (\d+)} {set BLOCK 0 ; close }
+                -re {Cannot contact Algorand node: (\d+)} {set BLOCK 0; close }
                 -re {Last committed block: (\d+)} {set BLOCK $expect_out(1,string); exp_continue }
                 -re {Time since last block: ([0-9]*\.?[0-9]*)s} {set TIME_SINCE_LAST_BLOCK $expect_out(1,string); exp_continue }
                 -re {Sync Time: ([0-9]*\.?[0-9]*)s} {set SYNC_TIME $expect_out(1,string); exp_continue }

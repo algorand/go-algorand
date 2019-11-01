@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -101,5 +102,21 @@ func BenchmarkTxHandlerProcessDecoded(b *testing.B) {
 	b.StartTimer()
 	for _, signedTxn := range signedTransactions {
 		txHandler.processDecoded([]transactions.SignedTxn{signedTxn})
+	}
+}
+
+func BenchmarkTimeAfter(b *testing.B) {
+	b.StopTimer()
+	b.ResetTimer()
+	deadline := time.Now().Add(5 * time.Second)
+	after := 0
+	before := 0
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		if time.Now().After(deadline) {
+			after++
+		} else {
+			before++
+		}
 	}
 }

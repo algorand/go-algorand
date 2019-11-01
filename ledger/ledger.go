@@ -337,6 +337,13 @@ func (l *Ledger) isDup(currentProto config.ConsensusParams, current basics.Round
 	return l.txTail.isDup(currentProto, current, firstValid, lastValid, txid, txl)
 }
 
+// GetRoundTxIds returns a map of the transactions ids that we have for the given round
+func (l *Ledger) GetRoundTxIds(rnd basics.Round) (txMap map[transactions.Txid]bool) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.txTail.getRoundTxIds(rnd)
+}
+
 // Latest returns the latest known block round added to the ledger.
 func (l *Ledger) Latest() basics.Round {
 	return l.blockQ.latest()

@@ -65,7 +65,7 @@ func fundAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpConfi
 
 	// Fee of 0 will make cause the function to use the suggested one by network
 	fee := uint64(0)
-	minFund := cfg.MinAccountFunds+(cfg.MaxAmt+cfg.MaxFee)*cfg.TxnPerSec*uint64(math.Ceil(cfg.RefreshTime.Seconds()))
+	minFund := cfg.MinAccountFunds + (cfg.MaxAmt+cfg.MaxFee)*cfg.TxnPerSec*uint64(math.Ceil(cfg.RefreshTime.Seconds()))
 	for addr, balance := range accounts {
 		if balance < minFund {
 			toSend := minFund - balance
