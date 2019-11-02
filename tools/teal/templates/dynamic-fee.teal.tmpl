@@ -1,0 +1,47 @@
+global GroupSize
+int 2
+==
+txn GroupIndex
+int 0
+==
+txn TypeEnum
+int 1
+==
+txn Receiver
+addr TMPL_RCV
+==
+txn CloseRemainderTo
+addr TMPL_CLS
+==
+txn Amount
+int TMPL_AMT
+==
+txn FirstValid
+int TMPL_FV
+==
+txn LastValid
+int TMPL_LV
+==
+txn Lease
+byte base64 TMPL_X
+==
+gtxn 1 TypeEnum
+int 1
+==
+gtxn 1 Receiver
+txn Sender
+==
+gtxn 1 Amount
+txn Fee
+==
+&&
+&&
+&&
+&&
+&&
+&&
+&&
+&&
+&&
+&&
+&&

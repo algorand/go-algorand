@@ -100,6 +100,7 @@ func init() {
 	configAssetCmd.Flags().StringVar(&noteBase64, "noteb64", "", "Note (URL-base64 encoded)")
 	configAssetCmd.Flags().StringVarP(&noteText, "note", "n", "", "Note text (ignored if --noteb64 used also)")
 	configAssetCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
+	configAssetCmd.MarkFlagRequired("manager")
 
 	sendAssetCmd.Flags().StringVar(&assetClawback, "clawback", "", "Address to issue a clawback transaction from (defaults to no clawback)")
 	sendAssetCmd.Flags().StringVar(&assetCreator, "creator", "", "Account address for asset creator")

@@ -1,0 +1,32 @@
+txn TypeEnum
+int 2
+==
+txn Fee
+int TMPL_FEE
+<
+txn LastValid
+int TMPL_EXPIRE
+<
+txn LastValid
+int TMPL_DUR
+txn FirstValid
++
+==
+txn FirstValid
+int TMPL_PERIOD
+%
+int 0
+==
+txn Lease
+byte base64 TMPL_X
+==
+txn TxID
+arg_0
+addr TMPL_AUTH
+ed25519verify
+&&
+&&
+&&
+&&
+&&
+&&
