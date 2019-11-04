@@ -330,7 +330,12 @@ var sendCmd = &cobra.Command{
 		}
 		var stx transactions.SignedTxn
 		if lsig.Logic != nil {
-			proto := config.Consensus[protocol.ConsensusCurrentVersion]
+			params, err := client.SuggestedParams()
+			if err != nil {
+				reportErrorf(errorNodeStatus, err)
+			}
+
+			proto := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
 			unsignedTxn := transactions.SignedTxn{Txn: payment}
 			err = verify.LogicSig(&lsig, &proto, &unsignedTxn)
 			if err != nil {
@@ -566,6 +571,17 @@ func getProto(versArg string) config.ConsensusParams {
 	cvers := protocol.ConsensusCurrentVersion
 	if versArg != "" {
 		cvers = protocol.ConsensusVersion(versArg)
+	} else {
+		dataDir := maybeSingleDataDir()
+		if dataDir != "" {
+			client := ensureAlgodClient(dataDir)
+			params, err := client.SuggestedParams()
+			if err == nil {
+				cvers = protocol.ConsensusVersion(params.ConsensusVersion)
+			}
+			// else warning message?
+		}
+		// else warning message?
 	}
 	proto, ok := config.Consensus[cvers]
 	if !ok {
