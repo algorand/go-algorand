@@ -1,0 +1,51 @@
+txn TypeEnum
+int 1
+==
+txn Fee
+int TMPL_FEE
+<
+txn FirstValid
+int TMPL_PERIOD
+%
+int 0
+==
+txn LastValid
+int TMPL_DUR
+txn FirstValid
++
+==
+txn Lease
+byte base64 TMPL_X
+==
+&&
+&&
+&&
+&&
+txn CloseRemainderTo
+global ZeroAddress
+==
+txn Receiver
+addr TMPL_RCV
+==
+txn Amount
+int TMPL_AMT
+==
+&&
+&&
+txn CloseRemainderTo
+addr TMPL_RCV
+==
+txn Receiver
+global ZeroAddress
+==
+txn FirstValid
+int TMPL_TIMEOUT
+>
+txn Amount
+int 0
+==
+&&
+&&
+&&
+||
+&&
