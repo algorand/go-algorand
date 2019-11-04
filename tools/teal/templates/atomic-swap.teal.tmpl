@@ -1,0 +1,32 @@
+txn Fee
+int TMPL_FEE
+<
+txn TypeEnum
+int 1
+==
+txn Receiver
+global ZeroAddress
+==
+txn Amount
+int 0
+==
+txn CloseRemainderTo
+addr TMPL_RCV
+==
+arg_0
+TMPL_HASHFN
+byte base64 TMPL_HASHIMG
+==
+&&
+txn CloseRemainderTo
+addr TMPL_OWN
+==
+txn FirstValid
+int TMPL_TIMEOUT
+>
+&&
+||
+&&
+&&
+&&
+&&

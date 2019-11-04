@@ -1,0 +1,61 @@
+txn TypeEnum
+int 1
+==
+txn Fee
+int TMPL_FEE
+<
+&&
+global GroupSize
+int 2
+==
+bnz label0
+txn CloseRemainderTo
+addr TMPL_OWN
+==
+txn Receiver
+global ZeroAddress
+==
+txn Amount
+int 0
+==
+txn FirstValid
+int TMPL_TIMEOUT
+>
+&&
+&&
+&&
+int 1
+bnz label1
+pop // check bug workaround
+label0:
+gtxn 0 Sender
+gtxn 1 Sender
+==
+txn CloseRemainderTo
+global ZeroAddress
+==
+gtxn 0 Receiver
+addr TMPL_RCV1
+==
+gtxn 1 Receiver
+addr TMPL_RCV2
+==
+gtxn 0 Amount
+gtxn 0 Amount
+gtxn 1 Amount
++
+int TMPL_RATN
+*
+int TMPL_RATD
+/
+==
+gtxn 0 Amount
+int TMPL_MINPAY
+>
+&&
+&&
+&&
+&&
+&&
+label1:
+&&
