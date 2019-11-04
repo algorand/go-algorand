@@ -673,6 +673,7 @@ func init() {
 		opcodesByName[oi.Name] = oi.Opcode
 	}
 
+	// WARNING: special case op assembly by argOps functions must do their own type stack maintenance via ops.tpop() ops.tpush()/ops.tpusha()
 	argOps = make(map[string]func(*OpStream, []string) error)
 	argOps["int"] = assembleInt
 	argOps["intc"] = assembleIntC
@@ -688,6 +689,7 @@ func init() {
 	argOps["bnz"] = assembleBnz
 	argOps["load"] = assembleLoad
 	argOps["store"] = assembleStore
+	// WARNING: special case op assembly by argOps functions must do their own type stack maintenance via ops.tpop() ops.tpush()/ops.tpusha()
 
 	TxnFieldNames = make([]string, int(invalidTxnField))
 	for fi := Sender; fi < invalidTxnField; fi++ {
