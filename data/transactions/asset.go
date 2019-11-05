@@ -322,36 +322,45 @@ func (ct AssetTransferTxnFields) apply(header Header, balances Balances, spec Sp
 	}
 
 	if ct.AssetCloseTo != (basics.Address{}) {
-		creatorAddr, err := balances.GetAssetCreator(ct.XferAsset)
-		if err != nil {
-			return fmt.Errorf("failed to find asset creator: %v", creatorAddr)
-		}
-
-		// Cannot close asset ID allocated by this account; must use destroy.
-		if creatorAddr == source {
-			return fmt.Errorf("cannot close asset ID in allocating account")
-		}
-
-		// Cannot close by clawback.
+		// Cannot close by clawback
 		if clawback {
 			return fmt.Errorf("cannot close asset by clawback")
 		}
 
-		// Allow closing out to the asset creator even when frozen
-		var bypassFreeze bool
-		if ct.AssetCloseTo == creatorAddr {
-			bypassFreeze = true
-		}
-
-		// Figure out how much balance to move.
+		// Fetch the sender balance record to 1. ensure they're not
+		// the creator and 2. figure out how much balance to move
 		snd, err := balances.Get(source, false)
 		if err != nil {
 			return err
 		}
 
+		// Cannot close asset ID allocated by this account; must use destroy.
+		if _, ok := snd.AssetParams[ct.XferAsset]; ok {
+			return fmt.Errorf("cannot close asset ID in allocating account")
+		}
+
+		// Fetch the asset holding
 		sndHolding, ok := snd.Assets[ct.XferAsset]
 		if !ok {
 			return fmt.Errorf("asset %v not present in account %v", ct.XferAsset, source)
+		}
+
+		var bypassFreeze bool
+		if sndHolding.Amount == 0 {
+			// Always allow closing out if the asset amount is zero
+			bypassFreeze = true
+		} else {
+			// Amount is nonzero, so asset shouldn't have been deleted.
+			// Creator should exist.
+			creatorAddr, err := balances.GetAssetCreator(ct.XferAsset)
+			if err != nil {
+				return fmt.Errorf("failed to find asset creator: %v", creatorAddr)
+			}
+
+			// Allow closing out to the asset creator even when frozen
+			if ct.AssetCloseTo == creatorAddr {
+				bypassFreeze = true
+			}
 		}
 
 		// Move the balance out.
@@ -360,6 +369,7 @@ func (ct AssetTransferTxnFields) apply(header Header, balances Balances, spec Sp
 			return err
 		}
 
+		// Put the balance in.
 		err = putIn(balances, ct.AssetCloseTo, ct.XferAsset, sndHolding.Amount, bypassFreeze)
 		if err != nil {
 			return err
