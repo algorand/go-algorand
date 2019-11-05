@@ -19,7 +19,8 @@ package pingpong
 import (
 	"fmt"
 	"github.com/algorand/go-algorand/crypto"
-	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/libgoal"
 	"sort"
 	"time"
@@ -118,6 +119,8 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 
 	toCreate := int(cfg.NumAsset) - len(account.AssetParams)
 
+	signedTrxs := make([]*transactions.SignedTxn, toCreate)
+
 	// create assets in srcAccount
 	for i := 0; i < toCreate; i++ {
 		var metaLen = 32
@@ -147,21 +150,30 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 			return
 		}
 
-		txid, broadcastErr := client.BroadcastTransaction(signedTxn)
-		if broadcastErr != nil {
-			fmt.Printf("Cannot broadcast asset creation txn\n")
-			err = broadcastErr
-			return
-		}
+		signedTrxs[i] = &signedTxn
 
 		if !cfg.Quiet {
-			fmt.Printf("Create a new asset: supply=%d, txid=%s\n", totalSupply, txid)
+			fmt.Printf("Create a new asset: supply=%d \n", totalSupply)
 		}
 		accounts[cfg.SrcAccount] -= tx.Fee.Raw
 	}
 
-	// get these assets
+	// submit the asset transactions and validate that they have all been accepted
 	for {
+		fmt.Printf("Creating assets\n")
+		for i := 0; i < toCreate; i++ {
+			txid, broadcastErr := client.BroadcastTransaction(*signedTrxs[i])
+			if broadcastErr != nil {
+				fmt.Printf("Cannot broadcast asset creation txn error: %v\n", broadcastErr)
+				//err = broadcastErr
+				//return
+			} else if !cfg.Quiet {
+				fmt.Printf("Broadcast asset creation:  txid=%s\n", txid)
+			}
+		}
+
+		time.Sleep(time.Second * 10)
+
 		account, accountErr = client.AccountInformation(cfg.SrcAccount)
 		if accountErr != nil {
 			fmt.Printf("Cannot lookup source account")
@@ -171,7 +183,7 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 		if len(account.AssetParams) >= int(cfg.NumAsset) {
 			break
 		}
-		time.Sleep(time.Second)
+
 	}
 
 	assetParams = account.AssetParams
