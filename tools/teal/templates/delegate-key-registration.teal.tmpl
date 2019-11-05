@@ -1,32 +1,38 @@
 txn TypeEnum
-int 2
+int 2 // KeyRegistration
 ==
+
 txn Fee
 int TMPL_FEE
 <
+&&
+
 txn LastValid
 int TMPL_EXPIRE
 <
+&&
+
 txn LastValid
 int TMPL_DUR
 txn FirstValid
 +
-==
+== // txn.LastValid == txn.FirstValid + duration
+&&
+
 txn FirstValid
 int TMPL_PERIOD
 %
 int 0
-==
+== // txn.FirstValid % period == 0
+&&
+
 txn Lease
 byte base64 TMPL_X
 ==
+&&
+
 txn TxID
 arg_0
 addr TMPL_AUTH
-ed25519verify
-&&
-&&
-&&
-&&
-&&
+ed25519verify // the delegated address signed this txid
 &&
