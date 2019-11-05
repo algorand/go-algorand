@@ -180,23 +180,26 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookDir
 		return nil, err
 	}
 
-	blockListeners := []ledger.BlockListener{}
-
-	if node.config.EnableTopAccountsReporting {
-		blockListeners = append(blockListeners, &accountListener)
-	}
-
 	node.cryptoPool = execpool.MakePool(node)
 	node.lowPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.LowPriority, node)
 	node.highPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.HighPriority, node)
-	node.ledger, err = data.LoadLedger(node.log, ledgerPathnamePrefix, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, blockListeners, cfg.Archival)
+	node.ledger, err = data.LoadLedger(node.log, ledgerPathnamePrefix, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, []ledger.BlockListener{}, cfg.Archival)
 	if err != nil {
 		log.Errorf("Cannot initialize ledger (%s): %v", ledgerPathnamePrefix, err)
 		return nil, err
 	}
 
 	node.transactionPool = pools.MakeTransactionPool(node.ledger.Ledger, cfg)
-	node.ledger.RegisterBlockListeners([]ledger.BlockListener{node.transactionPool, node})
+
+	blockListeners := []ledger.BlockListener{
+		node.transactionPool,
+		node,
+	}
+
+	if node.config.EnableTopAccountsReporting {
+		blockListeners = append(blockListeners, &accountListener)
+	}
+	node.ledger.RegisterBlockListeners(blockListeners)
 	node.txHandler = data.MakeTxHandler(node.transactionPool, node.ledger, node.net, node.genesisID, node.genesisHash, node.lowPriorityCryptoVerificationPool)
 	node.feeTracker, err = pools.MakeFeeTracker()
 	if err != nil {
