@@ -121,8 +121,6 @@ type evalContext struct {
 	stepCount int
 	cost      int
 
-	checkStack []StackType
-
 	// Ordered set of pc values that a branch could go to.
 	// If Check pc skips a target, the source branch was invalid!
 	branchTargets []int
@@ -296,28 +294,12 @@ func Check(program []byte, params EvalParams) (cost int, err error) {
 	cx.version = version
 	cx.pc = vlen
 	cx.EvalParams = params
-	cx.checkStack = make([]StackType, 0, 10)
 	cx.program = program
 	for (cx.err == nil) && (cx.pc < len(cx.program)) {
 		cost += cx.checkStep()
 	}
 	if cx.err != nil {
 		err = fmt.Errorf("%3d %s", cx.pc, cx.err)
-		return
-	}
-	if len(cx.checkStack) != 1 {
-		if cx.Trace != nil {
-			fmt.Fprintf(cx.Trace, "end stack:\n")
-			for i, sv := range cx.checkStack {
-				fmt.Fprintf(cx.Trace, "[%d] %s\n", i, sv.String())
-			}
-		}
-		err = fmt.Errorf("end stack size %d != 1", len(cx.checkStack))
-		return
-	}
-	lastElemType := cx.checkStack[len(cx.checkStack)-1]
-	if lastElemType != StackUint64 && lastElemType != StackAny {
-		err = errors.New("program would end with bytes on stack")
 		return
 	}
 	return
@@ -521,24 +503,6 @@ func (cx *evalContext) checkStep() (cost int) {
 		cx.err = fmt.Errorf("%3d illegal opcode %02x", cx.pc, opcode)
 		return 1
 	}
-	argsTypes := opsByOpcode[opcode].Args
-	if len(argsTypes) >= 0 {
-		// check args for stack underflow and types
-		if len(cx.checkStack) < len(argsTypes) {
-			cx.err = fmt.Errorf("stack underflow in %s", opsByOpcode[opcode].Name)
-			return 1
-		}
-		first := len(cx.checkStack) - len(argsTypes)
-		for i, argType := range argsTypes {
-			if !typecheck(argType, cx.checkStack[first+i]) {
-				cx.err = fmt.Errorf("%s arg %d wanted %s but got %s", opsByOpcode[opcode].Name, i, argType.String(), cx.checkStack[first+i].String())
-			}
-		}
-	}
-	poplen := len(opsByOpcode[opcode].Args)
-	if poplen > 0 {
-		cx.checkStack = cx.checkStack[:len(cx.checkStack)-poplen]
-	}
 	oz := opSizeByOpcode[opcode]
 	if oz.size != 0 && (cx.pc+oz.size > len(cx.program)) {
 		cx.err = fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, opsByOpcode[opcode].Name)
@@ -567,20 +531,6 @@ func (cx *evalContext) checkStep() (cost int) {
 		for len(cx.branchTargets) > 0 && cx.branchTargets[0] == cx.pc {
 			// checks okay
 			cx.branchTargets = cx.branchTargets[1:]
-		}
-	}
-	if opsByOpcode[opcode].Returns != nil {
-		cx.checkStack = append(cx.checkStack, opsByOpcode[opcode].Returns...)
-	}
-	if len(cx.checkStack) > MaxStackDepth {
-		cx.err = errors.New("stack overflow")
-		return
-	}
-	if cx.Trace != nil {
-		if len(cx.checkStack) == 0 {
-			fmt.Fprintf(cx.Trace, "%3d %s => %s\n", cx.pc, opsByOpcode[opcode].Name, "<empty stack>")
-		} else {
-			fmt.Fprintf(cx.Trace, "%3d %s => %s\n", cx.pc, opsByOpcode[opcode].Name, cx.checkStack[len(cx.checkStack)-1].String())
 		}
 	}
 	return

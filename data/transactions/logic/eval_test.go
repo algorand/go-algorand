@@ -335,6 +335,37 @@ int 1
 	require.True(t, pass)
 }
 
+func TestBnz2(t *testing.T) {
+	t.Parallel()
+	program, err := AssembleString(`int 1
+int 2
+int 1
+int 2
+>
+bnz planb
+*
+int 1
+bnz after
+planb:
++
+after:
+dup
+pop
+`)
+	require.NoError(t, err)
+	cost, err := Check(program, defaultEvalParams(nil, nil))
+	require.NoError(t, err)
+	require.True(t, cost < 1000)
+	sb := strings.Builder{}
+	pass, err := Eval(program, defaultEvalParams(&sb, nil))
+	if !pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.NoError(t, err)
+	require.True(t, pass)
+}
+
 func TestSubUnderflow(t *testing.T) {
 	t.Parallel()
 	program, err := AssembleString(`int 1
@@ -575,7 +606,7 @@ int 1`)
 	require.NoError(t, err)
 	sb := strings.Builder{}
 	cost, err := Check(program, defaultEvalParams(&sb, nil))
-	require.Error(t, err)
+	require.NoError(t, err)
 	require.True(t, cost < 1000)
 	sb = strings.Builder{}
 	pass, err := Eval(program, defaultEvalParams(&sb, nil))
@@ -594,7 +625,7 @@ func TestStackBytesLeftover(t *testing.T) {
 	require.NoError(t, err)
 	sb := strings.Builder{}
 	cost, err := Check(program, defaultEvalParams(&sb, nil))
-	require.Error(t, err)
+	require.NoError(t, err)
 	require.True(t, cost < 1000)
 	sb = strings.Builder{}
 	pass, err := Eval(program, defaultEvalParams(&sb, nil))
@@ -615,7 +646,7 @@ pop
 pop`)
 	require.NoError(t, err)
 	cost, err := Check(program, defaultEvalParams(nil, nil))
-	require.Error(t, err)
+	require.NoError(t, err)
 	require.True(t, cost < 1000)
 	sb := strings.Builder{}
 	pass, err := Eval(program, defaultEvalParams(&sb, nil))
@@ -1351,7 +1382,7 @@ func TestStackUnderflow(t *testing.T) {
 	program = append(program, 0x08) // +
 	require.NoError(t, err)
 	cost, err := Check(program, defaultEvalParams(nil, nil))
-	require.Error(t, err) // Check should know the type stack was wrong
+	require.NoError(t, err)
 	require.True(t, cost < 1000)
 	sb := strings.Builder{}
 	pass, err := Eval(program, defaultEvalParams(&sb, nil))
@@ -1369,7 +1400,7 @@ func TestWrongStackTypeRuntime(t *testing.T) {
 	require.NoError(t, err)
 	program = append(program, 0x01, 0x15) // sha256, len
 	cost, err := Check(program, defaultEvalParams(nil, nil))
-	require.Error(t, err) // Check should know the type stack was wrong
+	require.NoError(t, err)
 	require.True(t, cost < 1000)
 	sb := strings.Builder{}
 	pass, err := Eval(program, defaultEvalParams(&sb, nil))
@@ -1426,7 +1457,7 @@ int 1`)
 	require.NoError(t, err)
 	program = append(program, 0x08) // +
 	cost, err := Check(program, defaultEvalParams(nil, nil))
-	require.Error(t, err) // Check should know the type stack was wrong
+	require.NoError(t, err)
 	require.True(t, cost < 1000)
 	sb := strings.Builder{}
 	pass, _ := Eval(program, defaultEvalParams(&sb, nil))
