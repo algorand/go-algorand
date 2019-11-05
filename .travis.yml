@@ -5,9 +5,6 @@ go_import_path: github.com/algorand/go-algorand
 language: go
 sudo: required
 
-# Don't build tags
-if: tag IS blank
-
 stages:
   - name: build_commit
     if: NOT (branch =~ /^rel\//) AND type != pull_request
