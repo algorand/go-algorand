@@ -66,12 +66,9 @@ func (ft *FeeTracker) EstimateFee() basics.MicroAlgos {
 
 // ProcessBlock takes a block and update the current suggested fee
 func (ft *FeeTracker) ProcessBlock(block bookkeeping.Block) {
-	ft.mu.Lock()
-	defer ft.mu.Unlock()
-
 	// If the block is less than half full, drive the suggested fee down rapidly. Suggested Fee may fall to zero, but algod API client will be responsible for submitting transactions with at least MinTxnFee
 	if len(protocol.Encode(block.Payset)) < config.Consensus[block.CurrentProtocol].MaxTxnBytesPerBlock/2 {
-		ft.ewma.Add(1)
+		ft.add(1.0)
 		return
 	}
 
@@ -88,8 +85,14 @@ func (ft *FeeTracker) ProcessBlock(block bookkeeping.Block) {
 	}
 
 	// Add median to EWMA
-	ft.ewma.Add(median(fees))
+	ft.add(median(fees))
+}
 
+// add adds the given value to the ewma
+func (ft *FeeTracker) add(n float64) {
+	ft.mu.Lock()
+	defer ft.mu.Unlock()
+	ft.ewma.Add(n)
 }
 
 // processTransaction takes a transaction and process it

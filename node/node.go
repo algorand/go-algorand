@@ -180,25 +180,26 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookDir
 		return nil, err
 	}
 
-	blockListeners := []ledger.BlockListener{
-		node,
-	}
-
-	if node.config.EnableTopAccountsReporting {
-		blockListeners = append(blockListeners, &accountListener)
-	}
-
 	node.cryptoPool = execpool.MakePool(node)
 	node.lowPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.LowPriority, node)
 	node.highPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.HighPriority, node)
-	node.ledger, err = data.LoadLedger(node.log, ledgerPathnamePrefix, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, blockListeners, cfg.Archival)
+	node.ledger, err = data.LoadLedger(node.log, ledgerPathnamePrefix, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, []ledger.BlockListener{}, cfg.Archival)
 	if err != nil {
 		log.Errorf("Cannot initialize ledger (%s): %v", ledgerPathnamePrefix, err)
 		return nil, err
 	}
 
 	node.transactionPool = pools.MakeTransactionPool(node.ledger.Ledger, cfg)
-	node.ledger.RegisterBlockListeners([]ledger.BlockListener{node.transactionPool})
+
+	blockListeners := []ledger.BlockListener{
+		node.transactionPool,
+		node,
+	}
+
+	if node.config.EnableTopAccountsReporting {
+		blockListeners = append(blockListeners, &accountListener)
+	}
+	node.ledger.RegisterBlockListeners(blockListeners)
 	node.txHandler = data.MakeTxHandler(node.transactionPool, node.ledger, node.net, node.genesisID, node.genesisHash, node.lowPriorityCryptoVerificationPool)
 	node.feeTracker, err = pools.MakeFeeTracker()
 	if err != nil {
@@ -696,20 +697,19 @@ func (node *AlgorandFullNode) IsArchival() bool {
 
 // OnNewBlock implements the BlockListener interface so we're notified after each block is written to the ledger
 func (node *AlgorandFullNode) OnNewBlock(block bookkeeping.Block) {
-	node.mu.Lock()
-	defer node.mu.Unlock()
+	// Update fee tracker
+	node.feeTracker.ProcessBlock(block)
 
+	node.mu.Lock()
 	node.lastRoundTimestamp = time.Now()
 	node.hasSyncedSinceStartup = true
+	node.mu.Unlock()
 
 	// Wake up oldKeyDeletionThread(), non-blocking.
 	select {
 	case node.oldKeyDeletionNotify <- struct{}{}:
 	default:
 	}
-
-	// Update fee tracker
-	node.feeTracker.ProcessBlock(block)
 }
 
 // oldKeyDeletionThread keeps deleting old participation keys.
