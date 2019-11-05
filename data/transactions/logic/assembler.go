@@ -26,6 +26,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strconv"
 	"strings"
 
@@ -782,8 +783,12 @@ func (ops *OpStream) checkArgs(spec OpSpec) error {
 			ops.trace(", %s", stype.String())
 		}
 		if !typecheck(argType, stype) {
-			err := fmt.Errorf("%s arg %d wanted type %s got %s", spec.Name, i, argType.String(), stype.String())
-			return lineErr(ops.sourceLine, err)
+			msg := fmt.Sprintf("%s arg %d wanted type %s got %s", spec.Name, i, argType.String(), stype.String())
+			if len(ops.labelReferences) > 0 {
+				fmt.Fprintf(os.Stderr, "warning: %d: %s; but branches have happened and assembler does not precisely track types in this case\n", ops.sourceLine, msg)
+			} else {
+				return lineErr(ops.sourceLine, errors.New(msg))
+			}
 		}
 	}
 	if !firstPop {
