@@ -183,6 +183,11 @@ func (qs *accountsDbQueries) lookupAssetCreator(assetIdx basics.AssetIndex) (add
 	err = db.Retry(func() error {
 		var buf []byte
 		err := qs.lookupAssetCreatorStmt.QueryRow(assetIdx).Scan(&buf)
+
+		if err == sql.ErrNoRows {
+			err = fmt.Errorf("asset %d does not exist or has been deleted", assetIdx)
+		}
+
 		if err != nil {
 			return err
 		}
