@@ -6,8 +6,9 @@
 // Fund the contract with as much of an asset as you wish to trade away for
 // Algos and a minimum balance of Algos and a couple transaction fee's worth.
 //
-// Works on two cases
+// Works on three cases
 // * trading asset for Algos
+// * set up allowing for receiving asset
 // * closing out asset and Algos back to the originator after a timeout
 //
 // trade case, a 2 transaction group:
@@ -18,6 +19,9 @@
 // gtxn[0].Amount / gtxn[1].AssetAmount >= N / D
 // ===
 // gtxn[0].Amount * D >= gtxn[1].AssetAmount * N
+//
+// setup case:
+// transfer 0 of asset from self to self to allow receiving asset
 //
 // close-out case:
 // txn alone, close out Algo value after timeout
@@ -35,14 +39,15 @@
 global GroupSize
 int 1
 ==
-bnz closeOut
+bnz oneTx
+// nothing is left on the stack as we proced to swap case or oneTx
 
 // swap case
 global GroupSize
 int 2
 ==
 
-global GroupIndex
+txn GroupIndex
 int 1
 ==
 &&
@@ -119,7 +124,7 @@ load 4
 bnz done
 err // ratio is not good enough
 
-closeOut:
+oneTx:
 
 // close Algos case
 txn TypeEnum
@@ -129,6 +134,7 @@ int 1 // Payment
 txn CloseRemainderTo
 addr TMPL_OWN
 ==
+&&
 
 txn FirstValid
 int TMPL_TIMEOUT
@@ -145,7 +151,7 @@ int 0
 ==
 && // is Payment && CloseRemainderTo me && (txn.FirstValid > timeout) && no Receiver and 0 Amount
 
-// close asset case
+// setup or close asset case
 txn TypeEnum
 int 4 // AssetTransfer
 ==
@@ -155,31 +161,44 @@ global ZeroAddress
 ==
 &&
 
-txn AssetCloseTo
-addr TMPL_OWN
-==
-&&
-
 txn XferAsset
 int TMPL_ASSET
-==
-&&
-
-txn AssetReceiver
-global ZeroAddress
 ==
 &&
 
 txn AssetAmount
 int 0
 ==
-&& // is AssetTransfer && not clawback && close asset to Me && is correct asset && no asset Receiver && 0 asset Amount
+&& // setup or close common: not clawback && is AssetTransfer && is correct asset && 0 asset Amount
+
+// close asset case
+txn AssetCloseTo
+addr TMPL_OWN
+==
+
+txn AssetReceiver
+global ZeroAddress
+==
+&& // close asset to Me && no asset Receiver
+
+// setup case
+txn AssetReceiver
+addr TMPL_OWN
+==
+
+txn AssetCloseTo
+global ZeroAddress
+==
+&& // AssetReceiver is Me && no AssetCloseTo
+
+|| // (close asset) || setup
+&& // ((close asset) || setup) && (setup or close common)
 
 || // (good Algo close) || (good Asset close)
 
 
 done:
 
-// two-instruction nop because all we need is the value from the swap case or closeOut case
+// two-instruction nop because all we need is the value from the swap case or oneTx case
 dup
 pop
