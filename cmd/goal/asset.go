@@ -53,6 +53,8 @@ func init() {
 	assetCmd.AddCommand(infoAssetCmd)
 	assetCmd.AddCommand(freezeAssetCmd)
 
+	assetCmd.PersistentFlags().StringVarP(&walletName, "wallet", "w", "", "Set the wallet to be used for the selected operation")
+
 	createAssetCmd.Flags().StringVar(&assetCreator, "creator", "", "Account address for creating an asset")
 	createAssetCmd.Flags().Uint64Var(&assetTotal, "total", 0, "Total amount of tokens for created asset")
 	createAssetCmd.Flags().BoolVar(&assetFrozen, "defaultfrozen", false, "Freeze or not freeze holdings by default")
