@@ -123,3 +123,5 @@ goal account balance -a $ACCOUNT; goal account balance -a $ACCOUNT_ALGO_TRADER; 
 
 # goal clerk dryrun -t ${TEMPDIR}/group.stx
 goal clerk rawsend -f ${TEMPDIR}/group.stx
+
+date '+limit-swap-test OK %Y%m%d_%H%M%S'
