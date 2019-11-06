@@ -327,41 +327,39 @@ func (ct AssetTransferTxnFields) apply(header Header, balances Balances, spec Sp
 			return fmt.Errorf("cannot close asset by clawback")
 		}
 
-		// Fetch the sender balance record to 1. ensure they're not
-		// the creator and 2. figure out how much balance to move
+		// Fetch the sender balance record. We will use this to ensure
+		// that the sender is not the creator of the asset, and to
+		// figure out how much of the asset to move.
 		snd, err := balances.Get(source, false)
 		if err != nil {
 			return err
 		}
 
-		// Cannot close asset ID allocated by this account; must use destroy.
+		// The creator of the asset cannot close their holding of the
+		// asset. Check if we are the creator by seeing if there is an
+		// AssetParams entry for the asset index.
 		if _, ok := snd.AssetParams[ct.XferAsset]; ok {
 			return fmt.Errorf("cannot close asset ID in allocating account")
 		}
 
-		// Fetch the asset holding
+		// Fetch our asset holding, which should exist since we're
+		// closing it out
 		sndHolding, ok := snd.Assets[ct.XferAsset]
 		if !ok {
 			return fmt.Errorf("asset %v not present in account %v", ct.XferAsset, source)
 		}
 
-		var bypassFreeze bool
-		if sndHolding.Amount == 0 {
-			// Always allow closing out if the asset amount is zero
-			bypassFreeze = true
-		} else {
-			// Amount is nonzero, so asset shouldn't have been deleted.
-			// Creator should exist.
-			creatorAddr, err := balances.GetAssetCreator(ct.XferAsset)
-			if err != nil {
-				return fmt.Errorf("failed to find asset creator: %v", creatorAddr)
-			}
-
-			// Allow closing out to the asset creator even when frozen
-			if ct.AssetCloseTo == creatorAddr {
-				bypassFreeze = true
-			}
+		// Fetch the destination balance record to check if we are
+		// closing out to the creator (and the asset still exists)
+		dst, err := balances.Get(ct.AssetCloseTo, false)
+		if err != nil {
+			return err
 		}
+
+		// Allow closing out to the asset creator even when frozen.
+		// If we are closing out 0 units of the asset, then takeOut
+		// and putIn will short circuit (so bypassFreeze doesn't matter)
+		_, bypassFreeze := dst.AssetParams[ct.XferAsset]
 
 		// Move the balance out.
 		err = takeOut(balances, source, ct.XferAsset, sndHolding.Amount, bypassFreeze)
