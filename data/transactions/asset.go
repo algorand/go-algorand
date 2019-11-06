@@ -350,7 +350,7 @@ func (ct AssetTransferTxnFields) apply(header Header, balances Balances, spec Sp
 		}
 
 		// Fetch the destination balance record to check if we are
-		// closing out to the creator (and the asset still exists)
+		// closing out to the creator
 		dst, err := balances.Get(ct.AssetCloseTo, false)
 		if err != nil {
 			return err
