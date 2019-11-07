@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -216,7 +217,7 @@ func assetFreezeTxEncode(tx transactions.Transaction, ad transactions.ApplyData)
 	}
 }
 
-func txWithStatusEncode(tr node.TxnWithStatus) (v1.Transaction, error) {
+func txWithStatusEncode(tr node.TxnWithStatus, l *data.Ledger) (v1.Transaction, error) {
 	s, err := txEncode(tr.Txn.Txn, tr.ApplyData)
 	if err != nil {
 		err = decorateUnknownTransactionTypeError(err, tr)
@@ -224,7 +225,60 @@ func txWithStatusEncode(tr node.TxnWithStatus) (v1.Transaction, error) {
 	}
 	s.ConfirmedRound = uint64(tr.ConfirmedRound)
 	s.PoolError = tr.PoolError
+	s.CreatedAssetIndex = computeAssetIndexFromTxn(tr, l)
 	return s, nil
+}
+
+func computeAssetIndexInBlock(tx node.TxnWithStatus, blk bookkeeping.Block) (aidx uint64) {
+	// Compute transaction index in block
+	offset := -1
+	payset, err := blk.DecodePaysetFlat()
+	if err != nil {
+		return 0
+	}
+	for idx, stxnib := range payset {
+		if tx.Txn.Txn.ID() == stxnib.Txn.ID() {
+			offset = idx
+			break
+		}
+	}
+
+	// Sanity check that txn was in fetched block
+	if offset < 0 {
+		return 0
+	}
+
+	// Count into block to get created asset index
+	return blk.BlockHeader.TxnCounter + uint64(offset)
+}
+
+// computeAssetIndexFromTxn returns the created asset index given a confirmed
+// transaction whose confirmation block is available in the ledger
+func computeAssetIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx uint64) {
+	// Must have ledger
+	if l == nil {
+		return 0
+	}
+	// Transaction must be confirmed
+	if tx.ConfirmedRound == 0 {
+		return 0
+	}
+	// Transaction must be AssetConfig transaction
+	if tx.Txn.Txn.AssetConfigTxnFields == (transactions.AssetConfigTxnFields{}) {
+		return 0
+	}
+	// Transaction must be creating an asset
+	if tx.Txn.Txn.AssetConfigTxnFields.ConfigAsset != 0 {
+		return 0
+	}
+
+	// Look up block where transaction was confirmed
+	blk, err := l.Block(tx.ConfirmedRound)
+	if err != nil {
+		return 0
+	}
+
+	return computeAssetIndexInBlock(tx, blk)
 }
 
 func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error) {
@@ -266,10 +320,11 @@ func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error)
 			ConfirmedRound: b.Round(),
 			ApplyData:      txn.ApplyData,
 		}
-		encTx, err := txWithStatusEncode(tx)
+		encTx, err := txWithStatusEncode(tx, nil)
 		if err != nil {
 			return v1.Block{}, err
 		}
+		encTx.CreatedAssetIndex = computeAssetIndexInBlock(tx, b)
 
 		txns = append(txns, encTx)
 	}
@@ -612,7 +667,7 @@ func TransactionInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.R
 
 	if txn, ok := ctx.Node.GetTransaction(addr, txID, start, latestRound); ok {
 		var responseTxs v1.Transaction
-		responseTxs, err = txWithStatusEncode(txn)
+		responseTxs, err = txWithStatusEncode(txn, ledger)
 		if err != nil {
 			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToParseTransaction, ctx.Log)
 			return
@@ -682,7 +737,8 @@ func PendingTransactionInformation(ctx lib.ReqContext, w http.ResponseWriter, r 
 	}
 
 	if txn, ok := ctx.Node.GetPendingTransaction(txID); ok {
-		responseTxs, err := txWithStatusEncode(txn)
+		ledger := ctx.Node.Ledger()
+		responseTxs, err := txWithStatusEncode(txn, ledger)
 		if err != nil {
 			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToParseTransaction, ctx.Log)
 			return
@@ -1341,8 +1397,9 @@ func Transactions(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	}
 
 	responseTxs := make([]v1.Transaction, len(txs))
+	ledger := ctx.Node.Ledger()
 	for i, twr := range txs {
-		responseTxs[i], err = txWithStatusEncode(twr)
+		responseTxs[i], err = txWithStatusEncode(twr, ledger)
 		if err != nil {
 			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToParseTransaction, ctx.Log)
 			return
@@ -1411,9 +1468,10 @@ func GetTransactionByID(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	ledger := ctx.Node.Ledger()
 	if txn, err := ctx.Node.GetTransactionByID(txID, basics.Round(rnd)); err == nil {
 		var responseTxs v1.Transaction
-		responseTxs, err = txWithStatusEncode(txn)
+		responseTxs, err = txWithStatusEncode(txn, ledger)
 		if err != nil {
 			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToParseTransaction, ctx.Log)
 			return

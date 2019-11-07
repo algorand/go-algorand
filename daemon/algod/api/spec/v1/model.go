@@ -315,6 +315,11 @@ type Transaction struct {
 	// required: false
 	ConfirmedRound uint64 `json:"round"`
 
+	// CreatedAssetIndex indicates the asset index of an asset created by this txn
+	//
+	// required: false
+	CreatedAssetIndex uint64 `json:"createdasset,omitempty"`
+
 	// PoolError indicates the transaction was evicted from this node's transaction
 	// pool (if non-empty).  A non-empty PoolError does not guarantee that the
 	// transaction will never be committed; other nodes may not have evicted the
