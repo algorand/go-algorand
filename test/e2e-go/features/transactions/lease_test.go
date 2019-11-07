@@ -73,7 +73,6 @@ func TestLeaseTransactionsSameSender(t *testing.T) {
 	// wait for the txids and check balance
 	txids := make(map[string]string)
 	txids[stx1.Txn.ID().String()] = account0
-	txids[stx2.Txn.ID().String()] = account0
 
 	_, curRound := fixture.GetBalanceAndRound(account0)
 	confirmed := fixture.WaitForAllTxnsToConfirm(curRound+5, txids)
@@ -123,7 +122,7 @@ func TestLeaseTransactionsDifferentSender(t *testing.T) {
 	lease := [32]byte{1, 2, 3, 4}
 
 	// construct transactions for sending money to account1 and account2
-	// from same sender with identical lease
+	// from different senders with identical lease
 	tx1, err := client.ConstructPayment(account0, account2, 0, 1000000, nil, "", lease, 0, 0)
 	a.NoError(err)
 
