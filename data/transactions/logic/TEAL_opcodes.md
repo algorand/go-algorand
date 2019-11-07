@@ -372,7 +372,7 @@ TypeEnum mapping:
 | 5 | afrz | AssetFreeze |
 
 
-FirstValidTime is actually the time of the round at FirstValid-1. Subtle implementation details make it much faster to serve details of an already completed round. `int` accepts the user friendly string constants for comparison to `txn TypeEnum`
+FirstValidTime is actually the time of the round at FirstValid-1. Subtle implementation details make it much faster to serve details of an already completed round. `int` accepts the user friendly names for comparison to `txn TypeEnum`
 
 ## global
 

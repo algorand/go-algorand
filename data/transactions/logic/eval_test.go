@@ -943,7 +943,11 @@ func TestTypeEnum(t *testing.T) {
 		t.Run(string(symbol), func(t *testing.T) {
 			text := fmt.Sprintf(`txn TypeEnum
 int %s
-==`, symbol)
+==
+txn TypeEnum
+int %s
+==
+&&`, symbol, string(tt))
 			program, err := AssembleString(text)
 			require.NoError(t, err)
 			cost, err := Check(program, defaultEvalParams(nil, nil))
