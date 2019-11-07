@@ -225,17 +225,15 @@ func txWithStatusEncode(tr node.TxnWithStatus, l *data.Ledger) (v1.Transaction, 
 	}
 	s.ConfirmedRound = uint64(tr.ConfirmedRound)
 	s.PoolError = tr.PoolError
-	s.CreatedAssetIndex = computeAssetIndexFromTxn(tr, l)
+	s.TransactionResults = &v1.TransactionResults{
+		CreatedAssetIndex: computeAssetIndexFromTxn(tr, l),
+	}
 	return s, nil
 }
 
-func computeAssetIndexInBlock(tx node.TxnWithStatus, blk bookkeeping.Block) (aidx uint64) {
+func computeAssetIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, payset []transactions.SignedTxnWithAD) (aidx uint64) {
 	// Compute transaction index in block
 	offset := -1
-	payset, err := blk.DecodePaysetFlat()
-	if err != nil {
-		return 0
-	}
 	for idx, stxnib := range payset {
 		if tx.Txn.Txn.ID() == stxnib.Txn.ID() {
 			offset = idx
@@ -249,7 +247,7 @@ func computeAssetIndexInBlock(tx node.TxnWithStatus, blk bookkeeping.Block) (aid
 	}
 
 	// Count into block to get created asset index
-	return blk.BlockHeader.TxnCounter + uint64(offset)
+	return txnCounter + uint64(offset)
 }
 
 // computeAssetIndexFromTxn returns the created asset index given a confirmed
@@ -278,7 +276,12 @@ func computeAssetIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx uint6
 		return 0
 	}
 
-	return computeAssetIndexInBlock(tx, blk)
+	payset, err := blk.DecodePaysetFlat()
+	if err != nil {
+		return 0
+	}
+
+	return computeAssetIndexInPayset(tx, blk.BlockHeader.TxnCounter, payset)
 }
 
 func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error) {
@@ -320,11 +323,17 @@ func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error)
 			ConfirmedRound: b.Round(),
 			ApplyData:      txn.ApplyData,
 		}
+
 		encTx, err := txWithStatusEncode(tx, nil)
 		if err != nil {
 			return v1.Block{}, err
 		}
-		encTx.CreatedAssetIndex = computeAssetIndexInBlock(tx, b)
+
+		if encTx.TransactionResults == nil {
+			encTx.TransactionResults = &v1.TransactionResults{}
+		}
+
+		encTx.TransactionResults.CreatedAssetIndex = computeAssetIndexInPayset(tx, b.BlockHeader.TxnCounter, payset)
 
 		txns = append(txns, encTx)
 	}
