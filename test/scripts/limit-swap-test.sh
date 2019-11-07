@@ -37,6 +37,21 @@ ASSET_ID=$(goal asset info --creator $ACCOUNT --asset bogo|grep 'Asset ID'|awk '
 ROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
 TIMEOUT_ROUND=$((${ROUND} + 2))
 
+# closeout part a, Algo trader
+
+sed s/TMPL_ASSET/${ASSET_ID}/g < ${GOPATH}/src/github.com/algorand/go-algorand/tools/teal/templates/limit-order-a.teal.tmpl | sed s/TMPL_SWAPN/31337/g | sed s/TMPL_SWAPD/137/g | sed s/TMPL_TIMEOUT/${TIMEOUT_ROUND}/g | sed s/TMPL_OWN/${ACCOUNT}/g | sed s/TMPL_FEE/100000/g | sed s/TMPL_MINTRD/10000/g > ${TEMPDIR}/limit-order-a.teal
+
+ACCOUNT_ALGO_TRADER=$(goal clerk compile ${TEMPDIR}/limit-order-a.teal -o ${TEMPDIR}/limit-order-a.tealc|awk '{ print $2 }')
+
+# setup trader with Algos
+goal clerk send --amount 100000000 --from ${ACCOUNT} --to ${ACCOUNT_ALGO_TRADER}
+
+goal node wait
+
+goal clerk send -a 0 -t AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ -c ${ACCOUNT} --from-program ${TEMPDIR}/limit-order-a.teal
+
+
+# closeout part b, asset trader
 
 sed s/TMPL_ASSET/${ASSET_ID}/g < ${GOPATH}/src/github.com/algorand/go-algorand/tools/teal/templates/limit-order-b.teal.tmpl | sed s/TMPL_SWAPN/137/g | sed s/TMPL_SWAPD/31337/g | sed s/TMPL_TIMEOUT/${TIMEOUT_ROUND}/g | sed s/TMPL_OWN/${ACCOUNT}/g | sed s/TMPL_FEE/100000/g | sed s/TMPL_MINTRD/10000/g > ${TEMPDIR}/limit-order-b.teal
 
