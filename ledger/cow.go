@@ -45,10 +45,11 @@ type roundCowState struct {
 	lookupParent roundCowParent
 	commitParent *roundCowState
 	proto        config.ConsensusParams
-	mods         stateDelta
+	mods         StateDelta
 }
 
-type stateDelta struct {
+// StateDelta describes the delta between a given round to the previous round
+type StateDelta struct {
 	// modified accounts
 	accts map[basics.Address]accountDelta
 
@@ -65,12 +66,20 @@ type stateDelta struct {
 	hdr *bookkeeping.BlockHeader
 }
 
+// Txids returns the map fo the transactions Ids included
+func (st *StateDelta) Txids() map[transactions.Txid]struct{} {
+	if st.txids == nil {
+		return make(map[transactions.Txid]struct{})
+	}
+	return st.txids
+}
+
 func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader) *roundCowState {
 	return &roundCowState{
 		lookupParent: b,
 		commitParent: nil,
 		proto:        config.Consensus[hdr.CurrentProtocol],
-		mods: stateDelta{
+		mods: StateDelta{
 			accts:    make(map[basics.Address]accountDelta),
 			txids:    make(map[transactions.Txid]struct{}),
 			txleases: make(map[txlease]basics.Round),
@@ -149,7 +158,7 @@ func (cb *roundCowState) child() *roundCowState {
 		lookupParent: cb,
 		commitParent: cb,
 		proto:        cb.proto,
-		mods: stateDelta{
+		mods: StateDelta{
 			accts:    make(map[basics.Address]accountDelta),
 			txids:    make(map[transactions.Txid]struct{}),
 			txleases: make(map[txlease]basics.Round),

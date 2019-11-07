@@ -484,7 +484,7 @@ func (l *Ledger) trackerLog() logging.Logger {
 	return l.log
 }
 
-func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, aux evalAux) (stateDelta, error) {
+func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, aux evalAux) (StateDelta, error) {
 	// passing nil as the verificationPool is ok since we've asking the evaluator to skip verification.
 	delta, _, err := l.eval(context.Background(), blk, &aux, false, nil, nil)
 	return delta, err
