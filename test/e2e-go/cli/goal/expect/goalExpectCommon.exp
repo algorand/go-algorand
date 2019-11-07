@@ -460,10 +460,10 @@ proc ::AlgorandGoal::SignTransaction { WALLET_NAME WALLET_PASSWORD INPUT_TXN OUT
 proc ::AlgorandGoal::RawSend { TXN_FILE TEST_PRIMARY_NODE_DIR } {
     if { [ catch {
         set TRANSACTION_ID "NOT SET"
-        spawn goal clerk rawsend -f $TXN_FILE -d TEST_PRIMARY_NODE_DIR
+        spawn goal clerk rawsend -f $TXN_FILE -d $TEST_PRIMARY_NODE_DIR
         expect {
             timeout { close; ::AlgorandGoal::Abort "Timed out rawsend $TXN_FILE"  }
-            -re {transaction ID: ([A-Z0-9]{52})} {set TRANSACTION_ID $expect_out(1,string); close }
+            -re {Transaction ([A-Z0-9]{52}) committed} {set TRANSACTION_ID $expect_out(1,string); close }
         }
     } EXCEPTION ] } {
        ::AlgorandGoal::Abort "ERROR in RawSend: $EXCEPTION"

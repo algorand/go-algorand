@@ -166,6 +166,9 @@ if { [catch {
     set RAW_TRANSACTION_ID [::AlgorandGoal::RawSend $LIMIT_STX $TEST_PRIMARY_NODE_DIR]
     puts "send limit order transaction in $RAW_TRANSACTION_ID"
 
+     # Check to make sure that the transfer is reflected in the to account
+    ::AlgorandGoal::WaitForAccountBalance $WALLET_1_NAME $CONTRACT_HASH 0 $TEST_PRIMARY_NODE_DIR
+    
     # Shutdown the network
     ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ALGO_DIR $TEST_ROOT_DIR
 
