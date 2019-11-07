@@ -247,7 +247,7 @@ func computeAssetIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, payset 
 	}
 
 	// Count into block to get created asset index
-	return txnCounter + uint64(offset)
+	return txnCounter - uint64(len(payset)) + uint64(offset) + 1
 }
 
 // computeAssetIndexFromTxn returns the created asset index given a confirmed
