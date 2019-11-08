@@ -1210,6 +1210,8 @@ int 0x310
 func TestLoadStore(t *testing.T) {
 	t.Parallel()
 	program, err := AssembleString(`int 37
+int 37
+store 1
 byte 0xabbacafe
 store 42
 int 37
@@ -1219,7 +1221,48 @@ load 42
 byte 0xabbacafe
 ==
 load 0
+load 1
++
 &&`)
+	require.NoError(t, err)
+	cost, err := Check(program, defaultEvalParams(nil, nil))
+	require.NoError(t, err)
+	require.True(t, cost < 1000)
+	sb := strings.Builder{}
+	pass, err := Eval(program, defaultEvalParams(&sb, nil))
+	if !pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.NoError(t, err)
+	require.True(t, pass)
+}
+
+func assembleStringWithTrace(t testing.TB, text string) ([]byte, error) {
+	sr := strings.NewReader(text)
+	sb := strings.Builder{}
+	ops := OpStream{Trace: &sb}
+	err := ops.Assemble(sr)
+	if err != nil {
+		t.Log(sb.String())
+		return nil, err
+	}
+	return ops.Bytes()
+}
+
+func TestLoadStore2(t *testing.T) {
+	t.Parallel()
+	program, err := assembleStringWithTrace(t, `int 2
+int 3
+byte 0xaa
+store 44
+store 43
+store 42
+load 43
+load 42
++
+int 5
+==`)
 	require.NoError(t, err)
 	cost, err := Check(program, defaultEvalParams(nil, nil))
 	require.NoError(t, err)
