@@ -20,10 +20,11 @@ specs_args = {
     "TMPL_MINTRD": "the minimum amount to be traded away",
     "TMPL_DUR": "the amount of time any transaction is available",
     "TMPL_PERIOD": "the time between any pair of operations",
+    "TMPL_TO": "the receiver of the payments",
     "TMPL_RCV": "the receiver of the payments",
     "TMPL_AMT": "the maximum amount of money that may be withdrawn from the account",
     "TMPL_CLS": "the address to close the transaction to",
-    "TMPL_X": "string to use for the transaction lease (defaults to \"tmpl\")",
+    "TMPL_LEASE": "string to use for the transaction lease (defaults to \"tmpl\")",
     "TMPL_RATN": "fraction of money to be paid to the first recipient: numerator",
     "TMPL_RATD": "fraction of money to be paid to the first recipient: denominator",
     "TMPL_SWAPN": "limit order exchange rate (for N algos, want rate * N coin): numerator",
@@ -57,7 +58,7 @@ def tokens_of(template_name):
         for line in f:
             for token in line.strip().split(' '):
                 if token.startswith(template_token_pfx):
-                    tokens[token] = True
+                    tokens[token.strip(',.:')] = True
     return tokens
 
 def cmd_arg(token):
