@@ -189,7 +189,12 @@ txn Sender
 txn AssetCloseTo
 global ZeroAddress
 ==
-&& // AssetReceiver is Me && no AssetCloseTo
+&&
+
+txn LastValid
+int TMPL_TIMEOUT
+<
+&& // AssetReceiver is Me && no AssetCloseTo && setup is before timeout
 
 || // (close asset) || setup
 && // ((close asset) || setup) && (setup or close common)
