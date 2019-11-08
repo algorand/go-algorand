@@ -26,6 +26,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strconv"
 	"strings"
 
@@ -52,6 +53,7 @@ type labelReference struct {
 type OpStream struct {
 	Out     bytes.Buffer
 	Version uint64
+	Trace   io.Writer
 	vubytes [9]byte
 	intc    []uint64
 	bytec   [][]byte
@@ -421,7 +423,14 @@ func assembleBnz(ops *OpStream, args []string) error {
 		return errors.New("bnz operation needs label argument")
 	}
 	ops.ReferToLabel(ops.sourceLine, ops.Out.Len(), args[0])
-	ops.Out.WriteByte(0x40)
+	opcode := byte(0x40)
+	spec := opsByOpcode[opcode]
+	err := ops.checkArgs(spec)
+	if err != nil {
+		return err
+	}
+	ops.Out.WriteByte(opcode)
+	// zero bytes will get replaced with actual offset in resolveLabels()
 	ops.Out.WriteByte(0)
 	ops.Out.WriteByte(0)
 	return nil
@@ -437,6 +446,7 @@ func assembleLoad(ops *OpStream, args []string) error {
 	}
 	ops.Out.WriteByte(0x34)
 	ops.Out.WriteByte(byte(val))
+	ops.tpush(StackAny)
 	return nil
 }
 
@@ -448,7 +458,13 @@ func assembleStore(ops *OpStream, args []string) error {
 	if val > EvalMaxScratchSize {
 		return errors.New("store limited to 0..255")
 	}
-	ops.Out.WriteByte(0x35)
+	opcode := byte(0x35)
+	spec := opsByOpcode[opcode]
+	err = ops.checkArgs(spec)
+	if err != nil {
+		return err
+	}
+	ops.Out.WriteByte(opcode)
 	ops.Out.WriteByte(byte(val))
 	return nil
 }
@@ -658,6 +674,7 @@ func init() {
 		opcodesByName[oi.Name] = oi.Opcode
 	}
 
+	// WARNING: special case op assembly by argOps functions must do their own type stack maintenance via ops.tpop() ops.tpush()/ops.tpusha()
 	argOps = make(map[string]func(*OpStream, []string) error)
 	argOps["int"] = assembleInt
 	argOps["intc"] = assembleIntC
@@ -673,6 +690,7 @@ func init() {
 	argOps["bnz"] = assembleBnz
 	argOps["load"] = assembleLoad
 	argOps["store"] = assembleStore
+	// WARNING: special case op assembly by argOps functions must do their own type stack maintenance via ops.tpop() ops.tpush()/ops.tpusha()
 
 	TxnFieldNames = make([]string, int(invalidTxnField))
 	for fi := Sender; fi < invalidTxnField; fi++ {
@@ -746,6 +764,39 @@ func filterFieldsForLineComment(fields []string) []string {
 	return fields
 }
 
+func (ops *OpStream) trace(format string, args ...interface{}) {
+	if ops.Trace == nil {
+		return
+	}
+	fmt.Fprintf(ops.Trace, format, args...)
+}
+
+// checks (and pops) arg types from arg type stack
+func (ops *OpStream) checkArgs(spec OpSpec) error {
+	firstPop := true
+	for i, argType := range spec.Args {
+		stype := ops.tpop()
+		if firstPop {
+			firstPop = false
+			ops.trace("pops(%s", stype.String())
+		} else {
+			ops.trace(", %s", stype.String())
+		}
+		if !typecheck(argType, stype) {
+			msg := fmt.Sprintf("%s arg %d wanted type %s got %s", spec.Name, i, argType.String(), stype.String())
+			if len(ops.labelReferences) > 0 {
+				fmt.Fprintf(os.Stderr, "warning: %d: %s; but branches have happened and assembler does not precisely track types in this case\n", ops.sourceLine, msg)
+			} else {
+				return lineErr(ops.sourceLine, errors.New(msg))
+			}
+		}
+	}
+	if !firstPop {
+		ops.trace(") ")
+	}
+	return nil
+}
+
 // Assemble reads text from an input and accumulates the program
 func (ops *OpStream) Assemble(fin io.Reader) error {
 	scanner := bufio.NewScanner(fin)
@@ -754,42 +805,47 @@ func (ops *OpStream) Assemble(fin io.Reader) error {
 		ops.sourceLine++
 		line := scanner.Text()
 		if len(line) == 0 {
+			ops.trace("%d: 0 line\n", ops.sourceLine)
 			continue
 		}
 		if strings.HasPrefix(line, "//") {
+			ops.trace("%d: // line\n", ops.sourceLine)
 			continue
 		}
 		fields := strings.Fields(line)
 		fields = filterFieldsForLineComment(fields)
 		if len(fields) == 0 {
+			ops.trace("%d: no fields\n", ops.sourceLine)
 			continue
 		}
 		opstring := fields[0]
 		argf, ok := argOps[opstring]
 		if ok {
+			ops.trace("%3d: %s\t", ops.sourceLine, opstring)
 			err := argf(ops, fields[1:])
 			if err != nil {
 				return lineErr(ops.sourceLine, err)
 			}
+			ops.trace("\n")
 			continue
 		}
 		opcode, ok := opcodesByName[opstring]
 		if ok {
+			ops.trace("%3d: %s\t", ops.sourceLine, opstring)
 			spec := opsByOpcode[opcode]
-			for i, argType := range spec.Args {
-				stype := ops.tpop()
-				if !typecheck(argType, stype) {
-					err := fmt.Errorf("%s arg %d wanted type %s got %s", spec.Name, i, argType.String(), stype.String())
-					return lineErr(ops.sourceLine, err)
-				}
+			err := ops.checkArgs(spec)
+			if err != nil {
+				return err
 			}
 			if spec.Returns != nil {
 				ops.tpusha(spec.Returns)
+				ops.trace("pushes%#v", spec.Returns)
 			}
-			err := ops.Out.WriteByte(opcode)
+			err = ops.Out.WriteByte(opcode)
 			if err != nil {
 				return lineErr(ops.sourceLine, err)
 			}
+			ops.trace("\n")
 			continue
 		}
 		if opstring[len(opstring)-1] == ':' {
