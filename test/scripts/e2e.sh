@@ -60,7 +60,8 @@ cd "${SCRIPT_PATH}"
 
 ./e2e_basic_start_stop.sh
 
-./e2e_teal.sh
+./timeout 200 ./e2e_teal.sh
+./timeout 200 ./limit-swap-test.sh
 
 # Export our root temp folder as 'TESTDIR' for tests to use as their root test folder
 # This allows us to clean up everything with our rm -rf trap.
