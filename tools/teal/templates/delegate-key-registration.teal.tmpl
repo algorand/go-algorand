@@ -1,32 +1,52 @@
+// Creates a delegate key solely with the authority to
+// register participation keys.
+// This is delegate logic.
+//
+// TMPL_AUTH specifies the delegate public key.  For the
+// transaction to be valid, arg_0 must contain the signature
+// of the private key corresponding to TMPL_AUTH on the
+// key registration transaction.
+//
+// This allows the delegate key to spend TMPL_FEE every
+// TMPL_PERIOD rounds for TMPL_DUR after every multiple
+// of TMPL_PERIOD.
+//
+// Parameters:
+//  - TMPL_AUTH: key authorized with delegation authority
+//  - TMPL_EXPIRE: round at which key expires
+//  - TMPL_PERIOD: time between a pair of allowed registration periods
+//  - TMPL_DUR: duration of an allowed registration period
+//  - TMPL_LEASE: string to use for the transaction lease
+//  - TMPL_FEE: maximum fee used by the delegate key registration transaction
 txn TypeEnum
 int 2
 ==
 txn Fee
 int TMPL_FEE
 <
+&&
 txn LastValid
 int TMPL_EXPIRE
 <
+&&
 txn LastValid
 int TMPL_DUR
 txn FirstValid
 +
 ==
+&&
 txn FirstValid
 int TMPL_PERIOD
 %
 int 0
 ==
+&&
 txn Lease
-byte base64 TMPL_X
+byte base64 TMPL_LEASE
 ==
+&&
 txn TxID
 arg_0
 addr TMPL_AUTH
 ed25519verify
-&&
-&&
-&&
-&&
-&&
 &&
