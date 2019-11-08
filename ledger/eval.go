@@ -294,6 +294,7 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *eval
 	}
 
 	// hotfix for testnet stall 08/26/2019; move some algos from testnet bank to rewards pool to give it enough time until protocol upgrade occur.
+	// hotfix for testnet stall 11/07/2019; the same bug again, account ran out before the protocol upgrade occurred.
 	poolOld, err = eval.workaroundOverspentRewards(poolOld, hdr.Round)
 	if err != nil {
 		return nil, err
@@ -321,9 +322,10 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *eval
 }
 
 // hotfix for testnet stall 08/26/2019; move some algos from testnet bank to rewards pool to give it enough time until protocol upgrade occur.
+// hotfix for testnet stall 11/07/2019; do the same thing
 func (eval *BlockEvaluator) workaroundOverspentRewards(rewardPoolBalance basics.BalanceRecord, headerRound basics.Round) (poolOld basics.BalanceRecord, err error) {
 	// verify that we patch the correct round.
-	if headerRound != 1499995 {
+	if headerRound != 1499995 && headerRound != 2926564 {
 		return rewardPoolBalance, nil
 	}
 	// verify that we're patching the correct genesis ( i.e. testnet )
