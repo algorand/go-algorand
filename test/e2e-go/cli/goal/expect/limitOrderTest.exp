@@ -118,6 +118,12 @@ if { [catch {
     set TEAL_SOURCE "$TEST_ROOT_DIR/limit.teal"
     ::AlgorandGoal::LimitOrder "driver.py" $SWAP_N $SWAP_D $MIN_TRD $ACCOUNT_2_ADDRESS $FEE $TIME_OUT $ASSET_ID $TEAL_SOURCE 
     cd $WORK_DIR
+
+    puts "Generated Teal Source:"
+    spawn cat $TEAL_SOURCE
+    expect {
+	    -re {^.+$} { close }
+    }
     
     # compile teal assembly to bytecode
     set CONTRACT_HASH [::AlgorandGoal::TealCompile $TEAL_SOURCE]

@@ -316,7 +316,7 @@ proc ::AlgorandGoal::WaitForAccountBalance { WALLET_NAME ACCOUNT_ADDRESS EXPECTE
     return $ACCOUNT_BALANCE
 }
 
-# Create a asset
+# Create an asset
 proc ::AlgorandGoal::AssetCreate { CREATOR WALLET_NAME WALLET_PASSWORD TOTAL_SUPPLY UNIT_NAME TEST_PRIMARY_NODE_DIR } {
     set timeout 40
     if { [ catch {
@@ -464,6 +464,7 @@ proc ::AlgorandGoal::RawSend { TXN_FILE TEST_PRIMARY_NODE_DIR } {
         expect {
             timeout { close; ::AlgorandGoal::Abort "Timed out rawsend $TXN_FILE"  }
             -re {Transaction ([A-Z0-9]{52}) committed} {set TRANSACTION_ID $expect_out(1,string); close }
+	    -re {Rejected transactions written to (.+rej)} {::AlgorandGoal::Abort "RawSend rejected."}
         }
     } EXCEPTION ] } {
        ::AlgorandGoal::Abort "ERROR in RawSend: $EXCEPTION"

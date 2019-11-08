@@ -102,7 +102,6 @@ func TestGoalWithExpect(t *testing.T) {
 			t.Logf("algoDir: %s\ntestDataDir:%s\n", algoDir, f.testDataDir)
 			cmd := execCommand("expect", testName, algoDir, f.testDataDir)
 			out, err := cmd.CombinedOutput()
-			t.Logf(string(out))
 			if err != nil {
 				t.Logf("err running '%s': %s\noutput: %s", testName, err, out)
 				t.Fail()
