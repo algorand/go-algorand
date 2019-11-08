@@ -21,10 +21,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
 	"strconv"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -262,7 +264,7 @@ func (helper *Helper) GetPackageFilesVersion(channel string, pkgFiles string, sp
 	maxVersion = 0
 	maxVersionName = ""
 
-	prefix := fmt.Sprintf("channel/%s/%s", channel, pkgFiles)
+	prefix := fmt.Sprintf("channel/%s/", channel)
 	svc := s3.New(helper.session)
 	input := &s3.ListObjectsInput{
 		Bucket:  &helper.bucket,
@@ -281,8 +283,14 @@ func (helper *Helper) GetPackageFilesVersion(channel string, pkgFiles string, sp
 	}
 
 	for _, item := range result.Contents {
-		var version uint64
 		name := string(*item.Key)
+
+		baseName := path.Base(name)
+		if !strings.HasPrefix(baseName, pkgFiles) {
+			continue
+		}
+
+		var version uint64
 		version, err = GetVersionFromName(name)
 		if err != nil {
 			return
