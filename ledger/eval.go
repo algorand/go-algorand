@@ -54,6 +54,7 @@ type VerifiedTxnCache interface {
 	Verified(txn transactions.SignedTxn) bool
 	EvalOk(cvers protocol.ConsensusVersion, txid transactions.Txid) (found bool, txErr error)
 	EvalRemember(cvers protocol.ConsensusVersion, txid transactions.Txid, err error)
+	EncodedTransactionLength(txib *transactions.SignedTxnInBlock) (int)
 }
 
 type roundCowBase struct {
@@ -421,7 +422,11 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 		txibs = append(txibs, txib)
 
 		if eval.validate {
-			groupTxBytes += len(protocol.Encode(txib))
+			if eval.txcache != nil {
+				groupTxBytes += eval.txcache.EncodedTransactionLength(&txib)
+			} else {
+				groupTxBytes += len(protocol.Encode(txib))
+			}
 			if eval.blockTxBytes+groupTxBytes > eval.proto.MaxTxnBytesPerBlock {
 				return ErrNoSpace
 			}

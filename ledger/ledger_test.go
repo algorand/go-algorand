@@ -128,6 +128,9 @@ func (x DummyVerifiedTxnCache) EvalOk(cvers protocol.ConsensusVersion, txid tran
 }
 func (x DummyVerifiedTxnCache) EvalRemember(cvers protocol.ConsensusVersion, txid transactions.Txid, err error) {
 }
+func (x DummyVerifiedTxnCache) EncodedTransactionLength(txib *transactions.SignedTxnInBlock) (int) {
+	return len(protocol.Encode(*txib))
+}
 
 func (l *Ledger) appendUnvalidated(blk bookkeeping.Block) error {
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)

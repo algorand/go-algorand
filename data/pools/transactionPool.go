@@ -449,6 +449,14 @@ func (pool *alwaysVerifiedPool) EvalOk(cvers protocol.ConsensusVersion, txid tra
 func (pool *alwaysVerifiedPool) EvalRemember(cvers protocol.ConsensusVersion, txid transactions.Txid, txErr error) {
 	pool.pool.EvalRemember(cvers, txid, txErr)
 }
+func (pool *alwaysVerifiedPool) EncodedTransactionLength(txib *transactions.SignedTxnInBlock) (int) {
+	return pool.pool.EncodedTransactionLength(txib)
+}
+
+// EncodedTransactionLength return the length of the encoded transaction
+func (pool *TransactionPool) EncodedTransactionLength(txib *transactions.SignedTxnInBlock) (int) {
+	return len(protocol.Encode(*txib))
+}
 
 func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactions.SignedTxn) error {
 	r := pool.pendingBlockEvaluator.Round() + pool.numPendingWholeBlocks
