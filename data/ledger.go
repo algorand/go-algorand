@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/execpool"
 )
 
 // The Ledger object in this (data) package provides a wrapper around the
@@ -315,8 +316,14 @@ func (l *Ledger) EnsureBlock(block *bookkeeping.Block, c agreement.Certificate) 
 }
 
 // AssemblePayset adds transactions to a BlockEvaluator.
-func (l *Ledger) AssemblePayset(pool *pools.TransactionPool, eval *ledger.BlockEvaluator, deadline time.Time) (stats telemetryspec.AssembleBlockStats) {
-	pending := pool.Pending()
+func (l *Ledger) AssemblePayset(txpool *pools.TransactionPool, blk bookkeeping.BlockHeader, verificationPool execpool.BacklogPool, deadline time.Time) (eval *ledger.BlockEvaluator, stats telemetryspec.AssembleBlockStats, err error) {
+	pending := txpool.Pending()
+
+	eval, err = l.StartEvaluator(blk, len(pending), txpool, verificationPool)
+	if err != nil {
+		return nil, stats, err
+	}
+
 	stats.StartCount = len(pending)
 	stats.StopReason = telemetryspec.AssembleBlockEmpty
 	first := true

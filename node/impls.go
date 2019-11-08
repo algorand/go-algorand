@@ -97,13 +97,12 @@ func (i *blockFactoryImpl) AssembleBlock(round basics.Round, deadline time.Time)
 
 	newEmptyBlk := bookkeeping.MakeBlock(prev)
 
-	eval, err := i.l.StartEvaluator(newEmptyBlk.BlockHeader, i.tp, i.verificationPool)
+	var stats telemetryspec.AssembleBlockMetrics
+	var eval *ledger.BlockEvaluator
+	eval, stats.AssembleBlockStats, err = i.l.AssemblePayset(i.tp, newEmptyBlk.BlockHeader, i.verificationPool, deadline)
 	if err != nil {
 		return nil, fmt.Errorf("could not make proposals at round %d: could not start evaluator: %v", round, err)
 	}
-
-	var stats telemetryspec.AssembleBlockMetrics
-	stats.AssembleBlockStats = i.l.AssemblePayset(i.tp, eval, deadline)
 
 	// Measure time here because we want to know how close to deadline we are
 	dt := time.Now().Sub(start)

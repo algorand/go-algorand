@@ -197,11 +197,11 @@ type ledgerForEvaluator interface {
 
 // StartEvaluator creates a BlockEvaluator, given a ledger and a block header
 // of the block that the caller is planning to evaluate.
-func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader, txcache VerifiedTxnCache, executionPool execpool.BacklogPool) (*BlockEvaluator, error) {
-	return startEvaluator(l, hdr, nil, true, true, txcache, executionPool)
+func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader, expectedPaysetCount int, txcache VerifiedTxnCache, executionPool execpool.BacklogPool) (*BlockEvaluator, error) {
+	return startEvaluator(l, hdr, nil, true, true, expectedPaysetCount, txcache, executionPool)
 }
 
-func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *evalAux, validate bool, generate bool, txcache VerifiedTxnCache, executionPool execpool.BacklogPool) (*BlockEvaluator, error) {
+func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *evalAux, validate bool, generate bool, expectedPaysetCount int, txcache VerifiedTxnCache, executionPool execpool.BacklogPool) (*BlockEvaluator, error) {
 	proto, ok := config.Consensus[hdr.CurrentProtocol]
 	if !ok {
 		return nil, ProtocolError(hdr.CurrentProtocol)
@@ -226,7 +226,10 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *eval
 		validate:         validate,
 		generate:         generate,
 		txcache:          txcache,
-		block:            bookkeeping.Block{BlockHeader: hdr},
+		block:            bookkeeping.Block{
+			BlockHeader: hdr,
+			Payset: make(transactions.Payset, 0, expectedPaysetCount),
+		},
 		proto:            proto,
 		genesisHash:      l.GenesisHash(),
 		verificationPool: executionPool,
@@ -688,18 +691,18 @@ func (eval *BlockEvaluator) GenerateBlock() (*ValidatedBlock, error) {
 }
 
 func (l *Ledger) eval(ctx context.Context, blk bookkeeping.Block, aux *evalAux, validate bool, txcache VerifiedTxnCache, executionPool execpool.BacklogPool) (stateDelta, evalAux, error) {
-	eval, err := startEvaluator(l, blk.BlockHeader, aux, validate, false, txcache, executionPool)
+	// Decode the payset to figure out the transaction groups.
+	paysetgroups, err := blk.DecodePaysetGroups()
+	if err != nil {
+		return stateDelta{}, evalAux{}, err
+	}
+
+	eval, err := startEvaluator(l, blk.BlockHeader, aux, validate, false, len(paysetgroups), txcache, executionPool)
 	if err != nil {
 		return stateDelta{}, evalAux{}, err
 	}
 
 	// TODO: batch tx sig verification: ingest blk.Payset and output a list of ValidatedTx
-
-	// Next, transactions
-	paysetgroups, err := blk.DecodePaysetGroups()
-	if err != nil {
-		return stateDelta{}, evalAux{}, err
-	}
 
 	for _, txgroup := range paysetgroups {
 		select {

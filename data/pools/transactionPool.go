@@ -493,19 +493,20 @@ func (pool *TransactionPool) recomputeBlockEvaluator() (stats telemetryspec.Proc
 		return
 	}
 
+	// get the transaction groups.
+	pool.pendingMu.RLock()
+	txgroups := pool.pendingTxGroups
+	pool.pendingMu.RUnlock()
+
 	next := bookkeeping.MakeBlock(prev)
 	pool.numPendingWholeBlocks = 0
-	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, &alwaysVerifiedPool{pool}, nil)
+	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, len(txgroups), &alwaysVerifiedPool{pool}, nil)
 	if err != nil {
 		logging.Base().Warnf("TransactionPool.recomputeBlockEvaluator: cannot start evaluator: %v", err)
 		return
 	}
 
 	// Feed the transactions in order.
-	pool.pendingMu.RLock()
-	txgroups := pool.pendingTxGroups
-	pool.pendingMu.RUnlock()
-
 	for _, txgroup := range txgroups {
 		err := pool.remember(txgroup)
 		if err != nil {
