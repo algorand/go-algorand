@@ -746,6 +746,10 @@ func PendingTransactionInformation(ctx lib.ReqContext, w http.ResponseWriter, r 
 		}
 
 		responseTxs.TransactionResults = &v1.TransactionResults{
+			// This field will be omitted for transactions that did not
+			// create an asset (or for which we could not look up the block
+			// it was created in), because computeAssetIndexFromTxn will
+			// return 0 in that case.
 			CreatedAssetIndex: computeAssetIndexFromTxn(txn, ledger),
 		}
 
