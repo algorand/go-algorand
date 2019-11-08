@@ -251,7 +251,8 @@ func computeAssetIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, payset 
 }
 
 // computeAssetIndexFromTxn returns the created asset index given a confirmed
-// transaction whose confirmation block is available in the ledger
+// transaction whose confirmation block is available in the ledger. Note that
+// 0 is an invalid asset index (they start at 1).
 func computeAssetIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx uint64) {
 	// Must have ledger
 	if l == nil {
