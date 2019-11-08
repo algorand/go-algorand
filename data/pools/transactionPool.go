@@ -52,6 +52,7 @@ type TransactionPool struct {
 	pendingMu       deadlock.RWMutex
 	pendingTxGroups [][]transactions.SignedTxn
 	pendingTxids    map[transactions.Txid]transactions.SignedTxn
+	pendingTxLength map[transactions.Txid]int
 
 	// Calls to remember() add transactions to rememberedTxGroups and
 	// rememberedTxids.  Calling rememberCommit() adds them to the
@@ -76,6 +77,7 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local) *TransactionPo
 	}
 	pool := TransactionPool{
 		pendingTxids:    make(map[transactions.Txid]transactions.SignedTxn),
+		pendingTxLength: make(map[transactions.Txid]int),
 		rememberedTxids: make(map[transactions.Txid]transactions.SignedTxn),
 		expiredTxCount:  make(map[basics.Round]int),
 		ledger:          ledger,
@@ -381,6 +383,7 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block) {
 			_, ok := pool.pendingTxids[txid]
 			if ok {
 				knownCommitted++
+				delete(pool.pendingTxLength, txid)
 			} else {
 				unknownCommitted++
 			}
@@ -454,8 +457,15 @@ func (pool *alwaysVerifiedPool) EncodedTransactionLength(txib *transactions.Sign
 }
 
 // EncodedTransactionLength return the length of the encoded transaction
-func (pool *TransactionPool) EncodedTransactionLength(txib *transactions.SignedTxnInBlock) (int) {
-	return len(protocol.Encode(*txib))
+func (pool *TransactionPool) EncodedTransactionLength(txib *transactions.SignedTxnInBlock) (encodedSize int) {
+	txnID := txib.Txn.ID()
+	var has bool
+	if encodedSize, has = pool.pendingTxLength[txnID]; has {
+		return
+	}
+	encodedSize = len(protocol.Encode(*txib))
+	pool.pendingTxLength[txnID] = encodedSize
+	return 
 }
 
 func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactions.SignedTxn) error {

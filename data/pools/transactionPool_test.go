@@ -95,13 +95,13 @@ func makeMockLedgerFuture(t TestingT, initAccounts map[basics.Address]basics.Acc
 	return mockLedger(t, initAccounts, protocol.ConsensusFuture)
 }
 
-func newBlockEvaluator(t TestingT, l *ledger.Ledger) *ledger.BlockEvaluator {
+func newBlockEvaluator(t TestingT, l *ledger.Ledger, txpool *TransactionPool) *ledger.BlockEvaluator {
 	latest := l.Latest()
 	prev, err := l.BlockHdr(latest)
 	require.NoError(t, err)
 
 	next := bookkeeping.MakeBlock(prev)
-	eval, err := l.StartEvaluator(next.BlockHeader, &alwaysVerifiedPool{}, nil)
+	eval, err := l.StartEvaluator(next.BlockHeader, &alwaysVerifiedPool{pool:txpool}, nil)
 	require.NoError(t, err)
 
 	return eval
@@ -506,7 +506,7 @@ func TestRememberForget(t *testing.T) {
 	cfg.EnableAssembleStats = false
 	transactionPool := MakeTransactionPool(ledger, cfg)
 
-	eval := newBlockEvaluator(t, ledger)
+	eval := newBlockEvaluator(t, ledger, transactionPool)
 
 	for i, sender := range addresses {
 		for j, receiver := range addresses {
@@ -600,7 +600,7 @@ func TestCleanUp(t *testing.T) {
 	}
 
 	for ledger.Latest() < 6 {
-		eval := newBlockEvaluator(t, ledger)
+		eval := newBlockEvaluator(t, ledger, transactionPool)
 		blk, err := eval.GenerateBlock()
 		require.NoError(t, err)
 
@@ -616,7 +616,7 @@ func TestCleanUp(t *testing.T) {
 	require.Equal(t, issuedTransactions, transactionPool.NumExpired(5))
 
 	for ledger.Latest() < 6+basics.Round(expiredHistory*proto.MaxTxnLife) {
-		eval := newBlockEvaluator(t, ledger)
+		eval := newBlockEvaluator(t, ledger, transactionPool)
 		blk, err := eval.GenerateBlock()
 		require.NoError(t, err)
 
@@ -705,7 +705,7 @@ func TestFixOverflowOnNewBlock(t *testing.T) {
 	}
 	signedTx := tx.Sign(secrets[0])
 
-	blockEval := newBlockEvaluator(t, ledger)
+	blockEval := newBlockEvaluator(t, ledger, transactionPool)
 	err := blockEval.Transaction(signedTx, transactions.ApplyData{})
 	require.NoError(t, err)
 
@@ -1204,7 +1204,7 @@ func BenchmarkTransactionPoolSteadyState(b *testing.B) {
 		}
 
 		// Commit a block
-		eval := newBlockEvaluator(b, l)
+		eval := newBlockEvaluator(b, l, transactionPool)
 		for len(ledgerTxnQueue) > 0 {
 			stx := ledgerTxnQueue[0]
 			err := eval.Transaction(stx, transactions.ApplyData{})
