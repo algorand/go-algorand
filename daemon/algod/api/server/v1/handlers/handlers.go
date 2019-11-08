@@ -217,7 +217,7 @@ func assetFreezeTxEncode(tx transactions.Transaction, ad transactions.ApplyData)
 	}
 }
 
-func txWithStatusEncode(tr node.TxnWithStatus, l *data.Ledger) (v1.Transaction, error) {
+func txWithStatusEncode(tr node.TxnWithStatus) (v1.Transaction, error) {
 	s, err := txEncode(tr.Txn.Txn, tr.ApplyData)
 	if err != nil {
 		err = decorateUnknownTransactionTypeError(err, tr)
@@ -225,9 +225,6 @@ func txWithStatusEncode(tr node.TxnWithStatus, l *data.Ledger) (v1.Transaction, 
 	}
 	s.ConfirmedRound = uint64(tr.ConfirmedRound)
 	s.PoolError = tr.PoolError
-	s.TransactionResults = &v1.TransactionResults{
-		CreatedAssetIndex: computeAssetIndexFromTxn(tr, l),
-	}
 	return s, nil
 }
 
@@ -325,16 +322,10 @@ func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error)
 			ApplyData:      txn.ApplyData,
 		}
 
-		encTx, err := txWithStatusEncode(tx, nil)
+		encTx, err := txWithStatusEncode(tx)
 		if err != nil {
 			return v1.Block{}, err
 		}
-
-		if encTx.TransactionResults == nil {
-			encTx.TransactionResults = &v1.TransactionResults{}
-		}
-
-		encTx.TransactionResults.CreatedAssetIndex = computeAssetIndexInPayset(tx, b.BlockHeader.TxnCounter, payset)
 
 		txns = append(txns, encTx)
 	}
@@ -677,7 +668,7 @@ func TransactionInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.R
 
 	if txn, ok := ctx.Node.GetTransaction(addr, txID, start, latestRound); ok {
 		var responseTxs v1.Transaction
-		responseTxs, err = txWithStatusEncode(txn, ledger)
+		responseTxs, err = txWithStatusEncode(txn)
 		if err != nil {
 			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToParseTransaction, ctx.Log)
 			return
@@ -748,10 +739,14 @@ func PendingTransactionInformation(ctx lib.ReqContext, w http.ResponseWriter, r 
 
 	if txn, ok := ctx.Node.GetPendingTransaction(txID); ok {
 		ledger := ctx.Node.Ledger()
-		responseTxs, err := txWithStatusEncode(txn, ledger)
+		responseTxs, err := txWithStatusEncode(txn)
 		if err != nil {
 			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToParseTransaction, ctx.Log)
 			return
+		}
+
+		responseTxs.TransactionResults = &v1.TransactionResults{
+			CreatedAssetIndex: computeAssetIndexFromTxn(txn, ledger),
 		}
 
 		response := TransactionResponse{
@@ -1407,9 +1402,8 @@ func Transactions(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	}
 
 	responseTxs := make([]v1.Transaction, len(txs))
-	ledger := ctx.Node.Ledger()
 	for i, twr := range txs {
-		responseTxs[i], err = txWithStatusEncode(twr, ledger)
+		responseTxs[i], err = txWithStatusEncode(twr)
 		if err != nil {
 			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToParseTransaction, ctx.Log)
 			return
@@ -1478,10 +1472,9 @@ func GetTransactionByID(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	ledger := ctx.Node.Ledger()
 	if txn, err := ctx.Node.GetTransactionByID(txID, basics.Round(rnd)); err == nil {
 		var responseTxs v1.Transaction
-		responseTxs, err = txWithStatusEncode(txn, ledger)
+		responseTxs, err = txWithStatusEncode(txn)
 		if err != nil {
 			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToParseTransaction, ctx.Log)
 			return
