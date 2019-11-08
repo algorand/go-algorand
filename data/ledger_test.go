@@ -163,16 +163,15 @@ func BenchmarkAssemblePayset(b *testing.B) {
 		}
 		b.StartTimer()
 		newEmptyBlk := bookkeeping.MakeBlock(prev)
-		eval, err := l.StartEvaluator(newEmptyBlk.BlockHeader, tp, backlogPool)
+		
+		deadline := time.Now().Add(time.Second)
+		_, stats,err := l.AssemblePayset(tp, newEmptyBlk.BlockHeader, backlogPool, deadline)
 		if err != nil {
 			b.Errorf("could not make proposals at round %d: could not start evaluator: %v", next, err)
 			return
 		}
-		var stats telemetryspec.AssembleBlockMetrics
-		deadline := time.Now().Add(time.Second)
-		stats.AssembleBlockStats = l.AssemblePayset(tp, eval, deadline)
 		b.StopTimer()
-		require.Equal(b, stats.AssembleBlockStats.StopReason, telemetryspec.AssembleBlockFull)
+		require.Equal(b, stats.StopReason, telemetryspec.AssembleBlockFull)
 		// the worst txn, with lower fee than the rest, should still be in the pool
 		_, _, found := tp.Lookup(worstTxID)
 		require.True(b, found)
