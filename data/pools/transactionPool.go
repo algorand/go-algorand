@@ -376,7 +376,7 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block) {
 
 	payset, err := block.DecodePaysetFlat()
 	if err == nil {
-		pool.pendingMu.RLock()
+		pool.pendingMu.Lock()
 		for _, txad := range payset {
 			tx := txad.SignedTxn
 			txid := tx.ID()
@@ -388,7 +388,7 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block) {
 				unknownCommitted++
 			}
 		}
-		pool.pendingMu.RUnlock()
+		pool.pendingMu.Unlock()
 	}
 
 	if pool.pendingBlockEvaluator == nil || block.Round() >= pool.pendingBlockEvaluator.Round() {
@@ -453,11 +453,18 @@ func (pool *alwaysVerifiedPool) EvalRemember(cvers protocol.ConsensusVersion, tx
 	pool.pool.EvalRemember(cvers, txid, txErr)
 }
 func (pool *alwaysVerifiedPool) EncodedTransactionLength(txib *transactions.SignedTxnInBlock) (int) {
-	return pool.pool.EncodedTransactionLength(txib)
+	return pool.pool.encodedTransactionLength(txib)
 }
 
 // EncodedTransactionLength return the length of the encoded transaction
 func (pool *TransactionPool) EncodedTransactionLength(txib *transactions.SignedTxnInBlock) (encodedSize int) {
+	pool.pendingMu.Lock()
+	defer pool.pendingMu.Unlock()
+	return pool.encodedTransactionLength(txib)
+}
+
+// EncodedTransactionLength return the length of the encoded transaction
+func (pool *TransactionPool) encodedTransactionLength(txib *transactions.SignedTxnInBlock) (encodedSize int) {
 	txnID := txib.Txn.ID()
 	var has bool
 	if encodedSize, has = pool.pendingTxLength[txnID]; has {
