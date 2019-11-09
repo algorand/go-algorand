@@ -298,6 +298,9 @@ func (pool *TransactionPool) Remember(txgroup []transactions.SignedTxn) error {
 func (pool *TransactionPool) remember(txgroup []transactions.SignedTxn) error {
 	err := pool.addToPendingBlockEvaluator(txgroup)
 	if err != nil {
+		for _, t := range txgroup {
+			delete(pool.pendingTxLength, t.ID())
+		}
 		return err
 	}
 
@@ -376,19 +379,18 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block) {
 
 	payset, err := block.DecodePaysetFlat()
 	if err == nil {
-		pool.pendingMu.Lock()
+		pool.pendingMu.RLock()
 		for _, txad := range payset {
 			tx := txad.SignedTxn
 			txid := tx.ID()
 			_, ok := pool.pendingTxids[txid]
 			if ok {
 				knownCommitted++
-				delete(pool.pendingTxLength, txid)
 			} else {
 				unknownCommitted++
 			}
 		}
-		pool.pendingMu.Unlock()
+		pool.pendingMu.RUnlock()
 	}
 
 	if pool.pendingBlockEvaluator == nil || block.Round() >= pool.pendingBlockEvaluator.Round() {
@@ -452,27 +454,22 @@ func (pool *alwaysVerifiedPool) EvalOk(cvers protocol.ConsensusVersion, txid tra
 func (pool *alwaysVerifiedPool) EvalRemember(cvers protocol.ConsensusVersion, txid transactions.Txid, txErr error) {
 	pool.pool.EvalRemember(cvers, txid, txErr)
 }
-func (pool *alwaysVerifiedPool) EncodedTransactionLength(txib *transactions.SignedTxnInBlock) (int) {
-	return pool.pool.encodedTransactionLength(txib)
+
+// EncodedTransactionLength return the length of the encoded transaction
+func (pool *alwaysVerifiedPool) EncodedTransactionLength(txib *transactions.SignedTxnInBlock) (encodedSize int) {
+	var has bool
+	txnID := txib.Txn.ID()
+	if encodedSize, has = pool.pool.pendingTxLength[txnID]; has {
+		return
+	}
+	encodedSize = pool.EncodedTransactionLength(txib)
+	pool.pool.pendingTxLength[txnID] = encodedSize
+	return 
 }
 
 // EncodedTransactionLength return the length of the encoded transaction
 func (pool *TransactionPool) EncodedTransactionLength(txib *transactions.SignedTxnInBlock) (encodedSize int) {
-	pool.pendingMu.Lock()
-	defer pool.pendingMu.Unlock()
-	return pool.encodedTransactionLength(txib)
-}
-
-// EncodedTransactionLength return the length of the encoded transaction
-func (pool *TransactionPool) encodedTransactionLength(txib *transactions.SignedTxnInBlock) (encodedSize int) {
-	txnID := txib.Txn.ID()
-	var has bool
-	if encodedSize, has = pool.pendingTxLength[txnID]; has {
-		return
-	}
-	encodedSize = len(protocol.Encode(*txib))
-	pool.pendingTxLength[txnID] = encodedSize
-	return 
+	return len(protocol.Encode(*txib))
 }
 
 func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactions.SignedTxn) error {
