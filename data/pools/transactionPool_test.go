@@ -536,7 +536,7 @@ func TestRememberForget(t *testing.T) {
 		}
 	}
 
-	pending := transactionPool.Pending()
+	pending,_  := transactionPool.Pending()
 	numberOfTxns := numOfAccounts*numOfAccounts - numOfAccounts
 	require.Len(t, pending, numberOfTxns)
 
@@ -547,7 +547,7 @@ func TestRememberForget(t *testing.T) {
 	require.NoError(t, err)
 	transactionPool.OnNewBlock(blk.Block())
 
-	pending = transactionPool.Pending()
+	pending, _ = transactionPool.Pending()
 	require.Len(t, pending, 0)
 }
 
@@ -610,7 +610,7 @@ func TestCleanUp(t *testing.T) {
 		transactionPool.OnNewBlock(blk.Block())
 	}
 
-	pending := transactionPool.Pending()
+	pending, _ := transactionPool.Pending()
 	require.Zero(t, len(pending))
 	require.Zero(t, transactionPool.NumExpired(4))
 	require.Equal(t, issuedTransactions, transactionPool.NumExpired(5))
@@ -682,7 +682,7 @@ func TestFixOverflowOnNewBlock(t *testing.T) {
 			}
 		}
 	}
-	pending := transactionPool.Pending()
+	pending, _ := transactionPool.Pending()
 	require.Len(t, pending, savedTransactions)
 
 	secret := keypair()
@@ -718,7 +718,7 @@ func TestFixOverflowOnNewBlock(t *testing.T) {
 
 	transactionPool.OnNewBlock(block.Block())
 
-	pending = transactionPool.Pending()
+	pending, _ = transactionPool.Pending()
 	// only one transaction is missing
 	require.Len(t, pending, savedTransactions-1)
 }
@@ -822,7 +822,8 @@ func TestRemove(t *testing.T) {
 	}
 	signedTx := tx.Sign(secrets[0])
 	require.NoError(t, transactionPool.RememberOne(signedTx))
-	require.Equal(t, transactionPool.Pending(), [][]transactions.SignedTxn{[]transactions.SignedTxn{signedTx}})
+	pendingTxGrps, _ :=  transactionPool.Pending()
+	require.Equal(t, pendingTxGrps, [][]transactions.SignedTxn{[]transactions.SignedTxn{signedTx}})
 }
 
 func TestLogicSigOK(t *testing.T) {
