@@ -462,7 +462,7 @@ func (pool *alwaysVerifiedPool) EncodedTransactionLength(txib *transactions.Sign
 	if encodedSize, has = pool.pool.pendingTxLength[txnID]; has {
 		return
 	}
-	encodedSize = pool.EncodedTransactionLength(txib)
+	encodedSize = pool.pool.EncodedTransactionLength(txib)
 	pool.pool.pendingTxLength[txnID] = encodedSize
 	return 
 }
