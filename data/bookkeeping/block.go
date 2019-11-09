@@ -548,7 +548,8 @@ func SignedTxnsToGroups(txns []transactions.SignedTxn) (res [][]transactions.Sig
 }
 
 // SignedTxnGroupsFlatten combines all groups into a flat slice of SignedTxns.
-func SignedTxnGroupsFlatten(txgroups [][]transactions.SignedTxn) (res []transactions.SignedTxn) {
+func SignedTxnGroupsFlatten(txgroups [][]transactions.SignedTxn, txnCount int) (res []transactions.SignedTxn) {
+	res = make([]transactions.SignedTxn, 0, txnCount)
 	for _, txgroup := range txgroups {
 		res = append(res, txgroup...)
 	}

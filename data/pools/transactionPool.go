@@ -120,14 +120,14 @@ func (pool *TransactionPool) PendingTxIDs() []transactions.Txid {
 
 // Pending returns a list of transaction groups that should be proposed
 // in the next block, in order.
-func (pool *TransactionPool) Pending() [][]transactions.SignedTxn {
+func (pool *TransactionPool) Pending() (pendingTxn [][]transactions.SignedTxn, pendingTxnCount int) {
 	pool.pendingMu.RLock()
 	defer pool.pendingMu.RUnlock()
 	// note that this operation is safe for the sole reason that arrays in go are immutable.
 	// if the underlaying array need to be expanded, the actual underlaying array would need
 	// to be reallocated.
-	return pool.pendingTxGroups
-
+	pendingTxn, pendingTxnCount = pool.pendingTxGroups, len(pool.pendingTxids)
+	return
 }
 
 // rememberCommit() saves the changes added by remember to

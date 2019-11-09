@@ -317,9 +317,9 @@ func (l *Ledger) EnsureBlock(block *bookkeeping.Block, c agreement.Certificate) 
 
 // AssemblePayset adds transactions to a BlockEvaluator.
 func (l *Ledger) AssemblePayset(txpool *pools.TransactionPool, blk bookkeeping.BlockHeader, verificationPool execpool.BacklogPool, deadline time.Time) (eval *ledger.BlockEvaluator, stats telemetryspec.AssembleBlockStats, err error) {
-	pending := txpool.Pending()
+	pending, pendingTxCount := txpool.Pending()
 
-	eval, err = l.StartEvaluator(blk, len(pending), txpool, verificationPool)
+	eval, err = l.StartEvaluator(blk, pendingTxCount, txpool, verificationPool)
 	if err != nil {
 		return nil, stats, err
 	}
