@@ -691,18 +691,17 @@ func (eval *BlockEvaluator) GenerateBlock() (*ValidatedBlock, error) {
 }
 
 func (l *Ledger) eval(ctx context.Context, blk bookkeeping.Block, aux *evalAux, validate bool, txcache VerifiedTxnCache, executionPool execpool.BacklogPool) (stateDelta, evalAux, error) {
-	// Decode the payset to figure out the transaction groups.
-	paysetgroups, err := blk.DecodePaysetGroups()
-	if err != nil {
-		return stateDelta{}, evalAux{}, err
-	}
-
-	eval, err := startEvaluator(l, blk.BlockHeader, aux, validate, false, len(paysetgroups), txcache, executionPool)
+	eval, err := startEvaluator(l, blk.BlockHeader, aux, validate, false, len(blk.Payset), txcache, executionPool)
 	if err != nil {
 		return stateDelta{}, evalAux{}, err
 	}
 
 	// TODO: batch tx sig verification: ingest blk.Payset and output a list of ValidatedTx
+	// Decode the payset to figure out the transaction groups.
+	paysetgroups, err := blk.DecodePaysetGroups()
+	if err != nil {
+		return stateDelta{}, evalAux{}, err
+	}
 
 	for _, txgroup := range paysetgroups {
 		select {
