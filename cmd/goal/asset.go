@@ -248,6 +248,14 @@ var createAssetCmd = &cobra.Command{
 				if err != nil {
 					reportErrorf(err.Error())
 				}
+				// Check if we know about the transaction yet
+				txn, err := client.PendingTransactionInformation(txid)
+				if err != nil {
+					reportErrorf(err.Error())
+				}
+				if txn.TransactionResults != nil && txn.TransactionResults.CreatedAssetIndex != 0 {
+					reportInfof("Created asset with asset index %d", txn.TransactionResults.CreatedAssetIndex)
+				}
 			}
 		} else {
 			err = writeTxnToFile(client, sign, dataDir, walletName, tx, txFilename)
