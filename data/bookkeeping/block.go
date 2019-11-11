@@ -389,7 +389,7 @@ func MakeBlock(prev BlockHeader) Block {
 		logging.Base().Panicf("MakeBlock: next protocol %v not supported", upgradeState.CurrentProtocol)
 	}
 
-	emptyPayset := make(transactions.Payset, 0)
+	var emptyPayset transactions.Payset
 
 	timestamp := time.Now().Unix()
 	if prev.TimeStamp > 0 {

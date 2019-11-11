@@ -90,7 +90,7 @@ func testGenerateInitState(t *testing.T, proto protocol.ConsensusVersion) (genes
 
 	incentivePoolBalanceAtGenesis := initAccounts[poolAddr].MicroAlgos
 	initialRewardsPerRound := incentivePoolBalanceAtGenesis.Raw / uint64(params.RewardsRateRefreshInterval)
-	emptyPayset := make(transactions.Payset, 0)
+	var emptyPayset transactions.Payset
 
 	initBlock := bookkeeping.Block{
 		BlockHeader: bookkeeping.BlockHeader{
@@ -152,7 +152,7 @@ func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics
 	lastBlock, err := l.Block(l.Latest())
 	a.NoError(err, "could not get last block")
 
-	emptyPayset := make(transactions.Payset, 0)
+	var emptyPayset transactions.Payset
 
 	proto := config.Consensus[lastBlock.CurrentProtocol]
 	poolAddr := testPoolAddr
@@ -222,7 +222,7 @@ func TestLedgerBlockHeaders(t *testing.T) {
 	lastBlock, err := l.Block(l.Latest())
 	a.NoError(err, "could not get last block")
 
-	emptyPayset := make(transactions.Payset, 0)
+	var emptyPayset transactions.Payset
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	poolAddr := testPoolAddr
@@ -720,7 +720,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 			}
 			poolBal, err := l.Lookup(l.Latest(), testPoolAddr)
 			a.NoError(err, "could not get incentive pool balance")
-			emptyPayset := make(transactions.Payset, 0)
+			var emptyPayset transactions.Payset
 			lastBlock, err := l.Block(l.Latest())
 			a.NoError(err, "could not get last block")
 
