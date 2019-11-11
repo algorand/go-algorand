@@ -500,13 +500,13 @@ func TestRememberForget(t *testing.T) {
 		addresses[i] = addr
 	}
 
-	ledger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
+	mockLedger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = testPoolSize
 	cfg.EnableAssembleStats = false
-	transactionPool := MakeTransactionPool(ledger, cfg)
+	transactionPool := MakeTransactionPool(mockLedger, cfg)
 
-	eval := newBlockEvaluator(t, ledger)
+	eval := newBlockEvaluator(t, mockLedger)
 
 	for i, sender := range addresses {
 		for j, receiver := range addresses {
@@ -519,7 +519,7 @@ func TestRememberForget(t *testing.T) {
 						FirstValid:  0,
 						LastValid:   basics.Round(proto.MaxTxnLife),
 						Note:        make([]byte, 2),
-						GenesisHash: ledger.GenesisHash(),
+						GenesisHash: mockLedger.GenesisHash(),
 					},
 					PaymentTxnFields: transactions.PaymentTxnFields{
 						Receiver: receiver,
@@ -543,9 +543,9 @@ func TestRememberForget(t *testing.T) {
 	blk, err := eval.GenerateBlock()
 	require.NoError(t, err)
 
-	err = ledger.AddValidatedBlock(*blk, agreement.Certificate{})
+	err = mockLedger.AddValidatedBlock(*blk, agreement.Certificate{})
 	require.NoError(t, err)
-	transactionPool.OnNewBlock(blk.Block())
+	transactionPool.OnNewBlock(blk.Block(), ledger.StateDelta{})
 
 	pending = transactionPool.Pending()
 	require.Len(t, pending, 0)
@@ -565,11 +565,11 @@ func TestCleanUp(t *testing.T) {
 		addresses[i] = addr
 	}
 
-	ledger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
+	mockLedger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = testPoolSize
 	cfg.EnableAssembleStats = false
-	transactionPool := MakeTransactionPool(ledger, cfg)
+	transactionPool := MakeTransactionPool(mockLedger, cfg)
 
 	issuedTransactions := 0
 	for i, sender := range addresses {
@@ -583,7 +583,7 @@ func TestCleanUp(t *testing.T) {
 						FirstValid:  0,
 						LastValid:   5,
 						Note:        make([]byte, 2),
-						GenesisHash: ledger.GenesisHash(),
+						GenesisHash: mockLedger.GenesisHash(),
 					},
 					PaymentTxnFields: transactions.PaymentTxnFields{
 						Receiver: receiver,
@@ -599,15 +599,15 @@ func TestCleanUp(t *testing.T) {
 		}
 	}
 
-	for ledger.Latest() < 6 {
-		eval := newBlockEvaluator(t, ledger)
+	for mockLedger.Latest() < 6 {
+		eval := newBlockEvaluator(t, mockLedger)
 		blk, err := eval.GenerateBlock()
 		require.NoError(t, err)
 
-		err = ledger.AddValidatedBlock(*blk, agreement.Certificate{})
+		err = mockLedger.AddValidatedBlock(*blk, agreement.Certificate{})
 		require.NoError(t, err)
 
-		transactionPool.OnNewBlock(blk.Block())
+		transactionPool.OnNewBlock(blk.Block(), ledger.StateDelta{})
 	}
 
 	pending := transactionPool.Pending()
@@ -615,15 +615,15 @@ func TestCleanUp(t *testing.T) {
 	require.Zero(t, transactionPool.NumExpired(4))
 	require.Equal(t, issuedTransactions, transactionPool.NumExpired(5))
 
-	for ledger.Latest() < 6+basics.Round(expiredHistory*proto.MaxTxnLife) {
-		eval := newBlockEvaluator(t, ledger)
+	for mockLedger.Latest() < 6+basics.Round(expiredHistory*proto.MaxTxnLife) {
+		eval := newBlockEvaluator(t, mockLedger)
 		blk, err := eval.GenerateBlock()
 		require.NoError(t, err)
 
-		err = ledger.AddValidatedBlock(*blk, agreement.Certificate{})
+		err = mockLedger.AddValidatedBlock(*blk, agreement.Certificate{})
 		require.NoError(t, err)
 
-		transactionPool.OnNewBlock(blk.Block())
+		transactionPool.OnNewBlock(blk.Block(), ledger.StateDelta{})
 		require.Zero(t, transactionPool.NumExpired(blk.Block().Round()))
 	}
 	require.Len(t, transactionPool.expiredTxCount, int(expiredHistory*proto.MaxTxnLife))
@@ -642,11 +642,11 @@ func TestFixOverflowOnNewBlock(t *testing.T) {
 		addresses[i] = addr
 	}
 
-	ledger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
+	mockLedger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = testPoolSize
 	cfg.EnableAssembleStats = false
-	transactionPool := MakeTransactionPool(ledger, cfg)
+	transactionPool := MakeTransactionPool(mockLedger, cfg)
 
 	overSpender := addresses[0]
 	var overSpenderAmount uint64
@@ -663,7 +663,7 @@ func TestFixOverflowOnNewBlock(t *testing.T) {
 						FirstValid:  0,
 						LastValid:   10,
 						Note:        make([]byte, 0),
-						GenesisHash: ledger.GenesisHash(),
+						GenesisHash: mockLedger.GenesisHash(),
 					},
 					PaymentTxnFields: transactions.PaymentTxnFields{
 						Receiver: receiver,
@@ -696,7 +696,7 @@ func TestFixOverflowOnNewBlock(t *testing.T) {
 			FirstValid:  0,
 			LastValid:   10,
 			Note:        []byte{1},
-			GenesisHash: ledger.GenesisHash(),
+			GenesisHash: mockLedger.GenesisHash(),
 		},
 		PaymentTxnFields: transactions.PaymentTxnFields{
 			Receiver: recv,
@@ -705,7 +705,7 @@ func TestFixOverflowOnNewBlock(t *testing.T) {
 	}
 	signedTx := tx.Sign(secrets[0])
 
-	blockEval := newBlockEvaluator(t, ledger)
+	blockEval := newBlockEvaluator(t, mockLedger)
 	err := blockEval.Transaction(signedTx, transactions.ApplyData{})
 	require.NoError(t, err)
 
@@ -713,10 +713,10 @@ func TestFixOverflowOnNewBlock(t *testing.T) {
 	block, err := blockEval.GenerateBlock()
 	require.NoError(t, err)
 
-	err = ledger.AddValidatedBlock(*block, agreement.Certificate{})
+	err = mockLedger.AddValidatedBlock(*block, agreement.Certificate{})
 	require.NoError(t, err)
 
-	transactionPool.OnNewBlock(block.Block())
+	transactionPool.OnNewBlock(block.Block(), ledger.StateDelta{})
 
 	pending = transactionPool.Pending()
 	// only one transaction is missing
@@ -1221,7 +1221,7 @@ func BenchmarkTransactionPoolSteadyState(b *testing.B) {
 		err = l.AddValidatedBlock(*blk, agreement.Certificate{})
 		require.NoError(b, err)
 
-		transactionPool.OnNewBlock(blk.Block())
+		transactionPool.OnNewBlock(blk.Block(), ledger.StateDelta{})
 
 		fmt.Printf("BenchmarkTransactionPoolSteadyState: committed block %d\n", blk.Block().Round())
 	}

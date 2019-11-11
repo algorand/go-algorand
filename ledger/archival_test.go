@@ -64,7 +64,7 @@ func (wl *wrappedLedger) blockAux(rnd basics.Round) (bookkeeping.Block, evalAux,
 	return wl.l.blockAux(rnd)
 }
 
-func (wl *wrappedLedger) trackerEvalVerified(blk bookkeeping.Block, aux evalAux) (stateDelta, error) {
+func (wl *wrappedLedger) trackerEvalVerified(blk bookkeeping.Block, aux evalAux) (StateDelta, error) {
 	return wl.l.trackerEvalVerified(blk, aux)
 }
 

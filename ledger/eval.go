@@ -687,10 +687,10 @@ func (eval *BlockEvaluator) GenerateBlock() (*ValidatedBlock, error) {
 	return &vb, nil
 }
 
-func (l *Ledger) eval(ctx context.Context, blk bookkeeping.Block, aux *evalAux, validate bool, txcache VerifiedTxnCache, executionPool execpool.BacklogPool) (stateDelta, evalAux, error) {
+func (l *Ledger) eval(ctx context.Context, blk bookkeeping.Block, aux *evalAux, validate bool, txcache VerifiedTxnCache, executionPool execpool.BacklogPool) (StateDelta, evalAux, error) {
 	eval, err := startEvaluator(l, blk.BlockHeader, aux, validate, false, txcache, executionPool)
 	if err != nil {
-		return stateDelta{}, evalAux{}, err
+		return StateDelta{}, evalAux{}, err
 	}
 
 	// TODO: batch tx sig verification: ingest blk.Payset and output a list of ValidatedTx
@@ -698,33 +698,33 @@ func (l *Ledger) eval(ctx context.Context, blk bookkeeping.Block, aux *evalAux, 
 	// Next, transactions
 	paysetgroups, err := blk.DecodePaysetGroups()
 	if err != nil {
-		return stateDelta{}, evalAux{}, err
+		return StateDelta{}, evalAux{}, err
 	}
 
 	for _, txgroup := range paysetgroups {
 		select {
 		case <-ctx.Done():
-			return stateDelta{}, evalAux{}, ctx.Err()
+			return StateDelta{}, evalAux{}, ctx.Err()
 		default:
 		}
 
 		err = eval.TransactionGroup(txgroup)
 		if err != nil {
-			return stateDelta{}, evalAux{}, err
+			return StateDelta{}, evalAux{}, err
 		}
 	}
 
 	// Finally, procees any pending end-of-block state changes
 	err = eval.endOfBlock()
 	if err != nil {
-		return stateDelta{}, evalAux{}, err
+		return StateDelta{}, evalAux{}, err
 	}
 
 	// If validating, do final block checks that depend on our new state
 	if validate {
 		err = eval.finalValidation()
 		if err != nil {
-			return stateDelta{}, evalAux{}, err
+			return StateDelta{}, evalAux{}, err
 		}
 	}
 
@@ -754,7 +754,7 @@ func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, txcache Ve
 // the work of applying the block's changes to the ledger state.
 type ValidatedBlock struct {
 	blk   bookkeeping.Block
-	delta stateDelta
+	delta StateDelta
 	aux   evalAux
 }
 
