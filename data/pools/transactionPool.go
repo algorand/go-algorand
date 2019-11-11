@@ -364,24 +364,26 @@ func (pool *TransactionPool) EvalRemember(cvers protocol.ConsensusVersion, txid 
 
 // OnNewBlock excises transactions from the pool that are included in the specified Block or if they've expired
 func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledger.StateDelta) {
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
-	defer pool.cond.Broadcast()
-
 	var stats telemetryspec.ProcessBlockMetrics
 	var knownCommitted uint
 	var unknownCommitted uint
 
-	commitedTxids := delta.Txids()
-	pool.pendingMu.RLock()
-	for txid := range commitedTxids {
-		if _, ok := pool.pendingTxids[txid]; ok {
-			knownCommitted++
-		} else {
-			unknownCommitted++
+	commitedTxids := delta.Txids
+	if pool.logStats {
+		pool.pendingMu.RLock()
+		for txid := range commitedTxids {
+			if _, ok := pool.pendingTxids[txid]; ok {
+				knownCommitted++
+			} else {
+				unknownCommitted++
+			}
 		}
+		pool.pendingMu.RUnlock()
 	}
-	pool.pendingMu.RUnlock()
+
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+	defer pool.cond.Broadcast()
 
 	if pool.pendingBlockEvaluator == nil || block.Round() >= pool.pendingBlockEvaluator.Round() {
 		// Adjust the pool fee threshold.  The rules are:

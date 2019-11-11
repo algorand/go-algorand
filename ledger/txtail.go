@@ -88,7 +88,7 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta StateDelta) {
 	}
 
 	t.recent[rnd] = roundTxMembers{
-		txids:    delta.txids,
+		txids:    delta.Txids,
 		txleases: delta.txleases,
 		proto:    config.Consensus[blk.CurrentProtocol],
 	}
