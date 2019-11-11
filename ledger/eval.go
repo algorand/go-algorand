@@ -690,13 +690,8 @@ func (eval *BlockEvaluator) GenerateBlock() (*ValidatedBlock, error) {
 	return &vb, nil
 }
 
-<<<<<<< HEAD
-func (l *Ledger) eval(ctx context.Context, blk bookkeeping.Block, aux *evalAux, validate bool, txcache VerifiedTxnCache, executionPool execpool.BacklogPool) (stateDelta, evalAux, error) {
-	eval, err := startEvaluator(l, blk.BlockHeader, aux, validate, false, len(blk.Payset), txcache, executionPool)
-=======
 func (l *Ledger) eval(ctx context.Context, blk bookkeeping.Block, aux *evalAux, validate bool, txcache VerifiedTxnCache, executionPool execpool.BacklogPool) (StateDelta, evalAux, error) {
-	eval, err := startEvaluator(l, blk.BlockHeader, aux, validate, false, txcache, executionPool)
->>>>>>> master
+	eval, err := startEvaluator(l, blk.BlockHeader, aux, validate, false, len(blk.Payset), txcache, executionPool)
 	if err != nil {
 		return StateDelta{}, evalAux{}, err
 	}
