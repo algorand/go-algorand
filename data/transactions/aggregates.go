@@ -53,5 +53,8 @@ func (payset Payset) Commit(flat bool) crypto.Digest {
 
 // ToBeHashed implements the crypto.Hashable interface
 func (payset Payset) ToBeHashed() (protocol.HashID, []byte) {
+	if len(payset) == 0 {
+		return protocol.PaysetFlat, protocol.Encode(nil)
+	}
 	return protocol.PaysetFlat, protocol.Encode(payset)
 }
