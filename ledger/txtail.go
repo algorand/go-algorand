@@ -79,7 +79,7 @@ func (t *txTail) loadFromDisk(l ledgerForTracker) error {
 func (t *txTail) close() {
 }
 
-func (t *txTail) newBlock(blk bookkeeping.Block, delta stateDelta) {
+func (t *txTail) newBlock(blk bookkeeping.Block, delta StateDelta) {
 	rnd := blk.Round()
 
 	if t.recent[rnd].txids != nil {
@@ -88,7 +88,7 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta stateDelta) {
 	}
 
 	t.recent[rnd] = roundTxMembers{
-		txids:    delta.txids,
+		txids:    delta.Txids,
 		txleases: delta.txleases,
 		proto:    config.Consensus[blk.CurrentProtocol],
 	}

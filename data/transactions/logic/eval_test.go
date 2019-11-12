@@ -919,6 +919,55 @@ func TestGlobal(t *testing.T) {
 	require.True(t, pass)
 }
 
+func TestTypeEnum(t *testing.T) {
+	t.Parallel()
+	ttypes := []protocol.TxType{
+		protocol.PaymentTx,
+		protocol.KeyRegistrationTx,
+		protocol.AssetConfigTx,
+		protocol.AssetTransferTx,
+		protocol.AssetFreezeTx,
+	}
+	// this is explicitly a local copy of the list so that someone
+	// doesn't accidentally disconnect the doc.go
+	// typeEnumDescriptions from its need in assembler.go
+	typeNames := []string{
+		"Payment",
+		"KeyRegistration",
+		"AssetConfig",
+		"AssetTransfer",
+		"AssetFreeze",
+	}
+	for i, tt := range ttypes {
+		symbol := typeNames[i]
+		t.Run(string(symbol), func(t *testing.T) {
+			text := fmt.Sprintf(`txn TypeEnum
+int %s
+==
+txn TypeEnum
+int %s
+==
+&&`, symbol, string(tt))
+			program, err := AssembleString(text)
+			require.NoError(t, err)
+			cost, err := Check(program, defaultEvalParams(nil, nil))
+			require.NoError(t, err)
+			require.True(t, cost < 1000)
+			var txn transactions.SignedTxn
+			txn.Txn.Type = tt
+			sb := strings.Builder{}
+			proto := defaultEvalProto()
+			pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, GroupIndex: 3, FirstValidTimeStamp: 210})
+			if !pass {
+				t.Log(hex.EncodeToString(program))
+				t.Log(sb.String())
+			}
+			require.NoError(t, err)
+			require.True(t, pass)
+		})
+	}
+}
+
 const testTxnProgramText = `txn Sender
 arg 0
 ==
@@ -1062,8 +1111,6 @@ func TestTxn(t *testing.T) {
 		txid[:],
 		txn.Txn.Lease[:],
 	}
-	recs := make([]basics.BalanceRecord, 4)
-	recs[3].MicroAlgos.Raw = 4160
 	sb := strings.Builder{}
 	proto := defaultEvalProto()
 	pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, GroupIndex: 3, FirstValidTimeStamp: 210})

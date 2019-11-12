@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -227,6 +228,60 @@ func txWithStatusEncode(tr node.TxnWithStatus) (v1.Transaction, error) {
 	return s, nil
 }
 
+func computeAssetIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, payset []transactions.SignedTxnWithAD) (aidx uint64) {
+	// Compute transaction index in block
+	offset := -1
+	for idx, stxnib := range payset {
+		if tx.Txn.Txn.ID() == stxnib.Txn.ID() {
+			offset = idx
+			break
+		}
+	}
+
+	// Sanity check that txn was in fetched block
+	if offset < 0 {
+		return 0
+	}
+
+	// Count into block to get created asset index
+	return txnCounter - uint64(len(payset)) + uint64(offset) + 1
+}
+
+// computeAssetIndexFromTxn returns the created asset index given a confirmed
+// transaction whose confirmation block is available in the ledger. Note that
+// 0 is an invalid asset index (they start at 1).
+func computeAssetIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx uint64) {
+	// Must have ledger
+	if l == nil {
+		return 0
+	}
+	// Transaction must be confirmed
+	if tx.ConfirmedRound == 0 {
+		return 0
+	}
+	// Transaction must be AssetConfig transaction
+	if tx.Txn.Txn.AssetConfigTxnFields == (transactions.AssetConfigTxnFields{}) {
+		return 0
+	}
+	// Transaction must be creating an asset
+	if tx.Txn.Txn.AssetConfigTxnFields.ConfigAsset != 0 {
+		return 0
+	}
+
+	// Look up block where transaction was confirmed
+	blk, err := l.Block(tx.ConfirmedRound)
+	if err != nil {
+		return 0
+	}
+
+	payset, err := blk.DecodePaysetFlat()
+	if err != nil {
+		return 0
+	}
+
+	return computeAssetIndexInPayset(tx, blk.BlockHeader.TxnCounter, payset)
+}
+
 func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error) {
 	block := v1.Block{
 		Hash:              crypto.Digest(b.Hash()).String(),
@@ -266,6 +321,7 @@ func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error)
 			ConfirmedRound: b.Round(),
 			ApplyData:      txn.ApplyData,
 		}
+
 		encTx, err := txWithStatusEncode(tx)
 		if err != nil {
 			return v1.Block{}, err
@@ -682,10 +738,19 @@ func PendingTransactionInformation(ctx lib.ReqContext, w http.ResponseWriter, r 
 	}
 
 	if txn, ok := ctx.Node.GetPendingTransaction(txID); ok {
+		ledger := ctx.Node.Ledger()
 		responseTxs, err := txWithStatusEncode(txn)
 		if err != nil {
 			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToParseTransaction, ctx.Log)
 			return
+		}
+
+		responseTxs.TransactionResults = &v1.TransactionResults{
+			// This field will be omitted for transactions that did not
+			// create an asset (or for which we could not look up the block
+			// it was created in), because computeAssetIndexFromTxn will
+			// return 0 in that case.
+			CreatedAssetIndex: computeAssetIndexFromTxn(txn, ledger),
 		}
 
 		response := TransactionResponse{
