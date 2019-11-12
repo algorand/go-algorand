@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # produce TEAL assembly for a periodic payment escrow (send to two accounts in a 30/70 split)
-python driver.py split --ratn 30 --ratd 100 --timeout 60000 --own WO3QIJ6T4DZHBX5PWJH26JLHFSRT7W7M2DJOULPXDTUS6TUX7ZRIO4KDFY --rcv1 W6UUUSEAOGLBHT7VFT4H2SDATKKSG6ZBUIJXTZMSLW36YS44FRP5NVAU7U --rcv2 XCIBIN7RT4ZXGBMVAMU3QS6L5EKB7XGROC5EPCNHHYXUIBAA5Q6C5Y7NEU --minpay 100000 --fee 20000 > split.teal
+algotmpl -d `git rev-parse --show-toplevel`/tools/teal/templates split --ratn 30 --ratd 100 --timeout 60000 --own WO3QIJ6T4DZHBX5PWJH26JLHFSRT7W7M2DJOULPXDTUS6TUX7ZRIO4KDFY --rcv1 W6UUUSEAOGLBHT7VFT4H2SDATKKSG6ZBUIJXTZMSLW36YS44FRP5NVAU7U --rcv2 XCIBIN7RT4ZXGBMVAMU3QS6L5EKB7XGROC5EPCNHHYXUIBAA5Q6C5Y7NEU --minpay 100000 --fee 20000 > split.teal
 
 # compile TEAL assembly to TEAL bytecode
 goal clerk compile split.teal
