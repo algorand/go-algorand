@@ -127,16 +127,16 @@ Fold the "Scenario 2" checks into a single boolean.
 At this point in the program's execution, the stack has three values. At the base of the stack is a boolean holding the results of the initial transaction validity checks. This is followed by two booleans indicating the results of the scenario 1 and 2 checks.
 
 We want to approve this transaction if we are in scenario 1 or 2. So we logically `OR` the results of those checks together.
-```
 
+```
 ||
 ```
 
 Finally, we logically `AND` the scenario checks with the initial checks.
 
 ```
-
 &&
 
 ```
+
 At this point, the stack contains just one value: a boolean indicating whether or not it has been approved by this contract.
