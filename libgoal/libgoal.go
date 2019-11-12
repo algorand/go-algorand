@@ -479,6 +479,59 @@ func (c *Client) signAndBroadcastTransactionWithWallet(walletHandle, pw []byte, 
 	return tx, nil
 }
 
+// ComputeValidityRounds takes first, last and rounds provided by a user and resolves them into
+// actual firstValid and lastValid.
+// Resolution table
+//
+// validRounds | lastValid | result (lastValid)
+// -------------------------------------------------
+// 	  	 0     |     0     | firstValid + maxTxnLife
+// 		 0     |     N     | lastValid
+// 		 M     |     0     | first + validRounds - 1
+// 		 M     |     M     | error
+//
+func (c *Client) ComputeValidityRounds(firstValid, lastValid, validRounds uint64) (uint64, uint64, error) {
+	params, err := c.SuggestedParams()
+	if err != nil {
+		return 0, 0, err
+	}
+	cparams, ok := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
+	if !ok {
+		return 0, 0, fmt.Errorf("cannot construct transaction: unknown consensus version %s", params.ConsensusVersion)
+	}
+
+	return computeValidityRounds(firstValid, lastValid, validRounds, params.LastRound, cparams.MaxTxnLife)
+}
+
+func computeValidityRounds(firstValid, lastValid, validRounds, lastRound, maxTxnLife uint64) (uint64, uint64, error) {
+	if validRounds != 0 && lastValid != 0 {
+		return 0, 0, fmt.Errorf("cannot construct transaction: ambiguous input: lastValid = %d, validRounds = %d", lastValid, validRounds)
+	}
+
+	if firstValid == 0 {
+		firstValid = lastRound + 1
+	}
+
+	if validRounds != 0 {
+		// MaxTxnLife is the maximum difference between LastValid and FirstValid
+		// so that validRounds = maxTxnLife+1 gives lastValid = firstValid + validRounds - 1 = firstValid + maxTxnLife
+		if validRounds > maxTxnLife+1 {
+			return 0, 0, fmt.Errorf("cannot construct transaction: txn validity period %d is greater than protocol max txn lifetime %d", validRounds-1, maxTxnLife)
+		}
+		lastValid = firstValid + validRounds - 1
+	} else if lastValid == 0 {
+		lastValid = firstValid + maxTxnLife
+	}
+
+	if firstValid > lastValid {
+		return 0, 0, fmt.Errorf("cannot construct transaction: txn would first be valid on round %d which is after last valid round %d", firstValid, lastValid)
+	} else if lastValid-firstValid > maxTxnLife {
+		return 0, 0, fmt.Errorf("cannot construct transaction: txn validity period ( %d to %d ) is greater than protocol max txn lifetime %d", firstValid, lastValid, maxTxnLife)
+	}
+
+	return firstValid, lastValid, nil
+}
+
 // ConstructPayment builds a payment transaction to be signed
 // If the fee is 0, the function will use the suggested one form the network
 // if the lastValid is 0, firstValid + maxTxnLifetime will be used

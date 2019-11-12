@@ -337,7 +337,7 @@ func (c *Client) MakeUnsignedBecomeNonparticipatingTx(address string, round, txV
 }
 
 // FillUnsignedTxTemplate fills in header fields in a partially-filled-in transaction.
-func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, numValidRounds, fee uint64, tx transactions.Transaction) (transactions.Transaction, error) {
+func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, lastValid, fee uint64, tx transactions.Transaction) (transactions.Transaction, error) {
 	// Parse the address
 	parsedAddr, err := basics.UnmarshalChecksumAddress(sender)
 	if err != nil {
@@ -354,23 +354,21 @@ func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, numValidRound
 		return transactions.Transaction{}, errors.New("unknown consensus version")
 	}
 
-	// Determine the last round this tx will be valid
 	if firstValid == 0 {
 		firstValid = params.LastRound + 1
 	}
 
-	if numValidRounds == 0 {
-		numValidRounds = cparams.MaxTxnLife
+	// Determine the last round this tx will be valid
+	if lastValid == 0 {
+		lastValid = firstValid + cparams.MaxTxnLife - 1
 	}
 
-	parsedFirstValid := basics.Round(firstValid)
-	parsedLastValid := basics.Round(firstValid + numValidRounds)
 	parsedFee := basics.MicroAlgos{Raw: fee}
 
 	tx.Header.Sender = parsedAddr
 	tx.Header.Fee = parsedFee
-	tx.Header.FirstValid = parsedFirstValid
-	tx.Header.LastValid = parsedLastValid
+	tx.Header.FirstValid = basics.Round(firstValid)
+	tx.Header.LastValid = basics.Round(lastValid)
 
 	if cparams.SupportGenesisHash {
 		var genHash crypto.Digest
