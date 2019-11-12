@@ -23,16 +23,27 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 type roundTxMembers struct {
-	txids    map[transactions.Txid]struct{}
+	txids    map[transactions.Txid]basics.Round
 	txleases map[txlease]basics.Round // map of transaction lease to when it expires
 	proto    config.ConsensusParams
+	txidsLastRound    map[transactions.Txid]bool // a map of transactions that have their last round at this round.
 }
 
 type txTail struct {
-	recent map[basics.Round]roundTxMembers
+	recent map[basics.Round]*roundTxMembers
+}
+
+func makeRoundTxMembers(consensus config.ConsensusParams) *roundTxMembers {
+	return &roundTxMembers{
+		txids:    make(map[transactions.Txid]basics.Round),
+		txleases: make(map[txlease]basics.Round),
+		proto:    consensus,
+		txidsLastRound: make(map[transactions.Txid]bool),
+	}
 }
 
 func (t *txTail) loadFromDisk(l ledgerForTracker) error {
@@ -49,7 +60,7 @@ func (t *txTail) loadFromDisk(l ledgerForTracker) error {
 	// Thus we load the txids from blocks R+1-maxTxnLife to R, inclusive
 	old := (latest + 1).SubSaturate(basics.Round(proto.MaxTxnLife))
 
-	t.recent = make(map[basics.Round]roundTxMembers)
+	t.recent = make(map[basics.Round]*roundTxMembers)
 	for ; old <= latest; old++ {
 		blk, err := l.Block(old)
 		if err != nil {
@@ -61,15 +72,18 @@ func (t *txTail) loadFromDisk(l ledgerForTracker) error {
 			return err
 		}
 
-		t.recent[old] = roundTxMembers{
-			txids:    make(map[transactions.Txid]struct{}),
-			txleases: make(map[txlease]basics.Round),
-			proto:    config.Consensus[blk.CurrentProtocol],
+		if t.recent[old] == nil {
+			t.recent[old] = makeRoundTxMembers( config.Consensus[blk.CurrentProtocol])
 		}
+
 		for _, txad := range payset {
 			tx := txad.SignedTxn
-			t.recent[old].txids[tx.ID()] = struct{}{}
+			t.recent[old].txids[tx.ID()] = tx.Txn.LastValid
 			t.recent[old].txleases[txlease{sender: tx.Txn.Sender, lease: tx.Txn.Lease}] = tx.Txn.LastValid
+			if t.recent[tx.Txn.LastValid] == nil {
+				t.recent[tx.Txn.LastValid] = makeRoundTxMembers( config.Consensus[blk.CurrentProtocol])
+				t.recent[tx.Txn.LastValid].txidsLastRound[tx.ID()] = true
+			}
 		}
 	}
 
@@ -82,48 +96,79 @@ func (t *txTail) close() {
 func (t *txTail) newBlock(blk bookkeeping.Block, delta StateDelta) {
 	rnd := blk.Round()
 
-	if t.recent[rnd].txids != nil {
+	if t.recent[rnd] == nil || t.recent[rnd].txids != nil {
 		// Repeat, ignore
 		return
 	}
 
-	t.recent[rnd] = roundTxMembers{
-		txids:    delta.Txids,
-		txleases: delta.txleases,
-		proto:    config.Consensus[blk.CurrentProtocol],
+	if t.recent[rnd] == nil {
+		t.recent[rnd] = makeRoundTxMembers(config.Consensus[blk.CurrentProtocol])
+	}
+	t.recent[rnd].txids = delta.Txids
+	t.recent[rnd].txleases = delta.txleases
+
+	for txid, lastValid := range delta.Txids {
+		if t.recent[lastValid] == nil {
+			t.recent[lastValid] = makeRoundTxMembers(config.Consensus[blk.CurrentProtocol])
+		}
+		t.recent[lastValid].txidsLastRound[txid] = true
 	}
 }
 
 func (t *txTail) committedUpTo(rnd basics.Round) basics.Round {
-	maxlife := basics.Round(t.recent[rnd].proto.MaxTxnLife)
-	for r := range t.recent {
-		if r+maxlife < rnd {
-			delete(t.recent, r)
+	recent := t.recent[rnd]
+	var maxlife basics.Round
+	if recent == nil {
+		maxlife = basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife)
+	} else {
+		maxlife = basics.Round(recent.proto.MaxTxnLife)
+	}
+	for r, rndTxs := range t.recent {
+		if r+maxlife >= rnd {
+			continue
 		}
+		for txid, lastValid := range rndTxs.txids {
+			if t.recent[lastValid] != nil {
+				delete(t.recent[lastValid].txidsLastRound, txid)
+			}
+		}
+		delete(t.recent, r)
 	}
 
 	return (rnd + 1).SubSaturate(maxlife)
 }
 
 func (t *txTail) isDup(proto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl txlease) (bool, error) {
-	for rnd := firstValid; rnd <= lastValid; rnd++ {
-		rndtxs := t.recent[rnd].txids
-		if rndtxs == nil {
-			return true, fmt.Errorf("txTail: tried to check for dup in missing round %d", rnd)
-		}
+	if proto.SupportTransactionLeases && (txl.lease != [32]byte{}) {
+		for rnd := firstValid; rnd <= lastValid; rnd++ {
+			recent := t.recent[rnd]
+			if recent == nil {
+				continue
+			}
+			rndtxs := t.recent[rnd].txids
+			if rndtxs == nil {
+				return true, fmt.Errorf("txTail: tried to check for dup in missing round %d", rnd)
+			}
 
-		_, present := rndtxs[txid]
-		if present {
-			return true, nil
-		}
+			_, present := rndtxs[txid]
+			if present {
+				return true, nil
+			}
 
-		if proto.SupportTransactionLeases && (txl.lease != [32]byte{}) {
 			expires, ok := t.recent[rnd].txleases[txl]
 			if ok && current <= expires {
 				return true, nil
 			}
 		}
-
+	} else {
+		// check to see if the lastValid for the transaction contains the given txid.
+		recent := t.recent[lastValid]
+		if recent == nil {
+			return false, nil
+		}
+		if exists := recent.txidsLastRound[txid]; exists {
+			return true, nil
+		}
 	}
 
 	return false, nil

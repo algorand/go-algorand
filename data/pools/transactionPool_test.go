@@ -505,6 +505,9 @@ func TestRememberForget(t *testing.T) {
 	cfg.TxPoolSize = testPoolSize
 	cfg.EnableAssembleStats = false
 	transactionPool := MakeTransactionPool(mockLedger, cfg)
+	stateDelta := ledger.StateDelta{
+		Txids: make(map[transactions.Txid]basics.Round),
+	}
 
 	eval := newBlockEvaluator(t, mockLedger)
 
@@ -532,6 +535,7 @@ func TestRememberForget(t *testing.T) {
 				transactionPool.RememberOne(signedTx)
 				err := eval.Transaction(signedTx, transactions.ApplyData{})
 				require.NoError(t, err)
+				stateDelta.Txids[tx.ID()] = tx.LastValid
 			}
 		}
 	}
@@ -545,7 +549,7 @@ func TestRememberForget(t *testing.T) {
 
 	err = mockLedger.AddValidatedBlock(*blk, agreement.Certificate{})
 	require.NoError(t, err)
-	transactionPool.OnNewBlock(blk.Block(), ledger.StateDelta{})
+	transactionPool.OnNewBlock(blk.Block(), stateDelta)
 
 	pending = transactionPool.Pending()
 	require.Len(t, pending, 0)

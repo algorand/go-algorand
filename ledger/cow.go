@@ -53,8 +53,8 @@ type StateDelta struct {
 	// modified accounts
 	accts map[basics.Address]accountDelta
 
-	// new Txids for the txtail and TxnCounter
-	Txids map[transactions.Txid]struct{}
+	// new Txids for the txtail and TxnCounter, with their respective expiration
+	Txids map[transactions.Txid]basics.Round
 
 	// new txleases for the txtail mapped to expiration
 	txleases map[txlease]basics.Round
@@ -73,7 +73,7 @@ func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader) *roundCowS
 		proto:        config.Consensus[hdr.CurrentProtocol],
 		mods: StateDelta{
 			accts:    make(map[basics.Address]accountDelta),
-			Txids:    make(map[transactions.Txid]struct{}),
+			Txids:    make(map[transactions.Txid]basics.Round),
 			txleases: make(map[txlease]basics.Round),
 			assets:   make(map[basics.AssetIndex]modifiedAsset),
 			hdr:      &hdr,
@@ -141,7 +141,7 @@ func (cb *roundCowState) put(addr basics.Address, old basics.AccountData, new ba
 }
 
 func (cb *roundCowState) addTx(txn transactions.Transaction) {
-	cb.mods.Txids[txn.ID()] = struct{}{}
+	cb.mods.Txids[txn.ID()] = txn.LastValid
 	cb.mods.txleases[txlease{sender: txn.Sender, lease: txn.Lease}] = txn.LastValid
 }
 
@@ -152,7 +152,7 @@ func (cb *roundCowState) child() *roundCowState {
 		proto:        cb.proto,
 		mods: StateDelta{
 			accts:    make(map[basics.Address]accountDelta),
-			Txids:    make(map[transactions.Txid]struct{}),
+			Txids:    make(map[transactions.Txid]basics.Round),
 			txleases: make(map[txlease]basics.Round),
 			assets:   make(map[basics.AssetIndex]modifiedAsset),
 			hdr:      cb.mods.hdr,
@@ -173,8 +173,8 @@ func (cb *roundCowState) commitToParent() {
 		}
 	}
 
-	for txid := range cb.mods.Txids {
-		cb.commitParent.mods.Txids[txid] = struct{}{}
+	for txid, lastValid := range cb.mods.Txids {
+		cb.commitParent.mods.Txids[txid] = lastValid
 	}
 	for txl, expires := range cb.mods.txleases {
 		cb.commitParent.mods.txleases[txl] = expires
