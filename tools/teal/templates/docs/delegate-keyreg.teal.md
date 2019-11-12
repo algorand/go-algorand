@@ -2,9 +2,9 @@
 
 ## Functionality
 
-For accounts in cold storage that still want to participate in the Algorand protocol, it is undesirable to thaw the spending key whenever new participation keys need to be registered. This contract allows you to delegate a key whose sole permission is to sign `KeyRegistration` transactions for its associated account.
+For accounts in cold storage that still want to participate in the Algorand protocol, it is undesirable to thaw the spending key whenever new participation keys need to be registered. This contract allows you to delegate a key whose sole permission is to sign `KeyReg` transactions for its associated account.
 
-This contract is intended to be used as a "delegated" script, *not* as a contract-only account. That is to say, a spending should sign this contract.
+This contract is intended to be used as a "delegated" script, *not* as a contract-only account. A spending key should sign this contract.
 
 The contract is designed approve transactions that meet the following criteria:
   1. The transaction is a `KeyReg` transaction
