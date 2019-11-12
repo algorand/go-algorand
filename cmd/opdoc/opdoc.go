@@ -51,24 +51,25 @@ func typeEnumTableMarkdown(out io.Writer) {
 	out.Write([]byte("\n"))
 }
 
-func fieldTableMarkdown(out io.Writer, names []string, types []logic.StackType) {
-	fmt.Fprintf(out, "| Index | Name | Type |\n")
-	fmt.Fprintf(out, "| --- | --- | --- |\n")
+func fieldTableMarkdown(out io.Writer, names []string, types []logic.StackType, extra map[string]string) {
+	fmt.Fprintf(out, "| Index | Name | Type | Notes |\n")
+	fmt.Fprintf(out, "| --- | --- | --- | --- |\n")
 	for i, name := range names {
 		gfType := types[i]
-		fmt.Fprintf(out, "| %d | %s | %s |\n", i, markdownTableEscape(name), markdownTableEscape(gfType.String()))
+		estr := extra[name]
+		fmt.Fprintf(out, "| %d | %s | %s | %s |\n", i, markdownTableEscape(name), markdownTableEscape(gfType.String()), estr)
 	}
 	out.Write([]byte("\n"))
 }
 
 func transactionFieldsMarkdown(out io.Writer) {
 	fmt.Fprintf(out, "\n`txn` Fields:\n\n")
-	fieldTableMarkdown(out, logic.TxnFieldNames, logic.TxnFieldTypes)
+	fieldTableMarkdown(out, logic.TxnFieldNames, logic.TxnFieldTypes, logic.TxnFieldDocs)
 }
 
 func globalFieldsMarkdown(out io.Writer) {
 	fmt.Fprintf(out, "\n`global` Fields:\n\n")
-	fieldTableMarkdown(out, logic.GlobalFieldNames, logic.GlobalFieldTypes)
+	fieldTableMarkdown(out, logic.GlobalFieldNames, logic.GlobalFieldTypes, logic.GlobalFieldDocs)
 }
 
 func opToMarkdown(out io.Writer, op *logic.OpSpec) (err error) {
@@ -231,11 +232,11 @@ func main() {
 		}
 	}
 	txnfields, _ := os.Create("txn_fields.md")
-	fieldTableMarkdown(txnfields, logic.TxnFieldNames, logic.TxnFieldTypes)
+	fieldTableMarkdown(txnfields, logic.TxnFieldNames, logic.TxnFieldTypes, logic.TxnFieldDocs)
 	txnfields.Close()
 
 	globalfields, _ := os.Create("global_fields.md")
-	fieldTableMarkdown(globalfields, logic.GlobalFieldNames, logic.GlobalFieldTypes)
+	fieldTableMarkdown(globalfields, logic.GlobalFieldNames, logic.GlobalFieldTypes, logic.GlobalFieldDocs)
 	globalfields.Close()
 
 	langspecjs, _ := os.Create("langspec.json")
