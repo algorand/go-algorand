@@ -363,7 +363,7 @@ func (l *Ledger) Committed(currentProto config.ConsensusParams, txn transactions
 	defer l.trackerMu.RUnlock()
 	// do not check for whether lease would excluded this
 	txl := txlease{sender: txn.Txn.Sender}
-	return l.txTail.isDup(currentProto, l.Latest()+1, txn.Txn.First(), l.Latest(), txn.ID(), txl)
+	return l.txTail.isDup(currentProto, l.Latest()+1, txn.Txn.First(), txn.Txn.Last(), txn.ID(), txl)
 }
 
 func (l *Ledger) blockAux(rnd basics.Round) (bookkeeping.Block, evalAux, error) {
