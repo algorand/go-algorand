@@ -42,7 +42,7 @@ func (tt *timeTracker) loadFromDisk(l ledgerForTracker) error {
 func (tt *timeTracker) close() {
 }
 
-func (tt *timeTracker) newBlock(blk bookkeeping.Block, delta stateDelta) {
+func (tt *timeTracker) newBlock(blk bookkeeping.Block, delta StateDelta) {
 	rnd := blk.Round()
 	tt.timestamps[rnd] = delta.hdr.TimeStamp
 }
