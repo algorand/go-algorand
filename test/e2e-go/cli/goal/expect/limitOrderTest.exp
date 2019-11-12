@@ -103,7 +103,7 @@ if { [catch {
 
     # -------------------------- generate teal form template  ----------------------------------
 
-    # swtich to teal template folder
+    # switch to teal template folder
     set WORK_DIR [exec pwd]
     puts "Current Dir: $WORK_DIR"
     set TEAL_DIR "$TEST_DATA_DIR/../../tools/teal"
