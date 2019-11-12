@@ -109,6 +109,7 @@ func TestGroupTransactionsDifferentSizes(t *testing.T) {
 	a.NoError(err)
 	account0 := accountList[0].Address
 	goodGroupSizes := []int{1, 2, 3, 16}
+	badGroupSize := 17
 
 	for _, gs := range goodGroupSizes {
 		wh, err := client.GetUnencryptedWalletHandle()
@@ -158,5 +159,46 @@ func TestGroupTransactionsDifferentSizes(t *testing.T) {
 			bal, _ := fixture.GetBalanceAndRound(acct)
 			a.Equal(bal, uint64((i+1)*1000000))
 		}
+	}
+
+	// Now test a group that's too large
+	{
+		wh, err := client.GetUnencryptedWalletHandle()
+		a.NoError(err)
+
+		// Generate gs accounts
+		var accts []string
+		for i := 0; i < badGroupSize; i++ {
+			acct, err := client.GenerateAddress(wh)
+			a.NoError(err)
+			accts = append(accts, acct)
+		}
+
+		// construct gx txns sending money from account0 to each account
+		var txns []transactions.Transaction
+		for i, acct := range accts {
+			txn, err := client.ConstructPayment(account0, acct, 0, uint64((i+1)*1000000), nil, "", [32]byte{}, 0, 0)
+			a.NoError(err)
+			txns = append(txns, txn)
+		}
+
+		// compute gid
+		gid, err := client.GroupID(txns)
+		a.NoError(err)
+
+		// fill in gid and sign and keep track of txids
+		var stxns []transactions.SignedTxn
+		txids := make(map[string]string)
+		for _, txn := range txns {
+			txn.Group = gid
+			stxn, err := client.SignTransactionWithWallet(wh, nil, txn)
+			a.NoError(err)
+			stxns = append(stxns, stxn)
+			txids[txn.ID().String()] = account0
+		}
+
+		// broadcasting group should now fail
+		err = client.BroadcastTransactionGroup(stxns)
+		a.Error(err)
 	}
 }
