@@ -1,0 +1,141 @@
+// Limit-order
+//
+// Part A: Trade Algos for asset
+//
+// Works on a contract account.
+// Fund the contract with some number of Algos to limit the maximum number of
+// Algos you're willing to trade for some other asset.
+//
+// Works on two cases:
+// * trading Algos for some other asset
+// * closing out Algos back to the originator after a timeout
+//
+// trade case, a 2 transaction group:
+// gtxn[0] (this txn) Algos from Me to Other
+// gtxn[1] asset from Other to Me
+//
+// We want to get _at least_ some amout of the other asset per our Algos
+// gtxn[1].AssetAmount / gtxn[0].Amount >= N / D
+// ===
+// gtxn[1].AssetAmount * D >= gtxn[0].Amount * N
+//
+// close-out case:
+// txn alone, close out value after timeout
+//
+// Parameters:
+//  - TMPL_ASSET: ID of the transferred asset
+//  - TMPL_SWAPN: exchange rate (N asset per D Algos, or better)
+//  - TMPL_SWAPD: exchange rate (N asset per D Algos, or better)
+//  - TMPL_TIMEOUT: the round at which the account expires
+//  - TMPL_OWN: the address to refund funds to on timeout
+//  - TMPL_FEE: maximum fee used by the limit order transaction
+//  - TMPL_MINTRD: the minimum amount (of Algos) to be traded away
+
+// basic prologue checks
+txn GroupIndex
+int 0
+==
+
+txn TypeEnum
+int 1 // Payment (either Algos-out in trade or Algos redeemed at timeout)
+==
+&&
+
+txn Fee
+int TMPL_FEE
+<=
+&& // is gtxn[0] && is Payment && ok Fee
+// now, with that hanging out on the stack for a while ... (see label done:)
+
+global GroupSize
+int 1
+==
+bnz closeOut
+
+// swap case
+
+global GroupSize
+int 2
+==
+
+txn Amount
+int TMPL_MINTRD
+>
+&&
+
+gtxn 1 TypeEnum
+int 4 // AssetTransfer
+==
+&&
+
+gtxn 1 XferAsset
+int TMPL_ASSET
+==
+&&
+
+gtxn 1 AssetReceiver
+addr TMPL_OWN
+==
+&&
+
+gtxn 1 AssetSender
+global ZeroAddress
+==
+&& // (we have a 2 txn swap group) && (trade is above minimum Algo value) && other txn is AssetTransfer && other txn is desired asset && other txn sends asset to Me && other txn is not a clawback operation
+
+// The above test stays on the stack and remains to be collected at done:
+// Below we establish that the trade ratio is good enough, but that leaves the stack unchanged.
+
+// gtxn[1].AssetAmount * D >= gtxn[0].Amount * N
+gtxn 1 AssetAmount
+int TMPL_SWAPD
+mulw // AssetAmount * D => (high 64 bits, low 64 bits)
+store 2 // move aside low 64 bits
+store 1 // move aside high 64 bits
+
+txn Amount
+int TMPL_SWAPN
+mulw
+store 4 // move aside low 64 bits
+store 3 // move aside high 64 bits
+
+// compare high bits to high bits
+load 1
+load 3
+>
+bnz done
+
+load 1
+load 3
+==
+load 2
+load 4
+>=
+&& // high bits are equal and low bits are ok
+bnz done
+err // ratio is not good enough
+
+closeOut:
+
+txn CloseRemainderTo
+addr TMPL_OWN
+==
+
+txn FirstValid
+int TMPL_TIMEOUT
+>
+&&
+
+txn Receiver
+global ZeroAddress
+==
+&&
+
+txn Amount
+int 0
+==
+&& // CloseRemainderTo me && (txn.FirstValid > timeout) && no Receiver and 0 Amount
+
+
+done:
+&& // conditional clauses && prologue checks
