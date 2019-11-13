@@ -85,7 +85,7 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local) *TransactionPo
 		lsigCache:       makeLsigEvalCache(cfg.TxPoolSize),
 	}
 	pool.cond.L = &pool.mu
-	pool.recomputeBlockEvaluator(make(map[transactions.Txid]struct{}))
+	pool.recomputeBlockEvaluator(make(map[transactions.Txid]basics.Round))
 	return &pool
 }
 
@@ -479,7 +479,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluator(txgroup []transactions.S
 // recomputeBlockEvaluator constructs a new BlockEvaluator and feeds all
 // in-pool transactions to it (removing any transactions that are rejected
 // by the BlockEvaluator).
-func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transactions.Txid]struct{}) (stats telemetryspec.ProcessBlockMetrics) {
+func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transactions.Txid]basics.Round) (stats telemetryspec.ProcessBlockMetrics) {
 	pool.pendingBlockEvaluator = nil
 
 	latest := pool.ledger.Latest()
