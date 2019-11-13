@@ -63,6 +63,11 @@ int TMPL_MINTRD
 >
 &&
 
+txn CloseRemainderTo
+global ZeroAddress
+==
+&&
+
 gtxn 1 TypeEnum
 int 4 // AssetTransfer
 ==
@@ -81,7 +86,7 @@ addr TMPL_OWN
 gtxn 1 AssetSender
 global ZeroAddress
 ==
-&& // (we have a 2 txn swap group) && (trade is above minimum Algo value) && other txn is AssetTransfer && other txn is desired asset && other txn sends asset to Me && other txn is not a clawback operation
+&& // (we have a 2 txn swap group) && (trade is above minimum Algo value) && (no CloseRemainderTo) && other txn is AssetTransfer && other txn is desired asset && other txn sends asset to Me && other txn is not a clawback operation
 
 // The above test stays on the stack and remains to be collected at done:
 // Below we establish that the trade ratio is good enough, but that leaves the stack unchanged.
