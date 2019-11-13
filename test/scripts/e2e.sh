@@ -67,6 +67,9 @@ cd "${SCRIPT_PATH}"
 # TODO: use ./timeout script across these three scripts when it gets committed from another branch
 ./teal-split-test.sh
 
+# TODO: use ./timeout script across these three scripts when it gets committed from another branch
+./periodic-teal-test.sh
+
 # Export our root temp folder as 'TESTDIR' for tests to use as their root test folder
 # This allows us to clean up everything with our rm -rf trap.
 export TESTDIR=${TEMPDIR}
