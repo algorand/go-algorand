@@ -5,8 +5,8 @@
 // split, or single transaction, for closing the account.
 //
 // Withdrawals from this account are allowed as a group transaction which
-// sends TMPL_RCV1 exactly TMPL_RATN/TMPL_RATD times the sum of amounts
-// across both transactions.  At least TMPL_MINPAY must be sent to TMPL_RCV1.
+// sends TMPL_RCV1 and TMPL_RCV2 amounts with exactly the ratio of
+// TMPL_RATN/TMPL_RATD.  At least TMPL_MINPAY must be sent to TMPL_RCV1.
 // (CloseRemainderTo must be zero.)
 //
 // After TMPL_TIMEOUT passes, all funds can be refunded to TMPL_OWN.
@@ -64,14 +64,16 @@ gtxn 1 Receiver
 addr TMPL_RCV2
 ==
 &&
+// 0.Amount / 1.Amount == N / D
+// ===
+// 0.Amount * D == 1.Amount * N
+// TODO: redo with mulw
 gtxn 0 Amount
-gtxn 0 Amount
+int TMPL_RATD
+*
 gtxn 1 Amount
-+
 int TMPL_RATN
 *
-int TMPL_RATD
-/
 ==
 &&
 gtxn 0 Amount
