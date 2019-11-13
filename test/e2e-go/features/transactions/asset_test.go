@@ -392,8 +392,6 @@ func TestAssetSend(t *testing.T) {
 	a.NoError(err)
 	_, err = client.SendPaymentFromUnencryptedWallet(account0, clawback, 0, 10000000000, nil)
 	a.NoError(err)
-	_, err = client.SendPaymentFromUnencryptedWallet(account0, extra, 0, 10000000000, nil)
-	a.NoError(err)
 
 	// Create two assets: one with default-freeze, and one without default-freeze
 	txids := make(map[string]string)
@@ -426,10 +424,41 @@ func TestAssetSend(t *testing.T) {
 		}
 	}
 
+	// An account with no algos should not be able to accept assets
+	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 0, extra, "", "")
+	txid, err = helperFillSignBroadcast(client, wh, extra, tx, err)
+	a.Error(err)
+
+	// Fund the account: extra
+	tx, err = client.SendPaymentFromUnencryptedWallet(account0, extra, 0, 10000000000, nil)
+	a.NoError(err)
+	_, curRound = fixture.GetBalanceAndRound(account0)
+	fixture.WaitForConfirmedTxn(curRound+20, account0, tx.ID().String())
+
 	// Sending assets to account that hasn't opted in should fail, but
 	// after opting in, should succeed for non-frozen asset.
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 1, extra, "", "")
 	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
+	a.Error(err)
+
+	// Clawback assets to an account that hasn't opted in should fail
+	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 1, extra, "", account0)
+	_, err = helperFillSignBroadcast(client, wh, clawback, tx, err)
+	a.Error(err)
+
+	// opting in should be signed by the opting in account not sender
+	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 0, extra, "", "")
+	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
+	a.NoError(err)
+
+	// Account hasn't opted in yet. sending will fail
+	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 1, extra, "", "")
+	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
+	a.Error(err)
+
+	// Account hasn't opted in yet. clawback to will fail
+	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 1, extra, "", account0)
+	_, err = helperFillSignBroadcast(client, wh, clawback, tx, err)
 	a.Error(err)
 
 	txids = make(map[string]string)
@@ -467,6 +496,11 @@ func TestAssetSend(t *testing.T) {
 	// Should not be able to send more than is available
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 11, extra, "", "")
 	_, err = helperFillSignBroadcast(client, wh, extra, tx, err)
+	a.Error(err)
+
+	// Should not be able to clawback more than is available
+	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 11, account0, "", extra)
+	_, err = helperFillSignBroadcast(client, wh, clawback, tx, err)
 	a.Error(err)
 
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 10, extra, "", "")
