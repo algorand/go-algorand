@@ -83,7 +83,7 @@ var defaultLocalV4 = Local{
 	SuggestedFeeBlockHistory:              3,
 	SuggestedFeeSlidingWindowSize:         50,
 	TxPoolExponentialIncreaseFactor:       2,
-	TxPoolSize:                            50000,
+	TxPoolSize:                            15000,
 	TxSyncIntervalSeconds:                 60,
 	TxSyncTimeoutSeconds:                  30,
 	TxSyncServeResponseSize:               1000000,
@@ -282,6 +282,9 @@ func migrate(cfg Local) (newCfg Local, err error) {
 		}
 		if newCfg.AnnounceParticipationKey == defaultLocalV3.AnnounceParticipationKey {
 			newCfg.AnnounceParticipationKey = defaultLocalV4.AnnounceParticipationKey
+		}
+		if newCfg.TxPoolSize == defaultLocalV3.TxPoolSize {
+			newCfg.TxPoolSize = defaultLocalV4.TxPoolSize
 		}
 		if newCfg.PriorityPeers == nil {
 			newCfg.PriorityPeers = map[string]bool{}

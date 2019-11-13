@@ -41,7 +41,7 @@
     "SuggestedFeeBlockHistory": 3,
     "SuggestedFeeSlidingWindowSize": 50,
     "TxPoolExponentialIncreaseFactor": 2,
-    "TxPoolSize": 50000,
+    "TxPoolSize": 15000,
     "TxSyncIntervalSeconds": 60,
     "TxSyncServeResponseSize": 1000000,
     "TxSyncTimeoutSeconds": 30
