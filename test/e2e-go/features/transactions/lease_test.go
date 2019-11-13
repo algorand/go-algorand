@@ -194,12 +194,15 @@ func TestOverlappingLeases(t *testing.T) {
 	// transaction isn't valid until the first transaction's lease
 	// has expired.
 
+	const firstTxLeaseLife = 20
+	const secondTxLeaseLife = 100
+
 	// construct transactions for sending money to account1 and account2
 	// from same sender with identical lease, but different, overlapping ranges
-	tx1, err := client.ConstructPayment(account0, account1, 0, 1000000, nil, "", lease, basics.Round(leaseStart), basics.Round(leaseStart+10))
+	tx1, err := client.ConstructPayment(account0, account1, 0, 1000000, nil, "", lease, basics.Round(leaseStart), basics.Round(leaseStart+firstTxLeaseLife))
 	a.NoError(err)
 
-	tx2, err := client.ConstructPayment(account0, account2, 0, 2000000, nil, "", lease, basics.Round(leaseStart), basics.Round(leaseStart+100))
+	tx2, err := client.ConstructPayment(account0, account2, 0, 2000000, nil, "", lease, basics.Round(leaseStart), basics.Round(leaseStart+secondTxLeaseLife))
 	a.NoError(err)
 
 	stx1, err := client.SignTransactionWithWallet(wh, nil, tx1)
@@ -229,23 +232,15 @@ func TestOverlappingLeases(t *testing.T) {
 
 	// wait for a round after the first txn was confirmed, but before its
 	// lease has expired
-	fixture.WaitForRoundWithTimeout(leaseStart + 7)
+	fixture.WaitForRoundWithTimeout(leaseStart + firstTxLeaseLife/2)
 
 	// submitting the second transaction should still fail
 	_, err = client.BroadcastTransaction(stx2)
 	a.Error(err)
 
-	// wait for us to be building leaseStart + 10, the last round where
-	// the first txn's lease is still valid
-	fixture.WaitForRoundWithTimeout(leaseStart + 9)
-
-	// submitting the second transaction should still fail
-	_, err = client.BroadcastTransaction(stx2)
-	a.Error(err)
-
-	// wait for us to be building leaseStart + 11, where the first txn's
-	// lease should have expired
-	fixture.WaitForRoundWithTimeout(leaseStart + 10)
+	// wait for us to be building leaseStart + firstTxLeaseLife + 1, where
+	// the first txn's lease should have expired
+	fixture.WaitForRoundWithTimeout(leaseStart + firstTxLeaseLife)
 
 	// submitting the second transaction should succeed
 	_, err = client.BroadcastTransaction(stx2)
