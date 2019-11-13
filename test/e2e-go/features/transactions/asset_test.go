@@ -18,6 +18,7 @@ package transactions
 
 import (
 	"fmt"
+	"strings"
 	"path/filepath"
 	"testing"
 
@@ -125,6 +126,7 @@ func TestAssetConfig(t *testing.T) {
 	tx, err := client.MakeUnsignedAssetCreateTx(1, false, manager, reserve, freeze, clawback, fmt.Sprintf("toomany"), fmt.Sprintf("toomany"), assetURL, assetMetadataHash)
 	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
 	a.Error(err)
+	a.True(strings.Contains(err.Error(), "too many assets in account:"))
 
 	// Check that assets are visible
 	info, err = client.AccountInformation(account0)
@@ -237,6 +239,8 @@ func TestAssetConfig(t *testing.T) {
 	// Should not be able to close account before destroying assets
 	_, err = client.SendPaymentFromWallet(wh, nil, account0, "", 0, 0, nil, reserve, 0, 0)
 	a.Error(err)
+	a.True(strings.Contains(err.Error(), "cannot close:"))
+	a.True(strings.Contains(err.Error(), "outstanding assets"))
 
 	// Destroy assets
 	txids = make(map[string]string)
@@ -426,8 +430,14 @@ func TestAssetSend(t *testing.T) {
 
 	// An account with no algos should not be able to accept assets
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 0, extra, "", "")
+	txid, err = helperFillSignBroadcast(client, wh, account0, tx, err)
+	a.NoError(err)
+	
+	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 0, extra, "", "")
 	txid, err = helperFillSignBroadcast(client, wh, extra, tx, err)
 	a.Error(err)
+	a.True(strings.Contains(err.Error(), "overspend"))
+	a.True(strings.Contains(err.Error(), "tried to spend"))
 
 	// Fund the account: extra
 	tx, err = client.SendPaymentFromUnencryptedWallet(account0, extra, 0, 10000000000, nil)
@@ -440,11 +450,15 @@ func TestAssetSend(t *testing.T) {
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 1, extra, "", "")
 	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
 	a.Error(err)
+	a.True(strings.Contains(err.Error(), "asset"))
+	a.True(strings.Contains(err.Error(), "missing from"))
 
 	// Clawback assets to an account that hasn't opted in should fail
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 1, extra, "", account0)
 	_, err = helperFillSignBroadcast(client, wh, clawback, tx, err)
 	a.Error(err)
+	a.True(strings.Contains(err.Error(), "asset"))
+	a.True(strings.Contains(err.Error(), "missing from"))
 
 	// opting in should be signed by the opting in account not sender
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 0, extra, "", "")
@@ -455,11 +469,15 @@ func TestAssetSend(t *testing.T) {
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 1, extra, "", "")
 	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
 	a.Error(err)
+	a.True(strings.Contains(err.Error(), "asset"))
+	a.True(strings.Contains(err.Error(), "missing from"))	
 
 	// Account hasn't opted in yet. clawback to will fail
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 1, extra, "", account0)
 	_, err = helperFillSignBroadcast(client, wh, clawback, tx, err)
 	a.Error(err)
+	a.True(strings.Contains(err.Error(), "asset"))
+	a.True(strings.Contains(err.Error(), "missing from"))	
 
 	txids = make(map[string]string)
 	tx, err = client.MakeUnsignedAssetSendTx(frozenIdx, 0, extra, "", "")
@@ -475,6 +493,7 @@ func TestAssetSend(t *testing.T) {
 	tx, err = client.MakeUnsignedAssetSendTx(frozenIdx, 1, extra, "", "")
 	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
 	a.Error(err)
+	a.True(strings.Contains(err.Error(), "asset frozen in recipient"))
 
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 10, extra, "", "")
 	txid, err = helperFillSignBroadcast(client, wh, account0, tx, err)
@@ -497,11 +516,13 @@ func TestAssetSend(t *testing.T) {
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 11, extra, "", "")
 	_, err = helperFillSignBroadcast(client, wh, extra, tx, err)
 	a.Error(err)
+	a.True(strings.Contains(err.Error(), "underflow on subtracting 11 from sender amount"))
 
 	// Should not be able to clawback more than is available
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 11, account0, "", extra)
 	_, err = helperFillSignBroadcast(client, wh, clawback, tx, err)
 	a.Error(err)
+	a.True(strings.Contains(err.Error(), "underflow on subtracting 11 from sender amount"))
 
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 10, extra, "", "")
 	_, err = helperFillSignBroadcast(client, wh, extra, tx, err)
@@ -512,6 +533,7 @@ func TestAssetSend(t *testing.T) {
 	tx, err = client.MakeUnsignedAssetFreezeTx(nonFrozenIdx, extra, true)
 	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
 	a.Error(err)
+	a.True(strings.Contains(err.Error(), "freeze not allowed: sender"))
 
 	tx, err = client.MakeUnsignedAssetFreezeTx(nonFrozenIdx, extra, true)
 	_, err = helperFillSignBroadcast(client, wh, freeze, tx, err)
@@ -530,6 +552,7 @@ func TestAssetSend(t *testing.T) {
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 1, extra, "", "")
 	_, err = helperFillSignBroadcast(client, wh, extra, tx, err)
 	a.Error(err)
+	a.True(strings.Contains(err.Error(), "frozen in"))
 
 	// Clawback should be able to claim money out of both frozen and non-frozen accounts,
 	// and the wrong address should not be able to clawback.
@@ -542,6 +565,7 @@ func TestAssetSend(t *testing.T) {
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 5, account0, "", extra)
 	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
 	a.Error(err)
+	a.True(strings.Contains(err.Error(), "clawback not allowed: sender"))
 
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 5, account0, "", extra)
 	txid, err = helperFillSignBroadcast(client, wh, clawback, tx, err)
