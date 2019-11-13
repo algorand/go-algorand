@@ -360,10 +360,13 @@ func constructTxn(from, to string, fee, amt, assetID uint64, client libgoal.Clie
 		if !cfg.Quiet {
 			fmt.Fprintf(os.Stdout, "Sending %d asset %d: %s -> %s\n", amt, assetID, from, to)
 		}
+		
 	}
 	if err != nil {
 		return
 	}
+	// adjust transaction duration for 5 rounds. That would prevent it from getting stuck in the transaction pool for too long.
+	txn.LastValid = txn.FirstValid + 5
 	return
 }
 
