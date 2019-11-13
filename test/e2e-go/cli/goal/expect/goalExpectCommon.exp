@@ -278,7 +278,7 @@ proc ::AlgorandGoal::AccountTransfer { FROM_WALLET_NAME FROM_WALLET_PASSWORD FRO
         expect {
             timeout { close; ::AlgorandGoal::Abort "Timed out transfering funds"  }
             "Please enter the password for wallet '$FROM_WALLET_NAME':" { send "$FROM_WALLET_PASSWORD\r" }
-            -re {[A-Z0-9]{52}} {set TRANSACTION_ID $expect_out(0,string); close }
+            -re {transaction ID: [A-Z0-9]{52}} {set TRANSACTION_ID $expect_out(0,string); close }
         }
     } EXCEPTION ] } {
        ::AlgorandGoal::Abort "ERROR in AccountTransfer: $EXCEPTION"

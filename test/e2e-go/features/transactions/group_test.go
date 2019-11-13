@@ -95,3 +95,68 @@ func TestGroupTransactions(t *testing.T) {
 	a.Equal(bal1, uint64(1000000))
 	a.Equal(bal2, uint64(2000000))
 }
+
+func TestGroupTransactionsDifferentSizes(t *testing.T) {
+	t.Parallel()
+	a := require.New(t)
+
+	var fixture fixtures.RestClientFixture
+	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
+	defer fixture.Shutdown()
+
+	client := fixture.LibGoalClient
+	accountList, err := fixture.GetWalletsSortedByBalance()
+	a.NoError(err)
+	account0 := accountList[0].Address
+	goodGroupSizes := []int{1, 2, 3, 16}
+
+	for _, gs := range goodGroupSizes {
+		wh, err := client.GetUnencryptedWalletHandle()
+		a.NoError(err)
+
+		// Generate gs accounts
+		var accts []string
+		for i := 0; i < gs; i++ {
+			acct, err := client.GenerateAddress(wh)
+			a.NoError(err)
+			accts = append(accts, acct)
+		}
+
+		// construct gx txns sending money from account0 to each account
+		var txns []transactions.Transaction
+		for i, acct := range accts {
+			txn, err := client.ConstructPayment(account0, acct, 0, uint64((i+1)*1000000), nil, "", [32]byte{}, 0, 0)
+			a.NoError(err)
+			txns = append(txns, txn)
+		}
+
+		// compute gid
+		gid, err := client.GroupID(txns)
+		a.NoError(err)
+
+		// fill in gid and sign and keep track of txids
+		var stxns []transactions.SignedTxn
+		txids := make(map[string]string)
+		for _, txn := range txns {
+			txn.Group = gid
+			stxn, err := client.SignTransactionWithWallet(wh, nil, txn)
+			a.NoError(err)
+			stxns = append(stxns, stxn)
+			txids[txn.ID().String()] = account0
+		}
+
+		// broadcasting group should succeed
+		err = client.BroadcastTransactionGroup(stxns)
+		a.NoError(err)
+
+		// wait for the txids and check balances
+		_, curRound := fixture.GetBalanceAndRound(account0)
+		confirmed := fixture.WaitForAllTxnsToConfirm(curRound+5, txids)
+		a.True(confirmed, "txgroup")
+
+		for i, acct := range accts {
+			bal, _ := fixture.GetBalanceAndRound(acct)
+			a.Equal(bal, uint64((i+1)*1000000))
+		}
+	}
+}

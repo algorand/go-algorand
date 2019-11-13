@@ -315,6 +315,11 @@ type Transaction struct {
 	// required: false
 	ConfirmedRound uint64 `json:"round"`
 
+	// TransactionResults contains information about the side effects of a transaction
+	//
+	// required: false
+	TransactionResults *TransactionResults `json:"txresults,omitempty"`
+
 	// PoolError indicates the transaction was evicted from this node's transaction
 	// pool (if non-empty).  A non-empty PoolError does not guarantee that the
 	// transaction will never be committed; other nodes may not have evicted the
@@ -441,6 +446,15 @@ type KeyregTransactionType struct {
 	//
 	// required: false
 	VoteKeyDilution uint64 `json:"votekd"`
+}
+
+// TransactionResults contains information about the side effects of a transaction
+// swagger:model TransactionResults
+type TransactionResults struct {
+	// CreatedAssetIndex indicates the asset index of an asset created by this txn
+	//
+	// required: false
+	CreatedAssetIndex uint64 `json:"createdasset,omitempty"`
 }
 
 // AssetConfigTransactionType contains the additional fields for an asset config transaction
