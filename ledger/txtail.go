@@ -32,8 +32,13 @@ type roundTxMembers struct {
 }
 
 type txTail struct {
-	recent    map[basics.Round]roundTxMembers
+	recent map[basics.Round]roundTxMembers
+
 	lastValid map[basics.Round]map[transactions.Txid]struct{} // map tx.LastValid -> tx confirmed set
+
+	// duplicate detection queries with LastValid not before
+	// lowWaterMark are not guaranteed to succeed
+	lowWaterMark basics.Round // the last round known to be committed to disk
 }
 
 func (t *txTail) loadFromDisk(l ledgerForTracker) error {
@@ -44,17 +49,14 @@ func (t *txTail) loadFromDisk(l ledgerForTracker) error {
 	}
 	proto := config.Consensus[hdr.CurrentProtocol]
 
-	t.lastValid = make(map[basics.Round]map[transactions.Txid]struct{})
-	for i := uint64(0); i <= proto.MaxTxnLife+1; i++ {
-		lv := latest + basics.Round(i)
-		t.lastValid[lv] = make(map[transactions.Txid]struct{})
-	}
-
 	// If the latest round is R, then any transactions from blocks strictly older than
 	// R + 1 - proto.MaxTxnLife
 	// could not be valid in the next round (R+1), and so are irrelevant.
 	// Thus we load the txids from blocks R+1-maxTxnLife to R, inclusive
 	old := (latest + 1).SubSaturate(basics.Round(proto.MaxTxnLife))
+
+	t.lowWaterMark = latest
+	t.lastValid = make(map[basics.Round]map[transactions.Txid]struct{})
 
 	t.recent = make(map[basics.Round]roundTxMembers)
 	for ; old <= latest; old++ {
@@ -76,10 +78,8 @@ func (t *txTail) loadFromDisk(l ledgerForTracker) error {
 		for _, txad := range payset {
 			tx := txad.SignedTxn
 			t.recent[old].txids[tx.ID()] = tx.Txn.LastValid
-			if _, ok := t.lastValid[tx.Txn.LastValid]; ok {
-				t.lastValid[tx.Txn.LastValid][tx.ID()] = struct{}{}
-			}
 			t.recent[old].txleases[txlease{sender: tx.Txn.Sender, lease: tx.Txn.Lease}] = tx.Txn.LastValid
+			t.putLV(tx.Txn.LastValid, tx.ID())
 		}
 	}
 
@@ -103,12 +103,8 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta StateDelta) {
 		proto:    config.Consensus[blk.CurrentProtocol],
 	}
 
-	proto := config.Consensus[blk.CurrentProtocol]
-	if _, ok := t.lastValid[rnd+basics.Round(proto.MaxTxnLife)+1]; !ok {
-		t.lastValid[rnd+basics.Round(proto.MaxTxnLife)+1] = make(map[transactions.Txid]struct{})
-	}
 	for txid, lv := range delta.Txids {
-		t.lastValid[lv][txid] = struct{}{}
+		t.putLV(lv, txid)
 	}
 }
 
@@ -119,16 +115,18 @@ func (t *txTail) committedUpTo(rnd basics.Round) basics.Round {
 			delete(t.recent, r)
 		}
 	}
-	for lv := range t.lastValid {
-		if lv < rnd {
-			delete(t.lastValid, lv)
-		}
+	for ; t.lowWaterMark < rnd; t.lowWaterMark++ {
+		delete(t.lastValid, t.lowWaterMark)
 	}
 
 	return (rnd + 1).SubSaturate(maxlife)
 }
 
 func (t *txTail) isDup(proto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl txlease) (bool, error) {
+	if lastValid < t.lowWaterMark {
+		return true, fmt.Errorf("txTail: tried to check for dup in missing round %d", lastValid)
+	}
+
 	if proto.SupportTransactionLeases && (txl.lease != [32]byte{}) {
 		for rnd := firstValid; rnd <= lastValid; rnd++ {
 			expires, ok := t.recent[rnd].txleases[txl]
@@ -138,11 +136,7 @@ func (t *txTail) isDup(proto config.ConsensusParams, current basics.Round, first
 		}
 	}
 
-	set, ok := t.lastValid[lastValid]
-	if !ok {
-		return true, fmt.Errorf("txTail: tried to check for dup in missing round %d", lastValid)
-	}
-	_, confirmed := set[txid]
+	_, confirmed := t.lastValid[lastValid][txid]
 	return confirmed, nil
 }
 
@@ -153,4 +147,11 @@ func (t *txTail) getRoundTxIds(rnd basics.Round) (txMap map[transactions.Txid]bo
 		txMap[txid] = true
 	}
 	return
+}
+
+func (t *txTail) putLV(lastValid basics.Round, id transactions.Txid) {
+	if _, ok := t.lastValid[lastValid]; !ok {
+		t.lastValid[lastValid] = make(map[transactions.Txid]struct{})
+	}
+	t.lastValid[lastValid][id] = struct{}{}
 }
