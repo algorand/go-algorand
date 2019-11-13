@@ -247,6 +247,16 @@ func (ops *OpStream) Global(val uint64) error {
 }
 
 func assembleInt(ops *OpStream, args []string) error {
+	// check friendly TypeEnum constants
+	te, isTypeEnum := txnTypeConstToUint64[args[0]]
+	if isTypeEnum {
+		return ops.Uint(uint64(te))
+	}
+	// check raw transaction type strings
+	tt, isTypeStr := txnTypeIndexes[args[0]]
+	if isTypeStr {
+		return ops.Uint(uint64(tt))
+	}
 	val, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
 		return err
@@ -579,6 +589,9 @@ var TxnTypeNames = []string{
 // map TxnTypeName to its enum index, for `txn TypeEnum`
 var txnTypeIndexes map[string]int
 
+// map symbolic name to uint64 for assembleInt
+var txnTypeConstToUint64 map[string]uint64
+
 func assembleTxn(ops *OpStream, args []string) error {
 	if len(args) != 1 {
 		return errors.New("txn expects one argument")
@@ -730,6 +743,12 @@ func init() {
 	txnTypeIndexes = make(map[string]int, len(TxnTypeNames))
 	for i, tt := range TxnTypeNames {
 		txnTypeIndexes[tt] = i
+	}
+
+	txnTypeConstToUint64 = make(map[string]uint64, len(TxnTypeNames))
+	for tt, v := range txnTypeIndexes {
+		symbol := TypeNameDescription(tt)
+		txnTypeConstToUint64[symbol] = uint64(v)
 	}
 }
 

@@ -392,8 +392,6 @@ func TestAssetSend(t *testing.T) {
 	a.NoError(err)
 	_, err = client.SendPaymentFromUnencryptedWallet(account0, clawback, 0, 10000000000, nil)
 	a.NoError(err)
-	_, err = client.SendPaymentFromUnencryptedWallet(account0, extra, 0, 10000000000, nil)
-	a.NoError(err)
 
 	// Create two assets: one with default-freeze, and one without default-freeze
 	txids := make(map[string]string)
@@ -426,10 +424,41 @@ func TestAssetSend(t *testing.T) {
 		}
 	}
 
+	// An account with no algos should not be able to accept assets
+	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 0, extra, "", "")
+	txid, err = helperFillSignBroadcast(client, wh, extra, tx, err)
+	a.Error(err)
+
+	// Fund the account: extra
+	tx, err = client.SendPaymentFromUnencryptedWallet(account0, extra, 0, 10000000000, nil)
+	a.NoError(err)
+	_, curRound = fixture.GetBalanceAndRound(account0)
+	fixture.WaitForConfirmedTxn(curRound+20, account0, tx.ID().String())
+
 	// Sending assets to account that hasn't opted in should fail, but
 	// after opting in, should succeed for non-frozen asset.
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 1, extra, "", "")
 	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
+	a.Error(err)
+
+	// Clawback assets to an account that hasn't opted in should fail
+	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 1, extra, "", account0)
+	_, err = helperFillSignBroadcast(client, wh, clawback, tx, err)
+	a.Error(err)
+
+	// opting in should be signed by the opting in account not sender
+	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 0, extra, "", "")
+	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
+	a.NoError(err)
+
+	// Account hasn't opted in yet. sending will fail
+	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 1, extra, "", "")
+	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
+	a.Error(err)
+
+	// Account hasn't opted in yet. clawback to will fail
+	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 1, extra, "", account0)
+	_, err = helperFillSignBroadcast(client, wh, clawback, tx, err)
 	a.Error(err)
 
 	txids = make(map[string]string)
@@ -467,6 +496,11 @@ func TestAssetSend(t *testing.T) {
 	// Should not be able to send more than is available
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 11, extra, "", "")
 	_, err = helperFillSignBroadcast(client, wh, extra, tx, err)
+	a.Error(err)
+
+	// Should not be able to clawback more than is available
+	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 11, account0, "", extra)
+	_, err = helperFillSignBroadcast(client, wh, clawback, tx, err)
 	a.Error(err)
 
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 10, extra, "", "")
@@ -545,5 +579,129 @@ func TestAssetSend(t *testing.T) {
 	a.NoError(err)
 
 	_, err = client.SendPaymentFromWallet(wh, nil, extra, "", 0, 0, nil, account0, 0, 0)
+	a.NoError(err)
+}
+
+func TestAssetCreateWaitRestartDelete(t *testing.T) {
+	t.Parallel()
+	a := require.New(t)
+
+	var fixture fixtures.RestClientFixture
+	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
+	defer fixture.Shutdown()
+
+	client := fixture.LibGoalClient
+	accountList, err := fixture.GetWalletsSortedByBalance()
+	a.NoError(err)
+	account0 := accountList[0].Address
+	wh, err := client.GetUnencryptedWalletHandle()
+	a.NoError(err)
+
+	manager, err := client.GenerateAddress(wh)
+	a.NoError(err)
+	reserve, err := client.GenerateAddress(wh)
+	a.NoError(err)
+	freeze, err := client.GenerateAddress(wh)
+	a.NoError(err)
+	clawback, err := client.GenerateAddress(wh)
+	a.NoError(err)
+
+	assetURL := "foo://bar"
+	assetMetadataHash := []byte("ISTHISTHEREALLIFEISTHISJUSTFANTA")
+
+	// Fund the manager, so it can issue transactions later on
+	_, err = client.SendPaymentFromUnencryptedWallet(account0, manager, 0, 10000000000, nil)
+	a.NoError(err)
+
+	// There should be no assets to start with
+	info, err := client.AccountInformation(account0)
+	a.NoError(err)
+	a.Equal(len(info.AssetParams), 0)
+
+	// Create the asset
+	tx, err := client.MakeUnsignedAssetCreateTx(
+		100,
+		false,
+		manager,
+		reserve,
+		freeze,
+		clawback,
+		"test",
+		"testname", //%d",
+		assetURL,
+		assetMetadataHash)
+	txid, err := helperFillSignBroadcast(client, wh, account0, tx, err)
+	a.NoError(err)
+	txids := make(map[string]string)
+	txids[txid] = account0
+	_, curRound := fixture.GetBalanceAndRound(account0)
+	confirmed := fixture.WaitForAllTxnsToConfirm(curRound+20, txids)
+	a.True(confirmed, "created the asset")
+
+	// Check that asset is visible
+	info, err = client.AccountInformation(account0)
+	a.NoError(err)
+	a.Equal(len(info.AssetParams), 1)
+	var asset v1.AssetParams
+	var assetIndex uint64
+	for idx, cp := range info.AssetParams {
+		asset = cp
+		assetIndex = idx
+	}
+	a.Equal(asset.UnitName, "test")
+	a.Equal(asset.AssetName, "testname")
+	a.Equal(asset.ManagerAddr, manager)
+	a.Equal(asset.ReserveAddr, reserve)
+	a.Equal(asset.FreezeAddr, freeze)
+	a.Equal(asset.ClawbackAddr, clawback)
+	a.Equal(asset.MetadataHash, assetMetadataHash)
+	a.Equal(asset.URL, assetURL)
+
+	// restart the node
+	fixture.ShutdownImpl(true) // shutdown but preserve the data
+	fixture.Start()
+	fixture.AlgodClient = fixture.GetAlgodClientForController(fixture.NC)
+	client = fixture.LibGoalClient
+
+	// Check again that asset is visible
+	info, err = client.AccountInformation(account0)
+	a.NoError(err)
+	a.Equal(len(info.AssetParams), 1)
+	for idx, cp := range info.AssetParams {
+		asset = cp
+		assetIndex = idx
+	}
+	a.Equal(asset.UnitName, "test")
+	a.Equal(asset.AssetName, "testname")
+	a.Equal(asset.ManagerAddr, manager)
+	a.Equal(asset.ReserveAddr, reserve)
+	a.Equal(asset.FreezeAddr, freeze)
+	a.Equal(asset.ClawbackAddr, clawback)
+	a.Equal(asset.MetadataHash, assetMetadataHash)
+	a.Equal(asset.URL, assetURL)
+
+	// Destroy the asset
+	txids = make(map[string]string)
+	tx, err = client.MakeUnsignedAssetDestroyTx(assetIndex)
+	sender := manager
+
+	// re-generate wh, since this test takes a while and sometimes
+	// the wallet handle expires.
+	wh, err = client.GetUnencryptedWalletHandle()
+
+	txid, err = helperFillSignBroadcast(client, wh, sender, tx, err)
+	a.NoError(err)
+	txids[txid] = sender
+
+	_, curRound = fixture.GetBalanceAndRound(account0)
+	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+20, txids)
+	a.True(confirmed, "destroying assets")
+
+	// re-generate wh, since this test takes a while and sometimes
+	// the wallet handle expires.
+	wh, err = client.GetUnencryptedWalletHandle()
+
+	// Should be able to close now
+	_, err = client.SendPaymentFromWallet(wh, nil, account0, "", 0, 0, nil, reserve, 0, 0)
 	a.NoError(err)
 }
