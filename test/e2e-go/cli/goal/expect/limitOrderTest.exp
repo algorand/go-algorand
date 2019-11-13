@@ -116,7 +116,7 @@ if { [catch {
     set FEE 100000
     set TIME_OUT 150000
     set TEAL_SOURCE "$TEST_ROOT_DIR/limit.teal"
-    exec python "driver.py" limit-order --swapn $SWAP_N --swapd $SWAP_D --mintrd $MIN_TRD --own $ACCOUNT_2_ADDRESS --fee $FEE --timeout $TIME_OUT --asset $ASSET_ID > $TEAL_SOURCE
+    exec algotmpl -d "./templates" limit-order --swapn $SWAP_N --swapd $SWAP_D --mintrd $MIN_TRD --own $ACCOUNT_2_ADDRESS --fee $FEE --timeout $TIME_OUT --asset $ASSET_ID > $TEAL_SOURCE
     cd $WORK_DIR
 
     puts "Generated Teal Source:"
