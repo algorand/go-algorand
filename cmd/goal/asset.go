@@ -26,7 +26,6 @@ import (
 )
 
 var (
-	numValidRounds          uint64
 	assetID                 uint64
 	assetCreator            string
 	assetTotal              uint64
@@ -202,21 +201,12 @@ func lookupAssetID(cmd *cobra.Command, creator string, client libgoal.Client) {
 	}
 }
 
-func checkValidRoundsOptions(cmd *cobra.Command) {
-	if cmd.Flags().Changed("validrounds") && cmd.Flags().Changed("lastvalid") {
-		reportErrorf("Only one of [-validrounds] or [-lastvalid] can be specified")
-	}
-	if cmd.Flags().Changed("validrounds") && numValidRounds == 0 {
-		reportErrorf("[-validrounds] can not be zero")
-	}
-}
-
 var createAssetCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create an asset",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		checkValidRoundsOptions(cmd)
+		checkTxValidityPeriodCmdFlags(cmd)
 
 		dataDir := ensureSingleDataDir()
 		client := ensureFullClient(dataDir)
@@ -291,7 +281,7 @@ var destroyAssetCmd = &cobra.Command{
 	Short: "Destroy an asset",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		checkValidRoundsOptions(cmd)
+		checkTxValidityPeriodCmdFlags(cmd)
 
 		dataDir := ensureSingleDataDir()
 		client := ensureFullClient(dataDir)
@@ -357,7 +347,7 @@ var configAssetCmd = &cobra.Command{
 	Short: "Configure an asset",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		checkValidRoundsOptions(cmd)
+		checkTxValidityPeriodCmdFlags(cmd)
 
 		dataDir := ensureSingleDataDir()
 		client := ensureFullClient(dataDir)
@@ -445,7 +435,7 @@ var sendAssetCmd = &cobra.Command{
 	Long:  "Transfer asset holdings.  Use a zero self-transfer to add an asset to an account in the first place.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		checkValidRoundsOptions(cmd)
+		checkTxValidityPeriodCmdFlags(cmd)
 
 		dataDir := ensureSingleDataDir()
 		client := ensureFullClient(dataDir)
@@ -524,7 +514,7 @@ var freezeAssetCmd = &cobra.Command{
 	Short: "Freeze assets",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		checkValidRoundsOptions(cmd)
+		checkTxValidityPeriodCmdFlags(cmd)
 
 		dataDir := ensureSingleDataDir()
 		client := ensureFullClient(dataDir)

@@ -557,15 +557,9 @@ func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []by
 	}
 
 	cp := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
-	if firstValid == 0 && lastValid == 0 {
-		firstValid = basics.Round(params.LastRound + 1)
-		lastValid = firstValid + basics.Round(cp.MaxTxnLife)
-	} else if firstValid != 0 && lastValid == 0 {
-		lastValid = firstValid + basics.Round(cp.MaxTxnLife)
-	} else if firstValid > lastValid {
-		return transactions.Transaction{}, fmt.Errorf("cannot construct payment: txn would first be valid on round %d which is after last valid round %d", firstValid, lastValid)
-	} else if lastValid-firstValid > basics.Round(cp.MaxTxnLife) {
-		return transactions.Transaction{}, fmt.Errorf("cannot construct payment: txn validity period ( %d to %d ) is greater than protocol max txn lifetime %d ", firstValid, lastValid, cp.MaxTxnLife)
+	fv, lv, err := computeValidityRounds(uint64(firstValid), uint64(lastValid), 0, params.LastRound, cp.MaxTxnLife)
+	if err != nil {
+		return transactions.Transaction{}, err
 	}
 
 	tx := transactions.Transaction{
@@ -573,8 +567,8 @@ func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []by
 		Header: transactions.Header{
 			Sender:     fromAddr,
 			Fee:        basics.MicroAlgos{Raw: fee},
-			FirstValid: firstValid,
-			LastValid:  lastValid,
+			FirstValid: basics.Round(fv),
+			LastValid:  basics.Round(lv),
 			Lease:      lease,
 			Note:       note,
 		},

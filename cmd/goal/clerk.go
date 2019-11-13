@@ -44,8 +44,6 @@ var (
 	account         string
 	amount          uint64
 	fee             uint64
-	firstValid      uint64
-	lastValid       uint64
 	txFilename      string
 	outFilename     string
 	rejectsFilename string

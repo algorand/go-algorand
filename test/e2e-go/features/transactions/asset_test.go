@@ -18,7 +18,6 @@ package transactions
 
 import (
 	"fmt"
-	"strings"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -550,7 +549,7 @@ func TestAssetSend(t *testing.T) {
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 0, extra, "", "")
 	txid, err = helperFillSignBroadcast(client, wh, account0, tx, err)
 	a.NoError(err)
-	
+
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 0, extra, "", "")
 	txid, err = helperFillSignBroadcast(client, wh, extra, tx, err)
 	a.Error(err)
@@ -588,14 +587,14 @@ func TestAssetSend(t *testing.T) {
 	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
 	a.Error(err)
 	a.True(strings.Contains(err.Error(), "asset"))
-	a.True(strings.Contains(err.Error(), "missing from"))	
+	a.True(strings.Contains(err.Error(), "missing from"))
 
 	// Account hasn't opted in yet. clawback to will fail
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 1, extra, "", account0)
 	_, err = helperFillSignBroadcast(client, wh, clawback, tx, err)
 	a.Error(err)
 	a.True(strings.Contains(err.Error(), "asset"))
-	a.True(strings.Contains(err.Error(), "missing from"))	
+	a.True(strings.Contains(err.Error(), "missing from"))
 
 	txids = make(map[string]string)
 	tx, err = client.MakeUnsignedAssetSendTx(frozenIdx, 0, extra, "", "")
