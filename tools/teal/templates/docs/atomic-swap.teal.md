@@ -136,7 +136,6 @@ Finally, we logically `AND` the scenario checks with the initial checks.
 
 ```
 &&
-
 ```
 
 At this point, the stack contains just one value: a boolean indicating whether or not it has been approved by this contract.
