@@ -131,24 +131,7 @@ func (handler *TxHandler) backlogWorker() {
 			if !ok {
 				return
 			}
-			if wi.verificationErr != nil {
-				// disconnect from peer.
-				logging.Base().Warnf("Received a malformed tx group %v: %v", wi.unverifiedTxGroup, wi.verificationErr)
-				handler.net.Disconnect(wi.rawmsg.Sender)
-				continue
-			}
-			// at this point, we've verified the transaction, so we can safely treat the transaction as a verified transaction.
-			verifiedTxGroup := wi.unverifiedTxGroup
-
-			// save the transaction, if it has high enough fee and not already in the cache
-			err := handler.txPool.Remember(verifiedTxGroup)
-			if err != nil {
-				logging.Base().Debugf("could not remember tx: %v", err)
-				continue
-			}
-
-			// We reencode here instead of using rawmsg.Data to avoid broadcasting non-canonical encodings
-			handler.net.Relay(handler.ctx, protocol.TxnTag, reencode(verifiedTxGroup), false, wi.rawmsg.Sender)
+			handler.postprocessCheckedTxn(wi)
 
 			// restart the loop so that we could empty out the post verification queue.
 			continue
