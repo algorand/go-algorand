@@ -534,6 +534,8 @@ func computeValidityRounds(firstValid, lastValid, validRounds, lastRound, maxTxn
 
 // ConstructPayment builds a payment transaction to be signed
 // If the fee is 0, the function will use the suggested one form the network
+// Although firstValid and lastValid come pre-computed in a normal flow,
+// additional validation is done by computeValidityRounds:
 // if the lastValid is 0, firstValid + maxTxnLifetime will be used
 // if the firstValid is 0, lastRound + 1 will be used
 func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []byte, closeTo string, lease [32]byte, firstValid, lastValid basics.Round) (transactions.Transaction, error) {
