@@ -167,16 +167,26 @@ func (pool *TransactionPool) PendingCount() int {
 	return count
 }
 
-// Test checks whether a transaction group could be remembered in the pool,
-// but does not actually store this transaction in the pool.
-func (pool *TransactionPool) Test(txgroup []transactions.SignedTxn) error {
-	for i := range txgroup {
-		txgroup[i].InitCaches()
-	}
-
+// checkPendingQueueSize test to see if there is more room in the pending
+// group transaction list. As long as we haven't surpassed the size limit, we
+// should be good to go.
+func (pool *TransactionPool) checkPendingQueueSize() error {
 	pendingSize := len(pool.Pending())
 	if pendingSize >= pool.txPoolMaxSize {
 		return fmt.Errorf("TransactionPool.Test: transaction pool have reached capacity")
+	}
+	return nil
+}
+
+// Test checks whether a transaction group could be remembered in the pool,
+// but does not actually store this transaction in the pool.
+func (pool *TransactionPool) Test(txgroup []transactions.SignedTxn) error {
+	if err := pool.checkPendingQueueSize(); err != nil {
+		return err
+	}
+
+	for i := range txgroup {
+		txgroup[i].InitCaches()
 	}
 
 	pool.mu.Lock()
@@ -274,6 +284,10 @@ func (pool *TransactionPool) RememberOne(t transactions.SignedTxn) error {
 // Remember stores the provided transaction group
 // Precondition: Only Remember() properly-signed and well-formed transactions (i.e., ensure t.WellFormed())
 func (pool *TransactionPool) Remember(txgroup []transactions.SignedTxn) error {
+	if err := pool.checkPendingQueueSize(); err != nil {
+		return err
+	}
+
 	for i := range txgroup {
 		txgroup[i].InitCaches()
 	}
