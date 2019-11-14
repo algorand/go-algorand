@@ -38,7 +38,7 @@ txn FirstValid
 txn Lease
 byte base64 TMPL_LEASE
 ==
-&&
+&& // is Payment and ok Fee and on period and correct duration and good lease
 txn CloseRemainderTo
 global ZeroAddress
 ==
@@ -49,7 +49,7 @@ addr TMPL_RCV
 txn Amount
 int TMPL_AMT
 ==
-&&
+&& // no close and good Receiver and good amount
 txn CloseRemainderTo
 addr TMPL_RCV
 ==
@@ -64,6 +64,6 @@ int TMPL_TIMEOUT
 txn Amount
 int 0
 ==
-&&
-||
-&&
+&& // good close to and after timeout and 0 Amount
+|| // normal payment or close
+&& // (normal payment or close) and preamble checks
