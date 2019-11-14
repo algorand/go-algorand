@@ -304,10 +304,6 @@ func (pool *TransactionPool) Remember(txgroup []transactions.SignedTxn) error {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
-	if pool.pendingBlockEvaluator == nil {
-		return fmt.Errorf("TransactionPool.Remember: no pending block evaluator")
-	}
-
 	err := pool.test(txgroup)
 	if err != nil {
 		return fmt.Errorf("TransactionPool.Remember: %v", err)
