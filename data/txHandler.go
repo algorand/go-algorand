@@ -274,44 +274,6 @@ func (handler *TxHandler) checkAlreadyCommitted(tx *txBacklogMsg) (processingDon
 		logging.Base().Debugf("txPool rejected transaction: %v", err)
 		return true
 	}
-
-	// build the transaction verification context
-	latest := handler.ledger.Latest()
-	latestHdr, err := handler.ledger.BlockHdr(latest)
-	if err != nil {
-		logging.Base().Warnf("Could not get header for previous block %v: %v", latest, err)
-		return true
-	}
-	tx.proto = config.Consensus[latestHdr.CurrentProtocol]
-	tx.spec.FeeSink = latestHdr.FeeSink
-	tx.spec.RewardsPool = latestHdr.RewardsPool
-
-	tc := transactions.ExplicitTxnContext{
-		ExplicitRound: latest + 1,
-		Proto:         tx.proto,
-		GenID:         handler.genesisID,
-		GenHash:       handler.genesisHash,
-	}
-
-	for _, txn := range tx.unverifiedTxGroup {
-		err = txn.Txn.Alive(tc)
-		if err != nil {
-			logging.Base().Debugf("Received a dead txn %s: %v", txn.ID(), err)
-			return true
-		}
-
-		committed, err := handler.ledger.Committed(tx.proto, txn)
-		if err != nil {
-			logging.Base().Errorf("Could not verify committed status of txn %v: %v", txn, err)
-			return true
-		}
-
-		if committed {
-			logging.Base().Debugf("Already confirmed tx %v", txn.ID())
-			return true
-		}
-	}
-
 	return false
 }
 
