@@ -66,6 +66,8 @@ cd "${SCRIPT_PATH}"
 
 ./timeout 200 ./teal-split-test.sh
 
+./timeout 200 ./atomic-swap-teal-test.sh
+
 # TODO: use ./timeout script across these three scripts when it gets committed from another branch
 ./periodic-teal-test.sh
 
