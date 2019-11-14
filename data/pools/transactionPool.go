@@ -178,63 +178,7 @@ func (pool *TransactionPool) checkPendingQueueSize() error {
 	return nil
 }
 
-// Test checks whether a transaction group could be remembered in the pool,
-// but does not actually store this transaction in the pool.
-func (pool *TransactionPool) Test(txgroup []transactions.SignedTxn) error {
-	if err := pool.checkPendingQueueSize(); err != nil {
-		return err
-	}
-
-	for i := range txgroup {
-		txgroup[i].InitCaches()
-	}
-
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
-
-	return pool.test(txgroup)
-}
-
-// test checks whether a transaction group could be remembered in the pool,
-// but does not actually store this transaction in the pool.
-//
-// test assumes that pool.mu is locked.  It might release the lock
-// while it waits for OnNewBlock() to be called.
-func (pool *TransactionPool) test(txgroup []transactions.SignedTxn) error {
-	if pool.pendingBlockEvaluator == nil {
-		return fmt.Errorf("TransactionPool.test: no pending block evaluator")
-	}
-
-	// Make sure that the latest block has been processed by OnNewBlock().
-	// If not, we might be in a race, so wait a little bit for OnNewBlock()
-	// to catch up to the ledger.
-	latest := pool.ledger.Latest()
-	waitExpires := time.Now().Add(timeoutOnNewBlock)
-	for pool.pendingBlockEvaluator.Round() <= latest && time.Now().Before(waitExpires) {
-		condvar.TimedWait(&pool.cond, timeoutOnNewBlock)
-		if pool.pendingBlockEvaluator == nil {
-			return fmt.Errorf("TransactionPool.test: no pending block evaluator")
-		}
-	}
-
-	tentativeRound := pool.pendingBlockEvaluator.Round() + pool.numPendingWholeBlocks
-	err := pool.pendingBlockEvaluator.TestTransactionGroup(txgroup)
-	if err == ledger.ErrNoSpace {
-		tentativeRound++
-	} else if err != nil {
-		return err
-	}
-
-	for _, t := range txgroup {
-		if t.Txn.LastValid < tentativeRound {
-			return transactions.TxnDeadError{
-				Round:      tentativeRound,
-				FirstValid: t.Txn.FirstValid,
-				LastValid:  t.Txn.LastValid,
-			}
-		}
-	}
-
+func (pool *TransactionPool) checkSufficientFee(txgroup []transactions.SignedTxn) error {
 	// The baseline threshold fee per byte is 1, the smallest fee we can
 	// represent.  This amounts to a fee of 100 for a 100-byte txn, which
 	// is well below MinTxnFee (1000).  This means that, when the pool
@@ -275,6 +219,71 @@ func (pool *TransactionPool) test(txgroup []transactions.SignedTxn) error {
 	return nil
 }
 
+// Test checks whether a transaction group could be remembered in the pool,
+// but does not actually store this transaction in the pool.
+func (pool *TransactionPool) Test(txgroup []transactions.SignedTxn) error {
+	if err := pool.checkPendingQueueSize(); err != nil {
+		return err
+	}
+
+	for i := range txgroup {
+		txgroup[i].InitCaches()
+	}
+
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	return pool.test(txgroup)
+}
+
+// test checks whether a transaction group could be remembered in the pool,
+// but does not actually store this transaction in the pool.
+//
+// test assumes that pool.mu is locked.  It might release the lock
+// while it waits for OnNewBlock() to be called.
+func (pool *TransactionPool) test(txgroup []transactions.SignedTxn) error {
+	if pool.pendingBlockEvaluator == nil {
+		return fmt.Errorf("TransactionPool.test: no pending block evaluator")
+	}
+
+	// Make sure that the latest block has been processed by OnNewBlock().
+	// If not, we might be in a race, so wait a little bit for OnNewBlock()
+	// to catch up to the ledger.
+	latest := pool.ledger.Latest()
+	waitExpires := time.Now().Add(timeoutOnNewBlock)
+	for pool.pendingBlockEvaluator.Round() <= latest && time.Now().Before(waitExpires) {
+		condvar.TimedWait(&pool.cond, timeoutOnNewBlock)
+		if pool.pendingBlockEvaluator == nil {
+			return fmt.Errorf("TransactionPool.test: no pending block evaluator")
+		}
+	}
+
+	err := pool.checkSufficientFee(txgroup)
+	if err != nil {
+		return err
+	}
+
+	tentativeRound := pool.pendingBlockEvaluator.Round() + pool.numPendingWholeBlocks
+	err = pool.pendingBlockEvaluator.TestTransactionGroup(txgroup)
+	if err == ledger.ErrNoSpace {
+		tentativeRound++
+	} else if err != nil {
+		return err
+	}
+
+	for _, t := range txgroup {
+		if t.Txn.LastValid < tentativeRound {
+			return transactions.TxnDeadError{
+				Round:      tentativeRound,
+				FirstValid: t.Txn.FirstValid,
+				LastValid:  t.Txn.LastValid,
+			}
+		}
+	}
+
+	return nil
+}
+
 // RememberOne stores the provided transaction
 // Precondition: Only RememberOne() properly-signed and well-formed transactions (i.e., ensure t.WellFormed())
 func (pool *TransactionPool) RememberOne(t transactions.SignedTxn) error {
@@ -298,10 +307,6 @@ func (pool *TransactionPool) Remember(txgroup []transactions.SignedTxn) error {
 	err := pool.test(txgroup)
 	if err != nil {
 		return fmt.Errorf("TransactionPool.Remember: %v", err)
-	}
-
-	if pool.pendingBlockEvaluator == nil {
-		return fmt.Errorf("TransactionPool.Remember: no pending block evaluator")
 	}
 
 	err = pool.remember(txgroup)
