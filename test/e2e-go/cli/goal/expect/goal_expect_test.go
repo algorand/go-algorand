@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -32,6 +33,7 @@ type goalExpectFixture struct {
 	testDataDir string
 	testDirTmp  bool
 	t           *testing.T
+	testFilter  string
 }
 
 func (f *goalExpectFixture) initialize(t *testing.T) (err error) {
@@ -50,6 +52,11 @@ func (f *goalExpectFixture) initialize(t *testing.T) (err error) {
 	f.testDataDir = os.Getenv("TESTDATADIR")
 	if f.testDataDir == "" {
 		f.testDataDir = os.ExpandEnv("${GOPATH}/src/github.com/algorand/go-algorand/test/testdata")
+	}
+
+	f.testFilter = os.Getenv("TESTFILTER")
+	if f.testFilter == "" {
+		f.testFilter = ".*"
 	}
 	return
 }
@@ -96,19 +103,21 @@ func TestGoalWithExpect(t *testing.T) {
 	require.NoError(t, err)
 
 	for testName := range expectFiles {
-		t.Run(testName, func(t *testing.T) {
-			workingDir, algoDir, err := f.getTestDir(testName)
-			require.NoError(t, err)
-			t.Logf("algoDir: %s\ntestDataDir:%s\n", algoDir, f.testDataDir)
-			cmd := execCommand("expect", testName, algoDir, f.testDataDir)
-			out, err := cmd.CombinedOutput()
-			if err != nil {
-				t.Logf("err running '%s': %s\noutput: %s", testName, err, out)
-				t.Fail()
-			} else {
-				//t.Logf("out: %s", out)
-				f.removeTestDir(workingDir)
-			}
-		})
+		if match, _ := regexp.MatchString(f.testFilter, testName); match {
+			t.Run(testName, func(t *testing.T) {
+				workingDir, algoDir, err := f.getTestDir(testName)
+				require.NoError(t, err)
+				t.Logf("algoDir: %s\ntestDataDir:%s\n", algoDir, f.testDataDir)
+				cmd := execCommand("expect", testName, algoDir, f.testDataDir)
+				out, err := cmd.CombinedOutput()
+				if err != nil {
+					t.Logf("err running '%s': %s\noutput: %s", testName, err, out)
+					t.Fail()
+				} else {
+					//t.Logf("out: %s", out)
+					f.removeTestDir(workingDir)
+				}
+			})
+		}
 	}
 }
