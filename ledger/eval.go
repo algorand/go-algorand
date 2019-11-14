@@ -372,20 +372,14 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 		return fmt.Errorf("group size %d exceeds maximum %d", len(txgroup), eval.proto.MaxTxGroupSize)
 	}
 
-	var txibs []transactions.SignedTxnInBlock
-	var group transactions.TxGroup
-
 	cow := eval.state.child()
 
+	var group transactions.TxGroup
 	for gi, txn := range txgroup {
-		var txib transactions.SignedTxnInBlock
-
-		err := eval.testTransaction(txn, txgroup, gi, cow, &txib)
+		err := eval.testTransaction(txn, txgroup, gi, cow)
 		if err != nil {
 			return err
 		}
-
-		txibs = append(txibs, txib)
 
 		// Make sure all transactions in group have the same group value
 		if txn.Txn.Group != txgroup[0].Txn.Group {
@@ -418,7 +412,7 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 // testTransaction performs basic duplicate detection and well-formedness checks
 // on a single transaction, but does not actually add the transaction to the block
 // evaluator, or modify the block evaluator state in any other visible way.
-func (eval *BlockEvaluator) testTransaction(txn transactions.SignedTxn, txgroup []transactions.SignedTxn, groupIndex int, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
+func (eval *BlockEvaluator) testTransaction(txn transactions.SignedTxn, txgroup []transactions.SignedTxn, groupIndex int, cow *roundCowState) error {
 	// Verify that groups are supported.
 	if !txn.Txn.Group.IsZero() && !eval.proto.SupportTxGroups {
 		return fmt.Errorf("transaction groups not supported")
