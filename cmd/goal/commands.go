@@ -291,6 +291,14 @@ func ensureSingleDataDir() string {
 	return ensureFirstDataDir()
 }
 
+// like ensureSingleDataDir() but doesn't exit()
+func maybeSingleDataDir() string {
+	if len(dataDirs) > 1 {
+		return ""
+	}
+	return resolveDataDir()
+}
+
 func getDataDirs() (dirs []string) {
 	if len(dataDirs) == 0 {
 		reportErrorln(errorNoDataDirectory)

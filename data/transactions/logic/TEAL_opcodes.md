@@ -39,7 +39,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - Opcode: 0x04 
 - Pops: *... stack*, {[]byte A}, {[]byte B}, {[]byte C}
 - Pushes: uint64
-- for (data, signature, pubkey) verify the signature of the data against the pubkey => {0 or 1}
+- for (data, signature, pubkey) verify the signature of ("ProgData" || program_hash || data) against the pubkey => {0 or 1}
 - **Cost**: 1900
 
 ## +
@@ -366,11 +366,13 @@ TypeEnum mapping:
 | --- | --- | --- |
 | 0 | unknown | Unknown type. Invalid transaction. |
 | 1 | pay | Payment |
-| 2 | keyreg | Key Registration |
-| 3 | acfg | Asset Config |
-| 4 | axfer | Asset Transfer |
-| 5 | afrz | Asset Freeze |
+| 2 | keyreg | KeyRegistration |
+| 3 | acfg | AssetConfig |
+| 4 | axfer | AssetTransfer |
+| 5 | afrz | AssetFreeze |
 
+
+FirstValidTime is actually the time of the round at FirstValid-1. Subtle implementation details make it much faster to serve details of an already completed round. `int` accepts the user friendly names for comparison to `txn TypeEnum`
 
 ## global
 

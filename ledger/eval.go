@@ -32,10 +32,15 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/execpool"
+	"github.com/algorand/go-algorand/util/metrics"
 )
 
 // ErrNoSpace indicates insufficient space for transaction in block
 var ErrNoSpace = errors.New("block does not have space for transaction")
+
+var logicGoodTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_logic_ok", Description: "Total transaction scripts executed and accepted"})
+var logicRejTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_logic_rej", Description: "Total transaction scripts executed and rejected"})
+var logicErrTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_logic_err", Description: "Total transaction scripts executed and errored"})
 
 // evalAux is left after removing explicit reward claims,
 // in case we need this infrastructure in the future.
@@ -289,6 +294,7 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *eval
 	}
 
 	// hotfix for testnet stall 08/26/2019; move some algos from testnet bank to rewards pool to give it enough time until protocol upgrade occur.
+	// hotfix for testnet stall 11/07/2019; the same bug again, account ran out before the protocol upgrade occurred.
 	poolOld, err = eval.workaroundOverspentRewards(poolOld, hdr.Round)
 	if err != nil {
 		return nil, err
@@ -316,9 +322,10 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *eval
 }
 
 // hotfix for testnet stall 08/26/2019; move some algos from testnet bank to rewards pool to give it enough time until protocol upgrade occur.
+// hotfix for testnet stall 11/07/2019; do the same thing
 func (eval *BlockEvaluator) workaroundOverspentRewards(rewardPoolBalance basics.BalanceRecord, headerRound basics.Round) (poolOld basics.BalanceRecord, err error) {
 	// verify that we patch the correct round.
-	if headerRound != 1499995 {
+	if headerRound != 1499995 && headerRound != 2926564 {
 		return rewardPoolBalance, nil
 	}
 	// verify that we're patching the correct genesis ( i.e. testnet )
@@ -588,31 +595,34 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 }
 
 func (eval *BlockEvaluator) checkLogicSig(txn transactions.SignedTxn, txgroup []transactions.SignedTxnWithAD, groupIndex int) (err error) {
-	firstValid := basics.Round(txn.Txn.FirstValid)
-	var hdr bookkeeping.BlockHeader
-	if eval.block.BlockHeader.Round == firstValid {
-		hdr = eval.block.BlockHeader
-	} else {
-		// TODO: move this into some lazy evaluator for the few scripts that actually use `txn FirstValidTime` ?
-		hdr, err = eval.l.BlockHdr(firstValid)
-		if err != nil {
-			return fmt.Errorf("could not fetch BlockHdr for FirstValid=%d (current=%d): %s", txn.Txn.FirstValid, eval.block.BlockHeader.Round, err)
-		}
+	if txn.Txn.FirstValid == 0 {
+		return errors.New("LogicSig does not work with FirstValid==0")
+	}
+	// TODO: move this into some lazy evaluator for the few scripts that actually use `txn FirstValidTime` ?
+	hdr, err := eval.l.BlockHdr(basics.Round(txn.Txn.FirstValid - 1))
+	if err != nil {
+		return fmt.Errorf("could not fetch BlockHdr for FirstValid-1=%d (current=%d): %s", txn.Txn.FirstValid-1, eval.block.BlockHeader.Round, err)
 	}
 	ep := logic.EvalParams{
-		Txn:                 &txn,
-		Proto:               &eval.proto,
-		TxnGroup:            txgroup,
-		GroupIndex:          groupIndex,
-		FirstValidTimeStamp: uint64(hdr.TimeStamp),
+		Txn:        &txn,
+		Proto:      &eval.proto,
+		TxnGroup:   txgroup,
+		GroupIndex: groupIndex,
 	}
+	if hdr.TimeStamp < 0 {
+		return fmt.Errorf("cannot evaluate LogicSig before 1970 at TimeStamp %d", hdr.TimeStamp)
+	}
+	ep.FirstValidTimeStamp = uint64(hdr.TimeStamp)
 	pass, err := logic.Eval(txn.Lsig.Logic, ep)
 	if err != nil {
+		logicErrTotal.Inc(nil)
 		return fmt.Errorf("transaction %v: rejected by logic err=%s", txn.ID(), err)
 	}
 	if !pass {
+		logicRejTotal.Inc(nil)
 		return fmt.Errorf("transaction %v: rejected by logic", txn.ID())
 	}
+	logicGoodTotal.Inc(nil)
 	return nil
 }
 
@@ -677,10 +687,10 @@ func (eval *BlockEvaluator) GenerateBlock() (*ValidatedBlock, error) {
 	return &vb, nil
 }
 
-func (l *Ledger) eval(ctx context.Context, blk bookkeeping.Block, aux *evalAux, validate bool, txcache VerifiedTxnCache, executionPool execpool.BacklogPool) (stateDelta, evalAux, error) {
+func (l *Ledger) eval(ctx context.Context, blk bookkeeping.Block, aux *evalAux, validate bool, txcache VerifiedTxnCache, executionPool execpool.BacklogPool) (StateDelta, evalAux, error) {
 	eval, err := startEvaluator(l, blk.BlockHeader, aux, validate, false, txcache, executionPool)
 	if err != nil {
-		return stateDelta{}, evalAux{}, err
+		return StateDelta{}, evalAux{}, err
 	}
 
 	// TODO: batch tx sig verification: ingest blk.Payset and output a list of ValidatedTx
@@ -688,33 +698,33 @@ func (l *Ledger) eval(ctx context.Context, blk bookkeeping.Block, aux *evalAux, 
 	// Next, transactions
 	paysetgroups, err := blk.DecodePaysetGroups()
 	if err != nil {
-		return stateDelta{}, evalAux{}, err
+		return StateDelta{}, evalAux{}, err
 	}
 
 	for _, txgroup := range paysetgroups {
 		select {
 		case <-ctx.Done():
-			return stateDelta{}, evalAux{}, ctx.Err()
+			return StateDelta{}, evalAux{}, ctx.Err()
 		default:
 		}
 
 		err = eval.TransactionGroup(txgroup)
 		if err != nil {
-			return stateDelta{}, evalAux{}, err
+			return StateDelta{}, evalAux{}, err
 		}
 	}
 
 	// Finally, procees any pending end-of-block state changes
 	err = eval.endOfBlock()
 	if err != nil {
-		return stateDelta{}, evalAux{}, err
+		return StateDelta{}, evalAux{}, err
 	}
 
 	// If validating, do final block checks that depend on our new state
 	if validate {
 		err = eval.finalValidation()
 		if err != nil {
-			return stateDelta{}, evalAux{}, err
+			return StateDelta{}, evalAux{}, err
 		}
 	}
 
@@ -744,7 +754,7 @@ func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, txcache Ve
 // the work of applying the block's changes to the ledger state.
 type ValidatedBlock struct {
 	blk   bookkeeping.Block
-	delta stateDelta
+	delta StateDelta
 	aux   evalAux
 }
 

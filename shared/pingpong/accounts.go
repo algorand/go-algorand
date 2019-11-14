@@ -25,7 +25,7 @@ import (
 	"time"
 )
 
-func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]uint64,  cfg PpConfig, err error) {
+func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]uint64, cfg PpConfig, err error) {
 	accounts = make(map[string]uint64)
 	cfg = initCfg
 

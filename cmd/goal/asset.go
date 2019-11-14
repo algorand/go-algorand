@@ -53,6 +53,8 @@ func init() {
 	assetCmd.AddCommand(infoAssetCmd)
 	assetCmd.AddCommand(freezeAssetCmd)
 
+	assetCmd.PersistentFlags().StringVarP(&walletName, "wallet", "w", "", "Set the wallet to be used for the selected operation")
+
 	createAssetCmd.Flags().StringVar(&assetCreator, "creator", "", "Account address for creating an asset")
 	createAssetCmd.Flags().Uint64Var(&assetTotal, "total", 0, "Total amount of tokens for created asset")
 	createAssetCmd.Flags().BoolVar(&assetFrozen, "defaultfrozen", false, "Freeze or not freeze holdings by default")
@@ -100,6 +102,7 @@ func init() {
 	configAssetCmd.Flags().StringVar(&noteBase64, "noteb64", "", "Note (URL-base64 encoded)")
 	configAssetCmd.Flags().StringVarP(&noteText, "note", "n", "", "Note text (ignored if --noteb64 used also)")
 	configAssetCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
+	configAssetCmd.MarkFlagRequired("manager")
 
 	sendAssetCmd.Flags().StringVar(&assetClawback, "clawback", "", "Address to issue a clawback transaction from (defaults to no clawback)")
 	sendAssetCmd.Flags().StringVar(&assetCreator, "creator", "", "Account address for asset creator")
@@ -244,6 +247,14 @@ var createAssetCmd = &cobra.Command{
 				err = waitForCommit(client, txid)
 				if err != nil {
 					reportErrorf(err.Error())
+				}
+				// Check if we know about the transaction yet
+				txn, err := client.PendingTransactionInformation(txid)
+				if err != nil {
+					reportErrorf(err.Error())
+				}
+				if txn.TransactionResults != nil && txn.TransactionResults.CreatedAssetIndex != 0 {
+					reportInfof("Created asset with asset index %d", txn.TransactionResults.CreatedAssetIndex)
 				}
 			}
 		} else {

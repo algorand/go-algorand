@@ -475,7 +475,7 @@ func (au *accountUpdates) committedUpTo(rnd basics.Round) basics.Round {
 	return au.dbRound
 }
 
-func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta stateDelta) {
+func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta StateDelta) {
 	proto := config.Consensus[blk.CurrentProtocol]
 	rnd := blk.Round()
 

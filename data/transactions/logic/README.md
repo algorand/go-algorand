@@ -69,7 +69,7 @@ For two-argument ops, `A` is the previous element on the stack and `B` is the la
 | `sha256` | SHA256 hash of value, yields [32]byte |
 | `keccak256` | Keccak256 hash of value, yields [32]byte |
 | `sha512_256` | SHA512_256 hash of value, yields [32]byte |
-| `ed25519verify` | for (data, signature, pubkey) verify the signature of the data against the pubkey => {0 or 1} |
+| `ed25519verify` | for (data, signature, pubkey) verify the signature of ("ProgData" \|\| program_hash \|\| data) against the pubkey => {0 or 1} |
 | `+` | A plus B. Panic on overflow. |
 | `-` | A minus B. Panic if B > A. |
 | `/` | A divided by B. Panic if B == 0. |
@@ -237,6 +237,6 @@ Current design and implementation limitations to be aware of.
 * TEAL cannot lookup balances of Algos or other assets. (Standard transaction accounting will apply after TEAL has run and authorized a transaction. A TEAL-approved transaction could still be invalid by other accounting rules just as a standard signed transaction could be invalid. e.g. I can't give away money I don't have.)
 * TEAL cannot access information in previous blocks. TEAL cannot access most information in other transactions in the current block. (TEAL can access fields of the transaction it is attached to and the transactions in an atomic transaction group.)
 * TEAL cannot know exactly what round the current transaction will commit in (but it is somewhere in FirstValid through LastValid).
-* TEAL cannot know exactly what time its transaction is committed. (`txn FirstValidTime` should be approximately the 'unix time' seconds since 1970-01-01 00:00:00 UTC of the block at FirstValid, but there are conditions in which this time may drift and slowly re-align to close to accurate time.)
+* TEAL cannot know exactly what time its transaction is committed. (`txn FirstValidTime` should be approximately the 'unix time' seconds since 1970-01-01 00:00:00 UTC of the block *before* FirstValid, but there are conditions in which this time may drift and slowly re-align to close to accurate time.)
 * TEAL cannot loop. Its branch instruction `bnz` "branch if not zero" can only branch forward so as to skip some code.
 * TEAL cannot recurse. There is no subroutine jump operation.

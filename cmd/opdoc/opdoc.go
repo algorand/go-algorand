@@ -100,16 +100,16 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec) (err error) {
 	if cost != 1 {
 		fmt.Fprintf(out, "- **Cost**: %d\n", cost)
 	}
-	ode := logic.OpDocExtra(op.Name)
-	if ode != "" {
-		fmt.Fprintf(out, "\n%s\n", ode)
-	}
 	if op.Name == "global" {
 		globalFieldsMarkdown(out)
 	} else if op.Name == "txn" {
 		transactionFieldsMarkdown(out)
 		fmt.Fprintf(out, "\nTypeEnum mapping:\n\n")
 		typeEnumTableMarkdown(out)
+	}
+	ode := logic.OpDocExtra(op.Name)
+	if ode != "" {
+		fmt.Fprintf(out, "\n%s\n", ode)
 	}
 	return nil
 }

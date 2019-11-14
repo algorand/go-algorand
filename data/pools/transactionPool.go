@@ -47,6 +47,7 @@ type TransactionPool struct {
 	statusCache            *statusCache
 	logStats               bool
 	expFeeFactor           uint64
+	txPoolMaxSize          int
 
 	// pendingMu protects pendingTxGroups and pendingTxids
 	pendingMu       deadlock.RWMutex
@@ -83,9 +84,10 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local) *TransactionPo
 		logStats:        cfg.EnableAssembleStats,
 		expFeeFactor:    cfg.TxPoolExponentialIncreaseFactor,
 		lsigCache:       makeLsigEvalCache(cfg.TxPoolSize),
+		txPoolMaxSize:   cfg.TxPoolSize,
 	}
 	pool.cond.L = &pool.mu
-	pool.recomputeBlockEvaluator()
+	pool.recomputeBlockEvaluator(make(map[transactions.Txid]struct{}))
 	return &pool
 }
 
@@ -172,6 +174,11 @@ func (pool *TransactionPool) Test(txgroup []transactions.SignedTxn) error {
 		txgroup[i].InitCaches()
 	}
 
+	pendingSize := len(pool.Pending())
+	if pendingSize >= pool.txPoolMaxSize {
+		return fmt.Errorf("TransactionPool.Test: transaction pool have reached capacity")
+	}
+
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
@@ -232,6 +239,20 @@ func (pool *TransactionPool) test(txgroup []transactions.SignedTxn) error {
 	// are accepted (assuming the BlockEvaluator approves them, which
 	// requires a flat MinTxnFee).
 	feePerByte = feePerByte * pool.feeThresholdMultiplier
+
+	// The feePerByte should be bumped to 1 to make the exponentially
+	// threshold growing valid.
+	if feePerByte == 0 && pool.numPendingWholeBlocks > 1 {
+		feePerByte = uint64(1)
+	}
+
+	// The threshold grows exponentially if there are multiple blocks
+	// pending in the pool.
+	// golang has no convenient integer exponentiation, so we just
+	// do this in a loop
+	for i := 0; i < int(pool.numPendingWholeBlocks)-1; i++ {
+		feePerByte *= pool.expFeeFactor
+	}
 
 	for _, t := range txgroup {
 		feeThreshold := feePerByte * uint64(t.GetEncodedLength())
@@ -349,23 +370,16 @@ func (pool *TransactionPool) EvalRemember(cvers protocol.ConsensusVersion, txid 
 }
 
 // OnNewBlock excises transactions from the pool that are included in the specified Block or if they've expired
-func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block) {
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
-	defer pool.cond.Broadcast()
-
+func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledger.StateDelta) {
 	var stats telemetryspec.ProcessBlockMetrics
 	var knownCommitted uint
 	var unknownCommitted uint
 
-	payset, err := block.DecodePaysetFlat()
-	if err == nil {
+	commitedTxids := delta.Txids
+	if pool.logStats {
 		pool.pendingMu.RLock()
-		for _, txad := range payset {
-			tx := txad.SignedTxn
-			txid := tx.ID()
-			_, ok := pool.pendingTxids[txid]
-			if ok {
+		for txid := range commitedTxids {
+			if _, ok := pool.pendingTxids[txid]; ok {
 				knownCommitted++
 			} else {
 				unknownCommitted++
@@ -373,6 +387,10 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block) {
 		}
 		pool.pendingMu.RUnlock()
 	}
+
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+	defer pool.cond.Broadcast()
 
 	if pool.pendingBlockEvaluator == nil || block.Round() >= pool.pendingBlockEvaluator.Round() {
 		// Adjust the pool fee threshold.  The rules are:
@@ -401,7 +419,7 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block) {
 		// Recompute the pool by starting from the new latest block.
 		// This has the side-effect of discarding transactions that
 		// have been committed (or that are otherwise no longer valid).
-		stats = pool.recomputeBlockEvaluator()
+		stats = pool.recomputeBlockEvaluator(commitedTxids)
 	}
 
 	stats.KnownCommittedCount = knownCommitted
@@ -468,7 +486,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluator(txgroup []transactions.S
 // recomputeBlockEvaluator constructs a new BlockEvaluator and feeds all
 // in-pool transactions to it (removing any transactions that are rejected
 // by the BlockEvaluator).
-func (pool *TransactionPool) recomputeBlockEvaluator() (stats telemetryspec.ProcessBlockMetrics) {
+func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transactions.Txid]struct{}) (stats telemetryspec.ProcessBlockMetrics) {
 	pool.pendingBlockEvaluator = nil
 
 	latest := pool.ledger.Latest()
@@ -493,6 +511,12 @@ func (pool *TransactionPool) recomputeBlockEvaluator() (stats telemetryspec.Proc
 	pool.pendingMu.RUnlock()
 
 	for _, txgroup := range txgroups {
+		if len(txgroup) == 0 {
+			continue
+		}
+		if _, alreadyCommitted := committedTxIds[txgroup[0].ID()]; alreadyCommitted {
+			continue
+		}
 		err := pool.remember(txgroup)
 		if err != nil {
 			for _, tx := range txgroup {
