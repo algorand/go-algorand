@@ -50,7 +50,7 @@ What might be a one line expression with various parenthesized clauses should be
 Looping is not possible, by design, to ensure predictably fast execution.
 There is a branch instruction (`bnz`, branch if not zero) which allows forward branching only so that some code may be skipped.
 
-Many programs need only a few dozen instructions. The instruction set has some optimization built in. `intc`, `bytec`, and `arg` take an immediate value byte, making a 2-byte op to load a value onto the stack, but they also have single byte versions for loading values 0, 1, 2, and 3. Any program will benefit from having a few common values loaded with a smaller one byte opcode, and many programs won't even need more than those 4 values. Cryptographic hashes and `ed25519verify` are single byte opcodes with powerful libraries behind them. These operations still take more time than other ops (and this is reflected in the cost of each op and the cost limit of a program) but are efficient in compiled code space.
+Many programs need only a few dozen instructions. The instruction set has some optimization built in. `intc`, `bytec`, and `arg` take an immediate value byte, making a 2-byte op to load a value onto the stack, but they also have single byte versions for loading the most common constant values. Any program will benefit from having a few common values loaded with a smaller one byte opcode. Cryptographic hashes and `ed25519verify` are single byte opcodes with powerful libraries behind them. These operations still take more time than other ops (and this is reflected in the cost of each op and the cost limit of a program) but are efficient in compiled code space.
 
 This summary is supplemented by more detail in the [opcodes document](TEAL_opcodes.md).
 

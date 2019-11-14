@@ -72,7 +72,7 @@ The 32 byte public key is the last element on the stack, preceeded by the 64 byt
 - Pushes: uint64
 - A times B. Panic on overflow.
 
-It is worth noting that there are 10,000,000,000,000,000 micro-Algos in the total supply, or a bit less than 2^54. When doing rational math, e.g. (A * (N/D)) as ((A * N) / D) one should limit the numerator to less than 2^10 to be completely sure there won't be overflow. Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `mullw`.
+Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `mulw`.
 
 ## <
 
@@ -424,7 +424,7 @@ for notes on transaction fields available, see `txn`. If this transaction is _i_
 - Pushes: _None_
 - branch if value X is not zero
 
-For a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else proceed to next instruction at `pc + 3`. Branch targets must be well aligned instructions. (e.g. Branching to the second byte of a 2 byte op will be rejected.)
+The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which are a high byte first and low byte second which together form a 16 bit offset which the instruction may branch to. For a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else proceed to next instruction at `pc + 3`. Branch targets must be well aligned instructions. (e.g. Branching to the second byte of a 2 byte op will be rejected.) Branch offsets are currently limited to forward branches only, 0-0x7fff. A future expansion might make this a signed 16 bit integer allowing for backward branches and looping.
 
 ## pop
 
