@@ -274,6 +274,18 @@ func (handler *TxHandler) checkAlreadyCommitted(tx *txBacklogMsg) (processingDon
 		logging.Base().Debugf("txPool rejected transaction: %v", err)
 		return true
 	}
+
+	// build the transaction verification context
+	latest := handler.ledger.Latest()
+	latestHdr, err := handler.ledger.BlockHdr(latest)
+	if err != nil {
+		logging.Base().Warnf("Could not get header for previous block %v: %v", latest, err)
+		return true
+	}
+	tx.proto = config.Consensus[latestHdr.CurrentProtocol]
+	tx.spec.FeeSink = latestHdr.FeeSink
+	tx.spec.RewardsPool = latestHdr.RewardsPool
+
 	return false
 }
 
