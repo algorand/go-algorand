@@ -26,7 +26,6 @@ import (
 )
 
 var (
-	numValidRounds          uint64
 	assetID                 uint64
 	assetCreator            string
 	assetTotal              uint64
@@ -63,6 +62,7 @@ func init() {
 	createAssetCmd.Flags().Uint64Var(&fee, "fee", 0, "The transaction fee (automatically determined by default), in microAlgos")
 	createAssetCmd.Flags().Uint64Var(&firstValid, "firstvalid", 0, "The first round where the transaction may be committed to the ledger")
 	createAssetCmd.Flags().Uint64Var(&numValidRounds, "validrounds", 0, "The number of rounds for which the transaction will be valid")
+	createAssetCmd.Flags().Uint64Var(&lastValid, "lastvalid", 0, "The last round where the transaction may be committed to the ledger")
 	createAssetCmd.Flags().StringVar(&assetURL, "asseturl", "", "URL where user can access more information about the asset (max 32 bytes)")
 	createAssetCmd.Flags().StringVar(&assetMetadataHashBase64, "assetmetadatab64", "", "base-64 encoded 32-byte commitment to asset metadata")
 	createAssetCmd.Flags().StringVarP(&txFilename, "out", "o", "", "Write transaction to this file")
@@ -80,6 +80,7 @@ func init() {
 	destroyAssetCmd.Flags().Uint64Var(&fee, "fee", 0, "The transaction fee (automatically determined by default), in microAlgos")
 	destroyAssetCmd.Flags().Uint64Var(&firstValid, "firstvalid", 0, "The first round where the transaction may be committed to the ledger")
 	destroyAssetCmd.Flags().Uint64Var(&numValidRounds, "validrounds", 0, "The number of rounds for which the transaction will be valid")
+	destroyAssetCmd.Flags().Uint64Var(&lastValid, "lastvalid", 0, "The last round where the transaction may be committed to the ledger")
 	destroyAssetCmd.Flags().StringVarP(&txFilename, "out", "o", "", "Write transaction to this file")
 	destroyAssetCmd.Flags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
 	destroyAssetCmd.Flags().StringVar(&noteBase64, "noteb64", "", "Note (URL-base64 encoded)")
@@ -97,6 +98,7 @@ func init() {
 	configAssetCmd.Flags().Uint64Var(&fee, "fee", 0, "The transaction fee (automatically determined by default), in microAlgos")
 	configAssetCmd.Flags().Uint64Var(&firstValid, "firstvalid", 0, "The first round where the transaction may be committed to the ledger")
 	configAssetCmd.Flags().Uint64Var(&numValidRounds, "validrounds", 0, "The number of rounds for which the transaction will be valid")
+	configAssetCmd.Flags().Uint64Var(&lastValid, "lastvalid", 0, "The last round where the transaction may be committed to the ledger")
 	configAssetCmd.Flags().StringVarP(&txFilename, "out", "o", "", "Write transaction to this file")
 	configAssetCmd.Flags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
 	configAssetCmd.Flags().StringVar(&noteBase64, "noteb64", "", "Note (URL-base64 encoded)")
@@ -115,6 +117,7 @@ func init() {
 	sendAssetCmd.Flags().Uint64Var(&fee, "fee", 0, "The transaction fee (automatically determined by default), in microAlgos")
 	sendAssetCmd.Flags().Uint64Var(&firstValid, "firstvalid", 0, "The first round where the transaction may be committed to the ledger")
 	sendAssetCmd.Flags().Uint64Var(&numValidRounds, "validrounds", 0, "The number of rounds for which the transaction will be valid")
+	sendAssetCmd.Flags().Uint64Var(&lastValid, "lastvalid", 0, "The last round where the transaction may be committed to the ledger")
 	sendAssetCmd.Flags().StringVarP(&txFilename, "out", "o", "", "Write transaction to this file")
 	sendAssetCmd.Flags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
 	sendAssetCmd.Flags().StringVar(&noteBase64, "noteb64", "", "Note (URL-base64 encoded)")
@@ -132,6 +135,7 @@ func init() {
 	freezeAssetCmd.Flags().Uint64Var(&fee, "fee", 0, "The transaction fee (automatically determined by default), in microAlgos")
 	freezeAssetCmd.Flags().Uint64Var(&firstValid, "firstvalid", 0, "The first round where the transaction may be committed to the ledger")
 	freezeAssetCmd.Flags().Uint64Var(&numValidRounds, "validrounds", 0, "The number of rounds for which the transaction will be valid")
+	freezeAssetCmd.Flags().Uint64Var(&lastValid, "lastvalid", 0, "The last round where the transaction may be committed to the ledger")
 	freezeAssetCmd.Flags().StringVarP(&txFilename, "out", "o", "", "Write transaction to this file")
 	freezeAssetCmd.Flags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
 	freezeAssetCmd.Flags().StringVar(&noteBase64, "noteb64", "", "Note (URL-base64 encoded)")
@@ -202,6 +206,8 @@ var createAssetCmd = &cobra.Command{
 	Short: "Create an asset",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
+		checkTxValidityPeriodCmdFlags(cmd)
+
 		dataDir := ensureSingleDataDir()
 		client := ensureFullClient(dataDir)
 		accountList := makeAccountsList(dataDir)
@@ -223,7 +229,11 @@ var createAssetCmd = &cobra.Command{
 
 		tx.Note = parseNoteField(cmd)
 
-		tx, err = client.FillUnsignedTxTemplate(creator, firstValid, numValidRounds, fee, tx)
+		fv, lv, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		if err != nil {
+			reportErrorf("Cannot determine last valid round: %s", err)
+		}
+		tx, err = client.FillUnsignedTxTemplate(creator, fv, lv, fee, tx)
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
@@ -271,6 +281,8 @@ var destroyAssetCmd = &cobra.Command{
 	Short: "Destroy an asset",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
+		checkTxValidityPeriodCmdFlags(cmd)
+
 		dataDir := ensureSingleDataDir()
 		client := ensureFullClient(dataDir)
 		accountList := makeAccountsList(dataDir)
@@ -291,7 +303,11 @@ var destroyAssetCmd = &cobra.Command{
 
 		tx.Note = parseNoteField(cmd)
 
-		tx, err = client.FillUnsignedTxTemplate(manager, firstValid, numValidRounds, fee, tx)
+		firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		if err != nil {
+			reportErrorf("Cannot determine last valid round: %s", err)
+		}
+		tx, err = client.FillUnsignedTxTemplate(manager, firstValid, lastValid, fee, tx)
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
@@ -331,6 +347,8 @@ var configAssetCmd = &cobra.Command{
 	Short: "Configure an asset",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
+		checkTxValidityPeriodCmdFlags(cmd)
+
 		dataDir := ensureSingleDataDir()
 		client := ensureFullClient(dataDir)
 		accountList := makeAccountsList(dataDir)
@@ -372,7 +390,11 @@ var configAssetCmd = &cobra.Command{
 
 		tx.Note = parseNoteField(cmd)
 
-		tx, err = client.FillUnsignedTxTemplate(manager, firstValid, numValidRounds, fee, tx)
+		firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		if err != nil {
+			reportErrorf("Cannot determine last valid round: %s", err)
+		}
+		tx, err = client.FillUnsignedTxTemplate(manager, firstValid, lastValid, fee, tx)
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
@@ -413,6 +435,8 @@ var sendAssetCmd = &cobra.Command{
 	Long:  "Transfer asset holdings.  Use a zero self-transfer to add an asset to an account in the first place.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
+		checkTxValidityPeriodCmdFlags(cmd)
+
 		dataDir := ensureSingleDataDir()
 		client := ensureFullClient(dataDir)
 		accountList := makeAccountsList(dataDir)
@@ -446,7 +470,11 @@ var sendAssetCmd = &cobra.Command{
 
 		tx.Note = parseNoteField(cmd)
 
-		tx, err = client.FillUnsignedTxTemplate(sender, firstValid, numValidRounds, fee, tx)
+		firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		if err != nil {
+			reportErrorf("Cannot determine last valid round: %s", err)
+		}
+		tx, err = client.FillUnsignedTxTemplate(sender, firstValid, lastValid, fee, tx)
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
@@ -486,6 +514,8 @@ var freezeAssetCmd = &cobra.Command{
 	Short: "Freeze assets",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
+		checkTxValidityPeriodCmdFlags(cmd)
+
 		dataDir := ensureSingleDataDir()
 		client := ensureFullClient(dataDir)
 		accountList := makeAccountsList(dataDir)
@@ -503,7 +533,11 @@ var freezeAssetCmd = &cobra.Command{
 
 		tx.Note = parseNoteField(cmd)
 
-		tx, err = client.FillUnsignedTxTemplate(freezer, firstValid, numValidRounds, fee, tx)
+		firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		if err != nil {
+			reportErrorf("Cannot determine last valid round: %s", err)
+		}
+		tx, err = client.FillUnsignedTxTemplate(freezer, firstValid, lastValid, fee, tx)
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}

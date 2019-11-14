@@ -44,8 +44,6 @@ var (
 	account         string
 	amount          uint64
 	fee             uint64
-	firstValid      uint64
-	lastValid       uint64
 	txFilename      string
 	outFilename     string
 	rejectsFilename string
@@ -86,6 +84,7 @@ func init() {
 	sendCmd.Flags().Uint64Var(&fee, "fee", 0, "The transaction fee (automatically determined by default), in microAlgos")
 	sendCmd.Flags().Uint64Var(&firstValid, "firstvalid", 0, "The first round where the transaction may be committed to the ledger")
 	sendCmd.Flags().Uint64Var(&lastValid, "lastvalid", 0, "The last round where the transaction may be committed to the ledger")
+	sendCmd.Flags().Uint64VarP(&numValidRounds, "validrounds", "v", 0, "The validity period for the transaction, used to calculate lastvalid")
 	sendCmd.Flags().StringVar(&noteBase64, "noteb64", "", "Note (URL-base64 encoded)")
 	sendCmd.Flags().StringVarP(&noteText, "note", "n", "", "Note text (ignored if --noteb64 used also)")
 	sendCmd.Flags().StringVarP(&lease, "lease", "x", "", "Lease value (base64, optional): no transaction may also acquire this lease until lastvalid")
@@ -261,6 +260,8 @@ var sendCmd = &cobra.Command{
 			reportErrorln(soFlagError)
 		}
 
+		checkTxValidityPeriodCmdFlags(cmd)
+
 		dataDir := ensureSingleDataDir()
 		accountList := makeAccountsList(dataDir)
 
@@ -324,7 +325,14 @@ var sendCmd = &cobra.Command{
 		}
 
 		client := ensureFullClient(dataDir)
-		payment, err := client.ConstructPayment(fromAddressResolved, toAddressResolved, fee, amount, noteBytes, closeToAddressResolved, leaseBytes, basics.Round(firstValid), basics.Round(lastValid))
+		firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		if err != nil {
+			reportErrorf(err.Error())
+		}
+		payment, err := client.ConstructPayment(
+			fromAddressResolved, toAddressResolved, fee, amount, noteBytes, closeToAddressResolved,
+			leaseBytes, basics.Round(firstValid), basics.Round(lastValid),
+		)
 		if err != nil {
 			reportErrorf(errorConstructingTX, err)
 		}

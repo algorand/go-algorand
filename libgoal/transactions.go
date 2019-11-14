@@ -141,7 +141,7 @@ func (c *Client) SignAndBroadcastTransaction(walletHandle, pw []byte, utx transa
 }
 
 // MakeUnsignedGoOnlineTx creates a transaction that will bring an address online using available participation keys
-func (c *Client) MakeUnsignedGoOnlineTx(address string, part *account.Participation, round, txValidRounds, fee uint64, leaseBytes [32]byte) (transactions.Transaction, error) {
+func (c *Client) MakeUnsignedGoOnlineTx(address string, part *account.Participation, firstValid, lastValid, fee uint64, leaseBytes [32]byte) (transactions.Transaction, error) {
 	// Parse the address
 	parsedAddr, err := basics.UnmarshalChecksumAddress(address)
 	if err != nil {
@@ -154,37 +154,31 @@ func (c *Client) MakeUnsignedGoOnlineTx(address string, part *account.Participat
 		return transactions.Transaction{}, err
 	}
 
-	// Determine the last round this tx will be valid
-	if round == 0 {
-		round = params.LastRound + 1
-	}
-
 	cparams, ok := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
 	if !ok {
 		return transactions.Transaction{}, errors.New("unknown consensus version")
 	}
 
-	if txValidRounds == 0 {
-		txValidRounds = cparams.MaxTxnLife
+	firstValid, lastValid, err = computeValidityRounds(firstValid, lastValid, 0, params.LastRound, cparams.MaxTxnLife)
+	if err != nil {
+		return transactions.Transaction{}, err
 	}
 
 	// Choose which participation keys to go online with;
 	// need to do this after filling in the round number.
 	if part == nil {
-		bestPart, err := c.chooseParticipation(parsedAddr, basics.Round(round))
+		bestPart, err := c.chooseParticipation(parsedAddr, basics.Round(firstValid))
 		if err != nil {
 			return transactions.Transaction{}, err
 		}
 		part = &bestPart
 	}
 
-	parsedRound := basics.Round(round)
-	parsedTXValidRounds := basics.Round(txValidRounds)
-
-	lastRound := parsedRound + parsedTXValidRounds
+	parsedFrstValid := basics.Round(firstValid)
+	parsedLastValid := basics.Round(lastValid)
 	parsedFee := basics.MicroAlgos{Raw: fee}
 
-	goOnlineTransaction := part.GenerateRegistrationTransaction(parsedFee, parsedRound, lastRound, leaseBytes, cparams)
+	goOnlineTransaction := part.GenerateRegistrationTransaction(parsedFee, parsedFrstValid, parsedLastValid, leaseBytes, cparams)
 	if cparams.SupportGenesisHash {
 		var genHash crypto.Digest
 		copy(genHash[:], params.GenesisHash)
@@ -209,7 +203,7 @@ func (c *Client) MakeUnsignedGoOnlineTx(address string, part *account.Participat
 }
 
 // MakeUnsignedGoOfflineTx creates a transaction that will bring an address offline
-func (c *Client) MakeUnsignedGoOfflineTx(address string, round, txValidRounds, fee uint64, leaseBytes [32]byte) (transactions.Transaction, error) {
+func (c *Client) MakeUnsignedGoOfflineTx(address string, firstValid, lastValid, fee uint64, leaseBytes [32]byte) (transactions.Transaction, error) {
 	// Parse the address
 	parsedAddr, err := basics.UnmarshalChecksumAddress(address)
 	if err != nil {
@@ -226,18 +220,13 @@ func (c *Client) MakeUnsignedGoOfflineTx(address string, round, txValidRounds, f
 		return transactions.Transaction{}, errors.New("unknown consensus version")
 	}
 
-	// Determine the last round this tx will be valid
-	if round == 0 {
-		round = params.LastRound + 1
+	firstValid, lastValid, err = computeValidityRounds(firstValid, lastValid, 0, params.LastRound, cparams.MaxTxnLife)
+	if err != nil {
+		return transactions.Transaction{}, err
 	}
 
-	if txValidRounds == 0 {
-		txValidRounds = cparams.MaxTxnLife
-	}
-
-	parsedRound := basics.Round(round)
-	parsedTXValidRounds := basics.Round(txValidRounds)
-	lastRound := parsedRound + parsedTXValidRounds
+	parsedFirstRound := basics.Round(firstValid)
+	parsedLastRound := basics.Round(lastValid)
 	parsedFee := basics.MicroAlgos{Raw: fee}
 
 	goOfflineTransaction := transactions.Transaction{
@@ -245,8 +234,8 @@ func (c *Client) MakeUnsignedGoOfflineTx(address string, round, txValidRounds, f
 		Header: transactions.Header{
 			Sender:     parsedAddr,
 			Fee:        parsedFee,
-			FirstValid: parsedRound,
-			LastValid:  lastRound,
+			FirstValid: parsedFirstRound,
+			LastValid:  parsedLastRound,
 			Lease:      leaseBytes,
 		},
 	}
@@ -273,7 +262,7 @@ func (c *Client) MakeUnsignedGoOfflineTx(address string, round, txValidRounds, f
 }
 
 // MakeUnsignedBecomeNonparticipatingTx creates a transaction that will mark an account as non-participating
-func (c *Client) MakeUnsignedBecomeNonparticipatingTx(address string, round, txValidRounds, fee uint64) (transactions.Transaction, error) {
+func (c *Client) MakeUnsignedBecomeNonparticipatingTx(address string, firstValid, lastValid, fee uint64) (transactions.Transaction, error) {
 	// Parse the address
 	parsedAddr, err := basics.UnmarshalChecksumAddress(address)
 	if err != nil {
@@ -290,18 +279,13 @@ func (c *Client) MakeUnsignedBecomeNonparticipatingTx(address string, round, txV
 		return transactions.Transaction{}, errors.New("unknown consensus version")
 	}
 
-	// Determine the last round this tx will be valid
-	if round == 0 {
-		round = params.LastRound + 1
+	firstValid, lastValid, err = computeValidityRounds(firstValid, lastValid, 0, params.LastRound, cparams.MaxTxnLife)
+	if err != nil {
+		return transactions.Transaction{}, err
 	}
 
-	if txValidRounds == 0 {
-		txValidRounds = cparams.MaxTxnLife
-	}
-
-	parsedRound := basics.Round(round)
-	parsedTXValidRounds := basics.Round(txValidRounds)
-	lastRound := parsedRound + parsedTXValidRounds
+	parsedFirstRound := basics.Round(firstValid)
+	parsedLastRound := basics.Round(lastValid)
 	parsedFee := basics.MicroAlgos{Raw: fee}
 
 	becomeNonparticipatingTransaction := transactions.Transaction{
@@ -309,8 +293,8 @@ func (c *Client) MakeUnsignedBecomeNonparticipatingTx(address string, round, txV
 		Header: transactions.Header{
 			Sender:     parsedAddr,
 			Fee:        parsedFee,
-			FirstValid: parsedRound,
-			LastValid:  lastRound,
+			FirstValid: parsedFirstRound,
+			LastValid:  parsedLastRound,
 		},
 	}
 	if cparams.SupportGenesisHash {
@@ -337,7 +321,7 @@ func (c *Client) MakeUnsignedBecomeNonparticipatingTx(address string, round, txV
 }
 
 // FillUnsignedTxTemplate fills in header fields in a partially-filled-in transaction.
-func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, numValidRounds, fee uint64, tx transactions.Transaction) (transactions.Transaction, error) {
+func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, lastValid, fee uint64, tx transactions.Transaction) (transactions.Transaction, error) {
 	// Parse the address
 	parsedAddr, err := basics.UnmarshalChecksumAddress(sender)
 	if err != nil {
@@ -354,23 +338,17 @@ func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, numValidRound
 		return transactions.Transaction{}, errors.New("unknown consensus version")
 	}
 
-	// Determine the last round this tx will be valid
-	if firstValid == 0 {
-		firstValid = params.LastRound + 1
+	firstValid, lastValid, err = computeValidityRounds(firstValid, lastValid, 0, params.LastRound, cparams.MaxTxnLife)
+	if err != nil {
+		return transactions.Transaction{}, err
 	}
 
-	if numValidRounds == 0 {
-		numValidRounds = cparams.MaxTxnLife
-	}
-
-	parsedFirstValid := basics.Round(firstValid)
-	parsedLastValid := basics.Round(firstValid + numValidRounds)
 	parsedFee := basics.MicroAlgos{Raw: fee}
 
 	tx.Header.Sender = parsedAddr
 	tx.Header.Fee = parsedFee
-	tx.Header.FirstValid = parsedFirstValid
-	tx.Header.LastValid = parsedLastValid
+	tx.Header.FirstValid = basics.Round(firstValid)
+	tx.Header.LastValid = basics.Round(lastValid)
 
 	if cparams.SupportGenesisHash {
 		var genHash crypto.Digest

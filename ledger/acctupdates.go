@@ -282,7 +282,9 @@ func (au *accountUpdates) listAssets(maxAssetIdx basics.AssetIndex, maxResults u
 	// created/deleted asset indices in memory.
 	keys := make([]basics.AssetIndex, 0, len(au.assets))
 	for aidx := range au.assets {
-		keys = append(keys, aidx)
+		if aidx <= maxAssetIdx {
+			keys = append(keys, aidx)
+		}
 	}
 	sort.Slice(keys, func(i, j int) bool { return keys[i] > keys[j] })
 
@@ -291,7 +293,7 @@ func (au *accountUpdates) listAssets(maxAssetIdx basics.AssetIndex, maxResults u
 	deletedAssets := make(map[basics.AssetIndex]bool)
 	for _, aidx := range keys {
 		delta := au.assets[aidx]
-		if delta.created && aidx <= maxAssetIdx {
+		if delta.created {
 			// Created asset that only exists in memory
 			unsyncedAssets = append(unsyncedAssets, basics.AssetLocator{
 				Index:   aidx,
@@ -303,7 +305,7 @@ func (au *accountUpdates) listAssets(maxAssetIdx basics.AssetIndex, maxResults u
 		}
 	}
 
-	// Check in-memory created assets, which will always be larger than anything
+	// Check in-memory created assets, which will always be newer than anything
 	// in the database
 	var res []basics.AssetLocator
 	for _, loc := range unsyncedAssets {
