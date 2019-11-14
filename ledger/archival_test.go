@@ -209,11 +209,13 @@ func TestArchivalRestart(t *testing.T) {
 	require.Equal(t, basics.Round(0), earliest)
 }
 
-func makeUnsignedAssetCreateTx(total uint64, defaultFrozen bool, manager string, reserve string, freeze string, clawback string, unitName string, assetName string, url string, metadataHash []byte) (transactions.Transaction, error) {
+func makeUnsignedAssetCreateTx(firstValid, lastValid basics.Round, total uint64, defaultFrozen bool, manager string, reserve string, freeze string, clawback string, unitName string, assetName string, url string, metadataHash []byte) (transactions.Transaction, error) {
 	var tx transactions.Transaction
 	var err error
 
 	tx.Type = protocol.AssetConfigTx
+	tx.FirstValid = firstValid
+	tx.LastValid = lastValid
 	tx.AssetParams = basics.AssetParams{
 		Total:         total,
 		DefaultFrozen: defaultFrozen,
@@ -239,6 +241,16 @@ func makeUnsignedAssetCreateTx(total uint64, defaultFrozen bool, manager string,
 	tx.AssetParams.UnitName = unitName
 	tx.AssetParams.AssetName = assetName
 	return tx, nil
+}
+
+func makeUnsignedAssetDestroyTx(client libgoal.Client, firstValid, lastValid basics.Round, assetIndex uint64) (transactions.Transaction, error) {
+	txn, err := client.MakeUnsignedAssetDestroyTx(assetIndex)
+	if err != nil {
+		return transactions.Transaction{}, err
+	}
+	txn.FirstValid = firstValid
+	txn.LastValid = lastValid
+	return txn, nil
 }
 
 func TestArchivalAssets(t *testing.T) {
@@ -293,7 +305,7 @@ func TestArchivalAssets(t *testing.T) {
 
 		// make a transaction that will create an asset
 		creatorEncoded := creators[i].String()
-		tx, err := makeUnsignedAssetCreateTx(100, false, creatorEncoded, creatorEncoded, creatorEncoded, creatorEncoded, "m", "m", "", nil)
+		tx, err := makeUnsignedAssetCreateTx(blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, 100, false, creatorEncoded, creatorEncoded, creatorEncoded, creatorEncoded, "m", "m", "", nil)
 		require.NoError(t, err)
 		tx.Sender = creators[i]
 		createdAssetIdx := basics.AssetIndex(blk.BlockHeader.TxnCounter + 1)
@@ -312,7 +324,7 @@ func TestArchivalAssets(t *testing.T) {
 
 		// for one of the assets, delete it in the same block
 		if i == maxBlocks/2 {
-			tx0, err := client.MakeUnsignedAssetDestroyTx(blk.BlockHeader.TxnCounter)
+			tx0, err := makeUnsignedAssetDestroyTx(client, blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, blk.BlockHeader.TxnCounter)
 			require.NoError(t, err)
 			tx0.Sender = assetCreators[createdAssetIdx]
 			blk.Payset = append(blk.Payset, makeSignedTxnInBlock(tx0))
@@ -375,7 +387,7 @@ func TestArchivalAssets(t *testing.T) {
 
 	// delete an old asset and a new asset
 	assetToDelete := basics.AssetIndex(1)
-	tx0, err := client.MakeUnsignedAssetDestroyTx(uint64(assetToDelete))
+	tx0, err := makeUnsignedAssetDestroyTx(client, blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, uint64(assetToDelete))
 	require.NoError(t, err)
 	tx0.Sender = assetCreators[assetToDelete]
 	assetIdxs[assetToDelete] = false
@@ -384,7 +396,7 @@ func TestArchivalAssets(t *testing.T) {
 	expectedDeleted++
 
 	assetToDelete = basics.AssetIndex(maxBlocks)
-	tx1, err := client.MakeUnsignedAssetDestroyTx(uint64(assetToDelete))
+	tx1, err := makeUnsignedAssetDestroyTx(client, blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, uint64(assetToDelete))
 	require.NoError(t, err)
 	tx1.Sender = assetCreators[assetToDelete]
 	assetIdxs[assetToDelete] = false
