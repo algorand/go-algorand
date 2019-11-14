@@ -39,7 +39,7 @@
     "RunHosted": false,
     "SuggestedFeeBlockHistory": 3,
     "TxPoolExponentialIncreaseFactor": 2,
-    "TxPoolSize": 50000,
+    "TxPoolSize": 15000,
     "TxSyncIntervalSeconds": 60,
     "TxSyncTimeoutSeconds": 30,
     "TxSyncServeResponseSize": 1000000,

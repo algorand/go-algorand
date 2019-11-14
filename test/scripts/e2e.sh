@@ -58,9 +58,16 @@ pkill -u $(whoami) -x algod || true
 # Change current directory to test/scripts so we can just use ./test.sh to exec.
 cd "${SCRIPT_PATH}"
 
-./e2e_basic_start_stop.sh
+./timeout 200 ./e2e_basic_start_stop.sh
 
-./e2e_teal.sh
+./timeout 200 ./e2e_teal.sh
+
+./timeout 200 ./limit-swap-test.sh
+
+./timeout 200 ./teal-split-test.sh
+
+# TODO: use ./timeout script across these three scripts when it gets committed from another branch
+./periodic-teal-test.sh
 
 # Export our root temp folder as 'TESTDIR' for tests to use as their root test folder
 # This allows us to clean up everything with our rm -rf trap.

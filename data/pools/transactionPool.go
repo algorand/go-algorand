@@ -47,6 +47,7 @@ type TransactionPool struct {
 	statusCache            *statusCache
 	logStats               bool
 	expFeeFactor           uint64
+	txPoolMaxSize          int
 
 	// pendingMu protects pendingTxGroups and pendingTxids
 	pendingMu       deadlock.RWMutex
@@ -83,6 +84,7 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local) *TransactionPo
 		logStats:        cfg.EnableAssembleStats,
 		expFeeFactor:    cfg.TxPoolExponentialIncreaseFactor,
 		lsigCache:       makeLsigEvalCache(cfg.TxPoolSize),
+		txPoolMaxSize:   cfg.TxPoolSize,
 	}
 	pool.cond.L = &pool.mu
 	pool.recomputeBlockEvaluator(make(map[transactions.Txid]struct{}))
@@ -170,6 +172,11 @@ func (pool *TransactionPool) PendingCount() int {
 func (pool *TransactionPool) Test(txgroup []transactions.SignedTxn) error {
 	for i := range txgroup {
 		txgroup[i].InitCaches()
+	}
+
+	pendingSize := len(pool.Pending())
+	if pendingSize >= pool.txPoolMaxSize {
+		return fmt.Errorf("TransactionPool.Test: transaction pool have reached capacity")
 	}
 
 	pool.mu.Lock()
