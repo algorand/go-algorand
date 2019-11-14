@@ -77,8 +77,8 @@ func (x *roundCowBase) lookup(addr basics.Address) (basics.AccountData, error) {
 	return x.l.LookupWithoutRewards(x.rnd, addr)
 }
 
-func (x *roundCowBase) isDup(firstValid basics.Round, txid transactions.Txid, txl txlease) (bool, error) {
-	return x.l.isDup(x.proto, x.rnd+1, firstValid, x.rnd, txid, txl)
+func (x *roundCowBase) isDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl txlease) (bool, error) {
+	return x.l.isDup(x.proto, x.rnd+1, firstValid, lastValid, txid, txl)
 }
 
 func (x *roundCowBase) txnCounter() uint64 {
@@ -481,7 +481,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 
 		// Transaction already in the ledger?
 		txid := txn.ID()
-		dup, err := cow.isDup(txn.Txn.First(), txid, txlease{sender: txn.Txn.Sender, lease: txn.Txn.Lease})
+		dup, err := cow.isDup(txn.Txn.First(), txn.Txn.Last(), txid, txlease{sender: txn.Txn.Sender, lease: txn.Txn.Lease})
 		if err != nil {
 			return err
 		}
