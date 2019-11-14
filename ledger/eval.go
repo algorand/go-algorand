@@ -362,31 +362,31 @@ func (eval *BlockEvaluator) ResetTxnBytes() {
 // Transaction tentatively adds a new transaction as part of this block evaluation.
 // If the transaction cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn, ad transactions.ApplyData) error {
+func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn, ad transactions.ApplyData, skipCrypto bool) error {
 	return eval.transactionGroup([]transactions.SignedTxnWithAD{
 		transactions.SignedTxnWithAD{
 			SignedTxn: txn,
 			ApplyData: ad,
 		},
-	}, true)
+	}, true, skipCrypto)
 }
 
 // TransactionGroup tentatively adds a new transaction group as part of this block evaluation.
 // If the transaction group cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) TransactionGroup(txads []transactions.SignedTxnWithAD) error {
-	return eval.transactionGroup(txads, true)
+func (eval *BlockEvaluator) TransactionGroup(txads []transactions.SignedTxnWithAD, skipCrypto bool) error {
+	return eval.transactionGroup(txads, true, skipCrypto)
 }
 
 // TestTransactionGroup checks if a given transaction group could be executed at this
 // point in the block evaluator, but does not actually add the transactions to the block
 // evaluator, or modify the block evaluator state in any other visible way.
-func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTxn) error {
+func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTxn, skipCrypto bool) error {
 	txads := make([]transactions.SignedTxnWithAD, len(txgroup))
 	for i := range txgroup {
 		txads[i].SignedTxn = txgroup[i]
 	}
-	return eval.transactionGroup(txads, false)
+	return eval.transactionGroup(txads, false, skipCrypto)
 }
 
 // transactionGroup tentatively executes a group of transactions as part of this block evaluation.
@@ -394,7 +394,7 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 // an error is returned and the block evaluator state is unchanged.  If remember is true,
 // the transaction group is added to the block evaluator state; otherwise, the block evaluator
 // is not modified and does not remember this transaction group.
-func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWithAD, remember bool) error {
+func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWithAD, remember bool, skipCrypto bool) error {
 	// Nothing to do if there are no transactions.
 	if len(txgroup) == 0 {
 		return nil
@@ -413,7 +413,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
-		err := eval.transaction(txad.SignedTxn, txad.ApplyData, txgroup, gi, cow, &txib)
+		err := eval.transaction(txad.SignedTxn, txad.ApplyData, txgroup, gi, cow, &txib, skipCrypto)
 		if err != nil {
 			return err
 		}
@@ -464,7 +464,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 // transaction tentatively executes a new transaction as part of this block evaluation.
 // If the transaction cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transactions.ApplyData, txgroup []transactions.SignedTxnWithAD, groupIndex int, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
+func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transactions.ApplyData, txgroup []transactions.SignedTxnWithAD, groupIndex int, cow *roundCowState, txib *transactions.SignedTxnInBlock, skipCrypto bool) error {
 	var err error
 
 	spec := transactions.SpecialAddresses{
@@ -495,38 +495,40 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 			return fmt.Errorf("transaction %v: malformed: %v", txn.ID(), err)
 		}
 
-		// Properly signed?
-		if eval.txcache == nil || !eval.txcache.Verified(txn) {
-			err = verify.TxnPool(&txn, spec, eval.proto, eval.verificationPool)
-			if err != nil {
-				return fmt.Errorf("transaction %v: failed to verify: %v", txn.ID(), err)
-			}
-
-		}
-
 		// Verify that groups are supported.
 		if !txn.Txn.Group.IsZero() && !eval.proto.SupportTxGroups {
 			return fmt.Errorf("transaction groups not supported")
 		}
 
-		needCheckLsig := !txn.Lsig.Blank()
-		if needCheckLsig {
-			found, txErr := eval.txcache.EvalOk(eval.block.CurrentProtocol, txid)
-			if found {
-				if txErr == nil {
-					needCheckLsig = false
-				} else {
-					return txErr
+		if !skipCrypto {
+			// Properly signed?
+			if eval.txcache == nil || !eval.txcache.Verified(txn) {
+				err = verify.TxnPool(&txn, spec, eval.proto, eval.verificationPool)
+				if err != nil {
+					return fmt.Errorf("transaction %v: failed to verify: %v", txn.ID(), err)
+				}
+
+			}
+
+			needCheckLsig := !txn.Lsig.Blank()
+			if needCheckLsig {
+				found, txErr := eval.txcache.EvalOk(eval.block.CurrentProtocol, txid)
+				if found {
+					if txErr == nil {
+						needCheckLsig = false
+					} else {
+						return txErr
+					}
 				}
 			}
-		}
-		if needCheckLsig {
-			err = eval.checkLogicSig(txn, txgroup, groupIndex)
-			if err != nil {
-				eval.txcache.EvalRemember(eval.block.CurrentProtocol, txid, err)
-				return err
+			if needCheckLsig {
+				err = eval.checkLogicSig(txn, txgroup, groupIndex)
+				if err != nil {
+					eval.txcache.EvalRemember(eval.block.CurrentProtocol, txid, err)
+					return err
+				}
+				eval.txcache.EvalRemember(eval.block.CurrentProtocol, txid, nil)
 			}
-			eval.txcache.EvalRemember(eval.block.CurrentProtocol, txid, nil)
 		}
 	}
 
@@ -708,7 +710,7 @@ func (l *Ledger) eval(ctx context.Context, blk bookkeeping.Block, aux *evalAux, 
 		default:
 		}
 
-		err = eval.TransactionGroup(txgroup)
+		err = eval.TransactionGroup(txgroup, false)
 		if err != nil {
 			return StateDelta{}, evalAux{}, err
 		}

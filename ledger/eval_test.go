@@ -79,17 +79,17 @@ func TestBlockEvaluator(t *testing.T) {
 	st := transactions.SignedTxn{
 		Txn: txn,
 	}
-	err = eval.Transaction(st, transactions.ApplyData{})
+	err = eval.Transaction(st, transactions.ApplyData{}, false)
 	require.Error(t, err)
 
 	// Random signature should fail
 	crypto.RandBytes(st.Sig[:])
-	err = eval.Transaction(st, transactions.ApplyData{})
+	err = eval.Transaction(st, transactions.ApplyData{}, false)
 	require.Error(t, err)
 
 	// Correct signature should work
 	st = txn.Sign(keys[0])
-	err = eval.Transaction(st, transactions.ApplyData{})
+	err = eval.Transaction(st, transactions.ApplyData{}, false)
 	require.NoError(t, err)
 
 	selfTxn := transactions.Transaction{
@@ -106,7 +106,7 @@ func TestBlockEvaluator(t *testing.T) {
 			Amount:   basics.MicroAlgos{Raw: 100},
 		},
 	}
-	err = eval.Transaction(selfTxn.Sign(keys[2]), transactions.ApplyData{})
+	err = eval.Transaction(selfTxn.Sign(keys[2]), transactions.ApplyData{}, false)
 	require.NoError(t, err)
 
 	validatedBlock, err := eval.GenerateBlock()

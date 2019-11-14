@@ -178,6 +178,22 @@ func (pool *TransactionPool) checkPendingQueueSize() error {
 	return nil
 }
 
+// QuickTest is like Test, but it does not perform cryptographic verification.
+func (pool *TransactionPool) QuickTest(txgroup []transactions.SignedTxn) error {
+	if err := pool.checkPendingQueueSize(); err != nil {
+		return err
+	}
+
+	for i := range txgroup {
+		txgroup[i].InitCaches()
+	}
+
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	return pool.test(txgroup, true)
+}
+
 // Test checks whether a transaction group could be remembered in the pool,
 // but does not actually store this transaction in the pool.
 func (pool *TransactionPool) Test(txgroup []transactions.SignedTxn) error {
@@ -192,7 +208,7 @@ func (pool *TransactionPool) Test(txgroup []transactions.SignedTxn) error {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
-	return pool.test(txgroup)
+	return pool.test(txgroup, false)
 }
 
 // test checks whether a transaction group could be remembered in the pool,
@@ -200,7 +216,7 @@ func (pool *TransactionPool) Test(txgroup []transactions.SignedTxn) error {
 //
 // test assumes that pool.mu is locked.  It might release the lock
 // while it waits for OnNewBlock() to be called.
-func (pool *TransactionPool) test(txgroup []transactions.SignedTxn) error {
+func (pool *TransactionPool) test(txgroup []transactions.SignedTxn, skipCrypto bool) error {
 	if pool.pendingBlockEvaluator == nil {
 		return fmt.Errorf("TransactionPool.test: no pending block evaluator")
 	}
@@ -218,7 +234,7 @@ func (pool *TransactionPool) test(txgroup []transactions.SignedTxn) error {
 	}
 
 	tentativeRound := pool.pendingBlockEvaluator.Round() + pool.numPendingWholeBlocks
-	err := pool.pendingBlockEvaluator.TestTransactionGroup(txgroup)
+	err := pool.pendingBlockEvaluator.TestTransactionGroup(txgroup, skipCrypto)
 	if err == ledger.ErrNoSpace {
 		tentativeRound++
 	} else if err != nil {
@@ -277,13 +293,13 @@ func (pool *TransactionPool) test(txgroup []transactions.SignedTxn) error {
 
 // RememberOne stores the provided transaction
 // Precondition: Only RememberOne() properly-signed and well-formed transactions (i.e., ensure t.WellFormed())
-func (pool *TransactionPool) RememberOne(t transactions.SignedTxn) error {
-	return pool.Remember([]transactions.SignedTxn{t})
+func (pool *TransactionPool) RememberOne(t transactions.SignedTxn, skipCrypto bool) error {
+	return pool.Remember([]transactions.SignedTxn{t}, skipCrypto)
 }
 
 // Remember stores the provided transaction group
 // Precondition: Only Remember() properly-signed and well-formed transactions (i.e., ensure t.WellFormed())
-func (pool *TransactionPool) Remember(txgroup []transactions.SignedTxn) error {
+func (pool *TransactionPool) Remember(txgroup []transactions.SignedTxn, skipCrypto bool) error {
 	if err := pool.checkPendingQueueSize(); err != nil {
 		return err
 	}
@@ -295,7 +311,7 @@ func (pool *TransactionPool) Remember(txgroup []transactions.SignedTxn) error {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
-	err := pool.test(txgroup)
+	err := pool.test(txgroup, skipCrypto)
 	if err != nil {
 		return fmt.Errorf("TransactionPool.Remember: %v", err)
 	}
@@ -304,7 +320,7 @@ func (pool *TransactionPool) Remember(txgroup []transactions.SignedTxn) error {
 		return fmt.Errorf("TransactionPool.Remember: no pending block evaluator")
 	}
 
-	err = pool.remember(txgroup)
+	err = pool.remember(txgroup, true)
 	if err != nil {
 		return fmt.Errorf("TransactionPool.Remember: %v", err)
 	}
@@ -314,8 +330,8 @@ func (pool *TransactionPool) Remember(txgroup []transactions.SignedTxn) error {
 }
 
 // remember tries to add the transaction to the pool, bypassing the fee priority checks.
-func (pool *TransactionPool) remember(txgroup []transactions.SignedTxn) error {
-	err := pool.addToPendingBlockEvaluator(txgroup)
+func (pool *TransactionPool) remember(txgroup []transactions.SignedTxn, skipCrypto bool) error {
+	err := pool.addToPendingBlockEvaluator(txgroup, skipCrypto)
 	if err != nil {
 		return err
 	}
@@ -468,7 +484,7 @@ func (pool *alwaysVerifiedPool) EvalRemember(cvers protocol.ConsensusVersion, tx
 	pool.pool.EvalRemember(cvers, txid, txErr)
 }
 
-func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactions.SignedTxn) error {
+func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactions.SignedTxn, skipCrypto bool) error {
 	r := pool.pendingBlockEvaluator.Round() + pool.numPendingWholeBlocks
 	for _, tx := range txgroup {
 		if tx.Txn.LastValid < r {
@@ -484,15 +500,15 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 	for i, tx := range txgroup {
 		txgroupad[i].SignedTxn = tx
 	}
-	return pool.pendingBlockEvaluator.TransactionGroup(txgroupad)
+	return pool.pendingBlockEvaluator.TransactionGroup(txgroupad, skipCrypto)
 }
 
-func (pool *TransactionPool) addToPendingBlockEvaluator(txgroup []transactions.SignedTxn) error {
-	err := pool.addToPendingBlockEvaluatorOnce(txgroup)
+func (pool *TransactionPool) addToPendingBlockEvaluator(txgroup []transactions.SignedTxn, skipCrypto bool) error {
+	err := pool.addToPendingBlockEvaluatorOnce(txgroup, skipCrypto)
 	if err == ledger.ErrNoSpace {
 		pool.numPendingWholeBlocks++
 		pool.pendingBlockEvaluator.ResetTxnBytes()
-		err = pool.addToPendingBlockEvaluatorOnce(txgroup)
+		err = pool.addToPendingBlockEvaluatorOnce(txgroup, skipCrypto)
 	}
 	return err
 }
@@ -531,7 +547,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 		if _, alreadyCommitted := committedTxIds[txgroup[0].ID()]; alreadyCommitted {
 			continue
 		}
-		err := pool.remember(txgroup)
+		err := pool.remember(txgroup, true)
 		if err != nil {
 			for _, tx := range txgroup {
 				pool.statusCache.put(tx, err.Error())

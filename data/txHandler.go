@@ -141,7 +141,7 @@ func (handler *TxHandler) backlogWorker() {
 			verifiedTxGroup := wi.unverifiedTxGroup
 
 			// save the transaction, if it has high enough fee and not already in the cache
-			err := handler.txPool.Remember(verifiedTxGroup)
+			err := handler.txPool.Remember(verifiedTxGroup, true)
 			if err != nil {
 				logging.Base().Debugf("could not remember tx: %v", err)
 				continue
@@ -184,7 +184,7 @@ func (handler *TxHandler) backlogWorker() {
 			verifiedTxGroup := wi.unverifiedTxGroup
 
 			// save the transaction, if it has high enough fee and not already in the cache
-			err := handler.txPool.Remember(verifiedTxGroup)
+			err := handler.txPool.Remember(verifiedTxGroup, true)
 			if err != nil {
 				logging.Base().Debugf("could not remember tx: %v", err)
 				continue
@@ -269,7 +269,7 @@ func (handler *TxHandler) checkAlreadyCommitted(tx *txBacklogMsg) (processingDon
 	logging.Base().Debugf("got a tx group with IDs %v", txids)
 
 	// do a quick test to check that this transaction could potentially be committed, to reject dup pending transactions
-	err := handler.txPool.Test(tx.unverifiedTxGroup)
+	err := handler.txPool.QuickTest(tx.unverifiedTxGroup)
 	if err != nil {
 		logging.Base().Debugf("txPool rejected transaction: %v", err)
 		return true
@@ -337,7 +337,7 @@ func (handler *TxHandler) processDecoded(unverifiedTxGroup []transactions.Signed
 	verifiedTxGroup := unverifiedTxGroup
 
 	// save the transaction, if it has high enough fee and not already in the cache
-	err := handler.txPool.Remember(verifiedTxGroup)
+	err := handler.txPool.Remember(verifiedTxGroup, true)
 	if err != nil {
 		logging.Base().Debugf("could not remember tx: %v", err)
 		return network.OutgoingMessage{}, true

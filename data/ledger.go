@@ -351,7 +351,7 @@ func (l *Ledger) AssemblePayset(pool *pools.TransactionPool, eval *ledger.BlockE
 		for i, tx := range txgroup {
 			txgroupad[i].SignedTxn = tx
 		}
-		err := eval.TransactionGroup(txgroupad)
+		err := eval.TransactionGroup(txgroupad, true)
 		if err == ledger.ErrNoSpace {
 			stats.StopReason = telemetryspec.AssembleBlockFull
 			break
