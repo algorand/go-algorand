@@ -87,7 +87,7 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local) *TransactionPo
 		txPoolMaxSize:   cfg.TxPoolSize,
 	}
 	pool.cond.L = &pool.mu
-	pool.recomputeBlockEvaluator(make(map[transactions.Txid]struct{}))
+	pool.recomputeBlockEvaluator(make(map[transactions.Txid]basics.Round))
 	return &pool
 }
 
@@ -167,16 +167,26 @@ func (pool *TransactionPool) PendingCount() int {
 	return count
 }
 
-// Test checks whether a transaction group could be remembered in the pool,
-// but does not actually store this transaction in the pool.
-func (pool *TransactionPool) Test(txgroup []transactions.SignedTxn) error {
-	for i := range txgroup {
-		txgroup[i].InitCaches()
-	}
-
+// checkPendingQueueSize test to see if there is more room in the pending
+// group transaction list. As long as we haven't surpassed the size limit, we
+// should be good to go.
+func (pool *TransactionPool) checkPendingQueueSize() error {
 	pendingSize := len(pool.Pending())
 	if pendingSize >= pool.txPoolMaxSize {
 		return fmt.Errorf("TransactionPool.Test: transaction pool have reached capacity")
+	}
+	return nil
+}
+
+// Test checks whether a transaction group could be remembered in the pool,
+// but does not actually store this transaction in the pool.
+func (pool *TransactionPool) Test(txgroup []transactions.SignedTxn) error {
+	if err := pool.checkPendingQueueSize(); err != nil {
+		return err
+	}
+
+	for i := range txgroup {
+		txgroup[i].InitCaches()
 	}
 
 	pool.mu.Lock()
@@ -274,6 +284,10 @@ func (pool *TransactionPool) RememberOne(t transactions.SignedTxn) error {
 // Remember stores the provided transaction group
 // Precondition: Only Remember() properly-signed and well-formed transactions (i.e., ensure t.WellFormed())
 func (pool *TransactionPool) Remember(txgroup []transactions.SignedTxn) error {
+	if err := pool.checkPendingQueueSize(); err != nil {
+		return err
+	}
+
 	for i := range txgroup {
 		txgroup[i].InitCaches()
 	}
@@ -486,7 +500,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluator(txgroup []transactions.S
 // recomputeBlockEvaluator constructs a new BlockEvaluator and feeds all
 // in-pool transactions to it (removing any transactions that are rejected
 // by the BlockEvaluator).
-func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transactions.Txid]struct{}) (stats telemetryspec.ProcessBlockMetrics) {
+func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transactions.Txid]basics.Round) (stats telemetryspec.ProcessBlockMetrics) {
 	pool.pendingBlockEvaluator = nil
 
 	latest := pool.ledger.Latest()
