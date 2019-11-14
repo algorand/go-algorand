@@ -42,6 +42,8 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - for (data A, signature B, pubkey C) verify the signature of ("ProgData" || program_hash || data) against the pubkey => {0 or 1}
 - **Cost**: 1900
 
+The 32 byte public key is the last element on the stack, preceeded by the 64 byte signature at the second-to-last element on the stack, preceeded by the data which was signed at the third-to-last element on the stack.
+
 ## +
 
 - Opcode: 0x08 

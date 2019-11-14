@@ -6,7 +6,7 @@ TEAL programs should be short and run fast as they are run in-line along with si
 
 ## The Stack
 
-The stack starts empty and contains values of either uint64 or bytes (`bytes` ar implemented in Go as a []byte slice). Most operations act on the stack, popping arguments from it and pushing results to it.
+The stack starts empty and contains values of either uint64 or bytes (`bytes` are implemented in Go as a []byte slice). Most operations act on the stack, popping arguments from it and pushing results to it.
 
 The maximum stack depth is currently 1000.
 
@@ -63,6 +63,8 @@ A contract account governed by a buggy program might not have a way to get asset
 For one-argument ops, `X` is the last element on the stack, which is typically replaced by a new value.
 
 For two-argument ops, `A` is the previous element on the stack and `B` is the last element on the stack. These typically result in popping A and B from the stack and pushing the result.
+
+`ed25519verify` is currently the only 3 argument opcode and is described in detail in the opcode refrence.
 
 | Op | Description |
 | --- | --- |
@@ -157,6 +159,8 @@ Some of these have immediate data in the byte or bytes after the opcode.
 Additional details in the [opcodes document](TEAL_opcodes.md#txn) on the `txn` op.
 
 **Global Fields**
+
+Global fields are fields that are common to all the transactions in the group. In particular it includes consensus parameters.
 
 | Index | Name | Type | Notes |
 | --- | --- | --- | --- |
