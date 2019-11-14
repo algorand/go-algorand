@@ -237,17 +237,17 @@ func (pool *TransactionPool) Test(txgroup []transactions.SignedTxn) error {
 }
 
 type poolIngestParams struct {
-	remember bool // if set, remember txn
-	checkFee bool // if set, perform fee checks
-	mustSync bool // if set, wait until ledger is caught up
+	remember   bool // if set, remember txn
+	checkFee   bool // if set, perform fee checks
+	preferSync bool // if set, wait until ledger is caught up
 }
 
 // remember attempts to add a transaction group to the pool.
 func (pool *TransactionPool) remember(txgroup []transactions.SignedTxn) error {
 	params := poolIngestParams{
-		remember: true,
-		checkFee: true,
-		mustSync: true,
+		remember:   true,
+		checkFee:   true,
+		preferSync: true,
 	}
 	return pool.ingest(txgroup, params)
 }
@@ -256,9 +256,9 @@ func (pool *TransactionPool) remember(txgroup []transactions.SignedTxn) error {
 // priority checks.
 func (pool *TransactionPool) add(txgroup []transactions.SignedTxn) error {
 	params := poolIngestParams{
-		remember: true,
-		checkFee: false,
-		mustSync: false,
+		remember:   true,
+		checkFee:   false,
+		preferSync: false,
 	}
 	return pool.ingest(txgroup, params)
 }
@@ -267,9 +267,9 @@ func (pool *TransactionPool) add(txgroup []transactions.SignedTxn) error {
 // but does not actually store this transaction in the pool.
 func (pool *TransactionPool) test(txgroup []transactions.SignedTxn) error {
 	params := poolIngestParams{
-		remember: false,
-		checkFee: true,
-		mustSync: true,
+		remember:   false,
+		checkFee:   true,
+		preferSync: true,
 	}
 	return pool.ingest(txgroup, params)
 }
@@ -281,10 +281,10 @@ func (pool *TransactionPool) test(txgroup []transactions.SignedTxn) error {
 // while it waits for OnNewBlock() to be called.
 func (pool *TransactionPool) ingest(txgroup []transactions.SignedTxn, params poolIngestParams) error {
 	if pool.pendingBlockEvaluator == nil {
-		return fmt.Errorf("TransactionPool.test: no pending block evaluator")
+		return fmt.Errorf("TransactionPool.ingest: no pending block evaluator")
 	}
 
-	if params.mustSync {
+	if params.preferSync {
 		// Make sure that the latest block has been processed by OnNewBlock().
 		// If not, we might be in a race, so wait a little bit for OnNewBlock()
 		// to catch up to the ledger.
@@ -293,7 +293,7 @@ func (pool *TransactionPool) ingest(txgroup []transactions.SignedTxn, params poo
 		for pool.pendingBlockEvaluator.Round() <= latest && time.Now().Before(waitExpires) {
 			condvar.TimedWait(&pool.cond, timeoutOnNewBlock)
 			if pool.pendingBlockEvaluator == nil {
-				return fmt.Errorf("TransactionPool.test: no pending block evaluator")
+				return fmt.Errorf("TransactionPool.ingest: no pending block evaluator")
 			}
 		}
 	}
