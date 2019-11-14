@@ -219,8 +219,8 @@ func (pool *TransactionPool) checkSufficientFee(txgroup []transactions.SignedTxn
 	return nil
 }
 
-// Test checks whether a transaction group could be remembered in the pool,
-// but does not actually store this transaction in the pool.
+// Test performs basic duplicate detection and well-formedness checks
+// on a transaction group without storing the group.
 func (pool *TransactionPool) Test(txgroup []transactions.SignedTxn) error {
 	if err := pool.checkPendingQueueSize(); err != nil {
 		return err
@@ -232,12 +232,10 @@ func (pool *TransactionPool) Test(txgroup []transactions.SignedTxn) error {
 
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
-
-	return pool.test(txgroup)
+	return pool.pendingBlockEvaluator.TestTransactionGroup(txgroup)
 }
 
 type poolIngestParams struct {
-	remember   bool // if set, remember txn
 	checkFee   bool // if set, perform fee checks
 	preferSync bool // if set, wait until ledger is caught up
 }
@@ -245,7 +243,6 @@ type poolIngestParams struct {
 // remember attempts to add a transaction group to the pool.
 func (pool *TransactionPool) remember(txgroup []transactions.SignedTxn) error {
 	params := poolIngestParams{
-		remember:   true,
 		checkFee:   true,
 		preferSync: true,
 	}
@@ -256,26 +253,14 @@ func (pool *TransactionPool) remember(txgroup []transactions.SignedTxn) error {
 // priority checks.
 func (pool *TransactionPool) add(txgroup []transactions.SignedTxn) error {
 	params := poolIngestParams{
-		remember:   true,
 		checkFee:   false,
 		preferSync: false,
 	}
 	return pool.ingest(txgroup, params)
 }
 
-// test checks whether a transaction group could be remembered in the pool,
-// but does not actually store this transaction in the pool.
-func (pool *TransactionPool) test(txgroup []transactions.SignedTxn) error {
-	params := poolIngestParams{
-		remember:   false,
-		checkFee:   true,
-		preferSync: true,
-	}
-	return pool.ingest(txgroup, params)
-}
-
 // ingest checks whether a transaction group could be remembered in the pool,
-// and stores this transaction in the pool if remember is set.
+// and stores this transaction if valid.
 //
 // ingest assumes that pool.mu is locked.  It might release the lock
 // while it waits for OnNewBlock() to be called.
@@ -305,34 +290,14 @@ func (pool *TransactionPool) ingest(txgroup []transactions.SignedTxn, params poo
 		}
 	}
 
-	if !params.remember {
-		tentativeRound := pool.pendingBlockEvaluator.Round() + pool.numPendingWholeBlocks
-		err := pool.pendingBlockEvaluator.TestTransactionGroup(txgroup)
-		if err == ledger.ErrNoSpace {
-			tentativeRound++
-		} else if err != nil {
-			return err
-		}
+	err := pool.addToPendingBlockEvaluator(txgroup)
+	if err != nil {
+		return err
+	}
 
-		for _, t := range txgroup {
-			if t.Txn.LastValid < tentativeRound {
-				return transactions.TxnDeadError{
-					Round:      tentativeRound,
-					FirstValid: t.Txn.FirstValid,
-					LastValid:  t.Txn.LastValid,
-				}
-			}
-		}
-	} else {
-		err := pool.addToPendingBlockEvaluator(txgroup)
-		if err != nil {
-			return err
-		}
-
-		pool.rememberedTxGroups = append(pool.rememberedTxGroups, txgroup)
-		for _, t := range txgroup {
-			pool.rememberedTxids[t.ID()] = t
-		}
+	pool.rememberedTxGroups = append(pool.rememberedTxGroups, txgroup)
+	for _, t := range txgroup {
+		pool.rememberedTxids[t.ID()] = t
 	}
 
 	return nil
