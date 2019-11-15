@@ -158,21 +158,21 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 		accounts[cfg.SrcAccount] -= tx.Fee.Raw
 	}
 
+	waitCount := 10
+
 	// submit the asset transactions and validate that they have all been accepted
-	for {
+	for i := 0; i < waitCount; i++ {
 		fmt.Printf("Creating assets\n")
 		for i := 0; i < toCreate; i++ {
 			txid, broadcastErr := client.BroadcastTransaction(*signedTrxs[i])
 			if broadcastErr != nil {
 				fmt.Printf("Cannot broadcast asset creation txn error: %v\n", broadcastErr)
-				//err = broadcastErr
-				//return
 			} else if !cfg.Quiet {
 				fmt.Printf("Broadcast asset creation:  txid=%s\n", txid)
 			}
 		}
 
-		time.Sleep(time.Second * 10)
+		time.Sleep(time.Second)
 
 		account, accountErr = client.AccountInformation(cfg.SrcAccount)
 		if accountErr != nil {
@@ -223,14 +223,14 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 				_, broadcastErr := client.BroadcastTransaction(signedTxn)
 				if broadcastErr != nil {
 					fmt.Printf("Cannot broadcast asset %v init txn in account %v\n", k, addr)
-					err = broadcastErr
-					return
+					//err = broadcastErr
+					//return
+				} else {
+					if !cfg.Quiet {
+						fmt.Printf("Init asset %v in account %v\n", k, addr)
+					}
+					accounts[addr] -= tx.Fee.Raw
 				}
-
-				if !cfg.Quiet {
-					fmt.Printf("Init asset %v in account %v\n", k, addr)
-				}
-				accounts[addr] -= tx.Fee.Raw
 			}
 
 			// fund asset
@@ -264,13 +264,14 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 			_, broadcastErr := client.BroadcastTransaction(stxn)
 			if broadcastErr != nil {
 				fmt.Printf("Cannot broadcast asset %v init fund txn in account %v\n", k, addr)
-				err = broadcastErr
-				return
+				//err = broadcastErr
+				//return
+			} else {
+				if !cfg.Quiet {
+					fmt.Printf("Fund %d asset %d to account %s\n", assetAmt, k, addr)
+				}
+				accounts[cfg.SrcAccount] -= tx.Fee.Raw
 			}
-			if !cfg.Quiet {
-				fmt.Printf("Fund %d asset %d to account %s\n", assetAmt, k, addr)
-			}
-			accounts[cfg.SrcAccount] -= tx.Fee.Raw
 		}
 
 	}
