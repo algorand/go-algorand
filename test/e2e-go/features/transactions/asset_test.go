@@ -18,14 +18,15 @@ package transactions
 
 import (
 	"fmt"
-	"strings"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
@@ -49,6 +50,122 @@ func helperFillSignBroadcast(client libgoal.Client, wh []byte, sender string, tx
 	}
 
 	return client.SignAndBroadcastTransaction(wh, nil, tx)
+}
+
+func TestAssetValidRounds(t *testing.T) {
+	t.Parallel()
+	a := require.New(t)
+
+	var fixture fixtures.RestClientFixture
+	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
+	defer fixture.Shutdown()
+
+	client := fixture.LibGoalClient
+
+	// First, test valid rounds to last valid conversion
+	var firstValid, lastValid, validRounds uint64
+	firstValid = 0
+	lastValid = 0
+	validRounds = 0
+
+	params, err := client.SuggestedParams()
+	a.NoError(err)
+	cparams, ok := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
+	a.True(ok)
+
+	firstValid = 0
+	lastValid = 0
+	validRounds = cparams.MaxTxnLife + 1
+	firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, validRounds)
+	a.NoError(err)
+	a.Equal(params.LastRound+1, firstValid)
+	a.Equal(firstValid+cparams.MaxTxnLife, lastValid)
+
+	firstValid = 0
+	lastValid = 0
+	validRounds = cparams.MaxTxnLife + 2
+	firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, validRounds)
+	a.Error(err)
+	a.True(strings.Contains(err.Error(), "cannot construct transaction: txn validity period"))
+
+	firstValid = 0
+	lastValid = 0
+	validRounds = 1
+	firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, validRounds)
+	a.NoError(err)
+	a.Equal(firstValid, lastValid)
+
+	firstValid = 1
+	lastValid = 0
+	validRounds = 1
+	firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, validRounds)
+	a.NoError(err)
+	a.Equal(uint64(1), firstValid)
+	a.Equal(firstValid, lastValid)
+
+	firstValid = 1
+	lastValid = 0
+	validRounds = cparams.MaxTxnLife
+	firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, validRounds)
+	a.NoError(err)
+	a.Equal(uint64(1), firstValid)
+	a.Equal(cparams.MaxTxnLife, lastValid)
+
+	firstValid = 100
+	lastValid = 0
+	validRounds = cparams.MaxTxnLife
+	firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, validRounds)
+	a.NoError(err)
+	a.Equal(uint64(100), firstValid)
+	a.Equal(firstValid+cparams.MaxTxnLife-1, lastValid)
+
+	// Second, test transaction creation
+	accountList, err := fixture.GetWalletsSortedByBalance()
+	a.NoError(err)
+	account0 := accountList[0].Address
+	wh, err := client.GetUnencryptedWalletHandle()
+	a.NoError(err)
+
+	manager, err := client.GenerateAddress(wh)
+	a.NoError(err)
+
+	reserve := manager
+	freeze := manager
+	clawback := manager
+
+	// Fund the manager, so it can issue transactions later on
+	_, err = client.SendPaymentFromUnencryptedWallet(account0, manager, 0, 10000000000, nil)
+	a.NoError(err)
+
+	tx, err := client.MakeUnsignedAssetCreateTx(100, false, manager, reserve, freeze, clawback, "test1", "testname1", "foo://bar", nil)
+
+	fee := uint64(1000)
+	firstValid = 0
+	lastValid = 0
+
+	tx, err = client.FillUnsignedTxTemplate(account0, firstValid, lastValid, fee, tx)
+	a.NoError(err)
+
+	// zeros are special cases
+	// first valid must be set to last round + 1 and never be zero
+	// last valid must be set to first + MaxTxnLife - 1
+	a.NotEqual(basics.Round(0), tx.FirstValid)
+	a.Equal(basics.Round(params.LastRound+1), tx.FirstValid)
+	a.Equal(basics.Round(params.LastRound+cparams.MaxTxnLife+1), tx.LastValid)
+
+	firstValid = 1
+	lastValid = 1
+	tx, err = client.FillUnsignedTxTemplate(account0, firstValid, lastValid, fee, tx)
+	a.NoError(err)
+	a.Equal(basics.Round(1), tx.FirstValid)
+	a.Equal(basics.Round(1), tx.LastValid)
+
+	firstValid = 1
+	lastValid = 0
+	tx, err = client.FillUnsignedTxTemplate(account0, firstValid, lastValid, fee, tx)
+	a.NoError(err)
+	a.Equal(basics.Round(1), tx.FirstValid)
+	a.Equal(basics.Round(cparams.MaxTxnLife+1), tx.LastValid)
 }
 
 func TestAssetConfig(t *testing.T) {
@@ -432,7 +549,7 @@ func TestAssetSend(t *testing.T) {
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 0, extra, "", "")
 	txid, err = helperFillSignBroadcast(client, wh, account0, tx, err)
 	a.NoError(err)
-	
+
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 0, extra, "", "")
 	txid, err = helperFillSignBroadcast(client, wh, extra, tx, err)
 	a.Error(err)
@@ -470,14 +587,14 @@ func TestAssetSend(t *testing.T) {
 	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
 	a.Error(err)
 	a.True(strings.Contains(err.Error(), "asset"))
-	a.True(strings.Contains(err.Error(), "missing from"))	
+	a.True(strings.Contains(err.Error(), "missing from"))
 
 	// Account hasn't opted in yet. clawback to will fail
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 1, extra, "", account0)
 	_, err = helperFillSignBroadcast(client, wh, clawback, tx, err)
 	a.Error(err)
 	a.True(strings.Contains(err.Error(), "asset"))
-	a.True(strings.Contains(err.Error(), "missing from"))	
+	a.True(strings.Contains(err.Error(), "missing from"))
 
 	txids = make(map[string]string)
 	tx, err = client.MakeUnsignedAssetSendTx(frozenIdx, 0, extra, "", "")
