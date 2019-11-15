@@ -376,7 +376,7 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 
 	var group transactions.TxGroup
 	for gi, txn := range txgroup {
-		err := eval.testTransaction(txn, txgroup, gi, cow)
+		err := eval.testTransaction(txn, cow)
 		if err != nil {
 			return err
 		}
@@ -412,7 +412,7 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 // testTransaction performs basic duplicate detection and well-formedness checks
 // on a single transaction, but does not actually add the transaction to the block
 // evaluator, or modify the block evaluator state in any other visible way.
-func (eval *BlockEvaluator) testTransaction(txn transactions.SignedTxn, txgroup []transactions.SignedTxn, groupIndex int, cow *roundCowState) error {
+func (eval *BlockEvaluator) testTransaction(txn transactions.SignedTxn, cow *roundCowState) error {
 	// Verify that groups are supported.
 	if !txn.Txn.Group.IsZero() && !eval.proto.SupportTxGroups {
 		return fmt.Errorf("transaction groups not supported")
