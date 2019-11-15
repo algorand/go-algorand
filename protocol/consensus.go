@@ -89,7 +89,7 @@ const ConsensusV16 = ConsensusVersion(
 	"https://github.com/algorand/spec/tree/22726c9dcd12d9cddce4a8bd7e8ccaa707f74101",
 )
 
-// ConsensusV17 points to 'final' spec commit
+// ConsensusV17 points to 'final' spec commit for 2019 june release
 const ConsensusV17 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/5615adc36bad610c7f165fa2967f4ecfa75125f0",
 )
@@ -99,7 +99,7 @@ const ConsensusV18 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/6c6bd668be0ab14098e51b37e806c509f7b7e31f",
 )
 
-// ConsensusV19 needs to be updated with actual spec
+// ConsensusV19 points to 'final' spec commit for 2019 nov release
 const ConsensusV19 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/03ae4eac54f1325377d0a2df62b5ef7cc08c5e18",
 )
