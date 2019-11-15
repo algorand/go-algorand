@@ -356,16 +356,6 @@ func (l *Ledger) LatestCommitted() basics.Round {
 	return l.blockQ.latestCommitted()
 }
 
-// Committed uses the transaction tail tracker to check if txn already
-// appeared in a block.
-func (l *Ledger) Committed(currentProto config.ConsensusParams, txn transactions.SignedTxn) (bool, error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
-	// do not check for whether lease would excluded this
-	txl := txlease{sender: txn.Txn.Sender}
-	return l.txTail.isDup(currentProto, l.Latest()+1, txn.Txn.First(), txn.Txn.Last(), txn.ID(), txl)
-}
-
 func (l *Ledger) blockAux(rnd basics.Round) (bookkeeping.Block, evalAux, error) {
 	return l.blockQ.getBlockAux(rnd)
 }
