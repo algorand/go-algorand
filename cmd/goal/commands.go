@@ -530,3 +530,13 @@ func readFile(filename string) ([]byte, error) {
 	}
 	return ioutil.ReadFile(filename)
 }
+
+func checkTxValidityPeriodCmdFlags(cmd *cobra.Command) {
+	validRoundsChanged := cmd.Flags().Changed("validrounds") || cmd.Flags().Changed("validRounds")
+	if validRoundsChanged && cmd.Flags().Changed("lastvalid") {
+		reportErrorf("Only one of [--validrounds] or [--lastvalid] can be specified")
+	}
+	if validRoundsChanged && numValidRounds == 0 {
+		reportErrorf("[--validrounds] can not be zero")
+	}
+}
