@@ -55,6 +55,13 @@ echo Killing all instances and installing current build
 pkill -u $(whoami) -x algod || true
 ./scripts/local_install.sh -c ${CHANNEL} -p ${BINDIR} -d ${DATADIR}
 
+# check our install
+${BINDIR}/algod -v
+${BINDIR}/goal -v
+
+export PATH=${BINDIR}:${PATH}
+export GOPATH=$(go env GOPATH)
+
 # Change current directory to test/scripts so we can just use ./test.sh to exec.
 cd "${SCRIPT_PATH}"
 
@@ -77,8 +84,8 @@ export SRCROOT=${SRCROOT}
 
 ./e2e_go_tests.sh
 
-rm -rf ${TEMPDIR}
-rm -rf ${PKG_ROOT}
+#rm -rf ${TEMPDIR}
+#rm -rf ${PKG_ROOT}
 
 echo "----------------------------------------------------------------------"
 echo "  DONE: E2E"
