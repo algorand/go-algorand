@@ -359,6 +359,94 @@ func (eval *BlockEvaluator) ResetTxnBytes() {
 	eval.blockTxBytes = 0
 }
 
+// TestTransactionGroup performs basic duplicate detection and well-formedness checks
+// on a transaction group, but does not actually add the transactions to the block
+// evaluator, or modify the block evaluator state in any other visible way.
+func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTxn) error {
+	// Nothing to do if there are no transactions.
+	if len(txgroup) == 0 {
+		return nil
+	}
+
+	if len(txgroup) > eval.proto.MaxTxGroupSize {
+		return fmt.Errorf("group size %d exceeds maximum %d", len(txgroup), eval.proto.MaxTxGroupSize)
+	}
+
+	cow := eval.state.child()
+
+	var group transactions.TxGroup
+	for gi, txn := range txgroup {
+		err := eval.testTransaction(txn, txgroup, gi, cow)
+		if err != nil {
+			return err
+		}
+
+		// Make sure all transactions in group have the same group value
+		if txn.Txn.Group != txgroup[0].Txn.Group {
+			return fmt.Errorf("transactionGroup: inconsistent group values: %v != %v",
+				txn.Txn.Group, txgroup[0].Txn.Group)
+		}
+
+		if !txn.Txn.Group.IsZero() {
+			txWithoutGroup := txn.Txn
+			txWithoutGroup.Group = crypto.Digest{}
+			txWithoutGroup.ResetCaches()
+
+			group.TxGroupHashes = append(group.TxGroupHashes, crypto.HashObj(txWithoutGroup))
+		} else if len(txgroup) > 1 {
+			return fmt.Errorf("transactionGroup: [%d] had zero Group but was submitted in a group of %d", gi, len(txgroup))
+		}
+	}
+
+	// If we had a non-zero Group value, check that all group members are present.
+	if group.TxGroupHashes != nil {
+		if txgroup[0].Txn.Group != crypto.HashObj(group) {
+			return fmt.Errorf("transactionGroup: incomplete group: %v != %v (%v)",
+				txgroup[0].Txn.Group, crypto.HashObj(group), group)
+		}
+	}
+
+	return nil
+}
+
+// testTransaction performs basic duplicate detection and well-formedness checks
+// on a single transaction, but does not actually add the transaction to the block
+// evaluator, or modify the block evaluator state in any other visible way.
+func (eval *BlockEvaluator) testTransaction(txn transactions.SignedTxn, txgroup []transactions.SignedTxn, groupIndex int, cow *roundCowState) error {
+	// Verify that groups are supported.
+	if !txn.Txn.Group.IsZero() && !eval.proto.SupportTxGroups {
+		return fmt.Errorf("transaction groups not supported")
+	}
+
+	// Transaction valid (not expired)?
+	err := txn.Txn.Alive(eval.block)
+	if err != nil {
+		return err
+	}
+
+	// Well-formed on its own?
+	spec := transactions.SpecialAddresses{
+		FeeSink:     eval.block.BlockHeader.FeeSink,
+		RewardsPool: eval.block.BlockHeader.RewardsPool,
+	}
+	err = txn.Txn.WellFormed(spec, eval.proto)
+	if err != nil {
+		return fmt.Errorf("transaction %v: malformed: %v", txn.ID(), err)
+	}
+
+	// Transaction already in the ledger?
+	txid := txn.ID()
+	dup, err := cow.isDup(txn.Txn.First(), txn.Txn.Last(), txid, txlease{sender: txn.Txn.Sender, lease: txn.Txn.Lease})
+	if err != nil {
+		return err
+	}
+	if dup {
+		return TransactionInLedgerError{txn.ID()}
+	}
+
+	return nil
+}
+
 // Transaction tentatively adds a new transaction as part of this block evaluation.
 // If the transaction cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
@@ -376,17 +464,6 @@ func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn, ad transacti
 // an error is returned and the block evaluator state is unchanged.
 func (eval *BlockEvaluator) TransactionGroup(txads []transactions.SignedTxnWithAD) error {
 	return eval.transactionGroup(txads, true)
-}
-
-// TestTransactionGroup checks if a given transaction group could be executed at this
-// point in the block evaluator, but does not actually add the transactions to the block
-// evaluator, or modify the block evaluator state in any other visible way.
-func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTxn) error {
-	txads := make([]transactions.SignedTxnWithAD, len(txgroup))
-	for i := range txgroup {
-		txads[i].SignedTxn = txgroup[i]
-	}
-	return eval.transactionGroup(txads, false)
 }
 
 // transactionGroup tentatively executes a group of transactions as part of this block evaluation.
