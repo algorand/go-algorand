@@ -471,7 +471,7 @@ proc ::AlgorandGoal::WaitForRound { WAIT_FOR_ROUND_NUMBER TEST_PRIMARY_NODE_DIR 
                 -re {Next consensus protocol supported: (\w+)} {set NEXT_CONSENSUS_PROTOCOL_SUPPORTED $expect_out(1,string); exp_continue }
                 -re {Has Synced Since Startup: (\w+)} {set HAS_SYNCHED_SINCE_STARTUP $expect_out(1,string); exp_continue }
                 -re {Genesis ID: (\w+)} {set GENESIS_ID $expect_out(1,string); exp_continue }
-                -re {Genesis hash: (\w+)} {set GENESIS_HASH $expect_out(1,string); close }
+                -re {Genesis hash: (^[A-Za-z0-9+\/]+={0,2}$)} {set GENESIS_HASH $expect_out(1,string); close }
             }
             if { $BLOCK > 0 } {
                 puts "node status check complete"
