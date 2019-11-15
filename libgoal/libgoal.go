@@ -479,8 +479,63 @@ func (c *Client) signAndBroadcastTransactionWithWallet(walletHandle, pw []byte, 
 	return tx, nil
 }
 
+// ComputeValidityRounds takes first, last and rounds provided by a user and resolves them into
+// actual firstValid and lastValid.
+// Resolution table
+//
+// validRounds | lastValid | result (lastValid)
+// -------------------------------------------------
+// 	  	 0     |     0     | firstValid + maxTxnLife
+// 		 0     |     N     | lastValid
+// 		 M     |     0     | first + validRounds - 1
+// 		 M     |     M     | error
+//
+func (c *Client) ComputeValidityRounds(firstValid, lastValid, validRounds uint64) (uint64, uint64, error) {
+	params, err := c.SuggestedParams()
+	if err != nil {
+		return 0, 0, err
+	}
+	cparams, ok := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
+	if !ok {
+		return 0, 0, fmt.Errorf("cannot construct transaction: unknown consensus version %s", params.ConsensusVersion)
+	}
+
+	return computeValidityRounds(firstValid, lastValid, validRounds, params.LastRound, cparams.MaxTxnLife)
+}
+
+func computeValidityRounds(firstValid, lastValid, validRounds, lastRound, maxTxnLife uint64) (uint64, uint64, error) {
+	if validRounds != 0 && lastValid != 0 {
+		return 0, 0, fmt.Errorf("cannot construct transaction: ambiguous input: lastValid = %d, validRounds = %d", lastValid, validRounds)
+	}
+
+	if firstValid == 0 {
+		firstValid = lastRound + 1
+	}
+
+	if validRounds != 0 {
+		// MaxTxnLife is the maximum difference between LastValid and FirstValid
+		// so that validRounds = maxTxnLife+1 gives lastValid = firstValid + validRounds - 1 = firstValid + maxTxnLife
+		if validRounds > maxTxnLife+1 {
+			return 0, 0, fmt.Errorf("cannot construct transaction: txn validity period %d is greater than protocol max txn lifetime %d", validRounds-1, maxTxnLife)
+		}
+		lastValid = firstValid + validRounds - 1
+	} else if lastValid == 0 {
+		lastValid = firstValid + maxTxnLife
+	}
+
+	if firstValid > lastValid {
+		return 0, 0, fmt.Errorf("cannot construct transaction: txn would first be valid on round %d which is after last valid round %d", firstValid, lastValid)
+	} else if lastValid-firstValid > maxTxnLife {
+		return 0, 0, fmt.Errorf("cannot construct transaction: txn validity period ( %d to %d ) is greater than protocol max txn lifetime %d", firstValid, lastValid, maxTxnLife)
+	}
+
+	return firstValid, lastValid, nil
+}
+
 // ConstructPayment builds a payment transaction to be signed
 // If the fee is 0, the function will use the suggested one form the network
+// Although firstValid and lastValid come pre-computed in a normal flow,
+// additional validation is done by computeValidityRounds:
 // if the lastValid is 0, firstValid + maxTxnLifetime will be used
 // if the firstValid is 0, lastRound + 1 will be used
 func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []byte, closeTo string, lease [32]byte, firstValid, lastValid basics.Round) (transactions.Transaction, error) {
@@ -504,15 +559,9 @@ func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []by
 	}
 
 	cp := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
-	if firstValid == 0 && lastValid == 0 {
-		firstValid = basics.Round(params.LastRound + 1)
-		lastValid = firstValid + basics.Round(cp.MaxTxnLife)
-	} else if firstValid != 0 && lastValid == 0 {
-		lastValid = firstValid + basics.Round(cp.MaxTxnLife)
-	} else if firstValid > lastValid {
-		return transactions.Transaction{}, fmt.Errorf("cannot construct payment: txn would first be valid on round %d which is after last valid round %d", firstValid, lastValid)
-	} else if lastValid-firstValid > basics.Round(cp.MaxTxnLife) {
-		return transactions.Transaction{}, fmt.Errorf("cannot construct payment: txn validity period ( %d to %d ) is greater than protocol max txn lifetime %d ", firstValid, lastValid, cp.MaxTxnLife)
+	fv, lv, err := computeValidityRounds(uint64(firstValid), uint64(lastValid), 0, params.LastRound, cp.MaxTxnLife)
+	if err != nil {
+		return transactions.Transaction{}, err
 	}
 
 	tx := transactions.Transaction{
@@ -520,8 +569,8 @@ func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []by
 		Header: transactions.Header{
 			Sender:     fromAddr,
 			Fee:        basics.MicroAlgos{Raw: fee},
-			FirstValid: firstValid,
-			LastValid:  lastValid,
+			FirstValid: basics.Round(fv),
+			LastValid:  basics.Round(lv),
 			Lease:      lease,
 			Note:       note,
 		},

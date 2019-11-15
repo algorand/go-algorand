@@ -4,6 +4,7 @@ date '+limit-swap-test start %Y%m%d_%H%M%S'
 
 set -e
 set -x
+export GOPATH=$(go env GOPATH)
 
 TEMPDIR=$(mktemp -d)
 trap "rm -rf $TEMPDIR" 0
