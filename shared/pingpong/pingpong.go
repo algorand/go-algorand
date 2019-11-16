@@ -345,8 +345,14 @@ func constructTxn(from, to string, fee, amt, assetID uint64, client libgoal.Clie
 	copy(noteField, pingpongTag)
 	crypto.RandBytes(noteField[tagLen:])
 
+	// if random lease flag set, fill the lease field with random bytes
+	var lease [32]byte
+	if cfg.RandomLease {
+		crypto.RandBytes(lease[:])
+	}
+
 	if cfg.NumAsset == 0 { // Construct payment transaction
-		txn, err = client.ConstructPayment(from, to, fee, amt, noteField[:], "", [32]byte{}, 0, 0)
+		txn, err = client.ConstructPayment(from, to, fee, amt, noteField[:], "", lease, 0, 0)
 		if !cfg.Quiet {
 			fmt.Fprintf(os.Stdout, "Sending %d : %s -> %s\n", amt, from, to)
 		}
@@ -356,11 +362,12 @@ func constructTxn(from, to string, fee, amt, assetID uint64, client libgoal.Clie
 			return
 		}
 		txn.Note = noteField[:]
+		txn.Lease = lease
 		txn, err = client.FillUnsignedTxTemplate(from, 0, 0, cfg.MaxFee, txn)
 		if !cfg.Quiet {
 			fmt.Fprintf(os.Stdout, "Sending %d asset %d: %s -> %s\n", amt, assetID, from, to)
 		}
-		
+
 	}
 	if err != nil {
 		return

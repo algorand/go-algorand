@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # generate the delegate key
-dkeygen > delegate.keyregkey
+algokey generate -f delegate.keyregkey | grep "Public key" | awk '{ print $3 }'
 # > QY5UZGE746YGIEQ66UPPWO4Z55SJEZLZJDEXSN6RAHXWYIDTO4KA5RHZUQ
 
 # create and sign delegate logic enabling the delegation of key registration authority to delegate.keyregkey
