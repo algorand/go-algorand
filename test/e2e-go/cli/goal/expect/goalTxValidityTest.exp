@@ -1,0 +1,133 @@
+#!/usr/bin/expect -f
+set err 0
+log_user 1
+
+source  goalExpectCommon.exp
+
+set TEST_ALGO_DIR [lindex $argv 0]
+set TEST_DATA_DIR [lindex $argv 1]
+
+puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
+puts "TEST_DATA_DIR: $TEST_DATA_DIR"
+
+set TIME_STAMP [clock seconds]
+
+set TEST_ROOT_DIR $TEST_ALGO_DIR/root
+set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/Primary/
+set NETWORK_NAME test_net_expect_$TIME_STAMP
+set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/TwoNodes50Each.json"
+
+set FILE_COUNTER 1
+
+proc TestGoalCommandLineFlags { CMD EXPECTED_RE } {
+    set PASSED 0
+    eval spawn $CMD
+    expect {
+        timeout { puts "goal asset create timed out"; exit 1 }
+        -re $EXPECTED_RE {set PASSED 1; close }
+    }
+    if { $PASSED == 0 } {
+        puts "'$CMD' did not show expected output"
+        puts "Expected regex:"
+        puts $EXPECTED_RE
+        puts "Actual:"
+        puts $expect_out(buffer)
+        exit 1
+    }
+}
+
+proc TestLastValidInTx { CMD TX_FILE EXPECTED_LAST_VALID } {
+    set PASSED 0
+    set LAST_VALID 0
+    set timeout 5
+
+    eval spawn $CMD
+    expect
+    puts "'$CMD' output"
+    puts $expect_out(buffer)
+
+    spawn goal clerk inspect $TX_FILE
+    expect {
+        timeout { ::AlgorandGoal::Abort "'goal clerk inspect' timed out" }
+        -re {"lv": (\d+)} {set PASSED 1; set LAST_VALID $expect_out(1,string); close }
+    }
+
+    if { $PASSED == 0 } {
+        ::AlgorandGoal::Abort "Failed to find 'lv' in serialized tx"
+    }
+
+    if { $LAST_VALID != $EXPECTED_LAST_VALID } {
+        ::AlgorandGoal::Abort "Last valid is $LAST_VALID but expected $EXPECTED_LAST_VALID"
+    }
+}
+
+if { [catch {
+    puts "Part 1: Check --validrounds and --lastvalid options combination for 'goal asset' and 'goal account"
+
+    TestGoalCommandLineFlags "goal asset create --validrounds 0 --creator ABC --total 100" ".*can not be zero.*"
+    TestGoalCommandLineFlags "goal asset create --validrounds 1 --lastvalid 1 --creator ABC --total 100" "Only one of .* can be specified"
+
+    TestGoalCommandLineFlags "goal account changeonlinestatus --validRounds 0 --online" ".*validRounds has been deprecated.*"
+    TestGoalCommandLineFlags "goal account changeonlinestatus --firstRound 0 --online" ".*firstRound has been deprecated.*"
+    TestGoalCommandLineFlags "goal account changeonlinestatus --validRounds 0 --online" ".*can not be zero.*"
+    TestGoalCommandLineFlags "goal account changeonlinestatus --validrounds 0 --online" ".*can not be zero.*"
+    TestGoalCommandLineFlags "goal account changeonlinestatus --validRounds 0 --lastvalid 1 --online" "Only one of .* can be specified"
+    TestGoalCommandLineFlags "goal account changeonlinestatus --validrounds 0 --lastvalid 1 --online" "Only one of .* can be specified"
+
+    TestGoalCommandLineFlags "goal clerk send --validrounds 0 -a 1 -t ABC -f ABC" ".*can not be zero.*"
+    TestGoalCommandLineFlags "goal clerk send --validrounds 1 --lastvalid 1 -a 1 -t ABC -f ABC" "Only one of .* can be specified"
+
+} EXCEPTION ] } {
+    puts "ERROR in Goal Asset Tx Validity test: $EXCEPTION"
+    exit 1
+}
+
+if { [catch {
+    puts "Part 2: Check actual firstvalid and lastvalid values after TX creation"
+
+    # Create network
+    ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    # use goal node status command to wait for round 0
+    ::AlgorandGoal::WaitForRound 0 $TEST_PRIMARY_NODE_DIR
+
+    set PRIMARY_WALLET_NAME unencrypted-default-wallet
+    set PRIMARY_ACCOUNT_ADDRESS [::AlgorandGoal::GetHighestFundedAccountForWallet $PRIMARY_WALLET_NAME  $TEST_PRIMARY_NODE_DIR]
+
+    puts "Verify asset create with validrounds=1"
+    set TX_FILE $TEST_ROOT_DIR/tx-create-$FILE_COUNTER.tx
+    incr FILE_COUNTER
+    set LV_EXPECTED 2
+    TestLastValidInTx "goal asset create --validrounds 1 --firstvalid 2 --creator $PRIMARY_ACCOUNT_ADDRESS --total 100 -d $TEST_PRIMARY_NODE_DIR -o $TX_FILE" $TX_FILE $LV_EXPECTED
+
+    puts "Verify asset create with lastvalid=2 firstvalid=2"
+    set TX_FILE $TEST_ROOT_DIR/tx-create-$FILE_COUNTER.tx
+    incr FILE_COUNTER
+    set LV_EXPECTED 2
+    TestLastValidInTx "goal asset create --lastvalid 2 --firstvalid 2 --creator $PRIMARY_ACCOUNT_ADDRESS --total 100 -d $TEST_PRIMARY_NODE_DIR -o $TX_FILE" $TX_FILE $LV_EXPECTED
+
+    puts "Verify asset create with validrounds=1000"
+    set TX_FILE $TEST_ROOT_DIR/tx-create-$FILE_COUNTER.tx
+    incr FILE_COUNTER
+    set LV_EXPECTED 1001
+    TestLastValidInTx "goal asset create --validrounds 1000 --firstvalid 2 --creator $PRIMARY_ACCOUNT_ADDRESS --total 100 -d $TEST_PRIMARY_NODE_DIR -o $TX_FILE" $TX_FILE $LV_EXPECTED
+
+    puts "Verify account changeonlinestatus with lastvalid=2"
+    set TX_FILE $TEST_ROOT_DIR/tx-create-$FILE_COUNTER.tx
+    incr FILE_COUNTER
+    set LV_EXPECTED 2
+    TestLastValidInTx "goal account changeonlinestatus --lastvalid 2 --firstvalid 2 --address $PRIMARY_ACCOUNT_ADDRESS --online -d $TEST_PRIMARY_NODE_DIR -t $TX_FILE" $TX_FILE $LV_EXPECTED
+
+    puts "Verify account changeonlinestatus with validrounds=1000"
+    set TX_FILE $TEST_ROOT_DIR/tx-create-$FILE_COUNTER.tx
+    incr FILE_COUNTER
+    set LV_EXPECTED 1001
+    TestLastValidInTx "goal account changeonlinestatus --validrounds 1000 --firstvalid 2 --address $PRIMARY_ACCOUNT_ADDRESS --online -d $TEST_PRIMARY_NODE_DIR -t $TX_FILE" $TX_FILE $LV_EXPECTED
+
+    # Shutdown the network
+    ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ALGO_DIR $TEST_ROOT_DIR
+    exit 0
+
+} EXCEPTION ] } {
+    ::AlgorandGoal::Abort "ERROR in AssetTxValidityTest: $EXCEPTION"
+}
