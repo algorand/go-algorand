@@ -485,6 +485,20 @@ func initConsensusTestProtocols() {
 	//but explicitly mark "no approved upgrades" just in case
 	rapidRecalcParams.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
 	Consensus[protocol.ConsensusTestRapidRewardRecalculation] = rapidRecalcParams
+
+	// Setting the testShorterLookback parameters derived from ConsensusFuture
+	// Will result in MaxBalLookback = 32 
+	// Used to run tests faster where past MaxBalLookback values are checked
+	testShorterLookback := Consensus[protocol.ConsensusFuture]
+	testShorterLookback.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+
+	// MaxBalLookback  =  2 x SeedRefreshInterval x SeedLookback
+	// ref. https://github.com/algorandfoundation/specs/blob/master/dev/abft.md
+	testShorterLookback.SeedLookback = 2
+	testShorterLookback.SeedRefreshInterval = 8
+	testShorterLookback.MaxBalLookback = // 32
+		2*testShorterLookback.SeedLookback*testShorterLookback.SeedRefreshInterval
+	Consensus[protocol.ConsensusTestShorterLookback] = testShorterLookback
 }
 
 func initConsensusTestFastUpgrade() {
