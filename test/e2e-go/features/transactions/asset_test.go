@@ -851,17 +851,17 @@ func TestAssetCreateWaitBalLookbackDelete(t *testing.T) {
 /** Helper functions **/
 
 // Setup the test and the network 
-func setupTestAndNetwork(t *testing.T, proto string)(
+func setupTestAndNetwork(t *testing.T, networkTemplate string)(
 	Assertions *require.Assertions, Fixture *fixtures.RestClientFixture,  Client *libgoal.Client, Account0 string) {
 
 	t.Parallel()
 	asser := require.New(t)
-	if 0 == len(proto){
-		// If the  protocol is not specified, used the default one
-		proto = "TwoNodes50EachFuture.json"
+	if 0 == len(networkTemplate){
+		// If the  networkTemplate is not specified, used the default one
+		networkTemplate = "TwoNodes50EachFuture.json"
 	}
 	var fixture fixtures.RestClientFixture
-	fixture.Setup(t, filepath.Join("nettemplates", proto))
+	fixture.Setup(t, filepath.Join("nettemplates", networkTemplate))
 	accountList, err := fixture.GetWalletsSortedByBalance()
 	asser.NoError(err)
 	account0 := accountList[0].Address

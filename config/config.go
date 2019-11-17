@@ -503,8 +503,7 @@ func initConsensusTestProtocols() {
 	// ref. https://github.com/algorandfoundation/specs/blob/master/dev/abft.md
 	testShorterLookback.SeedLookback = 2
 	testShorterLookback.SeedRefreshInterval = 8
-	testShorterLookback.MaxBalLookback = // 32
-		2*testShorterLookback.SeedLookback*testShorterLookback.SeedRefreshInterval
+	testShorterLookback.MaxBalLookback = 2*testShorterLookback.SeedLookback*testShorterLookback.SeedRefreshInterval // 32
 	Consensus[protocol.ConsensusTestShorterLookback] = testShorterLookback
 }
 
