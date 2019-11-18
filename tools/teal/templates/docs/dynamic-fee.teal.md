@@ -2,7 +2,7 @@
 
 ## Functionality
 
-Suppose the owner of account A wants to send a payment to account `TMPL_TO`, but does not want to pay a transaction fee. If account A signs the following contract with the appropriate parameters (specifying all of the necessary details of the payment transaction), then anyone can cover afee for that payment on account A's behalf.
+Suppose the owner of account A wants to send a payment to account `TMPL_TO`, but does not want to pay a transaction fee. If account A signs the following contract with the appropriate parameters (specifying all of the necessary details of the payment transaction), then anyone can cover a fee for that payment on account A's behalf.
 
 The contract works by approving a group of two transactions (meaning the two transactions will occur together or not at all). The first transaction must spend the transaction fee _into_ account A, and the second transaction must be the specified payment transaction _from_ account A to account `TMPL_TO`.
 
