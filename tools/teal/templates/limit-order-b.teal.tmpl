@@ -57,11 +57,6 @@ int 4 // AssetTransfer
 ==
 &&
 
-txn Fee
-int TMPL_FEE
-<=
-&&
-
 txn AssetAmount
 int TMPL_MINTRD
 >
@@ -206,9 +201,10 @@ int TMPL_TIMEOUT
 
 || // (good Algo close) || (good Asset close)
 
-
 done:
 
-// two-instruction nop because all we need is the value from the swap case or oneTx case
-dup
-pop
+// finally, add to everything a check that Fee is ok
+txn Fee
+int TMPL_FEE
+<=
+&&
