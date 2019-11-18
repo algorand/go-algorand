@@ -19,12 +19,14 @@ package transactions
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
@@ -48,6 +50,137 @@ func helperFillSignBroadcast(client libgoal.Client, wh []byte, sender string, tx
 	}
 
 	return client.SignAndBroadcastTransaction(wh, nil, tx)
+}
+
+func TestAssetValidRounds(t *testing.T) {
+	t.Parallel()
+	a := require.New(t)
+
+	var fixture fixtures.RestClientFixture
+	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
+	defer fixture.Shutdown()
+
+	client := fixture.LibGoalClient
+
+	// First, test valid rounds to last valid conversion
+	var firstValid, lastValid, validRounds uint64
+	firstValid = 0
+	lastValid = 0
+	validRounds = 0
+
+	params, err := client.SuggestedParams()
+	a.NoError(err)
+	cparams, ok := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
+	a.True(ok)
+
+	firstValid = 0
+	lastValid = 0
+	validRounds = cparams.MaxTxnLife + 1
+	firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, validRounds)
+	a.NoError(err)
+	a.Equal(params.LastRound+1, firstValid)
+	a.Equal(firstValid+cparams.MaxTxnLife, lastValid)
+
+	firstValid = 0
+	lastValid = 0
+	validRounds = cparams.MaxTxnLife + 2
+	firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, validRounds)
+	a.Error(err)
+	a.True(strings.Contains(err.Error(), "cannot construct transaction: txn validity period"))
+
+	firstValid = 0
+	lastValid = 0
+	validRounds = 1
+	firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, validRounds)
+	a.NoError(err)
+	a.Equal(firstValid, lastValid)
+
+	firstValid = 1
+	lastValid = 0
+	validRounds = 1
+	firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, validRounds)
+	a.NoError(err)
+	a.Equal(uint64(1), firstValid)
+	a.Equal(firstValid, lastValid)
+
+	firstValid = 1
+	lastValid = 0
+	validRounds = cparams.MaxTxnLife
+	firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, validRounds)
+	a.NoError(err)
+	a.Equal(uint64(1), firstValid)
+	a.Equal(cparams.MaxTxnLife, lastValid)
+
+	firstValid = 100
+	lastValid = 0
+	validRounds = cparams.MaxTxnLife
+	firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, validRounds)
+	a.NoError(err)
+	a.Equal(uint64(100), firstValid)
+	a.Equal(firstValid+cparams.MaxTxnLife-1, lastValid)
+
+	// Second, test transaction creation
+	accountList, err := fixture.GetWalletsSortedByBalance()
+	a.NoError(err)
+	account0 := accountList[0].Address
+	wh, err := client.GetUnencryptedWalletHandle()
+	a.NoError(err)
+
+	manager, err := client.GenerateAddress(wh)
+	a.NoError(err)
+
+	reserve := manager
+	freeze := manager
+	clawback := manager
+
+	// Fund the manager, so it can issue transactions later on
+	_, err = client.SendPaymentFromUnencryptedWallet(account0, manager, 0, 10000000000, nil)
+	a.NoError(err)
+
+	tx, err := client.MakeUnsignedAssetCreateTx(100, false, manager, reserve, freeze, clawback, "test1", "testname1", "foo://bar", nil)
+	a.NoError(err)
+
+	fee := uint64(1000)
+	firstValid = 0
+	lastValid = 0
+
+	params, err = client.SuggestedParams()
+	a.NoError(err)
+	lastRoundBefore := params.LastRound
+
+	tx, err = client.FillUnsignedTxTemplate(account0, firstValid, lastValid, fee, tx)
+	a.NoError(err)
+	// zeros are special cases
+	// first valid never should be zero
+	a.NotEqual(basics.Round(0), tx.FirstValid)
+
+	params, err = client.SuggestedParams()
+	a.NoError(err)
+	lastRoundAfter := params.LastRound
+
+	// ledger may advance between SuggestedParams and FillUnsignedTxTemplate calls
+	// expect validity sequence
+	var firstValidRange, lastValidRange []uint64
+	for i := lastRoundBefore + 1; i <= lastRoundAfter+1; i++ {
+		firstValidRange = append(firstValidRange, i)
+		lastValidRange = append(lastValidRange, i+cparams.MaxTxnLife)
+	}
+	a.Contains(firstValidRange, uint64(tx.FirstValid))
+	a.Contains(lastValidRange, uint64(tx.LastValid))
+
+	firstValid = 1
+	lastValid = 1
+	tx, err = client.FillUnsignedTxTemplate(account0, firstValid, lastValid, fee, tx)
+	a.NoError(err)
+	a.Equal(basics.Round(1), tx.FirstValid)
+	a.Equal(basics.Round(1), tx.LastValid)
+
+	firstValid = 1
+	lastValid = 0
+	tx, err = client.FillUnsignedTxTemplate(account0, firstValid, lastValid, fee, tx)
+	a.NoError(err)
+	a.Equal(basics.Round(1), tx.FirstValid)
+	a.Equal(basics.Round(cparams.MaxTxnLife+1), tx.LastValid)
 }
 
 func TestAssetConfig(t *testing.T) {
@@ -125,6 +258,7 @@ func TestAssetConfig(t *testing.T) {
 	tx, err := client.MakeUnsignedAssetCreateTx(1, false, manager, reserve, freeze, clawback, fmt.Sprintf("toomany"), fmt.Sprintf("toomany"), assetURL, assetMetadataHash)
 	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
 	a.Error(err)
+	a.True(strings.Contains(err.Error(), "too many assets in account:"))
 
 	// Check that assets are visible
 	info, err = client.AccountInformation(account0)
@@ -237,6 +371,8 @@ func TestAssetConfig(t *testing.T) {
 	// Should not be able to close account before destroying assets
 	_, err = client.SendPaymentFromWallet(wh, nil, account0, "", 0, 0, nil, reserve, 0, 0)
 	a.Error(err)
+	a.True(strings.Contains(err.Error(), "cannot close:"))
+	a.True(strings.Contains(err.Error(), "outstanding assets"))
 
 	// Destroy assets
 	txids = make(map[string]string)
@@ -392,8 +528,6 @@ func TestAssetSend(t *testing.T) {
 	a.NoError(err)
 	_, err = client.SendPaymentFromUnencryptedWallet(account0, clawback, 0, 10000000000, nil)
 	a.NoError(err)
-	_, err = client.SendPaymentFromUnencryptedWallet(account0, extra, 0, 10000000000, nil)
-	a.NoError(err)
 
 	// Create two assets: one with default-freeze, and one without default-freeze
 	txids := make(map[string]string)
@@ -426,11 +560,56 @@ func TestAssetSend(t *testing.T) {
 		}
 	}
 
+	// An account with no algos should not be able to accept assets
+	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 0, extra, "", "")
+	txid, err = helperFillSignBroadcast(client, wh, account0, tx, err)
+	a.NoError(err)
+
+	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 0, extra, "", "")
+	txid, err = helperFillSignBroadcast(client, wh, extra, tx, err)
+	a.Error(err)
+	a.True(strings.Contains(err.Error(), "overspend"))
+	a.True(strings.Contains(err.Error(), "tried to spend"))
+
+	// Fund the account: extra
+	tx, err = client.SendPaymentFromUnencryptedWallet(account0, extra, 0, 10000000000, nil)
+	a.NoError(err)
+	_, curRound = fixture.GetBalanceAndRound(account0)
+	fixture.WaitForConfirmedTxn(curRound+20, account0, tx.ID().String())
+
 	// Sending assets to account that hasn't opted in should fail, but
 	// after opting in, should succeed for non-frozen asset.
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 1, extra, "", "")
 	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
 	a.Error(err)
+	a.True(strings.Contains(err.Error(), "asset"))
+	a.True(strings.Contains(err.Error(), "missing from"))
+
+	// Clawback assets to an account that hasn't opted in should fail
+	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 1, extra, "", account0)
+	_, err = helperFillSignBroadcast(client, wh, clawback, tx, err)
+	a.Error(err)
+	a.True(strings.Contains(err.Error(), "asset"))
+	a.True(strings.Contains(err.Error(), "missing from"))
+
+	// opting in should be signed by the opting in account not sender
+	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 0, extra, "", "")
+	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
+	a.NoError(err)
+
+	// Account hasn't opted in yet. sending will fail
+	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 1, extra, "", "")
+	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
+	a.Error(err)
+	a.True(strings.Contains(err.Error(), "asset"))
+	a.True(strings.Contains(err.Error(), "missing from"))
+
+	// Account hasn't opted in yet. clawback to will fail
+	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 1, extra, "", account0)
+	_, err = helperFillSignBroadcast(client, wh, clawback, tx, err)
+	a.Error(err)
+	a.True(strings.Contains(err.Error(), "asset"))
+	a.True(strings.Contains(err.Error(), "missing from"))
 
 	txids = make(map[string]string)
 	tx, err = client.MakeUnsignedAssetSendTx(frozenIdx, 0, extra, "", "")
@@ -446,6 +625,7 @@ func TestAssetSend(t *testing.T) {
 	tx, err = client.MakeUnsignedAssetSendTx(frozenIdx, 1, extra, "", "")
 	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
 	a.Error(err)
+	a.True(strings.Contains(err.Error(), "asset frozen in recipient"))
 
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 10, extra, "", "")
 	txid, err = helperFillSignBroadcast(client, wh, account0, tx, err)
@@ -468,6 +648,13 @@ func TestAssetSend(t *testing.T) {
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 11, extra, "", "")
 	_, err = helperFillSignBroadcast(client, wh, extra, tx, err)
 	a.Error(err)
+	a.True(strings.Contains(err.Error(), "underflow on subtracting 11 from sender amount"))
+
+	// Should not be able to clawback more than is available
+	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 11, account0, "", extra)
+	_, err = helperFillSignBroadcast(client, wh, clawback, tx, err)
+	a.Error(err)
+	a.True(strings.Contains(err.Error(), "underflow on subtracting 11 from sender amount"))
 
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 10, extra, "", "")
 	_, err = helperFillSignBroadcast(client, wh, extra, tx, err)
@@ -478,6 +665,7 @@ func TestAssetSend(t *testing.T) {
 	tx, err = client.MakeUnsignedAssetFreezeTx(nonFrozenIdx, extra, true)
 	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
 	a.Error(err)
+	a.True(strings.Contains(err.Error(), "freeze not allowed: sender"))
 
 	tx, err = client.MakeUnsignedAssetFreezeTx(nonFrozenIdx, extra, true)
 	_, err = helperFillSignBroadcast(client, wh, freeze, tx, err)
@@ -496,6 +684,7 @@ func TestAssetSend(t *testing.T) {
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 1, extra, "", "")
 	_, err = helperFillSignBroadcast(client, wh, extra, tx, err)
 	a.Error(err)
+	a.True(strings.Contains(err.Error(), "frozen in"))
 
 	// Clawback should be able to claim money out of both frozen and non-frozen accounts,
 	// and the wrong address should not be able to clawback.
@@ -508,6 +697,7 @@ func TestAssetSend(t *testing.T) {
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 5, account0, "", extra)
 	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
 	a.Error(err)
+	a.True(strings.Contains(err.Error(), "clawback not allowed: sender"))
 
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 5, account0, "", extra)
 	txid, err = helperFillSignBroadcast(client, wh, clawback, tx, err)

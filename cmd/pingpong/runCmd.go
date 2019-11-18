@@ -52,6 +52,7 @@ var useDefault bool
 var quietish bool
 var logicProg string
 var randomNote bool
+var randomLease bool
 var txnPerSec uint64
 var teal string
 var groupSize uint32
@@ -85,6 +86,7 @@ func init() {
 	runCmd.Flags().StringVar(&teal, "teal", "", "teal test scenario, can be light, normal, or heavy, this overrides --program")
 	runCmd.Flags().Uint32Var(&groupSize, "groupsize", 1, "The number of transactions in each group")
 	runCmd.Flags().Uint32Var(&numAsset, "numasset", 0, "The number of assets each account holds")
+	runCmd.Flags().BoolVar(&randomLease, "randomlease", false, "set the lease to contain a random value")
 }
 
 var runCmd = &cobra.Command{
@@ -155,6 +157,7 @@ var runCmd = &cobra.Command{
 		if randomAmount {
 			cfg.RandomizeAmt = true
 		}
+		cfg.RandomLease = randomLease
 		if noRandomAmount {
 			if randomAmount {
 				reportErrorf("Error --ra and --nra can't both be specified\n")

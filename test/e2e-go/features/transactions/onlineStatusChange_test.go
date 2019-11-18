@@ -82,7 +82,7 @@ func testAccountsCanChangeOnlineState(t *testing.T, templatePath string) {
 	a.NoError(err, "should be no errors when creating partkeys")
 	a.Equal(initiallyOffline, partkeyResponse.Address().String(), "successful partkey creation should echo account")
 
-	goOnlineUTx, err := client.MakeUnsignedGoOnlineTx(initiallyOffline, nil, curRound, transactionValidityPeriod, transactionFee, [32]byte{})
+	goOnlineUTx, err := client.MakeUnsignedGoOnlineTx(initiallyOffline, nil, curRound, curRound+transactionValidityPeriod, transactionFee, [32]byte{})
 	a.NoError(err, "should be able to make go online tx")
 	wh, err := client.GetUnencryptedWalletHandle()
 	a.NoError(err, "should be able to get unencrypted wallet handle")
@@ -94,7 +94,7 @@ func testAccountsCanChangeOnlineState(t *testing.T, templatePath string) {
 	a.NoError(err, "should be no errors when creating partkeys")
 	a.Equal(initiallyOnline, partkeyResponse.Address().String(), "successful partkey creation should echo account")
 
-	goOfflineUTx, err := client.MakeUnsignedGoOfflineTx(initiallyOnline, curRound, transactionValidityPeriod, transactionFee, [32]byte{})
+	goOfflineUTx, err := client.MakeUnsignedGoOfflineTx(initiallyOnline, curRound, curRound+transactionValidityPeriod, transactionFee, [32]byte{})
 	a.NoError(err, "should be able to make go offline tx")
 	wh, err = client.GetUnencryptedWalletHandle()
 	offlineTxID, err := client.SignAndBroadcastTransaction(wh, nil, goOfflineUTx)
@@ -105,7 +105,7 @@ func testAccountsCanChangeOnlineState(t *testing.T, templatePath string) {
 	doNonparticipationTest := consensusParams.SupportBecomeNonParticipatingTransactions
 	nonparticipatingTxID := ""
 	if doNonparticipationTest {
-		becomeNonparticpatingUTx, err := client.MakeUnsignedBecomeNonparticipatingTx(becomesNonparticipating, curRound, transactionValidityPeriod, transactionFee)
+		becomeNonparticpatingUTx, err := client.MakeUnsignedBecomeNonparticipatingTx(becomesNonparticipating, curRound, curRound+transactionValidityPeriod, transactionFee)
 		a.NoError(err, "should be able to make become-nonparticipating tx")
 		wh, err = client.GetUnencryptedWalletHandle()
 		nonparticipatingTxID, err = client.SignAndBroadcastTransaction(wh, nil, becomeNonparticpatingUTx)
