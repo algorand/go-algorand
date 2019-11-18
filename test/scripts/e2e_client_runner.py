@@ -306,6 +306,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('scripts', nargs='*', help='scripts to run')
     ap.add_argument('--keep-temps', default=False, action='store_true', help='if set, keep all the test files')
+    ap.add_argument('--timeout', default=500, type=int, help='integer seconds to wait for the scripts to run')
     ap.add_argument('--verbose', default=False, action='store_true')
     args = ap.parse_args()
 
@@ -349,7 +350,7 @@ def main():
     rs = RunSet(env)
     for scriptname in args.scripts:
         rs.start(scriptname)
-    rs.wait(500)
+    rs.wait(args.timeout)
     if rs.errors:
         retcode = 1
         logger.error('errors: %r', '\n'.join(rs.errors))
