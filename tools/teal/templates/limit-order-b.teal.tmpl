@@ -1,0 +1,209 @@
+// Limit-order
+//
+// Part B: trade asset for Algos
+//
+// Works on a contract account.
+// Fund the contract with as much of an asset as you wish to trade away for
+// Algos and a minimum balance of Algos and a couple transaction fee's worth.
+//
+// Works on three cases
+// * trading asset for Algos
+// * set up allowing for receiving asset
+// * closing out asset and Algos back to the originator after a timeout
+//
+// trade case, a 2 transaction group:
+// gtxn[0] Algos from Other to Me
+// gtxn[1] (this txn) asset from Me to Other
+//
+// We want to get _at least_ some amout of algos for our asset
+// gtxn[0].Amount / gtxn[1].AssetAmount >= N / D
+// ===
+// gtxn[0].Amount * D >= gtxn[1].AssetAmount * N
+//
+// setup case:
+// transfer 0 of asset from self to self to allow receiving asset
+//
+// close-out case:
+// txn alone, close out Algo value after timeout
+// OR close out asset value after timeout
+//
+// Parameters:
+//  - TMPL_ASSET: ID of the transferred asset
+//  - TMPL_SWAPN: exchange rate (N Algos per D Asset, or better)
+//  - TMPL_SWAPD: exchange rate (N Algos per D Asset, or better)
+//  - TMPL_TIMEOUT: the round at which the account expires
+//  - TMPL_OWN: the address to refund funds to on timeout
+//  - TMPL_FEE: maximum fee used by the limit order transaction
+//  - TMPL_MINTRD: the minimum amount (of asset) to be traded away
+
+global GroupSize
+int 1
+==
+bnz oneTx
+// nothing is left on the stack as we proced to swap case or oneTx
+
+// swap case
+global GroupSize
+int 2
+==
+
+txn GroupIndex
+int 1
+==
+&&
+
+txn TypeEnum
+int 4 // AssetTransfer
+==
+&&
+
+txn Fee
+int TMPL_FEE
+<=
+&&
+
+txn AssetAmount
+int TMPL_MINTRD
+>
+&&
+
+txn XferAsset
+int TMPL_ASSET
+==
+&&
+
+txn AssetSender
+global ZeroAddress
+==
+&&
+
+txn AssetCloseTo
+global ZeroAddress
+==
+&&
+
+gtxn 0 TypeEnum
+int 1 // Payment
+==
+&&
+
+gtxn 0 Receiver
+addr TMPL_OWN
+==
+&&
+
+// The above test stays on the stack and remains to be collected at done:
+// Below we establish that the trade ratio is good enough, but that leaves the stack unchanged.
+
+// gtxn[0].Amount * D >= gtxn[1].AssetAmount * N
+gtxn 0 Amount
+int TMPL_SWAPD
+mulw // AssetAmount * D => (high 64 bits, low 64 bits)
+store 2 // move aside low 64 bits
+store 1 // move aside high 64 bits
+
+txn AssetAmount
+int TMPL_SWAPN
+mulw
+store 4 // move aside low 64 bits
+store 3 // move aside high 64 bits
+
+// compare high bits to high bits
+load 1
+load 3
+>
+bnz done
+
+load 1
+load 3
+==
+load 2
+load 4
+>=
+&& // high bits are equal and low bits are ok
+bnz done
+err // ratio is not good enough
+
+oneTx:
+
+// close Algos case
+txn TypeEnum
+int 1 // Payment
+==
+
+txn CloseRemainderTo
+addr TMPL_OWN
+==
+&&
+
+txn FirstValid
+int TMPL_TIMEOUT
+>
+&&
+
+txn Receiver
+global ZeroAddress
+==
+&&
+
+txn Amount
+int 0
+==
+&& // is Payment && CloseRemainderTo me && (txn.FirstValid > timeout) && no Receiver and 0 Amount
+
+// setup or close asset case
+txn TypeEnum
+int 4 // AssetTransfer
+==
+
+txn AssetSender
+global ZeroAddress
+==
+&&
+
+txn XferAsset
+int TMPL_ASSET
+==
+&&
+
+txn AssetAmount
+int 0
+==
+&& // setup or close common: not clawback && is AssetTransfer && is correct asset && 0 asset Amount
+
+// close asset case
+txn AssetCloseTo
+addr TMPL_OWN
+==
+
+txn AssetReceiver
+global ZeroAddress
+==
+&& // close asset to Me && no asset Receiver
+
+// setup case
+txn AssetReceiver
+txn Sender
+==
+
+txn AssetCloseTo
+global ZeroAddress
+==
+&&
+
+txn LastValid
+int TMPL_TIMEOUT
+<
+&& // AssetReceiver is Me && no AssetCloseTo && setup is before timeout
+
+|| // (close asset) || setup
+&& // ((close asset) || setup) && (setup or close common)
+
+|| // (good Algo close) || (good Asset close)
+
+
+done:
+
+// two-instruction nop because all we need is the value from the swap case or oneTx case
+dup
+pop
