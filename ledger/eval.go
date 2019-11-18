@@ -600,7 +600,6 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 		if needCheckLsig {
 			err = eval.checkLogicSig(txn, txgroup, groupIndex)
 			if err != nil {
-				eval.txcache.EvalRemember(eval.block.CurrentProtocol, txid, err)
 				return err
 			}
 			eval.txcache.EvalRemember(eval.block.CurrentProtocol, txid, nil)
