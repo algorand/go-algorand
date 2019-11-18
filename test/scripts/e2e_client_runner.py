@@ -73,9 +73,30 @@ def script_thread(runset, scriptname):
     env = dict(runset.env)
     env['TEMPDIR'] = os.path.join(env['TEMPDIR'], walletname)
     os.makedirs(env['TEMPDIR'])
-    p = subprocess.Popen([scriptname, walletname], env=env)
+    cmdlogpath = os.path.join(env['TEMPDIR'],'.cmdlog')
+    cmdlog = open(cmdlogpath, 'wb')
+    logger.info('starting %s', scriptname)
+    p = subprocess.Popen([scriptname, walletname], env=env, stdout=cmdlog, stderr=subprocess.STDOUT)
+    cmdlog.close()
     runset.running(scriptname, p)
     retcode = p.wait(read_script_for_timeout(scriptname))
+    if retcode != 0:
+        sys.stderr.write('error: {} FAILED\n'.format(scriptname))
+        st = os.stat(cmdlogpath)
+        with open(cmdlogpath, 'r') as fin:
+            if st.st_size > 4096:
+                fin.seek(st.st_size - 4096)
+                text = fin.read()
+                lines = text.splitlines()
+                if len(lines) > 1:
+                    # drop probably-partial first line
+                    lines = lines[1:]
+                sys.stderr.write('end of log follows:\n')
+                sys.stderr.write('\n'.join(lines))
+                sys.stderr.write('\n\n')
+            else:
+                sys.stderr.write('whole log follows:\n')
+                sys.stderr.write(fin.read())
     runset.done(scriptname, retcode == 0)
     return
 
@@ -207,9 +228,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('scripts', nargs='*', help='scripts to run')
     ap.add_argument('--keep-temps', default=False, action='store_true', help='if set, keep all the test files')
+    ap.add_argument('--verbose', default=False, action='store_true')
     args = ap.parse_args()
 
-    logging.basicConfig()
+    if args.verbose:
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.INFO)
 
     # start with a copy when making env for child processes
     env = dict(os.environ)

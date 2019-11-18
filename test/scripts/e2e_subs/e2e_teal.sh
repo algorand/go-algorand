@@ -63,7 +63,7 @@ ${gcmd} clerk send --amount 1000000 --from ${ACCOUNT} --to ${ACCOUNT_TLHC}
 # timeout round should pass. some of the 35 seconds was eaten by prior ops.
 CROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
 while [ $CROUND -lt $TIMEOUT_ROUND ]; do
-    ${gcmd} node wait
+    goal node wait
     CROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
 done
 
