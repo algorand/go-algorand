@@ -6,7 +6,7 @@ TEAL programs should be short and run fast as they are run in-line along with si
 
 ## The Stack
 
-The stack starts empty and contains values of either uint64 or bytes. (`bytes` implemented in Go as a []byte slice) Most operations act on the stack, popping arguments from it and pushing results to it.
+The stack starts empty and contains values of either uint64 or bytes (`bytes` are implemented in Go as a []byte slice). Most operations act on the stack, popping arguments from it and pushing results to it.
 
 The maximum stack depth is currently 1000.
 
@@ -20,7 +20,7 @@ TEAL runs in Algorand nodes as part of testing a proposed transaction to see if 
 
 If an authorized program executes and finishes with a single non-zero uint64 value on the stack then that program has validated the transaction it is attached to.
 
-The TEAL program has access to data from the transaction it is attached to (`txn` op), any transactions in a transaction group it is part of (`gtxn` op), and a few global values like consensus parameters (`global` op). Some "Args" may be attached to a transaction being validated by a TEAL program. Args are an array of byte strings. A common pattern would be to have the key to unlock some contract as an Arg. The args are recorded on the blockchain, thus publishing the secret as is needed by a time-locked-hash-contract swap pattern.
+The TEAL program has access to data from the transaction it is attached to (`txn` op), any transactions in a transaction group it is part of (`gtxn` op), and a few global values like consensus parameters (`global` op). Some "Args" may be attached to a transaction being validated by a TEAL program. Args are an array of byte strings. A common pattern would be to have the key to unlock some contract as an Arg. Args are recorded on the blockchain and publicly visible when the transaction is submitted to the network.
 
 A program can either authorize some delegated action on a normal private key signed or multisig account or be wholly in charge of a contract account.
 
@@ -39,7 +39,7 @@ The assembler will hide most of this, allowing simple use of `int 1234` and `byt
 
 Constants are loaded into the environment by two opcodes, `intcblock` and `bytecblock`. Both of these use [proto-buf style variable length unsigned int](https://developers.google.com/protocol-buffers/docs/encoding#varint), reproduced [here](#varuint). The `intcblock` opcode is followed by a varuint specifying the length of the array and then that number of varuint. The `bytecblock` opcode is followed by a varuint array length then that number of pairs of (varuint, bytes) length prefixed byte strings. This should efficiently load 32 and 64 byte constants which will be common as addresses, hashes, and signatures.
 
-Constants are pushed onto the stack by `intc`, `intc_[0123]`, `bytec`, and `bytec_[0123]`. The assembler will typically handle converting `int N` or `byte N` into the appropriate constant-offset opcode or opcode followed by index byte.
+Constants are pushed onto the stack by `intc`, `intc_[0123]`, `bytec`, and `bytec_[0123]`. The assembler will handle converting `int N` or `byte N` into the appropriate form of the instruction needed.
 
 ## Operations
 
@@ -50,7 +50,7 @@ What might be a one line expression with various parenthesized clauses should be
 Looping is not possible, by design, to ensure predictably fast execution.
 There is a branch instruction (`bnz`, branch if not zero) which allows forward branching only so that some code may be skipped.
 
-Many programs need only a few dozen instructions. The instruction set has some optimization built in. `intc`, `bytec`, and `arg` take an immediate value byte, making a 2-byte op to load a value onto the stack, but they also have single byte versions for loading values 0, 1, 2, and 3. Any program will benefit from having a few common values loaded with a smaller one byte opcode, and many programs won't even need more than those 4 values. Cryptographic hashes and `ed25519verify` are single byte opcodes with powerful libraries behind them. These operations still take more time than other ops (and this is reflected in the cost of each op and the cost limit of a program) but are efficient in compiled code space.
+Many programs need only a few dozen instructions. The instruction set has some optimization built in. `intc`, `bytec`, and `arg` take an immediate value byte, making a 2-byte op to load a value onto the stack, but they also have single byte versions for loading the most common constant values. Any program will benefit from having a few common values loaded with a smaller one byte opcode. Cryptographic hashes and `ed25519verify` are single byte opcodes with powerful libraries behind them. These operations still take more time than other ops (and this is reflected in the cost of each op and the cost limit of a program) but are efficient in compiled code space.
 
 This summary is supplemented by more detail in the [opcodes document](TEAL_opcodes.md).
 
@@ -58,11 +58,13 @@ Some operations 'panic' and immediately end execution of the program.
 A transaction checked by a program that panics is not valid.
 A contract account governed by a buggy program might not have a way to get assets back out of it. Code carefully.
 
-### Arithmetic
+### Arithmetic, Logic, and Cryptographic Operations
 
 For one-argument ops, `X` is the last element on the stack, which is typically replaced by a new value.
 
 For two-argument ops, `A` is the previous element on the stack and `B` is the last element on the stack. These typically result in popping A and B from the stack and pushing the result.
+
+`ed25519verify` is currently the only 3 argument opcode and is described in detail in the opcode refrence.
 
 @@ Arithmetic.md @@
 
@@ -81,6 +83,8 @@ Some of these have immediate data in the byte or bytes after the opcode.
 Additional details in the [opcodes document](TEAL_opcodes.md#txn) on the `txn` op.
 
 **Global Fields**
+
+Global fields are fields that are common to all the transactions in the group. In particular it includes consensus parameters.
 
 @@ global_fields.md @@
 
@@ -114,7 +118,7 @@ byte 0x0123456789abcdef...
 
 `int` constants may be `0x` prefixed for hex, `0` prefixed for octal, or decimal numbers.
 
-`intcblock` may be explictly assembled. It will conflict with the assembler gathering `int` pseudo-ops into a `intcblock` program prefix, but may be used in code only has explicit `intc` references. `intcblock` should be followed by space separated int constants all on one line.
+`intcblock` may be explictly assembled. It will conflict with the assembler gathering `int` pseudo-ops into a `intcblock` program prefix, but may be used if code only has explicit `intc` references. `intcblock` should be followed by space separated int constants all on one line.
 
 `bytecblock` may be explicitly assembled. It will conflict with the assembler if there are any `byte` pseudo-ops but may be used if only explicit `bytec` references are used. `bytecblock` should be followed with byte constants all on one line, either 'encoding value' pairs (`b64 AAA...`) or 0x prefix or function-style values (`base64(...)`).
 
