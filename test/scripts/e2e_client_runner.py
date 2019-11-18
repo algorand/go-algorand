@@ -1,4 +1,18 @@
 #!/usr/bin/env python3
+#
+# Create a local private network and run functional tests on it in parallel.
+#
+# Each test is run as `ftest.sh wallet_name` for a wallet with a
+# million Algos.  A test should carefully specify that wallet (or
+# wallets created for the test) for all actions. Tests are expected to
+# not be CPU intensive, merely setting up a handful of transactions
+# and executing them against the network, exercising aspects of the
+# network and the goal tools.
+#
+# Usage:
+#  ./e2e_client_runner.py e2e_subs/*.sh
+#
+# Reads each bash script for `# TIMEOUT=N` line to configure timeout to N seconds. (default timeout is 200 seconds)
 
 import argparse
 import atexit
@@ -76,6 +90,9 @@ def _script_thread_inner(runset, scriptname):
     os.makedirs(env['TEMPDIR'])
     cmdlogpath = os.path.join(env['TEMPDIR'],'.cmdlog')
     cmdlog = open(cmdlogpath, 'wb')
+    if not runset.is_ok():
+        runset.done(scriptname, False)
+        return
     logger.info('starting %s', scriptname)
     p = subprocess.Popen([scriptname, walletname], env=env, stdout=cmdlog, stderr=subprocess.STDOUT)
     cmdlog.close()
@@ -132,6 +149,10 @@ class RunSet:
         self.errors = []
         return
 
+    def is_ok(self):
+        with self.lock:
+            return self.ok
+
     def connect(self):
         with self.lock:
             self._connect()
@@ -169,8 +190,7 @@ class RunSet:
                 self.pubw = pubw
                 self.maxpubaddr = maxpubaddr
             return self.pubw, self.maxpubaddr
-                
-                
+
     def start(self, scriptname):
         with self.lock:
             if not self.ok:
@@ -315,6 +335,7 @@ def main():
         logger.error('$GOPATH not set')
         sys.exit(1)
 
+    retcode = 0
     xrun(['goal', 'network', 'create', '-r', netdir, '-n', 'tbd', '-t', os.path.join(gopath, 'src/github.com/algorand/go-algorand/test/testdata/nettemplates/TwoNodes50EachFuture.json')], timeout=30)
     xrun(['goal', 'network', 'start', '-r', netdir], timeout=30)
     atexit.register(goal_network_stop, netdir)
@@ -327,13 +348,13 @@ def main():
 
     rs = RunSet(env)
     for scriptname in args.scripts:
-        #logger.info('starting %s', scriptname)
         rs.start(scriptname)
     rs.wait(500)
     if rs.errors:
+        retcode = 1
         logger.error('errors: %r', '\n'.join(rs.errors))
     logger.info('finished in %f seconds', time.time() - start)
-    return
+    return retcode
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())
