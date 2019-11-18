@@ -15,7 +15,7 @@
 // gtxn[0] Algos from Other to Me
 // gtxn[1] (this txn) asset from Me to Other
 //
-// We want to get _at least_ some amout of algos for our asset
+// We want to get _at least_ some amount of algos for our asset
 // gtxn[0].Amount / gtxn[1].AssetAmount >= N / D
 // ===
 // gtxn[0].Amount * D >= gtxn[1].AssetAmount * N
@@ -176,10 +176,15 @@ txn AssetCloseTo
 addr TMPL_OWN
 ==
 
+txn FirstValid
+int TMPL_TIMEOUT
+>
+&&
+
 txn AssetReceiver
 global ZeroAddress
 ==
-&& // close asset to Me && no asset Receiver
+&& // close asset to Me && after timeout && no asset Receiver
 
 // setup case
 txn AssetReceiver
