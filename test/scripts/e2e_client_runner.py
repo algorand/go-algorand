@@ -19,6 +19,9 @@ import algosdk
 
 logger = logging.getLogger(__name__)
 
+def timestamp():
+    return time.strftime('%Y%m%d_%H%M%S', time.gmtime())
+
 def openkmd(algodata):
     kmdnetpath = sorted(glob.glob(os.path.join(algodata,'kmd-*','kmd.net')))[-1]
     kmdnet = open(kmdnetpath, 'rt').read().strip()
@@ -47,7 +50,8 @@ def read_script_for_timeout(fname):
             logger.debug('read timeout match err', exc_info=True)
     return 200
 
-def script_thread(runset, scriptname):
+def _script_thread_inner(runset, scriptname):
+    start = time.time()
     algod, kmd = runset.connect()
     pubw, maxpubaddr = runset.get_pub_wallet()
 
@@ -75,13 +79,14 @@ def script_thread(runset, scriptname):
     os.makedirs(env['TEMPDIR'])
     cmdlogpath = os.path.join(env['TEMPDIR'],'.cmdlog')
     cmdlog = open(cmdlogpath, 'wb')
-    logger.info('starting %s', scriptname)
+    logger.info('starting %s at %s', scriptname, timestamp())
     p = subprocess.Popen([scriptname, walletname], env=env, stdout=cmdlog, stderr=subprocess.STDOUT)
     cmdlog.close()
     runset.running(scriptname, p)
     retcode = p.wait(read_script_for_timeout(scriptname))
+    dt = time.time() - start
     if retcode != 0:
-        sys.stderr.write('error: {} FAILED\n'.format(scriptname))
+        sys.stderr.write('error: {} FAILED in {} seconds\n'.format(scriptname, dt))
         st = os.stat(cmdlogpath)
         with open(cmdlogpath, 'r') as fin:
             if st.st_size > 4096:
@@ -97,8 +102,17 @@ def script_thread(runset, scriptname):
             else:
                 sys.stderr.write('whole log follows:\n')
                 sys.stderr.write(fin.read())
+    else:
+        logger.info('finished %s OK at %s in %f seconds', scriptname, timestamp(), dt)
     runset.done(scriptname, retcode == 0)
     return
+
+def script_thread(runset, scriptname):
+    try:
+        _script_thread_inner(runset, scriptname)
+    except Exception as e:
+        logger.error('error in e2e_client_runner.py', exc_info=True)
+        runset.done(scriptname, False)
 
 def killthread(runset):
     time.sleep(5)
@@ -130,7 +144,7 @@ class RunSet:
         if self.algod and self.kmd:
             return
         # should run from inside self.lock
-        subprocess.run(['goal', 'kmd', 'start', '-t', '200'], env=self.env, timeout=5).check_returncode()
+        xrun(['goal', 'kmd', 'start', '-t', '200'], env=self.env, timeout=5)
         algodata = self.env['ALGORAND_DATA']
         self.kmd = openkmd(algodata)
         self.algod = openalgod(algodata)
@@ -220,11 +234,50 @@ class RunSet:
                 self._terminate()
 
 def goal_network_stop(netdir):
-    x = subprocess.run(['goal', 'network', 'stop', '-r', netdir], timeout=30)
-    if x.returncode != 0:
-        logger.error('stop failed %s', x)
+    logger.info('stop network in %s', netdir)
+    xrun(['goal', 'network', 'stop', '-r', netdir], timeout=10)
+
+def xrun(cmd, *args, **kwargs):
+    timeout = kwargs.pop('timeout', None)
+    kwargs['stdout'] = subprocess.PIPE
+    kwargs['stderr'] = subprocess.STDOUT
+    try:
+        p = subprocess.Popen(cmd, *args, **kwargs)
+    except Exception as e:
+        logger.error('subprocess failed {!r}'.format(cmd), exc_info=True)
+        raise
+    try:
+        if timeout:
+            p.communicate(timeout=timeout)
+        else:
+            p.communicate()
+    except subprocess.TimeoutExpired as te:
+        cmdr = repr(cmd)
+        logger.error('subprocess timed out {}'.format(cmdr), exc_info=True)
+        if p.stdout:
+            sys.stderr.write('output from {}:\n{}\n\n'.format(cmdr, p.stdout))
+        if p.stderr:
+            sys.stderr.write('stderr from {}:\n{}\n\n'.format(cmdr, p.stderr))
+        raise
+    except Exception as e:
+        cmdr = repr(cmd)
+        logger.error('subprocess exception {}'.format(cmdr), exc_info=True)
+        if p.stdout:
+            sys.stderr.write('output from {}:\n{}\n\n'.format(cmdr, p.stdout))
+        if p.stderr:
+            sys.stderr.write('stderr from {}:\n{}\n\n'.format(cmdr, p.stderr))
+        raise
+    if p.returncode != 0:
+        cmdr = repr(cmd)
+        logger.error('cmd failed {}'.format(cmdr))
+        if p.stdout:
+            sys.stderr.write('output from {}:\n{}\n\n'.format(cmdr, p.stdout))
+        if p.stderr:
+            sys.stderr.write('stderr from {}:\n{}\n\n'.format(cmdr, p.stderr))
+        raise Exception('error: cmd failed: {}'.format(cmdr))
 
 def main():
+    start = time.time()
     ap = argparse.ArgumentParser()
     ap.add_argument('scripts', nargs='*', help='scripts to run')
     ap.add_argument('--keep-temps', default=False, action='store_true', help='if set, keep all the test files')
@@ -236,6 +289,7 @@ def main():
     else:
         logging.basicConfig(level=logging.INFO)
 
+    logger.info('starting at %s: %r', timestamp(), args.scripts)
     # start with a copy when making env for child processes
     env = dict(os.environ)
     tempdir = os.getenv('TEMPDIR')
@@ -256,23 +310,24 @@ def main():
         logger.error('$GOPATH not set')
         sys.exit(1)
 
-    subprocess.run(['goal', 'network', 'create', '-r', netdir, '-n', 'tbd', '-t', os.path.join(gopath, 'src/github.com/algorand/go-algorand/test/testdata/nettemplates/TwoNodes50EachFuture.json')], timeout=30).check_returncode()
-    subprocess.run(['goal', 'network', 'start', '-r', netdir], timeout=30).check_returncode()
+    xrun(['goal', 'network', 'create', '-r', netdir, '-n', 'tbd', '-t', os.path.join(gopath, 'src/github.com/algorand/go-algorand/test/testdata/nettemplates/TwoNodes50EachFuture.json')], timeout=30)
+    xrun(['goal', 'network', 'start', '-r', netdir], timeout=30)
     atexit.register(goal_network_stop, netdir)
 
     env['ALGORAND_DATA'] = os.path.join(netdir, 'Node')
     env['ALGORAND_DATA2'] = os.path.join(netdir, 'Primary')
 
-    subprocess.run(['goal', '-v'], env=env, timeout=5).check_returncode()
-    subprocess.run(['goal', 'node', 'status'], env=env, timeout=5).check_returncode()
+    xrun(['goal', '-v'], env=env, timeout=5)
+    xrun(['goal', 'node', 'status'], env=env, timeout=5)
 
     rs = RunSet(env)
     for scriptname in args.scripts:
-        logger.info('starting %s', scriptname)
+        #logger.info('starting %s', scriptname)
         rs.start(scriptname)
     rs.wait(500)
     if rs.errors:
         logger.error('errors: %r', '\n'.join(rs.errors))
+    logger.info('finished at %s in %f seconds', timestamp(), time.time() - start)
     return
 
 if __name__ == '__main__':
