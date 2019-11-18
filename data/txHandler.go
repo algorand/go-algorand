@@ -131,24 +131,7 @@ func (handler *TxHandler) backlogWorker() {
 			if !ok {
 				return
 			}
-			if wi.verificationErr != nil {
-				// disconnect from peer.
-				logging.Base().Warnf("Received a malformed tx group %v: %v", wi.unverifiedTxGroup, wi.verificationErr)
-				handler.net.Disconnect(wi.rawmsg.Sender)
-				continue
-			}
-			// at this point, we've verified the transaction, so we can safely treat the transaction as a verified transaction.
-			verifiedTxGroup := wi.unverifiedTxGroup
-
-			// save the transaction, if it has high enough fee and not already in the cache
-			err := handler.txPool.Remember(verifiedTxGroup)
-			if err != nil {
-				logging.Base().Debugf("could not remember tx: %v", err)
-				continue
-			}
-
-			// We reencode here instead of using rawmsg.Data to avoid broadcasting non-canonical encodings
-			handler.net.Relay(handler.ctx, protocol.TxnTag, reencode(verifiedTxGroup), false, wi.rawmsg.Sender)
+			handler.postprocessCheckedTxn(wi)
 
 			// restart the loop so that we could empty out the post verification queue.
 			continue
@@ -166,36 +149,42 @@ func (handler *TxHandler) backlogWorker() {
 			}
 			// enqueue the task to the verification pool.
 			handler.txVerificationPool.EnqueueBacklog(handler.ctx, handler.asyncVerifySignature, wi, nil)
+
 		case wi, ok := <-handler.postVerificationQueue:
 			if !ok {
 				return
 			}
-			if wi.verificationErr != nil {
-				// disconnect from peer.
-				logging.Base().Warnf("Received a malformed txn %v: %v", wi.unverifiedTxGroup, wi.verificationErr)
-				handler.net.Disconnect(wi.rawmsg.Sender)
-				continue
-			}
+			handler.postprocessCheckedTxn(wi)
 
-			// we've processed this message, so increase the counter.
-			transactionMessagesHandled.Inc(nil)
-
-			// at this point, we've verified the transaction, so we can safely treat the transaction as a verified transaction.
-			verifiedTxGroup := wi.unverifiedTxGroup
-
-			// save the transaction, if it has high enough fee and not already in the cache
-			err := handler.txPool.Remember(verifiedTxGroup)
-			if err != nil {
-				logging.Base().Debugf("could not remember tx: %v", err)
-				continue
-			}
-
-			// We reencode here instead of using rawmsg.Data to avoid broadcasting non-canonical encodings
-			handler.net.Relay(handler.ctx, protocol.TxnTag, reencode(verifiedTxGroup), false, wi.rawmsg.Sender)
 		case <-handler.ctx.Done():
 			return
 		}
 	}
+}
+
+func (handler *TxHandler) postprocessCheckedTxn(wi *txBacklogMsg) {
+	if wi.verificationErr != nil {
+		// disconnect from peer.
+		logging.Base().Warnf("Received a malformed tx group %v: %v", wi.unverifiedTxGroup, wi.verificationErr)
+		handler.net.Disconnect(wi.rawmsg.Sender)
+		return
+	}
+
+	// we've processed this message, so increase the counter.
+	transactionMessagesHandled.Inc(nil)
+
+	// at this point, we've verified the transaction, so we can safely treat the transaction as a verified transaction.
+	verifiedTxGroup := wi.unverifiedTxGroup
+
+	// save the transaction, if it has high enough fee and not already in the cache
+	err := handler.txPool.Remember(verifiedTxGroup)
+	if err != nil {
+		logging.Base().Debugf("could not remember tx: %v", err)
+		return
+	}
+
+	// We reencode here instead of using rawmsg.Data to avoid broadcasting non-canonical encodings
+	handler.net.Relay(handler.ctx, protocol.TxnTag, reencode(verifiedTxGroup), false, wi.rawmsg.Sender)
 }
 
 // asyncVerifySignature verifies that the given transaction group is valid, and update the txBacklogMsg data structure accordingly.
@@ -285,32 +274,6 @@ func (handler *TxHandler) checkAlreadyCommitted(tx *txBacklogMsg) (processingDon
 	tx.proto = config.Consensus[latestHdr.CurrentProtocol]
 	tx.spec.FeeSink = latestHdr.FeeSink
 	tx.spec.RewardsPool = latestHdr.RewardsPool
-
-	tc := transactions.ExplicitTxnContext{
-		ExplicitRound: latest + 1,
-		Proto:         tx.proto,
-		GenID:         handler.genesisID,
-		GenHash:       handler.genesisHash,
-	}
-
-	for _, txn := range tx.unverifiedTxGroup {
-		err = txn.Txn.Alive(tc)
-		if err != nil {
-			logging.Base().Debugf("Received a dead txn %s: %v", txn.ID(), err)
-			return true
-		}
-
-		committed, err := handler.ledger.Committed(tx.proto, txn)
-		if err != nil {
-			logging.Base().Errorf("Could not verify committed status of txn %v: %v", txn, err)
-			return true
-		}
-
-		if committed {
-			logging.Base().Debugf("Already confirmed tx %v", txn.ID())
-			return true
-		}
-	}
 
 	return false
 }

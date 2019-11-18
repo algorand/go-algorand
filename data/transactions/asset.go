@@ -152,7 +152,7 @@ func (cc AssetConfigTxnFields) apply(header Header, balances Balances, spec Spec
 	}
 
 	if params.Manager.IsZero() || (header.Sender != params.Manager) {
-		return fmt.Errorf("transaction issued by %v, manager key %v", header.Sender, params.Manager)
+		return fmt.Errorf("this transaction should be issued by the manager. It is issued by %v, manager key %v", header.Sender, params.Manager)
 	}
 
 	record, err := balances.Get(creator, false)

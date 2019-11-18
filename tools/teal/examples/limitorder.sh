@@ -26,7 +26,7 @@ goal asset send --creator G5PM2K5RIEHHO7ZKR2ZTQDYY6DVBYOMGOFZMMNGJCW4BYNMT7HC4HT
 # > Transaction ELLYMXT56IIZ57XT5U65QLERU5VQUDSU36AXI5IP4MPKQJDORKBQ committed in round 152632
 
 # produce TEAL assembly for a limit order escrow: Alice will trade _more than_ 1000 Algos for at least 3/2 * 1000 of some asset
-python driver.py limit-order --swapn 3 --swapd 2 --mintrd 1000 --own SKXZDBHECM6AS73GVPGJHMIRDMJKEAN5TUGMUPSKJCQ44E6M6TC2H2UJ3I --fee 100000 --timeout 150000 --asset 39 > limit.teal
+algotmpl -d `git rev-parse --show-toplevel`/tools/teal/templates limit-order --swapn 3 --swapd 2 --mintrd 1000 --own SKXZDBHECM6AS73GVPGJHMIRDMJKEAN5TUGMUPSKJCQ44E6M6TC2H2UJ3I --fee 100000 --timeout 150000 --asset 39 > limit.teal
 
 # compile TEAL assembly to TEAL bytecode
 goal clerk compile limit.teal 

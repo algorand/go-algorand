@@ -46,6 +46,7 @@ type PpConfig struct {
 	MinAccountFunds uint64
 	Quiet           bool
 	RandomNote      bool
+	RandomLease     bool
 	Program         []byte
 	LogicArgs       [][]byte
 	GroupSize       uint32
