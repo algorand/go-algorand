@@ -81,8 +81,8 @@ export SRCROOT=${SRCROOT}
 
 ./e2e_go_tests.sh
 
-#rm -rf ${TEMPDIR}
-#rm -rf ${PKG_ROOT}
+rm -rf ${TEMPDIR}
+rm -rf ${PKG_ROOT}
 
 echo "----------------------------------------------------------------------"
 echo "  DONE: E2E"
