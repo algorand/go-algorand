@@ -116,7 +116,7 @@ goal clerk rawsend -f ${TEMPDIR}/finalgroup.stxn
 # Check balance of recipient
 BALANCED=$(goal account balance -a ${ACCOUNTD}|awk '{ print $1 }')
 if [ $BALANCED -ne 1000000 ]; then
-    date '+dynamic-fee-teal-test FAIL wanted balance=1000000 but got ${BALANCEB} %Y%m%d_%H%M%S'
+    date '+dynamic-fee-teal-test FAIL wanted balance=1000000 but got ${BALANCED} %Y%m%d_%H%M%S'
     false
 fi
 
