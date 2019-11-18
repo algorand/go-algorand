@@ -72,6 +72,7 @@ txn TypeEnum
 int 1
 ==
 &&
+```
 
 Finally, check that all of the fields in the second transaction are equal to their corresponding contract parameters. Fold all of these checks into a single boolean.
 
