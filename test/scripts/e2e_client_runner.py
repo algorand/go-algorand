@@ -19,9 +19,6 @@ import algosdk
 
 logger = logging.getLogger(__name__)
 
-def timestamp():
-    return time.strftime('%Y%m%d_%H%M%S', time.gmtime())
-
 def openkmd(algodata):
     kmdnetpath = sorted(glob.glob(os.path.join(algodata,'kmd-*','kmd.net')))[-1]
     kmdnet = open(kmdnetpath, 'rt').read().strip()
@@ -79,14 +76,14 @@ def _script_thread_inner(runset, scriptname):
     os.makedirs(env['TEMPDIR'])
     cmdlogpath = os.path.join(env['TEMPDIR'],'.cmdlog')
     cmdlog = open(cmdlogpath, 'wb')
-    logger.info('starting %s at %s', scriptname, timestamp())
+    logger.info('starting %s', scriptname)
     p = subprocess.Popen([scriptname, walletname], env=env, stdout=cmdlog, stderr=subprocess.STDOUT)
     cmdlog.close()
     runset.running(scriptname, p)
     retcode = p.wait(read_script_for_timeout(scriptname))
     dt = time.time() - start
     if retcode != 0:
-        sys.stderr.write('error: {} FAILED in {} seconds\n'.format(scriptname, dt))
+        logger.error('%s failed in %f seconds', scriptname, dt)
         st = os.stat(cmdlogpath)
         with open(cmdlogpath, 'r') as fin:
             if st.st_size > 4096:
@@ -103,7 +100,7 @@ def _script_thread_inner(runset, scriptname):
                 sys.stderr.write('whole log follows:\n')
                 sys.stderr.write(fin.read())
     else:
-        logger.info('finished %s OK at %s in %f seconds', scriptname, timestamp(), dt)
+        logger.info('finished %s OK in %f seconds', scriptname, dt)
     runset.done(scriptname, retcode == 0)
     return
 
@@ -196,12 +193,14 @@ class RunSet:
             self.ok = self.ok and ok
             if not self.ok:
                 self._terminate()
-            if self.killthread is None:
-                self.killthread = threading.Thread(target=killthread, args=(self,), daemon=True)
-                self.killthread.start()
+                if self.killthread is None:
+                    self.killthread = threading.Thread(target=killthread, args=(self,), daemon=True)
+                    self.killthread.start()
 
     def _terminate(self):
         # run from inside self.lock
+        if self.terminated:
+            return
         self.terminated = time.time()
         for p in self.procs.values():
             p.terminate()
@@ -235,7 +234,10 @@ class RunSet:
 
 def goal_network_stop(netdir):
     logger.info('stop network in %s', netdir)
-    xrun(['goal', 'network', 'stop', '-r', netdir], timeout=10)
+    try:
+        xrun(['goal', 'network', 'stop', '-r', netdir], timeout=10)
+    except Exception as e:
+        logger.error('error stopping network', exc_info=True)
 
 def xrun(cmd, *args, **kwargs):
     timeout = kwargs.pop('timeout', None)
@@ -276,6 +278,9 @@ def xrun(cmd, *args, **kwargs):
             sys.stderr.write('stderr from {}:\n{}\n\n'.format(cmdr, p.stderr))
         raise Exception('error: cmd failed: {}'.format(cmdr))
 
+_logging_format = '%(asctime)s :%(lineno)d %(message)s'
+_logging_datefmt = '%Y%m%d_%H%M%S'
+
 def main():
     start = time.time()
     ap = argparse.ArgumentParser()
@@ -285,11 +290,11 @@ def main():
     args = ap.parse_args()
 
     if args.verbose:
-        logging.basicConfig(level=logging.DEBUG)
+        logging.basicConfig(format=_logging_format, datefmt=_logging_datefmt, level=logging.DEBUG)
     else:
-        logging.basicConfig(level=logging.INFO)
+        logging.basicConfig(format=_logging_format, datefmt=_logging_datefmt, level=logging.INFO)
 
-    logger.info('starting at %s: %r', timestamp(), args.scripts)
+    logger.info('starting: %r', args.scripts)
     # start with a copy when making env for child processes
     env = dict(os.environ)
     tempdir = os.getenv('TEMPDIR')
@@ -327,7 +332,7 @@ def main():
     rs.wait(500)
     if rs.errors:
         logger.error('errors: %r', '\n'.join(rs.errors))
-    logger.info('finished at %s in %f seconds', timestamp(), time.time() - start)
+    logger.info('finished in %f seconds', time.time() - start)
     return
 
 if __name__ == '__main__':
