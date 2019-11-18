@@ -35,12 +35,12 @@ int 2
 ==
 ```
 
-Next, check that the fee of this transaction is less than `TMPL_FEE`. Fold this check into above with a logical `AND`.
+Next, check that the fee of this transaction is less than or equal to `TMPL_FEE`. Fold this check into above with a logical `AND`.
 
 ```
 txn Fee
 int TMPL_FEE
-<
+<=
 &&
 ```
 

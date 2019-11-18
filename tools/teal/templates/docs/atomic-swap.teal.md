@@ -6,7 +6,7 @@ This contract implements part of an "atomic swap". It is intended to be used as 
 
 The contract will approve transactions spending algos from itself under two circumstances:
 
-  1. If an argument `arg_0` is passed to the script such that `TMPL_HASHFN(arg_0)` is equal to `TMPL_HASHIMG`, then funds may be closed out to  `TMPL_RCV`. 
+  1. If an argument `arg_0` is passed to the script such that `TMPL_HASHFN(arg_0)` is equal to `TMPL_HASHIMG`, then funds may be closed out to `TMPL_RCV`. 
   2. If `txn.FirstValid` is greater than `TMPL_TIMEOUT`, then funds may be closed out to `TMPL_OWN`.
 
 The idea is that by knowing the preimage to `TMPL_HASHIMG`, funds may be released. Alternatively, after some timeout round `TMPL_TIMEOUT`, funds may be closed back to their original owner.
@@ -23,12 +23,12 @@ The idea is that by knowing the preimage to `TMPL_HASHIMG`, funds may be release
 ## Code overview
 
 ### Initial checks
-First, check if the fee of this transaction is less than `TMPL_FEE`.
+First, check if the fee of this transaction is less than or equal to `TMPL_FEE`.
 
 ```
 txn Fee
 int TMPL_FEE
-<
+<=
 ```
 
 Next, check that this is a payment transaction. The possible valid values of this enum may be found [here](https://github.com/algorand/go-algorand/blob/9978b3aed0643751246af82f5538ba1e7de47310/data/transactions/logic/assembler.go#L569).
