@@ -598,7 +598,11 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 			}
 		}
 		if needCheckLsig {
-			err = eval.checkLogicSig(txn, txgroup, groupIndex)
+			groupNoAD := make([]transactions.SignedTxn, len(txgroup))
+			for i := range txgroup {
+				groupNoAD[i] = txgroup[i].SignedTxn
+			}
+			err = eval.checkLogicSig(txn, groupNoAD, groupIndex)
 			if err != nil {
 				return err
 			}
@@ -670,7 +674,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 	return nil
 }
 
-func (eval *BlockEvaluator) checkLogicSig(txn transactions.SignedTxn, txgroup []transactions.SignedTxnWithAD, groupIndex int) (err error) {
+func (eval *BlockEvaluator) checkLogicSig(txn transactions.SignedTxn, txgroup []transactions.SignedTxn, groupIndex int) (err error) {
 	if txn.Txn.FirstValid == 0 {
 		return errors.New("LogicSig does not work with FirstValid==0")
 	}
