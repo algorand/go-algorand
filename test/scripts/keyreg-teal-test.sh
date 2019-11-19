@@ -150,5 +150,3 @@ if [[ $RES != *"${EXPERROR}"* ]]; then
     date '+keyreg-teal-test FAIL keyreg on expired logic should be rejected %Y%m%d_%H%M%S'
     false
 fi
-
-
