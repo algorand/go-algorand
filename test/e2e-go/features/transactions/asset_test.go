@@ -491,6 +491,147 @@ func TestAssetInformation(t *testing.T) {
 	a.NoError(err)
 }
 
+func TestAssetGroupCreateSendDestroy(t *testing.T) {
+	t.Parallel()
+	a := require.New(t)
+
+	var fixture fixtures.RestClientFixture
+	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
+	defer fixture.Shutdown()
+
+	client0 := fixture.GetLibGoalClientForNamedNode("Primary")
+	client1 := fixture.GetLibGoalClientForNamedNode("Node")
+
+	wh0, err := client0.GetUnencryptedWalletHandle()
+	a.NoError(err)
+	wh1, err := client1.GetUnencryptedWalletHandle()
+	a.NoError(err)
+
+	client0.ListAddresses(wh0)
+	accountList, err := client0.ListAddresses(wh0)
+	a.NoError(err)
+	account0 := accountList[0]
+
+	client1.ListAddresses(wh0)
+	accountList, err = client1.ListAddresses(wh1)
+	a.NoError(err)
+	account1 := accountList[0]
+
+	txCount := uint64(0)
+	fee := uint64(1000000)
+
+	manager := account0
+	reserve := account0
+	freeze := account0
+	clawback := account0
+
+	txids := make(map[string]string)
+	assetTotal := uint64(100)
+
+	// Create and Send in the same group
+	assetName1 := "testassetname1"
+	assetUnitName1 := "unit1"
+	txCreate1, err := client0.MakeUnsignedAssetCreateTx(assetTotal, false, manager, reserve, freeze, clawback, assetUnitName1, assetName1, "foo://bar", nil)
+	a.NoError(err)
+	txCreate1, err = client0.FillUnsignedTxTemplate(account0, 0, 0, fee, txCreate1)
+	a.NoError(err)
+
+	assetID1 := txCount + 1
+	txSend, err := client1.MakeUnsignedAssetSendTx(assetID1, 0, account1, "", "")
+	a.NoError(err)
+	txSend, err = client1.FillUnsignedTxTemplate(account1, 0, 0, fee, txSend)
+	a.NoError(err)
+
+	gid, err := client0.GroupID([]transactions.Transaction{txCreate1, txSend})
+	a.NoError(err)
+
+	var stxns []transactions.SignedTxn
+
+	txCreate1.Group = gid
+	stxn, err := client0.SignTransactionWithWallet(wh0, nil, txCreate1)
+	a.NoError(err)
+	stxns = append(stxns, stxn)
+	txids[txCreate1.ID().String()] = account0
+
+	txSend.Group = gid
+	stxn, err = client1.SignTransactionWithWallet(wh1, nil, txSend)
+	a.NoError(err)
+	stxns = append(stxns, stxn)
+	txids[txSend.ID().String()] = account1
+
+	txCount += uint64(len(stxns))
+
+	// broadcasting group should succeed
+	err = client0.BroadcastTransactionGroup(stxns)
+	a.NoError(err)
+
+	// Create and Destroy in the same group
+	assetName2 := "testassetname2"
+	assetUnitName2 := "unit2"
+	txCreate2, err := client0.MakeUnsignedAssetCreateTx(assetTotal, false, manager, reserve, freeze, clawback, assetUnitName2, assetName2, "foo://bar", nil)
+	a.NoError(err)
+	txCreate2, err = client0.FillUnsignedTxTemplate(account0, 0, 0, fee, txCreate2)
+	a.NoError(err)
+
+	assetID3 := txCount + 1
+	txDestroy, err := client0.MakeUnsignedAssetDestroyTx(assetID3)
+	a.NoError(err)
+	txDestroy, err = client0.FillUnsignedTxTemplate(account0, 0, 0, fee, txDestroy)
+	a.NoError(err)
+
+	gid, err = client0.GroupID([]transactions.Transaction{txCreate2, txDestroy})
+	a.NoError(err)
+
+	stxns = []transactions.SignedTxn{}
+
+	txCreate2.Group = gid
+	stxn, err = client0.SignTransactionWithWallet(wh0, nil, txCreate2)
+	a.NoError(err)
+	stxns = append(stxns, stxn)
+	txids[txCreate2.ID().String()] = account0
+
+	txDestroy.Group = gid
+	stxn, err = client0.SignTransactionWithWallet(wh0, nil, txDestroy)
+	a.NoError(err)
+	stxns = append(stxns, stxn)
+	txids[txDestroy.ID().String()] = account0
+
+	// broadcasting group should succeed
+	err = client0.BroadcastTransactionGroup(stxns)
+	a.NoError(err)
+
+	_, curRound := fixture.GetBalanceAndRound(account0)
+	confirmed := fixture.WaitForAllTxnsToConfirm(curRound+5, txids)
+	a.True(confirmed)
+
+	txids = make(map[string]string)
+
+	// asset 1 (create + send) exists and available
+	assetParams, err := client1.AssetInformation(assetID1)
+	a.NoError(err)
+	a.Equal(assetName1, assetParams.AssetName)
+	a.Equal(assetUnitName1, assetParams.UnitName)
+	a.Equal(account0, assetParams.Creator)
+	a.Equal(assetTotal, assetParams.Total)
+	// sending it should succeed
+	txSend, err = client0.MakeUnsignedAssetSendTx(assetID1, 1, account1, "", "")
+	txid, err := helperFillSignBroadcast(client0, wh0, account0, txSend, err)
+	a.NoError(err)
+	txids[txid] = account0
+
+	_, curRound = fixture.GetBalanceAndRound(account0)
+	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+5, txids)
+	a.True(confirmed)
+
+	// asset 3 (create + destroy) not available
+	_, err = client1.AssetInformation(assetID3)
+	a.Error(err)
+	// sending it should fail
+	txSend, err = client1.MakeUnsignedAssetSendTx(assetID3, 0, account1, "", "")
+	txid, err = helperFillSignBroadcast(client1, wh1, account1, txSend, err)
+	a.Error(err)
+}
+
 func TestAssetSend(t *testing.T) {
 	t.Parallel()
 	a := require.New(t)
