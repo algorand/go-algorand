@@ -497,7 +497,7 @@ func (c *Client) ComputeValidityRounds(firstValid, lastValid, validRounds uint64
 	}
 	cparams, ok := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
 	if !ok {
-		return 0, 0, fmt.Errorf("cannot construct transaction: unknown consensus version %s", params.ConsensusVersion)
+		return 0, 0, fmt.Errorf("cannot construct transaction: unknown consensus protocol %s", params.ConsensusVersion)
 	}
 
 	return computeValidityRounds(firstValid, lastValid, validRounds, params.LastRound, cparams.MaxTxnLife)
@@ -558,7 +558,10 @@ func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []by
 		return transactions.Transaction{}, err
 	}
 
-	cp := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
+	cp, ok := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
+	if !ok {
+		return transactions.Transaction{}, fmt.Errorf("ConstructPayment: unknown consensus protocol %s", params.ConsensusVersion)
+	}
 	fv, lv, err := computeValidityRounds(uint64(firstValid), uint64(lastValid), 0, params.LastRound, cp.MaxTxnLife)
 	if err != nil {
 		return transactions.Transaction{}, err
@@ -783,5 +786,11 @@ func (c *Client) ConsensusParams(round uint64) (consensus config.ConsensusParams
 		return
 	}
 
-	return config.Consensus[protocol.ConsensusVersion(block.CurrentProtocol)], nil
+	params, ok := config.Consensus[protocol.ConsensusVersion(block.CurrentProtocol)]
+	if !ok {
+		err = fmt.Errorf("ConsensusParams: unknown consensus protocol %s", block.CurrentProtocol)
+		return
+	}
+
+	return params, nil
 }

@@ -484,10 +484,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 		groupNoAD[i] = txgroup[i].SignedTxn
 	}
 
-	ctxs, err := verify.PrepareContexts(eval.l, groupNoAD, eval.block.BlockHeader)
-	if err != nil {
-		return err
-	}
+	ctxs := verify.PrepareContexts(groupNoAD, eval.block.BlockHeader)
 
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock

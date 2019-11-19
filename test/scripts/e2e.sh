@@ -70,6 +70,8 @@ cd "${SCRIPT_PATH}"
 
 ./timeout 200 ./periodic-teal-test.sh
 
+./timeout 200 ./dynamic-fee-teal-test.sh
+
 ./timeout 200 ./keyreg-teal-test.sh
 
 # Export our root temp folder as 'TESTDIR' for tests to use as their root test folder

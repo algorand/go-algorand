@@ -237,6 +237,11 @@ func (pool *TransactionPool) Test(txgroup []transactions.SignedTxn) error {
 
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
+
+	if pool.pendingBlockEvaluator == nil {
+		return fmt.Errorf("Test: pendingBlockEvaluator is nil")
+	}
+
 	return pool.pendingBlockEvaluator.TestTransactionGroup(txgroup)
 }
 
@@ -504,6 +509,21 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	if err != nil {
 		logging.Base().Warnf("TransactionPool.recomputeBlockEvaluator: cannot get prev header for %d: %v",
 			latest, err)
+		return
+	}
+
+	// Process upgrade to see if we support the next protocol version
+	_, upgradeState, err := bookkeeping.ProcessUpgradeParams(prev)
+	if err != nil {
+		logging.Base().Warnf("TransactionPool.recomputeBlockEvaluator: error processing upgrade params for next round: %v", err)
+		return
+	}
+
+	// Ensure we know about the next protocol version (MakeBlock will panic
+	// if we don't, and we would rather stall locally than panic)
+	_, ok := config.Consensus[upgradeState.CurrentProtocol]
+	if !ok {
+		logging.Base().Warnf("TransactionPool.recomputeBlockEvaluator: next protocol version %v is not supported", upgradeState.CurrentProtocol)
 		return
 	}
 
