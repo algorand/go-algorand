@@ -19,8 +19,7 @@ package pingpong
 import (
 	"fmt"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
-	"github.com/algorand/go-algorand/data/transactions"
+	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/libgoal"
 	"sort"
 	"time"
@@ -119,8 +118,6 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 
 	toCreate := int(cfg.NumAsset) - len(account.AssetParams)
 
-	signedTrxs := make([]*transactions.SignedTxn, toCreate)
-
 	// create assets in srcAccount
 	for i := 0; i < toCreate; i++ {
 		var metaLen = 32
@@ -150,30 +147,21 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 			return
 		}
 
-		signedTrxs[i] = &signedTxn
+		txid, broadcastErr := client.BroadcastTransaction(signedTxn)
+		if broadcastErr != nil {
+			fmt.Printf("Cannot broadcast asset creation txn\n")
+			err = broadcastErr
+			return
+		}
 
 		if !cfg.Quiet {
-			fmt.Printf("Create a new asset: supply=%d \n", totalSupply)
+			fmt.Printf("Create a new asset: supply=%d, txid=%s\n", totalSupply, txid)
 		}
 		accounts[cfg.SrcAccount] -= tx.Fee.Raw
 	}
 
-	waitCount := 10
-
-	// submit the asset transactions and validate that they have all been accepted
-	for i := 0; i < waitCount; i++ {
-		fmt.Printf("Creating assets\n")
-		for i := 0; i < toCreate; i++ {
-			txid, broadcastErr := client.BroadcastTransaction(*signedTrxs[i])
-			if broadcastErr != nil {
-				fmt.Printf("Cannot broadcast asset creation txn error: %v\n", broadcastErr)
-			} else if !cfg.Quiet {
-				fmt.Printf("Broadcast asset creation:  txid=%s\n", txid)
-			}
-		}
-
-		time.Sleep(time.Second)
-
+	// get these assets
+	for {
 		account, accountErr = client.AccountInformation(cfg.SrcAccount)
 		if accountErr != nil {
 			fmt.Printf("Cannot lookup source account")
@@ -183,7 +171,7 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 		if len(account.AssetParams) >= int(cfg.NumAsset) {
 			break
 		}
-
+		time.Sleep(time.Second)
 	}
 
 	assetParams = account.AssetParams
@@ -223,14 +211,14 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 				_, broadcastErr := client.BroadcastTransaction(signedTxn)
 				if broadcastErr != nil {
 					fmt.Printf("Cannot broadcast asset %v init txn in account %v\n", k, addr)
-					//err = broadcastErr
-					//return
-				} else {
-					if !cfg.Quiet {
-						fmt.Printf("Init asset %v in account %v\n", k, addr)
-					}
-					accounts[addr] -= tx.Fee.Raw
+					err = broadcastErr
+					return
 				}
+
+				if !cfg.Quiet {
+					fmt.Printf("Init asset %v in account %v\n", k, addr)
+				}
+				accounts[addr] -= tx.Fee.Raw
 			}
 
 			// fund asset
@@ -264,14 +252,13 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 			_, broadcastErr := client.BroadcastTransaction(stxn)
 			if broadcastErr != nil {
 				fmt.Printf("Cannot broadcast asset %v init fund txn in account %v\n", k, addr)
-				//err = broadcastErr
-				//return
-			} else {
-				if !cfg.Quiet {
-					fmt.Printf("Fund %d asset %d to account %s\n", assetAmt, k, addr)
-				}
-				accounts[cfg.SrcAccount] -= tx.Fee.Raw
+				err = broadcastErr
+				return
 			}
+			if !cfg.Quiet {
+				fmt.Printf("Fund %d asset %d to account %s\n", assetAmt, k, addr)
+			}
+			accounts[cfg.SrcAccount] -= tx.Fee.Raw
 		}
 
 	}
