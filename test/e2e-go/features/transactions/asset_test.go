@@ -138,20 +138,35 @@ func TestAssetValidRounds(t *testing.T) {
 	a.NoError(err)
 
 	tx, err := client.MakeUnsignedAssetCreateTx(100, false, manager, reserve, freeze, clawback, "test1", "testname1", "foo://bar", nil)
+	a.NoError(err)
 
 	fee := uint64(1000)
 	firstValid = 0
 	lastValid = 0
 
+	params, err = client.SuggestedParams()
+	a.NoError(err)
+	lastRoundBefore := params.LastRound
+
 	tx, err = client.FillUnsignedTxTemplate(account0, firstValid, lastValid, fee, tx)
 	a.NoError(err)
-
 	// zeros are special cases
-	// first valid must be set to last round + 1 and never be zero
-	// last valid must be set to first + MaxTxnLife - 1
+	// first valid never should be zero
 	a.NotEqual(basics.Round(0), tx.FirstValid)
-	a.Equal(basics.Round(params.LastRound+1), tx.FirstValid)
-	a.Equal(basics.Round(params.LastRound+cparams.MaxTxnLife+1), tx.LastValid)
+
+	params, err = client.SuggestedParams()
+	a.NoError(err)
+	lastRoundAfter := params.LastRound
+
+	// ledger may advance between SuggestedParams and FillUnsignedTxTemplate calls
+	// expect validity sequence
+	var firstValidRange, lastValidRange []uint64
+	for i := lastRoundBefore + 1; i <= lastRoundAfter+1; i++ {
+		firstValidRange = append(firstValidRange, i)
+		lastValidRange = append(lastValidRange, i+cparams.MaxTxnLife)
+	}
+	a.Contains(firstValidRange, uint64(tx.FirstValid))
+	a.Contains(lastValidRange, uint64(tx.LastValid))
 
 	firstValid = 1
 	lastValid = 1
