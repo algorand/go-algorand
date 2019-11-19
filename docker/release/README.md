@@ -3,13 +3,13 @@
 
 The following section documents the steps to build and deploy the Algod Docker Image.
 
-###Prerequisites
+### Prerequisites
 Verify that you have a running Docker Engine on your local system.  Instructions for installing Docker are available on the Docker web site:
 ```cmd
 https://docs.docker.com/
 ```
 
-###Building the Docker Image:
+### Building the Docker Image:
 The docker release image is automatically created as part of the release building process initiated by the scripts/build_release.sh script.
 
 It is possible to manually build the docker image with the following procedure:
@@ -49,7 +49,7 @@ A resulting docker tar file will be generated and placed here:
  ~/node_pkg/algod_docker_package_${CHANNEL}_${FULLVERSION}.tar.gz
 ```
 
-###Running the Docker Image
+### Running the Docker Image
 To use the resulting docker image:
 
 Change directory to the ~/node_pkg directory.
@@ -62,7 +62,7 @@ If you prefer using a prebuilt docker package, download one from the S3 releases
 aws s3 ls algorand-releases/channel/${CHANNEL}/algod_docker_package_${CHANNEL}_${FULLVERSION}.tar.gz
 ```
 
-###Extract the tar.gz file
+### Extract the tar.gz file
 ```cmd
 tar xvf algod_docker_package_${CHANNEL}_${FULLVERSION}.tar.gz
 ```
@@ -93,7 +93,7 @@ While attached, verify the status of the Algod instance.
 goal node status
 ```
 
-###Stopping the Docker Container:
+### Stopping the Docker Container:
 Run the following command to stop the docker container:
 ```cmd
 docker stop algod_${CHANNEL}_${FULLVERSION}_${NETWORK}
@@ -104,7 +104,7 @@ To remove the container from the Docker environment:
 ```cmd
 docker container rm algod_${CHANNEL}_${FULLVERSION}_${NETWORK}
 ```
-###Container Persistence 
+### Container Persistence 
 When starting the Algod Docker instance, a Docker volume is created to persist the node data directory external from the container.  This allows updating the docker container and reusing an existing data directory with the new version.  A volume is created for each instantiated network (i.e. betanet, devnet, testnet, or mainnet). 
 
 The existing volumes can be determined using the docker volume command.
