@@ -411,7 +411,7 @@ func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.Sign
 	}
 	err = node.transactionPool.Remember(txgroup)
 	if err != nil {
-		node.log.Infof("rejected by local pool: %v - transaction group was %+v", err, txgroup)
+		node.log.Warnf("broadcasting transaction that was rejected by local pool: %v - transaction group was %+v", err, txgroup)
 	}
 
 	var enc []byte
