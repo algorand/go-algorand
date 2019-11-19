@@ -56,21 +56,31 @@ func (lsig *LogicSig) Len() int {
 
 // Equal returns true if both LogicSig are equivalent
 func (lsig *LogicSig) Equal(b *LogicSig) bool {
-	// TODO is this sufficient?
-	if len(lsig.Logic) == 0 && len(b.Logic) == 0 {
-		return true
-	}
 	sigs := lsig.Sig == b.Sig && lsig.Msig.Equal(b.Msig)
 	if !sigs {
 		return false
 	}
+	if !safeSliceCheck(lsig.Logic, b.Logic) {
+		return false
+	}
+
 	if len(lsig.Args) != len(b.Args) {
 		return false
 	}
-	for i, a := range lsig.Args {
-		if !bytes.Equal(a, b.Args[i]) {
+	for i := range lsig.Args {
+		if !safeSliceCheck(lsig.Args[i], b.Args[i]) {
 			return false
 		}
 	}
 	return true
+}
+
+func safeSliceCheck(a, b []byte) bool {
+	if a == nil {
+		return b == nil
+	}
+	if b == nil {
+		return a == nil
+	}
+	return bytes.Equal(a, b)
 }
