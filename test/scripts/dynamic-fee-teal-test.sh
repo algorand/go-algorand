@@ -45,7 +45,7 @@ algotmpl -d ${GOPATH}/src/github.com/algorand/go-algorand/tools/teal/templates/ 
 #
 
 # Compile the template
-goal clerk compile -a ${ACCOUNTB} -s ${TEMPDIR}/dynamic.teal -o ${TEMPDIR}/dynamic.steal
+goal clerk compile -a ${ACCOUNTB} -s ${TEMPDIR}/dynamic.teal -o ${TEMPDIR}/dynamic.sigteal
 
 # Delete ACCOUNTB so that we definitely can't sign txns with it anymore
 goal account delete -a ${ACCOUNTB}
@@ -73,7 +73,7 @@ goal clerk split -i ${TEMPDIR}/txnwithgroup.txn -o ${TEMPDIR}/gtxn.txn
 goal clerk sign -i ${TEMPDIR}/gtxn-0.txn -o ${TEMPDIR}/gtxn-0.stxn
 
 # Sign the payment transaction with logicsig
-goal clerk sign -L ${TEMPDIR}/dynamic.steal -i ${TEMPDIR}/gtxn-1.txn -o ${TEMPDIR}/gtxn-1.stxn
+goal clerk sign -L ${TEMPDIR}/dynamic.sigteal -i ${TEMPDIR}/gtxn-1.txn -o ${TEMPDIR}/gtxn-1.stxn
 
 # Cat signed txns together
 cat ${TEMPDIR}/gtxn-0.stxn ${TEMPDIR}/gtxn-1.stxn > ${TEMPDIR}/finalgroup.stxn
@@ -106,7 +106,7 @@ goal clerk split -i ${TEMPDIR}/txnwithgroup.txn -o ${TEMPDIR}/gtxn.txn
 goal clerk sign -i ${TEMPDIR}/gtxn-0.txn -o ${TEMPDIR}/gtxn-0.stxn
 
 # Sign the payment transaction with logicsig
-goal clerk sign -L ${TEMPDIR}/dynamic.steal -i ${TEMPDIR}/gtxn-1.txn -o ${TEMPDIR}/gtxn-1.stxn
+goal clerk sign -L ${TEMPDIR}/dynamic.sigteal -i ${TEMPDIR}/gtxn-1.txn -o ${TEMPDIR}/gtxn-1.stxn
 
 # Cat signed txns together
 cat ${TEMPDIR}/gtxn-0.stxn ${TEMPDIR}/gtxn-1.stxn > ${TEMPDIR}/finalgroup.stxn
