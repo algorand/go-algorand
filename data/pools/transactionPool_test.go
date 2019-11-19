@@ -989,8 +989,8 @@ func TestLogicSigCache(t *testing.T) {
 		Header: transactions.Header{
 			Sender:      addresses[0],
 			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee},
-			FirstValid:  0,
-			LastValid:   basics.Round(proto.MaxTxnLife),
+			FirstValid:  1,
+			LastValid:   1 + basics.Round(proto.MaxTxnLife),
 			Note:        make([]byte, 2),
 			GenesisHash: ledger.GenesisHash(),
 		},
