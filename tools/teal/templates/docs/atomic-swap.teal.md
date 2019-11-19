@@ -23,7 +23,7 @@ The idea is that by knowing the preimage to `TMPL_HASHIMG`, funds may be release
 ## Code overview
 
 ### Initial checks
-First, check if the fee of this transaction is less than or equal to `TMPL_FEE`.
+First, check that the fee of this transaction is less than or equal to `TMPL_FEE`.
 
 ```
 txn Fee

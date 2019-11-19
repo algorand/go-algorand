@@ -6,7 +6,7 @@ For accounts in cold storage that still want to participate in the Algorand prot
 
 This contract is intended to be used as a "delegated" script, *not* as a contract-only account. A spending key should sign this contract.
 
-The contract is designed approve transactions that meet the following criteria:
+The contract is designed to approve transactions that meet the following criteria:
   1. The transaction is a `KeyReg` transaction
   2. The transaction's `FirstValid` round is a multiple of `TMPL_PERIOD`
   3. The transaction's `LastValid` round is within `TMPL_DUR` of its `FirstValid`
