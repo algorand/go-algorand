@@ -23,6 +23,7 @@ The idea is that by knowing the preimage to `TMPL_HASHIMG`, funds may be release
 ## Code overview
 
 ### Initial checks
+
 First, check that the fee of this transaction is less than or equal to `TMPL_FEE`.
 
 ```
@@ -124,6 +125,7 @@ Fold the "Scenario 2" checks into a single boolean.
 ```
 
 ### Final checks
+
 At this point in the program's execution, the stack has three values. At the base of the stack is a boolean holding the results of the initial transaction validity checks. This is followed by two booleans indicating the results of the scenario 1 and 2 checks.
 
 We want to approve this transaction if we are in scenario 1 or 2. So we logically `OR` the results of those checks together.

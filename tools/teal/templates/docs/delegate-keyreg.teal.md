@@ -15,6 +15,8 @@ The contract is designed to approve transactions that meet the following criteri
   6. The transaction's `Fee` is less than `TMPL_FEE`
   7. The transaction's `TxID` has been signed by `TMPL_AUTH`, and a valid signature can be found in `arg_0`
 
+Signatures for use in `arg_0` can be generated using the `algokey` and `dsign` tools. Check out `go-algorand/tools/teal/examples/keyreg.sh` for an example.
+
 ## Parameters:
 
   - `TMPL_AUTH`: public key of key that can authorize `KeyReg` transactions
@@ -27,6 +29,7 @@ The contract is designed to approve transactions that meet the following criteri
 ## Code overview
 
 ### Initial checks
+
 First, check that this is a key registration transaction. The possible valid values of this enum may be found [here](https://github.com/algorand/go-algorand/blob/9978b3aed0643751246af82f5538ba1e7de47310/data/transactions/logic/assembler.go#L569).
 
 ```
@@ -75,7 +78,7 @@ int 0
 &&
 ```
 
-Next, check that the lease field is exactly `TMPL_LEASE`.
+Next, check that the lease field is exactly `TMPL_LEASE`. This prevents the delegated key from draining the account by making many transactions, each with its own fee. By ensuring that `FirstValid` is an exact multiple of `TMPL_PERIOD`, and that `TMPL_LEASE` is a specific value, this allows at most one transaction to be approved by this contract per `TMPL_PERIOD`.
 
 ```
 txn Lease
