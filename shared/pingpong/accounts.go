@@ -119,7 +119,7 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 
 	toCreate := int(cfg.NumAsset) - len(account.AssetParams)
 
-	signedTrxs := make([]*transactions.SignedTxn, toCreate)
+	signedTxns := make([]*transactions.SignedTxn, toCreate)
 
 	// create assets in srcAccount
 	for i := 0; i < toCreate; i++ {
@@ -150,7 +150,7 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 			return
 		}
 
-		signedTrxs[i] = &signedTxn
+		signedTxns[i] = &signedTxn
 
 		if !cfg.Quiet {
 			fmt.Printf("Create a new asset: supply=%d \n", totalSupply)
@@ -164,7 +164,7 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 	for i := 0; i < waitCount; i++ {
 		fmt.Printf("Creating assets\n")
 		for i := 0; i < toCreate; i++ {
-			txid, broadcastErr := client.BroadcastTransaction(*signedTrxs[i])
+			txid, broadcastErr := client.BroadcastTransaction(*signedTxns[i])
 			if broadcastErr != nil {
 				fmt.Printf("Cannot broadcast asset creation txn error: %v\n", broadcastErr)
 			} else if !cfg.Quiet {
@@ -264,8 +264,6 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 			_, broadcastErr := client.BroadcastTransaction(stxn)
 			if broadcastErr != nil {
 				fmt.Printf("Cannot broadcast asset %v init fund txn in account %v\n", k, addr)
-				//err = broadcastErr
-				//return
 			} else {
 				if !cfg.Quiet {
 					fmt.Printf("Fund %d asset %d to account %s\n", assetAmt, k, addr)
