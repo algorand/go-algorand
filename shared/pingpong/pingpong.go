@@ -186,6 +186,10 @@ func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uin
 func sendFromTo(fromList, toList []string, accounts map[string]uint64, assetParams map[uint64]v1.AssetParams, client libgoal.Client, cfg PpConfig) (sentCount, successCount uint64, err error) {
 	amt := cfg.MaxAmt
 	fee := cfg.MaxFee
+	if cfg.NumAsset > 0 && len(assetParams) <= 0 {
+		fmt.Fprintf(os.Stdout, "Skipping sendFromTo, no assest params.\n")
+		return
+	}
 	for i, from := range fromList {
 		if cfg.RandomizeAmt {
 			amt = rand.Uint64()%cfg.MaxAmt + 1
