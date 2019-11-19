@@ -29,7 +29,7 @@ ACCOUNT=$(goal account list|awk '{ print $3 }')
 ACCOUNTB=$(goal account new|awk '{ print $6 }')
 ACCOUNTC=$(goal account new|awk '{ print $6 }')
 
-sed s/TMPL_RCV1/${ACCOUNTB}/g < ${GOPATH}/src/github.com/algorand/go-algorand/tools/teal/templates/split.teal.tmpl | sed s/TMPL_RCV2/${ACCOUNTC}/g | sed s/TMPL_RATN/60/g | sed s/TMPL_RATD/40/g | sed s/TMPL_MINPAY/100000/g | sed s/TMPL_TIMEOUT/4/g | sed s/TMPL_OWN/${ACCOUNTB}/g | sed s/TMPL_FEE/10000/g > ${TEMPDIR}/split.teal
+sed s/TMPL_RCV1/${ACCOUNTB}/g < ${GOPATH}/src/github.com/algorand/go-algorand/tools/teal/templates/split.teal.tmpl | sed s/TMPL_RCV2/${ACCOUNTC}/g | sed s/TMPL_RAT1/60/g | sed s/TMPL_RAT2/40/g | sed s/TMPL_MINPAY/100000/g | sed s/TMPL_TIMEOUT/4/g | sed s/TMPL_OWN/${ACCOUNTB}/g | sed s/TMPL_FEE/10000/g > ${TEMPDIR}/split.teal
 
 ACCOUNT_SPLIT=$(goal clerk compile ${TEMPDIR}/split.teal -o ${TEMPDIR}/split.tealc|awk '{ print $2 }')
 
