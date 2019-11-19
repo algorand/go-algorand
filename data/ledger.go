@@ -297,7 +297,7 @@ func (l *Ledger) EnsureBlock(block *bookkeeping.Block, c agreement.Certificate) 
 		}
 
 		switch err.(type) {
-		case ledger.ProtocolError:
+		case protocol.Error:
 			if !protocolErrorLogged {
 				logging.Base().Errorf("unrecoverable protocol error detected at block %d: %v", round, err)
 				protocolErrorLogged = true

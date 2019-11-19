@@ -27,8 +27,36 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/execpool"
+	"github.com/algorand/go-algorand/util/metrics"
 )
+
+var logicGoodTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_logic_ok", Description: "Total transaction scripts executed and accepted"})
+var logicRejTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_logic_rej", Description: "Total transaction scripts executed and rejected"})
+var logicErrTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_logic_err", Description: "Total transaction scripts executed and errored"})
+
+// Context encapsulates the context needed to perform stateless checks
+// on a signed transaction.
+type Context struct {
+	Params
+	Group      []transactions.SignedTxn
+	GroupIndex int
+}
+
+// Params is the set of parameters external to a transaction which
+// stateless checks are performed against.
+//
+// For efficient caching, these parameters should either be constant
+// or change slowly over time.
+//
+// Group data are omitted because they are committed to in the
+// transaction and its ID.
+type Params struct {
+	CurrSpecAddrs  transactions.SpecialAddresses
+	CurrProto      protocol.ConsensusVersion
+	FirstValidTime uint64
+}
 
 // TxnPool verifies that a SignedTxn has a good signature and that the underlying
 // transaction is properly constructed.
@@ -36,8 +64,12 @@ import (
 // a SignedTxn may be well-formed, but a payset might contain an overspend.
 //
 // This version of verify is performing the verification over the provided execution pool.
-func TxnPool(s *transactions.SignedTxn, spec transactions.SpecialAddresses, proto config.ConsensusParams, verificationPool execpool.BacklogPool) error {
-	if err := s.Txn.WellFormed(spec, proto); err != nil {
+func TxnPool(s *transactions.SignedTxn, ctx Context, verificationPool execpool.BacklogPool) error {
+	proto, ok := config.Consensus[ctx.CurrProto]
+	if !ok {
+		return protocol.Error(ctx.CurrProto)
+	}
+	if err := s.Txn.WellFormed(ctx.CurrSpecAddrs, proto); err != nil {
 		return err
 	}
 
@@ -47,7 +79,7 @@ func TxnPool(s *transactions.SignedTxn, spec transactions.SpecialAddresses, prot
 	}
 
 	outCh := make(chan error, 1)
-	cx := asyncVerifyContext{s, outCh, &proto}
+	cx := asyncVerifyContext{s: s, outCh: outCh, ctx: &ctx}
 	verificationPool.EnqueueBacklog(context.Background(), stxnAsyncVerify, &cx, nil)
 	if err, hasErr := <-outCh; hasErr {
 		return err
@@ -57,8 +89,12 @@ func TxnPool(s *transactions.SignedTxn, spec transactions.SpecialAddresses, prot
 
 // Txn verifies a SignedTxn as being signed and having no obviously inconsistent data.
 // Block-assembly time checks of LogicSig and accounting rules may still block the txn.
-func Txn(s *transactions.SignedTxn, spec transactions.SpecialAddresses, proto config.ConsensusParams) error {
-	if err := s.Txn.WellFormed(spec, proto); err != nil {
+func Txn(s *transactions.SignedTxn, ctx Context) error {
+	proto, ok := config.Consensus[ctx.CurrProto]
+	if !ok {
+		return protocol.Error(ctx.CurrProto)
+	}
+	if err := s.Txn.WellFormed(ctx.CurrSpecAddrs, proto); err != nil {
 		return err
 	}
 
@@ -67,18 +103,18 @@ func Txn(s *transactions.SignedTxn, spec transactions.SpecialAddresses, proto co
 		return errors.New("empty address")
 	}
 
-	return stxnVerifyCore(s, &proto)
+	return stxnVerifyCore(s, &ctx)
 }
 
 type asyncVerifyContext struct {
 	s     *transactions.SignedTxn
 	outCh chan error
-	proto *config.ConsensusParams
+	ctx   *Context
 }
 
 func stxnAsyncVerify(arg interface{}) interface{} {
 	cx := arg.(*asyncVerifyContext)
-	err := stxnVerifyCore(cx.s, cx.proto)
+	err := stxnVerifyCore(cx.s, cx.ctx)
 	if err != nil {
 		cx.outCh <- err
 	} else {
@@ -87,7 +123,7 @@ func stxnAsyncVerify(arg interface{}) interface{} {
 	return nil
 }
 
-func stxnVerifyCore(s *transactions.SignedTxn, proto *config.ConsensusParams) error {
+func stxnVerifyCore(s *transactions.SignedTxn, ctx *Context) error {
 	numSigs := 0
 	hasSig := false
 	hasMsig := false
@@ -124,14 +160,19 @@ func stxnVerifyCore(s *transactions.SignedTxn, proto *config.ConsensusParams) er
 		return errors.New("multisig validation failed")
 	}
 	if hasLogicSig {
-		return LogicSig(&s.Lsig, proto, s)
+		return LogicSig(s, ctx)
 	}
 	return errors.New("has one mystery sig. WAT?")
 }
 
-// LogicSig checks that the signature is valid and that the program is basically well formed.
+// LogicSigSanityCheck checks that the signature is valid and that the program is basically well formed.
 // It does not evaluate the logic.
-func LogicSig(lsig *transactions.LogicSig, proto *config.ConsensusParams, stxn *transactions.SignedTxn) error {
+func LogicSigSanityCheck(txn *transactions.SignedTxn, ctx *Context) error {
+	lsig := txn.Lsig
+	proto, ok := config.Consensus[ctx.CurrProto]
+	if !ok {
+		return protocol.Error(ctx.CurrProto)
+	}
 	if proto.LogicSigVersion == 0 {
 		return errors.New("LogicSig not enabled")
 	}
@@ -148,8 +189,13 @@ func LogicSig(lsig *transactions.LogicSig, proto *config.ConsensusParams, stxn *
 	if uint64(lsig.Len()) > proto.LogicSigMaxSize {
 		return errors.New("LogicSig.Logic too long")
 	}
-
-	ep := logic.EvalParams{Txn: stxn, Proto: proto}
+	ep := logic.EvalParams{
+		Txn:                 txn,
+		Proto:               &proto,
+		TxnGroup:            ctx.Group,
+		GroupIndex:          ctx.GroupIndex,
+		FirstValidTimeStamp: ctx.FirstValidTime,
+	}
 	cost, err := logic.Check(lsig.Logic, ep)
 	if err != nil {
 		return err
@@ -158,11 +204,9 @@ func LogicSig(lsig *transactions.LogicSig, proto *config.ConsensusParams, stxn *
 		return fmt.Errorf("LogicSig.Logic too slow, %d > %d", cost, proto.LogicSigMaxCost)
 	}
 
-	hasSig := false
 	hasMsig := false
 	numSigs := 0
 	if lsig.Sig != (crypto.Signature{}) {
-		hasSig = true
 		numSigs++
 	}
 	if !lsig.Msig.Blank() {
@@ -173,7 +217,7 @@ func LogicSig(lsig *transactions.LogicSig, proto *config.ConsensusParams, stxn *
 		// if the txn.Sender == hash(Logic) then this is a (potentially) valid operation on a contract-only account
 		program := logic.Program(lsig.Logic)
 		lhash := crypto.HashObj(&program)
-		if crypto.Digest(stxn.Txn.Sender) == lhash {
+		if crypto.Digest(txn.Txn.Sender) == lhash {
 			return nil
 		}
 		return errors.New("LogicNot signed and not a Logic-only account")
@@ -182,20 +226,49 @@ func LogicSig(lsig *transactions.LogicSig, proto *config.ConsensusParams, stxn *
 		return errors.New("LogicSig should only have one of Sig or Msig but has more than one")
 	}
 
-	if hasSig {
+	if !hasMsig {
 		program := logic.Program(lsig.Logic)
-		if crypto.SignatureVerifier(stxn.Txn.Src()).Verify(&program, lsig.Sig) {
-			return nil
+		if !crypto.SignatureVerifier(txn.Txn.Src()).Verify(&program, lsig.Sig) {
+			return errors.New("logic signature validation failed")
 		}
-		return errors.New("logic signature validation failed")
+	} else {
+		program := logic.Program(lsig.Logic)
+		if ok, _ := crypto.MultisigVerify(&program, crypto.Digest(txn.Txn.Src()), lsig.Msig); !ok {
+			return errors.New("logic multisig validation failed")
+		}
 	}
-	if hasMsig {
-		program := logic.Program(lsig.Logic)
-		if ok, _ := crypto.MultisigVerify(&program, crypto.Digest(stxn.Txn.Src()), lsig.Msig); ok {
-			return nil
-		}
-		return errors.New("logic multisig validation failed")
+	return nil
+}
+
+// LogicSig checks that the signature is valid, executing the program.
+func LogicSig(txn *transactions.SignedTxn, ctx *Context) error {
+	proto, ok := config.Consensus[ctx.CurrProto]
+	if !ok {
+		return protocol.Error(ctx.CurrProto)
 	}
 
-	return errors.New("inconsistent internal state verifying LogicSig")
+	err := LogicSigSanityCheck(txn, ctx)
+	if err != nil {
+		return err
+	}
+
+	ep := logic.EvalParams{
+		Txn:                 txn,
+		Proto:               &proto,
+		TxnGroup:            ctx.Group,
+		GroupIndex:          ctx.GroupIndex,
+		FirstValidTimeStamp: ctx.FirstValidTime,
+	}
+	pass, err := logic.Eval(txn.Lsig.Logic, ep)
+	if err != nil {
+		logicErrTotal.Inc(nil)
+		return fmt.Errorf("transaction %v: rejected by logic err=%s", txn.ID(), err)
+	}
+	if !pass {
+		logicRejTotal.Inc(nil)
+		return fmt.Errorf("transaction %v: rejected by logic", txn.ID())
+	}
+	logicGoodTotal.Inc(nil)
+	return nil
+
 }

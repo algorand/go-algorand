@@ -56,6 +56,7 @@ func (lsig *LogicSig) Len() int {
 
 // Equal returns true if both LogicSig are equivalent
 func (lsig *LogicSig) Equal(b *LogicSig) bool {
+	// TODO is this sufficient?
 	if len(lsig.Logic) == 0 && len(b.Logic) == 0 {
 		return true
 	}

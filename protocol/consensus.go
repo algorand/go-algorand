@@ -16,6 +16,10 @@
 
 package protocol
 
+import (
+	"fmt"
+)
+
 // ConsensusVersion is a string that identifies a version of the
 // consensus protocol.
 type ConsensusVersion string
@@ -145,4 +149,13 @@ const ConsensusTestShorterLookback = ConsensusVersion("test-shorter-lookback")
 // only a few rounds.
 func ConsensusTestFastUpgrade(proto ConsensusVersion) ConsensusVersion {
 	return "test-fast-upgrade-" + proto
+}
+
+// Error is used to indicate that an unsupported protocol has been detected.
+type Error ConsensusVersion
+
+// Error satisfies builtin interface `error`
+func (err Error) Error() string {
+	proto := ConsensusVersion(err)
+	return fmt.Sprintf("protocol not supported: %s", proto)
 }

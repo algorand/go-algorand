@@ -396,20 +396,47 @@ func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.Sign
 	if err != nil {
 		node.log.Errorf("could not get block header from last round %v: %v", lastRound, err)
 	}
-	spec := transactions.SpecialAddresses{
-		FeeSink:     b.FeeSink,
-		RewardsPool: b.RewardsPool,
-	}
-	proto := config.Consensus[b.CurrentProtocol]
 
-	for _, tx := range txgroup {
-		err = verify.Txn(&tx, spec, proto)
+	contexts := make([]verify.Context, len(txgroup))
+	for i := range contexts {
+		var fvTime uint64
+		txn := txgroup[i]
+		if !txn.Lsig.Blank() {
+			// TODO: move this into some lazy evaluator for the few scripts that actually use `txn FirstValidTime` ?
+			if txn.Txn.FirstValid == 0 {
+				return fmt.Errorf("(%d) LogicSig does not work with FirstValid==0", i)
+			}
+			hdr, err := node.ledger.BlockHdr(txn.Txn.FirstValid - 1)
+			if err != nil {
+				return fmt.Errorf("(%d) could not fetch BlockHdr for FirstValid-1=%d (current=%d): %s", i, txn.Txn.FirstValid-1, b.Round, err)
+			}
+			if hdr.TimeStamp < 0 {
+				return fmt.Errorf("(%d) cannot evaluate LogicSig before 1970 at TimeStamp %d", i, hdr.TimeStamp)
+			}
+			fvTime = uint64(hdr.TimeStamp)
+		}
+
+		var ctx verify.Context
+		ctx.CurrSpecAddrs.FeeSink = b.FeeSink
+		ctx.CurrSpecAddrs.RewardsPool = b.RewardsPool
+		ctx.CurrProto = b.CurrentProtocol
+		ctx.FirstValidTime = fvTime
+		ctx.Group = txgroup
+		ctx.GroupIndex = i
+
+		contexts[i] = ctx
+	}
+
+	params := make([]verify.Params, len(txgroup))
+	for i, tx := range txgroup {
+		err = verify.Txn(&tx, contexts[i])
 		if err != nil {
 			node.log.Warnf("malformed transaction: %v - transaction was %+v", err, tx)
 			return err
 		}
+		params[i] = contexts[i].Params
 	}
-	err = node.transactionPool.Remember(txgroup)
+	err = node.transactionPool.Remember(txgroup, params)
 	if err != nil {
 		node.log.Infof("rejected by local pool: %v - transaction group was %+v", err, txgroup)
 		return err
