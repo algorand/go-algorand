@@ -150,6 +150,7 @@ addons:
       - libboost-all-dev
       - fakeroot
       - rpm
+      - python3-venv
   artifacts:
     s3_region: "us-east-1"
     paths:
