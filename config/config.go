@@ -442,7 +442,7 @@ func initConsensusProtocols() {
 
 	// v18 can be upgraded to v19.
 	v18.ApprovedUpgrades[protocol.ConsensusV19] = true
-	// v17 can be upgraded to v18.
+	// v17 can be upgraded to v19.
 	v17.ApprovedUpgrades[protocol.ConsensusV19] = true
 
 	// ConsensusFuture is used to test features that are implemented
