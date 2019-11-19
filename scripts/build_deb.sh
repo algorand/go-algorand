@@ -126,7 +126,7 @@ Upstream-Contact: Algorand developers <dev@algorand.com>
 Source: https://github.com/algorand/go-algorand
 
 Files: *
-Copyright: Algorand developers <dev@algorand.com>
+Copyright: 2019 Algorand, Inc. <dev@algorand.com>
 License: AGPL-3+
 EOF
 sed 's/^$/./g' < COPYING | sed 's/^/ /g' >> ${PKG_ROOT}/DEBIAN/copyright
