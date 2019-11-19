@@ -34,7 +34,7 @@ func (ml *mockLedger) lookup(addr basics.Address) (basics.AccountData, error) {
 	return ml.balanceMap[addr], nil
 }
 
-func (ml *mockLedger) isDup(firstValid basics.Round, txn transactions.Txid, txl txlease) (bool, error) {
+func (ml *mockLedger) isDup(firstValid, lastValid basics.Round, txn transactions.Txid, txl txlease) (bool, error) {
 	return false, nil
 }
 
