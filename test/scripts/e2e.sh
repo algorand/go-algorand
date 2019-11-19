@@ -67,10 +67,10 @@ cd "${SCRIPT_PATH}"
 
 ./timeout 200 ./e2e_basic_start_stop.sh
 
-python3 -m venv ${TMPDIR}/ve
-. ${TMPDIR}/ve/bin/activate
-${TMPDIR}/ve/bin/pip3 install py-algorand-sdk
-${TMPDIR}/ve/bin/python3 e2e_client_runner.py e2e_subs/*.sh
+python3 -m venv ${TEMPDIR}/ve
+. ${TEMPDIR}/ve/bin/activate
+${TEMPDIR}/ve/bin/pip3 install py-algorand-sdk
+${TEMPDIR}/ve/bin/python3 e2e_client_runner.py e2e_subs/*.sh
 deactivate
 
 # Export our root temp folder as 'TESTDIR' for tests to use as their root test folder
