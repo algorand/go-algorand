@@ -801,7 +801,7 @@ func TestAssetCreateWaitRestartDelete(t *testing.T) {
 
 
 func TestAssetCreateWaitBalLookbackDelete(t *testing.T) {
-	a, fixture, client, account0 := setupTestAndNetwork(t, "TwoNodes50EachFutureTestShorterLookback.json")
+	a, fixture, client, account0 := setupTestAndNetwork(t, "TwoNodes50EachTestShorterLookback.json")
 	defer fixture.Shutdown()
 	
 	// There should be no assets to start with
@@ -873,7 +873,7 @@ func setupTestAndNetwork(t *testing.T, networkTemplate string)(
 	asser := require.New(t)
 	if 0 == len(networkTemplate){
 		// If the  networkTemplate is not specified, used the default one
-		networkTemplate = "TwoNodes50EachFuture.json"
+		networkTemplate = "TwoNodes50Each.json"
 	}
 	var fixture fixtures.RestClientFixture
 	fixture.Setup(t, filepath.Join("nettemplates", networkTemplate))

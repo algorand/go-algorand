@@ -1,7 +1,7 @@
 {
     "Genesis": {
         "NetworkName": "tbd",
-        "ConsensusProtocol": "test-future-shorter-lookback",
+        "ConsensusProtocol": "test-shorter-lookback",
         "Wallets": [
             {
                 "Name": "Wallet1",

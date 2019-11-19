@@ -493,10 +493,10 @@ func initConsensusTestProtocols() {
 	rapidRecalcParams.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
 	Consensus[protocol.ConsensusTestRapidRewardRecalculation] = rapidRecalcParams
 
-	// Setting the testShorterLookback parameters derived from ConsensusFuture
+	// Setting the testShorterLookback parameters derived from ConsensusCurrentVersion
 	// Will result in MaxBalLookback = 32 
 	// Used to run tests faster where past MaxBalLookback values are checked
-	testShorterLookback := Consensus[protocol.ConsensusFuture]
+	testShorterLookback := Consensus[protocol.ConsensusCurrentVersion]
 	testShorterLookback.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
 
 	// MaxBalLookback  =  2 x SeedRefreshInterval x SeedLookback
