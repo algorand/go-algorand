@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # produce TEAL assembly for a delegated logic signature on a dynamic-fee transaction and compile it (note the required lease value)
-python driver.py dynamic-fee --cls AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ --rcv NBH2CNQCPV7S2ZOSWVQ7JLFO7W5JERULPSGYUP4ZAEOLSVMTYODHVY37VQ --fv 170500 --lv 171500 --amt 100000 --x uFVDhjBpkpKQ8sZaau0qsDsf0eW3oXFEn1Ar5o39vkk= > dynamic.teal
+algotmpl -d `git rev-parse --show-toplevel`/tools/teal/templates dynamic-fee --cls AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ --to NBH2CNQCPV7S2ZOSWVQ7JLFO7W5JERULPSGYUP4ZAEOLSVMTYODHVY37VQ --fv 170500 --lv 171500 --amt 100000 --lease uFVDhjBpkpKQ8sZaau0qsDsf0eW3oXFEn1Ar5o39vkk= > dynamic.teal
 goal clerk compile -a EVADN3MAXLTUAZFLJNIN7RD7WCNEPTB37GJMD5OACMVBKTGFXYYFMS5IT4 -s -o dynamic.lsig dynamic.teal -d .
 
 # make the main, unsigned transaction which executes the intended transfer

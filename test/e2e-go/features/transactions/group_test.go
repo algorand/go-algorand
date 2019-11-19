@@ -17,12 +17,15 @@
 package transactions
 
 import (
+	"fmt"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 )
 
@@ -94,4 +97,186 @@ func TestGroupTransactions(t *testing.T) {
 	bal2, _ := fixture.GetBalanceAndRound(account2)
 	a.Equal(bal1, uint64(1000000))
 	a.Equal(bal2, uint64(2000000))
+}
+
+func TestGroupTransactionsDifferentSizes(t *testing.T) {
+	t.Parallel()
+	a := require.New(t)
+
+	var fixture fixtures.RestClientFixture
+	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
+	defer fixture.Shutdown()
+
+	client := fixture.LibGoalClient
+	accountList, err := fixture.GetWalletsSortedByBalance()
+	a.NoError(err)
+	account0 := accountList[0].Address
+	maxTxGroupSize := config.Consensus[protocol.ConsensusCurrentVersion].MaxTxGroupSize
+	goodGroupSizes := []int{1, 2, 3, maxTxGroupSize}
+	badGroupSize := maxTxGroupSize + 1
+
+	for _, gs := range goodGroupSizes {
+		wh, err := client.GetUnencryptedWalletHandle()
+		a.NoError(err)
+
+		// Generate gs accounts
+		var accts []string
+		for i := 0; i < gs; i++ {
+			acct, err := client.GenerateAddress(wh)
+			a.NoError(err)
+			accts = append(accts, acct)
+		}
+
+		// construct gx txns sending money from account0 to each account
+		var txns []transactions.Transaction
+		for i, acct := range accts {
+			txn, err := client.ConstructPayment(account0, acct, 0, uint64((i+1)*1000000), nil, "", [32]byte{}, 0, 0)
+			a.NoError(err)
+			txns = append(txns, txn)
+		}
+
+		// compute gid
+		gid, err := client.GroupID(txns)
+		a.NoError(err)
+
+		// fill in gid and sign and keep track of txids
+		var stxns []transactions.SignedTxn
+		txids := make(map[string]string)
+		for _, txn := range txns {
+			txn.Group = gid
+			stxn, err := client.SignTransactionWithWallet(wh, nil, txn)
+			a.NoError(err)
+			stxns = append(stxns, stxn)
+			txids[txn.ID().String()] = account0
+		}
+
+		// broadcasting group should succeed
+		err = client.BroadcastTransactionGroup(stxns)
+		a.NoError(err)
+
+		// wait for the txids and check balances
+		_, curRound := fixture.GetBalanceAndRound(account0)
+		confirmed := fixture.WaitForAllTxnsToConfirm(curRound+5, txids)
+		a.True(confirmed, "txgroup")
+
+		for i, acct := range accts {
+			bal, _ := fixture.GetBalanceAndRound(acct)
+			a.Equal(bal, uint64((i+1)*1000000))
+		}
+	}
+
+	// Now test a group that's too large
+	{
+		wh, err := client.GetUnencryptedWalletHandle()
+		a.NoError(err)
+
+		// Generate gs accounts
+		var accts []string
+		for i := 0; i < badGroupSize; i++ {
+			acct, err := client.GenerateAddress(wh)
+			a.NoError(err)
+			accts = append(accts, acct)
+		}
+
+		// construct gx txns sending money from account0 to each account
+		var txns []transactions.Transaction
+		for i, acct := range accts {
+			txn, err := client.ConstructPayment(account0, acct, 0, uint64((i+1)*1000000), nil, "", [32]byte{}, 0, 0)
+			a.NoError(err)
+			txns = append(txns, txn)
+		}
+
+		// compute gid
+		gid, err := client.GroupID(txns)
+		a.NoError(err)
+
+		// fill in gid and sign and keep track of txids
+		var stxns []transactions.SignedTxn
+		for _, txn := range txns {
+			txn.Group = gid
+			stxn, err := client.SignTransactionWithWallet(wh, nil, txn)
+			a.NoError(err)
+			stxns = append(stxns, stxn)
+		}
+
+		// broadcasting group should now fail
+		err = client.BroadcastTransactionGroup(stxns)
+		a.Error(err)
+	}
+}
+
+func TestGroupTransactionsSubmission(t *testing.T) {
+	t.Parallel()
+	a := require.New(t)
+
+	var fixture fixtures.RestClientFixture
+	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
+	defer fixture.Shutdown()
+
+	client := fixture.LibGoalClient
+	accountList, err := fixture.GetWalletsSortedByBalance()
+	a.NoError(err)
+	account0 := accountList[0].Address
+	maxTxGroupSize := config.Consensus[protocol.ConsensusCurrentVersion].MaxTxGroupSize
+	goodGroupSizes := []int{1, 2, maxTxGroupSize}
+	exceedGroupSize := maxTxGroupSize + 1
+
+	sampleTxn, err := client.ConstructPayment(account0, account0, 0, uint64(1000), nil, "", [32]byte{}, 0, 0)
+	a.NoError(err)
+	wh, err := client.GetUnencryptedWalletHandle()
+	a.NoError(err)
+	sampleStxn, err := client.SignTransactionWithWallet(wh, nil, sampleTxn)
+	a.NoError(err)
+
+	for _, gs := range goodGroupSizes {
+		// Generate gs accounts
+		var accts []string
+		for i := 0; i < gs; i++ {
+			acct, err := client.GenerateAddress(wh)
+			a.NoError(err)
+			accts = append(accts, acct)
+		}
+
+		// construct gx txns sending money from account0 to each account
+		var txns []transactions.Transaction
+		for i, acct := range accts {
+			txn, err := client.ConstructPayment(account0, acct, 0, uint64((i+1)*1000000), nil, "", [32]byte{}, 0, 0)
+			a.NoError(err)
+			txns = append(txns, txn)
+		}
+
+		// compute gid
+		gid, err := client.GroupID(txns)
+		a.NoError(err)
+
+		// fill in gid and sign and keep track of txids
+		var stxns []transactions.SignedTxn
+		for _, txn := range txns {
+			txn.Group = gid
+			stxn, err := client.SignTransactionWithWallet(wh, nil, txn)
+			a.NoError(err)
+			stxns = append(stxns, stxn)
+		}
+
+		// broadcasting group of (gs-1) and (gs+1) should fail
+		// send gs-1
+		reduced := stxns[:len(stxns)-1]
+		err = client.BroadcastTransactionGroup(reduced)
+		a.Error(err)
+		if len(reduced) == 0 {
+			a.Contains(err.Error(), "empty txgroup")
+		} else {
+			a.Contains(err.Error(), "incomplete group")
+		}
+
+		// send gs+1
+		expanded := append(stxns, sampleStxn)
+		err = client.BroadcastTransactionGroup(expanded)
+		a.Error(err)
+		if len(expanded) >= exceedGroupSize {
+			a.Contains(err.Error(), fmt.Sprintf("group size %d exceeds maximum %d", len(expanded), maxTxGroupSize))
+		} else {
+			a.Contains(err.Error(), "inconsistent group values")
+		}
+	}
 }

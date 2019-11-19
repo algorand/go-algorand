@@ -47,6 +47,7 @@ type TransactionPool struct {
 	statusCache            *statusCache
 	logStats               bool
 	expFeeFactor           uint64
+	txPoolMaxSize          int
 
 	// pendingMu protects pendingTxGroups and pendingTxids
 	pendingMu       deadlock.RWMutex
@@ -83,9 +84,10 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local) *TransactionPo
 		logStats:        cfg.EnableAssembleStats,
 		expFeeFactor:    cfg.TxPoolExponentialIncreaseFactor,
 		lsigCache:       makeLsigEvalCache(cfg.TxPoolSize),
+		txPoolMaxSize:   cfg.TxPoolSize,
 	}
 	pool.cond.L = &pool.mu
-	pool.recomputeBlockEvaluator()
+	pool.recomputeBlockEvaluator(make(map[transactions.Txid]basics.Round))
 	return &pool
 }
 
@@ -165,59 +167,18 @@ func (pool *TransactionPool) PendingCount() int {
 	return count
 }
 
-// Test checks whether a transaction group could be remembered in the pool,
-// but does not actually store this transaction in the pool.
-func (pool *TransactionPool) Test(txgroup []transactions.SignedTxn) error {
-	for i := range txgroup {
-		txgroup[i].InitCaches()
+// checkPendingQueueSize test to see if there is more room in the pending
+// group transaction list. As long as we haven't surpassed the size limit, we
+// should be good to go.
+func (pool *TransactionPool) checkPendingQueueSize() error {
+	pendingSize := len(pool.Pending())
+	if pendingSize >= pool.txPoolMaxSize {
+		return fmt.Errorf("TransactionPool.Test: transaction pool have reached capacity")
 	}
-
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
-
-	return pool.test(txgroup)
+	return nil
 }
 
-// test checks whether a transaction group could be remembered in the pool,
-// but does not actually store this transaction in the pool.
-//
-// test assumes that pool.mu is locked.  It might release the lock
-// while it waits for OnNewBlock() to be called.
-func (pool *TransactionPool) test(txgroup []transactions.SignedTxn) error {
-	if pool.pendingBlockEvaluator == nil {
-		return fmt.Errorf("TransactionPool.test: no pending block evaluator")
-	}
-
-	// Make sure that the latest block has been processed by OnNewBlock().
-	// If not, we might be in a race, so wait a little bit for OnNewBlock()
-	// to catch up to the ledger.
-	latest := pool.ledger.Latest()
-	waitExpires := time.Now().Add(timeoutOnNewBlock)
-	for pool.pendingBlockEvaluator.Round() <= latest && time.Now().Before(waitExpires) {
-		condvar.TimedWait(&pool.cond, timeoutOnNewBlock)
-		if pool.pendingBlockEvaluator == nil {
-			return fmt.Errorf("TransactionPool.test: no pending block evaluator")
-		}
-	}
-
-	tentativeRound := pool.pendingBlockEvaluator.Round() + pool.numPendingWholeBlocks
-	err := pool.pendingBlockEvaluator.TestTransactionGroup(txgroup)
-	if err == ledger.ErrNoSpace {
-		tentativeRound++
-	} else if err != nil {
-		return err
-	}
-
-	for _, t := range txgroup {
-		if t.Txn.LastValid < tentativeRound {
-			return transactions.TxnDeadError{
-				Round:      tentativeRound,
-				FirstValid: t.Txn.FirstValid,
-				LastValid:  t.Txn.LastValid,
-			}
-		}
-	}
-
+func (pool *TransactionPool) checkSufficientFee(txgroup []transactions.SignedTxn) error {
 	// The baseline threshold fee per byte is 1, the smallest fee we can
 	// represent.  This amounts to a fee of 100 for a 100-byte txn, which
 	// is well below MinTxnFee (1000).  This means that, when the pool
@@ -258,42 +219,77 @@ func (pool *TransactionPool) test(txgroup []transactions.SignedTxn) error {
 	return nil
 }
 
-// RememberOne stores the provided transaction
-// Precondition: Only RememberOne() properly-signed and well-formed transactions (i.e., ensure t.WellFormed())
-func (pool *TransactionPool) RememberOne(t transactions.SignedTxn) error {
-	return pool.Remember([]transactions.SignedTxn{t})
-}
+// Test performs basic duplicate detection and well-formedness checks
+// on a transaction group without storing the group.
+func (pool *TransactionPool) Test(txgroup []transactions.SignedTxn) error {
+	if err := pool.checkPendingQueueSize(); err != nil {
+		return err
+	}
 
-// Remember stores the provided transaction group
-// Precondition: Only Remember() properly-signed and well-formed transactions (i.e., ensure t.WellFormed())
-func (pool *TransactionPool) Remember(txgroup []transactions.SignedTxn) error {
 	for i := range txgroup {
 		txgroup[i].InitCaches()
 	}
 
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
-
-	err := pool.test(txgroup)
-	if err != nil {
-		return fmt.Errorf("TransactionPool.Remember: %v", err)
-	}
-
-	if pool.pendingBlockEvaluator == nil {
-		return fmt.Errorf("TransactionPool.Remember: no pending block evaluator")
-	}
-
-	err = pool.remember(txgroup)
-	if err != nil {
-		return fmt.Errorf("TransactionPool.Remember: %v", err)
-	}
-
-	pool.rememberCommit(false)
-	return nil
+	return pool.pendingBlockEvaluator.TestTransactionGroup(txgroup)
 }
 
-// remember tries to add the transaction to the pool, bypassing the fee priority checks.
+type poolIngestParams struct {
+	checkFee   bool // if set, perform fee checks
+	preferSync bool // if set, wait until ledger is caught up
+}
+
+// remember attempts to add a transaction group to the pool.
 func (pool *TransactionPool) remember(txgroup []transactions.SignedTxn) error {
+	params := poolIngestParams{
+		checkFee:   true,
+		preferSync: true,
+	}
+	return pool.ingest(txgroup, params)
+}
+
+// add tries to add the transaction group to the pool, bypassing the fee
+// priority checks.
+func (pool *TransactionPool) add(txgroup []transactions.SignedTxn) error {
+	params := poolIngestParams{
+		checkFee:   false,
+		preferSync: false,
+	}
+	return pool.ingest(txgroup, params)
+}
+
+// ingest checks whether a transaction group could be remembered in the pool,
+// and stores this transaction if valid.
+//
+// ingest assumes that pool.mu is locked.  It might release the lock
+// while it waits for OnNewBlock() to be called.
+func (pool *TransactionPool) ingest(txgroup []transactions.SignedTxn, params poolIngestParams) error {
+	if pool.pendingBlockEvaluator == nil {
+		return fmt.Errorf("TransactionPool.ingest: no pending block evaluator")
+	}
+
+	if params.preferSync {
+		// Make sure that the latest block has been processed by OnNewBlock().
+		// If not, we might be in a race, so wait a little bit for OnNewBlock()
+		// to catch up to the ledger.
+		latest := pool.ledger.Latest()
+		waitExpires := time.Now().Add(timeoutOnNewBlock)
+		for pool.pendingBlockEvaluator.Round() <= latest && time.Now().Before(waitExpires) {
+			condvar.TimedWait(&pool.cond, timeoutOnNewBlock)
+			if pool.pendingBlockEvaluator == nil {
+				return fmt.Errorf("TransactionPool.ingest: no pending block evaluator")
+			}
+		}
+	}
+
+	if params.checkFee {
+		err := pool.checkSufficientFee(txgroup)
+		if err != nil {
+			return err
+		}
+	}
+
 	err := pool.addToPendingBlockEvaluator(txgroup)
 	if err != nil {
 		return err
@@ -303,6 +299,36 @@ func (pool *TransactionPool) remember(txgroup []transactions.SignedTxn) error {
 	for _, t := range txgroup {
 		pool.rememberedTxids[t.ID()] = t
 	}
+
+	return nil
+}
+
+// RememberOne stores the provided transaction
+// Precondition: Only RememberOne() properly-signed and well-formed transactions (i.e., ensure t.WellFormed())
+func (pool *TransactionPool) RememberOne(t transactions.SignedTxn) error {
+	return pool.Remember([]transactions.SignedTxn{t})
+}
+
+// Remember stores the provided transaction group
+// Precondition: Only Remember() properly-signed and well-formed transactions (i.e., ensure t.WellFormed())
+func (pool *TransactionPool) Remember(txgroup []transactions.SignedTxn) error {
+	if err := pool.checkPendingQueueSize(); err != nil {
+		return err
+	}
+
+	for i := range txgroup {
+		txgroup[i].InitCaches()
+	}
+
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	err := pool.remember(txgroup)
+	if err != nil {
+		return fmt.Errorf("TransactionPool.Remember: %v", err)
+	}
+
+	pool.rememberCommit(false)
 	return nil
 }
 
@@ -363,23 +389,16 @@ func (pool *TransactionPool) EvalRemember(cvers protocol.ConsensusVersion, txid 
 }
 
 // OnNewBlock excises transactions from the pool that are included in the specified Block or if they've expired
-func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block) {
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
-	defer pool.cond.Broadcast()
-
+func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledger.StateDelta) {
 	var stats telemetryspec.ProcessBlockMetrics
 	var knownCommitted uint
 	var unknownCommitted uint
 
-	payset, err := block.DecodePaysetFlat()
-	if err == nil {
+	commitedTxids := delta.Txids
+	if pool.logStats {
 		pool.pendingMu.RLock()
-		for _, txad := range payset {
-			tx := txad.SignedTxn
-			txid := tx.ID()
-			_, ok := pool.pendingTxids[txid]
-			if ok {
+		for txid := range commitedTxids {
+			if _, ok := pool.pendingTxids[txid]; ok {
 				knownCommitted++
 			} else {
 				unknownCommitted++
@@ -387,6 +406,10 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block) {
 		}
 		pool.pendingMu.RUnlock()
 	}
+
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+	defer pool.cond.Broadcast()
 
 	if pool.pendingBlockEvaluator == nil || block.Round() >= pool.pendingBlockEvaluator.Round() {
 		// Adjust the pool fee threshold.  The rules are:
@@ -415,7 +438,7 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block) {
 		// Recompute the pool by starting from the new latest block.
 		// This has the side-effect of discarding transactions that
 		// have been committed (or that are otherwise no longer valid).
-		stats = pool.recomputeBlockEvaluator()
+		stats = pool.recomputeBlockEvaluator(commitedTxids)
 	}
 
 	stats.KnownCommittedCount = knownCommitted
@@ -482,7 +505,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluator(txgroup []transactions.S
 // recomputeBlockEvaluator constructs a new BlockEvaluator and feeds all
 // in-pool transactions to it (removing any transactions that are rejected
 // by the BlockEvaluator).
-func (pool *TransactionPool) recomputeBlockEvaluator() (stats telemetryspec.ProcessBlockMetrics) {
+func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transactions.Txid]basics.Round) (stats telemetryspec.ProcessBlockMetrics) {
 	pool.pendingBlockEvaluator = nil
 
 	latest := pool.ledger.Latest()
@@ -507,7 +530,13 @@ func (pool *TransactionPool) recomputeBlockEvaluator() (stats telemetryspec.Proc
 	pool.pendingMu.RUnlock()
 
 	for _, txgroup := range txgroups {
-		err := pool.remember(txgroup)
+		if len(txgroup) == 0 {
+			continue
+		}
+		if _, alreadyCommitted := committedTxIds[txgroup[0].ID()]; alreadyCommitted {
+			continue
+		}
+		err := pool.add(txgroup)
 		if err != nil {
 			for _, tx := range txgroup {
 				pool.statusCache.put(tx, err.Error())
