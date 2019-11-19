@@ -4,6 +4,7 @@ date '+dynamic-fee-teal-test start %Y%m%d_%H%M%S'
 
 set -e
 set -x
+set -o pipefail
 export GOPATH=$(go env GOPATH)
 
 TEMPDIR=$(mktemp -d)
@@ -15,7 +16,7 @@ if [ ! -z $BINDIR ]; then
     export PATH=${BINDIR}:${PATH}
 fi
 
-goal network create -r ${NETDIR} -n tbd -t ${GOPATH}/src/github.com/algorand/go-algorand/test/testdata/nettemplates/TwoNodes50EachFuture.json
+goal network create -r ${NETDIR} -n dynamic-fee-teal-test -t ${GOPATH}/src/github.com/algorand/go-algorand/test/testdata/nettemplates/TwoNodes50EachFuture.json
 
 goal network start -r ${NETDIR}
 
@@ -29,7 +30,7 @@ ACCOUNTB=$(goal account new|awk '{ print $6 }')
 ACCOUNTC=$(goal account new|awk '{ print $6 }')
 ACCOUNTD=$(goal account new|awk '{ print $6 }')
 ZERO_ADDRESS=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ
-LEASE=YmxhaCBibGFoIGxlYXNlIHdoYXRldmVyIGJsYWghISE=
+LEASE=uImiLf+mqOqs0BFsqIUHBh436N/z964X50e3P9Ii4ac=
 
 # Fund ACCOUNTB
 goal clerk send -a 100000000 -f ${ACCOUNT} -t ${ACCOUNTB}
