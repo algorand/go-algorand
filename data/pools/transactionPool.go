@@ -232,6 +232,11 @@ func (pool *TransactionPool) Test(txgroup []transactions.SignedTxn) error {
 
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
+
+	if pool.pendingBlockEvaluator == nil {
+		return fmt.Errorf("Test: pendingBlockEvaluator is nil")
+	}
+
 	return pool.pendingBlockEvaluator.TestTransactionGroup(txgroup)
 }
 
