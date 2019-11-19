@@ -217,6 +217,7 @@ func (c *Client) InstallParticipationKeys(inputfile string) (part account.Partic
 	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
 	if !ok {
 		err = fmt.Errorf("Unknown consensus protocol %s", protocol.ConsensusCurrentVersion)
+		return
 	}
 
 	// After successful install, remove the input copy of the
