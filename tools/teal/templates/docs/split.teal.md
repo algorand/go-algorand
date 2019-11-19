@@ -6,7 +6,7 @@ The purpose of this contract is to allow two addresses, `TMPL_RCV1` and `TMPL_RC
 
 For example, if `TMPL_RAT1` is set to 1, `TMPL_RAT2` is set to 5, and `TMPL_MINPAY` is set to 1,000,000 microAlgos, then this contract will approve a group transaction that sends 1,000,000 microAlgo to `TMPL_RCV1` and 5,000,000 microAlgos to `TMPL_RCV2`.
 
-This contract additionally takes a timeout round `TMPL_TIMEOUT`, after which all remaining funds may be recovered to the address `TMPL_OWN` and the contract will be closed. Note that the regular split withdrawal functionality will still work until after contract is explicitly closed.
+This contract additionally takes a timeout round `TMPL_TIMEOUT`, after which all remaining funds may be recovered to the address `TMPL_OWN` and the contract will be closed. Note that the regular split withdrawal functionality will still work until after the contract is explicitly closed.
 
 This contract is intended to be used as a contract-only account, and *not* as a delegated contract (in other words, this contract should never be signed by an account).
 
