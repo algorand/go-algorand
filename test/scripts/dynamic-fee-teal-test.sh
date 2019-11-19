@@ -16,7 +16,7 @@ if [ ! -z $BINDIR ]; then
     export PATH=${BINDIR}:${PATH}
 fi
 
-goal network create -r ${NETDIR} -n dynamic-fee-teal-test -t ${GOPATH}/src/github.com/algorand/go-algorand/test/testdata/nettemplates/TwoNodes50EachFuture.json
+goal network create -r ${NETDIR} -n dynamic-fee-teal-test -t ${GOPATH}/src/github.com/algorand/go-algorand/test/testdata/nettemplates/TwoNodes50Each.json
 
 goal network start -r ${NETDIR}
 
