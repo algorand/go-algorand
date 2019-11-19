@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+	"runtime"	
 
 	"github.com/stretchr/testify/require"
 
@@ -94,6 +95,9 @@ func TestPartitionRecoverySwapStartup(t *testing.T) {
 }
 
 func TestPartitionRecoveryStaggerRestart(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	if testing.Short() {
 		t.Skip()
 	}
@@ -155,6 +159,9 @@ func runTestWithStaggeredStopStart(t *testing.T, fixture fixtures.RestClientFixt
 }
 
 func TestBasicPartitionRecoveryPartOffline(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	if testing.Short() {
 		t.Skip()
 	}
@@ -206,6 +213,9 @@ func TestBasicPartitionRecoveryPartOffline(t *testing.T) {
 }
 
 func TestPartitionHalfOffline(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	if testing.Short() {
 		t.Skip()
 	}

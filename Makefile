@@ -154,7 +154,7 @@ $(GOPATH1)/bin/%:
 	cp -f $< $@
 
 test: build
-	go test $(GOTAGS) -race $(UNIT_TEST_SOURCES)
+	go test $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 3600s
 
 fulltest: build-race
 	for PACKAGE_DIRECTORY in $(UNIT_TEST_SOURCES) ; do \

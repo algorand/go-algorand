@@ -19,7 +19,7 @@ package participation
 import (
 	"path/filepath"
 	"testing"
-
+	"runtime" 
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
@@ -96,6 +96,9 @@ func waitForAccountToProposeBlock(a *require.Assertions, fixture fixtures.RestCl
 }
 
 func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	if testing.Short() {
 		t.Skip()
 	}

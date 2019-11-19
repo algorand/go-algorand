@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"runtime"
 
 	"github.com/stretchr/testify/require"
 
@@ -401,6 +402,9 @@ func TestAssetConfig(t *testing.T) {
 }
 
 func TestAssetInformation(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	t.Parallel()
 	a := require.New(t)
 
@@ -477,6 +481,9 @@ func TestAssetInformation(t *testing.T) {
 }
 
 func TestAssetSend(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	t.Parallel()
 	a := require.New(t)
 
