@@ -131,7 +131,7 @@ if { [catch {
     # -------------------------- limit order  ----------------------------------
     
     # initialize the escrow by sending 1000000 microAlgos into it
-    set CONTRACT_MICRO_ALGO 1000000 
+    set CONTRACT_MICRO_ALGO 200000 
     set TRANSACTION_ID [::AlgorandGoal::AccountTransfer $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS $CONTRACT_MICRO_ALGO $CONTRACT_HASH $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR]
     puts "Fund contract account on transaction $TRANSACTION_ID"
 
@@ -142,15 +142,16 @@ if { [catch {
     # build the group transaction
     # the first payment sends money (Algos) from Alice's escrow to the recipient (we'll call him Bob), closing the rest of the account to Alice
     # the second payment sends money (the asset) from the Bob to the Alice
+    set ZERO_ADDRESS "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ"
     set LIMIT_TXN_1 "$TEST_ROOT_DIR/limit1.tx"
-    ::AlgorandGoal::TealTxnCreate $TEAL_SOURCE $ACCOUNT_1_ADDRESS $ACCOUNT_2_ADDRESS 2000 $TEST_PRIMARY_NODE_DIR $LIMIT_TXN_1 
+    ::AlgorandGoal::TealTxnCreate $TEAL_SOURCE $ACCOUNT_1_ADDRESS $ZERO_ADDRESS 20000 $TEST_PRIMARY_NODE_DIR $LIMIT_TXN_1 
 
     set LIMIT_TXN_2 "$TEST_ROOT_DIR/limit2.tx"
-    ::AlgorandGoal::CreateAssetTransfer $ACCOUNT_1_ADDRESS $ACCOUNT_2_ADDRESS $ASSET_ID 20000 $TEST_PRIMARY_NODE_DIR $LIMIT_TXN_2 
+    ::AlgorandGoal::CreateAssetTransfer $ACCOUNT_1_ADDRESS $ACCOUNT_2_ADDRESS $ASSET_ID 30000 $TEST_PRIMARY_NODE_DIR $LIMIT_TXN_2 
 
     set LIMIT_CMB "$TEST_ROOT_DIR/limitcmb.tx"
     exec cat $LIMIT_TXN_1 $LIMIT_TXN_2 > $LIMIT_CMB
-    
+  
     set GROUP_TX_UNSIGNED "$TEST_ROOT_DIR/limitgrp.tx"
     ::AlgorandGoal::AssembleGroup $LIMIT_CMB $GROUP_TX_UNSIGNED
 
@@ -168,12 +169,10 @@ if { [catch {
     # regroup the transactions and send the combined signed transactions to the network
     set LIMIT_STX "$TEST_ROOT_DIR/limitraw.stx"
     exec cat $RAW_TX_0 $RAW_STX_1 > $LIMIT_STX
+    puts "Assembled signed group txn."
 
     set RAW_TRANSACTION_ID [::AlgorandGoal::RawSend $LIMIT_STX $TEST_PRIMARY_NODE_DIR]
     puts "send limit order transaction in $RAW_TRANSACTION_ID"
-
-     # Check to make sure that the transfer is reflected in the to account
-    ::AlgorandGoal::WaitForAccountBalance $WALLET_1_NAME $CONTRACT_HASH 0 $TEST_PRIMARY_NODE_DIR
     
     # Shutdown the network
     ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ALGO_DIR $TEST_ROOT_DIR
