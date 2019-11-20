@@ -130,7 +130,7 @@ var opDocExtraList = []stringString{
 	{"intcblock", "`intcblock` loads following program bytes into an array of integer constants in the evaluator. These integer constants can be referred to by `intc` and `intc_*` which will push the value onto the stack. Subsequent calls to `intcblock` reset and replace the integer constants available to the script."},
 	{"bytecblock", "`bytecblock` loads the following program bytes into an array of byte string constants in the evaluator. These constants can be referred to by `bytec` and `bytec_*` which will push the value onto the stack. Subsequent calls to `bytecblock` reset and replace the bytes constants available to the script."},
 	{"*", "Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `mulw`."},
-	{"txn", "FirstValidTime is actually the time of the round at FirstValid-1. Subtle implementation details make it much faster to serve details of an already completed round. `int` accepts the user friendly names for comparison to `txn TypeEnum`"},
+	{"txn", "FirstValidTime causes the program to fail. The field is reserved for future use."},
 	{"gtxn", "for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`"},
 	{"btoi", "`btoi` panics if the input is longer than 8 bytes"},
 }
@@ -224,7 +224,7 @@ var txnFieldDocList = []stringString{
 	{"Sender", "32 byte address"},
 	{"Fee", "micro-Algos"},
 	{"FirstValid", "round number"},
-	{"FirstValidTime", "Seconds since 1970-01-01 00:00:00 UTC of block at FirstValid-1"},
+	{"FirstValidTime", "Causes program to fail; reserved for future use."},
 	{"LastValid", "round number"},
 	{"Receiver", "32 byte address"},
 	{"Amount", "micro-Algos"},

@@ -101,7 +101,7 @@ const ConsensusV18 = ConsensusVersion(
 
 // ConsensusV19 points to 'final' spec commit for 2019 nov release
 const ConsensusV19 = ConsensusVersion(
-	"https://github.com/algorandfoundation/specs/tree/03ae4eac54f1325377d0a2df62b5ef7cc08c5e18",
+	"https://github.com/algorandfoundation/specs/tree/0e196e82bfd6e327994bec373c4cc81bc878ef5c",
 )
 
 // ConsensusFuture is a protocol that should not appear in any production
