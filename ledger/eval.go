@@ -27,20 +27,14 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/execpool"
-	"github.com/algorand/go-algorand/util/metrics"
 )
 
 // ErrNoSpace indicates insufficient space for transaction in block
 var ErrNoSpace = errors.New("block does not have space for transaction")
-
-var logicGoodTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_logic_ok", Description: "Total transaction scripts executed and accepted"})
-var logicRejTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_logic_rej", Description: "Total transaction scripts executed and rejected"})
-var logicErrTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_logic_err", Description: "Total transaction scripts executed and errored"})
 
 // evalAux is left after removing explicit reward claims,
 // in case we need this infrastructure in the future.
@@ -51,9 +45,7 @@ type evalAux struct {
 // verified transactions.  This is expected to match the transaction
 // pool object.
 type VerifiedTxnCache interface {
-	Verified(txn transactions.SignedTxn) bool
-	EvalOk(cvers protocol.ConsensusVersion, txid transactions.Txid) (found bool, txErr error)
-	EvalRemember(cvers protocol.ConsensusVersion, txid transactions.Txid, err error)
+	Verified(txn transactions.SignedTxn, params verify.Params) bool
 }
 
 type roundCowBase struct {
@@ -204,7 +196,7 @@ func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader, txcache VerifiedTxn
 func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *evalAux, validate bool, generate bool, txcache VerifiedTxnCache, executionPool execpool.BacklogPool) (*BlockEvaluator, error) {
 	proto, ok := config.Consensus[hdr.CurrentProtocol]
 	if !ok {
-		return nil, ProtocolError(hdr.CurrentProtocol)
+		return nil, protocol.Error(hdr.CurrentProtocol)
 	}
 
 	if aux == nil {
@@ -487,10 +479,17 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 
 	cow := eval.state.child()
 
+	groupNoAD := make([]transactions.SignedTxn, len(txgroup))
+	for i := range txgroup {
+		groupNoAD[i] = txgroup[i].SignedTxn
+	}
+
+	ctxs := verify.PrepareContexts(groupNoAD, eval.block.BlockHeader)
+
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
-		err := eval.transaction(txad.SignedTxn, txad.ApplyData, txgroup, gi, cow, &txib)
+		err := eval.transaction(txad.SignedTxn, txad.ApplyData, groupNoAD, gi, ctxs[gi], cow, &txib)
 		if err != nil {
 			return err
 		}
@@ -541,7 +540,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 // transaction tentatively executes a new transaction as part of this block evaluation.
 // If the transaction cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transactions.ApplyData, txgroup []transactions.SignedTxnWithAD, groupIndex int, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
+func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transactions.ApplyData, txgroup []transactions.SignedTxn, groupIndex int, ctx verify.Context, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
 	var err error
 
 	spec := transactions.SpecialAddresses{
@@ -572,37 +571,16 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 			return fmt.Errorf("transaction %v: malformed: %v", txn.ID(), err)
 		}
 
-		// Properly signed?
-		if eval.txcache == nil || !eval.txcache.Verified(txn) {
-			err = verify.TxnPool(&txn, spec, eval.proto, eval.verificationPool)
+		if eval.txcache == nil || !eval.txcache.Verified(txn, ctx.Params) {
+			err = verify.TxnPool(&txn, ctx, eval.verificationPool)
 			if err != nil {
 				return fmt.Errorf("transaction %v: failed to verify: %v", txn.ID(), err)
 			}
-
 		}
 
 		// Verify that groups are supported.
 		if !txn.Txn.Group.IsZero() && !eval.proto.SupportTxGroups {
 			return fmt.Errorf("transaction groups not supported")
-		}
-
-		needCheckLsig := !txn.Lsig.Blank()
-		if needCheckLsig {
-			found, txErr := eval.txcache.EvalOk(eval.block.CurrentProtocol, txid)
-			if found {
-				if txErr == nil {
-					needCheckLsig = false
-				} else {
-					return txErr
-				}
-			}
-		}
-		if needCheckLsig {
-			err = eval.checkLogicSig(txn, txgroup, groupIndex)
-			if err != nil {
-				return err
-			}
-			eval.txcache.EvalRemember(eval.block.CurrentProtocol, txid, nil)
 		}
 	}
 
@@ -667,29 +645,6 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 	// Remember this txn
 	cow.addTx(txn.Txn)
 
-	return nil
-}
-
-func (eval *BlockEvaluator) checkLogicSig(txn transactions.SignedTxn, txgroup []transactions.SignedTxnWithAD, groupIndex int) (err error) {
-	if txn.Txn.FirstValid == 0 {
-		return errors.New("LogicSig does not work with FirstValid==0")
-	}
-	ep := logic.EvalParams{
-		Txn:        &txn,
-		Proto:      &eval.proto,
-		TxnGroup:   txgroup,
-		GroupIndex: groupIndex,
-	}
-	pass, err := logic.Eval(txn.Lsig.Logic, ep)
-	if err != nil {
-		logicErrTotal.Inc(nil)
-		return fmt.Errorf("transaction %v: rejected by logic err=%s", txn.ID(), err)
-	}
-	if !pass {
-		logicRejTotal.Inc(nil)
-		return fmt.Errorf("transaction %v: rejected by logic", txn.ID())
-	}
-	logicGoodTotal.Inc(nil)
 	return nil
 }
 
