@@ -251,6 +251,7 @@ func (n asyncPseudonode) getParticipations(procName string, round basics.Round) 
 // makeProposals creates a slice of block proposals for the given round and period.
 func (n asyncPseudonode) makeProposals(round basics.Round, period period, accounts []account.Participation) ([]proposal, []unauthenticatedVote) {
 	deadline := time.Now().Add(AssemblyTime)
+	n.log.Infof("makeProposals called")
 	ve, err := n.factory.AssembleBlock(round, deadline)
 	if err != nil {
 		n.log.Errorf("pseudonode.makeProposals: could not generate a proposal for round %v: %v", round, err)

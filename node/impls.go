@@ -108,6 +108,7 @@ func (i *blockFactoryImpl) AssembleBlock(round basics.Round, deadline time.Time)
 	// Measure time here because we want to know how close to deadline we are
 	dt := time.Now().Sub(start)
 	stats.AssembleBlockStats.Nanoseconds = dt.Nanoseconds()
+	logging.Base().Infof("AssemblePayset: StopReason='%s', BlockSize=%d, IncludedCount=%d, Nanoseconds=%d", stats.AssembleBlockStats.StopReason, stats.AssembleBlockStats.TotalLength, stats.AssembleBlockStats.IncludedCount, stats.AssembleBlockStats.Nanoseconds)
 
 	lvb, err := eval.GenerateBlock()
 	if err != nil {
