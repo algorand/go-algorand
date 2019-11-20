@@ -444,6 +444,13 @@ func opCompat(expected, got StackType) bool {
 	return expected == got
 }
 
+func nilToEmpty(x []byte) []byte {
+	if x == nil {
+		return make([]byte, 0)
+	}
+	return x
+}
+
 // MaxStackDepth should move to consensus params
 const MaxStackDepth = 1000
 
@@ -906,7 +913,8 @@ func opArgN(cx *evalContext, n uint64) {
 		cx.err = fmt.Errorf("cannot load arg[%d] of %d", n, len(cx.Txn.Lsig.Args))
 		return
 	}
-	cx.stack = append(cx.stack, stackValue{Bytes: cx.Txn.Lsig.Args[n]})
+	val := nilToEmpty(cx.Txn.Lsig.Args[n])
+	cx.stack = append(cx.stack, stackValue{Bytes: val})
 }
 func opArg(cx *evalContext) {
 	n := uint64(cx.program[cx.pc+1])
@@ -982,7 +990,7 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint
 	case LastValid:
 		sv.Uint = uint64(txn.LastValid)
 	case Note:
-		sv.Bytes = txn.Note
+		sv.Bytes = nilToEmpty(txn.Note)
 	case Receiver:
 		sv.Bytes = txn.Receiver[:]
 	case Amount:
