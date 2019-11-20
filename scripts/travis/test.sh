@@ -12,5 +12,5 @@ if [ "${OS}-${ARCH}" = "linux-arm" ]; then
 fi
 
 make fixcheck
-scripts/travis/run_tests.sh; 
+if [[ "${OS}" != "darwin" ]]; then scripts/travis/run_tests.sh; fi
 if [[ "${OS}" != "darwin" ]]; then scripts/travis/after_build.sh; fi
