@@ -88,7 +88,7 @@ type EvalParams struct {
 
 	Trace io.Writer
 
-	TxnGroup []transactions.SignedTxnWithAD
+	TxnGroup []transactions.SignedTxn
 
 	// GroupIndex should point to Txn within TxnGroup
 	GroupIndex int
