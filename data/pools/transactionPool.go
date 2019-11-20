@@ -63,10 +63,6 @@ type TransactionPool struct {
 	rememberedTxGroups     [][]transactions.SignedTxn
 	rememberedVerifyParams [][]verify.Params
 	rememberedTxids        map[transactions.Txid]txPoolVerifyCacheVal
-
-	// result of logic.Eval()
-	lsigCache *lsigEvalCache
-	lcmu      deadlock.RWMutex
 }
 
 // MakeTransactionPool is the constructor, it uses Ledger to ensure that no account has pending transactions that together overspend.
@@ -85,7 +81,6 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local) *TransactionPo
 		statusCache:     makeStatusCache(cfg.TxPoolSize),
 		logStats:        cfg.EnableAssembleStats,
 		expFeeFactor:    cfg.TxPoolExponentialIncreaseFactor,
-		lsigCache:       makeLsigEvalCache(cfg.TxPoolSize),
 		txPoolMaxSize:   cfg.TxPoolSize,
 	}
 	pool.cond.L = &pool.mu
