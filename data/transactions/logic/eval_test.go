@@ -957,7 +957,6 @@ int %s
 			txn.Txn.Type = tt
 			sb := strings.Builder{}
 			proto := defaultEvalProto()
-			// pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, GroupIndex: 3, FirstValidTimeStamp: 210})
 			pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, GroupIndex: 3})
 			if !pass {
 				t.Log(hex.EncodeToString(program))
@@ -1112,7 +1111,6 @@ func TestTxn(t *testing.T) {
 	}
 	sb := strings.Builder{}
 	proto := defaultEvalProto()
-	// pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, GroupIndex: 3, FirstValidTimeStamp: 210})
 	pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, GroupIndex: 3})
 	if !pass {
 		t.Log(hex.EncodeToString(program))
