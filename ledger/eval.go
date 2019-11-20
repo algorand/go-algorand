@@ -674,21 +674,12 @@ func (eval *BlockEvaluator) checkLogicSig(txn transactions.SignedTxn, txgroup []
 	if txn.Txn.FirstValid == 0 {
 		return errors.New("LogicSig does not work with FirstValid==0")
 	}
-	// TODO: move this into some lazy evaluator for the few scripts that actually use `txn FirstValidTime` ?
-	hdr, err := eval.l.BlockHdr(basics.Round(txn.Txn.FirstValid - 1))
-	if err != nil {
-		return fmt.Errorf("could not fetch BlockHdr for FirstValid-1=%d (current=%d): %s", txn.Txn.FirstValid-1, eval.block.BlockHeader.Round, err)
-	}
 	ep := logic.EvalParams{
 		Txn:        &txn,
 		Proto:      &eval.proto,
 		TxnGroup:   txgroup,
 		GroupIndex: groupIndex,
 	}
-	if hdr.TimeStamp < 0 {
-		return fmt.Errorf("cannot evaluate LogicSig before 1970 at TimeStamp %d", hdr.TimeStamp)
-	}
-	ep.FirstValidTimeStamp = uint64(hdr.TimeStamp)
 	pass, err := logic.Eval(txn.Lsig.Logic, ep)
 	if err != nil {
 		logicErrTotal.Inc(nil)
