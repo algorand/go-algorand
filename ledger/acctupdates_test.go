@@ -49,8 +49,8 @@ func (ml *mockLedgerForTracker) Latest() basics.Round {
 	return basics.Round(len(ml.blocks)) - 1
 }
 
-func (ml *mockLedgerForTracker) trackerEvalVerified(blk bookkeeping.Block, aux evalAux) (stateDelta, error) {
-	delta := stateDelta{
+func (ml *mockLedgerForTracker) trackerEvalVerified(blk bookkeeping.Block, aux evalAux) (StateDelta, error) {
+	delta := StateDelta{
 		hdr: &bookkeeping.BlockHeader{},
 	}
 	return delta, nil
@@ -219,7 +219,7 @@ func TestAcctUpdates(t *testing.T) {
 		blk.RewardsLevel = rewardLevel
 		blk.CurrentProtocol = protocol.ConsensusCurrentVersion
 
-		au.newBlock(blk, stateDelta{
+		au.newBlock(blk, StateDelta{
 			accts: updates,
 			hdr:   &blk.BlockHeader,
 		})

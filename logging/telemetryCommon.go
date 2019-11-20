@@ -36,11 +36,8 @@ type TelemetryOperation struct {
 }
 
 type telemetryState struct {
-	history      *logBuffer
-	hook         *asyncTelemetryHook
-	sessionGUID  string
-	hostName     string
-	instanceName string
+	history *logBuffer
+	hook    *asyncTelemetryHook
 }
 
 // TelemetryConfig represents the configuration of Telemetry logging
@@ -55,6 +52,8 @@ type TelemetryConfig struct {
 	FilePath           string // Path to file on disk, if any
 	ChainID            string `json:"-"`
 	SessionGUID        string `json:"-"`
+	UserName           string
+	Password           string
 }
 
 type asyncTelemetryHook struct {
@@ -65,6 +64,9 @@ type asyncTelemetryHook struct {
 	entries       chan *logrus.Entry
 	quit          chan struct{}
 	maxQueueDepth int
+	levels        []logrus.Level
+	ready         bool
+	urlUpdate     chan bool
 }
 
 type hookFactory func(cfg TelemetryConfig) (logrus.Hook, error)

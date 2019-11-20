@@ -479,7 +479,7 @@ func (t pseudonodeProposalsTask) execute(verifier *AsyncVoteVerifier, quit chan 
 		t.node.log.with(logEvent).Infof("pseudonode.makeProposals: proposal created for (%v, %v)", vote.R.Round, vote.R.Period)
 		t.node.log.EventWithDetails(telemetryspec.Agreement, telemetryspec.BlockProposedEvent, telemetryspec.BlockProposedEventDetails{
 			Hash:    vote.R.Proposal.BlockDigest.String(),
-			Address: vote.R.Sender.GetChecksumAddress().String(),
+			Address: vote.R.Sender.String(),
 			Round:   uint64(vote.R.Round),
 			Period:  uint64(vote.R.Period),
 		})

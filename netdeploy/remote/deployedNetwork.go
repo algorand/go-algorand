@@ -253,7 +253,7 @@ func (cfg DeployedNetwork) BuildNetworkFromTemplate(buildCfg BuildConfig, rootDi
 	if cfg.useExistingGenesis {
 		fmt.Println(" *** using existing genesis files ***")
 	} else {
-		if err = gen.GenerateGenesisFiles(cfg.GenesisData, genesisFolder); err != nil {
+		if err = gen.GenerateGenesisFiles(cfg.GenesisData, genesisFolder, true); err != nil {
 			return
 		}
 	}
@@ -422,7 +422,7 @@ func createHostSpec(host HostConfig, template cloudHost) (hostSpec cloudHostSpec
 	defaultConfig := config.GetDefaultLocal()
 	var port int
 	for _, node := range host.Nodes {
-		if node.IsRelay {
+		if node.IsRelay() {
 			relayCount++
 			port, err = extractPublicPort(node.NetAddress)
 			if err != nil {

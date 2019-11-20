@@ -9,9 +9,6 @@ export ALGOTEST=1
 
 SCRIPT_PATH="$( cd "$(dirname "$0")" ; pwd -P )"
 
-export GOPATH=$(go env GOPATH)
-cd ${GOPATH}/src/github.com/algorand/go-algorand
-
 SRCROOT="$(pwd -P)"
 
 # Use same PKG_ROOT location as local_install.sh uses.
@@ -61,7 +58,21 @@ pkill -u $(whoami) -x algod || true
 # Change current directory to test/scripts so we can just use ./test.sh to exec.
 cd "${SCRIPT_PATH}"
 
-./e2e_basic_start_stop.sh
+./timeout 200 ./e2e_basic_start_stop.sh
+
+./timeout 200 ./e2e_teal.sh
+
+./timeout 200 ./limit-swap-test.sh
+
+./timeout 200 ./teal-split-test.sh
+
+./timeout 200 ./atomic-swap-teal-test.sh
+
+./timeout 200 ./periodic-teal-test.sh
+
+./timeout 200 ./dynamic-fee-teal-test.sh
+
+./timeout 200 ./keyreg-teal-test.sh
 
 # Export our root temp folder as 'TESTDIR' for tests to use as their root test folder
 # This allows us to clean up everything with our rm -rf trap.

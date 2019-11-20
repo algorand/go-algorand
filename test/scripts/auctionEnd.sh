@@ -7,6 +7,9 @@ set -x
 export GOPATH=$(go env GOPATH)
 WAIT_SECONDS=3
 
+# Anchor our repo root reference location
+REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"/../..
+
 if [[ ! "$#" -eq 4 ]]; then
     echo "Syntax: auctionEnd.sh <test_dir> <auction_bank_port> <console_port> <final_auction_id>"
     exit 1
@@ -35,9 +38,7 @@ echo "PWD" $(pwd)
 
 
 if [[ "${SRCROOT}" = "" ]]; then
-    pushd ${GOPATH}/src/github.com/algorand/go-algorand
-    export SRCROOT="$(pwd -P)"
-    popd
+    export SRCROOT=${REPO_ROOT}
 fi
 
 if [[ "${NODEBINDIR}" = "" ]]; then

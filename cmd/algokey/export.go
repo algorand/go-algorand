@@ -37,12 +37,13 @@ func init() {
 var exportCmd = &cobra.Command{
 	Use:   "export",
 	Short: "Export key file to mnemonic and public key",
-	Run: func(cmd *cobra.Command, args []string) {
+	Args:  cobra.NoArgs,
+	Run: func(cmd *cobra.Command, _ []string) {
 		seed := loadKeyfile(exportKeyfile)
 		mnemonic := computeMnemonic(seed)
 
 		key := crypto.GenerateSignatureSecrets(seed)
-		publicKeyChecksummed := basics.Address(key.SignatureVerifier).GetChecksumAddress().String()
+		publicKeyChecksummed := basics.Address(key.SignatureVerifier).String()
 
 		fmt.Printf("Private key mnemonic: %s\n", mnemonic)
 		fmt.Printf("Public key: %s\n", publicKeyChecksummed)

@@ -1,4 +1,4 @@
-dist: xenial
+dist: bionic
 go:
   - "1.12"
 go_import_path: github.com/algorand/go-algorand
@@ -17,72 +17,132 @@ stages:
     if: branch =~ /^rel\// AND type != pull_request
   - name: deploy
     if: branch =~ /^rel\// AND type != pull_request
-  - name: release
-    if: branch =~ /^rel\/nightly/ AND type != pull_request
 
 jobs:
+  allow_failures:
+    - name: External ARM64 Build
+    - name: External ARM64 Deploy
+    - name: External ARM64 Integration Test
+    - name: External ARM Build
+    - name: External ARM Deploy
   include:
     - stage: build_commit
       os: linux
       script:
-        - scripts/travis/build.sh || travis_terminate 1;
-        - travis_wait 90 scripts/travis/test.sh
+        - scripts/travis/build_test.sh
 
     - stage: build_pr
       os: linux
+      name: Ubuntu AMD64 Build
       script:
-        - scripts/travis/build.sh || travis_terminate 1;
-        - travis_wait 90 scripts/travis/test.sh
-#    - # same stage, parallel job
-#      os: linux
-#      env:
-#        - BUILD_TYPE: "integration"
-#      script:
-#        - scripts/travis/build.sh || travis_terminate 1;
-#        - travis_wait 90 scripts/travis/test.sh
+        - scripts/travis/build_test.sh
+    - # same stage, parallel job
+      os: linux
+      name: Ubuntu AMD64 Integration Test
+      script:
+        - ./scripts/travis/integration_test.sh
+    - # same stage, parallel job
+      name: External ARM64 Build
+      os: linux
+      env:
+        - BUILD_TYPE: "external_build"
+        - TARGET_PLATFORM: "linux-arm64"
+      addons:
+        apt:
+          packages:
+            - awscli
+      script:
+        - scripts/travis/external_build.sh ./scripts/travis/build_test.sh
+    - # same stage, parallel job
+      name: External ARM64 Integration Test
+      os: linux
+      env:
+        - BUILD_TYPE: "external_build"
+        - TARGET_PLATFORM: "linux-arm64"
+      addons:
+        apt:
+          packages:
+            - awscli
+      script:
+        - scripts/travis/external_build.sh ./scripts/travis/integration_test.sh
     - # same stage, parallel job
       os: osx
       osx_image: xcode11
-      name: Darwin AMD64 Build
+      name: MacOS AMD64 Build
       script:
-        - scripts/travis/build.sh || travis_terminate 1;
-        - travis_wait 90 scripts/travis/test.sh
+        - scripts/travis/build_test.sh
 
     - stage: build_release
       os: linux
+      name: Ubuntu AMD64 Build
       script:
-        - scripts/travis/build.sh || travis_terminate 1;
-        - travis_wait 90 scripts/travis/test.sh
-#    - # same stage, parallel job
-#      os: linux
-#      env:
-#        - BUILD_TYPE: "integration"
-#      script:
-#        - scripts/travis/build.sh || travis_terminate 1;
-#        - travis_wait 90 scripts/travis/test.sh
+        - ./scripts/travis/build_test.sh
+    - # same stage, parallel job
+      os: linux
+      name: Ubuntu AMD64 Integration Test
+      script:
+        - ./scripts/travis/integration_test.sh
     - # same stage, parallel job
       os: osx
       osx_image: xcode11
-      name: Darwin AMD64 Build
+      name: MacOS AMD64 Build
       script:
-        - scripts/travis/build.sh || travis_terminate 1;
-        - travis_wait 90 scripts/travis/test.sh
+        - scripts/travis/build_test.sh
+    - # same stage, parallel job
+      name: External ARM64 Integration Test
+      os: linux
+      env:
+        - BUILD_TYPE: "external_build"
+        - TARGET_PLATFORM: "linux-arm64"
+      addons:
+        apt:
+          packages:
+            - awscli
+      script:
+        - scripts/travis/external_build.sh ./scripts/travis/integration_test.sh
 
     - stage: deploy
+      name: Ubuntu Deploy
       os: linux
       script: scripts/travis/deploy_packages.sh
     - # same stage, parallel job
+      name: MacOS Deploy
       os: osx
       osx_image: xcode11
       script: scripts/travis/deploy_packages.sh
-
-    - stage: release
-      script: scripts/travis/release_packages.sh
+    - # same stage, parallel job
+      name: External ARM64 Deploy
+      os: linux
+      env:
+        - BUILD_TYPE: "external_build"
+        - TARGET_PLATFORM: "linux-arm64"
+      addons:
+        apt:
+          packages:
+            - awscli
+      script:
+        - scripts/travis/external_build.sh ./scripts/travis/deploy_packages.sh
+    - # same stage, parallel job
+      name: External ARM Deploy
+      os: linux
+      env:
+        - BUILD_TYPE: "external_build"
+        - TARGET_PLATFORM: "linux-arm"
+      addons:
+        apt:
+          packages:
+            - awscli
+      script:
+        - scripts/travis/external_build.sh ./scripts/travis/deploy_packages.sh
 
 # Don't rebuild libsodium every time
 cache:
   directories:
     - crypto/lib
+
+before_install:
+  # Disable sometimes-broken sources.list in Travis base images
+  - sudo rm -vf /etc/apt/sources.list.d/*
 
 addons:
   apt:
@@ -93,7 +153,7 @@ addons:
   artifacts:
     s3_region: "us-east-1"
     paths:
-      - $(git ls-files -o | grep -v crypto/libsodium-fork | grep -v crypto/lib/ | grep -v swagger.json.validated | tr "\n" ":")
+      - $(git ls-files -o | grep -v crypto/libsodium-fork | grep -v crypto/lib/ | grep -v ^gen/ | grep -v swagger.json.validated | tr "\n" ":")
 
 notifications:
   slack:

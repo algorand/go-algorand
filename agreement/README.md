@@ -66,6 +66,7 @@ specific concepts:
    credential (i.e., mu(S, r, p)).
  - The "staging" value in a period p refers to the proposal-value which received
    a quorum of soft votes (i.e., sigma(S, r, p)).
+ - Additional terminology is described in the [agreement service doc](../docs/agreement_service.md).
 
 # Design
 

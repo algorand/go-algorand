@@ -37,11 +37,12 @@ func init() {
 var importCmd = &cobra.Command{
 	Use:   "import",
 	Short: "Import key file from mnemonic",
-	Run: func(cmd *cobra.Command, args []string) {
+	Args:  cobra.NoArgs,
+	Run: func(cmd *cobra.Command, _ []string) {
 		seed := loadMnemonic(mnemonic)
 
 		key := crypto.GenerateSignatureSecrets(seed)
-		publicKeyChecksummed := basics.Address(key.SignatureVerifier).GetChecksumAddress().String()
+		publicKeyChecksummed := basics.Address(key.SignatureVerifier).String()
 
 		fmt.Printf("Private key mnemonic: %s\n", mnemonic)
 		fmt.Printf("Public key: %s\n", publicKeyChecksummed)

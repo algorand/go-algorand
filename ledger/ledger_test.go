@@ -18,6 +18,7 @@ package ledger
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -28,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/execpool"
@@ -59,7 +61,7 @@ func sign(secrets map[basics.Address]*crypto.SignatureSecrets, t transactions.Tr
 	}
 }
 
-func testGenerateInitState(t *testing.T, proto protocol.ConsensusVersion) (initBlocks []bookkeeping.Block, initAccounts map[basics.Address]basics.AccountData, initKeys map[basics.Address]*crypto.SignatureSecrets) {
+func testGenerateInitState(t *testing.T, proto protocol.ConsensusVersion) (genesisInitState InitState, initKeys map[basics.Address]*crypto.SignatureSecrets) {
 	params := config.Consensus[proto]
 	poolAddr := testPoolAddr
 	sinkAddr := testSinkAddr
@@ -76,7 +78,7 @@ func testGenerateInitState(t *testing.T, proto protocol.ConsensusVersion) (initB
 	}
 
 	initKeys = make(map[basics.Address]*crypto.SignatureSecrets)
-	initAccounts = make(map[basics.Address]basics.AccountData)
+	initAccounts := make(map[basics.Address]basics.AccountData)
 	for i := range genaddrs {
 		initKeys[genaddrs[i]] = gensecrets[i]
 		// Give each account quite a bit more balance than MinFee or MinBalance
@@ -90,34 +92,42 @@ func testGenerateInitState(t *testing.T, proto protocol.ConsensusVersion) (initB
 	incentivePoolBalanceAtGenesis := initAccounts[poolAddr].MicroAlgos
 	initialRewardsPerRound := incentivePoolBalanceAtGenesis.Raw / uint64(params.RewardsRateRefreshInterval)
 	var emptyPayset transactions.Payset
-	blk := bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{
-		GenesisID: t.Name(),
-		Round:     0,
-		TxnRoot:   emptyPayset.Commit(params.PaysetCommitFlat),
-	}}
-	if params.SupportGenesisHash {
-		blk.BlockHeader.GenesisHash = crypto.Hash([]byte(t.Name()))
-	}
-	initBlocks = append(initBlocks, blk)
-	initBlocks[0].RewardsPool = poolAddr
-	initBlocks[0].FeeSink = sinkAddr
-	initBlocks[0].CurrentProtocol = proto
-	initBlocks[0].RewardsRate = initialRewardsPerRound
 
-	for i := 1; i < 300; i++ {
-		next := bookkeeping.MakeBlock(initBlocks[i-1].BlockHeader)
-		next.RewardsState = initBlocks[i-1].NextRewardsState(basics.Round(i), params, incentivePoolBalanceAtGenesis, 0)
-		next.TimeStamp = initBlocks[i-1].TimeStamp
-		initBlocks = append(initBlocks, next)
+	initBlock := bookkeeping.Block{
+		BlockHeader: bookkeeping.BlockHeader{
+			GenesisID: t.Name(),
+			Round:     0,
+			RewardsState: bookkeeping.RewardsState{
+				RewardsRate: initialRewardsPerRound,
+				RewardsPool: poolAddr,
+				FeeSink:     sinkAddr,
+			},
+			UpgradeState: bookkeeping.UpgradeState{
+				CurrentProtocol: proto,
+			},
+			TxnRoot: emptyPayset.Commit(params.PaysetCommitFlat),
+		},
 	}
+	if params.SupportGenesisHash {
+		initBlock.BlockHeader.GenesisHash = crypto.Hash([]byte(t.Name()))
+	}
+
+	genesisInitState.Block = initBlock
+	genesisInitState.Accounts = initAccounts
+	genesisInitState.GenesisHash = crypto.Hash([]byte(t.Name()))
 
 	return
 }
 
 type DummyVerifiedTxnCache struct{}
 
-func (x DummyVerifiedTxnCache) Verified(txn transactions.SignedTxn) bool {
+func (x DummyVerifiedTxnCache) Verified(txn transactions.SignedTxn, params verify.Params) bool {
 	return false
+}
+func (x DummyVerifiedTxnCache) EvalOk(cvers protocol.ConsensusVersion, txid transactions.Txid) (found bool, err error) {
+	return false, nil
+}
+func (x DummyVerifiedTxnCache) EvalRemember(cvers protocol.ConsensusVersion, txid transactions.Txid, err error) {
 }
 
 func (l *Ledger) appendUnvalidated(blk bookkeeping.Block) error {
@@ -126,7 +136,7 @@ func (l *Ledger) appendUnvalidated(blk bookkeeping.Block) error {
 
 	vb, err := l.Validate(context.Background(), blk, DummyVerifiedTxnCache{}, backlogPool)
 	if err != nil {
-		return err
+		return fmt.Errorf("appendUnvalidated error in Validate: %s", err.Error())
 	}
 
 	return l.AddValidatedBlock(*vb, agreement.Certificate{})
@@ -170,11 +180,15 @@ func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics
 		correctBlkHeader.GenesisHash = crypto.Hash([]byte(t.Name()))
 	}
 
+	if proto.TxnCounter {
+		correctBlkHeader.TxnCounter = lastBlock.TxnCounter + 1
+	}
+
 	var blk bookkeeping.Block
 	blk.BlockHeader = correctBlkHeader
 	txib, err := blk.EncodeSignedTxn(stx, ad)
 	if err != nil {
-		return err
+		return fmt.Errorf("could not sign txn: %s", err.Error())
 	}
 	blk.Payset = append(blk.Payset, txib)
 	blk.TxnRoot = blk.Payset.Commit(proto.PaysetCommitFlat)
@@ -185,9 +199,12 @@ func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics
 }
 
 func TestLedgerBasic(t *testing.T) {
-	initBlocks, initAccounts, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
-	_, err := OpenLedger(logging.Base(), t.Name(), true, initBlocks, initAccounts, crypto.Hash([]byte(t.Name())))
+	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
+	const inMem = true
+	const archival = true
+	l, err := OpenLedger(logging.Base(), t.Name(), inMem, genesisInitState, archival)
 	require.NoError(t, err, "could not open ledger")
+	defer l.Close()
 }
 
 func TestLedgerBlockHeaders(t *testing.T) {
@@ -196,9 +213,12 @@ func TestLedgerBlockHeaders(t *testing.T) {
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
-	initBlocks, initAccounts, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
-	l, err := OpenLedger(logging.Base(), t.Name(), true, initBlocks, initAccounts, crypto.Hash([]byte(t.Name())))
+	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
+	const inMem = true
+	const archival = true
+	l, err := OpenLedger(logging.Base(), t.Name(), inMem, genesisInitState, archival)
 	a.NoError(err, "could not open ledger")
+	defer l.Close()
 
 	lastBlock, err := l.Block(l.Latest())
 	a.NoError(err, "could not get last block")
@@ -208,7 +228,7 @@ func TestLedgerBlockHeaders(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	poolAddr := testPoolAddr
 	var totalRewardUnits uint64
-	for _, acctdata := range initAccounts {
+	for _, acctdata := range genesisInitState.Accounts {
 		totalRewardUnits += acctdata.MicroAlgos.RewardUnits(proto)
 	}
 	poolBal, err := l.Lookup(l.Latest(), poolAddr)
@@ -330,14 +350,18 @@ func TestLedgerSingleTx(t *testing.T) {
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
-	initBlocks, initAccounts, initSecrets := testGenerateInitState(t, protocol.ConsensusV4)
-	l, err := OpenLedger(logging.Base(), t.Name(), true, initBlocks, initAccounts, crypto.Hash([]byte(t.Name())))
+	genesisInitState, initSecrets := testGenerateInitState(t, protocol.ConsensusV7)
+	const inMem = true
+	const archival = true
+	l, err := OpenLedger(logging.Base(), t.Name(), inMem, genesisInitState, archival)
 	a.NoError(err, "could not open ledger")
+	defer l.Close()
 
-	proto := config.Consensus[protocol.ConsensusV4]
+	proto := config.Consensus[protocol.ConsensusV7]
 	poolAddr := testPoolAddr
 	sinkAddr := testSinkAddr
 
+	initAccounts := genesisInitState.Accounts
 	var addrList []basics.Address
 	for addr := range initAccounts {
 		if addr != poolAddr && addr != sinkAddr {
@@ -348,8 +372,8 @@ func TestLedgerSingleTx(t *testing.T) {
 	correctTxHeader := transactions.Header{
 		Sender:     addrList[0],
 		Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
-		FirstValid: 10,
-		LastValid:  l.Latest() * 2,
+		FirstValid: l.Latest() + 1,
+		LastValid:  l.Latest() + 10,
 		GenesisID:  t.Name(),
 	}
 
@@ -505,21 +529,25 @@ func TestLedgerSingleTx(t *testing.T) {
 	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctKeyreg, ad), "added duplicate tx")
 }
 
-func TestLedgerSingleTxApplyData(t *testing.T) {
+func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion) {
 	a := require.New(t)
 
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
-	initBlocks, initAccounts, initSecrets := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
-	l, err := OpenLedger(logging.Base(), t.Name(), true, initBlocks, initAccounts, crypto.Hash([]byte(t.Name())))
+	genesisInitState, initSecrets := testGenerateInitState(t, version)
+	const inMem = true
+	const archival = true
+	l, err := OpenLedger(logging.Base(), t.Name(), inMem, genesisInitState, archival)
 	a.NoError(err, "could not open ledger")
+	defer l.Close()
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	proto := config.Consensus[version]
 	poolAddr := testPoolAddr
 	sinkAddr := testSinkAddr
 
 	var addrList []basics.Address
+	initAccounts := genesisInitState.Accounts
 	for addr := range initAccounts {
 		if addr != poolAddr && addr != sinkAddr {
 			addrList = append(addrList, addr)
@@ -529,8 +557,8 @@ func TestLedgerSingleTxApplyData(t *testing.T) {
 	correctTxHeader := transactions.Header{
 		Sender:      addrList[0],
 		Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
-		FirstValid:  10,
-		LastValid:   l.Latest() * 2,
+		FirstValid:  l.Latest() + 1,
+		LastValid:   l.Latest() + 10,
 		GenesisID:   t.Name(),
 		GenesisHash: crypto.Hash([]byte(t.Name())),
 	}
@@ -664,4 +692,80 @@ func TestLedgerSingleTxApplyData(t *testing.T) {
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctKeyreg, ad), "could not add key registration")
 
 	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctKeyreg, ad), "added duplicate tx")
+
+	leaseReleaseRound := l.Latest() + 10
+	correctPayLease := correctPay
+	correctPayLease.Sender = addrList[3]
+	correctPayLease.Lease[0] = 1
+	correctPayLease.LastValid = leaseReleaseRound
+	if proto.SupportTransactionLeases {
+		a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "could not add payment transaction with payment lease")
+
+		correctPayLease.Note = make([]byte, 1)
+		correctPayLease.Note[0] = 1
+		correctPayLease.LastValid += 10
+		a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "added payment transaction with matching transaction lease")
+		correctPayLeaseOther := correctPayLease
+		correctPayLeaseOther.Sender = addrList[4]
+		a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLeaseOther, ad), "could not add payment transaction with matching lease but different sender")
+		correctPayLeaseOther = correctPayLease
+		correctPayLeaseOther.Lease[0]++
+		a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLeaseOther, ad), "could not add payment transaction with matching sender but different lease")
+
+		for l.Latest() < leaseReleaseRound {
+			a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "added payment transaction with matching transaction lease")
+
+			var totalRewardUnits uint64
+			for _, acctdata := range initAccounts {
+				totalRewardUnits += acctdata.MicroAlgos.RewardUnits(proto)
+			}
+			poolBal, err := l.Lookup(l.Latest(), testPoolAddr)
+			a.NoError(err, "could not get incentive pool balance")
+			var emptyPayset transactions.Payset
+			lastBlock, err := l.Block(l.Latest())
+			a.NoError(err, "could not get last block")
+
+			correctHeader := bookkeeping.BlockHeader{
+				GenesisID:    t.Name(),
+				Round:        l.Latest() + 1,
+				Branch:       lastBlock.Hash(),
+				TxnRoot:      emptyPayset.Commit(proto.PaysetCommitFlat),
+				TimeStamp:    0,
+				RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits),
+				UpgradeState: lastBlock.UpgradeState,
+				// Seed:       does not matter,
+				// UpgradeVote: empty,
+			}
+			correctHeader.RewardsPool = testPoolAddr
+			correctHeader.FeeSink = testSinkAddr
+
+			if proto.SupportGenesisHash {
+				correctHeader.GenesisHash = crypto.Hash([]byte(t.Name()))
+			}
+
+			if proto.TxnCounter {
+				correctHeader.TxnCounter = lastBlock.TxnCounter
+			}
+
+			correctBlock := bookkeeping.Block{BlockHeader: correctHeader}
+			a.NoError(l.appendUnvalidated(correctBlock), "could not add block with correct header")
+		}
+
+		a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "could not add payment transaction after lease was dropped")
+	} else {
+		a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "added payment transaction with transaction lease unsupported by protocol version")
+	}
+}
+
+func TestLedgerSingleTxApplyData(t *testing.T) {
+	testLedgerSingleTxApplyData(t, protocol.ConsensusCurrentVersion)
+}
+
+// SupportTransactionLeases was introduced after v18.
+func TestLedgerSingleTxApplyDataV18(t *testing.T) {
+	testLedgerSingleTxApplyData(t, protocol.ConsensusV18)
+}
+
+func TestLedgerSingleTxApplyDataFuture(t *testing.T) {
+	testLedgerSingleTxApplyData(t, protocol.ConsensusFuture)
 }

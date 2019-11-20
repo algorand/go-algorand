@@ -14,14 +14,22 @@ function install_or_upgrade {
 }
 
 if [ "${OS}" = "linux" ]; then
+    if [ -z "$(dpkg -l sudo 2>/dev/null | grep ^ii)" ] ; then
+        apt-get update
+        apt-get -y install sudo
+    fi
+
     sudo apt-get update
-    sudo apt-get -y install libboost-all-dev expect jq
+    sudo apt-get -y install libboost-all-dev expect jq autoconf
 elif [ "${OS}" = "darwin" ]; then
     brew update
     brew tap homebrew/cask
     install_or_upgrade pkg-config
     install_or_upgrade boost
     install_or_upgrade jq
+    install_or_upgrade libtool
+    install_or_upgrade autoconf
+    install_or_upgrade automake
 fi
 
 ${SCRIPTPATH}/configure_dev-deps.sh

@@ -22,6 +22,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/crypto"
 )
 
 func TestGenerateAndRecovery(t *testing.T) {
@@ -79,5 +81,67 @@ func TestInvalidKeyLen(t *testing.T) {
 		m, err := KeyToMnemonic(key)
 		require.Error(t, err)
 		require.Empty(t, m)
+	}
+}
+
+func TestUint11Array(t *testing.T) {
+	N := 11*8*32 + 1
+
+	for i := 0; i < N; i++ {
+		a := make([]byte, i, i)
+		b := toUint11Array(a)
+		c := toByteArray(b)
+		require.True(t, len(c) == len(a) || len(c) == len(a)+1 || len(c) == len(a)+2)
+		if i == 0 {
+			require.Equal(t, len(c), 0)
+		} else {
+			require.Equal(t, a, c[:i])
+		}
+	}
+
+	for i := 0; i < N; i++ {
+		a := make([]byte, i, i)
+		crypto.RandBytes(a)
+		b := toUint11Array(a)
+		c := toByteArray(b)
+		require.True(t, len(c) == len(a) || len(c) == len(a)+1 || len(c) == len(a)+2)
+		if i == 0 {
+			require.Equal(t, len(c), 0)
+		} else {
+			require.Equal(t, a, c[:i])
+		}
+	}
+
+	for i := 0; i < N; i++ {
+		a := make([]uint32, i, i)
+		b := toByteArray(a)
+		c := toUint11Array(b)
+		require.True(t, len(c) == len(a) || len(c) == len(a)+1)
+		if i == 0 {
+			require.Equal(t, len(c), 0)
+		} else {
+			require.Equal(t, a, c[:i])
+		}
+	}
+
+	for i := 0; i < N; i++ {
+		a := make([]uint32, i, i)
+		for j := 0; j < i; j++ {
+			a[j] = uint32(crypto.RandUint64() % ((1 << 11) - 1))
+		}
+		b := toByteArray(a)
+		c := toUint11Array(b)
+		require.True(t, len(c) == len(a) || len(c) == len(a)+1)
+		if i == 0 {
+			require.Equal(t, len(c), 0)
+		} else {
+			require.Equal(t, a, c[:i])
+		}
+	}
+
+	for i := 0; i < N; i++ {
+		a := make([]uint32, i, i)
+		b := toByteArray(a)
+		require.True(t, len(b)*8 >= len(a)*11)
 	}
 }

@@ -112,6 +112,27 @@ var Routes = lib.Routes{
 		HandlerFunc: handlers.PendingTransactionInformation,
 	},
 
+	lib.Route{
+		Name:        "pending-transaction-information-by-address",
+		Method:      "GET",
+		Path:        "/account/{addr}/transactions/pending",
+		HandlerFunc: handlers.GetPendingTransactionsByAddress,
+	},
+
+	lib.Route{
+		Name:        "asset-information-by-id",
+		Method:      "GET",
+		Path:        fmt.Sprintf("/asset/{index:[0-9]+}"),
+		HandlerFunc: handlers.AssetInformation,
+	},
+
+	lib.Route{
+		Name:        "list-assets",
+		Method:      "GET",
+		Path:        fmt.Sprintf("/assets"),
+		HandlerFunc: handlers.Assets,
+	},
+
 	// ----- This can only be active when indexer is live
 
 	lib.Route{

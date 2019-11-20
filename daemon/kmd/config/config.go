@@ -20,10 +20,13 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"path/filepath"
+
+	"github.com/algorand/go-algorand/util/codecs"
 )
 
 const (
 	kmdConfigFilename          = "kmd_config.json"
+	kmdConfigExampleFilename   = kmdConfigFilename + ".example"
 	defaultSessionLifetimeSecs = 60
 	defaultScryptN             = 65536
 	defaultScryptR             = 1
@@ -95,8 +98,12 @@ func LoadKMDConfig(dataDir string) (cfg KMDConfig, err error) {
 	cfg = defaultConfig(dataDir)
 	configFilename := filepath.Join(dataDir, kmdConfigFilename)
 	dat, err := ioutil.ReadFile(configFilename)
-	// Return the default configuration if the file doesn't exist
+	// If there is no config file, then return the default configuration, and dump the default config to disk
 	if err != nil {
+		exampleFilename := filepath.Join(dataDir, kmdConfigExampleFilename)
+		// SaveObjectToFile may return an unhandled error because
+		// there is nothing to do if an error occurs
+		codecs.SaveObjectToFile(exampleFilename, cfg, true)
 		return cfg, nil
 	}
 	// Fill in the non-default values

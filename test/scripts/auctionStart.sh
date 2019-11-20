@@ -11,6 +11,9 @@ if [[ ! "$#" -eq 5 ]]; then
     exit 1
 fi
 
+# Anchor our repo root reference location
+REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"/../..
+
 # Ensure our required environment variables are set - in case running this script standalone
 CLEANUP_TEMPDIR=0
 WAIT_SECONDS=3
@@ -50,9 +53,7 @@ cd ${AUCTION_TESTDIR}
 echo "PWD" $(pwd)
 
 if [[ "${SRCROOT}" = "" ]]; then
-    pushd ${GOPATH}/src/github.com/algorand/go-algorand
-    export SRCROOT="$(pwd -P)"
-    popd
+    export SRCROOT=${REPO_ROOT}
 fi
 
 if [[ "${NODEBINDIR}" = "" ]]; then
@@ -125,6 +126,10 @@ export PRIMARY_ACCOUNT=$(cat ${ALGOTESTDIR}/accountlist.out | ( while read accou
 do
     account_key=$(awk '{print $3}' <<< ${account})
     account_balance=$(awk '{print $4}' <<< ${account})
+    if [ "${account_balance}" = "[n/a]" ]; then
+        echo "ERROR: unable to retrieve available funds for account ${account_key}"
+        exit 1
+    fi
     if [[ ${max_balance} -lt ${account_balance} ]]; then
        max_balance=${account_balance}
        primary_account=${account_key}

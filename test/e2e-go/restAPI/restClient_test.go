@@ -30,7 +30,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/daemon/algod/api/client/models"
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
@@ -127,7 +130,7 @@ func waitForRoundOne(t *testing.T, testClient libgoal.Client) {
 	select {
 	case err := <-errchan:
 		require.NoError(t, err)
-	case <-time.After(30 * time.Second):
+	case <-time.After(1 * time.Minute): // Wait 1 minute (same as WaitForRound)
 		close(quit)
 		t.Fatalf("%s: timeout waiting for round 1", t.Name())
 	}
@@ -135,7 +138,7 @@ func waitForRoundOne(t *testing.T, testClient libgoal.Client) {
 
 var errWaitForTransactionTimeout = errors.New("wait for transaction timed out")
 
-func waitForTransaction(t *testing.T, testClient libgoal.Client, fromAddress, txID string, timeout time.Duration) (tx models.Transaction, err error) {
+func waitForTransaction(t *testing.T, testClient libgoal.Client, fromAddress, txID string, timeout time.Duration) (tx v1.Transaction, err error) {
 	rnd, err := testClient.Status()
 	require.NoError(t, err)
 	if rnd.LastRound == 0 {
@@ -149,6 +152,7 @@ func waitForTransaction(t *testing.T, testClient libgoal.Client, fromAddress, tx
 		}
 		if err == nil {
 			require.NotEmpty(t, tx)
+			require.Empty(t, tx.PoolError)
 			if tx.ConfirmedRound > 0 {
 				return
 			}
@@ -236,6 +240,14 @@ func TestClientCanGetSuggestedFee(t *testing.T) {
 	suggestedFeeResponse, err := testClient.SuggestedFee()
 	require.NoError(t, err)
 	_ = suggestedFeeResponse // per-byte-fee is allowed to be zero
+}
+
+func TestClientCanGetMinTxnFee(t *testing.T) {
+	defer fixture.SetTestContext(t)()
+	testClient := fixture.LibGoalClient
+	suggestedParamsRes, err := testClient.SuggestedParams()
+	require.NoError(t, err)
+	require.Truef(t, suggestedParamsRes.MinTxnFee > 0, "min txn fee not supplied")
 }
 
 func TestClientCanGetBlockInfo(t *testing.T) {
@@ -391,6 +403,92 @@ func TestClientCanGetTransactionStatus(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestAccountBalance(t *testing.T) {
+	defer fixture.SetTestContext(t)()
+	testClient := fixture.LibGoalClient
+	waitForRoundOne(t, testClient)
+	wh, err := testClient.GetUnencryptedWalletHandle()
+	require.NoError(t, err)
+	addresses, err := testClient.ListAddresses(wh)
+	require.NoError(t, err)
+	_, someAddress := getMaxBalAddr(t, testClient, addresses)
+	if someAddress == "" {
+		t.Error("no addr with funds")
+	}
+
+	toAddress, err := testClient.GenerateAddress(wh)
+	require.NoError(t, err)
+	tx, err := testClient.SendPaymentFromWallet(wh, nil, someAddress, toAddress, 10000, 100000, nil, "", 0, 0)
+	require.NoError(t, err)
+	_, err = waitForTransaction(t, testClient, someAddress, tx.ID().String(), 15*time.Second)
+	require.NoError(t, err)
+
+	account, err := testClient.AccountInformation(toAddress)
+	require.NoError(t, err)
+	require.Equal(t, account.AmountWithoutPendingRewards, uint64(100000))
+	require.Truef(t, account.Amount >= 100000, "account must have received money, and account information endpoint must print it")
+}
+
+func TestAccountParticipationInfo(t *testing.T) {
+	defer fixture.SetTestContext(t)()
+	testClient := fixture.LibGoalClient
+	waitForRoundOne(t, testClient)
+	wh, err := testClient.GetUnencryptedWalletHandle()
+	require.NoError(t, err)
+	addresses, err := testClient.ListAddresses(wh)
+	require.NoError(t, err)
+	_, someAddress := getMaxBalAddr(t, testClient, addresses)
+	if someAddress == "" {
+		t.Error("no addr with funds")
+	}
+	require.NoError(t, err)
+	addr, err := basics.UnmarshalChecksumAddress(someAddress)
+
+	params, err := testClient.SuggestedParams()
+	require.NoError(t, err)
+
+	firstRound := basics.Round(params.LastRound + 1)
+	lastRound := basics.Round(params.LastRound + 1000)
+	dilution := uint64(100)
+	randomVotePKStr := randomString(32)
+	var votePK crypto.OneTimeSignatureVerifier
+	copy(votePK[:], []byte(randomVotePKStr))
+	randomSelPKStr := randomString(32)
+	var selPK crypto.VRFVerifier
+	copy(selPK[:], []byte(randomSelPKStr))
+	var gh crypto.Digest
+	copy(gh[:], params.GenesisHash)
+	tx := transactions.Transaction{
+		Type: protocol.KeyRegistrationTx,
+		Header: transactions.Header{
+			Sender:      addr,
+			Fee:         basics.MicroAlgos{Raw: 10000},
+			FirstValid:  firstRound,
+			LastValid:   lastRound,
+			GenesisHash: gh,
+		},
+		KeyregTxnFields: transactions.KeyregTxnFields{
+			VotePK:          votePK,
+			SelectionPK:     selPK,
+			VoteKeyDilution: dilution,
+			VoteFirst:       firstRound,
+			VoteLast:        lastRound,
+		},
+	}
+	txID, err := testClient.SignAndBroadcastTransaction(wh, nil, tx)
+	require.NoError(t, err)
+	_, err = waitForTransaction(t, testClient, someAddress, txID, 15*time.Second)
+	require.NoError(t, err)
+
+	account, err := testClient.AccountInformation(someAddress)
+	require.NoError(t, err)
+	require.Equal(t, randomVotePKStr, string(account.Participation.ParticipationPK), "API must print correct root voting key")
+	require.Equal(t, randomSelPKStr, string(account.Participation.VRFPK), "API must print correct vrf key")
+	require.Equal(t, uint64(firstRound), account.Participation.VoteFirst, "API must print correct first participation round")
+	require.Equal(t, uint64(lastRound), account.Participation.VoteLast, "API must print correct last participation round")
+	require.Equal(t, dilution, account.Participation.VoteKeyDilution, "API must print correct key dilution")
+}
+
 func TestSupply(t *testing.T) {
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -531,7 +629,7 @@ func TestSendingLowFeeFails(t *testing.T) {
 		t.Errorf("balance too low %d < %d", someBal, sendAmount)
 	}
 	toAddress := getDestAddr(t, testClient, addresses, someAddress, wh)
-	utx, err := testClient.ConstructPayment(someAddress, toAddress, 1, sendAmount, nil, "", 0, 0)
+	utx, err := testClient.ConstructPayment(someAddress, toAddress, 1, sendAmount, nil, "", [32]byte{}, 0, 0)
 	require.NoError(t, err)
 	utx.Fee.Raw = 1
 	stx, err := testClient.SignTransactionWithWallet(wh, nil, utx)
@@ -659,6 +757,8 @@ func TestClientTruncatesPendingTransactions(t *testing.T) {
 }
 
 func TestClientPrioritizesPendingTransactions(t *testing.T) {
+	t.Skip("new FIFO pool does not have prioritization")
+
 	var localFixture fixtures.RestClientFixture
 	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
 	defer localFixture.Shutdown()

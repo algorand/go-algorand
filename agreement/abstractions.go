@@ -251,7 +251,11 @@ type Network interface {
 	//
 	// Calls to Broadcast by the agreement package are currently guaranteed
 	// to be serialized.
-	Broadcast(protocol.Tag, []byte)
+	//
+	// If the broadcasting of the message have failed or is not possible, the
+	// method returns a non-nil error describing the underlaying error.
+	// otherwise, a nil is returned.
+	Broadcast(protocol.Tag, []byte) error
 
 	// Relay attempts to send a slice of bytes under some protocol.Tag to
 	// all neighbors, except for the neighbor associated with the given
@@ -263,7 +267,11 @@ type Network interface {
 	// identical to calling Broadcast.  In other words, the calls
 	// Broadcast(tag, data) and Relay(nil, tag, data) should cause identical
 	// behavior.
-	Relay(MessageHandle, protocol.Tag, []byte)
+	//
+	// If the relaying of the message have failed or is not possible, the
+	// method returns a non-nil error describing the underlaying error.
+	// otherwise, a nil is returned.
+	Relay(MessageHandle, protocol.Tag, []byte) error
 
 	// Disconnect sends the Network a hint to disconnect to the peer
 	// associated with the given MessageHandle.

@@ -1,8 +1,8 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -e
 
 # upload_config.sh - Archives and uploads a netgoal configuration package from a specified directory
-#           NOTE: Will only work if you have the required S3_UPLOAD_ID/SECRET vars set
+#           NOTE: Will only work if you have the required AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY vars set
 #
 # Syntax:   upload_config.sh <config root directory> <channel>
 #
@@ -10,7 +10,8 @@ set -e
 #
 # ExitCode: 0 = Update succeeded
 #
-# Usage:    Should be used to package and upload a prepared netgoal configuration directory
+# Usage:    Should be used to package and upload a prepared netgoal configuration directory.
+#           Expects target S3 bucket to be set as S3_RELEASE_BUCKET environment variable.
 #
 # Examples: scripts/upload_config.sh ~/MyTest1 david-test
 
@@ -19,11 +20,18 @@ if [ "$#" -ne 2 ]; then
     exit 1
 fi
 
+if [[ -z "${S3_RELEASE_BUCKET}" ]]; then
+    echo "Target S3 bucket must be set as S3_RELEASE_BUCKET env var"
+    exit 1
+fi
+
 export GOPATH=$(go env GOPATH)
-cd ${GOPATH}/src/github.com/algorand/go-algorand
+
+SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
+SRCPATH=${SCRIPTPATH}/..
 
 export CHANNEL=$2
-export FULLVERSION=$(./scripts/compute_build_number.sh -f)
+export FULLVERSION=$($SRCPATH/scripts/compute_build_number.sh -f)
 
 TEMPDIR=$(mktemp -d 2>/dev/null || mktemp -d -t "tmp")
 TARFILE=${TEMPDIR}/config_${CHANNEL}_${FULLVERSION}.tar.gz
@@ -31,5 +39,5 @@ TARFILE=${TEMPDIR}/config_${CHANNEL}_${FULLVERSION}.tar.gz
 cd $1
 tar -zcf ${TARFILE} * >/dev/null 2>&1
 
-${GOPATH}/bin/updater send -s ${TEMPDIR} -c ${CHANNEL}
+${GOPATH}/bin/updater send -s ${TEMPDIR} -c ${CHANNEL} -b "${S3_RELEASE_BUCKET}"
 rm ${TARFILE}
