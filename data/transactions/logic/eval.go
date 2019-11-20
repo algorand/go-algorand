@@ -93,7 +93,7 @@ type EvalParams struct {
 	// GroupIndex should point to Txn within TxnGroup
 	GroupIndex int
 
-	FirstValidTimeStamp uint64
+	// FirstValidTimeStamp uint64
 
 	Logger logging.Logger
 }
@@ -985,8 +985,8 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint
 		sv.Uint = txn.Fee.Raw
 	case FirstValid:
 		sv.Uint = uint64(txn.FirstValid)
-	case FirstValidTime:
-		sv.Uint = cx.FirstValidTimeStamp
+	// case FirstValidTime:
+	// 	sv.Uint = cx.FirstValidTimeStamp
 	case LastValid:
 		sv.Uint = uint64(txn.LastValid)
 	case Note:

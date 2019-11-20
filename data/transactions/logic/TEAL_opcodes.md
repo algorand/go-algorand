@@ -339,7 +339,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 | 0 | Sender | []byte | 32 byte address |
 | 1 | Fee | uint64 | micro-Algos |
 | 2 | FirstValid | uint64 | round number |
-| 3 | FirstValidTime | uint64 | Seconds since 1970-01-01 00:00:00 UTC of block at FirstValid-1 |
+| 3 | FirstValidTime | uint64 | Causes program to fail; reserved for future use. |
 | 4 | LastValid | uint64 | round number |
 | 5 | Note | []byte |  |
 | 6 | Lease | []byte |  |
@@ -374,7 +374,7 @@ TypeEnum mapping:
 | 5 | afrz | AssetFreeze |
 
 
-FirstValidTime is actually the time of the round at FirstValid-1. Subtle implementation details make it much faster to serve details of an already completed round. `int` accepts the user friendly names for comparison to `txn TypeEnum`
+FirstValidTime causes the program to fail. The field is reserved for future use.
 
 ## global
 

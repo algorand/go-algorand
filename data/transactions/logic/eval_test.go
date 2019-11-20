@@ -957,7 +957,8 @@ int %s
 			txn.Txn.Type = tt
 			sb := strings.Builder{}
 			proto := defaultEvalProto()
-			pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, GroupIndex: 3, FirstValidTimeStamp: 210})
+			// pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, GroupIndex: 3, FirstValidTimeStamp: 210})
+			pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, GroupIndex: 3})
 			if !pass {
 				t.Log(hex.EncodeToString(program))
 				t.Log(sb.String())
@@ -997,10 +998,6 @@ int 1337
 &&
 txn FirstValid
 int 42
-==
-&&
-txn FirstValidTime
-int 210
 ==
 &&
 txn LastValid
@@ -1068,7 +1065,9 @@ func TestTxn(t *testing.T) {
 	t.Parallel()
 	for _, txnField := range TxnFieldNames {
 		if !strings.Contains(testTxnProgramText, txnField) {
-			t.Errorf("TestTxn missing field %v", txnField)
+			if txnField != FirstValidTime.String() {
+				t.Errorf("TestTxn missing field %v", txnField)
+			}
 		}
 	}
 	program, err := AssembleString(testTxnProgramText)
@@ -1113,7 +1112,8 @@ func TestTxn(t *testing.T) {
 	}
 	sb := strings.Builder{}
 	proto := defaultEvalProto()
-	pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, GroupIndex: 3, FirstValidTimeStamp: 210})
+	// pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, GroupIndex: 3, FirstValidTimeStamp: 210})
+	pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, GroupIndex: 3})
 	if !pass {
 		t.Log(hex.EncodeToString(program))
 		t.Log(sb.String())
