@@ -81,6 +81,66 @@
       "Template": "AWS-AP-SOUTHEAST-1-m5d.4xl"
     },
     {
+      "Name": "NPN1",
+      "Template": "AWS-US-EAST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN2",
+      "Template": "AWS-US-WEST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN3",
+      "Template": "AWS-CA-CENTRAL-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN4",
+      "Template": "AWS-AP-SOUTHEAST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN5",
+      "Template": "AWS-AP-SOUTHEAST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN6",
+      "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN7",
+      "Template": "AWS-EU-WEST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN8",
+      "Template": "AWS-EU-WEST-3-m5d.4xl"
+    },
+    {
+      "Name": "NPN9",
+      "Template": "AWS-US-EAST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN10",
+      "Template": "AWS-US-WEST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN11",
+      "Template": "AWS-CA-CENTRAL-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN12",
+      "Template": "AWS-AP-SOUTHEAST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN13",
+      "Template": "AWS-AP-SOUTHEAST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN14",
+      "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN15",
+      "Template": "AWS-EU-WEST-2-m5d.4xl"
+    },
+    {
       "Name": "N1",
       "Template": "AWS-US-EAST-1-c5d.9xl"
     },

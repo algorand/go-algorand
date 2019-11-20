@@ -1,0 +1,43 @@
+#!/usr/bin/expect -f
+set err 0
+log_user 1
+
+proc TestGoalCommandLineFlags { CMD EXPECTED_RE } {
+    set PASSED 0
+    eval spawn $CMD
+    expect {
+        timeout { puts "goal asset create timed out"; exit 1 }
+        -re $EXPECTED_RE {set PASSED 1; close }
+    }
+    if { $PASSED == 0 } {
+        puts "'$CMD' did not show expected output"
+        puts "Expected regex:"
+        puts $EXPECTED_RE
+        puts "Actual:"
+        puts $expect_out(buffer)
+        exit 1
+    }
+}
+
+if { [catch {
+    puts "Part 1: Check --validrounds and --lastvalid options combination for 'goal asset' and 'goal account"
+
+    TestGoalCommandLineFlags "goal asset create --validrounds 0 --creator ABC --total 100" ".*can not be zero.*"
+    TestGoalCommandLineFlags "goal asset create --validrounds 1 --lastvalid 1 --creator ABC --total 100" "Only one of .* can be specified"
+
+    TestGoalCommandLineFlags "goal account changeonlinestatus --validRounds 0 --online" ".*validRounds has been deprecated.*"
+    TestGoalCommandLineFlags "goal account changeonlinestatus --firstRound 0 --online" ".*firstRound has been deprecated.*"
+    TestGoalCommandLineFlags "goal account changeonlinestatus --validRounds 0 --online" ".*can not be zero.*"
+    TestGoalCommandLineFlags "goal account changeonlinestatus --validrounds 0 --online" ".*can not be zero.*"
+    TestGoalCommandLineFlags "goal account changeonlinestatus --validRounds 0 --lastvalid 1 --online" "Only one of .* can be specified"
+    TestGoalCommandLineFlags "goal account changeonlinestatus --validrounds 0 --lastvalid 1 --online" "Only one of .* can be specified"
+
+    TestGoalCommandLineFlags "goal clerk send --validrounds 0 -a 1 -t ABC -f ABC" ".*can not be zero.*"
+    TestGoalCommandLineFlags "goal clerk send --validrounds 1 --lastvalid 1 -a 1 -t ABC -f ABC" "Only one of .* can be specified"
+
+    TestGoalCommandLineFlags "goal account marknonparticipating" ".*required flag.*\"address\" not set"
+
+} EXCEPTION ] } {
+    puts "ERROR in Goal Asset Tx Validity test: $EXCEPTION"
+    exit 1
+}
