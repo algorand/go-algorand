@@ -166,6 +166,11 @@ if { [catch {
     set RAW_STX_1 "$TEST_ROOT_DIR/limitraw-1.stx"
     ::AlgorandGoal::SignTransaction $WALLET_1_NAME $WALLET_1_PASSWORD $RAW_TX_1 $RAW_STX_1 $TEST_PRIMARY_NODE_DIR
 
+    puts "wait 3 second for signature verification"
+    after 3000 set stop_wait &
+    vwait stop_wait
+    unset stop_wait
+    
     # regroup the transactions and send the combined signed transactions to the network
     set LIMIT_STX "$TEST_ROOT_DIR/limitraw.stx"
     exec cat $RAW_TX_0 $RAW_STX_1 > $LIMIT_STX
