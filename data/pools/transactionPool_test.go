@@ -946,6 +946,7 @@ func TestLogicSigReject(t *testing.T) {
 }
 
 func TestLogicSigCache(t *testing.T) {
+	t.Skip("Skipping TestLogicSigCache since we disabled the cache")
 	// hack in a cache entry that passes for a program that would reject
 	oparams := config.Consensus[protocol.ConsensusCurrentVersion]
 	params := oparams
