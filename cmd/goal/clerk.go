@@ -655,7 +655,7 @@ var signCmd = &cobra.Command{
 				uncheckedTxn.Lsig = lsig
 				err = verify.LogicSigSanityCheck(&uncheckedTxn, &verify.Context{Params: verify.Params{CurrProto: proto}})
 				if err != nil {
-					reportErrorf("%s: txn[%d] error %s", txFilename, err)
+					reportErrorf("%s: txn[%d] error %s", txFilename, count, err)
 				}
 				signedTxn = uncheckedTxn
 			} else {

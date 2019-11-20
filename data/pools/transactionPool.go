@@ -358,10 +358,10 @@ func (pool *TransactionPool) Lookup(txid transactions.Txid) (tx transactions.Sig
 	defer pool.pendingMu.RUnlock()
 
 	cacheval, inPool := pool.pendingTxids[txid]
+	tx = cacheval.txn
 	if inPool {
 		return tx, "", true
 	}
-	tx = cacheval.txn
 
 	return pool.statusCache.check(txid)
 }

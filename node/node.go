@@ -395,6 +395,7 @@ func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.Sign
 	b, err := node.ledger.BlockHdr(lastRound)
 	if err != nil {
 		node.log.Errorf("could not get block header from last round %v: %v", lastRound, err)
+		return err
 	}
 
 	contexts := make([]verify.Context, len(txgroup))
