@@ -348,14 +348,14 @@ func (s UpgradeState) applyUpgradeVote(r basics.Round, vote UpgradeVote) (res Up
 	return
 }
 
-// MakeBlock constructs a new valid block with an empty payset and an unset Seed.
-func MakeBlock(prev BlockHeader) Block {
-	round := prev.Round + 1
-
+// ProcessUpgradeParams determines our upgrade vote, applies it, and returns
+// the generated UpgradeVote and the new UpgradeState
+func ProcessUpgradeParams(prev BlockHeader) (uv UpgradeVote, us UpgradeState, err error) {
 	// Find parameters for current protocol; panic if not supported
 	prevParams, ok := config.Consensus[prev.CurrentProtocol]
 	if !ok {
-		logging.Base().Panicf("MakeBlock: previous protocol %v not supported", prev.CurrentProtocol)
+		err = fmt.Errorf("previous protocol %v not supported", prev.CurrentProtocol)
+		return
 	}
 
 	// Decide on the votes for protocol upgrades
@@ -373,6 +373,7 @@ func MakeBlock(prev BlockHeader) Block {
 	}
 
 	// If there is a proposal being voted on, see if we approve it
+	round := prev.Round + 1
 	if round < prev.NextProtocolVoteBefore {
 		if prevParams.ApprovedUpgrades[prev.NextProtocol] {
 			upgradeVote.UpgradeApprove = true
@@ -381,7 +382,18 @@ func MakeBlock(prev BlockHeader) Block {
 
 	upgradeState, err := prev.UpgradeState.applyUpgradeVote(round, upgradeVote)
 	if err != nil {
-		logging.Base().Panicf("MakeBlock: constructed invalid upgrade vote %v for round %v in state %v: %v", upgradeVote, round, prev.UpgradeState, err)
+		err = fmt.Errorf("constructed invalid upgrade vote %v for round %v in state %v: %v", upgradeVote, round, prev.UpgradeState, err)
+		return
+	}
+
+	return upgradeVote, upgradeState, err
+}
+
+// MakeBlock constructs a new valid block with an empty payset and an unset Seed.
+func MakeBlock(prev BlockHeader) Block {
+	upgradeVote, upgradeState, err := ProcessUpgradeParams(prev)
+	if err != nil {
+		logging.Base().Panicf("MakeBlock: error processing upgrade: %v", err)
 	}
 
 	params, ok := config.Consensus[upgradeState.CurrentProtocol]
@@ -403,7 +415,7 @@ func MakeBlock(prev BlockHeader) Block {
 	// the merkle root of TXs will update when fillpayset is called
 	return Block{
 		BlockHeader: BlockHeader{
-			Round:        round,
+			Round:        prev.Round + 1,
 			Branch:       prev.Hash(),
 			TxnRoot:      emptyPayset.Commit(params.PaysetCommitFlat),
 			UpgradeVote:  upgradeVote,

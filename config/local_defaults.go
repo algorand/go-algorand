@@ -49,7 +49,7 @@ var defaultLocalV5 = Local{
 	PriorityPeers:                         map[string]bool{},
 	CadaverSizeTarget:                     1073741824,
 	CatchupFailurePeerRefreshRate:         10,
-	CatchupParallelBlocks:                 50,
+	CatchupParallelBlocks:                 16,
 	ConnectionsRateLimitingCount:          60,
 	ConnectionsRateLimitingWindowSeconds:  1,
 	DeadlockDetection:                     0,
@@ -344,6 +344,10 @@ func migrate(cfg Local) (newCfg Local, err error) {
 		if newCfg.TxPoolSize == defaultLocalV4.TxPoolSize {
 			newCfg.TxPoolSize = defaultLocalV5.TxPoolSize
 		}
+		if newCfg.CatchupParallelBlocks == defaultLocalV4.CatchupParallelBlocks {
+			newCfg.CatchupParallelBlocks = defaultLocalV5.CatchupParallelBlocks
+		}
+		
 		newCfg.Version = 5
 	}
 
