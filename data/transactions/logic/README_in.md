@@ -153,6 +153,6 @@ Current design and implementation limitations to be aware of.
 * TEAL cannot lookup balances of Algos or other assets. (Standard transaction accounting will apply after TEAL has run and authorized a transaction. A TEAL-approved transaction could still be invalid by other accounting rules just as a standard signed transaction could be invalid. e.g. I can't give away money I don't have.)
 * TEAL cannot access information in previous blocks. TEAL cannot access most information in other transactions in the current block. (TEAL can access fields of the transaction it is attached to and the transactions in an atomic transaction group.)
 * TEAL cannot know exactly what round the current transaction will commit in (but it is somewhere in FirstValid through LastValid).
-* TEAL cannot know exactly what time its transaction is committed. (`txn FirstValidTime` should be approximately the 'unix time' seconds since 1970-01-01 00:00:00 UTC of the block *before* FirstValid, but there are conditions in which this time may drift and slowly re-align to close to accurate time.)
+* TEAL cannot know exactly what time its transaction is committed.
 * TEAL cannot loop. Its branch instruction `bnz` "branch if not zero" can only branch forward so as to skip some code.
 * TEAL cannot recurse. There is no subroutine jump operation.
