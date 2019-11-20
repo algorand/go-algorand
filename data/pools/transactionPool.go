@@ -381,9 +381,15 @@ func (pool *TransactionPool) Verified(txn transactions.SignedTxn) bool {
 
 // EvalOk for LogicSig Eval of a txn by txid, returns the SignedTxn, error string, and found.
 func (pool *TransactionPool) EvalOk(cvers protocol.ConsensusVersion, txid transactions.Txid) (found bool, err error) {
+	// disable the usage of the cache for now.
+	return false, nil
+
+	// when we will want to bring it back, we should replace it with the following snippet:
+	/*
 	pool.lcmu.RLock()
 	defer pool.lcmu.RUnlock()
 	return pool.lsigCache.get(cvers, txid)
+	*/
 }
 
 // EvalRemember sets an error string from LogicSig Eval for some SignedTxn
@@ -472,9 +478,7 @@ func (*alwaysVerifiedPool) Verified(txn transactions.SignedTxn) bool {
 	return true
 }
 func (pool *alwaysVerifiedPool) EvalOk(cvers protocol.ConsensusVersion, txid transactions.Txid) (txfound bool, err error) {
-	//return pool.pool.EvalOk(cvers, txid)
-	// disable the usage of the cache.
-	return false, nil
+	return pool.pool.EvalOk(cvers, txid)
 }
 func (pool *alwaysVerifiedPool) EvalRemember(cvers protocol.ConsensusVersion, txid transactions.Txid, txErr error) {
 	pool.pool.EvalRemember(cvers, txid, txErr)
