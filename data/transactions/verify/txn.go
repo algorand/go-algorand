@@ -25,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
@@ -56,6 +57,51 @@ type Params struct {
 	CurrSpecAddrs  transactions.SpecialAddresses
 	CurrProto      protocol.ConsensusVersion
 	FirstValidTime uint64
+}
+
+// Ledger returns the block headers associated with different rounds.
+type Ledger interface {
+	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
+}
+
+// PrepareContexts prepares verification contexts for a transaction
+// group.
+func PrepareContexts(ledger Ledger, group []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader) ([]Context, error) {
+	ctxs := make([]Context, len(group))
+	for i, txn := range group {
+		var fvTime uint64
+		if !txn.Lsig.Blank() {
+			// TODO: move this into some lazy evaluator for the few scripts that actually use `txn FirstValidTime` ?
+			if txn.Txn.FirstValid == 0 {
+				return nil, fmt.Errorf("PrepareContexts (%d): LogicSig does not work with FirstValid==0", i)
+			}
+			hdr, err := ledger.BlockHdr(txn.Txn.FirstValid - 1)
+			if err != nil {
+				return nil, fmt.Errorf("PrepareContexts (%d): could not fetch BlockHdr for FirstValid-1=%d (current=%d): %s", i, txn.Txn.FirstValid-1, contextHdr.Round, err)
+			}
+			if hdr.TimeStamp < 0 {
+				return nil, fmt.Errorf("PrepareContexts (%d): cannot evaluate LogicSig before 1970 at TimeStamp %d", i, hdr.TimeStamp)
+			}
+			fvTime = uint64(hdr.TimeStamp)
+		}
+
+		spec := transactions.SpecialAddresses{
+			FeeSink:     contextHdr.FeeSink,
+			RewardsPool: contextHdr.RewardsPool,
+		}
+		ctx := Context{
+			Params: Params{
+				CurrSpecAddrs:  spec,
+				CurrProto:      contextHdr.CurrentProtocol,
+				FirstValidTime: fvTime,
+			},
+			Group:      group,
+			GroupIndex: i,
+		}
+		ctxs[i] = ctx
+	}
+
+	return ctxs, nil
 }
 
 // TxnPool verifies that a SignedTxn has a good signature and that the underlying
@@ -189,6 +235,10 @@ func LogicSigSanityCheck(txn *transactions.SignedTxn, ctx *Context) error {
 	if uint64(lsig.Len()) > proto.LogicSigMaxSize {
 		return errors.New("LogicSig.Logic too long")
 	}
+	if txn.Txn.FirstValid == 0 {
+		return errors.New("LogicSig does not work with FirstValid==0")
+	}
+
 	ep := logic.EvalParams{
 		Txn:                 txn,
 		Proto:               &proto,
@@ -262,7 +312,7 @@ func LogicSig(txn *transactions.SignedTxn, ctx *Context) error {
 	pass, err := logic.Eval(txn.Lsig.Logic, ep)
 	if err != nil {
 		logicErrTotal.Inc(nil)
-		return fmt.Errorf("transaction %v: rejected by logic err=%s", txn.ID(), err)
+		return fmt.Errorf("transaction %v: rejected by logic err=%v", txn.ID(), err)
 	}
 	if !pass {
 		logicRejTotal.Inc(nil)

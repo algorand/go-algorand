@@ -24,7 +24,6 @@ import (
 	"sync"
 
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
@@ -154,14 +153,14 @@ func (handler *TxHandler) backlogWorker() {
 				logging.Base().Warnf("Could not get header for previous block %v: %v", latest, err)
 				continue
 			}
-			err = handler.prepareVerifyContexts(wi, latestHdr)
+			ctxs, err := verify.PrepareContexts(handler.ledger, wi.unverifiedTxGroup, latestHdr)
 			if err != nil {
-				wi.verificationErr = err
-				handler.postprocessCheckedTxn(wi)
+				logging.Base().Warnf("Could not prepare verification context for group %v: %v", wi.unverifiedTxGroup, err)
 				continue
 			}
 
 			// enqueue the task to the verification pool.
+			wi.verifyContexts = ctxs
 			handler.txVerificationPool.EnqueueBacklog(handler.ctx, handler.asyncVerifySignature, wi, nil)
 
 		case wi, ok := <-handler.postVerificationQueue:
@@ -267,6 +266,9 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 
 // checkAlreadyCommitted test to see if the given transaction ( in the txBacklogMsg ) was already commited, and
 // whether it would qualify as a candidate for the transaction pool.
+//
+// Note that this also checks the consistency of the transaction's group hash,
+// which is required for safe transaction signature caching behavior.
 func (handler *TxHandler) checkAlreadyCommitted(tx *txBacklogMsg) (processingDone bool) {
 	txids := make([]transactions.Txid, len(tx.unverifiedTxGroup))
 	for i := range tx.unverifiedTxGroup {
@@ -284,40 +286,6 @@ func (handler *TxHandler) checkAlreadyCommitted(tx *txBacklogMsg) (processingDon
 	return false
 }
 
-// note: this modifies tx
-func (handler *TxHandler) prepareVerifyContexts(tx *txBacklogMsg, latestHdr bookkeeping.BlockHeader) error {
-	// TODO set verifyContexts correctly
-	tx.verifyContexts = make([]verify.Context, len(tx.unverifiedTxGroup))
-	for i, txn := range tx.unverifiedTxGroup {
-		var fvTime uint64
-		if !txn.Lsig.Blank() {
-			// TODO: move this into some lazy evaluator for the few scripts that actually use `txn FirstValidTime` ?
-			if txn.Txn.FirstValid == 0 {
-				return fmt.Errorf("(%d) LogicSig does not work with FirstValid==0", i)
-			}
-			hdr, err := handler.ledger.BlockHdr(txn.Txn.FirstValid - 1)
-			if err != nil {
-				return fmt.Errorf("(%d) could not fetch BlockHdr for FirstValid-1=%d (current=%d): %s", i, txn.Txn.FirstValid-1, latestHdr.Round, err)
-			}
-			if hdr.TimeStamp < 0 {
-				return fmt.Errorf("(%d) cannot evaluate LogicSig before 1970 at TimeStamp %d", i, hdr.TimeStamp)
-			}
-			fvTime = uint64(hdr.TimeStamp)
-		}
-
-		var ctx verify.Context
-		ctx.CurrSpecAddrs.FeeSink = latestHdr.FeeSink
-		ctx.CurrSpecAddrs.RewardsPool = latestHdr.RewardsPool
-		ctx.CurrProto = latestHdr.CurrentProtocol
-		ctx.FirstValidTime = fvTime
-		ctx.Group = tx.unverifiedTxGroup
-		ctx.GroupIndex = i
-
-		tx.verifyContexts[i] = ctx
-	}
-	return nil
-}
-
 func (handler *TxHandler) processDecoded(unverifiedTxGroup []transactions.SignedTxn) (outmsg network.OutgoingMessage, processingDone bool) {
 	tx := &txBacklogMsg{
 		unverifiedTxGroup: unverifiedTxGroup,
@@ -333,11 +301,12 @@ func (handler *TxHandler) processDecoded(unverifiedTxGroup []transactions.Signed
 		logging.Base().Warnf("Could not get header for previous block %v: %v", latest, err)
 		return network.OutgoingMessage{}, true
 	}
-	err = handler.prepareVerifyContexts(tx, latestHdr)
+	ctxs, err := verify.PrepareContexts(handler.ledger, tx.unverifiedTxGroup, latestHdr)
 	if err != nil {
-		logging.Base().Warnf("Received a malformed txn (pre-verify): %v", err)
-		return network.OutgoingMessage{Action: network.Disconnect}, true
+		logging.Base().Warnf("Could not prepare verification context for group %v: %v", tx.unverifiedTxGroup, err)
+		return network.OutgoingMessage{}, true
 	}
+	tx.verifyContexts = ctxs
 
 	for i, txn := range unverifiedTxGroup {
 		err := verify.TxnPool(&txn, tx.verifyContexts[i], handler.txVerificationPool)

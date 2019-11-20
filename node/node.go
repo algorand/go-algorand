@@ -398,36 +398,11 @@ func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.Sign
 		return err
 	}
 
-	contexts := make([]verify.Context, len(txgroup))
-	for i := range contexts {
-		var fvTime uint64
-		txn := txgroup[i]
-		if !txn.Lsig.Blank() {
-			// TODO: move this into some lazy evaluator for the few scripts that actually use `txn FirstValidTime` ?
-			if txn.Txn.FirstValid == 0 {
-				return fmt.Errorf("(%d) LogicSig does not work with FirstValid==0", i)
-			}
-			hdr, err := node.ledger.BlockHdr(txn.Txn.FirstValid - 1)
-			if err != nil {
-				return fmt.Errorf("(%d) could not fetch BlockHdr for FirstValid-1=%d (current=%d): %s", i, txn.Txn.FirstValid-1, b.Round, err)
-			}
-			if hdr.TimeStamp < 0 {
-				return fmt.Errorf("(%d) cannot evaluate LogicSig before 1970 at TimeStamp %d", i, hdr.TimeStamp)
-			}
-			fvTime = uint64(hdr.TimeStamp)
-		}
-
-		var ctx verify.Context
-		ctx.CurrSpecAddrs.FeeSink = b.FeeSink
-		ctx.CurrSpecAddrs.RewardsPool = b.RewardsPool
-		ctx.CurrProto = b.CurrentProtocol
-		ctx.FirstValidTime = fvTime
-		ctx.Group = txgroup
-		ctx.GroupIndex = i
-
-		contexts[i] = ctx
+	contexts, err := verify.PrepareContexts(node.ledger, txgroup, b)
+	if err != nil {
+		node.log.Warnf("could not prepare contexts for group %v: %v", txgroup, err)
+		return err
 	}
-
 	params := make([]verify.Params, len(txgroup))
 	for i, tx := range txgroup {
 		err = verify.Txn(&tx, contexts[i])

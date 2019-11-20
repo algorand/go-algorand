@@ -484,10 +484,15 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 		groupNoAD[i] = txgroup[i].SignedTxn
 	}
 
+	ctxs, err := verify.PrepareContexts(eval.l, groupNoAD, eval.block.BlockHeader)
+	if err != nil {
+		return err
+	}
+
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
-		err := eval.transaction(txad.SignedTxn, txad.ApplyData, groupNoAD, gi, cow, &txib)
+		err := eval.transaction(txad.SignedTxn, txad.ApplyData, groupNoAD, gi, ctxs[gi], cow, &txib)
 		if err != nil {
 			return err
 		}
@@ -538,7 +543,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 // transaction tentatively executes a new transaction as part of this block evaluation.
 // If the transaction cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transactions.ApplyData, txgroup []transactions.SignedTxn, groupIndex int, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
+func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transactions.ApplyData, txgroup []transactions.SignedTxn, groupIndex int, ctx verify.Context, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
 	var err error
 
 	spec := transactions.SpecialAddresses{
@@ -569,32 +574,6 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 			return fmt.Errorf("transaction %v: malformed: %v", txn.ID(), err)
 		}
 
-		var fvTime uint64
-		if !txn.Lsig.Blank() {
-			// TODO: move this into some lazy evaluator for the few scripts that actually use `txn FirstValidTime` ?
-			if txn.Txn.FirstValid == 0 {
-				return errors.New("LogicSig does not work with FirstValid==0")
-			}
-			hdr, err := eval.l.BlockHdr(txn.Txn.FirstValid - 1)
-			if err != nil {
-				return fmt.Errorf("could not fetch BlockHdr for FirstValid-1=%d (current=%d): %s", txn.Txn.FirstValid-1, eval.block.BlockHeader.Round, err)
-			}
-			if hdr.TimeStamp < 0 {
-				return fmt.Errorf("cannot evaluate LogicSig before 1970 at TimeStamp %d", hdr.TimeStamp)
-			}
-			fvTime = uint64(hdr.TimeStamp)
-		}
-
-		// Properly signed?
-		ctx := verify.Context{
-			Params: verify.Params{
-				CurrSpecAddrs:  spec,
-				CurrProto:      eval.block.CurrentProtocol,
-				FirstValidTime: fvTime,
-			},
-			Group:      txgroup,
-			GroupIndex: groupIndex,
-		}
 		if eval.txcache == nil || !eval.txcache.Verified(txn, ctx.Params) {
 			err = verify.TxnPool(&txn, ctx, eval.verificationPool)
 			if err != nil {
