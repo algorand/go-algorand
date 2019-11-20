@@ -292,13 +292,6 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *eval
 		return nil, err
 	}
 
-	// hotfix for testnet stall 08/26/2019; move some algos from testnet bank to rewards pool to give it enough time until protocol upgrade occur.
-	// hotfix for testnet stall 11/07/2019; the same bug again, account ran out before the protocol upgrade occurred.
-	poolOld, err = eval.workaroundOverspentRewards(poolOld, hdr.Round)
-	if err != nil {
-		return nil, err
-	}
-
 	poolNew := poolOld
 	poolNew.MicroAlgos = ot.SubA(poolOld.MicroAlgos, basics.MicroAlgos{Raw: ot.Mul(prevTotals.RewardUnits(), rewardsPerUnit)})
 	if ot.Overflowed {
