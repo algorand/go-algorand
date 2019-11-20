@@ -472,7 +472,9 @@ func (*alwaysVerifiedPool) Verified(txn transactions.SignedTxn) bool {
 	return true
 }
 func (pool *alwaysVerifiedPool) EvalOk(cvers protocol.ConsensusVersion, txid transactions.Txid) (txfound bool, err error) {
-	return pool.pool.EvalOk(cvers, txid)
+	//return pool.pool.EvalOk(cvers, txid)
+	// disable the usage of the cache.
+	return false, nil
 }
 func (pool *alwaysVerifiedPool) EvalRemember(cvers protocol.ConsensusVersion, txid transactions.Txid, txErr error) {
 	pool.pool.EvalRemember(cvers, txid, txErr)
