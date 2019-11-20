@@ -19,7 +19,7 @@ package main
 const (
 	// General
 	errorNoDataDirectory     = "Data directory not specified.  Please use -d or set $ALGORAND_DATA in your environment. Exiting."
-	errorOneDataDirSupported = "One one data directory can be specified for this command."
+	errorOneDataDirSupported = "Only one data directory can be specified for this command."
 	errorRequestFail         = "Error processing command: %s"
 	errorGenesisIDFail       = "Error determining kmd folder (%s). Ensure the node is running in %s."
 	errorDirectoryNotExist   = "Specified directory '%s' does not exist."
@@ -57,12 +57,14 @@ const (
 	infoNodeAlreadyStarted           = "Algorand node was already started!"
 	infoTryingToStopNode             = "Trying to stop the node..."
 	infoNodeSuccessfullyStopped      = "The node was successfully stopped."
-	infoNodeStatus                   = "Last committed block: %d\nTime since last block: %s\nSync Time: %s\nLast consensus protocol: %s\nNext consensus protocol: %s\nRound for next consensus protocol: %d\nNext consensus protocol supported: %v"
+	infoNodeStatus                   = "Last committed block: %d\nTime since last block: %s\nSync Time: %s\nLast consensus protocol: %s\nNext consensus protocol: %s\nRound for next consensus protocol: %d\nNext consensus protocol supported: %v\nHas Synced Since Startup: %t"
+	errorNodeCreationIPFailure       = "Parsing passed IP %v failed: need a valid IPv4 or IPv6 address with a specified port number"
 	errorNodeNotDetected             = "Algorand node does not appear to be running: %s"
 	errorNodeStatus                  = "Cannot contact Algorand node: %s."
 	errorNodeFailedToStart           = "Algorand node failed to start: %s"
 	errorNodeRunning                 = "Node must be stopped before writing APIToken"
 	errorNodeFailGenToken            = "Cannot generate API token: %s"
+	errorNodeCreation                = "Error during node creation: %v"
 	errorKill                        = "Cannot kill node: %s"
 	errorCloningNode                 = "Error cloning the node: %s"
 	infoNodeCloned                   = "Node cloned successfully to: %s"
@@ -72,11 +74,15 @@ const (
 	infoDataDir                      = "[Data Directory: %s]"
 	errLoadingConfig                 = "Error loading Config file from '%s': %v"
 
+	// Asset
+	malformedMetadataHash = "Cannot base64-decode metadata hash %s: %s"
+
 	// Clerk
 	infoTxIssued    = "Sent %d MicroAlgos from account %s to address %s, transaction ID: %s. Fee set to %d"
 	infoTxCommitted = "Transaction %s committed in round %d"
 	infoTxPending   = "Transaction %s still pending as of round %d"
 	malformedNote   = "Cannot base64-decode note %s: %s"
+	malformedLease  = "Cannot base64-decode lease %s: %s"
 	fileReadError   = "Cannot read file %s: %s"
 	fileWriteError  = "Cannot write file %s: %s"
 	txDecodeError   = "Cannot decode transactions from %s: %s"
@@ -103,6 +109,8 @@ const (
 	infoNetworkStarted       = "Network Started under %s"
 	infoNetworkStopped       = "Network Stopped under %s"
 	infoNetworkDeleted       = "Network Deleted under %s"
+
+	multisigProgramCollision = "should have at most one of --program/-p | --program-bytes/-P | --lsig/-L"
 
 	// Wallet
 	infoRecoveryPrompt           = "Please type your recovery mnemonic below, and hit return when you are done: "

@@ -1,0 +1,37 @@
+## For some data directory $ALGORAND_DATA
+##
+## Setup:
+## ALGORAND_DATA=/var/lib/algorand_testnet
+## sudo mkdir -p ${ALGORAND_DATA}
+## sudo cp -p /var/lib/algorand/genesis/testnet/genesis.json ${ALGORAND_DATA}/genesis.json
+## sudo cp -p /var/lib/algorand/system.json ${ALGORAND_DATA}/system.json
+## sudo chown -R algorand ${ALGORAND_DATA}
+##
+## systemd allows for config overrides in a .conf file under a directory named for the service. e.g.:
+##
+## sudo mkdir -p /lib/systemd/system/algorand@$(systemd-escape ${ALGORAND_DATA}).service.d
+## cat <<EOF>/lib/systemd/system/algorand@$(systemd-escape ${ALGORAND_DATA}).service.d/override.conf
+## [Service]
+## User=someuser
+## EOF
+##
+## sudo systemctl enable algorand@$(systemd-escape ${ALGORAND_DATA})
+## sudo systemctl start algorand@$(systemd-escape ${ALGORAND_DATA})
+
+
+[Unit]
+Description=Algorand daemon for %I
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/algod -d %I
+PIDFile=%I/algod.pid
+User=algorand
+Group=algorand
+Restart=always
+RestartSec=5s
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

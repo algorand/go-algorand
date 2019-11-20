@@ -27,7 +27,7 @@ import (
 	"github.com/google/go-querystring/query"
 
 	"github.com/algorand/go-algorand/auction"
-	"github.com/algorand/go-algorand/daemon/algod/api/client"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 )
 
@@ -81,8 +81,8 @@ type OutcomeResponse struct {
 
 // LastAuctionIDResponse describes the ID of the last completed auction
 type LastAuctionIDResponse struct {
-	AuctionKey client.ChecksumAddress `json:"auctionKey"`
-	AuctionID  uint64                 `json:"auctionID"`
+	AuctionKey basics.Address `json:"auctionKey"`
+	AuctionID  uint64         `json:"auctionID"`
 }
 
 // ConsoleRestClient manages the REST interface for a calling Auction Services.

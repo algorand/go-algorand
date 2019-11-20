@@ -31,11 +31,14 @@ import (
 	"github.com/gofrs/flock"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/tools/network"
+	"github.com/algorand/go-algorand/util/metrics"
 	"github.com/algorand/go-algorand/util/tokens"
 )
 
@@ -72,11 +75,17 @@ func main() {
 	}
 
 	if *versionCheck {
-		version := config.GetCurrentVersion()
-		fmt.Printf("%d\n%s.%s [%s] (commit #%s)\n%s\n", version.AsUInt64(), version.String(),
-			version.Channel, version.Branch, version.GetCommitHash(), config.GetLicenseInfo())
+		fmt.Println(config.FormatVersionAndLicense())
 		return
 	}
+
+	version := config.GetCurrentVersion()
+	heartbeatGauge := metrics.MakeStringGauge()
+	heartbeatGauge.Set("version", version.String())
+	heartbeatGauge.Set("version-num", strconv.FormatUint(version.AsUInt64(), 10))
+	heartbeatGauge.Set("channel", version.Channel)
+	heartbeatGauge.Set("branch", version.Branch)
+	heartbeatGauge.Set("commit-hash", version.GetCommitHash())
 
 	if *branchCheck {
 		fmt.Println(config.Branch)
@@ -148,16 +157,13 @@ func main() {
 	// If ALGOTEST env variable is set, telemetry is disabled - allows disabling telemetry for tests
 	isTest := os.Getenv("ALGOTEST") != ""
 	if !isTest {
-		telemetryConfig, err := logging.EnsureTelemetryConfig(nil, genesis.ID())
+		telemetryConfig, err := logging.EnsureTelemetryConfig(&dataDir, genesis.ID())
 		if err != nil {
 			fmt.Fprintln(os.Stdout, "error loading telemetry config", err)
 		}
 
 		// Apply telemetry override.
-		hasOverride, override := logging.TelemetryOverride(*telemetryOverride)
-		if hasOverride {
-			telemetryConfig.Enable = override
-		}
+		telemetryConfig.Enable = logging.TelemetryOverride(*telemetryOverride)
 
 		if telemetryConfig.Enable {
 			// If session GUID specified, use it.
@@ -169,26 +175,6 @@ func main() {
 			err = log.EnableTelemetry(telemetryConfig)
 			if err != nil {
 				fmt.Fprintln(os.Stdout, "error creating telemetry hook", err)
-			}
-
-			if log.GetTelemetryEnabled() {
-				currentVersion := config.GetCurrentVersion()
-				startupDetails := telemetryspec.StartupEventDetails{
-					Version:    currentVersion.String(),
-					CommitHash: currentVersion.CommitHash,
-					Branch:     currentVersion.Branch,
-					Channel:    currentVersion.Channel,
-					Instance:   absolutePath,
-				}
-
-				log.EventWithDetails(telemetryspec.ApplicationState, telemetryspec.StartupEvent, startupDetails)
-				// Send a heartbeat event every 10 minutes as a sign of life
-				go func() {
-					for {
-						log.Event(telemetryspec.ApplicationState, telemetryspec.HeartbeatEvent)
-						<-time.After(10 * time.Minute)
-					}
-				}()
 			}
 		}
 	}
@@ -221,6 +207,7 @@ func main() {
 	}
 
 	// If overriding peers, disable SRV lookup
+	telemetryDNSBootstrapID := cfg.DNSBootstrapID
 	var peerOverrideArray []string
 	if *peerOverride != "" {
 		peerOverrideArray = strings.Split(*peerOverride, ";")
@@ -268,6 +255,59 @@ func main() {
 		deadlockState = "disabled"
 	}
 	fmt.Fprintf(os.Stdout, "Deadlock detection is set to: %s (Default state is '%s')\n", deadlockState, config.DefaultDeadlock)
+
+	if log.GetTelemetryEnabled() {
+		done := make(chan struct{})
+		defer close(done)
+
+		// Make a copy of config and reset DNSBootstrapID in case it was disabled.
+		cfgCopy := cfg
+		cfgCopy.DNSBootstrapID = telemetryDNSBootstrapID
+
+		// If the telemetry URI is not set, periodically check SRV records for new telemetry URI
+		if log.GetTelemetryURI() == "" {
+			network.StartTelemetryURIUpdateService(time.Minute, cfg, s.Genesis.Network, log, done)
+		}
+
+		currentVersion := config.GetCurrentVersion()
+		startupDetails := telemetryspec.StartupEventDetails{
+			Version:      currentVersion.String(),
+			CommitHash:   currentVersion.CommitHash,
+			Branch:       currentVersion.Branch,
+			Channel:      currentVersion.Channel,
+			InstanceHash: crypto.Hash([]byte(absolutePath)).String(),
+		}
+
+		log.EventWithDetails(telemetryspec.ApplicationState, telemetryspec.StartupEvent, startupDetails)
+
+		// Send a heartbeat event every 10 minutes as a sign of life
+		go func() {
+			ticker := time.NewTicker(10 * time.Minute)
+			defer ticker.Stop()
+
+			sendHeartbeat := func() {
+				values := make(map[string]string)
+				metrics.DefaultRegistry().AddMetrics(values)
+
+				heartbeatDetails := telemetryspec.HeartbeatEventDetails{
+					Metrics: values,
+				}
+
+				log.EventWithDetails(telemetryspec.ApplicationState, telemetryspec.HeartbeatEvent, heartbeatDetails)
+			}
+
+			// Send initial heartbeat, followed by one every 10 minutes.
+			sendHeartbeat()
+			for {
+				select {
+				case <-ticker.C:
+					sendHeartbeat()
+				case <-done:
+					return
+				}
+			}
+		}()
+	}
 
 	s.Start()
 }

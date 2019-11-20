@@ -26,6 +26,7 @@ import (
 type fileIterator struct {
 	filePaths []string
 	bucket    string
+	subFolder string
 	next      struct {
 		path string
 		f    *os.File
@@ -33,10 +34,11 @@ type fileIterator struct {
 	err error
 }
 
-func makeFileIterator(files []string, bucket string) s3manager.BatchUploadIterator {
+func makeFileIterator(files []string, bucket string, targetFolder string) s3manager.BatchUploadIterator {
 	return &fileIterator{
 		filePaths: files,
 		bucket:    bucket,
+		subFolder: targetFolder,
 	}
 }
 
@@ -50,7 +52,7 @@ func (iter *fileIterator) Next() bool {
 	iter.err = err
 
 	iter.next.f = f
-	iter.next.path = filepath.Base(iter.filePaths[0])
+	iter.next.path = filepath.Join(iter.subFolder, filepath.Base(iter.filePaths[0]))
 
 	iter.filePaths = iter.filePaths[1:]
 	return iter.Err() == nil

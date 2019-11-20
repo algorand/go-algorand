@@ -20,6 +20,8 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+
+	"github.com/algorand/go-algorand/util/s3"
 )
 
 var toolsDestFile string
@@ -36,12 +38,15 @@ var getToolsCmd = &cobra.Command{
 	Short: "Download the latest version of tools package available for specified channel",
 	Long:  "Download the latest version of tools package available for specified channel",
 	Run: func(cmd *cobra.Command, args []string) {
-		s3, err := makeS3SessionForDownload(toolsBucket)
+		if toolsBucket == "" {
+			toolsBucket = s3.GetS3ReleaseBucket()
+		}
+		s3Session, err := s3.MakeS3SessionForDownloadWithBucket(toolsBucket)
 		if err != nil {
 			exitErrorf("Error creating s3 session %s\n", err.Error())
 		}
 
-		version, name, err := s3.getPackageVersion("tools", channel, specificVersion)
+		version, name, err := s3Session.GetPackageVersion(channel, "tools", specificVersion)
 		if err != nil {
 			exitErrorf("Error getting latest tools version from s3 %s\n", err.Error())
 		}
@@ -55,7 +60,7 @@ var getToolsCmd = &cobra.Command{
 			exitErrorf("Error creating output file: %s\n", err.Error())
 		}
 
-		err = s3.downloadFile(name, file)
+		err = s3Session.DownloadFile(name, file)
 		if err != nil {
 			exitErrorf("Error downloading file: %s\n", err.Error())
 			// script should delete the file.

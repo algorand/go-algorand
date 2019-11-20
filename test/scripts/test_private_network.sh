@@ -8,8 +8,7 @@ set -e
 export ALGOTEST=1
 
 export GOPATH=$(go env GOPATH)
-SRCPATH=${GOPATH}/src/github.com/algorand/go-algorand
-cd ${SRCPATH}
+SRCPATH=$(pwd)
 
 NETROOTPATH=${SRCPATH}/tmp/test_private_network
 # purge if it already exists

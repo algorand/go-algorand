@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/algorand/go-algorand/config"
@@ -57,7 +58,7 @@ var defaultNetworkTemplate = NetworkTemplate{
 func (t NetworkTemplate) generateGenesisAndWallets(targetFolder, networkName, binDir string) error {
 	genesisData := t.Genesis
 	genesisData.NetworkName = networkName
-	return gen.GenerateGenesisFiles(genesisData, targetFolder)
+	return gen.GenerateGenesisFiles(genesisData, targetFolder, true)
 }
 
 // Create data folders for all NodeConfigs, configuring relays appropriately and
@@ -72,7 +73,7 @@ func (t NetworkTemplate) createNodeDirectories(targetFolder string, binDir strin
 	nodeDirs = make(map[string]string)
 	getGenesisVerCmd := filepath.Join(binDir, "algod")
 	importKeysCmd := filepath.Join(binDir, "goal")
-	genesisVer, err := util.ExecAndCaptureOutput(getGenesisVerCmd, "-G", "-d", targetFolder)
+	genesisVer, _, err := util.ExecAndCaptureOutput(getGenesisVerCmd, "-G", "-d", targetFolder)
 	if err != nil {
 		return
 	}
@@ -137,7 +138,7 @@ func (t NetworkTemplate) createNodeDirectories(targetFolder string, binDir strin
 				return
 			}
 
-			_, err = util.ExecAndCaptureOutput(importKeysCmd, "account", "importrootkey", "-w", string(libgoal.UnencryptedWalletName), "-d", nodeDir)
+			_, _, err = util.ExecAndCaptureOutput(importKeysCmd, "account", "importrootkey", "-w", string(libgoal.UnencryptedWalletName), "-d", nodeDir)
 			if err != nil {
 				return
 			}
@@ -160,6 +161,11 @@ func loadTemplate(templateFile string) (NetworkTemplate, error) {
 		return template, err
 	}
 	defer f.Close()
+
+	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+		// for arm machines, use smaller key dilution
+		template.Genesis.PartKeyDilution = 100
+	}
 
 	err = loadTemplateFromReader(f, &template)
 	return template, err

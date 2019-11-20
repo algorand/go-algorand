@@ -189,6 +189,9 @@ const (
 	// with the response.
 	readStaging
 
+	// readPinned is sent to the proposalStore to read the pinned value, if it exists.
+	readPinned
+
 	/*
 	 * The following are event types that replace queries, and may warrant
 	 * a revision to make them more state-machine-esque.
@@ -588,6 +591,30 @@ func (e stagingValueEvent) String() string {
 }
 
 func (e stagingValueEvent) ComparableStr() string {
+	return e.String()
+}
+
+type pinnedValueEvent struct {
+	// Round is the round for which to query the current pinned value
+	Round round
+
+	// Proposal holds the pinned value itself.
+	Proposal proposalValue
+	// Payload holds the payload, if one exists (which is the case if PayloadOK is set).
+	Payload proposal
+	// PayloadOK is set if and only if a payload was received for the pinned value.
+	PayloadOK bool
+}
+
+func (e pinnedValueEvent) t() eventType {
+	return readPinned
+}
+
+func (e pinnedValueEvent) String() string {
+	return fmt.Sprintf("%v: %.5v", e.t().String(), e.Proposal.BlockDigest.String())
+}
+
+func (e pinnedValueEvent) ComparableStr() string {
 	return e.String()
 }
 

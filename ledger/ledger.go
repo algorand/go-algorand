@@ -49,7 +49,6 @@ type Ledger struct {
 
 	// archival determines whether the ledger keeps all blocks forever
 	// (archival mode) or trims older blocks to save space (non-archival).
-	// The default is archival mode; it can be changed by SetArchival().
 	archival bool
 
 	// genesisHash stores the genesis hash for this ledger.
@@ -69,16 +68,25 @@ type Ledger struct {
 	headerCache heapLRUCache
 }
 
+// InitState structure defines blockchain init params
+type InitState struct {
+	Block       bookkeeping.Block
+	Accounts    map[basics.Address]basics.AccountData
+	GenesisHash crypto.Digest
+}
+
 // OpenLedger creates a Ledger object, using SQLite database filenames
-// based on dbPathPrefix (in-memory if dbMem is true).  initBlocks and
-// initAccounts specify the initial blocks and accounts to use if the
+// based on dbPathPrefix (in-memory if dbMem is true). genesisInitState.Blocks and
+// genesisInitState.Accounts specify the initial blocks and accounts to use if the
 // database wasn't initialized before.
-func OpenLedger(log logging.Logger, dbPathPrefix string, dbMem bool, initBlocks []bookkeeping.Block, initAccounts map[basics.Address]basics.AccountData, genesisHash crypto.Digest) (*Ledger, error) {
+func OpenLedger(
+	log logging.Logger, dbPathPrefix string, dbMem bool, genesisInitState InitState, isArchival bool,
+) (*Ledger, error) {
 	var err error
 	l := &Ledger{
 		log:         log,
-		archival:    true,
-		genesisHash: genesisHash,
+		archival:    isArchival,
+		genesisHash: genesisInitState.GenesisHash,
 	}
 
 	l.headerCache.maxEntries = 10
@@ -86,47 +94,16 @@ func OpenLedger(log logging.Logger, dbPathPrefix string, dbMem bool, initBlocks 
 	defer func() {
 		if err != nil {
 			l.Close()
-			if l.blockQ != nil {
-				l.blockQ.close()
-			}
 		}
 	}()
 
-	// Backwards compatibility: we used to store both blocks and tracker
-	// state in a single SQLite db file.
-	var trackerDBFilename string
-	var blockDBFilename string
-
-	commonDBFilename := dbPathPrefix + ".sqlite"
-	if !dbMem {
-		_, err = os.Stat(commonDBFilename)
-	}
-
-	if !dbMem && os.IsNotExist(err) {
-		// No common file, so use two separate files for blocks and tracker.
-		trackerDBFilename = dbPathPrefix + ".tracker.sqlite"
-		blockDBFilename = dbPathPrefix + ".block.sqlite"
-	} else if err == nil {
-		// Legacy common file exists (or testing in-memory, where performance
-		// doesn't matter), use same database for everything.
-		trackerDBFilename = commonDBFilename
-		blockDBFilename = commonDBFilename
-	} else {
-		return nil, err
-	}
-
-	l.trackerDBs, err = dbOpen(trackerDBFilename, dbMem)
-	if err != nil {
-		return nil, err
-	}
-
-	l.blockDBs, err = dbOpen(blockDBFilename, dbMem)
+	l.trackerDBs, l.blockDBs, err = openLedgerDB(dbPathPrefix, dbMem)
 	if err != nil {
 		return nil, err
 	}
 
 	err = l.blockDBs.wdb.Atomic(func(tx *sql.Tx) error {
-		return blockInit(tx, initBlocks)
+		return initBlocksDB(tx, l, []bookkeeping.Block{genesisInitState.Block}, isArchival)
 	})
 	if err != nil {
 		return nil, err
@@ -138,14 +115,12 @@ func OpenLedger(log logging.Logger, dbPathPrefix string, dbMem bool, initBlocks 
 	}
 
 	// Accounts are special because they get an initialization argument (initAccounts).
+	initAccounts := genesisInitState.Accounts
 	if initAccounts == nil {
 		initAccounts = make(map[basics.Address]basics.AccountData)
 	}
 
-	if len(initBlocks) != 0 {
-		// only needed if not initialized yet
-		l.accts.initProto = config.Consensus[initBlocks[0].CurrentProtocol]
-	}
+	l.accts.initProto = config.Consensus[genesisInitState.Block.CurrentProtocol]
 	l.accts.initAccounts = initAccounts
 
 	l.trackers.register(&l.accts)
@@ -173,8 +148,11 @@ func OpenLedger(log logging.Logger, dbPathPrefix string, dbMem bool, initBlocks 
 		}
 
 		params := config.Consensus[hdr.CurrentProtocol]
-		if params.SupportGenesisHash && hdr.GenesisHash != genesisHash {
-			return fmt.Errorf("latest block %d genesis hash %v does not match expected genesis hash %v", latest, hdr.GenesisHash, genesisHash)
+		if params.SupportGenesisHash && hdr.GenesisHash != genesisInitState.GenesisHash {
+			return fmt.Errorf(
+				"latest block %d genesis hash %v does not match expected genesis hash %v",
+				latest, hdr.GenesisHash, genesisInitState.GenesisHash,
+			)
 		}
 
 		return nil
@@ -186,17 +164,86 @@ func OpenLedger(log logging.Logger, dbPathPrefix string, dbMem bool, initBlocks 
 	return l, nil
 }
 
+func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs dbPair, blockDBs dbPair, err error) {
+	// Backwards compatibility: we used to store both blocks and tracker
+	// state in a single SQLite db file.
+	var trackerDBFilename string
+	var blockDBFilename string
+
+	commonDBFilename := dbPathPrefix + ".sqlite"
+	if !dbMem {
+		_, err = os.Stat(commonDBFilename)
+	}
+
+	if !dbMem && os.IsNotExist(err) {
+		// No common file, so use two separate files for blocks and tracker.
+		trackerDBFilename = dbPathPrefix + ".tracker.sqlite"
+		blockDBFilename = dbPathPrefix + ".block.sqlite"
+	} else if err == nil {
+		// Legacy common file exists (or testing in-memory, where performance
+		// doesn't matter), use same database for everything.
+		trackerDBFilename = commonDBFilename
+		blockDBFilename = commonDBFilename
+	} else {
+		return
+	}
+
+	trackerDBs, err = dbOpen(trackerDBFilename, dbMem)
+	if err != nil {
+		return
+	}
+
+	blockDBs, err = dbOpen(blockDBFilename, dbMem)
+	if err != nil {
+		return
+	}
+	return
+}
+
+// initLedgerDB performs DB initialization:
+// - creates and populates it with genesis blocks
+// - ensures DB is in good shape for archival mode and resets it if not
+// - does nothing if everything looks good
+func initBlocksDB(tx *sql.Tx, l *Ledger, initBlocks []bookkeeping.Block, isArchival bool) (err error) {
+	err = blockInit(tx, initBlocks)
+	if err != nil {
+		return err
+	}
+
+	// in archival mode check if DB contains all blocks up to the latest
+	if isArchival {
+		earliest, err := blockEarliest(tx)
+		if err != nil {
+			return err
+		}
+
+		// Detect possible problem - archival node needs all block but have only subsequence of them
+		// So reset the DB and init it again
+		if earliest != basics.Round(0) {
+			l.log.Warnf("resetting blocks DB (earliest block is %v)", earliest)
+			err := blockResetDB(tx)
+			if err != nil {
+				return err
+			}
+			err = blockInit(tx, initBlocks)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // Close reclaims resources used by the ledger (namely, the database connection
 // and goroutines used by trackers).
 func (l *Ledger) Close() {
 	l.trackerDBs.close()
 	l.blockDBs.close()
 	l.trackers.close()
-}
-
-// SetArchival sets whether the ledger should operate in archival mode or not.
-func (l *Ledger) SetArchival(a bool) {
-	l.archival = a
+	if l.blockQ != nil {
+		l.blockQ.close()
+		l.blockQ = nil
+	}
 }
 
 // RegisterBlockListeners registers listeners that will be called when a
@@ -221,6 +268,32 @@ func (l *Ledger) notifyCommit(r basics.Round) basics.Round {
 	return minToSave
 }
 
+// GetAssetCreatorForRound looks up the asset creator given the numerical asset
+// ID. This is necessary so that we can retrieve the AssetParams from the
+// creator's balance record.
+func (l *Ledger) GetAssetCreatorForRound(rnd basics.Round, assetIdx basics.AssetIndex) (basics.Address, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.accts.getAssetCreatorForRound(rnd, assetIdx)
+}
+
+// GetAssetCreator is like GetAssetCreatorForRound, but for the latest round
+// and race free with respect to ledger.Latest()
+func (l *Ledger) GetAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.accts.getAssetCreatorForRound(l.blockQ.latest(), assetIdx)
+}
+
+// ListAssets takes a maximum asset index and maximum result length, and
+// returns up to that many asset AssetIDs from the database where asset id is
+// less than or equal to the maximum.
+func (l *Ledger) ListAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) (results []basics.AssetLocator, err error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.accts.listAssets(maxAssetIdx, maxResults)
+}
+
 // Lookup uses the accounts tracker to return the account state for a
 // given account in a particular round.  The account values reflect
 // the changes of all blocks up to and including rnd.
@@ -228,9 +301,7 @@ func (l *Ledger) Lookup(rnd basics.Round, addr basics.Address) (basics.AccountDa
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 
-	// As a precaution against callers that forget to apply rewards
-	// and look at data.MicroAlgos directly, this function applies rewards
-	// up to rnd.
+	// Intentionally apply (pending) rewards up to rnd.
 	data, err := l.accts.lookup(rnd, addr, true)
 	if err != nil {
 		return basics.AccountData{}, err
@@ -253,14 +324,6 @@ func (l *Ledger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ba
 	return data, nil
 }
 
-// lookup returns the raw accountData as stored by the ledger, without applying rewards
-func (l *Ledger) lookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
-
-	return l.accts.lookup(rnd, addr, false)
-}
-
 // Totals returns the totals of all accounts at the end of round rnd.
 func (l *Ledger) Totals(rnd basics.Round) (AccountTotals, error) {
 	l.trackerMu.RLock()
@@ -268,10 +331,17 @@ func (l *Ledger) Totals(rnd basics.Round) (AccountTotals, error) {
 	return l.accts.totals(rnd)
 }
 
-func (l *Ledger) isDup(firstValid basics.Round, lastValid basics.Round, txid transactions.Txid) (bool, error) {
+func (l *Ledger) isDup(currentProto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl txlease) (bool, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.txTail.isDup(firstValid, lastValid, txid)
+	return l.txTail.isDup(currentProto, current, firstValid, lastValid, txid, txl)
+}
+
+// GetRoundTxIds returns a map of the transactions ids that we have for the given round
+func (l *Ledger) GetRoundTxIds(rnd basics.Round) (txMap map[transactions.Txid]bool) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.txTail.getRoundTxIds(rnd)
 }
 
 // Latest returns the latest known block round added to the ledger.
@@ -284,14 +354,6 @@ func (l *Ledger) Latest() basics.Round {
 // guaranteed to be available after a crash.
 func (l *Ledger) LatestCommitted() basics.Round {
 	return l.blockQ.latestCommitted()
-}
-
-// Committed uses the transaction tail tracker to check if txn already
-// appeared in a block.
-func (l *Ledger) Committed(txn transactions.SignedTxn) (bool, error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
-	return l.txTail.isDup(txn.Txn.First(), l.Latest(), txn.ID())
 }
 
 func (l *Ledger) blockAux(rnd basics.Round) (bookkeeping.Block, evalAux, error) {
@@ -316,6 +378,11 @@ func (l *Ledger) BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err er
 		l.headerCache.Put(rnd, blk)
 	}
 	return
+}
+
+// EncodedBlockCert returns the encoded block and the corresponding encoded certificate of the block for round rnd.
+func (l *Ledger) EncodedBlockCert(rnd basics.Round) (blk []byte, cert []byte, err error) {
+	return l.blockQ.getEncodedBlockCert(rnd)
 }
 
 // BlockCert returns the block and the certificate of the block for round rnd.
@@ -407,8 +474,15 @@ func (l *Ledger) trackerLog() logging.Logger {
 	return l.log
 }
 
-func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, aux evalAux) (stateDelta, error) {
+func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, aux evalAux) (StateDelta, error) {
 	// passing nil as the verificationPool is ok since we've asking the evaluator to skip verification.
 	delta, _, err := l.eval(context.Background(), blk, &aux, false, nil, nil)
 	return delta, err
+}
+
+// A txlease is a transaction (sender, lease) pair which uniquely specifies a
+// transaction lease.
+type txlease struct {
+	sender basics.Address
+	lease  [32]byte
 }

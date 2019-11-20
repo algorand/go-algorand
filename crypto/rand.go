@@ -69,14 +69,14 @@ func RandBytes(buf []byte) {
 
 // MakePRNG creates a new PRNG from an initial seed.  The implementation is
 // based on HMAC_DRBG.  All random bytes from the PRNG will be determined by
-// the initial seed value.
+// the initial seed value. Used by test code only.
 func MakePRNG(seed []byte) *PRNG {
 	return &PRNG{
 		d: drbg.New(seed),
 	}
 }
 
-// RandBytes implements the RNG interface for the PRNG.
+// RandBytes implements the RNG interface for the PRNG. Used by test code only.
 func (prng *PRNG) RandBytes(buf []byte) {
 	n, err := prng.d.Read(buf)
 	if err != nil {

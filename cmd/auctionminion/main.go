@@ -17,7 +17,6 @@
 package main
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -62,7 +61,7 @@ var stateFile = flag.String("statefile", "auctionminion.state", "State/config fi
 var initFlag = flag.Bool("init", false, "Initialize state file")
 
 type minionConfig struct {
-	AuctionKey DigestChecksummed
+	AuctionKey basics.Address
 	AuctionID  uint64
 	StartRound uint64
 	AlgodURL   string
@@ -129,8 +128,6 @@ func main() {
 	}
 
 	restClient := client.MakeRestClient(*algodURL, cfg.AlgodToken)
-	auctionKey := crypto.Digest(cfg.AuctionKey)
-	auctionChecksumAddr := basics.Address(auctionKey).GetChecksumAddress()
 
 	var results []auction.MasterInput
 	var ra *auction.RunningAuction
@@ -145,7 +142,7 @@ func main() {
 			fmt.Printf("Checking round %d..\n", curRound)
 		}
 
-		txns, err := restClient.TransactionsByAddr(auctionChecksumAddr.String(), curRound, curRound, math.MaxUint64)
+		txns, err := restClient.TransactionsByAddr(cfg.AuctionKey.String(), curRound, curRound, math.MaxUint64)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot fetch transactions from %d: %v\n", curRound, err)
 			os.Exit(1)
@@ -176,7 +173,7 @@ func main() {
 						continue
 					}
 
-					ra, err = auction.InitSigned(note.SignedParams, auctionKey)
+					ra, err = auction.InitSigned(note.SignedParams, crypto.Digest(cfg.AuctionKey))
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "Failed to initialize auction from round %d: %v\n", curRound, err)
 						os.Exit(1)
@@ -253,5 +250,5 @@ func main() {
 
 	outcomes := ra.Settle(false)
 	outcomesHash := crypto.HashObj(outcomes)
-	fmt.Printf("Expected outcomes hash (if settled without cancelling): %v\n", base64.StdEncoding.EncodeToString(outcomesHash[:]))
+	fmt.Printf("Expected outcomes hash (if settled without cancelling): %v\n", outcomesHash.String())
 }

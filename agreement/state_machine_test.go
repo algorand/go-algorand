@@ -262,6 +262,9 @@ type ioTraceable interface {
 	getTrace() ioTrace
 	// getTraceVisible returns a trace without hiding internal events.
 	getTraceVisible() ioTrace
+	// resetTrace resets the stored trace, erasing history, in effect
+	// restarting it at the point when resetTrace is called
+	resetTrace()
 }
 
 // ioAutomataConcrete is a concrete wrapper around listener, implementing ioAutomata.
@@ -282,6 +285,12 @@ type ioAutomataConcrete struct {
 
 func (w *ioAutomataConcrete) getTrace() ioTrace {
 	return w.savedHiddenTrace
+}
+
+// resets the trace, for instance to make testing for recent events easier
+func (w *ioAutomataConcrete) resetTrace() {
+	w.savedHiddenTrace = ioTrace{}
+	w.savedTrace = ioTrace{}
 }
 
 func (w *ioAutomataConcrete) getTraceVisible() ioTrace {
@@ -538,6 +547,11 @@ type ioAutomataConcretePlayer struct {
 
 func (w *ioAutomataConcretePlayer) getTrace() ioTrace {
 	return *w.savedTrace
+}
+
+// resets the trace, for instance to make testing for recent events easier
+func (w *ioAutomataConcretePlayer) resetTrace() {
+	w.savedTrace = nil
 }
 
 func (w *ioAutomataConcretePlayer) getTraceVisible() ioTrace {

@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/algorand/go-deadlock"
 
@@ -64,10 +65,19 @@ func (s *Server) Initialize(cfg config.Local) error {
 	// set up node
 	s.log = logging.Base()
 
-	liveLog := fmt.Sprintf("%s/node.log", s.RootPath)
-	archive := fmt.Sprintf("%s/node.archive.log", s.RootPath)
+	liveLog := filepath.Join(s.RootPath, "node.log")
+	archive := filepath.Join(s.RootPath, cfg.LogArchiveName)
 	fmt.Println("Logging to: ", liveLog)
-	logWriter := logging.MakeCyclicFileWriter(liveLog, archive, cfg.LogSizeLimit)
+	var maxLogAge time.Duration
+	var err error
+	if cfg.LogArchiveMaxAge != "" {
+		maxLogAge, err = time.ParseDuration(cfg.LogArchiveMaxAge)
+		if err != nil {
+			s.log.Fatalf("invalid config LogArchiveMaxAge: %s", err)
+			maxLogAge = 0
+		}
+	}
+	logWriter := logging.MakeCyclicFileWriter(liveLog, archive, cfg.LogSizeLimit, maxLogAge)
 	s.log.SetOutput(logWriter)
 	s.log.SetJSONFormatter()
 	s.log.SetLevel(logging.Level(cfg.BaseLoggerDebugLevel))
@@ -170,7 +180,7 @@ func (s *Server) Start() {
 
 	// use the data dir as the static file dir (for our API server), there's
 	// no need to separate the two yet. This lets us serve the swagger.json file.
-	handler := apiServer.NewRouter(s.log, s.node, apiToken, s.RootPath)
+	apiHandler := apiServer.NewRouter(s.log, s.node, apiToken)
 
 	addr := cfg.EndpointAddress
 	if addr == "" {
@@ -185,7 +195,12 @@ func (s *Server) Start() {
 	}
 
 	addr = listener.Addr().String()
-	server = http.Server{Addr: addr, Handler: handler}
+	server = http.Server{
+		Addr:         addr,
+		Handler:      apiHandler,
+		ReadTimeout:  time.Duration(cfg.RestReadTimeoutSeconds) * time.Second,
+		WriteTimeout: time.Duration(cfg.RestWriteTimeoutSeconds) * time.Second,
+	}
 
 	defer s.Stop()
 
@@ -239,6 +254,8 @@ func (s *Server) Stop() {
 
 	// Attempt to log a shutdown event before we exit...
 	s.log.Event(telemetryspec.ApplicationState, telemetryspec.ShutdownEvent)
+
+	s.node.Stop()
 
 	err := server.Shutdown(context.Background())
 	if err != nil {

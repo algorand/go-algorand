@@ -18,7 +18,19 @@ package main
 
 import "github.com/spf13/cobra"
 
+const (
+	stdoutFilenameValue = "-"
+	stdinFileNameValue  = "-"
+)
+
 // validateNoPosArgsFn is a reusable cobra positional argument validation function
 // for generating proper error messages when commands see unexpected arguments when they expect no args.
 // We don't use cobra.NoArgs directly, in case we want to customize behavior later.
 var validateNoPosArgsFn = cobra.NoArgs
+
+// transaction validity period margins
+var firstValid uint64
+var lastValid uint64
+
+// numValidRounds specifies validity period for a transaction and used to calculate last valid round
+var numValidRounds uint64 // also used in account and asset

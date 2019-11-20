@@ -30,4 +30,8 @@ const (
 	metricNoExternalHostAndFailedAutoDetect = "No external host name was provided, and auto-detecting external IP address failed : %v\n"
 	metricNoExternalHostUsingAutoDetectedIP = "No external host name was provided; auto-detecting external IP address = %s\n"
 	metricDataDirectoryEmpty                = "no data directory was specified. Please use either -d or set environment variable ALGORAND_DATA"
+
+	telemetryConfigReadError = "Could not read telemetry config: %s\n"
+
+	pathErrFormat = "%s: %s\n"
 )

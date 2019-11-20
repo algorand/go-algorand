@@ -44,6 +44,7 @@ func init() {
 	CodecHandle.RecursiveEmptyCheck = true
 	CodecHandle.WriteExt = true
 	CodecHandle.PositiveIntUnsigned = true
+	CodecHandle.Raw = true
 
 	JSONHandle = new(codec.JsonHandle)
 	JSONHandle.ErrorIfNoField = true

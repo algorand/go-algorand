@@ -17,15 +17,12 @@
 package transactions
 
 import (
-	"context"
 	"errors"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/util/execpool"
 )
 
 // SignedTxn wraps a transaction and a signature.
@@ -49,6 +46,7 @@ type SignedTxn struct {
 
 	Sig  crypto.Signature   `codec:"sig"`
 	Msig crypto.MultisigSig `codec:"msig"`
+	Lsig LogicSig           `codec:"lsig"`
 	Txn  Transaction        `codec:"txn"`
 
 	// The length of the encoded SignedTxn, used for computing the
@@ -156,73 +154,6 @@ func (s *SignedTxn) PtrPriority() TxnPriority {
 	// that size will get a priority of 0, which is reasonable given
 	// that transactions should never be that large.
 	return TxnPriority(basics.MulSaturate(s.Txn.TxFee().Raw, uint64(maxTxnBytesForPriority/encodingLen)))
-}
-
-// Verify that a SignedTxn has a good signature and that the underlying
-// transaction is properly constructed.
-// Note that this does not check whether a payset is valid against the ledger:
-// a SignedTxn may be well-formed, but a payset might contain an overspend.
-func (s SignedTxn) Verify(spec SpecialAddresses, proto config.ConsensusParams) error {
-	if err := s.Txn.WellFormed(spec, proto); err != nil {
-		return err
-	}
-
-	zeroAddress := basics.Address{}
-	if s.Txn.Src() == zeroAddress {
-		return errors.New("empty address")
-	}
-
-	if s.Sig != (crypto.Signature{}) && !s.Msig.Blank() {
-		return errors.New("signedtxn should only have one of Sig or Msig")
-	}
-
-	if !crypto.SignatureVerifier(s.Txn.Src()).Verify(s.Txn, s.Sig) {
-		if ok, _ := crypto.MultisigVerify(s.Txn, crypto.Digest(s.Txn.Src()), s.Msig); !ok {
-			return errors.New("signature (and multisig) failed to verify")
-		}
-		return nil
-	}
-	return nil
-
-}
-
-// PoolVerify verifies that a SignedTxn has a good signature and that the underlying
-// transaction is properly constructed.
-// Note that this does not check whether a payset is valid against the ledger:
-// a SignedTxn may be well-formed, but a payset might contain an overspend.
-//
-// This version of verify is performing the verification over the provided execution pool.
-func (s SignedTxn) PoolVerify(spec SpecialAddresses, proto config.ConsensusParams, verificationPool execpool.BacklogPool) error {
-	if err := s.Txn.WellFormed(spec, proto); err != nil {
-		return err
-	}
-
-	zeroAddress := basics.Address{}
-	if s.Txn.Src() == zeroAddress {
-		return errors.New("empty address")
-	}
-
-	if s.Sig != (crypto.Signature{}) && !s.Msig.Blank() {
-		return errors.New("signedtxn should only have one of Sig or Msig")
-	}
-
-	outCh := make(chan error, 1)
-	verificationPool.EnqueueBacklog(context.Background(), s.asyncVerify, outCh, nil)
-	if err, hasErr := <-outCh; hasErr {
-		return err
-	}
-	return nil
-}
-
-func (s SignedTxn) asyncVerify(arg interface{}) interface{} {
-	outCh := arg.(chan error)
-	if !crypto.SignatureVerifier(s.Txn.Src()).Verify(s.Txn, s.Sig) {
-		if ok, _ := crypto.MultisigVerify(s.Txn, crypto.Digest(s.Txn.Src()), s.Msig); !ok {
-			outCh <- errors.New("signature (and multisig) failed to verify")
-		}
-	}
-	close(outCh)
-	return nil
 }
 
 // AssembleSignedTxn assembles a multisig-signed transaction from a transaction an optional sig, and an optional multisig.

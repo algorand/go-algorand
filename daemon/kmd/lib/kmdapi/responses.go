@@ -147,7 +147,18 @@ type APIV1POSTKeyListResponse struct {
 // friendly:SignTransactionResponse
 type APIV1POSTTransactionSignResponse struct {
 	APIV1ResponseEnvelope
-	SignedTransaction Bytes `json:"signed_transaction"`
+
+	// swagger:strfmt byte
+	SignedTransaction []byte `json:"signed_transaction"`
+}
+
+// APIV1POSTProgramSignResponse is the repsonse to `POST /v1/data/sign`
+// friendly:SignProgramResponse
+type APIV1POSTProgramSignResponse struct {
+	APIV1ResponseEnvelope
+
+	// swagger:strfmt byte
+	Signature []byte `json:"sig"`
 }
 
 // APIV1POSTMultisigListResponse is the response to `POST /v1/multisig/list`
@@ -183,5 +194,16 @@ type APIV1DELETEMultisigResponse struct {
 // friendly:SignMultisigResponse
 type APIV1POSTMultisigTransactionSignResponse struct {
 	APIV1ResponseEnvelope
-	Multisig Bytes `json:"multisig"`
+
+	// swagger:strfmt byte
+	Multisig []byte `json:"multisig"`
+}
+
+// APIV1POSTMultisigProgramSignResponse is the response to `POST /v1/multisig/signdata`
+// friendly:SignProgramMultisigResponse
+type APIV1POSTMultisigProgramSignResponse struct {
+	APIV1ResponseEnvelope
+
+	// swagger:strfmt byte
+	Multisig []byte `json:"multisig"`
 }

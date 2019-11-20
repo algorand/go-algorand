@@ -234,7 +234,7 @@ func accountStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 type createAuctionsQuery struct {
-	AuctionKey client.ChecksumAddress `schema:"auction"`
+	AuctionKey basics.Address `schema:"auction"`
 }
 
 func createAuctions(w http.ResponseWriter, r *http.Request) {
@@ -259,11 +259,11 @@ func createAuctions(w http.ResponseWriter, r *http.Request) {
 }
 
 type depositAuctionQuery struct {
-	Username   string                 `schema:"username"`
-	AuctionKey client.ChecksumAddress `schema:"auction"`
-	BidderKey  client.ChecksumAddress `schema:"bidder"`
-	AuctionID  uint64                 `schema:"auctionid"`
-	Amount     uint64                 `schema:"amount"`
+	Username   string         `schema:"username"`
+	AuctionKey basics.Address `schema:"auction"`
+	BidderKey  basics.Address `schema:"bidder"`
+	AuctionID  uint64         `schema:"auctionid"`
+	Amount     uint64         `schema:"amount"`
 }
 
 type depositStatus struct {
@@ -414,9 +414,9 @@ func depositAuction(w http.ResponseWriter, r *http.Request) {
 }
 
 type settleAuctionQuery struct {
-	AuctionKey        client.ChecksumAddress `schema:"auction"`
-	SigSettlementBlob client.BytesBase64     `schema:"sigsettle"`
-	OutcomesBlob      client.BytesBase64     `schema:"outcomes"`
+	AuctionKey        basics.Address     `schema:"auction"`
+	SigSettlementBlob client.BytesBase64 `schema:"sigsettle"`
+	OutcomesBlob      client.BytesBase64 `schema:"outcomes"`
 }
 
 func settleAuction(w http.ResponseWriter, r *http.Request) {
@@ -546,7 +546,7 @@ func main() {
 
 		bankKey = crypto.GenerateSignatureSecrets(seed)
 		fmt.Fprintf(os.Stderr, "Bank key: %s\n",
-			basics.Address(bankKey.SignatureVerifier).GetChecksumAddress())
+			basics.Address(bankKey.SignatureVerifier))
 
 		os.Exit(0)
 	}
@@ -578,7 +578,7 @@ func main() {
 	copy(seed[:], seedBytes)
 	bankKey = crypto.GenerateSignatureSecrets(seed)
 	fmt.Fprintf(os.Stderr, "Bank key: %s\n",
-		basics.Address(bankKey.SignatureVerifier).GetChecksumAddress())
+		basics.Address(bankKey.SignatureVerifier))
 
 	http.HandleFunc("/create-user", createUser)
 	http.HandleFunc("/transfer-in", transferIn)
