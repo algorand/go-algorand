@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/execpool"
@@ -120,7 +121,7 @@ func testGenerateInitState(t *testing.T, proto protocol.ConsensusVersion) (genes
 
 type DummyVerifiedTxnCache struct{}
 
-func (x DummyVerifiedTxnCache) Verified(txn transactions.SignedTxn) bool {
+func (x DummyVerifiedTxnCache) Verified(txn transactions.SignedTxn, params verify.Params) bool {
 	return false
 }
 func (x DummyVerifiedTxnCache) EvalOk(cvers protocol.ConsensusVersion, txid transactions.Txid) (found bool, err error) {

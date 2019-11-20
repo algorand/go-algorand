@@ -756,8 +756,8 @@ func TestGtxnBadIndex(t *testing.T) {
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = program
 	txn.Lsig.Args = nil
-	txgroup := make([]transactions.SignedTxnWithAD, 1)
-	txgroup[0].SignedTxn = txn
+	txgroup := make([]transactions.SignedTxn, 1)
+	txgroup[0] = txn
 	proto := defaultEvalProto()
 	pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, TxnGroup: txgroup})
 	if pass {
@@ -779,8 +779,8 @@ func TestGtxnBadField(t *testing.T) {
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = program
 	txn.Lsig.Args = nil
-	txgroup := make([]transactions.SignedTxnWithAD, 1)
-	txgroup[0].SignedTxn = txn
+	txgroup := make([]transactions.SignedTxn, 1)
+	txgroup[0] = txn
 	proto := defaultEvalProto()
 	pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, TxnGroup: txgroup})
 	if pass {
@@ -891,8 +891,8 @@ func TestGlobal(t *testing.T) {
 	require.True(t, cost < 1000)
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = program
-	txgroup := make([]transactions.SignedTxnWithAD, 1)
-	txgroup[0].SignedTxn = txn
+	txgroup := make([]transactions.SignedTxn, 1)
+	txgroup[0] = txn
 	sb := strings.Builder{}
 	block := bookkeeping.Block{}
 	block.BlockHeader.Round = 999999
@@ -1182,7 +1182,7 @@ int 2
 	}
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
-	txgroup := make([]transactions.SignedTxnWithAD, 2)
+	txgroup := make([]transactions.SignedTxn, 2)
 	var txn transactions.SignedTxn
 	copy(txn.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
 	copy(txn.Txn.Receiver[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01"))
@@ -1197,7 +1197,7 @@ int 2
 	txn.Txn.VoteFirst = 1317
 	txn.Txn.VoteLast = 17776
 	txn.Txn.VoteKeyDilution = 1
-	txgroup[0].SignedTxn = txn
+	txgroup[0] = txn
 	txgroup[1].Txn.Amount.Raw = 42
 	txgroup[1].Txn.Fee.Raw = 1066
 	txgroup[1].Txn.FirstValid = 42
