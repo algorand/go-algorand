@@ -57,16 +57,19 @@ if [ -z "${DC_IP}" ]; then
 fi
 
 # Update version file for this build
-BUILD_NUMBER=
-if [ -e buildnumber.dat ]; then
-    BUILD_NUMBER=$(cat ./buildnumber.dat)
-    BUILD_NUMBER=$((${BUILD_NUMBER} + 1))
+if [ ! -z "${BUILD_NUMBER}" ]; then
+    echo "using externally set BUILD_NUMBER=${BUILD_NUMBER} without incrementing"
 else
-    BUILD_NUMBER=0
+    if [ -e buildnumber.dat ]; then
+	BUILD_NUMBER=$(cat ./buildnumber.dat)
+	BUILD_NUMBER=$((${BUILD_NUMBER} + 1))
+    else
+	BUILD_NUMBER=0
+    fi
+    echo ${BUILD_NUMBER} > ./buildnumber.dat
+    git add -A
+    git commit -m "Build ${BUILD_NUMBER}"
 fi
-echo ${BUILD_NUMBER} > ./buildnumber.dat
-git add -A
-git commit -m "Build ${BUILD_NUMBER}"
 export FULLVERSION=$(./scripts/compute_build_number.sh -f)
 
 # a bash user might `source build_env` to manually continue a broken build
