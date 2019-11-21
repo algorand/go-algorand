@@ -37,7 +37,7 @@ sudo rm -rf ${HOME}/prodrepo
 mkdir -p ${HOME}/prodrepo
 cp -p ${REPO_ROOT}/installer/rpm/algorand.repo ${HOME}/prodrepo/algorand.repo
 
-. get_centos_gpg.sh
+. ${REPO_ROOT}/scripts/get_centos_gpg.sh
 gpg --export -a dev@algorand.com > "${HOME}/docker_test_resources/key.pub"
 gpg --export -a rpm@algorand.com > "${HOME}/docker_test_resources/rpm.pub"
 
