@@ -127,6 +127,15 @@ Expire-Date: 0
 Passphrase: foogorand
 %transient-key
 EOF
+cat >${HOME}/tkey/rpmkeygenscript<<EOF
+Key-Type: default
+Subkey-Type: default
+Name-Real: Algorand RPM
+Name-Email: rpm@algorand.com
+Expire-Date: 0
+Passphrase: foogorand
+%transient-key
+EOF
 cat <<EOF>${GNUPGHOME}/gpg-agent.conf
 extra-socket ${GNUPGHOME}/S.gpg-agent.extra
 # inable unattended daemon mode
@@ -136,13 +145,17 @@ default-cache-ttl 2592000
 max-cache-ttl 2592000
 EOF
 gpg --gen-key --batch ${HOME}/tkey/keygenscript
-gpg --export -a > "${HOME}/docker_test_resources/key.pub"
+gpg --gen-key --batch ${HOME}/tkey/rpmkeygenscript
+gpg --export -a dev@algorand.com > "${HOME}/docker_test_resources/key.pub"
+gpg --export -a rpm@algorand.com > "${HOME}/docker_test_resources/rpm.pub"
 
 gpgconf --kill gpg-agent
 gpgconf --launch gpg-agent
 
-KEYGRIP=$(gpg -K --with-keygrip --textmode|grep Keygrip|head -1|awk '{ print $3 }')
 gpgp=$(ls /usr/lib/gnupg{2,,1}/gpg-preset-passphrase|head -1)
+KEYGRIP=$(gpg -K --with-keygrip --textmode dev@algorand.com|grep Keygrip|head -1|awk '{ print $3 }')
+echo foogorand|${gpgp} --verbose --preset ${KEYGRIP}
+KEYGRIP=$(gpg -K --with-keygrip --textmode rpm@algorand.com|grep Keygrip|head -1|awk '{ print $3 }')
 echo foogorand|${gpgp} --verbose --preset ${KEYGRIP}
 
 # copy previous installers into ~/docker_test_resources
