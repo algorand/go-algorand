@@ -139,7 +139,8 @@ gpgconf --kill gpg-agent
 gpgconf --launch gpg-agent
 
 KEYGRIP=$(gpg -K --with-keygrip --textmode|grep Keygrip|head -1|awk '{ print $3 }')
-echo foogorand|/usr/lib/gnupg/gpg-preset-passphrase --verbose --preset ${KEYGRIP}
+gpgp=$(ls /usr/lib/gnupg{2,,1}/gpg-preset-passphrase|head -1)
+echo foogorand|${gpgp} --verbose --preset ${KEYGRIP}
 
 # copy previous installers into ~/docker_test_resources
 cd "${HOME}/docker_test_resources"
