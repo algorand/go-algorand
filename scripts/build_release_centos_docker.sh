@@ -20,17 +20,17 @@ export GOPATH=${HOME}/go
 export PATH=${GOPATH}/bin:/usr/local/go/bin:${PATH}
 
 # Anchor our repo root reference location
-REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"/..
+REPO_DIR="$( cd "$(dirname "$0")" ; pwd -P )"/..
 
-${REPO_ROOT}/scripts/configure_dev-deps.sh
+${REPO_DIR}/scripts/configure_dev-deps.sh
 
-cd ${REPO_ROOT}
+cd ${REPO_DIR}
 
 # definitely rebuild libsodium which could link to external C libraries
-if [ -f ${REPO_ROOT}/crypto/libsodium-fork/Makefile ]; then
-    (cd ${REPO_ROOT}/crypto/libsodium-fork && make distclean)
+if [ -f ${REPO_DIR}/crypto/libsodium-fork/Makefile ]; then
+    (cd ${REPO_DIR}/crypto/libsodium-fork && make distclean)
 fi
-rm -rf ${REPO_ROOT}/crypto/lib
+rm -rf ${REPO_DIR}/crypto/lib
 make crypto/lib/libsodium.a
 
 make build
@@ -60,7 +60,7 @@ rm -f ${HOME}/.gnupg/S.gpg-agent
 (cd ~/.gnupg && ln -s /S.gpg-agent S.gpg-agent)
 
 gpg --import /stuff/key.pub
-gpg --import ${REPO_ROOT}/installer/rpm/RPM-GPG-KEY-Algorand
+gpg --import ${REPO_DIR}/installer/rpm/RPM-GPG-KEY-Algorand
 
 cat <<EOF>"${HOME}/.rpmmacros"
 %_gpg_name Algorand RPM <rpm@algorand.com>
