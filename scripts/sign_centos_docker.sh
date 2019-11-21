@@ -29,7 +29,6 @@ rm -f ${HOME}/.gnupg/S.gpg-agent
 
 gpg --import /stuff/key.pub
 gpg --import /stuff/rpm.pub
-gpg --import ${REPO_DIR}/installer/rpm/RPM-GPG-KEY-Algorand
 rpmkeys --import /stuff/rpm.pub
 echo "wat"|gpg -u rpm@algorand.com --clearsign
 
