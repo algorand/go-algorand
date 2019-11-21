@@ -20,13 +20,9 @@ export GOPATH=${HOME}/go
 export PATH=${GOPATH}/bin:/usr/local/go/bin:${PATH}
 
 # Anchor our repo root reference location
-REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"/../..
+REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"/..
 
-go install golang.org/x/lint/golint
-go install github.com/golang/dep/cmd/dep
-go install golang.org/x/tools/cmd/stringer
-go install github.com/go-swagger/go-swagger/cmd/swagger
-
+${REPO_ROOT}/scripts/configure_dev-deps.sh
 
 cd ${REPO_ROOT}
 
