@@ -132,7 +132,7 @@ allow-preset-passphrase
 default-cache-ttl 2592000
 max-cache-ttl 2592000
 EOF
-gpg --generate-key --batch ${HOME}/tkey/keygenscript
+gpg --gen-key --batch ${HOME}/tkey/keygenscript
 gpg --export -a > "${HOME}/docker_test_resources/key.pub"
 
 gpgconf --kill gpg-agent
