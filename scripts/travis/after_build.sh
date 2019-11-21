@@ -8,6 +8,12 @@
 #
 # Examples: scripts/travis/after_build.sh
 
+if [[ "${OS}" == "darwin" ]]; then
+    # do not run these on darwin
+    exit;
+fi;
+
+
 if [ "${TRAVIS_EVENT_TYPE}" = "cron" ] || [[ "${TRAVIS_BRANCH}" =~ ^rel/ ]]; then
     if [ "${BUILD_TYPE}" != "integration" ]; then
         cd "$(dirname "$0")"/../.. || exit 1
