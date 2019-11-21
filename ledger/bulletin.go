@@ -86,7 +86,7 @@ func (b *bulletin) loadFromDisk(l ledgerForTracker) error {
 func (b *bulletin) close() {
 }
 
-func (b *bulletin) newBlock(blk bookkeeping.Block, delta stateDelta) {
+func (b *bulletin) newBlock(blk bookkeeping.Block, delta StateDelta) {
 }
 
 func (b *bulletin) committedUpTo(rnd basics.Round) basics.Round {

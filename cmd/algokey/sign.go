@@ -46,7 +46,8 @@ func init() {
 var signCmd = &cobra.Command{
 	Use:   "sign",
 	Short: "Sign transactions from a file using a private key",
-	Run: func(cmd *cobra.Command, args []string) {
+	Args:  cobra.NoArgs,
+	Run: func(cmd *cobra.Command, _ []string) {
 		seed := loadKeyfileOrMnemonic(signKeyfile, signMnemonic)
 		key := crypto.GenerateSignatureSecrets(seed)
 

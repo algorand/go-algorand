@@ -21,6 +21,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"os/user"
 	"path/filepath"
 	"strings"
@@ -30,6 +31,7 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/logging"
@@ -46,11 +48,15 @@ var verboseVersionPrint bool
 
 var kmdDataDirFlag string
 
+var versionCheck bool
+
 func init() {
 	// infile
 	rootCmd.AddCommand(versionCmd)
 	versionCmd.Flags().BoolVarP(&verboseVersionPrint, "verbose", "v", false, "Print all version info available")
+	rootCmd.Flags().BoolVarP(&versionCheck, "version", "v", false, "Display and write current build version and exit")
 	rootCmd.AddCommand(licenseCmd)
+	rootCmd.AddCommand(reportCmd)
 
 	// account.go
 	rootCmd.AddCommand(accountCmd)
@@ -60,6 +66,9 @@ func init() {
 
 	// clerk.go
 	rootCmd.AddCommand(clerkCmd)
+
+	// asset.go
+	rootCmd.AddCommand(assetCmd)
 
 	// node.go
 	rootCmd.AddCommand(nodeCmd)
@@ -76,6 +85,9 @@ func init() {
 	// ledger.go
 	rootCmd.AddCommand(ledgerCmd)
 
+	// completion.go
+	rootCmd.AddCommand(completionCmd)
+
 	// Config
 	defaultDataDirValue := []string{""}
 	rootCmd.PersistentFlags().StringArrayVarP(&dataDirs, "datadir", "d", defaultDataDirValue, "Data directory for the node")
@@ -88,8 +100,11 @@ var rootCmd = &cobra.Command{
 	Long:  `GOAL is the CLI for interacting Algorand software instance. The binary 'goal' is installed alongside the algod binary and is considered an integral part of the complete installation. The binaries should be used in tandem - you should not try to use a version of goal with a different version of algod.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
+		if versionCheck {
+			fmt.Println(config.FormatVersionAndLicense())
+			return
+		}
 		//If no arguments passed, we should fallback to help
-
 		cmd.HelpFunc()(cmd, args)
 	},
 }
@@ -145,15 +160,17 @@ var versionCmd = &cobra.Command{
 		onDataDirs(func(dataDir string) {
 			response, err := ensureAlgodClient(dataDir).AlgodVersions()
 			if err != nil {
-				panic(err)
+				fmt.Println(err)
+				os.Exit(1)
 			}
 			if !verboseVersionPrint {
 				fmt.Println(response.Versions)
-			} else {
-				fmt.Printf("Version: %v \n", response.Versions)
-				fmt.Printf("GenesisID: %v \n", response.GenesisID)
-				// fmt.Printf("Channel: %v \n", response.Channel)
-				// fmt.Printf("Commit: %v - #%v \n", response.Branch, response.CommitHash)
+				return
+			}
+			fmt.Printf("Version: %v \n", response.Versions)
+			fmt.Printf("GenesisID: %s \n", response.GenesisID)
+			if (response.Build != common.BuildVersion{}) {
+				fmt.Printf("Build: %d.%d.%d.%s [%s] (commit #%s)\n", response.Build.Major, response.Build.Minor, response.Build.BuildNumber, response.Build.Channel, response.Build.Branch, response.Build.CommitHash)
 			}
 		})
 	},
@@ -166,6 +183,39 @@ var licenseCmd = &cobra.Command{
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println(config.GetLicenseInfo())
+	},
+}
+
+var reportCmd = &cobra.Command{
+	Use:   "report",
+	Short: "",
+	Long:  "Produces report helpful for debugging",
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println(config.FormatVersionAndLicense())
+		fmt.Println()
+		data, err := exec.Command("uname", "-a").CombinedOutput()
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		fmt.Println(string(data))
+
+		dirs := getDataDirs()
+		report := len(dirs) > 1
+		for _, dir := range dirs {
+			if report {
+				reportInfof(infoDataDir, dir)
+			}
+			genesis, err := readGenesis(dir)
+			if err != nil {
+				fmt.Println(err)
+				os.Exit(1)
+			}
+			fmt.Printf("Genesis ID from genesis.json: %s\n", genesis.ID())
+		}
+		fmt.Println()
+		onDataDirs(getStatus)
 	},
 }
 
@@ -239,6 +289,14 @@ func ensureSingleDataDir() string {
 		reportErrorln(errorOneDataDirSupported)
 	}
 	return ensureFirstDataDir()
+}
+
+// like ensureSingleDataDir() but doesn't exit()
+func maybeSingleDataDir() string {
+	if len(dataDirs) > 1 {
+		return ""
+	}
+	return resolveDataDir()
 }
 
 func getDataDirs() (dirs []string) {
@@ -439,13 +497,46 @@ func reportWarnf(format string, args ...interface{}) {
 }
 
 func reportErrorln(args ...interface{}) {
-	fmt.Println(args...)
+	fmt.Fprintln(os.Stderr, args...)
 	// log.Warnln(args...)
 	os.Exit(1)
 }
 
 func reportErrorf(format string, args ...interface{}) {
-	fmt.Printf(format+"\n", args...)
+	fmt.Fprintf(os.Stderr, format+"\n", args...)
 	// log.Warnf(format, args...)
 	os.Exit(1)
+}
+
+// writeFile is a wrapper of ioutil.WriteFile which considers the special
+// case of stdout filename
+func writeFile(filename string, data []byte, perm os.FileMode) error {
+	var err error
+	if filename == stdoutFilenameValue {
+		// Write to Stdout
+		if _, err = os.Stdout.Write(data); err != nil {
+			return err
+		}
+		return nil
+	}
+	return ioutil.WriteFile(filename, data, perm)
+}
+
+// readFile is a wrapper of ioutil.ReadFile which consniders the
+// special case of stdin filename
+func readFile(filename string) ([]byte, error) {
+	if filename == stdinFileNameValue {
+		return ioutil.ReadAll(os.Stdin)
+	}
+	return ioutil.ReadFile(filename)
+}
+
+func checkTxValidityPeriodCmdFlags(cmd *cobra.Command) {
+	validRoundsChanged := cmd.Flags().Changed("validrounds") || cmd.Flags().Changed("validRounds")
+	if validRoundsChanged && cmd.Flags().Changed("lastvalid") {
+		reportErrorf("Only one of [--validrounds] or [--lastvalid] can be specified")
+	}
+	if validRoundsChanged && numValidRounds == 0 {
+		reportErrorf("[--validrounds] can not be zero")
+	}
 }

@@ -37,6 +37,9 @@ import (
 
 var configFile = flag.String("config", "", "JSON configuration file")
 var autocertDir = flag.String("autocert", "", "Autocert cache directory")
+var listenPort = flag.Int("port", 443, "Port to listen for incoming connections")
+var httpsCert = flag.String("cert", "", "https certificate.pem file; mutually exclusive with autocert")
+var httpsKey = flag.String("key", "", "https key.pem file; mutually exclusive with autocert")
 var configMap map[string]dispenserSiteConfig
 
 var client map[string]libgoal.Client
@@ -186,14 +189,14 @@ func dispense(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	txid, err := c.SendPaymentFromUnencryptedWallet(cfg.Source, target, uint64(cfg.Fee), uint64(cfg.Amount), nil)
+	tx, err := c.SendPaymentFromUnencryptedWallet(cfg.Source, target, uint64(cfg.Fee), uint64(cfg.Amount), nil)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to dispense money - %v", err), http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	json.NewEncoder(w).Encode(txid)
+	json.NewEncoder(w).Encode(tx.ID().String())
 }
 
 func main() {
@@ -253,17 +256,26 @@ func main() {
 		configMap[h] = cfg
 	}
 
-	cacheDir := *autocertDir
-	if cacheDir == "" {
-		cacheDir = os.Getenv("HOME") + "/.autocert"
+	useAutocert := false
+	if *autocertDir != "" || *httpsCert == "" || *httpsKey == "" {
+		useAutocert = true
 	}
 
-	m := autocert.Manager{
-		Prompt:     autocert.AcceptTOS,
-		HostPolicy: autocert.HostWhitelist(hosts...),
-		Cache:      autocert.DirCache(cacheDir),
-	}
+	if useAutocert {
+		cacheDir := *autocertDir
+		if cacheDir == "" {
+			cacheDir = os.Getenv("HOME") + "/.autocert"
+		}
 
-	go http.ListenAndServe(":80", m.HTTPHandler(nil))
-	log.Fatal(http.Serve(m.Listener(), nil))
+		m := autocert.Manager{
+			Prompt:     autocert.AcceptTOS,
+			HostPolicy: autocert.HostWhitelist(hosts...),
+			Cache:      autocert.DirCache(cacheDir),
+		}
+
+		go http.ListenAndServe(":80", m.HTTPHandler(nil))
+		log.Fatal(http.Serve(m.Listener(), nil))
+	} else {
+		log.Fatal(http.ListenAndServeTLS(fmt.Sprintf(":%d", *listenPort), *httpsCert, *httpsKey, nil))
+	}
 }

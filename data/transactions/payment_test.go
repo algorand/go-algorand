@@ -76,8 +76,12 @@ type mockBalances struct {
 	protocol.ConsensusVersion
 }
 
-func (balances mockBalances) Get(basics.Address) (basics.BalanceRecord, error) {
+func (balances mockBalances) Get(basics.Address, bool) (basics.BalanceRecord, error) {
 	return basics.BalanceRecord{}, nil
+}
+
+func (balances mockBalances) GetAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error) {
+	return basics.Address{}, nil
 }
 
 func (balances mockBalances) Put(basics.BalanceRecord) error {
@@ -114,13 +118,13 @@ func TestPaymentApply(t *testing.T) {
 			Amount:   basics.MicroAlgos{Raw: uint64(50)},
 		},
 	}
-	_, err := tx.Apply(mockBalV0, SpecialAddresses{FeeSink: feeSink})
+	_, err := tx.Apply(mockBalV0, SpecialAddresses{FeeSink: feeSink}, 0)
 	require.NoError(t, err)
 }
 
 func TestCheckSpender(t *testing.T) {
 	mockBalV0 := mockBalances{protocol.ConsensusCurrentVersion}
-	mockBalV4 := mockBalances{protocol.ConsensusV4}
+	mockBalV7 := mockBalances{protocol.ConsensusV7}
 
 	secretSrc := keypair()
 	src := basics.Address(secretSrc.SignatureVerifier)
@@ -151,10 +155,10 @@ func TestCheckSpender(t *testing.T) {
 
 	tx.CloseRemainderTo = poolAddr
 	require.Error(t, tx.checkSpender(tx.Header, spec, mockBalV0.ConsensusParams()))
-	require.Error(t, tx.checkSpender(tx.Header, spec, mockBalV4.ConsensusParams()))
+	require.Error(t, tx.checkSpender(tx.Header, spec, mockBalV7.ConsensusParams()))
 
 	tx.Sender = src
-	require.NoError(t, tx.checkSpender(tx.Header, spec, mockBalV4.ConsensusParams()))
+	require.NoError(t, tx.checkSpender(tx.Header, spec, mockBalV7.ConsensusParams()))
 }
 
 func TestPaymentValidation(t *testing.T) {
@@ -263,25 +267,6 @@ func TestPaymentSelfClose(t *testing.T) {
 	require.Error(t, tx.WellFormed(spec, config.Consensus[protocol.ConsensusCurrentVersion]))
 }
 
-func TestSignedPayment(t *testing.T) {
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-
-	payments, stxns, secrets, addrs := generateTestObjects(1, 1)
-	payment, stxn, secret, addr := payments[0], stxns[0], secrets[0], addrs[0]
-
-	require.NoError(t, payment.WellFormed(spec, proto), "generateTestObjects generated an invalid payment")
-	require.NoError(t, stxn.Verify(spec, proto), "generateTestObjects generated a bad signedtxn")
-
-	stxn2 := payment.Sign(secret)
-	require.Equal(t, stxn2.Sig, stxn.Sig, "got two different signatures for the same transaction (our signing function is deterministic)")
-
-	stxn2.MessUpSigForTesting()
-	require.Equal(t, stxn.ID(), stxn2.ID(), "changing sig caused txid to change")
-	require.Error(t, stxn2.Verify(spec, proto), "verify succeeded with bad sig")
-
-	require.True(t, crypto.SignatureVerifier(addr).Verify(payment, stxn.Sig), "signature on the transaction is not the signature of the hash of the transaction under the spender's key")
-}
-
 /*
 func TestTxnValidation(t *testing.T) {
 	_, signed, _, _ := generateTestObjects(100, 50)
@@ -366,22 +351,3 @@ func TestTxnValidation(t *testing.T) {
 	}
 }
 */
-
-func TestTxnValidationEncodeDecode(t *testing.T) {
-	_, signed, _, _ := generateTestObjects(100, 50)
-
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	for _, txn := range signed {
-		if txn.Verify(spec, proto) != nil {
-			t.Errorf("signed transaction %#v did not verify", txn)
-		}
-
-		x := protocol.Encode(txn)
-		var signedTx SignedTxn
-		protocol.Decode(x, &signedTx)
-
-		if signedTx.Verify(spec, proto) != nil {
-			t.Errorf("signed transaction %#v did not verify", txn)
-		}
-	}
-}

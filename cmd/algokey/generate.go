@@ -36,14 +36,15 @@ func init() {
 var generateCmd = &cobra.Command{
 	Use:   "generate",
 	Short: "Generate key",
-	Run: func(cmd *cobra.Command, args []string) {
+	Args:  cobra.NoArgs,
+	Run: func(cmd *cobra.Command, _ []string) {
 		var seed crypto.Seed
 		crypto.RandBytes(seed[:])
 
 		mnemonic := computeMnemonic(seed)
 
 		key := crypto.GenerateSignatureSecrets(seed)
-		publicKeyChecksummed := basics.Address(key.SignatureVerifier).GetChecksumAddress().String()
+		publicKeyChecksummed := basics.Address(key.SignatureVerifier).String()
 
 		fmt.Printf("Private key mnemonic: %s\n", mnemonic)
 		fmt.Printf("Public key: %s\n", publicKeyChecksummed)

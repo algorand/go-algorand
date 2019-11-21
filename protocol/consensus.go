@@ -16,6 +16,10 @@
 
 package protocol
 
+import (
+	"fmt"
+)
+
 // ConsensusVersion is a string that identifies a version of the
 // consensus protocol.
 type ConsensusVersion string
@@ -30,22 +34,22 @@ const DEPRECATEDConsensusV0 = ConsensusVersion("v0")
 // It is now deprecated.
 const DEPRECATEDConsensusV1 = ConsensusVersion("v1")
 
-// ConsensusV2 fixes a bug in the agreement protocol where proposalValues
+// DEPRECATEDConsensusV2 fixes a bug in the agreement protocol where proposalValues
 // fail to commit to the original period and sender of a block.
-const ConsensusV2 = ConsensusVersion("v2")
+const DEPRECATEDConsensusV2 = ConsensusVersion("v2")
 
-// ConsensusV3 adds support for fine-grained ephemeral keys.
-const ConsensusV3 = ConsensusVersion("v3")
+// DEPRECATEDConsensusV3 adds support for fine-grained ephemeral keys.
+const DEPRECATEDConsensusV3 = ConsensusVersion("v3")
 
-// ConsensusV4 adds support for a min balance and a transaction that
+// DEPRECATEDConsensusV4 adds support for a min balance and a transaction that
 // closes out an account.
-const ConsensusV4 = ConsensusVersion("v4")
+const DEPRECATEDConsensusV4 = ConsensusVersion("v4")
 
-// ConsensusV5 sets MinTxnFee to 1000 and fixes a blance lookback bug
-const ConsensusV5 = ConsensusVersion("v5")
+// DEPRECATEDConsensusV5 sets MinTxnFee to 1000 and fixes a blance lookback bug
+const DEPRECATEDConsensusV5 = ConsensusVersion("v5")
 
-// ConsensusV6 adds support for explicit ephemeral-key parameters
-const ConsensusV6 = ConsensusVersion("v6")
+// DEPRECATEDConsensusV6 adds support for explicit ephemeral-key parameters
+const DEPRECATEDConsensusV6 = ConsensusVersion("v6")
 
 // ConsensusV7 increases MaxBalLookback to 320 in preparation for
 // the twin seeds change.
@@ -89,9 +93,25 @@ const ConsensusV16 = ConsensusVersion(
 	"https://github.com/algorand/spec/tree/22726c9dcd12d9cddce4a8bd7e8ccaa707f74101",
 )
 
-// ConsensusV17 points to 'final' spec commit
+// ConsensusV17 points to 'final' spec commit for 2019 june release
 const ConsensusV17 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/5615adc36bad610c7f165fa2967f4ecfa75125f0",
+)
+
+// ConsensusV18 points to reward calculation spec commit
+const ConsensusV18 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/6c6bd668be0ab14098e51b37e806c509f7b7e31f",
+)
+
+// ConsensusV19 points to 'final' spec commit for 2019 nov release
+const ConsensusV19 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/0e196e82bfd6e327994bec373c4cc81bc878ef5c",
+)
+
+// ConsensusFuture is a protocol that should not appear in any production
+// network, but is used to test features before they are released.
+const ConsensusFuture = ConsensusVersion(
+	"future",
 )
 
 // !!! ********************* !!!
@@ -100,7 +120,7 @@ const ConsensusV17 = ConsensusVersion(
 
 // ConsensusCurrentVersion is the latest version and should be used
 // when a specific version is not provided.
-const ConsensusCurrentVersion = ConsensusV17
+const ConsensusCurrentVersion = ConsensusV19
 
 // ConsensusTest0 is a version of ConsensusV0 used for testing
 // (it has different approved upgrade paths).
@@ -119,10 +139,23 @@ const ConsensusTestBigBlocks = ConsensusVersion("test-big-blocks")
 // that decreases the RewardRecalculationInterval greatly.
 const ConsensusTestRapidRewardRecalculation = ConsensusVersion("test-fast-reward-recalculation")
 
+// ConsensusTestShorterLookback is a version of ConsensusCurrentVersion
+// that decreases the MaxBalLookback greatly.
+const ConsensusTestShorterLookback = ConsensusVersion("test-shorter-lookback")
+
 // ConsensusTestFastUpgrade is meant for testing of protocol upgrades:
 // during testing, it is equivalent to another protocol with the exception
 // of the upgrade parameters, which allow for upgrades to take place after
 // only a few rounds.
 func ConsensusTestFastUpgrade(proto ConsensusVersion) ConsensusVersion {
 	return "test-fast-upgrade-" + proto
+}
+
+// Error is used to indicate that an unsupported protocol has been detected.
+type Error ConsensusVersion
+
+// Error satisfies builtin interface `error`
+func (err Error) Error() string {
+	proto := ConsensusVersion(err)
+	return fmt.Sprintf("protocol not supported: %s", proto)
 }

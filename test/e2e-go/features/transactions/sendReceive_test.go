@@ -43,18 +43,6 @@ func TestAccountsCanSendMoney(t *testing.T) {
 	testAccountsCanSendMoney(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
 }
 
-// this test checks that we can still send money in protocol v3,
-// which adds support for fine-grained ephemeral keys.
-func TestAccountsCanSendMoneyV3(t *testing.T) {
-	testAccountsCanSendMoney(t, filepath.Join("nettemplates", "TwoNodes50EachV3.json"))
-}
-
-// this test checks that we can still send money in protocol v4,
-// which adds MinBalance.
-func TestAccountsCanSendMoneyV4(t *testing.T) {
-	testAccountsCanSendMoney(t, filepath.Join("nettemplates", "TwoNodes50EachV4.json"))
-}
-
 func testAccountsCanSendMoney(t *testing.T, templatePath string) {
 	t.Parallel()
 	a := require.New(t)
@@ -91,10 +79,10 @@ func testAccountsCanSendMoney(t *testing.T, templatePath string) {
 	transactionFee := minTxnFee + 5
 	amountPongSendsPing := minAcctBalance
 	amountPingSendsPong := minAcctBalance * 3 / 2
-	const numberOfSends = 5
+	const numberOfSends = 225
 
+	txidsToAddresses := make(map[string]string)
 	for i := 0; i < numberOfSends; i++ {
-		txidsToAddresses := make(map[string]string)
 		pongTx, err := pongClient.SendPaymentFromUnencryptedWallet(pongAccount, pingAccount, transactionFee, amountPongSendsPing, GenerateRandomBytes(8))
 		txidsToAddresses[pongTx.ID().String()] = pongAccount
 		a.NoError(err, "fixture should be able to send money (pong -> ping), error on send number %v", i)
@@ -105,15 +93,14 @@ func testAccountsCanSendMoney(t *testing.T, templatePath string) {
 		expectedPongBalance = expectedPongBalance - transactionFee - amountPongSendsPing + amountPingSendsPong
 		curStatus, _ := pongClient.Status()
 		curRound := curStatus.LastRound
-		fixture.WaitForAllTxnsToConfirm(curRound+uint64(5), txidsToAddresses)
-		curStatus, _ = pongClient.Status()
-		curRound = curStatus.LastRound
 		err = fixture.WaitForRoundWithTimeout(curRound + uint64(1))
 		a.NoError(err)
-		pingBalance, err = c.GetBalance(pingAccount)
-		pongBalance, err = c.GetBalance(pongAccount)
-
-		a.True(expectedPingBalance <= pingBalance, "ping balance is different than expected., payment = %d", i)
-		a.True(expectedPongBalance <= pongBalance, "pong balance is different than expected., payment = %d", i)
 	}
+	curStatus, _ := pongClient.Status()
+	curRound := curStatus.LastRound
+	fixture.WaitForAllTxnsToConfirm(curRound+uint64(5), txidsToAddresses)
+	pingBalance, err = c.GetBalance(pingAccount)
+	pongBalance, err = c.GetBalance(pongAccount)
+	a.True(expectedPingBalance <= pingBalance, "ping balance is different than expected.")
+	a.True(expectedPongBalance <= pongBalance, "pong balance is different than expected.")
 }

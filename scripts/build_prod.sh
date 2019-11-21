@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # build_prod.sh - Used to build production (Release) versions of our binaries.  This script ensures the build number
 #           and current commit hash are baked into the algod binary.
@@ -16,7 +16,5 @@
 #           Currently used by build_package.sh to generate production binaries for each platform.
 #
 # Examples: scripts/build_prod.sh
-
-cd ${GOPATH}/src/github.com/algorand/go-algorand
 
 make build

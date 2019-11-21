@@ -18,6 +18,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"math/rand"
 	"os"
 	"regexp"
@@ -36,8 +37,10 @@ var templateToGenerate string
 var relaysToGenerate int
 var nodesToGenerate int
 var nodeHostsToGenerate int
+var nonPartnodesHostsToGenerate int
 var walletsToGenerate int
 var nodeTemplatePath string
+var nonParticipatingNodeTemplatePath string
 var relayTemplatePath string
 
 func init() {
@@ -52,7 +55,9 @@ func init() {
 	generateCmd.Flags().IntVarP(&relaysToGenerate, "relays", "R", -1, "Relays to generate")
 	generateCmd.Flags().IntVarP(&nodeHostsToGenerate, "node-hosts", "N", -1, "Node-hosts to generate, default=nodes")
 	generateCmd.Flags().IntVarP(&nodesToGenerate, "nodes", "n", -1, "Nodes to generate")
+	generateCmd.Flags().IntVarP(&nonPartnodesHostsToGenerate, "non-participating-nodes-hosts", "H", 0, "Non participating nodes hosts to generate")
 	generateCmd.Flags().StringVarP(&nodeTemplatePath, "node-template", "", "", "json for one node")
+	generateCmd.Flags().StringVarP(&nonParticipatingNodeTemplatePath, "non-participating-node-template", "", "", "json for non participating node")
 	generateCmd.Flags().StringVarP(&relayTemplatePath, "relay-template", "", "", "json for a relay node")
 
 	longParts := make([]string, len(generateTemplateLines)+1)
@@ -80,6 +85,7 @@ template modes for -t:`,
 		var err error
 		baseNode := remote.NodeConfig{}
 		baseRelay := remote.NodeConfig{}
+		baseNonParticipatingNode := remote.NodeConfig{}
 		if nodeTemplatePath != "" {
 			fin, err := os.Open(nodeTemplatePath)
 			if err != nil {
@@ -90,6 +96,19 @@ template modes for -t:`,
 			if err != nil {
 				reportErrorf("%s: bad node template, %s", nodeTemplatePath, err)
 			}
+		}
+		if nonParticipatingNodeTemplatePath != "" {
+			fin, err := os.Open(nonParticipatingNodeTemplatePath)
+			if err != nil {
+				reportErrorf("%s: bad npnode template, %s", nonParticipatingNodeTemplatePath, err)
+			}
+			dec := json.NewDecoder(fin)
+			err = dec.Decode(&baseNonParticipatingNode)
+			if err != nil {
+				reportErrorf("%s: bad node template, %s", nodeTemplatePath, err)
+			}
+		} else {
+			baseNonParticipatingNode = baseNode
 		}
 		if relayTemplatePath != "" {
 			fin, err := os.Open(relayTemplatePath)
@@ -109,7 +128,7 @@ template modes for -t:`,
 			if walletsToGenerate < 0 {
 				reportErrorf("must specify number of wallets with -w")
 			}
-			err = generateWalletGenesis(outputFilename, walletsToGenerate)
+			err = generateWalletGenesis(outputFilename, walletsToGenerate, nonPartnodesHostsToGenerate)
 		case "net", "network":
 			if walletsToGenerate < 0 {
 				reportErrorf("must specify number of wallets with -w")
@@ -124,13 +143,13 @@ template modes for -t:`,
 				reportErrorf("must specify number of relays with -R")
 			}
 
-			err = generateNetworkTemplate(outputFilename, walletsToGenerate, relaysToGenerate, nodeHostsToGenerate, nodesToGenerate, baseNode, baseRelay)
+			err = generateNetworkTemplate(outputFilename, walletsToGenerate, relaysToGenerate, nodeHostsToGenerate, nodesToGenerate, nonPartnodesHostsToGenerate, baseNode, baseNonParticipatingNode, baseRelay)
 		case "otwt":
-			err = generateNetworkTemplate(outputFilename, 1000, 10, 20, 100, baseNode, baseRelay)
+			err = generateNetworkTemplate(outputFilename, 1000, 10, 20, 100, 0, baseNode, baseNonParticipatingNode, baseRelay)
 		case "otwg":
-			err = generateWalletGenesis(outputFilename, 1000)
+			err = generateWalletGenesis(outputFilename, 1000, 0)
 		case "ohwg":
-			err = generateWalletGenesis(outputFilename, 100)
+			err = generateWalletGenesis(outputFilename, 100, 0)
 		default:
 			reportInfoln("Please specify a valid template name.\nSupported templates are:")
 			for _, line := range generateTemplateLines {
@@ -183,11 +202,12 @@ func pickNodeConfig(alt []remote.NodeConfig, name string) remote.NodeConfig {
 	return alt[0]
 }
 
-func generateNetworkTemplate(templateFilename string, wallets, relays, nodeHosts, nodes int, baseNode, baseRelay remote.NodeConfig) error {
+func generateNetworkTemplate(templateFilename string, wallets, relays, nodeHosts, nodes, npnHosts int, baseNode, baseNonPartNode, baseRelay remote.NodeConfig) error {
 	network := remote.DeployedNetworkConfig{}
 
 	relayTemplates := unpackNodeConfig(baseRelay)
 	leafTemplates := unpackNodeConfig(baseNode)
+	npnTemplates := unpackNodeConfig(baseNonPartNode)
 
 	for i := 0; i < relays; i++ {
 		indexID := strconv.Itoa(i + 1)
@@ -199,7 +219,9 @@ func generateNetworkTemplate(templateFilename string, wallets, relays, nodeHosts
 		newNode.NodeNameMatchRegex = ""
 		newNode.FractionApply = 0.0
 		newNode.Name = name
-		newNode.IsRelay = true
+		if newNode.NetAddress == "" {
+			return errors.New("relay template did not set NetAddress")
+		}
 		newNode.Wallets = nil
 		host.Nodes = append(host.Nodes, newNode)
 		network.Hosts = append(network.Hosts, host)
@@ -233,11 +255,26 @@ func generateNetworkTemplate(templateFilename string, wallets, relays, nodeHosts
 		}
 	}
 
+	for i := 0; i < npnHosts; i++ {
+		indexID := strconv.Itoa(i + 1)
+
+		name := "nonParticipatingNode" + strconv.Itoa(i+1)
+		node := pickNodeConfig(npnTemplates, name)
+		node.NodeNameMatchRegex = ""
+		node.FractionApply = 0.0
+		node.Name = name
+		host := remote.HostConfig{
+			Name:  "NPN" + indexID,
+			Nodes: []remote.NodeConfig{node},
+		}
+		network.Hosts = append(network.Hosts, host)
+	}
+
 	walletIndex := 0
 	for walletIndex < wallets {
 		for hosti := range network.Hosts {
 			for nodei, node := range network.Hosts[hosti].Nodes {
-				if node.Name[0:5] == "relay" {
+				if node.Name[0:4] != "node" {
 					continue
 				}
 				wallet := remote.NodeWalletData{
@@ -256,6 +293,31 @@ func generateNetworkTemplate(templateFilename string, wallets, relays, nodeHosts
 		}
 	}
 
+	if npnHosts > 0 {
+		walletIndex := 0
+		for walletIndex < wallets {
+			for hosti := range network.Hosts {
+				for nodei, node := range network.Hosts[hosti].Nodes {
+					if node.Name[0:4] != "nonP" {
+						continue
+					}
+					wallet := remote.NodeWalletData{
+						Name:              "Wallet" + strconv.Itoa(wallets+walletIndex+1),
+						ParticipationOnly: false,
+					}
+					network.Hosts[hosti].Nodes[nodei].Wallets = append(network.Hosts[hosti].Nodes[nodei].Wallets, wallet)
+					walletIndex++
+					if walletIndex >= wallets {
+						break
+					}
+				}
+				if walletIndex >= wallets {
+					break
+				}
+			}
+		}
+	}
+
 	return saveTemplateToDisk(network, templateFilename)
 }
 
@@ -270,8 +332,11 @@ func saveTemplateToDisk(template remote.DeployedNetworkConfig, filename string) 
 	return err
 }
 
-func generateWalletGenesis(filename string, wallets int) error {
+func generateWalletGenesis(filename string, wallets, npnHosts int) error {
 	data := gen.DefaultGenesis
+	if npnHosts > 0 {
+		wallets = 2 * wallets
+	}
 	data.Wallets = make([]gen.WalletData, wallets)
 	stake := 100.0 / float64(wallets)
 
@@ -282,9 +347,11 @@ func generateWalletGenesis(filename string, wallets int) error {
 			stake = 100.0 - stakeSum
 		}
 		w := gen.WalletData{
-			Name:   "Wallet" + strconv.Itoa(i+1), // Wallet names are 1-based for this template
-			Stake:  stake,
-			Online: true,
+			Name:  "Wallet" + strconv.Itoa(i+1), // Wallet names are 1-based for this template
+			Stake: stake,
+		}
+		if (i < (wallets / 2)) || (npnHosts == 0) {
+			w.Online = true
 		}
 		stakeSum += stake
 		data.Wallets[i] = w

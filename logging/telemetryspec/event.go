@@ -31,15 +31,20 @@ const StartupEvent Event = "Startup"
 
 // StartupEventDetails contains details for the StartupEvent
 type StartupEventDetails struct {
-	Version    string
-	CommitHash string
-	Branch     string
-	Channel    string
-	Instance   string
+	Version      string
+	CommitHash   string
+	Branch       string
+	Channel      string
+	InstanceHash string
 }
 
 // HeartbeatEvent is sent periodically to indicate node is running
 const HeartbeatEvent Event = "Heartbeat"
+
+// HeartbeatEventDetails contains details for the StartupEvent
+type HeartbeatEventDetails struct {
+	Metrics map[string]string
+}
 
 // CatchupStartEvent event
 const CatchupStartEvent Event = "CatchupStart"
@@ -155,6 +160,21 @@ type VoteRejectedEventDetails struct {
 	Reason string
 }
 
+// EquivocatedVoteEvent event
+const EquivocatedVoteEvent Event = "EquivocatedVoteEvent"
+
+// EquivocatedVoteEventDetails contains details for the EquivocatedVoteEvent
+type EquivocatedVoteEventDetails struct {
+	VoterAddress          string
+	ProposalHash          string
+	Round                 uint64
+	Period                uint64
+	Step                  uint64
+	Weight                uint64
+	PreviousProposalHash1 string
+	PreviousProposalHash2 string
+}
+
 // ConnectPeerEvent event
 const ConnectPeerEvent Event = "ConnectPeer"
 
@@ -218,4 +238,18 @@ type BlockStatsEventDetails struct {
 	ActiveUsers         uint64
 	AgreementDurationMs uint64
 	NetworkDowntimeMs   uint64
+}
+
+// HTTPRequestEvent event
+const HTTPRequestEvent Event = "HTTPRequest"
+
+// HTTPRequestDetails contains details for the HTTPRequestEvent
+// This should resemble the Common Log Format, as it's being used as the source data for generating it.
+type HTTPRequestDetails struct {
+	Client       string // The ip address of the remote
+	InstanceName string // The node identifier
+	Request      string // The request string, i.e. "GET /apache_pb.gif HTTP/1.0"
+	StatusCode   uint64 // The response status code
+	BodyLength   uint64 // The returned body length, in bytes
+	UserAgent    string // The user-agent string ( if any )
 }

@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -313,7 +314,7 @@ func TestConfigMigrateFromDisk(t *testing.T) {
 func TestConfigInvariant(t *testing.T) {
 	a := require.New(t)
 
-	a.Equal(uint32(4), configVersion, "If you bump Config Version, please update this test (and consider if you should be adding more)")
+	a.Equal(uint32(5), configVersion, "If you bump Config Version, please update this test (and consider if you should be adding more)")
 
 	ourPath, err := os.Getwd()
 	a.NoError(err)
@@ -343,6 +344,11 @@ func TestConfigInvariant(t *testing.T) {
 	err = codecs.LoadObjectFromFile(filepath.Join(configsPath, "config-v4.json"), &c4)
 	a.NoError(err)
 	a.Equal(defaultLocalV4, c4)
+
+	c5 := Local{}
+	err = codecs.LoadObjectFromFile(filepath.Join(configsPath, "config-v5.json"), &c5)
+	a.NoError(err)
+	a.Equal(defaultLocalV5, c5)
 }
 
 func TestConfigLatestVersion(t *testing.T) {
@@ -355,8 +361,8 @@ func TestConfigLatestVersion(t *testing.T) {
 func TestConsensusUpgrades(t *testing.T) {
 	a := require.New(t)
 
-	// Starting with v1, ensure we have a path to ConsensusCurrentVersion
-	currentVersionName := protocol.ConsensusV2
+	// Starting with v7, ensure we have a path to ConsensusCurrentVersion
+	currentVersionName := protocol.ConsensusV7
 	latestVersionName := protocol.ConsensusCurrentVersion
 
 	leadsTo := consensusUpgradesTo(a, currentVersionName, latestVersionName)
@@ -384,4 +390,86 @@ func TestConsensusLatestVersion(t *testing.T) {
 	latest, has := Consensus[protocol.ConsensusCurrentVersion]
 	a.True(has, "ConsensusCurrentVersion doesn't appear to be a known version: %v", protocol.ConsensusCurrentVersion)
 	a.Empty(latest.ApprovedUpgrades, "Latest ConsensusVersion should not have any upgrades - update ConsensusCurrentVersion")
+}
+
+func TestLocal_DNSBootstrapArray(t *testing.T) {
+	type fields struct {
+		DNSBootstrapID string
+	}
+	type args struct {
+		networkID protocol.NetworkID
+	}
+	tests := []struct {
+		name               string
+		fields             fields
+		args               args
+		wantBootstrapArray []string
+	}{
+		{name: "test1",
+			fields:             fields{DNSBootstrapID: "<network>.cloudflare.com"},
+			args:               args{networkID: "devnet"},
+			wantBootstrapArray: []string{"devnet.cloudflare.com"},
+		},
+		{name: "test2",
+			fields:             fields{DNSBootstrapID: "<network>.cloudflare.com;<network>.cloudfront.com"},
+			args:               args{networkID: "devnet"},
+			wantBootstrapArray: []string{"devnet.cloudflare.com", "devnet.cloudfront.com"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := Local{
+				DNSBootstrapID: tt.fields.DNSBootstrapID,
+			}
+			if gotBootstrapArray := cfg.DNSBootstrapArray(tt.args.networkID); !reflect.DeepEqual(gotBootstrapArray, tt.wantBootstrapArray) {
+				t.Errorf("Local.DNSBootstrapArray() = %v, want %v", gotBootstrapArray, tt.wantBootstrapArray)
+			}
+		})
+	}
+}
+
+func TestLocal_DNSBootstrap(t *testing.T) {
+	type fields struct {
+		DNSBootstrapID string
+	}
+	type args struct {
+		network protocol.NetworkID
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		args   args
+		want   string
+	}{
+		{name: "test1",
+			fields: fields{DNSBootstrapID: "<network>.cloudflare.com"},
+			args:   args{network: "devnet"},
+			want:   "devnet.cloudflare.com",
+		},
+		{name: "test2",
+			fields: fields{DNSBootstrapID: "<network>.cloudflare.com;"},
+			args:   args{network: "devnet"},
+			want:   "devnet.cloudflare.com;",
+		},
+		{name: "test3",
+			fields: fields{DNSBootstrapID: "<network>.cloudflare.com;<network>.cloudfront.com"},
+			args:   args{network: "devnet"},
+			want:   "devnet.cloudflare.com;devnet.cloudfront.com",
+		},
+		{name: "test4",
+			fields: fields{DNSBootstrapID: "<network>.cloudflare.com;<network>.cloudfront.com;"},
+			args:   args{network: "devnet"},
+			want:   "devnet.cloudflare.com;devnet.cloudfront.com;",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := Local{
+				DNSBootstrapID: tt.fields.DNSBootstrapID,
+			}
+			if got := cfg.DNSBootstrap(tt.args.network); got != tt.want {
+				t.Errorf("Local.DNSBootstrap() = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }

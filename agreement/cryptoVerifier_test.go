@@ -70,15 +70,7 @@ func makeUnauthenticatedVote(l Ledger, sender basics.Address, selection *crypto.
 	m, _ := membership(l, rv.Sender, rv.Round, rv.Period, rv.Step)
 	cred := committee.MakeCredential(&selection.SK, m.Selector)
 	ephID := basics.OneTimeIDForRound(rv.Round, voting.KeyDilution(config.Consensus[protocol.ConsensusCurrentVersion]))
-	var sig crypto.OneTimeSignature
-
-	proto, err := l.ConsensusParams(ParamsRound(rv.Round))
-	// If we can't figure out the protocol params, the ledger has moved forward
-	// well ahead of rv.Round, so our vote is irrelevant.  Generate an empty
-	// signature in that case.
-	if err == nil {
-		sig = voting.Sign(ephID, proto.FineGrainedEphemeralKeys, rv)
-	}
+	sig := voting.Sign(ephID, rv)
 
 	return unauthenticatedVote{
 		R:    rv,

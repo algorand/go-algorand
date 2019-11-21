@@ -18,7 +18,6 @@ package ledger
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 
 	"github.com/mattn/go-sqlite3"
@@ -29,9 +28,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// ErrNoEntry is the error indicating the ledger does not contain an entry for a requested Round
-var ErrNoEntry = errors.New("ledger does not have entry")
-
 var blockSchema = []string{
 	`CREATE TABLE IF NOT EXISTS blocks (
 		rnd integer primary key,
@@ -40,6 +36,10 @@ var blockSchema = []string{
 		blkdata blob,
 		certdata blob,
 		auxdata blob)`,
+}
+
+var blockResetExprs = []string{
+	`DROP TABLE IF EXISTS blocks`,
 }
 
 func blockInit(tx *sql.Tx, initBlocks []bookkeeping.Block) error {
@@ -71,12 +71,22 @@ func blockInit(tx *sql.Tx, initBlocks []bookkeeping.Block) error {
 	return nil
 }
 
+func blockResetDB(tx *sql.Tx) error {
+	for _, stmt := range blockResetExprs {
+		_, err := tx.Exec(stmt)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func blockGet(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, err error) {
 	var buf []byte
 	err = tx.QueryRow("SELECT blkdata FROM blocks WHERE rnd=?", rnd).Scan(&buf)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			err = ErrNoEntry
+			err = ErrNoEntry{Round: rnd}
 		}
 
 		return
@@ -91,7 +101,7 @@ func blockGetHdr(tx *sql.Tx, rnd basics.Round) (hdr bookkeeping.BlockHeader, err
 	err = tx.QueryRow("SELECT hdrdata FROM blocks WHERE rnd=?", rnd).Scan(&buf)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			err = ErrNoEntry
+			err = ErrNoEntry{Round: rnd}
 		}
 
 		return
@@ -101,18 +111,23 @@ func blockGetHdr(tx *sql.Tx, rnd basics.Round) (hdr bookkeeping.BlockHeader, err
 	return
 }
 
-func blockGetCert(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, cert agreement.Certificate, err error) {
-	var blkbuf []byte
-	var certbuf []byte
-	err = tx.QueryRow("SELECT blkdata, certdata FROM blocks WHERE rnd=?", rnd).Scan(&blkbuf, &certbuf)
+func blockGetEncodedCert(tx *sql.Tx, rnd basics.Round) (blk []byte, cert []byte, err error) {
+	err = tx.QueryRow("SELECT blkdata, certdata FROM blocks WHERE rnd=?", rnd).Scan(&blk, &cert)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			err = ErrNoEntry
+			err = ErrNoEntry{Round: rnd}
 		}
 
 		return
 	}
+	return
+}
 
+func blockGetCert(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, cert agreement.Certificate, err error) {
+	blkbuf, certbuf, err := blockGetEncodedCert(tx, rnd)
+	if err != nil {
+		return
+	}
 	err = protocol.Decode(blkbuf, &blk)
 	if err != nil {
 		return
@@ -132,7 +147,7 @@ func blockGetAux(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, aux evalA
 	err = tx.QueryRow("SELECT blkdata, auxdata FROM blocks WHERE rnd=?", rnd).Scan(&blkbuf, &auxbuf)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			err = ErrNoEntry
+			err = ErrNoEntry{Round: rnd}
 		}
 
 		return
@@ -202,6 +217,20 @@ func blockLatest(tx *sql.Tx) (basics.Round, error) {
 
 	if max.Valid {
 		return basics.Round(max.Int64), nil
+	}
+
+	return 0, fmt.Errorf("no blocks present")
+}
+
+func blockEarliest(tx *sql.Tx) (basics.Round, error) {
+	var min sql.NullInt64
+	err := tx.QueryRow("SELECT MIN(rnd) FROM blocks").Scan(&min)
+	if err != nil {
+		return 0, err
+	}
+
+	if min.Valid {
+		return basics.Round(min.Int64), nil
 	}
 
 	return 0, fmt.Errorf("no blocks present")
