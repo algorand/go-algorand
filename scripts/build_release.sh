@@ -100,7 +100,7 @@ scripts/build_packages.sh "${PLATFORM}"
 
 # build docker release package
 cd ${REPO_ROOT}/docker/release
-./build_algod_docker.sh ${HOME}/node_pkg/node_${CHANNEL}_linux-amd64_${FULLVERSION}.tar.gz
+./build_algod_docker.sh ${HOME}/node_pkg/node_${CHANNEL}_${OS}-${ARCH}_${FULLVERSION}.tar.gz
 cd ${REPO_ROOT}/scripts
 
 # Test .deb installer
@@ -144,7 +144,7 @@ echo foogorand|${gpgp} --verbose --preset ${KEYGRIP}
 
 # copy previous installers into ~/docker_test_resources
 cd "${HOME}/docker_test_resources"
-if [ "${TEST_UPGRADE}" == "no" ]; then
+if [ "${TEST_UPGRADE}" == "no" -o -z "${S3_PREFIX}" ]; then
     echo "upgrade test disabled"
 else
     python3 ${REPO_ROOT}/scripts/get_current_installers.py "${S3_PREFIX}/${CHANNEL}"

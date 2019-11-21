@@ -58,7 +58,7 @@ exec /usr/bin/gpgv2 "\$@"
 EOF
 	chmod +x ${HOME}/gpgbin/*
     elif [ "${DISTRIB_RELEASE}" = "18.04" ]; then
-	sudo apt-get install -y autoconf awscli docker.io git gpg nfs-common python3 rpm sqlite3 python3-boto3
+	sudo apt-get install -y autoconf awscli docker.io git gpg nfs-common python3 rpm sqlite3 python3-boto3 make g++ libtool
     else
 	echo "don't know how to build on Ubuntu ${DISTRIB_RELEASE}"
 	exit 1
@@ -106,6 +106,16 @@ sg docker "docker pull centos:7"
 sg docker "docker pull ubuntu:18.04"
 sg docker "docker pull ubuntu:16.04"
 
+touch ~/.ssh/known_hosts
+chmod 644 ~/.ssh/known_hosts
+if grep -q github.com ~/.ssh/known_hosts; then
+    echo already have github in known hosts
+else
+cat<<EOF>> ~/.ssh/known_hosts
+github.com,192.30.253.113 ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEAq2A7hRGmdnm9tUDbO9IDSwBK6TbQa+PXYPCPy6rbTrTtw7PHkccKrpp0yVhp5HdEIcKr6pLlVDBfOLX9QUsyCOV0wzfjIJNlGEYsdlLJizHhbn2mUjvSAHQqZETYP81eFzLQNnPHt4EVVUh7VfDESU84KezmD5QlWpXLmvU31/yMf+Se8xhHTvKSCZIFImWwoG6mbUoWf9nzpIoaSjB+weqqUUmpaaasXVal72J+UX2B+2RPW3RcT0eOzQgqlJL3RKrTJvdsjE3JEAvGq3lGHSZXy28G3skua2SmVi/w4yCE6gbODqnTWlg7+wC604ydGXA8VJiS5ap43JXiUFFAaQ==
+EOF
+fi
+
 # Check out
 mkdir -p ${GOPATH}/src/github.com/algorand
 if [ ! -d "${GOPATH}/src/github.com/algorand/go-algorand/.git" ]; then
@@ -133,5 +143,17 @@ cat<<EOF>> "${HOME}/.profile"
 export GOPATH=\${HOME}/go
 export PATH=\${HOME}/gpgbin:\${GOPATH}/bin:/usr/local/go/bin:\${PATH}
 EOF
+
+# Install aptly for building debian repo
+mkdir -p $GOPATH/src/github.com/aptly-dev
+if [ ! -d $GOPATH/src/github.com/aptly-dev/aptly ]; then
+    git clone https://github.com/aptly-dev/aptly $GOPATH/src/github.com/aptly-dev/aptly
+fi
+(cd $GOPATH/src/github.com/aptly-dev/aptly && git fetch)
+# As of 2019-06-06 release tag v1.3.0 is 2018-May, GnuPG 2 support was added in October but they haven't tagged a new release yet. Hash below seems to work so far.
+# 2019-07-06 v1.4.0
+(cd $GOPATH/src/github.com/aptly-dev/aptly && git checkout v1.4.0)
+(cd $GOPATH/src/github.com/aptly-dev/aptly && make install)
+
 
 date "+setup finish %Y%m%d_%H%M%S"
