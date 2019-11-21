@@ -132,7 +132,6 @@ func init() {
 	compileCmd.Flags().StringVarP(&account, "account", "a", "", "Account address to sign the program (If not specified, uses default account)")
 
 	dryrunCmd.Flags().StringVarP(&txFilename, "txfile", "t", "", "transaction or transaction-group to test")
-	dryrunCmd.Flags().Int64VarP(&timeStamp, "time-stamp", "S", 0, "unix time value for txn FirstValidTime (default now)")
 	dryrunCmd.Flags().StringVarP(&protoVersion, "proto", "P", "", "consensus protocol version id string")
 	dryrunCmd.MarkFlagRequired("txfile")
 }
@@ -343,16 +342,16 @@ var sendCmd = &cobra.Command{
 				reportErrorf(errorNodeStatus, err)
 			}
 
-			proto := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
-			unsignedTxn := transactions.SignedTxn{Txn: payment}
-			err = verify.LogicSig(&lsig, &proto, &unsignedTxn)
-			if err != nil {
-				reportErrorf("%s: txn[0] error %s", txFilename, err)
-			}
-			stx = transactions.SignedTxn{
+			proto := protocol.ConsensusVersion(params.ConsensusVersion)
+			uncheckedTxn := transactions.SignedTxn{
 				Txn:  payment,
 				Lsig: lsig,
 			}
+			err = verify.LogicSigSanityCheck(&uncheckedTxn, &verify.Context{Params: verify.Params{CurrProto: proto}})
+			if err != nil {
+				reportErrorf("%s: txn[0] error %s", txFilename, err)
+			}
+			stx = uncheckedTxn
 		} else if program != nil {
 			stx = transactions.SignedTxn{
 				Txn: payment,
@@ -575,7 +574,7 @@ func lsigFromArgs(lsig *transactions.LogicSig) {
 	lsig.Args = getProgramArgs()
 }
 
-func getProto(versArg string) config.ConsensusParams {
+func getProto(versArg string) (protocol.ConsensusVersion, config.ConsensusParams) {
 	cvers := protocol.ConsensusCurrentVersion
 	if versArg != "" {
 		cvers = protocol.ConsensusVersion(versArg)
@@ -599,7 +598,7 @@ func getProto(versArg string) config.ConsensusParams {
 		}
 		os.Exit(1)
 	}
-	return proto
+	return cvers, proto
 }
 
 var signCmd = &cobra.Command{
@@ -640,8 +639,8 @@ var signCmd = &cobra.Command{
 		count := 0
 		for {
 			// transaction file comes in as a SignedTxn with no signature
-			var unsignedTxn transactions.SignedTxn
-			err = dec.Decode(&unsignedTxn)
+			var uncheckedTxn transactions.SignedTxn
+			err = dec.Decode(&uncheckedTxn)
 			if err == io.EOF {
 				break
 			}
@@ -651,16 +650,16 @@ var signCmd = &cobra.Command{
 
 			var signedTxn transactions.SignedTxn
 			if lsig.Logic != nil {
-				proto := getProto(protoVersion)
-				err = verify.LogicSig(&lsig, &proto, &unsignedTxn)
+				proto, _ := getProto(protoVersion)
+				uncheckedTxn.Lsig = lsig
+				err = verify.LogicSigSanityCheck(&uncheckedTxn, &verify.Context{Params: verify.Params{CurrProto: proto}})
 				if err != nil {
 					reportErrorf("%s: txn[%d] error %s", txFilename, count, err)
 				}
-				signedTxn.Txn = unsignedTxn.Txn
-				signedTxn.Lsig = lsig
+				signedTxn = uncheckedTxn
 			} else {
 				// sign the usual way
-				signedTxn, err = client.SignTransactionWithWallet(wh, pw, unsignedTxn.Txn)
+				signedTxn, err = client.SignTransactionWithWallet(wh, pw, uncheckedTxn.Txn)
 				if err != nil {
 					reportErrorf(errorSigningTX, err)
 				}
@@ -894,31 +893,30 @@ var dryrunCmd = &cobra.Command{
 			}
 			stxns = append(stxns, txn)
 		}
-		txgroup := make([]transactions.SignedTxnWithAD, len(stxns))
+		txgroup := make([]transactions.SignedTxn, len(stxns))
 		for i, st := range stxns {
-			txgroup[i].SignedTxn = st
+			txgroup[i] = st
 		}
 		if timeStamp <= 0 {
 			timeStamp = time.Now().Unix()
 		}
-		proto := getProto(protoVersion)
+		_, params := getProto(protoVersion)
 		for i, txn := range txgroup {
 			if txn.Lsig.Blank() {
 				continue
 			}
-			ep := logic.EvalParams{Txn: &txn.SignedTxn, Proto: &proto}
+			ep := logic.EvalParams{Txn: &txn, Proto: &params}
 			cost, err := logic.Check(txn.Lsig.Logic, ep)
 			if err != nil {
 				reportErrorf("program failed Check: %s", err)
 			}
 			sb := strings.Builder{}
 			ep = logic.EvalParams{
-				Txn:                 &txn.SignedTxn,
-				Proto:               &proto,
-				Trace:               &sb,
-				TxnGroup:            txgroup,
-				GroupIndex:          i,
-				FirstValidTimeStamp: uint64(timeStamp),
+				Txn:        &txn,
+				Proto:      &params,
+				Trace:      &sb,
+				TxnGroup:   txgroup,
+				GroupIndex: i,
 			}
 			pass, err := logic.Eval(txn.Lsig.Logic, ep)
 			// TODO: optionally include `inspect` output here?
