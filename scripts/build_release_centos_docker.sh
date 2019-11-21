@@ -60,7 +60,9 @@ rm -f ${HOME}/.gnupg/S.gpg-agent
 (cd ~/.gnupg && ln -s /S.gpg-agent S.gpg-agent)
 
 gpg --import /stuff/key.pub
+gpg --import /stuff/rpm.pub
 gpg --import ${REPO_DIR}/installer/rpm/RPM-GPG-KEY-Algorand
+echo "wat"|gpg -u rpm@algorand.com --clearsign
 
 cat <<EOF>"${HOME}/.rpmmacros"
 %_gpg_name Algorand RPM <rpm@algorand.com>
