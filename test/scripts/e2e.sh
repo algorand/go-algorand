@@ -66,7 +66,7 @@ cd "${SCRIPT_PATH}"
 
 ./timeout 200 ./teal-split-test.sh
 
-./timeout 200 ./atomic-swap-teal-test.sh
+./timeout 200 ./hltc-teal-test.sh
 
 ./timeout 200 ./periodic-teal-test.sh
 

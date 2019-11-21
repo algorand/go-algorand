@@ -1,15 +1,15 @@
-# Atomic Swap
+# Hash Time Lock Contract (HTLC)
 
 ## Functionality
 
-This contract implements part of an "atomic swap". It is intended to be used as a "contract only" account, not as a "delegated contract" account.
+This contract implements a "hash time lock". It is intended to be used as a "contract only" account, not as a "delegated contract" account. In other words, this contract should not be signed by a spending key.
 
 The contract will approve transactions spending algos from itself under two circumstances:
 
   1. If an argument `arg_0` is passed to the script such that `TMPL_HASHFN(arg_0)` is equal to `TMPL_HASHIMG`, then funds may be closed out to `TMPL_RCV`. 
   2. If `txn.FirstValid` is greater than `TMPL_TIMEOUT`, then funds may be closed out to `TMPL_OWN`.
 
-The idea is that by knowing the preimage to `TMPL_HASHIMG`, funds may be released. Alternatively, after some timeout round `TMPL_TIMEOUT`, funds may be closed back to their original owner.
+The idea is that by knowing the preimage to `TMPL_HASHIMG`, funds may be released to `TMPL_RCV` (Scenario 1). Alternatively, after some timeout round `TMPL_TIMEOUT`, funds may be closed back to their original owner, `TMPL_OWN` (Scenario 2). Note that Scenario 1 may occur up until Scenario 2 occurs, even if `TMPL_TIMEOUT` has already passed.
 
 ## Parameters
 
