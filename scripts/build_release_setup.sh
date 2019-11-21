@@ -47,7 +47,7 @@ chmod +x ${HOME}/gpgbin/remote_gpg_socket
 if [ "${DISTRIB_ID}" = "Ubuntu" ]; then
     if [ "${DISTRIB_RELEASE}" = "16.04" ]; then
 	echo "WARNING: Ubuntu 16.04 is DEPRECATED"
-	sudo apt-get install -y autoconf awscli docker.io g++ fakeroot git gnupg2 gpgv2 make nfs-common python3 rpm sqlite3 python3-boto3
+	sudo apt-get install -y autoconf awscli docker.io g++ fakeroot git gnupg2 gpgv2 make nfs-common python3 rpm sqlite3 python3-boto3 rng-tools
 	cat <<EOF>${HOME}/gpgbin/gpg
 #!/usr/bin/env bash
 exec /usr/bin/gpg2 "\$@"
@@ -58,7 +58,7 @@ exec /usr/bin/gpgv2 "\$@"
 EOF
 	chmod +x ${HOME}/gpgbin/*
     elif [ "${DISTRIB_RELEASE}" = "18.04" ]; then
-	sudo apt-get install -y autoconf awscli docker.io git gpg nfs-common python3 rpm sqlite3 python3-boto3 make g++ libtool
+	sudo apt-get install -y autoconf awscli docker.io git gpg nfs-common python3 rpm sqlite3 python3-boto3 make g++ libtool rng-tools
     else
 	echo "don't know how to build on Ubuntu ${DISTRIB_RELEASE}"
 	exit 1
@@ -67,6 +67,8 @@ else
     echo "don't know how to build non Ubuntu, /etc/lsb-release[DISTRIB_ID]=${DISTRIB_ID}"
     exit 1
 fi
+
+sudo rngd -r /dev/urandom
 
 export GOPATH=${HOME}/go
 export PATH=${HOME}/gpgbin:${GOPATH}/bin:/usr/local/go/bin:${PATH}
