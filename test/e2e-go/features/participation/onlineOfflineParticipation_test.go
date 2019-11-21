@@ -44,7 +44,7 @@ func TestParticipationKeyOnlyAccountParticipatesCorrectly(t *testing.T) {
 	partAccounts := fixture.GetParticipationOnlyAccounts(client)
 	a.NotEmpty(partAccounts)
 
-	partkeyOnlyAccount := partAccounts[0].Address().GetChecksumAddress().String() // 20% stake
+	partkeyOnlyAccount := partAccounts[0].Address().String() // 20% stake
 	// allow "a few" rounds to pass so accounts can participate
 
 	// the below window controls the likelihood a block will be proposed by the account under test
@@ -62,7 +62,7 @@ func TestParticipationKeyOnlyAccountParticipatesCorrectly(t *testing.T) {
 	_, err = client.SendPaymentFromWallet(wh, nil, partkeyOnlyAccount, richAccount, amountToSend, transactionFee, nil, "", basics.Round(0), basics.Round(0))
 	a.Error(err, "attempt to send money from partkey-only account should be treated as though wallet is not controlled")
 	// partkeyonly_account attempts to go offline, should fail (no rootkey to sign txn with)
-	goOfflineUTx, err := client.MakeUnsignedGoOfflineTx(partkeyOnlyAccount, 0, 0, transactionFee)
+	goOfflineUTx, err := client.MakeUnsignedGoOfflineTx(partkeyOnlyAccount, 0, 0, transactionFee, [32]byte{})
 	a.NoError(err, "should be able to make go offline tx")
 	wh, err = client.GetUnencryptedWalletHandle()
 	a.NoError(err, "should get unencrypted wallet handle")
@@ -139,11 +139,11 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 	partKeyLastValid := partKeyFirstValid + partKeyValidityPeriod
 	partkeyResponse, _, err := client.GenParticipationKeys(newAccount, partKeyFirstValid, partKeyLastValid, 0)
 	a.NoError(err, "rest client should be able to add participation key to new account")
-	a.Equal(newAccount, partkeyResponse.Parent.GetChecksumAddress().String(), "partkey response should echo queried account")
+	a.Equal(newAccount, partkeyResponse.Parent.String(), "partkey response should echo queried account")
 	// account uses part key to go online
-	goOnlineTx, err := client.MakeUnsignedGoOnlineTx(newAccount, nil, 0, 0, transactionFee)
+	goOnlineTx, err := client.MakeUnsignedGoOnlineTx(newAccount, nil, 0, 0, transactionFee, [32]byte{})
 	a.NoError(err, "should be able to make go online tx")
-	a.Equal(newAccount, goOnlineTx.Src().GetChecksumAddress().String(), "go online response should echo queried account")
+	a.Equal(newAccount, goOnlineTx.Src().String(), "go online response should echo queried account")
 	onlineTxID, err := client.SignAndBroadcastTransaction(wh, nil, goOnlineTx)
 	a.NoError(err, "new account with new partkey should be able to go online")
 
@@ -185,13 +185,5 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 
 // helper copied from agreement/selector.go
 func balanceRound(r basics.Round, cparams config.ConsensusParams) basics.Round {
-	if cparams.TwinSeeds {
-		return r.SubSaturate(basics.Round(2 * cparams.SeedRefreshInterval * cparams.SeedLookback))
-	}
-
-	lookback := basics.Round(2*cparams.SeedRefreshInterval + cparams.SeedLookback + 1)
-	if cparams.IncorrectBalLookback {
-		return r.SubSaturate(lookback) + 2
-	}
-	return r.SubSaturate(lookback)
+	return r.SubSaturate(basics.Round(2 * cparams.SeedRefreshInterval * cparams.SeedLookback))
 }

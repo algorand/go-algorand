@@ -58,7 +58,7 @@
 // Autogenerate the swagger json.
 // Base path must be a fully specified package name (else, it seems that swagger feeds a relative path to
 // loader.Config.Import(), and that breaks the vendor directory if the source is symlinked from elsewhere)
-//go:generate swagger generate spec -m -o="./swagger.json" --base-path="github.com/algorand/go-algorand/daemon/kmd/"
+//go:generate swagger generate spec -m -o="./swagger.json"
 //go:generate swagger validate ./swagger.json --stop-on-error
 //go:generate ../lib/kmdapi/bundle_swagger_json.sh
 package api
@@ -85,15 +85,20 @@ var supportedAPIVersions = []string{apiV1Tag}
 // The /versions endpoint is one of two non-versioned API endpoints, since its
 // response tells us which API versions are supported (the other is /swagger.json)
 func versionsHandler(w http.ResponseWriter, r *http.Request) {
-	// swagger:route GET /versions GetVersion
-	//
-	// Retrieves the current version
-	//
+	// swagger:operation GET /versions GetVersion
+	//---
+	//     Summary: Retrieves the current version
 	//     Produces:
 	//     - application/json
-	//     Schemes: http
+	//     Parameters:
+	//     - name: Versions Request
+	//       in: body
+	//       required: false
+	//       schema:
+	//         "$ref": "#/definitions/VersionsRequest"
 	//     Responses:
-	//		200: VersionsResponse
+	//       "200":
+	//         "$ref": "#/responses/VersionsResponse"
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	response := kmdapi.VersionsResponse{

@@ -19,6 +19,7 @@ package transactions
 import (
 	"testing"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
@@ -26,6 +27,32 @@ import (
 )
 
 var feeSink = basics.Address{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1, 0x75, 0x76, 0xbd, 0x45, 0x9a, 0xe6, 0x42, 0x1d, 0x48, 0x6d, 0xa3, 0xd4, 0xef, 0x22, 0x47, 0xc4, 0x9, 0xa3, 0x96, 0xb8, 0x2e, 0xa2, 0x21}
+
+// mock balances that support looking up particular balance records
+type keyregTestBalances struct {
+	addrs   map[basics.Address]basics.BalanceRecord
+	version protocol.ConsensusVersion
+}
+
+func (balances keyregTestBalances) Get(addr basics.Address, withPendingRewards bool) (basics.BalanceRecord, error) {
+	return balances.addrs[addr], nil
+}
+
+func (balances keyregTestBalances) GetAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error) {
+	return basics.Address{}, nil
+}
+
+func (balances keyregTestBalances) Put(basics.BalanceRecord) error {
+	return nil
+}
+
+func (balances keyregTestBalances) Move(src, dst basics.Address, amount basics.MicroAlgos, srcRewards, dstRewards *basics.MicroAlgos) error {
+	return nil
+}
+
+func (balances keyregTestBalances) ConsensusParams() config.ConsensusParams {
+	return config.Consensus[balances.version]
+}
 
 func TestKeyregApply(t *testing.T) {
 	secretSrc := keypair()
@@ -46,10 +73,32 @@ func TestKeyregApply(t *testing.T) {
 			SelectionPK: vrfSecrets.PK,
 		},
 	}
-	_, err := tx.Apply(mockBalances{protocol.ConsensusCurrentVersion}, SpecialAddresses{FeeSink: feeSink})
+	_, err := tx.Apply(mockBalances{protocol.ConsensusCurrentVersion}, SpecialAddresses{FeeSink: feeSink}, 0)
 	require.NoError(t, err)
 
 	tx.Sender = feeSink
-	_, err = tx.Apply(mockBalances{protocol.ConsensusCurrentVersion}, SpecialAddresses{FeeSink: feeSink})
+	_, err = tx.Apply(mockBalances{protocol.ConsensusCurrentVersion}, SpecialAddresses{FeeSink: feeSink}, 0)
 	require.Error(t, err)
+
+	tx.Sender = src
+
+	mockBal := keyregTestBalances{make(map[basics.Address]basics.BalanceRecord), protocol.ConsensusCurrentVersion}
+
+	// Going from offline to online should be okay
+	mockBal.addrs[src] = basics.BalanceRecord{Addr: src, AccountData: basics.AccountData{Status: basics.Offline}}
+	_, err = tx.Apply(mockBal, SpecialAddresses{FeeSink: feeSink}, 0)
+	require.NoError(t, err)
+
+	// Going from online to nonparticipatory should be okay, if the protocol supports that
+	if mockBal.ConsensusParams().SupportBecomeNonParticipatingTransactions {
+		tx.KeyregTxnFields = KeyregTxnFields{}
+		tx.KeyregTxnFields.Nonparticipation = true
+		_, err = tx.Apply(mockBal, SpecialAddresses{FeeSink: feeSink}, 0)
+		require.NoError(t, err)
+
+		// Nonparticipatory accounts should not be able to change status
+		mockBal.addrs[src] = basics.BalanceRecord{Addr: src, AccountData: basics.AccountData{Status: basics.NotParticipating}}
+		_, err = tx.Apply(mockBal, SpecialAddresses{FeeSink: feeSink}, 0)
+		require.Error(t, err)
+	}
 }

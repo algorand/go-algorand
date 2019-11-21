@@ -14,43 +14,34 @@
 # Examples: scripts/checkout_deps.sh
 
 export GOPATH=$(go env GOPATH)
-
-ROOT=${GOPATH}/src/github.com/algorand/go-algorand
-cd ${ROOT}
+GOPATH1=$(echo $GOPATH | cut -d: -f1)
 
 ANY_MISSING=0
 # golint doesn't work with 'dep ensure' so we manually install it
 GOLINT_MISSING=0
 STRINGER_MISSING=0
 SWAGGER_MISSING=0
-DEP_MISSING=0
 
 function check_deps() {
     ANY_MISSING=0
     GOLINT_MISSING=0
 
-    if [ ! -f "${GOPATH}/bin/golint" ]; then
+    if [ ! -f "${GOPATH1}/bin/golint" ]; then
         GOLINT_MISSING=1
         ANY_MISSING=1
         echo "... golint missing"
     fi
 
-    if [ ! -f "${GOPATH}/bin/stringer" ]; then
+    if [ ! -f "${GOPATH1}/bin/stringer" ]; then
         STRINGER_MISSING=1
         ANY_MISSING=1
         echo "... stringer missing"
     fi
 
-    if [ ! -f "${GOPATH}/bin/swagger" ]; then
+    if [ ! -f "${GOPATH1}/bin/swagger" ]; then
         SWAGGER_MISSING=1
         ANY_MISSING=1
         echo "... swagger missing"
-    fi
-
-    if [ ! -f "${GOPATH}/bin/dep" ]; then
-        DEP_MISSING=1
-        ANY_MISSING=1
-        echo "... dep missing"
     fi
 
     return ${ANY_MISSING}
@@ -66,7 +57,7 @@ if [ ${GOLINT_MISSING} -ne 0 ]; then
     read -p "Install golint (using go get) (y/N): " OK
     if [ "$OK" = "y" ]; then
         echo "Installing golint..."
-        go get -u golang.org/x/lint/golint
+        GO111MODULE=off go get -u golang.org/x/lint/golint
     fi
 fi
 
@@ -74,23 +65,15 @@ if [ ${STRINGER_MISSING} -ne 0 ]; then
     read -p "Install stringer (using go get) (y/N): " OK
     if [ "$OK" = "y" ]; then
         echo "Installing stringer..."
-        go get -u golang.org/x/tools/cmd/stringer
+        GO111MODULE=off go get -u golang.org/x/tools/cmd/stringer
     fi
 fi
 
 if [ ${SWAGGER_MISSING} -ne 0 ]; then
-    read -p "Install go-swagger (using go get) (y/N): " OK
+    read -p "Install swagger (using go get) (y/N): " OK
     if [ "$OK" = "y" ]; then
         echo "Installing swagger..."
-        go get -u github.com/go-swagger/go-swagger/cmd/swagger
-    fi
-fi
-
-if [ ${DEP_MISSING} -ne 0 ]; then
-    read -p "Install dep (using go get) (y/N): " OK
-    if [ "$OK" = "y" ]; then
-        echo "Installing dep..."
-        go get -u github.com/golang/dep/cmd/dep
+        GO111MODULE=off go get -u github.com/go-swagger/go-swagger/cmd/swagger
     fi
 fi
 
@@ -100,5 +83,5 @@ if [ $? -eq 0 ]; then
     exit 0
 else
     echo Required dependencies still missing. Build will probably fail.
-    exit 1
+    exit 0
 fi

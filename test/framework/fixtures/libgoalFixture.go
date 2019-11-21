@@ -138,7 +138,7 @@ func (f *LibGoalFixture) importRootKeys(lg *libgoal.Client, dataDir string) {
 			if err != nil && !strings.Contains(err.Error(), "key already exists") {
 				f.failOnError(err, "couldn't import secret: %v")
 			}
-			accountsWithRootKeys[root.Address().GetChecksumAddress().String()] = true
+			accountsWithRootKeys[root.Address().String()] = true
 		} else if config.IsPartKeyFilename(filename) {
 			// Fetch a handle to this database
 			handle, err = db.MakeErasableAccessor(filepath.Join(keyDir, filename))
@@ -157,7 +157,7 @@ func (f *LibGoalFixture) importRootKeys(lg *libgoal.Client, dataDir string) {
 			}
 
 			// Early reject partkeys if we already have a rootkey for the account
-			if !accountsWithRootKeys[participation.Address().GetChecksumAddress().String()] {
+			if !accountsWithRootKeys[participation.Address().String()] {
 				allPartKeys = append(allPartKeys, participation)
 			}
 		}
@@ -165,7 +165,7 @@ func (f *LibGoalFixture) importRootKeys(lg *libgoal.Client, dataDir string) {
 
 	// Go through final set of non-filtered part keys and add the partkey-only keys to our collection
 	for _, part := range allPartKeys {
-		if !accountsWithRootKeys[part.Address().GetChecksumAddress().String()] {
+		if !accountsWithRootKeys[part.Address().String()] {
 			f.addParticipationForClient(*lg, part)
 		}
 	}
@@ -275,6 +275,14 @@ func (f *LibGoalFixture) ShutdownImpl(preserveData bool) {
 		if f.testDirTmp {
 			os.Remove(f.testDir)
 		}
+	}
+}
+
+// intercept baseFixture.failOnError so we can clean up any algods that are still alive
+func (f *LibGoalFixture) failOnError(err error, message string) {
+	if err != nil {
+		f.network.Stop(f.binDir)
+		f.baseFixture.failOnError(err, message)
 	}
 }
 

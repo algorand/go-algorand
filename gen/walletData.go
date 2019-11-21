@@ -45,6 +45,7 @@ type GenesisData struct {
 	ConsensusProtocol protocol.ConsensusVersion
 	FirstPartKeyRound uint64
 	LastPartKeyRound  uint64
+	PartKeyDilution   uint64
 	Wallets           []WalletData
 	FeeSink           basics.Address
 	RewardsPool       basics.Address

@@ -24,6 +24,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/logging/telemetryspec"
 )
 
 type proposalVoteCounter struct {
@@ -116,8 +117,20 @@ func (tracker *voteTracker) handle(r routerHandle, p player, e0 event) event {
 		}
 
 		sender := e.Vote.R.Sender
-		_, equivocator := tracker.Equivocators[sender]
+		eqVote, equivocator := tracker.Equivocators[sender]
 		if equivocator {
+			equivocationDetails := telemetryspec.EquivocatedVoteEventDetails{
+				VoterAddress:          sender.String(),
+				ProposalHash:          e.Vote.R.Proposal.BlockDigest.String(),
+				Round:                 uint64(e.Vote.R.Round),
+				Period:                uint64(e.Vote.R.Period),
+				Step:                  uint64(e.Vote.R.Step),
+				Weight:                e.Vote.Cred.Weight,
+				PreviousProposalHash1: eqVote.Proposals[0].BlockDigest.String(),
+				PreviousProposalHash2: eqVote.Proposals[1].BlockDigest.String(),
+			}
+			logging.Base().EventWithDetails(telemetryspec.ApplicationState, telemetryspec.EquivocatedVoteEvent, equivocationDetails)
+
 			return thresholdEvent{}
 		}
 
@@ -147,6 +160,17 @@ func (tracker *voteTracker) handle(r routerHandle, p player, e0 event) event {
 				voteCausesStateChange = false
 				return thresholdEvent{}
 			}
+
+			equivocationDetails := telemetryspec.EquivocatedVoteEventDetails{
+				VoterAddress:          sender.String(),
+				ProposalHash:          e.Vote.R.Proposal.BlockDigest.String(),
+				Round:                 uint64(e.Vote.R.Round),
+				Period:                uint64(e.Vote.R.Period),
+				Step:                  uint64(e.Vote.R.Step),
+				Weight:                e.Vote.Cred.Weight,
+				PreviousProposalHash1: oldVote.R.Proposal.BlockDigest.String(),
+			}
+			logging.Base().EventWithDetails(telemetryspec.ApplicationState, telemetryspec.EquivocatedVoteEvent, equivocationDetails)
 
 			logging.Base().Warnf("voteTracker: observed an equivocator: %v (vote was %v)", sender, e.Vote)
 
@@ -229,8 +253,20 @@ func (tracker *voteTracker) handle(r routerHandle, p player, e0 event) event {
 		return res
 	case voteFilterRequest:
 		e := e0.(voteFilterRequestEvent)
-		_, equivocated := tracker.Equivocators[e.RawVote.Sender]
+		eqVote, equivocated := tracker.Equivocators[e.RawVote.Sender]
 		if equivocated {
+			equivocationDetails := telemetryspec.EquivocatedVoteEventDetails{
+				VoterAddress:          e.RawVote.Sender.String(),
+				ProposalHash:          e.RawVote.Proposal.BlockDigest.String(),
+				Round:                 uint64(e.RawVote.Round),
+				Period:                uint64(e.RawVote.Period),
+				Step:                  uint64(e.RawVote.Step),
+				Weight:                eqVote.Cred.Weight,
+				PreviousProposalHash1: eqVote.Proposals[0].BlockDigest.String(),
+				PreviousProposalHash2: eqVote.Proposals[1].BlockDigest.String(),
+			}
+			logging.Base().EventWithDetails(telemetryspec.ApplicationState, telemetryspec.EquivocatedVoteEvent, equivocationDetails)
+
 			return filteredStepEvent{T: voteFilteredStep}
 		}
 

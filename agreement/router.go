@@ -264,3 +264,10 @@ func stagedValue(p0 player, h routerHandle, r round, p period) stagingValueEvent
 	e := h.dispatch(p0, qe, proposalMachineRound, r, p, 0)
 	return e.(stagingValueEvent)
 }
+
+// pinnedValue gets the current pinned value for some (r)
+func pinnedValue(p0 player, h routerHandle, r round) pinnedValueEvent {
+	qe := pinnedValueEvent{Round: r}
+	e := h.dispatch(p0, qe, proposalMachineRound, r, 0, 0)
+	return e.(pinnedValueEvent)
+}

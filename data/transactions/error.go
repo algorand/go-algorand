@@ -16,7 +16,11 @@
 
 package transactions
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/algorand/go-algorand/data/basics"
+)
 
 // MinFeeError defines an error type which could be returned from the method WellFormed
 type MinFeeError string
@@ -27,4 +31,16 @@ func (err MinFeeError) Error() string {
 
 func makeMinFeeErrorf(format string, args ...interface{}) MinFeeError {
 	return MinFeeError(fmt.Sprintf(format, args...))
+}
+
+// TxnDeadError defines an error type which indicates a transaction is outside of the
+// round validity window.
+type TxnDeadError struct {
+	Round      basics.Round
+	FirstValid basics.Round
+	LastValid  basics.Round
+}
+
+func (err TxnDeadError) Error() string {
+	return fmt.Sprintf("txn dead: round %d outside of %d--%d", err.Round, err.FirstValid, err.LastValid)
 }

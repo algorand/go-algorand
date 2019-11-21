@@ -81,25 +81,35 @@ func (part Participation) OverlapsInterval(first, last basics.Round) bool {
 }
 
 // DeleteOldKeys securely deletes ephemeral keys for rounds strictly older than the given round.
-func (part Participation) DeleteOldKeys(current basics.Round, proto config.ConsensusParams) error {
+func (part Participation) DeleteOldKeys(current basics.Round, proto config.ConsensusParams) <-chan error {
 	keyDilution := part.KeyDilution
 	if keyDilution == 0 {
 		keyDilution = proto.DefaultKeyDilution
 	}
 
-	if proto.FineGrainedEphemeralKeys {
-		part.Voting.DeleteBeforeFineGrained(basics.OneTimeIDForRound(current, keyDilution), keyDilution)
-	} else {
-		part.Voting.DeleteBeforeCoarseGrained(basics.OneTimeIDForRound(current, keyDilution))
-	}
-	raw := protocol.Encode(part.Voting.Snapshot())
+	part.Voting.DeleteBeforeFineGrained(basics.OneTimeIDForRound(current, keyDilution), keyDilution)
 
+	errorCh := make(chan error, 1)
+	deleteOldKeys := func(encodedVotingSecrets []byte) {
+		errorCh <- part.Store.Atomic(func(tx *sql.Tx) error {
+			_, err := tx.Exec("UPDATE ParticipationAccount SET voting=?", encodedVotingSecrets)
+			if err != nil {
+				return fmt.Errorf("Participation.DeleteOldKeys: failed to update account: %v", err)
+			}
+			return nil
+		})
+		close(errorCh)
+	}
+	encodedVotingSecrets := protocol.Encode(part.Voting.Snapshot())
+	go deleteOldKeys(encodedVotingSecrets)
+	return errorCh
+}
+
+// PersistNewParent writes a new parent address to the partkey database.
+func (part Participation) PersistNewParent() error {
 	return part.Store.Atomic(func(tx *sql.Tx) error {
-		_, err := tx.Exec("UPDATE ParticipationAccount SET voting=?", raw)
-		if err != nil {
-			return fmt.Errorf("Participation.DeleteOldKeys: failed to update account: %v", err)
-		}
-		return nil
+		_, err := tx.Exec("UPDATE ParticipationAccount SET parent=?", part.Parent[:])
+		return err
 	})
 }
 
@@ -123,7 +133,7 @@ func (part Participation) VotingSigner() crypto.OneTimeSigner {
 }
 
 // GenerateRegistrationTransaction returns a transaction object for registering a Participation with its parent.
-func (part Participation) GenerateRegistrationTransaction(fee basics.MicroAlgos, txnFirstValid, txnLastValid basics.Round, params config.ConsensusParams) transactions.Transaction {
+func (part Participation) GenerateRegistrationTransaction(fee basics.MicroAlgos, txnFirstValid, txnLastValid basics.Round, leaseBytes [32]byte, params config.ConsensusParams) transactions.Transaction {
 	t := transactions.Transaction{
 		Type: protocol.KeyRegistrationTx,
 		Header: transactions.Header{
@@ -131,17 +141,16 @@ func (part Participation) GenerateRegistrationTransaction(fee basics.MicroAlgos,
 			Fee:        fee,
 			FirstValid: txnFirstValid,
 			LastValid:  txnLastValid,
+			Lease:      leaseBytes,
 		},
 		KeyregTxnFields: transactions.KeyregTxnFields{
 			VotePK:      part.Voting.OneTimeSignatureVerifier,
 			SelectionPK: part.VRF.PK,
 		},
 	}
-	if params.ExplicitEphemeralParams {
-		t.KeyregTxnFields.VoteFirst = part.FirstValid
-		t.KeyregTxnFields.VoteLast = part.LastValid
-		t.KeyregTxnFields.VoteKeyDilution = part.KeyDilution
-	}
+	t.KeyregTxnFields.VoteFirst = part.FirstValid
+	t.KeyregTxnFields.VoteLast = part.LastValid
+	t.KeyregTxnFields.VoteKeyDilution = part.KeyDilution
 	return t
 }
 

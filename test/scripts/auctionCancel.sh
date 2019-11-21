@@ -12,6 +12,9 @@ if [[ ! "$#" -eq 4 ]]; then
     exit 1
 fi
 
+# Anchor our repo root reference location
+REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"/../..
+
 export AUCTION_TESTDIR=${1}
 
 # setup ports
@@ -34,9 +37,7 @@ echo "PWD" $(pwd)
 
 
 if [[ "${SRCROOT}" = "" ]]; then
-    pushd ${GOPATH}/src/github.com/algorand/go-algorand
-    export SRCROOT="$(pwd -P)"
-    popd
+    export SRCROOT=${REPO_ROOT}
 fi
 
 if [[ "${NODEBINDIR}" = "" ]]; then

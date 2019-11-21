@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 type blockEntry struct {
@@ -188,29 +189,49 @@ func (bq *blockQueue) putBlock(blk bookkeeping.Block, cert agreement.Certificate
 	return nil
 }
 
-func (bq *blockQueue) checkEntry(r basics.Round) (e *blockEntry, checkDisk bool) {
+func (bq *blockQueue) checkEntry(r basics.Round) (e *blockEntry, lastCommitted basics.Round, latest basics.Round, err error) {
 	bq.mu.Lock()
 	defer bq.mu.Unlock()
 
+	// To help the caller form a more informative ErrNoEntry
+	lastCommitted = bq.lastCommitted
+	latest = bq.lastCommitted + basics.Round(len(bq.q))
+
 	if r > bq.lastCommitted+basics.Round(len(bq.q)) {
-		return nil, false
+		return nil, lastCommitted, latest, ErrNoEntry{
+			Round:     r,
+			Latest:    latest,
+			Committed: lastCommitted,
+		}
 	}
 
 	if r <= bq.lastCommitted {
-		return nil, true
+		return nil, lastCommitted, latest, nil
 	}
 
-	return &bq.q[int(r-bq.lastCommitted-1)], false
+	return &bq.q[r-bq.lastCommitted-1], lastCommitted, latest, nil
+}
+
+func updateErrNoEntry(err error, lastCommitted basics.Round, latest basics.Round) error {
+	if err != nil {
+		switch errt := err.(type) {
+		case ErrNoEntry:
+			errt.Committed = lastCommitted
+			errt.Latest = latest
+			return errt
+		}
+	}
+
+	return err
 }
 
 func (bq *blockQueue) getBlock(r basics.Round) (blk bookkeeping.Block, err error) {
-	e, checkDisk := bq.checkEntry(r)
+	e, lastCommitted, latest, err := bq.checkEntry(r)
 	if e != nil {
 		return e.block, nil
 	}
 
-	if !checkDisk {
-		err = ErrNoEntry
+	if err != nil {
 		return
 	}
 
@@ -219,17 +240,17 @@ func (bq *blockQueue) getBlock(r basics.Round) (blk bookkeeping.Block, err error
 		blk, err0 = blockGet(tx, r)
 		return err0
 	})
+	err = updateErrNoEntry(err, lastCommitted, latest)
 	return
 }
 
 func (bq *blockQueue) getBlockHdr(r basics.Round) (hdr bookkeeping.BlockHeader, err error) {
-	e, checkDisk := bq.checkEntry(r)
+	e, lastCommitted, latest, err := bq.checkEntry(r)
 	if e != nil {
 		return e.block.BlockHeader, nil
 	}
 
-	if !checkDisk {
-		err = ErrNoEntry
+	if err != nil {
 		return
 	}
 
@@ -238,17 +259,40 @@ func (bq *blockQueue) getBlockHdr(r basics.Round) (hdr bookkeeping.BlockHeader, 
 		hdr, err0 = blockGetHdr(tx, r)
 		return err0
 	})
+	err = updateErrNoEntry(err, lastCommitted, latest)
+	return
+}
+
+func (bq *blockQueue) getEncodedBlockCert(r basics.Round) (blk []byte, cert []byte, err error) {
+	e, lastCommitted, latest, err := bq.checkEntry(r)
+	if e != nil {
+		// block has yet to be committed. we'll need to encode it.
+		blk = protocol.Encode(e.block)
+		cert = protocol.Encode(e.cert)
+		err = nil
+		return
+	}
+
+	if err != nil {
+		return
+	}
+
+	err = bq.l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
+		var err0 error
+		blk, cert, err0 = blockGetEncodedCert(tx, r)
+		return err0
+	})
+	err = updateErrNoEntry(err, lastCommitted, latest)
 	return
 }
 
 func (bq *blockQueue) getBlockCert(r basics.Round) (blk bookkeeping.Block, cert agreement.Certificate, err error) {
-	e, checkDisk := bq.checkEntry(r)
+	e, lastCommitted, latest, err := bq.checkEntry(r)
 	if e != nil {
 		return e.block, e.cert, nil
 	}
 
-	if !checkDisk {
-		err = ErrNoEntry
+	if err != nil {
 		return
 	}
 
@@ -257,17 +301,17 @@ func (bq *blockQueue) getBlockCert(r basics.Round) (blk bookkeeping.Block, cert 
 		blk, cert, err0 = blockGetCert(tx, r)
 		return err0
 	})
+	err = updateErrNoEntry(err, lastCommitted, latest)
 	return
 }
 
 func (bq *blockQueue) getBlockAux(r basics.Round) (blk bookkeeping.Block, aux evalAux, err error) {
-	e, checkDisk := bq.checkEntry(r)
+	e, lastCommitted, latest, err := bq.checkEntry(r)
 	if e != nil {
 		return e.block, e.aux, nil
 	}
 
-	if !checkDisk {
-		err = ErrNoEntry
+	if err != nil {
 		return
 	}
 
@@ -276,5 +320,6 @@ func (bq *blockQueue) getBlockAux(r basics.Round) (blk bookkeeping.Block, aux ev
 		blk, aux, err0 = blockGetAux(tx, r)
 		return err0
 	})
+	err = updateErrNoEntry(err, lastCommitted, latest)
 	return
 }

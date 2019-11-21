@@ -31,7 +31,6 @@ import (
 	"github.com/algorand/go-algorand/auction"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/daemon/algod/api/client"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
@@ -77,8 +76,8 @@ type multisigConfig struct {
 	// keys.  It is also encoded in `auction%d.multisig`, using msgpack
 	// encoding.  For consistency with our other uses of msgpack, we give
 	// the fields explicit names for that encoding.
-	Threshold uint8                    `codec:"threshold"`
-	PKs       []client.ChecksumAddress `codec:"pks"`
+	Threshold uint8            `codec:"threshold"`
+	PKs       []basics.Address `codec:"pks"`
 }
 
 // atomicWrite is a wrapper around atomicWriteDir that passes in
@@ -178,14 +177,14 @@ type initParams struct {
 	// BankKey overrides the BankKey field from Params.
 	// algod.ChecksumAddress means that the JSON codec will
 	// decode it using basics.UnmarshalChecksumAddress.
-	BankKey client.ChecksumAddress `json:"BankKey"`
+	BankKey basics.Address `json:"BankKey"`
 }
 
 func initAuctionParams() {
 	var initParams initParams
 	initParams.AuctionKeyDummy = "ignored"
 	initParams.DispensingKeyDummy = "ignored"
-	initParams.DispensingMultisig.PKs = []client.ChecksumAddress{}
+	initParams.DispensingMultisig.PKs = []basics.Address{}
 	jsonTemplate, err := json.MarshalIndent(initParams, "", "  ")
 	if err != nil {
 		panic(fmt.Sprintf("cannot JSON-encode init params template: %v", err))
@@ -254,8 +253,8 @@ func initAuctionParams() {
 	atomicEncode("nextsettlement", params.AuctionID)
 
 	fmt.Printf("Initial auction state:\n%s\n", string(jsonParamsOut))
-	fmt.Printf("AuctionKey: %s\n", basics.Address(masterKey.SignatureVerifier).GetChecksumAddress().String())
-	fmt.Printf("DispensingKey: %s\n", basics.Address(msigAddr).GetChecksumAddress().String())
+	fmt.Printf("AuctionKey: %s\n", basics.Address(masterKey.SignatureVerifier).String())
+	fmt.Printf("DispensingKey: %s\n", basics.Address(msigAddr).String())
 }
 
 func settleAuction() {

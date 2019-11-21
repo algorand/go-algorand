@@ -28,7 +28,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/daemon/algod/api/client/models"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/libgoal"
@@ -99,11 +99,17 @@ func doBenchTemplate(b *testing.B, template string, moneynode string) {
 	require.True(b, len(addrs) > 0)
 	addr := addrs[0]
 
+	suggest, err := c.SuggestedParams()
+	require.NoError(b, err)
+
+	var genesisHash crypto.Digest
+	copy(genesisHash[:], suggest.GenesisHash)
+
 	// Increase the number of keepalive connections, since we use many
 	// goroutines to talk to algod and kmd.
 	http.DefaultTransport.(*http.Transport).MaxIdleConnsPerHost = 100
 
-	var status models.NodeStatus
+	var status v1.NodeStatus
 
 	b.Run(template, func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
@@ -141,14 +147,15 @@ func doBenchTemplate(b *testing.B, template string, moneynode string) {
 					txn := transactions.Transaction{
 						Type: protocol.PaymentTx,
 						Header: transactions.Header{
-							Sender:     sender,
-							Fee:        basics.MicroAlgos{Raw: 1001},
-							FirstValid: basics.Round(round),
-							LastValid:  basics.Round(round) + basics.Round(proto.MaxTxnLife),
+							Sender:      sender,
+							Fee:         basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee},
+							FirstValid:  basics.Round(round),
+							LastValid:   basics.Round(round) + basics.Round(proto.MaxTxnLife),
+							GenesisHash: genesisHash,
 						},
 						PaymentTxnFields: transactions.PaymentTxnFields{
 							Receiver: dst,
-							Amount:   basics.MicroAlgos{Raw: 1000},
+							Amount:   basics.MicroAlgos{Raw: 100000},
 						},
 					}
 
@@ -222,6 +229,6 @@ func doBenchTemplate(b *testing.B, template string, moneynode string) {
 			break
 		}
 
-		fmt.Printf("  %d: %d txns\n", round, len(blk.Txns.Transactions))
+		fmt.Printf("  %d: %d txns\n", round, len(blk.Transactions.Transactions))
 	}
 }

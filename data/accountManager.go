@@ -17,6 +17,8 @@
 package data
 
 import (
+	"fmt"
+
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
@@ -98,7 +100,7 @@ func (manager *AccountManager) AddParticipation(participation account.Participat
 
 	manager.partIntervals[interval] = participation
 
-	addressString := address.GetChecksumAddress().String()
+	addressString := address.String()
 	manager.log.EventWithDetails(telemetryspec.Accounts, telemetryspec.PartKeyRegisteredEvent, telemetryspec.PartKeyRegisteredEventDetails{
 		Address:    addressString,
 		FirstValid: uint64(first),
@@ -121,14 +123,25 @@ func (manager *AccountManager) AddParticipation(participation account.Participat
 // current round.
 func (manager *AccountManager) DeleteOldKeys(current basics.Round, proto config.ConsensusParams) {
 	manager.mu.Lock()
-	defer manager.mu.Unlock()
-
-	for _, part := range manager.partIntervals {
-		err := part.DeleteOldKeys(current, proto)
-		if err != nil {
+	pendingItems := make(map[string]<-chan error, len(manager.partIntervals))
+	func() {
+		defer manager.mu.Unlock()
+		for _, part := range manager.partIntervals {
+			// we pre-create the reported error string here, so that we won't need to have the participation key object if error is detected.
 			first, last := part.ValidInterval()
-			logging.Base().Warnf("AccountManager.DeleteOldKeys(%d): key for %s (%d-%d): %v",
-				current, part.Address().String(), first, last, err)
+			errString := fmt.Sprintf("AccountManager.DeleteOldKeys(%d): key for %s (%d-%d)",
+				current, part.Address().String(), first, last)
+			errCh := part.DeleteOldKeys(current, proto)
+
+			pendingItems[errString] = errCh
+		}
+	}()
+
+	// wait all all disk flushes, and report errors as they appear.
+	for errString, errCh := range pendingItems {
+		err := <-errCh
+		if err != nil {
+			logging.Base().Warnf("%s: %v", errString, err)
 		}
 	}
 }

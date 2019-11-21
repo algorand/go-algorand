@@ -52,8 +52,8 @@ type ledgerTracker interface {
 	loadFromDisk(ledgerForTracker) error
 
 	// newBlock informs the tracker of a new block from round
-	// rnd and a given stateDelta as produced by BlockEvaluator.
-	newBlock(blk bookkeeping.Block, delta stateDelta)
+	// rnd and a given StateDelta as produced by BlockEvaluator.
+	newBlock(blk bookkeeping.Block, delta StateDelta)
 
 	// committedUpTo informs the tracker that the database has
 	// committed all blocks up to and including rnd to persistent
@@ -81,7 +81,7 @@ type ledgerTracker interface {
 type ledgerForTracker interface {
 	trackerDB() dbPair
 	trackerLog() logging.Logger
-	trackerEvalVerified(bookkeeping.Block, evalAux) (stateDelta, error)
+	trackerEvalVerified(bookkeeping.Block, evalAux) (StateDelta, error)
 
 	Latest() basics.Round
 	Block(basics.Round) (bookkeeping.Block, error)
@@ -108,7 +108,7 @@ func (tr *trackerRegistry) loadFromDisk(l ledgerForTracker) error {
 	return nil
 }
 
-func (tr *trackerRegistry) newBlock(blk bookkeeping.Block, delta stateDelta) {
+func (tr *trackerRegistry) newBlock(blk bookkeeping.Block, delta StateDelta) {
 	for _, lt := range tr.trackers {
 		lt.newBlock(blk, delta)
 	}

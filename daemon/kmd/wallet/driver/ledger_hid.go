@@ -23,11 +23,34 @@ import (
 	"github.com/karalabe/hid"
 )
 
+// deviceID holds a vendor ID and product ID for a USB device
+type deviceID struct {
+	vendor  uint16
+	product uint16
+}
+
+// ledgerDeviceIDs contains the device IDs we're scanning for
+var ledgerDeviceIDs = [...]deviceID{
+	// Ledger Nano S
+	deviceID{0x2c97, 0x0001},
+	// Ledger Nano X
+	deviceID{0x2c97, 0x0004},
+}
+
 // LedgerUSB is a wrapper around a Ledger USB HID device, used to implement
 // the protocol used for sending messages to the application running on the
 // Ledger hardware wallet.
 type LedgerUSB struct {
 	hiddev *hid.Device
+}
+
+// LedgerUSBError is a wrapper around the two-byte error code that the Ledger
+// protocol returns.
+type LedgerUSBError uint16
+
+// Error satisfies builtin interface `error`
+func (err LedgerUSBError) Error() string {
+	return fmt.Sprintf("Exchange: unexpected status 0x%x", err)
 }
 
 // Protocol reference:
@@ -172,7 +195,7 @@ func (l *LedgerUSB) Exchange(msg []byte) ([]byte, error) {
 		// See various hints about what the error status might mean in
 		// HIDDongleHIDAPI.exchange():
 		// https://github.com/LedgerHQ/blue-loader-python/blob/master/ledgerblue/comm.py
-		return nil, fmt.Errorf("Exchange: unexpected status %x", replyStat)
+		return nil, LedgerUSBError(replyStat)
 	}
 
 	return replyMsg, nil
@@ -190,15 +213,17 @@ func LedgerEnumerate() ([]LedgerUSB, error) {
 	}
 
 	var devs []LedgerUSB
-	for _, info := range hid.Enumerate(0x2c97, 0x0001) {
-		dev, err := info.Open()
-		if err != nil {
-			return nil, err
-		}
+	for _, did := range ledgerDeviceIDs {
+		for _, info := range hid.Enumerate(did.vendor, did.product) {
+			dev, err := info.Open()
+			if err != nil {
+				return nil, err
+			}
 
-		devs = append(devs, LedgerUSB{
-			hiddev: dev,
-		})
+			devs = append(devs, LedgerUSB{
+				hiddev: dev,
+			})
+		}
 	}
 
 	return devs, nil

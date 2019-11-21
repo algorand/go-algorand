@@ -107,17 +107,10 @@ type ConsensusParams struct {
 	RequireGenesisHash bool
 
 	// DefaultKeyDilution specifies the granularity of top-level ephemeral
-	// keys.  If FineGrainedEphemeralKeys is not set, then every ephemeral
-	// key is valid for DefaultKeyDilution rounds.  If FineGrainedEphemeralKeys
-	// is set, then KeyDilution is the number of second-level keys in each
-	// batch, signed by a top-level "batch" key.  The default value can be
+	// keys. KeyDilution is the number of second-level keys in each batch,
+	// signed by a top-level "batch" key.  The default value can be
 	// overriden in the account state.
 	DefaultKeyDilution uint64
-
-	// FineGrainedEphemeralKeys indicates support for fine-grained
-	// ephemeral keys, implemented as a two-level tree.  We will accept
-	// (and produce) fine-grained vote signatures only if this flag is true.
-	FineGrainedEphemeralKeys bool
 
 	// MinBalance specifies the minimum balance that can appear in
 	// an account.  To spend money below MinBalance requires issuing
@@ -130,10 +123,6 @@ type ConsensusParams struct {
 	// a way of making the spender subsidize the cost of storing this transaction.
 	MinTxnFee uint64
 
-	// SupportTxnClosing indicates if we support transactions that
-	// close out an account.
-	SupportTransactionClose bool
-
 	// RewardUnit specifies the number of MicroAlgos corresponding to one reward
 	// unit.
 	//
@@ -144,17 +133,6 @@ type ConsensusParams struct {
 	// RewardsRateRefreshInterval is the number of rounds after which the
 	// rewards level is recomputed for the next RewardsRateRefreshInterval rounds.
 	RewardsRateRefreshInterval uint64
-
-	// IncorrectBalLookback, if true, causes committee selection to use a balance lookback that disagrees with the spec and the rest of the code.
-	// If false, use the correct balance lookback everywhere.
-	// TODO: This option exists to allow fixing this bug with an in-band protocol upgrade. It should be removed the next time genesis is bumped.
-	IncorrectBalLookback bool
-	// TwinSeeds specifies whether we are using multiple seeds in parallel (instead of just one).
-	TwinSeeds bool
-
-	// ExplicitEphemeralParams indicates support for explicitly specifying
-	// VotingFirstValid, VotingLastValid, and VotingKeyDilution.
-	ExplicitEphemeralParams bool
 
 	// seed-related parameters
 	SeedLookback        uint64 // how many blocks back we use seeds from in sortition. delta_s in the spec
@@ -201,6 +179,48 @@ type ConsensusParams struct {
 
 	// domain-separated credentials
 	CredentialDomainSeparationEnabled bool
+
+	// support for transactions that mark an account non-participating
+	SupportBecomeNonParticipatingTransactions bool
+
+	// fix the rewards calculation by avoiding subtracting too much from the rewards pool
+	PendingResidueRewards bool
+
+	// asset support
+	Asset bool
+
+	// max number of assets per account
+	MaxAssetsPerAccount int
+
+	// max length of asset name
+	MaxAssetNameBytes int
+
+	// max length of asset unit name
+	MaxAssetUnitNameBytes int
+
+	// max length of asset url
+	MaxAssetURLBytes int
+
+	// support sequential transaction counter TxnCounter
+	TxnCounter bool
+
+	// transaction groups
+	SupportTxGroups bool
+
+	// max group size
+	MaxTxGroupSize int
+
+	// support for transaction leases
+	SupportTransactionLeases bool
+
+	// 0 for no support, otherwise highest version supported
+	LogicSigVersion uint64
+
+	// len(LogicSig.Logic) + len(LogicSig.Args[*]) must be less than this
+	LogicSigMaxSize uint64
+
+	// sum of estimated op cost must be less than this
+	LogicSigMaxCost uint64
 }
 
 // Consensus tracks the protocol-level settings for different versions of the
@@ -232,14 +252,15 @@ func initConsensusProtocols() {
 	// does not copy the ApprovedUpgrades map.  Make sure that each new
 	// ConsensusParams structure gets a fresh ApprovedUpgrades map.
 
-	// Base consensus protocol version, v2.
-	v2 := ConsensusParams{
+	// Base consensus protocol version, v7.
+	v7 := ConsensusParams{
 		UpgradeVoteRounds:   10000,
 		UpgradeThreshold:    9000,
 		UpgradeWaitRounds:   10000,
 		MaxVersionStringLen: 64,
 
-		MinTxnFee:           1,
+		MinBalance:          10000,
+		MinTxnFee:           1000,
 		MaxTxnLife:          1000,
 		MaxTxnNoteBytes:     1024,
 		MaxTxnBytesPerBlock: 1000000,
@@ -250,8 +271,7 @@ func initConsensusProtocols() {
 		RewardUnit:                 1e6,
 		RewardsRateRefreshInterval: 5e5,
 
-		ApprovedUpgrades:     map[protocol.ConsensusVersion]bool{},
-		IncorrectBalLookback: true,
+		ApprovedUpgrades: map[protocol.ConsensusVersion]bool{},
 
 		NumProposers:           30,
 		SoftCommitteeSize:      2500,
@@ -272,63 +292,17 @@ func initConsensusProtocols() {
 		SeedLookback:        2,
 		SeedRefreshInterval: 100,
 
-		MaxBalLookback: 203,
+		MaxBalLookback: 320,
+
+		MaxTxGroupSize: 1,
 	}
-	Consensus[protocol.ConsensusV2] = v2
 
-	// In v3, we add support for fine-grained ephemeral keys.
-	v3 := v2
-	v3.FineGrainedEphemeralKeys = true
-	v3.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
-	Consensus[protocol.ConsensusV3] = v3
-
-	// v2 can be upgraded to v3.
-	v2.ApprovedUpgrades[protocol.ConsensusV3] = true
-
-	// In v4, we add a minimum balance, and add support for transactions
-	// that close an account.
-	v4 := v3
-	v4.MinBalance = 1000
-	v4.SupportTransactionClose = true
-	v4.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
-	Consensus[protocol.ConsensusV4] = v4
-
-	// v3 can be upgraded to v4.
-	v3.ApprovedUpgrades[protocol.ConsensusV4] = true
-
-	// v5 sets the min transaction fee to 1000 microAlgos, the min balance to 10000 microAlgos and also fixes a balance lookback bug
-	v5 := v4
-	v5.MinTxnFee = 1000
-	v5.MinBalance = 10000
-	v5.IncorrectBalLookback = false
-	v5.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
-	Consensus[protocol.ConsensusV5] = v5
-
-	// v4 can be upgraded to v5.
-	v4.ApprovedUpgrades[protocol.ConsensusV5] = true
-
-	// v6 adds support for explicit ephemeral-key parameters.
-	v6 := v5
-	v6.ExplicitEphemeralParams = true
-	v6.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
-	Consensus[protocol.ConsensusV6] = v6
-
-	// v5 can be upgraded to v6.
-	v5.ApprovedUpgrades[protocol.ConsensusV6] = true
-
-	// v7 increases block retention in the ledger to 320 (= 2 * 2 [seed lookback] * 80 [seed refresh interval])
-	v7 := v6
-	v7.MaxBalLookback = 320
 	v7.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
 	Consensus[protocol.ConsensusV7] = v7
-
-	// v6 can be upgraded to v7.
-	v6.ApprovedUpgrades[protocol.ConsensusV7] = true
 
 	// v8 uses parameters and a seed derivation policy (the "twin seeds") from Georgios' new analysis
 	v8 := v7
 
-	v8.TwinSeeds = true
 	v8.SeedRefreshInterval = 80
 	v8.NumProposers = 9
 	v8.SoftCommitteeSize = 2990
@@ -440,6 +414,42 @@ func initConsensusProtocols() {
 
 	// v16 can be upgraded to v17.
 	v16.ApprovedUpgrades[protocol.ConsensusV17] = true
+
+	// ConsensusV18 points to reward calculation spec commit
+	v18 := v17
+	v18.PendingResidueRewards = true
+	v18.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	v18.TxnCounter = true
+	v18.Asset = true
+	v18.LogicSigVersion = 1
+	v18.LogicSigMaxSize = 1000
+	v18.LogicSigMaxCost = 20000
+	v18.MaxAssetsPerAccount = 1000
+	v18.SupportTxGroups = true
+	v18.MaxTxGroupSize = 16
+	v18.SupportTransactionLeases = true
+	v18.SupportBecomeNonParticipatingTransactions = true
+	v18.MaxAssetNameBytes = 32
+	v18.MaxAssetUnitNameBytes = 8
+	v18.MaxAssetURLBytes = 32
+	Consensus[protocol.ConsensusV18] = v18
+
+	// ConsensusV19 is the official spec commit ( teal, assets, group tx )
+	v19 := v18
+	v19.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+
+	Consensus[protocol.ConsensusV19] = v19
+
+	// v18 can be upgraded to v19.
+	v18.ApprovedUpgrades[protocol.ConsensusV19] = true
+	// v17 can be upgraded to v19.
+	v17.ApprovedUpgrades[protocol.ConsensusV19] = true
+
+	// ConsensusFuture is used to test features that are implemented
+	// but not yet released in a production protocol version.
+	vFuture := v19
+	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	Consensus[protocol.ConsensusFuture] = vFuture
 }
 
 func initConsensusTestProtocols() {
@@ -470,17 +480,10 @@ func initConsensusTestProtocols() {
 		ApprovedUpgrades: map[protocol.ConsensusVersion]bool{},
 	}
 
-	Consensus[protocol.ConsensusTestBigBlocks] = ConsensusParams{
-		UpgradeVoteRounds:   10000,
-		UpgradeThreshold:    9000,
-		UpgradeWaitRounds:   10000,
-		MaxVersionStringLen: 64,
-
-		MaxTxnBytesPerBlock: 100000000,
-		DefaultKeyDilution:  10000,
-
-		ApprovedUpgrades: map[protocol.ConsensusVersion]bool{},
-	}
+	testBigBlocks := Consensus[protocol.ConsensusCurrentVersion]
+	testBigBlocks.MaxTxnBytesPerBlock = 100000000
+	testBigBlocks.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	Consensus[protocol.ConsensusTestBigBlocks] = testBigBlocks
 
 	rapidRecalcParams := Consensus[protocol.ConsensusCurrentVersion]
 	rapidRecalcParams.RewardsRateRefreshInterval = 25
@@ -489,6 +492,19 @@ func initConsensusTestProtocols() {
 	//but explicitly mark "no approved upgrades" just in case
 	rapidRecalcParams.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
 	Consensus[protocol.ConsensusTestRapidRewardRecalculation] = rapidRecalcParams
+
+	// Setting the testShorterLookback parameters derived from ConsensusCurrentVersion
+	// Will result in MaxBalLookback = 32 
+	// Used to run tests faster where past MaxBalLookback values are checked
+	testShorterLookback := Consensus[protocol.ConsensusCurrentVersion]
+	testShorterLookback.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+
+	// MaxBalLookback  =  2 x SeedRefreshInterval x SeedLookback
+	// ref. https://github.com/algorandfoundation/specs/blob/master/dev/abft.md
+	testShorterLookback.SeedLookback = 2
+	testShorterLookback.SeedRefreshInterval = 8
+	testShorterLookback.MaxBalLookback = 2*testShorterLookback.SeedLookback*testShorterLookback.SeedRefreshInterval // 32
+	Consensus[protocol.ConsensusTestShorterLookback] = testShorterLookback
 }
 
 func initConsensusTestFastUpgrade() {
@@ -583,11 +599,29 @@ type Local struct {
 	// API endpoint address
 	EndpointAddress string
 
+	// timeouts passed to the rest http.Server implementation
+	RestReadTimeoutSeconds  int
+	RestWriteTimeoutSeconds int
+
 	// SRV-based phonebook
 	DNSBootstrapID string
 
 	// Log file size limit in bytes
 	LogSizeLimit uint64
+
+	// text/template for creating log archive filename.
+	// Available template vars:
+	// Time at start of log: {{.Year}} {{.Month}} {{.Day}} {{.Hour}} {{.Minute}} {{.Second}}
+	// Time at end of log: {{.EndYear}} {{.EndMonth}} {{.EndDay}} {{.EndHour}} {{.EndMinute}} {{.EndSecond}}
+	//
+	// If the filename ends with .gz or .bz2 it will be compressed.
+	//
+	// default: "node.archive.log" (no rotation, clobbers previous archive)
+	LogArchiveName string
+
+	// LogArchiveMaxAge will be parsed by time.ParseDuration().
+	// Valid units are 's' seconds, 'm' minutes, 'h' hours
+	LogArchiveMaxAge string
 
 	// number of consecutive attempts to catchup after which we replace the peers we're connected to
 	CatchupFailurePeerRefreshRate int
@@ -613,7 +647,7 @@ type Local struct {
 	// The fallback DNS resolver address that would be used if the system resolver would fail to retrieve SRV records
 	FallbackDNSResolverAddress string
 
-	// if the transaction pool is full, a new transaction must beat the minimum priority transaction by at least this factor
+	// exponential increase factor of transaction pool's fee threshold, should always be 2 in production
 	TxPoolExponentialIncreaseFactor uint64
 
 	SuggestedFeeBlockHistory int
@@ -669,7 +703,7 @@ type Local struct {
 	// the max size the sync server would return
 	TxSyncServeResponseSize int
 
-	// IsIndexerActive indicates wheather to activate the indexer for fast retrieval of transactions
+	// IsIndexerActive indicates whether to activate the indexer for fast retrieval of transactions
 	// Note -- Indexer cannot operate on non Archival nodes
 	IsIndexerActive bool
 
@@ -678,6 +712,23 @@ type Local struct {
 	// proxy vendor provides another header field.  In the case of CloudFlare proxy, the "CF-Connecting-IP" header
 	// field can be used.
 	UseXForwardedForAddressField string
+
+	// ForceRelayMessages indicates whether the network library relay messages even in the case that no NetAddress was specified.
+	ForceRelayMessages bool
+
+	// ConnectionsRateLimitingWindowSeconds is being used in conjunction with ConnectionsRateLimitingCount;
+	// see ConnectionsRateLimitingCount description for further information. Providing a zero value
+	// in this variable disables the connection rate limiting.
+	ConnectionsRateLimitingWindowSeconds uint
+
+	// ConnectionsRateLimitingCount is being used along with ConnectionsRateLimitingWindowSeconds to determine if
+	// a connection request should be accepted or not. The gossip network examine all the incoming requests in the past
+	// ConnectionsRateLimitingWindowSeconds seconds that share the same origin. If the total count exceed the ConnectionsRateLimitingCount
+	// value, the connection is refused.
+	ConnectionsRateLimitingCount uint
+
+	// EnableRequestLogger enabled the logging of the incoming requests to the telemetry server.
+	EnableRequestLogger bool
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)
@@ -712,6 +763,8 @@ func loadConfigFromFile(configFile string) (c Local, err error) {
 	}
 
 	// Migrate in case defaults were changed
+	// If a config file does not have version, it is assumed to be zero.
+	// All fields listed in migrate() might be changed if an actual value matches to default value from a previous version.
 	c, err = migrate(c)
 	return
 }
@@ -746,6 +799,13 @@ func mergeConfigFromFile(configpath string, source Local) (Local, error) {
 func loadConfig(reader io.Reader, config *Local) error {
 	dec := json.NewDecoder(reader)
 	return dec.Decode(config)
+}
+
+// DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
+func (cfg Local) DNSBootstrapArray(networkID protocol.NetworkID) (bootstrapArray []string) {
+	dnsBootstrapString := cfg.DNSBootstrap(networkID)
+	bootstrapArray = strings.Split(dnsBootstrapString, ";")
+	return
 }
 
 // DNSBootstrap returns the network-specific DNSBootstrap identifier

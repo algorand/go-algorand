@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 
-# promote_stable.sh - Promote the pending_* packages for stable channel
+# promote_stable.sh - Promote the build for stable channel
 #
 # Syntax:   promote_stable.sh
 #
 # Usage:    Should only be used when officially releasing the build.
-#           Requires S3_UPLOAD_ID, S3_UPLOAD_SECRET and S3_UPLOAD_BUCKET to be defined in the env.
+#           Requires AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and S3_RELEASE_BUCKET to be defined in the env.
 #
 # Examples: scripts/promote_stable.sh
 
@@ -15,7 +15,7 @@ S3CMD="s3cmd"
 
 function init_s3cmd() {
     SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
-    SEDARGS="-e s,-ACCESS_KEY-,${S3_UPLOAD_ID}, -e s,-SECRET_KEY-,${S3_UPLOAD_SECRET}, -e s,-S3_BUCKET-,${S3_UPLOAD_BUCKET},"
+    SEDARGS="-e s,-ACCESS_KEY-,${AWS_ACCESS_KEY_ID}, -e s,-SECRET_KEY-,${AWS_SECRET_ACCESS_KEY}, -e s,-S3_BUCKET-,${S3_RELEASE_BUCKET},"
 
     cat ${SCRIPTPATH}/s3cfg.template \
       | sed ${SEDARGS} \
@@ -26,7 +26,6 @@ function init_s3cmd() {
         wget https://sourceforge.net/projects/s3tools/files/s3cmd/2.0.2/s3cmd-2.0.2.tar.gz
         tar -xf s3cmd-2.0.2.tar.gz
         popd
-        sudo apt-get install python-dateutil
         S3CMD=~/s3cmd-2.0.2/s3cmd
     fi
 }
@@ -35,9 +34,11 @@ init_s3cmd
 
 CHANNEL="stable"
 
-# Rename the _CHANNEL_ and CHANNEL-VARIANT pending files
-${S3CMD} ls s3://${S3_UPLOAD_BUCKET}/pending_ | grep _${CHANNEL}[_-] | awk '{ print $4 }' | while read line; do
-    NEW_ARTIFACT_NAME=$(echo "$line" | sed -e 's/pending_//')
-    echo "Rename ${line} => ${NEW_ARTIFACT_NAME}"
-    ${S3CMD} mv ${line} ${NEW_ARTIFACT_NAME}
+# Move the _${CHANNEL}_ files from the build to the release bucket
+${S3CMD} ls s3://${S3_RELEASE_BUCKET}/channel/${CHANNEL}/ | grep _${CHANNEL}[_-] | awk '{ print $4 }' | while read line; do
+    NEW_ARTIFACT_NAME=$(echo "$line" | sed -e "s/${BUILD_BUCKET}/${RELEASE_BUCKET}/g")
+    echo "Copy ${line} => ${NEW_ARTIFACT_NAME}"
+    ${S3CMD} cp ${line} ${NEW_ARTIFACT_NAME}
+    echo "Deleting original file ${line}"
+    ${S3CMD} rm ${line}
 done
