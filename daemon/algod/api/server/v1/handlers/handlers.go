@@ -106,7 +106,7 @@ func txEncode(tx transactions.Transaction, ad transactions.ApplyData) (v1.Transa
 	}
 
 	if tx.Lease != ([32]byte{}) {
-		res.Lease = &tx.Lease
+		res.Lease = tx.Lease[:]
 	}
 
 	return res, nil
