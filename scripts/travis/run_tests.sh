@@ -2,6 +2,7 @@
 
 set -e
 
+SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 OS=$("${SCRIPTPATH}/../ostype.sh")
 
 if [ "${BUILD_TYPE}" = "integration" ]; then
