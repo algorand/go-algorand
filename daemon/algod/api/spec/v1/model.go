@@ -315,6 +315,9 @@ type Transaction struct {
 	// lease identified by the (Sender, Lease) pair of the transaction until
 	// the LastValid round passes.  While this transaction possesses the
 	// lease, no other transaction specifying this lease can be confirmed.
+	//
+	// required: false
+	// swagger:strfmt byte
 	Lease []byte `json:"lease,omitempty"`
 
 	// ConfirmedRound indicates the block number this transaction appeared in
