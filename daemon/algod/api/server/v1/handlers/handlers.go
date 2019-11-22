@@ -100,7 +100,15 @@ func txEncode(tx transactions.Transaction, ad transactions.ApplyData) (v1.Transa
 	res.FromRewards = ad.SenderRewards.Raw
 	res.GenesisID = tx.GenesisID
 	res.GenesisHash = tx.GenesisHash[:]
-	res.Group = tx.Group[:]
+
+	if tx.Group != (crypto.Digest{}) {
+		res.Group = tx.Group[:]
+	}
+
+	if tx.Lease != ([32]byte{}) {
+		res.Lease = tx.Lease[:]
+	}
+
 	return res, nil
 }
 
@@ -134,6 +142,17 @@ func keyregTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.T
 	return v1.Transaction{
 		Keyreg: &keyreg,
 	}
+}
+
+func participationKeysEncode(r basics.AccountData) *v1.Participation {
+	var apiParticipation v1.Participation
+	apiParticipation.ParticipationPK = r.VoteID[:]
+	apiParticipation.VRFPK = r.SelectionID[:]
+	apiParticipation.VoteFirst = uint64(r.VoteFirstValid)
+	apiParticipation.VoteLast = uint64(r.VoteLastValid)
+	apiParticipation.VoteKeyDilution = r.VoteKeyDilution
+
+	return &apiParticipation
 }
 
 func assetParams(creator basics.Address, params basics.AssetParams) v1.AssetParams {
@@ -566,13 +585,11 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	apiParticipation := v1.Participation{
-		ParticipationPK: record.VoteID[:],
-		VRFPK:           record.SelectionID[:],
-		VoteFirst:       uint64(record.VoteFirstValid),
-		VoteLast:        uint64(record.VoteLastValid),
-		VoteKeyDilution: record.VoteKeyDilution,
+	var apiParticipation *v1.Participation
+	if record.VoteID != (crypto.OneTimeSignatureVerifier{}) {
+		apiParticipation = participationKeysEncode(record)
 	}
+
 	accountInfo := v1.Account{
 		Round:                       uint64(lastRound),
 		Address:                     addr.String(),
