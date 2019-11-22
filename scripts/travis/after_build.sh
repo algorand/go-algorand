@@ -8,6 +8,7 @@
 #
 # Examples: scripts/travis/after_build.sh
 
+OS=$("${SCRIPTPATH}/../ostype.sh")
 if [[ "${OS}" == "darwin" ]]; then
     # do not run these on darwin
     exit;
