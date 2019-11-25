@@ -73,6 +73,10 @@ ${TEMPDIR}/ve/bin/pip3 install py-algorand-sdk
 ${TEMPDIR}/ve/bin/python3 e2e_client_runner.py e2e_subs/*.sh
 deactivate
 
+./timeout 200 ./dynamic-fee-teal-test.sh
+
+./timeout 200 ./keyreg-teal-test.sh
+
 # Export our root temp folder as 'TESTDIR' for tests to use as their root test folder
 # This allows us to clean up everything with our rm -rf trap.
 export TESTDIR=${TEMPDIR}

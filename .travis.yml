@@ -1,4 +1,4 @@
-dist: bionic
+dist: xenial
 go:
   - "1.12"
 go_import_path: github.com/algorand/go-algorand
@@ -71,6 +71,12 @@ jobs:
       name: MacOS AMD64 Build
       script:
         - scripts/travis/build_test.sh
+    - # same stage, parallel job
+      os: osx
+      osx_image: xcode11
+      name: MacOS AMD64 Integration Test
+      script:
+        - ./scripts/travis/integration_test.sh
 
     - stage: build_release
       os: linux

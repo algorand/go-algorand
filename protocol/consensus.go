@@ -16,6 +16,10 @@
 
 package protocol
 
+import (
+	"fmt"
+)
+
 // ConsensusVersion is a string that identifies a version of the
 // consensus protocol.
 type ConsensusVersion string
@@ -101,7 +105,7 @@ const ConsensusV18 = ConsensusVersion(
 
 // ConsensusV19 points to 'final' spec commit for 2019 nov release
 const ConsensusV19 = ConsensusVersion(
-	"https://github.com/algorandfoundation/specs/tree/03ae4eac54f1325377d0a2df62b5ef7cc08c5e18",
+	"https://github.com/algorandfoundation/specs/tree/0e196e82bfd6e327994bec373c4cc81bc878ef5c",
 )
 
 // ConsensusFuture is a protocol that should not appear in any production
@@ -135,10 +139,23 @@ const ConsensusTestBigBlocks = ConsensusVersion("test-big-blocks")
 // that decreases the RewardRecalculationInterval greatly.
 const ConsensusTestRapidRewardRecalculation = ConsensusVersion("test-fast-reward-recalculation")
 
+// ConsensusTestShorterLookback is a version of ConsensusCurrentVersion
+// that decreases the MaxBalLookback greatly.
+const ConsensusTestShorterLookback = ConsensusVersion("test-shorter-lookback")
+
 // ConsensusTestFastUpgrade is meant for testing of protocol upgrades:
 // during testing, it is equivalent to another protocol with the exception
 // of the upgrade parameters, which allow for upgrades to take place after
 // only a few rounds.
 func ConsensusTestFastUpgrade(proto ConsensusVersion) ConsensusVersion {
 	return "test-fast-upgrade-" + proto
+}
+
+// Error is used to indicate that an unsupported protocol has been detected.
+type Error ConsensusVersion
+
+// Error satisfies builtin interface `error`
+func (err Error) Error() string {
+	proto := ConsensusVersion(err)
+	return fmt.Sprintf("protocol not supported: %s", proto)
 }

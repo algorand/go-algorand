@@ -88,12 +88,10 @@ type EvalParams struct {
 
 	Trace io.Writer
 
-	TxnGroup []transactions.SignedTxnWithAD
+	TxnGroup []transactions.SignedTxn
 
 	// GroupIndex should point to Txn within TxnGroup
 	GroupIndex int
-
-	FirstValidTimeStamp uint64
 
 	Logger logging.Logger
 }
@@ -442,6 +440,13 @@ func opCompat(expected, got StackType) bool {
 		return true
 	}
 	return expected == got
+}
+
+func nilToEmpty(x []byte) []byte {
+	if x == nil {
+		return make([]byte, 0)
+	}
+	return x
 }
 
 // MaxStackDepth should move to consensus params
@@ -906,7 +911,8 @@ func opArgN(cx *evalContext, n uint64) {
 		cx.err = fmt.Errorf("cannot load arg[%d] of %d", n, len(cx.Txn.Lsig.Args))
 		return
 	}
-	cx.stack = append(cx.stack, stackValue{Bytes: cx.Txn.Lsig.Args[n]})
+	val := nilToEmpty(cx.Txn.Lsig.Args[n])
+	cx.stack = append(cx.stack, stackValue{Bytes: val})
 }
 func opArg(cx *evalContext) {
 	n := uint64(cx.program[cx.pc+1])
@@ -977,12 +983,10 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint
 		sv.Uint = txn.Fee.Raw
 	case FirstValid:
 		sv.Uint = uint64(txn.FirstValid)
-	case FirstValidTime:
-		sv.Uint = cx.FirstValidTimeStamp
 	case LastValid:
 		sv.Uint = uint64(txn.LastValid)
 	case Note:
-		sv.Bytes = txn.Note
+		sv.Bytes = nilToEmpty(txn.Note)
 	case Receiver:
 		sv.Bytes = txn.Receiver[:]
 	case Amount:

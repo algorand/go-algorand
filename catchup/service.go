@@ -237,7 +237,7 @@ func (s *Service) fetchAndWrite(fetcher rpcs.Fetcher, r basics.Round, prevFetchC
 					case ledger.BlockInLedgerError:
 						s.log.Debugf("fetchAndWrite(%v): block already in ledger", r)
 						return true
-					case ledger.ProtocolError:
+					case protocol.Error:
 						if !s.protocolErrorLogged {
 							logging.Base().Errorf("fetchAndWrite(%v): unrecoverable protocol error detected: %v", r, err)
 							s.protocolErrorLogged = true
