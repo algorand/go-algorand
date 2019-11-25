@@ -4,6 +4,7 @@ date '+teal-split-test start %Y%m%d_%H%M%S'
 
 set -e
 set -x
+set -o pipefail
 
 WALLET=$1
 

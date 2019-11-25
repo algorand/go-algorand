@@ -4,6 +4,7 @@ date '+e2e_teal start %Y%m%d_%H%M%S'
 
 set -e
 set -x
+set -o pipefail
 
 WALLET=$1
 

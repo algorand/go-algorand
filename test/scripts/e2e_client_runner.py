@@ -97,7 +97,12 @@ def _script_thread_inner(runset, scriptname):
     p = subprocess.Popen([scriptname, walletname], env=env, stdout=cmdlog, stderr=subprocess.STDOUT)
     cmdlog.close()
     runset.running(scriptname, p)
-    retcode = p.wait(read_script_for_timeout(scriptname))
+    timeout = read_script_for_timeout(scriptname)
+    try:
+        retcode = p.wait(timeout)
+    except subprocess.TimeoutExpired as te:
+        sys.stderr.write('{}\n'.format(te))
+        retcode = -1
     dt = time.time() - start
     if retcode != 0:
         logger.error('%s failed in %f seconds', scriptname, dt)
@@ -327,6 +332,8 @@ def main():
             # If we created a tmpdir and we're not keeping it, clean it up.
             # If an outer process specified $TEMPDIR, let them clean it up.
             atexit.register(shutil.rmtree, tempdir, onerror=logger.error)
+        else:
+            atexit.register(print, 'keeping temps. to clean up:\nrm -rf {}'.format(tempdir))
 
     netdir = os.path.join(tempdir, 'net')
     env['NETDIR'] = netdir
