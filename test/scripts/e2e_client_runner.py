@@ -18,6 +18,7 @@ import argparse
 import atexit
 import base64
 import glob
+import json
 import logging
 import os
 import re
@@ -32,6 +33,9 @@ import threading
 import algosdk
 
 logger = logging.getLogger(__name__)
+
+# less than 16kB of log we show the whole thing, otherwise the last 16kB
+LOG_WHOLE_CUTOFF = 1024 * 16
 
 def openkmd(algodata):
     kmdnetpath = sorted(glob.glob(os.path.join(algodata,'kmd-*','kmd.net')))[-1]
@@ -91,7 +95,7 @@ def _script_thread_inner(runset, scriptname):
     cmdlogpath = os.path.join(env['TEMPDIR'],'.cmdlog')
     cmdlog = open(cmdlogpath, 'wb')
     if not runset.is_ok():
-        runset.done(scriptname, False)
+        runset.done(scriptname, False, time.time() - start)
         return
     logger.info('starting %s', scriptname)
     p = subprocess.Popen([scriptname, walletname], env=env, stdout=cmdlog, stderr=subprocess.STDOUT)
@@ -108,8 +112,8 @@ def _script_thread_inner(runset, scriptname):
         logger.error('%s failed in %f seconds', scriptname, dt)
         st = os.stat(cmdlogpath)
         with open(cmdlogpath, 'r') as fin:
-            if st.st_size > 4096:
-                fin.seek(st.st_size - 4096)
+            if st.st_size > LOG_WHOLE_CUTOFF:
+                fin.seek(st.st_size - LOG_WHOLE_CUTOFF)
                 text = fin.read()
                 lines = text.splitlines()
                 if len(lines) > 1:
@@ -123,15 +127,16 @@ def _script_thread_inner(runset, scriptname):
                 sys.stderr.write(fin.read())
     else:
         logger.info('finished %s OK in %f seconds', scriptname, dt)
-    runset.done(scriptname, retcode == 0)
+    runset.done(scriptname, retcode == 0, dt)
     return
 
 def script_thread(runset, scriptname):
+    start = time.time()
     try:
         _script_thread_inner(runset, scriptname)
     except Exception as e:
         logger.error('error in e2e_client_runner.py', exc_info=True)
-        runset.done(scriptname, False)
+        runset.done(scriptname, False, time.time() - start)
 
 def killthread(runset):
     time.sleep(5)
@@ -152,6 +157,7 @@ class RunSet:
         self.pubw = None
         self.maxpubaddr = None
         self.errors = []
+        self.statuses = []
         return
 
     def is_ok(self):
@@ -209,8 +215,9 @@ class RunSet:
         with self.lock:
             self.procs[scriptname] = p
 
-    def done(self, scriptname, ok):
+    def done(self, scriptname, ok, seconds):
         with self.lock:
+            self.statuses.append( {'script':scriptname, 'ok':ok, 'seconds':seconds} )
             if not ok:
                 self.errors.append('{} failed'.format(scriptname))
             self.threads.pop(scriptname, None)
@@ -360,8 +367,10 @@ def main():
     rs.wait(args.timeout)
     if rs.errors:
         retcode = 1
-        logger.error('errors: %r', '\n'.join(rs.errors))
-    logger.info('finished in %f seconds', time.time() - start)
+        logger.error('ERRORS after %f seconds: %r', time.time() - start, '\n'.join(rs.errors))
+    else:
+        logger.info('finished OK %f seconds', time.time() - start)
+    logger.info('statuses-json: %s', json.dumps(rs.statuses))
     return retcode
 
 if __name__ == '__main__':

@@ -34,13 +34,17 @@ fi
 
 echo "wait for first round multiple"
 ROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
-while [ ${ROUND} != ${PERIOD} ]; do
+cat<<EOF|python - > ${TEMPDIR}/pbound
+print(((${ROUND} // ${PERIOD}) * ${PERIOD}) + ${PERIOD})
+EOF
+PBOUND=$(cat ${TEMPDIR}/pbound)
+while [ ${ROUND} != ${PBOUND} ]; do
     goal node wait
     ROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
 done
 
 echo "send a bad keyreg transaction (missing lease)"
-${gcmd} account changeonlinestatus -a ${ACCOUNTA} --online --firstvalid ${PERIOD} --validrounds `expr ${DUR} + 1` --txfile ${TEMPDIR}/keyreg.tx
+${gcmd} account changeonlinestatus -a ${ACCOUNTA} --online --firstvalid ${PBOUND} --validrounds `expr ${DUR} + 1` --txfile ${TEMPDIR}/keyreg.tx
 dsign ${TEMPDIR}/delegate.keyregkey ${TEMPDIR}/kr.lsig < ${TEMPDIR}/keyreg.tx > ${TEMPDIR}/keyreg.stx
 
 RES=$(${gcmd} clerk rawsend -f ${TEMPDIR}/keyreg.stx || true)
@@ -51,7 +55,7 @@ if [[ $RES != *"${EXPERROR}"* ]]; then
 fi
 
 echo "send a bad keyreg transaction (bad validity)"
-${gcmd} account changeonlinestatus -a ${ACCOUNTA} --online --firstvalid ${PERIOD} --validrounds `expr ${DUR} + 4` --txfile ${TEMPDIR}/keyreg.tx
+${gcmd} account changeonlinestatus -a ${ACCOUNTA} --online --firstvalid ${PBOUND} --validrounds `expr ${DUR} + 4` --txfile ${TEMPDIR}/keyreg.tx
 dsign ${TEMPDIR}/delegate.keyregkey ${TEMPDIR}/kr.lsig < ${TEMPDIR}/keyreg.tx > ${TEMPDIR}/keyreg.stx
 
 RES=$(${gcmd} clerk rawsend -f ${TEMPDIR}/keyreg.stx || true)
@@ -62,7 +66,7 @@ if [[ $RES != *"${EXPERROR}"* ]]; then
 fi
 
 echo "send a bad keyreg transaction (bad delegate key)"
-${gcmd} account changeonlinestatus -a ${ACCOUNTA} -x ${LEASE} --online --firstvalid ${PERIOD} --validrounds `expr ${DUR} + 1` --txfile ${TEMPDIR}/keyreg.tx
+${gcmd} account changeonlinestatus -a ${ACCOUNTA} -x ${LEASE} --online --firstvalid ${PBOUND} --validrounds `expr ${DUR} + 1` --txfile ${TEMPDIR}/keyreg.tx
 algokey generate -f ${TEMPDIR}/bad.keyregkey
 dsign ${TEMPDIR}/bad.keyregkey ${TEMPDIR}/kr.lsig < ${TEMPDIR}/keyreg.tx > ${TEMPDIR}/keyreg.stx
 
@@ -80,7 +84,7 @@ if [[ $REGOK != 1 ]]; then
    false
 fi
 
-${gcmd} account changeonlinestatus -a ${ACCOUNTA} -x ${LEASE} --online --firstvalid ${PERIOD} --validrounds `expr ${DUR} + 1` --txfile ${TEMPDIR}/keyreg.tx
+${gcmd} account changeonlinestatus -a ${ACCOUNTA} -x ${LEASE} --online --firstvalid ${PBOUND} --validrounds `expr ${DUR} + 1` --txfile ${TEMPDIR}/keyreg.tx
 dsign ${TEMPDIR}/delegate.keyregkey ${TEMPDIR}/kr.lsig < ${TEMPDIR}/keyreg.tx > ${TEMPDIR}/keyreg.stx
 ${gcmd} clerk rawsend -f ${TEMPDIR}/keyreg.stx
 
@@ -91,7 +95,7 @@ if [[ $REGOK != 1 ]]; then
 fi
 
 echo "replay keyreg transaction with different fee"
-${gcmd} account changeonlinestatus -a ${ACCOUNTA} -x ${LEASE} --online --firstvalid ${PERIOD} --validrounds `expr ${DUR} + 1` --txfile ${TEMPDIR}/keyreg.tx --fee 100000
+${gcmd} account changeonlinestatus -a ${ACCOUNTA} -x ${LEASE} --online --firstvalid ${PBOUND} --validrounds `expr ${DUR} + 1` --txfile ${TEMPDIR}/keyreg.tx --fee 100000
 dsign ${TEMPDIR}/delegate.keyregkey ${TEMPDIR}/kr.lsig < ${TEMPDIR}/keyreg.tx > ${TEMPDIR}/keyreg.stx
 
 RES=$(${gcmd} clerk rawsend -f ${TEMPDIR}/keyreg.stx || true)
@@ -121,13 +125,13 @@ fi
 
 echo "wait for valid duration to pass"
 ROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
-while [ ${ROUND} != `expr ${EXPIRE} + 1` ]; do
+while [ ${ROUND} -lt `expr ${EXPIRE} + 1` ]; do
     goal node wait
     ROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
 done
 
 echo "send a keyreg transaction after expiration"
-${gcmd} account changeonlinestatus -a ${ACCOUNTB} -x ${LEASE} --online --firstvalid ${PERIOD} --validrounds `expr ${DUR} + 1` --txfile ${TEMPDIR}/keyreg.tx
+${gcmd} account changeonlinestatus -a ${ACCOUNTB} -x ${LEASE} --online --firstvalid ${PBOUND} --validrounds `expr ${DUR} + 1` --txfile ${TEMPDIR}/keyreg.tx
 dsign ${TEMPDIR}/delegate.keyregkey ${TEMPDIR}/kr.lsig < ${TEMPDIR}/keyreg.tx > ${TEMPDIR}/keyreg.stx
 
 RES=$(${gcmd} clerk rawsend -f ${TEMPDIR}/keyreg.stx || true)
