@@ -156,6 +156,9 @@ addons:
       - libboost-all-dev
       - fakeroot
       - rpm
+      - python3-venv
+      - libssl-dev
+      - libffi-dev
   artifacts:
     s3_region: "us-east-1"
     paths:
