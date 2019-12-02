@@ -54,22 +54,35 @@ func (lsig *LogicSig) Len() int {
 	return lsiglen
 }
 
-// Equal returns true if both LogicSig are equivalent
+// Equal returns true if both LogicSig are equivalent.
+//
+// Out of paranoia, Equal distinguishes zero-length byte slices
+// from byte slice-typed nil values as they may have subtly
+// different behaviors within the evaluation of a LogicSig,
+// due to differences in msgpack encoding behavior.
 func (lsig *LogicSig) Equal(b *LogicSig) bool {
-	if len(lsig.Logic) == 0 && len(b.Logic) == 0 {
-		return true
-	}
 	sigs := lsig.Sig == b.Sig && lsig.Msig.Equal(b.Msig)
 	if !sigs {
 		return false
 	}
+	if !safeSliceCheck(lsig.Logic, b.Logic) {
+		return false
+	}
+
 	if len(lsig.Args) != len(b.Args) {
 		return false
 	}
-	for i, a := range lsig.Args {
-		if !bytes.Equal(a, b.Args[i]) {
+	for i := range lsig.Args {
+		if !safeSliceCheck(lsig.Args[i], b.Args[i]) {
 			return false
 		}
 	}
 	return true
+}
+
+func safeSliceCheck(a, b []byte) bool {
+	if a != nil && b != nil {
+		return bytes.Equal(a, b)
+	}
+	return a == nil && b == nil
 }

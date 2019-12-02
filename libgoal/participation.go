@@ -214,6 +214,12 @@ func (c *Client) InstallParticipationKeys(inputfile string) (part account.Partic
 		return
 	}
 
+	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
+	if !ok {
+		err = fmt.Errorf("Unknown consensus protocol %s", protocol.ConsensusCurrentVersion)
+		return
+	}
+
 	// After successful install, remove the input copy of the
 	// partkey so that old keys cannot be recovered after they
 	// are used by algod.  We try to delete the data inside
@@ -221,7 +227,7 @@ func (c *Client) InstallParticipationKeys(inputfile string) (part account.Partic
 	// disk blocks, but regardless of whether that works, we
 	// delete the input file.  The consensus protocol version
 	// is irrelevant for the maxuint64 round number we pass in.
-	errCh := partkey.DeleteOldKeys(basics.Round(math.MaxUint64), config.Consensus[protocol.ConsensusCurrentVersion])
+	errCh := partkey.DeleteOldKeys(basics.Round(math.MaxUint64), proto)
 	err = <-errCh
 	if err != nil {
 		return
