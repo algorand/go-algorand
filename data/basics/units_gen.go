@@ -59,7 +59,7 @@ func (z MicroAlgos) Msgsize() (s int) {
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z MicroAlgos) MsgIsZero() bool { return true && (z.Raw == 0) }
+func (z MicroAlgos) MsgIsZero() bool { return (z.Raw == 0) }
 
 // MarshalMsg implements msgp.Marshaler
 func (z Round) MarshalMsg(b []byte) (o []byte, err error) {

@@ -75,7 +75,11 @@ func (z *AccountData) MarshalMsg(b []byte) (o []byte, err error) {
 		o = append(o, 0xa4, 0x61, 0x70, 0x61, 0x72)
 		o = msgp.AppendMapHeader(o, uint32(len(z.AssetParams)))
 		for za0001, za0002 := range z.AssetParams {
-			o = msgp.AppendString(o, za0001)
+			o, err = za0001.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "AssetParams", za0001)
+				return
+			}
 			o, err = za0002.MarshalMsg(o)
 			if err != nil {
 				err = msgp.WrapError(err, "AssetParams", za0001)
@@ -88,7 +92,11 @@ func (z *AccountData) MarshalMsg(b []byte) (o []byte, err error) {
 		o = append(o, 0xa5, 0x61, 0x73, 0x73, 0x65, 0x74)
 		o = msgp.AppendMapHeader(o, uint32(len(z.Assets)))
 		for za0003, za0004 := range z.Assets {
-			o = msgp.AppendString(o, za0003)
+			o, err = za0003.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "Assets", za0003)
+				return
+			}
 			// map header, size 2
 			// string "a"
 			o = append(o, 0x82, 0xa1, 0x61)
@@ -252,10 +260,10 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			}
 			for zb0003 > 0 {
-				var za0001 string
+				var za0001 AssetIndex
 				var za0002 AssetParams
 				zb0003--
-				za0001, bts, err = msgp.ReadStringBytes(bts)
+				bts, err = za0001.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "AssetParams")
 					return
@@ -282,10 +290,10 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			}
 			for zb0004 > 0 {
-				var za0003 string
+				var za0003 AssetIndex
 				var za0004 AssetHolding
 				zb0004--
-				za0003, bts, err = msgp.ReadStringBytes(bts)
+				bts, err = za0003.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Assets")
 					return
@@ -340,26 +348,28 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *AccountData) Msgsize() (s int) {
-	s = 1 + 1 + 1 + 4 + msgp.ByteSize + 5 + z.MicroAlgos.Msgsize() + 6 + msgp.Uint64Size + 4 + z.RewardedMicroAlgos.Msgsize() + 5 + z.VoteID.Msgsize() + 4 + z.SelectionID.Msgsize() + 8 + z.VoteFirstValid.Msgsize() + 8 + z.VoteLastValid.Msgsize() + 7 + msgp.Uint64Size + 5 + msgp.MapHeaderSize
+	s = 1 + 4 + msgp.ByteSize + 5 + z.MicroAlgos.Msgsize() + 6 + msgp.Uint64Size + 4 + z.RewardedMicroAlgos.Msgsize() + 5 + z.VoteID.Msgsize() + 4 + z.SelectionID.Msgsize() + 8 + z.VoteFirstValid.Msgsize() + 8 + z.VoteLastValid.Msgsize() + 7 + msgp.Uint64Size + 5 + msgp.MapHeaderSize
 	if z.AssetParams != nil {
 		for za0001, za0002 := range z.AssetParams {
+			_ = za0001
 			_ = za0002
-			s += msgp.StringPrefixSize + len(za0001) + za0002.Msgsize()
+			s += 0 + za0001.Msgsize() + za0002.Msgsize()
 		}
 	}
 	s += 6 + msgp.MapHeaderSize
 	if z.Assets != nil {
 		for za0003, za0004 := range z.Assets {
+			_ = za0003
 			_ = za0004
-			s += msgp.StringPrefixSize + len(za0003) + 1 + 2 + msgp.Uint64Size + 2 + msgp.BoolSize
+			s += 0 + za0003.Msgsize() + 1 + 2 + msgp.Uint64Size + 2 + msgp.BoolSize
 		}
 	}
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z AccountData) MsgIsZero() bool {
-	return true && (z.Status == 0) && (z.MicroAlgos.MsgIsZero()) && (z.RewardsBase == 0) && (z.RewardedMicroAlgos.MsgIsZero()) && (z.VoteID.MsgIsZero()) && (z.SelectionID.MsgIsZero()) && (z.VoteFirstValid.MsgIsZero()) && (z.VoteLastValid.MsgIsZero()) && (z.VoteKeyDilution == 0) && (len(z.AssetParams) == 0) && (len(z.Assets) == 0)
+func (z *AccountData) MsgIsZero() bool {
+	return (z.Status == 0) && (z.MicroAlgos.MsgIsZero()) && (z.RewardsBase == 0) && (z.RewardedMicroAlgos.MsgIsZero()) && (z.VoteID.MsgIsZero()) && (z.SelectionID.MsgIsZero()) && (z.VoteFirstValid.MsgIsZero()) && (z.VoteLastValid.MsgIsZero()) && (z.VoteKeyDilution == 0) && (len(z.AssetParams) == 0) && (len(z.Assets) == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -445,8 +455,8 @@ func (z *AccountDetail) Msgsize() (s int) {
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z AccountDetail) MsgIsZero() bool {
-	return true && (z.Address.MsgIsZero()) && (z.Algos.MsgIsZero()) && (z.Status == 0)
+func (z *AccountDetail) MsgIsZero() bool {
+	return (z.Address.MsgIsZero()) && (z.Algos.MsgIsZero()) && (z.Status == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -511,7 +521,7 @@ func (z AssetHolding) Msgsize() (s int) {
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z AssetHolding) MsgIsZero() bool { return true && (z.Amount == 0) && (z.Frozen == false) }
+func (z AssetHolding) MsgIsZero() bool { return (z.Amount == 0) && (z.Frozen == false) }
 
 // MarshalMsg implements msgp.Marshaler
 func (z AssetIndex) MarshalMsg(b []byte) (o []byte, err error) {
@@ -614,7 +624,7 @@ func (z *AssetLocator) Msgsize() (s int) {
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z AssetLocator) MsgIsZero() bool { return true && (z.Creator.MsgIsZero()) && (z.Index == 0) }
+func (z *AssetLocator) MsgIsZero() bool { return (z.Creator.MsgIsZero()) && (z.Index == 0) }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *AssetParams) MarshalMsg(b []byte) (o []byte, err error) {
@@ -622,7 +632,7 @@ func (z *AssetParams) MarshalMsg(b []byte) (o []byte, err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(10)
 	var zb0001Mask uint16 /* 11 bits */
-	if z.MetadataHash == [32]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0} {
+	if (z.MetadataHash[0] == 0) && (z.MetadataHash[1] == 0) && (z.MetadataHash[2] == 0) && (z.MetadataHash[3] == 0) && (z.MetadataHash[4] == 0) && (z.MetadataHash[5] == 0) && (z.MetadataHash[6] == 0) && (z.MetadataHash[7] == 0) && (z.MetadataHash[8] == 0) && (z.MetadataHash[9] == 0) && (z.MetadataHash[10] == 0) && (z.MetadataHash[11] == 0) && (z.MetadataHash[12] == 0) && (z.MetadataHash[13] == 0) && (z.MetadataHash[14] == 0) && (z.MetadataHash[15] == 0) && (z.MetadataHash[16] == 0) && (z.MetadataHash[17] == 0) && (z.MetadataHash[18] == 0) && (z.MetadataHash[19] == 0) && (z.MetadataHash[20] == 0) && (z.MetadataHash[21] == 0) && (z.MetadataHash[22] == 0) && (z.MetadataHash[23] == 0) && (z.MetadataHash[24] == 0) && (z.MetadataHash[25] == 0) && (z.MetadataHash[26] == 0) && (z.MetadataHash[27] == 0) && (z.MetadataHash[28] == 0) && (z.MetadataHash[29] == 0) && (z.MetadataHash[30] == 0) && (z.MetadataHash[31] == 0) {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
@@ -828,13 +838,13 @@ func (z *AssetParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *AssetParams) Msgsize() (s int) {
-	s = 1 + 1 + 1 + 2 + msgp.Uint64Size + 3 + msgp.BoolSize + 3 + msgp.StringPrefixSize + len(z.UnitName) + 3 + msgp.StringPrefixSize + len(z.AssetName) + 3 + msgp.StringPrefixSize + len(z.URL) + 3 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 2 + z.Manager.Msgsize() + 2 + z.Reserve.Msgsize() + 2 + z.Freeze.Msgsize() + 2 + z.Clawback.Msgsize()
+	s = 1 + 2 + msgp.Uint64Size + 3 + msgp.BoolSize + 3 + msgp.StringPrefixSize + len(z.UnitName) + 3 + msgp.StringPrefixSize + len(z.AssetName) + 3 + msgp.StringPrefixSize + len(z.URL) + 3 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 2 + z.Manager.Msgsize() + 2 + z.Reserve.Msgsize() + 2 + z.Freeze.Msgsize() + 2 + z.Clawback.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z AssetParams) MsgIsZero() bool {
-	return true && (z.Total == 0) && (z.DefaultFrozen == false) && (z.UnitName == "") && (z.AssetName == "") && (z.URL == "") && (z.MetadataHash == [32]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}) && (z.Manager.MsgIsZero()) && (z.Reserve.MsgIsZero()) && (z.Freeze.MsgIsZero()) && (z.Clawback.MsgIsZero())
+func (z *AssetParams) MsgIsZero() bool {
+	return (z.Total == 0) && (z.DefaultFrozen == false) && (z.UnitName == "") && (z.AssetName == "") && (z.URL == "") && ((z.MetadataHash[0] == 0) && (z.MetadataHash[1] == 0) && (z.MetadataHash[2] == 0) && (z.MetadataHash[3] == 0) && (z.MetadataHash[4] == 0) && (z.MetadataHash[5] == 0) && (z.MetadataHash[6] == 0) && (z.MetadataHash[7] == 0) && (z.MetadataHash[8] == 0) && (z.MetadataHash[9] == 0) && (z.MetadataHash[10] == 0) && (z.MetadataHash[11] == 0) && (z.MetadataHash[12] == 0) && (z.MetadataHash[13] == 0) && (z.MetadataHash[14] == 0) && (z.MetadataHash[15] == 0) && (z.MetadataHash[16] == 0) && (z.MetadataHash[17] == 0) && (z.MetadataHash[18] == 0) && (z.MetadataHash[19] == 0) && (z.MetadataHash[20] == 0) && (z.MetadataHash[21] == 0) && (z.MetadataHash[22] == 0) && (z.MetadataHash[23] == 0) && (z.MetadataHash[24] == 0) && (z.MetadataHash[25] == 0) && (z.MetadataHash[26] == 0) && (z.MetadataHash[27] == 0) && (z.MetadataHash[28] == 0) && (z.MetadataHash[29] == 0) && (z.MetadataHash[30] == 0) && (z.MetadataHash[31] == 0)) && (z.Manager.MsgIsZero()) && (z.Reserve.MsgIsZero()) && (z.Freeze.MsgIsZero()) && (z.Clawback.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -952,8 +962,8 @@ func (z *BalanceDetail) Msgsize() (s int) {
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z BalanceDetail) MsgIsZero() bool {
-	return true && (z.Round.MsgIsZero()) && (z.TotalMoney.MsgIsZero()) && (z.OnlineMoney.MsgIsZero()) && (len(z.Accounts) == 0)
+func (z *BalanceDetail) MsgIsZero() bool {
+	return (z.Round.MsgIsZero()) && (z.TotalMoney.MsgIsZero()) && (z.OnlineMoney.MsgIsZero()) && (len(z.Accounts) == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1038,7 +1048,11 @@ func (z *BalanceRecord) MarshalMsg(b []byte) (o []byte, err error) {
 		o = append(o, 0xa4, 0x61, 0x70, 0x61, 0x72)
 		o = msgp.AppendMapHeader(o, uint32(len(z.AssetParams)))
 		for za0001, za0002 := range z.AssetParams {
-			o = msgp.AppendString(o, za0001)
+			o, err = za0001.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "AssetParams", za0001)
+				return
+			}
 			o, err = za0002.MarshalMsg(o)
 			if err != nil {
 				err = msgp.WrapError(err, "AssetParams", za0001)
@@ -1051,7 +1065,11 @@ func (z *BalanceRecord) MarshalMsg(b []byte) (o []byte, err error) {
 		o = append(o, 0xa5, 0x61, 0x73, 0x73, 0x65, 0x74)
 		o = msgp.AppendMapHeader(o, uint32(len(z.Assets)))
 		for za0003, za0004 := range z.Assets {
-			o = msgp.AppendString(o, za0003)
+			o, err = za0003.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "Assets", za0003)
+				return
+			}
 			// map header, size 2
 			// string "a"
 			o = append(o, 0x82, 0xa1, 0x61)
@@ -1221,10 +1239,10 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			}
 			for zb0003 > 0 {
-				var za0001 string
+				var za0001 AssetIndex
 				var za0002 AssetParams
 				zb0003--
-				za0001, bts, err = msgp.ReadStringBytes(bts)
+				bts, err = za0001.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "AssetParams")
 					return
@@ -1251,10 +1269,10 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			}
 			for zb0004 > 0 {
-				var za0003 string
+				var za0003 AssetIndex
 				var za0004 AssetHolding
 				zb0004--
-				za0003, bts, err = msgp.ReadStringBytes(bts)
+				bts, err = za0003.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Assets")
 					return
@@ -1309,26 +1327,28 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *BalanceRecord) Msgsize() (s int) {
-	s = 1 + 1 + 1 + 5 + z.Addr.Msgsize() + 1 + 1 + 4 + msgp.ByteSize + 5 + z.MicroAlgos.Msgsize() + 6 + msgp.Uint64Size + 4 + z.RewardedMicroAlgos.Msgsize() + 5 + z.VoteID.Msgsize() + 4 + z.SelectionID.Msgsize() + 8 + z.VoteFirstValid.Msgsize() + 8 + z.VoteLastValid.Msgsize() + 7 + msgp.Uint64Size + 5 + msgp.MapHeaderSize
+	s = 1 + 5 + z.Addr.Msgsize() + 4 + msgp.ByteSize + 5 + z.MicroAlgos.Msgsize() + 6 + msgp.Uint64Size + 4 + z.RewardedMicroAlgos.Msgsize() + 5 + z.VoteID.Msgsize() + 4 + z.SelectionID.Msgsize() + 8 + z.VoteFirstValid.Msgsize() + 8 + z.VoteLastValid.Msgsize() + 7 + msgp.Uint64Size + 5 + msgp.MapHeaderSize
 	if z.AssetParams != nil {
 		for za0001, za0002 := range z.AssetParams {
+			_ = za0001
 			_ = za0002
-			s += msgp.StringPrefixSize + len(za0001) + za0002.Msgsize()
+			s += 0 + za0001.Msgsize() + za0002.Msgsize()
 		}
 	}
 	s += 6 + msgp.MapHeaderSize
 	if z.Assets != nil {
 		for za0003, za0004 := range z.Assets {
+			_ = za0003
 			_ = za0004
-			s += msgp.StringPrefixSize + len(za0003) + 1 + 2 + msgp.Uint64Size + 2 + msgp.BoolSize
+			s += 0 + za0003.Msgsize() + 1 + 2 + msgp.Uint64Size + 2 + msgp.BoolSize
 		}
 	}
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z BalanceRecord) MsgIsZero() bool {
-	return true && (z.Addr.MsgIsZero()) && (z.Status == 0) && (z.MicroAlgos.MsgIsZero()) && (z.RewardsBase == 0) && (z.RewardedMicroAlgos.MsgIsZero()) && (z.VoteID.MsgIsZero()) && (z.SelectionID.MsgIsZero()) && (z.VoteFirstValid.MsgIsZero()) && (z.VoteLastValid.MsgIsZero()) && (z.VoteKeyDilution == 0) && (len(z.AssetParams) == 0) && (len(z.Assets) == 0)
+func (z *BalanceRecord) MsgIsZero() bool {
+	return (z.Addr.MsgIsZero()) && (z.Status == 0) && (z.MicroAlgos.MsgIsZero()) && (z.RewardsBase == 0) && (z.RewardedMicroAlgos.MsgIsZero()) && (z.VoteID.MsgIsZero()) && (z.SelectionID.MsgIsZero()) && (z.VoteFirstValid.MsgIsZero()) && (z.VoteLastValid.MsgIsZero()) && (z.VoteKeyDilution == 0) && (len(z.AssetParams) == 0) && (len(z.Assets) == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1445,6 +1465,6 @@ func (z *SupplyDetail) Msgsize() (s int) {
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z SupplyDetail) MsgIsZero() bool {
-	return true && (z.Round.MsgIsZero()) && (z.TotalMoney.MsgIsZero()) && (z.OnlineMoney.MsgIsZero())
+func (z *SupplyDetail) MsgIsZero() bool {
+	return (z.Round.MsgIsZero()) && (z.TotalMoney.MsgIsZero()) && (z.OnlineMoney.MsgIsZero())
 }
