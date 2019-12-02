@@ -16,6 +16,8 @@
 
 package crypto
 
+//go:generate msgp
+
 import (
 	"crypto/sha512"
 	"encoding/base32"
