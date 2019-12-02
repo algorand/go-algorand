@@ -60,6 +60,8 @@ func (hook *telemetryFilteredHook) Fire(entry *logrus.Entry) error {
 		return hook.wrappedHook.Fire(entry)
 	}
 
+	// Disable log history event.
+	/*
 	if entry.Level <= hook.reportLogLevel {
 		// Logging entry at a level which should include log history
 		// Create a new entry augmented with the history field.
@@ -72,6 +74,7 @@ func (hook *telemetryFilteredHook) Fire(entry *logrus.Entry) error {
 
 		return hook.wrappedHook.Fire(newEntry)
 	}
+	*/
 
 	// If we're not including log history and session GUID, create a new
 	// entry that includes the session GUID, unless it is already present
