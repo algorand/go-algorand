@@ -6,26 +6,6 @@ import (
 	"github.com/zeldovich/msgp/msgp"
 )
 
-// DecodeMsg implements msgp.Decodable
-func (z *Digest) DecodeMsg(dc *msgp.Reader) (err error) {
-	err = dc.ReadExactBytes((z)[:])
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	return
-}
-
-// EncodeMsg implements msgp.Encodable
-func (z *Digest) EncodeMsg(en *msgp.Writer) (err error) {
-	err = en.WriteBytes((z)[:])
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	return
-}
-
 // MarshalMsg implements msgp.Marshaler
 func (z *Digest) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())

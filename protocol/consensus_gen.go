@@ -6,30 +6,6 @@ import (
 	"github.com/zeldovich/msgp/msgp"
 )
 
-// DecodeMsg implements msgp.Decodable
-func (z *ConsensusVersion) DecodeMsg(dc *msgp.Reader) (err error) {
-	{
-		var zb0001 string
-		zb0001, err = dc.ReadString()
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		(*z) = ConsensusVersion(zb0001)
-	}
-	return
-}
-
-// EncodeMsg implements msgp.Encodable
-func (z ConsensusVersion) EncodeMsg(en *msgp.Writer) (err error) {
-	err = en.WriteString(string(z))
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	return
-}
-
 // MarshalMsg implements msgp.Marshaler
 func (z ConsensusVersion) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
@@ -55,30 +31,6 @@ func (z *ConsensusVersion) UnmarshalMsg(bts []byte) (o []byte, err error) {
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z ConsensusVersion) Msgsize() (s int) {
 	s = msgp.StringPrefixSize + len(string(z))
-	return
-}
-
-// DecodeMsg implements msgp.Decodable
-func (z *Error) DecodeMsg(dc *msgp.Reader) (err error) {
-	{
-		var zb0001 string
-		zb0001, err = dc.ReadString()
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		(*z) = Error(zb0001)
-	}
-	return
-}
-
-// EncodeMsg implements msgp.Encodable
-func (z Error) EncodeMsg(en *msgp.Writer) (err error) {
-	err = en.WriteString(string(z))
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
 	return
 }
 
