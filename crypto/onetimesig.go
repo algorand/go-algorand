@@ -16,6 +16,8 @@
 
 package crypto
 
+//go:generate msgp
+
 import (
 	"encoding/binary"
 	"fmt"
