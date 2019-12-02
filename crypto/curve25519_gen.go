@@ -35,7 +35,7 @@ func (z *MasterDerivationKey) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *MasterDerivationKey) MsgIsZero() bool {
-	return true && (z[0] == 0) && (z[1] == 0) && (z[2] == 0) && (z[3] == 0) && (z[4] == 0) && (z[5] == 0) && (z[6] == 0) && (z[7] == 0) && (z[8] == 0) && (z[9] == 0) && (z[10] == 0) && (z[11] == 0) && (z[12] == 0) && (z[13] == 0) && (z[14] == 0) && (z[15] == 0) && (z[16] == 0) && (z[17] == 0) && (z[18] == 0) && (z[19] == 0) && (z[20] == 0) && (z[21] == 0) && (z[22] == 0) && (z[23] == 0) && (z[24] == 0) && (z[25] == 0) && (z[26] == 0) && (z[27] == 0) && (z[28] == 0) && (z[29] == 0) && (z[30] == 0) && (z[31] == 0)
+	return (z[0] == 0) && (z[1] == 0) && (z[2] == 0) && (z[3] == 0) && (z[4] == 0) && (z[5] == 0) && (z[6] == 0) && (z[7] == 0) && (z[8] == 0) && (z[9] == 0) && (z[10] == 0) && (z[11] == 0) && (z[12] == 0) && (z[13] == 0) && (z[14] == 0) && (z[15] == 0) && (z[16] == 0) && (z[17] == 0) && (z[18] == 0) && (z[19] == 0) && (z[20] == 0) && (z[21] == 0) && (z[22] == 0) && (z[23] == 0) && (z[24] == 0) && (z[25] == 0) && (z[26] == 0) && (z[27] == 0) && (z[28] == 0) && (z[29] == 0) && (z[30] == 0) && (z[31] == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -64,7 +64,7 @@ func (z *PrivateKey) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *PrivateKey) MsgIsZero() bool {
-	return true && (z[0] == 0) && (z[1] == 0) && (z[2] == 0) && (z[3] == 0) && (z[4] == 0) && (z[5] == 0) && (z[6] == 0) && (z[7] == 0) && (z[8] == 0) && (z[9] == 0) && (z[10] == 0) && (z[11] == 0) && (z[12] == 0) && (z[13] == 0) && (z[14] == 0) && (z[15] == 0) && (z[16] == 0) && (z[17] == 0) && (z[18] == 0) && (z[19] == 0) && (z[20] == 0) && (z[21] == 0) && (z[22] == 0) && (z[23] == 0) && (z[24] == 0) && (z[25] == 0) && (z[26] == 0) && (z[27] == 0) && (z[28] == 0) && (z[29] == 0) && (z[30] == 0) && (z[31] == 0) && (z[32] == 0) && (z[33] == 0) && (z[34] == 0) && (z[35] == 0) && (z[36] == 0) && (z[37] == 0) && (z[38] == 0) && (z[39] == 0) && (z[40] == 0) && (z[41] == 0) && (z[42] == 0) && (z[43] == 0) && (z[44] == 0) && (z[45] == 0) && (z[46] == 0) && (z[47] == 0) && (z[48] == 0) && (z[49] == 0) && (z[50] == 0) && (z[51] == 0) && (z[52] == 0) && (z[53] == 0) && (z[54] == 0) && (z[55] == 0) && (z[56] == 0) && (z[57] == 0) && (z[58] == 0) && (z[59] == 0) && (z[60] == 0) && (z[61] == 0) && (z[62] == 0) && (z[63] == 0)
+	return (z[0] == 0) && (z[1] == 0) && (z[2] == 0) && (z[3] == 0) && (z[4] == 0) && (z[5] == 0) && (z[6] == 0) && (z[7] == 0) && (z[8] == 0) && (z[9] == 0) && (z[10] == 0) && (z[11] == 0) && (z[12] == 0) && (z[13] == 0) && (z[14] == 0) && (z[15] == 0) && (z[16] == 0) && (z[17] == 0) && (z[18] == 0) && (z[19] == 0) && (z[20] == 0) && (z[21] == 0) && (z[22] == 0) && (z[23] == 0) && (z[24] == 0) && (z[25] == 0) && (z[26] == 0) && (z[27] == 0) && (z[28] == 0) && (z[29] == 0) && (z[30] == 0) && (z[31] == 0) && (z[32] == 0) && (z[33] == 0) && (z[34] == 0) && (z[35] == 0) && (z[36] == 0) && (z[37] == 0) && (z[38] == 0) && (z[39] == 0) && (z[40] == 0) && (z[41] == 0) && (z[42] == 0) && (z[43] == 0) && (z[44] == 0) && (z[45] == 0) && (z[46] == 0) && (z[47] == 0) && (z[48] == 0) && (z[49] == 0) && (z[50] == 0) && (z[51] == 0) && (z[52] == 0) && (z[53] == 0) && (z[54] == 0) && (z[55] == 0) && (z[56] == 0) && (z[57] == 0) && (z[58] == 0) && (z[59] == 0) && (z[60] == 0) && (z[61] == 0) && (z[62] == 0) && (z[63] == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -93,7 +93,7 @@ func (z *PublicKey) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *PublicKey) MsgIsZero() bool {
-	return true && (z[0] == 0) && (z[1] == 0) && (z[2] == 0) && (z[3] == 0) && (z[4] == 0) && (z[5] == 0) && (z[6] == 0) && (z[7] == 0) && (z[8] == 0) && (z[9] == 0) && (z[10] == 0) && (z[11] == 0) && (z[12] == 0) && (z[13] == 0) && (z[14] == 0) && (z[15] == 0) && (z[16] == 0) && (z[17] == 0) && (z[18] == 0) && (z[19] == 0) && (z[20] == 0) && (z[21] == 0) && (z[22] == 0) && (z[23] == 0) && (z[24] == 0) && (z[25] == 0) && (z[26] == 0) && (z[27] == 0) && (z[28] == 0) && (z[29] == 0) && (z[30] == 0) && (z[31] == 0)
+	return (z[0] == 0) && (z[1] == 0) && (z[2] == 0) && (z[3] == 0) && (z[4] == 0) && (z[5] == 0) && (z[6] == 0) && (z[7] == 0) && (z[8] == 0) && (z[9] == 0) && (z[10] == 0) && (z[11] == 0) && (z[12] == 0) && (z[13] == 0) && (z[14] == 0) && (z[15] == 0) && (z[16] == 0) && (z[17] == 0) && (z[18] == 0) && (z[19] == 0) && (z[20] == 0) && (z[21] == 0) && (z[22] == 0) && (z[23] == 0) && (z[24] == 0) && (z[25] == 0) && (z[26] == 0) && (z[27] == 0) && (z[28] == 0) && (z[29] == 0) && (z[30] == 0) && (z[31] == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -122,7 +122,7 @@ func (z *Seed) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *Seed) MsgIsZero() bool {
-	return true && (z[0] == 0) && (z[1] == 0) && (z[2] == 0) && (z[3] == 0) && (z[4] == 0) && (z[5] == 0) && (z[6] == 0) && (z[7] == 0) && (z[8] == 0) && (z[9] == 0) && (z[10] == 0) && (z[11] == 0) && (z[12] == 0) && (z[13] == 0) && (z[14] == 0) && (z[15] == 0) && (z[16] == 0) && (z[17] == 0) && (z[18] == 0) && (z[19] == 0) && (z[20] == 0) && (z[21] == 0) && (z[22] == 0) && (z[23] == 0) && (z[24] == 0) && (z[25] == 0) && (z[26] == 0) && (z[27] == 0) && (z[28] == 0) && (z[29] == 0) && (z[30] == 0) && (z[31] == 0)
+	return (z[0] == 0) && (z[1] == 0) && (z[2] == 0) && (z[3] == 0) && (z[4] == 0) && (z[5] == 0) && (z[6] == 0) && (z[7] == 0) && (z[8] == 0) && (z[9] == 0) && (z[10] == 0) && (z[11] == 0) && (z[12] == 0) && (z[13] == 0) && (z[14] == 0) && (z[15] == 0) && (z[16] == 0) && (z[17] == 0) && (z[18] == 0) && (z[19] == 0) && (z[20] == 0) && (z[21] == 0) && (z[22] == 0) && (z[23] == 0) && (z[24] == 0) && (z[25] == 0) && (z[26] == 0) && (z[27] == 0) && (z[28] == 0) && (z[29] == 0) && (z[30] == 0) && (z[31] == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -151,7 +151,7 @@ func (z *Signature) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *Signature) MsgIsZero() bool {
-	return true && (z[0] == 0) && (z[1] == 0) && (z[2] == 0) && (z[3] == 0) && (z[4] == 0) && (z[5] == 0) && (z[6] == 0) && (z[7] == 0) && (z[8] == 0) && (z[9] == 0) && (z[10] == 0) && (z[11] == 0) && (z[12] == 0) && (z[13] == 0) && (z[14] == 0) && (z[15] == 0) && (z[16] == 0) && (z[17] == 0) && (z[18] == 0) && (z[19] == 0) && (z[20] == 0) && (z[21] == 0) && (z[22] == 0) && (z[23] == 0) && (z[24] == 0) && (z[25] == 0) && (z[26] == 0) && (z[27] == 0) && (z[28] == 0) && (z[29] == 0) && (z[30] == 0) && (z[31] == 0) && (z[32] == 0) && (z[33] == 0) && (z[34] == 0) && (z[35] == 0) && (z[36] == 0) && (z[37] == 0) && (z[38] == 0) && (z[39] == 0) && (z[40] == 0) && (z[41] == 0) && (z[42] == 0) && (z[43] == 0) && (z[44] == 0) && (z[45] == 0) && (z[46] == 0) && (z[47] == 0) && (z[48] == 0) && (z[49] == 0) && (z[50] == 0) && (z[51] == 0) && (z[52] == 0) && (z[53] == 0) && (z[54] == 0) && (z[55] == 0) && (z[56] == 0) && (z[57] == 0) && (z[58] == 0) && (z[59] == 0) && (z[60] == 0) && (z[61] == 0) && (z[62] == 0) && (z[63] == 0)
+	return (z[0] == 0) && (z[1] == 0) && (z[2] == 0) && (z[3] == 0) && (z[4] == 0) && (z[5] == 0) && (z[6] == 0) && (z[7] == 0) && (z[8] == 0) && (z[9] == 0) && (z[10] == 0) && (z[11] == 0) && (z[12] == 0) && (z[13] == 0) && (z[14] == 0) && (z[15] == 0) && (z[16] == 0) && (z[17] == 0) && (z[18] == 0) && (z[19] == 0) && (z[20] == 0) && (z[21] == 0) && (z[22] == 0) && (z[23] == 0) && (z[24] == 0) && (z[25] == 0) && (z[26] == 0) && (z[27] == 0) && (z[28] == 0) && (z[29] == 0) && (z[30] == 0) && (z[31] == 0) && (z[32] == 0) && (z[33] == 0) && (z[34] == 0) && (z[35] == 0) && (z[36] == 0) && (z[37] == 0) && (z[38] == 0) && (z[39] == 0) && (z[40] == 0) && (z[41] == 0) && (z[42] == 0) && (z[43] == 0) && (z[44] == 0) && (z[45] == 0) && (z[46] == 0) && (z[47] == 0) && (z[48] == 0) && (z[49] == 0) && (z[50] == 0) && (z[51] == 0) && (z[52] == 0) && (z[53] == 0) && (z[54] == 0) && (z[55] == 0) && (z[56] == 0) && (z[57] == 0) && (z[58] == 0) && (z[59] == 0) && (z[60] == 0) && (z[61] == 0) && (z[62] == 0) && (z[63] == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -221,159 +221,8 @@ func (z *SignatureSecrets) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *SignatureSecrets) MsgIsZero() bool {
-	return true && (z.SignatureVerifier.MsgIsZero()) && (true && (z.SK[0] == 0) && (z.SK[1] == 0) && (z.SK[2] == 0) && (z.SK[3] == 0) && (z.SK[4] == 0) && (z.SK[5] == 0) && (z.SK[6] == 0) && (z.SK[7] == 0) && (z.SK[8] == 0) && (z.SK[9] == 0) && (z.SK[10] == 0) && (z.SK[11] == 0) && (z.SK[12] == 0) && (z.SK[13] == 0) && (z.SK[14] == 0) && (z.SK[15] == 0) && (z.SK[16] == 0) && (z.SK[17] == 0) && (z.SK[18] == 0) && (z.SK[19] == 0) && (z.SK[20] == 0) && (z.SK[21] == 0) && (z.SK[22] == 0) && (z.SK[23] == 0) && (z.SK[24] == 0) && (z.SK[25] == 0) && (z.SK[26] == 0) && (z.SK[27] == 0) && (z.SK[28] == 0) && (z.SK[29] == 0) && (z.SK[30] == 0) && (z.SK[31] == 0) && (z.SK[32] == 0) && (z.SK[33] == 0) && (z.SK[34] == 0) && (z.SK[35] == 0) && (z.SK[36] == 0) && (z.SK[37] == 0) && (z.SK[38] == 0) && (z.SK[39] == 0) && (z.SK[40] == 0) && (z.SK[41] == 0) && (z.SK[42] == 0) && (z.SK[43] == 0) && (z.SK[44] == 0) && (z.SK[45] == 0) && (z.SK[46] == 0) && (z.SK[47] == 0) && (z.SK[48] == 0) && (z.SK[49] == 0) && (z.SK[50] == 0) && (z.SK[51] == 0) && (z.SK[52] == 0) && (z.SK[53] == 0) && (z.SK[54] == 0) && (z.SK[55] == 0) && (z.SK[56] == 0) && (z.SK[57] == 0) && (z.SK[58] == 0) && (z.SK[59] == 0) && (z.SK[60] == 0) && (z.SK[61] == 0) && (z.SK[62] == 0) && (z.SK[63] == 0))
+	return (z.SignatureVerifier.MsgIsZero()) && ((z.SK[0] == 0) && (z.SK[1] == 0) && (z.SK[2] == 0) && (z.SK[3] == 0) && (z.SK[4] == 0) && (z.SK[5] == 0) && (z.SK[6] == 0) && (z.SK[7] == 0) && (z.SK[8] == 0) && (z.SK[9] == 0) && (z.SK[10] == 0) && (z.SK[11] == 0) && (z.SK[12] == 0) && (z.SK[13] == 0) && (z.SK[14] == 0) && (z.SK[15] == 0) && (z.SK[16] == 0) && (z.SK[17] == 0) && (z.SK[18] == 0) && (z.SK[19] == 0) && (z.SK[20] == 0) && (z.SK[21] == 0) && (z.SK[22] == 0) && (z.SK[23] == 0) && (z.SK[24] == 0) && (z.SK[25] == 0) && (z.SK[26] == 0) && (z.SK[27] == 0) && (z.SK[28] == 0) && (z.SK[29] == 0) && (z.SK[30] == 0) && (z.SK[31] == 0) && (z.SK[32] == 0) && (z.SK[33] == 0) && (z.SK[34] == 0) && (z.SK[35] == 0) && (z.SK[36] == 0) && (z.SK[37] == 0) && (z.SK[38] == 0) && (z.SK[39] == 0) && (z.SK[40] == 0) && (z.SK[41] == 0) && (z.SK[42] == 0) && (z.SK[43] == 0) && (z.SK[44] == 0) && (z.SK[45] == 0) && (z.SK[46] == 0) && (z.SK[47] == 0) && (z.SK[48] == 0) && (z.SK[49] == 0) && (z.SK[50] == 0) && (z.SK[51] == 0) && (z.SK[52] == 0) && (z.SK[53] == 0) && (z.SK[54] == 0) && (z.SK[55] == 0) && (z.SK[56] == 0) && (z.SK[57] == 0) && (z.SK[58] == 0) && (z.SK[59] == 0) && (z.SK[60] == 0) && (z.SK[61] == 0) && (z.SK[62] == 0) && (z.SK[63] == 0))
 }
-
-// MarshalMsg implements msgp.Marshaler
-func (z _Ctype_int) MarshalMsg(b []byte) (o []byte, err error) {
-	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendInt32(o, int32(z))
-	return
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *_Ctype_int) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	{
-		var zb0001 int32
-		zb0001, bts, err = msgp.ReadInt32Bytes(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		(*z) = _Ctype_int(zb0001)
-	}
-	o = bts
-	return
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z _Ctype_int) Msgsize() (s int) {
-	s = msgp.Int32Size
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z _Ctype_int) MsgIsZero() bool { return z == 0 }
-
-// MarshalMsg implements msgp.Marshaler
-func (z _Ctype_uchar) MarshalMsg(b []byte) (o []byte, err error) {
-	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendUint8(o, uint8(z))
-	return
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *_Ctype_uchar) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	{
-		var zb0001 uint8
-		zb0001, bts, err = msgp.ReadUint8Bytes(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		(*z) = _Ctype_uchar(zb0001)
-	}
-	o = bts
-	return
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z _Ctype_uchar) Msgsize() (s int) {
-	s = msgp.Uint8Size
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z _Ctype_uchar) MsgIsZero() bool { return z == 0 }
-
-// MarshalMsg implements msgp.Marshaler
-func (z _Ctype_uint) MarshalMsg(b []byte) (o []byte, err error) {
-	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendUint32(o, uint32(z))
-	return
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *_Ctype_uint) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	{
-		var zb0001 uint32
-		zb0001, bts, err = msgp.ReadUint32Bytes(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		(*z) = _Ctype_uint(zb0001)
-	}
-	o = bts
-	return
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z _Ctype_uint) Msgsize() (s int) {
-	s = msgp.Uint32Size
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z _Ctype_uint) MsgIsZero() bool { return z == 0 }
-
-// MarshalMsg implements msgp.Marshaler
-func (z _Ctype_ulonglong) MarshalMsg(b []byte) (o []byte, err error) {
-	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendUint64(o, uint64(z))
-	return
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *_Ctype_ulonglong) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	{
-		var zb0001 uint64
-		zb0001, bts, err = msgp.ReadUint64Bytes(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		(*z) = _Ctype_ulonglong(zb0001)
-	}
-	o = bts
-	return
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z _Ctype_ulonglong) Msgsize() (s int) {
-	s = msgp.Uint64Size
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z _Ctype_ulonglong) MsgIsZero() bool { return z == 0 }
-
-// MarshalMsg implements msgp.Marshaler
-func (z *_Ctype_void) MarshalMsg(b []byte) (o []byte, err error) {
-	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendBytes(o, (z)[:])
-	return
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *_Ctype_void) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	bts, err = msgp.ReadExactBytes(bts, (z)[:])
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	o = bts
-	return
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *_Ctype_void) Msgsize() (s int) {
-	s = msgp.ArrayHeaderSize + (0 * (msgp.ByteSize))
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z *_Ctype_void) MsgIsZero() bool { return true }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *ed25519PrivateKey) MarshalMsg(b []byte) (o []byte, err error) {
@@ -401,7 +250,7 @@ func (z *ed25519PrivateKey) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *ed25519PrivateKey) MsgIsZero() bool {
-	return true && (z[0] == 0) && (z[1] == 0) && (z[2] == 0) && (z[3] == 0) && (z[4] == 0) && (z[5] == 0) && (z[6] == 0) && (z[7] == 0) && (z[8] == 0) && (z[9] == 0) && (z[10] == 0) && (z[11] == 0) && (z[12] == 0) && (z[13] == 0) && (z[14] == 0) && (z[15] == 0) && (z[16] == 0) && (z[17] == 0) && (z[18] == 0) && (z[19] == 0) && (z[20] == 0) && (z[21] == 0) && (z[22] == 0) && (z[23] == 0) && (z[24] == 0) && (z[25] == 0) && (z[26] == 0) && (z[27] == 0) && (z[28] == 0) && (z[29] == 0) && (z[30] == 0) && (z[31] == 0) && (z[32] == 0) && (z[33] == 0) && (z[34] == 0) && (z[35] == 0) && (z[36] == 0) && (z[37] == 0) && (z[38] == 0) && (z[39] == 0) && (z[40] == 0) && (z[41] == 0) && (z[42] == 0) && (z[43] == 0) && (z[44] == 0) && (z[45] == 0) && (z[46] == 0) && (z[47] == 0) && (z[48] == 0) && (z[49] == 0) && (z[50] == 0) && (z[51] == 0) && (z[52] == 0) && (z[53] == 0) && (z[54] == 0) && (z[55] == 0) && (z[56] == 0) && (z[57] == 0) && (z[58] == 0) && (z[59] == 0) && (z[60] == 0) && (z[61] == 0) && (z[62] == 0) && (z[63] == 0)
+	return (z[0] == 0) && (z[1] == 0) && (z[2] == 0) && (z[3] == 0) && (z[4] == 0) && (z[5] == 0) && (z[6] == 0) && (z[7] == 0) && (z[8] == 0) && (z[9] == 0) && (z[10] == 0) && (z[11] == 0) && (z[12] == 0) && (z[13] == 0) && (z[14] == 0) && (z[15] == 0) && (z[16] == 0) && (z[17] == 0) && (z[18] == 0) && (z[19] == 0) && (z[20] == 0) && (z[21] == 0) && (z[22] == 0) && (z[23] == 0) && (z[24] == 0) && (z[25] == 0) && (z[26] == 0) && (z[27] == 0) && (z[28] == 0) && (z[29] == 0) && (z[30] == 0) && (z[31] == 0) && (z[32] == 0) && (z[33] == 0) && (z[34] == 0) && (z[35] == 0) && (z[36] == 0) && (z[37] == 0) && (z[38] == 0) && (z[39] == 0) && (z[40] == 0) && (z[41] == 0) && (z[42] == 0) && (z[43] == 0) && (z[44] == 0) && (z[45] == 0) && (z[46] == 0) && (z[47] == 0) && (z[48] == 0) && (z[49] == 0) && (z[50] == 0) && (z[51] == 0) && (z[52] == 0) && (z[53] == 0) && (z[54] == 0) && (z[55] == 0) && (z[56] == 0) && (z[57] == 0) && (z[58] == 0) && (z[59] == 0) && (z[60] == 0) && (z[61] == 0) && (z[62] == 0) && (z[63] == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -430,7 +279,7 @@ func (z *ed25519PublicKey) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *ed25519PublicKey) MsgIsZero() bool {
-	return true && (z[0] == 0) && (z[1] == 0) && (z[2] == 0) && (z[3] == 0) && (z[4] == 0) && (z[5] == 0) && (z[6] == 0) && (z[7] == 0) && (z[8] == 0) && (z[9] == 0) && (z[10] == 0) && (z[11] == 0) && (z[12] == 0) && (z[13] == 0) && (z[14] == 0) && (z[15] == 0) && (z[16] == 0) && (z[17] == 0) && (z[18] == 0) && (z[19] == 0) && (z[20] == 0) && (z[21] == 0) && (z[22] == 0) && (z[23] == 0) && (z[24] == 0) && (z[25] == 0) && (z[26] == 0) && (z[27] == 0) && (z[28] == 0) && (z[29] == 0) && (z[30] == 0) && (z[31] == 0)
+	return (z[0] == 0) && (z[1] == 0) && (z[2] == 0) && (z[3] == 0) && (z[4] == 0) && (z[5] == 0) && (z[6] == 0) && (z[7] == 0) && (z[8] == 0) && (z[9] == 0) && (z[10] == 0) && (z[11] == 0) && (z[12] == 0) && (z[13] == 0) && (z[14] == 0) && (z[15] == 0) && (z[16] == 0) && (z[17] == 0) && (z[18] == 0) && (z[19] == 0) && (z[20] == 0) && (z[21] == 0) && (z[22] == 0) && (z[23] == 0) && (z[24] == 0) && (z[25] == 0) && (z[26] == 0) && (z[27] == 0) && (z[28] == 0) && (z[29] == 0) && (z[30] == 0) && (z[31] == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -459,7 +308,7 @@ func (z *ed25519Seed) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *ed25519Seed) MsgIsZero() bool {
-	return true && (z[0] == 0) && (z[1] == 0) && (z[2] == 0) && (z[3] == 0) && (z[4] == 0) && (z[5] == 0) && (z[6] == 0) && (z[7] == 0) && (z[8] == 0) && (z[9] == 0) && (z[10] == 0) && (z[11] == 0) && (z[12] == 0) && (z[13] == 0) && (z[14] == 0) && (z[15] == 0) && (z[16] == 0) && (z[17] == 0) && (z[18] == 0) && (z[19] == 0) && (z[20] == 0) && (z[21] == 0) && (z[22] == 0) && (z[23] == 0) && (z[24] == 0) && (z[25] == 0) && (z[26] == 0) && (z[27] == 0) && (z[28] == 0) && (z[29] == 0) && (z[30] == 0) && (z[31] == 0)
+	return (z[0] == 0) && (z[1] == 0) && (z[2] == 0) && (z[3] == 0) && (z[4] == 0) && (z[5] == 0) && (z[6] == 0) && (z[7] == 0) && (z[8] == 0) && (z[9] == 0) && (z[10] == 0) && (z[11] == 0) && (z[12] == 0) && (z[13] == 0) && (z[14] == 0) && (z[15] == 0) && (z[16] == 0) && (z[17] == 0) && (z[18] == 0) && (z[19] == 0) && (z[20] == 0) && (z[21] == 0) && (z[22] == 0) && (z[23] == 0) && (z[24] == 0) && (z[25] == 0) && (z[26] == 0) && (z[27] == 0) && (z[28] == 0) && (z[29] == 0) && (z[30] == 0) && (z[31] == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -488,5 +337,5 @@ func (z *ed25519Signature) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *ed25519Signature) MsgIsZero() bool {
-	return true && (z[0] == 0) && (z[1] == 0) && (z[2] == 0) && (z[3] == 0) && (z[4] == 0) && (z[5] == 0) && (z[6] == 0) && (z[7] == 0) && (z[8] == 0) && (z[9] == 0) && (z[10] == 0) && (z[11] == 0) && (z[12] == 0) && (z[13] == 0) && (z[14] == 0) && (z[15] == 0) && (z[16] == 0) && (z[17] == 0) && (z[18] == 0) && (z[19] == 0) && (z[20] == 0) && (z[21] == 0) && (z[22] == 0) && (z[23] == 0) && (z[24] == 0) && (z[25] == 0) && (z[26] == 0) && (z[27] == 0) && (z[28] == 0) && (z[29] == 0) && (z[30] == 0) && (z[31] == 0) && (z[32] == 0) && (z[33] == 0) && (z[34] == 0) && (z[35] == 0) && (z[36] == 0) && (z[37] == 0) && (z[38] == 0) && (z[39] == 0) && (z[40] == 0) && (z[41] == 0) && (z[42] == 0) && (z[43] == 0) && (z[44] == 0) && (z[45] == 0) && (z[46] == 0) && (z[47] == 0) && (z[48] == 0) && (z[49] == 0) && (z[50] == 0) && (z[51] == 0) && (z[52] == 0) && (z[53] == 0) && (z[54] == 0) && (z[55] == 0) && (z[56] == 0) && (z[57] == 0) && (z[58] == 0) && (z[59] == 0) && (z[60] == 0) && (z[61] == 0) && (z[62] == 0) && (z[63] == 0)
+	return (z[0] == 0) && (z[1] == 0) && (z[2] == 0) && (z[3] == 0) && (z[4] == 0) && (z[5] == 0) && (z[6] == 0) && (z[7] == 0) && (z[8] == 0) && (z[9] == 0) && (z[10] == 0) && (z[11] == 0) && (z[12] == 0) && (z[13] == 0) && (z[14] == 0) && (z[15] == 0) && (z[16] == 0) && (z[17] == 0) && (z[18] == 0) && (z[19] == 0) && (z[20] == 0) && (z[21] == 0) && (z[22] == 0) && (z[23] == 0) && (z[24] == 0) && (z[25] == 0) && (z[26] == 0) && (z[27] == 0) && (z[28] == 0) && (z[29] == 0) && (z[30] == 0) && (z[31] == 0) && (z[32] == 0) && (z[33] == 0) && (z[34] == 0) && (z[35] == 0) && (z[36] == 0) && (z[37] == 0) && (z[38] == 0) && (z[39] == 0) && (z[40] == 0) && (z[41] == 0) && (z[42] == 0) && (z[43] == 0) && (z[44] == 0) && (z[45] == 0) && (z[46] == 0) && (z[47] == 0) && (z[48] == 0) && (z[49] == 0) && (z[50] == 0) && (z[51] == 0) && (z[52] == 0) && (z[53] == 0) && (z[54] == 0) && (z[55] == 0) && (z[56] == 0) && (z[57] == 0) && (z[58] == 0) && (z[59] == 0) && (z[60] == 0) && (z[61] == 0) && (z[62] == 0) && (z[63] == 0)
 }

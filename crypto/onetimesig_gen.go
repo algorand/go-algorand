@@ -129,7 +129,7 @@ func (z *OneTimeSignature) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *OneTimeSignature) MsgIsZero() bool {
-	return true && (z.Sig.MsgIsZero()) && (z.PK.MsgIsZero()) && (z.PKSigOld.MsgIsZero()) && (z.PK2.MsgIsZero()) && (z.PK1Sig.MsgIsZero()) && (z.PK2Sig.MsgIsZero())
+	return (z.Sig.MsgIsZero()) && (z.PK.MsgIsZero()) && (z.PKSigOld.MsgIsZero()) && (z.PK2.MsgIsZero()) && (z.PK1Sig.MsgIsZero()) && (z.PK2Sig.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -194,7 +194,7 @@ func (z OneTimeSignatureIdentifier) Msgsize() (s int) {
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z OneTimeSignatureIdentifier) MsgIsZero() bool { return true && (z.Batch == 0) && (z.Offset == 0) }
+func (z OneTimeSignatureIdentifier) MsgIsZero() bool { return (z.Batch == 0) && (z.Offset == 0) }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *OneTimeSignatureSecrets) MarshalMsg(b []byte) (o []byte, err error) {
@@ -364,7 +364,7 @@ func (z *OneTimeSignatureSecrets) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *OneTimeSignatureSecrets) MsgIsZero() bool {
-	return true && (z.OneTimeSignatureVerifier.MsgIsZero()) && (z.FirstBatch == 0) && (len(z.Batches) == 0) && (z.FirstOffset == 0) && (len(z.Offsets) == 0) && (z.OffsetsPK2.MsgIsZero()) && (z.OffsetsPK2Sig.MsgIsZero())
+	return (z.OneTimeSignatureVerifier.MsgIsZero()) && (z.FirstBatch == 0) && (len(z.Batches) == 0) && (z.FirstOffset == 0) && (len(z.Offsets) == 0) && (z.OffsetsPK2.MsgIsZero()) && (z.OffsetsPK2Sig.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -535,7 +535,7 @@ func (z *OneTimeSignatureSecretsPersistent) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *OneTimeSignatureSecretsPersistent) MsgIsZero() bool {
-	return true && (z.OneTimeSignatureVerifier.MsgIsZero()) && (z.FirstBatch == 0) && (len(z.Batches) == 0) && (z.FirstOffset == 0) && (len(z.Offsets) == 0) && (z.OffsetsPK2.MsgIsZero()) && (z.OffsetsPK2Sig.MsgIsZero())
+	return (z.OneTimeSignatureVerifier.MsgIsZero()) && (z.FirstBatch == 0) && (len(z.Batches) == 0) && (z.FirstOffset == 0) && (len(z.Offsets) == 0) && (z.OffsetsPK2.MsgIsZero()) && (z.OffsetsPK2Sig.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -605,7 +605,7 @@ func (z *OneTimeSignatureSubkeyBatchID) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *OneTimeSignatureSubkeyBatchID) MsgIsZero() bool {
-	return true && (z.SubKeyPK.MsgIsZero()) && (z.Batch == 0)
+	return (z.SubKeyPK.MsgIsZero()) && (z.Batch == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -684,7 +684,7 @@ func (z *OneTimeSignatureSubkeyOffsetID) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *OneTimeSignatureSubkeyOffsetID) MsgIsZero() bool {
-	return true && (z.SubKeyPK.MsgIsZero()) && (z.Batch == 0) && (z.Offset == 0)
+	return (z.SubKeyPK.MsgIsZero()) && (z.Batch == 0) && (z.Offset == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -806,7 +806,7 @@ func (z *OneTimeSigner) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *OneTimeSigner) MsgIsZero() bool {
-	return true && (z.OneTimeSignatureSecrets == nil) && (z.OptionalKeyDilution == 0)
+	return (z.OneTimeSignatureSecrets == nil) && (z.OptionalKeyDilution == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -906,5 +906,5 @@ func (z *ephemeralSubkey) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *ephemeralSubkey) MsgIsZero() bool {
-	return true && (z.PK.MsgIsZero()) && (z.SK.MsgIsZero()) && (z.PKSigOld.MsgIsZero()) && (z.PKSigNew.MsgIsZero())
+	return (z.PK.MsgIsZero()) && (z.SK.MsgIsZero()) && (z.PKSigOld.MsgIsZero()) && (z.PKSigNew.MsgIsZero())
 }
