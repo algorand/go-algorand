@@ -16,6 +16,8 @@
 
 package basics
 
+//go:generate msgp
+
 import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
