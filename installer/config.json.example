@@ -6,7 +6,7 @@
     "BroadcastConnectionsLimit": -1,
     "CadaverSizeTarget": 1073741824,
     "CatchupFailurePeerRefreshRate": 10,
-    "CatchupParallelBlocks": 50,
+    "CatchupParallelBlocks": 16,
     "ConnectionsRateLimitingCount": 60,
     "ConnectionsRateLimitingWindowSeconds": 1,
     "DeadlockDetection": 0,

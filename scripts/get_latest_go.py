@@ -34,6 +34,23 @@ def loadfile(path):
     with open(path) as fin:
         return json.load(fin)
 
+def arch_os():
+    result = subprocess.run(['uname', '-a'], stdout=subprocess.PIPE)
+    text = result.stdout.decode()
+    if 'x86_64' in text:
+        arch = 'amd64'
+    elif 'aarch64' in text:
+        arch = 'arm64'
+    else:
+        raise Exception('could not guess go arch string from uname -a: {!r}'.format(text))
+    if 'Linux' in text:
+        os = 'linux'
+    elif 'Darwin' in text:
+        os = 'darwin'
+    else:
+        raise Exception('could not guess go os string from uname -a: {!r}'.format(text))
+    return arch, os
+
 def main():
     import argparse
     ap = argparse.ArgumentParser()
@@ -60,7 +77,8 @@ def main():
         ob = filtered_versions
     orderedbyversion = sorted([(parseversion(v['version']),v) for v in ob], reverse=True)
     newest = orderedbyversion[0][1]
-    files = list(filter(lambda x: x['arch']=='amd64' and x['os']=='linux', newest['files']))
+    go_arch, go_os = arch_os()
+    files = list(filter(lambda x: x['arch']==go_arch and x['os']==go_os, newest['files']))
     fname = files[0]['filename']
     sha256 = files[0]['sha256']
     url = 'https://dl.google.com/go/{}'.format(fname)

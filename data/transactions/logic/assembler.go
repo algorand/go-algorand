@@ -491,7 +491,7 @@ const (
 	Fee
 	// FirstValid Transaction.FirstValid
 	FirstValid
-	// FirstValidTime Block[Transaction.FirstValid].TimeStamp
+	// FirstValidTime panic
 	FirstValidTime
 	// LastValid Transaction.LastValid
 	LastValid
