@@ -29,3 +29,8 @@ func (z *Digest) Msgsize() (s int) {
 	s = msgp.ArrayHeaderSize + (DigestSize * (msgp.ByteSize))
 	return
 }
+
+// MsgIsZero returns whether this is a zero value
+func (z Digest) MsgIsZero() bool {
+	return z == Digest{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+}

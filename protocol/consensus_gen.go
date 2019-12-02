@@ -34,6 +34,9 @@ func (z ConsensusVersion) Msgsize() (s int) {
 	return
 }
 
+// MsgIsZero returns whether this is a zero value
+func (z ConsensusVersion) MsgIsZero() bool { return z == "" }
+
 // MarshalMsg implements msgp.Marshaler
 func (z Error) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
@@ -61,3 +64,6 @@ func (z Error) Msgsize() (s int) {
 	s = msgp.StringPrefixSize + len(string(z))
 	return
 }
+
+// MsgIsZero returns whether this is a zero value
+func (z Error) MsgIsZero() bool { return z == "" }
