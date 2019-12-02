@@ -16,7 +16,7 @@
 
 package protocol
 
-//go:generate msgp -io=false
+//go:generate msgp
 
 import (
 	"fmt"

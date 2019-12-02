@@ -16,7 +16,7 @@
 
 package crypto
 
-//go:generate msgp -io=false
+//go:generate msgp
 
 import (
 	"crypto/sha512"
