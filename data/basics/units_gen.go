@@ -58,6 +58,9 @@ func (z MicroAlgos) Msgsize() (s int) {
 	return
 }
 
+// MsgIsZero returns whether this is a zero value
+func (z MicroAlgos) MsgIsZero() bool { return true && (z.Raw == 0) }
+
 // MarshalMsg implements msgp.Marshaler
 func (z Round) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
@@ -86,6 +89,9 @@ func (z Round) Msgsize() (s int) {
 	return
 }
 
+// MsgIsZero returns whether this is a zero value
+func (z Round) MsgIsZero() bool { return z == 0 }
+
 // MarshalMsg implements msgp.Marshaler
 func (z RoundInterval) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
@@ -113,3 +119,6 @@ func (z RoundInterval) Msgsize() (s int) {
 	s = msgp.Uint64Size
 	return
 }
+
+// MsgIsZero returns whether this is a zero value
+func (z RoundInterval) MsgIsZero() bool { return z == 0 }
