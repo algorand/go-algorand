@@ -17,7 +17,6 @@
 package data
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -45,7 +44,6 @@ func BenchmarkBlockEncoding(b *testing.B) {
 	block.Payset = pendingTransactionsEnc
 	block.TxnRoot = block.Payset.Commit(false)
 
-if false {
 	b.Run("Encode+Decode", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			var dec bookkeeping.Block
@@ -57,28 +55,21 @@ if false {
 			require.Equal(b, block.Hash(), dec.Hash())
 		}
 	})
-}
 
 	b.Run("Encode+Decode msgp", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			var err error
-			enc, err := block.BlockHeader.MarshalMsg(nil)
-			// enc := protocol.Encode(block.BlockHeader)
+			enc, err := block.MarshalMsg(nil)
 			if err != nil {
 				panic(err)
 			}
 
 			var dec bookkeeping.Block
-			// _, err = dec.BlockHeader.UnmarshalMsg(enc)
-			err = protocol.Decode(enc, &dec.BlockHeader)
+			_, err = dec.UnmarshalMsg(enc)
 			if err != nil {
 				panic(err)
 			}
 
-if false {
- fmt.Printf("block %v\n", block.BlockHeader)
- fmt.Printf("dec %v\n", dec.BlockHeader)
-}
 			require.Equal(b, block.Hash(), dec.Hash())
 		}
 	})
