@@ -27,7 +27,7 @@ export ALGORAND_DATA=${NETDIR}/Node
 ACCOUNT=$(goal account list|awk '{ print $3 }')
 ZERO_ADDRESS=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ
 
-goal asset create --creator ${ACCOUNT} --name bogocoin --unitname bogo --total 1000000000000
+goal asset create --decimals 0 --creator ${ACCOUNT} --name bogocoin --unitname bogo --total 1000000000000
 
 ASSET_ID=$(goal asset info --creator $ACCOUNT --asset bogo|grep 'Asset ID'|awk '{ print $3 }')
 
