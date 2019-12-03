@@ -192,6 +192,14 @@ type AssetParams struct {
 	// required: true
 	Total uint64 `json:"total"`
 
+	// Decimals specifies the number of digits to use after the decimal
+	// point when displaying this asset. If 0, the asset is not divisible.
+	// If 1, the base unit of the asset is in tenths. If 2, the base unit
+	// of the asset is in hundredths, and so on.
+	//
+	// required: true
+	Decimals uint32 `json:"decimals"`
+
 	// DefaultFrozen specifies whether holdings in this asset
 	// are frozen by default.
 	//

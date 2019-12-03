@@ -29,6 +29,7 @@ var (
 	assetID                 uint64
 	assetCreator            string
 	assetTotal              uint64
+	assetDecimals           uint32
 	assetFrozen             bool
 	assetUnitName           string
 	assetMetadataHashBase64 string
@@ -56,6 +57,7 @@ func init() {
 
 	createAssetCmd.Flags().StringVar(&assetCreator, "creator", "", "Account address for creating an asset")
 	createAssetCmd.Flags().Uint64Var(&assetTotal, "total", 0, "Total amount of tokens for created asset")
+	createAssetCmd.Flags().Uint32Var(&assetDecimals, "decimals", 0, "The number of digits to use after the decimal point when displaying this asset. If set to 0, the asset is not divisible beyond its base unit. If set to 1, the base asset unit is tenths. If 2, the base asset unit is hundredths, and so on.")
 	createAssetCmd.Flags().BoolVar(&assetFrozen, "defaultfrozen", false, "Freeze or not freeze holdings by default")
 	createAssetCmd.Flags().StringVar(&assetUnitName, "unitname", "", "Name for the unit of asset")
 	createAssetCmd.Flags().StringVar(&assetName, "name", "", "Name for the entire asset")
@@ -71,6 +73,7 @@ func init() {
 	createAssetCmd.Flags().StringVarP(&noteText, "note", "n", "", "Note text (ignored if --noteb64 used also)")
 	createAssetCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
 	createAssetCmd.MarkFlagRequired("total")
+	createAssetCmd.MarkFlagRequired("decimals")
 	createAssetCmd.MarkFlagRequired("creator")
 
 	destroyAssetCmd.Flags().StringVar(&assetManager, "manager", "", "Manager account to issue the destroy transaction (defaults to creator)")
@@ -222,7 +225,7 @@ var createAssetCmd = &cobra.Command{
 			}
 		}
 
-		tx, err := client.MakeUnsignedAssetCreateTx(assetTotal, assetFrozen, creator, creator, creator, creator, assetUnitName, assetName, assetURL, assetMetadataHash)
+		tx, err := client.MakeUnsignedAssetCreateTx(assetTotal, assetFrozen, creator, creator, creator, creator, assetUnitName, assetName, assetURL, assetMetadataHash, assetDecimals)
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
