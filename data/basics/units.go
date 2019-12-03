@@ -74,26 +74,26 @@ func (a *MicroAlgos) CodecDecodeSelf(dec *codec.Decoder) {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z MicroAlgos) MarshalMsg(b []byte) (o []byte, err error) {
+func (a MicroAlgos) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, msgp.Uint64Size)
-	o = msgp.AppendUint64(o, z.Raw)
+	o = msgp.AppendUint64(o, a.Raw)
 	return
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *MicroAlgos) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	z.Raw, o, err = msgp.ReadUint64Bytes(bts)
+func (a *MicroAlgos) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	a.Raw, o, err = msgp.ReadUint64Bytes(bts)
 	return
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z MicroAlgos) Msgsize() (s int) {
+func (a MicroAlgos) Msgsize() (s int) {
 	return msgp.Uint64Size
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z MicroAlgos) MsgIsZero() bool {
-	return z.Raw == 0
+func (a MicroAlgos) MsgIsZero() bool {
+	return a.Raw == 0
 }
 
 // Round represents a protocol round index
