@@ -17,6 +17,8 @@
 package basics
 
 import (
+	"github.com/zeldovich/msgp/msgp"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-codec/codec"
@@ -56,6 +58,11 @@ func (a MicroAlgos) RewardUnits(proto config.ConsensusParams) uint64 {
 	return a.Raw / proto.RewardUnit
 }
 
+// We generate our own encoders and decoders for MicroAlgos
+// because we want it to appear as an integer, even though
+// we represent it as a single-element struct.
+//msgp:ignore MicroAlgos
+
 // CodecEncodeSelf implements codec.Selfer to encode MicroAlgos as a simple int
 func (a MicroAlgos) CodecEncodeSelf(enc *codec.Encoder) {
 	enc.MustEncode(a.Raw)
@@ -64,6 +71,29 @@ func (a MicroAlgos) CodecEncodeSelf(enc *codec.Encoder) {
 // CodecDecodeSelf implements codec.Selfer to decode MicroAlgos as a simple int
 func (a *MicroAlgos) CodecDecodeSelf(dec *codec.Decoder) {
 	dec.MustDecode(&a.Raw)
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z MicroAlgos) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, msgp.Uint64Size)
+	o = msgp.AppendUint64(o, z.Raw)
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *MicroAlgos) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	z.Raw, o, err = msgp.ReadUint64Bytes(bts)
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z MicroAlgos) Msgsize() (s int) {
+	return msgp.Uint64Size
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z MicroAlgos) MsgIsZero() bool {
+	return z.Raw == 0
 }
 
 // Round represents a protocol round index
