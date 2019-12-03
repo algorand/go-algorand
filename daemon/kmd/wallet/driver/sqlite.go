@@ -1109,7 +1109,8 @@ func (sw *SQLiteWallet) SignTransaction(tx transactions.Transaction, pw []byte) 
 	}
 
 	// Sign the transaction
-	stx = protocol.Encode(tx.Sign(secrets))
+	stxn := tx.Sign(secrets)
+	stx = protocol.Encode(&stxn)
 	return
 }
 
