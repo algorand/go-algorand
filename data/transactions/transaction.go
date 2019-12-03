@@ -473,6 +473,7 @@ type TxnContext interface {
 
 // ExplicitTxnContext is a struct that implements TxnContext with
 // explicit fields for everything.
+//msgp:ignore ExplicitTxnContext
 type ExplicitTxnContext struct {
 	ExplicitRound basics.Round
 	Proto         config.ConsensusParams

@@ -16,8 +16,6 @@
 
 package basics
 
-//go:generate msgp
-
 import (
 	"reflect"
 
