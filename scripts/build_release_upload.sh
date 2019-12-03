@@ -17,15 +17,6 @@ if [ ! -z "${AWS_EFS_MOUNT}" ]; then
     fi
 fi
 
-# Anchor our repo root reference location
-REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"/..
-
-cd ${REPO_ROOT}
-
-. ${HOME}/build_env
-git push origin
-git push origin ${TAG}
-
 cd ${PKG_ROOT}
 
 if [ ! -z "${S3_PREFIX}" ]; then

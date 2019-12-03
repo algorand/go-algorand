@@ -118,13 +118,18 @@ github.com,192.30.253.113 ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEAq2A7hRGmdnm9tUDbO9
 EOF
 fi
 
+if [ ! -d "${HOME}/go-algorand.git" ]; then
+    git clone --mirror "${GIT_REPO_PATH}" "${HOME}/go-algorand.git"
+fi
+
 # Check out
 mkdir -p ${GOPATH}/src/github.com/algorand
 if [ ! -d "${GOPATH}/src/github.com/algorand/go-algorand/.git" ]; then
-    (cd ${GOPATH}/src/github.com/algorand && git clone "${GIT_REPO_PATH}" go-algorand)
+    (cd ${GOPATH}/src/github.com/algorand && git clone "${HOME}/go-algorand.git" go-algorand)
 fi
 cd ${GOPATH}/src/github.com/algorand/go-algorand
 git checkout "${GIT_CHECKOUT_LABEL}"
+# TODO: if we are checking out a release tag, `git tag --verify` it
 
 gpg --import ${GOPATH}/src/github.com/algorand/go-algorand/installer/rpm/RPM-GPG-KEY-Algorand
 

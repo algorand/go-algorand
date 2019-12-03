@@ -11,11 +11,12 @@ cd ${REPO_ROOT}
 # Tag Source
 TAG=${BRANCH}-${FULLVERSION}
 echo "TAG=${TAG}" >> ${HOME}/build_env
-if [ ! -z "${SIGNING_KEY_ADDR}" ]; then
-    git tag -s -u "${SIGNING_KEY_ADDR}" ${TAG} -m "Genesis Timestamp: $(cat ./genesistimestamp.dat)"
-else
-    git tag -s ${TAG} -m "Genesis Timestamp: $(cat ./genesistimestamp.dat)"
-fi
+#if [ ! -z "${SIGNING_KEY_ADDR}" ]; then
+## git tag -s -u dev@algorand.com ${TAG} -m "Genesis Timestamp: $(cat ./genesistimestamp.dat)"
+#    git tag -s -u "${SIGNING_KEY_ADDR}" ${TAG} -m "Genesis Timestamp: $(cat ./genesistimestamp.dat)"
+#else
+#    git tag -s ${TAG} -m "Genesis Timestamp: $(cat ./genesistimestamp.dat)"
+#fi
 
 git archive --prefix=algorand-${FULLVERSION}/ "${TAG}" | gzip > ${PKG_ROOT}/algorand_${CHANNEL}_source_${FULLVERSION}.tar.gz
 
