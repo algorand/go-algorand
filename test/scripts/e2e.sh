@@ -55,24 +55,24 @@ echo Killing all instances and installing current build
 pkill -u $(whoami) -x algod || true
 ./scripts/local_install.sh -c ${CHANNEL} -p ${BINDIR} -d ${DATADIR}
 
+# check our install
+${BINDIR}/algod -v
+${BINDIR}/goal -v
+
+export PATH=${BINDIR}:${PATH}
+export GOPATH=$(go env GOPATH)
+
 # Change current directory to test/scripts so we can just use ./test.sh to exec.
 cd "${SCRIPT_PATH}"
 
 ./timeout 200 ./e2e_basic_start_stop.sh
 
-./timeout 200 ./e2e_teal.sh
-
-./timeout 200 ./limit-swap-test.sh
-
-./timeout 200 ./teal-split-test.sh
-
-./timeout 200 ./atomic-swap-teal-test.sh
-
-./timeout 200 ./periodic-teal-test.sh
-
-./timeout 200 ./dynamic-fee-teal-test.sh
-
-./timeout 200 ./keyreg-teal-test.sh
+python3 -m venv ${TEMPDIR}/ve
+. ${TEMPDIR}/ve/bin/activate
+${TEMPDIR}/ve/bin/pip3 install --upgrade pip
+${TEMPDIR}/ve/bin/pip3 install py-algorand-sdk cryptography
+${TEMPDIR}/ve/bin/python3 e2e_client_runner.py e2e_subs/*.sh
+deactivate
 
 # Export our root temp folder as 'TESTDIR' for tests to use as their root test folder
 # This allows us to clean up everything with our rm -rf trap.
