@@ -200,12 +200,12 @@ func (s *Service) fetchAndWrite(fetcher rpcs.Fetcher, r basics.Round, prevFetchC
 		if !block.ContentsMatchHeader() {
 			// Check if this mismatch is due to an unsupported protocol version
 			if _, ok := config.Consensus[block.BlockHeader.CurrentProtocol]; !ok {
-				if i == 10 {
-					s.log.Errorf("fetchAndWrite(%v): unsupported protocol version detected", )
-				}
-			} else {
-				s.log.Warnf("fetchAndWrite(%v): block contents do not match header (attempt %d)", r, i)
+				s.log.Errorf("fetchAndWrite(%v): unsupported protocol version detected", )
+				client.Close()
+				return false
 			}
+
+			s.log.Warnf("fetchAndWrite(%v): block contents do not match header (attempt %d)", r, i)
 			client.Close()
 			continue // retry the fetch
 		}
