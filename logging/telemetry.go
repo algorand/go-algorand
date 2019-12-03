@@ -70,7 +70,7 @@ func makeLevels(min logrus.Level) []logrus.Level {
 }
 
 func makeTelemetryState(cfg TelemetryConfig, hookFactory hookFactory) (*telemetryState, error) {
-	history := createLogBuffer(cfg.LogHistoryDepth)
+	history := createLogBuffer(2)
 	if cfg.SessionGUID == "" {
 		cfg.SessionGUID = uuid.NewV4().String()
 	}
