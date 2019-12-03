@@ -222,8 +222,8 @@ type ConsensusParams struct {
 	// sum of estimated op cost must be less than this
 	LogicSigMaxCost uint64
 
-	// a precision for assets
-	SupportAssetsPrecision bool
+	// max decimal precision for assets
+	MaxAssetDecimals uint32
 }
 
 // Consensus tracks the protocol-level settings for different versions of the
@@ -451,7 +451,7 @@ func initConsensusProtocols() {
 	// v20 points to adding the precision to the assets.
 	v20 := v19
 	v20.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
-	v20.SupportAssetsPrecision = true
+	v20.MaxAssetDecimals = 19
 	// we want to adjust the upgrade time to be roughly one week.
 	// one week, in term of rounds would be:
 	// 140651 = (7 * 24 * 60 * 60 / 4.3)
