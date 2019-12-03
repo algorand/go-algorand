@@ -93,5 +93,5 @@ type GenesisAllocation struct {
 
 // ToBeHashed impements the crypto.Hashable interface.
 func (genesis Genesis) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.Genesis, protocol.Encode(genesis)
+	return protocol.Genesis, protocol.Encode(&genesis)
 }

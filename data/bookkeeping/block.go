@@ -188,7 +188,7 @@ func (bh BlockHeader) Hash() BlockHash {
 
 // ToBeHashed implements the crypto.Hashable interface
 func (bh BlockHeader) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.BlockHeader, protocol.Encode(bh)
+	return protocol.BlockHeader, protocol.Encode(&bh)
 }
 
 // Digest returns a cryptographic digest summarizing the Block.

@@ -111,7 +111,7 @@ func TestTxnValidationEncodeDecode(t *testing.T) {
 			t.Errorf("signed transaction %#v did not verify", txn)
 		}
 
-		x := protocol.Encode(txn)
+		x := protocol.Encode(&txn)
 		var signedTx transactions.SignedTxn
 		protocol.Decode(x, &signedTx)
 

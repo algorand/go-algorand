@@ -65,7 +65,7 @@ type OneTimeSignatureSubkeyBatchID struct {
 // This is used to sign an intermediate subkey for a batch, in the new style
 // (contrast with OneTimeSignatureIdentifier.BatchBytes).
 func (batch OneTimeSignatureSubkeyBatchID) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.OneTimeSigKey1, protocol.Encode(batch)
+	return protocol.OneTimeSigKey1, protocol.Encode(&batch)
 }
 
 // A OneTimeSignatureSubkeyOffsetID identifies an ephemeralSubkey of a specific
@@ -79,7 +79,7 @@ type OneTimeSignatureSubkeyOffsetID struct {
 // ToBeHashed implements the Hashable interface for a OneTimeSignatureSubkeyOffsetID.
 // This is used to sign a subkey for a specific offset in a batch.
 func (off OneTimeSignatureSubkeyOffsetID) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.OneTimeSigKey2, protocol.Encode(off)
+	return protocol.OneTimeSigKey2, protocol.Encode(&off)
 }
 
 // A OneTimeSignatureIdentifier is an identifier under which a OneTimeSignature is

@@ -295,5 +295,5 @@ type BalanceRecord struct {
 
 // ToBeHashed implements the crypto.Hashable interface
 func (u BalanceRecord) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.BalanceRecord, protocol.Encode(u)
+	return protocol.BalanceRecord, protocol.Encode(&u)
 }

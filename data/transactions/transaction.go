@@ -148,12 +148,12 @@ type TxGroup struct {
 
 // ToBeHashed implements the crypto.Hashable interface.
 func (tg TxGroup) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.TxGroup, protocol.Encode(tg)
+	return protocol.TxGroup, protocol.Encode(&tg)
 }
 
 // ToBeHashed implements the crypto.Hashable interface.
 func (tx Transaction) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.Transaction, protocol.Encode(tx)
+	return protocol.Transaction, protocol.Encode(&tx)
 }
 
 func (tx *Transaction) computeID() Txid {
