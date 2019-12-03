@@ -1332,7 +1332,7 @@ func (z *SignedTxnInBlock) MarshalMsg(b []byte) (o []byte, err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(10)
 	var zb0001Mask uint16 /* 15 bits */
-	if z.ClosingAmount.MsgIsZero() {
+	if z.SignedTxnWithAD.ApplyData.ClosingAmount.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x10
 	}
@@ -1344,31 +1344,31 @@ func (z *SignedTxnInBlock) MarshalMsg(b []byte) (o []byte, err error) {
 		zb0001Len--
 		zb0001Mask |= 0x80
 	}
-	if z.Lsig.MsgIsZero() {
+	if z.SignedTxnWithAD.SignedTxn.Lsig.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x100
 	}
-	if z.Msig.MsgIsZero() {
+	if z.SignedTxnWithAD.SignedTxn.Msig.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x200
 	}
-	if z.CloseRewards.MsgIsZero() {
+	if z.SignedTxnWithAD.ApplyData.CloseRewards.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x400
 	}
-	if z.ReceiverRewards.MsgIsZero() {
+	if z.SignedTxnWithAD.ApplyData.ReceiverRewards.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x800
 	}
-	if z.SenderRewards.MsgIsZero() {
+	if z.SignedTxnWithAD.ApplyData.SenderRewards.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x1000
 	}
-	if z.Sig.MsgIsZero() {
+	if z.SignedTxnWithAD.SignedTxn.Sig.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2000
 	}
-	if z.Txn.MsgIsZero() {
+	if z.SignedTxnWithAD.SignedTxn.Txn.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x4000
 	}
@@ -1380,7 +1380,7 @@ func (z *SignedTxnInBlock) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x10) == 0 { // if not empty
 		// string "ca"
 		o = append(o, 0xa2, 0x63, 0x61)
-		o, err = z.ClosingAmount.MarshalMsg(o)
+		o, err = z.SignedTxnWithAD.ApplyData.ClosingAmount.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "ClosingAmount")
 			return
@@ -1399,7 +1399,7 @@ func (z *SignedTxnInBlock) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x100) == 0 { // if not empty
 		// string "lsig"
 		o = append(o, 0xa4, 0x6c, 0x73, 0x69, 0x67)
-		o, err = z.Lsig.MarshalMsg(o)
+		o, err = z.SignedTxnWithAD.SignedTxn.Lsig.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "Lsig")
 			return
@@ -1408,7 +1408,7 @@ func (z *SignedTxnInBlock) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x200) == 0 { // if not empty
 		// string "msig"
 		o = append(o, 0xa4, 0x6d, 0x73, 0x69, 0x67)
-		o, err = z.Msig.MarshalMsg(o)
+		o, err = z.SignedTxnWithAD.SignedTxn.Msig.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "Msig")
 			return
@@ -1417,7 +1417,7 @@ func (z *SignedTxnInBlock) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x400) == 0 { // if not empty
 		// string "rc"
 		o = append(o, 0xa2, 0x72, 0x63)
-		o, err = z.CloseRewards.MarshalMsg(o)
+		o, err = z.SignedTxnWithAD.ApplyData.CloseRewards.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "CloseRewards")
 			return
@@ -1426,7 +1426,7 @@ func (z *SignedTxnInBlock) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x800) == 0 { // if not empty
 		// string "rr"
 		o = append(o, 0xa2, 0x72, 0x72)
-		o, err = z.ReceiverRewards.MarshalMsg(o)
+		o, err = z.SignedTxnWithAD.ApplyData.ReceiverRewards.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "ReceiverRewards")
 			return
@@ -1435,7 +1435,7 @@ func (z *SignedTxnInBlock) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x1000) == 0 { // if not empty
 		// string "rs"
 		o = append(o, 0xa2, 0x72, 0x73)
-		o, err = z.SenderRewards.MarshalMsg(o)
+		o, err = z.SignedTxnWithAD.ApplyData.SenderRewards.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "SenderRewards")
 			return
@@ -1444,7 +1444,7 @@ func (z *SignedTxnInBlock) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x2000) == 0 { // if not empty
 		// string "sig"
 		o = append(o, 0xa3, 0x73, 0x69, 0x67)
-		o, err = z.Sig.MarshalMsg(o)
+		o, err = z.SignedTxnWithAD.SignedTxn.Sig.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "Sig")
 			return
@@ -1453,7 +1453,7 @@ func (z *SignedTxnInBlock) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x4000) == 0 { // if not empty
 		// string "txn"
 		o = append(o, 0xa3, 0x74, 0x78, 0x6e)
-		o, err = z.Txn.MarshalMsg(o)
+		o, err = z.SignedTxnWithAD.SignedTxn.Txn.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "Txn")
 			return
@@ -1481,49 +1481,49 @@ func (z *SignedTxnInBlock) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "sig":
-			bts, err = z.Sig.UnmarshalMsg(bts)
+			bts, err = z.SignedTxnWithAD.SignedTxn.Sig.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Sig")
 				return
 			}
 		case "msig":
-			bts, err = z.Msig.UnmarshalMsg(bts)
+			bts, err = z.SignedTxnWithAD.SignedTxn.Msig.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Msig")
 				return
 			}
 		case "lsig":
-			bts, err = z.Lsig.UnmarshalMsg(bts)
+			bts, err = z.SignedTxnWithAD.SignedTxn.Lsig.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Lsig")
 				return
 			}
 		case "txn":
-			bts, err = z.Txn.UnmarshalMsg(bts)
+			bts, err = z.SignedTxnWithAD.SignedTxn.Txn.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Txn")
 				return
 			}
 		case "ca":
-			bts, err = z.ClosingAmount.UnmarshalMsg(bts)
+			bts, err = z.SignedTxnWithAD.ApplyData.ClosingAmount.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "ClosingAmount")
 				return
 			}
 		case "rs":
-			bts, err = z.SenderRewards.UnmarshalMsg(bts)
+			bts, err = z.SignedTxnWithAD.ApplyData.SenderRewards.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "SenderRewards")
 				return
 			}
 		case "rr":
-			bts, err = z.ReceiverRewards.UnmarshalMsg(bts)
+			bts, err = z.SignedTxnWithAD.ApplyData.ReceiverRewards.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "ReceiverRewards")
 				return
 			}
 		case "rc":
-			bts, err = z.CloseRewards.UnmarshalMsg(bts)
+			bts, err = z.SignedTxnWithAD.ApplyData.CloseRewards.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "CloseRewards")
 				return
@@ -1554,13 +1554,13 @@ func (z *SignedTxnInBlock) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *SignedTxnInBlock) Msgsize() (s int) {
-	s = 1 + 4 + z.Sig.Msgsize() + 5 + z.Msig.Msgsize() + 5 + z.Lsig.Msgsize() + 4 + z.Txn.Msgsize() + 3 + z.ClosingAmount.Msgsize() + 3 + z.SenderRewards.Msgsize() + 3 + z.ReceiverRewards.Msgsize() + 3 + z.CloseRewards.Msgsize() + 4 + msgp.BoolSize + 4 + msgp.BoolSize
+	s = 1 + 4 + z.SignedTxnWithAD.SignedTxn.Sig.Msgsize() + 5 + z.SignedTxnWithAD.SignedTxn.Msig.Msgsize() + 5 + z.SignedTxnWithAD.SignedTxn.Lsig.Msgsize() + 4 + z.SignedTxnWithAD.SignedTxn.Txn.Msgsize() + 3 + z.SignedTxnWithAD.ApplyData.ClosingAmount.Msgsize() + 3 + z.SignedTxnWithAD.ApplyData.SenderRewards.Msgsize() + 3 + z.SignedTxnWithAD.ApplyData.ReceiverRewards.Msgsize() + 3 + z.SignedTxnWithAD.ApplyData.CloseRewards.Msgsize() + 4 + msgp.BoolSize + 4 + msgp.BoolSize
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *SignedTxnInBlock) MsgIsZero() bool {
-	return (z.Sig.MsgIsZero()) && (z.Msig.MsgIsZero()) && (z.Lsig.MsgIsZero()) && (z.Txn.MsgIsZero()) && (z.ClosingAmount.MsgIsZero()) && (z.SenderRewards.MsgIsZero()) && (z.ReceiverRewards.MsgIsZero()) && (z.CloseRewards.MsgIsZero()) && (z.HasGenesisID == false) && (z.HasGenesisHash == false)
+	return (z.SignedTxnWithAD.SignedTxn.Sig.MsgIsZero()) && (z.SignedTxnWithAD.SignedTxn.Msig.MsgIsZero()) && (z.SignedTxnWithAD.SignedTxn.Lsig.MsgIsZero()) && (z.SignedTxnWithAD.SignedTxn.Txn.MsgIsZero()) && (z.SignedTxnWithAD.ApplyData.ClosingAmount.MsgIsZero()) && (z.SignedTxnWithAD.ApplyData.SenderRewards.MsgIsZero()) && (z.SignedTxnWithAD.ApplyData.ReceiverRewards.MsgIsZero()) && (z.SignedTxnWithAD.ApplyData.CloseRewards.MsgIsZero()) && (z.HasGenesisID == false) && (z.HasGenesisHash == false)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1569,35 +1569,35 @@ func (z *SignedTxnWithAD) MarshalMsg(b []byte) (o []byte, err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(8)
 	var zb0001Mask uint16 /* 12 bits */
-	if z.ClosingAmount.MsgIsZero() {
+	if z.ApplyData.ClosingAmount.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
-	if z.Lsig.MsgIsZero() {
+	if z.SignedTxn.Lsig.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x20
 	}
-	if z.Msig.MsgIsZero() {
+	if z.SignedTxn.Msig.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x40
 	}
-	if z.CloseRewards.MsgIsZero() {
+	if z.ApplyData.CloseRewards.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x80
 	}
-	if z.ReceiverRewards.MsgIsZero() {
+	if z.ApplyData.ReceiverRewards.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x100
 	}
-	if z.SenderRewards.MsgIsZero() {
+	if z.ApplyData.SenderRewards.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x200
 	}
-	if z.Sig.MsgIsZero() {
+	if z.SignedTxn.Sig.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x400
 	}
-	if z.Txn.MsgIsZero() {
+	if z.SignedTxn.Txn.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x800
 	}
@@ -1609,7 +1609,7 @@ func (z *SignedTxnWithAD) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x8) == 0 { // if not empty
 		// string "ca"
 		o = append(o, 0xa2, 0x63, 0x61)
-		o, err = z.ClosingAmount.MarshalMsg(o)
+		o, err = z.ApplyData.ClosingAmount.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "ClosingAmount")
 			return
@@ -1618,7 +1618,7 @@ func (z *SignedTxnWithAD) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x20) == 0 { // if not empty
 		// string "lsig"
 		o = append(o, 0xa4, 0x6c, 0x73, 0x69, 0x67)
-		o, err = z.Lsig.MarshalMsg(o)
+		o, err = z.SignedTxn.Lsig.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "Lsig")
 			return
@@ -1627,7 +1627,7 @@ func (z *SignedTxnWithAD) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x40) == 0 { // if not empty
 		// string "msig"
 		o = append(o, 0xa4, 0x6d, 0x73, 0x69, 0x67)
-		o, err = z.Msig.MarshalMsg(o)
+		o, err = z.SignedTxn.Msig.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "Msig")
 			return
@@ -1636,7 +1636,7 @@ func (z *SignedTxnWithAD) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x80) == 0 { // if not empty
 		// string "rc"
 		o = append(o, 0xa2, 0x72, 0x63)
-		o, err = z.CloseRewards.MarshalMsg(o)
+		o, err = z.ApplyData.CloseRewards.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "CloseRewards")
 			return
@@ -1645,7 +1645,7 @@ func (z *SignedTxnWithAD) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x100) == 0 { // if not empty
 		// string "rr"
 		o = append(o, 0xa2, 0x72, 0x72)
-		o, err = z.ReceiverRewards.MarshalMsg(o)
+		o, err = z.ApplyData.ReceiverRewards.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "ReceiverRewards")
 			return
@@ -1654,7 +1654,7 @@ func (z *SignedTxnWithAD) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x200) == 0 { // if not empty
 		// string "rs"
 		o = append(o, 0xa2, 0x72, 0x73)
-		o, err = z.SenderRewards.MarshalMsg(o)
+		o, err = z.ApplyData.SenderRewards.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "SenderRewards")
 			return
@@ -1663,7 +1663,7 @@ func (z *SignedTxnWithAD) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x400) == 0 { // if not empty
 		// string "sig"
 		o = append(o, 0xa3, 0x73, 0x69, 0x67)
-		o, err = z.Sig.MarshalMsg(o)
+		o, err = z.SignedTxn.Sig.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "Sig")
 			return
@@ -1672,7 +1672,7 @@ func (z *SignedTxnWithAD) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x800) == 0 { // if not empty
 		// string "txn"
 		o = append(o, 0xa3, 0x74, 0x78, 0x6e)
-		o, err = z.Txn.MarshalMsg(o)
+		o, err = z.SignedTxn.Txn.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "Txn")
 			return
@@ -1700,49 +1700,49 @@ func (z *SignedTxnWithAD) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "sig":
-			bts, err = z.Sig.UnmarshalMsg(bts)
+			bts, err = z.SignedTxn.Sig.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Sig")
 				return
 			}
 		case "msig":
-			bts, err = z.Msig.UnmarshalMsg(bts)
+			bts, err = z.SignedTxn.Msig.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Msig")
 				return
 			}
 		case "lsig":
-			bts, err = z.Lsig.UnmarshalMsg(bts)
+			bts, err = z.SignedTxn.Lsig.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Lsig")
 				return
 			}
 		case "txn":
-			bts, err = z.Txn.UnmarshalMsg(bts)
+			bts, err = z.SignedTxn.Txn.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Txn")
 				return
 			}
 		case "ca":
-			bts, err = z.ClosingAmount.UnmarshalMsg(bts)
+			bts, err = z.ApplyData.ClosingAmount.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "ClosingAmount")
 				return
 			}
 		case "rs":
-			bts, err = z.SenderRewards.UnmarshalMsg(bts)
+			bts, err = z.ApplyData.SenderRewards.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "SenderRewards")
 				return
 			}
 		case "rr":
-			bts, err = z.ReceiverRewards.UnmarshalMsg(bts)
+			bts, err = z.ApplyData.ReceiverRewards.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "ReceiverRewards")
 				return
 			}
 		case "rc":
-			bts, err = z.CloseRewards.UnmarshalMsg(bts)
+			bts, err = z.ApplyData.CloseRewards.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "CloseRewards")
 				return
@@ -1761,13 +1761,13 @@ func (z *SignedTxnWithAD) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *SignedTxnWithAD) Msgsize() (s int) {
-	s = 1 + 4 + z.Sig.Msgsize() + 5 + z.Msig.Msgsize() + 5 + z.Lsig.Msgsize() + 4 + z.Txn.Msgsize() + 3 + z.ClosingAmount.Msgsize() + 3 + z.SenderRewards.Msgsize() + 3 + z.ReceiverRewards.Msgsize() + 3 + z.CloseRewards.Msgsize()
+	s = 1 + 4 + z.SignedTxn.Sig.Msgsize() + 5 + z.SignedTxn.Msig.Msgsize() + 5 + z.SignedTxn.Lsig.Msgsize() + 4 + z.SignedTxn.Txn.Msgsize() + 3 + z.ApplyData.ClosingAmount.Msgsize() + 3 + z.ApplyData.SenderRewards.Msgsize() + 3 + z.ApplyData.ReceiverRewards.Msgsize() + 3 + z.ApplyData.CloseRewards.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *SignedTxnWithAD) MsgIsZero() bool {
-	return (z.Sig.MsgIsZero()) && (z.Msig.MsgIsZero()) && (z.Lsig.MsgIsZero()) && (z.Txn.MsgIsZero()) && (z.ClosingAmount.MsgIsZero()) && (z.SenderRewards.MsgIsZero()) && (z.ReceiverRewards.MsgIsZero()) && (z.CloseRewards.MsgIsZero())
+	return (z.SignedTxn.Sig.MsgIsZero()) && (z.SignedTxn.Msig.MsgIsZero()) && (z.SignedTxn.Lsig.MsgIsZero()) && (z.SignedTxn.Txn.MsgIsZero()) && (z.ApplyData.ClosingAmount.MsgIsZero()) && (z.ApplyData.SenderRewards.MsgIsZero()) && (z.ApplyData.ReceiverRewards.MsgIsZero()) && (z.ApplyData.CloseRewards.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1850,95 +1850,95 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte, err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(29)
 	var zb0001Mask uint64 /* 38 bits */
-	if z.AssetAmount == 0 {
+	if z.AssetTransferTxnFields.AssetAmount == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x80
 	}
-	if z.AssetCloseTo.MsgIsZero() {
+	if z.AssetTransferTxnFields.AssetCloseTo.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x100
 	}
-	if z.AssetFrozen == false {
+	if z.AssetFreezeTxnFields.AssetFrozen == false {
 		zb0001Len--
 		zb0001Mask |= 0x200
 	}
-	if z.Amount.MsgIsZero() {
+	if z.PaymentTxnFields.Amount.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x400
 	}
-	if z.AssetParams.MsgIsZero() {
+	if z.AssetConfigTxnFields.AssetParams.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x800
 	}
-	if z.AssetReceiver.MsgIsZero() {
+	if z.AssetTransferTxnFields.AssetReceiver.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x1000
 	}
-	if z.AssetSender.MsgIsZero() {
+	if z.AssetTransferTxnFields.AssetSender.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2000
 	}
-	if z.ConfigAsset.MsgIsZero() {
+	if z.AssetConfigTxnFields.ConfigAsset.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x8000
 	}
-	if z.CloseRemainderTo.MsgIsZero() {
+	if z.PaymentTxnFields.CloseRemainderTo.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x10000
 	}
-	if z.FreezeAccount.MsgIsZero() {
+	if z.AssetFreezeTxnFields.FreezeAccount.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x20000
 	}
-	if z.FreezeAsset.MsgIsZero() {
+	if z.AssetFreezeTxnFields.FreezeAsset.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x40000
 	}
-	if z.Fee.MsgIsZero() {
+	if z.Header.Fee.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x80000
 	}
-	if z.FirstValid.MsgIsZero() {
+	if z.Header.FirstValid.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x100000
 	}
-	if z.GenesisID == "" {
+	if z.Header.GenesisID == "" {
 		zb0001Len--
 		zb0001Mask |= 0x200000
 	}
-	if z.GenesisHash.MsgIsZero() {
+	if z.Header.GenesisHash.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x400000
 	}
-	if z.Group.MsgIsZero() {
+	if z.Header.Group.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x800000
 	}
-	if z.LastValid.MsgIsZero() {
+	if z.Header.LastValid.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x1000000
 	}
-	if (z.Lease[0] == 0) && (z.Lease[1] == 0) && (z.Lease[2] == 0) && (z.Lease[3] == 0) && (z.Lease[4] == 0) && (z.Lease[5] == 0) && (z.Lease[6] == 0) && (z.Lease[7] == 0) && (z.Lease[8] == 0) && (z.Lease[9] == 0) && (z.Lease[10] == 0) && (z.Lease[11] == 0) && (z.Lease[12] == 0) && (z.Lease[13] == 0) && (z.Lease[14] == 0) && (z.Lease[15] == 0) && (z.Lease[16] == 0) && (z.Lease[17] == 0) && (z.Lease[18] == 0) && (z.Lease[19] == 0) && (z.Lease[20] == 0) && (z.Lease[21] == 0) && (z.Lease[22] == 0) && (z.Lease[23] == 0) && (z.Lease[24] == 0) && (z.Lease[25] == 0) && (z.Lease[26] == 0) && (z.Lease[27] == 0) && (z.Lease[28] == 0) && (z.Lease[29] == 0) && (z.Lease[30] == 0) && (z.Lease[31] == 0) {
+	if (z.Header.Lease[0] == 0) && (z.Header.Lease[1] == 0) && (z.Header.Lease[2] == 0) && (z.Header.Lease[3] == 0) && (z.Header.Lease[4] == 0) && (z.Header.Lease[5] == 0) && (z.Header.Lease[6] == 0) && (z.Header.Lease[7] == 0) && (z.Header.Lease[8] == 0) && (z.Header.Lease[9] == 0) && (z.Header.Lease[10] == 0) && (z.Header.Lease[11] == 0) && (z.Header.Lease[12] == 0) && (z.Header.Lease[13] == 0) && (z.Header.Lease[14] == 0) && (z.Header.Lease[15] == 0) && (z.Header.Lease[16] == 0) && (z.Header.Lease[17] == 0) && (z.Header.Lease[18] == 0) && (z.Header.Lease[19] == 0) && (z.Header.Lease[20] == 0) && (z.Header.Lease[21] == 0) && (z.Header.Lease[22] == 0) && (z.Header.Lease[23] == 0) && (z.Header.Lease[24] == 0) && (z.Header.Lease[25] == 0) && (z.Header.Lease[26] == 0) && (z.Header.Lease[27] == 0) && (z.Header.Lease[28] == 0) && (z.Header.Lease[29] == 0) && (z.Header.Lease[30] == 0) && (z.Header.Lease[31] == 0) {
 		zb0001Len--
 		zb0001Mask |= 0x2000000
 	}
-	if z.Nonparticipation == false {
+	if z.KeyregTxnFields.Nonparticipation == false {
 		zb0001Len--
 		zb0001Mask |= 0x4000000
 	}
-	if z.Note == nil {
+	if z.Header.Note == nil {
 		zb0001Len--
 		zb0001Mask |= 0x8000000
 	}
-	if z.Receiver.MsgIsZero() {
+	if z.PaymentTxnFields.Receiver.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x10000000
 	}
-	if z.SelectionPK.MsgIsZero() {
+	if z.KeyregTxnFields.SelectionPK.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x20000000
 	}
-	if z.Sender.MsgIsZero() {
+	if z.Header.Sender.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x40000000
 	}
@@ -1946,23 +1946,23 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte, err error) {
 		zb0001Len--
 		zb0001Mask |= 0x80000000
 	}
-	if z.VoteFirst.MsgIsZero() {
+	if z.KeyregTxnFields.VoteFirst.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x200000000
 	}
-	if z.VoteKeyDilution == 0 {
+	if z.KeyregTxnFields.VoteKeyDilution == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x400000000
 	}
-	if z.VotePK.MsgIsZero() {
+	if z.KeyregTxnFields.VotePK.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x800000000
 	}
-	if z.VoteLast.MsgIsZero() {
+	if z.KeyregTxnFields.VoteLast.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x1000000000
 	}
-	if z.XferAsset.MsgIsZero() {
+	if z.AssetTransferTxnFields.XferAsset.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2000000000
 	}
@@ -1974,12 +1974,12 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x80) == 0 { // if not empty
 		// string "aamt"
 		o = append(o, 0xa4, 0x61, 0x61, 0x6d, 0x74)
-		o = msgp.AppendUint64(o, z.AssetAmount)
+		o = msgp.AppendUint64(o, z.AssetTransferTxnFields.AssetAmount)
 	}
 	if (zb0001Mask & 0x100) == 0 { // if not empty
 		// string "aclose"
 		o = append(o, 0xa6, 0x61, 0x63, 0x6c, 0x6f, 0x73, 0x65)
-		o, err = z.AssetCloseTo.MarshalMsg(o)
+		o, err = z.AssetTransferTxnFields.AssetCloseTo.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "AssetCloseTo")
 			return
@@ -1988,12 +1988,12 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x200) == 0 { // if not empty
 		// string "afrz"
 		o = append(o, 0xa4, 0x61, 0x66, 0x72, 0x7a)
-		o = msgp.AppendBool(o, z.AssetFrozen)
+		o = msgp.AppendBool(o, z.AssetFreezeTxnFields.AssetFrozen)
 	}
 	if (zb0001Mask & 0x400) == 0 { // if not empty
 		// string "amt"
 		o = append(o, 0xa3, 0x61, 0x6d, 0x74)
-		o, err = z.Amount.MarshalMsg(o)
+		o, err = z.PaymentTxnFields.Amount.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "Amount")
 			return
@@ -2002,7 +2002,7 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x800) == 0 { // if not empty
 		// string "apar"
 		o = append(o, 0xa4, 0x61, 0x70, 0x61, 0x72)
-		o, err = z.AssetParams.MarshalMsg(o)
+		o, err = z.AssetConfigTxnFields.AssetParams.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "AssetParams")
 			return
@@ -2011,7 +2011,7 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x1000) == 0 { // if not empty
 		// string "arcv"
 		o = append(o, 0xa4, 0x61, 0x72, 0x63, 0x76)
-		o, err = z.AssetReceiver.MarshalMsg(o)
+		o, err = z.AssetTransferTxnFields.AssetReceiver.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "AssetReceiver")
 			return
@@ -2020,7 +2020,7 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x2000) == 0 { // if not empty
 		// string "asnd"
 		o = append(o, 0xa4, 0x61, 0x73, 0x6e, 0x64)
-		o, err = z.AssetSender.MarshalMsg(o)
+		o, err = z.AssetTransferTxnFields.AssetSender.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "AssetSender")
 			return
@@ -2029,7 +2029,7 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x8000) == 0 { // if not empty
 		// string "caid"
 		o = append(o, 0xa4, 0x63, 0x61, 0x69, 0x64)
-		o, err = z.ConfigAsset.MarshalMsg(o)
+		o, err = z.AssetConfigTxnFields.ConfigAsset.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "ConfigAsset")
 			return
@@ -2038,7 +2038,7 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x10000) == 0 { // if not empty
 		// string "close"
 		o = append(o, 0xa5, 0x63, 0x6c, 0x6f, 0x73, 0x65)
-		o, err = z.CloseRemainderTo.MarshalMsg(o)
+		o, err = z.PaymentTxnFields.CloseRemainderTo.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "CloseRemainderTo")
 			return
@@ -2047,7 +2047,7 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x20000) == 0 { // if not empty
 		// string "fadd"
 		o = append(o, 0xa4, 0x66, 0x61, 0x64, 0x64)
-		o, err = z.FreezeAccount.MarshalMsg(o)
+		o, err = z.AssetFreezeTxnFields.FreezeAccount.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "FreezeAccount")
 			return
@@ -2056,7 +2056,7 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x40000) == 0 { // if not empty
 		// string "faid"
 		o = append(o, 0xa4, 0x66, 0x61, 0x69, 0x64)
-		o, err = z.FreezeAsset.MarshalMsg(o)
+		o, err = z.AssetFreezeTxnFields.FreezeAsset.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "FreezeAsset")
 			return
@@ -2065,7 +2065,7 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x80000) == 0 { // if not empty
 		// string "fee"
 		o = append(o, 0xa3, 0x66, 0x65, 0x65)
-		o, err = z.Fee.MarshalMsg(o)
+		o, err = z.Header.Fee.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "Fee")
 			return
@@ -2074,7 +2074,7 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x100000) == 0 { // if not empty
 		// string "fv"
 		o = append(o, 0xa2, 0x66, 0x76)
-		o, err = z.FirstValid.MarshalMsg(o)
+		o, err = z.Header.FirstValid.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "FirstValid")
 			return
@@ -2083,12 +2083,12 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x200000) == 0 { // if not empty
 		// string "gen"
 		o = append(o, 0xa3, 0x67, 0x65, 0x6e)
-		o = msgp.AppendString(o, z.GenesisID)
+		o = msgp.AppendString(o, z.Header.GenesisID)
 	}
 	if (zb0001Mask & 0x400000) == 0 { // if not empty
 		// string "gh"
 		o = append(o, 0xa2, 0x67, 0x68)
-		o, err = z.GenesisHash.MarshalMsg(o)
+		o, err = z.Header.GenesisHash.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "GenesisHash")
 			return
@@ -2097,7 +2097,7 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x800000) == 0 { // if not empty
 		// string "grp"
 		o = append(o, 0xa3, 0x67, 0x72, 0x70)
-		o, err = z.Group.MarshalMsg(o)
+		o, err = z.Header.Group.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "Group")
 			return
@@ -2106,7 +2106,7 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x1000000) == 0 { // if not empty
 		// string "lv"
 		o = append(o, 0xa2, 0x6c, 0x76)
-		o, err = z.LastValid.MarshalMsg(o)
+		o, err = z.Header.LastValid.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "LastValid")
 			return
@@ -2115,22 +2115,22 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x2000000) == 0 { // if not empty
 		// string "lx"
 		o = append(o, 0xa2, 0x6c, 0x78)
-		o = msgp.AppendBytes(o, (z.Lease)[:])
+		o = msgp.AppendBytes(o, (z.Header.Lease)[:])
 	}
 	if (zb0001Mask & 0x4000000) == 0 { // if not empty
 		// string "nonpart"
 		o = append(o, 0xa7, 0x6e, 0x6f, 0x6e, 0x70, 0x61, 0x72, 0x74)
-		o = msgp.AppendBool(o, z.Nonparticipation)
+		o = msgp.AppendBool(o, z.KeyregTxnFields.Nonparticipation)
 	}
 	if (zb0001Mask & 0x8000000) == 0 { // if not empty
 		// string "note"
 		o = append(o, 0xa4, 0x6e, 0x6f, 0x74, 0x65)
-		o = msgp.AppendBytes(o, z.Note)
+		o = msgp.AppendBytes(o, z.Header.Note)
 	}
 	if (zb0001Mask & 0x10000000) == 0 { // if not empty
 		// string "rcv"
 		o = append(o, 0xa3, 0x72, 0x63, 0x76)
-		o, err = z.Receiver.MarshalMsg(o)
+		o, err = z.PaymentTxnFields.Receiver.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "Receiver")
 			return
@@ -2139,7 +2139,7 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x20000000) == 0 { // if not empty
 		// string "selkey"
 		o = append(o, 0xa6, 0x73, 0x65, 0x6c, 0x6b, 0x65, 0x79)
-		o, err = z.SelectionPK.MarshalMsg(o)
+		o, err = z.KeyregTxnFields.SelectionPK.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "SelectionPK")
 			return
@@ -2148,7 +2148,7 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x40000000) == 0 { // if not empty
 		// string "snd"
 		o = append(o, 0xa3, 0x73, 0x6e, 0x64)
-		o, err = z.Sender.MarshalMsg(o)
+		o, err = z.Header.Sender.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "Sender")
 			return
@@ -2166,7 +2166,7 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x200000000) == 0 { // if not empty
 		// string "votefst"
 		o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x66, 0x73, 0x74)
-		o, err = z.VoteFirst.MarshalMsg(o)
+		o, err = z.KeyregTxnFields.VoteFirst.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "VoteFirst")
 			return
@@ -2175,12 +2175,12 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x400000000) == 0 { // if not empty
 		// string "votekd"
 		o = append(o, 0xa6, 0x76, 0x6f, 0x74, 0x65, 0x6b, 0x64)
-		o = msgp.AppendUint64(o, z.VoteKeyDilution)
+		o = msgp.AppendUint64(o, z.KeyregTxnFields.VoteKeyDilution)
 	}
 	if (zb0001Mask & 0x800000000) == 0 { // if not empty
 		// string "votekey"
 		o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x6b, 0x65, 0x79)
-		o, err = z.VotePK.MarshalMsg(o)
+		o, err = z.KeyregTxnFields.VotePK.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "VotePK")
 			return
@@ -2189,7 +2189,7 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x1000000000) == 0 { // if not empty
 		// string "votelst"
 		o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x6c, 0x73, 0x74)
-		o, err = z.VoteLast.MarshalMsg(o)
+		o, err = z.KeyregTxnFields.VoteLast.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "VoteLast")
 			return
@@ -2198,7 +2198,7 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x2000000000) == 0 { // if not empty
 		// string "xaid"
 		o = append(o, 0xa4, 0x78, 0x61, 0x69, 0x64)
-		o, err = z.XferAsset.MarshalMsg(o)
+		o, err = z.AssetTransferTxnFields.XferAsset.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "XferAsset")
 			return
@@ -2232,169 +2232,169 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		case "snd":
-			bts, err = z.Sender.UnmarshalMsg(bts)
+			bts, err = z.Header.Sender.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Sender")
 				return
 			}
 		case "fee":
-			bts, err = z.Fee.UnmarshalMsg(bts)
+			bts, err = z.Header.Fee.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Fee")
 				return
 			}
 		case "fv":
-			bts, err = z.FirstValid.UnmarshalMsg(bts)
+			bts, err = z.Header.FirstValid.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "FirstValid")
 				return
 			}
 		case "lv":
-			bts, err = z.LastValid.UnmarshalMsg(bts)
+			bts, err = z.Header.LastValid.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "LastValid")
 				return
 			}
 		case "note":
-			z.Note, bts, err = msgp.ReadBytesBytes(bts, z.Note)
+			z.Header.Note, bts, err = msgp.ReadBytesBytes(bts, z.Header.Note)
 			if err != nil {
 				err = msgp.WrapError(err, "Note")
 				return
 			}
 		case "gen":
-			z.GenesisID, bts, err = msgp.ReadStringBytes(bts)
+			z.Header.GenesisID, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "GenesisID")
 				return
 			}
 		case "gh":
-			bts, err = z.GenesisHash.UnmarshalMsg(bts)
+			bts, err = z.Header.GenesisHash.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "GenesisHash")
 				return
 			}
 		case "grp":
-			bts, err = z.Group.UnmarshalMsg(bts)
+			bts, err = z.Header.Group.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Group")
 				return
 			}
 		case "lx":
-			bts, err = msgp.ReadExactBytes(bts, (z.Lease)[:])
+			bts, err = msgp.ReadExactBytes(bts, (z.Header.Lease)[:])
 			if err != nil {
 				err = msgp.WrapError(err, "Lease")
 				return
 			}
 		case "votekey":
-			bts, err = z.VotePK.UnmarshalMsg(bts)
+			bts, err = z.KeyregTxnFields.VotePK.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "VotePK")
 				return
 			}
 		case "selkey":
-			bts, err = z.SelectionPK.UnmarshalMsg(bts)
+			bts, err = z.KeyregTxnFields.SelectionPK.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "SelectionPK")
 				return
 			}
 		case "votefst":
-			bts, err = z.VoteFirst.UnmarshalMsg(bts)
+			bts, err = z.KeyregTxnFields.VoteFirst.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "VoteFirst")
 				return
 			}
 		case "votelst":
-			bts, err = z.VoteLast.UnmarshalMsg(bts)
+			bts, err = z.KeyregTxnFields.VoteLast.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "VoteLast")
 				return
 			}
 		case "votekd":
-			z.VoteKeyDilution, bts, err = msgp.ReadUint64Bytes(bts)
+			z.KeyregTxnFields.VoteKeyDilution, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "VoteKeyDilution")
 				return
 			}
 		case "nonpart":
-			z.Nonparticipation, bts, err = msgp.ReadBoolBytes(bts)
+			z.KeyregTxnFields.Nonparticipation, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Nonparticipation")
 				return
 			}
 		case "rcv":
-			bts, err = z.Receiver.UnmarshalMsg(bts)
+			bts, err = z.PaymentTxnFields.Receiver.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Receiver")
 				return
 			}
 		case "amt":
-			bts, err = z.Amount.UnmarshalMsg(bts)
+			bts, err = z.PaymentTxnFields.Amount.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Amount")
 				return
 			}
 		case "close":
-			bts, err = z.CloseRemainderTo.UnmarshalMsg(bts)
+			bts, err = z.PaymentTxnFields.CloseRemainderTo.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "CloseRemainderTo")
 				return
 			}
 		case "caid":
-			bts, err = z.ConfigAsset.UnmarshalMsg(bts)
+			bts, err = z.AssetConfigTxnFields.ConfigAsset.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "ConfigAsset")
 				return
 			}
 		case "apar":
-			bts, err = z.AssetParams.UnmarshalMsg(bts)
+			bts, err = z.AssetConfigTxnFields.AssetParams.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "AssetParams")
 				return
 			}
 		case "xaid":
-			bts, err = z.XferAsset.UnmarshalMsg(bts)
+			bts, err = z.AssetTransferTxnFields.XferAsset.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "XferAsset")
 				return
 			}
 		case "aamt":
-			z.AssetAmount, bts, err = msgp.ReadUint64Bytes(bts)
+			z.AssetTransferTxnFields.AssetAmount, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "AssetAmount")
 				return
 			}
 		case "asnd":
-			bts, err = z.AssetSender.UnmarshalMsg(bts)
+			bts, err = z.AssetTransferTxnFields.AssetSender.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "AssetSender")
 				return
 			}
 		case "arcv":
-			bts, err = z.AssetReceiver.UnmarshalMsg(bts)
+			bts, err = z.AssetTransferTxnFields.AssetReceiver.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "AssetReceiver")
 				return
 			}
 		case "aclose":
-			bts, err = z.AssetCloseTo.UnmarshalMsg(bts)
+			bts, err = z.AssetTransferTxnFields.AssetCloseTo.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "AssetCloseTo")
 				return
 			}
 		case "fadd":
-			bts, err = z.FreezeAccount.UnmarshalMsg(bts)
+			bts, err = z.AssetFreezeTxnFields.FreezeAccount.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "FreezeAccount")
 				return
 			}
 		case "faid":
-			bts, err = z.FreezeAsset.UnmarshalMsg(bts)
+			bts, err = z.AssetFreezeTxnFields.FreezeAsset.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "FreezeAsset")
 				return
 			}
 		case "afrz":
-			z.AssetFrozen, bts, err = msgp.ReadBoolBytes(bts)
+			z.AssetFreezeTxnFields.AssetFrozen, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "AssetFrozen")
 				return
@@ -2413,13 +2413,13 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Transaction) Msgsize() (s int) {
-	s = 3 + 5 + z.Type.Msgsize() + 4 + z.Sender.Msgsize() + 4 + z.Fee.Msgsize() + 3 + z.FirstValid.Msgsize() + 3 + z.LastValid.Msgsize() + 5 + msgp.BytesPrefixSize + len(z.Note) + 4 + msgp.StringPrefixSize + len(z.GenesisID) + 3 + z.GenesisHash.Msgsize() + 4 + z.Group.Msgsize() + 3 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 8 + z.VotePK.Msgsize() + 7 + z.SelectionPK.Msgsize() + 8 + z.VoteFirst.Msgsize() + 8 + z.VoteLast.Msgsize() + 7 + msgp.Uint64Size + 8 + msgp.BoolSize + 4 + z.Receiver.Msgsize() + 4 + z.Amount.Msgsize() + 6 + z.CloseRemainderTo.Msgsize() + 5 + z.ConfigAsset.Msgsize() + 5 + z.AssetParams.Msgsize() + 5 + z.XferAsset.Msgsize() + 5 + msgp.Uint64Size + 5 + z.AssetSender.Msgsize() + 5 + z.AssetReceiver.Msgsize() + 7 + z.AssetCloseTo.Msgsize() + 5 + z.FreezeAccount.Msgsize() + 5 + z.FreezeAsset.Msgsize() + 5 + msgp.BoolSize
+	s = 3 + 5 + z.Type.Msgsize() + 4 + z.Header.Sender.Msgsize() + 4 + z.Header.Fee.Msgsize() + 3 + z.Header.FirstValid.Msgsize() + 3 + z.Header.LastValid.Msgsize() + 5 + msgp.BytesPrefixSize + len(z.Header.Note) + 4 + msgp.StringPrefixSize + len(z.Header.GenesisID) + 3 + z.Header.GenesisHash.Msgsize() + 4 + z.Header.Group.Msgsize() + 3 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 8 + z.KeyregTxnFields.VotePK.Msgsize() + 7 + z.KeyregTxnFields.SelectionPK.Msgsize() + 8 + z.KeyregTxnFields.VoteFirst.Msgsize() + 8 + z.KeyregTxnFields.VoteLast.Msgsize() + 7 + msgp.Uint64Size + 8 + msgp.BoolSize + 4 + z.PaymentTxnFields.Receiver.Msgsize() + 4 + z.PaymentTxnFields.Amount.Msgsize() + 6 + z.PaymentTxnFields.CloseRemainderTo.Msgsize() + 5 + z.AssetConfigTxnFields.ConfigAsset.Msgsize() + 5 + z.AssetConfigTxnFields.AssetParams.Msgsize() + 5 + z.AssetTransferTxnFields.XferAsset.Msgsize() + 5 + msgp.Uint64Size + 5 + z.AssetTransferTxnFields.AssetSender.Msgsize() + 5 + z.AssetTransferTxnFields.AssetReceiver.Msgsize() + 7 + z.AssetTransferTxnFields.AssetCloseTo.Msgsize() + 5 + z.AssetFreezeTxnFields.FreezeAccount.Msgsize() + 5 + z.AssetFreezeTxnFields.FreezeAsset.Msgsize() + 5 + msgp.BoolSize
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Transaction) MsgIsZero() bool {
-	return (z.Type.MsgIsZero()) && (z.Sender.MsgIsZero()) && (z.Fee.MsgIsZero()) && (z.FirstValid.MsgIsZero()) && (z.LastValid.MsgIsZero()) && (z.Note == nil) && (z.GenesisID == "") && (z.GenesisHash.MsgIsZero()) && (z.Group.MsgIsZero()) && ((z.Lease[0] == 0) && (z.Lease[1] == 0) && (z.Lease[2] == 0) && (z.Lease[3] == 0) && (z.Lease[4] == 0) && (z.Lease[5] == 0) && (z.Lease[6] == 0) && (z.Lease[7] == 0) && (z.Lease[8] == 0) && (z.Lease[9] == 0) && (z.Lease[10] == 0) && (z.Lease[11] == 0) && (z.Lease[12] == 0) && (z.Lease[13] == 0) && (z.Lease[14] == 0) && (z.Lease[15] == 0) && (z.Lease[16] == 0) && (z.Lease[17] == 0) && (z.Lease[18] == 0) && (z.Lease[19] == 0) && (z.Lease[20] == 0) && (z.Lease[21] == 0) && (z.Lease[22] == 0) && (z.Lease[23] == 0) && (z.Lease[24] == 0) && (z.Lease[25] == 0) && (z.Lease[26] == 0) && (z.Lease[27] == 0) && (z.Lease[28] == 0) && (z.Lease[29] == 0) && (z.Lease[30] == 0) && (z.Lease[31] == 0)) && (z.VotePK.MsgIsZero()) && (z.SelectionPK.MsgIsZero()) && (z.VoteFirst.MsgIsZero()) && (z.VoteLast.MsgIsZero()) && (z.VoteKeyDilution == 0) && (z.Nonparticipation == false) && (z.Receiver.MsgIsZero()) && (z.Amount.MsgIsZero()) && (z.CloseRemainderTo.MsgIsZero()) && (z.ConfigAsset.MsgIsZero()) && (z.AssetParams.MsgIsZero()) && (z.XferAsset.MsgIsZero()) && (z.AssetAmount == 0) && (z.AssetSender.MsgIsZero()) && (z.AssetReceiver.MsgIsZero()) && (z.AssetCloseTo.MsgIsZero()) && (z.FreezeAccount.MsgIsZero()) && (z.FreezeAsset.MsgIsZero()) && (z.AssetFrozen == false)
+	return (z.Type.MsgIsZero()) && (z.Header.Sender.MsgIsZero()) && (z.Header.Fee.MsgIsZero()) && (z.Header.FirstValid.MsgIsZero()) && (z.Header.LastValid.MsgIsZero()) && (z.Header.Note == nil) && (z.Header.GenesisID == "") && (z.Header.GenesisHash.MsgIsZero()) && (z.Header.Group.MsgIsZero()) && ((z.Header.Lease[0] == 0) && (z.Header.Lease[1] == 0) && (z.Header.Lease[2] == 0) && (z.Header.Lease[3] == 0) && (z.Header.Lease[4] == 0) && (z.Header.Lease[5] == 0) && (z.Header.Lease[6] == 0) && (z.Header.Lease[7] == 0) && (z.Header.Lease[8] == 0) && (z.Header.Lease[9] == 0) && (z.Header.Lease[10] == 0) && (z.Header.Lease[11] == 0) && (z.Header.Lease[12] == 0) && (z.Header.Lease[13] == 0) && (z.Header.Lease[14] == 0) && (z.Header.Lease[15] == 0) && (z.Header.Lease[16] == 0) && (z.Header.Lease[17] == 0) && (z.Header.Lease[18] == 0) && (z.Header.Lease[19] == 0) && (z.Header.Lease[20] == 0) && (z.Header.Lease[21] == 0) && (z.Header.Lease[22] == 0) && (z.Header.Lease[23] == 0) && (z.Header.Lease[24] == 0) && (z.Header.Lease[25] == 0) && (z.Header.Lease[26] == 0) && (z.Header.Lease[27] == 0) && (z.Header.Lease[28] == 0) && (z.Header.Lease[29] == 0) && (z.Header.Lease[30] == 0) && (z.Header.Lease[31] == 0)) && (z.KeyregTxnFields.VotePK.MsgIsZero()) && (z.KeyregTxnFields.SelectionPK.MsgIsZero()) && (z.KeyregTxnFields.VoteFirst.MsgIsZero()) && (z.KeyregTxnFields.VoteLast.MsgIsZero()) && (z.KeyregTxnFields.VoteKeyDilution == 0) && (z.KeyregTxnFields.Nonparticipation == false) && (z.PaymentTxnFields.Receiver.MsgIsZero()) && (z.PaymentTxnFields.Amount.MsgIsZero()) && (z.PaymentTxnFields.CloseRemainderTo.MsgIsZero()) && (z.AssetConfigTxnFields.ConfigAsset.MsgIsZero()) && (z.AssetConfigTxnFields.AssetParams.MsgIsZero()) && (z.AssetTransferTxnFields.XferAsset.MsgIsZero()) && (z.AssetTransferTxnFields.AssetAmount == 0) && (z.AssetTransferTxnFields.AssetSender.MsgIsZero()) && (z.AssetTransferTxnFields.AssetReceiver.MsgIsZero()) && (z.AssetTransferTxnFields.AssetCloseTo.MsgIsZero()) && (z.AssetFreezeTxnFields.FreezeAccount.MsgIsZero()) && (z.AssetFreezeTxnFields.FreezeAsset.MsgIsZero()) && (z.AssetFreezeTxnFields.AssetFrozen == false)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -2514,27 +2514,23 @@ func (z *TxGroup) Msgsize() (s int) {
 func (z *TxGroup) MsgIsZero() bool { return (len(z.TxGroupHashes) == 0) }
 
 // MarshalMsg implements msgp.Marshaler
-func (z Txid) MarshalMsg(b []byte) ([]byte, error) {
-	z_cast := (crypto.Digest)(z)
-	return z_cast.MarshalMsg(b)
+func (z *Txid) MarshalMsg(b []byte) ([]byte, error) {
+	return ((*(crypto.Digest))(z)).MarshalMsg(b)
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z Txid) UnmarshalMsg(bts []byte) ([]byte, error) {
-	z_cast := (crypto.Digest)(z)
-	return z_cast.UnmarshalMsg(bts)
+func (z *Txid) UnmarshalMsg(bts []byte) ([]byte, error) {
+	return ((*(crypto.Digest))(z)).UnmarshalMsg(bts)
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z Txid) Msgsize() int {
-	z_cast := (crypto.Digest)(z)
-	return z_cast.Msgsize()
+func (z *Txid) Msgsize() int {
+	return ((*(crypto.Digest))(z)).Msgsize()
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z Txid) MsgIsZero() bool {
-	z_cast := (crypto.Digest)(z)
-	return z_cast.MsgIsZero()
+func (z *Txid) MsgIsZero() bool {
+	return ((*(crypto.Digest))(z)).MsgIsZero()
 }
 
 // MarshalMsg implements msgp.Marshaler

@@ -449,27 +449,23 @@ func (z *Block) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z BlockHash) MarshalMsg(b []byte) ([]byte, error) {
-	z_cast := (crypto.Digest)(z)
-	return z_cast.MarshalMsg(b)
+func (z *BlockHash) MarshalMsg(b []byte) ([]byte, error) {
+	return ((*(crypto.Digest))(z)).MarshalMsg(b)
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z BlockHash) UnmarshalMsg(bts []byte) ([]byte, error) {
-	z_cast := (crypto.Digest)(z)
-	return z_cast.UnmarshalMsg(bts)
+func (z *BlockHash) UnmarshalMsg(bts []byte) ([]byte, error) {
+	return ((*(crypto.Digest))(z)).UnmarshalMsg(bts)
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z BlockHash) Msgsize() int {
-	z_cast := (crypto.Digest)(z)
-	return z_cast.Msgsize()
+func (z *BlockHash) Msgsize() int {
+	return ((*(crypto.Digest))(z)).Msgsize()
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z BlockHash) MsgIsZero() bool {
-	z_cast := (crypto.Digest)(z)
-	return z_cast.MsgIsZero()
+func (z *BlockHash) MsgIsZero() bool {
+	return ((*(crypto.Digest))(z)).MsgIsZero()
 }
 
 // MarshalMsg implements msgp.Marshaler

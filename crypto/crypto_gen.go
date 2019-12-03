@@ -447,15 +447,15 @@ func (z *OneTimeSignatureSecrets) MarshalMsg(b []byte) (o []byte, err error) {
 	// map header, size 7
 	// string "First"
 	o = append(o, 0x87, 0xa5, 0x46, 0x69, 0x72, 0x73, 0x74)
-	o = msgp.AppendUint64(o, z.FirstBatch)
+	o = msgp.AppendUint64(o, z.OneTimeSignatureSecretsPersistent.FirstBatch)
 	// string "OneTimeSignatureVerifier"
 	o = append(o, 0xb8, 0x4f, 0x6e, 0x65, 0x54, 0x69, 0x6d, 0x65, 0x53, 0x69, 0x67, 0x6e, 0x61, 0x74, 0x75, 0x72, 0x65, 0x56, 0x65, 0x72, 0x69, 0x66, 0x69, 0x65, 0x72)
-	o = msgp.AppendBytes(o, (z.OneTimeSignatureVerifier)[:])
+	o = msgp.AppendBytes(o, (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier)[:])
 	// string "Sub"
 	o = append(o, 0xa3, 0x53, 0x75, 0x62)
-	o = msgp.AppendArrayHeader(o, uint32(len(z.Batches)))
-	for za0002 := range z.Batches {
-		o, err = z.Batches[za0002].MarshalMsg(o)
+	o = msgp.AppendArrayHeader(o, uint32(len(z.OneTimeSignatureSecretsPersistent.Batches)))
+	for za0002 := range z.OneTimeSignatureSecretsPersistent.Batches {
+		o, err = z.OneTimeSignatureSecretsPersistent.Batches[za0002].MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "Batches", za0002)
 			return
@@ -463,12 +463,12 @@ func (z *OneTimeSignatureSecrets) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// string "firstoff"
 	o = append(o, 0xa8, 0x66, 0x69, 0x72, 0x73, 0x74, 0x6f, 0x66, 0x66)
-	o = msgp.AppendUint64(o, z.FirstOffset)
+	o = msgp.AppendUint64(o, z.OneTimeSignatureSecretsPersistent.FirstOffset)
 	// string "offkeys"
 	o = append(o, 0xa7, 0x6f, 0x66, 0x66, 0x6b, 0x65, 0x79, 0x73)
-	o = msgp.AppendArrayHeader(o, uint32(len(z.Offsets)))
-	for za0003 := range z.Offsets {
-		o, err = z.Offsets[za0003].MarshalMsg(o)
+	o = msgp.AppendArrayHeader(o, uint32(len(z.OneTimeSignatureSecretsPersistent.Offsets)))
+	for za0003 := range z.OneTimeSignatureSecretsPersistent.Offsets {
+		o, err = z.OneTimeSignatureSecretsPersistent.Offsets[za0003].MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "Offsets", za0003)
 			return
@@ -476,10 +476,10 @@ func (z *OneTimeSignatureSecrets) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// string "offpk2"
 	o = append(o, 0xa6, 0x6f, 0x66, 0x66, 0x70, 0x6b, 0x32)
-	o = msgp.AppendBytes(o, (z.OffsetsPK2)[:])
+	o = msgp.AppendBytes(o, (z.OneTimeSignatureSecretsPersistent.OffsetsPK2)[:])
 	// string "offpk2sig"
 	o = append(o, 0xa9, 0x6f, 0x66, 0x66, 0x70, 0x6b, 0x32, 0x73, 0x69, 0x67)
-	o = msgp.AppendBytes(o, (z.OffsetsPK2Sig)[:])
+	o = msgp.AppendBytes(o, (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig)[:])
 	return
 }
 
@@ -502,13 +502,13 @@ func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error)
 		}
 		switch msgp.UnsafeString(field) {
 		case "OneTimeSignatureVerifier":
-			bts, err = msgp.ReadExactBytes(bts, (z.OneTimeSignatureVerifier)[:])
+			bts, err = msgp.ReadExactBytes(bts, (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier)[:])
 			if err != nil {
 				err = msgp.WrapError(err, "OneTimeSignatureVerifier")
 				return
 			}
 		case "First":
-			z.FirstBatch, bts, err = msgp.ReadUint64Bytes(bts)
+			z.OneTimeSignatureSecretsPersistent.FirstBatch, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "FirstBatch")
 				return
@@ -520,20 +520,20 @@ func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error)
 				err = msgp.WrapError(err, "Batches")
 				return
 			}
-			if cap(z.Batches) >= int(zb0002) {
-				z.Batches = (z.Batches)[:zb0002]
+			if cap(z.OneTimeSignatureSecretsPersistent.Batches) >= int(zb0002) {
+				z.OneTimeSignatureSecretsPersistent.Batches = (z.OneTimeSignatureSecretsPersistent.Batches)[:zb0002]
 			} else {
-				z.Batches = make([]ephemeralSubkey, zb0002)
+				z.OneTimeSignatureSecretsPersistent.Batches = make([]ephemeralSubkey, zb0002)
 			}
-			for za0002 := range z.Batches {
-				bts, err = z.Batches[za0002].UnmarshalMsg(bts)
+			for za0002 := range z.OneTimeSignatureSecretsPersistent.Batches {
+				bts, err = z.OneTimeSignatureSecretsPersistent.Batches[za0002].UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Batches", za0002)
 					return
 				}
 			}
 		case "firstoff":
-			z.FirstOffset, bts, err = msgp.ReadUint64Bytes(bts)
+			z.OneTimeSignatureSecretsPersistent.FirstOffset, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "FirstOffset")
 				return
@@ -545,26 +545,26 @@ func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error)
 				err = msgp.WrapError(err, "Offsets")
 				return
 			}
-			if cap(z.Offsets) >= int(zb0003) {
-				z.Offsets = (z.Offsets)[:zb0003]
+			if cap(z.OneTimeSignatureSecretsPersistent.Offsets) >= int(zb0003) {
+				z.OneTimeSignatureSecretsPersistent.Offsets = (z.OneTimeSignatureSecretsPersistent.Offsets)[:zb0003]
 			} else {
-				z.Offsets = make([]ephemeralSubkey, zb0003)
+				z.OneTimeSignatureSecretsPersistent.Offsets = make([]ephemeralSubkey, zb0003)
 			}
-			for za0003 := range z.Offsets {
-				bts, err = z.Offsets[za0003].UnmarshalMsg(bts)
+			for za0003 := range z.OneTimeSignatureSecretsPersistent.Offsets {
+				bts, err = z.OneTimeSignatureSecretsPersistent.Offsets[za0003].UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Offsets", za0003)
 					return
 				}
 			}
 		case "offpk2":
-			bts, err = msgp.ReadExactBytes(bts, (z.OffsetsPK2)[:])
+			bts, err = msgp.ReadExactBytes(bts, (z.OneTimeSignatureSecretsPersistent.OffsetsPK2)[:])
 			if err != nil {
 				err = msgp.WrapError(err, "OffsetsPK2")
 				return
 			}
 		case "offpk2sig":
-			bts, err = msgp.ReadExactBytes(bts, (z.OffsetsPK2Sig)[:])
+			bts, err = msgp.ReadExactBytes(bts, (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig)[:])
 			if err != nil {
 				err = msgp.WrapError(err, "OffsetsPK2Sig")
 				return
@@ -584,12 +584,12 @@ func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error)
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *OneTimeSignatureSecrets) Msgsize() (s int) {
 	s = 1 + 25 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 6 + msgp.Uint64Size + 4 + msgp.ArrayHeaderSize
-	for za0002 := range z.Batches {
-		s += z.Batches[za0002].Msgsize()
+	for za0002 := range z.OneTimeSignatureSecretsPersistent.Batches {
+		s += z.OneTimeSignatureSecretsPersistent.Batches[za0002].Msgsize()
 	}
 	s += 9 + msgp.Uint64Size + 8 + msgp.ArrayHeaderSize
-	for za0003 := range z.Offsets {
-		s += z.Offsets[za0003].Msgsize()
+	for za0003 := range z.OneTimeSignatureSecretsPersistent.Offsets {
+		s += z.OneTimeSignatureSecretsPersistent.Offsets[za0003].Msgsize()
 	}
 	s += 7 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 10 + msgp.ArrayHeaderSize + (64 * (msgp.ByteSize))
 	return
@@ -597,7 +597,7 @@ func (z *OneTimeSignatureSecrets) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *OneTimeSignatureSecrets) MsgIsZero() bool {
-	return ((z.OneTimeSignatureVerifier[0] == 0) && (z.OneTimeSignatureVerifier[1] == 0) && (z.OneTimeSignatureVerifier[2] == 0) && (z.OneTimeSignatureVerifier[3] == 0) && (z.OneTimeSignatureVerifier[4] == 0) && (z.OneTimeSignatureVerifier[5] == 0) && (z.OneTimeSignatureVerifier[6] == 0) && (z.OneTimeSignatureVerifier[7] == 0) && (z.OneTimeSignatureVerifier[8] == 0) && (z.OneTimeSignatureVerifier[9] == 0) && (z.OneTimeSignatureVerifier[10] == 0) && (z.OneTimeSignatureVerifier[11] == 0) && (z.OneTimeSignatureVerifier[12] == 0) && (z.OneTimeSignatureVerifier[13] == 0) && (z.OneTimeSignatureVerifier[14] == 0) && (z.OneTimeSignatureVerifier[15] == 0) && (z.OneTimeSignatureVerifier[16] == 0) && (z.OneTimeSignatureVerifier[17] == 0) && (z.OneTimeSignatureVerifier[18] == 0) && (z.OneTimeSignatureVerifier[19] == 0) && (z.OneTimeSignatureVerifier[20] == 0) && (z.OneTimeSignatureVerifier[21] == 0) && (z.OneTimeSignatureVerifier[22] == 0) && (z.OneTimeSignatureVerifier[23] == 0) && (z.OneTimeSignatureVerifier[24] == 0) && (z.OneTimeSignatureVerifier[25] == 0) && (z.OneTimeSignatureVerifier[26] == 0) && (z.OneTimeSignatureVerifier[27] == 0) && (z.OneTimeSignatureVerifier[28] == 0) && (z.OneTimeSignatureVerifier[29] == 0) && (z.OneTimeSignatureVerifier[30] == 0) && (z.OneTimeSignatureVerifier[31] == 0)) && (z.FirstBatch == 0) && (len(z.Batches) == 0) && (z.FirstOffset == 0) && (len(z.Offsets) == 0) && ((z.OffsetsPK2[0] == 0) && (z.OffsetsPK2[1] == 0) && (z.OffsetsPK2[2] == 0) && (z.OffsetsPK2[3] == 0) && (z.OffsetsPK2[4] == 0) && (z.OffsetsPK2[5] == 0) && (z.OffsetsPK2[6] == 0) && (z.OffsetsPK2[7] == 0) && (z.OffsetsPK2[8] == 0) && (z.OffsetsPK2[9] == 0) && (z.OffsetsPK2[10] == 0) && (z.OffsetsPK2[11] == 0) && (z.OffsetsPK2[12] == 0) && (z.OffsetsPK2[13] == 0) && (z.OffsetsPK2[14] == 0) && (z.OffsetsPK2[15] == 0) && (z.OffsetsPK2[16] == 0) && (z.OffsetsPK2[17] == 0) && (z.OffsetsPK2[18] == 0) && (z.OffsetsPK2[19] == 0) && (z.OffsetsPK2[20] == 0) && (z.OffsetsPK2[21] == 0) && (z.OffsetsPK2[22] == 0) && (z.OffsetsPK2[23] == 0) && (z.OffsetsPK2[24] == 0) && (z.OffsetsPK2[25] == 0) && (z.OffsetsPK2[26] == 0) && (z.OffsetsPK2[27] == 0) && (z.OffsetsPK2[28] == 0) && (z.OffsetsPK2[29] == 0) && (z.OffsetsPK2[30] == 0) && (z.OffsetsPK2[31] == 0)) && ((z.OffsetsPK2Sig[0] == 0) && (z.OffsetsPK2Sig[1] == 0) && (z.OffsetsPK2Sig[2] == 0) && (z.OffsetsPK2Sig[3] == 0) && (z.OffsetsPK2Sig[4] == 0) && (z.OffsetsPK2Sig[5] == 0) && (z.OffsetsPK2Sig[6] == 0) && (z.OffsetsPK2Sig[7] == 0) && (z.OffsetsPK2Sig[8] == 0) && (z.OffsetsPK2Sig[9] == 0) && (z.OffsetsPK2Sig[10] == 0) && (z.OffsetsPK2Sig[11] == 0) && (z.OffsetsPK2Sig[12] == 0) && (z.OffsetsPK2Sig[13] == 0) && (z.OffsetsPK2Sig[14] == 0) && (z.OffsetsPK2Sig[15] == 0) && (z.OffsetsPK2Sig[16] == 0) && (z.OffsetsPK2Sig[17] == 0) && (z.OffsetsPK2Sig[18] == 0) && (z.OffsetsPK2Sig[19] == 0) && (z.OffsetsPK2Sig[20] == 0) && (z.OffsetsPK2Sig[21] == 0) && (z.OffsetsPK2Sig[22] == 0) && (z.OffsetsPK2Sig[23] == 0) && (z.OffsetsPK2Sig[24] == 0) && (z.OffsetsPK2Sig[25] == 0) && (z.OffsetsPK2Sig[26] == 0) && (z.OffsetsPK2Sig[27] == 0) && (z.OffsetsPK2Sig[28] == 0) && (z.OffsetsPK2Sig[29] == 0) && (z.OffsetsPK2Sig[30] == 0) && (z.OffsetsPK2Sig[31] == 0) && (z.OffsetsPK2Sig[32] == 0) && (z.OffsetsPK2Sig[33] == 0) && (z.OffsetsPK2Sig[34] == 0) && (z.OffsetsPK2Sig[35] == 0) && (z.OffsetsPK2Sig[36] == 0) && (z.OffsetsPK2Sig[37] == 0) && (z.OffsetsPK2Sig[38] == 0) && (z.OffsetsPK2Sig[39] == 0) && (z.OffsetsPK2Sig[40] == 0) && (z.OffsetsPK2Sig[41] == 0) && (z.OffsetsPK2Sig[42] == 0) && (z.OffsetsPK2Sig[43] == 0) && (z.OffsetsPK2Sig[44] == 0) && (z.OffsetsPK2Sig[45] == 0) && (z.OffsetsPK2Sig[46] == 0) && (z.OffsetsPK2Sig[47] == 0) && (z.OffsetsPK2Sig[48] == 0) && (z.OffsetsPK2Sig[49] == 0) && (z.OffsetsPK2Sig[50] == 0) && (z.OffsetsPK2Sig[51] == 0) && (z.OffsetsPK2Sig[52] == 0) && (z.OffsetsPK2Sig[53] == 0) && (z.OffsetsPK2Sig[54] == 0) && (z.OffsetsPK2Sig[55] == 0) && (z.OffsetsPK2Sig[56] == 0) && (z.OffsetsPK2Sig[57] == 0) && (z.OffsetsPK2Sig[58] == 0) && (z.OffsetsPK2Sig[59] == 0) && (z.OffsetsPK2Sig[60] == 0) && (z.OffsetsPK2Sig[61] == 0) && (z.OffsetsPK2Sig[62] == 0) && (z.OffsetsPK2Sig[63] == 0))
+	return ((z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[0] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[1] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[2] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[3] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[4] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[5] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[6] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[7] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[8] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[9] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[10] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[11] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[12] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[13] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[14] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[15] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[16] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[17] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[18] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[19] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[20] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[21] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[22] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[23] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[24] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[25] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[26] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[27] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[28] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[29] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[30] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[31] == 0)) && (z.OneTimeSignatureSecretsPersistent.FirstBatch == 0) && (len(z.OneTimeSignatureSecretsPersistent.Batches) == 0) && (z.OneTimeSignatureSecretsPersistent.FirstOffset == 0) && (len(z.OneTimeSignatureSecretsPersistent.Offsets) == 0) && ((z.OneTimeSignatureSecretsPersistent.OffsetsPK2[0] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[1] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[2] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[3] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[4] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[5] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[6] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[7] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[8] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[9] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[10] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[11] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[12] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[13] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[14] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[15] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[16] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[17] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[18] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[19] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[20] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[21] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[22] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[23] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[24] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[25] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[26] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[27] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[28] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[29] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[30] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[31] == 0)) && ((z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[0] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[1] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[2] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[3] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[4] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[5] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[6] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[7] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[8] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[9] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[10] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[11] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[12] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[13] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[14] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[15] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[16] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[17] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[18] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[19] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[20] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[21] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[22] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[23] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[24] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[25] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[26] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[27] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[28] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[29] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[30] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[31] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[32] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[33] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[34] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[35] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[36] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[37] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[38] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[39] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[40] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[41] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[42] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[43] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[44] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[45] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[46] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[47] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[48] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[49] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[50] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[51] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[52] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[53] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[54] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[55] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[56] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[57] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[58] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[59] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[60] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[61] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[62] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[63] == 0))
 }
 
 // MarshalMsg implements msgp.Marshaler
