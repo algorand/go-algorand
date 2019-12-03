@@ -168,6 +168,12 @@ func (s *Service) fetchAndWrite(fetcher rpcs.Fetcher, r basics.Round, prevFetchC
 		default:
 		}
 
+		// Stop retrying after a while.
+		if i > 20 {
+			s.log.Errorf("fetchAndWrite(%v): failed to fetch block many times", )
+			return false
+		}
+
 		// Try to fetch, timing out after retryInterval
 
 		block, cert, client, err := s.innerFetch(fetcher, r)
