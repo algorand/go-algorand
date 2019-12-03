@@ -74,7 +74,7 @@ type Deposit struct {
 
 // ToBeHashed implements the crypto.Hashable interface.
 func (d Deposit) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.AuctionDeposit, protocol.Encode(d)
+	return protocol.AuctionDeposit, protocol.Encode(&d)
 }
 
 // WinningAddress returns the effective winning address
@@ -129,7 +129,7 @@ type Bid struct {
 
 // ToBeHashed implements the crypto.Hashable interface.
 func (b Bid) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.AuctionBid, protocol.Encode(b)
+	return protocol.AuctionBid, protocol.Encode(&b)
 }
 
 // SignedBid represents a signed bid by a bidder.
@@ -189,7 +189,7 @@ type BidOutcomes struct {
 
 // ToBeHashed implements the crypto.Hashable interface.
 func (o BidOutcomes) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.AuctionOutcomes, protocol.Encode(o)
+	return protocol.AuctionOutcomes, protocol.Encode(&o)
 }
 
 // Settlement describes the outcome of an auction.
@@ -218,7 +218,7 @@ type Settlement struct {
 
 // ToBeHashed implements the crypto.Hashable interface.
 func (s Settlement) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.AuctionSettlement, protocol.Encode(s)
+	return protocol.AuctionSettlement, protocol.Encode(&s)
 }
 
 // SignedSettlement is a settlement signed by the auction operator
@@ -303,7 +303,7 @@ type Params struct {
 
 // ToBeHashed implements the crypto.Hashable interface.
 func (p Params) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.AuctionParams, protocol.Encode(p)
+	return protocol.AuctionParams, protocol.Encode(&p)
 }
 
 // SignedParams is a signed statement by the auction operator attesting
