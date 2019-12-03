@@ -426,7 +426,7 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			bts, err = msgp.Skip(bts)
+			err = msgp.ErrNoField(msgp.UnsafeString(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -868,7 +868,7 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			bts, err = msgp.Skip(bts)
+			err = msgp.ErrNoField(msgp.UnsafeString(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -1082,7 +1082,7 @@ func (z *Genesis) UnmarshalMsg(bts []byte) (o []byte, err error) {
 							return
 						}
 					default:
-						bts, err = msgp.Skip(bts)
+						err = msgp.ErrNoField(msgp.UnsafeString(field))
 						if err != nil {
 							err = msgp.WrapError(err, "Allocation", za0001)
 							return
@@ -1115,7 +1115,7 @@ func (z *Genesis) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			bts, err = msgp.Skip(bts)
+			err = msgp.ErrNoField(msgp.UnsafeString(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -1198,7 +1198,7 @@ func (z *GenesisAllocation) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			bts, err = msgp.Skip(bts)
+			err = msgp.ErrNoField(msgp.UnsafeString(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -1312,7 +1312,7 @@ func (z *RewardsState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			bts, err = msgp.Skip(bts)
+			err = msgp.ErrNoField(msgp.UnsafeString(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -1421,7 +1421,7 @@ func (z *UpgradeState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			bts, err = msgp.Skip(bts)
+			err = msgp.ErrNoField(msgp.UnsafeString(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -1491,7 +1491,7 @@ func (z *UpgradeVote) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			bts, err = msgp.Skip(bts)
+			err = msgp.ErrNoField(msgp.UnsafeString(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return

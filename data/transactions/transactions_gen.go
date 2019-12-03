@@ -116,7 +116,7 @@ func (z *ApplyData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			bts, err = msgp.Skip(bts)
+			err = msgp.ErrNoField(msgp.UnsafeString(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -209,7 +209,7 @@ func (z *AssetConfigTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			bts, err = msgp.Skip(bts)
+			err = msgp.ErrNoField(msgp.UnsafeString(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -317,7 +317,7 @@ func (z *AssetFreezeTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			bts, err = msgp.Skip(bts)
+			err = msgp.ErrNoField(msgp.UnsafeString(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -463,7 +463,7 @@ func (z *AssetTransferTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) 
 				return
 			}
 		default:
-			bts, err = msgp.Skip(bts)
+			err = msgp.ErrNoField(msgp.UnsafeString(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -677,7 +677,7 @@ func (z *Header) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			bts, err = msgp.Skip(bts)
+			err = msgp.ErrNoField(msgp.UnsafeString(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -838,7 +838,7 @@ func (z *KeyregTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			bts, err = msgp.Skip(bts)
+			err = msgp.ErrNoField(msgp.UnsafeString(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -977,7 +977,7 @@ func (z *LogicSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			}
 		default:
-			bts, err = msgp.Skip(bts)
+			err = msgp.ErrNoField(msgp.UnsafeString(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -1123,7 +1123,7 @@ func (z *PaymentTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			bts, err = msgp.Skip(bts)
+			err = msgp.ErrNoField(msgp.UnsafeString(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -1304,7 +1304,7 @@ func (z *SignedTxn) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			bts, err = msgp.Skip(bts)
+			err = msgp.ErrNoField(msgp.UnsafeString(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -1541,7 +1541,7 @@ func (z *SignedTxnInBlock) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			bts, err = msgp.Skip(bts)
+			err = msgp.ErrNoField(msgp.UnsafeString(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -1748,7 +1748,7 @@ func (z *SignedTxnWithAD) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			bts, err = msgp.Skip(bts)
+			err = msgp.ErrNoField(msgp.UnsafeString(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -1822,7 +1822,7 @@ func (z *SpecialAddresses) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			bts, err = msgp.Skip(bts)
+			err = msgp.ErrNoField(msgp.UnsafeString(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -2400,7 +2400,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			bts, err = msgp.Skip(bts)
+			err = msgp.ErrNoField(msgp.UnsafeString(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -2490,7 +2490,7 @@ func (z *TxGroup) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			}
 		default:
-			bts, err = msgp.Skip(bts)
+			err = msgp.ErrNoField(msgp.UnsafeString(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -2598,7 +2598,7 @@ func (z *TxnDeadError) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			bts, err = msgp.Skip(bts)
+			err = msgp.ErrNoField(msgp.UnsafeString(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return

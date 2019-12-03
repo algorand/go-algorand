@@ -126,7 +126,7 @@ func (z *Credential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			bts, err = msgp.Skip(bts)
+			err = msgp.ErrNoField(msgp.UnsafeString(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -229,7 +229,7 @@ func (z *UnauthenticatedCredential) UnmarshalMsg(bts []byte) (o []byte, err erro
 				return
 			}
 		default:
-			bts, err = msgp.Skip(bts)
+			err = msgp.ErrNoField(msgp.UnsafeString(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -335,7 +335,7 @@ func (z *hashableCredential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			bts, err = msgp.Skip(bts)
+			err = msgp.ErrNoField(msgp.UnsafeString(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return

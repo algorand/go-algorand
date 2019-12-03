@@ -326,7 +326,7 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 							return
 						}
 					default:
-						bts, err = msgp.Skip(bts)
+						err = msgp.ErrNoField(msgp.UnsafeString(field))
 						if err != nil {
 							err = msgp.WrapError(err, "Assets", za0003)
 							return
@@ -336,7 +336,7 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				z.Assets[za0003] = za0004
 			}
 		default:
-			bts, err = msgp.Skip(bts)
+			err = msgp.ErrNoField(msgp.UnsafeString(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -438,7 +438,7 @@ func (z *AccountDetail) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				z.Status = Status(zb0002)
 			}
 		default:
-			bts, err = msgp.Skip(bts)
+			err = msgp.ErrNoField(msgp.UnsafeString(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -524,7 +524,7 @@ func (z *AssetHolding) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			bts, err = msgp.Skip(bts)
+			err = msgp.ErrNoField(msgp.UnsafeString(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -627,7 +627,7 @@ func (z *AssetLocator) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				z.Index = AssetIndex(zb0002)
 			}
 		default:
-			bts, err = msgp.Skip(bts)
+			err = msgp.ErrNoField(msgp.UnsafeString(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -846,7 +846,7 @@ func (z *AssetParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			bts, err = msgp.Skip(bts)
+			err = msgp.ErrNoField(msgp.UnsafeString(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -962,7 +962,7 @@ func (z *BalanceDetail) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			}
 		default:
-			bts, err = msgp.Skip(bts)
+			err = msgp.ErrNoField(msgp.UnsafeString(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -1325,7 +1325,7 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 							return
 						}
 					default:
-						bts, err = msgp.Skip(bts)
+						err = msgp.ErrNoField(msgp.UnsafeString(field))
 						if err != nil {
 							err = msgp.WrapError(err, "Assets", za0003)
 							return
@@ -1335,7 +1335,7 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				z.AccountData.Assets[za0003] = za0004
 			}
 		default:
-			bts, err = msgp.Skip(bts)
+			err = msgp.ErrNoField(msgp.UnsafeString(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -1407,7 +1407,7 @@ func (z *OverflowTracker) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			bts, err = msgp.Skip(bts)
+			err = msgp.ErrNoField(msgp.UnsafeString(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -1585,7 +1585,7 @@ func (z *SupplyDetail) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			bts, err = msgp.Skip(bts)
+			err = msgp.ErrNoField(msgp.UnsafeString(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return

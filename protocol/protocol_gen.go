@@ -72,7 +72,7 @@ func (z *CountingWriter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			bts, err = msgp.Skip(bts)
+			err = msgp.ErrNoField(msgp.UnsafeString(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
