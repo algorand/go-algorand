@@ -25,6 +25,8 @@ import (
 	"github.com/algorand/go-algorand/logging"
 )
 
+//msgp:ignore RNG PRNG systemRNG
+
 // RNG represents a randomness source.  This could be either a system-wide
 // randomness source (like what gets exposed by crypto/rand), or a PRNG that
 // we use for testing.

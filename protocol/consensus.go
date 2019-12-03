@@ -16,8 +16,6 @@
 
 package protocol
 
-//go:generate msgp
-
 import (
 	"fmt"
 )

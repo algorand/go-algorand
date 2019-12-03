@@ -16,8 +16,6 @@
 
 package protocol
 
-//go:generate msgp
-
 // Transaction types indicate different types of transactions that can appear
 // in a block.  They are used in the data/transaction package and the REST API.
 

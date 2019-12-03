@@ -55,6 +55,7 @@ func init() {
 	JSONHandle.HTMLCharsAsIs = true
 }
 
+//msgp:ignore codecBytes
 type codecBytes struct {
 	enc *codec.Encoder
 

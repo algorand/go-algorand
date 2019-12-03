@@ -16,8 +16,6 @@
 
 package crypto
 
-//go:generate msgp
-
 import (
 	"errors"
 )

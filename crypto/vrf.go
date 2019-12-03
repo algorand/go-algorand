@@ -16,8 +16,6 @@
 
 package crypto
 
-//go:generate msgp
-
 // #cgo CFLAGS: -Wall -std=c99
 // #cgo CFLAGS: -I${SRCDIR}/include/
 // #cgo LDFLAGS: ${SRCDIR}/lib/libsodium.a
