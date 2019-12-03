@@ -83,8 +83,9 @@ var codecStreamPool = sync.Pool{
 
 const initEncodeBufSize = 256
 
-// Encode returns a msgpack-encoded byte buffer for a given object
-func Encode(obj interface{}) []byte {
+// EncodeReflect returns a msgpack-encoded byte buffer for a given object,
+// using reflection.
+func EncodeReflect(obj interface{}) []byte {
 	codecBytes := codecBytesPool.Get().(*codecBytes)
 	codecBytes.buf = make([]byte, initEncodeBufSize)
 	codecBytes.enc.ResetBytes(&codecBytes.buf)
@@ -106,6 +107,16 @@ func EncodeMsgp(obj msgp.Marshaler) []byte {
 	}
 
 	return res
+}
+
+// Encode returns a msgpack-encoded byte buffer for a given object.
+func Encode(obj interface{}) []byte {
+	msgp, ok := obj.(msgp.Marshaler)
+	if ok {
+		return EncodeMsgp(msgp)
+	} else {
+		return EncodeReflect(obj)
+	}
 }
 
 // CountingWriter is an implementation of io.Writer that tracks the number
@@ -146,9 +157,9 @@ func EncodeJSON(obj interface{}) []byte {
 	return b
 }
 
-// Decode attempts to decode a msgpack-encoded byte buffer into an
-// object instance pointed to by objptr
-func Decode(b []byte, objptr interface{}) error {
+// DecodeReflect attempts to decode a msgpack-encoded byte buffer
+// into an object instance pointed to by objptr, using reflection.
+func DecodeReflect(b []byte, objptr interface{}) error {
 	dec := codec.NewDecoderBytes(b, CodecHandle)
 	return dec.Decode(objptr)
 }
@@ -159,6 +170,17 @@ func Decode(b []byte, objptr interface{}) error {
 func DecodeMsgp(b []byte, objptr msgp.Unmarshaler) error {
 	_, err := objptr.UnmarshalMsg(b)
 	return err
+}
+
+// DecodeReflect attempts to decode a msgpack-encoded byte buffer
+// into an object instance pointed to by objptr.
+func Decode(b []byte, objptr interface{}) error {
+	msgp, ok := objptr.(msgp.Unmarshaler)
+	if ok {
+		return DecodeMsgp(b, msgp)
+	} else {
+		return DecodeReflect(b, objptr)
+	}
 }
 
 // DecodeStream is like Decode but reads from an io.Reader instead.

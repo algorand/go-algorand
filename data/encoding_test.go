@@ -44,10 +44,10 @@ func BenchmarkBlockEncoding(b *testing.B) {
 	block.Payset = pendingTransactionsEnc
 	block.TxnRoot = block.Payset.Commit(false)
 
-	b.Run("Encode+Decode", func(b *testing.B) {
+	b.Run("Encode+Decode reflect", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			var dec bookkeeping.Block
-			err := protocol.Decode(protocol.Encode(block), &dec)
+			err := protocol.DecodeReflect(protocol.EncodeReflect(&block), &dec)
 			if err != nil {
 				panic(err)
 			}
