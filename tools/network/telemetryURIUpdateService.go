@@ -41,9 +41,9 @@ func lookupTelemetryEndpoint(cfg config.Local, genesisNetwork protocol.NetworkID
 	for _, bootstrapID := range bootstrapArray {
 		addrs, err := ReadFromSRV("telemetry", bootstrapID, cfg.FallbackDNSResolverAddress)
 		if err != nil {
-			log.Infof("An issue occurred reading telemetry entry for: %s", bootstrapID)
+			log.Infof("An issue occurred reading telemetry entry for '%s': %v", bootstrapID, err)
 		} else if len(addrs) == 0 {
-			log.Infof("No telemetry entry for: %s", bootstrapID)
+			log.Infof("No telemetry entry for: '%s'", bootstrapID)
 		} else {
 			return addrs[0]
 		}
