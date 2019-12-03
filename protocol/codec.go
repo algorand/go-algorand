@@ -20,6 +20,8 @@ import (
 	"io"
 	"sync"
 
+	"github.com/zeldovich/msgp/msgp"
+
 	"github.com/algorand/go-codec/codec"
 )
 
@@ -95,6 +97,17 @@ func Encode(obj interface{}) []byte {
 	return res
 }
 
+// EncodeMsgp returns a msgpack-encoded byte buffer, requiring
+// that we pre-generated the code for doing so using msgp.
+func EncodeMsgp(obj msgp.Marshaler) []byte {
+	res, err := obj.MarshalMsg(nil)
+	if err != nil {
+		panic(err)
+	}
+
+	return res
+}
+
 // CountingWriter is an implementation of io.Writer that tracks the number
 // of bytes written (but discards the actual bytes).
 type CountingWriter struct {
@@ -138,6 +151,14 @@ func EncodeJSON(obj interface{}) []byte {
 func Decode(b []byte, objptr interface{}) error {
 	dec := codec.NewDecoderBytes(b, CodecHandle)
 	return dec.Decode(objptr)
+}
+
+// DecodeMsgp attempts to decode a msgpack-encoded byte buffer into
+// an object instance pointed to by objptr, requiring that we pre-
+// generated the code for doing so using msgp.
+func DecodeMsgp(b []byte, objptr msgp.Unmarshaler) error {
+	_, err := objptr.UnmarshalMsg(b)
+	return err
 }
 
 // DecodeStream is like Decode but reads from an io.Reader instead.

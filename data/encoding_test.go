@@ -58,14 +58,8 @@ func BenchmarkBlockEncoding(b *testing.B) {
 
 	b.Run("Encode+Decode msgp", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			var err error
-			enc, err := block.MarshalMsg(nil)
-			if err != nil {
-				panic(err)
-			}
-
 			var dec bookkeeping.Block
-			_, err = dec.UnmarshalMsg(enc)
+			err := protocol.DecodeMsgp(protocol.EncodeMsgp(&block), &dec)
 			if err != nil {
 				panic(err)
 			}
