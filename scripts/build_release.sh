@@ -100,7 +100,7 @@ scripts/build_packages.sh "${PLATFORM}"
 
 # build docker release package
 cd ${REPO_ROOT}/docker/release
-./build_algod_docker.sh ${HOME}/node_pkg/node_${CHANNEL}_${OS}-${ARCH}_${FULLVERSION}.tar.gz
+sg docker "./build_algod_docker.sh ${HOME}/node_pkg/node_${CHANNEL}_${OS}-${ARCH}_${FULLVERSION}.tar.gz"
 cd ${REPO_ROOT}/scripts
 
 # Test .deb installer
