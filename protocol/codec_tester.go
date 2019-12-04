@@ -25,6 +25,8 @@ import (
 	"github.com/zeldovich/msgp/msgp"
 )
 
+const debug_codec_tester = true
+
 type MsgpMarshalUnmarshal interface {
 	msgp.Marshaler
 	msgp.Unmarshaler
@@ -103,22 +105,22 @@ func RandomizeValue(v reflect.Value) error {
 }
 
 func EncodingTest(template MsgpMarshalUnmarshal) error {
-	v, err := RandomizeObject(template)
+	v0, err := RandomizeObject(template)
 	if err != nil {
 		return err
 	}
 
-	e1 := EncodeMsgp(v.(msgp.Marshaler))
-	e2 := EncodeReflect(v)
+	e1 := EncodeMsgp(v0.(msgp.Marshaler))
+	e2 := EncodeReflect(v0)
 
 	// for debug, write out the encodings to a file
-	if true {
+	if debug_codec_tester {
 		ioutil.WriteFile("/tmp/e1", e1, 0666)
 		ioutil.WriteFile("/tmp/e2", e2, 0666)
 	}
 
 	if !reflect.DeepEqual(e1, e2) {
-		return fmt.Errorf("encoding mismatch for %v: %v != %v", v, e1, e2)
+		return fmt.Errorf("encoding mismatch for %v: %v != %v", v0, e1, e2)
 	}
 
 	v1 := reflect.New(reflect.TypeOf(template).Elem()).Interface().(MsgpMarshalUnmarshal)
@@ -128,16 +130,43 @@ func EncodingTest(template MsgpMarshalUnmarshal) error {
 	if err != nil {
 		return err
 	}
-	if !reflect.DeepEqual(v, v1) {
-		return fmt.Errorf("decoding msgp mismatch: %v != %v", v, v1)
-	}
 
 	err = DecodeReflect(e1, v2)
 	if err != nil {
 		return err
 	}
-	if !reflect.DeepEqual(v, v2) {
-		return fmt.Errorf("decoding reflect mismatch: %v != %v", v, v2)
+
+	if debug_codec_tester {
+		ioutil.WriteFile("/tmp/v0", []byte(fmt.Sprintf("%#v", v0)), 0666)
+		ioutil.WriteFile("/tmp/v1", []byte(fmt.Sprintf("%#v", v1)), 0666)
+		ioutil.WriteFile("/tmp/v2", []byte(fmt.Sprintf("%#v", v2)), 0666)
+	}
+
+	// At this point, it might be that v differs from v1 and v2,
+	// because there are multiple representations (e.g., an empty
+	// byte slice could be either nil or a zero-length slice).
+	// But we require that the msgp codec match the behavior of
+	// go-codec.
+
+	if !reflect.DeepEqual(v1, v2) {
+		return fmt.Errorf("decoding mismatch")
+	}
+
+	// Finally, check that the value encodes back to the same encoding.
+
+	ee1 := EncodeMsgp(v1)
+	ee2 := EncodeReflect(v1)
+
+	if debug_codec_tester {
+		ioutil.WriteFile("/tmp/ee1", ee1, 0666)
+		ioutil.WriteFile("/tmp/ee2", ee2, 0666)
+	}
+
+	if !reflect.DeepEqual(e1, ee1) {
+		return fmt.Errorf("re-encoding mismatch: e1 != ee1")
+	}
+	if !reflect.DeepEqual(e1, ee2) {
+		return fmt.Errorf("re-encoding mismatch: e1 != ee2")
 	}
 
 	return nil
