@@ -203,16 +203,7 @@ func LedgerEnumerate(log logging.Logger) ([]LedgerUSB, error) {
 	}
 
 	var devs []LedgerUSB
-	uniqueSerials := map[string]bool{}
 	for _, info := range hid.Enumerate(ledgerVendorID, 0) {
-		// Check if we've opened a device with this serial number already
-		// since sometimes we see duplicates
-		_, ok := uniqueSerials[info.Serial]
-		if ok {
-			continue
-		}
-		uniqueSerials[info.Serial] = true
-
 		// Try to open the device
 		dev, err := info.Open()
 		if err != nil {
