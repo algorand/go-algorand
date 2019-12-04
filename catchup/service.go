@@ -206,7 +206,7 @@ func (s *Service) fetchAndWrite(fetcher rpcs.Fetcher, r basics.Round, prevFetchC
 		if !block.ContentsMatchHeader() {
 			// Check if this mismatch is due to an unsupported protocol version
 			if _, ok := config.Consensus[block.BlockHeader.CurrentProtocol]; !ok {
-				s.log.Errorf("fetchAndWrite(%v): unsupported protocol version detected", )
+				s.log.Errorf("fetchAndWrite(%v): unsupported protocol version detected: '%v'", r, block.BlockHeader.CurrentProtocol)
 				client.Close()
 				return false
 			}
