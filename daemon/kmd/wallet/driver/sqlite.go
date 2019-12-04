@@ -34,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/daemon/kmd/wallet"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-codec/codec"
 )
@@ -132,7 +133,7 @@ func msgpackDecode(b []byte, objptr interface{}) error {
 
 // InitWithConfig accepts a driver configuration so that the SQLite driver
 // knows where to read and write its wallet databases
-func (swd *SQLiteWalletDriver) InitWithConfig(cfg config.KMDConfig) error {
+func (swd *SQLiteWalletDriver) InitWithConfig(cfg config.KMDConfig, log logging.Logger) error {
 	swd.globalCfg = cfg
 	swd.sqliteCfg = cfg.DriverConfig.SQLiteWalletDriverConfig
 
