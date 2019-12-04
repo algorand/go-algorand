@@ -108,9 +108,9 @@ const ConsensusV19 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/0e196e82bfd6e327994bec373c4cc81bc878ef5c",
 )
 
-// ConsensusV20 points to adding the precision to the assets.
+// ConsensusV20 points to adding the decimals field to assets
 const ConsensusV20 = ConsensusVersion(
-	"https://github.com/algorandfoundation/specs/tree/add_precision_to_assets",
+	"https://github.com/algorandfoundation/specs/tree/4a9db6a25595c6fd097cf9cc137cc83027787eaa",
 )
 
 // ConsensusFuture is a protocol that should not appear in any production
