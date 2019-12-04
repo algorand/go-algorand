@@ -36,6 +36,8 @@ import (
 )
 
 const catchupPeersForSync = 10
+// this should be at least the number of relays
+const catchupRetryLimit = 500
 
 // Ledger represents the interface of a block database which the
 // catchup server should interact with.
@@ -169,7 +171,7 @@ func (s *Service) fetchAndWrite(fetcher rpcs.Fetcher, r basics.Round, prevFetchC
 		}
 
 		// Stop retrying after a while.
-		if i > 20 {
+		if i > catchupRetryLimit {
 			s.log.Errorf("fetchAndWrite(%v): failed to fetch block many times", )
 			return false
 		}
