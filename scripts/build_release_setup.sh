@@ -26,6 +26,8 @@ if [ -z "${GIT_CHECKOUT_LABEL}" ]; then
     GIT_CHECKOUT_LABEL="rel/stable"
 fi
 
+export DEBIAN_FRONTEND=noninteractive
+
 sudo apt-get update
 sudo apt-get upgrade -y
 
