@@ -207,7 +207,7 @@ func LedgerEnumerate(log logging.Logger) ([]LedgerUSB, error) {
 		// Try to open the device
 		dev, err := info.Open()
 		if err != nil {
-			log.Warnf("enumerated but failed to open ledger %x", info.ProductID)
+			log.Warnf("enumerated but failed to open ledger %x: %v", info.ProductID, err)
 			continue
 		}
 
