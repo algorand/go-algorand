@@ -623,6 +623,7 @@ var infoAssetCmd = &cobra.Command{
 		fmt.Printf("Maximum issue:    %s %s\n", assetDecimalsFmt(params.Total, params.Decimals), params.UnitName)
 		fmt.Printf("Reserve amount:   %s %s\n", assetDecimalsFmt(res.Amount, params.Decimals), params.UnitName)
 		fmt.Printf("Issued:           %s %s\n", assetDecimalsFmt(params.Total-res.Amount, params.Decimals), params.UnitName)
+		fmt.Printf("Decimals:         %d\n", params.Decimals)
 		fmt.Printf("Default frozen:   %v\n", params.DefaultFrozen)
 		fmt.Printf("Manager address:  %s\n", params.ManagerAddr)
 		fmt.Printf("Reserve address:  %s\n", params.ReserveAddr)
