@@ -110,6 +110,10 @@ func EncodingTest(template MsgpMarshalUnmarshal) error {
 		return err
 	}
 
+	if debug_codec_tester {
+		ioutil.WriteFile("/tmp/v0", []byte(fmt.Sprintf("%#v", v0)), 0666)
+	}
+
 	e1 := EncodeMsgp(v0.(msgp.Marshaler))
 	e2 := EncodeReflect(v0)
 
@@ -137,7 +141,6 @@ func EncodingTest(template MsgpMarshalUnmarshal) error {
 	}
 
 	if debug_codec_tester {
-		ioutil.WriteFile("/tmp/v0", []byte(fmt.Sprintf("%#v", v0)), 0666)
 		ioutil.WriteFile("/tmp/v1", []byte(fmt.Sprintf("%#v", v1)), 0666)
 		ioutil.WriteFile("/tmp/v2", []byte(fmt.Sprintf("%#v", v2)), 0666)
 	}
