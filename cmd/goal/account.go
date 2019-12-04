@@ -490,6 +490,7 @@ var listCmd = &cobra.Command{
 						if params.UnitName != "" {
 							unitName = params.UnitName
 						}
+						unitName = "units"
 						if params.AssetName != "" {
 							assetName = fmt.Sprintf(", name %s", params.AssetName)
 						}
