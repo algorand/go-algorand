@@ -76,6 +76,7 @@ func (z *AccountData) MarshalMsg(b []byte) (o []byte, err error) {
 		o = append(o, 0xa4, 0x61, 0x70, 0x61, 0x72)
 		o = msgp.AppendMapHeader(o, uint32(len(z.AssetParams)))
 		for za0001, za0002 := range z.AssetParams {
+			_ = za0002
 			o, err = za0001.MarshalMsg(o)
 			if err != nil {
 				err = msgp.WrapError(err, "AssetParams", za0001)
@@ -93,6 +94,7 @@ func (z *AccountData) MarshalMsg(b []byte) (o []byte, err error) {
 		o = append(o, 0xa5, 0x61, 0x73, 0x73, 0x65, 0x74)
 		o = msgp.AppendMapHeader(o, uint32(len(z.Assets)))
 		for za0003, za0004 := range z.Assets {
+			_ = za0004
 			o, err = za0003.MarshalMsg(o)
 			if err != nil {
 				err = msgp.WrapError(err, "Assets", za0003)
@@ -1069,6 +1071,7 @@ func (z *BalanceRecord) MarshalMsg(b []byte) (o []byte, err error) {
 		o = append(o, 0xa4, 0x61, 0x70, 0x61, 0x72)
 		o = msgp.AppendMapHeader(o, uint32(len(z.AccountData.AssetParams)))
 		for za0001, za0002 := range z.AccountData.AssetParams {
+			_ = za0002
 			o, err = za0001.MarshalMsg(o)
 			if err != nil {
 				err = msgp.WrapError(err, "AssetParams", za0001)
@@ -1086,6 +1089,7 @@ func (z *BalanceRecord) MarshalMsg(b []byte) (o []byte, err error) {
 		o = append(o, 0xa5, 0x61, 0x73, 0x73, 0x65, 0x74)
 		o = msgp.AppendMapHeader(o, uint32(len(z.AccountData.Assets)))
 		for za0003, za0004 := range z.AccountData.Assets {
+			_ = za0004
 			o, err = za0003.MarshalMsg(o)
 			if err != nil {
 				err = msgp.WrapError(err, "Assets", za0003)

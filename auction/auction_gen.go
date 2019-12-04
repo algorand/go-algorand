@@ -1585,6 +1585,7 @@ func (z *RunningAuction) MarshalMsg(b []byte) (o []byte, err error) {
 	o = append(o, 0x86, 0xa7, 0x42, 0x69, 0x64, 0x64, 0x65, 0x72, 0x73)
 	o = msgp.AppendMapHeader(o, uint32(len(z.Bidders)))
 	for za0003, za0004 := range z.Bidders {
+		_ = za0004
 		o, err = za0003.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "Bidders", za0003)
@@ -1600,6 +1601,7 @@ func (z *RunningAuction) MarshalMsg(b []byte) (o []byte, err error) {
 	o = append(o, 0xa4, 0x42, 0x69, 0x64, 0x73)
 	o = msgp.AppendMapHeader(o, uint32(len(z.Bids)))
 	for za0005, za0006 := range z.Bids {
+		_ = za0006
 		o = msgp.AppendUint64(o, za0005)
 		o = msgp.AppendArrayHeader(o, uint32(len(za0006)))
 		for za0007 := range za0006 {
@@ -1623,6 +1625,7 @@ func (z *RunningAuction) MarshalMsg(b []byte) (o []byte, err error) {
 	o = append(o, 0xaa, 0x44, 0x65, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x49, 0x44, 0x73)
 	o = msgp.AppendMapHeader(o, uint32(len(z.DepositIDs)))
 	for za0001, za0002 := range z.DepositIDs {
+		_ = za0002
 		o = msgp.AppendUint64(o, za0001)
 		// map header, size 0
 		o = append(o, 0x80)
@@ -2616,6 +2619,7 @@ func (z *Tracker) MarshalMsg(b []byte) (o []byte, err error) {
 	o = append(o, 0xa8, 0x41, 0x75, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x73)
 	o = msgp.AppendMapHeader(o, uint32(len(z.Auctions)))
 	for za0001, za0002 := range z.Auctions {
+		_ = za0002
 		o = msgp.AppendUint64(o, za0001)
 		if za0002 == nil {
 			o = msgp.AppendNil(o)
