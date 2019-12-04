@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# S3_PREFIX_BUILDLOG= where upload build log (no trailing /)
+# AWS_EFS_MOUNT= NFS to mount for `aptly` persistent state and scratch storage
+
 . ${HOME}/build_env
 set -e
 set -x

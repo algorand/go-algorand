@@ -3,7 +3,6 @@
 # Externally settable env vars:
 # GIT_REPO_PATH= something to `git clone` from
 # GIT_CHECKOUT_LABEL= something to `git checkout` and build from (branch or tag or hash)
-# SIGNING_KEY_ADDR= dev@algorand.com or similar for GPG key
 
 if [ -z "${BUILDTIMESTAMP}" ]; then
     date "+%Y%m%d_%H%M%S" > "${HOME}/buildtimestamp"

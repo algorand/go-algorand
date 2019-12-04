@@ -5,9 +5,6 @@
 #
 # Externally settable env vars:
 # S3_PREFIX= where to upload build artifacts (no trailing /)
-# S3_PREFIX_BUILDLOG= where upload build log (no trailing /)
-# AWS_EFS_MOUNT= NFS to mount for `aptly` persistent state and scratch storage
-# SIGNING_KEY_ADDR= dev@algorand.com or similar for GPG key
 # RSTAMP= `scripts/reverse_hex_timestamp`
 # AWS_ACCESS_KEY_ID=
 # AWS_SECRET_ACCESS_KEY=
