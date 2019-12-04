@@ -17,6 +17,7 @@
 package data
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -25,6 +26,17 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
+
+func TestBlockEncoding(t *testing.T) {
+	var b bookkeeping.Block
+	for i := 0; i < 10; i++ {
+		err := protocol.EncodingTest(&b)
+		if err != nil {
+			fmt.Printf("err = %v\n", err)
+		}
+		require.NoError(t, err)
+	}
+}
 
 func BenchmarkBlockEncoding(b *testing.B) {
 	ledger, _, _, pendingTransactions, release := testingenv(b, 10, 1000, false)
