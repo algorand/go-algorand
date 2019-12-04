@@ -33,7 +33,6 @@ import (
 // TelemetryConfigFilename default file name for telemetry config "logging.config"
 var TelemetryConfigFilename = "logging.config"
 
-const ipv6AddressLength = 39
 const hostnameLength = 255
 
 // TelemetryOverride Determines whether an override value is set and what it's value is.
