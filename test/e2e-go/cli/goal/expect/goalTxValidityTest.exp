@@ -70,7 +70,7 @@ if { [catch {
     set TX_FILE $TEST_ROOT_DIR/tx-create-$FILE_COUNTER.tx
     incr FILE_COUNTER
     set LV_EXPECTED 1001
-    TestLastValidInTx "goal asset create --decimals 0 --validrounds 1000 --firstvalid 2 --creator $PRIMARY_ACCOUNT_ADDRESS --total 100 -d $TEST_PRIMARY_NODE_DIR -o $TX_FILE" $TX_FILE $LV_EXPECTED
+    TestLastValidInTx "goal asset create --validrounds 1000 --firstvalid 2 --creator $PRIMARY_ACCOUNT_ADDRESS --total 100 -d $TEST_PRIMARY_NODE_DIR -o $TX_FILE" $TX_FILE $LV_EXPECTED
 
     puts "Verify account changeonlinestatus with lastvalid=2"
     set TX_FILE $TEST_ROOT_DIR/tx-create-$FILE_COUNTER.tx
