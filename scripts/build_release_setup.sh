@@ -28,8 +28,8 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 
-sudo apt-get update
-sudo apt-get upgrade -y
+sudo apt-get update -q
+sudo apt-get upgrade -q -y
 
 if [ -f /etc/lsb-release ]; then
     . /etc/lsb-release
