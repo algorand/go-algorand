@@ -30,7 +30,7 @@ func ReadFromSRV(service string, name string, fallbackDNSResolverAddress string)
 
 		_, records, err = resolver.LookupSRV(context.Background(), service, "tcp", name)
 		if err != nil {
-			log.Warnf("ReadFromBootstrap: DNS LookupSRV failed when using system resolver(%v) as well as via %s due to %v", sysLookupErr, resolver.EffectiveResolverDNS(), err)
+			err = fmt.Errorf("ReadFromBootstrap: DNS LookupSRV failed when using system resolver(%v) as well as via %s due to %v", sysLookupErr, resolver.EffectiveResolverDNS(), err)
 			return
 		}
 		// we succeeded when using the public dns. log this.
