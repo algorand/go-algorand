@@ -175,8 +175,17 @@ func DecodeMsgp(b []byte, objptr msgp.Unmarshaler) (err error) {
 		}
 	}()
 
-	_, err = objptr.UnmarshalMsg(b)
-	return
+	var rem []byte
+	rem, err = objptr.UnmarshalMsg(b)
+	if err != nil {
+		return err
+	}
+
+	if len(rem) != 0 {
+		return fmt.Errorf("decoding left %d remaining bytes", len(rem))
+	}
+
+	return nil
 }
 
 // DecodeReflect attempts to decode a msgpack-encoded byte buffer
