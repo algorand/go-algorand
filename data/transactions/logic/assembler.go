@@ -164,6 +164,10 @@ func (ops *OpStream) Bytec(constIndex uint) error {
 		ops.Out.WriteByte(0x27) // bytec
 		ops.Out.WriteByte(uint8(constIndex))
 	}
+	if constIndex >= uint(len(ops.bytec)) {
+		return fmt.Errorf("bytec %d is not defined", constIndex)
+	}
+	ops.trace("bytec %d %s", constIndex, hex.EncodeToString(ops.bytec[constIndex]))
 	ops.tpush(StackBytes)
 	return nil
 }
@@ -242,6 +246,7 @@ func (ops *OpStream) Global(val uint64) error {
 	}
 	ops.Out.WriteByte(0x32)
 	ops.Out.WriteByte(uint8(val))
+	ops.trace("%s (%s)", GlobalFieldNames[val], GlobalFieldTypes[val].String())
 	ops.tpush(GlobalFieldTypes[val])
 	return nil
 }
@@ -507,6 +512,8 @@ func assembleSubstring(ops *OpStream, args []string) error {
 	ops.Out.WriteByte(opcode)
 	ops.Out.WriteByte(byte(start))
 	ops.Out.WriteByte(byte(end))
+	ops.trace(" pushes([]byte)")
+	ops.tpush(StackBytes)
 	return nil
 }
 
@@ -832,13 +839,14 @@ func (ops *OpStream) trace(format string, args ...interface{}) {
 // checks (and pops) arg types from arg type stack
 func (ops *OpStream) checkArgs(spec OpSpec) error {
 	firstPop := true
-	for i, argType := range spec.Args {
+	for i := len(spec.Args) - 1; i >= 0; i-- {
+		argType := spec.Args[i]
 		stype := ops.tpop()
 		if firstPop {
 			firstPop = false
-			ops.trace("pops(%s", stype.String())
+			ops.trace("pops(%s", argType.String())
 		} else {
-			ops.trace(", %s", stype.String())
+			ops.trace(", %s", argType.String())
 		}
 		if !typecheck(argType, stype) {
 			msg := fmt.Sprintf("%s arg %d wanted type %s got %s", spec.Name, i, argType.String(), stype.String())
@@ -850,7 +858,7 @@ func (ops *OpStream) checkArgs(spec OpSpec) error {
 		}
 	}
 	if !firstPop {
-		ops.trace(") ")
+		ops.trace(")")
 	}
 	return nil
 }
@@ -895,9 +903,15 @@ func (ops *OpStream) Assemble(fin io.Reader) error {
 			if err != nil {
 				return err
 			}
-			if spec.Returns != nil {
+			if len(spec.Returns) > 0 {
 				ops.tpusha(spec.Returns)
-				ops.trace("pushes%#v", spec.Returns)
+				ops.trace(" pushes(%s", spec.Returns[0])
+				if len(spec.Returns) > 1 {
+					for _, rt := range spec.Returns[1:] {
+						ops.trace("%s", rt.String())
+					}
+				}
+				ops.trace(")")
 			}
 			err = ops.Out.WriteByte(opcode)
 			if err != nil {

@@ -88,8 +88,8 @@ var opDocList = []stringString{
 	{"pop", "discard value X from stack"},
 	{"dup", "duplicate last value on stack"},
 	{"cons", "pop two byte strings A and B and join them"},
-	{"substring", "pop a byte string X. For immediate values in 0..255 A and B: extract a range of bytes from it starting at A up to but not including B, push the substring result"},
-	{"substring3", "pop a byte string X and two integers A and B. Extract a range of bytes from X starting at A up to but not including B, push the substring result"},
+	{"substring", "pop a byte string X. For immediate values in 0..255 N and M: extract a range of bytes from it starting at N up to but not including M, push the substring result"},
+	{"substring3", "pop a byte string A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result"},
 }
 
 var opDocByName map[string]string

@@ -439,3 +439,24 @@ The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which 
 - Pops: *... stack*, any
 - Pushes: any, any
 - duplicate last value on stack
+
+## cons
+
+- Opcode: 0x50 
+- Pops: *... stack*, {[]byte A}, {[]byte B}
+- Pushes: []byte
+- pop two byte strings A and B and join them
+
+## substring
+
+- Opcode: 0x51 
+- Pops: *... stack*, []byte
+- Pushes: []byte
+- pop a byte string X. For immediate values in 0..255 N and M: extract a range of bytes from it starting at N up to but not including M, push the substring result
+
+## substring3
+
+- Opcode: 0x52 
+- Pops: *... stack*, {[]byte A}, {uint64 B}, {uint64 C}
+- Pushes: []byte
+- pop a byte string A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result

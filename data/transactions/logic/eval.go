@@ -319,6 +319,7 @@ var oneInt = []StackType{StackUint64}
 var twoInts = []StackType{StackUint64, StackUint64}
 var oneAny = []StackType{StackAny}
 var twoAny = []StackType{StackAny, StackAny}
+var byteIntInt = []StackType{StackBytes, StackUint64, StackUint64}
 
 // OpSpecs is the table of operations that can be assembled and evaluated.
 //
@@ -380,7 +381,7 @@ var OpSpecs = []OpSpec{
 	{0x49, "dup", opDup, oneAny, twoAny},
 	{0x50, "cons", opCons, twoBytes, oneBytes},
 	{0x51, "substring", opSubstring, oneBytes, oneBytes},
-	{0x52, "substring3", opSubstring3, threeBytes, oneBytes},
+	{0x52, "substring3", opSubstring3, byteIntInt, oneBytes},
 }
 
 // direct opcode bytes
