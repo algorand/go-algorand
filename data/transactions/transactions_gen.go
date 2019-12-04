@@ -519,7 +519,7 @@ func (z *Header) MarshalMsg(b []byte) (o []byte, err error) {
 		zb0001Len--
 		zb0001Mask |= 0x80
 	}
-	if z.Note == nil {
+	if len(z.Note) == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x100
 	}
@@ -696,7 +696,7 @@ func (z *Header) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *Header) MsgIsZero() bool {
-	return (z.Sender.MsgIsZero()) && (z.Fee.MsgIsZero()) && (z.FirstValid.MsgIsZero()) && (z.LastValid.MsgIsZero()) && (z.Note == nil) && (z.GenesisID == "") && (z.GenesisHash.MsgIsZero()) && (z.Group.MsgIsZero()) && ((z.Lease[0] == 0) && (z.Lease[1] == 0) && (z.Lease[2] == 0) && (z.Lease[3] == 0) && (z.Lease[4] == 0) && (z.Lease[5] == 0) && (z.Lease[6] == 0) && (z.Lease[7] == 0) && (z.Lease[8] == 0) && (z.Lease[9] == 0) && (z.Lease[10] == 0) && (z.Lease[11] == 0) && (z.Lease[12] == 0) && (z.Lease[13] == 0) && (z.Lease[14] == 0) && (z.Lease[15] == 0) && (z.Lease[16] == 0) && (z.Lease[17] == 0) && (z.Lease[18] == 0) && (z.Lease[19] == 0) && (z.Lease[20] == 0) && (z.Lease[21] == 0) && (z.Lease[22] == 0) && (z.Lease[23] == 0) && (z.Lease[24] == 0) && (z.Lease[25] == 0) && (z.Lease[26] == 0) && (z.Lease[27] == 0) && (z.Lease[28] == 0) && (z.Lease[29] == 0) && (z.Lease[30] == 0) && (z.Lease[31] == 0))
+	return (z.Sender.MsgIsZero()) && (z.Fee.MsgIsZero()) && (z.FirstValid.MsgIsZero()) && (z.LastValid.MsgIsZero()) && (len(z.Note) == 0) && (z.GenesisID == "") && (z.GenesisHash.MsgIsZero()) && (z.Group.MsgIsZero()) && ((z.Lease[0] == 0) && (z.Lease[1] == 0) && (z.Lease[2] == 0) && (z.Lease[3] == 0) && (z.Lease[4] == 0) && (z.Lease[5] == 0) && (z.Lease[6] == 0) && (z.Lease[7] == 0) && (z.Lease[8] == 0) && (z.Lease[9] == 0) && (z.Lease[10] == 0) && (z.Lease[11] == 0) && (z.Lease[12] == 0) && (z.Lease[13] == 0) && (z.Lease[14] == 0) && (z.Lease[15] == 0) && (z.Lease[16] == 0) && (z.Lease[17] == 0) && (z.Lease[18] == 0) && (z.Lease[19] == 0) && (z.Lease[20] == 0) && (z.Lease[21] == 0) && (z.Lease[22] == 0) && (z.Lease[23] == 0) && (z.Lease[24] == 0) && (z.Lease[25] == 0) && (z.Lease[26] == 0) && (z.Lease[27] == 0) && (z.Lease[28] == 0) && (z.Lease[29] == 0) && (z.Lease[30] == 0) && (z.Lease[31] == 0))
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -870,7 +870,7 @@ func (z *LogicSig) MarshalMsg(b []byte) (o []byte, err error) {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if z.Logic == nil {
+	if len(z.Logic) == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
@@ -999,7 +999,7 @@ func (z *LogicSig) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *LogicSig) MsgIsZero() bool {
-	return (z.Logic == nil) && (z.Sig.MsgIsZero()) && (z.Msig.MsgIsZero()) && (len(z.Args) == 0)
+	return (len(z.Logic) == 0) && (z.Sig.MsgIsZero()) && (z.Msig.MsgIsZero()) && (len(z.Args) == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1926,7 +1926,7 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte, err error) {
 		zb0001Len--
 		zb0001Mask |= 0x4000000
 	}
-	if z.Header.Note == nil {
+	if len(z.Header.Note) == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x8000000
 	}
@@ -2419,7 +2419,7 @@ func (z *Transaction) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *Transaction) MsgIsZero() bool {
-	return (z.Type.MsgIsZero()) && (z.Header.Sender.MsgIsZero()) && (z.Header.Fee.MsgIsZero()) && (z.Header.FirstValid.MsgIsZero()) && (z.Header.LastValid.MsgIsZero()) && (z.Header.Note == nil) && (z.Header.GenesisID == "") && (z.Header.GenesisHash.MsgIsZero()) && (z.Header.Group.MsgIsZero()) && ((z.Header.Lease[0] == 0) && (z.Header.Lease[1] == 0) && (z.Header.Lease[2] == 0) && (z.Header.Lease[3] == 0) && (z.Header.Lease[4] == 0) && (z.Header.Lease[5] == 0) && (z.Header.Lease[6] == 0) && (z.Header.Lease[7] == 0) && (z.Header.Lease[8] == 0) && (z.Header.Lease[9] == 0) && (z.Header.Lease[10] == 0) && (z.Header.Lease[11] == 0) && (z.Header.Lease[12] == 0) && (z.Header.Lease[13] == 0) && (z.Header.Lease[14] == 0) && (z.Header.Lease[15] == 0) && (z.Header.Lease[16] == 0) && (z.Header.Lease[17] == 0) && (z.Header.Lease[18] == 0) && (z.Header.Lease[19] == 0) && (z.Header.Lease[20] == 0) && (z.Header.Lease[21] == 0) && (z.Header.Lease[22] == 0) && (z.Header.Lease[23] == 0) && (z.Header.Lease[24] == 0) && (z.Header.Lease[25] == 0) && (z.Header.Lease[26] == 0) && (z.Header.Lease[27] == 0) && (z.Header.Lease[28] == 0) && (z.Header.Lease[29] == 0) && (z.Header.Lease[30] == 0) && (z.Header.Lease[31] == 0)) && (z.KeyregTxnFields.VotePK.MsgIsZero()) && (z.KeyregTxnFields.SelectionPK.MsgIsZero()) && (z.KeyregTxnFields.VoteFirst.MsgIsZero()) && (z.KeyregTxnFields.VoteLast.MsgIsZero()) && (z.KeyregTxnFields.VoteKeyDilution == 0) && (z.KeyregTxnFields.Nonparticipation == false) && (z.PaymentTxnFields.Receiver.MsgIsZero()) && (z.PaymentTxnFields.Amount.MsgIsZero()) && (z.PaymentTxnFields.CloseRemainderTo.MsgIsZero()) && (z.AssetConfigTxnFields.ConfigAsset.MsgIsZero()) && (z.AssetConfigTxnFields.AssetParams.MsgIsZero()) && (z.AssetTransferTxnFields.XferAsset.MsgIsZero()) && (z.AssetTransferTxnFields.AssetAmount == 0) && (z.AssetTransferTxnFields.AssetSender.MsgIsZero()) && (z.AssetTransferTxnFields.AssetReceiver.MsgIsZero()) && (z.AssetTransferTxnFields.AssetCloseTo.MsgIsZero()) && (z.AssetFreezeTxnFields.FreezeAccount.MsgIsZero()) && (z.AssetFreezeTxnFields.FreezeAsset.MsgIsZero()) && (z.AssetFreezeTxnFields.AssetFrozen == false)
+	return (z.Type.MsgIsZero()) && (z.Header.Sender.MsgIsZero()) && (z.Header.Fee.MsgIsZero()) && (z.Header.FirstValid.MsgIsZero()) && (z.Header.LastValid.MsgIsZero()) && (len(z.Header.Note) == 0) && (z.Header.GenesisID == "") && (z.Header.GenesisHash.MsgIsZero()) && (z.Header.Group.MsgIsZero()) && ((z.Header.Lease[0] == 0) && (z.Header.Lease[1] == 0) && (z.Header.Lease[2] == 0) && (z.Header.Lease[3] == 0) && (z.Header.Lease[4] == 0) && (z.Header.Lease[5] == 0) && (z.Header.Lease[6] == 0) && (z.Header.Lease[7] == 0) && (z.Header.Lease[8] == 0) && (z.Header.Lease[9] == 0) && (z.Header.Lease[10] == 0) && (z.Header.Lease[11] == 0) && (z.Header.Lease[12] == 0) && (z.Header.Lease[13] == 0) && (z.Header.Lease[14] == 0) && (z.Header.Lease[15] == 0) && (z.Header.Lease[16] == 0) && (z.Header.Lease[17] == 0) && (z.Header.Lease[18] == 0) && (z.Header.Lease[19] == 0) && (z.Header.Lease[20] == 0) && (z.Header.Lease[21] == 0) && (z.Header.Lease[22] == 0) && (z.Header.Lease[23] == 0) && (z.Header.Lease[24] == 0) && (z.Header.Lease[25] == 0) && (z.Header.Lease[26] == 0) && (z.Header.Lease[27] == 0) && (z.Header.Lease[28] == 0) && (z.Header.Lease[29] == 0) && (z.Header.Lease[30] == 0) && (z.Header.Lease[31] == 0)) && (z.KeyregTxnFields.VotePK.MsgIsZero()) && (z.KeyregTxnFields.SelectionPK.MsgIsZero()) && (z.KeyregTxnFields.VoteFirst.MsgIsZero()) && (z.KeyregTxnFields.VoteLast.MsgIsZero()) && (z.KeyregTxnFields.VoteKeyDilution == 0) && (z.KeyregTxnFields.Nonparticipation == false) && (z.PaymentTxnFields.Receiver.MsgIsZero()) && (z.PaymentTxnFields.Amount.MsgIsZero()) && (z.PaymentTxnFields.CloseRemainderTo.MsgIsZero()) && (z.AssetConfigTxnFields.ConfigAsset.MsgIsZero()) && (z.AssetConfigTxnFields.AssetParams.MsgIsZero()) && (z.AssetTransferTxnFields.XferAsset.MsgIsZero()) && (z.AssetTransferTxnFields.AssetAmount == 0) && (z.AssetTransferTxnFields.AssetSender.MsgIsZero()) && (z.AssetTransferTxnFields.AssetReceiver.MsgIsZero()) && (z.AssetTransferTxnFields.AssetCloseTo.MsgIsZero()) && (z.AssetFreezeTxnFields.FreezeAccount.MsgIsZero()) && (z.AssetFreezeTxnFields.FreezeAsset.MsgIsZero()) && (z.AssetFreezeTxnFields.AssetFrozen == false)
 }
 
 // MarshalMsg implements msgp.Marshaler
