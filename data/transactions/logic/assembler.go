@@ -479,6 +479,44 @@ func assembleStore(ops *OpStream, args []string) error {
 	return nil
 }
 
+func assembleSubstring(ops *OpStream, args []string) error {
+	start, err := strconv.ParseUint(args[0], 0, 64)
+	if err != nil {
+		return err
+	}
+	if start > EvalMaxScratchSize {
+		return errors.New("substring limited to 0..255")
+	}
+	end, err := strconv.ParseUint(args[1], 0, 64)
+	if err != nil {
+		return err
+	}
+	if end > EvalMaxScratchSize {
+		return errors.New("substring limited to 0..255")
+	}
+
+	if end < start {
+		return errors.New("substring end is before start")
+	}
+	opcode := byte(0x51)
+	spec := opsByOpcode[opcode]
+	err = ops.checkArgs(spec)
+	if err != nil {
+		return err
+	}
+	ops.Out.WriteByte(opcode)
+	ops.Out.WriteByte(byte(start))
+	ops.Out.WriteByte(byte(end))
+	return nil
+}
+
+func disSubstring(dis *disassembleState) {
+	start := uint(dis.program[dis.pc+1])
+	end := uint(dis.program[dis.pc+2])
+	dis.nextpc = dis.pc + 3
+	_, dis.err = fmt.Fprintf(dis.out, "substring %d %d\n", start, end)
+}
+
 //go:generate stringer -type=TxnField
 
 // TxnField is an enum type for `txn` and `gtxn`
@@ -703,6 +741,7 @@ func init() {
 	argOps["bnz"] = assembleBnz
 	argOps["load"] = assembleLoad
 	argOps["store"] = assembleStore
+	argOps["substring"] = assembleSubstring
 	// WARNING: special case op assembly by argOps functions must do their own type stack maintenance via ops.tpop() ops.tpush()/ops.tpusha()
 
 	TxnFieldNames = make([]string, int(invalidTxnField))
@@ -1012,6 +1051,7 @@ var disassemblers = []disassembler{
 	{"bnz", disBnz},
 	{"load", disLoad},
 	{"store", disStore},
+	{"substring", disSubstring},
 }
 
 var disByName map[string]disassembler

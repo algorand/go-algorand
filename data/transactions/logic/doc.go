@@ -87,6 +87,9 @@ var opDocList = []stringString{
 	{"bnz", "branch if value X is not zero"},
 	{"pop", "discard value X from stack"},
 	{"dup", "duplicate last value on stack"},
+	{"cons", "pop two byte strings A and B and join them"},
+	{"substring", "pop a byte string X. For immediate values in 0..255 A and B: extract a range of bytes from it starting at A up to but not including B, push the substring result"},
+	{"substring3", "pop a byte string X and two integers A and B. Extract a range of bytes from X starting at A up to but not including B, push the substring result"},
 }
 
 var opDocByName map[string]string
@@ -154,7 +157,7 @@ type OpGroup struct {
 
 // OpGroupList is groupings of ops for documentation purposes.
 var OpGroupList = []OpGroup{
-	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw"}},
+	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "cons", "substring", "substring3"}},
 	{"Loading Values", []string{"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "global", "load", "store"}},
 	{"Flow Control", []string{"err", "bnz", "pop", "dup"}},
 }
