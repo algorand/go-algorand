@@ -33,7 +33,6 @@ func Test_loadTelemetryConfig(t *testing.T) {
 		URI:                "elastic.algorand.com",
 		MinLogLevel:        4,
 		ReportHistoryLevel: 4,
-		LogHistoryDepth:    100,
 		UserName:           "telemetry-v9",
 		Password:           "oq%$FA1TOJ!yYeMEcJ7D688eEOE#MGCu",
 	}
@@ -81,7 +80,6 @@ func Test_CreateSaveLoadTelemetryConfig(t *testing.T) {
 	a.Equal(config1.GUID, config2.GUID)
 	a.Equal(config1.MinLogLevel, config2.MinLogLevel)
 	a.Equal(config1.ReportHistoryLevel, config2.ReportHistoryLevel)
-	a.Equal(config1.LogHistoryDepth, config2.LogHistoryDepth)
 	a.Equal(config1.FilePath, "")
 	a.Equal(configsPath, config2.FilePath)
 	a.Equal(config1.ChainID, config2.ChainID)
