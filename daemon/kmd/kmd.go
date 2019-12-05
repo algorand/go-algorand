@@ -52,7 +52,7 @@ func Start(startConfig StartConfig) (died chan error, sock string, err error) {
 	}
 
 	// Initialize wallet drivers with the config
-	err = driver.InitWalletDrivers(kmdCfg)
+	err = driver.InitWalletDrivers(kmdCfg, startConfig.Log)
 	if err != nil {
 		return
 	}
