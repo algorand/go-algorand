@@ -1,6 +1,6 @@
 all:	TEAL_opcodes.md wat.md
 
-TEAL_opcodes.md:	../../../cmd/opdoc/opdoc.go eval.go assembler.go doc.go
+TEAL_opcodes.md:	../../../cmd/opdoc/opdoc.go eval.go assembler.go doc.go globalfield_string.go txnfield_string.go
 	go run ../../../cmd/opdoc/opdoc.go
 
 wat.md:	TEAL_opcodes.md README_in.md
