@@ -285,6 +285,15 @@ func (l *Ledger) GetAssetCreator(assetIdx basics.AssetIndex) (basics.Address, er
 	return l.accts.getAssetCreatorForRound(l.blockQ.latest(), assetIdx)
 }
 
+// ListAssets takes a maximum asset index and maximum result length, and
+// returns up to that many asset AssetIDs from the database where asset id is
+// less than or equal to the maximum.
+func (l *Ledger) ListAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) (results []basics.AssetLocator, err error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.accts.listAssets(maxAssetIdx, maxResults)
+}
+
 // Lookup uses the accounts tracker to return the account state for a
 // given account in a particular round.  The account values reflect
 // the changes of all blocks up to and including rnd.
@@ -328,6 +337,13 @@ func (l *Ledger) isDup(currentProto config.ConsensusParams, current basics.Round
 	return l.txTail.isDup(currentProto, current, firstValid, lastValid, txid, txl)
 }
 
+// GetRoundTxIds returns a map of the transactions ids that we have for the given round
+func (l *Ledger) GetRoundTxIds(rnd basics.Round) (txMap map[transactions.Txid]bool) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.txTail.getRoundTxIds(rnd)
+}
+
 // Latest returns the latest known block round added to the ledger.
 func (l *Ledger) Latest() basics.Round {
 	return l.blockQ.latest()
@@ -338,16 +354,6 @@ func (l *Ledger) Latest() basics.Round {
 // guaranteed to be available after a crash.
 func (l *Ledger) LatestCommitted() basics.Round {
 	return l.blockQ.latestCommitted()
-}
-
-// Committed uses the transaction tail tracker to check if txn already
-// appeared in a block.
-func (l *Ledger) Committed(currentProto config.ConsensusParams, txn transactions.SignedTxn) (bool, error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
-	// do not check for whether lease would excluded this
-	txl := txlease{sender: txn.Txn.Sender}
-	return l.txTail.isDup(currentProto, l.Latest()+1, txn.Txn.First(), l.Latest(), txn.ID(), txl)
 }
 
 func (l *Ledger) blockAux(rnd basics.Round) (bookkeeping.Block, evalAux, error) {
@@ -468,7 +474,7 @@ func (l *Ledger) trackerLog() logging.Logger {
 	return l.log
 }
 
-func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, aux evalAux) (stateDelta, error) {
+func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, aux evalAux) (StateDelta, error) {
 	// passing nil as the verificationPool is ok since we've asking the evaluator to skip verification.
 	delta, _, err := l.eval(context.Background(), blk, &aux, false, nil, nil)
 	return delta, err

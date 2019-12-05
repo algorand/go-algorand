@@ -1,0 +1,37 @@
+#!/usr/bin/env python
+#
+# Usage:
+#  timeout <integer seconds> subcommand args...
+
+import subprocess
+import sys
+import time
+
+timeout = int(sys.argv[1]) + time.time()
+cmd = sys.argv[2:]
+p = subprocess.Popen(cmd)
+
+while True:
+    retcode = p.poll()
+    if retcode is None:
+        now = time.time()
+        if now > timeout:
+            sys.stderr.write('subcommand timed out: ' + repr(cmd) + '\n')
+            # try politely for it to end
+            p.terminate()
+            killtime = now + 5
+            while True:
+                time.sleep(0.45)
+                retcode = p.poll()
+                if retcode is not None:
+                    break
+                if time.time() > killtime:
+                    # try less politely
+                    p.kill()
+                    break
+            sys.exit(1)
+    elif retcode != 0:
+        sys.stderr.write('subcommand returncode '+repr(retcode)+': ' + repr(cmd) + '\n')
+        sys.exit(1)
+    else:
+        sys.exit(0)

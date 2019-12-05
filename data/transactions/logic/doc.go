@@ -16,6 +16,10 @@
 
 package logic
 
+import (
+	"github.com/algorand/go-algorand/protocol"
+)
+
 type stringString struct {
 	a string
 	b string
@@ -32,10 +36,10 @@ func stringStringListToMap(they []stringString) map[string]string {
 // short description of every op
 var opDocList = []stringString{
 	{"err", "Error. Panic immediately. This is primarily a fencepost against accidental zero bytes getting compiled into programs."},
-	{"sha256", "SHA256 hash of value, yields [32]byte"},
-	{"keccak256", "Keccak256 hash of value, yields [32]byte"},
-	{"sha512_256", "SHA512_256 hash of value, yields [32]byte"},
-	{"ed25519verify", "for (data, signature, pubkey) verify the signature of the data against the pubkey => {0 or 1}"},
+	{"sha256", "SHA256 hash of value X, yields [32]byte"},
+	{"keccak256", "Keccak256 hash of value X, yields [32]byte"},
+	{"sha512_256", "SHA512_256 hash of value X, yields [32]byte"},
+	{"ed25519verify", "for (data A, signature B, pubkey C) verify the signature of (\"ProgData\" || program_hash || data) against the pubkey => {0 or 1}"},
 	{"+", "A plus B. Panic on overflow."},
 	{"-", "A minus B. Panic if B > A."},
 	{"/", "A divided by B. Panic if B == 0."},
@@ -49,39 +53,39 @@ var opDocList = []stringString{
 	{"==", "A is equal to B => {0 or 1}"},
 	{"!=", "A is not equal to B => {0 or 1}"},
 	{"!", "X == 0 yields 1; else 0"},
-	{"len", "yields length of byte value"},
-	{"itob", "converts uint64 to big endian bytes"},
-	{"btoi", "converts bytes as big endian to uint64"},
+	{"len", "yields length of byte value X"},
+	{"itob", "converts uint64 X to big endian bytes"},
+	{"btoi", "converts bytes X as big endian to uint64"},
 	{"%", "A modulo B. Panic if B == 0."},
 	{"|", "A bitwise-or B"},
 	{"&", "A bitwise-and B"},
 	{"^", "A bitwise-xor B"},
-	{"~", "bitwise invert value"},
+	{"~", "bitwise invert value X"},
 	{"mulw", "A times B out to 128-bit long result as low (top) and high uint64 values on the stack"},
 	{"intcblock", "load block of uint64 constants"},
 	{"intc", "push value from uint64 constants to stack by index into constants"},
-	{"intc_0", "push uint64 constant 0 to stack"},
-	{"intc_1", "push uint64 constant 1 to stack"},
-	{"intc_2", "push uint64 constant 2 to stack"},
-	{"intc_3", "push uint64 constant 3 to stack"},
+	{"intc_0", "push constant 0 from intcblock to stack"},
+	{"intc_1", "push constant 1 from intcblock to stack"},
+	{"intc_2", "push constant 2 from intcblock to stack"},
+	{"intc_3", "push constant 3 from intcblock to stack"},
 	{"bytecblock", "load block of byte-array constants"},
 	{"bytec", "push bytes constant to stack by index into constants"},
-	{"bytec_0", "push bytes constant 0 to stack"},
-	{"bytec_1", "push bytes constant 1 to stack"},
-	{"bytec_2", "push bytes constant 2 to stack"},
-	{"bytec_3", "push bytes constant 3 to stack"},
-	{"arg", "push LogicSig.Args[N] value to stack by index"},
-	{"arg_0", "push LogicSig.Args[0] to stack"},
-	{"arg_1", "push LogicSig.Args[1] to stack"},
-	{"arg_2", "push LogicSig.Args[2] to stack"},
-	{"arg_3", "push LogicSig.Args[3] to stack"},
+	{"bytec_0", "push constant 0 from bytecblock to stack"},
+	{"bytec_1", "push constant 1 from bytecblock to stack"},
+	{"bytec_2", "push constant 2 from bytecblock to stack"},
+	{"bytec_3", "push constant 3 from bytecblock to stack"},
+	{"arg", "push Args[N] value to stack by index"},
+	{"arg_0", "push Args[0] to stack"},
+	{"arg_1", "push Args[1] to stack"},
+	{"arg_2", "push Args[2] to stack"},
+	{"arg_3", "push Args[3] to stack"},
 	{"txn", "push field from current transaction to stack"},
 	{"gtxn", "push field to the stack from a transaction in the current transaction group"},
 	{"global", "push value from globals to stack"},
 	{"load", "copy a value from scratch space to the stack"},
 	{"store", "pop a value from the stack and store to scratch space"},
-	{"bnz", "branch if value is not zero"},
-	{"pop", "discard value from stack"},
+	{"bnz", "branch if value X is not zero"},
+	{"pop", "discard value X from stack"},
 	{"dup", "duplicate last value on stack"},
 }
 
@@ -121,12 +125,13 @@ func OpImmediateNote(opName string) string {
 
 // further documentation on the function of the opcode
 var opDocExtraList = []stringString{
-	{"bnz", "For a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else proceed to next instruction at `pc + 3`. Branch targets must be well aligned instructions. (e.g. Branching to the second byte of a 2 byte op will be rejected.)"},
-	{"intcblock", "`intcblock` loads following program bytes into an array of integer constants in the evaluator. These integer constants can be referred to by `intc` and `intc_*` which will push the value onto the stack."},
-	{"bytecblock", "`bytecblock` loads the following program bytes into an array of byte string constants in the evaluator. These constants can be referred to by `bytec` and `bytec_*` which will push the value onto the stack."},
-	{"*", "It is worth noting that there are 10,000,000,000,000,000 micro-Algos in the total supply, or a bit less than 2^54. When doing rational math, e.g. (A * (N/D)) as ((A * N) / D) one should limit the numerator to less than 2^10 to be completely sure there won't be overflow."},
-	{"txn", "Most fields are a simple copy of a uint64 or byte string value. `XferAsset` is the concatenation of the AssetID Creator Address (32 bytes) and the big-endian bytes of the uint64 AssetID Index for a total of 40 bytes. `SenderBalance` is the uin64 balance of the sender, with rewards factored in, at the time of execution."},
-	{"gtxn", "for notes on transaction fields available, see `txn`"},
+	{"ed25519verify", "The 32 byte public key is the last element on the stack, preceeded by the 64 byte signature at the second-to-last element on the stack, preceeded by the data which was signed at the third-to-last element on the stack."},
+	{"bnz", "The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which are a high byte first and low byte second which together form a 16 bit offset which the instruction may branch to. For a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else proceed to next instruction at `pc + 3`. Branch targets must be well aligned instructions. (e.g. Branching to the second byte of a 2 byte op will be rejected.) Branch offsets are currently limited to forward branches only, 0-0x7fff. A future expansion might make this a signed 16 bit integer allowing for backward branches and looping."},
+	{"intcblock", "`intcblock` loads following program bytes into an array of integer constants in the evaluator. These integer constants can be referred to by `intc` and `intc_*` which will push the value onto the stack. Subsequent calls to `intcblock` reset and replace the integer constants available to the script."},
+	{"bytecblock", "`bytecblock` loads the following program bytes into an array of byte string constants in the evaluator. These constants can be referred to by `bytec` and `bytec_*` which will push the value onto the stack. Subsequent calls to `bytecblock` reset and replace the bytes constants available to the script."},
+	{"*", "Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `mulw`."},
+	{"txn", "FirstValidTime causes the program to fail. The field is reserved for future use."},
+	{"gtxn", "for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`"},
 	{"btoi", "`btoi` panics if the input is longer than 8 bytes"},
 }
 
@@ -192,4 +197,67 @@ func OpSize(opName string) int {
 		return cost
 	}
 	return 1
+}
+
+// see assembler.go TxnTypeNames
+// also used to parse symbolic constants for `int`
+var typeEnumDescriptions = []stringString{
+	{string(protocol.UnknownTx), "Unknown type. Invalid transaction."},
+	{string(protocol.PaymentTx), "Payment"},
+	{string(protocol.KeyRegistrationTx), "KeyRegistration"},
+	{string(protocol.AssetConfigTx), "AssetConfig"},
+	{string(protocol.AssetTransferTx), "AssetTransfer"},
+	{string(protocol.AssetFreezeTx), "AssetFreeze"},
+}
+
+// TypeNameDescription returns extra description about a low level protocol transaction Type string
+func TypeNameDescription(typeName string) string {
+	for _, ted := range typeEnumDescriptions {
+		if typeName == ted.a {
+			return ted.b
+		}
+	}
+	return "invalid type name"
+}
+
+var txnFieldDocList = []stringString{
+	{"Sender", "32 byte address"},
+	{"Fee", "micro-Algos"},
+	{"FirstValid", "round number"},
+	{"FirstValidTime", "Causes program to fail; reserved for future use."},
+	{"LastValid", "round number"},
+	{"Receiver", "32 byte address"},
+	{"Amount", "micro-Algos"},
+	{"CloseRemainderTo", "32 byte address"},
+	{"VotePK", "32 byte address"},
+	{"SelectionPK", "32 byte address"},
+	//{"VoteFirst", ""},
+	//{"VoteLast", ""},
+	{"TypeEnum", "See table below"},
+	{"XferAsset", "Asset ID"},
+	{"AssetAmount", "value in Asset's units"},
+	{"AssetSender", "32 byte address. Causes clawback of all value of asset from AssetSender if Sender is the Clawback address of the asset."},
+	{"AssetReceiver", "32 byte address"},
+	{"AssetCloseTo", "32 byte address"},
+	{"GroupIndex", "Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1."},
+	{"TxID", "The computed ID for this transaction. 32 bytes."},
+}
+
+// TxnFieldDocs are notes on fields available by `txn` and `gtxn`
+var TxnFieldDocs map[string]string
+
+var globalFieldDocList = []stringString{
+	{"MinTxnFee", "micro Algos"},
+	{"MinBalance", "micro Algos"},
+	{"MaxTxnLife", "rounds"},
+	{"ZeroAddress", "32 byte address of all zero bytes"},
+	{"GroupSize", "Number of transactions in this atomic transaction group. At least 1."},
+}
+
+// GlobalFieldDocs are notes on fields available in `global`
+var GlobalFieldDocs map[string]string
+
+func init() {
+	TxnFieldDocs = stringStringListToMap(txnFieldDocList)
+	GlobalFieldDocs = stringStringListToMap(globalFieldDocList)
 }

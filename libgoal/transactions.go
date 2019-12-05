@@ -22,6 +22,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -140,7 +141,7 @@ func (c *Client) SignAndBroadcastTransaction(walletHandle, pw []byte, utx transa
 }
 
 // MakeUnsignedGoOnlineTx creates a transaction that will bring an address online using available participation keys
-func (c *Client) MakeUnsignedGoOnlineTx(address string, part *account.Participation, round, txValidRounds, fee uint64) (transactions.Transaction, error) {
+func (c *Client) MakeUnsignedGoOnlineTx(address string, part *account.Participation, firstValid, lastValid, fee uint64, leaseBytes [32]byte) (transactions.Transaction, error) {
 	// Parse the address
 	parsedAddr, err := basics.UnmarshalChecksumAddress(address)
 	if err != nil {
@@ -153,37 +154,31 @@ func (c *Client) MakeUnsignedGoOnlineTx(address string, part *account.Participat
 		return transactions.Transaction{}, err
 	}
 
-	// Determine the last round this tx will be valid
-	if round == 0 {
-		round = params.LastRound + 1
-	}
-
 	cparams, ok := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
 	if !ok {
 		return transactions.Transaction{}, errors.New("unknown consensus version")
 	}
 
-	if txValidRounds == 0 {
-		txValidRounds = cparams.MaxTxnLife
+	firstValid, lastValid, err = computeValidityRounds(firstValid, lastValid, 0, params.LastRound, cparams.MaxTxnLife)
+	if err != nil {
+		return transactions.Transaction{}, err
 	}
 
 	// Choose which participation keys to go online with;
 	// need to do this after filling in the round number.
 	if part == nil {
-		bestPart, err := c.chooseParticipation(parsedAddr, basics.Round(round))
+		bestPart, err := c.chooseParticipation(parsedAddr, basics.Round(firstValid))
 		if err != nil {
 			return transactions.Transaction{}, err
 		}
 		part = &bestPart
 	}
 
-	parsedRound := basics.Round(round)
-	parsedTXValidRounds := basics.Round(txValidRounds)
-
-	lastRound := parsedRound + parsedTXValidRounds
+	parsedFrstValid := basics.Round(firstValid)
+	parsedLastValid := basics.Round(lastValid)
 	parsedFee := basics.MicroAlgos{Raw: fee}
 
-	goOnlineTransaction := part.GenerateRegistrationTransaction(parsedFee, parsedRound, lastRound, cparams)
+	goOnlineTransaction := part.GenerateRegistrationTransaction(parsedFee, parsedFrstValid, parsedLastValid, leaseBytes, cparams)
 	if cparams.SupportGenesisHash {
 		var genHash crypto.Digest
 		copy(genHash[:], params.GenesisHash)
@@ -208,7 +203,7 @@ func (c *Client) MakeUnsignedGoOnlineTx(address string, part *account.Participat
 }
 
 // MakeUnsignedGoOfflineTx creates a transaction that will bring an address offline
-func (c *Client) MakeUnsignedGoOfflineTx(address string, round, txValidRounds, fee uint64) (transactions.Transaction, error) {
+func (c *Client) MakeUnsignedGoOfflineTx(address string, firstValid, lastValid, fee uint64, leaseBytes [32]byte) (transactions.Transaction, error) {
 	// Parse the address
 	parsedAddr, err := basics.UnmarshalChecksumAddress(address)
 	if err != nil {
@@ -225,18 +220,13 @@ func (c *Client) MakeUnsignedGoOfflineTx(address string, round, txValidRounds, f
 		return transactions.Transaction{}, errors.New("unknown consensus version")
 	}
 
-	// Determine the last round this tx will be valid
-	if round == 0 {
-		round = params.LastRound + 1
+	firstValid, lastValid, err = computeValidityRounds(firstValid, lastValid, 0, params.LastRound, cparams.MaxTxnLife)
+	if err != nil {
+		return transactions.Transaction{}, err
 	}
 
-	if txValidRounds == 0 {
-		txValidRounds = cparams.MaxTxnLife
-	}
-
-	parsedRound := basics.Round(round)
-	parsedTXValidRounds := basics.Round(txValidRounds)
-	lastRound := parsedRound + parsedTXValidRounds
+	parsedFirstRound := basics.Round(firstValid)
+	parsedLastRound := basics.Round(lastValid)
 	parsedFee := basics.MicroAlgos{Raw: fee}
 
 	goOfflineTransaction := transactions.Transaction{
@@ -244,8 +234,9 @@ func (c *Client) MakeUnsignedGoOfflineTx(address string, round, txValidRounds, f
 		Header: transactions.Header{
 			Sender:     parsedAddr,
 			Fee:        parsedFee,
-			FirstValid: parsedRound,
-			LastValid:  lastRound,
+			FirstValid: parsedFirstRound,
+			LastValid:  parsedLastRound,
+			Lease:      leaseBytes,
 		},
 	}
 	if cparams.SupportGenesisHash {
@@ -271,7 +262,7 @@ func (c *Client) MakeUnsignedGoOfflineTx(address string, round, txValidRounds, f
 }
 
 // MakeUnsignedBecomeNonparticipatingTx creates a transaction that will mark an account as non-participating
-func (c *Client) MakeUnsignedBecomeNonparticipatingTx(address string, round, txValidRounds, fee uint64) (transactions.Transaction, error) {
+func (c *Client) MakeUnsignedBecomeNonparticipatingTx(address string, firstValid, lastValid, fee uint64) (transactions.Transaction, error) {
 	// Parse the address
 	parsedAddr, err := basics.UnmarshalChecksumAddress(address)
 	if err != nil {
@@ -288,18 +279,13 @@ func (c *Client) MakeUnsignedBecomeNonparticipatingTx(address string, round, txV
 		return transactions.Transaction{}, errors.New("unknown consensus version")
 	}
 
-	// Determine the last round this tx will be valid
-	if round == 0 {
-		round = params.LastRound + 1
+	firstValid, lastValid, err = computeValidityRounds(firstValid, lastValid, 0, params.LastRound, cparams.MaxTxnLife)
+	if err != nil {
+		return transactions.Transaction{}, err
 	}
 
-	if txValidRounds == 0 {
-		txValidRounds = cparams.MaxTxnLife
-	}
-
-	parsedRound := basics.Round(round)
-	parsedTXValidRounds := basics.Round(txValidRounds)
-	lastRound := parsedRound + parsedTXValidRounds
+	parsedFirstRound := basics.Round(firstValid)
+	parsedLastRound := basics.Round(lastValid)
 	parsedFee := basics.MicroAlgos{Raw: fee}
 
 	becomeNonparticipatingTransaction := transactions.Transaction{
@@ -307,8 +293,8 @@ func (c *Client) MakeUnsignedBecomeNonparticipatingTx(address string, round, txV
 		Header: transactions.Header{
 			Sender:     parsedAddr,
 			Fee:        parsedFee,
-			FirstValid: parsedRound,
-			LastValid:  lastRound,
+			FirstValid: parsedFirstRound,
+			LastValid:  parsedLastRound,
 		},
 	}
 	if cparams.SupportGenesisHash {
@@ -335,7 +321,7 @@ func (c *Client) MakeUnsignedBecomeNonparticipatingTx(address string, round, txV
 }
 
 // FillUnsignedTxTemplate fills in header fields in a partially-filled-in transaction.
-func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, numValidRounds, fee uint64, tx transactions.Transaction) (transactions.Transaction, error) {
+func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, lastValid, fee uint64, tx transactions.Transaction) (transactions.Transaction, error) {
 	// Parse the address
 	parsedAddr, err := basics.UnmarshalChecksumAddress(sender)
 	if err != nil {
@@ -352,25 +338,17 @@ func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, numValidRound
 		return transactions.Transaction{}, errors.New("unknown consensus version")
 	}
 
-	// Determine the last round this tx will be valid
-	if firstValid == 0 {
-		firstValid = params.LastRound + 1
+	firstValid, lastValid, err = computeValidityRounds(firstValid, lastValid, 0, params.LastRound, cparams.MaxTxnLife)
+	if err != nil {
+		return transactions.Transaction{}, err
 	}
 
-	if numValidRounds == 0 {
-		numValidRounds = cparams.MaxTxnLife
-	}
-
-	parsedFirstValid := basics.Round(firstValid)
-	parsedLastValid := basics.Round(firstValid + numValidRounds)
 	parsedFee := basics.MicroAlgos{Raw: fee}
 
-	tx.Header = transactions.Header{
-		Sender:     parsedAddr,
-		Fee:        parsedFee,
-		FirstValid: parsedFirstValid,
-		LastValid:  parsedLastValid,
-	}
+	tx.Header.Sender = parsedAddr
+	tx.Header.Fee = parsedFee
+	tx.Header.FirstValid = basics.Round(firstValid)
+	tx.Header.LastValid = basics.Round(lastValid)
 
 	if cparams.SupportGenesisHash {
 		var genHash crypto.Digest
@@ -400,7 +378,7 @@ func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, numValidRound
 //
 // Call FillUnsignedTxTemplate afterwards to fill out common fields in
 // the resulting transaction template.
-func (c *Client) MakeUnsignedAssetCreateTx(total uint64, defaultFrozen bool, manager string, reserve string, freeze string, clawback string, unitName string, assetName string, url string, metadataHash []byte) (transactions.Transaction, error) {
+func (c *Client) MakeUnsignedAssetCreateTx(total uint64, defaultFrozen bool, manager string, reserve string, freeze string, clawback string, unitName string, assetName string, url string, metadataHash []byte, decimals uint32) (transactions.Transaction, error) {
 	var tx transactions.Transaction
 	var err error
 
@@ -438,25 +416,41 @@ func (c *Client) MakeUnsignedAssetCreateTx(total uint64, defaultFrozen bool, man
 		}
 	}
 
-	if len(url) > len(tx.AssetParams.URL) {
-		return tx, fmt.Errorf("asset url %s is too long (max %d bytes)", url, len(tx.AssetParams.URL))
+	// Get consensus params so we can get max field lengths
+	params, err := c.SuggestedParams()
+	if err != nil {
+		return transactions.Transaction{}, err
 	}
-	copy(tx.AssetParams.URL[:], []byte(url))
+
+	cparams, ok := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
+	if !ok {
+		return transactions.Transaction{}, errors.New("unknown consensus version")
+	}
+
+	if len(url) > cparams.MaxAssetURLBytes {
+		return tx, fmt.Errorf("asset url %s is too long (max %d bytes)", url, cparams.MaxAssetURLBytes)
+	}
+	tx.AssetParams.URL = url
 
 	if len(metadataHash) > len(tx.AssetParams.MetadataHash) {
 		return tx, fmt.Errorf("asset metadata hash %x too long (max %d bytes)", metadataHash, len(tx.AssetParams.MetadataHash))
 	}
 	copy(tx.AssetParams.MetadataHash[:], metadataHash)
 
-	if len(unitName) > len(tx.AssetParams.UnitName) {
-		return tx, fmt.Errorf("asset unit name %s too long (max %d bytes)", unitName, len(tx.AssetParams.UnitName))
+	if len(unitName) > cparams.MaxAssetUnitNameBytes {
+		return tx, fmt.Errorf("asset unit name %s too long (max %d bytes)", unitName, cparams.MaxAssetUnitNameBytes)
 	}
-	copy(tx.AssetParams.UnitName[:], []byte(unitName))
+	tx.AssetParams.UnitName = unitName
 
-	if len(assetName) > len(tx.AssetParams.AssetName) {
-		return tx, fmt.Errorf("asset name %s too long (max %d bytes)", assetName, len(tx.AssetParams.AssetName))
+	if len(assetName) > cparams.MaxAssetNameBytes {
+		return tx, fmt.Errorf("asset name %s too long (max %d bytes)", assetName, cparams.MaxAssetNameBytes)
 	}
-	copy(tx.AssetParams.AssetName[:], []byte(assetName))
+	tx.AssetParams.AssetName = assetName
+
+	if decimals > cparams.MaxAssetDecimals {
+		return tx, fmt.Errorf("asset decimal precision too high (max %d)", cparams.MaxAssetDecimals)
+	}
+	tx.AssetParams.Decimals = decimals
 
 	return tx, nil
 }
@@ -483,16 +477,26 @@ func (c *Client) MakeUnsignedAssetDestroyTx(index uint64) (transactions.Transact
 func (c *Client) MakeUnsignedAssetConfigTx(creator string, index uint64, newManager *string, newReserve *string, newFreeze *string, newClawback *string) (transactions.Transaction, error) {
 	var tx transactions.Transaction
 	var err error
+	var ok bool
 
-	// Fetch the current state, to fill in as a template
-	current, err := c.AccountInformation(creator)
-	if err != nil {
-		return tx, err
-	}
+	// If the creator was passed in blank, look up asset info by index
+	var params v1.AssetParams
+	if creator == "" {
+		params, err = c.AssetInformation(index)
+		if err != nil {
+			return tx, err
+		}
+	} else {
+		// Fetch the current state, to fill in as a template
+		current, err := c.AccountInformation(creator)
+		if err != nil {
+			return tx, err
+		}
 
-	params, ok := current.AssetParams[index]
-	if !ok {
-		return tx, fmt.Errorf("asset ID %d not found in account %s", index, creator)
+		params, ok = current.AssetParams[index]
+		if !ok {
+			return tx, fmt.Errorf("asset ID %d not found in account %s", index, creator)
+		}
 	}
 
 	if newManager == nil {

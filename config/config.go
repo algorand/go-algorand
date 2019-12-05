@@ -192,6 +192,15 @@ type ConsensusParams struct {
 	// max number of assets per account
 	MaxAssetsPerAccount int
 
+	// max length of asset name
+	MaxAssetNameBytes int
+
+	// max length of asset unit name
+	MaxAssetUnitNameBytes int
+
+	// max length of asset url
+	MaxAssetURLBytes int
+
 	// support sequential transaction counter TxnCounter
 	TxnCounter bool
 
@@ -212,6 +221,9 @@ type ConsensusParams struct {
 
 	// sum of estimated op cost must be less than this
 	LogicSigMaxCost uint64
+
+	// max decimal precision for assets
+	MaxAssetDecimals uint32
 }
 
 // Consensus tracks the protocol-level settings for different versions of the
@@ -410,25 +422,50 @@ func initConsensusProtocols() {
 	v18 := v17
 	v18.PendingResidueRewards = true
 	v18.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	v18.TxnCounter = true
+	v18.Asset = true
+	v18.LogicSigVersion = 1
+	v18.LogicSigMaxSize = 1000
+	v18.LogicSigMaxCost = 20000
+	v18.MaxAssetsPerAccount = 1000
+	v18.SupportTxGroups = true
+	v18.MaxTxGroupSize = 16
+	v18.SupportTransactionLeases = true
+	v18.SupportBecomeNonParticipatingTransactions = true
+	v18.MaxAssetNameBytes = 32
+	v18.MaxAssetUnitNameBytes = 8
+	v18.MaxAssetURLBytes = 32
 	Consensus[protocol.ConsensusV18] = v18
 
-	// v17 can be upgraded to v18.
-	// for now, I will leave this gated out.
-	// v17.ApprovedUpgrades[protocol.ConsensusV18] = true
+	// ConsensusV19 is the official spec commit ( teal, assets, group tx )
+	v19 := v18
+	v19.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+
+	Consensus[protocol.ConsensusV19] = v19
+
+	// v18 can be upgraded to v19.
+	v18.ApprovedUpgrades[protocol.ConsensusV19] = true
+	// v17 can be upgraded to v19.
+	v17.ApprovedUpgrades[protocol.ConsensusV19] = true
+
+	// v20 points to adding the precision to the assets.
+	v20 := v19
+	v20.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	v20.MaxAssetDecimals = 19
+	// we want to adjust the upgrade time to be roughly one week.
+	// one week, in term of rounds would be:
+	// 140651 = (7 * 24 * 60 * 60 / 4.3)
+	// for the sake of future manual calculations, we'll round that down
+	// a bit :
+	v20.UpgradeWaitRounds = 140000
+	Consensus[protocol.ConsensusV20] = v20
+
+	// v19 can be upgraded to v20.
+	v19.ApprovedUpgrades[protocol.ConsensusV20] = true
 
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v18
-	vFuture.TxnCounter = true
-	vFuture.Asset = true
-	vFuture.LogicSigVersion = 1
-	vFuture.LogicSigMaxSize = 1000
-	vFuture.LogicSigMaxCost = 20000
-	vFuture.MaxAssetsPerAccount = 1000
-	vFuture.SupportTxGroups = true
-	vFuture.MaxTxGroupSize = 16
-	vFuture.SupportTransactionLeases = true
-	vFuture.SupportBecomeNonParticipatingTransactions = true
+	vFuture := v20
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
@@ -473,6 +510,19 @@ func initConsensusTestProtocols() {
 	//but explicitly mark "no approved upgrades" just in case
 	rapidRecalcParams.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
 	Consensus[protocol.ConsensusTestRapidRewardRecalculation] = rapidRecalcParams
+
+	// Setting the testShorterLookback parameters derived from ConsensusCurrentVersion
+	// Will result in MaxBalLookback = 32
+	// Used to run tests faster where past MaxBalLookback values are checked
+	testShorterLookback := Consensus[protocol.ConsensusCurrentVersion]
+	testShorterLookback.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+
+	// MaxBalLookback  =  2 x SeedRefreshInterval x SeedLookback
+	// ref. https://github.com/algorandfoundation/specs/blob/master/dev/abft.md
+	testShorterLookback.SeedLookback = 2
+	testShorterLookback.SeedRefreshInterval = 8
+	testShorterLookback.MaxBalLookback = 2 * testShorterLookback.SeedLookback * testShorterLookback.SeedRefreshInterval // 32
+	Consensus[protocol.ConsensusTestShorterLookback] = testShorterLookback
 }
 
 func initConsensusTestFastUpgrade() {
@@ -731,6 +781,8 @@ func loadConfigFromFile(configFile string) (c Local, err error) {
 	}
 
 	// Migrate in case defaults were changed
+	// If a config file does not have version, it is assumed to be zero.
+	// All fields listed in migrate() might be changed if an actual value matches to default value from a previous version.
 	c, err = migrate(c)
 	return
 }

@@ -27,14 +27,19 @@ import (
 
 // BlockListener represents an object that needs to get notified on new blocks.
 type BlockListener interface {
-	OnNewBlock(block bookkeeping.Block)
+	OnNewBlock(block bookkeeping.Block, delta StateDelta)
+}
+
+type blockDeltaPair struct {
+	block bookkeeping.Block
+	delta StateDelta
 }
 
 type blockNotifier struct {
 	mu            deadlock.Mutex
 	cond          *sync.Cond
 	listeners     []BlockListener
-	pendingBlocks []bookkeeping.Block
+	pendingBlocks []blockDeltaPair
 	running       bool
 }
 
@@ -58,7 +63,7 @@ func (bn *blockNotifier) worker() {
 
 		for _, blk := range blocks {
 			for _, listener := range listeners {
-				listener.OnNewBlock(blk)
+				listener.OnNewBlock(blk.block, blk.delta)
 			}
 		}
 
@@ -90,11 +95,11 @@ func (bn *blockNotifier) register(listeners []BlockListener) {
 	bn.listeners = append(bn.listeners, listeners...)
 }
 
-func (bn *blockNotifier) newBlock(blk bookkeeping.Block, delta stateDelta) {
+func (bn *blockNotifier) newBlock(blk bookkeeping.Block, delta StateDelta) {
 	bn.mu.Lock()
 	defer bn.mu.Unlock()
 
-	bn.pendingBlocks = append(bn.pendingBlocks, blk)
+	bn.pendingBlocks = append(bn.pendingBlocks, blockDeltaPair{block: blk, delta: delta})
 	bn.cond.Broadcast()
 }
 

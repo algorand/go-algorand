@@ -52,9 +52,11 @@ var useDefault bool
 var quietish bool
 var logicProg string
 var randomNote bool
+var randomLease bool
 var txnPerSec uint64
 var teal string
 var groupSize uint32
+var numAsset uint32
 
 func init() {
 	rootCmd.AddCommand(runCmd)
@@ -83,6 +85,8 @@ func init() {
 	runCmd.Flags().BoolVar(&randomNote, "randomnote", false, "generates a random byte array between 0-1024 bytes long")
 	runCmd.Flags().StringVar(&teal, "teal", "", "teal test scenario, can be light, normal, or heavy, this overrides --program")
 	runCmd.Flags().Uint32Var(&groupSize, "groupsize", 1, "The number of transactions in each group")
+	runCmd.Flags().Uint32Var(&numAsset, "numasset", 0, "The number of assets each account holds")
+	runCmd.Flags().BoolVar(&randomLease, "randomlease", false, "set the lease to contain a random value")
 }
 
 var runCmd = &cobra.Command{
@@ -153,6 +157,7 @@ var runCmd = &cobra.Command{
 		if randomAmount {
 			cfg.RandomizeAmt = true
 		}
+		cfg.RandomLease = randomLease
 		if noRandomAmount {
 			if randomAmount {
 				reportErrorf("Error --ra and --nra can't both be specified\n")
@@ -230,11 +235,17 @@ var runCmd = &cobra.Command{
 			reportErrorf("Invalid group size: %v\n", groupSize)
 		}
 
+		if numAsset <= 1000 {
+			cfg.NumAsset = numAsset
+		} else {
+			reportErrorf("Invalid number of asset: %d, (valid number: 1 - 1000)\n", numAsset)
+		}
+
 		reportInfof("Preparing to initialize PingPong with config:\n")
 		cfg.Dump(os.Stdout)
 
 		// Initialize accounts if necessary
-		accounts, cfg, err := pingpong.PrepareAccounts(ac, cfg)
+		accounts, assetParams, cfg, err := pingpong.PrepareAccounts(ac, cfg)
 		if err != nil {
 			reportErrorf("Error preparing accounts for transfers: %v\n", err)
 		}
@@ -247,7 +258,7 @@ var runCmd = &cobra.Command{
 		cfg.Dump(os.Stdout)
 
 		// Kick off the real processing
-		pingpong.RunPingPong(context.Background(), ac, accounts, cfg)
+		pingpong.RunPingPong(context.Background(), ac, accounts, assetParams, cfg)
 	},
 }
 

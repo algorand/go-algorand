@@ -36,8 +36,8 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -46,6 +46,9 @@ const EvalMaxVersion = 1
 
 // EvalMaxArgs is the maximum number of arguments to an LSig
 const EvalMaxArgs = 255
+
+// EvalMaxScratchSize is the maximum number of scratch slots.
+const EvalMaxScratchSize = 255
 
 // stackValue is the type for the operand stack.
 // Each stackValue is either a valid []byte value or a uint64 value.
@@ -81,18 +84,23 @@ type EvalParams struct {
 	// the transaction being evaluated
 	Txn *transactions.SignedTxn
 
-	Block *bookkeeping.Block
-
 	Proto *config.ConsensusParams
 
 	Trace io.Writer
 
-	TxnGroup []transactions.SignedTxnWithAD
+	TxnGroup []transactions.SignedTxn
 
 	// GroupIndex should point to Txn within TxnGroup
 	GroupIndex int
 
-	FirstValidTimeStamp uint64
+	Logger logging.Logger
+}
+
+func (ep EvalParams) log() logging.Logger {
+	if ep.Logger != nil {
+		return ep.Logger
+	}
+	return logging.Base()
 }
 
 type evalContext struct {
@@ -110,8 +118,6 @@ type evalContext struct {
 
 	stepCount int
 	cost      int
-
-	checkStack []StackType
 
 	// Ordered set of pc values that a branch could go to.
 	// If Check pc skips a target, the source branch was invalid!
@@ -181,6 +187,7 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 				}
 			}
 			err = PanicError{x, errstr}
+			params.log().Errorf("recovered panic in Eval: %s", err)
 		}
 	}()
 	if (params.Proto == nil) || (params.Proto.LogicSigVersion == 0) {
@@ -261,6 +268,7 @@ func Check(program []byte, params EvalParams) (cost int, err error) {
 				}
 			}
 			err = PanicError{x, errstr}
+			params.log().Errorf("recovered panic in Check: %s", err)
 		}
 	}()
 	if (params.Proto == nil) || (params.Proto.LogicSigVersion == 0) {
@@ -284,28 +292,12 @@ func Check(program []byte, params EvalParams) (cost int, err error) {
 	cx.version = version
 	cx.pc = vlen
 	cx.EvalParams = params
-	cx.checkStack = make([]StackType, 0, 10)
 	cx.program = program
 	for (cx.err == nil) && (cx.pc < len(cx.program)) {
 		cost += cx.checkStep()
 	}
 	if cx.err != nil {
 		err = fmt.Errorf("%3d %s", cx.pc, cx.err)
-		return
-	}
-	if len(cx.checkStack) != 1 {
-		if cx.Trace != nil {
-			fmt.Fprintf(cx.Trace, "end stack:\n")
-			for i, sv := range cx.checkStack {
-				fmt.Fprintf(cx.Trace, "[%d] %s\n", i, sv.String())
-			}
-		}
-		err = fmt.Errorf("end stack size %d != 1", len(cx.checkStack))
-		return
-	}
-	lastElemType := cx.checkStack[len(cx.checkStack)-1]
-	if lastElemType != StackUint64 && lastElemType != StackAny {
-		err = errors.New("program would end with bytes on stack")
 		return
 	}
 	return
@@ -450,6 +442,13 @@ func opCompat(expected, got StackType) bool {
 	return expected == got
 }
 
+func nilToEmpty(x []byte) []byte {
+	if x == nil {
+		return make([]byte, 0)
+	}
+	return x
+}
+
 // MaxStackDepth should move to consensus params
 const MaxStackDepth = 1000
 
@@ -509,24 +508,6 @@ func (cx *evalContext) checkStep() (cost int) {
 		cx.err = fmt.Errorf("%3d illegal opcode %02x", cx.pc, opcode)
 		return 1
 	}
-	argsTypes := opsByOpcode[opcode].Args
-	if len(argsTypes) >= 0 {
-		// check args for stack underflow and types
-		if len(cx.checkStack) < len(argsTypes) {
-			cx.err = fmt.Errorf("stack underflow in %s", opsByOpcode[opcode].Name)
-			return 1
-		}
-		first := len(cx.checkStack) - len(argsTypes)
-		for i, argType := range argsTypes {
-			if !typecheck(argType, cx.checkStack[first+i]) {
-				cx.err = fmt.Errorf("%s arg %d wanted %s but got %s", opsByOpcode[opcode].Name, i, argType.String(), cx.checkStack[first+i].String())
-			}
-		}
-	}
-	poplen := len(opsByOpcode[opcode].Args)
-	if poplen > 0 {
-		cx.checkStack = cx.checkStack[:len(cx.checkStack)-poplen]
-	}
 	oz := opSizeByOpcode[opcode]
 	if oz.size != 0 && (cx.pc+oz.size > len(cx.program)) {
 		cx.err = fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, opsByOpcode[opcode].Name)
@@ -555,20 +536,6 @@ func (cx *evalContext) checkStep() (cost int) {
 		for len(cx.branchTargets) > 0 && cx.branchTargets[0] == cx.pc {
 			// checks okay
 			cx.branchTargets = cx.branchTargets[1:]
-		}
-	}
-	if opsByOpcode[opcode].Returns != nil {
-		cx.checkStack = append(cx.checkStack, opsByOpcode[opcode].Returns...)
-	}
-	if len(cx.checkStack) > MaxStackDepth {
-		cx.err = errors.New("stack overflow")
-		return
-	}
-	if cx.Trace != nil {
-		if len(cx.checkStack) == 0 {
-			fmt.Fprintf(cx.Trace, "%3d %s => %s\n", cx.pc, opsByOpcode[opcode].Name, "<empty stack>")
-		} else {
-			fmt.Fprintf(cx.Trace, "%3d %s => %s\n", cx.pc, opsByOpcode[opcode].Name, cx.checkStack[len(cx.checkStack)-1].String())
 		}
 	}
 	return
@@ -944,7 +911,8 @@ func opArgN(cx *evalContext, n uint64) {
 		cx.err = fmt.Errorf("cannot load arg[%d] of %d", n, len(cx.Txn.Lsig.Args))
 		return
 	}
-	cx.stack = append(cx.stack, stackValue{Bytes: cx.Txn.Lsig.Args[n]})
+	val := nilToEmpty(cx.Txn.Lsig.Args[n])
+	cx.stack = append(cx.stack, stackValue{Bytes: val})
 }
 func opArg(cx *evalContext) {
 	n := uint64(cx.program[cx.pc+1])
@@ -1015,12 +983,10 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint
 		sv.Uint = txn.Fee.Raw
 	case FirstValid:
 		sv.Uint = uint64(txn.FirstValid)
-	case FirstValidTime:
-		sv.Uint = cx.FirstValidTimeStamp
 	case LastValid:
 		sv.Uint = uint64(txn.LastValid)
 	case Note:
-		sv.Bytes = txn.Note
+		sv.Bytes = nilToEmpty(txn.Note)
 	case Receiver:
 		sv.Bytes = txn.Receiver[:]
 	case Amount:
@@ -1042,8 +1008,7 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint
 	case TypeEnum:
 		sv.Uint = uint64(txnTypeIndexes[string(txn.Type)])
 	case XferAsset:
-		sv.Bytes = make([]byte, 8)
-		binary.BigEndian.PutUint64(sv.Bytes[:], uint64(txn.XferAsset))
+		sv.Uint = uint64(txn.XferAsset)
 	case AssetAmount:
 		sv.Uint = txn.AssetAmount
 	case AssetSender:

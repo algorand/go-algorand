@@ -42,33 +42,34 @@ func markdownTableEscape(x string) string {
 	return strings.ReplaceAll(x, "|", "\\|")
 }
 
-func enumTableMarkdown(out io.Writer, names []string) {
-	fmt.Fprintf(out, "| Index | Name |\n")
-	fmt.Fprintf(out, "| --- | --- |\n")
-	for i, name := range names {
-		fmt.Fprintf(out, "| %d | %s |\n", i, markdownTableEscape(name))
+func typeEnumTableMarkdown(out io.Writer) {
+	fmt.Fprintf(out, "| Index | \"Type\" string | Description |\n")
+	fmt.Fprintf(out, "| --- | --- | --- |\n")
+	for i, name := range logic.TxnTypeNames {
+		fmt.Fprintf(out, "| %d | %s | %s |\n", i, markdownTableEscape(name), logic.TypeNameDescription(name))
 	}
 	out.Write([]byte("\n"))
 }
 
-func fieldTableMarkdown(out io.Writer, names []string, types []logic.StackType) {
-	fmt.Fprintf(out, "| Index | Name | Type |\n")
-	fmt.Fprintf(out, "| --- | --- | --- |\n")
+func fieldTableMarkdown(out io.Writer, names []string, types []logic.StackType, extra map[string]string) {
+	fmt.Fprintf(out, "| Index | Name | Type | Notes |\n")
+	fmt.Fprintf(out, "| --- | --- | --- | --- |\n")
 	for i, name := range names {
 		gfType := types[i]
-		fmt.Fprintf(out, "| %d | %s | %s |\n", i, markdownTableEscape(name), markdownTableEscape(gfType.String()))
+		estr := extra[name]
+		fmt.Fprintf(out, "| %d | %s | %s | %s |\n", i, markdownTableEscape(name), markdownTableEscape(gfType.String()), estr)
 	}
 	out.Write([]byte("\n"))
 }
 
 func transactionFieldsMarkdown(out io.Writer) {
 	fmt.Fprintf(out, "\n`txn` Fields:\n\n")
-	fieldTableMarkdown(out, logic.TxnFieldNames, logic.TxnFieldTypes)
+	fieldTableMarkdown(out, logic.TxnFieldNames, logic.TxnFieldTypes, logic.TxnFieldDocs)
 }
 
 func globalFieldsMarkdown(out io.Writer) {
 	fmt.Fprintf(out, "\n`global` Fields:\n\n")
-	fieldTableMarkdown(out, logic.GlobalFieldNames, logic.GlobalFieldTypes)
+	fieldTableMarkdown(out, logic.GlobalFieldNames, logic.GlobalFieldTypes, logic.GlobalFieldDocs)
 }
 
 func opToMarkdown(out io.Writer, op *logic.OpSpec) (err error) {
@@ -100,16 +101,16 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec) (err error) {
 	if cost != 1 {
 		fmt.Fprintf(out, "- **Cost**: %d\n", cost)
 	}
-	ode := logic.OpDocExtra(op.Name)
-	if ode != "" {
-		fmt.Fprintf(out, "\n%s\n", ode)
-	}
 	if op.Name == "global" {
 		globalFieldsMarkdown(out)
 	} else if op.Name == "txn" {
 		transactionFieldsMarkdown(out)
 		fmt.Fprintf(out, "\nTypeEnum mapping:\n\n")
-		enumTableMarkdown(out, logic.TxnTypeNames)
+		typeEnumTableMarkdown(out)
+	}
+	ode := logic.OpDocExtra(op.Name)
+	if ode != "" {
+		fmt.Fprintf(out, "\n%s\n", ode)
 	}
 	return nil
 }
@@ -231,11 +232,11 @@ func main() {
 		}
 	}
 	txnfields, _ := os.Create("txn_fields.md")
-	fieldTableMarkdown(txnfields, logic.TxnFieldNames, logic.TxnFieldTypes)
+	fieldTableMarkdown(txnfields, logic.TxnFieldNames, logic.TxnFieldTypes, logic.TxnFieldDocs)
 	txnfields.Close()
 
 	globalfields, _ := os.Create("global_fields.md")
-	fieldTableMarkdown(globalfields, logic.GlobalFieldNames, logic.GlobalFieldTypes)
+	fieldTableMarkdown(globalfields, logic.GlobalFieldNames, logic.GlobalFieldTypes, logic.GlobalFieldDocs)
 	globalfields.Close()
 
 	langspecjs, _ := os.Create("langspec.json")

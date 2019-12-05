@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -99,7 +100,15 @@ func txEncode(tx transactions.Transaction, ad transactions.ApplyData) (v1.Transa
 	res.FromRewards = ad.SenderRewards.Raw
 	res.GenesisID = tx.GenesisID
 	res.GenesisHash = tx.GenesisHash[:]
-	res.Group = tx.Group[:]
+
+	if tx.Group != (crypto.Digest{}) {
+		res.Group = tx.Group[:]
+	}
+
+	if tx.Lease != ([32]byte{}) {
+		res.Lease = tx.Lease[:]
+	}
+
 	return res, nil
 }
 
@@ -135,10 +144,22 @@ func keyregTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.T
 	}
 }
 
+func participationKeysEncode(r basics.AccountData) *v1.Participation {
+	var apiParticipation v1.Participation
+	apiParticipation.ParticipationPK = r.VoteID[:]
+	apiParticipation.VRFPK = r.SelectionID[:]
+	apiParticipation.VoteFirst = uint64(r.VoteFirstValid)
+	apiParticipation.VoteLast = uint64(r.VoteLastValid)
+	apiParticipation.VoteKeyDilution = r.VoteKeyDilution
+
+	return &apiParticipation
+}
+
 func assetParams(creator basics.Address, params basics.AssetParams) v1.AssetParams {
 	paramsModel := v1.AssetParams{
 		Total:         params.Total,
 		DefaultFrozen: params.DefaultFrozen,
+		Decimals:      params.Decimals,
 	}
 
 	paramsModel.UnitName = strings.TrimRight(string(params.UnitName[:]), "\x00")
@@ -227,6 +248,60 @@ func txWithStatusEncode(tr node.TxnWithStatus) (v1.Transaction, error) {
 	return s, nil
 }
 
+func computeAssetIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, payset []transactions.SignedTxnWithAD) (aidx uint64) {
+	// Compute transaction index in block
+	offset := -1
+	for idx, stxnib := range payset {
+		if tx.Txn.Txn.ID() == stxnib.Txn.ID() {
+			offset = idx
+			break
+		}
+	}
+
+	// Sanity check that txn was in fetched block
+	if offset < 0 {
+		return 0
+	}
+
+	// Count into block to get created asset index
+	return txnCounter - uint64(len(payset)) + uint64(offset) + 1
+}
+
+// computeAssetIndexFromTxn returns the created asset index given a confirmed
+// transaction whose confirmation block is available in the ledger. Note that
+// 0 is an invalid asset index (they start at 1).
+func computeAssetIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx uint64) {
+	// Must have ledger
+	if l == nil {
+		return 0
+	}
+	// Transaction must be confirmed
+	if tx.ConfirmedRound == 0 {
+		return 0
+	}
+	// Transaction must be AssetConfig transaction
+	if tx.Txn.Txn.AssetConfigTxnFields == (transactions.AssetConfigTxnFields{}) {
+		return 0
+	}
+	// Transaction must be creating an asset
+	if tx.Txn.Txn.AssetConfigTxnFields.ConfigAsset != 0 {
+		return 0
+	}
+
+	// Look up block where transaction was confirmed
+	blk, err := l.Block(tx.ConfirmedRound)
+	if err != nil {
+		return 0
+	}
+
+	payset, err := blk.DecodePaysetFlat()
+	if err != nil {
+		return 0
+	}
+
+	return computeAssetIndexInPayset(tx, blk.BlockHeader.TxnCounter, payset)
+}
+
 func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error) {
 	block := v1.Block{
 		Hash:              crypto.Digest(b.Hash()).String(),
@@ -266,6 +341,7 @@ func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error)
 			ConfirmedRound: b.Round(),
 			ApplyData:      txn.ApplyData,
 		}
+
 		encTx, err := txWithStatusEncode(tx)
 		if err != nil {
 			return v1.Block{}, err
@@ -510,13 +586,11 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	apiParticipation := v1.Participation{
-		ParticipationPK: record.VoteID[:],
-		VRFPK:           record.SelectionID[:],
-		VoteFirst:       uint64(record.VoteFirstValid),
-		VoteLast:        uint64(record.VoteLastValid),
-		VoteKeyDilution: record.VoteKeyDilution,
+	var apiParticipation *v1.Participation
+	if record.VoteID != (crypto.OneTimeSignatureVerifier{}) {
+		apiParticipation = participationKeysEncode(record)
 	}
+
 	accountInfo := v1.Account{
 		Round:                       uint64(lastRound),
 		Address:                     addr.String(),
@@ -682,10 +756,19 @@ func PendingTransactionInformation(ctx lib.ReqContext, w http.ResponseWriter, r 
 	}
 
 	if txn, ok := ctx.Node.GetPendingTransaction(txID); ok {
+		ledger := ctx.Node.Ledger()
 		responseTxs, err := txWithStatusEncode(txn)
 		if err != nil {
 			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToParseTransaction, ctx.Log)
 			return
+		}
+
+		responseTxs.TransactionResults = &v1.TransactionResults{
+			// This field will be omitted for transactions that did not
+			// create an asset (or for which we could not look up the block
+			// it was created in), because computeAssetIndexFromTxn will
+			// return 0 in that case.
+			CreatedAssetIndex: computeAssetIndexFromTxn(txn, ledger),
 		}
 
 		response := TransactionResponse{
@@ -923,6 +1006,103 @@ func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request
 		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errFailedRetrievingAsset), errFailedRetrievingAsset, ctx.Log)
 		return
 	}
+}
+
+// Assets is an httpHandler for route GET /v1/assets
+func Assets(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
+	// swagger:operation GET /v1/assets Assets
+	// ---
+	//     Summary: List assets
+	//     Description: Returns list of up to `max` assets, where the maximum assetIdx is <= `assetIdx`
+	//     Produces:
+	//     - application/json
+	//     Schemes:
+	//     - http
+	//     Parameters:
+	//       - name: assetIdx
+	//         in: query
+	//         type: integer
+	//         format: int64
+	//         minimum: 0
+	//         required: false
+	//         description: Fetch assets with asset index <= assetIdx. If zero, fetch most recent assets.
+	//       - name: max
+	//         in: query
+	//         type: integer
+	//         format: int64
+	//         minimum: 0
+	//         maximum: 100
+	//         required: false
+	//         description: Fetch no more than this many assets
+	//     Responses:
+	//       200:
+	//         "$ref": '#/responses/AssetsResponse'
+	//       400:
+	//         description: Bad Request
+	//         schema: {type: string}
+	//       500:
+	//         description: Internal Error
+	//         schema: {type: string}
+	//       401: { description: Invalid API Token }
+	//       default: { description: Unknown Error }
+
+	const maxAssetsToList = 100
+
+	// Parse max assets to fetch from db
+	max, err := strconv.ParseInt(r.FormValue("max"), 10, 64)
+	if err != nil || max < 0 || max > maxAssetsToList {
+		err := fmt.Errorf(errFailedParsingMaxAssetsToList, 0, maxAssetsToList)
+		lib.ErrorResponse(w, http.StatusBadRequest, err, err.Error(), ctx.Log)
+		return
+	}
+
+	// Parse maximum asset idx
+	assetIdx, err := strconv.ParseInt(r.FormValue("assetIdx"), 10, 64)
+	if err != nil || assetIdx < 0 {
+		errs := errFailedParsingAssetIdx
+		lib.ErrorResponse(w, http.StatusBadRequest, errors.New(errs), errs, ctx.Log)
+		return
+	}
+
+	// If assetIdx is 0, we want the most recent assets, so make it intmax
+	if assetIdx == 0 {
+		assetIdx = (1 << 63) - 1
+	}
+
+	// Query asset range from the database
+	ledger := ctx.Node.Ledger()
+	alocs, err := ledger.ListAssets(basics.AssetIndex(assetIdx), uint64(max))
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingAsset, ctx.Log)
+		return
+	}
+
+	// Fill in the asset models
+	lastRound := ledger.Latest()
+	var result v1.AssetList
+	for _, aloc := range alocs {
+		// Fetch the asset parameters
+		creatorRecord, err := ledger.Lookup(lastRound, aloc.Creator)
+		if err != nil {
+			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
+			return
+		}
+
+		// Ensure no race with asset deletion
+		rp, ok := creatorRecord.AssetParams[aloc.Index]
+		if !ok {
+			continue
+		}
+
+		// Append the result
+		params := assetParams(aloc.Creator, rp)
+		result.Assets = append(result.Assets, v1.Asset{
+			AssetIndex:  uint64(aloc.Index),
+			AssetParams: params,
+		})
+	}
+
+	SendJSON(AssetsResponse{&result}, w, ctx.Log)
 }
 
 // SuggestedFee is an httpHandler for route GET /v1/transactions/fee

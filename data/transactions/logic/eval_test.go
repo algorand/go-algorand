@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -173,7 +174,7 @@ func TestTLHC(t *testing.T) {
 	sb := strings.Builder{}
 	block := bookkeeping.Block{}
 	proto := defaultEvalProto()
-	ep := EvalParams{Proto: &proto, Txn: &txn, Trace: &sb, Block: &block}
+	ep := EvalParams{Proto: &proto, Txn: &txn, Trace: &sb}
 	cost, err := Check(program, ep)
 	if err != nil {
 		t.Log(hex.EncodeToString(program))
@@ -192,7 +193,7 @@ func TestTLHC(t *testing.T) {
 	txn.Txn.Receiver = a2
 	txn.Txn.CloseRemainderTo = a2
 	sb = strings.Builder{}
-	ep = EvalParams{Proto: &proto, Txn: &txn, Trace: &sb, Block: &block}
+	ep = EvalParams{Proto: &proto, Txn: &txn, Trace: &sb}
 	pass, err = Eval(program, ep)
 	if !pass {
 		t.Log(hex.EncodeToString(program))
@@ -205,7 +206,7 @@ func TestTLHC(t *testing.T) {
 	txn.Txn.CloseRemainderTo = a2
 	sb = strings.Builder{}
 	txn.Txn.FirstValid = 1
-	ep = EvalParams{Proto: &proto, Txn: &txn, Trace: &sb, Block: &block}
+	ep = EvalParams{Proto: &proto, Txn: &txn, Trace: &sb}
 	pass, err = Eval(program, ep)
 	if pass {
 		t.Log(hex.EncodeToString(program))
@@ -218,7 +219,7 @@ func TestTLHC(t *testing.T) {
 	txn.Txn.CloseRemainderTo = a1
 	sb = strings.Builder{}
 	txn.Txn.FirstValid = 999999
-	ep = EvalParams{Proto: &proto, Txn: &txn, Trace: &sb, Block: &block}
+	ep = EvalParams{Proto: &proto, Txn: &txn, Trace: &sb}
 	pass, err = Eval(program, ep)
 	if !pass {
 		t.Log(hex.EncodeToString(program))
@@ -231,7 +232,7 @@ func TestTLHC(t *testing.T) {
 	txn.Lsig.Args = [][]byte{[]byte("=0\x97S\x85H\xe9\x91B\xfd\xdb;1\xf5Z\xaec?\xae\xf2I\x93\x08\x12\x94\xaa~\x06\x08\x849a")}
 	sb = strings.Builder{}
 	block.BlockHeader.Round = 1
-	ep = EvalParams{Proto: &proto, Txn: &txn, Trace: &sb, Block: &block}
+	ep = EvalParams{Proto: &proto, Txn: &txn, Trace: &sb}
 	pass, err = Eval(program, ep)
 	if pass {
 		t.Log(hex.EncodeToString(program))
@@ -320,6 +321,37 @@ err
 safe:
 int 1
 +`)
+	require.NoError(t, err)
+	cost, err := Check(program, defaultEvalParams(nil, nil))
+	require.NoError(t, err)
+	require.True(t, cost < 1000)
+	sb := strings.Builder{}
+	pass, err := Eval(program, defaultEvalParams(&sb, nil))
+	if !pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.NoError(t, err)
+	require.True(t, pass)
+}
+
+func TestBnz2(t *testing.T) {
+	t.Parallel()
+	program, err := AssembleString(`int 1
+int 2
+int 1
+int 2
+>
+bnz planb
+*
+int 1
+bnz after
+planb:
++
+after:
+dup
+pop
+`)
 	require.NoError(t, err)
 	cost, err := Check(program, defaultEvalParams(nil, nil))
 	require.NoError(t, err)
@@ -574,7 +606,7 @@ int 1`)
 	require.NoError(t, err)
 	sb := strings.Builder{}
 	cost, err := Check(program, defaultEvalParams(&sb, nil))
-	require.Error(t, err)
+	require.NoError(t, err)
 	require.True(t, cost < 1000)
 	sb = strings.Builder{}
 	pass, err := Eval(program, defaultEvalParams(&sb, nil))
@@ -593,7 +625,7 @@ func TestStackBytesLeftover(t *testing.T) {
 	require.NoError(t, err)
 	sb := strings.Builder{}
 	cost, err := Check(program, defaultEvalParams(&sb, nil))
-	require.Error(t, err)
+	require.NoError(t, err)
 	require.True(t, cost < 1000)
 	sb = strings.Builder{}
 	pass, err := Eval(program, defaultEvalParams(&sb, nil))
@@ -614,7 +646,7 @@ pop
 pop`)
 	require.NoError(t, err)
 	cost, err := Check(program, defaultEvalParams(nil, nil))
-	require.Error(t, err)
+	require.NoError(t, err)
 	require.True(t, cost < 1000)
 	sb := strings.Builder{}
 	pass, err := Eval(program, defaultEvalParams(&sb, nil))
@@ -724,8 +756,8 @@ func TestGtxnBadIndex(t *testing.T) {
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = program
 	txn.Lsig.Args = nil
-	txgroup := make([]transactions.SignedTxnWithAD, 1)
-	txgroup[0].SignedTxn = txn
+	txgroup := make([]transactions.SignedTxn, 1)
+	txgroup[0] = txn
 	proto := defaultEvalProto()
 	pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, TxnGroup: txgroup})
 	if pass {
@@ -747,8 +779,8 @@ func TestGtxnBadField(t *testing.T) {
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = program
 	txn.Lsig.Args = nil
-	txgroup := make([]transactions.SignedTxnWithAD, 1)
-	txgroup[0].SignedTxn = txn
+	txgroup := make([]transactions.SignedTxn, 1)
+	txgroup[0] = txn
 	proto := defaultEvalProto()
 	pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, TxnGroup: txgroup})
 	if pass {
@@ -855,8 +887,8 @@ func TestGlobal(t *testing.T) {
 	require.True(t, cost < 1000)
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = program
-	txgroup := make([]transactions.SignedTxnWithAD, 1)
-	txgroup[0].SignedTxn = txn
+	txgroup := make([]transactions.SignedTxn, 1)
+	txgroup[0] = txn
 	sb := strings.Builder{}
 	block := bookkeeping.Block{}
 	block.BlockHeader.Round = 999999
@@ -871,7 +903,6 @@ func TestGlobal(t *testing.T) {
 	ep := EvalParams{
 		Trace:    &sb,
 		Txn:      &txn,
-		Block:    &block,
 		Proto:    &proto,
 		TxnGroup: txgroup,
 	}
@@ -882,6 +913,55 @@ func TestGlobal(t *testing.T) {
 	}
 	require.NoError(t, err)
 	require.True(t, pass)
+}
+
+func TestTypeEnum(t *testing.T) {
+	t.Parallel()
+	ttypes := []protocol.TxType{
+		protocol.PaymentTx,
+		protocol.KeyRegistrationTx,
+		protocol.AssetConfigTx,
+		protocol.AssetTransferTx,
+		protocol.AssetFreezeTx,
+	}
+	// this is explicitly a local copy of the list so that someone
+	// doesn't accidentally disconnect the doc.go
+	// typeEnumDescriptions from its need in assembler.go
+	typeNames := []string{
+		"Payment",
+		"KeyRegistration",
+		"AssetConfig",
+		"AssetTransfer",
+		"AssetFreeze",
+	}
+	for i, tt := range ttypes {
+		symbol := typeNames[i]
+		t.Run(string(symbol), func(t *testing.T) {
+			text := fmt.Sprintf(`txn TypeEnum
+int %s
+==
+txn TypeEnum
+int %s
+==
+&&`, symbol, string(tt))
+			program, err := AssembleString(text)
+			require.NoError(t, err)
+			cost, err := Check(program, defaultEvalParams(nil, nil))
+			require.NoError(t, err)
+			require.True(t, cost < 1000)
+			var txn transactions.SignedTxn
+			txn.Txn.Type = tt
+			sb := strings.Builder{}
+			proto := defaultEvalProto()
+			pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, GroupIndex: 3})
+			if !pass {
+				t.Log(hex.EncodeToString(program))
+				t.Log(sb.String())
+			}
+			require.NoError(t, err)
+			require.True(t, pass)
+		})
+	}
 }
 
 const testTxnProgramText = `txn Sender
@@ -915,10 +995,6 @@ txn FirstValid
 int 42
 ==
 &&
-txn FirstValidTime
-int 210
-==
-&&
 txn LastValid
 int 1066
 ==
@@ -948,7 +1024,7 @@ int 1
 ==
 &&
 txn XferAsset
-arg 6
+int 10
 ==
 &&
 txn AssetAmount
@@ -984,7 +1060,9 @@ func TestTxn(t *testing.T) {
 	t.Parallel()
 	for _, txnField := range TxnFieldNames {
 		if !strings.Contains(testTxnProgramText, txnField) {
-			t.Errorf("TestTxn missing field %v", txnField)
+			if txnField != FirstValidTime.String() {
+				t.Errorf("TestTxn missing field %v", txnField)
+			}
 		}
 	}
 	program, err := AssembleString(testTxnProgramText)
@@ -998,7 +1076,7 @@ func TestTxn(t *testing.T) {
 	copy(txn.Txn.CloseRemainderTo[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02"))
 	copy(txn.Txn.VotePK[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui03"))
 	copy(txn.Txn.SelectionPK[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui04"))
-	txn.Txn.XferAsset = 1
+	txn.Txn.XferAsset = 10
 	// This is not a valid transaction to have all these fields set this way
 	txn.Txn.Note = []byte("fnord")
 	copy(txn.Txn.Lease[:], []byte("woofwoof"))
@@ -1027,11 +1105,9 @@ func TestTxn(t *testing.T) {
 		txid[:],
 		txn.Txn.Lease[:],
 	}
-	recs := make([]basics.BalanceRecord, 4)
-	recs[3].MicroAlgos.Raw = 4160
 	sb := strings.Builder{}
 	proto := defaultEvalProto()
-	pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, GroupIndex: 3, FirstValidTimeStamp: 210})
+	pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, GroupIndex: 3})
 	if !pass {
 		t.Log(hex.EncodeToString(program))
 		t.Log(sb.String())
@@ -1102,7 +1178,7 @@ int 2
 	}
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
-	txgroup := make([]transactions.SignedTxnWithAD, 2)
+	txgroup := make([]transactions.SignedTxn, 2)
 	var txn transactions.SignedTxn
 	copy(txn.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
 	copy(txn.Txn.Receiver[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01"))
@@ -1117,7 +1193,7 @@ int 2
 	txn.Txn.VoteFirst = 1317
 	txn.Txn.VoteLast = 17776
 	txn.Txn.VoteKeyDilution = 1
-	txgroup[0].SignedTxn = txn
+	txgroup[0] = txn
 	txgroup[1].Txn.Amount.Raw = 42
 	txgroup[1].Txn.Fee.Raw = 1066
 	txgroup[1].Txn.FirstValid = 42
@@ -1175,6 +1251,8 @@ int 0x310
 func TestLoadStore(t *testing.T) {
 	t.Parallel()
 	program, err := AssembleString(`int 37
+int 37
+store 1
 byte 0xabbacafe
 store 42
 int 37
@@ -1184,7 +1262,48 @@ load 42
 byte 0xabbacafe
 ==
 load 0
+load 1
++
 &&`)
+	require.NoError(t, err)
+	cost, err := Check(program, defaultEvalParams(nil, nil))
+	require.NoError(t, err)
+	require.True(t, cost < 1000)
+	sb := strings.Builder{}
+	pass, err := Eval(program, defaultEvalParams(&sb, nil))
+	if !pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.NoError(t, err)
+	require.True(t, pass)
+}
+
+func assembleStringWithTrace(t testing.TB, text string) ([]byte, error) {
+	sr := strings.NewReader(text)
+	sb := strings.Builder{}
+	ops := OpStream{Trace: &sb}
+	err := ops.Assemble(sr)
+	if err != nil {
+		t.Log(sb.String())
+		return nil, err
+	}
+	return ops.Bytes()
+}
+
+func TestLoadStore2(t *testing.T) {
+	t.Parallel()
+	program, err := assembleStringWithTrace(t, `int 2
+int 3
+byte 0xaa
+store 44
+store 43
+store 42
+load 43
+load 42
++
+int 5
+==`)
 	require.NoError(t, err)
 	cost, err := Check(program, defaultEvalParams(nil, nil))
 	require.NoError(t, err)
@@ -1347,7 +1466,7 @@ func TestStackUnderflow(t *testing.T) {
 	program = append(program, 0x08) // +
 	require.NoError(t, err)
 	cost, err := Check(program, defaultEvalParams(nil, nil))
-	require.Error(t, err) // Check should know the type stack was wrong
+	require.NoError(t, err)
 	require.True(t, cost < 1000)
 	sb := strings.Builder{}
 	pass, err := Eval(program, defaultEvalParams(&sb, nil))
@@ -1365,7 +1484,7 @@ func TestWrongStackTypeRuntime(t *testing.T) {
 	require.NoError(t, err)
 	program = append(program, 0x01, 0x15) // sha256, len
 	cost, err := Check(program, defaultEvalParams(nil, nil))
-	require.Error(t, err) // Check should know the type stack was wrong
+	require.NoError(t, err)
 	require.True(t, cost < 1000)
 	sb := strings.Builder{}
 	pass, err := Eval(program, defaultEvalParams(&sb, nil))
@@ -1422,7 +1541,7 @@ int 1`)
 	require.NoError(t, err)
 	program = append(program, 0x08) // +
 	cost, err := Check(program, defaultEvalParams(nil, nil))
-	require.Error(t, err) // Check should know the type stack was wrong
+	require.NoError(t, err)
 	require.True(t, cost < 1000)
 	sb := strings.Builder{}
 	pass, _ := Eval(program, defaultEvalParams(&sb, nil))
@@ -1538,6 +1657,7 @@ func checkPanic(cx *evalContext) int {
 }
 
 func TestPanic(t *testing.T) {
+	log := logging.TestingLog(t)
 	program, err := AssembleString(`int 1`)
 	require.NoError(t, err)
 	var hackedOpcode int
@@ -1555,7 +1675,9 @@ func TestPanic(t *testing.T) {
 		}
 	}
 	sb := strings.Builder{}
-	_, err = Check(program, defaultEvalParams(&sb, nil))
+	params := defaultEvalParams(&sb, nil)
+	params.Logger = log
+	_, err = Check(program, params)
 	require.Error(t, err)
 	if pe, ok := err.(PanicError); ok {
 		require.Equal(t, panicString, pe.PanicValue)
@@ -1567,7 +1689,9 @@ func TestPanic(t *testing.T) {
 	sb = strings.Builder{}
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = program
-	pass, err := Eval(program, defaultEvalParams(&sb, &txn))
+	params = defaultEvalParams(&sb, &txn)
+	params.Logger = log
+	pass, err := Eval(program, params)
 	if pass {
 		t.Log(hex.EncodeToString(program))
 		t.Log(sb.String())

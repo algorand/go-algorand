@@ -26,6 +26,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strconv"
 	"strings"
 
@@ -52,6 +53,7 @@ type labelReference struct {
 type OpStream struct {
 	Out     bytes.Buffer
 	Version uint64
+	Trace   io.Writer
 	vubytes [9]byte
 	intc    []uint64
 	bytec   [][]byte
@@ -69,11 +71,15 @@ type OpStream struct {
 }
 
 // SetLabelHere inserts a label reference to point to the next instruction
-func (ops *OpStream) SetLabelHere(label string) {
+func (ops *OpStream) SetLabelHere(label string) error {
 	if ops.labels == nil {
 		ops.labels = make(map[string]int)
 	}
+	if _, ok := ops.labels[label]; ok {
+		return fmt.Errorf("duplicate label %s", label)
+	}
 	ops.labels[label] = ops.Out.Len()
+	return nil
 }
 
 // ReferToLabel records an opcode label refence to resolve later
@@ -241,6 +247,16 @@ func (ops *OpStream) Global(val uint64) error {
 }
 
 func assembleInt(ops *OpStream, args []string) error {
+	// check friendly TypeEnum constants
+	te, isTypeEnum := txnTypeConstToUint64[args[0]]
+	if isTypeEnum {
+		return ops.Uint(uint64(te))
+	}
+	// check raw transaction type strings
+	tt, isTypeStr := txnTypeIndexes[args[0]]
+	if isTypeStr {
+		return ops.Uint(uint64(tt))
+	}
 	val, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
 		return err
@@ -417,7 +433,14 @@ func assembleBnz(ops *OpStream, args []string) error {
 		return errors.New("bnz operation needs label argument")
 	}
 	ops.ReferToLabel(ops.sourceLine, ops.Out.Len(), args[0])
-	ops.Out.WriteByte(0x40)
+	opcode := byte(0x40)
+	spec := opsByOpcode[opcode]
+	err := ops.checkArgs(spec)
+	if err != nil {
+		return err
+	}
+	ops.Out.WriteByte(opcode)
+	// zero bytes will get replaced with actual offset in resolveLabels()
 	ops.Out.WriteByte(0)
 	ops.Out.WriteByte(0)
 	return nil
@@ -428,11 +451,12 @@ func assembleLoad(ops *OpStream, args []string) error {
 	if err != nil {
 		return err
 	}
-	if val > 255 {
+	if val > EvalMaxScratchSize {
 		return errors.New("load limited to 0..255")
 	}
 	ops.Out.WriteByte(0x34)
 	ops.Out.WriteByte(byte(val))
+	ops.tpush(StackAny)
 	return nil
 }
 
@@ -441,10 +465,16 @@ func assembleStore(ops *OpStream, args []string) error {
 	if err != nil {
 		return err
 	}
-	if val > 255 {
+	if val > EvalMaxScratchSize {
 		return errors.New("store limited to 0..255")
 	}
-	ops.Out.WriteByte(0x35)
+	opcode := byte(0x35)
+	spec := opsByOpcode[opcode]
+	err = ops.checkArgs(spec)
+	if err != nil {
+		return err
+	}
+	ops.Out.WriteByte(opcode)
 	ops.Out.WriteByte(byte(val))
 	return nil
 }
@@ -461,7 +491,7 @@ const (
 	Fee
 	// FirstValid Transaction.FirstValid
 	FirstValid
-	// FirstValidTime Block[Transaction.FirstValid].TimeStamp
+	// FirstValidTime panic
 	FirstValidTime
 	// LastValid Transaction.LastValid
 	LastValid
@@ -534,7 +564,7 @@ var txnFieldTypePairs = []txnFieldType{
 	{VoteKeyDilution, StackUint64},
 	{Type, StackBytes},
 	{TypeEnum, StackUint64},
-	{XferAsset, StackBytes},
+	{XferAsset, StackUint64},
 	{AssetAmount, StackUint64},
 	{AssetSender, StackBytes},
 	{AssetReceiver, StackBytes},
@@ -559,13 +589,16 @@ var TxnTypeNames = []string{
 // map TxnTypeName to its enum index, for `txn TypeEnum`
 var txnTypeIndexes map[string]int
 
+// map symbolic name to uint64 for assembleInt
+var txnTypeConstToUint64 map[string]uint64
+
 func assembleTxn(ops *OpStream, args []string) error {
 	if len(args) != 1 {
 		return errors.New("txn expects one argument")
 	}
 	val, ok := txnFields[args[0]]
 	if !ok {
-		return fmt.Errorf("txn unknown arg %v", args[0])
+		return fmt.Errorf("txn unknown arg %s", args[0])
 	}
 	return ops.Txn(uint64(val))
 }
@@ -580,7 +613,7 @@ func assembleGtxn(ops *OpStream, args []string) error {
 	}
 	val, ok := txnFields[args[1]]
 	if !ok {
-		return fmt.Errorf("gtxn unknown arg %v", args[0])
+		return fmt.Errorf("gtxn unknown arg %s", args[0])
 	}
 	return ops.Gtxn(gtid, uint64(val))
 }
@@ -657,6 +690,7 @@ func init() {
 		opcodesByName[oi.Name] = oi.Opcode
 	}
 
+	// WARNING: special case op assembly by argOps functions must do their own type stack maintenance via ops.tpop() ops.tpush()/ops.tpusha()
 	argOps = make(map[string]func(*OpStream, []string) error)
 	argOps["int"] = assembleInt
 	argOps["intc"] = assembleIntC
@@ -672,6 +706,7 @@ func init() {
 	argOps["bnz"] = assembleBnz
 	argOps["load"] = assembleLoad
 	argOps["store"] = assembleStore
+	// WARNING: special case op assembly by argOps functions must do their own type stack maintenance via ops.tpop() ops.tpush()/ops.tpusha()
 
 	TxnFieldNames = make([]string, int(invalidTxnField))
 	for fi := Sender; fi < invalidTxnField; fi++ {
@@ -712,6 +747,12 @@ func init() {
 	for i, tt := range TxnTypeNames {
 		txnTypeIndexes[tt] = i
 	}
+
+	txnTypeConstToUint64 = make(map[string]uint64, len(TxnTypeNames))
+	for tt, v := range txnTypeIndexes {
+		symbol := TypeNameDescription(tt)
+		txnTypeConstToUint64[symbol] = uint64(v)
+	}
 }
 
 type lineErrorWrapper struct {
@@ -745,6 +786,39 @@ func filterFieldsForLineComment(fields []string) []string {
 	return fields
 }
 
+func (ops *OpStream) trace(format string, args ...interface{}) {
+	if ops.Trace == nil {
+		return
+	}
+	fmt.Fprintf(ops.Trace, format, args...)
+}
+
+// checks (and pops) arg types from arg type stack
+func (ops *OpStream) checkArgs(spec OpSpec) error {
+	firstPop := true
+	for i, argType := range spec.Args {
+		stype := ops.tpop()
+		if firstPop {
+			firstPop = false
+			ops.trace("pops(%s", stype.String())
+		} else {
+			ops.trace(", %s", stype.String())
+		}
+		if !typecheck(argType, stype) {
+			msg := fmt.Sprintf("%s arg %d wanted type %s got %s", spec.Name, i, argType.String(), stype.String())
+			if len(ops.labelReferences) > 0 {
+				fmt.Fprintf(os.Stderr, "warning: %d: %s; but branches have happened and assembler does not precisely track types in this case\n", ops.sourceLine, msg)
+			} else {
+				return lineErr(ops.sourceLine, errors.New(msg))
+			}
+		}
+	}
+	if !firstPop {
+		ops.trace(") ")
+	}
+	return nil
+}
+
 // Assemble reads text from an input and accumulates the program
 func (ops *OpStream) Assemble(fin io.Reader) error {
 	scanner := bufio.NewScanner(fin)
@@ -753,49 +827,59 @@ func (ops *OpStream) Assemble(fin io.Reader) error {
 		ops.sourceLine++
 		line := scanner.Text()
 		if len(line) == 0 {
+			ops.trace("%d: 0 line\n", ops.sourceLine)
 			continue
 		}
 		if strings.HasPrefix(line, "//") {
+			ops.trace("%d: // line\n", ops.sourceLine)
 			continue
 		}
 		fields := strings.Fields(line)
 		fields = filterFieldsForLineComment(fields)
 		if len(fields) == 0 {
+			ops.trace("%d: no fields\n", ops.sourceLine)
 			continue
 		}
 		opstring := fields[0]
 		argf, ok := argOps[opstring]
 		if ok {
+			ops.trace("%3d: %s\t", ops.sourceLine, opstring)
 			err := argf(ops, fields[1:])
 			if err != nil {
 				return lineErr(ops.sourceLine, err)
 			}
+			ops.trace("\n")
 			continue
 		}
 		opcode, ok := opcodesByName[opstring]
 		if ok {
+			ops.trace("%3d: %s\t", ops.sourceLine, opstring)
 			spec := opsByOpcode[opcode]
-			for i, argType := range spec.Args {
-				stype := ops.tpop()
-				if !typecheck(argType, stype) {
-					return fmt.Errorf(":%d %s arg %d wanted type %s got %s", ops.sourceLine, spec.Name, i, argType.String(), stype.String())
-				}
+			err := ops.checkArgs(spec)
+			if err != nil {
+				return err
 			}
 			if spec.Returns != nil {
 				ops.tpusha(spec.Returns)
+				ops.trace("pushes%#v", spec.Returns)
 			}
-			err := ops.Out.WriteByte(opcode)
+			err = ops.Out.WriteByte(opcode)
+			if err != nil {
+				return lineErr(ops.sourceLine, err)
+			}
+			ops.trace("\n")
+			continue
+		}
+		if opstring[len(opstring)-1] == ':' {
+			// create a label
+			err := ops.SetLabelHere(opstring[:len(opstring)-1])
 			if err != nil {
 				return lineErr(ops.sourceLine, err)
 			}
 			continue
 		}
-		if opstring[len(opstring)-1] == ':' {
-			// create a label
-			ops.SetLabelHere(opstring[:len(opstring)-1])
-			continue
-		}
-		return fmt.Errorf(":%d unknown opcode %v", ops.sourceLine, opstring)
+		err := fmt.Errorf("unknown opcode %v", opstring)
+		return lineErr(ops.sourceLine, err)
 	}
 	// TODO: warn if expected resulting stack is not len==1 ?
 	return ops.resolveLabels()

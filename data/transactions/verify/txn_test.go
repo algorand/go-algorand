@@ -91,14 +91,14 @@ func TestSignedPayment(t *testing.T) {
 	payment, stxn, secret, addr := payments[0], stxns[0], secrets[0], addrs[0]
 
 	require.NoError(t, payment.WellFormed(spec, proto), "generateTestObjects generated an invalid payment")
-	require.NoError(t, Txn(&stxn, spec, proto), "generateTestObjects generated a bad signedtxn")
+	require.NoError(t, Txn(&stxn, Context{Params: Params{CurrSpecAddrs: spec, CurrProto: protocol.ConsensusCurrentVersion}}), "generateTestObjects generated a bad signedtxn")
 
 	stxn2 := payment.Sign(secret)
 	require.Equal(t, stxn2.Sig, stxn.Sig, "got two different signatures for the same transaction (our signing function is deterministic)")
 
 	stxn2.MessUpSigForTesting()
 	require.Equal(t, stxn.ID(), stxn2.ID(), "changing sig caused txid to change")
-	require.Error(t, Txn(&stxn2, spec, proto), "verify succeeded with bad sig")
+	require.Error(t, Txn(&stxn2, Context{Params: Params{CurrSpecAddrs: spec, CurrProto: protocol.ConsensusCurrentVersion}}), "verify succeeded with bad sig")
 
 	require.True(t, crypto.SignatureVerifier(addr).Verify(payment, stxn.Sig), "signature on the transaction is not the signature of the hash of the transaction under the spender's key")
 }
@@ -106,9 +106,8 @@ func TestSignedPayment(t *testing.T) {
 func TestTxnValidationEncodeDecode(t *testing.T) {
 	_, signed, _, _ := generateTestObjects(100, 50)
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	for _, txn := range signed {
-		if Txn(&txn, spec, proto) != nil {
+		if Txn(&txn, Context{Params: Params{CurrSpecAddrs: spec, CurrProto: protocol.ConsensusCurrentVersion}}) != nil {
 			t.Errorf("signed transaction %#v did not verify", txn)
 		}
 
@@ -116,7 +115,7 @@ func TestTxnValidationEncodeDecode(t *testing.T) {
 		var signedTx transactions.SignedTxn
 		protocol.Decode(x, &signedTx)
 
-		if Txn(&signedTx, spec, proto) != nil {
+		if Txn(&signedTx, Context{Params: Params{CurrSpecAddrs: spec, CurrProto: protocol.ConsensusCurrentVersion}}) != nil {
 			t.Errorf("signed transaction %#v did not verify", txn)
 		}
 	}
@@ -132,6 +131,6 @@ func TestDecodeNil(t *testing.T) {
 	err := protocol.Decode(nilEncoding, &st)
 	if err == nil {
 		// This used to panic when run on a zero value of SignedTxn.
-		Txn(&st, spec, config.Consensus[protocol.ConsensusCurrentVersion])
+		Txn(&st, Context{Params: Params{CurrSpecAddrs: spec, CurrProto: protocol.ConsensusCurrentVersion}})
 	}
 }

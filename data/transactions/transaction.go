@@ -337,9 +337,24 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 	if len(tx.Note) > proto.MaxTxnNoteBytes {
 		return fmt.Errorf("transaction note too big: %d > %d", len(tx.Note), proto.MaxTxnNoteBytes)
 	}
+	if len(tx.AssetConfigTxnFields.AssetParams.AssetName) > proto.MaxAssetNameBytes {
+		return fmt.Errorf("transaction asset name too big: %d > %d", len(tx.AssetConfigTxnFields.AssetParams.AssetName), proto.MaxAssetNameBytes)
+	}
+	if len(tx.AssetConfigTxnFields.AssetParams.UnitName) > proto.MaxAssetUnitNameBytes {
+		return fmt.Errorf("transaction asset unit name too big: %d > %d", len(tx.AssetConfigTxnFields.AssetParams.UnitName), proto.MaxAssetUnitNameBytes)
+	}
+	if len(tx.AssetConfigTxnFields.AssetParams.URL) > proto.MaxAssetURLBytes {
+		return fmt.Errorf("transaction asset url too big: %d > %d", len(tx.AssetConfigTxnFields.AssetParams.URL), proto.MaxAssetURLBytes)
+	}
+	if tx.AssetConfigTxnFields.AssetParams.Decimals > proto.MaxAssetDecimals {
+		return fmt.Errorf("transaction asset decimals is too high (max is %d)", proto.MaxAssetDecimals)
+	}
 	if tx.Sender == spec.RewardsPool {
 		// this check is just to be safe, but reaching here seems impossible, since it requires computing a preimage of rwpool
 		return fmt.Errorf("transaction from incentive pool is invalid")
+	}
+	if tx.Sender == (basics.Address{}) {
+		return fmt.Errorf("transaction cannot have zero sender")
 	}
 	if !proto.SupportTransactionLeases && (tx.Lease != [32]byte{}) {
 		return fmt.Errorf("transaction tried to acquire lease %v but protocol does not support transaction leases", tx.Lease)

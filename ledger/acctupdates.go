@@ -19,6 +19,7 @@ package ledger
 import (
 	"database/sql"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -275,6 +276,72 @@ func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address
 	return
 }
 
+func (au *accountUpdates) listAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) ([]basics.AssetLocator, error) {
+	// Sort indices for assets that have been created/deleted. If this
+	// turns out to be too inefficient, we could keep around a heap of
+	// created/deleted asset indices in memory.
+	keys := make([]basics.AssetIndex, 0, len(au.assets))
+	for aidx := range au.assets {
+		if aidx <= maxAssetIdx {
+			keys = append(keys, aidx)
+		}
+	}
+	sort.Slice(keys, func(i, j int) bool { return keys[i] > keys[j] })
+
+	// Check for assets that haven't been synced to disk yet.
+	var unsyncedAssets []basics.AssetLocator
+	deletedAssets := make(map[basics.AssetIndex]bool)
+	for _, aidx := range keys {
+		delta := au.assets[aidx]
+		if delta.created {
+			// Created asset that only exists in memory
+			unsyncedAssets = append(unsyncedAssets, basics.AssetLocator{
+				Index:   aidx,
+				Creator: delta.creator,
+			})
+		} else {
+			// Mark deleted assets for exclusion from the results set
+			deletedAssets[aidx] = true
+		}
+	}
+
+	// Check in-memory created assets, which will always be newer than anything
+	// in the database
+	var res []basics.AssetLocator
+	for _, loc := range unsyncedAssets {
+		if uint64(len(res)) == maxResults {
+			return res, nil
+		}
+		res = append(res, loc)
+	}
+
+	// Fetch up to maxResults - len(res) + len(deletedAssets) from the database, so we
+	// have enough extras in case assets were deleted
+	numToFetch := maxResults - uint64(len(res)) + uint64(len(deletedAssets))
+	dbResults, err := au.accountsq.listAssets(maxAssetIdx, numToFetch)
+	if err != nil {
+		return nil, err
+	}
+
+	// Now we merge the database results with the in-memory results
+	for _, loc := range dbResults {
+		// Check if we have enough results
+		if uint64(len(res)) == maxResults {
+			return res, nil
+		}
+
+		// Asset was deleted
+		if _, ok := deletedAssets[loc.Index]; ok {
+			continue
+		}
+
+		// We're OK to include this result
+		res = append(res, loc)
+	}
+
+	return res, nil
+}
+
 func (au *accountUpdates) getAssetCreatorForRound(rnd basics.Round, aidx basics.AssetIndex) (basics.Address, error) {
 	offset, err := au.roundOffset(rnd)
 	if err != nil {
@@ -410,7 +477,7 @@ func (au *accountUpdates) committedUpTo(rnd basics.Round) basics.Round {
 	return au.dbRound
 }
 
-func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta stateDelta) {
+func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta StateDelta) {
 	proto := config.Consensus[blk.CurrentProtocol]
 	rnd := blk.Round()
 

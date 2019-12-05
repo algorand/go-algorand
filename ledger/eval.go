@@ -27,7 +27,6 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -46,9 +45,7 @@ type evalAux struct {
 // verified transactions.  This is expected to match the transaction
 // pool object.
 type VerifiedTxnCache interface {
-	Verified(txn transactions.SignedTxn) bool
-	EvalOk(txid transactions.Txid) (txErr string, found bool)
-	EvalRemember(tx transactions.SignedTxn, errString string)
+	Verified(txn transactions.SignedTxn, params verify.Params) bool
 }
 
 type roundCowBase struct {
@@ -72,8 +69,8 @@ func (x *roundCowBase) lookup(addr basics.Address) (basics.AccountData, error) {
 	return x.l.LookupWithoutRewards(x.rnd, addr)
 }
 
-func (x *roundCowBase) isDup(firstValid basics.Round, txid transactions.Txid, txl txlease) (bool, error) {
-	return x.l.isDup(x.proto, x.rnd+1, firstValid, x.rnd, txid, txl)
+func (x *roundCowBase) isDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl txlease) (bool, error) {
+	return x.l.isDup(x.proto, x.rnd+1, firstValid, lastValid, txid, txl)
 }
 
 func (x *roundCowBase) txnCounter() uint64 {
@@ -185,6 +182,7 @@ type ledgerForEvaluator interface {
 	Lookup(basics.Round, basics.Address) (basics.AccountData, error)
 	Totals(basics.Round) (AccountTotals, error)
 	isDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, txlease) (bool, error)
+	GetRoundTxIds(rnd basics.Round) (txMap map[transactions.Txid]bool)
 	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, error)
 	GetAssetCreatorForRound(basics.Round, basics.AssetIndex) (basics.Address, error)
 }
@@ -198,7 +196,7 @@ func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader, txcache VerifiedTxn
 func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *evalAux, validate bool, generate bool, txcache VerifiedTxnCache, executionPool execpool.BacklogPool) (*BlockEvaluator, error) {
 	proto, ok := config.Consensus[hdr.CurrentProtocol]
 	if !ok {
-		return nil, ProtocolError(hdr.CurrentProtocol)
+		return nil, protocol.Error(hdr.CurrentProtocol)
 	}
 
 	if aux == nil {
@@ -288,6 +286,7 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *eval
 	}
 
 	// hotfix for testnet stall 08/26/2019; move some algos from testnet bank to rewards pool to give it enough time until protocol upgrade occur.
+	// hotfix for testnet stall 11/07/2019; the same bug again, account ran out before the protocol upgrade occurred.
 	poolOld, err = eval.workaroundOverspentRewards(poolOld, hdr.Round)
 	if err != nil {
 		return nil, err
@@ -315,9 +314,10 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *eval
 }
 
 // hotfix for testnet stall 08/26/2019; move some algos from testnet bank to rewards pool to give it enough time until protocol upgrade occur.
+// hotfix for testnet stall 11/07/2019; do the same thing
 func (eval *BlockEvaluator) workaroundOverspentRewards(rewardPoolBalance basics.BalanceRecord, headerRound basics.Round) (poolOld basics.BalanceRecord, err error) {
 	// verify that we patch the correct round.
-	if headerRound != 1499995 {
+	if headerRound != 1499995 && headerRound != 2926564 {
 		return rewardPoolBalance, nil
 	}
 	// verify that we're patching the correct genesis ( i.e. testnet )
@@ -351,6 +351,94 @@ func (eval *BlockEvaluator) ResetTxnBytes() {
 	eval.blockTxBytes = 0
 }
 
+// TestTransactionGroup performs basic duplicate detection and well-formedness checks
+// on a transaction group, but does not actually add the transactions to the block
+// evaluator, or modify the block evaluator state in any other visible way.
+func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTxn) error {
+	// Nothing to do if there are no transactions.
+	if len(txgroup) == 0 {
+		return nil
+	}
+
+	if len(txgroup) > eval.proto.MaxTxGroupSize {
+		return fmt.Errorf("group size %d exceeds maximum %d", len(txgroup), eval.proto.MaxTxGroupSize)
+	}
+
+	cow := eval.state.child()
+
+	var group transactions.TxGroup
+	for gi, txn := range txgroup {
+		err := eval.testTransaction(txn, cow)
+		if err != nil {
+			return err
+		}
+
+		// Make sure all transactions in group have the same group value
+		if txn.Txn.Group != txgroup[0].Txn.Group {
+			return fmt.Errorf("transactionGroup: inconsistent group values: %v != %v",
+				txn.Txn.Group, txgroup[0].Txn.Group)
+		}
+
+		if !txn.Txn.Group.IsZero() {
+			txWithoutGroup := txn.Txn
+			txWithoutGroup.Group = crypto.Digest{}
+			txWithoutGroup.ResetCaches()
+
+			group.TxGroupHashes = append(group.TxGroupHashes, crypto.HashObj(txWithoutGroup))
+		} else if len(txgroup) > 1 {
+			return fmt.Errorf("transactionGroup: [%d] had zero Group but was submitted in a group of %d", gi, len(txgroup))
+		}
+	}
+
+	// If we had a non-zero Group value, check that all group members are present.
+	if group.TxGroupHashes != nil {
+		if txgroup[0].Txn.Group != crypto.HashObj(group) {
+			return fmt.Errorf("transactionGroup: incomplete group: %v != %v (%v)",
+				txgroup[0].Txn.Group, crypto.HashObj(group), group)
+		}
+	}
+
+	return nil
+}
+
+// testTransaction performs basic duplicate detection and well-formedness checks
+// on a single transaction, but does not actually add the transaction to the block
+// evaluator, or modify the block evaluator state in any other visible way.
+func (eval *BlockEvaluator) testTransaction(txn transactions.SignedTxn, cow *roundCowState) error {
+	// Verify that groups are supported.
+	if !txn.Txn.Group.IsZero() && !eval.proto.SupportTxGroups {
+		return fmt.Errorf("transaction groups not supported")
+	}
+
+	// Transaction valid (not expired)?
+	err := txn.Txn.Alive(eval.block)
+	if err != nil {
+		return err
+	}
+
+	// Well-formed on its own?
+	spec := transactions.SpecialAddresses{
+		FeeSink:     eval.block.BlockHeader.FeeSink,
+		RewardsPool: eval.block.BlockHeader.RewardsPool,
+	}
+	err = txn.Txn.WellFormed(spec, eval.proto)
+	if err != nil {
+		return fmt.Errorf("transaction %v: malformed: %v", txn.ID(), err)
+	}
+
+	// Transaction already in the ledger?
+	txid := txn.ID()
+	dup, err := cow.isDup(txn.Txn.First(), txn.Txn.Last(), txid, txlease{sender: txn.Txn.Sender, lease: txn.Txn.Lease})
+	if err != nil {
+		return err
+	}
+	if dup {
+		return TransactionInLedgerError{txn.ID()}
+	}
+
+	return nil
+}
+
 // Transaction tentatively adds a new transaction as part of this block evaluation.
 // If the transaction cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
@@ -368,17 +456,6 @@ func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn, ad transacti
 // an error is returned and the block evaluator state is unchanged.
 func (eval *BlockEvaluator) TransactionGroup(txads []transactions.SignedTxnWithAD) error {
 	return eval.transactionGroup(txads, true)
-}
-
-// TestTransactionGroup checks if a given transaction group could be executed at this
-// point in the block evaluator, but does not actually add the transactions to the block
-// evaluator, or modify the block evaluator state in any other visible way.
-func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTxn) error {
-	txads := make([]transactions.SignedTxnWithAD, len(txgroup))
-	for i := range txgroup {
-		txads[i].SignedTxn = txgroup[i]
-	}
-	return eval.transactionGroup(txads, false)
 }
 
 // transactionGroup tentatively executes a group of transactions as part of this block evaluation.
@@ -402,10 +479,17 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 
 	cow := eval.state.child()
 
+	groupNoAD := make([]transactions.SignedTxn, len(txgroup))
+	for i := range txgroup {
+		groupNoAD[i] = txgroup[i].SignedTxn
+	}
+
+	ctxs := verify.PrepareContexts(groupNoAD, eval.block.BlockHeader)
+
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
-		err := eval.transaction(txad.SignedTxn, txad.ApplyData, txgroup, gi, cow, &txib)
+		err := eval.transaction(txad.SignedTxn, txad.ApplyData, groupNoAD, gi, ctxs[gi], cow, &txib)
 		if err != nil {
 			return err
 		}
@@ -456,7 +540,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 // transaction tentatively executes a new transaction as part of this block evaluation.
 // If the transaction cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transactions.ApplyData, txgroup []transactions.SignedTxnWithAD, groupIndex int, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
+func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transactions.ApplyData, txgroup []transactions.SignedTxn, groupIndex int, ctx verify.Context, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
 	var err error
 
 	spec := transactions.SpecialAddresses{
@@ -473,7 +557,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 
 		// Transaction already in the ledger?
 		txid := txn.ID()
-		dup, err := cow.isDup(txn.Txn.First(), txid, txlease{sender: txn.Txn.Sender, lease: txn.Txn.Lease})
+		dup, err := cow.isDup(txn.Txn.First(), txn.Txn.Last(), txid, txlease{sender: txn.Txn.Sender, lease: txn.Txn.Lease})
 		if err != nil {
 			return err
 		}
@@ -487,38 +571,16 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 			return fmt.Errorf("transaction %v: malformed: %v", txn.ID(), err)
 		}
 
-		// Properly signed?
-		if eval.txcache == nil || !eval.txcache.Verified(txn) {
-			err = verify.TxnPool(&txn, spec, eval.proto, eval.verificationPool)
+		if eval.txcache == nil || !eval.txcache.Verified(txn, ctx.Params) {
+			err = verify.TxnPool(&txn, ctx, eval.verificationPool)
 			if err != nil {
 				return fmt.Errorf("transaction %v: failed to verify: %v", txn.ID(), err)
 			}
-
 		}
 
 		// Verify that groups are supported.
 		if !txn.Txn.Group.IsZero() && !eval.proto.SupportTxGroups {
 			return fmt.Errorf("transaction groups not supported")
-		}
-
-		needCheckLsig := !txn.Lsig.Blank()
-		if needCheckLsig {
-			errStr, found := eval.txcache.EvalOk(txid)
-			if found {
-				if errStr == "" {
-					needCheckLsig = false
-				} else {
-					return errors.New(errStr)
-				}
-			}
-		}
-		if needCheckLsig {
-			err = eval.checkLogicSig(txn, txgroup, groupIndex)
-			if err != nil {
-				eval.txcache.EvalRemember(txn, err.Error())
-				return err
-			}
-			eval.txcache.EvalRemember(txn, "")
 		}
 	}
 
@@ -552,6 +614,14 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 	// completely zero, which means the account will be deleted.)
 	rewardlvl := cow.rewardsLevel()
 	for _, addr := range cow.modifiedAccounts() {
+		// Skip FeeSink and RewardsPool MinBalance checks here.
+		// There's only two accounts, so space isn't an issue, and we don't
+		// expect them to have low balances, but if they do, it may cause
+		// surprises for every transaction.
+		if addr == spec.FeeSink || addr == spec.RewardsPool {
+			continue
+		}
+
 		data, err := cow.lookup(addr)
 		if err != nil {
 			return err
@@ -561,14 +631,6 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 		// because the accounts DB can delete it.  Otherwise, we will
 		// enforce MinBalance.
 		if data.IsZero() {
-			continue
-		}
-
-		// Skip FeeSink and RewardsPool MinBalance checks here.
-		// There's only two accounts, so space isn't an issue, and we don't
-		// expect them to have low balances, but if they do, it may cause
-		// surprises for every transaction.
-		if addr == spec.FeeSink || addr == spec.RewardsPool {
 			continue
 		}
 
@@ -583,36 +645,6 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 	// Remember this txn
 	cow.addTx(txn.Txn)
 
-	return nil
-}
-
-func (eval *BlockEvaluator) checkLogicSig(txn transactions.SignedTxn, txgroup []transactions.SignedTxnWithAD, groupIndex int) (err error) {
-	firstValid := basics.Round(txn.Txn.FirstValid)
-	var hdr bookkeeping.BlockHeader
-	if eval.block.BlockHeader.Round == firstValid {
-		hdr = eval.block.BlockHeader
-	} else {
-		// TODO: move this into some lazy evaluator for the few scripts that actually use `txn FirstValidTime` ?
-		hdr, err = eval.l.BlockHdr(firstValid)
-		if err != nil {
-			return fmt.Errorf("could not fetch BlockHdr for FirstValid=%d (current=%d): %s", txn.Txn.FirstValid, eval.block.BlockHeader.Round, err)
-		}
-	}
-	ep := logic.EvalParams{
-		Txn:                 &txn,
-		Block:               &eval.block,
-		Proto:               &eval.proto,
-		TxnGroup:            txgroup,
-		GroupIndex:          groupIndex,
-		FirstValidTimeStamp: uint64(hdr.TimeStamp),
-	}
-	pass, err := logic.Eval(txn.Lsig.Logic, ep)
-	if err != nil {
-		return fmt.Errorf("transaction %v: rejected by logic err=%s", txn.ID(), err)
-	}
-	if !pass {
-		return fmt.Errorf("transaction %v: rejected by logic", txn.ID())
-	}
 	return nil
 }
 
@@ -677,10 +709,10 @@ func (eval *BlockEvaluator) GenerateBlock() (*ValidatedBlock, error) {
 	return &vb, nil
 }
 
-func (l *Ledger) eval(ctx context.Context, blk bookkeeping.Block, aux *evalAux, validate bool, txcache VerifiedTxnCache, executionPool execpool.BacklogPool) (stateDelta, evalAux, error) {
+func (l *Ledger) eval(ctx context.Context, blk bookkeeping.Block, aux *evalAux, validate bool, txcache VerifiedTxnCache, executionPool execpool.BacklogPool) (StateDelta, evalAux, error) {
 	eval, err := startEvaluator(l, blk.BlockHeader, aux, validate, false, txcache, executionPool)
 	if err != nil {
-		return stateDelta{}, evalAux{}, err
+		return StateDelta{}, evalAux{}, err
 	}
 
 	// TODO: batch tx sig verification: ingest blk.Payset and output a list of ValidatedTx
@@ -688,33 +720,33 @@ func (l *Ledger) eval(ctx context.Context, blk bookkeeping.Block, aux *evalAux, 
 	// Next, transactions
 	paysetgroups, err := blk.DecodePaysetGroups()
 	if err != nil {
-		return stateDelta{}, evalAux{}, err
+		return StateDelta{}, evalAux{}, err
 	}
 
 	for _, txgroup := range paysetgroups {
 		select {
 		case <-ctx.Done():
-			return stateDelta{}, evalAux{}, ctx.Err()
+			return StateDelta{}, evalAux{}, ctx.Err()
 		default:
 		}
 
 		err = eval.TransactionGroup(txgroup)
 		if err != nil {
-			return stateDelta{}, evalAux{}, err
+			return StateDelta{}, evalAux{}, err
 		}
 	}
 
 	// Finally, procees any pending end-of-block state changes
 	err = eval.endOfBlock()
 	if err != nil {
-		return stateDelta{}, evalAux{}, err
+		return StateDelta{}, evalAux{}, err
 	}
 
 	// If validating, do final block checks that depend on our new state
 	if validate {
 		err = eval.finalValidation()
 		if err != nil {
-			return stateDelta{}, evalAux{}, err
+			return StateDelta{}, evalAux{}, err
 		}
 	}
 
@@ -744,7 +776,7 @@ func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, txcache Ve
 // the work of applying the block's changes to the ledger state.
 type ValidatedBlock struct {
 	blk   bookkeeping.Block
-	delta stateDelta
+	delta StateDelta
 	aux   evalAux
 }
 
