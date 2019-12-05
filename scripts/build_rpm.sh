@@ -18,6 +18,7 @@ OUTDIR="$1"
 export GOPATH=$(go env GOPATH)
 
 cd "$(dirname "$0")"/..
+export REPO_DIR=$(pwd -P)
 
 echo "Building RPM package"
 

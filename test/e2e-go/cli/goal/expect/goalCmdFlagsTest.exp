@@ -22,8 +22,8 @@ proc TestGoalCommandLineFlags { CMD EXPECTED_RE } {
 if { [catch {
     puts "Part 1: Check --validrounds and --lastvalid options combination for 'goal asset' and 'goal account"
 
-    TestGoalCommandLineFlags "goal asset create --validrounds 0 --creator ABC --total 100" ".*can not be zero.*"
-    TestGoalCommandLineFlags "goal asset create --validrounds 1 --lastvalid 1 --creator ABC --total 100" "Only one of .* can be specified"
+    TestGoalCommandLineFlags "goal asset create --decimals 0 --validrounds 0 --creator ABC --total 100" ".*can not be zero.*"
+    TestGoalCommandLineFlags "goal asset create --decimals 0 --validrounds 1 --lastvalid 1 --creator ABC --total 100" "Only one of .* can be specified"
 
     TestGoalCommandLineFlags "goal account changeonlinestatus --validRounds 0 --online" ".*validRounds has been deprecated.*"
     TestGoalCommandLineFlags "goal account changeonlinestatus --firstRound 0 --online" ".*firstRound has been deprecated.*"

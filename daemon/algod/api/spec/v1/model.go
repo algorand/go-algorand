@@ -148,7 +148,7 @@ type Account struct {
 	// In future REST API versions, this field may become required.
 	//
 	// required: false
-	Participation Participation `json:"participation,omitempty"`
+	Participation *Participation `json:"participation,omitempty"`
 
 	// AssetParams specifies the parameters of assets created by this account.
 	//
@@ -192,6 +192,14 @@ type AssetParams struct {
 	// required: true
 	Total uint64 `json:"total"`
 
+	// Decimals specifies the number of digits to use after the decimal
+	// point when displaying this asset. If 0, the asset is not divisible.
+	// If 1, the base unit of the asset is in tenths. If 2, the base unit
+	// of the asset is in hundredths, and so on.
+	//
+	// required: true
+	Decimals uint32 `json:"decimals"`
+
 	// DefaultFrozen specifies whether holdings in this asset
 	// are frozen by default.
 	//
@@ -202,26 +210,26 @@ type AssetParams struct {
 	// as supplied by the creator.
 	//
 	// required: false
-	UnitName string `json:"unitname"`
+	UnitName string `json:"unitname,omitempty"`
 
 	// AssetName specifies the name of this asset,
 	// as supplied by the creator.
 	//
 	// required: false
-	AssetName string `json:"assetname"`
+	AssetName string `json:"assetname,omitempty"`
 
 	// URL specifies a URL where more information about the asset can be
 	// retrieved
 	//
 	// required: false
-	URL string `json:"url"`
+	URL string `json:"url,omitempty"`
 
 	// MetadataHash specifies a commitment to some unspecified asset
 	// metadata. The format of this metadata is up to the application.
 	//
 	// required: false
 	// swagger:strfmt byte
-	MetadataHash []byte `json:"metadatahash"`
+	MetadataHash []byte `json:"metadatahash,omitempty"`
 
 	// ManagerAddr specifies the address used to manage the keys of this
 	// asset and to destroy it.
@@ -308,7 +316,17 @@ type Transaction struct {
 	//
 	// required: false
 	// swagger:strfmt byte
-	Note []byte `json:"noteb64"`
+	Note []byte `json:"noteb64,omitempty"`
+
+	// Lease enforces mutual exclusion of transactions.  If this field is
+	// nonzero, then once the transaction is confirmed, it acquires the
+	// lease identified by the (Sender, Lease) pair of the transaction until
+	// the LastValid round passes.  While this transaction possesses the
+	// lease, no other transaction specifying this lease can be confirmed.
+	//
+	// required: false
+	// swagger:strfmt byte
+	Lease []byte `json:"lease,omitempty"`
 
 	// ConfirmedRound indicates the block number this transaction appeared in
 	//
@@ -326,7 +344,7 @@ type Transaction struct {
 	// transaction and may attempt to commit it in the future.
 	//
 	// required: false
-	PoolError string `json:"poolerror"`
+	PoolError string `json:"poolerror,omitempty"`
 
 	// This is a list of all supported transactions.
 	// To add another one, create a struct with XXXTransactionType and embed it here.
@@ -378,7 +396,7 @@ type Transaction struct {
 	//
 	// required: false
 	// swagger:strfmt byte
-	Group []byte `json:"group"`
+	Group []byte `json:"group,omitempty"`
 }
 
 // PaymentTransactionType contains the additional fields for a payment Transaction
@@ -392,12 +410,12 @@ type PaymentTransactionType struct {
 	// CloseRemainderTo is the address the sender closed to
 	//
 	// required: false
-	CloseRemainderTo string `json:"close"`
+	CloseRemainderTo string `json:"close,omitempty"`
 
 	// CloseAmount is the amount sent to CloseRemainderTo, for committed transaction
 	//
 	// required: false
-	CloseAmount uint64 `json:"closeamount"`
+	CloseAmount uint64 `json:"closeamount,omitempty"`
 
 	// Amount is the amount of MicroAlgos intended to be transferred
 	//

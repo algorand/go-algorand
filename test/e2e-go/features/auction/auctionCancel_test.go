@@ -3,7 +3,8 @@ package auction
 import (
 	"path/filepath"
 	"testing"
-
+	"runtime"
+	
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/test/framework/fixtures"
@@ -38,6 +39,9 @@ func TestStartAndCancelAuctionNoBids(t *testing.T) {
 }
 
 func TestStartAndCancelAuctionOneUserTenBids(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	t.Parallel()
 	r := require.New(t)
 	var fixture fixtures.AuctionFixture

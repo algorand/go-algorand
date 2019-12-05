@@ -5,9 +5,6 @@
 #
 # Externally settable env vars:
 # S3_PREFIX= where to upload build artifacts (no trailing /)
-# S3_PREFIX_BUILDLOG= where upload build log (no trailing /)
-# AWS_EFS_MOUNT= NFS to mount for `aptly` persistent state and scratch storage
-# SIGNING_KEY_ADDR= dev@algorand.com or similar for GPG key
 # RSTAMP= `scripts/reverse_hex_timestamp`
 # AWS_ACCESS_KEY_ID=
 # AWS_SECRET_ACCESS_KEY=
@@ -57,16 +54,19 @@ if [ -z "${DC_IP}" ]; then
 fi
 
 # Update version file for this build
-BUILD_NUMBER=
-if [ -e buildnumber.dat ]; then
-    BUILD_NUMBER=$(cat ./buildnumber.dat)
-    BUILD_NUMBER=$((${BUILD_NUMBER} + 1))
+if [ ! -z "${BUILD_NUMBER}" ]; then
+    echo "using externally set BUILD_NUMBER=${BUILD_NUMBER} without incrementing"
 else
-    BUILD_NUMBER=0
+    if [ -e buildnumber.dat ]; then
+	BUILD_NUMBER=$(cat ./buildnumber.dat)
+	BUILD_NUMBER=$((${BUILD_NUMBER} + 1))
+    else
+	BUILD_NUMBER=0
+    fi
+    echo ${BUILD_NUMBER} > ./buildnumber.dat
+    git add -A
+    git commit -m "Build ${BUILD_NUMBER}"
 fi
-echo ${BUILD_NUMBER} > ./buildnumber.dat
-git add -A
-git commit -m "Build ${BUILD_NUMBER}"
 export FULLVERSION=$(./scripts/compute_build_number.sh -f)
 
 # a bash user might `source build_env` to manually continue a broken build
@@ -100,15 +100,12 @@ scripts/build_packages.sh "${PLATFORM}"
 
 # build docker release package
 cd ${REPO_ROOT}/docker/release
-./build_algod_docker.sh ${HOME}/node_pkg/node_${CHANNEL}_linux-amd64_${FULLVERSION}.tar.gz
+sg docker "./build_algod_docker.sh ${HOME}/node_pkg/node_${CHANNEL}_${OS}-${ARCH}_${FULLVERSION}.tar.gz"
 cd ${REPO_ROOT}/scripts
 
 # Test .deb installer
 
-mkdir -p ${HOME}/docker_test_resources
-if [ ! -f "${HOME}/docker_test_resources/gnupg2.2.9_centos7_amd64.tar.bz2" ]; then
-    aws s3 cp s3://algorand-devops-misc/tools/gnupg2.2.9_centos7_amd64.tar.bz2 ${HOME}/docker_test_resources
-fi
+. get_centos_gpg.sh
 
 export GNUPGHOME=${HOME}/tkey
 gpgconf --kill gpg-agent
@@ -124,6 +121,15 @@ Expire-Date: 0
 Passphrase: foogorand
 %transient-key
 EOF
+cat >${HOME}/tkey/rpmkeygenscript<<EOF
+Key-Type: default
+Subkey-Type: default
+Name-Real: Algorand RPM
+Name-Email: rpm@algorand.com
+Expire-Date: 0
+Passphrase: foogorand
+%transient-key
+EOF
 cat <<EOF>${GNUPGHOME}/gpg-agent.conf
 extra-socket ${GNUPGHOME}/S.gpg-agent.extra
 # inable unattended daemon mode
@@ -132,18 +138,23 @@ allow-preset-passphrase
 default-cache-ttl 2592000
 max-cache-ttl 2592000
 EOF
-gpg --generate-key --batch ${HOME}/tkey/keygenscript
-gpg --export -a > "${HOME}/docker_test_resources/key.pub"
+gpg --gen-key --batch ${HOME}/tkey/keygenscript
+gpg --gen-key --batch ${HOME}/tkey/rpmkeygenscript
+gpg --export -a dev@algorand.com > "${HOME}/docker_test_resources/key.pub"
+gpg --export -a rpm@algorand.com > "${HOME}/docker_test_resources/rpm.pub"
 
 gpgconf --kill gpg-agent
 gpgconf --launch gpg-agent
 
-KEYGRIP=$(gpg -K --with-keygrip --textmode|grep Keygrip|head -1|awk '{ print $3 }')
-echo foogorand|/usr/lib/gnupg/gpg-preset-passphrase --verbose --preset ${KEYGRIP}
+gpgp=$(ls /usr/lib/gnupg{2,,1}/gpg-preset-passphrase|head -1)
+KEYGRIP=$(gpg -K --with-keygrip --textmode dev@algorand.com|grep Keygrip|head -1|awk '{ print $3 }')
+echo foogorand|${gpgp} --verbose --preset ${KEYGRIP}
+KEYGRIP=$(gpg -K --with-keygrip --textmode rpm@algorand.com|grep Keygrip|head -1|awk '{ print $3 }')
+echo foogorand|${gpgp} --verbose --preset ${KEYGRIP}
 
 # copy previous installers into ~/docker_test_resources
 cd "${HOME}/docker_test_resources"
-if [ "${TEST_UPGRADE}" == "no" ]; then
+if [ "${TEST_UPGRADE}" == "no" -o -z "${S3_PREFIX}" ]; then
     echo "upgrade test disabled"
 else
     python3 ${REPO_ROOT}/scripts/get_current_installers.py "${S3_PREFIX}/${CHANNEL}"
@@ -212,7 +223,7 @@ EOF
 (cd ${HOME}/dummyrepo && python3 ${REPO_ROOT}/scripts/httpd.py --pid ${HOME}/phttpd.pid) &
 trap ${REPO_ROOT}/scripts/kill_httpd.sh 0
 
-sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME}/.gnupg/S.gpg-agent,dst=/S.gpg-agent --mount type=bind,src=${HOME}/dummyrepo,dst=/dummyrepo --mount type=bind,src=${HOME}/docker_test_resources,dst=/stuff --mount type=bind,src=${GOPATH}/src,dst=/root/go/src --mount type=bind,src=${HOME},dst=/root/subhome --mount type=bind,src=/usr/local/go,dst=/usr/local/go algocentosbuild /root/go/src/github.com/algorand/go-algorand/scripts/build_release_centos_docker.sh"
+sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${GNUPGHOME}/S.gpg-agent.extra,dst=/S.gpg-agent --mount type=bind,src=${HOME}/dummyrepo,dst=/dummyrepo --mount type=bind,src=${HOME}/docker_test_resources,dst=/stuff --mount type=bind,src=${GOPATH}/src,dst=/root/go/src --mount type=bind,src=${HOME},dst=/root/subhome --mount type=bind,src=/usr/local/go,dst=/usr/local/go algocentosbuild /root/go/src/github.com/algorand/go-algorand/scripts/build_release_centos_docker.sh"
 
 date "+build_release done building centos %Y%m%d_%H%M%S"
 
