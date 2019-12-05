@@ -1,5 +1,7 @@
 package crypto
 
+// SortDigest implements sorting by Digest keys for
+// canonical encoding of maps in msgpack format.
 //msgp:ignore SortDigest
 type SortDigest []Digest
 

@@ -1,5 +1,7 @@
 package basics
 
+// SortAssetIndex implements sorting by AssetIndex keys for
+// canonical encoding of maps in msgpack format.
 //msgp:ignore SortAssetIndex
 //msgp:sort AssetIndex SortAssetIndex
 type SortAssetIndex []AssetIndex

@@ -27,9 +27,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const debug_codec_tester = false
+const debugCodecTester = false
 
-type MsgpMarshalUnmarshal interface {
+type msgpMarshalUnmarshal interface {
 	msgp.Marshaler
 	msgp.Unmarshaler
 }
@@ -38,6 +38,7 @@ func oneOf(n int) bool {
 	return (rand.Int() % n) == 0
 }
 
+// RandomizeObject returns a random object of the same type as template
 func RandomizeObject(template interface{}) (interface{}, error) {
 	tt := reflect.TypeOf(template)
 	if tt.Kind() != reflect.Ptr {
@@ -45,11 +46,11 @@ func RandomizeObject(template interface{}) (interface{}, error) {
 	}
 
 	v := reflect.New(tt.Elem())
-	err := RandomizeValue(v.Elem())
+	err := randomizeValue(v.Elem())
 	return v.Interface(), err
 }
 
-func RandomizeValue(v reflect.Value) error {
+func randomizeValue(v reflect.Value) error {
 	if oneOf(5) {
 		// Leave zero value
 		return nil
@@ -76,14 +77,14 @@ func RandomizeValue(v reflect.Value) error {
 				continue
 			}
 
-			err := RandomizeValue(v.Field(i))
+			err := randomizeValue(v.Field(i))
 			if err != nil {
 				return err
 			}
 		}
 	case reflect.Array:
 		for i := 0; i < v.Len(); i++ {
-			err := RandomizeValue(v.Index(i))
+			err := randomizeValue(v.Index(i))
 			if err != nil {
 				return err
 			}
@@ -92,7 +93,7 @@ func RandomizeValue(v reflect.Value) error {
 		l := rand.Int() % 32
 		s := reflect.MakeSlice(v.Type(), l, l)
 		for i := 0; i < l; i++ {
-			err := RandomizeValue(s.Index(i))
+			err := randomizeValue(s.Index(i))
 			if err != nil {
 				return err
 			}
@@ -106,13 +107,13 @@ func RandomizeValue(v reflect.Value) error {
 		l := rand.Int() % 32
 		for i := 0; i < l; i++ {
 			mk := reflect.New(mt.Key())
-			err := RandomizeValue(mk.Elem())
+			err := randomizeValue(mk.Elem())
 			if err != nil {
 				return err
 			}
 
 			mv := reflect.New(mt.Elem())
-			err = RandomizeValue(mv.Elem())
+			err = randomizeValue(mv.Elem())
 			if err != nil {
 				return err
 			}
@@ -125,13 +126,16 @@ func RandomizeValue(v reflect.Value) error {
 	return nil
 }
 
-func EncodingTest(template MsgpMarshalUnmarshal) error {
+// EncodingTest tests that our two msgpack codecs (msgp and go-codec)
+// agree on encodings and decodings of random values of the type of
+// template, returning an error if there is a mismatch.
+func EncodingTest(template msgpMarshalUnmarshal) error {
 	v0, err := RandomizeObject(template)
 	if err != nil {
 		return err
 	}
 
-	if debug_codec_tester {
+	if debugCodecTester {
 		ioutil.WriteFile("/tmp/v0", []byte(fmt.Sprintf("%#v", v0)), 0666)
 	}
 
@@ -139,7 +143,7 @@ func EncodingTest(template MsgpMarshalUnmarshal) error {
 	e2 := EncodeReflect(v0)
 
 	// for debug, write out the encodings to a file
-	if debug_codec_tester {
+	if debugCodecTester {
 		ioutil.WriteFile("/tmp/e1", e1, 0666)
 		ioutil.WriteFile("/tmp/e2", e2, 0666)
 	}
@@ -148,8 +152,8 @@ func EncodingTest(template MsgpMarshalUnmarshal) error {
 		return fmt.Errorf("encoding mismatch for %v: %v != %v", v0, e1, e2)
 	}
 
-	v1 := reflect.New(reflect.TypeOf(template).Elem()).Interface().(MsgpMarshalUnmarshal)
-	v2 := reflect.New(reflect.TypeOf(template).Elem()).Interface().(MsgpMarshalUnmarshal)
+	v1 := reflect.New(reflect.TypeOf(template).Elem()).Interface().(msgpMarshalUnmarshal)
+	v2 := reflect.New(reflect.TypeOf(template).Elem()).Interface().(msgpMarshalUnmarshal)
 
 	err = DecodeMsgp(e1, v1)
 	if err != nil {
@@ -161,7 +165,7 @@ func EncodingTest(template MsgpMarshalUnmarshal) error {
 		return err
 	}
 
-	if debug_codec_tester {
+	if debugCodecTester {
 		ioutil.WriteFile("/tmp/v1", []byte(fmt.Sprintf("%#v", v1)), 0666)
 		ioutil.WriteFile("/tmp/v2", []byte(fmt.Sprintf("%#v", v2)), 0666)
 	}
@@ -181,7 +185,7 @@ func EncodingTest(template MsgpMarshalUnmarshal) error {
 	ee1 := EncodeMsgp(v1)
 	ee2 := EncodeReflect(v1)
 
-	if debug_codec_tester {
+	if debugCodecTester {
 		ioutil.WriteFile("/tmp/ee1", ee1, 0666)
 		ioutil.WriteFile("/tmp/ee2", ee2, 0666)
 	}
@@ -196,7 +200,9 @@ func EncodingTest(template MsgpMarshalUnmarshal) error {
 	return nil
 }
 
-func RunEncodingTest(t *testing.T, template MsgpMarshalUnmarshal) {
+// RunEncodingTest runs several iterations of encoding/decoding
+// consistency testing of object type specified by template.
+func RunEncodingTest(t *testing.T, template msgpMarshalUnmarshal) {
 	for i := 0; i < 1000; i++ {
 		err := EncodingTest(template)
 		require.NoError(t, err)

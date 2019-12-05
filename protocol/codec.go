@@ -114,9 +114,8 @@ func Encode(obj interface{}) []byte {
 	msgp, ok := obj.(msgp.Marshaler)
 	if ok {
 		return EncodeMsgp(msgp)
-	} else {
-		return EncodeReflect(obj)
 	}
+	return EncodeReflect(obj)
 }
 
 // CountingWriter is an implementation of io.Writer that tracks the number
@@ -187,15 +186,14 @@ func DecodeMsgp(b []byte, objptr msgp.Unmarshaler) (err error) {
 	return nil
 }
 
-// DecodeReflect attempts to decode a msgpack-encoded byte buffer
+// Decode attempts to decode a msgpack-encoded byte buffer
 // into an object instance pointed to by objptr.
 func Decode(b []byte, objptr interface{}) error {
 	msgp, ok := objptr.(msgp.Unmarshaler)
 	if ok {
 		return DecodeMsgp(b, msgp)
-	} else {
-		return DecodeReflect(b, objptr)
 	}
+	return DecodeReflect(b, objptr)
 }
 
 // DecodeStream is like Decode but reads from an io.Reader instead.
