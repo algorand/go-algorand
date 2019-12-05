@@ -21,7 +21,9 @@ import (
 	"math/rand"
 	"io/ioutil"
 	"reflect"
+	"testing"
 
+	"github.com/stretchr/testify/require"
 	"github.com/zeldovich/msgp/msgp"
 )
 
@@ -192,4 +194,11 @@ func EncodingTest(template MsgpMarshalUnmarshal) error {
 	}
 
 	return nil
+}
+
+func RunEncodingTest(t *testing.T, template MsgpMarshalUnmarshal) {
+	for i := 0; i < 1000; i++ {
+		err := EncodingTest(template)
+		require.NoError(t, err)
+	}
 }
