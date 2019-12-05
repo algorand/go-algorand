@@ -128,7 +128,7 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 			fmt.Printf("Too many NumPartAccounts")
 			return
 		}
-		tx, createErr := client.MakeUnsignedAssetCreateTx(totalSupply, false, cfg.SrcAccount, cfg.SrcAccount, cfg.SrcAccount, cfg.SrcAccount, "ping", "pong", "", meta)
+		tx, createErr := client.MakeUnsignedAssetCreateTx(totalSupply, false, cfg.SrcAccount, cfg.SrcAccount, cfg.SrcAccount, cfg.SrcAccount, "ping", "pong", "", meta, 0)
 		if createErr != nil {
 			fmt.Printf("Cannot make asset create txn\n")
 			err = createErr
