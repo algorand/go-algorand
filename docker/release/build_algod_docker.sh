@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+set -e
+set -x
+
 ALGOD_INSTALL_TAR_FILE=$1
 
 if [[ -z "$CHANNEL" ]];
