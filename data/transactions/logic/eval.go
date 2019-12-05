@@ -1154,6 +1154,7 @@ func opStore(cx *evalContext) {
 }
 
 func opCons(cx *evalContext) {
+	// if result would be longer than 4096, panic
 	panic("TODO: implement cons")
 }
 

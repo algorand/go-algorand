@@ -137,6 +137,7 @@ var opDocExtraList = []stringString{
 	{"txn", "FirstValidTime causes the program to fail. The field is reserved for future use."},
 	{"gtxn", "for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`"},
 	{"btoi", "`btoi` panics if the input is longer than 8 bytes"},
+	{"cons", "`cons` panics if the result would be greater than 4096 bytes"},
 }
 
 var opDocExtras map[string]string

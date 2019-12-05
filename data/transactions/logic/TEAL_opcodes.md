@@ -447,6 +447,8 @@ The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which 
 - Pushes: []byte
 - pop two byte strings A and B and join them
 
+`cons` panics if the result would be greater than 4096 bytes
+
 ## substring
 
 - Opcode: 0x51 {uint8 start position}{uint8 end position}
