@@ -15,27 +15,27 @@ func (z *Bid) MarshalMsg(b []byte) (o []byte, err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(6)
 	var zb0001Mask uint8 /* 7 bits */
-	if z.AuctionID == 0 {
+	if (*z).AuctionID == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if z.AuctionKey.MsgIsZero() {
+	if (*z).AuctionKey.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if z.BidderKey.MsgIsZero() {
+	if (*z).BidderKey.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
-	if z.BidCurrency == 0 {
+	if (*z).BidCurrency == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x10
 	}
-	if z.BidID == 0 {
+	if (*z).BidID == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x20
 	}
-	if z.MaxPrice == 0 {
+	if (*z).MaxPrice == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x40
 	}
@@ -47,12 +47,12 @@ func (z *Bid) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x2) == 0 { // if not empty
 		// string "aid"
 		o = append(o, 0xa3, 0x61, 0x69, 0x64)
-		o = msgp.AppendUint64(o, z.AuctionID)
+		o = msgp.AppendUint64(o, (*z).AuctionID)
 	}
 	if (zb0001Mask & 0x4) == 0 { // if not empty
 		// string "auc"
 		o = append(o, 0xa3, 0x61, 0x75, 0x63)
-		o, err = z.AuctionKey.MarshalMsg(o)
+		o, err = (*z).AuctionKey.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "AuctionKey")
 			return
@@ -61,7 +61,7 @@ func (z *Bid) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x8) == 0 { // if not empty
 		// string "bidder"
 		o = append(o, 0xa6, 0x62, 0x69, 0x64, 0x64, 0x65, 0x72)
-		o, err = z.BidderKey.MarshalMsg(o)
+		o, err = (*z).BidderKey.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "BidderKey")
 			return
@@ -70,17 +70,17 @@ func (z *Bid) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x10) == 0 { // if not empty
 		// string "cur"
 		o = append(o, 0xa3, 0x63, 0x75, 0x72)
-		o = msgp.AppendUint64(o, z.BidCurrency)
+		o = msgp.AppendUint64(o, (*z).BidCurrency)
 	}
 	if (zb0001Mask & 0x20) == 0 { // if not empty
 		// string "id"
 		o = append(o, 0xa2, 0x69, 0x64)
-		o = msgp.AppendUint64(o, z.BidID)
+		o = msgp.AppendUint64(o, (*z).BidID)
 	}
 	if (zb0001Mask & 0x40) == 0 { // if not empty
 		// string "price"
 		o = append(o, 0xa5, 0x70, 0x72, 0x69, 0x63, 0x65)
-		o = msgp.AppendUint64(o, z.MaxPrice)
+		o = msgp.AppendUint64(o, (*z).MaxPrice)
 	}
 	return
 }
@@ -104,37 +104,37 @@ func (z *Bid) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "bidder":
-			bts, err = z.BidderKey.UnmarshalMsg(bts)
+			bts, err = (*z).BidderKey.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "BidderKey")
 				return
 			}
 		case "cur":
-			z.BidCurrency, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).BidCurrency, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "BidCurrency")
 				return
 			}
 		case "price":
-			z.MaxPrice, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).MaxPrice, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "MaxPrice")
 				return
 			}
 		case "id":
-			z.BidID, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).BidID, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "BidID")
 				return
 			}
 		case "auc":
-			bts, err = z.AuctionKey.UnmarshalMsg(bts)
+			bts, err = (*z).AuctionKey.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "AuctionKey")
 				return
 			}
 		case "aid":
-			z.AuctionID, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).AuctionID, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "AuctionID")
 				return
@@ -153,81 +153,81 @@ func (z *Bid) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Bid) Msgsize() (s int) {
-	s = 1 + 7 + z.BidderKey.Msgsize() + 4 + msgp.Uint64Size + 6 + msgp.Uint64Size + 3 + msgp.Uint64Size + 4 + z.AuctionKey.Msgsize() + 4 + msgp.Uint64Size
+	s = 1 + 7 + (*z).BidderKey.Msgsize() + 4 + msgp.Uint64Size + 6 + msgp.Uint64Size + 3 + msgp.Uint64Size + 4 + (*z).AuctionKey.Msgsize() + 4 + msgp.Uint64Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Bid) MsgIsZero() bool {
-	return (z.BidderKey.MsgIsZero()) && (z.BidCurrency == 0) && (z.MaxPrice == 0) && (z.BidID == 0) && (z.AuctionKey.MsgIsZero()) && (z.AuctionID == 0)
+	return ((*z).BidderKey.MsgIsZero()) && ((*z).BidCurrency == 0) && ((*z).MaxPrice == 0) && ((*z).BidID == 0) && ((*z).AuctionKey.MsgIsZero()) && ((*z).AuctionID == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *BidOutcomes) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(5)
-	var zb0001Mask uint8 /* 6 bits */
-	if z.AuctionID == 0 {
-		zb0001Len--
-		zb0001Mask |= 0x2
+	zb0002Len := uint32(5)
+	var zb0002Mask uint8 /* 6 bits */
+	if (*z).AuctionID == 0 {
+		zb0002Len--
+		zb0002Mask |= 0x2
 	}
-	if z.AuctionKey.MsgIsZero() {
-		zb0001Len--
-		zb0001Mask |= 0x4
+	if (*z).AuctionKey.MsgIsZero() {
+		zb0002Len--
+		zb0002Mask |= 0x4
 	}
-	if z.Cleared == false {
-		zb0001Len--
-		zb0001Mask |= 0x8
+	if (*z).Cleared == false {
+		zb0002Len--
+		zb0002Mask |= 0x8
 	}
-	if len(z.Outcomes) == 0 {
-		zb0001Len--
-		zb0001Mask |= 0x10
+	if len((*z).Outcomes) == 0 {
+		zb0002Len--
+		zb0002Mask |= 0x10
 	}
-	if z.Price == 0 {
-		zb0001Len--
-		zb0001Mask |= 0x20
+	if (*z).Price == 0 {
+		zb0002Len--
+		zb0002Mask |= 0x20
 	}
-	// variable map header, size zb0001Len
-	o = append(o, 0x80|uint8(zb0001Len))
-	if zb0001Len == 0 {
+	// variable map header, size zb0002Len
+	o = append(o, 0x80|uint8(zb0002Len))
+	if zb0002Len == 0 {
 		return
 	}
-	if (zb0001Mask & 0x2) == 0 { // if not empty
+	if (zb0002Mask & 0x2) == 0 { // if not empty
 		// string "aid"
 		o = append(o, 0xa3, 0x61, 0x69, 0x64)
-		o = msgp.AppendUint64(o, z.AuctionID)
+		o = msgp.AppendUint64(o, (*z).AuctionID)
 	}
-	if (zb0001Mask & 0x4) == 0 { // if not empty
+	if (zb0002Mask & 0x4) == 0 { // if not empty
 		// string "auc"
 		o = append(o, 0xa3, 0x61, 0x75, 0x63)
-		o, err = z.AuctionKey.MarshalMsg(o)
+		o, err = (*z).AuctionKey.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "AuctionKey")
 			return
 		}
 	}
-	if (zb0001Mask & 0x8) == 0 { // if not empty
+	if (zb0002Mask & 0x8) == 0 { // if not empty
 		// string "cleared"
 		o = append(o, 0xa7, 0x63, 0x6c, 0x65, 0x61, 0x72, 0x65, 0x64)
-		o = msgp.AppendBool(o, z.Cleared)
+		o = msgp.AppendBool(o, (*z).Cleared)
 	}
-	if (zb0001Mask & 0x10) == 0 { // if not empty
+	if (zb0002Mask & 0x10) == 0 { // if not empty
 		// string "outcomes"
 		o = append(o, 0xa8, 0x6f, 0x75, 0x74, 0x63, 0x6f, 0x6d, 0x65, 0x73)
-		o = msgp.AppendArrayHeader(o, uint32(len(z.Outcomes)))
-		for za0001 := range z.Outcomes {
-			o, err = z.Outcomes[za0001].MarshalMsg(o)
+		o = msgp.AppendArrayHeader(o, uint32(len((*z).Outcomes)))
+		for zb0001 := range (*z).Outcomes {
+			o, err = (*z).Outcomes[zb0001].MarshalMsg(o)
 			if err != nil {
-				err = msgp.WrapError(err, "Outcomes", za0001)
+				err = msgp.WrapError(err, "Outcomes", zb0001)
 				return
 			}
 		}
 	}
-	if (zb0001Mask & 0x20) == 0 { // if not empty
+	if (zb0002Mask & 0x20) == 0 { // if not empty
 		// string "price"
 		o = append(o, 0xa5, 0x70, 0x72, 0x69, 0x63, 0x65)
-		o = msgp.AppendUint64(o, z.Price)
+		o = msgp.AppendUint64(o, (*z).Price)
 	}
 	return
 }
@@ -236,14 +236,14 @@ func (z *BidOutcomes) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *BidOutcomes) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0001 uint32
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0002 uint32
+	zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
 	}
-	for zb0001 > 0 {
-		zb0001--
+	for zb0002 > 0 {
+		zb0002--
 		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
@@ -251,45 +251,45 @@ func (z *BidOutcomes) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "auc":
-			bts, err = z.AuctionKey.UnmarshalMsg(bts)
+			bts, err = (*z).AuctionKey.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "AuctionKey")
 				return
 			}
 		case "aid":
-			z.AuctionID, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).AuctionID, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "AuctionID")
 				return
 			}
 		case "price":
-			z.Price, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).Price, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Price")
 				return
 			}
 		case "cleared":
-			z.Cleared, bts, err = msgp.ReadBoolBytes(bts)
+			(*z).Cleared, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Cleared")
 				return
 			}
 		case "outcomes":
-			var zb0002 uint32
-			zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			var zb0003 uint32
+			zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Outcomes")
 				return
 			}
-			if cap(z.Outcomes) >= int(zb0002) {
-				z.Outcomes = (z.Outcomes)[:zb0002]
+			if cap((*z).Outcomes) >= int(zb0003) {
+				(*z).Outcomes = ((*z).Outcomes)[:zb0003]
 			} else {
-				z.Outcomes = make([]BidderOutcome, zb0002)
+				(*z).Outcomes = make([]BidderOutcome, zb0003)
 			}
-			for za0001 := range z.Outcomes {
-				bts, err = z.Outcomes[za0001].UnmarshalMsg(bts)
+			for zb0001 := range (*z).Outcomes {
+				bts, err = (*z).Outcomes[zb0001].UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "Outcomes", za0001)
+					err = msgp.WrapError(err, "Outcomes", zb0001)
 					return
 				}
 			}
@@ -307,16 +307,16 @@ func (z *BidOutcomes) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *BidOutcomes) Msgsize() (s int) {
-	s = 1 + 4 + z.AuctionKey.Msgsize() + 4 + msgp.Uint64Size + 6 + msgp.Uint64Size + 8 + msgp.BoolSize + 9 + msgp.ArrayHeaderSize
-	for za0001 := range z.Outcomes {
-		s += z.Outcomes[za0001].Msgsize()
+	s = 1 + 4 + (*z).AuctionKey.Msgsize() + 4 + msgp.Uint64Size + 6 + msgp.Uint64Size + 8 + msgp.BoolSize + 9 + msgp.ArrayHeaderSize
+	for zb0001 := range (*z).Outcomes {
+		s += (*z).Outcomes[zb0001].Msgsize()
 	}
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *BidOutcomes) MsgIsZero() bool {
-	return (z.AuctionKey.MsgIsZero()) && (z.AuctionID == 0) && (z.Price == 0) && (z.Cleared == false) && (len(z.Outcomes) == 0)
+	return ((*z).AuctionKey.MsgIsZero()) && ((*z).AuctionID == 0) && ((*z).Price == 0) && ((*z).Cleared == false) && (len((*z).Outcomes) == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -325,19 +325,19 @@ func (z *BidderOutcome) MarshalMsg(b []byte) (o []byte, err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(4)
 	var zb0001Mask uint8 /* 5 bits */
-	if z.AlgosWon == 0 {
+	if (*z).AlgosWon == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if z.BidID == 0 {
+	if (*z).BidID == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if z.BidderKey.MsgIsZero() {
+	if (*z).BidderKey.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
-	if z.WinningsAddress.MsgIsZero() {
+	if (*z).WinningsAddress.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x10
 	}
@@ -349,17 +349,17 @@ func (z *BidderOutcome) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x2) == 0 { // if not empty
 		// string "alg"
 		o = append(o, 0xa3, 0x61, 0x6c, 0x67)
-		o = msgp.AppendUint64(o, z.AlgosWon)
+		o = msgp.AppendUint64(o, (*z).AlgosWon)
 	}
 	if (zb0001Mask & 0x4) == 0 { // if not empty
 		// string "id"
 		o = append(o, 0xa2, 0x69, 0x64)
-		o = msgp.AppendUint64(o, z.BidID)
+		o = msgp.AppendUint64(o, (*z).BidID)
 	}
 	if (zb0001Mask & 0x8) == 0 { // if not empty
 		// string "key"
 		o = append(o, 0xa3, 0x6b, 0x65, 0x79)
-		o, err = z.BidderKey.MarshalMsg(o)
+		o, err = (*z).BidderKey.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "BidderKey")
 			return
@@ -368,7 +368,7 @@ func (z *BidderOutcome) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x10) == 0 { // if not empty
 		// string "out"
 		o = append(o, 0xa3, 0x6f, 0x75, 0x74)
-		o, err = z.WinningsAddress.MarshalMsg(o)
+		o, err = (*z).WinningsAddress.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "WinningsAddress")
 			return
@@ -396,25 +396,25 @@ func (z *BidderOutcome) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "key":
-			bts, err = z.BidderKey.UnmarshalMsg(bts)
+			bts, err = (*z).BidderKey.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "BidderKey")
 				return
 			}
 		case "alg":
-			z.AlgosWon, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).AlgosWon, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "AlgosWon")
 				return
 			}
 		case "out":
-			bts, err = z.WinningsAddress.UnmarshalMsg(bts)
+			bts, err = (*z).WinningsAddress.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "WinningsAddress")
 				return
 			}
 		case "id":
-			z.BidID, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).BidID, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "BidID")
 				return
@@ -433,13 +433,13 @@ func (z *BidderOutcome) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *BidderOutcome) Msgsize() (s int) {
-	s = 1 + 4 + z.BidderKey.Msgsize() + 4 + msgp.Uint64Size + 4 + z.WinningsAddress.Msgsize() + 3 + msgp.Uint64Size
+	s = 1 + 4 + (*z).BidderKey.Msgsize() + 4 + msgp.Uint64Size + 4 + (*z).WinningsAddress.Msgsize() + 3 + msgp.Uint64Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *BidderOutcome) MsgIsZero() bool {
-	return (z.BidderKey.MsgIsZero()) && (z.AlgosWon == 0) && (z.WinningsAddress.MsgIsZero()) && (z.BidID == 0)
+	return ((*z).BidderKey.MsgIsZero()) && ((*z).AlgosWon == 0) && ((*z).WinningsAddress.MsgIsZero()) && ((*z).BidID == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -448,16 +448,16 @@ func (z *BidderState) MarshalMsg(b []byte) (o []byte, err error) {
 	// map header, size 3
 	// string "DepositAmount"
 	o = append(o, 0x83, 0xad, 0x44, 0x65, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x41, 0x6d, 0x6f, 0x75, 0x6e, 0x74)
-	o = msgp.AppendUint64(o, z.DepositAmount)
+	o = msgp.AppendUint64(o, (*z).DepositAmount)
 	// string "PlacedBidIDs"
 	o = append(o, 0xac, 0x50, 0x6c, 0x61, 0x63, 0x65, 0x64, 0x42, 0x69, 0x64, 0x49, 0x44, 0x73)
-	o = msgp.AppendArrayHeader(o, uint32(len(z.PlacedBidIDs)))
-	for za0001 := range z.PlacedBidIDs {
-		o = msgp.AppendUint64(o, z.PlacedBidIDs[za0001])
+	o = msgp.AppendArrayHeader(o, uint32(len((*z).PlacedBidIDs)))
+	for zb0001 := range (*z).PlacedBidIDs {
+		o = msgp.AppendUint64(o, (*z).PlacedBidIDs[zb0001])
 	}
 	// string "WinningsAddress"
 	o = append(o, 0xaf, 0x57, 0x69, 0x6e, 0x6e, 0x69, 0x6e, 0x67, 0x73, 0x41, 0x64, 0x64, 0x72, 0x65, 0x73, 0x73)
-	o, err = z.WinningsAddress.MarshalMsg(o)
+	o, err = (*z).WinningsAddress.MarshalMsg(o)
 	if err != nil {
 		err = msgp.WrapError(err, "WinningsAddress")
 		return
@@ -469,14 +469,14 @@ func (z *BidderState) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *BidderState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0001 uint32
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0002 uint32
+	zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
 	}
-	for zb0001 > 0 {
-		zb0001--
+	for zb0002 > 0 {
+		zb0002--
 		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
@@ -484,33 +484,33 @@ func (z *BidderState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "WinningsAddress":
-			bts, err = z.WinningsAddress.UnmarshalMsg(bts)
+			bts, err = (*z).WinningsAddress.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "WinningsAddress")
 				return
 			}
 		case "DepositAmount":
-			z.DepositAmount, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).DepositAmount, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "DepositAmount")
 				return
 			}
 		case "PlacedBidIDs":
-			var zb0002 uint32
-			zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			var zb0003 uint32
+			zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "PlacedBidIDs")
 				return
 			}
-			if cap(z.PlacedBidIDs) >= int(zb0002) {
-				z.PlacedBidIDs = (z.PlacedBidIDs)[:zb0002]
+			if cap((*z).PlacedBidIDs) >= int(zb0003) {
+				(*z).PlacedBidIDs = ((*z).PlacedBidIDs)[:zb0003]
 			} else {
-				z.PlacedBidIDs = make([]uint64, zb0002)
+				(*z).PlacedBidIDs = make([]uint64, zb0003)
 			}
-			for za0001 := range z.PlacedBidIDs {
-				z.PlacedBidIDs[za0001], bts, err = msgp.ReadUint64Bytes(bts)
+			for zb0001 := range (*z).PlacedBidIDs {
+				(*z).PlacedBidIDs[zb0001], bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "PlacedBidIDs", za0001)
+					err = msgp.WrapError(err, "PlacedBidIDs", zb0001)
 					return
 				}
 			}
@@ -528,13 +528,13 @@ func (z *BidderState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *BidderState) Msgsize() (s int) {
-	s = 1 + 16 + z.WinningsAddress.Msgsize() + 14 + msgp.Uint64Size + 13 + msgp.ArrayHeaderSize + (len(z.PlacedBidIDs) * (msgp.Uint64Size))
+	s = 1 + 16 + (*z).WinningsAddress.Msgsize() + 14 + msgp.Uint64Size + 13 + msgp.ArrayHeaderSize + (len((*z).PlacedBidIDs) * (msgp.Uint64Size))
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *BidderState) MsgIsZero() bool {
-	return (z.WinningsAddress.MsgIsZero()) && (z.DepositAmount == 0) && (len(z.PlacedBidIDs) == 0)
+	return ((*z).WinningsAddress.MsgIsZero()) && ((*z).DepositAmount == 0) && (len((*z).PlacedBidIDs) == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -543,27 +543,27 @@ func (z *Deposit) MarshalMsg(b []byte) (o []byte, err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(6)
 	var zb0001Mask uint8 /* 7 bits */
-	if z.AuctionID == 0 {
+	if (*z).AuctionID == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if z.AuctionKey.MsgIsZero() {
+	if (*z).AuctionKey.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if z.Currency == 0 {
+	if (*z).Currency == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
-	if z.DepositID == 0 {
+	if (*z).DepositID == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x10
 	}
-	if z.BidderKey.MsgIsZero() {
+	if (*z).BidderKey.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x20
 	}
-	if z.WinningsAddress.MsgIsZero() {
+	if (*z).WinningsAddress.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x40
 	}
@@ -575,12 +575,12 @@ func (z *Deposit) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x2) == 0 { // if not empty
 		// string "aid"
 		o = append(o, 0xa3, 0x61, 0x69, 0x64)
-		o = msgp.AppendUint64(o, z.AuctionID)
+		o = msgp.AppendUint64(o, (*z).AuctionID)
 	}
 	if (zb0001Mask & 0x4) == 0 { // if not empty
 		// string "auc"
 		o = append(o, 0xa3, 0x61, 0x75, 0x63)
-		o, err = z.AuctionKey.MarshalMsg(o)
+		o, err = (*z).AuctionKey.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "AuctionKey")
 			return
@@ -589,17 +589,17 @@ func (z *Deposit) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x8) == 0 { // if not empty
 		// string "cur"
 		o = append(o, 0xa3, 0x63, 0x75, 0x72)
-		o = msgp.AppendUint64(o, z.Currency)
+		o = msgp.AppendUint64(o, (*z).Currency)
 	}
 	if (zb0001Mask & 0x10) == 0 { // if not empty
 		// string "did"
 		o = append(o, 0xa3, 0x64, 0x69, 0x64)
-		o = msgp.AppendUint64(o, z.DepositID)
+		o = msgp.AppendUint64(o, (*z).DepositID)
 	}
 	if (zb0001Mask & 0x20) == 0 { // if not empty
 		// string "key"
 		o = append(o, 0xa3, 0x6b, 0x65, 0x79)
-		o, err = z.BidderKey.MarshalMsg(o)
+		o, err = (*z).BidderKey.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "BidderKey")
 			return
@@ -608,7 +608,7 @@ func (z *Deposit) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x40) == 0 { // if not empty
 		// string "out"
 		o = append(o, 0xa3, 0x6f, 0x75, 0x74)
-		o, err = z.WinningsAddress.MarshalMsg(o)
+		o, err = (*z).WinningsAddress.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "WinningsAddress")
 			return
@@ -636,37 +636,37 @@ func (z *Deposit) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "key":
-			bts, err = z.BidderKey.UnmarshalMsg(bts)
+			bts, err = (*z).BidderKey.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "BidderKey")
 				return
 			}
 		case "out":
-			bts, err = z.WinningsAddress.UnmarshalMsg(bts)
+			bts, err = (*z).WinningsAddress.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "WinningsAddress")
 				return
 			}
 		case "cur":
-			z.Currency, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).Currency, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Currency")
 				return
 			}
 		case "auc":
-			bts, err = z.AuctionKey.UnmarshalMsg(bts)
+			bts, err = (*z).AuctionKey.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "AuctionKey")
 				return
 			}
 		case "aid":
-			z.AuctionID, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).AuctionID, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "AuctionID")
 				return
 			}
 		case "did":
-			z.DepositID, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).DepositID, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "DepositID")
 				return
@@ -685,13 +685,13 @@ func (z *Deposit) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Deposit) Msgsize() (s int) {
-	s = 1 + 4 + z.BidderKey.Msgsize() + 4 + z.WinningsAddress.Msgsize() + 4 + msgp.Uint64Size + 4 + z.AuctionKey.Msgsize() + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size
+	s = 1 + 4 + (*z).BidderKey.Msgsize() + 4 + (*z).WinningsAddress.Msgsize() + 4 + msgp.Uint64Size + 4 + (*z).AuctionKey.Msgsize() + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Deposit) MsgIsZero() bool {
-	return (z.BidderKey.MsgIsZero()) && (z.WinningsAddress.MsgIsZero()) && (z.Currency == 0) && (z.AuctionKey.MsgIsZero()) && (z.AuctionID == 0) && (z.DepositID == 0)
+	return ((*z).BidderKey.MsgIsZero()) && ((*z).WinningsAddress.MsgIsZero()) && ((*z).Currency == 0) && ((*z).AuctionKey.MsgIsZero()) && ((*z).AuctionID == 0) && ((*z).DepositID == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -700,19 +700,19 @@ func (z *MasterInput) MarshalMsg(b []byte) (o []byte, err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(4)
 	var zb0001Mask uint8 /* 5 bits */
-	if (z.SignedBid.Bid.MsgIsZero()) && (z.SignedBid.Sig.MsgIsZero()) {
+	if ((*z).SignedBid.Bid.MsgIsZero()) && ((*z).SignedBid.Sig.MsgIsZero()) {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if (z.SignedDeposit.Deposit.MsgIsZero()) && (z.SignedDeposit.Sig.MsgIsZero()) {
+	if ((*z).SignedDeposit.Deposit.MsgIsZero()) && ((*z).SignedDeposit.Sig.MsgIsZero()) {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if z.Round == 0 {
+	if (*z).Round == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
-	if z.Type == "" {
+	if (*z).Type == "" {
 		zb0001Len--
 		zb0001Mask |= 0x10
 	}
@@ -727,11 +727,11 @@ func (z *MasterInput) MarshalMsg(b []byte) (o []byte, err error) {
 		// omitempty: check for empty values
 		zb0002Len := uint32(2)
 		var zb0002Mask uint8 /* 3 bits */
-		if z.SignedBid.Bid.MsgIsZero() {
+		if (*z).SignedBid.Bid.MsgIsZero() {
 			zb0002Len--
 			zb0002Mask |= 0x2
 		}
-		if z.SignedBid.Sig.MsgIsZero() {
+		if (*z).SignedBid.Sig.MsgIsZero() {
 			zb0002Len--
 			zb0002Mask |= 0x4
 		}
@@ -740,7 +740,7 @@ func (z *MasterInput) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0002Mask & 0x2) == 0 { // if not empty
 			// string "bid"
 			o = append(o, 0xa3, 0x62, 0x69, 0x64)
-			o, err = z.SignedBid.Bid.MarshalMsg(o)
+			o, err = (*z).SignedBid.Bid.MarshalMsg(o)
 			if err != nil {
 				err = msgp.WrapError(err, "SignedBid", "Bid")
 				return
@@ -749,7 +749,7 @@ func (z *MasterInput) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0002Mask & 0x4) == 0 { // if not empty
 			// string "sig"
 			o = append(o, 0xa3, 0x73, 0x69, 0x67)
-			o, err = z.SignedBid.Sig.MarshalMsg(o)
+			o, err = (*z).SignedBid.Sig.MarshalMsg(o)
 			if err != nil {
 				err = msgp.WrapError(err, "SignedBid", "Sig")
 				return
@@ -762,11 +762,11 @@ func (z *MasterInput) MarshalMsg(b []byte) (o []byte, err error) {
 		// omitempty: check for empty values
 		zb0003Len := uint32(2)
 		var zb0003Mask uint8 /* 3 bits */
-		if z.SignedDeposit.Deposit.MsgIsZero() {
+		if (*z).SignedDeposit.Deposit.MsgIsZero() {
 			zb0003Len--
 			zb0003Mask |= 0x2
 		}
-		if z.SignedDeposit.Sig.MsgIsZero() {
+		if (*z).SignedDeposit.Sig.MsgIsZero() {
 			zb0003Len--
 			zb0003Mask |= 0x4
 		}
@@ -775,7 +775,7 @@ func (z *MasterInput) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0003Mask & 0x2) == 0 { // if not empty
 			// string "dep"
 			o = append(o, 0xa3, 0x64, 0x65, 0x70)
-			o, err = z.SignedDeposit.Deposit.MarshalMsg(o)
+			o, err = (*z).SignedDeposit.Deposit.MarshalMsg(o)
 			if err != nil {
 				err = msgp.WrapError(err, "SignedDeposit", "Deposit")
 				return
@@ -784,7 +784,7 @@ func (z *MasterInput) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0003Mask & 0x4) == 0 { // if not empty
 			// string "sig"
 			o = append(o, 0xa3, 0x73, 0x69, 0x67)
-			o, err = z.SignedDeposit.Sig.MarshalMsg(o)
+			o, err = (*z).SignedDeposit.Sig.MarshalMsg(o)
 			if err != nil {
 				err = msgp.WrapError(err, "SignedDeposit", "Sig")
 				return
@@ -794,12 +794,12 @@ func (z *MasterInput) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x8) == 0 { // if not empty
 		// string "rnd"
 		o = append(o, 0xa3, 0x72, 0x6e, 0x64)
-		o = msgp.AppendUint64(o, z.Round)
+		o = msgp.AppendUint64(o, (*z).Round)
 	}
 	if (zb0001Mask & 0x10) == 0 { // if not empty
 		// string "t"
 		o = append(o, 0xa1, 0x74)
-		o = msgp.AppendString(o, string(z.Type))
+		o = msgp.AppendString(o, string((*z).Type))
 	}
 	return
 }
@@ -823,7 +823,7 @@ func (z *MasterInput) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "rnd":
-			z.Round, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).Round, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Round")
 				return
@@ -836,7 +836,7 @@ func (z *MasterInput) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Type")
 					return
 				}
-				z.Type = NoteFieldType(zb0002)
+				(*z).Type = NoteFieldType(zb0002)
 			}
 		case "d":
 			var zb0003 uint32
@@ -854,13 +854,13 @@ func (z *MasterInput) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 				switch msgp.UnsafeString(field) {
 				case "dep":
-					bts, err = z.SignedDeposit.Deposit.UnmarshalMsg(bts)
+					bts, err = (*z).SignedDeposit.Deposit.UnmarshalMsg(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "SignedDeposit", "Deposit")
 						return
 					}
 				case "sig":
-					bts, err = z.SignedDeposit.Sig.UnmarshalMsg(bts)
+					bts, err = (*z).SignedDeposit.Sig.UnmarshalMsg(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "SignedDeposit", "Sig")
 						return
@@ -889,13 +889,13 @@ func (z *MasterInput) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 				switch msgp.UnsafeString(field) {
 				case "bid":
-					bts, err = z.SignedBid.Bid.UnmarshalMsg(bts)
+					bts, err = (*z).SignedBid.Bid.UnmarshalMsg(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "SignedBid", "Bid")
 						return
 					}
 				case "sig":
-					bts, err = z.SignedBid.Sig.UnmarshalMsg(bts)
+					bts, err = (*z).SignedBid.Sig.UnmarshalMsg(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "SignedBid", "Sig")
 						return
@@ -922,13 +922,13 @@ func (z *MasterInput) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *MasterInput) Msgsize() (s int) {
-	s = 1 + 4 + msgp.Uint64Size + 2 + msgp.StringPrefixSize + len(string(z.Type)) + 2 + 1 + 4 + z.SignedDeposit.Deposit.Msgsize() + 4 + z.SignedDeposit.Sig.Msgsize() + 2 + 1 + 4 + z.SignedBid.Bid.Msgsize() + 4 + z.SignedBid.Sig.Msgsize()
+	s = 1 + 4 + msgp.Uint64Size + 2 + msgp.StringPrefixSize + len(string((*z).Type)) + 2 + 1 + 4 + (*z).SignedDeposit.Deposit.Msgsize() + 4 + (*z).SignedDeposit.Sig.Msgsize() + 2 + 1 + 4 + (*z).SignedBid.Bid.Msgsize() + 4 + (*z).SignedBid.Sig.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *MasterInput) MsgIsZero() bool {
-	return (z.Round == 0) && (z.Type == "") && ((z.SignedDeposit.Deposit.MsgIsZero()) && (z.SignedDeposit.Sig.MsgIsZero())) && ((z.SignedBid.Bid.MsgIsZero()) && (z.SignedBid.Sig.MsgIsZero()))
+	return ((*z).Round == 0) && ((*z).Type == "") && (((*z).SignedDeposit.Deposit.MsgIsZero()) && ((*z).SignedDeposit.Sig.MsgIsZero())) && (((*z).SignedBid.Bid.MsgIsZero()) && ((*z).SignedBid.Sig.MsgIsZero()))
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -937,23 +937,23 @@ func (z *NoteField) MarshalMsg(b []byte) (o []byte, err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(5)
 	var zb0001Mask uint8 /* 6 bits */
-	if (z.SignedBid.Bid.MsgIsZero()) && (z.SignedBid.Sig.MsgIsZero()) {
+	if ((*z).SignedBid.Bid.MsgIsZero()) && ((*z).SignedBid.Sig.MsgIsZero()) {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if (z.SignedDeposit.Deposit.MsgIsZero()) && (z.SignedDeposit.Sig.MsgIsZero()) {
+	if ((*z).SignedDeposit.Deposit.MsgIsZero()) && ((*z).SignedDeposit.Sig.MsgIsZero()) {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if (z.SignedParams.Params.MsgIsZero()) && (z.SignedParams.Sig.MsgIsZero()) {
+	if ((*z).SignedParams.Params.MsgIsZero()) && ((*z).SignedParams.Sig.MsgIsZero()) {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
-	if (z.SignedSettlement.Settlement.MsgIsZero()) && (z.SignedSettlement.Sig.MsgIsZero()) {
+	if ((*z).SignedSettlement.Settlement.MsgIsZero()) && ((*z).SignedSettlement.Sig.MsgIsZero()) {
 		zb0001Len--
 		zb0001Mask |= 0x10
 	}
-	if z.Type == "" {
+	if (*z).Type == "" {
 		zb0001Len--
 		zb0001Mask |= 0x20
 	}
@@ -968,11 +968,11 @@ func (z *NoteField) MarshalMsg(b []byte) (o []byte, err error) {
 		// omitempty: check for empty values
 		zb0002Len := uint32(2)
 		var zb0002Mask uint8 /* 3 bits */
-		if z.SignedBid.Bid.MsgIsZero() {
+		if (*z).SignedBid.Bid.MsgIsZero() {
 			zb0002Len--
 			zb0002Mask |= 0x2
 		}
-		if z.SignedBid.Sig.MsgIsZero() {
+		if (*z).SignedBid.Sig.MsgIsZero() {
 			zb0002Len--
 			zb0002Mask |= 0x4
 		}
@@ -981,7 +981,7 @@ func (z *NoteField) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0002Mask & 0x2) == 0 { // if not empty
 			// string "bid"
 			o = append(o, 0xa3, 0x62, 0x69, 0x64)
-			o, err = z.SignedBid.Bid.MarshalMsg(o)
+			o, err = (*z).SignedBid.Bid.MarshalMsg(o)
 			if err != nil {
 				err = msgp.WrapError(err, "SignedBid", "Bid")
 				return
@@ -990,7 +990,7 @@ func (z *NoteField) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0002Mask & 0x4) == 0 { // if not empty
 			// string "sig"
 			o = append(o, 0xa3, 0x73, 0x69, 0x67)
-			o, err = z.SignedBid.Sig.MarshalMsg(o)
+			o, err = (*z).SignedBid.Sig.MarshalMsg(o)
 			if err != nil {
 				err = msgp.WrapError(err, "SignedBid", "Sig")
 				return
@@ -1003,11 +1003,11 @@ func (z *NoteField) MarshalMsg(b []byte) (o []byte, err error) {
 		// omitempty: check for empty values
 		zb0003Len := uint32(2)
 		var zb0003Mask uint8 /* 3 bits */
-		if z.SignedDeposit.Deposit.MsgIsZero() {
+		if (*z).SignedDeposit.Deposit.MsgIsZero() {
 			zb0003Len--
 			zb0003Mask |= 0x2
 		}
-		if z.SignedDeposit.Sig.MsgIsZero() {
+		if (*z).SignedDeposit.Sig.MsgIsZero() {
 			zb0003Len--
 			zb0003Mask |= 0x4
 		}
@@ -1016,7 +1016,7 @@ func (z *NoteField) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0003Mask & 0x2) == 0 { // if not empty
 			// string "dep"
 			o = append(o, 0xa3, 0x64, 0x65, 0x70)
-			o, err = z.SignedDeposit.Deposit.MarshalMsg(o)
+			o, err = (*z).SignedDeposit.Deposit.MarshalMsg(o)
 			if err != nil {
 				err = msgp.WrapError(err, "SignedDeposit", "Deposit")
 				return
@@ -1025,7 +1025,7 @@ func (z *NoteField) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0003Mask & 0x4) == 0 { // if not empty
 			// string "sig"
 			o = append(o, 0xa3, 0x73, 0x69, 0x67)
-			o, err = z.SignedDeposit.Sig.MarshalMsg(o)
+			o, err = (*z).SignedDeposit.Sig.MarshalMsg(o)
 			if err != nil {
 				err = msgp.WrapError(err, "SignedDeposit", "Sig")
 				return
@@ -1038,11 +1038,11 @@ func (z *NoteField) MarshalMsg(b []byte) (o []byte, err error) {
 		// omitempty: check for empty values
 		zb0004Len := uint32(2)
 		var zb0004Mask uint8 /* 3 bits */
-		if z.SignedParams.Params.MsgIsZero() {
+		if (*z).SignedParams.Params.MsgIsZero() {
 			zb0004Len--
 			zb0004Mask |= 0x2
 		}
-		if z.SignedParams.Sig.MsgIsZero() {
+		if (*z).SignedParams.Sig.MsgIsZero() {
 			zb0004Len--
 			zb0004Mask |= 0x4
 		}
@@ -1051,7 +1051,7 @@ func (z *NoteField) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0004Mask & 0x2) == 0 { // if not empty
 			// string "param"
 			o = append(o, 0xa5, 0x70, 0x61, 0x72, 0x61, 0x6d)
-			o, err = z.SignedParams.Params.MarshalMsg(o)
+			o, err = (*z).SignedParams.Params.MarshalMsg(o)
 			if err != nil {
 				err = msgp.WrapError(err, "SignedParams", "Params")
 				return
@@ -1060,7 +1060,7 @@ func (z *NoteField) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0004Mask & 0x4) == 0 { // if not empty
 			// string "sig"
 			o = append(o, 0xa3, 0x73, 0x69, 0x67)
-			o, err = z.SignedParams.Sig.MarshalMsg(o)
+			o, err = (*z).SignedParams.Sig.MarshalMsg(o)
 			if err != nil {
 				err = msgp.WrapError(err, "SignedParams", "Sig")
 				return
@@ -1073,11 +1073,11 @@ func (z *NoteField) MarshalMsg(b []byte) (o []byte, err error) {
 		// omitempty: check for empty values
 		zb0005Len := uint32(2)
 		var zb0005Mask uint8 /* 3 bits */
-		if z.SignedSettlement.Settlement.MsgIsZero() {
+		if (*z).SignedSettlement.Settlement.MsgIsZero() {
 			zb0005Len--
 			zb0005Mask |= 0x2
 		}
-		if z.SignedSettlement.Sig.MsgIsZero() {
+		if (*z).SignedSettlement.Sig.MsgIsZero() {
 			zb0005Len--
 			zb0005Mask |= 0x4
 		}
@@ -1086,7 +1086,7 @@ func (z *NoteField) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0005Mask & 0x2) == 0 { // if not empty
 			// string "settle"
 			o = append(o, 0xa6, 0x73, 0x65, 0x74, 0x74, 0x6c, 0x65)
-			o, err = z.SignedSettlement.Settlement.MarshalMsg(o)
+			o, err = (*z).SignedSettlement.Settlement.MarshalMsg(o)
 			if err != nil {
 				err = msgp.WrapError(err, "SignedSettlement", "Settlement")
 				return
@@ -1095,7 +1095,7 @@ func (z *NoteField) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0005Mask & 0x4) == 0 { // if not empty
 			// string "sig"
 			o = append(o, 0xa3, 0x73, 0x69, 0x67)
-			o, err = z.SignedSettlement.Sig.MarshalMsg(o)
+			o, err = (*z).SignedSettlement.Sig.MarshalMsg(o)
 			if err != nil {
 				err = msgp.WrapError(err, "SignedSettlement", "Sig")
 				return
@@ -1105,7 +1105,7 @@ func (z *NoteField) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x20) == 0 { // if not empty
 		// string "t"
 		o = append(o, 0xa1, 0x74)
-		o = msgp.AppendString(o, string(z.Type))
+		o = msgp.AppendString(o, string((*z).Type))
 	}
 	return
 }
@@ -1136,7 +1136,7 @@ func (z *NoteField) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Type")
 					return
 				}
-				z.Type = NoteFieldType(zb0002)
+				(*z).Type = NoteFieldType(zb0002)
 			}
 		case "d":
 			var zb0003 uint32
@@ -1154,13 +1154,13 @@ func (z *NoteField) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 				switch msgp.UnsafeString(field) {
 				case "dep":
-					bts, err = z.SignedDeposit.Deposit.UnmarshalMsg(bts)
+					bts, err = (*z).SignedDeposit.Deposit.UnmarshalMsg(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "SignedDeposit", "Deposit")
 						return
 					}
 				case "sig":
-					bts, err = z.SignedDeposit.Sig.UnmarshalMsg(bts)
+					bts, err = (*z).SignedDeposit.Sig.UnmarshalMsg(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "SignedDeposit", "Sig")
 						return
@@ -1189,13 +1189,13 @@ func (z *NoteField) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 				switch msgp.UnsafeString(field) {
 				case "bid":
-					bts, err = z.SignedBid.Bid.UnmarshalMsg(bts)
+					bts, err = (*z).SignedBid.Bid.UnmarshalMsg(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "SignedBid", "Bid")
 						return
 					}
 				case "sig":
-					bts, err = z.SignedBid.Sig.UnmarshalMsg(bts)
+					bts, err = (*z).SignedBid.Sig.UnmarshalMsg(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "SignedBid", "Sig")
 						return
@@ -1224,13 +1224,13 @@ func (z *NoteField) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 				switch msgp.UnsafeString(field) {
 				case "settle":
-					bts, err = z.SignedSettlement.Settlement.UnmarshalMsg(bts)
+					bts, err = (*z).SignedSettlement.Settlement.UnmarshalMsg(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "SignedSettlement", "Settlement")
 						return
 					}
 				case "sig":
-					bts, err = z.SignedSettlement.Sig.UnmarshalMsg(bts)
+					bts, err = (*z).SignedSettlement.Sig.UnmarshalMsg(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "SignedSettlement", "Sig")
 						return
@@ -1259,13 +1259,13 @@ func (z *NoteField) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 				switch msgp.UnsafeString(field) {
 				case "param":
-					bts, err = z.SignedParams.Params.UnmarshalMsg(bts)
+					bts, err = (*z).SignedParams.Params.UnmarshalMsg(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "SignedParams", "Params")
 						return
 					}
 				case "sig":
-					bts, err = z.SignedParams.Sig.UnmarshalMsg(bts)
+					bts, err = (*z).SignedParams.Sig.UnmarshalMsg(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "SignedParams", "Sig")
 						return
@@ -1292,13 +1292,13 @@ func (z *NoteField) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *NoteField) Msgsize() (s int) {
-	s = 1 + 2 + msgp.StringPrefixSize + len(string(z.Type)) + 2 + 1 + 4 + z.SignedDeposit.Deposit.Msgsize() + 4 + z.SignedDeposit.Sig.Msgsize() + 2 + 1 + 4 + z.SignedBid.Bid.Msgsize() + 4 + z.SignedBid.Sig.Msgsize() + 2 + 1 + 7 + z.SignedSettlement.Settlement.Msgsize() + 4 + z.SignedSettlement.Sig.Msgsize() + 2 + 1 + 6 + z.SignedParams.Params.Msgsize() + 4 + z.SignedParams.Sig.Msgsize()
+	s = 1 + 2 + msgp.StringPrefixSize + len(string((*z).Type)) + 2 + 1 + 4 + (*z).SignedDeposit.Deposit.Msgsize() + 4 + (*z).SignedDeposit.Sig.Msgsize() + 2 + 1 + 4 + (*z).SignedBid.Bid.Msgsize() + 4 + (*z).SignedBid.Sig.Msgsize() + 2 + 1 + 7 + (*z).SignedSettlement.Settlement.Msgsize() + 4 + (*z).SignedSettlement.Sig.Msgsize() + 2 + 1 + 6 + (*z).SignedParams.Params.Msgsize() + 4 + (*z).SignedParams.Sig.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *NoteField) MsgIsZero() bool {
-	return (z.Type == "") && ((z.SignedDeposit.Deposit.MsgIsZero()) && (z.SignedDeposit.Sig.MsgIsZero())) && ((z.SignedBid.Bid.MsgIsZero()) && (z.SignedBid.Sig.MsgIsZero())) && ((z.SignedSettlement.Settlement.MsgIsZero()) && (z.SignedSettlement.Sig.MsgIsZero())) && ((z.SignedParams.Params.MsgIsZero()) && (z.SignedParams.Sig.MsgIsZero()))
+	return ((*z).Type == "") && (((*z).SignedDeposit.Deposit.MsgIsZero()) && ((*z).SignedDeposit.Sig.MsgIsZero())) && (((*z).SignedBid.Bid.MsgIsZero()) && ((*z).SignedBid.Sig.MsgIsZero())) && (((*z).SignedSettlement.Settlement.MsgIsZero()) && ((*z).SignedSettlement.Sig.MsgIsZero())) && (((*z).SignedParams.Params.MsgIsZero()) && ((*z).SignedParams.Sig.MsgIsZero()))
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1330,7 +1330,9 @@ func (z NoteFieldType) Msgsize() (s int) {
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z NoteFieldType) MsgIsZero() bool { return z == "" }
+func (z NoteFieldType) MsgIsZero() bool {
+	return z == ""
+}
 
 // MarshalMsg implements msgp.Marshaler
 func (z *Params) MarshalMsg(b []byte) (o []byte, err error) {
@@ -1338,51 +1340,51 @@ func (z *Params) MarshalMsg(b []byte) (o []byte, err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(12)
 	var zb0001Mask uint16 /* 13 bits */
-	if z.AuctionID == 0 {
+	if (*z).AuctionID == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if z.AuctionKey.MsgIsZero() {
+	if (*z).AuctionKey.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if z.BankKey.MsgIsZero() {
+	if (*z).BankKey.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
-	if z.PriceChunkRounds == 0 {
+	if (*z).PriceChunkRounds == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x10
 	}
-	if z.DepositRound == 0 {
+	if (*z).DepositRound == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x20
 	}
-	if z.DispensingKey.MsgIsZero() {
+	if (*z).DispensingKey.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x40
 	}
-	if z.FirstRound == 0 {
+	if (*z).FirstRound == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x80
 	}
-	if z.LastPrice == 0 {
+	if (*z).LastPrice == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x100
 	}
-	if z.NumAlgos == 0 {
+	if (*z).NumAlgos == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x200
 	}
-	if z.MaxPriceMultiple == 0 {
+	if (*z).MaxPriceMultiple == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x400
 	}
-	if z.MinBidAlgos == 0 {
+	if (*z).MinBidAlgos == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x800
 	}
-	if z.NumChunks == 0 {
+	if (*z).NumChunks == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x1000
 	}
@@ -1394,12 +1396,12 @@ func (z *Params) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x2) == 0 { // if not empty
 		// string "aid"
 		o = append(o, 0xa3, 0x61, 0x69, 0x64)
-		o = msgp.AppendUint64(o, z.AuctionID)
+		o = msgp.AppendUint64(o, (*z).AuctionID)
 	}
 	if (zb0001Mask & 0x4) == 0 { // if not empty
 		// string "auc"
 		o = append(o, 0xa3, 0x61, 0x75, 0x63)
-		o, err = z.AuctionKey.MarshalMsg(o)
+		o, err = (*z).AuctionKey.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "AuctionKey")
 			return
@@ -1408,7 +1410,7 @@ func (z *Params) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x8) == 0 { // if not empty
 		// string "bank"
 		o = append(o, 0xa4, 0x62, 0x61, 0x6e, 0x6b)
-		o, err = z.BankKey.MarshalMsg(o)
+		o, err = (*z).BankKey.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "BankKey")
 			return
@@ -1417,17 +1419,17 @@ func (z *Params) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x10) == 0 { // if not empty
 		// string "chunkrnds"
 		o = append(o, 0xa9, 0x63, 0x68, 0x75, 0x6e, 0x6b, 0x72, 0x6e, 0x64, 0x73)
-		o = msgp.AppendUint64(o, z.PriceChunkRounds)
+		o = msgp.AppendUint64(o, (*z).PriceChunkRounds)
 	}
 	if (zb0001Mask & 0x20) == 0 { // if not empty
 		// string "depositrnd"
 		o = append(o, 0xaa, 0x64, 0x65, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x72, 0x6e, 0x64)
-		o = msgp.AppendUint64(o, z.DepositRound)
+		o = msgp.AppendUint64(o, (*z).DepositRound)
 	}
 	if (zb0001Mask & 0x40) == 0 { // if not empty
 		// string "dispense"
 		o = append(o, 0xa8, 0x64, 0x69, 0x73, 0x70, 0x65, 0x6e, 0x73, 0x65)
-		o, err = z.DispensingKey.MarshalMsg(o)
+		o, err = (*z).DispensingKey.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "DispensingKey")
 			return
@@ -1436,32 +1438,32 @@ func (z *Params) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x80) == 0 { // if not empty
 		// string "firstrnd"
 		o = append(o, 0xa8, 0x66, 0x69, 0x72, 0x73, 0x74, 0x72, 0x6e, 0x64)
-		o = msgp.AppendUint64(o, z.FirstRound)
+		o = msgp.AppendUint64(o, (*z).FirstRound)
 	}
 	if (zb0001Mask & 0x100) == 0 { // if not empty
 		// string "lastprice"
 		o = append(o, 0xa9, 0x6c, 0x61, 0x73, 0x74, 0x70, 0x72, 0x69, 0x63, 0x65)
-		o = msgp.AppendUint64(o, z.LastPrice)
+		o = msgp.AppendUint64(o, (*z).LastPrice)
 	}
 	if (zb0001Mask & 0x200) == 0 { // if not empty
 		// string "maxalgos"
 		o = append(o, 0xa8, 0x6d, 0x61, 0x78, 0x61, 0x6c, 0x67, 0x6f, 0x73)
-		o = msgp.AppendUint64(o, z.NumAlgos)
+		o = msgp.AppendUint64(o, (*z).NumAlgos)
 	}
 	if (zb0001Mask & 0x400) == 0 { // if not empty
 		// string "maxmult"
 		o = append(o, 0xa7, 0x6d, 0x61, 0x78, 0x6d, 0x75, 0x6c, 0x74)
-		o = msgp.AppendUint64(o, z.MaxPriceMultiple)
+		o = msgp.AppendUint64(o, (*z).MaxPriceMultiple)
 	}
 	if (zb0001Mask & 0x800) == 0 { // if not empty
 		// string "minbidalgos"
 		o = append(o, 0xab, 0x6d, 0x69, 0x6e, 0x62, 0x69, 0x64, 0x61, 0x6c, 0x67, 0x6f, 0x73)
-		o = msgp.AppendUint64(o, z.MinBidAlgos)
+		o = msgp.AppendUint64(o, (*z).MinBidAlgos)
 	}
 	if (zb0001Mask & 0x1000) == 0 { // if not empty
 		// string "numchunks"
 		o = append(o, 0xa9, 0x6e, 0x75, 0x6d, 0x63, 0x68, 0x75, 0x6e, 0x6b, 0x73)
-		o = msgp.AppendUint64(o, z.NumChunks)
+		o = msgp.AppendUint64(o, (*z).NumChunks)
 	}
 	return
 }
@@ -1485,73 +1487,73 @@ func (z *Params) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "auc":
-			bts, err = z.AuctionKey.UnmarshalMsg(bts)
+			bts, err = (*z).AuctionKey.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "AuctionKey")
 				return
 			}
 		case "aid":
-			z.AuctionID, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).AuctionID, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "AuctionID")
 				return
 			}
 		case "bank":
-			bts, err = z.BankKey.UnmarshalMsg(bts)
+			bts, err = (*z).BankKey.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "BankKey")
 				return
 			}
 		case "dispense":
-			bts, err = z.DispensingKey.UnmarshalMsg(bts)
+			bts, err = (*z).DispensingKey.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "DispensingKey")
 				return
 			}
 		case "lastprice":
-			z.LastPrice, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).LastPrice, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "LastPrice")
 				return
 			}
 		case "depositrnd":
-			z.DepositRound, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).DepositRound, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "DepositRound")
 				return
 			}
 		case "firstrnd":
-			z.FirstRound, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).FirstRound, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "FirstRound")
 				return
 			}
 		case "chunkrnds":
-			z.PriceChunkRounds, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).PriceChunkRounds, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "PriceChunkRounds")
 				return
 			}
 		case "numchunks":
-			z.NumChunks, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).NumChunks, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "NumChunks")
 				return
 			}
 		case "maxmult":
-			z.MaxPriceMultiple, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).MaxPriceMultiple, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "MaxPriceMultiple")
 				return
 			}
 		case "maxalgos":
-			z.NumAlgos, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).NumAlgos, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "NumAlgos")
 				return
 			}
 		case "minbidalgos":
-			z.MinBidAlgos, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).MinBidAlgos, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "MinBidAlgos")
 				return
@@ -1570,13 +1572,13 @@ func (z *Params) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Params) Msgsize() (s int) {
-	s = 1 + 4 + z.AuctionKey.Msgsize() + 4 + msgp.Uint64Size + 5 + z.BankKey.Msgsize() + 9 + z.DispensingKey.Msgsize() + 10 + msgp.Uint64Size + 11 + msgp.Uint64Size + 9 + msgp.Uint64Size + 10 + msgp.Uint64Size + 10 + msgp.Uint64Size + 8 + msgp.Uint64Size + 9 + msgp.Uint64Size + 12 + msgp.Uint64Size
+	s = 1 + 4 + (*z).AuctionKey.Msgsize() + 4 + msgp.Uint64Size + 5 + (*z).BankKey.Msgsize() + 9 + (*z).DispensingKey.Msgsize() + 10 + msgp.Uint64Size + 11 + msgp.Uint64Size + 9 + msgp.Uint64Size + 10 + msgp.Uint64Size + 10 + msgp.Uint64Size + 8 + msgp.Uint64Size + 9 + msgp.Uint64Size + 12 + msgp.Uint64Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Params) MsgIsZero() bool {
-	return (z.AuctionKey.MsgIsZero()) && (z.AuctionID == 0) && (z.BankKey.MsgIsZero()) && (z.DispensingKey.MsgIsZero()) && (z.LastPrice == 0) && (z.DepositRound == 0) && (z.FirstRound == 0) && (z.PriceChunkRounds == 0) && (z.NumChunks == 0) && (z.MaxPriceMultiple == 0) && (z.NumAlgos == 0) && (z.MinBidAlgos == 0)
+	return ((*z).AuctionKey.MsgIsZero()) && ((*z).AuctionID == 0) && ((*z).BankKey.MsgIsZero()) && ((*z).DispensingKey.MsgIsZero()) && ((*z).LastPrice == 0) && ((*z).DepositRound == 0) && ((*z).FirstRound == 0) && ((*z).PriceChunkRounds == 0) && ((*z).NumChunks == 0) && ((*z).MaxPriceMultiple == 0) && ((*z).NumAlgos == 0) && ((*z).MinBidAlgos == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1585,77 +1587,77 @@ func (z *RunningAuction) MarshalMsg(b []byte) (o []byte, err error) {
 	// map header, size 6
 	// string "Bidders"
 	o = append(o, 0x86, 0xa7, 0x42, 0x69, 0x64, 0x64, 0x65, 0x72, 0x73)
-	o = msgp.AppendMapHeader(o, uint32(len(z.Bidders)))
-	za0003_keys := make([]crypto.Digest, 0, len(z.Bidders))
-	for za0003 := range z.Bidders {
-		za0003_keys = append(za0003_keys, za0003)
+	o = msgp.AppendMapHeader(o, uint32(len((*z).Bidders)))
+	zb0003_keys := make([]crypto.Digest, 0, len((*z).Bidders))
+	for zb0003 := range (*z).Bidders {
+		zb0003_keys = append(zb0003_keys, zb0003)
 	}
-	sort.Sort(crypto.SortDigest(za0003_keys))
-	for _, za0003 := range za0003_keys {
-		za0004 := z.Bidders[za0003]
-		_ = za0004
-		o, err = za0003.MarshalMsg(o)
+	sort.Sort(crypto.SortDigest(zb0003_keys))
+	for _, zb0003 := range zb0003_keys {
+		zb0004 := (*z).Bidders[zb0003]
+		_ = zb0004
+		o, err = zb0003.MarshalMsg(o)
 		if err != nil {
-			err = msgp.WrapError(err, "Bidders", za0003)
+			err = msgp.WrapError(err, "Bidders", zb0003)
 			return
 		}
-		o, err = za0004.MarshalMsg(o)
+		o, err = zb0004.MarshalMsg(o)
 		if err != nil {
-			err = msgp.WrapError(err, "Bidders", za0003)
+			err = msgp.WrapError(err, "Bidders", zb0003)
 			return
 		}
 	}
 	// string "Bids"
 	o = append(o, 0xa4, 0x42, 0x69, 0x64, 0x73)
-	o = msgp.AppendMapHeader(o, uint32(len(z.Bids)))
-	za0005_keys := make([]uint64, 0, len(z.Bids))
-	for za0005 := range z.Bids {
-		za0005_keys = append(za0005_keys, za0005)
+	o = msgp.AppendMapHeader(o, uint32(len((*z).Bids)))
+	zb0005_keys := make([]uint64, 0, len((*z).Bids))
+	for zb0005 := range (*z).Bids {
+		zb0005_keys = append(zb0005_keys, zb0005)
 	}
-	sort.Sort(SortUint64(za0005_keys))
-	for _, za0005 := range za0005_keys {
-		za0006 := z.Bids[za0005]
-		_ = za0006
-		o = msgp.AppendUint64(o, za0005)
-		o = msgp.AppendArrayHeader(o, uint32(len(za0006)))
-		for za0007 := range za0006 {
+	sort.Sort(SortUint64(zb0005_keys))
+	for _, zb0005 := range zb0005_keys {
+		zb0006 := (*z).Bids[zb0005]
+		_ = zb0006
+		o = msgp.AppendUint64(o, zb0005)
+		o = msgp.AppendArrayHeader(o, uint32(len(zb0006)))
+		for zb0007 := range zb0006 {
 			// map header, size 3
 			// string "BidID"
 			o = append(o, 0x83, 0xa5, 0x42, 0x69, 0x64, 0x49, 0x44)
-			o = msgp.AppendUint64(o, za0006[za0007].BidID)
+			o = msgp.AppendUint64(o, zb0006[zb0007].BidID)
 			// string "Bidder"
 			o = append(o, 0xa6, 0x42, 0x69, 0x64, 0x64, 0x65, 0x72)
-			o, err = za0006[za0007].Bidder.MarshalMsg(o)
+			o, err = zb0006[zb0007].Bidder.MarshalMsg(o)
 			if err != nil {
-				err = msgp.WrapError(err, "Bids", za0005, za0007, "Bidder")
+				err = msgp.WrapError(err, "Bids", zb0005, zb0007, "Bidder")
 				return
 			}
 			// string "Currency"
 			o = append(o, 0xa8, 0x43, 0x75, 0x72, 0x72, 0x65, 0x6e, 0x63, 0x79)
-			o = msgp.AppendUint64(o, za0006[za0007].Currency)
+			o = msgp.AppendUint64(o, zb0006[zb0007].Currency)
 		}
 	}
 	// string "DepositIDs"
 	o = append(o, 0xaa, 0x44, 0x65, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x49, 0x44, 0x73)
-	o = msgp.AppendMapHeader(o, uint32(len(z.DepositIDs)))
-	za0001_keys := make([]uint64, 0, len(z.DepositIDs))
-	for za0001 := range z.DepositIDs {
-		za0001_keys = append(za0001_keys, za0001)
+	o = msgp.AppendMapHeader(o, uint32(len((*z).DepositIDs)))
+	zb0001_keys := make([]uint64, 0, len((*z).DepositIDs))
+	for zb0001 := range (*z).DepositIDs {
+		zb0001_keys = append(zb0001_keys, zb0001)
 	}
-	sort.Sort(SortUint64(za0001_keys))
-	for _, za0001 := range za0001_keys {
-		za0002 := z.DepositIDs[za0001]
-		_ = za0002
-		o = msgp.AppendUint64(o, za0001)
+	sort.Sort(SortUint64(zb0001_keys))
+	for _, zb0001 := range zb0001_keys {
+		zb0002 := (*z).DepositIDs[zb0001]
+		_ = zb0002
+		o = msgp.AppendUint64(o, zb0001)
 		// map header, size 0
 		o = append(o, 0x80)
 	}
 	// string "Outcome"
 	o = append(o, 0xa7, 0x4f, 0x75, 0x74, 0x63, 0x6f, 0x6d, 0x65)
-	if z.Outcome == nil {
+	if (*z).Outcome == nil {
 		o = msgp.AppendNil(o)
 	} else {
-		o, err = z.Outcome.MarshalMsg(o)
+		o, err = (*z).Outcome.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "Outcome")
 			return
@@ -1663,14 +1665,14 @@ func (z *RunningAuction) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// string "Params"
 	o = append(o, 0xa6, 0x50, 0x61, 0x72, 0x61, 0x6d, 0x73)
-	o, err = z.Params.MarshalMsg(o)
+	o, err = (*z).Params.MarshalMsg(o)
 	if err != nil {
 		err = msgp.WrapError(err, "Params")
 		return
 	}
 	// string "TotalCurrency"
 	o = append(o, 0xad, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x43, 0x75, 0x72, 0x72, 0x65, 0x6e, 0x63, 0x79)
-	o = msgp.AppendUint64(o, z.TotalCurrency)
+	o = msgp.AppendUint64(o, (*z).TotalCurrency)
 	return
 }
 
@@ -1678,14 +1680,14 @@ func (z *RunningAuction) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *RunningAuction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0001 uint32
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0008 uint32
+	zb0008, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
 	}
-	for zb0001 > 0 {
-		zb0001--
+	for zb0008 > 0 {
+		zb0008--
 		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
@@ -1693,170 +1695,170 @@ func (z *RunningAuction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "Params":
-			bts, err = z.Params.UnmarshalMsg(bts)
+			bts, err = (*z).Params.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Params")
 				return
 			}
 		case "DepositIDs":
-			var zb0002 uint32
-			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+			var zb0009 uint32
+			zb0009, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "DepositIDs")
 				return
 			}
-			if z.DepositIDs == nil {
-				z.DepositIDs = make(map[uint64]struct {
-				}, zb0002)
-			} else if len(z.DepositIDs) > 0 {
-				for key := range z.DepositIDs {
-					delete(z.DepositIDs, key)
+			if (*z).DepositIDs == nil {
+				(*z).DepositIDs = make(map[uint64]struct {
+				}, zb0009)
+			} else if len((*z).DepositIDs) > 0 {
+				for key := range (*z).DepositIDs {
+					delete((*z).DepositIDs, key)
 				}
 			}
-			for zb0002 > 0 {
-				var za0001 uint64
-				var za0002 struct {
+			for zb0009 > 0 {
+				var zb0001 uint64
+				var zb0002 struct {
 				}
-				zb0002--
-				za0001, bts, err = msgp.ReadUint64Bytes(bts)
+				zb0009--
+				zb0001, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "DepositIDs")
 					return
 				}
-				var zb0003 uint32
-				zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
+				var zb0010 uint32
+				zb0010, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "DepositIDs", za0001)
+					err = msgp.WrapError(err, "DepositIDs", zb0001)
 					return
 				}
-				for zb0003 > 0 {
-					zb0003--
+				for zb0010 > 0 {
+					zb0010--
 					field, bts, err = msgp.ReadMapKeyZC(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "DepositIDs", za0001)
+						err = msgp.WrapError(err, "DepositIDs", zb0001)
 						return
 					}
 					switch msgp.UnsafeString(field) {
 					default:
 						err = msgp.ErrNoField(msgp.UnsafeString(field))
 						if err != nil {
-							err = msgp.WrapError(err, "DepositIDs", za0001)
+							err = msgp.WrapError(err, "DepositIDs", zb0001)
 							return
 						}
 					}
 				}
-				z.DepositIDs[za0001] = za0002
+				(*z).DepositIDs[zb0001] = zb0002
 			}
 		case "Bidders":
-			var zb0004 uint32
-			zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
+			var zb0011 uint32
+			zb0011, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Bidders")
 				return
 			}
-			if z.Bidders == nil {
-				z.Bidders = make(map[crypto.Digest]BidderState, zb0004)
-			} else if len(z.Bidders) > 0 {
-				for key := range z.Bidders {
-					delete(z.Bidders, key)
+			if (*z).Bidders == nil {
+				(*z).Bidders = make(map[crypto.Digest]BidderState, zb0011)
+			} else if len((*z).Bidders) > 0 {
+				for key := range (*z).Bidders {
+					delete((*z).Bidders, key)
 				}
 			}
-			for zb0004 > 0 {
-				var za0003 crypto.Digest
-				var za0004 BidderState
-				zb0004--
-				bts, err = za0003.UnmarshalMsg(bts)
+			for zb0011 > 0 {
+				var zb0003 crypto.Digest
+				var zb0004 BidderState
+				zb0011--
+				bts, err = zb0003.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Bidders")
 					return
 				}
-				bts, err = za0004.UnmarshalMsg(bts)
+				bts, err = zb0004.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "Bidders", za0003)
+					err = msgp.WrapError(err, "Bidders", zb0003)
 					return
 				}
-				z.Bidders[za0003] = za0004
+				(*z).Bidders[zb0003] = zb0004
 			}
 		case "Bids":
-			var zb0005 uint32
-			zb0005, bts, err = msgp.ReadMapHeaderBytes(bts)
+			var zb0012 uint32
+			zb0012, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Bids")
 				return
 			}
-			if z.Bids == nil {
-				z.Bids = make(map[uint64][]RunningBid, zb0005)
-			} else if len(z.Bids) > 0 {
-				for key := range z.Bids {
-					delete(z.Bids, key)
+			if (*z).Bids == nil {
+				(*z).Bids = make(map[uint64][]RunningBid, zb0012)
+			} else if len((*z).Bids) > 0 {
+				for key := range (*z).Bids {
+					delete((*z).Bids, key)
 				}
 			}
-			for zb0005 > 0 {
-				var za0005 uint64
-				var za0006 []RunningBid
-				zb0005--
-				za0005, bts, err = msgp.ReadUint64Bytes(bts)
+			for zb0012 > 0 {
+				var zb0005 uint64
+				var zb0006 []RunningBid
+				zb0012--
+				zb0005, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Bids")
 					return
 				}
-				var zb0006 uint32
-				zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0013 uint32
+				zb0013, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "Bids", za0005)
+					err = msgp.WrapError(err, "Bids", zb0005)
 					return
 				}
-				if cap(za0006) >= int(zb0006) {
-					za0006 = (za0006)[:zb0006]
+				if cap(zb0006) >= int(zb0013) {
+					zb0006 = (zb0006)[:zb0013]
 				} else {
-					za0006 = make([]RunningBid, zb0006)
+					zb0006 = make([]RunningBid, zb0013)
 				}
-				for za0007 := range za0006 {
-					var zb0007 uint32
-					zb0007, bts, err = msgp.ReadMapHeaderBytes(bts)
+				for zb0007 := range zb0006 {
+					var zb0014 uint32
+					zb0014, bts, err = msgp.ReadMapHeaderBytes(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "Bids", za0005, za0007)
+						err = msgp.WrapError(err, "Bids", zb0005, zb0007)
 						return
 					}
-					for zb0007 > 0 {
-						zb0007--
+					for zb0014 > 0 {
+						zb0014--
 						field, bts, err = msgp.ReadMapKeyZC(bts)
 						if err != nil {
-							err = msgp.WrapError(err, "Bids", za0005, za0007)
+							err = msgp.WrapError(err, "Bids", zb0005, zb0007)
 							return
 						}
 						switch msgp.UnsafeString(field) {
 						case "Bidder":
-							bts, err = za0006[za0007].Bidder.UnmarshalMsg(bts)
+							bts, err = zb0006[zb0007].Bidder.UnmarshalMsg(bts)
 							if err != nil {
-								err = msgp.WrapError(err, "Bids", za0005, za0007, "Bidder")
+								err = msgp.WrapError(err, "Bids", zb0005, zb0007, "Bidder")
 								return
 							}
 						case "Currency":
-							za0006[za0007].Currency, bts, err = msgp.ReadUint64Bytes(bts)
+							zb0006[zb0007].Currency, bts, err = msgp.ReadUint64Bytes(bts)
 							if err != nil {
-								err = msgp.WrapError(err, "Bids", za0005, za0007, "Currency")
+								err = msgp.WrapError(err, "Bids", zb0005, zb0007, "Currency")
 								return
 							}
 						case "BidID":
-							za0006[za0007].BidID, bts, err = msgp.ReadUint64Bytes(bts)
+							zb0006[zb0007].BidID, bts, err = msgp.ReadUint64Bytes(bts)
 							if err != nil {
-								err = msgp.WrapError(err, "Bids", za0005, za0007, "BidID")
+								err = msgp.WrapError(err, "Bids", zb0005, zb0007, "BidID")
 								return
 							}
 						default:
 							err = msgp.ErrNoField(msgp.UnsafeString(field))
 							if err != nil {
-								err = msgp.WrapError(err, "Bids", za0005, za0007)
+								err = msgp.WrapError(err, "Bids", zb0005, zb0007)
 								return
 							}
 						}
 					}
 				}
-				z.Bids[za0005] = za0006
+				(*z).Bids[zb0005] = zb0006
 			}
 		case "TotalCurrency":
-			z.TotalCurrency, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).TotalCurrency, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "TotalCurrency")
 				return
@@ -1867,12 +1869,12 @@ func (z *RunningAuction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				if err != nil {
 					return
 				}
-				z.Outcome = nil
+				(*z).Outcome = nil
 			} else {
-				if z.Outcome == nil {
-					z.Outcome = new(BidOutcomes)
+				if (*z).Outcome == nil {
+					(*z).Outcome = new(BidOutcomes)
 				}
-				bts, err = z.Outcome.UnmarshalMsg(bts)
+				bts, err = (*z).Outcome.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Outcome")
 					return
@@ -1892,45 +1894,45 @@ func (z *RunningAuction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *RunningAuction) Msgsize() (s int) {
-	s = 1 + 7 + z.Params.Msgsize() + 11 + msgp.MapHeaderSize
-	if z.DepositIDs != nil {
-		for za0001, za0002 := range z.DepositIDs {
-			_ = za0001
-			_ = za0002
+	s = 1 + 7 + (*z).Params.Msgsize() + 11 + msgp.MapHeaderSize
+	if (*z).DepositIDs != nil {
+		for zb0001, zb0002 := range (*z).DepositIDs {
+			_ = zb0001
+			_ = zb0002
 			s += 0 + msgp.Uint64Size + 1
 		}
 	}
 	s += 8 + msgp.MapHeaderSize
-	if z.Bidders != nil {
-		for za0003, za0004 := range z.Bidders {
-			_ = za0003
-			_ = za0004
-			s += 0 + za0003.Msgsize() + za0004.Msgsize()
+	if (*z).Bidders != nil {
+		for zb0003, zb0004 := range (*z).Bidders {
+			_ = zb0003
+			_ = zb0004
+			s += 0 + zb0003.Msgsize() + zb0004.Msgsize()
 		}
 	}
 	s += 5 + msgp.MapHeaderSize
-	if z.Bids != nil {
-		for za0005, za0006 := range z.Bids {
-			_ = za0005
-			_ = za0006
+	if (*z).Bids != nil {
+		for zb0005, zb0006 := range (*z).Bids {
+			_ = zb0005
+			_ = zb0006
 			s += 0 + msgp.Uint64Size + msgp.ArrayHeaderSize
-			for za0007 := range za0006 {
-				s += 1 + 7 + za0006[za0007].Bidder.Msgsize() + 9 + msgp.Uint64Size + 6 + msgp.Uint64Size
+			for zb0007 := range zb0006 {
+				s += 1 + 7 + zb0006[zb0007].Bidder.Msgsize() + 9 + msgp.Uint64Size + 6 + msgp.Uint64Size
 			}
 		}
 	}
 	s += 14 + msgp.Uint64Size + 8
-	if z.Outcome == nil {
+	if (*z).Outcome == nil {
 		s += msgp.NilSize
 	} else {
-		s += z.Outcome.Msgsize()
+		s += (*z).Outcome.Msgsize()
 	}
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *RunningAuction) MsgIsZero() bool {
-	return (z.Params.MsgIsZero()) && (len(z.DepositIDs) == 0) && (len(z.Bidders) == 0) && (len(z.Bids) == 0) && (z.TotalCurrency == 0) && (z.Outcome == nil)
+	return ((*z).Params.MsgIsZero()) && (len((*z).DepositIDs) == 0) && (len((*z).Bidders) == 0) && (len((*z).Bids) == 0) && ((*z).TotalCurrency == 0) && ((*z).Outcome == nil)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1939,17 +1941,17 @@ func (z *RunningBid) MarshalMsg(b []byte) (o []byte, err error) {
 	// map header, size 3
 	// string "BidID"
 	o = append(o, 0x83, 0xa5, 0x42, 0x69, 0x64, 0x49, 0x44)
-	o = msgp.AppendUint64(o, z.BidID)
+	o = msgp.AppendUint64(o, (*z).BidID)
 	// string "Bidder"
 	o = append(o, 0xa6, 0x42, 0x69, 0x64, 0x64, 0x65, 0x72)
-	o, err = z.Bidder.MarshalMsg(o)
+	o, err = (*z).Bidder.MarshalMsg(o)
 	if err != nil {
 		err = msgp.WrapError(err, "Bidder")
 		return
 	}
 	// string "Currency"
 	o = append(o, 0xa8, 0x43, 0x75, 0x72, 0x72, 0x65, 0x6e, 0x63, 0x79)
-	o = msgp.AppendUint64(o, z.Currency)
+	o = msgp.AppendUint64(o, (*z).Currency)
 	return
 }
 
@@ -1972,19 +1974,19 @@ func (z *RunningBid) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "Bidder":
-			bts, err = z.Bidder.UnmarshalMsg(bts)
+			bts, err = (*z).Bidder.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Bidder")
 				return
 			}
 		case "Currency":
-			z.Currency, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).Currency, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Currency")
 				return
 			}
 		case "BidID":
-			z.BidID, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).BidID, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "BidID")
 				return
@@ -2003,13 +2005,13 @@ func (z *RunningBid) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *RunningBid) Msgsize() (s int) {
-	s = 1 + 7 + z.Bidder.Msgsize() + 9 + msgp.Uint64Size + 6 + msgp.Uint64Size
+	s = 1 + 7 + (*z).Bidder.Msgsize() + 9 + msgp.Uint64Size + 6 + msgp.Uint64Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *RunningBid) MsgIsZero() bool {
-	return (z.Bidder.MsgIsZero()) && (z.Currency == 0) && (z.BidID == 0)
+	return ((*z).Bidder.MsgIsZero()) && ((*z).Currency == 0) && ((*z).BidID == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -2018,10 +2020,10 @@ func (z *SerializedRunningAuction) MarshalMsg(b []byte) (o []byte, err error) {
 	// map header, size 1
 	// string "RunningAuction"
 	o = append(o, 0x81, 0xae, 0x52, 0x75, 0x6e, 0x6e, 0x69, 0x6e, 0x67, 0x41, 0x75, 0x63, 0x74, 0x69, 0x6f, 0x6e)
-	if z.RunningAuction == nil {
+	if (*z).RunningAuction == nil {
 		o = msgp.AppendNil(o)
 	} else {
-		o, err = z.RunningAuction.MarshalMsg(o)
+		o, err = (*z).RunningAuction.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "RunningAuction")
 			return
@@ -2054,12 +2056,12 @@ func (z *SerializedRunningAuction) UnmarshalMsg(bts []byte) (o []byte, err error
 				if err != nil {
 					return
 				}
-				z.RunningAuction = nil
+				(*z).RunningAuction = nil
 			} else {
-				if z.RunningAuction == nil {
-					z.RunningAuction = new(RunningAuction)
+				if (*z).RunningAuction == nil {
+					(*z).RunningAuction = new(RunningAuction)
 				}
-				bts, err = z.RunningAuction.UnmarshalMsg(bts)
+				bts, err = (*z).RunningAuction.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "RunningAuction")
 					return
@@ -2080,16 +2082,18 @@ func (z *SerializedRunningAuction) UnmarshalMsg(bts []byte) (o []byte, err error
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *SerializedRunningAuction) Msgsize() (s int) {
 	s = 1 + 15
-	if z.RunningAuction == nil {
+	if (*z).RunningAuction == nil {
 		s += msgp.NilSize
 	} else {
-		s += z.RunningAuction.Msgsize()
+		s += (*z).RunningAuction.Msgsize()
 	}
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *SerializedRunningAuction) MsgIsZero() bool { return (z.RunningAuction == nil) }
+func (z *SerializedRunningAuction) MsgIsZero() bool {
+	return ((*z).RunningAuction == nil)
+}
 
 // MarshalMsg implements msgp.Marshaler
 func (z *Settlement) MarshalMsg(b []byte) (o []byte, err error) {
@@ -2097,23 +2101,23 @@ func (z *Settlement) MarshalMsg(b []byte) (o []byte, err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(5)
 	var zb0001Mask uint8 /* 6 bits */
-	if z.AuctionID == 0 {
+	if (*z).AuctionID == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if z.AuctionKey.MsgIsZero() {
+	if (*z).AuctionKey.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if z.Canceled == false {
+	if (*z).Canceled == false {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
-	if z.Cleared == false {
+	if (*z).Cleared == false {
 		zb0001Len--
 		zb0001Mask |= 0x10
 	}
-	if z.OutcomesHash.MsgIsZero() {
+	if (*z).OutcomesHash.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x20
 	}
@@ -2125,12 +2129,12 @@ func (z *Settlement) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x2) == 0 { // if not empty
 		// string "aid"
 		o = append(o, 0xa3, 0x61, 0x69, 0x64)
-		o = msgp.AppendUint64(o, z.AuctionID)
+		o = msgp.AppendUint64(o, (*z).AuctionID)
 	}
 	if (zb0001Mask & 0x4) == 0 { // if not empty
 		// string "auc"
 		o = append(o, 0xa3, 0x61, 0x75, 0x63)
-		o, err = z.AuctionKey.MarshalMsg(o)
+		o, err = (*z).AuctionKey.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "AuctionKey")
 			return
@@ -2139,17 +2143,17 @@ func (z *Settlement) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x8) == 0 { // if not empty
 		// string "canceled"
 		o = append(o, 0xa8, 0x63, 0x61, 0x6e, 0x63, 0x65, 0x6c, 0x65, 0x64)
-		o = msgp.AppendBool(o, z.Canceled)
+		o = msgp.AppendBool(o, (*z).Canceled)
 	}
 	if (zb0001Mask & 0x10) == 0 { // if not empty
 		// string "cleared"
 		o = append(o, 0xa7, 0x63, 0x6c, 0x65, 0x61, 0x72, 0x65, 0x64)
-		o = msgp.AppendBool(o, z.Cleared)
+		o = msgp.AppendBool(o, (*z).Cleared)
 	}
 	if (zb0001Mask & 0x20) == 0 { // if not empty
 		// string "outhash"
 		o = append(o, 0xa7, 0x6f, 0x75, 0x74, 0x68, 0x61, 0x73, 0x68)
-		o, err = z.OutcomesHash.MarshalMsg(o)
+		o, err = (*z).OutcomesHash.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "OutcomesHash")
 			return
@@ -2177,31 +2181,31 @@ func (z *Settlement) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "auc":
-			bts, err = z.AuctionKey.UnmarshalMsg(bts)
+			bts, err = (*z).AuctionKey.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "AuctionKey")
 				return
 			}
 		case "aid":
-			z.AuctionID, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).AuctionID, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "AuctionID")
 				return
 			}
 		case "cleared":
-			z.Cleared, bts, err = msgp.ReadBoolBytes(bts)
+			(*z).Cleared, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Cleared")
 				return
 			}
 		case "outhash":
-			bts, err = z.OutcomesHash.UnmarshalMsg(bts)
+			bts, err = (*z).OutcomesHash.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "OutcomesHash")
 				return
 			}
 		case "canceled":
-			z.Canceled, bts, err = msgp.ReadBoolBytes(bts)
+			(*z).Canceled, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Canceled")
 				return
@@ -2220,13 +2224,13 @@ func (z *Settlement) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Settlement) Msgsize() (s int) {
-	s = 1 + 4 + z.AuctionKey.Msgsize() + 4 + msgp.Uint64Size + 8 + msgp.BoolSize + 8 + z.OutcomesHash.Msgsize() + 9 + msgp.BoolSize
+	s = 1 + 4 + (*z).AuctionKey.Msgsize() + 4 + msgp.Uint64Size + 8 + msgp.BoolSize + 8 + (*z).OutcomesHash.Msgsize() + 9 + msgp.BoolSize
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Settlement) MsgIsZero() bool {
-	return (z.AuctionKey.MsgIsZero()) && (z.AuctionID == 0) && (z.Cleared == false) && (z.OutcomesHash.MsgIsZero()) && (z.Canceled == false)
+	return ((*z).AuctionKey.MsgIsZero()) && ((*z).AuctionID == 0) && ((*z).Cleared == false) && ((*z).OutcomesHash.MsgIsZero()) && ((*z).Canceled == false)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -2235,11 +2239,11 @@ func (z *SignedBid) MarshalMsg(b []byte) (o []byte, err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(2)
 	var zb0001Mask uint8 /* 3 bits */
-	if z.Bid.MsgIsZero() {
+	if (*z).Bid.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if z.Sig.MsgIsZero() {
+	if (*z).Sig.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
@@ -2251,7 +2255,7 @@ func (z *SignedBid) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x2) == 0 { // if not empty
 		// string "bid"
 		o = append(o, 0xa3, 0x62, 0x69, 0x64)
-		o, err = z.Bid.MarshalMsg(o)
+		o, err = (*z).Bid.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "Bid")
 			return
@@ -2260,7 +2264,7 @@ func (z *SignedBid) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x4) == 0 { // if not empty
 		// string "sig"
 		o = append(o, 0xa3, 0x73, 0x69, 0x67)
-		o, err = z.Sig.MarshalMsg(o)
+		o, err = (*z).Sig.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "Sig")
 			return
@@ -2288,13 +2292,13 @@ func (z *SignedBid) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "bid":
-			bts, err = z.Bid.UnmarshalMsg(bts)
+			bts, err = (*z).Bid.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Bid")
 				return
 			}
 		case "sig":
-			bts, err = z.Sig.UnmarshalMsg(bts)
+			bts, err = (*z).Sig.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Sig")
 				return
@@ -2313,12 +2317,14 @@ func (z *SignedBid) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *SignedBid) Msgsize() (s int) {
-	s = 1 + 4 + z.Bid.Msgsize() + 4 + z.Sig.Msgsize()
+	s = 1 + 4 + (*z).Bid.Msgsize() + 4 + (*z).Sig.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *SignedBid) MsgIsZero() bool { return (z.Bid.MsgIsZero()) && (z.Sig.MsgIsZero()) }
+func (z *SignedBid) MsgIsZero() bool {
+	return ((*z).Bid.MsgIsZero()) && ((*z).Sig.MsgIsZero())
+}
 
 // MarshalMsg implements msgp.Marshaler
 func (z *SignedDeposit) MarshalMsg(b []byte) (o []byte, err error) {
@@ -2326,11 +2332,11 @@ func (z *SignedDeposit) MarshalMsg(b []byte) (o []byte, err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(2)
 	var zb0001Mask uint8 /* 3 bits */
-	if z.Deposit.MsgIsZero() {
+	if (*z).Deposit.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if z.Sig.MsgIsZero() {
+	if (*z).Sig.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
@@ -2342,7 +2348,7 @@ func (z *SignedDeposit) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x2) == 0 { // if not empty
 		// string "dep"
 		o = append(o, 0xa3, 0x64, 0x65, 0x70)
-		o, err = z.Deposit.MarshalMsg(o)
+		o, err = (*z).Deposit.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "Deposit")
 			return
@@ -2351,7 +2357,7 @@ func (z *SignedDeposit) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x4) == 0 { // if not empty
 		// string "sig"
 		o = append(o, 0xa3, 0x73, 0x69, 0x67)
-		o, err = z.Sig.MarshalMsg(o)
+		o, err = (*z).Sig.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "Sig")
 			return
@@ -2379,13 +2385,13 @@ func (z *SignedDeposit) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "dep":
-			bts, err = z.Deposit.UnmarshalMsg(bts)
+			bts, err = (*z).Deposit.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Deposit")
 				return
 			}
 		case "sig":
-			bts, err = z.Sig.UnmarshalMsg(bts)
+			bts, err = (*z).Sig.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Sig")
 				return
@@ -2404,12 +2410,14 @@ func (z *SignedDeposit) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *SignedDeposit) Msgsize() (s int) {
-	s = 1 + 4 + z.Deposit.Msgsize() + 4 + z.Sig.Msgsize()
+	s = 1 + 4 + (*z).Deposit.Msgsize() + 4 + (*z).Sig.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *SignedDeposit) MsgIsZero() bool { return (z.Deposit.MsgIsZero()) && (z.Sig.MsgIsZero()) }
+func (z *SignedDeposit) MsgIsZero() bool {
+	return ((*z).Deposit.MsgIsZero()) && ((*z).Sig.MsgIsZero())
+}
 
 // MarshalMsg implements msgp.Marshaler
 func (z *SignedParams) MarshalMsg(b []byte) (o []byte, err error) {
@@ -2417,11 +2425,11 @@ func (z *SignedParams) MarshalMsg(b []byte) (o []byte, err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(2)
 	var zb0001Mask uint8 /* 3 bits */
-	if z.Params.MsgIsZero() {
+	if (*z).Params.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if z.Sig.MsgIsZero() {
+	if (*z).Sig.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
@@ -2433,7 +2441,7 @@ func (z *SignedParams) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x2) == 0 { // if not empty
 		// string "param"
 		o = append(o, 0xa5, 0x70, 0x61, 0x72, 0x61, 0x6d)
-		o, err = z.Params.MarshalMsg(o)
+		o, err = (*z).Params.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "Params")
 			return
@@ -2442,7 +2450,7 @@ func (z *SignedParams) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x4) == 0 { // if not empty
 		// string "sig"
 		o = append(o, 0xa3, 0x73, 0x69, 0x67)
-		o, err = z.Sig.MarshalMsg(o)
+		o, err = (*z).Sig.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "Sig")
 			return
@@ -2470,13 +2478,13 @@ func (z *SignedParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "param":
-			bts, err = z.Params.UnmarshalMsg(bts)
+			bts, err = (*z).Params.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Params")
 				return
 			}
 		case "sig":
-			bts, err = z.Sig.UnmarshalMsg(bts)
+			bts, err = (*z).Sig.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Sig")
 				return
@@ -2495,12 +2503,14 @@ func (z *SignedParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *SignedParams) Msgsize() (s int) {
-	s = 1 + 6 + z.Params.Msgsize() + 4 + z.Sig.Msgsize()
+	s = 1 + 6 + (*z).Params.Msgsize() + 4 + (*z).Sig.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *SignedParams) MsgIsZero() bool { return (z.Params.MsgIsZero()) && (z.Sig.MsgIsZero()) }
+func (z *SignedParams) MsgIsZero() bool {
+	return ((*z).Params.MsgIsZero()) && ((*z).Sig.MsgIsZero())
+}
 
 // MarshalMsg implements msgp.Marshaler
 func (z *SignedSettlement) MarshalMsg(b []byte) (o []byte, err error) {
@@ -2508,11 +2518,11 @@ func (z *SignedSettlement) MarshalMsg(b []byte) (o []byte, err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(2)
 	var zb0001Mask uint8 /* 3 bits */
-	if z.Settlement.MsgIsZero() {
+	if (*z).Settlement.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if z.Sig.MsgIsZero() {
+	if (*z).Sig.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
@@ -2524,7 +2534,7 @@ func (z *SignedSettlement) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x2) == 0 { // if not empty
 		// string "settle"
 		o = append(o, 0xa6, 0x73, 0x65, 0x74, 0x74, 0x6c, 0x65)
-		o, err = z.Settlement.MarshalMsg(o)
+		o, err = (*z).Settlement.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "Settlement")
 			return
@@ -2533,7 +2543,7 @@ func (z *SignedSettlement) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x4) == 0 { // if not empty
 		// string "sig"
 		o = append(o, 0xa3, 0x73, 0x69, 0x67)
-		o, err = z.Sig.MarshalMsg(o)
+		o, err = (*z).Sig.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "Sig")
 			return
@@ -2561,13 +2571,13 @@ func (z *SignedSettlement) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "settle":
-			bts, err = z.Settlement.UnmarshalMsg(bts)
+			bts, err = (*z).Settlement.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Settlement")
 				return
 			}
 		case "sig":
-			bts, err = z.Sig.UnmarshalMsg(bts)
+			bts, err = (*z).Sig.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Sig")
 				return
@@ -2586,12 +2596,14 @@ func (z *SignedSettlement) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *SignedSettlement) Msgsize() (s int) {
-	s = 1 + 7 + z.Settlement.Msgsize() + 4 + z.Sig.Msgsize()
+	s = 1 + 7 + (*z).Settlement.Msgsize() + 4 + (*z).Sig.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *SignedSettlement) MsgIsZero() bool { return (z.Settlement.MsgIsZero()) && (z.Sig.MsgIsZero()) }
+func (z *SignedSettlement) MsgIsZero() bool {
+	return ((*z).Settlement.MsgIsZero()) && ((*z).Sig.MsgIsZero())
+}
 
 // MarshalMsg implements msgp.Marshaler
 func (z State) MarshalMsg(b []byte) (o []byte, err error) {
@@ -2622,7 +2634,9 @@ func (z State) Msgsize() (s int) {
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z State) MsgIsZero() bool { return z == 0 }
+func (z State) MsgIsZero() bool {
+	return z == 0
+}
 
 // MarshalMsg implements msgp.Marshaler
 func (z *Tracker) MarshalMsg(b []byte) (o []byte, err error) {
@@ -2630,35 +2644,35 @@ func (z *Tracker) MarshalMsg(b []byte) (o []byte, err error) {
 	// map header, size 2
 	// string "AuctionKey"
 	o = append(o, 0x82, 0xaa, 0x41, 0x75, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x4b, 0x65, 0x79)
-	o, err = z.AuctionKey.MarshalMsg(o)
+	o, err = (*z).AuctionKey.MarshalMsg(o)
 	if err != nil {
 		err = msgp.WrapError(err, "AuctionKey")
 		return
 	}
 	// string "Auctions"
 	o = append(o, 0xa8, 0x41, 0x75, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x73)
-	o = msgp.AppendMapHeader(o, uint32(len(z.Auctions)))
-	za0001_keys := make([]uint64, 0, len(z.Auctions))
-	for za0001 := range z.Auctions {
-		za0001_keys = append(za0001_keys, za0001)
+	o = msgp.AppendMapHeader(o, uint32(len((*z).Auctions)))
+	zb0001_keys := make([]uint64, 0, len((*z).Auctions))
+	for zb0001 := range (*z).Auctions {
+		zb0001_keys = append(zb0001_keys, zb0001)
 	}
-	sort.Sort(SortUint64(za0001_keys))
-	for _, za0001 := range za0001_keys {
-		za0002 := z.Auctions[za0001]
-		_ = za0002
-		o = msgp.AppendUint64(o, za0001)
-		if za0002 == nil {
+	sort.Sort(SortUint64(zb0001_keys))
+	for _, zb0001 := range zb0001_keys {
+		zb0002 := (*z).Auctions[zb0001]
+		_ = zb0002
+		o = msgp.AppendUint64(o, zb0001)
+		if zb0002 == nil {
 			o = msgp.AppendNil(o)
 		} else {
 			// map header, size 1
 			// string "RunningAuction"
 			o = append(o, 0x81, 0xae, 0x52, 0x75, 0x6e, 0x6e, 0x69, 0x6e, 0x67, 0x41, 0x75, 0x63, 0x74, 0x69, 0x6f, 0x6e)
-			if za0002.RunningAuction == nil {
+			if zb0002.RunningAuction == nil {
 				o = msgp.AppendNil(o)
 			} else {
-				o, err = za0002.RunningAuction.MarshalMsg(o)
+				o, err = zb0002.RunningAuction.MarshalMsg(o)
 				if err != nil {
-					err = msgp.WrapError(err, "Auctions", za0001, "RunningAuction")
+					err = msgp.WrapError(err, "Auctions", zb0001, "RunningAuction")
 					return
 				}
 			}
@@ -2671,14 +2685,14 @@ func (z *Tracker) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *Tracker) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0001 uint32
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0003 uint32
+	zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
 	}
-	for zb0001 > 0 {
-		zb0001--
+	for zb0003 > 0 {
+		zb0003--
 		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
@@ -2686,24 +2700,24 @@ func (z *Tracker) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "Auctions":
-			var zb0002 uint32
-			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+			var zb0004 uint32
+			zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Auctions")
 				return
 			}
-			if z.Auctions == nil {
-				z.Auctions = make(map[uint64]*SerializedRunningAuction, zb0002)
-			} else if len(z.Auctions) > 0 {
-				for key := range z.Auctions {
-					delete(z.Auctions, key)
+			if (*z).Auctions == nil {
+				(*z).Auctions = make(map[uint64]*SerializedRunningAuction, zb0004)
+			} else if len((*z).Auctions) > 0 {
+				for key := range (*z).Auctions {
+					delete((*z).Auctions, key)
 				}
 			}
-			for zb0002 > 0 {
-				var za0001 uint64
-				var za0002 *SerializedRunningAuction
-				zb0002--
-				za0001, bts, err = msgp.ReadUint64Bytes(bts)
+			for zb0004 > 0 {
+				var zb0001 uint64
+				var zb0002 *SerializedRunningAuction
+				zb0004--
+				zb0001, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Auctions")
 					return
@@ -2713,22 +2727,22 @@ func (z *Tracker) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					if err != nil {
 						return
 					}
-					za0002 = nil
+					zb0002 = nil
 				} else {
-					if za0002 == nil {
-						za0002 = new(SerializedRunningAuction)
+					if zb0002 == nil {
+						zb0002 = new(SerializedRunningAuction)
 					}
-					var zb0003 uint32
-					zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
+					var zb0005 uint32
+					zb0005, bts, err = msgp.ReadMapHeaderBytes(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "Auctions", za0001)
+						err = msgp.WrapError(err, "Auctions", zb0001)
 						return
 					}
-					for zb0003 > 0 {
-						zb0003--
+					for zb0005 > 0 {
+						zb0005--
 						field, bts, err = msgp.ReadMapKeyZC(bts)
 						if err != nil {
-							err = msgp.WrapError(err, "Auctions", za0001)
+							err = msgp.WrapError(err, "Auctions", zb0001)
 							return
 						}
 						switch msgp.UnsafeString(field) {
@@ -2738,30 +2752,30 @@ func (z *Tracker) UnmarshalMsg(bts []byte) (o []byte, err error) {
 								if err != nil {
 									return
 								}
-								za0002.RunningAuction = nil
+								zb0002.RunningAuction = nil
 							} else {
-								if za0002.RunningAuction == nil {
-									za0002.RunningAuction = new(RunningAuction)
+								if zb0002.RunningAuction == nil {
+									zb0002.RunningAuction = new(RunningAuction)
 								}
-								bts, err = za0002.RunningAuction.UnmarshalMsg(bts)
+								bts, err = zb0002.RunningAuction.UnmarshalMsg(bts)
 								if err != nil {
-									err = msgp.WrapError(err, "Auctions", za0001, "RunningAuction")
+									err = msgp.WrapError(err, "Auctions", zb0001, "RunningAuction")
 									return
 								}
 							}
 						default:
 							err = msgp.ErrNoField(msgp.UnsafeString(field))
 							if err != nil {
-								err = msgp.WrapError(err, "Auctions", za0001)
+								err = msgp.WrapError(err, "Auctions", zb0001)
 								return
 							}
 						}
 					}
 				}
-				z.Auctions[za0001] = za0002
+				(*z).Auctions[zb0001] = zb0002
 			}
 		case "AuctionKey":
-			bts, err = z.AuctionKey.UnmarshalMsg(bts)
+			bts, err = (*z).AuctionKey.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "AuctionKey")
 				return
@@ -2781,26 +2795,28 @@ func (z *Tracker) UnmarshalMsg(bts []byte) (o []byte, err error) {
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Tracker) Msgsize() (s int) {
 	s = 1 + 9 + msgp.MapHeaderSize
-	if z.Auctions != nil {
-		for za0001, za0002 := range z.Auctions {
-			_ = za0001
-			_ = za0002
+	if (*z).Auctions != nil {
+		for zb0001, zb0002 := range (*z).Auctions {
+			_ = zb0001
+			_ = zb0002
 			s += 0 + msgp.Uint64Size
-			if za0002 == nil {
+			if zb0002 == nil {
 				s += msgp.NilSize
 			} else {
 				s += 1 + 15
-				if za0002.RunningAuction == nil {
+				if zb0002.RunningAuction == nil {
 					s += msgp.NilSize
 				} else {
-					s += za0002.RunningAuction.Msgsize()
+					s += zb0002.RunningAuction.Msgsize()
 				}
 			}
 		}
 	}
-	s += 11 + z.AuctionKey.Msgsize()
+	s += 11 + (*z).AuctionKey.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *Tracker) MsgIsZero() bool { return (len(z.Auctions) == 0) && (z.AuctionKey.MsgIsZero()) }
+func (z *Tracker) MsgIsZero() bool {
+	return (len((*z).Auctions) == 0) && ((*z).AuctionKey.MsgIsZero())
+}

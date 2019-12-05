@@ -12,7 +12,7 @@ func (z *Message) MarshalMsg(b []byte) (o []byte, err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(1)
 	var zb0001Mask uint8 /* 2 bits */
-	if z.Message == "" {
+	if (*z).Message == "" {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
@@ -24,7 +24,7 @@ func (z *Message) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x2) == 0 { // if not empty
 		// string "msg"
 		o = append(o, 0xa3, 0x6d, 0x73, 0x67)
-		o = msgp.AppendString(o, z.Message)
+		o = msgp.AppendString(o, (*z).Message)
 	}
 	return
 }
@@ -48,7 +48,7 @@ func (z *Message) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "msg":
-			z.Message, bts, err = msgp.ReadStringBytes(bts)
+			(*z).Message, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Message")
 				return
@@ -67,9 +67,11 @@ func (z *Message) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Message) Msgsize() (s int) {
-	s = 1 + 4 + msgp.StringPrefixSize + len(z.Message)
+	s = 1 + 4 + msgp.StringPrefixSize + len((*z).Message)
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *Message) MsgIsZero() bool { return (z.Message == "") }
+func (z *Message) MsgIsZero() bool {
+	return ((*z).Message == "")
+}

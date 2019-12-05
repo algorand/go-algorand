@@ -35,7 +35,9 @@ func (z ConsensusVersion) Msgsize() (s int) {
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z ConsensusVersion) MsgIsZero() bool { return z == "" }
+func (z ConsensusVersion) MsgIsZero() bool {
+	return z == ""
+}
 
 // MarshalMsg implements msgp.Marshaler
 func (z CountingWriter) MarshalMsg(b []byte) (o []byte, err error) {
@@ -66,7 +68,7 @@ func (z *CountingWriter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "N":
-			z.N, bts, err = msgp.ReadIntBytes(bts)
+			(*z).N, bts, err = msgp.ReadIntBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "N")
 				return
@@ -90,7 +92,9 @@ func (z CountingWriter) Msgsize() (s int) {
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z CountingWriter) MsgIsZero() bool { return (z.N == 0) }
+func (z CountingWriter) MsgIsZero() bool {
+	return (z.N == 0)
+}
 
 // MarshalMsg implements msgp.Marshaler
 func (z Error) MarshalMsg(b []byte) (o []byte, err error) {
@@ -121,7 +125,9 @@ func (z Error) Msgsize() (s int) {
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z Error) MsgIsZero() bool { return z == "" }
+func (z Error) MsgIsZero() bool {
+	return z == ""
+}
 
 // MarshalMsg implements msgp.Marshaler
 func (z HashID) MarshalMsg(b []byte) (o []byte, err error) {
@@ -152,7 +158,9 @@ func (z HashID) Msgsize() (s int) {
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z HashID) MsgIsZero() bool { return z == "" }
+func (z HashID) MsgIsZero() bool {
+	return z == ""
+}
 
 // MarshalMsg implements msgp.Marshaler
 func (z NetworkID) MarshalMsg(b []byte) (o []byte, err error) {
@@ -183,7 +191,9 @@ func (z NetworkID) Msgsize() (s int) {
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z NetworkID) MsgIsZero() bool { return z == "" }
+func (z NetworkID) MsgIsZero() bool {
+	return z == ""
+}
 
 // MarshalMsg implements msgp.Marshaler
 func (z Tag) MarshalMsg(b []byte) (o []byte, err error) {
@@ -214,7 +224,9 @@ func (z Tag) Msgsize() (s int) {
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z Tag) MsgIsZero() bool { return z == "" }
+func (z Tag) MsgIsZero() bool {
+	return z == ""
+}
 
 // MarshalMsg implements msgp.Marshaler
 func (z TxType) MarshalMsg(b []byte) (o []byte, err error) {
@@ -245,4 +257,6 @@ func (z TxType) Msgsize() (s int) {
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z TxType) MsgIsZero() bool { return z == "" }
+func (z TxType) MsgIsZero() bool {
+	return z == ""
+}

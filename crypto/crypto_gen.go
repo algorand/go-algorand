@@ -12,13 +12,13 @@ import (
 // MarshalMsg implements msgp.Marshaler
 func (z *Digest) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendBytes(o, (z)[:])
+	o = msgp.AppendBytes(o, (*z)[:])
 	return
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *Digest) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	bts, err = msgp.ReadExactBytes(bts, (z)[:])
+	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
@@ -35,19 +35,19 @@ func (z *Digest) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *Digest) MsgIsZero() bool {
-	return (z[0] == 0) && (z[1] == 0) && (z[2] == 0) && (z[3] == 0) && (z[4] == 0) && (z[5] == 0) && (z[6] == 0) && (z[7] == 0) && (z[8] == 0) && (z[9] == 0) && (z[10] == 0) && (z[11] == 0) && (z[12] == 0) && (z[13] == 0) && (z[14] == 0) && (z[15] == 0) && (z[16] == 0) && (z[17] == 0) && (z[18] == 0) && (z[19] == 0) && (z[20] == 0) && (z[21] == 0) && (z[22] == 0) && (z[23] == 0) && (z[24] == 0) && (z[25] == 0) && (z[26] == 0) && (z[27] == 0) && (z[28] == 0) && (z[29] == 0) && (z[30] == 0) && (z[31] == 0)
+	return (*z) == (Digest{})
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *MasterDerivationKey) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendBytes(o, (z)[:])
+	o = msgp.AppendBytes(o, (*z)[:])
 	return
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *MasterDerivationKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	bts, err = msgp.ReadExactBytes(bts, (z)[:])
+	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
@@ -64,53 +64,53 @@ func (z *MasterDerivationKey) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *MasterDerivationKey) MsgIsZero() bool {
-	return (z[0] == 0) && (z[1] == 0) && (z[2] == 0) && (z[3] == 0) && (z[4] == 0) && (z[5] == 0) && (z[6] == 0) && (z[7] == 0) && (z[8] == 0) && (z[9] == 0) && (z[10] == 0) && (z[11] == 0) && (z[12] == 0) && (z[13] == 0) && (z[14] == 0) && (z[15] == 0) && (z[16] == 0) && (z[17] == 0) && (z[18] == 0) && (z[19] == 0) && (z[20] == 0) && (z[21] == 0) && (z[22] == 0) && (z[23] == 0) && (z[24] == 0) && (z[25] == 0) && (z[26] == 0) && (z[27] == 0) && (z[28] == 0) && (z[29] == 0) && (z[30] == 0) && (z[31] == 0)
+	return (*z) == (MasterDerivationKey{})
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *MultisigSig) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(3)
-	var zb0001Mask uint8 /* 4 bits */
-	if len(z.Subsigs) == 0 {
-		zb0001Len--
-		zb0001Mask |= 0x2
+	zb0002Len := uint32(3)
+	var zb0002Mask uint8 /* 4 bits */
+	if len((*z).Subsigs) == 0 {
+		zb0002Len--
+		zb0002Mask |= 0x2
 	}
-	if z.Threshold == 0 {
-		zb0001Len--
-		zb0001Mask |= 0x4
+	if (*z).Threshold == 0 {
+		zb0002Len--
+		zb0002Mask |= 0x4
 	}
-	if z.Version == 0 {
-		zb0001Len--
-		zb0001Mask |= 0x8
+	if (*z).Version == 0 {
+		zb0002Len--
+		zb0002Mask |= 0x8
 	}
-	// variable map header, size zb0001Len
-	o = append(o, 0x80|uint8(zb0001Len))
-	if zb0001Len == 0 {
+	// variable map header, size zb0002Len
+	o = append(o, 0x80|uint8(zb0002Len))
+	if zb0002Len == 0 {
 		return
 	}
-	if (zb0001Mask & 0x2) == 0 { // if not empty
+	if (zb0002Mask & 0x2) == 0 { // if not empty
 		// string "subsig"
 		o = append(o, 0xa6, 0x73, 0x75, 0x62, 0x73, 0x69, 0x67)
-		o = msgp.AppendArrayHeader(o, uint32(len(z.Subsigs)))
-		for za0001 := range z.Subsigs {
-			o, err = z.Subsigs[za0001].MarshalMsg(o)
+		o = msgp.AppendArrayHeader(o, uint32(len((*z).Subsigs)))
+		for zb0001 := range (*z).Subsigs {
+			o, err = (*z).Subsigs[zb0001].MarshalMsg(o)
 			if err != nil {
-				err = msgp.WrapError(err, "Subsigs", za0001)
+				err = msgp.WrapError(err, "Subsigs", zb0001)
 				return
 			}
 		}
 	}
-	if (zb0001Mask & 0x4) == 0 { // if not empty
+	if (zb0002Mask & 0x4) == 0 { // if not empty
 		// string "thr"
 		o = append(o, 0xa3, 0x74, 0x68, 0x72)
-		o = msgp.AppendUint8(o, z.Threshold)
+		o = msgp.AppendUint8(o, (*z).Threshold)
 	}
-	if (zb0001Mask & 0x8) == 0 { // if not empty
+	if (zb0002Mask & 0x8) == 0 { // if not empty
 		// string "v"
 		o = append(o, 0xa1, 0x76)
-		o = msgp.AppendUint8(o, z.Version)
+		o = msgp.AppendUint8(o, (*z).Version)
 	}
 	return
 }
@@ -119,14 +119,14 @@ func (z *MultisigSig) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *MultisigSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0001 uint32
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0002 uint32
+	zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
 	}
-	for zb0001 > 0 {
-		zb0001--
+	for zb0002 > 0 {
+		zb0002--
 		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
@@ -134,33 +134,33 @@ func (z *MultisigSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "v":
-			z.Version, bts, err = msgp.ReadUint8Bytes(bts)
+			(*z).Version, bts, err = msgp.ReadUint8Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Version")
 				return
 			}
 		case "thr":
-			z.Threshold, bts, err = msgp.ReadUint8Bytes(bts)
+			(*z).Threshold, bts, err = msgp.ReadUint8Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Threshold")
 				return
 			}
 		case "subsig":
-			var zb0002 uint32
-			zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			var zb0003 uint32
+			zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Subsigs")
 				return
 			}
-			if cap(z.Subsigs) >= int(zb0002) {
-				z.Subsigs = (z.Subsigs)[:zb0002]
+			if cap((*z).Subsigs) >= int(zb0003) {
+				(*z).Subsigs = ((*z).Subsigs)[:zb0003]
 			} else {
-				z.Subsigs = make([]MultisigSubsig, zb0002)
+				(*z).Subsigs = make([]MultisigSubsig, zb0003)
 			}
-			for za0001 := range z.Subsigs {
-				bts, err = z.Subsigs[za0001].UnmarshalMsg(bts)
+			for zb0001 := range (*z).Subsigs {
+				bts, err = (*z).Subsigs[zb0001].UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "Subsigs", za0001)
+					err = msgp.WrapError(err, "Subsigs", zb0001)
 					return
 				}
 			}
@@ -179,45 +179,45 @@ func (z *MultisigSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *MultisigSig) Msgsize() (s int) {
 	s = 1 + 2 + msgp.Uint8Size + 4 + msgp.Uint8Size + 7 + msgp.ArrayHeaderSize
-	for za0001 := range z.Subsigs {
-		s += z.Subsigs[za0001].Msgsize()
+	for zb0001 := range (*z).Subsigs {
+		s += (*z).Subsigs[zb0001].Msgsize()
 	}
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *MultisigSig) MsgIsZero() bool {
-	return (z.Version == 0) && (z.Threshold == 0) && (len(z.Subsigs) == 0)
+	return ((*z).Version == 0) && ((*z).Threshold == 0) && (len((*z).Subsigs) == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *MultisigSubsig) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(2)
-	var zb0001Mask uint8 /* 3 bits */
-	if (z.Key[0] == 0) && (z.Key[1] == 0) && (z.Key[2] == 0) && (z.Key[3] == 0) && (z.Key[4] == 0) && (z.Key[5] == 0) && (z.Key[6] == 0) && (z.Key[7] == 0) && (z.Key[8] == 0) && (z.Key[9] == 0) && (z.Key[10] == 0) && (z.Key[11] == 0) && (z.Key[12] == 0) && (z.Key[13] == 0) && (z.Key[14] == 0) && (z.Key[15] == 0) && (z.Key[16] == 0) && (z.Key[17] == 0) && (z.Key[18] == 0) && (z.Key[19] == 0) && (z.Key[20] == 0) && (z.Key[21] == 0) && (z.Key[22] == 0) && (z.Key[23] == 0) && (z.Key[24] == 0) && (z.Key[25] == 0) && (z.Key[26] == 0) && (z.Key[27] == 0) && (z.Key[28] == 0) && (z.Key[29] == 0) && (z.Key[30] == 0) && (z.Key[31] == 0) {
-		zb0001Len--
-		zb0001Mask |= 0x2
+	zb0003Len := uint32(2)
+	var zb0003Mask uint8 /* 3 bits */
+	if (*z).Key == (PublicKey{}) {
+		zb0003Len--
+		zb0003Mask |= 0x2
 	}
-	if (z.Sig[0] == 0) && (z.Sig[1] == 0) && (z.Sig[2] == 0) && (z.Sig[3] == 0) && (z.Sig[4] == 0) && (z.Sig[5] == 0) && (z.Sig[6] == 0) && (z.Sig[7] == 0) && (z.Sig[8] == 0) && (z.Sig[9] == 0) && (z.Sig[10] == 0) && (z.Sig[11] == 0) && (z.Sig[12] == 0) && (z.Sig[13] == 0) && (z.Sig[14] == 0) && (z.Sig[15] == 0) && (z.Sig[16] == 0) && (z.Sig[17] == 0) && (z.Sig[18] == 0) && (z.Sig[19] == 0) && (z.Sig[20] == 0) && (z.Sig[21] == 0) && (z.Sig[22] == 0) && (z.Sig[23] == 0) && (z.Sig[24] == 0) && (z.Sig[25] == 0) && (z.Sig[26] == 0) && (z.Sig[27] == 0) && (z.Sig[28] == 0) && (z.Sig[29] == 0) && (z.Sig[30] == 0) && (z.Sig[31] == 0) && (z.Sig[32] == 0) && (z.Sig[33] == 0) && (z.Sig[34] == 0) && (z.Sig[35] == 0) && (z.Sig[36] == 0) && (z.Sig[37] == 0) && (z.Sig[38] == 0) && (z.Sig[39] == 0) && (z.Sig[40] == 0) && (z.Sig[41] == 0) && (z.Sig[42] == 0) && (z.Sig[43] == 0) && (z.Sig[44] == 0) && (z.Sig[45] == 0) && (z.Sig[46] == 0) && (z.Sig[47] == 0) && (z.Sig[48] == 0) && (z.Sig[49] == 0) && (z.Sig[50] == 0) && (z.Sig[51] == 0) && (z.Sig[52] == 0) && (z.Sig[53] == 0) && (z.Sig[54] == 0) && (z.Sig[55] == 0) && (z.Sig[56] == 0) && (z.Sig[57] == 0) && (z.Sig[58] == 0) && (z.Sig[59] == 0) && (z.Sig[60] == 0) && (z.Sig[61] == 0) && (z.Sig[62] == 0) && (z.Sig[63] == 0) {
-		zb0001Len--
-		zb0001Mask |= 0x4
+	if (*z).Sig == (Signature{}) {
+		zb0003Len--
+		zb0003Mask |= 0x4
 	}
-	// variable map header, size zb0001Len
-	o = append(o, 0x80|uint8(zb0001Len))
-	if zb0001Len == 0 {
+	// variable map header, size zb0003Len
+	o = append(o, 0x80|uint8(zb0003Len))
+	if zb0003Len == 0 {
 		return
 	}
-	if (zb0001Mask & 0x2) == 0 { // if not empty
+	if (zb0003Mask & 0x2) == 0 { // if not empty
 		// string "pk"
 		o = append(o, 0xa2, 0x70, 0x6b)
-		o = msgp.AppendBytes(o, (z.Key)[:])
+		o = msgp.AppendBytes(o, ((*z).Key)[:])
 	}
-	if (zb0001Mask & 0x4) == 0 { // if not empty
+	if (zb0003Mask & 0x4) == 0 { // if not empty
 		// string "s"
 		o = append(o, 0xa1, 0x73)
-		o = msgp.AppendBytes(o, (z.Sig)[:])
+		o = msgp.AppendBytes(o, ((*z).Sig)[:])
 	}
 	return
 }
@@ -226,14 +226,14 @@ func (z *MultisigSubsig) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *MultisigSubsig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0001 uint32
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0003 uint32
+	zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
 	}
-	for zb0001 > 0 {
-		zb0001--
+	for zb0003 > 0 {
+		zb0003--
 		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
@@ -241,13 +241,13 @@ func (z *MultisigSubsig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "pk":
-			bts, err = msgp.ReadExactBytes(bts, (z.Key)[:])
+			bts, err = msgp.ReadExactBytes(bts, ((*z).Key)[:])
 			if err != nil {
 				err = msgp.WrapError(err, "Key")
 				return
 			}
 		case "s":
-			bts, err = msgp.ReadExactBytes(bts, (z.Sig)[:])
+			bts, err = msgp.ReadExactBytes(bts, ((*z).Sig)[:])
 			if err != nil {
 				err = msgp.WrapError(err, "Sig")
 				return
@@ -272,7 +272,7 @@ func (z *MultisigSubsig) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *MultisigSubsig) MsgIsZero() bool {
-	return ((z.Key[0] == 0) && (z.Key[1] == 0) && (z.Key[2] == 0) && (z.Key[3] == 0) && (z.Key[4] == 0) && (z.Key[5] == 0) && (z.Key[6] == 0) && (z.Key[7] == 0) && (z.Key[8] == 0) && (z.Key[9] == 0) && (z.Key[10] == 0) && (z.Key[11] == 0) && (z.Key[12] == 0) && (z.Key[13] == 0) && (z.Key[14] == 0) && (z.Key[15] == 0) && (z.Key[16] == 0) && (z.Key[17] == 0) && (z.Key[18] == 0) && (z.Key[19] == 0) && (z.Key[20] == 0) && (z.Key[21] == 0) && (z.Key[22] == 0) && (z.Key[23] == 0) && (z.Key[24] == 0) && (z.Key[25] == 0) && (z.Key[26] == 0) && (z.Key[27] == 0) && (z.Key[28] == 0) && (z.Key[29] == 0) && (z.Key[30] == 0) && (z.Key[31] == 0)) && ((z.Sig[0] == 0) && (z.Sig[1] == 0) && (z.Sig[2] == 0) && (z.Sig[3] == 0) && (z.Sig[4] == 0) && (z.Sig[5] == 0) && (z.Sig[6] == 0) && (z.Sig[7] == 0) && (z.Sig[8] == 0) && (z.Sig[9] == 0) && (z.Sig[10] == 0) && (z.Sig[11] == 0) && (z.Sig[12] == 0) && (z.Sig[13] == 0) && (z.Sig[14] == 0) && (z.Sig[15] == 0) && (z.Sig[16] == 0) && (z.Sig[17] == 0) && (z.Sig[18] == 0) && (z.Sig[19] == 0) && (z.Sig[20] == 0) && (z.Sig[21] == 0) && (z.Sig[22] == 0) && (z.Sig[23] == 0) && (z.Sig[24] == 0) && (z.Sig[25] == 0) && (z.Sig[26] == 0) && (z.Sig[27] == 0) && (z.Sig[28] == 0) && (z.Sig[29] == 0) && (z.Sig[30] == 0) && (z.Sig[31] == 0) && (z.Sig[32] == 0) && (z.Sig[33] == 0) && (z.Sig[34] == 0) && (z.Sig[35] == 0) && (z.Sig[36] == 0) && (z.Sig[37] == 0) && (z.Sig[38] == 0) && (z.Sig[39] == 0) && (z.Sig[40] == 0) && (z.Sig[41] == 0) && (z.Sig[42] == 0) && (z.Sig[43] == 0) && (z.Sig[44] == 0) && (z.Sig[45] == 0) && (z.Sig[46] == 0) && (z.Sig[47] == 0) && (z.Sig[48] == 0) && (z.Sig[49] == 0) && (z.Sig[50] == 0) && (z.Sig[51] == 0) && (z.Sig[52] == 0) && (z.Sig[53] == 0) && (z.Sig[54] == 0) && (z.Sig[55] == 0) && (z.Sig[56] == 0) && (z.Sig[57] == 0) && (z.Sig[58] == 0) && (z.Sig[59] == 0) && (z.Sig[60] == 0) && (z.Sig[61] == 0) && (z.Sig[62] == 0) && (z.Sig[63] == 0))
+	return ((*z).Key == (PublicKey{})) && ((*z).Sig == (Signature{}))
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -281,22 +281,22 @@ func (z *OneTimeSignature) MarshalMsg(b []byte) (o []byte, err error) {
 	// map header, size 6
 	// string "p"
 	o = append(o, 0x86, 0xa1, 0x70)
-	o = msgp.AppendBytes(o, (z.PK)[:])
+	o = msgp.AppendBytes(o, ((*z).PK)[:])
 	// string "p1s"
 	o = append(o, 0xa3, 0x70, 0x31, 0x73)
-	o = msgp.AppendBytes(o, (z.PK1Sig)[:])
+	o = msgp.AppendBytes(o, ((*z).PK1Sig)[:])
 	// string "p2"
 	o = append(o, 0xa2, 0x70, 0x32)
-	o = msgp.AppendBytes(o, (z.PK2)[:])
+	o = msgp.AppendBytes(o, ((*z).PK2)[:])
 	// string "p2s"
 	o = append(o, 0xa3, 0x70, 0x32, 0x73)
-	o = msgp.AppendBytes(o, (z.PK2Sig)[:])
+	o = msgp.AppendBytes(o, ((*z).PK2Sig)[:])
 	// string "ps"
 	o = append(o, 0xa2, 0x70, 0x73)
-	o = msgp.AppendBytes(o, (z.PKSigOld)[:])
+	o = msgp.AppendBytes(o, ((*z).PKSigOld)[:])
 	// string "s"
 	o = append(o, 0xa1, 0x73)
-	o = msgp.AppendBytes(o, (z.Sig)[:])
+	o = msgp.AppendBytes(o, ((*z).Sig)[:])
 	return
 }
 
@@ -304,14 +304,14 @@ func (z *OneTimeSignature) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *OneTimeSignature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0001 uint32
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0007 uint32
+	zb0007, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
 	}
-	for zb0001 > 0 {
-		zb0001--
+	for zb0007 > 0 {
+		zb0007--
 		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
@@ -319,37 +319,37 @@ func (z *OneTimeSignature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "s":
-			bts, err = msgp.ReadExactBytes(bts, (z.Sig)[:])
+			bts, err = msgp.ReadExactBytes(bts, ((*z).Sig)[:])
 			if err != nil {
 				err = msgp.WrapError(err, "Sig")
 				return
 			}
 		case "p":
-			bts, err = msgp.ReadExactBytes(bts, (z.PK)[:])
+			bts, err = msgp.ReadExactBytes(bts, ((*z).PK)[:])
 			if err != nil {
 				err = msgp.WrapError(err, "PK")
 				return
 			}
 		case "ps":
-			bts, err = msgp.ReadExactBytes(bts, (z.PKSigOld)[:])
+			bts, err = msgp.ReadExactBytes(bts, ((*z).PKSigOld)[:])
 			if err != nil {
 				err = msgp.WrapError(err, "PKSigOld")
 				return
 			}
 		case "p2":
-			bts, err = msgp.ReadExactBytes(bts, (z.PK2)[:])
+			bts, err = msgp.ReadExactBytes(bts, ((*z).PK2)[:])
 			if err != nil {
 				err = msgp.WrapError(err, "PK2")
 				return
 			}
 		case "p1s":
-			bts, err = msgp.ReadExactBytes(bts, (z.PK1Sig)[:])
+			bts, err = msgp.ReadExactBytes(bts, ((*z).PK1Sig)[:])
 			if err != nil {
 				err = msgp.WrapError(err, "PK1Sig")
 				return
 			}
 		case "p2s":
-			bts, err = msgp.ReadExactBytes(bts, (z.PK2Sig)[:])
+			bts, err = msgp.ReadExactBytes(bts, ((*z).PK2Sig)[:])
 			if err != nil {
 				err = msgp.WrapError(err, "PK2Sig")
 				return
@@ -374,7 +374,7 @@ func (z *OneTimeSignature) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *OneTimeSignature) MsgIsZero() bool {
-	return ((z.Sig[0] == 0) && (z.Sig[1] == 0) && (z.Sig[2] == 0) && (z.Sig[3] == 0) && (z.Sig[4] == 0) && (z.Sig[5] == 0) && (z.Sig[6] == 0) && (z.Sig[7] == 0) && (z.Sig[8] == 0) && (z.Sig[9] == 0) && (z.Sig[10] == 0) && (z.Sig[11] == 0) && (z.Sig[12] == 0) && (z.Sig[13] == 0) && (z.Sig[14] == 0) && (z.Sig[15] == 0) && (z.Sig[16] == 0) && (z.Sig[17] == 0) && (z.Sig[18] == 0) && (z.Sig[19] == 0) && (z.Sig[20] == 0) && (z.Sig[21] == 0) && (z.Sig[22] == 0) && (z.Sig[23] == 0) && (z.Sig[24] == 0) && (z.Sig[25] == 0) && (z.Sig[26] == 0) && (z.Sig[27] == 0) && (z.Sig[28] == 0) && (z.Sig[29] == 0) && (z.Sig[30] == 0) && (z.Sig[31] == 0) && (z.Sig[32] == 0) && (z.Sig[33] == 0) && (z.Sig[34] == 0) && (z.Sig[35] == 0) && (z.Sig[36] == 0) && (z.Sig[37] == 0) && (z.Sig[38] == 0) && (z.Sig[39] == 0) && (z.Sig[40] == 0) && (z.Sig[41] == 0) && (z.Sig[42] == 0) && (z.Sig[43] == 0) && (z.Sig[44] == 0) && (z.Sig[45] == 0) && (z.Sig[46] == 0) && (z.Sig[47] == 0) && (z.Sig[48] == 0) && (z.Sig[49] == 0) && (z.Sig[50] == 0) && (z.Sig[51] == 0) && (z.Sig[52] == 0) && (z.Sig[53] == 0) && (z.Sig[54] == 0) && (z.Sig[55] == 0) && (z.Sig[56] == 0) && (z.Sig[57] == 0) && (z.Sig[58] == 0) && (z.Sig[59] == 0) && (z.Sig[60] == 0) && (z.Sig[61] == 0) && (z.Sig[62] == 0) && (z.Sig[63] == 0)) && ((z.PK[0] == 0) && (z.PK[1] == 0) && (z.PK[2] == 0) && (z.PK[3] == 0) && (z.PK[4] == 0) && (z.PK[5] == 0) && (z.PK[6] == 0) && (z.PK[7] == 0) && (z.PK[8] == 0) && (z.PK[9] == 0) && (z.PK[10] == 0) && (z.PK[11] == 0) && (z.PK[12] == 0) && (z.PK[13] == 0) && (z.PK[14] == 0) && (z.PK[15] == 0) && (z.PK[16] == 0) && (z.PK[17] == 0) && (z.PK[18] == 0) && (z.PK[19] == 0) && (z.PK[20] == 0) && (z.PK[21] == 0) && (z.PK[22] == 0) && (z.PK[23] == 0) && (z.PK[24] == 0) && (z.PK[25] == 0) && (z.PK[26] == 0) && (z.PK[27] == 0) && (z.PK[28] == 0) && (z.PK[29] == 0) && (z.PK[30] == 0) && (z.PK[31] == 0)) && ((z.PKSigOld[0] == 0) && (z.PKSigOld[1] == 0) && (z.PKSigOld[2] == 0) && (z.PKSigOld[3] == 0) && (z.PKSigOld[4] == 0) && (z.PKSigOld[5] == 0) && (z.PKSigOld[6] == 0) && (z.PKSigOld[7] == 0) && (z.PKSigOld[8] == 0) && (z.PKSigOld[9] == 0) && (z.PKSigOld[10] == 0) && (z.PKSigOld[11] == 0) && (z.PKSigOld[12] == 0) && (z.PKSigOld[13] == 0) && (z.PKSigOld[14] == 0) && (z.PKSigOld[15] == 0) && (z.PKSigOld[16] == 0) && (z.PKSigOld[17] == 0) && (z.PKSigOld[18] == 0) && (z.PKSigOld[19] == 0) && (z.PKSigOld[20] == 0) && (z.PKSigOld[21] == 0) && (z.PKSigOld[22] == 0) && (z.PKSigOld[23] == 0) && (z.PKSigOld[24] == 0) && (z.PKSigOld[25] == 0) && (z.PKSigOld[26] == 0) && (z.PKSigOld[27] == 0) && (z.PKSigOld[28] == 0) && (z.PKSigOld[29] == 0) && (z.PKSigOld[30] == 0) && (z.PKSigOld[31] == 0) && (z.PKSigOld[32] == 0) && (z.PKSigOld[33] == 0) && (z.PKSigOld[34] == 0) && (z.PKSigOld[35] == 0) && (z.PKSigOld[36] == 0) && (z.PKSigOld[37] == 0) && (z.PKSigOld[38] == 0) && (z.PKSigOld[39] == 0) && (z.PKSigOld[40] == 0) && (z.PKSigOld[41] == 0) && (z.PKSigOld[42] == 0) && (z.PKSigOld[43] == 0) && (z.PKSigOld[44] == 0) && (z.PKSigOld[45] == 0) && (z.PKSigOld[46] == 0) && (z.PKSigOld[47] == 0) && (z.PKSigOld[48] == 0) && (z.PKSigOld[49] == 0) && (z.PKSigOld[50] == 0) && (z.PKSigOld[51] == 0) && (z.PKSigOld[52] == 0) && (z.PKSigOld[53] == 0) && (z.PKSigOld[54] == 0) && (z.PKSigOld[55] == 0) && (z.PKSigOld[56] == 0) && (z.PKSigOld[57] == 0) && (z.PKSigOld[58] == 0) && (z.PKSigOld[59] == 0) && (z.PKSigOld[60] == 0) && (z.PKSigOld[61] == 0) && (z.PKSigOld[62] == 0) && (z.PKSigOld[63] == 0)) && ((z.PK2[0] == 0) && (z.PK2[1] == 0) && (z.PK2[2] == 0) && (z.PK2[3] == 0) && (z.PK2[4] == 0) && (z.PK2[5] == 0) && (z.PK2[6] == 0) && (z.PK2[7] == 0) && (z.PK2[8] == 0) && (z.PK2[9] == 0) && (z.PK2[10] == 0) && (z.PK2[11] == 0) && (z.PK2[12] == 0) && (z.PK2[13] == 0) && (z.PK2[14] == 0) && (z.PK2[15] == 0) && (z.PK2[16] == 0) && (z.PK2[17] == 0) && (z.PK2[18] == 0) && (z.PK2[19] == 0) && (z.PK2[20] == 0) && (z.PK2[21] == 0) && (z.PK2[22] == 0) && (z.PK2[23] == 0) && (z.PK2[24] == 0) && (z.PK2[25] == 0) && (z.PK2[26] == 0) && (z.PK2[27] == 0) && (z.PK2[28] == 0) && (z.PK2[29] == 0) && (z.PK2[30] == 0) && (z.PK2[31] == 0)) && ((z.PK1Sig[0] == 0) && (z.PK1Sig[1] == 0) && (z.PK1Sig[2] == 0) && (z.PK1Sig[3] == 0) && (z.PK1Sig[4] == 0) && (z.PK1Sig[5] == 0) && (z.PK1Sig[6] == 0) && (z.PK1Sig[7] == 0) && (z.PK1Sig[8] == 0) && (z.PK1Sig[9] == 0) && (z.PK1Sig[10] == 0) && (z.PK1Sig[11] == 0) && (z.PK1Sig[12] == 0) && (z.PK1Sig[13] == 0) && (z.PK1Sig[14] == 0) && (z.PK1Sig[15] == 0) && (z.PK1Sig[16] == 0) && (z.PK1Sig[17] == 0) && (z.PK1Sig[18] == 0) && (z.PK1Sig[19] == 0) && (z.PK1Sig[20] == 0) && (z.PK1Sig[21] == 0) && (z.PK1Sig[22] == 0) && (z.PK1Sig[23] == 0) && (z.PK1Sig[24] == 0) && (z.PK1Sig[25] == 0) && (z.PK1Sig[26] == 0) && (z.PK1Sig[27] == 0) && (z.PK1Sig[28] == 0) && (z.PK1Sig[29] == 0) && (z.PK1Sig[30] == 0) && (z.PK1Sig[31] == 0) && (z.PK1Sig[32] == 0) && (z.PK1Sig[33] == 0) && (z.PK1Sig[34] == 0) && (z.PK1Sig[35] == 0) && (z.PK1Sig[36] == 0) && (z.PK1Sig[37] == 0) && (z.PK1Sig[38] == 0) && (z.PK1Sig[39] == 0) && (z.PK1Sig[40] == 0) && (z.PK1Sig[41] == 0) && (z.PK1Sig[42] == 0) && (z.PK1Sig[43] == 0) && (z.PK1Sig[44] == 0) && (z.PK1Sig[45] == 0) && (z.PK1Sig[46] == 0) && (z.PK1Sig[47] == 0) && (z.PK1Sig[48] == 0) && (z.PK1Sig[49] == 0) && (z.PK1Sig[50] == 0) && (z.PK1Sig[51] == 0) && (z.PK1Sig[52] == 0) && (z.PK1Sig[53] == 0) && (z.PK1Sig[54] == 0) && (z.PK1Sig[55] == 0) && (z.PK1Sig[56] == 0) && (z.PK1Sig[57] == 0) && (z.PK1Sig[58] == 0) && (z.PK1Sig[59] == 0) && (z.PK1Sig[60] == 0) && (z.PK1Sig[61] == 0) && (z.PK1Sig[62] == 0) && (z.PK1Sig[63] == 0)) && ((z.PK2Sig[0] == 0) && (z.PK2Sig[1] == 0) && (z.PK2Sig[2] == 0) && (z.PK2Sig[3] == 0) && (z.PK2Sig[4] == 0) && (z.PK2Sig[5] == 0) && (z.PK2Sig[6] == 0) && (z.PK2Sig[7] == 0) && (z.PK2Sig[8] == 0) && (z.PK2Sig[9] == 0) && (z.PK2Sig[10] == 0) && (z.PK2Sig[11] == 0) && (z.PK2Sig[12] == 0) && (z.PK2Sig[13] == 0) && (z.PK2Sig[14] == 0) && (z.PK2Sig[15] == 0) && (z.PK2Sig[16] == 0) && (z.PK2Sig[17] == 0) && (z.PK2Sig[18] == 0) && (z.PK2Sig[19] == 0) && (z.PK2Sig[20] == 0) && (z.PK2Sig[21] == 0) && (z.PK2Sig[22] == 0) && (z.PK2Sig[23] == 0) && (z.PK2Sig[24] == 0) && (z.PK2Sig[25] == 0) && (z.PK2Sig[26] == 0) && (z.PK2Sig[27] == 0) && (z.PK2Sig[28] == 0) && (z.PK2Sig[29] == 0) && (z.PK2Sig[30] == 0) && (z.PK2Sig[31] == 0) && (z.PK2Sig[32] == 0) && (z.PK2Sig[33] == 0) && (z.PK2Sig[34] == 0) && (z.PK2Sig[35] == 0) && (z.PK2Sig[36] == 0) && (z.PK2Sig[37] == 0) && (z.PK2Sig[38] == 0) && (z.PK2Sig[39] == 0) && (z.PK2Sig[40] == 0) && (z.PK2Sig[41] == 0) && (z.PK2Sig[42] == 0) && (z.PK2Sig[43] == 0) && (z.PK2Sig[44] == 0) && (z.PK2Sig[45] == 0) && (z.PK2Sig[46] == 0) && (z.PK2Sig[47] == 0) && (z.PK2Sig[48] == 0) && (z.PK2Sig[49] == 0) && (z.PK2Sig[50] == 0) && (z.PK2Sig[51] == 0) && (z.PK2Sig[52] == 0) && (z.PK2Sig[53] == 0) && (z.PK2Sig[54] == 0) && (z.PK2Sig[55] == 0) && (z.PK2Sig[56] == 0) && (z.PK2Sig[57] == 0) && (z.PK2Sig[58] == 0) && (z.PK2Sig[59] == 0) && (z.PK2Sig[60] == 0) && (z.PK2Sig[61] == 0) && (z.PK2Sig[62] == 0) && (z.PK2Sig[63] == 0))
+	return ((*z).Sig == (ed25519Signature{})) && ((*z).PK == (ed25519PublicKey{})) && ((*z).PKSigOld == (ed25519Signature{})) && ((*z).PK2 == (ed25519PublicKey{})) && ((*z).PK1Sig == (ed25519Signature{})) && ((*z).PK2Sig == (ed25519Signature{}))
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -409,13 +409,13 @@ func (z *OneTimeSignatureIdentifier) UnmarshalMsg(bts []byte) (o []byte, err err
 		}
 		switch msgp.UnsafeString(field) {
 		case "Batch":
-			z.Batch, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).Batch, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Batch")
 				return
 			}
 		case "Offset":
-			z.Offset, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).Offset, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Offset")
 				return
@@ -439,7 +439,9 @@ func (z OneTimeSignatureIdentifier) Msgsize() (s int) {
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z OneTimeSignatureIdentifier) MsgIsZero() bool { return (z.Batch == 0) && (z.Offset == 0) }
+func (z OneTimeSignatureIdentifier) MsgIsZero() bool {
+	return (z.Batch == 0) && (z.Offset == 0)
+}
 
 // MarshalMsg implements msgp.Marshaler
 func (z *OneTimeSignatureSecrets) MarshalMsg(b []byte) (o []byte, err error) {
@@ -447,39 +449,39 @@ func (z *OneTimeSignatureSecrets) MarshalMsg(b []byte) (o []byte, err error) {
 	// map header, size 7
 	// string "First"
 	o = append(o, 0x87, 0xa5, 0x46, 0x69, 0x72, 0x73, 0x74)
-	o = msgp.AppendUint64(o, z.OneTimeSignatureSecretsPersistent.FirstBatch)
+	o = msgp.AppendUint64(o, (*z).OneTimeSignatureSecretsPersistent.FirstBatch)
 	// string "OneTimeSignatureVerifier"
 	o = append(o, 0xb8, 0x4f, 0x6e, 0x65, 0x54, 0x69, 0x6d, 0x65, 0x53, 0x69, 0x67, 0x6e, 0x61, 0x74, 0x75, 0x72, 0x65, 0x56, 0x65, 0x72, 0x69, 0x66, 0x69, 0x65, 0x72)
-	o = msgp.AppendBytes(o, (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier)[:])
+	o = msgp.AppendBytes(o, ((*z).OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier)[:])
 	// string "Sub"
 	o = append(o, 0xa3, 0x53, 0x75, 0x62)
-	o = msgp.AppendArrayHeader(o, uint32(len(z.OneTimeSignatureSecretsPersistent.Batches)))
-	for za0002 := range z.OneTimeSignatureSecretsPersistent.Batches {
-		o, err = z.OneTimeSignatureSecretsPersistent.Batches[za0002].MarshalMsg(o)
+	o = msgp.AppendArrayHeader(o, uint32(len((*z).OneTimeSignatureSecretsPersistent.Batches)))
+	for zb0002 := range (*z).OneTimeSignatureSecretsPersistent.Batches {
+		o, err = (*z).OneTimeSignatureSecretsPersistent.Batches[zb0002].MarshalMsg(o)
 		if err != nil {
-			err = msgp.WrapError(err, "Batches", za0002)
+			err = msgp.WrapError(err, "Batches", zb0002)
 			return
 		}
 	}
 	// string "firstoff"
 	o = append(o, 0xa8, 0x66, 0x69, 0x72, 0x73, 0x74, 0x6f, 0x66, 0x66)
-	o = msgp.AppendUint64(o, z.OneTimeSignatureSecretsPersistent.FirstOffset)
+	o = msgp.AppendUint64(o, (*z).OneTimeSignatureSecretsPersistent.FirstOffset)
 	// string "offkeys"
 	o = append(o, 0xa7, 0x6f, 0x66, 0x66, 0x6b, 0x65, 0x79, 0x73)
-	o = msgp.AppendArrayHeader(o, uint32(len(z.OneTimeSignatureSecretsPersistent.Offsets)))
-	for za0003 := range z.OneTimeSignatureSecretsPersistent.Offsets {
-		o, err = z.OneTimeSignatureSecretsPersistent.Offsets[za0003].MarshalMsg(o)
+	o = msgp.AppendArrayHeader(o, uint32(len((*z).OneTimeSignatureSecretsPersistent.Offsets)))
+	for zb0003 := range (*z).OneTimeSignatureSecretsPersistent.Offsets {
+		o, err = (*z).OneTimeSignatureSecretsPersistent.Offsets[zb0003].MarshalMsg(o)
 		if err != nil {
-			err = msgp.WrapError(err, "Offsets", za0003)
+			err = msgp.WrapError(err, "Offsets", zb0003)
 			return
 		}
 	}
 	// string "offpk2"
 	o = append(o, 0xa6, 0x6f, 0x66, 0x66, 0x70, 0x6b, 0x32)
-	o = msgp.AppendBytes(o, (z.OneTimeSignatureSecretsPersistent.OffsetsPK2)[:])
+	o = msgp.AppendBytes(o, ((*z).OneTimeSignatureSecretsPersistent.OffsetsPK2)[:])
 	// string "offpk2sig"
 	o = append(o, 0xa9, 0x6f, 0x66, 0x66, 0x70, 0x6b, 0x32, 0x73, 0x69, 0x67)
-	o = msgp.AppendBytes(o, (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig)[:])
+	o = msgp.AppendBytes(o, ((*z).OneTimeSignatureSecretsPersistent.OffsetsPK2Sig)[:])
 	return
 }
 
@@ -487,14 +489,14 @@ func (z *OneTimeSignatureSecrets) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0001 uint32
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0006 uint32
+	zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
 	}
-	for zb0001 > 0 {
-		zb0001--
+	for zb0006 > 0 {
+		zb0006--
 		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
@@ -502,69 +504,69 @@ func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error)
 		}
 		switch msgp.UnsafeString(field) {
 		case "OneTimeSignatureVerifier":
-			bts, err = msgp.ReadExactBytes(bts, (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier)[:])
+			bts, err = msgp.ReadExactBytes(bts, ((*z).OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier)[:])
 			if err != nil {
 				err = msgp.WrapError(err, "OneTimeSignatureVerifier")
 				return
 			}
 		case "First":
-			z.OneTimeSignatureSecretsPersistent.FirstBatch, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).OneTimeSignatureSecretsPersistent.FirstBatch, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "FirstBatch")
 				return
 			}
 		case "Sub":
-			var zb0002 uint32
-			zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			var zb0007 uint32
+			zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Batches")
 				return
 			}
-			if cap(z.OneTimeSignatureSecretsPersistent.Batches) >= int(zb0002) {
-				z.OneTimeSignatureSecretsPersistent.Batches = (z.OneTimeSignatureSecretsPersistent.Batches)[:zb0002]
+			if cap((*z).OneTimeSignatureSecretsPersistent.Batches) >= int(zb0007) {
+				(*z).OneTimeSignatureSecretsPersistent.Batches = ((*z).OneTimeSignatureSecretsPersistent.Batches)[:zb0007]
 			} else {
-				z.OneTimeSignatureSecretsPersistent.Batches = make([]ephemeralSubkey, zb0002)
+				(*z).OneTimeSignatureSecretsPersistent.Batches = make([]ephemeralSubkey, zb0007)
 			}
-			for za0002 := range z.OneTimeSignatureSecretsPersistent.Batches {
-				bts, err = z.OneTimeSignatureSecretsPersistent.Batches[za0002].UnmarshalMsg(bts)
+			for zb0002 := range (*z).OneTimeSignatureSecretsPersistent.Batches {
+				bts, err = (*z).OneTimeSignatureSecretsPersistent.Batches[zb0002].UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "Batches", za0002)
+					err = msgp.WrapError(err, "Batches", zb0002)
 					return
 				}
 			}
 		case "firstoff":
-			z.OneTimeSignatureSecretsPersistent.FirstOffset, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).OneTimeSignatureSecretsPersistent.FirstOffset, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "FirstOffset")
 				return
 			}
 		case "offkeys":
-			var zb0003 uint32
-			zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			var zb0008 uint32
+			zb0008, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Offsets")
 				return
 			}
-			if cap(z.OneTimeSignatureSecretsPersistent.Offsets) >= int(zb0003) {
-				z.OneTimeSignatureSecretsPersistent.Offsets = (z.OneTimeSignatureSecretsPersistent.Offsets)[:zb0003]
+			if cap((*z).OneTimeSignatureSecretsPersistent.Offsets) >= int(zb0008) {
+				(*z).OneTimeSignatureSecretsPersistent.Offsets = ((*z).OneTimeSignatureSecretsPersistent.Offsets)[:zb0008]
 			} else {
-				z.OneTimeSignatureSecretsPersistent.Offsets = make([]ephemeralSubkey, zb0003)
+				(*z).OneTimeSignatureSecretsPersistent.Offsets = make([]ephemeralSubkey, zb0008)
 			}
-			for za0003 := range z.OneTimeSignatureSecretsPersistent.Offsets {
-				bts, err = z.OneTimeSignatureSecretsPersistent.Offsets[za0003].UnmarshalMsg(bts)
+			for zb0003 := range (*z).OneTimeSignatureSecretsPersistent.Offsets {
+				bts, err = (*z).OneTimeSignatureSecretsPersistent.Offsets[zb0003].UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "Offsets", za0003)
+					err = msgp.WrapError(err, "Offsets", zb0003)
 					return
 				}
 			}
 		case "offpk2":
-			bts, err = msgp.ReadExactBytes(bts, (z.OneTimeSignatureSecretsPersistent.OffsetsPK2)[:])
+			bts, err = msgp.ReadExactBytes(bts, ((*z).OneTimeSignatureSecretsPersistent.OffsetsPK2)[:])
 			if err != nil {
 				err = msgp.WrapError(err, "OffsetsPK2")
 				return
 			}
 		case "offpk2sig":
-			bts, err = msgp.ReadExactBytes(bts, (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig)[:])
+			bts, err = msgp.ReadExactBytes(bts, ((*z).OneTimeSignatureSecretsPersistent.OffsetsPK2Sig)[:])
 			if err != nil {
 				err = msgp.WrapError(err, "OffsetsPK2Sig")
 				return
@@ -584,12 +586,12 @@ func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error)
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *OneTimeSignatureSecrets) Msgsize() (s int) {
 	s = 1 + 25 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 6 + msgp.Uint64Size + 4 + msgp.ArrayHeaderSize
-	for za0002 := range z.OneTimeSignatureSecretsPersistent.Batches {
-		s += z.OneTimeSignatureSecretsPersistent.Batches[za0002].Msgsize()
+	for zb0002 := range (*z).OneTimeSignatureSecretsPersistent.Batches {
+		s += (*z).OneTimeSignatureSecretsPersistent.Batches[zb0002].Msgsize()
 	}
 	s += 9 + msgp.Uint64Size + 8 + msgp.ArrayHeaderSize
-	for za0003 := range z.OneTimeSignatureSecretsPersistent.Offsets {
-		s += z.OneTimeSignatureSecretsPersistent.Offsets[za0003].Msgsize()
+	for zb0003 := range (*z).OneTimeSignatureSecretsPersistent.Offsets {
+		s += (*z).OneTimeSignatureSecretsPersistent.Offsets[zb0003].Msgsize()
 	}
 	s += 7 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 10 + msgp.ArrayHeaderSize + (64 * (msgp.ByteSize))
 	return
@@ -597,7 +599,7 @@ func (z *OneTimeSignatureSecrets) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *OneTimeSignatureSecrets) MsgIsZero() bool {
-	return ((z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[0] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[1] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[2] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[3] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[4] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[5] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[6] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[7] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[8] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[9] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[10] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[11] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[12] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[13] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[14] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[15] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[16] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[17] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[18] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[19] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[20] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[21] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[22] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[23] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[24] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[25] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[26] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[27] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[28] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[29] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[30] == 0) && (z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier[31] == 0)) && (z.OneTimeSignatureSecretsPersistent.FirstBatch == 0) && (len(z.OneTimeSignatureSecretsPersistent.Batches) == 0) && (z.OneTimeSignatureSecretsPersistent.FirstOffset == 0) && (len(z.OneTimeSignatureSecretsPersistent.Offsets) == 0) && ((z.OneTimeSignatureSecretsPersistent.OffsetsPK2[0] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[1] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[2] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[3] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[4] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[5] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[6] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[7] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[8] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[9] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[10] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[11] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[12] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[13] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[14] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[15] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[16] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[17] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[18] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[19] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[20] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[21] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[22] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[23] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[24] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[25] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[26] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[27] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[28] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[29] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[30] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2[31] == 0)) && ((z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[0] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[1] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[2] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[3] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[4] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[5] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[6] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[7] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[8] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[9] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[10] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[11] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[12] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[13] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[14] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[15] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[16] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[17] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[18] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[19] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[20] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[21] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[22] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[23] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[24] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[25] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[26] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[27] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[28] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[29] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[30] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[31] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[32] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[33] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[34] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[35] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[36] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[37] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[38] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[39] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[40] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[41] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[42] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[43] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[44] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[45] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[46] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[47] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[48] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[49] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[50] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[51] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[52] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[53] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[54] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[55] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[56] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[57] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[58] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[59] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[60] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[61] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[62] == 0) && (z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig[63] == 0))
+	return ((*z).OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier == (OneTimeSignatureVerifier{})) && ((*z).OneTimeSignatureSecretsPersistent.FirstBatch == 0) && (len((*z).OneTimeSignatureSecretsPersistent.Batches) == 0) && ((*z).OneTimeSignatureSecretsPersistent.FirstOffset == 0) && (len((*z).OneTimeSignatureSecretsPersistent.Offsets) == 0) && ((*z).OneTimeSignatureSecretsPersistent.OffsetsPK2 == (ed25519PublicKey{})) && ((*z).OneTimeSignatureSecretsPersistent.OffsetsPK2Sig == (ed25519Signature{}))
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -606,39 +608,39 @@ func (z *OneTimeSignatureSecretsPersistent) MarshalMsg(b []byte) (o []byte, err 
 	// map header, size 7
 	// string "First"
 	o = append(o, 0x87, 0xa5, 0x46, 0x69, 0x72, 0x73, 0x74)
-	o = msgp.AppendUint64(o, z.FirstBatch)
+	o = msgp.AppendUint64(o, (*z).FirstBatch)
 	// string "OneTimeSignatureVerifier"
 	o = append(o, 0xb8, 0x4f, 0x6e, 0x65, 0x54, 0x69, 0x6d, 0x65, 0x53, 0x69, 0x67, 0x6e, 0x61, 0x74, 0x75, 0x72, 0x65, 0x56, 0x65, 0x72, 0x69, 0x66, 0x69, 0x65, 0x72)
-	o = msgp.AppendBytes(o, (z.OneTimeSignatureVerifier)[:])
+	o = msgp.AppendBytes(o, ((*z).OneTimeSignatureVerifier)[:])
 	// string "Sub"
 	o = append(o, 0xa3, 0x53, 0x75, 0x62)
-	o = msgp.AppendArrayHeader(o, uint32(len(z.Batches)))
-	for za0002 := range z.Batches {
-		o, err = z.Batches[za0002].MarshalMsg(o)
+	o = msgp.AppendArrayHeader(o, uint32(len((*z).Batches)))
+	for zb0002 := range (*z).Batches {
+		o, err = (*z).Batches[zb0002].MarshalMsg(o)
 		if err != nil {
-			err = msgp.WrapError(err, "Batches", za0002)
+			err = msgp.WrapError(err, "Batches", zb0002)
 			return
 		}
 	}
 	// string "firstoff"
 	o = append(o, 0xa8, 0x66, 0x69, 0x72, 0x73, 0x74, 0x6f, 0x66, 0x66)
-	o = msgp.AppendUint64(o, z.FirstOffset)
+	o = msgp.AppendUint64(o, (*z).FirstOffset)
 	// string "offkeys"
 	o = append(o, 0xa7, 0x6f, 0x66, 0x66, 0x6b, 0x65, 0x79, 0x73)
-	o = msgp.AppendArrayHeader(o, uint32(len(z.Offsets)))
-	for za0003 := range z.Offsets {
-		o, err = z.Offsets[za0003].MarshalMsg(o)
+	o = msgp.AppendArrayHeader(o, uint32(len((*z).Offsets)))
+	for zb0003 := range (*z).Offsets {
+		o, err = (*z).Offsets[zb0003].MarshalMsg(o)
 		if err != nil {
-			err = msgp.WrapError(err, "Offsets", za0003)
+			err = msgp.WrapError(err, "Offsets", zb0003)
 			return
 		}
 	}
 	// string "offpk2"
 	o = append(o, 0xa6, 0x6f, 0x66, 0x66, 0x70, 0x6b, 0x32)
-	o = msgp.AppendBytes(o, (z.OffsetsPK2)[:])
+	o = msgp.AppendBytes(o, ((*z).OffsetsPK2)[:])
 	// string "offpk2sig"
 	o = append(o, 0xa9, 0x6f, 0x66, 0x66, 0x70, 0x6b, 0x32, 0x73, 0x69, 0x67)
-	o = msgp.AppendBytes(o, (z.OffsetsPK2Sig)[:])
+	o = msgp.AppendBytes(o, ((*z).OffsetsPK2Sig)[:])
 	return
 }
 
@@ -646,14 +648,14 @@ func (z *OneTimeSignatureSecretsPersistent) MarshalMsg(b []byte) (o []byte, err 
 func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0001 uint32
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0006 uint32
+	zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
 	}
-	for zb0001 > 0 {
-		zb0001--
+	for zb0006 > 0 {
+		zb0006--
 		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
@@ -661,69 +663,69 @@ func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsg(bts []byte) (o []byte, 
 		}
 		switch msgp.UnsafeString(field) {
 		case "OneTimeSignatureVerifier":
-			bts, err = msgp.ReadExactBytes(bts, (z.OneTimeSignatureVerifier)[:])
+			bts, err = msgp.ReadExactBytes(bts, ((*z).OneTimeSignatureVerifier)[:])
 			if err != nil {
 				err = msgp.WrapError(err, "OneTimeSignatureVerifier")
 				return
 			}
 		case "First":
-			z.FirstBatch, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).FirstBatch, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "FirstBatch")
 				return
 			}
 		case "Sub":
-			var zb0002 uint32
-			zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			var zb0007 uint32
+			zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Batches")
 				return
 			}
-			if cap(z.Batches) >= int(zb0002) {
-				z.Batches = (z.Batches)[:zb0002]
+			if cap((*z).Batches) >= int(zb0007) {
+				(*z).Batches = ((*z).Batches)[:zb0007]
 			} else {
-				z.Batches = make([]ephemeralSubkey, zb0002)
+				(*z).Batches = make([]ephemeralSubkey, zb0007)
 			}
-			for za0002 := range z.Batches {
-				bts, err = z.Batches[za0002].UnmarshalMsg(bts)
+			for zb0002 := range (*z).Batches {
+				bts, err = (*z).Batches[zb0002].UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "Batches", za0002)
+					err = msgp.WrapError(err, "Batches", zb0002)
 					return
 				}
 			}
 		case "firstoff":
-			z.FirstOffset, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).FirstOffset, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "FirstOffset")
 				return
 			}
 		case "offkeys":
-			var zb0003 uint32
-			zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			var zb0008 uint32
+			zb0008, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Offsets")
 				return
 			}
-			if cap(z.Offsets) >= int(zb0003) {
-				z.Offsets = (z.Offsets)[:zb0003]
+			if cap((*z).Offsets) >= int(zb0008) {
+				(*z).Offsets = ((*z).Offsets)[:zb0008]
 			} else {
-				z.Offsets = make([]ephemeralSubkey, zb0003)
+				(*z).Offsets = make([]ephemeralSubkey, zb0008)
 			}
-			for za0003 := range z.Offsets {
-				bts, err = z.Offsets[za0003].UnmarshalMsg(bts)
+			for zb0003 := range (*z).Offsets {
+				bts, err = (*z).Offsets[zb0003].UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "Offsets", za0003)
+					err = msgp.WrapError(err, "Offsets", zb0003)
 					return
 				}
 			}
 		case "offpk2":
-			bts, err = msgp.ReadExactBytes(bts, (z.OffsetsPK2)[:])
+			bts, err = msgp.ReadExactBytes(bts, ((*z).OffsetsPK2)[:])
 			if err != nil {
 				err = msgp.WrapError(err, "OffsetsPK2")
 				return
 			}
 		case "offpk2sig":
-			bts, err = msgp.ReadExactBytes(bts, (z.OffsetsPK2Sig)[:])
+			bts, err = msgp.ReadExactBytes(bts, ((*z).OffsetsPK2Sig)[:])
 			if err != nil {
 				err = msgp.WrapError(err, "OffsetsPK2Sig")
 				return
@@ -743,12 +745,12 @@ func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsg(bts []byte) (o []byte, 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *OneTimeSignatureSecretsPersistent) Msgsize() (s int) {
 	s = 1 + 25 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 6 + msgp.Uint64Size + 4 + msgp.ArrayHeaderSize
-	for za0002 := range z.Batches {
-		s += z.Batches[za0002].Msgsize()
+	for zb0002 := range (*z).Batches {
+		s += (*z).Batches[zb0002].Msgsize()
 	}
 	s += 9 + msgp.Uint64Size + 8 + msgp.ArrayHeaderSize
-	for za0003 := range z.Offsets {
-		s += z.Offsets[za0003].Msgsize()
+	for zb0003 := range (*z).Offsets {
+		s += (*z).Offsets[zb0003].Msgsize()
 	}
 	s += 7 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 10 + msgp.ArrayHeaderSize + (64 * (msgp.ByteSize))
 	return
@@ -756,7 +758,7 @@ func (z *OneTimeSignatureSecretsPersistent) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *OneTimeSignatureSecretsPersistent) MsgIsZero() bool {
-	return ((z.OneTimeSignatureVerifier[0] == 0) && (z.OneTimeSignatureVerifier[1] == 0) && (z.OneTimeSignatureVerifier[2] == 0) && (z.OneTimeSignatureVerifier[3] == 0) && (z.OneTimeSignatureVerifier[4] == 0) && (z.OneTimeSignatureVerifier[5] == 0) && (z.OneTimeSignatureVerifier[6] == 0) && (z.OneTimeSignatureVerifier[7] == 0) && (z.OneTimeSignatureVerifier[8] == 0) && (z.OneTimeSignatureVerifier[9] == 0) && (z.OneTimeSignatureVerifier[10] == 0) && (z.OneTimeSignatureVerifier[11] == 0) && (z.OneTimeSignatureVerifier[12] == 0) && (z.OneTimeSignatureVerifier[13] == 0) && (z.OneTimeSignatureVerifier[14] == 0) && (z.OneTimeSignatureVerifier[15] == 0) && (z.OneTimeSignatureVerifier[16] == 0) && (z.OneTimeSignatureVerifier[17] == 0) && (z.OneTimeSignatureVerifier[18] == 0) && (z.OneTimeSignatureVerifier[19] == 0) && (z.OneTimeSignatureVerifier[20] == 0) && (z.OneTimeSignatureVerifier[21] == 0) && (z.OneTimeSignatureVerifier[22] == 0) && (z.OneTimeSignatureVerifier[23] == 0) && (z.OneTimeSignatureVerifier[24] == 0) && (z.OneTimeSignatureVerifier[25] == 0) && (z.OneTimeSignatureVerifier[26] == 0) && (z.OneTimeSignatureVerifier[27] == 0) && (z.OneTimeSignatureVerifier[28] == 0) && (z.OneTimeSignatureVerifier[29] == 0) && (z.OneTimeSignatureVerifier[30] == 0) && (z.OneTimeSignatureVerifier[31] == 0)) && (z.FirstBatch == 0) && (len(z.Batches) == 0) && (z.FirstOffset == 0) && (len(z.Offsets) == 0) && ((z.OffsetsPK2[0] == 0) && (z.OffsetsPK2[1] == 0) && (z.OffsetsPK2[2] == 0) && (z.OffsetsPK2[3] == 0) && (z.OffsetsPK2[4] == 0) && (z.OffsetsPK2[5] == 0) && (z.OffsetsPK2[6] == 0) && (z.OffsetsPK2[7] == 0) && (z.OffsetsPK2[8] == 0) && (z.OffsetsPK2[9] == 0) && (z.OffsetsPK2[10] == 0) && (z.OffsetsPK2[11] == 0) && (z.OffsetsPK2[12] == 0) && (z.OffsetsPK2[13] == 0) && (z.OffsetsPK2[14] == 0) && (z.OffsetsPK2[15] == 0) && (z.OffsetsPK2[16] == 0) && (z.OffsetsPK2[17] == 0) && (z.OffsetsPK2[18] == 0) && (z.OffsetsPK2[19] == 0) && (z.OffsetsPK2[20] == 0) && (z.OffsetsPK2[21] == 0) && (z.OffsetsPK2[22] == 0) && (z.OffsetsPK2[23] == 0) && (z.OffsetsPK2[24] == 0) && (z.OffsetsPK2[25] == 0) && (z.OffsetsPK2[26] == 0) && (z.OffsetsPK2[27] == 0) && (z.OffsetsPK2[28] == 0) && (z.OffsetsPK2[29] == 0) && (z.OffsetsPK2[30] == 0) && (z.OffsetsPK2[31] == 0)) && ((z.OffsetsPK2Sig[0] == 0) && (z.OffsetsPK2Sig[1] == 0) && (z.OffsetsPK2Sig[2] == 0) && (z.OffsetsPK2Sig[3] == 0) && (z.OffsetsPK2Sig[4] == 0) && (z.OffsetsPK2Sig[5] == 0) && (z.OffsetsPK2Sig[6] == 0) && (z.OffsetsPK2Sig[7] == 0) && (z.OffsetsPK2Sig[8] == 0) && (z.OffsetsPK2Sig[9] == 0) && (z.OffsetsPK2Sig[10] == 0) && (z.OffsetsPK2Sig[11] == 0) && (z.OffsetsPK2Sig[12] == 0) && (z.OffsetsPK2Sig[13] == 0) && (z.OffsetsPK2Sig[14] == 0) && (z.OffsetsPK2Sig[15] == 0) && (z.OffsetsPK2Sig[16] == 0) && (z.OffsetsPK2Sig[17] == 0) && (z.OffsetsPK2Sig[18] == 0) && (z.OffsetsPK2Sig[19] == 0) && (z.OffsetsPK2Sig[20] == 0) && (z.OffsetsPK2Sig[21] == 0) && (z.OffsetsPK2Sig[22] == 0) && (z.OffsetsPK2Sig[23] == 0) && (z.OffsetsPK2Sig[24] == 0) && (z.OffsetsPK2Sig[25] == 0) && (z.OffsetsPK2Sig[26] == 0) && (z.OffsetsPK2Sig[27] == 0) && (z.OffsetsPK2Sig[28] == 0) && (z.OffsetsPK2Sig[29] == 0) && (z.OffsetsPK2Sig[30] == 0) && (z.OffsetsPK2Sig[31] == 0) && (z.OffsetsPK2Sig[32] == 0) && (z.OffsetsPK2Sig[33] == 0) && (z.OffsetsPK2Sig[34] == 0) && (z.OffsetsPK2Sig[35] == 0) && (z.OffsetsPK2Sig[36] == 0) && (z.OffsetsPK2Sig[37] == 0) && (z.OffsetsPK2Sig[38] == 0) && (z.OffsetsPK2Sig[39] == 0) && (z.OffsetsPK2Sig[40] == 0) && (z.OffsetsPK2Sig[41] == 0) && (z.OffsetsPK2Sig[42] == 0) && (z.OffsetsPK2Sig[43] == 0) && (z.OffsetsPK2Sig[44] == 0) && (z.OffsetsPK2Sig[45] == 0) && (z.OffsetsPK2Sig[46] == 0) && (z.OffsetsPK2Sig[47] == 0) && (z.OffsetsPK2Sig[48] == 0) && (z.OffsetsPK2Sig[49] == 0) && (z.OffsetsPK2Sig[50] == 0) && (z.OffsetsPK2Sig[51] == 0) && (z.OffsetsPK2Sig[52] == 0) && (z.OffsetsPK2Sig[53] == 0) && (z.OffsetsPK2Sig[54] == 0) && (z.OffsetsPK2Sig[55] == 0) && (z.OffsetsPK2Sig[56] == 0) && (z.OffsetsPK2Sig[57] == 0) && (z.OffsetsPK2Sig[58] == 0) && (z.OffsetsPK2Sig[59] == 0) && (z.OffsetsPK2Sig[60] == 0) && (z.OffsetsPK2Sig[61] == 0) && (z.OffsetsPK2Sig[62] == 0) && (z.OffsetsPK2Sig[63] == 0))
+	return ((*z).OneTimeSignatureVerifier == (OneTimeSignatureVerifier{})) && ((*z).FirstBatch == 0) && (len((*z).Batches) == 0) && ((*z).FirstOffset == 0) && (len((*z).Offsets) == 0) && ((*z).OffsetsPK2 == (ed25519PublicKey{})) && ((*z).OffsetsPK2Sig == (ed25519Signature{}))
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -765,10 +767,10 @@ func (z *OneTimeSignatureSubkeyBatchID) MarshalMsg(b []byte) (o []byte, err erro
 	// map header, size 2
 	// string "batch"
 	o = append(o, 0x82, 0xa5, 0x62, 0x61, 0x74, 0x63, 0x68)
-	o = msgp.AppendUint64(o, z.Batch)
+	o = msgp.AppendUint64(o, (*z).Batch)
 	// string "pk"
 	o = append(o, 0xa2, 0x70, 0x6b)
-	o = msgp.AppendBytes(o, (z.SubKeyPK)[:])
+	o = msgp.AppendBytes(o, ((*z).SubKeyPK)[:])
 	return
 }
 
@@ -776,14 +778,14 @@ func (z *OneTimeSignatureSubkeyBatchID) MarshalMsg(b []byte) (o []byte, err erro
 func (z *OneTimeSignatureSubkeyBatchID) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0001 uint32
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0002 uint32
+	zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
 	}
-	for zb0001 > 0 {
-		zb0001--
+	for zb0002 > 0 {
+		zb0002--
 		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
@@ -791,13 +793,13 @@ func (z *OneTimeSignatureSubkeyBatchID) UnmarshalMsg(bts []byte) (o []byte, err 
 		}
 		switch msgp.UnsafeString(field) {
 		case "pk":
-			bts, err = msgp.ReadExactBytes(bts, (z.SubKeyPK)[:])
+			bts, err = msgp.ReadExactBytes(bts, ((*z).SubKeyPK)[:])
 			if err != nil {
 				err = msgp.WrapError(err, "SubKeyPK")
 				return
 			}
 		case "batch":
-			z.Batch, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).Batch, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Batch")
 				return
@@ -822,7 +824,7 @@ func (z *OneTimeSignatureSubkeyBatchID) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *OneTimeSignatureSubkeyBatchID) MsgIsZero() bool {
-	return ((z.SubKeyPK[0] == 0) && (z.SubKeyPK[1] == 0) && (z.SubKeyPK[2] == 0) && (z.SubKeyPK[3] == 0) && (z.SubKeyPK[4] == 0) && (z.SubKeyPK[5] == 0) && (z.SubKeyPK[6] == 0) && (z.SubKeyPK[7] == 0) && (z.SubKeyPK[8] == 0) && (z.SubKeyPK[9] == 0) && (z.SubKeyPK[10] == 0) && (z.SubKeyPK[11] == 0) && (z.SubKeyPK[12] == 0) && (z.SubKeyPK[13] == 0) && (z.SubKeyPK[14] == 0) && (z.SubKeyPK[15] == 0) && (z.SubKeyPK[16] == 0) && (z.SubKeyPK[17] == 0) && (z.SubKeyPK[18] == 0) && (z.SubKeyPK[19] == 0) && (z.SubKeyPK[20] == 0) && (z.SubKeyPK[21] == 0) && (z.SubKeyPK[22] == 0) && (z.SubKeyPK[23] == 0) && (z.SubKeyPK[24] == 0) && (z.SubKeyPK[25] == 0) && (z.SubKeyPK[26] == 0) && (z.SubKeyPK[27] == 0) && (z.SubKeyPK[28] == 0) && (z.SubKeyPK[29] == 0) && (z.SubKeyPK[30] == 0) && (z.SubKeyPK[31] == 0)) && (z.Batch == 0)
+	return ((*z).SubKeyPK == (ed25519PublicKey{})) && ((*z).Batch == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -831,13 +833,13 @@ func (z *OneTimeSignatureSubkeyOffsetID) MarshalMsg(b []byte) (o []byte, err err
 	// map header, size 3
 	// string "batch"
 	o = append(o, 0x83, 0xa5, 0x62, 0x61, 0x74, 0x63, 0x68)
-	o = msgp.AppendUint64(o, z.Batch)
+	o = msgp.AppendUint64(o, (*z).Batch)
 	// string "off"
 	o = append(o, 0xa3, 0x6f, 0x66, 0x66)
-	o = msgp.AppendUint64(o, z.Offset)
+	o = msgp.AppendUint64(o, (*z).Offset)
 	// string "pk"
 	o = append(o, 0xa2, 0x70, 0x6b)
-	o = msgp.AppendBytes(o, (z.SubKeyPK)[:])
+	o = msgp.AppendBytes(o, ((*z).SubKeyPK)[:])
 	return
 }
 
@@ -845,14 +847,14 @@ func (z *OneTimeSignatureSubkeyOffsetID) MarshalMsg(b []byte) (o []byte, err err
 func (z *OneTimeSignatureSubkeyOffsetID) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0001 uint32
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0002 uint32
+	zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
 	}
-	for zb0001 > 0 {
-		zb0001--
+	for zb0002 > 0 {
+		zb0002--
 		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
@@ -860,19 +862,19 @@ func (z *OneTimeSignatureSubkeyOffsetID) UnmarshalMsg(bts []byte) (o []byte, err
 		}
 		switch msgp.UnsafeString(field) {
 		case "pk":
-			bts, err = msgp.ReadExactBytes(bts, (z.SubKeyPK)[:])
+			bts, err = msgp.ReadExactBytes(bts, ((*z).SubKeyPK)[:])
 			if err != nil {
 				err = msgp.WrapError(err, "SubKeyPK")
 				return
 			}
 		case "batch":
-			z.Batch, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).Batch, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Batch")
 				return
 			}
 		case "off":
-			z.Offset, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).Offset, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Offset")
 				return
@@ -897,19 +899,19 @@ func (z *OneTimeSignatureSubkeyOffsetID) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *OneTimeSignatureSubkeyOffsetID) MsgIsZero() bool {
-	return ((z.SubKeyPK[0] == 0) && (z.SubKeyPK[1] == 0) && (z.SubKeyPK[2] == 0) && (z.SubKeyPK[3] == 0) && (z.SubKeyPK[4] == 0) && (z.SubKeyPK[5] == 0) && (z.SubKeyPK[6] == 0) && (z.SubKeyPK[7] == 0) && (z.SubKeyPK[8] == 0) && (z.SubKeyPK[9] == 0) && (z.SubKeyPK[10] == 0) && (z.SubKeyPK[11] == 0) && (z.SubKeyPK[12] == 0) && (z.SubKeyPK[13] == 0) && (z.SubKeyPK[14] == 0) && (z.SubKeyPK[15] == 0) && (z.SubKeyPK[16] == 0) && (z.SubKeyPK[17] == 0) && (z.SubKeyPK[18] == 0) && (z.SubKeyPK[19] == 0) && (z.SubKeyPK[20] == 0) && (z.SubKeyPK[21] == 0) && (z.SubKeyPK[22] == 0) && (z.SubKeyPK[23] == 0) && (z.SubKeyPK[24] == 0) && (z.SubKeyPK[25] == 0) && (z.SubKeyPK[26] == 0) && (z.SubKeyPK[27] == 0) && (z.SubKeyPK[28] == 0) && (z.SubKeyPK[29] == 0) && (z.SubKeyPK[30] == 0) && (z.SubKeyPK[31] == 0)) && (z.Batch == 0) && (z.Offset == 0)
+	return ((*z).SubKeyPK == (ed25519PublicKey{})) && ((*z).Batch == 0) && ((*z).Offset == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *OneTimeSignatureVerifier) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendBytes(o, (z)[:])
+	o = msgp.AppendBytes(o, (*z)[:])
 	return
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *OneTimeSignatureVerifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	bts, err = msgp.ReadExactBytes(bts, (z)[:])
+	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
@@ -926,7 +928,7 @@ func (z *OneTimeSignatureVerifier) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *OneTimeSignatureVerifier) MsgIsZero() bool {
-	return (z[0] == 0) && (z[1] == 0) && (z[2] == 0) && (z[3] == 0) && (z[4] == 0) && (z[5] == 0) && (z[6] == 0) && (z[7] == 0) && (z[8] == 0) && (z[9] == 0) && (z[10] == 0) && (z[11] == 0) && (z[12] == 0) && (z[13] == 0) && (z[14] == 0) && (z[15] == 0) && (z[16] == 0) && (z[17] == 0) && (z[18] == 0) && (z[19] == 0) && (z[20] == 0) && (z[21] == 0) && (z[22] == 0) && (z[23] == 0) && (z[24] == 0) && (z[25] == 0) && (z[26] == 0) && (z[27] == 0) && (z[28] == 0) && (z[29] == 0) && (z[30] == 0) && (z[31] == 0)
+	return (*z) == (OneTimeSignatureVerifier{})
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -935,10 +937,10 @@ func (z *OneTimeSigner) MarshalMsg(b []byte) (o []byte, err error) {
 	// map header, size 2
 	// string "OneTimeSignatureSecrets"
 	o = append(o, 0x82, 0xb7, 0x4f, 0x6e, 0x65, 0x54, 0x69, 0x6d, 0x65, 0x53, 0x69, 0x67, 0x6e, 0x61, 0x74, 0x75, 0x72, 0x65, 0x53, 0x65, 0x63, 0x72, 0x65, 0x74, 0x73)
-	if z.OneTimeSignatureSecrets == nil {
+	if (*z).OneTimeSignatureSecrets == nil {
 		o = msgp.AppendNil(o)
 	} else {
-		o, err = z.OneTimeSignatureSecrets.MarshalMsg(o)
+		o, err = (*z).OneTimeSignatureSecrets.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "OneTimeSignatureSecrets")
 			return
@@ -946,7 +948,7 @@ func (z *OneTimeSigner) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// string "OptionalKeyDilution"
 	o = append(o, 0xb3, 0x4f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x61, 0x6c, 0x4b, 0x65, 0x79, 0x44, 0x69, 0x6c, 0x75, 0x74, 0x69, 0x6f, 0x6e)
-	o = msgp.AppendUint64(o, z.OptionalKeyDilution)
+	o = msgp.AppendUint64(o, (*z).OptionalKeyDilution)
 	return
 }
 
@@ -974,19 +976,19 @@ func (z *OneTimeSigner) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				if err != nil {
 					return
 				}
-				z.OneTimeSignatureSecrets = nil
+				(*z).OneTimeSignatureSecrets = nil
 			} else {
-				if z.OneTimeSignatureSecrets == nil {
-					z.OneTimeSignatureSecrets = new(OneTimeSignatureSecrets)
+				if (*z).OneTimeSignatureSecrets == nil {
+					(*z).OneTimeSignatureSecrets = new(OneTimeSignatureSecrets)
 				}
-				bts, err = z.OneTimeSignatureSecrets.UnmarshalMsg(bts)
+				bts, err = (*z).OneTimeSignatureSecrets.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "OneTimeSignatureSecrets")
 					return
 				}
 			}
 		case "OptionalKeyDilution":
-			z.OptionalKeyDilution, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).OptionalKeyDilution, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "OptionalKeyDilution")
 				return
@@ -1006,10 +1008,10 @@ func (z *OneTimeSigner) UnmarshalMsg(bts []byte) (o []byte, err error) {
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *OneTimeSigner) Msgsize() (s int) {
 	s = 1 + 24
-	if z.OneTimeSignatureSecrets == nil {
+	if (*z).OneTimeSignatureSecrets == nil {
 		s += msgp.NilSize
 	} else {
-		s += z.OneTimeSignatureSecrets.Msgsize()
+		s += (*z).OneTimeSignatureSecrets.Msgsize()
 	}
 	s += 20 + msgp.Uint64Size
 	return
@@ -1017,19 +1019,19 @@ func (z *OneTimeSigner) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *OneTimeSigner) MsgIsZero() bool {
-	return (z.OneTimeSignatureSecrets == nil) && (z.OptionalKeyDilution == 0)
+	return ((*z).OneTimeSignatureSecrets == nil) && ((*z).OptionalKeyDilution == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *PrivateKey) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendBytes(o, (z)[:])
+	o = msgp.AppendBytes(o, (*z)[:])
 	return
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *PrivateKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	bts, err = msgp.ReadExactBytes(bts, (z)[:])
+	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
@@ -1046,19 +1048,19 @@ func (z *PrivateKey) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *PrivateKey) MsgIsZero() bool {
-	return (z[0] == 0) && (z[1] == 0) && (z[2] == 0) && (z[3] == 0) && (z[4] == 0) && (z[5] == 0) && (z[6] == 0) && (z[7] == 0) && (z[8] == 0) && (z[9] == 0) && (z[10] == 0) && (z[11] == 0) && (z[12] == 0) && (z[13] == 0) && (z[14] == 0) && (z[15] == 0) && (z[16] == 0) && (z[17] == 0) && (z[18] == 0) && (z[19] == 0) && (z[20] == 0) && (z[21] == 0) && (z[22] == 0) && (z[23] == 0) && (z[24] == 0) && (z[25] == 0) && (z[26] == 0) && (z[27] == 0) && (z[28] == 0) && (z[29] == 0) && (z[30] == 0) && (z[31] == 0) && (z[32] == 0) && (z[33] == 0) && (z[34] == 0) && (z[35] == 0) && (z[36] == 0) && (z[37] == 0) && (z[38] == 0) && (z[39] == 0) && (z[40] == 0) && (z[41] == 0) && (z[42] == 0) && (z[43] == 0) && (z[44] == 0) && (z[45] == 0) && (z[46] == 0) && (z[47] == 0) && (z[48] == 0) && (z[49] == 0) && (z[50] == 0) && (z[51] == 0) && (z[52] == 0) && (z[53] == 0) && (z[54] == 0) && (z[55] == 0) && (z[56] == 0) && (z[57] == 0) && (z[58] == 0) && (z[59] == 0) && (z[60] == 0) && (z[61] == 0) && (z[62] == 0) && (z[63] == 0)
+	return (*z) == (PrivateKey{})
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *PublicKey) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendBytes(o, (z)[:])
+	o = msgp.AppendBytes(o, (*z)[:])
 	return
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *PublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	bts, err = msgp.ReadExactBytes(bts, (z)[:])
+	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
@@ -1075,19 +1077,19 @@ func (z *PublicKey) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *PublicKey) MsgIsZero() bool {
-	return (z[0] == 0) && (z[1] == 0) && (z[2] == 0) && (z[3] == 0) && (z[4] == 0) && (z[5] == 0) && (z[6] == 0) && (z[7] == 0) && (z[8] == 0) && (z[9] == 0) && (z[10] == 0) && (z[11] == 0) && (z[12] == 0) && (z[13] == 0) && (z[14] == 0) && (z[15] == 0) && (z[16] == 0) && (z[17] == 0) && (z[18] == 0) && (z[19] == 0) && (z[20] == 0) && (z[21] == 0) && (z[22] == 0) && (z[23] == 0) && (z[24] == 0) && (z[25] == 0) && (z[26] == 0) && (z[27] == 0) && (z[28] == 0) && (z[29] == 0) && (z[30] == 0) && (z[31] == 0)
+	return (*z) == (PublicKey{})
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *Seed) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendBytes(o, (z)[:])
+	o = msgp.AppendBytes(o, (*z)[:])
 	return
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *Seed) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	bts, err = msgp.ReadExactBytes(bts, (z)[:])
+	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
@@ -1104,19 +1106,19 @@ func (z *Seed) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *Seed) MsgIsZero() bool {
-	return (z[0] == 0) && (z[1] == 0) && (z[2] == 0) && (z[3] == 0) && (z[4] == 0) && (z[5] == 0) && (z[6] == 0) && (z[7] == 0) && (z[8] == 0) && (z[9] == 0) && (z[10] == 0) && (z[11] == 0) && (z[12] == 0) && (z[13] == 0) && (z[14] == 0) && (z[15] == 0) && (z[16] == 0) && (z[17] == 0) && (z[18] == 0) && (z[19] == 0) && (z[20] == 0) && (z[21] == 0) && (z[22] == 0) && (z[23] == 0) && (z[24] == 0) && (z[25] == 0) && (z[26] == 0) && (z[27] == 0) && (z[28] == 0) && (z[29] == 0) && (z[30] == 0) && (z[31] == 0)
+	return (*z) == (Seed{})
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *Signature) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendBytes(o, (z)[:])
+	o = msgp.AppendBytes(o, (*z)[:])
 	return
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *Signature) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	bts, err = msgp.ReadExactBytes(bts, (z)[:])
+	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
@@ -1133,7 +1135,7 @@ func (z *Signature) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *Signature) MsgIsZero() bool {
-	return (z[0] == 0) && (z[1] == 0) && (z[2] == 0) && (z[3] == 0) && (z[4] == 0) && (z[5] == 0) && (z[6] == 0) && (z[7] == 0) && (z[8] == 0) && (z[9] == 0) && (z[10] == 0) && (z[11] == 0) && (z[12] == 0) && (z[13] == 0) && (z[14] == 0) && (z[15] == 0) && (z[16] == 0) && (z[17] == 0) && (z[18] == 0) && (z[19] == 0) && (z[20] == 0) && (z[21] == 0) && (z[22] == 0) && (z[23] == 0) && (z[24] == 0) && (z[25] == 0) && (z[26] == 0) && (z[27] == 0) && (z[28] == 0) && (z[29] == 0) && (z[30] == 0) && (z[31] == 0) && (z[32] == 0) && (z[33] == 0) && (z[34] == 0) && (z[35] == 0) && (z[36] == 0) && (z[37] == 0) && (z[38] == 0) && (z[39] == 0) && (z[40] == 0) && (z[41] == 0) && (z[42] == 0) && (z[43] == 0) && (z[44] == 0) && (z[45] == 0) && (z[46] == 0) && (z[47] == 0) && (z[48] == 0) && (z[49] == 0) && (z[50] == 0) && (z[51] == 0) && (z[52] == 0) && (z[53] == 0) && (z[54] == 0) && (z[55] == 0) && (z[56] == 0) && (z[57] == 0) && (z[58] == 0) && (z[59] == 0) && (z[60] == 0) && (z[61] == 0) && (z[62] == 0) && (z[63] == 0)
+	return (*z) == (Signature{})
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1142,10 +1144,10 @@ func (z *SignatureSecrets) MarshalMsg(b []byte) (o []byte, err error) {
 	// map header, size 2
 	// string "SK"
 	o = append(o, 0x82, 0xa2, 0x53, 0x4b)
-	o = msgp.AppendBytes(o, (z.SK)[:])
+	o = msgp.AppendBytes(o, ((*z).SK)[:])
 	// string "SignatureVerifier"
 	o = append(o, 0xb1, 0x53, 0x69, 0x67, 0x6e, 0x61, 0x74, 0x75, 0x72, 0x65, 0x56, 0x65, 0x72, 0x69, 0x66, 0x69, 0x65, 0x72)
-	o, err = z.SignatureVerifier.MarshalMsg(o)
+	o, err = (*z).SignatureVerifier.MarshalMsg(o)
 	if err != nil {
 		err = msgp.WrapError(err, "SignatureVerifier")
 		return
@@ -1157,14 +1159,14 @@ func (z *SignatureSecrets) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *SignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0001 uint32
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0002 uint32
+	zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
 	}
-	for zb0001 > 0 {
-		zb0001--
+	for zb0002 > 0 {
+		zb0002--
 		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
@@ -1172,13 +1174,13 @@ func (z *SignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "SignatureVerifier":
-			bts, err = z.SignatureVerifier.UnmarshalMsg(bts)
+			bts, err = (*z).SignatureVerifier.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "SignatureVerifier")
 				return
 			}
 		case "SK":
-			bts, err = msgp.ReadExactBytes(bts, (z.SK)[:])
+			bts, err = msgp.ReadExactBytes(bts, ((*z).SK)[:])
 			if err != nil {
 				err = msgp.WrapError(err, "SK")
 				return
@@ -1197,13 +1199,13 @@ func (z *SignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *SignatureSecrets) Msgsize() (s int) {
-	s = 1 + 18 + z.SignatureVerifier.Msgsize() + 3 + msgp.ArrayHeaderSize + (64 * (msgp.ByteSize))
+	s = 1 + 18 + (*z).SignatureVerifier.Msgsize() + 3 + msgp.ArrayHeaderSize + (64 * (msgp.ByteSize))
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *SignatureSecrets) MsgIsZero() bool {
-	return (z.SignatureVerifier.MsgIsZero()) && ((z.SK[0] == 0) && (z.SK[1] == 0) && (z.SK[2] == 0) && (z.SK[3] == 0) && (z.SK[4] == 0) && (z.SK[5] == 0) && (z.SK[6] == 0) && (z.SK[7] == 0) && (z.SK[8] == 0) && (z.SK[9] == 0) && (z.SK[10] == 0) && (z.SK[11] == 0) && (z.SK[12] == 0) && (z.SK[13] == 0) && (z.SK[14] == 0) && (z.SK[15] == 0) && (z.SK[16] == 0) && (z.SK[17] == 0) && (z.SK[18] == 0) && (z.SK[19] == 0) && (z.SK[20] == 0) && (z.SK[21] == 0) && (z.SK[22] == 0) && (z.SK[23] == 0) && (z.SK[24] == 0) && (z.SK[25] == 0) && (z.SK[26] == 0) && (z.SK[27] == 0) && (z.SK[28] == 0) && (z.SK[29] == 0) && (z.SK[30] == 0) && (z.SK[31] == 0) && (z.SK[32] == 0) && (z.SK[33] == 0) && (z.SK[34] == 0) && (z.SK[35] == 0) && (z.SK[36] == 0) && (z.SK[37] == 0) && (z.SK[38] == 0) && (z.SK[39] == 0) && (z.SK[40] == 0) && (z.SK[41] == 0) && (z.SK[42] == 0) && (z.SK[43] == 0) && (z.SK[44] == 0) && (z.SK[45] == 0) && (z.SK[46] == 0) && (z.SK[47] == 0) && (z.SK[48] == 0) && (z.SK[49] == 0) && (z.SK[50] == 0) && (z.SK[51] == 0) && (z.SK[52] == 0) && (z.SK[53] == 0) && (z.SK[54] == 0) && (z.SK[55] == 0) && (z.SK[56] == 0) && (z.SK[57] == 0) && (z.SK[58] == 0) && (z.SK[59] == 0) && (z.SK[60] == 0) && (z.SK[61] == 0) && (z.SK[62] == 0) && (z.SK[63] == 0))
+	return ((*z).SignatureVerifier.MsgIsZero()) && ((*z).SK == (ed25519PrivateKey{}))
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1212,10 +1214,10 @@ func (z *VRFSecrets) MarshalMsg(b []byte) (o []byte, err error) {
 	// map header, size 2
 	// string "PK"
 	o = append(o, 0x82, 0xa2, 0x50, 0x4b)
-	o = msgp.AppendBytes(o, (z.PK)[:])
+	o = msgp.AppendBytes(o, ((*z).PK)[:])
 	// string "SK"
 	o = append(o, 0xa2, 0x53, 0x4b)
-	o = msgp.AppendBytes(o, (z.SK)[:])
+	o = msgp.AppendBytes(o, ((*z).SK)[:])
 	return
 }
 
@@ -1223,14 +1225,14 @@ func (z *VRFSecrets) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *VRFSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0001 uint32
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0003 uint32
+	zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
 	}
-	for zb0001 > 0 {
-		zb0001--
+	for zb0003 > 0 {
+		zb0003--
 		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
@@ -1238,13 +1240,13 @@ func (z *VRFSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "PK":
-			bts, err = msgp.ReadExactBytes(bts, (z.PK)[:])
+			bts, err = msgp.ReadExactBytes(bts, ((*z).PK)[:])
 			if err != nil {
 				err = msgp.WrapError(err, "PK")
 				return
 			}
 		case "SK":
-			bts, err = msgp.ReadExactBytes(bts, (z.SK)[:])
+			bts, err = msgp.ReadExactBytes(bts, ((*z).SK)[:])
 			if err != nil {
 				err = msgp.WrapError(err, "SK")
 				return
@@ -1269,19 +1271,19 @@ func (z *VRFSecrets) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *VRFSecrets) MsgIsZero() bool {
-	return ((z.PK[0] == 0) && (z.PK[1] == 0) && (z.PK[2] == 0) && (z.PK[3] == 0) && (z.PK[4] == 0) && (z.PK[5] == 0) && (z.PK[6] == 0) && (z.PK[7] == 0) && (z.PK[8] == 0) && (z.PK[9] == 0) && (z.PK[10] == 0) && (z.PK[11] == 0) && (z.PK[12] == 0) && (z.PK[13] == 0) && (z.PK[14] == 0) && (z.PK[15] == 0) && (z.PK[16] == 0) && (z.PK[17] == 0) && (z.PK[18] == 0) && (z.PK[19] == 0) && (z.PK[20] == 0) && (z.PK[21] == 0) && (z.PK[22] == 0) && (z.PK[23] == 0) && (z.PK[24] == 0) && (z.PK[25] == 0) && (z.PK[26] == 0) && (z.PK[27] == 0) && (z.PK[28] == 0) && (z.PK[29] == 0) && (z.PK[30] == 0) && (z.PK[31] == 0)) && ((z.SK[0] == 0) && (z.SK[1] == 0) && (z.SK[2] == 0) && (z.SK[3] == 0) && (z.SK[4] == 0) && (z.SK[5] == 0) && (z.SK[6] == 0) && (z.SK[7] == 0) && (z.SK[8] == 0) && (z.SK[9] == 0) && (z.SK[10] == 0) && (z.SK[11] == 0) && (z.SK[12] == 0) && (z.SK[13] == 0) && (z.SK[14] == 0) && (z.SK[15] == 0) && (z.SK[16] == 0) && (z.SK[17] == 0) && (z.SK[18] == 0) && (z.SK[19] == 0) && (z.SK[20] == 0) && (z.SK[21] == 0) && (z.SK[22] == 0) && (z.SK[23] == 0) && (z.SK[24] == 0) && (z.SK[25] == 0) && (z.SK[26] == 0) && (z.SK[27] == 0) && (z.SK[28] == 0) && (z.SK[29] == 0) && (z.SK[30] == 0) && (z.SK[31] == 0) && (z.SK[32] == 0) && (z.SK[33] == 0) && (z.SK[34] == 0) && (z.SK[35] == 0) && (z.SK[36] == 0) && (z.SK[37] == 0) && (z.SK[38] == 0) && (z.SK[39] == 0) && (z.SK[40] == 0) && (z.SK[41] == 0) && (z.SK[42] == 0) && (z.SK[43] == 0) && (z.SK[44] == 0) && (z.SK[45] == 0) && (z.SK[46] == 0) && (z.SK[47] == 0) && (z.SK[48] == 0) && (z.SK[49] == 0) && (z.SK[50] == 0) && (z.SK[51] == 0) && (z.SK[52] == 0) && (z.SK[53] == 0) && (z.SK[54] == 0) && (z.SK[55] == 0) && (z.SK[56] == 0) && (z.SK[57] == 0) && (z.SK[58] == 0) && (z.SK[59] == 0) && (z.SK[60] == 0) && (z.SK[61] == 0) && (z.SK[62] == 0) && (z.SK[63] == 0))
+	return ((*z).PK == (VrfPubkey{})) && ((*z).SK == (VrfPrivkey{}))
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *VrfOutput) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendBytes(o, (z)[:])
+	o = msgp.AppendBytes(o, (*z)[:])
 	return
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *VrfOutput) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	bts, err = msgp.ReadExactBytes(bts, (z)[:])
+	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
@@ -1298,19 +1300,19 @@ func (z *VrfOutput) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *VrfOutput) MsgIsZero() bool {
-	return (z[0] == 0) && (z[1] == 0) && (z[2] == 0) && (z[3] == 0) && (z[4] == 0) && (z[5] == 0) && (z[6] == 0) && (z[7] == 0) && (z[8] == 0) && (z[9] == 0) && (z[10] == 0) && (z[11] == 0) && (z[12] == 0) && (z[13] == 0) && (z[14] == 0) && (z[15] == 0) && (z[16] == 0) && (z[17] == 0) && (z[18] == 0) && (z[19] == 0) && (z[20] == 0) && (z[21] == 0) && (z[22] == 0) && (z[23] == 0) && (z[24] == 0) && (z[25] == 0) && (z[26] == 0) && (z[27] == 0) && (z[28] == 0) && (z[29] == 0) && (z[30] == 0) && (z[31] == 0) && (z[32] == 0) && (z[33] == 0) && (z[34] == 0) && (z[35] == 0) && (z[36] == 0) && (z[37] == 0) && (z[38] == 0) && (z[39] == 0) && (z[40] == 0) && (z[41] == 0) && (z[42] == 0) && (z[43] == 0) && (z[44] == 0) && (z[45] == 0) && (z[46] == 0) && (z[47] == 0) && (z[48] == 0) && (z[49] == 0) && (z[50] == 0) && (z[51] == 0) && (z[52] == 0) && (z[53] == 0) && (z[54] == 0) && (z[55] == 0) && (z[56] == 0) && (z[57] == 0) && (z[58] == 0) && (z[59] == 0) && (z[60] == 0) && (z[61] == 0) && (z[62] == 0) && (z[63] == 0)
+	return (*z) == (VrfOutput{})
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *VrfPrivkey) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendBytes(o, (z)[:])
+	o = msgp.AppendBytes(o, (*z)[:])
 	return
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *VrfPrivkey) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	bts, err = msgp.ReadExactBytes(bts, (z)[:])
+	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
@@ -1327,19 +1329,19 @@ func (z *VrfPrivkey) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *VrfPrivkey) MsgIsZero() bool {
-	return (z[0] == 0) && (z[1] == 0) && (z[2] == 0) && (z[3] == 0) && (z[4] == 0) && (z[5] == 0) && (z[6] == 0) && (z[7] == 0) && (z[8] == 0) && (z[9] == 0) && (z[10] == 0) && (z[11] == 0) && (z[12] == 0) && (z[13] == 0) && (z[14] == 0) && (z[15] == 0) && (z[16] == 0) && (z[17] == 0) && (z[18] == 0) && (z[19] == 0) && (z[20] == 0) && (z[21] == 0) && (z[22] == 0) && (z[23] == 0) && (z[24] == 0) && (z[25] == 0) && (z[26] == 0) && (z[27] == 0) && (z[28] == 0) && (z[29] == 0) && (z[30] == 0) && (z[31] == 0) && (z[32] == 0) && (z[33] == 0) && (z[34] == 0) && (z[35] == 0) && (z[36] == 0) && (z[37] == 0) && (z[38] == 0) && (z[39] == 0) && (z[40] == 0) && (z[41] == 0) && (z[42] == 0) && (z[43] == 0) && (z[44] == 0) && (z[45] == 0) && (z[46] == 0) && (z[47] == 0) && (z[48] == 0) && (z[49] == 0) && (z[50] == 0) && (z[51] == 0) && (z[52] == 0) && (z[53] == 0) && (z[54] == 0) && (z[55] == 0) && (z[56] == 0) && (z[57] == 0) && (z[58] == 0) && (z[59] == 0) && (z[60] == 0) && (z[61] == 0) && (z[62] == 0) && (z[63] == 0)
+	return (*z) == (VrfPrivkey{})
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *VrfProof) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendBytes(o, (z)[:])
+	o = msgp.AppendBytes(o, (*z)[:])
 	return
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *VrfProof) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	bts, err = msgp.ReadExactBytes(bts, (z)[:])
+	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
@@ -1356,19 +1358,19 @@ func (z *VrfProof) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *VrfProof) MsgIsZero() bool {
-	return (z[0] == 0) && (z[1] == 0) && (z[2] == 0) && (z[3] == 0) && (z[4] == 0) && (z[5] == 0) && (z[6] == 0) && (z[7] == 0) && (z[8] == 0) && (z[9] == 0) && (z[10] == 0) && (z[11] == 0) && (z[12] == 0) && (z[13] == 0) && (z[14] == 0) && (z[15] == 0) && (z[16] == 0) && (z[17] == 0) && (z[18] == 0) && (z[19] == 0) && (z[20] == 0) && (z[21] == 0) && (z[22] == 0) && (z[23] == 0) && (z[24] == 0) && (z[25] == 0) && (z[26] == 0) && (z[27] == 0) && (z[28] == 0) && (z[29] == 0) && (z[30] == 0) && (z[31] == 0) && (z[32] == 0) && (z[33] == 0) && (z[34] == 0) && (z[35] == 0) && (z[36] == 0) && (z[37] == 0) && (z[38] == 0) && (z[39] == 0) && (z[40] == 0) && (z[41] == 0) && (z[42] == 0) && (z[43] == 0) && (z[44] == 0) && (z[45] == 0) && (z[46] == 0) && (z[47] == 0) && (z[48] == 0) && (z[49] == 0) && (z[50] == 0) && (z[51] == 0) && (z[52] == 0) && (z[53] == 0) && (z[54] == 0) && (z[55] == 0) && (z[56] == 0) && (z[57] == 0) && (z[58] == 0) && (z[59] == 0) && (z[60] == 0) && (z[61] == 0) && (z[62] == 0) && (z[63] == 0) && (z[64] == 0) && (z[65] == 0) && (z[66] == 0) && (z[67] == 0) && (z[68] == 0) && (z[69] == 0) && (z[70] == 0) && (z[71] == 0) && (z[72] == 0) && (z[73] == 0) && (z[74] == 0) && (z[75] == 0) && (z[76] == 0) && (z[77] == 0) && (z[78] == 0) && (z[79] == 0)
+	return (*z) == (VrfProof{})
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *VrfPubkey) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendBytes(o, (z)[:])
+	o = msgp.AppendBytes(o, (*z)[:])
 	return
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *VrfPubkey) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	bts, err = msgp.ReadExactBytes(bts, (z)[:])
+	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
@@ -1385,19 +1387,19 @@ func (z *VrfPubkey) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *VrfPubkey) MsgIsZero() bool {
-	return (z[0] == 0) && (z[1] == 0) && (z[2] == 0) && (z[3] == 0) && (z[4] == 0) && (z[5] == 0) && (z[6] == 0) && (z[7] == 0) && (z[8] == 0) && (z[9] == 0) && (z[10] == 0) && (z[11] == 0) && (z[12] == 0) && (z[13] == 0) && (z[14] == 0) && (z[15] == 0) && (z[16] == 0) && (z[17] == 0) && (z[18] == 0) && (z[19] == 0) && (z[20] == 0) && (z[21] == 0) && (z[22] == 0) && (z[23] == 0) && (z[24] == 0) && (z[25] == 0) && (z[26] == 0) && (z[27] == 0) && (z[28] == 0) && (z[29] == 0) && (z[30] == 0) && (z[31] == 0)
+	return (*z) == (VrfPubkey{})
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *ed25519PrivateKey) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendBytes(o, (z)[:])
+	o = msgp.AppendBytes(o, (*z)[:])
 	return
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *ed25519PrivateKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	bts, err = msgp.ReadExactBytes(bts, (z)[:])
+	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
@@ -1414,19 +1416,19 @@ func (z *ed25519PrivateKey) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *ed25519PrivateKey) MsgIsZero() bool {
-	return (z[0] == 0) && (z[1] == 0) && (z[2] == 0) && (z[3] == 0) && (z[4] == 0) && (z[5] == 0) && (z[6] == 0) && (z[7] == 0) && (z[8] == 0) && (z[9] == 0) && (z[10] == 0) && (z[11] == 0) && (z[12] == 0) && (z[13] == 0) && (z[14] == 0) && (z[15] == 0) && (z[16] == 0) && (z[17] == 0) && (z[18] == 0) && (z[19] == 0) && (z[20] == 0) && (z[21] == 0) && (z[22] == 0) && (z[23] == 0) && (z[24] == 0) && (z[25] == 0) && (z[26] == 0) && (z[27] == 0) && (z[28] == 0) && (z[29] == 0) && (z[30] == 0) && (z[31] == 0) && (z[32] == 0) && (z[33] == 0) && (z[34] == 0) && (z[35] == 0) && (z[36] == 0) && (z[37] == 0) && (z[38] == 0) && (z[39] == 0) && (z[40] == 0) && (z[41] == 0) && (z[42] == 0) && (z[43] == 0) && (z[44] == 0) && (z[45] == 0) && (z[46] == 0) && (z[47] == 0) && (z[48] == 0) && (z[49] == 0) && (z[50] == 0) && (z[51] == 0) && (z[52] == 0) && (z[53] == 0) && (z[54] == 0) && (z[55] == 0) && (z[56] == 0) && (z[57] == 0) && (z[58] == 0) && (z[59] == 0) && (z[60] == 0) && (z[61] == 0) && (z[62] == 0) && (z[63] == 0)
+	return (*z) == (ed25519PrivateKey{})
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *ed25519PublicKey) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendBytes(o, (z)[:])
+	o = msgp.AppendBytes(o, (*z)[:])
 	return
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *ed25519PublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	bts, err = msgp.ReadExactBytes(bts, (z)[:])
+	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
@@ -1443,19 +1445,19 @@ func (z *ed25519PublicKey) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *ed25519PublicKey) MsgIsZero() bool {
-	return (z[0] == 0) && (z[1] == 0) && (z[2] == 0) && (z[3] == 0) && (z[4] == 0) && (z[5] == 0) && (z[6] == 0) && (z[7] == 0) && (z[8] == 0) && (z[9] == 0) && (z[10] == 0) && (z[11] == 0) && (z[12] == 0) && (z[13] == 0) && (z[14] == 0) && (z[15] == 0) && (z[16] == 0) && (z[17] == 0) && (z[18] == 0) && (z[19] == 0) && (z[20] == 0) && (z[21] == 0) && (z[22] == 0) && (z[23] == 0) && (z[24] == 0) && (z[25] == 0) && (z[26] == 0) && (z[27] == 0) && (z[28] == 0) && (z[29] == 0) && (z[30] == 0) && (z[31] == 0)
+	return (*z) == (ed25519PublicKey{})
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *ed25519Seed) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendBytes(o, (z)[:])
+	o = msgp.AppendBytes(o, (*z)[:])
 	return
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *ed25519Seed) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	bts, err = msgp.ReadExactBytes(bts, (z)[:])
+	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
@@ -1472,19 +1474,19 @@ func (z *ed25519Seed) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *ed25519Seed) MsgIsZero() bool {
-	return (z[0] == 0) && (z[1] == 0) && (z[2] == 0) && (z[3] == 0) && (z[4] == 0) && (z[5] == 0) && (z[6] == 0) && (z[7] == 0) && (z[8] == 0) && (z[9] == 0) && (z[10] == 0) && (z[11] == 0) && (z[12] == 0) && (z[13] == 0) && (z[14] == 0) && (z[15] == 0) && (z[16] == 0) && (z[17] == 0) && (z[18] == 0) && (z[19] == 0) && (z[20] == 0) && (z[21] == 0) && (z[22] == 0) && (z[23] == 0) && (z[24] == 0) && (z[25] == 0) && (z[26] == 0) && (z[27] == 0) && (z[28] == 0) && (z[29] == 0) && (z[30] == 0) && (z[31] == 0)
+	return (*z) == (ed25519Seed{})
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *ed25519Signature) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendBytes(o, (z)[:])
+	o = msgp.AppendBytes(o, (*z)[:])
 	return
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *ed25519Signature) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	bts, err = msgp.ReadExactBytes(bts, (z)[:])
+	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
@@ -1501,7 +1503,7 @@ func (z *ed25519Signature) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *ed25519Signature) MsgIsZero() bool {
-	return (z[0] == 0) && (z[1] == 0) && (z[2] == 0) && (z[3] == 0) && (z[4] == 0) && (z[5] == 0) && (z[6] == 0) && (z[7] == 0) && (z[8] == 0) && (z[9] == 0) && (z[10] == 0) && (z[11] == 0) && (z[12] == 0) && (z[13] == 0) && (z[14] == 0) && (z[15] == 0) && (z[16] == 0) && (z[17] == 0) && (z[18] == 0) && (z[19] == 0) && (z[20] == 0) && (z[21] == 0) && (z[22] == 0) && (z[23] == 0) && (z[24] == 0) && (z[25] == 0) && (z[26] == 0) && (z[27] == 0) && (z[28] == 0) && (z[29] == 0) && (z[30] == 0) && (z[31] == 0) && (z[32] == 0) && (z[33] == 0) && (z[34] == 0) && (z[35] == 0) && (z[36] == 0) && (z[37] == 0) && (z[38] == 0) && (z[39] == 0) && (z[40] == 0) && (z[41] == 0) && (z[42] == 0) && (z[43] == 0) && (z[44] == 0) && (z[45] == 0) && (z[46] == 0) && (z[47] == 0) && (z[48] == 0) && (z[49] == 0) && (z[50] == 0) && (z[51] == 0) && (z[52] == 0) && (z[53] == 0) && (z[54] == 0) && (z[55] == 0) && (z[56] == 0) && (z[57] == 0) && (z[58] == 0) && (z[59] == 0) && (z[60] == 0) && (z[61] == 0) && (z[62] == 0) && (z[63] == 0)
+	return (*z) == (ed25519Signature{})
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1510,16 +1512,16 @@ func (z *ephemeralSubkey) MarshalMsg(b []byte) (o []byte, err error) {
 	// map header, size 4
 	// string "PK"
 	o = append(o, 0x84, 0xa2, 0x50, 0x4b)
-	o = msgp.AppendBytes(o, (z.PK)[:])
+	o = msgp.AppendBytes(o, ((*z).PK)[:])
 	// string "PKSig"
 	o = append(o, 0xa5, 0x50, 0x4b, 0x53, 0x69, 0x67)
-	o = msgp.AppendBytes(o, (z.PKSigOld)[:])
+	o = msgp.AppendBytes(o, ((*z).PKSigOld)[:])
 	// string "SK"
 	o = append(o, 0xa2, 0x53, 0x4b)
-	o = msgp.AppendBytes(o, (z.SK)[:])
+	o = msgp.AppendBytes(o, ((*z).SK)[:])
 	// string "sig2"
 	o = append(o, 0xa4, 0x73, 0x69, 0x67, 0x32)
-	o = msgp.AppendBytes(o, (z.PKSigNew)[:])
+	o = msgp.AppendBytes(o, ((*z).PKSigNew)[:])
 	return
 }
 
@@ -1527,14 +1529,14 @@ func (z *ephemeralSubkey) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *ephemeralSubkey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0001 uint32
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0005 uint32
+	zb0005, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
 	}
-	for zb0001 > 0 {
-		zb0001--
+	for zb0005 > 0 {
+		zb0005--
 		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
@@ -1542,25 +1544,25 @@ func (z *ephemeralSubkey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "PK":
-			bts, err = msgp.ReadExactBytes(bts, (z.PK)[:])
+			bts, err = msgp.ReadExactBytes(bts, ((*z).PK)[:])
 			if err != nil {
 				err = msgp.WrapError(err, "PK")
 				return
 			}
 		case "SK":
-			bts, err = msgp.ReadExactBytes(bts, (z.SK)[:])
+			bts, err = msgp.ReadExactBytes(bts, ((*z).SK)[:])
 			if err != nil {
 				err = msgp.WrapError(err, "SK")
 				return
 			}
 		case "PKSig":
-			bts, err = msgp.ReadExactBytes(bts, (z.PKSigOld)[:])
+			bts, err = msgp.ReadExactBytes(bts, ((*z).PKSigOld)[:])
 			if err != nil {
 				err = msgp.WrapError(err, "PKSigOld")
 				return
 			}
 		case "sig2":
-			bts, err = msgp.ReadExactBytes(bts, (z.PKSigNew)[:])
+			bts, err = msgp.ReadExactBytes(bts, ((*z).PKSigNew)[:])
 			if err != nil {
 				err = msgp.WrapError(err, "PKSigNew")
 				return
@@ -1585,5 +1587,5 @@ func (z *ephemeralSubkey) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *ephemeralSubkey) MsgIsZero() bool {
-	return ((z.PK[0] == 0) && (z.PK[1] == 0) && (z.PK[2] == 0) && (z.PK[3] == 0) && (z.PK[4] == 0) && (z.PK[5] == 0) && (z.PK[6] == 0) && (z.PK[7] == 0) && (z.PK[8] == 0) && (z.PK[9] == 0) && (z.PK[10] == 0) && (z.PK[11] == 0) && (z.PK[12] == 0) && (z.PK[13] == 0) && (z.PK[14] == 0) && (z.PK[15] == 0) && (z.PK[16] == 0) && (z.PK[17] == 0) && (z.PK[18] == 0) && (z.PK[19] == 0) && (z.PK[20] == 0) && (z.PK[21] == 0) && (z.PK[22] == 0) && (z.PK[23] == 0) && (z.PK[24] == 0) && (z.PK[25] == 0) && (z.PK[26] == 0) && (z.PK[27] == 0) && (z.PK[28] == 0) && (z.PK[29] == 0) && (z.PK[30] == 0) && (z.PK[31] == 0)) && ((z.SK[0] == 0) && (z.SK[1] == 0) && (z.SK[2] == 0) && (z.SK[3] == 0) && (z.SK[4] == 0) && (z.SK[5] == 0) && (z.SK[6] == 0) && (z.SK[7] == 0) && (z.SK[8] == 0) && (z.SK[9] == 0) && (z.SK[10] == 0) && (z.SK[11] == 0) && (z.SK[12] == 0) && (z.SK[13] == 0) && (z.SK[14] == 0) && (z.SK[15] == 0) && (z.SK[16] == 0) && (z.SK[17] == 0) && (z.SK[18] == 0) && (z.SK[19] == 0) && (z.SK[20] == 0) && (z.SK[21] == 0) && (z.SK[22] == 0) && (z.SK[23] == 0) && (z.SK[24] == 0) && (z.SK[25] == 0) && (z.SK[26] == 0) && (z.SK[27] == 0) && (z.SK[28] == 0) && (z.SK[29] == 0) && (z.SK[30] == 0) && (z.SK[31] == 0) && (z.SK[32] == 0) && (z.SK[33] == 0) && (z.SK[34] == 0) && (z.SK[35] == 0) && (z.SK[36] == 0) && (z.SK[37] == 0) && (z.SK[38] == 0) && (z.SK[39] == 0) && (z.SK[40] == 0) && (z.SK[41] == 0) && (z.SK[42] == 0) && (z.SK[43] == 0) && (z.SK[44] == 0) && (z.SK[45] == 0) && (z.SK[46] == 0) && (z.SK[47] == 0) && (z.SK[48] == 0) && (z.SK[49] == 0) && (z.SK[50] == 0) && (z.SK[51] == 0) && (z.SK[52] == 0) && (z.SK[53] == 0) && (z.SK[54] == 0) && (z.SK[55] == 0) && (z.SK[56] == 0) && (z.SK[57] == 0) && (z.SK[58] == 0) && (z.SK[59] == 0) && (z.SK[60] == 0) && (z.SK[61] == 0) && (z.SK[62] == 0) && (z.SK[63] == 0)) && ((z.PKSigOld[0] == 0) && (z.PKSigOld[1] == 0) && (z.PKSigOld[2] == 0) && (z.PKSigOld[3] == 0) && (z.PKSigOld[4] == 0) && (z.PKSigOld[5] == 0) && (z.PKSigOld[6] == 0) && (z.PKSigOld[7] == 0) && (z.PKSigOld[8] == 0) && (z.PKSigOld[9] == 0) && (z.PKSigOld[10] == 0) && (z.PKSigOld[11] == 0) && (z.PKSigOld[12] == 0) && (z.PKSigOld[13] == 0) && (z.PKSigOld[14] == 0) && (z.PKSigOld[15] == 0) && (z.PKSigOld[16] == 0) && (z.PKSigOld[17] == 0) && (z.PKSigOld[18] == 0) && (z.PKSigOld[19] == 0) && (z.PKSigOld[20] == 0) && (z.PKSigOld[21] == 0) && (z.PKSigOld[22] == 0) && (z.PKSigOld[23] == 0) && (z.PKSigOld[24] == 0) && (z.PKSigOld[25] == 0) && (z.PKSigOld[26] == 0) && (z.PKSigOld[27] == 0) && (z.PKSigOld[28] == 0) && (z.PKSigOld[29] == 0) && (z.PKSigOld[30] == 0) && (z.PKSigOld[31] == 0) && (z.PKSigOld[32] == 0) && (z.PKSigOld[33] == 0) && (z.PKSigOld[34] == 0) && (z.PKSigOld[35] == 0) && (z.PKSigOld[36] == 0) && (z.PKSigOld[37] == 0) && (z.PKSigOld[38] == 0) && (z.PKSigOld[39] == 0) && (z.PKSigOld[40] == 0) && (z.PKSigOld[41] == 0) && (z.PKSigOld[42] == 0) && (z.PKSigOld[43] == 0) && (z.PKSigOld[44] == 0) && (z.PKSigOld[45] == 0) && (z.PKSigOld[46] == 0) && (z.PKSigOld[47] == 0) && (z.PKSigOld[48] == 0) && (z.PKSigOld[49] == 0) && (z.PKSigOld[50] == 0) && (z.PKSigOld[51] == 0) && (z.PKSigOld[52] == 0) && (z.PKSigOld[53] == 0) && (z.PKSigOld[54] == 0) && (z.PKSigOld[55] == 0) && (z.PKSigOld[56] == 0) && (z.PKSigOld[57] == 0) && (z.PKSigOld[58] == 0) && (z.PKSigOld[59] == 0) && (z.PKSigOld[60] == 0) && (z.PKSigOld[61] == 0) && (z.PKSigOld[62] == 0) && (z.PKSigOld[63] == 0)) && ((z.PKSigNew[0] == 0) && (z.PKSigNew[1] == 0) && (z.PKSigNew[2] == 0) && (z.PKSigNew[3] == 0) && (z.PKSigNew[4] == 0) && (z.PKSigNew[5] == 0) && (z.PKSigNew[6] == 0) && (z.PKSigNew[7] == 0) && (z.PKSigNew[8] == 0) && (z.PKSigNew[9] == 0) && (z.PKSigNew[10] == 0) && (z.PKSigNew[11] == 0) && (z.PKSigNew[12] == 0) && (z.PKSigNew[13] == 0) && (z.PKSigNew[14] == 0) && (z.PKSigNew[15] == 0) && (z.PKSigNew[16] == 0) && (z.PKSigNew[17] == 0) && (z.PKSigNew[18] == 0) && (z.PKSigNew[19] == 0) && (z.PKSigNew[20] == 0) && (z.PKSigNew[21] == 0) && (z.PKSigNew[22] == 0) && (z.PKSigNew[23] == 0) && (z.PKSigNew[24] == 0) && (z.PKSigNew[25] == 0) && (z.PKSigNew[26] == 0) && (z.PKSigNew[27] == 0) && (z.PKSigNew[28] == 0) && (z.PKSigNew[29] == 0) && (z.PKSigNew[30] == 0) && (z.PKSigNew[31] == 0) && (z.PKSigNew[32] == 0) && (z.PKSigNew[33] == 0) && (z.PKSigNew[34] == 0) && (z.PKSigNew[35] == 0) && (z.PKSigNew[36] == 0) && (z.PKSigNew[37] == 0) && (z.PKSigNew[38] == 0) && (z.PKSigNew[39] == 0) && (z.PKSigNew[40] == 0) && (z.PKSigNew[41] == 0) && (z.PKSigNew[42] == 0) && (z.PKSigNew[43] == 0) && (z.PKSigNew[44] == 0) && (z.PKSigNew[45] == 0) && (z.PKSigNew[46] == 0) && (z.PKSigNew[47] == 0) && (z.PKSigNew[48] == 0) && (z.PKSigNew[49] == 0) && (z.PKSigNew[50] == 0) && (z.PKSigNew[51] == 0) && (z.PKSigNew[52] == 0) && (z.PKSigNew[53] == 0) && (z.PKSigNew[54] == 0) && (z.PKSigNew[55] == 0) && (z.PKSigNew[56] == 0) && (z.PKSigNew[57] == 0) && (z.PKSigNew[58] == 0) && (z.PKSigNew[59] == 0) && (z.PKSigNew[60] == 0) && (z.PKSigNew[61] == 0) && (z.PKSigNew[62] == 0) && (z.PKSigNew[63] == 0))
+	return ((*z).PK == (ed25519PublicKey{})) && ((*z).SK == (ed25519PrivateKey{})) && ((*z).PKSigOld == (ed25519Signature{})) && ((*z).PKSigNew == (ed25519Signature{}))
 }

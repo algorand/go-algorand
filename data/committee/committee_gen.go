@@ -12,23 +12,23 @@ func (z *Credential) MarshalMsg(b []byte) (o []byte, err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(5)
 	var zb0001Mask uint8 /* 7 bits */
-	if z.DomainSeparationEnabled == false {
+	if (*z).DomainSeparationEnabled == false {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if z.VrfOut.MsgIsZero() {
+	if (*z).VrfOut.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
-	if z.Hashable.MsgIsZero() {
+	if (*z).Hashable.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x10
 	}
-	if z.UnauthenticatedCredential.Proof.MsgIsZero() {
+	if (*z).UnauthenticatedCredential.Proof.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x20
 	}
-	if z.Weight == 0 {
+	if (*z).Weight == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x40
 	}
@@ -40,12 +40,12 @@ func (z *Credential) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x4) == 0 { // if not empty
 		// string "ds"
 		o = append(o, 0xa2, 0x64, 0x73)
-		o = msgp.AppendBool(o, z.DomainSeparationEnabled)
+		o = msgp.AppendBool(o, (*z).DomainSeparationEnabled)
 	}
 	if (zb0001Mask & 0x8) == 0 { // if not empty
 		// string "h"
 		o = append(o, 0xa1, 0x68)
-		o, err = z.VrfOut.MarshalMsg(o)
+		o, err = (*z).VrfOut.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "VrfOut")
 			return
@@ -54,7 +54,7 @@ func (z *Credential) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x10) == 0 { // if not empty
 		// string "hc"
 		o = append(o, 0xa2, 0x68, 0x63)
-		o, err = z.Hashable.MarshalMsg(o)
+		o, err = (*z).Hashable.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "Hashable")
 			return
@@ -63,7 +63,7 @@ func (z *Credential) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x20) == 0 { // if not empty
 		// string "pf"
 		o = append(o, 0xa2, 0x70, 0x66)
-		o, err = z.UnauthenticatedCredential.Proof.MarshalMsg(o)
+		o, err = (*z).UnauthenticatedCredential.Proof.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "Proof")
 			return
@@ -72,7 +72,7 @@ func (z *Credential) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x40) == 0 { // if not empty
 		// string "wt"
 		o = append(o, 0xa2, 0x77, 0x74)
-		o = msgp.AppendUint64(o, z.Weight)
+		o = msgp.AppendUint64(o, (*z).Weight)
 	}
 	return
 }
@@ -96,31 +96,31 @@ func (z *Credential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "wt":
-			z.Weight, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).Weight, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Weight")
 				return
 			}
 		case "h":
-			bts, err = z.VrfOut.UnmarshalMsg(bts)
+			bts, err = (*z).VrfOut.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "VrfOut")
 				return
 			}
 		case "ds":
-			z.DomainSeparationEnabled, bts, err = msgp.ReadBoolBytes(bts)
+			(*z).DomainSeparationEnabled, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "DomainSeparationEnabled")
 				return
 			}
 		case "hc":
-			bts, err = z.Hashable.UnmarshalMsg(bts)
+			bts, err = (*z).Hashable.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Hashable")
 				return
 			}
 		case "pf":
-			bts, err = z.UnauthenticatedCredential.Proof.UnmarshalMsg(bts)
+			bts, err = (*z).UnauthenticatedCredential.Proof.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Proof")
 				return
@@ -139,25 +139,25 @@ func (z *Credential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Credential) Msgsize() (s int) {
-	s = 1 + 3 + msgp.Uint64Size + 2 + z.VrfOut.Msgsize() + 3 + msgp.BoolSize + 3 + z.Hashable.Msgsize() + 3 + z.UnauthenticatedCredential.Proof.Msgsize()
+	s = 1 + 3 + msgp.Uint64Size + 2 + (*z).VrfOut.Msgsize() + 3 + msgp.BoolSize + 3 + (*z).Hashable.Msgsize() + 3 + (*z).UnauthenticatedCredential.Proof.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Credential) MsgIsZero() bool {
-	return (z.Weight == 0) && (z.VrfOut.MsgIsZero()) && (z.DomainSeparationEnabled == false) && (z.Hashable.MsgIsZero()) && (z.UnauthenticatedCredential.Proof.MsgIsZero())
+	return ((*z).Weight == 0) && ((*z).VrfOut.MsgIsZero()) && ((*z).DomainSeparationEnabled == false) && ((*z).Hashable.MsgIsZero()) && ((*z).UnauthenticatedCredential.Proof.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *Seed) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendBytes(o, (z)[:])
+	o = msgp.AppendBytes(o, (*z)[:])
 	return
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *Seed) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	bts, err = msgp.ReadExactBytes(bts, (z)[:])
+	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
@@ -174,7 +174,7 @@ func (z *Seed) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *Seed) MsgIsZero() bool {
-	return (z[0] == 0) && (z[1] == 0) && (z[2] == 0) && (z[3] == 0) && (z[4] == 0) && (z[5] == 0) && (z[6] == 0) && (z[7] == 0) && (z[8] == 0) && (z[9] == 0) && (z[10] == 0) && (z[11] == 0) && (z[12] == 0) && (z[13] == 0) && (z[14] == 0) && (z[15] == 0) && (z[16] == 0) && (z[17] == 0) && (z[18] == 0) && (z[19] == 0) && (z[20] == 0) && (z[21] == 0) && (z[22] == 0) && (z[23] == 0) && (z[24] == 0) && (z[25] == 0) && (z[26] == 0) && (z[27] == 0) && (z[28] == 0) && (z[29] == 0) && (z[30] == 0) && (z[31] == 0)
+	return (*z) == (Seed{})
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -183,7 +183,7 @@ func (z *UnauthenticatedCredential) MarshalMsg(b []byte) (o []byte, err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(1)
 	var zb0001Mask uint8 /* 2 bits */
-	if z.Proof.MsgIsZero() {
+	if (*z).Proof.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
@@ -195,7 +195,7 @@ func (z *UnauthenticatedCredential) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x2) == 0 { // if not empty
 		// string "pf"
 		o = append(o, 0xa2, 0x70, 0x66)
-		o, err = z.Proof.MarshalMsg(o)
+		o, err = (*z).Proof.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "Proof")
 			return
@@ -223,7 +223,7 @@ func (z *UnauthenticatedCredential) UnmarshalMsg(bts []byte) (o []byte, err erro
 		}
 		switch msgp.UnsafeString(field) {
 		case "pf":
-			bts, err = z.Proof.UnmarshalMsg(bts)
+			bts, err = (*z).Proof.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Proof")
 				return
@@ -242,12 +242,14 @@ func (z *UnauthenticatedCredential) UnmarshalMsg(bts []byte) (o []byte, err erro
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *UnauthenticatedCredential) Msgsize() (s int) {
-	s = 1 + 3 + z.Proof.Msgsize()
+	s = 1 + 3 + (*z).Proof.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *UnauthenticatedCredential) MsgIsZero() bool { return (z.Proof.MsgIsZero()) }
+func (z *UnauthenticatedCredential) MsgIsZero() bool {
+	return ((*z).Proof.MsgIsZero())
+}
 
 // MarshalMsg implements msgp.Marshaler
 func (z *hashableCredential) MarshalMsg(b []byte) (o []byte, err error) {
@@ -255,15 +257,15 @@ func (z *hashableCredential) MarshalMsg(b []byte) (o []byte, err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(3)
 	var zb0001Mask uint8 /* 4 bits */
-	if z.Iter == 0 {
+	if (*z).Iter == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if z.Member.MsgIsZero() {
+	if (*z).Member.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if z.RawOut.MsgIsZero() {
+	if (*z).RawOut.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
@@ -275,12 +277,12 @@ func (z *hashableCredential) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x2) == 0 { // if not empty
 		// string "i"
 		o = append(o, 0xa1, 0x69)
-		o = msgp.AppendUint64(o, z.Iter)
+		o = msgp.AppendUint64(o, (*z).Iter)
 	}
 	if (zb0001Mask & 0x4) == 0 { // if not empty
 		// string "m"
 		o = append(o, 0xa1, 0x6d)
-		o, err = z.Member.MarshalMsg(o)
+		o, err = (*z).Member.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "Member")
 			return
@@ -289,7 +291,7 @@ func (z *hashableCredential) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x8) == 0 { // if not empty
 		// string "v"
 		o = append(o, 0xa1, 0x76)
-		o, err = z.RawOut.MarshalMsg(o)
+		o, err = (*z).RawOut.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "RawOut")
 			return
@@ -317,19 +319,19 @@ func (z *hashableCredential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "v":
-			bts, err = z.RawOut.UnmarshalMsg(bts)
+			bts, err = (*z).RawOut.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "RawOut")
 				return
 			}
 		case "m":
-			bts, err = z.Member.UnmarshalMsg(bts)
+			bts, err = (*z).Member.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Member")
 				return
 			}
 		case "i":
-			z.Iter, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).Iter, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Iter")
 				return
@@ -348,11 +350,11 @@ func (z *hashableCredential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *hashableCredential) Msgsize() (s int) {
-	s = 1 + 2 + z.RawOut.Msgsize() + 2 + z.Member.Msgsize() + 2 + msgp.Uint64Size
+	s = 1 + 2 + (*z).RawOut.Msgsize() + 2 + (*z).Member.Msgsize() + 2 + msgp.Uint64Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *hashableCredential) MsgIsZero() bool {
-	return (z.RawOut.MsgIsZero()) && (z.Member.MsgIsZero()) && (z.Iter == 0)
+	return ((*z).RawOut.MsgIsZero()) && ((*z).Member.MsgIsZero()) && ((*z).Iter == 0)
 }
