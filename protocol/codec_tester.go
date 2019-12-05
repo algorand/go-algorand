@@ -25,7 +25,7 @@ import (
 	"github.com/zeldovich/msgp/msgp"
 )
 
-const debug_codec_tester = true
+const debug_codec_tester = false
 
 type MsgpMarshalUnmarshal interface {
 	msgp.Marshaler
@@ -98,6 +98,25 @@ func RandomizeValue(v reflect.Value) error {
 		v.Set(s)
 	case reflect.Bool:
 		v.SetBool(rand.Uint32() % 2 == 0)
+	case reflect.Map:
+		mt := v.Type()
+		v.Set(reflect.MakeMap(mt))
+		l := rand.Int() % 32
+		for i := 0; i < l; i++ {
+			mk := reflect.New(mt.Key())
+			err := RandomizeValue(mk.Elem())
+			if err != nil {
+				return err
+			}
+
+			mv := reflect.New(mt.Elem())
+			err = RandomizeValue(mv.Elem())
+			if err != nil {
+				return err
+			}
+
+			v.SetMapIndex(mk.Elem(), mv.Elem())
+		}
 	default:
 		return fmt.Errorf("unsupported object kind %v", v.Kind())
 	}

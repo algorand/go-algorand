@@ -17,7 +17,6 @@
 package data
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -29,11 +28,32 @@ import (
 
 func TestBlockEncoding(t *testing.T) {
 	var b bookkeeping.Block
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 1000; i++ {
 		err := protocol.EncodingTest(&b)
-		if err != nil {
-			fmt.Printf("err = %v\n", err)
-		}
+		require.NoError(t, err)
+	}
+}
+
+func TestGenesisEncoding(t *testing.T) {
+	var g bookkeeping.Genesis
+	for i := 0; i < 1000; i++ {
+		err := protocol.EncodingTest(&g)
+		require.NoError(t, err)
+	}
+}
+
+func TestTransactionEncoding(t *testing.T) {
+	var tx transactions.Transaction
+	for i := 0; i < 1000; i++ {
+		err := protocol.EncodingTest(&tx)
+		require.NoError(t, err)
+	}
+}
+
+func TestSignedTxnEncoding(t *testing.T) {
+	var st transactions.SignedTxn
+	for i := 0; i < 1000; i++ {
+		err := protocol.EncodingTest(&st)
 		require.NoError(t, err)
 	}
 }
