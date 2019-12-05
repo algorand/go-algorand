@@ -132,7 +132,7 @@ func (z *MultisigSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "v":
 			(*z).Version, bts, err = msgp.ReadUint8Bytes(bts)
 			if err != nil {
@@ -165,7 +165,7 @@ func (z *MultisigSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -239,7 +239,7 @@ func (z *MultisigSubsig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "pk":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).Key)[:])
 			if err != nil {
@@ -253,7 +253,7 @@ func (z *MultisigSubsig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -317,7 +317,7 @@ func (z *OneTimeSignature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "s":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).Sig)[:])
 			if err != nil {
@@ -355,7 +355,7 @@ func (z *OneTimeSignature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -407,7 +407,7 @@ func (z *OneTimeSignatureIdentifier) UnmarshalMsg(bts []byte) (o []byte, err err
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "Batch":
 			(*z).Batch, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
@@ -421,7 +421,7 @@ func (z *OneTimeSignatureIdentifier) UnmarshalMsg(bts []byte) (o []byte, err err
 				return
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -502,7 +502,7 @@ func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error)
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "OneTimeSignatureVerifier":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier)[:])
 			if err != nil {
@@ -572,7 +572,7 @@ func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error)
 				return
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -661,7 +661,7 @@ func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsg(bts []byte) (o []byte, 
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "OneTimeSignatureVerifier":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).OneTimeSignatureVerifier)[:])
 			if err != nil {
@@ -731,7 +731,7 @@ func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsg(bts []byte) (o []byte, 
 				return
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -791,7 +791,7 @@ func (z *OneTimeSignatureSubkeyBatchID) UnmarshalMsg(bts []byte) (o []byte, err 
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "pk":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).SubKeyPK)[:])
 			if err != nil {
@@ -805,7 +805,7 @@ func (z *OneTimeSignatureSubkeyBatchID) UnmarshalMsg(bts []byte) (o []byte, err 
 				return
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -860,7 +860,7 @@ func (z *OneTimeSignatureSubkeyOffsetID) UnmarshalMsg(bts []byte) (o []byte, err
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "pk":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).SubKeyPK)[:])
 			if err != nil {
@@ -880,7 +880,7 @@ func (z *OneTimeSignatureSubkeyOffsetID) UnmarshalMsg(bts []byte) (o []byte, err
 				return
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -969,7 +969,7 @@ func (z *OneTimeSigner) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "OneTimeSignatureSecrets":
 			if msgp.IsNil(bts) {
 				bts, err = msgp.ReadNilBytes(bts)
@@ -994,7 +994,7 @@ func (z *OneTimeSigner) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -1172,7 +1172,7 @@ func (z *SignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "SignatureVerifier":
 			bts, err = (*z).SignatureVerifier.UnmarshalMsg(bts)
 			if err != nil {
@@ -1186,7 +1186,7 @@ func (z *SignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -1238,7 +1238,7 @@ func (z *VRFSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "PK":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).PK)[:])
 			if err != nil {
@@ -1252,7 +1252,7 @@ func (z *VRFSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -1542,7 +1542,7 @@ func (z *ephemeralSubkey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "PK":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).PK)[:])
 			if err != nil {
@@ -1568,7 +1568,7 @@ func (z *ephemeralSubkey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return

@@ -46,7 +46,7 @@ func (z *Message) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "msg":
 			(*z).Message, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
@@ -54,7 +54,7 @@ func (z *Message) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return

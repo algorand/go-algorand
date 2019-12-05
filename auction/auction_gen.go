@@ -102,7 +102,7 @@ func (z *Bid) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "bidder":
 			bts, err = (*z).BidderKey.UnmarshalMsg(bts)
 			if err != nil {
@@ -140,7 +140,7 @@ func (z *Bid) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -249,7 +249,7 @@ func (z *BidOutcomes) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "auc":
 			bts, err = (*z).AuctionKey.UnmarshalMsg(bts)
 			if err != nil {
@@ -294,7 +294,7 @@ func (z *BidOutcomes) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -394,7 +394,7 @@ func (z *BidderOutcome) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "key":
 			bts, err = (*z).BidderKey.UnmarshalMsg(bts)
 			if err != nil {
@@ -420,7 +420,7 @@ func (z *BidderOutcome) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -482,7 +482,7 @@ func (z *BidderState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "WinningsAddress":
 			bts, err = (*z).WinningsAddress.UnmarshalMsg(bts)
 			if err != nil {
@@ -515,7 +515,7 @@ func (z *BidderState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -634,7 +634,7 @@ func (z *Deposit) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "key":
 			bts, err = (*z).BidderKey.UnmarshalMsg(bts)
 			if err != nil {
@@ -672,7 +672,7 @@ func (z *Deposit) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -821,7 +821,7 @@ func (z *MasterInput) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "rnd":
 			(*z).Round, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
@@ -852,7 +852,7 @@ func (z *MasterInput) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "SignedDeposit")
 					return
 				}
-				switch msgp.UnsafeString(field) {
+				switch string(field) {
 				case "dep":
 					bts, err = (*z).SignedDeposit.Deposit.UnmarshalMsg(bts)
 					if err != nil {
@@ -866,7 +866,7 @@ func (z *MasterInput) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						return
 					}
 				default:
-					err = msgp.ErrNoField(msgp.UnsafeString(field))
+					err = msgp.ErrNoField(string(field))
 					if err != nil {
 						err = msgp.WrapError(err, "SignedDeposit")
 						return
@@ -887,7 +887,7 @@ func (z *MasterInput) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "SignedBid")
 					return
 				}
-				switch msgp.UnsafeString(field) {
+				switch string(field) {
 				case "bid":
 					bts, err = (*z).SignedBid.Bid.UnmarshalMsg(bts)
 					if err != nil {
@@ -901,7 +901,7 @@ func (z *MasterInput) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						return
 					}
 				default:
-					err = msgp.ErrNoField(msgp.UnsafeString(field))
+					err = msgp.ErrNoField(string(field))
 					if err != nil {
 						err = msgp.WrapError(err, "SignedBid")
 						return
@@ -909,7 +909,7 @@ func (z *MasterInput) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -1127,7 +1127,7 @@ func (z *NoteField) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "t":
 			{
 				var zb0002 string
@@ -1152,7 +1152,7 @@ func (z *NoteField) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "SignedDeposit")
 					return
 				}
-				switch msgp.UnsafeString(field) {
+				switch string(field) {
 				case "dep":
 					bts, err = (*z).SignedDeposit.Deposit.UnmarshalMsg(bts)
 					if err != nil {
@@ -1166,7 +1166,7 @@ func (z *NoteField) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						return
 					}
 				default:
-					err = msgp.ErrNoField(msgp.UnsafeString(field))
+					err = msgp.ErrNoField(string(field))
 					if err != nil {
 						err = msgp.WrapError(err, "SignedDeposit")
 						return
@@ -1187,7 +1187,7 @@ func (z *NoteField) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "SignedBid")
 					return
 				}
-				switch msgp.UnsafeString(field) {
+				switch string(field) {
 				case "bid":
 					bts, err = (*z).SignedBid.Bid.UnmarshalMsg(bts)
 					if err != nil {
@@ -1201,7 +1201,7 @@ func (z *NoteField) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						return
 					}
 				default:
-					err = msgp.ErrNoField(msgp.UnsafeString(field))
+					err = msgp.ErrNoField(string(field))
 					if err != nil {
 						err = msgp.WrapError(err, "SignedBid")
 						return
@@ -1222,7 +1222,7 @@ func (z *NoteField) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "SignedSettlement")
 					return
 				}
-				switch msgp.UnsafeString(field) {
+				switch string(field) {
 				case "settle":
 					bts, err = (*z).SignedSettlement.Settlement.UnmarshalMsg(bts)
 					if err != nil {
@@ -1236,7 +1236,7 @@ func (z *NoteField) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						return
 					}
 				default:
-					err = msgp.ErrNoField(msgp.UnsafeString(field))
+					err = msgp.ErrNoField(string(field))
 					if err != nil {
 						err = msgp.WrapError(err, "SignedSettlement")
 						return
@@ -1257,7 +1257,7 @@ func (z *NoteField) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "SignedParams")
 					return
 				}
-				switch msgp.UnsafeString(field) {
+				switch string(field) {
 				case "param":
 					bts, err = (*z).SignedParams.Params.UnmarshalMsg(bts)
 					if err != nil {
@@ -1271,7 +1271,7 @@ func (z *NoteField) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						return
 					}
 				default:
-					err = msgp.ErrNoField(msgp.UnsafeString(field))
+					err = msgp.ErrNoField(string(field))
 					if err != nil {
 						err = msgp.WrapError(err, "SignedParams")
 						return
@@ -1279,7 +1279,7 @@ func (z *NoteField) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -1485,7 +1485,7 @@ func (z *Params) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "auc":
 			bts, err = (*z).AuctionKey.UnmarshalMsg(bts)
 			if err != nil {
@@ -1559,7 +1559,7 @@ func (z *Params) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -1693,7 +1693,7 @@ func (z *RunningAuction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "Params":
 			bts, err = (*z).Params.UnmarshalMsg(bts)
 			if err != nil {
@@ -1738,9 +1738,9 @@ func (z *RunningAuction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						err = msgp.WrapError(err, "DepositIDs", zb0001)
 						return
 					}
-					switch msgp.UnsafeString(field) {
+					switch string(field) {
 					default:
-						err = msgp.ErrNoField(msgp.UnsafeString(field))
+						err = msgp.ErrNoField(string(field))
 						if err != nil {
 							err = msgp.WrapError(err, "DepositIDs", zb0001)
 							return
@@ -1827,7 +1827,7 @@ func (z *RunningAuction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 							err = msgp.WrapError(err, "Bids", zb0005, zb0007)
 							return
 						}
-						switch msgp.UnsafeString(field) {
+						switch string(field) {
 						case "Bidder":
 							bts, err = zb0006[zb0007].Bidder.UnmarshalMsg(bts)
 							if err != nil {
@@ -1847,7 +1847,7 @@ func (z *RunningAuction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 								return
 							}
 						default:
-							err = msgp.ErrNoField(msgp.UnsafeString(field))
+							err = msgp.ErrNoField(string(field))
 							if err != nil {
 								err = msgp.WrapError(err, "Bids", zb0005, zb0007)
 								return
@@ -1881,7 +1881,7 @@ func (z *RunningAuction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -1972,7 +1972,7 @@ func (z *RunningBid) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "Bidder":
 			bts, err = (*z).Bidder.UnmarshalMsg(bts)
 			if err != nil {
@@ -1992,7 +1992,7 @@ func (z *RunningBid) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -2049,7 +2049,7 @@ func (z *SerializedRunningAuction) UnmarshalMsg(bts []byte) (o []byte, err error
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "RunningAuction":
 			if msgp.IsNil(bts) {
 				bts, err = msgp.ReadNilBytes(bts)
@@ -2068,7 +2068,7 @@ func (z *SerializedRunningAuction) UnmarshalMsg(bts []byte) (o []byte, err error
 				}
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -2179,7 +2179,7 @@ func (z *Settlement) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "auc":
 			bts, err = (*z).AuctionKey.UnmarshalMsg(bts)
 			if err != nil {
@@ -2211,7 +2211,7 @@ func (z *Settlement) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -2290,7 +2290,7 @@ func (z *SignedBid) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "bid":
 			bts, err = (*z).Bid.UnmarshalMsg(bts)
 			if err != nil {
@@ -2304,7 +2304,7 @@ func (z *SignedBid) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -2383,7 +2383,7 @@ func (z *SignedDeposit) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "dep":
 			bts, err = (*z).Deposit.UnmarshalMsg(bts)
 			if err != nil {
@@ -2397,7 +2397,7 @@ func (z *SignedDeposit) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -2476,7 +2476,7 @@ func (z *SignedParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "param":
 			bts, err = (*z).Params.UnmarshalMsg(bts)
 			if err != nil {
@@ -2490,7 +2490,7 @@ func (z *SignedParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -2569,7 +2569,7 @@ func (z *SignedSettlement) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "settle":
 			bts, err = (*z).Settlement.UnmarshalMsg(bts)
 			if err != nil {
@@ -2583,7 +2583,7 @@ func (z *SignedSettlement) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -2665,7 +2665,7 @@ func (z *Tracker) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "Auctions":
 			var zb0004 uint32
 			zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
@@ -2712,7 +2712,7 @@ func (z *Tracker) UnmarshalMsg(bts []byte) (o []byte, err error) {
 							err = msgp.WrapError(err, "Auctions", zb0001)
 							return
 						}
-						switch msgp.UnsafeString(field) {
+						switch string(field) {
 						case "RunningAuction":
 							if msgp.IsNil(bts) {
 								bts, err = msgp.ReadNilBytes(bts)
@@ -2731,7 +2731,7 @@ func (z *Tracker) UnmarshalMsg(bts []byte) (o []byte, err error) {
 								}
 							}
 						default:
-							err = msgp.ErrNoField(msgp.UnsafeString(field))
+							err = msgp.ErrNoField(string(field))
 							if err != nil {
 								err = msgp.WrapError(err, "Auctions", zb0001)
 								return
@@ -2748,7 +2748,7 @@ func (z *Tracker) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return

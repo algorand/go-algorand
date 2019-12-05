@@ -292,7 +292,7 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "rnd":
 			bts, err = (*z).BlockHeader.Round.UnmarshalMsg(bts)
 			if err != nil {
@@ -426,7 +426,7 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -740,7 +740,7 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "rnd":
 			bts, err = (*z).Round.UnmarshalMsg(bts)
 			if err != nil {
@@ -868,7 +868,7 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -1017,7 +1017,7 @@ func (z *Genesis) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "id":
 			(*z).SchemaID, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
@@ -1062,7 +1062,7 @@ func (z *Genesis) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						err = msgp.WrapError(err, "Allocation", zb0001)
 						return
 					}
-					switch msgp.UnsafeString(field) {
+					switch string(field) {
 					case "addr":
 						(*z).Allocation[zb0001].Address, bts, err = msgp.ReadStringBytes(bts)
 						if err != nil {
@@ -1082,7 +1082,7 @@ func (z *Genesis) UnmarshalMsg(bts []byte) (o []byte, err error) {
 							return
 						}
 					default:
-						err = msgp.ErrNoField(msgp.UnsafeString(field))
+						err = msgp.ErrNoField(string(field))
 						if err != nil {
 							err = msgp.WrapError(err, "Allocation", zb0001)
 							return
@@ -1115,7 +1115,7 @@ func (z *Genesis) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -1178,7 +1178,7 @@ func (z *GenesisAllocation) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "addr":
 			(*z).Address, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
@@ -1198,7 +1198,7 @@ func (z *GenesisAllocation) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -1274,7 +1274,7 @@ func (z *RewardsState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "fees":
 			bts, err = (*z).FeeSink.UnmarshalMsg(bts)
 			if err != nil {
@@ -1312,7 +1312,7 @@ func (z *RewardsState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -1389,7 +1389,7 @@ func (z *UpgradeState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "proto":
 			bts, err = (*z).CurrentProtocol.UnmarshalMsg(bts)
 			if err != nil {
@@ -1421,7 +1421,7 @@ func (z *UpgradeState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -1477,7 +1477,7 @@ func (z *UpgradeVote) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "upgradeprop":
 			bts, err = (*z).UpgradePropose.UnmarshalMsg(bts)
 			if err != nil {
@@ -1491,7 +1491,7 @@ func (z *UpgradeVote) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return

@@ -94,7 +94,7 @@ func (z *Credential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "wt":
 			(*z).Weight, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
@@ -126,7 +126,7 @@ func (z *Credential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -221,7 +221,7 @@ func (z *UnauthenticatedCredential) UnmarshalMsg(bts []byte) (o []byte, err erro
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "pf":
 			bts, err = (*z).Proof.UnmarshalMsg(bts)
 			if err != nil {
@@ -229,7 +229,7 @@ func (z *UnauthenticatedCredential) UnmarshalMsg(bts []byte) (o []byte, err erro
 				return
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
@@ -317,7 +317,7 @@ func (z *hashableCredential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
+		switch string(field) {
 		case "v":
 			bts, err = (*z).RawOut.UnmarshalMsg(bts)
 			if err != nil {
@@ -337,7 +337,7 @@ func (z *hashableCredential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
