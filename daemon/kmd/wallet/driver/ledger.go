@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/daemon/kmd/config"
 	"github.com/algorand/go-algorand/daemon/kmd/wallet"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -60,6 +61,7 @@ type LedgerWalletDriver struct {
 type LedgerWallet struct {
 	mu  deadlock.Mutex
 	dev LedgerUSB
+	log logging.Logger
 }
 
 // CreateWallet implements the Driver interface.  There is
@@ -85,8 +87,8 @@ func (lwd *LedgerWalletDriver) FetchWallet(id []byte) (w wallet.Wallet, err erro
 // InitWithConfig accepts a driver configuration.  Currently, the Ledger
 // driver does not have any configuration parameters.  However, we use
 // this to enumerate the USB devices.
-func (lwd *LedgerWalletDriver) InitWithConfig(cfg config.KMDConfig) error {
-	devs, err := LedgerEnumerate()
+func (lwd *LedgerWalletDriver) InitWithConfig(cfg config.KMDConfig, log logging.Logger) error {
+	devs, err := LedgerEnumerate(log)
 	if err != nil {
 		return err
 	}
