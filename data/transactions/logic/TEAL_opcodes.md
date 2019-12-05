@@ -449,14 +449,14 @@ The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which 
 
 ## substring
 
-- Opcode: 0x51 
+- Opcode: 0x51 {uint8 start position}{uint8 end position}
 - Pops: *... stack*, []byte
 - Pushes: []byte
-- pop a byte string X. For immediate values in 0..255 N and M: extract a range of bytes from it starting at N up to but not including M, push the substring result
+- pop a byte string X. For immediate values in 0..255 N and M: extract a range of bytes from it starting at N up to and including M, push the substring result
 
 ## substring3
 
 - Opcode: 0x52 
 - Pops: *... stack*, {[]byte A}, {uint64 B}, {uint64 C}
 - Pushes: []byte
-- pop a byte string A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result
+- pop a byte string A and two integers B and C. Extract a range of bytes from A starting at B up to and including C, push the substring result

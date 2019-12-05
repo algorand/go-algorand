@@ -88,8 +88,8 @@ var opDocList = []stringString{
 	{"pop", "discard value X from stack"},
 	{"dup", "duplicate last value on stack"},
 	{"cons", "pop two byte strings A and B and join them"},
-	{"substring", "pop a byte string X. For immediate values in 0..255 N and M: extract a range of bytes from it starting at N up to but not including M, push the substring result"},
-	{"substring3", "pop a byte string A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result"},
+	{"substring", "pop a byte string X. For immediate values in 0..255 N and M: extract a range of bytes from it starting at N up to and including M, push the substring result"},
+	{"substring3", "pop a byte string A and two integers B and C. Extract a range of bytes from A starting at B up to and including C, push the substring result"},
 }
 
 var opDocByName map[string]string
@@ -115,6 +115,7 @@ var opcodeImmediateNoteList = []stringString{
 	{"bnz", "{0..0x7fff forward branch offset, big endian}"},
 	{"load", "{uint8 position in scratch space to load from}"},
 	{"store", "{uint8 position in scratch space to store to}"},
+	{"substring", "{uint8 start position}{uint8 end position}"},
 }
 var opcodeImmediateNotes map[string]string
 
