@@ -37,6 +37,11 @@ byte base64(aGVsbG8gd29ybGQh)
 byte b64 aGVsbG8gd29ybGQh
 byte b64(aGVsbG8gd29ybGQh)
 addr RWXCBB73XJITATVQFOI7MVUUQOL2PFDDSDUMW4H4T2SNSX4SEUOQ2MM7F4
+cons
+substring 42 99
+intc 0
+intc 1
+substring3
 ed25519verify
 txn Sender
 txn Fee
@@ -149,10 +154,10 @@ func TestAssemble(t *testing.T) {
 			t.Errorf("test should contain op %v", spec.Name)
 		}
 	}
-	program, err := AssembleString(bigTestAssembleNonsenseProgram)
+	program, err := assembleStringWithTrace(t, bigTestAssembleNonsenseProgram)
 	require.NoError(t, err)
 	// check that compilation is stable over time and we assemble to the same bytes this month that we did last month.
-	expectedBytes, _ := hex.DecodeString("012005b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f26040212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d02424200320032013202320328292929292a0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e0102222324252104082209240a220b230c240d250e230f23102311231223132314181b1c2b171615400003290349483403350222231d48")
+	expectedBytes, _ := hex.DecodeString("012005b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f26040212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d02424200320032013202320328292929292a50512a632223520431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e0102222324252104082209240a220b230c240d250e230f23102311231223132314181b1c2b171615400003290349483403350222231d48")
 	if bytes.Compare(expectedBytes, program) != 0 {
 		// this print is for convenience if the program has been changed. the hex string can be copy pasted back in as a new expected result.
 		t.Log(hex.EncodeToString(program))
@@ -312,7 +317,7 @@ gtxn 12 Fee
 			t.Errorf("TestAssembleDisassemble missing field txn %v", txnField)
 		}
 	}
-	program, err := AssembleString(text)
+	program, err := assembleStringWithTrace(t, text)
 	require.NoError(t, err)
 	t2, err := Disassemble(program)
 	require.Equal(t, text, t2)

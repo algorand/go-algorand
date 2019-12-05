@@ -87,6 +87,9 @@ var opDocList = []stringString{
 	{"bnz", "branch if value X is not zero"},
 	{"pop", "discard value X from stack"},
 	{"dup", "duplicate last value on stack"},
+	{"cons", "pop two byte strings A and B and join them"},
+	{"substring", "pop a byte string X. For immediate values in 0..255 N and M: extract a range of bytes from it starting at N up to and including M, push the substring result"},
+	{"substring3", "pop a byte string A and two integers B and C. Extract a range of bytes from A starting at B up to and including C, push the substring result"},
 }
 
 var opDocByName map[string]string
@@ -112,6 +115,7 @@ var opcodeImmediateNoteList = []stringString{
 	{"bnz", "{0..0x7fff forward branch offset, big endian}"},
 	{"load", "{uint8 position in scratch space to load from}"},
 	{"store", "{uint8 position in scratch space to store to}"},
+	{"substring", "{uint8 start position}{uint8 end position}"},
 }
 var opcodeImmediateNotes map[string]string
 
@@ -133,6 +137,7 @@ var opDocExtraList = []stringString{
 	{"txn", "FirstValidTime causes the program to fail. The field is reserved for future use."},
 	{"gtxn", "for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`"},
 	{"btoi", "`btoi` panics if the input is longer than 8 bytes"},
+	{"cons", "`cons` panics if the result would be greater than 4096 bytes"},
 }
 
 var opDocExtras map[string]string
@@ -154,7 +159,7 @@ type OpGroup struct {
 
 // OpGroupList is groupings of ops for documentation purposes.
 var OpGroupList = []OpGroup{
-	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw"}},
+	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "cons", "substring", "substring3"}},
 	{"Loading Values", []string{"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "global", "load", "store"}},
 	{"Flow Control", []string{"err", "bnz", "pop", "dup"}},
 }

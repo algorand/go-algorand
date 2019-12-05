@@ -313,11 +313,13 @@ type OpSpec struct {
 }
 
 var oneBytes = []StackType{StackBytes}
+var twoBytes = []StackType{StackBytes, StackBytes}
 var threeBytes = []StackType{StackBytes, StackBytes, StackBytes}
 var oneInt = []StackType{StackUint64}
 var twoInts = []StackType{StackUint64, StackUint64}
 var oneAny = []StackType{StackAny}
 var twoAny = []StackType{StackAny, StackAny}
+var byteIntInt = []StackType{StackBytes, StackUint64, StackUint64}
 
 // OpSpecs is the table of operations that can be assembled and evaluated.
 //
@@ -377,6 +379,9 @@ var OpSpecs = []OpSpec{
 	{0x40, "bnz", opBnz, oneInt, nil},
 	{0x48, "pop", opPop, oneAny, nil},
 	{0x49, "dup", opDup, oneAny, twoAny},
+	{0x50, "cons", opCons, twoBytes, oneBytes},
+	{0x51, "substring", opSubstring, oneBytes, oneBytes},
+	{0x52, "substring3", opSubstring3, byteIntInt, oneBytes},
 }
 
 // direct opcode bytes
@@ -410,6 +415,7 @@ var opSizes = []opSize{
 	{"bytecblock", 1, 0, checkByteConstBlock},
 	{"load", 1, 2, nil},
 	{"store", 1, 2, nil},
+	{"substring", 1, 3, nil},
 }
 
 var opSizeByOpcode []opSize
@@ -1147,4 +1153,17 @@ func opStore(cx *evalContext) {
 	cx.scratch[gindex] = cx.stack[last]
 	cx.stack = cx.stack[:last]
 	cx.nextpc = cx.pc + 2
+}
+
+func opCons(cx *evalContext) {
+	// if result would be longer than 4096, panic
+	panic("TODO: implement cons")
+}
+
+func opSubstring(cx *evalContext) {
+	panic("TODO: implement substring")
+}
+
+func opSubstring3(cx *evalContext) {
+	panic("TODO: implement substring3")
 }
