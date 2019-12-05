@@ -38,6 +38,7 @@ var (
 )
 
 // State represents the state of the auction
+//msgp:ignore State
 type State int
 
 const (

@@ -40,63 +40,6 @@ func (z ConsensusVersion) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z CountingWriter) MarshalMsg(b []byte) (o []byte, err error) {
-	o = msgp.Require(b, z.Msgsize())
-	// map header, size 1
-	// string "N"
-	o = append(o, 0x81, 0xa1, 0x4e)
-	o = msgp.AppendInt(o, z.N)
-	return
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *CountingWriter) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	var field []byte
-	_ = field
-	var zb0001 uint32
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	for zb0001 > 0 {
-		zb0001--
-		field, bts, err = msgp.ReadMapKeyZC(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		switch msgp.UnsafeString(field) {
-		case "N":
-			(*z).N, bts, err = msgp.ReadIntBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "N")
-				return
-			}
-		default:
-			err = msgp.ErrNoField(msgp.UnsafeString(field))
-			if err != nil {
-				err = msgp.WrapError(err)
-				return
-			}
-		}
-	}
-	o = bts
-	return
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z CountingWriter) Msgsize() (s int) {
-	s = 1 + 2 + msgp.IntSize
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z CountingWriter) MsgIsZero() bool {
-	return (z.N == 0)
-}
-
-// MarshalMsg implements msgp.Marshaler
 func (z Error) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendString(o, string(z))

@@ -2606,39 +2606,6 @@ func (z *SignedSettlement) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z State) MarshalMsg(b []byte) (o []byte, err error) {
-	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendInt(o, int(z))
-	return
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *State) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	{
-		var zb0001 int
-		zb0001, bts, err = msgp.ReadIntBytes(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		(*z) = State(zb0001)
-	}
-	o = bts
-	return
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z State) Msgsize() (s int) {
-	s = msgp.IntSize
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z State) MsgIsZero() bool {
-	return z == 0
-}
-
-// MarshalMsg implements msgp.Marshaler
 func (z *Tracker) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 2
