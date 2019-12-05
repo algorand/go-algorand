@@ -4,6 +4,8 @@ github.com/algorand/go-codec/codec v0.0.0-20190507210007-269d70b6135d h1:W9MgGUo
 github.com/algorand/go-codec/codec v0.0.0-20190507210007-269d70b6135d/go.mod h1:qm6LyXvDa1+uZJxaVg8X+OEjBqt/zDinDa2EohtTDxU=
 github.com/algorand/go-deadlock v0.0.0-20181221160745-78d8cb5e2759 h1:IiCuOE1YCReVyEr1IQHKTBTvFLKdeBCfQuxrqhniq+I=
 github.com/algorand/go-deadlock v0.0.0-20181221160745-78d8cb5e2759/go.mod h1:Kve3O9VpxZIHsPzpfxNdyFltFU9jBTeVYMYxSC99tdg=
+github.com/algorand/msgp v1.1.11 h1:szIdMyTmAlyTEWYUgncwo73fey38YT5LqaytxrPf674=
+github.com/algorand/msgp v1.1.11/go.mod h1:LtOntbYiCHj/Sl/Sqxtf8CZOrDt2a8Dv3tLaS6mcnUE=
 github.com/algorand/websocket v1.4.1 h1:FPoNHI8i2VZWZzhCscY8JTzsAE7Vv73753cMbzb3udk=
 github.com/algorand/websocket v1.4.1/go.mod h1:0nFSn+xppw/GZS9hgWPS3b8/4FcA3Pj7XQxm+wqHGx8=
 github.com/aws/aws-sdk-go v1.16.5 h1:NVxzZXIuwX828VcJrpNxxWjur1tlOBISdMdDdHIKHcc=
@@ -101,8 +103,6 @@ github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+
 github.com/stretchr/testify v1.4.0 h1:2E4SXV/wtOkTonXsotYi4li6zVWxYlZuYNCXe9XRJyk=
 github.com/stretchr/testify v1.4.0/go.mod h1:j7eGeouHqKxXV5pUuKE4zz7dFj8WfuZ+81PSLYec5m4=
 github.com/ttacon/chalk v0.0.0-20160626202418-22c06c80ed31/go.mod h1:onvgF043R+lC5RZ8IT9rBXDaEDnpnw/Cl+HFiw+v/7Q=
-github.com/zeldovich/msgp v1.1.10 h1:gmeONWLS6uYf5TClGcRz2sYAGx0udWbuAFDCJDLzr1w=
-github.com/zeldovich/msgp v1.1.10/go.mod h1:mCGDE5W+88l6I4Lt1rXQiYsR2gpw5FjbHTSD9fDZNsE=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
 golang.org/x/crypto v0.0.0-20190605123033-f99c8df09eb5 h1:58fnuSXlxZmFdJyvtTFVmVhcMLU6v5fEb/ok4wyqtNU=
 golang.org/x/crypto v0.0.0-20190605123033-f99c8df09eb5/go.mod h1:yigFU9vqHzYiE8UmvKecakEJjdnWj3jj499lnFckfCI=

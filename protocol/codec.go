@@ -21,8 +21,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/zeldovich/msgp/msgp"
-
+	"github.com/algorand/msgp/msgp"
 	"github.com/algorand/go-codec/codec"
 )
 

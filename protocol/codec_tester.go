@@ -24,7 +24,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/zeldovich/msgp/msgp"
+	"github.com/algorand/msgp/msgp"
 )
 
 const debug_codec_tester = false

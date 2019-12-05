@@ -17,11 +17,11 @@
 package basics
 
 import (
-	"github.com/zeldovich/msgp/msgp"
+	"github.com/algorand/msgp/msgp"
+	"github.com/algorand/go-codec/codec"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-codec/codec"
 )
 
 // RoundInterval is a number of rounds

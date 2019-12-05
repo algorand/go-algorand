@@ -5,6 +5,7 @@ go 1.12
 require (
 	github.com/algorand/go-codec/codec v0.0.0-20190507210007-269d70b6135d
 	github.com/algorand/go-deadlock v0.0.0-20181221160745-78d8cb5e2759
+	github.com/algorand/msgp v1.1.11
 	github.com/algorand/websocket v1.4.1
 	github.com/aws/aws-sdk-go v1.16.5
 	github.com/cpuguy83/go-md2man v1.0.8 // indirect
@@ -42,7 +43,6 @@ require (
 	github.com/spf13/cobra v0.0.3
 	github.com/spf13/pflag v1.0.3 // indirect
 	github.com/stretchr/testify v1.4.0
-	github.com/zeldovich/msgp v1.1.10
 	golang.org/x/crypto v0.0.0-20190605123033-f99c8df09eb5
 	golang.org/x/net v0.0.0-20190620200207-3b0461eec859
 	golang.org/x/sys v0.0.0-20190902133755-9109b7679e13
