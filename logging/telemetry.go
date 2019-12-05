@@ -33,6 +33,7 @@ import (
 
 const telemetryPrefix = "/"
 const telemetrySeparator = "/"
+const logBufferDepth = 2
 
 // EnableTelemetry configures and enables telemetry based on the config provided
 func EnableTelemetry(cfg TelemetryConfig, l *logger) (err error) {
@@ -70,7 +71,7 @@ func makeLevels(min logrus.Level) []logrus.Level {
 }
 
 func makeTelemetryState(cfg TelemetryConfig, hookFactory hookFactory) (*telemetryState, error) {
-	history := createLogBuffer(cfg.LogHistoryDepth)
+	history := createLogBuffer(logBufferDepth)
 	if cfg.SessionGUID == "" {
 		cfg.SessionGUID = uuid.NewV4().String()
 	}

@@ -3,7 +3,6 @@
 # Externally settable env vars:
 # GIT_REPO_PATH= something to `git clone` from
 # GIT_CHECKOUT_LABEL= something to `git checkout` and build from (branch or tag or hash)
-# SIGNING_KEY_ADDR= dev@algorand.com or similar for GPG key
 
 if [ -z "${BUILDTIMESTAMP}" ]; then
     date "+%Y%m%d_%H%M%S" > "${HOME}/buildtimestamp"
@@ -27,8 +26,10 @@ if [ -z "${GIT_CHECKOUT_LABEL}" ]; then
     GIT_CHECKOUT_LABEL="rel/stable"
 fi
 
-sudo apt-get update
-sudo apt-get upgrade -y
+export DEBIAN_FRONTEND=noninteractive
+
+sudo apt-get update -q
+sudo apt-get upgrade -q -y
 
 if [ -f /etc/lsb-release ]; then
     . /etc/lsb-release
@@ -125,6 +126,7 @@ if [ ! -d "${GOPATH}/src/github.com/algorand/go-algorand/.git" ]; then
 fi
 cd ${GOPATH}/src/github.com/algorand/go-algorand
 git checkout "${GIT_CHECKOUT_LABEL}"
+# TODO: if we are checking out a release tag, `git tag --verify` it
 
 gpg --import ${GOPATH}/src/github.com/algorand/go-algorand/installer/rpm/RPM-GPG-KEY-Algorand
 
