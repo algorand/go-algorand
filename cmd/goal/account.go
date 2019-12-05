@@ -477,17 +477,20 @@ var listCmd = &cobra.Command{
 					frozen = ", frozen"
 				}
 
-				unitName := "units"
+				unitName := "base units"
 				assetName := ""
 				assetURL := ""
 				assetMetadata := ""
 				creatorInfo, err := client.AccountInformation(bal.Creator)
+				assetDecimals := uint32(0)
+				decimalInfo := " (no decimal info) "
 				if err == nil {
 					params, ok := creatorInfo.AssetParams[aid]
 					if ok {
 						if params.UnitName != "" {
 							unitName = params.UnitName
 						}
+						unitName = "units"
 						if params.AssetName != "" {
 							assetName = fmt.Sprintf(", name %s", params.AssetName)
 						}
@@ -497,10 +500,12 @@ var listCmd = &cobra.Command{
 						if params.MetadataHash != nil {
 							assetMetadata = fmt.Sprintf(", metadata %x", params.MetadataHash)
 						}
+						assetDecimals = params.Decimals
+						decimalInfo = ""
 					}
 				}
 
-				fmt.Printf("\t%20d %-8s (creator %s, ID %d%s%s%s%s)\n", bal.Amount, unitName, bal.Creator, aid, assetName, assetURL, assetMetadata, frozen)
+				fmt.Printf("\t%20s %-8s%s (creator %s, ID %d%s%s%s%s)\n", assetDecimalsFmt(bal.Amount, assetDecimals), unitName, decimalInfo, bal.Creator, aid, assetName, assetURL, assetMetadata, frozen)
 			}
 		}
 	},
