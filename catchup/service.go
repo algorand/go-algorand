@@ -36,6 +36,8 @@ import (
 )
 
 const catchupPeersForSync = 10
+// this should be at least the number of relays
+const catchupRetryLimit = 500
 
 // Ledger represents the interface of a block database which the
 // catchup server should interact with.
@@ -168,6 +170,12 @@ func (s *Service) fetchAndWrite(fetcher rpcs.Fetcher, r basics.Round, prevFetchC
 		default:
 		}
 
+		// Stop retrying after a while.
+		if i > catchupRetryLimit {
+			s.log.Errorf("fetchAndWrite(%v): failed to fetch block many times", )
+			return false
+		}
+
 		// Try to fetch, timing out after retryInterval
 
 		block, cert, client, err := s.innerFetch(fetcher, r)
@@ -198,6 +206,13 @@ func (s *Service) fetchAndWrite(fetcher rpcs.Fetcher, r basics.Round, prevFetchC
 
 		// Check that the block's contents match the block header (necessary with an untrusted block because b.Hash() only hashes the header)
 		if !block.ContentsMatchHeader() {
+			// Check if this mismatch is due to an unsupported protocol version
+			if _, ok := config.Consensus[block.BlockHeader.CurrentProtocol]; !ok {
+				s.log.Errorf("fetchAndWrite(%v): unsupported protocol version detected: '%v'", r, block.BlockHeader.CurrentProtocol)
+				client.Close()
+				return false
+			}
+
 			s.log.Warnf("fetchAndWrite(%v): block contents do not match header (attempt %d)", r, i)
 			client.Close()
 			continue // retry the fetch
