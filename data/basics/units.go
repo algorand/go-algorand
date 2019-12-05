@@ -17,8 +17,8 @@
 package basics
 
 import (
-	"github.com/algorand/msgp/msgp"
 	"github.com/algorand/go-codec/codec"
+	"github.com/algorand/msgp/msgp"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"

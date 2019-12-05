@@ -18,13 +18,13 @@ package protocol
 
 import (
 	"fmt"
-	"math/rand"
 	"io/ioutil"
+	"math/rand"
 	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	"github.com/algorand/msgp/msgp"
+	"github.com/stretchr/testify/require"
 )
 
 const debug_codec_tester = false
@@ -99,7 +99,7 @@ func RandomizeValue(v reflect.Value) error {
 		}
 		v.Set(s)
 	case reflect.Bool:
-		v.SetBool(rand.Uint32() % 2 == 0)
+		v.SetBool(rand.Uint32()%2 == 0)
 	case reflect.Map:
 		mt := v.Type()
 		v.Set(reflect.MakeMap(mt))

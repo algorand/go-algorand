@@ -21,8 +21,8 @@ import (
 	"io"
 	"sync"
 
-	"github.com/algorand/msgp/msgp"
 	"github.com/algorand/go-codec/codec"
+	"github.com/algorand/msgp/msgp"
 )
 
 // CodecHandle is used to instantiate msgpack encoders and decoders
