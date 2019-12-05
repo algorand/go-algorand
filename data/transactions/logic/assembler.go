@@ -55,8 +55,12 @@ type OpStream struct {
 	Version uint64
 	Trace   io.Writer
 	vubytes [9]byte
-	intc    []uint64
-	bytec   [][]byte
+
+	intc        []uint64
+	noIntcBlock bool
+
+	bytec        [][]byte
+	noBytecBlock bool
 
 	// Keep a stack of the types of what we would push and pop to typecheck a program
 	typeStack []StackType
@@ -378,14 +382,17 @@ func assembleIntCBlock(ops *OpStream, args []string) error {
 	var scratch [binary.MaxVarintLen64]byte
 	l := binary.PutUvarint(scratch[:], uint64(len(args)))
 	ops.Out.Write(scratch[:l])
-	for _, xs := range args {
+	ops.intc = make([]uint64, len(args))
+	for i, xs := range args {
 		cu, err := strconv.ParseUint(xs, 0, 64)
 		if err != nil {
 			return err
 		}
 		l = binary.PutUvarint(scratch[:], cu)
 		ops.Out.Write(scratch[:l])
+		ops.intc[i] = cu
 	}
+	ops.noIntcBlock = true
 	return nil
 }
 
@@ -409,6 +416,8 @@ func assembleByteCBlock(ops *OpStream, args []string) error {
 		ops.Out.Write(scratch[:l])
 		ops.Out.Write(bv)
 	}
+	ops.bytec = bvals
+	ops.noBytecBlock = true
 	return nil
 }
 
@@ -977,7 +986,7 @@ func (ops *OpStream) Bytes() (program []byte, err error) {
 	}
 	vlen := binary.PutUvarint(scratch[:], version)
 	prebytes.Write(scratch[:vlen])
-	if len(ops.intc) > 0 {
+	if len(ops.intc) > 0 && !ops.noIntcBlock {
 		prebytes.WriteByte(0x20) // intcblock
 		vlen := binary.PutUvarint(scratch[:], uint64(len(ops.intc)))
 		prebytes.Write(scratch[:vlen])
@@ -986,7 +995,7 @@ func (ops *OpStream) Bytes() (program []byte, err error) {
 			prebytes.Write(scratch[:vlen])
 		}
 	}
-	if len(ops.bytec) > 0 {
+	if len(ops.bytec) > 0 && !ops.noBytecBlock {
 		prebytes.WriteByte(0x26) // bytecblock
 		vlen := binary.PutUvarint(scratch[:], uint64(len(ops.bytec)))
 		prebytes.Write(scratch[:vlen])
