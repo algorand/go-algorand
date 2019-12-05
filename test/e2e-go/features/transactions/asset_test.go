@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"runtime"
 
 	"github.com/stretchr/testify/require"
 
@@ -137,7 +138,7 @@ func TestAssetValidRounds(t *testing.T) {
 	_, err = client.SendPaymentFromUnencryptedWallet(account0, manager, 0, 10000000000, nil)
 	a.NoError(err)
 
-	tx, err := client.MakeUnsignedAssetCreateTx(100, false, manager, reserve, freeze, clawback, "test1", "testname1", "foo://bar", nil)
+	tx, err := client.MakeUnsignedAssetCreateTx(100, false, manager, reserve, freeze, clawback, "test1", "testname1", "foo://bar", nil, 0)
 	a.NoError(err)
 
 	fee := uint64(1000)
@@ -230,7 +231,7 @@ func TestAssetConfig(t *testing.T) {
 		wh, err = client.GetUnencryptedWalletHandle()
 		a.NoError(err)
 
-		tx, err := client.MakeUnsignedAssetCreateTx(1+uint64(i), false, manager, reserve, freeze, clawback, fmt.Sprintf("test%d", i), fmt.Sprintf("testname%d", i), assetURL, assetMetadataHash)
+		tx, err := client.MakeUnsignedAssetCreateTx(1+uint64(i), false, manager, reserve, freeze, clawback, fmt.Sprintf("test%d", i), fmt.Sprintf("testname%d", i), assetURL, assetMetadataHash, 0)
 		txid, err := helperFillSignBroadcast(client, wh, account0, tx, err)
 		a.NoError(err)
 		txids[txid] = account0
@@ -255,7 +256,7 @@ func TestAssetConfig(t *testing.T) {
 	a.NoError(err)
 
 	// Creating more assets should return an error
-	tx, err := client.MakeUnsignedAssetCreateTx(1, false, manager, reserve, freeze, clawback, fmt.Sprintf("toomany"), fmt.Sprintf("toomany"), assetURL, assetMetadataHash)
+	tx, err := client.MakeUnsignedAssetCreateTx(1, false, manager, reserve, freeze, clawback, fmt.Sprintf("toomany"), fmt.Sprintf("toomany"), assetURL, assetMetadataHash, 0)
 	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
 	a.Error(err)
 	a.True(strings.Contains(err.Error(), "too many assets in account:"))
@@ -416,6 +417,9 @@ func TestAssetConfig(t *testing.T) {
 }
 
 func TestAssetInformation(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	t.Parallel()
 	a := require.New(t)
 
@@ -454,7 +458,7 @@ func TestAssetInformation(t *testing.T) {
 	// Create some assets
 	txids := make(map[string]string)
 	for i := 0; i < 16; i++ {
-		tx, err := client.MakeUnsignedAssetCreateTx(1+uint64(i), false, manager, reserve, freeze, clawback, fmt.Sprintf("test%d", i), fmt.Sprintf("testname%d", i), "foo://bar", nil)
+		tx, err := client.MakeUnsignedAssetCreateTx(1+uint64(i), false, manager, reserve, freeze, clawback, fmt.Sprintf("test%d", i), fmt.Sprintf("testname%d", i), "foo://bar", nil, 0)
 		txid, err := helperFillSignBroadcast(client, wh, account0, tx, err)
 		a.NoError(err)
 		txids[txid] = account0
@@ -531,7 +535,7 @@ func TestAssetGroupCreateSendDestroy(t *testing.T) {
 	// Create and Send in the same group
 	assetName1 := "testassetname1"
 	assetUnitName1 := "unit1"
-	txCreate1, err := client0.MakeUnsignedAssetCreateTx(assetTotal, false, manager, reserve, freeze, clawback, assetUnitName1, assetName1, "foo://bar", nil)
+	txCreate1, err := client0.MakeUnsignedAssetCreateTx(assetTotal, false, manager, reserve, freeze, clawback, assetUnitName1, assetName1, "foo://bar", nil, 0)
 	a.NoError(err)
 	txCreate1, err = client0.FillUnsignedTxTemplate(account0, 0, 0, fee, txCreate1)
 	a.NoError(err)
@@ -568,7 +572,7 @@ func TestAssetGroupCreateSendDestroy(t *testing.T) {
 	// Create and Destroy in the same group
 	assetName2 := "testassetname2"
 	assetUnitName2 := "unit2"
-	txCreate2, err := client0.MakeUnsignedAssetCreateTx(assetTotal, false, manager, reserve, freeze, clawback, assetUnitName2, assetName2, "foo://bar", nil)
+	txCreate2, err := client0.MakeUnsignedAssetCreateTx(assetTotal, false, manager, reserve, freeze, clawback, assetUnitName2, assetName2, "foo://bar", nil, 0)
 	a.NoError(err)
 	txCreate2, err = client0.FillUnsignedTxTemplate(account0, 0, 0, fee, txCreate2)
 	a.NoError(err)
@@ -633,6 +637,9 @@ func TestAssetGroupCreateSendDestroy(t *testing.T) {
 }
 
 func TestAssetSend(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	t.Parallel()
 	a := require.New(t)
 
@@ -673,12 +680,12 @@ func TestAssetSend(t *testing.T) {
 	// Create two assets: one with default-freeze, and one without default-freeze
 	txids := make(map[string]string)
 
-	tx, err := client.MakeUnsignedAssetCreateTx(100, false, manager, reserve, freeze, clawback, "nofreeze", "xx", "foo://bar", nil)
+	tx, err := client.MakeUnsignedAssetCreateTx(100, false, manager, reserve, freeze, clawback, "nofreeze", "xx", "foo://bar", nil, 0)
 	txid, err := helperFillSignBroadcast(client, wh, account0, tx, err)
 	a.NoError(err)
 	txids[txid] = account0
 
-	tx, err = client.MakeUnsignedAssetCreateTx(100, true, manager, reserve, freeze, clawback, "frozen", "xx", "foo://bar", nil)
+	tx, err = client.MakeUnsignedAssetCreateTx(100, true, manager, reserve, freeze, clawback, "frozen", "xx", "foo://bar", nil, 0)
 	txid, err = helperFillSignBroadcast(client, wh, account0, tx, err)
 	a.NoError(err)
 	txids[txid] = account0
@@ -882,15 +889,15 @@ func TestAssetSend(t *testing.T) {
 func TestAssetCreateWaitRestartDelete(t *testing.T) {
 	a, fixture, client, account0 := setupTestAndNetwork(t, "")
 	defer fixture.Shutdown()
-	
+
 	// There should be no assets to start with
 	info, err := client.AccountInformation(account0)
 	a.NoError(err)
 	a.Equal(len(info.AssetParams), 0)
-	
+
 	manager, reserve, freeze, clawback := setupActors(account0, client, a)
 	createAsset("test", account0, manager, reserve, freeze, clawback, client, fixture, a)
-	
+
 	// Check that asset is visible
 	info, err = client.AccountInformation(account0)
 	a.NoError(err)
@@ -905,9 +912,9 @@ func TestAssetCreateWaitRestartDelete(t *testing.T) {
 	assetURL := "foo://bar"
 	assetMetadataHash := []byte("ISTHISTHEREALLIFEISTHISJUSTFANTA")
 
-	verifyAssetParameters(asset, "test",  "testunit", manager, reserve, freeze, clawback,
-		assetMetadataHash, assetURL,  a)
-		
+	verifyAssetParameters(asset, "test", "testunit", manager, reserve, freeze, clawback,
+		assetMetadataHash, assetURL, a)
+
 	// restart the node
 	fixture.ShutdownImpl(true) // shutdown but preserve the data
 	fixture.Start()
@@ -922,8 +929,8 @@ func TestAssetCreateWaitRestartDelete(t *testing.T) {
 		asset = cp
 		assetIndex = idx
 	}
-	verifyAssetParameters(asset, "test",  "testunit", manager, reserve, freeze, clawback,
-		assetMetadataHash, assetURL,  a)
+	verifyAssetParameters(asset, "test", "testunit", manager, reserve, freeze, clawback,
+		assetMetadataHash, assetURL, a)
 
 	// Destroy the asset
 	tx, err := client.MakeUnsignedAssetDestroyTx(assetIndex)
@@ -933,26 +940,25 @@ func TestAssetCreateWaitRestartDelete(t *testing.T) {
 	info, err = client.AccountInformation(account0)
 	a.NoError(err)
 	a.Equal(len(info.AssetParams), 0)
-	
+
 	// Should be able to close now
 	wh, err := client.GetUnencryptedWalletHandle()
 	_, err = client.SendPaymentFromWallet(wh, nil, account0, "", 0, 0, nil, reserve, 0, 0)
 	a.NoError(err)
 }
 
-
 func TestAssetCreateWaitBalLookbackDelete(t *testing.T) {
 	a, fixture, client, account0 := setupTestAndNetwork(t, "TwoNodes50EachTestShorterLookback.json")
 	defer fixture.Shutdown()
-	
+
 	// There should be no assets to start with
 	info, err := client.AccountInformation(account0)
 	a.NoError(err)
 	a.Equal(len(info.AssetParams), 0)
-	
+
 	manager, reserve, freeze, clawback := setupActors(account0, client, a)
 	createAsset("test", account0, manager, reserve, freeze, clawback, client, fixture, a)
-	
+
 	// Check that asset is visible
 	info, err = client.AccountInformation(account0)
 	a.NoError(err)
@@ -967,16 +973,16 @@ func TestAssetCreateWaitBalLookbackDelete(t *testing.T) {
 	assetURL := "foo://bar"
 	assetMetadataHash := []byte("ISTHISTHEREALLIFEISTHISJUSTFANTA")
 
-	verifyAssetParameters(asset, "test",  "testunit", manager, reserve, freeze, clawback,
-		assetMetadataHash, assetURL,  a)
+	verifyAssetParameters(asset, "test", "testunit", manager, reserve, freeze, clawback,
+		assetMetadataHash, assetURL, a)
 
 	//  Wait more than lookback rounds
 	_, curRound := fixture.GetBalanceAndRound(account0)
 	nodeStatus, _ := client.Status()
 	consParams, err := client.ConsensusParams(nodeStatus.LastRound)
-	err = fixture.WaitForRoundWithTimeout(curRound+consParams.MaxBalLookback+1)
+	err = fixture.WaitForRoundWithTimeout(curRound + consParams.MaxBalLookback + 1)
 	a.NoError(err)
-	
+
 	// Check again that asset is visible
 	info, err = client.AccountInformation(account0)
 	a.NoError(err)
@@ -985,8 +991,8 @@ func TestAssetCreateWaitBalLookbackDelete(t *testing.T) {
 		asset = cp
 		assetIndex = idx
 	}
-	verifyAssetParameters(asset, "test",  "testunit", manager, reserve, freeze, clawback,
-		assetMetadataHash, assetURL,  a)
+	verifyAssetParameters(asset, "test", "testunit", manager, reserve, freeze, clawback,
+		assetMetadataHash, assetURL, a)
 
 	// Destroy the asset
 	tx, err := client.MakeUnsignedAssetDestroyTx(assetIndex)
@@ -996,23 +1002,22 @@ func TestAssetCreateWaitBalLookbackDelete(t *testing.T) {
 	info, err = client.AccountInformation(account0)
 	a.NoError(err)
 	a.Equal(len(info.AssetParams), 0)
-	
+
 	// Should be able to close now
 	wh, err := client.GetUnencryptedWalletHandle()
 	_, err = client.SendPaymentFromWallet(wh, nil, account0, "", 0, 0, nil, reserve, 0, 0)
 	a.NoError(err)
 }
 
-
 /** Helper functions **/
 
-// Setup the test and the network 
-func setupTestAndNetwork(t *testing.T, networkTemplate string)(
-	Assertions *require.Assertions, Fixture *fixtures.RestClientFixture,  Client *libgoal.Client, Account0 string) {
+// Setup the test and the network
+func setupTestAndNetwork(t *testing.T, networkTemplate string) (
+	Assertions *require.Assertions, Fixture *fixtures.RestClientFixture, Client *libgoal.Client, Account0 string) {
 
 	t.Parallel()
 	asser := require.New(t)
-	if 0 == len(networkTemplate){
+	if 0 == len(networkTemplate) {
 		// If the  networkTemplate is not specified, used the default one
 		networkTemplate = "TwoNodes50Each.json"
 	}
@@ -1026,32 +1031,31 @@ func setupTestAndNetwork(t *testing.T, networkTemplate string)(
 	return asser, &fixture, client, account0
 }
 
-// Create an asset 
+// Create an asset
 func createAsset(assetName, account0, manager, reserve, freeze, clawback string,
 	client *libgoal.Client,
 	fixture *fixtures.RestClientFixture,
-	asser *require.Assertions)() {
+	asser *require.Assertions) {
 
 	assetURL := "foo://bar"
 	assetMetadataHash := []byte("ISTHISTHEREALLIFEISTHISJUSTFANTA")
 
 	// Create two assets: one with default-freeze, and one without default-freeze
 	txids := make(map[string]string)
-	
 	wh, err := client.GetUnencryptedWalletHandle()
-	tx, err := client.MakeUnsignedAssetCreateTx(100, false, manager, reserve, freeze, clawback, assetName, "testunit", assetURL, assetMetadataHash)
+	tx, err := client.MakeUnsignedAssetCreateTx(100, false, manager, reserve, freeze, clawback, assetName, "testunit", assetURL, assetMetadataHash, 0)
 	txid, err := helperFillSignBroadcast(*client, wh, account0, tx, err)
 	asser.NoError(err)
 	txids[txid] = account0
 
 	_, curRound := fixture.GetBalanceAndRound(account0)
 	confirmed := fixture.WaitForAllTxnsToConfirm(curRound+20, txids)
-	asser.True(confirmed, "created the assets")	
+	asser.True(confirmed, "created the assets")
 }
 
 // Setup the actors
-func setupActors(account0 string, client *libgoal.Client, asser *require.Assertions)(manager, reserve, freeze, clawback string) {
-	// Setup the actors	
+func setupActors(account0 string, client *libgoal.Client, asser *require.Assertions) (manager, reserve, freeze, clawback string) {
+	// Setup the actors
 
 	wh, err := client.GetUnencryptedWalletHandle()
 	manager, err = client.GenerateAddress(wh)
@@ -1066,14 +1070,14 @@ func setupActors(account0 string, client *libgoal.Client, asser *require.Asserti
 	// Fund the manager, freeze, clawback, and extra, so they can issue transactions later on
 	_, err = client.SendPaymentFromUnencryptedWallet(account0, manager, 0, 10000000000, nil)
 	asser.NoError(err)
-	return 
+	return
 }
 
 func submitAndWaitForTransaction(sender string, tx transactions.Transaction, message string,
 	client *libgoal.Client,
 	fixture *fixtures.RestClientFixture,
-	asser *require.Assertions)() {
-	
+	asser *require.Assertions) {
+
 	txids := make(map[string]string)
 
 	// re-generate wh, since this test takes a while and sometimes
@@ -1090,9 +1094,9 @@ func submitAndWaitForTransaction(sender string, tx transactions.Transaction, mes
 }
 
 func verifyAssetParameters(asset v1.AssetParams,
-	unitName , assetName, manager, reserve, freeze, clawback string,
-	metadataHash []byte, assetURL string, asser *require.Assertions)() {
-			
+	unitName, assetName, manager, reserve, freeze, clawback string,
+	metadataHash []byte, assetURL string, asser *require.Assertions) {
+
 	asser.Equal(asset.UnitName, "test")
 	asser.Equal(asset.AssetName, "testunit")
 	asser.Equal(asset.ManagerAddr, manager)

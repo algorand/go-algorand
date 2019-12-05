@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 	"unicode"
+	"runtime"
 
 	"github.com/stretchr/testify/require"
 
@@ -182,6 +183,9 @@ func TestClientCanGetStatusAfterBlock(t *testing.T) {
 }
 
 func TestTransactionsByAddr(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	var localFixture fixtures.RestClientFixture
 	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
 	defer localFixture.Shutdown()
