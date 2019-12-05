@@ -21,21 +21,11 @@ import (
 	"fmt"
 
 	"github.com/karalabe/hid"
+
+	"github.com/algorand/go-algorand/logging"
 )
 
-// deviceID holds a vendor ID and product ID for a USB device
-type deviceID struct {
-	vendor  uint16
-	product uint16
-}
-
-// ledgerDeviceIDs contains the device IDs we're scanning for
-var ledgerDeviceIDs = [...]deviceID{
-	// Ledger Nano S
-	deviceID{0x2c97, 0x0001},
-	// Ledger Nano X
-	deviceID{0x2c97, 0x0004},
-}
+const ledgerVendorID = 0x2c97
 
 // LedgerUSB is a wrapper around a Ledger USB HID device, used to implement
 // the protocol used for sending messages to the application running on the
@@ -207,23 +197,23 @@ func (l *LedgerUSB) USBInfo() hid.DeviceInfo {
 }
 
 // LedgerEnumerate returns all of the Ledger devices connected to this machine.
-func LedgerEnumerate() ([]LedgerUSB, error) {
+func LedgerEnumerate(log logging.Logger) ([]LedgerUSB, error) {
 	if !hid.Supported() {
 		return nil, fmt.Errorf("HID not supported")
 	}
 
 	var devs []LedgerUSB
-	for _, did := range ledgerDeviceIDs {
-		for _, info := range hid.Enumerate(did.vendor, did.product) {
-			dev, err := info.Open()
-			if err != nil {
-				return nil, err
-			}
-
-			devs = append(devs, LedgerUSB{
-				hiddev: dev,
-			})
+	for _, info := range hid.Enumerate(ledgerVendorID, 0) {
+		// Try to open the device
+		dev, err := info.Open()
+		if err != nil {
+			log.Warnf("enumerated but failed to open ledger %x: %v", info.ProductID, err)
+			continue
 		}
+
+		devs = append(devs, LedgerUSB{
+			hiddev: dev,
+		})
 	}
 
 	return devs, nil
