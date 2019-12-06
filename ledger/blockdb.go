@@ -187,10 +187,10 @@ func blockPut(tx *sql.Tx, blk bookkeeping.Block, cert agreement.Certificate, aux
 
 	_, err = tx.Exec("INSERT INTO blocks (rnd, proto, hdrdata, blkdata, certdata, auxdata) VALUES (?, ?, ?, ?, ?, ?)",
 		blk.Round(), blk.CurrentProtocol,
-		protocol.Encode(blk.BlockHeader),
-		protocol.Encode(blk),
-		protocol.Encode(cert),
-		protocol.Encode(aux))
+		protocol.Encode(&blk.BlockHeader),
+		protocol.Encode(&blk),
+		protocol.Encode(&cert),
+		protocol.Encode(&aux))
 	return err
 }
 

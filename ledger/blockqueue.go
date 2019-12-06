@@ -267,8 +267,8 @@ func (bq *blockQueue) getEncodedBlockCert(r basics.Round) (blk []byte, cert []by
 	e, lastCommitted, latest, err := bq.checkEntry(r)
 	if e != nil {
 		// block has yet to be committed. we'll need to encode it.
-		blk = protocol.Encode(e.block)
-		cert = protocol.Encode(e.cert)
+		blk = protocol.Encode(&e.block)
+		cert = protocol.Encode(&e.cert)
 		err = nil
 		return
 	}
