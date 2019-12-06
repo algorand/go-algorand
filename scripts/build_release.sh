@@ -5,9 +5,6 @@
 #
 # Externally settable env vars:
 # S3_PREFIX= where to upload build artifacts (no trailing /)
-# S3_PREFIX_BUILDLOG= where upload build log (no trailing /)
-# AWS_EFS_MOUNT= NFS to mount for `aptly` persistent state and scratch storage
-# SIGNING_KEY_ADDR= dev@algorand.com or similar for GPG key
 # RSTAMP= `scripts/reverse_hex_timestamp`
 # AWS_ACCESS_KEY_ID=
 # AWS_SECRET_ACCESS_KEY=
@@ -103,7 +100,7 @@ scripts/build_packages.sh "${PLATFORM}"
 
 # build docker release package
 cd ${REPO_ROOT}/docker/release
-./build_algod_docker.sh ${HOME}/node_pkg/node_${CHANNEL}_${OS}-${ARCH}_${FULLVERSION}.tar.gz
+sg docker "./build_algod_docker.sh ${HOME}/node_pkg/node_${CHANNEL}_${OS}-${ARCH}_${FULLVERSION}.tar.gz"
 cd ${REPO_ROOT}/scripts
 
 # Test .deb installer
@@ -226,7 +223,7 @@ EOF
 (cd ${HOME}/dummyrepo && python3 ${REPO_ROOT}/scripts/httpd.py --pid ${HOME}/phttpd.pid) &
 trap ${REPO_ROOT}/scripts/kill_httpd.sh 0
 
-sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${GNUPGHOME}/S.gpg-agent,dst=/S.gpg-agent --mount type=bind,src=${HOME}/dummyrepo,dst=/dummyrepo --mount type=bind,src=${HOME}/docker_test_resources,dst=/stuff --mount type=bind,src=${GOPATH}/src,dst=/root/go/src --mount type=bind,src=${HOME},dst=/root/subhome --mount type=bind,src=/usr/local/go,dst=/usr/local/go algocentosbuild /root/go/src/github.com/algorand/go-algorand/scripts/build_release_centos_docker.sh"
+sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${GNUPGHOME}/S.gpg-agent.extra,dst=/S.gpg-agent --mount type=bind,src=${HOME}/dummyrepo,dst=/dummyrepo --mount type=bind,src=${HOME}/docker_test_resources,dst=/stuff --mount type=bind,src=${GOPATH}/src,dst=/root/go/src --mount type=bind,src=${HOME},dst=/root/subhome --mount type=bind,src=/usr/local/go,dst=/usr/local/go algocentosbuild /root/go/src/github.com/algorand/go-algorand/scripts/build_release_centos_docker.sh"
 
 date "+build_release done building centos %Y%m%d_%H%M%S"
 
