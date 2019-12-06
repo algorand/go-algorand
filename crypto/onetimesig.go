@@ -36,6 +36,11 @@ import (
 // secret-holder from signing a contradictory message in the future in the event
 // of a secret-key compromise.
 type OneTimeSignature struct {
+	// Unfortunately we forgot to mark this struct as omitempty at
+	// one point, and now it's hard to recover from that if we want
+	// to preserve encodings..
+	_struct struct{} `codec:""`
+
 	// Sig is a signature of msg under the key PK.
 	Sig ed25519Signature `codec:"s"`
 	PK  ed25519PublicKey `codec:"p"`
@@ -57,6 +62,11 @@ type OneTimeSignature struct {
 // A OneTimeSignatureSubkeyBatchID identifies an ephemeralSubkey of a batch
 // for the purposes of signing it with the top-level master key.
 type OneTimeSignatureSubkeyBatchID struct {
+	// Unfortunately we forgot to mark this struct as omitempty at
+	// one point, and now it's hard to recover from that if we want
+	// to preserve encodings..
+	_struct struct{} `codec:""`
+
 	SubKeyPK ed25519PublicKey `codec:"pk"`
 	Batch    uint64           `codec:"batch"`
 }
@@ -71,6 +81,11 @@ func (batch OneTimeSignatureSubkeyBatchID) ToBeHashed() (protocol.HashID, []byte
 // A OneTimeSignatureSubkeyOffsetID identifies an ephemeralSubkey of a specific
 // offset within a batch, for the purposes of signing it with the batch subkey.
 type OneTimeSignatureSubkeyOffsetID struct {
+	// Unfortunately we forgot to mark this struct as omitempty at
+	// one point, and now it's hard to recover from that if we want
+	// to preserve encodings..
+	_struct struct{} `codec:""`
+
 	SubKeyPK ed25519PublicKey `codec:"pk"`
 	Batch    uint64           `codec:"batch"`
 	Offset   uint64           `codec:"off"`
@@ -85,6 +100,7 @@ func (off OneTimeSignatureSubkeyOffsetID) ToBeHashed() (protocol.HashID, []byte)
 // A OneTimeSignatureIdentifier is an identifier under which a OneTimeSignature is
 // produced on a given message.  This identifier is represented using a two-level
 // structure, which corresponds to two levels of our ephemeral key tree.
+//msgp:ignore OneTimeSignatureIdentifier
 type OneTimeSignatureIdentifier struct {
 	// Batch represents the most-significant part of the identifier.
 	Batch uint64
@@ -117,6 +133,8 @@ type OneTimeSignatureVerifier ed25519PublicKey
 // OneTimeSignatureIdentifiers, protecting the integrity of the messages signed
 // under those identifiers.
 type OneTimeSignatureSecrets struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	OneTimeSignatureSecretsPersistent
 
 	// We keep track of an RNG, used to generate additional randomness.
@@ -132,6 +150,8 @@ type OneTimeSignatureSecrets struct {
 // OneTimeSignatureSecretsPersistent denotes the fields of a OneTimeSignatureSecrets
 // that get stored to persistent storage (through reflection on exported fields).
 type OneTimeSignatureSecretsPersistent struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	OneTimeSignatureVerifier
 
 	// FirstBatch denotes the first batch whose subkey appears in Batches.
@@ -156,6 +176,11 @@ type OneTimeSignatureSecretsPersistent struct {
 // An ephemeralSubkey produces OneTimeSignatures for messages and is deleted
 // after use.
 type ephemeralSubkey struct {
+	// Unfortunately we forgot to mark this struct as omitempty at
+	// one point, and now it's hard to recover from that if we want
+	// to preserve encodings..
+	_struct struct{} `codec:""`
+
 	PK ed25519PublicKey
 	SK ed25519PrivateKey
 
@@ -402,6 +427,7 @@ func (s *OneTimeSignatureSecrets) Snapshot() OneTimeSignatureSecrets {
 // OneTimeSigner is a wrapper for OneTimeSignatureSecrets that also
 // includes the appropriate KeyDilution value.  If zero, the value
 // should be inherited from ConsensusParams.DefaultKeyDilution.
+//msgp:ignore OneTimeSigner
 type OneTimeSigner struct {
 	*OneTimeSignatureSecrets
 	OptionalKeyDilution uint64

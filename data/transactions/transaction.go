@@ -41,6 +41,7 @@ func (txid *Txid) UnmarshalText(text []byte) error {
 }
 
 // SpecialAddresses holds addresses with nonstandard properties.
+//msgp:ignore SpecialAddresses
 type SpecialAddresses struct {
 	FeeSink     basics.Address
 	RewardsPool basics.Address

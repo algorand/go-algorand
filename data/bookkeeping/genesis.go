@@ -86,6 +86,11 @@ func (genesis Genesis) ID() string {
 // representing, and is purely informational.  State is the initial
 // account state.
 type GenesisAllocation struct {
+	// Unfortunately we forgot to specify omitempty, and now
+	// this struct must be encoded without omitempty for the
+	// Address, Comment, and State fields..
+	_struct struct{} `codec:""`
+
 	Address string             `codec:"addr"`
 	Comment string             `codec:"comment"`
 	State   basics.AccountData `codec:"state"`

@@ -38,6 +38,7 @@ type VRFVerifier = VrfPubkey
 type VRFProof = VrfProof
 
 // VRFSecrets is a wrapper for a VRF keypair. Use *VrfPrivkey instead
+//msgp:ignore VRFSecrets
 type VRFSecrets struct {
 	PK VrfPubkey
 	SK VrfPrivkey

@@ -123,6 +123,7 @@ type SignatureVerifier = PublicKey
 
 // SignatureSecrets are used by an entity to produce unforgeable signatures over
 // a message.
+//msgp:ignore SignatureSecrets
 type SignatureSecrets struct {
 	SignatureVerifier
 	SK ed25519PrivateKey

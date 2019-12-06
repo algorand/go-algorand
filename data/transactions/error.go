@@ -35,6 +35,7 @@ func makeMinFeeErrorf(format string, args ...interface{}) MinFeeError {
 
 // TxnDeadError defines an error type which indicates a transaction is outside of the
 // round validity window.
+//msgp:ignore TxnDeadError
 type TxnDeadError struct {
 	Round      basics.Round
 	FirstValid basics.Round

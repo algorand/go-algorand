@@ -383,110 +383,93 @@ func (z *OneTimeSignature) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z OneTimeSignatureIdentifier) MarshalMsg(b []byte) (o []byte, err error) {
-	o = msgp.Require(b, z.Msgsize())
-	// map header, size 2
-	// string "Batch"
-	o = append(o, 0x82, 0xa5, 0x42, 0x61, 0x74, 0x63, 0x68)
-	o = msgp.AppendUint64(o, z.Batch)
-	// string "Offset"
-	o = append(o, 0xa6, 0x4f, 0x66, 0x66, 0x73, 0x65, 0x74)
-	o = msgp.AppendUint64(o, z.Offset)
-	return
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *OneTimeSignatureIdentifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	var field []byte
-	_ = field
-	var zb0001 int
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	for zb0001 > 0 {
-		zb0001--
-		field, bts, err = msgp.ReadMapKeyZC(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		switch string(field) {
-		case "Batch":
-			(*z).Batch, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Batch")
-				return
-			}
-		case "Offset":
-			(*z).Offset, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Offset")
-				return
-			}
-		default:
-			err = msgp.ErrNoField(string(field))
-			if err != nil {
-				err = msgp.WrapError(err)
-				return
-			}
-		}
-	}
-	o = bts
-	return
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z OneTimeSignatureIdentifier) Msgsize() (s int) {
-	s = 1 + 6 + msgp.Uint64Size + 7 + msgp.Uint64Size
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z OneTimeSignatureIdentifier) MsgIsZero() bool {
-	return (z.Batch == 0) && (z.Offset == 0)
-}
-
-// MarshalMsg implements msgp.Marshaler
 func (z *OneTimeSignatureSecrets) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 7
-	// string "First"
-	o = append(o, 0x87, 0xa5, 0x46, 0x69, 0x72, 0x73, 0x74)
-	o = msgp.AppendUint64(o, (*z).OneTimeSignatureSecretsPersistent.FirstBatch)
-	// string "OneTimeSignatureVerifier"
-	o = append(o, 0xb8, 0x4f, 0x6e, 0x65, 0x54, 0x69, 0x6d, 0x65, 0x53, 0x69, 0x67, 0x6e, 0x61, 0x74, 0x75, 0x72, 0x65, 0x56, 0x65, 0x72, 0x69, 0x66, 0x69, 0x65, 0x72)
-	o = msgp.AppendBytes(o, ((*z).OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier)[:])
-	// string "Sub"
-	o = append(o, 0xa3, 0x53, 0x75, 0x62)
-	o = msgp.AppendArrayHeader(o, uint32(len((*z).OneTimeSignatureSecretsPersistent.Batches)))
-	for zb0002 := range (*z).OneTimeSignatureSecretsPersistent.Batches {
-		o, err = (*z).OneTimeSignatureSecretsPersistent.Batches[zb0002].MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "Batches", zb0002)
-			return
+	// omitempty: check for empty values
+	zb0006Len := uint32(7)
+	var zb0006Mask uint16 /* 11 bits */
+	if (*z).OneTimeSignatureSecretsPersistent.FirstBatch == 0 {
+		zb0006Len--
+		zb0006Mask |= 0x1
+	}
+	if (*z).OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier == (OneTimeSignatureVerifier{}) {
+		zb0006Len--
+		zb0006Mask |= 0x2
+	}
+	if len((*z).OneTimeSignatureSecretsPersistent.Batches) == 0 {
+		zb0006Len--
+		zb0006Mask |= 0x4
+	}
+	if (*z).OneTimeSignatureSecretsPersistent.FirstOffset == 0 {
+		zb0006Len--
+		zb0006Mask |= 0x20
+	}
+	if len((*z).OneTimeSignatureSecretsPersistent.Offsets) == 0 {
+		zb0006Len--
+		zb0006Mask |= 0x80
+	}
+	if (*z).OneTimeSignatureSecretsPersistent.OffsetsPK2 == (ed25519PublicKey{}) {
+		zb0006Len--
+		zb0006Mask |= 0x100
+	}
+	if (*z).OneTimeSignatureSecretsPersistent.OffsetsPK2Sig == (ed25519Signature{}) {
+		zb0006Len--
+		zb0006Mask |= 0x200
+	}
+	// variable map header, size zb0006Len
+	o = append(o, 0x80|uint8(zb0006Len))
+	if zb0006Len == 0 {
+		return
+	}
+	if (zb0006Mask & 0x1) == 0 { // if not empty
+		// string "First"
+		o = append(o, 0xa5, 0x46, 0x69, 0x72, 0x73, 0x74)
+		o = msgp.AppendUint64(o, (*z).OneTimeSignatureSecretsPersistent.FirstBatch)
+	}
+	if (zb0006Mask & 0x2) == 0 { // if not empty
+		// string "OneTimeSignatureVerifier"
+		o = append(o, 0xb8, 0x4f, 0x6e, 0x65, 0x54, 0x69, 0x6d, 0x65, 0x53, 0x69, 0x67, 0x6e, 0x61, 0x74, 0x75, 0x72, 0x65, 0x56, 0x65, 0x72, 0x69, 0x66, 0x69, 0x65, 0x72)
+		o = msgp.AppendBytes(o, ((*z).OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier)[:])
+	}
+	if (zb0006Mask & 0x4) == 0 { // if not empty
+		// string "Sub"
+		o = append(o, 0xa3, 0x53, 0x75, 0x62)
+		o = msgp.AppendArrayHeader(o, uint32(len((*z).OneTimeSignatureSecretsPersistent.Batches)))
+		for zb0002 := range (*z).OneTimeSignatureSecretsPersistent.Batches {
+			o, err = (*z).OneTimeSignatureSecretsPersistent.Batches[zb0002].MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "Batches", zb0002)
+				return
+			}
 		}
 	}
-	// string "firstoff"
-	o = append(o, 0xa8, 0x66, 0x69, 0x72, 0x73, 0x74, 0x6f, 0x66, 0x66)
-	o = msgp.AppendUint64(o, (*z).OneTimeSignatureSecretsPersistent.FirstOffset)
-	// string "offkeys"
-	o = append(o, 0xa7, 0x6f, 0x66, 0x66, 0x6b, 0x65, 0x79, 0x73)
-	o = msgp.AppendArrayHeader(o, uint32(len((*z).OneTimeSignatureSecretsPersistent.Offsets)))
-	for zb0003 := range (*z).OneTimeSignatureSecretsPersistent.Offsets {
-		o, err = (*z).OneTimeSignatureSecretsPersistent.Offsets[zb0003].MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "Offsets", zb0003)
-			return
+	if (zb0006Mask & 0x20) == 0 { // if not empty
+		// string "firstoff"
+		o = append(o, 0xa8, 0x66, 0x69, 0x72, 0x73, 0x74, 0x6f, 0x66, 0x66)
+		o = msgp.AppendUint64(o, (*z).OneTimeSignatureSecretsPersistent.FirstOffset)
+	}
+	if (zb0006Mask & 0x80) == 0 { // if not empty
+		// string "offkeys"
+		o = append(o, 0xa7, 0x6f, 0x66, 0x66, 0x6b, 0x65, 0x79, 0x73)
+		o = msgp.AppendArrayHeader(o, uint32(len((*z).OneTimeSignatureSecretsPersistent.Offsets)))
+		for zb0003 := range (*z).OneTimeSignatureSecretsPersistent.Offsets {
+			o, err = (*z).OneTimeSignatureSecretsPersistent.Offsets[zb0003].MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "Offsets", zb0003)
+				return
+			}
 		}
 	}
-	// string "offpk2"
-	o = append(o, 0xa6, 0x6f, 0x66, 0x66, 0x70, 0x6b, 0x32)
-	o = msgp.AppendBytes(o, ((*z).OneTimeSignatureSecretsPersistent.OffsetsPK2)[:])
-	// string "offpk2sig"
-	o = append(o, 0xa9, 0x6f, 0x66, 0x66, 0x70, 0x6b, 0x32, 0x73, 0x69, 0x67)
-	o = msgp.AppendBytes(o, ((*z).OneTimeSignatureSecretsPersistent.OffsetsPK2Sig)[:])
+	if (zb0006Mask & 0x100) == 0 { // if not empty
+		// string "offpk2"
+		o = append(o, 0xa6, 0x6f, 0x66, 0x66, 0x70, 0x6b, 0x32)
+		o = msgp.AppendBytes(o, ((*z).OneTimeSignatureSecretsPersistent.OffsetsPK2)[:])
+	}
+	if (zb0006Mask & 0x200) == 0 { // if not empty
+		// string "offpk2sig"
+		o = append(o, 0xa9, 0x6f, 0x66, 0x66, 0x70, 0x6b, 0x32, 0x73, 0x69, 0x67)
+		o = msgp.AppendBytes(o, ((*z).OneTimeSignatureSecretsPersistent.OffsetsPK2Sig)[:])
+	}
 	return
 }
 
@@ -610,42 +593,91 @@ func (z *OneTimeSignatureSecrets) MsgIsZero() bool {
 // MarshalMsg implements msgp.Marshaler
 func (z *OneTimeSignatureSecretsPersistent) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 7
-	// string "First"
-	o = append(o, 0x87, 0xa5, 0x46, 0x69, 0x72, 0x73, 0x74)
-	o = msgp.AppendUint64(o, (*z).FirstBatch)
-	// string "OneTimeSignatureVerifier"
-	o = append(o, 0xb8, 0x4f, 0x6e, 0x65, 0x54, 0x69, 0x6d, 0x65, 0x53, 0x69, 0x67, 0x6e, 0x61, 0x74, 0x75, 0x72, 0x65, 0x56, 0x65, 0x72, 0x69, 0x66, 0x69, 0x65, 0x72)
-	o = msgp.AppendBytes(o, ((*z).OneTimeSignatureVerifier)[:])
-	// string "Sub"
-	o = append(o, 0xa3, 0x53, 0x75, 0x62)
-	o = msgp.AppendArrayHeader(o, uint32(len((*z).Batches)))
-	for zb0002 := range (*z).Batches {
-		o, err = (*z).Batches[zb0002].MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "Batches", zb0002)
-			return
+	// omitempty: check for empty values
+	zb0006Len := uint32(7)
+	var zb0006Mask uint8 /* 8 bits */
+	if (*z).FirstBatch == 0 {
+		zb0006Len--
+		zb0006Mask |= 0x1
+	}
+	if (*z).OneTimeSignatureVerifier == (OneTimeSignatureVerifier{}) {
+		zb0006Len--
+		zb0006Mask |= 0x2
+	}
+	if len((*z).Batches) == 0 {
+		zb0006Len--
+		zb0006Mask |= 0x4
+	}
+	if (*z).FirstOffset == 0 {
+		zb0006Len--
+		zb0006Mask |= 0x10
+	}
+	if len((*z).Offsets) == 0 {
+		zb0006Len--
+		zb0006Mask |= 0x20
+	}
+	if (*z).OffsetsPK2 == (ed25519PublicKey{}) {
+		zb0006Len--
+		zb0006Mask |= 0x40
+	}
+	if (*z).OffsetsPK2Sig == (ed25519Signature{}) {
+		zb0006Len--
+		zb0006Mask |= 0x80
+	}
+	// variable map header, size zb0006Len
+	o = append(o, 0x80|uint8(zb0006Len))
+	if zb0006Len == 0 {
+		return
+	}
+	if (zb0006Mask & 0x1) == 0 { // if not empty
+		// string "First"
+		o = append(o, 0xa5, 0x46, 0x69, 0x72, 0x73, 0x74)
+		o = msgp.AppendUint64(o, (*z).FirstBatch)
+	}
+	if (zb0006Mask & 0x2) == 0 { // if not empty
+		// string "OneTimeSignatureVerifier"
+		o = append(o, 0xb8, 0x4f, 0x6e, 0x65, 0x54, 0x69, 0x6d, 0x65, 0x53, 0x69, 0x67, 0x6e, 0x61, 0x74, 0x75, 0x72, 0x65, 0x56, 0x65, 0x72, 0x69, 0x66, 0x69, 0x65, 0x72)
+		o = msgp.AppendBytes(o, ((*z).OneTimeSignatureVerifier)[:])
+	}
+	if (zb0006Mask & 0x4) == 0 { // if not empty
+		// string "Sub"
+		o = append(o, 0xa3, 0x53, 0x75, 0x62)
+		o = msgp.AppendArrayHeader(o, uint32(len((*z).Batches)))
+		for zb0002 := range (*z).Batches {
+			o, err = (*z).Batches[zb0002].MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "Batches", zb0002)
+				return
+			}
 		}
 	}
-	// string "firstoff"
-	o = append(o, 0xa8, 0x66, 0x69, 0x72, 0x73, 0x74, 0x6f, 0x66, 0x66)
-	o = msgp.AppendUint64(o, (*z).FirstOffset)
-	// string "offkeys"
-	o = append(o, 0xa7, 0x6f, 0x66, 0x66, 0x6b, 0x65, 0x79, 0x73)
-	o = msgp.AppendArrayHeader(o, uint32(len((*z).Offsets)))
-	for zb0003 := range (*z).Offsets {
-		o, err = (*z).Offsets[zb0003].MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "Offsets", zb0003)
-			return
+	if (zb0006Mask & 0x10) == 0 { // if not empty
+		// string "firstoff"
+		o = append(o, 0xa8, 0x66, 0x69, 0x72, 0x73, 0x74, 0x6f, 0x66, 0x66)
+		o = msgp.AppendUint64(o, (*z).FirstOffset)
+	}
+	if (zb0006Mask & 0x20) == 0 { // if not empty
+		// string "offkeys"
+		o = append(o, 0xa7, 0x6f, 0x66, 0x66, 0x6b, 0x65, 0x79, 0x73)
+		o = msgp.AppendArrayHeader(o, uint32(len((*z).Offsets)))
+		for zb0003 := range (*z).Offsets {
+			o, err = (*z).Offsets[zb0003].MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "Offsets", zb0003)
+				return
+			}
 		}
 	}
-	// string "offpk2"
-	o = append(o, 0xa6, 0x6f, 0x66, 0x66, 0x70, 0x6b, 0x32)
-	o = msgp.AppendBytes(o, ((*z).OffsetsPK2)[:])
-	// string "offpk2sig"
-	o = append(o, 0xa9, 0x6f, 0x66, 0x66, 0x70, 0x6b, 0x32, 0x73, 0x69, 0x67)
-	o = msgp.AppendBytes(o, ((*z).OffsetsPK2Sig)[:])
+	if (zb0006Mask & 0x40) == 0 { // if not empty
+		// string "offpk2"
+		o = append(o, 0xa6, 0x6f, 0x66, 0x66, 0x70, 0x6b, 0x32)
+		o = msgp.AppendBytes(o, ((*z).OffsetsPK2)[:])
+	}
+	if (zb0006Mask & 0x80) == 0 { // if not empty
+		// string "offpk2sig"
+		o = append(o, 0xa9, 0x6f, 0x66, 0x66, 0x70, 0x6b, 0x32, 0x73, 0x69, 0x67)
+		o = msgp.AppendBytes(o, ((*z).OffsetsPK2Sig)[:])
+	}
 	return
 }
 
@@ -937,97 +969,6 @@ func (z *OneTimeSignatureVerifier) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *OneTimeSigner) MarshalMsg(b []byte) (o []byte, err error) {
-	o = msgp.Require(b, z.Msgsize())
-	// map header, size 2
-	// string "OneTimeSignatureSecrets"
-	o = append(o, 0x82, 0xb7, 0x4f, 0x6e, 0x65, 0x54, 0x69, 0x6d, 0x65, 0x53, 0x69, 0x67, 0x6e, 0x61, 0x74, 0x75, 0x72, 0x65, 0x53, 0x65, 0x63, 0x72, 0x65, 0x74, 0x73)
-	if (*z).OneTimeSignatureSecrets == nil {
-		o = msgp.AppendNil(o)
-	} else {
-		o, err = (*z).OneTimeSignatureSecrets.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "OneTimeSignatureSecrets")
-			return
-		}
-	}
-	// string "OptionalKeyDilution"
-	o = append(o, 0xb3, 0x4f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x61, 0x6c, 0x4b, 0x65, 0x79, 0x44, 0x69, 0x6c, 0x75, 0x74, 0x69, 0x6f, 0x6e)
-	o = msgp.AppendUint64(o, (*z).OptionalKeyDilution)
-	return
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *OneTimeSigner) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	var field []byte
-	_ = field
-	var zb0001 int
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	for zb0001 > 0 {
-		zb0001--
-		field, bts, err = msgp.ReadMapKeyZC(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		switch string(field) {
-		case "OneTimeSignatureSecrets":
-			if msgp.IsNil(bts) {
-				bts, err = msgp.ReadNilBytes(bts)
-				if err != nil {
-					return
-				}
-				(*z).OneTimeSignatureSecrets = nil
-			} else {
-				if (*z).OneTimeSignatureSecrets == nil {
-					(*z).OneTimeSignatureSecrets = new(OneTimeSignatureSecrets)
-				}
-				bts, err = (*z).OneTimeSignatureSecrets.UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "OneTimeSignatureSecrets")
-					return
-				}
-			}
-		case "OptionalKeyDilution":
-			(*z).OptionalKeyDilution, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "OptionalKeyDilution")
-				return
-			}
-		default:
-			err = msgp.ErrNoField(string(field))
-			if err != nil {
-				err = msgp.WrapError(err)
-				return
-			}
-		}
-	}
-	o = bts
-	return
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *OneTimeSigner) Msgsize() (s int) {
-	s = 1 + 24
-	if (*z).OneTimeSignatureSecrets == nil {
-		s += msgp.NilSize
-	} else {
-		s += (*z).OneTimeSignatureSecrets.Msgsize()
-	}
-	s += 20 + msgp.Uint64Size
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z *OneTimeSigner) MsgIsZero() bool {
-	return ((*z).OneTimeSignatureSecrets == nil) && ((*z).OptionalKeyDilution == 0)
-}
-
-// MarshalMsg implements msgp.Marshaler
 func (z *PrivateKey) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendBytes(o, (*z)[:])
@@ -1141,142 +1082,6 @@ func (z *Signature) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *Signature) MsgIsZero() bool {
 	return (*z) == (Signature{})
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z *SignatureSecrets) MarshalMsg(b []byte) (o []byte, err error) {
-	o = msgp.Require(b, z.Msgsize())
-	// map header, size 2
-	// string "SK"
-	o = append(o, 0x82, 0xa2, 0x53, 0x4b)
-	o = msgp.AppendBytes(o, ((*z).SK)[:])
-	// string "SignatureVerifier"
-	o = append(o, 0xb1, 0x53, 0x69, 0x67, 0x6e, 0x61, 0x74, 0x75, 0x72, 0x65, 0x56, 0x65, 0x72, 0x69, 0x66, 0x69, 0x65, 0x72)
-	o, err = (*z).SignatureVerifier.MarshalMsg(o)
-	if err != nil {
-		err = msgp.WrapError(err, "SignatureVerifier")
-		return
-	}
-	return
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *SignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	var field []byte
-	_ = field
-	var zb0002 int
-	zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	for zb0002 > 0 {
-		zb0002--
-		field, bts, err = msgp.ReadMapKeyZC(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		switch string(field) {
-		case "SignatureVerifier":
-			bts, err = (*z).SignatureVerifier.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "SignatureVerifier")
-				return
-			}
-		case "SK":
-			bts, err = msgp.ReadExactBytes(bts, ((*z).SK)[:])
-			if err != nil {
-				err = msgp.WrapError(err, "SK")
-				return
-			}
-		default:
-			err = msgp.ErrNoField(string(field))
-			if err != nil {
-				err = msgp.WrapError(err)
-				return
-			}
-		}
-	}
-	o = bts
-	return
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *SignatureSecrets) Msgsize() (s int) {
-	s = 1 + 18 + (*z).SignatureVerifier.Msgsize() + 3 + msgp.ArrayHeaderSize + (64 * (msgp.ByteSize))
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z *SignatureSecrets) MsgIsZero() bool {
-	return ((*z).SignatureVerifier.MsgIsZero()) && ((*z).SK == (ed25519PrivateKey{}))
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z *VRFSecrets) MarshalMsg(b []byte) (o []byte, err error) {
-	o = msgp.Require(b, z.Msgsize())
-	// map header, size 2
-	// string "PK"
-	o = append(o, 0x82, 0xa2, 0x50, 0x4b)
-	o = msgp.AppendBytes(o, ((*z).PK)[:])
-	// string "SK"
-	o = append(o, 0xa2, 0x53, 0x4b)
-	o = msgp.AppendBytes(o, ((*z).SK)[:])
-	return
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *VRFSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	var field []byte
-	_ = field
-	var zb0003 int
-	zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	for zb0003 > 0 {
-		zb0003--
-		field, bts, err = msgp.ReadMapKeyZC(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		switch string(field) {
-		case "PK":
-			bts, err = msgp.ReadExactBytes(bts, ((*z).PK)[:])
-			if err != nil {
-				err = msgp.WrapError(err, "PK")
-				return
-			}
-		case "SK":
-			bts, err = msgp.ReadExactBytes(bts, ((*z).SK)[:])
-			if err != nil {
-				err = msgp.WrapError(err, "SK")
-				return
-			}
-		default:
-			err = msgp.ErrNoField(string(field))
-			if err != nil {
-				err = msgp.WrapError(err)
-				return
-			}
-		}
-	}
-	o = bts
-	return
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *VRFSecrets) Msgsize() (s int) {
-	s = 1 + 3 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + (64 * (msgp.ByteSize))
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z *VRFSecrets) MsgIsZero() bool {
-	return ((*z).PK == (VrfPubkey{})) && ((*z).SK == (VrfPrivkey{}))
 }
 
 // MarshalMsg implements msgp.Marshaler

@@ -114,13 +114,32 @@ func (z *AccountData) MarshalMsg(b []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Assets", zb0003)
 				return
 			}
-			// map header, size 2
-			// string "a"
-			o = append(o, 0x82, 0xa1, 0x61)
-			o = msgp.AppendUint64(o, zb0004.Amount)
-			// string "f"
-			o = append(o, 0xa1, 0x66)
-			o = msgp.AppendBool(o, zb0004.Frozen)
+			// omitempty: check for empty values
+			zb0006Len := uint32(2)
+			var zb0006Mask uint8 /* 3 bits */
+			if zb0004.Amount == 0 {
+				zb0006Len--
+				zb0006Mask |= 0x2
+			}
+			if zb0004.Frozen == false {
+				zb0006Len--
+				zb0006Mask |= 0x4
+			}
+			// variable map header, size zb0006Len
+			o = append(o, 0x80|uint8(zb0006Len))
+			if zb0006Len == 0 {
+				return
+			}
+			if (zb0006Mask & 0x2) == 0 { // if not empty
+				// string "a"
+				o = append(o, 0xa1, 0x61)
+				o = msgp.AppendUint64(o, zb0004.Amount)
+			}
+			if (zb0006Mask & 0x4) == 0 { // if not empty
+				// string "f"
+				o = append(o, 0xa1, 0x66)
+				o = msgp.AppendBool(o, zb0004.Frozen)
+			}
 		}
 	}
 	if (zb0005Mask & 0x10) == 0 { // if not empty
@@ -390,93 +409,6 @@ func (z *AccountData) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *AccountDetail) MarshalMsg(b []byte) (o []byte, err error) {
-	o = msgp.Require(b, z.Msgsize())
-	// map header, size 3
-	// string "Address"
-	o = append(o, 0x83, 0xa7, 0x41, 0x64, 0x64, 0x72, 0x65, 0x73, 0x73)
-	o, err = (*z).Address.MarshalMsg(o)
-	if err != nil {
-		err = msgp.WrapError(err, "Address")
-		return
-	}
-	// string "Algos"
-	o = append(o, 0xa5, 0x41, 0x6c, 0x67, 0x6f, 0x73)
-	o, err = (*z).Algos.MarshalMsg(o)
-	if err != nil {
-		err = msgp.WrapError(err, "Algos")
-		return
-	}
-	// string "Status"
-	o = append(o, 0xa6, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73)
-	o = msgp.AppendByte(o, byte((*z).Status))
-	return
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *AccountDetail) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	var field []byte
-	_ = field
-	var zb0001 int
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	for zb0001 > 0 {
-		zb0001--
-		field, bts, err = msgp.ReadMapKeyZC(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		switch string(field) {
-		case "Address":
-			bts, err = (*z).Address.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Address")
-				return
-			}
-		case "Algos":
-			bts, err = (*z).Algos.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Algos")
-				return
-			}
-		case "Status":
-			{
-				var zb0002 byte
-				zb0002, bts, err = msgp.ReadByteBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Status")
-					return
-				}
-				(*z).Status = Status(zb0002)
-			}
-		default:
-			err = msgp.ErrNoField(string(field))
-			if err != nil {
-				err = msgp.WrapError(err)
-				return
-			}
-		}
-	}
-	o = bts
-	return
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *AccountDetail) Msgsize() (s int) {
-	s = 1 + 8 + (*z).Address.Msgsize() + 6 + (*z).Algos.Msgsize() + 7 + msgp.ByteSize
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z *AccountDetail) MsgIsZero() bool {
-	return ((*z).Address.MsgIsZero()) && ((*z).Algos.MsgIsZero()) && ((*z).Status == 0)
-}
-
-// MarshalMsg implements msgp.Marshaler
 func (z *Address) MarshalMsg(b []byte) ([]byte, error) {
 	return ((*(crypto.Digest))(z)).MarshalMsg(b)
 }
@@ -497,15 +429,34 @@ func (z *Address) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z AssetHolding) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *AssetHolding) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 2
-	// string "a"
-	o = append(o, 0x82, 0xa1, 0x61)
-	o = msgp.AppendUint64(o, z.Amount)
-	// string "f"
-	o = append(o, 0xa1, 0x66)
-	o = msgp.AppendBool(o, z.Frozen)
+	// omitempty: check for empty values
+	zb0001Len := uint32(2)
+	var zb0001Mask uint8 /* 3 bits */
+	if (*z).Amount == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if (*z).Frozen == false {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len == 0 {
+		return
+	}
+	if (zb0001Mask & 0x2) == 0 { // if not empty
+		// string "a"
+		o = append(o, 0xa1, 0x61)
+		o = msgp.AppendUint64(o, (*z).Amount)
+	}
+	if (zb0001Mask & 0x4) == 0 { // if not empty
+		// string "f"
+		o = append(o, 0xa1, 0x66)
+		o = msgp.AppendBool(o, (*z).Frozen)
+	}
 	return
 }
 
@@ -552,14 +503,14 @@ func (z *AssetHolding) UnmarshalMsg(bts []byte) (o []byte, err error) {
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z AssetHolding) Msgsize() (s int) {
+func (z *AssetHolding) Msgsize() (s int) {
 	s = 1 + 2 + msgp.Uint64Size + 2 + msgp.BoolSize
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z AssetHolding) MsgIsZero() bool {
-	return (z.Amount == 0) && (z.Frozen == false)
+func (z *AssetHolding) MsgIsZero() bool {
+	return ((*z).Amount == 0) && ((*z).Frozen == false)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -593,80 +544,6 @@ func (z AssetIndex) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z AssetIndex) MsgIsZero() bool {
 	return z == 0
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z *AssetLocator) MarshalMsg(b []byte) (o []byte, err error) {
-	o = msgp.Require(b, z.Msgsize())
-	// map header, size 2
-	// string "Creator"
-	o = append(o, 0x82, 0xa7, 0x43, 0x72, 0x65, 0x61, 0x74, 0x6f, 0x72)
-	o, err = (*z).Creator.MarshalMsg(o)
-	if err != nil {
-		err = msgp.WrapError(err, "Creator")
-		return
-	}
-	// string "Index"
-	o = append(o, 0xa5, 0x49, 0x6e, 0x64, 0x65, 0x78)
-	o = msgp.AppendUint64(o, uint64((*z).Index))
-	return
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *AssetLocator) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	var field []byte
-	_ = field
-	var zb0001 int
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	for zb0001 > 0 {
-		zb0001--
-		field, bts, err = msgp.ReadMapKeyZC(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		switch string(field) {
-		case "Creator":
-			bts, err = (*z).Creator.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Creator")
-				return
-			}
-		case "Index":
-			{
-				var zb0002 uint64
-				zb0002, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Index")
-					return
-				}
-				(*z).Index = AssetIndex(zb0002)
-			}
-		default:
-			err = msgp.ErrNoField(string(field))
-			if err != nil {
-				err = msgp.WrapError(err)
-				return
-			}
-		}
-	}
-	o = bts
-	return
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *AssetLocator) Msgsize() (s int) {
-	s = 1 + 8 + (*z).Creator.Msgsize() + 6 + msgp.Uint64Size
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z *AssetLocator) MsgIsZero() bool {
-	return ((*z).Creator.MsgIsZero()) && ((*z).Index == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -891,125 +768,6 @@ func (z *AssetParams) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *BalanceDetail) MarshalMsg(b []byte) (o []byte, err error) {
-	o = msgp.Require(b, z.Msgsize())
-	// map header, size 4
-	// string "Accounts"
-	o = append(o, 0x84, 0xa8, 0x41, 0x63, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x73)
-	o = msgp.AppendArrayHeader(o, uint32(len((*z).Accounts)))
-	for zb0001 := range (*z).Accounts {
-		o, err = (*z).Accounts[zb0001].MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "Accounts", zb0001)
-			return
-		}
-	}
-	// string "OnlineMoney"
-	o = append(o, 0xab, 0x4f, 0x6e, 0x6c, 0x69, 0x6e, 0x65, 0x4d, 0x6f, 0x6e, 0x65, 0x79)
-	o, err = (*z).OnlineMoney.MarshalMsg(o)
-	if err != nil {
-		err = msgp.WrapError(err, "OnlineMoney")
-		return
-	}
-	// string "Round"
-	o = append(o, 0xa5, 0x52, 0x6f, 0x75, 0x6e, 0x64)
-	o = msgp.AppendUint64(o, uint64((*z).Round))
-	// string "TotalMoney"
-	o = append(o, 0xaa, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x4d, 0x6f, 0x6e, 0x65, 0x79)
-	o, err = (*z).TotalMoney.MarshalMsg(o)
-	if err != nil {
-		err = msgp.WrapError(err, "TotalMoney")
-		return
-	}
-	return
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *BalanceDetail) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	var field []byte
-	_ = field
-	var zb0002 int
-	zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	for zb0002 > 0 {
-		zb0002--
-		field, bts, err = msgp.ReadMapKeyZC(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		switch string(field) {
-		case "Round":
-			{
-				var zb0003 uint64
-				zb0003, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Round")
-					return
-				}
-				(*z).Round = Round(zb0003)
-			}
-		case "TotalMoney":
-			bts, err = (*z).TotalMoney.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "TotalMoney")
-				return
-			}
-		case "OnlineMoney":
-			bts, err = (*z).OnlineMoney.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "OnlineMoney")
-				return
-			}
-		case "Accounts":
-			var zb0004 int
-			zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Accounts")
-				return
-			}
-			if cap((*z).Accounts) >= zb0004 {
-				(*z).Accounts = ((*z).Accounts)[:zb0004]
-			} else {
-				(*z).Accounts = make([]AccountDetail, zb0004)
-			}
-			for zb0001 := range (*z).Accounts {
-				bts, err = (*z).Accounts[zb0001].UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Accounts", zb0001)
-					return
-				}
-			}
-		default:
-			err = msgp.ErrNoField(string(field))
-			if err != nil {
-				err = msgp.WrapError(err)
-				return
-			}
-		}
-	}
-	o = bts
-	return
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *BalanceDetail) Msgsize() (s int) {
-	s = 1 + 6 + msgp.Uint64Size + 11 + (*z).TotalMoney.Msgsize() + 12 + (*z).OnlineMoney.Msgsize() + 9 + msgp.ArrayHeaderSize
-	for zb0001 := range (*z).Accounts {
-		s += (*z).Accounts[zb0001].Msgsize()
-	}
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z *BalanceDetail) MsgIsZero() bool {
-	return ((*z).Round == 0) && ((*z).TotalMoney.MsgIsZero()) && ((*z).OnlineMoney.MsgIsZero()) && (len((*z).Accounts) == 0)
-}
-
-// MarshalMsg implements msgp.Marshaler
 func (z *BalanceRecord) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
@@ -1127,13 +885,32 @@ func (z *BalanceRecord) MarshalMsg(b []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Assets", zb0003)
 				return
 			}
-			// map header, size 2
-			// string "a"
-			o = append(o, 0x82, 0xa1, 0x61)
-			o = msgp.AppendUint64(o, zb0004.Amount)
-			// string "f"
-			o = append(o, 0xa1, 0x66)
-			o = msgp.AppendBool(o, zb0004.Frozen)
+			// omitempty: check for empty values
+			zb0006Len := uint32(2)
+			var zb0006Mask uint8 /* 3 bits */
+			if zb0004.Amount == 0 {
+				zb0006Len--
+				zb0006Mask |= 0x2
+			}
+			if zb0004.Frozen == false {
+				zb0006Len--
+				zb0006Mask |= 0x4
+			}
+			// variable map header, size zb0006Len
+			o = append(o, 0x80|uint8(zb0006Len))
+			if zb0006Len == 0 {
+				return
+			}
+			if (zb0006Mask & 0x2) == 0 { // if not empty
+				// string "a"
+				o = append(o, 0xa1, 0x61)
+				o = msgp.AppendUint64(o, zb0004.Amount)
+			}
+			if (zb0006Mask & 0x4) == 0 { // if not empty
+				// string "f"
+				o = append(o, 0xa1, 0x66)
+				o = msgp.AppendBool(o, zb0004.Frozen)
+			}
 		}
 	}
 	if (zb0005Mask & 0x40) == 0 { // if not empty
@@ -1409,63 +1186,6 @@ func (z *BalanceRecord) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z OverflowTracker) MarshalMsg(b []byte) (o []byte, err error) {
-	o = msgp.Require(b, z.Msgsize())
-	// map header, size 1
-	// string "Overflowed"
-	o = append(o, 0x81, 0xaa, 0x4f, 0x76, 0x65, 0x72, 0x66, 0x6c, 0x6f, 0x77, 0x65, 0x64)
-	o = msgp.AppendBool(o, z.Overflowed)
-	return
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *OverflowTracker) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	var field []byte
-	_ = field
-	var zb0001 int
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	for zb0001 > 0 {
-		zb0001--
-		field, bts, err = msgp.ReadMapKeyZC(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		switch string(field) {
-		case "Overflowed":
-			(*z).Overflowed, bts, err = msgp.ReadBoolBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Overflowed")
-				return
-			}
-		default:
-			err = msgp.ErrNoField(string(field))
-			if err != nil {
-				err = msgp.WrapError(err)
-				return
-			}
-		}
-	}
-	o = bts
-	return
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z OverflowTracker) Msgsize() (s int) {
-	s = 1 + 11 + msgp.BoolSize
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z OverflowTracker) MsgIsZero() bool {
-	return (z.Overflowed == false)
-}
-
-// MarshalMsg implements msgp.Marshaler
 func (z Round) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendUint64(o, uint64(z))
@@ -1562,91 +1282,4 @@ func (z Status) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z Status) MsgIsZero() bool {
 	return z == 0
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z *SupplyDetail) MarshalMsg(b []byte) (o []byte, err error) {
-	o = msgp.Require(b, z.Msgsize())
-	// map header, size 3
-	// string "OnlineMoney"
-	o = append(o, 0x83, 0xab, 0x4f, 0x6e, 0x6c, 0x69, 0x6e, 0x65, 0x4d, 0x6f, 0x6e, 0x65, 0x79)
-	o, err = (*z).OnlineMoney.MarshalMsg(o)
-	if err != nil {
-		err = msgp.WrapError(err, "OnlineMoney")
-		return
-	}
-	// string "Round"
-	o = append(o, 0xa5, 0x52, 0x6f, 0x75, 0x6e, 0x64)
-	o = msgp.AppendUint64(o, uint64((*z).Round))
-	// string "TotalMoney"
-	o = append(o, 0xaa, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x4d, 0x6f, 0x6e, 0x65, 0x79)
-	o, err = (*z).TotalMoney.MarshalMsg(o)
-	if err != nil {
-		err = msgp.WrapError(err, "TotalMoney")
-		return
-	}
-	return
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *SupplyDetail) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	var field []byte
-	_ = field
-	var zb0001 int
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	for zb0001 > 0 {
-		zb0001--
-		field, bts, err = msgp.ReadMapKeyZC(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		switch string(field) {
-		case "Round":
-			{
-				var zb0002 uint64
-				zb0002, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Round")
-					return
-				}
-				(*z).Round = Round(zb0002)
-			}
-		case "TotalMoney":
-			bts, err = (*z).TotalMoney.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "TotalMoney")
-				return
-			}
-		case "OnlineMoney":
-			bts, err = (*z).OnlineMoney.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "OnlineMoney")
-				return
-			}
-		default:
-			err = msgp.ErrNoField(string(field))
-			if err != nil {
-				err = msgp.WrapError(err)
-				return
-			}
-		}
-	}
-	o = bts
-	return
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *SupplyDetail) Msgsize() (s int) {
-	s = 1 + 6 + msgp.Uint64Size + 11 + (*z).TotalMoney.Msgsize() + 12 + (*z).OnlineMoney.Msgsize()
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z *SupplyDetail) MsgIsZero() bool {
-	return ((*z).Round == 0) && ((*z).TotalMoney.MsgIsZero()) && ((*z).OnlineMoney.MsgIsZero())
 }
