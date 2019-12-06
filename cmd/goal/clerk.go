@@ -248,6 +248,21 @@ func parseNoteField(cmd *cobra.Command) []byte {
 	return noteBytes
 }
 
+func parseLease(cmd *cobra.Command) (leaseBytes [32]byte) {
+	// Parse lease field
+	if cmd.Flags().Changed("lease") {
+		leaseBytesRaw, err := base64.StdEncoding.DecodeString(lease)
+		if err != nil {
+			reportErrorf(malformedLease, lease, err)
+		}
+		if len(leaseBytesRaw) != 32 {
+			reportErrorf(malformedLease, lease, fmt.Errorf("lease length %d != 32", len(leaseBytesRaw)))
+		}
+		copy(leaseBytes[:], leaseBytesRaw)
+	}
+	return
+}
+
 var sendCmd = &cobra.Command{
 	Use:   "send",
 	Short: "Send money to an address",
@@ -301,21 +316,9 @@ var sendCmd = &cobra.Command{
 		}
 		toAddressResolved := accountList.getAddressByName(toAddress)
 
-		// Parse lease field
-		var leaseBytes [32]byte
-		if cmd.Flags().Changed("lease") {
-			leaseBytesRaw, err := base64.StdEncoding.DecodeString(lease)
-			if err != nil {
-				reportErrorf(malformedLease, lease, err)
-			}
-			if len(leaseBytesRaw) != 32 {
-				reportErrorf(malformedLease, lease, fmt.Errorf("lease length %d != 32", len(leaseBytesRaw)))
-			}
-			copy(leaseBytes[:], leaseBytesRaw)
-		}
-
-		// Parse notes field
+		// Parse notes and lease fields
 		noteBytes := parseNoteField(cmd)
+		leaseBytes := parseLease(cmd)
 
 		// If closing an account, resolve that address as well
 		var closeToAddressResolved string
