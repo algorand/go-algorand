@@ -119,7 +119,7 @@ func (z *MultisigSig) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *MultisigSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0002 uint32
+	var zb0002 int
 	zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -146,13 +146,18 @@ func (z *MultisigSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		case "subsig":
-			var zb0003 uint32
+			var zb0003 int
 			zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Subsigs")
 				return
 			}
-			if cap((*z).Subsigs) >= int(zb0003) {
+			if zb0003 > maxMultisig {
+				err = msgp.ErrOverflow(uint64(zb0003), uint64(maxMultisig))
+				err = msgp.WrapError(err, "Subsigs")
+				return
+			}
+			if cap((*z).Subsigs) >= zb0003 {
 				(*z).Subsigs = ((*z).Subsigs)[:zb0003]
 			} else {
 				(*z).Subsigs = make([]MultisigSubsig, zb0003)
@@ -226,7 +231,7 @@ func (z *MultisigSubsig) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *MultisigSubsig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0003 uint32
+	var zb0003 int
 	zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -304,7 +309,7 @@ func (z *OneTimeSignature) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *OneTimeSignature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0007 uint32
+	var zb0007 int
 	zb0007, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -394,7 +399,7 @@ func (z OneTimeSignatureIdentifier) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *OneTimeSignatureIdentifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0001 uint32
+	var zb0001 int
 	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -489,7 +494,7 @@ func (z *OneTimeSignatureSecrets) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0006 uint32
+	var zb0006 int
 	zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -516,13 +521,13 @@ func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error)
 				return
 			}
 		case "Sub":
-			var zb0007 uint32
+			var zb0007 int
 			zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Batches")
 				return
 			}
-			if cap((*z).OneTimeSignatureSecretsPersistent.Batches) >= int(zb0007) {
+			if cap((*z).OneTimeSignatureSecretsPersistent.Batches) >= zb0007 {
 				(*z).OneTimeSignatureSecretsPersistent.Batches = ((*z).OneTimeSignatureSecretsPersistent.Batches)[:zb0007]
 			} else {
 				(*z).OneTimeSignatureSecretsPersistent.Batches = make([]ephemeralSubkey, zb0007)
@@ -541,13 +546,13 @@ func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error)
 				return
 			}
 		case "offkeys":
-			var zb0008 uint32
+			var zb0008 int
 			zb0008, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Offsets")
 				return
 			}
-			if cap((*z).OneTimeSignatureSecretsPersistent.Offsets) >= int(zb0008) {
+			if cap((*z).OneTimeSignatureSecretsPersistent.Offsets) >= zb0008 {
 				(*z).OneTimeSignatureSecretsPersistent.Offsets = ((*z).OneTimeSignatureSecretsPersistent.Offsets)[:zb0008]
 			} else {
 				(*z).OneTimeSignatureSecretsPersistent.Offsets = make([]ephemeralSubkey, zb0008)
@@ -648,7 +653,7 @@ func (z *OneTimeSignatureSecretsPersistent) MarshalMsg(b []byte) (o []byte, err 
 func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0006 uint32
+	var zb0006 int
 	zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -675,13 +680,13 @@ func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsg(bts []byte) (o []byte, 
 				return
 			}
 		case "Sub":
-			var zb0007 uint32
+			var zb0007 int
 			zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Batches")
 				return
 			}
-			if cap((*z).Batches) >= int(zb0007) {
+			if cap((*z).Batches) >= zb0007 {
 				(*z).Batches = ((*z).Batches)[:zb0007]
 			} else {
 				(*z).Batches = make([]ephemeralSubkey, zb0007)
@@ -700,13 +705,13 @@ func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsg(bts []byte) (o []byte, 
 				return
 			}
 		case "offkeys":
-			var zb0008 uint32
+			var zb0008 int
 			zb0008, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Offsets")
 				return
 			}
-			if cap((*z).Offsets) >= int(zb0008) {
+			if cap((*z).Offsets) >= zb0008 {
 				(*z).Offsets = ((*z).Offsets)[:zb0008]
 			} else {
 				(*z).Offsets = make([]ephemeralSubkey, zb0008)
@@ -778,7 +783,7 @@ func (z *OneTimeSignatureSubkeyBatchID) MarshalMsg(b []byte) (o []byte, err erro
 func (z *OneTimeSignatureSubkeyBatchID) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0002 uint32
+	var zb0002 int
 	zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -847,7 +852,7 @@ func (z *OneTimeSignatureSubkeyOffsetID) MarshalMsg(b []byte) (o []byte, err err
 func (z *OneTimeSignatureSubkeyOffsetID) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0002 uint32
+	var zb0002 int
 	zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -956,7 +961,7 @@ func (z *OneTimeSigner) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *OneTimeSigner) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0001 uint32
+	var zb0001 int
 	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -1159,7 +1164,7 @@ func (z *SignatureSecrets) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *SignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0002 uint32
+	var zb0002 int
 	zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -1225,7 +1230,7 @@ func (z *VRFSecrets) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *VRFSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0003 uint32
+	var zb0003 int
 	zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -1529,7 +1534,7 @@ func (z *ephemeralSubkey) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *ephemeralSubkey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0005 uint32
+	var zb0005 int
 	zb0005, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)

@@ -47,7 +47,7 @@ type Genesis struct {
 	Proto protocol.ConsensusVersion `codec:"proto"`
 
 	// Allocation determines the initial accounts and their state.
-	Allocation []GenesisAllocation `codec:"alloc"`
+	Allocation []GenesisAllocation `codec:"alloc,allocbound=-"`
 
 	// RewardsPool is the address of the rewards pool.
 	RewardsPool string `codec:"rwd"`

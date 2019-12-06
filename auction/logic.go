@@ -24,6 +24,7 @@ import (
 )
 
 // RunningBid keeps track of an outstanding bid.
+//msgp:ignore RunningBid
 type RunningBid struct {
 	// Bidder represents the bidder's key.
 	Bidder crypto.Digest
@@ -36,6 +37,7 @@ type RunningBid struct {
 }
 
 // BidderState keeps track of the different data points for each bidder
+//msgp:ignore BidderState
 type BidderState struct {
 	// WinningsAddresses keeps track of the of each bidder's winnings address
 	WinningsAddress crypto.Digest
@@ -49,6 +51,7 @@ type BidderState struct {
 }
 
 // RunningAuction keeps track of the state of an in-progress auction.
+//msgp:ignore RunningAuction
 type RunningAuction struct {
 	// Params specifies the initial parameters
 	Params Params

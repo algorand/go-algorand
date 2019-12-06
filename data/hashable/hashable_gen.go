@@ -33,7 +33,7 @@ func (z *Message) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *Message) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0001 uint32
+	var zb0001 int
 	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)

@@ -81,7 +81,7 @@ func (z *Credential) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *Credential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0001 uint32
+	var zb0001 int
 	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -208,7 +208,7 @@ func (z *UnauthenticatedCredential) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *UnauthenticatedCredential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0001 uint32
+	var zb0001 int
 	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -304,7 +304,7 @@ func (z *hashableCredential) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *hashableCredential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0001 uint32
+	var zb0001 int
 	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)

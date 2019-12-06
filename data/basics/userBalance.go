@@ -118,7 +118,7 @@ type AccountData struct {
 	// NOTE: do not modify this value in-place in existing AccountData
 	// structs; allocate a copy and modify that instead.  AccountData
 	// is expected to have copy-by-value semantics.
-	AssetParams map[AssetIndex]AssetParams `codec:"apar"`
+	AssetParams map[AssetIndex]AssetParams `codec:"apar,allocbound=-"`
 
 	// Assets is the set of assets that can be held by this
 	// account.  Assets (i.e., slots in this map) are explicitly
@@ -135,7 +135,7 @@ type AccountData struct {
 	// NOTE: do not modify this value in-place in existing AccountData
 	// structs; allocate a copy and modify that instead.  AccountData
 	// is expected to have copy-by-value semantics.
-	Assets map[AssetIndex]AssetHolding `codec:"asset"`
+	Assets map[AssetIndex]AssetHolding `codec:"asset,allocbound=-"`
 }
 
 // AccountDetail encapsulates meaningful details about a given account, for external consumption
@@ -157,7 +157,7 @@ type BalanceDetail struct {
 	Round       Round
 	TotalMoney  MicroAlgos
 	OnlineMoney MicroAlgos
-	Accounts    []AccountDetail
+	Accounts    []AccountDetail `codec:",allocbound=-"`
 }
 
 // AssetIndex is the unique integer index of an asset that can be used to look

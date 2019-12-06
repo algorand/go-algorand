@@ -184,7 +184,7 @@ type BidOutcomes struct {
 
 	// Outcomes is a list of bid outcomes, one for every placed bid
 	// in the auction.
-	Outcomes []BidderOutcome `codec:"outcomes"`
+	Outcomes []BidderOutcome `codec:"outcomes,allocbound=-"`
 }
 
 // ToBeHashed implements the crypto.Hashable interface.

@@ -63,6 +63,7 @@ const (
 // - Active -> Settled | Settlement
 // - Closed -> Settled | Settlement
 // - Settled -> Active | Params
+//msgp:ignore Tracker
 type Tracker struct {
 	// Auctions is a map from AuctionID to a RunningAuction.
 	// It may not be modified after initialization.

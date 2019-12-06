@@ -182,7 +182,7 @@ func (z *AccountData) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0005 uint32
+	var zb0005 int
 	zb0005, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -263,7 +263,7 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		case "apar":
-			var zb0009 uint32
+			var zb0009 int
 			zb0009, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "AssetParams")
@@ -293,7 +293,7 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				(*z).AssetParams[zb0001] = zb0002
 			}
 		case "asset":
-			var zb0010 uint32
+			var zb0010 int
 			zb0010, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Assets")
@@ -315,7 +315,7 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Assets")
 					return
 				}
-				var zb0011 uint32
+				var zb0011 int
 				zb0011, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Assets", zb0003)
@@ -417,7 +417,7 @@ func (z *AccountDetail) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *AccountDetail) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0001 uint32
+	var zb0001 int
 	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -513,7 +513,7 @@ func (z AssetHolding) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *AssetHolding) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0001 uint32
+	var zb0001 int
 	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -616,7 +616,7 @@ func (z *AssetLocator) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *AssetLocator) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0001 uint32
+	var zb0001 int
 	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -793,7 +793,7 @@ func (z *AssetParams) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *AssetParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0002 uint32
+	var zb0002 int
 	zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -928,7 +928,7 @@ func (z *BalanceDetail) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *BalanceDetail) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0002 uint32
+	var zb0002 int
 	zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -965,13 +965,13 @@ func (z *BalanceDetail) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		case "Accounts":
-			var zb0004 uint32
+			var zb0004 int
 			zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Accounts")
 				return
 			}
-			if cap((*z).Accounts) >= int(zb0004) {
+			if cap((*z).Accounts) >= zb0004 {
 				(*z).Accounts = ((*z).Accounts)[:zb0004]
 			} else {
 				(*z).Accounts = make([]AccountDetail, zb0004)
@@ -1195,7 +1195,7 @@ func (z *BalanceRecord) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0005 uint32
+	var zb0005 int
 	zb0005, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -1282,7 +1282,7 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		case "apar":
-			var zb0009 uint32
+			var zb0009 int
 			zb0009, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "AssetParams")
@@ -1312,7 +1312,7 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				(*z).AccountData.AssetParams[zb0001] = zb0002
 			}
 		case "asset":
-			var zb0010 uint32
+			var zb0010 int
 			zb0010, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Assets")
@@ -1334,7 +1334,7 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Assets")
 					return
 				}
-				var zb0011 uint32
+				var zb0011 int
 				zb0011, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Assets", zb0003)
@@ -1422,7 +1422,7 @@ func (z OverflowTracker) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *OverflowTracker) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0001 uint32
+	var zb0001 int
 	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -1592,7 +1592,7 @@ func (z *SupplyDetail) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *SupplyDetail) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0001 uint32
+	var zb0001 int
 	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)

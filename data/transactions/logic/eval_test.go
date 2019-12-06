@@ -64,7 +64,7 @@ func TestTooManyArgs(t *testing.T) {
 	require.NoError(t, err)
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = program
-	args := [EvalMaxArgs + 1][]byte{}
+	args := [transactions.EvalMaxArgs + 1][]byte{}
 	txn.Lsig.Args = args[:]
 	sb := strings.Builder{}
 	pass, err := Eval(program, defaultEvalParams(&sb, &txn))

@@ -279,7 +279,7 @@ func (z *Block) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0001 uint32
+	var zb0001 int
 	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -727,7 +727,7 @@ func (z *BlockHeader) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0001 uint32
+	var zb0001 int
 	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -1004,7 +1004,7 @@ func (z *Genesis) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *Genesis) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0002 uint32
+	var zb0002 int
 	zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -1037,19 +1037,19 @@ func (z *Genesis) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		case "alloc":
-			var zb0003 uint32
+			var zb0003 int
 			zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Allocation")
 				return
 			}
-			if cap((*z).Allocation) >= int(zb0003) {
+			if cap((*z).Allocation) >= zb0003 {
 				(*z).Allocation = ((*z).Allocation)[:zb0003]
 			} else {
 				(*z).Allocation = make([]GenesisAllocation, zb0003)
 			}
 			for zb0001 := range (*z).Allocation {
-				var zb0004 uint32
+				var zb0004 int
 				zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Allocation", zb0001)
@@ -1165,7 +1165,7 @@ func (z *GenesisAllocation) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *GenesisAllocation) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0001 uint32
+	var zb0001 int
 	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -1261,7 +1261,7 @@ func (z *RewardsState) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *RewardsState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0001 uint32
+	var zb0001 int
 	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -1376,7 +1376,7 @@ func (z *UpgradeState) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *UpgradeState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0001 uint32
+	var zb0001 int
 	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -1464,7 +1464,7 @@ func (z *UpgradeVote) MarshalMsg(b []byte) (o []byte, err error) {
 func (z *UpgradeVote) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0001 uint32
+	var zb0001 int
 	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
