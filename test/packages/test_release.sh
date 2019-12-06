@@ -15,20 +15,16 @@ RET_VALUE=0
 # https://serverfault.com/a/72511
 IFS='' read -r -d '' TOKENIZED <<"EOF"
 FROM {{OS}}
-
-ENV DEBIAN_FRONTEND noninteractive
+WORKDIR /root/install
 {{PACMAN}}
-ADD https://algorand-releases.s3.us-east-1.amazonaws.com/channel/stable/install_stable_linux-amd64_2.0.1.tar.gz /tmp
 
-RUN \
-  set -eux; \
-  mkdir /opt/installer ; \
-  cd /opt/installer ; \
-  tar xvf /tmp/install*tar.gz ; \
-  ./update.sh -i -c stable -p /opt/algorand/node -d /opt/algorand/node/data -n ;
+RUN curl --silent -L https://algorand-releases.s3.us-east-1.amazonaws.com/channel/stable/install_stable_linux-amd64_2.0.1.tar.gz | tar xzf - && \
+    ./update.sh -c stable -n -p ~/node -d ~/node/data -i && \
+    cd .. && \
+    rm -rf install /var/lib/apt/lists/*
 
-WORKDIR /opt/algorand/node
-RUN ["./goal", "node", "start", "-d", "data"]
+WORKDIR /root/node
+ENTRYPOINT ["./algod", "-v"]
 EOF
 
 for item in ${OS_LIST[*]}
@@ -38,16 +34,15 @@ do
     # ${parameter/pattern/substitution}
     if [[ $item =~ ubuntu ]]
     then
-        WITH_PACMAN=$(echo -e "${TOKENIZED//\{\{PACMAN\}\}/RUN apt update && apt install -y ca-certificates}")
+        WITH_PACMAN=$(echo -e "${TOKENIZED//\{\{PACMAN\}\}/RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y curl ca-certificates --no-install-recommends}")
     else
         # CentOS/Fedora must have the updated root certs already installed.
-        WITH_PACMAN=$(echo -e "${TOKENIZED//\{\{PACMAN\}\}/}")
+        WITH_PACMAN=$(echo -e "${TOKENIZED//\{\{PACMAN\}\}/RUN yum install -y curl}")
     fi
 
     # Finally, designate the OS and send the fully-formed Dockerfile to Docker.
-    echo -e "${WITH_PACMAN/\{\{OS\}\}/$item}" | docker build -t "$item" -
-
-    if ! docker run -it "$item" /bin/bash -c "/opt/algorand/node/algod -v"
+    echo -e "\n$(tput setaf 4)[$0]$(tput sgr0) Testing $item..."
+    if ! echo -e "${WITH_PACMAN/\{\{OS\}\}/$item}" | docker build -t "$item" -
     then
         RET_VALUE=1
         FAILED+=("$item")
