@@ -21,6 +21,7 @@ ANY_MISSING=0
 GOLINT_MISSING=0
 STRINGER_MISSING=0
 SWAGGER_MISSING=0
+MSGP_MISSING=0
 
 function check_deps() {
     ANY_MISSING=0
@@ -42,6 +43,12 @@ function check_deps() {
         SWAGGER_MISSING=1
         ANY_MISSING=1
         echo "... swagger missing"
+    fi
+
+    if [ ! -f "${GOPATH1}/bin/msgp" ]; then
+        MSGP_MISSING=1
+        ANY_MISSING=1
+        echo "... msgp missing"
     fi
 
     return ${ANY_MISSING}
@@ -74,6 +81,14 @@ if [ ${SWAGGER_MISSING} -ne 0 ]; then
     if [ "$OK" = "y" ]; then
         echo "Installing swagger..."
         GO111MODULE=off go get -u github.com/go-swagger/go-swagger/cmd/swagger
+    fi
+fi
+
+if [ ${MSGP_MISSING} -ne 0 ]; then
+    read -p "Install msgp (using go get) (y/N): " OK
+    if [ "$OK" = "y" ]; then
+        echo "Installing msgp..."
+        GO111MODULE=off go get -u github.com/algorand/msgp
     fi
 fi
 
