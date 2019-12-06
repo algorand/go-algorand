@@ -1282,10 +1282,10 @@ func (wn *WebsocketNetwork) sendPeerConnectionsTelemetryStatus() {
 			ConnectionDuration: uint(now.Sub(peer.createTime).Seconds()),
 			HostName:           peer.TelemetryGUID,
 			InstanceName:       peer.InstanceName,
-			Endpoint:           peer.GetAddress(),
 		}
 		if peer.outgoing {
 			connDetail.Address = justHost(peer.conn.RemoteAddr().String())
+			connDetail.Endpoint = peer.GetAddress()
 			connectionDetails.OutgoingPeers = append(connectionDetails.OutgoingPeers, connDetail)
 		} else {
 			connDetail.Address = peer.OriginAddress()
