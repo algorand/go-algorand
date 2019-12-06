@@ -248,6 +248,18 @@ bnz nowhere`
 	require.Nil(t, program)
 }
 
+func TestAssembleJumpToTheEnd(t *testing.T) {
+	text := `intcblock 1
+intc 0
+intc 0
+bnz done
+done:`
+	program, err := AssembleString(text)
+	require.NoError(t, err)
+	require.Equal(t, 9, len(program))
+	require.Equal(t, []byte("\x01\x20\x01\x01\x22\x22\x40\x00\x00"), program)
+}
+
 func TestAssembleDisassemble(t *testing.T) {
 	// Specifically constructed program text that should be recreated by Disassemble()
 	// TODO: disassemble to int/byte psuedo-ops instead of raw intcblock/bytecblock/intc/bytec
