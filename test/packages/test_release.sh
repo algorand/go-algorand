@@ -8,18 +8,54 @@ OS_LIST=(
     ubuntu:18.04
 )
 
+AWS_KEY_ID=
+AWS_SECRET_KEY=
+
+# These are default values which can be changed by the CLI args.
+BUCKET=algorand-builds
+CHANNEL=stable
+
 FAILED=()
 RET_VALUE=0
 
+while [ "$1" != "" ]; do
+    case "$1" in
+        -c)
+            shift
+            CHANNEL="$1"
+            ;;
+        -b)
+            shift
+            BUCKET="$1"
+            ;;
+        -k)
+            shift
+            AWS_KEY_ID="$1"
+            ;;
+        -s)
+            shift
+            AWS_SECRET_KEY="$1"
+            ;;
+        *)
+            echo "Unknown option $1"
+            exit 1
+            ;;
+    esac
+    shift
+done
+
 # We'll use this simple tokenized Dockerfile.
 # https://serverfault.com/a/72511
-IFS='' read -r -d '' TOKENIZED <<"EOF"
+IFS='' read -r -d '' TOKENIZED <<EOF
 FROM {{OS}}
 WORKDIR /root/install
 {{PACMAN}}
 
-RUN curl --silent -L https://algorand-releases.s3.us-east-1.amazonaws.com/channel/stable/install_stable_linux-amd64_2.0.1.tar.gz | tar xzf - && \
-    ./update.sh -c stable -n -p ~/node -d ~/node/data -i && \
+ENV AWS_ACCESS_KEY_ID=$AWS_KEY_ID
+ENV AWS_SECRET_ACCESS_KEY=$AWS_SECRET_KEY
+
+RUN curl --silent -L https://github.com/algorand/go-algorand-doc/blob/master/downloads/installers/linux_amd64/install_master_linux-amd64.tar.gz?raw=true | tar xzf - && \
+    ./update.sh -b $BUCKET -c $CHANNEL -n -p ~/node -d ~/node/data -i && \
     cd .. && \
     rm -rf install /var/lib/apt/lists/*
 
