@@ -130,7 +130,11 @@ func TestOnlineOfflineRewards(t *testing.T) {
 }
 
 func TestPartkeyOnlyRewards(t *testing.T) {
+<<<<<<< HEAD
 	testUtils.SkipIfFilteringTest(t)
+=======
+	testUtils "github.com/algorand/go-algorand/test/framework/utils"	
+>>>>>>> dcce411ebb9110d35bb72437b148e8d81492a9f1
 
 	t.Parallel()
 	r := require.New(t)
