@@ -21,11 +21,11 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
-	"runtime"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/test/framework/fixtures"
+	testUtils "github.com/algorand/go-algorand/test/framework/utils"
 )
 
 func GenerateRandomBytes(n int) []byte {
@@ -42,51 +42,44 @@ func GenerateRandomBytes(n int) []byte {
 // this test checks that two accounts can send money to one another
 // across a protocol upgrade.
 func TestAccountsCanSendMoneyAcrossUpgradeV7toV8(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip()
-	}
+	testUtils.SkipIfFilteringTest(t)
+
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV7Upgrade.json"))
 }
 
 func TestAccountsCanSendMoneyAcrossUpgradeV8toV9(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip()
-	}
+	testUtils.SkipIfFilteringTest(t)
+
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV8Upgrade.json"))
 }
 
 func TestAccountsCanSendMoneyAcrossUpgradeV9toV10(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip()
-	}
+	testUtils.SkipIfFilteringTest(t)
+
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV9Upgrade.json"))
 }
 
 func TestAccountsCanSendMoneyAcrossUpgradeV10toV11(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip()
-	}
+	testUtils.SkipIfFilteringTest(t)
+
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV10Upgrade.json"))
 }
 
 func TestAccountsCanSendMoneyAcrossUpgradeV11toV12(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip()
-	}
+	testUtils.SkipIfFilteringTest(t)
+
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV11Upgrade.json"))
 }
 
 func TestAccountsCanSendMoneyAcrossUpgradeV12toV13(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip()
-	}
+	testUtils.SkipIfFilteringTest(t)
+
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV12Upgrade.json"))
 }
 
 func TestAccountsCanSendMoneyAcrossUpgradeV13toV14(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip()
-	}
+	testUtils.SkipIfFilteringTest(t)
+
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV13Upgrade.json"))
 }
 
@@ -95,9 +88,8 @@ func TestAccountsCanSendMoneyAcrossUpgradeV14toV15(t *testing.T) {
 }
 
 func TestAccountsCanSendMoneyAcrossUpgradeV15toV16(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip()
-	}
+	testUtils.SkipIfFilteringTest(t)
+
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV15Upgrade.json"))
 }
 
