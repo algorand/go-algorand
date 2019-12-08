@@ -33,6 +33,8 @@ import (
 	"github.com/algorand/go-algorand/daemon/kmd/config"
 	"github.com/algorand/go-algorand/daemon/kmd/wallet"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-codec/codec"
 )
@@ -131,7 +133,7 @@ func msgpackDecode(b []byte, objptr interface{}) error {
 
 // InitWithConfig accepts a driver configuration so that the SQLite driver
 // knows where to read and write its wallet databases
-func (swd *SQLiteWalletDriver) InitWithConfig(cfg config.KMDConfig) error {
+func (swd *SQLiteWalletDriver) InitWithConfig(cfg config.KMDConfig, log logging.Logger) error {
 	swd.globalCfg = cfg
 	swd.sqliteCfg = cfg.DriverConfig.SQLiteWalletDriverConfig
 
@@ -1133,7 +1135,7 @@ func (sw *SQLiteWallet) SignProgram(data []byte, src crypto.Digest, pw []byte) (
 		return
 	}
 
-	progb := transactions.Program(data)
+	progb := logic.Program(data)
 	// Sign the transaction
 	sig := secrets.Sign(&progb)
 	stx = sig[:]
@@ -1267,7 +1269,7 @@ func (sw *SQLiteWallet) MultisigSignProgram(data []byte, src crypto.Digest, pk c
 
 		// Sign the transaction
 		from := src
-		progb := transactions.Program(data)
+		progb := logic.Program(data)
 		sig, err = crypto.MultisigSign(&progb, from, version, threshold, pks, *secrets)
 		return
 	}
@@ -1311,7 +1313,7 @@ func (sw *SQLiteWallet) MultisigSignProgram(data []byte, src crypto.Digest, pk c
 
 	// Sign the transaction, and merge the multisig into the partial
 	version, threshold, pks := partial.Preimage()
-	progb := transactions.Program(data)
+	progb := logic.Program(data)
 	msig2, err := crypto.MultisigSign(&progb, addr, version, threshold, pks, *secrets)
 	if err != nil {
 		return

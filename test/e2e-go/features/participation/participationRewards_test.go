@@ -20,7 +20,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"testing"
-
+	"runtime"
+	
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
@@ -129,6 +130,9 @@ func TestOnlineOfflineRewards(t *testing.T) {
 }
 
 func TestPartkeyOnlyRewards(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	t.Parallel()
 	r := require.New(t)
 
@@ -321,10 +325,16 @@ func TestRewardRateRecalculation(t *testing.T) {
 	if roundQueried != rewardRecalcRound-1 {
 		r.FailNow("got rewards pool balance on round %d but wanted the balance on round %d, failing out", rewardRecalcRound-1, roundQueried)
 	}
+	lastRoundBeforeRewardRecals, err := client.Block(rewardRecalcRound - 1)
+	r.NoError(err)
 	r.NoError(fixture.WaitForRoundWithTimeout(rewardRecalcRound))
 	blk, err = client.Block(rewardRecalcRound)
 	r.NoError(err)
-	r.Equal((balanceOfRewardsPool-minBal)/consensus.RewardsRateRefreshInterval, blk.RewardsRate)
+	if !consensus.PendingResidueRewards {
+		lastRoundBeforeRewardRecals.RewardsResidue = 0
+	}
+
+	r.Equalf((balanceOfRewardsPool-minBal-lastRoundBeforeRewardRecals.RewardsResidue)/consensus.RewardsRateRefreshInterval, blk.RewardsRate, "Mismatching (%d-%d-%d)/%d != %d @ round %d", balanceOfRewardsPool, minBal, lastRoundBeforeRewardRecals.RewardsResidue, consensus.RewardsRateRefreshInterval, blk.RewardsRate, lastRoundBeforeRewardRecals.Round)
 
 	curStatus, err = client.Status()
 	r.NoError(err)
@@ -338,10 +348,16 @@ func TestRewardRateRecalculation(t *testing.T) {
 	if roundQueried != rewardRecalcRound-1 {
 		r.FailNow("got rewards pool balance on round %d but wanted the balance on round %d, failing out", rewardRecalcRound-1, roundQueried)
 	}
+	lastRoundBeforeRewardRecals, err = client.Block(rewardRecalcRound - 1)
+	r.NoError(err)
+	consensus = config.Consensus[protocol.ConsensusVersion(lastRoundBeforeRewardRecals.CurrentProtocol)]
 	r.NoError(fixture.WaitForRoundWithTimeout(rewardRecalcRound))
 	blk, err = client.Block(rewardRecalcRound)
 	r.NoError(err)
-	r.Equal((balanceOfRewardsPool-minBal)/consensus.RewardsRateRefreshInterval, blk.RewardsRate)
+	if !consensus.PendingResidueRewards {
+		lastRoundBeforeRewardRecals.RewardsResidue = 0
+	}
+	r.Equal((balanceOfRewardsPool-minBal-lastRoundBeforeRewardRecals.RewardsResidue)/consensus.RewardsRateRefreshInterval, blk.RewardsRate)
 	// if the network keeps progressing without error,
 	// this shows the network is healthy and that we didn't panic
 	finalRound := rewardRecalcRound + uint64(5)

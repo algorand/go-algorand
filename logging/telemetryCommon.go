@@ -48,7 +48,6 @@ type TelemetryConfig struct {
 	GUID               string
 	MinLogLevel        logrus.Level
 	ReportHistoryLevel logrus.Level
-	LogHistoryDepth    uint
 	FilePath           string // Path to file on disk, if any
 	ChainID            string `json:"-"`
 	SessionGUID        string `json:"-"`
@@ -64,6 +63,9 @@ type asyncTelemetryHook struct {
 	entries       chan *logrus.Entry
 	quit          chan struct{}
 	maxQueueDepth int
+	levels        []logrus.Level
+	ready         bool
+	urlUpdate     chan bool
 }
 
 type hookFactory func(cfg TelemetryConfig) (logrus.Hook, error)

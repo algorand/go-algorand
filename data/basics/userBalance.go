@@ -118,7 +118,7 @@ type AccountData struct {
 	// NOTE: do not modify this value in-place in existing AccountData
 	// structs; allocate a copy and modify that instead.  AccountData
 	// is expected to have copy-by-value semantics.
-	AssetParams map[uint64]AssetParams `codec:"apar"`
+	AssetParams map[AssetIndex]AssetParams `codec:"apar"`
 
 	// Assets is the set of assets that can be held by this
 	// account.  Assets (i.e., slots in this map) are explicitly
@@ -135,7 +135,7 @@ type AccountData struct {
 	// NOTE: do not modify this value in-place in existing AccountData
 	// structs; allocate a copy and modify that instead.  AccountData
 	// is expected to have copy-by-value semantics.
-	Assets map[AssetID]AssetHolding `codec:"asset"`
+	Assets map[AssetIndex]AssetHolding `codec:"asset"`
 }
 
 // AccountDetail encapsulates meaningful details about a given account, for external consumption
@@ -160,10 +160,16 @@ type BalanceDetail struct {
 	Accounts    []AccountDetail
 }
 
-// AssetID is a name of an asset.
-type AssetID struct {
-	Creator Address `codec:"c"`
-	Index   uint64  `codec:"i"`
+// AssetIndex is the unique integer index of an asset that can be used to look
+// up the creator of the asset, whose balance record contains the AssetParams
+type AssetIndex uint64
+
+// AssetLocator stores both the asset creator, whose balance record contains
+// the asset parameters, and the asset index, which is the key into those
+// parameters
+type AssetLocator struct {
+	Creator Address
+	Index   AssetIndex
 }
 
 // AssetHolding describes an asset held by an account.
@@ -174,9 +180,18 @@ type AssetHolding struct {
 
 // AssetParams describes the parameters of an asset.
 type AssetParams struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	// Total specifies the total number of units of this asset
 	// created.
 	Total uint64 `codec:"t"`
+
+	// Decimals specifies the number of digits to display after the decimal
+	// place when displaying this asset. A value of 0 represents an asset
+	// that is not divisible, a value of 1 represents an asset divisible
+	// into tenths, and so on. This value must be between 0 and 19
+	// (inclusive).
+	Decimals uint32 `codec:"dc"`
 
 	// DefaultFrozen specifies whether slots for this asset
 	// in user accounts are frozen by default or not.
@@ -184,10 +199,18 @@ type AssetParams struct {
 
 	// UnitName specifies a hint for the name of a unit of
 	// this asset.
-	UnitName [8]byte `codec:"un"`
+	UnitName string `codec:"un"`
 
 	// AssetName specifies a hint for the name of the asset.
-	AssetName [32]byte `codec:"an"`
+	AssetName string `codec:"an"`
+
+	// URL specifies a URL where more information about the asset can be
+	// retrieved
+	URL string `codec:"au"`
+
+	// MetadataHash specifies a commitment to some unspecified asset
+	// metadata. The format of this metadata is up to the application.
+	MetadataHash [32]byte `codec:"am"`
 
 	// Manager specifies an account that is allowed to change the
 	// non-zero addresses in this AssetParams.

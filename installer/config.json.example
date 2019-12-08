@@ -1,12 +1,12 @@
 {
-    "Version": 4,
+    "Version": 5,
     "AnnounceParticipationKey": true,
     "Archival": false,
     "BaseLoggerDebugLevel": 4,
     "BroadcastConnectionsLimit": -1,
     "CadaverSizeTarget": 1073741824,
     "CatchupFailurePeerRefreshRate": 10,
-    "CatchupParallelBlocks": 50,
+    "CatchupParallelBlocks": 16,
     "ConnectionsRateLimitingCount": 60,
     "ConnectionsRateLimitingWindowSeconds": 1,
     "DeadlockDetection": 0,
@@ -41,7 +41,7 @@
     "SuggestedFeeBlockHistory": 3,
     "SuggestedFeeSlidingWindowSize": 50,
     "TxPoolExponentialIncreaseFactor": 2,
-    "TxPoolSize": 50000,
+    "TxPoolSize": 15000,
     "TxSyncIntervalSeconds": 60,
     "TxSyncServeResponseSize": 1000000,
     "TxSyncTimeoutSeconds": 30

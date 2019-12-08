@@ -19,6 +19,7 @@ package participation
 import (
 	"path/filepath"
 	"testing"
+	"runtime" 
 
 	"github.com/stretchr/testify/require"
 
@@ -62,7 +63,7 @@ func TestParticipationKeyOnlyAccountParticipatesCorrectly(t *testing.T) {
 	_, err = client.SendPaymentFromWallet(wh, nil, partkeyOnlyAccount, richAccount, amountToSend, transactionFee, nil, "", basics.Round(0), basics.Round(0))
 	a.Error(err, "attempt to send money from partkey-only account should be treated as though wallet is not controlled")
 	// partkeyonly_account attempts to go offline, should fail (no rootkey to sign txn with)
-	goOfflineUTx, err := client.MakeUnsignedGoOfflineTx(partkeyOnlyAccount, 0, 0, transactionFee)
+	goOfflineUTx, err := client.MakeUnsignedGoOfflineTx(partkeyOnlyAccount, 0, 0, transactionFee, [32]byte{})
 	a.NoError(err, "should be able to make go offline tx")
 	wh, err = client.GetUnencryptedWalletHandle()
 	a.NoError(err, "should get unencrypted wallet handle")
@@ -96,6 +97,9 @@ func waitForAccountToProposeBlock(a *require.Assertions, fixture fixtures.RestCl
 }
 
 func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	if testing.Short() {
 		t.Skip()
 	}
@@ -141,7 +145,7 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 	a.NoError(err, "rest client should be able to add participation key to new account")
 	a.Equal(newAccount, partkeyResponse.Parent.String(), "partkey response should echo queried account")
 	// account uses part key to go online
-	goOnlineTx, err := client.MakeUnsignedGoOnlineTx(newAccount, nil, 0, 0, transactionFee)
+	goOnlineTx, err := client.MakeUnsignedGoOnlineTx(newAccount, nil, 0, 0, transactionFee, [32]byte{})
 	a.NoError(err, "should be able to make go online tx")
 	a.Equal(newAccount, goOnlineTx.Src().String(), "go online response should echo queried account")
 	onlineTxID, err := client.SignAndBroadcastTransaction(wh, nil, goOnlineTx)

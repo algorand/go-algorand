@@ -18,6 +18,7 @@ package ledger
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -28,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/execpool"
@@ -119,8 +121,13 @@ func testGenerateInitState(t *testing.T, proto protocol.ConsensusVersion) (genes
 
 type DummyVerifiedTxnCache struct{}
 
-func (x DummyVerifiedTxnCache) Verified(txn transactions.SignedTxn) bool {
+func (x DummyVerifiedTxnCache) Verified(txn transactions.SignedTxn, params verify.Params) bool {
 	return false
+}
+func (x DummyVerifiedTxnCache) EvalOk(cvers protocol.ConsensusVersion, txid transactions.Txid) (found bool, err error) {
+	return false, nil
+}
+func (x DummyVerifiedTxnCache) EvalRemember(cvers protocol.ConsensusVersion, txid transactions.Txid, err error) {
 }
 
 func (l *Ledger) appendUnvalidated(blk bookkeeping.Block) error {
@@ -129,7 +136,7 @@ func (l *Ledger) appendUnvalidated(blk bookkeeping.Block) error {
 
 	vb, err := l.Validate(context.Background(), blk, DummyVerifiedTxnCache{}, backlogPool)
 	if err != nil {
-		return err
+		return fmt.Errorf("appendUnvalidated error in Validate: %s", err.Error())
 	}
 
 	return l.AddValidatedBlock(*vb, agreement.Certificate{})
@@ -181,7 +188,7 @@ func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics
 	blk.BlockHeader = correctBlkHeader
 	txib, err := blk.EncodeSignedTxn(stx, ad)
 	if err != nil {
-		return err
+		return fmt.Errorf("could not sign txn: %s", err.Error())
 	}
 	blk.Payset = append(blk.Payset, txib)
 	blk.TxnRoot = blk.Payset.Commit(proto.PaysetCommitFlat)

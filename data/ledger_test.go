@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
@@ -114,7 +115,10 @@ func BenchmarkAssemblePayset(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		// generate transactions
 		const txPoolSize = 6000
-		tp := pools.MakeTransactionPool(l.Ledger, txPoolSize, false)
+		cfg := config.GetDefaultLocal()
+		cfg.TxPoolSize = txPoolSize
+		cfg.EnableAssembleStats = false
+		tp := pools.MakeTransactionPool(l.Ledger, cfg)
 		errcount := 0
 		okcount := 0
 		var worstTxID transactions.Txid
@@ -146,7 +150,7 @@ func BenchmarkAssemblePayset(b *testing.B) {
 			if okcount == 0 {
 				worstTxID = signedTx.ID()
 			}
-			err := tp.Remember([]transactions.SignedTxn{signedTx})
+			err := tp.Remember([]transactions.SignedTxn{signedTx}, []verify.Params{verify.Params{}})
 			if err != nil {
 				errcount++
 				b.Logf("(%d/%d) could not send [%d] %s -> [%d] %s: %s", errcount, okcount, sourcei, addresses[sourcei], desti, addresses[desti], err)
