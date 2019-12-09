@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
 
+BLUE_FG=$(tput setaf 4)
+GREEN_FG=$(tput setaf 2)
+RED_FG=$(tput setaf 1)
+END_COLOR=$(tput sgr0)
+
 if [[ ! "$AWS_ACCESS_KEY_ID" || ! "$AWS_SECRET_ACCESS_KEY" ]]
 then
-    echo -e "$(tput setaf 1)[$0]$(tput sgr0) Missing AWS credentials."
-    echo "Export $(tput setaf 2)\$AWS_ACCESS_KEY_ID$(tput sgr0) and $(tput setaf 2)\$AWS_SECRET_ACCESS_KEY$(tput sgr0) before running this script."
-    echo "See https://aws.amazon.com/blogs/security/wheres-my-secret-access-key/ to obtain creds."
+    echo -e "$RED_FG[$0]$END_COLOR Missing AWS credentials." \
+        "\nExport $GREEN_FG\$AWS_ACCESS_KEY_ID$END_COLOR and $GREEN_FG\$AWS_SECRET_ACCESS_KEY$END_COLOR before running this script." \
+        "\nSee https://aws.amazon.com/blogs/security/wheres-my-secret-access-key/ to obtain creds."
     exit 1
 fi
 
@@ -74,7 +79,7 @@ do
     fi
 
     # Finally, designate the OS and send the fully-formed Dockerfile to Docker.
-    echo -e "$(tput setaf 4)[$0]$(tput sgr0) Testing $item..."
+    echo -e "$BLUE_FG[$0]$END_COLOR Testing $item..."
     if ! echo -e "${WITH_PACMAN/\{\{OS\}\}/$item}" | docker build -t "$item" -
     then
         RET_VALUE=1
@@ -84,7 +89,7 @@ done
 
 if [ "${#FAILED[@]}" -gt 0 ]
 then
-    echo -e "\n$(tput setaf 1)[$0]$(tput sgr0) The following images have problems:"
+    echo -e "\n$RED_FG[$0]$END_COLOR The following images have problems:"
     for failed in ${FAILED[*]}
     do
         echo " - $failed"
