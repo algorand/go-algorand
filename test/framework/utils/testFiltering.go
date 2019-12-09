@@ -22,7 +22,8 @@ import (
 	"runtime"
 )
 
-// SkipIfFilteringTest skips tests according to the logic implemented in here.
+// SkipIfFilteringTest skips tests according to the logic implemented in here:
+// Skipping tests on darwin and arm/arm64
 func SkipIfFilteringTest(t *testing.T) {
 	if runtime.GOOS == "darwin" {
 		t.Skip()
