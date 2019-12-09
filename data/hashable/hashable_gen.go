@@ -61,31 +61,31 @@ func (z *Message) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		}
-		return
-	}
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	for zb0001 > 0 {
-		zb0001--
-		field, bts, err = msgp.ReadMapKeyZC(bts)
+	} else {
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch string(field) {
-		case "msg":
-			(*z).Message, bts, err = msgp.ReadStringBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Message")
-				return
-			}
-		default:
-			err = msgp.ErrNoField(string(field))
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
+			}
+			switch string(field) {
+			case "msg":
+				(*z).Message, bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Message")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
 			}
 		}
 	}

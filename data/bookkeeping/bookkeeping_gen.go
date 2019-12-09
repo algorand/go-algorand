@@ -475,157 +475,157 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		}
-		return
-	}
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	for zb0001 > 0 {
-		zb0001--
-		field, bts, err = msgp.ReadMapKeyZC(bts)
+	} else {
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch string(field) {
-		case "rnd":
-			bts, err = (*z).BlockHeader.Round.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Round")
-				return
-			}
-		case "prev":
-			bts, err = (*z).BlockHeader.Branch.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Branch")
-				return
-			}
-		case "seed":
-			bts, err = (*z).BlockHeader.Seed.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Seed")
-				return
-			}
-		case "txn":
-			bts, err = (*z).BlockHeader.TxnRoot.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "TxnRoot")
-				return
-			}
-		case "ts":
-			(*z).BlockHeader.TimeStamp, bts, err = msgp.ReadInt64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "TimeStamp")
-				return
-			}
-		case "gen":
-			(*z).BlockHeader.GenesisID, bts, err = msgp.ReadStringBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "GenesisID")
-				return
-			}
-		case "gh":
-			bts, err = (*z).BlockHeader.GenesisHash.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "GenesisHash")
-				return
-			}
-		case "fees":
-			bts, err = (*z).BlockHeader.RewardsState.FeeSink.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "FeeSink")
-				return
-			}
-		case "rwd":
-			bts, err = (*z).BlockHeader.RewardsState.RewardsPool.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "RewardsPool")
-				return
-			}
-		case "earn":
-			(*z).BlockHeader.RewardsState.RewardsLevel, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "RewardsLevel")
-				return
-			}
-		case "rate":
-			(*z).BlockHeader.RewardsState.RewardsRate, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "RewardsRate")
-				return
-			}
-		case "frac":
-			(*z).BlockHeader.RewardsState.RewardsResidue, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "RewardsResidue")
-				return
-			}
-		case "rwcalr":
-			bts, err = (*z).BlockHeader.RewardsState.RewardsRecalculationRound.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "RewardsRecalculationRound")
-				return
-			}
-		case "proto":
-			bts, err = (*z).BlockHeader.UpgradeState.CurrentProtocol.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "CurrentProtocol")
-				return
-			}
-		case "nextproto":
-			bts, err = (*z).BlockHeader.UpgradeState.NextProtocol.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "NextProtocol")
-				return
-			}
-		case "nextyes":
-			(*z).BlockHeader.UpgradeState.NextProtocolApprovals, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "NextProtocolApprovals")
-				return
-			}
-		case "nextbefore":
-			bts, err = (*z).BlockHeader.UpgradeState.NextProtocolVoteBefore.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "NextProtocolVoteBefore")
-				return
-			}
-		case "nextswitch":
-			bts, err = (*z).BlockHeader.UpgradeState.NextProtocolSwitchOn.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "NextProtocolSwitchOn")
-				return
-			}
-		case "upgradeprop":
-			bts, err = (*z).BlockHeader.UpgradeVote.UpgradePropose.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "UpgradePropose")
-				return
-			}
-		case "upgradeyes":
-			(*z).BlockHeader.UpgradeVote.UpgradeApprove, bts, err = msgp.ReadBoolBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "UpgradeApprove")
-				return
-			}
-		case "tc":
-			(*z).BlockHeader.TxnCounter, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "TxnCounter")
-				return
-			}
-		case "txns":
-			bts, err = (*z).Payset.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Payset")
-				return
-			}
-		default:
-			err = msgp.ErrNoField(string(field))
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
+			}
+			switch string(field) {
+			case "rnd":
+				bts, err = (*z).BlockHeader.Round.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Round")
+					return
+				}
+			case "prev":
+				bts, err = (*z).BlockHeader.Branch.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Branch")
+					return
+				}
+			case "seed":
+				bts, err = (*z).BlockHeader.Seed.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Seed")
+					return
+				}
+			case "txn":
+				bts, err = (*z).BlockHeader.TxnRoot.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "TxnRoot")
+					return
+				}
+			case "ts":
+				(*z).BlockHeader.TimeStamp, bts, err = msgp.ReadInt64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "TimeStamp")
+					return
+				}
+			case "gen":
+				(*z).BlockHeader.GenesisID, bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "GenesisID")
+					return
+				}
+			case "gh":
+				bts, err = (*z).BlockHeader.GenesisHash.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "GenesisHash")
+					return
+				}
+			case "fees":
+				bts, err = (*z).BlockHeader.RewardsState.FeeSink.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "FeeSink")
+					return
+				}
+			case "rwd":
+				bts, err = (*z).BlockHeader.RewardsState.RewardsPool.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "RewardsPool")
+					return
+				}
+			case "earn":
+				(*z).BlockHeader.RewardsState.RewardsLevel, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "RewardsLevel")
+					return
+				}
+			case "rate":
+				(*z).BlockHeader.RewardsState.RewardsRate, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "RewardsRate")
+					return
+				}
+			case "frac":
+				(*z).BlockHeader.RewardsState.RewardsResidue, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "RewardsResidue")
+					return
+				}
+			case "rwcalr":
+				bts, err = (*z).BlockHeader.RewardsState.RewardsRecalculationRound.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "RewardsRecalculationRound")
+					return
+				}
+			case "proto":
+				bts, err = (*z).BlockHeader.UpgradeState.CurrentProtocol.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "CurrentProtocol")
+					return
+				}
+			case "nextproto":
+				bts, err = (*z).BlockHeader.UpgradeState.NextProtocol.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "NextProtocol")
+					return
+				}
+			case "nextyes":
+				(*z).BlockHeader.UpgradeState.NextProtocolApprovals, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "NextProtocolApprovals")
+					return
+				}
+			case "nextbefore":
+				bts, err = (*z).BlockHeader.UpgradeState.NextProtocolVoteBefore.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "NextProtocolVoteBefore")
+					return
+				}
+			case "nextswitch":
+				bts, err = (*z).BlockHeader.UpgradeState.NextProtocolSwitchOn.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "NextProtocolSwitchOn")
+					return
+				}
+			case "upgradeprop":
+				bts, err = (*z).BlockHeader.UpgradeVote.UpgradePropose.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "UpgradePropose")
+					return
+				}
+			case "upgradeyes":
+				(*z).BlockHeader.UpgradeVote.UpgradeApprove, bts, err = msgp.ReadBoolBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "UpgradeApprove")
+					return
+				}
+			case "tc":
+				(*z).BlockHeader.TxnCounter, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "TxnCounter")
+					return
+				}
+			case "txns":
+				bts, err = (*z).Payset.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Payset")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
 			}
 		}
 	}
@@ -1124,151 +1124,151 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		}
-		return
-	}
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	for zb0001 > 0 {
-		zb0001--
-		field, bts, err = msgp.ReadMapKeyZC(bts)
+	} else {
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch string(field) {
-		case "rnd":
-			bts, err = (*z).Round.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Round")
-				return
-			}
-		case "prev":
-			bts, err = (*z).Branch.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Branch")
-				return
-			}
-		case "seed":
-			bts, err = (*z).Seed.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Seed")
-				return
-			}
-		case "txn":
-			bts, err = (*z).TxnRoot.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "TxnRoot")
-				return
-			}
-		case "ts":
-			(*z).TimeStamp, bts, err = msgp.ReadInt64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "TimeStamp")
-				return
-			}
-		case "gen":
-			(*z).GenesisID, bts, err = msgp.ReadStringBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "GenesisID")
-				return
-			}
-		case "gh":
-			bts, err = (*z).GenesisHash.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "GenesisHash")
-				return
-			}
-		case "fees":
-			bts, err = (*z).RewardsState.FeeSink.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "FeeSink")
-				return
-			}
-		case "rwd":
-			bts, err = (*z).RewardsState.RewardsPool.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "RewardsPool")
-				return
-			}
-		case "earn":
-			(*z).RewardsState.RewardsLevel, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "RewardsLevel")
-				return
-			}
-		case "rate":
-			(*z).RewardsState.RewardsRate, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "RewardsRate")
-				return
-			}
-		case "frac":
-			(*z).RewardsState.RewardsResidue, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "RewardsResidue")
-				return
-			}
-		case "rwcalr":
-			bts, err = (*z).RewardsState.RewardsRecalculationRound.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "RewardsRecalculationRound")
-				return
-			}
-		case "proto":
-			bts, err = (*z).UpgradeState.CurrentProtocol.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "CurrentProtocol")
-				return
-			}
-		case "nextproto":
-			bts, err = (*z).UpgradeState.NextProtocol.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "NextProtocol")
-				return
-			}
-		case "nextyes":
-			(*z).UpgradeState.NextProtocolApprovals, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "NextProtocolApprovals")
-				return
-			}
-		case "nextbefore":
-			bts, err = (*z).UpgradeState.NextProtocolVoteBefore.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "NextProtocolVoteBefore")
-				return
-			}
-		case "nextswitch":
-			bts, err = (*z).UpgradeState.NextProtocolSwitchOn.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "NextProtocolSwitchOn")
-				return
-			}
-		case "upgradeprop":
-			bts, err = (*z).UpgradeVote.UpgradePropose.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "UpgradePropose")
-				return
-			}
-		case "upgradeyes":
-			(*z).UpgradeVote.UpgradeApprove, bts, err = msgp.ReadBoolBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "UpgradeApprove")
-				return
-			}
-		case "tc":
-			(*z).TxnCounter, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "TxnCounter")
-				return
-			}
-		default:
-			err = msgp.ErrNoField(string(field))
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
+			}
+			switch string(field) {
+			case "rnd":
+				bts, err = (*z).Round.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Round")
+					return
+				}
+			case "prev":
+				bts, err = (*z).Branch.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Branch")
+					return
+				}
+			case "seed":
+				bts, err = (*z).Seed.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Seed")
+					return
+				}
+			case "txn":
+				bts, err = (*z).TxnRoot.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "TxnRoot")
+					return
+				}
+			case "ts":
+				(*z).TimeStamp, bts, err = msgp.ReadInt64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "TimeStamp")
+					return
+				}
+			case "gen":
+				(*z).GenesisID, bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "GenesisID")
+					return
+				}
+			case "gh":
+				bts, err = (*z).GenesisHash.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "GenesisHash")
+					return
+				}
+			case "fees":
+				bts, err = (*z).RewardsState.FeeSink.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "FeeSink")
+					return
+				}
+			case "rwd":
+				bts, err = (*z).RewardsState.RewardsPool.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "RewardsPool")
+					return
+				}
+			case "earn":
+				(*z).RewardsState.RewardsLevel, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "RewardsLevel")
+					return
+				}
+			case "rate":
+				(*z).RewardsState.RewardsRate, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "RewardsRate")
+					return
+				}
+			case "frac":
+				(*z).RewardsState.RewardsResidue, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "RewardsResidue")
+					return
+				}
+			case "rwcalr":
+				bts, err = (*z).RewardsState.RewardsRecalculationRound.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "RewardsRecalculationRound")
+					return
+				}
+			case "proto":
+				bts, err = (*z).UpgradeState.CurrentProtocol.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "CurrentProtocol")
+					return
+				}
+			case "nextproto":
+				bts, err = (*z).UpgradeState.NextProtocol.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "NextProtocol")
+					return
+				}
+			case "nextyes":
+				(*z).UpgradeState.NextProtocolApprovals, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "NextProtocolApprovals")
+					return
+				}
+			case "nextbefore":
+				bts, err = (*z).UpgradeState.NextProtocolVoteBefore.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "NextProtocolVoteBefore")
+					return
+				}
+			case "nextswitch":
+				bts, err = (*z).UpgradeState.NextProtocolSwitchOn.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "NextProtocolSwitchOn")
+					return
+				}
+			case "upgradeprop":
+				bts, err = (*z).UpgradeVote.UpgradePropose.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "UpgradePropose")
+					return
+				}
+			case "upgradeyes":
+				(*z).UpgradeVote.UpgradeApprove, bts, err = msgp.ReadBoolBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "UpgradeApprove")
+					return
+				}
+			case "tc":
+				(*z).TxnCounter, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "TxnCounter")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
 			}
 		}
 	}
@@ -1494,86 +1494,86 @@ func (z *Genesis) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		}
-		return
-	}
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	for zb0002 > 0 {
-		zb0002--
-		field, bts, err = msgp.ReadMapKeyZC(bts)
+	} else {
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch string(field) {
-		case "id":
-			(*z).SchemaID, bts, err = msgp.ReadStringBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "SchemaID")
-				return
-			}
-		case "network":
-			bts, err = (*z).Network.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Network")
-				return
-			}
-		case "proto":
-			bts, err = (*z).Proto.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Proto")
-				return
-			}
-		case "alloc":
-			var zb0004 int
-			zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Allocation")
-				return
-			}
-			if (*z).Allocation != nil && cap((*z).Allocation) >= zb0004 {
-				(*z).Allocation = ((*z).Allocation)[:zb0004]
-			} else {
-				(*z).Allocation = make([]GenesisAllocation, zb0004)
-			}
-			for zb0001 := range (*z).Allocation {
-				bts, err = (*z).Allocation[zb0001].UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Allocation", zb0001)
-					return
-				}
-			}
-		case "rwd":
-			(*z).RewardsPool, bts, err = msgp.ReadStringBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "RewardsPool")
-				return
-			}
-		case "fees":
-			(*z).FeeSink, bts, err = msgp.ReadStringBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "FeeSink")
-				return
-			}
-		case "timestamp":
-			(*z).Timestamp, bts, err = msgp.ReadInt64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Timestamp")
-				return
-			}
-		case "comment":
-			(*z).Comment, bts, err = msgp.ReadStringBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Comment")
-				return
-			}
-		default:
-			err = msgp.ErrNoField(string(field))
+		for zb0002 > 0 {
+			zb0002--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
+			}
+			switch string(field) {
+			case "id":
+				(*z).SchemaID, bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "SchemaID")
+					return
+				}
+			case "network":
+				bts, err = (*z).Network.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Network")
+					return
+				}
+			case "proto":
+				bts, err = (*z).Proto.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Proto")
+					return
+				}
+			case "alloc":
+				var zb0004 int
+				zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Allocation")
+					return
+				}
+				if (*z).Allocation != nil && cap((*z).Allocation) >= zb0004 {
+					(*z).Allocation = ((*z).Allocation)[:zb0004]
+				} else {
+					(*z).Allocation = make([]GenesisAllocation, zb0004)
+				}
+				for zb0001 := range (*z).Allocation {
+					bts, err = (*z).Allocation[zb0001].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Allocation", zb0001)
+						return
+					}
+				}
+			case "rwd":
+				(*z).RewardsPool, bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "RewardsPool")
+					return
+				}
+			case "fees":
+				(*z).FeeSink, bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "FeeSink")
+					return
+				}
+			case "timestamp":
+				(*z).Timestamp, bts, err = msgp.ReadInt64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Timestamp")
+					return
+				}
+			case "comment":
+				(*z).Comment, bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Comment")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
 			}
 		}
 	}
@@ -1669,43 +1669,43 @@ func (z *GenesisAllocation) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		}
-		return
-	}
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	for zb0001 > 0 {
-		zb0001--
-		field, bts, err = msgp.ReadMapKeyZC(bts)
+	} else {
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch string(field) {
-		case "addr":
-			(*z).Address, bts, err = msgp.ReadStringBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Address")
-				return
-			}
-		case "comment":
-			(*z).Comment, bts, err = msgp.ReadStringBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Comment")
-				return
-			}
-		case "state":
-			bts, err = (*z).State.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "State")
-				return
-			}
-		default:
-			err = msgp.ErrNoField(string(field))
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
+			}
+			switch string(field) {
+			case "addr":
+				(*z).Address, bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Address")
+					return
+				}
+			case "comment":
+				(*z).Comment, bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Comment")
+					return
+				}
+			case "state":
+				bts, err = (*z).State.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "State")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
 			}
 		}
 	}
@@ -1881,61 +1881,61 @@ func (z *RewardsState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		}
-		return
-	}
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	for zb0001 > 0 {
-		zb0001--
-		field, bts, err = msgp.ReadMapKeyZC(bts)
+	} else {
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch string(field) {
-		case "fees":
-			bts, err = (*z).FeeSink.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "FeeSink")
-				return
-			}
-		case "rwd":
-			bts, err = (*z).RewardsPool.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "RewardsPool")
-				return
-			}
-		case "earn":
-			(*z).RewardsLevel, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "RewardsLevel")
-				return
-			}
-		case "rate":
-			(*z).RewardsRate, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "RewardsRate")
-				return
-			}
-		case "frac":
-			(*z).RewardsResidue, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "RewardsResidue")
-				return
-			}
-		case "rwcalr":
-			bts, err = (*z).RewardsRecalculationRound.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "RewardsRecalculationRound")
-				return
-			}
-		default:
-			err = msgp.ErrNoField(string(field))
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
+			}
+			switch string(field) {
+			case "fees":
+				bts, err = (*z).FeeSink.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "FeeSink")
+					return
+				}
+			case "rwd":
+				bts, err = (*z).RewardsPool.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "RewardsPool")
+					return
+				}
+			case "earn":
+				(*z).RewardsLevel, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "RewardsLevel")
+					return
+				}
+			case "rate":
+				(*z).RewardsRate, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "RewardsRate")
+					return
+				}
+			case "frac":
+				(*z).RewardsResidue, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "RewardsResidue")
+					return
+				}
+			case "rwcalr":
+				bts, err = (*z).RewardsRecalculationRound.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "RewardsRecalculationRound")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
 			}
 		}
 	}
@@ -2035,37 +2035,37 @@ func (z *UpgradeVote) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		}
-		return
-	}
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	for zb0001 > 0 {
-		zb0001--
-		field, bts, err = msgp.ReadMapKeyZC(bts)
+	} else {
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch string(field) {
-		case "upgradeprop":
-			bts, err = (*z).UpgradePropose.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "UpgradePropose")
-				return
-			}
-		case "upgradeyes":
-			(*z).UpgradeApprove, bts, err = msgp.ReadBoolBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "UpgradeApprove")
-				return
-			}
-		default:
-			err = msgp.ErrNoField(string(field))
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
+			}
+			switch string(field) {
+			case "upgradeprop":
+				bts, err = (*z).UpgradePropose.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "UpgradePropose")
+					return
+				}
+			case "upgradeyes":
+				(*z).UpgradeApprove, bts, err = msgp.ReadBoolBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "UpgradeApprove")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
 			}
 		}
 	}

@@ -201,61 +201,61 @@ func (z *MultisigSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		}
-		return
-	}
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	for zb0002 > 0 {
-		zb0002--
-		field, bts, err = msgp.ReadMapKeyZC(bts)
+	} else {
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch string(field) {
-		case "v":
-			(*z).Version, bts, err = msgp.ReadUint8Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Version")
-				return
-			}
-		case "thr":
-			(*z).Threshold, bts, err = msgp.ReadUint8Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Threshold")
-				return
-			}
-		case "subsig":
-			var zb0004 int
-			zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Subsigs")
-				return
-			}
-			if zb0004 > maxMultisig {
-				err = msgp.ErrOverflow(uint64(zb0004), uint64(maxMultisig))
-				err = msgp.WrapError(err, "Subsigs")
-				return
-			}
-			if (*z).Subsigs != nil && cap((*z).Subsigs) >= zb0004 {
-				(*z).Subsigs = ((*z).Subsigs)[:zb0004]
-			} else {
-				(*z).Subsigs = make([]MultisigSubsig, zb0004)
-			}
-			for zb0001 := range (*z).Subsigs {
-				bts, err = (*z).Subsigs[zb0001].UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Subsigs", zb0001)
-					return
-				}
-			}
-		default:
-			err = msgp.ErrNoField(string(field))
+		for zb0002 > 0 {
+			zb0002--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
+			}
+			switch string(field) {
+			case "v":
+				(*z).Version, bts, err = msgp.ReadUint8Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Version")
+					return
+				}
+			case "thr":
+				(*z).Threshold, bts, err = msgp.ReadUint8Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Threshold")
+					return
+				}
+			case "subsig":
+				var zb0004 int
+				zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Subsigs")
+					return
+				}
+				if zb0004 > maxMultisig {
+					err = msgp.ErrOverflow(uint64(zb0004), uint64(maxMultisig))
+					err = msgp.WrapError(err, "Subsigs")
+					return
+				}
+				if (*z).Subsigs != nil && cap((*z).Subsigs) >= zb0004 {
+					(*z).Subsigs = ((*z).Subsigs)[:zb0004]
+				} else {
+					(*z).Subsigs = make([]MultisigSubsig, zb0004)
+				}
+				for zb0001 := range (*z).Subsigs {
+					bts, err = (*z).Subsigs[zb0001].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Subsigs", zb0001)
+						return
+					}
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
 			}
 		}
 	}
@@ -354,37 +354,37 @@ func (z *MultisigSubsig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		}
-		return
-	}
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	for zb0003 > 0 {
-		zb0003--
-		field, bts, err = msgp.ReadMapKeyZC(bts)
+	} else {
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch string(field) {
-		case "pk":
-			bts, err = msgp.ReadExactBytes(bts, ((*z).Key)[:])
-			if err != nil {
-				err = msgp.WrapError(err, "Key")
-				return
-			}
-		case "s":
-			bts, err = msgp.ReadExactBytes(bts, ((*z).Sig)[:])
-			if err != nil {
-				err = msgp.WrapError(err, "Sig")
-				return
-			}
-		default:
-			err = msgp.ErrNoField(string(field))
+		for zb0003 > 0 {
+			zb0003--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
+			}
+			switch string(field) {
+			case "pk":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).Key)[:])
+				if err != nil {
+					err = msgp.WrapError(err, "Key")
+					return
+				}
+			case "s":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).Sig)[:])
+				if err != nil {
+					err = msgp.WrapError(err, "Sig")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
 			}
 		}
 	}
@@ -505,61 +505,61 @@ func (z *OneTimeSignature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		}
-		return
-	}
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	for zb0007 > 0 {
-		zb0007--
-		field, bts, err = msgp.ReadMapKeyZC(bts)
+	} else {
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch string(field) {
-		case "s":
-			bts, err = msgp.ReadExactBytes(bts, ((*z).Sig)[:])
-			if err != nil {
-				err = msgp.WrapError(err, "Sig")
-				return
-			}
-		case "p":
-			bts, err = msgp.ReadExactBytes(bts, ((*z).PK)[:])
-			if err != nil {
-				err = msgp.WrapError(err, "PK")
-				return
-			}
-		case "ps":
-			bts, err = msgp.ReadExactBytes(bts, ((*z).PKSigOld)[:])
-			if err != nil {
-				err = msgp.WrapError(err, "PKSigOld")
-				return
-			}
-		case "p2":
-			bts, err = msgp.ReadExactBytes(bts, ((*z).PK2)[:])
-			if err != nil {
-				err = msgp.WrapError(err, "PK2")
-				return
-			}
-		case "p1s":
-			bts, err = msgp.ReadExactBytes(bts, ((*z).PK1Sig)[:])
-			if err != nil {
-				err = msgp.WrapError(err, "PK1Sig")
-				return
-			}
-		case "p2s":
-			bts, err = msgp.ReadExactBytes(bts, ((*z).PK2Sig)[:])
-			if err != nil {
-				err = msgp.WrapError(err, "PK2Sig")
-				return
-			}
-		default:
-			err = msgp.ErrNoField(string(field))
+		for zb0007 > 0 {
+			zb0007--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
+			}
+			switch string(field) {
+			case "s":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).Sig)[:])
+				if err != nil {
+					err = msgp.WrapError(err, "Sig")
+					return
+				}
+			case "p":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).PK)[:])
+				if err != nil {
+					err = msgp.WrapError(err, "PK")
+					return
+				}
+			case "ps":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).PKSigOld)[:])
+				if err != nil {
+					err = msgp.WrapError(err, "PKSigOld")
+					return
+				}
+			case "p2":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).PK2)[:])
+				if err != nil {
+					err = msgp.WrapError(err, "PK2")
+					return
+				}
+			case "p1s":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).PK1Sig)[:])
+				if err != nil {
+					err = msgp.WrapError(err, "PK1Sig")
+					return
+				}
+			case "p2s":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).PK2Sig)[:])
+				if err != nil {
+					err = msgp.WrapError(err, "PK2Sig")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
 			}
 		}
 	}
@@ -780,93 +780,93 @@ func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error)
 				return
 			}
 		}
-		return
-	}
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	for zb0006 > 0 {
-		zb0006--
-		field, bts, err = msgp.ReadMapKeyZC(bts)
+	} else {
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch string(field) {
-		case "OneTimeSignatureVerifier":
-			bts, err = msgp.ReadExactBytes(bts, ((*z).OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier)[:])
-			if err != nil {
-				err = msgp.WrapError(err, "OneTimeSignatureVerifier")
-				return
-			}
-		case "First":
-			(*z).OneTimeSignatureSecretsPersistent.FirstBatch, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "FirstBatch")
-				return
-			}
-		case "Sub":
-			var zb0009 int
-			zb0009, bts, err = msgp.ReadArrayHeaderBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Batches")
-				return
-			}
-			if (*z).OneTimeSignatureSecretsPersistent.Batches != nil && cap((*z).OneTimeSignatureSecretsPersistent.Batches) >= zb0009 {
-				(*z).OneTimeSignatureSecretsPersistent.Batches = ((*z).OneTimeSignatureSecretsPersistent.Batches)[:zb0009]
-			} else {
-				(*z).OneTimeSignatureSecretsPersistent.Batches = make([]ephemeralSubkey, zb0009)
-			}
-			for zb0002 := range (*z).OneTimeSignatureSecretsPersistent.Batches {
-				bts, err = (*z).OneTimeSignatureSecretsPersistent.Batches[zb0002].UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Batches", zb0002)
-					return
-				}
-			}
-		case "firstoff":
-			(*z).OneTimeSignatureSecretsPersistent.FirstOffset, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "FirstOffset")
-				return
-			}
-		case "offkeys":
-			var zb0010 int
-			zb0010, bts, err = msgp.ReadArrayHeaderBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Offsets")
-				return
-			}
-			if (*z).OneTimeSignatureSecretsPersistent.Offsets != nil && cap((*z).OneTimeSignatureSecretsPersistent.Offsets) >= zb0010 {
-				(*z).OneTimeSignatureSecretsPersistent.Offsets = ((*z).OneTimeSignatureSecretsPersistent.Offsets)[:zb0010]
-			} else {
-				(*z).OneTimeSignatureSecretsPersistent.Offsets = make([]ephemeralSubkey, zb0010)
-			}
-			for zb0003 := range (*z).OneTimeSignatureSecretsPersistent.Offsets {
-				bts, err = (*z).OneTimeSignatureSecretsPersistent.Offsets[zb0003].UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Offsets", zb0003)
-					return
-				}
-			}
-		case "offpk2":
-			bts, err = msgp.ReadExactBytes(bts, ((*z).OneTimeSignatureSecretsPersistent.OffsetsPK2)[:])
-			if err != nil {
-				err = msgp.WrapError(err, "OffsetsPK2")
-				return
-			}
-		case "offpk2sig":
-			bts, err = msgp.ReadExactBytes(bts, ((*z).OneTimeSignatureSecretsPersistent.OffsetsPK2Sig)[:])
-			if err != nil {
-				err = msgp.WrapError(err, "OffsetsPK2Sig")
-				return
-			}
-		default:
-			err = msgp.ErrNoField(string(field))
+		for zb0006 > 0 {
+			zb0006--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
+			}
+			switch string(field) {
+			case "OneTimeSignatureVerifier":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier)[:])
+				if err != nil {
+					err = msgp.WrapError(err, "OneTimeSignatureVerifier")
+					return
+				}
+			case "First":
+				(*z).OneTimeSignatureSecretsPersistent.FirstBatch, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "FirstBatch")
+					return
+				}
+			case "Sub":
+				var zb0009 int
+				zb0009, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Batches")
+					return
+				}
+				if (*z).OneTimeSignatureSecretsPersistent.Batches != nil && cap((*z).OneTimeSignatureSecretsPersistent.Batches) >= zb0009 {
+					(*z).OneTimeSignatureSecretsPersistent.Batches = ((*z).OneTimeSignatureSecretsPersistent.Batches)[:zb0009]
+				} else {
+					(*z).OneTimeSignatureSecretsPersistent.Batches = make([]ephemeralSubkey, zb0009)
+				}
+				for zb0002 := range (*z).OneTimeSignatureSecretsPersistent.Batches {
+					bts, err = (*z).OneTimeSignatureSecretsPersistent.Batches[zb0002].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Batches", zb0002)
+						return
+					}
+				}
+			case "firstoff":
+				(*z).OneTimeSignatureSecretsPersistent.FirstOffset, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "FirstOffset")
+					return
+				}
+			case "offkeys":
+				var zb0010 int
+				zb0010, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Offsets")
+					return
+				}
+				if (*z).OneTimeSignatureSecretsPersistent.Offsets != nil && cap((*z).OneTimeSignatureSecretsPersistent.Offsets) >= zb0010 {
+					(*z).OneTimeSignatureSecretsPersistent.Offsets = ((*z).OneTimeSignatureSecretsPersistent.Offsets)[:zb0010]
+				} else {
+					(*z).OneTimeSignatureSecretsPersistent.Offsets = make([]ephemeralSubkey, zb0010)
+				}
+				for zb0003 := range (*z).OneTimeSignatureSecretsPersistent.Offsets {
+					bts, err = (*z).OneTimeSignatureSecretsPersistent.Offsets[zb0003].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Offsets", zb0003)
+						return
+					}
+				}
+			case "offpk2":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).OneTimeSignatureSecretsPersistent.OffsetsPK2)[:])
+				if err != nil {
+					err = msgp.WrapError(err, "OffsetsPK2")
+					return
+				}
+			case "offpk2sig":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).OneTimeSignatureSecretsPersistent.OffsetsPK2Sig)[:])
+				if err != nil {
+					err = msgp.WrapError(err, "OffsetsPK2Sig")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
 			}
 		}
 	}
@@ -1095,93 +1095,93 @@ func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsg(bts []byte) (o []byte, 
 				return
 			}
 		}
-		return
-	}
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	for zb0006 > 0 {
-		zb0006--
-		field, bts, err = msgp.ReadMapKeyZC(bts)
+	} else {
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch string(field) {
-		case "OneTimeSignatureVerifier":
-			bts, err = msgp.ReadExactBytes(bts, ((*z).OneTimeSignatureVerifier)[:])
-			if err != nil {
-				err = msgp.WrapError(err, "OneTimeSignatureVerifier")
-				return
-			}
-		case "First":
-			(*z).FirstBatch, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "FirstBatch")
-				return
-			}
-		case "Sub":
-			var zb0009 int
-			zb0009, bts, err = msgp.ReadArrayHeaderBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Batches")
-				return
-			}
-			if (*z).Batches != nil && cap((*z).Batches) >= zb0009 {
-				(*z).Batches = ((*z).Batches)[:zb0009]
-			} else {
-				(*z).Batches = make([]ephemeralSubkey, zb0009)
-			}
-			for zb0002 := range (*z).Batches {
-				bts, err = (*z).Batches[zb0002].UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Batches", zb0002)
-					return
-				}
-			}
-		case "firstoff":
-			(*z).FirstOffset, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "FirstOffset")
-				return
-			}
-		case "offkeys":
-			var zb0010 int
-			zb0010, bts, err = msgp.ReadArrayHeaderBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Offsets")
-				return
-			}
-			if (*z).Offsets != nil && cap((*z).Offsets) >= zb0010 {
-				(*z).Offsets = ((*z).Offsets)[:zb0010]
-			} else {
-				(*z).Offsets = make([]ephemeralSubkey, zb0010)
-			}
-			for zb0003 := range (*z).Offsets {
-				bts, err = (*z).Offsets[zb0003].UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Offsets", zb0003)
-					return
-				}
-			}
-		case "offpk2":
-			bts, err = msgp.ReadExactBytes(bts, ((*z).OffsetsPK2)[:])
-			if err != nil {
-				err = msgp.WrapError(err, "OffsetsPK2")
-				return
-			}
-		case "offpk2sig":
-			bts, err = msgp.ReadExactBytes(bts, ((*z).OffsetsPK2Sig)[:])
-			if err != nil {
-				err = msgp.WrapError(err, "OffsetsPK2Sig")
-				return
-			}
-		default:
-			err = msgp.ErrNoField(string(field))
+		for zb0006 > 0 {
+			zb0006--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
+			}
+			switch string(field) {
+			case "OneTimeSignatureVerifier":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).OneTimeSignatureVerifier)[:])
+				if err != nil {
+					err = msgp.WrapError(err, "OneTimeSignatureVerifier")
+					return
+				}
+			case "First":
+				(*z).FirstBatch, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "FirstBatch")
+					return
+				}
+			case "Sub":
+				var zb0009 int
+				zb0009, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Batches")
+					return
+				}
+				if (*z).Batches != nil && cap((*z).Batches) >= zb0009 {
+					(*z).Batches = ((*z).Batches)[:zb0009]
+				} else {
+					(*z).Batches = make([]ephemeralSubkey, zb0009)
+				}
+				for zb0002 := range (*z).Batches {
+					bts, err = (*z).Batches[zb0002].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Batches", zb0002)
+						return
+					}
+				}
+			case "firstoff":
+				(*z).FirstOffset, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "FirstOffset")
+					return
+				}
+			case "offkeys":
+				var zb0010 int
+				zb0010, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Offsets")
+					return
+				}
+				if (*z).Offsets != nil && cap((*z).Offsets) >= zb0010 {
+					(*z).Offsets = ((*z).Offsets)[:zb0010]
+				} else {
+					(*z).Offsets = make([]ephemeralSubkey, zb0010)
+				}
+				for zb0003 := range (*z).Offsets {
+					bts, err = (*z).Offsets[zb0003].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Offsets", zb0003)
+						return
+					}
+				}
+			case "offpk2":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).OffsetsPK2)[:])
+				if err != nil {
+					err = msgp.WrapError(err, "OffsetsPK2")
+					return
+				}
+			case "offpk2sig":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).OffsetsPK2Sig)[:])
+				if err != nil {
+					err = msgp.WrapError(err, "OffsetsPK2Sig")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
 			}
 		}
 	}
@@ -1266,37 +1266,37 @@ func (z *OneTimeSignatureSubkeyBatchID) UnmarshalMsg(bts []byte) (o []byte, err 
 				return
 			}
 		}
-		return
-	}
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	for zb0002 > 0 {
-		zb0002--
-		field, bts, err = msgp.ReadMapKeyZC(bts)
+	} else {
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch string(field) {
-		case "pk":
-			bts, err = msgp.ReadExactBytes(bts, ((*z).SubKeyPK)[:])
-			if err != nil {
-				err = msgp.WrapError(err, "SubKeyPK")
-				return
-			}
-		case "batch":
-			(*z).Batch, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Batch")
-				return
-			}
-		default:
-			err = msgp.ErrNoField(string(field))
+		for zb0002 > 0 {
+			zb0002--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
+			}
+			switch string(field) {
+			case "pk":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).SubKeyPK)[:])
+				if err != nil {
+					err = msgp.WrapError(err, "SubKeyPK")
+					return
+				}
+			case "batch":
+				(*z).Batch, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Batch")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
 			}
 		}
 	}
@@ -1384,43 +1384,43 @@ func (z *OneTimeSignatureSubkeyOffsetID) UnmarshalMsg(bts []byte) (o []byte, err
 				return
 			}
 		}
-		return
-	}
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	for zb0002 > 0 {
-		zb0002--
-		field, bts, err = msgp.ReadMapKeyZC(bts)
+	} else {
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch string(field) {
-		case "pk":
-			bts, err = msgp.ReadExactBytes(bts, ((*z).SubKeyPK)[:])
-			if err != nil {
-				err = msgp.WrapError(err, "SubKeyPK")
-				return
-			}
-		case "batch":
-			(*z).Batch, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Batch")
-				return
-			}
-		case "off":
-			(*z).Offset, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Offset")
-				return
-			}
-		default:
-			err = msgp.ErrNoField(string(field))
+		for zb0002 > 0 {
+			zb0002--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
+			}
+			switch string(field) {
+			case "pk":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).SubKeyPK)[:])
+				if err != nil {
+					err = msgp.WrapError(err, "SubKeyPK")
+					return
+				}
+			case "batch":
+				(*z).Batch, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Batch")
+					return
+				}
+			case "off":
+				(*z).Offset, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Offset")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
 			}
 		}
 	}
@@ -2026,49 +2026,49 @@ func (z *ephemeralSubkey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		}
-		return
-	}
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	for zb0005 > 0 {
-		zb0005--
-		field, bts, err = msgp.ReadMapKeyZC(bts)
+	} else {
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		switch string(field) {
-		case "PK":
-			bts, err = msgp.ReadExactBytes(bts, ((*z).PK)[:])
-			if err != nil {
-				err = msgp.WrapError(err, "PK")
-				return
-			}
-		case "SK":
-			bts, err = msgp.ReadExactBytes(bts, ((*z).SK)[:])
-			if err != nil {
-				err = msgp.WrapError(err, "SK")
-				return
-			}
-		case "PKSig":
-			bts, err = msgp.ReadExactBytes(bts, ((*z).PKSigOld)[:])
-			if err != nil {
-				err = msgp.WrapError(err, "PKSigOld")
-				return
-			}
-		case "sig2":
-			bts, err = msgp.ReadExactBytes(bts, ((*z).PKSigNew)[:])
-			if err != nil {
-				err = msgp.WrapError(err, "PKSigNew")
-				return
-			}
-		default:
-			err = msgp.ErrNoField(string(field))
+		for zb0005 > 0 {
+			zb0005--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
+			}
+			switch string(field) {
+			case "PK":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).PK)[:])
+				if err != nil {
+					err = msgp.WrapError(err, "PK")
+					return
+				}
+			case "SK":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).SK)[:])
+				if err != nil {
+					err = msgp.WrapError(err, "SK")
+					return
+				}
+			case "PKSig":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).PKSigOld)[:])
+				if err != nil {
+					err = msgp.WrapError(err, "PKSigOld")
+					return
+				}
+			case "sig2":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).PKSigNew)[:])
+				if err != nil {
+					err = msgp.WrapError(err, "PKSigNew")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
 			}
 		}
 	}
