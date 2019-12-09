@@ -159,6 +159,7 @@ func assetParams(creator basics.Address, params basics.AssetParams) v1.AssetPara
 	paramsModel := v1.AssetParams{
 		Total:         params.Total,
 		DefaultFrozen: params.DefaultFrozen,
+		Decimals:      params.Decimals,
 	}
 
 	paramsModel.UnitName = strings.TrimRight(string(params.UnitName[:]), "\x00")

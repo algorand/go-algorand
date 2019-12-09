@@ -363,7 +363,7 @@ func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, lastValid, fe
 //
 // Call FillUnsignedTxTemplate afterwards to fill out common fields in
 // the resulting transaction template.
-func (c *Client) MakeUnsignedAssetCreateTx(total uint64, defaultFrozen bool, manager string, reserve string, freeze string, clawback string, unitName string, assetName string, url string, metadataHash []byte) (transactions.Transaction, error) {
+func (c *Client) MakeUnsignedAssetCreateTx(total uint64, defaultFrozen bool, manager string, reserve string, freeze string, clawback string, unitName string, assetName string, url string, metadataHash []byte, decimals uint32) (transactions.Transaction, error) {
 	var tx transactions.Transaction
 	var err error
 
@@ -431,6 +431,11 @@ func (c *Client) MakeUnsignedAssetCreateTx(total uint64, defaultFrozen bool, man
 		return tx, fmt.Errorf("asset name %s too long (max %d bytes)", assetName, cparams.MaxAssetNameBytes)
 	}
 	tx.AssetParams.AssetName = assetName
+
+	if decimals > cparams.MaxAssetDecimals {
+		return tx, fmt.Errorf("asset decimal precision too high (max %d)", cparams.MaxAssetDecimals)
+	}
+	tx.AssetParams.Decimals = decimals
 
 	return tx, nil
 }

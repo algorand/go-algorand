@@ -22,6 +22,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/kmd/config"
 	"github.com/algorand/go-algorand/daemon/kmd/wallet"
+	"github.com/algorand/go-algorand/logging"
 )
 
 var walletDrivers = map[string]Driver{
@@ -34,7 +35,7 @@ var walletDrivers = map[string]Driver{
 // initialize themselves from a Config, create a wallet with a name, ID,
 // and password, and fetch a wallet by ID.
 type Driver interface {
-	InitWithConfig(cfg config.KMDConfig) error
+	InitWithConfig(cfg config.KMDConfig, log logging.Logger) error
 	ListWalletMetadatas() ([]wallet.Metadata, error)
 	CreateWallet(name []byte, id []byte, pw []byte, mdk crypto.MasterDerivationKey) error
 	RenameWallet(newName []byte, id []byte, pw []byte) error
@@ -42,9 +43,9 @@ type Driver interface {
 }
 
 // InitWalletDrivers accepts a KMDConfig and uses it to initialize each driver
-func InitWalletDrivers(cfg config.KMDConfig) error {
+func InitWalletDrivers(cfg config.KMDConfig, log logging.Logger) error {
 	for _, driver := range walletDrivers {
-		err := driver.InitWithConfig(cfg)
+		err := driver.InitWithConfig(cfg, log)
 		if err != nil {
 			return err
 		}
