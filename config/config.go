@@ -747,6 +747,10 @@ type Local struct {
 
 	// EnableRequestLogger enabled the logging of the incoming requests to the telemetry server.
 	EnableRequestLogger bool
+
+	// PeerConnectionsUpdateInterval defines the interval at which the peer connections information is being sent to the
+	// telemetry ( when enabled ). Defined in seconds.
+	PeerConnectionsUpdateInterval int
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)
