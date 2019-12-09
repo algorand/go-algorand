@@ -79,6 +79,7 @@ echo Checking Enlistment...
 if [[ -n $(git status --porcelain) ]]; then
     echo Enlistment is dirty - did you forget to run make?
     git status -s
+    git diff
     exit 1
 else
     echo Enlistment is clean
