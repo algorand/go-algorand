@@ -38,9 +38,12 @@ func (z *Message) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		// isnil zb0002 might be unused
+		_ = zb0002
 		if err != nil {
 			err = msgp.WrapError(err)
 			return

@@ -84,9 +84,12 @@ func (z *ApplyData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		// isnil zb0002 might be unused
+		_ = zb0002
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -245,9 +248,12 @@ func (z *AssetConfigTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		// isnil zb0002 might be unused
+		_ = zb0002
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -387,9 +393,12 @@ func (z *AssetFreezeTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		// isnil zb0002 might be unused
+		_ = zb0002
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -569,9 +578,12 @@ func (z *AssetTransferTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) 
 	var field []byte
 	_ = field
 	var zb0001 int
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		// isnil zb0002 might be unused
+		_ = zb0002
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -823,9 +835,12 @@ func (z *Header) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0002 int
-	zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0003 bool
+	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		// isnil zb0003 might be unused
+		_ = zb0003
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -1098,9 +1113,12 @@ func (z *KeyregTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		// isnil zb0002 might be unused
+		_ = zb0002
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -1266,7 +1284,11 @@ func (z *LogicSig) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0002Mask & 0x2) == 0 { // if not empty
 			// string "arg"
 			o = append(o, 0xa3, 0x61, 0x72, 0x67)
-			o = msgp.AppendArrayHeader(o, uint32(len((*z).Args)))
+			if (*z).Args == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).Args)))
+			}
 			for zb0001 := range (*z).Args {
 				o = msgp.AppendBytes(o, (*z).Args[zb0001])
 			}
@@ -1308,9 +1330,12 @@ func (z *LogicSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0002 int
-	zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0003 bool
+	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		// isnil zb0003 might be unused
+		_ = zb0003
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -1341,21 +1366,26 @@ func (z *LogicSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0002 > 0 {
 			zb0002--
-			var zb0003 int
-			zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			var zb0004 int
+			var zb0005 bool
+			zb0004, zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			// isnil zb0005 might be unused
+			_ = zb0005
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Args")
 				return
 			}
-			if zb0003 > EvalMaxArgs {
-				err = msgp.ErrOverflow(uint64(zb0003), uint64(EvalMaxArgs))
+			if zb0004 > EvalMaxArgs {
+				err = msgp.ErrOverflow(uint64(zb0004), uint64(EvalMaxArgs))
 				err = msgp.WrapError(err, "struct-from-array", "Args")
 				return
 			}
-			if (*z).Args != nil && cap((*z).Args) >= zb0003 {
-				(*z).Args = ((*z).Args)[:zb0003]
+			if zb0005 {
+				(*z).Args = nil
+			} else if (*z).Args != nil && cap((*z).Args) >= zb0004 {
+				(*z).Args = ((*z).Args)[:zb0004]
 			} else {
-				(*z).Args = make([][]byte, zb0003)
+				(*z).Args = make([][]byte, zb0004)
 			}
 			for zb0001 := range (*z).Args {
 				(*z).Args[zb0001], bts, err = msgp.ReadBytesBytes(bts, (*z).Args[zb0001])
@@ -1404,21 +1434,26 @@ func (z *LogicSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "arg":
-				var zb0004 int
-				zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0006 int
+				var zb0007 bool
+				zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				// isnil zb0007 might be unused
+				_ = zb0007
 				if err != nil {
 					err = msgp.WrapError(err, "Args")
 					return
 				}
-				if zb0004 > EvalMaxArgs {
-					err = msgp.ErrOverflow(uint64(zb0004), uint64(EvalMaxArgs))
+				if zb0006 > EvalMaxArgs {
+					err = msgp.ErrOverflow(uint64(zb0006), uint64(EvalMaxArgs))
 					err = msgp.WrapError(err, "Args")
 					return
 				}
-				if (*z).Args != nil && cap((*z).Args) >= zb0004 {
-					(*z).Args = ((*z).Args)[:zb0004]
+				if zb0007 {
+					(*z).Args = nil
+				} else if (*z).Args != nil && cap((*z).Args) >= zb0006 {
+					(*z).Args = ((*z).Args)[:zb0006]
 				} else {
-					(*z).Args = make([][]byte, zb0004)
+					(*z).Args = make([][]byte, zb0006)
 				}
 				for zb0001 := range (*z).Args {
 					(*z).Args[zb0001], bts, err = msgp.ReadBytesBytes(bts, (*z).Args[zb0001])
@@ -1564,9 +1599,12 @@ func (z *PaymentTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		// isnil zb0002 might be unused
+		_ = zb0002
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -1665,7 +1703,11 @@ func (z *PaymentTxnFields) MsgIsZero() bool {
 // MarshalMsg implements msgp.Marshaler
 func (z Payset) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendArrayHeader(o, uint32(len(z)))
+	if z == nil {
+		o = msgp.AppendNil(o)
+	} else {
+		o = msgp.AppendArrayHeader(o, uint32(len(z)))
+	}
 	for za0001 := range z {
 		o, err = z[za0001].MarshalMsg(o)
 		if err != nil {
@@ -1684,7 +1726,10 @@ func (_ Payset) CanMarshalMsg(z interface{}) bool {
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *Payset) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var zb0002 int
-	zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	var zb0003 bool
+	zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	// isnil zb0003 might be unused
+	_ = zb0003
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
@@ -1694,7 +1739,9 @@ func (z *Payset) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	if (*z) != nil && cap((*z)) >= zb0002 {
+	if zb0003 {
+		(*z) = nil
+	} else if (*z) != nil && cap((*z)) >= zb0002 {
 		(*z) = (*z)[:zb0002]
 	} else {
 		(*z) = make(Payset, zb0002)
@@ -1804,9 +1851,12 @@ func (z *SignedTxn) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		// isnil zb0002 might be unused
+		_ = zb0002
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -2061,9 +2111,12 @@ func (z *SignedTxnInBlock) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		// isnil zb0002 might be unused
+		_ = zb0002
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -2384,9 +2437,12 @@ func (z *SignedTxnWithAD) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		// isnil zb0002 might be unused
+		_ = zb0002
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -2924,9 +2980,12 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0002 int
-	zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0003 bool
+	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		// isnil zb0003 might be unused
+		_ = zb0003
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -3402,7 +3461,11 @@ func (z *TxGroup) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0002Mask & 0x2) == 0 { // if not empty
 			// string "txlist"
 			o = append(o, 0xa6, 0x74, 0x78, 0x6c, 0x69, 0x73, 0x74)
-			o = msgp.AppendArrayHeader(o, uint32(len((*z).TxGroupHashes)))
+			if (*z).TxGroupHashes == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).TxGroupHashes)))
+			}
 			for zb0001 := range (*z).TxGroupHashes {
 				o, err = (*z).TxGroupHashes[zb0001].MarshalMsg(o)
 				if err != nil {
@@ -3425,30 +3488,38 @@ func (z *TxGroup) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0002 int
-	zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0003 bool
+	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		// isnil zb0003 might be unused
+		_ = zb0003
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
 		if zb0002 > 0 {
 			zb0002--
-			var zb0003 int
-			zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			var zb0004 int
+			var zb0005 bool
+			zb0004, zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			// isnil zb0005 might be unused
+			_ = zb0005
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "TxGroupHashes")
 				return
 			}
-			if zb0003 > config.Consensus[protocol.ConsensusCurrentVersion].MaxTxGroupSize {
-				err = msgp.ErrOverflow(uint64(zb0003), uint64(config.Consensus[protocol.ConsensusCurrentVersion].MaxTxGroupSize))
+			if zb0004 > config.Consensus[protocol.ConsensusCurrentVersion].MaxTxGroupSize {
+				err = msgp.ErrOverflow(uint64(zb0004), uint64(config.Consensus[protocol.ConsensusCurrentVersion].MaxTxGroupSize))
 				err = msgp.WrapError(err, "struct-from-array", "TxGroupHashes")
 				return
 			}
-			if (*z).TxGroupHashes != nil && cap((*z).TxGroupHashes) >= zb0003 {
-				(*z).TxGroupHashes = ((*z).TxGroupHashes)[:zb0003]
+			if zb0005 {
+				(*z).TxGroupHashes = nil
+			} else if (*z).TxGroupHashes != nil && cap((*z).TxGroupHashes) >= zb0004 {
+				(*z).TxGroupHashes = ((*z).TxGroupHashes)[:zb0004]
 			} else {
-				(*z).TxGroupHashes = make([]crypto.Digest, zb0003)
+				(*z).TxGroupHashes = make([]crypto.Digest, zb0004)
 			}
 			for zb0001 := range (*z).TxGroupHashes {
 				bts, err = (*z).TxGroupHashes[zb0001].UnmarshalMsg(bts)
@@ -3479,21 +3550,26 @@ func (z *TxGroup) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "txlist":
-				var zb0004 int
-				zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0006 int
+				var zb0007 bool
+				zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				// isnil zb0007 might be unused
+				_ = zb0007
 				if err != nil {
 					err = msgp.WrapError(err, "TxGroupHashes")
 					return
 				}
-				if zb0004 > config.Consensus[protocol.ConsensusCurrentVersion].MaxTxGroupSize {
-					err = msgp.ErrOverflow(uint64(zb0004), uint64(config.Consensus[protocol.ConsensusCurrentVersion].MaxTxGroupSize))
+				if zb0006 > config.Consensus[protocol.ConsensusCurrentVersion].MaxTxGroupSize {
+					err = msgp.ErrOverflow(uint64(zb0006), uint64(config.Consensus[protocol.ConsensusCurrentVersion].MaxTxGroupSize))
 					err = msgp.WrapError(err, "TxGroupHashes")
 					return
 				}
-				if (*z).TxGroupHashes != nil && cap((*z).TxGroupHashes) >= zb0004 {
-					(*z).TxGroupHashes = ((*z).TxGroupHashes)[:zb0004]
+				if zb0007 {
+					(*z).TxGroupHashes = nil
+				} else if (*z).TxGroupHashes != nil && cap((*z).TxGroupHashes) >= zb0006 {
+					(*z).TxGroupHashes = ((*z).TxGroupHashes)[:zb0006]
 				} else {
-					(*z).TxGroupHashes = make([]crypto.Digest, zb0004)
+					(*z).TxGroupHashes = make([]crypto.Digest, zb0006)
 				}
 				for zb0001 := range (*z).TxGroupHashes {
 					bts, err = (*z).TxGroupHashes[zb0001].UnmarshalMsg(bts)

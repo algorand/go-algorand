@@ -42,6 +42,10 @@ func TestSignedTxnEncoding(t *testing.T) {
 	protocol.RunEncodingTest(t, &transactions.SignedTxn{})
 }
 
+func TestPaysetEncoding(t *testing.T) {
+	protocol.RunEncodingTest(t, &transactions.Payset{})
+}
+
 func BenchmarkBlockEncoding(b *testing.B) {
 	ledger, _, _, pendingTransactions, release := testingenv(b, 10, 1000, false)
 	defer release()

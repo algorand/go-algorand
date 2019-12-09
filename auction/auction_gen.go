@@ -91,9 +91,12 @@ func (z *Bid) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		// isnil zb0002 might be unused
+		_ = zb0002
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -282,7 +285,11 @@ func (z *BidOutcomes) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0002Mask & 0x10) == 0 { // if not empty
 			// string "outcomes"
 			o = append(o, 0xa8, 0x6f, 0x75, 0x74, 0x63, 0x6f, 0x6d, 0x65, 0x73)
-			o = msgp.AppendArrayHeader(o, uint32(len((*z).Outcomes)))
+			if (*z).Outcomes == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).Outcomes)))
+			}
 			for zb0001 := range (*z).Outcomes {
 				o, err = (*z).Outcomes[zb0001].MarshalMsg(o)
 				if err != nil {
@@ -310,9 +317,12 @@ func (z *BidOutcomes) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0002 int
-	zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0003 bool
+	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		// isnil zb0003 might be unused
+		_ = zb0003
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -351,16 +361,21 @@ func (z *BidOutcomes) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0002 > 0 {
 			zb0002--
-			var zb0003 int
-			zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			var zb0004 int
+			var zb0005 bool
+			zb0004, zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			// isnil zb0005 might be unused
+			_ = zb0005
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Outcomes")
 				return
 			}
-			if (*z).Outcomes != nil && cap((*z).Outcomes) >= zb0003 {
-				(*z).Outcomes = ((*z).Outcomes)[:zb0003]
+			if zb0005 {
+				(*z).Outcomes = nil
+			} else if (*z).Outcomes != nil && cap((*z).Outcomes) >= zb0004 {
+				(*z).Outcomes = ((*z).Outcomes)[:zb0004]
 			} else {
-				(*z).Outcomes = make([]BidderOutcome, zb0003)
+				(*z).Outcomes = make([]BidderOutcome, zb0004)
 			}
 			for zb0001 := range (*z).Outcomes {
 				bts, err = (*z).Outcomes[zb0001].UnmarshalMsg(bts)
@@ -415,16 +430,21 @@ func (z *BidOutcomes) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "outcomes":
-				var zb0004 int
-				zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0006 int
+				var zb0007 bool
+				zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				// isnil zb0007 might be unused
+				_ = zb0007
 				if err != nil {
 					err = msgp.WrapError(err, "Outcomes")
 					return
 				}
-				if (*z).Outcomes != nil && cap((*z).Outcomes) >= zb0004 {
-					(*z).Outcomes = ((*z).Outcomes)[:zb0004]
+				if zb0007 {
+					(*z).Outcomes = nil
+				} else if (*z).Outcomes != nil && cap((*z).Outcomes) >= zb0006 {
+					(*z).Outcomes = ((*z).Outcomes)[:zb0006]
 				} else {
-					(*z).Outcomes = make([]BidderOutcome, zb0004)
+					(*z).Outcomes = make([]BidderOutcome, zb0006)
 				}
 				for zb0001 := range (*z).Outcomes {
 					bts, err = (*z).Outcomes[zb0001].UnmarshalMsg(bts)
@@ -532,9 +552,12 @@ func (z *BidderOutcome) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		// isnil zb0002 might be unused
+		_ = zb0002
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -733,9 +756,12 @@ func (z *Deposit) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		// isnil zb0002 might be unused
+		_ = zb0002
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -992,9 +1018,12 @@ func (z *MasterInput) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		// isnil zb0002 might be unused
+		_ = zb0002
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -1010,43 +1039,46 @@ func (z *MasterInput) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		if zb0001 > 0 {
 			zb0001--
 			{
-				var zb0002 string
-				zb0002, bts, err = msgp.ReadStringBytes(bts)
+				var zb0003 string
+				zb0003, bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "Type")
 					return
 				}
-				(*z).Type = NoteFieldType(zb0002)
+				(*z).Type = NoteFieldType(zb0003)
 			}
 		}
 		if zb0001 > 0 {
 			zb0001--
-			var zb0003 int
-			zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
+			var zb0004 int
+			var zb0005 bool
+			zb0004, zb0005, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if _, ok := err.(msgp.TypeError); ok {
-				zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				zb0004, zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				// isnil zb0005 might be unused
+				_ = zb0005
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "SignedDeposit")
 					return
 				}
-				if zb0003 > 0 {
-					zb0003--
+				if zb0004 > 0 {
+					zb0004--
 					bts, err = (*z).SignedDeposit.Deposit.UnmarshalMsg(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "SignedDeposit", "struct-from-array", "Deposit")
 						return
 					}
 				}
-				if zb0003 > 0 {
-					zb0003--
+				if zb0004 > 0 {
+					zb0004--
 					bts, err = (*z).SignedDeposit.Sig.UnmarshalMsg(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "SignedDeposit", "struct-from-array", "Sig")
 						return
 					}
 				}
-				if zb0003 > 0 {
-					err = msgp.ErrTooManyArrayFields(zb0003)
+				if zb0004 > 0 {
+					err = msgp.ErrTooManyArrayFields(zb0004)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "SignedDeposit", "struct-from-array")
 						return
@@ -1057,8 +1089,8 @@ func (z *MasterInput) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "struct-from-array", "SignedDeposit")
 					return
 				}
-				for zb0003 > 0 {
-					zb0003--
+				for zb0004 > 0 {
+					zb0004--
 					field, bts, err = msgp.ReadMapKeyZC(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "SignedDeposit")
@@ -1089,32 +1121,35 @@ func (z *MasterInput) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			var zb0004 int
-			zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
+			var zb0006 int
+			var zb0007 bool
+			zb0006, zb0007, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if _, ok := err.(msgp.TypeError); ok {
-				zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				// isnil zb0007 might be unused
+				_ = zb0007
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "SignedBid")
 					return
 				}
-				if zb0004 > 0 {
-					zb0004--
+				if zb0006 > 0 {
+					zb0006--
 					bts, err = (*z).SignedBid.Bid.UnmarshalMsg(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "SignedBid", "struct-from-array", "Bid")
 						return
 					}
 				}
-				if zb0004 > 0 {
-					zb0004--
+				if zb0006 > 0 {
+					zb0006--
 					bts, err = (*z).SignedBid.Sig.UnmarshalMsg(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "SignedBid", "struct-from-array", "Sig")
 						return
 					}
 				}
-				if zb0004 > 0 {
-					err = msgp.ErrTooManyArrayFields(zb0004)
+				if zb0006 > 0 {
+					err = msgp.ErrTooManyArrayFields(zb0006)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "SignedBid", "struct-from-array")
 						return
@@ -1125,8 +1160,8 @@ func (z *MasterInput) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "struct-from-array", "SignedBid")
 					return
 				}
-				for zb0004 > 0 {
-					zb0004--
+				for zb0006 > 0 {
+					zb0006--
 					field, bts, err = msgp.ReadMapKeyZC(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "SignedBid")
@@ -1183,41 +1218,44 @@ func (z *MasterInput) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			case "t":
 				{
-					var zb0005 string
-					zb0005, bts, err = msgp.ReadStringBytes(bts)
+					var zb0008 string
+					zb0008, bts, err = msgp.ReadStringBytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "Type")
 						return
 					}
-					(*z).Type = NoteFieldType(zb0005)
+					(*z).Type = NoteFieldType(zb0008)
 				}
 			case "d":
-				var zb0006 int
-				zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
+				var zb0009 int
+				var zb0010 bool
+				zb0009, zb0010, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if _, ok := err.(msgp.TypeError); ok {
-					zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
+					zb0009, zb0010, bts, err = msgp.ReadArrayHeaderBytes(bts)
+					// isnil zb0010 might be unused
+					_ = zb0010
 					if err != nil {
 						err = msgp.WrapError(err, "SignedDeposit")
 						return
 					}
-					if zb0006 > 0 {
-						zb0006--
+					if zb0009 > 0 {
+						zb0009--
 						bts, err = (*z).SignedDeposit.Deposit.UnmarshalMsg(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "SignedDeposit", "struct-from-array", "Deposit")
 							return
 						}
 					}
-					if zb0006 > 0 {
-						zb0006--
+					if zb0009 > 0 {
+						zb0009--
 						bts, err = (*z).SignedDeposit.Sig.UnmarshalMsg(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "SignedDeposit", "struct-from-array", "Sig")
 							return
 						}
 					}
-					if zb0006 > 0 {
-						err = msgp.ErrTooManyArrayFields(zb0006)
+					if zb0009 > 0 {
+						err = msgp.ErrTooManyArrayFields(zb0009)
 						if err != nil {
 							err = msgp.WrapError(err, "SignedDeposit", "struct-from-array")
 							return
@@ -1228,8 +1266,8 @@ func (z *MasterInput) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						err = msgp.WrapError(err, "SignedDeposit")
 						return
 					}
-					for zb0006 > 0 {
-						zb0006--
+					for zb0009 > 0 {
+						zb0009--
 						field, bts, err = msgp.ReadMapKeyZC(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "SignedDeposit")
@@ -1258,32 +1296,35 @@ func (z *MasterInput) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 				}
 			case "b":
-				var zb0007 int
-				zb0007, bts, err = msgp.ReadMapHeaderBytes(bts)
+				var zb0011 int
+				var zb0012 bool
+				zb0011, zb0012, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if _, ok := err.(msgp.TypeError); ok {
-					zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
+					zb0011, zb0012, bts, err = msgp.ReadArrayHeaderBytes(bts)
+					// isnil zb0012 might be unused
+					_ = zb0012
 					if err != nil {
 						err = msgp.WrapError(err, "SignedBid")
 						return
 					}
-					if zb0007 > 0 {
-						zb0007--
+					if zb0011 > 0 {
+						zb0011--
 						bts, err = (*z).SignedBid.Bid.UnmarshalMsg(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "SignedBid", "struct-from-array", "Bid")
 							return
 						}
 					}
-					if zb0007 > 0 {
-						zb0007--
+					if zb0011 > 0 {
+						zb0011--
 						bts, err = (*z).SignedBid.Sig.UnmarshalMsg(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "SignedBid", "struct-from-array", "Sig")
 							return
 						}
 					}
-					if zb0007 > 0 {
-						err = msgp.ErrTooManyArrayFields(zb0007)
+					if zb0011 > 0 {
+						err = msgp.ErrTooManyArrayFields(zb0011)
 						if err != nil {
 							err = msgp.WrapError(err, "SignedBid", "struct-from-array")
 							return
@@ -1294,8 +1335,8 @@ func (z *MasterInput) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						err = msgp.WrapError(err, "SignedBid")
 						return
 					}
-					for zb0007 > 0 {
-						zb0007--
+					for zb0011 > 0 {
+						zb0011--
 						field, bts, err = msgp.ReadMapKeyZC(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "SignedBid")
@@ -1540,9 +1581,12 @@ func (z *NoteField) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		// isnil zb0002 might be unused
+		_ = zb0002
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -1550,43 +1594,46 @@ func (z *NoteField) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		if zb0001 > 0 {
 			zb0001--
 			{
-				var zb0002 string
-				zb0002, bts, err = msgp.ReadStringBytes(bts)
+				var zb0003 string
+				zb0003, bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "Type")
 					return
 				}
-				(*z).Type = NoteFieldType(zb0002)
+				(*z).Type = NoteFieldType(zb0003)
 			}
 		}
 		if zb0001 > 0 {
 			zb0001--
-			var zb0003 int
-			zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
+			var zb0004 int
+			var zb0005 bool
+			zb0004, zb0005, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if _, ok := err.(msgp.TypeError); ok {
-				zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				zb0004, zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				// isnil zb0005 might be unused
+				_ = zb0005
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "SignedDeposit")
 					return
 				}
-				if zb0003 > 0 {
-					zb0003--
+				if zb0004 > 0 {
+					zb0004--
 					bts, err = (*z).SignedDeposit.Deposit.UnmarshalMsg(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "SignedDeposit", "struct-from-array", "Deposit")
 						return
 					}
 				}
-				if zb0003 > 0 {
-					zb0003--
+				if zb0004 > 0 {
+					zb0004--
 					bts, err = (*z).SignedDeposit.Sig.UnmarshalMsg(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "SignedDeposit", "struct-from-array", "Sig")
 						return
 					}
 				}
-				if zb0003 > 0 {
-					err = msgp.ErrTooManyArrayFields(zb0003)
+				if zb0004 > 0 {
+					err = msgp.ErrTooManyArrayFields(zb0004)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "SignedDeposit", "struct-from-array")
 						return
@@ -1597,8 +1644,8 @@ func (z *NoteField) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "struct-from-array", "SignedDeposit")
 					return
 				}
-				for zb0003 > 0 {
-					zb0003--
+				for zb0004 > 0 {
+					zb0004--
 					field, bts, err = msgp.ReadMapKeyZC(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "SignedDeposit")
@@ -1629,32 +1676,35 @@ func (z *NoteField) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			var zb0004 int
-			zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
+			var zb0006 int
+			var zb0007 bool
+			zb0006, zb0007, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if _, ok := err.(msgp.TypeError); ok {
-				zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				// isnil zb0007 might be unused
+				_ = zb0007
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "SignedBid")
 					return
 				}
-				if zb0004 > 0 {
-					zb0004--
+				if zb0006 > 0 {
+					zb0006--
 					bts, err = (*z).SignedBid.Bid.UnmarshalMsg(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "SignedBid", "struct-from-array", "Bid")
 						return
 					}
 				}
-				if zb0004 > 0 {
-					zb0004--
+				if zb0006 > 0 {
+					zb0006--
 					bts, err = (*z).SignedBid.Sig.UnmarshalMsg(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "SignedBid", "struct-from-array", "Sig")
 						return
 					}
 				}
-				if zb0004 > 0 {
-					err = msgp.ErrTooManyArrayFields(zb0004)
+				if zb0006 > 0 {
+					err = msgp.ErrTooManyArrayFields(zb0006)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "SignedBid", "struct-from-array")
 						return
@@ -1665,8 +1715,8 @@ func (z *NoteField) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "struct-from-array", "SignedBid")
 					return
 				}
-				for zb0004 > 0 {
-					zb0004--
+				for zb0006 > 0 {
+					zb0006--
 					field, bts, err = msgp.ReadMapKeyZC(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "SignedBid")
@@ -1697,32 +1747,35 @@ func (z *NoteField) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			var zb0005 int
-			zb0005, bts, err = msgp.ReadMapHeaderBytes(bts)
+			var zb0008 int
+			var zb0009 bool
+			zb0008, zb0009, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if _, ok := err.(msgp.TypeError); ok {
-				zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				zb0008, zb0009, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				// isnil zb0009 might be unused
+				_ = zb0009
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "SignedSettlement")
 					return
 				}
-				if zb0005 > 0 {
-					zb0005--
+				if zb0008 > 0 {
+					zb0008--
 					bts, err = (*z).SignedSettlement.Settlement.UnmarshalMsg(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "SignedSettlement", "struct-from-array", "Settlement")
 						return
 					}
 				}
-				if zb0005 > 0 {
-					zb0005--
+				if zb0008 > 0 {
+					zb0008--
 					bts, err = (*z).SignedSettlement.Sig.UnmarshalMsg(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "SignedSettlement", "struct-from-array", "Sig")
 						return
 					}
 				}
-				if zb0005 > 0 {
-					err = msgp.ErrTooManyArrayFields(zb0005)
+				if zb0008 > 0 {
+					err = msgp.ErrTooManyArrayFields(zb0008)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "SignedSettlement", "struct-from-array")
 						return
@@ -1733,8 +1786,8 @@ func (z *NoteField) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "struct-from-array", "SignedSettlement")
 					return
 				}
-				for zb0005 > 0 {
-					zb0005--
+				for zb0008 > 0 {
+					zb0008--
 					field, bts, err = msgp.ReadMapKeyZC(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "SignedSettlement")
@@ -1765,32 +1818,35 @@ func (z *NoteField) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			var zb0006 int
-			zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
+			var zb0010 int
+			var zb0011 bool
+			zb0010, zb0011, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if _, ok := err.(msgp.TypeError); ok {
-				zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				zb0010, zb0011, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				// isnil zb0011 might be unused
+				_ = zb0011
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "SignedParams")
 					return
 				}
-				if zb0006 > 0 {
-					zb0006--
+				if zb0010 > 0 {
+					zb0010--
 					bts, err = (*z).SignedParams.Params.UnmarshalMsg(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "SignedParams", "struct-from-array", "Params")
 						return
 					}
 				}
-				if zb0006 > 0 {
-					zb0006--
+				if zb0010 > 0 {
+					zb0010--
 					bts, err = (*z).SignedParams.Sig.UnmarshalMsg(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "SignedParams", "struct-from-array", "Sig")
 						return
 					}
 				}
-				if zb0006 > 0 {
-					err = msgp.ErrTooManyArrayFields(zb0006)
+				if zb0010 > 0 {
+					err = msgp.ErrTooManyArrayFields(zb0010)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "SignedParams", "struct-from-array")
 						return
@@ -1801,8 +1857,8 @@ func (z *NoteField) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "struct-from-array", "SignedParams")
 					return
 				}
-				for zb0006 > 0 {
-					zb0006--
+				for zb0010 > 0 {
+					zb0010--
 					field, bts, err = msgp.ReadMapKeyZC(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "SignedParams")
@@ -1853,41 +1909,44 @@ func (z *NoteField) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			switch string(field) {
 			case "t":
 				{
-					var zb0007 string
-					zb0007, bts, err = msgp.ReadStringBytes(bts)
+					var zb0012 string
+					zb0012, bts, err = msgp.ReadStringBytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "Type")
 						return
 					}
-					(*z).Type = NoteFieldType(zb0007)
+					(*z).Type = NoteFieldType(zb0012)
 				}
 			case "d":
-				var zb0008 int
-				zb0008, bts, err = msgp.ReadMapHeaderBytes(bts)
+				var zb0013 int
+				var zb0014 bool
+				zb0013, zb0014, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if _, ok := err.(msgp.TypeError); ok {
-					zb0008, bts, err = msgp.ReadArrayHeaderBytes(bts)
+					zb0013, zb0014, bts, err = msgp.ReadArrayHeaderBytes(bts)
+					// isnil zb0014 might be unused
+					_ = zb0014
 					if err != nil {
 						err = msgp.WrapError(err, "SignedDeposit")
 						return
 					}
-					if zb0008 > 0 {
-						zb0008--
+					if zb0013 > 0 {
+						zb0013--
 						bts, err = (*z).SignedDeposit.Deposit.UnmarshalMsg(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "SignedDeposit", "struct-from-array", "Deposit")
 							return
 						}
 					}
-					if zb0008 > 0 {
-						zb0008--
+					if zb0013 > 0 {
+						zb0013--
 						bts, err = (*z).SignedDeposit.Sig.UnmarshalMsg(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "SignedDeposit", "struct-from-array", "Sig")
 							return
 						}
 					}
-					if zb0008 > 0 {
-						err = msgp.ErrTooManyArrayFields(zb0008)
+					if zb0013 > 0 {
+						err = msgp.ErrTooManyArrayFields(zb0013)
 						if err != nil {
 							err = msgp.WrapError(err, "SignedDeposit", "struct-from-array")
 							return
@@ -1898,8 +1957,8 @@ func (z *NoteField) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						err = msgp.WrapError(err, "SignedDeposit")
 						return
 					}
-					for zb0008 > 0 {
-						zb0008--
+					for zb0013 > 0 {
+						zb0013--
 						field, bts, err = msgp.ReadMapKeyZC(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "SignedDeposit")
@@ -1928,32 +1987,35 @@ func (z *NoteField) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 				}
 			case "b":
-				var zb0009 int
-				zb0009, bts, err = msgp.ReadMapHeaderBytes(bts)
+				var zb0015 int
+				var zb0016 bool
+				zb0015, zb0016, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if _, ok := err.(msgp.TypeError); ok {
-					zb0009, bts, err = msgp.ReadArrayHeaderBytes(bts)
+					zb0015, zb0016, bts, err = msgp.ReadArrayHeaderBytes(bts)
+					// isnil zb0016 might be unused
+					_ = zb0016
 					if err != nil {
 						err = msgp.WrapError(err, "SignedBid")
 						return
 					}
-					if zb0009 > 0 {
-						zb0009--
+					if zb0015 > 0 {
+						zb0015--
 						bts, err = (*z).SignedBid.Bid.UnmarshalMsg(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "SignedBid", "struct-from-array", "Bid")
 							return
 						}
 					}
-					if zb0009 > 0 {
-						zb0009--
+					if zb0015 > 0 {
+						zb0015--
 						bts, err = (*z).SignedBid.Sig.UnmarshalMsg(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "SignedBid", "struct-from-array", "Sig")
 							return
 						}
 					}
-					if zb0009 > 0 {
-						err = msgp.ErrTooManyArrayFields(zb0009)
+					if zb0015 > 0 {
+						err = msgp.ErrTooManyArrayFields(zb0015)
 						if err != nil {
 							err = msgp.WrapError(err, "SignedBid", "struct-from-array")
 							return
@@ -1964,8 +2026,8 @@ func (z *NoteField) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						err = msgp.WrapError(err, "SignedBid")
 						return
 					}
-					for zb0009 > 0 {
-						zb0009--
+					for zb0015 > 0 {
+						zb0015--
 						field, bts, err = msgp.ReadMapKeyZC(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "SignedBid")
@@ -1994,32 +2056,35 @@ func (z *NoteField) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 				}
 			case "s":
-				var zb0010 int
-				zb0010, bts, err = msgp.ReadMapHeaderBytes(bts)
+				var zb0017 int
+				var zb0018 bool
+				zb0017, zb0018, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if _, ok := err.(msgp.TypeError); ok {
-					zb0010, bts, err = msgp.ReadArrayHeaderBytes(bts)
+					zb0017, zb0018, bts, err = msgp.ReadArrayHeaderBytes(bts)
+					// isnil zb0018 might be unused
+					_ = zb0018
 					if err != nil {
 						err = msgp.WrapError(err, "SignedSettlement")
 						return
 					}
-					if zb0010 > 0 {
-						zb0010--
+					if zb0017 > 0 {
+						zb0017--
 						bts, err = (*z).SignedSettlement.Settlement.UnmarshalMsg(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "SignedSettlement", "struct-from-array", "Settlement")
 							return
 						}
 					}
-					if zb0010 > 0 {
-						zb0010--
+					if zb0017 > 0 {
+						zb0017--
 						bts, err = (*z).SignedSettlement.Sig.UnmarshalMsg(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "SignedSettlement", "struct-from-array", "Sig")
 							return
 						}
 					}
-					if zb0010 > 0 {
-						err = msgp.ErrTooManyArrayFields(zb0010)
+					if zb0017 > 0 {
+						err = msgp.ErrTooManyArrayFields(zb0017)
 						if err != nil {
 							err = msgp.WrapError(err, "SignedSettlement", "struct-from-array")
 							return
@@ -2030,8 +2095,8 @@ func (z *NoteField) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						err = msgp.WrapError(err, "SignedSettlement")
 						return
 					}
-					for zb0010 > 0 {
-						zb0010--
+					for zb0017 > 0 {
+						zb0017--
 						field, bts, err = msgp.ReadMapKeyZC(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "SignedSettlement")
@@ -2060,32 +2125,35 @@ func (z *NoteField) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 				}
 			case "p":
-				var zb0011 int
-				zb0011, bts, err = msgp.ReadMapHeaderBytes(bts)
+				var zb0019 int
+				var zb0020 bool
+				zb0019, zb0020, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if _, ok := err.(msgp.TypeError); ok {
-					zb0011, bts, err = msgp.ReadArrayHeaderBytes(bts)
+					zb0019, zb0020, bts, err = msgp.ReadArrayHeaderBytes(bts)
+					// isnil zb0020 might be unused
+					_ = zb0020
 					if err != nil {
 						err = msgp.WrapError(err, "SignedParams")
 						return
 					}
-					if zb0011 > 0 {
-						zb0011--
+					if zb0019 > 0 {
+						zb0019--
 						bts, err = (*z).SignedParams.Params.UnmarshalMsg(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "SignedParams", "struct-from-array", "Params")
 							return
 						}
 					}
-					if zb0011 > 0 {
-						zb0011--
+					if zb0019 > 0 {
+						zb0019--
 						bts, err = (*z).SignedParams.Sig.UnmarshalMsg(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "SignedParams", "struct-from-array", "Sig")
 							return
 						}
 					}
-					if zb0011 > 0 {
-						err = msgp.ErrTooManyArrayFields(zb0011)
+					if zb0019 > 0 {
+						err = msgp.ErrTooManyArrayFields(zb0019)
 						if err != nil {
 							err = msgp.WrapError(err, "SignedParams", "struct-from-array")
 							return
@@ -2096,8 +2164,8 @@ func (z *NoteField) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						err = msgp.WrapError(err, "SignedParams")
 						return
 					}
-					for zb0011 > 0 {
-						zb0011--
+					for zb0019 > 0 {
+						zb0019--
 						field, bts, err = msgp.ReadMapKeyZC(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "SignedParams")
@@ -2340,9 +2408,12 @@ func (z *Params) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		// isnil zb0002 might be unused
+		_ = zb0002
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -2640,9 +2711,12 @@ func (z *Settlement) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		// isnil zb0002 might be unused
+		_ = zb0002
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -2815,9 +2889,12 @@ func (z *SignedBid) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		// isnil zb0002 might be unused
+		_ = zb0002
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -2948,9 +3025,12 @@ func (z *SignedDeposit) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		// isnil zb0002 might be unused
+		_ = zb0002
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -3081,9 +3161,12 @@ func (z *SignedParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		// isnil zb0002 might be unused
+		_ = zb0002
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -3214,9 +3297,12 @@ func (z *SignedSettlement) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		// isnil zb0002 might be unused
+		_ = zb0002
 		if err != nil {
 			err = msgp.WrapError(err)
 			return

@@ -284,9 +284,12 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		// isnil zb0002 might be unused
+		_ = zb0002
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -940,9 +943,12 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		// isnil zb0002 might be unused
+		_ = zb0002
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -1334,7 +1340,11 @@ func (z *Genesis) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0002Mask & 0x2) == 0 { // if not empty
 			// string "alloc"
 			o = append(o, 0xa5, 0x61, 0x6c, 0x6c, 0x6f, 0x63)
-			o = msgp.AppendArrayHeader(o, uint32(len((*z).Allocation)))
+			if (*z).Allocation == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).Allocation)))
+			}
 			for zb0001 := range (*z).Allocation {
 				o, err = (*z).Allocation[zb0001].MarshalMsg(o)
 				if err != nil {
@@ -1400,9 +1410,12 @@ func (z *Genesis) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0002 int
-	zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0003 bool
+	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		// isnil zb0003 might be unused
+		_ = zb0003
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -1433,16 +1446,21 @@ func (z *Genesis) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0002 > 0 {
 			zb0002--
-			var zb0003 int
-			zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			var zb0004 int
+			var zb0005 bool
+			zb0004, zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			// isnil zb0005 might be unused
+			_ = zb0005
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Allocation")
 				return
 			}
-			if (*z).Allocation != nil && cap((*z).Allocation) >= zb0003 {
-				(*z).Allocation = ((*z).Allocation)[:zb0003]
+			if zb0005 {
+				(*z).Allocation = nil
+			} else if (*z).Allocation != nil && cap((*z).Allocation) >= zb0004 {
+				(*z).Allocation = ((*z).Allocation)[:zb0004]
 			} else {
-				(*z).Allocation = make([]GenesisAllocation, zb0003)
+				(*z).Allocation = make([]GenesisAllocation, zb0004)
 			}
 			for zb0001 := range (*z).Allocation {
 				bts, err = (*z).Allocation[zb0001].UnmarshalMsg(bts)
@@ -1523,16 +1541,21 @@ func (z *Genesis) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "alloc":
-				var zb0004 int
-				zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0006 int
+				var zb0007 bool
+				zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				// isnil zb0007 might be unused
+				_ = zb0007
 				if err != nil {
 					err = msgp.WrapError(err, "Allocation")
 					return
 				}
-				if (*z).Allocation != nil && cap((*z).Allocation) >= zb0004 {
-					(*z).Allocation = ((*z).Allocation)[:zb0004]
+				if zb0007 {
+					(*z).Allocation = nil
+				} else if (*z).Allocation != nil && cap((*z).Allocation) >= zb0006 {
+					(*z).Allocation = ((*z).Allocation)[:zb0006]
 				} else {
-					(*z).Allocation = make([]GenesisAllocation, zb0004)
+					(*z).Allocation = make([]GenesisAllocation, zb0006)
 				}
 				for zb0001 := range (*z).Allocation {
 					bts, err = (*z).Allocation[zb0001].UnmarshalMsg(bts)
@@ -1628,9 +1651,12 @@ func (z *GenesisAllocation) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		// isnil zb0002 might be unused
+		_ = zb0002
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -1815,9 +1841,12 @@ func (z *RewardsState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		// isnil zb0002 might be unused
+		_ = zb0002
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -2000,9 +2029,12 @@ func (z *UpgradeVote) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		// isnil zb0002 might be unused
+		_ = zb0002
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
