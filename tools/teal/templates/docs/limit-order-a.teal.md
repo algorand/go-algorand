@@ -1,4 +1,4 @@
-# Limit Order
+# Limit Order (Contract Owner Has Algos)
 
 ## Functionality
 
