@@ -20,8 +20,6 @@ import (
 	"errors"
 
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -56,26 +54,6 @@ type SignedTxnWithAD struct {
 	ApplyData
 }
 
-// TxnPriority represents the pool priority of a transaction.
-type TxnPriority uint64
-
-// maxTxnBytesForPriority is a scaling factor for computing fee-per-byte
-// priority values with integer arithmetic without worrying too much about
-// rounding effects.  Specifically, this constant should be larger than
-// any legitimate transaction that we expect to be stored in the transaction
-// pool.  Transactions of greater length will have a computed priority of 0.
-const maxTxnBytesForPriority = 1 << 20
-
-// LessThan compares two TxnPriority values
-func (a TxnPriority) LessThan(b TxnPriority) bool {
-	return a < b
-}
-
-// Mul multiplies a TxnPriority by a scalar, with saturation on overflow
-func (a TxnPriority) Mul(b uint64) TxnPriority {
-	return TxnPriority(basics.MulSaturate(uint64(a), b))
-}
-
 // ID returns the Txid (i.e., hash) of the underlying transaction.
 func (s SignedTxn) ID() Txid {
 	return s.Txn.ID()
@@ -91,30 +69,6 @@ func (s SignedTxnInBlock) ID() {
 // GetEncodedLength returns the length in bytes of the encoded transaction
 func (s SignedTxn) GetEncodedLength() int {
 	return len(protocol.Encode(&s))
-}
-
-// Priority returns the pool priority of this signed transaction.
-func (s SignedTxn) Priority() TxnPriority {
-	return s.PtrPriority()
-}
-
-// PtrPriority returns the pool priority of this signed transaction.
-func (s *SignedTxn) PtrPriority() TxnPriority {
-	encodingLen := s.GetEncodedLength()
-
-	// Sanity-checking guard against divide-by-zero, even though
-	// we should never get an empty encoding.
-	if encodingLen == 0 {
-		logging.Base().Panic("bug: SignedTxn.encodingLen is zero")
-	}
-
-	// To deal with rounding errors in integer division when dividing
-	// by the encodingLen, we scale up the TxnPriority value by a
-	// multiplicative factor that's much larger than the max legitimate
-	// encodingLen.  Here, we pick 2^20 (1 MByte).  Transactions over
-	// that size will get a priority of 0, which is reasonable given
-	// that transactions should never be that large.
-	return TxnPriority(basics.MulSaturate(s.Txn.TxFee().Raw, uint64(maxTxnBytesForPriority/encodingLen)))
 }
 
 // AssembleSignedTxn assembles a multisig-signed transaction from a transaction an optional sig, and an optional multisig.

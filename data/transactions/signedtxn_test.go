@@ -70,7 +70,6 @@ func TestDecodeNil(t *testing.T) {
 	if err == nil {
 		// These two functions used to panic when run on a zero value of SignedTxn.
 		st.ID()
-		st.Priority()
 	}
 }
 
