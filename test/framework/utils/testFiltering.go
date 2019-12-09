@@ -22,7 +22,7 @@ import (
 	"runtime"
 )
 
-// Skip tests according to the logic implemented in here.
+// SkipIfFilteringTest skips tests according to the logic implemented in here.
 func SkipIfFilteringTest(t *testing.T) {
 	if runtime.GOOS == "darwin" {
 		t.Skip()
