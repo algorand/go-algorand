@@ -36,6 +36,7 @@ import (
 )
 
 const catchupPeersForSync = 10
+
 // this should be at least the number of relays
 const catchupRetryLimit = 500
 
@@ -172,7 +173,7 @@ func (s *Service) fetchAndWrite(fetcher rpcs.Fetcher, r basics.Round, prevFetchC
 
 		// Stop retrying after a while.
 		if i > catchupRetryLimit {
-			s.log.Errorf("fetchAndWrite(%v): failed to fetch block many times", )
+			s.log.Errorf("fetchAndWrite(%v): failed to fetch block many times")
 			return false
 		}
 
@@ -339,6 +340,9 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 	from := s.ledger.NextRound()
 	nextRound := from
 	for ; nextRound < from+basics.Round(parallelRequests); nextRound++ {
+		if s.nextRoundIsNotApproved(nextRound) {
+			return
+		}
 		currentRoundComplete := make(chan bool, 2)
 		// len(taskCh) + (# pending writes to completed) increases by 1
 		taskCh <- s.pipelineCallback(fetcher, nextRound, currentRoundComplete, recentReqs[len(recentReqs)-1], recentReqs[len(recentReqs)-int(seedLookback)])
@@ -357,6 +361,9 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 			completedRounds[round] = true
 			// fetch rounds we can validate
 			for completedRounds[nextRound-basics.Round(parallelRequests)] {
+				if s.nextRoundIsNotApproved(nextRound) {
+					return
+				}
 				delete(completedRounds, nextRound)
 				currentRoundComplete := make(chan bool, 2)
 				// len(taskCh) + (# pending writes to completed) increases by 1
@@ -463,4 +470,32 @@ func (s *Service) sync() {
 	})
 
 	s.log.Infof("Catchup Service: finished catching up, now at round %v (previously %v). Total time catching up %v.", s.ledger.LastRound(), pr, elapsedTime)
+}
+
+// nextRoundIsNotApproved returns true if the next round upgrades to a protocol version
+// which is not approved.
+// In case of an error, it returns false
+func (s *Service) nextRoundIsNotApproved(nextRound basics.Round) bool {
+	pr := s.ledger.LastRound()
+	proto, err := s.ledger.ConsensusParams(pr)
+	if err != nil {
+		s.log.Errorf("catchup: could not get consensus parameters for round %v: $%v", pr, err)
+		s.log.Errorf("catchup: could not determine if next round is from an approved protocol.")
+		return false
+	}
+	approvedUpgrades := proto.ApprovedUpgrades
+
+	block, error := s.ledger.Block(s.ledger.LastRound())
+	if error != nil {
+		s.log.Errorf("catchup: could not last block (%v) from the ledger.", s.ledger.LastRound())
+		s.log.Errorf("catchup: could not determine if next round is from an approved protocol.")
+		return false
+	}
+	bh := block.BlockHeader
+
+	if nextRound == bh.NextProtocolSwitchOn &&
+		false == approvedUpgrades[bh.NextProtocol] {
+		return true
+	}
+	return false
 }
