@@ -61,138 +61,136 @@ func (z *AccountData) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// variable map header, size zb0005Len
 	o = append(o, 0x80|uint8(zb0005Len))
-	if zb0005Len == 0 {
-		return
-	}
-	if (zb0005Mask & 0x2) == 0 { // if not empty
-		// string "algo"
-		o = append(o, 0xa4, 0x61, 0x6c, 0x67, 0x6f)
-		o, err = (*z).MicroAlgos.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "MicroAlgos")
-			return
-		}
-	}
-	if (zb0005Mask & 0x4) == 0 { // if not empty
-		// string "apar"
-		o = append(o, 0xa4, 0x61, 0x70, 0x61, 0x72)
-		o = msgp.AppendMapHeader(o, uint32(len((*z).AssetParams)))
-		zb0001_keys := make([]AssetIndex, 0, len((*z).AssetParams))
-		for zb0001 := range (*z).AssetParams {
-			zb0001_keys = append(zb0001_keys, zb0001)
-		}
-		sort.Sort(SortAssetIndex(zb0001_keys))
-		for _, zb0001 := range zb0001_keys {
-			zb0002 := (*z).AssetParams[zb0001]
-			_ = zb0002
-			o, err = zb0001.MarshalMsg(o)
+	if zb0005Len != 0 {
+		if (zb0005Mask & 0x2) == 0 { // if not empty
+			// string "algo"
+			o = append(o, 0xa4, 0x61, 0x6c, 0x67, 0x6f)
+			o, err = (*z).MicroAlgos.MarshalMsg(o)
 			if err != nil {
-				err = msgp.WrapError(err, "AssetParams", zb0001)
+				err = msgp.WrapError(err, "MicroAlgos")
 				return
 			}
-			o, err = zb0002.MarshalMsg(o)
+		}
+		if (zb0005Mask & 0x4) == 0 { // if not empty
+			// string "apar"
+			o = append(o, 0xa4, 0x61, 0x70, 0x61, 0x72)
+			o = msgp.AppendMapHeader(o, uint32(len((*z).AssetParams)))
+			zb0001_keys := make([]AssetIndex, 0, len((*z).AssetParams))
+			for zb0001 := range (*z).AssetParams {
+				zb0001_keys = append(zb0001_keys, zb0001)
+			}
+			sort.Sort(SortAssetIndex(zb0001_keys))
+			for _, zb0001 := range zb0001_keys {
+				zb0002 := (*z).AssetParams[zb0001]
+				_ = zb0002
+				o, err = zb0001.MarshalMsg(o)
+				if err != nil {
+					err = msgp.WrapError(err, "AssetParams", zb0001)
+					return
+				}
+				o, err = zb0002.MarshalMsg(o)
+				if err != nil {
+					err = msgp.WrapError(err, "AssetParams", zb0001)
+					return
+				}
+			}
+		}
+		if (zb0005Mask & 0x8) == 0 { // if not empty
+			// string "asset"
+			o = append(o, 0xa5, 0x61, 0x73, 0x73, 0x65, 0x74)
+			o = msgp.AppendMapHeader(o, uint32(len((*z).Assets)))
+			zb0003_keys := make([]AssetIndex, 0, len((*z).Assets))
+			for zb0003 := range (*z).Assets {
+				zb0003_keys = append(zb0003_keys, zb0003)
+			}
+			sort.Sort(SortAssetIndex(zb0003_keys))
+			for _, zb0003 := range zb0003_keys {
+				zb0004 := (*z).Assets[zb0003]
+				_ = zb0004
+				o, err = zb0003.MarshalMsg(o)
+				if err != nil {
+					err = msgp.WrapError(err, "Assets", zb0003)
+					return
+				}
+				// omitempty: check for empty values
+				zb0006Len := uint32(2)
+				var zb0006Mask uint8 /* 3 bits */
+				if zb0004.Amount == 0 {
+					zb0006Len--
+					zb0006Mask |= 0x2
+				}
+				if zb0004.Frozen == false {
+					zb0006Len--
+					zb0006Mask |= 0x4
+				}
+				// variable map header, size zb0006Len
+				o = append(o, 0x80|uint8(zb0006Len))
+				if zb0006Len != 0 {
+					if (zb0006Mask & 0x2) == 0 { // if not empty
+						// string "a"
+						o = append(o, 0xa1, 0x61)
+						o = msgp.AppendUint64(o, zb0004.Amount)
+					}
+					if (zb0006Mask & 0x4) == 0 { // if not empty
+						// string "f"
+						o = append(o, 0xa1, 0x66)
+						o = msgp.AppendBool(o, zb0004.Frozen)
+					}
+				}
+			}
+		}
+		if (zb0005Mask & 0x10) == 0 { // if not empty
+			// string "ebase"
+			o = append(o, 0xa5, 0x65, 0x62, 0x61, 0x73, 0x65)
+			o = msgp.AppendUint64(o, (*z).RewardsBase)
+		}
+		if (zb0005Mask & 0x20) == 0 { // if not empty
+			// string "ern"
+			o = append(o, 0xa3, 0x65, 0x72, 0x6e)
+			o, err = (*z).RewardedMicroAlgos.MarshalMsg(o)
 			if err != nil {
-				err = msgp.WrapError(err, "AssetParams", zb0001)
+				err = msgp.WrapError(err, "RewardedMicroAlgos")
 				return
 			}
 		}
-	}
-	if (zb0005Mask & 0x8) == 0 { // if not empty
-		// string "asset"
-		o = append(o, 0xa5, 0x61, 0x73, 0x73, 0x65, 0x74)
-		o = msgp.AppendMapHeader(o, uint32(len((*z).Assets)))
-		zb0003_keys := make([]AssetIndex, 0, len((*z).Assets))
-		for zb0003 := range (*z).Assets {
-			zb0003_keys = append(zb0003_keys, zb0003)
+		if (zb0005Mask & 0x40) == 0 { // if not empty
+			// string "onl"
+			o = append(o, 0xa3, 0x6f, 0x6e, 0x6c)
+			o = msgp.AppendByte(o, byte((*z).Status))
 		}
-		sort.Sort(SortAssetIndex(zb0003_keys))
-		for _, zb0003 := range zb0003_keys {
-			zb0004 := (*z).Assets[zb0003]
-			_ = zb0004
-			o, err = zb0003.MarshalMsg(o)
+		if (zb0005Mask & 0x80) == 0 { // if not empty
+			// string "sel"
+			o = append(o, 0xa3, 0x73, 0x65, 0x6c)
+			o, err = (*z).SelectionID.MarshalMsg(o)
 			if err != nil {
-				err = msgp.WrapError(err, "Assets", zb0003)
+				err = msgp.WrapError(err, "SelectionID")
 				return
 			}
-			// omitempty: check for empty values
-			zb0006Len := uint32(2)
-			var zb0006Mask uint8 /* 3 bits */
-			if zb0004.Amount == 0 {
-				zb0006Len--
-				zb0006Mask |= 0x2
-			}
-			if zb0004.Frozen == false {
-				zb0006Len--
-				zb0006Mask |= 0x4
-			}
-			// variable map header, size zb0006Len
-			o = append(o, 0x80|uint8(zb0006Len))
-			if zb0006Len == 0 {
+		}
+		if (zb0005Mask & 0x100) == 0 { // if not empty
+			// string "vote"
+			o = append(o, 0xa4, 0x76, 0x6f, 0x74, 0x65)
+			o, err = (*z).VoteID.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "VoteID")
 				return
 			}
-			if (zb0006Mask & 0x2) == 0 { // if not empty
-				// string "a"
-				o = append(o, 0xa1, 0x61)
-				o = msgp.AppendUint64(o, zb0004.Amount)
-			}
-			if (zb0006Mask & 0x4) == 0 { // if not empty
-				// string "f"
-				o = append(o, 0xa1, 0x66)
-				o = msgp.AppendBool(o, zb0004.Frozen)
-			}
 		}
-	}
-	if (zb0005Mask & 0x10) == 0 { // if not empty
-		// string "ebase"
-		o = append(o, 0xa5, 0x65, 0x62, 0x61, 0x73, 0x65)
-		o = msgp.AppendUint64(o, (*z).RewardsBase)
-	}
-	if (zb0005Mask & 0x20) == 0 { // if not empty
-		// string "ern"
-		o = append(o, 0xa3, 0x65, 0x72, 0x6e)
-		o, err = (*z).RewardedMicroAlgos.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "RewardedMicroAlgos")
-			return
+		if (zb0005Mask & 0x200) == 0 { // if not empty
+			// string "voteFst"
+			o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x46, 0x73, 0x74)
+			o = msgp.AppendUint64(o, uint64((*z).VoteFirstValid))
 		}
-	}
-	if (zb0005Mask & 0x40) == 0 { // if not empty
-		// string "onl"
-		o = append(o, 0xa3, 0x6f, 0x6e, 0x6c)
-		o = msgp.AppendByte(o, byte((*z).Status))
-	}
-	if (zb0005Mask & 0x80) == 0 { // if not empty
-		// string "sel"
-		o = append(o, 0xa3, 0x73, 0x65, 0x6c)
-		o, err = (*z).SelectionID.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "SelectionID")
-			return
+		if (zb0005Mask & 0x400) == 0 { // if not empty
+			// string "voteKD"
+			o = append(o, 0xa6, 0x76, 0x6f, 0x74, 0x65, 0x4b, 0x44)
+			o = msgp.AppendUint64(o, (*z).VoteKeyDilution)
 		}
-	}
-	if (zb0005Mask & 0x100) == 0 { // if not empty
-		// string "vote"
-		o = append(o, 0xa4, 0x76, 0x6f, 0x74, 0x65)
-		o, err = (*z).VoteID.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "VoteID")
-			return
+		if (zb0005Mask & 0x800) == 0 { // if not empty
+			// string "voteLst"
+			o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x4c, 0x73, 0x74)
+			o = msgp.AppendUint64(o, uint64((*z).VoteLastValid))
 		}
-	}
-	if (zb0005Mask & 0x200) == 0 { // if not empty
-		// string "voteFst"
-		o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x46, 0x73, 0x74)
-		o = msgp.AppendUint64(o, uint64((*z).VoteFirstValid))
-	}
-	if (zb0005Mask & 0x400) == 0 { // if not empty
-		// string "voteKD"
-		o = append(o, 0xa6, 0x76, 0x6f, 0x74, 0x65, 0x4b, 0x44)
-		o = msgp.AppendUint64(o, (*z).VoteKeyDilution)
-	}
-	if (zb0005Mask & 0x800) == 0 { // if not empty
-		// string "voteLst"
-		o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x4c, 0x73, 0x74)
-		o = msgp.AppendUint64(o, uint64((*z).VoteLastValid))
 	}
 	return
 }
@@ -716,18 +714,17 @@ func (z *AssetHolding) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
-	if zb0001Len == 0 {
-		return
-	}
-	if (zb0001Mask & 0x2) == 0 { // if not empty
-		// string "a"
-		o = append(o, 0xa1, 0x61)
-		o = msgp.AppendUint64(o, (*z).Amount)
-	}
-	if (zb0001Mask & 0x4) == 0 { // if not empty
-		// string "f"
-		o = append(o, 0xa1, 0x66)
-		o = msgp.AppendBool(o, (*z).Frozen)
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "a"
+			o = append(o, 0xa1, 0x61)
+			o = msgp.AppendUint64(o, (*z).Amount)
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "f"
+			o = append(o, 0xa1, 0x66)
+			o = msgp.AppendBool(o, (*z).Frozen)
+		}
 	}
 	return
 }
@@ -917,74 +914,73 @@ func (z *AssetParams) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// variable map header, size zb0002Len
 	o = append(o, 0x80|uint8(zb0002Len))
-	if zb0002Len == 0 {
-		return
-	}
-	if (zb0002Mask & 0x2) == 0 { // if not empty
-		// string "am"
-		o = append(o, 0xa2, 0x61, 0x6d)
-		o = msgp.AppendBytes(o, ((*z).MetadataHash)[:])
-	}
-	if (zb0002Mask & 0x4) == 0 { // if not empty
-		// string "an"
-		o = append(o, 0xa2, 0x61, 0x6e)
-		o = msgp.AppendString(o, (*z).AssetName)
-	}
-	if (zb0002Mask & 0x8) == 0 { // if not empty
-		// string "au"
-		o = append(o, 0xa2, 0x61, 0x75)
-		o = msgp.AppendString(o, (*z).URL)
-	}
-	if (zb0002Mask & 0x10) == 0 { // if not empty
-		// string "c"
-		o = append(o, 0xa1, 0x63)
-		o, err = (*z).Clawback.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "Clawback")
-			return
+	if zb0002Len != 0 {
+		if (zb0002Mask & 0x2) == 0 { // if not empty
+			// string "am"
+			o = append(o, 0xa2, 0x61, 0x6d)
+			o = msgp.AppendBytes(o, ((*z).MetadataHash)[:])
 		}
-	}
-	if (zb0002Mask & 0x20) == 0 { // if not empty
-		// string "df"
-		o = append(o, 0xa2, 0x64, 0x66)
-		o = msgp.AppendBool(o, (*z).DefaultFrozen)
-	}
-	if (zb0002Mask & 0x40) == 0 { // if not empty
-		// string "f"
-		o = append(o, 0xa1, 0x66)
-		o, err = (*z).Freeze.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "Freeze")
-			return
+		if (zb0002Mask & 0x4) == 0 { // if not empty
+			// string "an"
+			o = append(o, 0xa2, 0x61, 0x6e)
+			o = msgp.AppendString(o, (*z).AssetName)
 		}
-	}
-	if (zb0002Mask & 0x80) == 0 { // if not empty
-		// string "m"
-		o = append(o, 0xa1, 0x6d)
-		o, err = (*z).Manager.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "Manager")
-			return
+		if (zb0002Mask & 0x8) == 0 { // if not empty
+			// string "au"
+			o = append(o, 0xa2, 0x61, 0x75)
+			o = msgp.AppendString(o, (*z).URL)
 		}
-	}
-	if (zb0002Mask & 0x100) == 0 { // if not empty
-		// string "r"
-		o = append(o, 0xa1, 0x72)
-		o, err = (*z).Reserve.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "Reserve")
-			return
+		if (zb0002Mask & 0x10) == 0 { // if not empty
+			// string "c"
+			o = append(o, 0xa1, 0x63)
+			o, err = (*z).Clawback.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "Clawback")
+				return
+			}
 		}
-	}
-	if (zb0002Mask & 0x200) == 0 { // if not empty
-		// string "t"
-		o = append(o, 0xa1, 0x74)
-		o = msgp.AppendUint64(o, (*z).Total)
-	}
-	if (zb0002Mask & 0x400) == 0 { // if not empty
-		// string "un"
-		o = append(o, 0xa2, 0x75, 0x6e)
-		o = msgp.AppendString(o, (*z).UnitName)
+		if (zb0002Mask & 0x20) == 0 { // if not empty
+			// string "df"
+			o = append(o, 0xa2, 0x64, 0x66)
+			o = msgp.AppendBool(o, (*z).DefaultFrozen)
+		}
+		if (zb0002Mask & 0x40) == 0 { // if not empty
+			// string "f"
+			o = append(o, 0xa1, 0x66)
+			o, err = (*z).Freeze.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "Freeze")
+				return
+			}
+		}
+		if (zb0002Mask & 0x80) == 0 { // if not empty
+			// string "m"
+			o = append(o, 0xa1, 0x6d)
+			o, err = (*z).Manager.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "Manager")
+				return
+			}
+		}
+		if (zb0002Mask & 0x100) == 0 { // if not empty
+			// string "r"
+			o = append(o, 0xa1, 0x72)
+			o, err = (*z).Reserve.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "Reserve")
+				return
+			}
+		}
+		if (zb0002Mask & 0x200) == 0 { // if not empty
+			// string "t"
+			o = append(o, 0xa1, 0x74)
+			o = msgp.AppendUint64(o, (*z).Total)
+		}
+		if (zb0002Mask & 0x400) == 0 { // if not empty
+			// string "un"
+			o = append(o, 0xa2, 0x75, 0x6e)
+			o = msgp.AppendString(o, (*z).UnitName)
+		}
 	}
 	return
 }
@@ -1251,147 +1247,145 @@ func (z *BalanceRecord) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// variable map header, size zb0005Len
 	o = append(o, 0x80|uint8(zb0005Len))
-	if zb0005Len == 0 {
-		return
-	}
-	if (zb0005Mask & 0x4) == 0 { // if not empty
-		// string "addr"
-		o = append(o, 0xa4, 0x61, 0x64, 0x64, 0x72)
-		o, err = (*z).Addr.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "Addr")
-			return
-		}
-	}
-	if (zb0005Mask & 0x8) == 0 { // if not empty
-		// string "algo"
-		o = append(o, 0xa4, 0x61, 0x6c, 0x67, 0x6f)
-		o, err = (*z).AccountData.MicroAlgos.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "MicroAlgos")
-			return
-		}
-	}
-	if (zb0005Mask & 0x10) == 0 { // if not empty
-		// string "apar"
-		o = append(o, 0xa4, 0x61, 0x70, 0x61, 0x72)
-		o = msgp.AppendMapHeader(o, uint32(len((*z).AccountData.AssetParams)))
-		zb0001_keys := make([]AssetIndex, 0, len((*z).AccountData.AssetParams))
-		for zb0001 := range (*z).AccountData.AssetParams {
-			zb0001_keys = append(zb0001_keys, zb0001)
-		}
-		sort.Sort(SortAssetIndex(zb0001_keys))
-		for _, zb0001 := range zb0001_keys {
-			zb0002 := (*z).AccountData.AssetParams[zb0001]
-			_ = zb0002
-			o, err = zb0001.MarshalMsg(o)
+	if zb0005Len != 0 {
+		if (zb0005Mask & 0x4) == 0 { // if not empty
+			// string "addr"
+			o = append(o, 0xa4, 0x61, 0x64, 0x64, 0x72)
+			o, err = (*z).Addr.MarshalMsg(o)
 			if err != nil {
-				err = msgp.WrapError(err, "AssetParams", zb0001)
+				err = msgp.WrapError(err, "Addr")
 				return
 			}
-			o, err = zb0002.MarshalMsg(o)
+		}
+		if (zb0005Mask & 0x8) == 0 { // if not empty
+			// string "algo"
+			o = append(o, 0xa4, 0x61, 0x6c, 0x67, 0x6f)
+			o, err = (*z).AccountData.MicroAlgos.MarshalMsg(o)
 			if err != nil {
-				err = msgp.WrapError(err, "AssetParams", zb0001)
+				err = msgp.WrapError(err, "MicroAlgos")
 				return
 			}
 		}
-	}
-	if (zb0005Mask & 0x20) == 0 { // if not empty
-		// string "asset"
-		o = append(o, 0xa5, 0x61, 0x73, 0x73, 0x65, 0x74)
-		o = msgp.AppendMapHeader(o, uint32(len((*z).AccountData.Assets)))
-		zb0003_keys := make([]AssetIndex, 0, len((*z).AccountData.Assets))
-		for zb0003 := range (*z).AccountData.Assets {
-			zb0003_keys = append(zb0003_keys, zb0003)
+		if (zb0005Mask & 0x10) == 0 { // if not empty
+			// string "apar"
+			o = append(o, 0xa4, 0x61, 0x70, 0x61, 0x72)
+			o = msgp.AppendMapHeader(o, uint32(len((*z).AccountData.AssetParams)))
+			zb0001_keys := make([]AssetIndex, 0, len((*z).AccountData.AssetParams))
+			for zb0001 := range (*z).AccountData.AssetParams {
+				zb0001_keys = append(zb0001_keys, zb0001)
+			}
+			sort.Sort(SortAssetIndex(zb0001_keys))
+			for _, zb0001 := range zb0001_keys {
+				zb0002 := (*z).AccountData.AssetParams[zb0001]
+				_ = zb0002
+				o, err = zb0001.MarshalMsg(o)
+				if err != nil {
+					err = msgp.WrapError(err, "AssetParams", zb0001)
+					return
+				}
+				o, err = zb0002.MarshalMsg(o)
+				if err != nil {
+					err = msgp.WrapError(err, "AssetParams", zb0001)
+					return
+				}
+			}
 		}
-		sort.Sort(SortAssetIndex(zb0003_keys))
-		for _, zb0003 := range zb0003_keys {
-			zb0004 := (*z).AccountData.Assets[zb0003]
-			_ = zb0004
-			o, err = zb0003.MarshalMsg(o)
+		if (zb0005Mask & 0x20) == 0 { // if not empty
+			// string "asset"
+			o = append(o, 0xa5, 0x61, 0x73, 0x73, 0x65, 0x74)
+			o = msgp.AppendMapHeader(o, uint32(len((*z).AccountData.Assets)))
+			zb0003_keys := make([]AssetIndex, 0, len((*z).AccountData.Assets))
+			for zb0003 := range (*z).AccountData.Assets {
+				zb0003_keys = append(zb0003_keys, zb0003)
+			}
+			sort.Sort(SortAssetIndex(zb0003_keys))
+			for _, zb0003 := range zb0003_keys {
+				zb0004 := (*z).AccountData.Assets[zb0003]
+				_ = zb0004
+				o, err = zb0003.MarshalMsg(o)
+				if err != nil {
+					err = msgp.WrapError(err, "Assets", zb0003)
+					return
+				}
+				// omitempty: check for empty values
+				zb0006Len := uint32(2)
+				var zb0006Mask uint8 /* 3 bits */
+				if zb0004.Amount == 0 {
+					zb0006Len--
+					zb0006Mask |= 0x2
+				}
+				if zb0004.Frozen == false {
+					zb0006Len--
+					zb0006Mask |= 0x4
+				}
+				// variable map header, size zb0006Len
+				o = append(o, 0x80|uint8(zb0006Len))
+				if zb0006Len != 0 {
+					if (zb0006Mask & 0x2) == 0 { // if not empty
+						// string "a"
+						o = append(o, 0xa1, 0x61)
+						o = msgp.AppendUint64(o, zb0004.Amount)
+					}
+					if (zb0006Mask & 0x4) == 0 { // if not empty
+						// string "f"
+						o = append(o, 0xa1, 0x66)
+						o = msgp.AppendBool(o, zb0004.Frozen)
+					}
+				}
+			}
+		}
+		if (zb0005Mask & 0x40) == 0 { // if not empty
+			// string "ebase"
+			o = append(o, 0xa5, 0x65, 0x62, 0x61, 0x73, 0x65)
+			o = msgp.AppendUint64(o, (*z).AccountData.RewardsBase)
+		}
+		if (zb0005Mask & 0x80) == 0 { // if not empty
+			// string "ern"
+			o = append(o, 0xa3, 0x65, 0x72, 0x6e)
+			o, err = (*z).AccountData.RewardedMicroAlgos.MarshalMsg(o)
 			if err != nil {
-				err = msgp.WrapError(err, "Assets", zb0003)
+				err = msgp.WrapError(err, "RewardedMicroAlgos")
 				return
 			}
-			// omitempty: check for empty values
-			zb0006Len := uint32(2)
-			var zb0006Mask uint8 /* 3 bits */
-			if zb0004.Amount == 0 {
-				zb0006Len--
-				zb0006Mask |= 0x2
-			}
-			if zb0004.Frozen == false {
-				zb0006Len--
-				zb0006Mask |= 0x4
-			}
-			// variable map header, size zb0006Len
-			o = append(o, 0x80|uint8(zb0006Len))
-			if zb0006Len == 0 {
+		}
+		if (zb0005Mask & 0x100) == 0 { // if not empty
+			// string "onl"
+			o = append(o, 0xa3, 0x6f, 0x6e, 0x6c)
+			o = msgp.AppendByte(o, byte((*z).AccountData.Status))
+		}
+		if (zb0005Mask & 0x200) == 0 { // if not empty
+			// string "sel"
+			o = append(o, 0xa3, 0x73, 0x65, 0x6c)
+			o, err = (*z).AccountData.SelectionID.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "SelectionID")
 				return
 			}
-			if (zb0006Mask & 0x2) == 0 { // if not empty
-				// string "a"
-				o = append(o, 0xa1, 0x61)
-				o = msgp.AppendUint64(o, zb0004.Amount)
+		}
+		if (zb0005Mask & 0x400) == 0 { // if not empty
+			// string "vote"
+			o = append(o, 0xa4, 0x76, 0x6f, 0x74, 0x65)
+			o, err = (*z).AccountData.VoteID.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "VoteID")
+				return
 			}
-			if (zb0006Mask & 0x4) == 0 { // if not empty
-				// string "f"
-				o = append(o, 0xa1, 0x66)
-				o = msgp.AppendBool(o, zb0004.Frozen)
-			}
 		}
-	}
-	if (zb0005Mask & 0x40) == 0 { // if not empty
-		// string "ebase"
-		o = append(o, 0xa5, 0x65, 0x62, 0x61, 0x73, 0x65)
-		o = msgp.AppendUint64(o, (*z).AccountData.RewardsBase)
-	}
-	if (zb0005Mask & 0x80) == 0 { // if not empty
-		// string "ern"
-		o = append(o, 0xa3, 0x65, 0x72, 0x6e)
-		o, err = (*z).AccountData.RewardedMicroAlgos.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "RewardedMicroAlgos")
-			return
+		if (zb0005Mask & 0x800) == 0 { // if not empty
+			// string "voteFst"
+			o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x46, 0x73, 0x74)
+			o = msgp.AppendUint64(o, uint64((*z).AccountData.VoteFirstValid))
 		}
-	}
-	if (zb0005Mask & 0x100) == 0 { // if not empty
-		// string "onl"
-		o = append(o, 0xa3, 0x6f, 0x6e, 0x6c)
-		o = msgp.AppendByte(o, byte((*z).AccountData.Status))
-	}
-	if (zb0005Mask & 0x200) == 0 { // if not empty
-		// string "sel"
-		o = append(o, 0xa3, 0x73, 0x65, 0x6c)
-		o, err = (*z).AccountData.SelectionID.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "SelectionID")
-			return
+		if (zb0005Mask & 0x1000) == 0 { // if not empty
+			// string "voteKD"
+			o = append(o, 0xa6, 0x76, 0x6f, 0x74, 0x65, 0x4b, 0x44)
+			o = msgp.AppendUint64(o, (*z).AccountData.VoteKeyDilution)
 		}
-	}
-	if (zb0005Mask & 0x400) == 0 { // if not empty
-		// string "vote"
-		o = append(o, 0xa4, 0x76, 0x6f, 0x74, 0x65)
-		o, err = (*z).AccountData.VoteID.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "VoteID")
-			return
+		if (zb0005Mask & 0x2000) == 0 { // if not empty
+			// string "voteLst"
+			o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x4c, 0x73, 0x74)
+			o = msgp.AppendUint64(o, uint64((*z).AccountData.VoteLastValid))
 		}
-	}
-	if (zb0005Mask & 0x800) == 0 { // if not empty
-		// string "voteFst"
-		o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x46, 0x73, 0x74)
-		o = msgp.AppendUint64(o, uint64((*z).AccountData.VoteFirstValid))
-	}
-	if (zb0005Mask & 0x1000) == 0 { // if not empty
-		// string "voteKD"
-		o = append(o, 0xa6, 0x76, 0x6f, 0x74, 0x65, 0x4b, 0x44)
-		o = msgp.AppendUint64(o, (*z).AccountData.VoteKeyDilution)
-	}
-	if (zb0005Mask & 0x2000) == 0 { // if not empty
-		// string "voteLst"
-		o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x4c, 0x73, 0x74)
-		o = msgp.AppendUint64(o, uint64((*z).AccountData.VoteLastValid))
 	}
 	return
 }

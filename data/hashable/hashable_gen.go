@@ -18,13 +18,12 @@ func (z *Message) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
-	if zb0001Len == 0 {
-		return
-	}
-	if (zb0001Mask & 0x2) == 0 { // if not empty
-		// string "msg"
-		o = append(o, 0xa3, 0x6d, 0x73, 0x67)
-		o = msgp.AppendString(o, (*z).Message)
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "msg"
+			o = append(o, 0xa3, 0x6d, 0x73, 0x67)
+			o = msgp.AppendString(o, (*z).Message)
+		}
 	}
 	return
 }

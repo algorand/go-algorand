@@ -34,45 +34,44 @@ func (z *Credential) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
-	if zb0001Len == 0 {
-		return
-	}
-	if (zb0001Mask & 0x4) == 0 { // if not empty
-		// string "ds"
-		o = append(o, 0xa2, 0x64, 0x73)
-		o = msgp.AppendBool(o, (*z).DomainSeparationEnabled)
-	}
-	if (zb0001Mask & 0x8) == 0 { // if not empty
-		// string "h"
-		o = append(o, 0xa1, 0x68)
-		o, err = (*z).VrfOut.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "VrfOut")
-			return
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "ds"
+			o = append(o, 0xa2, 0x64, 0x73)
+			o = msgp.AppendBool(o, (*z).DomainSeparationEnabled)
 		}
-	}
-	if (zb0001Mask & 0x10) == 0 { // if not empty
-		// string "hc"
-		o = append(o, 0xa2, 0x68, 0x63)
-		o, err = (*z).Hashable.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "Hashable")
-			return
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "h"
+			o = append(o, 0xa1, 0x68)
+			o, err = (*z).VrfOut.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "VrfOut")
+				return
+			}
 		}
-	}
-	if (zb0001Mask & 0x20) == 0 { // if not empty
-		// string "pf"
-		o = append(o, 0xa2, 0x70, 0x66)
-		o, err = (*z).UnauthenticatedCredential.Proof.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "Proof")
-			return
+		if (zb0001Mask & 0x10) == 0 { // if not empty
+			// string "hc"
+			o = append(o, 0xa2, 0x68, 0x63)
+			o, err = (*z).Hashable.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "Hashable")
+				return
+			}
 		}
-	}
-	if (zb0001Mask & 0x40) == 0 { // if not empty
-		// string "wt"
-		o = append(o, 0xa2, 0x77, 0x74)
-		o = msgp.AppendUint64(o, (*z).Weight)
+		if (zb0001Mask & 0x20) == 0 { // if not empty
+			// string "pf"
+			o = append(o, 0xa2, 0x70, 0x66)
+			o, err = (*z).UnauthenticatedCredential.Proof.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "Proof")
+				return
+			}
+		}
+		if (zb0001Mask & 0x40) == 0 { // if not empty
+			// string "wt"
+			o = append(o, 0xa2, 0x77, 0x74)
+			o = msgp.AppendUint64(o, (*z).Weight)
+		}
 	}
 	return
 }
@@ -264,16 +263,15 @@ func (z *UnauthenticatedCredential) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
-	if zb0001Len == 0 {
-		return
-	}
-	if (zb0001Mask & 0x2) == 0 { // if not empty
-		// string "pf"
-		o = append(o, 0xa2, 0x70, 0x66)
-		o, err = (*z).Proof.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "Proof")
-			return
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "pf"
+			o = append(o, 0xa2, 0x70, 0x66)
+			o, err = (*z).Proof.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "Proof")
+				return
+			}
 		}
 	}
 	return
@@ -379,30 +377,29 @@ func (z *hashableCredential) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
-	if zb0001Len == 0 {
-		return
-	}
-	if (zb0001Mask & 0x2) == 0 { // if not empty
-		// string "i"
-		o = append(o, 0xa1, 0x69)
-		o = msgp.AppendUint64(o, (*z).Iter)
-	}
-	if (zb0001Mask & 0x4) == 0 { // if not empty
-		// string "m"
-		o = append(o, 0xa1, 0x6d)
-		o, err = (*z).Member.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "Member")
-			return
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "i"
+			o = append(o, 0xa1, 0x69)
+			o = msgp.AppendUint64(o, (*z).Iter)
 		}
-	}
-	if (zb0001Mask & 0x8) == 0 { // if not empty
-		// string "v"
-		o = append(o, 0xa1, 0x76)
-		o, err = (*z).RawOut.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "RawOut")
-			return
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "m"
+			o = append(o, 0xa1, 0x6d)
+			o, err = (*z).Member.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "Member")
+				return
+			}
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "v"
+			o = append(o, 0xa1, 0x76)
+			o, err = (*z).RawOut.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "RawOut")
+				return
+			}
 		}
 	}
 	return

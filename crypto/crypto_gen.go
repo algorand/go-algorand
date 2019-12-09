@@ -107,30 +107,29 @@ func (z *MultisigSig) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// variable map header, size zb0002Len
 	o = append(o, 0x80|uint8(zb0002Len))
-	if zb0002Len == 0 {
-		return
-	}
-	if (zb0002Mask & 0x2) == 0 { // if not empty
-		// string "subsig"
-		o = append(o, 0xa6, 0x73, 0x75, 0x62, 0x73, 0x69, 0x67)
-		o = msgp.AppendArrayHeader(o, uint32(len((*z).Subsigs)))
-		for zb0001 := range (*z).Subsigs {
-			o, err = (*z).Subsigs[zb0001].MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Subsigs", zb0001)
-				return
+	if zb0002Len != 0 {
+		if (zb0002Mask & 0x2) == 0 { // if not empty
+			// string "subsig"
+			o = append(o, 0xa6, 0x73, 0x75, 0x62, 0x73, 0x69, 0x67)
+			o = msgp.AppendArrayHeader(o, uint32(len((*z).Subsigs)))
+			for zb0001 := range (*z).Subsigs {
+				o, err = (*z).Subsigs[zb0001].MarshalMsg(o)
+				if err != nil {
+					err = msgp.WrapError(err, "Subsigs", zb0001)
+					return
+				}
 			}
 		}
-	}
-	if (zb0002Mask & 0x4) == 0 { // if not empty
-		// string "thr"
-		o = append(o, 0xa3, 0x74, 0x68, 0x72)
-		o = msgp.AppendUint8(o, (*z).Threshold)
-	}
-	if (zb0002Mask & 0x8) == 0 { // if not empty
-		// string "v"
-		o = append(o, 0xa1, 0x76)
-		o = msgp.AppendUint8(o, (*z).Version)
+		if (zb0002Mask & 0x4) == 0 { // if not empty
+			// string "thr"
+			o = append(o, 0xa3, 0x74, 0x68, 0x72)
+			o = msgp.AppendUint8(o, (*z).Threshold)
+		}
+		if (zb0002Mask & 0x8) == 0 { // if not empty
+			// string "v"
+			o = append(o, 0xa1, 0x76)
+			o = msgp.AppendUint8(o, (*z).Version)
+		}
 	}
 	return
 }
@@ -298,18 +297,17 @@ func (z *MultisigSubsig) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// variable map header, size zb0003Len
 	o = append(o, 0x80|uint8(zb0003Len))
-	if zb0003Len == 0 {
-		return
-	}
-	if (zb0003Mask & 0x2) == 0 { // if not empty
-		// string "pk"
-		o = append(o, 0xa2, 0x70, 0x6b)
-		o = msgp.AppendBytes(o, ((*z).Key)[:])
-	}
-	if (zb0003Mask & 0x4) == 0 { // if not empty
-		// string "s"
-		o = append(o, 0xa1, 0x73)
-		o = msgp.AppendBytes(o, ((*z).Sig)[:])
+	if zb0003Len != 0 {
+		if (zb0003Mask & 0x2) == 0 { // if not empty
+			// string "pk"
+			o = append(o, 0xa2, 0x70, 0x6b)
+			o = msgp.AppendBytes(o, ((*z).Key)[:])
+		}
+		if (zb0003Mask & 0x4) == 0 { // if not empty
+			// string "s"
+			o = append(o, 0xa1, 0x73)
+			o = msgp.AppendBytes(o, ((*z).Sig)[:])
+		}
 	}
 	return
 }
@@ -619,57 +617,56 @@ func (z *OneTimeSignatureSecrets) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// variable map header, size zb0006Len
 	o = append(o, 0x80|uint8(zb0006Len))
-	if zb0006Len == 0 {
-		return
-	}
-	if (zb0006Mask & 0x1) == 0 { // if not empty
-		// string "First"
-		o = append(o, 0xa5, 0x46, 0x69, 0x72, 0x73, 0x74)
-		o = msgp.AppendUint64(o, (*z).OneTimeSignatureSecretsPersistent.FirstBatch)
-	}
-	if (zb0006Mask & 0x2) == 0 { // if not empty
-		// string "OneTimeSignatureVerifier"
-		o = append(o, 0xb8, 0x4f, 0x6e, 0x65, 0x54, 0x69, 0x6d, 0x65, 0x53, 0x69, 0x67, 0x6e, 0x61, 0x74, 0x75, 0x72, 0x65, 0x56, 0x65, 0x72, 0x69, 0x66, 0x69, 0x65, 0x72)
-		o = msgp.AppendBytes(o, ((*z).OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier)[:])
-	}
-	if (zb0006Mask & 0x4) == 0 { // if not empty
-		// string "Sub"
-		o = append(o, 0xa3, 0x53, 0x75, 0x62)
-		o = msgp.AppendArrayHeader(o, uint32(len((*z).OneTimeSignatureSecretsPersistent.Batches)))
-		for zb0002 := range (*z).OneTimeSignatureSecretsPersistent.Batches {
-			o, err = (*z).OneTimeSignatureSecretsPersistent.Batches[zb0002].MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Batches", zb0002)
-				return
+	if zb0006Len != 0 {
+		if (zb0006Mask & 0x1) == 0 { // if not empty
+			// string "First"
+			o = append(o, 0xa5, 0x46, 0x69, 0x72, 0x73, 0x74)
+			o = msgp.AppendUint64(o, (*z).OneTimeSignatureSecretsPersistent.FirstBatch)
+		}
+		if (zb0006Mask & 0x2) == 0 { // if not empty
+			// string "OneTimeSignatureVerifier"
+			o = append(o, 0xb8, 0x4f, 0x6e, 0x65, 0x54, 0x69, 0x6d, 0x65, 0x53, 0x69, 0x67, 0x6e, 0x61, 0x74, 0x75, 0x72, 0x65, 0x56, 0x65, 0x72, 0x69, 0x66, 0x69, 0x65, 0x72)
+			o = msgp.AppendBytes(o, ((*z).OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier)[:])
+		}
+		if (zb0006Mask & 0x4) == 0 { // if not empty
+			// string "Sub"
+			o = append(o, 0xa3, 0x53, 0x75, 0x62)
+			o = msgp.AppendArrayHeader(o, uint32(len((*z).OneTimeSignatureSecretsPersistent.Batches)))
+			for zb0002 := range (*z).OneTimeSignatureSecretsPersistent.Batches {
+				o, err = (*z).OneTimeSignatureSecretsPersistent.Batches[zb0002].MarshalMsg(o)
+				if err != nil {
+					err = msgp.WrapError(err, "Batches", zb0002)
+					return
+				}
 			}
 		}
-	}
-	if (zb0006Mask & 0x20) == 0 { // if not empty
-		// string "firstoff"
-		o = append(o, 0xa8, 0x66, 0x69, 0x72, 0x73, 0x74, 0x6f, 0x66, 0x66)
-		o = msgp.AppendUint64(o, (*z).OneTimeSignatureSecretsPersistent.FirstOffset)
-	}
-	if (zb0006Mask & 0x80) == 0 { // if not empty
-		// string "offkeys"
-		o = append(o, 0xa7, 0x6f, 0x66, 0x66, 0x6b, 0x65, 0x79, 0x73)
-		o = msgp.AppendArrayHeader(o, uint32(len((*z).OneTimeSignatureSecretsPersistent.Offsets)))
-		for zb0003 := range (*z).OneTimeSignatureSecretsPersistent.Offsets {
-			o, err = (*z).OneTimeSignatureSecretsPersistent.Offsets[zb0003].MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Offsets", zb0003)
-				return
+		if (zb0006Mask & 0x20) == 0 { // if not empty
+			// string "firstoff"
+			o = append(o, 0xa8, 0x66, 0x69, 0x72, 0x73, 0x74, 0x6f, 0x66, 0x66)
+			o = msgp.AppendUint64(o, (*z).OneTimeSignatureSecretsPersistent.FirstOffset)
+		}
+		if (zb0006Mask & 0x80) == 0 { // if not empty
+			// string "offkeys"
+			o = append(o, 0xa7, 0x6f, 0x66, 0x66, 0x6b, 0x65, 0x79, 0x73)
+			o = msgp.AppendArrayHeader(o, uint32(len((*z).OneTimeSignatureSecretsPersistent.Offsets)))
+			for zb0003 := range (*z).OneTimeSignatureSecretsPersistent.Offsets {
+				o, err = (*z).OneTimeSignatureSecretsPersistent.Offsets[zb0003].MarshalMsg(o)
+				if err != nil {
+					err = msgp.WrapError(err, "Offsets", zb0003)
+					return
+				}
 			}
 		}
-	}
-	if (zb0006Mask & 0x100) == 0 { // if not empty
-		// string "offpk2"
-		o = append(o, 0xa6, 0x6f, 0x66, 0x66, 0x70, 0x6b, 0x32)
-		o = msgp.AppendBytes(o, ((*z).OneTimeSignatureSecretsPersistent.OffsetsPK2)[:])
-	}
-	if (zb0006Mask & 0x200) == 0 { // if not empty
-		// string "offpk2sig"
-		o = append(o, 0xa9, 0x6f, 0x66, 0x66, 0x70, 0x6b, 0x32, 0x73, 0x69, 0x67)
-		o = msgp.AppendBytes(o, ((*z).OneTimeSignatureSecretsPersistent.OffsetsPK2Sig)[:])
+		if (zb0006Mask & 0x100) == 0 { // if not empty
+			// string "offpk2"
+			o = append(o, 0xa6, 0x6f, 0x66, 0x66, 0x70, 0x6b, 0x32)
+			o = msgp.AppendBytes(o, ((*z).OneTimeSignatureSecretsPersistent.OffsetsPK2)[:])
+		}
+		if (zb0006Mask & 0x200) == 0 { // if not empty
+			// string "offpk2sig"
+			o = append(o, 0xa9, 0x6f, 0x66, 0x66, 0x70, 0x6b, 0x32, 0x73, 0x69, 0x67)
+			o = msgp.AppendBytes(o, ((*z).OneTimeSignatureSecretsPersistent.OffsetsPK2Sig)[:])
+		}
 	}
 	return
 }
@@ -934,57 +931,56 @@ func (z *OneTimeSignatureSecretsPersistent) MarshalMsg(b []byte) (o []byte, err 
 	}
 	// variable map header, size zb0006Len
 	o = append(o, 0x80|uint8(zb0006Len))
-	if zb0006Len == 0 {
-		return
-	}
-	if (zb0006Mask & 0x1) == 0 { // if not empty
-		// string "First"
-		o = append(o, 0xa5, 0x46, 0x69, 0x72, 0x73, 0x74)
-		o = msgp.AppendUint64(o, (*z).FirstBatch)
-	}
-	if (zb0006Mask & 0x2) == 0 { // if not empty
-		// string "OneTimeSignatureVerifier"
-		o = append(o, 0xb8, 0x4f, 0x6e, 0x65, 0x54, 0x69, 0x6d, 0x65, 0x53, 0x69, 0x67, 0x6e, 0x61, 0x74, 0x75, 0x72, 0x65, 0x56, 0x65, 0x72, 0x69, 0x66, 0x69, 0x65, 0x72)
-		o = msgp.AppendBytes(o, ((*z).OneTimeSignatureVerifier)[:])
-	}
-	if (zb0006Mask & 0x4) == 0 { // if not empty
-		// string "Sub"
-		o = append(o, 0xa3, 0x53, 0x75, 0x62)
-		o = msgp.AppendArrayHeader(o, uint32(len((*z).Batches)))
-		for zb0002 := range (*z).Batches {
-			o, err = (*z).Batches[zb0002].MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Batches", zb0002)
-				return
+	if zb0006Len != 0 {
+		if (zb0006Mask & 0x1) == 0 { // if not empty
+			// string "First"
+			o = append(o, 0xa5, 0x46, 0x69, 0x72, 0x73, 0x74)
+			o = msgp.AppendUint64(o, (*z).FirstBatch)
+		}
+		if (zb0006Mask & 0x2) == 0 { // if not empty
+			// string "OneTimeSignatureVerifier"
+			o = append(o, 0xb8, 0x4f, 0x6e, 0x65, 0x54, 0x69, 0x6d, 0x65, 0x53, 0x69, 0x67, 0x6e, 0x61, 0x74, 0x75, 0x72, 0x65, 0x56, 0x65, 0x72, 0x69, 0x66, 0x69, 0x65, 0x72)
+			o = msgp.AppendBytes(o, ((*z).OneTimeSignatureVerifier)[:])
+		}
+		if (zb0006Mask & 0x4) == 0 { // if not empty
+			// string "Sub"
+			o = append(o, 0xa3, 0x53, 0x75, 0x62)
+			o = msgp.AppendArrayHeader(o, uint32(len((*z).Batches)))
+			for zb0002 := range (*z).Batches {
+				o, err = (*z).Batches[zb0002].MarshalMsg(o)
+				if err != nil {
+					err = msgp.WrapError(err, "Batches", zb0002)
+					return
+				}
 			}
 		}
-	}
-	if (zb0006Mask & 0x10) == 0 { // if not empty
-		// string "firstoff"
-		o = append(o, 0xa8, 0x66, 0x69, 0x72, 0x73, 0x74, 0x6f, 0x66, 0x66)
-		o = msgp.AppendUint64(o, (*z).FirstOffset)
-	}
-	if (zb0006Mask & 0x20) == 0 { // if not empty
-		// string "offkeys"
-		o = append(o, 0xa7, 0x6f, 0x66, 0x66, 0x6b, 0x65, 0x79, 0x73)
-		o = msgp.AppendArrayHeader(o, uint32(len((*z).Offsets)))
-		for zb0003 := range (*z).Offsets {
-			o, err = (*z).Offsets[zb0003].MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Offsets", zb0003)
-				return
+		if (zb0006Mask & 0x10) == 0 { // if not empty
+			// string "firstoff"
+			o = append(o, 0xa8, 0x66, 0x69, 0x72, 0x73, 0x74, 0x6f, 0x66, 0x66)
+			o = msgp.AppendUint64(o, (*z).FirstOffset)
+		}
+		if (zb0006Mask & 0x20) == 0 { // if not empty
+			// string "offkeys"
+			o = append(o, 0xa7, 0x6f, 0x66, 0x66, 0x6b, 0x65, 0x79, 0x73)
+			o = msgp.AppendArrayHeader(o, uint32(len((*z).Offsets)))
+			for zb0003 := range (*z).Offsets {
+				o, err = (*z).Offsets[zb0003].MarshalMsg(o)
+				if err != nil {
+					err = msgp.WrapError(err, "Offsets", zb0003)
+					return
+				}
 			}
 		}
-	}
-	if (zb0006Mask & 0x40) == 0 { // if not empty
-		// string "offpk2"
-		o = append(o, 0xa6, 0x6f, 0x66, 0x66, 0x70, 0x6b, 0x32)
-		o = msgp.AppendBytes(o, ((*z).OffsetsPK2)[:])
-	}
-	if (zb0006Mask & 0x80) == 0 { // if not empty
-		// string "offpk2sig"
-		o = append(o, 0xa9, 0x6f, 0x66, 0x66, 0x70, 0x6b, 0x32, 0x73, 0x69, 0x67)
-		o = msgp.AppendBytes(o, ((*z).OffsetsPK2Sig)[:])
+		if (zb0006Mask & 0x40) == 0 { // if not empty
+			// string "offpk2"
+			o = append(o, 0xa6, 0x6f, 0x66, 0x66, 0x70, 0x6b, 0x32)
+			o = msgp.AppendBytes(o, ((*z).OffsetsPK2)[:])
+		}
+		if (zb0006Mask & 0x80) == 0 { // if not empty
+			// string "offpk2sig"
+			o = append(o, 0xa9, 0x6f, 0x66, 0x66, 0x70, 0x6b, 0x32, 0x73, 0x69, 0x67)
+			o = msgp.AppendBytes(o, ((*z).OffsetsPK2Sig)[:])
+		}
 	}
 	return
 }

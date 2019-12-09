@@ -38,46 +38,45 @@ func (z *Bid) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
-	if zb0001Len == 0 {
-		return
-	}
-	if (zb0001Mask & 0x2) == 0 { // if not empty
-		// string "aid"
-		o = append(o, 0xa3, 0x61, 0x69, 0x64)
-		o = msgp.AppendUint64(o, (*z).AuctionID)
-	}
-	if (zb0001Mask & 0x4) == 0 { // if not empty
-		// string "auc"
-		o = append(o, 0xa3, 0x61, 0x75, 0x63)
-		o, err = (*z).AuctionKey.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "AuctionKey")
-			return
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "aid"
+			o = append(o, 0xa3, 0x61, 0x69, 0x64)
+			o = msgp.AppendUint64(o, (*z).AuctionID)
 		}
-	}
-	if (zb0001Mask & 0x8) == 0 { // if not empty
-		// string "bidder"
-		o = append(o, 0xa6, 0x62, 0x69, 0x64, 0x64, 0x65, 0x72)
-		o, err = (*z).BidderKey.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "BidderKey")
-			return
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "auc"
+			o = append(o, 0xa3, 0x61, 0x75, 0x63)
+			o, err = (*z).AuctionKey.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "AuctionKey")
+				return
+			}
 		}
-	}
-	if (zb0001Mask & 0x10) == 0 { // if not empty
-		// string "cur"
-		o = append(o, 0xa3, 0x63, 0x75, 0x72)
-		o = msgp.AppendUint64(o, (*z).BidCurrency)
-	}
-	if (zb0001Mask & 0x20) == 0 { // if not empty
-		// string "id"
-		o = append(o, 0xa2, 0x69, 0x64)
-		o = msgp.AppendUint64(o, (*z).BidID)
-	}
-	if (zb0001Mask & 0x40) == 0 { // if not empty
-		// string "price"
-		o = append(o, 0xa5, 0x70, 0x72, 0x69, 0x63, 0x65)
-		o = msgp.AppendUint64(o, (*z).MaxPrice)
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "bidder"
+			o = append(o, 0xa6, 0x62, 0x69, 0x64, 0x64, 0x65, 0x72)
+			o, err = (*z).BidderKey.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "BidderKey")
+				return
+			}
+		}
+		if (zb0001Mask & 0x10) == 0 { // if not empty
+			// string "cur"
+			o = append(o, 0xa3, 0x63, 0x75, 0x72)
+			o = msgp.AppendUint64(o, (*z).BidCurrency)
+		}
+		if (zb0001Mask & 0x20) == 0 { // if not empty
+			// string "id"
+			o = append(o, 0xa2, 0x69, 0x64)
+			o = msgp.AppendUint64(o, (*z).BidID)
+		}
+		if (zb0001Mask & 0x40) == 0 { // if not empty
+			// string "price"
+			o = append(o, 0xa5, 0x70, 0x72, 0x69, 0x63, 0x65)
+			o = msgp.AppendUint64(o, (*z).MaxPrice)
+		}
 	}
 	return
 }
@@ -260,44 +259,43 @@ func (z *BidOutcomes) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// variable map header, size zb0002Len
 	o = append(o, 0x80|uint8(zb0002Len))
-	if zb0002Len == 0 {
-		return
-	}
-	if (zb0002Mask & 0x2) == 0 { // if not empty
-		// string "aid"
-		o = append(o, 0xa3, 0x61, 0x69, 0x64)
-		o = msgp.AppendUint64(o, (*z).AuctionID)
-	}
-	if (zb0002Mask & 0x4) == 0 { // if not empty
-		// string "auc"
-		o = append(o, 0xa3, 0x61, 0x75, 0x63)
-		o, err = (*z).AuctionKey.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "AuctionKey")
-			return
+	if zb0002Len != 0 {
+		if (zb0002Mask & 0x2) == 0 { // if not empty
+			// string "aid"
+			o = append(o, 0xa3, 0x61, 0x69, 0x64)
+			o = msgp.AppendUint64(o, (*z).AuctionID)
 		}
-	}
-	if (zb0002Mask & 0x8) == 0 { // if not empty
-		// string "cleared"
-		o = append(o, 0xa7, 0x63, 0x6c, 0x65, 0x61, 0x72, 0x65, 0x64)
-		o = msgp.AppendBool(o, (*z).Cleared)
-	}
-	if (zb0002Mask & 0x10) == 0 { // if not empty
-		// string "outcomes"
-		o = append(o, 0xa8, 0x6f, 0x75, 0x74, 0x63, 0x6f, 0x6d, 0x65, 0x73)
-		o = msgp.AppendArrayHeader(o, uint32(len((*z).Outcomes)))
-		for zb0001 := range (*z).Outcomes {
-			o, err = (*z).Outcomes[zb0001].MarshalMsg(o)
+		if (zb0002Mask & 0x4) == 0 { // if not empty
+			// string "auc"
+			o = append(o, 0xa3, 0x61, 0x75, 0x63)
+			o, err = (*z).AuctionKey.MarshalMsg(o)
 			if err != nil {
-				err = msgp.WrapError(err, "Outcomes", zb0001)
+				err = msgp.WrapError(err, "AuctionKey")
 				return
 			}
 		}
-	}
-	if (zb0002Mask & 0x20) == 0 { // if not empty
-		// string "price"
-		o = append(o, 0xa5, 0x70, 0x72, 0x69, 0x63, 0x65)
-		o = msgp.AppendUint64(o, (*z).Price)
+		if (zb0002Mask & 0x8) == 0 { // if not empty
+			// string "cleared"
+			o = append(o, 0xa7, 0x63, 0x6c, 0x65, 0x61, 0x72, 0x65, 0x64)
+			o = msgp.AppendBool(o, (*z).Cleared)
+		}
+		if (zb0002Mask & 0x10) == 0 { // if not empty
+			// string "outcomes"
+			o = append(o, 0xa8, 0x6f, 0x75, 0x74, 0x63, 0x6f, 0x6d, 0x65, 0x73)
+			o = msgp.AppendArrayHeader(o, uint32(len((*z).Outcomes)))
+			for zb0001 := range (*z).Outcomes {
+				o, err = (*z).Outcomes[zb0001].MarshalMsg(o)
+				if err != nil {
+					err = msgp.WrapError(err, "Outcomes", zb0001)
+					return
+				}
+			}
+		}
+		if (zb0002Mask & 0x20) == 0 { // if not empty
+			// string "price"
+			o = append(o, 0xa5, 0x70, 0x72, 0x69, 0x63, 0x65)
+			o = msgp.AppendUint64(o, (*z).Price)
+		}
 	}
 	return
 }
@@ -491,35 +489,34 @@ func (z *BidderOutcome) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
-	if zb0001Len == 0 {
-		return
-	}
-	if (zb0001Mask & 0x2) == 0 { // if not empty
-		// string "alg"
-		o = append(o, 0xa3, 0x61, 0x6c, 0x67)
-		o = msgp.AppendUint64(o, (*z).AlgosWon)
-	}
-	if (zb0001Mask & 0x4) == 0 { // if not empty
-		// string "id"
-		o = append(o, 0xa2, 0x69, 0x64)
-		o = msgp.AppendUint64(o, (*z).BidID)
-	}
-	if (zb0001Mask & 0x8) == 0 { // if not empty
-		// string "key"
-		o = append(o, 0xa3, 0x6b, 0x65, 0x79)
-		o, err = (*z).BidderKey.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "BidderKey")
-			return
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "alg"
+			o = append(o, 0xa3, 0x61, 0x6c, 0x67)
+			o = msgp.AppendUint64(o, (*z).AlgosWon)
 		}
-	}
-	if (zb0001Mask & 0x10) == 0 { // if not empty
-		// string "out"
-		o = append(o, 0xa3, 0x6f, 0x75, 0x74)
-		o, err = (*z).WinningsAddress.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "WinningsAddress")
-			return
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "id"
+			o = append(o, 0xa2, 0x69, 0x64)
+			o = msgp.AppendUint64(o, (*z).BidID)
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "key"
+			o = append(o, 0xa3, 0x6b, 0x65, 0x79)
+			o, err = (*z).BidderKey.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "BidderKey")
+				return
+			}
+		}
+		if (zb0001Mask & 0x10) == 0 { // if not empty
+			// string "out"
+			o = append(o, 0xa3, 0x6f, 0x75, 0x74)
+			o, err = (*z).WinningsAddress.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "WinningsAddress")
+				return
+			}
 		}
 	}
 	return
@@ -679,49 +676,48 @@ func (z *Deposit) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
-	if zb0001Len == 0 {
-		return
-	}
-	if (zb0001Mask & 0x2) == 0 { // if not empty
-		// string "aid"
-		o = append(o, 0xa3, 0x61, 0x69, 0x64)
-		o = msgp.AppendUint64(o, (*z).AuctionID)
-	}
-	if (zb0001Mask & 0x4) == 0 { // if not empty
-		// string "auc"
-		o = append(o, 0xa3, 0x61, 0x75, 0x63)
-		o, err = (*z).AuctionKey.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "AuctionKey")
-			return
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "aid"
+			o = append(o, 0xa3, 0x61, 0x69, 0x64)
+			o = msgp.AppendUint64(o, (*z).AuctionID)
 		}
-	}
-	if (zb0001Mask & 0x8) == 0 { // if not empty
-		// string "cur"
-		o = append(o, 0xa3, 0x63, 0x75, 0x72)
-		o = msgp.AppendUint64(o, (*z).Currency)
-	}
-	if (zb0001Mask & 0x10) == 0 { // if not empty
-		// string "did"
-		o = append(o, 0xa3, 0x64, 0x69, 0x64)
-		o = msgp.AppendUint64(o, (*z).DepositID)
-	}
-	if (zb0001Mask & 0x20) == 0 { // if not empty
-		// string "key"
-		o = append(o, 0xa3, 0x6b, 0x65, 0x79)
-		o, err = (*z).BidderKey.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "BidderKey")
-			return
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "auc"
+			o = append(o, 0xa3, 0x61, 0x75, 0x63)
+			o, err = (*z).AuctionKey.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "AuctionKey")
+				return
+			}
 		}
-	}
-	if (zb0001Mask & 0x40) == 0 { // if not empty
-		// string "out"
-		o = append(o, 0xa3, 0x6f, 0x75, 0x74)
-		o, err = (*z).WinningsAddress.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "WinningsAddress")
-			return
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "cur"
+			o = append(o, 0xa3, 0x63, 0x75, 0x72)
+			o = msgp.AppendUint64(o, (*z).Currency)
+		}
+		if (zb0001Mask & 0x10) == 0 { // if not empty
+			// string "did"
+			o = append(o, 0xa3, 0x64, 0x69, 0x64)
+			o = msgp.AppendUint64(o, (*z).DepositID)
+		}
+		if (zb0001Mask & 0x20) == 0 { // if not empty
+			// string "key"
+			o = append(o, 0xa3, 0x6b, 0x65, 0x79)
+			o, err = (*z).BidderKey.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "BidderKey")
+				return
+			}
+		}
+		if (zb0001Mask & 0x40) == 0 { // if not empty
+			// string "out"
+			o = append(o, 0xa3, 0x6f, 0x75, 0x74)
+			o, err = (*z).WinningsAddress.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "WinningsAddress")
+				return
+			}
 		}
 	}
 	return
@@ -901,88 +897,87 @@ func (z *MasterInput) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
-	if zb0001Len == 0 {
-		return
-	}
-	if (zb0001Mask & 0x2) == 0 { // if not empty
-		// string "b"
-		o = append(o, 0xa1, 0x62)
-		// omitempty: check for empty values
-		zb0002Len := uint32(2)
-		var zb0002Mask uint8 /* 3 bits */
-		if (*z).SignedBid.Bid.MsgIsZero() {
-			zb0002Len--
-			zb0002Mask |= 0x2
-		}
-		if (*z).SignedBid.Sig.MsgIsZero() {
-			zb0002Len--
-			zb0002Mask |= 0x4
-		}
-		// variable map header, size zb0002Len
-		o = append(o, 0x80|uint8(zb0002Len))
-		if (zb0002Mask & 0x2) == 0 { // if not empty
-			// string "bid"
-			o = append(o, 0xa3, 0x62, 0x69, 0x64)
-			o, err = (*z).SignedBid.Bid.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "SignedBid", "Bid")
-				return
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "b"
+			o = append(o, 0xa1, 0x62)
+			// omitempty: check for empty values
+			zb0002Len := uint32(2)
+			var zb0002Mask uint8 /* 3 bits */
+			if (*z).SignedBid.Bid.MsgIsZero() {
+				zb0002Len--
+				zb0002Mask |= 0x2
+			}
+			if (*z).SignedBid.Sig.MsgIsZero() {
+				zb0002Len--
+				zb0002Mask |= 0x4
+			}
+			// variable map header, size zb0002Len
+			o = append(o, 0x80|uint8(zb0002Len))
+			if (zb0002Mask & 0x2) == 0 { // if not empty
+				// string "bid"
+				o = append(o, 0xa3, 0x62, 0x69, 0x64)
+				o, err = (*z).SignedBid.Bid.MarshalMsg(o)
+				if err != nil {
+					err = msgp.WrapError(err, "SignedBid", "Bid")
+					return
+				}
+			}
+			if (zb0002Mask & 0x4) == 0 { // if not empty
+				// string "sig"
+				o = append(o, 0xa3, 0x73, 0x69, 0x67)
+				o, err = (*z).SignedBid.Sig.MarshalMsg(o)
+				if err != nil {
+					err = msgp.WrapError(err, "SignedBid", "Sig")
+					return
+				}
 			}
 		}
-		if (zb0002Mask & 0x4) == 0 { // if not empty
-			// string "sig"
-			o = append(o, 0xa3, 0x73, 0x69, 0x67)
-			o, err = (*z).SignedBid.Sig.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "SignedBid", "Sig")
-				return
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "d"
+			o = append(o, 0xa1, 0x64)
+			// omitempty: check for empty values
+			zb0003Len := uint32(2)
+			var zb0003Mask uint8 /* 3 bits */
+			if (*z).SignedDeposit.Deposit.MsgIsZero() {
+				zb0003Len--
+				zb0003Mask |= 0x2
+			}
+			if (*z).SignedDeposit.Sig.MsgIsZero() {
+				zb0003Len--
+				zb0003Mask |= 0x4
+			}
+			// variable map header, size zb0003Len
+			o = append(o, 0x80|uint8(zb0003Len))
+			if (zb0003Mask & 0x2) == 0 { // if not empty
+				// string "dep"
+				o = append(o, 0xa3, 0x64, 0x65, 0x70)
+				o, err = (*z).SignedDeposit.Deposit.MarshalMsg(o)
+				if err != nil {
+					err = msgp.WrapError(err, "SignedDeposit", "Deposit")
+					return
+				}
+			}
+			if (zb0003Mask & 0x4) == 0 { // if not empty
+				// string "sig"
+				o = append(o, 0xa3, 0x73, 0x69, 0x67)
+				o, err = (*z).SignedDeposit.Sig.MarshalMsg(o)
+				if err != nil {
+					err = msgp.WrapError(err, "SignedDeposit", "Sig")
+					return
+				}
 			}
 		}
-	}
-	if (zb0001Mask & 0x4) == 0 { // if not empty
-		// string "d"
-		o = append(o, 0xa1, 0x64)
-		// omitempty: check for empty values
-		zb0003Len := uint32(2)
-		var zb0003Mask uint8 /* 3 bits */
-		if (*z).SignedDeposit.Deposit.MsgIsZero() {
-			zb0003Len--
-			zb0003Mask |= 0x2
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "rnd"
+			o = append(o, 0xa3, 0x72, 0x6e, 0x64)
+			o = msgp.AppendUint64(o, (*z).Round)
 		}
-		if (*z).SignedDeposit.Sig.MsgIsZero() {
-			zb0003Len--
-			zb0003Mask |= 0x4
+		if (zb0001Mask & 0x10) == 0 { // if not empty
+			// string "t"
+			o = append(o, 0xa1, 0x74)
+			o = msgp.AppendString(o, string((*z).Type))
 		}
-		// variable map header, size zb0003Len
-		o = append(o, 0x80|uint8(zb0003Len))
-		if (zb0003Mask & 0x2) == 0 { // if not empty
-			// string "dep"
-			o = append(o, 0xa3, 0x64, 0x65, 0x70)
-			o, err = (*z).SignedDeposit.Deposit.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "SignedDeposit", "Deposit")
-				return
-			}
-		}
-		if (zb0003Mask & 0x4) == 0 { // if not empty
-			// string "sig"
-			o = append(o, 0xa3, 0x73, 0x69, 0x67)
-			o, err = (*z).SignedDeposit.Sig.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "SignedDeposit", "Sig")
-				return
-			}
-		}
-	}
-	if (zb0001Mask & 0x8) == 0 { // if not empty
-		// string "rnd"
-		o = append(o, 0xa3, 0x72, 0x6e, 0x64)
-		o = msgp.AppendUint64(o, (*z).Round)
-	}
-	if (zb0001Mask & 0x10) == 0 { // if not empty
-		// string "t"
-		o = append(o, 0xa1, 0x74)
-		o = msgp.AppendString(o, string((*z).Type))
 	}
 	return
 }
@@ -1385,153 +1380,152 @@ func (z *NoteField) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
-	if zb0001Len == 0 {
-		return
-	}
-	if (zb0001Mask & 0x2) == 0 { // if not empty
-		// string "b"
-		o = append(o, 0xa1, 0x62)
-		// omitempty: check for empty values
-		zb0002Len := uint32(2)
-		var zb0002Mask uint8 /* 3 bits */
-		if (*z).SignedBid.Bid.MsgIsZero() {
-			zb0002Len--
-			zb0002Mask |= 0x2
-		}
-		if (*z).SignedBid.Sig.MsgIsZero() {
-			zb0002Len--
-			zb0002Mask |= 0x4
-		}
-		// variable map header, size zb0002Len
-		o = append(o, 0x80|uint8(zb0002Len))
-		if (zb0002Mask & 0x2) == 0 { // if not empty
-			// string "bid"
-			o = append(o, 0xa3, 0x62, 0x69, 0x64)
-			o, err = (*z).SignedBid.Bid.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "SignedBid", "Bid")
-				return
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "b"
+			o = append(o, 0xa1, 0x62)
+			// omitempty: check for empty values
+			zb0002Len := uint32(2)
+			var zb0002Mask uint8 /* 3 bits */
+			if (*z).SignedBid.Bid.MsgIsZero() {
+				zb0002Len--
+				zb0002Mask |= 0x2
+			}
+			if (*z).SignedBid.Sig.MsgIsZero() {
+				zb0002Len--
+				zb0002Mask |= 0x4
+			}
+			// variable map header, size zb0002Len
+			o = append(o, 0x80|uint8(zb0002Len))
+			if (zb0002Mask & 0x2) == 0 { // if not empty
+				// string "bid"
+				o = append(o, 0xa3, 0x62, 0x69, 0x64)
+				o, err = (*z).SignedBid.Bid.MarshalMsg(o)
+				if err != nil {
+					err = msgp.WrapError(err, "SignedBid", "Bid")
+					return
+				}
+			}
+			if (zb0002Mask & 0x4) == 0 { // if not empty
+				// string "sig"
+				o = append(o, 0xa3, 0x73, 0x69, 0x67)
+				o, err = (*z).SignedBid.Sig.MarshalMsg(o)
+				if err != nil {
+					err = msgp.WrapError(err, "SignedBid", "Sig")
+					return
+				}
 			}
 		}
-		if (zb0002Mask & 0x4) == 0 { // if not empty
-			// string "sig"
-			o = append(o, 0xa3, 0x73, 0x69, 0x67)
-			o, err = (*z).SignedBid.Sig.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "SignedBid", "Sig")
-				return
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "d"
+			o = append(o, 0xa1, 0x64)
+			// omitempty: check for empty values
+			zb0003Len := uint32(2)
+			var zb0003Mask uint8 /* 3 bits */
+			if (*z).SignedDeposit.Deposit.MsgIsZero() {
+				zb0003Len--
+				zb0003Mask |= 0x2
+			}
+			if (*z).SignedDeposit.Sig.MsgIsZero() {
+				zb0003Len--
+				zb0003Mask |= 0x4
+			}
+			// variable map header, size zb0003Len
+			o = append(o, 0x80|uint8(zb0003Len))
+			if (zb0003Mask & 0x2) == 0 { // if not empty
+				// string "dep"
+				o = append(o, 0xa3, 0x64, 0x65, 0x70)
+				o, err = (*z).SignedDeposit.Deposit.MarshalMsg(o)
+				if err != nil {
+					err = msgp.WrapError(err, "SignedDeposit", "Deposit")
+					return
+				}
+			}
+			if (zb0003Mask & 0x4) == 0 { // if not empty
+				// string "sig"
+				o = append(o, 0xa3, 0x73, 0x69, 0x67)
+				o, err = (*z).SignedDeposit.Sig.MarshalMsg(o)
+				if err != nil {
+					err = msgp.WrapError(err, "SignedDeposit", "Sig")
+					return
+				}
 			}
 		}
-	}
-	if (zb0001Mask & 0x4) == 0 { // if not empty
-		// string "d"
-		o = append(o, 0xa1, 0x64)
-		// omitempty: check for empty values
-		zb0003Len := uint32(2)
-		var zb0003Mask uint8 /* 3 bits */
-		if (*z).SignedDeposit.Deposit.MsgIsZero() {
-			zb0003Len--
-			zb0003Mask |= 0x2
-		}
-		if (*z).SignedDeposit.Sig.MsgIsZero() {
-			zb0003Len--
-			zb0003Mask |= 0x4
-		}
-		// variable map header, size zb0003Len
-		o = append(o, 0x80|uint8(zb0003Len))
-		if (zb0003Mask & 0x2) == 0 { // if not empty
-			// string "dep"
-			o = append(o, 0xa3, 0x64, 0x65, 0x70)
-			o, err = (*z).SignedDeposit.Deposit.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "SignedDeposit", "Deposit")
-				return
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "p"
+			o = append(o, 0xa1, 0x70)
+			// omitempty: check for empty values
+			zb0004Len := uint32(2)
+			var zb0004Mask uint8 /* 3 bits */
+			if (*z).SignedParams.Params.MsgIsZero() {
+				zb0004Len--
+				zb0004Mask |= 0x2
+			}
+			if (*z).SignedParams.Sig.MsgIsZero() {
+				zb0004Len--
+				zb0004Mask |= 0x4
+			}
+			// variable map header, size zb0004Len
+			o = append(o, 0x80|uint8(zb0004Len))
+			if (zb0004Mask & 0x2) == 0 { // if not empty
+				// string "param"
+				o = append(o, 0xa5, 0x70, 0x61, 0x72, 0x61, 0x6d)
+				o, err = (*z).SignedParams.Params.MarshalMsg(o)
+				if err != nil {
+					err = msgp.WrapError(err, "SignedParams", "Params")
+					return
+				}
+			}
+			if (zb0004Mask & 0x4) == 0 { // if not empty
+				// string "sig"
+				o = append(o, 0xa3, 0x73, 0x69, 0x67)
+				o, err = (*z).SignedParams.Sig.MarshalMsg(o)
+				if err != nil {
+					err = msgp.WrapError(err, "SignedParams", "Sig")
+					return
+				}
 			}
 		}
-		if (zb0003Mask & 0x4) == 0 { // if not empty
-			// string "sig"
-			o = append(o, 0xa3, 0x73, 0x69, 0x67)
-			o, err = (*z).SignedDeposit.Sig.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "SignedDeposit", "Sig")
-				return
+		if (zb0001Mask & 0x10) == 0 { // if not empty
+			// string "s"
+			o = append(o, 0xa1, 0x73)
+			// omitempty: check for empty values
+			zb0005Len := uint32(2)
+			var zb0005Mask uint8 /* 3 bits */
+			if (*z).SignedSettlement.Settlement.MsgIsZero() {
+				zb0005Len--
+				zb0005Mask |= 0x2
+			}
+			if (*z).SignedSettlement.Sig.MsgIsZero() {
+				zb0005Len--
+				zb0005Mask |= 0x4
+			}
+			// variable map header, size zb0005Len
+			o = append(o, 0x80|uint8(zb0005Len))
+			if (zb0005Mask & 0x2) == 0 { // if not empty
+				// string "settle"
+				o = append(o, 0xa6, 0x73, 0x65, 0x74, 0x74, 0x6c, 0x65)
+				o, err = (*z).SignedSettlement.Settlement.MarshalMsg(o)
+				if err != nil {
+					err = msgp.WrapError(err, "SignedSettlement", "Settlement")
+					return
+				}
+			}
+			if (zb0005Mask & 0x4) == 0 { // if not empty
+				// string "sig"
+				o = append(o, 0xa3, 0x73, 0x69, 0x67)
+				o, err = (*z).SignedSettlement.Sig.MarshalMsg(o)
+				if err != nil {
+					err = msgp.WrapError(err, "SignedSettlement", "Sig")
+					return
+				}
 			}
 		}
-	}
-	if (zb0001Mask & 0x8) == 0 { // if not empty
-		// string "p"
-		o = append(o, 0xa1, 0x70)
-		// omitempty: check for empty values
-		zb0004Len := uint32(2)
-		var zb0004Mask uint8 /* 3 bits */
-		if (*z).SignedParams.Params.MsgIsZero() {
-			zb0004Len--
-			zb0004Mask |= 0x2
+		if (zb0001Mask & 0x20) == 0 { // if not empty
+			// string "t"
+			o = append(o, 0xa1, 0x74)
+			o = msgp.AppendString(o, string((*z).Type))
 		}
-		if (*z).SignedParams.Sig.MsgIsZero() {
-			zb0004Len--
-			zb0004Mask |= 0x4
-		}
-		// variable map header, size zb0004Len
-		o = append(o, 0x80|uint8(zb0004Len))
-		if (zb0004Mask & 0x2) == 0 { // if not empty
-			// string "param"
-			o = append(o, 0xa5, 0x70, 0x61, 0x72, 0x61, 0x6d)
-			o, err = (*z).SignedParams.Params.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "SignedParams", "Params")
-				return
-			}
-		}
-		if (zb0004Mask & 0x4) == 0 { // if not empty
-			// string "sig"
-			o = append(o, 0xa3, 0x73, 0x69, 0x67)
-			o, err = (*z).SignedParams.Sig.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "SignedParams", "Sig")
-				return
-			}
-		}
-	}
-	if (zb0001Mask & 0x10) == 0 { // if not empty
-		// string "s"
-		o = append(o, 0xa1, 0x73)
-		// omitempty: check for empty values
-		zb0005Len := uint32(2)
-		var zb0005Mask uint8 /* 3 bits */
-		if (*z).SignedSettlement.Settlement.MsgIsZero() {
-			zb0005Len--
-			zb0005Mask |= 0x2
-		}
-		if (*z).SignedSettlement.Sig.MsgIsZero() {
-			zb0005Len--
-			zb0005Mask |= 0x4
-		}
-		// variable map header, size zb0005Len
-		o = append(o, 0x80|uint8(zb0005Len))
-		if (zb0005Mask & 0x2) == 0 { // if not empty
-			// string "settle"
-			o = append(o, 0xa6, 0x73, 0x65, 0x74, 0x74, 0x6c, 0x65)
-			o, err = (*z).SignedSettlement.Settlement.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "SignedSettlement", "Settlement")
-				return
-			}
-		}
-		if (zb0005Mask & 0x4) == 0 { // if not empty
-			// string "sig"
-			o = append(o, 0xa3, 0x73, 0x69, 0x67)
-			o, err = (*z).SignedSettlement.Sig.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "SignedSettlement", "Sig")
-				return
-			}
-		}
-	}
-	if (zb0001Mask & 0x20) == 0 { // if not empty
-		// string "t"
-		o = append(o, 0xa1, 0x74)
-		o = msgp.AppendString(o, string((*z).Type))
 	}
 	return
 }
@@ -2259,80 +2253,79 @@ func (z *Params) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
-	if zb0001Len == 0 {
-		return
-	}
-	if (zb0001Mask & 0x2) == 0 { // if not empty
-		// string "aid"
-		o = append(o, 0xa3, 0x61, 0x69, 0x64)
-		o = msgp.AppendUint64(o, (*z).AuctionID)
-	}
-	if (zb0001Mask & 0x4) == 0 { // if not empty
-		// string "auc"
-		o = append(o, 0xa3, 0x61, 0x75, 0x63)
-		o, err = (*z).AuctionKey.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "AuctionKey")
-			return
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "aid"
+			o = append(o, 0xa3, 0x61, 0x69, 0x64)
+			o = msgp.AppendUint64(o, (*z).AuctionID)
 		}
-	}
-	if (zb0001Mask & 0x8) == 0 { // if not empty
-		// string "bank"
-		o = append(o, 0xa4, 0x62, 0x61, 0x6e, 0x6b)
-		o, err = (*z).BankKey.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "BankKey")
-			return
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "auc"
+			o = append(o, 0xa3, 0x61, 0x75, 0x63)
+			o, err = (*z).AuctionKey.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "AuctionKey")
+				return
+			}
 		}
-	}
-	if (zb0001Mask & 0x10) == 0 { // if not empty
-		// string "chunkrnds"
-		o = append(o, 0xa9, 0x63, 0x68, 0x75, 0x6e, 0x6b, 0x72, 0x6e, 0x64, 0x73)
-		o = msgp.AppendUint64(o, (*z).PriceChunkRounds)
-	}
-	if (zb0001Mask & 0x20) == 0 { // if not empty
-		// string "depositrnd"
-		o = append(o, 0xaa, 0x64, 0x65, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x72, 0x6e, 0x64)
-		o = msgp.AppendUint64(o, (*z).DepositRound)
-	}
-	if (zb0001Mask & 0x40) == 0 { // if not empty
-		// string "dispense"
-		o = append(o, 0xa8, 0x64, 0x69, 0x73, 0x70, 0x65, 0x6e, 0x73, 0x65)
-		o, err = (*z).DispensingKey.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "DispensingKey")
-			return
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "bank"
+			o = append(o, 0xa4, 0x62, 0x61, 0x6e, 0x6b)
+			o, err = (*z).BankKey.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "BankKey")
+				return
+			}
 		}
-	}
-	if (zb0001Mask & 0x80) == 0 { // if not empty
-		// string "firstrnd"
-		o = append(o, 0xa8, 0x66, 0x69, 0x72, 0x73, 0x74, 0x72, 0x6e, 0x64)
-		o = msgp.AppendUint64(o, (*z).FirstRound)
-	}
-	if (zb0001Mask & 0x100) == 0 { // if not empty
-		// string "lastprice"
-		o = append(o, 0xa9, 0x6c, 0x61, 0x73, 0x74, 0x70, 0x72, 0x69, 0x63, 0x65)
-		o = msgp.AppendUint64(o, (*z).LastPrice)
-	}
-	if (zb0001Mask & 0x200) == 0 { // if not empty
-		// string "maxalgos"
-		o = append(o, 0xa8, 0x6d, 0x61, 0x78, 0x61, 0x6c, 0x67, 0x6f, 0x73)
-		o = msgp.AppendUint64(o, (*z).NumAlgos)
-	}
-	if (zb0001Mask & 0x400) == 0 { // if not empty
-		// string "maxmult"
-		o = append(o, 0xa7, 0x6d, 0x61, 0x78, 0x6d, 0x75, 0x6c, 0x74)
-		o = msgp.AppendUint64(o, (*z).MaxPriceMultiple)
-	}
-	if (zb0001Mask & 0x800) == 0 { // if not empty
-		// string "minbidalgos"
-		o = append(o, 0xab, 0x6d, 0x69, 0x6e, 0x62, 0x69, 0x64, 0x61, 0x6c, 0x67, 0x6f, 0x73)
-		o = msgp.AppendUint64(o, (*z).MinBidAlgos)
-	}
-	if (zb0001Mask & 0x1000) == 0 { // if not empty
-		// string "numchunks"
-		o = append(o, 0xa9, 0x6e, 0x75, 0x6d, 0x63, 0x68, 0x75, 0x6e, 0x6b, 0x73)
-		o = msgp.AppendUint64(o, (*z).NumChunks)
+		if (zb0001Mask & 0x10) == 0 { // if not empty
+			// string "chunkrnds"
+			o = append(o, 0xa9, 0x63, 0x68, 0x75, 0x6e, 0x6b, 0x72, 0x6e, 0x64, 0x73)
+			o = msgp.AppendUint64(o, (*z).PriceChunkRounds)
+		}
+		if (zb0001Mask & 0x20) == 0 { // if not empty
+			// string "depositrnd"
+			o = append(o, 0xaa, 0x64, 0x65, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x72, 0x6e, 0x64)
+			o = msgp.AppendUint64(o, (*z).DepositRound)
+		}
+		if (zb0001Mask & 0x40) == 0 { // if not empty
+			// string "dispense"
+			o = append(o, 0xa8, 0x64, 0x69, 0x73, 0x70, 0x65, 0x6e, 0x73, 0x65)
+			o, err = (*z).DispensingKey.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "DispensingKey")
+				return
+			}
+		}
+		if (zb0001Mask & 0x80) == 0 { // if not empty
+			// string "firstrnd"
+			o = append(o, 0xa8, 0x66, 0x69, 0x72, 0x73, 0x74, 0x72, 0x6e, 0x64)
+			o = msgp.AppendUint64(o, (*z).FirstRound)
+		}
+		if (zb0001Mask & 0x100) == 0 { // if not empty
+			// string "lastprice"
+			o = append(o, 0xa9, 0x6c, 0x61, 0x73, 0x74, 0x70, 0x72, 0x69, 0x63, 0x65)
+			o = msgp.AppendUint64(o, (*z).LastPrice)
+		}
+		if (zb0001Mask & 0x200) == 0 { // if not empty
+			// string "maxalgos"
+			o = append(o, 0xa8, 0x6d, 0x61, 0x78, 0x61, 0x6c, 0x67, 0x6f, 0x73)
+			o = msgp.AppendUint64(o, (*z).NumAlgos)
+		}
+		if (zb0001Mask & 0x400) == 0 { // if not empty
+			// string "maxmult"
+			o = append(o, 0xa7, 0x6d, 0x61, 0x78, 0x6d, 0x75, 0x6c, 0x74)
+			o = msgp.AppendUint64(o, (*z).MaxPriceMultiple)
+		}
+		if (zb0001Mask & 0x800) == 0 { // if not empty
+			// string "minbidalgos"
+			o = append(o, 0xab, 0x6d, 0x69, 0x6e, 0x62, 0x69, 0x64, 0x61, 0x6c, 0x67, 0x6f, 0x73)
+			o = msgp.AppendUint64(o, (*z).MinBidAlgos)
+		}
+		if (zb0001Mask & 0x1000) == 0 { // if not empty
+			// string "numchunks"
+			o = append(o, 0xa9, 0x6e, 0x75, 0x6d, 0x63, 0x68, 0x75, 0x6e, 0x6b, 0x73)
+			o = msgp.AppendUint64(o, (*z).NumChunks)
+		}
 	}
 	return
 }
@@ -2599,40 +2592,39 @@ func (z *Settlement) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
-	if zb0001Len == 0 {
-		return
-	}
-	if (zb0001Mask & 0x2) == 0 { // if not empty
-		// string "aid"
-		o = append(o, 0xa3, 0x61, 0x69, 0x64)
-		o = msgp.AppendUint64(o, (*z).AuctionID)
-	}
-	if (zb0001Mask & 0x4) == 0 { // if not empty
-		// string "auc"
-		o = append(o, 0xa3, 0x61, 0x75, 0x63)
-		o, err = (*z).AuctionKey.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "AuctionKey")
-			return
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "aid"
+			o = append(o, 0xa3, 0x61, 0x69, 0x64)
+			o = msgp.AppendUint64(o, (*z).AuctionID)
 		}
-	}
-	if (zb0001Mask & 0x8) == 0 { // if not empty
-		// string "canceled"
-		o = append(o, 0xa8, 0x63, 0x61, 0x6e, 0x63, 0x65, 0x6c, 0x65, 0x64)
-		o = msgp.AppendBool(o, (*z).Canceled)
-	}
-	if (zb0001Mask & 0x10) == 0 { // if not empty
-		// string "cleared"
-		o = append(o, 0xa7, 0x63, 0x6c, 0x65, 0x61, 0x72, 0x65, 0x64)
-		o = msgp.AppendBool(o, (*z).Cleared)
-	}
-	if (zb0001Mask & 0x20) == 0 { // if not empty
-		// string "outhash"
-		o = append(o, 0xa7, 0x6f, 0x75, 0x74, 0x68, 0x61, 0x73, 0x68)
-		o, err = (*z).OutcomesHash.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "OutcomesHash")
-			return
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "auc"
+			o = append(o, 0xa3, 0x61, 0x75, 0x63)
+			o, err = (*z).AuctionKey.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "AuctionKey")
+				return
+			}
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "canceled"
+			o = append(o, 0xa8, 0x63, 0x61, 0x6e, 0x63, 0x65, 0x6c, 0x65, 0x64)
+			o = msgp.AppendBool(o, (*z).Canceled)
+		}
+		if (zb0001Mask & 0x10) == 0 { // if not empty
+			// string "cleared"
+			o = append(o, 0xa7, 0x63, 0x6c, 0x65, 0x61, 0x72, 0x65, 0x64)
+			o = msgp.AppendBool(o, (*z).Cleared)
+		}
+		if (zb0001Mask & 0x20) == 0 { // if not empty
+			// string "outhash"
+			o = append(o, 0xa7, 0x6f, 0x75, 0x74, 0x68, 0x61, 0x73, 0x68)
+			o, err = (*z).OutcomesHash.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "OutcomesHash")
+				return
+			}
 		}
 	}
 	return
@@ -2790,25 +2782,24 @@ func (z *SignedBid) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
-	if zb0001Len == 0 {
-		return
-	}
-	if (zb0001Mask & 0x2) == 0 { // if not empty
-		// string "bid"
-		o = append(o, 0xa3, 0x62, 0x69, 0x64)
-		o, err = (*z).Bid.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "Bid")
-			return
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "bid"
+			o = append(o, 0xa3, 0x62, 0x69, 0x64)
+			o, err = (*z).Bid.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "Bid")
+				return
+			}
 		}
-	}
-	if (zb0001Mask & 0x4) == 0 { // if not empty
-		// string "sig"
-		o = append(o, 0xa3, 0x73, 0x69, 0x67)
-		o, err = (*z).Sig.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "Sig")
-			return
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "sig"
+			o = append(o, 0xa3, 0x73, 0x69, 0x67)
+			o, err = (*z).Sig.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "Sig")
+				return
+			}
 		}
 	}
 	return
@@ -2924,25 +2915,24 @@ func (z *SignedDeposit) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
-	if zb0001Len == 0 {
-		return
-	}
-	if (zb0001Mask & 0x2) == 0 { // if not empty
-		// string "dep"
-		o = append(o, 0xa3, 0x64, 0x65, 0x70)
-		o, err = (*z).Deposit.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "Deposit")
-			return
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "dep"
+			o = append(o, 0xa3, 0x64, 0x65, 0x70)
+			o, err = (*z).Deposit.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "Deposit")
+				return
+			}
 		}
-	}
-	if (zb0001Mask & 0x4) == 0 { // if not empty
-		// string "sig"
-		o = append(o, 0xa3, 0x73, 0x69, 0x67)
-		o, err = (*z).Sig.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "Sig")
-			return
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "sig"
+			o = append(o, 0xa3, 0x73, 0x69, 0x67)
+			o, err = (*z).Sig.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "Sig")
+				return
+			}
 		}
 	}
 	return
@@ -3058,25 +3048,24 @@ func (z *SignedParams) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
-	if zb0001Len == 0 {
-		return
-	}
-	if (zb0001Mask & 0x2) == 0 { // if not empty
-		// string "param"
-		o = append(o, 0xa5, 0x70, 0x61, 0x72, 0x61, 0x6d)
-		o, err = (*z).Params.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "Params")
-			return
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "param"
+			o = append(o, 0xa5, 0x70, 0x61, 0x72, 0x61, 0x6d)
+			o, err = (*z).Params.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "Params")
+				return
+			}
 		}
-	}
-	if (zb0001Mask & 0x4) == 0 { // if not empty
-		// string "sig"
-		o = append(o, 0xa3, 0x73, 0x69, 0x67)
-		o, err = (*z).Sig.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "Sig")
-			return
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "sig"
+			o = append(o, 0xa3, 0x73, 0x69, 0x67)
+			o, err = (*z).Sig.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "Sig")
+				return
+			}
 		}
 	}
 	return
@@ -3192,25 +3181,24 @@ func (z *SignedSettlement) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
-	if zb0001Len == 0 {
-		return
-	}
-	if (zb0001Mask & 0x2) == 0 { // if not empty
-		// string "settle"
-		o = append(o, 0xa6, 0x73, 0x65, 0x74, 0x74, 0x6c, 0x65)
-		o, err = (*z).Settlement.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "Settlement")
-			return
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "settle"
+			o = append(o, 0xa6, 0x73, 0x65, 0x74, 0x74, 0x6c, 0x65)
+			o, err = (*z).Settlement.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "Settlement")
+				return
+			}
 		}
-	}
-	if (zb0001Mask & 0x4) == 0 { // if not empty
-		// string "sig"
-		o = append(o, 0xa3, 0x73, 0x69, 0x67)
-		o, err = (*z).Sig.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "Sig")
-			return
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "sig"
+			o = append(o, 0xa3, 0x73, 0x69, 0x67)
+			o, err = (*z).Sig.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "Sig")
+				return
+			}
 		}
 	}
 	return
