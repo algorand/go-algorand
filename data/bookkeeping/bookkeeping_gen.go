@@ -275,6 +275,11 @@ func (z *Block) MarshalMsg(b []byte) (o []byte, err error) {
 	return
 }
 
+func (_ *Block) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Block)
+	return ok
+}
+
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
@@ -628,6 +633,11 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (_ *Block) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Block)
+	return ok
+}
+
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Block) Msgsize() (s int) {
 	s = 3 + 4 + (*z).BlockHeader.Round.Msgsize() + 5 + (*z).BlockHeader.Branch.Msgsize() + 5 + (*z).BlockHeader.Seed.Msgsize() + 4 + (*z).BlockHeader.TxnRoot.Msgsize() + 3 + msgp.Int64Size + 4 + msgp.StringPrefixSize + len((*z).BlockHeader.GenesisID) + 3 + (*z).BlockHeader.GenesisHash.Msgsize() + 5 + (*z).BlockHeader.RewardsState.FeeSink.Msgsize() + 4 + (*z).BlockHeader.RewardsState.RewardsPool.Msgsize() + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 7 + (*z).BlockHeader.RewardsState.RewardsRecalculationRound.Msgsize() + 6 + (*z).BlockHeader.UpgradeState.CurrentProtocol.Msgsize() + 10 + (*z).BlockHeader.UpgradeState.NextProtocol.Msgsize() + 8 + msgp.Uint64Size + 11 + (*z).BlockHeader.UpgradeState.NextProtocolVoteBefore.Msgsize() + 11 + (*z).BlockHeader.UpgradeState.NextProtocolSwitchOn.Msgsize() + 12 + (*z).BlockHeader.UpgradeVote.UpgradePropose.Msgsize() + 11 + msgp.BoolSize + 3 + msgp.Uint64Size + 5 + (*z).Payset.Msgsize()
@@ -643,10 +653,18 @@ func (z *Block) MsgIsZero() bool {
 func (z *BlockHash) MarshalMsg(b []byte) ([]byte, error) {
 	return ((*(crypto.Digest))(z)).MarshalMsg(b)
 }
+func (_ *BlockHash) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*BlockHash)
+	return ok
+}
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *BlockHash) UnmarshalMsg(bts []byte) ([]byte, error) {
 	return ((*(crypto.Digest))(z)).UnmarshalMsg(bts)
+}
+func (_ *BlockHash) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*BlockHash)
+	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
@@ -912,6 +930,11 @@ func (z *BlockHeader) MarshalMsg(b []byte) (o []byte, err error) {
 		o = msgp.AppendBool(o, (*z).UpgradeVote.UpgradeApprove)
 	}
 	return
+}
+
+func (_ *BlockHeader) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*BlockHeader)
+	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
@@ -1253,6 +1276,11 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (_ *BlockHeader) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*BlockHeader)
+	return ok
+}
+
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *BlockHeader) Msgsize() (s int) {
 	s = 3 + 4 + (*z).Round.Msgsize() + 5 + (*z).Branch.Msgsize() + 5 + (*z).Seed.Msgsize() + 4 + (*z).TxnRoot.Msgsize() + 3 + msgp.Int64Size + 4 + msgp.StringPrefixSize + len((*z).GenesisID) + 3 + (*z).GenesisHash.Msgsize() + 5 + (*z).RewardsState.FeeSink.Msgsize() + 4 + (*z).RewardsState.RewardsPool.Msgsize() + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 7 + (*z).RewardsState.RewardsRecalculationRound.Msgsize() + 6 + (*z).UpgradeState.CurrentProtocol.Msgsize() + 10 + (*z).UpgradeState.NextProtocol.Msgsize() + 8 + msgp.Uint64Size + 11 + (*z).UpgradeState.NextProtocolVoteBefore.Msgsize() + 11 + (*z).UpgradeState.NextProtocolSwitchOn.Msgsize() + 12 + (*z).UpgradeVote.UpgradePropose.Msgsize() + 11 + msgp.BoolSize + 3 + msgp.Uint64Size
@@ -1363,6 +1391,11 @@ func (z *Genesis) MarshalMsg(b []byte) (o []byte, err error) {
 		o = msgp.AppendInt64(o, (*z).Timestamp)
 	}
 	return
+}
+
+func (_ *Genesis) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Genesis)
+	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
@@ -1548,6 +1581,11 @@ func (z *Genesis) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (_ *Genesis) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Genesis)
+	return ok
+}
+
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Genesis) Msgsize() (s int) {
 	s = 1 + 3 + msgp.StringPrefixSize + len((*z).SchemaID) + 8 + (*z).Network.Msgsize() + 6 + (*z).Proto.Msgsize() + 6 + msgp.ArrayHeaderSize
@@ -1581,6 +1619,11 @@ func (z *GenesisAllocation) MarshalMsg(b []byte) (o []byte, err error) {
 		return
 	}
 	return
+}
+
+func (_ *GenesisAllocation) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*GenesisAllocation)
+	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
@@ -1668,6 +1711,11 @@ func (z *GenesisAllocation) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	}
 	o = bts
 	return
+}
+
+func (_ *GenesisAllocation) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*GenesisAllocation)
+	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
@@ -1759,6 +1807,11 @@ func (z *RewardsState) MarshalMsg(b []byte) (o []byte, err error) {
 		}
 	}
 	return
+}
+
+func (_ *RewardsState) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*RewardsState)
+	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
@@ -1890,6 +1943,11 @@ func (z *RewardsState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (_ *RewardsState) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*RewardsState)
+	return ok
+}
+
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *RewardsState) Msgsize() (s int) {
 	s = 1 + 5 + (*z).FeeSink.Msgsize() + 4 + (*z).RewardsPool.Msgsize() + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 7 + (*z).RewardsRecalculationRound.Msgsize()
@@ -1935,6 +1993,11 @@ func (z *UpgradeVote) MarshalMsg(b []byte) (o []byte, err error) {
 		o = msgp.AppendBool(o, (*z).UpgradeApprove)
 	}
 	return
+}
+
+func (_ *UpgradeVote) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*UpgradeVote)
+	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
@@ -2008,6 +2071,11 @@ func (z *UpgradeVote) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	}
 	o = bts
 	return
+}
+
+func (_ *UpgradeVote) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*UpgradeVote)
+	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message

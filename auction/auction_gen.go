@@ -82,6 +82,11 @@ func (z *Bid) MarshalMsg(b []byte) (o []byte, err error) {
 	return
 }
 
+func (_ *Bid) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Bid)
+	return ok
+}
+
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *Bid) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
@@ -211,6 +216,11 @@ func (z *Bid) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (_ *Bid) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Bid)
+	return ok
+}
+
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Bid) Msgsize() (s int) {
 	s = 1 + 7 + (*z).BidderKey.Msgsize() + 4 + msgp.Uint64Size + 6 + msgp.Uint64Size + 3 + msgp.Uint64Size + 4 + (*z).AuctionKey.Msgsize() + 4 + msgp.Uint64Size
@@ -290,6 +300,11 @@ func (z *BidOutcomes) MarshalMsg(b []byte) (o []byte, err error) {
 		o = msgp.AppendUint64(o, (*z).Price)
 	}
 	return
+}
+
+func (_ *BidOutcomes) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*BidOutcomes)
+	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
@@ -433,6 +448,11 @@ func (z *BidOutcomes) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (_ *BidOutcomes) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*BidOutcomes)
+	return ok
+}
+
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *BidOutcomes) Msgsize() (s int) {
 	s = 1 + 4 + (*z).AuctionKey.Msgsize() + 4 + msgp.Uint64Size + 6 + msgp.Uint64Size + 8 + msgp.BoolSize + 9 + msgp.ArrayHeaderSize
@@ -503,6 +523,11 @@ func (z *BidderOutcome) MarshalMsg(b []byte) (o []byte, err error) {
 		}
 	}
 	return
+}
+
+func (_ *BidderOutcome) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*BidderOutcome)
+	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
@@ -606,6 +631,11 @@ func (z *BidderOutcome) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (_ *BidderOutcome) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*BidderOutcome)
+	return ok
+}
+
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *BidderOutcome) Msgsize() (s int) {
 	s = 1 + 4 + (*z).BidderKey.Msgsize() + 4 + msgp.Uint64Size + 4 + (*z).WinningsAddress.Msgsize() + 3 + msgp.Uint64Size
@@ -695,6 +725,11 @@ func (z *Deposit) MarshalMsg(b []byte) (o []byte, err error) {
 		}
 	}
 	return
+}
+
+func (_ *Deposit) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Deposit)
+	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
@@ -826,6 +861,11 @@ func (z *Deposit) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (_ *Deposit) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Deposit)
+	return ok
+}
+
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Deposit) Msgsize() (s int) {
 	s = 1 + 4 + (*z).BidderKey.Msgsize() + 4 + (*z).WinningsAddress.Msgsize() + 4 + msgp.Uint64Size + 4 + (*z).AuctionKey.Msgsize() + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size
@@ -945,6 +985,11 @@ func (z *MasterInput) MarshalMsg(b []byte) (o []byte, err error) {
 		o = msgp.AppendString(o, string((*z).Type))
 	}
 	return
+}
+
+func (_ *MasterInput) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*MasterInput)
+	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
@@ -1296,6 +1341,11 @@ func (z *MasterInput) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (_ *MasterInput) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*MasterInput)
+	return ok
+}
+
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *MasterInput) Msgsize() (s int) {
 	s = 1 + 4 + msgp.Uint64Size + 2 + msgp.StringPrefixSize + len(string((*z).Type)) + 2 + 1 + 4 + (*z).SignedDeposit.Deposit.Msgsize() + 4 + (*z).SignedDeposit.Sig.Msgsize() + 2 + 1 + 4 + (*z).SignedBid.Bid.Msgsize() + 4 + (*z).SignedBid.Sig.Msgsize()
@@ -1484,6 +1534,11 @@ func (z *NoteField) MarshalMsg(b []byte) (o []byte, err error) {
 		o = msgp.AppendString(o, string((*z).Type))
 	}
 	return
+}
+
+func (_ *NoteField) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*NoteField)
+	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
@@ -2089,6 +2144,11 @@ func (z *NoteField) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (_ *NoteField) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*NoteField)
+	return ok
+}
+
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *NoteField) Msgsize() (s int) {
 	s = 1 + 2 + msgp.StringPrefixSize + len(string((*z).Type)) + 2 + 1 + 4 + (*z).SignedDeposit.Deposit.Msgsize() + 4 + (*z).SignedDeposit.Sig.Msgsize() + 2 + 1 + 4 + (*z).SignedBid.Bid.Msgsize() + 4 + (*z).SignedBid.Sig.Msgsize() + 2 + 1 + 7 + (*z).SignedSettlement.Settlement.Msgsize() + 4 + (*z).SignedSettlement.Sig.Msgsize() + 2 + 1 + 6 + (*z).SignedParams.Params.Msgsize() + 4 + (*z).SignedParams.Sig.Msgsize()
@@ -2107,6 +2167,11 @@ func (z NoteFieldType) MarshalMsg(b []byte) (o []byte, err error) {
 	return
 }
 
+func (_ NoteFieldType) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(NoteFieldType)
+	return ok
+}
+
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *NoteFieldType) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	{
@@ -2120,6 +2185,11 @@ func (z *NoteFieldType) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	}
 	o = bts
 	return
+}
+
+func (_ *NoteFieldType) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*NoteFieldType)
+	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
@@ -2265,6 +2335,11 @@ func (z *Params) MarshalMsg(b []byte) (o []byte, err error) {
 		o = msgp.AppendUint64(o, (*z).NumChunks)
 	}
 	return
+}
+
+func (_ *Params) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Params)
+	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
@@ -2480,6 +2555,11 @@ func (z *Params) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (_ *Params) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Params)
+	return ok
+}
+
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Params) Msgsize() (s int) {
 	s = 1 + 4 + (*z).AuctionKey.Msgsize() + 4 + msgp.Uint64Size + 5 + (*z).BankKey.Msgsize() + 9 + (*z).DispensingKey.Msgsize() + 10 + msgp.Uint64Size + 11 + msgp.Uint64Size + 9 + msgp.Uint64Size + 10 + msgp.Uint64Size + 10 + msgp.Uint64Size + 8 + msgp.Uint64Size + 9 + msgp.Uint64Size + 12 + msgp.Uint64Size
@@ -2556,6 +2636,11 @@ func (z *Settlement) MarshalMsg(b []byte) (o []byte, err error) {
 		}
 	}
 	return
+}
+
+func (_ *Settlement) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Settlement)
+	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
@@ -2673,6 +2758,11 @@ func (z *Settlement) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (_ *Settlement) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Settlement)
+	return ok
+}
+
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Settlement) Msgsize() (s int) {
 	s = 1 + 4 + (*z).AuctionKey.Msgsize() + 4 + msgp.Uint64Size + 8 + msgp.BoolSize + 8 + (*z).OutcomesHash.Msgsize() + 9 + msgp.BoolSize
@@ -2722,6 +2812,11 @@ func (z *SignedBid) MarshalMsg(b []byte) (o []byte, err error) {
 		}
 	}
 	return
+}
+
+func (_ *SignedBid) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*SignedBid)
+	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
@@ -2797,6 +2892,11 @@ func (z *SignedBid) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (_ *SignedBid) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*SignedBid)
+	return ok
+}
+
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *SignedBid) Msgsize() (s int) {
 	s = 1 + 4 + (*z).Bid.Msgsize() + 4 + (*z).Sig.Msgsize()
@@ -2846,6 +2946,11 @@ func (z *SignedDeposit) MarshalMsg(b []byte) (o []byte, err error) {
 		}
 	}
 	return
+}
+
+func (_ *SignedDeposit) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*SignedDeposit)
+	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
@@ -2921,6 +3026,11 @@ func (z *SignedDeposit) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (_ *SignedDeposit) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*SignedDeposit)
+	return ok
+}
+
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *SignedDeposit) Msgsize() (s int) {
 	s = 1 + 4 + (*z).Deposit.Msgsize() + 4 + (*z).Sig.Msgsize()
@@ -2970,6 +3080,11 @@ func (z *SignedParams) MarshalMsg(b []byte) (o []byte, err error) {
 		}
 	}
 	return
+}
+
+func (_ *SignedParams) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*SignedParams)
+	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
@@ -3045,6 +3160,11 @@ func (z *SignedParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (_ *SignedParams) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*SignedParams)
+	return ok
+}
+
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *SignedParams) Msgsize() (s int) {
 	s = 1 + 6 + (*z).Params.Msgsize() + 4 + (*z).Sig.Msgsize()
@@ -3094,6 +3214,11 @@ func (z *SignedSettlement) MarshalMsg(b []byte) (o []byte, err error) {
 		}
 	}
 	return
+}
+
+func (_ *SignedSettlement) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*SignedSettlement)
+	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
@@ -3167,6 +3292,11 @@ func (z *SignedSettlement) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	}
 	o = bts
 	return
+}
+
+func (_ *SignedSettlement) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*SignedSettlement)
+	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message

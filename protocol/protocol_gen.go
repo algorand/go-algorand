@@ -13,6 +13,11 @@ func (z ConsensusVersion) MarshalMsg(b []byte) (o []byte, err error) {
 	return
 }
 
+func (_ ConsensusVersion) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(ConsensusVersion)
+	return ok
+}
+
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *ConsensusVersion) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	{
@@ -26,6 +31,11 @@ func (z *ConsensusVersion) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	}
 	o = bts
 	return
+}
+
+func (_ *ConsensusVersion) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*ConsensusVersion)
+	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
@@ -46,6 +56,11 @@ func (z Error) MarshalMsg(b []byte) (o []byte, err error) {
 	return
 }
 
+func (_ Error) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(Error)
+	return ok
+}
+
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *Error) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	{
@@ -59,6 +74,11 @@ func (z *Error) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	}
 	o = bts
 	return
+}
+
+func (_ *Error) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Error)
+	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
@@ -79,6 +99,11 @@ func (z HashID) MarshalMsg(b []byte) (o []byte, err error) {
 	return
 }
 
+func (_ HashID) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(HashID)
+	return ok
+}
+
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *HashID) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	{
@@ -92,6 +117,11 @@ func (z *HashID) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	}
 	o = bts
 	return
+}
+
+func (_ *HashID) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*HashID)
+	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
@@ -112,6 +142,11 @@ func (z NetworkID) MarshalMsg(b []byte) (o []byte, err error) {
 	return
 }
 
+func (_ NetworkID) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(NetworkID)
+	return ok
+}
+
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *NetworkID) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	{
@@ -125,6 +160,11 @@ func (z *NetworkID) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	}
 	o = bts
 	return
+}
+
+func (_ *NetworkID) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*NetworkID)
+	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
@@ -145,6 +185,11 @@ func (z Tag) MarshalMsg(b []byte) (o []byte, err error) {
 	return
 }
 
+func (_ Tag) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(Tag)
+	return ok
+}
+
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *Tag) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	{
@@ -158,6 +203,11 @@ func (z *Tag) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	}
 	o = bts
 	return
+}
+
+func (_ *Tag) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Tag)
+	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
@@ -178,6 +228,11 @@ func (z TxType) MarshalMsg(b []byte) (o []byte, err error) {
 	return
 }
 
+func (_ TxType) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(TxType)
+	return ok
+}
+
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *TxType) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	{
@@ -191,6 +246,11 @@ func (z *TxType) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	}
 	o = bts
 	return
+}
+
+func (_ *TxType) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*TxType)
+	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message

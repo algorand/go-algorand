@@ -29,6 +29,11 @@ func (z *Message) MarshalMsg(b []byte) (o []byte, err error) {
 	return
 }
 
+func (_ *Message) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Message)
+	return ok
+}
+
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *Message) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
@@ -86,6 +91,11 @@ func (z *Message) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	}
 	o = bts
 	return
+}
+
+func (_ *Message) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Message)
+	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
