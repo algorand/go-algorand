@@ -620,7 +620,6 @@ func (bh BlockHeader) DecodeSignedTxn(stb transactions.SignedTxnInBlock) (transa
 		}
 	}
 
-	st.ResetCaches()
 	return st, ad, nil
 }
 

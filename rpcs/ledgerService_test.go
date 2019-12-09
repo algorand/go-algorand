@@ -333,7 +333,6 @@ func TestGetBlockMocked(t *testing.T) {
 	signedtx := transactions.SignedTxn{
 		Txn: tx,
 	}
-	signedtx.InitCaches()
 
 	var b bookkeeping.Block
 	prev, err := ledgerA.Block(ledgerA.LastRound())

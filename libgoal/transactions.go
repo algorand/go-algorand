@@ -183,8 +183,6 @@ func (c *Client) MakeUnsignedGoOnlineTx(address string, part *account.Participat
 		var genHash crypto.Digest
 		copy(genHash[:], params.GenesisHash)
 		goOnlineTransaction.GenesisHash = genHash
-		// Recompute the TXID
-		goOnlineTransaction.ResetCaches()
 	}
 
 	// Default to the suggested fee, if the caller didn't supply it
@@ -196,8 +194,6 @@ func (c *Client) MakeUnsignedGoOnlineTx(address string, part *account.Participat
 		if goOnlineTransaction.Fee.Raw < cparams.MinTxnFee {
 			goOnlineTransaction.Fee.Raw = cparams.MinTxnFee
 		}
-		// Recompute the TXID
-		goOnlineTransaction.ResetCaches()
 	}
 	return goOnlineTransaction, nil
 }
@@ -243,8 +239,6 @@ func (c *Client) MakeUnsignedGoOfflineTx(address string, firstValid, lastValid, 
 		var genHash crypto.Digest
 		copy(genHash[:], params.GenesisHash)
 		goOfflineTransaction.GenesisHash = genHash
-		// Recompute the TXID
-		goOfflineTransaction.ResetCaches()
 	}
 
 	// Default to the suggested fee, if the caller didn't supply it
@@ -255,8 +249,6 @@ func (c *Client) MakeUnsignedGoOfflineTx(address string, firstValid, lastValid, 
 		if goOfflineTransaction.Fee.Raw < cparams.MinTxnFee {
 			goOfflineTransaction.Fee.Raw = cparams.MinTxnFee
 		}
-		// Recompute the TXID
-		goOfflineTransaction.ResetCaches()
 	}
 	return goOfflineTransaction, nil
 }
@@ -301,8 +293,6 @@ func (c *Client) MakeUnsignedBecomeNonparticipatingTx(address string, firstValid
 		var genHash crypto.Digest
 		copy(genHash[:], params.GenesisHash)
 		becomeNonparticipatingTransaction.GenesisHash = genHash
-		// Recompute the TXID
-		becomeNonparticipatingTransaction.ResetCaches()
 	}
 	becomeNonparticipatingTransaction.KeyregTxnFields.Nonparticipation = true
 
@@ -314,8 +304,6 @@ func (c *Client) MakeUnsignedBecomeNonparticipatingTx(address string, firstValid
 		if becomeNonparticipatingTransaction.Fee.Raw < cparams.MinTxnFee {
 			becomeNonparticipatingTransaction.Fee.Raw = cparams.MinTxnFee
 		}
-		// Recompute the TXID
-		becomeNonparticipatingTransaction.ResetCaches()
 	}
 	return becomeNonparticipatingTransaction, nil
 }
@@ -366,9 +354,6 @@ func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, lastValid, fe
 			tx.Fee.Raw = cparams.MinTxnFee
 		}
 	}
-
-	// Recompute the TXID
-	tx.ResetCaches()
 
 	return tx, nil
 }

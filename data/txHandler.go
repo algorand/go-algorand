@@ -267,7 +267,6 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 func (handler *TxHandler) checkAlreadyCommitted(tx *txBacklogMsg) (processingDone bool) {
 	txids := make([]transactions.Txid, len(tx.unverifiedTxGroup))
 	for i := range tx.unverifiedTxGroup {
-		tx.unverifiedTxGroup[i].Txn.InitCaches()
 		txids[i] = tx.unverifiedTxGroup[i].ID()
 	}
 	logging.Base().Debugf("got a tx group with IDs %v", txids)
