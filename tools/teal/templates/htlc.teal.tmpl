@@ -1,4 +1,4 @@
-// Implements an atomic swap.
+// Implements a hash time lock contract.
 // This is a contract account.
 //
 // The receiver must be omitted.
@@ -13,7 +13,7 @@
 //  - TMPL_HASHIMG: the image of the hash function
 //  - TMPL_TIMEOUT: the round at which the account expires
 //  - TMPL_OWN: the address to refund funds to on timeout
-//  - TMPL_FEE: maximum fee used by the atomic swap transaction
+//  - TMPL_FEE: maximum fee used by the transaction
 txn Fee
 int TMPL_FEE
 <=
