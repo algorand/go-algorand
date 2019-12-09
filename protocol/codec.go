@@ -180,8 +180,11 @@ func DecodeMsgp(b []byte, objptr msgp.Unmarshaler) (err error) {
 		return err
 	}
 
-	if len(rem) != 0 {
-		return fmt.Errorf("decoding left %d remaining bytes", len(rem))
+	// go-codec compat: allow remaining bytes, because go-codec allows it too
+	if false {
+		if len(rem) != 0 {
+			return fmt.Errorf("decoding left %d remaining bytes", len(rem))
+		}
 	}
 
 	return nil

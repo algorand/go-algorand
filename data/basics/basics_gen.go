@@ -203,6 +203,229 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	_ = field
 	var zb0005 int
 	zb0005, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0005 > 0 {
+			zb0005--
+			{
+				var zb0006 byte
+				zb0006, bts, err = msgp.ReadByteBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Status")
+					return
+				}
+				(*z).Status = Status(zb0006)
+			}
+		}
+		if zb0005 > 0 {
+			zb0005--
+			bts, err = (*z).MicroAlgos.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "MicroAlgos")
+				return
+			}
+		}
+		if zb0005 > 0 {
+			zb0005--
+			(*z).RewardsBase, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "RewardsBase")
+				return
+			}
+		}
+		if zb0005 > 0 {
+			zb0005--
+			bts, err = (*z).RewardedMicroAlgos.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "RewardedMicroAlgos")
+				return
+			}
+		}
+		if zb0005 > 0 {
+			zb0005--
+			bts, err = (*z).VoteID.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "VoteID")
+				return
+			}
+		}
+		if zb0005 > 0 {
+			zb0005--
+			bts, err = (*z).SelectionID.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "SelectionID")
+				return
+			}
+		}
+		if zb0005 > 0 {
+			zb0005--
+			{
+				var zb0007 uint64
+				zb0007, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "VoteFirstValid")
+					return
+				}
+				(*z).VoteFirstValid = Round(zb0007)
+			}
+		}
+		if zb0005 > 0 {
+			zb0005--
+			{
+				var zb0008 uint64
+				zb0008, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "VoteLastValid")
+					return
+				}
+				(*z).VoteLastValid = Round(zb0008)
+			}
+		}
+		if zb0005 > 0 {
+			zb0005--
+			(*z).VoteKeyDilution, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "VoteKeyDilution")
+				return
+			}
+		}
+		if zb0005 > 0 {
+			zb0005--
+			var zb0009 int
+			zb0009, bts, err = msgp.ReadMapHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "AssetParams")
+				return
+			}
+			if (*z).AssetParams == nil {
+				(*z).AssetParams = make(map[AssetIndex]AssetParams, zb0009)
+			} else if len((*z).AssetParams) > 0 {
+				for key := range (*z).AssetParams {
+					delete((*z).AssetParams, key)
+				}
+			}
+			for zb0009 > 0 {
+				var zb0001 AssetIndex
+				var zb0002 AssetParams
+				zb0009--
+				bts, err = zb0001.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "AssetParams")
+					return
+				}
+				bts, err = zb0002.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "AssetParams", zb0001)
+					return
+				}
+				(*z).AssetParams[zb0001] = zb0002
+			}
+		}
+		if zb0005 > 0 {
+			zb0005--
+			var zb0010 int
+			zb0010, bts, err = msgp.ReadMapHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Assets")
+				return
+			}
+			if (*z).Assets == nil {
+				(*z).Assets = make(map[AssetIndex]AssetHolding, zb0010)
+			} else if len((*z).Assets) > 0 {
+				for key := range (*z).Assets {
+					delete((*z).Assets, key)
+				}
+			}
+			for zb0010 > 0 {
+				var zb0003 AssetIndex
+				var zb0004 AssetHolding
+				zb0010--
+				bts, err = zb0003.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Assets")
+					return
+				}
+				var zb0011 int
+				zb0011, bts, err = msgp.ReadMapHeaderBytes(bts)
+				if _, ok := err.(msgp.TypeError); ok {
+					zb0011, bts, err = msgp.ReadArrayHeaderBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "struct-from-array", "Assets", zb0003)
+						return
+					}
+					if zb0011 > 0 {
+						zb0011--
+						zb0004.Amount, bts, err = msgp.ReadUint64Bytes(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "Assets", zb0003, "struct-from-array", "Amount")
+							return
+						}
+					}
+					if zb0011 > 0 {
+						zb0011--
+						zb0004.Frozen, bts, err = msgp.ReadBoolBytes(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "Assets", zb0003, "struct-from-array", "Frozen")
+							return
+						}
+					}
+					if zb0011 > 0 {
+						err = msgp.ErrTooManyArrayFields(zb0011)
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "Assets", zb0003, "struct-from-array")
+							return
+						}
+					}
+					return
+				}
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Assets", zb0003)
+					return
+				}
+				for zb0011 > 0 {
+					zb0011--
+					field, bts, err = msgp.ReadMapKeyZC(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "struct-from-array", "Assets", zb0003)
+						return
+					}
+					switch string(field) {
+					case "a":
+						zb0004.Amount, bts, err = msgp.ReadUint64Bytes(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "Assets", zb0003, "Amount")
+							return
+						}
+					case "f":
+						zb0004.Frozen, bts, err = msgp.ReadBoolBytes(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "Assets", zb0003, "Frozen")
+							return
+						}
+					default:
+						err = msgp.ErrNoField(string(field))
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "Assets", zb0003)
+							return
+						}
+					}
+				}
+				(*z).Assets[zb0003] = zb0004
+			}
+		}
+		if zb0005 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0005)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+		return
+	}
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
@@ -217,13 +440,13 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		switch string(field) {
 		case "onl":
 			{
-				var zb0006 byte
-				zb0006, bts, err = msgp.ReadByteBytes(bts)
+				var zb0012 byte
+				zb0012, bts, err = msgp.ReadByteBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Status")
 					return
 				}
-				(*z).Status = Status(zb0006)
+				(*z).Status = Status(zb0012)
 			}
 		case "algo":
 			bts, err = (*z).MicroAlgos.UnmarshalMsg(bts)
@@ -257,23 +480,23 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 		case "voteFst":
 			{
-				var zb0007 uint64
-				zb0007, bts, err = msgp.ReadUint64Bytes(bts)
+				var zb0013 uint64
+				zb0013, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "VoteFirstValid")
 					return
 				}
-				(*z).VoteFirstValid = Round(zb0007)
+				(*z).VoteFirstValid = Round(zb0013)
 			}
 		case "voteLst":
 			{
-				var zb0008 uint64
-				zb0008, bts, err = msgp.ReadUint64Bytes(bts)
+				var zb0014 uint64
+				zb0014, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "VoteLastValid")
 					return
 				}
-				(*z).VoteLastValid = Round(zb0008)
+				(*z).VoteLastValid = Round(zb0014)
 			}
 		case "voteKD":
 			(*z).VoteKeyDilution, bts, err = msgp.ReadUint64Bytes(bts)
@@ -282,23 +505,23 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		case "apar":
-			var zb0009 int
-			zb0009, bts, err = msgp.ReadMapHeaderBytes(bts)
+			var zb0015 int
+			zb0015, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "AssetParams")
 				return
 			}
 			if (*z).AssetParams == nil {
-				(*z).AssetParams = make(map[AssetIndex]AssetParams, zb0009)
+				(*z).AssetParams = make(map[AssetIndex]AssetParams, zb0015)
 			} else if len((*z).AssetParams) > 0 {
 				for key := range (*z).AssetParams {
 					delete((*z).AssetParams, key)
 				}
 			}
-			for zb0009 > 0 {
+			for zb0015 > 0 {
 				var zb0001 AssetIndex
 				var zb0002 AssetParams
-				zb0009--
+				zb0015--
 				bts, err = zb0001.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "AssetParams")
@@ -312,36 +535,67 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				(*z).AssetParams[zb0001] = zb0002
 			}
 		case "asset":
-			var zb0010 int
-			zb0010, bts, err = msgp.ReadMapHeaderBytes(bts)
+			var zb0016 int
+			zb0016, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Assets")
 				return
 			}
 			if (*z).Assets == nil {
-				(*z).Assets = make(map[AssetIndex]AssetHolding, zb0010)
+				(*z).Assets = make(map[AssetIndex]AssetHolding, zb0016)
 			} else if len((*z).Assets) > 0 {
 				for key := range (*z).Assets {
 					delete((*z).Assets, key)
 				}
 			}
-			for zb0010 > 0 {
+			for zb0016 > 0 {
 				var zb0003 AssetIndex
 				var zb0004 AssetHolding
-				zb0010--
+				zb0016--
 				bts, err = zb0003.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Assets")
 					return
 				}
-				var zb0011 int
-				zb0011, bts, err = msgp.ReadMapHeaderBytes(bts)
+				var zb0017 int
+				zb0017, bts, err = msgp.ReadMapHeaderBytes(bts)
+				if _, ok := err.(msgp.TypeError); ok {
+					zb0017, bts, err = msgp.ReadArrayHeaderBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Assets", zb0003)
+						return
+					}
+					if zb0017 > 0 {
+						zb0017--
+						zb0004.Amount, bts, err = msgp.ReadUint64Bytes(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "Assets", zb0003, "struct-from-array", "Amount")
+							return
+						}
+					}
+					if zb0017 > 0 {
+						zb0017--
+						zb0004.Frozen, bts, err = msgp.ReadBoolBytes(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "Assets", zb0003, "struct-from-array", "Frozen")
+							return
+						}
+					}
+					if zb0017 > 0 {
+						err = msgp.ErrTooManyArrayFields(zb0017)
+						if err != nil {
+							err = msgp.WrapError(err, "Assets", zb0003, "struct-from-array")
+							return
+						}
+					}
+					return
+				}
 				if err != nil {
 					err = msgp.WrapError(err, "Assets", zb0003)
 					return
 				}
-				for zb0011 > 0 {
-					zb0011--
+				for zb0017 > 0 {
+					zb0017--
 					field, bts, err = msgp.ReadMapKeyZC(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "Assets", zb0003)
@@ -466,6 +720,37 @@ func (z *AssetHolding) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	_ = field
 	var zb0001 int
 	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).Amount, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Amount")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).Frozen, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Frozen")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+		return
+	}
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
@@ -672,6 +957,101 @@ func (z *AssetParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	_ = field
 	var zb0002 int
 	zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 > 0 {
+			zb0002--
+			(*z).Total, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Total")
+				return
+			}
+		}
+		if zb0002 > 0 {
+			zb0002--
+			(*z).DefaultFrozen, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "DefaultFrozen")
+				return
+			}
+		}
+		if zb0002 > 0 {
+			zb0002--
+			(*z).UnitName, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "UnitName")
+				return
+			}
+		}
+		if zb0002 > 0 {
+			zb0002--
+			(*z).AssetName, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "AssetName")
+				return
+			}
+		}
+		if zb0002 > 0 {
+			zb0002--
+			(*z).URL, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "URL")
+				return
+			}
+		}
+		if zb0002 > 0 {
+			zb0002--
+			bts, err = msgp.ReadExactBytes(bts, ((*z).MetadataHash)[:])
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "MetadataHash")
+				return
+			}
+		}
+		if zb0002 > 0 {
+			zb0002--
+			bts, err = (*z).Manager.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Manager")
+				return
+			}
+		}
+		if zb0002 > 0 {
+			zb0002--
+			bts, err = (*z).Reserve.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Reserve")
+				return
+			}
+		}
+		if zb0002 > 0 {
+			zb0002--
+			bts, err = (*z).Freeze.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Freeze")
+				return
+			}
+		}
+		if zb0002 > 0 {
+			zb0002--
+			bts, err = (*z).Clawback.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Clawback")
+				return
+			}
+		}
+		if zb0002 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0002)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+		return
+	}
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
@@ -974,6 +1354,237 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	_ = field
 	var zb0005 int
 	zb0005, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0005 > 0 {
+			zb0005--
+			bts, err = (*z).Addr.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Addr")
+				return
+			}
+		}
+		if zb0005 > 0 {
+			zb0005--
+			{
+				var zb0006 byte
+				zb0006, bts, err = msgp.ReadByteBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Status")
+					return
+				}
+				(*z).AccountData.Status = Status(zb0006)
+			}
+		}
+		if zb0005 > 0 {
+			zb0005--
+			bts, err = (*z).AccountData.MicroAlgos.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "MicroAlgos")
+				return
+			}
+		}
+		if zb0005 > 0 {
+			zb0005--
+			(*z).AccountData.RewardsBase, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "RewardsBase")
+				return
+			}
+		}
+		if zb0005 > 0 {
+			zb0005--
+			bts, err = (*z).AccountData.RewardedMicroAlgos.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "RewardedMicroAlgos")
+				return
+			}
+		}
+		if zb0005 > 0 {
+			zb0005--
+			bts, err = (*z).AccountData.VoteID.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "VoteID")
+				return
+			}
+		}
+		if zb0005 > 0 {
+			zb0005--
+			bts, err = (*z).AccountData.SelectionID.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "SelectionID")
+				return
+			}
+		}
+		if zb0005 > 0 {
+			zb0005--
+			{
+				var zb0007 uint64
+				zb0007, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "VoteFirstValid")
+					return
+				}
+				(*z).AccountData.VoteFirstValid = Round(zb0007)
+			}
+		}
+		if zb0005 > 0 {
+			zb0005--
+			{
+				var zb0008 uint64
+				zb0008, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "VoteLastValid")
+					return
+				}
+				(*z).AccountData.VoteLastValid = Round(zb0008)
+			}
+		}
+		if zb0005 > 0 {
+			zb0005--
+			(*z).AccountData.VoteKeyDilution, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "VoteKeyDilution")
+				return
+			}
+		}
+		if zb0005 > 0 {
+			zb0005--
+			var zb0009 int
+			zb0009, bts, err = msgp.ReadMapHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "AssetParams")
+				return
+			}
+			if (*z).AccountData.AssetParams == nil {
+				(*z).AccountData.AssetParams = make(map[AssetIndex]AssetParams, zb0009)
+			} else if len((*z).AccountData.AssetParams) > 0 {
+				for key := range (*z).AccountData.AssetParams {
+					delete((*z).AccountData.AssetParams, key)
+				}
+			}
+			for zb0009 > 0 {
+				var zb0001 AssetIndex
+				var zb0002 AssetParams
+				zb0009--
+				bts, err = zb0001.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "AssetParams")
+					return
+				}
+				bts, err = zb0002.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "AssetParams", zb0001)
+					return
+				}
+				(*z).AccountData.AssetParams[zb0001] = zb0002
+			}
+		}
+		if zb0005 > 0 {
+			zb0005--
+			var zb0010 int
+			zb0010, bts, err = msgp.ReadMapHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Assets")
+				return
+			}
+			if (*z).AccountData.Assets == nil {
+				(*z).AccountData.Assets = make(map[AssetIndex]AssetHolding, zb0010)
+			} else if len((*z).AccountData.Assets) > 0 {
+				for key := range (*z).AccountData.Assets {
+					delete((*z).AccountData.Assets, key)
+				}
+			}
+			for zb0010 > 0 {
+				var zb0003 AssetIndex
+				var zb0004 AssetHolding
+				zb0010--
+				bts, err = zb0003.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Assets")
+					return
+				}
+				var zb0011 int
+				zb0011, bts, err = msgp.ReadMapHeaderBytes(bts)
+				if _, ok := err.(msgp.TypeError); ok {
+					zb0011, bts, err = msgp.ReadArrayHeaderBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "struct-from-array", "Assets", zb0003)
+						return
+					}
+					if zb0011 > 0 {
+						zb0011--
+						zb0004.Amount, bts, err = msgp.ReadUint64Bytes(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "Assets", zb0003, "struct-from-array", "Amount")
+							return
+						}
+					}
+					if zb0011 > 0 {
+						zb0011--
+						zb0004.Frozen, bts, err = msgp.ReadBoolBytes(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "Assets", zb0003, "struct-from-array", "Frozen")
+							return
+						}
+					}
+					if zb0011 > 0 {
+						err = msgp.ErrTooManyArrayFields(zb0011)
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "Assets", zb0003, "struct-from-array")
+							return
+						}
+					}
+					return
+				}
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Assets", zb0003)
+					return
+				}
+				for zb0011 > 0 {
+					zb0011--
+					field, bts, err = msgp.ReadMapKeyZC(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "struct-from-array", "Assets", zb0003)
+						return
+					}
+					switch string(field) {
+					case "a":
+						zb0004.Amount, bts, err = msgp.ReadUint64Bytes(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "Assets", zb0003, "Amount")
+							return
+						}
+					case "f":
+						zb0004.Frozen, bts, err = msgp.ReadBoolBytes(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "Assets", zb0003, "Frozen")
+							return
+						}
+					default:
+						err = msgp.ErrNoField(string(field))
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "Assets", zb0003)
+							return
+						}
+					}
+				}
+				(*z).AccountData.Assets[zb0003] = zb0004
+			}
+		}
+		if zb0005 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0005)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+		return
+	}
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
@@ -994,13 +1605,13 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 		case "onl":
 			{
-				var zb0006 byte
-				zb0006, bts, err = msgp.ReadByteBytes(bts)
+				var zb0012 byte
+				zb0012, bts, err = msgp.ReadByteBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Status")
 					return
 				}
-				(*z).AccountData.Status = Status(zb0006)
+				(*z).AccountData.Status = Status(zb0012)
 			}
 		case "algo":
 			bts, err = (*z).AccountData.MicroAlgos.UnmarshalMsg(bts)
@@ -1034,23 +1645,23 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 		case "voteFst":
 			{
-				var zb0007 uint64
-				zb0007, bts, err = msgp.ReadUint64Bytes(bts)
+				var zb0013 uint64
+				zb0013, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "VoteFirstValid")
 					return
 				}
-				(*z).AccountData.VoteFirstValid = Round(zb0007)
+				(*z).AccountData.VoteFirstValid = Round(zb0013)
 			}
 		case "voteLst":
 			{
-				var zb0008 uint64
-				zb0008, bts, err = msgp.ReadUint64Bytes(bts)
+				var zb0014 uint64
+				zb0014, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "VoteLastValid")
 					return
 				}
-				(*z).AccountData.VoteLastValid = Round(zb0008)
+				(*z).AccountData.VoteLastValid = Round(zb0014)
 			}
 		case "voteKD":
 			(*z).AccountData.VoteKeyDilution, bts, err = msgp.ReadUint64Bytes(bts)
@@ -1059,23 +1670,23 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		case "apar":
-			var zb0009 int
-			zb0009, bts, err = msgp.ReadMapHeaderBytes(bts)
+			var zb0015 int
+			zb0015, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "AssetParams")
 				return
 			}
 			if (*z).AccountData.AssetParams == nil {
-				(*z).AccountData.AssetParams = make(map[AssetIndex]AssetParams, zb0009)
+				(*z).AccountData.AssetParams = make(map[AssetIndex]AssetParams, zb0015)
 			} else if len((*z).AccountData.AssetParams) > 0 {
 				for key := range (*z).AccountData.AssetParams {
 					delete((*z).AccountData.AssetParams, key)
 				}
 			}
-			for zb0009 > 0 {
+			for zb0015 > 0 {
 				var zb0001 AssetIndex
 				var zb0002 AssetParams
-				zb0009--
+				zb0015--
 				bts, err = zb0001.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "AssetParams")
@@ -1089,36 +1700,67 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				(*z).AccountData.AssetParams[zb0001] = zb0002
 			}
 		case "asset":
-			var zb0010 int
-			zb0010, bts, err = msgp.ReadMapHeaderBytes(bts)
+			var zb0016 int
+			zb0016, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Assets")
 				return
 			}
 			if (*z).AccountData.Assets == nil {
-				(*z).AccountData.Assets = make(map[AssetIndex]AssetHolding, zb0010)
+				(*z).AccountData.Assets = make(map[AssetIndex]AssetHolding, zb0016)
 			} else if len((*z).AccountData.Assets) > 0 {
 				for key := range (*z).AccountData.Assets {
 					delete((*z).AccountData.Assets, key)
 				}
 			}
-			for zb0010 > 0 {
+			for zb0016 > 0 {
 				var zb0003 AssetIndex
 				var zb0004 AssetHolding
-				zb0010--
+				zb0016--
 				bts, err = zb0003.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Assets")
 					return
 				}
-				var zb0011 int
-				zb0011, bts, err = msgp.ReadMapHeaderBytes(bts)
+				var zb0017 int
+				zb0017, bts, err = msgp.ReadMapHeaderBytes(bts)
+				if _, ok := err.(msgp.TypeError); ok {
+					zb0017, bts, err = msgp.ReadArrayHeaderBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Assets", zb0003)
+						return
+					}
+					if zb0017 > 0 {
+						zb0017--
+						zb0004.Amount, bts, err = msgp.ReadUint64Bytes(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "Assets", zb0003, "struct-from-array", "Amount")
+							return
+						}
+					}
+					if zb0017 > 0 {
+						zb0017--
+						zb0004.Frozen, bts, err = msgp.ReadBoolBytes(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "Assets", zb0003, "struct-from-array", "Frozen")
+							return
+						}
+					}
+					if zb0017 > 0 {
+						err = msgp.ErrTooManyArrayFields(zb0017)
+						if err != nil {
+							err = msgp.WrapError(err, "Assets", zb0003, "struct-from-array")
+							return
+						}
+					}
+					return
+				}
 				if err != nil {
 					err = msgp.WrapError(err, "Assets", zb0003)
 					return
 				}
-				for zb0011 > 0 {
-					zb0011--
+				for zb0017 > 0 {
+					zb0017--
 					field, bts, err = msgp.ReadMapKeyZC(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "Assets", zb0003)
