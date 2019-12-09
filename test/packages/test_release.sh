@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
 
+if [[ ! "$AWS_ACCESS_KEY_ID" || ! "$AWS_SECRET_ACCESS_KEY" ]]
+then
+    echo -e "$(tput setaf 1)[$0]$(tput sgr0) Missing AWS credentials."
+    echo "Export $(tput setaf 2)\$AWS_ACCESS_KEY_ID$(tput sgr0) and $(tput setaf 2)\$AWS_SECRET_ACCESS_KEY$(tput sgr0) before running this script."
+    echo "See https://aws.amazon.com/blogs/security/wheres-my-secret-access-key/ to obtain creds."
+    exit 1
+fi
+
 OS_LIST=(
     centos:7
     centos:8
@@ -7,9 +15,6 @@ OS_LIST=(
     ubuntu:16.04
     ubuntu:18.04
 )
-
-AWS_KEY_ID=
-AWS_SECRET_KEY=
 
 # These are default values which can be changed by the CLI args.
 BUCKET=algorand-builds
@@ -20,21 +25,13 @@ RET_VALUE=0
 
 while [ "$1" != "" ]; do
     case "$1" in
-        -c)
-            shift
-            CHANNEL="$1"
-            ;;
         -b)
             shift
             BUCKET="$1"
             ;;
-        -k)
+        -c)
             shift
-            AWS_KEY_ID="$1"
-            ;;
-        -s)
-            shift
-            AWS_SECRET_KEY="$1"
+            CHANNEL="$1"
             ;;
         *)
             echo "Unknown option $1"
@@ -51,8 +48,8 @@ FROM {{OS}}
 WORKDIR /root/install
 {{PACMAN}}
 
-ENV AWS_ACCESS_KEY_ID=$AWS_KEY_ID
-ENV AWS_SECRET_ACCESS_KEY=$AWS_SECRET_KEY
+ENV AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
+ENV AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
 
 RUN curl --silent -L https://github.com/algorand/go-algorand-doc/blob/master/downloads/installers/linux_amd64/install_master_linux-amd64.tar.gz?raw=true | tar xzf - && \
     ./update.sh -b $BUCKET -c $CHANNEL -n -p ~/node -d ~/node/data -i && \
@@ -77,7 +74,7 @@ do
     fi
 
     # Finally, designate the OS and send the fully-formed Dockerfile to Docker.
-    echo -e "\n$(tput setaf 4)[$0]$(tput sgr0) Testing $item..."
+    echo -e "$(tput setaf 4)[$0]$(tput sgr0) Testing $item..."
     if ! echo -e "${WITH_PACMAN/\{\{OS\}\}/$item}" | docker build -t "$item" -
     then
         RET_VALUE=1
