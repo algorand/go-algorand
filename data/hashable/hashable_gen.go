@@ -42,8 +42,6 @@ func (z *Message) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
 		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
-		// isnil zb0002 might be unused
-		_ = zb0002
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -67,6 +65,9 @@ func (z *Message) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
+		}
+		if zb0002 {
+			(*z) = Message{}
 		}
 		for zb0001 > 0 {
 			zb0001--

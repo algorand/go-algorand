@@ -217,8 +217,6 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	zb0005, zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
 		zb0005, zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
-		// isnil zb0006 might be unused
-		_ = zb0006
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -312,8 +310,6 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			var zb0010 int
 			var zb0011 bool
 			zb0010, zb0011, bts, err = msgp.ReadMapHeaderBytes(bts)
-			// isnil zb0011 might be unused
-			_ = zb0011
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "AssetParams")
 				return
@@ -322,10 +318,6 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				(*z).AssetParams = nil
 			} else if (*z).AssetParams == nil {
 				(*z).AssetParams = make(map[AssetIndex]AssetParams, zb0010)
-			} else if len((*z).AssetParams) > 0 {
-				for key := range (*z).AssetParams {
-					delete((*z).AssetParams, key)
-				}
 			}
 			for zb0010 > 0 {
 				var zb0001 AssetIndex
@@ -349,8 +341,6 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			var zb0012 int
 			var zb0013 bool
 			zb0012, zb0013, bts, err = msgp.ReadMapHeaderBytes(bts)
-			// isnil zb0013 might be unused
-			_ = zb0013
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Assets")
 				return
@@ -359,10 +349,6 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				(*z).Assets = nil
 			} else if (*z).Assets == nil {
 				(*z).Assets = make(map[AssetIndex]AssetHolding, zb0012)
-			} else if len((*z).Assets) > 0 {
-				for key := range (*z).Assets {
-					delete((*z).Assets, key)
-				}
 			}
 			for zb0012 > 0 {
 				var zb0003 AssetIndex
@@ -378,8 +364,6 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				zb0014, zb0015, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if _, ok := err.(msgp.TypeError); ok {
 					zb0014, zb0015, bts, err = msgp.ReadArrayHeaderBytes(bts)
-					// isnil zb0015 might be unused
-					_ = zb0015
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "Assets", zb0003)
 						return
@@ -411,6 +395,9 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "Assets", zb0003)
 						return
+					}
+					if zb0015 {
+						zb0004 = AssetHolding{}
 					}
 					for zb0014 > 0 {
 						zb0014--
@@ -455,6 +442,9 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
+		}
+		if zb0006 {
+			(*z) = AccountData{}
 		}
 		for zb0005 > 0 {
 			zb0005--
@@ -534,8 +524,6 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				var zb0019 int
 				var zb0020 bool
 				zb0019, zb0020, bts, err = msgp.ReadMapHeaderBytes(bts)
-				// isnil zb0020 might be unused
-				_ = zb0020
 				if err != nil {
 					err = msgp.WrapError(err, "AssetParams")
 					return
@@ -544,10 +532,6 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					(*z).AssetParams = nil
 				} else if (*z).AssetParams == nil {
 					(*z).AssetParams = make(map[AssetIndex]AssetParams, zb0019)
-				} else if len((*z).AssetParams) > 0 {
-					for key := range (*z).AssetParams {
-						delete((*z).AssetParams, key)
-					}
 				}
 				for zb0019 > 0 {
 					var zb0001 AssetIndex
@@ -569,8 +553,6 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				var zb0021 int
 				var zb0022 bool
 				zb0021, zb0022, bts, err = msgp.ReadMapHeaderBytes(bts)
-				// isnil zb0022 might be unused
-				_ = zb0022
 				if err != nil {
 					err = msgp.WrapError(err, "Assets")
 					return
@@ -579,10 +561,6 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					(*z).Assets = nil
 				} else if (*z).Assets == nil {
 					(*z).Assets = make(map[AssetIndex]AssetHolding, zb0021)
-				} else if len((*z).Assets) > 0 {
-					for key := range (*z).Assets {
-						delete((*z).Assets, key)
-					}
 				}
 				for zb0021 > 0 {
 					var zb0003 AssetIndex
@@ -598,8 +576,6 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					zb0023, zb0024, bts, err = msgp.ReadMapHeaderBytes(bts)
 					if _, ok := err.(msgp.TypeError); ok {
 						zb0023, zb0024, bts, err = msgp.ReadArrayHeaderBytes(bts)
-						// isnil zb0024 might be unused
-						_ = zb0024
 						if err != nil {
 							err = msgp.WrapError(err, "Assets", zb0003)
 							return
@@ -631,6 +607,9 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						if err != nil {
 							err = msgp.WrapError(err, "Assets", zb0003)
 							return
+						}
+						if zb0024 {
+							zb0004 = AssetHolding{}
 						}
 						for zb0023 > 0 {
 							zb0023--
@@ -780,8 +759,6 @@ func (z *AssetHolding) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
 		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
-		// isnil zb0002 might be unused
-		_ = zb0002
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -813,6 +790,9 @@ func (z *AssetHolding) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
+		}
+		if zb0002 {
+			(*z) = AssetHolding{}
 		}
 		for zb0001 > 0 {
 			zb0001--
@@ -1039,8 +1019,6 @@ func (z *AssetParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
 		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
-		// isnil zb0003 might be unused
-		_ = zb0003
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -1136,6 +1114,9 @@ func (z *AssetParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
+		}
+		if zb0003 {
+			(*z) = AssetParams{}
 		}
 		for zb0002 > 0 {
 			zb0002--
@@ -1455,8 +1436,6 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	zb0005, zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
 		zb0005, zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
-		// isnil zb0006 might be unused
-		_ = zb0006
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -1558,8 +1537,6 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			var zb0010 int
 			var zb0011 bool
 			zb0010, zb0011, bts, err = msgp.ReadMapHeaderBytes(bts)
-			// isnil zb0011 might be unused
-			_ = zb0011
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "AssetParams")
 				return
@@ -1568,10 +1545,6 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				(*z).AccountData.AssetParams = nil
 			} else if (*z).AccountData.AssetParams == nil {
 				(*z).AccountData.AssetParams = make(map[AssetIndex]AssetParams, zb0010)
-			} else if len((*z).AccountData.AssetParams) > 0 {
-				for key := range (*z).AccountData.AssetParams {
-					delete((*z).AccountData.AssetParams, key)
-				}
 			}
 			for zb0010 > 0 {
 				var zb0001 AssetIndex
@@ -1595,8 +1568,6 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			var zb0012 int
 			var zb0013 bool
 			zb0012, zb0013, bts, err = msgp.ReadMapHeaderBytes(bts)
-			// isnil zb0013 might be unused
-			_ = zb0013
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Assets")
 				return
@@ -1605,10 +1576,6 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				(*z).AccountData.Assets = nil
 			} else if (*z).AccountData.Assets == nil {
 				(*z).AccountData.Assets = make(map[AssetIndex]AssetHolding, zb0012)
-			} else if len((*z).AccountData.Assets) > 0 {
-				for key := range (*z).AccountData.Assets {
-					delete((*z).AccountData.Assets, key)
-				}
 			}
 			for zb0012 > 0 {
 				var zb0003 AssetIndex
@@ -1624,8 +1591,6 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				zb0014, zb0015, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if _, ok := err.(msgp.TypeError); ok {
 					zb0014, zb0015, bts, err = msgp.ReadArrayHeaderBytes(bts)
-					// isnil zb0015 might be unused
-					_ = zb0015
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "Assets", zb0003)
 						return
@@ -1657,6 +1622,9 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "Assets", zb0003)
 						return
+					}
+					if zb0015 {
+						zb0004 = AssetHolding{}
 					}
 					for zb0014 > 0 {
 						zb0014--
@@ -1701,6 +1669,9 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
+		}
+		if zb0006 {
+			(*z) = BalanceRecord{}
 		}
 		for zb0005 > 0 {
 			zb0005--
@@ -1786,8 +1757,6 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				var zb0019 int
 				var zb0020 bool
 				zb0019, zb0020, bts, err = msgp.ReadMapHeaderBytes(bts)
-				// isnil zb0020 might be unused
-				_ = zb0020
 				if err != nil {
 					err = msgp.WrapError(err, "AssetParams")
 					return
@@ -1796,10 +1765,6 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					(*z).AccountData.AssetParams = nil
 				} else if (*z).AccountData.AssetParams == nil {
 					(*z).AccountData.AssetParams = make(map[AssetIndex]AssetParams, zb0019)
-				} else if len((*z).AccountData.AssetParams) > 0 {
-					for key := range (*z).AccountData.AssetParams {
-						delete((*z).AccountData.AssetParams, key)
-					}
 				}
 				for zb0019 > 0 {
 					var zb0001 AssetIndex
@@ -1821,8 +1786,6 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				var zb0021 int
 				var zb0022 bool
 				zb0021, zb0022, bts, err = msgp.ReadMapHeaderBytes(bts)
-				// isnil zb0022 might be unused
-				_ = zb0022
 				if err != nil {
 					err = msgp.WrapError(err, "Assets")
 					return
@@ -1831,10 +1794,6 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					(*z).AccountData.Assets = nil
 				} else if (*z).AccountData.Assets == nil {
 					(*z).AccountData.Assets = make(map[AssetIndex]AssetHolding, zb0021)
-				} else if len((*z).AccountData.Assets) > 0 {
-					for key := range (*z).AccountData.Assets {
-						delete((*z).AccountData.Assets, key)
-					}
 				}
 				for zb0021 > 0 {
 					var zb0003 AssetIndex
@@ -1850,8 +1809,6 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					zb0023, zb0024, bts, err = msgp.ReadMapHeaderBytes(bts)
 					if _, ok := err.(msgp.TypeError); ok {
 						zb0023, zb0024, bts, err = msgp.ReadArrayHeaderBytes(bts)
-						// isnil zb0024 might be unused
-						_ = zb0024
 						if err != nil {
 							err = msgp.WrapError(err, "Assets", zb0003)
 							return
@@ -1883,6 +1840,9 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						if err != nil {
 							err = msgp.WrapError(err, "Assets", zb0003)
 							return
+						}
+						if zb0024 {
+							zb0004 = AssetHolding{}
 						}
 						for zb0023 > 0 {
 							zb0023--

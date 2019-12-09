@@ -152,8 +152,6 @@ func (z *MultisigSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
 		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
-		// isnil zb0003 might be unused
-		_ = zb0003
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -179,8 +177,6 @@ func (z *MultisigSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			var zb0004 int
 			var zb0005 bool
 			zb0004, zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
-			// isnil zb0005 might be unused
-			_ = zb0005
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Subsigs")
 				return
@@ -217,6 +213,9 @@ func (z *MultisigSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
+		if zb0003 {
+			(*z) = MultisigSig{}
+		}
 		for zb0002 > 0 {
 			zb0002--
 			field, bts, err = msgp.ReadMapKeyZC(bts)
@@ -241,8 +240,6 @@ func (z *MultisigSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				var zb0006 int
 				var zb0007 bool
 				zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				// isnil zb0007 might be unused
-				_ = zb0007
 				if err != nil {
 					err = msgp.WrapError(err, "Subsigs")
 					return
@@ -343,8 +340,6 @@ func (z *MultisigSubsig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
 		zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
-		// isnil zb0004 might be unused
-		_ = zb0004
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -376,6 +371,9 @@ func (z *MultisigSubsig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
+		}
+		if zb0004 {
+			(*z) = MultisigSubsig{}
 		}
 		for zb0003 > 0 {
 			zb0003--
@@ -465,8 +463,6 @@ func (z *OneTimeSignature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	zb0007, zb0008, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
 		zb0007, zb0008, bts, err = msgp.ReadArrayHeaderBytes(bts)
-		// isnil zb0008 might be unused
-		_ = zb0008
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -530,6 +526,9 @@ func (z *OneTimeSignature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
+		}
+		if zb0008 {
+			(*z) = OneTimeSignature{}
 		}
 		for zb0007 > 0 {
 			zb0007--
@@ -716,8 +715,6 @@ func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error)
 	zb0006, zb0007, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
 		zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
-		// isnil zb0007 might be unused
-		_ = zb0007
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -743,8 +740,6 @@ func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error)
 			var zb0008 int
 			var zb0009 bool
 			zb0008, zb0009, bts, err = msgp.ReadArrayHeaderBytes(bts)
-			// isnil zb0009 might be unused
-			_ = zb0009
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Batches")
 				return
@@ -777,8 +772,6 @@ func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error)
 			var zb0010 int
 			var zb0011 bool
 			zb0010, zb0011, bts, err = msgp.ReadArrayHeaderBytes(bts)
-			// isnil zb0011 might be unused
-			_ = zb0011
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Offsets")
 				return
@@ -826,6 +819,9 @@ func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error)
 			err = msgp.WrapError(err)
 			return
 		}
+		if zb0007 {
+			(*z) = OneTimeSignatureSecrets{}
+		}
 		for zb0006 > 0 {
 			zb0006--
 			field, bts, err = msgp.ReadMapKeyZC(bts)
@@ -850,8 +846,6 @@ func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error)
 				var zb0012 int
 				var zb0013 bool
 				zb0012, zb0013, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				// isnil zb0013 might be unused
-				_ = zb0013
 				if err != nil {
 					err = msgp.WrapError(err, "Batches")
 					return
@@ -880,8 +874,6 @@ func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error)
 				var zb0014 int
 				var zb0015 bool
 				zb0014, zb0015, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				// isnil zb0015 might be unused
-				_ = zb0015
 				if err != nil {
 					err = msgp.WrapError(err, "Offsets")
 					return
@@ -1061,8 +1053,6 @@ func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsg(bts []byte) (o []byte, 
 	zb0006, zb0007, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
 		zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
-		// isnil zb0007 might be unused
-		_ = zb0007
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -1088,8 +1078,6 @@ func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsg(bts []byte) (o []byte, 
 			var zb0008 int
 			var zb0009 bool
 			zb0008, zb0009, bts, err = msgp.ReadArrayHeaderBytes(bts)
-			// isnil zb0009 might be unused
-			_ = zb0009
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Batches")
 				return
@@ -1122,8 +1110,6 @@ func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsg(bts []byte) (o []byte, 
 			var zb0010 int
 			var zb0011 bool
 			zb0010, zb0011, bts, err = msgp.ReadArrayHeaderBytes(bts)
-			// isnil zb0011 might be unused
-			_ = zb0011
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Offsets")
 				return
@@ -1171,6 +1157,9 @@ func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsg(bts []byte) (o []byte, 
 			err = msgp.WrapError(err)
 			return
 		}
+		if zb0007 {
+			(*z) = OneTimeSignatureSecretsPersistent{}
+		}
 		for zb0006 > 0 {
 			zb0006--
 			field, bts, err = msgp.ReadMapKeyZC(bts)
@@ -1195,8 +1184,6 @@ func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsg(bts []byte) (o []byte, 
 				var zb0012 int
 				var zb0013 bool
 				zb0012, zb0013, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				// isnil zb0013 might be unused
-				_ = zb0013
 				if err != nil {
 					err = msgp.WrapError(err, "Batches")
 					return
@@ -1225,8 +1212,6 @@ func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsg(bts []byte) (o []byte, 
 				var zb0014 int
 				var zb0015 bool
 				zb0014, zb0015, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				// isnil zb0015 might be unused
-				_ = zb0015
 				if err != nil {
 					err = msgp.WrapError(err, "Offsets")
 					return
@@ -1321,8 +1306,6 @@ func (z *OneTimeSignatureSubkeyBatchID) UnmarshalMsg(bts []byte) (o []byte, err 
 	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
 		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
-		// isnil zb0003 might be unused
-		_ = zb0003
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -1354,6 +1337,9 @@ func (z *OneTimeSignatureSubkeyBatchID) UnmarshalMsg(bts []byte) (o []byte, err 
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
+		}
+		if zb0003 {
+			(*z) = OneTimeSignatureSubkeyBatchID{}
 		}
 		for zb0002 > 0 {
 			zb0002--
@@ -1434,8 +1420,6 @@ func (z *OneTimeSignatureSubkeyOffsetID) UnmarshalMsg(bts []byte) (o []byte, err
 	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
 		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
-		// isnil zb0003 might be unused
-		_ = zb0003
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -1475,6 +1459,9 @@ func (z *OneTimeSignatureSubkeyOffsetID) UnmarshalMsg(bts []byte) (o []byte, err
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
+		}
+		if zb0003 {
+			(*z) = OneTimeSignatureSubkeyOffsetID{}
 		}
 		for zb0002 > 0 {
 			zb0002--
@@ -2071,8 +2058,6 @@ func (z *ephemeralSubkey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	zb0005, zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
 		zb0005, zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
-		// isnil zb0006 might be unused
-		_ = zb0006
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -2120,6 +2105,9 @@ func (z *ephemeralSubkey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
+		}
+		if zb0006 {
+			(*z) = ephemeralSubkey{}
 		}
 		for zb0005 > 0 {
 			zb0005--

@@ -288,8 +288,6 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
 		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
-		// isnil zb0002 might be unused
-		_ = zb0002
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -481,6 +479,9 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
+		}
+		if zb0002 {
+			(*z) = Block{}
 		}
 		for zb0001 > 0 {
 			zb0001--
@@ -947,8 +948,6 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
 		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
-		// isnil zb0002 might be unused
-		_ = zb0002
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -1132,6 +1131,9 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
+		}
+		if zb0002 {
+			(*z) = BlockHeader{}
 		}
 		for zb0001 > 0 {
 			zb0001--
@@ -1414,8 +1416,6 @@ func (z *Genesis) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
 		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
-		// isnil zb0003 might be unused
-		_ = zb0003
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -1449,8 +1449,6 @@ func (z *Genesis) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			var zb0004 int
 			var zb0005 bool
 			zb0004, zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
-			// isnil zb0005 might be unused
-			_ = zb0005
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Allocation")
 				return
@@ -1514,6 +1512,9 @@ func (z *Genesis) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
+		if zb0003 {
+			(*z) = Genesis{}
+		}
 		for zb0002 > 0 {
 			zb0002--
 			field, bts, err = msgp.ReadMapKeyZC(bts)
@@ -1544,8 +1545,6 @@ func (z *Genesis) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				var zb0006 int
 				var zb0007 bool
 				zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				// isnil zb0007 might be unused
-				_ = zb0007
 				if err != nil {
 					err = msgp.WrapError(err, "Allocation")
 					return
@@ -1655,8 +1654,6 @@ func (z *GenesisAllocation) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
 		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
-		// isnil zb0002 might be unused
-		_ = zb0002
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -1696,6 +1693,9 @@ func (z *GenesisAllocation) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
+		}
+		if zb0002 {
+			(*z) = GenesisAllocation{}
 		}
 		for zb0001 > 0 {
 			zb0001--
@@ -1845,8 +1845,6 @@ func (z *RewardsState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
 		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
-		// isnil zb0002 might be unused
-		_ = zb0002
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -1910,6 +1908,9 @@ func (z *RewardsState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
+		}
+		if zb0002 {
+			(*z) = RewardsState{}
 		}
 		for zb0001 > 0 {
 			zb0001--
@@ -2033,8 +2034,6 @@ func (z *UpgradeVote) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
 		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
-		// isnil zb0002 might be unused
-		_ = zb0002
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -2066,6 +2065,9 @@ func (z *UpgradeVote) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
+		}
+		if zb0002 {
+			(*z) = UpgradeVote{}
 		}
 		for zb0001 > 0 {
 			zb0001--
