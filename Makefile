@@ -69,8 +69,11 @@ prof:
 generate: deps
 	PATH=$(GOPATH1)/bin:$$PATH go generate ./...
 
-msgp: deps
-	@for P in $(MSGP_GENERATE); do echo msgp -file $$P; msgp -file $$P; done
+msgp: $(patsubst %,%/msgp_gen.go,$(MSGP_GENERATE))
+
+%/msgp_gen.go: deps ALWAYS
+	msgp -file ./$(@D) -o $@
+ALWAYS:
 
 # build our fork of libsodium, placing artifacts into crypto/lib/ and crypto/include/
 crypto/lib/libsodium.a:
