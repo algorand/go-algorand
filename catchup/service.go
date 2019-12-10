@@ -341,7 +341,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 	nextRound := from
 	for ; nextRound < from+basics.Round(parallelRequests); nextRound++ {
 		if s.nextRoundIsNotApproved(nextRound) {
-			return
+			break
 		}
 		currentRoundComplete := make(chan bool, 2)
 		// len(taskCh) + (# pending writes to completed) increases by 1
@@ -362,6 +362,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 			// fetch rounds we can validate
 			for completedRounds[nextRound-basics.Round(parallelRequests)] {
 				if s.nextRoundIsNotApproved(nextRound) {
+					s.cancel()
 					return
 				}
 				delete(completedRounds, nextRound)
@@ -476,24 +477,24 @@ func (s *Service) sync() {
 // which is not approved.
 // In case of an error, it returns false
 func (s *Service) nextRoundIsNotApproved(nextRound basics.Round) bool {
-	pr := s.ledger.LastRound()
-	proto, err := s.ledger.ConsensusParams(pr)
+	lastLedgerRound := s.ledger.LastRound()
+	proto, err := s.ledger.ConsensusParams(lastLedgerRound)
 	if err != nil {
-		s.log.Errorf("catchup: could not get consensus parameters for round %v: $%v", pr, err)
+		s.log.Errorf("catchup: could not get consensus parameters for round %v: $%v", lastLedgerRound, err)
 		s.log.Errorf("catchup: could not determine if next round is from an approved protocol.")
 		return false
 	}
 	approvedUpgrades := proto.ApprovedUpgrades
 
-	block, error := s.ledger.Block(s.ledger.LastRound())
+	block, error := s.ledger.Block(lastLedgerRound)
 	if error != nil {
-		s.log.Errorf("catchup: could not last block (%v) from the ledger.", s.ledger.LastRound())
+		s.log.Errorf("catchup: could not last block (%v) from the ledger.", lastLedgerRound)
 		s.log.Errorf("catchup: could not determine if next round is from an approved protocol.")
 		return false
 	}
 	bh := block.BlockHeader
 
-	if nextRound == bh.NextProtocolSwitchOn &&
+	if nextRound >= bh.NextProtocolSwitchOn &&
 		false == approvedUpgrades[bh.NextProtocol] {
 		return true
 	}
