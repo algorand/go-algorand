@@ -24,7 +24,6 @@ import (
 
 // SerializedRunningAuction provides a wrapper around RunningAuction
 // and guarantees that all calls to RunningAuction are serialized.
-//msgp:ignore SerializedRunningAuction
 type SerializedRunningAuction struct {
 	*RunningAuction
 	mu deadlock.RWMutex

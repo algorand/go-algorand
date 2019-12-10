@@ -21,7 +21,6 @@ import (
 )
 
 // OverflowTracker is used to track when an operation causes an overflow
-//msgp:ignore OverflowTracker
 type OverflowTracker struct {
 	Overflowed bool
 }

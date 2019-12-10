@@ -57,7 +57,6 @@ func init() {
 	JSONHandle.HTMLCharsAsIs = true
 }
 
-//msgp:ignore codecBytes
 type codecBytes struct {
 	enc *codec.Encoder
 
@@ -120,7 +119,6 @@ func Encode(obj interface{}) []byte {
 
 // CountingWriter is an implementation of io.Writer that tracks the number
 // of bytes written (but discards the actual bytes).
-//msgp:ignore CountingWriter
 type CountingWriter struct {
 	N int
 }

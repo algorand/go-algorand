@@ -37,7 +37,6 @@ type Selector interface {
 }
 
 // Membership encodes the parameters used to verify membership in a committee.
-//msgp:ignore Membership
 type Membership struct {
 	Record     basics.BalanceRecord
 	Selector   Selector

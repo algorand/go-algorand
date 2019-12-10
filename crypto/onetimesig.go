@@ -100,7 +100,6 @@ func (off OneTimeSignatureSubkeyOffsetID) ToBeHashed() (protocol.HashID, []byte)
 // A OneTimeSignatureIdentifier is an identifier under which a OneTimeSignature is
 // produced on a given message.  This identifier is represented using a two-level
 // structure, which corresponds to two levels of our ephemeral key tree.
-//msgp:ignore OneTimeSignatureIdentifier
 type OneTimeSignatureIdentifier struct {
 	// Batch represents the most-significant part of the identifier.
 	Batch uint64
@@ -427,7 +426,6 @@ func (s *OneTimeSignatureSecrets) Snapshot() OneTimeSignatureSecrets {
 // OneTimeSigner is a wrapper for OneTimeSignatureSecrets that also
 // includes the appropriate KeyDilution value.  If zero, the value
 // should be inherited from ConsensusParams.DefaultKeyDilution.
-//msgp:ignore OneTimeSigner
 type OneTimeSigner struct {
 	*OneTimeSignatureSecrets
 	OptionalKeyDilution uint64

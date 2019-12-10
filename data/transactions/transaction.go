@@ -41,7 +41,6 @@ func (txid *Txid) UnmarshalText(text []byte) error {
 }
 
 // SpecialAddresses holds addresses with nonstandard properties.
-//msgp:ignore SpecialAddresses
 type SpecialAddresses struct {
 	FeeSink     basics.Address
 	RewardsPool basics.Address
@@ -447,7 +446,6 @@ type TxnContext interface {
 
 // ExplicitTxnContext is a struct that implements TxnContext with
 // explicit fields for everything.
-//msgp:ignore ExplicitTxnContext
 type ExplicitTxnContext struct {
 	ExplicitRound basics.Round
 	Proto         config.ConsensusParams

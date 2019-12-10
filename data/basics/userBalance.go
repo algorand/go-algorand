@@ -139,7 +139,6 @@ type AccountData struct {
 }
 
 // AccountDetail encapsulates meaningful details about a given account, for external consumption
-//msgp:ignore AccountDetail
 type AccountDetail struct {
 	Address Address
 	Algos   MicroAlgos
@@ -147,7 +146,6 @@ type AccountDetail struct {
 }
 
 // SupplyDetail encapsulates meaningful details about the ledger's current token supply
-//msgp:ignore SupplyDetail
 type SupplyDetail struct {
 	Round       Round
 	TotalMoney  MicroAlgos
@@ -155,7 +153,6 @@ type SupplyDetail struct {
 }
 
 // BalanceDetail encapsulates meaningful details about the current balances of the ledger, for external consumption
-//msgp:ignore BalanceDetail
 type BalanceDetail struct {
 	Round       Round
 	TotalMoney  MicroAlgos
@@ -170,7 +167,6 @@ type AssetIndex uint64
 // AssetLocator stores both the asset creator, whose balance record contains
 // the asset parameters, and the asset index, which is the key into those
 // parameters
-//msgp:ignore AssetLocator
 type AssetLocator struct {
 	Creator Address
 	Index   AssetIndex
