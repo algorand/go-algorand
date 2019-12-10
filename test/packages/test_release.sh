@@ -50,18 +50,15 @@ build_images () {
     # We'll use this simple tokenized Dockerfile.
     # https://serverfault.com/a/72511
     IFS='' read -r -d '' TOKENIZED <<EOF
-    FROM {{OS}}
+FROM {{OS}}
 
-    ENV AWS_ACCESS_KEY_ID=""
-    ENV AWS_SECRET_ACCESS_KEY=""
+ENV AWS_ACCESS_KEY_ID=""
+ENV AWS_SECRET_ACCESS_KEY=""
 
-    {{PACMAN}}
-
-    WORKDIR ~
-
-    RUN curl --silent -L https://github.com/algorand/go-algorand-doc/blob/master/downloads/installers/linux_amd64/install_master_linux-amd64.tar.gz?raw=true | tar xzf -
-
-    ENTRYPOINT ["./update.sh", "-n", "-p", "~/node", "-d", "~/node/data", "-i"]
+{{PACMAN}}
+WORKDIR /root
+COPY install.sh .
+CMD ["/bin/bash"]
 EOF
 
     for item in ${OS_LIST[*]}
@@ -78,7 +75,18 @@ EOF
 
         # Finally, designate the OS and send the fully-formed Dockerfile to Docker.
         echo -e "$BLUE_FG[$0]$END_FG_COLOR Testing $item..."
-        if ! echo -e "${WITH_PACMAN/\{\{OS\}\}/$item}" | docker build -t "${item}-test" -
+
+        # Note that we need to create a Dockerfile so the Docker context is properly set.
+        # Without this context, Docker will try to copy from /var/lib/docker/tmp and seems
+        # to do so because the Dockerfile is automatically generated.
+        #
+        # To get around this, we write the generated Dockerfile to disk, overwriting it with
+        # each subsequent iteration.
+        #
+        # Since we eventually want to move to storing the Dockerfiles, this seems like an
+        # acceptable tradeoff.
+        echo -e "${WITH_PACMAN/\{\{OS\}\}/$item}" > Dockerfile
+        if ! docker build -t "${item}-test" .
         then
             FAILED+=("$item")
         fi
@@ -89,11 +97,15 @@ run_images () {
     for item in ${OS_LIST[*]}
     do
         echo "$TEAL_FG[$0]$END_FG_COLOR Running ${item}-test..."
-        if ! docker run --rm --name algorand -e "AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID" -e "AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY" -t "${item}-test" -b "$BUCKET" -c "$CHANNEL"
+        if ! docker run --rm --name algorand -e "AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID" -e "AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY" -t "${item}-test" bash install.sh -b "$BUCKET" -c "$CHANNEL"
         then
             FAILED+=("$item")
         fi
     done
+}
+
+cleanup() {
+    rm -f Dockerfile
 }
 
 check_failures() {
@@ -107,6 +119,8 @@ check_failures() {
         done
 
         echo
+
+        cleanup
         exit 1
     fi
 }
@@ -119,5 +133,6 @@ run_images
 check_failures run
 echo "$GREEN_FG[$0]$END_FG_COLOR Runs completed with no failures."
 
+cleanup
 exit 0
 
