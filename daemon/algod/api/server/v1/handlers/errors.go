@@ -24,6 +24,7 @@ var (
 	errFailedRetrievingNodeStatus          = "failed retrieving node status"
 	errFailedRetrievingAsset               = "failed to retrieve asset information"
 	errFailedParsingRoundNumber            = "failed to parse the round number"
+	errFailedParsingRawOption              = "failed to parse the raw option"
 	errFailedParsingMaxAssetsToList        = "failed to parse max assets, must be between %d and %d"
 	errFailedParsingAssetIdx               = "failed to parse asset index"
 	errFailedToGetAssetCreator             = "failed to retrieve asset creator from the ledger"
