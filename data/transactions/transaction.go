@@ -111,6 +111,7 @@ type Transaction struct {
 	AssetConfigTxnFields
 	AssetTransferTxnFields
 	AssetFreezeTxnFields
+	ExecTxnFields
 
 	// The transaction's Txid is computed when we decode,
 	// and cached here, to avoid needlessly recomputing it.
@@ -447,6 +448,9 @@ func (tx Transaction) Apply(balances Balances, spec SpecialAddresses, ctr uint64
 
 	case protocol.AssetFreezeTx:
 		err = tx.AssetFreezeTxnFields.apply(tx.Header, balances, spec, &ad)
+
+	case protocol.ExecTx:
+		err = tx.ExecTxnFields.apply(tx.Header)
 
 	default:
 		err = fmt.Errorf("Unknown transaction type %v", tx.Type)

@@ -38,6 +38,9 @@ const (
 	// AssetFreezeTx changes the freeze status of an asset
 	AssetFreezeTx TxType = "afrz"
 
+	// AssetFreezeTx changes the freeze status of an asset
+	ExecutionRequestTx TxType = "exe"
+
 	// UnknownTx signals an error
 	UnknownTx TxType = "unknown"
 )
