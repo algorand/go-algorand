@@ -141,6 +141,11 @@ jobs:
       script:
         - scripts/travis/external_build.sh ./scripts/travis/deploy_packages.sh
 
+    - stage: post_deploy
+      os: linux
+      script:
+        - test/packages/test_release.sh
+
 # Don't rebuild libsodium every time
 cache:
   directories:
