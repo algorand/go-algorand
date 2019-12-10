@@ -257,7 +257,7 @@ func (helper *Helper) GetPackageVersion(channel string, pkg string, specificVers
 	return helper.GetPackageFilesVersion(channel, prefix, specificVersion)
 }
 
-func (helper *Helper) tryNewSchemaGetPackageFilesVersion(svc *s3.S3) {
+func (helper *Helper) tryNewSchemaGetPackageFilesVersion(svc *s3.S3) (maxVersion uint64, maxVersionName string, err error) {
 }
 
 // GetPackageFilesVersion return the package version
