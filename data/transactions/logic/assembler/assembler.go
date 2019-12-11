@@ -30,9 +30,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
-
 	//"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/protocol"
+	//"github.com/algorand/go-algorand/protocol"
 )
 
 // EvalMaxScratchSize is the maximum number of scratch slots.
@@ -645,14 +644,36 @@ var txnFieldTypePairs = []txnFieldType{
 // TxnFieldTypes is StackBytes or StackUint64 parallel to TxnFieldNames
 var TxnFieldTypes []StackType
 
+// copied from protocol/txntype.go to avoid protocol/ dependency on gocodec which imports unsafe
+
+const (
+	// PaymentTx indicates a payment transaction
+	PaymentTx = "pay"
+
+	// KeyRegistrationTx indicates a transaction that registers participation keys
+	KeyRegistrationTx = "keyreg"
+
+	// AssetConfigTx creates, re-configures, or destroys an asset
+	AssetConfigTx = "acfg"
+
+	// AssetTransferTx transfers assets between accounts (optionally closing)
+	AssetTransferTx = "axfer"
+
+	// AssetFreezeTx changes the freeze status of an asset
+	AssetFreezeTx = "afrz"
+
+	// UnknownTx signals an error
+	UnknownTx = "unknown"
+)
+
 // TxnTypeNames is the values of Txn.Type in enum order
 var TxnTypeNames = []string{
-	string(protocol.UnknownTx),
-	string(protocol.PaymentTx),
-	string(protocol.KeyRegistrationTx),
-	string(protocol.AssetConfigTx),
-	string(protocol.AssetTransferTx),
-	string(protocol.AssetFreezeTx),
+	string(UnknownTx),
+	string(PaymentTx),
+	string(KeyRegistrationTx),
+	string(AssetConfigTx),
+	string(AssetTransferTx),
+	string(AssetFreezeTx),
 }
 
 type stringString struct {
@@ -663,12 +684,12 @@ type stringString struct {
 // see assembler.go TxnTypeNames
 // also used to parse symbolic constants for `int`
 var typeEnumDescriptions = []stringString{
-	{string(protocol.UnknownTx), "Unknown type. Invalid transaction."},
-	{string(protocol.PaymentTx), "Payment"},
-	{string(protocol.KeyRegistrationTx), "KeyRegistration"},
-	{string(protocol.AssetConfigTx), "AssetConfig"},
-	{string(protocol.AssetTransferTx), "AssetTransfer"},
-	{string(protocol.AssetFreezeTx), "AssetFreeze"},
+	{string(UnknownTx), "Unknown type. Invalid transaction."},
+	{string(PaymentTx), "Payment"},
+	{string(KeyRegistrationTx), "KeyRegistration"},
+	{string(AssetConfigTx), "AssetConfig"},
+	{string(AssetTransferTx), "AssetTransfer"},
+	{string(AssetFreezeTx), "AssetFreeze"},
 }
 
 // TypeNameDescription returns extra description about a low level protocol transaction Type string
@@ -1023,7 +1044,6 @@ func (ops *OpStream) Bytes() (program []byte, err error) {
 	// TODO: configurable what version to compile for in case we're near a version boundary?
 	version := ops.Version
 	if version == 0 {
-		//version = config.Consensus[protocol.ConsensusCurrentVersion].LogicSigVersion
 		version = AssemblerDefaultVersion
 	}
 	vlen := binary.PutUvarint(scratch[:], version)
