@@ -18,12 +18,12 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/spf13/cobra"
 )
 
 var (
-	round       uint64
 	rawFilename string
 )
 
@@ -31,9 +31,7 @@ func init() {
 	ledgerCmd.AddCommand(supplyCmd)
 	ledgerCmd.AddCommand(rawBlockCmd)
 
-	rawBlockCmd.Flags().Uint64VarP(&round, "round", "r", 0, "The round to fetch the raw block for")
 	rawBlockCmd.Flags().StringVarP(&rawFilename, "out", "o", stdoutFilenameValue, "The filename to dump the raw block to (if not set, use stdout)")
-	rawBlockCmd.MarkFlagRequired("round")
 }
 
 var ledgerCmd = &cobra.Command{
@@ -67,8 +65,13 @@ var rawBlockCmd = &cobra.Command{
 	Use:   "rawblock",
 	Short: "Dump the raw, encoded msgpack block to a file or stdout",
 	Long:  "Dump the raw, encoded msgpack block to a file or stdout",
-	Args:  validateNoPosArgsFn,
-	Run: func(cmd *cobra.Command, _ []string) {
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		round, err := strconv.ParseUint(args[0], 10, 64)
+		if err != nil {
+			reportErrorf(errParsingRoundNumber, err)
+		}
+
 		dataDir := ensureSingleDataDir()
 		client := ensureAlgodClient(dataDir)
 		response, err := client.RawBlock(round)

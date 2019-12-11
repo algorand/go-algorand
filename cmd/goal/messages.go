@@ -146,4 +146,7 @@ const (
 	errWalletNotFound        = "Wallet '%s' not found"
 	errDefaultWalletNotFound = "Wallet with ID '%s' not found. Was the default wallet deleted?"
 	errGettingToken          = "Couldn't get token for wallet '%s' (ID: %s): %s"
+
+	// Ledger
+	errParsingRoundNumber    = "Error parsing round number: %s"
 )
