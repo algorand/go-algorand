@@ -32,7 +32,7 @@ func init() {
 	ledgerCmd.AddCommand(rawBlockCmd)
 
 	rawBlockCmd.Flags().Uint64VarP(&round, "round", "r", 0, "The round to fetch the raw block for")
-	rawBlockCmd.Flags().StringVarP(&rawFilename, "out", "o", "-", "The filename to dump the raw block to (if not set, use stdout)")
+	rawBlockCmd.Flags().StringVarP(&rawFilename, "out", "o", stdoutFilenameValue, "The filename to dump the raw block to (if not set, use stdout)")
 	rawBlockCmd.MarkFlagRequired("round")
 }
 
