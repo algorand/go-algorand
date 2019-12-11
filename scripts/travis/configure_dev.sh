@@ -31,7 +31,6 @@ if [ "${OS}" = "linux" ]; then
         set -e
         sudo apt-get update -y
         sudo apt-get -y install sqlite3 python3-venv libffi-dev libssl-dev
-
     fi
     if [[ "${ARCH}" = "arm" ]]; then
         sudo sh -c 'echo "CONF_SWAPSIZE=1024" > /etc/dphys-swapfile; dphys-swapfile setup; dphys-swapfile swapon'
