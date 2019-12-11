@@ -687,6 +687,10 @@ var txnTypeIndexes map[string]int
 // map symbolic name to uint64 for assembleInt
 var txnTypeConstToUint64 map[string]uint64
 
+func TxnTypeStringToInt(txnType string) int {
+	return txnTypeIndexes[txnType]
+}
+
 func assembleTxn(ops *OpStream, args []string) error {
 	if len(args) != 1 {
 		return errors.New("txn expects one argument")
@@ -1123,9 +1127,11 @@ func init() {
 	}
 }
 
-var errTooManyIntc = errors.New("intcblock with too many items")
+var ErrTooManyIntc = errors.New("intcblock with too many items")
 
-func parseIntcblock(program []byte, pc int) (intc []uint64, nextpc int, err error) {
+// ParseIntcblock for program[pc:] parse an `intcblock` op and data.
+// Return the data, and the pc of the next op.
+func ParseIntcblock(program []byte, pc int) (intc []uint64, nextpc int, err error) {
 	pos := pc + 1
 	numInts, bytesUsed := binary.Uvarint(program[pos:])
 	if bytesUsed <= 0 {
@@ -1134,7 +1140,7 @@ func parseIntcblock(program []byte, pc int) (intc []uint64, nextpc int, err erro
 	}
 	pos += bytesUsed
 	if numInts > uint64(len(program)) {
-		err = errTooManyIntc
+		err = ErrTooManyIntc
 		return
 	}
 	intc = make([]uint64, numInts)
@@ -1154,10 +1160,12 @@ func parseIntcblock(program []byte, pc int) (intc []uint64, nextpc int, err erro
 	return
 }
 
-var errShortBytecblock = errors.New("bytecblock ran past end of program")
-var errTooManyItems = errors.New("bytecblock with too many items")
+var ErrShortBytecblock = errors.New("bytecblock ran past end of program")
+var ErrTooManyItems = errors.New("bytecblock with too many items")
 
-func parseBytecBlock(program []byte, pc int) (bytec [][]byte, nextpc int, err error) {
+// ParseBytecBlock parse bytecblock op at program[pc:]
+// Return data and offset of next opcode.
+func ParseBytecBlock(program []byte, pc int) (bytec [][]byte, nextpc int, err error) {
 	pos := pc + 1
 	numItems, bytesUsed := binary.Uvarint(program[pos:])
 	if bytesUsed <= 0 {
@@ -1166,13 +1174,13 @@ func parseBytecBlock(program []byte, pc int) (bytec [][]byte, nextpc int, err er
 	}
 	pos += bytesUsed
 	if numItems > uint64(len(program)) {
-		err = errTooManyItems
+		err = ErrTooManyItems
 		return
 	}
 	bytec = make([][]byte, numItems)
 	for i := uint64(0); i < numItems; i++ {
 		if pos >= len(program) {
-			err = errShortBytecblock
+			err = ErrShortBytecblock
 			return
 		}
 		itemLen, bytesUsed := binary.Uvarint(program[pos:])
@@ -1182,12 +1190,12 @@ func parseBytecBlock(program []byte, pc int) (bytec [][]byte, nextpc int, err er
 		}
 		pos += bytesUsed
 		if pos >= len(program) {
-			err = errShortBytecblock
+			err = ErrShortBytecblock
 			return
 		}
 		end := uint64(pos) + itemLen
 		if end > uint64(len(program)) || end < uint64(pos) {
-			err = errShortBytecblock
+			err = ErrShortBytecblock
 			return
 		}
 		bytec[i] = program[pos : pos+int(itemLen)]
@@ -1199,7 +1207,7 @@ func parseBytecBlock(program []byte, pc int) (bytec [][]byte, nextpc int, err er
 
 func disIntcblock(dis *disassembleState) {
 	var intc []uint64
-	intc, dis.nextpc, dis.err = parseIntcblock(dis.program, dis.pc)
+	intc, dis.nextpc, dis.err = ParseIntcblock(dis.program, dis.pc)
 	if dis.err != nil {
 		return
 	}
@@ -1223,7 +1231,7 @@ func disIntc(dis *disassembleState) {
 
 func disBytecblock(dis *disassembleState) {
 	var bytec [][]byte
-	bytec, dis.nextpc, dis.err = parseBytecBlock(dis.program, dis.pc)
+	bytec, dis.nextpc, dis.err = ParseBytecBlock(dis.program, dis.pc)
 	if dis.err != nil {
 		return
 	}

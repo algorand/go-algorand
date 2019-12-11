@@ -19,6 +19,7 @@ package logic
 import (
 	"testing"
 
+	"github.com/algorand/go-algorand/data/transactions/logic/assembler"
 	"github.com/stretchr/testify/require"
 )
 
@@ -99,8 +100,8 @@ func TestOpSize(t *testing.T) {
 }
 
 func TestTypeNameDescription(t *testing.T) {
-	require.Equal(t, len(TxnTypeNames), len(typeEnumDescriptions))
-	for i, a := range TxnTypeNames {
+	require.Equal(t, len(assembler.TxnTypeNames), len(typeEnumDescriptions))
+	for i, a := range assembler.TxnTypeNames {
 		b := TypeNameDescription(a)
 		require.Equal(t, b, typeEnumDescriptions[i].b)
 	}

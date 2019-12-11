@@ -37,6 +37,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic/assembler"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -849,7 +850,7 @@ func opBitNot(cx *evalContext) {
 }
 
 func opIntConstBlock(cx *evalContext) {
-	cx.intc, cx.nextpc, cx.err = parseIntcblock(cx.program, cx.pc)
+	cx.intc, cx.nextpc, cx.err = assembler.ParseIntcblock(cx.program, cx.pc)
 }
 func checkIntConstBlock(cx *evalContext) int {
 	pos := cx.pc + 1
@@ -860,7 +861,7 @@ func checkIntConstBlock(cx *evalContext) int {
 	}
 	pos += bytesUsed
 	if numInts > uint64(len(cx.program)) {
-		cx.err = errTooManyIntc
+		cx.err = assembler.ErrTooManyIntc
 		return 0
 	}
 	//intc = make([]uint64, numInts)
@@ -906,7 +907,7 @@ func opIntConst3(cx *evalContext) {
 }
 
 func opByteConstBlock(cx *evalContext) {
-	cx.bytec, cx.nextpc, cx.err = parseBytecBlock(cx.program, cx.pc)
+	cx.bytec, cx.nextpc, cx.err = assembler.ParseBytecBlock(cx.program, cx.pc)
 }
 func checkByteConstBlock(cx *evalContext) int {
 	pos := cx.pc + 1
@@ -917,13 +918,13 @@ func checkByteConstBlock(cx *evalContext) int {
 	}
 	pos += bytesUsed
 	if numItems > uint64(len(cx.program)) {
-		cx.err = errTooManyItems
+		cx.err = assembler.ErrTooManyItems
 		return 0
 	}
 	//bytec = make([][]byte, numItems)
 	for i := uint64(0); i < numItems; i++ {
 		if pos >= len(cx.program) {
-			cx.err = errShortBytecblock
+			cx.err = assembler.ErrShortBytecblock
 			return 0
 		}
 		itemLen, bytesUsed := binary.Uvarint(cx.program[pos:])
@@ -933,12 +934,12 @@ func checkByteConstBlock(cx *evalContext) int {
 		}
 		pos += bytesUsed
 		if pos >= len(cx.program) {
-			cx.err = errShortBytecblock
+			cx.err = assembler.ErrShortBytecblock
 			return 0
 		}
 		end := uint64(pos) + itemLen
 		if end > uint64(len(cx.program)) || end < uint64(pos) {
-			cx.err = errShortBytecblock
+			cx.err = assembler.ErrShortBytecblock
 			return 0
 		}
 		//bytec[i] = program[pos : pos+int(itemLen)]
@@ -1043,53 +1044,53 @@ func opDup(cx *evalContext) {
 
 func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint64) (sv stackValue, err error) {
 	err = nil
-	switch TxnField(field) {
-	case Sender:
+	switch assembler.TxnField(field) {
+	case assembler.Sender:
 		sv.Bytes = txn.Sender[:]
-	case Fee:
+	case assembler.Fee:
 		sv.Uint = txn.Fee.Raw
-	case FirstValid:
+	case assembler.FirstValid:
 		sv.Uint = uint64(txn.FirstValid)
-	case LastValid:
+	case assembler.LastValid:
 		sv.Uint = uint64(txn.LastValid)
-	case Note:
+	case assembler.Note:
 		sv.Bytes = nilToEmpty(txn.Note)
-	case Receiver:
+	case assembler.Receiver:
 		sv.Bytes = txn.Receiver[:]
-	case Amount:
+	case assembler.Amount:
 		sv.Uint = txn.Amount.Raw
-	case CloseRemainderTo:
+	case assembler.CloseRemainderTo:
 		sv.Bytes = txn.CloseRemainderTo[:]
-	case VotePK:
+	case assembler.VotePK:
 		sv.Bytes = txn.VotePK[:]
-	case SelectionPK:
+	case assembler.SelectionPK:
 		sv.Bytes = txn.SelectionPK[:]
-	case VoteFirst:
+	case assembler.VoteFirst:
 		sv.Uint = uint64(txn.VoteFirst)
-	case VoteLast:
+	case assembler.VoteLast:
 		sv.Uint = uint64(txn.VoteLast)
-	case VoteKeyDilution:
+	case assembler.VoteKeyDilution:
 		sv.Uint = txn.VoteKeyDilution
-	case Type:
+	case assembler.Type:
 		sv.Bytes = []byte(txn.Type)
-	case TypeEnum:
-		sv.Uint = uint64(txnTypeIndexes[string(txn.Type)])
-	case XferAsset:
+	case assembler.TypeEnum:
+		sv.Uint = uint64(assembler.TxnTypeStringToInt(string(txn.Type)))
+	case assembler.XferAsset:
 		sv.Uint = uint64(txn.XferAsset)
-	case AssetAmount:
+	case assembler.AssetAmount:
 		sv.Uint = txn.AssetAmount
-	case AssetSender:
+	case assembler.AssetSender:
 		sv.Bytes = txn.AssetSender[:]
-	case AssetReceiver:
+	case assembler.AssetReceiver:
 		sv.Bytes = txn.AssetReceiver[:]
-	case AssetCloseTo:
+	case assembler.AssetCloseTo:
 		sv.Bytes = txn.AssetCloseTo[:]
-	case GroupIndex:
+	case assembler.GroupIndex:
 		sv.Uint = uint64(cx.GroupIndex)
-	case TxID:
+	case assembler.TxID:
 		txid := txn.ID()
 		sv.Bytes = txid[:]
-	case Lease:
+	case assembler.Lease:
 		sv.Bytes = txn.Lease[:]
 	default:
 		err = fmt.Errorf("invalid txn field %d", field)
@@ -1120,7 +1121,7 @@ func opGtxn(cx *evalContext) {
 	field := uint64(cx.program[cx.pc+2])
 	var sv stackValue
 	var err error
-	if TxnField(field) == GroupIndex {
+	if assembler.TxnField(field) == assembler.GroupIndex {
 		// GroupIndex; asking this when we just specified it is _dumb_, but oh well
 		sv.Uint = uint64(gtxid)
 	} else {
@@ -1139,16 +1140,16 @@ var zeroAddress basics.Address
 func opGlobal(cx *evalContext) {
 	gindex := uint64(cx.program[cx.pc+1])
 	var sv stackValue
-	switch GlobalField(gindex) {
-	case MinTxnFee:
+	switch assembler.GlobalField(gindex) {
+	case assembler.MinTxnFee:
 		sv.Uint = cx.Proto.MinTxnFee
-	case MinBalance:
+	case assembler.MinBalance:
 		sv.Uint = cx.Proto.MinBalance
-	case MaxTxnLife:
+	case assembler.MaxTxnLife:
 		sv.Uint = cx.Proto.MaxTxnLife
-	case ZeroAddress:
+	case assembler.ZeroAddress:
 		sv.Bytes = zeroAddress[:]
-	case GroupSize:
+	case assembler.GroupSize:
 		sv.Uint = uint64(len(cx.TxnGroup))
 	default:
 		cx.err = fmt.Errorf("invalid global[%d]", gindex)

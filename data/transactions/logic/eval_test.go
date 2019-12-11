@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic/assembler"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -60,7 +61,7 @@ func defaultEvalParams(sb *strings.Builder, txn *transactions.SignedTxn) EvalPar
 
 func TestTooManyArgs(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`int 1`)
+	program, err := assembler.AssembleString(`int 1`)
 	require.NoError(t, err)
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = program
@@ -74,7 +75,7 @@ func TestTooManyArgs(t *testing.T) {
 
 func TestWrongProtoVersion(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`int 1`)
+	program, err := assembler.AssembleString(`int 1`)
 	require.NoError(t, err)
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = program
@@ -88,7 +89,7 @@ func TestWrongProtoVersion(t *testing.T) {
 
 func TestTrivialMath(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`int 2
+	program, err := assembler.AssembleString(`int 2
 int 3
 +
 int 5
@@ -106,7 +107,7 @@ int 5
 
 func TestSha256EqArg(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`arg 0
+	program, err := assembler.AssembleString(`arg 0
 sha256
 byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 ==`)
@@ -164,7 +165,7 @@ func TestTLHC(t *testing.T) {
 	a1, _ := basics.UnmarshalChecksumAddress("DFPKC2SJP3OTFVJFMCD356YB7BOT4SJZTGWLIPPFEWL3ZABUFLTOY6ILYE")
 	a2, _ := basics.UnmarshalChecksumAddress("YYKRMERAFXMXCDWMBNR6BUUWQXDCUR53FPUGXLUYS7VNASRTJW2ENQ7BMQ")
 	secret, _ := base64.StdEncoding.DecodeString("xPUB+DJir1wsH7g2iEY1QwYqHqYH1vUJtzZKW4RxXsY=")
-	program, err := AssembleString(tlhcProgramText)
+	program, err := assembler.AssembleString(tlhcProgramText)
 	require.NoError(t, err)
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = program
@@ -244,7 +245,7 @@ func TestTLHC(t *testing.T) {
 
 func TestU64Math(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`int 0x1234567812345678
+	program, err := assembler.AssembleString(`int 0x1234567812345678
 int 0x100000000
 /
 int 0x12345678
@@ -262,7 +263,7 @@ int 0x12345678
 
 func TestItob(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`byte 0x1234567812345678
+	program, err := assembler.AssembleString(`byte 0x1234567812345678
 int 0x1234567812345678
 itob
 ==`)
@@ -279,7 +280,7 @@ itob
 
 func TestBtoi(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`int 0x1234567812345678
+	program, err := assembler.AssembleString(`int 0x1234567812345678
 byte 0x1234567812345678
 btoi
 ==`)
@@ -296,7 +297,7 @@ btoi
 
 func TestBtoiTooLong(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`int 0x1234567812345678
+	program, err := assembler.AssembleString(`int 0x1234567812345678
 byte 0x1234567812345678aaaa
 btoi
 ==`)
@@ -314,7 +315,7 @@ btoi
 
 func TestBnz(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`int 1
+	program, err := assembler.AssembleString(`int 1
 dup
 bnz safe
 err
@@ -337,7 +338,7 @@ int 1
 
 func TestBnz2(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`int 1
+	program, err := assembler.AssembleString(`int 1
 int 2
 int 1
 int 2
@@ -368,7 +369,7 @@ pop
 
 func TestSubUnderflow(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`int 1
+	program, err := assembler.AssembleString(`int 1
 int 0x100000000
 -
 pop
@@ -390,7 +391,7 @@ int 1`)
 
 func TestAddOverflow(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`int 0xf000000000000000
+	program, err := assembler.AssembleString(`int 0xf000000000000000
 int 0x1111111111111111
 +
 pop
@@ -412,7 +413,7 @@ int 1`)
 
 func TestMulOverflow(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`int 0x111111111
+	program, err := assembler.AssembleString(`int 0x111111111
 int 0x222222222
 *
 pop
@@ -458,7 +459,7 @@ func TestMulwImpl(t *testing.T) {
 func TestMulw(t *testing.T) {
 	t.Parallel()
 	// multiply two numbers, ensure high is 2 and low is 0x468acf130eca8642
-	program, err := AssembleString(`int 0x111111111
+	program, err := assembler.AssembleString(`int 0x111111111
 int 0x222222222
 mulw
 int 0x468acf130eca8642  // compare low (top of the stack)
@@ -489,7 +490,7 @@ int 1                   // ret 1
 
 func TestDivZero(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`int 0x111111111
+	program, err := assembler.AssembleString(`int 0x111111111
 int 0
 /
 pop
@@ -515,7 +516,7 @@ int 1`)
 
 func TestModZero(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`int 0x111111111
+	program, err := assembler.AssembleString(`int 0x111111111
 int 0
 %
 pop
@@ -537,7 +538,7 @@ int 1`)
 
 func TestErr(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`err
+	program, err := assembler.AssembleString(`err
 int 1`)
 	require.NoError(t, err)
 	cost, err := Check(program, defaultEvalParams(nil, nil))
@@ -556,7 +557,7 @@ int 1`)
 
 func TestModSubMulOk(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`int 35
+	program, err := assembler.AssembleString(`int 35
 int 16
 %
 int 1
@@ -581,7 +582,7 @@ int 4
 
 func TestPop(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`int 1
+	program, err := assembler.AssembleString(`int 1
 int 0
 pop`)
 	require.NoError(t, err)
@@ -601,7 +602,7 @@ pop`)
 
 func TestStackLeftover(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`int 1
+	program, err := assembler.AssembleString(`int 1
 int 1`)
 	require.NoError(t, err)
 	sb := strings.Builder{}
@@ -621,7 +622,7 @@ int 1`)
 
 func TestStackBytesLeftover(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`byte 0x10101010`)
+	program, err := assembler.AssembleString(`byte 0x10101010`)
 	require.NoError(t, err)
 	sb := strings.Builder{}
 	cost, err := Check(program, defaultEvalParams(&sb, nil))
@@ -640,7 +641,7 @@ func TestStackBytesLeftover(t *testing.T) {
 
 func TestStackEmpty(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`int 1
+	program, err := assembler.AssembleString(`int 1
 int 1
 pop
 pop`)
@@ -661,7 +662,7 @@ pop`)
 
 func TestArgTooFar(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`arg_1
+	program, err := assembler.AssembleString(`arg_1
 btoi`)
 	require.NoError(t, err)
 	cost, err := Check(program, defaultEvalParams(nil, nil))
@@ -683,7 +684,7 @@ btoi`)
 
 func TestIntcTooFar(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`intc_1`)
+	program, err := assembler.AssembleString(`intc_1`)
 	require.NoError(t, err)
 	cost, err := Check(program, defaultEvalParams(nil, nil))
 	//require.Error(t, err)
@@ -705,7 +706,7 @@ func TestIntcTooFar(t *testing.T) {
 
 func TestBytecTooFar(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`bytec_1
+	program, err := assembler.AssembleString(`bytec_1
 btoi`)
 	require.NoError(t, err)
 	cost, err := Check(program, defaultEvalParams(nil, nil))
@@ -814,7 +815,7 @@ func TestGlobalBadField(t *testing.T) {
 
 func TestArg(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`arg 0
+	program, err := assembler.AssembleString(`arg 0
 arg 1
 ==
 arg 2
@@ -879,12 +880,12 @@ int 1
 
 func TestGlobal(t *testing.T) {
 	t.Parallel()
-	for _, globalField := range GlobalFieldNames {
+	for _, globalField := range assembler.GlobalFieldNames {
 		if !strings.Contains(globalTestProgram, globalField) {
 			t.Errorf("TestGlobal missing field %v", globalField)
 		}
 	}
-	program, err := AssembleString(globalTestProgram)
+	program, err := assembler.AssembleString(globalTestProgram)
 	require.NoError(t, err)
 	cost, err := Check(program, defaultEvalParams(nil, nil))
 	require.NoError(t, err)
@@ -948,7 +949,7 @@ txn TypeEnum
 int %s
 ==
 &&`, symbol, string(tt))
-			program, err := AssembleString(text)
+			program, err := assembler.AssembleString(text)
 			require.NoError(t, err)
 			cost, err := Check(program, defaultEvalParams(nil, nil))
 			require.NoError(t, err)
@@ -1062,14 +1063,14 @@ arg 8
 
 func TestTxn(t *testing.T) {
 	t.Parallel()
-	for _, txnField := range TxnFieldNames {
+	for _, txnField := range assembler.TxnFieldNames {
 		if !strings.Contains(testTxnProgramText, txnField) {
-			if txnField != FirstValidTime.String() {
+			if txnField != assembler.FirstValidTime.String() {
 				t.Errorf("TestTxn missing field %v", txnField)
 			}
 		}
 	}
-	program, err := AssembleString(testTxnProgramText)
+	program, err := assembler.AssembleString(testTxnProgramText)
 	require.NoError(t, err)
 	cost, err := Check(program, defaultEvalParams(nil, nil))
 	require.NoError(t, err)
@@ -1122,7 +1123,7 @@ func TestTxn(t *testing.T) {
 
 func TestGtxn(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`gtxn 1 Amount
+	program, err := assembler.AssembleString(`gtxn 1 Amount
 int 42
 ==
 gtxn 1 Fee
@@ -1226,7 +1227,7 @@ int 2
 
 func TestBitOps(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`int 0x17
+	program, err := assembler.AssembleString(`int 0x17
 int 0x3e
 & // == 0x16
 int 0x0a
@@ -1254,7 +1255,7 @@ int 0x310
 
 func TestLoadStore(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`int 37
+	program, err := assembler.AssembleString(`int 37
 int 37
 store 1
 byte 0xabbacafe
@@ -1286,7 +1287,7 @@ load 1
 func assembleStringWithTrace(t testing.TB, text string) ([]byte, error) {
 	sr := strings.NewReader(text)
 	sb := strings.Builder{}
-	ops := OpStream{Trace: &sb}
+	ops := assembler.OpStream{Trace: &sb}
 	err := ops.Assemble(sr)
 	if err != nil {
 		t.Log(sb.String())
@@ -1384,7 +1385,7 @@ byte 0xf00d
 
 func TestCompares(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(testCompareProgramText)
+	program, err := assembler.AssembleString(testCompareProgramText)
 	require.NoError(t, err)
 	cost, err := Check(program, defaultEvalParams(nil, nil))
 	require.NoError(t, err)
@@ -1407,7 +1408,7 @@ func TestKeccak256(t *testing.T) {
 		blob=b'fnord'
 		sha3.keccak_256(blob).hexdigest()
 	*/
-	program, err := AssembleString(`byte 0x666E6F7264
+	program, err := assembler.AssembleString(`byte 0x666E6F7264
 keccak256
 byte 0xc195eca25a6f4c82bfba0287082ddb0d602ae9230f9cf1f1a40b68f8e2c41567
 ==`)
@@ -1436,7 +1437,7 @@ func TestSHA512_256(t *testing.T) {
 		digest.update(b'fnord')
 		base64.b16encode(digest.finalize())
 	*/
-	program, err := AssembleString(`byte 0x666E6F7264
+	program, err := assembler.AssembleString(`byte 0x666E6F7264
 sha512_256
 
 byte 0x98D2C31612EA500279B6753E5F6E780CA63EBA8274049664DAD66A2565ED1D2A
@@ -1466,7 +1467,7 @@ func isNotPanic(t *testing.T, err error) {
 
 func TestStackUnderflow(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`int 1`)
+	program, err := assembler.AssembleString(`int 1`)
 	program = append(program, 0x08) // +
 	require.NoError(t, err)
 	cost, err := Check(program, defaultEvalParams(nil, nil))
@@ -1484,7 +1485,7 @@ func TestStackUnderflow(t *testing.T) {
 
 func TestWrongStackTypeRuntime(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`int 1`)
+	program, err := assembler.AssembleString(`int 1`)
 	require.NoError(t, err)
 	program = append(program, 0x01, 0x15) // sha256, len
 	cost, err := Check(program, defaultEvalParams(nil, nil))
@@ -1502,7 +1503,7 @@ func TestWrongStackTypeRuntime(t *testing.T) {
 
 func TestEqMismatch(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`byte 0x1234
+	program, err := assembler.AssembleString(`byte 0x1234
 int 1`)
 	require.NoError(t, err)
 	program = append(program, 0x12) // ==
@@ -1521,7 +1522,7 @@ int 1`)
 
 func TestNeqMismatch(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`byte 0x1234
+	program, err := assembler.AssembleString(`byte 0x1234
 int 1`)
 	require.NoError(t, err)
 	program = append(program, 0x13) // !=
@@ -1540,7 +1541,7 @@ int 1`)
 
 func TestWrongStackTypeRuntime2(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`byte 0x1234
+	program, err := assembler.AssembleString(`byte 0x1234
 int 1`)
 	require.NoError(t, err)
 	program = append(program, 0x08) // +
@@ -1559,7 +1560,7 @@ int 1`)
 
 func TestIllegalOp(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`int 1`)
+	program, err := assembler.AssembleString(`int 1`)
 	require.NoError(t, err)
 	for opcode, spec := range opsByOpcode {
 		if spec.op == nil {
@@ -1582,7 +1583,7 @@ func TestIllegalOp(t *testing.T) {
 
 func TestShortProgram(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`int 1
+	program, err := assembler.AssembleString(`int 1
 bnz done
 done:`)
 	require.NoError(t, err)
@@ -1602,7 +1603,7 @@ done:`)
 
 func TestShortBytecblock(t *testing.T) {
 	t.Parallel()
-	fullprogram, err := AssembleString(`bytecblock 0x123456 0xababcdcd`)
+	fullprogram, err := assembler.AssembleString(`bytecblock 0x123456 0xababcdcd`)
 	require.NoError(t, err)
 	fullprogram[2] = 50 // fake 50 elements
 	for i := 2; i < len(fullprogram); i++ {
@@ -1662,7 +1663,7 @@ func checkPanic(cx *evalContext) int {
 
 func TestPanic(t *testing.T) {
 	log := logging.TestingLog(t)
-	program, err := AssembleString(`int 1`)
+	program, err := assembler.AssembleString(`int 1`)
 	require.NoError(t, err)
 	var hackedOpcode int
 	var oldSpec OpSpec
@@ -1755,7 +1756,7 @@ func TestProgramProtoForbidden(t *testing.T) {
 
 func TestMisalignedBranch(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`int 1
+	program, err := assembler.AssembleString(`int 1
 bnz done
 bytecblock 0x01234576 0xababcdcd 0xf000baad
 done:
@@ -1777,7 +1778,7 @@ int 1`)
 
 func TestBranchTooFar(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`int 1
+	program, err := assembler.AssembleString(`int 1
 bnz done
 bytecblock 0x01234576 0xababcdcd 0xf000baad
 done:
@@ -1799,7 +1800,7 @@ int 1`)
 
 func TestBranchTooLarge(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`int 1
+	program, err := assembler.AssembleString(`int 1
 bnz done
 bytecblock 0x01234576 0xababcdcd 0xf000baad
 done:
@@ -2096,7 +2097,7 @@ int 142791994204213819
 `
 
 func benchmarkBasicProgram(b *testing.B, source string) {
-	program, err := AssembleString(source)
+	program, err := assembler.AssembleString(source)
 	require.NoError(b, err)
 	cost, err := Check(program, defaultEvalParams(nil, nil))
 	require.NoError(b, err)
@@ -2122,7 +2123,7 @@ func benchmarkBasicProgram(b *testing.B, source string) {
 }
 
 func benchmarkExpensiveProgram(b *testing.B, source string) {
-	program, err := AssembleString(source)
+	program, err := assembler.AssembleString(source)
 	require.NoError(b, err)
 	cost, err := Check(program, defaultEvalParams(nil, nil))
 	require.NoError(b, err)
@@ -2215,7 +2216,7 @@ func TestEd25519verify(t *testing.T) {
 	require.NoError(t, err)
 	pk := basics.Address(c.SignatureVerifier)
 	pkStr := pk.String()
-	program, err := AssembleString(fmt.Sprintf(`arg 0
+	program, err := assembler.AssembleString(fmt.Sprintf(`arg 0
 arg 1
 addr %s
 ed25519verify`, pkStr))
@@ -2271,7 +2272,7 @@ func BenchmarkEd25519Verifyx1(b *testing.B) {
 		secret := crypto.GenerateSignatureSecrets(s)
 		pk := basics.Address(secret.SignatureVerifier)
 		pkStr := pk.String()
-		program, err := AssembleString(fmt.Sprintf(`arg 0
+		program, err := assembler.AssembleString(fmt.Sprintf(`arg 0
 arg 1
 addr %s
 ed25519verify`, pkStr))
@@ -2315,7 +2316,7 @@ func BenchmarkCheckx5(b *testing.B) {
 	programs := make([][]byte, len(sourcePrograms))
 	var err error
 	for i, text := range sourcePrograms {
-		programs[i], err = AssembleString(text)
+		programs[i], err = assembler.AssembleString(text)
 		require.NoError(b, err)
 	}
 	b.ResetTimer()
