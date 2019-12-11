@@ -25,6 +25,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/data/transactions/logic/assembler"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -45,13 +46,13 @@ func markdownTableEscape(x string) string {
 func typeEnumTableMarkdown(out io.Writer) {
 	fmt.Fprintf(out, "| Index | \"Type\" string | Description |\n")
 	fmt.Fprintf(out, "| --- | --- | --- |\n")
-	for i, name := range logic.TxnTypeNames {
+	for i, name := range assembler.TxnTypeNames {
 		fmt.Fprintf(out, "| %d | %s | %s |\n", i, markdownTableEscape(name), logic.TypeNameDescription(name))
 	}
 	out.Write([]byte("\n"))
 }
 
-func fieldTableMarkdown(out io.Writer, names []string, types []logic.StackType, extra map[string]string) {
+func fieldTableMarkdown(out io.Writer, names []string, types []assembler.StackType, extra map[string]string) {
 	fmt.Fprintf(out, "| Index | Name | Type | Notes |\n")
 	fmt.Fprintf(out, "| --- | --- | --- | --- |\n")
 	for i, name := range names {
@@ -64,12 +65,12 @@ func fieldTableMarkdown(out io.Writer, names []string, types []logic.StackType, 
 
 func transactionFieldsMarkdown(out io.Writer) {
 	fmt.Fprintf(out, "\n`txn` Fields:\n\n")
-	fieldTableMarkdown(out, logic.TxnFieldNames, logic.TxnFieldTypes, logic.TxnFieldDocs)
+	fieldTableMarkdown(out, assembler.TxnFieldNames, assembler.TxnFieldTypes, logic.TxnFieldDocs)
 }
 
 func globalFieldsMarkdown(out io.Writer) {
 	fmt.Fprintf(out, "\n`global` Fields:\n\n")
-	fieldTableMarkdown(out, logic.GlobalFieldNames, logic.GlobalFieldTypes, logic.GlobalFieldDocs)
+	fieldTableMarkdown(out, assembler.GlobalFieldNames, assembler.GlobalFieldTypes, logic.GlobalFieldDocs)
 }
 
 func opToMarkdown(out io.Writer, op *logic.OpSpec) (err error) {
@@ -153,25 +154,25 @@ type LanguageSpec struct {
 
 func argEnum(name string) []string {
 	if name == "txn" || name == "gtxn" {
-		return logic.TxnFieldNames
+		return assembler.TxnFieldNames
 	}
 	if name == "global" {
-		return logic.GlobalFieldNames
+		return assembler.GlobalFieldNames
 	}
 	return nil
 }
 
-func typeString(types []logic.StackType) string {
+func typeString(types []assembler.StackType) string {
 	out := make([]byte, len(types))
 	for i, t := range types {
 		switch t {
-		case logic.StackUint64:
+		case assembler.StackUint64:
 			out[i] = 'U'
-		case logic.StackBytes:
+		case assembler.StackBytes:
 			out[i] = 'B'
-		case logic.StackAny:
+		case assembler.StackAny:
 			out[i] = '.'
-		case logic.StackNone:
+		case assembler.StackNone:
 			if i == 0 && len(types) == 1 {
 				return ""
 			}
@@ -185,17 +186,17 @@ func typeString(types []logic.StackType) string {
 
 func argEnumTypes(name string) string {
 	if name == "txn" || name == "gtxn" {
-		return typeString(logic.TxnFieldTypes)
+		return typeString(assembler.TxnFieldTypes)
 	}
 	if name == "global" {
-		return typeString(logic.GlobalFieldTypes)
+		return typeString(assembler.GlobalFieldTypes)
 	}
 	return ""
 }
 
 func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
-	records := make([]OpRecord, len(logic.OpSpecs))
-	for i, spec := range logic.OpSpecs {
+	records := make([]OpRecord, len(assembler.OpSpecs))
+	for i, spec := range assembler.OpSpecs {
 		records[i].Opcode = spec.Opcode
 		records[i].Name = spec.Name
 		records[i].Args = typeString(spec.Args)
@@ -232,11 +233,11 @@ func main() {
 		}
 	}
 	txnfields, _ := os.Create("txn_fields.md")
-	fieldTableMarkdown(txnfields, logic.TxnFieldNames, logic.TxnFieldTypes, logic.TxnFieldDocs)
+	fieldTableMarkdown(txnfields, assembler.TxnFieldNames, assembler.TxnFieldTypes, logic.TxnFieldDocs)
 	txnfields.Close()
 
 	globalfields, _ := os.Create("global_fields.md")
-	fieldTableMarkdown(globalfields, logic.GlobalFieldNames, logic.GlobalFieldTypes, logic.GlobalFieldDocs)
+	fieldTableMarkdown(globalfields, assembler.GlobalFieldNames, assembler.GlobalFieldTypes, logic.GlobalFieldDocs)
 	globalfields.Close()
 
 	langspecjs, _ := os.Create("langspec.json")
