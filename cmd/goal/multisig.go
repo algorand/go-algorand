@@ -26,7 +26,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/data/transactions/logic/assembler"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -137,7 +137,7 @@ var signProgramCmd = &cobra.Command{
 			if err != nil {
 				reportErrorf(fileReadError, programSource, err)
 			}
-			program, err = logic.AssembleString(string(text))
+			program, err = assembler.AssembleString(string(text))
 			if err != nil {
 				reportErrorf("%s: %s", programSource, err)
 			}

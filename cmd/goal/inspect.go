@@ -23,7 +23,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/data/transactions/logic/assembler"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -76,7 +76,7 @@ type inspectLogicSig struct {
 type inspectProgram []byte
 
 func (prog inspectProgram) String() string {
-	text, err := logic.Disassemble([]byte(prog))
+	text, err := assembler.Disassemble([]byte(prog))
 	if err != nil {
 		return err.Error()
 	}
@@ -88,12 +88,12 @@ func (prog inspectProgram) GoString() string {
 }
 
 func (prog inspectProgram) MarshalText() ([]byte, error) {
-	text, err := logic.Disassemble([]byte(prog))
+	text, err := assembler.Disassemble([]byte(prog))
 	return []byte(text), err
 }
 
 func (prog *inspectProgram) UnmarshalText(text []byte) error {
-	program, err := logic.AssembleString(string(text))
+	program, err := assembler.AssembleString(string(text))
 	if err == nil {
 		*prog = program
 	}

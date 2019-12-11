@@ -20,7 +20,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/data/transactions/logic/assembler"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -216,7 +216,7 @@ var runCmd = &cobra.Command{
 			default:
 				reportErrorf("Invalid argument for --teal: %v\n", teal)
 			}
-			cfg.Program, err = logic.AssembleString(programStr)
+			cfg.Program, err = assembler.AssembleString(programStr)
 			if err != nil {
 				reportErrorf("Internal error, cannot assemble %v \n", programStr)
 			}

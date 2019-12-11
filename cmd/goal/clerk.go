@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/data/transactions/logic/assembler"
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
@@ -769,7 +770,7 @@ func assembleFile(fname string) (program []byte) {
 	if err != nil {
 		reportErrorf("%s: %s\n", fname, err)
 	}
-	program, err = logic.AssembleString(string(text))
+	program, err = assembler.AssembleString(string(text))
 	if err != nil {
 		reportErrorf("%s: %s\n", fname, err)
 	}
@@ -795,7 +796,7 @@ func disassembleFile(fname, outname string) {
 			extra = "LogicSig: " + string(protocol.EncodeJSON(ilsig))
 		}
 	}
-	text, err := logic.Disassemble(program)
+	text, err := assembler.Disassemble(program)
 	if err != nil {
 		reportErrorf("%s: %s\n", fname, err)
 	}
