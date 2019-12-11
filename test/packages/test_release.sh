@@ -73,15 +73,16 @@ EOF
             WITH_PACMAN=$(echo -e "${TOKENIZED//\{\{PACMAN\}\}/RUN yum install -y curl}")
         fi
 
-        # Finally, designate the OS and send the fully-formed Dockerfile to Docker.
         echo -e "$BLUE_FG[$0]$END_FG_COLOR Testing $item..."
 
-        # Note that we need to create a Dockerfile so the Docker context is properly set.
-        # Without this context, Docker will try to copy from /var/lib/docker/tmp and seems
-        # to do so because the Dockerfile is automatically generated.
+        # Note that we now create a Dockerfile so the Docker context is properly set.
+        # Without this context, Docker tried to COPY from /var/lib/docker/tmp and seemed
+        # to do so because the Dockerfile was being automatically generated, i.e.,
         #
-        # To get around this, we write the generated Dockerfile to disk, overwriting it with
-        # each subsequent iteration.
+        #       echo -e "..." | docker build -t foo -
+        #
+        # To avoid this, we now redirect the generated Dockerfile to disk, overwriting it
+        # with each subsequent iteration (and cleaning it up upon exit).
         #
         # Since we eventually want to move to storing the Dockerfiles, this seems like an
         # acceptable tradeoff.

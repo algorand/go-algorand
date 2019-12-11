@@ -25,6 +25,7 @@ jobs:
     - name: External ARM64 Integration Test
     - name: External ARM Build
     - name: External ARM Deploy
+    - name: Test Release Builds
   include:
     - stage: build_commit
       os: linux
@@ -143,8 +144,13 @@ jobs:
 
     - stage: post_deploy
       os: linux
+      name: Test Release Builds
       script:
-        - test/packages/test_release.sh
+        - scripts/travis/test_release.sh
+      addons:
+        apt:
+          packages:
+            - awscli
 
 # Don't rebuild libsodium every time
 cache:

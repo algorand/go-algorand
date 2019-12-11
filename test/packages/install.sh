@@ -25,5 +25,7 @@ done
 curl --silent -L https://github.com/algorand/go-algorand-doc/blob/master/downloads/installers/linux_amd64/install_master_linux-amd64.tar.gz?raw=true | tar xzf -
 
 ./update.sh -b "$BUCKET" -c "$CHANNEL" -i -p ~/node -d ~/node/data -n
+
+echo "[$0] Testing: algod -v"
 ./node/algod -v
 
