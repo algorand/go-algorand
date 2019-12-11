@@ -42,7 +42,7 @@ func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta StateDelta) {
 		// Duplicate, ignore.
 		return
 	}
-	if t.txType != protocol.ExecTx {
+	if t.TxType != protocol.ExecTx {
 		// Not executable, ignore.
 		return
 	}
