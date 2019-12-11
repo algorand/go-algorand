@@ -1254,9 +1254,12 @@ func disBnz(dis *disassembleState) {
 	dis.nextpc = dis.pc + 3
 	offset := (uint(dis.program[dis.pc+1]) << 8) | uint(dis.program[dis.pc+2])
 	target := int(offset) + dis.pc + 3
-	dis.labelCount++
-	label := fmt.Sprintf("label%d", dis.labelCount)
-	dis.putLabel(label, target)
+	label, labelExists := dis.pendingLabels[target]
+	if !labelExists {
+		dis.labelCount++
+		label = fmt.Sprintf("label%d", dis.labelCount)
+		dis.putLabel(label, target)
+	}
 	_, dis.err = fmt.Fprintf(dis.out, "bnz %s\n", label)
 }
 
