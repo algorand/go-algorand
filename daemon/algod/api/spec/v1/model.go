@@ -608,6 +608,7 @@ type TransactionParams struct {
 	MinTxnFee uint64 `json:"minFee"`
 }
 
+// RawResponse is fulfilled by responses that should not be decoded as msgpack
 type RawResponse interface {
 	SetBytes([]byte)
 }
@@ -617,6 +618,7 @@ type RawResponse interface {
 // swagger:strfmt byte
 type RawBlock []byte
 
+// SetBytes fulfills the RawResponse interface on RawBlock
 func (rb *RawBlock) SetBytes(b []byte) {
 	*rb = b
 }
