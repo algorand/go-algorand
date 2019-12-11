@@ -62,7 +62,7 @@ var supplyCmd = &cobra.Command{
 }
 
 var rawBlockCmd = &cobra.Command{
-	Use:   "rawblock",
+	Use:   "rawblock [round number]",
 	Short: "Dump the raw, encoded msgpack block to a file or stdout",
 	Long:  "Dump the raw, encoded msgpack block to a file or stdout",
 	Args:  cobra.ExactArgs(1),
