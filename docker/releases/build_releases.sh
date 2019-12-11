@@ -4,27 +4,36 @@
 # e.g. `docker login`
 # Login name is "algorand".
 
+# To build both images, one could run:
+#
+# $ ./build_releases.sh
+# $ ./build_releases.sh testnet
+#
+# or
+#
+# for name in {mainnet,testnet}
+# do
+#     ./build_releases.sh $name
+# done
+
 GREEN_FG=$(tput setaf 2)
 RED_FG=$(tput setaf 1)
 END_FG_COLOR=$(tput sgr0)
 
-NAME=stable
-NETWORK=""
+# Default to "mainnet".
+NAME=${1:-mainnet}
+NETWORK=
 
-while [ "$1" != "" ]; do
-    case "$1" in
-        -n|--name)
-            shift
-            NAME="$1"
-            NETWORK="-g $1"
-            ;;
-        *)
-            echo "$RED_FG[$0]$END_FG_COLOR Unknown option $1."
-            exit 1
-            ;;
-    esac
-    shift
-done
+if [[ ! "$NAME" =~ ^mainnet$|^testnet$ ]]
+then
+    echo "$RED_FG[$0]$END_FG_COLOR Network values must be either \`mainnet\` or \`testnet\`."
+    exit 1
+fi
+
+if [ "$NAME" == "testnet" ]
+then
+    NETWORK="-g $1"
+fi
 
 build_image () {
     IFS='' read -r -d '' DOCKERFILE <<EOF
