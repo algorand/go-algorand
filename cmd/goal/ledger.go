@@ -22,8 +22,18 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	round       uint64
+	rawFilename string
+)
+
 func init() {
 	ledgerCmd.AddCommand(supplyCmd)
+	ledgerCmd.AddCommand(rawBlockCmd)
+
+	rawBlockCmd.Flags().Uint64VarP(&round, "round", "r", 0, "The round to fetch the raw block for")
+	rawBlockCmd.Flags().StringVarP(&rawFilename, "out", "o", "-", "The filename to dump the raw block to (if not set, use stdout)")
+	rawBlockCmd.MarkFlagRequired("round")
 }
 
 var ledgerCmd = &cobra.Command{
@@ -50,5 +60,26 @@ var supplyCmd = &cobra.Command{
 		}
 
 		fmt.Printf("Round: %v\nTotal Money: %v microAlgos\nOnline Money: %v microAlgos\n", response.Round, response.TotalMoney, response.OnlineMoney)
+	},
+}
+
+var rawBlockCmd = &cobra.Command{
+	Use:   "rawblock",
+	Short: "Print the raw, encoded msgpack block to stdout",
+	Long:  "Print the raw, encoded msgpack block to stdout",
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, _ []string) {
+		dataDir := ensureSingleDataDir()
+		client := ensureAlgodClient(dataDir)
+		response, err := client.RawBlock(round)
+		if err != nil {
+			reportErrorf(errorRequestFail, err)
+		}
+
+		// If rawFilename flag was not set, the default value '-' will write to stdout
+		err = writeFile(rawFilename, response, 0600)
+		if err != nil {
+			reportErrorf(fileWriteError, rawFilename, err)
+		}
 	},
 }

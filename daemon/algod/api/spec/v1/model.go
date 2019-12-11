@@ -608,6 +608,19 @@ type TransactionParams struct {
 	MinTxnFee uint64 `json:"minFee"`
 }
 
+type RawResponse interface {
+	SetBytes([]byte)
+}
+
+// RawBlock represents an encoded msgpack block
+// swagger:model RawBlock
+// swagger:strfmt byte
+type RawBlock []byte
+
+func (rb *RawBlock) SetBytes(b []byte) {
+	*rb = b
+}
+
 // Block contains a block information
 // swagger:model Block
 type Block struct {
