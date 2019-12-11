@@ -65,8 +65,8 @@ var supplyCmd = &cobra.Command{
 
 var rawBlockCmd = &cobra.Command{
 	Use:   "rawblock",
-	Short: "Print the raw, encoded msgpack block to stdout",
-	Long:  "Print the raw, encoded msgpack block to stdout",
+	Short: "Dump the raw, encoded msgpack block to a file or stdout",
+	Long:  "Dump the raw, encoded msgpack block to a file or stdout",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		dataDir := ensureSingleDataDir()
