@@ -14,11 +14,12 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package logic
+package assembler
 
 import (
 	"bufio"
 	"bytes"
+	"crypto/sha512"
 	"encoding/base32"
 	"encoding/base64"
 	"encoding/binary"
@@ -30,9 +31,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/algorand/go-algorand/data/basics"
+	//"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 )
+
+// EvalMaxScratchSize is the maximum number of scratch slots.
+const EvalMaxScratchSize = 255
 
 // Writer is what we want here. Satisfied by bufio.Buffer
 type Writer interface {
@@ -47,6 +51,35 @@ type labelReference struct {
 	position int
 
 	label string
+}
+
+// StackType describes the type of a value on the operand stack
+type StackType byte
+
+// StackNone in an OpSpec shows that the op pops or yields nothing
+const StackNone StackType = 0
+
+// StackAny in an OpSpec shows that the op pops or yield any type
+const StackAny StackType = 1
+
+// StackUint64 in an OpSpec shows that the op pops or yields a uint64
+const StackUint64 StackType = 2
+
+// StackBytes in an OpSpec shows that the op pops or yields a []byte
+const StackBytes StackType = 3
+
+func (st StackType) String() string {
+	switch st {
+	case StackNone:
+		return "None"
+	case StackAny:
+		return "any"
+	case StackUint64:
+		return "uint64"
+	case StackBytes:
+		return "[]byte"
+	}
+	return "internal error, unknown type"
 }
 
 // OpStream is destination for program and scratch space
@@ -407,17 +440,53 @@ func assembleByteCBlock(ops *OpStream, args []string) error {
 	return nil
 }
 
+const addrLength = 32
+const checksumLength = 4
+
+// local reimplementation of data.basics.UnmarshalChecksumAddress
+// avoiding data.basics because of dependency on crypto
+func UnmarshalChecksumAddress(address string) ([]byte, error) {
+	decoded, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(address)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode address %s to base 32", address)
+	}
+	if len(decoded) < addrLength {
+		return nil, fmt.Errorf("decoded bad addr: %s", address)
+	}
+
+	//copy(short[:], decoded[:len(short)])
+	short := decoded[:addrLength]
+	incomingchecksum := decoded[len(decoded)-checksumLength:]
+
+	fullhash := sha512.Sum512_256(short)
+	calculatedchecksum := fullhash[len(fullhash)-checksumLength:]
+	isValid := bytes.Equal(incomingchecksum, calculatedchecksum)
+
+	if !isValid {
+		return nil, fmt.Errorf("address %s is malformed, checksum verification failed", address)
+	}
+
+	// Validate that we had a canonical string representation
+	addrWithChecksum := append(short, calculatedchecksum...)
+	reencoded := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(addrWithChecksum)
+	if reencoded != address {
+		return nil, fmt.Errorf("address %s is non-canonical", address)
+	}
+
+	return short, nil
+}
+
 // addr A1EU...
 // parses base32-with-checksum account address strings into a byte literal
 func assembleAddr(ops *OpStream, args []string) error {
 	if len(args) != 1 {
 		return errors.New("addr operation needs one argument")
 	}
-	addr, err := basics.UnmarshalChecksumAddress(args[0])
+	addr, err := UnmarshalChecksumAddress(args[0])
 	if err != nil {
 		return err
 	}
-	return ops.ByteLiteral(addr[:])
+	return ops.ByteLiteral(addr)
 }
 
 func assembleArg(ops *OpStream, args []string) error {
@@ -586,6 +655,32 @@ var TxnTypeNames = []string{
 	string(protocol.AssetFreezeTx),
 }
 
+type stringString struct {
+	a string
+	b string
+}
+
+// see assembler.go TxnTypeNames
+// also used to parse symbolic constants for `int`
+var typeEnumDescriptions = []stringString{
+	{string(protocol.UnknownTx), "Unknown type. Invalid transaction."},
+	{string(protocol.PaymentTx), "Payment"},
+	{string(protocol.KeyRegistrationTx), "KeyRegistration"},
+	{string(protocol.AssetConfigTx), "AssetConfig"},
+	{string(protocol.AssetTransferTx), "AssetTransfer"},
+	{string(protocol.AssetFreezeTx), "AssetFreeze"},
+}
+
+// TypeNameDescription returns extra description about a low level protocol transaction Type string
+func TypeNameDescription(typeName string) string {
+	for _, ted := range typeEnumDescriptions {
+		if typeName == ted.a {
+			return ted.b
+		}
+	}
+	return "invalid type name"
+}
+
 // map TxnTypeName to its enum index, for `txn TypeEnum`
 var txnTypeIndexes map[string]int
 
@@ -682,6 +777,11 @@ var opcodesByName map[string]byte
 var argOps map[string]func(*OpStream, []string) error
 
 func init() {
+	opsByOpcode = make([]OpSpec, 256)
+	for _, oi := range OpSpecs {
+		opsByOpcode[oi.Opcode] = oi
+	}
+
 	opcodesByName = make(map[string]byte)
 	for _, oi := range OpSpecs {
 		opcodesByName[oi.Name] = oi.Opcode
@@ -1054,35 +1154,6 @@ func parseIntcblock(program []byte, pc int) (intc []uint64, nextpc int, err erro
 	return
 }
 
-func checkIntConstBlock(cx *evalContext) int {
-	pos := cx.pc + 1
-	numInts, bytesUsed := binary.Uvarint(cx.program[pos:])
-	if bytesUsed <= 0 {
-		cx.err = fmt.Errorf("could not decode int const block size at pc=%d", pos)
-		return 1
-	}
-	pos += bytesUsed
-	if numInts > uint64(len(cx.program)) {
-		cx.err = errTooManyIntc
-		return 0
-	}
-	//intc = make([]uint64, numInts)
-	for i := uint64(0); i < numInts; i++ {
-		if pos >= len(cx.program) {
-			cx.err = fmt.Errorf("bytecblock ran past end of program")
-			return 0
-		}
-		_, bytesUsed = binary.Uvarint(cx.program[pos:])
-		if bytesUsed <= 0 {
-			cx.err = fmt.Errorf("could not decode int const[%d] at pc=%d", i, pos)
-			return 1
-		}
-		pos += bytesUsed
-	}
-	cx.nextpc = pos
-	return 1
-}
-
 var errShortBytecblock = errors.New("bytecblock ran past end of program")
 var errTooManyItems = errors.New("bytecblock with too many items")
 
@@ -1124,46 +1195,6 @@ func parseBytecBlock(program []byte, pc int) (bytec [][]byte, nextpc int, err er
 	}
 	nextpc = pos
 	return
-}
-
-func checkByteConstBlock(cx *evalContext) int {
-	pos := cx.pc + 1
-	numItems, bytesUsed := binary.Uvarint(cx.program[pos:])
-	if bytesUsed <= 0 {
-		cx.err = fmt.Errorf("could not decode []byte const block size at pc=%d", pos)
-		return 1
-	}
-	pos += bytesUsed
-	if numItems > uint64(len(cx.program)) {
-		cx.err = errTooManyItems
-		return 0
-	}
-	//bytec = make([][]byte, numItems)
-	for i := uint64(0); i < numItems; i++ {
-		if pos >= len(cx.program) {
-			cx.err = errShortBytecblock
-			return 0
-		}
-		itemLen, bytesUsed := binary.Uvarint(cx.program[pos:])
-		if bytesUsed <= 0 {
-			cx.err = fmt.Errorf("could not decode []byte const[%d] at pc=%d", i, pos)
-			return 1
-		}
-		pos += bytesUsed
-		if pos >= len(cx.program) {
-			cx.err = errShortBytecblock
-			return 0
-		}
-		end := uint64(pos) + itemLen
-		if end > uint64(len(cx.program)) || end < uint64(pos) {
-			cx.err = errShortBytecblock
-			return 0
-		}
-		//bytec[i] = program[pos : pos+int(itemLen)]
-		pos += int(itemLen)
-	}
-	cx.nextpc = pos
-	return 1
 }
 
 func disIntcblock(dis *disassembleState) {
