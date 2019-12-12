@@ -27,7 +27,7 @@ import (
 )
 
 var (
-	rawFilename    string
+	blockFilename  string
 	rawBlock       bool
 	base32Encoding bool
 	strictJSON     bool
@@ -37,8 +37,8 @@ func init() {
 	ledgerCmd.AddCommand(supplyCmd)
 	ledgerCmd.AddCommand(blockCmd)
 
-	blockCmd.Flags().StringVarP(&rawFilename, "out", "o", stdoutFilenameValue, "The filename to dump the raw block to (if not set, use stdout)")
-	blockCmd.Flags().BoolVarP(&rawBlock, "raw", "r", false, "Dump raw block as msgpack")
+	blockCmd.Flags().StringVarP(&blockFilename, "out", "o", stdoutFilenameValue, "The filename to dump the block to (if not set, use stdout)")
+	blockCmd.Flags().BoolVarP(&rawBlock, "raw", "r", false, "Format block as msgpack")
 	blockCmd.Flags().BoolVar(&base32Encoding, "b32", false, "Encode binary blobs using base32 instead of base64")
 	blockCmd.Flags().BoolVar(&strictJSON, "strict", false, "Strict JSON decode: turn all keys into strings")
 }
@@ -104,10 +104,10 @@ var blockCmd = &cobra.Command{
 			}
 		}
 
-		// If rawFilename flag was not set, the default value '-' will write to stdout
-		err = writeFile(rawFilename, response, 0600)
+		// If blockFilename flag was not set, the default value '-' will write to stdout
+		err = writeFile(blockFilename, response, 0600)
 		if err != nil {
-			reportErrorf(fileWriteError, rawFilename, err)
+			reportErrorf(fileWriteError, blockFilename, err)
 		}
 	},
 }
