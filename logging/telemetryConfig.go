@@ -33,7 +33,7 @@ import (
 // TelemetryConfigFilename default file name for telemetry config "logging.config"
 var TelemetryConfigFilename = "logging.config"
 
-const ipv6AddressLength = 39
+const hostnameLength = 255
 
 // TelemetryOverride Determines whether an override value is set and what it's value is.
 // The first return value is whether an override variable is found, if it is, the second is the override value.
@@ -116,7 +116,7 @@ func (cfg TelemetryConfig) getInstanceName() string {
 // SanitizeTelemetryString applies sanitization rules and returns the sanitized string.
 func SanitizeTelemetryString(input string, maxParts int) string {
 	// Truncate to a reasonable size, allowing some undefined separator.
-	maxReasonableSize := maxParts*ipv6AddressLength + maxParts - 1
+	maxReasonableSize := maxParts*hostnameLength + maxParts - 1
 	if len(input) > maxReasonableSize {
 		input = input[:maxReasonableSize]
 	}

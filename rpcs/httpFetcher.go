@@ -104,7 +104,7 @@ func (hf *HTTPFetcher) GetBlockBytes(ctx context.Context, r basics.Round) (data 
 	// TODO: Temporarily allow old and new content types so we have time for lazy upgrades
 	// Remove this 'old' string after next release.
 	const ledgerResponseContentTypeOld = "application/algorand-block-v1"
-	if contentTypes[0] != ledgerResponseContentType && contentTypes[0] != ledgerResponseContentTypeOld {
+	if contentTypes[0] != LedgerResponseContentType && contentTypes[0] != ledgerResponseContentTypeOld {
 		hf.log.Warnf("http block fetcher response has an invalid content type : %s", contentTypes[0])
 		response.Body.Close()
 		return nil, fmt.Errorf("http block fetcher invalid content type '%s'", contentTypes[0])

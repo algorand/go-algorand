@@ -275,6 +275,7 @@ len
 arg 5
 len
 +
+bnz label1
 global MinTxnFee
 global MinBalance
 global MaxTxnLife
@@ -283,11 +284,13 @@ global GroupSize
 global LogicSigVersion
 txn Sender
 txn Fee
+bnz label1
 txn FirstValid
 txn LastValid
 txn Note
 txn Receiver
 txn Amount
+label1:
 txn CloseRemainderTo
 txn VotePK
 txn SelectionPK
