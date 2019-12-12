@@ -86,7 +86,6 @@ type ledgerForTracker interface {
 	Latest() basics.Round
 	Block(basics.Round) (bookkeeping.Block, error)
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
-	//blockAux(basics.Round) (bookkeeping.Block, error)
 }
 
 type trackerRegistry struct {

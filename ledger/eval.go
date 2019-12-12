@@ -36,11 +36,6 @@ import (
 // ErrNoSpace indicates insufficient space for transaction in block
 var ErrNoSpace = errors.New("block does not have space for transaction")
 
-// evalAux is left after removing explicit reward claims,
-// in case we need this infrastructure in the future.
-type evalAux struct {
-}
-
 // VerifiedTxnCache captures the interface for a cache of previously
 // verified transactions.  This is expected to match the transaction
 // pool object.
@@ -158,8 +153,7 @@ func (cs *roundCowState) ConsensusParams() config.ConsensusParams {
 // BlockEvaluator represents an in-progress evaluation of a block
 // against the ledger.
 type BlockEvaluator struct {
-	state *roundCowState
-	//aux      *evalAux
+	state    *roundCowState
 	validate bool
 	generate bool
 	txcache  VerifiedTxnCache
@@ -199,12 +193,6 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, validate 
 		return nil, protocol.Error(hdr.CurrentProtocol)
 	}
 
-	/*
-		if aux == nil {
-			aux = &evalAux{}
-		}
-	*/
-
 	base := &roundCowBase{
 		l: l,
 		// round that lookups come from is previous block.  We validate
@@ -216,7 +204,6 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, validate 
 	}
 
 	eval := &BlockEvaluator{
-		//aux:              aux,
 		validate:         validate,
 		generate:         generate,
 		txcache:          txcache,
@@ -706,7 +693,6 @@ func (eval *BlockEvaluator) GenerateBlock() (*ValidatedBlock, error) {
 	vb := ValidatedBlock{
 		blk:   eval.block,
 		delta: eval.state.mods,
-		//aux:   *eval.aux,
 	}
 	return &vb, nil
 }
@@ -768,7 +754,6 @@ func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, txcache Ve
 	vb := ValidatedBlock{
 		blk:   blk,
 		delta: delta,
-		//aux:   aux,
 	}
 	return &vb, nil
 }
@@ -779,7 +764,6 @@ func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, txcache Ve
 type ValidatedBlock struct {
 	blk   bookkeeping.Block
 	delta StateDelta
-	//aux   evalAux
 }
 
 // Block returns the underlying Block for a ValidatedBlock.
@@ -795,6 +779,5 @@ func (vb ValidatedBlock) WithSeed(s committee.Seed) ValidatedBlock {
 	return ValidatedBlock{
 		blk:   newblock,
 		delta: vb.delta,
-		//aux:   vb.aux,
 	}
 }

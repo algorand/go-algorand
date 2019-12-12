@@ -364,12 +364,6 @@ func (l *Ledger) LatestCommitted() basics.Round {
 	return l.blockQ.latestCommitted()
 }
 
-/*
-func (l *Ledger) blockAux(rnd basics.Round) (bookkeeping.Block, error) {
-	return l.blockQ.getBlockAux(rnd)
-}
-*/
-
 // Block returns the block for round rnd.
 func (l *Ledger) Block(rnd basics.Round) (blk bookkeeping.Block, err error) {
 	return l.blockQ.getBlock(rnd)
@@ -413,7 +407,6 @@ func (l *Ledger) AddBlock(blk bookkeeping.Block, cert agreement.Certificate) err
 	vb := ValidatedBlock{
 		blk:   blk,
 		delta: updates,
-		//aux:   aux,
 	}
 
 	return l.AddValidatedBlock(vb, cert)

@@ -94,13 +94,6 @@ func checkBlockDB(t *testing.T, tx *sql.Tx, blocks []blockEntry) {
 		require.NoError(t, err)
 		require.Equal(t, blk, blocks[rnd].block)
 		require.Equal(t, cert, blocks[rnd].cert)
-
-		/*
-			blk, aux, err := blockGetAux(tx, rnd)
-			require.NoError(t, err)
-			require.Equal(t, blk, blocks[rnd].block)
-			require.Equal(t, aux, blocks[rnd].aux)
-		*/
 	}
 
 	_, err = blockGet(tx, basics.Round(len(blocks)))

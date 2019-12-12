@@ -140,33 +140,6 @@ func blockGetCert(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, cert agr
 	return
 }
 
-/*
-func blockGetAux(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, aux evalAux, err error) {
-	var blkbuf []byte
-	var auxbuf []byte
-	err = tx.QueryRow("SELECT blkdata, auxdata FROM blocks WHERE rnd=?", rnd).Scan(&blkbuf, &auxbuf)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			err = ErrNoEntry{Round: rnd}
-		}
-
-		return
-	}
-
-	err = protocol.Decode(blkbuf, &blk)
-	if err != nil {
-		return
-	}
-
-	err = protocol.Decode(auxbuf, &aux)
-	if err != nil {
-		return
-	}
-
-	return
-}
-*/
-
 func blockPut(tx *sql.Tx, blk bookkeeping.Block, cert agreement.Certificate) error {
 	var max sql.NullInt64
 	err := tx.QueryRow("SELECT MAX(rnd) FROM blocks").Scan(&max)

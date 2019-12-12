@@ -302,24 +302,3 @@ func (bq *blockQueue) getBlockCert(r basics.Round) (blk bookkeeping.Block, cert 
 	err = updateErrNoEntry(err, lastCommitted, latest)
 	return
 }
-
-/*
-func (bq *blockQueue) getBlockAux(r basics.Round) (blk bookkeeping.Block, aux evalAux, err error) {
-	e, lastCommitted, latest, err := bq.checkEntry(r)
-	if e != nil {
-		return e.block, e.aux, nil
-	}
-
-	if err != nil {
-		return
-	}
-
-	err = bq.l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
-		var err0 error
-		blk, aux, err0 = blockGetAux(tx, r)
-		return err0
-	})
-	err = updateErrNoEntry(err, lastCommitted, latest)
-	return
-}
-*/
