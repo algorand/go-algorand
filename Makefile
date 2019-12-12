@@ -57,7 +57,7 @@ check_license:
 	./scripts/check_license.sh
 
 check_shell:
-	find . -type f -name *.sh -exec shellcheck {} +
+	find . -type f -name "*.sh" -exec shellcheck {} +
 
 sanity: vet fix lint fmt check_license
 

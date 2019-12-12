@@ -21,107 +21,45 @@ END_FG_COLOR=$(tput sgr0)
 
 GOPATH=$(go env GOPATH)
 export GOPATH
-GOPATH1=$(echo "$GOPATH" | cut -d: -f1)
-DEPS=0
+GO_BIN="$(echo "$GOPATH" | cut -d: -f1)/bin"
+MISSING=0
 
-installing_dep() {
-    echo "$TEAL_FG[INSTALLING]$END_FG_COLOR $1..."
+missing_dep() {
+    echo "$YELLOW_FG[WARNING]$END_FG_COLOR Mising dependency \`$TEAL_FG${1}$END_FG_COLOR\`."
+    MISSING=1
 }
 
+GO_DEPS=(
+    "$GO_BIN/golint"
+    "$GO_BIN/stringer"
+    "$GO_BIN/swagger"
+)
+
 check_deps() {
-    if [ ! -f "${GOPATH1}/bin/golint" ]
-    then
-        DEPS=$(( "$DEPS" | 1 ))
-    fi
-
-    if [ ! -f "${GOPATH1}/bin/stringer" ]
-    then
-        DEPS=$(( "$DEPS" | 2 ))
-    fi
-
-    if [ ! -f "${GOPATH1}/bin/swagger" ]
-    then
-        DEPS=$(( "$DEPS" | 4 ))
-    fi
+    for path in ${GO_DEPS[*]}
+    do
+        if [ ! -f "$path" ]
+        then
+            # Parameter expansion is faster than invoking another process.
+            # https://www.linuxjournal.com/content/bash-parameter-expansion
+            missing_dep "${path##*/}"
+        fi
+    done
 
     # Don't print `shellcheck`s location.
     if ! which shellcheck > /dev/null
     then
-        DEPS=$(( "$DEPS" | 8 ))
+        missing_dep shellcheck
     fi
 }
 
 check_deps
 
-if [ $DEPS -eq 0 ]
+if [ $MISSING -eq 0 ]
 then
-    echo "$GREEN_FG[$0]$END_FG_COLOR Required dependencies already installed."
-    exit 0
-fi
-
-if [ $(( DEPS & 1 )) -ne 0 ]
-then
-    read -rp "${YELLOW_FG}MISSING DEPENDENCY$END_FG_COLOR \`golint\`. Install? (using go get) (Y/n): " OK
-    if [[ "$OK" =~ ^""$|Y|y ]]
-    then
-        installing_dep golint
-        GO111MODULE=off go get -u golang.org/x/lint/golint
-        DEPS=$(( "$DEPS" & ~1 ))
-    fi
-fi
-
-if [ $(( DEPS & 2 )) -ne 0 ]
-then
-    read -rp "${YELLOW_FG}MISSING DEPENDENCY$END_FG_COLOR \`stringer\`. Install? (using go get) (Y/n): " OK
-    if [[ "$OK" =~ ^""$|Y|y ]]
-    then
-        installing_dep stringer
-        GO111MODULE=off go get -u golang.org/x/tools/cmd/stringer
-        DEPS=$(( "$DEPS" & ~2 ))
-    fi
-fi
-
-if [ $(( DEPS & 4 )) -ne 0 ]
-then
-    read -rp "${YELLOW_FG}MISSING DEPENDENCY$END_FG_COLOR \`swagger\`. Install? (using go get) (Y/n): " OK
-    if [[ "$OK" =~ ^""$|Y|y ]]
-    then
-        installing_dep swagger
-        GO111MODULE=off go get -u github.com/go-swagger/go-swagger/cmd/swagger
-        DEPS=$(( "$DEPS" & ~4 ))
-    fi
-fi
-
-if [ $(( DEPS & 8 )) -ne 0 ]
-then
-
-    read -rp "${YELLOW_FG}MISSING DEPENDENCY$END_FG_COLOR \`shellcheck\`. Install? (using go get) (Y/n): " OK
-    if [[ "$OK" =~ ^""$|Y|y ]]
-    then
-        OS=$(uname)
-
-        if [ "$OS" == "Linux" ]
-        then
-            if ! which sudo > /dev/null
-            then
-                apt-get install sudo -y
-            fi
-
-            sudo apt-get install shellcheck -y
-        elif [ "$OS" == "Darwin" ]
-        then
-            brew install shellcheck
-        fi
-
-        DEPS=$(( "$DEPS" & ~8 ))
-    fi
-fi
-
-if [ $DEPS -eq 0 ]
-then
-    echo -e "$GREEN_FG[$0]$END_FG_COLOR All required dependencies have been installed."
+    echo "$GREEN_FG[$0]$END_FG_COLOR Required dependencies installed."
 else
-    echo -e "$RED_FG[$0]$END_FG_COLOR Required dependencies still missing. Build will probably fail."
+    echo -e "$RED_FG[$0]$END_FG_COLOR Required dependencies missing. Run \`${TEAL_FG}./scripts/configure-dev.sh$END_FG_COLOR\` to install."
     exit 1
 fi
 
