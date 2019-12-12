@@ -19,7 +19,7 @@ GOTAGS          := --tags "sqlite_unlock_notify sqlite_omit_load_extension"
 ifeq ($(UNAME), Linux)
 ifeq ($(ARCH), amd64)
 EXTLDFLAGS := -static-libstdc++ -static-libgcc -static
-GOTAGS     := --tags "sqlite_unlock_notify sqlite_omit_load_extension osusergo netgo static_build" -buildmode pie
+GOTAGS     := --tags "sqlite_unlock_notify sqlite_omit_load_extension osusergo netgo static_build"
 GOBUILDMODE := -buildmode pie
 else
 # non-arm64, i.e. arm
