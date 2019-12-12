@@ -56,10 +56,8 @@ vet:
 check_license:
 	./scripts/check_license.sh
 
-# Turn on recursive globbing to find all shell scripts.
 check_shell:
-	bash -c "shopt -s globstar"
-	shellcheck */**/*.sh
+	find . -type f -name *.sh -exec shellcheck {} +
 
 sanity: vet fix lint fmt check_license
 
