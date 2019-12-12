@@ -34,8 +34,7 @@ var blockSchema = []string{
 		proto text,
 		hdrdata blob,
 		blkdata blob,
-		certdata blob,
-		auxdata blob)`,
+		certdata blob)`,
 }
 
 var blockResetExprs = []string{
@@ -46,7 +45,7 @@ func blockInit(tx *sql.Tx, initBlocks []bookkeeping.Block) error {
 	for _, tableCreate := range blockSchema {
 		_, err := tx.Exec(tableCreate)
 		if err != nil {
-			return err
+			return fmt.Errorf("blockdb blockInit could not create table %v", err)
 		}
 	}
 
@@ -57,7 +56,7 @@ func blockInit(tx *sql.Tx, initBlocks []bookkeeping.Block) error {
 
 	if next == 0 {
 		for _, blk := range initBlocks {
-			err = blockPut(tx, blk, agreement.Certificate{}, evalAux{})
+			err = blockPut(tx, blk, agreement.Certificate{})
 			if err != nil {
 				serr, ok := err.(sqlite3.Error)
 				if ok && serr.Code == sqlite3.ErrConstraint {
@@ -141,6 +140,7 @@ func blockGetCert(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, cert agr
 	return
 }
 
+/*
 func blockGetAux(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, aux evalAux, err error) {
 	var blkbuf []byte
 	var auxbuf []byte
@@ -165,8 +165,9 @@ func blockGetAux(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, aux evalA
 
 	return
 }
+*/
 
-func blockPut(tx *sql.Tx, blk bookkeeping.Block, cert agreement.Certificate, aux evalAux) error {
+func blockPut(tx *sql.Tx, blk bookkeeping.Block, cert agreement.Certificate) error {
 	var max sql.NullInt64
 	err := tx.QueryRow("SELECT MAX(rnd) FROM blocks").Scan(&max)
 	if err != nil {
@@ -185,12 +186,13 @@ func blockPut(tx *sql.Tx, blk bookkeeping.Block, cert agreement.Certificate, aux
 		}
 	}
 
-	_, err = tx.Exec("INSERT INTO blocks (rnd, proto, hdrdata, blkdata, certdata, auxdata) VALUES (?, ?, ?, ?, ?, ?)",
-		blk.Round(), blk.CurrentProtocol,
+	_, err = tx.Exec("INSERT INTO blocks (rnd, proto, hdrdata, blkdata, certdata) VALUES (?, ?, ?, ?, ?)",
+		blk.Round(),
+		blk.CurrentProtocol,
 		protocol.Encode(blk.BlockHeader),
 		protocol.Encode(blk),
 		protocol.Encode(cert),
-		protocol.Encode(aux))
+	)
 	return err
 }
 
