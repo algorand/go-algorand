@@ -18,7 +18,7 @@ stages:
   - name: deploy
     if: branch =~ /^rel\// AND type != pull_request
   - name: post_deploy
-    if: branch =~ /^rel\// AND type != pull_request
+    if: branch =~ /^rel\/(^nightly|beta|stable)/ AND type != pull_request
 
 jobs:
   allow_failures:
