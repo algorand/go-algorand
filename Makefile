@@ -15,11 +15,18 @@ BUILDCHANNEL     ?= $(shell ./scripts/compute_branch_channel.sh $(BUILDBRANCH))
 DEFAULTNETWORK   ?= $(shell ./scripts/compute_branch_network.sh $(BUILDBRANCH))
 DEFAULT_DEADLOCK ?= $(shell ./scripts/compute_branch_deadlock_default.sh $(BUILDBRANCH))
 
+GOTAGS          := --tags "sqlite_unlock_notify sqlite_omit_load_extension"
 ifeq ($(UNAME), Linux)
+ifeq ($(ARCH), amd64)
+EXTLDFLAGS := -static-libstdc++ -static-libgcc -static
+GOTAGS     := --tags "sqlite_unlock_notify sqlite_omit_load_extension osusergo netgo static_build" -buildmode pie
+else
+# non-arm64, i.e. arm
 EXTLDFLAGS := -static-libstdc++ -static-libgcc
 endif
+endif
 
-GOTAGS          := --tags "sqlite_unlock_notify sqlite_omit_load_extension"
+
 GOTRIMPATH	:= $(shell go help build | grep -q .-trimpath && echo -trimpath)
 
 GOLDFLAGS_BASE  := -X github.com/algorand/go-algorand/config.BuildNumber=$(BUILDNUMBER) \
