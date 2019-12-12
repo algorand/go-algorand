@@ -50,6 +50,8 @@ const EvalMaxArgs = 255
 // EvalMaxScratchSize is the maximum number of scratch slots.
 const EvalMaxScratchSize = 255
 
+const MaxStringSize = 4069
+
 // stackValue is the type for the operand stack.
 // Each stackValue is either a valid []byte value or a uint64 value.
 // If (.Bytes != nil) the stackValue is a []byte value, otherwise uint64 value.
@@ -1154,14 +1156,55 @@ func opStore(cx *evalContext) {
 }
 
 func opCons(cx *evalContext) {
-	// if result would be longer than 4096, panic
-	panic("TODO: implement cons")
+	last := len(cx.stack) - 1
+	prev := last - 1
+	a := cx.stack[prev].Bytes
+	b := cx.stack[last].Bytes
+	newlen := len(a) + len(b)
+	if newlen > MaxStringSize {
+		cx.err = errors.New("cons resulted in string too long")
+		return
+	}
+	newvalue := make([]byte, newlen)
+	copy(newvalue, a)
+	copy(newvalue[len(a):], b)
+	cx.stack[prev].Bytes = newvalue
+	cx.stack = cx.stack[:last]
+}
+
+func substring(x []byte, start, end int) (out []byte, err error) {
+	out = x
+	if end <= start {
+		err = errors.New("substring end before start")
+		return
+	}
+	if start > len(x) || end > len(x) {
+		err = errors.New("substring range beyond length of string")
+	}
+	out = x[start:end]
+	err = nil
+	return
 }
 
 func opSubstring(cx *evalContext) {
-	panic("TODO: implement substring")
+	last := len(cx.stack) - 1
+	start := cx.program[cx.pc+1]
+	end := cx.program[cx.pc+2]
+	cx.stack[last].Bytes, cx.err = substring(cx.stack[last].Bytes, int(start), int(end))
 }
 
+const maxInt = int((^uint(0)) >> 1)
+
 func opSubstring3(cx *evalContext) {
-	panic("TODO: implement substring3")
+	last := len(cx.stack) - 1 // end
+	prev := last - 1          // start
+	pprev := prev - 1         // bytes
+	start := cx.stack[prev].Uint
+	end := cx.stack[last].Uint
+	if start > uint64(maxInt) || end > uint64(maxInt) {
+		cx.err = errors.New("substring range beyond length of string")
+		return
+	}
+	cx.stack[pprev].Bytes, cx.err = substring(cx.stack[pprev].Bytes, int(start), int(end))
+	cx.stack = cx.stack[:prev]
 }
