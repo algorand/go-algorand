@@ -26,7 +26,6 @@ import (
 	"testing"
 	"time"
 	"unicode"
-	"runtime"
 
 	"github.com/stretchr/testify/require"
 
@@ -38,6 +37,7 @@ import (
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
+	testUtils "github.com/algorand/go-algorand/test/framework/utils"
 )
 
 var fixture fixtures.RestClientFixture
@@ -183,9 +183,8 @@ func TestClientCanGetStatusAfterBlock(t *testing.T) {
 }
 
 func TestTransactionsByAddr(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip()
-	}
+	testUtils.SkipIfFilteringTest(t)
+
 	var localFixture fixtures.RestClientFixture
 	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
 	defer localFixture.Shutdown()

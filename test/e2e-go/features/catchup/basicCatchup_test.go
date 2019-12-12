@@ -19,11 +19,11 @@ package rewards
 import (
 	"path/filepath"
 	"testing"
-	"runtime"
 	
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/test/framework/fixtures"
+	testUtils "github.com/algorand/go-algorand/test/framework/utils"
 )
 
 func TestBasicCatchup(t *testing.T) {
@@ -69,9 +69,8 @@ func TestBasicCatchup(t *testing.T) {
 }
 
 func TestCatchupOverGossip(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip()
-	}
+	testUtils.SkipIfFilteringTest(t)
+
 	if testing.Short() {
 		t.Skip()
 	}
