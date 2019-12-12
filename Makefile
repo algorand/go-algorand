@@ -14,12 +14,14 @@ BUILDBRANCH      ?= $(shell ./scripts/compute_branch.sh)
 BUILDCHANNEL     ?= $(shell ./scripts/compute_branch_channel.sh $(BUILDBRANCH))
 DEFAULTNETWORK   ?= $(shell ./scripts/compute_branch_network.sh $(BUILDBRANCH))
 DEFAULT_DEADLOCK ?= $(shell ./scripts/compute_branch_deadlock_default.sh $(BUILDBRANCH))
+GOGCCFLAGS       := $(shell go env GOGCCFLAGS)
 
 GOTAGS          := --tags "sqlite_unlock_notify sqlite_omit_load_extension"
 ifeq ($(UNAME), Linux)
 ifeq ($(ARCH), amd64)
 EXTLDFLAGS := -static-libstdc++ -static-libgcc -static
 GOTAGS     := --tags "sqlite_unlock_notify sqlite_omit_load_extension osusergo netgo static_build" -buildmode pie
+GOGCCFLAGS := $(filter-out -fPIC,$(GOGCCFLAGS))
 else
 # non-arm64, i.e. arm
 EXTLDFLAGS := -static-libstdc++ -static-libgcc
@@ -134,6 +136,7 @@ $(KMD_API_SWAGGER_INJECT): $(KMD_API_SWAGGER_SPEC) $(KMD_API_SWAGGER_SPEC).valid
 build: buildsrc gen
 
 buildsrc: crypto/lib/libsodium.a node_exporter NONGO_BIN deps $(ALGOD_API_SWAGGER_INJECT) $(KMD_API_SWAGGER_INJECT)
+	GOGCCFLAGS="$(GOGCCFLAGS)" \
 	go install $(GOTRIMPATH) $(GOTAGS) -ldflags="$(GOLDFLAGS)" ./...
 
 SOURCES_RACE := github.com/algorand/go-algorand/cmd/kmd
