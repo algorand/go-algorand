@@ -56,6 +56,11 @@ vet:
 check_license:
 	./scripts/check_license.sh
 
+# Turn on recursive globbing to find all shell scripts.
+check_shell:
+	bash -c "shopt -s globstar"
+	shellcheck */**/*.sh
+
 sanity: vet fix lint fmt check_license
 
 cover:
@@ -243,4 +248,4 @@ dump: $(addprefix gen/,$(addsuffix /genesis.dump, $(NETWORKS)))
 install: build
 	scripts/dev_install.sh -p $(GOPATH1)/bin
 
-.PHONY: default fmt vet lint check_license sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN
+.PHONY: default fmt vet lint check_license check_shell sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN
