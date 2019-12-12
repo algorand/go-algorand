@@ -30,7 +30,7 @@ import (
 )
 
 func transcodeNoError(t *testing.T, mpToJSON bool, in io.ReadCloser, out io.WriteCloser) {
-	err := Transcode(mpToJSON, in, out)
+	err := Transcode(mpToJSON, false, false, in, out)
 	require.NoError(t, err)
 }
 
