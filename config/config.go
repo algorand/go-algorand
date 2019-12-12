@@ -221,6 +221,9 @@ type ConsensusParams struct {
 
 	// sum of estimated op cost must be less than this
 	LogicSigMaxCost uint64
+
+	// max decimal precision for assets
+	MaxAssetDecimals uint32
 }
 
 // Consensus tracks the protocol-level settings for different versions of the
@@ -445,9 +448,24 @@ func initConsensusProtocols() {
 	// v17 can be upgraded to v19.
 	v17.ApprovedUpgrades[protocol.ConsensusV19] = true
 
+	// v20 points to adding the precision to the assets.
+	v20 := v19
+	v20.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	v20.MaxAssetDecimals = 19
+	// we want to adjust the upgrade time to be roughly one week.
+	// one week, in term of rounds would be:
+	// 140651 = (7 * 24 * 60 * 60 / 4.3)
+	// for the sake of future manual calculations, we'll round that down
+	// a bit :
+	v20.UpgradeWaitRounds = 140000
+	Consensus[protocol.ConsensusV20] = v20
+
+	// v19 can be upgraded to v20.
+	v19.ApprovedUpgrades[protocol.ConsensusV20] = true
+
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v19
+	vFuture := v20
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
@@ -494,7 +512,7 @@ func initConsensusTestProtocols() {
 	Consensus[protocol.ConsensusTestRapidRewardRecalculation] = rapidRecalcParams
 
 	// Setting the testShorterLookback parameters derived from ConsensusCurrentVersion
-	// Will result in MaxBalLookback = 32 
+	// Will result in MaxBalLookback = 32
 	// Used to run tests faster where past MaxBalLookback values are checked
 	testShorterLookback := Consensus[protocol.ConsensusCurrentVersion]
 	testShorterLookback.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
@@ -503,7 +521,7 @@ func initConsensusTestProtocols() {
 	// ref. https://github.com/algorandfoundation/specs/blob/master/dev/abft.md
 	testShorterLookback.SeedLookback = 2
 	testShorterLookback.SeedRefreshInterval = 8
-	testShorterLookback.MaxBalLookback = 2*testShorterLookback.SeedLookback*testShorterLookback.SeedRefreshInterval // 32
+	testShorterLookback.MaxBalLookback = 2 * testShorterLookback.SeedLookback * testShorterLookback.SeedRefreshInterval // 32
 	Consensus[protocol.ConsensusTestShorterLookback] = testShorterLookback
 }
 
@@ -729,6 +747,10 @@ type Local struct {
 
 	// EnableRequestLogger enabled the logging of the incoming requests to the telemetry server.
 	EnableRequestLogger bool
+
+	// PeerConnectionsUpdateInterval defines the interval at which the peer connections information is being sent to the
+	// telemetry ( when enabled ). Defined in seconds.
+	PeerConnectionsUpdateInterval int
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)

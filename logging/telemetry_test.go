@@ -74,7 +74,6 @@ func makeTelemetryTestFixtureWithConfig(minLevel logrus.Level, cfg *TelemetryCon
 		f.cfg = createTelemetryConfig()
 	} else {
 		f.cfg = *cfg
-		f.cfg.LogHistoryDepth = 5
 	}
 	f.cfg.Enable = true
 	f.cfg.MinLogLevel = minLevel

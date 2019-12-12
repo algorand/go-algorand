@@ -1,3 +1,19 @@
+// Copyright (C) 2019 Algorand, Inc.
+// This file is part of go-algorand
+//
+// go-algorand is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// go-algorand is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
 package network
 
 import (
@@ -30,7 +46,7 @@ func ReadFromSRV(service string, name string, fallbackDNSResolverAddress string)
 
 		_, records, err = resolver.LookupSRV(context.Background(), service, "tcp", name)
 		if err != nil {
-			log.Warnf("ReadFromBootstrap: DNS LookupSRV failed when using system resolver(%v) as well as via %s due to %v", sysLookupErr, resolver.EffectiveResolverDNS(), err)
+			err = fmt.Errorf("ReadFromBootstrap: DNS LookupSRV failed when using system resolver(%v) as well as via %s due to %v", sysLookupErr, resolver.EffectiveResolverDNS(), err)
 			return
 		}
 		// we succeeded when using the public dns. log this.
