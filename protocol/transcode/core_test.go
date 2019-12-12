@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package main
+package transcode
 
 import (
 	"encoding/base32"
@@ -30,7 +30,7 @@ import (
 )
 
 func transcodeNoError(t *testing.T, mpToJSON bool, in io.ReadCloser, out io.WriteCloser) {
-	err := transcode(mpToJSON, in, out)
+	err := Transcode(mpToJSON, in, out)
 	require.NoError(t, err)
 }
 

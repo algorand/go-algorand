@@ -148,5 +148,7 @@ const (
 	errGettingToken          = "Couldn't get token for wallet '%s' (ID: %s): %s"
 
 	// Ledger
-	errParsingRoundNumber    = "Error parsing round number: %s"
+	errParsingRoundNumber  = "Error parsing round number: %s"
+	errBadBlockArgs        = "Cannot combine --b32=true or --strict=true with --raw"
+	errEncodingBlockAsJSON = "Error encoding block as json: %s"
 )

@@ -17,21 +17,30 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"strconv"
 
 	"github.com/spf13/cobra"
+
+	"github.com/algorand/go-algorand/protocol/transcode"
 )
 
 var (
-	rawFilename string
+	rawFilename    string
+	rawBlock       bool
+	base32Encoding bool
+	strictJSON     bool
 )
 
 func init() {
 	ledgerCmd.AddCommand(supplyCmd)
-	ledgerCmd.AddCommand(rawBlockCmd)
+	ledgerCmd.AddCommand(blockCmd)
 
-	rawBlockCmd.Flags().StringVarP(&rawFilename, "out", "o", stdoutFilenameValue, "The filename to dump the raw block to (if not set, use stdout)")
+	blockCmd.Flags().StringVarP(&rawFilename, "out", "o", stdoutFilenameValue, "The filename to dump the raw block to (if not set, use stdout)")
+	blockCmd.Flags().BoolVarP(&rawBlock, "raw", "r", false, "Dump raw block as msgpack")
+	blockCmd.Flags().BoolVar(&base32Encoding, "b32", false, "Encode binary blobs using base32 instead of base64")
+	blockCmd.Flags().BoolVar(&strictJSON, "strict", false, "Strict JSON decode: turn all keys into strings")
 }
 
 var ledgerCmd = &cobra.Command{
@@ -61,10 +70,10 @@ var supplyCmd = &cobra.Command{
 	},
 }
 
-var rawBlockCmd = &cobra.Command{
-	Use:   "rawblock [round number]",
-	Short: "Dump the raw, encoded msgpack block to a file or stdout",
-	Long:  "Dump the raw, encoded msgpack block to a file or stdout",
+var blockCmd = &cobra.Command{
+	Use:   "block [round number]",
+	Short: "Dump a block to a file or stdout",
+	Long:  "Dump a block to a file or stdout",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		round, err := strconv.ParseUint(args[0], 10, 64)
@@ -77,6 +86,22 @@ var rawBlockCmd = &cobra.Command{
 		response, err := client.RawBlock(round)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
+		}
+
+		// Unless the user asked for the raw block,
+		// print the msgpack decoded version
+		if !rawBlock {
+			in := bytes.NewBuffer(response)
+			out := bytes.NewBuffer(nil)
+			err = transcode.Transcode(true, in, out, base32Encoding, strictJSON)
+			if err != nil {
+				reportErrorf(errEncodingBlockAsJSON, err)
+			}
+			response = out.Bytes()
+		} else {
+			if base32Encoding || strictJSON {
+				reportErrorf(errBadBlockArgs)
+			}
 		}
 
 		// If rawFilename flag was not set, the default value '-' will write to stdout
