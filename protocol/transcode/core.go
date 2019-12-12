@@ -32,7 +32,8 @@ type decoder interface {
 	Decode(v interface{}) error
 }
 
-func Transcode(mpToJSON bool, in io.Reader, out io.Writer, base32Encoding, strictJSON bool) error {
+// Transcode turns msgpack to JSON or JSON to msgpack
+func Transcode(mpToJSON bool, base32Encoding, strictJSON bool, in io.Reader, out io.Writer) error {
 	canonicalMsgpackHandle := new(codec.MsgpackHandle)
 	canonicalMsgpackHandle.ErrorIfNoField = true
 	canonicalMsgpackHandle.ErrorIfNoArrayExpand = true

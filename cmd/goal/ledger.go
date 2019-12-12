@@ -93,7 +93,7 @@ var blockCmd = &cobra.Command{
 		if !rawBlock {
 			in := bytes.NewBuffer(response)
 			out := bytes.NewBuffer(nil)
-			err = transcode.Transcode(true, in, out, base32Encoding, strictJSON)
+			err = transcode.Transcode(true, base32Encoding, strictJSON, in, out)
 			if err != nil {
 				reportErrorf(errEncodingBlockAsJSON, err)
 			}

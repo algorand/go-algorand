@@ -66,7 +66,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	err := transcode.Transcode(*mpToJSON, os.Stdin, os.Stdout, *base32Encoding, *strictJSON)
+	err := transcode.Transcode(*mpToJSON, *base32Encoding, *strictJSON, os.Stdin, os.Stdout)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
