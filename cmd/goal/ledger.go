@@ -89,7 +89,7 @@ var blockCmd = &cobra.Command{
 		}
 
 		// Unless the user asked for the raw block,
-		// print the msgpack decoded version
+		// print the block encoded as JSON
 		if !rawBlock {
 			in := bytes.NewBuffer(response)
 			out := bytes.NewBuffer(nil)
