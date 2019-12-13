@@ -21,6 +21,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"runtime/debug"
+
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
@@ -49,7 +51,6 @@ type Ledger interface {
 	AddBlock(bookkeeping.Block, agreement.Certificate) error
 	ConsensusParams(basics.Round) (config.ConsensusParams, error)
 
-	// only needed to support tests
 	Block(basics.Round) (bookkeeping.Block, error)
 	BlockCert(basics.Round) (bookkeeping.Block, agreement.Certificate, error)
 }
@@ -114,6 +115,7 @@ func (s *Service) Start() {
 
 // Stop informs the catchup service that it should stop, and waits for it to stop (when periodicSync() exits)
 func (s *Service) Stop() {
+	debug.PrintStack()
 	s.cancel()
 	<-s.done
 	if atomic.CompareAndSwapUint32(&s.initialSyncNotified, 0, 1) {
@@ -341,6 +343,9 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 	nextRound := from
 	for ; nextRound < from+basics.Round(parallelRequests); nextRound++ {
 		if s.nextRoundIsNotApproved(nextRound) {
+			// It is sufficent to check only in the first
+			// iteration, however, checking in all to keep
+			// the nextRoundIsNotApproved interface simple
 			break
 		}
 		currentRoundComplete := make(chan bool, 2)

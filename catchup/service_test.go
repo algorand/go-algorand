@@ -445,3 +445,12 @@ func testingenv(t testing.TB, numBlocks int) (ledger, emptyLedger Ledger) {
 
 	return mLedger, mEmptyLedger
 }
+
+/*
+func getUnapprovedProtocol(consensusMap config.Consensus) (ConsensusParams) {
+
+	proto := consensumMap[protocol.ConsensusCurrentVersion]
+	proto.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	return proto
+}
+*/
