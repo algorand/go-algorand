@@ -39,6 +39,7 @@ const (
 	authHeader           = "X-Algo-API-Token"
 	healthCheckEndpoint  = "/health"
 	apiVersionPathPrefix = "/v1"
+	maxRawResponseBytes  = 50e6
 )
 
 // unversionedPaths ais a set of paths that should not be prefixed by the API version
@@ -87,7 +88,7 @@ func stripTransaction(tx string) string {
 }
 
 // submitForm is a helper used for submitting (ex.) GETs and POSTs to the server
-func (client RestClient) submitForm(response interface{}, path string, request interface{}, requestMethod string, encodeJSON bool) error {
+func (client RestClient) submitForm(response interface{}, path string, request interface{}, requestMethod string, encodeJSON bool, decodeJSON bool) error {
 	var err error
 	queryURL := client.serverURL
 	queryURL.Path = path
@@ -134,11 +135,12 @@ func (client RestClient) submitForm(response interface{}, path string, request i
 
 	httpClient := &http.Client{}
 	resp, err := httpClient.Do(req)
-
 	if err != nil {
 		return err
 	}
 
+	// Ensure response isn't too large
+	resp.Body = http.MaxBytesReader(nil, resp.Body, maxRawResponseBytes)
 	defer resp.Body.Close()
 
 	err = extractError(resp)
@@ -146,20 +148,42 @@ func (client RestClient) submitForm(response interface{}, path string, request i
 		return err
 	}
 
-	dec := json.NewDecoder(resp.Body)
-	return dec.Decode(&response)
+	if decodeJSON {
+		dec := json.NewDecoder(resp.Body)
+		return dec.Decode(&response)
+	}
+
+	// Response must implement RawResponse
+	raw, ok := response.(v1.RawResponse)
+	if !ok {
+		return fmt.Errorf("can only decode raw response into type implementing v1.RawResponse")
+	}
+
+	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	raw.SetBytes(bodyBytes)
+	return nil
 }
 
 // get performs a GET request to the specific path against the server
 func (client RestClient) get(response interface{}, path string, request interface{}) error {
-	return client.submitForm(response, path, request, "GET", false /* encodeJSON */)
+	return client.submitForm(response, path, request, "GET", false /* encodeJSON */, true /* decodeJSON */)
+}
+
+// getRaw behaves identically to get but doesn't json decode the response, and
+// the response must implement the v1.RawResponse interface
+func (client RestClient) getRaw(response v1.RawResponse, path string, request interface{}) error {
+	return client.submitForm(response, path, request, "GET", false /* encodeJSON */, false /* decodeJSON */)
 }
 
 // post sends a POST request to the given path with the given request object.
 // No query parameters will be sent if request is nil.
 // response must be a pointer to an object as post writes the response there.
 func (client RestClient) post(response interface{}, path string, request interface{}) error {
-	return client.submitForm(response, path, request, "POST", true /* encodeJSON */)
+	return client.submitForm(response, path, request, "POST", true /* encodeJSON */, true /* decodeJSON */)
 }
 
 // Status retrieves the StatusResponse from the running node
@@ -217,6 +241,10 @@ type transactionsByAddrParams struct {
 type assetsParams struct {
 	AssetIdx uint64 `url:"assetIdx"`
 	Max      uint64 `url:"max"`
+}
+
+type rawblockParams struct {
+	Raw uint64 `url:"raw"`
 }
 
 // TransactionsByAddr returns all transactions for a PK [addr] in the [first,
@@ -300,6 +328,12 @@ func (client RestClient) SendRawTransactionGroup(txgroup []transactions.SignedTx
 // Block gets the block info for the given round
 func (client RestClient) Block(round uint64) (response v1.Block, err error) {
 	err = client.get(&response, fmt.Sprintf("/block/%d", round), nil)
+	return
+}
+
+// RawBlock gets the encoded, raw msgpack block for the given round
+func (client RestClient) RawBlock(round uint64) (response v1.RawBlock, err error) {
+	err = client.getRaw(&response, fmt.Sprintf("/block/%d", round), rawblockParams{1})
 	return
 }
 
