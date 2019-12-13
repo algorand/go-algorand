@@ -20,11 +20,11 @@ import (
 	"math/rand"
 	"path/filepath"
 	"testing"
+	"runtime"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/test/framework/fixtures"
-	testUtils "github.com/algorand/go-algorand/test/framework/utils"
 )
 
 func GenerateRandomBytes(n int) []byte {
@@ -41,8 +41,9 @@ func GenerateRandomBytes(n int) []byte {
 // this test checks that two accounts' balances stay up to date
 // as they send each other money many times
 func TestAccountsCanSendMoney(t *testing.T) {
-	testUtils.SkipIfFilteringTest(t)
-
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	testAccountsCanSendMoney(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
 }
 

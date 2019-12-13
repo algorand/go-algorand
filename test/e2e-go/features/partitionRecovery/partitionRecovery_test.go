@@ -20,11 +20,11 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+	"runtime"	
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/test/framework/fixtures"
-	testUtils "github.com/algorand/go-algorand/test/framework/utils"
 )
 
 const partitionRecoveryTime = 20 * time.Minute // If we hit step 9, worst case recovery time can be ~2^8 * 5 ~= 20 mins
@@ -95,8 +95,9 @@ func TestPartitionRecoverySwapStartup(t *testing.T) {
 }
 
 func TestPartitionRecoveryStaggerRestart(t *testing.T) {
-	testUtils.SkipIfFilteringTest(t)
-
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	if testing.Short() {
 		t.Skip()
 	}
@@ -158,8 +159,9 @@ func runTestWithStaggeredStopStart(t *testing.T, fixture fixtures.RestClientFixt
 }
 
 func TestBasicPartitionRecoveryPartOffline(t *testing.T) {
-	testUtils.SkipIfFilteringTest(t)
-
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	if testing.Short() {
 		t.Skip()
 	}
@@ -211,8 +213,9 @@ func TestBasicPartitionRecoveryPartOffline(t *testing.T) {
 }
 
 func TestPartitionHalfOffline(t *testing.T) {
-	testUtils.SkipIfFilteringTest(t)
-
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	if testing.Short() {
 		t.Skip()
 	}

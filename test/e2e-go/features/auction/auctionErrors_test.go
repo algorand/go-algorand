@@ -20,16 +20,17 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+	"runtime"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/test/framework/fixtures"
-	testUtils "github.com/algorand/go-algorand/test/framework/utils"
 )
 
 func TestInvalidDeposit(t *testing.T) {
-	testUtils.SkipIfFilteringTest(t)
-
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	t.Parallel()
 	r := require.New(t)
 
@@ -276,8 +277,9 @@ func unpartitionNetwork(fixture *fixtures.AuctionFixture, r *require.Assertions)
 }
 
 func TestStartAndPartitionAuctionTenUsersTenBidsEach(t *testing.T) {
-	testUtils.SkipIfFilteringTest(t)
-
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	t.Parallel()
 	r := require.New(t)
 	var fixture fixtures.AuctionFixture

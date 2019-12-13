@@ -19,12 +19,12 @@ package auction
 import (
 	"path/filepath"
 	"testing"
+	"runtime"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/auction"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
-	testUtils "github.com/algorand/go-algorand/test/framework/utils"
 )
 
 func detectAuctionCannotProceed(r *require.Assertions, params auction.Params, lastRound, pricePerAlgo uint64) {
@@ -36,8 +36,9 @@ func detectAuctionCannotProceed(r *require.Assertions, params auction.Params, la
 }
 
 func TestStartAndEndAuctionNoBids(t *testing.T) {
-	testUtils.SkipIfFilteringTest(t)
-
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	t.Parallel()
 	r := require.New(t)
 	var fixture fixtures.AuctionFixture
@@ -73,8 +74,9 @@ func TestStartAndEndAuctionNoBids(t *testing.T) {
 }
 
 func TestStartAndEndAuctionOneUserOneBid(t *testing.T) {
-	testUtils.SkipIfFilteringTest(t)
-
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	t.Parallel()
 	r := require.New(t)
 	var fixture fixtures.AuctionFixture
@@ -138,8 +140,9 @@ func TestStartAndEndAuctionOneUserOneBid(t *testing.T) {
 }
 
 func TestStartAndEndAuctionOneUserTenBids(t *testing.T) {
-	testUtils.SkipIfFilteringTest(t)
-
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	t.Parallel()
 	r := require.New(t)
 	var fixture fixtures.AuctionFixture
@@ -301,8 +304,9 @@ func TestStartAndEndAuctionTenUsersOneBidEach(t *testing.T) {
 }
 
 func TestStartAndEndAuctionTenUsersTenBidsEach(t *testing.T) {
-	testUtils.SkipIfFilteringTest(t)
-
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	t.Parallel()
 	r := require.New(t)
 	var fixture fixtures.AuctionFixture
@@ -397,8 +401,9 @@ func TestStartAndEndAuctionTenUsersTenBidsEach(t *testing.T) {
 }
 
 func TestDecayingPrice(t *testing.T) {
-	testUtils.SkipIfFilteringTest(t)
-
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	t.Parallel()
 	r := require.New(t)
 	var fixture fixtures.AuctionFixture
