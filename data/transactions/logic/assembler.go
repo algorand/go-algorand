@@ -494,6 +494,9 @@ func assembleStore(ops *OpStream, args []string) error {
 }
 
 func assembleSubstring(ops *OpStream, args []string) error {
+	if len(args) != 2 {
+		return errors.New("substring expects 2 args")
+	}
 	start, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
 		return err

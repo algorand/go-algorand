@@ -1248,6 +1248,145 @@ int 0x310
 	require.True(t, pass)
 }
 
+func TestStringOps(t *testing.T) {
+	t.Parallel()
+	program, err := AssembleString(`byte 0x123456789abc
+substring 1 3
+byte 0x3456
+==
+byte 0x12
+byte 0x3456
+byte 0x789abc
+cons
+cons
+byte 0x123456789abc
+==
+&&
+byte 0x123456789abc
+int 1
+int 3
+substring3
+byte 0x3456
+==
+&&`)
+	require.NoError(t, err)
+	cost, err := Check(program, defaultEvalParams(nil, nil))
+	require.NoError(t, err)
+	require.True(t, cost < 1000)
+	sb := strings.Builder{}
+	pass, err := Eval(program, defaultEvalParams(&sb, nil))
+	if !pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.NoError(t, err)
+	require.True(t, pass)
+}
+
+func TestConsOverflow(t *testing.T) {
+	t.Parallel()
+	program, err := AssembleString(`byte 0xf000000000000000
+dup
+cons
+dup
+cons
+dup
+cons
+dup
+cons
+dup
+cons
+dup
+cons
+dup
+cons
+dup
+cons
+dup
+cons
+dup
+cons
+dup
+cons
+dup
+cons
+dup
+cons
+dup
+cons
+dup
+cons
+dup
+cons
+dup
+cons
+dup
+cons
+len`)
+	require.NoError(t, err)
+	cost, err := Check(program, defaultEvalParams(nil, nil))
+	require.NoError(t, err)
+	require.True(t, cost < 1000)
+	sb := strings.Builder{}
+	pass, err := Eval(program, defaultEvalParams(&sb, nil))
+	if pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.False(t, pass)
+	require.Error(t, err)
+	isNotPanic(t, err)
+}
+
+func TestSubstringFlop(t *testing.T) {
+	t.Parallel()
+	// fails in compiler
+	program, err := AssembleString(`byte 0xf000000000000000
+substring 4 2
+len`)
+	require.Error(t, err)
+
+	// fails at runtime
+	program, err = AssembleString(`byte 0xf000000000000000
+int 4
+int 2
+substring3
+len`)
+	require.NoError(t, err)
+	cost, err := Check(program, defaultEvalParams(nil, nil))
+	require.NoError(t, err)
+	require.True(t, cost < 1000)
+	sb := strings.Builder{}
+	pass, err := Eval(program, defaultEvalParams(&sb, nil))
+	if pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.False(t, pass)
+	require.Error(t, err)
+	isNotPanic(t, err)
+}
+
+func TestSubstringRange(t *testing.T) {
+	t.Parallel()
+	program, err := AssembleString(`byte 0xf000000000000000
+substring 2 99
+len`)
+	require.NoError(t, err)
+	cost, err := Check(program, defaultEvalParams(nil, nil))
+	require.NoError(t, err)
+	require.True(t, cost < 1000)
+	sb := strings.Builder{}
+	pass, err := Eval(program, defaultEvalParams(&sb, nil))
+	if pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.False(t, pass)
+	require.Error(t, err)
+	isNotPanic(t, err)
+}
+
 func TestLoadStore(t *testing.T) {
 	t.Parallel()
 	program, err := AssembleString(`int 37
