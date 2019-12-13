@@ -72,14 +72,6 @@ func (ml *mockLedgerForTracker) BlockHdr(rnd basics.Round) (bookkeeping.BlockHea
 	return ml.blocks[int(rnd)].block.BlockHeader, nil
 }
 
-func (ml *mockLedgerForTracker) blockAux(rnd basics.Round) (bookkeeping.Block, error) {
-	if rnd > ml.Latest() {
-		return bookkeeping.Block{}, fmt.Errorf("rnd %d out of bounds", rnd)
-	}
-
-	return ml.blocks[int(rnd)].block, nil
-}
-
 func (ml *mockLedgerForTracker) trackerDB() dbPair {
 	return ml.dbs
 }
