@@ -37,7 +37,7 @@ import (
 )
 
 func defaultEvalProto() config.ConsensusParams {
-	return config.ConsensusParams{LogicSigVersion: 1, LogicSigMaxCost: 20000}
+	return config.ConsensusParams{LogicSigVersion: 2, LogicSigMaxCost: 20000}
 }
 
 func defaultEvalParams(sb *strings.Builder, txn *transactions.SignedTxn) EvalParams {
@@ -1254,7 +1254,7 @@ int 0x310
 
 func TestStringOps(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`byte 0x123456789abc
+	program, err := assembleStringWithTraceVersion(t, 2, `byte 0x123456789abc
 substring 1 3
 byte 0x3456
 ==
@@ -1289,7 +1289,7 @@ byte 0x3456
 
 func TestConsOverflow(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`byte 0xf000000000000000
+	program, err := assembleStringWithTraceVersion(t, 2, `byte 0xf000000000000000
 dup
 cons
 dup
@@ -1345,13 +1345,13 @@ len`)
 func TestSubstringFlop(t *testing.T) {
 	t.Parallel()
 	// fails in compiler
-	program, err := AssembleString(`byte 0xf000000000000000
+	program, err := assembleStringWithTraceVersion(t, 2, `byte 0xf000000000000000
 substring 4 2
 len`)
 	require.Error(t, err)
 
 	// fails at runtime
-	program, err = AssembleString(`byte 0xf000000000000000
+	program, err = assembleStringWithTraceVersion(t, 2, `byte 0xf000000000000000
 int 4
 int 2
 substring3
@@ -1373,7 +1373,7 @@ len`)
 
 func TestSubstringRange(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`byte 0xf000000000000000
+	program, err := assembleStringWithTraceVersion(t, 2, `byte 0xf000000000000000
 substring 2 99
 len`)
 	require.NoError(t, err)
@@ -1423,9 +1423,13 @@ load 1
 }
 
 func assembleStringWithTrace(t testing.TB, text string) ([]byte, error) {
+	return assembleStringWithTraceVersion(t, 0, text)
+}
+
+func assembleStringWithTraceVersion(t testing.TB, version uint64, text string) ([]byte, error) {
 	sr := strings.NewReader(text)
 	sb := strings.Builder{}
-	ops := OpStream{Trace: &sb}
+	ops := OpStream{Trace: &sb, Version: version}
 	err := ops.Assemble(sr)
 	if err != nil {
 		t.Log(sb.String())
@@ -1796,6 +1800,7 @@ func opPanic(cx *evalContext) {
 	panic(panicString)
 }
 func checkPanic(cx *evalContext) int {
+	fmt.Printf("checkPanic\n")
 	panic(panicString)
 }
 
@@ -1804,19 +1809,21 @@ func TestPanic(t *testing.T) {
 	program, err := AssembleString(`int 1`)
 	require.NoError(t, err)
 	var hackedOpcode int
-	var oldSpec OpSpec
-	var oldOz opSize
+	var oldSpec OpSpecPlus
 	for opcode, spec := range opsByOpcode {
 		if spec.op == nil {
 			hackedOpcode = opcode
 			oldSpec = spec
 			opsByOpcode[opcode].op = opPanic
+			opsByOpcode[opcode].checkFunc = checkPanic
+			opsByOpcode[opcode].size = 1
+			opsByOpcode[opcode].cost = 1
+			opsByOpcode[opcode].Name = "panic"
 			program = append(program, byte(opcode))
-			oldOz = opSizeByOpcode[opcode]
-			opSizeByOpcode[opcode].checkFunc = checkPanic
 			break
 		}
 	}
+	fmt.Printf("program %s\n", hex.EncodeToString(program))
 	sb := strings.Builder{}
 	params := defaultEvalParams(&sb, nil)
 	params.Logger = log
@@ -1828,6 +1835,7 @@ func TestPanic(t *testing.T) {
 		require.True(t, strings.Contains(pes, "panic"))
 	} else {
 		t.Errorf("expected PanicError object but got %T %#v", err, err)
+		t.Log(sb.String())
 	}
 	sb = strings.Builder{}
 	var txn transactions.SignedTxn
@@ -1848,7 +1856,6 @@ func TestPanic(t *testing.T) {
 		t.Errorf("expected PanicError object but got %T %#v", err, err)
 	}
 	opsByOpcode[hackedOpcode] = oldSpec
-	opSizeByOpcode[hackedOpcode] = oldOz
 }
 
 func TestProgramTooNew(t *testing.T) {
@@ -1884,9 +1891,14 @@ func TestProgramProtoForbidden(t *testing.T) {
 	proto := config.ConsensusParams{
 		LogicSigVersion: EvalMaxVersion - 1,
 	}
-	_, err := Check(program[:vlen], EvalParams{Proto: &proto})
+	sb := strings.Builder{}
+	var txn transactions.SignedTxn
+	txn.Lsig.Logic = program[:]
+	params := defaultEvalParams(&sb, &txn)
+	params.Proto = &proto
+	_, err := Check(program[:vlen], params)
 	require.Error(t, err)
-	pass, err := Eval(program[:vlen], EvalParams{Proto: &proto})
+	pass, err := Eval(program[:vlen], params)
 	require.Error(t, err)
 	require.False(t, pass)
 	isNotPanic(t, err)
