@@ -22,7 +22,6 @@ echo "checking the path:"
 echo $PATH
 echo "done -------------"
 
-
 # Generate the template
 $GOPATH/bin/algotmpl -d ${GOPATH}/src/github.com/algorand/go-algorand/tools/teal/templates/ htlc --fee=2000 --hashfn="sha256" --hashimg="9S+9MrKzuG/4jvbEkGKChfSCrxXdyylUH5S89Saj9sc=" --own=${ACCOUNT} --rcv=${ACCOUNTB} --timeout=100000 > ${TEMPDIR}/atomic.teal
 
