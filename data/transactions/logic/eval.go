@@ -50,6 +50,7 @@ const EvalMaxArgs = 255
 // EvalMaxScratchSize is the maximum number of scratch slots.
 const EvalMaxScratchSize = 255
 
+// MaxStringSize is the limit of byte strings created by `cons`
 const MaxStringSize = 4069
 
 // stackValue is the type for the operand stack.
@@ -1180,6 +1181,7 @@ func substring(x []byte, start, end int) (out []byte, err error) {
 	}
 	if start > len(x) || end > len(x) {
 		err = errors.New("substring range beyond length of string")
+		return
 	}
 	out = x[start:end]
 	err = nil
@@ -1191,6 +1193,7 @@ func opSubstring(cx *evalContext) {
 	start := cx.program[cx.pc+1]
 	end := cx.program[cx.pc+2]
 	cx.stack[last].Bytes, cx.err = substring(cx.stack[last].Bytes, int(start), int(end))
+	cx.nextpc = cx.pc + 3
 }
 
 const maxInt = int((^uint(0)) >> 1)
