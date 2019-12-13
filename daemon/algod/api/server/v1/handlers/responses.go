@@ -175,6 +175,18 @@ func (r TransactionParamsResponse) getBody() interface{} {
 	return r.Body
 }
 
+// RawBlockResponse contains encoded, raw block information
+//
+// swagger:response RawBlockResponse
+type RawBlockResponse struct {
+	// in: body
+	Body *v1.RawBlock
+}
+
+func (r RawBlockResponse) getBody() interface{} {
+	return r.Body
+}
+
 // BlockResponse contains block information
 //
 // swagger:response BlockResponse

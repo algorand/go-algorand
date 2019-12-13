@@ -17,13 +17,30 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"strconv"
 
 	"github.com/spf13/cobra"
+
+	"github.com/algorand/go-algorand/protocol/transcode"
+)
+
+var (
+	blockFilename  string
+	rawBlock       bool
+	base32Encoding bool
+	strictJSON     bool
 )
 
 func init() {
 	ledgerCmd.AddCommand(supplyCmd)
+	ledgerCmd.AddCommand(blockCmd)
+
+	blockCmd.Flags().StringVarP(&blockFilename, "out", "o", stdoutFilenameValue, "The filename to dump the block to (if not set, use stdout)")
+	blockCmd.Flags().BoolVarP(&rawBlock, "raw", "r", false, "Format block as msgpack")
+	blockCmd.Flags().BoolVar(&base32Encoding, "b32", false, "Encode binary blobs using base32 instead of base64")
+	blockCmd.Flags().BoolVar(&strictJSON, "strict", false, "Strict JSON decode: turn all keys into strings")
 }
 
 var ledgerCmd = &cobra.Command{
@@ -50,5 +67,47 @@ var supplyCmd = &cobra.Command{
 		}
 
 		fmt.Printf("Round: %v\nTotal Money: %v microAlgos\nOnline Money: %v microAlgos\n", response.Round, response.TotalMoney, response.OnlineMoney)
+	},
+}
+
+var blockCmd = &cobra.Command{
+	Use:   "block [round number]",
+	Short: "Dump a block to a file or stdout",
+	Long:  "Dump a block to a file or stdout",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		round, err := strconv.ParseUint(args[0], 10, 64)
+		if err != nil {
+			reportErrorf(errParsingRoundNumber, err)
+		}
+
+		dataDir := ensureSingleDataDir()
+		client := ensureAlgodClient(dataDir)
+		response, err := client.RawBlock(round)
+		if err != nil {
+			reportErrorf(errorRequestFail, err)
+		}
+
+		// Unless the user asked for the raw block,
+		// print the block encoded as JSON
+		if !rawBlock {
+			in := bytes.NewBuffer(response)
+			out := bytes.NewBuffer(nil)
+			err = transcode.Transcode(true, base32Encoding, strictJSON, in, out)
+			if err != nil {
+				reportErrorf(errEncodingBlockAsJSON, err)
+			}
+			response = out.Bytes()
+		} else {
+			if base32Encoding || strictJSON {
+				reportErrorf(errBadBlockArgs)
+			}
+		}
+
+		// If blockFilename flag was not set, the default value '-' will write to stdout
+		err = writeFile(blockFilename, response, 0600)
+		if err != nil {
+			reportErrorf(fileWriteError, blockFilename, err)
+		}
 	},
 }
