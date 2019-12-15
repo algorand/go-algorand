@@ -56,6 +56,9 @@ vet:
 check_license:
 	./scripts/check_license.sh
 
+check_shell:
+	find . -type f -name "*.sh" -exec shellcheck {} +
+
 sanity: vet fix lint fmt check_license
 
 cover:
@@ -243,4 +246,4 @@ dump: $(addprefix gen/,$(addsuffix /genesis.dump, $(NETWORKS)))
 install: build
 	scripts/dev_install.sh -p $(GOPATH1)/bin
 
-.PHONY: default fmt vet lint check_license sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN
+.PHONY: default fmt vet lint check_license check_shell sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN

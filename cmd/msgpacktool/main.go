@@ -45,6 +45,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+
+	"github.com/algorand/go-algorand/protocol/transcode"
 )
 
 var mpToJSON = flag.Bool("d", false, "Decode msgpack to JSON")
@@ -64,7 +66,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	err := transcode(*mpToJSON, os.Stdin, os.Stdout)
+	err := transcode.Transcode(*mpToJSON, *base32Encoding, *strictJSON, os.Stdin, os.Stdout)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
