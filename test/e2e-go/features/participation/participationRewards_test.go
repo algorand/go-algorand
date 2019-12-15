@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"testing"
-	"runtime"
 	
 	"github.com/stretchr/testify/require"
 
@@ -28,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
+	testUtils "github.com/algorand/go-algorand/test/framework/utils"
 )
 
 func getFirstAccountFromNamedNode(fixture fixtures.RestClientFixture, r *require.Assertions, nodeName string) (account string) {
@@ -130,9 +130,8 @@ func TestOnlineOfflineRewards(t *testing.T) {
 }
 
 func TestPartkeyOnlyRewards(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip()
-	}
+	testUtils.SkipIfFilteringTest(t)
+
 	t.Parallel()
 	r := require.New(t)
 

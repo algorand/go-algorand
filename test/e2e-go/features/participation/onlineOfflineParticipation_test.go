@@ -19,13 +19,13 @@ package participation
 import (
 	"path/filepath"
 	"testing"
-	"runtime" 
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
+	testUtils "github.com/algorand/go-algorand/test/framework/utils"
 )
 
 func TestParticipationKeyOnlyAccountParticipatesCorrectly(t *testing.T) {
@@ -97,9 +97,8 @@ func waitForAccountToProposeBlock(a *require.Assertions, fixture fixtures.RestCl
 }
 
 func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip()
-	}
+	testUtils.SkipIfFilteringTest(t)
+
 	if testing.Short() {
 		t.Skip()
 	}

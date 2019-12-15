@@ -16,8 +16,14 @@ ACCOUNTB=$(${gcmd} account new|awk '{ print $6 }')
 ZERO_ADDRESS=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ
 LEASE=YmxhaCBibGFoIGxlYXNlIHdoYXRldmVyIGJsYWghISE=
 
+echo "checking for algotmpl executable. ------------"
+ls $GOPATH/bin
+echo "checking the path:"
+echo $PATH
+echo "done -------------"
+
 # Generate the template
-algotmpl -d ${GOPATH}/src/github.com/algorand/go-algorand/tools/teal/templates/ htlc --fee=2000 --hashfn="sha256" --hashimg="9S+9MrKzuG/4jvbEkGKChfSCrxXdyylUH5S89Saj9sc=" --own=${ACCOUNT} --rcv=${ACCOUNTB} --timeout=100000 > ${TEMPDIR}/atomic.teal
+$GOPATH/bin/algotmpl -d ${GOPATH}/src/github.com/algorand/go-algorand/tools/teal/templates/ htlc --fee=2000 --hashfn="sha256" --hashimg="9S+9MrKzuG/4jvbEkGKChfSCrxXdyylUH5S89Saj9sc=" --own=${ACCOUNT} --rcv=${ACCOUNTB} --timeout=100000 > ${TEMPDIR}/atomic.teal
 
 # Compile the template
 CONTRACT=$(${gcmd} clerk compile ${TEMPDIR}/atomic.teal | awk '{ print $2 }')
