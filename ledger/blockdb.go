@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+// 2019-12-15: removed column 'auxdata blob' from 'CREATE TABLE' statement. It was not explicitly removed from databases and may continue to exist with empty entries in some old databases.
 var blockSchema = []string{
 	`CREATE TABLE IF NOT EXISTS blocks (
 		rnd integer primary key,
