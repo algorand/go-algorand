@@ -949,7 +949,14 @@ func checkBnz(cx *evalContext) int {
 	}
 	cx.nextpc = cx.pc + 3
 	target := cx.nextpc + int(offset)
-	if target > len(cx.program) {
+	var branchTooFar bool
+	if cx.version >= 2 {
+		// branching to exactly the end of the program (target == len(cx.program)), the next pc after the last instruction, is okay and ends normally
+		branchTooFar = target > len(cx.program)
+	} else {
+		branchTooFar = target >= len(cx.program)
+	}
+	if branchTooFar {
 		cx.err = errors.New("bnz target beyond end of program")
 		return 1
 	}
