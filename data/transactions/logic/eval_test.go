@@ -1735,6 +1735,23 @@ done:`)
 	isNotPanic(t, err)
 }
 
+func TestShortProgramTrue(t *testing.T) {
+	t.Parallel()
+	program, err := AssembleString(`intcblock 1
+intc 0
+intc 0
+bnz done
+done:`)
+	require.NoError(t, err)
+	cost, err := Check(program, defaultEvalParams(nil, nil))
+	require.NoError(t, err)
+	require.True(t, cost < 1000)
+	sb := strings.Builder{}
+	pass, err := Eval(program, defaultEvalParams(&sb, nil))
+	require.NoError(t, err)
+	require.True(t, pass)
+}
+
 func TestShortBytecblock(t *testing.T) {
 	t.Parallel()
 	fullprogram, err := AssembleString(`bytecblock 0x123456 0xababcdcd`)

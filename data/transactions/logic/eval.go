@@ -949,7 +949,7 @@ func checkBnz(cx *evalContext) int {
 	}
 	cx.nextpc = cx.pc + 3
 	target := cx.nextpc + int(offset)
-	if target >= len(cx.program) {
+	if target > len(cx.program) {
 		cx.err = errors.New("bnz target beyond end of program")
 		return 1
 	}
