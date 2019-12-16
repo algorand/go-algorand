@@ -113,6 +113,11 @@ const ConsensusV20 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/4a9db6a25595c6fd097cf9cc137cc83027787eaa",
 )
 
+// ConsensusV21 points to adding features to TEAL
+const ConsensusV21 = ConsensusVersion(
+	"PLACEHOLDER 2019-12-16",
+)
+
 // ConsensusFuture is a protocol that should not appear in any production
 // network, but is used to test features before they are released.
 const ConsensusFuture = ConsensusVersion(

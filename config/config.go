@@ -463,9 +463,18 @@ func initConsensusProtocols() {
 	// v19 can be upgraded to v20.
 	v19.ApprovedUpgrades[protocol.ConsensusV20] = true
 
+	// v21 adds features to TEAL
+	v21 := v20
+	v21.LogicSigVersion = 2
+	v21.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	Consensus[protocol.ConsensusV21] = v21
+
+	// v20 can be upgraded to v21.
+	v20.ApprovedUpgrades[protocol.ConsensusV21] = true
+
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v20
+	vFuture := v21
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
