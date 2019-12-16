@@ -81,12 +81,11 @@ type ledgerTracker interface {
 type ledgerForTracker interface {
 	trackerDB() dbPair
 	trackerLog() logging.Logger
-	trackerEvalVerified(bookkeeping.Block, evalAux) (StateDelta, error)
+	trackerEvalVerified(bookkeeping.Block) (StateDelta, error)
 
 	Latest() basics.Round
 	Block(basics.Round) (bookkeeping.Block, error)
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
-	blockAux(basics.Round) (bookkeeping.Block, evalAux, error)
 }
 
 type trackerRegistry struct {
