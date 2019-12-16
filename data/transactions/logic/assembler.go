@@ -77,6 +77,7 @@ type OpStream struct {
 	labelReferences []labelReference
 }
 
+// GetVersion returns the LogicSigVersion we're building to
 func (ops *OpStream) GetVersion() uint64 {
 	if ops.Version == 0 {
 		ops.Version = AssemblerDefaultVersion

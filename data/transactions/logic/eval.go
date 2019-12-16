@@ -393,6 +393,8 @@ var OpSpecs = []OpSpec{
 	{0x52, "substring3", opSubstring3, byteIntInt, oneBytes},
 }
 
+// OpSpecPlus is OpSpec with a few more fields merged in at runtime.
+// This allows for a small table of exceptions where most ops have a default.
 type OpSpecPlus struct {
 	OpSpec
 	MinVersion uint64
