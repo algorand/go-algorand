@@ -176,6 +176,20 @@ type Asset struct {
 	AssetParams AssetParams
 }
 
+// AccountBalance specifies both an account and the balance associated with the account
+// swagger:model AccountBalance
+type AccountBalance struct {
+	// Address is the address of an account
+	//
+	// required: true
+	Address string `json:"address"`
+
+	// Amount indicates the amount of microAlgos in the account
+	//
+	// required: true
+	Amount uint64 `json:"amount"`
+}
+
 // AssetParams specifies the parameters for an asset.
 // swagger:model AssetParams
 type AssetParams struct {
@@ -553,6 +567,15 @@ type AssetList struct {
 	//
 	// required: true
 	Assets []Asset `json:"assets,omitempty"`
+}
+
+// BalanceList contains a list of accounts and their balances.
+// swagger:model BalanceList
+type BalanceList struct {
+	// Balances is a list of all accounts and their balances
+	//
+	// required: true
+	Balances []AccountBalance `json:"balances,omitempty"`
 }
 
 // TransactionFee contains the suggested fee

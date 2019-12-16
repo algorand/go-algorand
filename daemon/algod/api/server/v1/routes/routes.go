@@ -132,6 +132,12 @@ var Routes = lib.Routes{
 		Path:        fmt.Sprintf("/assets"),
 		HandlerFunc: handlers.Assets,
 	},
+	lib.Route{
+		Name:        "list-balances",
+		Method:      "GET",
+		Path:        "/balances",
+		HandlerFunc: handlers.ListBalances,
+	},
 
 	// ----- This can only be active when indexer is live
 

@@ -138,6 +138,18 @@ func (r AssetsResponse) getBody() interface{} {
 	return r.Body
 }
 
+// BalancesResponse contains a list of balances
+//
+// swagger:response BalancesResponse
+type BalancesResponse struct {
+	// in: body
+	Body *v1.BalanceList
+}
+
+func (r BalancesResponse) getBody() interface{} {
+	return r.Body
+}
+
 // AssetInformationResponse contains asset information
 //
 // swagger:response AssetInformationResponse

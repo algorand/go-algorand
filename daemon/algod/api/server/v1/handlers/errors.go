@@ -21,6 +21,7 @@ var (
 	errFailedGettingInformationFromIndexer = "failed retrieving information from the indexer"
 	errFailedLookingUpLedger               = "failed to retrieve information from the ledger"
 	errFailedLookingUpTransactionPool      = "failed to retrieve information from the transaction pool"
+	errFailedLookingUpBalances             = "failed to read balances from the ledger"
 	errFailedRetrievingNodeStatus          = "failed retrieving node status"
 	errFailedRetrievingAsset               = "failed to retrieve asset information"
 	errFailedParsingRoundNumber            = "failed to parse the round number"
