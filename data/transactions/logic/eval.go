@@ -42,7 +42,7 @@ import (
 )
 
 // EvalMaxVersion is the max version we can interpret and run
-const EvalMaxVersion = 1
+const EvalMaxVersion = 2
 
 // EvalMaxArgs is the maximum number of arguments to an LSig
 const EvalMaxArgs = 255
@@ -174,6 +174,7 @@ var errLoopDetected = errors.New("loop detected")
 var errCostTooHigh = errors.New("LogicSigMaxCost exceded")
 var errLogicSignNotSupported = errors.New("LogicSig not supported")
 var errTooManyArgs = errors.New("LogicSig has too many arguments")
+var errFeatureTooNew = errors.New("tried to use a feature not supported in current version")
 
 // Eval checks to see if a transaction passes logic
 // A program passes succesfully if it finishes with one int element on the stack that is non-zero.
@@ -297,7 +298,12 @@ func Check(program []byte, params EvalParams) (cost int, err error) {
 	cx.EvalParams = params
 	cx.program = program
 	for (cx.err == nil) && (cx.pc < len(cx.program)) {
+		prevpc := cx.pc
 		cost += cx.checkStep()
+		if cx.pc == prevpc {
+			err = fmt.Errorf("pc did not advance, stuck at %d", cx.pc)
+			return
+		}
 	}
 	if cx.err != nil {
 		err = fmt.Errorf("%3d %s", cx.pc, cx.err)
@@ -387,8 +393,16 @@ var OpSpecs = []OpSpec{
 	{0x52, "substring3", opSubstring3, byteIntInt, oneBytes},
 }
 
+type OpSpecPlus struct {
+	OpSpec
+	minVersion uint64
+	cost       int
+	size       int
+	checkFunc  opCheckFunc
+}
+
 // direct opcode bytes
-var opsByOpcode []OpSpec
+var opsByOpcode []OpSpecPlus
 
 type opCheckFunc func(cx *evalContext) int
 
@@ -421,26 +435,46 @@ var opSizes = []opSize{
 	{"substring", 1, 3, nil},
 }
 
-var opSizeByOpcode []opSize
+type opVersion struct {
+	name       string
+	minVersion uint64
+}
+
+var opVersions = []opVersion{
+	{"cons", 2},
+	{"substring", 2},
+	{"substring3", 2},
+}
+
+var opMinVersions map[string]uint64
 
 func init() {
-	opsByOpcode = make([]OpSpec, 256)
+	opsByOpcode = make([]OpSpecPlus, 256)
 	for _, oi := range OpSpecs {
-		opsByOpcode[oi.Opcode] = oi
+		opsByOpcode[oi.Opcode].OpSpec = oi
 	}
 
 	opSizeByName := make(map[string]*opSize, len(opSizes))
 	for i, oz := range opSizes {
 		opSizeByName[oz.name] = &opSizes[i]
 	}
-	opSizeByOpcode = make([]opSize, 256)
-	for _, oi := range OpSpecs {
-		oz := opSizeByName[oi.Name]
-		if oz == nil {
-			opSizeByOpcode[oi.Opcode] = opSize{oi.Name, 1, 1, nil}
-		} else {
-			opSizeByOpcode[oi.Opcode] = *oz
+
+	opMinVersions = make(map[string]uint64, len(opVersions))
+	for _, ov := range opVersions {
+		opMinVersions[ov.name] = ov.minVersion
+	}
+
+	for opcode, spec := range opsByOpcode {
+		oz := opSizeByName[spec.Name]
+		if oz != nil {
+			opsByOpcode[opcode].cost = oz.cost
+			opsByOpcode[opcode].size = oz.size
+			opsByOpcode[opcode].checkFunc = oz.checkFunc
+		} else if spec.Name != "" {
+			opsByOpcode[opcode].cost = 1
+			opsByOpcode[opcode].size = 1
 		}
+		opsByOpcode[opcode].minVersion = opMinVersions[spec.Name]
 	}
 }
 
@@ -463,37 +497,38 @@ const MaxStackDepth = 1000
 
 func (cx *evalContext) step() {
 	opcode := cx.program[cx.pc]
-	if opsByOpcode[opcode].op == nil {
+	spec := opsByOpcode[opcode]
+	if spec.op == nil {
 		cx.err = fmt.Errorf("%3d illegal opcode %02x", cx.pc, opcode)
 		return
 	}
-	argsTypes := opsByOpcode[opcode].Args
+	argsTypes := spec.Args
 	if len(argsTypes) >= 0 {
 		// check args for stack underflow and types
 		if len(cx.stack) < len(argsTypes) {
-			cx.err = fmt.Errorf("stack underflow in %s", opsByOpcode[opcode].Name)
+			cx.err = fmt.Errorf("stack underflow in %s", spec.Name)
 			return
 		}
 		first := len(cx.stack) - len(argsTypes)
 		for i, argType := range argsTypes {
 			if !opCompat(argType, cx.stack[first+i].argType()) {
-				cx.err = fmt.Errorf("%s arg %d wanted %s but got %s", opsByOpcode[opcode].Name, i, argType.String(), cx.stack[first+i].typeName())
+				cx.err = fmt.Errorf("%s arg %d wanted %s but got %s", spec.Name, i, argType.String(), cx.stack[first+i].typeName())
 				return
 			}
 		}
 	}
-	oz := opSizeByOpcode[opcode]
-	if oz.size != 0 && (cx.pc+oz.size > len(cx.program)) {
-		cx.err = fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, opsByOpcode[opcode].Name)
+	//oz := opSizeByOpcode[opcode]
+	if spec.size != 0 && (cx.pc+spec.size > len(cx.program)) {
+		cx.err = fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, spec.Name)
 		return
 	}
-	cx.cost += oz.cost
-	opsByOpcode[opcode].op(cx)
+	cx.cost += spec.cost
+	spec.op(cx)
 	if cx.Trace != nil {
 		if len(cx.stack) == 0 {
-			fmt.Fprintf(cx.Trace, "%3d %s => %s\n", cx.pc, opsByOpcode[opcode].Name, "<empty stack>")
+			fmt.Fprintf(cx.Trace, "%3d %s => %s\n", cx.pc, spec.Name, "<empty stack>")
 		} else {
-			fmt.Fprintf(cx.Trace, "%3d %s => %s\n", cx.pc, opsByOpcode[opcode].Name, cx.stack[len(cx.stack)-1].String())
+			fmt.Fprintf(cx.Trace, "%3d %s => %s\n", cx.pc, spec.Name, cx.stack[len(cx.stack)-1].String())
 		}
 	}
 	if cx.err != nil {
@@ -513,26 +548,31 @@ func (cx *evalContext) step() {
 
 func (cx *evalContext) checkStep() (cost int) {
 	opcode := cx.program[cx.pc]
-	if opsByOpcode[opcode].op == nil {
+	spec := opsByOpcode[opcode]
+	if spec.op == nil {
 		cx.err = fmt.Errorf("%3d illegal opcode %02x", cx.pc, opcode)
 		return 1
 	}
-	oz := opSizeByOpcode[opcode]
-	if oz.size != 0 && (cx.pc+oz.size > len(cx.program)) {
-		cx.err = fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, opsByOpcode[opcode].Name)
+	//oz := opSizeByOpcode[opcode]
+	if spec.size != 0 && (cx.pc+spec.size > len(cx.program)) {
+		cx.err = fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, spec.Name)
 		return 1
 	}
-	if oz.checkFunc != nil {
-		cost = oz.checkFunc(cx)
+	prevpc := cx.pc
+	if spec.checkFunc != nil {
+		cost = spec.checkFunc(cx)
 		if cx.nextpc != 0 {
 			cx.pc = cx.nextpc
 			cx.nextpc = 0
 		} else {
-			cx.pc += oz.size
+			cx.pc += spec.size
 		}
 	} else {
-		cost = oz.cost
-		cx.pc += oz.size
+		cost = spec.cost
+		cx.pc += spec.size
+	}
+	if cx.Trace != nil {
+		fmt.Fprintf(cx.Trace, "%3d %s\n", prevpc, spec.Name)
 	}
 	if cx.err != nil {
 		return 1
@@ -1166,6 +1206,10 @@ func opStore(cx *evalContext) {
 }
 
 func opCons(cx *evalContext) {
+	if cx.version < 2 {
+		cx.err = errFeatureTooNew
+		return
+	}
 	last := len(cx.stack) - 1
 	prev := last - 1
 	a := cx.stack[prev].Bytes
@@ -1198,6 +1242,10 @@ func substring(x []byte, start, end int) (out []byte, err error) {
 }
 
 func opSubstring(cx *evalContext) {
+	if cx.version < 2 {
+		cx.err = errFeatureTooNew
+		return
+	}
 	last := len(cx.stack) - 1
 	start := cx.program[cx.pc+1]
 	end := cx.program[cx.pc+2]
@@ -1208,6 +1256,10 @@ func opSubstring(cx *evalContext) {
 const maxInt = int((^uint(0)) >> 1)
 
 func opSubstring3(cx *evalContext) {
+	if cx.version < 2 {
+		cx.err = errFeatureTooNew
+		return
+	}
 	last := len(cx.stack) - 1 // end
 	prev := last - 1          // start
 	pprev := prev - 1         // bytes

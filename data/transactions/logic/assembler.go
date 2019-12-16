@@ -34,6 +34,9 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+// AssemblerDefaultVersion what version of code do we emit by default
+const AssemblerDefaultVersion = 1
+
 // Writer is what we want here. Satisfied by bufio.Buffer
 type Writer interface {
 	Write([]byte) (int, error)
@@ -72,6 +75,13 @@ type OpStream struct {
 	labels map[string]int
 
 	labelReferences []labelReference
+}
+
+func (ops *OpStream) GetVersion() uint64 {
+	if ops.Version == 0 {
+		ops.Version = AssemblerDefaultVersion
+	}
+	return ops.Version
 }
 
 // SetLabelHere inserts a label reference to point to the next instruction
@@ -449,7 +459,7 @@ func assembleBnz(ops *OpStream, args []string) error {
 	ops.ReferToLabel(ops.sourceLine, ops.Out.Len(), args[0])
 	opcode := byte(0x40)
 	spec := opsByOpcode[opcode]
-	err := ops.checkArgs(spec)
+	err := ops.checkArgs(spec.OpSpec)
 	if err != nil {
 		return err
 	}
@@ -484,7 +494,7 @@ func assembleStore(ops *OpStream, args []string) error {
 	}
 	opcode := byte(0x35)
 	spec := opsByOpcode[opcode]
-	err = ops.checkArgs(spec)
+	err = ops.checkArgs(spec.OpSpec)
 	if err != nil {
 		return err
 	}
@@ -517,7 +527,7 @@ func assembleSubstring(ops *OpStream, args []string) error {
 	}
 	opcode := byte(0x51)
 	spec := opsByOpcode[opcode]
-	err = ops.checkArgs(spec)
+	err = ops.checkArgs(spec.OpSpec)
 	if err != nil {
 		return err
 	}
@@ -900,6 +910,10 @@ func (ops *OpStream) Assemble(fin io.Reader) error {
 			continue
 		}
 		opstring := fields[0]
+		minVersion := opMinVersions[opstring]
+		if ops.GetVersion() < minVersion {
+			return fmt.Errorf(":%d %s requires at least version %d but currently targeting %d", ops.sourceLine, opstring, minVersion, ops.GetVersion())
+		}
 		argf, ok := argOps[opstring]
 		if ok {
 			ops.trace("%3d: %s\t", ops.sourceLine, opstring)
@@ -914,7 +928,7 @@ func (ops *OpStream) Assemble(fin io.Reader) error {
 		if ok {
 			ops.trace("%3d: %s\t", ops.sourceLine, opstring)
 			spec := opsByOpcode[opcode]
-			err := ops.checkArgs(spec)
+			err := ops.checkArgs(spec.OpSpec)
 			if err != nil {
 				return err
 			}
@@ -977,20 +991,11 @@ func (ops *OpStream) resolveLabels() (err error) {
 	return nil
 }
 
-// AssemblerDefaultVersion what version of code do we emit by default
-const AssemblerDefaultVersion = 1
-
 // Bytes returns the finished program bytes
 func (ops *OpStream) Bytes() (program []byte, err error) {
 	var scratch [binary.MaxVarintLen64]byte
 	prebytes := bytes.Buffer{}
-	// TODO: configurable what version to compile for in case we're near a version boundary?
-	version := ops.Version
-	if version == 0 {
-		//version = config.Consensus[protocol.ConsensusCurrentVersion].LogicSigVersion
-		version = AssemblerDefaultVersion
-	}
-	vlen := binary.PutUvarint(scratch[:], version)
+	vlen := binary.PutUvarint(scratch[:], ops.GetVersion())
 	prebytes.Write(scratch[:vlen])
 	if len(ops.intc) > 0 && !ops.noIntcBlock {
 		prebytes.WriteByte(0x20) // intcblock
