@@ -388,7 +388,7 @@ var OpSpecs = []OpSpec{
 	{0x40, "bnz", opBnz, oneInt, nil},
 	{0x48, "pop", opPop, oneAny, nil},
 	{0x49, "dup", opDup, oneAny, twoAny},
-	{0x50, "cons", opCons, twoBytes, oneBytes},
+	{0x50, "concat", opCons, twoBytes, oneBytes},
 	{0x51, "substring", opSubstring, oneBytes, oneBytes},
 	{0x52, "substring3", opSubstring3, byteIntInt, oneBytes},
 }
@@ -443,7 +443,7 @@ type opVersion struct {
 }
 
 var opVersions = []opVersion{
-	{"cons", 2},
+	{"concat", 2},
 	{"substring", 2},
 	{"substring3", 2},
 }

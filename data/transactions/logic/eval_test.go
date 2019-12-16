@@ -1257,8 +1257,8 @@ byte 0x3456
 byte 0x12
 byte 0x3456
 byte 0x789abc
-cons
-cons
+concat
+concat
 byte 0x123456789abc
 ==
 &&
@@ -1287,41 +1287,41 @@ func TestConsOverflow(t *testing.T) {
 	t.Parallel()
 	program, err := assembleStringWithTraceVersion(t, 2, `byte 0xf000000000000000
 dup
-cons
+concat
 dup
-cons
+concat
 dup
-cons
+concat
 dup
-cons
+concat
 dup
-cons
+concat
 dup
-cons
+concat
 dup
-cons
+concat
 dup
-cons
+concat
 dup
-cons
+concat
 dup
-cons
+concat
 dup
-cons
+concat
 dup
-cons
+concat
 dup
-cons
+concat
 dup
-cons
+concat
 dup
-cons
+concat
 dup
-cons
+concat
 dup
-cons
+concat
 dup
-cons
+concat
 len`)
 	require.NoError(t, err)
 	cost, err := Check(program, defaultEvalParams(nil, nil))

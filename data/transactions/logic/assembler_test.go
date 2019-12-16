@@ -37,7 +37,7 @@ byte base64(aGVsbG8gd29ybGQh)
 byte b64 aGVsbG8gd29ybGQh
 byte b64(aGVsbG8gd29ybGQh)
 addr RWXCBB73XJITATVQFOI7MVUUQOL2PFDDSDUMW4H4T2SNSX4SEUOQ2MM7F4
-cons
+concat
 substring 42 99
 intc 0
 intc 1
