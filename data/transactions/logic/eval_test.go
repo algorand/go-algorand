@@ -1741,7 +1741,7 @@ done:`)
 
 func TestShortProgramTrue(t *testing.T) {
 	t.Parallel()
-	program, err := AssembleString(`intcblock 1
+	program, err := assembleStringWithTraceVersion(t, 2, `intcblock 1
 intc 0
 intc 0
 bnz done
