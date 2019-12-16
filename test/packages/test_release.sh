@@ -22,10 +22,8 @@ OS_LIST=(
     ubuntu:18.04
 )
 
-# These are default values which can be changed by the CLI args.
 BUCKET=algorand-builds
 CHANNEL=stable
-
 FAILED=()
 
 while [ "$1" != "" ]; do
@@ -39,7 +37,7 @@ while [ "$1" != "" ]; do
             CHANNEL="$1"
             ;;
         *)
-            echo "Unknown option $1"
+            echo "$RED_FG[$0]$END_FG_COLOR Unknown option $1"
             exit 1
             ;;
     esac
@@ -135,5 +133,4 @@ check_failures run
 echo "$GREEN_FG[$0]$END_FG_COLOR Runs completed with no failures."
 
 cleanup
-exit 0
 
