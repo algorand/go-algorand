@@ -1813,7 +1813,6 @@ func opPanic(cx *evalContext) {
 	panic(panicString)
 }
 func checkPanic(cx *evalContext) int {
-	fmt.Printf("checkPanic\n")
 	panic(panicString)
 }
 
@@ -1836,7 +1835,6 @@ func TestPanic(t *testing.T) {
 			break
 		}
 	}
-	fmt.Printf("program %s\n", hex.EncodeToString(program))
 	sb := strings.Builder{}
 	params := defaultEvalParams(&sb, nil)
 	params.Logger = log

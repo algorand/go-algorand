@@ -395,7 +395,7 @@ var OpSpecs = []OpSpec{
 
 type OpSpecPlus struct {
 	OpSpec
-	minVersion uint64
+	MinVersion uint64
 	cost       int
 	size       int
 	checkFunc  opCheckFunc
@@ -474,7 +474,7 @@ func init() {
 			opsByOpcode[opcode].cost = 1
 			opsByOpcode[opcode].size = 1
 		}
-		opsByOpcode[opcode].minVersion = opMinVersions[spec.Name]
+		opsByOpcode[opcode].MinVersion = opMinVersions[spec.Name]
 	}
 }
 
