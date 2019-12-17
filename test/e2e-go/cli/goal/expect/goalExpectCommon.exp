@@ -21,6 +21,9 @@ namespace eval ::AlgorandGoal {
   namespace export GetLedgerSupply
   namespace export WaitForRound
   namespace export Report
+  namespace export ListParticipationKeys
+  namespace export AddParticipationKey
+  namespace export TakeAccountOnline
 
   # My Variables
    set version 1.0
