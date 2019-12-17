@@ -669,6 +669,19 @@ proc ::AlgorandGoal::Report { TEST_PRIMARY_NODE_DIR } {
             -re {Last commited block: (\d+)} {puts "status check ok"}
         }
     } EXCEPTION ] } {
-    ::AlgorandGoal::Abort "ERROR in GetLedgerSupply: $EXCEPTION"
+    ::AlgorandGoal::Abort "ERROR in Report: $EXCEPTION"
+    }
+}
+
+# List Participation keys
+proc ::AlgorandGoal::ListParticipationKeys { TEST_PRIMARY_NODE_DIR } {
+    if { [ catch {
+        spawn goal account listparticipationkeys -d $TEST_PRIMARY_NODE_DIR
+        expect {
+            timeout { ::AlgorandGoal::Abort "goal ListParticipationKeys timed out"  }
+            close
+        }
+    } EXCEPTION ] } {
+    ::AlgorandGoal::Abort "ERROR in ListParticipationKeys: $EXCEPTION"
     }
 }
