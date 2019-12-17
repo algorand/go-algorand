@@ -33,16 +33,13 @@ if { [catch {
     set ROUND_FIRST_VALID 1
     set KEY_EXPIRY_ROUND 10
     ::AlgorandGoal::AddParticipationKey $PRIMARY_ACCOUNT_ADDRESS $ROUND_FIRST_VALID $KEY_EXPIRY_ROUND $TEST_PRIMARY_NODE_DIR
-    #goal account addpartkey --address {addr} --roundFirstValid 1 --roundLastValid {expiry} -d datadir
     ::AlgorandGoal::TakeAccountOnline $PRIMARY_ACCOUNT_ADDRESS $ROUND_FIRST_VALID $KEY_EXPIRY_ROUND $TEST_PRIMARY_NODE_DIR
-    #goal account changeonlinestatus --address {address} --firstvalid 0 --validrounds 10 -d datadir
 
     # Wait for expiry
     ::AlgorandGoal::WaitForRound $KEY_EXPIRY_ROUND $TEST_PRIMARY_NODE_DIR
 
     # List participation keys
     ::AlgorandGoal::ListParticipationKeys $TEST_PRIMARY_NODE_DIR
-    #goal account listpartkeys -d datadir
 
     # Clean up
     ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ALGO_DIR $TEST_ROOT_DIR
