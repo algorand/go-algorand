@@ -102,7 +102,7 @@ func getWalletsHandler(ctx reqContext, w http.ResponseWriter, r *http.Request) {
 	//      in: query
 	//      type: boolean
 	//      required: false
-	//      description: Indicates whether wallet drivers should re-scan for devices
+	//      description: Indicates whether wallet drivers should re-scan for wallets
 	//    Responses:
 	//      "200":
 	//        "$ref": "#/responses/ListWalletsResponse"
