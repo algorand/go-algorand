@@ -1128,23 +1128,25 @@ func ListBalances(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	//       401: { description: Invalid API Token }
 	//       default: { description: Unknown Error }
 
-	balances, err := ctx.Node.Ledger().AllBalances(ctx.Node.Ledger().LastRound())
+	myLedger := ctx.Node.Ledger()
+	lastRound := myLedger.Latest()
+	balances, err := myLedger.AllBalances(lastRound)
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpBalances, ctx.Log)
 		return
 	}
-	totals, err := ctx.Node.Ledger().Totals(ctx.Node.Ledger().LastRound())
+	totals, err := myLedger.Totals(lastRound)
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpBalances, ctx.Log)
 		return
 	}
-	params, err := ctx.Node.Ledger().ConsensusParams(ctx.Node.Ledger().LastRound())
+	params, err := myLedger.ConsensusParams(lastRound)
 
 	var result v1.BalanceList
-	for account, accountData := range balances {
+	for address, accountData := range balances {
 		algos, _ := accountData.Money(params, totals.RewardsLevel)
 		result.Balances = append(result.Balances, v1.AccountBalance{
-			Address: account.GetUserAddress(),
+			Address: address.String(),
 			Amount:  algos.Raw,
 		})
 	}
