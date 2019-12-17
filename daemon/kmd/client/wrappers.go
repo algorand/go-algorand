@@ -31,10 +31,8 @@ func (kcl KMDClient) Version() (resp kmdapi.VersionsResponse, err error) {
 }
 
 // ListWallets wraps kmdapi.APIV1GETWalletsRequest
-func (kcl KMDClient) ListWallets(scan bool) (resp kmdapi.APIV1GETWalletsResponse, err error) {
-	req := kmdapi.APIV1GETWalletsRequest{
-		Scan: scan,
-	}
+func (kcl KMDClient) ListWallets() (resp kmdapi.APIV1GETWalletsResponse, err error) {
+	req := kmdapi.APIV1GETWalletsRequest{}
 	err = kcl.DoV1Request(req, &resp)
 	return
 }

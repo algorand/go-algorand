@@ -173,7 +173,7 @@ var newWalletCmd = &cobra.Command{
 		}
 
 		// Check if we're the only wallet
-		wallets, err := client.ListWallets(false)
+		wallets, err := client.ListWallets()
 		if err != nil {
 			reportErrorf(errorCouldntListWallets, err)
 		}
@@ -193,7 +193,7 @@ var listWalletsCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, _ []string) {
 		onDataDirs(func(dataDir string) {
 			client := ensureKmdClient(dataDir)
-			wallets, err := client.ListWallets(true)
+			wallets, err := client.ListWallets()
 			if err != nil {
 				reportErrorf(errorCouldntListWallets, err)
 			}

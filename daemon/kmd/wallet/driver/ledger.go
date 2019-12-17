@@ -164,15 +164,13 @@ func (lwd *LedgerWalletDriver) InitWithConfig(cfg config.KMDConfig, log logging.
 }
 
 // ListWalletMetadatas returns all wallets supported by this driver.
-func (lwd *LedgerWalletDriver) ListWalletMetadatas(scan bool) (metadatas []wallet.Metadata, err error) {
+func (lwd *LedgerWalletDriver) ListWalletMetadatas() (metadatas []wallet.Metadata, err error) {
 	lwd.mu.Lock()
 	defer lwd.mu.Unlock()
 
-	if scan {
-		err = lwd.scanWalletsLocked()
-		if err != nil {
-			return
-		}
+	err = lwd.scanWalletsLocked()
+	if err != nil {
+		return
 	}
 
 	for _, w := range lwd.wallets {

@@ -36,7 +36,7 @@ var walletDrivers = map[string]Driver{
 // and password, and fetch a wallet by ID.
 type Driver interface {
 	InitWithConfig(cfg config.KMDConfig, log logging.Logger) error
-	ListWalletMetadatas(scan bool) ([]wallet.Metadata, error)
+	ListWalletMetadatas() ([]wallet.Metadata, error)
 	CreateWallet(name []byte, id []byte, pw []byte, mdk crypto.MasterDerivationKey) error
 	RenameWallet(newName []byte, id []byte, pw []byte) error
 	FetchWallet(id []byte) (wallet.Wallet, error)
@@ -64,13 +64,13 @@ func FetchWalletDriver(driverName string) (Driver, error) {
 }
 
 // ListWalletMetadatas fetches wallet metadata from all of the drivers
-func ListWalletMetadatas(scan bool) ([]wallet.Metadata, error) {
+func ListWalletMetadatas() ([]wallet.Metadata, error) {
 	var metadatas []wallet.Metadata
 
 	// Iterate over the wallet drivers
 	for _, driver := range walletDrivers {
 		// Fetch all of the WalletMetadatas for each driver
-		driverMetadatas, err := driver.ListWalletMetadatas(scan)
+		driverMetadatas, err := driver.ListWalletMetadatas()
 		if err != nil {
 			return nil, err
 		}

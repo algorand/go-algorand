@@ -44,7 +44,6 @@ type VersionsRequest struct {
 // swagger:model ListWalletsRequest
 type APIV1GETWalletsRequest struct {
 	APIV1RequestEnvelope
-	Scan bool `url:"scan,omitempty"`
 }
 
 // APIV1POSTWalletRequest is the request for `POST /v1/wallet`
