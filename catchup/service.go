@@ -22,7 +22,7 @@ import (
 	"sync/atomic"
 	"time"
 	"runtime/debug"
-
+	"fmt"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
@@ -342,12 +342,12 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 	from := s.ledger.NextRound()
 	nextRound := from
 	for ; nextRound < from+basics.Round(parallelRequests); nextRound++ {
-		if s.nextRoundIsNotApproved(nextRound) {
+		//		if s.nextRoundIsNotApproved(nextRound) {
 			// It is sufficent to check only in the first
 			// iteration, however, checking in all to keep
 			// the nextRoundIsNotApproved interface simple
-			break
-		}
+		//	break
+		//}
 		currentRoundComplete := make(chan bool, 2)
 		// len(taskCh) + (# pending writes to completed) increases by 1
 		taskCh <- s.pipelineCallback(fetcher, nextRound, currentRoundComplete, recentReqs[len(recentReqs)-1], recentReqs[len(recentReqs)-int(seedLookback)])
@@ -498,9 +498,18 @@ func (s *Service) nextRoundIsNotApproved(nextRound basics.Round) bool {
 		return false
 	}
 	bh := block.BlockHeader
-
-	if nextRound >= bh.NextProtocolSwitchOn &&
+	fmt.Println("*********************************** ")
+	fmt.Println("*********************************** lastLedgerRound: ", lastLedgerRound)	
+	fmt.Println("*********************************** nextRound: ", nextRound)
+	fmt.Println("*********************************** bh.NextProtocolSwitchOn: ", bh.NextProtocolSwitchOn)
+	fmt.Println("*********************************** bh.NextProtocol: ", bh.NextProtocol)
+	fmt.Println("*********************************** approvedUpgrades[bh.NextProtocol]", approvedUpgrades[bh.NextProtocol])
+	fmt.Println("*********************************** ")
+	if bh.NextProtocolSwitchOn > 0 &&
+		nextRound >= bh.NextProtocolSwitchOn &&
 		false == approvedUpgrades[bh.NextProtocol] {
+
+		
 		return true
 	}
 	return false

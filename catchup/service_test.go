@@ -23,6 +23,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"fmt"
 
 	"github.com/algorand/go-deadlock"
 	"github.com/stretchr/testify/require"
@@ -339,6 +340,18 @@ func TestServiceFetchBlocksMalformed(t *testing.T) {
 	require.True(t, s.fetcherFactory.(*MockedFetcherFactory).fetcher.client.closed)
 }
 
+func TestOnSwitchToUnApprovedProtocol( t *testing.T) {
+
+	// Make Ledger
+	remote, local := testingenvWithUpgrade(t, 10, 5, 8)
+	s := MakeService(logging.Base(), defaultConfig, &mocks.MockNetwork{}, local, nil, &mockedAuthenticator{errorRound: -1})
+	s.fetcherFactory = &MockedFetcherFactory{fetcher: &MockedFetcher{ledger: remote, timeout: false, tries: make(map[basics.Round]int)}}
+
+	s.sync()
+
+	fmt.Println("***********************************")
+}
+
 const defaultRewardUnit = 1e6
 
 type mockedLedger struct {
@@ -446,11 +459,35 @@ func testingenv(t testing.TB, numBlocks int) (ledger, emptyLedger Ledger) {
 	return mLedger, mEmptyLedger
 }
 
-/*
-func getUnapprovedProtocol(consensusMap config.Consensus) (ConsensusParams) {
+func testingenvWithUpgrade(
+	t testing.TB,
+	numBlocks int,
+	roundWithSwitchOn,
+	upgradeRound int) (ledger, emptyLedger Ledger) {
 
-	proto := consensumMap[protocol.ConsensusCurrentVersion]
-	proto.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
-	return proto
+	mLedger := new(mockedLedger)
+	mEmptyLedger := new(mockedLedger)
+
+	var blk bookkeeping.Block
+	blk.CurrentProtocol = protocol.ConsensusCurrentVersion
+	mLedger.blocks = append(mLedger.blocks, blk)
+	mEmptyLedger.blocks = append(mEmptyLedger.blocks, blk)
+
+	for i := 1; i <= numBlocks; i++ {		
+		blk = bookkeeping.MakeBlock(blk.BlockHeader)
+		if roundWithSwitchOn >= i {
+			modifierBlk := blk
+			blkh := &modifierBlk.BlockHeader
+			blkh.NextProtocolSwitchOn = basics.Round(upgradeRound)
+			blkh.NextProtocol = protocol.ConsensusVersion("some-unsupported-protocol")
+			
+			mLedger.blocks = append(mLedger.blocks, modifierBlk)
+			continue
+		}
+		
+		mLedger.blocks = append(mLedger.blocks, blk)
+	}
+
+	return mLedger, mEmptyLedger
 }
-*/
+
