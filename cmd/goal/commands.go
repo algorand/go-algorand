@@ -396,7 +396,7 @@ func getWalletHandleMaybePassword(dataDir string, walletName string, getPassword
 		if len(walletID) == 0 {
 			// If we still don't have a default, check if there's only one wallet.
 			// If there is, make it the default and continue
-			wallets, err := kmd.ListWallets()
+			wallets, err := kmd.ListWallets(false)
 			if err != nil {
 				return nil, nil, fmt.Errorf(errCouldNotListWallets, err)
 			}

@@ -130,14 +130,14 @@ func (c *Client) ReleaseWalletHandle(wh []byte) error {
 }
 
 // ListWallets returns the list of wallets that kmd is aware of
-func (c *Client) ListWallets() (wallets []kmdapi.APIV1Wallet, err error) {
+func (c *Client) ListWallets(scan bool) (wallets []kmdapi.APIV1Wallet, err error) {
 	kmd, err := c.ensureKmdClient()
 	if err != nil {
 		return
 	}
 
 	// List the wallets
-	resp, err := kmd.ListWallets()
+	resp, err := kmd.ListWallets(scan)
 	if err != nil {
 		return
 	}
@@ -156,7 +156,7 @@ func (c *Client) FindWalletIDByName(name []byte) (wid []byte, duplicate bool, er
 		return
 	}
 
-	resp, err := kmd.ListWallets()
+	resp, err := kmd.ListWallets(false)
 	if err != nil {
 		return
 	}
@@ -185,7 +185,7 @@ func (c *Client) FindWalletNameByID(wid []byte) (name []byte, duplicate bool, er
 		return
 	}
 
-	resp, err := kmd.ListWallets()
+	resp, err := kmd.ListWallets(false)
 	if err != nil {
 		return
 	}

@@ -98,12 +98,24 @@ func getWalletsHandler(ctx reqContext, w http.ResponseWriter, r *http.Request) {
 	//      required: false
 	//      schema:
 	//        "$ref": "#/definitions/ListWalletsRequest"
+	//    - name: scan
+	//      in: query
+	//      type: boolean
+	//      required: false
+	//      description: Indicates whether wallet drivers should re-scan for devices
 	//    Responses:
 	//      "200":
 	//        "$ref": "#/responses/ListWalletsResponse"
 
+	// Should we scan for new wallets?
+	var scan bool
+	scans := r.URL.Query()["scan"]
+	if len(scans) > 0 && scans[0] != "" {
+		scan = true
+	}
+
 	// List all wallets from all wallet drivers
-	walletMetadatas, err := driver.ListWalletMetadatas()
+	walletMetadatas, err := driver.ListWalletMetadatas(scan)
 	if err != nil {
 		errorResponse(w, http.StatusInternalServerError, err)
 		return

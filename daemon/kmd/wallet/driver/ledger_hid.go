@@ -21,8 +21,6 @@ import (
 	"fmt"
 
 	"github.com/karalabe/hid"
-
-	"github.com/algorand/go-algorand/logging"
 )
 
 const ledgerVendorID = 0x2c97
@@ -40,7 +38,7 @@ type LedgerUSBError uint16
 
 // Error satisfies builtin interface `error`
 func (err LedgerUSBError) Error() string {
-	return fmt.Sprintf("Exchange: unexpected status 0x%x", err)
+	return fmt.Sprintf("Exchange: unexpected status 0x%x", uint16(err))
 }
 
 // Protocol reference:
@@ -197,24 +195,15 @@ func (l *LedgerUSB) USBInfo() hid.DeviceInfo {
 }
 
 // LedgerEnumerate returns all of the Ledger devices connected to this machine.
-func LedgerEnumerate(log logging.Logger) ([]LedgerUSB, error) {
+func LedgerEnumerate() ([]hid.DeviceInfo, error) {
 	if !hid.Supported() {
 		return nil, fmt.Errorf("HID not supported")
 	}
 
-	var devs []LedgerUSB
+	var infos []hid.DeviceInfo
 	for _, info := range hid.Enumerate(ledgerVendorID, 0) {
-		// Try to open the device
-		dev, err := info.Open()
-		if err != nil {
-			log.Warnf("enumerated but failed to open ledger %x: %v", info.ProductID, err)
-			continue
-		}
-
-		devs = append(devs, LedgerUSB{
-			hiddev: dev,
-		})
+		infos = append(infos, info)
 	}
 
-	return devs, nil
+	return infos, nil
 }

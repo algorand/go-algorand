@@ -246,7 +246,7 @@ func (swd *SQLiteWalletDriver) potentialWalletPaths() (paths []string, err error
 // ListWalletMetadatas opens everything that looks like a wallet in the
 // walletsDir() and tries to extract its metadata. It does not fail if it
 // is unable to read metadata from one of the files it attempts to open
-func (swd *SQLiteWalletDriver) ListWalletMetadatas() (metadatas []wallet.Metadata, err error) {
+func (swd *SQLiteWalletDriver) ListWalletMetadatas(_ bool) (metadatas []wallet.Metadata, err error) {
 	paths, err := swd.potentialWalletPaths()
 	if err != nil {
 		return

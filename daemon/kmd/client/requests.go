@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/google/go-querystring/query"
+
 	v1 "github.com/algorand/go-algorand/daemon/kmd/api/v1"
 	"github.com/algorand/go-algorand/daemon/kmd/lib/kmdapi"
 	"github.com/algorand/go-algorand/protocol"
@@ -36,9 +38,24 @@ func (kcl KMDClient) DoV1Request(req kmdapi.APIV1Request, resp kmdapi.APIV1Respo
 		return err
 	}
 
-	// Encode the request
-	body = protocol.EncodeJSON(req)
-	fullPath := fmt.Sprintf("http://%s/%s", kcl.address, reqPath)
+	// Encode URL GET parameters, if there are any
+	var urlParams string
+	if reqMethod == "GET" {
+		values, err := query.Values(req)
+		if err != nil {
+			return err
+		}
+		encoded := values.Encode()
+		if encoded != "" {
+			urlParams = "?" + encoded
+		}
+	} else {
+		// Encode the request body
+		body = protocol.EncodeJSON(req)
+	}
+
+	// Build the URL and make the request
+	fullPath := fmt.Sprintf("http://%s/%s%s", kcl.address, reqPath, urlParams)
 	hreq, err := http.NewRequest(reqMethod, fullPath, bytes.NewReader(body))
 	if err != nil {
 		return err
