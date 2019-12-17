@@ -59,13 +59,8 @@ func (wl *wrappedLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, er
 	return wl.l.BlockHdr(rnd)
 }
 
-func (wl *wrappedLedger) blockAux(rnd basics.Round) (bookkeeping.Block, evalAux, error) {
-	wl.recordBlockQuery(rnd)
-	return wl.l.blockAux(rnd)
-}
-
-func (wl *wrappedLedger) trackerEvalVerified(blk bookkeeping.Block, aux evalAux) (StateDelta, error) {
-	return wl.l.trackerEvalVerified(blk, aux)
+func (wl *wrappedLedger) trackerEvalVerified(blk bookkeeping.Block) (StateDelta, error) {
+	return wl.l.trackerEvalVerified(blk)
 }
 
 func (wl *wrappedLedger) Latest() basics.Round {
