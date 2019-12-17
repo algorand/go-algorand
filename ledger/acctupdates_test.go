@@ -49,7 +49,7 @@ func (ml *mockLedgerForTracker) Latest() basics.Round {
 	return basics.Round(len(ml.blocks)) - 1
 }
 
-func (ml *mockLedgerForTracker) trackerEvalVerified(blk bookkeeping.Block, aux evalAux) (StateDelta, error) {
+func (ml *mockLedgerForTracker) trackerEvalVerified(blk bookkeeping.Block) (StateDelta, error) {
 	delta := StateDelta{
 		hdr: &bookkeeping.BlockHeader{},
 	}
@@ -70,14 +70,6 @@ func (ml *mockLedgerForTracker) BlockHdr(rnd basics.Round) (bookkeeping.BlockHea
 	}
 
 	return ml.blocks[int(rnd)].block.BlockHeader, nil
-}
-
-func (ml *mockLedgerForTracker) blockAux(rnd basics.Round) (bookkeeping.Block, evalAux, error) {
-	if rnd > ml.Latest() {
-		return bookkeeping.Block{}, evalAux{}, fmt.Errorf("rnd %d out of bounds", rnd)
-	}
-
-	return ml.blocks[int(rnd)].block, ml.blocks[int(rnd)].aux, nil
 }
 
 func (ml *mockLedgerForTracker) trackerDB() dbPair {

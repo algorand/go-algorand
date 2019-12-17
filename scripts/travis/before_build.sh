@@ -64,3 +64,5 @@ runGoFmt
 echo "Running golint..."
 runGoLint
 
+echo "Running check_license..."
+./scripts/check_license.sh

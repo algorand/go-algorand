@@ -317,6 +317,9 @@ type WebsocketNetwork struct {
 
 	requestsTracker *RequestTracker
 	requestsLogger  *RequestLogger
+
+	// lastPeerConnectionsSent is the last time the peer connections were sent ( or attempted to be sent ) to the telemetry server.
+	lastPeerConnectionsSent time.Time
 }
 
 type broadcastRequest struct {
@@ -516,6 +519,7 @@ func (wn *WebsocketNetwork) setup() {
 	wn.upgrader.ReadBufferSize = 4096
 	wn.upgrader.WriteBufferSize = 4096
 	wn.upgrader.EnableCompression = false
+	wn.lastPeerConnectionsSent = time.Now()
 	wn.router = mux.NewRouter()
 	wn.router.Handle(GossipNetworkPath, wn)
 	wn.requestsTracker = makeRequestsTracker(wn.router, wn.log, wn.config)
@@ -728,8 +732,10 @@ func (wn *WebsocketNetwork) ClearHandlers() {
 }
 
 func (wn *WebsocketNetwork) setHeaders(header http.Header) {
-	myTelemetryGUID := wn.log.GetTelemetryHostName()
-	header.Set(TelemetryIDHeader, myTelemetryGUID)
+	localTelemetryGUID := wn.log.GetTelemetryHostName()
+	localInstanceName := wn.log.GetInstanceName()
+	header.Set(TelemetryIDHeader, localTelemetryGUID)
+	header.Set(InstanceNameHeader, localInstanceName)
 	header.Set(ProtocolVersionHeader, ProtocolVersion)
 	header.Set(AddressHeader, wn.PublicAddress())
 	header.Set(NodeRandomHeader, wn.RandomID)
@@ -1250,7 +1256,44 @@ func (wn *WebsocketNetwork) meshThread() {
 		if request.done != nil {
 			close(request.done)
 		}
+
+		// send the currently connected peers information to the
+		// telemetry server; that would allow the telemetry server
+		// to construct a cross-node map of all the nodes interconnections.
+		wn.sendPeerConnectionsTelemetryStatus()
 	}
+}
+
+// sendPeerConnectionsTelemetryStatus sends a snapshot of the currently connected peers
+// to the telemetry server. Internally, it's using a timer to ensure that it would only
+// send the information once every hour ( configurable via PeerConnectionsUpdateInterval )
+func (wn *WebsocketNetwork) sendPeerConnectionsTelemetryStatus() {
+	now := time.Now()
+	if wn.lastPeerConnectionsSent.Add(time.Duration(wn.config.PeerConnectionsUpdateInterval)*time.Second).After(now) || wn.config.PeerConnectionsUpdateInterval <= 0 {
+		// it's not yet time to send the update.
+		return
+	}
+	wn.lastPeerConnectionsSent = now
+	var peers []*wsPeer
+	peers = wn.peerSnapshot(peers)
+	var connectionDetails telemetryspec.PeersConnectionDetails
+	for _, peer := range peers {
+		connDetail := telemetryspec.PeerConnectionDetails{
+			ConnectionDuration: uint(now.Sub(peer.createTime).Seconds()),
+			HostName:           peer.TelemetryGUID,
+			InstanceName:       peer.InstanceName,
+		}
+		if peer.outgoing {
+			connDetail.Address = justHost(peer.conn.RemoteAddr().String())
+			connDetail.Endpoint = peer.GetAddress()
+			connectionDetails.OutgoingPeers = append(connectionDetails.OutgoingPeers, connDetail)
+		} else {
+			connDetail.Address = peer.OriginAddress()
+			connectionDetails.IncomingPeers = append(connectionDetails.IncomingPeers, connDetail)
+		}
+	}
+
+	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.PeerConnectionsEvent, connectionDetails)
 }
 
 // prioWeightRefreshTime controls how often we refresh the weights
@@ -1549,7 +1592,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	}
 
 	peer := &wsPeer{wsPeerCore: wsPeerCore{net: wn, rootURL: addr}, conn: conn, outgoing: true, incomingMsgFilter: wn.incomingMsgFilter, createTime: time.Now()}
-	peer.TelemetryGUID = response.Header.Get(TelemetryIDHeader)
+	peer.TelemetryGUID, peer.InstanceName, _ = getCommonHeaders(response.Header)
 	peer.init(wn.config, wn.outgoingMessagesBufferSize)
 	wn.addPeer(peer)
 	localAddr, _ := wn.Address()
@@ -1559,7 +1602,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 			Address:      justHost(conn.RemoteAddr().String()),
 			HostName:     peer.TelemetryGUID,
 			Incoming:     false,
-			InstanceName: myInstanceName,
+			InstanceName: peer.InstanceName,
 		})
 
 	peers.Set(float64(wn.NumPeers()), nil)

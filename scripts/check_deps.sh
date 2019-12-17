@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 
-# checkout_deps.sh - Quickly(!) checks the enlistment for any missing dependencies and attempts to resolve them.
+# check_deps.sh - Quickly(!) checks the enlistment for any missing dependencies and attempts to resolve them.
 #           Reports if any dependencies are still missing after attempts to resolve.
 #
-# Syntax:   checkout_deps.sh
+# Syntax:   check_deps.sh
 #
 # Outputs:  status messages
 #
@@ -11,77 +11,55 @@
 #
 # Usage:    Use before building to ensure dependencies are present (should be nop except after dependencies change)
 #
-# Examples: scripts/checkout_deps.sh
+# Examples: scripts/check_deps.sh
 
-export GOPATH=$(go env GOPATH)
-GOPATH1=$(echo $GOPATH | cut -d: -f1)
+GREEN_FG=$(tput setaf 2)
+RED_FG=$(tput setaf 1)
+TEAL_FG=$(tput setaf 6)
+YELLOW_FG=$(tput setaf 3)
+END_FG_COLOR=$(tput sgr0)
 
-ANY_MISSING=0
-# golint doesn't work with 'dep ensure' so we manually install it
-GOLINT_MISSING=0
-STRINGER_MISSING=0
-SWAGGER_MISSING=0
+GOPATH=$(go env GOPATH)
+export GOPATH
+GO_BIN="$(echo "$GOPATH" | cut -d: -f1)/bin"
+MISSING=0
 
-function check_deps() {
-    ANY_MISSING=0
-    GOLINT_MISSING=0
+missing_dep() {
+    echo "$YELLOW_FG[WARNING]$END_FG_COLOR Mising dependency \`$TEAL_FG${1}$END_FG_COLOR\`."
+    MISSING=1
+}
 
-    if [ ! -f "${GOPATH1}/bin/golint" ]; then
-        GOLINT_MISSING=1
-        ANY_MISSING=1
-        echo "... golint missing"
+GO_DEPS=(
+    "$GO_BIN/golint"
+    "$GO_BIN/stringer"
+    "$GO_BIN/swagger"
+)
+
+check_deps() {
+    for path in ${GO_DEPS[*]}
+    do
+        if [ ! -f "$path" ]
+        then
+            # Parameter expansion is faster than invoking another process.
+            # https://www.linuxjournal.com/content/bash-parameter-expansion
+            missing_dep "${path##*/}"
+        fi
+    done
+
+    # Don't print `shellcheck`s location.
+    if ! which shellcheck > /dev/null
+    then
+        missing_dep shellcheck
     fi
-
-    if [ ! -f "${GOPATH1}/bin/stringer" ]; then
-        STRINGER_MISSING=1
-        ANY_MISSING=1
-        echo "... stringer missing"
-    fi
-
-    if [ ! -f "${GOPATH1}/bin/swagger" ]; then
-        SWAGGER_MISSING=1
-        ANY_MISSING=1
-        echo "... swagger missing"
-    fi
-
-    return ${ANY_MISSING}
 }
 
 check_deps
-if [ $? -eq 0 ]; then
-    echo Required dependencies already installed.
-    exit 0
-fi
 
-if [ ${GOLINT_MISSING} -ne 0 ]; then
-    read -p "Install golint (using go get) (y/N): " OK
-    if [ "$OK" = "y" ]; then
-        echo "Installing golint..."
-        GO111MODULE=off go get -u golang.org/x/lint/golint
-    fi
-fi
-
-if [ ${STRINGER_MISSING} -ne 0 ]; then
-    read -p "Install stringer (using go get) (y/N): " OK
-    if [ "$OK" = "y" ]; then
-        echo "Installing stringer..."
-        GO111MODULE=off go get -u golang.org/x/tools/cmd/stringer
-    fi
-fi
-
-if [ ${SWAGGER_MISSING} -ne 0 ]; then
-    read -p "Install swagger (using go get) (y/N): " OK
-    if [ "$OK" = "y" ]; then
-        echo "Installing swagger..."
-        GO111MODULE=off go get -u github.com/go-swagger/go-swagger/cmd/swagger
-    fi
-fi
-
-check_deps
-if [ $? -eq 0 ]; then
-    echo Required dependencies have been installed
-    exit 0
+if [ $MISSING -eq 0 ]
+then
+    echo "$GREEN_FG[$0]$END_FG_COLOR Required dependencies installed."
 else
-    echo Required dependencies still missing. Build will probably fail.
-    exit 0
+    echo -e "$RED_FG[$0]$END_FG_COLOR Required dependencies missing. Run \`${TEAL_FG}./scripts/configure-dev.sh$END_FG_COLOR\` to install."
+    exit 1
 fi
+

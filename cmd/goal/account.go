@@ -487,10 +487,10 @@ var listCmd = &cobra.Command{
 				if err == nil {
 					params, ok := creatorInfo.AssetParams[aid]
 					if ok {
+						unitName = "units"
 						if params.UnitName != "" {
 							unitName = params.UnitName
 						}
-						unitName = "units"
 						if params.AssetName != "" {
 							assetName = fmt.Sprintf(", name %s", params.AssetName)
 						}
