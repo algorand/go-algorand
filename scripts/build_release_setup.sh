@@ -134,7 +134,7 @@ gpg --import ${GOPATH}/src/github.com/algorand/go-algorand/installer/rpm/RPM-GPG
 cd $HOME
 # TODO: make a config file in root of repo with single source of truth for Go major-minor version
 if [ ! -e /usr/local/go/bin/go ]; then
-    python3 ${GOPATH}/src/github.com/algorand/go-algorand/scripts/get_latest_go.py --version-prefix=1.12
+    python3 ${GOPATH}/src/github.com/algorand/go-algorand/scripts/get_latest_go.py --version-prefix=1.13
     # $HOME will be interpreted by the outer shell to create the string passed to sudo bash
     sudo bash -c "cd /usr/local && tar zxf ${HOME}/go*.tar.gz"
 fi
