@@ -137,7 +137,6 @@ func (lwd *LedgerWalletDriver) scanWalletsLocked() error {
 		err = lwd.wallets[deadPath].dev.hiddev.Close()
 		if err != nil {
 			lwd.log.Warnf("failed to close '%s': %v", deadPath, err)
-			continue
 		}
 		delete(lwd.wallets, deadPath)
 	}
