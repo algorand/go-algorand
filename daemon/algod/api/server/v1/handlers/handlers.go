@@ -1133,19 +1133,19 @@ func ListBalances(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpBalances, ctx.Log)
 		return
 	}
-	totals, err := ctx.Node.Ledger().Totals(ctx.Node.Ledger().LastRound())
-	if err != nil {
-		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpBalances, ctx.Log)
-		return
-	}
-	params, err := ctx.Node.Ledger().ConsensusParams(ctx.Node.Ledger().LastRound())
+	//totals, err := ctx.Node.Ledger().Totals(ctx.Node.Ledger().LastRound())
+	//if err != nil {
+	//	lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpBalances, ctx.Log)
+	//	return
+	//}
+	//params, err := ctx.Node.Ledger().ConsensusParams(ctx.Node.Ledger().LastRound())
 
 	var result v1.BalanceList
 	for account, accountData := range balances {
-		algos, rewards := accountData.Money(params, totals.RewardsLevel)
+		//algos, rewards := accountData.Money(params, totals.RewardsLevel)
 		result.Balances = append(result.Balances, v1.AccountBalance{
 			Address: account.GetUserAddress(),
-			Amount:  algos.Raw + rewards.Raw,
+			Amount:  accountData.MicroAlgos.Raw,
 		})
 	}
 	SendJSON(BalancesResponse{&result}, w, ctx.Log)
