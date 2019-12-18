@@ -95,8 +95,8 @@ const (
 	infoRawTxIssued = "Raw transaction ID %s issued"
 	txPoolError     = "Transaction %s kicked out of local node pool: %s"
 	addrNoSigError  = "Exactly one of --address or --no-sig is required"
-	msigLookupError = "Could not lookup multisig preimage: %s"
-	msigParseError  = "Multisig preimage parsing error: %s"
+	msigLookupError = "Could not lookup multisig template: %s"
+	msigParseError  = "Multisig template parsing error: %s"
 
 	infoAutoFeeSet = "Automatically set fee to %d MicroAlgos"
 

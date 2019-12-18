@@ -45,7 +45,7 @@ func init() {
 
 	addSigCmd.Flags().StringVarP(&txFilename, "tx", "t", "", "Partially-signed transaction file to add signature to")
 	addSigCmd.Flags().StringVarP(&addr, "address", "a", "", "Address of the key to sign with")
-	addSigCmd.Flags().BoolVarP(&noSig, "no-sig", "n", false, "Fill in the multisig struct with the preimage, but don't produce a signature")
+	addSigCmd.Flags().BoolVarP(&noSig, "no-sig", "n", false, "Fill in the transaction's multisig template with public keys and threshold information, but don't produce a signature")
 	addSigCmd.MarkFlagRequired("tx")
 
 	signProgramCmd.Flags().StringVarP(&programSource, "program", "p", "", "Program source to be compiled and signed")
