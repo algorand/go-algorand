@@ -94,7 +94,7 @@ const (
 	soFlagError     = "-s is not meaningful without -o"
 	infoRawTxIssued = "Raw transaction ID %s issued"
 	txPoolError     = "Transaction %s kicked out of local node pool: %s"
-	addrNoSigError  = "--address and --no-sig are mutually exclusive"
+	addrNoSigError  = "Exactly one of --address or --no-sig is required"
 	msigLookupError = "Could not lookup multisig preimage: %s"
 	msigParseError  = "Multisig preimage parsing error: %s"
 
