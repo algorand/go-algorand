@@ -280,13 +280,13 @@ func (s RewardsState) NextRewardsState(nextRound basics.Round, nextProto config.
 	return
 }
 
-// computeUpgradeState determines the UpgradeState for a block at round thisR,
+// computeUpgradeState determines the UpgradeState for a block at round r,
 // given the previous block's UpgradeState "s" and this block's UpgradeVote.
 //
 // This function returns an error if the input is not valid in prevState: that
 // is, if UpgradePropose shows up when there is already an active proposal, or
 // if UpgradeApprove shows up if there is no active proposal being voted on.
-func (s UpgradeState) applyUpgradeVote(r basics.Round, vote UpgradeVote) (res UpgradeState, err error) {
+func (s UpgradeState) applyUpgradeVote(r basics.Round, vote UpgradeVote, upgradeDelay uint64) (res UpgradeState, err error) {
 	// Locate the config parameters for current protocol
 	params, ok := config.Consensus[s.CurrentProtocol]
 	if !ok {
@@ -302,14 +302,19 @@ func (s UpgradeState) applyUpgradeVote(r basics.Round, vote UpgradeVote) (res Up
 		}
 
 		if len(vote.UpgradePropose) > params.MaxVersionStringLen {
-			err = fmt.Errorf("proposed protocol version %s too long", vote.UpgradePropose)
+			err = fmt.Errorf("computeUpgradeState: proposed protocol version %s too long", vote.UpgradePropose)
+			return
+		}
+
+		if upgradeDelay > params.MaxUpgradeWaitRounds || upgradeDelay < params.MinUpgradeWaitRounds {
+			err = fmt.Errorf("computeUpgradeState: proposed upgrade wait rounds %d out of permissible range", upgradeDelay)
 			return
 		}
 
 		s.NextProtocol = vote.UpgradePropose
 		s.NextProtocolApprovals = 0
 		s.NextProtocolVoteBefore = r + basics.Round(params.UpgradeVoteRounds)
-		s.NextProtocolSwitchOn = r + basics.Round(params.UpgradeVoteRounds) + basics.Round(params.UpgradeWaitRounds)
+		s.NextProtocolSwitchOn = r + basics.Round(params.UpgradeVoteRounds) + basics.Round(upgradeDelay)
 	}
 
 	// Apply approval of existing protocol upgrade
@@ -359,12 +364,14 @@ func ProcessUpgradeParams(prev BlockHeader) (uv UpgradeVote, us UpgradeState, er
 	}
 
 	// Decide on the votes for protocol upgrades
+	var upgradeDelay uint64
 	upgradeVote := UpgradeVote{}
 
 	// If there is no upgrade proposal, see if we can make one
 	if prev.NextProtocol == "" {
 		for k, v := range prevParams.ApprovedUpgrades {
-			if v {
+			if v > 0 {
+				upgradeDelay = v
 				upgradeVote.UpgradePropose = k
 				upgradeVote.UpgradeApprove = true
 				break
@@ -372,17 +379,22 @@ func ProcessUpgradeParams(prev BlockHeader) (uv UpgradeVote, us UpgradeState, er
 		}
 	}
 
+	// Set the upgrade delay if we haven't already done so
+	if upgradeDelay == 0 {
+		upgradeDelay = uint64(prev.NextProtocolSwitchOn - prev.NextProtocolVoteBefore)
+	}
+
 	// If there is a proposal being voted on, see if we approve it
 	round := prev.Round + 1
 	if round < prev.NextProtocolVoteBefore {
-		if prevParams.ApprovedUpgrades[prev.NextProtocol] {
+		if prev.NextProtocolVoteBefore+basics.Round(prevParams.ApprovedUpgrades[prev.NextProtocol]) == prev.NextProtocolSwitchOn {
 			upgradeVote.UpgradeApprove = true
 		}
 	}
 
-	upgradeState, err := prev.UpgradeState.applyUpgradeVote(round, upgradeVote)
+	upgradeState, err := prev.UpgradeState.applyUpgradeVote(round, upgradeVote, upgradeDelay)
 	if err != nil {
-		err = fmt.Errorf("constructed invalid upgrade vote %v for round %v in state %v: %v", upgradeVote, round, prev.UpgradeState, err)
+		err = fmt.Errorf("constructed invalid upgrade vote %v for round %v (delay %v) in state %v: %v", upgradeVote, round, upgradeDelay, prev.UpgradeState, err)
 		return
 	}
 
@@ -448,7 +460,8 @@ func (bh BlockHeader) PreCheck(prev BlockHeader) error {
 	}
 
 	// check upgrade state
-	nextUpgradeState, err := prev.UpgradeState.applyUpgradeVote(round, bh.UpgradeVote)
+	nextUpgradeDelay := uint64(bh.UpgradeState.NextProtocolSwitchOn - bh.UpgradeState.NextProtocolVoteBefore)
+	nextUpgradeState, err := prev.UpgradeState.applyUpgradeVote(round, bh.UpgradeVote, nextUpgradeDelay)
 	if err != nil {
 		return err
 	}
