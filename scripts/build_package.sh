@@ -59,7 +59,7 @@ mkdir ${PKG_ROOT}/bin
 # If you modify this list, also update this list in ./cmd/updater/update.sh backup_binaries()
 bin_files=("algocfg" "algod" "algoh" "algokey" "carpenter" "catchupsrv" "ddconfig.sh" "diagcfg" "find-nodes.sh" "goal" "kmd" "msgpacktool" "node_exporter" "update.sh" "updater" "COPYING")
 for bin in "${bin_files[@]}"; do
-    cp ${GOPATH}/bin/${bin} ${PKG_ROOT}/bin
+    cp ${GOPATH%%:*}/bin/${bin} ${PKG_ROOT}/bin
     if [ $? -ne 0 ]; then exit 1; fi
 done
 
@@ -113,7 +113,7 @@ echo "Staging tools package files"
 bin_files=("algons" "auctionconsole" "auctionmaster" "auctionminion" "coroner" "dispenser" "netgoal" "nodecfg" "pingpong" "cc_service" "cc_agent" "cc_client" "COPYING")
 mkdir -p ${TOOLS_ROOT}
 for bin in "${bin_files[@]}"; do
-    cp ${GOPATH}/bin/${bin} ${TOOLS_ROOT}
+    cp ${GOPATH%%:*}/bin/${bin} ${TOOLS_ROOT}
     if [ $? -ne 0 ]; then exit 1; fi
 done
 
