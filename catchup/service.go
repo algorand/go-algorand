@@ -367,7 +367,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 			// fetch rounds we can validate
 			for completedRounds[nextRound-basics.Round(parallelRequests)] {
 				if s.nextRoundIsNotApproved(nextRound) {
-					s.cancel()
+					//	s.cancel()
 					return
 				}
 				delete(completedRounds, nextRound)
