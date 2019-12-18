@@ -31,7 +31,7 @@ func ReadFromSRV(service string, protocol string, name string, fallbackDNSResolv
 		log.Debug("no dns lookup due to empty name")
 		return
 	}
-	if protocol != "tcp" && protocol != "udo" && protocol != "tls" {
+	if protocol != "tcp" && protocol != "udp" && protocol != "tls" {
 		err = fmt.Errorf("unsupported protocol '%s' specified", protocol)
 		return
 	}
