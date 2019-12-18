@@ -26,7 +26,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-type telemertySrvReader interface {
+type telemetrySrvReader interface {
 	readFromSRV(protocol string, bootstrapID string) (addrs []string, err error)
 }
 
@@ -36,7 +36,7 @@ type telemetryURIUpdater struct {
 	genesisNetwork protocol.NetworkID
 	log            logging.Logger
 	abort          chan struct{}
-	srvReader      telemertySrvReader
+	srvReader      telemetrySrvReader
 }
 
 // StartTelemetryURIUpdateService starts a go routine which queries SRV records for a telemetry URI every <interval>
@@ -89,7 +89,7 @@ func (t *telemetryURIUpdater) lookupTelemetryURL() (url *url.URL) {
 			t.log.Infof("No telemetry entry for: '_telemetry._tls.%s'", bootstrapID)
 		} else {
 			for _, addr := range addrs {
-				// the add that we received from ReadFromSRV contains host:port, we need to prefix that with the schema. since it's the tls, we want to use https.
+				// the addr that we received from ReadFromSRV contains host:port, we need to prefix that with the schema. since it's the tls, we want to use https.
 				url, err = url.Parse("https://" + addr)
 				if err != nil {
 					t.log.Infof("a telemetry endpoint '%s' was retrieved for '_telemerty._tls.%s'. This does not seems to be a valid endpoint and will be ignored(%v).", addr, bootstrapID, err)
@@ -107,10 +107,10 @@ func (t *telemetryURIUpdater) lookupTelemetryURL() (url *url.URL) {
 		} else {
 			for _, addr := range addrs {
 				if strings.HasPrefix(addr, "https://") {
-					// the add that we received from ReadFromSRV should contains host:port. however, in some cases, it migth contains a https prefix, where we want to take it as is.
+					// the addr that we received from ReadFromSRV should contain host:port. however, in some cases, it might contain a https prefix, where we want to take it as is.
 					url, err = url.Parse(addr)
 				} else {
-					// the add that we received from ReadFromSRV contains host:port, we need to prefix that with the schema. since it's the tcp, we want to use http.
+					// the addr that we received from ReadFromSRV contains host:port, we need to prefix that with the schema. since it's the tcp, we want to use http.
 					url, err = url.Parse("http://" + addr)
 				}
 
