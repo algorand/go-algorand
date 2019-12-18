@@ -17,9 +17,11 @@
 package driver
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"sort"
 
 	"github.com/algorand/go-deadlock"
 
@@ -52,7 +54,9 @@ var ledgerWalletSupportedTxs = []protocol.TxType{protocol.PaymentTx, protocol.Ke
 // Ledger Nano S device.  The device must run the Algorand wallet
 // application from https://github.com/algorand/ledger-app-algorand
 type LedgerWalletDriver struct {
+	mu      deadlock.Mutex
 	wallets map[string]*LedgerWallet
+	log     logging.Logger
 }
 
 // LedgerWallet represents a particular wallet under the
@@ -61,7 +65,6 @@ type LedgerWalletDriver struct {
 type LedgerWallet struct {
 	mu  deadlock.Mutex
 	dev LedgerUSB
-	log logging.Logger
 }
 
 // CreateWallet implements the Driver interface.  There is
@@ -76,6 +79,9 @@ func (lwd *LedgerWalletDriver) CreateWallet(name []byte, id []byte, pw []byte, m
 // FetchWallet looks up a wallet by ID and returns it, failing if there's more
 // than one wallet with the given ID
 func (lwd *LedgerWalletDriver) FetchWallet(id []byte) (w wallet.Wallet, err error) {
+	lwd.mu.Lock()
+	defer lwd.mu.Unlock()
+
 	lw, ok := lwd.wallets[string(id)]
 	if !ok {
 		return nil, errWalletNotFound
@@ -84,17 +90,59 @@ func (lwd *LedgerWalletDriver) FetchWallet(id []byte) (w wallet.Wallet, err erro
 	return lw, nil
 }
 
-// InitWithConfig accepts a driver configuration.  Currently, the Ledger
-// driver does not have any configuration parameters.  However, we use
-// this to enumerate the USB devices.
-func (lwd *LedgerWalletDriver) InitWithConfig(cfg config.KMDConfig, log logging.Logger) error {
-	devs, err := LedgerEnumerate(log)
+// scanWalletsLocked enumerates attached ledger devices and stores them.
+// lwd.mu must be held
+func (lwd *LedgerWalletDriver) scanWalletsLocked() error {
+	// Initialize wallets map
+	if lwd.wallets == nil {
+		lwd.wallets = make(map[string]*LedgerWallet)
+	}
+
+	// Enumerate attached wallet devices
+	infos, err := LedgerEnumerate()
 	if err != nil {
 		return err
 	}
 
-	lwd.wallets = make(map[string]*LedgerWallet)
-	for _, dev := range devs {
+	// Make map of existing device paths. We will pop each one that we
+	// are able to scan for, meaning anything left over is dead, and we
+	// should remove it
+	var curPaths map[string]bool
+	curPaths = make(map[string]bool)
+	for k := range lwd.wallets {
+		curPaths[k] = true
+	}
+
+	// Try to open each new device, skipping ones that are already open.
+	var newDevs []LedgerUSB
+	for _, info := range infos {
+		if curPaths[info.Path] {
+			delete(curPaths, info.Path)
+			continue
+		}
+
+		dev, err := info.Open()
+		if err != nil {
+			lwd.log.Warnf("enumerated but failed to open ledger %x: %v", info.ProductID, err)
+			continue
+		}
+
+		newDevs = append(newDevs, LedgerUSB{
+			hiddev: dev,
+		})
+	}
+
+	// Anything left in curPaths is no longer scanning. Close and remove
+	for deadPath := range curPaths {
+		err = lwd.wallets[deadPath].dev.hiddev.Close()
+		if err != nil {
+			lwd.log.Warnf("failed to close '%s': %v", deadPath, err)
+		}
+		delete(lwd.wallets, deadPath)
+	}
+
+	// Add in new devices
+	for _, dev := range newDevs {
 		id := dev.USBInfo().Path
 		lwd.wallets[id] = &LedgerWallet{
 			dev: dev,
@@ -103,8 +151,27 @@ func (lwd *LedgerWalletDriver) InitWithConfig(cfg config.KMDConfig, log logging.
 	return nil
 }
 
+// InitWithConfig accepts a driver configuration.  Currently, the Ledger
+// driver does not have any configuration parameters.  However, we use
+// this to enumerate the USB devices.
+func (lwd *LedgerWalletDriver) InitWithConfig(cfg config.KMDConfig, log logging.Logger) error {
+	lwd.mu.Lock()
+	defer lwd.mu.Unlock()
+
+	lwd.log = log
+	return lwd.scanWalletsLocked()
+}
+
 // ListWalletMetadatas returns all wallets supported by this driver.
 func (lwd *LedgerWalletDriver) ListWalletMetadatas() (metadatas []wallet.Metadata, err error) {
+	lwd.mu.Lock()
+	defer lwd.mu.Unlock()
+
+	err = lwd.scanWalletsLocked()
+	if err != nil {
+		return
+	}
+
 	for _, w := range lwd.wallets {
 		md, err := w.Metadata()
 		if err != nil {
@@ -113,6 +180,13 @@ func (lwd *LedgerWalletDriver) ListWalletMetadatas() (metadatas []wallet.Metadat
 
 		metadatas = append(metadatas, md)
 	}
+
+	metaSort := func(i, j int) bool {
+		return bytes.Compare(metadatas[i].ID, metadatas[j].ID) < 0
+	}
+
+	// Sort metadatas by ID
+	sort.Slice(metadatas, metaSort)
 
 	return metadatas, nil
 }
