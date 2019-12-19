@@ -94,6 +94,9 @@ const (
 	soFlagError     = "-s is not meaningful without -o"
 	infoRawTxIssued = "Raw transaction ID %s issued"
 	txPoolError     = "Transaction %s kicked out of local node pool: %s"
+	addrNoSigError  = "Exactly one of --address or --no-sig is required"
+	msigLookupError = "Could not lookup multisig information: %s"
+	msigParseError  = "Multisig information parsing error: %s"
 
 	infoAutoFeeSet = "Automatically set fee to %d MicroAlgos"
 
