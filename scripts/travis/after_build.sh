@@ -25,4 +25,4 @@ if [ "${TRAVIS_EVENT_TYPE}" = "cron" ] || [[ "${TRAVIS_BRANCH}" =~ ^rel/ ]]; the
 fi;
 
 # test binary compatibility
-"${SCRIPTPATH}/test/platform/test_linux_amd64_compatibility.sh"
+"${SCRIPTPATH}/../../test/platform/test_linux_amd64_compatibility.sh"
