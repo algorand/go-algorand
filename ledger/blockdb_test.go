@@ -32,7 +32,6 @@ import (
 func randomBlock(r basics.Round) blockEntry {
 	b := bookkeeping.Block{}
 	c := agreement.Certificate{}
-	a := evalAux{}
 
 	b.BlockHeader.Round = r
 	b.BlockHeader.TimeStamp = int64(crypto.RandUint64())
@@ -43,7 +42,6 @@ func randomBlock(r basics.Round) blockEntry {
 	return blockEntry{
 		block: b,
 		cert:  c,
-		aux:   a,
 	}
 }
 
@@ -52,7 +50,6 @@ func randomInitChain(proto protocol.ConsensusVersion, nblock int) []blockEntry {
 	for i := 0; i < nblock; i++ {
 		blkent := randomBlock(basics.Round(i))
 		blkent.cert = agreement.Certificate{}
-		blkent.aux = evalAux{}
 		blkent.block.CurrentProtocol = proto
 		res = append(res, blkent)
 	}
@@ -97,11 +94,6 @@ func checkBlockDB(t *testing.T, tx *sql.Tx, blocks []blockEntry) {
 		require.NoError(t, err)
 		require.Equal(t, blk, blocks[rnd].block)
 		require.Equal(t, cert, blocks[rnd].cert)
-
-		blk, aux, err := blockGetAux(tx, rnd)
-		require.NoError(t, err)
-		require.Equal(t, blk, blocks[rnd].block)
-		require.Equal(t, aux, blocks[rnd].aux)
 	}
 
 	_, err = blockGet(tx, basics.Round(len(blocks)))
@@ -156,7 +148,7 @@ func TestBlockDBAppend(t *testing.T) {
 
 	for i := 0; i < 10; i++ {
 		blkent := randomBlock(basics.Round(len(blocks)))
-		err = blockPut(tx, blkent.block, blkent.cert, blkent.aux)
+		err = blockPut(tx, blkent.block, blkent.cert)
 		require.NoError(t, err)
 
 		blocks = append(blocks, blkent)

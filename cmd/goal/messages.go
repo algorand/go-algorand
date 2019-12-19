@@ -94,6 +94,9 @@ const (
 	soFlagError     = "-s is not meaningful without -o"
 	infoRawTxIssued = "Raw transaction ID %s issued"
 	txPoolError     = "Transaction %s kicked out of local node pool: %s"
+	addrNoSigError  = "Exactly one of --address or --no-sig is required"
+	msigLookupError = "Could not lookup multisig information: %s"
+	msigParseError  = "Multisig information parsing error: %s"
 
 	infoAutoFeeSet = "Automatically set fee to %d MicroAlgos"
 
@@ -146,4 +149,9 @@ const (
 	errWalletNotFound        = "Wallet '%s' not found"
 	errDefaultWalletNotFound = "Wallet with ID '%s' not found. Was the default wallet deleted?"
 	errGettingToken          = "Couldn't get token for wallet '%s' (ID: %s): %s"
+
+	// Ledger
+	errParsingRoundNumber  = "Error parsing round number: %s"
+	errBadBlockArgs        = "Cannot combine --b32=true or --strict=true with --raw"
+	errEncodingBlockAsJSON = "Error encoding block as json: %s"
 )
