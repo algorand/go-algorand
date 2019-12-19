@@ -280,7 +280,7 @@ func (s RewardsState) NextRewardsState(nextRound basics.Round, nextProto config.
 	return
 }
 
-// computeUpgradeState determines the UpgradeState for a block at round r,
+// applyUpgradeVote determines the UpgradeState for a block at round r,
 // given the previous block's UpgradeState "s" and this block's UpgradeVote.
 //
 // This function returns an error if the input is not valid in prevState: that
@@ -290,24 +290,24 @@ func (s UpgradeState) applyUpgradeVote(r basics.Round, vote UpgradeVote, upgrade
 	// Locate the config parameters for current protocol
 	params, ok := config.Consensus[s.CurrentProtocol]
 	if !ok {
-		err = fmt.Errorf("computeUpgradeState: unsupported protocol %v", s.CurrentProtocol)
+		err = fmt.Errorf("applyUpgradeVote: unsupported protocol %v", s.CurrentProtocol)
 		return
 	}
 
 	// Apply proposal of upgrade to new protocol
 	if vote.UpgradePropose != "" {
 		if s.NextProtocol != "" {
-			err = fmt.Errorf("computeUpgradeState: new proposal during existing proposal")
+			err = fmt.Errorf("applyUpgradeVote: new proposal during existing proposal")
 			return
 		}
 
 		if len(vote.UpgradePropose) > params.MaxVersionStringLen {
-			err = fmt.Errorf("computeUpgradeState: proposed protocol version %s too long", vote.UpgradePropose)
+			err = fmt.Errorf("applyUpgradeVote: proposed protocol version %s too long", vote.UpgradePropose)
 			return
 		}
 
 		if upgradeDelay > params.MaxUpgradeWaitRounds || upgradeDelay < params.MinUpgradeWaitRounds {
-			err = fmt.Errorf("computeUpgradeState: proposed upgrade wait rounds %d out of permissible range", upgradeDelay)
+			err = fmt.Errorf("applyUpgradeVote: proposed upgrade wait rounds %d out of permissible range", upgradeDelay)
 			return
 		}
 
@@ -320,12 +320,12 @@ func (s UpgradeState) applyUpgradeVote(r basics.Round, vote UpgradeVote, upgrade
 	// Apply approval of existing protocol upgrade
 	if vote.UpgradeApprove {
 		if s.NextProtocol == "" {
-			err = fmt.Errorf("computeUpgradeState: approval without an active proposal")
+			err = fmt.Errorf("applyUpgradeVote: approval without an active proposal")
 			return
 		}
 
 		if r >= s.NextProtocolVoteBefore {
-			err = fmt.Errorf("computeUpgradeState: approval after vote deadline")
+			err = fmt.Errorf("applyUpgradeVote: approval after vote deadline")
 			return
 		}
 
