@@ -859,7 +859,8 @@ var listParticipationKeysCmd = &cobra.Command{
 			if err == nil {
 				votingBytes := parts[fn].Voting.OneTimeSignatureVerifier
 				vrfBytes := parts[fn].VRF.PK
-				if string(onlineAccountInfo.Participation.ParticipationPK) == string(votingBytes[:]) &&
+				if onlineAccountInfo.Participation != nil &&
+					(string(onlineAccountInfo.Participation.ParticipationPK) == string(votingBytes[:])) &&
 					(string(onlineAccountInfo.Participation.VRFPK) == string(vrfBytes[:])) &&
 					(onlineAccountInfo.Participation.VoteFirst == uint64(parts[fn].FirstValid)) &&
 					(onlineAccountInfo.Participation.VoteLast == uint64(parts[fn].LastValid)) &&
