@@ -24,10 +24,9 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"runtime"
 
 	"github.com/stretchr/testify/require"
-
-	testUtils "github.com/algorand/go-algorand/test/framework/utils"
 )
 
 type goalExpectFixture struct {
@@ -107,8 +106,9 @@ func TestGoalWithExpect(t *testing.T) {
 	for testName := range expectFiles {
 		if match, _ := regexp.MatchString(f.testFilter, testName); match {
 			t.Run(testName, func(t *testing.T) {
-				if testName == "basicGoalTest.exp" || testName == "createWalletTest.exp"|| testName == "goalNodeStatusTest.exp" {
-					testUtils.SkipIfFilteringTest(t)
+				if runtime.GOOS == "darwin" && (
+					testName == "basicGoalTest.exp" || testName == "createWalletTest.exp"|| testName == "goalNodeStatusTest.exp") {
+					t.Skip()
 				}
 				workingDir, algoDir, err := f.getTestDir(testName)
 				require.NoError(t, err)

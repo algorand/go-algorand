@@ -339,6 +339,21 @@ func TestServiceFetchBlocksMalformed(t *testing.T) {
 	require.True(t, s.fetcherFactory.(*MockedFetcherFactory).fetcher.client.closed)
 }
 
+func TestOnSwitchToUnApprovedProtocol( t *testing.T) {
+
+	lastRoundRemote := 10
+	lastRoundLocal := 7
+	
+	// Make Ledger
+	remote, local := testingenvWithUpgrade(t, lastRoundRemote, 5, lastRoundLocal+1)
+	s := MakeService(logging.Base(), defaultConfig, &mocks.MockNetwork{}, local, nil, &mockedAuthenticator{errorRound: -1})
+	s.fetcherFactory = &MockedFetcherFactory{fetcher: &MockedFetcher{ledger: remote, timeout: false, tries: make(map[basics.Round]int)}}
+	s.sync()
+
+	require.Equal(t, basics.Round(lastRoundLocal), local.LastRound())
+	require.Equal(t, basics.Round(lastRoundRemote), remote.LastRound())
+}
+
 const defaultRewardUnit = 1e6
 
 type mockedLedger struct {
@@ -445,3 +460,36 @@ func testingenv(t testing.TB, numBlocks int) (ledger, emptyLedger Ledger) {
 
 	return mLedger, mEmptyLedger
 }
+
+func testingenvWithUpgrade(
+	t testing.TB,
+	numBlocks int,
+	roundWithSwitchOn,
+	upgradeRound int) (ledger, emptyLedger Ledger) {
+
+	mLedger := new(mockedLedger)
+	mEmptyLedger := new(mockedLedger)
+
+	var blk bookkeeping.Block
+	blk.CurrentProtocol = protocol.ConsensusCurrentVersion
+	mLedger.blocks = append(mLedger.blocks, blk)
+	mEmptyLedger.blocks = append(mEmptyLedger.blocks, blk)
+
+	for i := 1; i <= numBlocks; i++ {		
+		blk = bookkeeping.MakeBlock(blk.BlockHeader)
+		if roundWithSwitchOn <= i {
+			modifierBlk := blk
+			blkh := &modifierBlk.BlockHeader
+			blkh.NextProtocolSwitchOn = basics.Round(upgradeRound)
+			blkh.NextProtocol = protocol.ConsensusVersion("some-unsupported-protocol")
+			
+			mLedger.blocks = append(mLedger.blocks, modifierBlk)
+			continue
+		}
+		
+		mLedger.blocks = append(mLedger.blocks, blk)
+	}
+
+	return mLedger, mEmptyLedger
+}
+

@@ -21,6 +21,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"runtime/debug"
+	"fmt"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
@@ -49,7 +51,6 @@ type Ledger interface {
 	AddBlock(bookkeeping.Block, agreement.Certificate) error
 	ConsensusParams(basics.Round) (config.ConsensusParams, error)
 
-	// only needed to support tests
 	Block(basics.Round) (bookkeeping.Block, error)
 	BlockCert(basics.Round) (bookkeeping.Block, agreement.Certificate, error)
 }
@@ -114,6 +115,7 @@ func (s *Service) Start() {
 
 // Stop informs the catchup service that it should stop, and waits for it to stop (when periodicSync() exits)
 func (s *Service) Stop() {
+	debug.PrintStack()
 	s.cancel()
 	<-s.done
 	if atomic.CompareAndSwapUint32(&s.initialSyncNotified, 0, 1) {
@@ -340,9 +342,12 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 	from := s.ledger.NextRound()
 	nextRound := from
 	for ; nextRound < from+basics.Round(parallelRequests); nextRound++ {
-		if s.nextRoundIsNotApproved(nextRound) {
-			break
-		}
+		//		if s.nextRoundIsNotApproved(nextRound) {
+			// It is sufficent to check only in the first
+			// iteration, however, checking in all to keep
+			// the nextRoundIsNotApproved interface simple
+		//	break
+		//}
 		currentRoundComplete := make(chan bool, 2)
 		// len(taskCh) + (# pending writes to completed) increases by 1
 		taskCh <- s.pipelineCallback(fetcher, nextRound, currentRoundComplete, recentReqs[len(recentReqs)-1], recentReqs[len(recentReqs)-int(seedLookback)])
@@ -362,7 +367,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 			// fetch rounds we can validate
 			for completedRounds[nextRound-basics.Round(parallelRequests)] {
 				if s.nextRoundIsNotApproved(nextRound) {
-					s.cancel()
+					//	s.cancel()
 					return
 				}
 				delete(completedRounds, nextRound)
@@ -493,9 +498,18 @@ func (s *Service) nextRoundIsNotApproved(nextRound basics.Round) bool {
 		return false
 	}
 	bh := block.BlockHeader
-
-	if nextRound >= bh.NextProtocolSwitchOn &&
+	fmt.Println("*********************************** ")
+	fmt.Println("*********************************** lastLedgerRound: ", lastLedgerRound)	
+	fmt.Println("*********************************** nextRound: ", nextRound)
+	fmt.Println("*********************************** bh.NextProtocolSwitchOn: ", bh.NextProtocolSwitchOn)
+	fmt.Println("*********************************** bh.NextProtocol: ", bh.NextProtocol)
+	fmt.Println("*********************************** approvedUpgrades[bh.NextProtocol]", approvedUpgrades[bh.NextProtocol])
+	fmt.Println("*********************************** ")
+	if bh.NextProtocolSwitchOn > 0 &&
+		nextRound >= bh.NextProtocolSwitchOn &&
 		false == approvedUpgrades[bh.NextProtocol] {
+
+		
 		return true
 	}
 	return false

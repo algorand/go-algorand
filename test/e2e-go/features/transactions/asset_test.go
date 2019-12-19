@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"runtime"
 
 	"github.com/stretchr/testify/require"
 
@@ -31,7 +32,6 @@ import (
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
-	testUtils "github.com/algorand/go-algorand/test/framework/utils"
 )
 
 type assetIDParams struct {
@@ -417,8 +417,9 @@ func TestAssetConfig(t *testing.T) {
 }
 
 func TestAssetInformation(t *testing.T) {
-	testUtils.SkipIfFilteringTest(t)
-
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	t.Parallel()
 	a := require.New(t)
 
@@ -636,8 +637,9 @@ func TestAssetGroupCreateSendDestroy(t *testing.T) {
 }
 
 func TestAssetSend(t *testing.T) {
-	testUtils.SkipIfFilteringTest(t)
-
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	t.Parallel()
 	a := require.New(t)
 
