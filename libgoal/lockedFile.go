@@ -59,7 +59,7 @@ func (f *unixLocker) unlock(fd *os.File) error {
 // and supposed to be platform-agnostic with appropriate locker implementation.
 // Each platform needs own specific `newLockedFile`
 const maxRepeats = 10
-const sleepInterval = 10 * time.Microsecond
+const sleepInterval = 10 * time.Millisecond
 
 type lockedFile struct {
 	path   string
@@ -67,10 +67,10 @@ type lockedFile struct {
 }
 
 func newLockedFile(path string) *lockedFile {
-	f := new(lockedFile)
-	f.path = path
-	f.locker = new(unixLocker)
-	return f
+	return &lockedFile{
+		path:   path,
+		locker: &unixLocker{},
+	}
 }
 
 func (f *lockedFile) read() ([]byte, error) {
@@ -91,7 +91,7 @@ func (f *lockedFile) read() ([]byte, error) {
 }
 
 func (f *lockedFile) write(data []byte, perm os.FileMode) error {
-	fd, err := os.OpenFile(f.path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
+	fd, err := os.OpenFile(f.path, os.O_WRONLY|os.O_CREATE, perm)
 	if err != nil {
 		return err
 	}
@@ -104,6 +104,7 @@ func (f *lockedFile) write(data []byte, perm os.FileMode) error {
 	}
 	defer f.locker.unlock(fd)
 
+	fd.Truncate(0)
 	_, err = fd.Write(data)
 	return err
 }
