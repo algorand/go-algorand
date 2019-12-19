@@ -25,10 +25,14 @@ import (
 )
 
 // ReadFromSRV is a helper to collect SRV addresses for a given name.
-func ReadFromSRV(service string, name string, fallbackDNSResolverAddress string) (addrs []string, err error) {
+func ReadFromSRV(service string, protocol string, name string, fallbackDNSResolverAddress string) (addrs []string, err error) {
 	log := logging.Base()
 	if name == "" {
 		log.Debug("no dns lookup due to empty name")
+		return
+	}
+	if protocol != "tcp" && protocol != "udp" && protocol != "tls" {
+		err = fmt.Errorf("unsupported protocol '%s' specified", protocol)
 		return
 	}
 
