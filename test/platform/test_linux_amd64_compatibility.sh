@@ -21,7 +21,7 @@ PLATFORM=$($SCRIPTPATH/../../scripts/osarchtype.sh)
 
 if [ "${PLATFORM}" != "linux/amd64" ]
 then
-    echo "The test_linux_amd64_compatibility.sh script is intended to support local execution only on linux/x86-64 machines."
+    echo "$RED_FG[$0]$END_FG_COLOR The test_linux_amd64_compatibility.sh script is intended to support local execution only on linux/x86-64 machines."
     exit 0
 fi
 
@@ -37,11 +37,9 @@ EOF
 
     for item in ${OS_LIST[*]}
     do
-        WITH_PACMAN=$(echo -e "${TOKENIZED}")
+        echo "$BLUE_FG[$0]$END_FG_COLOR Testing $item..."
 
-        echo -e "$BLUE_FG[$0]$END_FG_COLOR Testing $item..."
-
-        echo -e "${WITH_PACMAN/\{\{OS\}\}/$item}" > Dockerfile
+        echo -e "${TOKENIZED/\{\{OS\}\}/$item}" > Dockerfile
         if ! docker build -t "${item}-test" .
         then
             FAILED+=("$item")
