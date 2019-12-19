@@ -75,15 +75,17 @@ type ConsensusParams struct {
 	// acceptance and its execution.  This gives clients time to notify
 	// users.  This delay is specified by the upgrade proposer and must
 	// be between MinUpgradeWaitRounds and MaxUpgradeWaitRounds (inclusive)
-	// in the old protocol's parameters.
+	// in the old protocol's parameters.  If the delay is zero, it is
+	// equivalent to DefaultUpgradeWaitRounds.
 	//
 	// The maximum length of a consensus version string is
 	// MaxVersionStringLen.
-	UpgradeVoteRounds    uint64
-	UpgradeThreshold     uint64
-	MinUpgradeWaitRounds uint64
-	MaxUpgradeWaitRounds uint64
-	MaxVersionStringLen  int
+	UpgradeVoteRounds        uint64
+	UpgradeThreshold         uint64
+	DefaultUpgradeWaitRounds uint64
+	MinUpgradeWaitRounds     uint64
+	MaxUpgradeWaitRounds     uint64
+	MaxVersionStringLen      int
 
 	// MaxTxnBytesPerBlock determines the maximum number of bytes
 	// that transactions can take up in a block.  Specifically,
@@ -103,7 +105,8 @@ type ConsensusParams struct {
 
 	// ApprovedUpgrades describes the upgrade proposals that this protocol
 	// implementation will vote for, along with their delay value
-	// (in rounds).
+	// (in rounds).  A delay value of zero is the same as a delay of
+	// DefaultUpgradeWaitRounds.
 	ApprovedUpgrades map[protocol.ConsensusVersion]uint64
 
 	// SupportGenesisHash indicates support for the GenesisHash
@@ -265,11 +268,10 @@ func initConsensusProtocols() {
 
 	// Base consensus protocol version, v7.
 	v7 := ConsensusParams{
-		UpgradeVoteRounds:    10000,
-		UpgradeThreshold:     9000,
-		MinUpgradeWaitRounds: 10000,
-		MaxUpgradeWaitRounds: 10000,
-		MaxVersionStringLen:  64,
+		UpgradeVoteRounds:        10000,
+		UpgradeThreshold:         9000,
+		DefaultUpgradeWaitRounds: 10000,
+		MaxVersionStringLen:      64,
 
 		MinBalance:          10000,
 		MinTxnFee:           1000,
@@ -334,7 +336,7 @@ func initConsensusProtocols() {
 	Consensus[protocol.ConsensusV8] = v8
 
 	// v7 can be upgraded to v8.
-	v7.ApprovedUpgrades[protocol.ConsensusV8] = v7.MinUpgradeWaitRounds
+	v7.ApprovedUpgrades[protocol.ConsensusV8] = 0
 
 	// v9 increases the minimum balance to 100,000 microAlgos.
 	v9 := v8
@@ -343,7 +345,7 @@ func initConsensusProtocols() {
 	Consensus[protocol.ConsensusV9] = v9
 
 	// v8 can be upgraded to v9.
-	v8.ApprovedUpgrades[protocol.ConsensusV9] = v8.MinUpgradeWaitRounds
+	v8.ApprovedUpgrades[protocol.ConsensusV9] = 0
 
 	// v10 introduces fast partition recovery (and also raises NumProposers).
 	v10 := v9
@@ -359,7 +361,7 @@ func initConsensusProtocols() {
 	Consensus[protocol.ConsensusV10] = v10
 
 	// v9 can be upgraded to v10.
-	v9.ApprovedUpgrades[protocol.ConsensusV10] = v9.MinUpgradeWaitRounds
+	v9.ApprovedUpgrades[protocol.ConsensusV10] = 0
 
 	// v11 introduces SignedTxnInBlock.
 	v11 := v10
@@ -369,7 +371,7 @@ func initConsensusProtocols() {
 	Consensus[protocol.ConsensusV11] = v11
 
 	// v10 can be upgraded to v11.
-	v10.ApprovedUpgrades[protocol.ConsensusV11] = v10.MinUpgradeWaitRounds
+	v10.ApprovedUpgrades[protocol.ConsensusV11] = 0
 
 	// v12 increases the maximum length of a version string.
 	v12 := v11
@@ -378,7 +380,7 @@ func initConsensusProtocols() {
 	Consensus[protocol.ConsensusV12] = v12
 
 	// v11 can be upgraded to v12.
-	v11.ApprovedUpgrades[protocol.ConsensusV12] = v11.MinUpgradeWaitRounds
+	v11.ApprovedUpgrades[protocol.ConsensusV12] = 0
 
 	// v13 makes the consensus version a meaningful string.
 	v13 := v12
@@ -386,7 +388,7 @@ func initConsensusProtocols() {
 	Consensus[protocol.ConsensusV13] = v13
 
 	// v12 can be upgraded to v13.
-	v12.ApprovedUpgrades[protocol.ConsensusV13] = v12.MinUpgradeWaitRounds
+	v12.ApprovedUpgrades[protocol.ConsensusV13] = 0
 
 	// v14 introduces tracking of closing amounts in ApplyData, and enables
 	// GenesisHash in transactions.
@@ -397,7 +399,7 @@ func initConsensusProtocols() {
 	Consensus[protocol.ConsensusV14] = v14
 
 	// v13 can be upgraded to v14.
-	v13.ApprovedUpgrades[protocol.ConsensusV14] = v13.MinUpgradeWaitRounds
+	v13.ApprovedUpgrades[protocol.ConsensusV14] = 0
 
 	// v15 introduces tracking of reward distributions in ApplyData.
 	v15 := v14
@@ -407,7 +409,7 @@ func initConsensusProtocols() {
 	Consensus[protocol.ConsensusV15] = v15
 
 	// v14 can be upgraded to v15.
-	v14.ApprovedUpgrades[protocol.ConsensusV15] = v14.MinUpgradeWaitRounds
+	v14.ApprovedUpgrades[protocol.ConsensusV15] = 0
 
 	// v16 fixes domain separation in credentials.
 	v16 := v15
@@ -417,7 +419,7 @@ func initConsensusProtocols() {
 	Consensus[protocol.ConsensusV16] = v16
 
 	// v15 can be upgraded to v16.
-	v15.ApprovedUpgrades[protocol.ConsensusV16] = v15.MinUpgradeWaitRounds
+	v15.ApprovedUpgrades[protocol.ConsensusV16] = 0
 
 	// ConsensusV17 points to 'final' spec commit
 	v17 := v16
@@ -425,7 +427,7 @@ func initConsensusProtocols() {
 	Consensus[protocol.ConsensusV17] = v17
 
 	// v16 can be upgraded to v17.
-	v16.ApprovedUpgrades[protocol.ConsensusV17] = v16.MinUpgradeWaitRounds
+	v16.ApprovedUpgrades[protocol.ConsensusV17] = 0
 
 	// ConsensusV18 points to reward calculation spec commit
 	v18 := v17
@@ -453,9 +455,9 @@ func initConsensusProtocols() {
 	Consensus[protocol.ConsensusV19] = v19
 
 	// v18 can be upgraded to v19.
-	v18.ApprovedUpgrades[protocol.ConsensusV19] = v18.MinUpgradeWaitRounds
+	v18.ApprovedUpgrades[protocol.ConsensusV19] = 0
 	// v17 can be upgraded to v19.
-	v17.ApprovedUpgrades[protocol.ConsensusV19] = v17.MinUpgradeWaitRounds
+	v17.ApprovedUpgrades[protocol.ConsensusV19] = 0
 
 	// v20 points to adding the precision to the assets.
 	v20 := v19
@@ -466,12 +468,11 @@ func initConsensusProtocols() {
 	// 140651 = (7 * 24 * 60 * 60 / 4.3)
 	// for the sake of future manual calculations, we'll round that down
 	// a bit :
-	v20.MinUpgradeWaitRounds = 140000
-	v20.MaxUpgradeWaitRounds = 140000
+	v20.DefaultUpgradeWaitRounds = 140000
 	Consensus[protocol.ConsensusV20] = v20
 
 	// v19 can be upgraded to v20.
-	v19.ApprovedUpgrades[protocol.ConsensusV20] = v19.MinUpgradeWaitRounds
+	v19.ApprovedUpgrades[protocol.ConsensusV20] = 0
 
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
@@ -483,26 +484,24 @@ func initConsensusProtocols() {
 func initConsensusTestProtocols() {
 	// Various test protocol versions
 	Consensus[protocol.ConsensusTest0] = ConsensusParams{
-		UpgradeVoteRounds:    2,
-		UpgradeThreshold:     1,
-		MinUpgradeWaitRounds: 2,
-		MaxUpgradeWaitRounds: 2,
-		MaxVersionStringLen:  64,
+		UpgradeVoteRounds:        2,
+		UpgradeThreshold:         1,
+		DefaultUpgradeWaitRounds: 2,
+		MaxVersionStringLen:      64,
 
 		MaxTxnBytesPerBlock: 1000000,
 		DefaultKeyDilution:  10000,
 
 		ApprovedUpgrades: map[protocol.ConsensusVersion]uint64{
-			protocol.ConsensusTest1: 2,
+			protocol.ConsensusTest1: 0,
 		},
 	}
 
 	Consensus[protocol.ConsensusTest1] = ConsensusParams{
-		UpgradeVoteRounds:    10,
-		UpgradeThreshold:     8,
-		MinUpgradeWaitRounds: 10,
-		MaxUpgradeWaitRounds: 10,
-		MaxVersionStringLen:  64,
+		UpgradeVoteRounds:        10,
+		UpgradeThreshold:         8,
+		DefaultUpgradeWaitRounds: 10,
+		MaxVersionStringLen:      64,
 
 		MaxTxnBytesPerBlock: 1000000,
 		DefaultKeyDilution:  10000,
@@ -544,15 +543,12 @@ func initConsensusTestFastUpgrade() {
 		fastParams := params
 		fastParams.UpgradeVoteRounds = 5
 		fastParams.UpgradeThreshold = 3
-		fastParams.MinUpgradeWaitRounds = 5
-		fastParams.MaxUpgradeWaitRounds = 5
+		fastParams.DefaultUpgradeWaitRounds = 5
 		fastParams.MaxVersionStringLen += len(protocol.ConsensusTestFastUpgrade(""))
 		fastParams.ApprovedUpgrades = make(map[protocol.ConsensusVersion]uint64)
 
-		for ver, delay := range params.ApprovedUpgrades {
-			if delay > 0 {
-				fastParams.ApprovedUpgrades[protocol.ConsensusTestFastUpgrade(ver)] = 5
-			}
+		for ver := range params.ApprovedUpgrades {
+			fastParams.ApprovedUpgrades[protocol.ConsensusTestFastUpgrade(ver)] = 0
 		}
 
 		fastUpgradeProtocols[protocol.ConsensusTestFastUpgrade(proto)] = fastParams
