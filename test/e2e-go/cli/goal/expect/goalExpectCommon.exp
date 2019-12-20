@@ -279,7 +279,7 @@ proc ::AlgorandGoal::AccountTransfer { FROM_WALLET_NAME FROM_WALLET_PASSWORD FRO
         set TRANSACTION_ID "NOT SET"
         spawn goal clerk send --fee $FEE_AMOUNT --wallet $FROM_WALLET_NAME --amount $TRANSFER_AMOUNT --from $FROM_ACCOUNT_ADDRESS --to $TO_ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR -N
         expect {
-            timeout { close; ::AlgorandGoal::Abort "Timed out transfering funds"  }
+            timeout { close; ::AlgorandGoal::Abort "Timed out transferring funds"  }
             "Please enter the password for wallet '$FROM_WALLET_NAME':" { send "$FROM_WALLET_PASSWORD\r" }
             -re {transaction ID: ([A-Z0-9]{52})} {set TRANSACTION_ID $expect_out(1,string); close }
         }
@@ -309,7 +309,7 @@ proc ::AlgorandGoal::WaitForAccountBalance { WALLET_NAME ACCOUNT_ADDRESS EXPECTE
             if { $ACCOUNT_BALANCE == $EXPECTED_BALANCE } {
                 puts "Account balance OK: $ACCOUNT_BALANCE"; break
             } else {
-               puts "Account balance: ''$ACCOUNT_BALANCE' does not match expected balance: '$EXPECTED_BALANCE'"
+               puts "Account balance: '$ACCOUNT_BALANCE' does not match expected balance: '$EXPECTED_BALANCE'"
                if { $i >= 10 } then { ::AlgorandGoal::Abort "Account balance $ACCOUNT_BALANCE does not match expected amount: $EXPECTED_BALANCE"; break;}
             }
         }
@@ -336,26 +336,26 @@ proc ::AlgorandGoal::AssetCreate { CREATOR WALLET_NAME WALLET_PASSWORD TOTAL_SUP
 # Transfer asset
 proc ::AlgorandGoal::AssetTransfer { WALLET_NAME WALLET_PASSWORD FROM_ADDR TO_ADDR ASSET_ID ASSET_AMOUNT TEST_PRIMARY_NODE_DIR} {
     if { [ catch {
-        spawn goal asset send -d $TEST_PRIMARY_NODE_DIR -w $WALLET_NAME --from $FROM_ADDR --to $TO_ADDR --assetid $ASSET_ID --amount $ASSET_AMOUNT 
+        spawn goal asset send -d $TEST_PRIMARY_NODE_DIR -w $WALLET_NAME --from $FROM_ADDR --to $TO_ADDR --assetid $ASSET_ID --amount $ASSET_AMOUNT
         expect {
             timeout { ::AlgorandGoal::Abort "Timed out asset transfer"  }
 	    "Please enter the password for wallet '$WALLET_NAME':" { send "$WALLET_PASSWORD\r" }
         }
     } EXCEPTION ] } {
-       ::AlgorandGoal::Abort "ERROR in AsssetTransfer: $EXCEPTION"
+       ::AlgorandGoal::Abort "ERROR in AssetTransfer: $EXCEPTION"
     }
 }
 
 # write asset transfer to a txn file
 proc ::AlgorandGoal::CreateAssetTransfer { FROM_ADDR TO_ADDR ASSET_ID ASSET_AMOUNT TEST_PRIMARY_NODE_DIR TXN_OUTPUT} {
     if { [ catch {
-        spawn goal asset send -d $TEST_PRIMARY_NODE_DIR --from $FROM_ADDR --to $TO_ADDR --assetid $ASSET_ID --amount $ASSET_AMOUNT -o $TXN_OUTPUT         
+        spawn goal asset send -d $TEST_PRIMARY_NODE_DIR --from $FROM_ADDR --to $TO_ADDR --assetid $ASSET_ID --amount $ASSET_AMOUNT -o $TXN_OUTPUT
 	expect {
             timeout { ::AlgorandGoal::Abort "Timed out creating asset transfer transaction"  }
 	    close
         }
     } EXCEPTION ] } {
-       ::AlgorandGoal::Abort "ERROR in CreateAsssetTransfer: $EXCEPTION"
+       ::AlgorandGoal::Abort "ERROR in CreateAssetTransfer: $EXCEPTION"
     }
 }
 
@@ -462,6 +462,7 @@ proc ::AlgorandGoal::SignTransaction { WALLET_NAME WALLET_PASSWORD INPUT_TXN OUT
 
 # Raw send
 proc ::AlgorandGoal::RawSend { TXN_FILE TEST_PRIMARY_NODE_DIR } {
+    set timeout 30
     if { [ catch {
         set TRANSACTION_ID "NOT SET"
         spawn goal clerk rawsend -f $TXN_FILE -d $TEST_PRIMARY_NODE_DIR
@@ -669,7 +670,7 @@ proc ::AlgorandGoal::Report { TEST_PRIMARY_NODE_DIR } {
             timeout { ::AlgorandGoal::Abort "goal report timed out"  }
             "source code available at https://github.com/algorand/go-algorand" {puts "goal -v ok"}
             -re {Genesis ID from genesis.json: *} {puts "genesis ID from genesis.json ok"}
-            -re {Last commited block: (\d+)} {puts "status check ok"}
+            -re {Last committed block: (\d+)} {puts "status check ok"}
         }
     } EXCEPTION ] } {
     ::AlgorandGoal::Abort "ERROR in Report: $EXCEPTION"
