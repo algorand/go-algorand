@@ -18,7 +18,6 @@ package libgoal
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 )
@@ -31,14 +30,21 @@ type walletHandles struct {
 	Handles map[string]string
 }
 
+func readLocked(path string) ([]byte, error) {
+	lf := newLockedFile(path)
+	return lf.read()
+}
+
+func writeLocked(path string, data []byte, perm os.FileMode) error {
+	lf := newLockedFile(path)
+	return lf.write(data, perm)
+}
+
 func (whs *walletHandles) loadFromDisk(cacheDir string) error {
-	cachePath, err := walletHandlesCachePath(cacheDir)
-	if err != nil {
-		return err
-	}
-	_, err = os.Stat(cachePath)
+	path := walletHandlesCachePath(cacheDir)
+	_, err := os.Stat(path)
 	if !os.IsNotExist(err) {
-		raw, err := ioutil.ReadFile(cachePath)
+		raw, err := readLocked(path)
 		if err != nil {
 			return err
 		}
@@ -56,20 +62,16 @@ func (whs *walletHandles) dumpToDisk(cacheDir string) error {
 		return err
 	}
 
-	path, err := walletHandlesCachePath(cacheDir)
-	if err != nil {
-		return err
-	}
-
-	err = ioutil.WriteFile(path, raw, 0600)
+	path := walletHandlesCachePath(cacheDir)
+	err = writeLocked(path, raw, 0600)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func walletHandlesCachePath(cacheDir string) (string, error) {
-	return filepath.Join(cacheDir, walletHandlesJSONName), nil
+func walletHandlesCachePath(cacheDir string) string {
+	return filepath.Join(cacheDir, walletHandlesJSONName)
 }
 
 func loadWalletHandleFromDisk(walletID []byte, cacheDir string) ([]byte, error) {
