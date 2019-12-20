@@ -17,6 +17,8 @@
 package network
 
 import (
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -24,17 +26,42 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+type telemetrySrvReader interface {
+	readFromSRV(protocol string, bootstrapID string) (addrs []string, err error)
+}
+
+type telemetryURIUpdater struct {
+	interval       time.Duration
+	cfg            config.Local
+	genesisNetwork protocol.NetworkID
+	log            logging.Logger
+	abort          chan struct{}
+	srvReader      telemetrySrvReader
+}
+
 // StartTelemetryURIUpdateService starts a go routine which queries SRV records for a telemetry URI every <interval>
 func StartTelemetryURIUpdateService(interval time.Duration, cfg config.Local, genesisNetwork protocol.NetworkID, log logging.Logger, abort chan struct{}) {
+	updater := &telemetryURIUpdater{
+		interval:       interval,
+		cfg:            cfg,
+		genesisNetwork: genesisNetwork,
+		log:            log,
+		abort:          abort,
+	}
+	updater.srvReader = updater
+	updater.Start()
+
+}
+func (t *telemetryURIUpdater) Start() {
 	go func() {
-		ticker := time.NewTicker(interval)
+		ticker := time.NewTicker(t.interval)
 		defer ticker.Stop()
 
 		updateTelemetryURI := func() {
-			endpoint := lookupTelemetryEndpoint(cfg, genesisNetwork, log)
+			endpointURL := t.lookupTelemetryURL()
 
-			if endpoint != "" && endpoint != log.GetTelemetryURI() {
-				log.UpdateTelemetryURI(endpoint)
+			if endpointURL != nil && endpointURL.String() != t.log.GetTelemetryURI() {
+				t.log.UpdateTelemetryURI(endpointURL.String())
 			}
 		}
 
@@ -44,27 +71,62 @@ func StartTelemetryURIUpdateService(interval time.Duration, cfg config.Local, ge
 			select {
 			case <-ticker.C:
 				updateTelemetryURI()
-			case <-abort:
+			case <-t.abort:
 				return
 			}
 		}
 	}()
 }
 
-func lookupTelemetryEndpoint(cfg config.Local, genesisNetwork protocol.NetworkID, log logging.Logger) string {
-	bootstrapArray := cfg.DNSBootstrapArray(genesisNetwork)
+func (t *telemetryURIUpdater) lookupTelemetryURL() (url *url.URL) {
+	bootstrapArray := t.cfg.DNSBootstrapArray(t.genesisNetwork)
 	bootstrapArray = append(bootstrapArray, "default.algodev.network")
 	for _, bootstrapID := range bootstrapArray {
-		addrs, err := ReadFromSRV("telemetry", bootstrapID, cfg.FallbackDNSResolverAddress)
+		addrs, err := t.srvReader.readFromSRV("tls", bootstrapID)
 		if err != nil {
-			log.Infof("An issue occurred reading telemetry entry for '%s': %v", bootstrapID, err)
+			t.log.Infof("An issue occurred reading telemetry entry for '_telemetry._tls.%s': %v", bootstrapID, err)
 		} else if len(addrs) == 0 {
-			log.Infof("No telemetry entry for: '%s'", bootstrapID)
+			t.log.Infof("No telemetry entry for: '_telemetry._tls.%s'", bootstrapID)
 		} else {
-			return addrs[0]
+			for _, addr := range addrs {
+				// the addr that we received from ReadFromSRV contains host:port, we need to prefix that with the schema. since it's the tls, we want to use https.
+				url, err = url.Parse("https://" + addr)
+				if err != nil {
+					t.log.Infof("a telemetry endpoint '%s' was retrieved for '_telemerty._tls.%s'. This does not seems to be a valid endpoint and will be ignored(%v).", addr, bootstrapID, err)
+					continue
+				}
+				return url
+			}
+		}
+
+		addrs, err = t.srvReader.readFromSRV("tcp", bootstrapID)
+		if err != nil {
+			t.log.Infof("An issue occurred reading telemetry entry for '_telemetry._tcp.%s': %v", bootstrapID, err)
+		} else if len(addrs) == 0 {
+			t.log.Infof("No telemetry entry for: '_telemetry._tcp.%s'", bootstrapID)
+		} else {
+			for _, addr := range addrs {
+				if strings.HasPrefix(addr, "https://") {
+					// the addr that we received from ReadFromSRV should contain host:port. however, in some cases, it might contain a https prefix, where we want to take it as is.
+					url, err = url.Parse(addr)
+				} else {
+					// the addr that we received from ReadFromSRV contains host:port, we need to prefix that with the schema. since it's the tcp, we want to use http.
+					url, err = url.Parse("http://" + addr)
+				}
+
+				if err != nil {
+					t.log.Infof("a telemetry endpoint '%s' was retrieved for '_telemerty._tcp.%s'. This does not seems to be a valid endpoint and will be ignored(%v).", addr, bootstrapID, err)
+					continue
+				}
+				return url
+			}
 		}
 	}
 
-	log.Warn("No telemetry endpoint was found.")
-	return ""
+	t.log.Warn("No telemetry endpoint was found.")
+	return nil
+}
+
+func (t *telemetryURIUpdater) readFromSRV(protocol string, bootstrapID string) (addrs []string, err error) {
+	return ReadFromSRV("telemetry", protocol, bootstrapID, t.cfg.FallbackDNSResolverAddress)
 }
