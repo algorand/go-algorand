@@ -504,7 +504,7 @@ func initConsensusTestProtocols() {
 	Consensus[protocol.ConsensusTestBigBlocks] = testBigBlocks
 
 	rapidRecalcParams := Consensus[protocol.ConsensusCurrentVersion]
-	rapidRecalcParams.RewardsRateRefreshInterval = 25
+	rapidRecalcParams.RewardsRateRefreshInterval = 10
 	//because rapidRecalcParams is based on ConsensusCurrentVersion,
 	//it *shouldn't* have any ApprovedUpgrades
 	//but explicitly mark "no approved upgrades" just in case
