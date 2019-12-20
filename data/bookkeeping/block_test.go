@@ -38,13 +38,13 @@ var protoUnsupported = protocol.ConsensusVersion("TestUnsupported")
 
 func init() {
 	params1 := config.Consensus[protocol.ConsensusCurrentVersion]
-	params1.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{
-		proto2: true,
+	params1.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{
+		proto2: 0,
 	}
 	config.Consensus[proto1] = params1
 
 	params2 := config.Consensus[protocol.ConsensusCurrentVersion]
-	params2.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	params2.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	config.Consensus[proto2] = params2
 }
 
