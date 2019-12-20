@@ -392,13 +392,8 @@ func ProcessUpgradeParams(prev BlockHeader) (uv UpgradeVote, us UpgradeState, er
 	// If there is a proposal being voted on, see if we approve it and its delay
 	round := prev.Round + 1
 	if round < prev.NextProtocolVoteBefore {
-		expectedDelay, ok := prevParams.ApprovedUpgrades[prev.NextProtocol]
-		if expectedDelay == 0 {
-			expectedDelay = prevParams.DefaultUpgradeWaitRounds
-		}
-		if ok && prev.NextProtocolVoteBefore+basics.Round(expectedDelay) == prev.NextProtocolSwitchOn {
-			upgradeVote.UpgradeApprove = true
-		}
+		_, ok := prevParams.ApprovedUpgrades[prev.NextProtocol]
+		upgradeVote.UpgradeApprove = ok
 	}
 
 	upgradeState, err := prev.UpgradeState.applyUpgradeVote(round, upgradeVote)

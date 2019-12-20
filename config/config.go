@@ -75,8 +75,10 @@ type ConsensusParams struct {
 	// acceptance and its execution.  This gives clients time to notify
 	// users.  This delay is specified by the upgrade proposer and must
 	// be between MinUpgradeWaitRounds and MaxUpgradeWaitRounds (inclusive)
-	// in the old protocol's parameters.  If the delay is zero, it is
-	// equivalent to DefaultUpgradeWaitRounds.
+	// in the old protocol's parameters.  Note that these parameters refer
+	// to the representation of the delay in a block rather than the actual
+	// delay: if the specified delay is zero, it is equivalent to
+	// DefaultUpgradeWaitRounds.
 	//
 	// The maximum length of a consensus version string is
 	// MaxVersionStringLen.
