@@ -480,6 +480,8 @@ func initConsensusProtocols() {
 	// but not yet released in a production protocol version.
 	vFuture := v20
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	vFuture.MinUpgradeWaitRounds = 10000
+	vFuture.MaxUpgradeWaitRounds = 150000
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
 
