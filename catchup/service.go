@@ -18,11 +18,10 @@ package catchup
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
-	"runtime/debug"
-	"fmt"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
@@ -75,6 +74,7 @@ type Service struct {
 	InitialSyncDone     chan struct{}
 	initialSyncNotified uint32
 	protocolErrorLogged bool
+	lastApprovedRound   basics.Round
 }
 
 // A BlockAuthenticator authenticates blocks given a certificate.
@@ -115,8 +115,8 @@ func (s *Service) Start() {
 
 // Stop informs the catchup service that it should stop, and waits for it to stop (when periodicSync() exits)
 func (s *Service) Stop() {
-	debug.PrintStack()
 	s.cancel()
+	fmt.Println("doing <- done")
 	<-s.done
 	if atomic.CompareAndSwapUint32(&s.initialSyncNotified, 0, 1) {
 		close(s.InitialSyncDone)
@@ -169,6 +169,7 @@ func (s *Service) fetchAndWrite(fetcher rpcs.Fetcher, r basics.Round, prevFetchC
 		select {
 		case <-s.ctx.Done():
 			s.log.Debugf("fetchAndWrite(%v): Aborted", r)
+			fmt.Printf("fetchAndWrite(%v): Aborted\n", r)
 			return false
 		default:
 		}
@@ -176,6 +177,7 @@ func (s *Service) fetchAndWrite(fetcher rpcs.Fetcher, r basics.Round, prevFetchC
 		// Stop retrying after a while.
 		if i > catchupRetryLimit {
 			s.log.Errorf("fetchAndWrite(%v): failed to fetch block many times")
+			fmt.Printf("fetchAndWrite(): failed to fetch block many times\n")
 			return false
 		}
 
@@ -185,6 +187,7 @@ func (s *Service) fetchAndWrite(fetcher rpcs.Fetcher, r basics.Round, prevFetchC
 
 		if err != nil {
 			s.log.Debugf("fetchAndWrite(%v): Could not fetch: %v (attempt %d)", r, err, i)
+			fmt.Printf("fetchAndWrite(%v): Could not fetch: %v (attempt %d)\n", r, err, i)
 			// we've just failed to retrieve a block; wait until the previous block is fetched before trying again
 			// to avoid the usecase where the first block doesn't exists and we're making many requests down the chain
 			// for no reason.
@@ -192,10 +195,12 @@ func (s *Service) fetchAndWrite(fetcher rpcs.Fetcher, r basics.Round, prevFetchC
 				select {
 				case <-s.ctx.Done():
 					s.log.Debugf("fetchAndWrite(%v): Aborted while waiting for lookback block to ledger after failing once", r)
+					fmt.Printf("fetchAndWrite(%v): Aborted while waiting for lookback block to ledger after failing once\n", r)
 					return false
 				case hasLookback = <-lookbackComplete:
 					if !hasLookback {
 						s.log.Debugf("fetchAndWrite(%v): lookback block doesn't exist, won't try to retrieve block again", r)
+						fmt.Printf("fetchAndWrite(%v): lookback block doesn't exist, won't try to retrieve block again\n", r)
 						return false
 					}
 				}
@@ -206,17 +211,20 @@ func (s *Service) fetchAndWrite(fetcher rpcs.Fetcher, r basics.Round, prevFetchC
 			return false
 		}
 		s.log.Debugf("fetchAndWrite(%v): Got block and cert contents: %v %v", r, block, cert)
+		//		fmt.Printf("fetchAndWrite(%v): Got block and cert contents: %v %v\n", r, block, cert)
 
 		// Check that the block's contents match the block header (necessary with an untrusted block because b.Hash() only hashes the header)
 		if !block.ContentsMatchHeader() {
 			// Check if this mismatch is due to an unsupported protocol version
 			if _, ok := config.Consensus[block.BlockHeader.CurrentProtocol]; !ok {
 				s.log.Errorf("fetchAndWrite(%v): unsupported protocol version detected: '%v'", r, block.BlockHeader.CurrentProtocol)
+				fmt.Printf("fetchAndWrite(%v): unsupported protocol version detected: '%v'\n", r, block.BlockHeader.CurrentProtocol)
 				client.Close()
 				return false
 			}
 
 			s.log.Warnf("fetchAndWrite(%v): block contents do not match header (attempt %d)", r, i)
+			fmt.Printf("fetchAndWrite(%v): block contents do not match header (attempt %d)\n", r, i)
 			client.Close()
 			continue // retry the fetch
 		}
@@ -226,10 +234,12 @@ func (s *Service) fetchAndWrite(fetcher rpcs.Fetcher, r basics.Round, prevFetchC
 			select {
 			case <-s.ctx.Done():
 				s.log.Debugf("fetchAndWrite(%v): Aborted while waiting for lookback block to ledger", r)
+				fmt.Printf("fetchAndWrite(%v): Aborted while waiting for lookback block to ledger\n", r)
 				return false
 			case hasLookback = <-lookbackComplete:
 				if !hasLookback {
 					s.log.Warnf("fetchAndWrite(%v): lookback block doesn't exist, cannot authenticate new block", r)
+					fmt.Printf("fetchAndWrite(%v): lookback block doesn't exist, cannot authenticate new block\n", r)
 					return false
 				}
 			}
@@ -238,6 +248,7 @@ func (s *Service) fetchAndWrite(fetcher rpcs.Fetcher, r basics.Round, prevFetchC
 		err = s.auth.Authenticate(block, cert)
 		if err != nil {
 			s.log.Warnf("fetchAndWrite(%v): cert did not authenticate block (attempt %d): %v", r, i, err)
+			fmt.Printf("fetchAndWrite(%v): cert did not authenticate block (attempt %d): %v\n", r, i, err)
 			client.Close()
 			continue // retry the fetch
 		}
@@ -246,6 +257,7 @@ func (s *Service) fetchAndWrite(fetcher rpcs.Fetcher, r basics.Round, prevFetchC
 		select {
 		case <-s.ctx.Done():
 			s.log.Debugf("fetchAndWrite(%v): Aborted while waiting to write to ledger", r)
+			fmt.Printf("fetchAndWrite(%v): Aborted while waiting to write to ledger\n", r)
 			return false
 		case prevFetchSuccess := <-prevFetchCompleteChan:
 			if prevFetchSuccess {
@@ -254,6 +266,7 @@ func (s *Service) fetchAndWrite(fetcher rpcs.Fetcher, r basics.Round, prevFetchC
 					switch err.(type) {
 					case ledger.BlockInLedgerError:
 						s.log.Debugf("fetchAndWrite(%v): block already in ledger", r)
+						fmt.Printf("fetchAndWrite(%v): block already in ledger\n", r)
 						return true
 					case protocol.Error:
 						if !s.protocolErrorLogged {
@@ -262,14 +275,17 @@ func (s *Service) fetchAndWrite(fetcher rpcs.Fetcher, r basics.Round, prevFetchC
 						}
 					default:
 						s.log.Errorf("fetchAndWrite(%v): ledger write failed: %v", r, err)
+						fmt.Printf("fetchAndWrite(%v): ledger write failed: %v\n", r, err)
 					}
 
 					return false
 				}
 				s.log.Debugf("fetchAndWrite(%v): Wrote block to ledger", r)
+				//				fmt.Printf("fetchAndWrite(%v): Wrote block to ledger\n", r)
 				return true
 			}
 			s.log.Warnf("fetchAndWrite(%v): previous block doesn't exist (perhaps fetching block %v failed)", r, r-1)
+			fmt.Printf("fetchAndWrite(%v): previous block doesn't exist (perhaps fetching block %v failed)\n", r, r-1)
 			return false
 		}
 	}
@@ -288,6 +304,7 @@ func (s *Service) pipelineCallback(fetcher rpcs.Fetcher, r basics.Round, thisFet
 
 		if !fetchResult {
 			s.log.Infof("failed to fetch block %v", r)
+			fmt.Printf("failed to fetch block %v\n", r)
 			return 0
 		}
 		return r
@@ -342,14 +359,30 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 	from := s.ledger.NextRound()
 	nextRound := from
 	for ; nextRound < from+basics.Round(parallelRequests); nextRound++ {
-		//		if s.nextRoundIsNotApproved(nextRound) {
+		// If the next round is not approved
+		if s.nextRoundIsNotApproved(nextRound) {
+			// We may get here when (1) The service starts
+			// and gets to an unapproved round.  Since in
+			// this loop we do not wait for the requests
+			// to be written to the ledger, there is no
+			// guarantee that the unapproved round will be
+			// stopped in this case.
+
+			// (2) The unapproved round is detected in the
+			// "the rest" loop, but did not cancel because
+			// the last approved round was not yet written
+			// to the ledger.
+
 			// It is sufficent to check only in the first
-			// iteration, however, checking in all to keep
-			// the nextRoundIsNotApproved interface simple
-		//	break
-		//}
+			// iteration, however checking in all in favor
+			// of code simplicity.
+			s.handleUnapprovedRound(nextRound)
+			break
+		}
+
 		currentRoundComplete := make(chan bool, 2)
 		// len(taskCh) + (# pending writes to completed) increases by 1
+		fmt.Println("fetching from top loop: ", int(nextRound))
 		taskCh <- s.pipelineCallback(fetcher, nextRound, currentRoundComplete, recentReqs[len(recentReqs)-1], recentReqs[len(recentReqs)-int(seedLookback)])
 		recentReqs = append(recentReqs[1:], currentRoundComplete)
 	}
@@ -366,8 +399,9 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 			completedRounds[round] = true
 			// fetch rounds we can validate
 			for completedRounds[nextRound-basics.Round(parallelRequests)] {
+				// If the next round is not approved
 				if s.nextRoundIsNotApproved(nextRound) {
-					//	s.cancel()
+					s.handleUnapprovedRound(nextRound)
 					return
 				}
 				delete(completedRounds, nextRound)
@@ -498,19 +532,35 @@ func (s *Service) nextRoundIsNotApproved(nextRound basics.Round) bool {
 		return false
 	}
 	bh := block.BlockHeader
-	fmt.Println("*********************************** ")
-	fmt.Println("*********************************** lastLedgerRound: ", lastLedgerRound)	
-	fmt.Println("*********************************** nextRound: ", nextRound)
-	fmt.Println("*********************************** bh.NextProtocolSwitchOn: ", bh.NextProtocolSwitchOn)
-	fmt.Println("*********************************** bh.NextProtocol: ", bh.NextProtocol)
-	fmt.Println("*********************************** approvedUpgrades[bh.NextProtocol]", approvedUpgrades[bh.NextProtocol])
-	fmt.Println("*********************************** ")
+
 	if bh.NextProtocolSwitchOn > 0 &&
 		nextRound >= bh.NextProtocolSwitchOn &&
 		false == approvedUpgrades[bh.NextProtocol] {
-
-		
 		return true
 	}
 	return false
+}
+
+// handleUnapprovedRound records the last approved round number.
+// Checks if the last approved round was added to the ledger, and stopps the service.
+func (s *Service) handleUnapprovedRound(nextUnapprovedRound basics.Round) {
+	
+	// Save the last approved round
+	if s.lastApprovedRound == 0 || (nextUnapprovedRound-1) < s.lastApprovedRound {
+		s.lastApprovedRound = nextUnapprovedRound - 1
+	}
+
+	s.log.Infof("Catchup Service: round %v is not approved. Service will stop once the last approved round is added to the ledger.",
+			s.lastApprovedRound)
+	
+	// If the next round is an unapproved round, need to stop the
+	// catchup service. Should stop after the last approved round
+	// is added to the ledger.
+	lr := s.ledger.LastRound()
+	if lr == s.lastApprovedRound {
+		s.log.Infof("Catchup Service: finished catching up to the last approved round %v. The subsequent rounds are not approved. Service is stopping.",
+			s.ledger.LastRound())
+		fmt.Println("Service cancelled")
+		s.cancel()
+	}
 }

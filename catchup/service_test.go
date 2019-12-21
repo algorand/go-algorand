@@ -339,11 +339,84 @@ func TestServiceFetchBlocksMalformed(t *testing.T) {
 	require.True(t, s.fetcherFactory.(*MockedFetcherFactory).fetcher.client.closed)
 }
 
+func TestOnSwitchToUnApprovedProtocol(t *testing.T) {
+	
+	// Test the interruption in the initial loop
+	{
+		lastRoundRemote := 5
+		lastRoundLocal := 0
+		roundWithSwitchOn := 0
+		local, remote := helperTestOnSwitchToUnApprovedProtocol(t, lastRoundRemote, lastRoundLocal, roundWithSwitchOn)
+		
+		// Last approved round is 0, but is guaranteed
+		// to stop after 2 rounds.
+		// SeedLookback is 2, which allows two parallel fetches.
+		// i.e. rounds 1 and 2 may be simultaniously fetched. 
+		require.Less(t, int(local.LastRound()), 3) 
+		require.Equal(t, lastRoundRemote, int(remote.LastRound()))
+	}
+
+	// Test the interruption in "the rest" loop with gap 
+	{
+		lastRoundRemote := 10
+		lastRoundLocal := 7
+		roundWithSwitchOn := 5
+		local, remote := helperTestOnSwitchToUnApprovedProtocol(t, lastRoundRemote, lastRoundLocal, roundWithSwitchOn)
+		for r := 1; r <= lastRoundLocal; r = r + 1 {
+			blk, err := local.Block(basics.Round(r))
+			require.NoError(t, err)
+			require.Equal(t, r, int(blk.Round()))
+		}
+		require.Equal(t, lastRoundLocal, int(local.LastRound()))
+		require.Equal(t, lastRoundRemote, int(remote.LastRound()))
+	}
+
+	// Test the interruption with short notice (less than
+	// SeedLookback or the number of parallel fetches which in the
+	// test is the same: 2)
+	// This can not happen in practice, because there will be
+	// enough rounds for the protocol upgrade notice.
+	{
+		lastRoundRemote := 14
+		lastRoundLocal := 7
+		roundWithSwitchOn := 7
+		local, remote := helperTestOnSwitchToUnApprovedProtocol(t, lastRoundRemote, lastRoundLocal, roundWithSwitchOn)
+		for r := 1; r <= lastRoundLocal; r = r + 1 {
+			blk, err := local.Block(basics.Round(r))
+			require.NoError(t, err)
+			require.Equal(t, r, int(blk.Round()))
+		}
+		// Since round with switch on (7) can be fetched
+		// simultaniuosly with round 8, round 8 might also be
+		// fetched.
+		require.Less(t, int(local.LastRound()), lastRoundLocal+2)
+		require.Equal(t, lastRoundRemote, int(remote.LastRound()))
+	}
+}
+
+func helperTestOnSwitchToUnApprovedProtocol(t *testing.T, lastRoundRemote, lastRoundLocal, roundWithSwitchOn int) (local, remote Ledger) {
+
+	// Make Ledger
+	remote, local = testingenvWithUpgrade(t, lastRoundRemote, roundWithSwitchOn, lastRoundLocal+1)
+
+	// Make Service
+	s := MakeService(logging.Base(), defaultConfig, &mocks.MockNetwork{}, local, nil, &mockedAuthenticator{errorRound: -1})
+	s.deadlineTimeout = 2 * time.Second
+
+	s.fetcherFactory = &MockedFetcherFactory{fetcher: &MockedFetcher{ledger: remote, timeout: false, tries: make(map[basics.Round]int)}}
+	s.Start()
+	defer s.Stop()
+
+	<-s.done
+	return local, remote
+}
+
+/*
 func TestOnSwitchToUnApprovedProtocol( t *testing.T) {
 
 	lastRoundRemote := 10
 	lastRoundLocal := 7
-	
+
 	// Make Ledger
 	remote, local := testingenvWithUpgrade(t, lastRoundRemote, 5, lastRoundLocal+1)
 	s := MakeService(logging.Base(), defaultConfig, &mocks.MockNetwork{}, local, nil, &mockedAuthenticator{errorRound: -1})
@@ -353,7 +426,7 @@ func TestOnSwitchToUnApprovedProtocol( t *testing.T) {
 	require.Equal(t, basics.Round(lastRoundLocal), local.LastRound())
 	require.Equal(t, basics.Round(lastRoundRemote), remote.LastRound())
 }
-
+*/
 const defaultRewardUnit = 1e6
 
 type mockedLedger struct {
@@ -463,7 +536,7 @@ func testingenv(t testing.TB, numBlocks int) (ledger, emptyLedger Ledger) {
 
 func testingenvWithUpgrade(
 	t testing.TB,
-	numBlocks int,
+	numBlocks,
 	roundWithSwitchOn,
 	upgradeRound int) (ledger, emptyLedger Ledger) {
 
@@ -475,21 +548,20 @@ func testingenvWithUpgrade(
 	mLedger.blocks = append(mLedger.blocks, blk)
 	mEmptyLedger.blocks = append(mEmptyLedger.blocks, blk)
 
-	for i := 1; i <= numBlocks; i++ {		
+	for i := 1; i <= numBlocks; i++ {
 		blk = bookkeeping.MakeBlock(blk.BlockHeader)
 		if roundWithSwitchOn <= i {
 			modifierBlk := blk
 			blkh := &modifierBlk.BlockHeader
 			blkh.NextProtocolSwitchOn = basics.Round(upgradeRound)
 			blkh.NextProtocol = protocol.ConsensusVersion("some-unsupported-protocol")
-			
+
 			mLedger.blocks = append(mLedger.blocks, modifierBlk)
 			continue
 		}
-		
+
 		mLedger.blocks = append(mLedger.blocks, blk)
 	}
 
 	return mLedger, mEmptyLedger
 }
-
