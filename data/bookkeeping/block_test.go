@@ -35,6 +35,7 @@ var proto1 = protocol.ConsensusVersion("Test1")
 var proto2 = protocol.ConsensusVersion("Test2")
 var proto3 = protocol.ConsensusVersion("Test3")
 var protoUnsupported = protocol.ConsensusVersion("TestUnsupported")
+var protoDelay = protocol.ConsensusVersion("TestDelay")
 
 func init() {
 	params1 := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -46,6 +47,14 @@ func init() {
 	params2 := config.Consensus[protocol.ConsensusCurrentVersion]
 	params2.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	config.Consensus[proto2] = params2
+
+	paramsDelay := config.Consensus[protocol.ConsensusCurrentVersion]
+	paramsDelay.MinUpgradeWaitRounds = 3
+	paramsDelay.MaxUpgradeWaitRounds = 7
+	paramsDelay.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{
+		proto1: 5,
+	}
+	config.Consensus[protoDelay] = paramsDelay
 }
 
 func TestUpgradeVote(t *testing.T) {
@@ -109,6 +118,30 @@ func TestUpgradeVote(t *testing.T) {
 	require.Equal(t, s1.NextProtocolSwitchOn, basics.Round(0))
 }
 
+func TestUpgradeVariableDelay(t *testing.T) {
+	s := UpgradeState{
+		CurrentProtocol: protoDelay,
+	}
+
+	_, err := s.applyUpgradeVote(basics.Round(10), UpgradeVote{UpgradePropose: proto1, UpgradeDelay: 2})
+	require.Error(t, err, "accepted upgrade vote with delay less than MinUpgradeWaitRounds")
+
+	_, err = s.applyUpgradeVote(basics.Round(10), UpgradeVote{UpgradePropose: proto1, UpgradeDelay: 8})
+	require.Error(t, err, "accepted upgrade vote with delay more than MaxUpgradeWaitRounds")
+
+	_, err = s.applyUpgradeVote(basics.Round(10), UpgradeVote{UpgradePropose: proto1, UpgradeDelay: 5})
+	require.NoError(t, err, "did not accept upgrade vote with in-bounds delay")
+
+	_, err = s.applyUpgradeVote(basics.Round(10), UpgradeVote{UpgradePropose: proto1, UpgradeDelay: 3})
+	require.NoError(t, err, "did not accept upgrade vote with minimal delay")
+
+	_, err = s.applyUpgradeVote(basics.Round(10), UpgradeVote{UpgradePropose: proto1, UpgradeDelay: 7})
+	require.NoError(t, err, "did not accept upgrade vote with maximal delay")
+
+	_, err = s.applyUpgradeVote(basics.Round(10), UpgradeVote{UpgradePropose: proto1, UpgradeDelay: 0})
+	require.Error(t, err, "accepted upgrade vote with zero (below minimal) delay")
+}
+
 func TestMakeBlockUpgrades(t *testing.T) {
 	var b Block
 	b.BlockHeader.GenesisID = t.Name()
@@ -133,6 +166,30 @@ func TestMakeBlockUpgrades(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, b3.UpgradePropose, protocol.ConsensusVersion(""))
 	require.Equal(t, b3.UpgradeApprove, false)
+
+	var bd Block
+	bd.BlockHeader.GenesisID = t.Name()
+	bd.CurrentProtocol = protoDelay
+	bd.BlockHeader.GenesisID = "test"
+	crypto.RandBytes(bd.BlockHeader.GenesisHash[:])
+
+	bd1 := MakeBlock(bd.BlockHeader)
+	err = bd1.PreCheck(bd.BlockHeader)
+	require.NoError(t, err)
+	require.Equal(t, bd1.UpgradePropose, proto1)
+	require.Equal(t, bd1.UpgradeApprove, true)
+	require.Equal(t, bd1.UpgradeDelay, basics.Round(5))
+	require.Equal(t, bd1.NextProtocol, proto1)
+	require.Equal(t, bd1.NextProtocolSwitchOn-bd1.NextProtocolVoteBefore, basics.Round(5))
+
+	bd2 := MakeBlock(bd1.BlockHeader)
+	err = bd2.PreCheck(bd1.BlockHeader)
+	require.NoError(t, err)
+	require.Equal(t, bd2.UpgradePropose, protocol.ConsensusVersion(""))
+	require.Equal(t, bd2.UpgradeApprove, true)
+	require.Equal(t, bd2.UpgradeDelay, basics.Round(0))
+	require.Equal(t, bd2.NextProtocol, proto1)
+	require.Equal(t, bd2.NextProtocolSwitchOn-bd2.NextProtocolVoteBefore, basics.Round(5))
 }
 
 func TestBlockUnsupported(t *testing.T) {
