@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=2164
 
 # configure.sh - Configure a new EC2 machine as a buildhost
 #
@@ -15,30 +16,25 @@ if [ "$EUID" -ne 0 ]
   exit
 fi
 
-
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 
-sudo apt-get update -y
-sudo apt-get install jq -y
+apt-get update -y
+# Install the awscli using the python installer to work around the uploading
+# zero length files issue. See https://github.com/aws/aws-cli/issues/2403
+apt-get install jq python-pip -y
+pip install awscli
+ln -s /usr/local/bin/aws /usr/bin/aws
 
-# install the awscli using the python installer to work around
-# the uploading zero length files issue. see https://github.com/aws/aws-cli/issues/2403
-sudo apt install python-pip -y
-sudo pip install awscli
-sudo ln -s /usr/local/bin/aws /usr/bin/aws
-
-if [ ! -f ${SCRIPTPATH}/service_env.sh ]; then
-  cp -p ${SCRIPTPATH}/env.sh ${SCRIPTPATH}/service_env.sh
+if [ ! -f "$SCRIPTPATH/service_env.sh" ]; then
+  cp -p "$SCRIPTPATH/env.sh" "$SCRIPTPATH/service_env.sh"
 fi
-sudo cp ${SCRIPTPATH}/buildhost.service /etc/systemd/system/
-sudo echo "WorkingDirectory=${SCRIPTPATH}" >> /etc/systemd/system/buildhost.service
-sudo echo "ExecStart=/bin/bash ${SCRIPTPATH}/run.sh" >> /etc/systemd/system/buildhost.service
-sudo echo "EnvironmentFile=${SCRIPTPATH}/service_env.sh" >> /etc/systemd/system/buildhost.service
 
-sudo systemctl enable buildhost
+cp "$SCRIPTPATH/buildhost.service" /etc/systemd/system/
+
+echo -e "WorkingDirectory=$SCRIPTPATH\nExecStart=/bin/bash $SCRIPTPATH/run.sh\nEnvironmentFile=$SCRIPTPATH/service_env.sh" >> /etc/systemd/system/buildhost.service
+
+systemctl enable buildhost
 echo "Installation complete. Please edit the service_env.sh file and start the service:"
-echo "nano ${SCRIPTPATH}/service_env.sh"
-echo "sudo systemctl start buildhost"
-
-
+echo "nano $SCRIPTPATH/service_env.sh"
+echo "systemctl start buildhost"
 

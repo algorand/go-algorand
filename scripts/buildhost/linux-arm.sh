@@ -50,8 +50,8 @@ if [ "$?" != "0" ]; then
     exitWithError 1 "Unable to start EC2 instance"
 fi
 
-scp -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance):/home/ubuntu/armv6_stretch/id_rsa ./id_rsa
-if [ "$?" != "0" ]; then
+if ! scp -i BuilderInstanceKey.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance):/home/ubuntu/armv6_stretch/id_rsa ./id_rsa
+then
     exitWithError 1 "Unable to retreive RasPI credentials from EC2 instance at $(cat instance)"
 fi
 

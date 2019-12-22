@@ -12,56 +12,77 @@
 #
 #
 
-AWS_REGION=$1
+AWS_REGION=${1-us-east-1}
+GREEN_FG=$(echo -en "\e[32m")
+YELLOW_FG=$(echo -en "\e[33m")
+END_FG_COLOR=$(echo -en "\e[39m")
 
-if [ "${AWS_REGION}" = "" ]; then
-    echo "Missing AWS_REGION argument"
-    exit 1
-fi
+#if [ "$AWS_REGION" = "" ]
+#then
+#    echo "Missing AWS_REGION argument"
+#    exit 1
+#fi
 
+pushd tmp > /dev/null
 SGID=$(cat sgid)
 INSTANCE_ID=$(cat instance-id)
-INSTANCE_NAME=$(cat instance)
+#INSTANCE_NAME=$(cat instance)
 KEY_NAME=$(cat key-name)
+popd > /dev/null
 
-echo "Waiting for instance to terminate"
+echo "$YELLOW_FG[$0]$END_FG_COLOR: Waiting for instance to terminate."
 end=$((SECONDS+1200))
-while [ $SECONDS -lt $end ]; do
-    aws ec2 terminate-instances --instance-ids ${INSTANCE_ID} --region ${AWS_REGION} > instance2.json
-    INSTANCE_CODE=$(cat instance2.json | jq '.TerminatingInstances[].CurrentState.Code')
-    INSTANCE_STATE=$(cat instance2.json | jq '.TerminatingInstances[].CurrentState.Name')
-    if [ "${INSTANCE_CODE}" = "48" ]; then
-        echo "Instance terminated"
+PRIOR_INSTANCE_STATE=
+while [ $SECONDS -lt $end ]
+do
+    aws ec2 terminate-instances --instance-ids "$INSTANCE_ID" --region "$AWS_REGION" > tmp/instance.json
+    INSTANCE_CODE=$(< tmp/instance.json jq '.TerminatingInstances[].CurrentState.Code')
+    INSTANCE_STATE=$(< tmp/instance.json jq '.TerminatingInstances[].CurrentState.Name')
+
+    if [ "$INSTANCE_CODE" = "48" ]
+    then
+        echo "$GREEN_FG[$0]$END_FG_COLOR: Instance terminated."
         break
     fi
-    if [ "${INSTANCE_STATE}" != "" ]; then
-        echo "Instance is ${INSTANCE_STATE}"
-    else
-        cat instance2.json
+
+    if [ "$INSTANCE_STATE" != "$PRIOR_INSTANCE_STATE" ]
+    then
+        echo "$YELLOW_FG[$0]$END_FG_COLOR: Instance is in state $INSTANCE_STATE..."
+        PRIOR_INSTANCE_STATE="$INSTANCE_STATE"
+#    else
+#        cat tmp/instance.json
     fi
+
     sleep 5s
-    aws ec2 describe-instance-status --instance-id ${INSTANCE_ID} --region ${AWS_REGION} --include-all-instances > instance2.json
-    INSTANCE_CODE=$(cat instance2.json | jq '.InstanceStatuses[].InstanceState.Code')
-    INSTANCE_STATE=$(cat instance2.json | jq '.InstanceStatuses[].InstanceState.Name')
-    if [ "${INSTANCE_CODE}" = "48" ]; then
-        echo "Instance terminated"
-        break
-    fi
-    if [ "${INSTANCE_STATE}" != "" ]; then
-        echo "Instance is ${INSTANCE_STATE}"
-    else
-        cat instance2.json
-    fi    
-    sleep 10s
+#    aws ec2 describe-instance-status --instance-id "$INSTANCE_ID" --region "$AWS_REGION" --include-all-instances > tmp/instance.json
+#    INSTANCE_CODE=$(< tmp/instance.json jq '.InstanceStatuses[].InstanceState.Code')
+#    INSTANCE_STATE=$(< tmp/instance.json jq '.InstanceStatuses[].InstanceState.Name')
+#
+#    if [ "$INSTANCE_CODE" = "48" ]
+#    then
+#        echo "$GREEN_FG[$0]$END_FG_COLOR: Instance terminated."
+#        break
+#    fi
+#
+#    if [ "$INSTANCE_STATE" != "$PRIOR_INSTANCE_STATE" ]
+#    then
+#        echo "$YELLOW_FG[$0]$END_FG_COLOR: Instance is in state $INSTANCE_STATE..."
+#        PRIOR_INSTANCE_STATE="$INSTANCE_STATE"
+##    else
+##        cat tmp/instance.json
+#    fi
+#    sleep 10s
 done
 
-if [ "${KEY_NAME}" != "" ]; then
-    aws ec2 delete-key-pair --key-name "${KEY_NAME}" --region ${AWS_REGION}
+if [ "$KEY_NAME" != "" ]
+then
+    aws ec2 delete-key-pair --key-name "$KEY_NAME" --region "$AWS_REGION"
 fi
 
-if [ "${SGID}" != "" ]; then
-    aws ec2 delete-security-group --group-id "${SGID}" --region ${AWS_REGION}
+if [ "$SGID" != "" ]
+then
+    aws ec2 delete-security-group --group-id "$SGID" --region "$AWS_REGION"
 fi
 
-rm instance2.json sgid instance-id instance key-name
-rm -f key.pem
+rm -rf BuilderInstanceKey.pem tmp
+

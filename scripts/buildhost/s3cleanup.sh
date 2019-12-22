@@ -13,9 +13,9 @@ BUCKET=$1
 NO_SIGN=$2
 
 LISTFILE=${BUCKET}.buildRequests.txt
-aws s3 ls --recursive s3://${BUCKET} ${NO_SIGN} > ${LISTFILE}
-if [ "$?" != "0" ]; then
-    rm ${LISTFILE}
+if ! aws s3 ls --recursive "s3://$BUCKET $NO_SIGN" > "$LISTFILE"
+then
+    rm "$LISTFILE"
     exit 1
 fi
 # current time = date +"%Y-%m-%d %H:%M:%S"
@@ -23,14 +23,17 @@ fi
 # the above doesn't work on mac, but works well on ubuntu
 REF_TIME=$(date -d " - 12 hours " +"%Y-%m-%d %H:%M:%S")
 REF_TIME="${REF_TIME/ /.}"
-while read line; do
+while read -r line
+do
     FILE_TIME="${line:0:19}"
     FILE_TIME="${FILE_TIME/ /.}"
-    if [[ "${FILE_TIME}" < "${REF_TIME}" ]];then
+    if [[ "$FILE_TIME" < "$REF_TIME" ]]
+    then
         # this is where we want to delete the file.
         FILE_NAME="${line:31}"
-        aws s3 rm s3://${BUCKET}/${FILE_NAME} ${NO_SIGN}
+        aws s3 rm "s3://$BUCKET/$FILE_NAME" "$NO_SIGN"
     fi
-done < ${LISTFILE}
-rm -f ${LISTFILE}
+done < "$LISTFILE"
+rm -f "$LISTFILE"
 exit 0
+
