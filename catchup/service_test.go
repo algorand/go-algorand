@@ -340,29 +340,30 @@ func TestServiceFetchBlocksMalformed(t *testing.T) {
 }
 
 func TestOnSwitchToUnApprovedProtocol(t *testing.T) {
-	
 	// Test the interruption in the initial loop
+	// This cannot happen in practice, but is used to test the code.
 	{
 		lastRoundRemote := 5
 		lastRoundLocal := 0
 		roundWithSwitchOn := 0
-		local, remote := helperTestOnSwitchToUnApprovedProtocol(t, lastRoundRemote, lastRoundLocal, roundWithSwitchOn)
-		
+		local, remote := helperTestOnSwitchToUnApprovedProtocol(t, lastRoundRemote, lastRoundLocal, roundWithSwitchOn, 0)
+
 		// Last approved round is 0, but is guaranteed
 		// to stop after 2 rounds.
+
 		// SeedLookback is 2, which allows two parallel fetches.
-		// i.e. rounds 1 and 2 may be simultaniously fetched. 
-		require.Less(t, int(local.LastRound()), 3) 
+		// i.e. rounds 1 and 2 may be simultaneously fetched.
+		require.Less(t, int(local.LastRound()), 3)
 		require.Equal(t, lastRoundRemote, int(remote.LastRound()))
 	}
 
-	// Test the interruption in "the rest" loop with gap 
+	// Test the interruption in "the rest" loop
 	{
 		lastRoundRemote := 10
 		lastRoundLocal := 7
 		roundWithSwitchOn := 5
-		local, remote := helperTestOnSwitchToUnApprovedProtocol(t, lastRoundRemote, lastRoundLocal, roundWithSwitchOn)
-		for r := 1; r <= lastRoundLocal; r = r + 1 {
+		local, remote := helperTestOnSwitchToUnApprovedProtocol(t, lastRoundRemote, lastRoundLocal, roundWithSwitchOn, 0)
+		for r := 1; r <= lastRoundLocal; r++ {
 			blk, err := local.Block(basics.Round(r))
 			require.NoError(t, err)
 			require.Equal(t, r, int(blk.Round()))
@@ -374,30 +375,75 @@ func TestOnSwitchToUnApprovedProtocol(t *testing.T) {
 	// Test the interruption with short notice (less than
 	// SeedLookback or the number of parallel fetches which in the
 	// test is the same: 2)
+
 	// This can not happen in practice, because there will be
 	// enough rounds for the protocol upgrade notice.
 	{
 		lastRoundRemote := 14
 		lastRoundLocal := 7
 		roundWithSwitchOn := 7
-		local, remote := helperTestOnSwitchToUnApprovedProtocol(t, lastRoundRemote, lastRoundLocal, roundWithSwitchOn)
+		local, remote := helperTestOnSwitchToUnApprovedProtocol(t, lastRoundRemote, lastRoundLocal, roundWithSwitchOn, 0)
 		for r := 1; r <= lastRoundLocal; r = r + 1 {
 			blk, err := local.Block(basics.Round(r))
 			require.NoError(t, err)
 			require.Equal(t, r, int(blk.Round()))
 		}
 		// Since round with switch on (7) can be fetched
-		// simultaniuosly with round 8, round 8 might also be
+		// Simultaneously with round 8, round 8 might also be
 		// fetched.
 		require.Less(t, int(local.LastRound()), lastRoundLocal+2)
 		require.Equal(t, lastRoundRemote, int(remote.LastRound()))
 	}
+
+	// Test the interruption with short notice (less than
+	// SeedLookback or the number of parallel fetches which in the
+	// test is the same: 2)
+
+	// This case is a variation of the previous case. This may
+	// happen when the catchup service restart at the round when
+	// an upgrade happens.
+	{
+		lastRoundRemote := 14
+		lastRoundLocal := 7
+		roundWithSwitchOn := 7
+		roundsAlreadyInLocal := 8 // round 0 -> 7
+
+		local, remote := helperTestOnSwitchToUnApprovedProtocol(
+			t,
+			lastRoundRemote,
+			lastRoundLocal,
+			roundWithSwitchOn,
+			roundsAlreadyInLocal)
+
+		for r := 1; r <= lastRoundLocal; r = r + 1 {
+			blk, err := local.Block(basics.Round(r))
+			require.NoError(t, err)
+			require.Equal(t, r, int(blk.Round()))
+		}
+		// Since round with switch on (7) is already in the
+		// ledger, round 8 will not be fetched.
+		require.Equal(t, int(local.LastRound()), lastRoundLocal)
+		require.Equal(t, lastRoundRemote, int(remote.LastRound()))
+	}
 }
 
-func helperTestOnSwitchToUnApprovedProtocol(t *testing.T, lastRoundRemote, lastRoundLocal, roundWithSwitchOn int) (local, remote Ledger) {
+func helperTestOnSwitchToUnApprovedProtocol(
+	t *testing.T,
+	lastRoundRemote,
+	lastRoundLocal,
+	roundWithSwitchOn,
+	roundsToCopy int) (local, remote Ledger) {
 
 	// Make Ledger
-	remote, local = testingenvWithUpgrade(t, lastRoundRemote, roundWithSwitchOn, lastRoundLocal+1)
+	mRemote, mLocal := testingenvWithUpgrade(t, lastRoundRemote, roundWithSwitchOn, lastRoundLocal+1)
+
+	// Copy rounds to local
+	for r := 1; r < roundsToCopy; r++ {
+		mLocal.blocks = append(mLocal.blocks, mRemote.blocks[r])
+	}
+
+	local = mLocal
+	remote = Ledger(mRemote)
 
 	// Make Service
 	s := MakeService(logging.Base(), defaultConfig, &mocks.MockNetwork{}, local, nil, &mockedAuthenticator{errorRound: -1})
@@ -411,22 +457,6 @@ func helperTestOnSwitchToUnApprovedProtocol(t *testing.T, lastRoundRemote, lastR
 	return local, remote
 }
 
-/*
-func TestOnSwitchToUnApprovedProtocol( t *testing.T) {
-
-	lastRoundRemote := 10
-	lastRoundLocal := 7
-
-	// Make Ledger
-	remote, local := testingenvWithUpgrade(t, lastRoundRemote, 5, lastRoundLocal+1)
-	s := MakeService(logging.Base(), defaultConfig, &mocks.MockNetwork{}, local, nil, &mockedAuthenticator{errorRound: -1})
-	s.fetcherFactory = &MockedFetcherFactory{fetcher: &MockedFetcher{ledger: remote, timeout: false, tries: make(map[basics.Round]int)}}
-	s.sync()
-
-	require.Equal(t, basics.Round(lastRoundLocal), local.LastRound())
-	require.Equal(t, basics.Round(lastRoundRemote), remote.LastRound())
-}
-*/
 const defaultRewardUnit = 1e6
 
 type mockedLedger struct {
@@ -538,7 +568,7 @@ func testingenvWithUpgrade(
 	t testing.TB,
 	numBlocks,
 	roundWithSwitchOn,
-	upgradeRound int) (ledger, emptyLedger Ledger) {
+	upgradeRound int) (ledger, emptyLedger *mockedLedger) {
 
 	mLedger := new(mockedLedger)
 	mEmptyLedger := new(mockedLedger)
