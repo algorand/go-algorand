@@ -1,0 +1,23 @@
+pipeline {
+    environment {
+        AWS_ACCESS_KEY_ID = credentials('aws-access-key-id')
+        AWS_SECRET_ACCESS_KEY = credentials('aws-secret-access-key')
+    }
+
+    agent any
+
+    stages {
+        stage('create ec2 instance') {
+            steps {
+                sh label: '', script: 'scripts/buildhost/start_ec2_instance.sh'
+            }
+        }
+
+        stage('delete ec2 instance') {
+            steps {
+                sh label: '', script: 'scripts/buildhost/shutdown_ec2_instance.sh'
+            }
+        }
+    }
+}
+
