@@ -530,7 +530,7 @@ func (s *Service) nextRoundIsNotApproved(nextRound basics.Round) bool {
 func (s *Service) handleUnapprovedRound(nextUnapprovedRound basics.Round) {
 
 	s.log.Infof("Catchup Service: round %d is not approved. Service will stop once the last approved round is added to the ledger.",
-		s.lastApprovedRound)
+		nextUnapprovedRound)
 
 	// If the next round is an unapproved round, need to stop the
 	// catchup service. Should stop after the last approved round
