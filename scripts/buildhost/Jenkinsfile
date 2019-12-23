@@ -1,21 +1,29 @@
 pipeline {
     environment {
-        AWS_ACCESS_KEY_ID = credentials('aws-access-key-id')
-        AWS_SECRET_ACCESS_KEY = credentials('aws-secret-access-key')
+        AWS_ACCESS_KEY_ID = credentials("aws-access-key-id")
+        AWS_SECRET_ACCESS_KEY = credentials("aws-secret-access-key")
     }
 
     agent any
 
     stages {
-        stage('create ec2 instance') {
+        stage("create ec2 instance") {
             steps {
-                sh label: '', script: 'scripts/buildhost/start_ec2_instance.sh'
+                sh script: "scripts/buildhost/start_ec2_instance.sh"
             }
         }
 
-        stage('delete ec2 instance') {
+        stage("setup ec2 instance and release") {
             steps {
-                sh label: '', script: 'scripts/buildhost/shutdown_ec2_instance.sh'
+                sh 'scp -o StrictHostKeyChecking=no -i BuilderInstanceKey.pem $PWD/scripts/build_release*.sh ubuntu@$(cat tmp/instance):~/'
+                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat tmp/instance) "bash build_release_setup.sh"'
+                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat tmp/instance) "bash build_release.sh"'
+            }
+        }
+
+        stage("delete ec2 instance") {
+            steps {
+                sh script: "scripts/buildhost/shutdown_ec2_instance.sh"
             }
         }
     }

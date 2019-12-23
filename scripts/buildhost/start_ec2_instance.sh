@@ -17,7 +17,8 @@
 #
 
 AWS_REGION="${1-us-east-1}"
-AWS_AMI="${2-ami-00068cd7555f543d5}"
+# Ubuntu Server 18.04 LTS
+AWS_AMI="${2-ami-04b9e92b5572fa0d1}"
 AWS_INSTANCE_TYPE="${3-t2.micro}"
 INSTANCE_NUMBER=$RANDOM
 KEY_NAME="BuilderInstanceKey_$INSTANCE_NUMBER"
@@ -139,7 +140,7 @@ echo "$YELLOW_FG[$0]$END_FG_COLOR: Waiting for SSH connection"
 end=$((SECONDS+90))
 while [ $SECONDS -lt $end ]
 do
-    if ssh -i "$KEY_NAME_FILE" -o "StrictHostKeyChecking no" "ec2-user@$INSTANCE_NAME" "uname"
+    if ssh -i "$KEY_NAME_FILE" -o "StrictHostKeyChecking no" "ubuntu@$INSTANCE_NAME" "uname"
     then
         echo "$GREEN_FG[$0]$END_FG_COLOR: SSH connection ready"
         exit 0

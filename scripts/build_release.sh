@@ -11,14 +11,13 @@
 
 date "+build_release start %Y%m%d_%H%M%S"
 
-set -e
-set -x
+set -ex
 
 # Anchor our repo root reference location
-REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"/..
-
-# a previous docker centos build can leave junk owned by root. chown and clean
-sudo chown -R ${USER} ${GOPATH}
+# /home/ubuntu/..
+# /home/ubuntu/go/src/github.com/algorand/go-algorand/
+#REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"/..
+REPO_ROOT=/home/ubuntu/go/src/github.com/algorand/go-algorand/
 if [ -f ${REPO_ROOT}/crypto/libsodium-fork/Makefile ]; then
     (cd ${REPO_ROOT}/crypto/libsodium-fork && make distclean)
 fi
