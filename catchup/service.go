@@ -512,17 +512,15 @@ func (s *Service) nextRoundIsNotApproved(nextRound basics.Round) bool {
 	bh := block.BlockHeader
 	_, isAnApprovedUpgrade := approvedUpgrades[bh.NextProtocol]
 
-	// Save the last approved round number
 	if bh.NextProtocolSwitchOn > 0 && !isAnApprovedUpgrade {
+		// Save the last approved round number
 		// It is not necessary to check bh.NextProtocolSwitchOn < s.lastApprovedRound
 		// since there cannot be two protocol updates scheduled.
 		s.lastApprovedRound = bh.NextProtocolSwitchOn - 1
-	}
 
-	if bh.NextProtocolSwitchOn > 0 &&
-		nextRound >= bh.NextProtocolSwitchOn &&
-		!isAnApprovedUpgrade {
-		return true
+		if nextRound >= bh.NextProtocolSwitchOn {
+			return true
+		}
 	}
 	return false
 }
