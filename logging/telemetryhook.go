@@ -199,7 +199,7 @@ func (hook *asyncTelemetryHook) UpdateHookURI(uri string) (err error) {
 	updated := false
 
 	if hook.wrappedHook == nil {
-		return fmt.Errorf("asyncTelemetryHook has not wrappedHook")
+		return fmt.Errorf("asyncTelemetryHook.wrappedHook is nil")
 	}
 
 	tfh, ok := hook.wrappedHook.(*telemetryFilteredHook)
