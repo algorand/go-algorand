@@ -170,7 +170,6 @@ func createElasticHook(cfg TelemetryConfig) (hook logrus.Hook, err error) {
 	if err != nil {
 		return nil, err
 	}
-
 	hostName := cfg.getHostName()
 	hook, err = elogrus.NewElasticHook(client, hostName, cfg.MinLogLevel, cfg.ChainID)
 
