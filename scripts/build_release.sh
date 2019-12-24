@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=1091,2012,2166
 #
 # This script needs to be run in a terminal with a human watching to
 # be prompted for GPG key password at a couple points.
@@ -23,30 +24,30 @@ if [ -f ${REPO_ROOT}/crypto/libsodium-fork/Makefile ]; then
 fi
 rm -rf ${REPO_ROOT}/crypto/lib
 
-
 cd ${REPO_ROOT}
 export RELEASE_GENESIS_PROCESS=true
 PLATFORM=$(./scripts/osarchtype.sh)
 PLATFORM_SPLIT=(${PLATFORM//\// })
 OS=${PLATFORM_SPLIT[0]}
 ARCH=${PLATFORM_SPLIT[1]}
-export BRANCH=$(./scripts/compute_branch.sh)
-export CHANNEL=$(./scripts/compute_branch_channel.sh ${BRANCH})
-export DEFAULTNETWORK=$(./scripts/compute_branch_network.sh)
+BRANCH=$(./scripts/compute_branch.sh)
+export BRANCH
+CHANNEL=$(./scripts/compute_branch_channel.sh "${BRANCH}")
+export CHANNEL
+DEFAULTNETWORK=$(./scripts/compute_branch_network.sh)
+export DEFAULTNETWORK
 export PKG_ROOT=${HOME}/node_pkg
 export VARIATIONS="base"
 # tell underlying 'build' scripts we already built
 export NO_BUILD=true
-if [ -z "${RSTAMP}" ]; then
-    RSTAMP=$(scripts/reverse_hex_timestamp)
-    echo RSTAMP=${RSTAMP} > "${HOME}/rstamp"
-fi
+
+RSTAMP=$(scripts/reverse_hex_timestamp)
+echo RSTAMP="${RSTAMP}" > "${HOME}/rstamp"
+
 # What's my default IP address?
 # get the datacenter IP address for this EC2 host.
 # this might equivalently be gotten from `netstat -rn` and `ifconfig -a`
-if [ -z "${DC_IP}" ]; then
-    DC_IP=$(curl --silent http://169.254.169.254/latest/meta-data/local-ipv4)
-fi
+DC_IP=$(curl --silent http://169.254.169.254/latest/meta-data/local-ipv4)
 if [ -z "${DC_IP}" ]; then
     echo "ERROR: need DC_IP to be set to your local (but not localhost) IP"
     exit 1
@@ -58,7 +59,7 @@ if [ ! -z "${BUILD_NUMBER}" ]; then
 else
     if [ -e buildnumber.dat ]; then
 	BUILD_NUMBER=$(cat ./buildnumber.dat)
-	BUILD_NUMBER=$((${BUILD_NUMBER} + 1))
+	BUILD_NUMBER=$(( BUILD_NUMBER + 1 ))
     else
 	BUILD_NUMBER=0
     fi
@@ -66,10 +67,11 @@ else
     git add -A
     git commit -m "Build ${BUILD_NUMBER}"
 fi
-export FULLVERSION=$(./scripts/compute_build_number.sh -f)
+FULLVERSION=$(./scripts/compute_build_number.sh -f)
+export FULLVERSION
 
 # a bash user might `source build_env` to manually continue a broken build
-cat <<EOF>${HOME}/build_env
+cat <<EOF>"${HOME}"/build_env
 export RELEASE_GENESIS_PROCESS=${RELEASE_GENESIS_PROCESS}
 PLATFORM=${PLATFORM}
 OS=${OS}
@@ -85,7 +87,10 @@ export FULLVERSION=${FULLVERSION}
 DC_IP=${DC_IP}
 EOF
 # strip leading 'export ' for docker --env-file
-sed 's/^export //g' < ${HOME}/build_env > ${HOME}/build_env_docker
+sed 's/^export //g' < "${HOME}"/build_env > "${HOME}"/build_env_docker
+
+export GOPATH=${HOME}/go
+export PATH=${HOME}/gpgbin:${GOPATH}/bin:/usr/local/go/bin:${PATH}
 
 # Build!
 scripts/configure_dev.sh
@@ -104,14 +109,33 @@ cd ${REPO_ROOT}/scripts
 
 # Test .deb installer
 
-. get_centos_gpg.sh
+
+
+
+
+#export AWS_ACCESS_KEY_ID=
+#export AWS_SECRET_ACCESS_KEY=
+#export S3_PREFIX=s3://algorand-dev-deb-repo/releases
+#export AWS_EFS_MOUNT=fs-31159fd2.efs.us-east-1.amazonaws.com
+#export APTLY_S3_NAME=algorand-releases
+#export APTLY_DIR=/data/_aptly
+#export SIGNING_KEY_ADDR=dev@algorand.com
+#export S3_PREFIX_BUILDLOG=s3://algorand-devops-misc/buildlog
+#export TEST_UPGRADE=no
+#export BUILD_NUMBER=$(cat ${GOPATH}/src/github.com/algorand/go-algorand/buildnumber.dat)
+
+
+
+
+
+#. get_centos_gpg.sh
 
 export GNUPGHOME=${HOME}/tkey
 gpgconf --kill gpg-agent
-rm -rf ${GNUPGHOME}
-mkdir -p ${GNUPGHOME}
-chmod 700 ${GNUPGHOME}
-cat >${HOME}/tkey/keygenscript<<EOF
+rm -rf "${GNUPGHOME}"
+mkdir -p "${GNUPGHOME}"
+chmod 700 "${GNUPGHOME}"
+cat >"${HOME}"/tkey/keygenscript<<EOF
 Key-Type: default
 Subkey-Type: default
 Name-Real: Algorand developers
@@ -120,7 +144,7 @@ Expire-Date: 0
 Passphrase: foogorand
 %transient-key
 EOF
-cat >${HOME}/tkey/rpmkeygenscript<<EOF
+cat >"${HOME}"/tkey/rpmkeygenscript<<EOF
 Key-Type: default
 Subkey-Type: default
 Name-Real: Algorand RPM
@@ -129,27 +153,27 @@ Expire-Date: 0
 Passphrase: foogorand
 %transient-key
 EOF
-cat <<EOF>${GNUPGHOME}/gpg-agent.conf
-extra-socket ${GNUPGHOME}/S.gpg-agent.extra
+cat <<EOF>"${GNUPGHOME}"/gpg-agent.conf
+extra-socket "${GNUPGHOME}"/S.gpg-agent.extra
 # inable unattended daemon mode
 allow-preset-passphrase
 # cache password 30 days
 default-cache-ttl 2592000
 max-cache-ttl 2592000
 EOF
-gpg --gen-key --batch ${HOME}/tkey/keygenscript
-gpg --gen-key --batch ${HOME}/tkey/rpmkeygenscript
+gpg --gen-key --batch "${HOME}"/tkey/keygenscript
+gpg --gen-key --batch "${HOME}"/tkey/rpmkeygenscript
 gpg --export -a dev@algorand.com > "${HOME}/docker_test_resources/key.pub"
 gpg --export -a rpm@algorand.com > "${HOME}/docker_test_resources/rpm.pub"
 
 gpgconf --kill gpg-agent
 gpgconf --launch gpg-agent
 
-gpgp=$(ls /usr/lib/gnupg{2,,1}/gpg-preset-passphrase|head -1)
-KEYGRIP=$(gpg -K --with-keygrip --textmode dev@algorand.com|grep Keygrip|head -1|awk '{ print $3 }')
-echo foogorand|${gpgp} --verbose --preset ${KEYGRIP}
-KEYGRIP=$(gpg -K --with-keygrip --textmode rpm@algorand.com|grep Keygrip|head -1|awk '{ print $3 }')
-echo foogorand|${gpgp} --verbose --preset ${KEYGRIP}
+gpgp=$(ls /usr/lib/gnupg{2,,1}/gpg-preset-passphrase | head -1)
+KEYGRIP=$(gpg -K --with-keygrip --textmode dev@algorand.com | grep Keygrip | head -1 | awk '{ print $3 }')
+echo foogorand | ${gpgp} --verbose --preset "${KEYGRIP}"
+KEYGRIP=$(gpg -K --with-keygrip --textmode rpm@algorand.com | grep Keygrip | head -1 | awk '{ print $3 }')
+echo foogorand | ${gpgp} --verbose --preset "${KEYGRIP}"
 
 # copy previous installers into ~/docker_test_resources
 cd "${HOME}/docker_test_resources"
@@ -159,11 +183,11 @@ else
     python3 ${REPO_ROOT}/scripts/get_current_installers.py "${S3_PREFIX}/${CHANNEL}"
 fi
 
-echo "TEST_UPGRADE=${TEST_UPGRADE}" >> ${HOME}/build_env_docker
+echo "TEST_UPGRADE=${TEST_UPGRADE}" >> "${HOME}/build_env_docker"
 
-rm -rf ${HOME}/dummyaptly
-mkdir -p ${HOME}/dummyaptly
-cat <<EOF>${HOME}/dummyaptly.conf
+rm -rf "${HOME}/dummyaptly"
+mkdir -p "${HOME}/dummyaptly"
+cat <<EOF>"${HOME}"/dummyaptly.conf
 {
   "rootDir": "${HOME}/dummyaptly",
   "downloadConcurrency": 4,
@@ -187,11 +211,11 @@ cat <<EOF>${HOME}/dummyaptly.conf
   "SwiftPublishEndpoints": {}
 }
 EOF
-aptly -config=${HOME}/dummyaptly.conf repo create -distribution=stable -component=main algodummy
-aptly -config=${HOME}/dummyaptly.conf repo add algodummy ${HOME}/node_pkg/*.deb
+aptly -config="${HOME}"/dummyaptly.conf repo create -distribution=stable -component=main algodummy
+aptly -config="${HOME}"/dummyaptly.conf repo add algodummy "${HOME}"/node_pkg/*.deb
 SNAPSHOT=algodummy-$(date +%Y%m%d_%H%M%S)
-aptly -config=${HOME}/dummyaptly.conf snapshot create ${SNAPSHOT} from repo algodummy
-aptly -config=${HOME}/dummyaptly.conf publish snapshot -origin=Algorand -label=Algorand ${SNAPSHOT}
+aptly -config="${HOME}"/dummyaptly.conf snapshot create "${SNAPSHOT}" from repo algodummy
+aptly -config="${HOME}"/dummyaptly.conf publish snapshot -origin=Algorand -label=Algorand "${SNAPSHOT}"
 
 ${REPO_ROOT}/scripts/build_release_run_ubuntu_docker_build_test.sh
 
@@ -208,10 +232,10 @@ rm -rf ${REPO_ROOT}/crypto/lib
 
 # do the RPM build, sign and validate it
 
-sudo rm -rf ${HOME}/dummyrepo
-mkdir -p ${HOME}/dummyrepo
+sudo rm -rf "${HOME}/dummyrepo"
+mkdir -p "${HOME}/dummyrepo"
 
-cat <<EOF>${HOME}/dummyrepo/algodummy.repo
+cat <<EOF>"${HOME}"/dummyrepo/algodummy.repo
 [algodummy]
 name=Algorand
 baseurl=http://${DC_IP}:8111/
@@ -219,7 +243,7 @@ enabled=1
 gpgcheck=1
 gpgkey=https://releases.algorand.com/rpm/rpm_algorand.pub
 EOF
-(cd ${HOME}/dummyrepo && python3 ${REPO_ROOT}/scripts/httpd.py --pid ${HOME}/phttpd.pid) &
+(cd "${HOME}/dummyrepo" && python3 "${REPO_ROOT}/scripts/httpd.py" --pid "${HOME}"/phttpd.pid) &
 trap ${REPO_ROOT}/scripts/kill_httpd.sh 0
 
 sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${GNUPGHOME}/S.gpg-agent.extra,dst=/S.gpg-agent --mount type=bind,src=${HOME}/dummyrepo,dst=/dummyrepo --mount type=bind,src=${HOME}/docker_test_resources,dst=/stuff --mount type=bind,src=${GOPATH}/src,dst=/root/go/src --mount type=bind,src=${HOME},dst=/root/subhome --mount type=bind,src=/usr/local/go,dst=/usr/local/go algocentosbuild /root/go/src/github.com/algorand/go-algorand/scripts/build_release_centos_docker.sh"

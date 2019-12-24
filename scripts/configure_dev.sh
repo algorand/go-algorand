@@ -2,6 +2,16 @@
 set -e
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
+echo "$SCRIPTPATH"
+echo "$SCRIPTPATH"
+echo "$SCRIPTPATH"
+echo "$SCRIPTPATH"
+echo "$SCRIPTPATH"
+echo "$SCRIPTPATH"
+echo "$SCRIPTPATH"
+echo "$SCRIPTPATH"
+echo "$SCRIPTPATH"
+echo "$SCRIPTPATH"
 
 OS=$("$SCRIPTPATH"/ostype.sh)
 
@@ -34,5 +44,21 @@ elif [ "${OS}" = "darwin" ]; then
     install_or_upgrade shellcheck
 fi
 
+echo "got here"
+echo "got here"
+echo "got here"
+echo "got here"
+echo "got here"
+echo "got here"
+echo "got here"
+echo "got here"
+echo "got here"
+echo "got here"
+echo "got here"
+echo "got here"
+echo "got here"
+echo "got here"
+echo "got here"
+echo "got here"
 "$SCRIPTPATH"/configure_dev-deps.sh
 

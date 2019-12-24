@@ -22,6 +22,37 @@ export PATH=${GOPATH}/bin:/usr/local/go/bin:${PATH}
 # Anchor our repo root reference location
 REPO_DIR="$( cd "$(dirname "$0")" ; pwd -P )"/..
 
+echo "got here2"
+echo "got here2"
+echo "got here2"
+echo "got here2"
+echo "got here2"
+echo "got here2"
+echo "got here2"
+echo "got here2"
+echo "got here2"
+echo "got here2"
+echo "got here2"
+echo "got here2"
+echo "got here2"
+echo "got here2"
+echo "got here2"
+echo "got here2"
+echo "got here2"
+echo "got here2"
+echo "got here2"
+echo "got here2"
+echo "got here2"
+echo "got here2"
+echo "got here2"
+echo "got here2"
+echo "got here2"
+echo "got here2"
+echo "got here2"
+echo "got here2"
+echo "got here2"
+echo "got here2"
+echo "got here2"
 ${REPO_DIR}/scripts/configure_dev-deps.sh
 
 cd ${REPO_DIR}
