@@ -57,12 +57,6 @@ func (lfh *localFileHook) Levels() []logrus.Level {
 
 // implement logrus.Hook
 func (lfh *localFileHook) Fire(ent *logrus.Entry) error {
-	/*
-		ent.Data    // map[string]interface{}
-		ent.Time    // time.Time
-		ent.Level   // logrus.Level aka uint32
-		ent.Message // string
-	*/
 	out := make(map[string]interface{}, 4)
 	out["Time"] = ent.Time.UTC().Format(time.RFC3339Nano)
 	out["Level"] = strings.ToUpper(ent.Level.String())
