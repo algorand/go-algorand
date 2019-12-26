@@ -36,7 +36,7 @@ func ReadFromSRV(service string, protocol string, name string, fallbackDNSResolv
 		return
 	}
 
-	_, records, sysLookupErr := net.LookupSRV(service, "tcp", name)
+	_, records, sysLookupErr := net.LookupSRV(service, protocol, name)
 	if sysLookupErr != nil {
 		var resolver Resolver
 		// try to resolve the address. If it's an dotted-numbers format, it would return that right away.
@@ -48,7 +48,7 @@ func ReadFromSRV(service string, protocol string, name string, fallbackDNSResolv
 			log.Infof("ReadFromBootstrap: Failed to resolve fallback DNS resolver address '%s': %v; falling back to default fallback resolver address", fallbackDNSResolverAddress, err2)
 		}
 
-		_, records, err = resolver.LookupSRV(context.Background(), service, "tcp", name)
+		_, records, err = resolver.LookupSRV(context.Background(), service, protocol, name)
 		if err != nil {
 			err = fmt.Errorf("ReadFromBootstrap: DNS LookupSRV failed when using system resolver(%v) as well as via %s due to %v", sysLookupErr, resolver.EffectiveResolverDNS(), err)
 			return
