@@ -195,11 +195,11 @@ func createTelemetryHook(cfg TelemetryConfig, history *logBuffer, hookFactory ho
 
 // Note: This will be removed with the externalized telemetry project. Return whether or not the URI was successfully
 //       updated.
-func (hook *asyncTelemetryHook) UpdateHookURI(uri string) bool {
+func (hook *asyncTelemetryHook) UpdateHookURI(uri string) (err error) {
 	updated := false
 
 	if hook.wrappedHook == nil {
-		return false
+		return fmt.Errorf("asyncTelemetryHook.wrappedHook is nil")
 	}
 
 	tfh, ok := hook.wrappedHook.(*telemetryFilteredHook)
@@ -208,7 +208,8 @@ func (hook *asyncTelemetryHook) UpdateHookURI(uri string) bool {
 
 		copy := tfh.telemetryConfig
 		copy.URI = uri
-		newHook, err := tfh.factory(copy)
+		var newHook logrus.Hook
+		newHook, err = tfh.factory(copy)
 
 		if err == nil && newHook != nil {
 			tfh.wrappedHook = newHook
@@ -224,6 +225,8 @@ func (hook *asyncTelemetryHook) UpdateHookURI(uri string) bool {
 		if updated {
 			hook.urlUpdate <- true
 		}
+	} else {
+		return fmt.Errorf("asyncTelemetryHook.wrappedHook does not implement telemetryFilteredHook")
 	}
-	return updated
+	return
 }
