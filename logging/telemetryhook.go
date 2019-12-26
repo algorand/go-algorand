@@ -18,6 +18,7 @@ package logging
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/olivere/elastic"
 	"github.com/sirupsen/logrus"
@@ -161,6 +162,11 @@ func createElasticHook(cfg TelemetryConfig) (hook logrus.Hook, err error) {
 	// things can recover later.
 	if cfg.URI == "" {
 		return nil, nil
+	}
+
+	if strings.HasPrefix(cfg.URI, "file://") {
+		// create local file output hook
+		return createLocalFileTelemetryHook(cfg.URI)
 	}
 
 	client, err := elastic.NewClient(elastic.SetURL(cfg.URI),

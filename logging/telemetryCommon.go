@@ -48,7 +48,7 @@ type TelemetryConfig struct {
 	GUID               string
 	MinLogLevel        logrus.Level
 	ReportHistoryLevel logrus.Level
-	FilePath           string // Path to file on disk, if any
+	FilePath           string // Path to config file on disk, if any
 	ChainID            string `json:"-"`
 	SessionGUID        string `json:"-"`
 	UserName           string
