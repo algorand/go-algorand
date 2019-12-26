@@ -157,7 +157,7 @@ func (hook *asyncTelemetryHook) Flush() {
 	hook.wg.Wait()
 }
 
-func createElasticHook(cfg TelemetryConfig) (hook logrus.Hook, err error) {
+func createTelemetryLogrusHook(cfg TelemetryConfig) (hook logrus.Hook, err error) {
 	// Returning an error here causes issues... need the hooks to be created even if the elastic hook fails so that
 	// things can recover later.
 	if cfg.URI == "" {
@@ -169,6 +169,7 @@ func createElasticHook(cfg TelemetryConfig) (hook logrus.Hook, err error) {
 		return createLocalFileTelemetryHook(cfg.URI)
 	}
 
+	// create elasticsearch upload hook
 	client, err := elastic.NewClient(elastic.SetURL(cfg.URI),
 		elastic.SetBasicAuth(cfg.UserName, cfg.Password),
 		elastic.SetSniff(false),

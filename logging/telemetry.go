@@ -37,7 +37,7 @@ const logBufferDepth = 2
 
 // EnableTelemetry configures and enables telemetry based on the config provided
 func EnableTelemetry(cfg TelemetryConfig, l *logger) (err error) {
-	telemetry, err := makeTelemetryState(cfg, createElasticHook)
+	telemetry, err := makeTelemetryState(cfg, createTelemetryLogrusHook)
 	if err != nil {
 		return
 	}
