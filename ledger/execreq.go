@@ -18,6 +18,9 @@ package ledger
 
 import (
 	"fmt"
+	"io"
+	"log"
+	"os/exec"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
@@ -27,7 +30,7 @@ import (
 
 type exeTail struct {
 }
-
+/*
 func (t *txTail) loadFromDisk(l ledgerForTracker) error {
 	return nil
 }
@@ -51,8 +54,15 @@ func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta StateDelta) {
 		execTxn(txn)
 	}
 }
-
-// this is stub for execution protocol and code storage system
+*/
+// This is a stub for the execution protocol and code storage system.
+//
+// Currently the file name of the wasm code to exec is passed in the Code field rather than the code itself or a
+// hash of code that is cached.  The code is simply spawned and the Input passed to stdin rather than being run by a
+// consensus protocol
+//
+// The output is captured and placed back on the blockchain as another transaction
+//
 func execTxn(txn SignedTxnInBlock) {
 	cmd := exec.Command("wavm", "run", "--abi=wasi", txn.Code)
 	stdin, err := cmd.StdinPipe()
@@ -62,7 +72,7 @@ func execTxn(txn SignedTxnInBlock) {
 
 	go func() {
 		defer stdin.Close()
-		io.WriteString(stdin, strings.Join(txn,Inputs," "))
+		io.WriteString(stdin, Input)
 	}()
 
 	out, err := cmd.Output()

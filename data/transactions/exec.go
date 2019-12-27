@@ -27,7 +27,7 @@ import (
 type ExecTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Inputs []string `codec:"inp`
+	Input string `codec:"inp`
 	Code string `codec:"cod"`
 }
 
