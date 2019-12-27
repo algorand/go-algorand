@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=2164
 
 # start_ec2_instance.sh - Invokes the build host
 #
@@ -29,9 +30,10 @@ RED_FG=$(echo -en "\e[31m")
 GREEN_FG=$(echo -en "\e[32m")
 YELLOW_FG=$(echo -en "\e[33m")
 END_FG_COLOR=$(echo -en "\e[39m")
+REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"
 
 cleanup () {
-    rm -rf tmp
+    rm -rf "$REPO_ROOT"/tmp
 }
 
 delete_local_key () {
@@ -55,14 +57,14 @@ delete_security_group () {
 }
 
 manage_instance_info () {
-    pushd tmp > /dev/null
+    pushd "$REPO_ROOT"/tmp > /dev/null
     rm instance*.json
     echo "$SGID" > sgid
     echo "$INSTANCE_NAME" > instance
     echo "$INSTANCE_ID" > instance-id
     echo "$KEY_NAME" > key-name
     popd > /dev/null
-    echo "$GREEN_FG[$0]$END_FG_COLOR: Created tmp/ dir containing instance information."
+    echo "$GREEN_FG[$0]$END_FG_COLOR: Created $REPO_ROOT/tmp/ dir containing instance information."
 }
 
 if ! SGID=$(aws ec2 create-security-group --group-name "$SECURITY_GROUP_NAME" --description "Security Group for ephermal build machine to allow port 22" --region "$AWS_REGION" | jq -r '.GroupId')
@@ -91,9 +93,9 @@ else
     chmod 400 "$KEY_NAME_FILE"
 fi
 
-mkdir -p tmp
+mkdir -p "$REPO_ROOT/tmp"
 
-if ! aws ec2 run-instances --image-id "$AWS_AMI" --key-name "$KEY_NAME" --security-groups "$SECURITY_GROUP_NAME" --instance-type "$AWS_INSTANCE_TYPE" --tag-specifications "ResourceType=instance,Tags=[{Key=\"Name\",Value=\"Buildhost_Ephermal_Instance_${INSTANCE_NUMBER}\"}, {Key=\"For\",Value=\"Buildhost_Ephermal_Instance\"}]" --block-device-mappings DeviceName=/dev/sdh,Ebs=\{VolumeSize=100\} --count 1 --region "$AWS_REGION" > tmp/instance.json
+if ! aws ec2 run-instances --image-id "$AWS_AMI" --key-name "$KEY_NAME" --security-groups "$SECURITY_GROUP_NAME" --instance-type "$AWS_INSTANCE_TYPE" --tag-specifications "ResourceType=instance,Tags=[{Key=\"Name\",Value=\"Buildhost_Ephermal_Instance_${INSTANCE_NUMBER}\"}, {Key=\"For\",Value=\"Buildhost_Ephermal_Instance\"}]" --block-device-mappings DeviceName=/dev/sdh,Ebs=\{VolumeSize=100\} --count 1 --region "$AWS_REGION" > "$REPO_ROOT"/tmp/instance.json
 then
     echo "$RED_FG[$0]$END_FG_COLOR: There was a problem launching the instance! Deleting the security group and the key pair!"
     delete_key_pair
@@ -103,16 +105,16 @@ then
     exit 1
 fi
 
-INSTANCE_ID=$(< tmp/instance.json jq -r '.Instances[].InstanceId')
+INSTANCE_ID=$(< "$REPO_ROOT"/tmp/instance.json jq -r '.Instances[].InstanceId')
 
 echo "$YELLOW_FG[$0]$END_FG_COLOR: Waiting for instance to start."
 end=$((SECONDS+90))
 PRIOR_INSTANCE_STATE=
 while [ $SECONDS -lt $end ]
 do
-    aws ec2 describe-instance-status --instance-id "$INSTANCE_ID" --region "$AWS_REGION" --include-all-instances > tmp/instance2.json
-    INSTANCE_CODE=$(< tmp/instance2.json jq '.InstanceStatuses[].InstanceState.Code')
-    INSTANCE_STATE=$(< tmp/instance2.json jq '.InstanceStatuses[].InstanceState.Name')
+    aws ec2 describe-instance-status --instance-id "$INSTANCE_ID" --region "$AWS_REGION" --include-all-instances > "$REPO_ROOT"/tmp/instance2.json
+    INSTANCE_CODE=$(< "$REPO_ROOT"/tmp/instance2.json jq '.InstanceStatuses[].InstanceState.Code')
+    INSTANCE_STATE=$(< "$REPO_ROOT"/tmp/instance2.json jq '.InstanceStatuses[].InstanceState.Name')
 
     if [ "$INSTANCE_CODE" == "16" ]
     then
@@ -131,8 +133,8 @@ do
     sleep 1s
 done
 
-aws ec2 describe-instances --region "$AWS_REGION" --instance-id "$INSTANCE_ID" > tmp/instance2.json
-INSTANCE_NAME=$(< tmp/instance2.json jq -r '.Reservations[].Instances[].PublicDnsName')
+aws ec2 describe-instances --region "$AWS_REGION" --instance-id "$INSTANCE_ID" > "$REPO_ROOT"/tmp/instance2.json
+INSTANCE_NAME=$(< "$REPO_ROOT"/tmp/instance2.json jq -r '.Reservations[].Instances[].PublicDnsName')
 echo "$GREEN_FG[$0]$END_FG_COLOR: Instance name = $INSTANCE_NAME"
 
 manage_instance_info
