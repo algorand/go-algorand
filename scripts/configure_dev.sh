@@ -44,21 +44,5 @@ elif [ "${OS}" = "darwin" ]; then
     install_or_upgrade shellcheck
 fi
 
-echo "got here"
-echo "got here"
-echo "got here"
-echo "got here"
-echo "got here"
-echo "got here"
-echo "got here"
-echo "got here"
-echo "got here"
-echo "got here"
-echo "got here"
-echo "got here"
-echo "got here"
-echo "got here"
-echo "got here"
-echo "got here"
 "$SCRIPTPATH"/configure_dev-deps.sh
 

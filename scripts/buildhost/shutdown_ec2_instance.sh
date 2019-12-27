@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=2164
 
 # shutdown_ec2_instance.sh - Invokes the build host
 #
@@ -16,6 +17,7 @@ AWS_REGION=${1-us-east-1}
 GREEN_FG=$(echo -en "\e[32m")
 YELLOW_FG=$(echo -en "\e[33m")
 END_FG_COLOR=$(echo -en "\e[39m")
+REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"
 
 #if [ "$AWS_REGION" = "" ]
 #then
@@ -23,7 +25,7 @@ END_FG_COLOR=$(echo -en "\e[39m")
 #    exit 1
 #fi
 
-pushd tmp > /dev/null
+pushd "$REPO_ROOT"/tmp > /dev/null
 SGID=$(cat sgid)
 INSTANCE_ID=$(cat instance-id)
 #INSTANCE_NAME=$(cat instance)
@@ -35,9 +37,9 @@ end=$((SECONDS+1200))
 PRIOR_INSTANCE_STATE=
 while [ $SECONDS -lt $end ]
 do
-    aws ec2 terminate-instances --instance-ids "$INSTANCE_ID" --region "$AWS_REGION" > tmp/instance.json
-    INSTANCE_CODE=$(< tmp/instance.json jq '.TerminatingInstances[].CurrentState.Code')
-    INSTANCE_STATE=$(< tmp/instance.json jq '.TerminatingInstances[].CurrentState.Name')
+    aws ec2 terminate-instances --instance-ids "$INSTANCE_ID" --region "$AWS_REGION" > "$REPO_ROOT"/tmp/instance.json
+    INSTANCE_CODE=$(< "$REPO_ROOT"/tmp/instance.json jq '.TerminatingInstances[].CurrentState.Code')
+    INSTANCE_STATE=$(< "$REPO_ROOT"/tmp/instance.json jq '.TerminatingInstances[].CurrentState.Name')
 
     if [ "$INSTANCE_CODE" = "48" ]
     then
@@ -50,13 +52,13 @@ do
         echo "$YELLOW_FG[$0]$END_FG_COLOR: Instance is in state $INSTANCE_STATE..."
         PRIOR_INSTANCE_STATE="$INSTANCE_STATE"
 #    else
-#        cat tmp/instance.json
+#        cat "$REPO_ROOT"/tmp/instance.json
     fi
 
     sleep 5s
-#    aws ec2 describe-instance-status --instance-id "$INSTANCE_ID" --region "$AWS_REGION" --include-all-instances > tmp/instance.json
-#    INSTANCE_CODE=$(< tmp/instance.json jq '.InstanceStatuses[].InstanceState.Code')
-#    INSTANCE_STATE=$(< tmp/instance.json jq '.InstanceStatuses[].InstanceState.Name')
+#    aws ec2 describe-instance-status --instance-id "$INSTANCE_ID" --region "$AWS_REGION" --include-all-instances > "$REPO_ROOT"/tmp/instance.json
+#    INSTANCE_CODE=$(< "$REPO_ROOT"/tmp/instance.json jq '.InstanceStatuses[].InstanceState.Code')
+#    INSTANCE_STATE=$(< "$REPO_ROOT"/tmp/instance.json jq '.InstanceStatuses[].InstanceState.Name')
 #
 #    if [ "$INSTANCE_CODE" = "48" ]
 #    then
@@ -69,7 +71,7 @@ do
 #        echo "$YELLOW_FG[$0]$END_FG_COLOR: Instance is in state $INSTANCE_STATE..."
 #        PRIOR_INSTANCE_STATE="$INSTANCE_STATE"
 ##    else
-##        cat tmp/instance.json
+##        cat "$REPO_ROOT"/tmp/instance.json
 #    fi
 #    sleep 10s
 done
@@ -84,5 +86,5 @@ then
     aws ec2 delete-security-group --group-id "$SGID" --region "$AWS_REGION"
 fi
 
-rm -rf BuilderInstanceKey.pem tmp
+rm -rf BuilderInstanceKey.pem "$REPO_ROOT"/tmp
 

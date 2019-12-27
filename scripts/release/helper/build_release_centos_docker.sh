@@ -5,7 +5,7 @@
 # --mount type=bind,src=${GOPATH}/src,dst=/root/go/src
 #
 # mount golang install from outside
-# --mount type=bind,src=/usr/local/go,dst=/usr/local/go 
+# --mount type=bind,src=/usr/local/go,dst=/usr/local/go
 #
 # output copied to /root/subhome/node_pkg
 # --mount type=bind,src=${HOME},dst=/root/subhome
@@ -22,37 +22,6 @@ export PATH=${GOPATH}/bin:/usr/local/go/bin:${PATH}
 # Anchor our repo root reference location
 REPO_DIR="$( cd "$(dirname "$0")" ; pwd -P )"/..
 
-echo "got here2"
-echo "got here2"
-echo "got here2"
-echo "got here2"
-echo "got here2"
-echo "got here2"
-echo "got here2"
-echo "got here2"
-echo "got here2"
-echo "got here2"
-echo "got here2"
-echo "got here2"
-echo "got here2"
-echo "got here2"
-echo "got here2"
-echo "got here2"
-echo "got here2"
-echo "got here2"
-echo "got here2"
-echo "got here2"
-echo "got here2"
-echo "got here2"
-echo "got here2"
-echo "got here2"
-echo "got here2"
-echo "got here2"
-echo "got here2"
-echo "got here2"
-echo "got here2"
-echo "got here2"
-echo "got here2"
 ${REPO_DIR}/scripts/configure_dev-deps.sh
 
 cd ${REPO_DIR}
@@ -70,7 +39,7 @@ export NO_BUILD=1
 
 RPMTMP=$(mktemp -d 2>/dev/null || mktemp -d -t "rpmtmp")
 trap "rm -rf ${RPMTMP}" 0
-scripts/build_rpm.sh ${RPMTMP}
+scripts/release/helper/build_rpm.sh ${RPMTMP}
 cp -p ${RPMTMP}/*/*.rpm /root/subhome/node_pkg
 
 (cd ${HOME} && tar jxf /stuff/gnupg*.tar.bz2)

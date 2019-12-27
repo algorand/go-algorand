@@ -67,7 +67,7 @@ manage_instance_info () {
     echo "$GREEN_FG[$0]$END_FG_COLOR: Created $REPO_ROOT/tmp/ dir containing instance information."
 }
 
-if ! SGID=$(aws ec2 create-security-group --group-name "$SECURITY_GROUP_NAME" --description "Security Group for ephermal build machine to allow port 22" --region "$AWS_REGION" | jq -r '.GroupId')
+if ! SGID=$(aws ec2 create-security-group --group-name "$SECURITY_GROUP_NAME" --description "Security Group for ephemeral build machine to allow port 22" --region "$AWS_REGION" | jq -r '.GroupId')
 then
     exit 1
 fi
@@ -95,7 +95,7 @@ fi
 
 mkdir -p "$REPO_ROOT/tmp"
 
-if ! aws ec2 run-instances --image-id "$AWS_AMI" --key-name "$KEY_NAME" --security-groups "$SECURITY_GROUP_NAME" --instance-type "$AWS_INSTANCE_TYPE" --tag-specifications "ResourceType=instance,Tags=[{Key=\"Name\",Value=\"Buildhost_Ephermal_Instance_${INSTANCE_NUMBER}\"}, {Key=\"For\",Value=\"Buildhost_Ephermal_Instance\"}]" --block-device-mappings DeviceName=/dev/sdh,Ebs=\{VolumeSize=100\} --count 1 --region "$AWS_REGION" > "$REPO_ROOT"/tmp/instance.json
+if ! aws ec2 run-instances --image-id "$AWS_AMI" --key-name "$KEY_NAME" --security-groups "$SECURITY_GROUP_NAME" --instance-type "$AWS_INSTANCE_TYPE" --tag-specifications "ResourceType=instance,Tags=[{Key=\"Name\",Value=\"Buildhost_Ephemeral_${INSTANCE_NUMBER}\"}, {Key=\"For\",Value=\"Buildhost_Ephemeral\"}]" --block-device-mappings DeviceName=/dev/sdh,Ebs=\{VolumeSize=100\} --count 1 --region "$AWS_REGION" > "$REPO_ROOT"/tmp/instance.json
 then
     echo "$RED_FG[$0]$END_FG_COLOR: There was a problem launching the instance! Deleting the security group and the key pair!"
     delete_key_pair
@@ -127,7 +127,7 @@ do
         echo "$YELLOW_FG[$0]$END_FG_COLOR: Instance is in state $INSTANCE_STATE..."
         PRIOR_INSTANCE_STATE="$INSTANCE_STATE"
 #    else
-#        cat tmp/instance2.json
+#        cat "$REPO_ROOT"/tmp/instance2.json
     fi
 
     sleep 1s

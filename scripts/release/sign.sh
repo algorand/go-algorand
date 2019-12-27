@@ -44,4 +44,4 @@ sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind
 
 date "+build_release done signing %Y%m%d_%H%M%S"
 
-# NEXT: build_release_upload.sh
+# NEXT: upload.sh

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 #
-# This is a file of commands to copy and paste to run build_release.sh on an AWS EC2 instance.
+# This is a file of commands to copy and paste to run release.sh on an AWS EC2 instance.
 # Should work on Ubuntu 16.04 ro 18.04
 #
 # Externally settable env vars:
 # S3_PREFIX_BUILDLOG= where upload build log (no trailing /)
 
-echo "this is a file of commands to copy and paste to run build_release.sh on an AWS EC2 instance"
+echo "this is a file of commands to copy and paste to run release.sh on an AWS EC2 instance"
 exit 1
 
 # use AWS console to create a new t3.large with the latest official Ubuntu 18.04
@@ -19,7 +19,7 @@ cd ${GOPATH}/src/github.com/algorand/go-algorand
 git fetch
 git checkout rel/stable
 git merge origin/rel/stable
-scp -p ${GOPATH}/src/github.com/algorand/go-algorand/scripts/build_release_setup.sh ubuntu@${TARGET}:~/
+scp -p ${GOPATH}/src/github.com/algorand/go-algorand/scripts/release/setup.sh ubuntu@${TARGET}:~/
 
 # upload the latest public key
 GTMPDIR=$(mktemp -d 2>/dev/null || mktemp -d -t "rpmtmp")
@@ -27,7 +27,7 @@ gpg --export --armor -o "${GTMPDIR}/key.gpg" dev@algorand.com
 scp -p "${GTMPDIR}/key.gpg" "ubuntu@${TARGET}:~/key.gpg"
 rm -rf ${GTMPDIR}
 
-ssh -A ubuntu@${TARGET} bash build_release_setup.sh
+ssh -A ubuntu@${TARGET} bash setup.sh
 
 # setup GPG key forwarding https://wiki.gnupg.org/AgentForwarding
 umask 0077
@@ -73,13 +73,13 @@ export AWS_SECRET_ACCESS_KEY=
 # where we store persistent scratch space for aptly
 export AWS_EFS_MOUNT=
 
-# build_release.sh needs to be run in a terminal with a human watching
+# release.sh needs to be run in a terminal with a human watching
 # to be prompted for GPG key password at a couple points.
 # It can still steal the outer terminal from within piping the output to tee. Nifty, huh?
 BUILDTIMESTAMP=$(cat "${HOME}/buildtimestamp")
-(bash "${HOME}/go/src/github.com/algorand/go-algorand/scripts/build_release.sh" 2>&1)|tee -a "${HOME}/buildlog_${BUILDTIMESTAMP}"
-(bash "${HOME}/go/src/github.com/algorand/go-algorand/scripts/build_release_sign.sh" 2>&1)|tee -a "${HOME}/buildlog_${BUILDTIMESTAMP}"
-(bash "${HOME}/go/src/github.com/algorand/go-algorand/scripts/build_release_upload.sh" 2>&1)|tee -a "${HOME}/buildlog_${BUILDTIMESTAMP}"
+(bash "${HOME}/go/src/github.com/algorand/go-algorand/scripts/release/release/release.sh" 2>&1)|tee -a "${HOME}/buildlog_${BUILDTIMESTAMP}"
+(bash "${HOME}/go/src/github.com/algorand/go-algorand/scripts/release/release/sign.sh" 2>&1)|tee -a "${HOME}/buildlog_${BUILDTIMESTAMP}"
+(bash "${HOME}/go/src/github.com/algorand/go-algorand/scripts/release/release/upload.sh" 2>&1)|tee -a "${HOME}/buildlog_${BUILDTIMESTAMP}"
 if [ -f "${HOME}/rstamp" ]; then
     . "${HOME}/rstamp"
 fi

@@ -39,7 +39,7 @@ mkdir -p "${HOME}"/{go,gpgbin}
 export GOPATH=${HOME}/go
 export PATH=${HOME}/gpgbin:${GOPATH}/bin:/usr/local/go/bin:${PATH}
 
-cat <<EOF>"${HOME}"/gpgbin/remote_gpg_socket
+cat <<EOF>"${HOME}/gpgbin/remote_gpg_socket"
 export GOPATH=\${HOME}/go
 export PATH=\${HOME}/gpgbin:${GOPATH}/bin:/usr/local/go/bin:${PATH}
 gpgconf --list-dirs|grep agent-socket|awk -F: '{ print \$2 }'
@@ -88,8 +88,8 @@ sg docker "docker pull ubuntu:16.04"
 
 # Check out
 mkdir -p "${GOPATH}/src/github.com/algorand"
-(cd "${GOPATH}/src/github.com/algorand" && git clone "${GIT_REPO_PATH}" go-algorand)
-cd "${GOPATH}/src/github.com/algorand/go-algorand"
+cd "${GOPATH}/src/github.com/algorand" && git clone "${GIT_REPO_PATH}" go-algorand
+cd go-algorand
 git checkout "${GIT_CHECKOUT_LABEL}"
 # TODO: if we are checking out a release tag, `git tag --verify` it
 
@@ -113,12 +113,16 @@ EOF
 
 # Install aptly for building debian repo
 mkdir -p "$GOPATH/src/github.com/aptly-dev"
-git clone https://github.com/aptly-dev/aptly "$GOPATH/src/github.com/aptly-dev/aptly"
-(cd "$GOPATH/src/github.com/aptly-dev/aptly" && git fetch)
+cd "$GOPATH/src/github.com/aptly-dev"
+git clone https://github.com/aptly-dev/aptly
+cd aptly && git fetch
+
 # As of 2019-06-06 release tag v1.3.0 is 2018-May, GnuPG 2 support was added in October but they haven't tagged a new release yet. Hash below seems to work so far.
 # 2019-07-06 v1.4.0
-(cd "$GOPATH/src/github.com/aptly-dev/aptly" && git checkout v1.4.0)
-(cd "$GOPATH/src/github.com/aptly-dev/aptly" && make install)
+git checkout v1.4.0
+make install
+
+gpgconf --launch gpg-agent
 
 date "+setup finish %Y%m%d_%H%M%S"
 
