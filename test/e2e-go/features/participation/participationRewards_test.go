@@ -19,9 +19,9 @@ package participation
 import (
 	"fmt"
 	"path/filepath"
-	"testing"
 	"runtime"
-	
+	"testing"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
@@ -88,7 +88,7 @@ func TestOnlineOfflineRewards(t *testing.T) {
 	offlineClient := fixture.GetLibGoalClientForNamedNode("Offline")
 
 	// learn initial balances
-	initialRound := uint64(301)
+	initialRound := uint64(11)
 	r.NoError(fixture.WaitForRoundWithTimeout(initialRound))
 	initialOnlineBalance, _ := onlineClient.GetBalance(onlineAccount)
 	initialOfflineBalance, _ := offlineClient.GetBalance(offlineAccount)

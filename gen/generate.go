@@ -114,6 +114,8 @@ func generateGenesisFiles(outDir string, proto protocol.ConsensusVersion, netNam
 	sort.SliceStable(allocation, func(i, j int) bool {
 		return allocation[i].Name < allocation[j].Name
 	})
+	rootKeyCreated := 0
+	partKeyCreated := 0
 
 	for _, wallet := range allocation {
 		var root account.Root
@@ -152,7 +154,10 @@ func generateGenesisFiles(outDir string, proto protocol.ConsensusVersion, netNam
 					os.Remove(wfilename)
 					return
 				}
-				fmt.Printf("Created new rootkey: %s\n", wfilename)
+				if verbose {
+					fmt.Printf("Created new rootkey: %s\n", wfilename)
+				}
+				rootKeyCreated++
 			}
 
 			if partkeyErr != nil && wallet.Online == basics.Online {
@@ -171,7 +176,10 @@ func generateGenesisFiles(outDir string, proto protocol.ConsensusVersion, netNam
 					os.Remove(pfilename)
 					return
 				}
-				fmt.Printf("Created new partkey: %s\n", pfilename)
+				if verbose {
+					fmt.Printf("Created new partkey: %s\n", pfilename)
+				}
+				partKeyCreated++
 			}
 		}
 
@@ -250,6 +258,11 @@ func generateGenesisFiles(outDir string, proto protocol.ConsensusVersion, netNam
 
 	jsonData := protocol.EncodeJSON(g)
 	err = ioutil.WriteFile(filepath.Join(outDir, config.GenesisJSONFile), append(jsonData, '\n'), 0666)
+
+	if (!verbose) && (rootKeyCreated > 0 || partKeyCreated > 0) {
+		fmt.Printf("Created %d new rootkeys and %d new partkeys.\n", rootKeyCreated, partKeyCreated)
+	}
+
 	return
 }
 
