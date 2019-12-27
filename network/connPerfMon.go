@@ -48,8 +48,9 @@ type pmMessage struct {
 }
 
 type pmPeerStatistics struct {
-	peer      Peer  // the peer interface
-	peerDelay int64 // the peer avarage relative message delay
+	peer             Peer    // the peer interface
+	peerDelay        int64   // the peer avarage relative message delay
+	peerFirstMessage float32 // what precentage of the messages were delivered by this peer before any other peer
 }
 
 type pmStatistics struct {
@@ -69,6 +70,7 @@ type connectionPerformanceMonitor struct {
 	stageStartTime       int64                        // the timestamp at which we switched to the current stage.
 	pendingMessages      map[crypto.Digest]*pmMessage // the pendingMessages map contains messages that haven't been received from all the peers within the pmMaxMessageWaitTime
 	connectionDelay      map[Peer]int64               // contains the total delay we've sustained by each peer when we're in stages pmStagePresync-pmStageStopping and the average delay after that. ( in nano seconds )
+	firstMessageCount    map[Peer]int64               // maps the peers to their accumulated first messages ( the number of times a message seen coming from this peer first )
 	msgCount             int64                        // total number of messages that we've accumulated.
 }
 
@@ -94,13 +96,23 @@ func (pm *connectionPerformanceMonitor) GetPeersStatistics() (stat *pmStatistics
 		messageCount:   pm.msgCount,
 	}
 	for peer, delay := range pm.connectionDelay {
-		stat.peerStatistics = append(stat.peerStatistics, pmPeerStatistics{peer: peer, peerDelay: delay})
+		peerStat := pmPeerStatistics{
+			peer:      peer,
+			peerDelay: delay,
+		}
+		if pm.msgCount > 0 {
+			peerStat.peerFirstMessage = float32(pm.firstMessageCount[peer]) / float32(pm.msgCount)
+		}
+		stat.peerStatistics = append(stat.peerStatistics, peerStat)
 	}
 	sort.Slice(stat.peerStatistics, func(i, j int) bool {
 		return stat.peerStatistics[i].peerDelay > stat.peerStatistics[j].peerDelay
 	})
-	stat.leastPerformingPeer = stat.peerStatistics[0].peer
-	stat.leastPerformingPeerDelay = stat.peerStatistics[0].peerDelay
+	// if the slowest peer provide less that it's part ( i.e. 25% ) of the messages, disconnect from it.
+	if stat.peerStatistics[0].peerFirstMessage*float32(len(pm.connectionDelay)) <= 1.0 {
+		stat.leastPerformingPeer = stat.peerStatistics[0].peer
+		stat.leastPerformingPeerDelay = stat.peerStatistics[0].peerDelay
+	}
 	return
 }
 
@@ -122,6 +134,7 @@ func (pm *connectionPerformanceMonitor) Reset(peers []Peer) {
 	pm.monitoredConnections = make(map[Peer]bool, len(peers))
 	pm.lastPeerMsgTime = make(map[Peer]int64, len(peers))
 	pm.connectionDelay = make(map[Peer]int64, len(peers))
+	pm.firstMessageCount = make(map[Peer]int64, len(peers))
 	pm.msgCount = 0
 	pm.advanceStage(pmStagePresync, time.Now().UnixNano())
 
@@ -129,6 +142,7 @@ func (pm *connectionPerformanceMonitor) Reset(peers []Peer) {
 		pm.monitoredConnections[peer] = true
 		pm.lastPeerMsgTime[peer] = pm.stageStartTime
 		pm.connectionDelay[peer] = 0
+		pm.firstMessageCount[peer] = 0
 	}
 
 }
@@ -288,6 +302,7 @@ func (pm *connectionPerformanceMonitor) accumulateMessage(msg *IncomingMessage, 
 				},
 				firstPeerTime: msg.Received,
 			}
+			pm.firstMessageCount[msg.Sender]++
 			pm.msgCount++
 		}
 		return

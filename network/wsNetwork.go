@@ -173,6 +173,11 @@ type GossipNode interface {
 
 	// ClearHandlers deregisters all the existing message handlers.
 	ClearHandlers()
+
+	// OnNetworkAdvance notifies the network library that a new block was added via the agreement protocol.
+	// this is the only indication that we have that we haven't formed a clique, where all incoming messages
+	// arrive very quickly, but might be missing some votes.
+	OnNetworkAdvance()
 }
 
 // IncomingMessage represents a message arriving from some peer in our p2p network
@@ -322,6 +327,9 @@ type WebsocketNetwork struct {
 	lastPeerConnectionsSent time.Time
 
 	connPerfMonitor *connectionPerformanceMonitor
+
+	lastNetworkAdvanceMu deadlock.Mutex
+	lastNetworkAdvance   time.Time
 }
 
 type broadcastRequest struct {
@@ -574,6 +582,7 @@ func (wn *WebsocketNetwork) setup() {
 		wn.incomingMsgFilter = makeMessageFilter(wn.config.IncomingMessageFilterBucketCount, wn.config.IncomingMessageFilterBucketSize)
 	}
 	wn.connPerfMonitor = makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag, protocol.TxnTag})
+	wn.lastNetworkAdvance = time.Now()
 }
 
 func (wn *WebsocketNetwork) rlimitIncomingConnections() error {
@@ -1280,21 +1289,37 @@ func (wn *WebsocketNetwork) meshThread() {
 						for _, stat := range peerStat.peerStatistics {
 							wsPeer := stat.peer.(*wsPeer)
 							wsPeer.peerMessageDelay = stat.peerDelay
+							wn.log.Infof("network performance monitor - peer '%s' delay %d first message portion %d%%", wsPeer.GetAddress(), stat.peerDelay, int(stat.peerFirstMessage*100))
 						}
-
-						wsPeer := peerStat.leastPerformingPeer.(*wsPeer)
-						wn.disconnect(wsPeer, disconnectBadPerformance)
-						wn.connPerfMonitor.Reset([]Peer{})
-
+						if peerStat.leastPerformingPeer != nil {
+							wsPeer := peerStat.leastPerformingPeer.(*wsPeer)
+							wn.disconnect(wsPeer, disconnectBadPerformance)
+							wn.connPerfMonitor.Reset([]Peer{})
+						} else {
+							// did we made any progress since the previous attempt ?
+							// if the network is "stuck" due to cliques, try to randomally disconnect a peer.
+							lastNetworkAdvance := wn.getLastNetworkAdvance()
+							if time.Now().Sub(lastNetworkAdvance) > meshThreadInterval && len(peerStat.peerStatistics) > 0 {
+								var peer *wsPeer
+								if len(peerStat.peerStatistics) > 0 {
+									disconnectPeerIdx := crypto.RandUint63() % uint64(len(peerStat.peerStatistics))
+									peer = peerStat.peerStatistics[disconnectPeerIdx].peer.(*wsPeer)
+								} else {
+									peer = outgoingPeers[0].(*wsPeer)
+								}
+								wn.disconnect(peer, disconnectBadPerformance)
+								wn.connPerfMonitor.Reset([]Peer{})
+							} else {
+								wn.connPerfMonitor.Reset(outgoingPeers)
+							}
+						}
 					}
 				} else {
-					wn.log.Infof("Performance metrics reset peers")
 					// different set of peers. restart monitoring.
 					wn.connPerfMonitor.Reset(outgoingPeers)
 				}
 			} else {
 				// if not, reset the performance monitor.
-				wn.log.Infof("Performance metrics clear peers (%d)", len(outgoingPeers))
 				wn.connPerfMonitor.Reset([]Peer{})
 			}
 		}
@@ -1307,6 +1332,21 @@ func (wn *WebsocketNetwork) meshThread() {
 		// to construct a cross-node map of all the nodes interconnections.
 		wn.sendPeerConnectionsTelemetryStatus()
 	}
+}
+
+func (wn *WebsocketNetwork) getLastNetworkAdvance() time.Time {
+	wn.lastNetworkAdvanceMu.Lock()
+	defer wn.lastNetworkAdvanceMu.Unlock()
+	return wn.lastNetworkAdvance
+}
+
+// OnNetworkAdvance notifies the network library that a new block was added via the agreement protocol.
+// this is the only indication that we have that we haven't formed a clique, where all incoming messages
+// arrive very quickly, but might be missing some votes.
+func (wn *WebsocketNetwork) OnNetworkAdvance() {
+	wn.lastNetworkAdvanceMu.Lock()
+	defer wn.lastNetworkAdvanceMu.Unlock()
+	wn.lastNetworkAdvance = time.Now()
 }
 
 // sendPeerConnectionsTelemetryStatus sends a snapshot of the currently connected peers
