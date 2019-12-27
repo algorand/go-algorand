@@ -165,7 +165,7 @@ func main() {
 		// Apply telemetry override.
 		telemetryConfig.Enable = logging.TelemetryOverride(*telemetryOverride)
 
-		if telemetryConfig.Enable {
+		if telemetryConfig.Enable || telemetryConfig.SendToLog {
 			// If session GUID specified, use it.
 			if *sessionGUID != "" {
 				if len(*sessionGUID) == 36 {

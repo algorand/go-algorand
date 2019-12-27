@@ -36,13 +36,15 @@ type TelemetryOperation struct {
 }
 
 type telemetryState struct {
-	history *logBuffer
-	hook    *asyncTelemetryHook
+	history   *logBuffer
+	hook      *asyncTelemetryHook
+	sendToLog bool
 }
 
 // TelemetryConfig represents the configuration of Telemetry logging
 type TelemetryConfig struct {
 	Enable             bool
+	SendToLog          bool
 	URI                string
 	Name               string
 	GUID               string
