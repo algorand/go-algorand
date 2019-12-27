@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package main
+package transcode
 
 import (
 	"encoding/base32"
@@ -32,7 +32,8 @@ type decoder interface {
 	Decode(v interface{}) error
 }
 
-func transcode(mpToJSON bool, in io.ReadCloser, out io.WriteCloser) error {
+// Transcode turns msgpack to JSON or JSON to msgpack
+func Transcode(mpToJSON bool, base32Encoding, strictJSON bool, in io.Reader, out io.Writer) error {
 	canonicalMsgpackHandle := new(codec.MsgpackHandle)
 	canonicalMsgpackHandle.ErrorIfNoField = true
 	canonicalMsgpackHandle.ErrorIfNoArrayExpand = true
@@ -62,9 +63,6 @@ func transcode(mpToJSON bool, in io.ReadCloser, out io.WriteCloser) error {
 		enc = codec.NewEncoder(out, canonicalMsgpackHandle)
 	}
 
-	defer in.Close()
-	defer out.Close()
-
 	for {
 		var a interface{}
 		err := dec.Decode(&a)
@@ -77,7 +75,7 @@ func transcode(mpToJSON bool, in io.ReadCloser, out io.WriteCloser) error {
 		}
 
 		if mpToJSON {
-			a = toJSON(a)
+			a = toJSON(a, base32Encoding, strictJSON)
 		} else {
 			a = fromJSON(a)
 		}
@@ -93,7 +91,7 @@ func transcode(mpToJSON bool, in io.ReadCloser, out io.WriteCloser) error {
 	}
 }
 
-func toJSON(a interface{}) interface{} {
+func toJSON(a interface{}, base32Encoding, strictJSON bool) interface{} {
 	switch v := a.(type) {
 	case map[interface{}]interface{}:
 		r := make(map[interface{}]interface{})
@@ -106,16 +104,18 @@ func toJSON(a interface{}) interface{} {
 			eb, ok2 := e.([]byte)
 
 			if ok1 && ok2 {
-				if *base32Encoding {
+				if base32Encoding {
 					r[fmt.Sprintf("%s:b32", ks)] = base32.StdEncoding.EncodeToString(eb)
 				} else {
 					r[fmt.Sprintf("%s:b64", ks)] = base64.StdEncoding.EncodeToString(eb)
 				}
 			} else {
-				if *strictJSON {
+				if strictJSON {
 					k = fmt.Sprintf("%v", k)
 				}
-				r[toJSON(k)] = toJSON(e)
+				kenc := toJSON(k, base32Encoding, strictJSON)
+				eenc := toJSON(e, base32Encoding, strictJSON)
+				r[kenc] = eenc
 			}
 		}
 		return r
@@ -123,7 +123,8 @@ func toJSON(a interface{}) interface{} {
 	case []interface{}:
 		r := make([]interface{}, 0)
 		for _, e := range v {
-			r = append(r, toJSON(e))
+			eenc := toJSON(e, base32Encoding, strictJSON)
+			r = append(r, eenc)
 		}
 		return r
 

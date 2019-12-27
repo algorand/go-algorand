@@ -264,12 +264,39 @@ class RunSet:
                 self.ok = False
                 self._terminate()
 
-def goal_network_stop(netdir):
+
+# 'network stop' and 'network delete' are also tested and used as cleanup procedures
+# so it re-raises exception in 'test' mode
+already_stopped = False
+already_deleted = False
+
+def goal_network_stop(netdir, normal_cleanup=False):
+    global already_stopped, already_deleted
+    if already_stopped or already_deleted:
+        return
+
     logger.info('stop network in %s', netdir)
     try:
         xrun(['goal', 'network', 'stop', '-r', netdir], timeout=10)
     except Exception as e:
         logger.error('error stopping network', exc_info=True)
+        if normal_cleanup:
+            raise e
+    already_stopped = True
+
+def goal_network_delete(netdir, normal_cleanup=False):
+    global already_deleted
+    if already_deleted:
+        return
+
+    logger.info('delete network in %s', netdir)
+    try:
+        xrun(['goal', 'network', 'delete', '-r', netdir], timeout=10)
+    except Exception as e:
+        logger.error('error deleting network', exc_info=True)
+        if normal_cleanup:
+            raise e
+    already_deleted = True
 
 def xrun(cmd, *args, **kwargs):
     timeout = kwargs.pop('timeout', None)
@@ -371,6 +398,12 @@ def main():
     else:
         logger.info('finished OK %f seconds', time.time() - start)
     logger.info('statuses-json: %s', json.dumps(rs.statuses))
+
+    # ensure 'network stop' and 'network delete' also make they job
+    goal_network_stop(netdir, normal_cleanup=True)
+    if not args.keep_temps:
+        goal_network_delete(netdir, normal_cleanup=True)
+
     return retcode
 
 if __name__ == '__main__':

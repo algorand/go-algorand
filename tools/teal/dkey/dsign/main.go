@@ -21,6 +21,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -38,8 +39,8 @@ func failFast(err error) {
 }
 
 func main() {
-	if len(os.Args) != 3 {
-		fmt.Fprintf(os.Stderr, "usage: %s <key-file> <lsig-file>", os.Args[0])
+	if len(os.Args) != 3 && len(os.Args) != 4 {
+		fmt.Fprintf(os.Stderr, "usage: %s <key-file> <lsig-file> <optional-data-file>\n", os.Args[0])
 		os.Exit(-1)
 	}
 
@@ -52,27 +53,46 @@ func main() {
 	copy(seed[:], kdata)
 	sec := crypto.GenerateSignatureSecrets(seed)
 
-	pdata, err := ioutil.ReadFile(lsigfname)
-	failFast(err)
-	var lsig transactions.LogicSig
-	err = protocol.Decode(pdata, &lsig)
-	failFast(err)
+	if len(os.Args) == 4 {
+		// In this mode, interpret lsig-file as raw program bytes and produce a signature
+		// over the data file
+		pdata, err := ioutil.ReadFile(lsigfname)
+		failFast(err)
 
-	txdata, err := ioutil.ReadAll(os.Stdin)
-	failFast(err)
-	var txn transactions.SignedTxn
-	err = protocol.Decode(txdata, &txn)
-	failFast(err)
+		ddata, err := ioutil.ReadFile(os.Args[3])
+		failFast(err)
 
-	txID := txn.ID()
-	dsig := sec.Sign(logic.Msg{
-		ProgramHash: crypto.HashObj(logic.Program(lsig.Logic)),
-		Data:        txID[:],
-	})
-	lsig.Args = [][]byte{dsig[:]}
+		dsig := sec.Sign(logic.Msg{
+			ProgramHash: crypto.HashObj(logic.Program(pdata)),
+			Data:        ddata,
+		})
 
-	var out transactions.SignedTxn
-	out.Txn = txn.Txn
-	out.Lsig = lsig
-	protocol.EncodeStream(os.Stdout, out)
+		fmt.Fprintf(os.Stdout, "%s", base64.StdEncoding.EncodeToString(dsig[:]))
+	} else {
+		// In this mode, interpret lsig-file as a LogicSig struct and sign the
+		// txid of the transaction passed over stdin
+		pdata, err := ioutil.ReadFile(lsigfname)
+		failFast(err)
+		var lsig transactions.LogicSig
+		err = protocol.Decode(pdata, &lsig)
+		failFast(err)
+
+		txdata, err := ioutil.ReadAll(os.Stdin)
+		failFast(err)
+		var txn transactions.SignedTxn
+		err = protocol.Decode(txdata, &txn)
+		failFast(err)
+
+		txID := txn.ID()
+		dsig := sec.Sign(logic.Msg{
+			ProgramHash: crypto.HashObj(logic.Program(lsig.Logic)),
+			Data:        txID[:],
+		})
+		lsig.Args = [][]byte{dsig[:]}
+
+		var out transactions.SignedTxn
+		out.Txn = txn.Txn
+		out.Lsig = lsig
+		protocol.EncodeStream(os.Stdout, out)
+	}
 }

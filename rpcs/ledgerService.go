@@ -36,7 +36,8 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-const ledgerResponseContentType = "application/x-algorand-block-v1"
+// LedgerResponseContentType is the HTTP Content-Type header for a raw binary block
+const LedgerResponseContentType = "application/x-algorand-block-v1"
 const ledgerResponseHasBlockCacheControl = "public, max-age=31536000, immutable"    // 31536000 seconds are one year.
 const ledgerResponseMissingBlockCacheControl = "public, max-age=1, must-revalidate" // cache for 1 second, and force revalidation afterward
 const ledgerServerMaxBodyLength = 512                                               // we don't really pass meaningful content here, so 512 bytes should be a safe limit
@@ -160,7 +161,7 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 		response.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	encodedBlockCert, err := ls.encodedBlockCert(round)
+	encodedBlockCert, err := RawBlockBytes(ls.ledger, basics.Round(round))
 	if err != nil {
 		switch err.(type) {
 		case ledger.ErrNoEntry:
@@ -176,7 +177,7 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 		}
 	}
 
-	response.Header().Set("Content-Type", ledgerResponseContentType)
+	response.Header().Set("Content-Type", LedgerResponseContentType)
 	response.Header().Set("Content-Length", strconv.Itoa(len(encodedBlockCert)))
 	response.Header().Set("Cache-Control", ledgerResponseHasBlockCacheControl)
 	response.WriteHeader(http.StatusOK)
@@ -236,7 +237,8 @@ func (ls *LedgerService) handleCatchupReq(ctx context.Context, reqMsg network.In
 		return
 	}
 	res.Round = req.Round
-	encodedBlob, err := ls.encodedBlockCert(req.Round)
+	encodedBlob, err := RawBlockBytes(ls.ledger, basics.Round(req.Round))
+
 	if err != nil {
 		res.Error = err.Error()
 		return
@@ -254,8 +256,9 @@ func (ls *LedgerService) sendCatchupRes(ctx context.Context, target network.Unic
 	}
 }
 
-func (ls *LedgerService) encodedBlockCert(round uint64) ([]byte, error) {
-	blk, cert, err := ls.ledger.EncodedBlockCert(basics.Round(round))
+// RawBlockBytes return the msgpack bytes for a block
+func RawBlockBytes(ledger *data.Ledger, round basics.Round) ([]byte, error) {
+	blk, cert, err := ledger.EncodedBlockCert(round)
 	if err != nil {
 		return nil, err
 	}

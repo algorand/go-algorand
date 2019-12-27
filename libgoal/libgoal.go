@@ -672,6 +672,15 @@ func (c *Client) Block(round uint64) (resp v1.Block, err error) {
 	return
 }
 
+// RawBlock takes a round and returns its block
+func (c *Client) RawBlock(round uint64) (resp v1.RawBlock, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		resp, err = algod.RawBlock(round)
+	}
+	return
+}
+
 // HealthCheck returns an error if something is wrong
 func (c *Client) HealthCheck() error {
 	algod, err := c.ensureAlgodClient()
