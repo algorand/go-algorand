@@ -20,7 +20,7 @@
 AWS_REGION="${1-us-east-1}"
 # Ubuntu Server 18.04 LTS
 AWS_AMI="${2-ami-04b9e92b5572fa0d1}"
-AWS_INSTANCE_TYPE="${3-t2.micro}"
+AWS_INSTANCE_TYPE="${3-t2.xlarge}"
 INSTANCE_NUMBER=$RANDOM
 KEY_NAME="BuilderInstanceKey_$INSTANCE_NUMBER"
 KEY_NAME_FILE="BuilderInstanceKey.pem"
