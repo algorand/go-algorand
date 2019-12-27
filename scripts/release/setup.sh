@@ -36,14 +36,14 @@ sudo apt-get upgrade -q -y
 
 mkdir -p "${HOME}"/{go,gpgbin}
 
+export GOPATH=${HOME}/go
+export PATH=${HOME}/gpgbin:${GOPATH}/bin:/usr/local/go/bin:${PATH}
+
 cat <<EOF>"${HOME}"/gpgbin/remote_gpg_socket
 export GOPATH=\${HOME}/go
 export PATH=\${HOME}/gpgbin:${GOPATH}/bin:/usr/local/go/bin:${PATH}
 gpgconf --list-dirs|grep agent-socket|awk -F: '{ print \$2 }'
 EOF
-
-export GOPATH=${HOME}/go
-export PATH=${HOME}/gpgbin:${GOPATH}/bin:/usr/local/go/bin:${PATH}
 
 chmod +x "${HOME}/gpgbin/remote_gpg_socket"
 

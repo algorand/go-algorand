@@ -62,6 +62,7 @@ manage_instance_info () {
     echo "$INSTANCE_ID" > instance-id
     echo "$KEY_NAME" > key-name
     popd > /dev/null
+    echo "$GREEN_FG[$0]$END_FG_COLOR: Created tmp/ dir containing instance information."
 }
 
 if ! SGID=$(aws ec2 create-security-group --group-name "$SECURITY_GROUP_NAME" --description "Security Group for ephermal build machine to allow port 22" --region "$AWS_REGION" | jq -r '.GroupId')

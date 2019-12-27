@@ -15,15 +15,15 @@ pipeline {
 
         stage("setup ec2 instance") {
             steps {
-                sh 'scp -o StrictHostKeyChecking=no -i BuilderInstanceKey.pem $PWD/scripts/build_release*.sh ubuntu@$(cat tmp/instance):~/'
-                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat tmp/instance) "bash build_release_setup.sh"'
+                sh 'scp -o StrictHostKeyChecking=no -i BuilderInstanceKey.pem scripts/release/*.sh ubuntu@$(cat $PWD/scripts/buildhost/tmp/instance):~/'
+                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat $PWD/scripts/buildhost/tmp/instance) "bash setup.sh"'
                 sh 'aws s3 cp s3://algorand-devops-misc/tools/gnupg2.2.9_centos7_amd64.tar.bz2 $HOME/docker_test_resources'
             }
         }
 
         stage("release ec2 instance") {
             steps {
-                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat tmp/instance) "bash build_release.sh"'
+                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat $PWD/scripts/buildhost/tmp/instance) "bash release.sh"'
             }
         }
 

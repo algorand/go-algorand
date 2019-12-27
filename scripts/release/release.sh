@@ -155,7 +155,7 @@ Passphrase: foogorand
 EOF
 cat <<EOF>"${GNUPGHOME}"/gpg-agent.conf
 extra-socket "${GNUPGHOME}"/S.gpg-agent.extra
-# inable unattended daemon mode
+# enable unattended daemon mode
 allow-preset-passphrase
 # cache password 30 days
 default-cache-ttl 2592000
