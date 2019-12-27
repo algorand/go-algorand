@@ -92,6 +92,7 @@ const disconnectReadError disconnectReason = "ReadError"
 const disconnectWriteError disconnectReason = "WriteError"
 const disconnectIdleConn disconnectReason = "IdleConnection"
 const disconnectSlowConn disconnectReason = "SlowConnection"
+const disconnectBadPerformance disconnectReason = "BadPerformance"
 
 type wsPeer struct {
 	// lastPacketTime contains the UnixNano at the last time a successfull communication was made with the peer.
@@ -148,6 +149,13 @@ type wsPeer struct {
 
 	// createTime is the time at which the connection was established with the peer.
 	createTime time.Time
+	// connMonitor used to measure the relative performance of the connection
+	// compared to the other outgoing connections. Incoming connections would have this
+	// field set to nil.
+	connMonitor *connectionPerformanceMonitor
+
+	// peerMessageDelay is calculated by the connection monitor; it's the relative avarage per-message delay.
+	peerMessageDelay int64
 }
 
 // HTTPPeer is what the opaque Peer might be.
@@ -304,6 +312,11 @@ func (wp *wsPeer) readLoop() {
 			// network maintenance message handled immediately instead of handing off to general handlers
 			wp.handleFilterMessage(msg)
 			continue
+		}
+		// for outgoing connections, we want to notify the connection monitor that we've received
+		// a message. The connection monitor would update it's statistics accordingly.
+		if wp.connMonitor != nil {
+			wp.connMonitor.Notify(&msg)
 		}
 		if len(msg.Data) > 0 && wp.incomingMsgFilter != nil && dedupSafeTag(msg.Tag) {
 			if wp.incomingMsgFilter.CheckIncomingMessage(msg.Tag, msg.Data, true, true) {

@@ -320,6 +320,8 @@ type WebsocketNetwork struct {
 
 	// lastPeerConnectionsSent is the last time the peer connections were sent ( or attempted to be sent ) to the telemetry server.
 	lastPeerConnectionsSent time.Time
+
+	connPerfMonitor *connectionPerformanceMonitor
 }
 
 type broadcastRequest struct {
@@ -571,6 +573,7 @@ func (wn *WebsocketNetwork) setup() {
 	if wn.config.EnableIncomingMessageFilter {
 		wn.incomingMsgFilter = makeMessageFilter(wn.config.IncomingMessageFilterBucketCount, wn.config.IncomingMessageFilterBucketSize)
 	}
+	wn.connPerfMonitor = makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag, protocol.TxnTag})
 }
 
 func (wn *WebsocketNetwork) rlimitIncomingConnections() error {
@@ -1131,6 +1134,18 @@ func (wn *WebsocketNetwork) NumPeers() int {
 	return len(wn.peers)
 }
 
+func (wn *WebsocketNetwork) outgoingPeers() (peers []Peer) {
+	wn.peersLock.RLock()
+	defer wn.peersLock.RUnlock()
+	peers = make([]Peer, 0, len(wn.peers))
+	for _, peer := range wn.peers {
+		if peer.outgoing {
+			peers = append(peers, peer)
+		}
+	}
+	return
+}
+
 func (wn *WebsocketNetwork) numOutgoingPeers() int {
 	wn.peersLock.RLock()
 	defer wn.peersLock.RUnlock()
@@ -1233,13 +1248,14 @@ func (wn *WebsocketNetwork) meshThread() {
 			}
 		}
 		desired := wn.config.GossipFanout
-		numOutgoing := wn.numOutgoingPeers() + wn.numOutgoingPending()
-		need := desired - numOutgoing
+		numOutgoingTotal := wn.numOutgoingPeers() + wn.numOutgoingPending()
+		need := desired - numOutgoingTotal
 		if need > 0 {
 			// get more than we need so that we can ignore duplicates
-			newAddrs := wn.phonebook.GetAddresses(desired + numOutgoing)
+			newAddrs := wn.phonebook.GetAddresses(desired + numOutgoingTotal)
 			for _, na := range newAddrs {
 				if na == wn.config.PublicAddress {
+					// filter out self-public address, so we won't try to connect to outselves.
 					continue
 				}
 				gossipAddr, ok := wn.tryConnectReserveAddr(na)
@@ -1251,6 +1267,35 @@ func (wn *WebsocketNetwork) meshThread() {
 						break
 					}
 				}
+			}
+		} else {
+			// we already connected ( or connecting.. ) to  GossipFanout peers.
+			// get the actual peers.
+			outgoingPeers := wn.outgoingPeers()
+			if len(outgoingPeers) >= wn.config.GossipFanout {
+				if wn.connPerfMonitor.ComparePeers(outgoingPeers) {
+					// same set of peers.
+					peerStat := wn.connPerfMonitor.GetPeersStatistics()
+					if peerStat != nil {
+						for _, stat := range peerStat.peerStatistics {
+							wsPeer := stat.peer.(*wsPeer)
+							wsPeer.peerMessageDelay = stat.peerDelay
+						}
+
+						wsPeer := peerStat.leastPerformingPeer.(*wsPeer)
+						wn.disconnect(wsPeer, disconnectBadPerformance)
+						wn.connPerfMonitor.Reset([]Peer{})
+
+					}
+				} else {
+					wn.log.Infof("Performance metrics reset peers")
+					// different set of peers. restart monitoring.
+					wn.connPerfMonitor.Reset(outgoingPeers)
+				}
+			} else {
+				// if not, reset the performance monitor.
+				wn.log.Infof("Performance metrics clear peers (%d)", len(outgoingPeers))
+				wn.connPerfMonitor.Reset([]Peer{})
 			}
 		}
 		if request.done != nil {
@@ -1286,6 +1331,7 @@ func (wn *WebsocketNetwork) sendPeerConnectionsTelemetryStatus() {
 		if peer.outgoing {
 			connDetail.Address = justHost(peer.conn.RemoteAddr().String())
 			connDetail.Endpoint = peer.GetAddress()
+			connDetail.MessageDelay = peer.peerMessageDelay
 			connectionDetails.OutgoingPeers = append(connectionDetails.OutgoingPeers, connDetail)
 		} else {
 			connDetail.Address = peer.OriginAddress()
@@ -1591,7 +1637,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		return
 	}
 
-	peer := &wsPeer{wsPeerCore: wsPeerCore{net: wn, rootURL: addr}, conn: conn, outgoing: true, incomingMsgFilter: wn.incomingMsgFilter, createTime: time.Now()}
+	peer := &wsPeer{wsPeerCore: wsPeerCore{net: wn, rootURL: addr}, conn: conn, outgoing: true, incomingMsgFilter: wn.incomingMsgFilter, createTime: time.Now(), connMonitor: wn.connPerfMonitor}
 	peer.TelemetryGUID, peer.InstanceName, _ = getCommonHeaders(response.Header)
 	peer.init(wn.config, wn.outgoingMessagesBufferSize)
 	wn.addPeer(peer)
@@ -1603,6 +1649,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 			HostName:     peer.TelemetryGUID,
 			Incoming:     false,
 			InstanceName: peer.InstanceName,
+			Endpoint:     peer.GetAddress(),
 		})
 
 	peers.Set(float64(wn.NumPeers()), nil)
@@ -1652,7 +1699,11 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 	// first logging, then take the lock and do the actual accounting.
 	// definitely don't change this to do the logging while holding the lock.
 	localAddr, _ := wn.Address()
-	wn.log.With("event", "Disconnected").With("remote", peer.rootURL).With("local", localAddr).Infof("Peer %s disconnected: %s", peer.rootURL, reason)
+	logEntry := wn.log.With("event", "Disconnected").With("remote", peer.rootURL).With("local", localAddr)
+	if peer.outgoing && peer.peerMessageDelay > 0 {
+		logEntry = logEntry.With("messageDelay", peer.peerMessageDelay)
+	}
+	logEntry.Infof("Peer %s disconnected: %s", peer.rootURL, reason)
 	peerAddr := peer.OriginAddress()
 	// we might be able to get addr out of conn, or it might be closed
 	if peerAddr == "" && peer.conn != nil {
@@ -1671,15 +1722,20 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 			peerAddr = justHost(peer.rootURL)
 		}
 	}
+	eventDetails := telemetryspec.PeerEventDetails{
+		Address:      peerAddr,
+		HostName:     peer.TelemetryGUID,
+		Incoming:     !peer.outgoing,
+		InstanceName: peer.InstanceName,
+	}
+	if peer.outgoing {
+		eventDetails.Endpoint = peer.GetAddress()
+		eventDetails.MessageDelay = peer.peerMessageDelay
+	}
 	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.DisconnectPeerEvent,
 		telemetryspec.DisconnectPeerEventDetails{
-			PeerEventDetails: telemetryspec.PeerEventDetails{
-				Address:      peerAddr,
-				HostName:     peer.TelemetryGUID,
-				Incoming:     !peer.outgoing,
-				InstanceName: peer.InstanceName,
-			},
-			Reason: string(reason),
+			PeerEventDetails: eventDetails,
+			Reason:           string(reason),
 		})
 
 	peers.Set(float64(wn.NumPeers()), nil)
