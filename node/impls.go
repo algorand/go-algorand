@@ -160,12 +160,19 @@ func (l agreementLedger) EnsureBlock(e bookkeeping.Block, c agreement.Certificat
 // EnsureValidatedBlock implements agreement.LedgerWriter.EnsureValidatedBlock.
 func (l agreementLedger) EnsureValidatedBlock(ve agreement.ValidatedBlock, c agreement.Certificate) {
 	l.Ledger.EnsureValidatedBlock(ve.(validatedBlock).vb, c)
+	// let the network know that we've made some progress.
+	l.n.OnNetworkAdvance()
 }
 
 // EnsureDigest implements agreement.LedgerWriter.EnsureDigest.
 // TODO: Get rid of EnsureDigest -- instead the ledger should expose what blocks it's waiting on, and a separate service should fetch them and call EnsureBlock
 // should "retry until cert matches" logic live here or in the abstract fetcher?
 func (l agreementLedger) EnsureDigest(cert agreement.Certificate, quit chan struct{}, verifier *agreement.AsyncVoteVerifier) {
+	// let the network know that we've made some progress.
+	// this might be controverasl since we haven't received the entire block, but we did get the
+	// certificate, which means that network connections are likely to be just fine.
+	l.n.OnNetworkAdvance()
+
 	round := cert.Round
 	blockHash := bookkeeping.BlockHash(cert.Proposal.BlockDigest) // semantic digest (i.e., hash of the block header), not byte-for-byte digest
 	logging.Base().Debug("consensus was reached on a block we don't have yet: ", blockHash)

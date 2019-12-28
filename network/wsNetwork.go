@@ -331,8 +331,8 @@ type WebsocketNetwork struct {
 	lastNetworkAdvanceMu deadlock.Mutex
 	lastNetworkAdvance   time.Time
 
-	// number of throtteled outgoing connections "slots" needed to be populated.
-	throtteledOutgoingConnections int32
+	// number of throttled outgoing connections "slots" needed to be populated.
+	throttledOutgoingConnections int32
 }
 
 type broadcastRequest struct {
@@ -657,10 +657,10 @@ func (wn *WebsocketNetwork) Start() {
 		// wrap the limited connection listener with a requests tracker listener
 		wn.listener = wn.requestsTracker.Listener(listener)
 		wn.log.Debugf("listening on %s", wn.listener.Addr().String())
-		wn.throtteledOutgoingConnections = int32(wn.config.GossipFanout / 2)
+		wn.throttledOutgoingConnections = int32(wn.config.GossipFanout / 2)
 	} else {
 		// on non-relay, all the outgoing connections are throttled.
-		wn.throtteledOutgoingConnections = int32(wn.config.GossipFanout)
+		wn.throttledOutgoingConnections = int32(wn.config.GossipFanout)
 	}
 	if wn.config.TLSCertFile != "" && wn.config.TLSKeyFile != "" {
 		wn.scheme = "https"
@@ -1358,12 +1358,18 @@ func (wn *WebsocketNetwork) checkNetworkAdvanceDisconnect() bool {
 	if len(outgoingPeers) == 0 {
 		return false
 	}
+	if wn.numOutgoingPending() > 0 {
+		// we're currently trying to extend the list of outgoing connections. no need to
+		// disconnect any existing connection to free up room for another connection.
+		return false
+	}
 	var peer *wsPeer
 	disconnectPeerIdx := crypto.RandUint63() % uint64(len(outgoingPeers))
 	peer = outgoingPeers[disconnectPeerIdx].(*wsPeer)
 
 	wn.disconnect(peer, disconnectCliqueResolve)
 	wn.connPerfMonitor.Reset([]Peer{})
+	wn.OnNetworkAdvance()
 	// signal to reconnect.
 	select {
 	case wn.meshUpdateRequests <- meshRequest{}:
@@ -1716,10 +1722,10 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	}
 
 	throttledConnection := false
-	if atomic.AddInt32(&wn.throtteledOutgoingConnections, int32(-1)) >= 0 {
+	if atomic.AddInt32(&wn.throttledOutgoingConnections, int32(-1)) >= 0 {
 		throttledConnection = true
 	} else {
-		atomic.AddInt32(&wn.throtteledOutgoingConnections, int32(1))
+		atomic.AddInt32(&wn.throttledOutgoingConnections, int32(1))
 	}
 
 	peer := &wsPeer{
@@ -1844,7 +1850,7 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 		heap.Remove(peersHeap{wn}, peer.peerIndex)
 		wn.prioTracker.removePeer(peer)
 		if peer.throttledOutgoingConnection {
-			atomic.AddInt32(&wn.throtteledOutgoingConnections, int32(1))
+			atomic.AddInt32(&wn.throttledOutgoingConnections, int32(1))
 		}
 	}
 	wn.countPeersSetGauges()

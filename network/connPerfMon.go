@@ -130,7 +130,7 @@ func (pm *connectionPerformanceMonitor) ComparePeers(peers []Peer) bool {
 			return false
 		}
 	}
-	return true
+	return len(peers) == len(pm.monitoredConnections)
 }
 
 func (pm *connectionPerformanceMonitor) Reset(peers []Peer) {

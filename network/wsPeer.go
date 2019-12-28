@@ -158,7 +158,7 @@ type wsPeer struct {
 	// peerMessageDelay is calculated by the connection monitor; it's the relative avarage per-message delay.
 	peerMessageDelay int64
 
-	// throttledOutgoingConnection determines if this outgoing connection will be throtteled bassed on it's
+	// throttledOutgoingConnection determines if this outgoing connection will be throttled bassed on it's
 	// performance or not. Throttled connections are more likly to be short-lived connections.
 	throttledOutgoingConnection bool
 }
