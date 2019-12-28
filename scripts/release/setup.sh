@@ -47,7 +47,7 @@ EOF
 
 chmod +x "${HOME}/gpgbin/remote_gpg_socket"
 
-sudo apt-get install -y autoconf awscli docker.io git gpg nfs-common python3 rpm sqlite3 python3-boto3 make g++ libtool rng-tools
+sudo apt-get install -y build-essential automake autoconf awscli docker.io git gpg nfs-common python3 rpm sqlite3 python3-boto3 g++ libtool rng-tools
 
 sudo rngd -r /dev/urandom
 

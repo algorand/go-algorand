@@ -19,10 +19,10 @@ set -ex
 # /home/ubuntu/go/src/github.com/algorand/go-algorand/
 #REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"/..
 REPO_ROOT=/home/ubuntu/go/src/github.com/algorand/go-algorand/
-if [ -f ${REPO_ROOT}/crypto/libsodium-fork/Makefile ]; then
-    (cd ${REPO_ROOT}/crypto/libsodium-fork && make distclean)
-fi
-rm -rf ${REPO_ROOT}/crypto/lib
+#if [ -f ${REPO_ROOT}/crypto/libsodium-fork/Makefile ]; then
+#    (cd ${REPO_ROOT}/crypto/libsodium-fork && make distclean)
+#fi
+#rm -rf ${REPO_ROOT}/crypto/lib
 
 cd ${REPO_ROOT}
 export RELEASE_GENESIS_PROCESS=true
@@ -180,7 +180,7 @@ cat <<EOF>"${HOME}"/dummyaptly.conf
   "dependencyFollowAllVariants": false,
   "dependencyFollowSource": false,
   "dependencyVerboseResolve": false,
-  "gpgDisableSign": true,
+  "gpgDisableSign": false,
   "gpgDisableVerify": false,
   "gpgProvider": "gpg",
   "downloadSourcePackages": false,
@@ -199,7 +199,7 @@ SNAPSHOT=algodummy-$(date +%Y%m%d_%H%M%S)
 aptly -config="${HOME}"/dummyaptly.conf snapshot create "${SNAPSHOT}" from repo algodummy
 aptly -config="${HOME}"/dummyaptly.conf publish snapshot -origin=Algorand -label=Algorand "${SNAPSHOT}"
 
-${REPO_ROOT}/scripts/release/helper/build_release_run_ubuntu_docker_build_test.sh
+/home/ubuntu/release/helper/build_release_run_ubuntu_docker_build_test.sh
 
 date "+build_release done building ubuntu %Y%m%d_%H%M%S"
 
