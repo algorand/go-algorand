@@ -204,7 +204,7 @@ ${REPO_ROOT}/scripts/release/helper/build_release_run_ubuntu_docker_build_test.s
 date "+build_release done building ubuntu %Y%m%d_%H%M%S"
 
 # Run RPM build in Centos7 Docker container
-sg docker "docker build -t algocentosbuild - < ${REPO_ROOT}/scripts/centos-build.Dockerfile"
+sg docker "docker build -t algocentosbuild - < ${REPO_ROOT}/scripts/release/helper/centos-build.Dockerfile"
 
 # cleanup our libsodium build
 if [ -f ${REPO_ROOT}/crypto/libsodium-fork/Makefile ]; then
