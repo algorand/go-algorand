@@ -330,6 +330,9 @@ type WebsocketNetwork struct {
 
 	lastNetworkAdvanceMu deadlock.Mutex
 	lastNetworkAdvance   time.Time
+
+	// number of throtteled outgoing connections "slots" needed to be populated.
+	throtteledOutgoingConnections int32
 }
 
 type broadcastRequest struct {
@@ -525,7 +528,6 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 }
 
 func (wn *WebsocketNetwork) setup() {
-
 	wn.upgrader.ReadBufferSize = 4096
 	wn.upgrader.WriteBufferSize = 4096
 	wn.upgrader.EnableCompression = false
@@ -655,6 +657,10 @@ func (wn *WebsocketNetwork) Start() {
 		// wrap the limited connection listener with a requests tracker listener
 		wn.listener = wn.requestsTracker.Listener(listener)
 		wn.log.Debugf("listening on %s", wn.listener.Addr().String())
+		wn.throtteledOutgoingConnections = int32(wn.config.GossipFanout / 2)
+	} else {
+		// on non-relay, all the outgoing connections are throttled.
+		wn.throtteledOutgoingConnections = int32(wn.config.GossipFanout)
 	}
 	if wn.config.TLSCertFile != "" && wn.config.TLSKeyFile != "" {
 		wn.scheme = "https"
@@ -1204,6 +1210,7 @@ func (wn *WebsocketNetwork) connectedForIP(host string) (totalConnections int) {
 }
 
 const meshThreadInterval = time.Minute
+const cliqueResolveInterval = 5 * time.Minute
 
 type meshRequest struct {
 	disconnect bool
@@ -1237,92 +1244,10 @@ func (wn *WebsocketNetwork) meshThread() {
 			wn.DisconnectPeers()
 		}
 
-		// TODO: only do DNS fetch every N seconds? Honor DNS TTL? Trust DNS library we're using to handle caching and TTL?
-		dnsBootstrapArray := wn.config.DNSBootstrapArray(wn.NetworkID)
-		for _, dnsBootstrap := range dnsBootstrapArray {
-			dnsAddrs := wn.getDNSAddrs(dnsBootstrap)
-			if len(dnsAddrs) > 0 {
-				wn.log.Debugf("got %d dns addrs, %#v", len(dnsAddrs), dnsAddrs[:imin(5, len(dnsAddrs))])
-				dnsPhonebook := wn.phonebook.GetPhonebook(dnsBootstrap)
-				if dnsPhonebook == nil {
-					// create one, if we don't have one already.
-					dnsPhonebook = MakeThreadsafePhonebook()
-					wn.phonebook.AddOrUpdatePhonebook(dnsBootstrap, dnsPhonebook)
-				}
-				if tsPhonebook, ok := dnsPhonebook.(*ThreadsafePhonebook); ok {
-					tsPhonebook.ReplacePeerList(dnsAddrs)
-				}
-			} else {
-				wn.log.Infof("got no DNS addrs for network %s", wn.NetworkID)
-			}
+		if !wn.checkNewConnectionsNeeded() {
+			wn.checkExistingConnectionsNeedDisconnecting()
 		}
-		desired := wn.config.GossipFanout
-		numOutgoingTotal := wn.numOutgoingPeers() + wn.numOutgoingPending()
-		need := desired - numOutgoingTotal
-		if need > 0 {
-			// get more than we need so that we can ignore duplicates
-			newAddrs := wn.phonebook.GetAddresses(desired + numOutgoingTotal)
-			for _, na := range newAddrs {
-				if na == wn.config.PublicAddress {
-					// filter out self-public address, so we won't try to connect to outselves.
-					continue
-				}
-				gossipAddr, ok := wn.tryConnectReserveAddr(na)
-				if ok {
-					wn.wg.Add(1)
-					go wn.tryConnect(na, gossipAddr)
-					need--
-					if need == 0 {
-						break
-					}
-				}
-			}
-		} else {
-			// we already connected ( or connecting.. ) to  GossipFanout peers.
-			// get the actual peers.
-			outgoingPeers := wn.outgoingPeers()
-			if len(outgoingPeers) >= wn.config.GossipFanout {
-				if wn.connPerfMonitor.ComparePeers(outgoingPeers) {
-					// same set of peers.
-					peerStat := wn.connPerfMonitor.GetPeersStatistics()
-					if peerStat != nil {
-						for _, stat := range peerStat.peerStatistics {
-							wsPeer := stat.peer.(*wsPeer)
-							wsPeer.peerMessageDelay = stat.peerDelay
-							wn.log.Infof("network performance monitor - peer '%s' delay %d first message portion %d%%", wsPeer.GetAddress(), stat.peerDelay, int(stat.peerFirstMessage*100))
-						}
-						if peerStat.leastPerformingPeer != nil {
-							wsPeer := peerStat.leastPerformingPeer.(*wsPeer)
-							wn.disconnect(wsPeer, disconnectBadPerformance)
-							wn.connPerfMonitor.Reset([]Peer{})
-						} else {
-							// did we made any progress since the previous attempt ?
-							// if the network is "stuck" due to cliques, try to randomally disconnect a peer.
-							lastNetworkAdvance := wn.getLastNetworkAdvance()
-							if time.Now().Sub(lastNetworkAdvance) > meshThreadInterval && len(peerStat.peerStatistics) > 0 {
-								var peer *wsPeer
-								if len(peerStat.peerStatistics) > 0 {
-									disconnectPeerIdx := crypto.RandUint63() % uint64(len(peerStat.peerStatistics))
-									peer = peerStat.peerStatistics[disconnectPeerIdx].peer.(*wsPeer)
-								} else {
-									peer = outgoingPeers[0].(*wsPeer)
-								}
-								wn.disconnect(peer, disconnectBadPerformance)
-								wn.connPerfMonitor.Reset([]Peer{})
-							} else {
-								wn.connPerfMonitor.Reset(outgoingPeers)
-							}
-						}
-					}
-				} else {
-					// different set of peers. restart monitoring.
-					wn.connPerfMonitor.Reset(outgoingPeers)
-				}
-			} else {
-				// if not, reset the performance monitor.
-				wn.connPerfMonitor.Reset([]Peer{})
-			}
-		}
+
 		if request.done != nil {
 			close(request.done)
 		}
@@ -1332,6 +1257,119 @@ func (wn *WebsocketNetwork) meshThread() {
 		// to construct a cross-node map of all the nodes interconnections.
 		wn.sendPeerConnectionsTelemetryStatus()
 	}
+}
+
+func (wn *WebsocketNetwork) checkNewConnectionsNeeded() bool {
+	// TODO: only do DNS fetch every N seconds? Honor DNS TTL? Trust DNS library we're using to handle caching and TTL?
+	dnsBootstrapArray := wn.config.DNSBootstrapArray(wn.NetworkID)
+	for _, dnsBootstrap := range dnsBootstrapArray {
+		dnsAddrs := wn.getDNSAddrs(dnsBootstrap)
+		if len(dnsAddrs) > 0 {
+			wn.log.Debugf("got %d dns addrs, %#v", len(dnsAddrs), dnsAddrs[:imin(5, len(dnsAddrs))])
+			dnsPhonebook := wn.phonebook.GetPhonebook(dnsBootstrap)
+			if dnsPhonebook == nil {
+				// create one, if we don't have one already.
+				dnsPhonebook = MakeThreadsafePhonebook()
+				wn.phonebook.AddOrUpdatePhonebook(dnsBootstrap, dnsPhonebook)
+			}
+			if tsPhonebook, ok := dnsPhonebook.(*ThreadsafePhonebook); ok {
+				tsPhonebook.ReplacePeerList(dnsAddrs)
+			}
+		} else {
+			wn.log.Infof("got no DNS addrs for network %s", wn.NetworkID)
+		}
+	}
+	desired := wn.config.GossipFanout
+	numOutgoingTotal := wn.numOutgoingPeers() + wn.numOutgoingPending()
+	need := desired - numOutgoingTotal
+	if need <= 0 {
+		return false
+	}
+	// get more than we need so that we can ignore duplicates
+	newAddrs := wn.phonebook.GetAddresses(desired + numOutgoingTotal)
+	for _, na := range newAddrs {
+		if na == wn.config.PublicAddress {
+			// filter out self-public address, so we won't try to connect to outselves.
+			continue
+		}
+		gossipAddr, ok := wn.tryConnectReserveAddr(na)
+		if ok {
+			wn.wg.Add(1)
+			go wn.tryConnect(na, gossipAddr)
+			need--
+			if need == 0 {
+				break
+			}
+		}
+	}
+	return true
+}
+
+func (wn *WebsocketNetwork) checkExistingConnectionsNeedDisconnecting() bool {
+	// we already connected ( or connecting.. ) to  GossipFanout peers.
+	// get the actual peers.
+	outgoingPeers := wn.outgoingPeers()
+	if len(outgoingPeers) < wn.config.GossipFanout {
+		// reset the performance monitor.
+		wn.connPerfMonitor.Reset([]Peer{})
+		return wn.checkNetworkAdvanceDisconnect()
+	}
+
+	if !wn.connPerfMonitor.ComparePeers(outgoingPeers) {
+		// different set of peers. restart monitoring.
+		wn.connPerfMonitor.Reset(outgoingPeers)
+	}
+
+	// same set of peers.
+	peerStat := wn.connPerfMonitor.GetPeersStatistics()
+	if peerStat == nil {
+		// performance metrics are not yet ready.
+		return wn.checkNetworkAdvanceDisconnect()
+	}
+
+	// update peers with the performance metrics we've gathered.
+	var leastPerformingPeer *wsPeer = nil
+	for _, stat := range peerStat.peerStatistics {
+		wsPeer := stat.peer.(*wsPeer)
+		wsPeer.peerMessageDelay = stat.peerDelay
+		wn.log.Infof("network performance monitor - peer '%s' delay %d first message portion %d%%", wsPeer.GetAddress(), stat.peerDelay, int(stat.peerFirstMessage*100))
+		if wsPeer.throttledOutgoingConnection && leastPerformingPeer == nil {
+			leastPerformingPeer = wsPeer
+		}
+	}
+	if leastPerformingPeer == nil {
+		return wn.checkNetworkAdvanceDisconnect()
+	}
+	wn.disconnect(leastPerformingPeer, disconnectLeastPerformingPeer)
+	wn.connPerfMonitor.Reset([]Peer{})
+	// signal to reconnect.
+	select {
+	case wn.meshUpdateRequests <- meshRequest{}:
+	default:
+	}
+	return true
+}
+func (wn *WebsocketNetwork) checkNetworkAdvanceDisconnect() bool {
+	lastNetworkAdvance := wn.getLastNetworkAdvance()
+	if time.Now().Sub(lastNetworkAdvance) < cliqueResolveInterval {
+		return false
+	}
+	outgoingPeers := wn.outgoingPeers()
+	if len(outgoingPeers) == 0 {
+		return false
+	}
+	var peer *wsPeer
+	disconnectPeerIdx := crypto.RandUint63() % uint64(len(outgoingPeers))
+	peer = outgoingPeers[disconnectPeerIdx].(*wsPeer)
+
+	wn.disconnect(peer, disconnectCliqueResolve)
+	wn.connPerfMonitor.Reset([]Peer{})
+	// signal to reconnect.
+	select {
+	case wn.meshUpdateRequests <- meshRequest{}:
+	default:
+	}
+	return true
 }
 
 func (wn *WebsocketNetwork) getLastNetworkAdvance() time.Time {
@@ -1677,7 +1715,25 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		return
 	}
 
-	peer := &wsPeer{wsPeerCore: wsPeerCore{net: wn, rootURL: addr}, conn: conn, outgoing: true, incomingMsgFilter: wn.incomingMsgFilter, createTime: time.Now(), connMonitor: wn.connPerfMonitor}
+	throttledConnection := false
+	if atomic.AddInt32(&wn.throtteledOutgoingConnections, int32(-1)) >= 0 {
+		throttledConnection = true
+	} else {
+		atomic.AddInt32(&wn.throtteledOutgoingConnections, int32(1))
+	}
+
+	peer := &wsPeer{
+		wsPeerCore: wsPeerCore{
+			net:     wn,
+			rootURL: addr,
+		},
+		conn:                        conn,
+		outgoing:                    true,
+		incomingMsgFilter:           wn.incomingMsgFilter,
+		createTime:                  time.Now(),
+		connMonitor:                 wn.connPerfMonitor,
+		throttledOutgoingConnection: throttledConnection,
+	}
 	peer.TelemetryGUID, peer.InstanceName, _ = getCommonHeaders(response.Header)
 	peer.init(wn.config, wn.outgoingMessagesBufferSize)
 	wn.addPeer(peer)
@@ -1787,6 +1843,9 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 	if peer.peerIndex < len(wn.peers) && wn.peers[peer.peerIndex] == peer {
 		heap.Remove(peersHeap{wn}, peer.peerIndex)
 		wn.prioTracker.removePeer(peer)
+		if peer.throttledOutgoingConnection {
+			atomic.AddInt32(&wn.throtteledOutgoingConnections, int32(1))
+		}
 	}
 	wn.countPeersSetGauges()
 }

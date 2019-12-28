@@ -92,7 +92,8 @@ const disconnectReadError disconnectReason = "ReadError"
 const disconnectWriteError disconnectReason = "WriteError"
 const disconnectIdleConn disconnectReason = "IdleConnection"
 const disconnectSlowConn disconnectReason = "SlowConnection"
-const disconnectBadPerformance disconnectReason = "BadPerformance"
+const disconnectLeastPerformingPeer disconnectReason = "LeastPerformingPeer"
+const disconnectCliqueResolve disconnectReason = "CliqueResolving"
 
 type wsPeer struct {
 	// lastPacketTime contains the UnixNano at the last time a successfull communication was made with the peer.
@@ -156,6 +157,10 @@ type wsPeer struct {
 
 	// peerMessageDelay is calculated by the connection monitor; it's the relative avarage per-message delay.
 	peerMessageDelay int64
+
+	// throttledOutgoingConnection determines if this outgoing connection will be throtteled bassed on it's
+	// performance or not. Throttled connections are more likly to be short-lived connections.
+	throttledOutgoingConnection bool
 }
 
 // HTTPPeer is what the opaque Peer might be.
