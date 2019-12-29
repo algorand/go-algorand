@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# shellcheck disable=1091,2012,2166
+# shellcheck disable=1091,2166
 #
 # This script needs to be run in a terminal with a human watching to
 # be prompted for GPG key password at a couple points.
@@ -150,11 +150,13 @@ cd ${REPO_ROOT}/scripts
 #gpgconf --kill gpg-agent
 #gpgconf --launch gpg-agent
 
-#gpgp=$(ls /usr/lib/gnupg{2,,1}/gpg-preset-passphrase | head -1)
+#gpgp=$(find /usr/lib/gnupg{2,,1} -type f -name gpg-preset-passphrase 2> /dev/null)
 #KEYGRIP=$(gpg -K --with-keygrip --textmode dev@algorand.com | grep Keygrip | head -1 | awk '{ print $3 }')
 #echo foogorand | ${gpgp} --verbose --preset "${KEYGRIP}"
 #KEYGRIP=$(gpg -K --with-keygrip --textmode rpm@algorand.com | grep Keygrip | head -1 | awk '{ print $3 }')
 #echo foogorand | ${gpgp} --verbose --preset "${KEYGRIP}"
+
+/home/ubuntu/release/socket.sh
 
 # copy previous installers into ~/docker_test_resources
 mkdir -p "${HOME}/docker_test_resources"

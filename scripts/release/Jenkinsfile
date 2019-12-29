@@ -10,6 +10,7 @@ pipeline {
         stage("create ec2 instance") {
             steps {
                 sh script: "scripts/buildhost/start_ec2_instance.sh"
+                input "Deploy to production?"
             }
         }
 
