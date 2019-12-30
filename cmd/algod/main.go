@@ -161,6 +161,10 @@ func main() {
 		if err != nil {
 			fmt.Fprintln(os.Stdout, "error loading telemetry config", err)
 		}
+		if os.IsPermission(err) {
+			fmt.Fprintf(os.Stderr, "Permission error on accessing telemetry config: %v", err)
+			os.Exit(1)
+		}
 
 		// Apply telemetry override.
 		telemetryConfig.Enable = logging.TelemetryOverride(*telemetryOverride)
