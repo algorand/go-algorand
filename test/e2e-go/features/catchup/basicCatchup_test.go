@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"testing"
 	"runtime"
+	"os"
 	
 	"github.com/stretchr/testify/require"
 
@@ -119,5 +120,52 @@ func TestCatchupOverGossip(t *testing.T) {
 
 	// Now, catch up
 	err = fixture.LibGoalFixture.ClientWaitForRoundWithTimeout(lg, waitForRound)
+	a.NoError(err)
+}
+
+
+func TestStoppedCatchupOnUnapproved(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	t.Parallel()
+	a := require.New(t)
+
+	os.Setenv("ALGORAND_TEST_UNUPGRADEDPROTOCOL_UPGRADE", "1")
+	
+	// Overview of this test:
+	// Start a two-node network (primary has 0%, secondary has 100%)
+	// Let it run for a few blocks.
+	// Spin up a third node and see if it catches up
+
+	var fixture fixtures.RestClientFixture
+	// Give the second node (which starts up last) all the stake so that its proposal always has better credentials,
+	// and so that its proposal isn't dropped. Otherwise the test burns 17s to recover. We don't care about stake
+	// distribution for catchup so this is fine.
+	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes100SecondTestUnupgradedProtocol.json"))
+	defer fixture.Shutdown()
+
+	// Get 2nd node so we wait until we know they're at target block
+	nc, err := fixture.GetNodeController("Node")
+	a.NoError(err)
+
+	// Let the network make some progress
+	a.NoError(err)
+	waitForRound := uint64(3)
+	err = fixture.ClientWaitForRoundWithTimeout(fixture.GetAlgodClientForController(nc), waitForRound)
+	a.NoError(err)
+
+	os.Setenv("ALGORAND_TEST_UNUPGRADEDPROTOCOL_UPGRADE", "0")
+	
+	// Now spin up third node
+	cloneDataDir := filepath.Join(fixture.PrimaryDataDir(), "../clone")
+	cloneLedger := false
+	err = fixture.NC.Clone(cloneDataDir, cloneLedger)
+	a.NoError(err)
+	cloneClient, err := fixture.StartNode(cloneDataDir)
+	a.NoError(err)
+
+	// Now, catch up
+	err = fixture.LibGoalFixture.ClientWaitForRoundWithTimeout(cloneClient, waitForRound)
 	a.NoError(err)
 }
