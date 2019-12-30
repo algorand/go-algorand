@@ -119,6 +119,15 @@ func setFieldValue(field reflect.Value, value string) error {
 		// NOTE: We do not enforce bitsize
 		field.SetFloat(val)
 
+	case reflect.Bool:
+		switch value {
+		case "t", "true", "True", "TRUE", "1":
+			field.SetBool(true)
+		case "f", "false", "False", "FALSE", "0":
+			field.SetBool(false)
+		default:
+			return fmt.Errorf("could not parse value %#v as bool", value)
+		}
 	default:
 		return fmt.Errorf("unsupported parameter type '%s' - unable to set value", k)
 	}
