@@ -28,43 +28,29 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 )
 
-type exeTail struct {
-}
-/*
-func (t *txTail) loadFromDisk(l ledgerForTracker) error {
-	return nil
-}
+// This is part of a stub for the execution protocol, which I'll likely to need
+// to move to a separate process along the lines of @algobolson's algobot.
+// Saving here uncompleted until there is a place to move it to.
 
-func (t *txTail) close() {
-}
-
-func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta StateDelta) {
-	rnd := blk.Round()
-
-	if rnd <= au.latest() {
-		// Duplicate, ignore.
-		return
-	}
-	if t.TxType != protocol.ExecTx {
-		// Not executable, ignore.
-		return
-	}
-
-	for txn := range blk.Payset {
-		execTxn(txn)
-	}
-}
-*/
-// This is a stub for the execution protocol and code storage system.
-//
-// Currently the file name of the wasm code to exec is passed in the Code field rather than the code itself or a
-// hash of code that is cached.  The code is simply spawned and the Input passed to stdin rather than being run by a
-// consensus protocol
-//
+// The transaction is signed with Wasm code.  The code is simply spawned with the
+// transaction's note passed to stdin rather than being run by a consensus protocol.
 // The output is captured and placed back on the blockchain as another transaction
-//
-func execTxn(txn SignedTxnInBlock) {
-	cmd := exec.Command("wavm", "run", "--abi=wasi", txn.Code)
+execTxn(inBLock SignedTxnInBlock) {
+
+	// unpack transaction
+	txn := inBLock.SignedTransaction
+	code := signed_txn.LSig.Logic
+	type := GetExecTxType(signed_txn.Transaction.Note);
+	input := signed_txn.Transaction.Note[4:]
+
+	// temp file must be removed by spawned code
+	temp, err := ioutil.TempFile("dir", "prefix")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// spawn WAVM to execute the wasm
+	cmd := exec.Command("wavm", "run", "--abi=wasi", temp)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		log.Fatal(err)
@@ -72,12 +58,18 @@ func execTxn(txn SignedTxnInBlock) {
 
 	go func() {
 		defer stdin.Close()
-		io.WriteString(stdin, Input)
+		io.WriteString(stdin, input)
 	}()
 
-	out, err := cmd.Output()
-	if err != nil {
-		log.Fatal(err)
+	output, err := cmd.Output()
+
+	// repack transaction
+	if (err == nil) {
+		SetExecTxType(signed_txn.Transaction.Note, ExecFailure);
+	} else {
+		SetExecTxType(signed_txn.Transaction.Note, ExecCommit);
 	}
-	fmt.Printf("%s\n", out)
+	txn.Transaction.Note[4:] = output
+
+	// TODO send new transaction to network however it's done where this lands up
 }
