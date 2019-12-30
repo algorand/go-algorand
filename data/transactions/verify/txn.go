@@ -184,10 +184,8 @@ func stxnVerifyCore(s *transactions.SignedTxn, ctx *Context) error {
 	}
 	if hasLogicSig {
 
-		// The code might be for off-chain execution, in which case this transaction is considered valid.
-		// After this transaction is posted it will be observed on the blockchain and executed speculatively off-chain.
-		// TODO Use transaction type here rather than Note
-		if IsExecLogic(s.Txn.Note) {
+		// If the logic is code for off-chain execution the transaction is considered valid and posted as is.
+		if IsExecLogic(s) {
 			return nil;
 		}
 
