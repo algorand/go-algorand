@@ -35,15 +35,19 @@ const (
 // TODO use ExecTx and ExecTxnFields instead of header
 // TODO decide how to structure input and output -- probably JSON
 
-GetExecTxType(note []byte) string {
-	if len(note) < 5 {
+GetExecTxType(txn SignedTransaction) string {
+	if len(txn.Transaction.Note) < 5 {
 		return nil
 	}
-	return note[0:5]
+	return txn.Transaction.Note[0:5]
 }
 
-SetExecTxType(note *[4]byte, string type) {
-	*note = type
+SetExecTxType(txn SignedTransaction, string type) {
+	txn.Transaction.Note[0:5] = type
+}
+
+GetExecData(txn SignedTransaction) {
+	return txn.Transaction.Note[5:]
 }
 
 // ExecReqTxnFields captures the fields used by exec transactions.

@@ -40,8 +40,8 @@ execTxn(inBLock SignedTxnInBlock) {
 	// unpack transaction
 	txn := inBLock.SignedTransaction
 	code := signed_txn.LSig.Logic
-	type := GetExecTxType(signed_txn.Transaction.Note);
-	input := signed_txn.Transaction.Note[4:]
+	type := GetExecTxType(txn);
+	input := GetExecData(txn);
 
 	// temp file must be removed by spawned code
 	temp, err := ioutil.TempFile("dir", "prefix")
