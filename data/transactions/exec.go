@@ -23,12 +23,12 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 )
 
-constant {
+const (
 	ExecInit    = "INIT:"
 	ExecRequest = "RQST:"
 	ExecCommit  = "CMMT:"
 	ExecFailure = "FAIL:"
-}
+)
 
 // Currently using a PaymentTx whose Note field has a header indicating the type of
 // transaction, followed by plain text for use by the executable as input and output.
