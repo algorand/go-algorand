@@ -39,7 +39,7 @@ execTxn(inBLock SignedTxnInBlock) {
 
 	// unpack transaction
 	txn := inBLock.SignedTransaction
-	code := signed_txn.LSig.Logic
+	code := txn.LSig.Logic
 	type := GetExecTxType(txn);
 	input := GetExecData(txn);
 
