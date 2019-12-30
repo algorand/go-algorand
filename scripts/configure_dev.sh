@@ -26,7 +26,7 @@ elif [ "${OS}" = "darwin" ]; then
     brew update
     brew tap homebrew/cask
     install_or_upgrade pkg-config
-    install_or_upgrade boost@1.71
+    install_or_upgrade boost
     install_or_upgrade jq
     install_or_upgrade libtool
     install_or_upgrade autoconf
