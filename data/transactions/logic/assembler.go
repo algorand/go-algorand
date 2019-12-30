@@ -584,9 +584,7 @@ var TxnTypeNames = []string{
 	string(protocol.AssetConfigTx),
 	string(protocol.AssetTransferTx),
 	string(protocol.AssetFreezeTx),
-	string(protocol.ExecutionInitTx),
-	string(protocol.ExecutionRequestTx),
-	string(protocol.ExecutionCommitTx),
+	string(protocol.ExecTx),
 }
 
 // map TxnTypeName to its enum index, for `txn TypeEnum`
