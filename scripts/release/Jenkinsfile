@@ -10,26 +10,34 @@ pipeline {
         stage("create ec2 instance") {
             steps {
                 sh script: "scripts/buildhost/start_ec2_instance.sh"
-                input "Deploy to production?"
             }
         }
 
         stage("setup ec2 instance") {
             steps {
-                sh 'scp -o StrictHostKeyChecking=no -i BuilderInstanceKey.pem -r scripts/release/ ubuntu@$(cat $PWD/scripts/buildhost/tmp/instance):~/'
-                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat $PWD/scripts/buildhost/tmp/instance) "bash release/setup.sh"'
-                sh 'aws s3 cp s3://algorand-devops-misc/tools/gnupg2.2.9_centos7_amd64.tar.bz2 $HOME/docker_test_resources'
+                sh 'scp -o StrictHostKeyChecking=no -i BuilderInstanceKey.pem -r scripts/release/ ubuntu@$(cat scripts/buildhost/tmp/instance):~/'
+                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/buildhost/tmp/instance) bash release/setup.sh'
             }
         }
 
-        stage("release ec2 instance") {
+        stage("build and package") {
             steps {
-                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat $PWD/scripts/buildhost/tmp/instance) "bash release/release.sh"'
+                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/buildhost/tmp/instance) bash release/build.sh'
+                input "Login and sign!"
+                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/buildhost/tmp/instance) bash release/package.sh'
+            }
+        }
+
+        stage("sign") {
+            steps {
+                sh 'aws s3 cp s3://algorand-devops-misc/tools/gnupg2.2.9_centos7_amd64.tar.bz2 $HOME/docker_test_resources'
+                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/buildhost/tmp/instance) bash release/sign.sh'
             }
         }
 
         stage("delete ec2 instance") {
             steps {
+                input "Halt!"
                 sh script: "scripts/buildhost/shutdown_ec2_instance.sh"
             }
         }

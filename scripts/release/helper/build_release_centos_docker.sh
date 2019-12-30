@@ -14,13 +14,12 @@ set -e
 set -x
 
 export HOME=/root
-mkdir -p ${HOME}/go
-mkdir -p ${HOME}/go/bin
 export GOPATH=${HOME}/go
 export PATH=${GOPATH}/bin:/usr/local/go/bin:${PATH}
 
 # Anchor our repo root reference location
-REPO_DIR="$( cd "$(dirname "$0")" ; pwd -P )"/..
+#REPO_DIR="$( cd "$(dirname "$0")" ; pwd -P )"/..
+REPO_DIR=/root/go/src/github.com/algorand/go-algorand
 
 ${REPO_DIR}/scripts/configure_dev-deps.sh
 
@@ -46,8 +45,6 @@ cp -p ${RPMTMP}/*/*.rpm /root/subhome/node_pkg
 export PATH="${HOME}/gnupg2/bin:${PATH}"
 export LD_LIBRARY_PATH=${HOME}/gnupg2/lib
 
-umask 0077
-mkdir -p ~/.gnupg
 umask 0022
 
 touch "${HOME}/.gnupg/gpg.conf"

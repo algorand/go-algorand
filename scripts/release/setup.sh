@@ -30,11 +30,10 @@ export DEBIAN_FRONTEND=noninteractive
 sudo apt-get update -q
 sudo apt-get upgrade -q -y
 
-#if [ -f /etc/lsb-release ]; then
-#    . /etc/lsb-release
-#fi
-
-mkdir -p "${HOME}"/{go,gpgbin}
+# Some of these dirs aren't used until later scripts.
+#umask 0077
+#mkdir -p ~/.gnupg
+mkdir -p "${HOME}"/{.gnupg,go,gpgbin,docker_test_resources,dummyaptly,dummyrepo,prodrepo}
 
 export GOPATH=${HOME}/go
 export PATH=${HOME}/gpgbin:${GOPATH}/bin:/usr/local/go/bin:${PATH}
@@ -60,7 +59,6 @@ git config --global user.email dev@algorand.com
 
 # configure GnuPG to rely on forwarded remote gpg-agent
 umask 0077
-mkdir -p "${HOME}/.gnupg"
 touch "${HOME}/.gnupg/gpg.conf"
 if grep -q no-autostart "${HOME}/.gnupg/gpg.conf"; then
     echo ""

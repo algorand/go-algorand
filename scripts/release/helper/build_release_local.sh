@@ -31,7 +31,6 @@ ssh -A ubuntu@${TARGET} bash setup.sh
 
 # setup GPG key forwarding https://wiki.gnupg.org/AgentForwarding
 umask 0077
-mkdir -p ${HOME}/.gnupg
 touch ${HOME}/.gnupg/gpg-agent.conf
 if grep -q extra-socket ${HOME}/.gnupg/gpg-agent.conf; then
     echo "already have extra-socket"
