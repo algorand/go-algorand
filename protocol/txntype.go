@@ -38,8 +38,8 @@ const (
 	// AssetFreezeTx changes the freeze status of an asset
 	AssetFreezeTx TxType = "afrz"
 
-	// ExecutionRequestTx requests off-chain code execution
-	ExecutionRequestTx TxType = "exe"
+	// ExecTx manages off-chain code execution
+	ExecTx TxType = "exe"
 
 	// UnknownTx signals an error
 	UnknownTx TxType = "unknown"

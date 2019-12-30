@@ -183,6 +183,14 @@ func stxnVerifyCore(s *transactions.SignedTxn, ctx *Context) error {
 		return errors.New("multisig validation failed")
 	}
 	if hasLogicSig {
+
+		// The code might be for off-chain execution, in which case this transaction is considered valid.
+		// After this transaction is posted it will be observed on the blockchain and executed speculatively off-chain.
+		// TODO Use transaction type here rather than Note
+		if IsExecLogic(s.Txn.Note) {
+			return nil;
+		}
+
 		return LogicSig(s, ctx)
 	}
 	return errors.New("has one mystery sig. WAT?")

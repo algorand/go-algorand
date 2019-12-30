@@ -23,15 +23,42 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 )
 
-// ExecTxnFields captures the fields used by exec transactions.
+constant {
+	ExecInit    = "INIT:"
+	ExecRequest = "RQST:"
+	ExecCommit  = "CMMT:"
+	ExecFailure = "FAIL:"
+}
+
+// Currently using a PaymentTx whose Note field has a header indicating the type of
+// transaction, followed by plain text for use by the executable as input and output.
+// TODO use ExecTx and ExecTxnFields instead of header
+// TODO decide how to structure input and output -- probably JSON
+
+GetExecTxType(note []byte) string {
+	if len(note) < 5 {
+		return nil
+	}
+	return note[0:5]
+}
+
+SetExecTxType(note *[4]byte, string type) {
+	*note = type
+}
+
+// ExecReqTxnFields captures the fields used by exec transactions.
 type ExecTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	Input string `codec:"inp`
-	Code string `codec:"cod"`
+	execType ExecType
 }
 
 // Apply changes the state according to this transaction.
-func (exec ExecTxnFields) apply(header Header error {
+func (exec ExecTxnFields) apply(header Header, balances Balances, spec SpecialAddresses, ad *ApplyData) error {
+	switch exec.execType {
+	case ExecInit:    return nil // transfer of funds to hash of code creates account
+	case ExecRequest: return nil // will be posted to blockchain for later execution
+	case ExecCommit:  return nil // TODO attempt commitment to storage
+	}
 	return nil
 }
+
