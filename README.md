@@ -15,7 +15,7 @@ about using and installing the algorand platform.
 ## Building from source ##
 
 Development is done using the [Go Programming Language](https://golang.org/)
-version 1.12.x, and this document assumes that you have a functioning
+version 1.13.x, and this document assumes that you have a functioning
 environment setup. If you need assistance setting up an environment please visit
 the [official Go documentation website](https://golang.org/doc/).
 
