@@ -1244,8 +1244,37 @@ func (wn *WebsocketNetwork) meshThread() {
 			wn.DisconnectPeers()
 		}
 
-		if !wn.checkNewConnectionsNeeded() {
-			wn.checkExistingConnectionsNeedDisconnecting()
+		// TODO: only do DNS fetch every N seconds? Honor DNS TTL? Trust DNS library we're using to handle caching and TTL?
+		dnsBootstrapArray := wn.config.DNSBootstrapArray(wn.NetworkID)
+		for _, dnsBootstrap := range dnsBootstrapArray {
+			dnsAddrs := wn.getDNSAddrs(dnsBootstrap)
+			if len(dnsAddrs) > 0 {
+				wn.log.Debugf("got %d dns addrs, %#v", len(dnsAddrs), dnsAddrs[:imin(5, len(dnsAddrs))])
+				dnsPhonebook := wn.phonebook.GetPhonebook(dnsBootstrap)
+				if dnsPhonebook == nil {
+					// create one, if we don't have one already.
+					dnsPhonebook = MakeThreadsafePhonebook()
+					wn.phonebook.AddOrUpdatePhonebook(dnsBootstrap, dnsPhonebook)
+				}
+				if tsPhonebook, ok := dnsPhonebook.(*ThreadsafePhonebook); ok {
+					tsPhonebook.ReplacePeerList(dnsAddrs)
+				}
+			} else {
+				wn.log.Infof("got no DNS addrs for network %s", wn.NetworkID)
+			}
+		}
+
+		// as long as the call to checkExistingConnectionsNeedDisconnecting is deleting existing connections, we want to
+		// kick off the creation fo new connections.
+		for {
+			if wn.checkNewConnectionsNeeded() {
+				// new connections were created.
+				break
+			}
+			if !wn.checkExistingConnectionsNeedDisconnecting() {
+				// no connection were removed.
+				break
+			}
 		}
 
 		if request.done != nil {
@@ -1260,25 +1289,6 @@ func (wn *WebsocketNetwork) meshThread() {
 }
 
 func (wn *WebsocketNetwork) checkNewConnectionsNeeded() bool {
-	// TODO: only do DNS fetch every N seconds? Honor DNS TTL? Trust DNS library we're using to handle caching and TTL?
-	dnsBootstrapArray := wn.config.DNSBootstrapArray(wn.NetworkID)
-	for _, dnsBootstrap := range dnsBootstrapArray {
-		dnsAddrs := wn.getDNSAddrs(dnsBootstrap)
-		if len(dnsAddrs) > 0 {
-			wn.log.Debugf("got %d dns addrs, %#v", len(dnsAddrs), dnsAddrs[:imin(5, len(dnsAddrs))])
-			dnsPhonebook := wn.phonebook.GetPhonebook(dnsBootstrap)
-			if dnsPhonebook == nil {
-				// create one, if we don't have one already.
-				dnsPhonebook = MakeThreadsafePhonebook()
-				wn.phonebook.AddOrUpdatePhonebook(dnsBootstrap, dnsPhonebook)
-			}
-			if tsPhonebook, ok := dnsPhonebook.(*ThreadsafePhonebook); ok {
-				tsPhonebook.ReplacePeerList(dnsAddrs)
-			}
-		} else {
-			wn.log.Infof("got no DNS addrs for network %s", wn.NetworkID)
-		}
-	}
 	desired := wn.config.GossipFanout
 	numOutgoingTotal := wn.numOutgoingPeers() + wn.numOutgoingPending()
 	need := desired - numOutgoingTotal
@@ -1342,13 +1352,10 @@ func (wn *WebsocketNetwork) checkExistingConnectionsNeedDisconnecting() bool {
 	}
 	wn.disconnect(leastPerformingPeer, disconnectLeastPerformingPeer)
 	wn.connPerfMonitor.Reset([]Peer{})
-	// signal to reconnect.
-	select {
-	case wn.meshUpdateRequests <- meshRequest{}:
-	default:
-	}
+
 	return true
 }
+
 func (wn *WebsocketNetwork) checkNetworkAdvanceDisconnect() bool {
 	lastNetworkAdvance := wn.getLastNetworkAdvance()
 	if time.Now().Sub(lastNetworkAdvance) < cliqueResolveInterval {
@@ -1370,11 +1377,6 @@ func (wn *WebsocketNetwork) checkNetworkAdvanceDisconnect() bool {
 	wn.disconnect(peer, disconnectCliqueResolve)
 	wn.connPerfMonitor.Reset([]Peer{})
 	wn.OnNetworkAdvance()
-	// signal to reconnect.
-	select {
-	case wn.meshUpdateRequests <- meshRequest{}:
-	default:
-	}
 	return true
 }
 
