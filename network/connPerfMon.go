@@ -47,31 +47,34 @@ const (
 	pmDesiredMessegeDelayThreshold  = 50 * time.Millisecond
 )
 
+// pmMessage is the internal storage for a single message. We save the time the message arrived from each of the peers.
 type pmMessage struct {
 	peerMsgTime   map[Peer]int64 // for each peer, when did we see a message the first time
 	firstPeerTime int64          // the timestamp of the first peer that has seen this message.
 }
 
+// pmPeerStatistics is the per-peer resulting datastructure of the performance analysis.
 type pmPeerStatistics struct {
 	peer             Peer    // the peer interface
 	peerDelay        int64   // the peer avarage relative message delay
 	peerFirstMessage float32 // what precentage of the messages were delivered by this peer before any other peer
 }
 
+// pmStatistics is the resulting datastructure of the performance analysis.
 type pmStatistics struct {
-	leastPerformingPeer      Peer               // the least performing peer
-	leastPerformingPeerDelay int64              // the avarage message delay of the least performing peer
-	peerStatistics           []pmPeerStatistics // an ordered list of the peers performance statistics
-	messageCount             int64              // the number of messages used to calculate the above statistics
+	peerStatistics []pmPeerStatistics // an ordered list of the peers performance statistics
+	messageCount   int64              // the number of messages used to calculate the above statistics
 }
 
-// IncomingMessage represents a message arriving from some peer in our p2p network
+// connectionPerformanceMonitor is the connection monitor datatype. We typically would like to have a single monitor for all
+// the outgoing connections.
 type connectionPerformanceMonitor struct {
 	deadlock.Mutex
 	monitoredConnections map[Peer]bool                // the map of the connection we're going to monitor. Messages coming from other connections would be ignored.
 	monitoredMessageTags map[Tag]bool                 // the map of the message tags we're interested in monitoring. Messages that aren't broadcast-type typically would be a good choice heer.
 	stage                pmStage                      // the performance monitoring stage.
 	lastPeerMsgTime      map[Peer]int64               // the map describing the last time we received a message from each of the peers.
+	lastIncomingMsgTime  int64                        // the time at which the last message was received from any of the peers.
 	stageStartTime       int64                        // the timestamp at which we switched to the current stage.
 	pendingMessages      map[crypto.Digest]*pmMessage // the pendingMessages map contains messages that haven't been received from all the peers within the pmMaxMessageWaitTime
 	connectionDelay      map[Peer]int64               // contains the total delay we've sustained by each peer when we're in stages pmStagePresync-pmStageStopping and the average delay after that. ( in nano seconds )
@@ -80,6 +83,7 @@ type connectionPerformanceMonitor struct {
 	accumulationTime     int64                        // the duration of which we're going to accumulate messages. This will get randomized to prevent cross-node syncronization.
 }
 
+// makeConnectionPerformanceMonitor creates a new performance monitor instance, that is configured for monitoring the given message tags.
 func makeConnectionPerformanceMonitor(messageTags []Tag) *connectionPerformanceMonitor {
 	msgTagMap := make(map[Tag]bool, len(messageTags))
 	for _, tag := range messageTags {
@@ -91,6 +95,8 @@ func makeConnectionPerformanceMonitor(messageTags []Tag) *connectionPerformanceM
 	}
 }
 
+// GetPeersStatistics returns the statistics result of the performance monitoring, once these becomes available.
+// otherwise, it returns nil.
 func (pm *connectionPerformanceMonitor) GetPeersStatistics() (stat *pmStatistics) {
 	pm.Lock()
 	defer pm.Unlock()
@@ -114,14 +120,12 @@ func (pm *connectionPerformanceMonitor) GetPeersStatistics() (stat *pmStatistics
 	sort.Slice(stat.peerStatistics, func(i, j int) bool {
 		return stat.peerStatistics[i].peerDelay > stat.peerStatistics[j].peerDelay
 	})
-	// if the slowest peer provide less that it's part ( i.e. 25% ) of the messages, disconnect from it.
-	if stat.peerStatistics[0].peerFirstMessage*float32(len(pm.connectionDelay)) <= 1.0 && stat.peerStatistics[0].peerDelay > int64(pmDesiredMessegeDelayThreshold) {
-		stat.leastPerformingPeer = stat.peerStatistics[0].peer
-		stat.leastPerformingPeerDelay = stat.peerStatistics[0].peerDelay
-	}
 	return
 }
 
+// ComparePeers compares the given peers list or the existing peers being monitored. If the
+// peers list have changed since Reset was called, it would return false.
+// The method is insensetive to peer ordering and uses the peer interface pointer to determine equality.
 func (pm *connectionPerformanceMonitor) ComparePeers(peers []Peer) bool {
 	pm.Lock()
 	defer pm.Unlock()
@@ -133,6 +137,11 @@ func (pm *connectionPerformanceMonitor) ComparePeers(peers []Peer) bool {
 	return len(peers) == len(pm.monitoredConnections)
 }
 
+// Reset updates the existing peers list to the one provided. The Reset method is expected to be used
+// in three scenarios :
+// 1. clearing out the existing monitoring - which brings it to initial state and disable monitoring.
+// 2. change monitored peers - in case we've had some of out peers disconnected/reconnected during the monitoring process.
+// 3. start monitoring
 func (pm *connectionPerformanceMonitor) Reset(peers []Peer) {
 	pm.Lock()
 	defer pm.Unlock()
@@ -154,6 +163,9 @@ func (pm *connectionPerformanceMonitor) Reset(peers []Peer) {
 
 }
 
+// Notify is the single entrypoint for an incoming message processing. When an outgoing connection
+// is being monitored, it would make a call to Notify, sending the incoming message details.
+// The Notify function will forward this notification to the current stage processing function.
 func (pm *connectionPerformanceMonitor) Notify(msg *IncomingMessage) {
 	pm.Lock()
 	defer pm.Unlock()
@@ -213,6 +225,7 @@ func (pm *connectionPerformanceMonitor) notifyPresync(msg *IncomingMessage) {
 		}
 		return
 	}
+	pm.lastIncomingMsgTime = msg.Received
 	// otherwise, once we recieved a message from each of the peers, move to the sync stage.
 	pm.advanceStage(pmStageSync, msg.Received)
 }
@@ -221,8 +234,7 @@ func (pm *connectionPerformanceMonitor) notifyPresync(msg *IncomingMessage) {
 // when we go into this stage, the lastPeerMsgTime will be already updated
 // with the recent message time per peer.
 func (pm *connectionPerformanceMonitor) notifySync(msg *IncomingMessage) {
-	minMsgInterval := pm.calculateMsgIdlingInterval(msg.Received)
-	pm.lastPeerMsgTime[msg.Sender] = msg.Received
+	minMsgInterval := pm.updateMessageIdlingInterval(msg.Received)
 	if minMsgInterval > int64(pmSyncIdleTime) || (msg.Received-pm.stageStartTime > int64(pmSyncMaxTime)) {
 		// if we hit the first expression, then it means that we've managed to sync up the connections.
 		// otherwise, we've failed to sync up the connections. That's not great, as we're likly to
@@ -232,9 +244,10 @@ func (pm *connectionPerformanceMonitor) notifySync(msg *IncomingMessage) {
 	}
 }
 
+// notifyAccumulate accumulate the incoming message as needed, and waiting between pm.accumulationTime to
+// (pm.accumulationTime + pmAccumulationTimeRange) before moving to the next stage.
 func (pm *connectionPerformanceMonitor) notifyAccumulate(msg *IncomingMessage) {
-	minMsgInterval := pm.calculateMsgIdlingInterval(msg.Received)
-	pm.lastPeerMsgTime[msg.Sender] = msg.Received
+	minMsgInterval := pm.updateMessageIdlingInterval(msg.Received)
 	if msg.Received-pm.stageStartTime >= pm.accumulationTime {
 		if minMsgInterval > int64(pmAccumulationIdlingTime) ||
 			(msg.Received-pm.stageStartTime >= pm.accumulationTime+int64(pmAccumulationTimeRange)) {
@@ -247,6 +260,8 @@ func (pm *connectionPerformanceMonitor) notifyAccumulate(msg *IncomingMessage) {
 	pm.pruneOldMessages(msg.Received)
 }
 
+// notifyStopping attempts to stop the message accumulation. Once we reach this stage, no new messages are being
+// added, and old pending messages are being pruned. Once all messages are pruned, it moves to the next stage.
 func (pm *connectionPerformanceMonitor) notifyStopping(msg *IncomingMessage) {
 	pm.accumulateMessage(msg, false)
 	pm.pruneOldMessages(msg.Received)
@@ -262,19 +277,23 @@ func (pm *connectionPerformanceMonitor) notifyStopping(msg *IncomingMessage) {
 	pm.advanceStage(pmStageStopped, msg.Received)
 }
 
+// advanceStage set the stage variable and update the stage start time.
 func (pm *connectionPerformanceMonitor) advanceStage(newStage pmStage, now int64) {
 	pm.stage = newStage
 	pm.stageStartTime = now
 }
 
-func (pm *connectionPerformanceMonitor) calculateMsgIdlingInterval(now int64) (minMsgInterval int64) {
-	minMsgInterval = int64(time.Hour)
-	for _, prevMsgTime := range pm.lastPeerMsgTime {
-		if now-prevMsgTime < minMsgInterval {
-			minMsgInterval = now - prevMsgTime
-		}
+// updateMessageIdlingInterval updates the last message received timestamps and determines how long it has been since
+// the last message was received on any of the incoming peers
+func (pm *connectionPerformanceMonitor) updateMessageIdlingInterval(now int64) (minMsgInterval int64) {
+	currentIncomingMsgTime := pm.lastIncomingMsgTime
+	if pm.lastIncomingMsgTime < now {
+		pm.lastIncomingMsgTime = now
 	}
-	return
+	if currentIncomingMsgTime <= now {
+		return now - currentIncomingMsgTime
+	}
+	return 0
 }
 
 func (pm *connectionPerformanceMonitor) pruneOldMessages(now int64) {

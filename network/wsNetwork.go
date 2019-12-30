@@ -174,9 +174,10 @@ type GossipNode interface {
 	// ClearHandlers deregisters all the existing message handlers.
 	ClearHandlers()
 
-	// OnNetworkAdvance notifies the network library that a new block was added via the agreement protocol.
+	// OnNetworkAdvance notifies the network library that the agreement protocol was able to make a notable progress.
 	// this is the only indication that we have that we haven't formed a clique, where all incoming messages
-	// arrive very quickly, but might be missing some votes.
+	// arrive very quickly, but might be missing some votes. The usage of this call is expected to have similar
+	// characteristics as with a watchdog timer.
 	OnNetworkAdvance()
 }
 
@@ -326,10 +327,15 @@ type WebsocketNetwork struct {
 	// lastPeerConnectionsSent is the last time the peer connections were sent ( or attempted to be sent ) to the telemetry server.
 	lastPeerConnectionsSent time.Time
 
+	// connPerfMonitor is used on outgoing connections to measture their relative message timing
 	connPerfMonitor *connectionPerformanceMonitor
 
+	// lastNetworkAdvanceMu syncronized teh access to lastNetworkAdvance
 	lastNetworkAdvanceMu deadlock.Mutex
-	lastNetworkAdvance   time.Time
+
+	// lastNetworkAdvance contains the last timestamp where the agreement protocol was able to make a notable progress.
+	// it used as a watchdog to help us detect connectivity issues ( such as cliques )
+	lastNetworkAdvance time.Time
 
 	// number of throttled outgoing connections "slots" needed to be populated.
 	throttledOutgoingConnections int32
@@ -584,7 +590,7 @@ func (wn *WebsocketNetwork) setup() {
 		wn.incomingMsgFilter = makeMessageFilter(wn.config.IncomingMessageFilterBucketCount, wn.config.IncomingMessageFilterBucketSize)
 	}
 	wn.connPerfMonitor = makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag, protocol.TxnTag})
-	wn.lastNetworkAdvance = time.Now()
+	wn.lastNetworkAdvance = time.Now().UTC()
 }
 
 func (wn *WebsocketNetwork) rlimitIncomingConnections() error {
@@ -1149,6 +1155,7 @@ func (wn *WebsocketNetwork) NumPeers() int {
 	return len(wn.peers)
 }
 
+// outgoingPeers returns an array of the outgoing peers.
 func (wn *WebsocketNetwork) outgoingPeers() (peers []Peer) {
 	wn.peersLock.RLock()
 	defer wn.peersLock.RUnlock()
@@ -1288,6 +1295,11 @@ func (wn *WebsocketNetwork) meshThread() {
 	}
 }
 
+// checkNewConnectionsNeeded checks to see if we need to have more connections to meet the GossipFanout target.
+// if we do, it will spin async connection go routines.
+// it returns false if no connections are needed, and true otherwise.
+// note that the determination of needed connection could be inaccurate, and it might return false while
+// more connection should be created.
 func (wn *WebsocketNetwork) checkNewConnectionsNeeded() bool {
 	desired := wn.config.GossipFanout
 	numOutgoingTotal := wn.numOutgoingPeers() + wn.numOutgoingPending()
@@ -1315,6 +1327,8 @@ func (wn *WebsocketNetwork) checkNewConnectionsNeeded() bool {
 	return true
 }
 
+// checkExistingConnectionsNeedDisconnecting check to see if existing connection need to be dropped due to
+// performance issues and/or network being stalled.
 func (wn *WebsocketNetwork) checkExistingConnectionsNeedDisconnecting() bool {
 	// we already connected ( or connecting.. ) to  GossipFanout peers.
 	// get the actual peers.
@@ -1356,9 +1370,11 @@ func (wn *WebsocketNetwork) checkExistingConnectionsNeedDisconnecting() bool {
 	return true
 }
 
+// checkNetworkAdvanceDisconnect is using the lastNetworkAdvance indicator to see if the network is currently "stuck".
+// if it's seems to be "stuck", a randomally picked peer would be disconnected.
 func (wn *WebsocketNetwork) checkNetworkAdvanceDisconnect() bool {
 	lastNetworkAdvance := wn.getLastNetworkAdvance()
-	if time.Now().Sub(lastNetworkAdvance) < cliqueResolveInterval {
+	if time.Now().UTC().Sub(lastNetworkAdvance) < cliqueResolveInterval {
 		return false
 	}
 	outgoingPeers := wn.outgoingPeers()
@@ -1386,13 +1402,14 @@ func (wn *WebsocketNetwork) getLastNetworkAdvance() time.Time {
 	return wn.lastNetworkAdvance
 }
 
-// OnNetworkAdvance notifies the network library that a new block was added via the agreement protocol.
+// OnNetworkAdvance notifies the network library that the agreement protocol was able to make a notable progress.
 // this is the only indication that we have that we haven't formed a clique, where all incoming messages
-// arrive very quickly, but might be missing some votes.
+// arrive very quickly, but might be missing some votes. The usage of this call is expected to have similar
+// characteristics as with a watchdog timer.
 func (wn *WebsocketNetwork) OnNetworkAdvance() {
 	wn.lastNetworkAdvanceMu.Lock()
 	defer wn.lastNetworkAdvanceMu.Unlock()
-	wn.lastNetworkAdvance = time.Now()
+	wn.lastNetworkAdvance = time.Now().UTC()
 }
 
 // sendPeerConnectionsTelemetryStatus sends a snapshot of the currently connected peers
