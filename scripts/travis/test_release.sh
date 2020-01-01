@@ -6,7 +6,10 @@
 #       COPY install.sh .
 #
 
+BRANCH=$(./scripts/compute_branch.sh)
+CHANNEL=$(./scripts/compute_branch_channel.sh "$BRANCH")
+
 pushd test/packages
-./test_release.sh
+./test_release.sh -c "$CHANNEL"
 popd
 
