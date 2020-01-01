@@ -1018,7 +1018,7 @@ func (sw *SQLiteWallet) LookupMultisigPreimage(addr crypto.Digest) (version, thr
 	row := db.QueryRow("SELECT version, threshold, pks FROM msig_addrs WHERE address=?", addr[:])
 	err = row.Scan(&versionCandidate, &thresholdCandidate, &pksBlob)
 	if err != nil {
-		err = errKeyNotFound
+		err = errMsigDataNotFound
 		return
 	}
 
