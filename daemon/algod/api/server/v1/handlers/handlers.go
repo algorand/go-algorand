@@ -39,6 +39,7 @@ import (
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/rpcs"
 )
 
 func nodeStatus(node *node.AlgorandFullNode) (res v1.NodeStatus, err error) {
@@ -1180,6 +1181,12 @@ func GetBlock(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	//         minimum: 0
 	//         required: true
 	//         description: The round from which to fetch block information.
+	//       - name: raw
+	//         in: query
+	//         type: integer
+	//         format: int64
+	//         required: false
+	//         description: Return raw msgpack block bytes
 	//     Responses:
 	//       200:
 	//         "$ref": '#/responses/BlockResponse'
@@ -1197,6 +1204,33 @@ func GetBlock(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// raw msgpack option:
+	rawstr := r.FormValue("raw")
+	if rawstr != "" {
+		rawint, err := strconv.ParseUint(rawstr, 10, 64)
+		if err != nil {
+			lib.ErrorResponse(w, http.StatusBadRequest, err, errFailedParsingRawOption, ctx.Log)
+			return
+		}
+		if rawint != 0 {
+			blockbytes, err := rpcs.RawBlockBytes(ctx.Node.Ledger(), basics.Round(queryRound))
+			if err != nil {
+				lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
+				return
+			}
+			w.Header().Set("Content-Type", rpcs.LedgerResponseContentType)
+			w.Header().Set("Content-Length", strconv.Itoa(len(blockbytes)))
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			w.WriteHeader(http.StatusOK)
+			_, err = w.Write(blockbytes)
+			if err != nil {
+				ctx.Log.Warnf("algod failed to write an object to the response stream: %v", err)
+			}
+			return
+		}
+	}
+
+	// decoded json-reencoded default:
 	ledger := ctx.Node.Ledger()
 	b, c, err := ledger.BlockCert(basics.Round(queryRound))
 	if err != nil {

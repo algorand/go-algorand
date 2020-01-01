@@ -17,6 +17,8 @@ stages:
     if: branch =~ /^rel\// AND type != pull_request
   - name: deploy
     if: branch =~ /^rel\// AND type != pull_request
+  - name: post_deploy
+    if: branch =~ /^rel\// AND type != pull_request
 
 jobs:
   allow_failures:
@@ -25,6 +27,7 @@ jobs:
     - name: External ARM64 Integration Test
     - name: External ARM Build
     - name: External ARM Deploy
+    - name: Test Release Builds
   include:
     - stage: build_commit
       os: linux
@@ -140,6 +143,16 @@ jobs:
             - awscli
       script:
         - scripts/travis/external_build.sh ./scripts/travis/deploy_packages.sh
+
+    - stage: post_deploy
+      os: linux
+      name: Test Release Builds
+      script:
+        - scripts/travis/test_release.sh
+      addons:
+        apt:
+          packages:
+            - awscli
 
 # Don't rebuild libsodium every time
 cache:
