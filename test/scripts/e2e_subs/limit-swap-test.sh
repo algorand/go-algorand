@@ -11,7 +11,7 @@ WALLET=$1
 
 gcmd="goal -w ${WALLET}"
 
-ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
+ACCOUNT=$(${gcmd} account list|tee /dev/tty|awk '{ print $3 }')
 ZERO_ADDRESS=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ
 
 ${gcmd} asset create --creator ${ACCOUNT} --name bogocoin --unitname bogo --total 1000000000000
@@ -23,7 +23,7 @@ ASSET_ID=$(${gcmd} asset info --creator $ACCOUNT --asset bogo|grep 'Asset ID'|aw
 echo "closeout part a, Algo trader"
 # quick expiration, test closeout
 
-ROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
+ROUND=$(goal node status |tee /dev/tty| grep 'Last committed block:'|awk '{ print $4 }')
 TIMEOUT_ROUND=$((${ROUND} + 2))
 
 sed s/TMPL_ASSET/${ASSET_ID}/g < ${GOPATH}/src/github.com/algorand/go-algorand/tools/teal/templates/limit-order-a.teal.tmpl | sed s/TMPL_SWAPN/31337/g | sed s/TMPL_SWAPD/137/g | sed s/TMPL_TIMEOUT/${TIMEOUT_ROUND}/g | sed s/TMPL_OWN/${ACCOUNT}/g | sed s/TMPL_FEE/100000/g | sed s/TMPL_MINTRD/10000/g > ${TEMPDIR}/limit-order-a.teal
@@ -66,10 +66,10 @@ ${gcmd} clerk rawsend -f ${TEMPDIR}/b-asset-init.stx
 echo "fund account with asset"
 ${gcmd} asset send --assetid ${ASSET_ID} -f ${ACCOUNT} -t ${ACCOUNT_ASSET_TRADER} -a 1000000
 
-ROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
+ROUND=$(goal node status | grep 'Last committed block:'|tee /dev/tty|awk '{ print $4 }')
 while [ $ROUND -lt $TIMEOUT_ROUND ]; do
     goal node wait
-    ROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
+    ROUND=$(goal node status | grep 'Last committed block:'|tee /dev/tty|awk '{ print $4 }')
 done
 
 echo "recover asset"
@@ -116,7 +116,7 @@ echo "make Algo trader"
 
 sed s/TMPL_ASSET/${ASSET_ID}/g < ${GOPATH}/src/github.com/algorand/go-algorand/tools/teal/templates/limit-order-a.teal.tmpl | sed s/TMPL_SWAPN/31337/g | sed s/TMPL_SWAPD/137/g | sed s/TMPL_TIMEOUT/${TIMEOUT_ROUND}/g | sed s/TMPL_OWN/${ACCOUNT}/g | sed s/TMPL_FEE/100000/g | sed s/TMPL_MINTRD/10000/g > ${TEMPDIR}/limit-order-a.teal
 
-ACCOUNT_ALGO_TRADER=$(${gcmd} clerk compile ${TEMPDIR}/limit-order-a.teal -o ${TEMPDIR}/limit-order-a.tealc|awk '{ print $2 }')
+ACCOUNT_ALGO_TRADER=$(${gcmd} clerk compile ${TEMPDIR}/limit-order-a.teal -o ${TEMPDIR}/limit-order-a.tealc|tee /dev/tty|awk '{ print $2 }')
 
 echo "setup trader with Algos"
 ${gcmd} clerk send --amount 100000000 --from ${ACCOUNT} --to ${ACCOUNT_ALGO_TRADER}
