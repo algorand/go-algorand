@@ -244,6 +244,8 @@ func (s *Server) Start() {
 
 // Stop initiates a graceful shutdown of the node by shutting down the network server.
 func (s *Server) Stop() {
+	// close the s.stopping, which would signal the rest api router that any pending commands
+	// should be aborted.
 	close(s.stopping)
 
 	// Attempt to log a shutdown event before we exit...
