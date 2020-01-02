@@ -75,5 +75,11 @@ do
     fi
 done
 
+# check the README.md file.
+READMECOPYRIGHT="Copyright (C) 2019-$(date +"%Y"), Algorand Inc."
+if [ "$(<README.md grep "${READMECOPYRIGHT}" | wc -l | tr -d ' ')" = "0" ]; then
+    RETURN_VALUE=1
+    echo "README.md file need to have it's license date range updated."
+fi
 exit $RETURN_VALUE
 
