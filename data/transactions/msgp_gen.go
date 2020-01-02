@@ -1734,8 +1734,8 @@ func (z *Payset) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	if zb0002 > 10000 {
-		err = msgp.ErrOverflow(uint64(zb0002), uint64(10000))
+	if zb0002 > 100000 {
+		err = msgp.ErrOverflow(uint64(zb0002), uint64(100000))
 		err = msgp.WrapError(err)
 		return
 	}
