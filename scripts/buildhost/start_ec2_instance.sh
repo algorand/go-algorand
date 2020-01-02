@@ -95,7 +95,8 @@ fi
 
 mkdir -p "$REPO_ROOT/tmp"
 
-if ! aws ec2 run-instances --image-id "$AWS_AMI" --key-name "$KEY_NAME" --security-groups "$SECURITY_GROUP_NAME" --instance-type "$AWS_INSTANCE_TYPE" --tag-specifications "ResourceType=instance,Tags=[{Key=\"Name\",Value=\"Buildhost_Ephemeral_${INSTANCE_NUMBER}\"}, {Key=\"For\",Value=\"Buildhost_Ephemeral\"}]" --block-device-mappings DeviceName=/dev/sdh,Ebs=\{VolumeSize=100\} --count 1 --region "$AWS_REGION" > "$REPO_ROOT"/tmp/instance.json
+#if ! aws ec2 run-instances --image-id "$AWS_AMI" --key-name "$KEY_NAME" --security-groups "$SECURITY_GROUP_NAME" --instance-type "$AWS_INSTANCE_TYPE" --tag-specifications "ResourceType=instance,Tags=[{Key=\"Name\",Value=\"Buildhost_Ephemeral_${INSTANCE_NUMBER}\"}, {Key=\"For\",Value=\"Buildhost_Ephemeral\"}]" --block-device-mappings 'DeviceName=/dev/sdh,Ebs=\{VolumeSize=100\}' --count 1 --region "$AWS_REGION" > "$REPO_ROOT"/tmp/instance.json
+if ! aws ec2 run-instances --image-id "$AWS_AMI" --key-name "$KEY_NAME" --security-groups "$SECURITY_GROUP_NAME" --instance-type "$AWS_INSTANCE_TYPE" --tag-specifications "ResourceType=instance,Tags=[{Key=\"Name\",Value=\"Buildhost_Ephemeral_${INSTANCE_NUMBER}\"}, {Key=\"For\",Value=\"Buildhost_Ephemeral\"}]" --block-device-mappings "file://$REPO_ROOT/device-mapping.json" --count 1 --region "$AWS_REGION" > "$REPO_ROOT"/tmp/instance.json
 then
     echo "$RED_FG[$0]$END_FG_COLOR: There was a problem launching the instance! Deleting the security group and the key pair!"
     delete_key_pair
