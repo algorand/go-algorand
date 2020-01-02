@@ -2,7 +2,7 @@
 
 PROJECT_ROOT=$(git rev-parse --show-toplevel)
 LICENSE_LOCATION="$PROJECT_ROOT"/scripts/LICENSE_HEADER
-NUMLINES=$(wc -l "$LICENSE_LOCATION" | cut -d\  -f1)
+NUMLINES=$(< "$LICENSE_LOCATION" wc -l | tr -d ' ')
 LICENSE=$(sed "s/{DATE_Y}/$(date +"%Y")/" "$LICENSE_LOCATION")
 VERSIONED_GO_FILES=$(git ls-tree --full-tree --name-only -r HEAD | grep "\.go$")
 EXCLUDE=(
@@ -75,5 +75,11 @@ do
     fi
 done
 
+# check the README.md file.
+READMECOPYRIGHT="Copyright (C) 2019-$(date +"%Y"), Algorand Inc."
+if [ "$(<README.md grep "${READMECOPYRIGHT}" | wc -l | tr -d ' ')" = "0" ]; then
+    RETURN_VALUE=1
+    echo "README.md file need to have it's license date range updated."
+fi
 exit $RETURN_VALUE
 

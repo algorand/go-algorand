@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -161,12 +161,12 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 	for loaded < latest {
 		next := loaded + 1
 
-		blk, aux, err := l.blockAux(next)
+		blk, err := l.Block(next)
 		if err != nil {
 			return err
 		}
 
-		delta, err := l.trackerEvalVerified(blk, aux)
+		delta, err := l.trackerEvalVerified(blk)
 		if err != nil {
 			return err
 		}

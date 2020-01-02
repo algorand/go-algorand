@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -606,6 +606,21 @@ type TransactionParams struct {
 	//
 	// required: false
 	MinTxnFee uint64 `json:"minFee"`
+}
+
+// RawResponse is fulfilled by responses that should not be decoded as msgpack
+type RawResponse interface {
+	SetBytes([]byte)
+}
+
+// RawBlock represents an encoded msgpack block
+// swagger:model RawBlock
+// swagger:strfmt byte
+type RawBlock []byte
+
+// SetBytes fulfills the RawResponse interface on RawBlock
+func (rb *RawBlock) SetBytes(b []byte) {
+	*rb = b
 }
 
 // Block contains a block information

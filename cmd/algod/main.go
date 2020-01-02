@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -160,6 +160,10 @@ func main() {
 		telemetryConfig, err := logging.EnsureTelemetryConfig(&dataDir, genesis.ID())
 		if err != nil {
 			fmt.Fprintln(os.Stdout, "error loading telemetry config", err)
+		}
+		if os.IsPermission(err) {
+			fmt.Fprintf(os.Stderr, "Permission error on accessing telemetry config: %v", err)
+			os.Exit(1)
 		}
 
 		// Apply telemetry override.

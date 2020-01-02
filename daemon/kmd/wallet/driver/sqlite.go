@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -1018,7 +1018,7 @@ func (sw *SQLiteWallet) LookupMultisigPreimage(addr crypto.Digest) (version, thr
 	row := db.QueryRow("SELECT version, threshold, pks FROM msig_addrs WHERE address=?", addr[:])
 	err = row.Scan(&versionCandidate, &thresholdCandidate, &pksBlob)
 	if err != nil {
-		err = errKeyNotFound
+		err = errMsigDataNotFound
 		return
 	}
 
