@@ -10,7 +10,7 @@ export SHELLOPTS
 WALLET=$1
 
 gcmd="goal -w ${WALLET}"
-OUTPUT_DEVICE=$(readlink -f /proc/$$/fd/1)
+OUTPUT_DEVICE=$(lsof -p $$ | grep 1u | awk '{print $NF}')
 ACCOUNT=$(${gcmd} account list|tee ${OUTPUT_DEVICE}|awk '{ print $3 }')
 ZERO_ADDRESS=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ
 

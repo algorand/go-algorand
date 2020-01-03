@@ -11,7 +11,7 @@ WALLET=$1
 
 gcmd="goal -w ${WALLET}"
 
-OUTPUT_DEVICE=$(readlink -f /proc/$$/fd/1)
+OUTPUT_DEVICE=$(lsof -p $$ | grep 1u | awk '{print $NF}')
 ACCOUNT=$(${gcmd} account list|tee ${OUTPUT_DEVICE}|awk '{ print $3 }')
 ACCOUNTB=$(${gcmd} account new|tee ${OUTPUT_DEVICE}|awk '{ print $6 }')
 ACCOUNTC=$(${gcmd} account new|tee ${OUTPUT_DEVICE}|awk '{ print $6 }')
