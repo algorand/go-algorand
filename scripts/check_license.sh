@@ -28,13 +28,11 @@ usage() {
     echo
 }
 
-if [ "${TERM}" != "" ]; then
-    GREEN_FG=$(tput setaf 2)
-    RED_FG=$(tput setaf 1)
-    TEAL_FG=$(tput setaf 6)
-    YELLOW_FG=$(tput setaf 3)
-    END_FG_COLOR=$(tput sgr0)
-fi
+GREEN_FG=$(tput setaf 2 2>/dev/null)
+RED_FG=$(tput setaf 1 2>/dev/null)
+TEAL_FG=$(tput setaf 6 2>/dev/null)
+YELLOW_FG=$(tput setaf 3 2>/dev/null)
+END_FG_COLOR=$(tput sgr0 2>/dev/null)
 
 while [ "$1" != "" ]; do
     case "$1" in
