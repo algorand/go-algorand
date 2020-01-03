@@ -18,28 +18,29 @@ OUTDIR="$1"
 export GOPATH=$(go env GOPATH)
 
 cd "$(dirname "$0")"/..
-export REPO_DIR=$(pwd -P)
+#export REPO_DIR=$(pwd -P)
+export REPO_DIR=$HOME/go/src/github.com/algorand/go-algorand
 
 echo "Building RPM package"
 
-if [ -z "${NO_BUILD}" ]; then
-    env GOOS=${OS} GOARCH=${ARCH} scripts/build_prod.sh
-else
-    echo "already built"
-    true
-fi
+#if [ -z "${NO_BUILD}" ]; then
+    env GOOS=${OS} GOARCH=${ARCH} $REPO_DIR/scripts/build_prod.sh
+#else
+    #echo "already built"
+    #true
+#fi
 
-VER=$(./scripts/compute_build_number.sh -f)
+VER=$($REPO_DIR/scripts/compute_build_number.sh -f)
 
 if [ "${DEFAULTNETWORK}" = "" ]; then
-    export DEFAULTNETWORK=$(./scripts/compute_branch_network.sh)
+    export DEFAULTNETWORK=$($REPO_DIR/scripts/compute_branch_network.sh)
 fi
-export DEFAULT_RELEASE_NETWORK=$(./scripts/compute_branch_release_network.sh "${DEFAULTNETWORK}")
+export DEFAULT_RELEASE_NETWORK=$($REPO_DIR/scripts/compute_branch_release_network.sh "${DEFAULTNETWORK}")
 
 TEMPDIR=$(mktemp -d)
 trap "rm -rf $TEMPDIR" 0
-cat installer/rpm/algorand.spec \
+cat $REPO_DIR/installer/rpm/algorand.spec \
     | sed -e s,@VER@,${VER}, \
     > ${TEMPDIR}/algorand.spec
 
-rpmbuild --define "_rpmdir ${OUTDIR}" --define "RELEASE_GENESIS_PROCESS x${RELEASE_GENESIS_PROCESS}" --define "LICENSE_FILE $(pwd)/COPYING" -bb ${TEMPDIR}/algorand.spec
+rpmbuild --define "_rpmdir ${OUTDIR}" --define "RELEASE_GENESIS_PROCESS x${RELEASE_GENESIS_PROCESS}" --define "LICENSE_FILE $REPO_DIR/COPYING" -bb ${TEMPDIR}/algorand.spec

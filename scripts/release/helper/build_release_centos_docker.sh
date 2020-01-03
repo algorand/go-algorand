@@ -34,11 +34,11 @@ make crypto/lib/libsodium.a
 
 make build
 
-export NO_BUILD=1
+#export NO_BUILD=1
 
 RPMTMP=$(mktemp -d 2>/dev/null || mktemp -d -t "rpmtmp")
 trap "rm -rf ${RPMTMP}" 0
-scripts/release/helper/build_rpm.sh ${RPMTMP}
+${HOME}/release/helper/build_rpm.sh ${RPMTMP}
 cp -p ${RPMTMP}/*/*.rpm /root/subhome/node_pkg
 
 (cd ${HOME} && tar jxf /stuff/gnupg*.tar.bz2)
@@ -118,3 +118,4 @@ goal node stop -d /root/testnode
 
 
 echo CENTOS_DOCKER_TEST_OK
+

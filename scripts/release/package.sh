@@ -64,11 +64,11 @@ enabled=1
 gpgcheck=1
 gpgkey=https://releases.algorand.com/rpm/rpm_algorand.pub
 EOF
-(cd "${HOME}/dummyrepo" && python3 "${REPO_ROOT}/scripts/httpd.py" --pid "${HOME}"/phttpd.pid) &
-# https://github.com/koalaman/shellcheck/wiki/SC2064
-trap '${REPO_ROOT}/scripts/kill_httpd.sh' 0
+#(cd "${HOME}/dummyrepo" && python3 "${REPO_ROOT}/scripts/httpd.py" --pid "${HOME}"/phttpd.pid) &
+## https://github.com/koalaman/shellcheck/wiki/SC2064
+#trap '${REPO_ROOT}/scripts/kill_httpd.sh' 0
 
-sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME}/release,dst=/root/release --mount type=bind,src=/run/user/1000/gnupg/S.gpg-agent,dst=/S.gpg-agent --mount type=bind,src=${HOME}/dummyrepo,dst=/dummyrepo --mount type=bind,src=${HOME}/docker_test_resources,dst=/stuff --mount type=bind,src=${GOPATH}/src,dst=/root/go/src --mount type=bind,src=${HOME},dst=/root/subhome --mount type=bind,src=/usr/local/go,dst=/usr/local/go algocentosbuild /root/release/helper/build_release_centos_docker.sh"
+sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME}/release,dst=/root/release --mount type=bind,src=/run/user/1000/gnupg/S.gpg-agent,dst=/S.gpg-agent --mount type=bind,src=${HOME}/dummyrepo,dst=/dummyrepo --mount type=bind,src=${HOME}/docker_test_resources,dst=/stuff --mount type=bind,src=${GOPATH},dst=/root/go --mount type=bind,src=${HOME},dst=/root/subhome --mount type=bind,src=/usr/local/go,dst=/usr/local/go algocentosbuild /root/release/helper/build_release_centos_docker.sh"
 
 date "+build_release done building centos %Y%m%d_%H%M%S"
 
