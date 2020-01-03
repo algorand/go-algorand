@@ -33,7 +33,8 @@ sudo apt-get upgrade -q -y
 # Some of these dirs aren't used until later scripts.
 #umask 0077
 #mkdir -p ~/.gnupg
-mkdir -p "${HOME}"/{.gnupg,go,gpgbin,docker_test_resources,dummyaptly,dummyrepo,prodrepo}
+#mkdir -p "${HOME}"/{.gnupg,go,gpgbin,docker_test_resources,dummyaptly,dummyrepo,prodrepo}
+mkdir -p "${HOME}"/{.gnupg,go,gpgbin,dummyaptly,dummyrepo,prodrepo}
 
 export GOPATH=${HOME}/go
 export PATH=${HOME}/gpgbin:${GOPATH}/bin:/usr/local/go/bin:${PATH}

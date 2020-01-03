@@ -15,9 +15,11 @@ pipeline {
 
         stage("setup ec2 instance") {
             steps {
+                sh 'aws s3 cp s3://algorand-devops-misc/tools/gnupg2.2.9_centos7_amd64.tar.bz2 .'
+                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/buildhost/tmp/instance) mkdir docker_test_resources'
+                sh 'scp -o StrictHostKeyChecking=no -i BuilderInstanceKey.pem -r gnupg2.2.9_centos7_amd64.tar.bz2 ubuntu@$(cat scripts/buildhost/tmp/instance):~/docker_test_resources/'
                 sh 'scp -o StrictHostKeyChecking=no -i BuilderInstanceKey.pem -r scripts/release/ ubuntu@$(cat scripts/buildhost/tmp/instance):~/'
                 sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/buildhost/tmp/instance) bash release/setup.sh'
-                sh 'aws s3 cp s3://algorand-devops-misc/tools/gnupg2.2.9_centos7_amd64.tar.bz2 $HOME/docker_test_resources'
             }
         }
 
