@@ -419,6 +419,9 @@ func WaitForBlock(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	}
 
 	select {
+	case <-ctx.Shutdown:
+		lib.ErrorResponse(w, http.StatusInternalServerError, err, errServiceShuttingDown, ctx.Log)
+		return
 	case <-time.After(1 * time.Minute):
 	case <-ctx.Node.Ledger().Wait(basics.Round(queryRound + 1)):
 	}
