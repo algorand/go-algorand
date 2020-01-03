@@ -11,6 +11,7 @@ WALLET=$1
 
 gcmd="goal -w ${WALLET}"
 
+${gcmd} account list
 ACCOUNT=$(${gcmd} account list|tee /dev/tty|awk '{ print $3 }')
 
 # prints:
