@@ -17,6 +17,7 @@ pipeline {
             steps {
                 sh 'scp -o StrictHostKeyChecking=no -i BuilderInstanceKey.pem -r scripts/release/ ubuntu@$(cat scripts/buildhost/tmp/instance):~/'
                 sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/buildhost/tmp/instance) bash release/setup.sh'
+                sh 'aws s3 cp s3://algorand-devops-misc/tools/gnupg2.2.9_centos7_amd64.tar.bz2 $HOME/docker_test_resources'
             }
         }
 
@@ -30,7 +31,6 @@ pipeline {
 
         stage("sign") {
             steps {
-                sh 'aws s3 cp s3://algorand-devops-misc/tools/gnupg2.2.9_centos7_amd64.tar.bz2 $HOME/docker_test_resources'
                 sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/buildhost/tmp/instance) bash release/sign.sh'
             }
         }

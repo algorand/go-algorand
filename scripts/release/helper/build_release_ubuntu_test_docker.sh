@@ -4,7 +4,7 @@
 #
 # expects docker run with:
 # --env-file ${HOME}/build_env_docker
-# --mount type=bind,src=${HOME}/centos,dst=/stuff
+# --mount type=bind,src=${HOME}/centos,dst=/root/stuff
 # --mount type=bind,src=${GOPATH}/src,dst=/root/go/src
 # --mount type=bind,src=/usr/local/go,dst=/usr/local/go
 
@@ -20,7 +20,7 @@ apt-get install -y gnupg2 curl software-properties-common python3
 if [ "${TEST_UPGRADE}" == "no" ]; then
     echo "upgrade test skipped"
 else
-    apt install -y /stuff/*.deb
+    apt install -y /root/stuff/*.deb
     algod -v
     if algod -v | grep -q ${FULLVERSION}; then
 	echo "already installed current version. wat?"
@@ -36,7 +36,7 @@ else
 fi
 
 #apt-key adv --fetch-keys https://releases.algorand.com/key.pub
-apt-key add /stuff/key.pub
+apt-key add /root/stuff/key.pub
 add-apt-repository "deb http://${DC_IP}:8111/ stable main"
 apt-get update
 apt-get install -y algorand

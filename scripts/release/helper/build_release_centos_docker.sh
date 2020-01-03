@@ -41,7 +41,7 @@ trap "rm -rf ${RPMTMP}" 0
 ${HOME}/release/helper/build_rpm.sh ${RPMTMP}
 cp -p ${RPMTMP}/*/*.rpm /root/subhome/node_pkg
 
-(cd ${HOME} && tar jxf /stuff/gnupg*.tar.bz2)
+(cd ${HOME} && tar jxf /root/stuff/gnupg*.tar.bz2)
 export PATH="${HOME}/gnupg2/bin:${PATH}"
 export LD_LIBRARY_PATH=${HOME}/gnupg2/lib
 
@@ -56,10 +56,10 @@ fi
 rm -f ${HOME}/.gnupg/S.gpg-agent
 (cd ~/.gnupg && ln -s /S.gpg-agent S.gpg-agent)
 
-gpg --import /stuff/key.pub
-gpg --import /stuff/rpm.pub
+gpg --import /root/stuff/key.pub
+gpg --import /root/stuff/rpm.pub
 gpg --import ${REPO_DIR}/installer/rpm/RPM-GPG-KEY-Algorand
-rpmkeys --import /stuff/rpm.pub
+rpmkeys --import /root/stuff/rpm.pub
 echo "wat"|gpg -u rpm@algorand.com --clearsign
 
 cat <<EOF>"${HOME}/.rpmmacros"
@@ -82,7 +82,7 @@ createrepo --database /dummyrepo
 rm -f /dummyrepo/repodata/repomd.xml.asc
 gpg -u rpm@algorand.com --detach-sign --armor /dummyrepo/repodata/repomd.xml
 
-OLDRPM=$(ls -t /stuff/*.rpm|head -1)
+OLDRPM=$(ls -t /root/stuff/*.rpm|head -1)
 if [ -f "${OLDRPM}" ]; then
     yum install -y "${OLDRPM}"
     algod -v
