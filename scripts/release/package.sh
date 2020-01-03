@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # shellcheck disable=2164,2166
 
+REPO_ROOT=/home/ubuntu/go/src/github.com/algorand/go-algorand/
+
 # copy previous installers into ~/docker_test_resources
 cd "${HOME}/docker_test_resources"
 if [ "${TEST_UPGRADE}" == "no" -o -z "${S3_PREFIX}" ]; then
@@ -46,7 +48,7 @@ SNAPSHOT=algodummy-$(date +%Y%m%d_%H%M%S)
 date "+build_release done building ubuntu %Y%m%d_%H%M%S"
 
 # Run RPM build in Centos7 Docker container
-sg docker "docker build -t algocentosbuild - < ${HOME}/release/helper/centos-build.Dockerfile"
+sg docker "docker build -t algocentosbuild - < ${REPO_ROOT}/scripts/release/helper/centos-build.Dockerfile"
 
 # cleanup our libsodium build
 if [ -f "${REPO_ROOT}/crypto/libsodium-fork/Makefile" ]; then
@@ -68,7 +70,7 @@ EOF
 ## https://github.com/koalaman/shellcheck/wiki/SC2064
 #trap '${REPO_ROOT}/scripts/kill_httpd.sh' 0
 
-sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME}/release,dst=/root/release --mount type=bind,src=/run/user/1000/gnupg/S.gpg-agent,dst=/S.gpg-agent --mount type=bind,src=${HOME}/dummyrepo,dst=/dummyrepo --mount type=bind,src=${HOME}/docker_test_resources,dst=/root/stuff --mount type=bind,src=${HOME}/go,dst=/root/go --mount type=bind,src=${HOME},dst=/root/subhome --mount type=bind,src=/usr/local/go,dst=/usr/local/go algocentosbuild /root/release/helper/build_release_centos_docker.sh"
+sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=/run/user/1000/gnupg/S.gpg-agent,dst=/S.gpg-agent --mount type=bind,src=${HOME}/dummyrepo,dst=/dummyrepo --mount type=bind,src=${HOME}/docker_test_resources,dst=/root/stuff --mount type=bind,src=${HOME}/go,dst=/root/go --mount type=bind,src=${HOME},dst=/root/subhome --mount type=bind,src=/usr/local/go,dst=/usr/local/go algocentosbuild /root/go/src/github.com/algorand/go-algorand/scripts/release/helper/build_release_centos_docker.sh"
 
 date "+build_release done building centos %Y%m%d_%H%M%S"
 

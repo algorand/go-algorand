@@ -76,7 +76,7 @@ export AWS_EFS_MOUNT=
 # to be prompted for GPG key password at a couple points.
 # It can still steal the outer terminal from within piping the output to tee. Nifty, huh?
 BUILDTIMESTAMP=$(cat "${HOME}/buildtimestamp")
-(bash "${HOME}/go/src/github.com/algorand/go-algorand/scripts/release/release/release.sh" 2>&1)|tee -a "${HOME}/buildlog_${BUILDTIMESTAMP}"
+(bash "${HOME}/go/src/github.com/algorand/go-algorand/scripts/release/release/build.sh" 2>&1)|tee -a "${HOME}/buildlog_${BUILDTIMESTAMP}"
 (bash "${HOME}/go/src/github.com/algorand/go-algorand/scripts/release/release/sign.sh" 2>&1)|tee -a "${HOME}/buildlog_${BUILDTIMESTAMP}"
 (bash "${HOME}/go/src/github.com/algorand/go-algorand/scripts/release/release/upload.sh" 2>&1)|tee -a "${HOME}/buildlog_${BUILDTIMESTAMP}"
 if [ -f "${HOME}/rstamp" ]; then

@@ -18,7 +18,7 @@ date "+setup start %Y%m%d_%H%M%S"
 set -ex
 
 if [ -z "${GIT_REPO_PATH}" ]; then
-    GIT_REPO_PATH=https://github.com/algorand/go-algorand
+    GIT_REPO_PATH=https://github.com/btoll/go-algorand
 fi
 
 if [ -z "${GIT_CHECKOUT_LABEL}" ]; then
@@ -88,9 +88,9 @@ sg docker "docker pull ubuntu:16.04"
 
 # Check out
 mkdir -p "${GOPATH}/src/github.com/algorand"
-cd "${GOPATH}/src/github.com/algorand" && git clone "${GIT_REPO_PATH}" go-algorand
-cd go-algorand
-git checkout "${GIT_CHECKOUT_LABEL}"
+cd "${GOPATH}/src/github.com/algorand" && git clone --single-branch --branch build_test "${GIT_REPO_PATH}" go-algorand
+#cd go-algorand
+#git checkout "${GIT_CHECKOUT_LABEL}"
 # TODO: if we are checking out a release tag, `git tag --verify` it
 
 gpg --import "${GOPATH}/src/github.com/algorand/go-algorand/installer/rpm/RPM-GPG-KEY-Algorand"

@@ -10,7 +10,7 @@ mkdir -p ${HOME}/go/bin
 export GOPATH=${HOME}/go
 export PATH=${GOPATH}/bin:/usr/local/go/bin:${PATH}
 
-(cd ${HOME} && tar jxf /stuff/gnupg*.tar.bz2)
+(cd ${HOME} && tar jxf /root/stuff/gnupg*.tar.bz2)
 export PATH="${HOME}/gnupg2/bin:${PATH}"
 export LD_LIBRARY_PATH=${HOME}/gnupg2/lib
 
@@ -27,9 +27,9 @@ fi
 rm -f ${HOME}/.gnupg/S.gpg-agent
 (cd ~/.gnupg && ln -s /S.gpg-agent S.gpg-agent)
 
-gpg --import /stuff/key.pub
-gpg --import /stuff/rpm.pub
-rpmkeys --import /stuff/rpm.pub
+gpg --import /root/stuff/key.pub
+gpg --import /root/stuff/rpm.pub
+rpmkeys --import /root/stuff/rpm.pub
 echo "wat"|gpg -u rpm@algorand.com --clearsign
 
 cat <<EOF>"${HOME}/.rpmmacros"

@@ -38,7 +38,7 @@ make build
 
 RPMTMP=$(mktemp -d 2>/dev/null || mktemp -d -t "rpmtmp")
 trap "rm -rf ${RPMTMP}" 0
-${HOME}/release/helper/build_rpm.sh ${RPMTMP}
+${REPO_DIR}/scripts/release/helper/build_rpm.sh ${RPMTMP}
 cp -p ${RPMTMP}/*/*.rpm /root/subhome/node_pkg
 
 (cd ${HOME} && tar jxf /root/stuff/gnupg*.tar.bz2)
@@ -47,6 +47,8 @@ export LD_LIBRARY_PATH=${HOME}/gnupg2/lib
 
 umask 0022
 
+mkdir "${HOME}/.gnupg"
+chmod 770 "${HOME}/.gnupg"
 touch "${HOME}/.gnupg/gpg.conf"
 if grep -q no-autostart "${HOME}/.gnupg/gpg.conf"; then
     echo ""
