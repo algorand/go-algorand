@@ -17,13 +17,15 @@
 package rewards
 
 import (
-	"path/filepath"
-	"testing"
-	"runtime"
 	"os"
-	
+	"path/filepath"
+	"runtime"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 )
 
@@ -123,16 +125,15 @@ func TestCatchupOverGossip(t *testing.T) {
 	a.NoError(err)
 }
 
-
-func TestStoppedCatchupOnUnapproved(t *testing.T) {
+func TestStoppedCatchupOnUnsupported(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
 	t.Parallel()
 	a := require.New(t)
 
-	os.Setenv("ALGORAND_TEST_UNUPGRADEDPROTOCOL_UPGRADE", "1")
-	
+	os.Setenv("ALGORAND_TEST_UNUPGRADEDPROTOCOL_DELETE_CURRENT_VERSION", "0")
+
 	// Overview of this test:
 	// Start a two-node network (primary has 0%, secondary has 100%)
 	// Let it run for a few blocks.
@@ -151,12 +152,12 @@ func TestStoppedCatchupOnUnapproved(t *testing.T) {
 
 	// Let the network make some progress
 	a.NoError(err)
-	waitForRound := uint64(3)
+	waitForRound := uint64(3) // UpgradeVoteRounds + DefaultUpgradeWaitRounds
 	err = fixture.ClientWaitForRoundWithTimeout(fixture.GetAlgodClientForController(nc), waitForRound)
 	a.NoError(err)
 
-	os.Setenv("ALGORAND_TEST_UNUPGRADEDPROTOCOL_UPGRADE", "0")
-	
+	os.Setenv("ALGORAND_TEST_UNUPGRADEDPROTOCOL_DELETE_CURRENT_VERSION", "1")
+
 	// Now spin up third node
 	cloneDataDir := filepath.Join(fixture.PrimaryDataDir(), "../clone")
 	cloneLedger := false
@@ -168,4 +169,31 @@ func TestStoppedCatchupOnUnapproved(t *testing.T) {
 	// Now, catch up
 	err = fixture.LibGoalFixture.ClientWaitForRoundWithTimeout(cloneClient, waitForRound)
 	a.NoError(err)
+
+	var status v1.NodeStatus
+
+	// Check the status
+	timeout := time.NewTimer(20 * time.Second)
+	timedOut := false
+	go func() {
+		<-timeout.C
+		timedOut = true
+	}()
+	for status, err = cloneClient.Status(); !timedOut && err == nil && // did not timeout
+		// and while the next round is not the next protocol upgrade:
+		(status.NextVersion == status.LastVersion || // next is not a new protocol, or
+			// next is a new protocol but,
+			(status.NextVersion != status.LastVersion &&
+				// the new protocol version is not the next round
+				status.LastRound+1 != status.NextVersionRound)); status, err = cloneClient.Status() {
+		time.Sleep(800 * time.Millisecond)
+	}
+	a.NoError(err)
+	status, err = cloneClient.Status()
+	// Stoppd at the first protocol
+	a.Equal("test-unupgraded-protocol", status.LastVersion)
+	// Next version is different (did not upgrade to it)
+	a.True(status.NextVersion != status.LastVersion)
+	// Next round is when the upgrade happens
+	a.True(!status.NextVersionSupported && status.LastRound+1 == status.NextVersionRound)
 }

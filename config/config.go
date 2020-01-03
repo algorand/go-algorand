@@ -547,12 +547,18 @@ func initConsensusTestProtocols() {
 	testUnupgradedProtocol := Consensus[protocol.ConsensusCurrentVersion]
 	testUnupgradedProtocol.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
-	testUnupgradedProtocol.UpgradeVoteRounds = 5
-	testUnupgradedProtocol.UpgradeThreshold = 3
-	testUnupgradedProtocol.DefaultUpgradeWaitRounds = 5	
-	b, err := strconv.ParseBool(os.Getenv("ALGORAND_TEST_UNUPGRADEDPROTOCOL_UPGRADE"))
-	// upgrade the protocol only if TESTUNUPGRADEDPROTOCOL_UPGRADE evaluates to true (e.g. 1, TRUE)
+	testUnupgradedProtocol.UpgradeVoteRounds = 3
+	testUnupgradedProtocol.UpgradeThreshold = 2
+	testUnupgradedProtocol.DefaultUpgradeWaitRounds = 3
+	b, err := strconv.ParseBool(os.Getenv("ALGORAND_TEST_UNUPGRADEDPROTOCOL_DELETE_CURRENT_VERSION"))
+	// Do not upgrade to current version if
+	// ALGORAND_TEST_UNUPGRADEDPROTOCOL_DELETE_CURRENT_VERSION evaluates to true (e.g. 1, TRUE)
 	if err == nil && b {
+		// Configure as if ConsensusCurrentVersion is not supported by the binary
+		delete(Consensus, protocol.ConsensusCurrentVersion)
+	} else {
+		// Direct upgrade path from ConsensusTestUnupgradedProtocol to ConsensusCurrentVersion
+		// This is needed for the voting nodes vote to upgrade to the next protocol
 		testUnupgradedProtocol.ApprovedUpgrades[protocol.ConsensusCurrentVersion] = 0
 	}
 	Consensus[protocol.ConsensusTestUnupgradedProtocol] = testUnupgradedProtocol;

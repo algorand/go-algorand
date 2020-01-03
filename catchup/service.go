@@ -73,7 +73,7 @@ type Service struct {
 	InitialSyncDone     chan struct{}
 	initialSyncNotified uint32
 	protocolErrorLogged bool
-	lastApprovedRound   basics.Round
+	lastSupportedRound  basics.Round
 }
 
 // A BlockAuthenticator authenticates blocks given a certificate.
@@ -340,24 +340,24 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 	from := s.ledger.NextRound()
 	nextRound := from
 	for ; nextRound < from+basics.Round(parallelRequests); nextRound++ {
-		// If the next round is not approved
-		if s.nextRoundIsNotApproved(nextRound) {
+		// If the next round is not supported
+		if s.nextRoundIsNotSupported(nextRound) {
 			// We may get here when (1) The service starts
-			// and gets to an unapproved round.  Since in
+			// and gets to an unsupported round.  Since in
 			// this loop we do not wait for the requests
 			// to be written to the ledger, there is no
-			// guarantee that the unapproved round will be
+			// guarantee that the unsupported round will be
 			// stopped in this case.
 
-			// (2) The unapproved round is detected in the
+			// (2) The unsupported round is detected in the
 			// "the rest" loop, but did not cancel because
-			// the last approved round was not yet written
+			// the last supported round was not yet written
 			// to the ledger.
 
 			// It is sufficient to check only in the first
 			// iteration, however checking in all in favor
 			// of code simplicity.
-			s.handleUnapprovedRound(nextRound)
+			s.handleUnsupportedRound(nextRound)
 			break
 		}
 
@@ -379,9 +379,9 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 			completedRounds[round] = true
 			// fetch rounds we can validate
 			for completedRounds[nextRound-basics.Round(parallelRequests)] {
-				// If the next round is not approved
-				if s.nextRoundIsNotApproved(nextRound) {
-					s.handleUnapprovedRound(nextRound)
+				// If the next round is not supported
+				if s.nextRoundIsNotSupported(nextRound) {
+					s.handleUnsupportedRound(nextRound)
 					return
 				}
 				delete(completedRounds, nextRound)
@@ -492,31 +492,26 @@ func (s *Service) sync() {
 	s.log.Infof("Catchup Service: finished catching up, now at round %v (previously %v). Total time catching up %v.", s.ledger.LastRound(), pr, elapsedTime)
 }
 
-// nextRoundIsNotApproved returns true if the next round upgrades to a protocol version
-// which is not approved.
+// nextRoundIsNotSupported returns true if the next round upgrades to a protocol version
+// which is not supported.
 // In case of an error, it returns false
-func (s *Service) nextRoundIsNotApproved(nextRound basics.Round) bool {
+func (s *Service) nextRoundIsNotSupported(nextRound basics.Round) bool {
 	lastLedgerRound := s.ledger.LastRound()
-	proto, err := s.ledger.ConsensusParams(lastLedgerRound)
-	if err != nil {
-		s.log.Errorf("nextRoundIsNotApproved: could not get consensus parameters for round %d: %v", lastLedgerRound, err)
-		return false
-	}
-	approvedUpgrades := proto.ApprovedUpgrades
+	supportedUpgrades := config.Consensus
 
 	block, error := s.ledger.Block(lastLedgerRound)
 	if error != nil {
-		s.log.Errorf("nextRoundIsNotApproved: could not retrieve last block (%d) from the ledger.", lastLedgerRound)
+		s.log.Errorf("nextRoundIsNotSupported: could not retrieve last block (%d) from the ledger.", lastLedgerRound)
 		return false
 	}
 	bh := block.BlockHeader
-	_, isAnApprovedUpgrade := approvedUpgrades[bh.NextProtocol]
+	_, isSupportedUpgrade := supportedUpgrades[bh.NextProtocol]
 
-	if bh.NextProtocolSwitchOn > 0 && !isAnApprovedUpgrade {
-		// Save the last approved round number
-		// It is not necessary to check bh.NextProtocolSwitchOn < s.lastApprovedRound
+	if bh.NextProtocolSwitchOn > 0 && !isSupportedUpgrade {
+		// Save the last supported round number
+		// It is not necessary to check bh.NextProtocolSwitchOn < s.lastSupportedRound
 		// since there cannot be two protocol updates scheduled.
-		s.lastApprovedRound = bh.NextProtocolSwitchOn - 1
+		s.lastSupportedRound = bh.NextProtocolSwitchOn - 1
 
 		if nextRound >= bh.NextProtocolSwitchOn {
 			return true
@@ -525,20 +520,20 @@ func (s *Service) nextRoundIsNotApproved(nextRound basics.Round) bool {
 	return false
 }
 
-// handleUnapprovedRound receives a verified unapproved round: nextUnapprovedRound
-// Checks if the last approved round was added to the ledger, and stops the service.
-func (s *Service) handleUnapprovedRound(nextUnapprovedRound basics.Round) {
+// handleUnSupportedRound receives a verified unsupported round: nextUnsupportedRound
+// Checks if the last supported round was added to the ledger, and stops the service.
+func (s *Service) handleUnsupportedRound(nextUnsupportedRound basics.Round) {
 
-	s.log.Infof("Catchup Service: round %d is not approved. Service will stop once the last approved round is added to the ledger.",
-		nextUnapprovedRound)
+	s.log.Infof("Catchup Service: round %d is not approved. Service will stop once the last supported round is added to the ledger.",
+		nextUnsupportedRound)
 
-	// If the next round is an unapproved round, need to stop the
-	// catchup service. Should stop after the last approved round
+	// If the next round is an unsupported round, need to stop the
+	// catchup service. Should stop after the last supported round
 	// is added to the ledger.
 	lr := s.ledger.LastRound()
-	// Ledger writes are in order. >= guarantees last approved round is added to the ledger.
-	if lr >= s.lastApprovedRound {
-		s.log.Infof("Catchup Service: finished catching up to the last approved round %d. The subsequent rounds are not approved. Service is stopping.",
+	// Ledger writes are in order. >= guarantees last supported round is added to the ledger.
+	if lr >= s.lastSupportedRound {
+		s.log.Infof("Catchup Service: finished catching up to the last supported round %d. The subsequent rounds are not supported. Service is stopping.",
 			lr)
 		s.cancel()
 	}

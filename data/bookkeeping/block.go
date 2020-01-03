@@ -585,8 +585,7 @@ func SignedTxnGroupsFlatten(txgroups [][]transactions.SignedTxn) (res []transact
 
 // NextVersionInfo returns information about the next expected protocol version.
 // If no upgrade is scheduled, return the current protocol.
-// upgradeable means there is an upgrade path from current protocol version to the next 
-func (bh BlockHeader) NextVersionInfo() (ver protocol.ConsensusVersion, rnd basics.Round, supported bool, upgradeable bool) {
+func (bh BlockHeader) NextVersionInfo() (ver protocol.ConsensusVersion, rnd basics.Round, supported bool) {
 	if bh.Round >= bh.NextProtocolVoteBefore && bh.Round < bh.NextProtocolSwitchOn {
 		ver = bh.NextProtocol
 		rnd = bh.NextProtocolSwitchOn
@@ -595,12 +594,6 @@ func (bh BlockHeader) NextVersionInfo() (ver protocol.ConsensusVersion, rnd basi
 		rnd = bh.Round + 1
 	}
 	_, supported = config.Consensus[ver]
-	if supported {
-		currentConfig := config.Consensus[bh.CurrentProtocol]
-		_, upgradeable = currentConfig.ApprovedUpgrades[ver]
-	} else {
-		upgradeable = false
-	}
 	return
 }
 

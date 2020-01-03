@@ -45,11 +45,6 @@ type NodeStatus struct {
 	// required: true
 	NextVersionSupported bool `json:"nextConsensusVersionSupported"`
 
-	// NextVersionUpgradeable indicates whether there is a direct upgrade path from current version to the next
-	//
-	// required: true
-	NextVersionUpgradeable bool `json:"nextConsensusVersionUpgradable"`
-	
 	// TimeSinceLastRound in nanoseconds
 	//
 	// required: true
