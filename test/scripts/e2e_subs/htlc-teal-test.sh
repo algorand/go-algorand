@@ -11,8 +11,9 @@ WALLET=$1
 
 gcmd="goal -w ${WALLET}"
 
-ACCOUNT=$(${gcmd} account list|tee /dev/tty|awk '{ print $3 }')
-ACCOUNTB=$(${gcmd} account new|tee /dev/tty|awk '{ print $6 }')
+OUTPUT_DEVICE=$(readlink -f /proc/$$/fd/1)
+ACCOUNT=$(${gcmd} account list|tee ${OUTPUT_DEVICE}|awk '{ print $3 }')
+ACCOUNTB=$(${gcmd} account new|tee ${OUTPUT_DEVICE}|awk '{ print $6 }')
 ZERO_ADDRESS=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ
 LEASE=YmxhaCBibGFoIGxlYXNlIHdoYXRldmVyIGJsYWghISE=
 
@@ -20,7 +21,7 @@ LEASE=YmxhaCBibGFoIGxlYXNlIHdoYXRldmVyIGJsYWghISE=
 algotmpl -d ${GOPATH}/src/github.com/algorand/go-algorand/tools/teal/templates/ htlc --fee=2000 --hashfn="sha256" --hashimg="9S+9MrKzuG/4jvbEkGKChfSCrxXdyylUH5S89Saj9sc=" --own=${ACCOUNT} --rcv=${ACCOUNTB} --timeout=100000 > ${TEMPDIR}/atomic.teal
 
 # Compile the template
-CONTRACT=$(${gcmd} clerk compile ${TEMPDIR}/atomic.teal |tee /dev/tty| awk '{ print $2 }')
+CONTRACT=$(${gcmd} clerk compile ${TEMPDIR}/atomic.teal |tee ${OUTPUT_DEVICE}| awk '{ print $2 }')
 
 # Fund the contract
 ${gcmd} clerk send -a 10000000 -f ${ACCOUNT} -t ${CONTRACT}
@@ -45,7 +46,7 @@ fi
 ${gcmd} clerk send --fee=1000 --from-program ${TEMPDIR}/atomic.teal -a=0 -t=${ZERO_ADDRESS} --close-to=${ACCOUNTB} --argb64=aHVudGVyMg==
 
 # Check balance
-BALANCEB=$(${gcmd} account balance -a ${ACCOUNTB} |tee /dev/tty| awk '{ print $1 }')
+BALANCEB=$(${gcmd} account balance -a ${ACCOUNTB} |tee ${OUTPUT_DEVICE}| awk '{ print $1 }')
 if [ $BALANCEB -ne 9999000 ]; then
     date '+htlc-teal-test FAIL wanted balance=9999000 but got ${BALANCEB} %Y%m%d_%H%M%S'
     false
