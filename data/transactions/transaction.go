@@ -412,7 +412,7 @@ func (tx Transaction) TxAmount() basics.MicroAlgos {
 	}
 }
 
-// Receiver returns the address of the receiver. If the transaction has no receiver, it returns the empty address.
+// GetReceiverAddress returns the address of the receiver. If the transaction has no receiver, it returns the empty address.
 func (tx Transaction) GetReceiverAddress() basics.Address {
 	switch tx.Type {
 	case protocol.PaymentTx:
