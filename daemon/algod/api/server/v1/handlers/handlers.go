@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -419,6 +419,9 @@ func WaitForBlock(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	}
 
 	select {
+	case <-ctx.Shutdown:
+		lib.ErrorResponse(w, http.StatusInternalServerError, err, errServiceShuttingDown, ctx.Log)
+		return
 	case <-time.After(1 * time.Minute):
 	case <-ctx.Node.Ledger().Wait(basics.Round(queryRound + 1)):
 	}
