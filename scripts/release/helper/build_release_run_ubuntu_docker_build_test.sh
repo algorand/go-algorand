@@ -8,7 +8,7 @@ set -ex
 trap ${GOPATH}/src/github.com/algorand/go-algorand/scripts/kill_httpd.sh 0
 
 # Ubuntu 16 binaries are deprecated. Should still work to build from source for it.
-sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME}/docker_test_resources,dst=/stuff --mount type=bind,src=${GOPATH}/src,dst=/root/go/src --mount type=bind,src=/usr/local/go,dst=/usr/local/go ubuntu:16.04 bash ${HOME}/release/helper/build_release_ubuntu_test_docker.sh"
+sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME}/docker_test_resources,dst=/stuff --mount type=bind,src=${HOME}/go,dst=/root/go --mount type=bind,src=/usr/local/go,dst=/usr/local/go ubuntu:16.04 bash ${HOME}/release/helper/build_release_ubuntu_test_docker.sh"
 
 export DC_IP
 

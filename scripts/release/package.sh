@@ -35,18 +35,18 @@ cat <<EOF>"${HOME}"/dummyaptly.conf
   "SwiftPublishEndpoints": {}
 }
 EOF
-aptly -config="${HOME}"/dummyaptly.conf repo create -distribution=stable -component=main algodummy
-aptly -config="${HOME}"/dummyaptly.conf repo add algodummy "${HOME}"/node_pkg/*.deb
+"$HOME"/go/bin/aptly -config="${HOME}"/dummyaptly.conf repo create -distribution=stable -component=main algodummy
+"$HOME"/go/bin/aptly -config="${HOME}"/dummyaptly.conf repo add algodummy "${HOME}"/node_pkg/*.deb
 SNAPSHOT=algodummy-$(date +%Y%m%d_%H%M%S)
-aptly -config="${HOME}"/dummyaptly.conf snapshot create "${SNAPSHOT}" from repo algodummy
-aptly -config="${HOME}"/dummyaptly.conf publish snapshot -origin=Algorand -label=Algorand "${SNAPSHOT}"
+"$HOME"/go/bin/aptly -config="${HOME}"/dummyaptly.conf snapshot create "${SNAPSHOT}" from repo algodummy
+"$HOME"/go/bin/aptly -config="${HOME}"/dummyaptly.conf publish snapshot -origin=Algorand -label=Algorand "${SNAPSHOT}"
 
-/home/ubuntu/release/helper/build_release_run_ubuntu_docker_build_test.sh
+#/home/ubuntu/release/helper/build_release_run_ubuntu_docker_build_test.sh
 
 date "+build_release done building ubuntu %Y%m%d_%H%M%S"
 
 # Run RPM build in Centos7 Docker container
-sg docker "docker build -t algocentosbuild - < release/helper/centos-build.Dockerfile"
+sg docker "docker build -t algocentosbuild - < ${HOME}/release/helper/centos-build.Dockerfile"
 
 # cleanup our libsodium build
 if [ -f "${REPO_ROOT}/crypto/libsodium-fork/Makefile" ]; then
@@ -68,7 +68,7 @@ EOF
 ## https://github.com/koalaman/shellcheck/wiki/SC2064
 #trap '${REPO_ROOT}/scripts/kill_httpd.sh' 0
 
-sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME}/release,dst=/root/release --mount type=bind,src=/run/user/1000/gnupg/S.gpg-agent,dst=/S.gpg-agent --mount type=bind,src=${HOME}/dummyrepo,dst=/dummyrepo --mount type=bind,src=${HOME}/docker_test_resources,dst=/stuff --mount type=bind,src=${GOPATH},dst=/root/go --mount type=bind,src=${HOME},dst=/root/subhome --mount type=bind,src=/usr/local/go,dst=/usr/local/go algocentosbuild /root/release/helper/build_release_centos_docker.sh"
+sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME}/release,dst=/root/release --mount type=bind,src=/run/user/1000/gnupg/S.gpg-agent,dst=/S.gpg-agent --mount type=bind,src=${HOME}/dummyrepo,dst=/dummyrepo --mount type=bind,src=${HOME}/docker_test_resources,dst=/stuff --mount type=bind,src=${HOME}/go,dst=/root/go --mount type=bind,src=${HOME},dst=/root/subhome --mount type=bind,src=/usr/local/go,dst=/usr/local/go algocentosbuild /root/release/helper/build_release_centos_docker.sh"
 
 date "+build_release done building centos %Y%m%d_%H%M%S"
 
