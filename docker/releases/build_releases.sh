@@ -16,9 +16,9 @@
 #     ./build_releases.sh $name
 # done
 
-GREEN_FG=$(tput setaf 2)
-RED_FG=$(tput setaf 1)
-END_FG_COLOR=$(tput sgr0)
+GREEN_FG=$(tput setaf 2 2>/dev/null)
+RED_FG=$(tput setaf 1 2>/dev/null)
+END_FG_COLOR=$(tput sgr0 2>/dev/null)
 
 # Default to "mainnet".
 NAME=${1:-mainnet}
