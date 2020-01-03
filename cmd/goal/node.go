@@ -290,22 +290,7 @@ func getStatus(dataDir string) {
 func makeStatusString(stat v1.NodeStatus) string {
 	lastRoundTime := fmt.Sprintf("%.1fs", time.Duration(stat.TimeSinceLastRound).Seconds())
 	catchupTime := fmt.Sprintf("%.1fs", time.Duration(stat.CatchupTime).Seconds())
-	statusString := fmt.Sprintf(
-		infoNodeStatus,
-		stat.LastRound,
-		lastRoundTime,
-		catchupTime,
-		stat.LastVersion,
-		stat.NextVersion,
-		stat.NextVersionRound,
-		stat.NextVersionSupported)
-
-	if stat.LastRound+1 == stat.NextVersionRound &&
-		!stat.NextVersionSupported {
-		statusString = statusString + "\n" + fmt.Sprintf(catchupStoppedOnUnsupported, stat.LastRound)
-	}
-
-	return statusString
+	return fmt.Sprintf(infoNodeStatus, stat.LastRound, lastRoundTime, catchupTime, stat.LastVersion, stat.NextVersion, stat.NextVersionRound, stat.NextVersionSupported, stat.HasSyncedSinceStartup)
 }
 
 var lastroundCmd = &cobra.Command{
