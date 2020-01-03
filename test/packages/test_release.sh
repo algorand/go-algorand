@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 
-BLUE_FG=$(tput setaf 4)
-GREEN_FG=$(tput setaf 2)
-RED_FG=$(tput setaf 1)
-TEAL_FG=$(tput setaf 6)
-END_FG_COLOR=$(tput sgr0)
+if [ "${TERM}" != "" ]; then
+    BLUE_FG=$(tput setaf 4)
+    GREEN_FG=$(tput setaf 2)
+    RED_FG=$(tput setaf 1)
+    TEAL_FG=$(tput setaf 6)
+    END_FG_COLOR=$(tput sgr0)
+fi
 
 if [[ ! "$AWS_ACCESS_KEY_ID" || ! "$AWS_SECRET_ACCESS_KEY" ]]
 then

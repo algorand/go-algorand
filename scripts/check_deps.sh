@@ -13,11 +13,13 @@
 #
 # Examples: scripts/check_deps.sh
 
-GREEN_FG=$(tput setaf 2)
-RED_FG=$(tput setaf 1)
-TEAL_FG=$(tput setaf 6)
-YELLOW_FG=$(tput setaf 3)
-END_FG_COLOR=$(tput sgr0)
+if [ "${TERM}" != "" ]; then
+    GREEN_FG=$(tput setaf 2)
+    RED_FG=$(tput setaf 1)
+    TEAL_FG=$(tput setaf 6)
+    YELLOW_FG=$(tput setaf 3)
+    END_FG_COLOR=$(tput sgr0)
+fi
 
 GOPATH=$(go env GOPATH)
 export GOPATH

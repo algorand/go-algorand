@@ -28,6 +28,14 @@ usage() {
     echo
 }
 
+if [ "${TERM}" != "" ]; then
+    GREEN_FG=$(tput setaf 2)
+    RED_FG=$(tput setaf 1)
+    TEAL_FG=$(tput setaf 6)
+    YELLOW_FG=$(tput setaf 3)
+    END_FG_COLOR=$(tput sgr0)
+fi
+
 while [ "$1" != "" ]; do
     case "$1" in
         -i)
@@ -40,7 +48,7 @@ while [ "$1" != "" ]; do
             exit 0
             ;;
         *)
-            echo "$(tput setaf 1)[ERROR]$(tput sgr0) Unknown option $1"
+            echo "${RED_FG}[ERROR]${END_FG_COLOR} Unknown option $1"
             usage
             exit 1
             ;;
@@ -67,7 +75,7 @@ do
                     echo "$FILE"
                 fi
             else
-                echo -e "\n$(tput setaf 2)$FILE$(tput sgr0)"
+                echo -e "\n${RED_FG}$FILE${END_FG_COLOR}"
                 <"$PROJECT_ROOT/$FILE" head -n "$NUMLINES"
                 echo
             fi
