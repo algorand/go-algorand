@@ -9,38 +9,38 @@ pipeline {
     stages {
         stage("create ec2 instance") {
             steps {
-                sh script: 'scripts/release/start_ec2_instance.sh'
+                sh script: 'scripts/buildhost/start_ec2_instance.sh'
             }
         }
 
         stage("setup ec2 instance") {
             steps {
                 sh 'aws s3 cp s3://algorand-devops-misc/tools/gnupg2.2.9_centos7_amd64.tar.bz2 .'
-                sh 'ssh -A ubuntu@$(cat scripts/buildhost/tmp/instance) mkdir docker_test_resources'
-                sh 'scp -o StrictHostKeyChecking=no -r gnupg2.2.9_centos7_amd64.tar.bz2 ubuntu@$(cat scripts/buildhost/tmp/instance):~/docker_test_resources/'
-                sh 'scp -o StrictHostKeyChecking=no -r scripts/release/setup.sh ubuntu@$(cat scripts/buildhost/tmp/instance):~/setup.sh'
-                sh 'ssh -A ubuntu@$(cat scripts/buildhost/tmp/instance) bash setup.sh'
+                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/buildhost/tmp/instance) mkdir docker_test_resources'
+                sh 'scp -i BuilderInstanceKey.pem -o StrictHostKeyChecking=no -r gnupg2.2.9_centos7_amd64.tar.bz2 ubuntu@$(cat scripts/buildhost/tmp/instance):~/docker_test_resources/'
+                sh 'scp -i BuilderInstanceKey.pem -o StrictHostKeyChecking=no -r scripts/release/setup.sh ubuntu@$(cat scripts/buildhost/tmp/instance):~/setup.sh'
+                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/buildhost/tmp/instance) bash setup.sh'
             }
         }
 
         stage("build and package") {
             steps {
-                sh 'ssh -A ubuntu@$(cat scripts/buildhost/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/build.sh'
+                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/buildhost/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/build.sh'
                 input "Login and sign!"
-                sh 'ssh -A ubuntu@$(cat scripts/buildhost/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/package.sh'
+                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/buildhost/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/package.sh'
             }
         }
 
         stage("sign") {
             steps {
-                sh 'ssh -A ubuntu@$(cat scripts/buildhost/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/sign.sh'
+                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/buildhost/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/sign.sh'
             }
         }
 
         stage("delete ec2 instance") {
             steps {
                 input "Halt!"
-                sh script: "scripts/release/kill_ec2_instance.sh"
+                sh script: "scripts/buildhost/shutdown_ec2_instance.sh"
             }
         }
     }
