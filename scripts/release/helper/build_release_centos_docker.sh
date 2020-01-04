@@ -37,18 +37,17 @@ make build
 #export NO_BUILD=1
 
 RPMTMP=$(mktemp -d 2>/dev/null || mktemp -d -t "rpmtmp")
-trap "rm -rf ${RPMTMP}" 0
-${REPO_DIR}/scripts/release/helper/build_rpm.sh ${RPMTMP}
-cp -p ${RPMTMP}/*/*.rpm /root/subhome/node_pkg
+trap 'rm -rf ${RPMTMP}' 0
+"${REPO_DIR}/scripts/release/helper/build_rpm.sh" "${RPMTMP}"
+cp -p "${RPMTMP}/*/*.rpm" /root/subhome/node_pkg
 
 (cd ${HOME} && tar jxf /root/stuff/gnupg*.tar.bz2)
 export PATH="${HOME}/gnupg2/bin:${PATH}"
 export LD_LIBRARY_PATH=${HOME}/gnupg2/lib
 
+umask 0077
+mkdir -p "${HOME}/.gnupg"
 umask 0022
-
-mkdir "${HOME}/.gnupg"
-chmod 770 "${HOME}/.gnupg"
 touch "${HOME}/.gnupg/gpg.conf"
 if grep -q no-autostart "${HOME}/.gnupg/gpg.conf"; then
     echo ""
@@ -65,7 +64,7 @@ rpmkeys --import /root/stuff/rpm.pub
 echo "wat"|gpg -u rpm@algorand.com --clearsign
 
 cat <<EOF>"${HOME}/.rpmmacros"
-%_gpg_name Algorand RPM <rpm@algorand.com>
+%_gpg_name rpm algorand <rpm@algorand.com>
 %__gpg ${HOME}/gnupg2/bin/gpg
 %__gpg_check_password_cmd true
 EOF
@@ -76,7 +75,7 @@ import sys
 rpm.addSign(sys.argv[1], '')
 EOF
 
-NEWEST_RPM=$(ls -t /root/subhome/node_pkg/*rpm|head -1)
+NEWEST_RPM=$(ls -t /root/subhome/node_pkg/*rpm | head -1)
 python2 "${HOME}/rpmsign.py" "${NEWEST_RPM}"
 
 cp -p "${NEWEST_RPM}" /dummyrepo
@@ -84,13 +83,14 @@ createrepo --database /dummyrepo
 rm -f /dummyrepo/repodata/repomd.xml.asc
 gpg -u rpm@algorand.com --detach-sign --armor /dummyrepo/repodata/repomd.xml
 
-OLDRPM=$(ls -t /root/stuff/*.rpm|head -1)
+OLDRPM=$(ls -t /root/stuff/*.rpm | head -1)
 if [ -f "${OLDRPM}" ]; then
     yum install -y "${OLDRPM}"
     algod -v
-    if algod -v | grep -q ${FULLVERSION}; then
-	echo "already installed current version. wat?"
-	false
+    if algod -v | grep -q "${FULLVERSION}"
+    then
+        echo "already installed current version. wat?"
+        false
     fi
 
     mkdir -p /root/testnode
@@ -101,13 +101,12 @@ if [ -f "${OLDRPM}" ]; then
     goal node stop -d /root/testnode
 fi
 
-
-yum-config-manager --add-repo http://${DC_IP}:8111/algodummy.repo
+yum-config-manager --add-repo "http://${DC_IP}:8111/algodummy.repo"
 
 yum install -y algorand
 algod -v
 # check that the installed version is now the current version
-algod -v | grep -q ${FULLVERSION}.${CHANNEL}
+algod -v | grep -q "${FULLVERSION}.${CHANNEL}"
 
 if [ ! -d /root/testnode ]; then
     mkdir -p /root/testnode
@@ -117,7 +116,6 @@ fi
 goal node start -d /root/testnode
 goal node wait -d /root/testnode -w 120
 goal node stop -d /root/testnode
-
 
 echo CENTOS_DOCKER_TEST_OK
 

@@ -41,9 +41,9 @@ cp -p "${REPO_ROOT}/installer/rpm/algorand.repo" "${HOME}/prodrepo/algorand.repo
 gpg --export -a dev@algorand.com > "${HOME}/docker_test_resources/key.pub"
 gpg --export -a rpm@algorand.com > "${HOME}/docker_test_resources/rpm.pub"
 
-GPG_AGENT_SOCKET=$("${HOME}/gpgbin/remote_gpg_socket")
-
-sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${GPG_AGENT_SOCKET},dst=/S.gpg-agent --mount type=bind,src=${HOME}/prodrepo,dst=${HOME}/dummyrepo --mount type=bind,src=${HOME}/docker_test_resources,dst=/root/stuff --mount type=bind,src=${HOME}/go,dst=/root/go --mount type=bind,src=${HOME},dst=/root/subhome --mount type=bind,src=/usr/local/go,dst=/usr/local/go algocentosbuild /root/go/src/github.com/algorand/go-algorand/scripts/sign_centos_docker.sh"
+#GPG_AGENT_SOCKET=$("${HOME}/gpgbin/remote_gpg_socket")
+#
+#sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${GPG_AGENT_SOCKET},dst=/S.gpg-agent --mount type=bind,src=${HOME}/prodrepo,dst=${HOME}/dummyrepo --mount type=bind,src=${HOME}/docker_test_resources,dst=/root/stuff --mount type=bind,src=${HOME}/go,dst=/root/go --mount type=bind,src=${HOME},dst=/root/subhome --mount type=bind,src=/usr/local/go,dst=/usr/local/go algocentosbuild /root/go/src/github.com/algorand/go-algorand/scripts/sign_centos_docker.sh"
 
 date "+build_release done signing %Y%m%d_%H%M%S"
 
