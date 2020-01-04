@@ -18,10 +18,10 @@ package libgoal
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"syscall"
-	"time"
 )
 
 // Platform-dependant locker implementation
@@ -40,26 +40,68 @@ type locker interface {
 }
 
 type unixLocker struct {
+	ofd         bool
+	setLock     int
+	setLockWait int
+	getLock     int
 }
 
+// makeUnixLocker create a unix file locker.
+// note that the desired way is to use the OFD locker, which locks on the file descriptor level.
+// falling back to the non-OFD lock would allow obtaining two locks by the same process. If this becomes
+// and issue, we might want to use flock, which wouldn't work across NFS.
+func makeUnixLocker() *unixLocker {
+	locker := &unixLocker{}
+	getlk := syscall.Flock_t{Type: syscall.F_RDLCK}
+	if err := syscall.FcntlFlock(0, 37 /*F_OFD_GETLK*/, &getlk); err == nil {
+		locker.ofd = true
+		// constants from /usr/include/bits/fcntl-linux.h
+		locker.setLock = 37     // F_OFD_SETLK
+		locker.setLockWait = 38 // F_OFD_SETLKW
+		locker.getLock = 37     // F_OFD_GETLK
+	} else {
+		locker.setLock = syscall.F_SETLK
+		locker.setLockWait = syscall.F_SETLKW
+		locker.getLock = syscall.F_GETLK
+	}
+	return locker
+}
+
+// the FcntlFlock has the most consistent behaviour across platforms,
+// and supports both local and network file systems.
 func (f *unixLocker) tryRLock(fd *os.File) error {
-	return syscall.Flock(int(fd.Fd()), syscall.LOCK_SH|syscall.LOCK_NB)
+	flock := &syscall.Flock_t{
+		Type:   syscall.F_RDLCK,
+		Whence: int16(io.SeekStart),
+		Start:  0,
+		Len:    0,
+	}
+	return syscall.FcntlFlock(fd.Fd(), f.setLockWait, flock)
 }
 
 func (f *unixLocker) tryLock(fd *os.File) error {
-	return syscall.Flock(int(fd.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+	flock := &syscall.Flock_t{
+		Type:   syscall.F_WRLCK,
+		Whence: int16(io.SeekStart),
+		Start:  0,
+		Len:    0,
+	}
+	return syscall.FcntlFlock(fd.Fd(), syscall.F_SETLKW, flock)
 }
 
 func (f *unixLocker) unlock(fd *os.File) error {
-	return syscall.Flock(int(fd.Fd()), syscall.LOCK_UN)
+	flock := &syscall.Flock_t{
+		Type:   syscall.F_UNLCK,
+		Whence: int16(io.SeekStart),
+		Start:  0,
+		Len:    0,
+	}
+	return syscall.FcntlFlock(fd.Fd(), syscall.F_SETLKW, flock)
 }
 
 // lockedFile implementation
-// It uses non-blocking acquisition with repeats
-// and supposed to be platform-agnostic with appropriate locker implementation.
+// It a platform-agnostic with appropriate locker implementation.
 // Each platform needs own specific `newLockedFile`
-const maxRepeats = 10
-const sleepInterval = 10 * time.Millisecond
 
 type lockedFile struct {
 	path   string
@@ -69,7 +111,7 @@ type lockedFile struct {
 func newLockedFile(path string) *lockedFile {
 	return &lockedFile{
 		path:   path,
-		locker: &unixLocker{},
+		locker: makeUnixLocker(),
 	}
 }
 
@@ -85,16 +127,15 @@ func (f *lockedFile) read() (bytes []byte, err error) {
 		}
 	}()
 
-	lockFunc := func() error { return f.locker.tryRLock(fd) }
-	err = attemptLock(lockFunc)
+	err = f.locker.tryRLock(fd)
 	if err != nil {
-		err = fmt.Errorf("Can't acquire lock for %s: %s", f.path, err.Error())
+		err = fmt.Errorf("Can't acquire read lock for %s: %s", f.path, err.Error())
 		return
 	}
 	defer func() {
 		err2 := f.locker.unlock(fd)
 		if err2 != nil {
-			err = err2
+			err = fmt.Errorf("Can't unlock for %s: %s", f.path, err2.Error())
 		}
 	}()
 
@@ -114,15 +155,14 @@ func (f *lockedFile) write(data []byte, perm os.FileMode) (err error) {
 		}
 	}()
 
-	lockFunc := func() error { return f.locker.tryLock(fd) }
-	err = attemptLock(lockFunc)
+	err = f.locker.tryLock(fd)
 	if err != nil {
 		return fmt.Errorf("Can't acquire lock for %s: %s", f.path, err.Error())
 	}
 	defer func() {
 		err2 := f.locker.unlock(fd)
 		if err2 != nil {
-			err = err2
+			err = fmt.Errorf("Can't unlock for %s: %s", f.path, err2.Error())
 		}
 	}()
 
@@ -132,15 +172,4 @@ func (f *lockedFile) write(data []byte, perm os.FileMode) (err error) {
 	}
 	_, err = fd.Write(data)
 	return
-}
-
-func attemptLock(lockFunc func() error) error {
-	var savedError error
-	for repeatCounter := 0; repeatCounter < maxRepeats; repeatCounter++ {
-		if savedError = lockFunc(); savedError != syscall.EWOULDBLOCK {
-			break
-		}
-		time.Sleep(sleepInterval)
-	}
-	return savedError
 }
