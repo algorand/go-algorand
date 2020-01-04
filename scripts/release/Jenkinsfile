@@ -37,6 +37,12 @@ pipeline {
             }
         }
 
+        stage("tag") {
+            steps {
+                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/buildhost/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/tag.sh'
+            }
+        }
+
         stage("upload") {
             steps {
                 sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/buildhost/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/upload.sh'
