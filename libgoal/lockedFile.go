@@ -159,10 +159,27 @@ func attemptLock(lockFunc func() error) error {
 	var savedError error
 	for repeatCounter := 0; repeatCounter < maxRepeats; repeatCounter++ {
 		savedError = lockFunc()
-		if savedError != syscall.EACCES && savedError != syscall.EAGAIN {
+		if savedError != syscall.EACCES && savedError != syscall.EAGAIN && savedError != syscall.EWOULDBLOCK {
 			break
 		}
 		time.Sleep(sleepInterval)
+	}
+	if savedError != nil {
+		fmt.Fprintf(os.Stderr, "already attempted to lock for few times. kept failing.")
+		repeatCounter := 0
+		for ; repeatCounter < maxRepeats*100; repeatCounter++ {
+			savedError = lockFunc()
+			if savedError != syscall.EACCES && savedError != syscall.EAGAIN && savedError != syscall.EWOULDBLOCK {
+				break
+			}
+			time.Sleep(sleepInterval)
+		}
+		if savedError == nil {
+			fmt.Fprintf(os.Stderr, "trying for %d more times, did not help !", repeatCounter)
+		} else {
+			fmt.Fprintf(os.Stderr, "after trying for %d more times, we made it !", repeatCounter)
+		}
+
 	}
 	return savedError
 }
