@@ -112,7 +112,7 @@ func (f *lockedFile) write(data []byte, perm os.FileMode) error {
 func attemptLock(lockFunc func() error) error {
 	var savedError error
 	for repeatCounter := 0; repeatCounter < maxRepeats; repeatCounter++ {
-		if savedError = lockFunc(); savedError == nil {
+		if savedError = lockFunc(); savedError != syscall.EWOULDBLOCK {
 			break
 		}
 		time.Sleep(sleepInterval)
