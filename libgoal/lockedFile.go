@@ -43,8 +43,9 @@ type locker interface {
 type unixLocker struct {
 }
 
+// the FcntlFlock has the most consistent behaviour across platforms,
+// and supports both local and network file systems.
 func (f *unixLocker) tryRLock(fd *os.File) error {
-	//return syscall.Flock(int(fd.Fd()), syscall.LOCK_SH|syscall.LOCK_NB)
 	flock := &syscall.Flock_t{
 		Type:   syscall.F_RDLCK,
 		Whence: int16(io.SeekStart),
@@ -62,7 +63,6 @@ func (f *unixLocker) tryLock(fd *os.File) error {
 		Len:    0,
 	}
 	return syscall.FcntlFlock(fd.Fd(), syscall.F_SETLK, flock)
-	//return syscall.Flock(int(fd.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
 }
 
 func (f *unixLocker) unlock(fd *os.File) error {
@@ -73,7 +73,6 @@ func (f *unixLocker) unlock(fd *os.File) error {
 		Len:    0,
 	}
 	return syscall.FcntlFlock(fd.Fd(), syscall.F_SETLK, flock)
-	//return syscall.Flock(int(fd.Fd()), syscall.LOCK_UN)
 }
 
 // lockedFile implementation
@@ -116,7 +115,7 @@ func (f *lockedFile) read() (bytes []byte, err error) {
 	defer func() {
 		err2 := f.locker.unlock(fd)
 		if err2 != nil {
-			err = err2
+			err = fmt.Errorf("Can't unlock for %s: %s", f.path, err2.Error())
 		}
 	}()
 
@@ -144,7 +143,7 @@ func (f *lockedFile) write(data []byte, perm os.FileMode) (err error) {
 	defer func() {
 		err2 := f.locker.unlock(fd)
 		if err2 != nil {
-			err = err2
+			err = fmt.Errorf("Can't unlock for %s: %s", f.path, err2.Error())
 		}
 	}()
 
@@ -159,7 +158,7 @@ func (f *lockedFile) write(data []byte, perm os.FileMode) (err error) {
 func attemptLock(lockFunc func() error) error {
 	var savedError error
 	for repeatCounter := 0; repeatCounter < maxRepeats; repeatCounter++ {
-		if savedError = lockFunc(); savedError != syscall.EWOULDBLOCK {
+		if savedError = lockFunc(); savedError != syscall.ENOLCK {
 			break
 		}
 		time.Sleep(sleepInterval)
