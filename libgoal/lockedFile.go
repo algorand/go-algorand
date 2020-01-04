@@ -22,7 +22,6 @@ import (
 	"io/ioutil"
 	"os"
 	"syscall"
-	"time"
 )
 
 // Platform-dependant locker implementation
@@ -43,6 +42,13 @@ type locker interface {
 type unixLocker struct {
 }
 
+// makeUnixLocker create a unix file locker.
+// for now, we use the trivial implementation, however, we might need to adjust
+// the underlaying locking technology depending on the availablity on the executing host.
+func makeUnixLocker() *unixLocker {
+	return &unixLocker{}
+}
+
 // the FcntlFlock has the most consistent behaviour across platforms,
 // and supports both local and network file systems.
 func (f *unixLocker) tryRLock(fd *os.File) error {
@@ -52,7 +58,7 @@ func (f *unixLocker) tryRLock(fd *os.File) error {
 		Start:  0,
 		Len:    0,
 	}
-	return syscall.FcntlFlock(fd.Fd(), syscall.F_SETLK, flock)
+	return syscall.FcntlFlock(fd.Fd(), syscall.F_SETLKW, flock)
 }
 
 func (f *unixLocker) tryLock(fd *os.File) error {
@@ -62,7 +68,7 @@ func (f *unixLocker) tryLock(fd *os.File) error {
 		Start:  0,
 		Len:    0,
 	}
-	return syscall.FcntlFlock(fd.Fd(), syscall.F_SETLK, flock)
+	return syscall.FcntlFlock(fd.Fd(), syscall.F_SETLKW, flock)
 }
 
 func (f *unixLocker) unlock(fd *os.File) error {
@@ -72,15 +78,12 @@ func (f *unixLocker) unlock(fd *os.File) error {
 		Start:  0,
 		Len:    0,
 	}
-	return syscall.FcntlFlock(fd.Fd(), syscall.F_SETLK, flock)
+	return syscall.FcntlFlock(fd.Fd(), syscall.F_SETLKW, flock)
 }
 
 // lockedFile implementation
-// It uses non-blocking acquisition with repeats
-// and supposed to be platform-agnostic with appropriate locker implementation.
+// It a platform-agnostic with appropriate locker implementation.
 // Each platform needs own specific `newLockedFile`
-const maxRepeats = 10
-const sleepInterval = 10 * time.Millisecond
 
 type lockedFile struct {
 	path   string
@@ -90,7 +93,7 @@ type lockedFile struct {
 func newLockedFile(path string) *lockedFile {
 	return &lockedFile{
 		path:   path,
-		locker: &unixLocker{},
+		locker: makeUnixLocker(),
 	}
 }
 
@@ -106,8 +109,7 @@ func (f *lockedFile) read() (bytes []byte, err error) {
 		}
 	}()
 
-	lockFunc := func() error { return f.locker.tryRLock(fd) }
-	err = attemptLock(lockFunc)
+	err = f.locker.tryRLock(fd)
 	if err != nil {
 		err = fmt.Errorf("Can't acquire read lock for %s: %s", f.path, err.Error())
 		return
@@ -135,8 +137,7 @@ func (f *lockedFile) write(data []byte, perm os.FileMode) (err error) {
 		}
 	}()
 
-	lockFunc := func() error { return f.locker.tryLock(fd) }
-	err = attemptLock(lockFunc)
+	err = f.locker.tryLock(fd)
 	if err != nil {
 		return fmt.Errorf("Can't acquire lock for %s: %s", f.path, err.Error())
 	}
@@ -153,33 +154,4 @@ func (f *lockedFile) write(data []byte, perm os.FileMode) (err error) {
 	}
 	_, err = fd.Write(data)
 	return
-}
-
-func attemptLock(lockFunc func() error) error {
-	var savedError error
-	for repeatCounter := 0; repeatCounter < maxRepeats; repeatCounter++ {
-		savedError = lockFunc()
-		if savedError != syscall.EACCES && savedError != syscall.EAGAIN && savedError != syscall.EWOULDBLOCK {
-			break
-		}
-		time.Sleep(sleepInterval)
-	}
-	if savedError != nil {
-		fmt.Fprintf(os.Stderr, "already attempted to lock for few times. kept failing.")
-		repeatCounter := 0
-		for ; repeatCounter < maxRepeats*100; repeatCounter++ {
-			savedError = lockFunc()
-			if savedError != syscall.EACCES && savedError != syscall.EAGAIN && savedError != syscall.EWOULDBLOCK {
-				break
-			}
-			time.Sleep(sleepInterval)
-		}
-		if savedError == nil {
-			fmt.Fprintf(os.Stderr, "trying for %d more times, did not help !", repeatCounter)
-		} else {
-			fmt.Fprintf(os.Stderr, "after trying for %d more times, we made it !", repeatCounter)
-		}
-
-	}
-	return savedError
 }
