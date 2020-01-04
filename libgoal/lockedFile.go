@@ -73,46 +73,71 @@ func newLockedFile(path string) *lockedFile {
 	}
 }
 
-func (f *lockedFile) read() ([]byte, error) {
+func (f *lockedFile) read() (bytes []byte, err error) {
 	fd, err := os.Open(f.path)
 	if err != nil {
-		return nil, err
+		return
 	}
-	defer fd.Close()
+	defer func() {
+		err2 := fd.Close()
+		if err2 != nil {
+			err = err2
+		}
+	}()
 
 	lockFunc := func() error { return f.locker.tryRLock(fd) }
 	err = attemptLock(lockFunc)
 	if err != nil {
-		return nil, fmt.Errorf("Can't acquire lock for %s: %s", f.path, err.Error())
+		err = fmt.Errorf("Can't acquire lock for %s: %s", f.path, err.Error())
+		return
 	}
-	defer f.locker.unlock(fd)
+	defer func() {
+		err2 := f.locker.unlock(fd)
+		if err2 != nil {
+			err = err2
+		}
+	}()
 
-	return ioutil.ReadAll(fd)
+	bytes, err = ioutil.ReadAll(fd)
+	return
 }
 
-func (f *lockedFile) write(data []byte, perm os.FileMode) error {
+func (f *lockedFile) write(data []byte, perm os.FileMode) (err error) {
 	fd, err := os.OpenFile(f.path, os.O_WRONLY|os.O_CREATE, perm)
 	if err != nil {
-		return err
+		return
 	}
-	defer fd.Close()
+	defer func() {
+		err2 := fd.Close()
+		if err2 != nil {
+			err = err2
+		}
+	}()
 
 	lockFunc := func() error { return f.locker.tryLock(fd) }
 	err = attemptLock(lockFunc)
 	if err != nil {
 		return fmt.Errorf("Can't acquire lock for %s: %s", f.path, err.Error())
 	}
-	defer f.locker.unlock(fd)
+	defer func() {
+		err2 := f.locker.unlock(fd)
+		if err2 != nil {
+			err = err2
+		}
+	}()
 
-	fd.Truncate(0)
+	err = fd.Truncate(0)
+	if err != nil {
+		return
+	}
 	_, err = fd.Write(data)
-	return err
+	return
 }
 
 func attemptLock(lockFunc func() error) error {
 	var savedError error
 	for repeatCounter := 0; repeatCounter < maxRepeats; repeatCounter++ {
-		if savedError = lockFunc(); savedError == nil {
+		if savedError = lockFunc(); savedError != syscall.EWOULDBLOCK {
 			break
 		}
 		time.Sleep(sleepInterval)
