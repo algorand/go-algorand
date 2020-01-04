@@ -418,12 +418,29 @@ func WaitForBlock(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ledger := ctx.Node.Ledger()
+	latestBlkHdr, err := ledger.BlockHdr(ledger.Latest())
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
+		return
+	}
+	if latestBlkHdr.NextProtocol != "" {
+		if _, nextProtocolSupported := config.Consensus[latestBlkHdr.NextProtocol]; !nextProtocolSupported {
+			// see if the desired protocol switch is expect to happen before or after the above point.
+			if latestBlkHdr.NextProtocolSwitchOn <= basics.Round(queryRound+1) {
+				// we would never reach to this round, since this round would happen after the (unsupported) protocol upgrade.
+				lib.ErrorResponse(w, http.StatusBadRequest, err, errRequestedRoundInUnsupportedRound, ctx.Log)
+				return
+			}
+		}
+	}
+
 	select {
 	case <-ctx.Shutdown:
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errServiceShuttingDown, ctx.Log)
 		return
 	case <-time.After(1 * time.Minute):
-	case <-ctx.Node.Ledger().Wait(basics.Round(queryRound + 1)):
+	case <-ledger.Wait(basics.Round(queryRound + 1)):
 	}
 
 	nodeStatus, err := nodeStatus(ctx.Node)
