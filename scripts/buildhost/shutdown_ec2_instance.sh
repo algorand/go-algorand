@@ -13,7 +13,7 @@
 #
 #
 
-AWS_REGION=${1-us-east-1}
+AWS_REGION="$1"
 GREEN_FG=$(echo -en "\e[32m")
 YELLOW_FG=$(echo -en "\e[33m")
 END_FG_COLOR=$(echo -en "\e[39m")

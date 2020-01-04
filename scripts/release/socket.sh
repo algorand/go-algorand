@@ -14,6 +14,7 @@ LOCAL_GPG_SOCKET=$(gpgconf --list-dirs | grep agent-socket | awk -F: '{ print $2
 gpg --export -a dev@algorand.com > /tmp/dev.pub
 gpg --export -a rpm@algorand.com > /tmp/rpm.pub
 
+# TODO: Maybe scp the public keys into the $HOME/docker... dir on the remote server?
 scp -i BuilderInstanceKey.pem -p /tmp/{dev,rpm}.pub ubuntu@"$TARGET":~/
 ssh -i BuilderInstanceKey.pem ubuntu@"$TARGET" << EOF
     gpg --import dev.pub

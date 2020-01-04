@@ -9,7 +9,7 @@ pipeline {
     stages {
         stage("create ec2 instance") {
             steps {
-                sh script: 'scripts/buildhost/start_ec2_instance.sh'
+                sh script: 'scripts/buildhost/start_ec2_instance.sh us-west-1 ami-0dd655843c87b6930 t2.2xlarge'
             }
         }
 
@@ -40,7 +40,7 @@ pipeline {
         stage("delete ec2 instance") {
             steps {
                 input "Halt!"
-                sh script: "scripts/buildhost/shutdown_ec2_instance.sh"
+                sh script: "scripts/buildhost/shutdown_ec2_instance.sh us-west-1"
             }
         }
     }

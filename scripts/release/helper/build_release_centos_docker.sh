@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# shellcheck disable=2012
+#
 # build centos rpm from inside docker
 #
 # mount src from outside
@@ -39,7 +41,7 @@ make build
 RPMTMP=$(mktemp -d 2>/dev/null || mktemp -d -t "rpmtmp")
 trap 'rm -rf ${RPMTMP}' 0
 "${REPO_DIR}/scripts/release/helper/build_rpm.sh" "${RPMTMP}"
-cp -p "${RPMTMP}/*/*.rpm" /root/subhome/node_pkg
+cp -p "${RPMTMP}"/*/*.rpm /root/subhome/node_pkg
 
 (cd ${HOME} && tar jxf /root/stuff/gnupg*.tar.bz2)
 export PATH="${HOME}/gnupg2/bin:${PATH}"
@@ -64,7 +66,7 @@ rpmkeys --import /root/stuff/rpm.pub
 echo "wat"|gpg -u rpm@algorand.com --clearsign
 
 cat <<EOF>"${HOME}/.rpmmacros"
-%_gpg_name rpm algorand <rpm@algorand.com>
+%_gpg_name ALGORAND RPM <rpm@algorand.com>
 %__gpg ${HOME}/gnupg2/bin/gpg
 %__gpg_check_password_cmd true
 EOF
