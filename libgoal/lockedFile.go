@@ -18,6 +18,7 @@ package libgoal
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"syscall"
@@ -43,15 +44,36 @@ type unixLocker struct {
 }
 
 func (f *unixLocker) tryRLock(fd *os.File) error {
-	return syscall.Flock(int(fd.Fd()), syscall.LOCK_SH|syscall.LOCK_NB)
+	//return syscall.Flock(int(fd.Fd()), syscall.LOCK_SH|syscall.LOCK_NB)
+	flock := &syscall.Flock_t{
+		Type:   syscall.F_RDLCK,
+		Whence: int16(io.SeekStart),
+		Start:  0,
+		Len:    0,
+	}
+	return syscall.FcntlFlock(fd.Fd(), syscall.F_SETLK, flock)
 }
 
 func (f *unixLocker) tryLock(fd *os.File) error {
-	return syscall.Flock(int(fd.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+	flock := &syscall.Flock_t{
+		Type:   syscall.F_RDLCK | syscall.F_WRLCK,
+		Whence: int16(io.SeekStart),
+		Start:  0,
+		Len:    0,
+	}
+	return syscall.FcntlFlock(fd.Fd(), syscall.F_SETLK, flock)
+	//return syscall.Flock(int(fd.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
 }
 
 func (f *unixLocker) unlock(fd *os.File) error {
-	return syscall.Flock(int(fd.Fd()), syscall.LOCK_UN)
+	flock := &syscall.Flock_t{
+		Type:   syscall.F_UNLCK,
+		Whence: int16(io.SeekStart),
+		Start:  0,
+		Len:    0,
+	}
+	return syscall.FcntlFlock(fd.Fd(), syscall.F_SETLK, flock)
+	//return syscall.Flock(int(fd.Fd()), syscall.LOCK_UN)
 }
 
 // lockedFile implementation
@@ -73,40 +95,65 @@ func newLockedFile(path string) *lockedFile {
 	}
 }
 
-func (f *lockedFile) read() ([]byte, error) {
+func (f *lockedFile) read() (bytes []byte, err error) {
 	fd, err := os.Open(f.path)
 	if err != nil {
-		return nil, err
+		return
 	}
-	defer fd.Close()
+	defer func() {
+		err2 := fd.Close()
+		if err2 != nil {
+			err = err2
+		}
+	}()
 
 	lockFunc := func() error { return f.locker.tryRLock(fd) }
 	err = attemptLock(lockFunc)
 	if err != nil {
-		return nil, fmt.Errorf("Can't acquire lock for %s: %s", f.path, err.Error())
+		err = fmt.Errorf("Can't acquire read lock for %s: %s", f.path, err.Error())
+		return
 	}
-	defer f.locker.unlock(fd)
+	defer func() {
+		err2 := f.locker.unlock(fd)
+		if err2 != nil {
+			err = err2
+		}
+	}()
 
-	return ioutil.ReadAll(fd)
+	bytes, err = ioutil.ReadAll(fd)
+	return
 }
 
-func (f *lockedFile) write(data []byte, perm os.FileMode) error {
+func (f *lockedFile) write(data []byte, perm os.FileMode) (err error) {
 	fd, err := os.OpenFile(f.path, os.O_WRONLY|os.O_CREATE, perm)
 	if err != nil {
-		return err
+		return
 	}
-	defer fd.Close()
+	defer func() {
+		err2 := fd.Close()
+		if err2 != nil {
+			err = err2
+		}
+	}()
 
 	lockFunc := func() error { return f.locker.tryLock(fd) }
 	err = attemptLock(lockFunc)
 	if err != nil {
 		return fmt.Errorf("Can't acquire lock for %s: %s", f.path, err.Error())
 	}
-	defer f.locker.unlock(fd)
+	defer func() {
+		err2 := f.locker.unlock(fd)
+		if err2 != nil {
+			err = err2
+		}
+	}()
 
-	fd.Truncate(0)
+	err = fd.Truncate(0)
+	if err != nil {
+		return
+	}
 	_, err = fd.Write(data)
-	return err
+	return
 }
 
 func attemptLock(lockFunc func() error) error {
