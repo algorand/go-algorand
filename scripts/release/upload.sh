@@ -4,28 +4,30 @@
 # AWS_EFS_MOUNT= NFS to mount for `aptly` persistent state and scratch storage
 
 . "${HOME}/build_env"
-set -e
-set -x
+set -ex
+
+#AWS_EFS_MOUNT=fs-31159fd2.efs.us-east-1.amazonaws.com
 
 # persistent storage of repo manager scratch space is on EFS
 if [ ! -z "${AWS_EFS_MOUNT}" ]; then
-    if mount|grep -q /data; then
-	echo /data already mounted
+    if mount|grep -q /data
+    then
+        echo /data already mounted
     else
-	sudo mkdir -p /data
-	sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport "${AWS_EFS_MOUNT}":/ /data
-	# make environment for release_deb.sh
-	sudo mkdir -p /data/_aptly
-	sudo chown -R "${USER}" /data/_aptly
-	export APTLY_DIR=/data/_aptly
+        sudo mkdir -p /data
+        sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport "${AWS_EFS_MOUNT}":/ /data
+        # make environment for release_deb.sh
+        sudo mkdir -p /data/_aptly
+        sudo chown -R "${USER}" /data/_aptly
+        export APTLY_DIR=/data/_aptly
     fi
 fi
 
 cd "${PKG_ROOT}"
 
-if [ ! -z "${S3_PREFIX}" ]; then
-    aws s3 sync --quiet --exclude dev\* --exclude master\* --exclude nightly\* --exclude stable\* --acl public-read ./ "${S3_PREFIX}/${CHANNEL}/${RSTAMP}_${FULLVERSION}/"
-fi
+#if [ ! -z "${S3_PREFIX}" ]; then
+#    aws s3 sync --quiet --exclude dev\* --exclude master\* --exclude nightly\* --exclude stable\* --acl public-read ./ "${S3_PREFIX}/${CHANNEL}/${RSTAMP}_${FULLVERSION}/"
+#fi
 
 # copy .rpm file to intermediate yum repo scratch space, actual publish manually later
 if [ ! -d /data/yumrepo ]; then
@@ -64,10 +66,11 @@ EOF
 dpkg -l >>"${STATUSFILE}"
 gpg --clearsign "${STATUSFILE}"
 gzip "${STATUSFILE}.asc"
-if [ ! -z "${S3_PREFIX_BUILDLOG}" ]; then
-    aws s3 cp --quiet "${STATUSFILE}.asc.gz" "${S3_PREFIX_BUILDLOG}/${RSTAMP}/${STATUSFILE}.asc.gz"
-fi
+#if [ ! -z "${S3_PREFIX_BUILDLOG}" ]; then
+#    aws s3 cp --quiet "${STATUSFILE}.asc.gz" "${S3_PREFIX_BUILDLOG}/${RSTAMP}/${STATUSFILE}.asc.gz"
+#fi
 
 date "+build_release done uploading %Y%m%d_%H%M%S"
 
 # NEXT: release_deb.sh
+

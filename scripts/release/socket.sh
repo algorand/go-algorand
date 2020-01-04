@@ -23,6 +23,3 @@ ssh -i BuilderInstanceKey.pem ubuntu@"$TARGET" << EOF
 EOF
 ssh -i BuilderInstanceKey.pem -A -R "$REMOTE_GPG_SOCKET:$LOCAL_GPG_SOCKET" ubuntu@"$TARGET"
 
-#echo aoeu | gpg -u dev@algorand.com --clearsign
-#echo aoeu | gpg -u rpm@algorand.com --clearsign
-
