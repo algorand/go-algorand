@@ -412,6 +412,18 @@ func (tx Transaction) TxAmount() basics.MicroAlgos {
 	}
 }
 
+// GetReceiverAddress returns the address of the receiver. If the transaction has no receiver, it returns the empty address.
+func (tx Transaction) GetReceiverAddress() basics.Address {
+	switch tx.Type {
+	case protocol.PaymentTx:
+		return tx.PaymentTxnFields.Receiver
+	case protocol.AssetTransferTx:
+		return tx.AssetTransferTxnFields.AssetReceiver
+	default:
+		return basics.Address{}
+	}
+}
+
 // EstimateEncodedSize returns the estimated encoded size of the transaction including the signature.
 // This function is to be used for calculating the fee
 func (tx Transaction) EstimateEncodedSize() int {

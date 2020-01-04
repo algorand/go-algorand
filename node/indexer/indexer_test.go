@@ -124,6 +124,31 @@ func (s *IndexSuite) TestIndexer_DuplicateRounds() {
 	}
 }
 
+func (s *IndexSuite) TestIndexer_Asset() {
+	query := "SELECT txid from transactions where (from_addr = $1 OR to_addr = $1)"
+	rows, err := s.idx.IDB.dbr.Handle.Query(query, s.addrs[0].String())
+	require.NoError(s.T(), err)
+	defer rows.Close()
+
+	txids := make(map[string]bool, 0)
+	var txid string
+	for rows.Next() {
+		err := rows.Scan(&txid)
+		require.NoError(s.T(), err)
+		txids[txid] = true
+	}
+
+	// make sure all txns are in list
+	for _, txn := range s.txns {
+		if txn.Txn.Type == protocol.AssetTransferTx {
+			if txn.Txn.Sender == s.addrs[0] || txn.Txn.AssetReceiver == s.addrs[0] {
+				require.True(s.T(), txids[txn.ID().String()])
+			}
+		}
+	}
+
+}
+
 func TestExampleTestSuite(t *testing.T) {
 	suite.Run(t, new(IndexSuite))
 }
@@ -201,17 +226,28 @@ func generateTestObjects(numTxs, numAccs int) ([]transactions.Transaction, []tra
 		exp := iss + 10
 
 		txs[i] = transactions.Transaction{
-			Type: protocol.PaymentTx,
 			Header: transactions.Header{
 				Sender:     addresses[s],
 				Fee:        basics.MicroAlgos{Raw: f},
 				FirstValid: basics.Round(iss),
 				LastValid:  basics.Round(exp),
 			},
-			PaymentTxnFields: transactions.PaymentTxnFields{
+		}
+
+		// Create half assets and half payment
+		if i%2 == 0 {
+			txs[i].Type = protocol.PaymentTx
+			txs[i].PaymentTxnFields = transactions.PaymentTxnFields{
 				Receiver: addresses[r],
 				Amount:   basics.MicroAlgos{Raw: uint64(a)},
-			},
+			}
+		} else {
+			txs[i].Type = protocol.AssetTransferTx
+			txs[i].AssetTransferTxnFields = transactions.AssetTransferTxnFields{
+				AssetReceiver: addresses[r],
+				AssetAmount:   uint64(a),
+				XferAsset:     basics.AssetIndex(uint64(rand.Intn(20000))),
+			}
 		}
 		signed[i] = txs[i].Sign(secrets[s])
 	}
