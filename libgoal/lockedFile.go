@@ -57,7 +57,7 @@ func (f *unixLocker) tryRLock(fd *os.File) error {
 
 func (f *unixLocker) tryLock(fd *os.File) error {
 	flock := &syscall.Flock_t{
-		Type:   syscall.F_RDLCK | syscall.F_WRLCK,
+		Type:   syscall.F_WRLCK,
 		Whence: int16(io.SeekStart),
 		Start:  0,
 		Len:    0,
@@ -158,7 +158,8 @@ func (f *lockedFile) write(data []byte, perm os.FileMode) (err error) {
 func attemptLock(lockFunc func() error) error {
 	var savedError error
 	for repeatCounter := 0; repeatCounter < maxRepeats; repeatCounter++ {
-		if savedError = lockFunc(); savedError != syscall.ENOLCK {
+		savedError = lockFunc()
+		if savedError != syscall.EACCES && savedError != syscall.EAGAIN {
 			break
 		}
 		time.Sleep(sleepInterval)
