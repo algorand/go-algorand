@@ -40,5 +40,7 @@ var (
 	errNoRoundsSpecified                   = "Indexer is not enabled, firstRound and lastRound must be specified"
 	errNoTxnSpecified                      = "no transaction ID was specified"
 	errTransactionNotFound                 = "couldn't find the required transaction in the required range"
+	errServiceShuttingDown                 = "operation aborted as server is shutting down"
 	errUnknownTransactionType              = "found a transaction with an unknown type"
+	errRequestedRoundInUnsupportedRound    = "requested round would reach only after the protocol upgrade which isn't supported"
 )
