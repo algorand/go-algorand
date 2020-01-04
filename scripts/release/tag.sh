@@ -12,7 +12,7 @@ SIGNING_KEY_ADDR=dev@algorand.com
 #  fi
 #  export TIMESTAMP=${TIMESTAMP}
 
-cd "$REPO_ROOT" || exit
+cd "${HOME}"/go/src/github.com/algorand/go-algorand || exit
 git tag -d "${TAG}"
 git checkout HEAD
 git tag -s -u "${SIGNING_KEY_ADDR}" "${TAG}" -m "Genesis Timestamp: $(cat ./genesistimestamp.dat)"

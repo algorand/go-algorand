@@ -12,8 +12,7 @@
 # output copied to /root/subhome/node_pkg
 # --mount type=bind,src=${HOME},dst=/root/subhome
 
-set -e
-set -x
+set -ex
 
 export HOME=/root
 export GOPATH=${HOME}/go
@@ -63,7 +62,7 @@ gpg --import /root/stuff/key.pub
 gpg --import /root/stuff/rpm.pub
 gpg --import ${REPO_DIR}/installer/rpm/RPM-GPG-KEY-Algorand
 rpmkeys --import /root/stuff/rpm.pub
-echo "wat"|gpg -u rpm@algorand.com --clearsign
+echo "wat" | gpg -u rpm@algorand.com --clearsign
 
 cat <<EOF>"${HOME}/.rpmmacros"
 %_gpg_name ALGORAND RPM <rpm@algorand.com>
@@ -80,10 +79,10 @@ EOF
 NEWEST_RPM=$(ls -t /root/subhome/node_pkg/*rpm | head -1)
 python2 "${HOME}/rpmsign.py" "${NEWEST_RPM}"
 
-cp -p "${NEWEST_RPM}" /dummyrepo
-createrepo --database /dummyrepo
-rm -f /dummyrepo/repodata/repomd.xml.asc
-gpg -u rpm@algorand.com --detach-sign --armor /dummyrepo/repodata/repomd.xml
+cp -p "${NEWEST_RPM}" /root/dummyrepo
+createrepo --database /root/dummyrepo
+rm -f /root/dummyrepo/repodata/repomd.xml.asc
+gpg -u rpm@algorand.com --detach-sign --armor /root/dummyrepo/repodata/repomd.xml
 
 OLDRPM=$(ls -t /root/stuff/*.rpm | head -1)
 if [ -f "${OLDRPM}" ]; then

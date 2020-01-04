@@ -10,7 +10,7 @@ set -ex
 
 # persistent storage of repo manager scratch space is on EFS
 if [ ! -z "${AWS_EFS_MOUNT}" ]; then
-    if mount|grep -q /data
+    if mount | grep -q /data
     then
         echo /data already mounted
     else
@@ -41,31 +41,52 @@ cp -p -n ./*.rpm ./*.rpm.sig /data/yumrepo
 
 cd "${HOME}"
 STATUSFILE=build_status_${CHANNEL}_${FULLVERSION}
+
 echo "ami-id:" > "${STATUSFILE}"
 curl --silent http://169.254.169.254/latest/meta-data/ami-id >> "${STATUSFILE}"
+
+############################################################
+
 cat <<EOF>>"${STATUSFILE}"
 
 
 go version:
 EOF
-go version >>"${STATUSFILE}"
+
+/usr/local/go/bin/go version >>"${STATUSFILE}"
+
+
+############################################################
+
 cat <<EOF>>"${STATUSFILE}"
 
 go env:
 EOF
-go env >>"${STATUSFILE}"
+
+/usr/local/go/bin/go env >>"${STATUSFILE}"
+
+############################################################
+
 cat <<EOF>>"${STATUSFILE}"
 
 build_env:
 EOF
-cat <"${HOME}/build_env">>"${STATUSFILE}"
+
+cat <"${HOME}"/build_env >> "${STATUSFILE}"
+
+############################################################
+
 cat <<EOF>>"${STATUSFILE}"
 
 dpkg-l:
 EOF
-dpkg -l >>"${STATUSFILE}"
+
+############################################################
+
+dpkg -l >> "${STATUSFILE}"
 gpg --clearsign "${STATUSFILE}"
-gzip "${STATUSFILE}.asc"
+gzip "${STATUSFILE}".asc
+
 #if [ ! -z "${S3_PREFIX_BUILDLOG}" ]; then
 #    aws s3 cp --quiet "${STATUSFILE}.asc.gz" "${S3_PREFIX_BUILDLOG}/${RSTAMP}/${STATUSFILE}.asc.gz"
 #fi

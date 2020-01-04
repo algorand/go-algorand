@@ -19,8 +19,8 @@ git archive --prefix="algorand-${FULLVERSION}/" "${TAG}" | gzip > "${PKG_ROOT}/a
 
 # create *.sig gpg signatures
 cd "${PKG_ROOT}"
-#for i in *.tar.gz *.deb *.rpm; do
-for i in *.tar.gz *.deb; do
+for i in *.tar.gz *.deb *.rpm
+do
     gpg -u "${SIGNING_KEY_ADDR}" --detach-sign "${i}"
 done
 HASHFILE=hashes_${CHANNEL}_${OS}_${ARCH}_${FULLVERSION}

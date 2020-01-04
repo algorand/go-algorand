@@ -25,8 +25,26 @@ pipeline {
 
         stage("build and package") {
             steps {
+            /*
+                script {
+                    def PASSPHRASE = input(
+                        id: 'passphrase',
+                        message: 'Enter the GPG passphrase',
+                        parameters: [
+                            [
+                                $class: 'StringParameterDefinition',
+                                defaultValue: '',
+                                description: 'GPG Passphrase',
+                                name: 'gpg_pass'
+                            ]
+                        ])
+
+                        sh "bash scripts/release/socket.sh \$(cat scripts/buildhost/tmp/instance) ${PASSPHRASE}"
+                }
+            */
+
                 sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/buildhost/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/build.sh'
-                input "Login and sign!"
+                input "GPG remote socket"
                 sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/buildhost/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/package.sh'
             }
         }
@@ -37,15 +55,26 @@ pipeline {
             }
         }
 
-        stage("tag") {
+        stage("upload") {
             steps {
-                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/buildhost/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/tag.sh'
+                script {
+                    RSTAMP = sh(returnStdout: true, script: 'scripts/reverse_hex_timestamp')
+                    BRANCH = sh(returnStdout: true, script: 'scripts/compute_branch.sh')
+                    CHANNEL = sh(returnStdout: true, script: 'scripts/compute_branch_channel.sh ${BRANCH}')
+                    FULLVERSION = sh(returnStdout: true, script: 'scripts/compute_build_number.sh -f')
+
+                    sh "rm -rf node_pkg/* && mkdir -p node_pkg/${RSTAMP}"
+                    sh "scp -i BuilderInstanceKey.pem -o StrictHostKeyChecking=no -r ubuntu@\$(cat scripts/buildhost/tmp/instance):~/node_pkg/* node_pkg/${RSTAMP}/"
+                    sh "aws s3 sync --exclude dev* --exclude master* --exclude nightly* --exclude stable* --acl public-read node_pkg/${RSTAMP} s3://algorand-dev-deb-repo/releases/${CHANNEL}/${RSTAMP}_${FULLVERSION}/"
+                }
+
+                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/buildhost/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/upload.sh'
             }
         }
 
-        stage("upload") {
+        stage("tag") {
             steps {
-                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/buildhost/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/upload.sh'
+                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/buildhost/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/tag.sh'
             }
         }
 
