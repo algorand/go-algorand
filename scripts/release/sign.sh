@@ -7,15 +7,7 @@ set -ex
 #REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"/..
 REPO_ROOT=/home/ubuntu/go/src/github.com/algorand/go-algorand/
 
-cd "${REPO_ROOT}"
-
-# Tag Source
-TAG=${BRANCH}-${FULLVERSION}
-echo "TAG=${TAG}" >> "${HOME}/build_env"
-# creating a signed tag is now a manual process upstream of this build
-# git tag -s -u "${SIGNING_KEY_ADDR}" ${TAG} -m "Genesis Timestamp: $(cat ./genesistimestamp.dat)"
-
-git archive --prefix="algorand-${FULLVERSION}/" "${TAG}" | gzip > "${PKG_ROOT}/algorand_${CHANNEL}_source_${FULLVERSION}.tar.gz"
+#git archive --prefix="algorand-${FULLVERSION}/" "${TAG}" | gzip > "${PKG_ROOT}/algorand_${CHANNEL}_source_${FULLVERSION}.tar.gz"
 
 # create *.sig gpg signatures
 cd "${PKG_ROOT}"
@@ -32,6 +24,12 @@ touch "${HASHFILE}"
 md5sum *.tar.gz *.deb *.rpm >> "${HASHFILE}"
 shasum -a 256 *.tar.gz *.deb *.rpm >> "${HASHFILE}"
 shasum -a 512 *.tar.gz *.deb *.rpm >> "${HASHFILE}"
+
+if [ -z "${SIGNING_KEY_ADDR}" ]
+then
+    echo "no signing key addr"
+    SIGNING_KEY_ADDR=dev@algorand.com
+fi
 
 gpg -u "${SIGNING_KEY_ADDR}" --detach-sign "${HASHFILE}"
 gpg -u "${SIGNING_KEY_ADDR}" --clearsign "${HASHFILE}"

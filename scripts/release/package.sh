@@ -51,10 +51,10 @@ date "+build_release done building ubuntu %Y%m%d_%H%M%S"
 sg docker "docker build -t algocentosbuild - < ${REPO_ROOT}/scripts/release/helper/centos-build.Dockerfile"
 
 # cleanup our libsodium build
-if [ -f "${REPO_ROOT}/crypto/libsodium-fork/Makefile" ]; then
-    (cd "${REPO_ROOT}/crypto/libsodium-fork" && make distclean)
-fi
-rm -rf "${REPO_ROOT}/crypto/lib"
+#if [ -f "${REPO_ROOT}/crypto/libsodium-fork/Makefile" ]; then
+#    (cd "${REPO_ROOT}/crypto/libsodium-fork" && make distclean)
+#fi
+#rm -rf "${REPO_ROOT}/crypto/lib"
 
 # do the RPM build, sign and validate it
 

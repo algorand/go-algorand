@@ -93,7 +93,7 @@ cd "${GOPATH}/src/github.com/algorand" && git clone --single-branch --branch bui
 #git checkout "${GIT_CHECKOUT_LABEL}"
 # TODO: if we are checking out a release tag, `git tag --verify` it
 
-gpg --import "${GOPATH}/src/github.com/algorand/go-algorand/installer/rpm/RPM-GPG-KEY-Algorand"
+#gpg --import "${GOPATH}/src/github.com/algorand/go-algorand/installer/rpm/RPM-GPG-KEY-Algorand"
 
 # Install latest Go
 cd "$HOME"

@@ -1,13 +1,30 @@
 #!/usr/bin/env bash
 # shellcheck disable=2164
 
-AWS_REGION="${1-us-east-1}"
+# start_ec2_instance.sh - Invokes the build host
+#
+# Syntax:   start_ec2_instance.sh
+#
+# Usage:    Should only be used by a build host server.
+#
+# Exit Code: returns 0 if instance started successfully, non-zero otherwise
+#
+# Examples: scripts/buildhost/start_ec2_instance.sh <AWS_REGION> <AWS_AMI> <AWS_INSTANCE_TYPE>
+#
+# Upon successfull execution, the following files would be created:
+# sgid - contain the security group identifier
+# BuilderInstanceKey.pem - contains the certificate required to log on to the server
+# instance - contains the address of the created instance
+#
+
+AWS_REGION="$1"
 # Ubuntu Server 18.04 LTS
-AWS_AMI="${2-ami-04b9e92b5572fa0d1}"
-AWS_INSTANCE_TYPE="${3-t2.2xlarge}"
+AWS_AMI="$2"
+AWS_INSTANCE_TYPE="$3"
 INSTANCE_NUMBER=$RANDOM
-KEY_NAME="jenkins_ben"
-SECURITY_GROUP_NAME="JenkinsBuildSSH_$INSTANCE_NUMBER"
+KEY_NAME="BuilderInstanceKey_$INSTANCE_NUMBER"
+KEY_NAME_FILE="BuilderInstanceKey.pem"
+SECURITY_GROUP_NAME="BuilderMachineSSH_$INSTANCE_NUMBER"
 CIDR="0.0.0.0/0"
 RED_FG=$(echo -en "\e[31m")
 GREEN_FG=$(echo -en "\e[32m")
@@ -17,6 +34,18 @@ REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"
 
 cleanup () {
     rm -rf "$REPO_ROOT"/tmp
+}
+
+delete_local_key () {
+    rm -f "$KEY_NAME_FILE"
+}
+
+delete_key_pair () {
+    if ! aws ec2 delete-key-pair --key-name "$KEY_NAME" --region "$AWS_REGION"
+    then
+        exit 1
+        echo "$RED_FG[$0]$END_FG_COLOR: Key pair was not deleted!"
+    fi
 }
 
 delete_security_group () {
@@ -53,12 +82,25 @@ do
     fi
 done
 
+delete_local_key
+if ! aws ec2 create-key-pair --key-name "$KEY_NAME" --region "$AWS_REGION" | jq -r '.KeyMaterial' > "$KEY_NAME_FILE"
+then
+    echo "$RED_FG[$0]$END_FG_COLOR: There was a problem creating the key pair!"
+    delete_security_group
+    delete_local_key
+    exit 1
+else
+    chmod 400 "$KEY_NAME_FILE"
+fi
+
 mkdir -p "$REPO_ROOT/tmp"
 
-if ! aws ec2 run-instances --image-id "$AWS_AMI" --key-name "$KEY_NAME" --security-groups "$SECURITY_GROUP_NAME" --instance-type "$AWS_INSTANCE_TYPE" --tag-specifications "ResourceType=instance, Tags=[ { Key=\"Name\", Value=\"Jenkins_Build_Ephemeral_${INSTANCE_NUMBER}\"}, { Key=\"For\", Value=\"Jenkins_Build_Ephemeral\" } ]" --block-device-mappings "{ \"DeviceName\": \"/dev/sda1\", \"Ebs\": { \"DeleteOnTermination\": true, \"VolumeSize\": 40 } }" --count 1 --region "$AWS_REGION" > "$REPO_ROOT"/tmp/instance.json
+if ! aws ec2 run-instances --image-id "$AWS_AMI" --key-name "$KEY_NAME" --security-groups "$SECURITY_GROUP_NAME" --instance-type "$AWS_INSTANCE_TYPE" --tag-specifications "ResourceType=instance,Tags=[{Key=\"Name\",Value=\"Buildhost_Ephemeral_${INSTANCE_NUMBER}\"}, {Key=\"For\",Value=\"Buildhost_Ephemeral\"}]" --block-device-mappings '{ "DeviceName": "/dev/sda1", "Ebs": { "VolumeSize": 40 } }' --count 1 --region "$AWS_REGION" > "$REPO_ROOT"/tmp/instance.json
 then
     echo "$RED_FG[$0]$END_FG_COLOR: There was a problem launching the instance! Deleting the security group and the key pair!"
+    delete_key_pair
     delete_security_group
+    delete_local_key
     cleanup
     exit 1
 fi
@@ -84,6 +126,8 @@ do
     then
         echo "$YELLOW_FG[$0]$END_FG_COLOR: Instance is in state $INSTANCE_STATE..."
         PRIOR_INSTANCE_STATE="$INSTANCE_STATE"
+#    else
+#        cat "$REPO_ROOT"/tmp/instance2.json
     fi
 
     sleep 1s
@@ -94,4 +138,22 @@ INSTANCE_NAME=$(< "$REPO_ROOT"/tmp/instance2.json jq -r '.Reservations[].Instanc
 echo "$GREEN_FG[$0]$END_FG_COLOR: Instance name = $INSTANCE_NAME"
 
 manage_instance_info
+
+echo "$YELLOW_FG[$0]$END_FG_COLOR: Waiting for SSH connection"
+end=$((SECONDS+90))
+while [ $SECONDS -lt $end ]
+do
+    if ssh -i "$KEY_NAME_FILE" -o "StrictHostKeyChecking no" "ubuntu@$INSTANCE_NAME" "uname"
+    then
+        echo "$GREEN_FG[$0]$END_FG_COLOR: SSH connection ready"
+        exit 0
+    fi
+
+    sleep 1s
+done
+
+echo "$RED_FG[$0]$END_FG_COLOR: Unable to establish SSH connection"
+delete_local_key
+cleanup
+exit 1
 

@@ -33,7 +33,7 @@ rpmkeys --import /root/stuff/rpm.pub
 echo "wat"|gpg -u rpm@algorand.com --clearsign
 
 cat <<EOF>"${HOME}/.rpmmacros"
-%_gpg_name Algorand RPM <rpm@algorand.com>
+%_gpg_name ALGORAND RPM <rpm@algorand.com>
 %__gpg ${HOME}/gnupg2/bin/gpg
 %__gpg_check_password_cmd true
 EOF

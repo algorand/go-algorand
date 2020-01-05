@@ -25,10 +25,6 @@ fi
 
 cd "${PKG_ROOT}"
 
-#if [ ! -z "${S3_PREFIX}" ]; then
-#    aws s3 sync --quiet --exclude dev\* --exclude master\* --exclude nightly\* --exclude stable\* --acl public-read ./ "${S3_PREFIX}/${CHANNEL}/${RSTAMP}_${FULLVERSION}/"
-#fi
-
 # copy .rpm file to intermediate yum repo scratch space, actual publish manually later
 if [ ! -d /data/yumrepo ]; then
     sudo mkdir -p /data/yumrepo
@@ -87,6 +83,7 @@ dpkg -l >> "${STATUSFILE}"
 gpg --clearsign "${STATUSFILE}"
 gzip "${STATUSFILE}".asc
 
+# TODO
 #if [ ! -z "${S3_PREFIX_BUILDLOG}" ]; then
 #    aws s3 cp --quiet "${STATUSFILE}.asc.gz" "${S3_PREFIX_BUILDLOG}/${RSTAMP}/${STATUSFILE}.asc.gz"
 #fi

@@ -5,12 +5,11 @@
 # This lessens the security, but it may be acceptable in this case.
 
 INSTANCE=$1
-PASSPHRASE=$2
 gpgp=$(find /usr/lib/gnupg{2,,1} -type f -name gpg-preset-passphrase 2> /dev/null)
 KEYGRIP=$(gpg -K --with-keygrip --textmode dev@algorand.com | grep Keygrip | head -1 | awk '{ print $3 }')
 
 echo "enter dev@ password"
-echo "$PASSPHRASE" | $gpgp --verbose --preset "$KEYGRIP"
+$gpgp --verbose --preset "$KEYGRIP"
 echo aoeu | gpg -u dev@algorand.com --clearsign
 
 REMOTE_GPG_SOCKET=$(ssh -o StrictHostKeyChecking=no -i BuilderInstanceKey.pem ubuntu@"$INSTANCE" gpgbin/remote_gpg_socket)
@@ -24,7 +23,8 @@ scp -o StrictHostKeyChecking=no -i BuilderInstanceKey.pem -p /tmp/{dev,rpm}.pub 
 ssh -o StrictHostKeyChecking=no -i BuilderInstanceKey.pem ubuntu@"$INSTANCE" << EOF
     gpg --import dev.pub
     gpg --import rpm.pub
-    echo -e "SIGNING_KEY_ADDR=dev@algorand.com\nS3_PREFIX=s3://algorand-dev-deb-repo/releases\nS3_PREFIX_BUILDLOG=s3://algorand-devops-misc/buildlog" >> build_env
+    echo "SIGNING_KEY_ADDR=dev@algorand.com" >> build_env
 EOF
 ssh -o StrictHostKeyChecking=no -i BuilderInstanceKey.pem -A -R "$REMOTE_GPG_SOCKET:$LOCAL_GPG_SOCKET" ubuntu@"$INSTANCE"
+#    echo -e "SIGNING_KEY_ADDR=dev@algorand.com\nS3_PREFIX=s3://algorand-dev-deb-repo/releases\nS3_PREFIX_BUILDLOG=s3://algorand-devops-misc/buildlog" >> build_env
 
