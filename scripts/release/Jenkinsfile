@@ -1,0 +1,99 @@
+pipeline {
+    environment {
+        AWS_ACCESS_KEY_ID = credentials("aws-access-key-id")
+        AWS_SECRET_ACCESS_KEY = credentials("aws-secret-access-key")
+    }
+
+    agent any
+
+    stages {
+        stage("create ec2 instance") {
+            steps {
+                sh script: 'scripts/release/start_ec2_instance.sh us-west-1 ami-0dd655843c87b6930 t2.2xlarge'
+            }
+        }
+
+        stage("setup ec2 instance") {
+            steps {
+                sh 'aws s3 cp s3://algorand-devops-misc/tools/gnupg2.2.9_centos7_amd64.tar.bz2 .'
+                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/release/tmp/instance) mkdir docker_test_resources'
+                sh 'scp -i BuilderInstanceKey.pem -o StrictHostKeyChecking=no -r gnupg2.2.9_centos7_amd64.tar.bz2 ubuntu@$(cat scripts/release/tmp/instance):~/docker_test_resources/'
+                sh 'scp -i BuilderInstanceKey.pem -o StrictHostKeyChecking=no -r scripts/release/setup.sh ubuntu@$(cat scripts/release/tmp/instance):~/setup.sh'
+                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/release/tmp/instance) bash setup.sh'
+            }
+        }
+
+        stage("build and package") {
+            steps {
+                /*
+                script {
+                    def PASSPHRASE = input(
+                        id: 'passphrase',
+                        message: 'Enter the GPG passphrase',
+                        parameters: [
+                            [
+                                $class: 'StringParameterDefinition',
+                                defaultValue: '',
+                                description: 'GPG Passphrase',
+                                name: 'gpg_pass'
+                            ]
+                        ])
+
+                        sh "bash scripts/release/socket.sh \$(cat scripts/release/tmp/instance) ${PASSPHRASE}"
+                }
+                */
+
+                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/release/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/build.sh'
+                input "GPG remote socket"
+                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/release/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/package.sh'
+            }
+        }
+
+        stage("sign") {
+            steps {
+                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/release/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/sign.sh'
+            }
+        }
+
+        stage("upload") {
+            steps {
+                script {
+                    RSTAMP = sh(returnStdout: true, script: 'scripts/reverse_hex_timestamp')
+                    BRANCH = sh(returnStdout: true, script: 'bash scripts/compute_branch.sh')
+                    CHANNEL = sh(returnStdout: true, script: 'bash scripts/compute_branch_channel.sh ${BRANCH}')
+                    FULLVERSION = sh(returnStdout: true, script: 'bash scripts/compute_build_number.sh -f')
+
+                    // Bash scripts return vars with a trailing [:space:]
+                    BRANCH = BRANCH.replaceAll("\\s","")
+                    CHANNEL = CHANNEL.replaceAll("\\s","")
+                    FULLVERSION = FULLVERSION.replaceAll("\\s","")
+
+                    sh "rm -rf node_pkg/* && mkdir -p node_pkg/${RSTAMP}"
+                    sh "scp -i BuilderInstanceKey.pem -o StrictHostKeyChecking=no -r ubuntu@\$(cat scripts/release/tmp/instance):~/node_pkg/* node_pkg/${RSTAMP}/"
+                    sh "aws s3 sync --exclude dev* --exclude master* --exclude nightly* --exclude stable* --acl public-read node_pkg/${RSTAMP} s3://algorand-dev-deb-repo/releases/${CHANNEL}/${RSTAMP}_${FULLVERSION}/"
+                    // Create the buildlog file.
+                    sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/release/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/upload.sh'
+                    // sh "aws s3 cp --quiet ubuntu@\$(cat scripts/release/tmp/instance)/build_status_${CHANNEL}_${FULLVERSION}.asc.gz s3://algorand-devops-misc/buildlog/${RSTAMP}/"
+                    sh "scp -i BuilderInstanceKey.pem -o StrictHostKeyChecking=no ubuntu@\$(cat scripts/release/tmp/instance):~/build_status_${CHANNEL}_*.asc.gz node_pkg/"
+                    sh "aws s3 cp --quiet node_pkg/build_status_${CHANNEL}_*.asc.gz s3://algorand-devops-misc/buildlog/${RSTAMP}/"
+                }
+            }
+        }
+
+        /*
+        stage("tag") {
+            steps {
+                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/release/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/tag.sh'
+            }
+        }
+        */
+
+        stage("delete ec2 instance") {
+            steps {
+                input "Halt!"
+                sh script: "scripts/release/shutdown_ec2_instance.sh us-west-1"
+            }
+        }
+    }
+}
+
