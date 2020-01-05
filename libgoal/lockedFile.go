@@ -53,12 +53,12 @@ type unixLocker struct {
 func makeUnixLocker() *unixLocker {
 	locker := &unixLocker{}
 	getlk := syscall.Flock_t{Type: syscall.F_RDLCK}
-	if err := syscall.FcntlFlock(0, 37 /*F_OFD_GETLK*/, &getlk); err == nil {
+	if err := syscall.FcntlFlock(0, 36 /*F_OFD_GETLK*/, &getlk); err == nil {
 		locker.ofd = true
 		// constants from /usr/include/bits/fcntl-linux.h
 		locker.setLock = 37     // F_OFD_SETLK
 		locker.setLockWait = 38 // F_OFD_SETLKW
-		locker.getLock = 37     // F_OFD_GETLK
+		locker.getLock = 36     // F_OFD_GETLK
 	} else {
 		locker.setLock = syscall.F_SETLK
 		locker.setLockWait = syscall.F_SETLKW
