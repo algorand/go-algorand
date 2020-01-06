@@ -11,9 +11,9 @@ WALLET=$1
 
 gcmd="goal -w ${WALLET}"
 
-ACCOUNT=$(${gcmd} account list|tee /dev/tty|awk '{ print $3 }')
-ACCOUNTA=$(${gcmd} account new|tee /dev/tty|awk '{ print $6 }')
-ACCOUNTB=$(${gcmd} account new|tee /dev/tty|awk '{ print $6 }')
+ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
+ACCOUNTA=$(${gcmd} account new|awk '{ print $6 }')
+ACCOUNTB=$(${gcmd} account new|awk '{ print $6 }')
 LEASE=YmxhaCBibGFoIGxlYXNlIHdoYXRldmVyIGJsYWghISE=
 
 DUR=4
@@ -41,7 +41,7 @@ EOF
 PBOUND=$(cat ${TEMPDIR}/pbound)
 while [ ${ROUND} != ${PBOUND} ]; do
     goal node wait
-    ROUND=$(goal node status |tee /dev/tty| grep 'Last committed block:'|awk '{ print $4 }')
+    ROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
 done
 
 echo "send a bad keyreg transaction (missing lease)"
@@ -89,7 +89,7 @@ ${gcmd} account changeonlinestatus -a ${ACCOUNTA} -x ${LEASE} --online --firstva
 dsign ${TEMPDIR}/delegate.keyregkey ${TEMPDIR}/kr.lsig < ${TEMPDIR}/keyreg.tx > ${TEMPDIR}/keyreg.stx
 ${gcmd} clerk rawsend -f ${TEMPDIR}/keyreg.stx
 
-REGOK=$(${gcmd} account list |tee /dev/tty| grep ${ACCOUNTA} | awk '{ print $1 }' | grep -c online)
+REGOK=$(${gcmd} account list | grep ${ACCOUNTA} | awk '{ print $1 }' | grep -c online)
 if [[ $REGOK != 1 ]]; then
    date '+keyreg-teal-test FAIL correct keyreg transaction failed %Y%m%d_%H%M%S'
    false
@@ -125,10 +125,10 @@ if [[ $RES != 'Participation key generation successful' ]]; then
 fi
 
 echo "wait for valid duration to pass"
-ROUND=$(goal node status | grep 'Last committed block:'|tee /dev/tty|awk '{ print $4 }')
+ROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
 while [ ${ROUND} -lt `expr ${EXPIRE} + 1` ]; do
     goal node wait
-    ROUND=$(goal node status | grep 'Last committed block:'|tee /dev/tty|awk '{ print $4 }')
+    ROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
 done
 
 echo "send a keyreg transaction after expiration"
