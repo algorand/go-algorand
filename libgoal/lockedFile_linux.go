@@ -22,6 +22,8 @@ import (
 	"io/ioutil"
 	"os"
 	"syscall"
+
+	"golang.org/x/sys/unix"
 )
 
 type linuxLocker struct {
@@ -45,7 +47,7 @@ func (f *linuxLocker) tryRLock(fd *os.File) error {
 		Start:  0,
 		Len:    0,
 	}
-	return syscall.FcntlFlock(fd.Fd(), syscall.F_OFD_SETLKW, flock)
+	return syscall.FcntlFlock(fd.Fd(), unix.F_OFD_SETLKW, flock)
 }
 
 func (f *linuxLocker) tryLock(fd *os.File) error {
@@ -55,7 +57,7 @@ func (f *linuxLocker) tryLock(fd *os.File) error {
 		Start:  0,
 		Len:    0,
 	}
-	return syscall.FcntlFlock(fd.Fd(), syscall.F_OFD_SETLKW, flock)
+	return syscall.FcntlFlock(fd.Fd(), unix.F_OFD_SETLKW, flock)
 }
 
 func (f *linuxLocker) unlock(fd *os.File) error {
@@ -65,5 +67,5 @@ func (f *linuxLocker) unlock(fd *os.File) error {
 		Start:  0,
 		Len:    0,
 	}
-	return syscall.FcntlFlock(fd.Fd(), syscall.F_OFD_SETLKW, flock)
+	return syscall.FcntlFlock(fd.Fd(), unix.F_OFD_SETLKW, flock)
 }
