@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -448,6 +448,8 @@ func getWalletHandleMaybePassword(dataDir string, walletName string, getPassword
 		}
 		return token, nil, nil
 	}
+
+	reportInfof("Failed to get cached wallet handle: %v", err)
 
 	// Assume any errors were "wrong password" errors, until we have actual
 	// API error codes

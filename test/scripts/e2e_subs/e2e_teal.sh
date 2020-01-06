@@ -11,11 +11,11 @@ WALLET=$1
 
 gcmd="goal -w ${WALLET}"
 
-ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
+ACCOUNT=$(${gcmd} account list|tee /dev/tty|awk '{ print $3 }')
 
 # prints:
 # Created new account with address UCTHHNBEAUWHDQWQI5DGQCTB7AR4CSVNU5YNPROAYQIT3Y3LKVDFAA5M6Q
-ACCOUNTB=$(${gcmd} account new|awk '{ print $6 }')
+ACCOUNTB=$(${gcmd} account new|tee /dev/tty|awk '{ print $6 }')
 
 ROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
 TIMEOUT_ROUND=$((${ROUND} + 7))
@@ -25,7 +25,7 @@ python ${GOPATH}/src/github.com/algorand/go-algorand/data/transactions/logic/tlh
 
 cat ${TEMPDIR}/tlhc.teal
 
-ACCOUNT_TLHC=$(${gcmd} clerk compile -n ${TEMPDIR}/tlhc.teal|awk '{ print $2 }')
+ACCOUNT_TLHC=$(${gcmd} clerk compile -n ${TEMPDIR}/tlhc.teal|tee /dev/tty|awk '{ print $2 }')
 
 ${gcmd} clerk send --amount 1000000 --from ${ACCOUNT} --to ${ACCOUNT_TLHC}
 
@@ -63,10 +63,10 @@ set -e
 ${gcmd} clerk send --amount 1000000 --from ${ACCOUNT} --to ${ACCOUNT_TLHC}
 
 # timeout round should pass. some of the 35 seconds was eaten by prior ops.
-CROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
+CROUND=$(goal node status | grep 'Last committed block:'|tee /dev/tty|awk '{ print $4 }')
 while [ $CROUND -lt $TIMEOUT_ROUND ]; do
     goal node wait
-    CROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
+    CROUND=$(goal node status | grep 'Last committed block:'|tee /dev/tty|awk '{ print $4 }')
 done
 
 ${gcmd} clerk send --from-program ${TEMPDIR}/tlhc.teal --to ${ACCOUNT} --close-to ${ACCOUNT} --amount 1 --argb64 AA==
@@ -87,7 +87,7 @@ ${gcmd} clerk rawsend -f ${TEMPDIR}/one.stx
 
 ${gcmd} clerk dryrun -t ${TEMPDIR}/one.stx
 
-ACCOUNT_TRUE=$(${gcmd} clerk compile -n ${TEMPDIR}/true.teal|awk '{ print $2 }')
+ACCOUNT_TRUE=$(${gcmd} clerk compile -n ${TEMPDIR}/true.teal|tee /dev/tty|awk '{ print $2 }')
 
 ${gcmd} clerk send --amount 1000000 --from ${ACCOUNT} --to ${ACCOUNT_TRUE}
 
@@ -103,9 +103,9 @@ ${gcmd} clerk inspect ${TEMPDIR}/true.stx
 
 ${gcmd} clerk compile -D ${TEMPDIR}/true.lsig
 
-ACCOUNTC=$(${gcmd} account new|awk '{ print $6 }')
+ACCOUNTC=$(${gcmd} account new|tee /dev/tty|awk '{ print $6 }')
 
-ACCOUNTM=$(${gcmd} account multisig new -T 2 ${ACCOUNT} ${ACCOUNTB} ${ACCOUNTC}|awk '{ print $6 }')
+ACCOUNTM=$(${gcmd} account multisig new -T 2 ${ACCOUNT} ${ACCOUNTB} ${ACCOUNTC}|tee /dev/tty|awk '{ print $6 }')
 
 
 ${gcmd} clerk multisig signprogram -p ${TEMPDIR}/true.teal -a ${ACCOUNT} -A ${ACCOUNTM} -o ${TEMPDIR}/mtrue.lsig
