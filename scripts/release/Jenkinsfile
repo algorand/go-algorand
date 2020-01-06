@@ -18,12 +18,12 @@ pipeline {
                 sh 'aws s3 cp s3://algorand-devops-misc/tools/gnupg2.2.9_centos7_amd64.tar.bz2 .'
                 sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/release/tmp/instance) mkdir docker_test_resources'
                 sh 'scp -i BuilderInstanceKey.pem -o StrictHostKeyChecking=no -r gnupg2.2.9_centos7_amd64.tar.bz2 ubuntu@$(cat scripts/release/tmp/instance):~/docker_test_resources/'
-                sh 'scp -i BuilderInstanceKey.pem -o StrictHostKeyChecking=no -r scripts/release/setup.sh ubuntu@$(cat scripts/release/tmp/instance):~/setup.sh'
+                sh 'scp -i BuilderInstanceKey.pem -o StrictHostKeyChecking=no -r scripts/release/master-controller/setup.sh ubuntu@$(cat scripts/release/tmp/instance):~/setup.sh'
                 sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/release/tmp/instance) bash setup.sh'
             }
         }
 
-        stage("build and package") {
+        stage("build") {
             steps {
                 /*
                 script {
@@ -43,15 +43,20 @@ pipeline {
                 }
                 */
 
-                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/release/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/build.sh'
+                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/release/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/master-controller/build.sh'
+            }
+        }
+
+        stage("package") {
+            steps {
                 input "GPG remote socket"
-                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/release/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/package.sh'
+                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/release/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/master-controller/package.sh'
             }
         }
 
         stage("sign") {
             steps {
-                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/release/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/sign.sh'
+                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/release/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/master-controller/sign.sh'
             }
         }
 

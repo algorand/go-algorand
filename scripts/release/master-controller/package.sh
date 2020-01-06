@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # shellcheck disable=2164,2166
 
+set -e
+
 REPO_ROOT=/home/ubuntu/go/src/github.com/algorand/go-algorand/
 
 # copy previous installers into ~/docker_test_resources

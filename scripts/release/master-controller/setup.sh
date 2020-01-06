@@ -88,8 +88,7 @@ sg docker "docker pull ubuntu:16.04"
 
 # Check out
 mkdir -p "${GOPATH}/src/github.com/algorand"
-cd "${GOPATH}/src/github.com/algorand" && git clone --single-branch --branch build_test "${GIT_REPO_PATH}" go-algorand
-#cd go-algorand
+cd "${GOPATH}/src/github.com/algorand" && git clone --single-branch --branch build_release "${GIT_REPO_PATH}" go-algorand #cd go-algorand
 #git checkout "${GIT_CHECKOUT_LABEL}"
 # TODO: if we are checking out a release tag, `git tag --verify` it
 

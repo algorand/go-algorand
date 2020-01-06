@@ -4,13 +4,14 @@ The `Jenkinsfile` uses the pipeline module to define its build stages.  Currentl
 
 1. create ec2 instance
 1. setup ec2 instance
-1. build and package
+1. build
+1. package
 1. sign
 1. upload
 1. tag (TODO)
 1. delete ec2 instance
 
-The only thing that is not automated at this point is pre-setting the `gpg-agent` with the passphrase of the private key.  In the middle of the `build and package` stage, Jenkins will pause and wait for the initiator of the build to do this and set up an SSH connection that will forward a Unix socket from the remote ec2 instance to the client, which in this case is most likely your laptop.
+The only thing that is not automated at this point is pre-setting the `gpg-agent` with the passphrase of the private key.  At the beginning of the `package` stage, Jenkins will pause and wait for the initiator of the build to do this and set up an SSH connection that will forward a Unix socket from the remote ec2 instance to the client, which in this case is most likely your laptop.
 
 ## Workflow
 
@@ -28,6 +29,12 @@ To complete this step, you will need to do the following:
 
 1. At the prompt, input the GPG passphrase (**Don't do this in a public space!!**).
 1. You should now be logged into the remote machine!
+1. As a sanity, it is a good idea to sign some text as a test to make sure that the connection was set up properly.  Enter the following pipeline:
+
+        echo foo | gpg -u rpm@algorand.com --clearsign
+
+    If there are any errors or if you are prompted for the passphrase, log out and run the above command again.
+
 1. Go back to Jenkins, hover over the build step that is currently paused, and click "Proceed".
 
 This is all of the manual work that needs to be done.
