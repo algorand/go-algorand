@@ -39,7 +39,7 @@ const (
 	AssetFreezeTx TxType = "afrz"
 
 	// ExecTx manages off-chain code execution
-	ExecTx TxType = "exe"
+	ExecTx TxType = "exec"
 
 	// UnknownTx signals an error
 	UnknownTx TxType = "unknown"

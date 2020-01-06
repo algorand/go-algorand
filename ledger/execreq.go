@@ -16,18 +16,6 @@
 
 package ledger
 
-import (
-	"fmt"
-	"io"
-	"log"
-	"os/exec"
-
-	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/transactions"
-)
-
 // This is part of a stub for the execution protocol, which I'll likely to need
 // to move to a separate process along the lines of @algobolson's algobot.
 // Saving here uncompleted until there is a place to move it to.
@@ -35,11 +23,10 @@ import (
 // The transaction is signed with Wasm code.  The code is simply spawned with the
 // transaction's note passed to stdin rather than being run by a consensus protocol.
 // The output is captured and placed back on the blockchain as another transaction
-execTxn(inBLock SignedTxnInBlock) {
+spawnTxn(txn SignedTxn) {
 
 	// unpack transaction
-	txn := inBLock.SignedTransaction
-	code := txn.LSig.Logic
+	code := txn.Lsig.Logic
 	type := GetExecTxType(txn);
 	input := GetExecData(txn);
 
@@ -69,7 +56,7 @@ execTxn(inBLock SignedTxnInBlock) {
 	} else {
 		SetExecTxType(signed_txn.Transaction.Note, ExecCommit);
 	}
-	txn.Transaction.Note[4:] = output
+	txn.Transaction.Note[5:] = output
 
 	// TODO send new transaction to network however it's done where this lands up
 }
