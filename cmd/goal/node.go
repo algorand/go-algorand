@@ -300,8 +300,7 @@ func makeStatusString(stat v1.NodeStatus) string {
 		stat.NextVersionRound,
 		stat.NextVersionSupported)
 
-	if stat.LastRound+1 == stat.NextVersionRound &&
-		!stat.NextVersionSupported {
+	if stat.StoppedAtUnsupportedRound {
 		statusString = statusString + "\n" + fmt.Sprintf(catchupStoppedOnUnsupported, stat.LastRound)
 	}
 
