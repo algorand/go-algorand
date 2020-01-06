@@ -26,13 +26,14 @@ import (
 const (
 	ExecInit    = "INIT:"
 	ExecRequest = "RQST:"
+	ExecSpawn   = "SPWN:"
 	ExecCommit  = "CMMT:"
 	ExecFailure = "FAIL:"
 )
 
 // Currently using a PaymentTx whose Note field has a header indicating the type of
 // transaction, followed by plain text for use by the executable as input and output.
-// TODO use ExecTx and ExecTxnFields instead of header
+// TODO use ExecTx and ExecTxnFields instead of header (fields in header may be useful too)
 // TODO decide how to structure input and output -- probably JSON
 
 GetExecTxType(txn SignedTransaction) string {
@@ -61,7 +62,8 @@ func (exec ExecTxnFields) apply(header Header, balances Balances, spec SpecialAd
 	switch exec.execType {
 	case ExecInit:    return nil // transfer of funds to hash of code creates account
 	case ExecRequest: return nil // will be posted to blockchain for later execution
-	case ExecCommit:  return nil // TODO attempt commitment to storage
+	case ExecSpawn:   return nil // will be posted to blockchain for later execution
+	case ExecCommit:  return nil // TODO attempt commitment to storage?
 	}
 	return nil
 }
