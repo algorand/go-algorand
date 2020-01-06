@@ -86,7 +86,7 @@ func (f *unixLocker) tryLock(fd *os.File) error {
 		Start:  0,
 		Len:    0,
 	}
-	return syscall.FcntlFlock(fd.Fd(), syscall.F_SETLKW, flock)
+	return syscall.FcntlFlock(fd.Fd(), f.setLockWait, flock)
 }
 
 func (f *unixLocker) unlock(fd *os.File) error {
@@ -96,7 +96,7 @@ func (f *unixLocker) unlock(fd *os.File) error {
 		Start:  0,
 		Len:    0,
 	}
-	return syscall.FcntlFlock(fd.Fd(), syscall.F_SETLKW, flock)
+	return syscall.FcntlFlock(fd.Fd(), f.setLockWait, flock)
 }
 
 // lockedFile implementation
