@@ -193,7 +193,7 @@ func TestStoppedCatchupOnUnsupported(t *testing.T) {
 	// Stoppd at the first protocol
 	a.Equal("test-unupgraded-protocol", status.LastVersion)
 	// Next version is different (did not upgrade to it)
-	a.True(status.NextVersion != status.LastVersion)
+	a.NotEqual(status.NextVersion, status.LastVersion)
 	// Next round is when the upgrade happens
 	a.True(!status.NextVersionSupported && status.LastRound+1 == status.NextVersionRound)
 }
