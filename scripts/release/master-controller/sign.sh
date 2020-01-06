@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # shellcheck disable=1090,2129,2035
 . "${HOME}/build_env"
-set -ex
+#set -ex
 
 # Anchor our repo root reference location
 #REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"/..

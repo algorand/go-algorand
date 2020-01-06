@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # shellcheck disable=2164,2166
 
-set -e
+#set -e
 
 REPO_ROOT=/home/ubuntu/go/src/github.com/algorand/go-algorand/
 

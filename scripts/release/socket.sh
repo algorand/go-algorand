@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -e
+#set -e
 
 # TODO: ssh-keyscan?
 # -o StrictHostKeyChecking=no suppresses the (yes/no) new key ssh question.
