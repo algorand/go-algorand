@@ -327,7 +327,7 @@ type WebsocketNetwork struct {
 	// lastPeerConnectionsSent is the last time the peer connections were sent ( or attempted to be sent ) to the telemetry server.
 	lastPeerConnectionsSent time.Time
 
-	// connPerfMonitor is used on outgoing connections to measture their relative message timing
+	// connPerfMonitor is used on outgoing connections to measure their relative message timing
 	connPerfMonitor *connectionPerformanceMonitor
 
 	// lastNetworkAdvanceMu syncronized teh access to lastNetworkAdvance
