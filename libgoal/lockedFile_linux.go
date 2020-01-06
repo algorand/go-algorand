@@ -17,9 +17,7 @@
 package libgoal
 
 import (
-	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"syscall"
 
