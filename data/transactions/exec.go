@@ -26,7 +26,6 @@ import (
 const (
 	ExecInit    = "INIT:"
 	ExecRequest = "RQST:"
-	ExecSpawn   = "SPWN:"
 	ExecCommit  = "CMMT:"
 	ExecFailure = "FAIL:"
 )
@@ -61,8 +60,7 @@ type ExecTxnFields struct {
 func (exec ExecTxnFields) apply(header Header, balances Balances, spec SpecialAddresses, ad *ApplyData) error {
 	switch exec.execType {
 	case ExecInit:    return nil // transfer of funds to hash of code creates account
-	case ExecRequest: return nil // will be posted to blockchain for later execution
-	case ExecSpawn:   return nil // will be posted to blockchain for later execution
+	case ExecRequest: return nil // post to blockchain for later execution
 	case ExecCommit:  return nil // TODO attempt commitment to storage?
 	}
 	return nil

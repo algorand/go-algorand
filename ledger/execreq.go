@@ -23,7 +23,7 @@ package ledger
 // The transaction is signed with Wasm code.  The code is simply spawned with the
 // transaction's note passed to stdin rather than being run by a consensus protocol.
 // The output is captured and placed back on the blockchain as another transaction
-spawnTxn(txn SignedTxn) {
+execTxn(txn SignedTxn) {
 
 	// unpack transaction
 	code := txn.Lsig.Logic
@@ -58,5 +58,5 @@ spawnTxn(txn SignedTxn) {
 	}
 	txn.Transaction.Note[5:] = output
 
-	// TODO send new transaction to network however it's done where this lands up
+	// TODO send new transaction to network
 }
