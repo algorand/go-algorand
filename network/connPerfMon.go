@@ -73,7 +73,7 @@ type connectionPerformanceMonitor struct {
 	monitoredConnections map[Peer]bool                // the map of the connection we're going to monitor. Messages coming from other connections would be ignored.
 	monitoredMessageTags map[Tag]bool                 // the map of the message tags we're interested in monitoring. Messages that aren't broadcast-type typically would be a good choice heer.
 	stage                pmStage                      // the performance monitoring stage.
-	lastPeerMsgTime      map[Peer]int64               // the map describing the last time we received a message from each of the peers.
+	peerLastMsgTime      map[Peer]int64               // the map describing the last time we received a message from each of the peers.
 	lastIncomingMsgTime  int64                        // the time at which the last message was received from any of the peers.
 	stageStartTime       int64                        // the timestamp at which we switched to the current stage.
 	pendingMessages      map[crypto.Digest]*pmMessage // the pendingMessages map contains messages that haven't been received from all the peers within the pmMaxMessageWaitTime
@@ -147,7 +147,7 @@ func (pm *connectionPerformanceMonitor) Reset(peers []Peer) {
 	defer pm.Unlock()
 	pm.pendingMessages = make(map[crypto.Digest]*pmMessage, 0)
 	pm.monitoredConnections = make(map[Peer]bool, len(peers))
-	pm.lastPeerMsgTime = make(map[Peer]int64, len(peers))
+	pm.peerLastMsgTime = make(map[Peer]int64, len(peers))
 	pm.connectionDelay = make(map[Peer]int64, len(peers))
 	pm.firstMessageCount = make(map[Peer]int64, len(peers))
 	pm.msgCount = 0
@@ -156,7 +156,7 @@ func (pm *connectionPerformanceMonitor) Reset(peers []Peer) {
 
 	for _, peer := range peers {
 		pm.monitoredConnections[peer] = true
-		pm.lastPeerMsgTime[peer] = pm.stageStartTime
+		pm.peerLastMsgTime[peer] = pm.stageStartTime
 		pm.connectionDelay[peer] = 0
 		pm.firstMessageCount[peer] = 0
 	}
@@ -191,19 +191,19 @@ func (pm *connectionPerformanceMonitor) Notify(msg *IncomingMessage) {
 // notifyPresync waits until pmPresyncTime has passed and monitor the last arrivial time
 // of messages from each of the peers.
 func (pm *connectionPerformanceMonitor) notifyPresync(msg *IncomingMessage) {
-	pm.lastPeerMsgTime[msg.Sender] = msg.Received
+	pm.peerLastMsgTime[msg.Sender] = msg.Received
 	if (msg.Received - pm.stageStartTime) < int64(pmPresyncTime) {
 		return
 	}
 	// presync complete. move to the next stage.
 	noMsgPeers := make(map[Peer]bool, 0)
-	for peer, lastMsgTime := range pm.lastPeerMsgTime {
+	for peer, lastMsgTime := range pm.peerLastMsgTime {
 		if lastMsgTime == pm.stageStartTime {
 			// we haven't received a single message from this peer during the entire presync time.
 			noMsgPeers[peer] = true
 		}
 	}
-	if len(noMsgPeers) >= (len(pm.lastPeerMsgTime) / 2) {
+	if len(noMsgPeers) >= (len(pm.peerLastMsgTime) / 2) {
 		// if more than half of the peers have not sent us a single message,
 		// extend the presync time. We might be in agreement recovery, where we have very low
 		// traffic. If this becomes a repeated issue, it will get solved by the
@@ -231,7 +231,7 @@ func (pm *connectionPerformanceMonitor) notifyPresync(msg *IncomingMessage) {
 }
 
 // notifySync waits for all the peers connection's to go into an idle phase.
-// when we go into this stage, the lastPeerMsgTime will be already updated
+// when we go into this stage, the peerLastMsgTime will be already updated
 // with the recent message time per peer.
 func (pm *connectionPerformanceMonitor) notifySync(msg *IncomingMessage) {
 	minMsgInterval := pm.updateMessageIdlingInterval(msg.Received)
