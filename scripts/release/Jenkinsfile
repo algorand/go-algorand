@@ -9,7 +9,8 @@ pipeline {
     stages {
         stage("create ec2 instance") {
             steps {
-                sh script: 'scripts/release/start_ec2_instance.sh us-west-1 ami-0dd655843c87b6930 t2.2xlarge'
+                //sh script: 'scripts/release/start_ec2_instance.sh us-west-1 ami-0dd655843c87b6930 t2.2xlarge'
+                sh script: 'scripts/release/start_ec2_instance.sh us-east-1 ami-04b9e92b5572fa0d1 t2.2xlarge'
             }
         }
 
@@ -19,7 +20,23 @@ pipeline {
                 sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/release/tmp/instance) mkdir docker_test_resources'
                 sh 'scp -i BuilderInstanceKey.pem -o StrictHostKeyChecking=no -r gnupg2.2.9_centos7_amd64.tar.bz2 ubuntu@$(cat scripts/release/tmp/instance):~/docker_test_resources/'
                 sh 'scp -i BuilderInstanceKey.pem -o StrictHostKeyChecking=no -r scripts/release/setup.sh ubuntu@$(cat scripts/release/tmp/instance):~/setup.sh'
-                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/release/tmp/instance) bash setup.sh'
+
+                script {
+                    def GIT_BRANCH = input(
+                        id: 'git_branch',
+                        message: 'Enter the Git branch',
+                        parameters: [
+                            [
+                                $class: 'StringParameterDefinition',
+                                defaultValue: 'rel/stable',
+                                description: 'Git branch',
+                                name: 'branch'
+                            ]
+                        ]
+                    )
+
+                    sh "ssh -i BuilderInstanceKey.pem -A ubuntu@\$(cat scripts/release/tmp/instance) bash setup.sh ${GIT_BRANCH}"
+                }
             }
         }
 
@@ -37,9 +54,10 @@ pipeline {
                                 description: 'GPG Passphrase',
                                 name: 'gpg_pass'
                             ]
-                        ])
+                        ]
+                    )
 
-                        sh "bash scripts/release/socket.sh \$(cat scripts/release/tmp/instance) ${PASSPHRASE}"
+                    sh "bash scripts/release/socket.sh \$(cat scripts/release/tmp/instance) ${PASSPHRASE}"
                 }
                 */
 
@@ -62,7 +80,6 @@ pipeline {
 
         stage("upload") {
             steps {
-                input "Test for signing key"
                 script {
                     RSTAMP = sh(returnStdout: true, script: 'scripts/reverse_hex_timestamp')
                     BRANCH = sh(returnStdout: true, script: 'bash scripts/compute_branch.sh')

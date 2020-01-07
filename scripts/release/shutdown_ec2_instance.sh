@@ -1,18 +1,6 @@
 #!/usr/bin/env bash
 # shellcheck disable=2164
 
-# shutdown_ec2_instance.sh - Invokes the build host
-#
-# Syntax:   shutdown_ec2_instance.sh
-#
-# Usage:    Should only be used by a build host server.
-#
-# Exit Code: returns 0 if instance stop successfully, non-zero otherwise
-#
-# Examples: scripts/buildhost/shutdown_ec2_instance.sh <AWS_REGION>
-#
-#
-
 AWS_REGION="$1"
 GREEN_FG=$(echo -en "\e[32m")
 YELLOW_FG=$(echo -en "\e[33m")

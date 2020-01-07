@@ -9,7 +9,7 @@ if [ -z "${BUILDTIMESTAMP}" ]; then
     BUILDTIMESTAMP=$(cat "${HOME}/buildtimestamp")
     export BUILDTIMESTAMP
     echo run "${0}" with output to "${HOME}/buildlog_${BUILDTIMESTAMP}"
-    (bash "${0}" 2>&1) | tee "${HOME}/buildlog_${BUILDTIMESTAMP}"
+    (bash "${0}" "${1}" 2>&1) | tee "${HOME}/buildlog_${BUILDTIMESTAMP}"
     exit 0
 fi
 
@@ -21,9 +21,8 @@ if [ -z "${GIT_REPO_PATH}" ]; then
     GIT_REPO_PATH=https://github.com/btoll/go-algorand
 fi
 
-if [ -z "${GIT_CHECKOUT_LABEL}" ]; then
-    GIT_CHECKOUT_LABEL="rel/stable"
-fi
+GIT_CHECKOUT_LABEL=${1:-"rel/stable"}
+export GIT_CHECKOUT_LABEL
 
 export DEBIAN_FRONTEND=noninteractive
 
@@ -88,10 +87,9 @@ sg docker "docker pull ubuntu:16.04"
 
 # Check out
 mkdir -p "${GOPATH}/src/github.com/algorand"
-cd "${GOPATH}/src/github.com/algorand" && git clone --single-branch --branch build_test "${GIT_REPO_PATH}" go-algorand
-#cd go-algorand
-#git checkout "${GIT_CHECKOUT_LABEL}"
+cd "${GOPATH}/src/github.com/algorand" && git clone --single-branch --branch "${GIT_CHECKOUT_LABEL}" "${GIT_REPO_PATH}" go-algorand #cd go-algorand
 # TODO: if we are checking out a release tag, `git tag --verify` it
+#git checkout "${GIT_CHECKOUT_LABEL}"
 
 #gpg --import "${GOPATH}/src/github.com/algorand/go-algorand/installer/rpm/RPM-GPG-KEY-Algorand"
 

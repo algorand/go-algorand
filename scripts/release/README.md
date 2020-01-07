@@ -60,6 +60,26 @@ In addition, the build logs will be placed into the AWS `algorand-devops-misc` S
 
 All of the `aws ...` commands are now executed by Jenkins and are defined in the `Jenkinsfile`.  The reason for this is simple:  Jenkins already has the AWS auth credentials, and we don't want or need to be sending them anywhere else in the cloud.
 
+## Troublshooting
+
+If testing on a server, you will get bad creds errors if your system's clock is off by even a couple minutes.  Examples like the following will alert you to the problem:
+
+```
+An error occurred (AuthFailure) when calling the CreateSecurityGroup operation: AWS was not able to validate the provided access credentials
+
+etc
+```
+
+If you're on a debian-based system, this **should** work:
+
+    # https://github.com/mitchellh/vagrant-aws/issues/372#issuecomment-87429450
+    $ sudo apt-get install ntpdate
+    $ sudo ntpdate ntp.ubuntu.com
+
+You may also try reconfiguring your `tzdata` package:
+
+    $ sudo dpkg-reconfigure tzdata
+
 ## TODO
 
 Create the git tag.
