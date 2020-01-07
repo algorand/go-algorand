@@ -11,10 +11,10 @@ WALLET=$1
 
 gcmd="goal -w ${WALLET}"
 
-ACCOUNT=$(${gcmd} account list|tee /dev/tty|awk '{ print $3 }')
-ACCOUNTB=$(${gcmd} account new|tee /dev/tty|awk '{ print $6 }')
-ACCOUNTC=$(${gcmd} account new|tee /dev/tty|awk '{ print $6 }')
-ACCOUNTD=$(${gcmd} account new|tee /dev/tty|awk '{ print $6 }')
+ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
+ACCOUNTB=$(${gcmd} account new|awk '{ print $6 }')
+ACCOUNTC=$(${gcmd} account new|awk '{ print $6 }')
+ACCOUNTD=$(${gcmd} account new|awk '{ print $6 }')
 ZERO_ADDRESS=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ
 LEASE=uImiLf+mqOqs0BFsqIUHBh436N/z964X50e3P9Ii4ac=
 
