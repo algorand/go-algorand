@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
-BLUE_FG=$(tput setaf 4)
-GREEN_FG=$(tput setaf 2)
-RED_FG=$(tput setaf 1)
-TEAL_FG=$(tput setaf 6)
-END_FG_COLOR=$(tput sgr0)
+GREEN_FG=$(tput setaf 2 2>/dev/null)
+RED_FG=$(tput setaf 1 2>/dev/null)
+TEAL_FG=$(tput setaf 6 2>/dev/null)
+BLUE_FG=$(tput setaf 4 2>/dev/null)
+END_FG_COLOR=$(tput sgr0 2>/dev/null)
 
 OS_LIST=(
     centos:7

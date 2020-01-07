@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -147,6 +147,11 @@ const ConsensusTestRapidRewardRecalculation = ConsensusVersion("test-fast-reward
 // ConsensusTestShorterLookback is a version of ConsensusCurrentVersion
 // that decreases the MaxBalLookback greatly.
 const ConsensusTestShorterLookback = ConsensusVersion("test-shorter-lookback")
+
+// ConsensusTestUnupgradedProtocol is a version of ConsensusCurrentVersion
+// that allows the control of the upgrade from ConsensusTestUnupgradedProtocol to
+// ConsensusCurrentVersion
+const ConsensusTestUnupgradedProtocol = ConsensusVersion("test-unupgraded-protocol")
 
 // ConsensusTestFastUpgrade is meant for testing of protocol upgrades:
 // during testing, it is equivalent to another protocol with the exception
