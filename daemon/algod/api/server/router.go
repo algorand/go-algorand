@@ -126,12 +126,6 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-ch
 
 		urlAuthRouter := router.PathPrefix(urlAuthEndpointPrefix)
 		urlAuthRouter.PathPrefix(pprofEndpointPrefix).Handler(http.DefaultServeMux).Name(debugRouteName)
-	} else {
-		// pprof disabled, route to black hole
-		disabledHandler := func(w http.ResponseWriter, r *http.Request) {
-			http.Error(w, "Profiler disabled", http.StatusForbidden)
-		}
-		router.PathPrefix(pprofEndpointPrefix).HandlerFunc(disabledHandler)
 	}
 
 	// Registering common routes

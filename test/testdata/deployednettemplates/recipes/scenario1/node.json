@@ -4,6 +4,7 @@
     "EnableTelemetry": false,
     "TelemetryURI": "{{TelemetryURI}}",
     "EnableMetrics": false,
+    "EnableProfiler": true,
     "MetricsURI": "{{MetricsURI}}",
     "ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4  }",
    "AltConfigs": [
@@ -13,6 +14,7 @@
         "EnableTelemetry": true,
         "TelemetryURI": "{{TelemetryURI}}",
         "EnableMetrics": true,
+        "EnableProfiler": true,
         "MetricsURI": "{{MetricsURI}}",
         "ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4  }",
         "FractionApply": 0.2
