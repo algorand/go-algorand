@@ -179,6 +179,7 @@ func TestStoppedCatchupOnUnsupported(t *testing.T) {
 		<-timeout.C
 		timedOut = true
 	}()
+
 	for status, err = cloneClient.Status(); !timedOut && err == nil && // did not timeout
 		// and while the next round is not the next protocol upgrade:
 		(status.NextVersion == status.LastVersion || // next is not a new protocol, or
@@ -186,6 +187,8 @@ func TestStoppedCatchupOnUnsupported(t *testing.T) {
 			(status.NextVersion != status.LastVersion &&
 				// the new protocol version is not the next round
 				status.LastRound+1 != status.NextVersionRound)); status, err = cloneClient.Status() {
+		// libgoal Client StoppedAtUnsupportedRound in v1.NodeStatus should be false
+		a.False(status.StoppedAtUnsupportedRound)
 		time.Sleep(800 * time.Millisecond)
 	}
 	a.NoError(err)
@@ -196,4 +199,6 @@ func TestStoppedCatchupOnUnsupported(t *testing.T) {
 	a.NotEqual(status.NextVersion, status.LastVersion)
 	// Next round is when the upgrade happens
 	a.True(!status.NextVersionSupported && status.LastRound+1 == status.NextVersionRound)
+	// libgoal Client StoppedAtUnsupportedRound in v1.NodeStatus should now be true
+	a.True(status.StoppedAtUnsupportedRound)
 }
