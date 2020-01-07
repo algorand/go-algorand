@@ -561,7 +561,7 @@ func initConsensusTestProtocols() {
 		// This is needed for the voting nodes vote to upgrade to the next protocol
 		testUnupgradedProtocol.ApprovedUpgrades[protocol.ConsensusCurrentVersion] = 0
 	}
-	Consensus[protocol.ConsensusTestUnupgradedProtocol] = testUnupgradedProtocol;
+	Consensus[protocol.ConsensusTestUnupgradedProtocol] = testUnupgradedProtocol
 }
 
 func initConsensusTestFastUpgrade() {
@@ -790,6 +790,10 @@ type Local struct {
 	// PeerConnectionsUpdateInterval defines the interval at which the peer connections information is being sent to the
 	// telemetry ( when enabled ). Defined in seconds.
 	PeerConnectionsUpdateInterval int
+
+	// EnableProfiler enables the go pprof endpoints, should be false if
+	// the algod api will be exposed to untrusted individuals
+	EnableProfiler bool
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)
