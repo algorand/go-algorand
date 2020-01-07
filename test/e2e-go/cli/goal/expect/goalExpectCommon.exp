@@ -70,7 +70,7 @@ proc ::AlgorandGoal::StartNetwork { NETWORK_NAME NETWORK_TEMPLATE TEST_ALGO_DIR 
         spawn goal network create --network $NETWORK_NAME --template $NETWORK_TEMPLATE --datadir $TEST_ALGO_DIR --rootdir $TEST_ROOT_DIR
         expect {
             timeout { close; ::AlgorandGoal::Abort "Timed out creating network" }
-            "^Network $NETWORK_NAME created under*" { puts "Network $NETWORK_NAME created" ; close  }
+            "^Network [a-z-A-Z0-9_]* created under.*" { puts "Network $NETWORK_NAME created" ; close  }
             close
         }
 
