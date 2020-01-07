@@ -9,8 +9,8 @@ pipeline {
     stages {
         stage("create ec2 instance") {
             steps {
-                //sh script: 'scripts/release/start_ec2_instance.sh us-west-1 ami-0dd655843c87b6930 t2.2xlarge'
-                sh script: 'scripts/release/start_ec2_instance.sh us-east-1 ami-04b9e92b5572fa0d1 t2.2xlarge'
+                sh script: 'scripts/release/start_ec2_instance.sh us-west-1 ami-0dd655843c87b6930 t2.2xlarge'
+                //sh script: 'scripts/release/start_ec2_instance.sh us-east-1 ami-04b9e92b5572fa0d1 t2.2xlarge'
             }
         }
 
@@ -19,7 +19,7 @@ pipeline {
                 sh 'aws s3 cp s3://algorand-devops-misc/tools/gnupg2.2.9_centos7_amd64.tar.bz2 .'
                 sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/release/tmp/instance) mkdir docker_test_resources'
                 sh 'scp -i BuilderInstanceKey.pem -o StrictHostKeyChecking=no -r gnupg2.2.9_centos7_amd64.tar.bz2 ubuntu@$(cat scripts/release/tmp/instance):~/docker_test_resources/'
-                sh 'scp -i BuilderInstanceKey.pem -o StrictHostKeyChecking=no -r scripts/release/setup.sh ubuntu@$(cat scripts/release/tmp/instance):~/setup.sh'
+                sh 'scp -i BuilderInstanceKey.pem -o StrictHostKeyChecking=no -r scripts/release/controller/setup.sh ubuntu@$(cat scripts/release/tmp/instance):~/setup.sh'
 
                 script {
                     def GIT_BRANCH = input(
@@ -61,20 +61,20 @@ pipeline {
                 }
                 */
 
-                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/release/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/build.sh'
+                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/release/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/controller/build.sh'
             }
         }
 
         stage("package") {
             steps {
                 input "GPG remote socket"
-                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/release/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/package.sh'
+                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/release/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/controller/package.sh'
             }
         }
 
         stage("sign") {
             steps {
-                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/release/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/sign.sh'
+                sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/release/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/controller/sign.sh'
             }
         }
 
@@ -95,7 +95,7 @@ pipeline {
                     sh "scp -i BuilderInstanceKey.pem -o StrictHostKeyChecking=no -r ubuntu@\$(cat scripts/release/tmp/instance):~/node_pkg/* node_pkg/${RSTAMP}/"
                     sh "aws s3 sync --exclude dev* --exclude master* --exclude nightly* --exclude stable* --acl public-read node_pkg/${RSTAMP} s3://algorand-dev-deb-repo/releases/${CHANNEL}/${RSTAMP}_${FULLVERSION}/"
                     // Create the buildlog file.
-                    sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/release/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/upload.sh'
+                    sh 'ssh -i BuilderInstanceKey.pem -A ubuntu@$(cat scripts/release/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/controller/upload.sh'
                     // sh "aws s3 cp --quiet ubuntu@\$(cat scripts/release/tmp/instance)/build_status_${CHANNEL}_${FULLVERSION}.asc.gz s3://algorand-devops-misc/buildlog/${RSTAMP}/"
                     sh "scp -i BuilderInstanceKey.pem -o StrictHostKeyChecking=no ubuntu@\$(cat scripts/release/tmp/instance):~/build_status_${CHANNEL}_*.asc.gz node_pkg/"
                     sh "aws s3 cp --quiet node_pkg/build_status_${CHANNEL}_*.asc.gz s3://algorand-devops-misc/buildlog/${RSTAMP}/"

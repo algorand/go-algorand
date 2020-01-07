@@ -24,12 +24,8 @@ export REPO_DIR=$HOME/go/src/github.com/algorand/go-algorand
 
 echo "Building RPM package"
 
-#if [ -z "${NO_BUILD}" ]; then
-    env GOOS="${OS}" GOARCH="${ARCH}" "$REPO_DIR/scripts/build_prod.sh"
-#else
-    #echo "already built"
-    #true
-#fi
+#env GOOS="${OS}" GOARCH="${ARCH}" "$REPO_DIR/scripts/build_prod.sh"
+env GOOS="${OS}" GOARCH="${ARCH}" make build --directory "${REPO_DIR}"
 
 VER=$("$REPO_DIR/scripts/compute_build_number.sh" -f)
 

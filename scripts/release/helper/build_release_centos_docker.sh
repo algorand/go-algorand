@@ -27,11 +27,11 @@ ${REPO_DIR}/scripts/configure_dev-deps.sh
 cd ${REPO_DIR}
 
 # definitely rebuild libsodium which could link to external C libraries
-if [ -f ${REPO_DIR}/crypto/libsodium-fork/Makefile ]; then
-    (cd ${REPO_DIR}/crypto/libsodium-fork && make distclean)
-fi
-rm -rf ${REPO_DIR}/crypto/lib
-make crypto/lib/libsodium.a
+#if [ -f ${REPO_DIR}/crypto/libsodium-fork/Makefile ]; then
+#    (cd ${REPO_DIR}/crypto/libsodium-fork && make distclean)
+#fi
+#rm -rf ${REPO_DIR}/crypto/lib
+#make crypto/lib/libsodium.a
 
 make build
 
