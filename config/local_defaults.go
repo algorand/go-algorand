@@ -82,6 +82,7 @@ var defaultLocalV5 = Local{
 	RunHosted:                             false,
 	SuggestedFeeBlockHistory:              3,
 	SuggestedFeeSlidingWindowSize:         50,
+	TelemetryToLog:                        true,
 	TxPoolExponentialIncreaseFactor:       2,
 	TxPoolSize:                            15000,
 	TxSyncIntervalSeconds:                 60,
