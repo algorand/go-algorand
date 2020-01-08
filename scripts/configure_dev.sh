@@ -2,16 +2,6 @@
 set -e
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
-echo "$SCRIPTPATH"
-echo "$SCRIPTPATH"
-echo "$SCRIPTPATH"
-echo "$SCRIPTPATH"
-echo "$SCRIPTPATH"
-echo "$SCRIPTPATH"
-echo "$SCRIPTPATH"
-echo "$SCRIPTPATH"
-echo "$SCRIPTPATH"
-echo "$SCRIPTPATH"
 
 OS=$("$SCRIPTPATH"/ostype.sh)
 
