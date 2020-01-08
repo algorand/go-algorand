@@ -27,12 +27,12 @@ pipeline {
                 script {
                     user_input = input(
                         id: 'user_inputs',
-                        message: 'Enter the Git tag and the channel',
+                        message: 'Enter the Git tag or branch and the channel',
                         parameters: [
                             [
                                 $class: 'StringParameterDefinition',
                                 defaultValue: '',
-                                description: 'Git tag',
+                                description: 'Git tag or branch',
                                 name: 'tag'
                             ],
                             [
