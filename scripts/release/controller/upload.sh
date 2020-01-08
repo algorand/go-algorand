@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # shellcheck disable=1090,2129
-# S3_PREFIX_BUILDLOG= where upload build log (no trailing /)
 # AWS_EFS_MOUNT= NFS to mount for `aptly` persistent state and scratch storage
 
 . "${HOME}/build_env"
@@ -83,12 +82,5 @@ dpkg -l >> "${STATUSFILE}"
 gpg --clearsign "${STATUSFILE}"
 gzip "${STATUSFILE}".asc
 
-# TODO
-#if [ ! -z "${S3_PREFIX_BUILDLOG}" ]; then
-#    aws s3 cp --quiet "${STATUSFILE}.asc.gz" "${S3_PREFIX_BUILDLOG}/${RSTAMP}/${STATUSFILE}.asc.gz"
-#fi
-
 date "+build_release done uploading %Y%m%d_%H%M%S"
-
-# NEXT: release_deb.sh
 

@@ -10,21 +10,20 @@ KEYGRIP=$(gpg -K --with-keygrip --textmode dev@algorand.com | grep Keygrip | hea
 
 echo "enter dev@ password"
 $gpgp --verbose --preset "$KEYGRIP"
-echo aoeu | gpg -u dev@algorand.com --clearsign
 
-REMOTE_GPG_SOCKET=$(ssh -o StrictHostKeyChecking=no -i BuilderInstanceKey.pem ubuntu@"$INSTANCE" gpgbin/remote_gpg_socket)
+REMOTE_GPG_SOCKET=$(ssh -o StrictHostKeyChecking=no -i ReleaseBuildInstanceKey.pem ubuntu@"$INSTANCE" gpgbin/remote_gpg_socket)
 LOCAL_GPG_SOCKET=$(gpgconf --list-dirs | grep agent-socket | awk -F: '{ print $2 }')
 
 gpg --export -a dev@algorand.com > /tmp/dev.pub
 gpg --export -a rpm@algorand.com > /tmp/rpm.pub
 
 # TODO: Maybe scp the public keys into the $HOME/docker... dir on the remote server?
-scp -o StrictHostKeyChecking=no -i BuilderInstanceKey.pem -p /tmp/{dev,rpm}.pub ubuntu@"$INSTANCE":~/
-ssh -o StrictHostKeyChecking=no -i BuilderInstanceKey.pem ubuntu@"$INSTANCE" << EOF
+scp -o StrictHostKeyChecking=no -i ReleaseBuildInstanceKey.pem -p /tmp/{dev,rpm}.pub ubuntu@"$INSTANCE":~/
+ssh -o StrictHostKeyChecking=no -i ReleaseBuildInstanceKey.pem ubuntu@"$INSTANCE" << EOF
     gpg --import dev.pub
     gpg --import rpm.pub
     echo "SIGNING_KEY_ADDR=dev@algorand.com" >> build_env
 EOF
-ssh -o StrictHostKeyChecking=no -i BuilderInstanceKey.pem -A -R "$REMOTE_GPG_SOCKET:$LOCAL_GPG_SOCKET" ubuntu@"$INSTANCE"
-#    echo -e "SIGNING_KEY_ADDR=dev@algorand.com\nS3_PREFIX=s3://algorand-dev-deb-repo/releases\nS3_PREFIX_BUILDLOG=s3://algorand-devops-misc/buildlog" >> build_env
+
+ssh -o StrictHostKeyChecking=no -i ReleaseBuildInstanceKey.pem -A -R "$REMOTE_GPG_SOCKET:$LOCAL_GPG_SOCKET" ubuntu@"$INSTANCE"
 

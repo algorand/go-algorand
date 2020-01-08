@@ -6,8 +6,8 @@ The `Jenkinsfile` uses the pipeline module to define its build stages.  Currentl
 1. setup ec2 instance
 1. build
 1. package
+1. sign
 1. upload
-1. tag (TODO)
 1. delete ec2 instance
 
 The only thing that is not automated at this point is pre-setting the `gpg-agent` with the passphrase of the private key.  At the beginning of the `package` stage, Jenkins will pause and wait for the initiator of the build to do this and set up an SSH connection that will forward a Unix socket from the remote ec2 instance to the client, which in this case is most likely your laptop.
@@ -58,7 +58,9 @@ In addition, the build logs will be placed into the AWS `algorand-devops-misc` S
 
 ## Notes
 
-All of the `aws ...` commands are now executed by Jenkins and are defined in the `Jenkinsfile`.  The reason for this is simple:  Jenkins already has the AWS auth credentials, and we don't want or need to be sending them anywhere else in the cloud.
+- All of the `aws ...` commands are now executed by Jenkins and are defined in the `Jenkinsfile`.  The reason for this is simple:  Jenkins already has the AWS auth credentials, and we don't want or need to be sending them anywhere else in the cloud.
+
+- An ec2 instance is created and deleted by the `*_ec2_instance.sh` scripts in `release/`.  Any pertinent information, such as the instance name and security group ID, are stored in the sub-directory `release/tmp`.  This information is used by the shutdown script and then removed on a successful shutdown.
 
 ## Troublshooting
 
@@ -84,5 +86,5 @@ You may also try reconfiguring your `tzdata` package:
 
 Create the git tag.
 Upload the deb package via `aptly`.
-Add ability to specify branch and/or channel.
+Add ability to specify channel.
 

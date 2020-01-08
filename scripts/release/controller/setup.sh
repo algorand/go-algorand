@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
-#
-# Externally settable env vars:
-# GIT_REPO_PATH= something to `git clone` from
-# GIT_CHECKOUT_LABEL= something to `git checkout` and build from (branch or tag or hash)
 
 if [ -z "${BUILDTIMESTAMP}" ]; then
     date "+%Y%m%d_%H%M%S" > "${HOME}/buildtimestamp"
@@ -17,31 +13,38 @@ date "+setup start %Y%m%d_%H%M%S"
 
 set -ex
 
-if [ -z "${GIT_REPO_PATH}" ]; then
-    GIT_REPO_PATH=https://github.com/btoll/go-algorand
-fi
-
+GIT_REPO_PATH=https://github.com/btoll/go-algorand
 GIT_CHECKOUT_LABEL=${1:-"rel/stable"}
 export GIT_CHECKOUT_LABEL
-
 export DEBIAN_FRONTEND=noninteractive
 
 sudo apt-get update -q
 sudo apt-get upgrade -q -y
 
-# Some of these dirs aren't used until later scripts.
 #umask 0077
-#mkdir -p ~/.gnupg
-#mkdir -p "${HOME}"/{.gnupg,go,gpgbin,docker_test_resources,dummyaptly,dummyrepo,prodrepo}
 mkdir -p "${HOME}"/{.gnupg,go,gpgbin,dummyaptly,dummyrepo,prodrepo}
 
-export GOPATH=${HOME}/go
+# Check out
+mkdir -p "${HOME}/go/src/github.com/algorand"
+cd "${HOME}/go/src/github.com/algorand" && git clone --single-branch --branch "${GIT_CHECKOUT_LABEL}" "${GIT_REPO_PATH}" go-algorand #cd go-algorand
+# TODO: if we are checking out a release tag, `git tag --verify` it
+#git checkout "${GIT_CHECKOUT_LABEL}"
+
+# Install latest Go
+# TODO: make a config file in root of repo with single source of truth for Go major-minor version
+cd "${HOME}"
+python3 "${HOME}/go/src/github.com/algorand/go-algorand/scripts/get_latest_go.py" --version-prefix=1.12
+# $HOME will be interpreted by the outer shell to create the string passed to sudo bash
+sudo bash -c "cd /usr/local && tar zxf ${HOME}/go*.tar.gz"
+
+GOPATH=${HOME}/go
+export GOPATH
 export PATH=${HOME}/gpgbin:${GOPATH}/bin:/usr/local/go/bin:${PATH}
 
 cat <<EOF>"${HOME}/gpgbin/remote_gpg_socket"
 export GOPATH=\${HOME}/go
 export PATH=\${HOME}/gpgbin:${GOPATH}/bin:/usr/local/go/bin:${PATH}
-gpgconf --list-dirs|grep agent-socket|awk -F: '{ print \$2 }'
+gpgconf --list-dirs | grep agent-socket | awk -F: '{ print \$2 }'
 EOF
 
 chmod +x "${HOME}/gpgbin/remote_gpg_socket"
@@ -50,8 +53,6 @@ sudo apt-get update
 sudo apt-get install -y build-essential automake autoconf awscli docker.io git gpg nfs-common python3 rpm sqlite3 python3-boto3 g++ libtool rng-tools
 
 sudo rngd -r /dev/urandom
-
-# please keep packages sorted
 
 # This real name and email must precisely match GPG key
 git config --global user.name "Algorand developers"
@@ -84,21 +85,6 @@ sudo usermod -a -G docker ubuntu
 sg docker "docker pull centos:7"
 sg docker "docker pull ubuntu:18.04"
 sg docker "docker pull ubuntu:16.04"
-
-# Check out
-mkdir -p "${GOPATH}/src/github.com/algorand"
-cd "${GOPATH}/src/github.com/algorand" && git clone --single-branch --branch "${GIT_CHECKOUT_LABEL}" "${GIT_REPO_PATH}" go-algorand #cd go-algorand
-# TODO: if we are checking out a release tag, `git tag --verify` it
-#git checkout "${GIT_CHECKOUT_LABEL}"
-
-#gpg --import "${GOPATH}/src/github.com/algorand/go-algorand/installer/rpm/RPM-GPG-KEY-Algorand"
-
-# Install latest Go
-cd "$HOME"
-# TODO: make a config file in root of repo with single source of truth for Go major-minor version
-python3 "${GOPATH}/src/github.com/algorand/go-algorand/scripts/get_latest_go.py" --version-prefix=1.12
-# $HOME will be interpreted by the outer shell to create the string passed to sudo bash
-sudo bash -c "cd /usr/local && tar zxf ${HOME}/go*.tar.gz"
 
 cat<<EOF>> "${HOME}/.bashrc"
 export EDITOR=vi

@@ -1,30 +1,14 @@
 #!/usr/bin/env bash
 # shellcheck disable=2164
 
-# start_ec2_instance.sh - Invokes the build host
-#
-# Syntax:   start_ec2_instance.sh
-#
-# Usage:    Should only be used by a build host server.
-#
-# Exit Code: returns 0 if instance started successfully, non-zero otherwise
-#
-# Examples: scripts/buildhost/start_ec2_instance.sh <AWS_REGION> <AWS_AMI> <AWS_INSTANCE_TYPE>
-#
-# Upon successfull execution, the following files would be created:
-# sgid - contain the security group identifier
-# BuilderInstanceKey.pem - contains the certificate required to log on to the server
-# instance - contains the address of the created instance
-#
-
 AWS_REGION="$1"
 # Ubuntu Server 18.04 LTS
 AWS_AMI="$2"
 AWS_INSTANCE_TYPE="$3"
 INSTANCE_NUMBER=$RANDOM
-KEY_NAME="BuilderInstanceKey_$INSTANCE_NUMBER"
-KEY_NAME_FILE="BuilderInstanceKey.pem"
-SECURITY_GROUP_NAME="BuilderMachineSSH_$INSTANCE_NUMBER"
+KEY_NAME="ReleaseBuildInstanceKey_$INSTANCE_NUMBER"
+KEY_NAME_FILE="ReleaseBuildInstanceKey.pem"
+SECURITY_GROUP_NAME="ReleaseBuildMachineSSH_$INSTANCE_NUMBER"
 CIDR="0.0.0.0/0"
 RED_FG=$(echo -en "\e[31m")
 GREEN_FG=$(echo -en "\e[32m")
