@@ -54,15 +54,16 @@ const participationKeyCheckSecs = 60
 
 // StatusReport represents the current basic status of the node
 type StatusReport struct {
-	LastRound             basics.Round
-	LastVersion           protocol.ConsensusVersion
-	NextVersion           protocol.ConsensusVersion
-	NextVersionRound      basics.Round
-	NextVersionSupported  bool
-	LastRoundTimestamp    time.Time
-	SynchronizingTime     time.Duration
-	CatchupTime           time.Duration
-	HasSyncedSinceStartup bool
+	LastRound                 basics.Round
+	LastVersion               protocol.ConsensusVersion
+	NextVersion               protocol.ConsensusVersion
+	NextVersionRound          basics.Round
+	NextVersionSupported      bool
+	LastRoundTimestamp        time.Time
+	SynchronizingTime         time.Duration
+	CatchupTime               time.Duration
+	HasSyncedSinceStartup     bool
+	StoppedAtUnsupportedRound bool
 }
 
 // TimeSinceLastRound returns the time since the last block was approved (locally), or 0 if no blocks seen
@@ -554,6 +555,8 @@ func (node *AlgorandFullNode) Status() (s StatusReport, err error) {
 	s.LastRoundTimestamp = node.lastRoundTimestamp
 	s.CatchupTime = node.syncer.SynchronizingTime()
 	s.HasSyncedSinceStartup = node.hasSyncedSinceStartup
+	s.StoppedAtUnsupportedRound = s.LastRound+1 == s.NextVersionRound && !s.NextVersionSupported
+		
 	return
 }
 
