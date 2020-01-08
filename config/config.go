@@ -539,29 +539,38 @@ func initConsensusTestProtocols() {
 	testShorterLookback.MaxBalLookback = 2 * testShorterLookback.SeedLookback * testShorterLookback.SeedRefreshInterval // 32
 	Consensus[protocol.ConsensusTestShorterLookback] = testShorterLookback
 
+	// The following two protocols: testUnupgradedProtocol and testUnupgradedToProtocol
+	// are used to test the case when some nodes in the network do not make progress.
+
+	// testUnupgradedToProtocol is derived from ConsensusCurrentVersion and upgraded
+	// from testUnupgradedProtocol.
+	testUnupgradedToProtocol := Consensus[protocol.ConsensusCurrentVersion]
+	testUnupgradedToProtocol.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	Consensus[protocol.ConsensusTestUnupgradedToProtocol] = testUnupgradedToProtocol
+
 	// testUnupgradedProtocol is used to control the upgrade of a node. This is used
 	// to construct and run a network where some node is upgraded, and some other
 	// node is not upgraded.
 	// testUnupgradedProtocol is derived from ConsensusCurrentVersion and upgrades to
-	// ConsensusCurrentVersion.
+	// testUnupgradedToProtocol.
 	testUnupgradedProtocol := Consensus[protocol.ConsensusCurrentVersion]
 	testUnupgradedProtocol.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	testUnupgradedProtocol.UpgradeVoteRounds = 3
 	testUnupgradedProtocol.UpgradeThreshold = 2
 	testUnupgradedProtocol.DefaultUpgradeWaitRounds = 3
-	b, err := strconv.ParseBool(os.Getenv("ALGORAND_TEST_UNUPGRADEDPROTOCOL_DELETE_CURRENT_VERSION"))
-	// Do not upgrade to current version if
-	// ALGORAND_TEST_UNUPGRADEDPROTOCOL_DELETE_CURRENT_VERSION evaluates to true (e.g. 1, TRUE)
+	b, err := strconv.ParseBool(os.Getenv("ALGORAND_TEST_UNUPGRADEDPROTOCOL_DELETE_UPGRADE"))
+	// Do not upgrade to the next version if
+	// ALGORAND_TEST_UNUPGRADEDPROTOCOL_DELETE_UPGRADE is set to true (e.g. 1, TRUE)
 	if err == nil && b {
-		// Configure as if ConsensusCurrentVersion is not supported by the binary
-		delete(Consensus, protocol.ConsensusCurrentVersion)
+		// Configure as if testUnupgradedToProtocol is not supported by the binary
+		delete(Consensus, protocol.ConsensusTestUnupgradedToProtocol)
 	} else {
-		// Direct upgrade path from ConsensusTestUnupgradedProtocol to ConsensusCurrentVersion
+		// Direct upgrade path from ConsensusTestUnupgradedProtocol to ConsensusTestUnupgradedToProtocol
 		// This is needed for the voting nodes vote to upgrade to the next protocol
-		testUnupgradedProtocol.ApprovedUpgrades[protocol.ConsensusCurrentVersion] = 0
+		testUnupgradedProtocol.ApprovedUpgrades[protocol.ConsensusTestUnupgradedToProtocol] = 0
 	}
-	Consensus[protocol.ConsensusTestUnupgradedProtocol] = testUnupgradedProtocol;
+	Consensus[protocol.ConsensusTestUnupgradedProtocol] = testUnupgradedProtocol
 }
 
 func initConsensusTestFastUpgrade() {
