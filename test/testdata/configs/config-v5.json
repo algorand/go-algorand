@@ -38,6 +38,7 @@
     "RestWriteTimeoutSeconds": 120,
     "RunHosted": false,
     "SuggestedFeeBlockHistory": 3,
+    "TelemetryToLog": true,
     "TxPoolExponentialIncreaseFactor": 2,
     "TxPoolSize": 15000,
     "TxSyncIntervalSeconds": 60,
