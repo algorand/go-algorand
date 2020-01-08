@@ -30,7 +30,6 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/util/execpool"
 )
 
 var testPoolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
@@ -45,9 +44,6 @@ func init() {
 func TestBlockEvaluator(t *testing.T) {
 	genesisInitState, addrs, keys := genesis(10)
 
-	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
-	defer backlogPool.Shutdown()
-
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	const inMem = true
 	const archival = true
@@ -56,7 +52,7 @@ func TestBlockEvaluator(t *testing.T) {
 	defer l.Close()
 
 	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
-	eval, err := l.StartEvaluator(newBlock.BlockHeader, nil, backlogPool)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader)
 	require.NoError(t, err)
 
 	genHash := genesisInitState.Block.BlockHeader.GenesisHash

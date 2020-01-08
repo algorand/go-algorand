@@ -156,7 +156,6 @@ type BlockEvaluator struct {
 	state    *roundCowState
 	validate bool
 	generate bool
-	txcache  VerifiedTxnCache
 
 	prevHeader  bookkeeping.BlockHeader // cached
 	proto       config.ConsensusParams
@@ -164,8 +163,6 @@ type BlockEvaluator struct {
 
 	block        bookkeeping.Block
 	blockTxBytes int
-
-	verificationPool execpool.BacklogPool
 
 	l ledgerForEvaluator
 }
@@ -183,11 +180,11 @@ type ledgerForEvaluator interface {
 
 // StartEvaluator creates a BlockEvaluator, given a ledger and a block header
 // of the block that the caller is planning to evaluate.
-func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader, txcache VerifiedTxnCache, executionPool execpool.BacklogPool) (*BlockEvaluator, error) {
-	return startEvaluator(l, hdr, true, true, txcache, executionPool)
+func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader) (*BlockEvaluator, error) {
+	return startEvaluator(l, hdr, true, true)
 }
 
-func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, validate bool, generate bool, txcache VerifiedTxnCache, executionPool execpool.BacklogPool) (*BlockEvaluator, error) {
+func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, validate bool, generate bool) (*BlockEvaluator, error) {
 	proto, ok := config.Consensus[hdr.CurrentProtocol]
 	if !ok {
 		return nil, protocol.Error(hdr.CurrentProtocol)
@@ -204,14 +201,12 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, validate 
 	}
 
 	eval := &BlockEvaluator{
-		validate:         validate,
-		generate:         generate,
-		txcache:          txcache,
-		block:            bookkeeping.Block{BlockHeader: hdr},
-		proto:            proto,
-		genesisHash:      l.GenesisHash(),
-		verificationPool: executionPool,
-		l:                l,
+		validate:    validate,
+		generate:    generate,
+		block:       bookkeeping.Block{BlockHeader: hdr},
+		proto:       proto,
+		genesisHash: l.GenesisHash(),
+		l:           l,
 	}
 
 	if hdr.Round > 0 {
@@ -725,6 +720,11 @@ func (tv *evalTxValidator) run() {
 	close(tv.done)
 }
 
+// used by Ledger.Validate() Ledger.AddBlock() Ledger.trackerEvalVerified()(accountUpdates.loadFromDisk())
+//
+// Validate: eval(ctx, blk, true, txcache, executionPool)
+// AddBlock: eval(context.Background(), blk, false, nil, nil)
+// tracker:  eval(context.Background(), blk, false, nil, nil)
 func (l *Ledger) eval(ctx context.Context, blk bookkeeping.Block, validate bool, txcache VerifiedTxnCache, executionPool execpool.BacklogPool) (StateDelta, error) {
 	var txvalidator evalTxValidator
 	ctx, cf := context.WithCancel(ctx)
@@ -745,7 +745,7 @@ func (l *Ledger) eval(ctx context.Context, blk bookkeeping.Block, validate bool,
 		txvalidator.done = make(chan error, 1)
 		go txvalidator.run()
 	}
-	eval, err := startEvaluator(l, blk.BlockHeader, validate, false, txcache, executionPool)
+	eval, err := startEvaluator(l, blk.BlockHeader, validate, false)
 	if err != nil {
 		return StateDelta{}, err
 	}
