@@ -25,6 +25,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/gen"
@@ -52,8 +54,9 @@ type Network struct {
 	cfg                  NetworkCfg
 	nodeDirs             map[string]string // mapping between the node name and the directories where the node is operation on (not including RelayDirs)
 	gen                  gen.GenesisData
-	stopping             chan struct{}
 	nodeRunStateCallback nodecontrol.AlgodRunStateChangedFunc
+	runningNCsMu         deadlock.RWMutex
+	runningNCs           map[string]*nodecontrol.NodeController // maps each node data directroy to a node controller.
 }
 
 // Name returns the name of the private network
@@ -102,8 +105,8 @@ func (n Network) Genesis() gen.GenesisData {
 // under the specified root directory.
 func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, importKeys bool) (*Network, error) {
 	n := &Network{
-		rootDir:  rootDir,
-		stopping: make(chan struct{}),
+		rootDir:    rootDir,
+		runningNCs: make(map[string]*nodecontrol.NodeController),
 	}
 	n.cfg.Name = name
 	n.cfg.TemplateFile = templateFile
@@ -155,8 +158,8 @@ func isValidNetworkDir(rootDir string) bool {
 // an existing deployed network.
 func LoadNetwork(rootDir string) (*Network, error) {
 	n := &Network{
-		rootDir:  rootDir,
-		stopping: make(chan struct{}),
+		rootDir:    rootDir,
+		runningNCs: make(map[string]*nodecontrol.NodeController),
 	}
 
 	if !isValidNetworkDir(rootDir) {
@@ -254,7 +257,9 @@ func (n *Network) Start(binDir string, redirectOutput bool) error {
 	var peerAddressListBuilder strings.Builder
 
 	for _, relayDir := range n.cfg.RelayDirs {
-		nc := nodecontrol.MakeNodeController(binDir, n.getNodeFullPath(relayDir))
+
+		nodeFulllPath := n.getNodeFullPath(relayDir)
+		nc := nodecontrol.MakeNodeController(binDir, nodeFulllPath)
 		args := nodecontrol.AlgodStartArgs{
 			RedirectOutput:  redirectOutput,
 			RunStateChanged: n.nodeRunStateChanges,
@@ -274,6 +279,9 @@ func (n *Network) Start(binDir string, redirectOutput bool) error {
 			peerAddressListBuilder.WriteString(";")
 		}
 		peerAddressListBuilder.WriteString(relayAddress)
+		n.runningNCsMu.Lock()
+		n.runningNCs[nodeFulllPath] = &nc
+		n.runningNCsMu.Unlock()
 	}
 
 	peerAddressList := peerAddressListBuilder.String()
@@ -288,12 +296,16 @@ func (n *Network) NodeRunStateChangesCallback(callback nodecontrol.AlgodRunState
 
 // nodeRunStateChanges is a callback that notifies the network that a given node run state have changed.
 func (n *Network) nodeRunStateChanges(nc *nodecontrol.NodeController, err error) {
-	select {
-	case <-n.stopping:
-		return
-	default:
+	running := false
+	n.runningNCsMu.RLock()
+	for _, listedNC := range n.runningNCs {
+		if listedNC == nc {
+			running = true
+			break
+		}
 	}
-	if n.nodeRunStateCallback != nil {
+	n.runningNCsMu.RUnlock()
+	if n.nodeRunStateCallback != nil && running {
 		n.nodeRunStateCallback(nc, err)
 	}
 }
@@ -318,8 +330,15 @@ func (n *Network) getRelayAddress(nc nodecontrol.NodeController) (relayAddress s
 // outside of the main 'Start' call.
 func (n *Network) GetPeerAddresses(binDir string) []string {
 	var peerAddresses []string
+
+	n.runningNCsMu.RLock()
+	defer n.runningNCsMu.RUnlock()
+
 	for _, relayDir := range n.cfg.RelayDirs {
-		nc := nodecontrol.MakeNodeController(binDir, n.getNodeFullPath(relayDir))
+		nc := n.runningNCs[n.getNodeFullPath(relayDir)]
+		if nc == nil {
+			continue
+		}
 		relayAddress, err := nc.GetListeningAddress()
 		if err == nil {
 			peerAddresses = append(peerAddresses, relayAddress)
@@ -335,11 +354,15 @@ func (n *Network) startNodes(binDir, relayAddress string, redirectOutput bool) e
 		RunStateChanged: n.nodeRunStateChanges,
 	}
 	for _, nodeDir := range n.nodeDirs {
-		nc := nodecontrol.MakeNodeController(binDir, n.getNodeFullPath(nodeDir))
+		fullNodeDirPath := n.getNodeFullPath(nodeDir)
+		nc := nodecontrol.MakeNodeController(binDir, fullNodeDirPath)
 		_, err := nc.StartAlgod(args)
 		if err != nil {
 			return err
 		}
+		n.runningNCsMu.Lock()
+		n.runningNCs[fullNodeDirPath] = &nc
+		n.runningNCsMu.Unlock()
 	}
 	return nil
 }
@@ -361,32 +384,25 @@ func (n *Network) StartNode(binDir, nodeDir string, redirectOutput bool) (err er
 // Stop the network, ensuring primary relay stops first
 // No return code - we try to kill them if we can (if we read valid PID file)
 func (n *Network) Stop(binDir string) {
-	select {
-	case <-n.stopping:
-	default:
-		close(n.stopping)
-	}
 	c := make(chan struct{}, len(n.cfg.RelayDirs)+len(n.nodeDirs))
-	stopNodeContoller := func(nc nodecontrol.NodeController) {
+	stopNodeContoller := func(nc *nodecontrol.NodeController) {
 		defer func() {
 			c <- struct{}{}
 		}()
 		nc.FullStop()
 	}
-	for _, relayDir := range n.cfg.RelayDirs {
-		nc := nodecontrol.MakeNodeController(binDir, n.getNodeFullPath(relayDir))
+	n.runningNCsMu.Lock()
+	for _, nc := range n.runningNCs {
 		go stopNodeContoller(nc)
 	}
-	for _, nodeDir := range n.nodeDirs {
-		nc := nodecontrol.MakeNodeController(binDir, n.getNodeFullPath(nodeDir))
-		go stopNodeContoller(nc)
-	}
+	n.runningNCs = make(map[string]*nodecontrol.NodeController)
+	n.runningNCsMu.Unlock()
+
 	// wait until we finish stopping all the node controllers.
 	for i := cap(c); i > 0; i-- {
 		<-c
 	}
 	close(c)
-	n.stopping = make(chan struct{})
 }
 
 // NetworkNodeStatus represents the result from checking the status of a particular node instance
