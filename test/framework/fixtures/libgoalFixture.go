@@ -46,7 +46,7 @@ type LibGoalFixture struct {
 	NC             nodecontrol.NodeController
 	rootDir        string
 	Name           string
-	network        netdeploy.Network
+	network        *netdeploy.Network
 	t              TestingT
 	clientPartKeys map[string][]account.Participation
 }
@@ -85,11 +85,19 @@ func (f *LibGoalFixture) setup(test TestingT, testName string, templateFile stri
 	network, err := netdeploy.CreateNetworkFromTemplate("test", f.rootDir, templateFile, f.binDir, importKeys)
 	f.failOnError(err, "CreateNetworkFromTemplate failed: %v")
 
+	network.NodeRunStateChangesCallback(f.nodeRunStateChanges)
 	f.network = network
 
 	if startNetwork {
 		f.Start()
 	}
+}
+
+func (f *LibGoalFixture) nodeRunStateChanges(nc *nodecontrol.NodeController, err error) {
+	if f.t == nil || err == nil {
+		return
+	}
+	f.t.Errorf("Node %s has changed it's status to %v", nc.GetDataDir(), err)
 }
 
 func (f *LibGoalFixture) importRootKeys(lg *libgoal.Client, dataDir string) {
