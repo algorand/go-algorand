@@ -630,7 +630,6 @@ proc ::AlgorandGoal::WaitForRound { WAIT_FOR_ROUND_NUMBER TEST_PRIMARY_NODE_DIR 
                 -re {Next consensus protocol: ([-+=.:/_a-zA-Z0-9]+)} {set NEXT_CONSENSUS_PROTOCOL $expect_out(1,string); exp_continue }
                 -re {Round for next consensus protocol: (\d+)} {set ROUND_FOR_NEXT_CONSENSUS_PROTOCOL $expect_out(1,string); exp_continue }
                 -re {Next consensus protocol supported: (\w+)} {set NEXT_CONSENSUS_PROTOCOL_SUPPORTED $expect_out(1,string); exp_continue }
-                -re {Has Synced Since Startup: (\w+)} {set HAS_SYNCHED_SINCE_STARTUP $expect_out(1,string); exp_continue }
                 -re {Genesis ID: (\w+)} {set GENESIS_ID $expect_out(1,string); exp_continue }
                 -re {Genesis hash: ([A-Za-z0-9+/]+={0,2})} {set GENESIS_HASH $expect_out(1,string); close }
             }
@@ -643,7 +642,6 @@ proc ::AlgorandGoal::WaitForRound { WAIT_FOR_ROUND_NUMBER TEST_PRIMARY_NODE_DIR 
                 puts "next consensus protocol: $NEXT_CONSENSUS_PROTOCOL"
                 puts "round for next consensus protocol: $ROUND_FOR_NEXT_CONSENSUS_PROTOCOL"
                 puts "next consensus protocol supported: $NEXT_CONSENSUS_PROTOCOL_SUPPORTED"
-                puts "has synced since startup: $HAS_SYNCHED_SINCE_STARTUP"
                 puts "genesis id: $GENESIS_ID"
                 puts "genesis hash: $GENESIS_HASH"
             }
