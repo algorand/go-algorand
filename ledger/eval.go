@@ -478,7 +478,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
-		err := eval.transaction(txad.SignedTxn, txad.ApplyData, groupNoAD, gi, ctxs[gi], cow, &txib)
+		err := eval.transaction(txad.SignedTxn, txad.ApplyData /*groupNoAD, gi,*/, ctxs[gi], cow, &txib)
 		if err != nil {
 			return err
 		}
@@ -526,10 +526,43 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	return nil
 }
 
+func validateTransaction(txn transactions.SignedTxn, block bookkeeping.Block, proto config.ConsensusParams, txcache VerifiedTxnCache, ctx verify.Context, verificationPool execpool.BacklogPool) error {
+	// Transaction valid (not expired)?
+	err := txn.Txn.Alive(block)
+	if err != nil {
+		return err
+	}
+
+	// TODO: lift to once-per-block
+	spec := transactions.SpecialAddresses{
+		FeeSink:     block.BlockHeader.FeeSink,
+		RewardsPool: block.BlockHeader.RewardsPool,
+	}
+
+	// Well-formed on its own?
+	err = txn.Txn.WellFormed(spec, proto)
+	if err != nil {
+		return fmt.Errorf("transaction %v: malformed: %v", txn.ID(), err)
+	}
+
+	if txcache == nil || !txcache.Verified(txn, ctx.Params) {
+		err = verify.TxnPool(&txn, ctx, verificationPool)
+		if err != nil {
+			return fmt.Errorf("transaction %v: failed to verify: %v", txn.ID(), err)
+		}
+	}
+
+	// Verify that groups are supported.
+	if !txn.Txn.Group.IsZero() && !proto.SupportTxGroups {
+		return fmt.Errorf("transaction groups not supported")
+	}
+	return nil
+}
+
 // transaction tentatively executes a new transaction as part of this block evaluation.
 // If the transaction cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transactions.ApplyData, txgroup []transactions.SignedTxn, groupIndex int, ctx verify.Context, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
+func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transactions.ApplyData /*txgroup []transactions.SignedTxn, groupIndex int, */, ctx verify.Context, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
 	var err error
 
 	spec := transactions.SpecialAddresses{
@@ -538,12 +571,6 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 	}
 
 	if eval.validate {
-		// Transaction valid (not expired)?
-		err = txn.Txn.Alive(eval.block)
-		if err != nil {
-			return err
-		}
-
 		// Transaction already in the ledger?
 		txid := txn.ID()
 		dup, err := cow.isDup(txn.Txn.First(), txn.Txn.Last(), txid, txlease{sender: txn.Txn.Sender, lease: txn.Txn.Lease})
@@ -554,22 +581,9 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 			return TransactionInLedgerError{txn.ID()}
 		}
 
-		// Well-formed on its own?
-		err = txn.Txn.WellFormed(spec, eval.proto)
+		err = validateTransaction(txn, eval.block, eval.proto, eval.txcache, ctx, eval.verificationPool)
 		if err != nil {
-			return fmt.Errorf("transaction %v: malformed: %v", txn.ID(), err)
-		}
-
-		if eval.txcache == nil || !eval.txcache.Verified(txn, ctx.Params) {
-			err = verify.TxnPool(&txn, ctx, eval.verificationPool)
-			if err != nil {
-				return fmt.Errorf("transaction %v: failed to verify: %v", txn.ID(), err)
-			}
-		}
-
-		// Verify that groups are supported.
-		if !txn.Txn.Group.IsZero() && !eval.proto.SupportTxGroups {
-			return fmt.Errorf("transaction groups not supported")
+			return err
 		}
 	}
 
@@ -697,7 +711,68 @@ func (eval *BlockEvaluator) GenerateBlock() (*ValidatedBlock, error) {
 	return &vb, nil
 }
 
+type evalTxValidator struct {
+	txcache          VerifiedTxnCache
+	block            bookkeeping.Block
+	proto            config.ConsensusParams
+	verificationPool execpool.BacklogPool
+
+	ctx      context.Context
+	cf       context.CancelFunc
+	txgroups chan []transactions.SignedTxnWithAD
+	done     chan error
+}
+
+func (tv *evalTxValidator) run() {
+	for txgroup := range tv.txgroups {
+		select {
+		case <-tv.ctx.Done():
+			tv.done <- tv.ctx.Err()
+			tv.cf()
+			close(tv.done)
+			return
+		default:
+		}
+		groupNoAD := make([]transactions.SignedTxn, len(txgroup))
+		for i := range txgroup {
+			groupNoAD[i] = txgroup[i].SignedTxn
+		}
+		ctxs := verify.PrepareContexts(groupNoAD, tv.block.BlockHeader)
+
+		for gi, tx := range txgroup {
+			err := validateTransaction(tx.SignedTxn, tv.block, tv.proto, tv.txcache, ctxs[gi], tv.verificationPool)
+			if err != nil {
+				//logging.Base().Errorf("evalTxValidator reject tx %s", tx.ID())
+				tv.done <- err
+				tv.cf()
+				close(tv.done)
+				return
+			}
+		}
+	}
+	close(tv.done)
+}
+
 func (l *Ledger) eval(ctx context.Context, blk bookkeeping.Block, validate bool, txcache VerifiedTxnCache, executionPool execpool.BacklogPool) (StateDelta, error) {
+	var txvalidator evalTxValidator
+	ctx, cf := context.WithCancel(ctx)
+	defer cf()
+	if validate {
+		proto, ok := config.Consensus[blk.CurrentProtocol]
+		if !ok {
+			return StateDelta{}, protocol.Error(blk.CurrentProtocol)
+		}
+		txvalidator.txcache = txcache
+		txvalidator.block = blk
+		txvalidator.proto = proto
+		txvalidator.verificationPool = executionPool
+
+		txvalidator.ctx = ctx
+		txvalidator.cf = cf
+		txvalidator.txgroups = make(chan []transactions.SignedTxnWithAD, 10)
+		txvalidator.done = make(chan error, 1)
+		go txvalidator.run()
+	}
 	eval, err := startEvaluator(l, blk.BlockHeader, validate, false, txcache, executionPool)
 	if err != nil {
 		return StateDelta{}, err
@@ -714,10 +789,18 @@ func (l *Ledger) eval(ctx context.Context, blk bookkeeping.Block, validate bool,
 	for _, txgroup := range paysetgroups {
 		select {
 		case <-ctx.Done():
+			select {
+			case err := <-txvalidator.done:
+				return StateDelta{}, err
+			default:
+			}
 			return StateDelta{}, ctx.Err()
 		default:
 		}
 
+		if validate {
+			txvalidator.txgroups <- txgroup
+		}
 		err = eval.TransactionGroup(txgroup)
 		if err != nil {
 			return StateDelta{}, err
@@ -732,6 +815,11 @@ func (l *Ledger) eval(ctx context.Context, blk bookkeeping.Block, validate bool,
 
 	// If validating, do final block checks that depend on our new state
 	if validate {
+		close(txvalidator.txgroups)
+		err, gotErr := <-txvalidator.done
+		if gotErr && err != nil {
+			return StateDelta{}, err
+		}
 		err = eval.finalValidation()
 		if err != nil {
 			return StateDelta{}, err
