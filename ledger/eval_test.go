@@ -75,20 +75,8 @@ func TestBlockEvaluator(t *testing.T) {
 		},
 	}
 
-	// Zero signature should fail
-	st := transactions.SignedTxn{
-		Txn: txn,
-	}
-	err = eval.Transaction(st, transactions.ApplyData{})
-	require.Error(t, err)
-
-	// Random signature should fail
-	crypto.RandBytes(st.Sig[:])
-	err = eval.Transaction(st, transactions.ApplyData{})
-	require.Error(t, err)
-
 	// Correct signature should work
-	st = txn.Sign(keys[0])
+	st := txn.Sign(keys[0])
 	err = eval.Transaction(st, transactions.ApplyData{})
 	require.NoError(t, err)
 

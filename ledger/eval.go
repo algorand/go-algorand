@@ -533,14 +533,8 @@ func validateTransaction(txn transactions.SignedTxn, block bookkeeping.Block, pr
 		return err
 	}
 
-	// TODO: lift to once-per-block
-	spec := transactions.SpecialAddresses{
-		FeeSink:     block.BlockHeader.FeeSink,
-		RewardsPool: block.BlockHeader.RewardsPool,
-	}
-
 	// Well-formed on its own?
-	err = txn.Txn.WellFormed(spec, proto)
+	err = txn.Txn.WellFormed(ctx.CurrSpecAddrs, proto)
 	if err != nil {
 		return fmt.Errorf("transaction %v: malformed: %v", txn.ID(), err)
 	}
@@ -579,11 +573,6 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 		}
 		if dup {
 			return TransactionInLedgerError{txn.ID()}
-		}
-
-		err = validateTransaction(txn, eval.block, eval.proto, eval.txcache, ctx, eval.verificationPool)
-		if err != nil {
-			return err
 		}
 	}
 

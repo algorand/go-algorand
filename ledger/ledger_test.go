@@ -490,6 +490,11 @@ func TestLedgerSingleTx(t *testing.T) {
 	sbadTx.Sig = crypto.Signature{}
 	a.Error(l.appendUnvalidatedSignedTx(t, initAccounts, sbadTx, ad), "added tx with no signature")
 
+	badTx = correctPay
+	sbadTx = sign(initSecrets, badTx)
+	sbadTx.Sig[5]++
+	a.Error(l.appendUnvalidatedSignedTx(t, initAccounts, sbadTx, ad), "added tx with corrupt signature")
+
 	// TODO set multisig and test
 
 	badTx = correctPay
