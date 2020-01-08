@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/algorand/go-deadlock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
@@ -48,6 +49,7 @@ type LibGoalFixture struct {
 	Name           string
 	network        *netdeploy.Network
 	t              TestingT
+	tMu            deadlock.RWMutex
 	clientPartKeys map[string][]account.Participation
 }
 
@@ -85,7 +87,7 @@ func (f *LibGoalFixture) setup(test TestingT, testName string, templateFile stri
 	network, err := netdeploy.CreateNetworkFromTemplate("test", f.rootDir, templateFile, f.binDir, importKeys)
 	f.failOnError(err, "CreateNetworkFromTemplate failed: %v")
 
-	network.NodeRunStateChangesCallback(f.nodeRunStateChanges)
+	network.NodeRunStateChangesCallback(f.nodeRunStateChanged)
 	f.network = network
 
 	if startNetwork {
@@ -93,8 +95,13 @@ func (f *LibGoalFixture) setup(test TestingT, testName string, templateFile stri
 	}
 }
 
-func (f *LibGoalFixture) nodeRunStateChanges(nc *nodecontrol.NodeController, err error) {
-	if f.t == nil || err == nil {
+func (f *LibGoalFixture) nodeRunStateChanged(nc *nodecontrol.NodeController, err error) {
+	if err == nil {
+		return
+	}
+	f.tMu.RLock()
+	defer f.tMu.RUnlock()
+	if f.t == nil {
 		return
 	}
 	f.t.Errorf("Node %s has changed it's status to %v", nc.GetDataDir(), err)
@@ -247,8 +254,12 @@ func (f *LibGoalFixture) Start() {
 // It ensures the current test context is set and then reset after the test ends
 // It should be called in the form of "defer fixture.SetTestContext(t)()"
 func (f *LibGoalFixture) SetTestContext(t TestingT) func() {
+	f.tMu.Lock()
+	defer f.tMu.Unlock()
 	f.t = t
 	return func() {
+		f.tMu.Lock()
+		defer f.tMu.Unlock()
 		f.t = nil
 	}
 }

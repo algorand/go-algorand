@@ -262,7 +262,7 @@ func (n *Network) Start(binDir string, redirectOutput bool) error {
 		nc := nodecontrol.MakeNodeController(binDir, nodeFulllPath)
 		args := nodecontrol.AlgodStartArgs{
 			RedirectOutput:  redirectOutput,
-			RunStateChanged: n.nodeRunStateChanges,
+			RunStateChanged: n.nodeRunStateChanged,
 		}
 
 		_, err := nc.StartAlgod(args)
@@ -294,8 +294,8 @@ func (n *Network) NodeRunStateChangesCallback(callback nodecontrol.AlgodRunState
 	n.nodeRunStateCallback = callback
 }
 
-// nodeRunStateChanges is a callback that notifies the network that a given node run state have changed.
-func (n *Network) nodeRunStateChanges(nc *nodecontrol.NodeController, err error) {
+// nodeRunStateChanged is a callback that notifies the network that a given node run state have changed.
+func (n *Network) nodeRunStateChanged(nc *nodecontrol.NodeController, err error) {
 	running := false
 	n.runningNCsMu.RLock()
 	for _, listedNC := range n.runningNCs {
@@ -351,7 +351,7 @@ func (n *Network) startNodes(binDir, relayAddress string, redirectOutput bool) e
 	args := nodecontrol.AlgodStartArgs{
 		PeerAddress:     relayAddress,
 		RedirectOutput:  redirectOutput,
-		RunStateChanged: n.nodeRunStateChanges,
+		RunStateChanged: n.nodeRunStateChanged,
 	}
 	for _, nodeDir := range n.nodeDirs {
 		fullNodeDirPath := n.getNodeFullPath(nodeDir)
