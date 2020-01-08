@@ -1,4 +1,5 @@
-def user_input
+def USER_INPUT
+def S3_PREFIX = "s3://algorand-dev-deb-repo/releases"
 
 pipeline {
     environment {
@@ -25,7 +26,7 @@ pipeline {
                 sh 'scp -i ReleaseBuildInstanceKey.pem -o StrictHostKeyChecking=no -r scripts/release/controller/setup.sh ubuntu@$(cat scripts/release/tmp/instance):~/setup.sh'
 
                 script {
-                    user_input = input(
+                    USER_INPUT = input(
                         id: 'user_inputs',
                         message: 'Enter the Git tag or branch and the channel',
                         parameters: [
@@ -44,26 +45,30 @@ pipeline {
                         ]
                     )
 
-                    sh "ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@\$(cat scripts/release/tmp/instance) bash setup.sh ${user_input.tag} ${user_input.channel}"
+                    sh "ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@\$(cat scripts/release/tmp/instance) bash setup.sh ${USER_INPUT.tag} ${USER_INPUT.channel}"
                 }
             }
         }
 
         stage("build") {
             steps {
-                sh "ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@\$(cat scripts/release/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/controller/build.sh ${user_input.channel}"
+                sh "ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@\$(cat scripts/release/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/controller/build.sh ${USER_INPUT.channel}"
             }
         }
 
         stage("package") {
             steps {
                 input "GPG remote socket"
+                sh "rm -rf *.deb *.rpm ; python3 scripts/get_current_installers.py ${S3_PREFIX}/${USER_INPUT.channel}"
+                // Copy previous installers into ~/docker_test_resources.
+                sh 'scp -i ReleaseBuildInstanceKey.pem -o StrictHostKeyChecking=no *.deb ubuntu@$(cat scripts/release/tmp/instance):~/docker_test_resources/'
                 sh 'ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@$(cat scripts/release/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/controller/package.sh'
             }
         }
 
         stage("sign") {
             steps {
+                input "Halt"
                 sh 'ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@$(cat scripts/release/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/controller/sign.sh'
             }
         }
@@ -72,7 +77,7 @@ pipeline {
             steps {
                 script {
                     RSTAMP = sh(returnStdout: true, script: 'scripts/reverse_hex_timestamp')
-                    CHANNEL = user_input.channel
+                    CHANNEL = USER_INPUT.channel
                     FULLVERSION = sh(returnStdout: true, script: 'bash scripts/compute_build_number.sh -f')
 
                     // Bash scripts return vars with a trailing [:space:]
@@ -81,7 +86,7 @@ pipeline {
 
                     sh "rm -rf node_pkg/* && mkdir -p node_pkg/${RSTAMP}"
                     sh "scp -i ReleaseBuildInstanceKey.pem -o StrictHostKeyChecking=no -r ubuntu@\$(cat scripts/release/tmp/instance):~/node_pkg/* node_pkg/${RSTAMP}/"
-                    sh "aws s3 sync --exclude dev* --exclude master* --exclude nightly* --exclude stable* --acl public-read node_pkg/${RSTAMP} s3://algorand-dev-deb-repo/releases/${CHANNEL}/${RSTAMP}_${FULLVERSION}/"
+                    sh "aws s3 sync --exclude dev* --exclude master* --exclude nightly* --exclude stable* --acl public-read node_pkg/${RSTAMP} ${S3_PREFIX}/releases/${CHANNEL}/${RSTAMP}_${FULLVERSION}/"
                     // Create the buildlog file.
                     sh 'ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@$(cat scripts/release/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/controller/upload.sh'
                     // sh "aws s3 cp --quiet ubuntu@\$(cat scripts/release/tmp/instance)/build_status_${CHANNEL}_${FULLVERSION}.asc.gz s3://algorand-devops-misc/buildlog/${RSTAMP}/"

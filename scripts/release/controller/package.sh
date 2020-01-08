@@ -3,14 +3,6 @@
 
 REPO_ROOT=/home/ubuntu/go/src/github.com/algorand/go-algorand/
 
-# copy previous installers into ~/docker_test_resources
-#cd "${HOME}/docker_test_resources"
-#if [ "${TEST_UPGRADE}" == "no" -o -z "${S3_PREFIX}" ]; then
-#    echo "upgrade test disabled"
-#else
-#    python3 "${REPO_ROOT}/scripts/get_current_installers.py" "${S3_PREFIX}/${CHANNEL}"
-#fi
-
 echo "TEST_UPGRADE=${TEST_UPGRADE}" >> "${HOME}/build_env_docker"
 
 cat <<EOF>"${HOME}"/dummyaptly.conf
@@ -44,7 +36,7 @@ SNAPSHOT=algodummy-$(date +%Y%m%d_%H%M%S)
 "$HOME"/go/bin/aptly -config="${HOME}"/dummyaptly.conf snapshot create "${SNAPSHOT}" from repo algodummy
 "$HOME"/go/bin/aptly -config="${HOME}"/dummyaptly.conf publish snapshot -origin=Algorand -label=Algorand "${SNAPSHOT}"
 
-#/home/ubuntu/release/helper/build_release_run_ubuntu_docker_build_test.sh
+./"${REPO_ROOT}"/scripts/release/helper/debian/run_ubuntu_build_test.sh
 
 date "+build_release done building ubuntu %Y%m%d_%H%M%S"
 

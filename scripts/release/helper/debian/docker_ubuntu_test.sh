@@ -8,8 +8,7 @@
 # --mount type=bind,src=${GOPATH}/src,dst=/root/go/src
 # --mount type=bind,src=/usr/local/go,dst=/usr/local/go
 
-set -e
-set -x
+#set -ex
 
 export GOPATH=${HOME}/go
 export PATH=${GOPATH}/bin:/usr/local/go/bin:${PATH}
@@ -22,9 +21,10 @@ if [ "${TEST_UPGRADE}" == "no" ]; then
 else
     apt install -y /root/stuff/*.deb
     algod -v
-    if algod -v | grep -q ${FULLVERSION}; then
-	echo "already installed current version. wat?"
-	false
+    if algod -v | grep -q "${FULLVERSION}"
+    then
+        echo "already installed current version. wat?"
+        false
     fi
 
     mkdir -p /root/testnode
@@ -35,14 +35,22 @@ else
     goal node stop -d /root/testnode
 fi
 
-#apt-key adv --fetch-keys https://releases.algorand.com/key.pub
+# Getting the following errors when trying to fetch the public key from the repo:
+#
+#https://releases.algorand.com/key.pub
+#gpgkeys: protocol `https' not supported
+#gpg: no handler for keyserver scheme `https'
+#gpg: WARNING: unable to fetch URI https://releases.algorand.com/key.pub: keyserver error
+#gpg: can't open `/root/stuff/key.pub': No such file or directory
+
+apt-key adv --fetch-keys https://releases.algorand.com/key.pub
 apt-key add /root/stuff/key.pub
 add-apt-repository "deb http://${DC_IP}:8111/ stable main"
 apt-get update
 apt-get install -y algorand
 algod -v
 # check that the installed version is now the current version
-algod -v | grep -q ${FULLVERSION}.${CHANNEL}
+algod -v | grep -q "${FULLVERSION}.${CHANNEL}"
 
 if [ ! -d /root/testnode ]; then
     mkdir -p /root/testnode
@@ -54,3 +62,4 @@ goal node wait -d /root/testnode -w 120
 goal node stop -d /root/testnode
 
 echo UBUNTU_DOCKER_TEST_OK
+
