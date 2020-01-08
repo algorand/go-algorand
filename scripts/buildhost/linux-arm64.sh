@@ -97,7 +97,7 @@ timeout_monitor 360 &
 timeout_monitor_pid=$!
 
 set -o pipefail
-ssh -i BuilderInstanceKey.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) 'bash -s' < exescript 2>&1 | ${SCRIPTPATH}/s3streamup.sh s3://${BUCKET}/${LOGFILE} ${NO_SIGN}
+ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) 'bash -s' < exescript 2>&1 | ${SCRIPTPATH}/s3streamup.sh s3://${BUCKET}/${LOGFILE} ${NO_SIGN}
 ERR=$?
 ps -p$timeout_monitor_pid &>/dev/null && kill $timeout_monitor_pid
 if [ "${ERR}" = "0" ]; then
