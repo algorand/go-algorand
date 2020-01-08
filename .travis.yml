@@ -1,4 +1,4 @@
-dist: xenial
+dist: bionic
 go:
   - "1.12"
 go_import_path: github.com/algorand/go-algorand
@@ -17,14 +17,16 @@ stages:
     if: branch =~ /^rel\// AND type != pull_request
   - name: deploy
     if: branch =~ /^rel\// AND type != pull_request
+  - name: post_deploy
+    if: branch =~ /^rel\// AND type != pull_request
 
 jobs:
   allow_failures:
-    - name: External ARM64 Build
     - name: External ARM64 Deploy
     - name: External ARM64 Integration Test
     - name: External ARM Build
     - name: External ARM Deploy
+    - name: Test Release Builds
   include:
     - stage: build_commit
       os: linux
@@ -110,7 +112,9 @@ jobs:
     - stage: deploy
       name: Ubuntu Deploy
       os: linux
-      script: scripts/travis/deploy_packages.sh
+      script:
+        - scripts/travis/deploy_packages.sh
+        - scripts/travis/test_release.sh
     - # same stage, parallel job
       name: MacOS Deploy
       os: osx

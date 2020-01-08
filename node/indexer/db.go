@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -124,7 +124,7 @@ func (idb *DB) AddBlock(b bookkeeping.Block) error {
 		}
 		for _, txad := range payset {
 			txn := txad.SignedTxn
-			_, err = stmt.Exec(txn.ID().String(), txn.Txn.Sender.String(), txn.Txn.Receiver.String(), b.Round(), b.TimeStamp)
+			_, err = stmt.Exec(txn.ID().String(), txn.Txn.Sender.String(), txn.Txn.GetReceiverAddress().String(), b.Round(), b.TimeStamp)
 			if err != nil {
 				return err
 			}

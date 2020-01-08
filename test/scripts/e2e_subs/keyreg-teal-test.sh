@@ -5,6 +5,7 @@ date '+keyreg-teal-test start %Y%m%d_%H%M%S'
 set -e
 set -x
 set -o pipefail
+export SHELLOPTS
 
 WALLET=$1
 

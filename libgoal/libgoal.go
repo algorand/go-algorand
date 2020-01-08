@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -668,6 +668,15 @@ func (c *Client) Block(round uint64) (resp v1.Block, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.Block(round)
+	}
+	return
+}
+
+// RawBlock takes a round and returns its block
+func (c *Client) RawBlock(round uint64) (resp v1.RawBlock, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		resp, err = algod.RawBlock(round)
 	}
 	return
 }
