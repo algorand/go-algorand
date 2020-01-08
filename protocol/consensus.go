@@ -152,6 +152,9 @@ const ConsensusTestShorterLookback = ConsensusVersion("test-shorter-lookback")
 // that allows the control of the upgrade from ConsensusTestUnupgradedProtocol to
 // ConsensusTestUnupgradedProtocol
 const ConsensusTestUnupgradedProtocol = ConsensusVersion("test-unupgraded-protocol")
+
+// ConsensusTestUnupgradedToProtocol is a version of ConsensusCurrentVersion
+// It is used as an upgrade from ConsensusTestUnupgradedProtocol
 const ConsensusTestUnupgradedToProtocol = ConsensusVersion("test-unupgradedto-protocol")
 
 
