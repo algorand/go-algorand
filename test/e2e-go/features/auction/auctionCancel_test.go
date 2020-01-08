@@ -55,7 +55,7 @@ func TestStartAndCancelAuctionNoBids(t *testing.T) {
 }
 
 func TestStartAndCancelAuctionOneUserTenBids(t *testing.T) {
-	SkipTestOnPlatform(t, false /*ubuntuAMD64*/, true /*arm64*/, true /*macOSAMD64*/)
+	testUtils.SkipTestOnPlatform(t, false /*ubuntuAMD64*/, true /*arm64*/, true /*macOSAMD64*/)
 
 	t.Parallel()
 	r := require.New(t)
@@ -117,7 +117,7 @@ func TestStartAndCancelAuctionOneUserTenBids(t *testing.T) {
 }
 
 func TestStartAndCancelAuctionEarlyOneUserTenBids(t *testing.T) {
-	SkipTestOnPlatform(t, false /*ubuntuAMD64*/, true /*arm64*/, false /*macOSAMD64*/)
+	testUtils.SkipTestOnPlatform(t, false /*ubuntuAMD64*/, true /*arm64*/, false /*macOSAMD64*/)
 
 	t.Parallel()
 	r := require.New(t)
