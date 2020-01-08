@@ -153,9 +153,10 @@ func isValidNetworkDir(rootDir string) bool {
 
 // LoadNetwork loads and initializes the Network state representing
 // an existing deployed network.
-func LoadNetwork(rootDir string) (Network, error) {
-	n := Network{
-		rootDir: rootDir,
+func LoadNetwork(rootDir string) (*Network, error) {
+	n := &Network{
+		rootDir:  rootDir,
+		stopping: make(chan struct{}),
 	}
 
 	if !isValidNetworkDir(rootDir) {

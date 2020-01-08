@@ -107,7 +107,7 @@ var networkCreateCmd = &cobra.Command{
 	},
 }
 
-func getNetworkAndBinDir() (netdeploy.Network, string) {
+func getNetworkAndBinDir() (*netdeploy.Network, string) {
 	networkRootDir, err := filepath.Abs(networkRootDir)
 	if err != nil {
 		panic(err)
