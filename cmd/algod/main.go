@@ -153,6 +153,12 @@ func main() {
 	}
 	defer fileLock.Unlock()
 
+	cfg, err := config.LoadConfigFromDisk(absolutePath)
+	if err != nil && !os.IsNotExist(err) {
+		// log is not setup yet, this will log to stderr
+		log.Fatalf("Cannot load config: %v", err)
+	}
+
 	// Enable telemetry hook in daemon to send logs to cloud
 	// If ALGOTEST env variable is set, telemetry is disabled - allows disabling telemetry for tests
 	isTest := os.Getenv("ALGOTEST") != ""
@@ -166,10 +172,12 @@ func main() {
 			os.Exit(1)
 		}
 
+		telemetryConfig.SendToLog = telemetryConfig.SendToLog || cfg.TelemetryToLog
+
 		// Apply telemetry override.
 		telemetryConfig.Enable = logging.TelemetryOverride(*telemetryOverride)
 
-		if telemetryConfig.Enable {
+		if telemetryConfig.Enable || telemetryConfig.SendToLog {
 			// If session GUID specified, use it.
 			if *sessionGUID != "" {
 				if len(*sessionGUID) == 36 {
@@ -186,12 +194,6 @@ func main() {
 	s := algod.Server{
 		RootPath: absolutePath,
 		Genesis:  genesis,
-	}
-
-	cfg, err := config.LoadConfigFromDisk(s.RootPath)
-	if err != nil && !os.IsNotExist(err) {
-		// log is not setup yet, this will log to stderr
-		log.Fatalf("Cannot load config: %v", err)
 	}
 
 	// Generate a REST API token if one was not provided

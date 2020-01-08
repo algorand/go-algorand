@@ -48,7 +48,9 @@ func EnableTelemetry(cfg TelemetryConfig, l *logger) (err error) {
 func enableTelemetryState(telemetry *telemetryState, l *logger) {
 	l.loggerState.telemetry = telemetry
 	// Hook our normal logging to send desired types to telemetry
-	l.AddHook(telemetry.hook)
+	if telemetry.hook != nil {
+		l.AddHook(telemetry.hook)
+	}
 	// Wrap current logger Output writer to capture history
 	l.setOutput(telemetry.wrapOutput(l.getOutput()))
 }
@@ -71,19 +73,19 @@ func makeLevels(min logrus.Level) []logrus.Level {
 }
 
 func makeTelemetryState(cfg TelemetryConfig, hookFactory hookFactory) (*telemetryState, error) {
-	history := createLogBuffer(logBufferDepth)
-	if cfg.SessionGUID == "" {
-		cfg.SessionGUID = uuid.NewV4().String()
+	telemetry := &telemetryState{}
+	telemetry.history = createLogBuffer(logBufferDepth)
+	if cfg.Enable {
+		if cfg.SessionGUID == "" {
+			cfg.SessionGUID = uuid.NewV4().String()
+		}
+		hook, err := createTelemetryHook(cfg, telemetry.history, hookFactory)
+		if err != nil {
+			return nil, err
+		}
+		telemetry.hook = createAsyncHookLevels(hook, 32, 100, makeLevels(cfg.MinLogLevel))
 	}
-	hook, err := createTelemetryHook(cfg, history, hookFactory)
-	if err != nil {
-		return nil, err
-	}
-
-	telemetry := &telemetryState{
-		history,
-		createAsyncHookLevels(hook, 32, 100, makeLevels(cfg.MinLogLevel)),
-	}
+	telemetry.sendToLog = cfg.SendToLog
 	return telemetry, nil
 }
 
@@ -222,7 +224,12 @@ func (t *telemetryState) logTelemetry(l logger, message string, details interfac
 	entry.Level = logrus.InfoLevel
 	entry.Message = message
 
-	t.hook.Fire(entry)
+	if t.sendToLog {
+		entry.Info(message)
+	}
+	if t.hook != nil {
+		t.hook.Fire(entry)
+	}
 }
 
 func (t *telemetryState) Close() {
