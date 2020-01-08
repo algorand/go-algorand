@@ -5,7 +5,7 @@ if [ -z "${BUILDTIMESTAMP}" ]; then
     BUILDTIMESTAMP=$(cat "${HOME}/buildtimestamp")
     export BUILDTIMESTAMP
     echo run "${0}" with output to "${HOME}/buildlog_${BUILDTIMESTAMP}"
-    (bash "${0}" "${1}" 2>&1) | tee "${HOME}/buildlog_${BUILDTIMESTAMP}"
+    (bash "${0}" "${1}" "${2}" 2>&1) | tee "${HOME}/buildlog_${BUILDTIMESTAMP}"
     exit 0
 fi
 
@@ -14,8 +14,10 @@ date "+setup start %Y%m%d_%H%M%S"
 set -ex
 
 GIT_REPO_PATH=https://github.com/btoll/go-algorand
-GIT_CHECKOUT_LABEL=${1:-"rel/stable"}
-export GIT_CHECKOUT_LABEL
+TAG=${1:-"rel/stable"}
+export TAG
+CHANNEL=${1:-"stable"}
+export CHANNEL
 export DEBIAN_FRONTEND=noninteractive
 
 sudo apt-get update -q
@@ -26,9 +28,8 @@ mkdir -p "${HOME}"/{.gnupg,go,gpgbin,dummyaptly,dummyrepo,prodrepo}
 
 # Check out
 mkdir -p "${HOME}/go/src/github.com/algorand"
-cd "${HOME}/go/src/github.com/algorand" && git clone --single-branch --branch "${GIT_CHECKOUT_LABEL}" "${GIT_REPO_PATH}" go-algorand #cd go-algorand
+cd "${HOME}/go/src/github.com/algorand" && git clone --single-branch --branch "${TAG}" "${GIT_REPO_PATH}" go-algorand
 # TODO: if we are checking out a release tag, `git tag --verify` it
-#git checkout "${GIT_CHECKOUT_LABEL}"
 
 # Install latest Go
 # TODO: make a config file in root of repo with single source of truth for Go major-minor version

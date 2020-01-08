@@ -1,3 +1,5 @@
+def user_input
+
 pipeline {
     environment {
         AWS_ACCESS_KEY_ID = credentials("aws-access-key-id")
@@ -9,6 +11,7 @@ pipeline {
     stages {
         stage("create ec2 instance") {
             steps {
+                // Ubuntu Server 18.04 LTS, 8 vCPUs, 32 GB RAM
                 sh script: 'scripts/release/start_ec2_instance.sh us-west-1 ami-0dd655843c87b6930 t2.2xlarge'
                 //sh script: 'scripts/release/start_ec2_instance.sh us-east-1 ami-04b9e92b5572fa0d1 t2.2xlarge'
             }
@@ -22,45 +25,32 @@ pipeline {
                 sh 'scp -i ReleaseBuildInstanceKey.pem -o StrictHostKeyChecking=no -r scripts/release/controller/setup.sh ubuntu@$(cat scripts/release/tmp/instance):~/setup.sh'
 
                 script {
-                    def GIT_BRANCH = input(
-                        id: 'git_branch',
-                        message: 'Enter the Git branch',
+                    user_input = input(
+                        id: 'user_inputs',
+                        message: 'Enter the Git tag and the channel',
                         parameters: [
                             [
                                 $class: 'StringParameterDefinition',
-                                defaultValue: 'rel/stable',
-                                description: 'Git branch',
-                                name: 'branch'
+                                defaultValue: '',
+                                description: 'Git tag',
+                                name: 'tag'
+                            ],
+                            [
+                                $class: 'StringParameterDefinition',
+                                defaultValue: 'stable',
+                                description: 'channel',
+                                name: 'channel'
                             ]
                         ]
                     )
 
-                    sh "ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@\$(cat scripts/release/tmp/instance) bash setup.sh ${GIT_BRANCH}"
+                    sh "ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@\$(cat scripts/release/tmp/instance) bash setup.sh ${user_input.tag} ${user_input.channel}"
                 }
             }
         }
 
         stage("build") {
             steps {
-                /*
-                script {
-                    def PASSPHRASE = input(
-                        id: 'passphrase',
-                        message: 'Enter the GPG passphrase',
-                        parameters: [
-                            [
-                                $class: 'StringParameterDefinition',
-                                defaultValue: '',
-                                description: 'GPG Passphrase',
-                                name: 'gpg_pass'
-                            ]
-                        ]
-                    )
-
-                    sh "bash scripts/release/socket.sh \$(cat scripts/release/tmp/instance) ${PASSPHRASE}"
-                }
-                */
-
                 sh 'ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@$(cat scripts/release/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/controller/build.sh'
             }
         }
@@ -82,12 +72,10 @@ pipeline {
             steps {
                 script {
                     RSTAMP = sh(returnStdout: true, script: 'scripts/reverse_hex_timestamp')
-                    BRANCH = sh(returnStdout: true, script: 'bash scripts/compute_branch.sh')
-                    CHANNEL = sh(returnStdout: true, script: 'bash scripts/compute_branch_channel.sh ${BRANCH}')
+                    CHANNEL = user_input.channel
                     FULLVERSION = sh(returnStdout: true, script: 'bash scripts/compute_build_number.sh -f')
 
                     // Bash scripts return vars with a trailing [:space:]
-                    BRANCH = BRANCH.replaceAll("\\s","")
                     CHANNEL = CHANNEL.replaceAll("\\s","")
                     FULLVERSION = FULLVERSION.replaceAll("\\s","")
 

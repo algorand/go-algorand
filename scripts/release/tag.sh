@@ -1,22 +1,20 @@
 #!/usr/bin/env bash
 
-TAG=foo-bar
-SIGNING_KEY_ADDR=dev@algorand.com
+# TODO: Ensure params are sent!
+TAG=$1
+BRANCH=${2:-rel/stable}
 
-#  # Set the TIMESTAMP to use for the genesis.json file - set here so all packages use the same number
-#  TIMESTAMP=
-#  if [ -e ./genesistimestamp.dat ]; then
-#      TIMESTAMP=$(cat ./genesistimestamp.dat)
-#  else
-#      TIMESTAMP=$(date +%s)
-#  fi
-#  export TIMESTAMP=${TIMESTAMP}
+#pushd "${HOME}"/go/src/github.com/algorand/go-algorand || exit
+pushd "${HOME}"/projects/go-algorand || exit
+git checkout "${BRANCH}"
 
-cd "${HOME}"/go/src/github.com/algorand/go-algorand || exit
-git tag -d "${TAG}"
-git checkout HEAD
-git tag -s -u "${SIGNING_KEY_ADDR}" "${TAG}" -m "Genesis Timestamp: $(cat ./genesistimestamp.dat)"
+# TODO
+# There should be a discussion about what we actually want in the git tag text.
+# For now, just use the Unix timestamp.
+git tag -s -u dev@algorand.com "${TAG}" -m "Genesis Timestamp: $(date +%s)"
 git tag --verify "${TAG}"
+
 git push -n --tags
 git push --force --tags
+popd
 

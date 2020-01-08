@@ -13,7 +13,8 @@ PLATFORM=$(./scripts/osarchtype.sh)
 PLATFORM_SPLIT=(${PLATFORM//\// })
 OS=${PLATFORM_SPLIT[0]}
 ARCH=${PLATFORM_SPLIT[1]}
-BRANCH=$(./scripts/compute_branch.sh)
+# TODO - branch needs to come from user input
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
 export BRANCH
 CHANNEL=$(./scripts/compute_branch_channel.sh "${BRANCH}")
 export CHANNEL
@@ -55,7 +56,7 @@ export RELEASE_GENESIS_PROCESS=${RELEASE_GENESIS_PROCESS}
 PLATFORM=${PLATFORM}
 OS=${OS}
 ARCH=${ARCH}
-export BRANCH=$(git rev-parse --abbrev-ref HEAD)
+export BRANCH=${BRANCH}
 export CHANNEL=${CHANNEL}
 export DEFAULTNETWORK=${DEFAULTNETWORK}
 export PKG_ROOT=${PKG_ROOT}
