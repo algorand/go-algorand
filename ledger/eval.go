@@ -394,11 +394,6 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 // on a single transaction, but does not actually add the transaction to the block
 // evaluator, or modify the block evaluator state in any other visible way.
 func (eval *BlockEvaluator) testTransaction(txn transactions.SignedTxn, cow *roundCowState) error {
-	// Verify that groups are supported.
-	if !txn.Txn.Group.IsZero() && !eval.proto.SupportTxGroups {
-		return fmt.Errorf("transaction groups not supported")
-	}
-
 	// Transaction valid (not expired)?
 	err := txn.Txn.Alive(eval.block)
 	if err != nil {
@@ -468,17 +463,10 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 
 	cow := eval.state.child()
 
-	groupNoAD := make([]transactions.SignedTxn, len(txgroup))
-	for i := range txgroup {
-		groupNoAD[i] = txgroup[i].SignedTxn
-	}
-
-	ctxs := verify.PrepareContexts(groupNoAD, eval.block.BlockHeader)
-
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
-		err := eval.transaction(txad.SignedTxn, txad.ApplyData /*groupNoAD, gi,*/, ctxs[gi], cow, &txib)
+		err := eval.transaction(txad.SignedTxn, txad.ApplyData, cow, &txib)
 		if err != nil {
 			return err
 		}
@@ -545,24 +533,14 @@ func validateTransaction(txn transactions.SignedTxn, block bookkeeping.Block, pr
 			return fmt.Errorf("transaction %v: failed to verify: %v", txn.ID(), err)
 		}
 	}
-
-	// Verify that groups are supported.
-	if !txn.Txn.Group.IsZero() && !proto.SupportTxGroups {
-		return fmt.Errorf("transaction groups not supported")
-	}
 	return nil
 }
 
 // transaction tentatively executes a new transaction as part of this block evaluation.
 // If the transaction cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transactions.ApplyData /*txgroup []transactions.SignedTxn, groupIndex int, */, ctx verify.Context, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
+func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transactions.ApplyData, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
 	var err error
-
-	spec := transactions.SpecialAddresses{
-		FeeSink:     eval.block.BlockHeader.FeeSink,
-		RewardsPool: eval.block.BlockHeader.RewardsPool,
-	}
 
 	if eval.validate {
 		// Transaction already in the ledger?
@@ -574,6 +552,11 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 		if dup {
 			return TransactionInLedgerError{txn.ID()}
 		}
+	}
+
+	spec := transactions.SpecialAddresses{
+		FeeSink:     eval.block.BlockHeader.FeeSink,
+		RewardsPool: eval.block.BlockHeader.RewardsPool,
 	}
 
 	// Apply the transaction, updating the cow balances
