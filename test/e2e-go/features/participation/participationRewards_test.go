@@ -130,7 +130,7 @@ func TestOnlineOfflineRewards(t *testing.T) {
 }
 
 func TestPartkeyOnlyRewards(t *testing.T) {
-	SkipTestOnPlatform(t, false /*ubuntuAMD64*/, true /*arm64*/, true /*macOSAMD64*/)
+	testUtils.SkipTestOnPlatform(t, false /*ubuntuAMD64*/, true /*arm64*/, true /*macOSAMD64*/)
 
 	t.Parallel()
 	r := require.New(t)

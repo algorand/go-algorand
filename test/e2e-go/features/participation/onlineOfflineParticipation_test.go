@@ -97,7 +97,7 @@ func waitForAccountToProposeBlock(a *require.Assertions, fixture fixtures.RestCl
 }
 
 func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
-	SkipTestOnPlatform(t, false /*ubuntuAMD64*/, true /*arm64*/, true /*macOSAMD64*/)
+	testUtils.SkipTestOnPlatform(t, false /*ubuntuAMD64*/, true /*arm64*/, true /*macOSAMD64*/)
 
 	if testing.Short() {
 		t.Skip()

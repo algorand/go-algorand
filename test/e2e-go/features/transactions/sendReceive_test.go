@@ -41,7 +41,7 @@ func GenerateRandomBytes(n int) []byte {
 // this test checks that two accounts' balances stay up to date
 // as they send each other money many times
 func TestAccountsCanSendMoney(t *testing.T) {
-	SkipTestOnPlatform(t, false /*ubuntuAMD64*/, true /*arm64*/, true /*macOSAMD64*/)
+	testUtils.SkipTestOnPlatform(t, false /*ubuntuAMD64*/, true /*arm64*/, true /*macOSAMD64*/)
 
 	testAccountsCanSendMoney(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
 }
