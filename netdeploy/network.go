@@ -60,17 +60,17 @@ type Network struct {
 }
 
 // Name returns the name of the private network
-func (n Network) Name() string {
+func (n *Network) Name() string {
 	return n.cfg.Name
 }
 
 // PrimaryDataDir returns the primary data directory for the network
-func (n Network) PrimaryDataDir() string {
+func (n *Network) PrimaryDataDir() string {
 	return n.getNodeFullPath(n.cfg.RelayDirs[0])
 }
 
 // NodeDataDirs returns an array of node data directories (not the relays)
-func (n Network) NodeDataDirs() []string {
+func (n *Network) NodeDataDirs() []string {
 	var directories []string
 	for _, nodeDir := range n.nodeDirs {
 		directories = append(directories, n.getNodeFullPath(nodeDir))
@@ -79,7 +79,7 @@ func (n Network) NodeDataDirs() []string {
 }
 
 // GetNodeDir returns the node directory that is associated with the given node name.
-func (n Network) GetNodeDir(nodeName string) (string, error) {
+func (n *Network) GetNodeDir(nodeName string) (string, error) {
 	possibleDir := n.getNodeFullPath(nodeName)
 	if isNodeDir(possibleDir) {
 		return possibleDir, nil
@@ -97,7 +97,7 @@ func isNodeDir(path string) bool {
 }
 
 // Genesis returns the genesis data for this network
-func (n Network) Genesis() gen.GenesisData {
+func (n *Network) Genesis() gen.GenesisData {
 	return n.gen
 }
 
@@ -191,12 +191,12 @@ func loadNetworkCfg(configFile string) (NetworkCfg, error) {
 }
 
 // Save persists the network state in the root directory (in network.json)
-func (n Network) Save(rootDir string) error {
+func (n *Network) Save(rootDir string) error {
 	cfgFile := filepath.Join(rootDir, configFileName)
 	return saveNetworkCfg(n.cfg, cfgFile)
 }
 
-func (n Network) getNodeFullPath(nodeDir string) string {
+func (n *Network) getNodeFullPath(nodeDir string) string {
 	return filepath.Join(n.rootDir, nodeDir)
 }
 
@@ -392,8 +392,24 @@ func (n *Network) Stop(binDir string) {
 		nc.FullStop()
 	}
 	n.runningNCsMu.Lock()
-	for _, nc := range n.runningNCs {
-		go stopNodeContoller(nc)
+
+	for _, relayDir := range n.cfg.RelayDirs {
+		relayFullPath := n.getNodeFullPath(relayDir)
+		pnc := n.runningNCs[relayFullPath]
+		if pnc == nil {
+			nc := nodecontrol.MakeNodeController(binDir, relayFullPath)
+			pnc = &nc
+		}
+		go stopNodeContoller(pnc)
+	}
+	for _, nodeDir := range n.nodeDirs {
+		nodeFullPath := n.getNodeFullPath(nodeDir)
+		pnc := n.runningNCs[nodeFullPath]
+		if pnc == nil {
+			nc := nodecontrol.MakeNodeController(binDir, nodeFullPath)
+			pnc = &nc
+		}
+		go stopNodeContoller(pnc)
 	}
 	n.runningNCs = make(map[string]*nodecontrol.NodeController)
 	n.runningNCsMu.Unlock()
@@ -421,7 +437,7 @@ func (n *Network) GetGoalClient(binDir, nodeName string) (lg libgoal.Client, err
 }
 
 // GetNodeController returns the node controller for the specified node name
-func (n Network) GetNodeController(binDir, nodeName string) (nc nodecontrol.NodeController, err error) {
+func (n *Network) GetNodeController(binDir, nodeName string) (nc nodecontrol.NodeController, err error) {
 	nodeDir, err := n.GetNodeDir(nodeName)
 	if err != nil {
 		return
