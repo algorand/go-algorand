@@ -790,6 +790,9 @@ type Local struct {
 	// PeerConnectionsUpdateInterval defines the interval at which the peer connections information is being sent to the
 	// telemetry ( when enabled ). Defined in seconds.
 	PeerConnectionsUpdateInterval int
+
+	// TelemetryToLog records messages to node.log that are normally sent to remote event monitoring
+	TelemetryToLog bool
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)
