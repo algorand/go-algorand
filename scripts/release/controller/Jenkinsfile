@@ -51,7 +51,7 @@ pipeline {
 
         stage("build") {
             steps {
-                sh 'ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@$(cat scripts/release/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/controller/build.sh'
+                sh "ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@\$(cat scripts/release/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/controller/build.sh ${user_input.channel}"
             }
         }
 
