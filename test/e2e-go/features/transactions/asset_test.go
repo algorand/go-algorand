@@ -417,7 +417,7 @@ func TestAssetConfig(t *testing.T) {
 }
 
 func TestAssetInformation(t *testing.T) {
-	testUtils.SkipIfFilteringTest(t)
+	SkipTestOnPlatform(t, false /*ubuntuAMD64*/, true /*arm64*/, true /*macOSAMD64*/)
 
 	t.Parallel()
 	a := require.New(t)
@@ -636,7 +636,7 @@ func TestAssetGroupCreateSendDestroy(t *testing.T) {
 }
 
 func TestAssetSend(t *testing.T) {
-	testUtils.SkipIfFilteringTest(t)
+	SkipTestOnPlatform(t, false /*ubuntuAMD64*/, true /*arm64*/, true /*macOSAMD64*/)
 
 	t.Parallel()
 	a := require.New(t)

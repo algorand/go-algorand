@@ -36,7 +36,7 @@ func detectAuctionCannotProceed(r *require.Assertions, params auction.Params, la
 }
 
 func TestStartAndEndAuctionNoBids(t *testing.T) {
-	testUtils.SkipIfFilteringTest(t)
+	SkipTestOnPlatform(t, false /*ubuntuAMD64*/, true /*arm64*/, true /*macOSAMD64*/)
 
 	t.Parallel()
 	r := require.New(t)
@@ -73,7 +73,7 @@ func TestStartAndEndAuctionNoBids(t *testing.T) {
 }
 
 func TestStartAndEndAuctionOneUserOneBid(t *testing.T) {
-	testUtils.SkipIfFilteringTest(t)
+	SkipTestOnPlatform(t, false /*ubuntuAMD64*/, true /*arm64*/, true /*macOSAMD64*/)
 
 	t.Parallel()
 	r := require.New(t)
@@ -138,7 +138,7 @@ func TestStartAndEndAuctionOneUserOneBid(t *testing.T) {
 }
 
 func TestStartAndEndAuctionOneUserTenBids(t *testing.T) {
-	testUtils.SkipIfFilteringTest(t)
+	SkipTestOnPlatform(t, false /*ubuntuAMD64*/, true /*arm64*/, true /*macOSAMD64*/)
 
 	t.Parallel()
 	r := require.New(t)
@@ -301,7 +301,7 @@ func TestStartAndEndAuctionTenUsersOneBidEach(t *testing.T) {
 }
 
 func TestStartAndEndAuctionTenUsersTenBidsEach(t *testing.T) {
-	testUtils.SkipIfFilteringTest(t)
+	SkipTestOnPlatform(t, false /*ubuntuAMD64*/, true /*arm64*/, true /*macOSAMD64*/)
 
 	t.Parallel()
 	r := require.New(t)
@@ -397,7 +397,7 @@ func TestStartAndEndAuctionTenUsersTenBidsEach(t *testing.T) {
 }
 
 func TestDecayingPrice(t *testing.T) {
-	testUtils.SkipIfFilteringTest(t)
+	SkipTestOnPlatform(t, false /*ubuntuAMD64*/, true /*arm64*/, true /*macOSAMD64*/)
 
 	t.Parallel()
 	r := require.New(t)

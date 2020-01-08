@@ -28,7 +28,7 @@ import (
 )
 
 func TestInvalidDeposit(t *testing.T) {
-	testUtils.SkipIfFilteringTest(t)
+	SkipTestOnPlatform(t, false /*ubuntuAMD64*/, true /*arm64*/, true /*macOSAMD64*/)
 
 	t.Parallel()
 	r := require.New(t)
@@ -183,6 +183,8 @@ func TestNoDepositAssociatedWithBid(t *testing.T) {
 }
 
 func TestDeadbeatBid(t *testing.T) {
+	SkipTestOnPlatform(t, false /*ubuntuAMD64*/, true /*arm64*/, false /*macOSAMD64*/)
+
 	// an error is expected when an account attempts to overbid
 	t.Parallel()
 	r := require.New(t)
@@ -276,7 +278,7 @@ func unpartitionNetwork(fixture *fixtures.AuctionFixture, r *require.Assertions)
 }
 
 func TestStartAndPartitionAuctionTenUsersTenBidsEach(t *testing.T) {
-	testUtils.SkipIfFilteringTest(t)
+	SkipTestOnPlatform(t, false /*ubuntuAMD64*/, true /*arm64*/, true /*macOSAMD64*/)
 
 	t.Parallel()
 	r := require.New(t)

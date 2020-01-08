@@ -72,7 +72,7 @@ func TestBasicCatchup(t *testing.T) {
 }
 
 func TestCatchupOverGossip(t *testing.T) {
-	testUtils.SkipIfFilteringTest(t)
+	SkipTestOnPlatform(t, false /*ubuntuAMD64*/, true /*arm64*/, true /*macOSAMD64*/)
 
 	if testing.Short() {
 		t.Skip()

@@ -22,12 +22,14 @@ import (
 	"runtime"
 )
 
-// SkipIfFilteringTest skips tests according to the logic implemented in here:
-// Skipping tests on darwin and arm/arm64
-func SkipIfFilteringTest(t *testing.T) {
-	if runtime.GOOS == "darwin" {
+// SkipTestOnPlatform skips tests when running on particular platform(s)
+func SkipTestOnPlatform(t *testing.T, ubuntuAMD64, arm64, macOSAMD64 bool ) {
+	
+	if runtime.GOOS == "darwin" && macOSAMD64 {
 		t.Skip()
-	} else if runtime.GOOS == "linux" && (runtime.GOARCH == "arm" || runtime.GOARCH == "arm64") {
+	} else if runtime.GOOS == "linux" && runtime.GOARCH == "arm64" && arm64 {
+		t.Skip()
+	} else if runtime.GOOS == "linux" && runtime.GOARCH == "amd64" && ubuntuAMD64 {
 		t.Skip()
 	}
 }

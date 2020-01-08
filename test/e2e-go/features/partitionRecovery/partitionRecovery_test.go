@@ -95,7 +95,7 @@ func TestPartitionRecoverySwapStartup(t *testing.T) {
 }
 
 func TestPartitionRecoveryStaggerRestart(t *testing.T) {
-	testUtils.SkipIfFilteringTest(t)
+	SkipTestOnPlatform(t, false /*ubuntuAMD64*/, true /*arm64*/, true /*macOSAMD64*/)
 
 	if testing.Short() {
 		t.Skip()
@@ -158,7 +158,7 @@ func runTestWithStaggeredStopStart(t *testing.T, fixture fixtures.RestClientFixt
 }
 
 func TestBasicPartitionRecoveryPartOffline(t *testing.T) {
-	testUtils.SkipIfFilteringTest(t)
+	SkipTestOnPlatform(t, false /*ubuntuAMD64*/, true /*arm64*/, true /*macOSAMD64*/)
 
 	if testing.Short() {
 		t.Skip()
@@ -211,7 +211,7 @@ func TestBasicPartitionRecoveryPartOffline(t *testing.T) {
 }
 
 func TestPartitionHalfOffline(t *testing.T) {
-	testUtils.SkipIfFilteringTest(t)
+	SkipTestOnPlatform(t, false /*ubuntuAMD64*/, true /*arm64*/, true /*macOSAMD64*/)
 
 	if testing.Short() {
 		t.Skip()

@@ -110,7 +110,18 @@ func TestGoalWithExpect(t *testing.T) {
 		if match, _ := regexp.MatchString(f.testFilter, testName); match {
 			t.Run(testName, func(t *testing.T) {
 				if testName == "basicGoalTest.exp" || testName == "createWalletTest.exp"|| testName == "goalNodeStatusTest.exp" {
-					testUtils.SkipIfFilteringTest(t)
+					SkipTestOnPlatform(t, /*ubuntuAMD64*/false, /*arm64*/true, /*macOSAMD64*/true)
+				}
+				if testName == "doubleSpendingTest.exp" ||
+					testName == "goalTxValidityTest.exp" ||
+					testName == "limitOrderTest.exp" ||
+					testName == "multisigCreationDeletionTest.exp" ||
+					testName == "reportTest.exp" ||
+					testName == "createWalletTest.exp" ||
+					testName == "goalNodeStatusTest.exp" ||
+					testName == "ledgerTest.exp" ||
+					testName == "basicGoalTest.exp" {
+					SkipTestOnPlatform(t, /*ubuntuAMD64*/false, /*arm64*/true, /*macOSAMD64*/false)
 				}
 				workingDir, algoDir, err := f.getTestDir(testName)
 				require.NoError(t, err)
