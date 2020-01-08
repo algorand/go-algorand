@@ -132,6 +132,7 @@ func TestStoppedCatchupOnUnsupported(t *testing.T) {
 	t.Parallel()
 	a := require.New(t)
 
+	defer os.Unsetenv("ALGORAND_TEST_UNUPGRADEDPROTOCOL_DELETE_UPGRADE")	
 	os.Setenv("ALGORAND_TEST_UNUPGRADEDPROTOCOL_DELETE_UPGRADE", "0")
 
 	// Overview of this test:
@@ -156,7 +157,6 @@ func TestStoppedCatchupOnUnsupported(t *testing.T) {
 	err = fixture.ClientWaitForRoundWithTimeout(fixture.GetAlgodClientForController(nc), waitForRound)
 	a.NoError(err)
 
-	defer os.Setenv("ALGORAND_TEST_UNUPGRADEDPROTOCOL_DELETE_UPGRADE", "0")
 	os.Setenv("ALGORAND_TEST_UNUPGRADEDPROTOCOL_DELETE_UPGRADE", "1")
 
 	// Now spin up third node
