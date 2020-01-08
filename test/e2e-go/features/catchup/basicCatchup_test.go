@@ -64,6 +64,7 @@ func TestBasicCatchup(t *testing.T) {
 	a.NoError(err)
 	cloneClient, err := fixture.StartNode(cloneDataDir)
 	a.NoError(err)
+	defer shutdownClonedNode(cloneDataDir, &fixture, t)
 
 	// Now, catch up
 	err = fixture.LibGoalFixture.ClientWaitForRoundWithTimeout(cloneClient, waitForRound)
@@ -131,7 +132,8 @@ func TestStoppedCatchupOnUnsupported(t *testing.T) {
 	t.Parallel()
 	a := require.New(t)
 
-	os.Setenv("ALGORAND_TEST_UNUPGRADEDPROTOCOL_DELETE_CURRENT_VERSION", "0")
+	defer os.Unsetenv("ALGORAND_TEST_UNUPGRADEDPROTOCOL_DELETE_UPGRADE")	
+	os.Setenv("ALGORAND_TEST_UNUPGRADEDPROTOCOL_DELETE_UPGRADE", "0")
 
 	// Overview of this test:
 	// Start a two-node network (primary has 0%, secondary has 100%)
@@ -155,7 +157,7 @@ func TestStoppedCatchupOnUnsupported(t *testing.T) {
 	err = fixture.ClientWaitForRoundWithTimeout(fixture.GetAlgodClientForController(nc), waitForRound)
 	a.NoError(err)
 
-	os.Setenv("ALGORAND_TEST_UNUPGRADEDPROTOCOL_DELETE_CURRENT_VERSION", "1")
+	os.Setenv("ALGORAND_TEST_UNUPGRADEDPROTOCOL_DELETE_UPGRADE", "1")
 
 	// Now spin up third node
 	cloneDataDir := filepath.Join(fixture.PrimaryDataDir(), "../clone")
@@ -164,6 +166,7 @@ func TestStoppedCatchupOnUnsupported(t *testing.T) {
 	a.NoError(err)
 	cloneClient, err := fixture.StartNode(cloneDataDir)
 	a.NoError(err)
+	defer shutdownClonedNode(cloneDataDir, &fixture, t)	
 
 	// Now, catch up
 	err = fixture.LibGoalFixture.ClientWaitForRoundWithTimeout(cloneClient, waitForRound)
@@ -213,4 +216,14 @@ func TestStoppedCatchupOnUnsupported(t *testing.T) {
 	a.True(!status.NextVersionSupported && status.LastRound+1 == status.NextVersionRound)
 	// libgoal Client StoppedAtUnsupportedRound in v1.NodeStatus should now be true
 	a.True(status.StoppedAtUnsupportedRound)
+}
+
+// shutdownClonedNode replicates the behavior of fixture.Shutdown() for network nodes on cloned node
+// It deletes the directory if the test passes, otherwise it preserves it 
+func shutdownClonedNode(nodeDataDir string, f * fixtures.RestClientFixture, t *testing.T) {
+	nc := f.LibGoalFixture.GetNodeControllerForDataDir(nodeDataDir)
+	nc.FullStop()
+	if !t.Failed() {
+		os.RemoveAll(nodeDataDir)
+	}
 }
