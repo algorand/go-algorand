@@ -34,7 +34,7 @@ SNAPSHOT=algodummy-$(date +%Y%m%d_%H%M%S)
 "$HOME"/go/bin/aptly -config="${HOME}"/dummyaptly.conf snapshot create "${SNAPSHOT}" from repo algodummy
 "$HOME"/go/bin/aptly -config="${HOME}"/dummyaptly.conf publish snapshot -origin=Algorand -label=Algorand "${SNAPSHOT}"
 
-./"${REPO_ROOT}"/scripts/release/helper/debian/run_ubuntu_build_test.sh
+./"${REPO_ROOT}"/scripts/release/helper/run_ubuntu_build_test.sh
 
 date "+build_release done building ubuntu %Y%m%d_%H%M%S"
 

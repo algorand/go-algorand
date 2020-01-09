@@ -12,7 +12,7 @@ STATUS=0
 # run the docker container
 docker \
   run --rm --env-file "${HOME}"/build_env_docker \
-  --mount type=bind,src="${GOPATH}"/src/github.com/algorand/go-algorand/scripts/release/helper/debian/,dst=/workdir \
+  --mount type=bind,src="${GOPATH}"/src/github.com/algorand/go-algorand/scripts/release/helper/,dst=/workdir \
   --mount type=bind,src="${GOPATH}"/src/github.com/algorand/go-algorand/test/e2e-go/cli/goal/expect,dst=/expectdir \
   --mount type=bind,src="${GOPATH}"/src/github.com/algorand/go-algorand/test/testdata,dst=/testdata \
   --mount type=bind,src="${KEY_DIR}",dst=/stuff \
