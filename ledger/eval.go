@@ -509,28 +509,6 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	return nil
 }
 
-func validateTransaction(txn transactions.SignedTxn, block bookkeeping.Block, proto config.ConsensusParams, txcache VerifiedTxnCache, ctx verify.Context, verificationPool execpool.BacklogPool) error {
-	// Transaction valid (not expired)?
-	err := txn.Txn.Alive(block)
-	if err != nil {
-		return err
-	}
-
-	// Well-formed on its own?
-	err = txn.Txn.WellFormed(ctx.CurrSpecAddrs, proto)
-	if err != nil {
-		return fmt.Errorf("transaction %v: malformed: %v", txn.ID(), err)
-	}
-
-	if txcache == nil || !txcache.Verified(txn, ctx.Params) {
-		err = verify.TxnPool(&txn, ctx, verificationPool)
-		if err != nil {
-			return fmt.Errorf("transaction %v: failed to verify: %v", txn.ID(), err)
-		}
-	}
-	return nil
-}
-
 // transaction tentatively executes a new transaction as part of this block evaluation.
 // If the transaction cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
@@ -720,6 +698,28 @@ func (tv *evalTxValidator) run() {
 	close(tv.done)
 }
 
+func validateTransaction(txn transactions.SignedTxn, block bookkeeping.Block, proto config.ConsensusParams, txcache VerifiedTxnCache, ctx verify.Context, verificationPool execpool.BacklogPool) error {
+	// Transaction valid (not expired)?
+	err := txn.Txn.Alive(block)
+	if err != nil {
+		return err
+	}
+
+	// Well-formed on its own?
+	err = txn.Txn.WellFormed(ctx.CurrSpecAddrs, proto)
+	if err != nil {
+		return fmt.Errorf("transaction %v: malformed: %v", txn.ID(), err)
+	}
+
+	if txcache == nil || !txcache.Verified(txn, ctx.Params) {
+		err = verify.TxnPool(&txn, ctx, verificationPool)
+		if err != nil {
+			return fmt.Errorf("transaction %v: failed to verify: %v", txn.ID(), err)
+		}
+	}
+	return nil
+}
+
 // used by Ledger.Validate() Ledger.AddBlock() Ledger.trackerEvalVerified()(accountUpdates.loadFromDisk())
 //
 // Validate: eval(ctx, blk, true, txcache, executionPool)
@@ -749,8 +749,6 @@ func (l *Ledger) eval(ctx context.Context, blk bookkeeping.Block, validate bool,
 	if err != nil {
 		return StateDelta{}, err
 	}
-
-	// TODO: batch tx sig verification: ingest blk.Payset and output a list of ValidatedTx
 
 	// Next, transactions
 	paysetgroups, err := blk.DecodePaysetGroups()
