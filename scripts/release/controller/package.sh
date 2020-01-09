@@ -3,8 +3,6 @@
 
 REPO_ROOT=/home/ubuntu/go/src/github.com/algorand/go-algorand/
 
-echo "TEST_UPGRADE=${TEST_UPGRADE}" >> "${HOME}/build_env_docker"
-
 cat <<EOF>"${HOME}"/dummyaptly.conf
 {
   "rootDir": "${HOME}/dummyaptly",

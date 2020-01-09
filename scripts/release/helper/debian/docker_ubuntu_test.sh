@@ -16,24 +16,20 @@ export PATH=${GOPATH}/bin:/usr/local/go/bin:${PATH}
 apt-get update
 apt-get install -y gnupg2 curl software-properties-common python3
 
-if [ "${TEST_UPGRADE}" == "no" ]; then
-    echo "upgrade test skipped"
-else
-    apt install -y /root/stuff/*.deb
-    algod -v
-    if algod -v | grep -q "${FULLVERSION}"
-    then
-        echo "already installed current version. wat?"
-        false
-    fi
-
-    mkdir -p /root/testnode
-    cp -p /var/lib/algorand/genesis/testnet/genesis.json /root/testnode
-
-    goal node start -d /root/testnode
-    goal node wait -d /root/testnode -w 120
-    goal node stop -d /root/testnode
+apt install -y /root/stuff/*.deb
+algod -v
+if algod -v | grep -q "${FULLVERSION}"
+then
+    echo "already installed current version. wat?"
+    false
 fi
+
+mkdir -p /root/testnode
+cp -p /var/lib/algorand/genesis/testnet/genesis.json /root/testnode
+
+goal node start -d /root/testnode
+goal node wait -d /root/testnode -w 120
+goal node stop -d /root/testnode
 
 # Getting the following errors when trying to fetch the public key from the repo:
 #
