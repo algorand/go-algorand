@@ -87,7 +87,7 @@ func (f *GoalFixture) AccountNew(name string) (address string, err error) {
 		if strings.Contains(stderr, "is already taken") {
 			return "", ErrAccountAlreadyTaken
 		}
-		return
+		return "", combineExecuteError(stdout, stderr, err)
 	}
 	valid := strings.HasPrefix(stdout, "Created new account with address")
 	if !valid {

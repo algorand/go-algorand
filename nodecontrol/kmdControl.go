@@ -86,7 +86,8 @@ func (kc KMDController) KMDClient() (kmdClient client.KMDClient, err error) {
 	netFile := filepath.Join(kc.kmdDataDir, server.NetFilename)
 	sockPath, err := util.GetFirstLineFromFile(netFile)
 	if err != nil {
-		return
+		panic(err)
+		//return
 	}
 
 	// Build the client
