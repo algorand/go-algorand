@@ -24,12 +24,14 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
+	testUtils "github.com/algorand/go-algorand/test/framework/utils"
 )
 
 const transactionValidityPeriod = uint64(100) // rounds
 const transactionFee = uint64(0)
 
 func TestAccountsCanChangeOnlineState(t *testing.T) {
+	testUtils.SkipTestOnPlatform(t, false /*ubuntuAMD64*/, true /*arm64*/, false /*macOSAMD64*/)
 	testAccountsCanChangeOnlineState(t, filepath.Join("nettemplates", "TwoNodesPartlyOffline.json"))
 }
 

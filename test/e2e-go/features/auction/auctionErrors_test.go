@@ -115,6 +115,7 @@ func TestInvalidDeposit(t *testing.T) {
 }
 
 func TestNoDepositAssociatedWithBid(t *testing.T) {
+	testUtils.SkipTestOnPlatform(t, false /*ubuntuAMD64*/, true /*arm64*/, false /*macOSAMD64*/)
 	t.Parallel()
 	r := require.New(t)
 
