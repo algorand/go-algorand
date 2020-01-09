@@ -301,7 +301,7 @@ func initTelemetry(genesis bookkeeping.Genesis, log logging.Logger, dataDirector
 				}
 
 				// If the telemetry URI is not set, periodically check SRV records for new telemetry URI
-				if log.GetTelemetryURI() == "" {
+				if telemetryConfig.Enable && log.GetTelemetryURI() == "" {
 					network.StartTelemetryURIUpdateService(time.Minute, cfg, genesis.Network, log, abort)
 				}
 
