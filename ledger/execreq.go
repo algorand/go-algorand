@@ -23,21 +23,22 @@ package ledger
 // The transaction is signed with Wasm code.  The code is simply spawned with the
 // transaction's note passed to stdin rather than being run by a consensus protocol.
 // The output is captured and placed back on the blockchain as another transaction
-execTxn(txn SignedTxn) {
+func execTxn(txn SignedTxn) error {
 
 	// unpack transaction
 	code := txn.Lsig.Logic
-	type := GetExecTxType(txn);
-	input := GetExecData(txn);
+	execType := ExecType(txn)
+	input := GetExecData(txn)
 
 	// temp file must be removed by spawned code
-	temp, err := ioutil.TempFile("dir", "prefix")
+	temp, err := ioutil.TempFile("", "exec")
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
+	err = temp.write(code)
 
 	// spawn WAVM to execute the wasm
-	cmd := exec.Command("wavm", "run", "--abi=wasi", temp)
+	cmd := exec.Command("wavm", "run", "--abi=wasi", tempName(), input)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		log.Fatal(err)
@@ -50,11 +51,11 @@ execTxn(txn SignedTxn) {
 
 	output, err := cmd.Output()
 
-	// repack transaction
-	if (err == nil) {
-		SetExecTxType(signed_txn.Transaction.Note, ExecFailure);
+	// reset transaction type
+	if err == nil {
+		SetExecTxType(signed_txn.Transaction.Note, ExecFailure)
 	} else {
-		SetExecTxType(signed_txn.Transaction.Note, ExecCommit);
+		SetExecTxType(signed_txn.Transaction.Note, ExecCommit)
 	}
 	txn.Transaction.Note[5:] = output
 

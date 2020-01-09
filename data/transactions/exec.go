@@ -24,6 +24,7 @@ import (
 )
 
 type ExecType string
+
 const (
 	ExecInit    = "INIT:"
 	ExecRequest = "RQST:"
@@ -36,25 +37,30 @@ const (
 // TODO use ExecTx and ExecTxnFields instead of header (fields in header may be useful too)
 // TODO decide how to structure input and output -- probably JSON
 
-bool IsExecLogic(txn SignedTransaction) booc {
-   switch GetExecTxType(txt) {
-   case ExecInit:    return true
-	case ExecRequest: return true
-	case ExecCommit:  return true
-	case ExecFail:    return true
-	default:          return false;
+func IsExecLogic(txn SignedTransaction) bool {
+	switch ExecType(txt) {
+	case ExecInit:
+		return true
+	case ExecRequest:
+		return true
+	case ExecCommit:
+		return true
+	case ExecFail:
+		return true
+	default:
+		return false
 	}
 }
 
-func GetExecTxType(txn SignedTransaction) string {
+func GetExecType(txn SignedTransaction) ExecType {
 	if len(txn.Transaction.Note) < 5 {
 		return nil
 	}
 	return txn.Transaction.Note[0:5]
 }
 
-func SetExecTxType(txn SignedTransaction, string type) {
-	txn.Transaction.Note[0:5] = type
+func SetExecTxType(txn SignedTransaction, ExecType txType) {
+	txn.Transaction.Note[0:5] = txType
 }
 
 func GetExecData(txn SignedTransaction) {
@@ -63,18 +69,21 @@ func GetExecData(txn SignedTransaction) {
 
 // ExecReqTxnFields captures the fields used by exec transactions.
 type ExecTxnFields struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct  struct{} `codec:",omitempty,omitemptyarray"`
 	execType ExecType
 }
 
 // Apply changes the state according to this transaction.
 func (exec ExecTxnFields) apply(header Header, balances Balances, spec SpecialAddresses, ad *ApplyData) error {
 	switch exec.execType {
-	case ExecInit:    return nil // transfer of funds to hash of code creates account
-	case ExecRequest: return nil // post to blockchain for later execution
-	case ExecCommit:  return nil // post to blockchain in case of succcessful commit
-	case ExecFail:    return nil // post to blockchain in case of failed comit
+	case ExecInit:
+		return nil // transfer of funds to hash of code creates account
+	case ExecRequest:
+		return nil // post to blockchain for later execution
+	case ExecCommit:
+		return nil // post to blockchain in case of succcessful commit
+	case ExecFail:
+		return nil // post to blockchain in case of failed comit
 	}
 	return nil
 }
-

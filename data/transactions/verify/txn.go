@@ -275,12 +275,12 @@ func LogicSig(txn *transactions.SignedTxn, ctx *Context) error {
 	if err != nil {
 		return err
 	}
-	
-   // If the logic is code for off-chain execution the transaction is considered valid and posted as is.
-   // TODO LogicSigSanityCheck needs tweakng. 
-   if IsExecLogic(txn) {
-      return nil;
-   }
+
+	// If the logic is code for off-chain execution the transaction is considered valid and posted as is.
+	// TODO LogicSigSanityCheck needs tweakng.
+	if IsExecLogic(txn) {
+		return nil
+	}
 
 	ep := logic.EvalParams{
 		Txn:        txn,
