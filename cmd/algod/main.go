@@ -162,6 +162,7 @@ func main() {
 	// Enable telemetry hook in daemon to send logs to cloud
 	// If ALGOTEST env variable is set, telemetry is disabled - allows disabling telemetry for tests
 	isTest := os.Getenv("ALGOTEST") != ""
+	remoteTelemetryEnabled := false
 	if !isTest {
 		telemetryConfig, err := logging.EnsureTelemetryConfig(&dataDir, genesis.ID())
 		if err != nil {
@@ -176,6 +177,7 @@ func main() {
 
 		// Apply telemetry override.
 		telemetryConfig.Enable = logging.TelemetryOverride(*telemetryOverride)
+		remoteTelemetryEnabled = telemetryConfig.Enable
 
 		if telemetryConfig.Enable || telemetryConfig.SendToLog {
 			// If session GUID specified, use it.
@@ -271,7 +273,7 @@ func main() {
 		cfgCopy.DNSBootstrapID = telemetryDNSBootstrapID
 
 		// If the telemetry URI is not set, periodically check SRV records for new telemetry URI
-		if log.GetTelemetryURI() == "" {
+		if remoteTelemetryEnabled && log.GetTelemetryURI() == "" {
 			network.StartTelemetryURIUpdateService(time.Minute, cfg, s.Genesis.Network, log, done)
 		}
 
