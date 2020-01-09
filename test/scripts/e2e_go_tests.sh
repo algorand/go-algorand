@@ -73,7 +73,15 @@ while [ "$1" != "" ]; do
 done
 
 if [ "${#TESTPATTERNS[@]}" -eq 0 ]; then
-    go test -race -timeout 1h -v ${SHORTTEST} ./...
+    TESTS_DIRECTORIES=$(GO111MODULE=off go list ./...)
+    for TEST_DIR in ${TESTS_DIRECTORIES[@]}; do
+        #echo "Examining ${TEST_DIR}"
+        TESTS=$(go test -list ".*" ${TEST_DIR} -vet=off | grep -v "github.com")
+        for TEST_NAME in ${TESTS[@]}; do
+            #echo "Running ${TEST_NAME}"
+            go test -race -timeout 1h -vet=off -v ${SHORTTEST} -run ${TEST_NAME} ${TEST_DIR}
+        done
+    done
 else
     for TEST in ${TESTPATTERNS[@]}; do
         go test -race -timeout 1h -v ${SHORTTEST} -run ${TEST} ./...
