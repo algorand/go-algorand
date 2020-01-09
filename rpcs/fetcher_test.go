@@ -45,8 +45,6 @@ type MockRunner struct {
 	txgroups      [][]transactions.SignedTxn
 }
 
-const goExecTime = 100 * time.Millisecond
-
 type MockRPCClient struct {
 	client  *MockRunner
 	closed  bool
@@ -188,6 +186,7 @@ func TestSelectValidRemote(t *testing.T) {
 type dummyFetcher struct {
 	failWithNil   bool
 	failWithError bool
+	fetchTimeout  time.Duration
 }
 
 // FetcherClient interface
@@ -198,13 +197,9 @@ func (df *dummyFetcher) GetBlockBytes(ctx context.Context, r basics.Round) (data
 	if df.failWithError {
 		return nil, errors.New("failing call")
 	}
-	timer := time.NewTimer(goExecTime)
+
+	timer := time.NewTimer(df.fetchTimeout)
 	defer timer.Stop()
-	select {
-	case <-timer.C:
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
 
 	// Fill in the dummy response with the correct round
 	dummyBlock := EncodedBlockCert{
@@ -218,7 +213,15 @@ func (df *dummyFetcher) GetBlockBytes(ctx context.Context, r basics.Round) (data
 		},
 	}
 
-	return protocol.Encode(dummyBlock), nil
+	encodedData := protocol.Encode(dummyBlock)
+
+	select {
+	case <-timer.C:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+
+	return encodedData, nil
 }
 
 // FetcherClient interface
@@ -233,10 +236,10 @@ func (df *dummyFetcher) Close() error {
 	return nil
 }
 
-func makeDummyFetchers(failWithNil bool, failWithError bool) []FetcherClient {
+func makeDummyFetchers(failWithNil bool, failWithError bool, timeout time.Duration) []FetcherClient {
 	out := make([]FetcherClient, numberOfPeers)
 	for i := range out {
-		out[i] = &dummyFetcher{failWithNil, failWithError}
+		out[i] = &dummyFetcher{failWithNil, failWithError, timeout}
 	}
 	return out
 }
@@ -245,7 +248,7 @@ func TestFetchBlock(t *testing.T) {
 	fetcher := &NetworkFetcher{
 		roundUpperBound: make(map[FetcherClient]basics.Round),
 		activeFetches:   make(map[FetcherClient]int),
-		peers:           makeDummyFetchers(false, false),
+		peers:           makeDummyFetchers(false, false, 100*time.Millisecond),
 		log:             logging.TestingLog(t),
 	}
 
@@ -261,8 +264,8 @@ func TestFetchBlock(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, client)
 		end := time.Now()
-		require.True(t, end.Sub(start) > goExecTime)
-		require.True(t, end.Sub(start) < goExecTime+10*time.Millisecond)
+		require.True(t, end.Sub(start) > 100*time.Millisecond)
+		require.True(t, end.Sub(start) < 100*time.Millisecond+5*time.Second) // we want to have a higher margin here, as the machine we're running on might be slow.
 		if err == nil {
 			require.NotEqual(t, nil, block)
 			require.NotEqual(t, nil, cert)
@@ -279,7 +282,7 @@ func TestFetchBlockFail(t *testing.T) {
 	fetcher := &NetworkFetcher{
 		roundUpperBound: make(map[FetcherClient]basics.Round),
 		activeFetches:   make(map[FetcherClient]int),
-		peers:           makeDummyFetchers(true, false),
+		peers:           makeDummyFetchers(true, false, 100*time.Millisecond),
 		log:             logging.TestingLog(t),
 	}
 
@@ -295,45 +298,46 @@ func TestFetchBlockAborted(t *testing.T) {
 	fetcher := &NetworkFetcher{
 		roundUpperBound: make(map[FetcherClient]basics.Round),
 		activeFetches:   make(map[FetcherClient]int),
-		peers:           makeDummyFetchers(false, false),
+		peers:           makeDummyFetchers(false, false, 2*time.Second),
 		log:             logging.TestingLog(t),
 	}
 
-	start := time.Now()
-	ctx, cf := context.WithTimeout(context.Background(), goExecTime/2)
+	ctx, cf := context.WithCancel(context.Background())
 	defer cf()
+	go func() {
+		cf()
+	}()
+	start := time.Now()
 	_, _, client, err := fetcher.FetchBlock(ctx, basics.Round(1))
 	end := time.Now()
-	require.Error(t, err)
+	require.True(t, strings.Contains(err.Error(), context.Canceled.Error()))
 	require.Nil(t, client)
-	require.True(t, end.Sub(start) > goExecTime/2)
-	require.True(t, end.Sub(start) < goExecTime/2+10*time.Millisecond)
+	require.True(t, end.Sub(start) < 10*time.Second)
 }
 
 func TestFetchBlockTimeout(t *testing.T) {
 	fetcher := &NetworkFetcher{
 		roundUpperBound: make(map[FetcherClient]basics.Round),
 		activeFetches:   make(map[FetcherClient]int),
-		peers:           makeDummyFetchers(false, false),
+		peers:           makeDummyFetchers(false, false, 10*time.Second),
 		log:             logging.TestingLog(t),
 	}
-
-	start := time.Now()
-	ctx, cf := context.WithTimeout(context.Background(), goExecTime/2)
+	ctx, cf := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cf()
+	start := time.Now()
 	_, _, client, err := fetcher.FetchBlock(ctx, basics.Round(1))
 	end := time.Now()
-	require.Error(t, err)
+	require.True(t, strings.Contains(err.Error(), context.DeadlineExceeded.Error()))
 	require.Nil(t, client)
-	require.True(t, end.Sub(start) > goExecTime/2)
-	require.True(t, end.Sub(start) < goExecTime/2+10*time.Millisecond)
+	require.True(t, end.Sub(start) >= 500*time.Millisecond)
+	require.True(t, end.Sub(start) < 10*time.Second)
 }
 
 func TestFetchBlockErrorCall(t *testing.T) {
 	fetcher := &NetworkFetcher{
 		roundUpperBound: make(map[FetcherClient]basics.Round),
 		activeFetches:   make(map[FetcherClient]int),
-		peers:           makeDummyFetchers(false, true),
+		peers:           makeDummyFetchers(false, true, 10*time.Millisecond),
 		log:             logging.TestingLog(t),
 	}
 
@@ -347,7 +351,7 @@ func TestFetchBlockComposedNoOp(t *testing.T) {
 	f := &NetworkFetcher{
 		roundUpperBound: make(map[FetcherClient]basics.Round),
 		activeFetches:   make(map[FetcherClient]int),
-		peers:           makeDummyFetchers(false, false),
+		peers:           makeDummyFetchers(false, false, 1*time.Millisecond),
 		log:             logging.TestingLog(t),
 	}
 	fetcher := &ComposedFetcher{fetchers: []Fetcher{f, nil}}
@@ -364,8 +368,8 @@ func TestFetchBlockComposedNoOp(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, client)
 		end := time.Now()
-		require.True(t, end.Sub(start) > goExecTime)
-		require.True(t, end.Sub(start) < goExecTime+10*time.Millisecond)
+		require.True(t, end.Sub(start) >= 1*time.Millisecond)
+		require.True(t, end.Sub(start) < 1*time.Millisecond+10*time.Second) // we take a very high margin here for the fetcher to complete.
 		if err == nil {
 			require.NotEqual(t, nil, block)
 			require.NotEqual(t, nil, cert)
@@ -383,13 +387,13 @@ func TestFetchBlockComposedFail(t *testing.T) {
 	f := &NetworkFetcher{
 		roundUpperBound: make(map[FetcherClient]basics.Round),
 		activeFetches:   make(map[FetcherClient]int),
-		peers:           makeDummyFetchers(true, false),
+		peers:           makeDummyFetchers(true, false, 1*time.Millisecond),
 		log:             logging.TestingLog(t),
 	}
 	f2 := &NetworkFetcher{
 		roundUpperBound: make(map[FetcherClient]basics.Round),
 		activeFetches:   make(map[FetcherClient]int),
-		peers:           makeDummyFetchers(false, false),
+		peers:           makeDummyFetchers(false, false, 1*time.Millisecond),
 		log:             logging.TestingLog(t),
 	}
 	fetcher := &ComposedFetcher{fetchers: []Fetcher{f, f2}}
