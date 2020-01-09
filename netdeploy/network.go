@@ -335,9 +335,11 @@ func (n *Network) GetPeerAddresses(binDir string) []string {
 	defer n.runningNCsMu.RUnlock()
 
 	for _, relayDir := range n.cfg.RelayDirs {
-		nc := n.runningNCs[n.getNodeFullPath(relayDir)]
+		fullPath := n.getNodeFullPath(relayDir)
+		nc := n.runningNCs[fullPath]
 		if nc == nil {
-			continue
+			tnc := nodecontrol.MakeNodeController(binDir, fullPath)
+			nc = &tnc
 		}
 		relayAddress, err := nc.GetListeningAddress()
 		if err == nil {
@@ -391,28 +393,33 @@ func (n *Network) Stop(binDir string) {
 		}()
 		nc.FullStop()
 	}
-	n.runningNCsMu.Lock()
 
-	for _, relayDir := range n.cfg.RelayDirs {
-		relayFullPath := n.getNodeFullPath(relayDir)
-		pnc := n.runningNCs[relayFullPath]
-		if pnc == nil {
-			nc := nodecontrol.MakeNodeController(binDir, relayFullPath)
-			pnc = &nc
+	func() {
+		n.runningNCsMu.Lock()
+		defer n.runningNCsMu.Unlock()
+		for _, relayDir := range n.cfg.RelayDirs {
+			relayFullPath := n.getNodeFullPath(relayDir)
+			pnc := n.runningNCs[relayFullPath]
+			if pnc == nil {
+				nc := nodecontrol.MakeNodeController(binDir, relayFullPath)
+				pnc = &nc
+			} else {
+				delete(n.runningNCs, relayFullPath)
+			}
+			go stopNodeContoller(pnc)
 		}
-		go stopNodeContoller(pnc)
-	}
-	for _, nodeDir := range n.nodeDirs {
-		nodeFullPath := n.getNodeFullPath(nodeDir)
-		pnc := n.runningNCs[nodeFullPath]
-		if pnc == nil {
-			nc := nodecontrol.MakeNodeController(binDir, nodeFullPath)
-			pnc = &nc
+		for _, nodeDir := range n.nodeDirs {
+			nodeFullPath := n.getNodeFullPath(nodeDir)
+			pnc := n.runningNCs[nodeFullPath]
+			if pnc == nil {
+				nc := nodecontrol.MakeNodeController(binDir, nodeFullPath)
+				pnc = &nc
+			} else {
+				delete(n.runningNCs, nodeFullPath)
+			}
+			go stopNodeContoller(pnc)
 		}
-		go stopNodeContoller(pnc)
-	}
-	n.runningNCs = make(map[string]*nodecontrol.NodeController)
-	n.runningNCsMu.Unlock()
+	}()
 
 	// wait until we finish stopping all the node controllers.
 	for i := cap(c); i > 0; i-- {

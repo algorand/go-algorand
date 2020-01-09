@@ -95,6 +95,8 @@ func (f *LibGoalFixture) setup(test TestingT, testName string, templateFile stri
 	}
 }
 
+// nodeRunStateChanged is a callback from the network indicating that the node run state have changed.
+// i.e. node terminated, and not due to shutdown.. this is likely to be a crash/panic.
 func (f *LibGoalFixture) nodeRunStateChanged(nc *nodecontrol.NodeController, err error) {
 	if err == nil {
 		return
