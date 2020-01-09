@@ -25,7 +25,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 )
 
@@ -65,6 +64,7 @@ func TestBasicCatchup(t *testing.T) {
 	a.NoError(err)
 	cloneClient, err := fixture.StartNode(cloneDataDir)
 	a.NoError(err)
+	defer shutdownClonedNode(cloneDataDir, &fixture, t)
 
 	// Now, catch up
 	err = fixture.LibGoalFixture.ClientWaitForRoundWithTimeout(cloneClient, waitForRound)
@@ -132,7 +132,8 @@ func TestStoppedCatchupOnUnsupported(t *testing.T) {
 	t.Parallel()
 	a := require.New(t)
 
-	os.Setenv("ALGORAND_TEST_UNUPGRADEDPROTOCOL_DELETE_CURRENT_VERSION", "0")
+	defer os.Unsetenv("ALGORAND_TEST_UNUPGRADEDPROTOCOL_DELETE_UPGRADE")	
+	os.Setenv("ALGORAND_TEST_UNUPGRADEDPROTOCOL_DELETE_UPGRADE", "0")
 
 	// Overview of this test:
 	// Start a two-node network (primary has 0%, secondary has 100%)
@@ -156,7 +157,7 @@ func TestStoppedCatchupOnUnsupported(t *testing.T) {
 	err = fixture.ClientWaitForRoundWithTimeout(fixture.GetAlgodClientForController(nc), waitForRound)
 	a.NoError(err)
 
-	os.Setenv("ALGORAND_TEST_UNUPGRADEDPROTOCOL_DELETE_CURRENT_VERSION", "1")
+	os.Setenv("ALGORAND_TEST_UNUPGRADEDPROTOCOL_DELETE_UPGRADE", "1")
 
 	// Now spin up third node
 	cloneDataDir := filepath.Join(fixture.PrimaryDataDir(), "../clone")
@@ -165,35 +166,64 @@ func TestStoppedCatchupOnUnsupported(t *testing.T) {
 	a.NoError(err)
 	cloneClient, err := fixture.StartNode(cloneDataDir)
 	a.NoError(err)
+	defer shutdownClonedNode(cloneDataDir, &fixture, t)	
 
 	// Now, catch up
 	err = fixture.LibGoalFixture.ClientWaitForRoundWithTimeout(cloneClient, waitForRound)
 	a.NoError(err)
 
-	var status v1.NodeStatus
-
-	// Check the status
 	timeout := time.NewTimer(20 * time.Second)
-	timedOut := false
-	go func() {
-		<-timeout.C
-		timedOut = true
-	}()
-	for status, err = cloneClient.Status(); !timedOut && err == nil && // did not timeout
-		// and while the next round is not the next protocol upgrade:
-		(status.NextVersion == status.LastVersion || // next is not a new protocol, or
-			// next is a new protocol but,
-			(status.NextVersion != status.LastVersion &&
-				// the new protocol version is not the next round
-				status.LastRound+1 != status.NextVersionRound)); status, err = cloneClient.Status() {
-		time.Sleep(800 * time.Millisecond)
+	loop := true
+	for loop { // loop until timeout, error from Status() or the node stops making progress
+		status, err := cloneClient.Status()
+
+		select {
+		case <-timeout.C: // timeout
+			loop = false
+		default:
+			if err != nil { // error from Status()
+				loop = false
+				break
+			}
+			// Continue looping as long as:
+			// (1) next version is the same as current version, or
+			// (2) next version is a different protocol (test knows it is not supported), but
+			//     last round in current protocol is not yet added to the ledger (status.LastRound)
+			// And check that status.StoppedAtUnsupportedRound is false
+
+			if status.NextVersion == status.LastVersion || // next is not a new protocol, or
+				// next is a new protocol but,
+				(status.NextVersion != status.LastVersion &&
+					// the new protocol version is not the next round
+					status.LastRound+1 != status.NextVersionRound) {
+				// libgoal Client StoppedAtUnsupportedRound in v1.NodeStatus should be false
+				a.False(status.StoppedAtUnsupportedRound)
+				// Give some time for the next round
+				time.Sleep(800 * time.Millisecond)
+			} else {
+				loop = false
+			}
+		}
 	}
+
 	a.NoError(err)
-	status, err = cloneClient.Status()
-	// Stoppd at the first protocol
+	status, err := cloneClient.Status()
+	// Stopped at the first protocol
 	a.Equal("test-unupgraded-protocol", status.LastVersion)
 	// Next version is different (did not upgrade to it)
 	a.NotEqual(status.NextVersion, status.LastVersion)
 	// Next round is when the upgrade happens
 	a.True(!status.NextVersionSupported && status.LastRound+1 == status.NextVersionRound)
+	// libgoal Client StoppedAtUnsupportedRound in v1.NodeStatus should now be true
+	a.True(status.StoppedAtUnsupportedRound)
+}
+
+// shutdownClonedNode replicates the behavior of fixture.Shutdown() for network nodes on cloned node
+// It deletes the directory if the test passes, otherwise it preserves it 
+func shutdownClonedNode(nodeDataDir string, f * fixtures.RestClientFixture, t *testing.T) {
+	nc := f.LibGoalFixture.GetNodeControllerForDataDir(nodeDataDir)
+	nc.FullStop()
+	if !t.Failed() {
+		os.RemoveAll(nodeDataDir)
+	}
 }

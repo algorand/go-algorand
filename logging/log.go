@@ -366,7 +366,7 @@ func NewLogger() Logger {
 }
 
 func (l logger) EnableTelemetry(cfg TelemetryConfig) (err error) {
-	if l.loggerState.telemetry != nil || !cfg.Enable {
+	if l.loggerState.telemetry != nil || (!cfg.Enable && !cfg.SendToLog) {
 		return nil
 	}
 	return EnableTelemetry(cfg, &l)
