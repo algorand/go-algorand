@@ -68,7 +68,6 @@ pipeline {
 
         stage("sign") {
             steps {
-                input "Halt"
                 sh 'ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@$(cat scripts/release/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/controller/sign.sh'
             }
         }
@@ -86,7 +85,7 @@ pipeline {
 
                     sh "rm -rf node_pkg/* && mkdir -p node_pkg/${RSTAMP}"
                     sh "scp -i ReleaseBuildInstanceKey.pem -o StrictHostKeyChecking=no -r ubuntu@\$(cat scripts/release/tmp/instance):~/node_pkg/* node_pkg/${RSTAMP}/"
-                    sh "aws s3 sync --exclude dev* --exclude master* --exclude nightly* --exclude stable* --acl public-read node_pkg/${RSTAMP} ${S3_PREFIX}/releases/${CHANNEL}/${RSTAMP}_${FULLVERSION}/"
+                    sh "aws s3 sync --exclude dev* --exclude master* --exclude nightly* --exclude stable* --acl public-read node_pkg/${RSTAMP} ${S3_PREFIX}/${CHANNEL}/${RSTAMP}_${FULLVERSION}/"
                     // Create the buildlog file.
                     sh 'ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@$(cat scripts/release/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/controller/upload.sh'
                     // sh "aws s3 cp --quiet ubuntu@\$(cat scripts/release/tmp/instance)/build_status_${CHANNEL}_${FULLVERSION}.asc.gz s3://algorand-devops-misc/buildlog/${RSTAMP}/"
@@ -98,6 +97,7 @@ pipeline {
 
         stage("delete ec2 instance") {
             steps {
+                input "Halt"
                 sh script: "scripts/release/shutdown_ec2_instance.sh us-west-1"
             }
         }

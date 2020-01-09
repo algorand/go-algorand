@@ -12,5 +12,5 @@ sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind
 
 export DC_IP
 
-sg docker "/root/go/src/github.com/algorand/go-algorand/scripts/release/helper/docker_debian_test.sh ${HOME}/docker_test_resources"
+sg docker "${HOME}/go/src/github.com/algorand/go-algorand/scripts/release/helper/docker_debian_test.sh ${HOME}/docker_test_resources"
 
