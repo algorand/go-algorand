@@ -23,6 +23,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 )
 
+type ExecType string
 const (
 	ExecInit    = "INIT:"
 	ExecRequest = "RQST:"
@@ -35,18 +36,28 @@ const (
 // TODO use ExecTx and ExecTxnFields instead of header (fields in header may be useful too)
 // TODO decide how to structure input and output -- probably JSON
 
-GetExecTxType(txn SignedTransaction) string {
+bool IsExecLogic(txn SignedTransaction) booc {
+   switch GetExecTxType(txt) {
+   case ExecInit:    return true
+	case ExecRequest: return true
+	case ExecCommit:  return true
+	case ExecFail:    return true
+	default:          return false;
+	}
+}
+
+func GetExecTxType(txn SignedTransaction) string {
 	if len(txn.Transaction.Note) < 5 {
 		return nil
 	}
 	return txn.Transaction.Note[0:5]
 }
 
-SetExecTxType(txn SignedTransaction, string type) {
+func SetExecTxType(txn SignedTransaction, string type) {
 	txn.Transaction.Note[0:5] = type
 }
 
-GetExecData(txn SignedTransaction) {
+func GetExecData(txn SignedTransaction) {
 	return txn.Transaction.Note[5:]
 }
 
@@ -61,7 +72,8 @@ func (exec ExecTxnFields) apply(header Header, balances Balances, spec SpecialAd
 	switch exec.execType {
 	case ExecInit:    return nil // transfer of funds to hash of code creates account
 	case ExecRequest: return nil // post to blockchain for later execution
-	case ExecCommit:  return nil // TODO attempt commitment to storage?
+	case ExecCommit:  return nil // post to blockchain in case of succcessful commit
+	case ExecFail:    return nil // post to blockchain in case of failed comit
 	}
 	return nil
 }

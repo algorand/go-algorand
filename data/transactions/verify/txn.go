@@ -184,11 +184,6 @@ func stxnVerifyCore(s *transactions.SignedTxn, ctx *Context) error {
 	}
 	if hasLogicSig {
 
-		// If the logic is code for off-chain execution the transaction is considered valid and posted as is.
-		if IsExecLogic(s) {
-			return nil;
-		}
-
 		return LogicSig(s, ctx)
 	}
 	return errors.New("has one mystery sig. WAT?")
@@ -280,6 +275,12 @@ func LogicSig(txn *transactions.SignedTxn, ctx *Context) error {
 	if err != nil {
 		return err
 	}
+	
+   // If the logic is code for off-chain execution the transaction is considered valid and posted as is.
+   // TODO LogicSigSanityCheck needs tweakng. 
+   if IsExecLogic(txn) {
+      return nil;
+   }
 
 	ep := logic.EvalParams{
 		Txn:        txn,
