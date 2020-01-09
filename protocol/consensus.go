@@ -148,6 +148,16 @@ const ConsensusTestRapidRewardRecalculation = ConsensusVersion("test-fast-reward
 // that decreases the MaxBalLookback greatly.
 const ConsensusTestShorterLookback = ConsensusVersion("test-shorter-lookback")
 
+// ConsensusTestUnupgradedProtocol is a version of ConsensusCurrentVersion
+// that allows the control of the upgrade from ConsensusTestUnupgradedProtocol to
+// ConsensusTestUnupgradedProtocol
+const ConsensusTestUnupgradedProtocol = ConsensusVersion("test-unupgraded-protocol")
+
+// ConsensusTestUnupgradedToProtocol is a version of ConsensusCurrentVersion
+// It is used as an upgrade from ConsensusTestUnupgradedProtocol
+const ConsensusTestUnupgradedToProtocol = ConsensusVersion("test-unupgradedto-protocol")
+
+
 // ConsensusTestFastUpgrade is meant for testing of protocol upgrades:
 // during testing, it is equivalent to another protocol with the exception
 // of the upgrade parameters, which allow for upgrades to take place after

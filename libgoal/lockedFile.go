@@ -20,18 +20,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"syscall"
-	"time"
 )
-
-// Platform-dependant locker implementation
-// How to extend
-// 1. Create two new files locker.go and locker_platform.go
-// 2. Put appropriate build tags
-// 3. Move unixLocker implementation and `newLockedFile` method to locker.go
-// 4. Implement platform-specific locker in locker_platform.go
-// 5. Ensure `newLockedFile` sets platform-specific locker
-//    so that lockedFile.read and lockedFile.write work correctly
 
 type locker interface {
 	tryRLock(fd *os.File) error
@@ -39,83 +28,77 @@ type locker interface {
 	unlock(fd *os.File) error
 }
 
-type unixLocker struct {
-}
-
-func (f *unixLocker) tryRLock(fd *os.File) error {
-	return syscall.Flock(int(fd.Fd()), syscall.LOCK_SH|syscall.LOCK_NB)
-}
-
-func (f *unixLocker) tryLock(fd *os.File) error {
-	return syscall.Flock(int(fd.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
-}
-
-func (f *unixLocker) unlock(fd *os.File) error {
-	return syscall.Flock(int(fd.Fd()), syscall.LOCK_UN)
+func newLockedFile(path string) *lockedFile {
+	return &lockedFile{
+		path:   path,
+		locker: makeLocker(),
+	}
 }
 
 // lockedFile implementation
-// It uses non-blocking acquisition with repeats
-// and supposed to be platform-agnostic with appropriate locker implementation.
+// It a platform-agnostic with appropriate locker implementation.
 // Each platform needs own specific `newLockedFile`
-const maxRepeats = 10
-const sleepInterval = 10 * time.Millisecond
 
 type lockedFile struct {
 	path   string
 	locker locker
 }
 
-func newLockedFile(path string) *lockedFile {
-	return &lockedFile{
-		path:   path,
-		locker: &unixLocker{},
-	}
-}
-
-func (f *lockedFile) read() ([]byte, error) {
+func (f *lockedFile) read() (bytes []byte, err error) {
 	fd, err := os.Open(f.path)
 	if err != nil {
-		return nil, err
+		return
 	}
-	defer fd.Close()
+	defer func() {
+		err2 := fd.Close()
+		if err2 != nil {
+			err = err2
+		}
+	}()
 
-	lockFunc := func() error { return f.locker.tryRLock(fd) }
-	err = attemptLock(lockFunc)
+	err = f.locker.tryRLock(fd)
 	if err != nil {
-		return nil, fmt.Errorf("Can't acquire lock for %s: %s", f.path, err.Error())
+		err = fmt.Errorf("Can't acquire read lock for %s: %s", f.path, err.Error())
+		return
 	}
-	defer f.locker.unlock(fd)
+	defer func() {
+		err2 := f.locker.unlock(fd)
+		if err2 != nil {
+			err = fmt.Errorf("Can't unlock for %s: %s", f.path, err2.Error())
+		}
+	}()
 
-	return ioutil.ReadAll(fd)
+	bytes, err = ioutil.ReadAll(fd)
+	return
 }
 
-func (f *lockedFile) write(data []byte, perm os.FileMode) error {
+func (f *lockedFile) write(data []byte, perm os.FileMode) (err error) {
 	fd, err := os.OpenFile(f.path, os.O_WRONLY|os.O_CREATE, perm)
 	if err != nil {
-		return err
+		return
 	}
-	defer fd.Close()
+	defer func() {
+		err2 := fd.Close()
+		if err2 != nil {
+			err = err2
+		}
+	}()
 
-	lockFunc := func() error { return f.locker.tryLock(fd) }
-	err = attemptLock(lockFunc)
+	err = f.locker.tryLock(fd)
 	if err != nil {
 		return fmt.Errorf("Can't acquire lock for %s: %s", f.path, err.Error())
 	}
-	defer f.locker.unlock(fd)
-
-	fd.Truncate(0)
-	_, err = fd.Write(data)
-	return err
-}
-
-func attemptLock(lockFunc func() error) error {
-	var savedError error
-	for repeatCounter := 0; repeatCounter < maxRepeats; repeatCounter++ {
-		if savedError = lockFunc(); savedError == nil {
-			break
+	defer func() {
+		err2 := f.locker.unlock(fd)
+		if err2 != nil {
+			err = fmt.Errorf("Can't unlock for %s: %s", f.path, err2.Error())
 		}
-		time.Sleep(sleepInterval)
+	}()
+
+	err = fd.Truncate(0)
+	if err != nil {
+		return
 	}
-	return savedError
+	_, err = fd.Write(data)
+	return
 }
