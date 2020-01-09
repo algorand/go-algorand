@@ -59,6 +59,7 @@ export VARIATIONS=${VARIATIONS}
 BUILD_NUMBER=${BUILD_NUMBER}
 export FULLVERSION=${FULLVERSION}
 DC_IP=${DC_IP}
+REPO_ROOT=${REPO_ROOT}
 EOF
 
 # strip leading 'export ' for docker --env-file

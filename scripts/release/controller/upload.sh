@@ -82,5 +82,7 @@ dpkg -l >> "${STATUSFILE}"
 gpg --clearsign "${STATUSFILE}"
 gzip "${STATUSFILE}".asc
 
+./"${REPO_ROOT}"/scripts/release/helper/release_deb.sh
+
 date "+build_release done uploading %Y%m%d_%H%M%S"
 

@@ -84,7 +84,5 @@ You may also try reconfiguring your `tzdata` package:
 
 ## TODO
 
-Create the git tag.
 Upload the deb package via `aptly`.
-Add ability to specify channel.
 
