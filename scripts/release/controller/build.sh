@@ -4,6 +4,9 @@ date "+build_release start %Y%m%d_%H%M%S"
 
 set -ex
 
+export GOPATH=${HOME}/go
+export PATH=${HOME}/gpgbin:${GOPATH}/bin:/usr/local/go/bin:${PATH}
+
 # Anchor our repo root reference location
 REPO_ROOT=/home/ubuntu/go/src/github.com/algorand/go-algorand/
 
@@ -14,7 +17,7 @@ PLATFORM=$(${REPO_ROOT}/scripts/osarchtype.sh)
 PLATFORM_SPLIT=(${PLATFORM//\// })
 OS=${PLATFORM_SPLIT[0]}
 ARCH=${PLATFORM_SPLIT[1]}
-DEFAULTNETWORK=$(${REPO_ROOT}/scripts/compute_branch_network.sh)
+DEFAULTNETWORK=$(PATH=${PATH} ${REPO_ROOT}/scripts/compute_branch_network.sh)
 export DEFAULTNETWORK
 export PKG_ROOT=${HOME}/node_pkg
 export VARIATIONS="base"
@@ -43,7 +46,7 @@ else
     git add -A
     git commit -m "Build ${BUILD_NUMBER}"
 fi
-FULLVERSION=$(${REPO_ROOT}/scripts/compute_build_number.sh -f)
+FULLVERSION=$(PATH=${PATH} ${REPO_ROOT}/scripts/compute_build_number.sh -f)
 export FULLVERSION
 
 # a bash user might `source build_env` to manually continue a broken build
@@ -64,9 +67,6 @@ EOF
 
 # strip leading 'export ' for docker --env-file
 sed 's/^export //g' < "${HOME}"/build_env > "${HOME}"/build_env_docker
-
-export GOPATH=${HOME}/go
-export PATH=${HOME}/gpgbin:${GOPATH}/bin:/usr/local/go/bin:${PATH}
 
 # Build!
 scripts/configure_dev.sh

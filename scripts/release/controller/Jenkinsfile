@@ -57,6 +57,7 @@ pipeline {
 
         stage("upload") {
             steps {
+                input "Halt"
                 script {
                     def rstamp = sh(
                         script: 'scripts/reverse_hex_timestamp',
