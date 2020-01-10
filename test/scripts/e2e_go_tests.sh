@@ -72,19 +72,32 @@ while [ "$1" != "" ]; do
     shift
 done
 
+EXECUTE_TESTS_INDIVIDUALLY="true"
+
 if [ "${#TESTPATTERNS[@]}" -eq 0 ]; then
-    TESTS_DIRECTORIES=$(GO111MODULE=off go list ./...)
-    for TEST_DIR in ${TESTS_DIRECTORIES[@]}; do
-        #echo "Examining ${TEST_DIR}"
-        TESTS=$(go test -list ".*" ${TEST_DIR} -vet=off | grep -v "github.com")
-        for TEST_NAME in ${TESTS[@]}; do
-            #echo "Running ${TEST_NAME}"
-            go test -race -timeout 1h -vet=off -v ${SHORTTEST} -run ${TEST_NAME} ${TEST_DIR}
-            echo "leftovers kmds:"
-            ps -Af | grep kmd
-            echo "---"
+    if [ "${EXECUTE_TESTS_INDIVIDUALLY}" = "true" ]; then
+        TESTS_DIRECTORIES=$(GO111MODULE=off go list ./...)
+        for TEST_DIR in ${TESTS_DIRECTORIES[@]}; do
+            TESTS=$(go test -list ".*" ${TEST_DIR} -vet=off | grep -v "github.com")
+            for TEST_NAME in ${TESTS[@]}; do
+                go test -race -timeout 1h -vet=off -v ${SHORTTEST} -run ${TEST_NAME} ${TEST_DIR}
+                KMD_INSTANCES_COUNT=$(ps -Af | grep kmd | grep -v "grep" | wc -l | tr -d ' ')
+                if [ "${KMD_INSTANCES_COUNT}" != "0" ]; then
+                    echo "One or more than one KMD instances remains running:"
+                    ps -Af | grep kmd | grep -v "grep"
+                    exit 1
+                fi
+                ALGOD_INSTANCES_COUNT=$(ps -Af | grep algod | grep -v "grep" | wc -l | tr -d ' ')
+                if [ "${ALGOD_INSTANCES_COUNT}" != "0" ]; then
+                    echo "One or more than one algod instances remains running:"
+                    ps -Af | grep algod | grep -v "grep"
+                    exit 1
+                fi
+            done
         done
-    done
+    else
+        go test -race -timeout 1h -v ${SHORTTEST} ./...
+    fi
 else
     for TEST in ${TESTPATTERNS[@]}; do
         go test -race -timeout 1h -v ${SHORTTEST} -run ${TEST} ./...
