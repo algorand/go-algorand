@@ -78,7 +78,7 @@ if [ "${#TESTPATTERNS[@]}" -eq 0 ]; then
     if [ "${EXECUTE_TESTS_INDIVIDUALLY}" = "true" ]; then
         TESTS_DIRECTORIES=$(GO111MODULE=off go list ./...)
         for TEST_DIR in ${TESTS_DIRECTORIES[@]}; do
-            TESTS=$(go test -list ".*" ${TEST_DIR} -vet=off | grep -v "github.com")
+            TESTS=$(go test -list ".*" ${TEST_DIR} -vet=off | grep -v "github.com" || true)
             for TEST_NAME in ${TESTS[@]}; do
                 go test -race -timeout 1h -vet=off -v ${SHORTTEST} -run ${TEST_NAME} ${TEST_DIR}
                 KMD_INSTANCES_COUNT=$(ps -Af | grep kmd | grep -v "grep" | wc -l | tr -d ' ')
