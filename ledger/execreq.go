@@ -53,9 +53,9 @@ func execTxn(txn SignedTxn) error {
 
 	// reset transaction type
 	if err == nil {
-		SetExecTxType(signed_txn.Transaction.Note, ExecFailure)
+		SetExecType(signed_txn.Transaction.Note, ExecFailure)
 	} else {
-		SetExecTxType(signed_txn.Transaction.Note, ExecCommit)
+		SetExecType(signed_txn.Transaction.Note, ExecCommit)
 	}
 	txn.Transaction.Note[5:] = output
 

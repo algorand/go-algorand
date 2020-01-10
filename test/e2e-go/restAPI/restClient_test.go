@@ -22,11 +22,11 @@ import (
 	"math"
 	"math/rand"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 	"unicode"
-	"runtime"
 
 	"github.com/stretchr/testify/require"
 

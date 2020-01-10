@@ -16,20 +16,14 @@
 
 package transactions
 
-import (
-	"fmt"
-
-	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/data/basics"
-)
-
 type ExecType string
 
 const (
-	ExecInit    = "INIT:"
-	ExecRequest = "RQST:"
-	ExecCommit  = "CMMT:"
-	ExecFailure = "FAIL:"
+	ExecInit    ExecType = "INIT:"
+	ExecRequest ExecType = "RQST:"
+	ExecCommit  ExecType = "CMMT:"
+	ExecFail    ExecType = "FAIL:"
+	ExecNil     ExecType = "";
 )
 
 // Currently using a PaymentTx whose Note field has a header indicating the type of
@@ -37,8 +31,8 @@ const (
 // TODO use ExecTx and ExecTxnFields instead of header (fields in header may be useful too)
 // TODO decide how to structure input and output -- probably JSON
 
-func IsExecLogic(txn SignedTransaction) bool {
-	switch ExecType(txt) {
+func IsExecLogic(txn SignedTxn) bool {
+	switch GetExecType(txn) {
 	case ExecInit:
 		return true
 	case ExecRequest:
@@ -52,19 +46,19 @@ func IsExecLogic(txn SignedTransaction) bool {
 	}
 }
 
-func GetExecType(txn SignedTransaction) ExecType {
-	if len(txn.Transaction.Note) < 5 {
-		return nil
+func GetExecType(txn SignedTxn) ExecType {
+	if len(txn.Txn.Note) < 5 {
+		return ExecNil
 	}
-	return txn.Transaction.Note[0:5]
+	return ExecType(txn.Txn.Note[0:5])
 }
 
-func SetExecTxType(txn SignedTransaction, ExecType txType) {
-	txn.Transaction.Note[0:5] = txType
+func SetExecType(txn SignedTxn, txType ExecType) {
+	copy(txn.Txn.Note[0:5], string(txType))
 }
 
-func GetExecData(txn SignedTransaction) {
-	return txn.Transaction.Note[5:]
+func GetExecData(txn SignedTxn) []byte {
+	return txn.Txn.Note[5:]
 }
 
 // ExecReqTxnFields captures the fields used by exec transactions.
@@ -77,13 +71,13 @@ type ExecTxnFields struct {
 func (exec ExecTxnFields) apply(header Header, balances Balances, spec SpecialAddresses, ad *ApplyData) error {
 	switch exec.execType {
 	case ExecInit:
-		return nil // transfer of funds to hash of code creates account
+		return nil // store code indexed by hash -- transfer of funds to hash creates account
 	case ExecRequest:
-		return nil // post to blockchain for later execution
+		return nil // post to blockchain to request later execution
 	case ExecCommit:
-		return nil // post to blockchain in case of succcessful commit
+		return nil // post to blockchain to request commit of execution results
 	case ExecFail:
-		return nil // post to blockchain in case of failed comit
+		return nil // post to blockchain in case of failed execution or commit
 	}
 	return nil
 }

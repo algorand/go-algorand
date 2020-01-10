@@ -18,8 +18,8 @@ package auction
 
 import (
 	"path/filepath"
-	"testing"
 	"runtime"
+	"testing"
 
 	"github.com/stretchr/testify/require"
 

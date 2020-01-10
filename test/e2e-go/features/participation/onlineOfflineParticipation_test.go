@@ -18,8 +18,8 @@ package participation
 
 import (
 	"path/filepath"
+	"runtime"
 	"testing"
-	"runtime" 
 
 	"github.com/stretchr/testify/require"
 

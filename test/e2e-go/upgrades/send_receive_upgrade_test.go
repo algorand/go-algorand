@@ -19,9 +19,9 @@ package transactions
 import (
 	"math/rand"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
-	"runtime"
 
 	"github.com/stretchr/testify/require"
 
