@@ -70,9 +70,10 @@ func execTxn(txn SignedTxn) error {
 }
 
 func sendResultTransaction(txn SignedTxn, execType ExecType, output []byte) {
-	// TODO parse output into atomic transfer
 	SetExecType(txn, execType)
 	SetExecData(txn, output)
+
+	// TODO extend txn with output into atomic transfer
 
 	// TODO whatever it takes to send a transaction
 }
