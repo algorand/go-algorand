@@ -18,13 +18,13 @@ package utils
 
 import (
 	"testing"
-
 	"runtime"
 )
 
 // SkipTestOnPlatform skips tests when running on particular platform(s)
+// This utility is temporary and will be removed once the arm64 and Darwin failures are resolved. 
 func SkipTestOnPlatform(t *testing.T, ubuntuAMD64, arm64, macOSAMD64 bool ) {
-	
+
 	if runtime.GOOS == "darwin" && macOSAMD64 {
 		t.Skip()
 	} else if runtime.GOOS == "linux" && runtime.GOARCH == "arm64" && arm64 {
