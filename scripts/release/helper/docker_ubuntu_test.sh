@@ -31,15 +31,13 @@ goal node start -d /root/testnode
 goal node wait -d /root/testnode -w 120
 goal node stop -d /root/testnode
 
-# Getting the following errors when trying to fetch the public key from the repo:
-#
+# Use cURL to fetch the pubkey b/c using apt-key causes the following error:
+#apt-key adv --fetch-keys https://releases.algorand.com/key.pub
 #https://releases.algorand.com/key.pub
 #gpgkeys: protocol `https' not supported
-#gpg: no handler for keyserver scheme `https'
-#gpg: WARNING: unable to fetch URI https://releases.algorand.com/key.pub: keyserver error
-#gpg: can't open `/root/stuff/key.pub': No such file or directory
 
-apt-key adv --fetch-keys https://releases.algorand.com/key.pub
+curl -o /root/stuff/key.pub https://releases.algorand.com/key.pub
+chown ubuntu:ubuntu /root/stuff/key.pub
 apt-key add /root/stuff/key.pub
 add-apt-repository "deb http://${DC_IP}:8111/ stable main"
 apt-get update

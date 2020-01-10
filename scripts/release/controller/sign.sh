@@ -37,8 +37,8 @@ gpg -u "${SIGNING_KEY_ADDR}" --clearsign "${HASHFILE}"
 
 cp -p "${REPO_ROOT}/installer/rpm/algorand.repo" "${HOME}/prodrepo/algorand.repo"
 
-gpg --export -a dev@algorand.com > "${HOME}/docker_test_resources/key.pub"
-gpg --export -a rpm@algorand.com > "${HOME}/docker_test_resources/rpm.pub"
+#gpg --export -a dev@algorand.com > "${HOME}/docker_test_resources/key.pub"
+#gpg --export -a rpm@algorand.com > "${HOME}/docker_test_resources/rpm.pub"
 
 date "+build_release done signing %Y%m%d_%H%M%S"
 

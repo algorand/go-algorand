@@ -20,7 +20,7 @@ pipeline {
     stages {
         stage("create ec2 instance") {
             steps {
-                sh script: "scripts/release/start_ec2_instance.sh {params.region} {params.ami} {params.type}"
+                sh script: "scripts/release/start_ec2_instance.sh ${params.region} ${params.ami} ${params.type}"
                 //sh script: 'scripts/release/start_ec2_instance.sh us-east-1 ami-04b9e92b5572fa0d1 t2.2xlarge'
             }
         }
@@ -91,7 +91,7 @@ pipeline {
         stage("delete ec2 instance") {
             steps {
                 input "Halt"
-                sh script: "scripts/release/shutdown_ec2_instance.sh {params.region}"
+                sh script: "scripts/release/shutdown_ec2_instance.sh ${params.region}"
             }
         }
     }

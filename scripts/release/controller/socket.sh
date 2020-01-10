@@ -17,11 +17,10 @@ LOCAL_GPG_SOCKET=$(gpgconf --list-dirs | grep agent-socket | awk -F: '{ print $2
 gpg --export -a dev@algorand.com > /tmp/dev.pub
 gpg --export -a rpm@algorand.com > /tmp/rpm.pub
 
-# TODO: Maybe scp the public keys into the $HOME/docker... dir on the remote server?
-scp -o StrictHostKeyChecking=no -i ReleaseBuildInstanceKey.pem -p /tmp/{dev,rpm}.pub ubuntu@"$INSTANCE":~/
+scp -o StrictHostKeyChecking=no -i ReleaseBuildInstanceKey.pem -p /tmp/{dev,rpm}.pub ubuntu@"$INSTANCE":~/docker_test_resources/
 ssh -o StrictHostKeyChecking=no -i ReleaseBuildInstanceKey.pem ubuntu@"$INSTANCE" << EOF
-    gpg --import dev.pub
-    gpg --import rpm.pub
+    gpg --import docker_test_resources/dev.pub
+    gpg --import docker_test_resources/rpm.pub
     echo "SIGNING_KEY_ADDR=dev@algorand.com" >> build_env
 EOF
 
