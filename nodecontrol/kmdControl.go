@@ -244,7 +244,9 @@ func (kc *KMDController) StartKMD(args KMDStartArgs) (alreadyRunning bool, err e
 				kmdClient, err := kc.KMDClient()
 				if err != nil {
 					// kmd told us it's running, but we couldn't construct a client.
-					return false, err
+					// we want to keep waiting until the kmd would write out the
+					// file.
+					continue
 				}
 
 				// See if the server is up by requesting the versions endpoint
