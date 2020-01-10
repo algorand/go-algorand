@@ -36,21 +36,21 @@ pipeline {
             }
         }
 
-        stage("build") {
+        stage("build and package") {
             steps {
                 sh script: "scripts/release/controller/stages/build.sh ${params.channel}"
             }
         }
 
-        stage("package") {
+        stage("test") {
             steps {
-                input "GPG remote socket"
-                sh script: "scripts/release/controller/stages/package.sh ${params.bucket_location} ${params.channel}"
+                sh script: "scripts/release/controller/stages/test.sh ${params.bucket_location} ${params.channel}"
             }
         }
 
         stage("sign") {
             steps {
+                input "GPG remote socket"
                 sh script: "scripts/release/controller/stages/sign.sh"
             }
         }
@@ -75,7 +75,6 @@ pipeline {
 
         stage("delete ec2 instance") {
             steps {
-                input "Halt"
                 sh script: "scripts/release/controller/stages/delete.sh ${params.region}"
             }
         }

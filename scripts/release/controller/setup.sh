@@ -24,7 +24,7 @@ sudo apt-get update -q
 sudo apt-get upgrade -q -y
 
 #umask 0077
-mkdir -p "${HOME}"/{.gnupg,go,gpgbin,dummyaptly,dummyrepo,prodrepo}
+mkdir -p "${HOME}"/{.gnupg,go,gpgbin,dummyaptly,dummyrepo,prodrepo,tempkey}
 
 # Check out
 mkdir -p "${HOME}/go/src/github.com/algorand"

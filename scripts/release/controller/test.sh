@@ -1,8 +1,50 @@
 #!/usr/bin/env bash
-# shellcheck disable=2164,2166
+# shellcheck disable=2012
 
 REPO_ROOT=/home/ubuntu/go/src/github.com/algorand/go-algorand/
 
+export GNUPGHOME=${HOME}/tempkey
+gpgconf --kill gpg-agent
+chmod 700 "${GNUPGHOME}"
+cat > "${HOME}"/tempkey/keygenscript<<EOF
+Key-Type: default
+Subkey-Type: default
+Name-Real: Algorand developers
+Name-Email: dev@algorand.com
+Expire-Date: 0
+Passphrase: foogorand
+%transient-key
+EOF
+cat > "${HOME}"/tempkey/rpmkeygenscript<<EOF
+Key-Type: default
+Subkey-Type: default
+Name-Real: Algorand RPM
+Name-Email: rpm@algorand.com
+Expire-Date: 0
+Passphrase: foogorand
+%transient-key
+EOF
+cat <<EOF> "${GNUPGHOME}"/gpg-agent.conf
+extra-socket "${GNUPGHOME}"/S.gpg-agent.extra
+# Enable unattended daemon mode.
+allow-preset-passphrase
+# cache password 30 days
+default-cache-ttl 2592000
+max-cache-ttl 2592000
+EOF
+gpg --gen-key --batch "${HOME}"/tempkey/keygenscript
+gpg --gen-key --batch "${HOME}"/tempkey/rpmkeygenscript
+gpg --export -a dev@algorand.com > "${HOME}/docker_test_resources/key.pub"
+gpg --export -a rpm@algorand.com > "${HOME}/docker_test_resources/rpm.pub"
+
+gpgconf --kill gpg-agent
+gpgconf --launch gpg-agent
+
+gpgp=$(ls /usr/lib/gnupg{2,,1}/gpg-preset-passphrase | head -1)
+KEYGRIP=$(gpg -K --with-keygrip --textmode dev@algorand.com|grep Keygrip|head -1|awk '{ print $3 }')
+echo foogorand | "${gpgp}" --verbose --preset "${KEYGRIP}"
+KEYGRIP=$(gpg -K --with-keygrip --textmode rpm@algorand.com|grep Keygrip|head -1|awk '{ print $3 }')
+echo foogorand | "${gpgp}" --verbose --preset "${KEYGRIP}"
 cat <<EOF>"${HOME}"/dummyaptly.conf
 {
   "rootDir": "${HOME}/dummyaptly",

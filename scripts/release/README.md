@@ -4,13 +4,15 @@ The `Jenkinsfile` uses the pipeline module to define its build stages.  Currentl
 
 1. create ec2 instance
 1. setup ec2 instance
-1. build
-1. package
+1. build and package
+1. test
 1. sign
 1. upload
 1. delete ec2 instance
 
-The only thing that is not automated at this point is pre-setting the `gpg-agent` with the passphrase of the private key.  At the beginning of the `package` stage, Jenkins will pause and wait for the initiator of the build to do this and set up an SSH connection that will forward a Unix socket from the remote ec2 instance to the client, which in this case is most likely your laptop.
+The only thing that is not automated at this point is pre-setting the `gpg-agent` with the passphrase of the private key.  The build job is parameterized with sensible defaults except for the Git hash, which is blank and can vary for each job.
+
+Jenkins will pause at the beginning of the `sign` stage to up an SSH connection that will forward a Unix socket from the remote ec2 instance to the client (which may be your laptop).
 
 ## Workflow
 
@@ -20,9 +22,9 @@ Take a look at the Jenkins build configuration.  This will set the build in moti
 
 To complete this step, you will need to do the following:
 
-1. Download the `BuilderInstanceKey.pem` certificate from the appropriate Jenkins workspace and `chmod 400` on it or GPG will complain.  A subsequent step will assume that you moved this to the `$GOPATH/src/github/algorand/go-algorand/scripts/release` directory.
+1. Download the `ReleaseBuildInstanceKey.pem` certificate from the appropriate Jenkins workspace and `chmod 400` on it or GPG will complain.  A subsequent step will assume that you moved this to the `$GOPATH/src/github/algorand/go-algorand/scripts/release/controller` directory.
 1. Get the instance name from AWS, i.e., https://us-west-1.console.aws.amazon.com/ec2/home?region=us-west-1#Instances:sort=instanceState
-1. Change to the `$GOPATH/src/github/algorand/go-algorand/scripts/release` directory and execute `./socket.sh`, passing it the ec2 instance name that you just got from AWS:
+1. Change to the `$GOPATH/src/github/algorand/go-algorand/scripts/release/controller` directory and execute `./socket.sh`, passing it the ec2 instance name that you just got from AWS:
 
         ./socket ec2-13-57-188-227.us-west-1.compute.amazonaws.com
 
@@ -45,8 +47,6 @@ To complete this step, you will need to do the following:
 1. Go back to Jenkins, hover over the build step that is currently paused, and click "Proceed".
 
 This is all of the manual work that needs to be done.
-
-**Note** that I'd currently like to fully automate this, but the only way to do that is to install the GPG keys on the Jenkins production maching.
 
 > You may be wondering why it's necessary to automate the GPG bits.  Well, this is to circumvent the need to somehow get the private key onto the remote machine, which we definitely don't want to do.  See this explanation.
 

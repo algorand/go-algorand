@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -xv
 echo "Starting start_docker_debian_test.sh"
+GOPATH=${HOME}/go
 TEST_NAME="DebianTest"
 echo "start docker test: " $TEST_NAME
 
