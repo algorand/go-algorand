@@ -68,7 +68,7 @@ pipeline {
                         returnStdout: true
                     ).trim()
 
-                    sh script: "scripts/release/controller/stages/upload.sh {params.channel} ${params.bucket_version} ${params.rstamp} ${params.fullversion}"
+                    sh script: "scripts/release/controller/stages/upload.sh ${params.channel} ${params.bucket_location} ${rstamp} ${fullversion}"
                 }
             }
         }
@@ -76,7 +76,7 @@ pipeline {
         stage("delete ec2 instance") {
             steps {
                 input "Halt"
-                sh script: "scripts/release/controller/stages/delete.sh {params.region}"
+                sh script: "scripts/release/controller/stages/delete.sh ${params.region}"
             }
         }
     }

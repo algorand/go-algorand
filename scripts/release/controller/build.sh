@@ -10,11 +10,11 @@ REPO_ROOT=/home/ubuntu/go/src/github.com/algorand/go-algorand/
 cd ${REPO_ROOT}
 export RELEASE_GENESIS_PROCESS=true
 export CHANNEL="$1"
-PLATFORM=$(./scripts/osarchtype.sh)
+PLATFORM=$(${REPO_ROOT}/scripts/osarchtype.sh)
 PLATFORM_SPLIT=(${PLATFORM//\// })
 OS=${PLATFORM_SPLIT[0]}
 ARCH=${PLATFORM_SPLIT[1]}
-DEFAULTNETWORK=$(./scripts/compute_branch_network.sh)
+DEFAULTNETWORK=$(${REPO_ROOT}/scripts/compute_branch_network.sh)
 export DEFAULTNETWORK
 export PKG_ROOT=${HOME}/node_pkg
 export VARIATIONS="base"
@@ -43,7 +43,7 @@ else
     git add -A
     git commit -m "Build ${BUILD_NUMBER}"
 fi
-FULLVERSION=$(./scripts/compute_build_number.sh -f)
+FULLVERSION=$(${REPO_ROOT}/scripts/compute_build_number.sh -f)
 export FULLVERSION
 
 # a bash user might `source build_env` to manually continue a broken build
