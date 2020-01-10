@@ -1,7 +1,15 @@
-def USER_INPUT
-def S3_PREFIX = "s3://algorand-dev-deb-repo/releases"
-
 pipeline {
+    parameters {
+        string defaultValue: '', description: 'Branch name, commit hash or tag name.', name: 'hash', trim: true
+        string defaultValue: 'stable', description: 'Staged channel which should be released.', name: 'channel', trim: true
+        string defaultValue: 's3://algorand-dev-deb-repo/releases', description: 's3://bucket/prefix', name: 'bucket_location', trim: true
+
+        // AWS
+        string defaultValue: 'us-west-1', description: 'AWS Region', name: 'region', trim: true
+        string defaultValue: 'ami-0dd655843c87b6930', description: 'Amazon Machine Image (default: Ubuntu Server 18.04 LTS, 8 vCPUs, 32 GB RAM', name: 'ami', trim: true
+        string defaultValue: 't2.2xlarge', description: 'Instance Type', name: 'type', trim: true
+    }
+
     environment {
         AWS_ACCESS_KEY_ID = credentials("aws-access-key-id")
         AWS_SECRET_ACCESS_KEY = credentials("aws-secret-access-key")
@@ -12,54 +20,37 @@ pipeline {
     stages {
         stage("create ec2 instance") {
             steps {
-                // Ubuntu Server 18.04 LTS, 8 vCPUs, 32 GB RAM
-                sh script: 'scripts/release/start_ec2_instance.sh us-west-1 ami-0dd655843c87b6930 t2.2xlarge'
+                sh script: "scripts/release/start_ec2_instance.sh {params.region} {params.ami} {params.type}"
                 //sh script: 'scripts/release/start_ec2_instance.sh us-east-1 ami-04b9e92b5572fa0d1 t2.2xlarge'
             }
         }
 
         stage("setup ec2 instance") {
             steps {
+                script {
+                    if (params.channel == null || params.channel == "") {
+                        error("Missing required parameter [channel].")
+                    }
+                }
+
                 sh 'aws s3 cp s3://algorand-devops-misc/tools/gnupg2.2.9_centos7_amd64.tar.bz2 .'
                 sh 'ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@$(cat scripts/release/tmp/instance) mkdir docker_test_resources'
                 sh 'scp -i ReleaseBuildInstanceKey.pem -o StrictHostKeyChecking=no -r gnupg2.2.9_centos7_amd64.tar.bz2 ubuntu@$(cat scripts/release/tmp/instance):~/docker_test_resources/'
                 sh 'scp -i ReleaseBuildInstanceKey.pem -o StrictHostKeyChecking=no -r scripts/release/controller/setup.sh ubuntu@$(cat scripts/release/tmp/instance):~/setup.sh'
-
-                script {
-                    USER_INPUT = input(
-                        id: 'user_inputs',
-                        message: 'Enter the Git tag or branch and the channel',
-                        parameters: [
-                            [
-                                $class: 'StringParameterDefinition',
-                                defaultValue: '',
-                                description: 'Git tag or branch',
-                                name: 'tag'
-                            ],
-                            [
-                                $class: 'StringParameterDefinition',
-                                defaultValue: 'stable',
-                                description: 'channel',
-                                name: 'channel'
-                            ]
-                        ]
-                    )
-
-                    sh "ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@\$(cat scripts/release/tmp/instance) bash setup.sh ${USER_INPUT.tag} ${USER_INPUT.channel}"
-                }
+                sh "ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@\$(cat scripts/release/tmp/instance) bash setup.sh ${params.hash} ${params.channel}"
             }
         }
 
         stage("build") {
             steps {
-                sh "ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@\$(cat scripts/release/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/controller/build.sh ${USER_INPUT.channel}"
+                sh "ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@\$(cat scripts/release/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/controller/build.sh ${params.channel}"
             }
         }
 
         stage("package") {
             steps {
                 input "GPG remote socket"
-                sh "rm -rf *.deb *.rpm ; python3 scripts/get_current_installers.py ${S3_PREFIX}/${USER_INPUT.channel}"
+                sh "rm -rf *.deb *.rpm ; python3 scripts/get_current_installers.py ${params.bucket_location}/${params.channel}"
                 // Copy previous installers into ~/docker_test_resources.
                 sh 'scp -i ReleaseBuildInstanceKey.pem -o StrictHostKeyChecking=no *.deb ubuntu@$(cat scripts/release/tmp/instance):~/docker_test_resources/'
                 sh 'ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@$(cat scripts/release/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/controller/package.sh'
@@ -75,22 +66,24 @@ pipeline {
         stage("upload") {
             steps {
                 script {
-                    RSTAMP = sh(returnStdout: true, script: 'scripts/reverse_hex_timestamp')
-                    CHANNEL = USER_INPUT.channel
-                    FULLVERSION = sh(returnStdout: true, script: 'bash scripts/compute_build_number.sh -f')
+                    def rstamp = sh(
+                        script: 'scripts/reverse_hex_timestamp',
+                        returnStdout: true
+                    ).trim()
 
-                    // Bash scripts return vars with a trailing [:space:]
-                    CHANNEL = CHANNEL.replaceAll("\\s","")
-                    FULLVERSION = FULLVERSION.replaceAll("\\s","")
+                    def fullversion = sh(
+                        script: 'bash scripts/compute_build_number.sh -f',
+                        returnStdout: true
+                    ).trim()
 
-                    sh "rm -rf node_pkg/* && mkdir -p node_pkg/${RSTAMP}"
-                    sh "scp -i ReleaseBuildInstanceKey.pem -o StrictHostKeyChecking=no -r ubuntu@\$(cat scripts/release/tmp/instance):~/node_pkg/* node_pkg/${RSTAMP}/"
-                    sh "aws s3 sync --exclude dev* --exclude master* --exclude nightly* --exclude stable* --acl public-read node_pkg/${RSTAMP} ${S3_PREFIX}/${CHANNEL}/${RSTAMP}_${FULLVERSION}/"
+                    sh "rm -rf node_pkg/* && mkdir -p node_pkg/${rstamp}"
+                    sh "scp -i ReleaseBuildInstanceKey.pem -o StrictHostKeyChecking=no -r ubuntu@\$(cat scripts/release/tmp/instance):~/node_pkg/* node_pkg/${rstamp}/"
+                    sh "aws s3 sync --exclude dev* --exclude master* --exclude nightly* --exclude stable* --acl public-read node_pkg/${rstamp} ${params.bucket_location}/${params.channel}/${rstamp}_${fullversion}/"
                     // Create the buildlog file.
                     sh 'ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@$(cat scripts/release/tmp/instance) bash go/src/github.com/algorand/go-algorand/scripts/release/controller/upload.sh'
-                    // sh "aws s3 cp --quiet ubuntu@\$(cat scripts/release/tmp/instance)/build_status_${CHANNEL}_${FULLVERSION}.asc.gz s3://algorand-devops-misc/buildlog/${RSTAMP}/"
-                    sh "scp -i ReleaseBuildInstanceKey.pem -o StrictHostKeyChecking=no ubuntu@\$(cat scripts/release/tmp/instance):~/build_status_${CHANNEL}_*.asc.gz node_pkg/"
-                    sh "aws s3 cp --quiet node_pkg/build_status_${CHANNEL}_*.asc.gz s3://algorand-devops-misc/buildlog/${RSTAMP}/"
+                    // sh "aws s3 cp --quiet ubuntu@\$(cat scripts/release/tmp/instance)/build_status_${params.channel}_${fullversion}.asc.gz s3://algorand-devops-misc/buildlog/${rstamp}/"
+                    sh "scp -i ReleaseBuildInstanceKey.pem -o StrictHostKeyChecking=no ubuntu@\$(cat scripts/release/tmp/instance):~/build_status_${params.channel}_*.asc.gz node_pkg/"
+                    sh "aws s3 cp --quiet node_pkg/build_status_${params.channel}_*.asc.gz s3://algorand-devops-misc/buildlog/${rstamp}/"
                 }
             }
         }
@@ -98,7 +91,7 @@ pipeline {
         stage("delete ec2 instance") {
             steps {
                 input "Halt"
-                sh script: "scripts/release/shutdown_ec2_instance.sh us-west-1"
+                sh script: "scripts/release/shutdown_ec2_instance.sh {params.region}"
             }
         }
     }
