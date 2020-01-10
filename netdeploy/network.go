@@ -339,19 +339,25 @@ func (n Network) StartNode(binDir, nodeDir string, redirectOutput bool) (err err
 // No return code - we try to kill them if we can (if we read valid PID file)
 func (n Network) Stop(binDir string) {
 	c := make(chan struct{}, len(n.cfg.RelayDirs)+len(n.nodeDirs))
-	stopNodeContoller := func(nc nodecontrol.NodeController) {
+	stopNodeContoller := func(nc *nodecontrol.NodeController) {
 		defer func() {
 			c <- struct{}{}
 		}()
 		nc.FullStop()
 	}
 	for _, relayDir := range n.cfg.RelayDirs {
-		nc := nodecontrol.MakeNodeController(binDir, n.getNodeFullPath(relayDir))
-		go stopNodeContoller(nc)
+		relayDataDir := n.getNodeFullPath(relayDir)
+		nc := nodecontrol.MakeNodeController(binDir, relayDataDir)
+		algodKmdPath, _ := filepath.Abs(filepath.Join(relayDataDir, libgoal.DefaultKMDDataDir))
+		nc.SetKMDDataDir(algodKmdPath)
+		go stopNodeContoller(&nc)
 	}
 	for _, nodeDir := range n.nodeDirs {
-		nc := nodecontrol.MakeNodeController(binDir, n.getNodeFullPath(nodeDir))
-		go stopNodeContoller(nc)
+		nodeDataDir := n.getNodeFullPath(nodeDir)
+		nc := nodecontrol.MakeNodeController(binDir, nodeDataDir)
+		algodKmdPath, _ := filepath.Abs(filepath.Join(nodeDataDir, libgoal.DefaultKMDDataDir))
+		nc.SetKMDDataDir(algodKmdPath)
+		go stopNodeContoller(&nc)
 	}
 	// wait until we finish stopping all the node controllers.
 	for i := cap(c); i > 0; i-- {
