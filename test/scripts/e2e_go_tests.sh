@@ -73,7 +73,7 @@ while [ "$1" != "" ]; do
 done
 
 EXECUTE_TESTS_INDIVIDUALLY="true"
-
+set -x
 if [ "${#TESTPATTERNS[@]}" -eq 0 ]; then
     if [ "${EXECUTE_TESTS_INDIVIDUALLY}" = "true" ]; then
         TESTS_DIRECTORIES=$(GO111MODULE=off go list ./...)
