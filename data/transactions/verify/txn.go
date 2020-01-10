@@ -278,7 +278,7 @@ func LogicSig(txn *transactions.SignedTxn, ctx *Context) error {
 
 	// If the logic is code for off-chain execution the transaction is considered valid and posted as is.
 	// TODO LogicSigSanityCheck needs tweakng.
-	if IsExecLogic(*txn) {
+	if transactions.IsExecLogic(*txn) {
 		return nil
 	}
 
@@ -299,5 +299,4 @@ func LogicSig(txn *transactions.SignedTxn, ctx *Context) error {
 	}
 	logicGoodTotal.Inc(nil)
 	return nil
-
 }

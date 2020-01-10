@@ -23,7 +23,7 @@ const (
 	ExecRequest ExecType = "RQST:"
 	ExecCommit  ExecType = "CMMT:"
 	ExecFail    ExecType = "FAIL:"
-	ExecNil     ExecType = "";
+	ExecNil     ExecType = ""
 )
 
 // Currently using a PaymentTx whose Note field has a header indicating the type of
@@ -32,18 +32,7 @@ const (
 // TODO decide how to structure input and output -- probably JSON
 
 func IsExecLogic(txn SignedTxn) bool {
-	switch GetExecType(txn) {
-	case ExecInit:
-		return true
-	case ExecRequest:
-		return true
-	case ExecCommit:
-		return true
-	case ExecFail:
-		return true
-	default:
-		return false
-	}
+	return GetExecType(txn) != ExecNil
 }
 
 func GetExecType(txn SignedTxn) ExecType {
@@ -59,6 +48,10 @@ func SetExecType(txn SignedTxn, txType ExecType) {
 
 func GetExecData(txn SignedTxn) []byte {
 	return txn.Txn.Note[5:]
+}
+
+func SetExecData(txn SignedTxn, data []byte) {
+	copy(txn.Txn.Note[5:], data)
 }
 
 // ExecReqTxnFields captures the fields used by exec transactions.
