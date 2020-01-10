@@ -322,9 +322,9 @@ func TestFetchBlockTimeout(t *testing.T) {
 		peers:           makeDummyFetchers(false, false, 10*time.Second),
 		log:             logging.TestingLog(t),
 	}
+	start := time.Now()
 	ctx, cf := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cf()
-	start := time.Now()
 	_, _, client, err := fetcher.FetchBlock(ctx, basics.Round(1))
 	end := time.Now()
 	require.True(t, strings.Contains(err.Error(), context.DeadlineExceeded.Error()))
