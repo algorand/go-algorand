@@ -72,8 +72,15 @@ while [ "$1" != "" ]; do
     shift
 done
 
-EXECUTE_TESTS_INDIVIDUALLY="true"
-set -x
+# ARM64 has some memory related issues with fork. Since we don't really care
+# about testing the forking capabilities, we're just run the tests one at a time.
+EXECUTE_TESTS_INDIVIDUALLY="false"
+ARCHTYPE=$("${SRCROOT}/scripts/archtype.sh")
+if [ "${ARCHTYPE}" = "arm64" ]; then
+    EXECUTE_TESTS_INDIVIDUALLY="true"
+fi
+
+
 if [ "${#TESTPATTERNS[@]}" -eq 0 ]; then
     if [ "${EXECUTE_TESTS_INDIVIDUALLY}" = "true" ]; then
         TESTS_DIRECTORIES=$(GO111MODULE=off go list ./...)
