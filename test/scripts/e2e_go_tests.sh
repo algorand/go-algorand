@@ -80,6 +80,9 @@ if [ "${#TESTPATTERNS[@]}" -eq 0 ]; then
         for TEST_NAME in ${TESTS[@]}; do
             #echo "Running ${TEST_NAME}"
             go test -race -timeout 1h -vet=off -v ${SHORTTEST} -run ${TEST_NAME} ${TEST_DIR}
+            echo "leftovers kmds:"
+            ps -Af | grep kmd
+            echo "---"
         done
     done
 else
