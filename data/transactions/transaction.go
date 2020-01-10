@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -410,6 +410,18 @@ func (tx Transaction) TxAmount() basics.MicroAlgos {
 
 	default:
 		return basics.MicroAlgos{Raw: 0}
+	}
+}
+
+// GetReceiverAddress returns the address of the receiver. If the transaction has no receiver, it returns the empty address.
+func (tx Transaction) GetReceiverAddress() basics.Address {
+	switch tx.Type {
+	case protocol.PaymentTx:
+		return tx.PaymentTxnFields.Receiver
+	case protocol.AssetTransferTx:
+		return tx.AssetTransferTxnFields.AssetReceiver
+	default:
+		return basics.Address{}
 	}
 }
 
