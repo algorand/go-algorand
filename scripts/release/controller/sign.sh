@@ -5,10 +5,9 @@ set -ex
 
 # Anchor our repo root reference location
 #REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"/..
-REPO_ROOT=/home/ubuntu/go/src/github.com/algorand/go-algorand/
+REPO_ROOT="${HOME}"/go/src/github.com/algorand/go-algorand/
 
-# TODO
-#git archive --prefix="algorand-${FULLVERSION}/" "${TAG}" | gzip > "${PKG_ROOT}/algorand_${CHANNEL}_source_${FULLVERSION}.tar.gz"
+git archive --prefix="algorand-${FULLVERSION}/" "${TAG}" | gzip > "${PKG_ROOT}/algorand_${CHANNEL}_source_${FULLVERSION}.tar.gz"
 
 # create *.sig gpg signatures
 cd "${PKG_ROOT}"

@@ -8,16 +8,16 @@ export GOPATH=${HOME}/go
 export PATH=${HOME}/gpgbin:${GOPATH}/bin:/usr/local/go/bin:${PATH}
 
 # Anchor our repo root reference location
-REPO_ROOT=/home/ubuntu/go/src/github.com/algorand/go-algorand/
+REPO_ROOT="${HOME}"/go/src/github.com/algorand/go-algorand/
 
-cd ${REPO_ROOT}
+cd "${REPO_ROOT}"
 export RELEASE_GENESIS_PROCESS=true
 export CHANNEL="$1"
-PLATFORM=$(${REPO_ROOT}/scripts/osarchtype.sh)
+PLATFORM=$("${REPO_ROOT}"/scripts/osarchtype.sh)
 PLATFORM_SPLIT=(${PLATFORM//\// })
 OS=${PLATFORM_SPLIT[0]}
 ARCH=${PLATFORM_SPLIT[1]}
-DEFAULTNETWORK=$(PATH=${PATH} ${REPO_ROOT}/scripts/compute_branch_network.sh)
+DEFAULTNETWORK=$(PATH=${PATH} "${REPO_ROOT}"/scripts/compute_branch_network.sh)
 export DEFAULTNETWORK
 export PKG_ROOT=${HOME}/node_pkg
 export VARIATIONS="base"
@@ -46,7 +46,7 @@ else
     git add -A
     git commit -m "Build ${BUILD_NUMBER}"
 fi
-FULLVERSION=$(PATH=${PATH} ${REPO_ROOT}/scripts/compute_build_number.sh -f)
+FULLVERSION=$(PATH=${PATH} "${REPO_ROOT}"/scripts/compute_build_number.sh -f)
 export FULLVERSION
 
 # a bash user might `source build_env` to manually continue a broken build
@@ -77,7 +77,7 @@ export BUILD_DEB=1
 scripts/build_packages.sh "${PLATFORM}"
 
 # build docker release package
-cd ${REPO_ROOT}/docker/release
+cd "${REPO_ROOT}"/docker/release
 sg docker "./build_algod_docker.sh ${HOME}/node_pkg/node_${CHANNEL}_${OS}-${ARCH}_${FULLVERSION}.tar.gz"
-cd ${REPO_ROOT}/scripts
+cd "${REPO_ROOT}"/scripts
 

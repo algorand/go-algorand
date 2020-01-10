@@ -22,6 +22,8 @@ export DEBIAN_FRONTEND=noninteractive
 
 sudo apt-get update -q
 sudo apt-get upgrade -q -y
+sudo apt-get install -y build-essential automake autoconf awscli docker.io git gpg nfs-common python3 rpm sqlite3 python3-boto3 g++ libtool rng-tools
+sudo rngd -r /dev/urandom
 
 #umask 0077
 mkdir -p "${HOME}"/{.gnupg,go,gpgbin,dummyaptly,dummyrepo,prodrepo,tempkey}
@@ -38,9 +40,9 @@ python3 "${HOME}/go/src/github.com/algorand/go-algorand/scripts/get_latest_go.py
 # $HOME will be interpreted by the outer shell to create the string passed to sudo bash
 sudo bash -c "cd /usr/local && tar zxf ${HOME}/go*.tar.gz"
 
-GOPATH=${HOME}/go
-export GOPATH
+GOPATH=$(/usr/local/go/bin/go env GOPATH)
 export PATH=${HOME}/gpgbin:${GOPATH}/bin:/usr/local/go/bin:${PATH}
+export GOPATH
 
 cat <<EOF>"${HOME}/gpgbin/remote_gpg_socket"
 export GOPATH=\${HOME}/go
@@ -49,11 +51,6 @@ gpgconf --list-dirs | grep agent-socket | awk -F: '{ print \$2 }'
 EOF
 
 chmod +x "${HOME}/gpgbin/remote_gpg_socket"
-
-sudo apt-get update
-sudo apt-get install -y build-essential automake autoconf awscli docker.io git gpg nfs-common python3 rpm sqlite3 python3-boto3 g++ libtool rng-tools
-
-sudo rngd -r /dev/urandom
 
 # This real name and email must precisely match GPG key
 git config --global user.name "Algorand developers"

@@ -36,9 +36,10 @@ goal node stop -d /root/testnode
 #https://releases.algorand.com/key.pub
 #gpgkeys: protocol `https' not supported
 
-curl -o /root/stuff/key.pub https://releases.algorand.com/key.pub
-chown ubuntu:ubuntu /root/stuff/key.pub
-apt-key add /root/stuff/key.pub
+#curl -o /root/stuff/key.pub https://releases.algorand.com/key.pub
+#chown ubuntu:ubuntu /root/stuff/key.pub
+#apt-key add /root/stuff/key.pub
+apt-key add /root/stuff/rpm.pub
 add-apt-repository "deb http://${DC_IP}:8111/ stable main"
 apt-get update
 apt-get install -y algorand

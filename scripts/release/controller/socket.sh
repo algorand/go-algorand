@@ -4,6 +4,12 @@
 # -o StrictHostKeyChecking=no suppresses the (yes/no) new key ssh question.
 # This lessens the security, but it may be acceptable in this case.
 
+if [ -z "$1" ]
+then
+    echo Missing \`instance\` variable.
+    exit 1
+fi
+
 INSTANCE=$1
 gpgp=$(find /usr/lib/gnupg{2,,1} -type f -name gpg-preset-passphrase 2> /dev/null)
 KEYGRIP=$(gpg -K --with-keygrip --textmode dev@algorand.com | grep Keygrip | head -1 | awk '{ print $3 }')

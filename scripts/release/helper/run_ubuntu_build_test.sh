@@ -7,7 +7,6 @@
 (cd "${HOME}"/dummyaptly/public && python3 "${HOME}"/go/src/github.com/algorand/go-algorand/scripts/httpd.py --pid "${HOME}"/phttpd.pid) &
 trap "${HOME}"/go/src/github.com/algorand/go-algorand/scripts/kill_httpd.sh 0
 
-# Ubuntu 16 binaries are deprecated. Should still work to build from source for it.
 sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME}/docker_test_resources,dst=/root/stuff --mount type=bind,src=${HOME}/go,dst=/root/go --mount type=bind,src=/usr/local/go,dst=/usr/local/go ubuntu:16.04 bash /root/go/src/github.com/algorand/go-algorand/scripts/release/helper/docker_ubuntu_test.sh"
 
 export DC_IP
