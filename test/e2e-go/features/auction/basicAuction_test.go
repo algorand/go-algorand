@@ -209,6 +209,7 @@ func TestStartAndEndAuctionOneUserTenBids(t *testing.T) {
 }
 
 func TestStartAndEndAuctionTenUsersOneBidEach(t *testing.T) {
+	testUtils.SkipTestOnPlatform(t, false /*ubuntuAMD64*/, true /*arm64*/, false /*macOSAMD64*/)
 	t.Parallel()
 	r := require.New(t)
 	var fixture fixtures.AuctionFixture
