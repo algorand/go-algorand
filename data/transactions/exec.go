@@ -16,61 +16,29 @@
 
 package transactions
 
-type ExecType string
+// Transactions for off-chain execution of code.
+//
+// We currently cannot carry ordinary signatures through the system,
+// as the private keys disappear on the way from request to commit.
+// We also cannot store code or data.  So we currently support only
+// contract-controlled accounts, signed by a LogicSig, and addressed
+// via a hash of their code.  Accounts are created by sending funds to
+// that address.  When we can store code indexed via hash the LogicSig
+// can contain the code.
 
+// ExecTxnPhase is type for phase lables.
+type ExecTxnPhase string
+
+// Labels for the phases of exec transactions.
 const (
-	ExecInit    ExecType = "INIT:"
-	ExecRequest ExecType = "RQST:"
-	ExecCommit  ExecType = "CMMT:"
-	ExecFail    ExecType = "FAIL:"
-	ExecNil     ExecType = ""
+	ExecInit    ExecTxnPhase = "init"    // TODO store code indexed via hash
+	ExecRequest ExecTxnPhase = "request" // post to blockchain to request later execution
+	ExecCommit  ExecTxnPhase = "commit"  // post to blockchain to request commit of execution results
+	ExecFail    ExecTxnPhase = "fail"    // post to blockchain in case of failed execution or commit
 )
 
-// Currently using a PaymentTx whose Note field has a header indicating the type of
-// transaction, followed by plain text for use by the executable as input and output.
-// TODO use ExecTx and ExecTxnFields instead of header (fields in header may be useful too)
-// TODO decide how to structure input and output -- probably JSON
-
-func IsExecLogic(txn SignedTxn) bool {
-	return GetExecType(txn) != ExecNil
-}
-
-func GetExecType(txn SignedTxn) ExecType {
-	if len(txn.Txn.Note) < 5 {
-		return ExecNil
-	}
-	return ExecType(txn.Txn.Note[0:5])
-}
-
-func SetExecType(txn SignedTxn, txType ExecType) {
-	copy(txn.Txn.Note[0:5], string(txType))
-}
-
-func GetExecData(txn SignedTxn) []byte {
-	return txn.Txn.Note[5:]
-}
-
-func SetExecData(txn SignedTxn, data []byte) {
-	copy(txn.Txn.Note[5:], data)
-}
-
-// ExecReqTxnFields captures the fields used by exec transactions.
+// ExecTxnFields captures the fields used by exec transactions.
 type ExecTxnFields struct {
-	_struct  struct{} `codec:",omitempty,omitemptyarray"`
-	execType ExecType
-}
-
-// Apply changes the state according to this transaction.
-func (exec ExecTxnFields) apply(header Header, balances Balances, spec SpecialAddresses, ad *ApplyData) error {
-	switch exec.execType {
-	case ExecInit:
-		return nil // store code indexed by hash -- transfer of funds to hash creates account
-	case ExecRequest:
-		return nil // post to blockchain to request later execution
-	case ExecCommit:
-		return nil // post to blockchain to request commit of execution results
-	case ExecFail:
-		return nil // post to blockchain in case of failed execution or commit
-	}
-	return nil
+	_struct   struct{} `codec:",omitempty,omitemptyarray"`
+	ExecPhase ExecTxnPhase
 }

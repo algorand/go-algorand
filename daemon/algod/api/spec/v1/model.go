@@ -542,6 +542,15 @@ type AssetFreezeTransactionType struct {
 	NewFreezeStatus bool `json:"freeze"`
 }
 
+// ExecTransactionType contains the additional fields for an exec transaction
+// swagger:model ExecTransactionType
+type ExecTransactionType struct {
+	// ExecPhase specifies the exec transaction phase.
+	//
+	// required: true
+	ExecPhase string `json:"phase"`
+}
+
 // TransactionList contains a list of transactions
 // swagger:model TransactionList
 type TransactionList struct {

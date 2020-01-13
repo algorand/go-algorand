@@ -203,29 +203,33 @@ func LogicSigSanityCheck(txn *transactions.SignedTxn, ctx *Context) error {
 	if len(lsig.Logic) == 0 {
 		return errors.New("LogicSig.Logic empty")
 	}
-	version, vlen := binary.Uvarint(lsig.Logic)
-	if vlen <= 0 {
-		return errors.New("LogicSig.Logic bad version")
-	}
-	if version > proto.LogicSigVersion {
-		return errors.New("LogicSig.Logic version too new")
-	}
 	if uint64(lsig.Len()) > proto.LogicSigMaxSize {
 		return errors.New("LogicSig.Logic too long")
 	}
 
-	ep := logic.EvalParams{
-		Txn:        txn,
-		Proto:      &proto,
-		TxnGroup:   ctx.Group,
-		GroupIndex: ctx.GroupIndex,
-	}
-	cost, err := logic.Check(lsig.Logic, ep)
-	if err != nil {
-		return err
-	}
-	if cost > int(proto.LogicSigMaxCost) {
-		return fmt.Errorf("LogicSig.Logic too slow, %d > %d", cost, proto.LogicSigMaxCost)
+	if txn.Txn.Type != protocol.ExecTx {
+
+		version, vlen := binary.Uvarint(lsig.Logic)
+		if vlen <= 0 {
+			return errors.New("LogicSig.Logic bad version")
+		}
+		if version > proto.LogicSigVersion {
+			return errors.New("LogicSig.Logic version too new")
+		}
+
+		ep := logic.EvalParams{
+			Txn:        txn,
+			Proto:      &proto,
+			TxnGroup:   ctx.Group,
+			GroupIndex: ctx.GroupIndex,
+		}
+		cost, err := logic.Check(lsig.Logic, ep)
+		if err != nil {
+			return err
+		}
+		if cost > int(proto.LogicSigMaxCost) {
+			return fmt.Errorf("LogicSig.Logic too slow, %d > %d", cost, proto.LogicSigMaxCost)
+		}
 	}
 
 	hasMsig := false
@@ -276,9 +280,8 @@ func LogicSig(txn *transactions.SignedTxn, ctx *Context) error {
 		return err
 	}
 
-	// If the logic is code for off-chain execution the transaction is considered valid and posted as is.
-	// TODO LogicSigSanityCheck needs tweakng.
-	if transactions.IsExecLogic(*txn) {
+	// If the logic is code for off-chain execution consider it valid.
+	if txn.Txn.Type == protocol.ExecTx {
 		return nil
 	}
 

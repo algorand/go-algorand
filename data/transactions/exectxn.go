@@ -22,19 +22,17 @@ import (
 	"os/exec"
 )
 
-// This is part of a stub for the execution protocol, which I'll likely to need
-// to move to a separate process along the lines of @algobolson's algobot.
-// Saving here uncompleted until there is a place to move it to.
-
-// The transaction is signed with Wasm code.  The code is simply spawned with the
-// transaction's note passed to stdin.  The output is captured and placed back on
+// ExecTxnSpawn spawns a VM to execute transaction code.
+//
+// The transaction is signed with Wasm code.  That code is copied and spawned with
+// the transaction's note passed to stdin.  The output is captured and placed back on
 // the blockchain as a commit or fail transaction.
-func execTxn(txn SignedTxn) error {
+func ExecTxnSpawn(txn SignedTxn, client RestClient) error {
 
 	// unpack transaction
 	code := txn.Lsig.Logic
-	execType := GetExecType(txn)
-	input := GetExecData(txn)
+	execType := txn.Txn.ExecType
+	input := txn.Txn.Note
 
 	if execType != ExecRequest {
 		sendResultTransaction(txn, ExecFail, input)
@@ -50,30 +48,29 @@ func execTxn(txn SignedTxn) error {
 	defer temp.Close()
 	_, err = temp.Write(code)
 	if err != nil {
-		sendResultTransaction(txn, ExecFail, input)
+		sendTxn(client, txn, ExecFail, input)
 		return nil
 	}
 
-	// spawn WAVM to execute the wasm
+	// Spawn WAVM to execute the wasm.  TODO Parameterize command.
 	cmd := exec.Command("wavm", "run", "--abi=wasi", temp.Name())
 	cmd.Stdin = bytes.NewBuffer(input)
-	var stdout, stderr bytes.Buffer
+	var stdin, stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	err = cmd.Run()
 	if err != nil {
-		sendResultTransaction(txn, ExecFail, stderr.Bytes())
+		sendTxn(client, txn, ExecFail, stderr.Bytes())
 		return nil
 	}
-	sendResultTransaction(txn, ExecCommit, stdout.Bytes())
+	sendTxn(txn, ExecCommit, stdout.Bytes())
 	return nil
 }
 
-func sendResultTransaction(txn SignedTxn, execType ExecType, output []byte) {
-	SetExecType(txn, execType)
-	SetExecData(txn, output)
+func sendTxn(txn SignedTxn, execType ExecTxnPhase, output []byte, client RestClient) {
+	txn.Txn.execType = execType
+	txn.Txn.Note = output
 
-	// TODO extend txn with output into atomic transfer
-
-	// TODO whatever it takes to send a transaction
+	// TODO convert txn and output into atomic transfer
+	_, err = client.SendRawTransaction(stx)
 }
