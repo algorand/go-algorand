@@ -76,6 +76,7 @@ import (
 const (
 	apiV1Tag              = "v1"
 	debugRouteName        = "debug"
+	pprofEndpointPrefix   = "/debug/pprof/"
 	urlAuthEndpointPrefix = "/urlAuth/{apiToken:[0-9a-f]+}"
 )
 
@@ -117,12 +118,15 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-ch
 	// Request Context
 	ctx := lib.ReqContext{Node: node, Log: logger, Shutdown: shutdown}
 
-	// Registers /debug/pprof handler under root path and under /urlAuth path
-	// to support header or url-provided token.
-	router.PathPrefix("/debug/pprof/").Handler(http.DefaultServeMux)
+	// Route pprof requests
+	if node.Config().EnableProfiler {
+		// Registers /debug/pprof handler under root path and under /urlAuth path
+		// to support header or url-provided token.
+		router.PathPrefix(pprofEndpointPrefix).Handler(http.DefaultServeMux)
 
-	urlAuthRouter := router.PathPrefix(urlAuthEndpointPrefix)
-	urlAuthRouter.PathPrefix("/debug/pprof/").Handler(http.DefaultServeMux).Name(debugRouteName)
+		urlAuthRouter := router.PathPrefix(urlAuthEndpointPrefix)
+		urlAuthRouter.PathPrefix(pprofEndpointPrefix).Handler(http.DefaultServeMux).Name(debugRouteName)
+	}
 
 	// Registering common routes
 	registerHandlers(router, "", common.Routes, ctx)
