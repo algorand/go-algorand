@@ -48,7 +48,7 @@ func TestMain(m *testing.M) {
 	listMode := false
 	flag.Parse()
 	flag.Visit(func(f *flag.Flag) {
-		if f.Name == "test.list" && f.Value.String() != "" {
+		if f.Name == "test.list" {
 			listMode = true
 		}
 	})
