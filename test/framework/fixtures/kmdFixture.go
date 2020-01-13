@@ -77,6 +77,7 @@ func (f *KMDFixture) Shutdown() {
 	// If there's a kmd server running
 	if f.initialized {
 		nc := nodecontrol.MakeNodeController(f.binDir, f.dataDir)
+		nc.SetKMDDataDir(f.kmdDir)
 		_, err := nc.StopKMD()
 		require.NoError(f.t, err)
 	}

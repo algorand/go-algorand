@@ -240,6 +240,22 @@ func (kc *KMDController) StartKMD(args KMDStartArgs) (alreadyRunning bool, err e
 
 			// Check if we exited because kmd is already running
 			if exitCode == codes.ExitCodeKMDAlreadyRunning {
+				kmdClient, err := kc.KMDClient()
+				if err != nil {
+					// kmd told us it's running, but we couldn't construct a client.
+					// we want to keep waiting until the kmd would write out the
+					// file.
+					continue
+				}
+
+				// See if the server is up by requesting the versions endpoint
+				req := kmdapi.VersionsRequest{}
+				resp := kmdapi.VersionsResponse{}
+				err = kmdClient.DoV1Request(req, &resp)
+				if err != nil {
+					return false, err
+				}
+				// cool; kmd is up and running, and responding to version queries.
 				return true, nil
 			}
 
