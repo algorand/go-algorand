@@ -198,9 +198,12 @@ func (f *RestClientFixture) GetNodeWalletsSortedByBalance(nodeDataDir string) (a
 func (f *RestClientFixture) getNodeWalletsSortedByBalance(client libgoal.Client) (accounts []v1.Account, err error) {
 	wh, err := client.GetUnencryptedWalletHandle()
 	if err != nil {
-		return
+		return nil, fmt.Errorf("unable to retrieve wallet handle : %v", err)
 	}
 	addresses, err := client.ListAddresses(wh)
+	if err != nil {
+		return nil, fmt.Errorf("unable to list wallet addresses : %v", err)
+	}
 	for _, addr := range addresses {
 		info, err := client.AccountInformation(addr)
 		f.failOnError(err, "failed to get account info: %v")
@@ -209,7 +212,7 @@ func (f *RestClientFixture) getNodeWalletsSortedByBalance(client libgoal.Client)
 	sort.SliceStable(accounts, func(i, j int) bool {
 		return accounts[i].Amount > accounts[j].Amount
 	})
-	return accounts, err
+	return accounts, nil
 }
 
 // WaitForTxnConfirmation waits until either the passed txid is confirmed

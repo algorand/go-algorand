@@ -62,7 +62,9 @@ proc ::AlgorandGoal::StartNetwork { NETWORK_NAME NETWORK_TEMPLATE TEST_ALGO_DIR 
     set ::GLOBAL_TEST_ROOT_DIR $TEST_ROOT_DIR
     set ::GLOBAL_NETWORK_NAME $NETWORK_NAME
 
-    set timeout 30
+    # Running on ARM64, it seems that network creation is pretty slow.
+    # 30 second won't be enough here, so I'm changing this to 90 seconds.
+    set timeout 90
 
     if { [catch {
         # Create network
