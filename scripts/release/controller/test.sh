@@ -7,10 +7,11 @@ echo
 
 REPO_ROOT=/home/ubuntu/go/src/github.com/algorand/go-algorand/
 
-export GNUPGHOME=${HOME}/tempkey
+export GNUPGHOME=${HOME}/tkey
 gpgconf --kill gpg-agent
 chmod 700 "${GNUPGHOME}"
-cat > "${HOME}"/tempkey/keygenscript<<EOF
+
+cat > "${GNUPGHOME}"/keygenscript<<EOF
 Key-Type: default
 Subkey-Type: default
 Name-Real: Algorand developers
@@ -19,7 +20,8 @@ Expire-Date: 0
 Passphrase: foogorand
 %transient-key
 EOF
-cat > "${HOME}"/tempkey/rpmkeygenscript<<EOF
+
+cat > "${GNUPGHOME}"/rpmkeygenscript<<EOF
 Key-Type: default
 Subkey-Type: default
 Name-Real: Algorand RPM
@@ -28,16 +30,19 @@ Expire-Date: 0
 Passphrase: foogorand
 %transient-key
 EOF
+
+# https://stackoverflow.com/a/49491997
 cat <<EOF> "${GNUPGHOME}"/gpg-agent.conf
 extra-socket "${GNUPGHOME}"/S.gpg-agent.extra
 # Enable unattended daemon mode.
 allow-preset-passphrase
-# cache password 30 days
+# Cache password 30 days.
 default-cache-ttl 2592000
 max-cache-ttl 2592000
 EOF
-gpg --gen-key --batch "${HOME}"/tempkey/keygenscript
-gpg --gen-key --batch "${HOME}"/tempkey/rpmkeygenscript
+
+gpg --gen-key --batch "${GNUPGHOME}"/keygenscript
+gpg --gen-key --batch "${GNUPGHOME}"/rpmkeygenscript
 gpg --export -a dev@algorand.com > "${HOME}/docker_test_resources/key.pub"
 gpg --export -a rpm@algorand.com > "${HOME}/docker_test_resources/rpm.pub"
 
@@ -45,10 +50,12 @@ gpgconf --kill gpg-agent
 gpgconf --launch gpg-agent
 
 gpgp=$(ls /usr/lib/gnupg{2,,1}/gpg-preset-passphrase | head -1)
-KEYGRIP=$(gpg -K --with-keygrip --textmode dev@algorand.com|grep Keygrip|head -1|awk '{ print $3 }')
-echo foogorand | "${gpgp}" --verbose --preset "${KEYGRIP}"
-KEYGRIP=$(gpg -K --with-keygrip --textmode rpm@algorand.com|grep Keygrip|head -1|awk '{ print $3 }')
-echo foogorand | "${gpgp}" --verbose --preset "${KEYGRIP}"
+for name in {dev,rpm}
+do
+    KEYGRIP=$(gpg -K --with-keygrip --textmode "$name"@algorand.com | grep Keygrip | head -1 | awk '{ print $3 }')
+    echo foogorand | "${gpgp}" --verbose --preset "${KEYGRIP}"
+done
+
 cat <<EOF>"${HOME}"/dummyaptly.conf
 {
   "rootDir": "${HOME}/dummyaptly",
@@ -74,10 +81,13 @@ cat <<EOF>"${HOME}"/dummyaptly.conf
 }
 EOF
 
+# Creates ~/dummyaptly/db
 "$HOME"/go/bin/aptly -config="${HOME}"/dummyaptly.conf repo create -distribution=stable -component=main algodummy
+# Creates ~/dummyaptly/pool
 "$HOME"/go/bin/aptly -config="${HOME}"/dummyaptly.conf repo add algodummy "${HOME}"/node_pkg/*.deb
 SNAPSHOT=algodummy-$(date +%Y%m%d_%H%M%S)
 "$HOME"/go/bin/aptly -config="${HOME}"/dummyaptly.conf snapshot create "${SNAPSHOT}" from repo algodummy
+# Creates ~/dummyaptly/public
 "$HOME"/go/bin/aptly -config="${HOME}"/dummyaptly.conf publish snapshot -origin=Algorand -label=Algorand "${SNAPSHOT}"
 
 "${REPO_ROOT}"/scripts/release/helper/run_ubuntu_build_test.sh

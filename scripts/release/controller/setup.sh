@@ -28,7 +28,7 @@ sudo apt-get install -y build-essential automake autoconf awscli docker.io git g
 sudo rngd -r /dev/urandom
 
 #umask 0077
-mkdir -p "${HOME}"/{.gnupg,go,gpgbin,dummyaptly,dummyrepo,prodrepo,tempkey}
+mkdir -p "${HOME}"/{.gnupg,go,gpgbin,dummyaptly,dummyrepo,prodrepo,tkey}
 
 # Check out
 mkdir -p "${HOME}/go/src/github.com/algorand"

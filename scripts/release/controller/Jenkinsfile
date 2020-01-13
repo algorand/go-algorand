@@ -50,7 +50,7 @@ pipeline {
 
         stage("sign") {
             steps {
-                input "GPG remote socket"
+                input "Forward gpg-agent"
                 sh script: "scripts/release/controller/stages/sign.sh"
             }
         }

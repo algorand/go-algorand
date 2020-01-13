@@ -76,7 +76,7 @@ make crypto/lib/libsodium.a
 make build
 
 export BUILD_DEB=1
-scripts/build_packages.sh "${PLATFORM}"
+"${REPO_ROOT}"/scripts/build_packages.sh "${PLATFORM}"
 
 # build docker release package
 cd "${REPO_ROOT}"/docker/release
