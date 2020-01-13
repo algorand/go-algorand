@@ -47,7 +47,7 @@ type LibGoalFixture struct {
 	NC             nodecontrol.NodeController
 	rootDir        string
 	Name           string
-	network        *netdeploy.Network
+	network        netdeploy.Network
 	t              TestingT
 	tMu            deadlock.RWMutex
 	clientPartKeys map[string][]account.Participation
@@ -86,8 +86,6 @@ func (f *LibGoalFixture) setup(test TestingT, testName string, templateFile stri
 	importKeys := false // Don't automatically import root keys when creating folders, we'll import on-demand
 	network, err := netdeploy.CreateNetworkFromTemplate("test", f.rootDir, templateFile, f.binDir, importKeys, f.nodeRunStateChanged)
 	f.failOnError(err, "CreateNetworkFromTemplate failed: %v")
-
-	network.NodeRunStateChangesCallback(f.nodeRunStateChanged)
 	f.network = network
 
 	if startNetwork {
