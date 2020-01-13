@@ -84,7 +84,7 @@ func (f *LibGoalFixture) setup(test TestingT, testName string, templateFile stri
 	os.RemoveAll(f.rootDir)
 	templateFile = filepath.Join(f.testDataDir, templateFile)
 	importKeys := false // Don't automatically import root keys when creating folders, we'll import on-demand
-	network, err := netdeploy.CreateNetworkFromTemplate("test", f.rootDir, templateFile, f.binDir, importKeys)
+	network, err := netdeploy.CreateNetworkFromTemplate("test", f.rootDir, templateFile, f.binDir, importKeys, f.nodeRunStateChanged)
 	f.failOnError(err, "CreateNetworkFromTemplate failed: %v")
 
 	network.NodeRunStateChangesCallback(f.nodeRunStateChanged)
