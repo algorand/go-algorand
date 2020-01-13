@@ -9,7 +9,9 @@ if [ -z "${BUILDTIMESTAMP}" ]; then
     exit 0
 fi
 
-date "+setup start %Y%m%d_%H%M%S"
+echo
+date "+build_release begin SETUP stage %Y%m%d_%H%M%S"
+echo
 
 set -ex
 
@@ -106,5 +108,7 @@ make install
 
 gpgconf --launch gpg-agent
 
-date "+setup finish %Y%m%d_%H%M%S"
+echo
+date "+build_release end SETUP stage %Y%m%d_%H%M%S"
+echo
 

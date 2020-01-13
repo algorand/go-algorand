@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 # shellcheck disable=1090,2129,2035
+
+echo
+date "+build_release begin SIGN stage %Y%m%d_%H%M%S"
+echo
+
 . "${HOME}/build_env"
 set -ex
 
@@ -39,5 +44,7 @@ cp -p "${REPO_ROOT}/installer/rpm/algorand.repo" "${HOME}/prodrepo/algorand.repo
 #gpg --export -a dev@algorand.com > "${HOME}/docker_test_resources/key.pub"
 #gpg --export -a rpm@algorand.com > "${HOME}/docker_test_resources/rpm.pub"
 
-date "+build_release done signing %Y%m%d_%H%M%S"
+echo
+date "+build_release end SIGN stage %Y%m%d_%H%M%S"
+echo
 

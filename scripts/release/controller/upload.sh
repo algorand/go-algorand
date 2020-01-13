@@ -2,6 +2,10 @@
 # shellcheck disable=1090,2129
 # AWS_EFS_MOUNT= NFS to mount for `aptly` persistent state and scratch storage
 
+echo
+date "+build_release begin UPLOAD stage %Y%m%d_%H%M%S"
+echo
+
 . "${HOME}/build_env"
 set -ex
 
@@ -84,5 +88,7 @@ gzip "${STATUSFILE}".asc
 
 #"${REPO_ROOT}"/scripts/release/helper/release_deb.sh
 
-date "+build_release done uploading %Y%m%d_%H%M%S"
+echo
+date "+build_release end UPLOAD stage %Y%m%d_%H%M%S"
+echo
 

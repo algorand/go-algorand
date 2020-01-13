@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # shellcheck disable=2012
 
+echo
+date "+build_release begin TEST stage %Y%m%d_%H%M%S"
+echo
+
 REPO_ROOT=/home/ubuntu/go/src/github.com/algorand/go-algorand/
 
 export GNUPGHOME=${HOME}/tempkey
@@ -94,5 +98,7 @@ EOF
 
 sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=/run/user/1000/gnupg/S.gpg-agent,dst=/S.gpg-agent --mount type=bind,src=${HOME}/dummyrepo,dst=/dummyrepo --mount type=bind,src=${HOME}/docker_test_resources,dst=/root/stuff --mount type=bind,src=${HOME}/go,dst=/root/go --mount type=bind,src=${HOME},dst=/root/subhome --mount type=bind,src=/usr/local/go,dst=/usr/local/go algocentosbuild /root/go/src/github.com/algorand/go-algorand/scripts/release/helper/build_release_centos_docker.sh"
 
-date "+build_release done packaging centos %Y%m%d_%H%M%S"
+echo
+date "+build_release end TEST stage %Y%m%d_%H%M%S"
+echo
 

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
-date "+build_release start %Y%m%d_%H%M%S"
+echo
+date "+build_release begin BUILD stage %Y%m%d_%H%M%S"
+echo
 
 set -ex
 
@@ -80,4 +82,8 @@ scripts/build_packages.sh "${PLATFORM}"
 cd "${REPO_ROOT}"/docker/release
 sg docker "./build_algod_docker.sh ${HOME}/node_pkg/node_${CHANNEL}_${OS}-${ARCH}_${FULLVERSION}.tar.gz"
 cd "${REPO_ROOT}"/scripts
+
+echo
+date "+build_release end BUILD stage %Y%m%d_%H%M%S"
+echo
 
