@@ -71,6 +71,14 @@ func (f *GoalFixture) executeCommand(args ...string) (retStdout string, retStder
 	return
 }
 
+// combine the error and the output so that we could return it as a single error object.
+func combineExecuteError(retStdout string, retStderr string, err error) error {
+	if err == nil {
+		return err
+	}
+	return fmt.Errorf("%v\nStdout:\n%s\nStderr:\n%s", err, retStdout, retStderr)
+}
+
 // AccountNew exposes the `goal account new` command
 func (f *GoalFixture) AccountNew(name string) (address string, err error) {
 	stdout, stderr, err := f.executeCommand(accountCmd, newCmd, name)
@@ -79,7 +87,7 @@ func (f *GoalFixture) AccountNew(name string) (address string, err error) {
 		if strings.Contains(stderr, "is already taken") {
 			return "", ErrAccountAlreadyTaken
 		}
-		return
+		return "", combineExecuteError(stdout, stderr, err)
 	}
 	valid := strings.HasPrefix(stdout, "Created new account with address")
 	if !valid {
@@ -97,7 +105,7 @@ func (f *GoalFixture) AccountNew(name string) (address string, err error) {
 func (f *GoalFixture) AccountRename(name, newName string) (err error) {
 	stdout, stderr, err := f.executeCommand(accountCmd, renameCmd, name, newName)
 	if err != nil {
-		return
+		return combineExecuteError(stdout, stderr, err)
 	}
 
 	if strings.Contains(stdout, "Renamed") {
@@ -110,9 +118,9 @@ func (f *GoalFixture) AccountRename(name, newName string) (err error) {
 // CheckAccountListContainsAccount processes the `goal account list` results and returns true
 // if the provided matcher matches one of the results
 func (f *GoalFixture) CheckAccountListContainsAccount(matcher func([]string) bool) (bool, error) {
-	stdout, _, err := f.executeCommand(accountCmd, listCmd)
+	stdout, stderr, err := f.executeCommand(accountCmd, listCmd)
 	if err != nil {
-		return false, err
+		return false, combineExecuteError(stdout, stderr, err)
 	}
 
 	accounts := strings.Split(stdout, "\n")
@@ -135,7 +143,7 @@ func (f *GoalFixture) CheckAccountListContainsAccount(matcher func([]string) boo
 func (f *GoalFixture) NodeStart() error {
 	stdout, stderr, err := f.executeCommand(nodeCmd, startCmd)
 	if err != nil {
-		return err
+		return combineExecuteError(stdout, stderr, err)
 	}
 	if !strings.Contains(stdout, "Algorand node successfully started") {
 		err = fmt.Errorf("failed to start node: %s", stderr)
@@ -147,7 +155,7 @@ func (f *GoalFixture) NodeStart() error {
 func (f *GoalFixture) NodeStop() error {
 	stdout, stderr, err := f.executeCommand(nodeCmd, stopCmd)
 	if err != nil {
-		return err
+		return combineExecuteError(stdout, stderr, err)
 	}
 	if !strings.Contains(stdout, "The node was successfully stopped") {
 		err = fmt.Errorf("failed to stop node: %s", stderr)
@@ -159,14 +167,14 @@ func (f *GoalFixture) NodeStop() error {
 func (f *GoalFixture) ClerkSend(from, to string, amount, fee int64, note string) (string, error) {
 	// Successful send returns response in form of:
 	// Sent <amt> algos from account <from> to address <to>, transaction ID: tx-<txID>. Fee set to <fee>
-	stdout, _, err := f.executeCommand(clerkCmd, sendCmd,
+	stdout, stderr, err := f.executeCommand(clerkCmd, sendCmd,
 		fromParam, from,
 		toParam, to,
 		feeParam, strconv.FormatInt(fee, 10),
 		amountParam, strconv.FormatInt(amount, 10),
 		noteParam, note)
 	if err != nil {
-		return "", err
+		return "", combineExecuteError(stdout, stderr, err)
 	}
 	return parseClerkSendResponse(stdout)
 }
@@ -175,14 +183,14 @@ func (f *GoalFixture) ClerkSend(from, to string, amount, fee int64, note string)
 func (f *GoalFixture) ClerkSendNoteb64(from, to string, amount, fee int64, noteb64 string) (string, error) {
 	// Successful send returns response in form of:
 	// Sent <amt> algos from account <from> to address <to>, transaction ID: tx-<txID>. Fee set to <fee>
-	stdout, _, err := f.executeCommand(clerkCmd, sendCmd,
+	stdout, stderr, err := f.executeCommand(clerkCmd, sendCmd,
 		fromParam, from,
 		toParam, to,
 		feeParam, strconv.FormatInt(fee, 10),
 		amountParam, strconv.FormatInt(amount, 10),
 		noteb64Param, noteb64)
 	if err != nil {
-		return "", err
+		return "", combineExecuteError(stdout, stderr, err)
 	}
 
 	return parseClerkSendResponse(stdout)
