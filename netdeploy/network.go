@@ -139,7 +139,7 @@ func (n Network) PrimaryDataDir() string {
 }
 
 // NodeDataDirs returns an array of node data directories (not the relays)
-func (n *Network) NodeDataDirs() []string {
+func (n Network) NodeDataDirs() []string {
 	var directories []string
 	for _, nodeDir := range n.nodeDirs {
 		directories = append(directories, n.getNodeFullPath(nodeDir))
@@ -206,7 +206,7 @@ func saveNetworkCfg(cfg NetworkCfg, configFile string) error {
 	return err
 }
 
-func (n Network) scanForNodes() error {
+func (n *Network) scanForNodes() error {
 	// Enumerate direct sub-directories of our root and look for valid node data directories (where genesis.json exists)
 	entries, err := ioutil.ReadDir(n.rootDir)
 	if err != nil {
