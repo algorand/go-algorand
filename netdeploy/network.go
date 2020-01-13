@@ -279,6 +279,10 @@ func (n *Network) Start(binDir string, redirectOutput bool) error {
 			peerAddressListBuilder.WriteString(";")
 		}
 		peerAddressListBuilder.WriteString(relayAddress)
+
+		algodKmdPath, _ := filepath.Abs(filepath.Join(nodeFulllPath, libgoal.DefaultKMDDataDir))
+		nc.SetKMDDataDir(algodKmdPath)
+
 		n.runningNCsMu.Lock()
 		n.runningNCs[nodeFulllPath] = &nc
 		n.runningNCsMu.Unlock()
@@ -402,6 +406,8 @@ func (n *Network) Stop(binDir string) {
 			pnc := n.runningNCs[relayFullPath]
 			if pnc == nil {
 				nc := nodecontrol.MakeNodeController(binDir, relayFullPath)
+				algodKmdPath, _ := filepath.Abs(filepath.Join(relayFullPath, libgoal.DefaultKMDDataDir))
+				nc.SetKMDDataDir(algodKmdPath)
 				pnc = &nc
 			} else {
 				delete(n.runningNCs, relayFullPath)
@@ -413,6 +419,8 @@ func (n *Network) Stop(binDir string) {
 			pnc := n.runningNCs[nodeFullPath]
 			if pnc == nil {
 				nc := nodecontrol.MakeNodeController(binDir, nodeFullPath)
+				algodKmdPath, _ := filepath.Abs(filepath.Join(nodeFullPath, libgoal.DefaultKMDDataDir))
+				nc.SetKMDDataDir(algodKmdPath)
 				pnc = &nc
 			} else {
 				delete(n.runningNCs, nodeFullPath)
