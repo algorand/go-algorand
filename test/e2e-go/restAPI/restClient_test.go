@@ -19,14 +19,16 @@ package restapi
 import (
 	"context"
 	"errors"
+	"flag"
 	"math"
 	"math/rand"
+	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 	"unicode"
-	"runtime"
 
 	"github.com/stretchr/testify/require"
 
@@ -43,8 +45,19 @@ import (
 var fixture fixtures.RestClientFixture
 
 func TestMain(m *testing.M) {
-	fixture.SetupShared("RestClientTests", filepath.Join("nettemplates", "TwoNodes50Each.json"))
-	fixture.RunAndExit(m)
+	listMode := false
+	flag.Parse()
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "test.list" {
+			listMode = true
+		}
+	})
+	if !listMode {
+		fixture.SetupShared("RestClientTests", filepath.Join("nettemplates", "TwoNodes50Each.json"))
+		fixture.RunAndExit(m)
+	} else {
+		os.Exit(m.Run())
+	}
 }
 
 // helper generates a random Uppercase Alphabetic ASCII char
