@@ -274,9 +274,6 @@ func (n Network) Start(binDir string, redirectOutput bool) error {
 			peerAddressListBuilder.WriteString(";")
 		}
 		peerAddressListBuilder.WriteString(relayAddress)
-
-		algodKmdPath, _ := filepath.Abs(filepath.Join(nodeFulllPath, libgoal.DefaultKMDDataDir))
-		nc.SetKMDDataDir(algodKmdPath)
 	}
 
 	peerAddressList := peerAddressListBuilder.String()
@@ -304,7 +301,6 @@ func (n Network) getRelayAddress(nc nodecontrol.NodeController) (relayAddress st
 // outside of the main 'Start' call.
 func (n Network) GetPeerAddresses(binDir string) []string {
 	var peerAddresses []string
-
 	for _, relayDir := range n.cfg.RelayDirs {
 		nc := nodecontrol.MakeNodeController(binDir, n.getNodeFullPath(relayDir))
 		relayAddress, err := nc.GetListeningAddress()
@@ -355,7 +351,6 @@ func (n Network) Stop(binDir string) {
 		}()
 		nc.FullStop()
 	}
-
 	for _, relayDir := range n.cfg.RelayDirs {
 		relayDataDir := n.getNodeFullPath(relayDir)
 		nc := nodecontrol.MakeNodeController(binDir, relayDataDir)
@@ -370,7 +365,6 @@ func (n Network) Stop(binDir string) {
 		nc.SetKMDDataDir(algodKmdPath)
 		go stopNodeContoller(&nc)
 	}
-
 	// wait until we finish stopping all the node controllers.
 	for i := cap(c); i > 0; i-- {
 		<-c
