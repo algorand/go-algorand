@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -221,7 +221,7 @@ func (t NetworkTemplate) Validate() error {
 func (node nodeConfig) createConfigFile(configFile string, numNodes int) error {
 	// Override default :8080 REST endpoint, and disable SRV lookup
 	configString := `{ "GossipFanout": ` + fmt.Sprintf("%d", numNodes) +
-		`, "EndpointAddress": "127.0.0.1:0", "DNSBootstrapID": ""`
+		`, "EndpointAddress": "127.0.0.1:0", "DNSBootstrapID": "", "EnableProfiler": true`
 	if node.IsRelay {
 		// Have relays listen on any localhost port
 		configString += `, "NetAddress": "127.0.0.1:0"`

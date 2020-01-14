@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -231,6 +231,8 @@ func (f *LibGoalFixture) Start() {
 	f.failOnError(err, "make libgoal client failed: %v")
 	f.LibGoalClient = client
 	f.NC = nodecontrol.MakeNodeController(f.binDir, f.network.PrimaryDataDir())
+	algodKmdPath, _ := filepath.Abs(filepath.Join(f.PrimaryDataDir(), libgoal.DefaultKMDDataDir))
+	f.NC.SetKMDDataDir(algodKmdPath)
 	f.clientPartKeys = make(map[string][]account.Participation)
 	f.importRootKeys(&f.LibGoalClient, f.PrimaryDataDir())
 }
@@ -263,6 +265,7 @@ func (f *LibGoalFixture) Shutdown() {
 
 // ShutdownImpl implements the Fixture.ShutdownImpl method
 func (f *LibGoalFixture) ShutdownImpl(preserveData bool) {
+	f.NC.StopKMD()
 	if preserveData {
 		f.network.Stop(f.binDir)
 	} else {

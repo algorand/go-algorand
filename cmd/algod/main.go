@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -153,19 +153,33 @@ func main() {
 	}
 	defer fileLock.Unlock()
 
+	cfg, err := config.LoadConfigFromDisk(absolutePath)
+	if err != nil && !os.IsNotExist(err) {
+		// log is not setup yet, this will log to stderr
+		log.Fatalf("Cannot load config: %v", err)
+	}
+
 	// Enable telemetry hook in daemon to send logs to cloud
 	// If ALGOTEST env variable is set, telemetry is disabled - allows disabling telemetry for tests
 	isTest := os.Getenv("ALGOTEST") != ""
+	remoteTelemetryEnabled := false
 	if !isTest {
 		telemetryConfig, err := logging.EnsureTelemetryConfig(&dataDir, genesis.ID())
 		if err != nil {
 			fmt.Fprintln(os.Stdout, "error loading telemetry config", err)
 		}
+		if os.IsPermission(err) {
+			fmt.Fprintf(os.Stderr, "Permission error on accessing telemetry config: %v", err)
+			os.Exit(1)
+		}
+
+		telemetryConfig.SendToLog = telemetryConfig.SendToLog || cfg.TelemetryToLog
 
 		// Apply telemetry override.
 		telemetryConfig.Enable = logging.TelemetryOverride(*telemetryOverride)
+		remoteTelemetryEnabled = telemetryConfig.Enable
 
-		if telemetryConfig.Enable {
+		if telemetryConfig.Enable || telemetryConfig.SendToLog {
 			// If session GUID specified, use it.
 			if *sessionGUID != "" {
 				if len(*sessionGUID) == 36 {
@@ -182,12 +196,6 @@ func main() {
 	s := algod.Server{
 		RootPath: absolutePath,
 		Genesis:  genesis,
-	}
-
-	cfg, err := config.LoadConfigFromDisk(s.RootPath)
-	if err != nil && !os.IsNotExist(err) {
-		// log is not setup yet, this will log to stderr
-		log.Fatalf("Cannot load config: %v", err)
 	}
 
 	// Generate a REST API token if one was not provided
@@ -265,7 +273,7 @@ func main() {
 		cfgCopy.DNSBootstrapID = telemetryDNSBootstrapID
 
 		// If the telemetry URI is not set, periodically check SRV records for new telemetry URI
-		if log.GetTelemetryURI() == "" {
+		if remoteTelemetryEnabled && log.GetTelemetryURI() == "" {
 			network.StartTelemetryURIUpdateService(time.Minute, cfg, s.Genesis.Network, log, done)
 		}
 

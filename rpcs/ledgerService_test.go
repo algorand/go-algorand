@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -113,10 +113,11 @@ func TestGetBlockHTTP(t *testing.T) {
 
 	start := time.Now()
 	block, cert, client, err = fetcher.FetchBlock(context.Background(), next)
+	end := time.Now()
 	require.NotNil(t, client)
 	require.NoError(t, err)
-	end := time.Now()
-	require.True(t, end.Sub(start) < goExecTime+10*time.Millisecond)
+
+	require.True(t, end.Sub(start) < 10*time.Second)
 	require.Equal(t, &b, block)
 	if err == nil {
 		require.NotEqual(t, nil, block)
@@ -211,7 +212,7 @@ func TestGetBlockWS(t *testing.T) {
 	require.NotNil(t, client)
 	require.NoError(t, err)
 	end := time.Now()
-	require.True(t, end.Sub(start) < goExecTime+10*time.Millisecond)
+	require.True(t, end.Sub(start) < 10*time.Second)
 	require.Equal(t, &b, block)
 	if err == nil {
 		require.NotEqual(t, nil, block)

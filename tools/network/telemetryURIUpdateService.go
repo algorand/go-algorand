@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -61,7 +61,10 @@ func (t *telemetryURIUpdater) Start() {
 			endpointURL := t.lookupTelemetryURL()
 
 			if endpointURL != nil && endpointURL.String() != t.log.GetTelemetryURI() {
-				t.log.UpdateTelemetryURI(endpointURL.String())
+				err := t.log.UpdateTelemetryURI(endpointURL.String())
+				if err != nil {
+					t.log.Warnf("Unable to update telemetry URI to '%s' : %v", endpointURL.String(), err)
+				}
 			}
 		}
 

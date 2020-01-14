@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -36,13 +36,15 @@ type TelemetryOperation struct {
 }
 
 type telemetryState struct {
-	history *logBuffer
-	hook    *asyncTelemetryHook
+	history   *logBuffer
+	hook      *asyncTelemetryHook
+	sendToLog bool
 }
 
 // TelemetryConfig represents the configuration of Telemetry logging
 type TelemetryConfig struct {
 	Enable             bool
+	SendToLog          bool
 	URI                string
 	Name               string
 	GUID               string
