@@ -2,7 +2,7 @@
 #
 # This script exists to give a trap atexit context for killing the httpd so that we're not waiting on that
 
-#set -ex
+set -ex
 
 (cd "${HOME}"/dummyaptly/public && python3 "${HOME}"/go/src/github.com/algorand/go-algorand/scripts/httpd.py --pid "${HOME}"/phttpd.pid) &
 trap "${HOME}"/go/src/github.com/algorand/go-algorand/scripts/kill_httpd.sh 0

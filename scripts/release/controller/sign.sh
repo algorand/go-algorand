@@ -9,7 +9,6 @@ echo
 set -ex
 
 # Anchor our repo root reference location
-#REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"/..
 REPO_ROOT="${HOME}"/go/src/github.com/algorand/go-algorand/
 
 git archive --prefix="algorand-${FULLVERSION}/" "${TAG}" | gzip > "${PKG_ROOT}/algorand_${CHANNEL}_source_${FULLVERSION}.tar.gz"
@@ -40,9 +39,6 @@ gpg -u "${SIGNING_KEY_ADDR}" --detach-sign "${HASHFILE}"
 gpg -u "${SIGNING_KEY_ADDR}" --clearsign "${HASHFILE}"
 
 cp -p "${REPO_ROOT}/installer/rpm/algorand.repo" "${HOME}/prodrepo/algorand.repo"
-
-#gpg --export -a dev@algorand.com > "${HOME}/docker_test_resources/key.pub"
-#gpg --export -a rpm@algorand.com > "${HOME}/docker_test_resources/rpm.pub"
 
 echo
 date "+build_release end SIGN stage %Y%m%d_%H%M%S"

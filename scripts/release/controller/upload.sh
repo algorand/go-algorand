@@ -86,7 +86,7 @@ dpkg -l >> "${STATUSFILE}"
 gpg --clearsign "${STATUSFILE}"
 gzip "${STATUSFILE}".asc
 
-#"${REPO_ROOT}"/scripts/release/helper/release_deb.sh
+"${REPO_ROOT}"/scripts/release/helper/release_deb.sh
 
 echo
 date "+build_release end UPLOAD stage %Y%m%d_%H%M%S"

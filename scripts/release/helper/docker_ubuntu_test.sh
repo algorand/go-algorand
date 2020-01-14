@@ -8,7 +8,7 @@
 # --mount type=bind,src=${GOPATH}/src,dst=/root/go/src
 # --mount type=bind,src=/usr/local/go,dst=/usr/local/go
 
-#set -ex
+set -ex
 
 export GOPATH=${HOME}/go
 export PATH=${GOPATH}/bin:/usr/local/go/bin:${PATH}
@@ -31,13 +31,6 @@ goal node start -d /root/testnode
 goal node wait -d /root/testnode -w 120
 goal node stop -d /root/testnode
 
-# Use cURL to fetch the pubkey b/c using apt-key causes the following error:
-#apt-key adv --fetch-keys https://releases.algorand.com/key.pub
-#https://releases.algorand.com/key.pub
-#gpgkeys: protocol `https' not supported
-
-#curl -o /root/stuff/key.pub https://releases.algorand.com/key.pub
-#chown ubuntu:ubuntu /root/stuff/key.pub
 #apt-key add /root/stuff/key.pub
 apt-key add /root/stuff/rpm.pub
 add-apt-repository "deb http://${DC_IP}:8111/ stable main"

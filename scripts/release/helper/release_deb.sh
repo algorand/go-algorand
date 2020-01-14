@@ -11,10 +11,9 @@ if [ -z "${APTLY_DIR}" ]; then
     APTLY_DIR=${HOME}/.aptly
 fi
 
-#if [ -z "${APTLY_S3_NAME}" ]; then
-#    APTLY_S3_NAME=algorand-releases
-APTLY_S3_NAME=ben-test-release-bucket
-#fi
+if [ -z "${APTLY_S3_NAME}" ]; then
+    APTLY_S3_NAME=algorand-builds
+fi
 
 cat <<EOF>"${HOME}"/.aptly.conf
 {
