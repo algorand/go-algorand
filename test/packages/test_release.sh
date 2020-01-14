@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
-BLUE_FG=$(tput setaf 4)
-GREEN_FG=$(tput setaf 2)
-RED_FG=$(tput setaf 1)
-TEAL_FG=$(tput setaf 6)
-END_FG_COLOR=$(tput sgr0)
+GREEN_FG=$(tput setaf 2 2>/dev/null)
+RED_FG=$(tput setaf 1 2>/dev/null)
+TEAL_FG=$(tput setaf 6 2>/dev/null)
+BLUE_FG=$(tput setaf 4 2>/dev/null)
+END_FG_COLOR=$(tput sgr0 2>/dev/null)
 
 if [[ ! "$AWS_ACCESS_KEY_ID" || ! "$AWS_SECRET_ACCESS_KEY" ]]
 then
@@ -22,10 +22,8 @@ OS_LIST=(
     ubuntu:18.04
 )
 
-# These are default values which can be changed by the CLI args.
 BUCKET=algorand-builds
 CHANNEL=stable
-
 FAILED=()
 
 while [ "$1" != "" ]; do
@@ -39,7 +37,7 @@ while [ "$1" != "" ]; do
             CHANNEL="$1"
             ;;
         *)
-            echo "Unknown option $1"
+            echo "$RED_FG[$0]$END_FG_COLOR Unknown option $1"
             exit 1
             ;;
     esac
@@ -135,5 +133,4 @@ check_failures run
 echo "$GREEN_FG[$0]$END_FG_COLOR Runs completed with no failures."
 
 cleanup
-exit 0
 

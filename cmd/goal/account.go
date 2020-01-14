@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -859,7 +859,8 @@ var listParticipationKeysCmd = &cobra.Command{
 			if err == nil {
 				votingBytes := parts[fn].Voting.OneTimeSignatureVerifier
 				vrfBytes := parts[fn].VRF.PK
-				if string(onlineAccountInfo.Participation.ParticipationPK) == string(votingBytes[:]) &&
+				if onlineAccountInfo.Participation != nil &&
+					(string(onlineAccountInfo.Participation.ParticipationPK) == string(votingBytes[:])) &&
 					(string(onlineAccountInfo.Participation.VRFPK) == string(vrfBytes[:])) &&
 					(onlineAccountInfo.Participation.VoteFirst == uint64(parts[fn].FirstValid)) &&
 					(onlineAccountInfo.Participation.VoteLast == uint64(parts[fn].LastValid)) &&

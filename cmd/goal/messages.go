@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -57,7 +57,8 @@ const (
 	infoNodeAlreadyStarted           = "Algorand node was already started!"
 	infoTryingToStopNode             = "Trying to stop the node..."
 	infoNodeSuccessfullyStopped      = "The node was successfully stopped."
-	infoNodeStatus                   = "Last committed block: %d\nTime since last block: %s\nSync Time: %s\nLast consensus protocol: %s\nNext consensus protocol: %s\nRound for next consensus protocol: %d\nNext consensus protocol supported: %v\nHas Synced Since Startup: %t"
+	infoNodeStatus                   = "Last committed block: %d\nTime since last block: %s\nSync Time: %s\nLast consensus protocol: %s\nNext consensus protocol: %s\nRound for next consensus protocol: %d\nNext consensus protocol supported: %v"
+	catchupStoppedOnUnsupported      = "Last supported block (%d) is committed. The next block consensus protocol is not supported. Catchup service is stopped."
 	errorNodeCreationIPFailure       = "Parsing passed IP %v failed: need a valid IPv4 or IPv6 address with a specified port number"
 	errorNodeNotDetected             = "Algorand node does not appear to be running: %s"
 	errorNodeStatus                  = "Cannot contact Algorand node: %s."
@@ -94,6 +95,9 @@ const (
 	soFlagError     = "-s is not meaningful without -o"
 	infoRawTxIssued = "Raw transaction ID %s issued"
 	txPoolError     = "Transaction %s kicked out of local node pool: %s"
+	addrNoSigError  = "Exactly one of --address or --no-sig is required"
+	msigLookupError = "Could not lookup multisig information: %s"
+	msigParseError  = "Multisig information parsing error: %s"
 
 	infoAutoFeeSet = "Automatically set fee to %d MicroAlgos"
 
