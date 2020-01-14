@@ -157,7 +157,6 @@ const ConsensusTestUnupgradedProtocol = ConsensusVersion("test-unupgraded-protoc
 // It is used as an upgrade from ConsensusTestUnupgradedProtocol
 const ConsensusTestUnupgradedToProtocol = ConsensusVersion("test-unupgradedto-protocol")
 
-
 // ConsensusTestFastUpgrade is meant for testing of protocol upgrades:
 // during testing, it is equivalent to another protocol with the exception
 // of the upgrade parameters, which allow for upgrades to take place after

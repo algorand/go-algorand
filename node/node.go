@@ -556,7 +556,7 @@ func (node *AlgorandFullNode) Status() (s StatusReport, err error) {
 	s.CatchupTime = node.syncer.SynchronizingTime()
 	s.HasSyncedSinceStartup = node.hasSyncedSinceStartup
 	s.StoppedAtUnsupportedRound = s.LastRound+1 == s.NextVersionRound && !s.NextVersionSupported
-		
+
 	return
 }
 

@@ -19,9 +19,9 @@ package transactions
 import (
 	"fmt"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
-	"runtime"
 
 	"github.com/stretchr/testify/require"
 
