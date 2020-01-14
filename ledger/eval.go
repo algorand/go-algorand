@@ -668,13 +668,13 @@ type evalTxValidator struct {
 	done     chan error
 }
 
-func (tv *evalTxValidator) run() {
-	for txgroup := range tv.txgroups {
+func (validator *evalTxValidator) run() {
+	for txgroup := range validator.txgroups {
 		select {
-		case <-tv.ctx.Done():
-			tv.done <- tv.ctx.Err()
-			tv.cf()
-			close(tv.done)
+		case <-validator.ctx.Done():
+			validator.done <- validator.ctx.Err()
+			validator.cf()
+			close(validator.done)
 			return
 		default:
 		}
@@ -682,20 +682,19 @@ func (tv *evalTxValidator) run() {
 		for i := range txgroup {
 			groupNoAD[i] = txgroup[i].SignedTxn
 		}
-		ctxs := verify.PrepareContexts(groupNoAD, tv.block.BlockHeader)
+		ctxs := verify.PrepareContexts(groupNoAD, validator.block.BlockHeader)
 
 		for gi, tx := range txgroup {
-			err := validateTransaction(tx.SignedTxn, tv.block, tv.proto, tv.txcache, ctxs[gi], tv.verificationPool)
+			err := validateTransaction(tx.SignedTxn, validator.block, validator.proto, validator.txcache, ctxs[gi], validator.verificationPool)
 			if err != nil {
-				//logging.Base().Errorf("evalTxValidator reject tx %s", tx.ID())
-				tv.done <- err
-				tv.cf()
-				close(tv.done)
+				validator.done <- err
+				validator.cf()
+				close(validator.done)
 				return
 			}
 		}
 	}
-	close(tv.done)
+	close(validator.done)
 }
 
 func validateTransaction(txn transactions.SignedTxn, block bookkeeping.Block, proto config.ConsensusParams, txcache VerifiedTxnCache, ctx verify.Context, verificationPool execpool.BacklogPool) error {
@@ -703,12 +702,6 @@ func validateTransaction(txn transactions.SignedTxn, block bookkeeping.Block, pr
 	err := txn.Txn.Alive(block)
 	if err != nil {
 		return err
-	}
-
-	// Well-formed on its own?
-	err = txn.Txn.WellFormed(ctx.CurrSpecAddrs, proto)
-	if err != nil {
-		return fmt.Errorf("transaction %v: malformed: %v", txn.ID(), err)
 	}
 
 	if txcache == nil || !txcache.Verified(txn, ctx.Params) {
