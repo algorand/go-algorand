@@ -19,7 +19,6 @@ export GOPATH=${HOME}/go
 export PATH=${GOPATH}/bin:/usr/local/go/bin:${PATH}
 
 # Anchor our repo root reference location
-#REPO_DIR="$( cd "$(dirname "$0")" ; pwd -P )"/..
 REPO_DIR=/root/go/src/github.com/algorand/go-algorand
 
 ${REPO_DIR}/scripts/configure_dev-deps.sh

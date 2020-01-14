@@ -1,6 +1,6 @@
 pipeline {
     parameters {
-        string defaultValue: '', description: 'Branch name, commit hash or tag name.', name: 'hash', trim: true
+        string defaultValue: '', description: 'Branch name or tag name.', name: 'hash', trim: true
         string defaultValue: 'stable', description: 'Staged channel which should be released.', name: 'channel', trim: true
         string defaultValue: 's3://algorand-dev-deb-repo/releases', description: 's3://bucket/prefix', name: 'bucket_location', trim: true
 
@@ -57,7 +57,6 @@ pipeline {
 
         stage("upload") {
             steps {
-                input "Halt"
                 script {
                     def rstamp = sh(
                         script: 'scripts/reverse_hex_timestamp',
