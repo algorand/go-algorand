@@ -136,6 +136,13 @@ type AccountData struct {
 	// structs; allocate a copy and modify that instead.  AccountData
 	// is expected to have copy-by-value semantics.
 	Assets map[AssetIndex]AssetHolding `codec:"asset"`
+
+	// Storage is a small amount of storage for use by contracts.
+	//
+	// NOTE: do not modify this value in-place in existing AccountData
+	// structs; allocate a copy and modify that instead.  AccountData
+	// is expected to have copy-by-value semantics.
+	Storage []byte
 }
 
 // AccountDetail encapsulates meaningful details about a given account, for external consumption

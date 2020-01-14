@@ -16,6 +16,10 @@
 
 package transactions
 
+import (
+	"bytes"
+)
+
 // Transactions for off-chain execution of code.
 //
 // We currently cannot carry ordinary signatures through the system,
@@ -39,6 +43,28 @@ const (
 
 // ExecTxnFields captures the fields used by exec transactions.
 type ExecTxnFields struct {
-	_struct   struct{} `codec:",omitempty,omitemptyarray"`
-	ExecPhase ExecTxnPhase
+	_struct          struct{} `codec:",omitempty,omitemptyarray"`
+	ExecPhase        ExecTxnPhase
+	oldData, newData []byte
+}
+
+func (exec ExecTxnFields) apply(header Header, balances Balances, spec SpecialAddresses, ad *ApplyData) error {
+
+	account, err := balances.Get(header.Sender, false)
+	if err != nil {
+		return err
+	}
+	switch exec.ExecPhase {
+	case ExecRequest: // save initial state of data
+		exec.oldData = account.Storage
+	case ExecCommit: // if data is unchanged copy in new data
+		if bytes.Equal(account.Storage, exec.oldData) {
+			account.Storage = exec.newData
+			exec.newData = nil
+		} else {
+			exec.ExecPhase = ExecFail
+		}
+		exec.oldData = nil
+	}
+	return nil
 }

@@ -20,7 +20,10 @@ import (
 	"bytes"
 	"io/ioutil"
 	"os/exec"
+	//	"github.com/algorand/go-algorand/data/transactions"
+	//	"github.com/algorand/go-algorand/daemon/algod/api/client"
 )
+type RestClient int // TODO
 
 // ExecTxnSpawn spawns a VM to execute transaction code.
 //
@@ -31,46 +34,49 @@ func ExecTxnSpawn(txn SignedTxn, client RestClient) error {
 
 	// unpack transaction
 	code := txn.Lsig.Logic
-	execType := txn.Txn.ExecType
+	execType := txn.Txn.ExecPhase
 	input := txn.Txn.Note
+	// TODO add account Storage to input
 
 	if execType != ExecRequest {
-		sendResultTransaction(txn, ExecFail, input)
-		return nil
+		err := sendTxn(txn, ExecFail, input, client)
+		return err
 	}
 
 	// copy code to temp file
 	temp, err := ioutil.TempFile("", "exec")
 	if err != nil {
-		sendResultTransaction(txn, ExecFail, input)
-		return nil
+		err := sendTxn(txn, ExecFail, input, client)
+		return err
 	}
 	defer temp.Close()
 	_, err = temp.Write(code)
 	if err != nil {
-		sendTxn(client, txn, ExecFail, input)
+		sendTxn(txn, ExecFail, input, client)
 		return nil
 	}
 
 	// Spawn WAVM to execute the wasm.  TODO Parameterize command.
 	cmd := exec.Command("wavm", "run", "--abi=wasi", temp.Name())
 	cmd.Stdin = bytes.NewBuffer(input)
-	var stdin, stdout, stderr bytes.Buffer
+	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	err = cmd.Run()
 	if err != nil {
-		sendTxn(client, txn, ExecFail, stderr.Bytes())
-		return nil
+		err := sendTxn(txn, ExecFail, stderr.Bytes(), client)
+		return err
 	}
-	sendTxn(txn, ExecCommit, stdout.Bytes())
+	sendTxn(txn, ExecCommit, stdout.Bytes(), client)
 	return nil
 }
 
-func sendTxn(txn SignedTxn, execType ExecTxnPhase, output []byte, client RestClient) {
-	txn.Txn.execType = execType
+func sendTxn(txn SignedTxn, phase ExecTxnPhase, output []byte, client RestClient) error {
+	txn.Txn.ExecPhase = phase
 	txn.Txn.Note = output
 
 	// TODO convert txn and output into atomic transfer
-	_, err = client.SendRawTransaction(stx)
+//	_, err := client.SendRawTransaction(txn)
+//	return err
+	return nil
 }
