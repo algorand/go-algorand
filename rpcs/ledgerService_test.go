@@ -113,10 +113,11 @@ func TestGetBlockHTTP(t *testing.T) {
 
 	start := time.Now()
 	block, cert, client, err = fetcher.FetchBlock(context.Background(), next)
+	end := time.Now()
 	require.NotNil(t, client)
 	require.NoError(t, err)
-	end := time.Now()
-	require.True(t, end.Sub(start) < goExecTime+10*time.Millisecond)
+
+	require.True(t, end.Sub(start) < 10*time.Second)
 	require.Equal(t, &b, block)
 	if err == nil {
 		require.NotEqual(t, nil, block)
@@ -211,7 +212,7 @@ func TestGetBlockWS(t *testing.T) {
 	require.NotNil(t, client)
 	require.NoError(t, err)
 	end := time.Now()
-	require.True(t, end.Sub(start) < goExecTime+10*time.Millisecond)
+	require.True(t, end.Sub(start) < 10*time.Second)
 	require.Equal(t, &b, block)
 	if err == nil {
 		require.NotEqual(t, nil, block)
