@@ -20,8 +20,10 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -99,12 +101,21 @@ func (f *LibGoalFixture) nodeExitWithError(nc *nodecontrol.NodeController, err e
 	if err == nil {
 		return
 	}
+
 	f.tMu.RLock()
 	defer f.tMu.RUnlock()
 	if f.t == nil {
 		return
 	}
-	f.t.Errorf("Node %s has changed it's status to %v", nc.GetDataDir(), err)
+	exitError, ok := err.(*exec.ExitError)
+	if !ok {
+		require.NoError(f.t, err, "Node at %s has terminated with an error", nc.GetDataDir())
+		return
+	}
+	ws := exitError.Sys().(syscall.WaitStatus)
+	exitCode := ws.ExitStatus()
+
+	require.NoError(f.t, err, "Node at %s has terminated with error code %d", nc.GetDataDir(), exitCode)
 }
 
 func (f *LibGoalFixture) importRootKeys(lg *libgoal.Client, dataDir string) {

@@ -52,15 +52,15 @@ type Network struct {
 	cfg              NetworkCfg
 	nodeDirs         map[string]string // mapping between the node name and the directories where the node is operation on (not including RelayDirs)
 	gen              gen.GenesisData
-	nodeExitcallback nodecontrol.AlgodExitErrorCallback
+	nodeExitCallback nodecontrol.AlgodExitErrorCallback
 }
 
 // CreateNetworkFromTemplate uses the specified template to deploy a new private network
 // under the specified root directory.
-func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, importKeys bool, nodeExitcallback nodecontrol.AlgodExitErrorCallback) (Network, error) {
+func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, importKeys bool, nodeExitCallback nodecontrol.AlgodExitErrorCallback) (Network, error) {
 	n := Network{
 		rootDir:          rootDir,
-		nodeExitcallback: nodeExitcallback,
+		nodeExitCallback: nodeExitCallback,
 	}
 	n.cfg.Name = name
 	n.cfg.TemplateFile = templateFile
@@ -257,7 +257,7 @@ func (n Network) Start(binDir string, redirectOutput bool) error {
 		nc := nodecontrol.MakeNodeController(binDir, nodeFulllPath)
 		args := nodecontrol.AlgodStartArgs{
 			RedirectOutput:    redirectOutput,
-			ExitErrorCallback: n.nodeExitcallback,
+			ExitErrorCallback: n.nodeExitCallback,
 		}
 
 		_, err := nc.StartAlgod(args)
@@ -315,7 +315,7 @@ func (n Network) startNodes(binDir, relayAddress string, redirectOutput bool) er
 	args := nodecontrol.AlgodStartArgs{
 		PeerAddress:       relayAddress,
 		RedirectOutput:    redirectOutput,
-		ExitErrorCallback: n.nodeExitcallback,
+		ExitErrorCallback: n.nodeExitCallback,
 	}
 	for _, nodeDir := range n.nodeDirs {
 		nc := nodecontrol.MakeNodeController(binDir, n.getNodeFullPath(nodeDir))
