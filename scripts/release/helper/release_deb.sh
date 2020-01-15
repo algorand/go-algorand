@@ -5,19 +5,17 @@
 # To run on an ephemeral instance, mount AWS EFS somewhere and use it:
 # APTLY_DIR=/large/persistent/filesystem ./release_deb.sh *.deb
 
-
-set -e
-set -x
+set -ex
 
 if [ -z "${APTLY_DIR}" ]; then
     APTLY_DIR=${HOME}/.aptly
 fi
 
 if [ -z "${APTLY_S3_NAME}" ]; then
-    APTLY_S3_NAME=algorand-releases
+    APTLY_S3_NAME=algorand-builds
 fi
 
-cat <<EOF>${HOME}/.aptly.conf
+cat <<EOF>"${HOME}"/.aptly.conf
 {
   "rootDir": "${APTLY_DIR}",
   "downloadConcurrency": 4,
@@ -40,7 +38,7 @@ cat <<EOF>${HOME}/.aptly.conf
   "S3PublishEndpoints": {
     "algorand-releases": {
       "region":"us-east-1",
-      "bucket":"algorand-releases",
+      "bucket":"ben-test-release-bucket",
       "acl":"public-read",
       "prefix":"deb"
     }
@@ -49,17 +47,20 @@ cat <<EOF>${HOME}/.aptly.conf
 }
 EOF
 
+#      "bucket":"algorand-releases",
+
 FIRSTTIME=
 if aptly repo create -distribution=stable -component=main algorand; then
    FIRSTTIME=1
 fi
 aptly repo add algorand "$@"
 SNAPSHOT=algorand-$(date +%Y%m%d_%H%M%S)
-aptly snapshot create ${SNAPSHOT} from repo algorand
+aptly snapshot create "${SNAPSHOT}" from repo algorand
 if [ ! -z "${FIRSTTIME}" ]; then
     echo "first publish"
-    aptly publish snapshot -origin=Algorand -label=Algorand ${SNAPSHOT} "s3:${APTLY_S3_NAME}:"
+    aptly publish snapshot -origin=Algorand -label=Algorand "${SNAPSHOT}" "s3:${APTLY_S3_NAME}:"
 else
     echo "publish snapshot ${SNAPSHOT}"
-    aptly publish switch stable "s3:${APTLY_S3_NAME}:" ${SNAPSHOT}
+    aptly publish switch stable "s3:${APTLY_S3_NAME}:" "${SNAPSHOT}"
 fi
+
