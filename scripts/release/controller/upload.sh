@@ -48,7 +48,6 @@ curl --silent http://169.254.169.254/latest/meta-data/ami-id >> "${STATUSFILE}"
 
 cat <<EOF>>"${STATUSFILE}"
 
-
 go version:
 EOF
 
@@ -86,7 +85,11 @@ dpkg -l >> "${STATUSFILE}"
 gpg --clearsign "${STATUSFILE}"
 gzip "${STATUSFILE}".asc
 
-"${REPO_ROOT}"/scripts/release/helper/release_deb.sh
+#"${REPO_ROOT}"/scripts/release/helper/release_deb.sh
+"${HOME}"/ben-branch/scripts/release/helper/release_deb.sh
+
+
+#aws s3 sync --quiet ${HOME}/prodrepo/ s3://algorand-releases/rpm/stable/
 
 echo
 date "+build_release end UPLOAD stage %Y%m%d_%H%M%S"

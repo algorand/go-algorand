@@ -36,11 +36,11 @@ cat <<EOF>"${HOME}"/.aptly.conf
   "skipContentsPublishing": false,
   "FileSystemPublishEndpoints": {},
   "S3PublishEndpoints": {
-    "algorand-releases": {
+    "algorand-internal": {
       "region":"us-east-1",
-      "bucket":"ben-test-release-bucket",
+      "bucket":"algorand-internal",
       "acl":"public-read",
-      "prefix":"deb"
+      "prefix":"ben"
     }
   },
   "SwiftPublishEndpoints": {}
@@ -50,17 +50,18 @@ EOF
 #      "bucket":"algorand-releases",
 
 FIRSTTIME=
-if aptly repo create -distribution=stable -component=main algorand; then
+if "${HOME}"/go/bin/aptly repo create -distribution=stable -component=main algorand; then
    FIRSTTIME=1
 fi
-aptly repo add algorand "$@"
+#"${HOME}"/go/bin/aptly repo add algorand "$@"
+"${HOME}"/go/bin/aptly repo add algorand "${HOME}"/node_pkg/*.deb
 SNAPSHOT=algorand-$(date +%Y%m%d_%H%M%S)
-aptly snapshot create "${SNAPSHOT}" from repo algorand
+"${HOME}"/go/bin/aptly snapshot create "${SNAPSHOT}" from repo algorand
 if [ ! -z "${FIRSTTIME}" ]; then
     echo "first publish"
-    aptly publish snapshot -origin=Algorand -label=Algorand "${SNAPSHOT}" "s3:${APTLY_S3_NAME}:"
+    "${HOME}"/go/bin/aptly publish snapshot -origin=Algorand -label=Algorand "${SNAPSHOT}" "s3:${APTLY_S3_NAME}:"
 else
     echo "publish snapshot ${SNAPSHOT}"
-    aptly publish switch stable "s3:${APTLY_S3_NAME}:" "${SNAPSHOT}"
+    "${HOME}"/go/bin/aptly publish switch stable "s3:${APTLY_S3_NAME}:" "${SNAPSHOT}"
 fi
 

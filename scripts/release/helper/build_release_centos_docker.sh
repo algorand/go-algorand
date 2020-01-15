@@ -18,7 +18,7 @@ export HOME=/root
 
 . "${HOME}"/subhome/build_env
 
-GIT_REPO_PATH=https://github.com/algorand/go-algorand
+GIT_REPO_PATH=https://github.com/btoll/go-algorand
 mkdir -p "${HOME}/go/src/github.com/algorand"
 cd "${HOME}/go/src/github.com/algorand" && git clone --single-branch --branch "${HASH}" "${GIT_REPO_PATH}" go-algorand
 
@@ -51,7 +51,8 @@ cd "${REPO_DIR}"
 
 RPMTMP=$(mktemp -d 2>/dev/null || mktemp -d -t "rpmtmp")
 trap 'rm -rf ${RPMTMP}' 0
-"${REPO_DIR}/scripts/release/helper/build_rpm.sh" "${RPMTMP}"
+#"${REPO_DIR}/scripts/release/helper/build_rpm.sh" "${RPMTMP}"
+"${REPO_DIR}/scripts/build_rpm.sh" "${RPMTMP}"
 cp -p "${RPMTMP}"/*/*.rpm /root/subhome/node_pkg
 
 (cd ${HOME} && tar jxf /root/stuff/gnupg*.tar.bz2)
@@ -68,9 +69,9 @@ else
     echo "no-autostart" >> "${HOME}/.gnupg/gpg.conf"
 fi
 rm -f ${HOME}/.gnupg/S.gpg-agent
-(cd ~/.gnupg && ln -s /S.gpg-agent S.gpg-agent)
+(cd ~/.gnupg && ln -s /root/S.gpg-agent S.gpg-agent)
 
-gpg --import /root/stuff/key.pub
+gpg --import /root/stuff/dev.pub
 gpg --import /root/stuff/rpm.pub
 #gpg --import ${REPO_DIR}/installer/rpm/RPM-GPG-KEY-Algorand
 rpmkeys --import /root/stuff/rpm.pub

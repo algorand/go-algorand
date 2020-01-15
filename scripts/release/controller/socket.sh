@@ -17,6 +17,11 @@ KEYGRIP=$(gpg -K --with-keygrip --textmode dev@algorand.com | grep Keygrip | hea
 echo "enter dev@ password"
 $gpgp --verbose --preset "$KEYGRIP"
 
+KEYGRIP=$(gpg -K --with-keygrip --textmode rpm@algorand.com | grep Keygrip | head -1 | awk '{ print $3 }')
+
+echo "enter rpm@ password"
+$gpgp --verbose --preset "$KEYGRIP"
+
 REMOTE_GPG_SOCKET=$(ssh -o StrictHostKeyChecking=no -i ReleaseBuildInstanceKey.pem ubuntu@"$INSTANCE" gpgbin/remote_gpg_socket)
 LOCAL_GPG_SOCKET=$(gpgconf --list-dirs | grep agent-socket | awk -F: '{ print $2 }')
 
