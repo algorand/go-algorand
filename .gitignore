@@ -51,3 +51,6 @@ crypto/libsodium-fork/build-aux/
 
 # doc intermediates
 data/transactions/logic/*.md
+
+*.pem
+
