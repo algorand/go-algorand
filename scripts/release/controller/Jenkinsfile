@@ -1,0 +1,83 @@
+pipeline {
+    parameters {
+        string defaultValue: '', description: 'Branch name or tag name.', name: 'hash', trim: true
+        string defaultValue: 'stable', description: 'Staged channel which should be released.', name: 'channel', trim: true
+        string defaultValue: 's3://algorand-dev-deb-repo/releases', description: 's3://bucket/prefix', name: 'bucket_location', trim: true
+
+        // AWS
+        string defaultValue: 'us-west-1', description: 'AWS Region', name: 'region', trim: true
+        string defaultValue: 'ami-0dd655843c87b6930', description: 'Amazon Machine Image (default: Ubuntu Server 18.04 LTS, 8 vCPUs, 32 GB RAM', name: 'ami', trim: true
+        string defaultValue: 't2.2xlarge', description: 'Instance Type', name: 'type', trim: true
+    }
+
+    environment {
+        AWS_ACCESS_KEY_ID = credentials("aws-access-key-id")
+        AWS_SECRET_ACCESS_KEY = credentials("aws-secret-access-key")
+    }
+
+    agent any
+
+    stages {
+        stage("create ec2 instance") {
+            steps {
+                sh script: "scripts/release/controller/stages/create.sh ${params.region} ${params.ami} ${params.type}"
+            }
+        }
+
+        stage("setup ec2 instance") {
+            steps {
+                script {
+                    if (params.channel == null || params.channel == "") {
+                        error("Missing required parameter [channel].")
+                    }
+                }
+
+                sh script: "scripts/release/controller/stages/setup.sh ${params.hash} ${params.channel}"
+            }
+        }
+
+        stage("build and package") {
+            steps {
+                sh script: "scripts/release/controller/stages/build.sh ${params.hash} ${params.channel}"
+            }
+        }
+
+        stage("test") {
+            steps {
+                sh script: "scripts/release/controller/stages/test.sh ${params.bucket_location} ${params.channel}"
+            }
+        }
+
+        stage("sign") {
+            steps {
+                input "Forward gpg-agent"
+                sh script: "scripts/release/controller/stages/sign.sh"
+            }
+        }
+
+        stage("upload") {
+            steps {
+                script {
+                    def rstamp = sh(
+                        script: 'scripts/reverse_hex_timestamp',
+                        returnStdout: true
+                    ).trim()
+
+                    def fullversion = sh(
+                        script: 'bash scripts/compute_build_number.sh -f',
+                        returnStdout: true
+                    ).trim()
+
+                    sh script: "scripts/release/controller/stages/upload.sh ${params.channel} ${params.bucket_location} ${rstamp} ${fullversion}"
+                }
+            }
+        }
+
+        stage("delete ec2 instance") {
+            steps {
+                sh script: "scripts/release/controller/stages/delete.sh ${params.region}"
+            }
+        }
+    }
+}
+
