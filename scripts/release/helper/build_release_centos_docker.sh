@@ -18,14 +18,14 @@ export HOME=/root
 
 . "${HOME}"/subhome/build_env
 
-GIT_REPO_PATH=https://github.com/btoll/go-algorand
+GIT_REPO_PATH=https://github.com/algorand/go-algorand
 mkdir -p "${HOME}/go/src/github.com/algorand"
 cd "${HOME}/go/src/github.com/algorand" && git clone --single-branch --branch "${HASH}" "${GIT_REPO_PATH}" go-algorand
 
 # Get golang 1.12 and build its own copy of go-algorand.
 cd "${HOME}"
 python3 "${HOME}/go/src/github.com/algorand/go-algorand/scripts/get_latest_go.py" --version-prefix=1.12
-sudo bash -c "cd /usr/local && tar zxf ${HOME}/go*.tar.gz"
+bash -c "cd /usr/local && tar zxf ${HOME}/go*.tar.gz"
 
 GOPATH=$(/usr/local/go/bin/go env GOPATH)
 export PATH=${HOME}/gpgbin:${GOPATH}/bin:/usr/local/go/bin:${PATH}
@@ -35,8 +35,8 @@ REPO_DIR=/root/go/src/github.com/algorand/go-algorand
 
 # Build!
 "${REPO_DIR}"/scripts/configure_dev-deps.sh
-make crypto/lib/libsodium.a -C "${REPO_ROOT}"
-make build -C "${REPO_ROOT}"
+make crypto/lib/libsodium.a -C "${REPO_DIR}"
+make build -C "${REPO_DIR}"
 
 cd "${REPO_DIR}"
 

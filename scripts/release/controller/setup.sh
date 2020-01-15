@@ -15,7 +15,7 @@ echo
 
 set -ex
 
-GIT_REPO_PATH=https://github.com/btoll/go-algorand
+GIT_REPO_PATH=https://github.com/algorand/go-algorand
 HASH=${1:-"rel/stable"}
 export HASH
 CHANNEL=${1:-"stable"}
