@@ -87,6 +87,7 @@ var defaultLocalV5 = Local{
 	TxSyncIntervalSeconds:                 60,
 	TxSyncTimeoutSeconds:                  30,
 	TxSyncServeResponseSize:               1000000,
+	PeerConnectionsUpdateInterval:         3600,
 	// DO NOT MODIFY VALUES - New values may be added carefully - See WARNING at top of file
 }
 
@@ -138,6 +139,7 @@ var defaultLocalV4 = Local{
 	TxSyncIntervalSeconds:                 60,
 	TxSyncTimeoutSeconds:                  30,
 	TxSyncServeResponseSize:               1000000,
+
 	// DO NOT MODIFY VALUES - New values may be added carefully - See WARNING at top of file
 }
 
@@ -347,7 +349,10 @@ func migrate(cfg Local) (newCfg Local, err error) {
 		if newCfg.CatchupParallelBlocks == defaultLocalV4.CatchupParallelBlocks {
 			newCfg.CatchupParallelBlocks = defaultLocalV5.CatchupParallelBlocks
 		}
-		
+		if newCfg.PeerConnectionsUpdateInterval == defaultLocalV4.PeerConnectionsUpdateInterval {
+			newCfg.PeerConnectionsUpdateInterval = defaultLocalV5.PeerConnectionsUpdateInterval
+		}
+
 		newCfg.Version = 5
 	}
 
