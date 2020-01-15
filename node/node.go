@@ -237,7 +237,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookDir
 		Accessor:       crashAccess,
 		Clock:          timers.MakeMonotonicClock(time.Now()),
 		Local:          node.config,
-		Network:        gossip.WrapNetwork(node.net),
+		Network:        gossip.WrapNetwork(node.net, log),
 		Ledger:         agreementLedger,
 		BlockFactory:   blockFactory,
 		BlockValidator: blockValidator,
@@ -556,7 +556,7 @@ func (node *AlgorandFullNode) Status() (s StatusReport, err error) {
 	s.CatchupTime = node.syncer.SynchronizingTime()
 	s.HasSyncedSinceStartup = node.hasSyncedSinceStartup
 	s.StoppedAtUnsupportedRound = s.LastRound+1 == s.NextVersionRound && !s.NextVersionSupported
-		
+
 	return
 }
 
