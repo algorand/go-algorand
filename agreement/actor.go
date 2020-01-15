@@ -18,8 +18,6 @@ package agreement
 
 import (
 	"fmt"
-
-	"github.com/algorand/go-algorand/logging"
 )
 
 // An actor is a state machine which accepts events and returns sequences of actions.
@@ -89,12 +87,12 @@ func (l checkedActor) handle(r routerHandle, in event) []action {
 
 	for _, pre := range cerrpre {
 		if pre != nil {
-			logging.Base().Warnf("precondition call violation: %v", pre)
+			r.t.log.Warnf("precondition call violation: %v", pre)
 		}
 	}
 	for _, post := range cerrpost {
 		if post != nil {
-			logging.Base().Warnf("postcondition call violation: %v", post)
+			r.t.log.Warnf("postcondition call violation: %v", post)
 		}
 	}
 	//   for _, pre := range terrpre {
