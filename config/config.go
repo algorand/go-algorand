@@ -800,6 +800,10 @@ type Local struct {
 	// telemetry ( when enabled ). Defined in seconds.
 	PeerConnectionsUpdateInterval int
 
+	// EnableProfiler enables the go pprof endpoints, should be false if
+	// the algod api will be exposed to untrusted individuals
+	EnableProfiler bool
+
 	// TelemetryToLog records messages to node.log that are normally sent to remote event monitoring
 	TelemetryToLog bool
 }
