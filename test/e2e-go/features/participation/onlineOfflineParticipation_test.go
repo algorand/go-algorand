@@ -18,8 +18,8 @@ package participation
 
 import (
 	"path/filepath"
+	"runtime"
 	"testing"
-	"runtime" 
 
 	"github.com/stretchr/testify/require"
 
@@ -52,7 +52,7 @@ func TestParticipationKeyOnlyAccountParticipatesCorrectly(t *testing.T) {
 	// since block proposer selection is probabilistic, it is not guaranteed that the account will be chosen
 	// it is a trade-off between test flakiness and test duration
 	proposalWindow := 50 // arbitrary
-	blockWasProposedByPartkeyOnlyAccountRecently := waitForAccountToProposeBlock(a, fixture, partkeyOnlyAccount, proposalWindow)
+	blockWasProposedByPartkeyOnlyAccountRecently := waitForAccountToProposeBlock(a, &fixture, partkeyOnlyAccount, proposalWindow)
 	a.True(blockWasProposedByPartkeyOnlyAccountRecently, "partkey-only account should be proposing blocks")
 
 	// verify partkeyonly_account cannot spend
@@ -71,7 +71,7 @@ func TestParticipationKeyOnlyAccountParticipatesCorrectly(t *testing.T) {
 	a.Error(err, "partkey only account should fail to go offline")
 }
 
-func waitForAccountToProposeBlock(a *require.Assertions, fixture fixtures.RestClientFixture, account string, window int) bool {
+func waitForAccountToProposeBlock(a *require.Assertions, fixture *fixtures.RestClientFixture, account string, window int) bool {
 	client := fixture.AlgodClient
 
 	curStatus, err := client.Status()
@@ -183,7 +183,7 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 
 	// check that account starts participating after a while
 	proposalWindow := 20 // arbitrary
-	blockWasProposedByNewAccountRecently := waitForAccountToProposeBlock(a, fixture, newAccount, proposalWindow)
+	blockWasProposedByNewAccountRecently := waitForAccountToProposeBlock(a, &fixture, newAccount, proposalWindow)
 	a.True(blockWasProposedByNewAccountRecently, "newly online account should be proposing blocks")
 }
 

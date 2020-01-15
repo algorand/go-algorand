@@ -20,11 +20,14 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
+	"github.com/algorand/go-deadlock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
@@ -48,6 +51,7 @@ type LibGoalFixture struct {
 	Name           string
 	network        netdeploy.Network
 	t              TestingT
+	tMu            deadlock.RWMutex
 	clientPartKeys map[string][]account.Participation
 }
 
@@ -82,14 +86,36 @@ func (f *LibGoalFixture) setup(test TestingT, testName string, templateFile stri
 	os.RemoveAll(f.rootDir)
 	templateFile = filepath.Join(f.testDataDir, templateFile)
 	importKeys := false // Don't automatically import root keys when creating folders, we'll import on-demand
-	network, err := netdeploy.CreateNetworkFromTemplate("test", f.rootDir, templateFile, f.binDir, importKeys)
+	network, err := netdeploy.CreateNetworkFromTemplate("test", f.rootDir, templateFile, f.binDir, importKeys, f.nodeExitWithError)
 	f.failOnError(err, "CreateNetworkFromTemplate failed: %v")
-
 	f.network = network
 
 	if startNetwork {
 		f.Start()
 	}
+}
+
+// nodeExitWithError is a callback from the network indicating that the node exit with an error after a successfull startup.
+// i.e. node terminated, and not due to shutdown.. this is likely to be a crash/panic.
+func (f *LibGoalFixture) nodeExitWithError(nc *nodecontrol.NodeController, err error) {
+	if err == nil {
+		return
+	}
+
+	f.tMu.RLock()
+	defer f.tMu.RUnlock()
+	if f.t == nil {
+		return
+	}
+	exitError, ok := err.(*exec.ExitError)
+	if !ok {
+		require.NoError(f.t, err, "Node at %s has terminated with an error", nc.GetDataDir())
+		return
+	}
+	ws := exitError.Sys().(syscall.WaitStatus)
+	exitCode := ws.ExitStatus()
+
+	require.NoError(f.t, err, "Node at %s has terminated with error code %d", nc.GetDataDir(), exitCode)
 }
 
 func (f *LibGoalFixture) importRootKeys(lg *libgoal.Client, dataDir string) {
@@ -241,8 +267,12 @@ func (f *LibGoalFixture) Start() {
 // It ensures the current test context is set and then reset after the test ends
 // It should be called in the form of "defer fixture.SetTestContext(t)()"
 func (f *LibGoalFixture) SetTestContext(t TestingT) func() {
+	f.tMu.Lock()
+	defer f.tMu.Unlock()
 	f.t = t
 	return func() {
+		f.tMu.Lock()
+		defer f.tMu.Unlock()
 		f.t = nil
 	}
 }

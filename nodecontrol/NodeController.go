@@ -50,6 +50,10 @@ func MakeNodeController(binDir, algodDataDir string) NodeController {
 	return nc
 }
 
+// AlgodExitErrorCallback is the callback function from the node controller that reports upstream
+// in case there was a change with the algod running state.
+type AlgodExitErrorCallback func(*NodeController, error)
+
 // AlgodStartArgs are the possible arguments for starting algod
 type AlgodStartArgs struct {
 	PeerAddress       string
@@ -57,6 +61,7 @@ type AlgodStartArgs struct {
 	RedirectOutput    bool
 	RunUnderHost      bool
 	TelemetryOverride string
+	ExitErrorCallback AlgodExitErrorCallback
 }
 
 // KMDStartArgs are the possible arguments for starting kmd
