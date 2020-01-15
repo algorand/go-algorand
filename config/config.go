@@ -806,6 +806,10 @@ type Local struct {
 
 	// TelemetryToLog records messages to node.log that are normally sent to remote event monitoring
 	TelemetryToLog bool
+
+	// DisableOutgoingConnectionThrottling disables the connection throttling of the network library, which
+	// allow the network library to continuesly disconnect relays based on their relative ( and absolute ) performance.
+	DisableOutgoingConnectionThrottling bool
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)

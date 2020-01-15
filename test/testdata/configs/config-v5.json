@@ -10,6 +10,7 @@
     "ConnectionsRateLimitingWindowSeconds": 1,
     "ConnectionsRateLimitingCount": 60,
     "DeadlockDetection": 0,
+    "DisableOutgoingConnectionThrottling": false,
     "DNSBootstrapID": "<network>.algorand.network",
     "EnableAgreementReporting": false,
     "EnableIncomingMessageFilter": false,
@@ -31,6 +32,7 @@
     "NodeExporterPath": "./node_exporter",
     "OutgoingMessageFilterBucketCount": 3,
     "OutgoingMessageFilterBucketSize": 128,
+    "PeerConnectionsUpdateInterval": 3600,
     "PriorityPeers": {},
     "ReconnectTime": 60000000000,
     "ReservedFDs": 256,
@@ -38,12 +40,11 @@
     "RestWriteTimeoutSeconds": 120,
     "RunHosted": false,
     "SuggestedFeeBlockHistory": 3,
+    "SuggestedFeeSlidingWindowSize":  50,
     "TelemetryToLog": true,
     "TxPoolExponentialIncreaseFactor": 2,
     "TxPoolSize": 15000,
     "TxSyncIntervalSeconds": 60,
     "TxSyncTimeoutSeconds": 30,
-    "TxSyncServeResponseSize": 1000000,
-    "SuggestedFeeSlidingWindowSize":  50,
-    "PeerConnectionsUpdateInterval": 3600
+    "TxSyncServeResponseSize": 1000000
 }

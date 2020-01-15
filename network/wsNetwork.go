@@ -668,6 +668,9 @@ func (wn *WebsocketNetwork) Start() {
 		// on non-relay, all the outgoing connections are throttled.
 		wn.throttledOutgoingConnections = int32(wn.config.GossipFanout)
 	}
+	if wn.config.DisableOutgoingConnectionThrottling {
+		wn.throttledOutgoingConnections = 0
+	}
 	if wn.config.TLSCertFile != "" && wn.config.TLSKeyFile != "" {
 		wn.scheme = "https"
 	} else {
