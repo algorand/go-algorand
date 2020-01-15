@@ -28,6 +28,7 @@ import (
 
 	"github.com/algorand/go-deadlock"
 
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -323,7 +324,7 @@ func makewhiteholeNetwork(domain *whiteholeDomain) *whiteholeNetwork {
 
 func spinNetworkImpl(domain *whiteholeDomain) (whiteholeNet *whiteholeNetwork, counter *messageCounter) {
 	whiteholeNet = makewhiteholeNetwork(domain)
-	netImpl := WrapNetwork(whiteholeNet).(*networkImpl)
+	netImpl := WrapNetwork(whiteholeNet, logging.Base()).(*networkImpl)
 	counter = startMessageCounter(netImpl)
 	whiteholeNet.Start()
 	return
