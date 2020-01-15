@@ -84,7 +84,7 @@ func (f *LibGoalFixture) setup(test TestingT, testName string, templateFile stri
 	os.RemoveAll(f.rootDir)
 	templateFile = filepath.Join(f.testDataDir, templateFile)
 	importKeys := false // Don't automatically import root keys when creating folders, we'll import on-demand
-	network, err := netdeploy.CreateNetworkFromTemplate("test", f.rootDir, templateFile, f.binDir, importKeys, f.nodeRunStateChanged)
+	network, err := netdeploy.CreateNetworkFromTemplate("test", f.rootDir, templateFile, f.binDir, importKeys, f.nodeExitWithError)
 	f.failOnError(err, "CreateNetworkFromTemplate failed: %v")
 	f.network = network
 
@@ -93,9 +93,9 @@ func (f *LibGoalFixture) setup(test TestingT, testName string, templateFile stri
 	}
 }
 
-// nodeRunStateChanged is a callback from the network indicating that the node run state have changed.
+// nodeExitWithError is a callback from the network indicating that the node exit with an error after a successfull startup.
 // i.e. node terminated, and not due to shutdown.. this is likely to be a crash/panic.
-func (f *LibGoalFixture) nodeRunStateChanged(nc *nodecontrol.NodeController, err error) {
+func (f *LibGoalFixture) nodeExitWithError(nc *nodecontrol.NodeController, err error) {
 	if err == nil {
 		return
 	}

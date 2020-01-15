@@ -48,19 +48,19 @@ type NetworkCfg struct {
 
 // Network represents an instance of a deployed network
 type Network struct {
-	rootDir              string
-	cfg                  NetworkCfg
-	nodeDirs             map[string]string // mapping between the node name and the directories where the node is operation on (not including RelayDirs)
-	gen                  gen.GenesisData
-	nodeRunStateCallback nodecontrol.AlgodRunStateChangedFunc
+	rootDir          string
+	cfg              NetworkCfg
+	nodeDirs         map[string]string // mapping between the node name and the directories where the node is operation on (not including RelayDirs)
+	gen              gen.GenesisData
+	nodeExitcallback nodecontrol.AlgodExitErrorCallback
 }
 
 // CreateNetworkFromTemplate uses the specified template to deploy a new private network
 // under the specified root directory.
-func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, importKeys bool, nodeRunStateCallback nodecontrol.AlgodRunStateChangedFunc) (Network, error) {
+func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, importKeys bool, nodeExitcallback nodecontrol.AlgodExitErrorCallback) (Network, error) {
 	n := Network{
-		rootDir:              rootDir,
-		nodeRunStateCallback: nodeRunStateCallback,
+		rootDir:          rootDir,
+		nodeExitcallback: nodeExitcallback,
 	}
 	n.cfg.Name = name
 	n.cfg.TemplateFile = templateFile
@@ -256,8 +256,8 @@ func (n Network) Start(binDir string, redirectOutput bool) error {
 		nodeFulllPath := n.getNodeFullPath(relayDir)
 		nc := nodecontrol.MakeNodeController(binDir, nodeFulllPath)
 		args := nodecontrol.AlgodStartArgs{
-			RedirectOutput:  redirectOutput,
-			RunStateChanged: n.nodeRunStateCallback,
+			RedirectOutput:    redirectOutput,
+			ExitErrorCallback: n.nodeExitcallback,
 		}
 
 		_, err := nc.StartAlgod(args)
@@ -313,9 +313,9 @@ func (n Network) GetPeerAddresses(binDir string) []string {
 
 func (n Network) startNodes(binDir, relayAddress string, redirectOutput bool) error {
 	args := nodecontrol.AlgodStartArgs{
-		PeerAddress:     relayAddress,
-		RedirectOutput:  redirectOutput,
-		RunStateChanged: n.nodeRunStateCallback,
+		PeerAddress:       relayAddress,
+		RedirectOutput:    redirectOutput,
+		ExitErrorCallback: n.nodeExitcallback,
 	}
 	for _, nodeDir := range n.nodeDirs {
 		nc := nodecontrol.MakeNodeController(binDir, n.getNodeFullPath(nodeDir))
