@@ -127,10 +127,11 @@ func (n *Fuzzer) initAgreementNode(nodeID int, filters ...NetworkFilterFactory) 
 		return false
 	}
 
+	logger := n.log.WithFields(logging.Fields{"Source": "service-" + strconv.Itoa(nodeID)})
 	n.agreementParams[nodeID] = agreement.Parameters{
-		Logger:                  n.log.WithFields(logging.Fields{"Source": "service-" + strconv.Itoa(nodeID)}),
+		Logger:                  logger,
 		Ledger:                  n.ledgers[nodeID],
-		Network:                 gossip.WrapNetwork(n.facades[nodeID]),
+		Network:                 gossip.WrapNetwork(n.facades[nodeID], logger),
 		KeyManager:              simpleKeyManager(n.accounts[nodeID : nodeID+1]),
 		BlockValidator:          n.blockValidator,
 		BlockFactory:            testBlockFactory{Owner: nodeID},
@@ -593,7 +594,7 @@ func (n *Fuzzer) CrashNode(nodeID int) {
 	n.facades[nodeID].ClearHandlers()
 	n.ledgers[nodeID].ClearNotifications()
 
-	n.agreementParams[nodeID].Network = gossip.WrapNetwork(n.facades[nodeID])
+	n.agreementParams[nodeID].Network = gossip.WrapNetwork(n.facades[nodeID], n.log)
 	n.agreements[nodeID] = agreement.MakeService(n.agreementParams[nodeID])
 
 	cadaverFilename := fmt.Sprintf("%v-%v", n.networkName, nodeID)
