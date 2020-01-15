@@ -20,7 +20,10 @@ GOTAGSLIST          := sqlite_unlock_notify sqlite_omit_load_extension
 ifeq ($(UNAME), Linux)
 EXTLDFLAGS := -static-libstdc++ -static-libgcc
 ifeq ($(ARCH), amd64)
+# the following predicate is abit misleading; it tests if we're not in centos.
+ifeq (,$(wildcard /etc/centos-release))
 EXTLDFLAGS  += -static
+endif
 GOTAGSLIST  += osusergo netgo static_build
 GOBUILDMODE := -buildmode pie
 endif
