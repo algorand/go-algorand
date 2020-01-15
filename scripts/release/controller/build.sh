@@ -14,7 +14,8 @@ REPO_ROOT="${HOME}"/go/src/github.com/algorand/go-algorand/
 
 cd "${REPO_ROOT}"
 export RELEASE_GENESIS_PROCESS=true
-export CHANNEL="$1"
+export HASH="$1"
+export CHANNEL="$2"
 PLATFORM=$("${REPO_ROOT}"/scripts/osarchtype.sh)
 PLATFORM_SPLIT=(${PLATFORM//\// })
 OS=${PLATFORM_SPLIT[0]}
@@ -57,6 +58,7 @@ export RELEASE_GENESIS_PROCESS=${RELEASE_GENESIS_PROCESS}
 PLATFORM=${PLATFORM}
 OS=${OS}
 ARCH=${ARCH}
+export HASH=${HASH}
 export CHANNEL=${CHANNEL}
 export DEFAULTNETWORK=${DEFAULTNETWORK}
 export PKG_ROOT=${PKG_ROOT}

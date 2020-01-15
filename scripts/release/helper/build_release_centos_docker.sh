@@ -23,6 +23,7 @@ mkdir -p "${HOME}/go/src/github.com/algorand"
 cd "${HOME}/go/src/github.com/algorand" && git clone --single-branch --branch "${HASH}" "${GIT_REPO_PATH}" go-algorand
 
 # Get golang 1.12 and build its own copy of go-algorand.
+cd "${HOME}"
 python3 "${HOME}/go/src/github.com/algorand/go-algorand/scripts/get_latest_go.py" --version-prefix=1.12
 sudo bash -c "cd /usr/local && tar zxf ${HOME}/go*.tar.gz"
 
@@ -30,26 +31,23 @@ GOPATH=$(/usr/local/go/bin/go env GOPATH)
 export PATH=${HOME}/gpgbin:${GOPATH}/bin:/usr/local/go/bin:${PATH}
 export GOPATH
 
-# Build!
-scripts/configure_dev.sh
-make crypto/lib/libsodium.a
-make build
-
-# Anchor our repo root reference location
 REPO_DIR=/root/go/src/github.com/algorand/go-algorand
 
-${REPO_DIR}/scripts/configure_dev-deps.sh
+# Build!
+"${REPO_DIR}"/scripts/configure_dev-deps.sh
+make crypto/lib/libsodium.a -C "${REPO_ROOT}"
+make build -C "${REPO_ROOT}"
 
-cd ${REPO_DIR}
+cd "${REPO_DIR}"
 
 # definitely rebuild libsodium which could link to external C libraries
-if [ -f ${REPO_DIR}/crypto/libsodium-fork/Makefile ]; then
-    make distclean --directory ${REPO_DIR}/crypto/libsodium-fork
-fi
-rm -rf ${REPO_DIR}/crypto/lib
-make crypto/lib/libsodium.a
-
-make build
+#if [ -f ${REPO_DIR}/crypto/libsodium-fork/Makefile ]; then
+#    make distclean --directory ${REPO_DIR}/crypto/libsodium-fork
+#fi
+#rm -rf ${REPO_DIR}/crypto/lib
+#make crypto/lib/libsodium.a
+#
+#make build
 
 RPMTMP=$(mktemp -d 2>/dev/null || mktemp -d -t "rpmtmp")
 trap 'rm -rf ${RPMTMP}' 0

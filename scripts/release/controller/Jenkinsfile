@@ -38,7 +38,7 @@ pipeline {
 
         stage("build and package") {
             steps {
-                sh script: "scripts/release/controller/stages/build.sh ${params.channel}"
+                sh script: "scripts/release/controller/stages/build.sh ${params.hash} ${params.channel}"
             }
         }
 
