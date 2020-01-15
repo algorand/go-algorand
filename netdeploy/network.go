@@ -48,10 +48,84 @@ type NetworkCfg struct {
 
 // Network represents an instance of a deployed network
 type Network struct {
-	rootDir  string
-	cfg      NetworkCfg
-	nodeDirs map[string]string // mapping between the node name and the directories where the node is operation on (not including RelayDirs)
-	gen      gen.GenesisData
+	rootDir          string
+	cfg              NetworkCfg
+	nodeDirs         map[string]string // mapping between the node name and the directories where the node is operation on (not including RelayDirs)
+	gen              gen.GenesisData
+	nodeExitCallback nodecontrol.AlgodExitErrorCallback
+}
+
+// CreateNetworkFromTemplate uses the specified template to deploy a new private network
+// under the specified root directory.
+func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, importKeys bool, nodeExitCallback nodecontrol.AlgodExitErrorCallback) (Network, error) {
+	n := Network{
+		rootDir:          rootDir,
+		nodeExitCallback: nodeExitCallback,
+	}
+	n.cfg.Name = name
+	n.cfg.TemplateFile = templateFile
+
+	template, err := loadTemplate(templateFile)
+	if err == nil {
+		err = template.Validate()
+	}
+	if err != nil {
+		return n, err
+	}
+
+	// Create the network root directory so we can generate genesis.json and prepare node data directories
+	err = os.MkdirAll(rootDir, os.ModePerm)
+	if err != nil {
+		return n, err
+	}
+
+	err = template.generateGenesisAndWallets(rootDir, name, binDir)
+	if err != nil {
+		return n, err
+	}
+
+	n.cfg.RelayDirs, n.nodeDirs, n.gen, err = template.createNodeDirectories(rootDir, binDir, importKeys)
+	if err != nil {
+		return n, err
+	}
+
+	err = n.Save(rootDir)
+	return n, err
+}
+
+// LoadNetwork loads and initializes the Network state representing
+// an existing deployed network.
+func LoadNetwork(rootDir string) (Network, error) {
+	n := Network{
+		rootDir: rootDir,
+	}
+
+	if !isValidNetworkDir(rootDir) {
+		return n, fmt.Errorf("does not appear to be a valid network root directory: %s", rootDir)
+	}
+
+	cfgFile := filepath.Join(rootDir, configFileName)
+
+	var err error
+	n.cfg, err = loadNetworkCfg(cfgFile)
+	if err != nil {
+		return n, err
+	}
+
+	err = n.scanForNodes()
+	return n, err
+}
+
+func loadNetworkCfg(configFile string) (NetworkCfg, error) {
+	cfg := NetworkCfg{}
+	f, err := os.Open(configFile)
+	if err != nil {
+		return cfg, err
+	}
+	defer f.Close()
+	dec := json.NewDecoder(f)
+	err = dec.Decode(&cfg)
+	return cfg, err
 }
 
 // Name returns the name of the private network
@@ -96,43 +170,6 @@ func (n Network) Genesis() gen.GenesisData {
 	return n.gen
 }
 
-// CreateNetworkFromTemplate uses the specified template to deploy a new private network
-// under the specified root directory.
-func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, importKeys bool) (Network, error) {
-	n := Network{
-		rootDir: rootDir,
-	}
-	n.cfg.Name = name
-	n.cfg.TemplateFile = templateFile
-
-	template, err := loadTemplate(templateFile)
-	if err == nil {
-		err = template.Validate()
-	}
-	if err != nil {
-		return n, err
-	}
-
-	// Create the network root directory so we can generate genesis.json and prepare node data directories
-	err = os.MkdirAll(rootDir, os.ModePerm)
-	if err != nil {
-		return n, err
-	}
-
-	err = template.generateGenesisAndWallets(rootDir, name, binDir)
-	if err != nil {
-		return n, err
-	}
-
-	n.cfg.RelayDirs, n.nodeDirs, n.gen, err = template.createNodeDirectories(rootDir, binDir, importKeys)
-	if err != nil {
-		return n, err
-	}
-
-	err = n.Save(rootDir)
-	return n, err
-}
-
 func isValidNetworkDir(rootDir string) bool {
 	cfgFile := filepath.Join(rootDir, configFileName)
 	fileExists := util.FileExists(cfgFile)
@@ -146,41 +183,6 @@ func isValidNetworkDir(rootDir string) bool {
 	cfgFile = filepath.Join(rootDir, genesisFileName)
 	fileExists = util.FileExists(cfgFile)
 	return fileExists
-}
-
-// LoadNetwork loads and initializes the Network state representing
-// an existing deployed network.
-func LoadNetwork(rootDir string) (Network, error) {
-	n := Network{
-		rootDir: rootDir,
-	}
-
-	if !isValidNetworkDir(rootDir) {
-		return n, fmt.Errorf("does not appear to be a valid network root directory: %s", rootDir)
-	}
-
-	cfgFile := filepath.Join(rootDir, configFileName)
-
-	var err error
-	n.cfg, err = loadNetworkCfg(cfgFile)
-	if err != nil {
-		return n, err
-	}
-
-	err = n.scanForNodes()
-	return n, err
-}
-
-func loadNetworkCfg(configFile string) (NetworkCfg, error) {
-	cfg := NetworkCfg{}
-	f, err := os.Open(configFile)
-	if err != nil {
-		return cfg, err
-	}
-	defer f.Close()
-	dec := json.NewDecoder(f)
-	err = dec.Decode(&cfg)
-	return cfg, err
 }
 
 // Save persists the network state in the root directory (in network.json)
@@ -250,9 +252,12 @@ func (n Network) Start(binDir string, redirectOutput bool) error {
 	var peerAddressListBuilder strings.Builder
 
 	for _, relayDir := range n.cfg.RelayDirs {
-		nc := nodecontrol.MakeNodeController(binDir, n.getNodeFullPath(relayDir))
+
+		nodeFulllPath := n.getNodeFullPath(relayDir)
+		nc := nodecontrol.MakeNodeController(binDir, nodeFulllPath)
 		args := nodecontrol.AlgodStartArgs{
-			RedirectOutput: redirectOutput,
+			RedirectOutput:    redirectOutput,
+			ExitErrorCallback: n.nodeExitCallback,
 		}
 
 		_, err := nc.StartAlgod(args)
@@ -308,8 +313,9 @@ func (n Network) GetPeerAddresses(binDir string) []string {
 
 func (n Network) startNodes(binDir, relayAddress string, redirectOutput bool) error {
 	args := nodecontrol.AlgodStartArgs{
-		PeerAddress:    relayAddress,
-		RedirectOutput: redirectOutput,
+		PeerAddress:       relayAddress,
+		RedirectOutput:    redirectOutput,
+		ExitErrorCallback: n.nodeExitCallback,
 	}
 	for _, nodeDir := range n.nodeDirs {
 		nc := nodecontrol.MakeNodeController(binDir, n.getNodeFullPath(nodeDir))
