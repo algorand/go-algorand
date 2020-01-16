@@ -36,13 +36,16 @@ import (
 // secret-holder from signing a contradictory message in the future in the event
 // of a secret-key compromise.
 type OneTimeSignature struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	// Sig is a signature of msg under the key PK.
 	Sig ed25519Signature `codec:"s"`
 	PK  ed25519PublicKey `codec:"p"`
 
 	// Old-style signature that does not use proper domain separation.
 	// PKSigOld is unused; however, unfortunately we forgot to mark it
-	// `codec:omitempty` and so it appears (with zero value) in certs.
+	// `codec:omitempty` originally and so it appears (with zero value) in
+	// old certs.
 	// This means we can't delete the field without breaking catchup.
 	PKSigOld ed25519Signature `codec:"ps"`
 
