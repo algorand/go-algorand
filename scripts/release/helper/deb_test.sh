@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-set -x
-set -v
+
+#set -xv
 
 echo "deb_test starting within docker container"
 
@@ -18,12 +18,11 @@ apt-get install -y expect
 algod -v
 
 echo "starting test of algod with expect script testDebian.exp"
-OUTPUT=$(
- expect -d /workdir/testDebian.exp /var/lib/algorand /testdata
-)
+OUTPUT=$(expect -d /workdir/testDebian.exp /var/lib/algorand /testdata)
 STATUS=$?
-echo $OUTPUT
+echo "$OUTPUT"
 
 echo "deb_test completed with status: " $STATUS
 
 exit $STATUS
+
