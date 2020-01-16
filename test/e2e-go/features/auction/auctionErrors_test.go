@@ -18,9 +18,9 @@ package auction
 
 import (
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
-	"runtime"
 
 	"github.com/stretchr/testify/require"
 
@@ -278,6 +278,9 @@ func unpartitionNetwork(fixture *fixtures.AuctionFixture, r *require.Assertions)
 
 func TestStartAndPartitionAuctionTenUsersTenBidsEach(t *testing.T) {
 	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
+	if testing.Short() {
 		t.Skip()
 	}
 	t.Parallel()

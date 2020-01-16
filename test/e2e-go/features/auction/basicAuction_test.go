@@ -18,8 +18,8 @@ package auction
 
 import (
 	"path/filepath"
-	"testing"
 	"runtime"
+	"testing"
 
 	"github.com/stretchr/testify/require"
 
@@ -141,6 +141,9 @@ func TestStartAndEndAuctionOneUserOneBid(t *testing.T) {
 
 func TestStartAndEndAuctionOneUserTenBids(t *testing.T) {
 	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
+	if testing.Short() {
 		t.Skip()
 	}
 	t.Parallel()
