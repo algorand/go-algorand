@@ -236,6 +236,7 @@ func (cred Credential) lowestOutputBuggy() *big.Int {
 	return &lowest
 }
 
+// LessBuggy is the buggy version of Less
 // TODO(upgrade): Please remove the entire LessBuggy function as soon as the corresponding protocol upgrade goes through
 func (cred Credential) LessBuggy(otherCred Credential) bool {
 	i1 := cred.lowestOutputBuggy()
