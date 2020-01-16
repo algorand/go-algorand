@@ -54,9 +54,11 @@ func TestMain(m *testing.M) {
 }
 
 func debugMetrics(t *testing.T) {
-	var buf strings.Builder
-	metrics.DefaultRegistry().WriteMetrics(&buf, "")
-	t.Log(buf.String())
+	if t.Failed() {
+		var buf strings.Builder
+		metrics.DefaultRegistry().WriteMetrics(&buf, "")
+		t.Log(buf.String())
+	}
 }
 
 type emptyPhonebook struct{}
@@ -472,17 +474,24 @@ func TestSlowHandlers(t *testing.T) {
 		ipi++
 	}
 	ok := false
-	for i := 0; i < 10; i++ {
-		time.Sleep(time.Millisecond)
+	lastnw := -1
+	totalWait := 0
+	for i := 0; i < 7; i++ {
+		waitTime := int(1 << uint64(i))
+		time.Sleep(time.Duration(waitTime) * time.Millisecond)
+		totalWait += waitTime
 		nw := slowCounter.numWaiters()
 		if nw == incomingThreads {
 			ok = true
 			break
 		}
-		t.Logf("%dms %d waiting", i+1, nw)
+		if lastnw != nw {
+			t.Logf("%dms %d waiting", totalWait, nw)
+			lastnw = nw
+		}
 	}
 	if !ok {
-		t.Errorf("timeout waiting for %d threads to block on slow handler, have %d", incomingThreads, slowCounter.numWaiters())
+		t.Errorf("timeout waiting for %d threads to block on slow handler, have %d", incomingThreads, lastnw)
 	}
 	require.Equal(t, 0, fastCounter.Count())
 
