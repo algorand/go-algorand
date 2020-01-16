@@ -175,7 +175,7 @@ func (cred Credential) lowestOutput() *big.Int {
 	// for determining the weight of the credential. A nonzero iter provides
 	// domain separation between lowestOutput and UnauthenticatedCredential.Verify
 	//
-	// It we reused the iter = 0 hash output here it would be nonuniformly
+	// If we reused the iter = 0 hash output here it would be nonuniformly
 	// distributed (because lowestOutput can only get called if weight > 0).
 	// In particular if i starts at 0 then weight-1 credentials are at a
 	// significant disadvantage because UnauthenticatedCredential.Verify
