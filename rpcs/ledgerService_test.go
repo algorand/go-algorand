@@ -18,6 +18,7 @@ package rpcs
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/http"
 	"net/url"
@@ -53,6 +54,26 @@ type httpTestPeerSource struct {
 func (s *httpTestPeerSource) GetPeers(options ...network.PeerOption) []network.Peer {
 	return s.peers
 }
+func (s *httpTestPeerSource) Address() (string, bool) {
+	return "", false
+}
+func (s *httpTestPeerSource) Broadcast(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except network.Peer) error {
+	return errors.New("MockClientAggregator does not implement Broadcast.")
+}
+func (s *httpTestPeerSource) Relay(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except network.Peer) error {
+	return errors.New("MockClientAggregator does not implement Relay.")
+}
+func (s *httpTestPeerSource) Disconnect(badnode network.Peer) {}
+func (s *httpTestPeerSource) DisconnectPeers()                {}
+func (s *httpTestPeerSource) Ready() chan struct{} {
+	return nil
+}
+func (s *httpTestPeerSource) RegisterHTTPHandler(path string, handler http.Handler)     {}
+func (s *httpTestPeerSource) RequestConnectOutgoing(replace bool, quit <-chan struct{}) {}
+func (s *httpTestPeerSource) Start()                                                    {}
+func (s *httpTestPeerSource) Stop()                                                     {}
+func (s *httpTestPeerSource) RegisterHandlers(dispatch []network.TaggedMessageHandler)  {}
+func (s *httpTestPeerSource) ClearHandlers()                                            {}
 
 // implement network.HTTPPeer
 type testHTTPPeer struct {
@@ -73,7 +94,7 @@ func (p *testHTTPPeer) GetHTTPPeer() network.HTTPPeer {
 	return p
 }
 
-func buildTestHTTPPeerSource(rootURL string) PeerSource {
+func buildTestHTTPPeerSource(rootURL string) network.GossipNode {
 	peer := testHTTPPeer{rootURL: rootURL}
 	var wat network.HTTPPeer
 	wat = &peer
@@ -136,6 +157,25 @@ func (s *testUnicastPeerSrc) GetPeers(options ...network.PeerOption) []network.P
 	}
 	return nil
 }
+
+func (s *testUnicastPeerSrc) Address() (string, bool) {
+	return "", false
+}
+func (s *testUnicastPeerSrc) Broadcast(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except network.Peer) error {
+	return errors.New("MockClientAggregator does not implement Broadcast.")
+}
+func (s *testUnicastPeerSrc) Relay(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except network.Peer) error {
+	return errors.New("MockClientAggregator does not implement Relay.")
+}
+func (s *testUnicastPeerSrc) Disconnect(badnode network.Peer) {}
+func (s *testUnicastPeerSrc) DisconnectPeers()                {}
+func (s *testUnicastPeerSrc) Ready() chan struct{} {
+	return nil
+}
+func (s *testUnicastPeerSrc) RequestConnectOutgoing(replace bool, quit <-chan struct{}) {}
+func (s *testUnicastPeerSrc) Start()                                                    {}
+func (s *testUnicastPeerSrc) Stop()                                                     {}
+func (s *testUnicastPeerSrc) ClearHandlers()                                            {}
 
 func (s *testUnicastPeerSrc) RegisterHTTPHandler(path string, handler http.Handler) {}
 func (s *testUnicastPeerSrc) RegisterHandlers(dispatch []network.TaggedMessageHandler) {
@@ -227,6 +267,25 @@ type BasicRPCNode struct {
 	rmux     *mux.Router
 	peers    []network.Peer
 }
+func (b *BasicRPCNode) Address() (string, bool) {
+	return "", false
+}
+func (b *BasicRPCNode) Broadcast(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except network.Peer) error {
+	return errors.New("MockClientAggregator does not implement Broadcast.")
+}
+func (b *BasicRPCNode) Relay(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except network.Peer) error {
+	return errors.New("MockClientAggregator does not implement Relay.")
+}
+func (b *BasicRPCNode) Disconnect(badnode network.Peer) {}
+func (b *BasicRPCNode) DisconnectPeers() {}
+func (b *BasicRPCNode) Ready() chan struct{} {
+	return nil
+}
+
+func (b *BasicRPCNode) RequestConnectOutgoing(replace bool, quit <-chan struct{}) {}
+func (b *BasicRPCNode) Start() {}
+func (b *BasicRPCNode) Stop() {}
+func (b *BasicRPCNode) ClearHandlers() {}
 
 func (b *BasicRPCNode) RegisterHTTPHandler(path string, handler http.Handler) {
 	if b.rmux == nil {
