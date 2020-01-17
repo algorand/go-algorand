@@ -116,7 +116,7 @@ func (e *phonebookEntries) waitAndAddConnectionTime(addr string, connectionsRate
 	// Remove from recentConnectionTimes the times later than 1 second
 	for len((*e)[addr].recentConnectionTimes) > 0 {
 		timeSince = time.Since(((*e)[addr].recentConnectionTimes)[0])
-		if timeSince.Milliseconds() > 1000 {
+		if timeSince.Nanoseconds() > 1e9 {
 			phbData := (*e)[addr]
 			phbData.recentConnectionTimes = ((*e)[addr].recentConnectionTimes)[1:]
 			(*e)[addr] = phbData
