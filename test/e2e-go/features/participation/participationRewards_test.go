@@ -133,6 +133,9 @@ func TestPartkeyOnlyRewards(t *testing.T) {
 	if runtime.GOOS == "darwin" {
 		t.Skip()
 	}
+	if testing.Short() {
+		t.Skip()
+	}
 	t.Parallel()
 	r := require.New(t)
 
