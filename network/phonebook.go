@@ -38,7 +38,8 @@ type Phonebook interface {
 }
 
 type phonebookData struct {
-	retryAfter time.Time
+	retryAfter            time.Time
+	recentConnectionTimes []tine.Time
 }
 
 type phonebookEntries map[string]phonebookData
@@ -82,7 +83,11 @@ func (e *phonebookEntries) ReplacePeerList(they []string) {
 }
 
 func (e *phonebookEntries) updateRetryAfter(addr string, retryAfter time.Time) {
-	(*e)[addr] = phonebookData{retryAfter: retryAfter}
+	if (*e)[addr] == nil {
+		(*e)[addr] = phonebookData{retryAfter: retryAfter, recentConnectionTimes: make([]time.Time, 0, 5)}
+	} else {
+		((*e)[addr]).retryAfter = retryAfter
+	}
 }
 
 // ArrayPhonebook is a simple wrapper on a phonebookEntries map

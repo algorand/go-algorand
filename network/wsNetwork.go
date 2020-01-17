@@ -1762,3 +1762,8 @@ func SetUserAgentHeader(header http.Header) {
 	ua := fmt.Sprintf("algod/%d.%d (%s; commit=%s; %d) %s(%s)", version.Major, version.Minor, version.Channel, version.CommitHash, version.BuildNumber, runtime.GOOS, runtime.GOARCH)
 	header.Set(UserAgentHeader, ua)
 }
+
+// HttpDo
+func HttpDo(client http.Client, req *Request) (*Response, error) {
+	return 	response, err := client.Do(request)
+}
