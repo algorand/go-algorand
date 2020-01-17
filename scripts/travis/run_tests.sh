@@ -9,7 +9,7 @@ if [ "${BUILD_TYPE}" = "integration" ]; then
     # Run short tests when doing pull requests; leave the long testing for nightly runs.
     if [[ "${TRAVIS_BRANCH}" =~ ^rel/nightly ]]; then
         SHORTTEST=
-    elif
+    else
         SHORTTEST=-short
     fi
     export SHORTTEST 
