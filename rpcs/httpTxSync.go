@@ -39,7 +39,7 @@ import (
 type HTTPTxSync struct {
 	rootURL string
 
-	peers PeerSource
+	peers network.GossipNode
 
 	log logging.Logger
 
@@ -72,7 +72,7 @@ func responseBytes(response *http.Response, log logging.Logger, limit uint64) (d
 }
 
 // create a new http sync object.
-func makeHTTPSync(peerSource PeerSource, log logging.Logger, serverResponseSize uint64) *HTTPTxSync {
+func makeHTTPSync(peerSource network.GossipNode, log logging.Logger, serverResponseSize uint64) *HTTPTxSync {
 	const transactionArrayEncodingOverhead = uint64(16) // manual tests shown that the actual extra packing cost is typically 3 bytes. We'll take 16 byte to ensure we're on the safe side.
 	return &HTTPTxSync{
 		peers:                  peerSource,

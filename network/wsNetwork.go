@@ -1764,6 +1764,6 @@ func SetUserAgentHeader(header http.Header) {
 }
 
 // HttpDo
-func HttpDo(client http.Client, req *Request) (*Response, error) {
-	return 	response, err := client.Do(request)
+func DoHttp(client *http.Client, request *http.Request) (*http.Response, error) {
+	return client.Do(request)
 }

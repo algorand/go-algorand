@@ -45,6 +45,7 @@ type FetcherClient interface {
 type HTTPFetcher struct {
 	peer    network.HTTPPeer
 	rootURL string
+	net     *network.GossipNode
 
 	client *http.Client
 
@@ -52,14 +53,18 @@ type HTTPFetcher struct {
 }
 
 // MakeHTTPFetcher wraps an HTTPPeer so that we can get blocks from it
-func MakeHTTPFetcher(log logging.Logger, peer network.HTTPPeer) (fc FetcherClient) {
-	fc = &HTTPFetcher{peer, peer.GetAddress(), peer.GetHTTPClient(), log}
+func MakeHTTPFetcher(log logging.Logger, peer network.HTTPPeer, net *network.GossipNode) (fc FetcherClient) {
+	fc = &HTTPFetcher{peer, peer.GetAddress(), net, peer.GetHTTPClient(), log}
 	return
 }
 
 // GetBlockBytes gets a block.
 // Core piece of FetcherClient interface
 func (hf *HTTPFetcher) GetBlockBytes(ctx context.Context, r basics.Round) (data []byte, err error) {
+
+	//func (mp *MultiPhonebook) GetPhonebook(bootstrapNetworkName string) (p Phonebook) { xxxsss
+	// 		dnsBootstrapArray := wn.config.DNSBootstrapArray(wn.NetworkID) xxxsss
+
 	parsedURL, err := network.ParseHostOrURL(hf.rootURL)
 	if err != nil {
 		return nil, err
@@ -73,8 +78,7 @@ func (hf *HTTPFetcher) GetBlockBytes(ctx context.Context, r basics.Round) (data 
 	}
 	request = request.WithContext(ctx)
 	network.SetUserAgentHeader(request.Header)
-	//	response, err := HttpDo(hf.client, request)
-	response, err := hf.client.Do(request)
+	response, err := network.DoHttp(hf.client, request)
 	if err != nil {
 		hf.log.Debugf("GET %#v : %s", blockURL, err)
 		return nil, err

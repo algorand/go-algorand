@@ -39,10 +39,27 @@ type Phonebook interface {
 
 type phonebookData struct {
 	retryAfter            time.Time
-	recentConnectionTimes []tine.Time
+	recentConnectionTimes []time.Time
 }
 
 type phonebookEntries map[string]phonebookData
+
+// PopEarliestTime removes the earliest time from recentConnectionTimes in
+// phonebookData of addr
+// It assumes that it is earlier than 1 second
+func (phbEnteries *phonebookEntries) PopEarliestTime(addr string) {
+	phbData := (*phbEnteries)[addr]
+	phbData.recentConnectionTimes = phbData.recentConnectionTimes[1:]
+	(*phbEnteries)[addr] = phbData
+}
+
+// AppendTime adds the current time to recentConnectionTimes in
+// phonebookData of addr
+func (phbEnteries *phonebookEntries) AppendTimeNow(addr string) {
+	phbData := (*phbEnteries)[addr]
+	phbData.recentConnectionTimes = append(phbData.recentConnectionTimes, time.Now())
+	(*phbEnteries)[addr] = phbData
+}
 
 func (e *phonebookEntries) filterRetryTime(t time.Time) []string {
 	o := make([]string, 0, len(*e))
@@ -83,11 +100,42 @@ func (e *phonebookEntries) ReplacePeerList(they []string) {
 }
 
 func (e *phonebookEntries) updateRetryAfter(addr string, retryAfter time.Time) {
-	if (*e)[addr] == nil {
-		(*e)[addr] = phonebookData{retryAfter: retryAfter, recentConnectionTimes: make([]time.Time, 0, 5)}
+	_, found := (*e)[addr]
+	if !found {
+		(*e)[addr] = phonebookData{retryAfter: retryAfter, recentConnectionTimes: make([]time.Time, 0)}
 	} else {
-		((*e)[addr]).retryAfter = retryAfter
+		phbData := (*e)[addr]
+		phbData.retryAfter = retryAfter
+		(*e)[addr] = phbData
 	}
+}
+
+func (e *phonebookEntries) waitAndAddConnectionTime(addr string, connectionsRateLimitingCount uint) {
+
+	var timeSince time.Duration
+	// Remove from recentConnectionTimes the times later than 1 second
+	for len((*e)[addr].recentConnectionTimes) > 0 {
+		timeSince = time.Since(((*e)[addr].recentConnectionTimes)[0])
+		if timeSince.Milliseconds() > 1000 {
+			phbData := (*e)[addr]
+			phbData.recentConnectionTimes = ((*e)[addr].recentConnectionTimes)[1:]
+			(*e)[addr] = phbData
+		} else {
+			break // break the loop. The rest are earlier than 1 second
+		}
+	}
+
+	// If there are max number of connections within the last 1 second, wait
+	numElts := len((*e)[addr].recentConnectionTimes)
+	if uint(numElts)  > connectionsRateLimitingCount {
+		// Wait until the earliest time expires
+		time.Sleep(timeSince)
+		// Remove it from recentConnectionTimes
+		e.PopEarliestTime(addr)
+	}
+
+	// Append the time for the next connection request
+	e.AppendTimeNow(addr)
 }
 
 // ArrayPhonebook is a simple wrapper on a phonebookEntries map
@@ -136,6 +184,10 @@ func (p *ArrayPhonebook) UpdateRetryAfter(addr string, retryAfter time.Time) {
 	p.Entries.updateRetryAfter(addr, retryAfter)
 }
 
+func (p *ArrayPhonebook) WaitAndAddConnectionTime(addr string, connectionsRateLimitingCount uint) {
+	p.Entries.waitAndAddConnectionTime(addr, connectionsRateLimitingCount)
+}
+
 // GetAddresses returns up to N shuffled address
 func (p *ArrayPhonebook) GetAddresses(n int) []string {
 	return shuffleSelect(p.Entries.filterRetryTime(time.Now()), n)
@@ -166,6 +218,12 @@ func (p *ThreadsafePhonebook) UpdateRetryAfter(addr string, retryAfter time.Time
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 	p.entries.updateRetryAfter(addr, retryAfter)
+}
+
+func (p *ThreadsafePhonebook) WaitAndAddConnectionTime(addr string, connectionsRateLimitingCount uint) {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+	p.entries.waitAndAddConnectionTime(addr, connectionsRateLimitingCount)
 }
 
 // ExtendPeerList adds unique addresses to this set of addresses
