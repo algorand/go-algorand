@@ -1763,7 +1763,9 @@ func SetUserAgentHeader(header http.Header) {
 	header.Set(UserAgentHeader, ua)
 }
 
-// HttpDo
-func DoHttp(client *http.Client, request *http.Request) (*http.Response, error) {
+// DoHTTP will check call to WaitAndAddConnectionTime to
+// make sure connectionsRateLimitingCount is not violated, and register the
+// connection time of the request, before sending the request to the server. 
+func DoHTTP(client *http.Client, request *http.Request) (*http.Response, error) {
 	return client.Do(request)
 }

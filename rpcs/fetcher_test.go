@@ -103,10 +103,10 @@ func (mca *MockClientAggregator) Address() (string, bool) {
 	return "", false
 }
 func (mca *MockClientAggregator) Broadcast(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except network.Peer) error {
-	return errors.New("MockClientAggregator does not implement Broadcast.")
+	return errors.New("mock MockClientAggregator does not implement Broadcast")
 }
 func (mca *MockClientAggregator) Relay(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except network.Peer) error {
-	return errors.New("MockClientAggregator does not implement Relay.")
+	return errors.New("mock MockClientAggregator does not implement Relay")
 }
 func (mca *MockClientAggregator) Disconnect(badnode network.Peer) {}
 func (mca *MockClientAggregator) DisconnectPeers() {}

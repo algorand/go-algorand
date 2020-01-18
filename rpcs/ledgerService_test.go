@@ -58,10 +58,10 @@ func (s *httpTestPeerSource) Address() (string, bool) {
 	return "", false
 }
 func (s *httpTestPeerSource) Broadcast(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except network.Peer) error {
-	return errors.New("MockClientAggregator does not implement Broadcast.")
+	return errors.New("mock MockClientAggregator does not implement Broadcast")
 }
 func (s *httpTestPeerSource) Relay(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except network.Peer) error {
-	return errors.New("MockClientAggregator does not implement Relay.")
+	return errors.New("mock MockClientAggregator does not implement Relay")
 }
 func (s *httpTestPeerSource) Disconnect(badnode network.Peer) {}
 func (s *httpTestPeerSource) DisconnectPeers()                {}
@@ -162,10 +162,10 @@ func (s *testUnicastPeerSrc) Address() (string, bool) {
 	return "", false
 }
 func (s *testUnicastPeerSrc) Broadcast(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except network.Peer) error {
-	return errors.New("MockClientAggregator does not implement Broadcast.")
+	return errors.New("mock MockClientAggregator does not implement Broadcast")
 }
 func (s *testUnicastPeerSrc) Relay(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except network.Peer) error {
-	return errors.New("MockClientAggregator does not implement Relay.")
+	return errors.New("mock MockClientAggregator does not implement Relay")
 }
 func (s *testUnicastPeerSrc) Disconnect(badnode network.Peer) {}
 func (s *testUnicastPeerSrc) DisconnectPeers()                {}
@@ -271,10 +271,10 @@ func (b *BasicRPCNode) Address() (string, bool) {
 	return "", false
 }
 func (b *BasicRPCNode) Broadcast(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except network.Peer) error {
-	return errors.New("MockClientAggregator does not implement Broadcast.")
+	return errors.New("mock MockClientAggregator does not implement Broadcast")
 }
 func (b *BasicRPCNode) Relay(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except network.Peer) error {
-	return errors.New("MockClientAggregator does not implement Relay.")
+	return errors.New("mock MockClientAggregator does not implement Relay")
 }
 func (b *BasicRPCNode) Disconnect(badnode network.Peer) {}
 func (b *BasicRPCNode) DisconnectPeers() {}

@@ -47,18 +47,18 @@ type phonebookEntries map[string]phonebookData
 // PopEarliestTime removes the earliest time from recentConnectionTimes in
 // phonebookData of addr
 // It assumes that it is earlier than 1 second
-func (phbEnteries *phonebookEntries) PopEarliestTime(addr string) {
-	phbData := (*phbEnteries)[addr]
+func (e *phonebookEntries) PopEarliestTime(addr string) {
+	phbData := (*e)[addr]
 	phbData.recentConnectionTimes = phbData.recentConnectionTimes[1:]
-	(*phbEnteries)[addr] = phbData
+	(*e)[addr] = phbData
 }
 
 // AppendTime adds the current time to recentConnectionTimes in
 // phonebookData of addr
-func (phbEnteries *phonebookEntries) AppendTimeNow(addr string) {
-	phbData := (*phbEnteries)[addr]
+func (e *phonebookEntries) AppendTimeNow(addr string) {
+	phbData := (*e)[addr]
 	phbData.recentConnectionTimes = append(phbData.recentConnectionTimes, time.Now())
-	(*phbEnteries)[addr] = phbData
+	(*e)[addr] = phbData
 }
 
 func (e *phonebookEntries) filterRetryTime(t time.Time) []string {
@@ -110,8 +110,9 @@ func (e *phonebookEntries) updateRetryAfter(addr string, retryAfter time.Time) {
 	}
 }
 
+// waitAndAddConnectionTime will wait to prevent exceeding connectionsRateLimitingCount.
+// Then it will register the next connection time.
 func (e *phonebookEntries) waitAndAddConnectionTime(addr string, connectionsRateLimitingCount uint) {
-
 	var timeSince time.Duration
 	// Remove from recentConnectionTimes the times later than 1 second
 	for len((*e)[addr].recentConnectionTimes) > 0 {
@@ -184,6 +185,8 @@ func (p *ArrayPhonebook) UpdateRetryAfter(addr string, retryAfter time.Time) {
 	p.Entries.updateRetryAfter(addr, retryAfter)
 }
 
+// WaitAndAddConnectionTime will wait to prevent exceeding connectionsRateLimitingCount.
+// Then it will register the next connection time.
 func (p *ArrayPhonebook) WaitAndAddConnectionTime(addr string, connectionsRateLimitingCount uint) {
 	p.Entries.waitAndAddConnectionTime(addr, connectionsRateLimitingCount)
 }
@@ -220,6 +223,8 @@ func (p *ThreadsafePhonebook) UpdateRetryAfter(addr string, retryAfter time.Time
 	p.entries.updateRetryAfter(addr, retryAfter)
 }
 
+// WaitAndAddConnectionTime will wait to prevent exceeding connectionsRateLimitingCount.
+// Then it will register the next connection time.
 func (p *ThreadsafePhonebook) WaitAndAddConnectionTime(addr string, connectionsRateLimitingCount uint) {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
