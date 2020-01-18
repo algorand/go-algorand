@@ -28,6 +28,9 @@ import (
 )
 
 func TestInvalidDeposit(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
 	if runtime.GOOS == "darwin" {
 		t.Skip()
 	}
@@ -116,6 +119,9 @@ func TestInvalidDeposit(t *testing.T) {
 }
 
 func TestNoDepositAssociatedWithBid(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
 	t.Parallel()
 	r := require.New(t)
 
