@@ -18,10 +18,11 @@ package transactions
 
 import (
 	"math/rand"
+	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
-	"runtime"
 
 	"github.com/stretchr/testify/require"
 
@@ -104,7 +105,7 @@ func TestAccountsCanSendMoneyAcrossUpgradeV15toV16(t *testing.T) {
 func testAccountsCanSendMoneyAcrossUpgrade(t *testing.T, templatePath string) {
 	t.Parallel()
 	a := require.New(t)
-
+	os.Setenv("ALGOSMALLLAMBDAMSEC", "500")
 	var fixture fixtures.RestClientFixture
 	fixture.Setup(t, templatePath)
 	defer fixture.Shutdown()
@@ -166,8 +167,17 @@ func testAccountsCanSendMoneyAcrossUpgrade(t *testing.T, templatePath string) {
 		}
 	}
 
+	initialStatus, err = c.Status()
+	a.NoError(err, "getting status")
+
 	// submit a few more transactions to make sure payments work in new protocol
-	for i := 0; i < 20; i++ {
+	// perform this for two rounds.
+	for {
+		curStatus, err = pongClient.Status()
+		a.NoError(err)
+		if curStatus.LastRound > initialStatus.LastRound+2 {
+			break
+		}
 		pongTx, err := pongClient.SendPaymentFromUnencryptedWallet(pongAccount, pingAccount, transactionFee, amountPongSendsPing, GenerateRandomBytes(8))
 		a.NoError(err, "fixture should be able to send money (pong -> ping)")
 		pongTxids = append(pongTxids, pongTx.ID().String())
