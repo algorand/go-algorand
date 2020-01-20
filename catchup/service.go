@@ -511,6 +511,7 @@ func (s *Service) sync(cert *PendingUnmatchedCertificate) {
 	s.log.Infof("Catchup Service: finished catching up, now at round %v (previously %v). Total time catching up %v.", s.ledger.LastRound(), pr, elapsedTime)
 }
 
+// TODO this doesn't actually use the digest from cert!
 func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.AsyncVoteVerifier) {
 	blockHash := bookkeeping.BlockHash(cert.Proposal.BlockDigest) // semantic digest (i.e., hash of the block header), not byte-for-byte digest
 	fetcher := s.latestRoundFetcherFactory.NewOverGossip(protocol.UniEnsBlockReqTag)
@@ -527,17 +528,18 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 		}
 		// Ask the fetcher to get the block somehow
 		block, fetchedCert, rpcc, err := s.innerFetch(fetcher, cert.Round)
-		rpcc.Close()
 
 		if err != nil {
 			select {
 			case <-s.ctx.Done():
-				logging.Base().Debugf("EnsureDigest was asked to quit before we could acquire the block")
+				logging.Base().Debugf("fetchRound was asked to quit before we could acquire the block")
 				return
 			default:
 			}
-			logging.Base().Panicf("EnsureDigest could not acquire block, fetcher errored out: %v", err)
+			logging.Base().Warnf("fetchRound could not acquire block, fetcher errored out: %v", err)
+			continue
 		}
+		rpcc.Close()
 
 		if block.Hash() == blockHash && block.ContentsMatchHeader() {
 			s.ledger.EnsureBlock(block, cert)
@@ -553,7 +555,7 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 			s := "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
 			s += "!!!!!!!!!! FORK DETECTED !!!!!!!!!!!\n"
 			s += "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
-			s += "EnsureDigest called with a cert authenticating block with hash %v.\n"
+			s += "fetchRound called with a cert authenticating block with hash %v.\n"
 			s += "We fetched a valid cert authenticating a different block, %v. This indicates a fork.\n\n"
 			s += "Cert from our agreement service:\n%#v\n\n"
 			s += "Cert from the fetcher:\n%#v\n\n"

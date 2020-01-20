@@ -124,7 +124,9 @@ func (m *MockedFetcher) FetchBlock(ctx context.Context, round basics.Round) (*bo
 		panic(err)
 	}
 
-	return &block, &agreement.Certificate{}, &m.client, nil
+	var cert agreement.Certificate
+	cert.Proposal.BlockDigest = block.Digest()
+	return &block, &cert, &m.client, nil
 }
 
 func (m *MockedFetcher) NumPeers() int {
@@ -284,7 +286,9 @@ func TestAbruptWrites(t *testing.T) {
 			time.Sleep(time.Duration(rand.Uint32()%5) * time.Millisecond)
 			blk, err := remote.Block(i)
 			require.NoError(t, err)
-			err = local.AddBlock(blk, agreement.Certificate{})
+			var cert agreement.Certificate
+			cert.Proposal.BlockDigest = blk.Digest()
+			err = local.AddBlock(blk, cert)
 			require.NoError(t, err)
 		}
 	}()
@@ -606,4 +610,35 @@ func testingenvWithUpgrade(
 	}
 
 	return mLedger, mEmptyLedger
+}
+
+type MockVoteVerifier struct{}
+
+func (avv *MockVoteVerifier) Quit() {
+}
+func (avv *MockVoteVerifier) Parallelism() int {
+	return 1
+}
+
+func TestCatchupUnmatchedCertificate(t *testing.T) {
+	// Make Ledger
+	remote, local := testingenv(t, 10)
+
+	lastRoundAtStart := local.LastRound()
+
+	// Make Service
+	s := MakeService(logging.Base(), defaultConfig, &mocks.MockNetwork{}, local, nil, &mockedAuthenticator{errorRound: int(lastRoundAtStart + 1)}, nil)
+	s.latestRoundFetcherFactory = &MockedFetcherFactory{fetcher: &MockedFetcher{ledger: remote, timeout: false, tries: make(map[basics.Round]int)}}
+	for roundNumber := 2; roundNumber < 10; roundNumber += 3 {
+		pc := &PendingUnmatchedCertificate{
+			Cert: agreement.Certificate{
+				Round: basics.Round(roundNumber),
+			},
+			VoteVerifier: agreement.MakeAsyncVoteVerifier(nil),
+		}
+		block, _ := remote.Block(basics.Round(roundNumber))
+		pc.Cert.Proposal.BlockDigest = block.Digest()
+		s.sync(pc)
+		require.True(t, s.latestRoundFetcherFactory.(*MockedFetcherFactory).fetcher.client.closed)
+	}
 }
