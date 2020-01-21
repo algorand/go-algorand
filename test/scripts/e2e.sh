@@ -3,7 +3,6 @@ echo "######################################################################"
 echo "  E2E Tests"
 echo "######################################################################"
 set -e
-set -x
 
 # Suppress telemetry reporting for tests
 export ALGOTEST=1
@@ -60,16 +59,7 @@ pkill -u $(whoami) -x algod || true
 ${BINDIR}/algod -v
 ${BINDIR}/goal -v
 
-# Run all `goal ... -h` commands.
-# This will make sure they work and that there are no conflicting subcommand options.
-${BINDIR}/goal helptest > ${TEMPDIR}/helptest
-if bash -x -e ${TEMPDIR}/helptest > ${TEMPDIR}/helptest.out 2>&1; then
-    # ok
-    echo "helptest ok"
-else
-    cat ${TEMPDIR}/helptest.out
-    exit 1
-fi
+./test/scripts/goal_subcommand_sanity.sh
 
 export PATH=${BINDIR}:${PATH}
 export GOPATH=$(go env GOPATH)
