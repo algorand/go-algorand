@@ -191,6 +191,11 @@ func (l agreementLedger) EnsureDigest(cert agreement.Certificate, quit chan stru
 		return
 	case <-certRoundReachedCh:
 		// great! we've reached the desired round.
+		// clear out the content of the UnmatchedPendingCertificates channel if we somehow managed to get this round aquired by a different method ( i.e. regular catchup )
+		select {
+		case <-l.UnmatchedPendingCertificates:
+		default:
+		}
 		return
 	}
 }

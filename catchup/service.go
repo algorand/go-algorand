@@ -518,7 +518,7 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 	defer func() {
 		fetcher.Close()
 	}()
-	for {
+	for s.ledger.LastRound() < cert.Round {
 		if fetcher.OutOfPeers(cert.Round) {
 			fetcher.Close()
 			// refresh peers and try again
