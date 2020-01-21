@@ -61,8 +61,7 @@ func startKMDForDataDir(binDir, algodDataDir, kmdDataDir string) {
 
 var startKMDCmd = &cobra.Command{
 	Use:   "start",
-	Short: "Start the kmd process, or restart it with an updated timeout",
-	Long:  `Start the kmd process, or restart it with an updated timeout.`,
+	Short: "Start the kmd process, or restart it with an updated timeout.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		binDir, err := util.ExeDir()
@@ -79,8 +78,7 @@ var startKMDCmd = &cobra.Command{
 
 var stopKMDCmd = &cobra.Command{
 	Use:   "stop",
-	Short: "Stop the kmd process if it is running",
-	Long:  `Stop the kmd process if it is running.`,
+	Short: "Stop the kmd process if it is running.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		binDir, err := util.ExeDir()
