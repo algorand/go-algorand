@@ -460,7 +460,8 @@ func (s *Service) periodicSync() {
 }
 
 // Syncs the client with the network. sync asks the network for last known block and tries to sync the system
-// up the to the highest number it gets
+// up the to the highest number it gets. When a certificate is provided, the sync function attempts to keep trying
+// to fetch the matching block or abort when the catchup service exits.
 func (s *Service) sync(cert *PendingUnmatchedCertificate) {
 	// Only run sync once at a time
 	// Store start time of sync - in NS so we can compute time.Duration (which is based on NS)
