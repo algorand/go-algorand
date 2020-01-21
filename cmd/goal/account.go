@@ -693,7 +693,7 @@ No --delete-input flag specified, exiting without installing key.`)
 var renewParticipationKeyCmd = &cobra.Command{
 	Use:   "renewpartkey",
 	Short: "Renew an account's participation key",
-	Long:  `Generate a participation key for the specified account and issue the necessary transaction to register it`,
+	Long:  `Generate a participation key for the specified account and issue the necessary transaction to register it.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
@@ -758,7 +758,7 @@ func generateAndRegisterPartKey(address string, currentRound, lastValidRound uin
 var renewAllParticipationKeyCmd = &cobra.Command{
 	Use:   "renewallpartkeys",
 	Short: "Renew all existing participation keys",
-	Long:  `Generate new participation keys for all existing accounts with participation keys and issue the necessary transactions to register them`,
+	Long:  `Generate new participation keys for all existing accounts with participation keys and issue the necessary transactions to register them.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		onDataDirs(func(dataDir string) {
@@ -1074,7 +1074,7 @@ type partkeyInfo struct {
 var partkeyInfoCmd = &cobra.Command{
 	Use:   "partkeyinfo",
 	Short: "Output details about all available part keys",
-	Long:  `Output details about all available part keys in the specified data directory(ies), such as key validity period`,
+	Long:  `Output details about all available part keys in the specified data directory(ies), such as key validity period.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 

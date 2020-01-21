@@ -46,7 +46,7 @@ func init() {
 var ledgerCmd = &cobra.Command{
 	Use:   "ledger",
 	Short: "Access ledger-related details",
-	Long:  "Access ledger-related details",
+	Long:  "Access ledger-related details.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		// If no arguments passed, we should fallback to help
@@ -57,7 +57,7 @@ var ledgerCmd = &cobra.Command{
 var supplyCmd = &cobra.Command{
 	Use:   "supply",
 	Short: "Show ledger token supply",
-	Long:  "Show ledger token supply. All units are in microAlgos. The \"Total Money\" is all algos held by online+offline accounts (excludes non-participating accounts). The \"Online Money\" is the amount held solely by online accounts.",
+	Long:  `Show ledger token supply. All units are in microAlgos. The "Total Money" is all algos held by online+offline accounts (excludes non-participating accounts). The "Online Money" is the amount held solely by online accounts.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		dataDir := ensureSingleDataDir()
