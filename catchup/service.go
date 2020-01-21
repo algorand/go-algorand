@@ -79,7 +79,7 @@ type Service struct {
 	initialSyncNotified          uint32
 	protocolErrorLogged          bool
 	lastSupportedRound           basics.Round
-	unmatchedPendingCertificates chan PendingUnmatchedCertificate
+	unmatchedPendingCertificates <-chan PendingUnmatchedCertificate
 
 	latestRoundFetcherFactory rpcs.FetcherFactory
 }
@@ -98,7 +98,7 @@ type BlockAuthenticator interface {
 
 // MakeService creates a catchup service instance from its constituent components
 // If wsf is nil, then fetch over gossip is disabled.
-func MakeService(log logging.Logger, config config.Local, net network.GossipNode, ledger Ledger, wsf *rpcs.WsFetcherService, auth BlockAuthenticator, unmatchedPendingCertificates chan PendingUnmatchedCertificate) (s *Service) {
+func MakeService(log logging.Logger, config config.Local, net network.GossipNode, ledger Ledger, wsf *rpcs.WsFetcherService, auth BlockAuthenticator, unmatchedPendingCertificates <-chan PendingUnmatchedCertificate) (s *Service) {
 	s = &Service{}
 	s.ctx, s.cancel = context.WithCancel(context.Background())
 	s.cfg = config
