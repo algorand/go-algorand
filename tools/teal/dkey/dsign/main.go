@@ -62,8 +62,11 @@ func main() {
 		ddata, err := ioutil.ReadFile(os.Args[3])
 		failFast(err)
 
+		programbytes, err := logic.AssembleString(pdata)
+		failFast(err)
+
 		dsig := sec.Sign(logic.Msg{
-			ProgramHash: crypto.HashObj(logic.Program(pdata)),
+			ProgramHash: crypto.HashObj(logic.Program(programbytes)),
 			Data:        ddata,
 		})
 
