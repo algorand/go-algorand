@@ -171,7 +171,7 @@ var stopCmd = &cobra.Command{
 
 var restartCmd = &cobra.Command{
 	Use:   "restart",
-	Short: "stop, and then start, the specified Algorand node",
+	Short: "Stop, and then start, the specified Algorand node",
 	Long:  `Stop, and then start, the specified Algorand node`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
@@ -310,6 +310,7 @@ func makeStatusString(stat v1.NodeStatus) string {
 var lastroundCmd = &cobra.Command{
 	Use:   "lastround",
 	Short: "Print the last round number",
+	Long:  `Prints the most recent round confirmed by the Algorand node.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		onDataDirs(func(dataDir string) {
@@ -425,8 +426,8 @@ func isValidIP(userInput string) bool {
 
 var createCmd = &cobra.Command{
 	Use:   "create",
-	Short: "create a node at the desired data directory for the desired network",
-	Long:  "create a node at the desired data directory for the desired network",
+	Short: "Create a node at the desired data directory for the desired network",
+	Long:  "Create a node at the desired data directory for the desired network.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 

@@ -34,7 +34,7 @@ func init() {
 var kmdCmd = &cobra.Command{
 	Use:   "kmd",
 	Short: "Interact with kmd, the key management daemon",
-	Long:  `Interact with kmd, the key management daemon`,
+	Long:  `Interact with kmd, the key management daemon. The key management daemon is a separate process from algod that is solely responsible for key management, for security purposes.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		cmd.HelpFunc()(cmd, args)
@@ -61,8 +61,8 @@ func startKMDForDataDir(binDir, algodDataDir, kmdDataDir string) {
 
 var startKMDCmd = &cobra.Command{
 	Use:   "start",
-	Short: "Start the kmd process or restart it with an updated timeout",
-	Long:  `Start the kmd process or restart it with an updated timeout`,
+	Short: "Start the kmd process, or restart it with an updated timeout",
+	Long:  `Start the kmd process, or restart it with an updated timeout`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		binDir, err := util.ExeDir()

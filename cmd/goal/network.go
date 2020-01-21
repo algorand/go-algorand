@@ -126,7 +126,7 @@ func getNetworkAndBinDir() (netdeploy.Network, string) {
 var networkStartCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Start a deployed private network",
-	Long:  `Start a deployed private network`,
+	Long:  `Start a deployed private network by starting each individual node.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		network, binDir := getNetworkAndBinDir()
