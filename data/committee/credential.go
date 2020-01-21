@@ -211,7 +211,7 @@ func (cred Credential) lowestOutputBuggy() *big.Int {
 	var lowest big.Int
 
 	h1 := cred.VrfOut
-	for i := uint64(0); i <= cred.Weight; i++ {
+	for i := uint64(0); i < cred.Weight; i++ {
 		var h crypto.Digest
 		if cred.DomainSeparationEnabled {
 			cred.Hashable.Iter = i
@@ -247,7 +247,7 @@ func (cred Credential) LessBuggy(otherCred Credential) bool {
 
 // LowestOutputDigest gives the lowestOutput as a crypto.Digest, which allows
 // pretty-printing a proposal's lowest output.
-///This function is only used for debugging.
+// This function is only used for debugging.
 func (cred Credential) LowestOutputDigest() crypto.Digest {
 	lbytes := cred.lowestOutput().Bytes()
 	var out crypto.Digest
