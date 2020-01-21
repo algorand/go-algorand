@@ -42,7 +42,7 @@ const blockQueryPeerLimit = 10
 // this should be at least the number of relays
 const catchupRetryLimit = 500
 
-// PendingUnmatchedCertificate is a single certificate that is being waited upon to have it's corresponding block fetched.
+// PendingUnmatchedCertificate is a single certificate that is being waited upon to have its corresponding block fetched.
 type PendingUnmatchedCertificate struct {
 	Cert         agreement.Certificate
 	VoteVerifier *agreement.AsyncVoteVerifier
