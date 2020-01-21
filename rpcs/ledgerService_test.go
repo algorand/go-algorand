@@ -73,7 +73,8 @@ func (s *httpTestPeerSource) RequestConnectOutgoing(replace bool, quit <-chan st
 func (s *httpTestPeerSource) Start()                                                    {}
 func (s *httpTestPeerSource) Stop()                                                     {}
 func (s *httpTestPeerSource) RegisterHandlers(dispatch []network.TaggedMessageHandler)  {}
-func (s *httpTestPeerSource) ClearHandlers()                                            {}
+func (s *httpTestPeerSource) ClearHandlers() {}
+func (s *httpTestPeerSource) WaitAndAddConnectionTime(addr string) {}
 
 // implement network.HTTPPeer
 type testHTTPPeer struct {
@@ -183,6 +184,7 @@ func (s *testUnicastPeerSrc) RegisterHandlers(dispatch []network.TaggedMessageHa
 		s.handler = dispatch[0].MessageHandler
 	}
 }
+func (s *testUnicastPeerSrc) WaitAndAddConnectionTime(addr string) {}
 
 // implement network.UnicastPeer
 type testUnicastPeer struct {
@@ -324,6 +326,8 @@ func (b *BasicRPCNode) stop() {
 func (b *BasicRPCNode) GetPeers(options ...network.PeerOption) []network.Peer {
 	return b.peers
 }
+
+func (b *BasicRPCNode) WaitAndAddConnectionTime(addr string) {}
 
 func nodePair() (*BasicRPCNode, *BasicRPCNode) {
 	nodeA := &BasicRPCNode{}

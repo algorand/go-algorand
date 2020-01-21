@@ -119,6 +119,7 @@ func (mca *MockClientAggregator) Start() {}
 func (mca *MockClientAggregator) Stop() {}
 func (mca *MockClientAggregator) RegisterHandlers(dispatch []network.TaggedMessageHandler) {}
 func (mca *MockClientAggregator) ClearHandlers() {}
+func (mca *MockClientAggregator) WaitAndAddConnectionTime(addr string) {}
 
 const numberOfPeers = 10
 

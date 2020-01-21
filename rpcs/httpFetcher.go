@@ -78,7 +78,7 @@ func (hf *HTTPFetcher) GetBlockBytes(ctx context.Context, r basics.Round) (data 
 	}
 	request = request.WithContext(ctx)
 	network.SetUserAgentHeader(request.Header)
-	response, err := network.DoHTTP(hf.client, request)
+	response, err := network.DoHTTP(hf.client, request, hf.net, hf.rootURL)
 	if err != nil {
 		hf.log.Debugf("GET %#v : %s", blockURL, err)
 		return nil, err

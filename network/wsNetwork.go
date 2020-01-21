@@ -173,6 +173,11 @@ type GossipNode interface {
 
 	// ClearHandlers deregisters all the existing message handlers.
 	ClearHandlers()
+
+	// WaitAndAddConnectionTime will wait to prevent exceeding connectionsRateLimitingCount.
+	// Then it will register the next connection time.
+	WaitAndAddConnectionTime(addr string)
+
 }
 
 // IncomingMessage represents a message arriving from some peer in our p2p network
@@ -770,6 +775,16 @@ func (wn *WebsocketNetwork) checkServerResponseVariables(header http.Header, add
 		return false
 	}
 	return true
+}
+
+/*
+// GetPhonebook gives the Phonebook associated to the network
+func (wn *WebsocketNetwork) GetPhonebook(bootstrapNetworkName string) (p Phonebook) {
+	return wn.phonebook.GetPhonebook(bootstrapNetworkName)
+}
+*/ //xxxsss
+func (wn *WebsocketNetwork) WaitAndAddConnectionTime(addr string) {
+	wn.phonebook.WaitAndAddConnectionTime(addr, wn.config.ConnectionsRateLimitingCount)
 }
 
 // getCommonHeaders retreives the common headers for both incoming and outgoing connections from the provided headers.
@@ -1766,6 +1781,10 @@ func SetUserAgentHeader(header http.Header) {
 // DoHTTP will check call to WaitAndAddConnectionTime to
 // make sure connectionsRateLimitingCount is not violated, and register the
 // connection time of the request, before sending the request to the server. 
-func DoHTTP(client *http.Client, request *http.Request) (*http.Response, error) {
+func DoHTTP(client *http.Client,
+	request *http.Request,
+	net *GossipNode,
+	addr string ) (*http.Response, error) {
+	(*net).WaitAndAddConnectionTime(addr)
 	return client.Do(request)
 }
