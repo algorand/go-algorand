@@ -45,7 +45,7 @@ func init() {
 
 func main() {
 	// Hidden command to generate docs in a given directory
-	// goal generate-docs [path]
+	// algokey generate-docs [path]
 	if len(os.Args) == 3 && os.Args[1] == "generate-docs" {
 		err := doc.GenMarkdownTree(rootCmd, os.Args[2])
 		if err != nil {
