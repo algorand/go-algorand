@@ -122,3 +122,14 @@ func BenchmarkAddressFormatting(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkUnmarshalChecksumAddress(b *testing.B) {
+	addr := "J5YDZLPOHWB5O6MVRHNFGY4JXIQAYYM6NUJWPBSYBBIXH5ENQ4Z5LTJELU"
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := UnmarshalChecksumAddress(addr)
+		if err != nil {
+			break
+		}
+	}
+}

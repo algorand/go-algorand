@@ -33,6 +33,8 @@ const (
 	checksumLength = 4
 )
 
+var base32Encoder = base32.StdEncoding.WithPadding(base32.NoPadding)
+
 // GetChecksum returns the checksum as []byte
 // Checksum in Algorand are the last 4 bytes of the shortAddress Hash. H(Address)[28:]
 func (addr Address) GetChecksum() []byte {
@@ -48,7 +50,8 @@ func (addr Address) GetUserAddress() string {
 
 // UnmarshalChecksumAddress tries to unmarshal the checksummed address string.
 func UnmarshalChecksumAddress(address string) (Address, error) {
-	decoded, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(address)
+	decoded, err := base32Encoder.DecodeString(address)
+
 	if err != nil {
 		return Address{}, fmt.Errorf("failed to decode address %s to base 32", address)
 	}
@@ -74,8 +77,6 @@ func UnmarshalChecksumAddress(address string) (Address, error) {
 
 	return short, nil
 }
-
-var base32Encoder = base32.StdEncoding.WithPadding(base32.NoPadding)
 
 // String returns a string representation of Address
 func (addr Address) String() string {
