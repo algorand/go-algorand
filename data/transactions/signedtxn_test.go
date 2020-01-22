@@ -68,7 +68,7 @@ func TestDecodeNil(t *testing.T) {
 	var st SignedTxn
 	err := protocol.Decode(nilEncoding, &st)
 	if err == nil {
-		// These two functions used to panic when run on a zero value of SignedTxn.
+		// This function used to panic when run on a zero value of SignedTxn.
 		st.ID()
 	}
 }
