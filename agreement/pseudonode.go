@@ -253,7 +253,7 @@ func (n asyncPseudonode) makeProposals(round basics.Round, period period, accoun
 	deadline := time.Now().Add(AssemblyTime)
 	ve, err := n.factory.AssembleBlock(round, deadline)
 	if err != nil {
-		n.log.Errorf("pseudonode.makeProposals: could not generate a proposal for round %v: %v", round, err)
+		n.log.Errorf("pseudonode.makeProposals: could not generate a proposal for round %d: %v", round, err)
 		return nil, nil
 	}
 
@@ -484,7 +484,7 @@ func (t pseudonodeProposalsTask) execute(verifier *AsyncVoteVerifier, quit chan 
 			Period:  uint64(vote.R.Period),
 		})
 	}
-	t.node.log.Infof("pseudonode.makeProposals: %v proposals created for round %v, period %v", len(verifiedVotes), t.round, t.period)
+	t.node.log.Infof("pseudonode.makeProposals: %v proposals created for round %d, period %d", len(verifiedVotes), t.round, t.period)
 
 	for range verifiedVotes {
 		t.node.monitor.inc(pseudonodeCoserviceType)

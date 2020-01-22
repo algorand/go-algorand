@@ -129,13 +129,13 @@ func deriveNewSeed(address basics.Address, vrf *crypto.VRFSecrets, rnd round, pe
 
 	cparams, err := ledger.ConsensusParams(ParamsRound(rnd))
 	if err != nil {
-		err = fmt.Errorf("failed to obtain consensus parameters in round %v: %v", ParamsRound(rnd), err)
+		err = fmt.Errorf("failed to obtain consensus parameters in round %d: %v", ParamsRound(rnd), err)
 		return
 	}
 	var alpha crypto.Digest
 	prevSeed, err := ledger.Seed(seedRound(rnd, cparams))
 	if err != nil {
-		reterr = fmt.Errorf("failed read seed of round %v: %v", seedRound(rnd, cparams), err)
+		reterr = fmt.Errorf("failed read seed of round %d: %v", seedRound(rnd, cparams), err)
 		return
 	}
 
@@ -162,7 +162,7 @@ func deriveNewSeed(address basics.Address, vrf *crypto.VRFSecrets, rnd round, pe
 		digrnd := rnd.SubSaturate(basics.Round(cparams.SeedLookback * cparams.SeedRefreshInterval))
 		oldDigest, err := ledger.LookupDigest(digrnd)
 		if err != nil {
-			reterr = fmt.Errorf("could not lookup old entry digest (for seed) from round %v: %v", digrnd, err)
+			reterr = fmt.Errorf("could not lookup old entry digest (for seed) from round %d: %v", digrnd, err)
 			return
 		}
 		input.History = oldDigest
@@ -176,19 +176,19 @@ func verifyNewSeed(p unauthenticatedProposal, ledger LedgerReader) error {
 	rnd := p.Round()
 	cparams, err := ledger.ConsensusParams(ParamsRound(rnd))
 	if err != nil {
-		return fmt.Errorf("failed to obtain consensus parameters in round %v: %v", ParamsRound(rnd), err)
+		return fmt.Errorf("failed to obtain consensus parameters in round %d: %v", ParamsRound(rnd), err)
 	}
 
 	balanceRound := balanceRound(rnd, cparams)
 	proposerRecord, err := ledger.BalanceRecord(balanceRound, value.OriginalProposer)
 	if err != nil {
-		return fmt.Errorf("failed to obtain balance record for address %v in round %v: %v", value.OriginalProposer, balanceRound, err)
+		return fmt.Errorf("failed to obtain balance record for address %v in round %d: %v", value.OriginalProposer, balanceRound, err)
 	}
 
 	var alpha crypto.Digest
 	prevSeed, err := ledger.Seed(seedRound(rnd, cparams))
 	if err != nil {
-		return fmt.Errorf("failed read seed of round %v: %v", seedRound(rnd, cparams), err)
+		return fmt.Errorf("failed read seed of round %d: %v", seedRound(rnd, cparams), err)
 	}
 
 	if value.OriginalPeriod == 0 {
@@ -214,7 +214,7 @@ func verifyNewSeed(p unauthenticatedProposal, ledger LedgerReader) error {
 		digrnd := rnd.SubSaturate(basics.Round(cparams.SeedLookback * cparams.SeedRefreshInterval))
 		oldDigest, err := ledger.LookupDigest(digrnd)
 		if err != nil {
-			return fmt.Errorf("could not lookup old entry digest (for seed) from round %v: %v", digrnd, err)
+			return fmt.Errorf("could not lookup old entry digest (for seed) from round %d: %v", digrnd, err)
 		}
 		input.History = oldDigest
 	}

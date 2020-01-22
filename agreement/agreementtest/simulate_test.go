@@ -251,7 +251,7 @@ func (l *testLedger) EnsureBlock(e bookkeeping.Block, c agreement.Certificate) {
 
 	if _, ok := l.entries[e.Round()]; ok {
 		if l.entries[e.Round()].Digest() != e.Digest() {
-			err := fmt.Errorf("testLedger.EnsureBlock called with conflicting entries in round %v", e.Round())
+			err := fmt.Errorf("testLedger.EnsureBlock called with conflicting entries in round %d", e.Round())
 			panic(err)
 		}
 	}
@@ -274,7 +274,7 @@ func (l *testLedger) EnsureDigest(c agreement.Certificate, quit chan struct{}, v
 
 		if r < l.nextRound {
 			if l.entries[r].Digest() != c.Proposal.BlockDigest {
-				err := fmt.Errorf("testLedger.EnsureDigest called with conflicting entries in round %v", r)
+				err := fmt.Errorf("testLedger.EnsureDigest called with conflicting entries in round %d", r)
 				panic(err)
 			}
 			return true
@@ -291,7 +291,7 @@ func (l *testLedger) EnsureDigest(c agreement.Certificate, quit chan struct{}, v
 		return
 	case <-l.Wait(r):
 		if !consistencyCheck() {
-			err := fmt.Errorf("Wait channel fired without matching block in round %v", r)
+			err := fmt.Errorf("Wait channel fired without matching block in round %d", r)
 			panic(err)
 		}
 	}

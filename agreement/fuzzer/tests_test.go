@@ -79,12 +79,12 @@ func printResults(t *testing.T, r *RunResult) {
 	)
 	if r.PreRecoveryHighRound != r.PreRecoveryLowRound {
 		// network got disupted by the filters.
-		fmt.Printf("%v partitioned the network ( %v - %v ), but recovered correctly reaching round %v\n", t.Name(), r.PreRecoveryLowRound, r.PreRecoveryHighRound, r.PostRecoveryHighRound)
+		fmt.Printf("%v partitioned the network ( %v - %v ), but recovered correctly reaching round %d\n", t.Name(), r.PreRecoveryLowRound, r.PreRecoveryHighRound, r.PostRecoveryHighRound)
 	} else {
 		if r.PreRecoveryHighRound == r.StartLowRound {
-			fmt.Printf("%v stalled the network, and the network reached round %v\n", t.Name(), r.PostRecoveryHighRound)
+			fmt.Printf("%v stalled the network, and the network reached round %d\n", t.Name(), r.PostRecoveryHighRound)
 		} else {
-			fmt.Printf("%v did not partition the network, and the network reached round %v\n", t.Name(), r.PostRecoveryHighRound)
+			fmt.Printf("%v did not partition the network, and the network reached round %d\n", t.Name(), r.PostRecoveryHighRound)
 		}
 	}
 }*/
