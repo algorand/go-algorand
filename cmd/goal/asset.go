@@ -211,6 +211,7 @@ func lookupAssetID(cmd *cobra.Command, creator string, client libgoal.Client) {
 var createAssetCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create an asset",
+	Long:  "Post a transaction declaring and issuing a new layer-one asset on the network.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		checkTxValidityPeriodCmdFlags(cmd)
@@ -287,6 +288,7 @@ var createAssetCmd = &cobra.Command{
 var destroyAssetCmd = &cobra.Command{
 	Use:   "destroy",
 	Short: "Destroy an asset",
+	Long:  `Issue a transaction deleting an asset from the network. This transaction must be issued by the asset owner, who must hold all outstanding asset tokens.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		checkTxValidityPeriodCmdFlags(cmd)
@@ -354,6 +356,7 @@ var destroyAssetCmd = &cobra.Command{
 var configAssetCmd = &cobra.Command{
 	Use:   "config",
 	Short: "Configure an asset",
+	Long:  `Change an asset configuration. This transaction must be issued by the asset manager. This allows any management address to be changed: manager, freezer, reserve, or clawback.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		checkTxValidityPeriodCmdFlags(cmd)
@@ -442,7 +445,7 @@ var configAssetCmd = &cobra.Command{
 var sendAssetCmd = &cobra.Command{
 	Use:   "send",
 	Short: "Transfer assets",
-	Long:  "Transfer asset holdings.  Use a zero self-transfer to add an asset to an account in the first place.",
+	Long:  "Transfer asset holdings. An account can begin accepting an asset by issuing a zero-amount asset transfer to itself.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		checkTxValidityPeriodCmdFlags(cmd)
@@ -523,6 +526,7 @@ var sendAssetCmd = &cobra.Command{
 var freezeAssetCmd = &cobra.Command{
 	Use:   "freeze",
 	Short: "Freeze assets",
+	Long:  `Freeze or unfreeze assets for a target account. The transaction must be issued by the freeze address for the asset in question.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		checkTxValidityPeriodCmdFlags(cmd)
@@ -601,6 +605,7 @@ func assetDecimalsFmt(amount uint64, decimals uint32) string {
 var infoAssetCmd = &cobra.Command{
 	Use:   "info",
 	Short: "Look up current parameters for an asset",
+	Long:  `Look up asset information stored on the network, such as asset creator, management addresses, or asset name.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		dataDir := ensureSingleDataDir()
