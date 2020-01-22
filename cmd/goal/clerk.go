@@ -139,7 +139,7 @@ func init() {
 var clerkCmd = &cobra.Command{
 	Use:   "clerk",
 	Short: "Provides the tools to control transactions ",
-	Long:  `Collection of commands to support the mangement of transaction information.`,
+	Long:  `Collection of commands to support the management of transaction information.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		//If no arguments passed, we should fallback to help
@@ -536,6 +536,7 @@ var rawsendCmd = &cobra.Command{
 var inspectCmd = &cobra.Command{
 	Use:   "inspect",
 	Short: "print a transaction file",
+	Long:  `Loads a transaction file, attempts to decode the transaction, and displays the decoded information.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		for _, txFilename := range args {
 			data, err := readFile(txFilename)
@@ -815,7 +816,7 @@ func disassembleFile(fname, outname string) {
 var compileCmd = &cobra.Command{
 	Use:   "compile",
 	Short: "compile a contract program",
-	Long:  "compile a contract program, report its address",
+	Long:  "Reads a TEAL contract program and compiles it to binary output and contract address.",
 	Run: func(cmd *cobra.Command, args []string) {
 		for _, fname := range args {
 			if disassesmble {
@@ -877,7 +878,7 @@ var compileCmd = &cobra.Command{
 var dryrunCmd = &cobra.Command{
 	Use:   "dryrun",
 	Short: "test a program offline",
-	Long:  "test a program offline under various conditions and verbosity",
+	Long:  "Test a TEAL program offline under various conditions and verbosity.",
 	Run: func(cmd *cobra.Command, args []string) {
 		data, err := readFile(txFilename)
 		if err != nil {
