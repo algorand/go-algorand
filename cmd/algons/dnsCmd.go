@@ -203,7 +203,7 @@ func doAddDNS(from string, to string) (err error) {
 	} else {
 		recordType = "CNAME"
 	}
-	cloudflareDNS.SetDNSRecord(context.Background(), recordType, from, to, cloudflare.AutomaticTTL, priority, proxied)
+	err = cloudflareDNS.SetDNSRecord(context.Background(), recordType, from, to, cloudflare.AutomaticTTL, priority, proxied)
 
 	return
 }
