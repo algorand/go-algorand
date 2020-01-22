@@ -47,7 +47,7 @@ func init() {
 var loggingCmd = &cobra.Command{
 	Use:   "logging",
 	Short: "Control and manage Algorand logging",
-	Long:  `Enable/disable and configure Algorand remote logging`,
+	Long:  `Enable/disable and configure Algorand remote logging.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		fmt.Fprintf(os.Stderr, "Warning: `goal logging` deprecated, use `diagcfg telemetry status`\n")
@@ -90,8 +90,7 @@ var enableCmd = &cobra.Command{
 
 var disableCmd = &cobra.Command{
 	Use:   "disable",
-	Short: "Disable Algorand remote logging",
-	Long:  `Disable Algorand remote logging`,
+	Short: "Disable Algorand remote logging.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		fmt.Fprintf(os.Stderr, "Warning: `goal logging disable` deprecated, use `diagcfg telemetry disable`\n")

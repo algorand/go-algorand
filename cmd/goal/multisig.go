@@ -63,7 +63,7 @@ func init() {
 var multisigCmd = &cobra.Command{
 	Use:   "multisig",
 	Short: "Provides tools working with multisig transactions ",
-	Long:  `Create, examine, and add signatures to multisig transactions`,
+	Long:  `Create, examine, and add signatures to multisig transactions.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		//If no arguments passed, we should fallback to help
@@ -74,7 +74,7 @@ var multisigCmd = &cobra.Command{
 var addSigCmd = &cobra.Command{
 	Use:   "sign -t TXFILE -a ADDR",
 	Short: "Add a signature to a multisig transaction",
-	Long:  `Start a multisig, or add a signature to an existing multisig, for a given transaction`,
+	Long:  `Start a multisig, or add a signature to an existing multisig, for a given transaction.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		data, err := readFile(txFilename)
@@ -139,7 +139,7 @@ var addSigCmd = &cobra.Command{
 var signProgramCmd = &cobra.Command{
 	Use:   "signprogram -t TXFILE -a ADDR",
 	Short: "Add a signature to a multisig LogicSig",
-	Long:  `Start a multisig LogicSig, or add a signature to an existing multisig, for a given program`,
+	Long:  `Start a multisig LogicSig, or add a signature to an existing multisig, for a given program.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		dataDir := ensureSingleDataDir()
@@ -225,7 +225,7 @@ var signProgramCmd = &cobra.Command{
 var mergeSigCmd = &cobra.Command{
 	Use:   "merge -o MERGEDTXFILE TXFILE1 TXFILE2 ...",
 	Short: "Merge multisig signatures on transactions",
-	Long:  `Combine multiple partially-signed multisig transactions, and write out transactions with a single merged multisig signature`,
+	Long:  `Combine multiple partially-signed multisig transactions, and write out transactions with a single merged multisig signature.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) == 0 {
 			reportErrorf(txNoFilesError)
