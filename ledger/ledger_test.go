@@ -202,7 +202,8 @@ func TestLedgerBasic(t *testing.T) {
 	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
 	const inMem = true
 	const archival = true
-	l, err := OpenLedger(logging.Base(), t.Name(), inMem, genesisInitState, archival)
+	log := logging.TestingLog(t)
+	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, archival)
 	require.NoError(t, err, "could not open ledger")
 	defer l.Close()
 }
@@ -353,7 +354,8 @@ func TestLedgerSingleTx(t *testing.T) {
 	genesisInitState, initSecrets := testGenerateInitState(t, protocol.ConsensusV7)
 	const inMem = true
 	const archival = true
-	l, err := OpenLedger(logging.Base(), t.Name(), inMem, genesisInitState, archival)
+	log := logging.TestingLog(t)
+	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, archival)
 	a.NoError(err, "could not open ledger")
 	defer l.Close()
 
@@ -488,6 +490,11 @@ func TestLedgerSingleTx(t *testing.T) {
 	sbadTx.Sig = crypto.Signature{}
 	a.Error(l.appendUnvalidatedSignedTx(t, initAccounts, sbadTx, ad), "added tx with no signature")
 
+	badTx = correctPay
+	sbadTx = sign(initSecrets, badTx)
+	sbadTx.Sig[5]++
+	a.Error(l.appendUnvalidatedSignedTx(t, initAccounts, sbadTx, ad), "added tx with corrupt signature")
+
 	// TODO set multisig and test
 
 	badTx = correctPay
@@ -538,7 +545,8 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 	genesisInitState, initSecrets := testGenerateInitState(t, version)
 	const inMem = true
 	const archival = true
-	l, err := OpenLedger(logging.Base(), t.Name(), inMem, genesisInitState, archival)
+	log := logging.TestingLog(t)
+	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, archival)
 	a.NoError(err, "could not open ledger")
 	defer l.Close()
 
