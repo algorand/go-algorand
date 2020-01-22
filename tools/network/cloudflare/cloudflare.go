@@ -236,9 +236,14 @@ func (d *DNS) UpdateDNSRecord(ctx context.Context, recordID string, recordType s
 	if err != nil {
 		return err
 	}
+
 	if parsedResponse.Success == false {
-		return fmt.Errorf("failed to update DNS record : %v", parsedResponse)
+		request, _ := updateDNSRecordRequest(d.zoneID, d.authEmail, d.authKey, recordType, recordID, name, content, ttl, priority, proxied)
+		requestBody, _ := request.GetBody()
+		bodyBytes, _ := ioutil.ReadAll(requestBody)
+		return fmt.Errorf("failed to update DNS record. Request body = %s, parsedResponse = %#v", string(bodyBytes), parsedResponse)
 	}
+
 	return nil
 }
 
@@ -259,7 +264,10 @@ func (d *DNS) UpdateSRVRecord(ctx context.Context, recordID string, name string,
 		return err
 	}
 	if parsedResponse.Success == false {
-		return fmt.Errorf("failed to update SRV record : %v", parsedResponse)
+		request, _ := updateSRVRecordRequest(d.zoneID, d.authEmail, d.authKey, recordID, name, service, protocol, weight, port, ttl, priority, target)
+		requestBody, _ := request.GetBody()
+		bodyBytes, _ := ioutil.ReadAll(requestBody)
+		return fmt.Errorf("failed to update SRV record. Request body = %s, parsedResponse = %#v", string(bodyBytes), parsedResponse)
 	}
 	return nil
 }
