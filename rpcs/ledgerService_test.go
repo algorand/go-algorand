@@ -177,7 +177,6 @@ func (s *testUnicastPeerSrc) RequestConnectOutgoing(replace bool, quit <-chan st
 func (s *testUnicastPeerSrc) Start()                                                    {}
 func (s *testUnicastPeerSrc) Stop()                                                     {}
 func (s *testUnicastPeerSrc) ClearHandlers()                                            {}
-
 func (s *testUnicastPeerSrc) RegisterHTTPHandler(path string, handler http.Handler) {}
 func (s *testUnicastPeerSrc) RegisterHandlers(dispatch []network.TaggedMessageHandler) {
 	if dispatch[0].Tag == protocol.UniCatchupResTag {
@@ -283,7 +282,6 @@ func (b *BasicRPCNode) DisconnectPeers() {}
 func (b *BasicRPCNode) Ready() chan struct{} {
 	return nil
 }
-
 func (b *BasicRPCNode) RequestConnectOutgoing(replace bool, quit <-chan struct{}) {}
 func (b *BasicRPCNode) Start() {}
 func (b *BasicRPCNode) Stop() {}

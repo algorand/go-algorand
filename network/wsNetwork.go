@@ -780,7 +780,9 @@ func (wn *WebsocketNetwork) checkServerResponseVariables(header http.Header, add
 // WaitAndAddConnectionTime will wait to prevent exceeding connectionsRateLimitingCount.
 // Then it will register the next connection time.
 func (wn *WebsocketNetwork) WaitAndAddConnectionTime(addr string) {
-	wn.phonebook.WaitAndAddConnectionTime(addr, wn.config.ConnectionsRateLimitingCount)
+	wn.phonebook.WaitAndAddConnectionTime(addr,
+		wn.config.ConnectionsRateLimitingCount,
+		wn.config.ConnectionsRateLimitingWindowSeconds)
 }
 
 // getCommonHeaders retreives the common headers for both incoming and outgoing connections from the provided headers.

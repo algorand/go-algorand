@@ -98,7 +98,7 @@ func (factory NetworkFetcherFactory) BuildFetcherClients() []FetcherClient {
 	}
 	out := make([]FetcherClient, 0, len(peers))
 	for _, peer := range peers {
-		fetcher := factory.makeHTTPFetcherFromPeer(factory.log, peer) // xxxsss pass to the fetcher the net
+		fetcher := factory.makeHTTPFetcherFromPeer(factory.log, peer)
 		if fetcher != nil {
 			out = append(out, fetcher)
 		}
@@ -106,7 +106,7 @@ func (factory NetworkFetcherFactory) BuildFetcherClients() []FetcherClient {
 	return out
 }
 
-// New returns a new fetcher xxxsss Newx
+// New returns a new fetcher
 func (factory NetworkFetcherFactory) New() Fetcher {
 	return &NetworkFetcher{
 		roundUpperBound: make(map[FetcherClient]basics.Round),

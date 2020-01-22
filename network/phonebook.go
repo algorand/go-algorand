@@ -36,12 +36,10 @@ type Phonebook interface {
 	// UpdateRetryAfter updates the retry-after field for the entries matching the given address
 	UpdateRetryAfter(addr string, retryAfter time.Time)
 
-
 	// waitAndAddConnectionTime will wait to prevent exceeding connectionsRateLimitingCount.
 	// Then it will register the next connection time.
-	WaitAndAddConnectionTime(addr string, connectionsRateLimitingCount uint)
-
-	
+	WaitAndAddConnectionTime(addr string,
+		connectionsRateLimitingCount uint, connectionsRateLimitingWindowSeconds uint)
 }
 
 type phonebookData struct {
@@ -52,8 +50,8 @@ type phonebookData struct {
 type phonebookEntries map[string]phonebookData
 
 // PopEarliestTime removes the earliest time from recentConnectionTimes in
-// phonebookData of addr
-// It assumes that it is earlier than 1 second
+// phonebookData for addr
+// It is expected to be later than ConnectionsRateLimitingWindowSeconds
 func (e *phonebookEntries) popEarliestTime(addr string) {
 	phbData := (*e)[addr]
 	phbData.recentConnectionTimes = phbData.recentConnectionTimes[1:]
@@ -119,30 +117,30 @@ func (e *phonebookEntries) updateRetryAfter(addr string, retryAfter time.Time) {
 
 // waitAndAddConnectionTime will wait to prevent exceeding connectionsRateLimitingCount.
 // Then it will register the next connection time.
-func (e *phonebookEntries) waitAndAddConnectionTime(addr string, connectionsRateLimitingCount uint) {
+func (e *phonebookEntries) waitAndAddConnectionTime(addr string,
+	connectionsRateLimitingCount uint, connectionsRateLimitingWindowSeconds uint) {
+	connectionRateLimitWindowDuration := time.Duration(connectionsRateLimitingWindowSeconds)*time.Second
 	_, found := (*e)[addr]
 	if !found {
 		(*e)[addr] = phonebookData{retryAfter: time.Now(), recentConnectionTimes: make([]time.Time, 0)}
 	}
 
 	var timeSince time.Duration
-	// Remove from recentConnectionTimes the times later than 1 second
+	// Remove from recentConnectionTimes the times later than ConnectionsRateLimitingWindowSeconds
 	for len((*e)[addr].recentConnectionTimes) > 0 {
 		timeSince = time.Since(((*e)[addr].recentConnectionTimes)[0])
-		if timeSince.Nanoseconds() > 1e9 {
-			phbData := (*e)[addr]
-			phbData.recentConnectionTimes = ((*e)[addr].recentConnectionTimes)[1:]
-			(*e)[addr] = phbData
+		if timeSince > connectionRateLimitWindowDuration {
+			e.popEarliestTime(addr)
 		} else {
 			break // break the loop. The rest are earlier than 1 second
 		}
 	}
 
-	// If there are max number of connections within the last 1 second, wait
+	// If there are max number of connections within the time window, wait
 	numElts := len((*e)[addr].recentConnectionTimes)
-	if uint(numElts)  > connectionsRateLimitingCount {
+	if uint(numElts) >= connectionsRateLimitingCount {
 		// Wait until the earliest time expires
-		time.Sleep(timeSince)
+		time.Sleep(connectionRateLimitWindowDuration - timeSince)
 		// Remove it from recentConnectionTimes
 		e.popEarliestTime(addr)
 	}
@@ -199,8 +197,9 @@ func (p *ArrayPhonebook) UpdateRetryAfter(addr string, retryAfter time.Time) {
 
 // WaitAndAddConnectionTime will wait to prevent exceeding connectionsRateLimitingCount.
 // Then it will register the next connection time.
-func (p *ArrayPhonebook) WaitAndAddConnectionTime(addr string, connectionsRateLimitingCount uint) {
-	p.Entries.waitAndAddConnectionTime(addr, connectionsRateLimitingCount)
+func (p *ArrayPhonebook) WaitAndAddConnectionTime(addr string,
+	connectionsRateLimitingCount uint, connectionsRateLimitingWindowSeconds uint) {
+	p.Entries.waitAndAddConnectionTime(addr, connectionsRateLimitingCount, connectionsRateLimitingWindowSeconds)
 }
 
 // GetAddresses returns up to N shuffled address
@@ -237,10 +236,12 @@ func (p *ThreadsafePhonebook) UpdateRetryAfter(addr string, retryAfter time.Time
 
 // WaitAndAddConnectionTime will wait to prevent exceeding connectionsRateLimitingCount.
 // Then it will register the next connection time.
-func (p *ThreadsafePhonebook) WaitAndAddConnectionTime(addr string, connectionsRateLimitingCount uint) {
+func (p *ThreadsafePhonebook) WaitAndAddConnectionTime(addr string,
+	connectionsRateLimitingCount uint, connectionsRateLimitingWindowSeconds uint) {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
-	p.entries.waitAndAddConnectionTime(addr, connectionsRateLimitingCount)
+	p.entries.waitAndAddConnectionTime(addr,
+		connectionsRateLimitingCount, connectionsRateLimitingWindowSeconds)
 }
 
 // ExtendPeerList adds unique addresses to this set of addresses
@@ -339,11 +340,13 @@ func (mp *MultiPhonebook) UpdateRetryAfter(addr string, retryAfter time.Time) {
 
 // WaitAndAddConnectionTime will wait to prevent exceeding connectionsRateLimitingCount.
 // Then it will register the next connection time.
-func (mp *MultiPhonebook) WaitAndAddConnectionTime(addr string, connectionsRateLimitingCount uint) {
+func (mp *MultiPhonebook) WaitAndAddConnectionTime(addr string,
+	connectionsRateLimitingCount uint, connectionsRateLimitingWindowSeconds uint) {
 	mp.lock.Lock()
 	defer mp.lock.Unlock()
 	for _, op := range mp.phonebookMap {
-		op.WaitAndAddConnectionTime(addr, connectionsRateLimitingCount)
+		op.WaitAndAddConnectionTime(addr,
+			connectionsRateLimitingCount, connectionsRateLimitingWindowSeconds)
 		break // If the first phonebook does not have the phonebookData, will add it there
 	}
 }

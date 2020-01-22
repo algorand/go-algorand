@@ -61,10 +61,6 @@ func MakeHTTPFetcher(log logging.Logger, peer network.HTTPPeer, net *network.Gos
 // GetBlockBytes gets a block.
 // Core piece of FetcherClient interface
 func (hf *HTTPFetcher) GetBlockBytes(ctx context.Context, r basics.Round) (data []byte, err error) {
-
-	//func (mp *MultiPhonebook) GetPhonebook(bootstrapNetworkName string) (p Phonebook) { xxxsss
-	// 		dnsBootstrapArray := wn.config.DNSBootstrapArray(wn.NetworkID) xxxsss
-
 	parsedURL, err := network.ParseHostOrURL(hf.rootURL)
 	if err != nil {
 		return nil, err

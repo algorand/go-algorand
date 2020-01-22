@@ -87,8 +87,8 @@ func (e *oneEntryPhonebook) UpdateRetryAfter(addr string, retryAfter time.Time) 
 	}
 }
 
-//xxxsss
-func (e *oneEntryPhonebook) WaitAndAddConnectionTime(addr string, connectionsRateLimitingCount uint) {
+func (e *oneEntryPhonebook) WaitAndAddConnectionTime(addr string,
+	connectionsRateLimitingCount uint, connectionsRateLimitingWindowSeconds uint) {
 }
 
 var defaultConfig config.Local
