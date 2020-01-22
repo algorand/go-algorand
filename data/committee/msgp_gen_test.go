@@ -5,6 +5,7 @@ package committee
 import (
 	"testing"
 
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/msgp/msgp"
 )
 
@@ -29,6 +30,10 @@ func TestMarshalUnmarshalCredential(t *testing.T) {
 	if len(left) > 0 {
 		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
 	}
+}
+
+func TestRandomizedEncodingCredential(t *testing.T) {
+	protocol.RunEncodingTest(t, &Credential{})
 }
 
 func BenchmarkMarshalMsgCredential(b *testing.B) {
@@ -89,6 +94,10 @@ func TestMarshalUnmarshalSeed(t *testing.T) {
 	}
 }
 
+func TestRandomizedEncodingSeed(t *testing.T) {
+	protocol.RunEncodingTest(t, &Seed{})
+}
+
 func BenchmarkMarshalMsgSeed(b *testing.B) {
 	v := Seed{}
 	b.ReportAllocs()
@@ -147,6 +156,10 @@ func TestMarshalUnmarshalUnauthenticatedCredential(t *testing.T) {
 	}
 }
 
+func TestRandomizedEncodingUnauthenticatedCredential(t *testing.T) {
+	protocol.RunEncodingTest(t, &UnauthenticatedCredential{})
+}
+
 func BenchmarkMarshalMsgUnauthenticatedCredential(b *testing.B) {
 	v := UnauthenticatedCredential{}
 	b.ReportAllocs()
@@ -203,6 +216,10 @@ func TestMarshalUnmarshalhashableCredential(t *testing.T) {
 	if len(left) > 0 {
 		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
 	}
+}
+
+func TestRandomizedEncodinghashableCredential(t *testing.T) {
+	protocol.RunEncodingTest(t, &hashableCredential{})
 }
 
 func BenchmarkMarshalMsghashableCredential(b *testing.B) {

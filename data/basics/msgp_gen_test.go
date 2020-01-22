@@ -5,6 +5,7 @@ package basics
 import (
 	"testing"
 
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/msgp/msgp"
 )
 
@@ -29,6 +30,10 @@ func TestMarshalUnmarshalAccountData(t *testing.T) {
 	if len(left) > 0 {
 		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
 	}
+}
+
+func TestRandomizedEncodingAccountData(t *testing.T) {
+	protocol.RunEncodingTest(t, &AccountData{})
 }
 
 func BenchmarkMarshalMsgAccountData(b *testing.B) {
@@ -89,6 +94,10 @@ func TestMarshalUnmarshalAssetHolding(t *testing.T) {
 	}
 }
 
+func TestRandomizedEncodingAssetHolding(t *testing.T) {
+	protocol.RunEncodingTest(t, &AssetHolding{})
+}
+
 func BenchmarkMarshalMsgAssetHolding(b *testing.B) {
 	v := AssetHolding{}
 	b.ReportAllocs()
@@ -147,6 +156,10 @@ func TestMarshalUnmarshalAssetParams(t *testing.T) {
 	}
 }
 
+func TestRandomizedEncodingAssetParams(t *testing.T) {
+	protocol.RunEncodingTest(t, &AssetParams{})
+}
+
 func BenchmarkMarshalMsgAssetParams(b *testing.B) {
 	v := AssetParams{}
 	b.ReportAllocs()
@@ -203,6 +216,10 @@ func TestMarshalUnmarshalBalanceRecord(t *testing.T) {
 	if len(left) > 0 {
 		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
 	}
+}
+
+func TestRandomizedEncodingBalanceRecord(t *testing.T) {
+	protocol.RunEncodingTest(t, &BalanceRecord{})
 }
 
 func BenchmarkMarshalMsgBalanceRecord(b *testing.B) {

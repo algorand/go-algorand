@@ -5,6 +5,7 @@ package hashable
 import (
 	"testing"
 
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/msgp/msgp"
 )
 
@@ -29,6 +30,10 @@ func TestMarshalUnmarshalMessage(t *testing.T) {
 	if len(left) > 0 {
 		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
 	}
+}
+
+func TestRandomizedEncodingMessage(t *testing.T) {
+	protocol.RunEncodingTest(t, &Message{})
 }
 
 func BenchmarkMarshalMsgMessage(b *testing.B) {

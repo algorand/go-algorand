@@ -5,6 +5,7 @@ package bookkeeping
 import (
 	"testing"
 
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/msgp/msgp"
 )
 
@@ -29,6 +30,10 @@ func TestMarshalUnmarshalBlock(t *testing.T) {
 	if len(left) > 0 {
 		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
 	}
+}
+
+func TestRandomizedEncodingBlock(t *testing.T) {
+	protocol.RunEncodingTest(t, &Block{})
 }
 
 func BenchmarkMarshalMsgBlock(b *testing.B) {
@@ -89,6 +94,10 @@ func TestMarshalUnmarshalBlockHeader(t *testing.T) {
 	}
 }
 
+func TestRandomizedEncodingBlockHeader(t *testing.T) {
+	protocol.RunEncodingTest(t, &BlockHeader{})
+}
+
 func BenchmarkMarshalMsgBlockHeader(b *testing.B) {
 	v := BlockHeader{}
 	b.ReportAllocs()
@@ -145,6 +154,10 @@ func TestMarshalUnmarshalGenesis(t *testing.T) {
 	if len(left) > 0 {
 		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
 	}
+}
+
+func TestRandomizedEncodingGenesis(t *testing.T) {
+	protocol.RunEncodingTest(t, &Genesis{})
 }
 
 func BenchmarkMarshalMsgGenesis(b *testing.B) {
@@ -205,6 +218,10 @@ func TestMarshalUnmarshalGenesisAllocation(t *testing.T) {
 	}
 }
 
+func TestRandomizedEncodingGenesisAllocation(t *testing.T) {
+	protocol.RunEncodingTest(t, &GenesisAllocation{})
+}
+
 func BenchmarkMarshalMsgGenesisAllocation(b *testing.B) {
 	v := GenesisAllocation{}
 	b.ReportAllocs()
@@ -263,6 +280,10 @@ func TestMarshalUnmarshalRewardsState(t *testing.T) {
 	}
 }
 
+func TestRandomizedEncodingRewardsState(t *testing.T) {
+	protocol.RunEncodingTest(t, &RewardsState{})
+}
+
 func BenchmarkMarshalMsgRewardsState(b *testing.B) {
 	v := RewardsState{}
 	b.ReportAllocs()
@@ -319,6 +340,10 @@ func TestMarshalUnmarshalUpgradeVote(t *testing.T) {
 	if len(left) > 0 {
 		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
 	}
+}
+
+func TestRandomizedEncodingUpgradeVote(t *testing.T) {
+	protocol.RunEncodingTest(t, &UpgradeVote{})
 }
 
 func BenchmarkMarshalMsgUpgradeVote(b *testing.B) {

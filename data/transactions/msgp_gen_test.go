@@ -5,6 +5,7 @@ package transactions
 import (
 	"testing"
 
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/msgp/msgp"
 )
 
@@ -29,6 +30,10 @@ func TestMarshalUnmarshalApplyData(t *testing.T) {
 	if len(left) > 0 {
 		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
 	}
+}
+
+func TestRandomizedEncodingApplyData(t *testing.T) {
+	protocol.RunEncodingTest(t, &ApplyData{})
 }
 
 func BenchmarkMarshalMsgApplyData(b *testing.B) {
@@ -89,6 +94,10 @@ func TestMarshalUnmarshalAssetConfigTxnFields(t *testing.T) {
 	}
 }
 
+func TestRandomizedEncodingAssetConfigTxnFields(t *testing.T) {
+	protocol.RunEncodingTest(t, &AssetConfigTxnFields{})
+}
+
 func BenchmarkMarshalMsgAssetConfigTxnFields(b *testing.B) {
 	v := AssetConfigTxnFields{}
 	b.ReportAllocs()
@@ -145,6 +154,10 @@ func TestMarshalUnmarshalAssetFreezeTxnFields(t *testing.T) {
 	if len(left) > 0 {
 		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
 	}
+}
+
+func TestRandomizedEncodingAssetFreezeTxnFields(t *testing.T) {
+	protocol.RunEncodingTest(t, &AssetFreezeTxnFields{})
 }
 
 func BenchmarkMarshalMsgAssetFreezeTxnFields(b *testing.B) {
@@ -205,6 +218,10 @@ func TestMarshalUnmarshalAssetTransferTxnFields(t *testing.T) {
 	}
 }
 
+func TestRandomizedEncodingAssetTransferTxnFields(t *testing.T) {
+	protocol.RunEncodingTest(t, &AssetTransferTxnFields{})
+}
+
 func BenchmarkMarshalMsgAssetTransferTxnFields(b *testing.B) {
 	v := AssetTransferTxnFields{}
 	b.ReportAllocs()
@@ -261,6 +278,10 @@ func TestMarshalUnmarshalHeader(t *testing.T) {
 	if len(left) > 0 {
 		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
 	}
+}
+
+func TestRandomizedEncodingHeader(t *testing.T) {
+	protocol.RunEncodingTest(t, &Header{})
 }
 
 func BenchmarkMarshalMsgHeader(b *testing.B) {
@@ -321,6 +342,10 @@ func TestMarshalUnmarshalKeyregTxnFields(t *testing.T) {
 	}
 }
 
+func TestRandomizedEncodingKeyregTxnFields(t *testing.T) {
+	protocol.RunEncodingTest(t, &KeyregTxnFields{})
+}
+
 func BenchmarkMarshalMsgKeyregTxnFields(b *testing.B) {
 	v := KeyregTxnFields{}
 	b.ReportAllocs()
@@ -377,6 +402,10 @@ func TestMarshalUnmarshalLogicSig(t *testing.T) {
 	if len(left) > 0 {
 		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
 	}
+}
+
+func TestRandomizedEncodingLogicSig(t *testing.T) {
+	protocol.RunEncodingTest(t, &LogicSig{})
 }
 
 func BenchmarkMarshalMsgLogicSig(b *testing.B) {
@@ -437,6 +466,10 @@ func TestMarshalUnmarshalPaymentTxnFields(t *testing.T) {
 	}
 }
 
+func TestRandomizedEncodingPaymentTxnFields(t *testing.T) {
+	protocol.RunEncodingTest(t, &PaymentTxnFields{})
+}
+
 func BenchmarkMarshalMsgPaymentTxnFields(b *testing.B) {
 	v := PaymentTxnFields{}
 	b.ReportAllocs()
@@ -493,6 +526,10 @@ func TestMarshalUnmarshalPayset(t *testing.T) {
 	if len(left) > 0 {
 		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
 	}
+}
+
+func TestRandomizedEncodingPayset(t *testing.T) {
+	protocol.RunEncodingTest(t, &Payset{})
 }
 
 func BenchmarkMarshalMsgPayset(b *testing.B) {
@@ -553,6 +590,10 @@ func TestMarshalUnmarshalSignedTxn(t *testing.T) {
 	}
 }
 
+func TestRandomizedEncodingSignedTxn(t *testing.T) {
+	protocol.RunEncodingTest(t, &SignedTxn{})
+}
+
 func BenchmarkMarshalMsgSignedTxn(b *testing.B) {
 	v := SignedTxn{}
 	b.ReportAllocs()
@@ -609,6 +650,10 @@ func TestMarshalUnmarshalSignedTxnInBlock(t *testing.T) {
 	if len(left) > 0 {
 		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
 	}
+}
+
+func TestRandomizedEncodingSignedTxnInBlock(t *testing.T) {
+	protocol.RunEncodingTest(t, &SignedTxnInBlock{})
 }
 
 func BenchmarkMarshalMsgSignedTxnInBlock(b *testing.B) {
@@ -669,6 +714,10 @@ func TestMarshalUnmarshalSignedTxnWithAD(t *testing.T) {
 	}
 }
 
+func TestRandomizedEncodingSignedTxnWithAD(t *testing.T) {
+	protocol.RunEncodingTest(t, &SignedTxnWithAD{})
+}
+
 func BenchmarkMarshalMsgSignedTxnWithAD(b *testing.B) {
 	v := SignedTxnWithAD{}
 	b.ReportAllocs()
@@ -727,6 +776,10 @@ func TestMarshalUnmarshalTransaction(t *testing.T) {
 	}
 }
 
+func TestRandomizedEncodingTransaction(t *testing.T) {
+	protocol.RunEncodingTest(t, &Transaction{})
+}
+
 func BenchmarkMarshalMsgTransaction(b *testing.B) {
 	v := Transaction{}
 	b.ReportAllocs()
@@ -783,6 +836,10 @@ func TestMarshalUnmarshalTxGroup(t *testing.T) {
 	if len(left) > 0 {
 		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
 	}
+}
+
+func TestRandomizedEncodingTxGroup(t *testing.T) {
+	protocol.RunEncodingTest(t, &TxGroup{})
 }
 
 func BenchmarkMarshalMsgTxGroup(b *testing.B) {

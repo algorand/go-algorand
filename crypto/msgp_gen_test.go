@@ -5,6 +5,7 @@ package crypto
 import (
 	"testing"
 
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/msgp/msgp"
 )
 
@@ -29,6 +30,10 @@ func TestMarshalUnmarshalDigest(t *testing.T) {
 	if len(left) > 0 {
 		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
 	}
+}
+
+func TestRandomizedEncodingDigest(t *testing.T) {
+	protocol.RunEncodingTest(t, &Digest{})
 }
 
 func BenchmarkMarshalMsgDigest(b *testing.B) {
@@ -89,6 +94,10 @@ func TestMarshalUnmarshalMasterDerivationKey(t *testing.T) {
 	}
 }
 
+func TestRandomizedEncodingMasterDerivationKey(t *testing.T) {
+	protocol.RunEncodingTest(t, &MasterDerivationKey{})
+}
+
 func BenchmarkMarshalMsgMasterDerivationKey(b *testing.B) {
 	v := MasterDerivationKey{}
 	b.ReportAllocs()
@@ -145,6 +154,10 @@ func TestMarshalUnmarshalMultisigSig(t *testing.T) {
 	if len(left) > 0 {
 		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
 	}
+}
+
+func TestRandomizedEncodingMultisigSig(t *testing.T) {
+	protocol.RunEncodingTest(t, &MultisigSig{})
 }
 
 func BenchmarkMarshalMsgMultisigSig(b *testing.B) {
@@ -205,6 +218,10 @@ func TestMarshalUnmarshalMultisigSubsig(t *testing.T) {
 	}
 }
 
+func TestRandomizedEncodingMultisigSubsig(t *testing.T) {
+	protocol.RunEncodingTest(t, &MultisigSubsig{})
+}
+
 func BenchmarkMarshalMsgMultisigSubsig(b *testing.B) {
 	v := MultisigSubsig{}
 	b.ReportAllocs()
@@ -261,6 +278,10 @@ func TestMarshalUnmarshalOneTimeSignature(t *testing.T) {
 	if len(left) > 0 {
 		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
 	}
+}
+
+func TestRandomizedEncodingOneTimeSignature(t *testing.T) {
+	protocol.RunEncodingTest(t, &OneTimeSignature{})
 }
 
 func BenchmarkMarshalMsgOneTimeSignature(b *testing.B) {
@@ -321,6 +342,10 @@ func TestMarshalUnmarshalOneTimeSignatureSecrets(t *testing.T) {
 	}
 }
 
+func TestRandomizedEncodingOneTimeSignatureSecrets(t *testing.T) {
+	protocol.RunEncodingTest(t, &OneTimeSignatureSecrets{})
+}
+
 func BenchmarkMarshalMsgOneTimeSignatureSecrets(b *testing.B) {
 	v := OneTimeSignatureSecrets{}
 	b.ReportAllocs()
@@ -377,6 +402,10 @@ func TestMarshalUnmarshalOneTimeSignatureSecretsPersistent(t *testing.T) {
 	if len(left) > 0 {
 		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
 	}
+}
+
+func TestRandomizedEncodingOneTimeSignatureSecretsPersistent(t *testing.T) {
+	protocol.RunEncodingTest(t, &OneTimeSignatureSecretsPersistent{})
 }
 
 func BenchmarkMarshalMsgOneTimeSignatureSecretsPersistent(b *testing.B) {
@@ -437,6 +466,10 @@ func TestMarshalUnmarshalOneTimeSignatureSubkeyBatchID(t *testing.T) {
 	}
 }
 
+func TestRandomizedEncodingOneTimeSignatureSubkeyBatchID(t *testing.T) {
+	protocol.RunEncodingTest(t, &OneTimeSignatureSubkeyBatchID{})
+}
+
 func BenchmarkMarshalMsgOneTimeSignatureSubkeyBatchID(b *testing.B) {
 	v := OneTimeSignatureSubkeyBatchID{}
 	b.ReportAllocs()
@@ -493,6 +526,10 @@ func TestMarshalUnmarshalOneTimeSignatureSubkeyOffsetID(t *testing.T) {
 	if len(left) > 0 {
 		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
 	}
+}
+
+func TestRandomizedEncodingOneTimeSignatureSubkeyOffsetID(t *testing.T) {
+	protocol.RunEncodingTest(t, &OneTimeSignatureSubkeyOffsetID{})
 }
 
 func BenchmarkMarshalMsgOneTimeSignatureSubkeyOffsetID(b *testing.B) {
@@ -553,6 +590,10 @@ func TestMarshalUnmarshalOneTimeSignatureVerifier(t *testing.T) {
 	}
 }
 
+func TestRandomizedEncodingOneTimeSignatureVerifier(t *testing.T) {
+	protocol.RunEncodingTest(t, &OneTimeSignatureVerifier{})
+}
+
 func BenchmarkMarshalMsgOneTimeSignatureVerifier(b *testing.B) {
 	v := OneTimeSignatureVerifier{}
 	b.ReportAllocs()
@@ -609,6 +650,10 @@ func TestMarshalUnmarshalPrivateKey(t *testing.T) {
 	if len(left) > 0 {
 		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
 	}
+}
+
+func TestRandomizedEncodingPrivateKey(t *testing.T) {
+	protocol.RunEncodingTest(t, &PrivateKey{})
 }
 
 func BenchmarkMarshalMsgPrivateKey(b *testing.B) {
@@ -669,6 +714,10 @@ func TestMarshalUnmarshalPublicKey(t *testing.T) {
 	}
 }
 
+func TestRandomizedEncodingPublicKey(t *testing.T) {
+	protocol.RunEncodingTest(t, &PublicKey{})
+}
+
 func BenchmarkMarshalMsgPublicKey(b *testing.B) {
 	v := PublicKey{}
 	b.ReportAllocs()
@@ -725,6 +774,10 @@ func TestMarshalUnmarshalSeed(t *testing.T) {
 	if len(left) > 0 {
 		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
 	}
+}
+
+func TestRandomizedEncodingSeed(t *testing.T) {
+	protocol.RunEncodingTest(t, &Seed{})
 }
 
 func BenchmarkMarshalMsgSeed(b *testing.B) {
@@ -785,6 +838,10 @@ func TestMarshalUnmarshalSignature(t *testing.T) {
 	}
 }
 
+func TestRandomizedEncodingSignature(t *testing.T) {
+	protocol.RunEncodingTest(t, &Signature{})
+}
+
 func BenchmarkMarshalMsgSignature(b *testing.B) {
 	v := Signature{}
 	b.ReportAllocs()
@@ -841,6 +898,10 @@ func TestMarshalUnmarshalVrfOutput(t *testing.T) {
 	if len(left) > 0 {
 		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
 	}
+}
+
+func TestRandomizedEncodingVrfOutput(t *testing.T) {
+	protocol.RunEncodingTest(t, &VrfOutput{})
 }
 
 func BenchmarkMarshalMsgVrfOutput(b *testing.B) {
@@ -901,6 +962,10 @@ func TestMarshalUnmarshalVrfPrivkey(t *testing.T) {
 	}
 }
 
+func TestRandomizedEncodingVrfPrivkey(t *testing.T) {
+	protocol.RunEncodingTest(t, &VrfPrivkey{})
+}
+
 func BenchmarkMarshalMsgVrfPrivkey(b *testing.B) {
 	v := VrfPrivkey{}
 	b.ReportAllocs()
@@ -957,6 +1022,10 @@ func TestMarshalUnmarshalVrfProof(t *testing.T) {
 	if len(left) > 0 {
 		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
 	}
+}
+
+func TestRandomizedEncodingVrfProof(t *testing.T) {
+	protocol.RunEncodingTest(t, &VrfProof{})
 }
 
 func BenchmarkMarshalMsgVrfProof(b *testing.B) {
@@ -1017,6 +1086,10 @@ func TestMarshalUnmarshalVrfPubkey(t *testing.T) {
 	}
 }
 
+func TestRandomizedEncodingVrfPubkey(t *testing.T) {
+	protocol.RunEncodingTest(t, &VrfPubkey{})
+}
+
 func BenchmarkMarshalMsgVrfPubkey(b *testing.B) {
 	v := VrfPubkey{}
 	b.ReportAllocs()
@@ -1073,6 +1146,10 @@ func TestMarshalUnmarshaled25519PrivateKey(t *testing.T) {
 	if len(left) > 0 {
 		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
 	}
+}
+
+func TestRandomizedEncodinged25519PrivateKey(t *testing.T) {
+	protocol.RunEncodingTest(t, &ed25519PrivateKey{})
 }
 
 func BenchmarkMarshalMsged25519PrivateKey(b *testing.B) {
@@ -1133,6 +1210,10 @@ func TestMarshalUnmarshaled25519PublicKey(t *testing.T) {
 	}
 }
 
+func TestRandomizedEncodinged25519PublicKey(t *testing.T) {
+	protocol.RunEncodingTest(t, &ed25519PublicKey{})
+}
+
 func BenchmarkMarshalMsged25519PublicKey(b *testing.B) {
 	v := ed25519PublicKey{}
 	b.ReportAllocs()
@@ -1189,6 +1270,10 @@ func TestMarshalUnmarshaled25519Seed(t *testing.T) {
 	if len(left) > 0 {
 		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
 	}
+}
+
+func TestRandomizedEncodinged25519Seed(t *testing.T) {
+	protocol.RunEncodingTest(t, &ed25519Seed{})
 }
 
 func BenchmarkMarshalMsged25519Seed(b *testing.B) {
@@ -1249,6 +1334,10 @@ func TestMarshalUnmarshaled25519Signature(t *testing.T) {
 	}
 }
 
+func TestRandomizedEncodinged25519Signature(t *testing.T) {
+	protocol.RunEncodingTest(t, &ed25519Signature{})
+}
+
 func BenchmarkMarshalMsged25519Signature(b *testing.B) {
 	v := ed25519Signature{}
 	b.ReportAllocs()
@@ -1305,6 +1394,10 @@ func TestMarshalUnmarshalephemeralSubkey(t *testing.T) {
 	if len(left) > 0 {
 		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
 	}
+}
+
+func TestRandomizedEncodingephemeralSubkey(t *testing.T) {
+	protocol.RunEncodingTest(t, &ephemeralSubkey{})
 }
 
 func BenchmarkMarshalMsgephemeralSubkey(b *testing.B) {

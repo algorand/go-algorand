@@ -5,6 +5,7 @@ package auction
 import (
 	"testing"
 
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/msgp/msgp"
 )
 
@@ -29,6 +30,10 @@ func TestMarshalUnmarshalBid(t *testing.T) {
 	if len(left) > 0 {
 		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
 	}
+}
+
+func TestRandomizedEncodingBid(t *testing.T) {
+	protocol.RunEncodingTest(t, &Bid{})
 }
 
 func BenchmarkMarshalMsgBid(b *testing.B) {
@@ -89,6 +94,10 @@ func TestMarshalUnmarshalBidOutcomes(t *testing.T) {
 	}
 }
 
+func TestRandomizedEncodingBidOutcomes(t *testing.T) {
+	protocol.RunEncodingTest(t, &BidOutcomes{})
+}
+
 func BenchmarkMarshalMsgBidOutcomes(b *testing.B) {
 	v := BidOutcomes{}
 	b.ReportAllocs()
@@ -145,6 +154,10 @@ func TestMarshalUnmarshalBidderOutcome(t *testing.T) {
 	if len(left) > 0 {
 		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
 	}
+}
+
+func TestRandomizedEncodingBidderOutcome(t *testing.T) {
+	protocol.RunEncodingTest(t, &BidderOutcome{})
 }
 
 func BenchmarkMarshalMsgBidderOutcome(b *testing.B) {
@@ -205,6 +218,10 @@ func TestMarshalUnmarshalDeposit(t *testing.T) {
 	}
 }
 
+func TestRandomizedEncodingDeposit(t *testing.T) {
+	protocol.RunEncodingTest(t, &Deposit{})
+}
+
 func BenchmarkMarshalMsgDeposit(b *testing.B) {
 	v := Deposit{}
 	b.ReportAllocs()
@@ -261,6 +278,10 @@ func TestMarshalUnmarshalMasterInput(t *testing.T) {
 	if len(left) > 0 {
 		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
 	}
+}
+
+func TestRandomizedEncodingMasterInput(t *testing.T) {
+	protocol.RunEncodingTest(t, &MasterInput{})
 }
 
 func BenchmarkMarshalMsgMasterInput(b *testing.B) {
@@ -321,6 +342,10 @@ func TestMarshalUnmarshalNoteField(t *testing.T) {
 	}
 }
 
+func TestRandomizedEncodingNoteField(t *testing.T) {
+	protocol.RunEncodingTest(t, &NoteField{})
+}
+
 func BenchmarkMarshalMsgNoteField(b *testing.B) {
 	v := NoteField{}
 	b.ReportAllocs()
@@ -377,6 +402,10 @@ func TestMarshalUnmarshalParams(t *testing.T) {
 	if len(left) > 0 {
 		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
 	}
+}
+
+func TestRandomizedEncodingParams(t *testing.T) {
+	protocol.RunEncodingTest(t, &Params{})
 }
 
 func BenchmarkMarshalMsgParams(b *testing.B) {
@@ -437,6 +466,10 @@ func TestMarshalUnmarshalSettlement(t *testing.T) {
 	}
 }
 
+func TestRandomizedEncodingSettlement(t *testing.T) {
+	protocol.RunEncodingTest(t, &Settlement{})
+}
+
 func BenchmarkMarshalMsgSettlement(b *testing.B) {
 	v := Settlement{}
 	b.ReportAllocs()
@@ -493,6 +526,10 @@ func TestMarshalUnmarshalSignedBid(t *testing.T) {
 	if len(left) > 0 {
 		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
 	}
+}
+
+func TestRandomizedEncodingSignedBid(t *testing.T) {
+	protocol.RunEncodingTest(t, &SignedBid{})
 }
 
 func BenchmarkMarshalMsgSignedBid(b *testing.B) {
@@ -553,6 +590,10 @@ func TestMarshalUnmarshalSignedDeposit(t *testing.T) {
 	}
 }
 
+func TestRandomizedEncodingSignedDeposit(t *testing.T) {
+	protocol.RunEncodingTest(t, &SignedDeposit{})
+}
+
 func BenchmarkMarshalMsgSignedDeposit(b *testing.B) {
 	v := SignedDeposit{}
 	b.ReportAllocs()
@@ -611,6 +652,10 @@ func TestMarshalUnmarshalSignedParams(t *testing.T) {
 	}
 }
 
+func TestRandomizedEncodingSignedParams(t *testing.T) {
+	protocol.RunEncodingTest(t, &SignedParams{})
+}
+
 func BenchmarkMarshalMsgSignedParams(b *testing.B) {
 	v := SignedParams{}
 	b.ReportAllocs()
@@ -667,6 +712,10 @@ func TestMarshalUnmarshalSignedSettlement(t *testing.T) {
 	if len(left) > 0 {
 		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
 	}
+}
+
+func TestRandomizedEncodingSignedSettlement(t *testing.T) {
+	protocol.RunEncodingTest(t, &SignedSettlement{})
 }
 
 func BenchmarkMarshalMsgSignedSettlement(b *testing.B) {
