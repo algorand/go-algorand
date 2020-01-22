@@ -777,12 +777,8 @@ func (wn *WebsocketNetwork) checkServerResponseVariables(header http.Header, add
 	return true
 }
 
-/*
-// GetPhonebook gives the Phonebook associated to the network
-func (wn *WebsocketNetwork) GetPhonebook(bootstrapNetworkName string) (p Phonebook) {
-	return wn.phonebook.GetPhonebook(bootstrapNetworkName)
-}
-*/ //xxxsss
+// WaitAndAddConnectionTime will wait to prevent exceeding connectionsRateLimitingCount.
+// Then it will register the next connection time.
 func (wn *WebsocketNetwork) WaitAndAddConnectionTime(addr string) {
 	wn.phonebook.WaitAndAddConnectionTime(addr, wn.config.ConnectionsRateLimitingCount)
 }
