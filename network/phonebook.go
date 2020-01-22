@@ -52,23 +52,23 @@ type phonebookEntries map[string]phonebookData
 // PopEarliestTime removes the earliest time from recentConnectionTimes in
 // phonebookData for addr
 // It is expected to be later than ConnectionsRateLimitingWindowSeconds
-func (e *phonebookEntries) popEarliestTime(addr string) {
-	phbData := (*e)[addr]
-	phbData.recentConnectionTimes = phbData.recentConnectionTimes[1:]
-	(*e)[addr] = phbData
+func (e phonebookEntries) popNElements(n int, addr string) {
+	entry := e[addr]
+	entry.recentConnectionTimes = entry.recentConnectionTimes[n:]
+	e[addr] = entry
 }
 
 // AppendTime adds the current time to recentConnectionTimes in
 // phonebookData of addr
-func (e *phonebookEntries) appendTimeNow(addr string) {
-	phbData := (*e)[addr]
-	phbData.recentConnectionTimes = append(phbData.recentConnectionTimes, time.Now())
-	(*e)[addr] = phbData
+func (e phonebookEntries) appendTimeNow(addr string) {
+	entry := e[addr]
+	entry.recentConnectionTimes = append(entry.recentConnectionTimes, time.Now())
+	e[addr] = entry
 }
 
-func (e *phonebookEntries) filterRetryTime(t time.Time) []string {
-	o := make([]string, 0, len(*e))
-	for addr, entry := range *e {
+func (e phonebookEntries) filterRetryTime(t time.Time) []string {
+	o := make([]string, 0, len(e))
+	for addr, entry := range e {
 		if t.After(entry.retryAfter) {
 			o = append(o, addr)
 		}
@@ -80,69 +80,72 @@ func (e *phonebookEntries) filterRetryTime(t time.Time) []string {
 // new entries in they are being added
 // existing items that aren't included in they are being removed
 // matching entries don't change
-func (e *phonebookEntries) ReplacePeerList(they []string) {
+func (e phonebookEntries) ReplacePeerList(they []string) {
 
 	// prepare a map of items we'd like to remove.
 	removeItems := make(map[string]bool, 0)
-	for k := range *e {
+	for k := range e {
 		removeItems[k] = true
 	}
 
 	for _, addr := range they {
-		if _, has := (*e)[addr]; has {
+		if _, has := e[addr]; has {
 			// we already have this. do nothing.
 			delete(removeItems, addr)
 		} else {
 			// we don't have this item. add it.
-			(*e)[addr] = phonebookData{}
+			e[addr] = phonebookData{}
 		}
 	}
 
 	// remove items that were missing in they
 	for k := range removeItems {
-		delete((*e), k)
+		delete(e, k)
 	}
 }
 
-func (e *phonebookEntries) updateRetryAfter(addr string, retryAfter time.Time) {
-	_, found := (*e)[addr]
+func (e phonebookEntries) updateRetryAfter(addr string, retryAfter time.Time) {
+	_, found := e[addr]
 	if !found {
-		(*e)[addr] = phonebookData{retryAfter: retryAfter, recentConnectionTimes: make([]time.Time, 0)}
+		e[addr] = phonebookData{retryAfter: retryAfter, recentConnectionTimes: make([]time.Time, 0)}
 	} else {
-		phbData := (*e)[addr]
-		phbData.retryAfter = retryAfter
-		(*e)[addr] = phbData
+		entry := e[addr]
+		entry.retryAfter = retryAfter
+		e[addr] = entry
 	}
 }
 
 // waitAndAddConnectionTime will wait to prevent exceeding connectionsRateLimitingCount.
 // Then it will register the next connection time.
-func (e *phonebookEntries) waitAndAddConnectionTime(addr string,
+func (e phonebookEntries) waitAndAddConnectionTime(addr string,
 	connectionsRateLimitingCount uint, connectionsRateLimitingWindowSeconds uint) {
 	connectionRateLimitWindowDuration := time.Duration(connectionsRateLimitingWindowSeconds)*time.Second
-	_, found := (*e)[addr]
+	_, found := e[addr]
+	curTime := time.Now()
 	if !found {
-		(*e)[addr] = phonebookData{retryAfter: time.Now(), recentConnectionTimes: make([]time.Time, 0)}
+		e[addr] = phonebookData{retryAfter: curTime, recentConnectionTimes: make([]time.Time, 0)}
 	}
 
 	var timeSince time.Duration
+	var numElmtsToRemove int
 	// Remove from recentConnectionTimes the times later than ConnectionsRateLimitingWindowSeconds
-	for len((*e)[addr].recentConnectionTimes) > 0 {
-		timeSince = time.Since(((*e)[addr].recentConnectionTimes)[0])
+	for numElmtsToRemove < len(e[addr].recentConnectionTimes) {
+		timeSince = curTime.Sub((e[addr].recentConnectionTimes)[numElmtsToRemove])
 		if timeSince > connectionRateLimitWindowDuration {
-			e.popEarliestTime(addr)
+			numElmtsToRemove++
 		} else {
 			break // break the loop. The rest are earlier than 1 second
 		}
 	}
-
+	e.popNElements(numElmtsToRemove, addr)
+	
 	// If there are max number of connections within the time window, wait
-	numElts := len((*e)[addr].recentConnectionTimes)
+	numElts := len(e[addr].recentConnectionTimes)
 	if uint(numElts) >= connectionsRateLimitingCount {
 		// Wait until the earliest time expires
 		time.Sleep(connectionRateLimitWindowDuration - timeSince)
 		// Remove it from recentConnectionTimes
-		e.popEarliestTime(addr)
+		e.popNElements(1, addr)
 	}
 
 	// Append the time for the next connection request

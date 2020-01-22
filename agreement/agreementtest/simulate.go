@@ -158,7 +158,10 @@ func (b *blackhole) RegisterHandlers(dispatch []network.TaggedMessageHandler) {}
 
 func (b *blackhole) ClearHandlers() {}
 
-func (b *blackhole) WaitAndAddConnectionTime(addr string) {}
+func (b *blackhole) MakeHTTPRequest(client *http.Client,
+	request *http.Request) (*http.Response, error) {
+	return nil, nil
+}
 
 // CryptoRandomSource is a random source that is based off our crypto library.
 type CryptoRandomSource struct{}

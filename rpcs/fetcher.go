@@ -71,7 +71,7 @@ type NetworkFetcherFactory struct {
 func (factory NetworkFetcherFactory) makeHTTPFetcherFromPeer(log logging.Logger, peer network.Peer) FetcherClient {
 	hp, ok := peer.(network.HTTPPeer)
 	if ok {
-		return MakeHTTPFetcher(log, hp, &factory.net)
+		return MakeHTTPFetcher(log, hp, factory.net)
 	}
 	log.Errorf("%T %#v is not HTTPPeer", peer, peer)
 	return nil

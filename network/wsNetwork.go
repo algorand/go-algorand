@@ -174,10 +174,11 @@ type GossipNode interface {
 	// ClearHandlers deregisters all the existing message handlers.
 	ClearHandlers()
 
-	// WaitAndAddConnectionTime will wait to prevent exceeding connectionsRateLimitingCount.
-	// Then it will register the next connection time.
-	WaitAndAddConnectionTime(addr string)
-
+	// MakeHTTPRequest will make sure connectionsRateLimitingCount
+	// is not violated, and register the connection time of the
+	// request, before making the http request to the server.
+	MakeHTTPRequest(client *http.Client,
+		request *http.Request) (*http.Response, error)
 }
 
 // IncomingMessage represents a message arriving from some peer in our p2p network
@@ -777,12 +778,21 @@ func (wn *WebsocketNetwork) checkServerResponseVariables(header http.Header, add
 	return true
 }
 
-// WaitAndAddConnectionTime will wait to prevent exceeding connectionsRateLimitingCount.
+// waitAndAddConnectionTime will wait to prevent exceeding connectionsRateLimitingCount.
 // Then it will register the next connection time.
-func (wn *WebsocketNetwork) WaitAndAddConnectionTime(addr string) {
+func (wn *WebsocketNetwork) waitAndAddConnectionTime(addr string) {
 	wn.phonebook.WaitAndAddConnectionTime(addr,
 		wn.config.ConnectionsRateLimitingCount,
 		wn.config.ConnectionsRateLimitingWindowSeconds)
+}
+
+// MakeHTTPRequest will make sure connectionsRateLimitingCount is not
+// violated, and register the connection time of the request, before
+// making the http request to the server.
+func (wn *WebsocketNetwork) MakeHTTPRequest(client *http.Client,
+	request *http.Request) (*http.Response, error) {
+	wn.waitAndAddConnectionTime(request.Host)
+	return client.Do(request)
 }
 
 // getCommonHeaders retreives the common headers for both incoming and outgoing connections from the provided headers.
@@ -1774,15 +1784,4 @@ func SetUserAgentHeader(header http.Header) {
 	version := config.GetCurrentVersion()
 	ua := fmt.Sprintf("algod/%d.%d (%s; commit=%s; %d) %s(%s)", version.Major, version.Minor, version.Channel, version.CommitHash, version.BuildNumber, runtime.GOOS, runtime.GOARCH)
 	header.Set(UserAgentHeader, ua)
-}
-
-// DoHTTP will check call to WaitAndAddConnectionTime to
-// make sure connectionsRateLimitingCount is not violated, and register the
-// connection time of the request, before sending the request to the server. 
-func DoHTTP(client *http.Client,
-	request *http.Request,
-	net *GossipNode,
-	addr string ) (*http.Response, error) {
-	(*net).WaitAndAddConnectionTime(addr)
-	return client.Do(request)
 }

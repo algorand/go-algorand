@@ -103,23 +103,26 @@ func (mca *MockClientAggregator) Address() (string, bool) {
 	return "", false
 }
 func (mca *MockClientAggregator) Broadcast(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except network.Peer) error {
-	return errors.New("mock MockClientAggregator does not implement Broadcast")
+	return nil
 }
 func (mca *MockClientAggregator) Relay(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except network.Peer) error {
-	return errors.New("mock MockClientAggregator does not implement Relay")
+	return nil
 }
 func (mca *MockClientAggregator) Disconnect(badnode network.Peer) {}
-func (mca *MockClientAggregator) DisconnectPeers() {}
+func (mca *MockClientAggregator) DisconnectPeers()                {}
 func (mca *MockClientAggregator) Ready() chan struct{} {
 	return nil
 }
-func (mca *MockClientAggregator) RegisterHTTPHandler(path string, handler http.Handler) {}
+func (mca *MockClientAggregator) RegisterHTTPHandler(path string, handler http.Handler)     {}
 func (mca *MockClientAggregator) RequestConnectOutgoing(replace bool, quit <-chan struct{}) {}
-func (mca *MockClientAggregator) Start() {}
-func (mca *MockClientAggregator) Stop() {}
-func (mca *MockClientAggregator) RegisterHandlers(dispatch []network.TaggedMessageHandler) {}
-func (mca *MockClientAggregator) ClearHandlers() {}
-func (mca *MockClientAggregator) WaitAndAddConnectionTime(addr string) {}
+func (mca *MockClientAggregator) Start()                                                    {}
+func (mca *MockClientAggregator) Stop()                                                     {}
+func (mca *MockClientAggregator) RegisterHandlers(dispatch []network.TaggedMessageHandler)  {}
+func (mca *MockClientAggregator) ClearHandlers()                                            {}
+func (mca *MockClientAggregator) MakeHTTPRequest(client *http.Client,
+	request *http.Request) (*http.Response, error) {
+	return nil, nil
+}
 
 const numberOfPeers = 10
 
