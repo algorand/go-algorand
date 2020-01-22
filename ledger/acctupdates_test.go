@@ -34,11 +34,15 @@ import (
 type mockLedgerForTracker struct {
 	dbs    dbPair
 	blocks []blockEntry
+	log    logging.Logger
 }
 
 func makeMockLedgerForTracker(t *testing.T) *mockLedgerForTracker {
 	dbs := dbOpenTest(t)
-	return &mockLedgerForTracker{dbs: dbs}
+	dblogger := logging.TestingLog(t)
+	dbs.rdb.SetLogger(dblogger)
+	dbs.wdb.SetLogger(dblogger)
+	return &mockLedgerForTracker{dbs: dbs, log: dblogger}
 }
 
 func (ml *mockLedgerForTracker) close() {
@@ -77,7 +81,7 @@ func (ml *mockLedgerForTracker) trackerDB() dbPair {
 }
 
 func (ml *mockLedgerForTracker) trackerLog() logging.Logger {
-	return logging.Base()
+	return ml.log
 }
 
 func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, latestRnd basics.Round, accts []map[basics.Address]basics.AccountData, rewards []uint64, proto config.ConsensusParams) {
