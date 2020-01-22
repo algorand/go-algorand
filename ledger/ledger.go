@@ -102,6 +102,10 @@ func OpenLedger(
 		err = fmt.Errorf("OpenLedger.openLedgerDB %v", err)
 		return nil, err
 	}
+	l.trackerDBs.rdb.SetLogger(log)
+	l.trackerDBs.wdb.SetLogger(log)
+	l.blockDBs.rdb.SetLogger(log)
+	l.blockDBs.wdb.SetLogger(log)
 
 	err = l.blockDBs.wdb.Atomic(func(tx *sql.Tx) error {
 		return initBlocksDB(tx, l, []bookkeeping.Block{genesisInitState.Block}, isArchival)
