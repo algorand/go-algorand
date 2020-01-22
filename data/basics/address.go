@@ -82,6 +82,7 @@ func UnmarshalChecksumAddress(address string) (Address, error) {
 func (addr Address) String() string {
 	addrWithChecksum := make([]byte, crypto.DigestSize+checksumLength)
 	copy(addrWithChecksum[:crypto.DigestSize], addr[:])
+	// calling addr.GetChecksum() here takes 20ns more than just rolling it out, so we'll just repeat that code.
 	shortAddressHash := crypto.Hash(addr[:])
 	copy(addrWithChecksum[crypto.DigestSize:], shortAddressHash[len(shortAddressHash)-checksumLength:])
 	return base32Encoder.EncodeToString(addrWithChecksum)
