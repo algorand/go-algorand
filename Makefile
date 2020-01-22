@@ -85,7 +85,7 @@ generate: deps
 msgp: $(patsubst %,%/msgp_gen.go,$(MSGP_GENERATE))
 
 %/msgp_gen.go: deps ALWAYS
-	msgp -file ./$(@D) -o $@
+	$(GOPATH1)/bin/msgp -file ./$(@D) -o $@
 ALWAYS:
 
 # build our fork of libsodium, placing artifacts into crypto/lib/ and crypto/include/
