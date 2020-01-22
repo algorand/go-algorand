@@ -102,7 +102,7 @@ func newBlockEvaluator(t TestingT, l *ledger.Ledger) *ledger.BlockEvaluator {
 	require.NoError(t, err)
 
 	next := bookkeeping.MakeBlock(prev)
-	eval, err := l.StartEvaluator(next.BlockHeader, &alwaysVerifiedPool{}, nil)
+	eval, err := l.StartEvaluator(next.BlockHeader)
 	require.NoError(t, err)
 
 	return eval
