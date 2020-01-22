@@ -59,7 +59,7 @@ pkill -u $(whoami) -x algod || true
 ${BINDIR}/algod -v
 ${BINDIR}/goal -v
 
-./test/scripts/goal_subcommand_sanity.sh
+./test/scripts/goal_subcommand_sanity.sh "${BINDIR}" "${TEMPDIR}"
 
 export PATH=${BINDIR}:${PATH}
 export GOPATH=$(go env GOPATH)
