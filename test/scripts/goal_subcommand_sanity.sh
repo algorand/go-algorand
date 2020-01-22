@@ -3,8 +3,8 @@ echo "goal subcommand sanity check"
 set -e
 set -x
 
-BINDIR=$0
-TEMPDIR=$1
+BINDIR=$1
+TEMPDIR=$2
 
 # Run all `goal ... -h` commands.
 # This will make sure they work and that there are no conflicting subcommand options.
