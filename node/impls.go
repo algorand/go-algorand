@@ -171,31 +171,35 @@ func (l agreementLedger) EnsureDigest(cert agreement.Certificate, quit chan stru
 	default:
 	}
 
+	// if the quit channel is closed, we want to exit here before placing the request on the UnmatchedPendingCertificates
+	// channel.
+	select {
+	case <-quit:
+		logging.Base().Debugf("EnsureDigest was asked to quit before we enqueue the certificate request")
+		return
+	default:
+	}
+
 	// The channel send to UnmatchedPendingCertificates is guaranteed to be non-blocking since due to the fact that -
 	// 1. the channel capacity is 1
 	// 2. we just cleared a single item off this channel ( if there was any )
 	// 3. the EnsureDigest method is being called with the agreeement service guarantee
 	// 4. no other senders to this channel exists
 	// we want to have this as a select statement to check if we neeed to exit before enqueueing the task to the catchup service.
-	select {
-	case <-quit:
-		logging.Base().Debugf("EnsureDigest was asked to quit before we enqueue the certificate request")
-		return
-	case l.UnmatchedPendingCertificates <- catchup.PendingUnmatchedCertificate{Cert: cert, VoteVerifier: verifier}:
-		// good, we've placed the cert in the queue.
-	}
+	l.UnmatchedPendingCertificates <- catchup.PendingUnmatchedCertificate{Cert: cert, VoteVerifier: verifier}
 
-	select {
-	case <-quit:
-		logging.Base().Debugf("EnsureDigest was asked to quit before we could acquire the block")
-		return
-	case <-certRoundReachedCh:
-		// great! we've reached the desired round.
+	defer func() {
 		// clear out the content of the UnmatchedPendingCertificates channel if we somehow managed to get this round aquired by a different method ( i.e. regular catchup )
 		select {
 		case <-l.UnmatchedPendingCertificates:
 		default:
 		}
-		return
+	}()
+
+	select {
+	case <-quit:
+		logging.Base().Debugf("EnsureDigest was asked to quit before we could acquire the block")
+	case <-certRoundReachedCh:
+		// great! we've reached the desired round.
 	}
 }
