@@ -75,7 +75,7 @@ func (s *httpTestPeerSource) RegisterHandlers(dispatch []network.TaggedMessageHa
 func (s *httpTestPeerSource) ClearHandlers()                                            {}
 func (s *httpTestPeerSource) MakeHTTPRequest(client *http.Client,
 	request *http.Request) (*http.Response, error) {
-	return nil, nil
+	return client.Do(request)
 }
 
 // implement network.HTTPPeer
