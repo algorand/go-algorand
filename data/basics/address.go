@@ -75,11 +75,15 @@ func UnmarshalChecksumAddress(address string) (Address, error) {
 	return short, nil
 }
 
+var base32Encoder = base32.StdEncoding.WithPadding(base32.NoPadding)
+
 // String returns a string representation of Address
 func (addr Address) String() string {
-	var addrWithChecksum []byte
-	addrWithChecksum = append(addr[:], addr.GetChecksum()...)
-	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(addrWithChecksum)
+	addrWithChecksum := make([]byte, crypto.DigestSize+checksumLength)
+	copy(addrWithChecksum[:crypto.DigestSize], addr[:])
+	shortAddressHash := crypto.Hash(addr[:])
+	copy(addrWithChecksum[crypto.DigestSize:], shortAddressHash[len(shortAddressHash)-checksumLength:])
+	return base32Encoder.EncodeToString(addrWithChecksum)
 }
 
 // MarshalText returns the address string as an array of bytes
