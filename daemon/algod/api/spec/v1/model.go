@@ -58,6 +58,11 @@ type NodeStatus struct {
 	// HasSyncedSinceStartup indicates whether a round has completed since startup
 	// Required: true
 	HasSyncedSinceStartup bool `json:"hasSyncedSinceStartup"`
+
+	// StoppedAtUnsupportedRound indicates that the node does not support the new rounds and has stopped making progress
+	//
+	// Required: true
+	StoppedAtUnsupportedRound bool `json:"stoppedAtUnsupportedRound"`
 }
 
 // TransactionID Description

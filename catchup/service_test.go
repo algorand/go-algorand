@@ -339,16 +339,16 @@ func TestServiceFetchBlocksMalformed(t *testing.T) {
 	require.True(t, s.fetcherFactory.(*MockedFetcherFactory).fetcher.client.closed)
 }
 
-func TestOnSwitchToUnApprovedProtocol(t *testing.T) {
+func TestOnSwitchToUnSupportedProtocol(t *testing.T) {
 	// Test the interruption in the initial loop
 	// This cannot happen in practice, but is used to test the code.
 	{
 		lastRoundRemote := 5
 		lastRoundLocal := 0
 		roundWithSwitchOn := 0
-		local, remote := helperTestOnSwitchToUnApprovedProtocol(t, lastRoundRemote, lastRoundLocal, roundWithSwitchOn, 0)
+		local, remote := helperTestOnSwitchToUnSupportedProtocol(t, lastRoundRemote, lastRoundLocal, roundWithSwitchOn, 0)
 
-		// Last approved round is 0, but is guaranteed
+		// Last supported round is 0, but is guaranteed
 		// to stop after 2 rounds.
 
 		// SeedLookback is 2, which allows two parallel fetches.
@@ -362,7 +362,7 @@ func TestOnSwitchToUnApprovedProtocol(t *testing.T) {
 		lastRoundRemote := 10
 		lastRoundLocal := 7
 		roundWithSwitchOn := 5
-		local, remote := helperTestOnSwitchToUnApprovedProtocol(t, lastRoundRemote, lastRoundLocal, roundWithSwitchOn, 0)
+		local, remote := helperTestOnSwitchToUnSupportedProtocol(t, lastRoundRemote, lastRoundLocal, roundWithSwitchOn, 0)
 		for r := 1; r <= lastRoundLocal; r++ {
 			blk, err := local.Block(basics.Round(r))
 			require.NoError(t, err)
@@ -382,7 +382,7 @@ func TestOnSwitchToUnApprovedProtocol(t *testing.T) {
 		lastRoundRemote := 14
 		lastRoundLocal := 7
 		roundWithSwitchOn := 7
-		local, remote := helperTestOnSwitchToUnApprovedProtocol(t, lastRoundRemote, lastRoundLocal, roundWithSwitchOn, 0)
+		local, remote := helperTestOnSwitchToUnSupportedProtocol(t, lastRoundRemote, lastRoundLocal, roundWithSwitchOn, 0)
 		for r := 1; r <= lastRoundLocal; r = r + 1 {
 			blk, err := local.Block(basics.Round(r))
 			require.NoError(t, err)
@@ -408,7 +408,7 @@ func TestOnSwitchToUnApprovedProtocol(t *testing.T) {
 		roundWithSwitchOn := 7
 		roundsAlreadyInLocal := 8 // round 0 -> 7
 
-		local, remote := helperTestOnSwitchToUnApprovedProtocol(
+		local, remote := helperTestOnSwitchToUnSupportedProtocol(
 			t,
 			lastRoundRemote,
 			lastRoundLocal,
@@ -427,7 +427,7 @@ func TestOnSwitchToUnApprovedProtocol(t *testing.T) {
 	}
 }
 
-func helperTestOnSwitchToUnApprovedProtocol(
+func helperTestOnSwitchToUnSupportedProtocol(
 	t *testing.T,
 	lastRoundRemote,
 	lastRoundLocal,
