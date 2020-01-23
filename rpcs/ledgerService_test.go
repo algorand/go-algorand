@@ -333,7 +333,7 @@ func (b *BasicRPCNode) GetPeers(options ...network.PeerOption) []network.Peer {
 
 func (b *BasicRPCNode) MakeHTTPRequest(client *http.Client,
 	request *http.Request) (*http.Response, error) {
-	return nil, nil
+	return client.Do(request)
 }
 
 func nodePair() (*BasicRPCNode, *BasicRPCNode) {
