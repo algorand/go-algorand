@@ -123,7 +123,7 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 	request.Header.Set("Content-Type", requestContentType)
 	network.SetUserAgentHeader(request.Header)
 	request = request.WithContext(ctx)
-	response, err := client.Do(request)
+	response, err := hts.peers.MakeHTTPRequest(client, request)
 	if err != nil {
 		hts.log.Warnf("txSync POST %v: %s", syncURL, err)
 		return nil, err
