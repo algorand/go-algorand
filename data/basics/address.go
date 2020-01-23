@@ -33,6 +33,8 @@ const (
 	checksumLength = 4
 )
 
+var base32Encoder = base32.StdEncoding.WithPadding(base32.NoPadding)
+
 // GetChecksum returns the checksum as []byte
 // Checksum in Algorand are the last 4 bytes of the shortAddress Hash. H(Address)[28:]
 func (addr Address) GetChecksum() []byte {
@@ -48,7 +50,8 @@ func (addr Address) GetUserAddress() string {
 
 // UnmarshalChecksumAddress tries to unmarshal the checksummed address string.
 func UnmarshalChecksumAddress(address string) (Address, error) {
-	decoded, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(address)
+	decoded, err := base32Encoder.DecodeString(address)
+
 	if err != nil {
 		return Address{}, fmt.Errorf("failed to decode address %s to base 32", address)
 	}
@@ -77,9 +80,12 @@ func UnmarshalChecksumAddress(address string) (Address, error) {
 
 // String returns a string representation of Address
 func (addr Address) String() string {
-	var addrWithChecksum []byte
-	addrWithChecksum = append(addr[:], addr.GetChecksum()...)
-	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(addrWithChecksum)
+	addrWithChecksum := make([]byte, crypto.DigestSize+checksumLength)
+	copy(addrWithChecksum[:crypto.DigestSize], addr[:])
+	// calling addr.GetChecksum() here takes 20ns more than just rolling it out, so we'll just repeat that code.
+	shortAddressHash := crypto.Hash(addr[:])
+	copy(addrWithChecksum[crypto.DigestSize:], shortAddressHash[len(shortAddressHash)-checksumLength:])
+	return base32Encoder.EncodeToString(addrWithChecksum)
 }
 
 // MarshalText returns the address string as an array of bytes
