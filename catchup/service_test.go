@@ -30,8 +30,10 @@ import (
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/components/mocks"
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
@@ -115,14 +117,15 @@ func (m *MockedFetcher) FetchBlock(ctx context.Context, round basics.Round) (*bo
 		// Add random delay to get it out of sync
 		time.Sleep(time.Duration(rand.Int()%50) * time.Millisecond)
 	}
-
-	block, cert, err := m.ledger.BlockCert(round)
+	block, err := m.ledger.Block(round)
 	if round > m.ledger.LastRound() {
 		return nil, nil, nil, errors.New("no block")
 	} else if err != nil {
 		panic(err)
 	}
 
+	var cert agreement.Certificate
+	cert.Proposal.BlockDigest = block.Digest()
 	return &block, &cert, &m.client, nil
 }
 
@@ -182,10 +185,10 @@ func TestServiceFetchBlocksSameRange(t *testing.T) {
 	net := &mocks.MockNetwork{}
 
 	// Make Service
-	syncer := MakeService(logging.Base(), defaultConfig, net, local, nil, &mockedAuthenticator{errorRound: -1})
+	syncer := MakeService(logging.Base(), defaultConfig, net, local, nil, &mockedAuthenticator{errorRound: -1}, nil)
 	syncer.fetcherFactory = makeMockFactory(&MockedFetcher{ledger: remote, timeout: false, tries: make(map[basics.Round]int)})
 
-	syncer.sync()
+	syncer.sync(nil)
 	require.Equal(t, remote.LastRound(), local.LastRound())
 }
 
@@ -197,7 +200,7 @@ func TestPeriodicSync(t *testing.T) {
 	initialLocalRound := local.LastRound()
 
 	// Make Service
-	s := MakeService(logging.Base(), defaultConfig, &mocks.MockNetwork{}, local, nil, auth)
+	s := MakeService(logging.Base(), defaultConfig, &mocks.MockNetwork{}, local, nil, auth, nil)
 	s.deadlineTimeout = 2 * time.Second
 
 	factory := MockedFetcherFactory{fetcher: &MockedFetcher{ledger: remote, timeout: false, tries: make(map[basics.Round]int)}}
@@ -232,7 +235,7 @@ func TestServiceFetchBlocksOneBlock(t *testing.T) {
 	net := &mocks.MockNetwork{}
 
 	// Make Service
-	s := MakeService(logging.Base(), defaultConfig, net, local, nil, &mockedAuthenticator{errorRound: -1})
+	s := MakeService(logging.Base(), defaultConfig, net, local, nil, &mockedAuthenticator{errorRound: -1}, nil)
 	factory := MockedFetcherFactory{fetcher: &MockedFetcher{ledger: remote, timeout: false, tries: make(map[basics.Round]int)}}
 	s.fetcherFactory = &factory
 
@@ -240,7 +243,7 @@ func TestServiceFetchBlocksOneBlock(t *testing.T) {
 	require.False(t, factory.fetcher.client.closed)
 
 	// Fetch blocks
-	s.sync()
+	s.sync(nil)
 
 	// Asserts that the last block is the one we expect
 	require.Equal(t, lastRoundAtStart+basics.Round(numBlocks), local.LastRound())
@@ -270,7 +273,7 @@ func TestAbruptWrites(t *testing.T) {
 	lastRound := local.LastRound()
 
 	// Make Service
-	s := MakeService(logging.Base(), defaultConfig, &mocks.MockNetwork{}, local, nil, &mockedAuthenticator{errorRound: -1})
+	s := MakeService(logging.Base(), defaultConfig, &mocks.MockNetwork{}, local, nil, &mockedAuthenticator{errorRound: -1}, nil)
 	factory := MockedFetcherFactory{fetcher: &MockedFetcher{ledger: remote, timeout: false, tries: make(map[basics.Round]int)}}
 	s.fetcherFactory = &factory
 
@@ -281,14 +284,16 @@ func TestAbruptWrites(t *testing.T) {
 		defer wg.Done()
 		for i := basics.Round(lastRound + 1); i <= basics.Round(numberOfBlocks); i++ {
 			time.Sleep(time.Duration(rand.Uint32()%5) * time.Millisecond)
-			blk, cert, err := remote.BlockCert(i)
+			blk, err := remote.Block(i)
 			require.NoError(t, err)
+			var cert agreement.Certificate
+			cert.Proposal.BlockDigest = blk.Digest()
 			err = local.AddBlock(blk, cert)
 			require.NoError(t, err)
 		}
 	}()
 
-	s.sync()
+	s.sync(nil)
 	require.Equal(t, remote.LastRound(), local.LastRound())
 }
 
@@ -302,11 +307,11 @@ func TestServiceFetchBlocksMultiBlocks(t *testing.T) {
 	lastRoundAtStart := local.LastRound()
 
 	// Make Service
-	syncer := MakeService(logging.Base(), defaultConfig, &mocks.MockNetwork{}, local, nil, &mockedAuthenticator{errorRound: -1})
+	syncer := MakeService(logging.Base(), defaultConfig, &mocks.MockNetwork{}, local, nil, &mockedAuthenticator{errorRound: -1}, nil)
 	syncer.fetcherFactory = &MockedFetcherFactory{fetcher: &MockedFetcher{ledger: remote, timeout: false, tries: make(map[basics.Round]int)}}
 
 	// Fetch blocks
-	syncer.sync()
+	syncer.sync(nil)
 
 	// Asserts that the last block is the one we expect
 	require.Equal(t, lastRoundAtStart+numberOfBlocks, local.LastRound())
@@ -331,10 +336,10 @@ func TestServiceFetchBlocksMalformed(t *testing.T) {
 
 	lastRoundAtStart := local.LastRound()
 	// Make Service
-	s := MakeService(logging.Base(), defaultConfig, &mocks.MockNetwork{}, local, nil, &mockedAuthenticator{errorRound: int(lastRoundAtStart + 1)})
+	s := MakeService(logging.Base(), defaultConfig, &mocks.MockNetwork{}, local, nil, &mockedAuthenticator{errorRound: int(lastRoundAtStart + 1)}, nil)
 	s.fetcherFactory = &MockedFetcherFactory{fetcher: &MockedFetcher{ledger: remote, timeout: false, tries: make(map[basics.Round]int)}}
 
-	s.sync()
+	s.sync(nil)
 	require.Equal(t, lastRoundAtStart, local.LastRound())
 	require.True(t, s.fetcherFactory.(*MockedFetcherFactory).fetcher.client.closed)
 }
@@ -446,7 +451,7 @@ func helperTestOnSwitchToUnSupportedProtocol(
 	remote = Ledger(mRemote)
 
 	// Make Service
-	s := MakeService(logging.Base(), defaultConfig, &mocks.MockNetwork{}, local, nil, &mockedAuthenticator{errorRound: -1})
+	s := MakeService(logging.Base(), defaultConfig, &mocks.MockNetwork{}, local, nil, &mockedAuthenticator{errorRound: -1}, nil)
 	s.deadlineTimeout = 2 * time.Second
 
 	s.fetcherFactory = &MockedFetcherFactory{fetcher: &MockedFetcher{ledger: remote, timeout: false, tries: make(map[basics.Round]int)}}
@@ -529,15 +534,6 @@ func (m *mockedLedger) Wait(r basics.Round) chan struct{} {
 	return m.chans[r]
 }
 
-func (m *mockedLedger) BlockCert(r basics.Round) (bookkeeping.Block, agreement.Certificate, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if r > m.lastRound() {
-		return bookkeeping.Block{}, agreement.Certificate{}, errors.New("mockedLedger.BlockCert: round too high")
-	}
-	return m.blocks[r], agreement.Certificate{}, nil
-}
-
 func (m *mockedLedger) Block(r basics.Round) (bookkeeping.Block, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -545,6 +541,26 @@ func (m *mockedLedger) Block(r basics.Round) (bookkeeping.Block, error) {
 		return bookkeeping.Block{}, errors.New("mockedLedger.Block: round too high")
 	}
 	return m.blocks[r], nil
+}
+
+func (m *mockedLedger) BalanceRecord(basics.Round, basics.Address) (basics.BalanceRecord, error) {
+	return basics.BalanceRecord{}, errors.New("not needed for mockedLedger")
+}
+func (m *mockedLedger) Circulation(basics.Round) (basics.MicroAlgos, error) {
+	return basics.MicroAlgos{}, errors.New("not needed for mockedLedger")
+}
+func (m *mockedLedger) ConsensusVersion(basics.Round) (protocol.ConsensusVersion, error) {
+	return protocol.ConsensusCurrentVersion, nil
+}
+func (m *mockedLedger) EnsureBlock(block *bookkeeping.Block, c agreement.Certificate) {
+	m.AddBlock(*block, c)
+}
+func (m *mockedLedger) Seed(basics.Round) (committee.Seed, error) {
+	return committee.Seed{}, errors.New("not needed for mockedLedger")
+}
+
+func (m *mockedLedger) LookupDigest(basics.Round) (crypto.Digest, error) {
+	return crypto.Digest{}, errors.New("not needed for mockedLedger")
 }
 
 func testingenv(t testing.TB, numBlocks int) (ledger, emptyLedger Ledger) {
@@ -594,4 +610,35 @@ func testingenvWithUpgrade(
 	}
 
 	return mLedger, mEmptyLedger
+}
+
+type MockVoteVerifier struct{}
+
+func (avv *MockVoteVerifier) Quit() {
+}
+func (avv *MockVoteVerifier) Parallelism() int {
+	return 1
+}
+
+func TestCatchupUnmatchedCertificate(t *testing.T) {
+	// Make Ledger
+	remote, local := testingenv(t, 10)
+
+	lastRoundAtStart := local.LastRound()
+
+	// Make Service
+	s := MakeService(logging.Base(), defaultConfig, &mocks.MockNetwork{}, local, nil, &mockedAuthenticator{errorRound: int(lastRoundAtStart + 1)}, nil)
+	s.latestRoundFetcherFactory = &MockedFetcherFactory{fetcher: &MockedFetcher{ledger: remote, timeout: false, tries: make(map[basics.Round]int)}}
+	for roundNumber := 2; roundNumber < 10; roundNumber += 3 {
+		pc := &PendingUnmatchedCertificate{
+			Cert: agreement.Certificate{
+				Round: basics.Round(roundNumber),
+			},
+			VoteVerifier: agreement.MakeAsyncVoteVerifier(nil),
+		}
+		block, _ := remote.Block(basics.Round(roundNumber))
+		pc.Cert.Proposal.BlockDigest = block.Digest()
+		s.sync(pc)
+		require.True(t, s.latestRoundFetcherFactory.(*MockedFetcherFactory).fetcher.client.closed)
+	}
 }
