@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -270,7 +271,10 @@ func TestAssetConfig(t *testing.T) {
 	a.Equal(len(info.AssetParams), config.Consensus[protocol.ConsensusFuture].MaxAssetsPerAccount)
 	var assets []assetIDParams
 	for idx, cp := range info.AssetParams {
-		assets = append(assets, assetIDParams{idx, cp})
+		var i uint64
+		i, err = strconv.ParseUint(idx, 10, 64)
+		a.NoError(err)
+		assets = append(assets, assetIDParams{i, cp})
 		a.Equal(cp.UnitName, fmt.Sprintf("test%d", cp.Total-1))
 		a.Equal(cp.AssetName, fmt.Sprintf("testname%d", cp.Total-1))
 		a.Equal(cp.ManagerAddr, manager)
@@ -336,31 +340,31 @@ func TestAssetConfig(t *testing.T) {
 		a.Equal(cp.UnitName, fmt.Sprintf("test%d", cp.Total-1))
 		a.Equal(cp.AssetName, fmt.Sprintf("testname%d", cp.Total-1))
 
-		if idx == assets[0].idx {
+		if idx == string(assets[0].idx) {
 			a.Equal(cp.ManagerAddr, account0)
 		} else {
 			a.Equal(cp.ManagerAddr, manager)
 		}
 
-		if idx == assets[1].idx {
+		if idx == string(assets[1].idx) {
 			a.Equal(cp.ReserveAddr, account0)
-		} else if idx == assets[4].idx {
+		} else if idx == string(assets[4].idx) {
 			a.Equal(cp.ReserveAddr, "")
 		} else {
 			a.Equal(cp.ReserveAddr, reserve)
 		}
 
-		if idx == assets[2].idx {
+		if idx == string(assets[2].idx) {
 			a.Equal(cp.FreezeAddr, account0)
-		} else if idx == assets[5].idx {
+		} else if idx == string(assets[5].idx) {
 			a.Equal(cp.FreezeAddr, "")
 		} else {
 			a.Equal(cp.FreezeAddr, freeze)
 		}
 
-		if idx == assets[3].idx {
+		if idx == string(assets[3].idx) {
 			a.Equal(cp.ClawbackAddr, account0)
-		} else if idx == assets[6].idx {
+		} else if idx == string(assets[6].idx) {
 			a.Equal(cp.ClawbackAddr, "")
 		} else {
 			a.Equal(cp.ClawbackAddr, clawback)
@@ -386,9 +390,13 @@ func TestAssetConfig(t *testing.T) {
 		wh, err = client.GetUnencryptedWalletHandle()
 		a.NoError(err)
 
-		tx, err := client.MakeUnsignedAssetDestroyTx(idx)
+		var i uint64
+		i, err = strconv.ParseUint(idx, 10, 64)
+		a.NoError(err)
+		tx, err := client.MakeUnsignedAssetDestroyTx(i)
+		a.NoError(err)
 		sender := manager
-		if idx == assets[0].idx {
+		if idx == string(assets[0].idx) {
 			sender = account0
 		}
 		txid, err := helperFillSignBroadcast(client, wh, sender, tx, err)
