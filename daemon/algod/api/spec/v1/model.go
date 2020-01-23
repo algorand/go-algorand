@@ -146,7 +146,7 @@ type Account struct {
 	// NotParticipating - indicates that the associated account is neither a delegator nor a delegate.
 	//
 	// required: true
-	Status string `json:"statuss"`
+	Status string `json:"status"`
 
 	// Participation is the participation information currently associated with the account, if any.
 	// This field is optional and may not be set even if participation information is registered.
