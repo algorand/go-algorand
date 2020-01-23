@@ -153,8 +153,7 @@ func main() {
 
 var versionCmd = &cobra.Command{
 	Use:   "version",
-	Short: "The current version of the Algorand daemon (algod)",
-	Long:  `The current version of the Algorand daemon (algod)`,
+	Short: "The current version of the Algorand daemon (algod).",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		onDataDirs(func(dataDir string) {
@@ -178,8 +177,7 @@ var versionCmd = &cobra.Command{
 
 var licenseCmd = &cobra.Command{
 	Use:   "license",
-	Short: "Display license information",
-	Long:  `Displays license information`,
+	Short: "Display license information.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println(config.GetLicenseInfo())
@@ -189,7 +187,7 @@ var licenseCmd = &cobra.Command{
 var reportCmd = &cobra.Command{
 	Use:   "report",
 	Short: "",
-	Long:  "Produces report helpful for debugging",
+	Long:  "Produces report helpful for debugging.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println(config.FormatVersionAndLicense())
