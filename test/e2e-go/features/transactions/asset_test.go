@@ -385,18 +385,19 @@ func TestAssetConfig(t *testing.T) {
 	// Destroy assets
 	txids = make(map[string]string)
 	for idx := range info.AssetParams {
+		var i uint64
+		i, err = strconv.ParseUint(idx, 10, 64)
+		a.NoError(err)
+
 		// re-generate wh, since this test takes a while and sometimes
 		// the wallet handle expires.
 		wh, err = client.GetUnencryptedWalletHandle()
 		a.NoError(err)
 
-		var i uint64
-		i, err = strconv.ParseUint(idx, 10, 64)
-		a.NoError(err)
 		tx, err := client.MakeUnsignedAssetDestroyTx(i)
 		a.NoError(err)
 		sender := manager
-		if idx == string(assets[0].idx) {
+		if i == assets[0].idx {
 			sender = account0
 		}
 		txid, err := helperFillSignBroadcast(client, wh, sender, tx, err)
@@ -405,7 +406,7 @@ func TestAssetConfig(t *testing.T) {
 
 		// Travis is slow, so help it along by waiting every once in a while
 		// for these transactions to commit..
-		if (idx % 50) == 0 {
+		if (i % 50) == 0 {
 			_, curRound = fixture.GetBalanceAndRound(account0)
 			confirmed = fixture.WaitForAllTxnsToConfirm(curRound+20, txids)
 			a.True(confirmed)
@@ -482,8 +483,11 @@ func TestAssetInformation(t *testing.T) {
 	// Check that AssetInformation returns the correct AssetParams
 	info, err = client.AccountInformation(account0)
 	a.NoError(err)
+	var i uint64
 	for idx, cp := range info.AssetParams {
-		assetInfo, err := client.AssetInformation(idx)
+		i, err = strconv.ParseUint(idx, 10, 64)
+		a.NoError(err)
+		assetInfo, err := client.AssetInformation(i)
 		a.NoError(err)
 		a.Equal(cp, assetInfo)
 	}
@@ -491,7 +495,9 @@ func TestAssetInformation(t *testing.T) {
 	// Destroy assets
 	txids = make(map[string]string)
 	for idx := range info.AssetParams {
-		tx, err := client.MakeUnsignedAssetDestroyTx(idx)
+		i, err = strconv.ParseUint(idx, 10, 64)
+		a.NoError(err)
+		tx, err := client.MakeUnsignedAssetDestroyTx(i)
 		txid, err := helperFillSignBroadcast(client, wh, manager, tx, err)
 		a.NoError(err)
 		txids[txid] = manager
@@ -708,14 +714,17 @@ func TestAssetSend(t *testing.T) {
 	info, err := client.AccountInformation(account0)
 	a.NoError(err)
 	a.Equal(len(info.AssetParams), 2)
-	var frozenIdx, nonFrozenIdx uint64
+	var i, frozenIdx, nonFrozenIdx uint64
 	for idx, cp := range info.AssetParams {
+		i, err = strconv.ParseUint(idx, 10, 64)
+		a.NoError(err)
+
 		if cp.UnitName == "frozen" {
-			frozenIdx = idx
+			frozenIdx = i
 		}
 
 		if cp.UnitName == "nofreeze" {
-			nonFrozenIdx = idx
+			nonFrozenIdx = i
 		}
 	}
 
@@ -798,10 +807,10 @@ func TestAssetSend(t *testing.T) {
 	info, err = client.AccountInformation(extra)
 	a.NoError(err)
 	a.Equal(len(info.Assets), 2)
-	a.Equal(info.Assets[frozenIdx].Amount, uint64(0))
-	a.Equal(info.Assets[frozenIdx].Frozen, true)
-	a.Equal(info.Assets[nonFrozenIdx].Amount, uint64(10))
-	a.Equal(info.Assets[nonFrozenIdx].Frozen, false)
+	a.Equal(info.Assets[string(frozenIdx)].Amount, uint64(0))
+	a.Equal(info.Assets[string(frozenIdx)].Frozen, true)
+	a.Equal(info.Assets[string(nonFrozenIdx)].Amount, uint64(10))
+	a.Equal(info.Assets[string(nonFrozenIdx)].Frozen, false)
 
 	// Should not be able to send more than is available
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 11, extra, "", "")
@@ -871,14 +880,14 @@ func TestAssetSend(t *testing.T) {
 	info, err = client.AccountInformation(account0)
 	a.NoError(err)
 	a.Equal(len(info.Assets), 2)
-	a.Equal(info.Assets[frozenIdx].Amount, uint64(95))
-	a.Equal(info.Assets[nonFrozenIdx].Amount, uint64(95))
+	a.Equal(info.Assets[string(frozenIdx)].Amount, uint64(95))
+	a.Equal(info.Assets[string(nonFrozenIdx)].Amount, uint64(95))
 
 	info, err = client.AccountInformation(extra)
 	a.NoError(err)
 	a.Equal(len(info.Assets), 2)
-	a.Equal(info.Assets[frozenIdx].Amount, uint64(5))
-	a.Equal(info.Assets[nonFrozenIdx].Amount, uint64(5))
+	a.Equal(info.Assets[string(frozenIdx)].Amount, uint64(5))
+	a.Equal(info.Assets[string(nonFrozenIdx)].Amount, uint64(5))
 
 	// Should be able to close out asset slots and close entire account.
 	tx, err = client.MakeUnsignedAssetFreezeTx(nonFrozenIdx, extra, false)
@@ -914,10 +923,12 @@ func TestAssetCreateWaitRestartDelete(t *testing.T) {
 	a.NoError(err)
 	a.Equal(len(info.AssetParams), 1)
 	var asset v1.AssetParams
-	var assetIndex uint64
+	var i, assetIndex uint64
 	for idx, cp := range info.AssetParams {
+		i, err = strconv.ParseUint(idx, 10, 64)
+		a.NoError(err)
 		asset = cp
-		assetIndex = idx
+		assetIndex = i
 	}
 
 	assetURL := "foo://bar"
@@ -937,8 +948,10 @@ func TestAssetCreateWaitRestartDelete(t *testing.T) {
 	a.NoError(err)
 	a.Equal(len(info.AssetParams), 1)
 	for idx, cp := range info.AssetParams {
+		i, err = strconv.ParseUint(idx, 10, 64)
+		a.NoError(err)
 		asset = cp
-		assetIndex = idx
+		assetIndex = i
 	}
 	verifyAssetParameters(asset, "test", "testunit", manager, reserve, freeze, clawback,
 		assetMetadataHash, assetURL, a)
@@ -978,10 +991,12 @@ func TestAssetCreateWaitBalLookbackDelete(t *testing.T) {
 	a.NoError(err)
 	a.Equal(len(info.AssetParams), 1)
 	var asset v1.AssetParams
-	var assetIndex uint64
+	var i, assetIndex uint64
 	for idx, cp := range info.AssetParams {
+		i, err = strconv.ParseUint(idx, 10, 64)
+		a.NoError(err)
 		asset = cp
-		assetIndex = idx
+		assetIndex = i
 	}
 
 	assetURL := "foo://bar"
@@ -1002,8 +1017,10 @@ func TestAssetCreateWaitBalLookbackDelete(t *testing.T) {
 	a.NoError(err)
 	a.Equal(len(info.AssetParams), 1)
 	for idx, cp := range info.AssetParams {
+		i, err = strconv.ParseUint(idx, 10, 64)
+		a.NoError(err)
 		asset = cp
-		assetIndex = idx
+		assetIndex = i
 	}
 	verifyAssetParameters(asset, "test", "testunit", manager, reserve, freeze, clawback,
 		assetMetadataHash, assetURL, a)
