@@ -22,6 +22,7 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -32,7 +33,7 @@ import (
 )
 
 // PrepareAccounts to set up accounts and asset accounts required for Ping Pong run
-func PrepareAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]uint64, assetParams map[uint64]v1.AssetParams, cfg PpConfig, err error) {
+func PrepareAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]uint64, assetParams map[string]v1.AssetParams, cfg PpConfig, err error) {
 	cfg = initCfg
 	accounts, cfg, err = ensureAccounts(ac, cfg)
 	if err != nil {
@@ -112,7 +113,7 @@ func listSufficientAccounts(accounts map[string]uint64, minimumAmount uint64, ex
 }
 
 // RunPingPong starts ping pong process
-func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uint64, assetParam map[uint64]v1.AssetParams, cfg PpConfig) {
+func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uint64, assetParam map[string]v1.AssetParams, cfg PpConfig) {
 	// Infinite loop given:
 	//  - accounts -> map of accounts to include in transfers (including src account, which we don't want to use)
 	//  - cfg      -> configuration for how to proceed
@@ -183,7 +184,7 @@ func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uin
 	}
 }
 
-func sendFromTo(fromList, toList []string, accounts map[string]uint64, assetParams map[uint64]v1.AssetParams, client libgoal.Client, cfg PpConfig) (sentCount, successCount uint64, err error) {
+func sendFromTo(fromList, toList []string, accounts map[string]uint64, assetParams map[string]v1.AssetParams, client libgoal.Client, cfg PpConfig) (sentCount, successCount uint64, err error) {
 	amt := cfg.MaxAmt
 	fee := cfg.MaxFee
 	for i, from := range fromList {
@@ -214,9 +215,14 @@ func sendFromTo(fromList, toList []string, accounts map[string]uint64, assetPara
 			if cfg.NumAsset > 0 { // generate random assetID if we send asset txns
 				rindex := rand.Intn(len(assetParams))
 				i := 0
+				var parsed uint64
 				for k := range assetParams {
+					parsed, err = strconv.ParseUint(k, 10, 64)
+					if err != nil {
+						return
+					}
 					if i == rindex {
-						assetID = k
+						assetID = parsed
 						break
 					}
 					i++

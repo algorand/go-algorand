@@ -493,7 +493,7 @@ func (c *Client) MakeUnsignedAssetConfigTx(creator string, index uint64, newMana
 			return tx, err
 		}
 
-		params, ok = current.AssetParams[index]
+		params, ok = current.AssetParams[string(index)]
 		if !ok {
 			return tx, fmt.Errorf("asset ID %d not found in account %s", index, creator)
 		}

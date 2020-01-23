@@ -122,7 +122,7 @@ func (componentInstance *PingPongComponentInstance) startPingPong(cfg *pingpong.
 	log.Infof("Preparing to initialize PingPong with config: %+v\n", cfg)
 
 	var accounts map[string]uint64
-	var assetParams map[uint64]v1.AssetParams
+	var assetParams map[string]v1.AssetParams
 	var resultCfg pingpong.PpConfig
 
 	// Initialize accounts if necessary, this may take several attempts while previous transactions to settle

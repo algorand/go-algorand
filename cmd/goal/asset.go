@@ -19,6 +19,7 @@ package main
 import (
 	"encoding/base64"
 	"fmt"
+	"strconv"
 
 	"github.com/spf13/cobra"
 
@@ -193,8 +194,13 @@ func lookupAssetID(cmd *cobra.Command, creator string, client libgoal.Client) {
 
 	nmatch := 0
 	for id, params := range response.AssetParams {
+		i, err := strconv.ParseUint(id, 10, 64)
+		if err != nil {
+			reportErrorf("Asset IDs must be integer strings.", err)
+		}
+
 		if params.UnitName == assetUnitName {
-			assetID = id
+			assetID = i
 			nmatch++
 		}
 	}
@@ -629,9 +635,9 @@ var infoAssetCmd = &cobra.Command{
 			reportErrorf(errorRequestFail, err)
 		}
 
-		res := reserve.Assets[assetID]
+		res := reserve.Assets[string(assetID)]
 
-		fmt.Printf("Asset ID:         %d\n", assetID)
+		fmt.Printf("Asset ID:         %s\n", assetID)
 		fmt.Printf("Creator:          %s\n", params.Creator)
 		fmt.Printf("Asset name:       %s\n", params.AssetName)
 		fmt.Printf("Unit name:        %s\n", params.UnitName)

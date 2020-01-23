@@ -22,6 +22,7 @@ import (
 	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/libgoal"
 	"sort"
+	"strconv"
 	"time"
 )
 
@@ -100,7 +101,7 @@ func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]ui
 	return
 }
 
-func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConfig) (assetParams map[uint64]v1.AssetParams, err error) {
+func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConfig) (assetParams map[string]v1.AssetParams, err error) {
 	// get existing assets
 	account, accountErr := client.AccountInformation(cfg.SrcAccount)
 	if accountErr != nil {
@@ -184,11 +185,18 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 			return
 		}
 
+		var i uint64
 		for k := range assetParams {
+			i, err = strconv.ParseUint(k, 10, 64)
+			if err != nil {
+				return
+			}
+
 			// if addr already opened this asset, skip
 			if _, ok := addrAccount.Assets[k]; !ok {
 				// init asset k in addr
-				tx, sendErr := client.MakeUnsignedAssetSendTx(k, 0, addr, "", "")
+				tx, sendErr := client.MakeUnsignedAssetSendTx(i, 0, addr, "", "")
+
 				if sendErr != nil {
 					fmt.Printf("Cannot initiate asset %v in account %v\n", k, addr)
 					err = sendErr
@@ -237,7 +245,7 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 				continue
 			}
 
-			tx, sendErr := constructTxn(cfg.SrcAccount, addr, cfg.MaxFee, assetAmt, k, client, cfg)
+			tx, sendErr := constructTxn(cfg.SrcAccount, addr, cfg.MaxFee, assetAmt, i, client, cfg)
 			if sendErr != nil {
 				fmt.Printf("Cannot initiate asset %v in account %v\n", k, addr)
 				err = sendErr

@@ -579,9 +579,9 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	var assets map[uint64]v1.AssetHolding
+	var assets map[string]v1.AssetHolding
 	if len(record.Assets) > 0 {
-		assets = make(map[uint64]v1.AssetHolding)
+		assets = make(map[string]v1.AssetHolding)
 		for curid, holding := range record.Assets {
 			var creator string
 			creatorAddr, err := myLedger.GetAssetCreator(curid)
@@ -592,7 +592,7 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 				// longer fetch the creator
 				creator = ""
 			}
-			assets[uint64(curid)] = v1.AssetHolding{
+			assets[string(curid)] = v1.AssetHolding{
 				Creator: creator,
 				Amount:  holding.Amount,
 				Frozen:  holding.Frozen,
@@ -600,11 +600,11 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	var thisAssetParams map[uint64]v1.AssetParams
+	var thisAssetParams map[string]v1.AssetParams
 	if len(record.AssetParams) > 0 {
-		thisAssetParams = make(map[uint64]v1.AssetParams)
+		thisAssetParams = make(map[string]v1.AssetParams)
 		for idx, params := range record.AssetParams {
-			thisAssetParams[uint64(idx)] = assetParams(addr, params)
+			thisAssetParams[string(idx)] = assetParams(addr, params)
 		}
 	}
 

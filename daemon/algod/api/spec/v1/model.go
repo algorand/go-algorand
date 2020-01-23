@@ -146,7 +146,7 @@ type Account struct {
 	// NotParticipating - indicates that the associated account is neither a delegator nor a delegate.
 	//
 	// required: true
-	Status string `json:"status"`
+	Status string `json:"statuss"`
 
 	// Participation is the participation information currently associated with the account, if any.
 	// This field is optional and may not be set even if participation information is registered.
@@ -158,13 +158,13 @@ type Account struct {
 	// AssetParams specifies the parameters of assets created by this account.
 	//
 	// required: false
-	AssetParams map[uint64]AssetParams `json:"thisassettotal,omitempty"`
+	AssetParams map[string]AssetParams `json:"thisassettotal,omitempty"`
 
 	// Assets specifies the holdings of assets by this account,
 	// indexed by the asset ID.
 	//
 	// required: false
-	Assets map[uint64]AssetHolding `json:"assets,omitempty"`
+	Assets map[string]AssetHolding `json:"assets,omitempty"`
 }
 
 // Asset specifies both the unique identifier and the parameters for an asset
