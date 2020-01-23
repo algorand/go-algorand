@@ -107,3 +107,29 @@ func TestAddressMarshalUnmarshal(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, testob, nob)
 }
+
+func BenchmarkAddressFormatting(b *testing.B) {
+	addr := "J5YDZLPOHWB5O6MVRHNFGY4JXIQAYYM6NUJWPBSYBBIXH5ENQ4Z5LTJELU"
+	uaddr, err := UnmarshalChecksumAddress(addr)
+	require.NoError(b, err)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		stringed := uaddr.String()
+		if len(stringed) == 0 {
+			break
+		}
+	}
+}
+
+func BenchmarkUnmarshalChecksumAddress(b *testing.B) {
+	addr := "J5YDZLPOHWB5O6MVRHNFGY4JXIQAYYM6NUJWPBSYBBIXH5ENQ4Z5LTJELU"
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := UnmarshalChecksumAddress(addr)
+		if err != nil {
+			break
+		}
+	}
+}
