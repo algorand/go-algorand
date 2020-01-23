@@ -54,11 +54,11 @@ func BenchmarkServiceFetchBlocks(b *testing.B) {
 		require.NoError(b, err)
 
 		// Make Service
-		syncer := MakeService(logging.Base(), defaultConfig, net, local, nil, new(mockedAuthenticator))
+		syncer := MakeService(logging.Base(), defaultConfig, net, local, nil, new(mockedAuthenticator), nil)
 		syncer.fetcherFactory = makeMockFactory(&MockedFetcher{ledger: remote, timeout: false, tries: make(map[basics.Round]int), latency: 100 * time.Millisecond, predictable: true})
 
 		b.StartTimer()
-		syncer.sync()
+		syncer.sync(nil)
 		b.StopTimer()
 		local.Close()
 		require.Equal(b, remote.LastRound(), local.LastRound())

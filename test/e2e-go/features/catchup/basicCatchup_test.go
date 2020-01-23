@@ -103,7 +103,7 @@ func TestCatchupOverGossip(t *testing.T) {
 
 	// Let the network make some progress
 
-	waitForRound := uint64(5)
+	waitForRound := uint64(3)
 	err = fixture.ClientWaitForRoundWithTimeout(fixture.GetAlgodClientForController(nc), waitForRound)
 	a.NoError(err)
 
@@ -123,6 +123,22 @@ func TestCatchupOverGossip(t *testing.T) {
 	// Now, catch up
 	err = fixture.LibGoalFixture.ClientWaitForRoundWithTimeout(lg, waitForRound)
 	a.NoError(err)
+
+	// wait until the round number on the secondary node matches the round number on the primary node.
+	for {
+		nodeLibGoalClient := fixture.LibGoalFixture.GetLibGoalClientFromDataDir(nc.GetDataDir())
+		nodeStatus, err := nodeLibGoalClient.Status()
+		a.NoError(err)
+
+		primaryStatus, err := lg.Status()
+		a.NoError(err)
+		a.True(nodeStatus.LastRound >= primaryStatus.LastRound)
+		if nodeStatus.LastRound == primaryStatus.LastRound && waitForRound < nodeStatus.LastRound {
+			//t.Logf("Both nodes reached round %d\n", primaryStatus.LastRound)
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 }
 
 func TestStoppedCatchupOnUnsupported(t *testing.T) {
@@ -132,7 +148,7 @@ func TestStoppedCatchupOnUnsupported(t *testing.T) {
 	t.Parallel()
 	a := require.New(t)
 
-	defer os.Unsetenv("ALGORAND_TEST_UNUPGRADEDPROTOCOL_DELETE_UPGRADE")	
+	defer os.Unsetenv("ALGORAND_TEST_UNUPGRADEDPROTOCOL_DELETE_UPGRADE")
 	os.Setenv("ALGORAND_TEST_UNUPGRADEDPROTOCOL_DELETE_UPGRADE", "0")
 
 	// Overview of this test:
@@ -166,7 +182,7 @@ func TestStoppedCatchupOnUnsupported(t *testing.T) {
 	a.NoError(err)
 	cloneClient, err := fixture.StartNode(cloneDataDir)
 	a.NoError(err)
-	defer shutdownClonedNode(cloneDataDir, &fixture, t)	
+	defer shutdownClonedNode(cloneDataDir, &fixture, t)
 
 	// Now, catch up
 	err = fixture.LibGoalFixture.ClientWaitForRoundWithTimeout(cloneClient, waitForRound)
@@ -219,8 +235,8 @@ func TestStoppedCatchupOnUnsupported(t *testing.T) {
 }
 
 // shutdownClonedNode replicates the behavior of fixture.Shutdown() for network nodes on cloned node
-// It deletes the directory if the test passes, otherwise it preserves it 
-func shutdownClonedNode(nodeDataDir string, f * fixtures.RestClientFixture, t *testing.T) {
+// It deletes the directory if the test passes, otherwise it preserves it
+func shutdownClonedNode(nodeDataDir string, f *fixtures.RestClientFixture, t *testing.T) {
 	nc := f.LibGoalFixture.GetNodeControllerForDataDir(nodeDataDir)
 	nc.FullStop()
 	if !t.Failed() {

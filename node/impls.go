@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/agreement"
+	"github.com/algorand/go-algorand/catchup"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -30,15 +31,10 @@ import (
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
-	"github.com/algorand/go-algorand/network"
-	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/rpcs"
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
 // TODO these implementations should be pushed down into the corresponding structs or alternatively turned into new structs in the correct subpackages
-
-const blockQueryPeerLimit = 10
 
 type blockAuthenticatorImpl struct {
 	*data.Ledger
@@ -145,9 +141,14 @@ func (vb validatedBlock) Block() bookkeeping.Block {
 // agreementLedger implements the agreement.Ledger interface.
 type agreementLedger struct {
 	*data.Ledger
+	UnmatchedPendingCertificates chan catchup.PendingUnmatchedCertificate
+}
 
-	ff rpcs.FetcherFactory
-	n  network.GossipNode
+func makeAgreementLedger(ledger *data.Ledger) agreementLedger {
+	return agreementLedger{
+		Ledger:                       ledger,
+		UnmatchedPendingCertificates: make(chan catchup.PendingUnmatchedCertificate, 1),
+	}
 }
 
 // EnsureBlock implements agreement.LedgerWriter.EnsureBlock.
@@ -161,108 +162,44 @@ func (l agreementLedger) EnsureValidatedBlock(ve agreement.ValidatedBlock, c agr
 }
 
 // EnsureDigest implements agreement.LedgerWriter.EnsureDigest.
-// TODO: Get rid of EnsureDigest -- instead the ledger should expose what blocks it's waiting on, and a separate service should fetch them and call EnsureBlock
-// should "retry until cert matches" logic live here or in the abstract fetcher?
 func (l agreementLedger) EnsureDigest(cert agreement.Certificate, quit chan struct{}, verifier *agreement.AsyncVoteVerifier) {
-	round := cert.Round
-	blockHash := bookkeeping.BlockHash(cert.Proposal.BlockDigest) // semantic digest (i.e., hash of the block header), not byte-for-byte digest
-	logging.Base().Debug("consensus was reached on a block we don't have yet: ", blockHash)
-	for {
-		// Ask the fetcher to get the block somehow
-		block, fetchedCert, err := l.FetchBlockByDigest(round, quit)
-		if err != nil {
-			select {
-			case <-quit:
-				logging.Base().Debugf("EnsureDigest was asked to quit before we could acquire the block")
-				return
-			default:
-			}
-			logging.Base().Panicf("EnsureDigest could not acquire block, fetcher errored out: %v", err)
-		}
-
-		if block.Hash() == blockHash && block.ContentsMatchHeader() {
-			l.EnsureBlock(block, cert)
-			return
-		}
-		// Otherwise, fetcher gave us the wrong block
-		logging.Base().Warnf("fetcher gave us bad/wrong block (for round %d): fetched hash %v; want hash %v", round, block.Hash(), blockHash)
-
-		// As a failsafe, if the cert we fetched is valid but for the wrong block, panic as loudly as possible
-		if cert.Round == fetchedCert.Round &&
-			cert.Proposal.BlockDigest != fetchedCert.Proposal.BlockDigest &&
-			fetchedCert.Authenticate(block, l, verifier) == nil {
-			s := "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
-			s += "!!!!!!!!!! FORK DETECTED !!!!!!!!!!!\n"
-			s += "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
-			s += "EnsureDigest called with a cert authenticating block with hash %v.\n"
-			s += "We fetched a valid cert authenticating a different block, %v. This indicates a fork.\n\n"
-			s += "Cert from our agreement service:\n%#v\n\n"
-			s += "Cert from the fetcher:\n%#v\n\n"
-			s += "Block from the fetcher:\n%#v\n\n"
-			s += "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
-			s += "!!!!!!!!!! FORK DETECTED !!!!!!!!!!!\n"
-			s += "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
-			s = fmt.Sprintf(s, cert.Proposal.BlockDigest, fetchedCert.Proposal.BlockDigest, cert, fetchedCert, block)
-			fmt.Println(s)
-			logging.Base().Error(s)
-		}
-	}
-}
-
-func (l agreementLedger) innerFetch(fetcher rpcs.Fetcher, round basics.Round, quit chan struct{}) (*bookkeeping.Block, *agreement.Certificate, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), rpcs.DefaultFetchTimeout)
-	defer cancel()
-	type fbreturn struct {
-		block *bookkeeping.Block
-		cert  *agreement.Certificate
-		err   error
-	}
-	localdone := make(chan fbreturn, 1)
-	go func() {
-		block, cert, _, err := fetcher.FetchBlock(ctx, round)
-		localdone <- fbreturn{block, cert, err}
-	}()
+	certRoundReachedCh := l.Wait(cert.Round)
+	// clear out the pending certificates ( if any )
 	select {
-	case ret := <-localdone:
-		return ret.block, ret.cert, ret.err
-	case <-quit:
-		return nil, nil, nil
-	case <-l.Wait(round):
-		return nil, nil, nil
+	case pendingCert := <-l.UnmatchedPendingCertificates:
+		logging.Base().Debugf("agreementLedger.EnsureDigest has flushed out pending request for certificate for round %d in favor of recent certificate for round %d", pendingCert.Cert.Round, cert.Round)
+	default:
 	}
-}
 
-// FetchBlockByDigest is a helper for EnsureDigest.
-// TODO This is a kludge. Instead we should have a service that sees what the ledger is waiting on, fetches it, and calls EnsureBlock on it.
-// TODO this doesn't actually use the digest from cert!
-func (l agreementLedger) FetchBlockByDigest(round basics.Round, quit chan struct{}) (bookkeeping.Block, agreement.Certificate, error) {
-	fetcher := l.ff.NewOverGossip(protocol.UniEnsBlockReqTag)
+	// if the quit channel is closed, we want to exit here before placing the request on the UnmatchedPendingCertificates
+	// channel.
+	select {
+	case <-quit:
+		logging.Base().Debugf("EnsureDigest was asked to quit before we enqueue the certificate request")
+		return
+	default:
+	}
+
+	// The channel send to UnmatchedPendingCertificates is guaranteed to be non-blocking since due to the fact that -
+	// 1. the channel capacity is 1
+	// 2. we just cleared a single item off this channel ( if there was any )
+	// 3. the EnsureDigest method is being called with the agreeement service guarantee
+	// 4. no other senders to this channel exists
+	// we want to have this as a select statement to check if we neeed to exit before enqueueing the task to the catchup service.
+	l.UnmatchedPendingCertificates <- catchup.PendingUnmatchedCertificate{Cert: cert, VoteVerifier: verifier}
+
 	defer func() {
-		fetcher.Close()
-	}()
-	for {
-		if fetcher.OutOfPeers(round) {
-			fetcher.Close()
-			// refresh peers and try again
-			logging.Base().Warn("fetchBlockByDigest found no outgoing peers")
-			l.n.RequestConnectOutgoing(true, quit)
-			fetcher = l.ff.NewOverGossip(protocol.UniEnsBlockReqTag)
-		}
-		block, cert, err := l.innerFetch(fetcher, round, quit)
-		if err == nil {
-			if block == nil || cert == nil {
-				// nil error, nil block = async write
-				logging.Base().Debugf("async write of block from round %v to ledger (or quit)", round)
-				return l.BlockCert(round) // err is nil because ledger.Wait returned
-			}
-			return *block, *cert, nil
-		}
+		// clear out the content of the UnmatchedPendingCertificates channel if we somehow managed to get this round aquired by a different method ( i.e. regular catchup )
 		select {
-		case <-quit:
-			return bookkeeping.Block{}, agreement.Certificate{}, fmt.Errorf("asked to abort")
+		case <-l.UnmatchedPendingCertificates:
 		default:
-			logging.Base().Debugf("error fetching block (%v), trying again", err)
-			// todo: consider rate-limiting here if a node is completely offline.
 		}
+	}()
+
+	select {
+	case <-quit:
+		logging.Base().Debugf("EnsureDigest was asked to quit before we could acquire the block")
+	case <-certRoundReachedCh:
+		// great! we've reached the desired round.
 	}
 }
