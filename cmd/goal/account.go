@@ -508,7 +508,7 @@ var listCmd = &cobra.Command{
 					}
 				}
 
-				fmt.Printf("\t%20s %-8s%s (creator %s, ID %d%s%s%s%s)\n", assetDecimalsFmt(bal.Amount, assetDecimals), unitName, decimalInfo, bal.Creator, aid, assetName, assetURL, assetMetadata, frozen)
+				fmt.Printf("\t%20s %-8s%s (creator %s, ID %s%s%s%s%s)\n", assetDecimalsFmt(bal.Amount, assetDecimals), unitName, decimalInfo, bal.Creator, aid, assetName, assetURL, assetMetadata, frozen)
 			}
 		}
 	},

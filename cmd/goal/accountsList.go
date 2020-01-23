@@ -227,7 +227,7 @@ func (accountList *AccountsList) outputAccount(addr string, acctInfo v1.Account,
 	if len(acctInfo.AssetParams) > 0 {
 		fmt.Printf("\t[created assets:")
 		for curid, params := range acctInfo.AssetParams {
-			fmt.Printf(" %d (%d %s)", curid, params.Total, params.UnitName)
+			fmt.Printf(" %s (%d %s)", curid, params.Total, params.UnitName)
 		}
 		fmt.Printf("]")
 	}

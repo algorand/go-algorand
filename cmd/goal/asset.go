@@ -637,7 +637,7 @@ var infoAssetCmd = &cobra.Command{
 
 		res := reserve.Assets[string(assetID)]
 
-		fmt.Printf("Asset ID:         %s\n", assetID)
+		fmt.Printf("Asset ID:         %d\n", assetID)
 		fmt.Printf("Creator:          %s\n", params.Creator)
 		fmt.Printf("Asset name:       %s\n", params.AssetName)
 		fmt.Printf("Unit name:        %s\n", params.UnitName)

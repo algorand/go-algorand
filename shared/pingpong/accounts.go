@@ -264,7 +264,7 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 				return
 			}
 			if !cfg.Quiet {
-				fmt.Printf("Fund %d asset %d to account %s\n", assetAmt, k, addr)
+				fmt.Printf("Fund %d asset %d to account %s\n", assetAmt, i, addr)
 			}
 			accounts[cfg.SrcAccount] -= tx.Fee.Raw
 		}
