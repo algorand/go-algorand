@@ -24,6 +24,7 @@ import (
 
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/logspec"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
@@ -183,7 +184,7 @@ func (n asyncPseudonode) MakeVotes(ctx context.Context, r round, p period, s ste
 }
 
 func (n asyncPseudonode) makeProposalsTask(ctx context.Context, r round, p period) pseudonodeProposalsTask {
-	participation := n.getParticipations("asyncPseudonode.makeProposalsTask", r)
+	participation := n.getParticipations("asyncPseudonode.makeProposalsTask", r, p, 0)
 
 	pt := pseudonodeProposalsTask{
 		pseudonodeBaseTask: pseudonodeBaseTask{
@@ -202,7 +203,7 @@ func (n asyncPseudonode) makeProposalsTask(ctx context.Context, r round, p perio
 }
 
 func (n asyncPseudonode) makeVotesTask(ctx context.Context, r round, p period, s step, prop proposalValue, persistStateDone chan error) pseudonodeVotesTask {
-	participation := n.getParticipations("asyncPseudonode.makeVotesTask", r)
+	participation := n.getParticipations("asyncPseudonode.makeVotesTask", r, p, s)
 
 	pvt := pseudonodeVotesTask{
 		pseudonodeBaseTask: pseudonodeBaseTask{
@@ -234,15 +235,32 @@ func (n asyncPseudonode) makePseudonodeVerifier(voteVerifier *AsyncVoteVerifier)
 }
 
 // getParticipations retrieves the participation accounts for a given round.
-func (n asyncPseudonode) getParticipations(procName string, round basics.Round) []account.Participation {
+func (n asyncPseudonode) getParticipations(procName string, round basics.Round, p period, s step) []account.Participation {
 	keys := n.keys.Keys()
 	participations := make([]account.Participation, 0, len(keys))
+
+	proto, err := n.ledger.ConsensusParams(ParamsRound(round))
+	if err != nil {
+		return participations
+	}
 	for _, part := range keys {
 		firstValid, lastValid := part.ValidInterval()
 		if round < firstValid || round > lastValid {
 			n.log.Debugf("%v (round=%v): Account %v not participating: %v not in [%v, %v]", procName, round, part.Address(), round, firstValid, lastValid)
 			continue
 		}
+
+		m, err := membership(n.ledger, part.Address(), round, p, s)
+		if err != nil {
+			continue
+		}
+
+		cred := committee.MakeCredential(&part.VRFSecrets().SK, m.Selector)
+		_, err = cred.Verify(proto, m)
+		if err != nil {
+			continue
+		}
+
 		participations = append(participations, part)
 	}
 	return participations

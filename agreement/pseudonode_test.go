@@ -273,7 +273,7 @@ func (n serializedPseudonode) MakeProposals(ctx context.Context, r round, p peri
 	verifier := makeCryptoVerifier(n.ledger, n.validator, MakeAsyncVoteVerifier(nil), n.log)
 	defer verifier.Quit()
 
-	participation := n.getParticipations("serializedPseudonode.MakeProposals", r)
+	participation := n.getParticipations("serializedPseudonode.MakeProposals", r, p, 0)
 
 	proposals, votes := n.makeProposals(r, p, participation)
 
@@ -329,7 +329,7 @@ func (n serializedPseudonode) MakeVotes(ctx context.Context, r round, p period, 
 	verifier := makeCryptoVerifier(n.ledger, n.validator, MakeAsyncVoteVerifier(nil), n.log)
 	defer verifier.Quit()
 
-	participation := n.getParticipations("serializedPseudonode.MakeVotes", r)
+	participation := n.getParticipations("serializedPseudonode.MakeVotes", r, p, s)
 
 	votes := n.makeVotes(r, p, s, prop, participation)
 
