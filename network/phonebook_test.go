@@ -21,6 +21,7 @@ import (
 	"math/rand"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -200,6 +201,69 @@ func TestMultiPhonebookDuplicateFiltering(t *testing.T) {
 	testPhonebookAll(t, set, mp)
 	testPhonebookUniform(t, set, mp, 1)
 	testPhonebookUniform(t, set, mp, 3)
+}
+
+func TestWaitAndAddConnectionTime(t *testing.T) {
+
+	entries := make(phonebookEntries, 0)
+	addr1 := "addrABC"
+	addr2 := "addrXYZ"
+
+	// addr not in. Should be added
+	entries.waitAndAddConnectionTime(addr1, 3, 2)
+	phBookData := entries[addr1]
+	assert.Equal(t, 1, len(phBookData.recentConnectionTimes))
+
+	// add 1 second gap between the two requests
+	time.Sleep(1 * time.Second)
+
+	// add another value to addr
+	entries.waitAndAddConnectionTime(addr1, 3, 2)
+	phBookData = entries[addr1]
+	assert.Equal(t, 2, len(phBookData.recentConnectionTimes))
+
+	// wait for the time the first element should be removed
+	time.Sleep(1 * time.Second)
+
+	// the first time should be removed and a new one added
+	entries.waitAndAddConnectionTime(addr1, 3, 2)
+	phBookData = entries[addr1]
+	assert.Equal(t, 2, len(phBookData.recentConnectionTimes))
+
+	// try requestiong from another address, make sure
+	// a separate array is used for these new requests
+
+	// add 3 values to another address. should not be blocked
+	t0 := time.Now()
+	entries.waitAndAddConnectionTime(addr2, 3, 2)
+	entries.waitAndAddConnectionTime(addr2, 3, 2)
+	entries.waitAndAddConnectionTime(addr2, 3, 2)
+	// expected no wait
+	assert.True(t, (time.Since(t0)) < 1*time.Second)
+	phBookData = entries[addr2]
+	// all three times should be queued
+	assert.Equal(t, 3, len(phBookData.recentConnectionTimes))
+
+	// add another element to trigger wait
+	t0 = time.Now()
+	entries.waitAndAddConnectionTime(addr2, 3, 2)
+	// there should be some wait the earliest element expires
+	assert.True(t, time.Since(t0) > 1*time.Second)
+	// only one element should be removed, and one added
+	phBookData = entries[addr2]
+	assert.Equal(t, 3, len(phBookData.recentConnectionTimes))
+
+	// give enough time to expire all the elements
+	time.Sleep(2 * time.Second)
+
+	t0 = time.Now()
+	entries.waitAndAddConnectionTime(addr2, 3, 2)
+	// there should not be any wait
+	assert.True(t, time.Since(t0) < 1*time.Second)
+	// only one time should be left (the newly added)
+	phBookData = entries[addr2]
+	assert.Equal(t, 1, len(phBookData.recentConnectionTimes))
+
 }
 
 func BenchmarkThreadsafePhonebook(b *testing.B) {
