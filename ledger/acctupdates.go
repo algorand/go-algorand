@@ -161,12 +161,12 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 	for loaded < latest {
 		next := loaded + 1
 
-		blk, err := l.Block(next)
+		blk, aux, err := l.blockAux(next)
 		if err != nil {
 			return err
 		}
 
-		delta, err := l.trackerEvalVerified(blk)
+		delta, err := l.trackerEvalVerified(blk, aux)
 		if err != nil {
 			return err
 		}

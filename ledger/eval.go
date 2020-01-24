@@ -36,6 +36,11 @@ import (
 // ErrNoSpace indicates insufficient space for transaction in block
 var ErrNoSpace = errors.New("block does not have space for transaction")
 
+// evalAux is left after removing explicit reward claims,
+// in case we need this infrastructure in the future.
+type evalAux struct {
+}
+
 // VerifiedTxnCache captures the interface for a cache of previously
 // verified transactions.  This is expected to match the transaction
 // pool object.
@@ -154,6 +159,7 @@ func (cs *roundCowState) ConsensusParams() config.ConsensusParams {
 // against the ledger.
 type BlockEvaluator struct {
 	state    *roundCowState
+	aux      *evalAux
 	validate bool
 	generate bool
 	txcache  VerifiedTxnCache
@@ -184,13 +190,17 @@ type ledgerForEvaluator interface {
 // StartEvaluator creates a BlockEvaluator, given a ledger and a block header
 // of the block that the caller is planning to evaluate.
 func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader, txcache VerifiedTxnCache, executionPool execpool.BacklogPool) (*BlockEvaluator, error) {
-	return startEvaluator(l, hdr, true, true, txcache, executionPool)
+	return startEvaluator(l, hdr, nil, true, true, txcache, executionPool)
 }
 
-func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, validate bool, generate bool, txcache VerifiedTxnCache, executionPool execpool.BacklogPool) (*BlockEvaluator, error) {
+func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, aux *evalAux, validate bool, generate bool, txcache VerifiedTxnCache, executionPool execpool.BacklogPool) (*BlockEvaluator, error) {
 	proto, ok := config.Consensus[hdr.CurrentProtocol]
 	if !ok {
 		return nil, protocol.Error(hdr.CurrentProtocol)
+	}
+
+	if aux == nil {
+		aux = &evalAux{}
 	}
 
 	base := &roundCowBase{
@@ -204,6 +214,7 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, validate 
 	}
 
 	eval := &BlockEvaluator{
+		aux:              aux,
 		validate:         validate,
 		generate:         generate,
 		txcache:          txcache,
@@ -693,14 +704,15 @@ func (eval *BlockEvaluator) GenerateBlock() (*ValidatedBlock, error) {
 	vb := ValidatedBlock{
 		blk:   eval.block,
 		delta: eval.state.mods,
+		aux:   *eval.aux,
 	}
 	return &vb, nil
 }
 
-func (l *Ledger) eval(ctx context.Context, blk bookkeeping.Block, validate bool, txcache VerifiedTxnCache, executionPool execpool.BacklogPool) (StateDelta, error) {
-	eval, err := startEvaluator(l, blk.BlockHeader, validate, false, txcache, executionPool)
+func (l *Ledger) eval(ctx context.Context, blk bookkeeping.Block, aux *evalAux, validate bool, txcache VerifiedTxnCache, executionPool execpool.BacklogPool) (StateDelta, evalAux, error) {
+	eval, err := startEvaluator(l, blk.BlockHeader, aux, validate, false, txcache, executionPool)
 	if err != nil {
-		return StateDelta{}, err
+		return StateDelta{}, evalAux{}, err
 	}
 
 	// TODO: batch tx sig verification: ingest blk.Payset and output a list of ValidatedTx
@@ -708,37 +720,37 @@ func (l *Ledger) eval(ctx context.Context, blk bookkeeping.Block, validate bool,
 	// Next, transactions
 	paysetgroups, err := blk.DecodePaysetGroups()
 	if err != nil {
-		return StateDelta{}, err
+		return StateDelta{}, evalAux{}, err
 	}
 
 	for _, txgroup := range paysetgroups {
 		select {
 		case <-ctx.Done():
-			return StateDelta{}, ctx.Err()
+			return StateDelta{}, evalAux{}, ctx.Err()
 		default:
 		}
 
 		err = eval.TransactionGroup(txgroup)
 		if err != nil {
-			return StateDelta{}, err
+			return StateDelta{}, evalAux{}, err
 		}
 	}
 
 	// Finally, procees any pending end-of-block state changes
 	err = eval.endOfBlock()
 	if err != nil {
-		return StateDelta{}, err
+		return StateDelta{}, evalAux{}, err
 	}
 
 	// If validating, do final block checks that depend on our new state
 	if validate {
 		err = eval.finalValidation()
 		if err != nil {
-			return StateDelta{}, err
+			return StateDelta{}, evalAux{}, err
 		}
 	}
 
-	return eval.state.mods, nil
+	return eval.state.mods, *eval.aux, nil
 }
 
 // Validate uses the ledger to validate block blk as a candidate next block.
@@ -746,7 +758,7 @@ func (l *Ledger) eval(ctx context.Context, blk bookkeeping.Block, validate bool,
 // not a valid block (e.g., it has duplicate transactions, overspends some
 // account, etc).
 func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, txcache VerifiedTxnCache, executionPool execpool.BacklogPool) (*ValidatedBlock, error) {
-	delta, err := l.eval(ctx, blk, true, txcache, executionPool)
+	delta, aux, err := l.eval(ctx, blk, nil, true, txcache, executionPool)
 	if err != nil {
 		return nil, err
 	}
@@ -754,6 +766,7 @@ func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, txcache Ve
 	vb := ValidatedBlock{
 		blk:   blk,
 		delta: delta,
+		aux:   aux,
 	}
 	return &vb, nil
 }
@@ -764,6 +777,7 @@ func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, txcache Ve
 type ValidatedBlock struct {
 	blk   bookkeeping.Block
 	delta StateDelta
+	aux   evalAux
 }
 
 // Block returns the underlying Block for a ValidatedBlock.
@@ -779,5 +793,6 @@ func (vb ValidatedBlock) WithSeed(s committee.Seed) ValidatedBlock {
 	return ValidatedBlock{
 		blk:   newblock,
 		delta: vb.delta,
+		aux:   vb.aux,
 	}
 }
