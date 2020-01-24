@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/execpool"
 )
 
 var testPoolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
@@ -44,6 +45,9 @@ func init() {
 func TestBlockEvaluator(t *testing.T) {
 	genesisInitState, addrs, keys := genesis(10)
 
+	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
+	defer backlogPool.Shutdown()
+
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	const inMem = true
 	const archival = true
@@ -52,7 +56,7 @@ func TestBlockEvaluator(t *testing.T) {
 	defer l.Close()
 
 	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
-	eval, err := l.StartEvaluator(newBlock.BlockHeader)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, nil, backlogPool)
 	require.NoError(t, err)
 
 	genHash := genesisInitState.Block.BlockHeader.GenesisHash
@@ -71,8 +75,20 @@ func TestBlockEvaluator(t *testing.T) {
 		},
 	}
 
+	// Zero signature should fail
+	st := transactions.SignedTxn{
+		Txn: txn,
+	}
+	err = eval.Transaction(st, transactions.ApplyData{})
+	require.Error(t, err)
+
+	// Random signature should fail
+	crypto.RandBytes(st.Sig[:])
+	err = eval.Transaction(st, transactions.ApplyData{})
+	require.Error(t, err)
+
 	// Correct signature should work
-	st := txn.Sign(keys[0])
+	st = txn.Sign(keys[0])
 	err = eval.Transaction(st, transactions.ApplyData{})
 	require.NoError(t, err)
 

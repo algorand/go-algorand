@@ -26,7 +26,6 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -101,15 +100,8 @@ func checkBlockDB(t *testing.T, tx *sql.Tx, blocks []blockEntry) {
 	require.Error(t, err)
 }
 
-func setDbLogging(t *testing.T, dbs dbPair) {
-	dblogger := logging.TestingLog(t)
-	dbs.rdb.SetLogger(dblogger)
-	dbs.wdb.SetLogger(dblogger)
-}
-
 func TestBlockDBEmpty(t *testing.T) {
 	dbs := dbOpenTest(t)
-	setDbLogging(t, dbs)
 	defer dbs.close()
 
 	tx, err := dbs.wdb.Handle.Begin()
@@ -123,7 +115,6 @@ func TestBlockDBEmpty(t *testing.T) {
 
 func TestBlockDBInit(t *testing.T) {
 	dbs := dbOpenTest(t)
-	setDbLogging(t, dbs)
 	defer dbs.close()
 
 	tx, err := dbs.wdb.Handle.Begin()
@@ -143,7 +134,6 @@ func TestBlockDBInit(t *testing.T) {
 
 func TestBlockDBAppend(t *testing.T) {
 	dbs := dbOpenTest(t)
-	setDbLogging(t, dbs)
 	defer dbs.close()
 
 	tx, err := dbs.wdb.Handle.Begin()

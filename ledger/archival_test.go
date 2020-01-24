@@ -104,8 +104,7 @@ func TestArchival(t *testing.T) {
 	genesisInitState := getInitState()
 	const inMem = true
 	const archival = true
-	log := logging.TestingLog(t)
-	l, err := OpenLedger(log, dbName, inMem, genesisInitState, archival)
+	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, archival)
 	require.NoError(t, err)
 	defer l.Close()
 	wl := &wrappedLedger{
@@ -496,8 +495,7 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	const inMem = false // use persistent storage
 	archival := false
 
-	log := logging.TestingLog(t)
-	l, err := OpenLedger(log, dbPrefix, inMem, genesisInitState, archival)
+	l, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
 	require.NoError(t, err)
 	blk := genesisInitState.Block
 
@@ -526,7 +524,7 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	l.Close()
 
 	archival = true
-	l, err = OpenLedger(log, dbPrefix, inMem, genesisInitState, archival)
+	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
 	require.NoError(t, err)
 	defer l.Close()
 

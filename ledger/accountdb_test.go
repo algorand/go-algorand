@@ -160,7 +160,6 @@ func TestAccountDBInit(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	dbs := dbOpenTest(t)
-	setDbLogging(t, dbs)
 	defer dbs.close()
 
 	tx, err := dbs.wdb.Handle.Begin()
@@ -181,7 +180,6 @@ func TestAccountDBRound(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	dbs := dbOpenTest(t)
-	setDbLogging(t, dbs)
 	defer dbs.close()
 
 	tx, err := dbs.wdb.Handle.Begin()
