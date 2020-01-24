@@ -114,3 +114,14 @@ func BenchmarkVrfVerify(b *testing.B) {
 		_, _ = pks[i].verifyBytes(proofs[i], strs[i])
 	}
 }
+
+func BenchmarkVrfProve(b *testing.B) {
+	var msg []byte
+	_, priv := VrfKeygenFromSeed([32]byte{1, 2, 3, 4})
+	rand.Read(msg)
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		priv.proveBytes(msg)
+	}
+}
