@@ -158,11 +158,6 @@ func blockGetAux(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, aux evalA
 		return
 	}
 
-	err = protocol.Decode(auxbuf, &aux)
-	if err != nil {
-		return
-	}
-
 	return
 }
 
