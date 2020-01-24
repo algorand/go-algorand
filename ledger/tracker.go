@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -81,12 +81,11 @@ type ledgerTracker interface {
 type ledgerForTracker interface {
 	trackerDB() dbPair
 	trackerLog() logging.Logger
-	trackerEvalVerified(bookkeeping.Block, evalAux) (StateDelta, error)
+	trackerEvalVerified(bookkeeping.Block) (StateDelta, error)
 
 	Latest() basics.Round
 	Block(basics.Round) (bookkeeping.Block, error)
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
-	blockAux(basics.Round) (bookkeeping.Block, evalAux, error)
 }
 
 type trackerRegistry struct {

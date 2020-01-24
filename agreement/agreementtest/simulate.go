@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -189,7 +189,7 @@ func Simulate(dbname string, n basics.Round, roundDeadline time.Duration, ledger
 		Logger:         log,
 		Accessor:       accessor,
 		Clock:          stopwatch,
-		Network:        gossip.WrapNetwork(new(blackhole)),
+		Network:        gossip.WrapNetwork(new(blackhole), log),
 		Ledger:         ledger,
 		BlockFactory:   proposalFactory,
 		BlockValidator: proposalValidator,

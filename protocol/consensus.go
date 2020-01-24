@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -113,6 +113,11 @@ const ConsensusV20 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/4a9db6a25595c6fd097cf9cc137cc83027787eaa",
 )
 
+// ConsensusV21 fixes a bug in credential.lowestOutput
+const ConsensusV21 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/8096e2df2da75c3339986317f9abe69d4fa86b4b",
+)
+
 // ConsensusFuture is a protocol that should not appear in any production
 // network, but is used to test features before they are released.
 const ConsensusFuture = ConsensusVersion(
@@ -125,7 +130,7 @@ const ConsensusFuture = ConsensusVersion(
 
 // ConsensusCurrentVersion is the latest version and should be used
 // when a specific version is not provided.
-const ConsensusCurrentVersion = ConsensusV20
+const ConsensusCurrentVersion = ConsensusV21
 
 // ConsensusTest0 is a version of ConsensusV0 used for testing
 // (it has different approved upgrade paths).
@@ -147,6 +152,16 @@ const ConsensusTestRapidRewardRecalculation = ConsensusVersion("test-fast-reward
 // ConsensusTestShorterLookback is a version of ConsensusCurrentVersion
 // that decreases the MaxBalLookback greatly.
 const ConsensusTestShorterLookback = ConsensusVersion("test-shorter-lookback")
+
+// ConsensusTestUnupgradedProtocol is a version of ConsensusCurrentVersion
+// that allows the control of the upgrade from ConsensusTestUnupgradedProtocol to
+// ConsensusTestUnupgradedProtocol
+const ConsensusTestUnupgradedProtocol = ConsensusVersion("test-unupgraded-protocol")
+
+// ConsensusTestUnupgradedToProtocol is a version of ConsensusCurrentVersion
+// It is used as an upgrade from ConsensusTestUnupgradedProtocol
+const ConsensusTestUnupgradedToProtocol = ConsensusVersion("test-unupgradedto-protocol")
+
 
 // ConsensusTestFastUpgrade is meant for testing of protocol upgrades:
 // during testing, it is equivalent to another protocol with the exception
