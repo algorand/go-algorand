@@ -250,14 +250,15 @@ func (n Network) Start(binDir string, redirectOutput bool) error {
 	// Start Prime Relay and get its listening address
 
 	var peerAddressListBuilder strings.Builder
-
+	var relayAddress string
+	var err error
 	for _, relayDir := range n.cfg.RelayDirs {
-
 		nodeFulllPath := n.getNodeFullPath(relayDir)
 		nc := nodecontrol.MakeNodeController(binDir, nodeFulllPath)
 		args := nodecontrol.AlgodStartArgs{
 			RedirectOutput:    redirectOutput,
 			ExitErrorCallback: n.nodeExitCallback,
+			PeerAddress:       relayAddress, // on the first iteration it would be empty, which is ok. subsequent iterations would link all the relays.
 		}
 
 		_, err := nc.StartAlgod(args)
@@ -265,7 +266,7 @@ func (n Network) Start(binDir string, redirectOutput bool) error {
 			return err
 		}
 
-		relayAddress, err := n.getRelayAddress(nc)
+		relayAddress, err = n.getRelayAddress(nc)
 		if err != nil {
 			return err
 		}
@@ -277,7 +278,7 @@ func (n Network) Start(binDir string, redirectOutput bool) error {
 	}
 
 	peerAddressList := peerAddressListBuilder.String()
-	err := n.startNodes(binDir, peerAddressList, redirectOutput)
+	err = n.startNodes(binDir, peerAddressList, redirectOutput)
 	return err
 }
 
