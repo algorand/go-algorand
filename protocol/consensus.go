@@ -130,7 +130,7 @@ const ConsensusFuture = ConsensusVersion(
 
 // ConsensusCurrentVersion is the latest version and should be used
 // when a specific version is not provided.
-const ConsensusCurrentVersion = ConsensusV20
+const ConsensusCurrentVersion = ConsensusV21
 
 // ConsensusTest0 is a version of ConsensusV0 used for testing
 // (it has different approved upgrade paths).
@@ -161,6 +161,7 @@ const ConsensusTestUnupgradedProtocol = ConsensusVersion("test-unupgraded-protoc
 // ConsensusTestUnupgradedToProtocol is a version of ConsensusCurrentVersion
 // It is used as an upgrade from ConsensusTestUnupgradedProtocol
 const ConsensusTestUnupgradedToProtocol = ConsensusVersion("test-unupgradedto-protocol")
+
 
 // ConsensusTestFastUpgrade is meant for testing of protocol upgrades:
 // during testing, it is equivalent to another protocol with the exception
