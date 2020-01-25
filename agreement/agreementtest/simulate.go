@@ -160,7 +160,7 @@ func (b *blackhole) ClearHandlers() {}
 
 func (b *blackhole) MakeHTTPRequest(client *http.Client,
 	request *http.Request) (*http.Response, error) {
-	return nil, nil
+	return client.Do(request)
 }
 
 // CryptoRandomSource is a random source that is based off our crypto library.

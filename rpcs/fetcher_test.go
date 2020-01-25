@@ -121,7 +121,7 @@ func (mca *MockClientAggregator) RegisterHandlers(dispatch []network.TaggedMessa
 func (mca *MockClientAggregator) ClearHandlers()                                            {}
 func (mca *MockClientAggregator) MakeHTTPRequest(client *http.Client,
 	request *http.Request) (*http.Response, error) {
-	return nil, nil
+	return client.Do(request)
 }
 
 const numberOfPeers = 10

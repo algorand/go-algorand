@@ -187,7 +187,7 @@ func (s *testUnicastPeerSrc) RegisterHandlers(dispatch []network.TaggedMessageHa
 }
 func (s *testUnicastPeerSrc) MakeHTTPRequest(client *http.Client,
 	request *http.Request) (*http.Response, error) {
-	return nil, nil
+	return client.Do(request)
 }
 
 // implement network.UnicastPeer
