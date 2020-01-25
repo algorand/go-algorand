@@ -781,9 +781,7 @@ func (wn *WebsocketNetwork) checkServerResponseVariables(header http.Header, add
 // waitAndAddConnectionTime will wait to prevent exceeding connectionsRateLimitingCount.
 // Then it will register the next connection time.
 func (wn *WebsocketNetwork) waitAndAddConnectionTime(addr string) {
-	wn.phonebook.WaitAndAddConnectionTime(addr,
-		wn.config.ConnectionsRateLimitingCount,
-		wn.config.ConnectionsRateLimitingWindowSeconds)
+	wn.phonebook.WaitAndAddConnectionTime(addr)
 }
 
 // MakeHTTPRequest will make sure connectionsRateLimitingCount is not
@@ -1245,7 +1243,8 @@ func (wn *WebsocketNetwork) meshThread() {
 				dnsPhonebook := wn.phonebook.GetPhonebook(dnsBootstrap)
 				if dnsPhonebook == nil {
 					// create one, if we don't have one already.
-					dnsPhonebook = MakeThreadsafePhonebook()
+					dnsPhonebook = MakeThreadsafePhonebook(wn.config.ConnectionsRateLimitingCount,
+						time.Duration(wn.config.ConnectionsRateLimitingWindowSeconds)*time.Second)
 					wn.phonebook.AddOrUpdatePhonebook(dnsBootstrap, dnsPhonebook)
 				}
 				if tsPhonebook, ok := dnsPhonebook.(*ThreadsafePhonebook); ok {

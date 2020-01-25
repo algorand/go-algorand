@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func testPhonebookAll(t *testing.T, set []string, ph Phonebook) {
@@ -86,27 +87,27 @@ func testPhonebookUniform(t *testing.T, set []string, ph Phonebook, getsize int)
 
 func TestArrayPhonebookAll(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e"}
-	ph := MakeArrayPhonebook()
+	ph := MakeArrayPhonebook(1, 1)
 	for _, e := range set {
-		ph.Entries[e] = phonebookData{}
+		ph.Entries.data[e] = phonebookData{}
 	}
 	testPhonebookAll(t, set, ph)
 }
 
 func TestArrayPhonebookUniform1(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e"}
-	ph := MakeArrayPhonebook()
+	ph := MakeArrayPhonebook(1, 1)
 	for _, e := range set {
-		ph.Entries[e] = phonebookData{}
+		ph.Entries.data[e] = phonebookData{}
 	}
 	testPhonebookUniform(t, set, ph, 1)
 }
 
 func TestArrayPhonebookUniform3(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e"}
-	ph := MakeArrayPhonebook()
+	ph := MakeArrayPhonebook(1, 1)
 	for _, e := range set {
-		ph.Entries[e] = phonebookData{}
+		ph.Entries.data[e] = phonebookData{}
 	}
 	testPhonebookUniform(t, set, ph, 3)
 }
@@ -124,7 +125,7 @@ func extenderThread(th *ThreadsafePhonebook, more []string, wg *sync.WaitGroup, 
 func TestThreadsafePhonebookExtension(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e"}
 	more := []string{"f", "g", "h", "i", "j"}
-	ph := MakeThreadsafePhonebook()
+	ph := MakeThreadsafePhonebook(1, 1)
 	ph.ReplacePeerList(set)
 	wg := sync.WaitGroup{}
 	wg.Add(5)
@@ -150,7 +151,7 @@ func TestThreadsafePhonebookExtensionLong(t *testing.T) {
 		t.SkipNow()
 		return
 	}
-	ph := MakeThreadsafePhonebook()
+	ph := MakeThreadsafePhonebook(1, 1)
 	wg := sync.WaitGroup{}
 	const threads = 5
 	const setSize = 1000
@@ -167,13 +168,13 @@ func TestThreadsafePhonebookExtensionLong(t *testing.T) {
 
 func TestMultiPhonebook(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j"}
-	pha := MakeArrayPhonebook()
+	pha := MakeArrayPhonebook(1, 1)
 	for _, e := range set[:5] {
-		pha.Entries[e] = phonebookData{}
+		pha.Entries.data[e] = phonebookData{}
 	}
-	phb := MakeArrayPhonebook()
+	phb := MakeArrayPhonebook(1, 1)
 	for _, e := range set[5:] {
-		phb.Entries[e] = phonebookData{}
+		phb.Entries.data[e] = phonebookData{}
 	}
 	mp := MakeMultiPhonebook()
 	mp.AddOrUpdatePhonebook("pha", pha)
@@ -186,13 +187,13 @@ func TestMultiPhonebook(t *testing.T) {
 
 func TestMultiPhonebookDuplicateFiltering(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j"}
-	pha := MakeArrayPhonebook()
+	pha := MakeArrayPhonebook(1, 1)
 	for _, e := range set[:7] {
-		pha.Entries[e] = phonebookData{}
+		pha.Entries.data[e] = phonebookData{}
 	}
-	phb := MakeArrayPhonebook()
+	phb := MakeArrayPhonebook(1, 1)
 	for _, e := range set[3:] {
-		phb.Entries[e] = phonebookData{}
+		phb.Entries.data[e] = phonebookData{}
 	}
 	mp := MakeMultiPhonebook()
 	mp.AddOrUpdatePhonebook("pha", pha)
@@ -203,71 +204,86 @@ func TestMultiPhonebookDuplicateFiltering(t *testing.T) {
 	testPhonebookUniform(t, set, mp, 3)
 }
 
-func TestWaitAndAddConnectionTime(t *testing.T) {
-
-	entries := make(phonebookEntries, 0)
+func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
+	entries := makePhonebookEntries(3, 200*time.Millisecond)
 	addr1 := "addrABC"
 	addr2 := "addrXYZ"
 
-	// addr not in. Should be added
-	entries.waitAndAddConnectionTime(addr1, 3, 2)
-	phBookData := entries[addr1]
-	assert.Equal(t, 1, len(phBookData.recentConnectionTimes))
+	// Test the addresses are populated in the phonebook and a
+	// time can be added to one of them
+	entries.ReplacePeerList([]string{addr1, addr2})
+	require.Equal(t, false, entries.waitAndAddConnectionTime(addr1))
+	phBookData := entries.data[addr1].recentConnectionTimes
+	require.Equal(t, 1, len(phBookData))
 
-	// add 1 second gap between the two requests
-	time.Sleep(1 * time.Second)
+	// introduce a gap between the two requests
+	time.Sleep(100 * time.Millisecond)
 
 	// add another value to addr
-	entries.waitAndAddConnectionTime(addr1, 3, 2)
-	phBookData = entries[addr1]
-	assert.Equal(t, 2, len(phBookData.recentConnectionTimes))
+	require.Equal(t, false, entries.waitAndAddConnectionTime(addr1))
+	phBookData = entries.data[addr1].recentConnectionTimes
+	require.Equal(t, 2, len(phBookData))
 
 	// wait for the time the first element should be removed
-	time.Sleep(1 * time.Second)
+	time.Sleep(100 * time.Millisecond)
 
 	// the first time should be removed and a new one added
-	entries.waitAndAddConnectionTime(addr1, 3, 2)
-	phBookData = entries[addr1]
-	assert.Equal(t, 2, len(phBookData.recentConnectionTimes))
+	// there should not be any wait
+	require.Equal(t, false, entries.waitAndAddConnectionTime(addr1))
+	phBookData2 := entries.data[addr1].recentConnectionTimes
+	require.Equal(t, 2, len(phBookData2))
 
-	// try requestiong from another address, make sure
+	// make sure the right time was removed
+	require.Equal(t, phBookData[1], phBookData2[0])
+	require.Equal(t, true, phBookData2[0].Before(phBookData2[1]))
+
+	// try requesting from another address, make sure
 	// a separate array is used for these new requests
 
 	// add 3 values to another address. should not be blocked
-	t0 := time.Now()
-	entries.waitAndAddConnectionTime(addr2, 3, 2)
-	entries.waitAndAddConnectionTime(addr2, 3, 2)
-	entries.waitAndAddConnectionTime(addr2, 3, 2)
-	// expected no wait
-	assert.True(t, (time.Since(t0)) < 1*time.Second)
-	phBookData = entries[addr2]
+	require.Equal(t, false, entries.waitAndAddConnectionTime(addr2))
+	require.Equal(t, false, entries.waitAndAddConnectionTime(addr2))
+	require.Equal(t, false, entries.waitAndAddConnectionTime(addr2))
+	phBookData = entries.data[addr2].recentConnectionTimes
 	// all three times should be queued
-	assert.Equal(t, 3, len(phBookData.recentConnectionTimes))
+	require.Equal(t, 3, len(phBookData))
 
 	// add another element to trigger wait
-	t0 = time.Now()
-	entries.waitAndAddConnectionTime(addr2, 3, 2)
-	// there should be some wait the earliest element expires
-	assert.True(t, time.Since(t0) > 1*time.Second)
+	require.Equal(t, true, entries.waitAndAddConnectionTime(addr2))
 	// only one element should be removed, and one added
-	phBookData = entries[addr2]
-	assert.Equal(t, 3, len(phBookData.recentConnectionTimes))
+	phBookData2 = entries.data[addr2].recentConnectionTimes
+	require.Equal(t, 3, len(phBookData))
+
+	// make sure the right time was removed
+	require.Equal(t, phBookData[1], phBookData2[0])
+	require.Equal(t, phBookData[2], phBookData2[1])
+}
+
+func TestWaitAndAddConnectionTimeShortWindow(t *testing.T) {
+	entries := makePhonebookEntries(3, 2*time.Millisecond)
+	addr1 := "addrABC"
+
+	// Init the data structures
+	entries.ReplacePeerList([]string{addr1})
+
+	// add 3 values. should not wait
+	require.Equal(t, false, entries.waitAndAddConnectionTime(addr1))
+	require.Equal(t, false, entries.waitAndAddConnectionTime(addr1))
+	require.Equal(t, false, entries.waitAndAddConnectionTime(addr1))
 
 	// give enough time to expire all the elements
-	time.Sleep(2 * time.Second)
+	time.Sleep(10 * time.Millisecond)
 
-	t0 = time.Now()
-	entries.waitAndAddConnectionTime(addr2, 3, 2)
 	// there should not be any wait
-	assert.True(t, time.Since(t0) < 1*time.Second)
-	// only one time should be left (the newly added)
-	phBookData = entries[addr2]
-	assert.Equal(t, 1, len(phBookData.recentConnectionTimes))
+	require.Equal(t, false, entries.waitAndAddConnectionTime(addr1))
 
+	// only one time should be left (the newly added)
+	phBookData := entries.data[addr1].recentConnectionTimes
+	require.Equal(t, 1, len(phBookData))
 }
 
 func BenchmarkThreadsafePhonebook(b *testing.B) {
-	ph := MakeThreadsafePhonebook()
+	ph := MakeThreadsafePhonebook(1, 1)
 	threads := 5
 	if b.N < threads {
 		threads = b.N
