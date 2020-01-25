@@ -487,7 +487,7 @@ func initConsensusProtocols() {
 	v21.UseBuggyProposalLowestOutput = false // TODO(upgrade): Please remove this line as soon as the protocol upgrade goes through
 	Consensus[protocol.ConsensusV21] = v21
 	// v20 can be upgraded to v21.
-	// v20.ApprovedUpgrades[protocol.ConsensusV21] = 0
+	v20.ApprovedUpgrades[protocol.ConsensusV21] = 0
 
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
