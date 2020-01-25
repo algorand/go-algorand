@@ -19,7 +19,6 @@ package agreement
 import (
 	"fmt"
 
-	"github.com/algorand/go-algorand/config" // TODO(upgrade): Please remove this line after the upgrade goes through
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 )
@@ -38,23 +37,14 @@ type proposalSeeker struct {
 
 // accept compares a given vote with the current lowest-credentialled vote and
 // sets it if freeze has not been called.
-// TODO(upgrade): Please remove the "useBuggyLowestOutput" argument as soon as the protocol upgrade goes through
-func (s proposalSeeker) accept(v vote, useBuggyLowestOutput bool) (proposalSeeker, error) {
+func (s proposalSeeker) accept(v vote) (proposalSeeker, error) {
 	if s.Frozen {
 		return s, errProposalSeekerFrozen{}
 	}
 
-	// TODO(upgrade): Please remove the lines below as soon as the upgrade goes through
-	if useBuggyLowestOutput {
-		if s.Filled && !v.Cred.LessBuggy(s.Lowest.Cred) {
-			return s, errProposalSeekerNotLess{NewSender: v.R.Sender, LowestSender: s.Lowest.R.Sender}
-		}
-	} else {
-		// TODO(upgrade): Please remove the lines above as soon as the upgrade goes through
-		if s.Filled && !v.Cred.Less(s.Lowest.Cred) {
-			return s, errProposalSeekerNotLess{NewSender: v.R.Sender, LowestSender: s.Lowest.R.Sender}
-		}
-	} // TODO(upgrade): Please remove this line when the upgrade goes through
+	if s.Filled && !v.Cred.Less(s.Lowest.Cred) {
+		return s, errProposalSeekerNotLess{NewSender: v.R.Sender, LowestSender: s.Lowest.R.Sender}
+	}
 
 	s.Lowest = v
 	s.Filled = true
@@ -156,7 +146,7 @@ func (t *proposalTracker) handle(r routerHandle, p player, e event) event {
 		}
 
 		var err error
-		t.Freezer, err = t.Freezer.accept(v, config.Consensus[e.Proto.Version].UseBuggyProposalLowestOutput) // TODO(upgrade): Please remove the second argument as soon as the upgrade goes through
+		t.Freezer, err = t.Freezer.accept(v)
 		if err != nil {
 			err := errProposalTrackerPS{Sub: err}
 			return filteredEvent{T: voteFiltered, Err: makeSerErr(err)}

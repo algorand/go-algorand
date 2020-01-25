@@ -62,19 +62,19 @@ func TestProposalTrackerProposalSeeker(t *testing.T) {
 	assert.False(t, s.Filled)
 
 	// issue events in the following order: 2, 3, 1, (freeze), 0
-	s, err = s.accept(votes[2], false) //TODO(upgrade) delete the ", false"
+	s, err = s.accept(votes[2])
 	assert.NoError(t, err)
 	assert.False(t, s.Frozen)
 	assert.True(t, s.Filled)
 	assert.True(t, s.Lowest.equals(votes[2]))
 
-	s, err = s.accept(votes[3], false) //TODO(upgrade) delete the ", false"
+	s, err = s.accept(votes[3])
 	assert.Error(t, err)
 	assert.False(t, s.Frozen)
 	assert.True(t, s.Filled)
 	assert.True(t, s.Lowest.equals(votes[2]))
 
-	s, err = s.accept(votes[1], false) //TODO(upgrade) delete the ", false"
+	s, err = s.accept(votes[1])
 	assert.NoError(t, err)
 	assert.False(t, s.Frozen)
 	assert.True(t, s.Filled)
@@ -85,7 +85,7 @@ func TestProposalTrackerProposalSeeker(t *testing.T) {
 	assert.True(t, s.Filled)
 	assert.True(t, s.Lowest.equals(votes[1]))
 
-	s, err = s.accept(votes[0], false) //TODO(upgrade) delete the ", false"
+	s, err = s.accept(votes[0])
 	assert.Error(t, err)
 	assert.True(t, s.Frozen)
 	assert.True(t, s.Filled)
