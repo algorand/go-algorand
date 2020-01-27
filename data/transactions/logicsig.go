@@ -22,6 +22,9 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 )
 
+// EvalMaxArgs is the maximum number of arguments to an LSig
+const EvalMaxArgs = 255
+
 // LogicSig contains logic for validating a transaction.
 // LogicSig is signed by an account, allowing delegation of operations.
 // OR
@@ -36,7 +39,7 @@ type LogicSig struct {
 	Msig crypto.MultisigSig `codec:"msig"`
 
 	// Args are not signed, but checked by Logic
-	Args [][]byte `codec:"arg"`
+	Args [][]byte `codec:"arg,allocbound=EvalMaxArgs"`
 }
 
 // Blank returns true if there is no content in this LogicSig

@@ -137,7 +137,6 @@ func (syncer *TxSyncer) syncFromClient(client TxSyncClient) error {
 	for _, txgroup := range txgroups {
 		var txnsInFilter int
 		for i := range txgroup {
-			txgroup[i].InitCaches()
 			txID := txgroup[i].ID()
 			if filter.Test(txID[:]) {
 				// we just found a transaction that shouldn't have been

@@ -54,7 +54,7 @@ func TestBlockWithTxnEncoding(t *testing.T) {
 			},
 		},
 	}
-	enc := protocol.Encode(b)
+	enc := protocol.Encode(&b)
 
 	var b2 Block
 	err := protocol.Decode(enc, &b2)
