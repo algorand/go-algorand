@@ -24,28 +24,29 @@ import (
 //
 // We currently cannot carry ordinary signatures through the system,
 // as the private keys disappear on the way from request to commit.
-// We also cannot store code or data.  So we currently support only
-// contract-controlled accounts, signed by a LogicSig, and addressed
-// via a hash of their code.  Accounts are created by sending funds to
-// that address.  When we can store code indexed via hash the LogicSig
-// can contain the code.
+// We also cannot store code.  So we currently support only contract-
+// controlled accounts, signed by a LogicSig, and addressed via a hash
+// of their code.  Accounts are created by sending funds to that address.
+// When we can store code indexed via hash the LogicSig can contain the
+// hash rather than the code.
 
 // ExecTxnPhase is type for phase lables.
 type ExecTxnPhase string
 
 // Labels for the phases of exec transactions.
 const (
-	ExecInit    ExecTxnPhase = "init"    // TODO store code indexed via hash
-	ExecRequest ExecTxnPhase = "request" // post to blockchain to request later execution
-	ExecCommit  ExecTxnPhase = "commit"  // post to blockchain to request commit of execution results
-	ExecFail    ExecTxnPhase = "fail"    // post to blockchain in case of failed execution or commit
+	ExecInit   ExecTxnPhase = "init"    // TODO store code indexed via hash
+	ExecExec   ExecTxnPhase = "exec"    // request later execution
+	ExecCommit ExecTxnPhase = "commit"  // request commit of execution results
+	ExecFail   ExecTxnPhase = "fail"    // failed execution or commit
 )
 
 // ExecTxnFields captures the fields used by exec transactions.
 type ExecTxnFields struct {
-	_struct          struct{} `codec:",omitempty,omitemptyarray"`
-	ExecPhase        ExecTxnPhase
-	oldData, newData []byte
+	_struct   struct{}     `codec:",omitempty,omitemptyarray"`
+	ExecPhase ExecTxnPhase `codec:"phase"`
+	oldData  []byte	       `codec:"old_data"`
+	newData  []byte 	   `"codec:new_data"`
 }
 
 func (exec ExecTxnFields) apply(header Header, balances Balances, spec SpecialAddresses, ad *ApplyData) error {
@@ -55,13 +56,20 @@ func (exec ExecTxnFields) apply(header Header, balances Balances, spec SpecialAd
 		return err
 	}
 	switch exec.ExecPhase {
-	case ExecRequest: // save initial state of data
+	case ExecExec:
+
+	   // Save initial state of data.
 		exec.oldData = account.Storage
-	case ExecCommit: // if data is unchanged copy in new data
+
+	case ExecCommit:
+
+	   // If data is unchanged copy in new data.
 		if bytes.Equal(account.Storage, exec.oldData) {
 			account.Storage = exec.newData
 			exec.newData = nil
 		} else {
+
+		   // This transaction lost the race, mark phase as failed.
 			exec.ExecPhase = ExecFail
 		}
 		exec.oldData = nil
