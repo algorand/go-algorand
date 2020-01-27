@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
+	"github.com/algorand/go-algorand/components/mocks"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -91,37 +92,12 @@ func (client *MockRPCClient) PrepareURL(x string) string {
 }
 
 type MockClientAggregator struct {
+	mocks.MockNetwork
 	peers []network.Peer
-	Registrar
 }
 
 func (mca *MockClientAggregator) GetPeers(options ...network.PeerOption) []network.Peer {
 	return mca.peers
-}
-
-func (mca *MockClientAggregator) Address() (string, bool) {
-	return "", false
-}
-func (mca *MockClientAggregator) Broadcast(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except network.Peer) error {
-	return nil
-}
-func (mca *MockClientAggregator) Relay(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except network.Peer) error {
-	return nil
-}
-func (mca *MockClientAggregator) Disconnect(badnode network.Peer) {}
-func (mca *MockClientAggregator) DisconnectPeers()                {}
-func (mca *MockClientAggregator) Ready() chan struct{} {
-	return nil
-}
-func (mca *MockClientAggregator) RegisterHTTPHandler(path string, handler http.Handler)     {}
-func (mca *MockClientAggregator) RequestConnectOutgoing(replace bool, quit <-chan struct{}) {}
-func (mca *MockClientAggregator) Start()                                                    {}
-func (mca *MockClientAggregator) Stop()                                                     {}
-func (mca *MockClientAggregator) RegisterHandlers(dispatch []network.TaggedMessageHandler)  {}
-func (mca *MockClientAggregator) ClearHandlers()                                            {}
-func (mca *MockClientAggregator) MakeHTTPRequest(client *http.Client,
-	request *http.Request) (*http.Response, error) {
-	return client.Do(request)
 }
 
 const numberOfPeers = 10
