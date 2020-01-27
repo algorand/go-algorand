@@ -288,7 +288,7 @@ func (lw *LedgerWallet) SignTransaction(tx transactions.Transaction, pw []byte) 
 		return nil, err
 	}
 
-	return protocol.Encode(transactions.SignedTxn{
+	return protocol.Encode(&transactions.SignedTxn{
 		Txn: tx,
 		Sig: sig,
 	}), nil
@@ -393,7 +393,7 @@ func (lw *LedgerWallet) signTransactionHelper(tx transactions.Transaction) (sig 
 func (lw *LedgerWallet) sendTransactionMsgpack(tx transactions.Transaction) (sig crypto.Signature, err error) {
 	var reply []byte
 
-	tosend := protocol.Encode(tx)
+	tosend := protocol.Encode(&tx)
 	p1 := ledgerP1first
 	p2 := ledgerP2more
 
