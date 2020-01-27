@@ -259,5 +259,5 @@ func (cred Credential) LowestOutputDigest() crypto.Digest {
 }
 
 func (cred hashableCredential) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.Credential, protocol.Encode(cred)
+	return protocol.Credential, protocol.Encode(&cred)
 }

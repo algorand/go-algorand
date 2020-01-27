@@ -14,19 +14,14 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package hashable
+package basics
 
-import (
-	"github.com/algorand/go-algorand/protocol"
-)
+// SortAssetIndex implements sorting by AssetIndex keys for
+// canonical encoding of maps in msgpack format.
+//msgp:ignore SortAssetIndex
+//msgp:sort AssetIndex SortAssetIndex
+type SortAssetIndex []AssetIndex
 
-// Message is used for messages with no special meaning
-type Message struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-	Message string   `codec:"msg"`
-}
-
-// ToBeHashed implements the crypto.Hashable interface
-func (msg Message) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.Message, protocol.Encode(&msg)
-}
+func (a SortAssetIndex) Len() int           { return len(a) }
+func (a SortAssetIndex) Less(i, j int) bool { return a[i] < a[j] }
+func (a SortAssetIndex) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
