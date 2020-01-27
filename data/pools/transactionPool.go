@@ -231,10 +231,6 @@ func (pool *TransactionPool) Test(txgroup []transactions.SignedTxn) error {
 		return err
 	}
 
-	for i := range txgroup {
-		txgroup[i].InitCaches()
-	}
-
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
@@ -325,10 +321,6 @@ func (pool *TransactionPool) RememberOne(t transactions.SignedTxn, verifyParams 
 func (pool *TransactionPool) Remember(txgroup []transactions.SignedTxn, verifyParams []verify.Params) error {
 	if err := pool.checkPendingQueueSize(); err != nil {
 		return err
-	}
-
-	for i := range txgroup {
-		txgroup[i].InitCaches()
 	}
 
 	pool.mu.Lock()

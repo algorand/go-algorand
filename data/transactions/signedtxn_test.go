@@ -39,8 +39,8 @@ func TestEncoding(t *testing.T) {
 	ids[stxn2.ID()] = true
 	require.Len(t, ids, 2, "Signed payment and signed key reg have the same Txid -- either domain separation or txid caching is broken")
 
-	paymentBytes := protocol.Encode(stxn1)
-	keyRegBytes := protocol.Encode(stxn2)
+	paymentBytes := protocol.Encode(&stxn1)
+	keyRegBytes := protocol.Encode(&stxn2)
 
 	bytes := make(map[crypto.Digest]bool)
 	bytes[crypto.Hash(paymentBytes)] = true
@@ -68,9 +68,8 @@ func TestDecodeNil(t *testing.T) {
 	var st SignedTxn
 	err := protocol.Decode(nilEncoding, &st)
 	if err == nil {
-		// These two functions used to panic when run on a zero value of SignedTxn.
+		// This function used to panic when run on a zero value of SignedTxn.
 		st.ID()
-		st.Priority()
 	}
 }
 

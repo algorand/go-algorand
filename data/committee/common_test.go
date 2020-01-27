@@ -171,7 +171,7 @@ type AgreementSelector struct {
 
 // ToBeHashed implements the crypto.Hashable interface.
 func (sel AgreementSelector) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.AgreementSelector, protocol.Encode(sel)
+	return protocol.AgreementSelector, protocol.Encode(&sel)
 }
 
 // CommitteeSize returns the size of the committee,

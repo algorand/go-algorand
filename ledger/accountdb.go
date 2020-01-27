@@ -89,7 +89,7 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 
 		for addr, data := range initAccounts {
 			_, err = tx.Exec("INSERT INTO accountbase (address, data) VALUES (?, ?)",
-				addr[:], protocol.Encode(data))
+				addr[:], protocol.Encode(&data))
 			if err != nil {
 				return err
 			}
@@ -352,7 +352,7 @@ func accountsNewRound(tx *sql.Tx, rnd basics.Round, updates map[basics.Address]a
 			// prune empty accounts
 			_, err = deleteStmt.Exec(addr[:])
 		} else {
-			_, err = replaceStmt.Exec(addr[:], protocol.Encode(data.new))
+			_, err = replaceStmt.Exec(addr[:], protocol.Encode(&data.new))
 		}
 		if err != nil {
 			return
