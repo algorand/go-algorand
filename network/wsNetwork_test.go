@@ -87,11 +87,13 @@ func (e *oneEntryPhonebook) UpdateRetryAfter(addr string, retryAfter time.Time) 
 	}
 }
 
-func (e *oneEntryPhonebook) WaitForConnectionTime(addr string) bool {
-	return false
+func (e *oneEntryPhonebook) WaitForConnectionTime(addr string) (addrInPhonebook,
+	waited bool, provisionalTime time.Time) {
+	var t time.Time
+	return false, false, t
 }
 
-func (e *oneEntryPhonebook) AddConnectionTime(addr string) bool {
+func (e *oneEntryPhonebook) UpdateConnectionTime(addr string, t time.Time) bool {
 	return false
 }
 

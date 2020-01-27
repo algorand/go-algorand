@@ -783,9 +783,9 @@ func (wn *WebsocketNetwork) checkServerResponseVariables(header http.Header, add
 // making the http request to the server.
 func (wn *WebsocketNetwork) MakeHTTPRequest(client *http.Client,
 	request *http.Request) (resp *http.Response, err error) {
-	wn.phonebook.WaitForConnectionTime(request.Host)
+	_, _, provisionalTime := wn.phonebook.WaitForConnectionTime(request.Host)
 	resp, err = client.Do(request)
-	wn.phonebook.AddConnectionTime(request.Host)
+	wn.phonebook.UpdateConnectionTime(request.Host, provisionalTime)
 	return resp, err
 }
 

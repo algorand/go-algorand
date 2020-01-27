@@ -210,13 +210,16 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	addr2 := "addrXYZ"
 
 	// Address not in. Should return false
-	require.Equal(t, false, entries.addConnectionTime(addr1))
+	addrInPhonebook, _,  provisionalTime := entries.waitForConnectionTime(addr1)
+	require.Equal(t, false, addrInPhonebook)
+	require.Equal(t, false, entries.updateConnectionTime(addr1, provisionalTime))
 
 	// Test the addresses are populated in the phonebook and a
 	// time can be added to one of them
 	entries.ReplacePeerList([]string{addr1, addr2})
-	require.Equal(t, false, entries.waitForConnectionTime(addr1))
-	require.Equal(t, true, entries.addConnectionTime(addr1))
+	_, waited,  provisionalTime := entries.waitForConnectionTime(addr1)
+	require.Equal(t, false, waited)
+	require.Equal(t, true, entries.updateConnectionTime(addr1, provisionalTime))
 	phBookData := entries.data[addr1].recentConnectionTimes
 	require.Equal(t, 1, len(phBookData))
 
@@ -224,8 +227,9 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// add another value to addr
-	require.Equal(t, false, entries.waitForConnectionTime(addr1))
-	require.Equal(t, true, entries.addConnectionTime(addr1))
+	_, waited,  provisionalTime = entries.waitForConnectionTime(addr1)
+	require.Equal(t, false, waited)
+	require.Equal(t, true, entries.updateConnectionTime(addr1, provisionalTime))
 	phBookData = entries.data[addr1].recentConnectionTimes
 	require.Equal(t, 2, len(phBookData))
 
@@ -234,8 +238,9 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 
 	// the first time should be removed and a new one added
 	// there should not be any wait
-	require.Equal(t, false, entries.waitForConnectionTime(addr1))
-	require.Equal(t, true, entries.addConnectionTime(addr1))
+	_, waited,  provisionalTime = entries.waitForConnectionTime(addr1)	
+	require.Equal(t, false, waited)
+	require.Equal(t, true, entries.updateConnectionTime(addr1, provisionalTime))
 	phBookData2 := entries.data[addr1].recentConnectionTimes
 	require.Equal(t, 2, len(phBookData2))
 
@@ -247,20 +252,26 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	// a separate array is used for these new requests
 
 	// add 3 values to another address. should not be blocked
-	require.Equal(t, false, entries.waitForConnectionTime(addr2))
-	require.Equal(t, true, entries.addConnectionTime(addr2))
-	require.Equal(t, false, entries.waitForConnectionTime(addr2))
-	require.Equal(t, true, entries.addConnectionTime(addr2))
-	require.Equal(t, false, entries.waitForConnectionTime(addr2))
-	require.Equal(t, true, entries.addConnectionTime(addr2))
+	_, waited,  provisionalTime = entries.waitForConnectionTime(addr2)	
+	require.Equal(t, false, waited)
+	require.Equal(t, true, entries.updateConnectionTime(addr2, provisionalTime))
+
+	_, waited,  provisionalTime = entries.waitForConnectionTime(addr2)	
+	require.Equal(t, false, waited)
+	require.Equal(t, true, entries.updateConnectionTime(addr2, provisionalTime))
+
+	_, waited,  provisionalTime = entries.waitForConnectionTime(addr2)	
+	require.Equal(t, false, waited)
+	require.Equal(t, true, entries.updateConnectionTime(addr2, provisionalTime))
 
 	phBookData = entries.data[addr2].recentConnectionTimes
 	// all three times should be queued
 	require.Equal(t, 3, len(phBookData))
 
 	// add another element to trigger wait
-	require.Equal(t, true, entries.waitForConnectionTime(addr2))
-	require.Equal(t, true, entries.addConnectionTime(addr2))
+	_, waited,  provisionalTime = entries.waitForConnectionTime(addr2)
+	require.Equal(t, true, waited)
+	require.Equal(t, true, entries.updateConnectionTime(addr2, provisionalTime))
 	// only one element should be removed, and one added
 	phBookData2 = entries.data[addr2].recentConnectionTimes
 	require.Equal(t, 3, len(phBookData))
@@ -278,19 +289,30 @@ func TestWaitAndAddConnectionTimeShortWindow(t *testing.T) {
 	entries.ReplacePeerList([]string{addr1})
 
 	// add 3 values. should not wait
-	require.Equal(t, false, entries.waitForConnectionTime(addr1))
-	require.Equal(t, true, entries.addConnectionTime(addr1))
-	require.Equal(t, false, entries.waitForConnectionTime(addr1))
-	require.Equal(t, true, entries.addConnectionTime(addr1))
-	require.Equal(t, false, entries.waitForConnectionTime(addr1))
-	require.Equal(t, true, entries.addConnectionTime(addr1))
+	addrInPhonebook, waited,  provisionalTime := entries.waitForConnectionTime(addr1)
+	require.Equal(t, true, addrInPhonebook)
+	require.Equal(t, false, waited)
+	require.Equal(t, true, entries.updateConnectionTime(addr1, provisionalTime))
+
+	_, waited,  provisionalTime = entries.waitForConnectionTime(addr1)
+	require.Equal(t, false, waited)
+	require.Equal(t, true, entries.updateConnectionTime(addr1, provisionalTime))
+
+	_, waited,  provisionalTime = entries.waitForConnectionTime(addr1)	
+	require.Equal(t, true, waited)
+	require.Equal(t, true, entries.updateConnectionTime(addr1, provisionalTime))
+
+	_, waited,  provisionalTime = entries.waitForConnectionTime(addr1)
+	require.Equal(t, false, waited)
+	require.Equal(t, true, entries.updateConnectionTime(addr1, provisionalTime))
 
 	// give enough time to expire all the elements
 	time.Sleep(10 * time.Millisecond)
 
 	// there should not be any wait
-	require.Equal(t, false, entries.waitForConnectionTime(addr1))
-	require.Equal(t, true, entries.addConnectionTime(addr1))
+	_, waited,  provisionalTime = entries.waitForConnectionTime(addr1)
+	require.Equal(t, false, waited)
+	require.Equal(t, true, entries.updateConnectionTime(addr1, provisionalTime))
 
 	// only one time should be left (the newly added)
 	phBookData := entries.data[addr1].recentConnectionTimes
