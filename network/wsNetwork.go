@@ -778,19 +778,15 @@ func (wn *WebsocketNetwork) checkServerResponseVariables(header http.Header, add
 	return true
 }
 
-// waitAndAddConnectionTime will wait to prevent exceeding connectionsRateLimitingCount.
-// Then it will register the next connection time.
-func (wn *WebsocketNetwork) waitAndAddConnectionTime(addr string) {
-	wn.phonebook.WaitAndAddConnectionTime(addr)
-}
-
 // MakeHTTPRequest will make sure connectionsRateLimitingCount is not
 // violated, and register the connection time of the request, before
 // making the http request to the server.
 func (wn *WebsocketNetwork) MakeHTTPRequest(client *http.Client,
-	request *http.Request) (*http.Response, error) {
-	wn.waitAndAddConnectionTime(request.Host)
-	return client.Do(request)
+	request *http.Request) (resp *http.Response, err error) {
+	wn.phonebook.WaitForConnectionTime(request.Host)
+	resp, err = client.Do(request)
+	wn.phonebook.AddConnectionTime(request.Host)
+	return resp, err
 }
 
 // getCommonHeaders retreives the common headers for both incoming and outgoing connections from the provided headers.
