@@ -132,14 +132,6 @@ const ConsensusFuture = ConsensusVersion(
 // when a specific version is not provided.
 const ConsensusCurrentVersion = ConsensusV21
 
-// ConsensusTest0 is a version of ConsensusV0 used for testing
-// (it has different approved upgrade paths).
-const ConsensusTest0 = ConsensusVersion("test0")
-
-// ConsensusTest1 is an extension of ConsensusTest0 that
-// supports a sorted-list balance commitment.
-const ConsensusTest1 = ConsensusVersion("test1")
-
 // ConsensusTestBigBlocks is a version of ConsensusV0 used for testing
 // with big block size (large MaxTxnBytesPerBlock).
 // at the time versioning was introduced.
@@ -161,7 +153,6 @@ const ConsensusTestUnupgradedProtocol = ConsensusVersion("test-unupgraded-protoc
 // ConsensusTestUnupgradedToProtocol is a version of ConsensusCurrentVersion
 // It is used as an upgrade from ConsensusTestUnupgradedProtocol
 const ConsensusTestUnupgradedToProtocol = ConsensusVersion("test-unupgradedto-protocol")
-
 
 // ConsensusTestFastUpgrade is meant for testing of protocol upgrades:
 // during testing, it is equivalent to another protocol with the exception

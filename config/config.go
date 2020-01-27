@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"io/ioutil"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -267,6 +268,60 @@ func init() {
 	}
 }
 
+// SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.
+func SaveConfigurableConsensus(dataDirectory string, params map[protocol.ConsensusVersion]ConsensusParams) error {
+	consensusProtocolPath := filepath.Join(dataDirectory, ConfigurableConsensusProtocolsFilename)
+
+	encodedConsensusParams, err := json.Marshal(params)
+	if err != nil {
+		return err
+	}
+	err = ioutil.WriteFile(consensusProtocolPath, encodedConsensusParams, 0644)
+	return err
+}
+
+// LoadConfigurableConsensusProtocols loads the configurable protocols from the data directroy
+func LoadConfigurableConsensusProtocols(dataDirectory string) error {
+	consensusProtocolPath := filepath.Join(dataDirectory, ConfigurableConsensusProtocolsFilename)
+	file, err := os.Open(consensusProtocolPath)
+
+	if err != nil {
+		if os.IsNotExist(err) {
+			// this file is not required, only optional. if it's missing, no harm is done.
+			return nil
+		}
+		return err
+	}
+	defer file.Close()
+
+	configurableConsensus := make(map[protocol.ConsensusVersion]ConsensusParams)
+
+	decoder := json.NewDecoder(file)
+	err = decoder.Decode(&configurableConsensus)
+	if err != nil {
+		return err
+	}
+
+	for consensusVersion, consensusParams := range configurableConsensus {
+		if consensusParams.ApprovedUpgrades == nil {
+			// if we were provided with an empty ConsensusParams, delete the existing reference to this consensus version
+			for cVer, cParam := range Consensus {
+				if cVer == consensusVersion {
+					delete(Consensus, cVer)
+				} else if _, has := cParam.ApprovedUpgrades[consensusVersion]; has {
+					// delete upgrade to deleted version
+					delete(cParam.ApprovedUpgrades, consensusVersion)
+				}
+			}
+		} else {
+			// need to add/update entry
+			Consensus[consensusVersion] = consensusParams
+		}
+	}
+
+	return nil
+}
+
 func initConsensusProtocols() {
 	// WARNING: copying a ConsensusParams by value into a new variable
 	// does not copy the ApprovedUpgrades map.  Make sure that each new
@@ -314,7 +369,7 @@ func initConsensusProtocols() {
 
 		MaxBalLookback: 320,
 
-		MaxTxGroupSize: 1,
+		MaxTxGroupSize:               1,
 		UseBuggyProposalLowestOutput: true, // TODO(upgrade): Please remove as soon as the upgrade goes through
 	}
 
@@ -500,31 +555,6 @@ func initConsensusProtocols() {
 
 func initConsensusTestProtocols() {
 	// Various test protocol versions
-	Consensus[protocol.ConsensusTest0] = ConsensusParams{
-		UpgradeVoteRounds:        2,
-		UpgradeThreshold:         1,
-		DefaultUpgradeWaitRounds: 2,
-		MaxVersionStringLen:      64,
-
-		MaxTxnBytesPerBlock: 1000000,
-		DefaultKeyDilution:  10000,
-
-		ApprovedUpgrades: map[protocol.ConsensusVersion]uint64{
-			protocol.ConsensusTest1: 0,
-		},
-	}
-
-	Consensus[protocol.ConsensusTest1] = ConsensusParams{
-		UpgradeVoteRounds:        10,
-		UpgradeThreshold:         8,
-		DefaultUpgradeWaitRounds: 10,
-		MaxVersionStringLen:      64,
-
-		MaxTxnBytesPerBlock: 1000000,
-		DefaultKeyDilution:  10000,
-
-		ApprovedUpgrades: map[protocol.ConsensusVersion]uint64{},
-	}
 
 	testBigBlocks := Consensus[protocol.ConsensusCurrentVersion]
 	testBigBlocks.MaxTxnBytesPerBlock = 100000000
@@ -835,6 +865,11 @@ const LedgerFilenamePrefix = "ledger"
 // CrashFilename is the name of the agreement database file.
 // It is used to recover from node crashes.
 const CrashFilename = "crash.sqlite"
+
+// ConfigurableConsensusProtocolsFilename defines a set of consensus prototocols that
+// are to be loaded from the data directory ( if present ), to override the
+// built-in supported consensus protocols.
+const ConfigurableConsensusProtocolsFilename = "consensus.json"
 
 // LoadConfigFromDisk returns a Local config structure based on merging the defaults
 // with settings loaded from the config file from the custom dir.  If the custom file
