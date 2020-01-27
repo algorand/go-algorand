@@ -62,7 +62,7 @@ func main() {
 		ddata, err := ioutil.ReadFile(os.Args[3])
 		failFast(err)
 
-		programstr := fmt.Sprintf("%s", pdata)
+		programstr := string(pdata)
 		
 		programbytes, err := logic.AssembleString(programstr)
 		failFast(err)
