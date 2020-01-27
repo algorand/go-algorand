@@ -19,6 +19,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"math/big"
 	"math/rand"
 	"os"
 	"regexp"
@@ -338,22 +339,26 @@ func generateWalletGenesis(filename string, wallets, npnHosts int) error {
 		wallets = 2 * wallets
 	}
 	data.Wallets = make([]gen.WalletData, wallets)
-	stake := 100.0 / float64(wallets)
+	stake := big.NewRat(int64(100), int64(wallets))
 
-	stakeSum := float64(0)
+	ratZero := big.NewRat(int64(0), int64(1))
+	ratHundred := big.NewRat(int64(100), int64(1))
+
+	stakeSum := new(big.Rat).Set(ratZero)
 	for i := 0; i < wallets; i++ {
 		if i == (wallets - 1) {
 			// use the last wallet to workaround roundoff and get back to 1.0
-			stake = 100.0 - stakeSum
+			stake = stake.Sub(new(big.Rat).Set(ratHundred), stakeSum)
 		}
+		floatStake, _ := stake.Float64()
 		w := gen.WalletData{
 			Name:  "Wallet" + strconv.Itoa(i+1), // Wallet names are 1-based for this template
-			Stake: stake,
+			Stake: floatStake,
 		}
 		if (i < (wallets / 2)) || (npnHosts == 0) {
 			w.Online = true
 		}
-		stakeSum += stake
+		stakeSum = stakeSum.Add(stakeSum, stake)
 		data.Wallets[i] = w
 	}
 	return saveGenesisDataToDisk(data, filename)
