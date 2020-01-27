@@ -366,6 +366,7 @@ type cloudHostSpec struct {
 	OutgoingPorts  string
 	IncomingPorts  string
 	ProtectedPorts string
+	IsRelay        bool
 	Configuration  cloudHostConfiguration
 }
 
@@ -494,6 +495,7 @@ func createHostSpec(host HostConfig, template cloudHost) (hostSpec cloudHostSpec
 	hostSpec.IncomingPorts = strings.Join(portList, ",")
 	hostSpec.ProtectedPorts = "22"
 	hostSpec.OutgoingPorts = "*"
+	hostSpec.IsRelay = relayCount > 0
 
 	rootStorage := computeRootStorage(nodeCount, relayCount)
 	ssdStorage := computeSSDStorage(nodeCount, relayCount)
