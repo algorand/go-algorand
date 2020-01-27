@@ -58,6 +58,11 @@ scripts/travis/before_build.sh
 # Force re-evaluation of genesis files to see if source files changed w/o running make
 touch gen/generate.go
 
+# Force re-generation of msgpack encoders/decoders with msgp.  If this re-generated code
+# does not match the checked-in code, some structs may have been added or updated without
+# refreshing the generated codecs.  The enlistment check below will error out, if so.
+make msgp
+
 if [ "${OS}-${ARCH}" = "linux-arm" ]; then
     # for arm, build just the basic distro
     MAKE_DEBUG_OPTION=""
@@ -74,6 +79,7 @@ echo Checking Enlistment...
 if [[ -n $(git status --porcelain) ]]; then
     echo Enlistment is dirty - did you forget to run make?
     git status -s
+    git diff
     exit 1
 else
     echo Enlistment is clean

@@ -44,6 +44,8 @@ GOLDFLAGS := $(GOLDFLAGS_BASE) \
 UNIT_TEST_SOURCES := $(sort $(shell GO111MODULE=off go list ./... | grep -v /go-algorand/test/ ))
 ALGOD_API_PACKAGES := $(sort $(shell GO111MODULE=off cd daemon/algod/api; go list ./... ))
 
+MSGP_GENERATE	:= ./protocol ./crypto ./data/basics ./data/transactions ./data/committee ./data/bookkeeping ./data/hashable ./auction
+
 default: build
 
 # tools
@@ -79,6 +81,12 @@ prof:
 
 generate: deps
 	PATH=$(GOPATH1)/bin:$$PATH go generate ./...
+
+msgp: $(patsubst %,%/msgp_gen.go,$(MSGP_GENERATE))
+
+%/msgp_gen.go: deps ALWAYS
+	$(GOPATH1)/bin/msgp -file ./$(@D) -o $@
+ALWAYS:
 
 # build our fork of libsodium, placing artifacts into crypto/lib/ and crypto/include/
 crypto/lib/libsodium.a:
