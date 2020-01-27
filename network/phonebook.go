@@ -63,11 +63,11 @@ type phonebookEntries struct {
 // makePhonebookEntries creates phonebookEntries with the passed configuration values
 func makePhonebookEntries(connectionsRateLimitingCount uint,
 	connectionsRateLimitingWindow time.Duration) phonebookEntries {
-	var pbEnteries phonebookEntries
-	pbEnteries.connectionsRateLimitingCount = connectionsRateLimitingCount
-	pbEnteries.connectionsRateLimitingWindow = connectionsRateLimitingWindow
-	pbEnteries.data = make(map[string]phonebookData, 0)
-	return pbEnteries
+	return phonebookEntries{
+		connectionsRateLimitingCount:  connectionsRateLimitingCount,
+		connectionsRateLimitingWindow: connectionsRateLimitingWindow,
+		data:                          make(map[string]phonebookData, 0),
+	}
 }
 
 // PopEarliestTime removes the earliest time from recentConnectionTimes in
@@ -182,23 +182,26 @@ func (e *phonebookEntries) waitForConnectionTime(addr string) (addrInPhonebook, 
 // Returns true of the addr was in the phonebook
 func (e *phonebookEntries) updateConnectionTime(addr string, provisionalTime time.Time) bool {
 	entry, found := e.data[addr]
-	if found {
-		defer func() {
-			e.data[addr] = entry
-		}()
-		for indx, val := range entry.recentConnectionTimes {
-			if provisionalTime == val {
-				entry.recentConnectionTimes[indx] = time.Now()
-				return true
-			}
-		}
-		// In case the time is not found, means it was removed from the list.
-		// This may happen when the time expires before the connection was established with the server.
-		// The time should be added again.
-		entry.recentConnectionTimes = append(entry.recentConnectionTimes, time.Now())
-		return true
+	if !found {
+		return false
 	}
-	return false
+
+	defer func() {
+		e.data[addr] = entry
+	}()
+
+	// Find the provisionalTime and update it
+	for indx, val := range entry.recentConnectionTimes {
+		if provisionalTime == val {
+			entry.recentConnectionTimes[indx] = time.Now()
+			return true
+		}
+	}
+	// Case where the time is not found: it was removed from the list.
+	// This may happen when the time expires before the connection was established with the server.
+	// The time should be added again.
+	entry.recentConnectionTimes = append(entry.recentConnectionTimes, time.Now())
+	return true
 }
 
 // ArrayPhonebook is a simple wrapper on a phonebookEntries map
