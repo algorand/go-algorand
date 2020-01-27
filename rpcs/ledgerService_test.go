@@ -48,7 +48,7 @@ var poolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x
 
 type httpTestPeerSource struct {
 	peers []network.Peer
-	*mocks.MockNetwork
+	mocks.MockNetwork
 }
 
 func (s *httpTestPeerSource) GetPeers(options ...network.PeerOption) []network.Peer {
