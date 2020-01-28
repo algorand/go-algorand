@@ -595,19 +595,6 @@ func initConsensusTestProtocols() {
 	rapidRecalcParams.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	Consensus[protocol.ConsensusTestRapidRewardRecalculation] = rapidRecalcParams
 
-	// Setting the testShorterLookback parameters derived from ConsensusCurrentVersion
-	// Will result in MaxBalLookback = 32
-	// Used to run tests faster where past MaxBalLookback values are checked
-	//testShorterLookback := Consensus[protocol.ConsensusCurrentVersion]
-	//testShorterLookback.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-
-	// MaxBalLookback  =  2 x SeedRefreshInterval x SeedLookback
-	// ref. https://github.com/algorandfoundation/specs/blob/master/dev/abft.md
-	//testShorterLookback.SeedLookback = 2
-	//testShorterLookback.SeedRefreshInterval = 8
-	//testShorterLookback.MaxBalLookback = 2 * testShorterLookback.SeedLookback * testShorterLookback.SeedRefreshInterval // 32
-	//Consensus[protocol.ConsensusTestShorterLookback] = testShorterLookback
-
 	// The following two protocols: testUnupgradedProtocol and testUnupgradedToProtocol
 	// are used to test the case when some nodes in the network do not make progress.
 

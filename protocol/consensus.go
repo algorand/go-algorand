@@ -141,10 +141,6 @@ const ConsensusTestBigBlocks = ConsensusVersion("test-big-blocks")
 // that decreases the RewardRecalculationInterval greatly.
 const ConsensusTestRapidRewardRecalculation = ConsensusVersion("test-fast-reward-recalculation")
 
-// ConsensusTestShorterLookback is a version of ConsensusCurrentVersion
-// that decreases the MaxBalLookback greatly.
-//const ConsensusTestShorterLookback = ConsensusVersion("test-shorter-lookback")
-
 // ConsensusTestUnupgradedProtocol is a version of ConsensusCurrentVersion
 // that allows the control of the upgrade from ConsensusTestUnupgradedProtocol to
 // ConsensusTestUnupgradedProtocol

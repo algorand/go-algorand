@@ -93,6 +93,7 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 			if err != nil {
 				return err
 			}
+
 			totals.addAccount(proto, data, &ot)
 		}
 
