@@ -262,7 +262,6 @@ func (s RewardsState) NextRewardsState(nextRound basics.Round, nextProto config.
 			newRate = 0
 		}
 		res.RewardsRate = newRate / nextProto.RewardsRateRefreshInterval
-		fmt.Printf("RewardsRate <- %d\n", res.RewardsRate)
 		res.RewardsRecalculationRound = nextRound + basics.Round(nextProto.RewardsRateRefreshInterval)
 	}
 

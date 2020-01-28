@@ -48,7 +48,6 @@ type Ledger struct {
 }
 
 func makeGenesisBlock(proto protocol.ConsensusVersion, genesisBal GenesisBalances, genesisID string, genesisHash crypto.Digest) (bookkeeping.Block, error) {
-	
 	params, ok := config.Consensus[proto]
 	if !ok {
 		return bookkeeping.Block{}, fmt.Errorf("unsupported protocol %s", proto)
@@ -66,7 +65,6 @@ func makeGenesisBlock(proto protocol.ConsensusVersion, genesisBal GenesisBalance
 		RewardsRecalculationRound: basics.Round(params.RewardsRateRefreshInterval),
 	}
 
-	fmt.Printf("genesisRewardsState : %#v\n", genesisRewardsState)
 	genesisProtoState := bookkeeping.UpgradeState{
 		CurrentProtocol: proto,
 	}

@@ -455,8 +455,12 @@ func (f *LibGoalFixture) ConsensusParams(round uint64) (consensus config.Consens
 	if err != nil {
 		return
 	}
-
-	return config.Consensus[protocol.ConsensusVersion(block.CurrentProtocol)], nil
+	version := protocol.ConsensusVersion(block.CurrentProtocol)
+	consensus, has := config.Consensus[version]
+	if !has && f.consensus != nil {
+		consensus = f.consensus[version]
+	}
+	return
 }
 
 // CurrentMinFeeAndBalance returns the MinTxnFee and MinBalance for the currently active protocol

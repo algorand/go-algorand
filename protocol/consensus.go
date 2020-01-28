@@ -137,10 +137,6 @@ const ConsensusCurrentVersion = ConsensusV21
 // at the time versioning was introduced.
 const ConsensusTestBigBlocks = ConsensusVersion("test-big-blocks")
 
-// ConsensusTestRapidRewardRecalculation is a version of ConsensusCurrentVersion
-// that decreases the RewardRecalculationInterval greatly.
-const ConsensusTestRapidRewardRecalculation = ConsensusVersion("test-fast-reward-recalculation")
-
 // Error is used to indicate that an unsupported protocol has been detected.
 type Error ConsensusVersion
 
