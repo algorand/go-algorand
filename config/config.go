@@ -254,10 +254,6 @@ func init() {
 	initConsensusProtocols()
 	initConsensusTestProtocols()
 
-	// This must appear last, since it depends on all of the other
-	// versions to already be registered (by the above calls).
-	initConsensusTestFastUpgrade()
-
 	// Allow tuning SmallLambda for faster consensus in single-machine e2e
 	// tests.  Useful for development.  This might make sense to fold into
 	// a protocol-version-specific setting, once we move SmallLambda into
@@ -627,31 +623,6 @@ func initConsensusTestProtocols() {
 		testUnupgradedProtocol.ApprovedUpgrades[protocol.ConsensusTestUnupgradedToProtocol] = 0
 	}
 	Consensus[protocol.ConsensusTestUnupgradedProtocol] = testUnupgradedProtocol
-}
-
-func initConsensusTestFastUpgrade() {
-	fastUpgradeProtocols := make(map[protocol.ConsensusVersion]ConsensusParams)
-
-	for proto, params := range Consensus {
-		fastParams := params
-		fastParams.UpgradeVoteRounds = 5
-		fastParams.UpgradeThreshold = 3
-		fastParams.DefaultUpgradeWaitRounds = 5
-		fastParams.MaxVersionStringLen += len(protocol.ConsensusTestFastUpgrade(""))
-		fastParams.ApprovedUpgrades = make(map[protocol.ConsensusVersion]uint64)
-
-		for ver := range params.ApprovedUpgrades {
-			fastParams.ApprovedUpgrades[protocol.ConsensusTestFastUpgrade(ver)] = 0
-		}
-
-		fastUpgradeProtocols[protocol.ConsensusTestFastUpgrade(proto)] = fastParams
-	}
-
-	// Put the test protocols into the Consensus struct; this
-	// is done as a separate step so we don't recurse forever.
-	for proto, params := range fastUpgradeProtocols {
-		Consensus[proto] = params
-	}
 }
 
 // Local holds the per-node-instance configuration settings for the protocol.

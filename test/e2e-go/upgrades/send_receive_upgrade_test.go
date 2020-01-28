@@ -26,7 +26,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 func GenerateRandomBytes(n int) []byte {
@@ -102,11 +104,43 @@ func TestAccountsCanSendMoneyAcrossUpgradeV15toV16(t *testing.T) {
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV15Upgrade.json"))
 }
 
+// ConsensusTestFastUpgrade is meant for testing of protocol upgrades:
+// during testing, it is equivalent to another protocol with the exception
+// of the upgrade parameters, which allow for upgrades to take place after
+// only a few rounds.
+func consensusTestFastUpgrade(proto protocol.ConsensusVersion) protocol.ConsensusVersion {
+	return "test-fast-upgrade-" + proto
+}
+
+func generateFastUpgradeConsensus() (fastUpgradeProtocols map[protocol.ConsensusVersion]config.ConsensusParams) {
+	fastUpgradeProtocols = make(map[protocol.ConsensusVersion]config.ConsensusParams)
+
+	for proto, params := range config.Consensus {
+		fastParams := params
+		fastParams.UpgradeVoteRounds = 5
+		fastParams.UpgradeThreshold = 3
+		fastParams.DefaultUpgradeWaitRounds = 5
+		fastParams.MaxVersionStringLen += len(consensusTestFastUpgrade(""))
+		fastParams.ApprovedUpgrades = make(map[protocol.ConsensusVersion]uint64)
+
+		for ver := range params.ApprovedUpgrades {
+			fastParams.ApprovedUpgrades[consensusTestFastUpgrade(ver)] = 0
+		}
+
+		fastUpgradeProtocols[consensusTestFastUpgrade(proto)] = fastParams
+	}
+	return
+}
+
 func testAccountsCanSendMoneyAcrossUpgrade(t *testing.T, templatePath string) {
 	t.Parallel()
 	a := require.New(t)
 	os.Setenv("ALGOSMALLLAMBDAMSEC", "500")
+
+	consensus := generateFastUpgradeConsensus()
+
 	var fixture fixtures.RestClientFixture
+	fixture.SetConsensus(consensus)
 	fixture.Setup(t, templatePath)
 	defer fixture.Shutdown()
 	c := fixture.LibGoalClient
