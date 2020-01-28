@@ -87,6 +87,16 @@ func (e *oneEntryPhonebook) UpdateRetryAfter(addr string, retryAfter time.Time) 
 	}
 }
 
+func (e *oneEntryPhonebook) WaitForConnectionTime(addr string) (addrInPhonebook,
+	waited bool, provisionalTime time.Time) {
+	var t time.Time
+	return false, false, t
+}
+
+func (e *oneEntryPhonebook) UpdateConnectionTime(addr string, t time.Time) bool {
+	return false
+}
+
 var defaultConfig config.Local
 
 func init() {
@@ -790,7 +800,11 @@ func TestGetPeers(t *testing.T) {
 	waitReady(t, netB, readyTimeout.C)
 	t.Log("b ready")
 
-	ph := ArrayPhonebook{Entries: phonebookEntries{"a": phonebookData{}, "b": phonebookData{}, "c": phonebookData{}}}
+	ph := ArrayPhonebook{Entries: makePhonebookEntries(netA.config.ConnectionsRateLimitingCount,
+		time.Duration(netA.config.ConnectionsRateLimitingWindowSeconds)*time.Second)}
+
+	data := map[string]phonebookData{"a": phonebookData{}, "b": phonebookData{}, "c": phonebookData{}}
+	ph.Entries.data = data
 	phbMulti.AddOrUpdatePhonebook("ph", &ph)
 
 	//addrB, _ := netB.Address()

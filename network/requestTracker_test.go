@@ -111,7 +111,8 @@ func TestRateLimiting(t *testing.T) {
 	for i := 0; i < clientsCount; i++ {
 		networks[i] = makeTestWebsocketNodeWithConfig(t, noAddressConfig)
 		networks[i].config.GossipFanout = 1
-		phonebooks[i] = MakeThreadsafePhonebook()
+		phonebooks[i] = MakeThreadsafePhonebook(networks[i].config.ConnectionsRateLimitingCount,
+			time.Duration(networks[i].config.ConnectionsRateLimitingWindowSeconds)*time.Second)
 		phonebooks[i].ReplacePeerList([]string{addrA})
 		networks[i].phonebook = MakeMultiPhonebook()
 		networks[i].phonebook.AddOrUpdatePhonebook("default", phonebooks[i])
