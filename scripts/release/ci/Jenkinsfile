@@ -2,7 +2,7 @@ pipeline {
     parameters {
         string defaultValue: '', description: 'Branch name or tag name.', name: 'hash', trim: true
         string defaultValue: 'stable', description: 'Staged channel which should be released.', name: 'channel', trim: true
-        string defaultValue: 's3://algorand-dev-deb-repo/releases', description: 's3://bucket/prefix', name: 'bucket_location', trim: true
+        string defaultValue: 's3://algorand-builds/channel', description: 's3://bucket/prefix', name: 'bucket_location', trim: true
 
         // AWS
         string defaultValue: 'us-west-1', description: 'AWS Region', name: 'region', trim: true
@@ -52,6 +52,27 @@ pipeline {
             steps {
                 input "Forward gpg-agent"
                 sh script: "scripts/release/ci/stage/sign.sh"
+            }
+        }
+
+        stage("upload") {
+            steps {
+                script {
+                    def rstamp = sh(
+                        script: 'scripts/reverse_hex_timestamp',
+                        returnStdout: true
+                    ).trim()
+
+                    /*
+                    def fullversion = sh(
+                        script: 'PATH=/usr/local/go/bin bash scripts/compute_build_number.sh -f',
+                        returnStdout: true
+                    ).trim()
+                    */
+                    def fullversion = "2.0.3"
+
+                    sh script: "scripts/release/ci/stage/upload.sh ${params.channel} ${params.bucket_location} ${rstamp} ${fullversion}"
+                }
             }
         }
 
