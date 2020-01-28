@@ -44,8 +44,8 @@ type coserviceMonitor struct {
 }
 
 type coserviceListener interface {
-	inc(sum uint)
-	dec(sum uint)
+	inc(sum uint, state map[coserviceType]uint)
+	dec(sum uint, state map[coserviceType]uint)
 }
 
 func (m *coserviceMonitor) inc(t coserviceType) {
@@ -62,7 +62,7 @@ func (m *coserviceMonitor) inc(t coserviceType) {
 	m.c[t]++
 
 	if m.coserviceListener != nil {
-		m.coserviceListener.inc(m.sum())
+		m.coserviceListener.inc(m.sum(), m.c)
 	}
 }
 
@@ -83,7 +83,7 @@ func (m *coserviceMonitor) dec(t coserviceType) {
 	m.c[t]--
 
 	if m.coserviceListener != nil {
-		m.coserviceListener.dec(m.sum())
+		m.coserviceListener.dec(m.sum(), m.c)
 	}
 }
 

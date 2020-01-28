@@ -374,7 +374,7 @@ func (store *proposalStore) lastRelevant(pv proposalValue) (p period, pinned boo
 	}
 
 	for per := range store.Relevant {
-		if per > p {
+		if per > p && store.Relevant[per] == pv {
 			p = per
 		}
 	}
