@@ -35,17 +35,61 @@ type Phonebook interface {
 
 	// UpdateRetryAfter updates the retry-after field for the entries matching the given address
 	UpdateRetryAfter(addr string, retryAfter time.Time)
+
+	// WaitForConnectionTime will wait to prevent exceeding connectionsRateLimitingCount.
+	// Then it will register a provisional next connection time.
+	// Will return true if it waited and false otherwise
+	WaitForConnectionTime(addr string) (addrInPhonebook, waited bool, provisionalTime time.Time)
+
+	// UpdateConnectionTime will update the provisional connection time.
+	// Returns true of the addr was in the phonebook
+	UpdateConnectionTime(addr string, provisionalTime time.Time) bool
 }
 
 type phonebookData struct {
-	retryAfter time.Time
+	retryAfter            time.Time
+	recentConnectionTimes []time.Time
 }
 
-type phonebookEntries map[string]phonebookData
+// phonebookEntries holds the server connection configuration values
+// and the list of request times withing the time window for each
+// address.
+type phonebookEntries struct {
+	connectionsRateLimitingCount  uint
+	connectionsRateLimitingWindow time.Duration
+	data                          map[string]phonebookData
+}
+
+// makePhonebookEntries creates phonebookEntries with the passed configuration values
+func makePhonebookEntries(connectionsRateLimitingCount uint,
+	connectionsRateLimitingWindow time.Duration) phonebookEntries {
+	return phonebookEntries{
+		connectionsRateLimitingCount:  connectionsRateLimitingCount,
+		connectionsRateLimitingWindow: connectionsRateLimitingWindow,
+		data:                          make(map[string]phonebookData, 0),
+	}
+}
+
+// PopEarliestTime removes the earliest time from recentConnectionTimes in
+// phonebookData for addr
+// It is expected to be later than ConnectionsRateLimitingWindow
+func (e *phonebookEntries) popNElements(n int, addr string) {
+	entry := e.data[addr]
+	entry.recentConnectionTimes = entry.recentConnectionTimes[n:]
+	e.data[addr] = entry
+}
+
+// AppendTime adds the current time to recentConnectionTimes in
+// phonebookData of addr
+func (e *phonebookEntries) appendTime(addr string, t time.Time) {
+	entry := e.data[addr]
+	entry.recentConnectionTimes = append(entry.recentConnectionTimes, t)
+	e.data[addr] = entry
+}
 
 func (e *phonebookEntries) filterRetryTime(t time.Time) []string {
-	o := make([]string, 0, len(*e))
-	for addr, entry := range *e {
+	o := make([]string, 0, len(e.data))
+	for addr, entry := range e.data {
 		if t.After(entry.retryAfter) {
 			o = append(o, addr)
 		}
@@ -61,28 +105,103 @@ func (e *phonebookEntries) ReplacePeerList(they []string) {
 
 	// prepare a map of items we'd like to remove.
 	removeItems := make(map[string]bool, 0)
-	for k := range *e {
+	for k := range e.data {
 		removeItems[k] = true
 	}
 
 	for _, addr := range they {
-		if _, has := (*e)[addr]; has {
+		if _, has := e.data[addr]; has {
 			// we already have this. do nothing.
 			delete(removeItems, addr)
 		} else {
 			// we don't have this item. add it.
-			(*e)[addr] = phonebookData{}
+			e.data[addr] = phonebookData{}
 		}
 	}
 
 	// remove items that were missing in they
 	for k := range removeItems {
-		delete((*e), k)
+		delete(e.data, k)
 	}
 }
 
 func (e *phonebookEntries) updateRetryAfter(addr string, retryAfter time.Time) {
-	(*e)[addr] = phonebookData{retryAfter: retryAfter}
+	_, found := e.data[addr]
+	if !found {
+		e.data[addr] = phonebookData{retryAfter: retryAfter, recentConnectionTimes: make([]time.Time, 0)}
+	} else {
+		entry := e.data[addr]
+		entry.retryAfter = retryAfter
+		e.data[addr] = entry
+	}
+}
+
+// waitForConnectionTime will wait to prevent exceeding connectionsRateLimitingCount.
+// Will return true if it waited and false otherwise
+func (e *phonebookEntries) waitForConnectionTime(addr string) (addrInPhonebook, waited bool, provisionalTime time.Time) {
+	waited = false
+	_, found := e.data[addr]
+	curTime := time.Now()
+	if !found {
+		// The addr is not in this phonebook.
+		// Will find the addr in a different phonebook.
+		return found, waited, curTime
+	}
+
+	var timeSince time.Duration
+	var numElmtsToRemove int
+	// Remove from recentConnectionTimes the times later than ConnectionsRateLimitingWindowSeconds
+	for numElmtsToRemove < len(e.data[addr].recentConnectionTimes) {
+		timeSince = curTime.Sub((e.data[addr].recentConnectionTimes)[numElmtsToRemove])
+		if timeSince > e.connectionsRateLimitingWindow {
+			numElmtsToRemove++
+		} else {
+			break // break the loop. The rest are earlier than 1 second
+		}
+	}
+	e.popNElements(numElmtsToRemove, addr)
+
+	// If there are max number of connections within the time window, wait
+	numElts := len(e.data[addr].recentConnectionTimes)
+	if uint(numElts) >= e.connectionsRateLimitingCount {
+		// Wait until the earliest time expires
+		time.Sleep(e.connectionsRateLimitingWindow - timeSince)
+		waited = true
+		// Remove it from recentConnectionTimes
+		e.popNElements(1, addr)
+	}
+
+	// Update curTime, since it may have significantly changed if waited
+	curTime = time.Now()
+	// Append the provisional time for the next connection request
+	e.appendTime(addr, curTime)
+	return found, waited, curTime
+}
+
+// UpdateConnectionTime will update the provisional connection time.
+// Returns true of the addr was in the phonebook
+func (e *phonebookEntries) updateConnectionTime(addr string, provisionalTime time.Time) bool {
+	entry, found := e.data[addr]
+	if !found {
+		return false
+	}
+
+	defer func() {
+		e.data[addr] = entry
+	}()
+
+	// Find the provisionalTime and update it
+	for indx, val := range entry.recentConnectionTimes {
+		if provisionalTime == val {
+			entry.recentConnectionTimes[indx] = time.Now()
+			return true
+		}
+	}
+	// Case where the time is not found: it was removed from the list.
+	// This may happen when the time expires before the connection was established with the server.
+	// The time should be added again.
+	entry.recentConnectionTimes = append(entry.recentConnectionTimes, time.Now())
+	return true
 }
 
 // ArrayPhonebook is a simple wrapper on a phonebookEntries map
@@ -91,9 +210,11 @@ type ArrayPhonebook struct {
 }
 
 // MakeArrayPhonebook creates a ArrayPhonebook
-func MakeArrayPhonebook() *ArrayPhonebook {
+func MakeArrayPhonebook(connectionsRateLimitingCount uint,
+	connectionsRateLimitingWindow time.Duration) *ArrayPhonebook {
 	return &ArrayPhonebook{
-		Entries: make(phonebookEntries, 0),
+		Entries: makePhonebookEntries(connectionsRateLimitingCount,
+			connectionsRateLimitingWindow),
 	}
 }
 
@@ -131,6 +252,19 @@ func (p *ArrayPhonebook) UpdateRetryAfter(addr string, retryAfter time.Time) {
 	p.Entries.updateRetryAfter(addr, retryAfter)
 }
 
+// WaitForConnectionTime will wait to prevent exceeding connectionsRateLimitingCount.
+// Then it will register the next connection time.
+// Will return true if it waited and false otherwise
+func (p *ArrayPhonebook) WaitForConnectionTime(addr string) (addrInPhonebook, waited bool, provisionalTime time.Time) {
+	return p.Entries.waitForConnectionTime(addr)
+}
+
+// UpdateConnectionTime will update the provisional connection time.
+// Returns true of the addr was in the phonebook
+func (p *ArrayPhonebook) UpdateConnectionTime(addr string, provisionalTime time.Time) bool {
+	return p.Entries.updateConnectionTime(addr, provisionalTime)
+}
+
 // GetAddresses returns up to N shuffled address
 func (p *ArrayPhonebook) GetAddresses(n int) []string {
 	return shuffleSelect(p.Entries.filterRetryTime(time.Now()), n)
@@ -143,9 +277,11 @@ type ThreadsafePhonebook struct {
 }
 
 // MakeThreadsafePhonebook creates a ThreadsafePhonebook
-func MakeThreadsafePhonebook() *ThreadsafePhonebook {
+func MakeThreadsafePhonebook(connectionsRateLimitingCount uint,
+	connectionsRateLimitingWindow time.Duration) *ThreadsafePhonebook {
 	return &ThreadsafePhonebook{
-		entries: make(phonebookEntries, 0),
+		entries: makePhonebookEntries(connectionsRateLimitingCount,
+			connectionsRateLimitingWindow),
 	}
 }
 
@@ -163,16 +299,32 @@ func (p *ThreadsafePhonebook) UpdateRetryAfter(addr string, retryAfter time.Time
 	p.entries.updateRetryAfter(addr, retryAfter)
 }
 
+// WaitForConnectionTime will wait to prevent exceeding connectionsRateLimitingCount.
+// Will return true if it waited and false otherwise
+func (p *ThreadsafePhonebook) WaitForConnectionTime(addr string) (addrInPhonebook, waited bool, provisionalTime time.Time) {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+	return p.entries.waitForConnectionTime(addr)
+}
+
+// UpdateConnectionTime will update the provisional connection time.
+// Returns true of the addr was in the phonebook
+func (p *ThreadsafePhonebook) UpdateConnectionTime(addr string, provisionalTime time.Time) bool {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+	return p.entries.updateConnectionTime(addr, provisionalTime)
+}
+
 // ExtendPeerList adds unique addresses to this set of addresses
 func (p *ThreadsafePhonebook) ExtendPeerList(more []string) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	// TODO: if this gets bad because p.addrs gets long, replace storage with a map[string]bool
 	for _, addr := range more {
-		if _, has := p.entries[addr]; has {
+		if _, has := p.entries.data[addr]; has {
 			continue
 		}
-		p.entries[addr] = phonebookData{}
+		p.entries.data[addr] = phonebookData{}
 	}
 }
 
@@ -180,7 +332,7 @@ func (p *ThreadsafePhonebook) ExtendPeerList(more []string) {
 func (p *ThreadsafePhonebook) Length() int {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
-	return len(p.entries)
+	return len(p.entries.data)
 }
 
 // ReplacePeerList merges a set of addresses with that passed in.
@@ -255,4 +407,37 @@ func (mp *MultiPhonebook) UpdateRetryAfter(addr string, retryAfter time.Time) {
 	for _, op := range mp.phonebookMap {
 		op.UpdateRetryAfter(addr, retryAfter)
 	}
+}
+
+// WaitForConnectionTime will wait to prevent exceeding connectionsRateLimitingCount.
+// Will return true if it waited and false otherwise
+func (mp *MultiPhonebook) WaitForConnectionTime(addr string) (addrInPhonebook, waited bool, provisionalTime time.Time) {
+	mp.lock.Lock()
+	defer mp.lock.Unlock()
+	addrInPhonebook = false
+	waited = false
+	for _, op := range mp.phonebookMap {
+		// The addr will be in one of the phonebooks.
+		// If it is not found in this phonebook, no action will be taken .
+		if addrInPhonebook, waited, provisionalTime = op.WaitForConnectionTime(addr); addrInPhonebook {
+			// If addr is in this phonebook, no need to look for it in other phonebooks
+			return addrInPhonebook, waited, provisionalTime
+		}
+	}
+	return addrInPhonebook, waited, provisionalTime
+}
+
+// UpdateConnectionTime will update the provisional connection time.
+// Returns true of the addr was in the phonebook
+func (mp *MultiPhonebook) UpdateConnectionTime(addr string, provisionalTime time.Time) bool {
+	mp.lock.Lock()
+	defer mp.lock.Unlock()
+	for _, op := range mp.phonebookMap {
+		// The addr will be in one of the phonebooks.
+		// If it is not found in this phonebook, no action will be taken .
+		if op.UpdateConnectionTime(addr, provisionalTime) {
+			return true
+		}
+	}
+	return false
 }
