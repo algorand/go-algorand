@@ -97,17 +97,6 @@ export GOPATH=\${HOME}/go
 export PATH=\${HOME}/gpgbin:\${GOPATH}/bin:/usr/local/go/bin:\${PATH}
 EOF
 
-# Install aptly for building debian repo
-mkdir -p "$GOPATH/src/github.com/aptly-dev"
-cd "$GOPATH/src/github.com/aptly-dev"
-git clone https://github.com/aptly-dev/aptly
-cd aptly && git fetch
-
-# As of 2019-06-06 release tag v1.3.0 is 2018-May, GnuPG 2 support was added in October but they haven't tagged a new release yet. Hash below seems to work so far.
-# 2019-07-06 v1.4.0
-git checkout v1.4.0
-make install
-
 gpgconf --launch gpg-agent
 
 echo
