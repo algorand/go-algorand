@@ -287,7 +287,7 @@ func TestSimpleUpgrade(t *testing.T) {
 	testParams0.MaxTxnBytesPerBlock = 1000000
 	testParams0.DefaultKeyDilution = 10000
 	testParams0.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{
-		protocol.ConsensusTest1: 0,
+		consensusTest1: 0,
 	}
 	configurableConsensus[consensusTest0] = testParams0
 
