@@ -56,6 +56,10 @@ func (network *MockNetwork) Stop() {
 func (network *MockNetwork) RequestConnectOutgoing(replace bool, quit <-chan struct{}) {
 }
 
+// Disconnect - unused function
+func (network *MockNetwork) Disconnect(badpeer network.Peer) {
+}
+
 // DisconnectPeers - unused function
 func (network *MockNetwork) DisconnectPeers() {
 }
@@ -86,4 +90,10 @@ func (network *MockNetwork) ClearHandlers() {
 
 // RegisterHTTPHandler - empty implementation
 func (network *MockNetwork) RegisterHTTPHandler(path string, handler http.Handler) {
+}
+
+// MakeHTTPRequest - basic client.Do request
+func (network *MockNetwork) MakeHTTPRequest(client *http.Client,
+	request *http.Request) (*http.Response, error) {
+	return client.Do(request)
 }
