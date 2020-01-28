@@ -583,13 +583,13 @@ func initConsensusTestProtocols() {
 	testBigBlocks.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	Consensus[protocol.ConsensusTestBigBlocks] = testBigBlocks
 
-	rapidRecalcParams := Consensus[protocol.ConsensusCurrentVersion]
+	/*rapidRecalcParams := Consensus[protocol.ConsensusCurrentVersion]
 	rapidRecalcParams.RewardsRateRefreshInterval = 10
 	//because rapidRecalcParams is based on ConsensusCurrentVersion,
 	//it *shouldn't* have any ApprovedUpgrades
 	//but explicitly mark "no approved upgrades" just in case
 	rapidRecalcParams.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	Consensus[protocol.ConsensusTestRapidRewardRecalculation] = rapidRecalcParams
+	Consensus[protocol.ConsensusTestRapidRewardRecalculation] = rapidRecalcParams*/
 }
 
 // Local holds the per-node-instance configuration settings for the protocol.
