@@ -2,7 +2,6 @@
 # shellcheck disable=2164
 
 AWS_REGION="$1"
-# Ubuntu Server 18.04 LTS
 AWS_AMI="$2"
 AWS_INSTANCE_TYPE="$3"
 INSTANCE_NUMBER=$RANDOM

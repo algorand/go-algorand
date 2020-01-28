@@ -36,7 +36,6 @@ cd "${HOME}/go/src/github.com/algorand" && git clone --single-branch --branch "$
 # TODO: if we are checking out a release tag, `git tag --verify` it
 
 # Install latest Go
-# TODO: make a config file in root of repo with single source of truth for Go major-minor version
 cd "${HOME}"
 python3 "${HOME}/go/src/github.com/algorand/go-algorand/scripts/get_latest_go.py" --version-prefix=1.12
 # $HOME will be interpreted by the outer shell to create the string passed to sudo bash

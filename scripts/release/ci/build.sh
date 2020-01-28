@@ -27,15 +27,6 @@ export VARIATIONS="base"
 # tell underlying 'build' scripts we already built
 export NO_BUILD=true
 
-# What's my default IP address?
-# get the datacenter IP address for this EC2 host.
-# this might equivalently be gotten from `netstat -rn` and `ifconfig -a`
-DC_IP=$(curl --silent http://169.254.169.254/latest/meta-data/local-ipv4)
-if [ -z "${DC_IP}" ]; then
-    echo "ERROR: need DC_IP to be set to your local (but not localhost) IP"
-    exit 1
-fi
-
 # Update version file for this build
 if [ ! -z "${BUILD_NUMBER}" ]; then
     echo "using externally set BUILD_NUMBER=${BUILD_NUMBER} without incrementing"
@@ -43,7 +34,6 @@ else
     if [ -e "${REPO_ROOT}"/buildnumber.dat ]
     then
         BUILD_NUMBER=$(cat "${REPO_ROOT}"/buildnumber.dat)
-#        BUILD_NUMBER=$(( BUILD_NUMBER + 1 ))
     else
         BUILD_NUMBER=0
     fi

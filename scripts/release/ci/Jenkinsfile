@@ -48,14 +48,6 @@ pipeline {
             }
         }
 
-        /*
-        stage("test") {
-            steps {
-                sh script: "scripts/release/ci/stage/test.sh ${params.bucket_location} ${params.channel}"
-            }
-        }
-        */
-
         stage("sign") {
             steps {
                 input "Forward gpg-agent"
@@ -63,31 +55,9 @@ pipeline {
             }
         }
 
-        stage("upload") {
-            steps {
-                input "Halt!"
-                sh script: "scripts/release/ci/stage/sign.sh"
-                script {
-                    def rstamp = sh(
-                        script: 'scripts/reverse_hex_timestamp',
-                        returnStdout: true
-                    ).trim()
-
-                    /*
-                    def fullversion = sh(
-                        script: 'PATH=/usr/local/go/bin bash scripts/compute_build_number.sh -f',
-                        returnStdout: true
-                    ).trim()
-                    */
-                    def fullversion = "2.0.3"
-
-                    sh script: "scripts/release/ci/stage/upload.sh ${params.channel} ${params.bucket_location} ${rstamp} ${fullversion}"
-                }
-            }
-        }
-
         stage("delete ec2 instance") {
             steps {
+                input "Halt!"
                 sh script: "scripts/release/ci/stage/delete.sh ${params.region}"
             }
         }
