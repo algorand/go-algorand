@@ -476,7 +476,7 @@ func (t pseudonodeProposalsTask) execute(verifier *AsyncVoteVerifier, quit chan 
 			ObjectRound:  uint64(vote.R.Round),
 			ObjectPeriod: uint64(vote.R.Period),
 		}
-		t.node.log.with(logEvent).Infof("pseudonode.makeProposals: proposal created for (%v, %v)", vote.R.Round, vote.R.Period)
+		t.node.log.with(logEvent).Infof("pseudonode.makeProposals: proposal created for (%d, %d)", vote.R.Round, vote.R.Period)
 		t.node.log.EventWithDetails(telemetryspec.Agreement, telemetryspec.BlockProposedEvent, telemetryspec.BlockProposedEventDetails{
 			Hash:    vote.R.Proposal.BlockDigest.String(),
 			Address: vote.R.Sender.String(),
@@ -484,7 +484,7 @@ func (t pseudonodeProposalsTask) execute(verifier *AsyncVoteVerifier, quit chan 
 			Period:  uint64(vote.R.Period),
 		})
 	}
-	t.node.log.Infof("pseudonode.makeProposals: %v proposals created for round %d, period %d", len(verifiedVotes), t.round, t.period)
+	t.node.log.Infof("pseudonode.makeProposals: %d proposals created for round %d, period %d", len(verifiedVotes), t.round, t.period)
 
 	for range verifiedVotes {
 		t.node.monitor.inc(pseudonodeCoserviceType)
