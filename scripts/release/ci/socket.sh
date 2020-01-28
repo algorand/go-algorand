@@ -28,10 +28,10 @@ LOCAL_GPG_SOCKET=$(gpgconf --list-dirs | grep agent-socket | awk -F: '{ print $2
 gpg --export -a dev@algorand.com > /tmp/dev.pub
 gpg --export -a rpm@algorand.com > /tmp/rpm.pub
 
-scp -o StrictHostKeyChecking=no -i ReleaseBuildInstanceKey.pem -p /tmp/{dev,rpm}.pub ubuntu@"$INSTANCE":~/docker_test_resources/
+scp -o StrictHostKeyChecking=no -i ReleaseBuildInstanceKey.pem -p /tmp/{dev,rpm}.pub ubuntu@"$INSTANCE":~/keys/
 ssh -o StrictHostKeyChecking=no -i ReleaseBuildInstanceKey.pem ubuntu@"$INSTANCE" << EOF
-    gpg --import docker_test_resources/dev.pub
-    gpg --import docker_test_resources/rpm.pub
+    gpg --import keys/dev.pub
+    gpg --import keys/rpm.pub
     echo "SIGNING_KEY_ADDR=dev@algorand.com" >> build_env
 EOF
 

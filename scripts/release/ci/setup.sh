@@ -28,7 +28,7 @@ sudo apt-get install -y build-essential automake autoconf awscli docker.io git g
 sudo rngd -r /dev/urandom
 
 #umask 0077
-mkdir -p "${HOME}"/{.gnupg,go,gpgbin,dummyaptly,dummyrepo,node_pkg,prodrepo,tkey}
+mkdir -p "${HOME}"/{.gnupg,go,gpgbin,node_pkg,keys,tkey}
 
 # Check out
 mkdir -p "${HOME}/go/src/github.com/algorand"
@@ -41,7 +41,8 @@ python3 "${HOME}/go/src/github.com/algorand/go-algorand/scripts/get_latest_go.py
 # $HOME will be interpreted by the outer shell to create the string passed to sudo bash
 sudo bash -c "cd /usr/local && tar zxf ${HOME}/go*.tar.gz"
 
-git clone --single-branch --branch build_all_on_centos https://github.com/btoll/go-algorand ben-branch
+# TODO: This will go away!
+git clone --single-branch --branch build_package_sign https://github.com/btoll/go-algorand ben-branch
 
 GOPATH=$(/usr/local/go/bin/go env GOPATH)
 export PATH=${HOME}/gpgbin:${GOPATH}/bin:/usr/local/go/bin:${PATH}

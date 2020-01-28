@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # shellcheck disable=2012
 
-set -x
+set -ex
 
 echo
 date "+build_release begin TEST stage %Y%m%d_%H%M%S"
