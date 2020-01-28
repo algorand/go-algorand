@@ -44,18 +44,19 @@ var (
 )
 
 func init() {
-	kmdCmd.Flags().StringVarP(&dataDir, "data-dir", "d", "", "KMD data directory.")
-	kmdCmd.Flags().Uint64VarP(&timeoutSecs, "timout-secs", "t", 0, "Number of seconds that KMD will run for before termination.")
+	kmdCmd.Flags().StringVarP(&dataDir, "data-dir", "d", "", "kmd data directory.")
+	kmdCmd.Flags().Uint64VarP(&timeoutSecs, "timout-secs", "t", 0, "Number of seconds that kmd will run for before termination.")
+	kmdCmd.MarkFlagRequired("data-dir")
 }
 
 var kmdCmd = &cobra.Command{
 	Use:   "kmd",
-	Short: "Key Management Daemon (KMD)",
-	Long:  `The Key Management Daemon (KMD) is a low level wallet and participation
-key management tool. It works in conjunction with algod and goal to keep
-secrets safe. An optional timeout flag will automatically terminate KMD
-after a number of seconds has elapsed, allowing a simple way to ensure KMD
-will be shutdown in a timely manner. This is a blocking command that.`,
+	Short: "Key Management Daemon (kmd)",
+	Long:  `The Key Management Daemon (kmd) is a low level wallet and key management
+tool. It works in conjunction with algod and goal to keep secrets safe. An
+optional timeout flag will automatically terminate kmd after a number of
+seconds has elapsed, allowing a simple way to ensure kmd will be shutdown in
+a timely manner. This is a blocking command.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		runKmd(dataDir, timeoutSecs)
 	},
