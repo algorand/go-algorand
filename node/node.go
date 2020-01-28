@@ -148,7 +148,8 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookDir
 	node.log = log.With("name", cfg.NetAddress)
 	node.genesisID = genesis.ID()
 	node.genesisHash = crypto.HashObj(genesis)
-	node.phonebook = network.MakeThreadsafePhonebook()
+	node.phonebook = network.MakeThreadsafePhonebook(cfg.ConnectionsRateLimitingCount,
+		time.Duration(cfg.ConnectionsRateLimitingWindowSeconds)*time.Second)
 
 	addrs, err := config.LoadPhonebook(phonebookDir)
 	if err != nil {

@@ -45,6 +45,7 @@ type FetcherClient interface {
 type HTTPFetcher struct {
 	peer    network.HTTPPeer
 	rootURL string
+	net     network.GossipNode
 
 	client *http.Client
 
@@ -52,8 +53,8 @@ type HTTPFetcher struct {
 }
 
 // MakeHTTPFetcher wraps an HTTPPeer so that we can get blocks from it
-func MakeHTTPFetcher(log logging.Logger, peer network.HTTPPeer) (fc FetcherClient) {
-	fc = &HTTPFetcher{peer, peer.GetAddress(), peer.GetHTTPClient(), log}
+func MakeHTTPFetcher(log logging.Logger, peer network.HTTPPeer, net network.GossipNode) (fc FetcherClient) {
+	fc = &HTTPFetcher{peer, peer.GetAddress(), net, peer.GetHTTPClient(), log}
 	return
 }
 
@@ -73,7 +74,7 @@ func (hf *HTTPFetcher) GetBlockBytes(ctx context.Context, r basics.Round) (data 
 	}
 	request = request.WithContext(ctx)
 	network.SetUserAgentHeader(request.Header)
-	response, err := hf.client.Do(request)
+	response, err := hf.net.MakeHTTPRequest(hf.client, request)
 	if err != nil {
 		hf.log.Debugf("GET %#v : %s", blockURL, err)
 		return nil, err
