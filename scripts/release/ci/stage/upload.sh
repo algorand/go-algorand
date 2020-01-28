@@ -13,8 +13,8 @@ scp -i ReleaseBuildInstanceKey.pem -o StrictHostKeyChecking=no -r ubuntu@"$INSTA
 aws s3 sync --exclude dev* --exclude master* --exclude nightly* --exclude stable* --acl public-read node_pkg/"$RSTAMP" "$BUCKET_LOCATION"/"$CHANNEL"/"$RSTAMP"_"$FULLVERSION"/
 
 # Create the buildlog file.
-#ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@"$INSTANCE" bash go/src/github.com/algorand/go-algorand/scripts/release/controller/upload.sh
-ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@"$INSTANCE" bash ben-branch/scripts/release/controller/upload.sh
+#ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@"$INSTANCE" bash go/src/github.com/algorand/go-algorand/scripts/release/ci/upload.sh
+ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@"$INSTANCE" bash ben-branch/scripts/release/ci/upload.sh
 scp -i ReleaseBuildInstanceKey.pem -o StrictHostKeyChecking=no ubuntu@"$INSTANCE":~/build_status_"$CHANNEL"_*.asc.gz node_pkg/
 aws s3 cp --quiet node_pkg/build_status_"$CHANNEL"_*.asc.gz s3://algorand-devops-misc/buildlog/"$RSTAMP"/
 

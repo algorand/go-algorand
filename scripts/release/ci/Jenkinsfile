@@ -20,7 +20,7 @@ pipeline {
     stages {
         stage("create ec2 instance") {
             steps {
-                sh script: "scripts/release/controller/stages/create.sh ${params.region} ${params.ami} ${params.type}"
+                sh script: "scripts/release/ci/stage/create.sh ${params.region} ${params.ami} ${params.type}"
             }
         }
 
@@ -32,26 +32,26 @@ pipeline {
                     }
                 }
 
-                sh script: "scripts/release/controller/stages/setup.sh ${params.hash} ${params.channel}"
+                sh script: "scripts/release/ci/stage/setup.sh ${params.hash} ${params.channel}"
             }
         }
 
         stage("build") {
             steps {
-                sh script: "scripts/release/controller/stages/build.sh ${params.hash} ${params.channel}"
+                sh script: "scripts/release/ci/stage/build.sh ${params.hash} ${params.channel}"
             }
         }
 
         stage("package") {
             steps {
-                sh script: "scripts/release/controller/stages/package.sh ${params.hash} ${params.channel}"
+                sh script: "scripts/release/ci/stage/package.sh ${params.hash} ${params.channel}"
             }
         }
 
         /*
         stage("test") {
             steps {
-                sh script: "scripts/release/controller/stages/test.sh ${params.bucket_location} ${params.channel}"
+                sh script: "scripts/release/ci/stage/test.sh ${params.bucket_location} ${params.channel}"
             }
         }
         */
@@ -59,14 +59,14 @@ pipeline {
         stage("sign") {
             steps {
                 input "Forward gpg-agent"
-                sh script: "scripts/release/controller/stages/sign.sh"
+                sh script: "scripts/release/ci/stage/sign.sh"
             }
         }
 
         stage("upload") {
             steps {
                 input "Halt!"
-                sh script: "scripts/release/controller/stages/sign.sh"
+                sh script: "scripts/release/ci/stage/sign.sh"
                 script {
                     def rstamp = sh(
                         script: 'scripts/reverse_hex_timestamp',
@@ -81,14 +81,14 @@ pipeline {
                     */
                     def fullversion = "2.0.3"
 
-                    sh script: "scripts/release/controller/stages/upload.sh ${params.channel} ${params.bucket_location} ${rstamp} ${fullversion}"
+                    sh script: "scripts/release/ci/stage/upload.sh ${params.channel} ${params.bucket_location} ${rstamp} ${fullversion}"
                 }
             }
         }
 
         stage("delete ec2 instance") {
             steps {
-                sh script: "scripts/release/controller/stages/delete.sh ${params.region}"
+                sh script: "scripts/release/ci/stage/delete.sh ${params.region}"
             }
         }
     }

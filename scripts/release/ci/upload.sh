@@ -85,8 +85,8 @@ dpkg -l >> "${STATUSFILE}"
 gpg --clearsign "${STATUSFILE}"
 gzip "${STATUSFILE}".asc
 
-#"${REPO_ROOT}"/scripts/release/helper/release_deb.sh
-"${HOME}"/ben-branch/scripts/release/helper/release_deb.sh
+#"${REPO_ROOT}"/scripts/release/test/release_deb.sh
+"${HOME}"/ben-branch/scripts/release/test/release_deb.sh
 
 
 #aws s3 sync --quiet ${HOME}/prodrepo/ s3://algorand-releases/rpm/stable/

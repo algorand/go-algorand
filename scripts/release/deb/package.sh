@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=1090
 
 echo
 date "+build_release begin PACKAGE DEB stage %Y%m%d_%H%M%S"

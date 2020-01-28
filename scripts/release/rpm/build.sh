@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# shellcheck disable=1090,2012
+# shellcheck disable=1090
 #
 # build centos rpm from inside docker
 #

@@ -95,13 +95,13 @@ SNAPSHOT=algodummy-$(date +%Y%m%d_%H%M%S)
 # Creates ~/dummyaptly/public
 "$HOME"/go/bin/aptly -config="${HOME}"/dummyaptly.conf publish snapshot -origin=Algorand -label=Algorand "${SNAPSHOT}"
 
-#"${REPO_ROOT}"/scripts/release/helper/run_ubuntu_build_test.sh
+#"${REPO_ROOT}"/scripts/release/test/run_ubuntu_build_test.sh
 "${REPO_ROOT}"/scripts/build_release_ubuntu_test_docker.sh
 
 date "+build_release done building ubuntu %Y%m%d_%H%M%S"
 
 # Run RPM build in Centos7 Docker container
-#sg docker "docker build -t algocentosbuild - < ${REPO_ROOT}/scripts/release/helper/centos-build.Dockerfile"
+#sg docker "docker build -t algocentosbuild - < ${REPO_ROOT}/scripts/release/test/centos-build.Dockerfile"
 #sg docker "docker build -t algocentosbuild - < ${REPO_ROOT}/scripts/centos-build.Dockerfile"
 
 #cat <<EOF>"${HOME}"/dummyrepo/algodummy.repo
@@ -113,7 +113,7 @@ date "+build_release done building ubuntu %Y%m%d_%H%M%S"
 #gpgkey=https://releases.algorand.com/rpm/rpm_algorand.pub
 #EOF
 
-#sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=/run/user/1000/gnupg/S.gpg-agent,dst=/S.gpg-agent --mount type=bind,src=${HOME}/dummyrepo,dst=/dummyrepo --mount type=bind,src=${HOME}/docker_test_resources,dst=/root/stuff --mount type=bind,src=${HOME},dst=/root/subhome algocentosbuild /root/subhome/ben-branch/scripts/release/helper/build_release_centos_docker.sh"
+#sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=/run/user/1000/gnupg/S.gpg-agent,dst=/S.gpg-agent --mount type=bind,src=${HOME}/dummyrepo,dst=/dummyrepo --mount type=bind,src=${HOME}/docker_test_resources,dst=/root/stuff --mount type=bind,src=${HOME},dst=/root/subhome algocentosbuild /root/subhome/ben-branch/scripts/release/test/build_release_centos_docker.sh"
 
 echo
 date "+build_release end TEST stage %Y%m%d_%H%M%S"

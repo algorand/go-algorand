@@ -51,7 +51,7 @@ cd "${REPO_DIR}"
 
 RPMTMP=$(mktemp -d 2>/dev/null || mktemp -d -t "rpmtmp")
 trap 'rm -rf ${RPMTMP}' 0
-#"${REPO_DIR}/scripts/release/helper/build_rpm.sh" "${RPMTMP}"
+#"${REPO_DIR}/scripts/release/test/build_rpm.sh" "${RPMTMP}"
 "${REPO_DIR}/scripts/build_rpm.sh" "${RPMTMP}"
 cp -p "${RPMTMP}"/*/*.rpm /root/subhome/node_pkg
 
