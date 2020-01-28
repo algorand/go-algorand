@@ -18,6 +18,7 @@ package agreement
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"math/rand"
@@ -35,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -501,6 +503,8 @@ type activityMonitor struct {
 
 	activity chan struct{}
 	quiet    chan struct{}
+
+	cb func(nodeID, map[coserviceType]uint)
 }
 
 func makeActivityMonitor() (m *activityMonitor) {
@@ -533,7 +537,6 @@ func (m *activityMonitor) dump() {
 	m.Lock()
 	defer m.Unlock()
 
-	fmt.Println("activityMonitor: dump")
 	for n, s := range m.sums {
 		fmt.Printf("%v: %v\n", n, s)
 	}
@@ -558,12 +561,19 @@ func (m *activityMonitor) waitForQuiet() {
 	}
 }
 
+func (m *activityMonitor) setCallback(cb func(nodeID, map[coserviceType]uint)) {
+	m.Lock()
+	defer m.Unlock()
+	m.cb = cb
+}
+
 type amCoserviceListener struct {
 	id nodeID
+
 	*activityMonitor
 }
 
-func (l amCoserviceListener) inc(sum uint) {
+func (l amCoserviceListener) inc(sum uint, v map[coserviceType]uint) {
 	l.Lock()
 	defer l.Unlock()
 
@@ -573,9 +583,13 @@ func (l amCoserviceListener) inc(sum uint) {
 		l.activity <- struct{}{}
 		l.busy = true
 	}
+
+	if l.cb != nil {
+		l.cb(l.id, v)
+	}
 }
 
-func (l amCoserviceListener) dec(sum uint) {
+func (l amCoserviceListener) dec(sum uint, v map[coserviceType]uint) {
 	l.Lock()
 	defer l.Unlock()
 
@@ -584,6 +598,10 @@ func (l amCoserviceListener) dec(sum uint) {
 	if l.busy && l.sum() == 0 {
 		l.quiet <- struct{}{}
 		l.busy = false
+	}
+
+	if l.cb != nil {
+		l.cb(l.id, v)
 	}
 }
 
@@ -689,6 +707,11 @@ func (testingRand) Uint64() uint64 {
 }
 
 func setupAgreement(t *testing.T, numNodes int, traceLevel traceLevel, ledgerFactory func(map[basics.Address]basics.BalanceRecord) Ledger) (*testingNetwork, Ledger, func(), []*Service, []timers.Clock, []Ledger, *activityMonitor) {
+	var validator testBlockValidator
+	return setupAgreementWithValidator(t, numNodes, traceLevel, validator, ledgerFactory)
+}
+
+func setupAgreementWithValidator(t *testing.T, numNodes int, traceLevel traceLevel, validator BlockValidator, ledgerFactory func(map[basics.Address]basics.BalanceRecord) Ledger) (*testingNetwork, Ledger, func(), []*Service, []timers.Clock, []Ledger, *activityMonitor) {
 	bufCap := 1000 // max number of buffered messages
 
 	// system state setup: keygen, stake initialization
@@ -707,7 +730,6 @@ func setupAgreement(t *testing.T, numNodes int, traceLevel traceLevel, ledgerFac
 	ledgers := make([]Ledger, numNodes)
 	dbAccessors := make([]db.Accessor, numNodes)
 	services := make([]*Service, numNodes)
-	var validator testBlockValidator
 	baseNetwork := makeTestingNetwork(numNodes, bufCap, validator)
 	am := makeActivityMonitor()
 
@@ -796,7 +818,7 @@ func (m *coserviceMonitor) clearClock() {
 	m.c[clockCoserviceType] = 0
 
 	if m.coserviceListener != nil {
-		m.coserviceListener.dec(m.sum())
+		m.coserviceListener.dec(m.sum(), m.c)
 	}
 }
 
@@ -1914,6 +1936,183 @@ func TestAgreementLargePeriods(t *testing.T) {
 		triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
+
+	// run two more rounds
+	for j := 0; j < 2; j++ {
+		zeroes = runRound(clocks, activityMonitor, zeroes)
+	}
+	for i := 0; i < numNodes; i++ {
+		services[i].Shutdown()
+	}
+
+	const expectNumRounds = 5
+	for i := 0; i < numNodes; i++ {
+		if ledgers[i].NextRound() != startRound+round(expectNumRounds) {
+			panic("did not progress 5 rounds")
+		}
+	}
+
+	for j := 0; j < expectNumRounds; j++ {
+		ledger := ledgers[0].(*testLedger)
+		reference := ledger.entries[startRound+round(j)].Digest()
+		for i := 0; i < numNodes; i++ {
+			ledger := ledgers[i].(*testLedger)
+			if ledger.entries[startRound+round(j)].Digest() != reference {
+				panic("wrong block confirmed")
+			}
+		}
+	}
+}
+
+type testSuspendableBlockValidator struct {
+	mu deadlock.Mutex
+	x  chan struct{}
+}
+
+func makeTestSuspendableBlockValidator() (v *testSuspendableBlockValidator) {
+	v = new(testSuspendableBlockValidator)
+	v.x = make(chan struct{})
+	close(v.x)
+	return
+}
+
+func (v *testSuspendableBlockValidator) Validate(ctx context.Context, e bookkeeping.Block) (ValidatedBlock, error) {
+	v.mu.Lock()
+	ch := v.x
+	v.mu.Unlock()
+
+	<-ch
+	return testValidatedBlock{Inside: e}, nil
+}
+
+// returns a channel which when closed terminates validation
+func (v *testSuspendableBlockValidator) suspend() chan struct{} {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	v.x = make(chan struct{})
+	return v.x
+}
+
+func TestAgreementRegression_WrongPeriodPayloadVerificationCancellation_8ba23942(t *testing.T) {
+	numNodes := 5
+	validator := makeTestSuspendableBlockValidator()
+	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreementWithValidator(t, numNodes, disabled, validator, makeTestLedger)
+	startRound := baseLedger.NextRound()
+	defer cleanupFn()
+	for i := 0; i < numNodes; i++ {
+		services[i].Start()
+	}
+
+	activityMonitor.waitForActivity()
+	activityMonitor.waitForQuiet()
+	zeroes := expectNewPeriod(clocks, 0)
+
+	// run two rounds
+	for j := 0; j < 2; j++ {
+		zeroes = runRound(clocks, activityMonitor, zeroes)
+	}
+
+	// run round and then start pocketing payloads, suspending validation
+	pocket0 := make(chan multicastParams, 100)
+	ch := validator.suspend()
+	closeFn := baseNetwork.pocketAllCompound(pocket0) // (takes effect next round)
+	{
+		triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
+		zeroes = expectNewPeriod(clocks, zeroes)
+	}
+
+	// force network into period 1 by failing period 0, entering with bottom and no soft threshold (to prevent proposal value pinning)
+	baseNetwork.dropAllSoftVotes()
+	triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
+	zeroes = expectNoNewPeriod(clocks, zeroes)
+
+	// resume delivery of payloads in following period
+	baseNetwork.repairAll()
+	closeFn()
+
+	// trigger the deadlineTimeout to enter the new period
+	// release proposed blocks in a controlled manner to prevent oversubscription of verification
+	pocket1 := make(chan multicastParams, 100)
+	closeFn = baseNetwork.pocketAllCompound(pocket1)
+	triggerGlobalTimeout(deadlineTimeout, clocks, activityMonitor)
+	baseNetwork.repairAll()
+	close(pocket1)
+	{
+		// setup synchronization channel
+		var csmu deadlock.Mutex
+		closed := false
+		vch := make(chan struct{})
+		cryptoStates := make(map[nodeID]uint)
+		activityMonitor.setCallback(func(id nodeID, v map[coserviceType]uint) {
+			csmu.Lock()
+			defer csmu.Unlock()
+			cryptoStates[id] = v[cryptoVerifierCoserviceType]
+
+			var s uint
+			for _, c := range cryptoStates {
+				s += c
+			}
+			if s == uint(numNodes-1) && !closed {
+				closed = true
+				close(vch)
+			}
+		})
+
+		baseNetwork.prepareAllMulticast()
+		for p := range pocket1 {
+			baseNetwork.multicast(p.tag, p.data, p.source, p.exclude)
+		}
+		baseNetwork.finishAllMulticast()
+
+		// wait for numNodes-1 pending crypto verification requests
+		<-vch
+	}
+
+	// attack the network with the stale payloads
+	{
+		// setup synchronization channel
+		var csmu deadlock.Mutex
+		closed := false
+		vch := make(chan struct{})
+		cryptoStates := make(map[nodeID]uint)
+		activityMonitor.setCallback(func(id nodeID, v map[coserviceType]uint) {
+			csmu.Lock()
+			defer csmu.Unlock()
+			cryptoStates[id] = v[cryptoVerifierCoserviceType]
+
+			var s uint
+			for _, c := range cryptoStates {
+				s += c
+			}
+			if s == uint(numNodes-1)*2 && !closed {
+				closed = true
+				close(vch)
+			}
+		})
+
+		baseNetwork.prepareAllMulticast()
+		for p := range pocket0 {
+			baseNetwork.multicast(p.tag, p.data, p.source, p.exclude)
+		}
+		baseNetwork.finishAllMulticast()
+
+		// wait for (numNodes-1)*2 pending crypto verification requests
+		<-vch
+	}
+
+	// resume block verification, replay potentially cancelled blocks to ensure good caching
+	//  then wait for network to converge (round should terminate at this point)
+	activityMonitor.setCallback(nil)
+	close(ch)
+
+	baseNetwork.prepareAllMulticast()
+	for p := range pocket1 {
+		baseNetwork.multicast(p.tag, p.data, p.source, p.exclude)
+	}
+	baseNetwork.finishAllMulticast()
+
+	zeroes = expectNewPeriod(clocks, zeroes)
+	activityMonitor.waitForQuiet()
 
 	// run two more rounds
 	for j := 0; j < 2; j++ {

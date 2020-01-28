@@ -801,3 +801,109 @@ func TestProposalStoreRegressionBlockRedeliveryBug_b29ea57(t *testing.T) {
 	}
 
 }
+
+func TestProposalStoreRegressionWrongPipelinePeriodBug_39387501(t *testing.T) {
+	var msgV1, msgV2, msgP1, msgP2 message
+	var rv rawVote
+	var propVal proposalValue
+	var propPay proposal
+	curRound := round(10)
+	proposer := basics.Address(randomBlockHash())
+
+	propPay = proposal{
+		unauthenticatedProposal: unauthenticatedProposal{
+			OriginalPeriod:   1,
+			OriginalProposer: proposer,
+		},
+	}
+	propVal = proposalValue{
+		OriginalPeriod:   1,
+		OriginalProposer: proposer,
+		BlockDigest:      propPay.Digest(),
+		EncodingDigest:   crypto.HashObj(propPay),
+	}
+	rv = rawVote{
+		Sender:   proposer,
+		Round:    curRound,
+		Period:   1,
+		Proposal: propVal,
+	}
+	msgV1 = message{
+		Tag:                 protocol.AgreementVoteTag,
+		Vote:                vote{R: rv},
+		UnauthenticatedVote: unauthenticatedVote{R: rv},
+	}
+	msgP1 = message{
+		Tag:                     protocol.ProposalPayloadTag,
+		Proposal:                propPay,
+		UnauthenticatedProposal: propPay.u(),
+	}
+
+	propPay = proposal{
+		unauthenticatedProposal: unauthenticatedProposal{
+			OriginalPeriod:   2,
+			OriginalProposer: proposer,
+		},
+	}
+	propVal = proposalValue{
+		OriginalPeriod:   2,
+		OriginalProposer: proposer,
+		BlockDigest:      propPay.Digest(),
+		EncodingDigest:   crypto.HashObj(propPay),
+	}
+	rv = rawVote{
+		Sender:   proposer,
+		Round:    curRound,
+		Period:   2,
+		Proposal: propVal,
+	}
+	msgV2 = message{
+		Tag:                 protocol.AgreementVoteTag,
+		Vote:                vote{R: rv},
+		UnauthenticatedVote: unauthenticatedVote{R: rv},
+	}
+	msgP2 = message{
+		Tag:                     protocol.ProposalPayloadTag,
+		Proposal:                propPay,
+		UnauthenticatedProposal: propPay.u(),
+	}
+
+	period1Trigger := newPeriodEvent{Period: 1, Proposal: bottom}
+	propVote1Receipt := messageEvent{T: voteVerified, Input: msgV1}
+	propPayload1Receipt := messageEvent{T: payloadPresent, Input: msgP1}
+	period2Trigger := newPeriodEvent{Period: 2, Proposal: bottom}
+	propVote2Receipt := messageEvent{T: voteVerified, Input: msgV2}
+	propPayload2Receipt := messageEvent{T: payloadPresent, Input: msgP2}
+
+	player := player{Round: curRound}
+
+	var router router
+	rr := routerFixture
+	router = &rr
+
+	var res event
+
+	res = router.dispatch(&proposalStoreTracer, player, period1Trigger, playerMachine, proposalMachineRound, curRound, 1, 0)
+	require.Equal(t, res.t(), none)
+
+	res = router.dispatch(&proposalStoreTracer, player, propVote1Receipt, playerMachine, proposalMachineRound, curRound, 1, 0)
+	require.Equal(t, res.t(), proposalAccepted)
+
+	res = router.dispatch(&proposalStoreTracer, player, period2Trigger, playerMachine, proposalMachineRound, curRound, 2, 0)
+	require.Equal(t, res.t(), none)
+
+	res = router.dispatch(&proposalStoreTracer, player, propVote2Receipt, playerMachine, proposalMachineRound, curRound, 2, 0)
+	require.Equal(t, res.t(), proposalAccepted)
+
+	res = router.dispatch(&proposalStoreTracer, player, propPayload2Receipt, playerMachine, proposalMachineRound, curRound, 2, 0)
+	require.Equal(t, res.t(), payloadPipelined)
+	require.Equal(t, res.(payloadProcessedEvent).Period, period(2))
+
+	res = router.dispatch(&proposalStoreTracer, player, propPayload1Receipt, playerMachine, proposalMachineRound, curRound, 1, 0)
+	if res.(payloadProcessedEvent).Period == 2 {
+		t.Fatalf("bug b29ea57: a proposal corresponding to an old period is erroneously seen as as corresponding to a new period")
+	} else {
+		require.Equal(t, res.t(), payloadPipelined)
+		require.Equal(t, res.(payloadProcessedEvent).Period, period(1))
+	}
+}
