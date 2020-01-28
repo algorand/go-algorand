@@ -48,8 +48,8 @@ gpgconf --launch gpg-agent
 
 gpg --gen-key --batch "${GNUPGHOME}"/keygenscript
 gpg --gen-key --batch "${GNUPGHOME}"/rpmkeygenscript
-gpg --export -a dev@algorand.com > "${HOME}/docker_test_resources/key.pub"
-gpg --export -a rpm@algorand.com > "${HOME}/docker_test_resources/rpm.pub"
+gpg --export -a dev@algorand.com > "${HOME}/keys/key.pub"
+gpg --export -a rpm@algorand.com > "${HOME}/keys/rpm.pub"
 
 gpgconf --kill gpg-agent
 gpgconf --launch gpg-agent
@@ -113,7 +113,7 @@ date "+build_release done building ubuntu %Y%m%d_%H%M%S"
 #gpgkey=https://releases.algorand.com/rpm/rpm_algorand.pub
 #EOF
 
-#sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=/run/user/1000/gnupg/S.gpg-agent,dst=/S.gpg-agent --mount type=bind,src=${HOME}/dummyrepo,dst=/dummyrepo --mount type=bind,src=${HOME}/docker_test_resources,dst=/root/stuff --mount type=bind,src=${HOME},dst=/root/subhome algocentosbuild /root/subhome/ben-branch/scripts/release/test/build_release_centos_docker.sh"
+#sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=/run/user/1000/gnupg/S.gpg-agent,dst=/S.gpg-agent --mount type=bind,src=${HOME}/dummyrepo,dst=/dummyrepo --mount type=bind,src=${HOME}/keys,dst=/root/stuff --mount type=bind,src=${HOME},dst=/root/subhome algocentosbuild /root/subhome/ben-branch/scripts/release/test/build_release_centos_docker.sh"
 
 echo
 date "+build_release end TEST stage %Y%m%d_%H%M%S"

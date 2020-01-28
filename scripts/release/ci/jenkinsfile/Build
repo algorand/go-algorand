@@ -2,7 +2,7 @@ pipeline {
     parameters {
         string defaultValue: '', description: 'Branch name or tag name.', name: 'hash', trim: true
         string defaultValue: 'stable', description: 'Staged channel which should be released.', name: 'channel', trim: true
-        string defaultValue: 's3://algorand-dev-deb-repo/releases', description: 's3://bucket/prefix', name: 'bucket_location', trim: true
+        string defaultValue: 's3://algorand-builds/channel', description: 's3://bucket/prefix', name: 'bucket_location', trim: true
 
         // AWS
         string defaultValue: 'us-west-1', description: 'AWS Region', name: 'region', trim: true
@@ -48,14 +48,6 @@ pipeline {
             }
         }
 
-        /*
-        stage("test") {
-            steps {
-                sh script: "scripts/release/ci/stage/test.sh ${params.bucket_location} ${params.channel}"
-            }
-        }
-        */
-
         stage("sign") {
             steps {
                 input "Forward gpg-agent"
@@ -65,8 +57,6 @@ pipeline {
 
         stage("upload") {
             steps {
-                input "Halt!"
-                sh script: "scripts/release/ci/stage/sign.sh"
                 script {
                     def rstamp = sh(
                         script: 'scripts/reverse_hex_timestamp',
@@ -88,6 +78,7 @@ pipeline {
 
         stage("delete ec2 instance") {
             steps {
+                input "Halt!"
                 sh script: "scripts/release/ci/stage/delete.sh ${params.region}"
             }
         }
