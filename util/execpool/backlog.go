@@ -19,12 +19,15 @@ package execpool
 import (
 	"context"
 	"sync"
+
+	"github.com/algorand/go-deadlock"
 )
 
 // A backlog for an execution pool. The typical usage of this is to
 // create non-blocking queue which would get executed once the execution pool is ready to accept new
 // tasks.
 type backlog struct {
+	mu        deadlock.Mutex
 	pool      ExecutionPool
 	wg        sync.WaitGroup
 	buffer    chan backlogItemTask
@@ -32,6 +35,7 @@ type backlog struct {
 	ctxCancel context.CancelFunc
 	owner     interface{}
 	priority  Priority
+	quit      bool
 }
 
 type backlogItemTask struct {
@@ -78,11 +82,25 @@ func (b *backlog) GetParallelism() int {
 
 // IsFull test to see if the input buffer is full.
 func (b *backlog) IsFull() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	return len(b.buffer) == cap(b.buffer)
 }
 
 // Enqueue enqueues a single task into the backlog
 func (b *backlog) Enqueue(enqueueCtx context.Context, t ExecFunc, arg interface{}, priority Priority, out chan interface{}) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.quit {
+		select {
+		case <-enqueueCtx.Done():
+			return enqueueCtx.Err()
+		case <-b.ctx.Done():
+			return b.ctx.Err()
+		default:
+			return nil
+		}
+	}
 	select {
 	case b.buffer <- backlogItemTask{
 		enqueuedTask: enqueuedTask{
@@ -95,11 +113,25 @@ func (b *backlog) Enqueue(enqueueCtx context.Context, t ExecFunc, arg interface{
 		return nil
 	case <-enqueueCtx.Done():
 		return enqueueCtx.Err()
+	case <-b.ctx.Done():
+		return b.ctx.Err()
 	}
 }
 
 // Enqueue enqueues a single task into the backlog
 func (b *backlog) EnqueueBacklog(enqueueCtx context.Context, t ExecFunc, arg interface{}, out chan interface{}) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.quit {
+		select {
+		case <-enqueueCtx.Done():
+			return enqueueCtx.Err()
+		case <-b.ctx.Done():
+			return b.ctx.Err()
+		default:
+			return nil
+		}
+	}
 	select {
 	case b.buffer <- backlogItemTask{
 		enqueuedTask: enqueuedTask{
@@ -112,11 +144,16 @@ func (b *backlog) EnqueueBacklog(enqueueCtx context.Context, t ExecFunc, arg int
 		return nil
 	case <-enqueueCtx.Done():
 		return enqueueCtx.Err()
+	case <-b.ctx.Done():
+		return b.ctx.Err()
 	}
 }
 
 // Shutdown shuts down the backlog.
 func (b *backlog) Shutdown() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.quit = true
 	b.ctxCancel()
 	close(b.buffer)
 	b.wg.Wait()

@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/logspec"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
@@ -312,7 +311,7 @@ func (a pseudonodeAction) do(ctx context.Context, s *Service) {
 		case errPseudonodeNoProposals:
 			// no participation keys, do nothing.
 		default:
-			logging.Base().Errorf("pseudonode.MakeProposals call failed %v", err)
+			s.log.Errorf("pseudonode.MakeProposals call failed %v", err)
 		}
 	case repropose:
 		logEvent := logspec.AgreementEvent{
@@ -336,7 +335,7 @@ func (a pseudonodeAction) do(ctx context.Context, s *Service) {
 			// do nothing
 		default:
 			// otherwise,
-			logging.Base().Errorf("pseudonode.MakeVotes call failed for reproposal(%v) %v", a.T, err)
+			s.log.Errorf("pseudonode.MakeVotes call failed for reproposal(%v) %v", a.T, err)
 		}
 	case attest:
 		logEvent := logspec.AgreementEvent{
@@ -360,7 +359,7 @@ func (a pseudonodeAction) do(ctx context.Context, s *Service) {
 			s.demux.prioritize(voteEvents)
 		default:
 			// otherwise,
-			logging.Base().Errorf("pseudonode.MakeVotes call failed(%v) %v", a.T, err)
+			s.log.Errorf("pseudonode.MakeVotes call failed(%v) %v", a.T, err)
 			fallthrough // just so that we would close the channel.
 		case errPseudonodeNoVotes:
 			// do nothing; we're closing the channel just to avoid leaving open channels, but it's not

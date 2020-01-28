@@ -61,7 +61,7 @@ type FetcherFactory interface {
 
 // NetworkFetcherFactory creates network fetchers
 type NetworkFetcherFactory struct {
-	net       PeerSource
+	net       network.GossipNode
 	peerLimit int
 	fs        *WsFetcherService
 
@@ -71,7 +71,7 @@ type NetworkFetcherFactory struct {
 func (factory NetworkFetcherFactory) makeHTTPFetcherFromPeer(log logging.Logger, peer network.Peer) FetcherClient {
 	hp, ok := peer.(network.HTTPPeer)
 	if ok {
-		return MakeHTTPFetcher(log, hp)
+		return MakeHTTPFetcher(log, hp, factory.net)
 	}
 	log.Errorf("%T %#v is not HTTPPeer", peer, peer)
 	return nil
@@ -79,7 +79,7 @@ func (factory NetworkFetcherFactory) makeHTTPFetcherFromPeer(log logging.Logger,
 
 // MakeNetworkFetcherFactory returns a network fetcher factory, that associates fetchers with no more than peerLimit peers from the aggregator.
 // WSClientSource can be nil, if no network exists to create clients from (defaults to http clients)
-func MakeNetworkFetcherFactory(net PeerSource, peerLimit int, fs *WsFetcherService) NetworkFetcherFactory {
+func MakeNetworkFetcherFactory(net network.GossipNode, peerLimit int, fs *WsFetcherService) NetworkFetcherFactory {
 	var factory NetworkFetcherFactory
 	factory.net = net
 	factory.peerLimit = peerLimit
@@ -116,7 +116,9 @@ func (factory NetworkFetcherFactory) New() Fetcher {
 	}
 }
 
-// NewOverGossip returns a gossip fetcher using the given message tag.
+// NewOverGossip returns a fetcher using the given message tag.
+// If there are gossip peers, then it returns a fetcher over gossip
+// Otherwise, it returns an HTTP fetcher
 // We should never build two fetchers utilising the same tag. Why?
 func (factory NetworkFetcherFactory) NewOverGossip(tag protocol.Tag) Fetcher {
 	gossipPeers := factory.net.GetPeers(network.PeersConnectedIn)

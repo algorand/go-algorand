@@ -27,6 +27,9 @@ import (
 )
 
 func TestStartAndCancelAuctionNoBids(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
 	t.Parallel()
 	r := require.New(t)
 	var fixture fixtures.AuctionFixture

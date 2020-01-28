@@ -103,7 +103,7 @@ func TestCatchupOverGossip(t *testing.T) {
 
 	// Let the network make some progress
 
-	waitForRound := uint64(5)
+	waitForRound := uint64(3)
 	err = fixture.ClientWaitForRoundWithTimeout(fixture.GetAlgodClientForController(nc), waitForRound)
 	a.NoError(err)
 
@@ -123,6 +123,22 @@ func TestCatchupOverGossip(t *testing.T) {
 	// Now, catch up
 	err = fixture.LibGoalFixture.ClientWaitForRoundWithTimeout(lg, waitForRound)
 	a.NoError(err)
+
+	// wait until the round number on the secondary node matches the round number on the primary node.
+	for {
+		nodeLibGoalClient := fixture.LibGoalFixture.GetLibGoalClientFromDataDir(nc.GetDataDir())
+		nodeStatus, err := nodeLibGoalClient.Status()
+		a.NoError(err)
+
+		primaryStatus, err := lg.Status()
+		a.NoError(err)
+		a.True(nodeStatus.LastRound >= primaryStatus.LastRound)
+		if nodeStatus.LastRound == primaryStatus.LastRound && waitForRound < nodeStatus.LastRound {
+			//t.Logf("Both nodes reached round %d\n", primaryStatus.LastRound)
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 }
 
 func TestStoppedCatchupOnUnsupported(t *testing.T) {

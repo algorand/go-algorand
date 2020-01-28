@@ -118,7 +118,7 @@ type AccountData struct {
 	// NOTE: do not modify this value in-place in existing AccountData
 	// structs; allocate a copy and modify that instead.  AccountData
 	// is expected to have copy-by-value semantics.
-	AssetParams map[AssetIndex]AssetParams `codec:"apar"`
+	AssetParams map[AssetIndex]AssetParams `codec:"apar,allocbound=-"`
 
 	// Assets is the set of assets that can be held by this
 	// account.  Assets (i.e., slots in this map) are explicitly
@@ -135,7 +135,7 @@ type AccountData struct {
 	// NOTE: do not modify this value in-place in existing AccountData
 	// structs; allocate a copy and modify that instead.  AccountData
 	// is expected to have copy-by-value semantics.
-	Assets map[AssetIndex]AssetHolding `codec:"asset"`
+        Assets map[AssetIndex]AssetHolding `codec:"asset,allocbound=-"`
 
 	// Storage is a small amount of persistent data for use by contracts.
 	//
@@ -181,6 +181,8 @@ type AssetLocator struct {
 
 // AssetHolding describes an asset held by an account.
 type AssetHolding struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	Amount uint64 `codec:"a"`
 	Frozen bool   `codec:"f"`
 }
@@ -309,5 +311,5 @@ type BalanceRecord struct {
 
 // ToBeHashed implements the crypto.Hashable interface
 func (u BalanceRecord) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.BalanceRecord, protocol.Encode(u)
+	return protocol.BalanceRecord, protocol.Encode(&u)
 }
