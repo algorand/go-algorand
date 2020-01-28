@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,6 +33,7 @@ import (
 
 const telemetryPrefix = "/"
 const telemetrySeparator = "/"
+const logBufferDepth = 2
 
 // EnableTelemetry configures and enables telemetry based on the config provided
 func EnableTelemetry(cfg TelemetryConfig, l *logger) (err error) {
@@ -47,25 +48,44 @@ func EnableTelemetry(cfg TelemetryConfig, l *logger) (err error) {
 func enableTelemetryState(telemetry *telemetryState, l *logger) {
 	l.loggerState.telemetry = telemetry
 	// Hook our normal logging to send desired types to telemetry
-	l.AddHook(telemetry.hook)
+	if telemetry.hook != nil {
+		l.AddHook(telemetry.hook)
+	}
 	// Wrap current logger Output writer to capture history
 	l.setOutput(telemetry.wrapOutput(l.getOutput()))
 }
 
-func makeTelemetryState(cfg TelemetryConfig, hookFactory hookFactory) (*telemetryState, error) {
-	history := createLogBuffer(cfg.LogHistoryDepth)
-	if cfg.SessionGUID == "" {
-		cfg.SessionGUID = uuid.NewV4().String()
+func makeLevels(min logrus.Level) []logrus.Level {
+	levels := []logrus.Level{}
+	for _, l := range []logrus.Level{
+		logrus.PanicLevel,
+		logrus.FatalLevel,
+		logrus.ErrorLevel,
+		logrus.WarnLevel,
+		logrus.InfoLevel,
+		logrus.DebugLevel,
+	} {
+		if l <= min {
+			levels = append(levels, l)
+		}
 	}
-	hook, err := createTelemetryHook(cfg, history, hookFactory)
-	if err != nil {
-		return nil, err
-	}
+	return levels
+}
 
-	telemetry := &telemetryState{
-		history,
-		createAsyncHook(hook, 32, 100),
+func makeTelemetryState(cfg TelemetryConfig, hookFactory hookFactory) (*telemetryState, error) {
+	telemetry := &telemetryState{}
+	telemetry.history = createLogBuffer(logBufferDepth)
+	if cfg.Enable {
+		if cfg.SessionGUID == "" {
+			cfg.SessionGUID = uuid.NewV4().String()
+		}
+		hook, err := createTelemetryHook(cfg, telemetry.history, hookFactory)
+		if err != nil {
+			return nil, err
+		}
+		telemetry.hook = createAsyncHookLevels(hook, 32, 100, makeLevels(cfg.MinLogLevel))
 	}
+	telemetry.sendToLog = cfg.SendToLog
 	return telemetry, nil
 }
 
@@ -204,7 +224,12 @@ func (t *telemetryState) logTelemetry(l logger, message string, details interfac
 	entry.Level = logrus.InfoLevel
 	entry.Message = message
 
-	t.hook.Fire(entry)
+	if t.sendToLog {
+		entry.Info(message)
+	}
+	if t.hook != nil {
+		t.hook.Fire(entry)
+	}
 }
 
 func (t *telemetryState) Close() {

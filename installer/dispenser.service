@@ -3,10 +3,10 @@ Description=Algorand dispenser
 After=network.target
 
 [Service]
-ExecStart=/home/algo/dispenser/dispenser -config /home/algo/dispenser/config.json -autocert /home/algo/dispenser/autocert-cache
+ExecStart=/usr/bin/dispenser -config /var/lib/algorand/dispenser/dispenser.json -autocert /var/lib/algorand/dispenser/autocert-cache
 Type=simple
-User=algo
-Group=algo
+User=algorand
+Group=nogroup
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 Restart=always
 RestartSec=5s

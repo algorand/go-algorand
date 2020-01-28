@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,12 +18,14 @@ package data
 
 import (
 	"fmt"
-	"github.com/algorand/go-algorand/components/mocks"
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/components/mocks"
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/pools"
@@ -53,16 +55,26 @@ func BenchmarkTxHandlerProcessDecoded(b *testing.B) {
 			MicroAlgos: basics.MicroAlgos{Raw: 10000000000000},
 		}
 	}
-	require.Equal(b, len(genesis), numUsers)
-	genBal := MakeGenesisBalances(genesis, poolAddr, sinkAddr)
+
+	genesis[poolAddr] = basics.AccountData{
+		Status:     basics.NotParticipating,
+		MicroAlgos: basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinBalance},
+	}
+
+	require.Equal(b, len(genesis), numUsers+1)
+	genBal := MakeGenesisBalances(genesis, sinkAddr, poolAddr)
 	ledgerName := fmt.Sprintf("%s-mem-%d", b.Name(), b.N)
-	ledger, err := LoadLedger(log, ledgerName, true, protocol.ConsensusCurrentVersion, genBal, "", crypto.Digest{}, nil)
+	const inMem = true
+	const archival = true
+	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, archival)
 	require.NoError(b, err)
 
 	l := ledger
 
-	const txPoolSize = 20000
-	tp := pools.MakeTransactionPool(l.Ledger, txPoolSize, false)
+	cfg := config.GetDefaultLocal()
+	cfg.TxPoolSize = 20000
+	cfg.EnableAssembleStats = false
+	tp := pools.MakeTransactionPool(l.Ledger, cfg)
 	signedTransactions := make([]transactions.SignedTxn, 0, b.N)
 	for i := 0; i < b.N/numUsers; i++ {
 		for u := 0; u < numUsers; u++ {
@@ -89,6 +101,22 @@ func BenchmarkTxHandlerProcessDecoded(b *testing.B) {
 	txHandler := MakeTxHandler(tp, l, &mocks.MockNetwork{}, "", crypto.Digest{}, backlogPool)
 	b.StartTimer()
 	for _, signedTxn := range signedTransactions {
-		txHandler.processDecoded(signedTxn)
+		txHandler.processDecoded([]transactions.SignedTxn{signedTxn})
+	}
+}
+
+func BenchmarkTimeAfter(b *testing.B) {
+	b.StopTimer()
+	b.ResetTimer()
+	deadline := time.Now().Add(5 * time.Second)
+	after := 0
+	before := 0
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		if time.Now().After(deadline) {
+			after++
+		} else {
+			before++
+		}
 	}
 }

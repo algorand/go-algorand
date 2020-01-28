@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,3 +27,10 @@ const (
 // for generating proper error messages when commands see unexpected arguments when they expect no args.
 // We don't use cobra.NoArgs directly, in case we want to customize behavior later.
 var validateNoPosArgsFn = cobra.NoArgs
+
+// transaction validity period margins
+var firstValid uint64
+var lastValid uint64
+
+// numValidRounds specifies validity period for a transaction and used to calculate last valid round
+var numValidRounds uint64 // also used in account and asset

@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -15,6 +15,10 @@
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
 package protocol
+
+import (
+	"fmt"
+)
 
 // ConsensusVersion is a string that identifies a version of the
 // consensus protocol.
@@ -89,9 +93,35 @@ const ConsensusV16 = ConsensusVersion(
 	"https://github.com/algorand/spec/tree/22726c9dcd12d9cddce4a8bd7e8ccaa707f74101",
 )
 
-// ConsensusV17 points to 'final' spec commit
+// ConsensusV17 points to 'final' spec commit for 2019 june release
 const ConsensusV17 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/5615adc36bad610c7f165fa2967f4ecfa75125f0",
+)
+
+// ConsensusV18 points to reward calculation spec commit
+const ConsensusV18 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/6c6bd668be0ab14098e51b37e806c509f7b7e31f",
+)
+
+// ConsensusV19 points to 'final' spec commit for 2019 nov release
+const ConsensusV19 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/0e196e82bfd6e327994bec373c4cc81bc878ef5c",
+)
+
+// ConsensusV20 points to adding the decimals field to assets
+const ConsensusV20 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/4a9db6a25595c6fd097cf9cc137cc83027787eaa",
+)
+
+// ConsensusV21 fixes a bug in credential.lowestOutput
+const ConsensusV21 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/8096e2df2da75c3339986317f9abe69d4fa86b4b",
+)
+
+// ConsensusFuture is a protocol that should not appear in any production
+// network, but is used to test features before they are released.
+const ConsensusFuture = ConsensusVersion(
+	"future",
 )
 
 // !!! ********************* !!!
@@ -100,7 +130,7 @@ const ConsensusV17 = ConsensusVersion(
 
 // ConsensusCurrentVersion is the latest version and should be used
 // when a specific version is not provided.
-const ConsensusCurrentVersion = ConsensusV17
+const ConsensusCurrentVersion = ConsensusV21
 
 // ConsensusTest0 is a version of ConsensusV0 used for testing
 // (it has different approved upgrade paths).
@@ -119,10 +149,33 @@ const ConsensusTestBigBlocks = ConsensusVersion("test-big-blocks")
 // that decreases the RewardRecalculationInterval greatly.
 const ConsensusTestRapidRewardRecalculation = ConsensusVersion("test-fast-reward-recalculation")
 
+// ConsensusTestShorterLookback is a version of ConsensusCurrentVersion
+// that decreases the MaxBalLookback greatly.
+const ConsensusTestShorterLookback = ConsensusVersion("test-shorter-lookback")
+
+// ConsensusTestUnupgradedProtocol is a version of ConsensusCurrentVersion
+// that allows the control of the upgrade from ConsensusTestUnupgradedProtocol to
+// ConsensusTestUnupgradedProtocol
+const ConsensusTestUnupgradedProtocol = ConsensusVersion("test-unupgraded-protocol")
+
+// ConsensusTestUnupgradedToProtocol is a version of ConsensusCurrentVersion
+// It is used as an upgrade from ConsensusTestUnupgradedProtocol
+const ConsensusTestUnupgradedToProtocol = ConsensusVersion("test-unupgradedto-protocol")
+
+
 // ConsensusTestFastUpgrade is meant for testing of protocol upgrades:
 // during testing, it is equivalent to another protocol with the exception
 // of the upgrade parameters, which allow for upgrades to take place after
 // only a few rounds.
 func ConsensusTestFastUpgrade(proto ConsensusVersion) ConsensusVersion {
 	return "test-fast-upgrade-" + proto
+}
+
+// Error is used to indicate that an unsupported protocol has been detected.
+type Error ConsensusVersion
+
+// Error satisfies builtin interface `error`
+func (err Error) Error() string {
+	proto := ConsensusVersion(err)
+	return fmt.Sprintf("protocol not supported: %s", proto)
 }

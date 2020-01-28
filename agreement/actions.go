@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/logspec"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
@@ -277,7 +276,7 @@ func (a stageDigestAction) do(ctx context.Context, service *Service) {
 		Type:   logspec.RoundWaiting,
 	}
 	service.log.with(logEvent).Infof("round %v concluded without block for %v; (async) waiting on ledger", a.Certificate.Round, a.Certificate.Proposal)
-	service.Ledger.EnsureDigest(a.Certificate, service.quit, service.voteVerifier)
+	service.Ledger.EnsureDigest(a.Certificate, service.voteVerifier)
 }
 
 type rezeroAction struct {
@@ -334,7 +333,7 @@ func (a pseudonodeAction) do(ctx context.Context, s *Service) {
 		case errPseudonodeNoProposals:
 			// no participation keys, do nothing.
 		default:
-			logging.Base().Errorf("pseudonode.MakeProposals call failed %v", err)
+			s.log.Errorf("pseudonode.MakeProposals call failed %v", err)
 		}
 	case repropose:
 		logEvent := logspec.AgreementEvent{
@@ -358,7 +357,7 @@ func (a pseudonodeAction) do(ctx context.Context, s *Service) {
 			// do nothing
 		default:
 			// otherwise,
-			logging.Base().Errorf("pseudonode.MakeVotes call failed for reproposal(%v) %v", a.T, err)
+			s.log.Errorf("pseudonode.MakeVotes call failed for reproposal(%v) %v", a.T, err)
 		}
 	case attest:
 		logEvent := logspec.AgreementEvent{
@@ -382,7 +381,7 @@ func (a pseudonodeAction) do(ctx context.Context, s *Service) {
 			s.demux.prioritize(voteEvents)
 		default:
 			// otherwise,
-			logging.Base().Errorf("pseudonode.MakeVotes call failed(%v) %v", a.T, err)
+			s.log.Errorf("pseudonode.MakeVotes call failed(%v) %v", a.T, err)
 			fallthrough // just so that we would close the channel.
 		case errPseudonodeNoVotes:
 			// do nothing; we're closing the channel just to avoid leaving open channels, but it's not

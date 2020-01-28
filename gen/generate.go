@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -93,11 +93,11 @@ func GenerateGenesisFiles(genesisData GenesisData, outDir string, verbose bool) 
 		genesisData.RewardsPool = defaultPoolAddr
 	}
 
-	return generateGenesisFiles(outDir, proto, genesisData.NetworkName, genesisData.VersionModifier, allocation, genesisData.FirstPartKeyRound, genesisData.LastPartKeyRound, genesisData.FeeSink, genesisData.RewardsPool, genesisData.Comment, verbose)
+	return generateGenesisFiles(outDir, proto, genesisData.NetworkName, genesisData.VersionModifier, allocation, genesisData.FirstPartKeyRound, genesisData.LastPartKeyRound, genesisData.PartKeyDilution, genesisData.FeeSink, genesisData.RewardsPool, genesisData.Comment, verbose)
 }
 
 func generateGenesisFiles(outDir string, proto protocol.ConsensusVersion, netName string, schemaVersionModifier string,
-	allocation []genesisAllocation, firstWalletValid uint64, lastWalletValid uint64, feeSink, rewardsPool basics.Address, comment string, verbose bool) (err error) {
+	allocation []genesisAllocation, firstWalletValid uint64, lastWalletValid uint64, partKeyDilution uint64, feeSink, rewardsPool basics.Address, comment string, verbose bool) (err error) {
 
 	genesisAddrs := make(map[string]basics.Address)
 	records := make(map[string]basics.AccountData)
@@ -106,11 +106,16 @@ func generateGenesisFiles(outDir string, proto protocol.ConsensusVersion, netNam
 	if !ok {
 		return fmt.Errorf("protocol %s not supported", proto)
 	}
+	if partKeyDilution == 0 {
+		partKeyDilution = params.DefaultKeyDilution
+	}
 
 	// Sort account names alphabetically
 	sort.SliceStable(allocation, func(i, j int) bool {
 		return allocation[i].Name < allocation[j].Name
 	})
+	rootKeyCreated := 0
+	partKeyCreated := 0
 
 	for _, wallet := range allocation {
 		var root account.Root
@@ -149,7 +154,10 @@ func generateGenesisFiles(outDir string, proto protocol.ConsensusVersion, netNam
 					os.Remove(wfilename)
 					return
 				}
-				fmt.Printf("Created new rootkey: %s\n", wfilename)
+				if verbose {
+					fmt.Printf("Created new rootkey: %s\n", wfilename)
+				}
+				rootKeyCreated++
 			}
 
 			if partkeyErr != nil && wallet.Online == basics.Online {
@@ -162,13 +170,16 @@ func generateGenesisFiles(outDir string, proto protocol.ConsensusVersion, netNam
 					return
 				}
 
-				part, err = account.FillDBWithParticipationKeys(partDB, root.Address(), basics.Round(firstWalletValid), basics.Round(lastWalletValid), params.DefaultKeyDilution)
+				part, err = account.FillDBWithParticipationKeys(partDB, root.Address(), basics.Round(firstWalletValid), basics.Round(lastWalletValid), partKeyDilution)
 				if err != nil {
 					err = fmt.Errorf("could not generate new participation file %s: %v", pfilename, err)
 					os.Remove(pfilename)
 					return
 				}
-				fmt.Printf("Created new partkey: %s\n", pfilename)
+				if verbose {
+					fmt.Printf("Created new partkey: %s\n", pfilename)
+				}
+				partKeyCreated++
 			}
 		}
 
@@ -247,6 +258,11 @@ func generateGenesisFiles(outDir string, proto protocol.ConsensusVersion, netNam
 
 	jsonData := protocol.EncodeJSON(g)
 	err = ioutil.WriteFile(filepath.Join(outDir, config.GenesisJSONFile), append(jsonData, '\n'), 0666)
+
+	if (!verbose) && (rootKeyCreated > 0 || partKeyCreated > 0) {
+		fmt.Printf("Created %d new rootkeys and %d new partkeys.\n", rootKeyCreated, partKeyCreated)
+	}
+
 	return
 }
 

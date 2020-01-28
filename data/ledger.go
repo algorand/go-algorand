@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -47,10 +47,10 @@ type Ledger struct {
 	log logging.Logger
 }
 
-func makeGenesisBlocks(proto protocol.ConsensusVersion, genesisBal GenesisBalances, genesisID string, genesisHash crypto.Digest) ([]bookkeeping.Block, error) {
+func makeGenesisBlock(proto protocol.ConsensusVersion, genesisBal GenesisBalances, genesisID string, genesisHash crypto.Digest) (bookkeeping.Block, error) {
 	params, ok := config.Consensus[proto]
 	if !ok {
-		return nil, fmt.Errorf("unsupported protocol %s", proto)
+		return bookkeeping.Block{}, fmt.Errorf("unsupported protocol %s", proto)
 	}
 
 	poolAddr := basics.Address(genesisBal.rewardsPool)
@@ -87,17 +87,20 @@ func makeGenesisBlocks(proto protocol.ConsensusVersion, genesisBal GenesisBalanc
 		blk.BlockHeader.GenesisHash = genesisHash
 	}
 
-	blocks := []bookkeeping.Block{blk}
-	return blocks, nil
+	return blk, nil
 }
 
 // LoadLedger creates a Ledger object to represent the ledger with the
 // specified database file prefix, initializing it if necessary.
-func LoadLedger(log logging.Logger, dbFilenamePrefix string, memory bool, genesisProto protocol.ConsensusVersion, genesisBal GenesisBalances, genesisID string, genesisHash crypto.Digest, blockListeners []ledger.BlockListener) (*Ledger, error) {
+func LoadLedger(
+	log logging.Logger, dbFilenamePrefix string, memory bool,
+	genesisProto protocol.ConsensusVersion, genesisBal GenesisBalances, genesisID string, genesisHash crypto.Digest,
+	blockListeners []ledger.BlockListener, isArchival bool,
+) (*Ledger, error) {
 	if genesisBal.balances == nil {
 		genesisBal.balances = make(map[basics.Address]basics.AccountData)
 	}
-	genBlocks, err := makeGenesisBlocks(genesisProto, genesisBal, genesisID, genesisHash)
+	genBlock, err := makeGenesisBlock(genesisProto, genesisBal, genesisID, genesisHash)
 	if err != nil {
 		return nil, err
 	}
@@ -113,9 +116,14 @@ func LoadLedger(log logging.Logger, dbFilenamePrefix string, memory bool, genesi
 	l := &Ledger{
 		log: log,
 	}
+	genesisInitState := ledger.InitState{
+		Block:       genBlock,
+		Accounts:    genesisBal.balances,
+		GenesisHash: genesisHash,
+	}
 	l.log.Debugf("Initializing Ledger(%s)", dbFilenamePrefix)
 
-	ll, err := ledger.OpenLedger(log, dbFilenamePrefix, memory, genBlocks, genesisBal.balances, genesisHash)
+	ll, err := ledger.OpenLedger(log, dbFilenamePrefix, memory, genesisInitState, isArchival)
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +146,7 @@ func (l *Ledger) AddressTxns(id basics.Address, r basics.Round) ([]transactions.
 	proto := config.Consensus[blk.CurrentProtocol]
 
 	var res []transactions.SignedTxnWithAD
-	payset, err := blk.DecodePaysetWithAD()
+	payset, err := blk.DecodePaysetFlat()
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +166,7 @@ func (l *Ledger) LookupTxid(txid transactions.Txid, r basics.Round) (stxn transa
 		return transactions.SignedTxnWithAD{}, false, err
 	}
 
-	payset, err := blk.DecodePaysetWithAD()
+	payset, err := blk.DecodePaysetFlat()
 	if err != nil {
 		return transactions.SignedTxnWithAD{}, false, err
 	}
@@ -290,7 +298,7 @@ func (l *Ledger) EnsureBlock(block *bookkeeping.Block, c agreement.Certificate) 
 		}
 
 		switch err.(type) {
-		case ledger.ProtocolError:
+		case protocol.Error:
 			if !protocolErrorLogged {
 				logging.Base().Errorf("unrecoverable protocol error detected at block %d: %v", round, err)
 				protocolErrorLogged = true
@@ -308,85 +316,91 @@ func (l *Ledger) EnsureBlock(block *bookkeeping.Block, c agreement.Certificate) 
 }
 
 // AssemblePayset adds transactions to a BlockEvaluator.
-func (*Ledger) AssemblePayset(pool *pools.TransactionPool, eval *ledger.BlockEvaluator, deadline time.Time) (stats telemetryspec.AssembleBlockStats) {
+func (l *Ledger) AssemblePayset(pool *pools.TransactionPool, eval *ledger.BlockEvaluator, deadline time.Time) (stats telemetryspec.AssembleBlockStats) {
 	pending := pool.Pending()
 	stats.StartCount = len(pending)
 	stats.StopReason = telemetryspec.AssembleBlockEmpty
 	first := true
 	totalFees := uint64(0)
 
+	// retrieve a list of all the previously known txid in the current round. We want to retrieve it here so we could avoid
+	// exercising the ledger read lock.
+	prevRoundTxIds := l.GetRoundTxIds(l.Latest())
+
 	for len(pending) > 0 {
-		txn := pending[0]
+		txgroup := pending[0]
 		pending = pending[1:]
+
+		if len(txgroup) == 0 {
+			stats.InvalidCount++
+			continue
+		}
+
+		// if we already had this tx in the previous round, and haven't removed it yet from the txpool, that's fine.
+		// just skip that one.
+		if prevRoundTxIds[txgroup[0].ID()] {
+			stats.EarlyCommittedCount++
+			continue
+		}
 
 		if time.Now().After(deadline) {
 			stats.StopReason = telemetryspec.AssembleBlockTimeout
 			break
 		}
 
-		err := eval.Transaction(txn, nil)
+		txgroupad := make([]transactions.SignedTxnWithAD, len(txgroup))
+		for i, tx := range txgroup {
+			txgroupad[i].SignedTxn = tx
+		}
+		err := eval.TransactionGroup(txgroupad)
 		if err == ledger.ErrNoSpace {
 			stats.StopReason = telemetryspec.AssembleBlockFull
 			break
 		}
 		if err != nil {
-			msg := fmt.Sprintf("Cannot add pending transaction to block: %v", err)
-
-			logAt := logging.Base().Warn
-
 			// GOAL2-255: Don't warn for common case of txn already being in ledger
 			switch err.(type) {
 			case ledger.TransactionInLedgerError:
-				logAt = logging.Base().Debug
 				stats.CommittedCount++
 			case transactions.MinFeeError:
-				logAt = logging.Base().Info
 				stats.InvalidCount++
+				logging.Base().Infof("Cannot add pending transaction to block: %v", err)
 			default:
-				// logAt = Warn
 				stats.InvalidCount++
+				logging.Base().Warnf("Cannot add pending transaction to block: %v", err)
 			}
-
-			logAt(msg)
 		} else {
-			fee := txn.Txn.Fee.Raw
-			encodedLen := txn.GetEncodedLength()
-			priority := uint64(txn.PtrPriority())
+			for _, txn := range txgroup {
+				fee := txn.Txn.Fee.Raw
+				encodedLen := txn.GetEncodedLength()
 
-			stats.IncludedCount++
-			totalFees += fee
+				stats.IncludedCount++
+				totalFees += fee
 
-			if first {
-				first = false
-				stats.MinFee = fee
-				stats.MaxFee = fee
-				stats.MinLength = encodedLen
-				stats.MaxLength = encodedLen
-				stats.MinPriority = priority
-				stats.MaxPriority = priority
-			} else {
-				if fee < stats.MinFee {
+				if first {
+					first = false
 					stats.MinFee = fee
-				} else if fee > stats.MaxFee {
 					stats.MaxFee = fee
-				}
-				if encodedLen < stats.MinLength {
 					stats.MinLength = encodedLen
-				} else if encodedLen > stats.MaxLength {
 					stats.MaxLength = encodedLen
+				} else {
+					if fee < stats.MinFee {
+						stats.MinFee = fee
+					} else if fee > stats.MaxFee {
+						stats.MaxFee = fee
+					}
+					if encodedLen < stats.MinLength {
+						stats.MinLength = encodedLen
+					} else if encodedLen > stats.MaxLength {
+						stats.MaxLength = encodedLen
+					}
 				}
-				if priority < stats.MinPriority {
-					stats.MinPriority = priority
-				} else if priority > stats.MaxPriority {
-					stats.MaxPriority = priority
-				}
+				stats.TotalLength += uint64(encodedLen)
 			}
-			stats.TotalLength += uint64(encodedLen)
 		}
-
-		if stats.IncludedCount != 0 {
-			stats.AverageFee = totalFees / uint64(stats.IncludedCount)
-		}
+	}
+	if stats.IncludedCount != 0 {
+		stats.AverageFee = totalFees / uint64(stats.IncludedCount)
 	}
 	return
 }

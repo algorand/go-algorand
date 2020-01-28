@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,7 +18,9 @@ package transactions
 
 import (
 	"math/rand"
+	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -41,30 +43,51 @@ func GenerateRandomBytes(n int) []byte {
 // this test checks that two accounts can send money to one another
 // across a protocol upgrade.
 func TestAccountsCanSendMoneyAcrossUpgradeV7toV8(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV7Upgrade.json"))
 }
 
 func TestAccountsCanSendMoneyAcrossUpgradeV8toV9(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV8Upgrade.json"))
 }
 
 func TestAccountsCanSendMoneyAcrossUpgradeV9toV10(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV9Upgrade.json"))
 }
 
 func TestAccountsCanSendMoneyAcrossUpgradeV10toV11(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV10Upgrade.json"))
 }
 
 func TestAccountsCanSendMoneyAcrossUpgradeV11toV12(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV11Upgrade.json"))
 }
 
 func TestAccountsCanSendMoneyAcrossUpgradeV12toV13(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV12Upgrade.json"))
 }
 
 func TestAccountsCanSendMoneyAcrossUpgradeV13toV14(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV13Upgrade.json"))
 }
 
@@ -73,13 +96,16 @@ func TestAccountsCanSendMoneyAcrossUpgradeV14toV15(t *testing.T) {
 }
 
 func TestAccountsCanSendMoneyAcrossUpgradeV15toV16(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV15Upgrade.json"))
 }
 
 func testAccountsCanSendMoneyAcrossUpgrade(t *testing.T, templatePath string) {
 	t.Parallel()
 	a := require.New(t)
-
+	os.Setenv("ALGOSMALLLAMBDAMSEC", "500")
 	var fixture fixtures.RestClientFixture
 	fixture.Setup(t, templatePath)
 	defer fixture.Shutdown()
@@ -141,8 +167,17 @@ func testAccountsCanSendMoneyAcrossUpgrade(t *testing.T, templatePath string) {
 		}
 	}
 
+	initialStatus, err = c.Status()
+	a.NoError(err, "getting status")
+
 	// submit a few more transactions to make sure payments work in new protocol
-	for i := 0; i < 20; i++ {
+	// perform this for two rounds.
+	for {
+		curStatus, err = pongClient.Status()
+		a.NoError(err)
+		if curStatus.LastRound > initialStatus.LastRound+2 {
+			break
+		}
 		pongTx, err := pongClient.SendPaymentFromUnencryptedWallet(pongAccount, pingAccount, transactionFee, amountPongSendsPing, GenerateRandomBytes(8))
 		a.NoError(err, "fixture should be able to send money (pong -> ping)")
 		pongTxids = append(pongTxids, pongTx.ID().String())

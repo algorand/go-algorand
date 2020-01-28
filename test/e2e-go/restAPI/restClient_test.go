@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,9 +19,12 @@ package restapi
 import (
 	"context"
 	"errors"
+	"flag"
 	"math"
 	"math/rand"
+	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -42,8 +45,19 @@ import (
 var fixture fixtures.RestClientFixture
 
 func TestMain(m *testing.M) {
-	fixture.SetupShared("RestClientTests", filepath.Join("nettemplates", "TwoNodes50Each.json"))
-	fixture.RunAndExit(m)
+	listMode := false
+	flag.Parse()
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "test.list" {
+			listMode = true
+		}
+	})
+	if !listMode {
+		fixture.SetupShared("RestClientTests", filepath.Join("nettemplates", "TwoNodes50Each.json"))
+		fixture.RunAndExit(m)
+	} else {
+		os.Exit(m.Run())
+	}
 }
 
 // helper generates a random Uppercase Alphabetic ASCII char
@@ -182,6 +196,9 @@ func TestClientCanGetStatusAfterBlock(t *testing.T) {
 }
 
 func TestTransactionsByAddr(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	var localFixture fixtures.RestClientFixture
 	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
 	defer localFixture.Shutdown()
@@ -629,7 +646,7 @@ func TestSendingLowFeeFails(t *testing.T) {
 		t.Errorf("balance too low %d < %d", someBal, sendAmount)
 	}
 	toAddress := getDestAddr(t, testClient, addresses, someAddress, wh)
-	utx, err := testClient.ConstructPayment(someAddress, toAddress, 1, sendAmount, nil, "", 0, 0)
+	utx, err := testClient.ConstructPayment(someAddress, toAddress, 1, sendAmount, nil, "", [32]byte{}, 0, 0)
 	require.NoError(t, err)
 	utx.Fee.Raw = 1
 	stx, err := testClient.SignTransactionWithWallet(wh, nil, utx)

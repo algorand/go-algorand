@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -35,20 +35,21 @@ type MetricDetails interface {
 
 // AssembleBlockStats is the set of stats captured when we compute AssemblePayset
 type AssembleBlockStats struct {
-	StartCount     int
-	IncludedCount  int
-	InvalidCount   int
-	MinFee         uint64
-	MaxFee         uint64
-	AverageFee     uint64
-	MinLength      int
-	MaxLength      int
-	MinPriority    uint64
-	MaxPriority    uint64
-	CommittedCount int
-	StopReason     string
-	TotalLength    uint64
-	Nanoseconds    int64
+	StartCount          int
+	IncludedCount       int
+	InvalidCount        int
+	MinFee              uint64
+	MaxFee              uint64
+	AverageFee          uint64
+	MinLength           int
+	MaxLength           int
+	MinPriority         uint64
+	MaxPriority         uint64
+	CommittedCount      int
+	StopReason          string
+	TotalLength         uint64
+	EarlyCommittedCount uint64
+	Nanoseconds         int64
 }
 
 // AssembleBlockTimeout represents AssemblePayset exiting due to timeout

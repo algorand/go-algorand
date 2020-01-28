@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"flag"
 	"io/ioutil"
 	"net/http"
@@ -26,6 +27,7 @@ import (
 	"github.com/algorand/websocket"
 	"github.com/gorilla/mux"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/rpcs"
@@ -63,8 +65,12 @@ func main() {
 		pathVars := mux.Vars(r)
 		genesisID := pathVars["genesisID"]
 
+		var rnd [10]byte
+		crypto.RandBytes(rnd[:])
+
 		requestHeader := make(http.Header)
 		requestHeader.Set(network.GenesisHeader, genesisID)
+		requestHeader.Set(network.NodeRandomHeader, base64.StdEncoding.EncodeToString(rnd[:]))
 		requestHeader.Set(network.ProtocolVersionHeader, "1")
 
 		conn, err := upgrader.Upgrade(w, r, requestHeader)

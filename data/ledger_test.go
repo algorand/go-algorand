@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -30,10 +30,10 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/util/execpool"
 )
 
 func incaddr(user *basics.Address) {
@@ -69,9 +69,6 @@ func BenchmarkAssemblePayset(b *testing.B) {
 	secrets := make([]*crypto.SignatureSecrets, numUsers)
 	addresses := make([]basics.Address, numUsers)
 
-	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
-	defer backlogPool.Shutdown()
-
 	genesis := make(map[basics.Address]basics.AccountData)
 	for i := 0; i < numUsers; i++ {
 		secret := keypair()
@@ -85,10 +82,17 @@ func BenchmarkAssemblePayset(b *testing.B) {
 		//b.Log(addr)
 	}
 
-	require.Equal(b, len(genesis), numUsers)
-	genBal := MakeGenesisBalances(genesis, poolAddr, sinkAddr)
+	genesis[poolAddr] = basics.AccountData{
+		Status:     basics.NotParticipating,
+		MicroAlgos: basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinBalance},
+	}
+
+	require.Equal(b, len(genesis), numUsers+1)
+	genBal := MakeGenesisBalances(genesis, sinkAddr, poolAddr)
 	ledgerName := fmt.Sprintf("%s-mem-%d", b.Name(), b.N)
-	ledger, err := LoadLedger(log, ledgerName, true, protocol.ConsensusCurrentVersion, genBal, "", crypto.Digest{}, nil)
+	const inMem = true
+	const archival = true
+	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, archival)
 	require.NoError(b, err)
 
 	l := ledger
@@ -107,7 +111,10 @@ func BenchmarkAssemblePayset(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		// generate transactions
 		const txPoolSize = 6000
-		tp := pools.MakeTransactionPool(l.Ledger, txPoolSize, false)
+		cfg := config.GetDefaultLocal()
+		cfg.TxPoolSize = txPoolSize
+		cfg.EnableAssembleStats = false
+		tp := pools.MakeTransactionPool(l.Ledger, cfg)
 		errcount := 0
 		okcount := 0
 		var worstTxID transactions.Txid
@@ -119,11 +126,12 @@ func BenchmarkAssemblePayset(b *testing.B) {
 			tx := transactions.Transaction{
 				Type: protocol.PaymentTx,
 				Header: transactions.Header{
-					Sender:     addresses[sourcei],
-					Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
-					FirstValid: 0,
-					LastValid:  basics.Round(proto.MaxTxnLife),
-					Note:       make([]byte, 2),
+					Sender:      addresses[sourcei],
+					Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+					FirstValid:  0,
+					LastValid:   basics.Round(proto.MaxTxnLife),
+					Note:        make([]byte, 2),
+					GenesisHash: genesisHash,
 				},
 				PaymentTxnFields: transactions.PaymentTxnFields{
 					Receiver: addresses[desti],
@@ -138,7 +146,7 @@ func BenchmarkAssemblePayset(b *testing.B) {
 			if okcount == 0 {
 				worstTxID = signedTx.ID()
 			}
-			err := tp.Remember(signedTx)
+			err := tp.Remember([]transactions.SignedTxn{signedTx}, []verify.Params{verify.Params{}})
 			if err != nil {
 				errcount++
 				b.Logf("(%d/%d) could not send [%d] %s -> [%d] %s: %s", errcount, okcount, sourcei, addresses[sourcei], desti, addresses[desti], err)
@@ -152,7 +160,7 @@ func BenchmarkAssemblePayset(b *testing.B) {
 		}
 		b.StartTimer()
 		newEmptyBlk := bookkeeping.MakeBlock(prev)
-		eval, err := l.StartEvaluator(newEmptyBlk.BlockHeader, tp, backlogPool)
+		eval, err := l.StartEvaluator(newEmptyBlk.BlockHeader)
 		if err != nil {
 			b.Errorf("could not make proposals at round %d: could not start evaluator: %v", next, err)
 			return

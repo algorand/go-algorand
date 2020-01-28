@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -145,7 +145,9 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 		genesisDir := filepath.Join(rootDirectory, g.ID())
 		ledgerFilenamePrefix := filepath.Join(genesisDir, config.LedgerFilenamePrefix)
 		nodeID := fmt.Sprintf("Node%d", i)
-		_, err := data.LoadLedger(logging.Base().With("name", nodeID), ledgerFilenamePrefix, false, g.Proto, bootstrap, "", crypto.Digest{}, nil)
+		const inMem = false
+		const archival = true
+		_, err := data.LoadLedger(logging.Base().With("name", nodeID), ledgerFilenamePrefix, inMem, g.Proto, bootstrap, "", crypto.Digest{}, nil, archival)
 		require.NoError(t, err)
 	}
 

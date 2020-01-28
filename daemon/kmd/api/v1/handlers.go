@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -858,6 +858,64 @@ func postTransactionSignHandler(ctx reqContext, w http.ResponseWriter, r *http.R
 	successResponse(w, resp)
 }
 
+// postProgramSignHandler handles `POST /v1/program/sign`
+func postProgramSignHandler(ctx reqContext, w http.ResponseWriter, r *http.Request) {
+	// swagger:operation POST /v1/program/sign SignProgram
+	//---
+	//    Summary: Sign program
+	//    Description: >
+	//      Signs the passed program with a key from the wallet, determined
+	//      by the account named in the request.
+	//    Produces:
+	//    - application/json
+	//    Parameters:
+	//      - name: Sign Program Request
+	//        in: body
+	//        required: true
+	//        schema:
+	//          "$ref": "#/definitions/SignProgramRequest"
+	//    Responses:
+	//      "200":
+	//        "$ref": "#/responses/SignProgramResponse"
+	var req kmdapi.APIV1POSTProgramSignRequest
+
+	// Decode the request
+	decoder := protocol.NewJSONDecoder(r.Body)
+	err := decoder.Decode(&req)
+	if err != nil {
+		errorResponse(w, http.StatusBadRequest, errCouldNotDecode)
+		return
+	}
+
+	// Fetch the wallet from the WalletHandleToken
+	wallet, _, err := ctx.sm.AuthWithWalletHandleToken([]byte(req.WalletHandleToken))
+	if err != nil {
+		errorResponse(w, http.StatusUnauthorized, err)
+		return
+	}
+
+	// Decode the address
+	reqAddr, err := basics.UnmarshalChecksumAddress(req.Address)
+	if err != nil {
+		errorResponse(w, http.StatusBadRequest, errCouldNotDecodeAddress)
+		return
+	}
+
+	stx, err := wallet.SignProgram(req.Program, crypto.Digest(reqAddr), []byte(req.WalletPassword))
+	if err != nil {
+		errorResponse(w, http.StatusBadRequest, err)
+		return
+	}
+
+	// Build the response
+	resp := kmdapi.APIV1POSTProgramSignResponse{
+		Signature: stx,
+	}
+
+	// Return and encode the response
+	successResponse(w, resp)
+}
+
 // postMultisigListHandler handles `POST /v1/multisig/list`
 func postMultisigListHandler(ctx reqContext, w http.ResponseWriter, r *http.Request) {
 	// swagger:operation POST /v1/multisig/list ListMultisg
@@ -1077,7 +1135,66 @@ func postMultisigTransactionSignHandler(ctx reqContext, w http.ResponseWriter, r
 
 	// Build the response
 	resp := kmdapi.APIV1POSTMultisigTransactionSignResponse{
-		Multisig: protocol.Encode(msig),
+		Multisig: protocol.Encode(&msig),
+	}
+
+	// Return and encode the response
+	successResponse(w, resp)
+}
+
+// postMultisigProgramSignHandler handles `POST /v1/multisig/signprogram`
+func postMultisigProgramSignHandler(ctx reqContext, w http.ResponseWriter, r *http.Request) {
+	// swagger:operation POST /v1/multisig/signprogram SignMultisigProgram
+	//---
+	//    Summary: Sign a program for a multisig account
+	//    Description: >
+	//      Start a multisig signature, or add a signature to a partially completed
+	//      multisig signature object.
+	//    Produces:
+	//    - application/json
+	//    Parameters:
+	//      - name: Sign Multisig Program Request
+	//        in: body
+	//        required: true
+	//        schema:
+	//          "$ref": "#/definitions/SignProgramMultisigRequest"
+	//    Responses:
+	//      "200":
+	//        "$ref": "#/responses/SignProgramMultisigResponse"
+	var req kmdapi.APIV1POSTMultisigProgramSignRequest
+
+	// Decode the request
+	decoder := protocol.NewJSONDecoder(r.Body)
+	err := decoder.Decode(&req)
+	if err != nil {
+		errorResponse(w, http.StatusBadRequest, errCouldNotDecode)
+		return
+	}
+
+	// Fetch the wallet from the WalletHandleToken
+	wallet, _, err := ctx.sm.AuthWithWalletHandleToken([]byte(req.WalletHandleToken))
+	if err != nil {
+		errorResponse(w, http.StatusUnauthorized, err)
+		return
+	}
+
+	// Decode the address
+	reqAddr, err := basics.UnmarshalChecksumAddress(req.Address)
+	if err != nil {
+		errorResponse(w, http.StatusBadRequest, errCouldNotDecodeAddress)
+		return
+	}
+
+	// Sign the transaction
+	msig, err := wallet.MultisigSignProgram(req.Program, crypto.Digest(reqAddr), req.PublicKey, req.PartialMsig, []byte(req.WalletPassword))
+	if err != nil {
+		errorResponse(w, http.StatusBadRequest, err)
+		return
+	}
+
+	// Build the response
+	resp := kmdapi.APIV1POSTMultisigProgramSignResponse{
+		Multisig: protocol.Encode(&msig),
 	}
 
 	// Return and encode the response
@@ -1192,9 +1309,11 @@ func RegisterHandlers(router *mux.Router, sm *session.Manager, log logging.Logge
 
 	router.HandleFunc("/multisig/list", wrapCtx(ctx, postMultisigListHandler)).Methods("POST")
 	router.HandleFunc("/multisig/sign", wrapCtx(ctx, postMultisigTransactionSignHandler)).Methods("POST")
+	router.HandleFunc("/multisig/signprogram", wrapCtx(ctx, postMultisigProgramSignHandler)).Methods("POST")
 	router.HandleFunc("/multisig/import", wrapCtx(ctx, postMultisigImportHandler)).Methods("POST")
 	router.HandleFunc("/multisig/export", wrapCtx(ctx, postMultisigExportHandler)).Methods("POST")
 	router.HandleFunc("/multisig", wrapCtx(ctx, deleteMultisigHandler)).Methods("DELETE")
 
 	router.HandleFunc("/transaction/sign", wrapCtx(ctx, postTransactionSignHandler)).Methods("POST")
+	router.HandleFunc("/program/sign", wrapCtx(ctx, postProgramSignHandler)).Methods("POST")
 }

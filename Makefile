@@ -5,6 +5,7 @@ GO111MODULE	:= on
 export GO111MODULE
 UNAME		:= $(shell uname)
 SRCPATH     := $(shell pwd)
+ARCH        := $(shell ./scripts/archtype.sh)
 
 # If build number already set, use it - to ensure same build number across multiple platforms being built
 BUILDNUMBER      ?= $(shell ./scripts/compute_build_number.sh)
@@ -14,11 +15,21 @@ BUILDCHANNEL     ?= $(shell ./scripts/compute_branch_channel.sh $(BUILDBRANCH))
 DEFAULTNETWORK   ?= $(shell ./scripts/compute_branch_network.sh $(BUILDBRANCH))
 DEFAULT_DEADLOCK ?= $(shell ./scripts/compute_branch_deadlock_default.sh $(BUILDBRANCH))
 
+GOTAGSLIST          := sqlite_unlock_notify sqlite_omit_load_extension
+
 ifeq ($(UNAME), Linux)
 EXTLDFLAGS := -static-libstdc++ -static-libgcc
+ifeq ($(ARCH), amd64)
+# the following predicate is abit misleading; it tests if we're not in centos.
+ifeq (,$(wildcard /etc/centos-release))
+EXTLDFLAGS  += -static
+endif
+GOTAGSLIST  += osusergo netgo static_build
+GOBUILDMODE := -buildmode pie
+endif
 endif
 
-GOTAGS          := --tags "sqlite_unlock_notify sqlite_omit_load_extension"
+GOTAGS      := --tags "$(GOTAGSLIST)"
 GOTRIMPATH	:= $(shell go help build | grep -q .-trimpath && echo -trimpath)
 
 GOLDFLAGS_BASE  := -X github.com/algorand/go-algorand/config.BuildNumber=$(BUILDNUMBER) \
@@ -30,7 +41,10 @@ GOLDFLAGS_BASE  := -X github.com/algorand/go-algorand/config.BuildNumber=$(BUILD
 GOLDFLAGS := $(GOLDFLAGS_BASE) \
 		 -X github.com/algorand/go-algorand/config.Channel=$(BUILDCHANNEL)
 
-UNIT_TEST_SOURCES := $(sort $(shell go list ./... | grep -v /go-algorand/test/ ))
+UNIT_TEST_SOURCES := $(sort $(shell GO111MODULE=off go list ./... | grep -v /go-algorand/test/ ))
+ALGOD_API_PACKAGES := $(sort $(shell GO111MODULE=off cd daemon/algod/api; go list ./... ))
+
+MSGP_GENERATE	:= ./protocol ./crypto ./data/basics ./data/transactions ./data/committee ./data/bookkeeping ./data/hashable ./auction
 
 default: build
 
@@ -51,7 +65,13 @@ lint: deps
 vet:
 	go vet ./...
 
-sanity: vet fix lint fmt
+check_license:
+	./scripts/check_license.sh
+
+check_shell:
+	find . -type f -name "*.sh" -exec shellcheck {} +
+
+sanity: vet fix lint fmt check_license
 
 cover:
 	go test $(GOTAGS) -coverprofile=cover.out $(UNIT_TEST_SOURCES)
@@ -61,6 +81,12 @@ prof:
 
 generate: deps
 	PATH=$(GOPATH1)/bin:$$PATH go generate ./...
+
+msgp: $(patsubst %,%/msgp_gen.go,$(MSGP_GENERATE))
+
+%/msgp_gen.go: deps ALWAYS
+	$(GOPATH1)/bin/msgp -file ./$(@D) -o $@
+ALWAYS:
 
 # build our fork of libsodium, placing artifacts into crypto/lib/ and crypto/include/
 crypto/lib/libsodium.a:
@@ -122,8 +148,7 @@ $(KMD_API_SWAGGER_INJECT): $(KMD_API_SWAGGER_SPEC) $(KMD_API_SWAGGER_SPEC).valid
 build: buildsrc gen
 
 buildsrc: crypto/lib/libsodium.a node_exporter NONGO_BIN deps $(ALGOD_API_SWAGGER_INJECT) $(KMD_API_SWAGGER_INJECT)
-	go install $(GOTRIMPATH) $(GOTAGS) -ldflags="$(GOLDFLAGS)" ./...
-	go vet ./...
+	go install $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
 
 SOURCES_RACE := github.com/algorand/go-algorand/cmd/kmd
 
@@ -135,8 +160,9 @@ build-race: build
 	@mkdir -p $(GOPATH1)/bin-race
 	GOBIN=$(GOPATH1)/bin-race go install $(GOTRIMPATH) $(GOTAGS) -race -ldflags="$(GOLDFLAGS)" ./...
 	GOBIN=$(GOPATH1)/bin-race go install $(GOTRIMPATH) $(GOTAGS) -ldflags="$(GOLDFLAGS)" $(SOURCES_RACE)
+	go vet ./...
 
-NONGO_BIN_FILES=$(GOPATH1)/bin/find-nodes.sh $(GOPATH1)/bin/update.sh $(GOPATH1)/bin/COPYING
+NONGO_BIN_FILES=$(GOPATH1)/bin/find-nodes.sh $(GOPATH1)/bin/update.sh $(GOPATH1)/bin/COPYING $(GOPATH1)/bin/ddconfig.sh
 
 NONGO_BIN: $(NONGO_BIN_FILES)
 
@@ -146,11 +172,13 @@ $(GOPATH1)/bin/update.sh: cmd/updater/update.sh
 
 $(GOPATH1)/bin/COPYING: COPYING
 
+$(GOPATH1)/bin/ddconfig.sh: scripts/ddconfig.sh
+
 $(GOPATH1)/bin/%:
 	cp -f $< $@
 
 test: build
-	go test $(GOTAGS) -race $(UNIT_TEST_SOURCES)
+	go test $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 3600s
 
 fulltest: build-race
 	for PACKAGE_DIRECTORY in $(UNIT_TEST_SOURCES) ; do \
@@ -236,4 +264,4 @@ dump: $(addprefix gen/,$(addsuffix /genesis.dump, $(NETWORKS)))
 install: build
 	scripts/dev_install.sh -p $(GOPATH1)/bin
 
-.PHONY: default fmt vet lint sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN
+.PHONY: default fmt vet lint check_license check_shell sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN

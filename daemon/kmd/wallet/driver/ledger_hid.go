@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,11 +23,22 @@ import (
 	"github.com/karalabe/hid"
 )
 
+const ledgerVendorID = 0x2c97
+
 // LedgerUSB is a wrapper around a Ledger USB HID device, used to implement
 // the protocol used for sending messages to the application running on the
 // Ledger hardware wallet.
 type LedgerUSB struct {
 	hiddev *hid.Device
+}
+
+// LedgerUSBError is a wrapper around the two-byte error code that the Ledger
+// protocol returns.
+type LedgerUSBError uint16
+
+// Error satisfies builtin interface `error`
+func (err LedgerUSBError) Error() string {
+	return fmt.Sprintf("Exchange: unexpected status 0x%x", uint16(err))
 }
 
 // Protocol reference:
@@ -172,7 +183,7 @@ func (l *LedgerUSB) Exchange(msg []byte) ([]byte, error) {
 		// See various hints about what the error status might mean in
 		// HIDDongleHIDAPI.exchange():
 		// https://github.com/LedgerHQ/blue-loader-python/blob/master/ledgerblue/comm.py
-		return nil, fmt.Errorf("Exchange: unexpected status %x", replyStat)
+		return nil, LedgerUSBError(replyStat)
 	}
 
 	return replyMsg, nil
@@ -184,22 +195,15 @@ func (l *LedgerUSB) USBInfo() hid.DeviceInfo {
 }
 
 // LedgerEnumerate returns all of the Ledger devices connected to this machine.
-func LedgerEnumerate() ([]LedgerUSB, error) {
+func LedgerEnumerate() ([]hid.DeviceInfo, error) {
 	if !hid.Supported() {
 		return nil, fmt.Errorf("HID not supported")
 	}
 
-	var devs []LedgerUSB
-	for _, info := range hid.Enumerate(0x2c97, 0x0001) {
-		dev, err := info.Open()
-		if err != nil {
-			return nil, err
-		}
-
-		devs = append(devs, LedgerUSB{
-			hiddev: dev,
-		})
+	var infos []hid.DeviceInfo
+	for _, info := range hid.Enumerate(ledgerVendorID, 0) {
+		infos = append(infos, info)
 	}
 
-	return devs, nil
+	return infos, nil
 }

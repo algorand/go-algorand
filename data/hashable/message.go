@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,5 +28,5 @@ type Message struct {
 
 // ToBeHashed implements the crypto.Hashable interface
 func (msg Message) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.Message, protocol.Encode(msg)
+	return protocol.Message, protocol.Encode(&msg)
 }

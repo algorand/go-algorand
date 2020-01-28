@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -35,11 +35,10 @@ func TestTelemetryConfig(t *testing.T) {
 	cfg := createTelemetryConfig()
 	expectedEnabled := false
 	a.Equal(expectedEnabled, cfg.Enable)
-	a.Equal(elasticsearchEndpoint(), cfg.URI)
+	a.Equal("", cfg.URI)
 	a.NotZero(len(cfg.GUID))
 	a.Equal(logrus.WarnLevel, cfg.MinLogLevel)
 	a.Equal(logrus.WarnLevel, cfg.ReportHistoryLevel)
-	a.Equal(uint(100), cfg.LogHistoryDepth)
 }
 
 func TestLoadDefaultConfig(t *testing.T) {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -52,7 +52,7 @@ func Start(startConfig StartConfig) (died chan error, sock string, err error) {
 	}
 
 	// Initialize wallet drivers with the config
-	err = driver.InitWalletDrivers(kmdCfg)
+	err = driver.InitWalletDrivers(kmdCfg, startConfig.Log)
 	if err != nil {
 		return
 	}

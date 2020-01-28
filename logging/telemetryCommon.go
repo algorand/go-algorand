@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -36,19 +36,20 @@ type TelemetryOperation struct {
 }
 
 type telemetryState struct {
-	history *logBuffer
-	hook    *asyncTelemetryHook
+	history   *logBuffer
+	hook      *asyncTelemetryHook
+	sendToLog bool
 }
 
 // TelemetryConfig represents the configuration of Telemetry logging
 type TelemetryConfig struct {
 	Enable             bool
+	SendToLog          bool
 	URI                string
 	Name               string
 	GUID               string
 	MinLogLevel        logrus.Level
 	ReportHistoryLevel logrus.Level
-	LogHistoryDepth    uint
 	FilePath           string // Path to file on disk, if any
 	ChainID            string `json:"-"`
 	SessionGUID        string `json:"-"`
@@ -64,6 +65,9 @@ type asyncTelemetryHook struct {
 	entries       chan *logrus.Entry
 	quit          chan struct{}
 	maxQueueDepth int
+	levels        []logrus.Level
+	ready         bool
+	urlUpdate     chan bool
 }
 
 type hookFactory func(cfg TelemetryConfig) (logrus.Hook, error)

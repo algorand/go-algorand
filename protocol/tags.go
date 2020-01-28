@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,7 +20,7 @@ package protocol
 // e.g., the agreement service can register to handle agreements with the Agreement tag.
 type Tag string
 
-// Tags, in lexicographic sort order to avoid duplicates.
+// Tags, in lexicographic sort order of tag values to avoid duplicates.
 const (
 	UnknownMsgTag      Tag = "??"
 	AgreementVoteTag   Tag = "AV"
@@ -31,9 +31,9 @@ const (
 	ProposalPayloadTag Tag = "PP"
 	TxnTag             Tag = "TX"
 	UniCatchupReqTag   Tag = "UC"
-	UniCatchupResTag   Tag = "UT"
 	UniEnsBlockReqTag  Tag = "UE"
 	UniEnsBlockResTag  Tag = "US"
+	UniCatchupResTag   Tag = "UT"
 	VoteBundleTag      Tag = "VB"
 )
 

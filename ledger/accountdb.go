@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -31,7 +31,9 @@ import (
 // accountsDbQueries is used to cache a prepared SQL statement to look up
 // the state of a single account.
 type accountsDbQueries struct {
-	lookupStmt *sql.Stmt
+	listAssetsStmt         *sql.Stmt
+	lookupStmt             *sql.Stmt
+	lookupAssetCreatorStmt *sql.Stmt
 }
 
 var accountsSchema = []string{
@@ -50,6 +52,16 @@ var accountsSchema = []string{
 	`CREATE TABLE IF NOT EXISTS accountbase (
 		address blob primary key,
 		data blob)`,
+	`CREATE TABLE IF NOT EXISTS assetcreators (
+		asset integer primary key,
+		creator blob)`,
+}
+
+var accountsResetExprs = []string{
+	`DROP TABLE IF EXISTS acctrounds`,
+	`DROP TABLE IF EXISTS accounttotals`,
+	`DROP TABLE IF EXISTS accountbase`,
+	`DROP TABLE IF EXISTS assetcreators`,
 }
 
 type accountDelta struct {
@@ -77,7 +89,7 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 
 		for addr, data := range initAccounts {
 			_, err = tx.Exec("INSERT INTO accountbase (address, data) VALUES (?, ?)",
-				addr[:], protocol.Encode(data))
+				addr[:], protocol.Encode(&data))
 			if err != nil {
 				return err
 			}
@@ -105,6 +117,16 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 	return nil
 }
 
+func accountsReset(tx *sql.Tx) error {
+	for _, stmt := range accountsResetExprs {
+		_, err := tx.Exec(stmt)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func accountsRound(tx *sql.Tx) (rnd basics.Round, err error) {
 	err = tx.QueryRow("SELECT rnd FROM acctrounds WHERE id='acctbase'").Scan(&rnd)
 	return
@@ -114,12 +136,65 @@ func accountsDbInit(q db.Queryable) (*accountsDbQueries, error) {
 	var err error
 	qs := &accountsDbQueries{}
 
+	qs.listAssetsStmt, err = q.Prepare("SELECT asset, creator FROM assetcreators WHERE asset <= ? ORDER BY asset desc LIMIT ?")
+	if err != nil {
+		return nil, err
+	}
+
 	qs.lookupStmt, err = q.Prepare("SELECT data FROM accountbase WHERE address=?")
 	if err != nil {
 		return nil, err
 	}
 
+	qs.lookupAssetCreatorStmt, err = q.Prepare("SELECT creator FROM assetcreators WHERE asset=?")
+	if err != nil {
+		return nil, err
+	}
+
 	return qs, nil
+}
+
+func (qs *accountsDbQueries) listAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) (results []basics.AssetLocator, err error) {
+	err = db.Retry(func() error {
+		// Query for assets in range
+		rows, err := qs.listAssetsStmt.Query(maxAssetIdx, maxResults)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		// For each row, copy into a new AssetLocator and append to results
+		var buf []byte
+		var al basics.AssetLocator
+		for rows.Next() {
+			err := rows.Scan(&al.Index, &buf)
+			if err != nil {
+				return err
+			}
+			copy(al.Creator[:], buf)
+			results = append(results, al)
+		}
+		return nil
+	})
+	return
+}
+
+func (qs *accountsDbQueries) lookupAssetCreator(assetIdx basics.AssetIndex) (addr basics.Address, err error) {
+	err = db.Retry(func() error {
+		var buf []byte
+		err := qs.lookupAssetCreatorStmt.QueryRow(assetIdx).Scan(&buf)
+
+		if err == sql.ErrNoRows {
+			err = fmt.Errorf("asset %d does not exist or has been deleted", assetIdx)
+		}
+
+		if err != nil {
+			return err
+		}
+		copy(addr[:], buf)
+		return nil
+	})
+	return
 }
 
 func (qs *accountsDbQueries) lookup(addr basics.Address) (data basics.AccountData, err error) {
@@ -198,74 +273,131 @@ func accountsPutTotals(tx *sql.Tx, totals AccountTotals) error {
 	return err
 }
 
-func accountsNewRound(tx *sql.Tx, rnd basics.Round, updates map[basics.Address]accountDelta, rewardsLevel uint64, proto config.ConsensusParams) error {
+// getChangedAssetIndices takes an accountDelta and returns which AssetIndices
+// were created and which were deleted
+func getChangedAssetIndices(creator basics.Address, delta accountDelta) map[basics.AssetIndex]modifiedAsset {
+	assetMods := make(map[basics.AssetIndex]modifiedAsset)
+
+	// Get assets that were created
+	for idx := range delta.new.AssetParams {
+		// AssetParams are in now the balance record now, but _weren't_ before
+		if _, ok := delta.old.AssetParams[idx]; !ok {
+			assetMods[idx] = modifiedAsset{
+				created: true,
+				creator: creator,
+			}
+		}
+	}
+
+	// Get assets that were deleted
+	for idx := range delta.old.AssetParams {
+		// AssetParams were in the balance record, but _aren't_ anymore
+		if _, ok := delta.new.AssetParams[idx]; !ok {
+			assetMods[idx] = modifiedAsset{
+				created: false,
+				creator: creator,
+			}
+		}
+	}
+
+	return assetMods
+}
+
+func accountsNewRound(tx *sql.Tx, rnd basics.Round, updates map[basics.Address]accountDelta, rewardsLevel uint64, proto config.ConsensusParams) (err error) {
 	var base basics.Round
-	err := tx.QueryRow("SELECT rnd FROM acctrounds WHERE id='acctbase'").Scan(&base)
+	err = tx.QueryRow("SELECT rnd FROM acctrounds WHERE id='acctbase'").Scan(&base)
 	if err != nil {
-		return err
+		return
 	}
 
 	if rnd != base+1 {
-		return fmt.Errorf("newRound %d is not immediately after base %d", rnd, base)
+		err = fmt.Errorf("newRound %d is not immediately after base %d", rnd, base)
+		return
 	}
 
 	var ot basics.OverflowTracker
 	totals, err := accountsTotals(tx)
 	if err != nil {
-		return err
+		return
 	}
 
 	totals.applyRewards(rewardsLevel, &ot)
 
 	deleteStmt, err := tx.Prepare("DELETE FROM accountbase WHERE address=?")
 	if err != nil {
-		return err
+		return
 	}
 	defer deleteStmt.Close()
 
 	replaceStmt, err := tx.Prepare("REPLACE INTO accountbase (address, data) VALUES (?, ?)")
 	if err != nil {
-		return err
+		return
 	}
 	defer replaceStmt.Close()
 
+	insertAssetIdxStmt, err := tx.Prepare("INSERT INTO assetcreators (asset, creator) VALUES (?, ?)")
+	if err != nil {
+		return
+	}
+	defer insertAssetIdxStmt.Close()
+
+	deleteAssetIdxStmt, err := tx.Prepare("DELETE FROM assetcreators WHERE asset=?")
+	if err != nil {
+		return
+	}
+	defer deleteAssetIdxStmt.Close()
+
 	for addr, data := range updates {
-		if (data.new == basics.AccountData{}) {
+		if data.new.IsZero() {
 			// prune empty accounts
 			_, err = deleteStmt.Exec(addr[:])
 		} else {
-			_, err = replaceStmt.Exec(addr[:], protocol.Encode(data.new))
+			_, err = replaceStmt.Exec(addr[:], protocol.Encode(&data.new))
 		}
 		if err != nil {
-			return err
+			return
 		}
 
 		totals.delAccount(proto, data.old, &ot)
 		totals.addAccount(proto, data.new, &ot)
+
+		adeltas := getChangedAssetIndices(addr, data)
+		for aidx, delta := range adeltas {
+			if delta.created {
+				_, err = insertAssetIdxStmt.Exec(aidx, addr[:])
+			} else {
+				_, err = deleteAssetIdxStmt.Exec(aidx)
+			}
+			if err != nil {
+				return
+			}
+		}
 	}
 
 	if ot.Overflowed {
-		return fmt.Errorf("overflow computing totals")
+		err = fmt.Errorf("overflow computing totals")
+		return
 	}
 
 	res, err := tx.Exec("UPDATE acctrounds SET rnd=? WHERE id='acctbase'", rnd)
 	if err != nil {
-		return err
+		return
 	}
 
 	aff, err := res.RowsAffected()
 	if err != nil {
-		return err
+		return
 	}
 
 	if aff != 1 {
-		return fmt.Errorf("accountsNewRound: expected to update 1 row but got %d", aff)
+		err = fmt.Errorf("accountsNewRound: expected to update 1 row but got %d", aff)
+		return
 	}
 
 	err = accountsPutTotals(tx, totals)
 	if err != nil {
-		return err
+		return
 	}
 
-	return nil
+	return
 }

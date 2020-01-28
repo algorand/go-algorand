@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -173,6 +173,12 @@ type GossipNode interface {
 
 	// ClearHandlers deregisters all the existing message handlers.
 	ClearHandlers()
+
+	// MakeHTTPRequest will make sure connectionsRateLimitingCount
+	// is not violated, and register the connection time of the
+	// request, before making the http request to the server.
+	MakeHTTPRequest(client *http.Client,
+		request *http.Request) (*http.Response, error)
 }
 
 // IncomingMessage represents a message arriving from some peer in our p2p network
@@ -317,6 +323,9 @@ type WebsocketNetwork struct {
 
 	requestsTracker *RequestTracker
 	requestsLogger  *RequestLogger
+
+	// lastPeerConnectionsSent is the last time the peer connections were sent ( or attempted to be sent ) to the telemetry server.
+	lastPeerConnectionsSent time.Time
 }
 
 type broadcastRequest struct {
@@ -516,6 +525,7 @@ func (wn *WebsocketNetwork) setup() {
 	wn.upgrader.ReadBufferSize = 4096
 	wn.upgrader.WriteBufferSize = 4096
 	wn.upgrader.EnableCompression = false
+	wn.lastPeerConnectionsSent = time.Now()
 	wn.router = mux.NewRouter()
 	wn.router.Handle(GossipNetworkPath, wn)
 	wn.requestsTracker = makeRequestsTracker(wn.router, wn.log, wn.config)
@@ -728,8 +738,10 @@ func (wn *WebsocketNetwork) ClearHandlers() {
 }
 
 func (wn *WebsocketNetwork) setHeaders(header http.Header) {
-	myTelemetryGUID := wn.log.GetTelemetryHostName()
-	header.Set(TelemetryIDHeader, myTelemetryGUID)
+	localTelemetryGUID := wn.log.GetTelemetryHostName()
+	localInstanceName := wn.log.GetInstanceName()
+	header.Set(TelemetryIDHeader, localTelemetryGUID)
+	header.Set(InstanceNameHeader, localInstanceName)
 	header.Set(ProtocolVersionHeader, ProtocolVersion)
 	header.Set(AddressHeader, wn.PublicAddress())
 	header.Set(NodeRandomHeader, wn.RandomID)
@@ -764,6 +776,17 @@ func (wn *WebsocketNetwork) checkServerResponseVariables(header http.Header, add
 		return false
 	}
 	return true
+}
+
+// MakeHTTPRequest will make sure connectionsRateLimitingCount is not
+// violated, and register the connection time of the request, before
+// making the http request to the server.
+func (wn *WebsocketNetwork) MakeHTTPRequest(client *http.Client,
+	request *http.Request) (resp *http.Response, err error) {
+	_, _, provisionalTime := wn.phonebook.WaitForConnectionTime(request.Host)
+	resp, err = client.Do(request)
+	wn.phonebook.UpdateConnectionTime(request.Host, provisionalTime)
+	return resp, err
 }
 
 // getCommonHeaders retreives the common headers for both incoming and outgoing connections from the provided headers.
@@ -1216,7 +1239,8 @@ func (wn *WebsocketNetwork) meshThread() {
 				dnsPhonebook := wn.phonebook.GetPhonebook(dnsBootstrap)
 				if dnsPhonebook == nil {
 					// create one, if we don't have one already.
-					dnsPhonebook = MakeThreadsafePhonebook()
+					dnsPhonebook = MakeThreadsafePhonebook(wn.config.ConnectionsRateLimitingCount,
+						time.Duration(wn.config.ConnectionsRateLimitingWindowSeconds)*time.Second)
 					wn.phonebook.AddOrUpdatePhonebook(dnsBootstrap, dnsPhonebook)
 				}
 				if tsPhonebook, ok := dnsPhonebook.(*ThreadsafePhonebook); ok {
@@ -1250,7 +1274,44 @@ func (wn *WebsocketNetwork) meshThread() {
 		if request.done != nil {
 			close(request.done)
 		}
+
+		// send the currently connected peers information to the
+		// telemetry server; that would allow the telemetry server
+		// to construct a cross-node map of all the nodes interconnections.
+		wn.sendPeerConnectionsTelemetryStatus()
 	}
+}
+
+// sendPeerConnectionsTelemetryStatus sends a snapshot of the currently connected peers
+// to the telemetry server. Internally, it's using a timer to ensure that it would only
+// send the information once every hour ( configurable via PeerConnectionsUpdateInterval )
+func (wn *WebsocketNetwork) sendPeerConnectionsTelemetryStatus() {
+	now := time.Now()
+	if wn.lastPeerConnectionsSent.Add(time.Duration(wn.config.PeerConnectionsUpdateInterval)*time.Second).After(now) || wn.config.PeerConnectionsUpdateInterval <= 0 {
+		// it's not yet time to send the update.
+		return
+	}
+	wn.lastPeerConnectionsSent = now
+	var peers []*wsPeer
+	peers = wn.peerSnapshot(peers)
+	var connectionDetails telemetryspec.PeersConnectionDetails
+	for _, peer := range peers {
+		connDetail := telemetryspec.PeerConnectionDetails{
+			ConnectionDuration: uint(now.Sub(peer.createTime).Seconds()),
+			HostName:           peer.TelemetryGUID,
+			InstanceName:       peer.InstanceName,
+		}
+		if peer.outgoing {
+			connDetail.Address = justHost(peer.conn.RemoteAddr().String())
+			connDetail.Endpoint = peer.GetAddress()
+			connectionDetails.OutgoingPeers = append(connectionDetails.OutgoingPeers, connDetail)
+		} else {
+			connDetail.Address = peer.OriginAddress()
+			connectionDetails.IncomingPeers = append(connectionDetails.IncomingPeers, connDetail)
+		}
+	}
+
+	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.PeerConnectionsEvent, connectionDetails)
 }
 
 // prioWeightRefreshTime controls how often we refresh the weights
@@ -1363,7 +1424,7 @@ func (wn *WebsocketNetwork) peersToPing() []*wsPeer {
 }
 
 func (wn *WebsocketNetwork) getDNSAddrs(dnsBootstrap string) []string {
-	srvPhonebook, err := wn.readFromBootstrap(dnsBootstrap)
+	srvPhonebook, err := tools_network.ReadFromSRV("algobootstrap", "tcp", dnsBootstrap, wn.config.FallbackDNSResolverAddress)
 	if err != nil {
 		// only log this warning on testnet or devnet
 		if wn.NetworkID == config.Devnet || wn.NetworkID == config.Testnet {
@@ -1372,47 +1433,6 @@ func (wn *WebsocketNetwork) getDNSAddrs(dnsBootstrap string) []string {
 		return nil
 	}
 	return srvPhonebook
-}
-
-func (wn *WebsocketNetwork) readFromBootstrap(bootstrapID string) (addrs []string, err error) {
-	if bootstrapID == "" {
-		wn.log.Debug("no dns lookup due to empty bootstrapID")
-		return
-	}
-
-	_, records, sysLookupErr := net.LookupSRV("algobootstrap", "tcp", bootstrapID)
-	if sysLookupErr != nil {
-		var resolver tools_network.Resolver
-		// try to resolve the address. If it's an dotted-numbers format, it would return that right away.
-		// if it's a named address, we would attempt to parse it and might fail.
-		// ( failing isn't that bad; the resolver would internally try to use 8.8.8.8 instead )
-		if DNSIPAddr, err2 := net.ResolveIPAddr("ip", wn.config.FallbackDNSResolverAddress); err2 == nil {
-			resolver.DNSAddress = *DNSIPAddr
-		} else {
-			wn.log.Infof("readFromBootstrap: Failed to resolve fallback DNS resolver address '%s': %v; falling back to default fallback resolver address", wn.config.FallbackDNSResolverAddress, err2)
-		}
-
-		_, records, err = resolver.LookupSRV(context.Background(), "algobootstrap", "tcp", bootstrapID)
-		if err != nil {
-			wn.log.Warnf("readFromBootstrap: DNS LookupSRV failed when using system resolver(%v) as well as via %s due to %v", sysLookupErr, resolver.EffectiveResolverDNS(), err)
-			return
-		}
-		// we succeeded when using the public dns. log this.
-		wn.log.Infof("readFromBootstrap: DNS LookupSRV failed when using the system resolver(%v); using public DNS(%s) server directly instead.", sysLookupErr, resolver.EffectiveResolverDNS())
-	}
-	for _, srv := range records {
-		// empty target won't take us far; skip these
-		if srv.Target == "" {
-			continue
-		}
-		// according to the SRV spec, each target need to end with a dot. While this would make a valid host name, including the
-		// last dot could lead to a non-canonical domain name representation, which would better get avoided.
-		if srv.Target[len(srv.Target)-1:] == "." {
-			srv.Target = srv.Target[:len(srv.Target)-1]
-		}
-		addrs = append(addrs, fmt.Sprintf("%s:%d", srv.Target, srv.Port))
-	}
-	return
 }
 
 // ProtocolVersionHeader HTTP header for protocol version. TODO: this may be unneeded redundance since we also have url versioning "/v1/..."
@@ -1590,7 +1610,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	}
 
 	peer := &wsPeer{wsPeerCore: wsPeerCore{net: wn, rootURL: addr}, conn: conn, outgoing: true, incomingMsgFilter: wn.incomingMsgFilter, createTime: time.Now()}
-	peer.TelemetryGUID = response.Header.Get(TelemetryIDHeader)
+	peer.TelemetryGUID, peer.InstanceName, _ = getCommonHeaders(response.Header)
 	peer.init(wn.config, wn.outgoingMessagesBufferSize)
 	wn.addPeer(peer)
 	localAddr, _ := wn.Address()
@@ -1600,7 +1620,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 			Address:      justHost(conn.RemoteAddr().String()),
 			HostName:     peer.TelemetryGUID,
 			Incoming:     false,
-			InstanceName: myInstanceName,
+			InstanceName: peer.InstanceName,
 		})
 
 	peers.Set(float64(wn.NumPeers()), nil)
@@ -1650,7 +1670,7 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 	// first logging, then take the lock and do the actual accounting.
 	// definitely don't change this to do the logging while holding the lock.
 	localAddr, _ := wn.Address()
-	wn.log.With("event", "Disconnected").With("remote", peer.rootURL).With("local", localAddr).Infof("Peer %v disconnected", peer.rootURL)
+	wn.log.With("event", "Disconnected").With("remote", peer.rootURL).With("local", localAddr).Infof("Peer %s disconnected: %s", peer.rootURL, reason)
 	peerAddr := peer.OriginAddress()
 	// we might be able to get addr out of conn, or it might be closed
 	if peerAddr == "" && peer.conn != nil {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -333,7 +333,7 @@ func (l *testLedger) EnsureBlock(e bookkeeping.Block, c Certificate) {
 	l.notify(e.Round())
 }
 
-func (l *testLedger) EnsureDigest(c Certificate, quit chan struct{}, verifier *AsyncVoteVerifier) {
+func (l *testLedger) EnsureDigest(c Certificate, verifier *AsyncVoteVerifier) {
 	r := c.Round
 	l.mu.Lock()
 	defer l.mu.Unlock()

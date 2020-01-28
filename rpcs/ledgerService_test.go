@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
+	"github.com/algorand/go-algorand/components/mocks"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data"
@@ -47,7 +48,7 @@ var poolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x
 
 type httpTestPeerSource struct {
 	peers []network.Peer
-	Registrar
+	mocks.MockNetwork
 }
 
 func (s *httpTestPeerSource) GetPeers(options ...network.PeerOption) []network.Peer {
@@ -73,7 +74,7 @@ func (p *testHTTPPeer) GetHTTPPeer() network.HTTPPeer {
 	return p
 }
 
-func buildTestHTTPPeerSource(rootURL string) PeerSource {
+func buildTestHTTPPeerSource(rootURL string) network.GossipNode {
 	peer := testHTTPPeer{rootURL: rootURL}
 	var wat network.HTTPPeer
 	wat = &peer
@@ -113,10 +114,11 @@ func TestGetBlockHTTP(t *testing.T) {
 
 	start := time.Now()
 	block, cert, client, err = fetcher.FetchBlock(context.Background(), next)
+	end := time.Now()
 	require.NotNil(t, client)
 	require.NoError(t, err)
-	end := time.Now()
-	require.True(t, end.Sub(start) < goExecTime+10*time.Millisecond)
+
+	require.True(t, end.Sub(start) < 10*time.Second)
 	require.Equal(t, &b, block)
 	if err == nil {
 		require.NotEqual(t, nil, block)
@@ -127,6 +129,7 @@ func TestGetBlockHTTP(t *testing.T) {
 type testUnicastPeerSrc struct {
 	peers   []network.Peer
 	handler network.MessageHandler
+	mocks.MockNetwork
 }
 
 func (s *testUnicastPeerSrc) GetPeers(options ...network.PeerOption) []network.Peer {
@@ -136,7 +139,6 @@ func (s *testUnicastPeerSrc) GetPeers(options ...network.PeerOption) []network.P
 	return nil
 }
 
-func (s *testUnicastPeerSrc) RegisterHTTPHandler(path string, handler http.Handler) {}
 func (s *testUnicastPeerSrc) RegisterHandlers(dispatch []network.TaggedMessageHandler) {
 	if dispatch[0].Tag == protocol.UniCatchupResTag {
 		s.handler = dispatch[0].MessageHandler
@@ -211,7 +213,7 @@ func TestGetBlockWS(t *testing.T) {
 	require.NotNil(t, client)
 	require.NoError(t, err)
 	end := time.Now()
-	require.True(t, end.Sub(start) < goExecTime+10*time.Millisecond)
+	require.True(t, end.Sub(start) < 10*time.Second)
 	require.Equal(t, &b, block)
 	if err == nil {
 		require.NotEqual(t, nil, block)
@@ -225,6 +227,7 @@ type BasicRPCNode struct {
 	server   http.Server
 	rmux     *mux.Router
 	peers    []network.Peer
+	mocks.MockNetwork
 }
 
 func (b *BasicRPCNode) RegisterHTTPHandler(path string, handler http.Handler) {
@@ -302,7 +305,13 @@ func TestGetBlockMocked(t *testing.T) {
 
 	// A is running the ledger service and will respond to fetch requests
 	genBal := data.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
-	ledgerA, err := data.LoadLedger(log.With("name", "A"), t.Name(), true, protocol.ConsensusCurrentVersion, genBal, "", crypto.Digest{}, nil)
+	const inMem = true
+	const archival = true
+	ledgerA, err := data.LoadLedger(
+		log.With("name", "A"), t.Name(), inMem,
+		protocol.ConsensusCurrentVersion, genBal, "", crypto.Digest{},
+		nil, archival,
+	)
 	if err != nil {
 		t.Errorf("Couldn't make ledger: %v", err)
 	}
@@ -327,7 +336,6 @@ func TestGetBlockMocked(t *testing.T) {
 	signedtx := transactions.SignedTxn{
 		Txn: tx,
 	}
-	signedtx.InitCaches()
 
 	var b bookkeeping.Block
 	prev, err := ledgerA.Block(ledgerA.LastRound())
@@ -382,7 +390,13 @@ func TestGetFutureBlock(t *testing.T) {
 
 	gen := data.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
 	// A is running the ledger service and will respond to fetch requests
-	ledgerA, err := data.LoadLedger(log.With("name", "A"), t.Name(), true, protocol.ConsensusCurrentVersion, gen, "", crypto.Digest{}, nil)
+	const inMem = true
+	const archival = true
+	ledgerA, err := data.LoadLedger(
+		log.With("name", "A"), t.Name(), inMem,
+		protocol.ConsensusCurrentVersion, gen, "", crypto.Digest{},
+		nil, archival,
+	)
 	if err != nil {
 		t.Errorf("Couldn't make ledger: %v", err)
 	}
@@ -421,7 +435,12 @@ func buildTestLedger(t *testing.T) (ledger *data.Ledger, next basics.Round, b bo
 	log := logging.TestingLog(t)
 	genBal := data.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
 	genHash := crypto.Digest{0x42}
-	ledger, err = data.LoadLedger(log, t.Name(), true, protocol.ConsensusCurrentVersion, genBal, "", genHash, nil)
+	const inMem = true
+	const archival = true
+	ledger, err = data.LoadLedger(
+		log, t.Name(), inMem, protocol.ConsensusCurrentVersion, genBal, "", genHash,
+		nil, archival,
+	)
 	if err != nil {
 		t.Fatal("couldn't build ledger", err)
 		return

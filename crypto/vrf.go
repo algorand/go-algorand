@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -56,15 +56,15 @@ func GenerateVRFSecrets() *VRFSecrets {
 type (
 	// A VrfPrivkey is a private key used for producing VRF proofs.
 	// Specifically, we use a 64-byte ed25519 private key (the latter 32-bytes are the precomputed public key)
-	VrfPrivkey [64]uint8
+	VrfPrivkey [64]byte
 	// A VrfPubkey is a public key that can be used to verify VRF proofs.
-	VrfPubkey [32]uint8
+	VrfPubkey [32]byte
 	// A VrfProof for a message can be generated with a secret key and verified against a public key, like a signature.
 	// Proofs are malleable, however, for a given message and public key, the VRF output that can be computed from a proof is unique.
-	VrfProof [80]uint8
+	VrfProof [80]byte
 	// VrfOutput is a 64-byte pseudorandom value that can be computed from a VrfProof.
 	// The VRF scheme guarantees that such output will be unique
-	VrfOutput [64]uint8
+	VrfOutput [64]byte
 )
 
 // VrfKeygenFromSeed deterministically generates a VRF keypair from 32 bytes of (secret) entropy.
@@ -121,7 +121,7 @@ func (pk VrfPubkey) verifyBytes(proof VrfProof, msg []byte) (bool, VrfOutput) {
 
 // Verify checks a VRF proof of a given Hashable. If the proof is valid the pseudorandom VrfOutput will be returned.
 // For a given public key and message, there are potentially multiple valid proofs.
-// However, given a publick key and message, all valid proofs will yield the same output.
+// However, given a public key and message, all valid proofs will yield the same output.
 // Moreover, the output is indistinguishable from random to anyone without the proof or the secret key.
 func (pk VrfPubkey) Verify(p VrfProof, message Hashable) (bool, VrfOutput) {
 	return pk.verifyBytes(p, hashRep(message))

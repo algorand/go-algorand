@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -137,7 +137,7 @@ func (i ledgerImpl) ConsensusVersion(r basics.Round) (protocol.ConsensusVersion,
 }
 
 // EnsureDigest implements Ledger.EnsureDigest.
-func (i ledgerImpl) EnsureDigest(cert agreement.Certificate, quit chan struct{}, verifier *agreement.AsyncVoteVerifier) {
+func (i ledgerImpl) EnsureDigest(cert agreement.Certificate, verifier *agreement.AsyncVoteVerifier) {
 	r := cert.Round
 	consistencyCheck := func() bool {
 		if r < i.NextRound() {
@@ -159,13 +159,9 @@ func (i ledgerImpl) EnsureDigest(cert agreement.Certificate, quit chan struct{},
 		return
 	}
 
-	select {
-	case <-quit:
-		return
-	case <-i.Wait(r):
-		if !consistencyCheck() {
-			err := fmt.Errorf("Wait channel fired without matching block in round %v", r)
-			panic(err)
-		}
+	<-i.Wait(r)
+	if !consistencyCheck() {
+		err := fmt.Errorf("Wait channel fired without matching block in round %v", r)
+		panic(err)
 	}
 }

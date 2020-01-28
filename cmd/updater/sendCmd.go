@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -31,6 +31,7 @@ func init() {
 	sendCmd.Flags().StringVarP(&sourcePath, "sourcePath", "s", "", "Path containing versions to send (required)")
 	sendCmd.Flags().StringVarP(&uploadBucket, "bucket", "b", "", "S3 bucket to upload files to.")
 	sendCmd.MarkFlagRequired("sourcePath")
+	sendCmd.MarkFlagRequired("bucket")
 }
 
 var sendCmd = &cobra.Command{
@@ -38,9 +39,6 @@ var sendCmd = &cobra.Command{
 	Short: "Upload versions to S3",
 	Long:  "Uploads *.tar.gz files from specified path",
 	Run: func(cmd *cobra.Command, args []string) {
-		if uploadBucket == "" {
-			uploadBucket = s3.GetS3ReleaseBucket()
-		}
 		s3Session, err := s3.MakeS3SessionForUploadWithBucket(uploadBucket)
 		if err != nil {
 			exitErrorf("Error creating s3 session %s", err.Error())

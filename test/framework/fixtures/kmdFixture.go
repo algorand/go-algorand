@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -77,6 +77,7 @@ func (f *KMDFixture) Shutdown() {
 	// If there's a kmd server running
 	if f.initialized {
 		nc := nodecontrol.MakeNodeController(f.binDir, f.dataDir)
+		nc.SetKMDDataDir(f.kmdDir)
 		_, err := nc.StopKMD()
 		require.NoError(f.t, err)
 	}

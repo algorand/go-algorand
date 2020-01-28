@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,7 +33,6 @@ func Test_loadTelemetryConfig(t *testing.T) {
 		URI:                "elastic.algorand.com",
 		MinLogLevel:        4,
 		ReportHistoryLevel: 4,
-		LogHistoryDepth:    100,
 		UserName:           "telemetry-v9",
 		Password:           "oq%$FA1TOJ!yYeMEcJ7D688eEOE#MGCu",
 	}
@@ -81,7 +80,6 @@ func Test_CreateSaveLoadTelemetryConfig(t *testing.T) {
 	a.Equal(config1.GUID, config2.GUID)
 	a.Equal(config1.MinLogLevel, config2.MinLogLevel)
 	a.Equal(config1.ReportHistoryLevel, config2.ReportHistoryLevel)
-	a.Equal(config1.LogHistoryDepth, config2.LogHistoryDepth)
 	a.Equal(config1.FilePath, "")
 	a.Equal(configsPath, config2.FilePath)
 	a.Equal(config1.ChainID, config2.ChainID)
@@ -100,10 +98,8 @@ func Test_SanitizeTelemetryString(t *testing.T) {
 
 	tests := []testcase{
 		{"2001:0db8:85a3:0000:0000:8a2e:0370:7334", "2001:0db8:85a3:0000:0000:8a2e:0370:7334", 1},
-		{"2001:0db8:85a3:0000:0000:8a2e:0370:7334:9999", "2001:0db8:85a3:0000:0000:8a2e:0370:7334", 1},
-		{"this.needs.to.be.truncated.because.it.is.way.too.long", "this.needs.to.be.truncated.because.it.i", 1},
-		{"this.needs.to.be.truncated.because.it.is.way.too.long:two-parts-can-be-bigger", "this.needs.to.be.truncated.because.it.is.way.too.long:two-parts-can-be-bigger", 2},
-		{"this.needs.to.be.truncated.because.it.is.way.too.long:two-parts-can-be-bigger-but-there-is-still-a-limit", "this.needs.to.be.truncated.because.it.is.way.too.long:two-parts-can-be-bigger-b", 2},
+		{"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 1},
+		{"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 1},
 	}
 
 	for _, test := range tests {

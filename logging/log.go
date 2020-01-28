@@ -154,6 +154,7 @@ type Logger interface {
 	AddHook(hook logrus.Hook)
 
 	EnableTelemetry(cfg TelemetryConfig) error
+	UpdateTelemetryURI(uri string) error
 	GetTelemetryEnabled() bool
 	Metrics(category telemetryspec.Category, metrics telemetryspec.MetricDetails, details interface{})
 	Event(category telemetryspec.Category, identifier telemetryspec.Event)
@@ -162,6 +163,7 @@ type Logger interface {
 	GetTelemetrySession() string
 	GetTelemetryHostName() string
 	GetInstanceName() string
+	GetTelemetryURI() string
 	CloseTelemetry()
 }
 
@@ -364,10 +366,21 @@ func NewLogger() Logger {
 }
 
 func (l logger) EnableTelemetry(cfg TelemetryConfig) (err error) {
-	if l.loggerState.telemetry != nil || !cfg.Enable {
+	if l.loggerState.telemetry != nil || (!cfg.Enable && !cfg.SendToLog) {
 		return nil
 	}
 	return EnableTelemetry(cfg, &l)
+}
+
+func (l logger) UpdateTelemetryURI(uri string) (err error) {
+	if l.loggerState.telemetry.hook == nil {
+		return nil
+	}
+	err = l.loggerState.telemetry.hook.UpdateHookURI(uri)
+	if err == nil {
+		telemetryConfig.URI = uri
+	}
+	return
 }
 
 func (l logger) GetTelemetryEnabled() bool {
@@ -384,6 +397,10 @@ func (l logger) GetTelemetryHostName() string {
 
 func (l logger) GetInstanceName() string {
 	return telemetryConfig.getInstanceName()
+}
+
+func (l logger) GetTelemetryURI() string {
+	return telemetryConfig.URI
 }
 
 func (l logger) Metrics(category telemetryspec.Category, metrics telemetryspec.MetricDetails, details interface{}) {

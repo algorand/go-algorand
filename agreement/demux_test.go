@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -515,7 +515,7 @@ func (t *demuxTester) EnsureValidatedBlock(ValidatedBlock, Certificate) {
 }
 
 // implement Ledger
-func (t *demuxTester) EnsureDigest(Certificate, chan struct{}, *AsyncVoteVerifier) {
+func (t *demuxTester) EnsureDigest(Certificate, *AsyncVoteVerifier) {
 	// we don't care about this function in this test.
 }
 

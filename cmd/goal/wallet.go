@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -48,8 +48,7 @@ func init() {
 
 var walletCmd = &cobra.Command{
 	Use:   "wallet",
-	Short: "Manage wallets: encrypted collections of Algorand account keys",
-	Long:  `Manage wallets: encrypted collections of Algorand account keys`,
+	Short: "Manage wallets: encrypted collections of Algorand account keys.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Update the default wallet
@@ -80,8 +79,7 @@ var walletCmd = &cobra.Command{
 
 var newWalletCmd = &cobra.Command{
 	Use:   "new [wallet name]",
-	Short: "Create a new wallet",
-	Long:  `Create a new wallet`,
+	Short: "Create a new wallet.",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		var err error
@@ -187,8 +185,7 @@ var newWalletCmd = &cobra.Command{
 
 var listWalletsCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List wallets managed by kmd",
-	Long:  `List wallets managed by kmd`,
+	Short: "List wallets managed by kmd.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		onDataDirs(func(dataDir string) {

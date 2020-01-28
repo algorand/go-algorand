@@ -48,3 +48,9 @@ crypto/libsodium-fork/build-aux/
 
 # Mac
 .DS_Store
+
+# doc intermediates
+data/transactions/logic/*.md
+
+*.pem
+

@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -34,8 +34,16 @@ func (ml *mockLedger) lookup(addr basics.Address) (basics.AccountData, error) {
 	return ml.balanceMap[addr], nil
 }
 
-func (ml *mockLedger) isDup(firstValid basics.Round, txn transactions.Txid) (bool, error) {
+func (ml *mockLedger) isDup(firstValid, lastValid basics.Round, txn transactions.Txid, txl txlease) (bool, error) {
 	return false, nil
+}
+
+func (ml *mockLedger) getAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error) {
+	return basics.Address{}, nil
+}
+
+func (ml *mockLedger) txnCounter() uint64 {
+	return 0
 }
 
 func checkCow(t *testing.T, cow *roundCowState, accts map[basics.Address]basics.AccountData) {

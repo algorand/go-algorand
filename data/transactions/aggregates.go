@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,6 +24,7 @@ import (
 
 type (
 	// A Payset represents a common, unforgeable, consistent, ordered set of SignedTxn objects.
+	//msgp:allocbound Payset 100000
 	Payset []SignedTxnInBlock
 )
 

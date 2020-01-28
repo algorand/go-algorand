@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -166,6 +166,18 @@ type APIV1POSTTransactionSignRequest struct {
 	WalletPassword string `json:"wallet_password"`
 }
 
+// APIV1POSTProgramSignRequest is the request for `POST /v1/program/sign`
+//
+// swagger:model SignProgramRequest
+type APIV1POSTProgramSignRequest struct {
+	APIV1RequestEnvelope
+	WalletHandleToken string `json:"wallet_handle_token"`
+	Address           string `json:"address"`
+	// swagger:strfmt byte
+	Program        []byte `json:"data"`
+	WalletPassword string `json:"wallet_password"`
+}
+
 // APIV1POSTMultisigListRequest is the request for `POST /v1/multisig/list`
 //
 // swagger:model ListMultisigRequest
@@ -212,6 +224,20 @@ type APIV1POSTMultisigTransactionSignRequest struct {
 	WalletHandleToken string `json:"wallet_handle_token"`
 	// swagger:strfmt byte
 	Transaction    []byte             `json:"transaction"`
+	PublicKey      crypto.PublicKey   `json:"public_key"`
+	PartialMsig    crypto.MultisigSig `json:"partial_multisig"`
+	WalletPassword string             `json:"wallet_password"`
+}
+
+// APIV1POSTMultisigProgramSignRequest is the request for `POST /v1/multisig/signprogram`
+//
+// swagger:model SignProgramMultisigRequest
+type APIV1POSTMultisigProgramSignRequest struct {
+	APIV1RequestEnvelope
+	WalletHandleToken string `json:"wallet_handle_token"`
+	Address           string `json:"address"`
+	// swagger:strfmt byte
+	Program        []byte             `json:"data"`
 	PublicKey      crypto.PublicKey   `json:"public_key"`
 	PartialMsig    crypto.MultisigSig `json:"partial_multisig"`
 	WalletPassword string             `json:"wallet_password"`

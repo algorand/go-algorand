@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -34,11 +34,15 @@ import (
 type mockLedgerForTracker struct {
 	dbs    dbPair
 	blocks []blockEntry
+	log    logging.Logger
 }
 
 func makeMockLedgerForTracker(t *testing.T) *mockLedgerForTracker {
 	dbs := dbOpenTest(t)
-	return &mockLedgerForTracker{dbs: dbs}
+	dblogger := logging.TestingLog(t)
+	dbs.rdb.SetLogger(dblogger)
+	dbs.wdb.SetLogger(dblogger)
+	return &mockLedgerForTracker{dbs: dbs, log: dblogger}
 }
 
 func (ml *mockLedgerForTracker) close() {
@@ -49,8 +53,8 @@ func (ml *mockLedgerForTracker) Latest() basics.Round {
 	return basics.Round(len(ml.blocks)) - 1
 }
 
-func (ml *mockLedgerForTracker) trackerEvalVerified(blk bookkeeping.Block, aux evalAux) (stateDelta, error) {
-	delta := stateDelta{
+func (ml *mockLedgerForTracker) trackerEvalVerified(blk bookkeeping.Block) (StateDelta, error) {
+	delta := StateDelta{
 		hdr: &bookkeeping.BlockHeader{},
 	}
 	return delta, nil
@@ -72,20 +76,12 @@ func (ml *mockLedgerForTracker) BlockHdr(rnd basics.Round) (bookkeeping.BlockHea
 	return ml.blocks[int(rnd)].block.BlockHeader, nil
 }
 
-func (ml *mockLedgerForTracker) blockAux(rnd basics.Round) (bookkeeping.Block, evalAux, error) {
-	if rnd > ml.Latest() {
-		return bookkeeping.Block{}, evalAux{}, fmt.Errorf("rnd %d out of bounds", rnd)
-	}
-
-	return ml.blocks[int(rnd)].block, ml.blocks[int(rnd)].aux, nil
-}
-
 func (ml *mockLedgerForTracker) trackerDB() dbPair {
 	return ml.dbs
 }
 
 func (ml *mockLedgerForTracker) trackerLog() logging.Logger {
-	return logging.Base()
+	return ml.log
 }
 
 func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, latestRnd basics.Round, accts []map[basics.Address]basics.AccountData, rewards []uint64, proto config.ConsensusParams) {
@@ -219,7 +215,7 @@ func TestAcctUpdates(t *testing.T) {
 		blk.RewardsLevel = rewardLevel
 		blk.CurrentProtocol = protocol.ConsensusCurrentVersion
 
-		au.newBlock(blk, stateDelta{
+		au.newBlock(blk, StateDelta{
 			accts: updates,
 			hdr:   &blk.BlockHeader,
 		})

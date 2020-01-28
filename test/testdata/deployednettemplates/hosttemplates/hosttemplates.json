@@ -61,6 +61,12 @@
       "BaseConfiguration": "c5d.9xlarge"
     },
     {
+      "Name": "AWS-US-EAST-1-T2-Large",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "t2.large"
+    },
+    {
       "Name": "AWS-US-EAST-1-Small",
       "Provider": "AWS",
       "Region": "us-east-1",

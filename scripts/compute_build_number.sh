@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # compute_build_number.sh - Calculates the build number to use based on the current date/time.
 #           Optionally computes the complete version string from scanning config/version.go for the

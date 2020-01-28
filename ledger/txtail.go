@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,12 +26,19 @@ import (
 )
 
 type roundTxMembers struct {
-	txids map[transactions.Txid]struct{}
-	proto config.ConsensusParams
+	txids    map[transactions.Txid]basics.Round
+	txleases map[txlease]basics.Round // map of transaction lease to when it expires
+	proto    config.ConsensusParams
 }
 
 type txTail struct {
 	recent map[basics.Round]roundTxMembers
+
+	lastValid map[basics.Round]map[transactions.Txid]struct{} // map tx.LastValid -> tx confirmed set
+
+	// duplicate detection queries with LastValid not before
+	// lowWaterMark are not guaranteed to succeed
+	lowWaterMark basics.Round // the last round known to be committed to disk
 }
 
 func (t *txTail) loadFromDisk(l ledgerForTracker) error {
@@ -48,6 +55,9 @@ func (t *txTail) loadFromDisk(l ledgerForTracker) error {
 	// Thus we load the txids from blocks R+1-maxTxnLife to R, inclusive
 	old := (latest + 1).SubSaturate(basics.Round(proto.MaxTxnLife))
 
+	t.lowWaterMark = latest
+	t.lastValid = make(map[basics.Round]map[transactions.Txid]struct{})
+
 	t.recent = make(map[basics.Round]roundTxMembers)
 	for ; old <= latest; old++ {
 		blk, err := l.Block(old)
@@ -55,17 +65,21 @@ func (t *txTail) loadFromDisk(l ledgerForTracker) error {
 			return err
 		}
 
-		payset, err := blk.DecodePayset()
+		payset, err := blk.DecodePaysetFlat()
 		if err != nil {
 			return err
 		}
 
 		t.recent[old] = roundTxMembers{
-			txids: make(map[transactions.Txid]struct{}),
-			proto: config.Consensus[blk.CurrentProtocol],
+			txids:    make(map[transactions.Txid]basics.Round),
+			txleases: make(map[txlease]basics.Round),
+			proto:    config.Consensus[blk.CurrentProtocol],
 		}
-		for _, tx := range payset {
-			t.recent[old].txids[tx.ID()] = struct{}{}
+		for _, txad := range payset {
+			tx := txad.SignedTxn
+			t.recent[old].txids[tx.ID()] = tx.Txn.LastValid
+			t.recent[old].txleases[txlease{sender: tx.Txn.Sender, lease: tx.Txn.Lease}] = tx.Txn.LastValid
+			t.putLV(tx.Txn.LastValid, tx.ID())
 		}
 	}
 
@@ -75,7 +89,7 @@ func (t *txTail) loadFromDisk(l ledgerForTracker) error {
 func (t *txTail) close() {
 }
 
-func (t *txTail) newBlock(blk bookkeeping.Block, delta stateDelta) {
+func (t *txTail) newBlock(blk bookkeeping.Block, delta StateDelta) {
 	rnd := blk.Round()
 
 	if t.recent[rnd].txids != nil {
@@ -84,8 +98,13 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta stateDelta) {
 	}
 
 	t.recent[rnd] = roundTxMembers{
-		txids: delta.txids,
-		proto: config.Consensus[blk.CurrentProtocol],
+		txids:    delta.Txids,
+		txleases: delta.txleases,
+		proto:    config.Consensus[blk.CurrentProtocol],
+	}
+
+	for txid, lv := range delta.Txids {
+		t.putLV(lv, txid)
 	}
 }
 
@@ -96,22 +115,43 @@ func (t *txTail) committedUpTo(rnd basics.Round) basics.Round {
 			delete(t.recent, r)
 		}
 	}
+	for ; t.lowWaterMark < rnd; t.lowWaterMark++ {
+		delete(t.lastValid, t.lowWaterMark)
+	}
 
 	return (rnd + 1).SubSaturate(maxlife)
 }
 
-func (t *txTail) isDup(firstValid basics.Round, lastValid basics.Round, txid transactions.Txid) (bool, error) {
-	for rnd := firstValid; rnd <= lastValid; rnd++ {
-		rndtxs := t.recent[rnd].txids
-		if rndtxs == nil {
-			return true, fmt.Errorf("txTail: tried to check for dup in missing round %d", rnd)
-		}
+func (t *txTail) isDup(proto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl txlease) (bool, error) {
+	if lastValid < t.lowWaterMark {
+		return true, fmt.Errorf("txTail: tried to check for dup in missing round %d", lastValid)
+	}
 
-		_, present := rndtxs[txid]
-		if present {
-			return true, nil
+	if proto.SupportTransactionLeases && (txl.lease != [32]byte{}) {
+		for rnd := firstValid; rnd <= lastValid; rnd++ {
+			expires, ok := t.recent[rnd].txleases[txl]
+			if ok && current <= expires {
+				return true, nil
+			}
 		}
 	}
 
-	return false, nil
+	_, confirmed := t.lastValid[lastValid][txid]
+	return confirmed, nil
+}
+
+func (t *txTail) getRoundTxIds(rnd basics.Round) (txMap map[transactions.Txid]bool) {
+	rndtxs := t.recent[rnd].txids
+	txMap = make(map[transactions.Txid]bool, len(rndtxs))
+	for txid := range rndtxs {
+		txMap[txid] = true
+	}
+	return
+}
+
+func (t *txTail) putLV(lastValid basics.Round, id transactions.Txid) {
+	if _, ok := t.lastValid[lastValid]; !ok {
+		t.lastValid[lastValid] = make(map[transactions.Txid]struct{})
+	}
+	t.lastValid[lastValid][id] = struct{}{}
 }
