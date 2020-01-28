@@ -141,15 +141,6 @@ const ConsensusTestBigBlocks = ConsensusVersion("test-big-blocks")
 // that decreases the RewardRecalculationInterval greatly.
 const ConsensusTestRapidRewardRecalculation = ConsensusVersion("test-fast-reward-recalculation")
 
-// ConsensusTestUnupgradedProtocol is a version of ConsensusCurrentVersion
-// that allows the control of the upgrade from ConsensusTestUnupgradedProtocol to
-// ConsensusTestUnupgradedProtocol
-const ConsensusTestUnupgradedProtocol = ConsensusVersion("test-unupgraded-protocol")
-
-// ConsensusTestUnupgradedToProtocol is a version of ConsensusCurrentVersion
-// It is used as an upgrade from ConsensusTestUnupgradedProtocol
-const ConsensusTestUnupgradedToProtocol = ConsensusVersion("test-unupgradedto-protocol")
-
 // Error is used to indicate that an unsupported protocol has been detected.
 type Error ConsensusVersion
 
