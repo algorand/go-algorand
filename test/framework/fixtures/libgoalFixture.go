@@ -220,7 +220,7 @@ func (f *LibGoalFixture) GetLibGoalClientFromDataDir(dataDir string) libgoal.Cli
 // GetLibGoalClientForNamedNode returns the LibGoal Client for a given named node
 func (f *LibGoalFixture) GetLibGoalClientForNamedNode(nodeName string) libgoal.Client {
 	nodeDir, err := f.network.GetNodeDir(nodeName)
-	client, err := libgoal.MakeClientWithBinDir(f.binDir, nodeDir, nodeDir, libgoal.KmdClient)
+	client, err := libgoal.MakeClientWithBinDir(f.binDir, nodeDir, nodeDir, libgoal.FullClient)
 	f.failOnError(err, "make libgoal client failed: %v")
 	f.importRootKeys(&client, nodeDir)
 	return client
