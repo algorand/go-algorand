@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/gen"
 	"github.com/algorand/go-algorand/libgoal"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util"
 )
 
@@ -47,8 +48,9 @@ type nodeConfig struct {
 
 // NetworkTemplate represents the template used for creating private named networks
 type NetworkTemplate struct {
-	Genesis gen.GenesisData
-	Nodes   []nodeConfig
+	Genesis   gen.GenesisData
+	Nodes     []nodeConfig
+	Consensus map[protocol.ConsensusVersion]config.ConsensusParams
 }
 
 var defaultNetworkTemplate = NetworkTemplate{
@@ -58,7 +60,7 @@ var defaultNetworkTemplate = NetworkTemplate{
 func (t NetworkTemplate) generateGenesisAndWallets(targetFolder, networkName, binDir string) error {
 	genesisData := t.Genesis
 	genesisData.NetworkName = networkName
-	return gen.GenerateGenesisFiles(genesisData, targetFolder, true)
+	return gen.GenerateGenesisFiles(genesisData, targetFolder, true, t.Consensus)
 }
 
 // Create data folders for all NodeConfigs, configuring relays appropriately and

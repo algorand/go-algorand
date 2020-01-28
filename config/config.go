@@ -282,15 +282,28 @@ func SaveConfigurableConsensus(dataDirectory string, params map[protocol.Consens
 
 // LoadConfigurableConsensusProtocols loads the configurable protocols from the data directroy
 func LoadConfigurableConsensusProtocols(dataDirectory string) error {
+	newConsensus, err := PreloadConfigurableConsensusProtocols(dataDirectory)
+	if err != nil {
+		return err
+	}
+	if newConsensus != nil {
+		Consensus = newConsensus
+	}
+	return nil
+}
+
+// PreloadConfigurableConsensusProtocols loads the configurable protocols from the data directroy
+// and merge it with a copy of the Consensus map. Then, it returns it to the caller.
+func PreloadConfigurableConsensusProtocols(dataDirectory string) (map[protocol.ConsensusVersion]ConsensusParams, error) {
 	consensusProtocolPath := filepath.Join(dataDirectory, ConfigurableConsensusProtocolsFilename)
 	file, err := os.Open(consensusProtocolPath)
 
 	if err != nil {
 		if os.IsNotExist(err) {
 			// this file is not required, only optional. if it's missing, no harm is done.
-			return nil
+			return nil, nil
 		}
-		return err
+		return nil, err
 	}
 	defer file.Close()
 
@@ -299,15 +312,28 @@ func LoadConfigurableConsensusProtocols(dataDirectory string) error {
 	decoder := json.NewDecoder(file)
 	err = decoder.Decode(&configurableConsensus)
 	if err != nil {
-		return err
+		return nil, err
+	}
+
+	staticConsensus := make(map[protocol.ConsensusVersion]ConsensusParams)
+	for consensusVersion, consensusParams := range Consensus {
+		// recreate the ApprovedUpgrades map since we don't want to modify the original one.
+		if consensusParams.ApprovedUpgrades != nil {
+			newApprovedUpgrades := make(map[protocol.ConsensusVersion]uint64)
+			for ver, when := range consensusParams.ApprovedUpgrades {
+				newApprovedUpgrades[ver] = when
+			}
+			consensusParams.ApprovedUpgrades = newApprovedUpgrades
+		}
+		staticConsensus[consensusVersion] = consensusParams
 	}
 
 	for consensusVersion, consensusParams := range configurableConsensus {
 		if consensusParams.ApprovedUpgrades == nil {
 			// if we were provided with an empty ConsensusParams, delete the existing reference to this consensus version
-			for cVer, cParam := range Consensus {
+			for cVer, cParam := range staticConsensus {
 				if cVer == consensusVersion {
-					delete(Consensus, cVer)
+					delete(staticConsensus, cVer)
 				} else if _, has := cParam.ApprovedUpgrades[consensusVersion]; has {
 					// delete upgrade to deleted version
 					delete(cParam.ApprovedUpgrades, consensusVersion)
@@ -315,11 +341,11 @@ func LoadConfigurableConsensusProtocols(dataDirectory string) error {
 			}
 		} else {
 			// need to add/update entry
-			Consensus[consensusVersion] = consensusParams
+			staticConsensus[consensusVersion] = consensusParams
 		}
 	}
 
-	return nil
+	return staticConsensus, nil
 }
 
 func initConsensusProtocols() {
@@ -572,15 +598,15 @@ func initConsensusTestProtocols() {
 	// Setting the testShorterLookback parameters derived from ConsensusCurrentVersion
 	// Will result in MaxBalLookback = 32
 	// Used to run tests faster where past MaxBalLookback values are checked
-	testShorterLookback := Consensus[protocol.ConsensusCurrentVersion]
-	testShorterLookback.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	//testShorterLookback := Consensus[protocol.ConsensusCurrentVersion]
+	//testShorterLookback.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	// MaxBalLookback  =  2 x SeedRefreshInterval x SeedLookback
 	// ref. https://github.com/algorandfoundation/specs/blob/master/dev/abft.md
-	testShorterLookback.SeedLookback = 2
-	testShorterLookback.SeedRefreshInterval = 8
-	testShorterLookback.MaxBalLookback = 2 * testShorterLookback.SeedLookback * testShorterLookback.SeedRefreshInterval // 32
-	Consensus[protocol.ConsensusTestShorterLookback] = testShorterLookback
+	//testShorterLookback.SeedLookback = 2
+	//testShorterLookback.SeedRefreshInterval = 8
+	//testShorterLookback.MaxBalLookback = 2 * testShorterLookback.SeedLookback * testShorterLookback.SeedRefreshInterval // 32
+	//Consensus[protocol.ConsensusTestShorterLookback] = testShorterLookback
 
 	// The following two protocols: testUnupgradedProtocol and testUnupgradedToProtocol
 	// are used to test the case when some nodes in the network do not make progress.

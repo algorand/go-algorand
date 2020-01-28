@@ -53,6 +53,13 @@ type LibGoalFixture struct {
 	t              TestingT
 	tMu            deadlock.RWMutex
 	clientPartKeys map[string][]account.Participation
+	consensus      map[protocol.ConsensusVersion]config.ConsensusParams
+}
+
+// SetConsensus applies a new consensus settings which would get deployed before
+// any of the nodes starts
+func (f *RestClientFixture) SetConsensus(consensus map[protocol.ConsensusVersion]config.ConsensusParams) {
+	f.consensus = consensus
 }
 
 // Setup is called to initialize the test fixture for the test(s)
@@ -86,7 +93,7 @@ func (f *LibGoalFixture) setup(test TestingT, testName string, templateFile stri
 	os.RemoveAll(f.rootDir)
 	templateFile = filepath.Join(f.testDataDir, templateFile)
 	importKeys := false // Don't automatically import root keys when creating folders, we'll import on-demand
-	network, err := netdeploy.CreateNetworkFromTemplate("test", f.rootDir, templateFile, f.binDir, importKeys, f.nodeExitWithError)
+	network, err := netdeploy.CreateNetworkFromTemplate("test", f.rootDir, templateFile, f.binDir, importKeys, f.nodeExitWithError, f.consensus)
 	f.failOnError(err, "CreateNetworkFromTemplate failed: %v")
 	f.network = network
 

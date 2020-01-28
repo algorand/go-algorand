@@ -53,7 +53,7 @@ func main() {
 		genesisData.NetworkName = *netName
 	}
 
-	err = gen.GenerateGenesisFiles(genesisData, *outDir, !*quiet)
+	err = gen.GenerateGenesisFiles(genesisData, *outDir, !*quiet, nil)
 	if err != nil {
 		reportErrorf("Cannot write genesis files: %s", err)
 	}

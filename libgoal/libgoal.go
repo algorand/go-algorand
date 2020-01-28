@@ -50,6 +50,7 @@ type Client struct {
 	kmdStartArgs nodecontrol.KMDStartArgs
 	dataDir      string
 	cacheDir     string
+	consensus    map[protocol.ConsensusVersion]config.ConsensusParams
 }
 
 // ClientConfig is data to configure a Client
@@ -160,6 +161,10 @@ func (c *Client) init(config ClientConfig, clientType ClientType) error {
 
 	if clientType == AlgodClient || clientType == FullClient {
 		_, err = c.ensureAlgodClient()
+		if err != nil {
+			return err
+		}
+		c.consensus, err = nc.GetConsensus()
 		if err != nil {
 			return err
 		}
@@ -495,7 +500,7 @@ func (c *Client) ComputeValidityRounds(firstValid, lastValid, validRounds uint64
 	if err != nil {
 		return 0, 0, err
 	}
-	cparams, ok := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
+	cparams, ok := c.consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
 	if !ok {
 		return 0, 0, fmt.Errorf("cannot construct transaction: unknown consensus protocol %s", params.ConsensusVersion)
 	}
@@ -558,7 +563,7 @@ func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []by
 		return transactions.Transaction{}, err
 	}
 
-	cp, ok := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
+	cp, ok := c.consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
 	if !ok {
 		return transactions.Transaction{}, fmt.Errorf("ConstructPayment: unknown consensus protocol %s", params.ConsensusVersion)
 	}
@@ -795,7 +800,7 @@ func (c *Client) ConsensusParams(round uint64) (consensus config.ConsensusParams
 		return
 	}
 
-	params, ok := config.Consensus[protocol.ConsensusVersion(block.CurrentProtocol)]
+	params, ok := c.consensus[protocol.ConsensusVersion(block.CurrentProtocol)]
 	if !ok {
 		err = fmt.Errorf("ConsensusParams: unknown consensus protocol %s", block.CurrentProtocol)
 		return

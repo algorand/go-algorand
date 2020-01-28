@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/gen"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/nodecontrol"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util"
 )
 
@@ -57,7 +58,7 @@ type Network struct {
 
 // CreateNetworkFromTemplate uses the specified template to deploy a new private network
 // under the specified root directory.
-func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, importKeys bool, nodeExitCallback nodecontrol.AlgodExitErrorCallback) (Network, error) {
+func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, importKeys bool, nodeExitCallback nodecontrol.AlgodExitErrorCallback, consensus map[protocol.ConsensusVersion]config.ConsensusParams) (Network, error) {
 	n := Network{
 		rootDir:          rootDir,
 		nodeExitCallback: nodeExitCallback,
@@ -78,7 +79,7 @@ func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, impor
 	if err != nil {
 		return n, err
 	}
-
+	template.Consensus = consensus
 	err = template.generateGenesisAndWallets(rootDir, name, binDir)
 	if err != nil {
 		return n, err
@@ -90,6 +91,7 @@ func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, impor
 	}
 
 	err = n.Save(rootDir)
+	n.SetConsensus(binDir, consensus)
 	return n, err
 }
 
@@ -436,4 +438,26 @@ func (n Network) NodesStatus(binDir string) map[string]NetworkNodeStatus {
 func (n Network) Delete(binDir string) error {
 	n.Stop(binDir)
 	return os.RemoveAll(n.rootDir)
+}
+
+// SetConsensus applies a new consensus settings which would get deployed before
+// any of the nodes starts
+func (n Network) SetConsensus(binDir string, consensus map[protocol.ConsensusVersion]config.ConsensusParams) error {
+	for _, relayDir := range n.cfg.RelayDirs {
+		relayFulllPath := n.getNodeFullPath(relayDir)
+		nc := nodecontrol.MakeNodeController(binDir, relayFulllPath)
+		err := nc.SetConsensus(consensus)
+		if err != nil {
+			return err
+		}
+	}
+	for _, nodeDir := range n.nodeDirs {
+		nodeFulllPath := n.getNodeFullPath(nodeDir)
+		nc := nodecontrol.MakeNodeController(binDir, nodeFulllPath)
+		err := nc.SetConsensus(consensus)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
