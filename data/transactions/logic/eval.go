@@ -44,9 +44,6 @@ import (
 // EvalMaxVersion is the max version we can interpret and run
 const EvalMaxVersion = 1
 
-// EvalMaxArgs is the maximum number of arguments to an LSig
-const EvalMaxArgs = 255
-
 // EvalMaxScratchSize is the maximum number of scratch slots.
 const EvalMaxScratchSize = 255
 
@@ -194,7 +191,7 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 		err = errLogicSignNotSupported
 		return
 	}
-	if params.Txn.Lsig.Args != nil && len(params.Txn.Lsig.Args) > EvalMaxArgs {
+	if params.Txn.Lsig.Args != nil && len(params.Txn.Lsig.Args) > transactions.EvalMaxArgs {
 		err = errTooManyArgs
 		return
 	}
