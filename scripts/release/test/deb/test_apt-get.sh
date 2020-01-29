@@ -2,7 +2,7 @@
 
 #set -xv
 
-echo "deb_test starting within docker container"
+echo "test_apt-get starting within docker container"
 
 export GOPATH=${HOME}/go
 export PATH=${GOPATH}/bin:/usr/local/go/bin:${PATH}
@@ -22,7 +22,7 @@ OUTPUT=$(expect -d /workdir/testDebian.exp /var/lib/algorand /testdata)
 STATUS=$?
 echo "$OUTPUT"
 
-echo "deb_test completed with status: " $STATUS
+echo "test_apt-get completed with status: " $STATUS
 
 exit $STATUS
 

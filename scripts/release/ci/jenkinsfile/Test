@@ -36,7 +36,6 @@ pipeline {
             }
         }
 
-        /*
         stage("test") {
             steps {
                 sh script: "scripts/release/ci/stage/test.sh ${params.bucket_location} ${params.channel}"
@@ -49,7 +48,6 @@ pipeline {
                 sh script: "scripts/release/ci/stage/delete.sh ${params.region}"
             }
         }
-        */
     }
 }
 
