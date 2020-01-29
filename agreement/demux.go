@@ -232,7 +232,7 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 		fastDeadlineCh = s.Clock.TimeoutAt(fastDeadline)
 	}
 	if err != nil {
-		logging.Base().Errorf("could not get consensus parameters for round %v: %v", ParamsRound(currentRound), err)
+		logging.Base().Errorf("could not get consensus parameters for round %d: %v", ParamsRound(currentRound), err)
 	}
 
 	d.UpdateEventsQueue(eventQueueDemux, 0)
@@ -271,7 +271,7 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 			Round: uint64(previousRound),
 		}
 
-		s.log.with(logEvent).Infof("agreement: round %v ended early due to concurrent write; next round is %v", previousRound, nextRound)
+		s.log.with(logEvent).Infof("agreement: round %d ended early due to concurrent write; next round is %d", previousRound, nextRound)
 		e = roundInterruptionEvent{Round: nextRound}
 		d.UpdateEventsQueue(eventQueueDemux, 1)
 		d.monitor.inc(demuxCoserviceType)

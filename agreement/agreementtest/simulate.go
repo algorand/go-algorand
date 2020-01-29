@@ -181,7 +181,7 @@ func Simulate(dbname string, n basics.Round, roundDeadline time.Duration, ledger
 		select {
 		case <-ledger.Wait(r):
 		case <-deadlineCh:
-			return fmt.Errorf("agreementtest.Simulate: round %v failed to complete by the deadline (%v)", r, roundDeadline)
+			return fmt.Errorf("agreementtest.Simulate: round %d failed to complete by the deadline (%v)", r, roundDeadline)
 		}
 	}
 

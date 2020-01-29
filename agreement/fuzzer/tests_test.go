@@ -66,7 +66,7 @@ func printResults(t *testing.T, r *RunResult) {
 		return
 	}
 	require.Truef(t, (r.PostRecoveryHighRound-r.PostRecoveryLowRound <= 1),
-		"Initial Rounds %v-%v\nPre Recovery Rounds %v-%v\nPost Recovery Rounds %v-%v",
+		"Initial Rounds %d-%d\nPre Recovery Rounds %d-%d\nPost Recovery Rounds %d-%d",
 		r.StartLowRound, r.StartHighRound,
 		r.PreRecoveryLowRound, r.PreRecoveryHighRound,
 		r.PostRecoveryLowRound, r.PostRecoveryHighRound,
@@ -79,12 +79,12 @@ func printResults(t *testing.T, r *RunResult) {
 	)
 	if r.PreRecoveryHighRound != r.PreRecoveryLowRound {
 		// network got disupted by the filters.
-		fmt.Printf("%v partitioned the network ( %v - %v ), but recovered correctly reaching round %v\n", t.Name(), r.PreRecoveryLowRound, r.PreRecoveryHighRound, r.PostRecoveryHighRound)
+		fmt.Printf("%v partitioned the network ( %d - %d ), but recovered correctly reaching round %d\n", t.Name(), r.PreRecoveryLowRound, r.PreRecoveryHighRound, r.PostRecoveryHighRound)
 	} else {
 		if r.PreRecoveryHighRound == r.StartLowRound {
-			fmt.Printf("%v stalled the network, and the network reached round %v\n", t.Name(), r.PostRecoveryHighRound)
+			fmt.Printf("%v stalled the network, and the network reached round %d\n", t.Name(), r.PostRecoveryHighRound)
 		} else {
-			fmt.Printf("%v did not partition the network, and the network reached round %v\n", t.Name(), r.PostRecoveryHighRound)
+			fmt.Printf("%v did not partition the network, and the network reached round %d\n", t.Name(), r.PostRecoveryHighRound)
 		}
 	}
 }*/
@@ -112,7 +112,7 @@ func TestCircularNetworkTopology(t *testing.T) {
 	}
 	for i := range nodeCounts {
 		nodeCount := nodeCounts[i]
-		t.Run(fmt.Sprintf("TestCircularNetworkTopology-%v", nodeCount),
+		t.Run(fmt.Sprintf("TestCircularNetworkTopology-%d", nodeCount),
 			func(t *testing.T) {
 				nodes := nodeCount
 				topologyConfig := TopologyFilterConfig{
@@ -122,7 +122,7 @@ func TestCircularNetworkTopology(t *testing.T) {
 					topologyConfig.NodesConnection[i] = []int{(i + nodes - 1) % nodes, (i + 1) % nodes}
 				}
 				netConfig := &FuzzerConfig{
-					FuzzerName: fmt.Sprintf("circularNetworkTopology-%v", nodes),
+					FuzzerName: fmt.Sprintf("circularNetworkTopology-%d", nodes),
 					NodesCount: nodes,
 					Filters:    []NetworkFilterFactory{NetworkFilterFactory(MakeTopologyFilter(topologyConfig))},
 					LogLevel:   logging.Info,
@@ -491,7 +491,7 @@ func TestNetworkBandwidth(t *testing.T) {
 	}
 	for i := range nodeCounts {
 		nodeCount := nodeCounts[i]
-		t.Run(fmt.Sprintf("TestNetworkBandwidth-%v", nodeCount),
+		t.Run(fmt.Sprintf("TestNetworkBandwidth-%d", nodeCount),
 			func(t *testing.T) {
 				nodes := nodeCount
 				topologyConfig := TopologyFilterConfig{
@@ -518,7 +518,7 @@ func TestNetworkBandwidth(t *testing.T) {
 				}
 
 				netConfig := &FuzzerConfig{
-					FuzzerName:  fmt.Sprintf("networkBandwidth-%v", nodes),
+					FuzzerName:  fmt.Sprintf("networkBandwidth-%d", nodes),
 					NodesCount:  nodes + relayCounts,
 					OnlineNodes: onlineNodes,
 					Filters: []NetworkFilterFactory{
@@ -593,7 +593,7 @@ func TestUnstakedNetworkLinearGrowth(t *testing.T) {
 		statFilterFactory := MakeTrafficStatisticsFilterFactory(statConf)
 
 		netConfig := &FuzzerConfig{
-			FuzzerName:  fmt.Sprintf("networkUnstakedLinearGrowth-%v", nodes),
+			FuzzerName:  fmt.Sprintf("networkUnstakedLinearGrowth-%d", nodes),
 			NodesCount:  nodes + relayCount,
 			OnlineNodes: onlineNodes,
 			Filters: []NetworkFilterFactory{
@@ -704,7 +704,7 @@ func TestStakedNetworkQuadricGrowth(t *testing.T) {
 		statFilterFactory := MakeTrafficStatisticsFilterFactory(statConf)
 
 		netConfig := &FuzzerConfig{
-			FuzzerName:  fmt.Sprintf("stakedNetworkQuadricGrowth-%v", nodes),
+			FuzzerName:  fmt.Sprintf("stakedNetworkQuadricGrowth-%d", nodes),
 			NodesCount:  nodes + relayCount,
 			OnlineNodes: onlineNodes,
 			Filters: []NetworkFilterFactory{
@@ -810,7 +810,7 @@ func TestRegossipinngElimination(t *testing.T) {
 	}
 
 	netConfig := &FuzzerConfig{
-		FuzzerName:  fmt.Sprintf("networkRegossiping-baseline-%v", nodes),
+		FuzzerName:  fmt.Sprintf("networkRegossiping-baseline-%d", nodes),
 		NodesCount:  nodes + relayCounts,
 		OnlineNodes: onlineNodes,
 		Filters: []NetworkFilterFactory{
@@ -829,7 +829,7 @@ func TestRegossipinngElimination(t *testing.T) {
 	validator.Go(netConfig)
 
 	netConfig2 := &FuzzerConfig{
-		FuzzerName:  fmt.Sprintf("networkRegossiping-eliminated-regossip-%v", nodes),
+		FuzzerName:  fmt.Sprintf("networkRegossiping-eliminated-regossip-%d", nodes),
 		NodesCount:  nodes + relayCounts,
 		OnlineNodes: onlineNodes,
 		Filters: []NetworkFilterFactory{
@@ -910,7 +910,7 @@ func BenchmarkNetworkPerformance(b *testing.B) {
 		statFilterFactory := MakeTrafficStatisticsFilterFactory(statConf)
 
 		netConfig := &FuzzerConfig{
-			FuzzerName:  fmt.Sprintf("networkUnstakedLinearGrowth-%v", nodes),
+			FuzzerName:  fmt.Sprintf("networkUnstakedLinearGrowth-%d", nodes),
 			NodesCount:  nodes + relayCount,
 			OnlineNodes: onlineNodes,
 			Filters: []NetworkFilterFactory{
