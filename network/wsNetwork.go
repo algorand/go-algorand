@@ -173,6 +173,12 @@ type GossipNode interface {
 
 	// ClearHandlers deregisters all the existing message handlers.
 	ClearHandlers()
+
+	// MakeHTTPRequest will make sure connectionsRateLimitingCount
+	// is not violated, and register the connection time of the
+	// request, before making the http request to the server.
+	MakeHTTPRequest(client *http.Client,
+		request *http.Request) (*http.Response, error)
 }
 
 // IncomingMessage represents a message arriving from some peer in our p2p network
@@ -772,6 +778,17 @@ func (wn *WebsocketNetwork) checkServerResponseVariables(header http.Header, add
 	return true
 }
 
+// MakeHTTPRequest will make sure connectionsRateLimitingCount is not
+// violated, and register the connection time of the request, before
+// making the http request to the server.
+func (wn *WebsocketNetwork) MakeHTTPRequest(client *http.Client,
+	request *http.Request) (resp *http.Response, err error) {
+	_, _, provisionalTime := wn.phonebook.WaitForConnectionTime(request.Host)
+	resp, err = client.Do(request)
+	wn.phonebook.UpdateConnectionTime(request.Host, provisionalTime)
+	return resp, err
+}
+
 // getCommonHeaders retreives the common headers for both incoming and outgoing connections from the provided headers.
 func getCommonHeaders(headers http.Header) (otherTelemetryGUID, otherInstanceName, otherPublicAddr string) {
 	otherTelemetryGUID = logging.SanitizeTelemetryString(headers.Get(TelemetryIDHeader), 1)
@@ -1222,7 +1239,8 @@ func (wn *WebsocketNetwork) meshThread() {
 				dnsPhonebook := wn.phonebook.GetPhonebook(dnsBootstrap)
 				if dnsPhonebook == nil {
 					// create one, if we don't have one already.
-					dnsPhonebook = MakeThreadsafePhonebook()
+					dnsPhonebook = MakeThreadsafePhonebook(wn.config.ConnectionsRateLimitingCount,
+						time.Duration(wn.config.ConnectionsRateLimitingWindowSeconds)*time.Second)
 					wn.phonebook.AddOrUpdatePhonebook(dnsBootstrap, dnsPhonebook)
 				}
 				if tsPhonebook, ok := dnsPhonebook.(*ThreadsafePhonebook); ok {
