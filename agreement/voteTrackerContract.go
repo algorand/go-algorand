@@ -61,7 +61,7 @@ func (c *voteTrackerContract) pre(p player, in0 event) (pre []error) {
 			c.Step = in.Vote.R.Step
 		} else {
 			if c.Step != in.Vote.R.Step {
-				pre = append(pre, fmt.Errorf("incoming event has step %v but expected step %v", in.Vote.R.Step, c.Step))
+				pre = append(pre, fmt.Errorf("incoming event has step %d but expected step %d", in.Vote.R.Step, c.Step))
 			}
 		}
 		return
@@ -82,15 +82,15 @@ func (c *voteTrackerContract) post(p player, in0, out0 event) (post []error) {
 		case none:
 		case softThreshold:
 			if in.Vote.R.Step != soft {
-				post = append(post, fmt.Errorf("incoming event has step %v but outgoing event has type softThreshold", in.Vote.R.Step))
+				post = append(post, fmt.Errorf("incoming event has step %d but outgoing event has type softThreshold", in.Vote.R.Step))
 			}
 		case certThreshold:
 			if in.Vote.R.Step != cert {
-				post = append(post, fmt.Errorf("incoming event has step %v but outgoing event has type certThreshold", in.Vote.R.Step))
+				post = append(post, fmt.Errorf("incoming event has step %d but outgoing event has type certThreshold", in.Vote.R.Step))
 			}
 		case nextThreshold:
 			if in.Vote.R.Step <= cert {
-				post = append(post, fmt.Errorf("incoming event has step %v but outgoing event has type nextThreshold", in.Vote.R.Step))
+				post = append(post, fmt.Errorf("incoming event has step %d but outgoing event has type nextThreshold", in.Vote.R.Step))
 			}
 		default:
 			post = append(post, fmt.Errorf("outgoing event has invalid type: %v", out0.t()))
@@ -115,10 +115,10 @@ func (c *voteTrackerContract) post(p player, in0, out0 event) (post []error) {
 
 		emptyBundle := len(out.Bundle.Votes) == 0
 		if (out.T == none) != emptyBundle {
-			post = append(post, fmt.Errorf("out.T must be none if and only if out.Bundle is empty, but out.T = %v while len(out.Bundle.Votes) = %v", out.T, len(out.Bundle.Votes)))
+			post = append(post, fmt.Errorf("out.T must be none if and only if out.Bundle is empty, but out.T = %v while len(out.Bundle.Votes) = %d", out.T, len(out.Bundle.Votes)))
 		}
 		if out.T != none && out.Proposal == bottom && out.Step < next {
-			post = append(post, fmt.Errorf("outgoing event has bottom proposal but step %v", out.Step))
+			post = append(post, fmt.Errorf("outgoing event has bottom proposal but step %d", out.Step))
 		}
 		return
 	case voteFilterRequest:

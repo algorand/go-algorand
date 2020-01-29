@@ -100,14 +100,14 @@ func (uv unauthenticatedVote) verify(l LedgerReader) (vote, error) {
 		}
 		// The following check could apply to all steps, but it's sufficient to only check in the propose step.
 		if rv.Proposal.OriginalPeriod > rv.Period {
-			return vote{}, fmt.Errorf("unauthenticatedVote.verify: proposal-vote in period %v claims to repropose block from future period %v", rv.Period, rv.Proposal.OriginalPeriod)
+			return vote{}, fmt.Errorf("unauthenticatedVote.verify: proposal-vote in period %d claims to repropose block from future period %d", rv.Period, rv.Proposal.OriginalPeriod)
 		}
 		fallthrough
 	case soft:
 		fallthrough
 	case cert:
 		if rv.Proposal == bottom {
-			return vote{}, fmt.Errorf("unauthenticatedVote.verify: votes from step %v cannot validate bottom", rv.Step)
+			return vote{}, fmt.Errorf("unauthenticatedVote.verify: votes from step %d cannot validate bottom", rv.Step)
 		}
 	}
 
@@ -156,18 +156,18 @@ func makeVote(rv rawVote, voting crypto.OneTimeSigner, selection *crypto.VRFSecr
 		switch rv.Step {
 		case propose, soft, cert, late, redo:
 			if rv.Proposal == bottom {
-				logging.Base().Panicf("makeVote: votes from step %v cannot validate bottom", rv.Step)
+				logging.Base().Panicf("makeVote: votes from step %d cannot validate bottom", rv.Step)
 			}
 		case down:
 			if rv.Proposal != bottom {
-				logging.Base().Panicf("makeVote: votes from step %v must validate bottom", rv.Step)
+				logging.Base().Panicf("makeVote: votes from step %d must validate bottom", rv.Step)
 			}
 		}
 	} else {
 		switch rv.Step {
 		case propose, soft, cert:
 			if rv.Proposal == bottom {
-				logging.Base().Panicf("makeVote: votes from step %v cannot validate bottom", rv.Step)
+				logging.Base().Panicf("makeVote: votes from step %d cannot validate bottom", rv.Step)
 			}
 		}
 	}
