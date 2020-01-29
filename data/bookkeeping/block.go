@@ -261,6 +261,7 @@ func (s RewardsState) NextRewardsState(nextRound basics.Round, nextProto config.
 			logging.Base().Errorf("overflowed when trying to refresh RewardsRate for round %v (state %+v)", nextRound, s)
 			newRate = 0
 		}
+
 		res.RewardsRate = newRate / nextProto.RewardsRateRefreshInterval
 		res.RewardsRecalculationRound = nextRound + basics.Round(nextProto.RewardsRateRefreshInterval)
 	}
