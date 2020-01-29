@@ -18,7 +18,7 @@ set -ex
 GIT_REPO_PATH=https://github.com/algorand/go-algorand
 HASH=${1:-"rel/stable"}
 export HASH
-CHANNEL=${1:-"stable"}
+CHANNEL=${2:-"stable"}
 export CHANNEL
 export DEBIAN_FRONTEND=noninteractive
 
@@ -29,6 +29,7 @@ sudo rngd -r /dev/urandom
 
 #umask 0077
 mkdir -p "${HOME}"/{.gnupg,go,gpgbin,node_pkg,keys,tkey}
+mkdir -p "${HOME}"/go/bin
 
 # Check out
 mkdir -p "${HOME}/go/src/github.com/algorand"
