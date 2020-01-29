@@ -92,8 +92,12 @@ func (network *MockNetwork) ClearHandlers() {
 func (network *MockNetwork) RegisterHTTPHandler(path string, handler http.Handler) {
 }
 
-// MakeHTTPRequest - basic client.Do request
-func (network *MockNetwork) MakeHTTPRequest(client *http.Client,
-	request *http.Request) (*http.Response, error) {
-	return client.Do(request)
+// GetDialer -  empty implementation
+func (network *MockNetwork) GetDialer() *network.Dialer {
+	return nil
+}
+
+// GetNetTransport - empty implementation
+func (network *MockNetwork) GetNetTransport() *http.Transport {
+	return nil
 }
