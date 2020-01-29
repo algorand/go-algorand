@@ -954,7 +954,7 @@ func TestAssetCreateWaitBalLookbackDelete(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	configurableConsensus := make(map[protocol.ConsensusVersion]config.ConsensusParams)
+	configurableConsensus := make(config.ConsensusProtocols)
 
 	consensusVersion := protocol.ConsensusVersion("test-shorter-lookback")
 
@@ -1036,7 +1036,7 @@ func TestAssetCreateWaitBalLookbackDelete(t *testing.T) {
 /** Helper functions **/
 
 // Setup the test and the network
-func setupTestAndNetwork(t *testing.T, networkTemplate string, consensus map[protocol.ConsensusVersion]config.ConsensusParams) (
+func setupTestAndNetwork(t *testing.T, networkTemplate string, consensus config.ConsensusProtocols) (
 	Assertions *require.Assertions, Fixture *fixtures.RestClientFixture, Client *libgoal.Client, Account0 string) {
 
 	t.Parallel()

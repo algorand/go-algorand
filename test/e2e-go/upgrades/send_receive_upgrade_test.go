@@ -27,8 +27,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/framework/fixtures"
 )
 
 func GenerateRandomBytes(n int) []byte {
@@ -112,8 +112,8 @@ func consensusTestFastUpgrade(proto protocol.ConsensusVersion) protocol.Consensu
 	return "test-fast-upgrade-" + proto
 }
 
-func generateFastUpgradeConsensus() (fastUpgradeProtocols map[protocol.ConsensusVersion]config.ConsensusParams) {
-	fastUpgradeProtocols = make(map[protocol.ConsensusVersion]config.ConsensusParams)
+func generateFastUpgradeConsensus() (fastUpgradeProtocols config.ConsensusProtocols) {
+	fastUpgradeProtocols = make(ConsensusProtocols)
 
 	for proto, params := range config.Consensus {
 		fastParams := params

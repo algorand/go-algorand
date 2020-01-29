@@ -53,12 +53,12 @@ type LibGoalFixture struct {
 	t              TestingT
 	tMu            deadlock.RWMutex
 	clientPartKeys map[string][]account.Participation
-	consensus      map[protocol.ConsensusVersion]config.ConsensusParams
+	consensus      config.ConsensusProtocols
 }
 
 // SetConsensus applies a new consensus settings which would get deployed before
 // any of the nodes starts
-func (f *RestClientFixture) SetConsensus(consensus map[protocol.ConsensusVersion]config.ConsensusParams) {
+func (f *RestClientFixture) SetConsensus(consensus config.ConsensusProtocols) {
 	f.consensus = consensus
 }
 

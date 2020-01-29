@@ -50,7 +50,7 @@ type Client struct {
 	kmdStartArgs nodecontrol.KMDStartArgs
 	dataDir      string
 	cacheDir     string
-	consensus    map[protocol.ConsensusVersion]config.ConsensusParams
+	consensus    config.ConsensusProtocols
 }
 
 // ClientConfig is data to configure a Client

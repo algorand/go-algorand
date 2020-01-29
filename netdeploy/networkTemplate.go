@@ -30,7 +30,6 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/gen"
 	"github.com/algorand/go-algorand/libgoal"
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util"
 )
 
@@ -50,7 +49,7 @@ type nodeConfig struct {
 type NetworkTemplate struct {
 	Genesis   gen.GenesisData
 	Nodes     []nodeConfig
-	Consensus map[protocol.ConsensusVersion]config.ConsensusParams
+	Consensus config.ConsensusProtocols
 }
 
 var defaultNetworkTemplate = NetworkTemplate{

@@ -30,7 +30,6 @@ import (
 	"github.com/algorand/go-algorand/gen"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/nodecontrol"
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util"
 )
 
@@ -58,7 +57,7 @@ type Network struct {
 
 // CreateNetworkFromTemplate uses the specified template to deploy a new private network
 // under the specified root directory.
-func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, importKeys bool, nodeExitCallback nodecontrol.AlgodExitErrorCallback, consensus map[protocol.ConsensusVersion]config.ConsensusParams) (Network, error) {
+func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, importKeys bool, nodeExitCallback nodecontrol.AlgodExitErrorCallback, consensus config.ConsensusProtocols) (Network, error) {
 	n := Network{
 		rootDir:          rootDir,
 		nodeExitCallback: nodeExitCallback,
@@ -442,7 +441,7 @@ func (n Network) Delete(binDir string) error {
 
 // SetConsensus applies a new consensus settings which would get deployed before
 // any of the nodes starts
-func (n Network) SetConsensus(binDir string, consensus map[protocol.ConsensusVersion]config.ConsensusParams) error {
+func (n Network) SetConsensus(binDir string, consensus config.ConsensusProtocols) error {
 	for _, relayDir := range n.cfg.RelayDirs {
 		relayFulllPath := n.getNodeFullPath(relayDir)
 		nc := nodecontrol.MakeNodeController(binDir, relayFulllPath)

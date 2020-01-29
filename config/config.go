@@ -244,12 +244,16 @@ type ConsensusParams struct {
 	UseBuggyProposalLowestOutput bool
 }
 
+// ConsensusProtocols defines a set of supported protocols versions, and their corresponding
+// parameters
+type ConsensusProtocols map[protocol.ConsensusVersion]ConsensusParams
+
 // Consensus tracks the protocol-level settings for different versions of the
 // consensus protocol.
-var Consensus map[protocol.ConsensusVersion]ConsensusParams
+var Consensus ConsensusProtocols
 
 func init() {
-	Consensus = make(map[protocol.ConsensusVersion]ConsensusParams)
+	Consensus = make(ConsensusProtocols)
 
 	initConsensusProtocols()
 
@@ -264,7 +268,7 @@ func init() {
 }
 
 // SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.
-func SaveConfigurableConsensus(dataDirectory string, params map[protocol.ConsensusVersion]ConsensusParams) error {
+func SaveConfigurableConsensus(dataDirectory string, params ConsensusProtocols) error {
 	consensusProtocolPath := filepath.Join(dataDirectory, ConfigurableConsensusProtocolsFilename)
 
 	encodedConsensusParams, err := json.Marshal(params)
@@ -289,7 +293,7 @@ func LoadConfigurableConsensusProtocols(dataDirectory string) error {
 
 // PreloadConfigurableConsensusProtocols loads the configurable protocols from the data directroy
 // and merge it with a copy of the Consensus map. Then, it returns it to the caller.
-func PreloadConfigurableConsensusProtocols(dataDirectory string) (map[protocol.ConsensusVersion]ConsensusParams, error) {
+func PreloadConfigurableConsensusProtocols(dataDirectory string) (ConsensusProtocols, error) {
 	consensusProtocolPath := filepath.Join(dataDirectory, ConfigurableConsensusProtocolsFilename)
 	file, err := os.Open(consensusProtocolPath)
 
@@ -302,7 +306,7 @@ func PreloadConfigurableConsensusProtocols(dataDirectory string) (map[protocol.C
 	}
 	defer file.Close()
 
-	configurableConsensus := make(map[protocol.ConsensusVersion]ConsensusParams)
+	configurableConsensus := make(ConsensusProtocols)
 
 	decoder := json.NewDecoder(file)
 	err = decoder.Decode(&configurableConsensus)
@@ -310,7 +314,7 @@ func PreloadConfigurableConsensusProtocols(dataDirectory string) (map[protocol.C
 		return nil, err
 	}
 
-	staticConsensus := make(map[protocol.ConsensusVersion]ConsensusParams)
+	staticConsensus := make(ConsensusProtocols)
 	for consensusVersion, consensusParams := range Consensus {
 		// recreate the ApprovedUpgrades map since we don't want to modify the original one.
 		if consensusParams.ApprovedUpgrades != nil {

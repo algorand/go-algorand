@@ -313,7 +313,7 @@ func TestRewardRateRecalculation(t *testing.T) {
 	rapidRecalcParams.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	var fixture fixtures.RestClientFixture
-	fixture.SetConsensus(map[protocol.ConsensusVersion]config.ConsensusParams{
+	fixture.SetConsensus(config.ConsensusProtocols{
 		consensusTestRapidRewardRecalculation: rapidRecalcParams,
 	})
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each_RapidRewardRecalculation.json"))

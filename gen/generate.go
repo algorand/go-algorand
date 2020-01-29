@@ -51,7 +51,7 @@ type genesisAllocation struct {
 }
 
 // GenerateGenesisFiles generates the genesis.json file and wallet files for a give genesis configuration.
-func GenerateGenesisFiles(genesisData GenesisData, outDir string, verbose bool, consensus map[protocol.ConsensusVersion]config.ConsensusParams) error {
+func GenerateGenesisFiles(genesisData GenesisData, outDir string, verbose bool, consensus config.ConsensusProtocols) error {
 	err := os.Mkdir(outDir, os.ModeDir|os.FileMode(0777))
 	if err != nil && os.IsNotExist(err) {
 		return fmt.Errorf("couldn't make output directory '%s': %v", outDir, err.Error())

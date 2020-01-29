@@ -96,7 +96,7 @@ func doBenchTemplate(b *testing.B, template string, moneynode string) {
 	testBigBlocks.MaxTxnBytesPerBlock = 100000000
 	testBigBlocks.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
-	fixture.SetConsensus(map[protocol.ConsensusVersion]config.ConsensusParams{
+	fixture.SetConsensus(config.ConsensusProtocols{
 		consensusTestBigBlocks: testBigBlocks,
 	})
 	fixture.Setup(b, filepath.Join("nettemplates", template))

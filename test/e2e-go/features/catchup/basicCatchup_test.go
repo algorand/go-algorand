@@ -26,8 +26,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/framework/fixtures"
 )
 
 func TestBasicCatchup(t *testing.T) {
@@ -142,6 +142,7 @@ func TestCatchupOverGossip(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 	}
 }
+
 // consensusTestUnupgradedProtocol is a version of ConsensusCurrentVersion
 // that allows the control of the upgrade from consensusTestUnupgradedProtocol to
 // consensusTestUnupgradedProtocol
@@ -158,7 +159,7 @@ func TestStoppedCatchupOnUnsupported(t *testing.T) {
 	t.Parallel()
 	a := require.New(t)
 
-	consensus := make(map[protocol.ConsensusVersion]config.ConsensusParams)
+	consensus := make(config.ConsensusProtocols)
 	// The following two protocols: testUnupgradedProtocol and testUnupgradedToProtocol
 	// are used to test the case when some nodes in the network do not make progress.
 

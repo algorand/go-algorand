@@ -55,7 +55,7 @@ var defaultConfig = config.Local{
 	IncomingConnectionsLimit: -1,
 }
 
-func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationPool execpool.BacklogPool, customConsensus map[protocol.ConsensusVersion]config.ConsensusParams) ([]*AlgorandFullNode, []string, []string) {
+func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationPool execpool.BacklogPool, customConsensus config.ConsensusProtocols) ([]*AlgorandFullNode, []string, []string) {
 	util.RaiseRlimit(1000)
 	f, _ := os.Create(t.Name() + ".log")
 	logging.Base().SetJSONFormatter()
@@ -276,7 +276,7 @@ func TestSimpleUpgrade(t *testing.T) {
 	// supports a sorted-list balance commitment.
 	const consensusTest1 = protocol.ConsensusVersion("test1")
 
-	configurableConsensus := make(map[protocol.ConsensusVersion]config.ConsensusParams)
+	configurableConsensus := make(config.ConsensusProtocols)
 
 	testParams0 := config.Consensus[protocol.ConsensusCurrentVersion]
 	testParams0.SupportGenesisHash = false
