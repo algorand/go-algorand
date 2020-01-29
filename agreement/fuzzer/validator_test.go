@@ -70,7 +70,7 @@ func (v *Validator) CheckNetworkRecovery() {
 		return
 	}
 	require.Truef(v.tb, (v.runResult.PostRecoveryHighRound-v.runResult.PostRecoveryLowRound <= 1),
-		"Initial Rounds %v-%v\nPre Recovery Rounds %v-%v\nPost Recovery Rounds %v-%v",
+		"Initial Rounds %d-%d\nPre Recovery Rounds %d-%d\nPost Recovery Rounds %d-%d",
 		v.runResult.StartLowRound, v.runResult.StartHighRound,
 		v.runResult.PreRecoveryLowRound, v.runResult.PreRecoveryHighRound,
 		v.runResult.PostRecoveryLowRound, v.runResult.PostRecoveryHighRound,
@@ -83,12 +83,12 @@ func (v *Validator) CheckNetworkRecovery() {
 	)
 	if v.runResult.PreRecoveryHighRound != v.runResult.PreRecoveryLowRound {
 		// network got disupted by the filters.
-		fmt.Printf("%v partitioned the network ( %v - %v ), but recovered correctly reaching round %v\n", v.tb.Name(), v.runResult.PreRecoveryLowRound, v.runResult.PreRecoveryHighRound, v.runResult.PostRecoveryHighRound)
+		fmt.Printf("%v partitioned the network ( %d - %d ), but recovered correctly reaching round %d\n", v.tb.Name(), v.runResult.PreRecoveryLowRound, v.runResult.PreRecoveryHighRound, v.runResult.PostRecoveryHighRound)
 	} else {
 		if v.runResult.PreRecoveryHighRound == v.runResult.StartLowRound {
-			fmt.Printf("%v stalled the network, and the network reached round %v\n", v.tb.Name(), v.runResult.PostRecoveryHighRound)
+			fmt.Printf("%v stalled the network, and the network reached round %d\n", v.tb.Name(), v.runResult.PostRecoveryHighRound)
 		} else {
-			fmt.Printf("%v did not partition the network, and the network reached round %v\n", v.tb.Name(), v.runResult.PostRecoveryHighRound)
+			fmt.Printf("%v did not partition the network, and the network reached round %d\n", v.tb.Name(), v.runResult.PostRecoveryHighRound)
 		}
 	}
 }

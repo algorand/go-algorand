@@ -315,7 +315,7 @@ func (l *testLedger) EnsureBlock(e bookkeeping.Block, c Certificate) {
 
 	if _, ok := l.entries[e.Round()]; ok {
 		if l.entries[e.Round()].Digest() != e.Digest() {
-			err := fmt.Errorf("testLedger.EnsureBlock: called with conflicting entries in round %v", e.Round())
+			err := fmt.Errorf("testLedger.EnsureBlock: called with conflicting entries in round %d", e.Round())
 			panic(err)
 		}
 	}
@@ -326,7 +326,7 @@ func (l *testLedger) EnsureBlock(e bookkeeping.Block, c Certificate) {
 	if l.nextRound == e.Round() {
 		l.nextRound = e.Round() + 1
 	} else if l.nextRound < e.Round() {
-		err := fmt.Errorf("testLedger.EnsureBlock: attempted to write block in future round: %v < %v", l.nextRound, e.Round())
+		err := fmt.Errorf("testLedger.EnsureBlock: attempted to write block in future round: %d < %d", l.nextRound, e.Round())
 		panic(err)
 	}
 
@@ -341,7 +341,7 @@ func (l *testLedger) EnsureDigest(c Certificate, quit chan struct{}, verifier *A
 
 		if r < l.nextRound {
 			if l.entries[r].Digest() != c.Proposal.BlockDigest {
-				err := fmt.Errorf("testLedger.EnsureDigest called with conflicting entries in round %v", r)
+				err := fmt.Errorf("testLedger.EnsureDigest called with conflicting entries in round %d", r)
 				panic(err)
 			}
 			return true
@@ -358,7 +358,7 @@ func (l *testLedger) EnsureDigest(c Certificate, quit chan struct{}, verifier *A
 		return
 	case <-l.Wait(r):
 		if !consistencyCheck() {
-			err := fmt.Errorf("Wait channel fired without matching block in round %v", r)
+			err := fmt.Errorf("Wait channel fired without matching block in round %d", r)
 			panic(err)
 		}
 	}
@@ -383,7 +383,7 @@ type testAccountData struct {
 func makeProposalsTesting(accs testAccountData, round basics.Round, period period, factory BlockFactory, ledger Ledger) (ps []proposal, vs []vote) {
 	ve, err := factory.AssembleBlock(round, time.Now().Add(time.Minute))
 	if err != nil {
-		logging.Base().Errorf("Could not generate a proposal for round %v: %v", round, err)
+		logging.Base().Errorf("Could not generate a proposal for round %d: %v", round, err)
 		return nil, nil
 	}
 

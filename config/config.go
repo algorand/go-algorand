@@ -237,6 +237,10 @@ type ConsensusParams struct {
 
 	// max decimal precision for assets
 	MaxAssetDecimals uint32
+
+	// whether to use the old buggy Credential.lowestOutput function
+	// TODO(upgrade): Please remove as soon as the upgrade goes through
+	UseBuggyProposalLowestOutput bool
 }
 
 // Consensus tracks the protocol-level settings for different versions of the
@@ -311,6 +315,7 @@ func initConsensusProtocols() {
 		MaxBalLookback: 320,
 
 		MaxTxGroupSize: 1,
+		UseBuggyProposalLowestOutput: true, // TODO(upgrade): Please remove as soon as the upgrade goes through
 	}
 
 	v7.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
@@ -476,9 +481,17 @@ func initConsensusProtocols() {
 	// v19 can be upgraded to v20.
 	v19.ApprovedUpgrades[protocol.ConsensusV20] = 0
 
+	// v21 fixes a bug in Credential.lowestOutput that would cause larger accounts to be selected to propose disproportionately more often than small accounts
+	v21 := v20
+	v21.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	v21.UseBuggyProposalLowestOutput = false // TODO(upgrade): Please remove this line as soon as the protocol upgrade goes through
+	Consensus[protocol.ConsensusV21] = v21
+	// v20 can be upgraded to v21.
+	v20.ApprovedUpgrades[protocol.ConsensusV21] = 0
+
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v20
+	vFuture := v21
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	vFuture.MinUpgradeWaitRounds = 10000
 	vFuture.MaxUpgradeWaitRounds = 150000
@@ -538,6 +551,39 @@ func initConsensusTestProtocols() {
 	testShorterLookback.SeedRefreshInterval = 8
 	testShorterLookback.MaxBalLookback = 2 * testShorterLookback.SeedLookback * testShorterLookback.SeedRefreshInterval // 32
 	Consensus[protocol.ConsensusTestShorterLookback] = testShorterLookback
+
+	// The following two protocols: testUnupgradedProtocol and testUnupgradedToProtocol
+	// are used to test the case when some nodes in the network do not make progress.
+
+	// testUnupgradedToProtocol is derived from ConsensusCurrentVersion and upgraded
+	// from testUnupgradedProtocol.
+	testUnupgradedToProtocol := Consensus[protocol.ConsensusCurrentVersion]
+	testUnupgradedToProtocol.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	Consensus[protocol.ConsensusTestUnupgradedToProtocol] = testUnupgradedToProtocol
+
+	// testUnupgradedProtocol is used to control the upgrade of a node. This is used
+	// to construct and run a network where some node is upgraded, and some other
+	// node is not upgraded.
+	// testUnupgradedProtocol is derived from ConsensusCurrentVersion and upgrades to
+	// testUnupgradedToProtocol.
+	testUnupgradedProtocol := Consensus[protocol.ConsensusCurrentVersion]
+	testUnupgradedProtocol.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	testUnupgradedProtocol.UpgradeVoteRounds = 3
+	testUnupgradedProtocol.UpgradeThreshold = 2
+	testUnupgradedProtocol.DefaultUpgradeWaitRounds = 3
+	b, err := strconv.ParseBool(os.Getenv("ALGORAND_TEST_UNUPGRADEDPROTOCOL_DELETE_UPGRADE"))
+	// Do not upgrade to the next version if
+	// ALGORAND_TEST_UNUPGRADEDPROTOCOL_DELETE_UPGRADE is set to true (e.g. 1, TRUE)
+	if err == nil && b {
+		// Configure as if testUnupgradedToProtocol is not supported by the binary
+		delete(Consensus, protocol.ConsensusTestUnupgradedToProtocol)
+	} else {
+		// Direct upgrade path from ConsensusTestUnupgradedProtocol to ConsensusTestUnupgradedToProtocol
+		// This is needed for the voting nodes vote to upgrade to the next protocol
+		testUnupgradedProtocol.ApprovedUpgrades[protocol.ConsensusTestUnupgradedToProtocol] = 0
+	}
+	Consensus[protocol.ConsensusTestUnupgradedProtocol] = testUnupgradedProtocol
 }
 
 func initConsensusTestFastUpgrade() {
@@ -766,6 +812,13 @@ type Local struct {
 	// PeerConnectionsUpdateInterval defines the interval at which the peer connections information is being sent to the
 	// telemetry ( when enabled ). Defined in seconds.
 	PeerConnectionsUpdateInterval int
+
+	// EnableProfiler enables the go pprof endpoints, should be false if
+	// the algod api will be exposed to untrusted individuals
+	EnableProfiler bool
+
+	// TelemetryToLog records messages to node.log that are normally sent to remote event monitoring
+	TelemetryToLog bool
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)

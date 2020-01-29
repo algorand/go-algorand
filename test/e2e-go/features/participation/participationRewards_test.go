@@ -30,7 +30,7 @@ import (
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 )
 
-func getFirstAccountFromNamedNode(fixture fixtures.RestClientFixture, r *require.Assertions, nodeName string) (account string) {
+func getFirstAccountFromNamedNode(fixture *fixtures.RestClientFixture, r *require.Assertions, nodeName string) (account string) {
 	cli := fixture.GetLibGoalClientForNamedNode(nodeName)
 	wh, err := cli.GetUnencryptedWalletHandle()
 	r.NoError(err)
@@ -82,9 +82,9 @@ func TestOnlineOfflineRewards(t *testing.T) {
 	defer fixture.Shutdown()
 
 	// get online and offline accounts
-	onlineAccount := getFirstAccountFromNamedNode(fixture, r, "Online")
+	onlineAccount := getFirstAccountFromNamedNode(&fixture, r, "Online")
 	onlineClient := fixture.GetLibGoalClientForNamedNode("Online")
-	offlineAccount := getFirstAccountFromNamedNode(fixture, r, "Offline")
+	offlineAccount := getFirstAccountFromNamedNode(&fixture, r, "Offline")
 	offlineClient := fixture.GetLibGoalClientForNamedNode("Offline")
 
 	// learn initial balances
@@ -131,6 +131,9 @@ func TestOnlineOfflineRewards(t *testing.T) {
 
 func TestPartkeyOnlyRewards(t *testing.T) {
 	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
+	if testing.Short() {
 		t.Skip()
 	}
 	t.Parallel()
@@ -184,7 +187,7 @@ func TestRewardUnitThreshold(t *testing.T) {
 	defer fixture.Shutdown()
 
 	// get "poor" account (has 1% stake as opposed to 33%)
-	poorAccount := getFirstAccountFromNamedNode(fixture, r, "SmallNode")
+	poorAccount := getFirstAccountFromNamedNode(&fixture, r, "SmallNode")
 	client := fixture.GetLibGoalClientForNamedNode("SmallNode")
 	// make new account
 	wh, _ := client.GetUnencryptedWalletHandle()
