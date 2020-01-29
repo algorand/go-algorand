@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,6 +24,7 @@ var (
 	errFailedRetrievingNodeStatus          = "failed retrieving node status"
 	errFailedRetrievingAsset               = "failed to retrieve asset information"
 	errFailedParsingRoundNumber            = "failed to parse the round number"
+	errFailedParsingRawOption              = "failed to parse the raw option"
 	errFailedParsingMaxAssetsToList        = "failed to parse max assets, must be between %d and %d"
 	errFailedParsingAssetIdx               = "failed to parse asset index"
 	errFailedToGetAssetCreator             = "failed to retrieve asset creator from the ledger"
@@ -39,5 +40,7 @@ var (
 	errNoRoundsSpecified                   = "Indexer is not enabled, firstRound and lastRound must be specified"
 	errNoTxnSpecified                      = "no transaction ID was specified"
 	errTransactionNotFound                 = "couldn't find the required transaction in the required range"
+	errServiceShuttingDown                 = "operation aborted as server is shutting down"
 	errUnknownTransactionType              = "found a transaction with an unknown type"
+	errRequestedRoundInUnsupportedRound    = "requested round would reach only after the protocol upgrade which isn't supported"
 )

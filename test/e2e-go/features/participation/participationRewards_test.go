@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,9 +19,9 @@ package participation
 import (
 	"fmt"
 	"path/filepath"
-	"testing"
 	"runtime"
-	
+	"testing"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
@@ -30,7 +30,7 @@ import (
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 )
 
-func getFirstAccountFromNamedNode(fixture fixtures.RestClientFixture, r *require.Assertions, nodeName string) (account string) {
+func getFirstAccountFromNamedNode(fixture *fixtures.RestClientFixture, r *require.Assertions, nodeName string) (account string) {
 	cli := fixture.GetLibGoalClientForNamedNode(nodeName)
 	wh, err := cli.GetUnencryptedWalletHandle()
 	r.NoError(err)
@@ -82,13 +82,13 @@ func TestOnlineOfflineRewards(t *testing.T) {
 	defer fixture.Shutdown()
 
 	// get online and offline accounts
-	onlineAccount := getFirstAccountFromNamedNode(fixture, r, "Online")
+	onlineAccount := getFirstAccountFromNamedNode(&fixture, r, "Online")
 	onlineClient := fixture.GetLibGoalClientForNamedNode("Online")
-	offlineAccount := getFirstAccountFromNamedNode(fixture, r, "Offline")
+	offlineAccount := getFirstAccountFromNamedNode(&fixture, r, "Offline")
 	offlineClient := fixture.GetLibGoalClientForNamedNode("Offline")
 
 	// learn initial balances
-	initialRound := uint64(301)
+	initialRound := uint64(11)
 	r.NoError(fixture.WaitForRoundWithTimeout(initialRound))
 	initialOnlineBalance, _ := onlineClient.GetBalance(onlineAccount)
 	initialOfflineBalance, _ := offlineClient.GetBalance(offlineAccount)
@@ -131,6 +131,9 @@ func TestOnlineOfflineRewards(t *testing.T) {
 
 func TestPartkeyOnlyRewards(t *testing.T) {
 	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
+	if testing.Short() {
 		t.Skip()
 	}
 	t.Parallel()
@@ -184,7 +187,7 @@ func TestRewardUnitThreshold(t *testing.T) {
 	defer fixture.Shutdown()
 
 	// get "poor" account (has 1% stake as opposed to 33%)
-	poorAccount := getFirstAccountFromNamedNode(fixture, r, "SmallNode")
+	poorAccount := getFirstAccountFromNamedNode(&fixture, r, "SmallNode")
 	client := fixture.GetLibGoalClientForNamedNode("SmallNode")
 	// make new account
 	wh, _ := client.GetUnencryptedWalletHandle()

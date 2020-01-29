@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -172,6 +172,18 @@ type TransactionParamsResponse struct {
 }
 
 func (r TransactionParamsResponse) getBody() interface{} {
+	return r.Body
+}
+
+// RawBlockResponse contains encoded, raw block information
+//
+// swagger:response RawBlockResponse
+type RawBlockResponse struct {
+	// in: body
+	Body *v1.RawBlock
+}
+
+func (r RawBlockResponse) getBody() interface{} {
 	return r.Body
 }
 
