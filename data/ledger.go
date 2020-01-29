@@ -372,7 +372,6 @@ func (l *Ledger) AssemblePayset(pool *pools.TransactionPool, eval *ledger.BlockE
 			for _, txn := range txgroup {
 				fee := txn.Txn.Fee.Raw
 				encodedLen := txn.GetEncodedLength()
-				priority := uint64(txn.PtrPriority())
 
 				stats.IncludedCount++
 				totalFees += fee
@@ -383,8 +382,6 @@ func (l *Ledger) AssemblePayset(pool *pools.TransactionPool, eval *ledger.BlockE
 					stats.MaxFee = fee
 					stats.MinLength = encodedLen
 					stats.MaxLength = encodedLen
-					stats.MinPriority = priority
-					stats.MaxPriority = priority
 				} else {
 					if fee < stats.MinFee {
 						stats.MinFee = fee
@@ -395,11 +392,6 @@ func (l *Ledger) AssemblePayset(pool *pools.TransactionPool, eval *ledger.BlockE
 						stats.MinLength = encodedLen
 					} else if encodedLen > stats.MaxLength {
 						stats.MaxLength = encodedLen
-					}
-					if priority < stats.MinPriority {
-						stats.MinPriority = priority
-					} else if priority > stats.MaxPriority {
-						stats.MaxPriority = priority
 					}
 				}
 				stats.TotalLength += uint64(encodedLen)

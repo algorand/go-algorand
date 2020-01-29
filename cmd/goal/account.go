@@ -245,7 +245,7 @@ var accountMultisigCmd = &cobra.Command{
 var renameCmd = &cobra.Command{
 	Use:   "rename [old name] [new name]",
 	Short: "Change the human-friendly name of an account",
-	Long:  `Change the human-friendly name of an account`,
+	Long:  `Change the human-friendly name of an account. This is a local-only name, it is not stored on the network.`,
 	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		accountList := makeAccountsList(ensureSingleDataDir())
@@ -325,6 +325,7 @@ var newCmd = &cobra.Command{
 var deleteCmd = &cobra.Command{
 	Use:   "delete",
 	Short: "Delete an account",
+	Long:  `Delete the indicated account. The key management daemon will no longer know about this account, although the account will still exist on the network.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
@@ -388,6 +389,7 @@ var newMultisigCmd = &cobra.Command{
 var deleteMultisigCmd = &cobra.Command{
 	Use:   "delete",
 	Short: "Delete a multisig account",
+	Long:  `Delete a multisig account. Like ordinary account delete, the local node will no longer know about the account, but it may still exist on the network.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
@@ -408,6 +410,7 @@ var deleteMultisigCmd = &cobra.Command{
 var infoMultisigCmd = &cobra.Command{
 	Use:   "info",
 	Short: "Print information about a multisig account",
+	Long:  `Print information about a multisig account, such as its Algorand multisig version, or the number of keys needed to validate a transaction from the multisig account.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
@@ -431,7 +434,7 @@ var infoMultisigCmd = &cobra.Command{
 var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "Show the list of Algorand accounts on this machine",
-	Long:  `Show the list of Algorand accounts on this machine. Also indicates whether the account is [offline] or [online], and if the account is the default account for goal.`,
+	Long:  `Show the list of Algorand accounts on this machine. Indicates whether the account is [offline] or [online], and if the account is the default account for goal. Also displays balances and asset information.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
@@ -513,8 +516,8 @@ var listCmd = &cobra.Command{
 
 var balanceCmd = &cobra.Command{
 	Use:   "balance",
-	Short: "Retrieve the balance for the specified account, in microAlgos",
-	Long:  `Retrieve the balance for the specified account, in microAlgos`,
+	Short: "Retrieve the balances for the specified account",
+	Long:  `Retrieve the balance record for the specified account, displaying both algos and assets. Algo balance is displayed in microAlgos.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
@@ -531,7 +534,7 @@ var balanceCmd = &cobra.Command{
 var rewardsCmd = &cobra.Command{
 	Use:   "rewards",
 	Short: "Retrieve the rewards for the specified account",
-	Long:  `Retrieve the rewards for the specified account`,
+	Long:  `Retrieve the rewards for the specified account, including pending rewards. Units displayed are microAlgos.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
@@ -636,7 +639,7 @@ func changeAccountOnlineStatus(acct string, part *algodAcct.Participation, goOnl
 var addParticipationKeyCmd = &cobra.Command{
 	Use:   "addpartkey",
 	Short: "Generate a participation key for the specified account",
-	Long:  `Generate a participation key for the specified account`,
+	Long:  `Generate a participation key for the specified account. This participation key can then be used for going online and participating in consensus.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
@@ -690,7 +693,7 @@ No --delete-input flag specified, exiting without installing key.`)
 var renewParticipationKeyCmd = &cobra.Command{
 	Use:   "renewpartkey",
 	Short: "Renew an account's participation key",
-	Long:  `Generate a participation key for the specified account and register it`,
+	Long:  `Generate a participation key for the specified account and issue the necessary transaction to register it.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
@@ -755,7 +758,7 @@ func generateAndRegisterPartKey(address string, currentRound, lastValidRound uin
 var renewAllParticipationKeyCmd = &cobra.Command{
 	Use:   "renewallpartkeys",
 	Short: "Renew all existing participation keys",
-	Long:  `Generate new participation keys for all existing accounts with participation keys and register them`,
+	Long:  `Generate new participation keys for all existing accounts with participation keys and issue the necessary transactions to register them.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		onDataDirs(func(dataDir string) {
@@ -835,6 +838,7 @@ func renewPartKeysInDir(dataDir string, lastValidRound uint64, fee uint64, lease
 var listParticipationKeysCmd = &cobra.Command{
 	Use:   "listpartkeys",
 	Short: "List participation keys",
+	Long:  `List all participation keys tracked by algod, with additional information such as key validity period.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
@@ -941,7 +945,7 @@ var importCmd = &cobra.Command{
 var exportCmd = &cobra.Command{
 	Use:   "export",
 	Short: "Export an account key for use with account import",
-	Long:  "Export an account mnemonic seed, for use with account import. This exports the seed for a single account and should not be confused with the wallet mnemonic.",
+	Long:  "Export an account mnemonic seed, for use with account import. This exports the seed for a single account and should NOT be confused with the wallet mnemonic.",
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
 		client := ensureKmdClient(dataDir)
@@ -1070,7 +1074,7 @@ type partkeyInfo struct {
 var partkeyInfoCmd = &cobra.Command{
 	Use:   "partkeyinfo",
 	Short: "Output details about all available part keys",
-	Long:  `Output details about all available part keys in the specified data directory(ies)`,
+	Long:  `Output details about all available part keys in the specified data directory(ies), such as key validity period.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 
