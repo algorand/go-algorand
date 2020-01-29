@@ -67,11 +67,9 @@ EOF
 sed 's/^export //g' < "${HOME}"/build_env > "${HOME}"/build_env_docker
 
 # Run RPM build in Centos7 Docker container
-#sg docker "docker build -t algocentosbuild - < ${REPO_ROOT}/scripts/release/test/centos-build.Dockerfile"
-sg docker "docker build -t algocentosbuild - < $HOME/ben-branch/scripts/release/rpm/centos-build.Dockerfile"
+sg docker "docker build -t algocentosbuild - < $HOME/go/src/github.com/algorand/go-algorand/scripts/release/rpm/centos-build.Dockerfile"
 
-#sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=/run/user/1000/gnupg/S.gpg-agent,dst=/root/S.gpg-agent --mount type=bind,src=${HOME}/prodrepo,dst=/dummyrepo --mount type=bind,src=${HOME}/docker_test_resources,dst=/root/stuff --mount type=bind,src=${HOME},dst=/root/subhome algocentosbuild /root/subhome/ben-branch/scripts/release/rpm/build.sh"
-sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME},dst=/root/subhome algocentosbuild /root/subhome/ben-branch/scripts/release/rpm/build.sh"
+sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME},dst=/root/subhome algocentosbuild /root/subhome/go/src/github.com/algorand/go-algorand/scripts/release/rpm/build.sh"
 
 echo
 date "+build_release end BUILD stage %Y%m%d_%H%M%S"

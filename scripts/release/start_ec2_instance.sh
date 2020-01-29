@@ -1,5 +1,3 @@
-#!/usr/bin/env bash
-# shellcheck disable=2164
 
 AWS_REGION="$1"
 AWS_AMI="$2"
