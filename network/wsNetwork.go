@@ -174,8 +174,16 @@ type GossipNode interface {
 	// ClearHandlers deregisters all the existing message handlers.
 	ClearHandlers()
 
+<<<<<<< HEAD
 	// GetRoundTripper returns a Transport that would limit the number of outgoing connections.
 	GetRoundTripper() http.RoundTripper
+=======
+	// GetDialer retrieves the dialer.
+	GetDialer() *Dialer
+
+	// GetNetTransport returns a Transport that would limit the number of outgoing connections.
+	GetNetTransport() *http.Transport
+>>>>>>> changes.
 }
 
 // IncomingMessage represents a message arriving from some peer in our p2p network
@@ -323,11 +331,15 @@ type WebsocketNetwork struct {
 
 	// lastPeerConnectionsSent is the last time the peer connections were sent ( or attempted to be sent ) to the telemetry server.
 	lastPeerConnectionsSent time.Time
+<<<<<<< HEAD
 
 	// transport and dialer are customized to limit the number of
 	// connection in compliance with connectionsRateLimitingCount.
 	transport http.Transport
 	dialer    Dialer
+=======
+	dialer                  Dialer
+>>>>>>> changes.
 }
 
 type broadcastRequest struct {
@@ -526,6 +538,7 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 func (wn *WebsocketNetwork) setup() {
 
 	wn.dialer.phonebook = wn.phonebook
+<<<<<<< HEAD
 	// Parameter values similar to http.DefaultTransport
 	wn.dialer.innerDialer.Timeout = 30 * time.Second
 	wn.dialer.innerDialer.Timeout = 30 * time.Second
@@ -540,6 +553,8 @@ func (wn *WebsocketNetwork) setup() {
 	wn.transport.TLSHandshakeTimeout = 10 * time.Second
 	wn.transport.ExpectContinueTimeout = 1 * time.Second
 
+=======
+>>>>>>> changes.
 	wn.upgrader.ReadBufferSize = 4096
 	wn.upgrader.WriteBufferSize = 4096
 	wn.upgrader.EnableCompression = false
@@ -796,6 +811,20 @@ func (wn *WebsocketNetwork) checkServerResponseVariables(header http.Header, add
 	return true
 }
 
+<<<<<<< HEAD
+=======
+// MakeHTTPRequest will make sure connectionsRateLimitingCount is not
+// violated, and register the connection time of the request, before
+// making the http request to the server.
+/*func (wn *WebsocketNetwork) MakeHTTPRequest(client *http.Client,
+	request *http.Request) (resp *http.Response, err error) {
+	_, _, provisionalTime := wn.phonebook.WaitForConnectionTime(request.Host)
+	resp, err = client.Do(request)
+	wn.phonebook.UpdateConnectionTime(request.Host, provisionalTime)
+	return resp, err
+}*/
+
+>>>>>>> changes.
 // getCommonHeaders retreives the common headers for both incoming and outgoing connections from the provided headers.
 func getCommonHeaders(headers http.Header) (otherTelemetryGUID, otherInstanceName, otherPublicAddr string) {
 	otherTelemetryGUID = logging.SanitizeTelemetryString(headers.Get(TelemetryIDHeader), 1)
@@ -940,7 +969,18 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 	}
 
 	peer := &wsPeer{
+<<<<<<< HEAD
 		wsPeerCore:        makePeerCore(wn, trackedRequest.otherPublicAddr, wn.GetRoundTripper(), trackedRequest.remoteHost),
+=======
+		wsPeerCore: wsPeerCore{
+			net:           wn,
+			rootURL:       trackedRequest.otherPublicAddr,
+			originAddress: trackedRequest.remoteHost,
+			client: http.Client{
+				Transport: wn.GetNetTransport(),
+			},
+		},
+>>>>>>> changes.
 		conn:              conn,
 		outgoing:          false,
 		InstanceName:      trackedRequest.otherInstanceName,
@@ -1547,10 +1587,18 @@ func (wn *WebsocketNetwork) numOutgoingPending() int {
 	return len(wn.tryConnectAddrs)
 }
 
+<<<<<<< HEAD
 // GetRoundTripper returns an http.Transport that limits the number of connection
 // to comply with connectionsRateLimitingCount.
 func (wn *WebsocketNetwork) GetRoundTripper() http.RoundTripper {
 	return &wn.transport
+=======
+func (wn *WebsocketNetwork) GetNetTransport() *http.Transport {
+	transport := http.DefaultTransport.(*http.Transport)
+	transport.DialContext = wn.GetDialer().DialContext
+	return transport
+
+>>>>>>> changes.
 }
 
 // tryConnect opens websocket connection and checks initial connection parameters.
@@ -1572,8 +1620,13 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		Proxy:             http.ProxyFromEnvironment,
 		HandshakeTimeout:  45 * time.Second,
 		EnableCompression: false,
+<<<<<<< HEAD
 		NetDialContext:    wn.dialer.DialContext,
 		NetDial:           wn.dialer.Dial,
+=======
+		NetDialContext:    wn.GetDialer().DialContext,
+		NetDial:           wn.GetDialer().Dial,
+>>>>>>> changes.
 	}
 
 	conn, response, err := websocketDialer.DialContext(wn.ctx, gossipAddr, requestHeader)
@@ -1621,7 +1674,17 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	}
 
 	peer := &wsPeer{
+<<<<<<< HEAD
 		wsPeerCore:        makePeerCore(wn, addr, wn.GetRoundTripper(), "" /* origin */),
+=======
+		wsPeerCore: wsPeerCore{
+			net:     wn,
+			rootURL: addr,
+			client: http.Client{
+				Transport: wn.GetNetTransport(),
+			},
+		},
+>>>>>>> changes.
 		conn:              conn,
 		outgoing:          true,
 		incomingMsgFilter: wn.incomingMsgFilter,
@@ -1780,6 +1843,11 @@ func (wn *WebsocketNetwork) countPeersSetGauges() {
 	}
 	networkIncomingConnections.Set(float64(numIn), nil)
 	networkOutgoingConnections.Set(float64(numOut), nil)
+}
+
+// GetDialer returns the dialer for this network
+func (wn *WebsocketNetwork) GetDialer() *Dialer {
+	return &wn.dialer
 }
 
 func justHost(hostPort string) string {

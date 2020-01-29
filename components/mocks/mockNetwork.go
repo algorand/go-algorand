@@ -96,3 +96,16 @@ func (network *MockNetwork) ClearHandlers() {
 // RegisterHTTPHandler - empty implementation
 func (network *MockNetwork) RegisterHTTPHandler(path string, handler http.Handler) {
 }
+<<<<<<< HEAD
+=======
+
+// GetDialer -  empty implementation
+func (network *MockNetwork) GetDialer() *network.Dialer {
+	return nil
+}
+
+// GetNetTransport - empty implementation
+func (network *MockNetwork) GetNetTransport() *http.Transport {
+	return nil
+}
+>>>>>>> changes.
