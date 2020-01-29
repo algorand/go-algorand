@@ -3,7 +3,7 @@ set -e
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 
-OS=$(${SCRIPTPATH}/ostype.sh)
+OS=$("$SCRIPTPATH"/ostype.sh)
 
 function install_or_upgrade {
     if brew ls --versions "$1" >/dev/null; then
@@ -14,13 +14,14 @@ function install_or_upgrade {
 }
 
 if [ "${OS}" = "linux" ]; then
-    if [ -z "$(dpkg -l sudo 2>/dev/null | grep ^ii)" ] ; then
+    if ! which sudo > /dev/null
+    then
         apt-get update
         apt-get -y install sudo
     fi
 
     sudo apt-get update
-    sudo apt-get -y install libboost-all-dev expect jq autoconf
+    sudo apt-get install -y libboost-all-dev expect jq autoconf shellcheck
 elif [ "${OS}" = "darwin" ]; then
     brew update
     brew tap homebrew/cask
@@ -30,6 +31,8 @@ elif [ "${OS}" = "darwin" ]; then
     install_or_upgrade libtool
     install_or_upgrade autoconf
     install_or_upgrade automake
+    install_or_upgrade shellcheck
 fi
 
-${SCRIPTPATH}/configure_dev-deps.sh
+"$SCRIPTPATH"/configure_dev-deps.sh
+
