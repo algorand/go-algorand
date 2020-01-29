@@ -220,7 +220,7 @@ func (f *LibGoalFixture) GetLibGoalClientFromDataDir(dataDir string) libgoal.Cli
 // GetLibGoalClientForNamedNode returns the LibGoal Client for a given named node
 func (f *LibGoalFixture) GetLibGoalClientForNamedNode(nodeName string) libgoal.Client {
 	nodeDir, err := f.network.GetNodeDir(nodeName)
-	client, err := libgoal.MakeClientWithBinDir(f.binDir, nodeDir, nodeDir, libgoal.FullClient)
+	client, err := libgoal.MakeClientWithBinDir(f.binDir, nodeDir, nodeDir, libgoal.KmdClient)
 	f.failOnError(err, "make libgoal client failed: %v")
 	f.importRootKeys(&client, nodeDir)
 	return client
@@ -456,10 +456,13 @@ func (f *LibGoalFixture) ConsensusParams(round uint64) (consensus config.Consens
 		return
 	}
 	version := protocol.ConsensusVersion(block.CurrentProtocol)
-	consensus, has := config.Consensus[version]
-	if !has && f.consensus != nil {
-		consensus = f.consensus[version]
+	if f.consensus != nil {
+		consensus, has := f.consensus[version]
+		if has {
+			return consensus, nil
+		}
 	}
+	consensus = config.Consensus[version]
 	return
 }
 

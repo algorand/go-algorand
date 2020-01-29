@@ -132,11 +132,6 @@ const ConsensusFuture = ConsensusVersion(
 // when a specific version is not provided.
 const ConsensusCurrentVersion = ConsensusV21
 
-// ConsensusTestBigBlocks is a version of ConsensusV0 used for testing
-// with big block size (large MaxTxnBytesPerBlock).
-// at the time versioning was introduced.
-const ConsensusTestBigBlocks = ConsensusVersion("test-big-blocks")
-
 // Error is used to indicate that an unsupported protocol has been detected.
 type Error ConsensusVersion
 

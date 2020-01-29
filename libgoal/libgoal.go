@@ -164,10 +164,11 @@ func (c *Client) init(config ClientConfig, clientType ClientType) error {
 		if err != nil {
 			return err
 		}
-		c.consensus, err = nc.GetConsensus()
-		if err != nil {
-			return err
-		}
+	}
+
+	c.consensus, err = nc.GetConsensus()
+	if err != nil {
+		return err
 	}
 	return nil
 }

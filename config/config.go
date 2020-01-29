@@ -252,7 +252,6 @@ func init() {
 	Consensus = make(map[protocol.ConsensusVersion]ConsensusParams)
 
 	initConsensusProtocols()
-	initConsensusTestProtocols()
 
 	// Allow tuning SmallLambda for faster consensus in single-machine e2e
 	// tests.  Useful for development.  This might make sense to fold into
@@ -573,15 +572,6 @@ func initConsensusProtocols() {
 	vFuture.MinUpgradeWaitRounds = 10000
 	vFuture.MaxUpgradeWaitRounds = 150000
 	Consensus[protocol.ConsensusFuture] = vFuture
-}
-
-func initConsensusTestProtocols() {
-	// Various test protocol versions
-
-	testBigBlocks := Consensus[protocol.ConsensusCurrentVersion]
-	testBigBlocks.MaxTxnBytesPerBlock = 100000000
-	testBigBlocks.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	Consensus[protocol.ConsensusTestBigBlocks] = testBigBlocks
 }
 
 // Local holds the per-node-instance configuration settings for the protocol.
