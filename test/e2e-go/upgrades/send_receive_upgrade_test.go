@@ -113,7 +113,7 @@ func consensusTestFastUpgrade(proto protocol.ConsensusVersion) protocol.Consensu
 }
 
 func generateFastUpgradeConsensus() (fastUpgradeProtocols config.ConsensusProtocols) {
-	fastUpgradeProtocols = make(ConsensusProtocols)
+	fastUpgradeProtocols = make(config.ConsensusProtocols)
 
 	for proto, params := range config.Consensus {
 		fastParams := params
