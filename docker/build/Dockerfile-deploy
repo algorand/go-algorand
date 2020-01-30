@@ -8,7 +8,7 @@ ENV GOROOT=/usr/local/go \
     GOPATH=$HOME/go
 RUN mkdir -p $GOPATH/src/github.com/algorand
 WORKDIR $GOPATH/src/github.com/algorand
-COPY ./go-algorand ./go-algorand/
+COPY . ./go-algorand/
 ENV PATH=$GOPATH/bin:$GOROOT/bin:$PATH \
     BRANCH=${BRANCH} \
     CHANNEL=${CHANNEL} \
