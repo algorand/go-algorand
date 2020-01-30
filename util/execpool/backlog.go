@@ -42,7 +42,6 @@ type backlogItemTask struct {
 // BacklogPool supports all the ExecutionPool functions plus few more that tests the pending tasks.
 type BacklogPool interface {
 	ExecutionPool
-	IsFull() bool
 	EnqueueBacklog(enqueueCtx context.Context, t ExecFunc, arg interface{}, out chan interface{}) error
 }
 
@@ -74,11 +73,6 @@ func MakeBacklog(execPool ExecutionPool, backlogSize int, priority Priority, own
 
 func (b *backlog) GetParallelism() int {
 	return b.pool.GetParallelism()
-}
-
-// IsFull test to see if the input buffer is full.
-func (b *backlog) IsFull() bool {
-	return len(b.buffer) == cap(b.buffer)
 }
 
 // Enqueue enqueues a single task into the backlog
