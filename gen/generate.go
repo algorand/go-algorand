@@ -51,7 +51,7 @@ type genesisAllocation struct {
 }
 
 // GenerateGenesisFiles generates the genesis.json file and wallet files for a give genesis configuration.
-func GenerateGenesisFiles(genesisData GenesisData, outDir string, verbose bool, consensus config.ConsensusProtocols) error {
+func GenerateGenesisFiles(genesisData GenesisData, consensus config.ConsensusProtocols, outDir string, verbose bool) error {
 	err := os.Mkdir(outDir, os.ModeDir|os.FileMode(0777))
 	if err != nil && os.IsNotExist(err) {
 		return fmt.Errorf("couldn't make output directory '%s': %v", outDir, err.Error())
@@ -93,12 +93,9 @@ func GenerateGenesisFiles(genesisData GenesisData, outDir string, verbose bool, 
 		genesisData.RewardsPool = defaultPoolAddr
 	}
 
-	consensusParams, ok := config.Consensus[proto]
+	consensusParams, ok := consensus[proto]
 	if !ok {
-		consensusParams, ok = consensus[proto]
-		if !ok {
-			return fmt.Errorf("protocol %s not supported", proto)
-		}
+		return fmt.Errorf("protocol %s not supported", proto)
 	}
 
 	return generateGenesisFiles(outDir, proto, consensusParams, genesisData.NetworkName, genesisData.VersionModifier, allocation, genesisData.FirstPartKeyRound, genesisData.LastPartKeyRound, genesisData.PartKeyDilution, genesisData.FeeSink, genesisData.RewardsPool, genesisData.Comment, verbose)

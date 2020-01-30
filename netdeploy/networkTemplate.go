@@ -59,7 +59,8 @@ var defaultNetworkTemplate = NetworkTemplate{
 func (t NetworkTemplate) generateGenesisAndWallets(targetFolder, networkName, binDir string) error {
 	genesisData := t.Genesis
 	genesisData.NetworkName = networkName
-	return gen.GenerateGenesisFiles(genesisData, targetFolder, true, t.Consensus)
+	mergedConsensus := config.Consensus.Merge(t.Consensus)
+	return gen.GenerateGenesisFiles(genesisData, mergedConsensus, targetFolder, true)
 }
 
 // Create data folders for all NodeConfigs, configuring relays appropriately and

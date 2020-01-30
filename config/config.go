@@ -279,6 +279,48 @@ func SaveConfigurableConsensus(dataDirectory string, params ConsensusProtocols) 
 	return err
 }
 
+// DeepCopy creates a deep copy of a consensus protocols map.
+func (cp ConsensusProtocols) DeepCopy() ConsensusProtocols {
+	staticConsensus := make(ConsensusProtocols)
+	for consensusVersion, consensusParams := range cp {
+		// recreate the ApprovedUpgrades map since we don't want to modify the original one.
+		if consensusParams.ApprovedUpgrades != nil {
+			newApprovedUpgrades := make(map[protocol.ConsensusVersion]uint64)
+			for ver, when := range consensusParams.ApprovedUpgrades {
+				newApprovedUpgrades[ver] = when
+			}
+			consensusParams.ApprovedUpgrades = newApprovedUpgrades
+		}
+		staticConsensus[consensusVersion] = consensusParams
+	}
+	return staticConsensus
+}
+
+// Merge merges a configurable consensus ontop of the existing consensus protocol and return
+// a new consensus protocol without modify any of the incoming structures.
+func (cp ConsensusProtocols) Merge(configurableConsensus ConsensusProtocols) ConsensusProtocols {
+	staticConsensus := cp.DeepCopy()
+
+	for consensusVersion, consensusParams := range configurableConsensus {
+		if consensusParams.ApprovedUpgrades == nil {
+			// if we were provided with an empty ConsensusParams, delete the existing reference to this consensus version
+			for cVer, cParam := range staticConsensus {
+				if cVer == consensusVersion {
+					delete(staticConsensus, cVer)
+				} else if _, has := cParam.ApprovedUpgrades[consensusVersion]; has {
+					// delete upgrade to deleted version
+					delete(cParam.ApprovedUpgrades, consensusVersion)
+				}
+			}
+		} else {
+			// need to add/update entry
+			staticConsensus[consensusVersion] = consensusParams
+		}
+	}
+
+	return staticConsensus
+}
+
 // LoadConfigurableConsensusProtocols loads the configurable protocols from the data directroy
 func LoadConfigurableConsensusProtocols(dataDirectory string) error {
 	newConsensus, err := PreloadConfigurableConsensusProtocols(dataDirectory)
@@ -313,38 +355,7 @@ func PreloadConfigurableConsensusProtocols(dataDirectory string) (ConsensusProto
 	if err != nil {
 		return nil, err
 	}
-
-	staticConsensus := make(ConsensusProtocols)
-	for consensusVersion, consensusParams := range Consensus {
-		// recreate the ApprovedUpgrades map since we don't want to modify the original one.
-		if consensusParams.ApprovedUpgrades != nil {
-			newApprovedUpgrades := make(map[protocol.ConsensusVersion]uint64)
-			for ver, when := range consensusParams.ApprovedUpgrades {
-				newApprovedUpgrades[ver] = when
-			}
-			consensusParams.ApprovedUpgrades = newApprovedUpgrades
-		}
-		staticConsensus[consensusVersion] = consensusParams
-	}
-
-	for consensusVersion, consensusParams := range configurableConsensus {
-		if consensusParams.ApprovedUpgrades == nil {
-			// if we were provided with an empty ConsensusParams, delete the existing reference to this consensus version
-			for cVer, cParam := range staticConsensus {
-				if cVer == consensusVersion {
-					delete(staticConsensus, cVer)
-				} else if _, has := cParam.ApprovedUpgrades[consensusVersion]; has {
-					// delete upgrade to deleted version
-					delete(cParam.ApprovedUpgrades, consensusVersion)
-				}
-			}
-		} else {
-			// need to add/update entry
-			staticConsensus[consensusVersion] = consensusParams
-		}
-	}
-
-	return staticConsensus, nil
+	return Consensus.Merge(configurableConsensus), nil
 }
 
 func initConsensusProtocols() {

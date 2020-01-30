@@ -117,20 +117,22 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 			panic(err)
 		}
 		root, err := account.GenerateRoot(access)
+		access.Close()
 		if err != nil {
 			panic(err)
 		}
-		access.Close()
+
 		filename = filepath.Join(genesisDir, pname)
 		access, err = db.MakeAccessor(filename, false, false)
 		if err != nil {
 			panic(err)
 		}
 		part, err := account.FillDBWithParticipationKeys(access, root.Address(), firstRound, lastRound, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
+		access.Close()
 		if err != nil {
 			panic(err)
 		}
-		access.Close()
+
 		data := basics.AccountData{
 			Status:      basics.Online,
 			MicroAlgos:  basics.MicroAlgos{Raw: uint64(minMoneyAtStart + (gen.Int() % (maxMoneyAtStart - minMoneyAtStart)))},
