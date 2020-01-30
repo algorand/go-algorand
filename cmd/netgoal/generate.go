@@ -29,6 +29,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/algorand/go-algorand/gen"
+	"github.com/algorand/go-algorand/netdeploy"
 	"github.com/algorand/go-algorand/netdeploy/remote"
 	"github.com/algorand/go-algorand/util/codecs"
 )
@@ -68,7 +69,8 @@ func init() {
 }
 
 var generateTemplateLines = []string{
-	"net => network template according to -R -N -n -w options",
+	"net => network template according to -R -N -n -w options. Suitable for 'netgoal build'",
+	"goalnet => goal network template according to -R -n -w options. Suitable for 'goal network'",
 	"genesis => genesis.json according to -w option",
 	"otwt => OneThousandWallets network template",
 	"otwg => OneThousandWallets genesis data",
@@ -124,13 +126,14 @@ template modes for -t:`,
 		} else {
 			baseRelay = baseNode
 		}
-		switch strings.ToLower(templateToGenerate) {
+		templateType := strings.ToLower(templateToGenerate)
+		switch templateType {
 		case "genesis", "wallets":
 			if walletsToGenerate < 0 {
 				reportErrorf("must specify number of wallets with -w")
 			}
 			err = generateWalletGenesis(outputFilename, walletsToGenerate, nonPartnodesHostsToGenerate)
-		case "net", "network":
+		case "net", "network", "goalnet":
 			if walletsToGenerate < 0 {
 				reportErrorf("must specify number of wallets with -w")
 			}
@@ -143,8 +146,11 @@ template modes for -t:`,
 			if relaysToGenerate < 0 {
 				reportErrorf("must specify number of relays with -R")
 			}
-
-			err = generateNetworkTemplate(outputFilename, walletsToGenerate, relaysToGenerate, nodeHostsToGenerate, nodesToGenerate, nonPartnodesHostsToGenerate, baseNode, baseNonParticipatingNode, baseRelay)
+			if templateType == "goalnet" {
+				err = generateNetworkGoalTemplate(outputFilename, walletsToGenerate, relaysToGenerate, nodesToGenerate, nonPartnodesHostsToGenerate)
+			} else {
+				err = generateNetworkTemplate(outputFilename, walletsToGenerate, relaysToGenerate, nodeHostsToGenerate, nodesToGenerate, nonPartnodesHostsToGenerate, baseNode, baseNonParticipatingNode, baseRelay)
+			}
 		case "otwt":
 			err = generateNetworkTemplate(outputFilename, 1000, 10, 20, 100, 0, baseNode, baseNonParticipatingNode, baseRelay)
 		case "otwg":
@@ -201,6 +207,82 @@ func pickNodeConfig(alt []remote.NodeConfig, name string) remote.NodeConfig {
 		}
 	}
 	return alt[0]
+}
+
+func generateNetworkGoalTemplate(templateFilename string, wallets, relays, nodes, npnHosts int) error {
+	template := netdeploy.NetworkTemplate{}
+	template.Nodes = make([]remote.NodeConfigGoal, 0, relays+nodes+npnHosts)
+	template.Genesis = generateWalletGenesisData(walletsToGenerate, 0, 0)
+	for i := 0; i < relays; i++ {
+		name := "relay" + strconv.Itoa(i+1)
+		newNode := remote.NodeConfigGoal{
+			Name:    name,
+			IsRelay: true,
+			Wallets: nil,
+		}
+		template.Nodes = append(template.Nodes, newNode)
+	}
+
+	for i := 0; i < nodes; i++ {
+		name := "node" + strconv.Itoa(i+1)
+		newNode := remote.NodeConfigGoal{
+			Name:    name,
+			Wallets: make([]remote.NodeWalletData, 0),
+		}
+		template.Nodes = append(template.Nodes, newNode)
+	}
+
+	for i := 0; i < npnHosts; i++ {
+		name := "nonParticipatingNode" + strconv.Itoa(i+1)
+		newNode := remote.NodeConfigGoal{
+			Name:    name,
+			Wallets: make([]remote.NodeWalletData, 0),
+		}
+		template.Nodes = append(template.Nodes, newNode)
+	}
+	walletIndex := 0
+	for walletIndex < wallets {
+		for nodei, node := range template.Nodes {
+			if node.Name[0:4] != "node" {
+				continue
+			}
+			wallet := remote.NodeWalletData{
+				Name:              "Wallet" + strconv.Itoa(walletIndex+1),
+				ParticipationOnly: false,
+			}
+			template.Nodes[nodei].Wallets = append(template.Nodes[nodei].Wallets, wallet)
+			walletIndex++
+			if walletIndex >= wallets {
+				break
+			}
+		}
+		if walletIndex >= wallets {
+			break
+		}
+	}
+
+	if npnHosts > 0 {
+		for walletIndex < wallets {
+			for nodei, node := range template.Nodes {
+				if node.Name[0:4] != "nonP" {
+					continue
+				}
+				wallet := remote.NodeWalletData{
+					Name:              "Wallet" + strconv.Itoa(walletIndex+1),
+					ParticipationOnly: false,
+				}
+				template.Nodes[nodei].Wallets = append(template.Nodes[nodei].Wallets, wallet)
+				walletIndex++
+				if walletIndex >= wallets {
+					break
+				}
+			}
+			if walletIndex >= wallets {
+				break
+			}
+		}
+	}
+	return saveGoalTemplateToDisk(template, templateFilename)
 }
 
 func generateNetworkTemplate(templateFilename string, wallets, relays, nodeHosts, nodes, npnHosts int, baseNode, baseNonPartNode, baseRelay remote.NodeConfig) error {
@@ -333,13 +415,30 @@ func saveTemplateToDisk(template remote.DeployedNetworkConfig, filename string) 
 	return err
 }
 
-func generateWalletGenesis(filename string, wallets, npnHosts int) error {
+func saveGoalTemplateToDisk(template netdeploy.NetworkTemplate, filename string) error {
+	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err == nil {
+		defer f.Close()
+
+		enc := codecs.NewFormattedJSONEncoder(f)
+		err = enc.Encode(template)
+	}
+	return err
+}
+
+func generateWalletGenesisData(wallets, npnHosts int, totalStake int64) gen.GenesisData {
 	data := gen.DefaultGenesis
 	if npnHosts > 0 {
 		wallets = 2 * wallets
 	}
+	// cloud templates use percentage of stake
+	// but 'goal network' templates expect algos distribution
+	// if a value is not provided make equal integer split
+	if totalStake == 0 {
+		totalStake = int64(wallets)
+	}
 	data.Wallets = make([]gen.WalletData, wallets)
-	stake := big.NewRat(int64(100), int64(wallets))
+	stake := big.NewRat(totalStake, int64(wallets))
 
 	ratZero := big.NewRat(int64(0), int64(1))
 	ratHundred := big.NewRat(int64(100), int64(1))
@@ -361,6 +460,11 @@ func generateWalletGenesis(filename string, wallets, npnHosts int) error {
 		stakeSum = stakeSum.Add(stakeSum, stake)
 		data.Wallets[i] = w
 	}
+	return data
+}
+
+func generateWalletGenesis(filename string, wallets, npnHosts int) error {
+	data := generateWalletGenesisData(wallets, npnHosts, 100)
 	return saveGenesisDataToDisk(data, filename)
 }
 
