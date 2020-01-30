@@ -99,6 +99,13 @@ make install
 
 gpgconf --launch gpg-agent
 
+# a bash user might `source build_env` to manually continue a broken build
+cat <<EOF>>"${HOME}"/build_env
+CHANNEL=${CHANNEL}
+DC_IP=$(curl --silent http://169.254.169.254/latest/meta-data/local-ipv4)
+FULLVERSION=${RELEASE}
+EOF
+
 echo
 date "+build_release end SETUP stage %Y%m%d_%H%M%S"
 echo

@@ -7,8 +7,6 @@ echo
 date "+build_release begin TEST stage %Y%m%d_%H%M%S"
 echo
 
-REPO_ROOT=/home/ubuntu/go/src/github.com/algorand/go-algorand/
-
 export GNUPGHOME=${HOME}/tkey
 gpgconf --kill gpg-agent
 chmod 700 "${GNUPGHOME}"
@@ -35,7 +33,8 @@ EOF
 
 # https://stackoverflow.com/a/49491997
 cat <<EOF> "${GNUPGHOME}"/gpg-agent.conf
-extra-socket "${GNUPGHOME}"/S.gpg-agent.extra
+# Only needed for gpg < 2.1.17 (https://wiki.gnupg.org/AgentForwarding)
+#extra-socket "${GNUPGHOME}"/S.gpg-agent.extra
 # Enable unattended daemon mode.
 allow-preset-passphrase
 # Cache password 30 days.
