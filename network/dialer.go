@@ -19,7 +19,10 @@ package network
 import (
 	"context"
 	"net"
+<<<<<<< HEAD
 	"time"
+=======
+>>>>>>> adding dialer.
 )
 
 // Dialer establish tcp-level connection with the destination
@@ -29,6 +32,7 @@ type Dialer struct {
 }
 
 // Dial connects to the address on the named network.
+<<<<<<< HEAD
 // It waits if needed not to exceed connectionsRateLimitingCount.
 func (d *Dialer) Dial(network, address string) (net.Conn, error) {
 	return d.DialContext(context.Background(), network, address)
@@ -55,4 +59,14 @@ func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.
 	d.phonebook.UpdateConnectionTime(address, provisionalTime)
 
 	return conn, err
+=======
+func (d *Dialer) Dial(network, address string) (net.Conn, error) {
+	// todo limit the rate of this one
+	return d.innerDialer.Dial(network, address)
+}
+
+// DialContext connects to the address on the named network using the provided context.
+func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	return d.innerDialer.DialContext(ctx, network, address)
+>>>>>>> adding dialer.
 }
