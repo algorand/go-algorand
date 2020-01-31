@@ -41,7 +41,7 @@ import sys
 rpm.addSign(sys.argv[1], '')
 EOF
 
-NEWEST_RPM=$(ls -t /root/subhome/node_pkg/*rpm | head -1)
+NEWEST_RPM=$(ls -t /root/subhome/node_pkg/*.rpm | head -1)
 python2 "${HOME}/rpmsign.py" "${NEWEST_RPM}"
 
 cp -p "${NEWEST_RPM}" /root/dummyrepo
@@ -53,11 +53,6 @@ OLDRPM=$(ls -t /root/subhome/node_pkg/*.rpm | head -1)
 if [ -f "${OLDRPM}" ]; then
     yum install -y "${OLDRPM}"
     algod -v
-#    if algod -v | grep -q "${FULLVERSION}"
-#    then
-#        echo "already installed current version. wat?"
-#        false
-#    fi
 
     mkdir -p /root/testnode
     cp -p /var/lib/algorand/genesis/testnet/genesis.json /root/testnode
