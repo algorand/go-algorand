@@ -23,9 +23,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"golang.org/x/sys/unix"
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
+	"golang.org/x/sys/unix"
 
 	"github.com/algorand/go-algorand/cmd/kmd/codes"
 	"github.com/algorand/go-algorand/daemon/kmd"
@@ -52,7 +52,7 @@ func init() {
 var kmdCmd = &cobra.Command{
 	Use:   "kmd",
 	Short: "Key Management Daemon (kmd)",
-	Long:  `The Key Management Daemon (kmd) is a low level wallet and key management
+	Long: `The Key Management Daemon (kmd) is a low level wallet and key management
 tool. It works in conjunction with algod and goal to keep secrets safe. An
 optional timeout flag will automatically terminate kmd after a number of
 seconds has elapsed, allowing a simple way to ensure kmd will be shutdown in

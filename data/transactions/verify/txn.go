@@ -206,32 +206,32 @@ func LogicSigSanityCheck(txn *transactions.SignedTxn, ctx *Context) error {
 	if uint64(lsig.Len()) > proto.LogicSigMaxSize {
 		return errors.New("LogicSig.Logic too long")
 	}
-	
-   // Following tests are not relevant to exec transactions.
-	if txn.Txn.Type == protocol.ExecTx {
-	   return nil
-   }
-   version, vlen := binary.Uvarint(lsig.Logic)
-   if vlen <= 0 {
-      return errors.New("LogicSig.Logic bad version")
-   }
-   if version > proto.LogicSigVersion {
-      return errors.New("LogicSig.Logic version too new")
-   }
 
-   ep := logic.EvalParams{
-      Txn:        txn,
-      Proto:      &proto,
-      TxnGroup:   ctx.Group,
-      GroupIndex: ctx.GroupIndex,
-   }
-   cost, err := logic.Check(lsig.Logic, ep)
-   if err != nil {
-      return err
-   }
-   if cost > int(proto.LogicSigMaxCost) {
-      return fmt.Errorf("LogicSig.Logic too slow, %d > %d", cost, proto.LogicSigMaxCost)
-   }
+	// Following tests are not relevant to exec transactions.
+	if txn.Txn.Type == protocol.ExecTx {
+		return nil
+	}
+	version, vlen := binary.Uvarint(lsig.Logic)
+	if vlen <= 0 {
+		return errors.New("LogicSig.Logic bad version")
+	}
+	if version > proto.LogicSigVersion {
+		return errors.New("LogicSig.Logic version too new")
+	}
+
+	ep := logic.EvalParams{
+		Txn:        txn,
+		Proto:      &proto,
+		TxnGroup:   ctx.Group,
+		GroupIndex: ctx.GroupIndex,
+	}
+	cost, err := logic.Check(lsig.Logic, ep)
+	if err != nil {
+		return err
+	}
+	if cost > int(proto.LogicSigMaxCost) {
+		return fmt.Errorf("LogicSig.Logic too slow, %d > %d", cost, proto.LogicSigMaxCost)
+	}
 
 	hasMsig := false
 	numSigs := 0

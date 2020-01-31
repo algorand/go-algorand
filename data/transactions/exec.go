@@ -35,18 +35,18 @@ type ExecTxnPhase string
 
 // Labels for the phases of exec transactions.
 const (
-	ExecInit   ExecTxnPhase = "init"    // TODO store code indexed via hash
-	ExecExec   ExecTxnPhase = "exec"    // request later execution
-	ExecCommit ExecTxnPhase = "commit"  // request commit of execution results
-	ExecFail   ExecTxnPhase = "fail"    // failed execution or commit
+	ExecInit   ExecTxnPhase = "init"   // TODO store code indexed via hash
+	ExecExec   ExecTxnPhase = "exec"   // request later execution
+	ExecCommit ExecTxnPhase = "commit" // request commit of execution results
+	ExecFail   ExecTxnPhase = "fail"   // failed execution or commit
 )
 
 // ExecTxnFields captures the fields used by exec transactions.
 type ExecTxnFields struct {
 	_struct   struct{}     `codec:",omitempty,omitemptyarray"`
 	ExecPhase ExecTxnPhase `codec:"phase"`
-	oldData  []byte	       `codec:"old_data"`
-	newData  []byte 	   `"codec:new_data"`
+	oldData   []byte       `codec:"old_data"`
+	newData   []byte       `codec:"new_data"`
 }
 
 func (exec ExecTxnFields) apply(header Header, balances Balances, spec SpecialAddresses, ad *ApplyData) error {
@@ -58,18 +58,18 @@ func (exec ExecTxnFields) apply(header Header, balances Balances, spec SpecialAd
 	switch exec.ExecPhase {
 	case ExecExec:
 
-	   // Save initial state of data.
+		// Save initial state of data.
 		exec.oldData = account.Storage
 
 	case ExecCommit:
 
-	   // If data is unchanged copy in new data.
+		// If data is unchanged copy in new data.
 		if bytes.Equal(account.Storage, exec.oldData) {
 			account.Storage = exec.newData
 			exec.newData = nil
 		} else {
 
-		   // This transaction lost the race, mark phase as failed.
+			// This transaction lost the race, mark phase as failed.
 			exec.ExecPhase = ExecFail
 		}
 		exec.oldData = nil

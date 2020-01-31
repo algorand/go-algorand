@@ -135,7 +135,7 @@ type AccountData struct {
 	// NOTE: do not modify this value in-place in existing AccountData
 	// structs; allocate a copy and modify that instead.  AccountData
 	// is expected to have copy-by-value semantics.
-        Assets map[AssetIndex]AssetHolding `codec:"asset,allocbound=-"`
+	Assets map[AssetIndex]AssetHolding `codec:"asset,allocbound=-"`
 
 	// Storage is a small amount of persistent data for use by contracts.
 	//
