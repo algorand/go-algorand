@@ -48,9 +48,7 @@ func EnableTelemetry(cfg TelemetryConfig, l *logger) (err error) {
 func enableTelemetryState(telemetry *telemetryState, l *logger) {
 	l.loggerState.telemetry = telemetry
 	// Hook our normal logging to send desired types to telemetry
-	if telemetry.hook != nil {
-		l.AddHook(telemetry.hook)
-	}
+	l.AddHook(telemetry.hook)
 	// Wrap current logger Output writer to capture history
 	l.setOutput(telemetry.wrapOutput(l.getOutput()))
 }
@@ -84,6 +82,8 @@ func makeTelemetryState(cfg TelemetryConfig, hookFactory hookFactory) (*telemetr
 			return nil, err
 		}
 		telemetry.hook = createAsyncHookLevels(hook, 32, 100, makeLevels(cfg.MinLogLevel))
+	} else {
+		telemetry.hook = new(dummyHook)
 	}
 	telemetry.sendToLog = cfg.SendToLog
 	return telemetry, nil
@@ -227,9 +227,7 @@ func (t *telemetryState) logTelemetry(l logger, message string, details interfac
 	if t.sendToLog {
 		entry.Info(message)
 	}
-	if t.hook != nil {
-		t.hook.Fire(entry)
-	}
+	t.hook.Fire(entry)
 }
 
 func (t *telemetryState) Close() {
