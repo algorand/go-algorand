@@ -54,3 +54,6 @@ data/transactions/logic/*.md
 
 *.pem
 
+# Folder for collecting release assets
+assets
+
