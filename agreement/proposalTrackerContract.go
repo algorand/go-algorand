@@ -25,7 +25,6 @@ type proposalTrackerContract struct {
 	Froze            bool
 	SawSoftThreshold bool
 	SawCertThreshold bool
-	Expected         proposalValue
 }
 
 // TODO check concrete types of events
@@ -104,7 +103,6 @@ func (c *proposalTrackerContract) post(p player, in, out event) (post []error) {
 		}
 
 		c.Froze = true
-		c.Expected = out.(proposalFrozenEvent).Proposal
 	case softThreshold:
 		if out.t() != proposalAccepted {
 			post = append(post, fmt.Errorf("output event from proposalFrozen has bad type: %v", out.t()))
@@ -122,7 +120,6 @@ func (c *proposalTrackerContract) post(p player, in, out event) (post []error) {
 		}
 
 		c.SawSoftThreshold = true
-		c.Expected = out.(proposalAcceptedEvent).Proposal
 	case certThreshold:
 		if out.t() != proposalAccepted {
 			post = append(post, fmt.Errorf("output event from certThreshold has bad type: %v", out.t()))

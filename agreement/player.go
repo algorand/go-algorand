@@ -198,9 +198,9 @@ func (p *player) issueNextVote(r routerHandle) []action {
 		res := r.dispatch(*p, nextThresholdStatusRequestEvent{}, voteMachinePeriod, p.Round, p.Period-1, 0)
 		nextStatus := res.(nextThresholdStatusEvent) // panic if violate postcondition
 		if !nextStatus.Bottom {
-			// if we fast-forwarded to this period or entered via a soft threshold, or even a cert threshold,
-			// nextStatus.Bottom will be true and we will next vote bottom.
-			// As long as a majority of honest users (in the cert threshold case) do not vote bottom, we are safe.
+			// if we fast-forwarded to this period or entered via a soft/cert threshold,
+			// nextStatus.Bottom will be false and we will next vote bottom.
+			// As long as a majority of honest users (in the cert threshold case) do not vote bottom (as assumed), we are safe.
 			// Note that cert threshold fast-forwarding will never change a next value vote to a next bottom vote -
 			// if a player has voted for a value, they have the block, and should have ended the round.
 			a.Proposal = nextStatus.Proposal
@@ -235,8 +235,8 @@ func (p *player) issueFastVote(r routerHandle) (actions []action) {
 		res := r.dispatch(*p, nextThresholdStatusRequestEvent{}, voteMachinePeriod, p.Round, p.Period-1, 0)
 		nextStatus := res.(nextThresholdStatusEvent) // panic if violate postcondition
 		if !nextStatus.Bottom {
-			// note that this is bottom if we fast-forwarded to this period or entered via a soft threshold.
 			a.Step = redo
+			// note that this is bottom if we fast-forwarded to this period or entered via a soft/cert threshold.
 			a.Proposal = nextStatus.Proposal
 		}
 	}
@@ -360,7 +360,7 @@ func (p *player) enterRound(r routerHandle, source event, target round) []action
 	// so replace with an explicit new round event.
 	// In addition, handle a new source: payloadVerified (which can trigger new round if
 	// received after cert threshold)
-	if source.t() == certThreshold || source.t() == payloadVerified {
+	if source.t() == certThreshold || source.t() == payloadVerified { // i.e., source.t() != roundInterruption
 		r.t.logRoundStart(*p, target)
 		newRoundEvent = roundInterruptionEvent{Round: target}
 	}
@@ -391,7 +391,6 @@ func (p *player) enterRound(r routerHandle, source event, target round) []action
 	}
 
 	// we might need to handle a pipelined threshold event
-
 	res := r.dispatch(*p, freshestBundleRequestEvent{}, voteMachineRound, p.Round, 0, 0)
 	freshestRes := res.(freshestBundleEvent) // panic if violate postcondition
 	if freshestRes.Ok {
@@ -567,8 +566,8 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 		actions = append(actions, a)
 
 		// If the payload is valid, check it against any received cert threshold.
-		// Of course, this should only trigger for payloadVerified clause.
-		// This allows us to handle late payloads (relative to cert-certificates) without resorting to catchup.
+		// Of course, this should only trigger for payloadVerified case.
+		// This allows us to handle late payloads (relative to cert-bundles, i.e., certificates) without resorting to catchup.
 		if ef.t() == proposalCommittable || ef.t() == payloadAccepted {
 			freshestRes := r.dispatch(*p, freshestBundleRequestEvent{}, voteMachineRound, p.Round, 0, 0).(freshestBundleEvent)
 			if freshestRes.Ok && freshestRes.Event.t() == certThreshold {

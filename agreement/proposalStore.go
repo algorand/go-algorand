@@ -170,8 +170,8 @@ func (store *proposalStore) underlying() listener {
 //   credential it has seen and possibly a cached authenticator (if not, it
 //   returns an empty event).
 //
-// - A softThreshold event is delivered when the player state has observed a
-//   quorum of soft votes for the current round and period.  The proposalStore
+// - A soft/certThreshold event is delivered when the player state has observed a
+//   quorum of soft/cert votes for the current round and period.  The proposalStore
 //   dispatches this event to the proposalMachinePeriod.  If the proposalStore
 //   has the proposal payload corresponding to the proposal-value of the quorum,
 //   it returns a proposalCommittable event; otherwise, it propagates the
