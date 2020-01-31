@@ -18,44 +18,15 @@ export HOME=/root
 
 . "${HOME}"/subhome/build_env
 
-GIT_REPO_PATH=https://github.com/btoll/go-algorand
-mkdir -p "${HOME}/go/src/github.com/algorand"
-cd "${HOME}/go/src/github.com/algorand" && git clone --single-branch --branch "${HASH}" "${GIT_REPO_PATH}" go-algorand
-
-# Get golang 1.12 and build its own copy of go-algorand.
-cd "${HOME}"
-python3 "${HOME}/go/src/github.com/algorand/go-algorand/scripts/get_latest_go.py" --version-prefix=1.12
-bash -c "cd /usr/local && tar zxf ${HOME}/go*.tar.gz"
-
 GOPATH=$(/usr/local/go/bin/go env GOPATH)
 export PATH=${HOME}/gpgbin:${GOPATH}/bin:/usr/local/go/bin:${PATH}
 export GOPATH
 
 REPO_DIR=/root/go/src/github.com/algorand/go-algorand
 
-# Build!
-"${REPO_DIR}"/scripts/configure_dev-deps.sh
-make crypto/lib/libsodium.a -C "${REPO_DIR}"
-make build -C "${REPO_DIR}"
-
 cd "${REPO_DIR}"
 
-# definitely rebuild libsodium which could link to external C libraries
-#if [ -f ${REPO_DIR}/crypto/libsodium-fork/Makefile ]; then
-#    make distclean --directory ${REPO_DIR}/crypto/libsodium-fork
-#fi
-#rm -rf ${REPO_DIR}/crypto/lib
-#make crypto/lib/libsodium.a
-#
-#make build
-
-RPMTMP=$(mktemp -d 2>/dev/null || mktemp -d -t "rpmtmp")
-trap 'rm -rf ${RPMTMP}' 0
-#"${REPO_DIR}/scripts/release/test/build_rpm.sh" "${RPMTMP}"
-"${REPO_DIR}/scripts/build_rpm.sh" "${RPMTMP}"
-cp -p "${RPMTMP}"/*/*.rpm /root/subhome/node_pkg
-
-(cd ${HOME} && tar jxf /root/stuff/gnupg*.tar.bz2)
+(cd ${HOME} && tar jxf /root/keys/gnupg*.tar.bz2)
 export PATH="${HOME}/gnupg2/bin:${PATH}"
 export LD_LIBRARY_PATH=${HOME}/gnupg2/lib
 
@@ -71,10 +42,10 @@ fi
 rm -f ${HOME}/.gnupg/S.gpg-agent
 (cd ~/.gnupg && ln -s /root/S.gpg-agent S.gpg-agent)
 
-gpg --import /root/stuff/dev.pub
-gpg --import /root/stuff/rpm.pub
+gpg --import /root/keys/dev.pub
+gpg --import /root/keys/rpm.pub
 #gpg --import ${REPO_DIR}/installer/rpm/RPM-GPG-KEY-Algorand
-rpmkeys --import /root/stuff/rpm.pub
+rpmkeys --import /root/keys/rpm.pub
 echo "wat" | gpg -u rpm@algorand.com --clearsign
 
 cat <<EOF>"${HOME}/.rpmmacros"
@@ -97,7 +68,7 @@ createrepo --database /root/dummyrepo
 rm -f /root/dummyrepo/repodata/repomd.xml.asc
 gpg -u rpm@algorand.com --detach-sign --armor /root/dummyrepo/repodata/repomd.xml
 
-OLDRPM=$(ls -t /root/stuff/*.rpm | head -1)
+OLDRPM=$(ls -t /root/keys/*.rpm | head -1)
 if [ -f "${OLDRPM}" ]; then
     yum install -y "${OLDRPM}"
     algod -v
