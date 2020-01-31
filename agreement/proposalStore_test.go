@@ -61,7 +61,7 @@ func TestBlockAssemblerPipeline(t *testing.T) {
 	round := player.Round
 	period := player.Period
 	testBlockFactory, err := factory.AssembleBlock(player.Round, time.Now().Add(time.Minute))
-	require.NoError(t, err, "Could not generate a proposal for round %v: %v", round, err)
+	require.NoError(t, err, "Could not generate a proposal for round %d: %v", round, err)
 
 	accountIndex := 0
 	proposal, _, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, period, ledger)
@@ -127,7 +127,7 @@ func TestBlockAssemblerBind(t *testing.T) {
 	player, _, accounts, factory, ledger := testSetup(0)
 
 	testBlockFactory, err := factory.AssembleBlock(player.Round, time.Now().Add(time.Minute))
-	require.NoError(t, err, "Could not generate a proposal for round %v: %v", player.Round, err)
+	require.NoError(t, err, "Could not generate a proposal for round %d: %v", player.Round, err)
 
 	accountIndex := 0
 
@@ -193,7 +193,7 @@ func TestBlockAssemblerAuthenticator(t *testing.T) {
 	player, _, accounts, factory, ledger := testSetup(0)
 
 	testBlockFactory, err := factory.AssembleBlock(player.Round, time.Now().Add(time.Minute))
-	require.NoError(t, err, "Could not generate a proposal for round %v: %v", player.Round, err)
+	require.NoError(t, err, "Could not generate a proposal for round %d: %v", player.Round, err)
 	accountIndex := 0
 	proposalPayload, _, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, player.Period, ledger)
 
@@ -257,7 +257,7 @@ func TestBlockAssemblerTrim(t *testing.T) {
 	player, _, accounts, factory, ledger := testSetup(0)
 
 	testBlockFactory, err := factory.AssembleBlock(player.Round, time.Now().Add(time.Minute))
-	require.NoError(t, err, "Could not generate a proposal for round %v: %v", player.Round, err)
+	require.NoError(t, err, "Could not generate a proposal for round %d: %v", player.Round, err)
 	accountIndex := 0
 	proposalPayload, _, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, player.Period, ledger)
 
@@ -329,7 +329,7 @@ func TestProposalStoreT(t *testing.T) {
 	player, _, accounts, factory, ledger := testSetup(0)
 
 	testBlockFactory, err := factory.AssembleBlock(player.Round, time.Now().Add(time.Minute))
-	require.NoError(t, err, "Could not generate a proposal for round %v: %v", player.Round, err)
+	require.NoError(t, err, "Could not generate a proposal for round %d: %v", player.Round, err)
 	accountIndex := 0
 	proposalPayload, proposalV, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, player.Period, ledger)
 
@@ -401,7 +401,7 @@ func TestProposalStoreUnderlying(t *testing.T) {
 	player, _, accounts, factory, ledger := testSetup(0)
 
 	testBlockFactory, err := factory.AssembleBlock(player.Round, time.Now().Add(time.Minute))
-	require.NoError(t, err, "Could not generate a proposal for round %v: %v", player.Round, err)
+	require.NoError(t, err, "Could not generate a proposal for round %d: %v", player.Round, err)
 	accountIndex := 0
 	proposalPayload, proposalV, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, player.Period, ledger)
 
@@ -463,7 +463,7 @@ func TestProposalStoreHandle(t *testing.T) {
 	proposalVoteEventBatch, proposalPayloadEventBatch, _ := generateProposalEvents(t, player, accounts, factory, ledger)
 
 	testBlockFactory, err := factory.AssembleBlock(player.Round, time.Now().Add(time.Minute))
-	require.NoError(t, err, "Could not generate a proposal for round %v: %v", player.Round, err)
+	require.NoError(t, err, "Could not generate a proposal for round %d: %v", player.Round, err)
 	accountIndex := 0
 	_, proposalV0, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, player.Period, ledger)
 	accountIndex++
@@ -645,7 +645,7 @@ func TestProposalStoreGetPinnedValue(t *testing.T) {
 	// create proposal Store
 	player, router, accounts, factory, ledger := testPlayerSetup()
 	testBlockFactory, err := factory.AssembleBlock(player.Round, time.Now().Add(time.Minute))
-	require.NoError(t, err, "Could not generate a proposal for round %v: %v", player.Round, err)
+	require.NoError(t, err, "Could not generate a proposal for round %d: %v", player.Round, err)
 	accountIndex := 0
 	// create a route handler for the proposal store
 	rHandle := routerHandle{

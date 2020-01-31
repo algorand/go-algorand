@@ -18,7 +18,7 @@ set -ex
 GIT_REPO_PATH=https://github.com/algorand/go-algorand
 HASH=${1:-"rel/stable"}
 export HASH
-CHANNEL=${1:-"stable"}
+CHANNEL=${2:-"stable"}
 export CHANNEL
 export DEBIAN_FRONTEND=noninteractive
 
@@ -28,7 +28,8 @@ sudo apt-get install -y build-essential automake autoconf awscli docker.io git g
 sudo rngd -r /dev/urandom
 
 #umask 0077
-mkdir -p "${HOME}"/{.gnupg,go,gpgbin,dummyaptly,dummyrepo,prodrepo,tkey}
+mkdir -p "${HOME}"/{.gnupg,go,gpgbin,node_pkg,keys,tkey}
+mkdir -p "${HOME}"/go/bin
 
 # Check out
 mkdir -p "${HOME}/go/src/github.com/algorand"
@@ -36,7 +37,6 @@ cd "${HOME}/go/src/github.com/algorand" && git clone --single-branch --branch "$
 # TODO: if we are checking out a release tag, `git tag --verify` it
 
 # Install latest Go
-# TODO: make a config file in root of repo with single source of truth for Go major-minor version
 cd "${HOME}"
 python3 "${HOME}/go/src/github.com/algorand/go-algorand/scripts/get_latest_go.py" --version-prefix=1.12
 # $HOME will be interpreted by the outer shell to create the string passed to sudo bash
@@ -94,17 +94,6 @@ cat<<EOF>> "${HOME}/.profile"
 export GOPATH=\${HOME}/go
 export PATH=\${HOME}/gpgbin:\${GOPATH}/bin:/usr/local/go/bin:\${PATH}
 EOF
-
-# Install aptly for building debian repo
-mkdir -p "$GOPATH/src/github.com/aptly-dev"
-cd "$GOPATH/src/github.com/aptly-dev"
-git clone https://github.com/aptly-dev/aptly
-cd aptly && git fetch
-
-# As of 2019-06-06 release tag v1.3.0 is 2018-May, GnuPG 2 support was added in October but they haven't tagged a new release yet. Hash below seems to work so far.
-# 2019-07-06 v1.4.0
-git checkout v1.4.0
-make install
 
 gpgconf --launch gpg-agent
 
