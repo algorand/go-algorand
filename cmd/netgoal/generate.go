@@ -212,7 +212,7 @@ func pickNodeConfig(alt []remote.NodeConfig, name string) remote.NodeConfig {
 func generateNetworkGoalTemplate(templateFilename string, wallets, relays, nodes, npnHosts int) error {
 	template := netdeploy.NetworkTemplate{}
 	template.Nodes = make([]remote.NodeConfigGoal, 0, relays+nodes+npnHosts)
-	template.Genesis = generateWalletGenesisData(walletsToGenerate, 0, 0)
+	template.Genesis = generateWalletGenesisData(walletsToGenerate, 0)
 	for i := 0; i < relays; i++ {
 		name := "relay" + strconv.Itoa(i+1)
 		newNode := remote.NodeConfigGoal{
@@ -426,19 +426,13 @@ func saveGoalTemplateToDisk(template netdeploy.NetworkTemplate, filename string)
 	return err
 }
 
-func generateWalletGenesisData(wallets, npnHosts int, totalStake int64) gen.GenesisData {
+func generateWalletGenesisData(wallets, npnHosts int) gen.GenesisData {
 	data := gen.DefaultGenesis
 	if npnHosts > 0 {
 		wallets = 2 * wallets
 	}
-	// cloud templates use percentage of stake
-	// but 'goal network' templates expect algos distribution
-	// if a value is not provided make equal integer split
-	if totalStake == 0 {
-		totalStake = int64(wallets)
-	}
 	data.Wallets = make([]gen.WalletData, wallets)
-	stake := big.NewRat(totalStake, int64(wallets))
+	stake := big.NewRat(int64(100), int64(wallets))
 
 	ratZero := big.NewRat(int64(0), int64(1))
 	ratHundred := big.NewRat(int64(100), int64(1))
@@ -464,7 +458,7 @@ func generateWalletGenesisData(wallets, npnHosts int, totalStake int64) gen.Gene
 }
 
 func generateWalletGenesis(filename string, wallets, npnHosts int) error {
-	data := generateWalletGenesisData(wallets, npnHosts, 100)
+	data := generateWalletGenesisData(wallets, npnHosts)
 	return saveGenesisDataToDisk(data, filename)
 }
 

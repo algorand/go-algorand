@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/big"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -169,17 +170,21 @@ func loadTemplateFromReader(reader io.Reader, template *NetworkTemplate) error {
 func (t NetworkTemplate) Validate() error {
 	// Genesis wallet percentages must add up to 100
 	// Genesis account names must be unique
-	totalPct := uint(0)
+	totalPct := big.NewFloat(float64(0))
 	accounts := make(map[string]bool)
 	for _, wallet := range t.Genesis.Wallets {
-		totalPct += uint(wallet.Stake)
+		if wallet.Stake < 0 {
+			return fmt.Errorf("invalid template: negative stake on Genesis account %s", wallet.Name)
+		}
+		totalPct = totalPct.Add(totalPct, big.NewFloat(wallet.Stake))
 		upperAcct := strings.ToUpper(wallet.Name)
 		if _, found := accounts[upperAcct]; found {
 			return fmt.Errorf("invalid template: duplicate Genesis account %s", wallet.Name)
 		}
 		accounts[upperAcct] = true
 	}
-	if totalPct != 100 {
+	totalPctInt, _ := totalPct.Int64()
+	if totalPctInt != 100 {
 		return fmt.Errorf("invalid template: Genesis account allocations must total 100 (actual %v)", totalPct)
 	}
 
