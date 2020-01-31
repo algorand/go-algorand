@@ -111,7 +111,7 @@ func (n *VoteFilter) Eval(tag protocol.Tag, data []byte, direction string) bool 
 	}
 	if !included {
 		if n.config.DebugMessages {
-			fmt.Printf("VoteFilter(%s) service-%v : (%v,%v,%v) skipped. Rules (%v-%v, %v-%v, %v-%v)\n", direction, n.nodeID, uv.R.Round, uv.R.Period, uv.R.Step, n.config.IncludeMasks[0].StartRound, n.config.IncludeMasks[0].EndRound, n.config.IncludeMasks[0].StartPeriod, n.config.IncludeMasks[0].EndPeriod, n.config.IncludeMasks[0].StartStep, n.config.IncludeMasks[0].EndStep)
+			fmt.Printf("VoteFilter(%s) service-%v : (%d,%d,%d) skipped. Rules (%d-%d, %d-%d, %d-%d)\n", direction, n.nodeID, uv.R.Round, uv.R.Period, uv.R.Step, n.config.IncludeMasks[0].StartRound, n.config.IncludeMasks[0].EndRound, n.config.IncludeMasks[0].StartPeriod, n.config.IncludeMasks[0].EndPeriod, n.config.IncludeMasks[0].StartStep, n.config.IncludeMasks[0].EndStep)
 		}
 		return false
 	}
@@ -128,13 +128,13 @@ func (n *VoteFilter) Eval(tag protocol.Tag, data []byte, direction string) bool 
 
 	if excluded {
 		if n.config.DebugMessages {
-			fmt.Printf("VoteFilter(%s) service-%v : (%v,%v,%v) skipped\n", direction, n.nodeID, uv.R.Round, uv.R.Period, uv.R.Step)
+			fmt.Printf("VoteFilter(%s) service-%v : (%d,%d,%d) skipped\n", direction, n.nodeID, uv.R.Round, uv.R.Period, uv.R.Step)
 		}
 		return false
 	}
 
 	if n.config.DebugMessages {
-		fmt.Printf("VoteFilter(%s) service-%v : (%v,%v,%v) passed\n", direction, n.nodeID, uv.R.Round, uv.R.Period, uv.R.Step)
+		fmt.Printf("VoteFilter(%s) service-%v : (%d,%d,%d) passed\n", direction, n.nodeID, uv.R.Round, uv.R.Period, uv.R.Step)
 	}
 	return true
 }
