@@ -116,7 +116,7 @@ func (b *backlog) EnqueueBacklog(enqueueCtx context.Context, t ExecFunc, arg int
 // Shutdown shuts down the backlog.
 func (b *backlog) Shutdown() {
 	b.ctxCancel()
-	close(b.buffer)
+	// NOTE: Do not close(b.buffer) because there's no good way to ensure Enqueue*() won't write to it and panic. Just let it be garbage collected.
 	b.wg.Wait()
 	if b.pool.GetOwner() == b {
 		b.pool.Shutdown()
