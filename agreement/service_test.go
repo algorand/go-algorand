@@ -1964,9 +1964,9 @@ func TestAgreementLargePeriods(t *testing.T) {
 // Note that the stall will be resolved by catchup even if the relay blocks.
 func TestAgreementCertificateDoesNotStallSingleRelay(t *testing.T) {
 	numNodes := 10 // single relay, nine leaf nodes
-	//relayID := nodeID(0)
-	_, _, cleanupFn, services, clocks, _, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
-	//startRound := baseLedger.NextRound()
+	relayID := nodeID(0)
+	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
+	startRound := baseLedger.NextRound()
 	defer cleanupFn()
 	for i := 0; i < numNodes; i++ {
 		services[i].Start()
@@ -1977,82 +1977,82 @@ func TestAgreementCertificateDoesNotStallSingleRelay(t *testing.T) {
 	// run two rounds
 	zeroes = runRound(clocks, activityMonitor, zeroes)
 	// make sure relay does not see block proposal for round 3
-	//baseNetwork.intercept(func(params multicastParams) multicastParams {
-	//	if params.tag == protocol.ProposalPayloadTag {
-	//		var tp transmittedPayload
-	//		err := protocol.DecodeStream(bytes.NewBuffer(params.data), &tp)
-	//		if err != nil {
-	//			panic(err)
-	//		}
-	//		if tp.Round() == basics.Round(startRound+2) {
-	//			params.exclude = relayID
-	//		}
-	//	}
-	//	return params
-	//})
-	//zeroes = runRound(clocks, activityMonitor, zeroes)
-	//
-	//// Round 3:
-	//// First partition the relay to prevent it from seeing certificate or block
-	//baseNetwork.repairAll()
-	//baseNetwork.partition(relayID)
-	//// Get a copy of the certificate
-	//pocketCert := make(chan multicastParams, 100)
-	//baseNetwork.intercept(func(params multicastParams) multicastParams {
-	//	if params.tag == protocol.AgreementVoteTag {
-	//		r := bytes.NewBuffer(params.data)
-	//		var uv unauthenticatedVote
-	//		err := protocol.DecodeStream(r, &uv)
-	//		if err != nil {
-	//			panic(err)
-	//		}
-	//		if uv.R.Step == cert {
-	//			pocketCert <- params
-	//		}
-	//	}
-	//	return params
-	//})
-	//// And with some hypothetical second relay the network achieves consensus on a certificate and block.
-	//triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
-	//zeroes = expectNewPeriod(clocks[1:], zeroes)
-	//require.Equal(t, uint(3), clocks[0].(*testingClock).zeroes)
-	//close(pocketCert)
-	//
-	//// Round 4:
-	//// Return to the relay topology
-	//baseNetwork.repairAll()
-	//baseNetwork.makeRelays(relayID)
-	//// Trigger ensureDigest on the relay
-	//baseNetwork.prepareAllMulticast()
-	//for p := range pocketCert {
-	//	baseNetwork.multicast(p.tag, p.data, p.source, p.exclude)
-	//}
-	//baseNetwork.finishAllMulticast()
-	//activityMonitor.waitForActivity()
-	//activityMonitor.waitForQuiet()
-	//// this relay must still relay initial messages. Note that payloads were already relayed with
-	//// the previous global timeout.
-	//triggerGlobalTimeout(filterTimeout, clocks[1:], activityMonitor)
-	//zeroes = expectNewPeriod(clocks[1:], zeroes)
-	//require.Equal(t, uint(3), clocks[0].(*testingClock).zeroes)
-	//
-	//for i := 0; i < numNodes; i++ {
-	//	services[i].Shutdown()
-	//}
-	//const expectNumRounds = 4
-	//for i := 1; i < numNodes; i++ {
-	//	if ledgers[i].NextRound() != startRound+round(expectNumRounds) {
-	//		panic("did not progress 4 rounds")
-	//	}
-	//}
-	//for j := 0; j < expectNumRounds; j++ {
-	//	ledger := ledgers[1].(*testLedger)
-	//	reference := ledger.entries[startRound+round(j)].Digest()
-	//	for i := 1; i < numNodes; i++ {
-	//		ledger := ledgers[i].(*testLedger)
-	//		if ledger.entries[startRound+round(j)].Digest() != reference {
-	//			panic("wrong block confirmed")
-	//		}
-	//	}
-	//}
+	baseNetwork.intercept(func(params multicastParams) multicastParams {
+		if params.tag == protocol.ProposalPayloadTag {
+			var tp transmittedPayload
+			err := protocol.DecodeStream(bytes.NewBuffer(params.data), &tp)
+			if err != nil {
+				panic(err)
+			}
+			if tp.Round() == basics.Round(startRound+2) {
+				params.exclude = relayID
+			}
+		}
+		return params
+	})
+	zeroes = runRound(clocks, activityMonitor, zeroes)
+
+	// Round 3:
+	// First partition the relay to prevent it from seeing certificate or block
+	baseNetwork.repairAll()
+	baseNetwork.partition(relayID)
+	// Get a copy of the certificate
+	pocketCert := make(chan multicastParams, 100)
+	baseNetwork.intercept(func(params multicastParams) multicastParams {
+		if params.tag == protocol.AgreementVoteTag {
+			r := bytes.NewBuffer(params.data)
+			var uv unauthenticatedVote
+			err := protocol.DecodeStream(r, &uv)
+			if err != nil {
+				panic(err)
+			}
+			if uv.R.Step == cert {
+				pocketCert <- params
+			}
+		}
+		return params
+	})
+	// And with some hypothetical second relay the network achieves consensus on a certificate and block.
+	triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
+	zeroes = expectNewPeriod(clocks[1:], zeroes)
+	require.Equal(t, uint(3), clocks[0].(*testingClock).zeroes)
+	close(pocketCert)
+
+	// Round 4:
+	// Return to the relay topology
+	baseNetwork.repairAll()
+	baseNetwork.makeRelays(relayID)
+	// Trigger ensureDigest on the relay
+	baseNetwork.prepareAllMulticast()
+	for p := range pocketCert {
+		baseNetwork.multicast(p.tag, p.data, p.source, p.exclude)
+	}
+	baseNetwork.finishAllMulticast()
+	activityMonitor.waitForActivity()
+	activityMonitor.waitForQuiet()
+	// this relay must still relay initial messages. Note that payloads were already relayed with
+	// the previous global timeout.
+	triggerGlobalTimeout(filterTimeout, clocks[1:], activityMonitor)
+	zeroes = expectNewPeriod(clocks[1:], zeroes)
+	require.Equal(t, uint(3), clocks[0].(*testingClock).zeroes)
+
+	for i := 0; i < numNodes; i++ {
+		services[i].Shutdown()
+	}
+	const expectNumRounds = 4
+	for i := 1; i < numNodes; i++ {
+		if ledgers[i].NextRound() != startRound+round(expectNumRounds) {
+			panic("did not progress 4 rounds")
+		}
+	}
+	for j := 0; j < expectNumRounds; j++ {
+		ledger := ledgers[1].(*testLedger)
+		reference := ledger.entries[startRound+round(j)].Digest()
+		for i := 1; i < numNodes; i++ {
+			ledger := ledgers[i].(*testLedger)
+			if ledger.entries[startRound+round(j)].Digest() != reference {
+				panic("wrong block confirmed")
+			}
+		}
+	}
 }
