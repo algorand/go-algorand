@@ -2,7 +2,7 @@ pipeline {
     parameters {
         string defaultValue: '', description: 'Branch name or tag name.', name: 'hash', trim: true
         string defaultValue: 'stable', description: 'Staged channel which should be released.', name: 'channel', trim: true
-        string defaultValue: 's3://algorand-dev-deb-repo/releases', description: 's3://bucket/prefix', name: 'bucket_location', trim: true
+        string defaultValue: 's3://algorand-builds/channel', description: 's3://bucket/prefix', name: 'bucket_location', trim: true
 
         // AWS
         string defaultValue: 'us-west-1', description: 'AWS Region', name: 'region', trim: true
@@ -11,8 +11,8 @@ pipeline {
     }
 
     environment {
-        AWS_ACCESS_KEY_ID = credentials("aws-access-key-id")
-        AWS_SECRET_ACCESS_KEY = credentials("aws-secret-access-key")
+        AWS_ACCESS_KEY_ID = credentials("prod-s3-aws-access-key-id")
+        AWS_SECRET_ACCESS_KEY = credentials("prod-s3-aws-secret-access-key")
     }
 
     agent any
@@ -20,7 +20,7 @@ pipeline {
     stages {
         stage("create ec2 instance") {
             steps {
-                sh script: "scripts/release/controller/stages/create.sh ${params.region} ${params.ami} ${params.type}"
+                sh script: "scripts/release/ci/stage/create.sh ${params.region} ${params.ami} ${params.type}"
             }
         }
 
@@ -32,50 +32,45 @@ pipeline {
                     }
                 }
 
-                sh script: "scripts/release/controller/stages/setup.sh ${params.hash} ${params.channel}"
+                sh script: "scripts/release/ci/stage/setup.sh ${params.hash} ${params.channel}"
             }
         }
 
-        stage("build and package") {
+        stage("build") {
             steps {
-                sh script: "scripts/release/controller/stages/build.sh ${params.hash} ${params.channel}"
+                sh script: "scripts/release/ci/stage/build.sh ${params.hash} ${params.channel}"
             }
         }
 
-        stage("test") {
+        stage("package") {
             steps {
-                sh script: "scripts/release/controller/stages/test.sh ${params.bucket_location} ${params.channel}"
+                sh script: "scripts/release/ci/stage/package.sh ${params.hash} ${params.channel}"
             }
         }
 
         stage("sign") {
             steps {
                 input "Forward gpg-agent"
-                sh script: "scripts/release/controller/stages/sign.sh"
+                sh script: "scripts/release/ci/stage/sign.sh"
             }
         }
 
         stage("upload") {
             steps {
                 script {
-                    def rstamp = sh(
-                        script: 'scripts/reverse_hex_timestamp',
-                        returnStdout: true
-                    ).trim()
-
                     def fullversion = sh(
-                        script: 'bash scripts/compute_build_number.sh -f',
+                        script: 'PATH=/usr/local/go/bin bash scripts/compute_build_number.sh -f',
                         returnStdout: true
                     ).trim()
 
-                    sh script: "scripts/release/controller/stages/upload.sh ${params.channel} ${params.bucket_location} ${rstamp} ${fullversion}"
+                    sh script: "scripts/release/ci/stage/upload.sh ${params.channel} ${params.bucket_location} ${fullversion}"
                 }
             }
         }
 
         stage("delete ec2 instance") {
             steps {
-                sh script: "scripts/release/controller/stages/delete.sh ${params.region}"
+                sh script: "scripts/release/ci/stage/delete.sh ${params.region}"
             }
         }
     }
