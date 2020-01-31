@@ -1,87 +1,27 @@
 #!/usr/bin/env bash
-# shellcheck disable=1090,2012
+# shellcheck disable=2012
 
-set -ex
+set -x
 
-export HOME=/root
+echo
+date "+build_release begin TEST stage %Y%m%d_%H%M%S"
+echo
 
-cd "${HOME}" && tar jxf "${HOME}"/subhome/gnupg*.tar.bz2
-export PATH="${HOME}/gnupg2/bin:${PATH}"
-export LD_LIBRARY_PATH=${HOME}/gnupg2/lib
+# Run RPM build in Centos7 Docker container
+sg docker "docker build -t algocentosbuild - < ${HOME}/ben-branch/scripts/release/rpm/centos-build.Dockerfile"
 
-umask 0077
-mkdir -p "${HOME}/.gnupg"
-umask 0022
-touch "${HOME}/.gnupg/gpg.conf"
-
-if grep -q no-autostart "${HOME}/.gnupg/gpg.conf"
-then
-    echo ""
-else
-    echo "no-autostart" >> "${HOME}/.gnupg/gpg.conf"
-fi
-
-rm -f ${HOME}/.gnupg/S.gpg-agent
-cd "${HOME}"/.gnupg && ln -s "${HOME}"/S.gpg-agent S.gpg-agent
-
-gpg --import /root/keys/dev.pub
-gpg --import /root/keys/rpm.pub
-rpmkeys --import /root/keys/rpm.pub
-echo "wat" | gpg -u rpm@algorand.com --clearsign
-
-cat <<EOF>"${HOME}/.rpmmacros"
-%_gpg_name Algorand RPM <rpm@algorand.com>
-%__gpg ${HOME}/gnupg2/bin/gpg
-%__gpg_check_password_cmd true
+cat <<EOF>"${HOME}"/dummyrepo/algodummy.repo
+[algodummy]
+name=Algorand
+baseurl=http://${DC_IP}:8111/
+enabled=1
+gpgcheck=1
+gpgkey=https://releases.algorand.com/rpm/rpm_algorand.pub
 EOF
 
-cat <<EOF>"${HOME}/rpmsign.py"
-import rpm
-import sys
-rpm.addSign(sys.argv[1], '')
-EOF
+sg docker "docker run --rm --env-file ${HOME}/build_env --mount type=bind,src=/run/user/1000/gnupg/S.gpg-agent,dst=/root/S.gpg-agent --mount type=bind,src=${HOME}/dummyrepo,dst=/root/dummyrepo --mount type=bind,src=${HOME}/keys,dst=/root/keys --mount type=bind,src=${HOME},dst=/root/subhome algocentosbuild /root/subhome/ben-branch/scripts/release/test/rpm/test_algorand.sh"
 
-NEWEST_RPM=$(ls -t /root/subhome/node_pkg/*rpm | head -1)
-python2 "${HOME}/rpmsign.py" "${NEWEST_RPM}"
-
-cp -p "${NEWEST_RPM}" /root/dummyrepo
-createrepo --database /root/dummyrepo
-rm -f /root/dummyrepo/repodata/repomd.xml.asc
-gpg -u rpm@algorand.com --detach-sign --armor /root/dummyrepo/repodata/repomd.xml
-
-OLDRPM=$(ls -t /root/subhome/node_pkg/*.rpm | head -1)
-if [ -f "${OLDRPM}" ]; then
-    yum install -y "${OLDRPM}"
-    algod -v
-#    if algod -v | grep -q "${FULLVERSION}"
-#    then
-#        echo "already installed current version. wat?"
-#        false
-#    fi
-
-    mkdir -p /root/testnode
-    cp -p /var/lib/algorand/genesis/testnet/genesis.json /root/testnode
-
-    goal node start -d /root/testnode
-    goal node wait -d /root/testnode -w 120
-    goal node stop -d /root/testnode
-fi
-
-yum-config-manager --add-repo "http://${DC_IP}:8111/algodummy.repo"
-
-yum install -y algorand
-algod -v
-# check that the installed version is now the current version
-algod -v | grep -q "${FULLVERSION}.${CHANNEL}"
-
-if [ ! -d /root/testnode ]; then
-    mkdir -p /root/testnode
-    cp -p /var/lib/algorand/genesis/testnet/genesis.json /root/testnode
-fi
-
-goal node start -d /root/testnode
-goal node wait -d /root/testnode -w 120
-goal node stop -d /root/testnode
-
-echo CENTOS_DOCKER_TEST_OK
+echo
+date "+build_release end TEST stage %Y%m%d_%H%M%S"
+echo
 

@@ -4,6 +4,40 @@
 
 set -ex
 
+cat <<EOF>"${HOME}"/dummyaptly.conf
+{
+  "rootDir": "${HOME}/dummyaptly",
+  "downloadConcurrency": 4,
+  "downloadSpeedLimit": 0,
+  "architectures": [],
+  "dependencyFollowSuggests": false,
+  "dependencyFollowRecommends": false,
+  "dependencyFollowAllVariants": false,
+  "dependencyFollowSource": false,
+  "dependencyVerboseResolve": false,
+  "gpgDisableSign": false,
+  "gpgDisableVerify": false,
+  "gpgProvider": "gpg",
+  "downloadSourcePackages": false,
+  "skipLegacyPool": true,
+  "ppaDistributorID": "ubuntu",
+  "ppaCodename": "",
+  "skipContentsPublishing": false,
+  "FileSystemPublishEndpoints": {},
+  "S3PublishEndpoints": {},
+  "SwiftPublishEndpoints": {}
+}
+EOF
+
+# Creates ~/dummyaptly/db
+"$HOME"/go/bin/aptly -config="${HOME}"/dummyaptly.conf repo create -distribution=stable -component=main algodummy
+# Creates ~/dummyaptly/pool
+"$HOME"/go/bin/aptly -config="${HOME}"/dummyaptly.conf repo add algodummy "${HOME}"/node_pkg/*.deb
+SNAPSHOT=algodummy-$(date +%Y%m%d_%H%M%S)
+"$HOME"/go/bin/aptly -config="${HOME}"/dummyaptly.conf snapshot create "${SNAPSHOT}" from repo algodummy
+# Creates ~/dummyaptly/public
+"$HOME"/go/bin/aptly -config="${HOME}"/dummyaptly.conf publish snapshot -origin=Algorand -label=Algorand "${SNAPSHOT}"
+
 (cd "${HOME}"/dummyaptly/public && python3 "${HOME}"/go/src/github.com/algorand/go-algorand/scripts/httpd.py --pid "${HOME}"/phttpd.pid) &
 trap "${HOME}"/go/src/github.com/algorand/go-algorand/scripts/kill_httpd.sh 0
 
