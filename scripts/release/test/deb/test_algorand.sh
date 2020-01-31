@@ -10,11 +10,6 @@ apt-get install -y gnupg2 curl software-properties-common python3
 
 apt install -y /root/subhome/*.deb
 algod -v
-#if algod -v | grep -q "${FULLVERSION}"
-#then
-#    echo "already installed current version. wat?"
-#    false
-#fi
 
 mkdir -p /root/testnode
 cp -p /var/lib/algorand/genesis/testnet/genesis.json /root/testnode
@@ -23,7 +18,7 @@ goal node start -d /root/testnode
 goal node wait -d /root/testnode -w 120
 goal node stop -d /root/testnode
 
-apt-key add /root/keys/key.pub
+apt-key add /root/keys/dev.pub
 apt-key add /root/keys/rpm.pub
 add-apt-repository "deb http://${DC_IP}:8111/ stable main"
 apt-get update

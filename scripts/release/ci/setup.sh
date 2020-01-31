@@ -18,7 +18,7 @@ sudo apt-get upgrade -q -y
 sudo apt-get install -y build-essential automake autoconf awscli docker.io git gpg nfs-common python3 rpm sqlite3 python3-boto3 g++ libtool rng-tools
 
 #umask 0077
-mkdir -p "${HOME}"/{.gnupg,go,gpgbin,dummyaptly,dummyrepo,keys,node_pkg,prodrepo,tkey}
+mkdir -p "${HOME}"/{.gnupg,go,gpgbin,dummyaptly,dummyrepo,keys,node_pkg,prodrepo}
 
 # Check out
 mkdir -p "${HOME}/go/src/github.com/algorand"

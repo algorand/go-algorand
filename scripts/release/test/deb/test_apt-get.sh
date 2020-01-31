@@ -9,7 +9,7 @@ export PATH=${GOPATH}/bin:/usr/local/go/bin:${PATH}
 
 apt-get update
 apt-get install -y gnupg2 curl software-properties-common python3
-apt-key add /root/keys/key.pub
+apt-key add /root/keys/dev.pub
 add-apt-repository -y "deb [trusted=yes] http://${DC_IP}:8111/ stable main"
 apt-get update
 apt-get install -y algorand

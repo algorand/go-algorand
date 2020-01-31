@@ -7,11 +7,11 @@ echo
 date "+build_release begin TEST stage %Y%m%d_%H%M%S"
 echo
 
-export GNUPGHOME=${HOME}/tkey
+GNUPGHOME="${HOME}"/.gnupg
 gpgconf --kill gpg-agent
 chmod 700 "${GNUPGHOME}"
 
-cat > "${GNUPGHOME}"/keygenscript<<EOF
+cat > "${GNUPGHOME}"/keygenscript <<EOF
 Key-Type: default
 Subkey-Type: default
 Name-Real: Algorand developers
@@ -21,7 +21,7 @@ Passphrase: foogorand
 %transient-key
 EOF
 
-cat > "${GNUPGHOME}"/rpmkeygenscript<<EOF
+cat > "${GNUPGHOME}"/rpmkeygenscript <<EOF
 Key-Type: default
 Subkey-Type: default
 Name-Real: Algorand RPM
@@ -34,7 +34,7 @@ EOF
 # https://stackoverflow.com/a/49491997
 cat <<EOF> "${GNUPGHOME}"/gpg-agent.conf
 # Only needed for gpg < 2.1.17 (https://wiki.gnupg.org/AgentForwarding)
-#extra-socket "${GNUPGHOME}"/S.gpg-agent.extra
+#extra-socket "${HOME}"/S.gpg-agent.extra
 # Enable unattended daemon mode.
 allow-preset-passphrase
 # Cache password 30 days.
@@ -47,7 +47,7 @@ gpgconf --launch gpg-agent
 
 gpg --gen-key --batch "${GNUPGHOME}"/keygenscript
 gpg --gen-key --batch "${GNUPGHOME}"/rpmkeygenscript
-gpg --export -a dev@algorand.com > "${HOME}/keys/key.pub"
+gpg --export -a dev@algorand.com > "${HOME}/keys/dev.pub"
 gpg --export -a rpm@algorand.com > "${HOME}/keys/rpm.pub"
 
 gpgconf --kill gpg-agent
@@ -99,7 +99,7 @@ SNAPSHOT=algodummy-$(date +%Y%m%d_%H%M%S)
 date "+build_release done building ubuntu %Y%m%d_%H%M%S"
 
 # Run RPM build in Centos7 Docker container
-sg docker "docker build -t algocentosbuild - < ${REPO_ROOT}/scripts/release/rpm/centos-build.Dockerfile"
+sg docker "docker build -t algocentosbuild - < ${HOME}/ben-branch/scripts/release/rpm/centos-build.Dockerfile"
 
 cat <<EOF>"${HOME}"/dummyrepo/algodummy.repo
 [algodummy]
@@ -110,7 +110,7 @@ gpgcheck=1
 gpgkey=https://releases.algorand.com/rpm/rpm_algorand.pub
 EOF
 
-sg docker "docker run --rm --env-file ${HOME}/build_env --mount type=bind,src=/run/user/1000/gnupg/S.gpg-agent,dst=/S.gpg-agent --mount type=bind,src=${HOME}/dummyrepo,dst=/dummyrepo --mount type=bind,src=${HOME}/keys,dst=/root/keys --mount type=bind,src=${HOME},dst=/root/subhome algocentosbuild /root/subhome/ben-branch/scripts/release/test/rpm/run_centos.sh"
+sg docker "docker run --rm --env-file ${HOME}/build_env --mount type=bind,src=/run/user/1000/gnupg/S.gpg-agent,dst=/root/S.gpg-agent --mount type=bind,src=${HOME}/dummyrepo,dst=/root/dummyrepo --mount type=bind,src=${HOME}/keys,dst=/root/keys --mount type=bind,src=${HOME},dst=/root/subhome algocentosbuild /root/subhome/ben-branch/scripts/release/test/rpm/run_centos.sh"
 
 echo
 date "+build_release end TEST stage %Y%m%d_%H%M%S"

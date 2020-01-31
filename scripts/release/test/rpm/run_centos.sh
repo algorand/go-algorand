@@ -1,32 +1,11 @@
 #!/usr/bin/env bash
 # shellcheck disable=1090,2012
-#
-# build centos rpm from inside docker
-#
-# mount src from outside
-# --mount type=bind,src=${GOPATH}/src,dst=/root/go/src
-#
-# mount golang install from outside
-# --mount type=bind,src=/usr/local/go,dst=/usr/local/go
-#
-# output copied to /root/subhome/node_pkg
-# --mount type=bind,src=${HOME},dst=/root/subhome
 
 set -ex
 
 export HOME=/root
 
-. "${HOME}"/subhome/build_env
-
-GOPATH=$(/usr/local/go/bin/go env GOPATH)
-export PATH=${HOME}/gpgbin:${GOPATH}/bin:/usr/local/go/bin:${PATH}
-export GOPATH
-
-REPO_DIR=/root/go/src/github.com/algorand/go-algorand
-
-cd "${REPO_DIR}"
-
-(cd ${HOME} && tar jxf /root/keys/gnupg*.tar.bz2)
+cd "${HOME}" && tar jxf "${HOME}"/subhome/gnupg*.tar.bz2
 export PATH="${HOME}/gnupg2/bin:${PATH}"
 export LD_LIBRARY_PATH=${HOME}/gnupg2/lib
 
@@ -34,17 +13,19 @@ umask 0077
 mkdir -p "${HOME}/.gnupg"
 umask 0022
 touch "${HOME}/.gnupg/gpg.conf"
-if grep -q no-autostart "${HOME}/.gnupg/gpg.conf"; then
+
+if grep -q no-autostart "${HOME}/.gnupg/gpg.conf"
+then
     echo ""
 else
     echo "no-autostart" >> "${HOME}/.gnupg/gpg.conf"
 fi
+
 rm -f ${HOME}/.gnupg/S.gpg-agent
-(cd ~/.gnupg && ln -s /root/S.gpg-agent S.gpg-agent)
+cd "${HOME}"/.gnupg && ln -s "${HOME}"/S.gpg-agent S.gpg-agent
 
 gpg --import /root/keys/dev.pub
 gpg --import /root/keys/rpm.pub
-#gpg --import ${REPO_DIR}/installer/rpm/RPM-GPG-KEY-Algorand
 rpmkeys --import /root/keys/rpm.pub
 echo "wat" | gpg -u rpm@algorand.com --clearsign
 
@@ -68,15 +49,15 @@ createrepo --database /root/dummyrepo
 rm -f /root/dummyrepo/repodata/repomd.xml.asc
 gpg -u rpm@algorand.com --detach-sign --armor /root/dummyrepo/repodata/repomd.xml
 
-OLDRPM=$(ls -t /root/keys/*.rpm | head -1)
+OLDRPM=$(ls -t /root/subhome/node_pkg/*.rpm | head -1)
 if [ -f "${OLDRPM}" ]; then
     yum install -y "${OLDRPM}"
     algod -v
-    if algod -v | grep -q "${FULLVERSION}"
-    then
-        echo "already installed current version. wat?"
-        false
-    fi
+#    if algod -v | grep -q "${FULLVERSION}"
+#    then
+#        echo "already installed current version. wat?"
+#        false
+#    fi
 
     mkdir -p /root/testnode
     cp -p /var/lib/algorand/genesis/testnet/genesis.json /root/testnode

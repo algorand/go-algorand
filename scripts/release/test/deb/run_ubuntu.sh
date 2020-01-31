@@ -16,8 +16,6 @@ GOPATH=${HOME}/go
 TEST_NAME="DebianTest"
 echo "start docker test: " $TEST_NAME
 
-KEY_DIR=$1
-echo "KEY_DIR: $KEY_DIR"
 echo "DC_IP: $DC_IP"
 STATUS=0
 
@@ -34,5 +32,4 @@ STATUS=$?
 echo "start_docker_debian_test completed with status: " $STATUS
 
 exit $STATUS
-#sg docker "${HOME}/go/src/github.com/algorand/go-algorand/scripts/release/test/docker_debian_test.sh ${HOME}/keys"
 
