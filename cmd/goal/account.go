@@ -1018,6 +1018,7 @@ var importRootKeysCmd = &cobra.Command{
 
 			// Fetch an account.Participation from the database
 			root, err := algodAcct.RestoreRoot(handle)
+			handle.Close()
 			if err != nil {
 				// Couldn't read it, skip it
 				err = nil

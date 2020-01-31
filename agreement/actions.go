@@ -228,7 +228,7 @@ func (a ensureAction) do(ctx context.Context, s *Service) {
 
 	if a.Payload.ve != nil {
 		logEvent.Type = logspec.RoundConcluded
-		s.log.with(logEvent).Infof("committed round %v with pre-validated block %v", a.Certificate.Round, a.Certificate.Proposal)
+		s.log.with(logEvent).Infof("committed round %d with pre-validated block %v", a.Certificate.Round, a.Certificate.Proposal)
 		s.log.EventWithDetails(telemetryspec.Agreement, telemetryspec.BlockAcceptedEvent, telemetryspec.BlockAcceptedEventDetails{
 			Address: a.Certificate.Proposal.OriginalProposer.String(),
 			Hash:    a.Certificate.Proposal.BlockDigest.String(),
@@ -238,7 +238,7 @@ func (a ensureAction) do(ctx context.Context, s *Service) {
 	} else {
 		block := a.Payload.Block
 		logEvent.Type = logspec.RoundConcluded
-		s.log.with(logEvent).Infof("committed round %v with block %v", a.Certificate.Round, a.Certificate.Proposal)
+		s.log.with(logEvent).Infof("committed round %d with block %v", a.Certificate.Round, a.Certificate.Proposal)
 		s.log.EventWithDetails(telemetryspec.Agreement, telemetryspec.BlockAcceptedEvent, telemetryspec.BlockAcceptedEventDetails{
 			Address: a.Certificate.Proposal.OriginalProposer.String(),
 			Hash:    a.Certificate.Proposal.BlockDigest.String(),
@@ -248,7 +248,7 @@ func (a ensureAction) do(ctx context.Context, s *Service) {
 	}
 	logEventStart := logEvent
 	logEventStart.Type = logspec.RoundStart
-	s.log.with(logEventStart).Infof("finished round %v", a.Certificate.Round)
+	s.log.with(logEventStart).Infof("finished round %d", a.Certificate.Round)
 	s.tracer.timeR().StartRound(a.Certificate.Round + 1)
 	s.tracer.timeR().RecStep(0, propose, bottom)
 }
