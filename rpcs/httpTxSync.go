@@ -48,7 +48,7 @@ type HTTPTxSync struct {
 
 const requestContentType = "application/x-www-form-urlencoded"
 
-func responseBytes(response *http.Response, log logging.Logger, limit uint64) (data []byte, err error) {
+func ResponseBytes(response *http.Response, log logging.Logger, limit uint64) (data []byte, err error) {
 	// response.Body is always non-nil
 	defer response.Body.Close()
 	if response.ContentLength >= 0 {
@@ -158,7 +158,7 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 		return nil, fmt.Errorf("txSync POST invalid content type '%s'", contentTypes[0])
 	}
 
-	data, err := responseBytes(response, hts.log, hts.maxTxSyncResponseBytes)
+	data, err := ResponseBytes(response, hts.log, hts.maxTxSyncResponseBytes)
 	if err != nil {
 		hts.log.Warn("txSync body read failed: ", err)
 		return nil, err

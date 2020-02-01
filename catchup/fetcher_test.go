@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package rpcs
+package catchup
 
 import (
 	"context"
@@ -35,6 +35,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/rpcs"
 	"github.com/algorand/go-algorand/util/bloom"
 )
 
@@ -203,7 +204,7 @@ func (df *dummyFetcher) GetBlockBytes(ctx context.Context, r basics.Round) (data
 	defer timer.Stop()
 
 	// Fill in the dummy response with the correct round
-	dummyBlock := EncodedBlockCert{
+	dummyBlock := rpcs.EncodedBlockCert{
 		Block: bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
 				Round: r,
