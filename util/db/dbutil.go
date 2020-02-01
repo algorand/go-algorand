@@ -53,6 +53,7 @@ var initStatements []string
 type Accessor struct {
 	Handle   *sql.DB
 	readOnly bool
+	log      logging.Logger
 }
 
 // MakeAccessor creates a new Accessor.
@@ -100,22 +101,35 @@ func (db Accessor) runInitStatements() error {
 	return nil
 }
 
+// SetLogger sets the Logger, mainly for unit test quietness
+func (db *Accessor) SetLogger(log logging.Logger) {
+	db.log = log
+}
+
+func (db *Accessor) logger() logging.Logger {
+	if db.log != nil {
+		return db.log
+	}
+	return logging.Base()
+}
+
 // Close closes the connection.
 func (db Accessor) Close() {
 	db.Handle.Close()
 	db.Handle = nil
 }
 
-// Retry executes a function repeatedly as long as it returns an error
+// LoggedRetry executes a function repeatedly as long as it returns an error
 // that indicates database contention that warrants a retry.
-func Retry(fn func() error) (err error) {
+// Sends warnings and errors to log.
+func LoggedRetry(fn func() error, log logging.Logger) (err error) {
 	for i := 0; ; i++ {
 		if i > 0 && i%warnTxRetries == 0 {
 			if i >= 1000 {
-				logging.Base().Errorf("db.Retry: %d retries (last err: %v)", i, err)
+				log.Errorf("db.Retry: %d retries (last err: %v)", i, err)
 				return
 			}
-			logging.Base().Warnf("db.Retry: %d retries (last err: %v)", i, err)
+			log.Warnf("db.Retry: %d retries (last err: %v)", i, err)
 		}
 
 		err = fn()
@@ -127,9 +141,16 @@ func Retry(fn func() error) (err error) {
 	}
 }
 
+// Retry executes a function repeatedly as long as it returns an error
+// that indicates database contention that warrants a retry.
+// Sends warnings and errors to logging.Base()
+func Retry(fn func() error) (err error) {
+	return LoggedRetry(fn, logging.Base())
+}
+
 // getDecoratedLogger retruns a decorated logger that includes the readonly true/false, caller and extra fields.
 func (db *Accessor) getDecoratedLogger(fn idemFn, extras ...interface{}) logging.Logger {
-	log := logging.Base().With("readonly", db.readOnly)
+	log := db.logger().With("readonly", db.readOnly)
 	_, file, line, ok := runtime.Caller(2)
 	if ok {
 		log = log.With("caller", fmt.Sprintf("%s:%d", file, line))

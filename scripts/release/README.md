@@ -5,7 +5,6 @@ The `Jenkinsfile` uses the pipeline module to define its build stages.  Currentl
 1. create ec2 instance
 1. setup ec2 instance
 1. build and package
-1. test
 1. sign
 1. upload
 1. delete ec2 instance

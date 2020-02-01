@@ -49,10 +49,11 @@ type networkImpl struct {
 	bundleCh   chan agreement.Message
 
 	net network.GossipNode
+	log logging.Logger
 }
 
 // WrapNetwork adapts a network.GossipNode into an agreement.Network.
-func WrapNetwork(net network.GossipNode) agreement.Network {
+func WrapNetwork(net network.GossipNode, log logging.Logger) agreement.Network {
 	i := new(networkImpl)
 
 	i.voteCh = make(chan agreement.Message, voteBufferSize)
@@ -60,6 +61,7 @@ func WrapNetwork(net network.GossipNode) agreement.Network {
 	i.bundleCh = make(chan agreement.Message, bundleBufferSize)
 
 	i.net = net
+	i.log = log
 
 	handlers := []network.TaggedMessageHandler{
 		{Tag: protocol.AgreementVoteTag, MessageHandler: network.HandlerFunc(i.processVoteMessage)},
@@ -116,7 +118,7 @@ func (i *networkImpl) Messages(t protocol.Tag) <-chan agreement.Message {
 	case protocol.VoteBundleTag:
 		return i.bundleCh
 	default:
-		logging.Base().Panicf("bad tag! %v", t)
+		i.log.Panicf("bad tag! %v", t)
 		return nil
 	}
 }
@@ -124,7 +126,7 @@ func (i *networkImpl) Messages(t protocol.Tag) <-chan agreement.Message {
 func (i *networkImpl) Broadcast(t protocol.Tag, data []byte) (err error) {
 	err = i.net.Broadcast(context.Background(), t, data, false, nil)
 	if err != nil {
-		logging.Base().Infof("agreement: could not broadcast message with tag %v: %v", t, err)
+		i.log.Infof("agreement: could not broadcast message with tag %v: %v", t, err)
 	}
 	return
 }
@@ -134,12 +136,12 @@ func (i *networkImpl) Relay(h agreement.MessageHandle, t protocol.Tag, data []by
 	if metadata == nil { // synthentic loopback
 		err = i.net.Broadcast(context.Background(), t, data, false, nil)
 		if err != nil {
-			logging.Base().Infof("agreement: could not (pseudo)relay message with tag %v: %v", t, err)
+			i.log.Infof("agreement: could not (pseudo)relay message with tag %v: %v", t, err)
 		}
 	} else {
 		err = i.net.Relay(context.Background(), t, data, false, metadata.raw.Sender)
 		if err != nil {
-			logging.Base().Infof("agreement: could not relay message from %v with tag %v: %v", metadata.raw.Sender, t, err)
+			i.log.Infof("agreement: could not relay message from %v with tag %v: %v", metadata.raw.Sender, t, err)
 		}
 	}
 	return

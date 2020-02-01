@@ -1,16 +1,5 @@
 #!/usr/bin/env bash
 # shellcheck disable=1090
-#
-# build centos rpm from inside docker
-#
-# mount src from outside
-# --mount type=bind,src=${GOPATH}/src,dst=/root/go/src
-#
-# mount golang install from outside
-# --mount type=bind,src=/usr/local/go,dst=/usr/local/go
-#
-# output copied to /root/subhome/node_pkg
-# --mount type=bind,src=${HOME},dst=/root/subhome
 
 echo
 date "+build_release start BUILD CENTOS DOCKER stage %Y%m%d_%H%M%S"

@@ -17,10 +17,12 @@
 package protocol
 
 import (
+	"fmt"
 	"io"
 	"sync"
 
 	"github.com/algorand/go-codec/codec"
+	"github.com/algorand/msgp/msgp"
 )
 
 // CodecHandle is used to instantiate msgpack encoders and decoders
@@ -80,8 +82,9 @@ var codecStreamPool = sync.Pool{
 
 const initEncodeBufSize = 256
 
-// Encode returns a msgpack-encoded byte buffer for a given object
-func Encode(obj interface{}) []byte {
+// EncodeReflect returns a msgpack-encoded byte buffer for a given object,
+// using reflection.
+func EncodeReflect(obj interface{}) []byte {
 	codecBytes := codecBytesPool.Get().(*codecBytes)
 	codecBytes.buf = make([]byte, initEncodeBufSize)
 	codecBytes.enc.ResetBytes(&codecBytes.buf)
@@ -92,6 +95,26 @@ func Encode(obj interface{}) []byte {
 	// let the GC deal with the codecBytes object.
 	codecBytesPool.Put(codecBytes)
 	return res
+}
+
+// EncodeMsgp returns a msgpack-encoded byte buffer, requiring
+// that we pre-generated the code for doing so using msgp.
+func EncodeMsgp(obj msgp.Marshaler) []byte {
+	res, err := obj.MarshalMsg(nil)
+	if err != nil {
+		panic(err)
+	}
+
+	return res
+}
+
+// Encode returns a msgpack-encoded byte buffer for a given object.
+func Encode(obj interface{}) []byte {
+	msgp, ok := obj.(msgp.Marshaler)
+	if ok && msgp.CanMarshalMsg(msgp) {
+		return EncodeMsgp(msgp)
+	}
+	return EncodeReflect(obj)
 }
 
 // CountingWriter is an implementation of io.Writer that tracks the number
@@ -132,11 +155,47 @@ func EncodeJSON(obj interface{}) []byte {
 	return b
 }
 
-// Decode attempts to decode a msgpack-encoded byte buffer into an
-// object instance pointed to by objptr
-func Decode(b []byte, objptr interface{}) error {
+// DecodeReflect attempts to decode a msgpack-encoded byte buffer
+// into an object instance pointed to by objptr, using reflection.
+func DecodeReflect(b []byte, objptr interface{}) error {
 	dec := codec.NewDecoderBytes(b, CodecHandle)
 	return dec.Decode(objptr)
+}
+
+// DecodeMsgp attempts to decode a msgpack-encoded byte buffer into
+// an object instance pointed to by objptr, requiring that we pre-
+// generated the code for doing so using msgp.
+func DecodeMsgp(b []byte, objptr msgp.Unmarshaler) (err error) {
+	defer func() {
+		if x := recover(); x != nil {
+			err = fmt.Errorf("DecodeMsgp: %v", x)
+		}
+	}()
+
+	var rem []byte
+	rem, err = objptr.UnmarshalMsg(b)
+	if err != nil {
+		return err
+	}
+
+	// go-codec compat: allow remaining bytes, because go-codec allows it too
+	if false {
+		if len(rem) != 0 {
+			return fmt.Errorf("decoding left %d remaining bytes", len(rem))
+		}
+	}
+
+	return nil
+}
+
+// Decode attempts to decode a msgpack-encoded byte buffer
+// into an object instance pointed to by objptr.
+func Decode(b []byte, objptr interface{}) error {
+	msgp, ok := objptr.(msgp.Unmarshaler)
+	if ok && msgp.CanUnmarshalMsg(msgp) {
+		return DecodeMsgp(b, msgp)
+	}
+	return DecodeReflect(b, objptr)
 }
 
 // DecodeStream is like Decode but reads from an io.Reader instead.

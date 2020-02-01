@@ -171,7 +171,10 @@ func (d *DNS) CreateDNSRecord(ctx context.Context, recordType string, name strin
 		return err
 	}
 	if parsedResponse.Success == false {
-		return fmt.Errorf("failed to create DNS record : %v", parsedResponse)
+		request, _ := createDNSRecordRequest(d.zoneID, d.authEmail, d.authKey, recordType, name, content, ttl, priority, proxied)
+		requestBody, _ := request.GetBody()
+		bodyBytes, _ := ioutil.ReadAll(requestBody)
+		return fmt.Errorf("failed to create DNS record. Request body = %s, parsed response : %#v", string(bodyBytes), parsedResponse)
 	}
 	return nil
 }
@@ -193,7 +196,10 @@ func (d *DNS) CreateSRVRecord(ctx context.Context, name string, target string, t
 		return err
 	}
 	if parsedResponse.Success == false {
-		return fmt.Errorf("failed to create SRV record : %v", parsedResponse)
+		request, _ := createSRVRecordRequest(d.zoneID, d.authEmail, d.authKey, name, service, protocol, weight, port, ttl, priority, target)
+		requestBody, _ := request.GetBody()
+		bodyBytes, _ := ioutil.ReadAll(requestBody)
+		return fmt.Errorf("failed to create SRV record. Request body = %s, parsed response : %#v", string(bodyBytes), parsedResponse)
 	}
 	return nil
 }
@@ -215,7 +221,10 @@ func (d *DNS) DeleteDNSRecord(ctx context.Context, recordID string) error {
 		return err
 	}
 	if parsedResponse.Success == false {
-		return fmt.Errorf("failed to delete DNS record : %v", parsedResponse)
+		request, _ := deleteDNSRecordRequest(d.zoneID, d.authEmail, d.authKey, recordID)
+		requestBody, _ := request.GetBody()
+		bodyBytes, _ := ioutil.ReadAll(requestBody)
+		return fmt.Errorf("failed to delete DNS record. Request body = %s, parsed response : %#v", string(bodyBytes), parsedResponse)
 	}
 	return nil
 }
@@ -236,9 +245,14 @@ func (d *DNS) UpdateDNSRecord(ctx context.Context, recordID string, recordType s
 	if err != nil {
 		return err
 	}
+
 	if parsedResponse.Success == false {
-		return fmt.Errorf("failed to update DNS record : %v", parsedResponse)
+		request, _ := updateDNSRecordRequest(d.zoneID, d.authEmail, d.authKey, recordType, recordID, name, content, ttl, priority, proxied)
+		requestBody, _ := request.GetBody()
+		bodyBytes, _ := ioutil.ReadAll(requestBody)
+		return fmt.Errorf("failed to update DNS record. Request body = %s, parsedResponse = %#v", string(bodyBytes), parsedResponse)
 	}
+
 	return nil
 }
 
@@ -259,7 +273,10 @@ func (d *DNS) UpdateSRVRecord(ctx context.Context, recordID string, name string,
 		return err
 	}
 	if parsedResponse.Success == false {
-		return fmt.Errorf("failed to update SRV record : %v", parsedResponse)
+		request, _ := updateSRVRecordRequest(d.zoneID, d.authEmail, d.authKey, recordID, name, service, protocol, weight, port, ttl, priority, target)
+		requestBody, _ := request.GetBody()
+		bodyBytes, _ := ioutil.ReadAll(requestBody)
+		return fmt.Errorf("failed to update SRV record. Request body = %s, parsedResponse = %#v", string(bodyBytes), parsedResponse)
 	}
 	return nil
 }
@@ -287,7 +304,10 @@ func (c *Cred) GetZones(ctx context.Context) (zones []Zone, err error) {
 		return nil, err
 	}
 	if parsedResponse.Success == false {
-		return nil, fmt.Errorf("failed to retrieve zone records : %v", parsedResponse)
+		request, _ := getZonesRequest(c.authEmail, c.authKey)
+		requestBody, _ := request.GetBody()
+		bodyBytes, _ := ioutil.ReadAll(requestBody)
+		return nil, fmt.Errorf("failed to retrieve zone records. Request body = %s, parsed response : %#v", string(bodyBytes), parsedResponse)
 	}
 
 	for _, z := range parsedResponse.Result {

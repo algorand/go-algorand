@@ -99,8 +99,7 @@ var nodeCmd = &cobra.Command{
 
 var startCmd = &cobra.Command{
 	Use:   "start",
-	Short: "Init the specified algorand node",
-	Long:  `Init the specified algorand node`,
+	Short: "Init the specified Algorand node.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		binDir, err := util.ExeDir()
@@ -146,8 +145,7 @@ func getRunHostedConfigFlag(dataDir string) bool {
 
 var stopCmd = &cobra.Command{
 	Use:   "stop",
-	Short: "stop the specified Algorand node",
-	Long:  `Stop the specified Algorand node`,
+	Short: "stop the specified Algorand node.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		binDir, err := util.ExeDir()
@@ -171,8 +169,7 @@ var stopCmd = &cobra.Command{
 
 var restartCmd = &cobra.Command{
 	Use:   "restart",
-	Short: "stop, and then start, the specified Algorand node",
-	Long:  `Stop, and then start, the specified Algorand node`,
+	Short: "Stop, and then start, the specified Algorand node.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		binDir, err := util.ExeDir()
@@ -228,8 +225,7 @@ var restartCmd = &cobra.Command{
 
 var generateTokenCmd = &cobra.Command{
 	Use:   "generatetoken",
-	Short: "Generate and install a new API token",
-	Long:  "Generate and install a new API token",
+	Short: "Generate and install a new API token.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		onDataDirs(func(dataDir string) {
@@ -262,7 +258,7 @@ var generateTokenCmd = &cobra.Command{
 var statusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Get the current node status",
-	Long:  `Show the current status of the running Algorand node`,
+	Long:  `Show the current status of the running Algorand node.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		onDataDirs(getStatus)
@@ -310,6 +306,7 @@ func makeStatusString(stat v1.NodeStatus) string {
 var lastroundCmd = &cobra.Command{
 	Use:   "lastround",
 	Short: "Print the last round number",
+	Long:  `Prints the most recent round confirmed by the Algorand node.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		onDataDirs(func(dataDir string) {
@@ -381,7 +378,7 @@ var pendingTxnsCmd = &cobra.Command{
 var waitCmd = &cobra.Command{
 	Use:   "wait",
 	Short: "Waits for the node to make progress",
-	Long:  "Waits for the node to make progress, which includes catching up",
+	Long:  "Waits for the node to make progress, which includes catching up.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		client := ensureAlgodClient(ensureSingleDataDir())
@@ -425,8 +422,7 @@ func isValidIP(userInput string) bool {
 
 var createCmd = &cobra.Command{
 	Use:   "create",
-	Short: "create a node at the desired data directory for the desired network",
-	Long:  "create a node at the desired data directory for the desired network",
+	Short: "Create a node at the desired data directory for the desired network.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 
