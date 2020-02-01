@@ -95,8 +95,6 @@ cd aptly && git fetch
 git checkout v1.4.0
 make install
 
-gpgconf --launch gpg-agent
-
 # a bash user might `source build_env` to manually continue a broken build
 cat <<EOF>>"${HOME}"/build_env
 CHANNEL=${CHANNEL}
