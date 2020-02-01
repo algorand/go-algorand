@@ -159,6 +159,12 @@ func main() {
 		log.Fatalf("Cannot load config: %v", err)
 	}
 
+	err = config.LoadConfigurableConsensusProtocols(absolutePath)
+	if err != nil {
+		// log is not setup yet, this will log to stderr
+		log.Fatalf("Unable to load optional consensus protocols file: %v", err)
+	}
+
 	// Enable telemetry hook in daemon to send logs to cloud
 	// If ALGOTEST env variable is set, telemetry is disabled - allows disabling telemetry for tests
 	isTest := os.Getenv("ALGOTEST") != ""

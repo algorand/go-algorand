@@ -231,7 +231,9 @@ func (t *telemetryState) logTelemetry(l logger, message string, details interfac
 }
 
 func (t *telemetryState) Close() {
-	t.hook.Close()
+	if t.hook != nil {
+		t.hook.Close()
+	}
 }
 
 func (t *telemetryState) Flush() {
