@@ -37,8 +37,9 @@ import (
 
 // NetworkTemplate represents the template used for creating private named networks
 type NetworkTemplate struct {
-	Genesis gen.GenesisData
-	Nodes   []remote.NodeConfigGoal
+	Genesis   gen.GenesisData
+	Nodes     []remote.NodeConfigGoal
+	Consensus config.ConsensusProtocols
 }
 
 var defaultNetworkTemplate = NetworkTemplate{
@@ -48,7 +49,8 @@ var defaultNetworkTemplate = NetworkTemplate{
 func (t NetworkTemplate) generateGenesisAndWallets(targetFolder, networkName, binDir string) error {
 	genesisData := t.Genesis
 	genesisData.NetworkName = networkName
-	return gen.GenerateGenesisFiles(genesisData, targetFolder, true)
+	mergedConsensus := config.Consensus.Merge(t.Consensus)
+	return gen.GenerateGenesisFiles(genesisData, mergedConsensus, targetFolder, true)
 }
 
 // Create data folders for all NodeConfigs, configuring relays appropriately and

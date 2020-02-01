@@ -53,6 +53,13 @@ type LibGoalFixture struct {
 	t              TestingT
 	tMu            deadlock.RWMutex
 	clientPartKeys map[string][]account.Participation
+	consensus      config.ConsensusProtocols
+}
+
+// SetConsensus applies a new consensus settings which would get deployed before
+// any of the nodes starts
+func (f *RestClientFixture) SetConsensus(consensus config.ConsensusProtocols) {
+	f.consensus = consensus
 }
 
 // Setup is called to initialize the test fixture for the test(s)
@@ -86,7 +93,7 @@ func (f *LibGoalFixture) setup(test TestingT, testName string, templateFile stri
 	os.RemoveAll(f.rootDir)
 	templateFile = filepath.Join(f.testDataDir, templateFile)
 	importKeys := false // Don't automatically import root keys when creating folders, we'll import on-demand
-	network, err := netdeploy.CreateNetworkFromTemplate("test", f.rootDir, templateFile, f.binDir, importKeys, f.nodeExitWithError)
+	network, err := netdeploy.CreateNetworkFromTemplate("test", f.rootDir, templateFile, f.binDir, importKeys, f.nodeExitWithError, f.consensus)
 	f.failOnError(err, "CreateNetworkFromTemplate failed: %v")
 	f.network = network
 
@@ -448,8 +455,15 @@ func (f *LibGoalFixture) ConsensusParams(round uint64) (consensus config.Consens
 	if err != nil {
 		return
 	}
-
-	return config.Consensus[protocol.ConsensusVersion(block.CurrentProtocol)], nil
+	version := protocol.ConsensusVersion(block.CurrentProtocol)
+	if f.consensus != nil {
+		consensus, has := f.consensus[version]
+		if has {
+			return consensus, nil
+		}
+	}
+	consensus = config.Consensus[version]
+	return
 }
 
 // CurrentMinFeeAndBalance returns the MinTxnFee and MinBalance for the currently active protocol
