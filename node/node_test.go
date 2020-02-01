@@ -55,7 +55,7 @@ var defaultConfig = config.Local{
 	IncomingConnectionsLimit: -1,
 }
 
-func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationPool execpool.BacklogPool) ([]*AlgorandFullNode, []string, []string) {
+func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationPool execpool.BacklogPool, customConsensus config.ConsensusProtocols) ([]*AlgorandFullNode, []string, []string) {
 	util.RaiseRlimit(1000)
 	f, _ := os.Create(t.Name() + ".log")
 	logging.Base().SetJSONFormatter()
@@ -84,9 +84,11 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 	// because we explicitly generated the sqlite database above (in
 	// installFullNode).
 	g := bookkeeping.Genesis{
-		SchemaID: "go-test-node-genesis",
-		Proto:    proto,
-		Network:  config.Devtestnet,
+		SchemaID:    "go-test-node-genesis",
+		Proto:       proto,
+		Network:     config.Devtestnet,
+		FeeSink:     sinkAddr.String(),
+		RewardsPool: poolAddr.String(),
 	}
 
 	for i := range wallets {
@@ -115,6 +117,7 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 			panic(err)
 		}
 		root, err := account.GenerateRoot(access)
+		access.Close()
 		if err != nil {
 			panic(err)
 		}
@@ -125,6 +128,7 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 			panic(err)
 		}
 		part, err := account.FillDBWithParticipationKeys(access, root.Address(), firstRound, lastRound, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
+		access.Close()
 		if err != nil {
 			panic(err)
 		}
@@ -144,6 +148,12 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 	for i, rootDirectory := range rootDirs {
 		genesisDir := filepath.Join(rootDirectory, g.ID())
 		ledgerFilenamePrefix := filepath.Join(genesisDir, config.LedgerFilenamePrefix)
+		if customConsensus != nil {
+			err := config.SaveConfigurableConsensus(genesisDir, customConsensus)
+			require.Nil(t, err)
+		}
+		err1 := config.LoadConfigurableConsensusProtocols(genesisDir)
+		require.Nil(t, err1)
 		nodeID := fmt.Sprintf("Node%d", i)
 		const inMem = false
 		const archival = true
@@ -170,7 +180,7 @@ func TestSyncingFullNode(t *testing.T) {
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
-	nodes, wallets, rootDirs := setupFullNodes(t, protocol.ConsensusCurrentVersion, backlogPool)
+	nodes, wallets, rootDirs := setupFullNodes(t, protocol.ConsensusCurrentVersion, backlogPool, nil)
 	for i := 0; i < len(nodes); i++ {
 		defer os.Remove(wallets[i])
 		defer os.RemoveAll(rootDirs[i])
@@ -227,7 +237,7 @@ func TestInitialSync(t *testing.T) {
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
-	nodes, wallets, rootdirs := setupFullNodes(t, protocol.ConsensusCurrentVersion, backlogPool)
+	nodes, wallets, rootdirs := setupFullNodes(t, protocol.ConsensusCurrentVersion, backlogPool, nil)
 	for i := 0; i < len(nodes); i++ {
 		defer os.Remove(wallets[i])
 		defer os.RemoveAll(rootdirs[i])
@@ -255,12 +265,46 @@ func TestInitialSync(t *testing.T) {
 }
 
 func TestSimpleUpgrade(t *testing.T) {
-	t.Skip("Randomly failing: node_test.go:~283 : no block notification for account. Re-enable after agreement bug-fix pass")
+	t.Skip("Randomly failing: node_test.go:~330 : no block notification for account. Re-enable after agreement bug-fix pass")
 
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
-	nodes, wallets, rootDirs := setupFullNodes(t, protocol.ConsensusTest0, backlogPool)
+	// ConsensusTest0 is a version of ConsensusV0 used for testing
+	// (it has different approved upgrade paths).
+	const consensusTest0 = protocol.ConsensusVersion("test0")
+
+	// ConsensusTest1 is an extension of ConsensusTest0 that
+	// supports a sorted-list balance commitment.
+	const consensusTest1 = protocol.ConsensusVersion("test1")
+
+	configurableConsensus := make(config.ConsensusProtocols)
+
+	testParams0 := config.Consensus[protocol.ConsensusCurrentVersion]
+	testParams0.SupportGenesisHash = false
+	testParams0.UpgradeVoteRounds = 2
+	testParams0.UpgradeThreshold = 1
+	testParams0.DefaultUpgradeWaitRounds = 2
+	testParams0.MaxVersionStringLen = 64
+	testParams0.MaxTxnBytesPerBlock = 1000000
+	testParams0.DefaultKeyDilution = 10000
+	testParams0.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{
+		consensusTest1: 0,
+	}
+	configurableConsensus[consensusTest0] = testParams0
+
+	testParams1 := config.Consensus[protocol.ConsensusCurrentVersion]
+	testParams1.SupportGenesisHash = false
+	testParams1.UpgradeVoteRounds = 10
+	testParams1.UpgradeThreshold = 8
+	testParams1.DefaultUpgradeWaitRounds = 10
+	testParams1.MaxVersionStringLen = 64
+	testParams1.MaxTxnBytesPerBlock = 1000000
+	testParams1.DefaultKeyDilution = 10000
+	testParams1.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	configurableConsensus[consensusTest1] = testParams1
+
+	nodes, wallets, rootDirs := setupFullNodes(t, consensusTest0, backlogPool, configurableConsensus)
 	for i := 0; i < len(nodes); i++ {
 		defer os.Remove(wallets[i])
 		defer os.RemoveAll(rootDirs[i])
@@ -301,7 +345,7 @@ func TestSimpleUpgrade(t *testing.T) {
 			roundsCheckedForUpgrade++
 
 			for i := range wallets {
-				require.Equal(t, protocol.ConsensusTest0, blocks[i].CurrentProtocol)
+				require.Equal(t, consensusTest0, blocks[i].CurrentProtocol)
 			}
 		}
 
@@ -310,7 +354,7 @@ func TestSimpleUpgrade(t *testing.T) {
 			roundsCheckedForUpgrade++
 
 			for i := range wallets {
-				require.Equal(t, protocol.ConsensusTest1, blocks[i].CurrentProtocol)
+				require.Equal(t, consensusTest1, blocks[i].CurrentProtocol)
 			}
 		}
 	}

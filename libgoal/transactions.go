@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/account"
@@ -154,7 +153,7 @@ func (c *Client) MakeUnsignedGoOnlineTx(address string, part *account.Participat
 		return transactions.Transaction{}, err
 	}
 
-	cparams, ok := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
+	cparams, ok := c.consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
 	if !ok {
 		return transactions.Transaction{}, errors.New("unknown consensus version")
 	}
@@ -211,7 +210,7 @@ func (c *Client) MakeUnsignedGoOfflineTx(address string, firstValid, lastValid, 
 		return transactions.Transaction{}, err
 	}
 
-	cparams, ok := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
+	cparams, ok := c.consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
 	if !ok {
 		return transactions.Transaction{}, errors.New("unknown consensus version")
 	}
@@ -266,7 +265,7 @@ func (c *Client) MakeUnsignedBecomeNonparticipatingTx(address string, firstValid
 		return transactions.Transaction{}, err
 	}
 
-	cparams, ok := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
+	cparams, ok := c.consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
 	if !ok {
 		return transactions.Transaction{}, errors.New("unknown consensus version")
 	}
@@ -321,7 +320,7 @@ func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, lastValid, fe
 		return transactions.Transaction{}, err
 	}
 
-	cparams, ok := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
+	cparams, ok := c.consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
 	if !ok {
 		return transactions.Transaction{}, errors.New("unknown consensus version")
 	}
@@ -407,7 +406,7 @@ func (c *Client) MakeUnsignedAssetCreateTx(total uint64, defaultFrozen bool, man
 		return transactions.Transaction{}, err
 	}
 
-	cparams, ok := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
+	cparams, ok := c.consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
 	if !ok {
 		return transactions.Transaction{}, errors.New("unknown consensus version")
 	}
