@@ -132,7 +132,7 @@ func (c *Client) GenParticipationKeysTo(address string, firstValid, lastValid, k
 		return
 	}
 
-	proto, ok := config.Consensus[protocol.ConsensusVersion(stat.LastVersion)]
+	proto, ok := c.consensus[protocol.ConsensusVersion(stat.LastVersion)]
 	if !ok {
 		err = fmt.Errorf("consensus protocol %s not supported", stat.LastVersion)
 		return
@@ -214,7 +214,7 @@ func (c *Client) InstallParticipationKeys(inputfile string) (part account.Partic
 		return
 	}
 
-	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
+	proto, ok := c.consensus[protocol.ConsensusCurrentVersion]
 	if !ok {
 		err = fmt.Errorf("Unknown consensus protocol %s", protocol.ConsensusCurrentVersion)
 		return

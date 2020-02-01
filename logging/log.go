@@ -373,9 +373,6 @@ func (l logger) EnableTelemetry(cfg TelemetryConfig) (err error) {
 }
 
 func (l logger) UpdateTelemetryURI(uri string) (err error) {
-	if l.loggerState.telemetry.hook == nil {
-		return nil
-	}
 	err = l.loggerState.telemetry.hook.UpdateHookURI(uri)
 	if err == nil {
 		telemetryConfig.URI = uri

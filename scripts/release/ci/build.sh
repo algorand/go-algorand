@@ -25,31 +25,25 @@ export DEFAULTNETWORK
 export PKG_ROOT=${HOME}/node_pkg
 export VARIATIONS="base"
 # tell underlying 'build' scripts we already built
-
-# What's my default IP address?
-# get the datacenter IP address for this EC2 host.
-# this might equivalently be gotten from `netstat -rn` and `ifconfig -a`
-DC_IP=$(curl --silent http://169.254.169.254/latest/meta-data/local-ipv4)
-if [ -z "${DC_IP}" ]; then
-    echo "ERROR: need DC_IP to be set to your local (but not localhost) IP"
-    exit 1
-fi
+export NO_BUILD=true
 
 # Update version file for this build
 if [ ! -z "${BUILD_NUMBER}" ]; then
     echo "using externally set BUILD_NUMBER=${BUILD_NUMBER} without incrementing"
 else
-    if [ -e buildnumber.dat ]; then
-	BUILD_NUMBER=$(cat ./buildnumber.dat)
-	BUILD_NUMBER=$(( BUILD_NUMBER + 1 ))
+    if [ -e "${REPO_ROOT}"/buildnumber.dat ]
+    then
+        BUILD_NUMBER=$(cat "${REPO_ROOT}"/buildnumber.dat)
     else
-	BUILD_NUMBER=0
+        BUILD_NUMBER=0
     fi
-    echo ${BUILD_NUMBER} > ./buildnumber.dat
-    git add -A
-    git commit -m "Build ${BUILD_NUMBER}"
+
+    echo ${BUILD_NUMBER} > "${REPO_ROOT}"/buildnumber.dat
+#    git add -A
+#    git commit -m "Build ${BUILD_NUMBER}"
 fi
 FULLVERSION=$(PATH=${PATH} "${REPO_ROOT}"/scripts/compute_build_number.sh -f)
+echo "${FULLVERSION}" > "${REPO_ROOT}"/fullversion.dat
 export FULLVERSION
 
 # a bash user might `source build_env` to manually continue a broken build
@@ -72,20 +66,10 @@ EOF
 # strip leading 'export ' for docker --env-file
 sed 's/^export //g' < "${HOME}"/build_env > "${HOME}"/build_env_docker
 
-# Build!
-scripts/configure_dev.sh
-make crypto/lib/libsodium.a
-make build
+# Run RPM build in Centos7 Docker container
+sg docker "docker build -t algocentosbuild - < $HOME/go/src/github.com/algorand/go-algorand/scripts/release/rpm/centos-build.Dockerfile"
 
-export BUILD_DEB=1
-export NO_BUILD=true
-
-"${REPO_ROOT}"/scripts/build_packages.sh "${PLATFORM}"
-
-# build docker release package
-cd "${REPO_ROOT}"/docker/release
-sg docker "./build_algod_docker.sh ${HOME}/node_pkg/node_${CHANNEL}_${OS}-${ARCH}_${FULLVERSION}.tar.gz"
-cd "${REPO_ROOT}"/scripts
+sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME},dst=/root/subhome algocentosbuild /root/subhome/go/src/github.com/algorand/go-algorand/scripts/release/rpm/build.sh"
 
 echo
 date "+build_release end BUILD stage %Y%m%d_%H%M%S"
