@@ -47,13 +47,6 @@ fi
 
 cd ${SRCROOT}/test/e2e-go
 
-# For now, disable long-running e2e tests on Travis
-# (the ones that won't complete...)
-SHORTTEST=
-if [ "${TRAVIS_BRANCH}" != "" ]; then
-    SHORTTEST=-short
-fi
-
 # If one or more -t <pattern> are specified, use go test -run <pattern> for each
 
 TESTPATTERNS=()

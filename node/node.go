@@ -148,7 +148,8 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookDir
 	node.log = log.With("name", cfg.NetAddress)
 	node.genesisID = genesis.ID()
 	node.genesisHash = crypto.HashObj(genesis)
-	node.phonebook = network.MakeThreadsafePhonebook()
+	node.phonebook = network.MakeThreadsafePhonebook(cfg.ConnectionsRateLimitingCount,
+		time.Duration(cfg.ConnectionsRateLimitingWindowSeconds)*time.Second)
 
 	addrs, err := config.LoadPhonebook(phonebookDir)
 	if err != nil {
@@ -230,7 +231,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookDir
 
 	blockFactory := makeBlockFactory(node.ledger, node.transactionPool, node.config.EnableProcessBlockStats, node.highPriorityCryptoVerificationPool)
 	blockValidator := blockValidatorImpl{l: node.ledger, tp: node.transactionPool, verificationPool: node.highPriorityCryptoVerificationPool}
-	agreementLedger := agreementLedger{Ledger: node.ledger, ff: rpcs.MakeNetworkFetcherFactory(node.net, blockQueryPeerLimit, node.wsFetcherService), n: node.net}
+	agreementLedger := makeAgreementLedger(node.ledger, node.net)
 
 	agreementParameters := agreement.Parameters{
 		Logger:         log,
@@ -247,7 +248,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookDir
 	}
 	node.algorandService = agreement.MakeService(agreementParameters)
 
-	node.syncer = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.wsFetcherService, blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)})
+	node.syncer = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.wsFetcherService, blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)}, agreementLedger.UnmatchedPendingCertificates)
 	node.txPoolSyncer = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
 
 	err = node.loadParticipationKeys()

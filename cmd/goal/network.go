@@ -93,7 +93,7 @@ var networkCreateCmd = &cobra.Command{
 			panic(err)
 		}
 
-		network, err := netdeploy.CreateNetworkFromTemplate(networkName, networkRootDir, networkTemplateFile, binDir, !noImportKeys, nil)
+		network, err := netdeploy.CreateNetworkFromTemplate(networkName, networkRootDir, networkTemplateFile, binDir, !noImportKeys, nil, nil)
 		if err != nil {
 			if noClean {
 				reportInfof(" ** failed ** - Preserving network rootdir '%s'", networkRootDir)
@@ -126,7 +126,7 @@ func getNetworkAndBinDir() (netdeploy.Network, string) {
 var networkStartCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Start a deployed private network",
-	Long:  `Start a deployed private network`,
+	Long:  `Start a deployed private network by starting each individual node.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		network, binDir := getNetworkAndBinDir()
@@ -148,8 +148,7 @@ var networkStartCmd = &cobra.Command{
 
 var networkRestartCmd = &cobra.Command{
 	Use:   "restart",
-	Short: "Restart a deployed private network",
-	Long:  `Restart a deployed private network`,
+	Short: "Restart a deployed private network.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		network, binDir := getNetworkAndBinDir()
@@ -164,8 +163,7 @@ var networkRestartCmd = &cobra.Command{
 
 var networkStopCmd = &cobra.Command{
 	Use:   "stop",
-	Short: "Stop a deployed private network",
-	Long:  `Stop a deployed private network`,
+	Short: "Stop a deployed private network.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		network, binDir := getNetworkAndBinDir()
@@ -176,8 +174,7 @@ var networkStopCmd = &cobra.Command{
 
 var networkStatusCmd = &cobra.Command{
 	Use:   "status",
-	Short: "Prints status for all nodes in a deployed private network",
-	Long:  `Prints status for all nodes in a deployed private network`,
+	Short: "Prints status for all nodes in a deployed private network.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		network, binDir := getNetworkAndBinDir()

@@ -50,3 +50,11 @@ func (nc NodeConfig) IsRelay() bool {
 	// If we advertise to the world an address where we listen for gossip network connections, we are taking on the role of relay.
 	return nc.NetAddress != ""
 }
+
+// NodeConfigGoal represents is a simplified version of NodeConfig used with 'goal network' commands
+type NodeConfigGoal struct {
+	Name              string
+	IsRelay           bool `json:",omitempty"`
+	Wallets           []NodeWalletData
+	DeadlockDetection int `json:"-"`
+}
