@@ -25,6 +25,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 )
 
@@ -141,6 +143,15 @@ func TestCatchupOverGossip(t *testing.T) {
 	}
 }
 
+// consensusTestUnupgradedProtocol is a version of ConsensusCurrentVersion
+// that allows the control of the upgrade from consensusTestUnupgradedProtocol to
+// consensusTestUnupgradedProtocol
+const consensusTestUnupgradedProtocol = protocol.ConsensusVersion("test-unupgraded-protocol")
+
+// consensusTestUnupgradedToProtocol is a version of ConsensusCurrentVersion
+// It is used as an upgrade from consensusTestUnupgradedProtocol
+const consensusTestUnupgradedToProtocol = protocol.ConsensusVersion("test-unupgradedto-protocol")
+
 func TestStoppedCatchupOnUnsupported(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -148,8 +159,30 @@ func TestStoppedCatchupOnUnsupported(t *testing.T) {
 	t.Parallel()
 	a := require.New(t)
 
-	defer os.Unsetenv("ALGORAND_TEST_UNUPGRADEDPROTOCOL_DELETE_UPGRADE")
-	os.Setenv("ALGORAND_TEST_UNUPGRADEDPROTOCOL_DELETE_UPGRADE", "0")
+	consensus := make(config.ConsensusProtocols)
+	// The following two protocols: testUnupgradedProtocol and testUnupgradedToProtocol
+	// are used to test the case when some nodes in the network do not make progress.
+
+	// testUnupgradedToProtocol is derived from ConsensusCurrentVersion and upgraded
+	// from testUnupgradedProtocol.
+	testUnupgradedToProtocol := config.Consensus[protocol.ConsensusCurrentVersion]
+	testUnupgradedToProtocol.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	consensus[consensusTestUnupgradedToProtocol] = testUnupgradedToProtocol
+
+	// testUnupgradedProtocol is used to control the upgrade of a node. This is used
+	// to construct and run a network where some node is upgraded, and some other
+	// node is not upgraded.
+	// testUnupgradedProtocol is derived from ConsensusCurrentVersion and upgrades to
+	// testUnupgradedToProtocol.
+	testUnupgradedProtocol := config.Consensus[protocol.ConsensusCurrentVersion]
+	testUnupgradedProtocol.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	testUnupgradedProtocol.UpgradeVoteRounds = 3
+	testUnupgradedProtocol.UpgradeThreshold = 2
+	testUnupgradedProtocol.DefaultUpgradeWaitRounds = 3
+
+	testUnupgradedProtocol.ApprovedUpgrades[consensusTestUnupgradedToProtocol] = 0
+	consensus[consensusTestUnupgradedProtocol] = testUnupgradedProtocol
 
 	// Overview of this test:
 	// Start a two-node network (primary has 0%, secondary has 100%)
@@ -157,6 +190,7 @@ func TestStoppedCatchupOnUnsupported(t *testing.T) {
 	// Spin up a third node and see if it catches up
 
 	var fixture fixtures.RestClientFixture
+	fixture.SetConsensus(consensus)
 	// Give the second node (which starts up last) all the stake so that its proposal always has better credentials,
 	// and so that its proposal isn't dropped. Otherwise the test burns 17s to recover. We don't care about stake
 	// distribution for catchup so this is fine.
@@ -173,13 +207,14 @@ func TestStoppedCatchupOnUnsupported(t *testing.T) {
 	err = fixture.ClientWaitForRoundWithTimeout(fixture.GetAlgodClientForController(nc), waitForRound)
 	a.NoError(err)
 
-	os.Setenv("ALGORAND_TEST_UNUPGRADEDPROTOCOL_DELETE_UPGRADE", "1")
-
 	// Now spin up third node
 	cloneDataDir := filepath.Join(fixture.PrimaryDataDir(), "../clone")
 	cloneLedger := false
 	err = fixture.NC.Clone(cloneDataDir, cloneLedger)
 	a.NoError(err)
+
+	delete(consensus, consensusTestUnupgradedToProtocol)
+	fixture.GetNodeControllerForDataDir(cloneDataDir).SetConsensus(consensus)
 	cloneClient, err := fixture.StartNode(cloneDataDir)
 	a.NoError(err)
 	defer shutdownClonedNode(cloneDataDir, &fixture, t)
