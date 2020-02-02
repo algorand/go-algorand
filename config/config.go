@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"io/ioutil"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -243,19 +244,18 @@ type ConsensusParams struct {
 	UseBuggyProposalLowestOutput bool
 }
 
+// ConsensusProtocols defines a set of supported protocols versions, and their corresponding
+// parameters
+type ConsensusProtocols map[protocol.ConsensusVersion]ConsensusParams
+
 // Consensus tracks the protocol-level settings for different versions of the
 // consensus protocol.
-var Consensus map[protocol.ConsensusVersion]ConsensusParams
+var Consensus ConsensusProtocols
 
 func init() {
-	Consensus = make(map[protocol.ConsensusVersion]ConsensusParams)
+	Consensus = make(ConsensusProtocols)
 
 	initConsensusProtocols()
-	initConsensusTestProtocols()
-
-	// This must appear last, since it depends on all of the other
-	// versions to already be registered (by the above calls).
-	initConsensusTestFastUpgrade()
 
 	// Allow tuning SmallLambda for faster consensus in single-machine e2e
 	// tests.  Useful for development.  This might make sense to fold into
@@ -265,6 +265,97 @@ func init() {
 	if err == nil {
 		Protocol.SmallLambda = time.Duration(algoSmallLambda) * time.Millisecond
 	}
+}
+
+// SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.
+func SaveConfigurableConsensus(dataDirectory string, params ConsensusProtocols) error {
+	consensusProtocolPath := filepath.Join(dataDirectory, ConfigurableConsensusProtocolsFilename)
+
+	encodedConsensusParams, err := json.Marshal(params)
+	if err != nil {
+		return err
+	}
+	err = ioutil.WriteFile(consensusProtocolPath, encodedConsensusParams, 0644)
+	return err
+}
+
+// DeepCopy creates a deep copy of a consensus protocols map.
+func (cp ConsensusProtocols) DeepCopy() ConsensusProtocols {
+	staticConsensus := make(ConsensusProtocols)
+	for consensusVersion, consensusParams := range cp {
+		// recreate the ApprovedUpgrades map since we don't want to modify the original one.
+		if consensusParams.ApprovedUpgrades != nil {
+			newApprovedUpgrades := make(map[protocol.ConsensusVersion]uint64)
+			for ver, when := range consensusParams.ApprovedUpgrades {
+				newApprovedUpgrades[ver] = when
+			}
+			consensusParams.ApprovedUpgrades = newApprovedUpgrades
+		}
+		staticConsensus[consensusVersion] = consensusParams
+	}
+	return staticConsensus
+}
+
+// Merge merges a configurable consensus ontop of the existing consensus protocol and return
+// a new consensus protocol without modify any of the incoming structures.
+func (cp ConsensusProtocols) Merge(configurableConsensus ConsensusProtocols) ConsensusProtocols {
+	staticConsensus := cp.DeepCopy()
+
+	for consensusVersion, consensusParams := range configurableConsensus {
+		if consensusParams.ApprovedUpgrades == nil {
+			// if we were provided with an empty ConsensusParams, delete the existing reference to this consensus version
+			for cVer, cParam := range staticConsensus {
+				if cVer == consensusVersion {
+					delete(staticConsensus, cVer)
+				} else if _, has := cParam.ApprovedUpgrades[consensusVersion]; has {
+					// delete upgrade to deleted version
+					delete(cParam.ApprovedUpgrades, consensusVersion)
+				}
+			}
+		} else {
+			// need to add/update entry
+			staticConsensus[consensusVersion] = consensusParams
+		}
+	}
+
+	return staticConsensus
+}
+
+// LoadConfigurableConsensusProtocols loads the configurable protocols from the data directroy
+func LoadConfigurableConsensusProtocols(dataDirectory string) error {
+	newConsensus, err := PreloadConfigurableConsensusProtocols(dataDirectory)
+	if err != nil {
+		return err
+	}
+	if newConsensus != nil {
+		Consensus = newConsensus
+	}
+	return nil
+}
+
+// PreloadConfigurableConsensusProtocols loads the configurable protocols from the data directroy
+// and merge it with a copy of the Consensus map. Then, it returns it to the caller.
+func PreloadConfigurableConsensusProtocols(dataDirectory string) (ConsensusProtocols, error) {
+	consensusProtocolPath := filepath.Join(dataDirectory, ConfigurableConsensusProtocolsFilename)
+	file, err := os.Open(consensusProtocolPath)
+
+	if err != nil {
+		if os.IsNotExist(err) {
+			// this file is not required, only optional. if it's missing, no harm is done.
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer file.Close()
+
+	configurableConsensus := make(ConsensusProtocols)
+
+	decoder := json.NewDecoder(file)
+	err = decoder.Decode(&configurableConsensus)
+	if err != nil {
+		return nil, err
+	}
+	return Consensus.Merge(configurableConsensus), nil
 }
 
 func initConsensusProtocols() {
@@ -314,7 +405,7 @@ func initConsensusProtocols() {
 
 		MaxBalLookback: 320,
 
-		MaxTxGroupSize: 1,
+		MaxTxGroupSize:               1,
 		UseBuggyProposalLowestOutput: true, // TODO(upgrade): Please remove as soon as the upgrade goes through
 	}
 
@@ -496,119 +587,6 @@ func initConsensusProtocols() {
 	vFuture.MinUpgradeWaitRounds = 10000
 	vFuture.MaxUpgradeWaitRounds = 150000
 	Consensus[protocol.ConsensusFuture] = vFuture
-}
-
-func initConsensusTestProtocols() {
-	// Various test protocol versions
-	Consensus[protocol.ConsensusTest0] = ConsensusParams{
-		UpgradeVoteRounds:        2,
-		UpgradeThreshold:         1,
-		DefaultUpgradeWaitRounds: 2,
-		MaxVersionStringLen:      64,
-
-		MaxTxnBytesPerBlock: 1000000,
-		DefaultKeyDilution:  10000,
-
-		ApprovedUpgrades: map[protocol.ConsensusVersion]uint64{
-			protocol.ConsensusTest1: 0,
-		},
-	}
-
-	Consensus[protocol.ConsensusTest1] = ConsensusParams{
-		UpgradeVoteRounds:        10,
-		UpgradeThreshold:         8,
-		DefaultUpgradeWaitRounds: 10,
-		MaxVersionStringLen:      64,
-
-		MaxTxnBytesPerBlock: 1000000,
-		DefaultKeyDilution:  10000,
-
-		ApprovedUpgrades: map[protocol.ConsensusVersion]uint64{},
-	}
-
-	testBigBlocks := Consensus[protocol.ConsensusCurrentVersion]
-	testBigBlocks.MaxTxnBytesPerBlock = 100000000
-	testBigBlocks.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	Consensus[protocol.ConsensusTestBigBlocks] = testBigBlocks
-
-	rapidRecalcParams := Consensus[protocol.ConsensusCurrentVersion]
-	rapidRecalcParams.RewardsRateRefreshInterval = 10
-	//because rapidRecalcParams is based on ConsensusCurrentVersion,
-	//it *shouldn't* have any ApprovedUpgrades
-	//but explicitly mark "no approved upgrades" just in case
-	rapidRecalcParams.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	Consensus[protocol.ConsensusTestRapidRewardRecalculation] = rapidRecalcParams
-
-	// Setting the testShorterLookback parameters derived from ConsensusCurrentVersion
-	// Will result in MaxBalLookback = 32
-	// Used to run tests faster where past MaxBalLookback values are checked
-	testShorterLookback := Consensus[protocol.ConsensusCurrentVersion]
-	testShorterLookback.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-
-	// MaxBalLookback  =  2 x SeedRefreshInterval x SeedLookback
-	// ref. https://github.com/algorandfoundation/specs/blob/master/dev/abft.md
-	testShorterLookback.SeedLookback = 2
-	testShorterLookback.SeedRefreshInterval = 8
-	testShorterLookback.MaxBalLookback = 2 * testShorterLookback.SeedLookback * testShorterLookback.SeedRefreshInterval // 32
-	Consensus[protocol.ConsensusTestShorterLookback] = testShorterLookback
-
-	// The following two protocols: testUnupgradedProtocol and testUnupgradedToProtocol
-	// are used to test the case when some nodes in the network do not make progress.
-
-	// testUnupgradedToProtocol is derived from ConsensusCurrentVersion and upgraded
-	// from testUnupgradedProtocol.
-	testUnupgradedToProtocol := Consensus[protocol.ConsensusCurrentVersion]
-	testUnupgradedToProtocol.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	Consensus[protocol.ConsensusTestUnupgradedToProtocol] = testUnupgradedToProtocol
-
-	// testUnupgradedProtocol is used to control the upgrade of a node. This is used
-	// to construct and run a network where some node is upgraded, and some other
-	// node is not upgraded.
-	// testUnupgradedProtocol is derived from ConsensusCurrentVersion and upgrades to
-	// testUnupgradedToProtocol.
-	testUnupgradedProtocol := Consensus[protocol.ConsensusCurrentVersion]
-	testUnupgradedProtocol.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-
-	testUnupgradedProtocol.UpgradeVoteRounds = 3
-	testUnupgradedProtocol.UpgradeThreshold = 2
-	testUnupgradedProtocol.DefaultUpgradeWaitRounds = 3
-	b, err := strconv.ParseBool(os.Getenv("ALGORAND_TEST_UNUPGRADEDPROTOCOL_DELETE_UPGRADE"))
-	// Do not upgrade to the next version if
-	// ALGORAND_TEST_UNUPGRADEDPROTOCOL_DELETE_UPGRADE is set to true (e.g. 1, TRUE)
-	if err == nil && b {
-		// Configure as if testUnupgradedToProtocol is not supported by the binary
-		delete(Consensus, protocol.ConsensusTestUnupgradedToProtocol)
-	} else {
-		// Direct upgrade path from ConsensusTestUnupgradedProtocol to ConsensusTestUnupgradedToProtocol
-		// This is needed for the voting nodes vote to upgrade to the next protocol
-		testUnupgradedProtocol.ApprovedUpgrades[protocol.ConsensusTestUnupgradedToProtocol] = 0
-	}
-	Consensus[protocol.ConsensusTestUnupgradedProtocol] = testUnupgradedProtocol
-}
-
-func initConsensusTestFastUpgrade() {
-	fastUpgradeProtocols := make(map[protocol.ConsensusVersion]ConsensusParams)
-
-	for proto, params := range Consensus {
-		fastParams := params
-		fastParams.UpgradeVoteRounds = 5
-		fastParams.UpgradeThreshold = 3
-		fastParams.DefaultUpgradeWaitRounds = 5
-		fastParams.MaxVersionStringLen += len(protocol.ConsensusTestFastUpgrade(""))
-		fastParams.ApprovedUpgrades = make(map[protocol.ConsensusVersion]uint64)
-
-		for ver := range params.ApprovedUpgrades {
-			fastParams.ApprovedUpgrades[protocol.ConsensusTestFastUpgrade(ver)] = 0
-		}
-
-		fastUpgradeProtocols[protocol.ConsensusTestFastUpgrade(proto)] = fastParams
-	}
-
-	// Put the test protocols into the Consensus struct; this
-	// is done as a separate step so we don't recurse forever.
-	for proto, params := range fastUpgradeProtocols {
-		Consensus[proto] = params
-	}
 }
 
 // Local holds the per-node-instance configuration settings for the protocol.
@@ -835,6 +813,11 @@ const LedgerFilenamePrefix = "ledger"
 // CrashFilename is the name of the agreement database file.
 // It is used to recover from node crashes.
 const CrashFilename = "crash.sqlite"
+
+// ConfigurableConsensusProtocolsFilename defines a set of consensus prototocols that
+// are to be loaded from the data directory ( if present ), to override the
+// built-in supported consensus protocols.
+const ConfigurableConsensusProtocolsFilename = "consensus.json"
 
 // LoadConfigFromDisk returns a Local config structure based on merging the defaults
 // with settings loaded from the config file from the custom dir.  If the custom file
