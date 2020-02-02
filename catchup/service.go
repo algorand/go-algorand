@@ -317,7 +317,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 	if parallelRequests < seedLookback {
 		parallelRequests = seedLookback
 	}
-
+	parallelRequests = 500
 	completed := make(chan basics.Round, parallelRequests)
 	taskCh := make(chan task, parallelRequests)
 	var wg sync.WaitGroup
