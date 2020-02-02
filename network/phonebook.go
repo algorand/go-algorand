@@ -20,7 +20,10 @@ import (
 	"math"
 	"math/rand"
 	"time"
-
+	"fmt"
+	"os"
+	//	"runtime/debug"
+	
 	"github.com/algorand/go-deadlock"
 )
 
@@ -165,16 +168,17 @@ func (e *phonebookEntries) waitForConnectionTime(addr string) (addrInPhonebook, 
 	numElts := len(e.data[addr].recentConnectionTimes)
 	if uint(numElts) >= e.connectionsRateLimitingCount {
 		// Wait until the earliest time expires
+		fmt.Fprintf(os.Stderr, "xxxsss Waiting for %v ... %v\n", addr, e.connectionsRateLimitingWindow - timeSince)
 		time.Sleep(e.connectionsRateLimitingWindow - timeSince)
 		waited = true
 		// Remove it from recentConnectionTimes
 		e.popNElements(1, addr)
 	}
-
 	// Update curTime, since it may have significantly changed if waited
 	curTime = time.Now()
 	// Append the provisional time for the next connection request
 	e.appendTime(addr, curTime)
+	//	fmt.Fprintf(os.Stderr, "xxxsss times on out:  %v\n", len(e.data[addr].recentConnectionTimes))
 	return found, waited, curTime
 }
 
@@ -189,7 +193,7 @@ func (e *phonebookEntries) updateConnectionTime(addr string, provisionalTime tim
 	defer func() {
 		e.data[addr] = entry
 	}()
-
+	//	fmt.Fprintf(os.Stderr, "xxxsss time updated...\n")
 	// Find the provisionalTime and update it
 	for indx, val := range entry.recentConnectionTimes {
 		if provisionalTime == val {
@@ -347,13 +351,18 @@ func (p *ThreadsafePhonebook) ReplacePeerList(they []string) {
 
 // MultiPhonebook contains a map of phonebooks
 type MultiPhonebook struct {
+	gateKeeper chan int
 	phonebookMap map[string]Phonebook
 	lock         deadlock.RWMutex
 }
 
 // MakeMultiPhonebook constructs and returns a new Multi Phonebook
 func MakeMultiPhonebook() *MultiPhonebook {
-	return &MultiPhonebook{phonebookMap: make(map[string]Phonebook)}
+	gk := make(chan int, 61)
+	for x:= 0; x < 60; x++ {
+		gk<- x
+	}
+	return &MultiPhonebook{gateKeeper : gk, phonebookMap: make(map[string]Phonebook)}
 }
 
 // GetAddresses returns up to N address
@@ -412,6 +421,7 @@ func (mp *MultiPhonebook) UpdateRetryAfter(addr string, retryAfter time.Time) {
 // WaitForConnectionTime will wait to prevent exceeding connectionsRateLimitingCount.
 // Will return true if it waited and false otherwise
 func (mp *MultiPhonebook) WaitForConnectionTime(addr string) (addrInPhonebook, waited bool, provisionalTime time.Time) {
+	<-mp.gateKeeper
 	mp.lock.Lock()
 	defer mp.lock.Unlock()
 	addrInPhonebook = false
@@ -430,14 +440,17 @@ func (mp *MultiPhonebook) WaitForConnectionTime(addr string) (addrInPhonebook, w
 // UpdateConnectionTime will update the provisional connection time.
 // Returns true of the addr was in the phonebook
 func (mp *MultiPhonebook) UpdateConnectionTime(addr string, provisionalTime time.Time) bool {
+	//	debug.PrintStack()
 	mp.lock.Lock()
 	defer mp.lock.Unlock()
 	for _, op := range mp.phonebookMap {
 		// The addr will be in one of the phonebooks.
 		// If it is not found in this phonebook, no action will be taken .
 		if op.UpdateConnectionTime(addr, provisionalTime) {
+			mp.gateKeeper<- 1
 			return true
 		}
 	}
+	mp.gateKeeper<- 1
 	return false
 }

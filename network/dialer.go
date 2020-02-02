@@ -29,11 +29,20 @@ type Dialer struct {
 
 // Dial connects to the address on the named network.
 func (d *Dialer) Dial(network, address string) (net.Conn, error) {
-	// todo limit the rate of this one
-	return d.innerDialer.Dial(network, address)
+
+	_, _, provisionalTime := d.phonebook.WaitForConnectionTime(address)	
+	conn, err := d.innerDialer.Dial(network, address)
+	d.phonebook.UpdateConnectionTime(address, provisionalTime)
+
+	return conn, err
 }
 
 // DialContext connects to the address on the named network using the provided context.
 func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
-	return d.innerDialer.DialContext(ctx, network, address)
+
+	_, _, provisionalTime := d.phonebook.WaitForConnectionTime(address)
+	conn, err := d.innerDialer.DialContext(ctx, network, address)
+	d.phonebook.UpdateConnectionTime(address, provisionalTime)
+
+	return conn, err
 }
