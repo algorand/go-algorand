@@ -412,10 +412,6 @@ type MultiPhonebook struct {
 
 // MakeMultiPhonebook constructs and returns a new Multi Phonebook
 func MakeMultiPhonebook() *MultiPhonebook {
-	gk := make(chan int, 61)
-	for x:= 0; x < 60; x++ {
-		gk<- x
-	}
 	return &MultiPhonebook{phonebookMap: make(map[string]Phonebook)}
 }
 
