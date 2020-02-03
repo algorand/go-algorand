@@ -19,6 +19,7 @@ package network
 import (
 	"context"
 	"net"
+	"time"
 )
 
 // Dialer establish tcp-level connection with the destination
@@ -36,18 +37,18 @@ func (d *Dialer) Dial(network, address string) (net.Conn, error) {
 // DialContext connects to the address on the named network using the provided context.
 // It waits if needed not to exceed connectionsRateLimitingCount.
 func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
-	var waitTime time.Duration		
+	var waitTime time.Duration
 	var provisionalTime time.Time
-	
-	for  {
+
+	for {
 		_, waitTime, provisionalTime = d.phonebook.GetConnectionWaitTime(address)
 		if waitTime == 0 {
 			break // break out of the loop and proceed to the connection
 		}
 		select {
-		case <- ctx.Done():
+		case <-ctx.Done():
 			return nil, ctx.Err()
-		case <- time.After(waitTime):
+		case <-time.After(waitTime):
 		}
 	}
 	conn, err := d.innerDialer.DialContext(ctx, network, address)
