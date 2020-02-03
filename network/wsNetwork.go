@@ -780,17 +780,6 @@ func (wn *WebsocketNetwork) checkServerResponseVariables(header http.Header, add
 	return true
 }
 
-// MakeHTTPRequest will make sure connectionsRateLimitingCount is not
-// violated, and register the connection time of the request, before
-// making the http request to the server.
-/*func (wn *WebsocketNetwork) MakeHTTPRequest(client *http.Client,
-	request *http.Request) (resp *http.Response, err error) {
-	_, _, provisionalTime := wn.phonebook.WaitForConnectionTime(request.Host)
-	resp, err = client.Do(request)
-	wn.phonebook.UpdateConnectionTime(request.Host, provisionalTime)
-	return resp, err
-}*/
-
 // getCommonHeaders retreives the common headers for both incoming and outgoing connections from the provided headers.
 func getCommonHeaders(headers http.Header) (otherTelemetryGUID, otherInstanceName, otherPublicAddr string) {
 	otherTelemetryGUID = logging.SanitizeTelemetryString(headers.Get(TelemetryIDHeader), 1)
