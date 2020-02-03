@@ -812,6 +812,7 @@ func (wn *WebsocketNetwork) checkServerResponseVariables(header http.Header, add
 }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 // MakeHTTPRequest will make sure connectionsRateLimitingCount is not
 // violated, and register the connection time of the request, before
@@ -825,6 +826,8 @@ func (wn *WebsocketNetwork) checkServerResponseVariables(header http.Header, add
 }*/
 
 >>>>>>> changes.
+=======
+>>>>>>> cleaning unnecessary changes.
 // getCommonHeaders retreives the common headers for both incoming and outgoing connections from the provided headers.
 func getCommonHeaders(headers http.Header) (otherTelemetryGUID, otherInstanceName, otherPublicAddr string) {
 	otherTelemetryGUID = logging.SanitizeTelemetryString(headers.Get(TelemetryIDHeader), 1)
