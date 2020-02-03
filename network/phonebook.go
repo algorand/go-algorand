@@ -147,7 +147,7 @@ func (e *phonebookEntries) getConnectionWaitTime(addr string) (addrInPhonebook b
 	_, addrInPhonebook = e.data[addr]
 	curTime := time.Now()
 	if !addrInPhonebook {
-		// The addr is not in this phonebook. 
+		// The addr is not in this phonebook.
 		// Will find the addr in a different phonebook.
 		return addrInPhonebook, 0 /* not unsed */, curTime /* not unsed */
 	}
@@ -168,7 +168,7 @@ func (e *phonebookEntries) getConnectionWaitTime(addr string) (addrInPhonebook b
 	// If there are max number of connections within the time window, wait
 	numElts := len(e.data[addr].recentConnectionTimes)
 	if uint(numElts) >= e.connectionsRateLimitingCount {
-		return addrInPhonebook /* true */ , 
+		return addrInPhonebook, /* true */
 			(e.connectionsRateLimitingWindow - timeSince), curTime /* not unsed */
 	}
 
@@ -178,7 +178,7 @@ func (e *phonebookEntries) getConnectionWaitTime(addr string) (addrInPhonebook b
 	provisionalTime = time.Now()
 	// Append the provisional time for the next connection request
 	e.appendTime(addr, provisionalTime)
-	return addrInPhonebook /* true */,  0 /* no wait. proceed */, provisionalTime
+	return addrInPhonebook /* true */, 0 /* no wait. proceed */, provisionalTime
 }
 
 // UpdateConnectionTime will update the provisional connection time.
