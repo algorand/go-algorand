@@ -33,6 +33,7 @@ type Dialer struct {
 
 // Dial connects to the address on the named network.
 <<<<<<< HEAD
+<<<<<<< HEAD
 // It waits if needed not to exceed connectionsRateLimitingCount.
 func (d *Dialer) Dial(network, address string) (net.Conn, error) {
 	return d.DialContext(context.Background(), network, address)
@@ -60,23 +61,39 @@ func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.
 
 	return conn, err
 =======
+=======
+// It waits if needed not to exceed connectionsRateLimitingCount.
+>>>>>>> Taking care of the lock triggering deadlock detection.
 func (d *Dialer) Dial(network, address string) (net.Conn, error) {
-
-	_, _, provisionalTime := d.phonebook.WaitForConnectionTime(address)	
-	conn, err := d.innerDialer.Dial(network, address)
-	d.phonebook.UpdateConnectionTime(address, provisionalTime)
-
-	return conn, err
+	return d.DialContext(context.Background(), network, address)
 }
 
 // DialContext connects to the address on the named network using the provided context.
+// It waits if needed not to exceed connectionsRateLimitingCount.
 func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+<<<<<<< HEAD
 <<<<<<< HEAD
 	return d.innerDialer.DialContext(ctx, network, address)
 >>>>>>> adding dialer.
 =======
 
 	_, _, provisionalTime := d.phonebook.WaitForConnectionTime(address)
+=======
+	var waitTime time.Duration		
+	var provisionalTime time.Time
+	
+	for  {
+		_, waitTime, provisionalTime = d.phonebook.GetConnectionWaitTime(address)
+		if waitTime == 0 {
+			break // break out of the loop and proceed to the connection
+		}
+		select {
+		case <- ctx.Done():
+			return nil, ctx.Err()
+		case <- time.After(waitTime):
+		}
+	}
+>>>>>>> Taking care of the lock triggering deadlock detection.
 	conn, err := d.innerDialer.DialContext(ctx, network, address)
 	d.phonebook.UpdateConnectionTime(address, provisionalTime)
 
