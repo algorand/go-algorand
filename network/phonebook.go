@@ -441,7 +441,6 @@ func (mp *MultiPhonebook) GetConnectionWaitTime(addr string) (addrInPhonebook bo
 // UpdateConnectionTime will update the provisional connection time.
 // Returns true of the addr was in the phonebook
 func (mp *MultiPhonebook) UpdateConnectionTime(addr string, provisionalTime time.Time) bool {
-	//	debug.PrintStack()
 	mp.lock.Lock()
 	defer mp.lock.Unlock()
 	for _, op := range mp.phonebookMap {
