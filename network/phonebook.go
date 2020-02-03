@@ -156,10 +156,14 @@ func (e *phonebookEntries) getConnectionWaitTime(addr string) (addrInPhonebook b
 	curTime := time.Now()
 	if !addrInPhonebook {
 <<<<<<< HEAD
+<<<<<<< HEAD
 		// The addr is not in this phonebook.
 =======
 		// The addr is not in this phonebook. 
 >>>>>>> Taking care of the lock triggering deadlock detection.
+=======
+		// The addr is not in this phonebook.
+>>>>>>> minor fixes
 		// Will find the addr in a different phonebook.
 		return addrInPhonebook, 0 /* not unsed */, curTime /* not unsed */
 	}
@@ -181,6 +185,7 @@ func (e *phonebookEntries) getConnectionWaitTime(addr string) (addrInPhonebook b
 	// If there are max number of connections within the time window, wait
 	numElts := len(e.data[addr].recentConnectionTimes)
 	if uint(numElts) >= e.connectionsRateLimitingCount {
+<<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
 		return addrInPhonebook, /* true */
@@ -211,6 +216,9 @@ func (e *phonebookEntries) getConnectionWaitTime(addr string) (addrInPhonebook b
 >>>>>>> DRAFT: using channel to offload the mutex.
 =======
 		return addrInPhonebook /* true */ , 
+=======
+		return addrInPhonebook, /* true */
+>>>>>>> minor fixes
 			(e.connectionsRateLimitingWindow - timeSince), curTime /* not unsed */
 	}
 
@@ -220,8 +228,12 @@ func (e *phonebookEntries) getConnectionWaitTime(addr string) (addrInPhonebook b
 	provisionalTime = time.Now()
 	// Append the provisional time for the next connection request
 	e.appendTime(addr, provisionalTime)
+<<<<<<< HEAD
 	return addrInPhonebook /* true */,  0 /* no wait. proceed */, provisionalTime
 >>>>>>> Taking care of the lock triggering deadlock detection.
+=======
+	return addrInPhonebook /* true */, 0 /* no wait. proceed */, provisionalTime
+>>>>>>> minor fixes
 }
 
 // UpdateConnectionTime will update the provisional connection time.

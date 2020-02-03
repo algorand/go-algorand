@@ -20,9 +20,13 @@ import (
 	"context"
 	"net"
 <<<<<<< HEAD
+<<<<<<< HEAD
 	"time"
 =======
 >>>>>>> adding dialer.
+=======
+	"time"
+>>>>>>> minor fixes
 )
 
 // Dialer establish tcp-level connection with the destination
@@ -43,6 +47,7 @@ func (d *Dialer) Dial(network, address string) (net.Conn, error) {
 // It waits if needed not to exceed connectionsRateLimitingCount.
 func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
 	var waitTime time.Duration
+<<<<<<< HEAD
 	var provisionalTime time.Time
 
 	for {
@@ -80,17 +85,19 @@ func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.
 	_, _, provisionalTime := d.phonebook.WaitForConnectionTime(address)
 =======
 	var waitTime time.Duration		
+=======
+>>>>>>> minor fixes
 	var provisionalTime time.Time
-	
-	for  {
+
+	for {
 		_, waitTime, provisionalTime = d.phonebook.GetConnectionWaitTime(address)
 		if waitTime == 0 {
 			break // break out of the loop and proceed to the connection
 		}
 		select {
-		case <- ctx.Done():
+		case <-ctx.Done():
 			return nil, ctx.Err()
-		case <- time.After(waitTime):
+		case <-time.After(waitTime):
 		}
 	}
 >>>>>>> Taking care of the lock triggering deadlock detection.

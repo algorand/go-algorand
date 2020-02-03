@@ -1591,11 +1591,16 @@ func (wn *WebsocketNetwork) numOutgoingPending() int {
 }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 // GetRoundTripper returns an http.Transport that limits the number of connection
 // to comply with connectionsRateLimitingCount.
 func (wn *WebsocketNetwork) GetRoundTripper() http.RoundTripper {
 	return &wn.transport
 =======
+=======
+// GetNetTransport returns an http.Transport that limits the number of connection
+// to comply with connectionsRateLimitingCount.
+>>>>>>> minor fixes
 func (wn *WebsocketNetwork) GetNetTransport() *http.Transport {
 	transport := http.DefaultTransport.(*http.Transport)
 	transport.DialContext = wn.GetDialer().DialContext
