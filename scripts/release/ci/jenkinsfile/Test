@@ -1,0 +1,53 @@
+pipeline {
+    parameters {
+        string defaultValue: '', description: 'Release to test', name: 'release', trim: true
+        string defaultValue: 'stable', description: 'Staged channel which should be tested.', name: 'channel', trim: true
+        string defaultValue: 's3://ben-test-2.0.3', description: 's3://bucket/prefix', name: 'bucket_location', trim: true
+
+        // AWS
+        string defaultValue: 'us-west-1', description: 'AWS Region', name: 'region', trim: true
+        string defaultValue: 'ami-0dd655843c87b6930', description: 'Amazon Machine Image (default: Ubuntu Server 18.04 LTS, 8 vCPUs, 32 GB RAM', name: 'ami', trim: true
+        string defaultValue: 't2.2xlarge', description: 'Instance Type', name: 'type', trim: true
+    }
+
+    environment {
+        AWS_ACCESS_KEY_ID = credentials("prod-s3-aws-access-key-id")
+        AWS_SECRET_ACCESS_KEY = credentials("prod-s3-aws-secret-access-key")
+    }
+
+    agent any
+
+    stages {
+        stage("create ec2 instance") {
+            steps {
+                sh script: "scripts/release/ci/stage/create.sh ${params.region} ${params.ami} ${params.type}"
+            }
+        }
+
+        stage("setup ec2 instance") {
+            steps {
+                script {
+                    if (params.channel == null || params.channel == "") {
+                        error("Missing required parameter [channel].")
+                    }
+                }
+
+                sh script: "scripts/release/ci/stage/setup.sh ${params.release} ${params.channel}"
+            }
+        }
+
+        stage("test") {
+            steps {
+                sh script: "scripts/release/ci/stage/test.sh ${params.bucket_location} ${params.channel}"
+            }
+        }
+
+        stage("delete ec2 instance") {
+            steps {
+                input "Halt!"
+                sh script: "scripts/release/ci/stage/delete.sh ${params.region}"
+            }
+        }
+    }
+}
+
