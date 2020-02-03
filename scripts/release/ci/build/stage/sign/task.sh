@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# shellcheck disable=1090,2129,2035
+
+echo
+date "+build_release begin SIGN stage %Y%m%d_%H%M%S"
+echo
+
+. "${HOME}/build_env"
+set -ex
+
+#sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${GPG_AGENT_SOCKET},dst=/S.gpg-agent --mount type=bind,src=${HOME}/prodrepo,dst=/dummyrepo --mount type=bind,src=${HOME}/docker_test_resources,dst=/root/stuff --mount type=bind,src=${HOME}/go/src,dst=/root/go/src --mount type=bind,src=${HOME},dst=/root/subhome --mount type=bind,src=/usr/local/go,dst=/usr/local/go algocentosbuild /root/go/src/github.com/algorand/go-algorand/scripts/release/test/sign_centos_docker.sh"
+sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=/run/user/1000/gnupg/S.gpg-agent,dst=/root/S.gpg-agent --mount type=bind,src=${HOME}/keys,dst=/root/keys --mount type=bind,src=${HOME},dst=/root/subhome algocentosbuild /root/subhome/ben-branch/scripts/release/ci/build/rpm/sign.sh"
+
+# Anchor our repo root reference location
+REPO_ROOT="${HOME}"/go/src/github.com/algorand/go-algorand/
+
+pushd "${REPO_ROOT}"
+git archive --prefix="algorand-${FULLVERSION}/" "${HASH}" | gzip > "${PKG_ROOT}/algorand_${CHANNEL}_source_${FULLVERSION}.tar.gz"
+popd
+
+cd "${PKG_ROOT}" || exit
+for i in *.tar.gz *.deb
+do
+    gpg -u "${SIGNING_KEY_ADDR}" --detach-sign "${i}"
+done
+
+for i in *.rpm
+do
+    gpg -u rpm@algorand.com --detach-sign "${i}"
+done
+
+HASHFILE=hashes_${CHANNEL}_${OS}_${ARCH}_${FULLVERSION}
+rm -f "${HASHFILE}"
+touch "${HASHFILE}"
+
+# For an explanation of the "-- *.tar.gz" below
+# see https://github.com/koalaman/shellcheck/wiki/SC2035
+md5sum *.tar.gz *.deb *.rpm >> "${HASHFILE}"
+shasum -a 256 *.tar.gz *.deb *.rpm >> "${HASHFILE}"
+shasum -a 512 *.tar.gz *.deb *.rpm >> "${HASHFILE}"
+
+if [ -z "${SIGNING_KEY_ADDR}" ]
+then
+    echo "no signing key addr"
+    SIGNING_KEY_ADDR=dev@algorand.com
+fi
+
+gpg -u "${SIGNING_KEY_ADDR}" --detach-sign "${HASHFILE}"
+gpg -u "${SIGNING_KEY_ADDR}" --clearsign "${HASHFILE}"
+
+echo
+date "+build_release end SIGN stage %Y%m%d_%H%M%S"
+echo
+
