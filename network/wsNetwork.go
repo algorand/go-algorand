@@ -1541,9 +1541,9 @@ func (wn *WebsocketNetwork) numOutgoingPending() int {
 // GetNetTransport returns an http.Transport that limits the number of connection
 // to comply with connectionsRateLimitingCount.
 func (wn *WebsocketNetwork) GetNetTransport() *http.Transport {
-	transport := http.DefaultTransport.(*http.Transport)
+	transport := *http.DefaultTransport.(*http.Transport)
 	transport.DialContext = wn.GetDialer().DialContext
-	return transport
+	return &transport
 
 }
 
