@@ -30,8 +30,6 @@ python3 "${HOME}/go/src/github.com/algorand/go-algorand/scripts/get_latest_go.py
 # $HOME will be interpreted by the outer shell to create the string passed to sudo bash
 sudo bash -c "cd /usr/local && tar zxf ${HOME}/go*.tar.gz"
 
-git clone --single-branch --branch restructure_release_dir https://github.com/btoll/go-algorand ben-branch
-
 GOPATH=$(/usr/local/go/bin/go env GOPATH)
 export PATH=${HOME}/gpgbin:${GOPATH}/bin:/usr/local/go/bin:${PATH}
 export GOPATH
