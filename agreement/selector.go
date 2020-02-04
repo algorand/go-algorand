@@ -28,15 +28,16 @@ import (
 // A Selector is the input used to define proposers and members of voting
 // committees.
 type selector struct {
-	Seed   committee.Seed `codec:"seed"`
-	Round  basics.Round   `codec:"rnd"`
-	Period period         `codec:"per"`
-	Step   step           `codec:"step"`
+	Seed            committee.Seed `codec:"seed"`
+	Round           basics.Round   `codec:"rnd"`
+	Period          period         `codec:"per"`
+	Step            step           `codec:"step"`
+	encodedSelector []byte         // we don't want to encode this member as it's the encoded selector bytes.
 }
 
 // ToBeHashed implements the crypto.Hashable interface.
 func (sel selector) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.AgreementSelector, protocol.Encode(sel)
+	return protocol.AgreementSelector, sel.encodedSelector
 }
 
 // CommitteeSize returns the size of the committee, which is determined by
@@ -53,6 +54,12 @@ func seedRound(r basics.Round, cparams config.ConsensusParams) basics.Round {
 	return r.SubSaturate(basics.Round(cparams.SeedLookback))
 }
 
+func makeSelector(seed committee.Seed, r basics.Round, p period, s step) (sel selector) {
+	sel = selector{Seed: seed, Round: r, Period: p, Step: s}
+	sel.encodedSelector = protocol.Encode(sel)
+	return
+}
+
 // a helper function for obtaining memberhship verification parameters.
 func membership(l LedgerReader, addr basics.Address, r basics.Round, p period, s step) (m committee.Membership, err error) {
 	cparams, err := l.ConsensusParams(ParamsRound(r))
@@ -64,24 +71,25 @@ func membership(l LedgerReader, addr basics.Address, r basics.Round, p period, s
 
 	record, err := l.BalanceRecord(balanceRound, addr)
 	if err != nil {
-		err = fmt.Errorf("Service.initializeVote (r=%d): Failed to obtain balance record for address %v in round %d: %v", r, addr, balanceRound, err)
+		err = fmt.Errorf("membership (r=%d): Failed to obtain balance record for address %v in round %d: %v", r, addr, balanceRound, err)
 		return
 	}
 
 	total, err := l.Circulation(balanceRound)
 	if err != nil {
-		err = fmt.Errorf("Service.initializeVote (r=%d): Failed to obtain total circulation in round %d: %v", r, balanceRound, err)
+		err = fmt.Errorf("membership (r=%d): Failed to obtain total circulation in round %d: %v", r, balanceRound, err)
 		return
 	}
 
 	seed, err := l.Seed(seedRound)
 	if err != nil {
-		err = fmt.Errorf("Service.initializeVote (r=%d): Failed to obtain seed in round %d: %v", r, seedRound, err)
+		err = fmt.Errorf("membership (r=%d): Failed to obtain seed in round %d: %v", r, seedRound, err)
 		return
 	}
 
 	m.Record = record
-	m.Selector = selector{Seed: seed, Round: r, Period: p, Step: s}
+
+	m.Selector = makeSelector(seed, r, p, s)
 	m.TotalMoney = total
 	return m, nil
 }

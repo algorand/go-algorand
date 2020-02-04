@@ -122,6 +122,42 @@ func (cred UnauthenticatedCredential) Verify(proto config.ConsensusParams, m Mem
 	return
 }
 
+// VerifySelection check an unauthenticated locally generated Credential checking voting eligibility.
+//
+// Method returns true if the account is eligible to vote or false otherwise.
+func (cred UnauthenticatedCredential) VerifySelection(proto config.ConsensusParams, m Membership) bool {
+	selectionKey := m.Record.SelectionID
+	ok, vrfOut := selectionKey.Verify(cred.Proof, m.Selector)
+
+	if !ok {
+		return false
+	}
+
+	// Also hash in the address. This is necessary to decorrelate the selection of different accounts that have the same VRF key.
+	var h crypto.Digest
+	if proto.CredentialDomainSeparationEnabled {
+		hashable := hashableCredential{
+			RawOut: vrfOut,
+			Member: m.Record.Addr,
+		}
+		h = crypto.HashObj(hashable)
+	} else {
+		h = crypto.Hash(append(vrfOut[:], m.Record.Addr[:]...))
+	}
+
+	var weight uint64
+	userMoney := m.Record.VotingStake()
+	expectedSelection := float64(m.Selector.CommitteeSize(proto))
+
+	if m.TotalMoney.Raw < userMoney.Raw {
+	} else if m.TotalMoney.IsZero() || expectedSelection == 0 || expectedSelection > float64(m.TotalMoney.Raw) {
+	} else if !userMoney.IsZero() {
+		weight = sortition.Select(userMoney.Raw, m.TotalMoney.Raw, expectedSelection, h)
+	}
+
+	return weight >= 0
+}
+
 // MakeCredential creates a new unauthenticated Credential given some selector.
 func MakeCredential(secrets *crypto.VrfPrivkey, sel Selector) UnauthenticatedCredential {
 	pf, ok := secrets.Prove(sel)
@@ -254,7 +290,7 @@ func (cred Credential) LowestOutputDigest() crypto.Digest {
 	if len(lbytes) > len(out) {
 		panic("Cred lowest output too long")
 	}
-	copy(out[len(out) - len(lbytes):], lbytes)
+	copy(out[len(out)-len(lbytes):], lbytes)
 	return out
 }
 

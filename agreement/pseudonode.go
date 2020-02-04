@@ -239,30 +239,55 @@ func (n asyncPseudonode) getParticipations(procName string, round basics.Round, 
 	keys := n.keys.Keys()
 	participations := make([]account.Participation, 0, len(keys))
 
-	proto, err := n.ledger.ConsensusParams(ParamsRound(round))
-	if err != nil {
-		return participations
-	}
 	for _, part := range keys {
 		firstValid, lastValid := part.ValidInterval()
 		if round < firstValid || round > lastValid {
 			n.log.Debugf("%v (round=%v): Account %v not participating: %v not in [%v, %v]", procName, round, part.Address(), round, firstValid, lastValid)
 			continue
 		}
-
-		m, err := membership(n.ledger, part.Address(), round, p, s)
-		if err != nil {
-			continue
-		}
-
-		cred := committee.MakeCredential(&part.VRFSecrets().SK, m.Selector)
-		_, err = cred.Verify(proto, m)
-		if err != nil {
-			continue
-		}
-
 		participations = append(participations, part)
 	}
+	if len(participations) == 0 {
+		return participations
+	}
+
+	proto, err := n.ledger.ConsensusParams(ParamsRound(round))
+	if err != nil {
+		return participations
+	}
+
+	seedRound := seedRound(round, proto)
+	seed, err := n.ledger.Seed(seedRound)
+	if err != nil {
+		err = fmt.Errorf("asyncPseudonode.getParticipations (r=%d): Failed to obtain seed in round %d: %v", round, seedRound, err)
+		return participations
+	}
+	balanceRound := balanceRound(round, proto)
+	total, err := n.ledger.Circulation(balanceRound)
+	if err != nil {
+		err = fmt.Errorf("asyncPseudonode.getParticipations (r=%d): Failed to obtain total circulation in round %d: %v", round, balanceRound, err)
+		return participations
+	}
+
+	sel := makeSelector(seed, round, p, s)
+	i := 0 // output index
+	for _, part := range participations {
+		record, err := n.ledger.BalanceRecord(balanceRound, part.Address())
+		if err != nil {
+			continue
+		}
+
+		cred := committee.MakeCredential(&part.VRFSecrets().SK, sel)
+		selected := cred.VerifySelection(proto, committee.Membership{Record: record, Selector: sel, TotalMoney: total})
+		if !selected {
+			continue
+		}
+
+		// copy and increment index
+		participations[i] = part
+		i++
+	}
+	participations = participations[:i]
 	return participations
 }
 
