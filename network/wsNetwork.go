@@ -339,7 +339,12 @@ type WebsocketNetwork struct {
 	dialer    Dialer
 =======
 	dialer                  Dialer
+<<<<<<< HEAD
 >>>>>>> changes.
+=======
+
+	transportUpdated  bool
+>>>>>>> workaround to avoid the race detection trigger.
 }
 
 type broadcastRequest struct {
@@ -1602,9 +1607,12 @@ func (wn *WebsocketNetwork) GetRoundTripper() http.RoundTripper {
 // to comply with connectionsRateLimitingCount.
 >>>>>>> minor fixes
 func (wn *WebsocketNetwork) GetNetTransport() *http.Transport {
-	transport := *http.DefaultTransport.(*http.Transport)
-	transport.DialContext = wn.GetDialer().DialContext
-	return &transport
+	transport := http.DefaultTransport.(*http.Transport)
+	if !wn.transportUpdated {
+		transport.DialContext = wn.GetDialer().DialContext
+		wn.transportUpdated = true
+	}
+	return transport
 
 >>>>>>> changes.
 }
