@@ -181,9 +181,14 @@ type GossipNode interface {
 	// GetDialer retrieves the dialer.
 	GetDialer() *Dialer
 
+<<<<<<< HEAD
 	// GetNetTransport returns a Transport that would limit the number of outgoing connections.
 	GetNetTransport() *http.Transport
 >>>>>>> changes.
+=======
+	// GetRoundTripper returns a Transport that would limit the number of outgoing connections.
+	GetRoundTripper() http.RoundTripper
+>>>>>>> Testing a different approach to ovrride the Dial/DialContext by embedding the default transport into another object instead of changing the default transport.
 }
 
 // IncomingMessage represents a message arriving from some peer in our p2p network
@@ -340,11 +345,14 @@ type WebsocketNetwork struct {
 =======
 	dialer                  Dialer
 <<<<<<< HEAD
+<<<<<<< HEAD
 >>>>>>> changes.
 =======
 
 	transportUpdated  bool
 >>>>>>> workaround to avoid the race detection trigger.
+=======
+>>>>>>> Testing a different approach to ovrride the Dial/DialContext by embedding the default transport into another object instead of changing the default transport.
 }
 
 type broadcastRequest struct {
@@ -985,7 +993,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 			rootURL:       trackedRequest.otherPublicAddr,
 			originAddress: trackedRequest.remoteHost,
 			client: http.Client{
-				Transport: wn.GetNetTransport(),
+				Transport: wn.GetRoundTripper(),
 			},
 		},
 >>>>>>> changes.
@@ -1597,6 +1605,7 @@ func (wn *WebsocketNetwork) numOutgoingPending() int {
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 // GetRoundTripper returns an http.Transport that limits the number of connection
 // to comply with connectionsRateLimitingCount.
 func (wn *WebsocketNetwork) GetRoundTripper() http.RoundTripper {
@@ -1613,6 +1622,14 @@ func (wn *WebsocketNetwork) GetNetTransport() *http.Transport {
 		wn.transportUpdated = true
 	}
 	return transport
+=======
+// GetRoundTripper returns an http.Transport that limits the number of connection
+// to comply with connectionsRateLimitingCount.
+func (wn *WebsocketNetwork) GetRoundTripper() http.RoundTripper {
+	var mt MyTransport
+	mt.myDialer = wn.GetDialer()
+	return &mt
+>>>>>>> Testing a different approach to ovrride the Dial/DialContext by embedding the default transport into another object instead of changing the default transport.
 
 >>>>>>> changes.
 }
@@ -1697,7 +1714,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 			net:     wn,
 			rootURL: addr,
 			client: http.Client{
-				Transport: wn.GetNetTransport(),
+				Transport: wn.GetRoundTripper(),
 			},
 		},
 >>>>>>> changes.

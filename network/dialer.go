@@ -18,6 +18,7 @@ package network
 
 import (
 	"context"
+	"net/http"
 	"net"
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -106,4 +107,20 @@ func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.
 
 	return conn, err
 >>>>>>> DRAFT: using channel to offload the mutex.
+}
+
+// MyTransport is a wrapper around the http.Transport that overrides the Dial and DialContext functions. 
+type MyTransport struct {
+	myDialer *Dialer
+	*http.Transport
+}
+
+// Dial redirects the call to MyTransport.DialContext
+func (mt *MyTransport) Dial(network, addr string) (net.Conn, error) {
+	return mt.myDialer.Dial(network, addr)
+}
+
+// DialContext wrapps around the http.Transport.DialContext function to perform connection limiting
+func (mt *MyTransport) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	return mt.myDialer.DialContext(ctx, network, addr)
 }
