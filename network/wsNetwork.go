@@ -327,6 +327,8 @@ type WebsocketNetwork struct {
 	// lastPeerConnectionsSent is the last time the peer connections were sent ( or attempted to be sent ) to the telemetry server.
 	lastPeerConnectionsSent time.Time
 	dialer                  Dialer
+
+	transportUpdated  bool
 }
 
 type broadcastRequest struct {
@@ -1541,9 +1543,12 @@ func (wn *WebsocketNetwork) numOutgoingPending() int {
 // GetNetTransport returns an http.Transport that limits the number of connection
 // to comply with connectionsRateLimitingCount.
 func (wn *WebsocketNetwork) GetNetTransport() *http.Transport {
-	transport := *http.DefaultTransport.(*http.Transport)
-	transport.DialContext = wn.GetDialer().DialContext
-	return &transport
+	transport := http.DefaultTransport.(*http.Transport)
+	if !wn.transportUpdated {
+		transport.DialContext = wn.GetDialer().DialContext
+		wn.transportUpdated = true
+	}
+	return transport
 
 }
 
