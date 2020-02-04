@@ -366,7 +366,6 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 		if !txn.Txn.Group.IsZero() {
 			txWithoutGroup := txn.Txn
 			txWithoutGroup.Group = crypto.Digest{}
-			txWithoutGroup.ResetCaches()
 
 			group.TxGroupHashes = append(group.TxGroupHashes, crypto.HashObj(txWithoutGroup))
 		} else if len(txgroup) > 1 {
@@ -469,7 +468,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 		txibs = append(txibs, txib)
 
 		if eval.validate {
-			groupTxBytes += len(protocol.Encode(txib))
+			groupTxBytes += len(protocol.Encode(&txib))
 			if eval.blockTxBytes+groupTxBytes > eval.proto.MaxTxnBytesPerBlock {
 				return ErrNoSpace
 			}
@@ -484,7 +483,6 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 		if !txad.SignedTxn.Txn.Group.IsZero() {
 			txWithoutGroup := txad.SignedTxn.Txn
 			txWithoutGroup.Group = crypto.Digest{}
-			txWithoutGroup.ResetCaches()
 
 			group.TxGroupHashes = append(group.TxGroupHashes, crypto.HashObj(txWithoutGroup))
 		} else if len(txgroup) > 1 {
@@ -516,6 +514,11 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 	var err error
 
 	if eval.validate {
+		err = txn.Txn.Alive(eval.block)
+		if err != nil {
+			return err
+		}
+
 		// Transaction already in the ledger?
 		txid := txn.ID()
 		dup, err := cow.isDup(txn.Txn.First(), txn.Txn.Last(), txid, txlease{sender: txn.Txn.Sender, lease: txn.Txn.Lease})
@@ -719,6 +722,17 @@ func validateTransaction(txn transactions.SignedTxn, block bookkeeping.Block, pr
 // AddBlock: eval(context.Background(), blk, false, nil, nil)
 // tracker:  eval(context.Background(), blk, false, nil, nil)
 func (l *Ledger) eval(ctx context.Context, blk bookkeeping.Block, validate bool, txcache VerifiedTxnCache, executionPool execpool.BacklogPool) (StateDelta, error) {
+	eval, err := startEvaluator(l, blk.BlockHeader, validate, false)
+	if err != nil {
+		return StateDelta{}, err
+	}
+
+	// Next, transactions
+	paysetgroups, err := blk.DecodePaysetGroups()
+	if err != nil {
+		return StateDelta{}, err
+	}
+
 	var txvalidator evalTxValidator
 	ctx, cf := context.WithCancel(ctx)
 	defer cf()
@@ -734,19 +748,9 @@ func (l *Ledger) eval(ctx context.Context, blk bookkeeping.Block, validate bool,
 
 		txvalidator.ctx = ctx
 		txvalidator.cf = cf
-		txvalidator.txgroups = make(chan []transactions.SignedTxnWithAD, 10)
+		txvalidator.txgroups = make(chan []transactions.SignedTxnWithAD, len(paysetgroups))
 		txvalidator.done = make(chan error, 1)
 		go txvalidator.run()
-	}
-	eval, err := startEvaluator(l, blk.BlockHeader, validate, false)
-	if err != nil {
-		return StateDelta{}, err
-	}
-
-	// Next, transactions
-	paysetgroups, err := blk.DecodePaysetGroups()
-	if err != nil {
-		return StateDelta{}, err
 	}
 
 	for _, txgroup := range paysetgroups {

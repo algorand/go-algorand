@@ -61,7 +61,7 @@ func TestBlockAssemblerPipeline(t *testing.T) {
 	round := player.Round
 	period := player.Period
 	testBlockFactory, err := factory.AssembleBlock(player.Round, time.Now().Add(time.Minute))
-	require.NoError(t, err, "Could not generate a proposal for round %v: %v", round, err)
+	require.NoError(t, err, "Could not generate a proposal for round %d: %v", round, err)
 
 	accountIndex := 0
 	proposal, _, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, period, ledger)
@@ -127,7 +127,7 @@ func TestBlockAssemblerBind(t *testing.T) {
 	player, _, accounts, factory, ledger := testSetup(0)
 
 	testBlockFactory, err := factory.AssembleBlock(player.Round, time.Now().Add(time.Minute))
-	require.NoError(t, err, "Could not generate a proposal for round %v: %v", player.Round, err)
+	require.NoError(t, err, "Could not generate a proposal for round %d: %v", player.Round, err)
 
 	accountIndex := 0
 
@@ -193,7 +193,7 @@ func TestBlockAssemblerAuthenticator(t *testing.T) {
 	player, _, accounts, factory, ledger := testSetup(0)
 
 	testBlockFactory, err := factory.AssembleBlock(player.Round, time.Now().Add(time.Minute))
-	require.NoError(t, err, "Could not generate a proposal for round %v: %v", player.Round, err)
+	require.NoError(t, err, "Could not generate a proposal for round %d: %v", player.Round, err)
 	accountIndex := 0
 	proposalPayload, _, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, player.Period, ledger)
 
@@ -257,7 +257,7 @@ func TestBlockAssemblerTrim(t *testing.T) {
 	player, _, accounts, factory, ledger := testSetup(0)
 
 	testBlockFactory, err := factory.AssembleBlock(player.Round, time.Now().Add(time.Minute))
-	require.NoError(t, err, "Could not generate a proposal for round %v: %v", player.Round, err)
+	require.NoError(t, err, "Could not generate a proposal for round %d: %v", player.Round, err)
 	accountIndex := 0
 	proposalPayload, _, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, player.Period, ledger)
 
@@ -329,7 +329,7 @@ func TestProposalStoreT(t *testing.T) {
 	player, _, accounts, factory, ledger := testSetup(0)
 
 	testBlockFactory, err := factory.AssembleBlock(player.Round, time.Now().Add(time.Minute))
-	require.NoError(t, err, "Could not generate a proposal for round %v: %v", player.Round, err)
+	require.NoError(t, err, "Could not generate a proposal for round %d: %v", player.Round, err)
 	accountIndex := 0
 	proposalPayload, proposalV, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, player.Period, ledger)
 
@@ -401,7 +401,7 @@ func TestProposalStoreUnderlying(t *testing.T) {
 	player, _, accounts, factory, ledger := testSetup(0)
 
 	testBlockFactory, err := factory.AssembleBlock(player.Round, time.Now().Add(time.Minute))
-	require.NoError(t, err, "Could not generate a proposal for round %v: %v", player.Round, err)
+	require.NoError(t, err, "Could not generate a proposal for round %d: %v", player.Round, err)
 	accountIndex := 0
 	proposalPayload, proposalV, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, player.Period, ledger)
 
@@ -463,7 +463,7 @@ func TestProposalStoreHandle(t *testing.T) {
 	proposalVoteEventBatch, proposalPayloadEventBatch, _ := generateProposalEvents(t, player, accounts, factory, ledger)
 
 	testBlockFactory, err := factory.AssembleBlock(player.Round, time.Now().Add(time.Minute))
-	require.NoError(t, err, "Could not generate a proposal for round %v: %v", player.Round, err)
+	require.NoError(t, err, "Could not generate a proposal for round %d: %v", player.Round, err)
 	accountIndex := 0
 	_, proposalV0, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, player.Period, ledger)
 	accountIndex++
@@ -645,7 +645,7 @@ func TestProposalStoreGetPinnedValue(t *testing.T) {
 	// create proposal Store
 	player, router, accounts, factory, ledger := testPlayerSetup()
 	testBlockFactory, err := factory.AssembleBlock(player.Round, time.Now().Add(time.Minute))
-	require.NoError(t, err, "Could not generate a proposal for round %v: %v", player.Round, err)
+	require.NoError(t, err, "Could not generate a proposal for round %d: %v", player.Round, err)
 	accountIndex := 0
 	// create a route handler for the proposal store
 	rHandle := routerHandle{
@@ -800,4 +800,110 @@ func TestProposalStoreRegressionBlockRedeliveryBug_b29ea57(t *testing.T) {
 		}
 	}
 
+}
+
+func TestProposalStoreRegressionWrongPipelinePeriodBug_39387501(t *testing.T) {
+	var msgV1, msgV2, msgP1, msgP2 message
+	var rv rawVote
+	var propVal proposalValue
+	var propPay proposal
+	curRound := round(10)
+	proposer := basics.Address(randomBlockHash())
+
+	propPay = proposal{
+		unauthenticatedProposal: unauthenticatedProposal{
+			OriginalPeriod:   1,
+			OriginalProposer: proposer,
+		},
+	}
+	propVal = proposalValue{
+		OriginalPeriod:   1,
+		OriginalProposer: proposer,
+		BlockDigest:      propPay.Digest(),
+		EncodingDigest:   crypto.HashObj(propPay),
+	}
+	rv = rawVote{
+		Sender:   proposer,
+		Round:    curRound,
+		Period:   1,
+		Proposal: propVal,
+	}
+	msgV1 = message{
+		Tag:                 protocol.AgreementVoteTag,
+		Vote:                vote{R: rv},
+		UnauthenticatedVote: unauthenticatedVote{R: rv},
+	}
+	msgP1 = message{
+		Tag:                     protocol.ProposalPayloadTag,
+		Proposal:                propPay,
+		UnauthenticatedProposal: propPay.u(),
+	}
+
+	propPay = proposal{
+		unauthenticatedProposal: unauthenticatedProposal{
+			OriginalPeriod:   2,
+			OriginalProposer: proposer,
+		},
+	}
+	propVal = proposalValue{
+		OriginalPeriod:   2,
+		OriginalProposer: proposer,
+		BlockDigest:      propPay.Digest(),
+		EncodingDigest:   crypto.HashObj(propPay),
+	}
+	rv = rawVote{
+		Sender:   proposer,
+		Round:    curRound,
+		Period:   2,
+		Proposal: propVal,
+	}
+	msgV2 = message{
+		Tag:                 protocol.AgreementVoteTag,
+		Vote:                vote{R: rv},
+		UnauthenticatedVote: unauthenticatedVote{R: rv},
+	}
+	msgP2 = message{
+		Tag:                     protocol.ProposalPayloadTag,
+		Proposal:                propPay,
+		UnauthenticatedProposal: propPay.u(),
+	}
+
+	period1Trigger := newPeriodEvent{Period: 1, Proposal: bottom}
+	propVote1Receipt := messageEvent{T: voteVerified, Input: msgV1}
+	propPayload1Receipt := messageEvent{T: payloadPresent, Input: msgP1}
+	period2Trigger := newPeriodEvent{Period: 2, Proposal: bottom}
+	propVote2Receipt := messageEvent{T: voteVerified, Input: msgV2}
+	propPayload2Receipt := messageEvent{T: payloadPresent, Input: msgP2}
+
+	player := player{Round: curRound}
+
+	var router router
+	rr := routerFixture
+	router = &rr
+
+	var res event
+
+	res = router.dispatch(&proposalStoreTracer, player, period1Trigger, playerMachine, proposalMachineRound, curRound, 1, 0)
+	require.Equal(t, res.t(), none)
+
+	res = router.dispatch(&proposalStoreTracer, player, propVote1Receipt, playerMachine, proposalMachineRound, curRound, 1, 0)
+	require.Equal(t, res.t(), proposalAccepted)
+
+	res = router.dispatch(&proposalStoreTracer, player, period2Trigger, playerMachine, proposalMachineRound, curRound, 2, 0)
+	require.Equal(t, res.t(), none)
+
+	res = router.dispatch(&proposalStoreTracer, player, propVote2Receipt, playerMachine, proposalMachineRound, curRound, 2, 0)
+	require.Equal(t, res.t(), proposalAccepted)
+
+	res = router.dispatch(&proposalStoreTracer, player, propPayload2Receipt, playerMachine, proposalMachineRound, curRound, 2, 0)
+	require.Equal(t, res.t(), payloadPipelined)
+	require.Equal(t, res.(payloadProcessedEvent).Period, period(2))
+
+	res = router.dispatch(&proposalStoreTracer, player, propPayload1Receipt, playerMachine, proposalMachineRound, curRound, 1, 0)
+	if res.(payloadProcessedEvent).Period == 2 {
+		t.Fatalf("bug b29ea57: a proposal corresponding to an old period is erroneously seen as as corresponding to a new period")
+	} else {
+		require.Equal(t, res.t(), payloadPipelined)
+		require.Equal(t, res.(payloadProcessedEvent).Period, period(1))
+	}
 }

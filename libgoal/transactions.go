@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/account"
@@ -154,7 +153,7 @@ func (c *Client) MakeUnsignedGoOnlineTx(address string, part *account.Participat
 		return transactions.Transaction{}, err
 	}
 
-	cparams, ok := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
+	cparams, ok := c.consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
 	if !ok {
 		return transactions.Transaction{}, errors.New("unknown consensus version")
 	}
@@ -183,8 +182,6 @@ func (c *Client) MakeUnsignedGoOnlineTx(address string, part *account.Participat
 		var genHash crypto.Digest
 		copy(genHash[:], params.GenesisHash)
 		goOnlineTransaction.GenesisHash = genHash
-		// Recompute the TXID
-		goOnlineTransaction.ResetCaches()
 	}
 
 	// Default to the suggested fee, if the caller didn't supply it
@@ -196,8 +193,6 @@ func (c *Client) MakeUnsignedGoOnlineTx(address string, part *account.Participat
 		if goOnlineTransaction.Fee.Raw < cparams.MinTxnFee {
 			goOnlineTransaction.Fee.Raw = cparams.MinTxnFee
 		}
-		// Recompute the TXID
-		goOnlineTransaction.ResetCaches()
 	}
 	return goOnlineTransaction, nil
 }
@@ -215,7 +210,7 @@ func (c *Client) MakeUnsignedGoOfflineTx(address string, firstValid, lastValid, 
 		return transactions.Transaction{}, err
 	}
 
-	cparams, ok := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
+	cparams, ok := c.consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
 	if !ok {
 		return transactions.Transaction{}, errors.New("unknown consensus version")
 	}
@@ -243,8 +238,6 @@ func (c *Client) MakeUnsignedGoOfflineTx(address string, firstValid, lastValid, 
 		var genHash crypto.Digest
 		copy(genHash[:], params.GenesisHash)
 		goOfflineTransaction.GenesisHash = genHash
-		// Recompute the TXID
-		goOfflineTransaction.ResetCaches()
 	}
 
 	// Default to the suggested fee, if the caller didn't supply it
@@ -255,8 +248,6 @@ func (c *Client) MakeUnsignedGoOfflineTx(address string, firstValid, lastValid, 
 		if goOfflineTransaction.Fee.Raw < cparams.MinTxnFee {
 			goOfflineTransaction.Fee.Raw = cparams.MinTxnFee
 		}
-		// Recompute the TXID
-		goOfflineTransaction.ResetCaches()
 	}
 	return goOfflineTransaction, nil
 }
@@ -274,7 +265,7 @@ func (c *Client) MakeUnsignedBecomeNonparticipatingTx(address string, firstValid
 		return transactions.Transaction{}, err
 	}
 
-	cparams, ok := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
+	cparams, ok := c.consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
 	if !ok {
 		return transactions.Transaction{}, errors.New("unknown consensus version")
 	}
@@ -301,8 +292,6 @@ func (c *Client) MakeUnsignedBecomeNonparticipatingTx(address string, firstValid
 		var genHash crypto.Digest
 		copy(genHash[:], params.GenesisHash)
 		becomeNonparticipatingTransaction.GenesisHash = genHash
-		// Recompute the TXID
-		becomeNonparticipatingTransaction.ResetCaches()
 	}
 	becomeNonparticipatingTransaction.KeyregTxnFields.Nonparticipation = true
 
@@ -314,8 +303,6 @@ func (c *Client) MakeUnsignedBecomeNonparticipatingTx(address string, firstValid
 		if becomeNonparticipatingTransaction.Fee.Raw < cparams.MinTxnFee {
 			becomeNonparticipatingTransaction.Fee.Raw = cparams.MinTxnFee
 		}
-		// Recompute the TXID
-		becomeNonparticipatingTransaction.ResetCaches()
 	}
 	return becomeNonparticipatingTransaction, nil
 }
@@ -333,7 +320,7 @@ func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, lastValid, fe
 		return transactions.Transaction{}, err
 	}
 
-	cparams, ok := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
+	cparams, ok := c.consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
 	if !ok {
 		return transactions.Transaction{}, errors.New("unknown consensus version")
 	}
@@ -366,9 +353,6 @@ func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, lastValid, fe
 			tx.Fee.Raw = cparams.MinTxnFee
 		}
 	}
-
-	// Recompute the TXID
-	tx.ResetCaches()
 
 	return tx, nil
 }
@@ -422,7 +406,7 @@ func (c *Client) MakeUnsignedAssetCreateTx(total uint64, defaultFrozen bool, man
 		return transactions.Transaction{}, err
 	}
 
-	cparams, ok := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
+	cparams, ok := c.consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
 	if !ok {
 		return transactions.Transaction{}, errors.New("unknown consensus version")
 	}

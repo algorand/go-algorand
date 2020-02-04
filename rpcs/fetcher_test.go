@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
+	"github.com/algorand/go-algorand/components/mocks"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -91,8 +92,8 @@ func (client *MockRPCClient) PrepareURL(x string) string {
 }
 
 type MockClientAggregator struct {
+	mocks.MockNetwork
 	peers []network.Peer
-	Registrar
 }
 
 func (mca *MockClientAggregator) GetPeers(options ...network.PeerOption) []network.Peer {
