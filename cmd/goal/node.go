@@ -107,6 +107,10 @@ var startCmd = &cobra.Command{
 			panic(err)
 		}
 		onDataDirs(func(dataDir string) {
+			if libgoal.AlgorandDaemonSystemdManaged(dataDir) {
+				reportErrorf(errorNodeManagedBySystemd, "start")
+			}
+
 			nc := nodecontrol.MakeNodeController(binDir, dataDir)
 			nodeArgs := nodecontrol.AlgodStartArgs{
 				PeerAddress:       peerDial,
@@ -153,6 +157,10 @@ var stopCmd = &cobra.Command{
 			panic(err)
 		}
 		onDataDirs(func(dataDir string) {
+			if libgoal.AlgorandDaemonSystemdManaged(dataDir) {
+				reportErrorf(errorNodeManagedBySystemd, "stop")
+			}
+
 			nc := nodecontrol.MakeNodeController(binDir, dataDir)
 
 			log.Info(infoTryingToStopNode)
@@ -177,6 +185,10 @@ var restartCmd = &cobra.Command{
 			panic(err)
 		}
 		onDataDirs(func(dataDir string) {
+			if libgoal.AlgorandDaemonSystemdManaged(dataDir) {
+				reportErrorf(errorNodeManagedBySystemd, "restart")
+			}
+
 			nc := nodecontrol.MakeNodeController(binDir, dataDir)
 
 			_, err = nc.GetAlgodPID()
