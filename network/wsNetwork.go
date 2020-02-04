@@ -177,8 +177,8 @@ type GossipNode interface {
 	// GetDialer retrieves the dialer.
 	GetDialer() *Dialer
 
-	// GetNetTransport returns a Transport that would limit the number of outgoing connections.
-	GetNetTransport() *http.Transport
+	// GetRoundTripper returns a Transport that would limit the number of outgoing connections.
+	GetRoundTripper() http.RoundTripper
 }
 
 // IncomingMessage represents a message arriving from some peer in our p2p network
@@ -327,8 +327,6 @@ type WebsocketNetwork struct {
 	// lastPeerConnectionsSent is the last time the peer connections were sent ( or attempted to be sent ) to the telemetry server.
 	lastPeerConnectionsSent time.Time
 	dialer                  Dialer
-
-	transportUpdated  bool
 }
 
 type broadcastRequest struct {
@@ -931,7 +929,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 			rootURL:       trackedRequest.otherPublicAddr,
 			originAddress: trackedRequest.remoteHost,
 			client: http.Client{
-				Transport: wn.GetNetTransport(),
+				Transport: wn.GetRoundTripper(),
 			},
 		},
 		conn:              conn,
@@ -1540,15 +1538,12 @@ func (wn *WebsocketNetwork) numOutgoingPending() int {
 	return len(wn.tryConnectAddrs)
 }
 
-// GetNetTransport returns an http.Transport that limits the number of connection
+// GetRoundTripper returns an http.Transport that limits the number of connection
 // to comply with connectionsRateLimitingCount.
-func (wn *WebsocketNetwork) GetNetTransport() *http.Transport {
-	transport := http.DefaultTransport.(*http.Transport)
-	if !wn.transportUpdated {
-		transport.DialContext = wn.GetDialer().DialContext
-		wn.transportUpdated = true
-	}
-	return transport
+func (wn *WebsocketNetwork) GetRoundTripper() http.RoundTripper {
+	var mt MyTransport
+	mt.myDialer = wn.GetDialer()
+	return &mt
 
 }
 
@@ -1624,7 +1619,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 			net:     wn,
 			rootURL: addr,
 			client: http.Client{
-				Transport: wn.GetNetTransport(),
+				Transport: wn.GetRoundTripper(),
 			},
 		},
 		conn:              conn,
