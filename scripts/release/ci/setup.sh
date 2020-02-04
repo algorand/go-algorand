@@ -1,14 +1,5 @@
 #!/usr/bin/env bash
 
-if [ -z "${BUILDTIMESTAMP}" ]; then
-    date "+%Y%m%d_%H%M%S" > "${HOME}/buildtimestamp"
-    BUILDTIMESTAMP=$(cat "${HOME}/buildtimestamp")
-    export BUILDTIMESTAMP
-    echo run "${0}" with output to "${HOME}/buildlog_${BUILDTIMESTAMP}"
-    (bash "${0}" "${1}" "${2}" 2>&1) | tee "${HOME}/buildlog_${BUILDTIMESTAMP}"
-    exit 0
-fi
-
 echo
 date "+build_release begin SETUP stage %Y%m%d_%H%M%S"
 echo
@@ -16,8 +7,8 @@ echo
 set -ex
 
 GIT_REPO_PATH=https://github.com/algorand/go-algorand
-HASH=${1:-"rel/stable"}
-export HASH
+RELEASE=${1}
+export RELEASE
 CHANNEL=${2:-"stable"}
 export CHANNEL
 export DEBIAN_FRONTEND=noninteractive
@@ -25,16 +16,13 @@ export DEBIAN_FRONTEND=noninteractive
 sudo apt-get update -q
 sudo apt-get upgrade -q -y
 sudo apt-get install -y build-essential automake autoconf awscli docker.io git gpg nfs-common python3 rpm sqlite3 python3-boto3 g++ libtool rng-tools
-sudo rngd -r /dev/urandom
 
 #umask 0077
-mkdir -p "${HOME}"/{.gnupg,go,gpgbin,node_pkg,keys,tkey}
-mkdir -p "${HOME}"/go/bin
+mkdir -p "${HOME}"/{.gnupg,go,gpgbin,dummyaptly,dummyrepo,keys,node_pkg,prodrepo}
 
 # Check out
 mkdir -p "${HOME}/go/src/github.com/algorand"
-cd "${HOME}/go/src/github.com/algorand" && git clone --single-branch --branch "${HASH}" "${GIT_REPO_PATH}" go-algorand
-# TODO: if we are checking out a release tag, `git tag --verify` it
+cd "${HOME}/go/src/github.com/algorand" && git clone --single-branch --branch master "${GIT_REPO_PATH}" go-algorand
 
 # Install latest Go
 cd "${HOME}"
@@ -95,7 +83,23 @@ export GOPATH=\${HOME}/go
 export PATH=\${HOME}/gpgbin:\${GOPATH}/bin:/usr/local/go/bin:\${PATH}
 EOF
 
-gpgconf --launch gpg-agent
+# Install aptly for building debian repo
+mkdir -p "$GOPATH/src/github.com/aptly-dev"
+cd "$GOPATH/src/github.com/aptly-dev"
+git clone https://github.com/aptly-dev/aptly
+cd aptly && git fetch
+
+# As of 2019-06-06 release tag v1.3.0 is 2018-May, GnuPG 2 support was added in October but they haven't tagged a new release yet. Hash below seems to work so far.
+# 2019-07-06 v1.4.0
+git checkout v1.4.0
+make install
+
+# a bash user might `source build_env` to manually continue a broken build
+cat <<EOF>>"${HOME}"/build_env
+CHANNEL=${CHANNEL}
+DC_IP=$(curl --silent http://169.254.169.254/latest/meta-data/local-ipv4)
+FULLVERSION=${RELEASE}
+EOF
 
 echo
 date "+build_release end SETUP stage %Y%m%d_%H%M%S"
