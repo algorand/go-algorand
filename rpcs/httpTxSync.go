@@ -104,7 +104,7 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 	client := hpeer.GetHTTPClient()
 	if client == nil {
 		client = http.DefaultClient
-		client.Transport = hts.peers.GetNetTransport()
+		client.Transport = hts.peers.GetRoundTripper()
 	}
 	parsedURL, err := network.ParseHostOrURL(hts.rootURL)
 	if err != nil {
