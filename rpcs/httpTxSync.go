@@ -109,11 +109,15 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 =======
 		client = http.DefaultClient
 <<<<<<< HEAD
+<<<<<<< HEAD
 		client.Transport = hts.peers.GetNetTransport()
 >>>>>>> changes.
 =======
 		client.Transport = hts.peers.GetRoundTripper()
 >>>>>>> Testing a different approach to ovrride the Dial/DialContext by embedding the default transport into another object instead of changing the default transport.
+=======
+		client.Transport = hts.peers.GetRateLimitedTransport()
+>>>>>>> Adding RateLimitedTransport to wrap around the http.Transport
 	}
 	parsedURL, err := network.ParseHostOrURL(hts.rootURL)
 	if err != nil {

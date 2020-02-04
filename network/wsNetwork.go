@@ -175,6 +175,7 @@ type GossipNode interface {
 	ClearHandlers()
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 	// GetRoundTripper returns a Transport that would limit the number of outgoing connections.
 	GetRoundTripper() http.RoundTripper
 =======
@@ -189,6 +190,10 @@ type GossipNode interface {
 	// GetRoundTripper returns a Transport that would limit the number of outgoing connections.
 	GetRoundTripper() http.RoundTripper
 >>>>>>> Testing a different approach to ovrride the Dial/DialContext by embedding the default transport into another object instead of changing the default transport.
+=======
+	// GetRateLimitedTransport returns a Transport that limits the number of outgoing connections.
+	GetRateLimitedTransport() *RateLimitedTransport
+>>>>>>> Adding RateLimitedTransport to wrap around the http.Transport
 }
 
 // IncomingMessage represents a message arriving from some peer in our p2p network
@@ -337,6 +342,7 @@ type WebsocketNetwork struct {
 	// lastPeerConnectionsSent is the last time the peer connections were sent ( or attempted to be sent ) to the telemetry server.
 	lastPeerConnectionsSent time.Time
 <<<<<<< HEAD
+<<<<<<< HEAD
 
 	// transport and dialer are customized to limit the number of
 	// connection in compliance with connectionsRateLimitingCount.
@@ -353,6 +359,9 @@ type WebsocketNetwork struct {
 >>>>>>> workaround to avoid the race detection trigger.
 =======
 >>>>>>> Testing a different approach to ovrride the Dial/DialContext by embedding the default transport into another object instead of changing the default transport.
+=======
+	rateLimitedTransport    RateLimitedTransport
+>>>>>>> Adding RateLimitedTransport to wrap around the http.Transport
 }
 
 type broadcastRequest struct {
@@ -550,6 +559,7 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 
 func (wn *WebsocketNetwork) setup() {
 
+<<<<<<< HEAD
 	wn.dialer.phonebook = wn.phonebook
 <<<<<<< HEAD
 	// Parameter values similar to http.DefaultTransport
@@ -568,6 +578,9 @@ func (wn *WebsocketNetwork) setup() {
 
 =======
 >>>>>>> changes.
+=======
+	wn.rateLimitedTransport.phonebook = wn.phonebook
+>>>>>>> Adding RateLimitedTransport to wrap around the http.Transport
 	wn.upgrader.ReadBufferSize = 4096
 	wn.upgrader.WriteBufferSize = 4096
 	wn.upgrader.EnableCompression = false
@@ -993,7 +1006,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 			rootURL:       trackedRequest.otherPublicAddr,
 			originAddress: trackedRequest.remoteHost,
 			client: http.Client{
-				Transport: wn.GetRoundTripper(),
+				Transport: wn.GetRateLimitedTransport(),
 			},
 		},
 >>>>>>> changes.
@@ -1625,6 +1638,7 @@ func (wn *WebsocketNetwork) GetNetTransport() *http.Transport {
 =======
 // GetRoundTripper returns an http.Transport that limits the number of connection
 // to comply with connectionsRateLimitingCount.
+<<<<<<< HEAD
 func (wn *WebsocketNetwork) GetRoundTripper() http.RoundTripper {
 	var mt MyTransport
 	mt.myDialer = wn.GetDialer()
@@ -1632,6 +1646,10 @@ func (wn *WebsocketNetwork) GetRoundTripper() http.RoundTripper {
 >>>>>>> Testing a different approach to ovrride the Dial/DialContext by embedding the default transport into another object instead of changing the default transport.
 
 >>>>>>> changes.
+=======
+func (wn *WebsocketNetwork) GetRateLimitedTransport() *RateLimitedTransport {
+	return &wn.rateLimitedTransport
+>>>>>>> Adding RateLimitedTransport to wrap around the http.Transport
 }
 
 // tryConnect opens websocket connection and checks initial connection parameters.
@@ -1654,12 +1672,17 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		HandshakeTimeout:  45 * time.Second,
 		EnableCompression: false,
 <<<<<<< HEAD
+<<<<<<< HEAD
 		NetDialContext:    wn.dialer.DialContext,
 		NetDial:           wn.dialer.Dial,
 =======
 		NetDialContext:    wn.GetDialer().DialContext,
 		NetDial:           wn.GetDialer().Dial,
 >>>>>>> changes.
+=======
+		NetDialContext:    wn.GetRateLimitedTransport().DialContext,
+		NetDial:           wn.GetRateLimitedTransport().Dial,
+>>>>>>> Adding RateLimitedTransport to wrap around the http.Transport
 	}
 
 	conn, response, err := websocketDialer.DialContext(wn.ctx, gossipAddr, requestHeader)
@@ -1714,7 +1737,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 			net:     wn,
 			rootURL: addr,
 			client: http.Client{
-				Transport: wn.GetRoundTripper(),
+				Transport: wn.GetRateLimitedTransport(),
 			},
 		},
 >>>>>>> changes.
@@ -1876,11 +1899,6 @@ func (wn *WebsocketNetwork) countPeersSetGauges() {
 	}
 	networkIncomingConnections.Set(float64(numIn), nil)
 	networkOutgoingConnections.Set(float64(numOut), nil)
-}
-
-// GetDialer returns the dialer for this network
-func (wn *WebsocketNetwork) GetDialer() *Dialer {
-	return &wn.dialer
 }
 
 func justHost(hostPort string) string {
