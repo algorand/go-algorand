@@ -1619,6 +1619,7 @@ func (wn *WebsocketNetwork) numOutgoingPending() int {
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 // GetRoundTripper returns an http.Transport that limits the number of connection
 // to comply with connectionsRateLimitingCount.
 func (wn *WebsocketNetwork) GetRoundTripper() http.RoundTripper {
@@ -1647,6 +1648,11 @@ func (wn *WebsocketNetwork) GetRoundTripper() http.RoundTripper {
 
 >>>>>>> changes.
 =======
+=======
+// GetRateLimitedTransport returns a wrapper around http.Transport
+// that limits the number of connection to comply with
+// connectionsRateLimitingCount.
+>>>>>>> fixing lint
 func (wn *WebsocketNetwork) GetRateLimitedTransport() *RateLimitedTransport {
 	return &wn.rateLimitedTransport
 >>>>>>> Adding RateLimitedTransport to wrap around the http.Transport
