@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
 # Path(s) are relative to the root of the Jenkins workspace.
-
 INSTANCE=$(cat scripts/release/tmp/instance)
 
 rm -rf ./*.deb ./*.rpm
