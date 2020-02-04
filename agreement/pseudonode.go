@@ -184,7 +184,7 @@ func (n asyncPseudonode) MakeVotes(ctx context.Context, r round, p period, s ste
 }
 
 func (n asyncPseudonode) makeProposalsTask(ctx context.Context, r round, p period) pseudonodeProposalsTask {
-	participation := n.getParticipations("asyncPseudonode.makeProposalsTask", r, p, 0)
+	participation := n.getParticipations("asyncPseudonode.makeProposalsTask", r, p, propose)
 
 	pt := pseudonodeProposalsTask{
 		pseudonodeBaseTask: pseudonodeBaseTask{
