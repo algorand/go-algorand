@@ -1602,9 +1602,9 @@ func (wn *WebsocketNetwork) GetRoundTripper() http.RoundTripper {
 // to comply with connectionsRateLimitingCount.
 >>>>>>> minor fixes
 func (wn *WebsocketNetwork) GetNetTransport() *http.Transport {
-	transport := http.DefaultTransport.(*http.Transport)
+	transport := *http.DefaultTransport.(*http.Transport)
 	transport.DialContext = wn.GetDialer().DialContext
-	return transport
+	return &transport
 
 >>>>>>> changes.
 }
