@@ -155,7 +155,7 @@ func (cred UnauthenticatedCredential) VerifySelection(proto config.ConsensusPara
 		weight = sortition.Select(userMoney.Raw, m.TotalMoney.Raw, expectedSelection, h)
 	}
 
-	return weight >= 0
+	return weight > 0
 }
 
 // MakeCredential creates a new unauthenticated Credential given some selector.
