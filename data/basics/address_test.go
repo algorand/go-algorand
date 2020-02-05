@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -106,4 +106,30 @@ func TestAddressMarshalUnmarshal(t *testing.T) {
 	err := protocol.DecodeJSON(data, &nob)
 	require.NoError(t, err)
 	require.Equal(t, testob, nob)
+}
+
+func BenchmarkAddressFormatting(b *testing.B) {
+	addr := "J5YDZLPOHWB5O6MVRHNFGY4JXIQAYYM6NUJWPBSYBBIXH5ENQ4Z5LTJELU"
+	uaddr, err := UnmarshalChecksumAddress(addr)
+	require.NoError(b, err)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		stringed := uaddr.String()
+		if len(stringed) == 0 {
+			break
+		}
+	}
+}
+
+func BenchmarkUnmarshalChecksumAddress(b *testing.B) {
+	addr := "J5YDZLPOHWB5O6MVRHNFGY4JXIQAYYM6NUJWPBSYBBIXH5ENQ4Z5LTJELU"
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := UnmarshalChecksumAddress(addr)
+		if err != nil {
+			break
+		}
+	}
 }

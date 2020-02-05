@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,9 +19,9 @@ package transactions
 import (
 	"fmt"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
-	"runtime"
 
 	"github.com/stretchr/testify/require"
 
@@ -185,6 +185,9 @@ func TestAssetValidRounds(t *testing.T) {
 }
 
 func TestAssetConfig(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
 	t.Parallel()
 	a := require.New(t)
 
@@ -948,6 +951,9 @@ func TestAssetCreateWaitRestartDelete(t *testing.T) {
 }
 
 func TestAssetCreateWaitBalLookbackDelete(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
 	a, fixture, client, account0 := setupTestAndNetwork(t, "TwoNodes50EachTestShorterLookback.json")
 	defer fixture.Shutdown()
 
