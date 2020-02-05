@@ -19,32 +19,35 @@ package network
 import (
 	"context"
 	"net"
-	"net/http"
 	"time"
+
+	"fmt"
+	"os"
+	"runtime/debug"
 )
 
-// RateLimitedTransport is a wrapper around the http.Transport that overrides the Dial and DialContext functions.
-// It limits the rate of the outgoing connections to comply with connectionsRateLimitingCount
-type RateLimitedTransport struct {
+// Dialer establish tcp-level connection with the destination
+type Dialer struct {
 	phonebook   *MultiPhonebook
 	innerDialer net.Dialer
-	*http.Transport
 }
 
-// Dial redirects the call to MyTransport.DialContext
-func (rlt *RateLimitedTransport) Dial(network, address string) (net.Conn, error) {
-	return rlt.DialContext(context.Background(), network, address)
+// Dial connects to the address on the named network.
+// It waits if needed not to exceed connectionsRateLimitingCount.
+func (d *Dialer) Dial(network, address string) (net.Conn, error) {
+	return d.DialContext(context.Background(), network, address)
 }
 
 // DialContext connects to the address on the named network using the provided context.
-// It wraps around the http.Transport.DialContext to limit the outgoing connection rate
 // It waits if needed not to exceed connectionsRateLimitingCount.
-func (rlt *RateLimitedTransport) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
 	var waitTime time.Duration
 	var provisionalTime time.Time
 
 	for {
-		_, waitTime, provisionalTime = rlt.phonebook.GetConnectionWaitTime(address)
+		_, waitTime, provisionalTime = d.phonebook.GetConnectionWaitTime(address)
+		fmt.Fprintf(os.Stderr, "xxxsss Waittime: %d Addr: %s\n", waitTime, address)
+		debug.PrintStack()
 		if waitTime == 0 {
 			break // break out of the loop and proceed to the connection
 		}
@@ -54,8 +57,8 @@ func (rlt *RateLimitedTransport) DialContext(ctx context.Context, network, addre
 		case <-time.After(waitTime):
 		}
 	}
-	conn, err := rlt.innerDialer.DialContext(ctx, network, address)
-	rlt.phonebook.UpdateConnectionTime(address, provisionalTime)
+	conn, err := d.innerDialer.DialContext(ctx, network, address)
+	d.phonebook.UpdateConnectionTime(address, provisionalTime)
 
 	return conn, err
 }
