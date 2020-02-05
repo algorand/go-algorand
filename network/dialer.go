@@ -37,8 +37,11 @@ import (
 
 	"fmt"
 	"os"
+<<<<<<< HEAD
 	"runtime/debug"
 >>>>>>> Separating Dialer from Transport, initializing the Dialer and Transport params (timeout, etc):network/dialer.go
+=======
+>>>>>>> Integrating changes from Tsachi + cleanups.
 )
 
 // Dialer establish tcp-level connection with the destination
@@ -116,8 +119,6 @@ func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.
 
 	for {
 		_, waitTime, provisionalTime = d.phonebook.GetConnectionWaitTime(address)
-		fmt.Fprintf(os.Stderr, "xxxsss Waittime: %d Addr: %s\n", waitTime, address)
-		debug.PrintStack()
 		if waitTime == 0 {
 			break // break out of the loop and proceed to the connection
 		}

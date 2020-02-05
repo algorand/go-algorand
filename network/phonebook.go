@@ -41,9 +41,13 @@ type Phonebook interface {
 	// The connection should be established when the waitTime is 0.
 	// It will register a provisional next connection time when the waitTime is 0.
 <<<<<<< HEAD
+<<<<<<< HEAD
 	// The provisional time should be updated after the connection with UpdateConnectionTime
 =======
 >>>>>>> Taking care of the lock triggering deadlock detection.
+=======
+	// The provisional time should be updated after the connection with UpdateConnectionTime
+>>>>>>> Integrating changes from Tsachi + cleanups.
 	GetConnectionWaitTime(addr string) (addrInPhonebook bool,
 		waitTime time.Duration, provisionalTime time.Time)
 
@@ -147,9 +151,13 @@ func (e *phonebookEntries) updateRetryAfter(addr string, retryAfter time.Time) {
 // The connection should be established when the waitTime is 0.
 // It will register a provisional next connection time when the waitTime is 0.
 <<<<<<< HEAD
+<<<<<<< HEAD
 // The provisional time should be updated after the connection with UpdateConnectionTime
 =======
 >>>>>>> Taking care of the lock triggering deadlock detection.
+=======
+// The provisional time should be updated after the connection with UpdateConnectionTime
+>>>>>>> Integrating changes from Tsachi + cleanups.
 func (e *phonebookEntries) getConnectionWaitTime(addr string) (addrInPhonebook bool,
 	waitTime time.Duration, provisionalTime time.Time) {
 	_, addrInPhonebook = e.data[addr]
@@ -315,9 +323,13 @@ func (p *ArrayPhonebook) UpdateRetryAfter(addr string, retryAfter time.Time) {
 // The connection should be established when the waitTime is 0.
 // It will register a provisional next connection time when the waitTime is 0.
 <<<<<<< HEAD
+<<<<<<< HEAD
 // The provisional time should be updated after the connection with UpdateConnectionTime
 =======
 >>>>>>> Taking care of the lock triggering deadlock detection.
+=======
+// The provisional time should be updated after the connection with UpdateConnectionTime
+>>>>>>> Integrating changes from Tsachi + cleanups.
 func (p *ArrayPhonebook) GetConnectionWaitTime(addr string) (addrInPhonebook bool,
 	waitTime time.Duration, provisionalTime time.Time) {
 	return p.Entries.getConnectionWaitTime(addr)
@@ -368,9 +380,13 @@ func (p *ThreadsafePhonebook) UpdateRetryAfter(addr string, retryAfter time.Time
 // The connection should be established when the waitTime is 0.
 // It will register a provisional next connection time when the waitTime is 0.
 <<<<<<< HEAD
+<<<<<<< HEAD
 // The provisional time should be updated after the connection with UpdateConnectionTime
 =======
 >>>>>>> Taking care of the lock triggering deadlock detection.
+=======
+// The provisional time should be updated after the connection with UpdateConnectionTime
+>>>>>>> Integrating changes from Tsachi + cleanups.
 func (p *ThreadsafePhonebook) GetConnectionWaitTime(addr string) (addrInPhonebook bool,
 	waitTime time.Duration, provisionalTime time.Time) {
 	p.lock.RLock()

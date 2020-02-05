@@ -37,7 +37,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	//"os"
 
 	"github.com/algorand/go-deadlock"
 	"github.com/algorand/websocket"
@@ -1665,6 +1664,7 @@ func (wn *WebsocketNetwork) numOutgoingPending() int {
 func (wn *WebsocketNetwork) GetRoundTripper() http.RoundTripper {
 	return &wn.transport
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 =======
 // GetNetTransport returns an http.Transport that limits the number of connection
@@ -1700,6 +1700,8 @@ func (wn *WebsocketNetwork) GetRateLimitedTransport() *RateLimitedTransport {
 =======
 
 >>>>>>> Separating Dialer from Transport, initializing the Dialer and Transport params (timeout, etc)
+=======
+>>>>>>> Integrating changes from Tsachi + cleanups.
 }
 
 // tryConnect opens websocket connection and checks initial connection parameters.

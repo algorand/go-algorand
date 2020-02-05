@@ -283,6 +283,7 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	require.Equal(t, phBookData[1], phBookData2[1])
 	require.Equal(t, phBookData[2], phBookData2[2])
 <<<<<<< HEAD
+<<<<<<< HEAD
 
 	time.Sleep(waitTime)
 
@@ -291,6 +292,11 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	time.Sleep(waitTime)
 	
 >>>>>>> Taking care of the lock triggering deadlock detection.
+=======
+
+	time.Sleep(waitTime)
+
+>>>>>>> Integrating changes from Tsachi + cleanups.
 	// The wait should be sufficient
 	_, waitTime, provisionalTime = entries.getConnectionWaitTime(addr2)
 	require.Equal(t, time.Duration(0), waitTime)
