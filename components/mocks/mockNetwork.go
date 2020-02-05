@@ -73,7 +73,7 @@ func (network *MockNetwork) GetPeers(options ...network.PeerOption) []network.Pe
 	return nil
 }
 
-// GetRoundTripper -- returns the default http transport
+// GetRoundTripper -- returns the network round tripper
 func (network *MockNetwork) GetRoundTripper() http.RoundTripper {
 	return http.DefaultTransport
 }
@@ -95,10 +95,4 @@ func (network *MockNetwork) ClearHandlers() {
 
 // RegisterHTTPHandler - empty implementation
 func (network *MockNetwork) RegisterHTTPHandler(path string, handler http.Handler) {
-}
-
-// GetDialer -  empty implementation
-func (network *MockNetwork) GetDialer() *network.Dialer {
-	// TODO: fix this 
-	return nil
 }
