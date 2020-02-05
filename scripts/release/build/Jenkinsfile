@@ -20,7 +20,7 @@ pipeline {
     stages {
         stage("create ec2 instance") {
             steps {
-                sh script: "scripts/release/ci/stage/create.sh ${params.region} ${params.ami} ${params.type}"
+                sh script: "scripts/release/create.sh ${params.region} ${params.ami} ${params.type}"
             }
         }
 
@@ -32,26 +32,26 @@ pipeline {
                     }
                 }
 
-                sh script: "scripts/release/ci/stage/setup.sh ${params.hash} ${params.channel}"
+                sh script: "scripts/release/build/stage/setup/run.sh ${params.hash} ${params.channel}"
             }
         }
 
         stage("build") {
             steps {
-                sh script: "scripts/release/ci/stage/build.sh ${params.hash} ${params.channel}"
+                sh script: "scripts/release/build/stage/build/run.sh ${params.hash} ${params.channel}"
             }
         }
 
         stage("package") {
             steps {
-                sh script: "scripts/release/ci/stage/package.sh ${params.hash} ${params.channel}"
+                sh script: "scripts/release/build/stage/package/run.sh ${params.hash} ${params.channel}"
             }
         }
 
         stage("sign") {
             steps {
                 input "Forward gpg-agent"
-                sh script: "scripts/release/ci/stage/sign.sh"
+                sh script: "scripts/release/build/stage/sign/run.sh"
             }
         }
 
@@ -63,14 +63,14 @@ pipeline {
                         returnStdout: true
                     ).trim()
 
-                    sh script: "scripts/release/ci/stage/upload.sh ${params.channel} ${params.bucket_location} ${fullversion}"
+                    sh script: "scripts/release/build/stage/upload/run.sh ${params.channel} ${params.bucket_location} ${fullversion}"
                 }
             }
         }
 
         stage("delete ec2 instance") {
             steps {
-                sh script: "scripts/release/ci/stage/delete.sh ${params.region}"
+                sh script: "scripts/release/delete.sh ${params.region}"
             }
         }
     }
