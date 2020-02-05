@@ -47,7 +47,7 @@ This section briefly describes the expected outcomes of the current build pipeli
 
     The result of running this job will be to put the build artifacts and their detached signatures in the staging `algorand-builds` bucket.
 
-    In addition, the build logs will be placed into the AWS `algorand-devops-misc` S3 bucket under `buildlog`.
+    In addition, the build logs will be placed into the AWS S3 bucket`algorand-builds/build-logs/channel`.
 
 1. test
 

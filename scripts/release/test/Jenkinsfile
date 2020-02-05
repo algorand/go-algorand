@@ -32,7 +32,7 @@ pipeline {
                     }
                 }
 
-                sh script: "scripts/release/test/stage/setup/run.sh ${params.release} ${params.channel}"
+                sh script: "scripts/release/test/stage/setup/run.sh ${params.bucket_location} ${params.channel} ${params.release}"
             }
         }
 

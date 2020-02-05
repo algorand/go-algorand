@@ -7,9 +7,9 @@ echo
 set -ex
 
 GIT_REPO_PATH=https://github.com/algorand/go-algorand
-RELEASE=${1}
+RELEASE=${2}
 export RELEASE
-CHANNEL=${2:-"stable"}
+CHANNEL=${1:-"stable"}
 export CHANNEL
 export DEBIAN_FRONTEND=noninteractive
 
