@@ -85,8 +85,8 @@ type asyncPseudonode struct {
 
 // pseudonodeTask encapsulates a single task which should be executed by the pseudonode.
 type pseudonodeTask interface {
-	// Execute a task with a given cryptoVerifier and quit channel.
-	execute(verifier *AsyncVoteVerifier, quit chan struct{})
+	// Execute a task with quit channel.
+	execute(quit chan struct{})
 }
 
 type selectedParticipant struct {
@@ -117,13 +117,12 @@ type pseudonodeProposalsTask struct {
 }
 
 type pseudonodeVerifier struct {
-	verifier      *AsyncVoteVerifier
 	incomingTasks chan pseudonodeTask
 }
 
 type verifiedCryptoResults []asyncVerifyVoteResponse
 
-func makePseudonode(factory BlockFactory, validator BlockValidator, keys KeyManager, ledger Ledger, voteVerifier *AsyncVoteVerifier, log serviceLogger) pseudonode {
+func makePseudonode(factory BlockFactory, validator BlockValidator, keys KeyManager, ledger Ledger, log serviceLogger) pseudonode {
 	pn := asyncPseudonode{
 		factory:   factory,
 		validator: validator,
@@ -134,8 +133,8 @@ func makePseudonode(factory BlockFactory, validator BlockValidator, keys KeyMana
 		closeWg:   &sync.WaitGroup{},
 	}
 
-	pn.proposalsVerifier = pn.makePseudonodeVerifier(voteVerifier)
-	pn.votesVerifier = pn.makePseudonodeVerifier(voteVerifier)
+	pn.proposalsVerifier = pn.makePseudonodeVerifier()
+	pn.votesVerifier = pn.makePseudonodeVerifier()
 	return pn
 }
 
@@ -229,9 +228,8 @@ func (n asyncPseudonode) makeVotesTask(ctx context.Context, r round, p period, s
 	return pvt
 }
 
-func (n asyncPseudonode) makePseudonodeVerifier(voteVerifier *AsyncVoteVerifier) *pseudonodeVerifier {
+func (n asyncPseudonode) makePseudonodeVerifier() *pseudonodeVerifier {
 	pv := &pseudonodeVerifier{
-		verifier:      voteVerifier,
 		incomingTasks: make(chan pseudonodeTask, pseudonodeVerificationBacklog),
 	}
 	n.closeWg.Add(1)
@@ -377,7 +375,7 @@ func (pv *pseudonodeVerifier) verifierLoop(n *asyncPseudonode) {
 				return
 			}
 		}
-		task.execute(pv.verifier, n.quit)
+		task.execute(n.quit)
 	}
 }
 
@@ -389,7 +387,7 @@ func (t pseudonodeBaseTask) close() {
 	close(t.out)
 }
 
-func (t pseudonodeVotesTask) execute(verifier *AsyncVoteVerifier, quit chan struct{}) {
+func (t pseudonodeVotesTask) execute(quit chan struct{}) {
 	defer t.close()
 
 	// check to see if task already expired.
@@ -470,7 +468,7 @@ func (t pseudonodeVotesTask) execute(verifier *AsyncVoteVerifier, quit chan stru
 	}
 }
 
-func (t pseudonodeProposalsTask) execute(verifier *AsyncVoteVerifier, quit chan struct{}) {
+func (t pseudonodeProposalsTask) execute(quit chan struct{}) {
 	defer t.close()
 
 	// check to see if task already expired.

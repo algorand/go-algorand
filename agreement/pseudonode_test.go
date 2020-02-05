@@ -142,7 +142,7 @@ func TestPseudonode(t *testing.T) {
 	sLogger := serviceLogger{logging.Base()}
 
 	keyManager := simpleKeyManager(accounts)
-	pb := makePseudonode(testBlockFactory{Owner: 0}, testBlockValidator{}, keyManager, ledger, MakeAsyncVoteVerifier(nil), sLogger)
+	pb := makePseudonode(testBlockFactory{Owner: 0}, testBlockValidator{}, keyManager, ledger, sLogger)
 	defer pb.Quit()
 	spn := makeSerializedPseudonode(testBlockFactory{Owner: 0}, testBlockValidator{}, keyManager, ledger)
 	defer spn.Quit()
@@ -235,30 +235,28 @@ func TestPseudonode(t *testing.T) {
 		}
 	}
 
-	// todo : fix this test
-	/*
-		for a := 0; a < 2; a++ {
-			for s := 0; s < 3; s++ {
-				for p := 0; p < 3; p++ {
-					for ch1src := 0; ch1src < 2; ch1src++ {
-						var err1 error
-						var ch1 <-chan externalEvent
-						if ch1src == 0 {
-							ch1, err1 = pb.MakeVotes(context.Background(), startRound, period(p), step(s), makeProposalValue(period(p), accounts[a].Address()), persist)
-						} else {
-							ch1, err1 = spn.MakeVotes(context.Background(), startRound, period(p), step(s), makeProposalValue(period(p), accounts[a].Address()), persist)
-						}
-						assert.NoError(t, err1, "MakeVotes failed")
-						ch2, err2 := spn.MakeVotes(context.Background(), startRound, period(p), step(s), makeProposalValue(period(p), accounts[a].Address()), persist)
-						assert.NoError(t, err2, "MakeVotes failed")
-						if !compareEventChannels(t, ch1, ch2) {
-							return
-						}
+	for a := 0; a < 2; a++ {
+		for s := 0; s < 3; s++ {
+			for p := 0; p < 3; p++ {
+				for ch1src := 0; ch1src < 2; ch1src++ {
+					var err1 error
+					var ch1 <-chan externalEvent
+					if ch1src == 0 {
+						ch1, err1 = pb.MakeVotes(context.Background(), startRound, period(p), step(s), makeProposalValue(period(p), accounts[a].Address()), persist)
+					} else {
+						ch1, err1 = spn.MakeVotes(context.Background(), startRound, period(p), step(s), makeProposalValue(period(p), accounts[a].Address()), persist)
+					}
+					assert.NoError(t, err1, "MakeVotes failed")
+					ch2, err2 := spn.MakeVotes(context.Background(), startRound, period(p), step(s), makeProposalValue(period(p), accounts[a].Address()), persist)
+					assert.NoError(t, err2, "MakeVotes failed")
+					if !compareEventChannels(t, ch1, ch2) {
+						return
 					}
 				}
 			}
 		}
-	*/
+	}
+
 }
 
 func makeSerializedPseudonode(factory BlockFactory, validator BlockValidator, keys KeyManager, ledger Ledger) pseudonode {
@@ -341,26 +339,12 @@ func (n serializedPseudonode) MakeVotes(ctx context.Context, r round, p period, 
 	defer close(out)
 	outChan = out
 
-	verifiedVotes := make(verifiedCryptoResults, len(votes))
-
-	for i, vote := range votes {
-		verifier.VerifyVote(ctx, cryptoVoteRequest{message: message{Tag: protocol.AgreementVoteTag, UnauthenticatedVote: vote.u()}})
-		select {
-		case cryptoResult, ok := <-verifier.VerifiedVotes():
-			if !ok {
-				return nil, errPseudonodeVerifierClosedChannel
-			}
-			verifiedVotes[i] = cryptoResult
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
-	}
-
 	<-persistStateDone
 
-	for i := 0; i < len(verifiedVotes); i++ {
-		if verifiedVotes[i].err == nil {
-			out <- messageEvent{T: voteVerified, Input: verifiedVotes[i].message}
+	for _, vote := range votes {
+		out <- messageEvent{
+			T:     voteVerified,
+			Input: message{Tag: protocol.AgreementVoteTag, UnauthenticatedVote: vote.u(), Vote: vote},
 		}
 	}
 
