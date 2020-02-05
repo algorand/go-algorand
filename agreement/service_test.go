@@ -2162,7 +2162,7 @@ func TestAgreementRegression_WrongPeriodPayloadVerificationCancellation_8ba23942
 // (such as blocks and pipelined messages for the next round)
 // Note that the stall will be resolved by catchup even if the relay blocks.
 func TestAgreementCertificateDoesNotStallSingleRelay(t *testing.T) {
-	numNodes := 10 // single relay, nine leaf nodes
+	numNodes := 5 // single relay, four leaf nodes
 	relayID := nodeID(0)
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 
@@ -2188,6 +2188,22 @@ func TestAgreementCertificateDoesNotStallSingleRelay(t *testing.T) {
 				params.exclude = relayID
 			}
 		}
+		if params.source == relayID {
+			// must also drop relay's proposal so it cannot win leadership
+			r := bytes.NewBuffer(params.data)
+			if params.tag == protocol.AgreementVoteTag {
+				var uv unauthenticatedVote
+				err := protocol.DecodeStream(r, &uv)
+				if err != nil {
+					panic(err)
+				}
+				if uv.R.Step != propose {
+					return params
+				}
+			}
+			params.tag = protocol.UnknownMsgTag
+		}
+
 		return params
 	})
 	zeroes = runRound(clocks, activityMonitor, zeroes)
