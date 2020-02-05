@@ -104,6 +104,7 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 	client := hpeer.GetHTTPClient()
 	if client == nil {
 <<<<<<< HEAD
+<<<<<<< HEAD
 		client = &http.Client{}
 		client.Transport = hts.peers.GetRoundTripper()
 =======
@@ -120,6 +121,9 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 		client.Transport = hts.peers.GetRateLimitedTransport()
 >>>>>>> Adding RateLimitedTransport to wrap around the http.Transport
 =======
+=======
+		client = &http.Client{}
+>>>>>>> changes.
 		client.Transport = hts.peers.GetRoundTripper()
 >>>>>>> Separating Dialer from Transport, initializing the Dialer and Transport params (timeout, etc)
 	}

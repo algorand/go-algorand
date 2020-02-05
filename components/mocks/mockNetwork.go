@@ -76,10 +76,14 @@ func (network *MockNetwork) GetPeers(options ...network.PeerOption) []network.Pe
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 // GetRoundTripper -- returns the network round tripper
 =======
 // GetRoundTripper -- returns the default http transport
 >>>>>>> Testing a different approach to ovrride the Dial/DialContext by embedding the default transport into another object instead of changing the default transport.
+=======
+// GetRoundTripper -- returns the network round tripper
+>>>>>>> changes.
 func (network *MockNetwork) GetRoundTripper() http.RoundTripper {
 	return http.DefaultTransport
 =======
@@ -115,6 +119,7 @@ func (network *MockNetwork) RegisterHTTPHandler(path string, handler http.Handle
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 
 // GetDialer -  empty implementation
@@ -137,3 +142,5 @@ func (network *MockNetwork) GetDialer() *network.Dialer {
 	return nil
 }
 >>>>>>> Separating Dialer from Transport, initializing the Dialer and Transport params (timeout, etc)
+=======
+>>>>>>> changes.

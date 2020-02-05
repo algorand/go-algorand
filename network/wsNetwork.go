@@ -37,7 +37,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"os"
+	//"os"
 
 	"github.com/algorand/go-deadlock"
 	"github.com/algorand/websocket"
@@ -178,6 +178,7 @@ type GossipNode interface {
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 	// GetRoundTripper returns a Transport that would limit the number of outgoing connections.
 	GetRoundTripper() http.RoundTripper
 =======
@@ -189,6 +190,8 @@ type GossipNode interface {
 	GetNetTransport() *http.Transport
 >>>>>>> changes.
 =======
+=======
+>>>>>>> changes.
 	// GetRoundTripper returns a Transport that would limit the number of outgoing connections.
 	GetRoundTripper() http.RoundTripper
 >>>>>>> Testing a different approach to ovrride the Dial/DialContext by embedding the default transport into another object instead of changing the default transport.
@@ -556,7 +559,11 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 			var addrs []string
 			addrs = wn.phonebook.GetAddresses(1000)
 			for _, addr := range addrs {
+<<<<<<< HEAD
 				peerCore := makePeerCore(wn, addr, wn.GetRoundTripper(), "" /*origin address*/)
+=======
+				peerCore := makePeerCore(wn, addr, wn.GetRoundTripper(), "" /*origin addres*/)
+>>>>>>> changes.
 				outPeers = append(outPeers, &peerCore)
 			}
 		case PeersConnectedIn:
@@ -1025,6 +1032,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 
 	peer := &wsPeer{
 <<<<<<< HEAD
+<<<<<<< HEAD
 		wsPeerCore:        makePeerCore(wn, trackedRequest.otherPublicAddr, wn.GetRoundTripper(), trackedRequest.remoteHost),
 =======
 		wsPeerCore: wsPeerCore{
@@ -1035,6 +1043,9 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 				Transport: wn.GetRoundTripper(),
 			},
 		},
+>>>>>>> changes.
+=======
+		wsPeerCore:        makePeerCore(wn, trackedRequest.otherPublicAddr, wn.GetRoundTripper(), trackedRequest.remoteHost),
 >>>>>>> changes.
 		conn:              conn,
 		outgoing:          false,
@@ -1713,6 +1724,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 		NetDialContext:    wn.dialer.DialContext,
 		NetDial:           wn.dialer.Dial,
 =======
@@ -1727,6 +1739,10 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		NetDialContext:    wn.GetDialer().DialContext,
 		NetDial:           wn.GetDialer().Dial,
 >>>>>>> Separating Dialer from Transport, initializing the Dialer and Transport params (timeout, etc)
+=======
+		NetDialContext:    wn.dialer.DialContext,
+		NetDial:           wn.dialer.Dial,
+>>>>>>> changes.
 	}
 
 	conn, response, err := websocketDialer.DialContext(wn.ctx, gossipAddr, requestHeader)
@@ -1775,6 +1791,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 
 	peer := &wsPeer{
 <<<<<<< HEAD
+<<<<<<< HEAD
 		wsPeerCore:        makePeerCore(wn, addr, wn.GetRoundTripper(), "" /* origin */),
 =======
 		wsPeerCore: wsPeerCore{
@@ -1784,6 +1801,9 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 				Transport: wn.GetRoundTripper(),
 			},
 		},
+>>>>>>> changes.
+=======
+		wsPeerCore:        makePeerCore(wn, addr, wn.GetRoundTripper(), "" /* origin */),
 >>>>>>> changes.
 		conn:              conn,
 		outgoing:          true,
@@ -1943,11 +1963,6 @@ func (wn *WebsocketNetwork) countPeersSetGauges() {
 	}
 	networkIncomingConnections.Set(float64(numIn), nil)
 	networkOutgoingConnections.Set(float64(numOut), nil)
-}
-
-// GetDialer returns the dialer for this network
-func (wn *WebsocketNetwork) GetDialer() *Dialer {
-	return &wn.dialer
 }
 
 func justHost(hostPort string) string {
