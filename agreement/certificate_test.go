@@ -51,7 +51,7 @@ func TestCertificateGoodCertificateBasic(t *testing.T) {
 	equiVotes := make([]equivocationVote, 0)
 	var totalWeight uint64
 	for j, addr := range addresses {
-		vote, err := makeVoteTesting(addr, vrfSecrets[j], otSecrets[j], ledger, round, period, cert, block.Digest())
+		vote, err := makeUnauthenticatedVoteTesting(addr, vrfSecrets[j], otSecrets[j], ledger, round, period, cert, block.Digest())
 		if err == nil {
 			votes = append(votes, vote)
 			totalWeight += vote.Cred.Weight
@@ -77,7 +77,7 @@ func TestCertificateGoodCertificateEarlyBreak(t *testing.T) {
 	equiVotes := make([]equivocationVote, 0)
 	var totalWeight uint64
 	for j, addr := range addresses {
-		vote, err := makeVoteTesting(addr, vrfSecrets[j], otSecrets[j], ledger, round, period, cert, block.Digest())
+		vote, err := makeUnauthenticatedVoteTesting(addr, vrfSecrets[j], otSecrets[j], ledger, round, period, cert, block.Digest())
 		if err == nil {
 			votes = append(votes, vote)
 			totalWeight += vote.Cred.Weight
@@ -103,7 +103,7 @@ func TestCertificateFinalCert(t *testing.T) {
 	equiVotes := make([]equivocationVote, 0)
 	var totalWeight uint64
 	for j, addr := range addresses {
-		vote, err := makeVoteTesting(addr, vrfSecrets[j], otSecrets[j], ledger, round, period, cert, block.Digest())
+		vote, err := makeUnauthenticatedVoteTesting(addr, vrfSecrets[j], otSecrets[j], ledger, round, period, cert, block.Digest())
 		if err == nil {
 			votes = append(votes, vote)
 			totalWeight += vote.Cred.Weight
@@ -131,13 +131,13 @@ func TestCertificateBadCertificateWithFakeDoubleVote(t *testing.T) {
 	i := 0
 
 	for j, addr := range addresses {
-		vote, err := makeVoteTesting(addr, vrfSecrets[j], otSecrets[j], ledger, round, period, cert, block.Digest())
+		vote, err := makeUnauthenticatedVoteTesting(addr, vrfSecrets[j], otSecrets[j], ledger, round, period, cert, block.Digest())
 		if err == nil {
 			if i < 30 {
 				votes = append(votes, vote)
 			} else {
-				v1, err1 := makeVoteTesting(addr, vrfSecrets[j], otSecrets[j], ledger, round, period, cert, lastHash)
-				v2, err2 := makeVoteTesting(addr, vrfSecrets[j], otSecrets[j], ledger, round, period, cert, lastHash)
+				v1, err1 := makeUnauthenticatedVoteTesting(addr, vrfSecrets[j], otSecrets[j], ledger, round, period, cert, lastHash)
+				v2, err2 := makeUnauthenticatedVoteTesting(addr, vrfSecrets[j], otSecrets[j], ledger, round, period, cert, lastHash)
 
 				require.NoError(t, err1)
 				require.NoError(t, err2)
@@ -182,7 +182,7 @@ func TestCertificateDifferentBlock(t *testing.T) {
 	equiVotes := make([]equivocationVote, 0)
 	var totalWeight uint64
 	for j, addr := range addresses {
-		vote, err := makeVoteTesting(addr, vrfSecrets[j], otSecrets[j], ledger, round, period, cert, lastHash)
+		vote, err := makeUnauthenticatedVoteTesting(addr, vrfSecrets[j], otSecrets[j], ledger, round, period, cert, lastHash)
 		if err == nil {
 			votes = append(votes, vote)
 			totalWeight += vote.Cred.Weight
@@ -211,7 +211,7 @@ func TestCertificateNoCertStep(t *testing.T) {
 	equiVotes := make([]equivocationVote, 0)
 	var totalWeight uint64
 	for j, addr := range addresses {
-		vote, err := makeVoteTesting(addr, vrfSecrets[j], otSecrets[j], ledger, round, period, next, block.Digest())
+		vote, err := makeUnauthenticatedVoteTesting(addr, vrfSecrets[j], otSecrets[j], ledger, round, period, next, block.Digest())
 		if err == nil {
 			votes = append(votes, vote)
 			totalWeight += vote.Cred.Weight
@@ -235,7 +235,7 @@ func TestCertificateNotEnoughVotesToCert(t *testing.T) {
 	equiVotes := make([]equivocationVote, 0)
 	var totalWeight uint64
 	for j, addr := range addresses {
-		vote, err := makeVoteTesting(addr, vrfSecrets[j], otSecrets[j], ledger, round, period, cert, lastHash)
+		vote, err := makeUnauthenticatedVoteTesting(addr, vrfSecrets[j], otSecrets[j], ledger, round, period, cert, lastHash)
 		if err == nil {
 			if cert.reachesQuorum(config.Consensus[protocol.ConsensusCurrentVersion], totalWeight+vote.Cred.Weight) {
 				break
@@ -266,7 +266,7 @@ func TestCertificateCertWrongRound(t *testing.T) {
 	var totalWeight uint64
 
 	for j, addr := range addresses {
-		vote, err := makeVoteTesting(addr, vrfSecrets[j], otSecrets[j], ledger, round, period, cert, block.Digest())
+		vote, err := makeUnauthenticatedVoteTesting(addr, vrfSecrets[j], otSecrets[j], ledger, round, period, cert, block.Digest())
 		if err == nil {
 			votes = append(votes, vote)
 			totalWeight += vote.Cred.Weight
@@ -295,7 +295,7 @@ func TestCertificateCertWithTooFewVotes(t *testing.T) {
 	var totalWeight uint64
 
 	for j, addr := range addresses {
-		vote, err := makeVoteTesting(addr, vrfSecrets[j], otSecrets[j], ledger, round, period, cert, block.Digest())
+		vote, err := makeUnauthenticatedVoteTesting(addr, vrfSecrets[j], otSecrets[j], ledger, round, period, cert, block.Digest())
 		if err == nil {
 			votes = append(votes, vote)
 			totalWeight += vote.Cred.Weight
@@ -324,7 +324,7 @@ func TestCertificateDupVote(t *testing.T) {
 	i := 0
 
 	for j, addr := range addresses {
-		vote, err := makeVoteTesting(addr, vrfSecrets[j], otSecrets[j], ledger, round, period, cert, block.Digest())
+		vote, err := makeUnauthenticatedVoteTesting(addr, vrfSecrets[j], otSecrets[j], ledger, round, period, cert, block.Digest())
 		if err == nil {
 			votes = append(votes, vote)
 			if i == 0 {

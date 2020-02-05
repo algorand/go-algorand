@@ -48,7 +48,7 @@ func TestBundleCreation(t *testing.T) {
 			address := addresses[i]
 			step := step(s)
 			rv := rawVote{Sender: address, Round: round, Period: period, Step: step, Proposal: proposal}
-			uv, err := makeVote(rv, otSecrets[i], vrfSecrets[i], ledger)
+			uv, err := makeUnauthenticatedVote(rv, otSecrets[i], vrfSecrets[i], ledger)
 			require.NoError(t, err)
 
 			vote, err := uv.verify(ledger)
@@ -123,7 +123,7 @@ func TestBundleCreationWithVotesFromSameAddress(t *testing.T) {
 			step := step(s)
 
 			rv0 := rawVote{Sender: address, Round: round, Period: period, Step: step, Proposal: proposal}
-			uv0, err := makeVote(rv0, otSecrets[i], vrfSecrets[i], ledger)
+			uv0, err := makeUnauthenticatedVote(rv0, otSecrets[i], vrfSecrets[i], ledger)
 			require.NoError(t, err)
 			vote0, err := uv0.verify(ledger)
 			if err != nil {
@@ -131,7 +131,7 @@ func TestBundleCreationWithVotesFromSameAddress(t *testing.T) {
 			}
 
 			rv1 := rawVote{Sender: address, Round: round, Period: period, Step: step, Proposal: proposal2}
-			uv1, err := makeVote(rv1, otSecrets[i], vrfSecrets[i], ledger)
+			uv1, err := makeUnauthenticatedVote(rv1, otSecrets[i], vrfSecrets[i], ledger)
 			require.NoError(t, err)
 			vote1, err := uv1.verify(ledger)
 			if err != nil {
@@ -187,7 +187,7 @@ func TestBundleCreationWithEquivocationVotes(t *testing.T) {
 			step := step(s)
 
 			rv0 := rawVote{Sender: address, Round: round, Period: period, Step: step, Proposal: proposal}
-			uv0, err := makeVote(rv0, otSecrets[i], vrfSecrets[i], ledger)
+			uv0, err := makeUnauthenticatedVote(rv0, otSecrets[i], vrfSecrets[i], ledger)
 			require.NoError(t, err)
 			vote0, err := uv0.verify(ledger)
 			if err != nil {
@@ -195,7 +195,7 @@ func TestBundleCreationWithEquivocationVotes(t *testing.T) {
 			}
 
 			rv1 := rawVote{Sender: address, Round: round, Period: period, Step: step, Proposal: proposal2}
-			uv1, err := makeVote(rv1, otSecrets[i], vrfSecrets[i], ledger)
+			uv1, err := makeUnauthenticatedVote(rv1, otSecrets[i], vrfSecrets[i], ledger)
 			require.NoError(t, err)
 			vote1, err := uv1.verify(ledger)
 			if err != nil {
@@ -294,7 +294,7 @@ func TestBundleCertificationWithEquivocationVotes(t *testing.T) {
 			step := step(s)
 
 			rv0 := rawVote{Sender: address, Round: round, Period: period, Step: step, Proposal: proposal}
-			uv0, err := makeVote(rv0, otSecrets[i], vrfSecrets[i], ledger)
+			uv0, err := makeUnauthenticatedVote(rv0, otSecrets[i], vrfSecrets[i], ledger)
 			require.NoError(t, err)
 			vote0, err := uv0.verify(ledger)
 			if err != nil {
@@ -302,7 +302,7 @@ func TestBundleCertificationWithEquivocationVotes(t *testing.T) {
 			}
 
 			rv1 := rawVote{Sender: address, Round: round, Period: period, Step: step, Proposal: proposal2}
-			uv1, err := makeVote(rv1, otSecrets[i], vrfSecrets[i], ledger)
+			uv1, err := makeUnauthenticatedVote(rv1, otSecrets[i], vrfSecrets[i], ledger)
 			require.NoError(t, err)
 			vote1, err := uv1.verify(ledger)
 			if err != nil {
@@ -366,7 +366,7 @@ func TestBundleCreationWithEquivocationVotesUnderQuorum(t *testing.T) {
 			step := step(s)
 
 			rv0 := rawVote{Sender: address, Round: round, Period: period, Step: step, Proposal: proposal}
-			uv0, err := makeVote(rv0, otSecrets[i], vrfSecrets[i], ledger)
+			uv0, err := makeUnauthenticatedVote(rv0, otSecrets[i], vrfSecrets[i], ledger)
 			require.NoError(t, err)
 			vote0, err := uv0.verify(ledger)
 			if err != nil {
@@ -374,7 +374,7 @@ func TestBundleCreationWithEquivocationVotesUnderQuorum(t *testing.T) {
 			}
 
 			rv1 := rawVote{Sender: address, Round: round, Period: period, Step: step, Proposal: proposal2}
-			uv1, err := makeVote(rv1, otSecrets[i], vrfSecrets[i], ledger)
+			uv1, err := makeUnauthenticatedVote(rv1, otSecrets[i], vrfSecrets[i], ledger)
 			require.NoError(t, err)
 			vote1, err := uv1.verify(ledger)
 			if err != nil {

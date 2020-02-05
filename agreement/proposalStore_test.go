@@ -205,7 +205,7 @@ func TestBlockAssemblerAuthenticator(t *testing.T) {
 
 	block := makeRandomBlock(1)
 
-	tempVote, err := makeVoteTesting(currentAccount, accounts.vrfs[accountIndex], accounts.ots[accountIndex], ledger, player.Round, player.Period, cert, block.Digest())
+	tempVote, err := makeUnauthenticatedVoteTesting(currentAccount, accounts.vrfs[accountIndex], accounts.ots[accountIndex], ledger, player.Round, player.Period, cert, block.Digest())
 	require.NoError(t, err)
 
 	voteAuthenticators = append(voteAuthenticators, tempVote)
@@ -269,7 +269,7 @@ func TestBlockAssemblerTrim(t *testing.T) {
 
 	block, _ := makeRandomBlock(1), randomBlockHash()
 
-	tempVote, err := makeVoteTesting(currentAccount, accounts.vrfs[accountIndex], accounts.ots[accountIndex], ledger, player.Round, player.Period, cert, block.Digest())
+	tempVote, err := makeUnauthenticatedVoteTesting(currentAccount, accounts.vrfs[accountIndex], accounts.ots[accountIndex], ledger, player.Round, player.Period, cert, block.Digest())
 	require.NoError(t, err)
 
 	voteAuthenticators = append(voteAuthenticators, tempVote)
@@ -341,7 +341,7 @@ func TestProposalStoreT(t *testing.T) {
 
 	block, _ := makeRandomBlock(1), randomBlockHash()
 
-	tempVote, err := makeVoteTesting(currentAccount, accounts.vrfs[accountIndex], accounts.ots[accountIndex], ledger, player.Round, player.Period, cert, block.Digest())
+	tempVote, err := makeUnauthenticatedVoteTesting(currentAccount, accounts.vrfs[accountIndex], accounts.ots[accountIndex], ledger, player.Round, player.Period, cert, block.Digest())
 	require.NoError(t, err)
 
 	voteAuthenticators = append(voteAuthenticators, tempVote)
@@ -413,7 +413,7 @@ func TestProposalStoreUnderlying(t *testing.T) {
 
 	block, _ := makeRandomBlock(1), randomBlockHash()
 
-	tempVote, err := makeVoteTesting(currentAccount, accounts.vrfs[accountIndex], accounts.ots[accountIndex], ledger, player.Round, player.Period, cert, block.Digest())
+	tempVote, err := makeUnauthenticatedVoteTesting(currentAccount, accounts.vrfs[accountIndex], accounts.ots[accountIndex], ledger, player.Round, player.Period, cert, block.Digest())
 	require.NoError(t, err)
 
 	voteAuthenticators = append(voteAuthenticators, tempVote)
@@ -477,7 +477,7 @@ func TestProposalStoreHandle(t *testing.T) {
 
 	block, _ := makeRandomBlock(1), randomBlockHash()
 
-	tempVote, err := makeVoteTesting(currentAccount, accounts.vrfs[accountIndex], accounts.ots[accountIndex], ledger, player.Round, player.Period, cert, block.Digest())
+	tempVote, err := makeUnauthenticatedVoteTesting(currentAccount, accounts.vrfs[accountIndex], accounts.ots[accountIndex], ledger, player.Round, player.Period, cert, block.Digest())
 	require.NoError(t, err)
 
 	voteAuthenticators = append(voteAuthenticators, tempVote)

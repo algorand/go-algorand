@@ -35,7 +35,7 @@ func sortedVoteGen(t *testing.T) (votes []vote) {
 			EncodingDigest:   randomBlockHash(),
 		}
 		rv := rawVote{Round: ledger.NextRound(), Sender: addr, Proposal: pv}
-		uv, err := makeVote(rv, ots[i], vrfs[i], ledger)
+		uv, err := makeUnauthenticatedVote(rv, ots[i], vrfs[i], ledger)
 		require.NoError(t, err)
 		v, err := uv.verify(ledger)
 		if err == nil {
@@ -283,7 +283,7 @@ func setupProposalTrackerTests(t *testing.T) (votes []vote) {
 			Proposal: prop,
 		}
 
-		uv, err := makeVote(rv, ots[i], vrfs[i], ledger)
+		uv, err := makeUnauthenticatedVote(rv, ots[i], vrfs[i], ledger)
 		require.NoError(t, err)
 
 		v, err := uv.verify(ledger)

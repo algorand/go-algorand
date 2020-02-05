@@ -58,7 +58,7 @@ func findSender(l Ledger, Round basics.Round, Period period, Step step, addresse
 	return idxs[0]
 }
 
-func makeUnauthenticatedVote(l Ledger, sender basics.Address, selection *crypto.VRFSecrets, voting crypto.OneTimeSigner, Round basics.Round, Period period, Step step, Proposal proposalValue) unauthenticatedVote {
+func makeTestUnauthenticatedVote(l Ledger, sender basics.Address, selection *crypto.VRFSecrets, voting crypto.OneTimeSigner, Round basics.Round, Period period, Step step, Proposal proposalValue) unauthenticatedVote {
 	rv := rawVote{
 		Sender:   sender,
 		Round:    Round,
@@ -92,7 +92,7 @@ func makeMessage(msgHandle int, tag protocol.Tag, sender basics.Address, l Ledge
 		return message{
 			MessageHandle:       MessageHandle(msgHandle),
 			Tag:                 tag,
-			UnauthenticatedVote: makeUnauthenticatedVote(l, sender, selection, voting, Round, Period, Step, proposal),
+			UnauthenticatedVote: makeTestUnauthenticatedVote(l, sender, selection, voting, Round, Period, Step, proposal),
 		}
 	case protocol.ProposalPayloadTag:
 		e := makeRandomBlock(1)
@@ -341,7 +341,7 @@ func BenchmarkCryptoVerifierBundleVertification(b *testing.B) {
 
 	request := cryptoRequest{message: makeMessage(0, protocol.VoteBundleTag, addresses[senders[0]], ledger, selections[senders[0]], votings[senders[0]], ledger.NextRound(), 0, Step), Round: ledger.NextRound()}
 	for _, senderIdx := range senders {
-		uv := makeUnauthenticatedVote(ledger, addresses[senderIdx], selections[senderIdx], votings[senderIdx], request.message.UnauthenticatedBundle.Round, request.message.UnauthenticatedBundle.Period, Step, request.message.UnauthenticatedBundle.Proposal)
+		uv := makeTestUnauthenticatedVote(ledger, addresses[senderIdx], selections[senderIdx], votings[senderIdx], request.message.UnauthenticatedBundle.Round, request.message.UnauthenticatedBundle.Period, Step, request.message.UnauthenticatedBundle.Proposal)
 		v, err := uv.verify(ledger)
 		if err != nil {
 			b.Errorf("unable to verify created vote : %+v", err)

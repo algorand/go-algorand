@@ -399,7 +399,7 @@ func makeProposalsTesting(accs testAccountData, round basics.Round, period perio
 
 		// attempt to make the vote
 		rv := rawVote{Sender: accs.addresses[i], Round: round, Period: period, Step: propose, Proposal: proposal}
-		uv, err := makeVote(rv, accs.ots[i], accs.vrfs[i], ledger)
+		uv, err := makeUnauthenticatedVote(rv, accs.ots[i], accs.vrfs[i], ledger)
 		if err != nil {
 			logging.Base().Errorf("AccountManager.makeVotes: Could not create vote: %v", err)
 			return
@@ -423,7 +423,7 @@ func makeVotesTesting(accs testAccountData, round basics.Round, period period, s
 	votes := make([]vote, 0)
 	for i := range accs.addresses {
 		rv := rawVote{Sender: accs.addresses[i], Round: round, Period: period, Step: step, Proposal: proposal}
-		uv, err := makeVote(rv, accs.ots[i], accs.vrfs[i], ledger)
+		uv, err := makeUnauthenticatedVote(rv, accs.ots[i], accs.vrfs[i], ledger)
 		if err != nil {
 			logging.Base().Errorf("AccountManager.makeVotes: Could not create vote: %v", err)
 			return

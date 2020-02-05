@@ -19,6 +19,7 @@ package agreement
 import (
 	"fmt"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/committee"
@@ -138,19 +139,58 @@ func (uv unauthenticatedVote) verify(l LedgerReader) (vote, error) {
 	return vote{R: rv, Cred: cred, Sig: uv.Sig}, nil
 }
 
-// makeVote creates a new unauthenticated vote from its constituent components.
+// makeUnauthenticatedVote creates a new unauthenticated vote from its constituent components.
 //
-// makeVote returns an error it it fails.
-func makeVote(rv rawVote, voting crypto.OneTimeSigner, selection *crypto.VRFSecrets, l Ledger) (unauthenticatedVote, error) {
+// makeUnauthenticatedVote returns an error it it fails.
+func makeUnauthenticatedVote(rv rawVote, voting crypto.OneTimeSigner, selection *crypto.VRFSecrets, l Ledger) (unauthenticatedVote, error) {
 	m, err := membership(l, rv.Sender, rv.Round, rv.Period, rv.Step)
 	if err != nil {
-		return unauthenticatedVote{}, fmt.Errorf("makeVote: could not get membership parameters: %v", err)
+		return unauthenticatedVote{}, fmt.Errorf("makeUnauthenticatedVote: could not get membership parameters: %v", err)
 	}
 
 	proto, err := l.ConsensusParams(ParamsRound(rv.Round))
 	if err != nil {
-		return unauthenticatedVote{}, fmt.Errorf("makeVote: could not get consensus params for round %d: %v", ParamsRound(rv.Round), err)
+		return unauthenticatedVote{}, fmt.Errorf("makeUnauthenticatedVote: could not get consensus params for round %d: %v", ParamsRound(rv.Round), err)
 	}
+
+	if proto.FastPartitionRecovery {
+		switch rv.Step {
+		case propose, soft, cert, late, redo:
+			if rv.Proposal == bottom {
+				logging.Base().Panicf("makeUnauthenticatedVote: votes from step %d cannot validate bottom", rv.Step)
+			}
+		case down:
+			if rv.Proposal != bottom {
+				logging.Base().Panicf("makeUnauthenticatedVote: votes from step %d must validate bottom", rv.Step)
+			}
+		}
+	} else {
+		switch rv.Step {
+		case propose, soft, cert:
+			if rv.Proposal == bottom {
+				logging.Base().Panicf("makeUnauthenticatedVote: votes from step %d cannot validate bottom", rv.Step)
+			}
+		}
+	}
+
+	ephID := basics.OneTimeIDForRound(rv.Round, voting.KeyDilution(proto))
+	sig := voting.Sign(ephID, rv)
+	if (sig == crypto.OneTimeSignature{}) {
+		return unauthenticatedVote{}, fmt.Errorf("makeUnauthenticatedVote: got back empty signature for vote")
+	}
+
+	cred := committee.MakeCredential(&selection.SK, m.Selector)
+	return unauthenticatedVote{R: rv, Cred: cred, Sig: sig}, nil
+}
+
+// makeVote creates a new vote from its constituent components.
+//
+// makeVote returns an error it it fails.
+func makeVote(rv rawVote, voting crypto.OneTimeSigner, cred committee.Credential, proto config.ConsensusParams) (vote, error) {
+	/*proto, err := l.ConsensusParams(ParamsRound(rv.Round))
+	if err != nil {
+		return vote{}, fmt.Errorf("makeVote: could not get consensus params for round %d: %v", ParamsRound(rv.Round), err)
+	}*/
 
 	if proto.FastPartitionRecovery {
 		switch rv.Step {
@@ -175,11 +215,10 @@ func makeVote(rv rawVote, voting crypto.OneTimeSigner, selection *crypto.VRFSecr
 	ephID := basics.OneTimeIDForRound(rv.Round, voting.KeyDilution(proto))
 	sig := voting.Sign(ephID, rv)
 	if (sig == crypto.OneTimeSignature{}) {
-		return unauthenticatedVote{}, fmt.Errorf("makeVote: got back empty signature for vote")
+		return vote{}, fmt.Errorf("makeVote: got back empty signature for vote")
 	}
 
-	cred := committee.MakeCredential(&selection.SK, m.Selector)
-	return unauthenticatedVote{R: rv, Cred: cred, Sig: sig}, nil
+	return vote{R: rv, Cred: cred, Sig: sig}, nil
 }
 
 // ToBeHashed implements the Hashable interface.

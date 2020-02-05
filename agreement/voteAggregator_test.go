@@ -56,7 +56,7 @@ func TestVoteAggregatorVotes(t *testing.T) {
 			address := addresses[i]
 			step := step(s)
 			rv := rawVote{Sender: address, Round: round, Period: period, Step: step, Proposal: proposal}
-			uv, err := makeVote(rv, otSecrets[i], vrfSecrets[i], ledger)
+			uv, err := makeUnauthenticatedVote(rv, otSecrets[i], vrfSecrets[i], ledger)
 			assert.NoError(t, err)
 
 			vote, err := uv.verify(ledger)
@@ -108,7 +108,7 @@ func TestVoteAggregatorBundles(t *testing.T) {
 			address := addresses[i]
 			step := step(s)
 			rv := rawVote{Sender: address, Round: round, Period: period, Step: step, Proposal: proposal}
-			uv, err := makeVote(rv, otSecrets[i], vrfSecrets[i], ledger)
+			uv, err := makeUnauthenticatedVote(rv, otSecrets[i], vrfSecrets[i], ledger)
 			assert.NoError(t, err)
 
 			vote, err := uv.verify(ledger)
