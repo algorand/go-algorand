@@ -37,7 +37,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	//"os"
 
 	"github.com/algorand/go-deadlock"
 	"github.com/algorand/websocket"
@@ -325,6 +324,8 @@ type WebsocketNetwork struct {
 	// lastPeerConnectionsSent is the last time the peer connections were sent ( or attempted to be sent ) to the telemetry server.
 	lastPeerConnectionsSent time.Time
 
+	// transport and dialer are customized to limit the number of
+	// connection in compliance with connectionsRateLimitingCount.
 	transport http.Transport
 	dialer    Dialer
 }
@@ -1551,7 +1552,6 @@ func (wn *WebsocketNetwork) numOutgoingPending() int {
 // to comply with connectionsRateLimitingCount.
 func (wn *WebsocketNetwork) GetRoundTripper() http.RoundTripper {
 	return &wn.transport
-
 }
 
 // tryConnect opens websocket connection and checks initial connection parameters.
