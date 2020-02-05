@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,8 +19,8 @@ package transactions
 import (
 	"math/rand"
 	"path/filepath"
-	"testing"
 	"runtime"
+	"testing"
 
 	"github.com/stretchr/testify/require"
 
@@ -42,6 +42,9 @@ func GenerateRandomBytes(n int) []byte {
 // as they send each other money many times
 func TestAccountsCanSendMoney(t *testing.T) {
 	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
+	if testing.Short() {
 		t.Skip()
 	}
 	testAccountsCanSendMoney(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))

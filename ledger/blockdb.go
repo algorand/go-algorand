@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -154,11 +154,6 @@ func blockGetAux(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, aux evalA
 	}
 
 	err = protocol.Decode(blkbuf, &blk)
-	if err != nil {
-		return
-	}
-
-	err = protocol.Decode(auxbuf, &aux)
 	if err != nil {
 		return
 	}
