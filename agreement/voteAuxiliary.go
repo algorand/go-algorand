@@ -23,6 +23,8 @@ import (
 // A voteTrackerPeriod is a voteMachinePeriod which indicates whether a
 // next-threshold of votes was observed for a some value in a period.
 type voteTrackerPeriod struct {
+	_struct struct{} `codec:""` // not omitempty
+
 	// Make it explicit that we are serializing player fields for crash recovery;
 	// we should probably adopt this convention over the rest of player at some point.
 	Cached nextThresholdStatusEvent `codec:"cached"`
