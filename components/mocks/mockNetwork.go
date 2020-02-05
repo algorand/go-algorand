@@ -73,6 +73,11 @@ func (network *MockNetwork) GetPeers(options ...network.PeerOption) []network.Pe
 	return nil
 }
 
+// GetRoundTripper -- returns the default http transport
+func (network *MockNetwork) GetRoundTripper() http.RoundTripper {
+	return http.DefaultTransport
+}
+
 // Ready - always ready
 func (network *MockNetwork) Ready() chan struct{} {
 	c := make(chan struct{})
@@ -92,8 +97,8 @@ func (network *MockNetwork) ClearHandlers() {
 func (network *MockNetwork) RegisterHTTPHandler(path string, handler http.Handler) {
 }
 
-// MakeHTTPRequest - basic client.Do request
-func (network *MockNetwork) MakeHTTPRequest(client *http.Client,
-	request *http.Request) (*http.Response, error) {
-	return client.Do(request)
+// GetDialer -  empty implementation
+func (network *MockNetwork) GetDialer() *network.Dialer {
+	// TODO: fix this 
+	return nil
 }
