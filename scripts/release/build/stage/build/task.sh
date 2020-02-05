@@ -39,8 +39,6 @@ else
     fi
 
     echo ${BUILD_NUMBER} > "${REPO_ROOT}"/buildnumber.dat
-#    git add -A
-#    git commit -m "Build ${BUILD_NUMBER}"
 fi
 FULLVERSION=$(PATH=${PATH} "${REPO_ROOT}"/scripts/compute_build_number.sh -f)
 echo "${FULLVERSION}" > "${REPO_ROOT}"/fullversion.dat
@@ -67,9 +65,9 @@ EOF
 sed 's/^export //g' < "${HOME}"/build_env > "${HOME}"/build_env_docker
 
 # Run RPM build in Centos7 Docker container
-sg docker "docker build -t algocentosbuild - < $HOME/go/src/github.com/algorand/go-algorand/scripts/release/rpm/centos-build.Dockerfile"
+sg docker "docker build -t algocentosbuild - < $HOME/go/src/github.com/algorand/go-algorand/scripts/release/centos-build.Dockerfile"
 
-sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME},dst=/root/subhome algocentosbuild /root/subhome/go/src/github.com/algorand/go-algorand/scripts/release/rpm/build.sh"
+sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME},dst=/root/subhome algocentosbuild /root/subhome/go/src/github.com/algorand/go-algorand/scripts/release/build/rpm/build.sh"
 
 echo
 date "+build_release end BUILD stage %Y%m%d_%H%M%S"
