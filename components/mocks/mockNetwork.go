@@ -73,9 +73,9 @@ func (network *MockNetwork) GetPeers(options ...network.PeerOption) []network.Pe
 	return nil
 }
 
-// GetRateLimitedTransport -- returns RateLimitedTransport
-func (network *MockNetwork) GetRateLimitedTransport() *network.RateLimitedTransport {
-	return network.GetRateLimitedTransport()
+// GetRoundTripper -- returns the default http transport
+func (network *MockNetwork) GetRoundTripper() http.RoundTripper {
+	return http.DefaultTransport
 }
 
 // Ready - always ready
@@ -95,4 +95,10 @@ func (network *MockNetwork) ClearHandlers() {
 
 // RegisterHTTPHandler - empty implementation
 func (network *MockNetwork) RegisterHTTPHandler(path string, handler http.Handler) {
+}
+
+// GetDialer -  empty implementation
+func (network *MockNetwork) GetDialer() *network.Dialer {
+	// TODO: fix this 
+	return nil
 }
