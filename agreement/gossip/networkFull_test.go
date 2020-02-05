@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -84,7 +84,7 @@ func spinNetwork(t *testing.T, nodesCount int) ([]*networkImpl, []*messageCounte
 	networkImpls := []*networkImpl{}
 	msgCounters := []*messageCounter{}
 	for _, gossipNode := range gossipNodes {
-		networkImpl := WrapNetwork(gossipNode).(*networkImpl)
+		networkImpl := WrapNetwork(gossipNode, log).(*networkImpl)
 		networkImpls = append(networkImpls, networkImpl)
 		msgCounter := startMessageCounter(networkImpl)
 		msgCounters = append(msgCounters, msgCounter)

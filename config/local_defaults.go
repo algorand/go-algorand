@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -82,6 +82,7 @@ var defaultLocalV5 = Local{
 	RunHosted:                             false,
 	SuggestedFeeBlockHistory:              3,
 	SuggestedFeeSlidingWindowSize:         50,
+	TelemetryToLog:                        true,
 	TxPoolExponentialIncreaseFactor:       2,
 	TxPoolSize:                            15000,
 	TxSyncIntervalSeconds:                 60,

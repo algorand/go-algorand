@@ -1,7 +1,7 @@
 FROM ubuntu:18.04
 ENV GOLANG_VERSION 1.12
 
-RUN apt update && apt install -y git libboost-all-dev wget sqlite3 autoconf jq bsdmainutils
+RUN apt-get update && apt-get install -y git libboost-all-dev wget sqlite3 autoconf jq bsdmainutils shellcheck
 WORKDIR /root
 RUN wget --quiet https://dl.google.com/go/go${GOLANG_VERSION}.linux-amd64.tar.gz && tar -xvf go${GOLANG_VERSION}.linux-amd64.tar.gz && mv go /usr/local
 ENV GOROOT=/usr/local/go \

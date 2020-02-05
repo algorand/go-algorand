@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -39,6 +39,7 @@ import (
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/rpcs"
 )
 
 func nodeStatus(node *node.AlgorandFullNode) (res v1.NodeStatus, err error) {
@@ -48,13 +49,14 @@ func nodeStatus(node *node.AlgorandFullNode) (res v1.NodeStatus, err error) {
 	}
 
 	return v1.NodeStatus{
-		LastRound:            uint64(stat.LastRound),
-		LastVersion:          string(stat.LastVersion),
-		NextVersion:          string(stat.NextVersion),
-		NextVersionRound:     uint64(stat.NextVersionRound),
-		NextVersionSupported: stat.NextVersionSupported,
-		TimeSinceLastRound:   stat.TimeSinceLastRound().Nanoseconds(),
-		CatchupTime:          stat.CatchupTime.Nanoseconds(),
+		LastRound:                 uint64(stat.LastRound),
+		LastVersion:               string(stat.LastVersion),
+		NextVersion:               string(stat.NextVersion),
+		NextVersionRound:          uint64(stat.NextVersionRound),
+		NextVersionSupported:      stat.NextVersionSupported,
+		TimeSinceLastRound:        stat.TimeSinceLastRound().Nanoseconds(),
+		CatchupTime:               stat.CatchupTime.Nanoseconds(),
+		StoppedAtUnsupportedRound: stat.StoppedAtUnsupportedRound,
 	}, nil
 }
 
@@ -417,9 +419,29 @@ func WaitForBlock(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ledger := ctx.Node.Ledger()
+	latestBlkHdr, err := ledger.BlockHdr(ledger.Latest())
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
+		return
+	}
+	if latestBlkHdr.NextProtocol != "" {
+		if _, nextProtocolSupported := config.Consensus[latestBlkHdr.NextProtocol]; !nextProtocolSupported {
+			// see if the desired protocol switch is expect to happen before or after the above point.
+			if latestBlkHdr.NextProtocolSwitchOn <= basics.Round(queryRound+1) {
+				// we would never reach to this round, since this round would happen after the (unsupported) protocol upgrade.
+				lib.ErrorResponse(w, http.StatusBadRequest, err, errRequestedRoundInUnsupportedRound, ctx.Log)
+				return
+			}
+		}
+	}
+
 	select {
+	case <-ctx.Shutdown:
+		lib.ErrorResponse(w, http.StatusInternalServerError, err, errServiceShuttingDown, ctx.Log)
+		return
 	case <-time.After(1 * time.Minute):
-	case <-ctx.Node.Ledger().Wait(basics.Round(queryRound + 1)):
+	case <-ledger.Wait(basics.Round(queryRound + 1)):
 	}
 
 	nodeStatus, err := nodeStatus(ctx.Node)
@@ -1180,6 +1202,12 @@ func GetBlock(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	//         minimum: 0
 	//         required: true
 	//         description: The round from which to fetch block information.
+	//       - name: raw
+	//         in: query
+	//         type: integer
+	//         format: int64
+	//         required: false
+	//         description: Return raw msgpack block bytes
 	//     Responses:
 	//       200:
 	//         "$ref": '#/responses/BlockResponse'
@@ -1197,6 +1225,33 @@ func GetBlock(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// raw msgpack option:
+	rawstr := r.FormValue("raw")
+	if rawstr != "" {
+		rawint, err := strconv.ParseUint(rawstr, 10, 64)
+		if err != nil {
+			lib.ErrorResponse(w, http.StatusBadRequest, err, errFailedParsingRawOption, ctx.Log)
+			return
+		}
+		if rawint != 0 {
+			blockbytes, err := rpcs.RawBlockBytes(ctx.Node.Ledger(), basics.Round(queryRound))
+			if err != nil {
+				lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
+				return
+			}
+			w.Header().Set("Content-Type", rpcs.LedgerResponseContentType)
+			w.Header().Set("Content-Length", strconv.Itoa(len(blockbytes)))
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			w.WriteHeader(http.StatusOK)
+			_, err = w.Write(blockbytes)
+			if err != nil {
+				ctx.Log.Warnf("algod failed to write an object to the response stream: %v", err)
+			}
+			return
+		}
+	}
+
+	// decoded json-reencoded default:
 	ledger := ctx.Node.Ledger()
 	b, c, err := ledger.BlockCert(basics.Round(queryRound))
 	if err != nil {
