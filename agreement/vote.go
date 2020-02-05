@@ -187,11 +187,6 @@ func makeUnauthenticatedVote(rv rawVote, voting crypto.OneTimeSigner, selection 
 //
 // makeVote returns an error it it fails.
 func makeVote(rv rawVote, voting crypto.OneTimeSigner, cred committee.Credential, proto config.ConsensusParams) (vote, error) {
-	/*proto, err := l.ConsensusParams(ParamsRound(rv.Round))
-	if err != nil {
-		return vote{}, fmt.Errorf("makeVote: could not get consensus params for round %d: %v", ParamsRound(rv.Round), err)
-	}*/
-
 	if proto.FastPartitionRecovery {
 		switch rv.Step {
 		case propose, soft, cert, late, redo:
