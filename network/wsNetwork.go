@@ -37,6 +37,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"os"
 
 	"github.com/algorand/go-deadlock"
 	"github.com/algorand/websocket"
@@ -176,6 +177,7 @@ type GossipNode interface {
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 	// GetRoundTripper returns a Transport that would limit the number of outgoing connections.
 	GetRoundTripper() http.RoundTripper
 =======
@@ -194,6 +196,13 @@ type GossipNode interface {
 	// GetRateLimitedTransport returns a Transport that limits the number of outgoing connections.
 	GetRateLimitedTransport() *RateLimitedTransport
 >>>>>>> Adding RateLimitedTransport to wrap around the http.Transport
+=======
+	// GetDialer retrieves the dialer.
+	GetDialer() *Dialer
+
+	// GetRoundTripper returns a Transport that would limit the number of outgoing connections.
+	GetRoundTripper() http.RoundTripper
+>>>>>>> Separating Dialer from Transport, initializing the Dialer and Transport params (timeout, etc)
 }
 
 // IncomingMessage represents a message arriving from some peer in our p2p network
@@ -343,6 +352,7 @@ type WebsocketNetwork struct {
 	lastPeerConnectionsSent time.Time
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 
 	// transport and dialer are customized to limit the number of
 	// connection in compliance with connectionsRateLimitingCount.
@@ -362,6 +372,11 @@ type WebsocketNetwork struct {
 =======
 	rateLimitedTransport    RateLimitedTransport
 >>>>>>> Adding RateLimitedTransport to wrap around the http.Transport
+=======
+
+	transport http.Transport
+	dialer    Dialer
+>>>>>>> Separating Dialer from Transport, initializing the Dialer and Transport params (timeout, etc)
 }
 
 type broadcastRequest struct {
@@ -560,8 +575,12 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 func (wn *WebsocketNetwork) setup() {
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 	wn.dialer.phonebook = wn.phonebook
 <<<<<<< HEAD
+=======
+	wn.dialer.phonebook = wn.phonebook
+>>>>>>> Separating Dialer from Transport, initializing the Dialer and Transport params (timeout, etc)
 	// Parameter values similar to http.DefaultTransport
 	wn.dialer.innerDialer.Timeout = 30 * time.Second
 	wn.dialer.innerDialer.Timeout = 30 * time.Second
@@ -571,16 +590,23 @@ func (wn *WebsocketNetwork) setup() {
 	// Parameter values similar to http.DefaultTransport
 	wn.transport.DialContext = wn.dialer.DialContext
 	wn.transport.Dial = wn.dialer.Dial
+<<<<<<< HEAD
+=======
+	wn.transport.ForceAttemptHTTP2 = true
+>>>>>>> Separating Dialer from Transport, initializing the Dialer and Transport params (timeout, etc)
 	wn.transport.MaxIdleConns = 100
 	wn.transport.IdleConnTimeout = 90 * time.Second
 	wn.transport.TLSHandshakeTimeout = 10 * time.Second
 	wn.transport.ExpectContinueTimeout = 1 * time.Second
 
+<<<<<<< HEAD
 =======
 >>>>>>> changes.
 =======
 	wn.rateLimitedTransport.phonebook = wn.phonebook
 >>>>>>> Adding RateLimitedTransport to wrap around the http.Transport
+=======
+>>>>>>> Separating Dialer from Transport, initializing the Dialer and Transport params (timeout, etc)
 	wn.upgrader.ReadBufferSize = 4096
 	wn.upgrader.WriteBufferSize = 4096
 	wn.upgrader.EnableCompression = false
@@ -1006,7 +1032,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 			rootURL:       trackedRequest.otherPublicAddr,
 			originAddress: trackedRequest.remoteHost,
 			client: http.Client{
-				Transport: wn.GetRateLimitedTransport(),
+				Transport: wn.GetRoundTripper(),
 			},
 		},
 >>>>>>> changes.
@@ -1620,10 +1646,14 @@ func (wn *WebsocketNetwork) numOutgoingPending() int {
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> Separating Dialer from Transport, initializing the Dialer and Transport params (timeout, etc)
 // GetRoundTripper returns an http.Transport that limits the number of connection
 // to comply with connectionsRateLimitingCount.
 func (wn *WebsocketNetwork) GetRoundTripper() http.RoundTripper {
 	return &wn.transport
+<<<<<<< HEAD
 =======
 =======
 // GetNetTransport returns an http.Transport that limits the number of connection
@@ -1656,6 +1686,9 @@ func (wn *WebsocketNetwork) GetRoundTripper() http.RoundTripper {
 func (wn *WebsocketNetwork) GetRateLimitedTransport() *RateLimitedTransport {
 	return &wn.rateLimitedTransport
 >>>>>>> Adding RateLimitedTransport to wrap around the http.Transport
+=======
+
+>>>>>>> Separating Dialer from Transport, initializing the Dialer and Transport params (timeout, etc)
 }
 
 // tryConnect opens websocket connection and checks initial connection parameters.
@@ -1679,6 +1712,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		EnableCompression: false,
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 		NetDialContext:    wn.dialer.DialContext,
 		NetDial:           wn.dialer.Dial,
 =======
@@ -1689,6 +1723,10 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		NetDialContext:    wn.GetRateLimitedTransport().DialContext,
 		NetDial:           wn.GetRateLimitedTransport().Dial,
 >>>>>>> Adding RateLimitedTransport to wrap around the http.Transport
+=======
+		NetDialContext:    wn.GetDialer().DialContext,
+		NetDial:           wn.GetDialer().Dial,
+>>>>>>> Separating Dialer from Transport, initializing the Dialer and Transport params (timeout, etc)
 	}
 
 	conn, response, err := websocketDialer.DialContext(wn.ctx, gossipAddr, requestHeader)
@@ -1743,7 +1781,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 			net:     wn,
 			rootURL: addr,
 			client: http.Client{
-				Transport: wn.GetRateLimitedTransport(),
+				Transport: wn.GetRoundTripper(),
 			},
 		},
 >>>>>>> changes.
@@ -1905,6 +1943,11 @@ func (wn *WebsocketNetwork) countPeersSetGauges() {
 	}
 	networkIncomingConnections.Set(float64(numIn), nil)
 	networkOutgoingConnections.Set(float64(numOut), nil)
+}
+
+// GetDialer returns the dialer for this network
+func (wn *WebsocketNetwork) GetDialer() *Dialer {
+	return &wn.dialer
 }
 
 func justHost(hostPort string) string {

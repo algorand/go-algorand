@@ -19,6 +19,7 @@ package network
 import (
 	"context"
 	"net"
+<<<<<<< HEAD:network/rateLimitedTransport.go
 <<<<<<< HEAD:network/dialer.go
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -31,16 +32,22 @@ import (
 =======
 	"time"
 >>>>>>> minor fixes
+=======
+	"time"
+
+	"fmt"
+	"os"
+	"runtime/debug"
+>>>>>>> Separating Dialer from Transport, initializing the Dialer and Transport params (timeout, etc):network/dialer.go
 )
 
-// RateLimitedTransport is a wrapper around the http.Transport that overrides the Dial and DialContext functions.
-// It limits the rate of the outgoing connections to comply with connectionsRateLimitingCount
-type RateLimitedTransport struct {
+// Dialer establish tcp-level connection with the destination
+type Dialer struct {
 	phonebook   *MultiPhonebook
 	innerDialer net.Dialer
-	*http.Transport
 }
 
+<<<<<<< HEAD:network/rateLimitedTransport.go
 <<<<<<< HEAD:network/dialer.go
 // Dial connects to the address on the named network.
 <<<<<<< HEAD
@@ -53,12 +60,17 @@ func (d *Dialer) Dial(network, address string) (net.Conn, error) {
 func (rlt *RateLimitedTransport) Dial(network, address string) (net.Conn, error) {
 	return rlt.DialContext(context.Background(), network, address)
 >>>>>>> Adding RateLimitedTransport to wrap around the http.Transport:network/rateLimitedTransport.go
+=======
+// Dial connects to the address on the named network.
+// It waits if needed not to exceed connectionsRateLimitingCount.
+func (d *Dialer) Dial(network, address string) (net.Conn, error) {
+	return d.DialContext(context.Background(), network, address)
+>>>>>>> Separating Dialer from Transport, initializing the Dialer and Transport params (timeout, etc):network/dialer.go
 }
 
 // DialContext connects to the address on the named network using the provided context.
-// It wraps around the http.Transport.DialContext to limit the outgoing connection rate
 // It waits if needed not to exceed connectionsRateLimitingCount.
-func (rlt *RateLimitedTransport) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
 	var waitTime time.Duration
 <<<<<<< HEAD
 	var provisionalTime time.Time
@@ -103,7 +115,9 @@ func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.
 	var provisionalTime time.Time
 
 	for {
-		_, waitTime, provisionalTime = rlt.phonebook.GetConnectionWaitTime(address)
+		_, waitTime, provisionalTime = d.phonebook.GetConnectionWaitTime(address)
+		fmt.Fprintf(os.Stderr, "xxxsss Waittime: %d Addr: %s\n", waitTime, address)
+		debug.PrintStack()
 		if waitTime == 0 {
 			break // break out of the loop and proceed to the connection
 		}
@@ -113,6 +127,7 @@ func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.
 		case <-time.After(waitTime):
 		}
 	}
+<<<<<<< HEAD:network/rateLimitedTransport.go
 <<<<<<< HEAD:network/dialer.go
 >>>>>>> Taking care of the lock triggering deadlock detection.
 	conn, err := d.innerDialer.DialContext(ctx, network, address)
@@ -121,6 +136,10 @@ func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.
 	conn, err := rlt.innerDialer.DialContext(ctx, network, address)
 	rlt.phonebook.UpdateConnectionTime(address, provisionalTime)
 >>>>>>> Adding RateLimitedTransport to wrap around the http.Transport:network/rateLimitedTransport.go
+=======
+	conn, err := d.innerDialer.DialContext(ctx, network, address)
+	d.phonebook.UpdateConnectionTime(address, provisionalTime)
+>>>>>>> Separating Dialer from Transport, initializing the Dialer and Transport params (timeout, etc):network/dialer.go
 
 	return conn, err
 >>>>>>> DRAFT: using channel to offload the mutex.
