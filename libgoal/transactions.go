@@ -411,6 +411,15 @@ func (c *Client) MakeUnsignedAssetCreateTx(total uint64, defaultFrozen bool, man
 		return transactions.Transaction{}, errors.New("unknown consensus version")
 	}
 
+	// If assets are not yet enabled, lookup the base parameters to allow creating assets while offline
+	if !cparams.Asset {
+		cparams, ok = c.consensus[protocol.ConsensusVersion(protocol.ConsensusV18)]
+
+		if !ok {
+			return transactions.Transaction{}, errors.New("unknown consensus version")
+		}
+	}
+
 	if len(url) > cparams.MaxAssetURLBytes {
 		return tx, fmt.Errorf("asset url %s is too long (max %d bytes)", url, cparams.MaxAssetURLBytes)
 	}
@@ -605,3 +614,4 @@ func (c *Client) GroupID(txgroup []transactions.Transaction) (gid crypto.Digest,
 
 	return crypto.HashObj(group), nil
 }
+
