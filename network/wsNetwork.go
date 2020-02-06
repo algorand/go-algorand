@@ -535,7 +535,6 @@ func (wn *WebsocketNetwork) setup() {
 	// Parameter values similar to http.DefaultTransport
 	wn.transport.DialContext = wn.dialer.DialContext
 	wn.transport.Dial = wn.dialer.Dial
-	wn.transport.ForceAttemptHTTP2 = true
 	wn.transport.MaxIdleConns = 100
 	wn.transport.IdleConnTimeout = 90 * time.Second
 	wn.transport.TLSHandshakeTimeout = 10 * time.Second
