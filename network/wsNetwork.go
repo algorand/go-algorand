@@ -559,10 +559,14 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 			addrs = wn.phonebook.GetAddresses(1000)
 			for _, addr := range addrs {
 <<<<<<< HEAD
+<<<<<<< HEAD
 				peerCore := makePeerCore(wn, addr, wn.GetRoundTripper(), "" /*origin address*/)
 =======
 				peerCore := makePeerCore(wn, addr, wn.GetRoundTripper(), "" /*origin addres*/)
 >>>>>>> changes.
+=======
+				peerCore := makePeerCore(wn, addr, wn.GetRoundTripper(), "" /*origin address*/)
+>>>>>>> Addressing Pavel's comments.
 				outPeers = append(outPeers, &peerCore)
 			}
 		case PeersConnectedIn:
