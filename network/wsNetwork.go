@@ -597,9 +597,12 @@ func (wn *WebsocketNetwork) setup() {
 	wn.transport.DialContext = wn.dialer.DialContext
 	wn.transport.Dial = wn.dialer.Dial
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 	wn.transport.ForceAttemptHTTP2 = true
 >>>>>>> Separating Dialer from Transport, initializing the Dialer and Transport params (timeout, etc)
+=======
+>>>>>>> fixing build failure.
 	wn.transport.MaxIdleConns = 100
 	wn.transport.IdleConnTimeout = 90 * time.Second
 	wn.transport.TLSHandshakeTimeout = 10 * time.Second
