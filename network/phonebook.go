@@ -165,6 +165,7 @@ func (e *phonebookEntries) getConnectionWaitTime(addr string) (addrInPhonebook b
 			break // break the loop. The rest are earlier than 1 second
 		}
 	}
+	// Remove the expired elements from e.data[addr].recentConnectionTimes
 	e.popNElements(numElmtsToRemove, addr)
 
 	// If there are max number of connections within the time window, wait
