@@ -20,9 +20,6 @@ import (
 	"context"
 	"net"
 	"time"
-
-	"fmt"
-	"os"
 )
 
 // Dialer establish tcp-level connection with the destination
