@@ -5,10 +5,11 @@
 CHANNEL="$1"
 BUCKET_LOCATION="$2"
 FULLVERSION="$4"
-INSTANCE=$(cat scripts/release/tmp/instance)
+INSTANCE=$(cat scripts/release/common/ec2/tmp/instance)
 
 rm -rf pkg/* && mkdir -p pkg/"$FULLVERSION"
-ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@"$INSTANCE" bash go/src/github.com/algorand/go-algorand/scripts/release/build/stage/upload/task.sh
+#ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@"$INSTANCE" bash go/src/github.com/algorand/go-algorand/scripts/release/build/stage/upload/task.sh
+ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@"$INSTANCE" bash ben-branch/scripts/release/build/stage/upload/task.sh
 scp -i ReleaseBuildInstanceKey.pem -o StrictHostKeyChecking=no -r ubuntu@"$INSTANCE":~/node_pkg/* pkg/"$FULLVERSION"/
 # Create the buildlog file.
 scp -i ReleaseBuildInstanceKey.pem -o StrictHostKeyChecking=no ubuntu@"$INSTANCE":~/build_status_"$CHANNEL"_*.asc.gz pkg/

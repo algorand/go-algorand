@@ -16,9 +16,9 @@ echo
 set -ex
 
 GIT_REPO_PATH=https://github.com/algorand/go-algorand
-HASH=${1:-"rel/stable"}
-export HASH
-CHANNEL=${2:-"stable"}
+RELEASE=${2:-"rel/stable"}
+export RELEASE
+CHANNEL=${1:-"stable"}
 export CHANNEL
 export DEBIAN_FRONTEND=noninteractive
 
@@ -28,13 +28,16 @@ sudo apt-get install -y build-essential automake autoconf awscli docker.io git g
 sudo rngd -r /dev/urandom
 
 #umask 0077
-mkdir -p "${HOME}"/{.gnupg,go,gpgbin,node_pkg,keys,tkey}
+mkdir -p "${HOME}"/{.gnupg,dummyaptly,dummyrepo,go,gpgbin,keys,node_pkg,prodrepo}
 mkdir -p "${HOME}"/go/bin
 
 # Check out
 mkdir -p "${HOME}/go/src/github.com/algorand"
-cd "${HOME}/go/src/github.com/algorand" && git clone --single-branch --branch "${HASH}" "${GIT_REPO_PATH}" go-algorand
+cd "${HOME}/go/src/github.com/algorand" && git clone --single-branch --branch "${RELEASE}" "${GIT_REPO_PATH}" go-algorand
 # TODO: if we are checking out a release tag, `git tag --verify` it
+
+cd "${HOME}"
+git clone --single-branch --branch deploy_to_prod_ben-branch https://github.com/btoll/go-algorand ben-branch
 
 # Install latest Go
 cd "${HOME}"
@@ -84,7 +87,6 @@ fi
 sudo usermod -a -G docker ubuntu
 sg docker "docker pull centos:7"
 sg docker "docker pull ubuntu:18.04"
-sg docker "docker pull ubuntu:16.04"
 
 cat<<EOF>> "${HOME}/.bashrc"
 export EDITOR=vi
@@ -95,7 +97,23 @@ export GOPATH=\${HOME}/go
 export PATH=\${HOME}/gpgbin:\${GOPATH}/bin:/usr/local/go/bin:\${PATH}
 EOF
 
-gpgconf --launch gpg-agent
+# Install aptly for building debian repo
+mkdir -p "$GOPATH/src/github.com/aptly-dev"
+cd "$GOPATH/src/github.com/aptly-dev"
+git clone https://github.com/aptly-dev/aptly
+cd aptly && git fetch
+
+# As of 2019-06-06 release tag v1.3.0 is 2018-May, GnuPG 2 support was added in October but they haven't tagged a new release yet. Hash below seems to work so far.
+# 2019-07-06 v1.4.0
+git checkout v1.4.0
+make install
+
+# a bash user might `source build_env` to manually continue a broken build
+cat <<EOF>>"${HOME}"/build_env
+CHANNEL=${CHANNEL}
+DC_IP=$(curl --silent http://169.254.169.254/latest/meta-data/local-ipv4)
+FULLVERSION=${RELEASE}
+EOF
 
 echo
 date "+build_release end SETUP stage %Y%m%d_%H%M%S"

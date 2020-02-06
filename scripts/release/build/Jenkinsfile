@@ -20,7 +20,7 @@ pipeline {
     stages {
         stage("create ec2 instance") {
             steps {
-                sh script: "scripts/release/create.sh ${params.region} ${params.ami} ${params.type}"
+                sh script: "scripts/release/common/create.sh ${params.region} ${params.ami} ${params.type}"
             }
         }
 
@@ -32,7 +32,7 @@ pipeline {
                     }
                 }
 
-                sh script: "scripts/release/build/stage/setup/run.sh ${params.hash} ${params.channel}"
+                sh script: "scripts/release/build/stage/setup/run.sh ${params.channel} ${params.hash}"
             }
         }
 
@@ -70,7 +70,7 @@ pipeline {
 
         stage("delete ec2 instance") {
             steps {
-                sh script: "scripts/release/delete.sh ${params.region}"
+                sh script: "scripts/release/common/delete.sh ${params.region}"
             }
         }
     }
