@@ -34,6 +34,7 @@ import (
 >>>>>>> minor fixes
 =======
 	"time"
+<<<<<<< HEAD
 
 	"fmt"
 	"os"
@@ -42,6 +43,8 @@ import (
 >>>>>>> Separating Dialer from Transport, initializing the Dialer and Transport params (timeout, etc):network/dialer.go
 =======
 >>>>>>> Integrating changes from Tsachi + cleanups.
+=======
+>>>>>>> fixing build failure.
 )
 
 // Dialer establish tcp-level connection with the destination
