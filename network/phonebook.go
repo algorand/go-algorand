@@ -40,14 +40,7 @@ type Phonebook interface {
 	// time to prevent exceeding connectionsRateLimitingCount.
 	// The connection should be established when the waitTime is 0.
 	// It will register a provisional next connection time when the waitTime is 0.
-<<<<<<< HEAD
-<<<<<<< HEAD
 	// The provisional time should be updated after the connection with UpdateConnectionTime
-=======
->>>>>>> Taking care of the lock triggering deadlock detection.
-=======
-	// The provisional time should be updated after the connection with UpdateConnectionTime
->>>>>>> Integrating changes from Tsachi + cleanups.
 	GetConnectionWaitTime(addr string) (addrInPhonebook bool,
 		waitTime time.Duration, provisionalTime time.Time)
 
@@ -150,28 +143,13 @@ func (e *phonebookEntries) updateRetryAfter(addr string, retryAfter time.Time) {
 // time to prevent exceeding connectionsRateLimitingCount.
 // The connection should be established when the waitTime is 0.
 // It will register a provisional next connection time when the waitTime is 0.
-<<<<<<< HEAD
-<<<<<<< HEAD
 // The provisional time should be updated after the connection with UpdateConnectionTime
-=======
->>>>>>> Taking care of the lock triggering deadlock detection.
-=======
-// The provisional time should be updated after the connection with UpdateConnectionTime
->>>>>>> Integrating changes from Tsachi + cleanups.
 func (e *phonebookEntries) getConnectionWaitTime(addr string) (addrInPhonebook bool,
 	waitTime time.Duration, provisionalTime time.Time) {
 	_, addrInPhonebook = e.data[addr]
 	curTime := time.Now()
 	if !addrInPhonebook {
-<<<<<<< HEAD
-<<<<<<< HEAD
 		// The addr is not in this phonebook.
-=======
-		// The addr is not in this phonebook. 
->>>>>>> Taking care of the lock triggering deadlock detection.
-=======
-		// The addr is not in this phonebook.
->>>>>>> minor fixes
 		// Will find the addr in a different phonebook.
 		return addrInPhonebook, 0 /* not unsed */, curTime /* not unsed */
 	}
@@ -193,40 +171,7 @@ func (e *phonebookEntries) getConnectionWaitTime(addr string) (addrInPhonebook b
 	// If there are max number of connections within the time window, wait
 	numElts := len(e.data[addr].recentConnectionTimes)
 	if uint(numElts) >= e.connectionsRateLimitingCount {
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
 		return addrInPhonebook, /* true */
-			(e.connectionsRateLimitingWindow - timeSince), curTime /* not unsed */
-	}
-
-	// Else, there is space in connectionsRateLimitingCount. The
-	// connection request of the caller will proceed
-=======
-		// Wait until the earliest time expires
-		fmt.Fprintf(os.Stderr, "xxxsss Waiting for %v ... %v\n", addr, e.connectionsRateLimitingWindow - timeSince)
-		time.Sleep(e.connectionsRateLimitingWindow - timeSince)
-		waited = true
-		// Remove it from recentConnectionTimes
-		e.popNElements(1, addr)
-	}
->>>>>>> DRAFT: using channel to offload the mutex.
-	// Update curTime, since it may have significantly changed if waited
-	provisionalTime = time.Now()
-	// Append the provisional time for the next connection request
-<<<<<<< HEAD
-	e.appendTime(addr, provisionalTime)
-	return addrInPhonebook /* true */, 0 /* no wait. proceed */, provisionalTime
-=======
-	e.appendTime(addr, curTime)
-	//	fmt.Fprintf(os.Stderr, "xxxsss times on out:  %v\n", len(e.data[addr].recentConnectionTimes))
-	return found, waited, curTime
->>>>>>> DRAFT: using channel to offload the mutex.
-=======
-		return addrInPhonebook /* true */ , 
-=======
-		return addrInPhonebook, /* true */
->>>>>>> minor fixes
 			(e.connectionsRateLimitingWindow - timeSince), curTime /* not unsed */
 	}
 
@@ -236,12 +181,7 @@ func (e *phonebookEntries) getConnectionWaitTime(addr string) (addrInPhonebook b
 	provisionalTime = time.Now()
 	// Append the provisional time for the next connection request
 	e.appendTime(addr, provisionalTime)
-<<<<<<< HEAD
-	return addrInPhonebook /* true */,  0 /* no wait. proceed */, provisionalTime
->>>>>>> Taking care of the lock triggering deadlock detection.
-=======
 	return addrInPhonebook /* true */, 0 /* no wait. proceed */, provisionalTime
->>>>>>> minor fixes
 }
 
 // UpdateConnectionTime will update the provisional connection time.
@@ -322,14 +262,7 @@ func (p *ArrayPhonebook) UpdateRetryAfter(addr string, retryAfter time.Time) {
 // time to prevent exceeding connectionsRateLimitingCount.
 // The connection should be established when the waitTime is 0.
 // It will register a provisional next connection time when the waitTime is 0.
-<<<<<<< HEAD
-<<<<<<< HEAD
 // The provisional time should be updated after the connection with UpdateConnectionTime
-=======
->>>>>>> Taking care of the lock triggering deadlock detection.
-=======
-// The provisional time should be updated after the connection with UpdateConnectionTime
->>>>>>> Integrating changes from Tsachi + cleanups.
 func (p *ArrayPhonebook) GetConnectionWaitTime(addr string) (addrInPhonebook bool,
 	waitTime time.Duration, provisionalTime time.Time) {
 	return p.Entries.getConnectionWaitTime(addr)
@@ -379,14 +312,7 @@ func (p *ThreadsafePhonebook) UpdateRetryAfter(addr string, retryAfter time.Time
 // time to prevent exceeding connectionsRateLimitingCount.
 // The connection should be established when the waitTime is 0.
 // It will register a provisional next connection time when the waitTime is 0.
-<<<<<<< HEAD
-<<<<<<< HEAD
 // The provisional time should be updated after the connection with UpdateConnectionTime
-=======
->>>>>>> Taking care of the lock triggering deadlock detection.
-=======
-// The provisional time should be updated after the connection with UpdateConnectionTime
->>>>>>> Integrating changes from Tsachi + cleanups.
 func (p *ThreadsafePhonebook) GetConnectionWaitTime(addr string) (addrInPhonebook bool,
 	waitTime time.Duration, provisionalTime time.Time) {
 	p.lock.RLock()
@@ -496,25 +422,12 @@ func (mp *MultiPhonebook) UpdateRetryAfter(addr string, retryAfter time.Time) {
 	}
 }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> Taking care of the lock triggering deadlock detection.
 // GetConnectionWaitTime will calculate and return the wait
 // time to prevent exceeding connectionsRateLimitingCount.
 // The connection should be established when the waitTime is 0.
 // It will register a provisional next connection time when the waitTime is 0.
 func (mp *MultiPhonebook) GetConnectionWaitTime(addr string) (addrInPhonebook bool,
 	waitTime time.Duration, provisionalTime time.Time) {
-<<<<<<< HEAD
-=======
-// WaitForConnectionTime will wait to prevent exceeding connectionsRateLimitingCount.
-// Will return true if it waited and false otherwise
-func (mp *MultiPhonebook) WaitForConnectionTime(addr string) (addrInPhonebook, waited bool, provisionalTime time.Time) {
-	<-mp.gateKeeper
->>>>>>> DRAFT: using channel to offload the mutex.
-=======
->>>>>>> Taking care of the lock triggering deadlock detection.
 	mp.lock.Lock()
 	defer mp.lock.Unlock()
 	addrInPhonebook = false

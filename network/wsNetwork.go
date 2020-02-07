@@ -174,37 +174,8 @@ type GossipNode interface {
 	// ClearHandlers deregisters all the existing message handlers.
 	ClearHandlers()
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
 	// GetRoundTripper returns a Transport that would limit the number of outgoing connections.
 	GetRoundTripper() http.RoundTripper
-=======
-	// GetDialer retrieves the dialer.
-	GetDialer() *Dialer
-
-<<<<<<< HEAD
-	// GetNetTransport returns a Transport that would limit the number of outgoing connections.
-	GetNetTransport() *http.Transport
->>>>>>> changes.
-=======
-=======
->>>>>>> changes.
-	// GetRoundTripper returns a Transport that would limit the number of outgoing connections.
-	GetRoundTripper() http.RoundTripper
->>>>>>> Testing a different approach to ovrride the Dial/DialContext by embedding the default transport into another object instead of changing the default transport.
-=======
-	// GetRateLimitedTransport returns a Transport that limits the number of outgoing connections.
-	GetRateLimitedTransport() *RateLimitedTransport
->>>>>>> Adding RateLimitedTransport to wrap around the http.Transport
-=======
-	// GetDialer retrieves the dialer.
-	GetDialer() *Dialer
-
-	// GetRoundTripper returns a Transport that would limit the number of outgoing connections.
-	GetRoundTripper() http.RoundTripper
->>>>>>> Separating Dialer from Transport, initializing the Dialer and Transport params (timeout, etc)
 }
 
 // IncomingMessage represents a message arriving from some peer in our p2p network
@@ -352,33 +323,11 @@ type WebsocketNetwork struct {
 
 	// lastPeerConnectionsSent is the last time the peer connections were sent ( or attempted to be sent ) to the telemetry server.
 	lastPeerConnectionsSent time.Time
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
 
 	// transport and dialer are customized to limit the number of
 	// connection in compliance with connectionsRateLimitingCount.
 	transport http.Transport
 	dialer    Dialer
-=======
-	dialer                  Dialer
-<<<<<<< HEAD
-<<<<<<< HEAD
->>>>>>> changes.
-=======
-
-	transportUpdated  bool
->>>>>>> workaround to avoid the race detection trigger.
-=======
->>>>>>> Testing a different approach to ovrride the Dial/DialContext by embedding the default transport into another object instead of changing the default transport.
-=======
-	rateLimitedTransport    RateLimitedTransport
->>>>>>> Adding RateLimitedTransport to wrap around the http.Transport
-=======
-
-	transport http.Transport
-	dialer    Dialer
->>>>>>> Separating Dialer from Transport, initializing the Dialer and Transport params (timeout, etc)
 }
 
 type broadcastRequest struct {
@@ -558,15 +507,7 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 			var addrs []string
 			addrs = wn.phonebook.GetAddresses(1000)
 			for _, addr := range addrs {
-<<<<<<< HEAD
-<<<<<<< HEAD
 				peerCore := makePeerCore(wn, addr, wn.GetRoundTripper(), "" /*origin address*/)
-=======
-				peerCore := makePeerCore(wn, addr, wn.GetRoundTripper(), "" /*origin addres*/)
->>>>>>> changes.
-=======
-				peerCore := makePeerCore(wn, addr, wn.GetRoundTripper(), "" /*origin address*/)
->>>>>>> Addressing Pavel's comments.
 				outPeers = append(outPeers, &peerCore)
 			}
 		case PeersConnectedIn:
@@ -584,13 +525,7 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 
 func (wn *WebsocketNetwork) setup() {
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 	wn.dialer.phonebook = wn.phonebook
-<<<<<<< HEAD
-=======
-	wn.dialer.phonebook = wn.phonebook
->>>>>>> Separating Dialer from Transport, initializing the Dialer and Transport params (timeout, etc)
 	// Parameter values similar to http.DefaultTransport
 	wn.dialer.innerDialer.Timeout = 30 * time.Second
 	wn.dialer.innerDialer.Timeout = 30 * time.Second
@@ -600,26 +535,11 @@ func (wn *WebsocketNetwork) setup() {
 	// Parameter values similar to http.DefaultTransport
 	wn.transport.DialContext = wn.dialer.DialContext
 	wn.transport.Dial = wn.dialer.Dial
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-	wn.transport.ForceAttemptHTTP2 = true
->>>>>>> Separating Dialer from Transport, initializing the Dialer and Transport params (timeout, etc)
-=======
->>>>>>> fixing build failure.
 	wn.transport.MaxIdleConns = 100
 	wn.transport.IdleConnTimeout = 90 * time.Second
 	wn.transport.TLSHandshakeTimeout = 10 * time.Second
 	wn.transport.ExpectContinueTimeout = 1 * time.Second
 
-<<<<<<< HEAD
-=======
->>>>>>> changes.
-=======
-	wn.rateLimitedTransport.phonebook = wn.phonebook
->>>>>>> Adding RateLimitedTransport to wrap around the http.Transport
-=======
->>>>>>> Separating Dialer from Transport, initializing the Dialer and Transport params (timeout, etc)
 	wn.upgrader.ReadBufferSize = 4096
 	wn.upgrader.WriteBufferSize = 4096
 	wn.upgrader.EnableCompression = false
@@ -876,23 +796,6 @@ func (wn *WebsocketNetwork) checkServerResponseVariables(header http.Header, add
 	return true
 }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-// MakeHTTPRequest will make sure connectionsRateLimitingCount is not
-// violated, and register the connection time of the request, before
-// making the http request to the server.
-/*func (wn *WebsocketNetwork) MakeHTTPRequest(client *http.Client,
-	request *http.Request) (resp *http.Response, err error) {
-	_, _, provisionalTime := wn.phonebook.WaitForConnectionTime(request.Host)
-	resp, err = client.Do(request)
-	wn.phonebook.UpdateConnectionTime(request.Host, provisionalTime)
-	return resp, err
-}*/
-
->>>>>>> changes.
-=======
->>>>>>> cleaning unnecessary changes.
 // getCommonHeaders retreives the common headers for both incoming and outgoing connections from the provided headers.
 func getCommonHeaders(headers http.Header) (otherTelemetryGUID, otherInstanceName, otherPublicAddr string) {
 	otherTelemetryGUID = logging.SanitizeTelemetryString(headers.Get(TelemetryIDHeader), 1)
@@ -1037,22 +940,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 	}
 
 	peer := &wsPeer{
-<<<<<<< HEAD
-<<<<<<< HEAD
 		wsPeerCore:        makePeerCore(wn, trackedRequest.otherPublicAddr, wn.GetRoundTripper(), trackedRequest.remoteHost),
-=======
-		wsPeerCore: wsPeerCore{
-			net:           wn,
-			rootURL:       trackedRequest.otherPublicAddr,
-			originAddress: trackedRequest.remoteHost,
-			client: http.Client{
-				Transport: wn.GetRoundTripper(),
-			},
-		},
->>>>>>> changes.
-=======
-		wsPeerCore:        makePeerCore(wn, trackedRequest.otherPublicAddr, wn.GetRoundTripper(), trackedRequest.remoteHost),
->>>>>>> changes.
 		conn:              conn,
 		outgoing:          false,
 		InstanceName:      trackedRequest.otherInstanceName,
@@ -1659,56 +1547,10 @@ func (wn *WebsocketNetwork) numOutgoingPending() int {
 	return len(wn.tryConnectAddrs)
 }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> Separating Dialer from Transport, initializing the Dialer and Transport params (timeout, etc)
 // GetRoundTripper returns an http.Transport that limits the number of connection
 // to comply with connectionsRateLimitingCount.
 func (wn *WebsocketNetwork) GetRoundTripper() http.RoundTripper {
 	return &wn.transport
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-=======
-// GetNetTransport returns an http.Transport that limits the number of connection
-// to comply with connectionsRateLimitingCount.
->>>>>>> minor fixes
-func (wn *WebsocketNetwork) GetNetTransport() *http.Transport {
-	transport := http.DefaultTransport.(*http.Transport)
-	if !wn.transportUpdated {
-		transport.DialContext = wn.GetDialer().DialContext
-		wn.transportUpdated = true
-	}
-	return transport
-=======
-// GetRoundTripper returns an http.Transport that limits the number of connection
-// to comply with connectionsRateLimitingCount.
-<<<<<<< HEAD
-func (wn *WebsocketNetwork) GetRoundTripper() http.RoundTripper {
-	var mt MyTransport
-	mt.myDialer = wn.GetDialer()
-	return &mt
->>>>>>> Testing a different approach to ovrride the Dial/DialContext by embedding the default transport into another object instead of changing the default transport.
-
->>>>>>> changes.
-=======
-=======
-// GetRateLimitedTransport returns a wrapper around http.Transport
-// that limits the number of connection to comply with
-// connectionsRateLimitingCount.
->>>>>>> fixing lint
-func (wn *WebsocketNetwork) GetRateLimitedTransport() *RateLimitedTransport {
-	return &wn.rateLimitedTransport
->>>>>>> Adding RateLimitedTransport to wrap around the http.Transport
-=======
-
->>>>>>> Separating Dialer from Transport, initializing the Dialer and Transport params (timeout, etc)
-=======
->>>>>>> Integrating changes from Tsachi + cleanups.
 }
 
 // tryConnect opens websocket connection and checks initial connection parameters.
@@ -1730,28 +1572,8 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		Proxy:             http.ProxyFromEnvironment,
 		HandshakeTimeout:  45 * time.Second,
 		EnableCompression: false,
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
 		NetDialContext:    wn.dialer.DialContext,
 		NetDial:           wn.dialer.Dial,
-=======
-		NetDialContext:    wn.GetDialer().DialContext,
-		NetDial:           wn.GetDialer().Dial,
->>>>>>> changes.
-=======
-		NetDialContext:    wn.GetRateLimitedTransport().DialContext,
-		NetDial:           wn.GetRateLimitedTransport().Dial,
->>>>>>> Adding RateLimitedTransport to wrap around the http.Transport
-=======
-		NetDialContext:    wn.GetDialer().DialContext,
-		NetDial:           wn.GetDialer().Dial,
->>>>>>> Separating Dialer from Transport, initializing the Dialer and Transport params (timeout, etc)
-=======
-		NetDialContext:    wn.dialer.DialContext,
-		NetDial:           wn.dialer.Dial,
->>>>>>> changes.
 	}
 
 	conn, response, err := websocketDialer.DialContext(wn.ctx, gossipAddr, requestHeader)
@@ -1799,21 +1621,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	}
 
 	peer := &wsPeer{
-<<<<<<< HEAD
-<<<<<<< HEAD
 		wsPeerCore:        makePeerCore(wn, addr, wn.GetRoundTripper(), "" /* origin */),
-=======
-		wsPeerCore: wsPeerCore{
-			net:     wn,
-			rootURL: addr,
-			client: http.Client{
-				Transport: wn.GetRoundTripper(),
-			},
-		},
->>>>>>> changes.
-=======
-		wsPeerCore:        makePeerCore(wn, addr, wn.GetRoundTripper(), "" /* origin */),
->>>>>>> changes.
 		conn:              conn,
 		outgoing:          true,
 		incomingMsgFilter: wn.incomingMsgFilter,
