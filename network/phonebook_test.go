@@ -210,15 +210,16 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	addr2 := "addrXYZ"
 
 	// Address not in. Should return false
-	addrInPhonebook, _, provisionalTime := entries.waitForConnectionTime(addr1)
+	addrInPhonebook, _, provisionalTime := entries.getConnectionWaitTime(addr1)
 	require.Equal(t, false, addrInPhonebook)
 	require.Equal(t, false, entries.updateConnectionTime(addr1, provisionalTime))
 
 	// Test the addresses are populated in the phonebook and a
 	// time can be added to one of them
 	entries.ReplacePeerList([]string{addr1, addr2})
-	_, waited, provisionalTime := entries.waitForConnectionTime(addr1)
-	require.Equal(t, false, waited)
+	addrInPhonebook, waitTime, provisionalTime := entries.getConnectionWaitTime(addr1)
+	require.Equal(t, true, addrInPhonebook)
+	require.Equal(t, time.Duration(0), waitTime)
 	require.Equal(t, true, entries.updateConnectionTime(addr1, provisionalTime))
 	phBookData := entries.data[addr1].recentConnectionTimes
 	require.Equal(t, 1, len(phBookData))
@@ -227,8 +228,8 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// add another value to addr
-	_, waited, provisionalTime = entries.waitForConnectionTime(addr1)
-	require.Equal(t, false, waited)
+	addrInPhonebook, waitTime, provisionalTime = entries.getConnectionWaitTime(addr1)
+	require.Equal(t, time.Duration(0), waitTime)
 	require.Equal(t, true, entries.updateConnectionTime(addr1, provisionalTime))
 	phBookData = entries.data[addr1].recentConnectionTimes
 	require.Equal(t, 2, len(phBookData))
@@ -238,8 +239,8 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 
 	// the first time should be removed and a new one added
 	// there should not be any wait
-	_, waited, provisionalTime = entries.waitForConnectionTime(addr1)
-	require.Equal(t, false, waited)
+	addrInPhonebook, waitTime, provisionalTime = entries.getConnectionWaitTime(addr1)
+	require.Equal(t, time.Duration(0), waitTime)
 	require.Equal(t, true, entries.updateConnectionTime(addr1, provisionalTime))
 	phBookData2 := entries.data[addr1].recentConnectionTimes
 	require.Equal(t, 2, len(phBookData2))
@@ -253,16 +254,20 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 
 	// add 3 values to another address. should not wait
 	// value 1
-	_, waited, provisionalTime = entries.waitForConnectionTime(addr2)
-	require.Equal(t, false, waited)
+	_, waitTime, provisionalTime = entries.getConnectionWaitTime(addr2)
+	require.Equal(t, time.Duration(0), waitTime)
 	require.Equal(t, true, entries.updateConnectionTime(addr2, provisionalTime))
+
+	// introduce a gap between the two requests so that only the first will be removed later when waited
+	time.Sleep(100 * time.Millisecond)
+
 	// value 2
-	_, waited, provisionalTime = entries.waitForConnectionTime(addr2)
-	require.Equal(t, false, waited)
+	addrInPhonebook, waitTime, provisionalTime = entries.getConnectionWaitTime(addr2)
+	require.Equal(t, time.Duration(0), waitTime)
 	require.Equal(t, true, entries.updateConnectionTime(addr2, provisionalTime))
 	// value 3
-	_, waited, provisionalTime = entries.waitForConnectionTime(addr2)
-	require.Equal(t, false, waited)
+	_, waitTime, provisionalTime = entries.getConnectionWaitTime(addr2)
+	require.Equal(t, time.Duration(0), waitTime)
 	require.Equal(t, true, entries.updateConnectionTime(addr2, provisionalTime))
 
 	phBookData = entries.data[addr2].recentConnectionTimes
@@ -270,8 +275,19 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	require.Equal(t, 3, len(phBookData))
 
 	// add another element to trigger wait
-	_, waited, provisionalTime = entries.waitForConnectionTime(addr2)
-	require.Equal(t, true, waited)
+	_, waitTime, provisionalTime = entries.getConnectionWaitTime(addr2)
+	require.Greater(t, int64(waitTime), int64(0))
+	// no element should be removed
+	phBookData2 = entries.data[addr2].recentConnectionTimes
+	require.Equal(t, phBookData[0], phBookData2[0])
+	require.Equal(t, phBookData[1], phBookData2[1])
+	require.Equal(t, phBookData[2], phBookData2[2])
+
+	time.Sleep(waitTime)
+
+	// The wait should be sufficient
+	_, waitTime, provisionalTime = entries.getConnectionWaitTime(addr2)
+	require.Equal(t, time.Duration(0), waitTime)
 	require.Equal(t, true, entries.updateConnectionTime(addr2, provisionalTime))
 	// only one element should be removed, and one added
 	phBookData2 = entries.data[addr2].recentConnectionTimes
@@ -291,25 +307,25 @@ func TestWaitAndAddConnectionTimeShortWindow(t *testing.T) {
 
 	// add 3 values. should not wait
 	// value 1
-	addrInPhonebook, waited, provisionalTime := entries.waitForConnectionTime(addr1)
+	addrInPhonebook, waitTime, provisionalTime := entries.getConnectionWaitTime(addr1)
 	require.Equal(t, true, addrInPhonebook)
-	require.Equal(t, false, waited)
+	require.Equal(t, time.Duration(0), waitTime)
 	require.Equal(t, true, entries.updateConnectionTime(addr1, provisionalTime))
 	// value 2
-	_, waited, provisionalTime = entries.waitForConnectionTime(addr1)
-	require.Equal(t, false, waited)
+	_, waitTime, provisionalTime = entries.getConnectionWaitTime(addr1)
+	require.Equal(t, time.Duration(0), waitTime)
 	require.Equal(t, true, entries.updateConnectionTime(addr1, provisionalTime))
 	// value 3
-	_, waited, provisionalTime = entries.waitForConnectionTime(addr1)
-	require.Equal(t, false, waited)
+	_, waitTime, provisionalTime = entries.getConnectionWaitTime(addr1)
+	require.Equal(t, time.Duration(0), waitTime)
 	require.Equal(t, true, entries.updateConnectionTime(addr1, provisionalTime))
 
 	// give enough time to expire all the elements
 	time.Sleep(10 * time.Millisecond)
 
 	// there should not be any wait
-	_, waited, provisionalTime = entries.waitForConnectionTime(addr1)
-	require.Equal(t, false, waited)
+	_, waitTime, provisionalTime = entries.getConnectionWaitTime(addr1)
+	require.Equal(t, time.Duration(0), waitTime)
 	require.Equal(t, true, entries.updateConnectionTime(addr1, provisionalTime))
 
 	// only one time should be left (the newly added)
