@@ -252,8 +252,8 @@ type ConsensusProtocols map[protocol.ConsensusVersion]ConsensusParams
 // consensus protocol.
 var Consensus ConsensusProtocols
 
-// Max vote threshold over all supported consensus protocols, for decoding
-// purposes.
+// MaxVoteThreshold is the largest threshold for a bundle over all supported
+// consensus protocols, used for decoding purposes.
 var MaxVoteThreshold int
 
 func maybeMaxVoteThreshold(t uint64) {
