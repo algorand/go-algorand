@@ -342,7 +342,7 @@ func PreloadConfigurableConsensusProtocols(dataDirectory string) (ConsensusProto
 	if err != nil {
 		if os.IsNotExist(err) {
 			// this file is not required, only optional. if it's missing, no harm is done.
-			return nil, nil
+			return Consensus, nil
 		}
 		return nil, err
 	}

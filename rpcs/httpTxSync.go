@@ -103,7 +103,8 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 	hts.rootURL = hpeer.GetAddress()
 	client := hpeer.GetHTTPClient()
 	if client == nil {
-		client = http.DefaultClient
+		client = &http.Client{}
+		client.Transport = hts.peers.GetRoundTripper()
 	}
 	parsedURL, err := network.ParseHostOrURL(hts.rootURL)
 	if err != nil {
@@ -123,7 +124,7 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 	request.Header.Set("Content-Type", requestContentType)
 	network.SetUserAgentHeader(request.Header)
 	request = request.WithContext(ctx)
-	response, err := hts.peers.MakeHTTPRequest(client, request)
+	response, err := client.Do(request)
 	if err != nil {
 		hts.log.Warnf("txSync POST %v: %s", syncURL, err)
 		return nil, err
