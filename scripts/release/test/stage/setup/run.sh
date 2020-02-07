@@ -4,8 +4,9 @@
 # Path(s) are relative to the root of the Jenkins workspace.
 INSTANCE=$(cat scripts/release/common/ec2/tmp/instance)
 BUCKET="$1"
-CHANNEL="$2"
-RELEASE="$3"
+BRANCH="$2"
+CHANNEL="$3"
+RELEASE="$4"
 
 rm -rf pkg/* && mkdir -p pkg/"$FULLVERSION"
 aws s3 sync s3://"$BUCKET"/"$CHANNEL"/"$RELEASE" pkg/ --exclude "*" --include "*.deb" --include "*.rpm"
@@ -18,6 +19,6 @@ scp -i ReleaseBuildInstanceKey.pem -o StrictHostKeyChecking=no -r gnupg2.2.9_cen
 
 #scp -i ReleaseBuildInstanceKey.pem -o StrictHostKeyChecking=no -r scripts/release/test/stage/setup/task.sh ubuntu@"$INSTANCE":
 scp -i ReleaseBuildInstanceKey.pem -o StrictHostKeyChecking=no -r scripts/release/common/setup.sh ubuntu@"$INSTANCE":
-#ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@"$INSTANCE" bash task.sh "$CHANNEL" "$RELEASE"
-ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@"$INSTANCE" bash setup.sh "$CHANNEL" "$RELEASE"
+#ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@"$INSTANCE" bash task.sh "$BRANCH" "$CHANNEL" "$RELEASE"
+ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@"$INSTANCE" bash setup.sh "$BRANCH" "$CHANNEL" "$RELEASE"
 

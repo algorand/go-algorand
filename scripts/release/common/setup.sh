@@ -16,10 +16,12 @@ echo
 set -ex
 
 GIT_REPO_PATH=https://github.com/algorand/go-algorand
-RELEASE=${2:-"rel/stable"}
-export RELEASE
-CHANNEL=${1:-"stable"}
+BRANCH=${1:-"master"}
+export BRANCH
+CHANNEL=${2:-"stable"}
 export CHANNEL
+RELEASE="$3"
+export RELEASE
 export DEBIAN_FRONTEND=noninteractive
 
 sudo apt-get update -q
@@ -33,7 +35,7 @@ mkdir -p "${HOME}"/go/bin
 
 # Check out
 mkdir -p "${HOME}/go/src/github.com/algorand"
-cd "${HOME}/go/src/github.com/algorand" && git clone --single-branch --branch "${RELEASE}" "${GIT_REPO_PATH}" go-algorand
+cd "${HOME}/go/src/github.com/algorand" && git clone --single-branch --branch "${BRANCH}" "${GIT_REPO_PATH}" go-algorand
 # TODO: if we are checking out a release tag, `git tag --verify` it
 
 cd "${HOME}"
