@@ -19,16 +19,22 @@ package catchup
 import (
 	"context"
 	"errors"
+	"net"
 	"net/http"
 	"net/rpc"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/components/mocks"
+	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -413,3 +419,389 @@ func TestFetchBlockComposedFail(t *testing.T) {
 		require.NoError(t, err)
 	}
 }
+
+func buildTestLedger(t *testing.T) (ledger *data.Ledger, next basics.Round, b bookkeeping.Block, err error) {
+	var user basics.Address
+	user[0] = 123
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	genesis := make(map[basics.Address]basics.AccountData)
+	genesis[user] = basics.AccountData{
+		Status:     basics.Online,
+		MicroAlgos: basics.MicroAlgos{Raw: proto.MinBalance * 2},
+	}
+	genesis[sinkAddr] = basics.AccountData{
+		Status:     basics.Online,
+		MicroAlgos: basics.MicroAlgos{Raw: proto.MinBalance * 2},
+	}
+	genesis[poolAddr] = basics.AccountData{
+		Status:     basics.Online,
+		MicroAlgos: basics.MicroAlgos{Raw: proto.MinBalance * 2},
+	}
+
+	log := logging.TestingLog(t)
+	genBal := data.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
+	genHash := crypto.Digest{0x42}
+	const inMem = true
+	const archival = true
+	ledger, err = data.LoadLedger(
+		log, t.Name(), inMem, protocol.ConsensusCurrentVersion, genBal, "", genHash,
+		nil, archival,
+	)
+	if err != nil {
+		t.Fatal("couldn't build ledger", err)
+		return
+	}
+	next = ledger.NextRound()
+	tx := transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender:      user,
+			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee},
+			FirstValid:  next,
+			LastValid:   next,
+			GenesisHash: genHash,
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: user,
+			Amount:   basics.MicroAlgos{Raw: 2},
+		},
+	}
+	signedtx := transactions.SignedTxn{
+		Txn: tx,
+	}
+
+	prev, err := ledger.Block(ledger.LastRound())
+	require.NoError(t, err)
+	b.RewardsLevel = prev.RewardsLevel
+	b.BlockHeader.Round = next
+	b.BlockHeader.GenesisHash = genHash
+	b.CurrentProtocol = protocol.ConsensusCurrentVersion
+	txib, err := b.EncodeSignedTxn(signedtx, transactions.ApplyData{})
+	require.NoError(t, err)
+	b.Payset = []transactions.SignedTxnInBlock{
+		txib,
+	}
+
+	require.NoError(t, ledger.AddBlock(b, agreement.Certificate{Round: next}))
+	return
+}
+
+type basicRPCNode struct {
+	listener net.Listener
+	server   http.Server
+	rmux     *mux.Router
+	peers    []network.Peer
+	mocks.MockNetwork
+}
+
+func (b *basicRPCNode) RegisterHTTPHandler(path string, handler http.Handler) {
+	if b.rmux == nil {
+		b.rmux = mux.NewRouter()
+	}
+	b.rmux.Handle(path, handler)
+}
+
+func (b *basicRPCNode) RegisterHandlers(dispatch []network.TaggedMessageHandler) {
+}
+
+func (b *basicRPCNode) start() bool {
+	var err error
+	b.listener, err = net.Listen("tcp", "")
+	if err != nil {
+		logging.Base().Error("tcp listen", err)
+		return false
+	}
+	if b.rmux == nil {
+		b.rmux = mux.NewRouter()
+	}
+	b.server.Handler = b.rmux
+	go b.server.Serve(b.listener)
+	return true
+}
+func (b *basicRPCNode) rootURL() string {
+	addr := b.listener.Addr().String()
+	rootURL := url.URL{Scheme: "http", Host: addr, Path: ""}
+	return rootURL.String()
+}
+
+func (b *basicRPCNode) stop() {
+	b.server.Close()
+}
+
+func (b *basicRPCNode) GetPeers(options ...network.PeerOption) []network.Peer {
+	return b.peers
+}
+
+type httpTestPeerSource struct {
+	peers []network.Peer
+	mocks.MockNetwork
+}
+
+func (s *httpTestPeerSource) GetPeers(options ...network.PeerOption) []network.Peer {
+	return s.peers
+}
+
+// implement network.HTTPPeer
+type testHTTPPeer string
+
+func (p *testHTTPPeer) GetAddress() string {
+	return string(*p)
+}
+func (p *testHTTPPeer) PrepareURL(x string) string {
+	return strings.Replace(x, "{genesisID}", "test genesisID", -1)
+}
+func (p *testHTTPPeer) GetHTTPClient() *http.Client {
+	return &http.Client{}
+}
+func (p *testHTTPPeer) GetHTTPPeer() network.HTTPPeer {
+	return p
+}
+
+func buildTestHTTPPeerSource(rootURLs ...string) *httpTestPeerSource {
+	peers := []network.Peer{}
+	for url := range rootURLs {
+		peer := testHTTPPeer(url)
+		peers = append(peers, &peer)
+	}
+	return &httpTestPeerSource{peers: peers}
+}
+func (s *httpTestPeerSource) addPeer(rootURL string) {
+	peer := testHTTPPeer(rootURL)
+	s.peers = append(s.peers, &peer)
+}
+
+// Build a ledger with genesis and one block, start an HTTPServer around it, use NetworkFetcher to fetch the block.
+// For smaller test, see ledgerService_test.go TestGetBlockHTTP
+// todo - fix this one
+func TestGetBlockHTTP(t *testing.T) {
+	// start server
+	ledger, next, b, err := buildTestLedger(t)
+	if err != nil {
+		t.Fatal(err)
+		return
+	}
+	net := buildTestHTTPPeerSource()
+	ls := rpcs.RegisterLedgerService(config.GetDefaultLocal(), ledger, net, "test genesisID")
+
+	nodeA := basicRPCNode{}
+	nodeA.RegisterHTTPHandler(rpcs.LedgerServiceBlockPath, ls)
+	nodeA.start()
+	defer nodeA.stop()
+	rootURL := nodeA.rootURL()
+
+	// run fetcher
+	net.addPeer(rootURL)
+	_, ok := net.GetPeers(network.PeersConnectedOut)[0].(network.HTTPPeer)
+	require.True(t, ok)
+	factory := MakeNetworkFetcherFactory(net, numberOfPeers, nil)
+	factory.log = logging.TestingLog(t)
+	fetcher := factory.New()
+	// we have one peer, the HTTP block server
+	require.Equal(t, len(fetcher.(*NetworkFetcher).peers), 1)
+
+	var block *bookkeeping.Block
+	var cert *agreement.Certificate
+	var client FetcherClient
+
+	start := time.Now()
+	block, cert, client, err = fetcher.FetchBlock(context.Background(), next)
+	end := time.Now()
+	require.NotNil(t, client)
+	require.NoError(t, err)
+
+	require.True(t, end.Sub(start) < 10*time.Second)
+	require.Equal(t, &b, block)
+	if err == nil {
+		require.NotEqual(t, nil, block)
+		require.NotEqual(t, nil, cert)
+	}
+}
+
+func nodePair() (*basicRPCNode, *basicRPCNode) {
+	nodeA := &basicRPCNode{}
+	nodeA.start()
+	nodeB := &basicRPCNode{}
+	nodeB.start()
+	httpPeerA := testHTTPPeer(nodeA.rootURL())
+	httpPeerB := testHTTPPeer(nodeB.rootURL())
+	nodeB.peers = []network.Peer{&httpPeerA}
+	nodeA.peers = []network.Peer{&httpPeerB}
+	return nodeA, nodeB
+}
+
+func TestGetBlockMocked(t *testing.T) {
+	var user basics.Address
+	user[0] = 123
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	genesis := make(map[basics.Address]basics.AccountData)
+	genesis[user] = basics.AccountData{
+		Status:     basics.Online,
+		MicroAlgos: basics.MicroAlgos{Raw: proto.MinBalance * 2},
+	}
+	genesis[sinkAddr] = basics.AccountData{
+		Status:     basics.Online,
+		MicroAlgos: basics.MicroAlgos{Raw: proto.MinBalance * 2},
+	}
+	genesis[poolAddr] = basics.AccountData{
+		Status:     basics.Online,
+		MicroAlgos: basics.MicroAlgos{Raw: proto.MinBalance * 2},
+	}
+
+	log := logging.TestingLog(t)
+	// A network with two nodes, A and B
+	nodeA, nodeB := nodePair()
+	defer nodeA.stop()
+	defer nodeB.stop()
+
+	// A is running the ledger service and will respond to fetch requests
+	genBal := data.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
+	const inMem = true
+	const archival = true
+	ledgerA, err := data.LoadLedger(
+		log.With("name", "A"), t.Name(), inMem,
+		protocol.ConsensusCurrentVersion, genBal, "", crypto.Digest{},
+		nil, archival,
+	)
+	if err != nil {
+		t.Errorf("Couldn't make ledger: %v", err)
+	}
+	rpcs.RegisterLedgerService(config.GetDefaultLocal(), ledgerA, nodeA, "test genesisID")
+
+	next := ledgerA.NextRound()
+	genHash := crypto.Digest{0x42}
+	tx := transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender:      user,
+			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee},
+			FirstValid:  next,
+			LastValid:   next,
+			GenesisHash: genHash,
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: user,
+			Amount:   basics.MicroAlgos{Raw: 2},
+		},
+	}
+	signedtx := transactions.SignedTxn{
+		Txn: tx,
+	}
+
+	var b bookkeeping.Block
+	prev, err := ledgerA.Block(ledgerA.LastRound())
+	require.NoError(t, err)
+	b.RewardsLevel = prev.RewardsLevel
+	b.BlockHeader.Round = next
+	b.BlockHeader.GenesisHash = genHash
+	b.CurrentProtocol = protocol.ConsensusCurrentVersion
+	txib, err := b.EncodeSignedTxn(signedtx, transactions.ApplyData{})
+	require.NoError(t, err)
+	b.Payset = []transactions.SignedTxnInBlock{
+		txib,
+	}
+	require.NoError(t, ledgerA.AddBlock(b, agreement.Certificate{Round: next}))
+
+	// B tries to fetch block
+	factory := MakeNetworkFetcherFactory(nodeB, 10, nil)
+	factory.log = logging.TestingLog(t)
+	nodeBRPC := factory.New()
+	ctx, cf := context.WithTimeout(context.Background(), time.Second)
+	defer cf()
+	eblock, _, _, err := nodeBRPC.FetchBlock(ctx, next)
+	if err != nil {
+		require.Failf(t, "Error fetching block", "%v", err)
+	}
+	block, err := ledgerA.Block(next)
+	require.NoError(t, err)
+	if eblock.Hash() != block.Hash() {
+		t.Errorf("FetchBlock returned wrong block: expected %v; got %v", block.Hash(), eblock)
+	}
+}
+
+func TestGetFutureBlock(t *testing.T) {
+	log := logging.TestingLog(t)
+	// A network with two nodes, A and B
+	nodeA, nodeB := nodePair()
+	defer nodeA.stop()
+	defer nodeB.stop()
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	genesis := make(map[basics.Address]basics.AccountData)
+	genesis[sinkAddr] = basics.AccountData{
+		Status:     basics.Online,
+		MicroAlgos: basics.MicroAlgos{Raw: proto.MinBalance * 2},
+	}
+	genesis[poolAddr] = basics.AccountData{
+		Status:     basics.Online,
+		MicroAlgos: basics.MicroAlgos{Raw: proto.MinBalance * 2},
+	}
+
+	gen := data.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
+	// A is running the ledger service and will respond to fetch requests
+	const inMem = true
+	const archival = true
+	ledgerA, err := data.LoadLedger(
+		log.With("name", "A"), t.Name(), inMem,
+		protocol.ConsensusCurrentVersion, gen, "", crypto.Digest{},
+		nil, archival,
+	)
+	if err != nil {
+		t.Errorf("Couldn't make ledger: %v", err)
+	}
+	rpcs.RegisterLedgerService(config.GetDefaultLocal(), ledgerA, nodeA, "test genesisID")
+
+	// B tries to fetch block 4
+	factory := MakeNetworkFetcherFactory(nodeB, 10, nil)
+	factory.log = logging.TestingLog(t)
+	nodeBRPC := factory.New()
+	ctx, cf := context.WithTimeout(context.Background(), time.Second)
+	defer cf()
+	_, _, client, err := nodeBRPC.FetchBlock(ctx, ledgerA.NextRound())
+	require.Error(t, err)
+	require.Nil(t, client)
+}
+
+// A quick GetBlock over websockets test hitting a mocked websocket server (no actual connection)
+/*func TestGetBlockWS(t *testing.T) {
+	// start server
+	ledger, next, b, err := buildTestLedger(t)
+	if err != nil {
+		t.Fatal(err)
+		return
+	}
+	c := make(chan network.IncomingMessage, 50)
+	ls := LedgerService{ledger: ledger, genesisID: "test genesisID", catchupReqs: c}
+	ls.Start()
+
+	// get ws fetcher
+	net := buildTestUnicastPeerSrc(t, c)
+	fs := rpcs.RegisterWsFetcherService(logging.TestingLog(t), net)
+
+	_, ok := net.GetPeers(network.PeersConnectedIn)[0].(network.UnicastPeer)
+	require.True(t, ok)
+	factory := MakeNetworkFetcherFactory(net, numberOfPeers, fs)
+	factory.log = logging.TestingLog(t)
+	fetcher := factory.NewOverGossip(protocol.UniCatchupReqTag)
+	// we have one peer, the Ws block server
+	require.Equal(t, fetcher.NumPeers(), 1)
+
+	var block *bookkeeping.Block
+	var cert *agreement.Certificate
+	var client FetcherClient
+
+	start := time.Now()
+	block, cert, client, err = fetcher.FetchBlock(context.Background(), next)
+	require.NotNil(t, client)
+	require.NoError(t, err)
+	end := time.Now()
+	require.True(t, end.Sub(start) < 10*time.Second)
+	require.Equal(t, &b, block)
+	if err == nil {
+		require.NotEqual(t, nil, block)
+		require.NotEqual(t, nil, cert)
+	}
+	fetcher.Close()
+}
+*/
