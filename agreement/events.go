@@ -813,8 +813,6 @@ func (e nextThresholdStatusRequestEvent) ComparableStr() string {
 }
 
 type nextThresholdStatusEvent struct {
-	_struct struct{} `codec:""` // not omitempty
-
 	// the result of a nextThresholdStatusRequest. Contains two bits of information,
 	// capturing four cases:
 	// Bottom = false, Proposal = unset/bottom --> received no next value thresholds
@@ -824,8 +822,8 @@ type nextThresholdStatusEvent struct {
 	// In particular, the first case could occur despite already been in the subsequent period
 	// IF we fast forwarded from a soft-vote bundle from the subsequent period.
 
-	Bottom   bool          `codec:"Bottom"`   // true if saw a threshold for bottom
-	Proposal proposalValue `codec:"Proposal"` // set to not bottom if saw threshold for some proposal
+	Bottom   bool          // true if saw a threshold for bottom
+	Proposal proposalValue // set to not bottom if saw threshold for some proposal
 }
 
 func (e nextThresholdStatusEvent) t() eventType {

@@ -257,68 +257,6 @@ func BenchmarkUnmarshalequivocationVoteAuthenticator(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalnextThresholdStatusEvent(t *testing.T) {
-	v := nextThresholdStatusEvent{}
-	bts, err := v.MarshalMsg(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	left, err := v.UnmarshalMsg(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
-	}
-
-	left, err = msgp.Skip(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
-	}
-}
-
-func TestRandomizedEncodingnextThresholdStatusEvent(t *testing.T) {
-	protocol.RunEncodingTest(t, &nextThresholdStatusEvent{})
-}
-
-func BenchmarkMarshalMsgnextThresholdStatusEvent(b *testing.B) {
-	v := nextThresholdStatusEvent{}
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		v.MarshalMsg(nil)
-	}
-}
-
-func BenchmarkAppendMsgnextThresholdStatusEvent(b *testing.B) {
-	v := nextThresholdStatusEvent{}
-	bts := make([]byte, 0, v.Msgsize())
-	bts, _ = v.MarshalMsg(bts[0:0])
-	b.SetBytes(int64(len(bts)))
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		bts, _ = v.MarshalMsg(bts[0:0])
-	}
-}
-
-func BenchmarkUnmarshalnextThresholdStatusEvent(b *testing.B) {
-	v := nextThresholdStatusEvent{}
-	bts, _ := v.MarshalMsg(nil)
-	b.ReportAllocs()
-	b.SetBytes(int64(len(bts)))
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, err := v.UnmarshalMsg(bts)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
 func TestMarshalUnmarshalproposal(t *testing.T) {
 	v := proposal{}
 	bts, err := v.MarshalMsg(nil)
@@ -1113,68 +1051,6 @@ func BenchmarkAppendMsgvoteAuthenticator(b *testing.B) {
 
 func BenchmarkUnmarshalvoteAuthenticator(b *testing.B) {
 	v := voteAuthenticator{}
-	bts, _ := v.MarshalMsg(nil)
-	b.ReportAllocs()
-	b.SetBytes(int64(len(bts)))
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, err := v.UnmarshalMsg(bts)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func TestMarshalUnmarshalvoteTrackerPeriod(t *testing.T) {
-	v := voteTrackerPeriod{}
-	bts, err := v.MarshalMsg(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	left, err := v.UnmarshalMsg(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
-	}
-
-	left, err = msgp.Skip(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
-	}
-}
-
-func TestRandomizedEncodingvoteTrackerPeriod(t *testing.T) {
-	protocol.RunEncodingTest(t, &voteTrackerPeriod{})
-}
-
-func BenchmarkMarshalMsgvoteTrackerPeriod(b *testing.B) {
-	v := voteTrackerPeriod{}
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		v.MarshalMsg(nil)
-	}
-}
-
-func BenchmarkAppendMsgvoteTrackerPeriod(b *testing.B) {
-	v := voteTrackerPeriod{}
-	bts := make([]byte, 0, v.Msgsize())
-	bts, _ = v.MarshalMsg(bts[0:0])
-	b.SetBytes(int64(len(bts)))
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		bts, _ = v.MarshalMsg(bts[0:0])
-	}
-}
-
-func BenchmarkUnmarshalvoteTrackerPeriod(b *testing.B) {
-	v := voteTrackerPeriod{}
 	bts, _ := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
