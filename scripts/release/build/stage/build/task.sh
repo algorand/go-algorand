@@ -65,7 +65,7 @@ EOF
 sed 's/^export //g' < "${HOME}"/build_env > "${HOME}"/build_env_docker
 
 # Run RPM build in Centos7 Docker container
-sg docker "docker build -t algocentosbuild - < $HOME/go/src/github.com/algorand/go-algorand/scripts/release/centos-build.Dockerfile"
+sg docker "docker build -t algocentosbuild - < $HOME/go/src/github.com/algorand/go-algorand/scripts/release/common/centos-build.Dockerfile"
 
 sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME},dst=/root/subhome algocentosbuild /root/subhome/go/src/github.com/algorand/go-algorand/scripts/release/build/rpm/build.sh"
 
