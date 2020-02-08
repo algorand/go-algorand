@@ -48,6 +48,8 @@ type HTTPTxSync struct {
 
 const requestContentType = "application/x-www-form-urlencoded"
 
+// ResponseBytes reads the content of the response object and return the body content
+// while obeying the read size limits
 func ResponseBytes(response *http.Response, log logging.Logger, limit uint64) (data []byte, err error) {
 	// response.Body is always non-nil
 	defer response.Body.Close()
