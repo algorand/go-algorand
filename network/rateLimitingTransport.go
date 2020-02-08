@@ -35,11 +35,19 @@ var ErrConnectionQueueingTimeout = errors.New("rateLimitingTransport: queueing t
 
 // makeRateLimitingTransport creates a rate limiting http transport that would limit the requests rate
 // according to the entries in the phonebook.
-func makeRateLimitingTransport(phonebook *MultiPhonebook, queueingTimeout time.Duration) rateLimitingTransport {
+func makeRateLimitingTransport(phonebook *MultiPhonebook, queueingTimeout time.Duration, dialer *Dialer) rateLimitingTransport {
 	defaultTransport := http.DefaultTransport.(*http.Transport)
 	return rateLimitingTransport{
-		phonebook:       phonebook,
-		innerTransport:  defaultTransport.Clone(),
+		phonebook: phonebook,
+		innerTransport: &http.Transport{
+			Proxy:                 defaultTransport.Proxy,
+			DialContext:           dialer.innerDialContext,
+			ForceAttemptHTTP2:     defaultTransport.ForceAttemptHTTP2,
+			MaxIdleConns:          defaultTransport.MaxIdleConns,
+			IdleConnTimeout:       defaultTransport.IdleConnTimeout,
+			TLSHandshakeTimeout:   defaultTransport.TLSHandshakeTimeout,
+			ExpectContinueTimeout: defaultTransport.ExpectContinueTimeout,
+		},
 		queueingTimeout: queueingTimeout,
 	}
 }

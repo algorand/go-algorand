@@ -526,7 +526,7 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 func (wn *WebsocketNetwork) setup() {
 
 	wn.dialer = makeRateLimitingDialer(wn.phonebook)
-	wn.transport = makeRateLimitingTransport(wn.phonebook, 10*time.Second)
+	wn.transport = makeRateLimitingTransport(wn.phonebook, 10*time.Second, &wn.dialer)
 
 	wn.upgrader.ReadBufferSize = 4096
 	wn.upgrader.WriteBufferSize = 4096
