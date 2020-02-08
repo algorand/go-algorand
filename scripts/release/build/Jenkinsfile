@@ -1,6 +1,6 @@
 pipeline {
     parameters {
-        string defaultValue: '', description: 'Branch name or tag name.', name: 'hash', trim: true
+        string defaultValue: 'master', description: 'Branch name or tag name.', name: 'branch', trim: true
         string defaultValue: 'stable', description: 'Staged channel which should be released.', name: 'channel', trim: true
         string defaultValue: 's3://algorand-builds/channel', description: 's3://bucket/prefix', name: 'bucket_location', trim: true
 
@@ -20,7 +20,7 @@ pipeline {
     stages {
         stage("create ec2 instance") {
             steps {
-                sh script: "scripts/release/create.sh ${params.region} ${params.ami} ${params.type}"
+                sh script: "scripts/release/common/create.sh ${params.region} ${params.ami} ${params.type}"
             }
         }
 
@@ -32,19 +32,19 @@ pipeline {
                     }
                 }
 
-                sh script: "scripts/release/build/stage/setup/run.sh ${params.hash} ${params.channel}"
+                sh script: "scripts/release/build/stage/setup/run.sh ${params.branch} ${params.channel}"
             }
         }
 
         stage("build") {
             steps {
-                sh script: "scripts/release/build/stage/build/run.sh ${params.hash} ${params.channel}"
+                sh script: "scripts/release/build/stage/build/run.sh ${params.branch} ${params.channel}"
             }
         }
 
         stage("package") {
             steps {
-                sh script: "scripts/release/build/stage/package/run.sh ${params.hash} ${params.channel}"
+                sh script: "scripts/release/build/stage/package/run.sh ${params.branch} ${params.channel}"
             }
         }
 
@@ -70,7 +70,7 @@ pipeline {
 
         stage("delete ec2 instance") {
             steps {
-                sh script: "scripts/release/delete.sh ${params.region}"
+                sh script: "scripts/release/common/delete.sh ${params.region}"
             }
         }
     }
