@@ -28,6 +28,19 @@ type Dialer struct {
 	innerDialer net.Dialer
 }
 
+// makeRateLimitingDialer creates a rate limiting dialer that would limit the connections
+// according to the entries in the phonebook.
+func makeRateLimitingDialer(phonebook *MultiPhonebook) Dialer {
+	return Dialer{
+		phonebook: phonebook,
+		innerDialer: net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+			DualStack: true,
+		},
+	}
+}
+
 // Dial connects to the address on the named network.
 // It waits if needed not to exceed connectionsRateLimitingCount.
 func (d *Dialer) Dial(network, address string) (net.Conn, error) {
