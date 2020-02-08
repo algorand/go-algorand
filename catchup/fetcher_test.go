@@ -45,7 +45,7 @@ import (
 	"github.com/algorand/go-algorand/util/bloom"
 )
 
-type MockRunner struct {
+type mockRunner struct {
 	ran           bool
 	done          chan *rpc.Call
 	failWithNil   bool
@@ -53,22 +53,22 @@ type MockRunner struct {
 	txgroups      [][]transactions.SignedTxn
 }
 
-type MockRPCClient struct {
-	client  *MockRunner
+type mockRPCClient struct {
+	client  *mockRunner
 	closed  bool
 	rootURL string
 	log     logging.Logger
 }
 
-func (client *MockRPCClient) Close() error {
+func (client *mockRPCClient) Close() error {
 	client.closed = true
 	return nil
 }
 
-func (client *MockRPCClient) Address() string {
+func (client *mockRPCClient) Address() string {
 	return "mock.address."
 }
-func (client *MockRPCClient) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups [][]transactions.SignedTxn, err error) {
+func (client *mockRPCClient) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups [][]transactions.SignedTxn, err error) {
 	client.log.Info("MockRPCClient.Sync")
 	select {
 	case <-ctx.Done():
@@ -83,40 +83,40 @@ func (client *MockRPCClient) Sync(ctx context.Context, bloom *bloom.Filter) (txg
 	}
 	return client.client.txgroups, nil
 }
-func (client *MockRPCClient) GetBlockBytes(ctx context.Context, r basics.Round) (data []byte, err error) {
+func (client *mockRPCClient) GetBlockBytes(ctx context.Context, r basics.Round) (data []byte, err error) {
 	return nil, nil
 }
 
 // network.HTTPPeer interface
-func (client *MockRPCClient) GetAddress() string {
+func (client *mockRPCClient) GetAddress() string {
 	return client.rootURL
 }
-func (client *MockRPCClient) GetHTTPClient() *http.Client {
+func (client *mockRPCClient) GetHTTPClient() *http.Client {
 	return nil
 }
-func (client *MockRPCClient) PrepareURL(x string) string {
+func (client *mockRPCClient) PrepareURL(x string) string {
 	return strings.Replace(x, "{genesisID}", "test genesisID", -1)
 }
 
-type MockClientAggregator struct {
+type mockClientAggregator struct {
 	mocks.MockNetwork
 	peers []network.Peer
 }
 
-func (mca *MockClientAggregator) GetPeers(options ...network.PeerOption) []network.Peer {
+func (mca *mockClientAggregator) GetPeers(options ...network.PeerOption) []network.Peer {
 	return mca.peers
 }
 
 const numberOfPeers = 10
 
-func makeMockClientAggregator(t *testing.T, failWithNil bool, failWithError bool) *MockClientAggregator {
+func makeMockClientAggregator(t *testing.T, failWithNil bool, failWithError bool) *mockClientAggregator {
 	clients := make([]network.Peer, 0)
 	for i := 0; i < numberOfPeers; i++ {
-		runner := MockRunner{failWithNil: failWithNil, failWithError: failWithError, done: make(chan *rpc.Call)}
-		clients = append(clients, &MockRPCClient{client: &runner, log: logging.TestingLog(t)})
+		runner := mockRunner{failWithNil: failWithNil, failWithError: failWithError, done: make(chan *rpc.Call)}
+		clients = append(clients, &mockRPCClient{client: &runner, log: logging.TestingLog(t)})
 	}
 	t.Logf("len(mca.clients) = %d", len(clients))
-	return &MockClientAggregator{peers: clients}
+	return &mockClientAggregator{peers: clients}
 }
 
 func getAllClientsSelectedForRound(t *testing.T, fetcher *NetworkFetcher, round basics.Round) map[FetcherClient]basics.Round {
