@@ -1,7 +1,8 @@
 pipeline {
     parameters {
-        string defaultValue: '', description: 'Release to test', name: 'release', trim: true
+        string defaultValue: 'master', description: 'Branch name or tag name.', name: 'branch', trim: true
         string defaultValue: 'stable', description: 'Staged channel which should be tested.', name: 'channel', trim: true
+        string defaultValue: '', description: 'Release to test', name: 'release', trim: true
         string defaultValue: 'algorand-builds', description: 'bucket/prefix', name: 'bucket_location', trim: true
 
         // AWS
@@ -20,7 +21,7 @@ pipeline {
     stages {
         stage("create ec2 instance") {
             steps {
-                sh script: "scripts/release/create.sh ${params.region} ${params.ami} ${params.type}"
+                sh script: "scripts/release/common/create.sh ${params.region} ${params.ami} ${params.type}"
             }
         }
 
@@ -32,7 +33,7 @@ pipeline {
                     }
                 }
 
-                sh script: "scripts/release/test/stage/setup/run.sh ${params.bucket_location} ${params.channel} ${params.release}"
+                sh script: "scripts/release/test/stage/setup/run.sh ${params.bucket_location} ${params.branch} ${params.channel} ${params.release}"
             }
         }
 
@@ -44,8 +45,7 @@ pipeline {
 
         stage("delete ec2 instance") {
             steps {
-                input "Halt!"
-                sh script: "scripts/release/delete.sh ${params.region}"
+                sh script: "scripts/release/common/delete.sh ${params.region}"
             }
         }
     }
