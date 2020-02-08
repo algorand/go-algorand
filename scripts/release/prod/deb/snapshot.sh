@@ -23,9 +23,9 @@ cat <<EOF>"${HOME}"/.aptly.conf
   "skipContentsPublishing": false,
   "FileSystemPublishEndpoints": {},
   "S3PublishEndpoints": {
-    "ben-test-2.0.3": {
+    "algorand-releases": {
       "region":"us-east-1",
-      "bucket":"ben-test-2.0.3",
+      "bucket":"algorand-releases",
       "acl":"public-read",
       "prefix":"deb"
     }
@@ -34,21 +34,6 @@ cat <<EOF>"${HOME}"/.aptly.conf
 }
 EOF
 
-#  "S3PublishEndpoints": {
-#    "algorand-releases": {
-#      "region":"us-east-1",
-#      "bucket":"algorand-releases",
-#      "acl":"public-read",
-#      "prefix":"deb"
-#    },
-#    "algorand-dev-deb-repo": {
-#      "region":"us-east-1",
-#      "bucket":"algorand-dev-deb-repo",
-#      "acl":"public-read",
-#      "prefix":"deb"
-#    }
-#  },
-
 # Creates ~/aptly/db
 "$HOME"/go/bin/aptly -config="${HOME}"/.aptly.conf repo create -distribution=stable -component=main algorand
 # Creates ~/aptly/pool
@@ -56,5 +41,5 @@ EOF
 SNAPSHOT=algorand-$(date +%Y%m%d_%H%M%S)
 "$HOME"/go/bin/aptly -config="${HOME}"/.aptly.conf snapshot create "${SNAPSHOT}" from repo algorand
 # Creates ~/aptly/public
-"$HOME"/go/bin/aptly -config="${HOME}"/.aptly.conf publish snapshot -gpg-key=dev@algorand.com -origin=Algorand -label=Algorand "${SNAPSHOT}" "s3:ben-test-2.0.3:"
+"$HOME"/go/bin/aptly -config="${HOME}"/.aptly.conf publish snapshot -gpg-key=dev@algorand.com -origin=Algorand -label=Algorand "${SNAPSHOT}" "s3:algorand-releases:"
 

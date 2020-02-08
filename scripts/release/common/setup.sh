@@ -38,9 +38,6 @@ mkdir -p "${HOME}/go/src/github.com/algorand"
 cd "${HOME}/go/src/github.com/algorand" && git clone --single-branch --branch "${BRANCH}" "${GIT_REPO_PATH}" go-algorand
 # TODO: if we are checking out a release tag, `git tag --verify` it
 
-cd "${HOME}"
-git clone --single-branch --branch deploy_to_prod_ben-branch https://github.com/btoll/go-algorand ben-branch
-
 # Install latest Go
 cd "${HOME}"
 python3 "${HOME}/go/src/github.com/algorand/go-algorand/scripts/get_latest_go.py" --version-prefix=1.12
