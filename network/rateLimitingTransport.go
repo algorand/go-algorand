@@ -42,7 +42,6 @@ func makeRateLimitingTransport(phonebook *MultiPhonebook, queueingTimeout time.D
 		innerTransport: &http.Transport{
 			Proxy:                 defaultTransport.Proxy,
 			DialContext:           dialer.innerDialContext,
-			ForceAttemptHTTP2:     defaultTransport.ForceAttemptHTTP2,
 			MaxIdleConns:          defaultTransport.MaxIdleConns,
 			IdleConnTimeout:       defaultTransport.IdleConnTimeout,
 			TLSHandshakeTimeout:   defaultTransport.TLSHandshakeTimeout,
