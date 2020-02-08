@@ -28,6 +28,19 @@ type Dialer struct {
 	innerDialer net.Dialer
 }
 
+// makeRateLimitingDialer creates a rate limiting dialer that would limit the connections
+// according to the entries in the phonebook.
+func makeRateLimitingDialer(phonebook *MultiPhonebook) Dialer {
+	return Dialer{
+		phonebook: phonebook,
+		innerDialer: net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+			DualStack: true,
+		},
+	}
+}
+
 // Dial connects to the address on the named network.
 // It waits if needed not to exceed connectionsRateLimitingCount.
 func (d *Dialer) Dial(network, address string) (net.Conn, error) {
@@ -51,8 +64,13 @@ func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.
 		case <-time.After(waitTime):
 		}
 	}
-	conn, err := d.innerDialer.DialContext(ctx, network, address)
+	conn, err := d.innerDialContext(ctx, network, address)
 	d.phonebook.UpdateConnectionTime(address, provisionalTime)
 
 	return conn, err
+}
+
+func (d *Dialer) innerDialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	// this would be a good place to have the dnssec evaluated.
+	return d.innerDialer.DialContext(ctx, network, address)
 }
