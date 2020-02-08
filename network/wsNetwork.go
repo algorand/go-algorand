@@ -326,7 +326,7 @@ type WebsocketNetwork struct {
 
 	// transport and dialer are customized to limit the number of
 	// connection in compliance with connectionsRateLimitingCount.
-	transport http.Transport
+	transport rateLimitingTransport
 	dialer    Dialer
 }
 
@@ -525,20 +525,8 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 
 func (wn *WebsocketNetwork) setup() {
 
-	wn.dialer.phonebook = wn.phonebook
-	// Parameter values similar to http.DefaultTransport
-	wn.dialer.innerDialer.Timeout = 30 * time.Second
-	wn.dialer.innerDialer.Timeout = 30 * time.Second
-	wn.dialer.innerDialer.KeepAlive = 30 * time.Second
-	wn.dialer.innerDialer.DualStack = true
-
-	// Parameter values similar to http.DefaultTransport
-	wn.transport.DialContext = wn.dialer.DialContext
-	wn.transport.Dial = wn.dialer.Dial
-	wn.transport.MaxIdleConns = 100
-	wn.transport.IdleConnTimeout = 90 * time.Second
-	wn.transport.TLSHandshakeTimeout = 10 * time.Second
-	wn.transport.ExpectContinueTimeout = 1 * time.Second
+	wn.dialer = makeRateLimitingDialer(wn.phonebook)
+	wn.transport = makeRateLimitingTransport(wn.phonebook, 10*time.Second, &wn.dialer)
 
 	wn.upgrader.ReadBufferSize = 4096
 	wn.upgrader.WriteBufferSize = 4096
