@@ -17,22 +17,112 @@
 package rpcs
 
 import (
+	"net"
+	"net/http"
+	"net/url"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/components/mocks"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/util/bloom"
 )
 
 func TestMain(m *testing.M) {
 	logging.Base().SetLevel(logging.Debug)
 	os.Exit(m.Run())
+}
+
+type httpTestPeerSource struct {
+	peers []network.Peer
+	mocks.MockNetwork
+}
+
+func (s *httpTestPeerSource) GetPeers(options ...network.PeerOption) []network.Peer {
+	return s.peers
+}
+
+// implement network.HTTPPeer
+type testHTTPPeer string
+
+func (p testHTTPPeer) GetAddress() string {
+	return string(p)
+}
+func (p *testHTTPPeer) PrepareURL(x string) string {
+	return strings.Replace(x, "{genesisID}", "test genesisID", -1)
+}
+func (p *testHTTPPeer) GetHTTPClient() *http.Client {
+	return &http.Client{}
+}
+func (p *testHTTPPeer) GetHTTPPeer() network.HTTPPeer {
+	return p
+}
+
+type basicRPCNode struct {
+	listener net.Listener
+	server   http.Server
+	rmux     *mux.Router
+	peers    []network.Peer
+	mocks.MockNetwork
+}
+
+func (b *basicRPCNode) RegisterHTTPHandler(path string, handler http.Handler) {
+	if b.rmux == nil {
+		b.rmux = mux.NewRouter()
+	}
+	b.rmux.Handle(path, handler)
+}
+
+func (b *basicRPCNode) RegisterHandlers(dispatch []network.TaggedMessageHandler) {
+}
+
+func (b *basicRPCNode) start() bool {
+	var err error
+	b.listener, err = net.Listen("tcp", "")
+	if err != nil {
+		logging.Base().Error("tcp listen", err)
+		return false
+	}
+	if b.rmux == nil {
+		b.rmux = mux.NewRouter()
+	}
+	b.server.Handler = b.rmux
+	go b.server.Serve(b.listener)
+	return true
+}
+func (b *basicRPCNode) rootURL() string {
+	addr := b.listener.Addr().String()
+	rootURL := url.URL{Scheme: "http", Host: addr, Path: ""}
+	return rootURL.String()
+}
+
+func (b *basicRPCNode) stop() {
+	b.server.Close()
+}
+
+func (b *basicRPCNode) GetPeers(options ...network.PeerOption) []network.Peer {
+	return b.peers
+}
+
+func nodePair() (*basicRPCNode, *basicRPCNode) {
+	nodeA := &basicRPCNode{}
+	nodeA.start()
+	nodeB := &basicRPCNode{}
+	nodeB.start()
+	httpPeerA := testHTTPPeer(nodeA.rootURL())
+	httpPeerB := testHTTPPeer(nodeB.rootURL())
+	nodeB.peers = []network.Peer{&httpPeerA}
+	nodeA.peers = []network.Peer{&httpPeerB}
+	return nodeA, nodeB
 }
 
 func TestTxSync(t *testing.T) {

@@ -536,10 +536,15 @@ func (b *basicRPCNode) GetPeers(options ...network.PeerOption) []network.Peer {
 type httpTestPeerSource struct {
 	peers []network.Peer
 	mocks.MockNetwork
+	dispatchHandlers []network.TaggedMessageHandler
 }
 
 func (s *httpTestPeerSource) GetPeers(options ...network.PeerOption) []network.Peer {
 	return s.peers
+}
+
+func (s *httpTestPeerSource) RegisterHandlers(dispatch []network.TaggedMessageHandler) {
+	s.dispatchHandlers = append(s.dispatchHandlers, dispatch...)
 }
 
 // implement network.HTTPPeer
@@ -763,20 +768,64 @@ func TestGetFutureBlock(t *testing.T) {
 	require.Nil(t, client)
 }
 
+// implement network.UnicastPeer
+type testUnicastPeer struct {
+	gn network.GossipNode
+	t  *testing.T
+}
+
+func (p *testUnicastPeer) GetAddress() string {
+	return "test"
+}
+
+func (p *testUnicastPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag) error {
+	ps := p.gn.(*httpTestPeerSource)
+	var dispather network.MessageHandler
+	for _, v := range ps.dispatchHandlers {
+		if v.Tag == tag {
+			dispather = v.MessageHandler
+			break
+		}
+	}
+	require.NotNil(p.t, dispather)
+	dispather.Handle(network.IncomingMessage{Tag: tag, Data: msg, Sender: p, Net: p.gn})
+	return nil
+}
+
+func makeTestUnicastPeer(gn network.GossipNode, t *testing.T) network.UnicastPeer {
+	wsp := testUnicastPeer{}
+	wsp.gn = gn
+	wsp.t = t
+	return &wsp
+}
+
 // A quick GetBlock over websockets test hitting a mocked websocket server (no actual connection)
-/*func TestGetBlockWS(t *testing.T) {
+func TestGetBlockWS(t *testing.T) {
+	// test the WS fetcher:
+	// 1. fetcher sends UniCatchupReqTag to http peer
+	// 2. peer send message to gossip node
+	// 3. gossip node send message to ledger service
+	// 4. ledger service responds with UniCatchupResTag sending it back to the http peer
+	// 5. the http peer send it to the network
+	// 6. the network send it back to the fetcher
+
 	// start server
 	ledger, next, b, err := buildTestLedger(t)
 	if err != nil {
 		t.Fatal(err)
 		return
 	}
-	c := make(chan network.IncomingMessage, 50)
-	ls := LedgerService{ledger: ledger, genesisID: "test genesisID", catchupReqs: c}
+
+	net := buildTestHTTPPeerSource()
+	ledgerServiceConfig := config.GetDefaultLocal()
+	ledgerServiceConfig.CatchupParallelBlocks = 5
+	ls := rpcs.RegisterLedgerService(ledgerServiceConfig, ledger, net, "test genesisID")
+
 	ls.Start()
 
-	// get ws fetcher
-	net := buildTestUnicastPeerSrc(t, c)
+	up := makeTestUnicastPeer(net, t)
+	net.peers = append(net.peers, up)
+
 	fs := rpcs.RegisterWsFetcherService(logging.TestingLog(t), net)
 
 	_, ok := net.GetPeers(network.PeersConnectedIn)[0].(network.UnicastPeer)
@@ -804,4 +853,3 @@ func TestGetFutureBlock(t *testing.T) {
 	}
 	fetcher.Close()
 }
-*/
