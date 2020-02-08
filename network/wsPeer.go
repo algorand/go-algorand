@@ -80,7 +80,7 @@ type sendMessage struct {
 type wsPeerCore struct {
 	net           *WebsocketNetwork
 	rootURL       string
-	originAddress string
+	originAddress string // incoming connection remote host
 	client        http.Client
 }
 
@@ -167,6 +167,16 @@ type UnicastPeer interface {
 	GetAddress() string
 	// Unicast sends the given bytes to this specific peer. Does not wait for message to be sent.
 	Unicast(ctx context.Context, data []byte, tag protocol.Tag) error
+}
+
+// Create a wsPeerCore object
+func makePeerCore(net *WebsocketNetwork, rootURL string, roundTripper http.RoundTripper, originAddress string) wsPeerCore {
+	return wsPeerCore{
+		net:           net,
+		rootURL:       rootURL,
+		originAddress: originAddress,
+		client:        http.Client{Transport: roundTripper},
+	}
 }
 
 // GetAddress returns the root url to use to connect to this peer.

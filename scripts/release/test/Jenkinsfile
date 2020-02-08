@@ -45,7 +45,6 @@ pipeline {
 
         stage("delete ec2 instance") {
             steps {
-                input "Halt!"
                 sh script: "scripts/release/common/delete.sh ${params.region}"
             }
         }
