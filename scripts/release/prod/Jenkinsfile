@@ -1,8 +1,9 @@
 pipeline {
     parameters {
-        string defaultValue: '', description: 'Release to deploy to production', name: 'release', trim: true
+        string defaultValue: 'master', description: 'Release to deploy to production', name: 'branch', trim: true
         string defaultValue: 'stable', description: 'Staged channel which should be deployed to production.', name: 'channel', trim: true
-        string defaultValue: 'algorand-builds/channel', description: 'Staging location', name: 'bucket_location_staging', trim: true
+        string defaultValue: '', description: 'Release to deploy to production', name: 'release', trim: true
+        string defaultValue: 'algorand-builds', description: 'Staging location', name: 'bucket_location_staging', trim: true
         string defaultValue: 'algorand-dev-deb-repo/releases', description: 'Production location', name: 'bucket_location_prod', trim: true
 
         // AWS
@@ -27,7 +28,7 @@ pipeline {
 
         stage("create ec2 instance") {
             steps {
-                sh script: "scripts/release/create.sh ${params.region} ${params.ami} ${params.type}"
+                sh script: "scripts/release/common/create.sh ${params.region} ${params.ami} ${params.type}"
             }
         }
 
@@ -39,7 +40,7 @@ pipeline {
                     }
                 }
 
-                sh script: "scripts/release/prod/stage/setup/run.sh ${params.bucket_location_staging} ${params.channel} ${params.release}"
+                sh script: "scripts/release/prod/stage/setup/run.sh ${params.bucket_location_staging} ${params.branch} ${params.channel} ${params.release}"
             }
         }
 
@@ -51,8 +52,7 @@ pipeline {
 
         stage("delete ec2 instance") {
             steps {
-                input "Halt!"
-                sh script: "scripts/release/delete.sh ${params.region}"
+                sh script: "scripts/release/common/delete.sh ${params.region}"
             }
         }
     }
