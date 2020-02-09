@@ -375,3 +375,14 @@ func (nc NodeController) readGenesisJSON(genesisFile string) (genesisLedger book
 	err = protocol.DecodeJSON(genesisText, &genesisLedger)
 	return
 }
+
+// SetConsensus applies a new consensus settings which would get deployed before
+// any of the nodes starts
+func (nc NodeController) SetConsensus(consensus config.ConsensusProtocols) error {
+	return config.SaveConfigurableConsensus(nc.algodDataDir, consensus)
+}
+
+// GetConsensus rebuild the consensus version from the data directroy
+func (nc NodeController) GetConsensus() (config.ConsensusProtocols, error) {
+	return config.PreloadConfigurableConsensusProtocols(nc.algodDataDir)
+}
