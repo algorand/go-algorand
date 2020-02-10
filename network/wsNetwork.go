@@ -1450,7 +1450,7 @@ func (wn *WebsocketNetwork) getDNSAddrs(dnsBootstrap string) []string {
 	return srvPhonebook
 }
 
-// ProtocolVersionHeader HTTP header for protocol version. TODO: this may be unneeded redundance since we also have url versioning "/v1/..."
+// ProtocolVersionHeader HTTP header for protocol version.
 const ProtocolVersionHeader = "X-Algorand-Version"
 
 // ProtocolAcceptVersionHeader HTTP header for accept protocol version. Client use this to advertise supported protocol versions.
