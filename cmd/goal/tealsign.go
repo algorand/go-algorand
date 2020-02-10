@@ -1,0 +1,223 @@
+// Copyright (C) 2019-2020 Algorand, Inc.
+// This file is part of go-algorand
+//
+// go-algorand is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// go-algorand is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
+package main
+
+import (
+	"encoding/base32"
+	"encoding/base64"
+	"io/ioutil"
+
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/protocol"
+
+	"github.com/spf13/cobra"
+)
+
+var (
+	keyFilename     string
+	signerAcct      string
+	lsigTxnFilename string
+	contractAddr    string
+	signTxID        bool
+	dataFile        string
+	datab64         string
+	datab32         string
+	setLsigArg      int
+)
+
+func init() {
+	clerkCmd.AddCommand(tealsignCmd)
+
+	tealsignCmd.Flags().StringVarP(&keyFilename, "with-keyfile", "f", "", "algokey private key file to sign with")
+	tealsignCmd.Flags().StringVarP(&signerAcct, "with-account", "t", "", "address of account to sign with")
+	tealsignCmd.Flags().StringVarP(&lsigTxnFilename, "lsig-txn", "l", "", "transaction with logicsig to sign data for")
+	tealsignCmd.Flags().StringVarP(&contractAddr, "contract-addr", "c", "", "contract address to sign data for. not necessary if --lsig-txn is provided")
+	tealsignCmd.Flags().BoolVarP(&signTxID, "sign-txid", "s", false, "use the txid of --lsig-txn as the data to sign")
+	tealsignCmd.Flags().StringVar(&dataFile, "data-file", "", "data file to sign")
+	tealsignCmd.Flags().StringVar(&datab64, "data-b64", "", "base64 data to sign")
+	tealsignCmd.Flags().StringVar(&datab32, "data-b32", "", "base32 data to sign")
+	tealsignCmd.Flags().IntVarP(&setLsigArg, "set-lsig-arg", "a", -1, "if --lsig-txn is also specified, set this lsig arg to the raw signature bytes")
+}
+
+var tealsignCmd = &cobra.Command{
+	Use:   "tealsign",
+	Short: "Sign data to be verified in a TEAL program",
+	Long:  `Sign data to be verified in a TEAL program`,
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, args []string) {
+		/*
+		 * First, fetch the key for signing
+		 */
+
+		if keyFilename != "" && signerAcct != "" {
+			reportErrorf(tealsignMutKeyArgs)
+		}
+
+		var kdata []byte
+		var err error
+		if keyFilename != "" {
+			kdata, err = ioutil.ReadFile(keyFilename)
+			if err != nil {
+				reportErrorf(tealsignKeyfileFail, err)
+			}
+		}
+
+		// --with-account not yet supported, coming in another PR
+		// (need to add kmd support for signing logicsig data)
+		if signerAcct != "" {
+			reportErrorf(tealsignNoWithAcct)
+		}
+
+		// Create signature secrets from the seed
+		var seed crypto.Seed
+		copy(seed[:], kdata)
+		sec := crypto.GenerateSignatureSecrets(seed)
+
+		/*
+		 * Next, fetch the hash of the program for use in the domain
+		 * separated signature payload
+		 */
+
+		var lsigHashArgs int
+		if lsigTxnFilename != "" {
+			lsigHashArgs++
+		}
+		if contractAddr != "" {
+			lsigHashArgs++
+		}
+
+		// Ensure there is one unambiguous source of program hash
+		if lsigHashArgs != 1 {
+			reportErrorf(tealsignMutLsigArgs)
+		}
+
+		var progHash crypto.Digest
+		var stxn transactions.SignedTxn
+		if lsigTxnFilename != "" {
+			// If passed a SignedTxn with a logic sig, compute
+			// the hash of the program within the logic sig
+			stxnBytes, err := ioutil.ReadFile(lsigTxnFilename)
+			if err != nil {
+				reportErrorf(fileReadError, lsigTxnFilename, err)
+			}
+
+			err = protocol.Decode(stxnBytes, &stxn)
+			if err != nil {
+				reportErrorf(txDecodeError, lsigTxnFilename, err)
+			}
+
+			// Ensure signed transaction has a logic sig with a
+			// program
+			if len(stxn.Lsig.Logic) == 0 {
+				reportErrorf(tealsignEmptyLogic)
+			}
+
+			progHash = crypto.HashObj(logic.Program(stxn.Lsig.Logic))
+		} else {
+			// Otherwise, the contract address is the logic hash
+			parsedAddr, err := basics.UnmarshalChecksumAddress(contractAddr)
+			if err != nil {
+				reportErrorf(tealsignParseAddr, err)
+			}
+
+			// Copy parsed address as program hash
+			copy(progHash[:], parsedAddr[:])
+		}
+
+		/*
+		 * Next, fetch the data to sign
+		 */
+
+		var dataArgs int
+		var dataToSign []byte
+
+		if dataFile != "" {
+			dataToSign, err = ioutil.ReadFile(dataFile)
+			if err != nil {
+				reportErrorf(tealsignParseData, err)
+			}
+			dataArgs++
+		}
+		if datab64 != "" {
+			dataToSign, err = base64.StdEncoding.DecodeString(datab64)
+			if err != nil {
+				reportErrorf(tealsignParseb64, err)
+			}
+			dataArgs++
+		}
+		if datab32 != "" {
+			dataToSign, err = base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(datab32)
+			if err != nil {
+				reportErrorf(tealsignParseb32, err)
+			}
+			dataArgs++
+		}
+		if signTxID {
+			if lsigTxnFilename == "" {
+				reportErrorf(tealsignTxIDLsigReq)
+			}
+			txid := stxn.Txn.ID()
+			dataToSign = txid[:]
+			dataArgs++
+		}
+
+		// Ensure there is one unambiguous source of data
+		if dataArgs != 1 {
+			reportErrorf(tealsignDataReq)
+		}
+
+		/*
+		 * Sign the payload and print signature to stdout
+		 */
+
+		signature := sec.Sign(logic.Msg{
+			ProgramHash: progHash,
+			Data:        dataToSign,
+		})
+
+		/*
+		 * If requested, fill in logic sig arg
+		 */
+
+		if setLsigArg >= 0 {
+			if lsigTxnFilename == "" {
+				reportErrorf(tealsignSetArgLsigReq)
+			}
+			if setLsigArg > transactions.EvalMaxArgs-1 {
+				reportErrorf(tealsignTooManyArg, transactions.EvalMaxArgs)
+			}
+			for len(stxn.Lsig.Args) < setLsigArg+1 {
+				stxn.Lsig.Args = append(stxn.Lsig.Args, nil)
+			}
+			stxn.Lsig.Args[setLsigArg] = signature[:]
+
+			// Write out the modified stxn
+			err = writeFile(lsigTxnFilename, protocol.Encode(stxn), 0600)
+			if err != nil {
+				reportErrorf(fileWriteError, lsigTxnFilename, err)
+			}
+			reportInfof(tealsignInfoWroteSig, lsigTxnFilename, setLsigArg)
+		}
+
+		// Always print signature to stdout
+		signatureb64 := base64.StdEncoding.EncodeToString(signature[:])
+		reportInfof(tealsignInfoSig, signatureb64)
+	},
+}
