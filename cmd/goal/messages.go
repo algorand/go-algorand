@@ -117,10 +117,10 @@ const (
 
 	multisigProgramCollision = "should have at most one of --program/-p | --program-bytes/-P | --lsig/-L"
 
-	tealsignMutKeyArgs    = "--with-keyfile and --with-account are mutually exclusive"
+	tealsignMutKeyArgs    = "--keyfile and --account are mutually exclusive"
 	tealsignMutLsigArgs   = "Need exactly one of --contract-addr or --lsig-txn"
 	tealsignKeyfileFail   = "Failed to read keyfile: %v"
-	tealsignNoWithAcct    = "--with-account is not yet supported"
+	tealsignNoWithAcct    = "--account is not yet supported"
 	tealsignEmptyLogic    = "LogicSig must have non-empty program"
 	tealsignParseAddr     = "Failed to parse contract addr: %v"
 	tealsignParseData     = "Failed to parse data to sign: %v"

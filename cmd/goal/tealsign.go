@@ -45,15 +45,15 @@ var (
 func init() {
 	clerkCmd.AddCommand(tealsignCmd)
 
-	tealsignCmd.Flags().StringVarP(&keyFilename, "with-keyfile", "f", "", "algokey private key file to sign with")
-	tealsignCmd.Flags().StringVarP(&signerAcct, "with-account", "t", "", "address of account to sign with")
-	tealsignCmd.Flags().StringVarP(&lsigTxnFilename, "lsig-txn", "l", "", "transaction with logicsig to sign data for")
-	tealsignCmd.Flags().StringVarP(&contractAddr, "contract-addr", "c", "", "contract address to sign data for. not necessary if --lsig-txn is provided")
-	tealsignCmd.Flags().BoolVarP(&signTxID, "sign-txid", "s", false, "use the txid of --lsig-txn as the data to sign")
+	tealsignCmd.Flags().StringVar(&keyFilename, "keyfile", "", "algokey private key file to sign with")
+	tealsignCmd.Flags().StringVar(&signerAcct, "account", "", "address of account to sign with")
+	tealsignCmd.Flags().StringVar(&lsigTxnFilename, "lsig-txn", "", "transaction with logicsig to sign data for")
+	tealsignCmd.Flags().StringVar(&contractAddr, "contract-addr", "", "contract address to sign data for. not necessary if --lsig-txn is provided")
+	tealsignCmd.Flags().BoolVar(&signTxID, "sign-txid", false, "use the txid of --lsig-txn as the data to sign")
 	tealsignCmd.Flags().StringVar(&dataFile, "data-file", "", "data file to sign")
 	tealsignCmd.Flags().StringVar(&datab64, "data-b64", "", "base64 data to sign")
 	tealsignCmd.Flags().StringVar(&datab32, "data-b32", "", "base32 data to sign")
-	tealsignCmd.Flags().IntVarP(&setLsigArg, "set-lsig-arg", "a", -1, "if --lsig-txn is also specified, set this lsig arg to the raw signature bytes")
+	tealsignCmd.Flags().IntVar(&setLsigArg, "set-lsig-arg", -1, "if --lsig-txn is also specified, set this lsig arg to the raw signature bytes")
 }
 
 var tealsignCmd = &cobra.Command{
@@ -79,7 +79,7 @@ var tealsignCmd = &cobra.Command{
 			}
 		}
 
-		// --with-account not yet supported, coming in another PR
+		// --account not yet supported, coming in another PR
 		// (need to add kmd support for signing logicsig data)
 		if signerAcct != "" {
 			reportErrorf(tealsignNoWithAcct)
