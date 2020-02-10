@@ -72,7 +72,7 @@ func randomizeValue(v reflect.Value) error {
 		st := v.Type()
 		for i := 0; i < v.NumField(); i++ {
 			f := st.Field(i)
-			if f.PkgPath != "" {
+			if f.PkgPath != "" && !f.Anonymous {
 				// unexported
 				continue
 			}
