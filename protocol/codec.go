@@ -109,31 +109,11 @@ func EncodeMsgp(obj msgp.Marshaler) []byte {
 }
 
 // Encode returns a msgpack-encoded byte buffer for a given object.
-// func Encode(obj interface{}) []byte {
 func Encode(obj msgp.Marshaler) []byte {
 	if obj.CanMarshalMsg(obj) {
 		return EncodeMsgp(obj)
 	}
 	return EncodeReflect(obj)
-}
-
-// CountingWriter is an implementation of io.Writer that tracks the number
-// of bytes written (but discards the actual bytes).
-type CountingWriter struct {
-	N int
-}
-
-func (cw *CountingWriter) Write(b []byte) (int, error) {
-	blen := len(b)
-	cw.N += blen
-	return blen, nil
-}
-
-// EncodeLen returns len(Encode(obj))
-func EncodeLen(obj interface{}) int {
-	var cw CountingWriter
-	EncodeStream(&cw, obj)
-	return cw.N
 }
 
 // EncodeStream is like Encode but writes to an io.Writer instead.
