@@ -845,7 +845,7 @@ func (wn *WebsocketNetwork) checkProtocolVersionMatch(otherHeaders http.Header) 
 			return supportedProtocolVersion, otherVersion
 		}
 	}
-	return matchingVersion, otherVersion
+	return "", otherVersion
 }
 
 // checkIncomingConnectionVariables checks the variables that were provided on the request, and compares them to the
