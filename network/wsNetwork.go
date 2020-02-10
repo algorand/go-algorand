@@ -1457,7 +1457,7 @@ const ProtocolVersionHeader = "X-Algorand-Version"
 const ProtocolAcceptVersionHeader = "X-Algorand-Accept-Version"
 
 // SupportedProtocolVersions contains the list of supported protocol versions by this node ( in order of preference ).
-var SupportedProtocolVersions = [...]string{"2", "1"}
+var SupportedProtocolVersions = [...]string{ /*"2",*/ "1"}
 
 // ProtocolVersion is the current version attached to the ProtocolVersionHeader header
 const ProtocolVersion = "1"
@@ -1635,9 +1635,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	}
 
 	// no need to test the response.StatusCode since we know it's going to be http.StatusSwitchingProtocols, as it's already being tested inside websocketDialer.DialContext.
-	// checking the headers here is abit redundent; the server has already verified that the headers match. But we will need this in the future -
-	// once our server would support multiple protocols, we would need to verify here that we use the correct protocol, out of the "proposed" protocols we have provided in the
-	// request headers.
+	// we need to examine the headers here to extract which protocol version we should be using.
 	responseHeaderOk, matchingVersion := wn.checkServerResponseVariables(response.Header, gossipAddr)
 	if !responseHeaderOk {
 		// The error was already logged, so no need to log again.
