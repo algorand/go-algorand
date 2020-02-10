@@ -17,8 +17,6 @@ scp -i ReleaseBuildInstanceKey.pem -o StrictHostKeyChecking=no -r pkg/* ubuntu@"
 aws s3 cp s3://algorand-devops-misc/tools/gnupg2.2.9_centos7_amd64.tar.bz2 .
 scp -i ReleaseBuildInstanceKey.pem -o StrictHostKeyChecking=no -r gnupg2.2.9_centos7_amd64.tar.bz2 ubuntu@"$INSTANCE":
 
-#scp -i ReleaseBuildInstanceKey.pem -o StrictHostKeyChecking=no -r scripts/release/test/stage/setup/task.sh ubuntu@"$INSTANCE":
 scp -i ReleaseBuildInstanceKey.pem -o StrictHostKeyChecking=no -r scripts/release/common/setup.sh ubuntu@"$INSTANCE":
-#ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@"$INSTANCE" bash task.sh "$BRANCH" "$CHANNEL" "$RELEASE"
 ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@"$INSTANCE" bash setup.sh "$BRANCH" "$CHANNEL" "$RELEASE"
 
