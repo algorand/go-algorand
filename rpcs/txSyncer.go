@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -42,15 +42,10 @@ type TxSyncClient interface {
 	Close() error
 }
 
-// PeerSource is a subset of network.GossipNode
-type PeerSource interface {
-	GetPeers(options ...network.PeerOption) []network.Peer
-}
-
 // TxSyncer fetches pending transactions that are missing from its pool, and feeds them to the handler
 type TxSyncer struct {
 	pool         PendingTxAggregate
-	clientSource PeerSource
+	clientSource network.GossipNode
 	handler      data.SolicitedTxHandler
 	ctx          context.Context
 	cancel       context.CancelFunc
@@ -63,7 +58,7 @@ type TxSyncer struct {
 }
 
 // MakeTxSyncer returns a TxSyncer
-func MakeTxSyncer(pool PendingTxAggregate, clientSource PeerSource, txHandler data.SolicitedTxHandler, syncInterval time.Duration, syncTimeout time.Duration, serverResponseSize int) *TxSyncer {
+func MakeTxSyncer(pool PendingTxAggregate, clientSource network.GossipNode, txHandler data.SolicitedTxHandler, syncInterval time.Duration, syncTimeout time.Duration, serverResponseSize int) *TxSyncer {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &TxSyncer{
 		pool:         pool,
@@ -129,7 +124,7 @@ func (syncer *TxSyncer) syncFromClient(client TxSyncClient) error {
 	defer cf()
 	txgroups, err := client.Sync(ctx, filter)
 	if err != nil {
-		return fmt.Errorf("TxSyncer.Sync: peer %v error %v", client.Address(), err)
+		return fmt.Errorf("TxSyncer.Sync: peer '%v' error '%v'", client.Address(), err)
 	}
 
 	// test to see if all the transaction that we've received honor the bloom filter constraints
@@ -137,7 +132,6 @@ func (syncer *TxSyncer) syncFromClient(client TxSyncClient) error {
 	for _, txgroup := range txgroups {
 		var txnsInFilter int
 		for i := range txgroup {
-			txgroup[i].InitCaches()
 			txID := txgroup[i].ID()
 			if filter.Test(txID[:]) {
 				// we just found a transaction that shouldn't have been

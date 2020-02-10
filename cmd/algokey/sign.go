@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -71,7 +71,7 @@ var signCmd = &cobra.Command{
 			}
 
 			stxn.Sig = key.Sign(stxn.Txn)
-			outBytes = append(outBytes, protocol.Encode(stxn)...)
+			outBytes = append(outBytes, protocol.Encode(&stxn)...)
 		}
 
 		err = ioutil.WriteFile(signOutfile, outBytes, 0600)

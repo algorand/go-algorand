@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -156,6 +156,27 @@ func (hook *asyncTelemetryHook) Flush() {
 	hook.wg.Wait()
 }
 
+func (hook *dummyHook) UpdateHookURI(uri string) (err error) {
+	return
+}
+func (hook *dummyHook) Levels() []logrus.Level {
+	return []logrus.Level{}
+}
+func (hook *dummyHook) Fire(entry *logrus.Entry) error {
+	return nil
+}
+func (hook *dummyHook) Close() {
+}
+func (hook *dummyHook) Flush() {
+}
+
+func (hook *dummyHook) appendEntry(entry *logrus.Entry) bool {
+	return true
+}
+func (hook *dummyHook) waitForEventAndReady() bool {
+	return true
+}
+
 func createElasticHook(cfg TelemetryConfig) (hook logrus.Hook, err error) {
 	// Returning an error here causes issues... need the hooks to be created even if the elastic hook fails so that
 	// things can recover later.
@@ -195,11 +216,11 @@ func createTelemetryHook(cfg TelemetryConfig, history *logBuffer, hookFactory ho
 
 // Note: This will be removed with the externalized telemetry project. Return whether or not the URI was successfully
 //       updated.
-func (hook *asyncTelemetryHook) UpdateHookURI(uri string) bool {
+func (hook *asyncTelemetryHook) UpdateHookURI(uri string) (err error) {
 	updated := false
 
 	if hook.wrappedHook == nil {
-		return false
+		return fmt.Errorf("asyncTelemetryHook.wrappedHook is nil")
 	}
 
 	tfh, ok := hook.wrappedHook.(*telemetryFilteredHook)
@@ -208,7 +229,8 @@ func (hook *asyncTelemetryHook) UpdateHookURI(uri string) bool {
 
 		copy := tfh.telemetryConfig
 		copy.URI = uri
-		newHook, err := tfh.factory(copy)
+		var newHook logrus.Hook
+		newHook, err = tfh.factory(copy)
 
 		if err == nil && newHook != nil {
 			tfh.wrappedHook = newHook
@@ -224,6 +246,8 @@ func (hook *asyncTelemetryHook) UpdateHookURI(uri string) bool {
 		if updated {
 			hook.urlUpdate <- true
 		}
+	} else {
+		return fmt.Errorf("asyncTelemetryHook.wrappedHook does not implement telemetryFilteredHook")
 	}
-	return updated
+	return
 }

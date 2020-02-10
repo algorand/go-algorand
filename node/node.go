@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -54,15 +54,16 @@ const participationKeyCheckSecs = 60
 
 // StatusReport represents the current basic status of the node
 type StatusReport struct {
-	LastRound             basics.Round
-	LastVersion           protocol.ConsensusVersion
-	NextVersion           protocol.ConsensusVersion
-	NextVersionRound      basics.Round
-	NextVersionSupported  bool
-	LastRoundTimestamp    time.Time
-	SynchronizingTime     time.Duration
-	CatchupTime           time.Duration
-	HasSyncedSinceStartup bool
+	LastRound                 basics.Round
+	LastVersion               protocol.ConsensusVersion
+	NextVersion               protocol.ConsensusVersion
+	NextVersionRound          basics.Round
+	NextVersionSupported      bool
+	LastRoundTimestamp        time.Time
+	SynchronizingTime         time.Duration
+	CatchupTime               time.Duration
+	HasSyncedSinceStartup     bool
+	StoppedAtUnsupportedRound bool
 }
 
 // TimeSinceLastRound returns the time since the last block was approved (locally), or 0 if no blocks seen
@@ -147,7 +148,8 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookDir
 	node.log = log.With("name", cfg.NetAddress)
 	node.genesisID = genesis.ID()
 	node.genesisHash = crypto.HashObj(genesis)
-	node.phonebook = network.MakeThreadsafePhonebook()
+	node.phonebook = network.MakeThreadsafePhonebook(cfg.ConnectionsRateLimitingCount,
+		time.Duration(cfg.ConnectionsRateLimitingWindowSeconds)*time.Second)
 
 	addrs, err := config.LoadPhonebook(phonebookDir)
 	if err != nil {
@@ -229,14 +231,14 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookDir
 
 	blockFactory := makeBlockFactory(node.ledger, node.transactionPool, node.config.EnableProcessBlockStats, node.highPriorityCryptoVerificationPool)
 	blockValidator := blockValidatorImpl{l: node.ledger, tp: node.transactionPool, verificationPool: node.highPriorityCryptoVerificationPool}
-	agreementLedger := agreementLedger{Ledger: node.ledger, ff: rpcs.MakeNetworkFetcherFactory(node.net, blockQueryPeerLimit, node.wsFetcherService), n: node.net}
+	agreementLedger := makeAgreementLedger(node.ledger)
 
 	agreementParameters := agreement.Parameters{
 		Logger:         log,
 		Accessor:       crashAccess,
 		Clock:          timers.MakeMonotonicClock(time.Now()),
 		Local:          node.config,
-		Network:        gossip.WrapNetwork(node.net),
+		Network:        gossip.WrapNetwork(node.net, log),
 		Ledger:         agreementLedger,
 		BlockFactory:   blockFactory,
 		BlockValidator: blockValidator,
@@ -246,7 +248,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookDir
 	}
 	node.algorandService = agreement.MakeService(agreementParameters)
 
-	node.syncer = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.wsFetcherService, blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)})
+	node.syncer = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.wsFetcherService, blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)}, agreementLedger.UnmatchedPendingCertificates)
 	node.txPoolSyncer = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
 
 	err = node.loadParticipationKeys()
@@ -554,6 +556,8 @@ func (node *AlgorandFullNode) Status() (s StatusReport, err error) {
 	s.LastRoundTimestamp = node.lastRoundTimestamp
 	s.CatchupTime = node.syncer.SynchronizingTime()
 	s.HasSyncedSinceStartup = node.hasSyncedSinceStartup
+	s.StoppedAtUnsupportedRound = s.LastRound+1 == s.NextVersionRound && !s.NextVersionSupported
+
 	return
 }
 

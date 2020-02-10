@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -99,8 +99,7 @@ var nodeCmd = &cobra.Command{
 
 var startCmd = &cobra.Command{
 	Use:   "start",
-	Short: "Init the specified algorand node",
-	Long:  `Init the specified algorand node`,
+	Short: "Init the specified Algorand node.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		binDir, err := util.ExeDir()
@@ -108,6 +107,10 @@ var startCmd = &cobra.Command{
 			panic(err)
 		}
 		onDataDirs(func(dataDir string) {
+			if libgoal.AlgorandDaemonSystemdManaged(dataDir) {
+				reportErrorf(errorNodeManagedBySystemd, "start")
+			}
+
 			nc := nodecontrol.MakeNodeController(binDir, dataDir)
 			nodeArgs := nodecontrol.AlgodStartArgs{
 				PeerAddress:       peerDial,
@@ -146,8 +149,7 @@ func getRunHostedConfigFlag(dataDir string) bool {
 
 var stopCmd = &cobra.Command{
 	Use:   "stop",
-	Short: "stop the specified Algorand node",
-	Long:  `Stop the specified Algorand node`,
+	Short: "stop the specified Algorand node.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		binDir, err := util.ExeDir()
@@ -155,6 +157,10 @@ var stopCmd = &cobra.Command{
 			panic(err)
 		}
 		onDataDirs(func(dataDir string) {
+			if libgoal.AlgorandDaemonSystemdManaged(dataDir) {
+				reportErrorf(errorNodeManagedBySystemd, "stop")
+			}
+
 			nc := nodecontrol.MakeNodeController(binDir, dataDir)
 
 			log.Info(infoTryingToStopNode)
@@ -171,8 +177,7 @@ var stopCmd = &cobra.Command{
 
 var restartCmd = &cobra.Command{
 	Use:   "restart",
-	Short: "stop, and then start, the specified Algorand node",
-	Long:  `Stop, and then start, the specified Algorand node`,
+	Short: "Stop, and then start, the specified Algorand node.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		binDir, err := util.ExeDir()
@@ -180,6 +185,10 @@ var restartCmd = &cobra.Command{
 			panic(err)
 		}
 		onDataDirs(func(dataDir string) {
+			if libgoal.AlgorandDaemonSystemdManaged(dataDir) {
+				reportErrorf(errorNodeManagedBySystemd, "restart")
+			}
+
 			nc := nodecontrol.MakeNodeController(binDir, dataDir)
 
 			_, err = nc.GetAlgodPID()
@@ -228,8 +237,7 @@ var restartCmd = &cobra.Command{
 
 var generateTokenCmd = &cobra.Command{
 	Use:   "generatetoken",
-	Short: "Generate and install a new API token",
-	Long:  "Generate and install a new API token",
+	Short: "Generate and install a new API token.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		onDataDirs(func(dataDir string) {
@@ -262,7 +270,7 @@ var generateTokenCmd = &cobra.Command{
 var statusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Get the current node status",
-	Long:  `Show the current status of the running Algorand node`,
+	Long:  `Show the current status of the running Algorand node.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		onDataDirs(getStatus)
@@ -290,12 +298,27 @@ func getStatus(dataDir string) {
 func makeStatusString(stat v1.NodeStatus) string {
 	lastRoundTime := fmt.Sprintf("%.1fs", time.Duration(stat.TimeSinceLastRound).Seconds())
 	catchupTime := fmt.Sprintf("%.1fs", time.Duration(stat.CatchupTime).Seconds())
-	return fmt.Sprintf(infoNodeStatus, stat.LastRound, lastRoundTime, catchupTime, stat.LastVersion, stat.NextVersion, stat.NextVersionRound, stat.NextVersionSupported, stat.HasSyncedSinceStartup)
+	statusString := fmt.Sprintf(
+		infoNodeStatus,
+		stat.LastRound,
+		lastRoundTime,
+		catchupTime,
+		stat.LastVersion,
+		stat.NextVersion,
+		stat.NextVersionRound,
+		stat.NextVersionSupported)
+
+	if stat.StoppedAtUnsupportedRound {
+		statusString = statusString + "\n" + fmt.Sprintf(catchupStoppedOnUnsupported, stat.LastRound)
+	}
+
+	return statusString
 }
 
 var lastroundCmd = &cobra.Command{
 	Use:   "lastround",
 	Short: "Print the last round number",
+	Long:  `Prints the most recent round confirmed by the Algorand node.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		onDataDirs(func(dataDir string) {
@@ -367,7 +390,7 @@ var pendingTxnsCmd = &cobra.Command{
 var waitCmd = &cobra.Command{
 	Use:   "wait",
 	Short: "Waits for the node to make progress",
-	Long:  "Waits for the node to make progress, which includes catching up",
+	Long:  "Waits for the node to make progress, which includes catching up.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		client := ensureAlgodClient(ensureSingleDataDir())
@@ -411,8 +434,7 @@ func isValidIP(userInput string) bool {
 
 var createCmd = &cobra.Command{
 	Use:   "create",
-	Short: "create a node at the desired data directory for the desired network",
-	Long:  "create a node at the desired data directory for the desired network",
+	Short: "Create a node at the desired data directory for the desired network.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 

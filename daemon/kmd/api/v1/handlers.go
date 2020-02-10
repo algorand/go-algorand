@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -1135,7 +1135,7 @@ func postMultisigTransactionSignHandler(ctx reqContext, w http.ResponseWriter, r
 
 	// Build the response
 	resp := kmdapi.APIV1POSTMultisigTransactionSignResponse{
-		Multisig: protocol.Encode(msig),
+		Multisig: protocol.Encode(&msig),
 	}
 
 	// Return and encode the response
@@ -1194,7 +1194,7 @@ func postMultisigProgramSignHandler(ctx reqContext, w http.ResponseWriter, r *ht
 
 	// Build the response
 	resp := kmdapi.APIV1POSTMultisigProgramSignResponse{
-		Multisig: protocol.Encode(msig),
+		Multisig: protocol.Encode(&msig),
 	}
 
 	// Return and encode the response

@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -111,14 +111,6 @@ type Transaction struct {
 	AssetConfigTxnFields
 	AssetTransferTxnFields
 	AssetFreezeTxnFields
-
-	// The transaction's Txid is computed when we decode,
-	// and cached here, to avoid needlessly recomputing it.
-	cachedTxid Txid
-
-	// The valid flag indicates if this transaction was
-	// correctly decoded.
-	valid bool
 }
 
 // ApplyData contains information about the transaction's execution.
@@ -143,43 +135,22 @@ type TxGroup struct {
 	// together, sequentially, in a block in order for the group to be
 	// valid.  Each hash in the list is a hash of a transaction with
 	// the `Group` field omitted.
-	TxGroupHashes []crypto.Digest `codec:"txlist"`
+	TxGroupHashes []crypto.Digest `codec:"txlist,allocbound=-"`
 }
 
 // ToBeHashed implements the crypto.Hashable interface.
 func (tg TxGroup) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.TxGroup, protocol.Encode(tg)
+	return protocol.TxGroup, protocol.Encode(&tg)
 }
 
 // ToBeHashed implements the crypto.Hashable interface.
 func (tx Transaction) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.Transaction, protocol.Encode(tx)
-}
-
-func (tx *Transaction) computeID() Txid {
-	return Txid(crypto.HashObj(tx))
-}
-
-// InitCaches initializes caches inside of Transaction.
-func (tx *Transaction) InitCaches() {
-	if !tx.valid {
-		tx.cachedTxid = tx.computeID()
-		tx.valid = true
-	}
-}
-
-// ResetCaches clears caches inside of Transaction, if the Transaction was modified.
-func (tx *Transaction) ResetCaches() {
-	tx.valid = false
+	return protocol.Transaction, protocol.Encode(&tx)
 }
 
 // ID returns the Txid (i.e., hash) of the transaction.
-// For efficiency this is precomputed when the Transaction is created.
 func (tx Transaction) ID() Txid {
-	if tx.valid {
-		return tx.cachedTxid
-	}
-	return tx.computeID()
+	return Txid(crypto.HashObj(tx))
 }
 
 // Sign signs a transaction using a given Account's secrets.
@@ -190,7 +161,6 @@ func (tx Transaction) Sign(secrets *crypto.SignatureSecrets) SignedTxn {
 		Txn: tx,
 		Sig: sig,
 	}
-	s.InitCaches()
 	return s
 }
 
@@ -409,6 +379,18 @@ func (tx Transaction) TxAmount() basics.MicroAlgos {
 
 	default:
 		return basics.MicroAlgos{Raw: 0}
+	}
+}
+
+// GetReceiverAddress returns the address of the receiver. If the transaction has no receiver, it returns the empty address.
+func (tx Transaction) GetReceiverAddress() basics.Address {
+	switch tx.Type {
+	case protocol.PaymentTx:
+		return tx.PaymentTxnFields.Receiver
+	case protocol.AssetTransferTx:
+		return tx.AssetTransferTxnFields.AssetReceiver
+	default:
+		return basics.Address{}
 	}
 }
 

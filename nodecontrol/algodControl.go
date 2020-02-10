@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -184,18 +184,28 @@ func (nc *NodeController) StartAlgod(args AlgodStartArgs) (alreadyRunning bool, 
 	}
 
 	// Wait on the algod process and check if exits
-	c := make(chan bool)
+	algodExitChan := make(chan struct{})
+	startAlgodCompletedChan := make(chan struct{})
+	defer close(startAlgodCompletedChan)
 	go func() {
 		// this Wait call is important even beyond the scope of this function; it allows the system to
 		// move the process from a "zombie" state into "done" state, and is required for the Signal(0) test.
-		algodCmd.Wait()
-		c <- true
+		err := algodCmd.Wait()
+		select {
+		case <-startAlgodCompletedChan:
+			// we've already exited this function, so we want to report to the error to the callback.
+			if args.ExitErrorCallback != nil {
+				args.ExitErrorCallback(nc, err)
+			}
+		default:
+		}
+		algodExitChan <- struct{}{}
 	}()
 
 	success := false
 	for !success {
 		select {
-		case <-c:
+		case <-algodExitChan:
 			return false, errAlgodExitedEarly
 		case <-time.After(time.Millisecond * 100):
 			// If we can't talk to the API yet, spin
@@ -364,4 +374,15 @@ func (nc NodeController) readGenesisJSON(genesisFile string) (genesisLedger book
 
 	err = protocol.DecodeJSON(genesisText, &genesisLedger)
 	return
+}
+
+// SetConsensus applies a new consensus settings which would get deployed before
+// any of the nodes starts
+func (nc NodeController) SetConsensus(consensus config.ConsensusProtocols) error {
+	return config.SaveConfigurableConsensus(nc.algodDataDir, consensus)
+}
+
+// GetConsensus rebuild the consensus version from the data directroy
+func (nc NodeController) GetConsensus() (config.ConsensusProtocols, error) {
+	return config.PreloadConfigurableConsensusProtocols(nc.algodDataDir)
 }

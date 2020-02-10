@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,15 +18,18 @@ package auction
 
 import (
 	"path/filepath"
-	"testing"
 	"runtime"
-	
+	"testing"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 )
 
 func TestStartAndCancelAuctionNoBids(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
 	t.Parallel()
 	r := require.New(t)
 	var fixture fixtures.AuctionFixture

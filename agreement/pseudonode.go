@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -115,6 +115,7 @@ type pseudonodeVerifier struct {
 	incomingTasks chan pseudonodeTask
 }
 
+//msgp:ignore verifiedCryptoResults
 type verifiedCryptoResults []asyncVerifyVoteResponse
 
 func makePseudonode(factory BlockFactory, validator BlockValidator, keys KeyManager, ledger Ledger, voteVerifier *AsyncVoteVerifier, log serviceLogger) pseudonode {
@@ -253,7 +254,7 @@ func (n asyncPseudonode) makeProposals(round basics.Round, period period, accoun
 	deadline := time.Now().Add(AssemblyTime)
 	ve, err := n.factory.AssembleBlock(round, deadline)
 	if err != nil {
-		n.log.Errorf("pseudonode.makeProposals: could not generate a proposal for round %v: %v", round, err)
+		n.log.Errorf("pseudonode.makeProposals: could not generate a proposal for round %d: %v", round, err)
 		return nil, nil
 	}
 
@@ -476,7 +477,7 @@ func (t pseudonodeProposalsTask) execute(verifier *AsyncVoteVerifier, quit chan 
 			ObjectRound:  uint64(vote.R.Round),
 			ObjectPeriod: uint64(vote.R.Period),
 		}
-		t.node.log.with(logEvent).Infof("pseudonode.makeProposals: proposal created for (%v, %v)", vote.R.Round, vote.R.Period)
+		t.node.log.with(logEvent).Infof("pseudonode.makeProposals: proposal created for (%d, %d)", vote.R.Round, vote.R.Period)
 		t.node.log.EventWithDetails(telemetryspec.Agreement, telemetryspec.BlockProposedEvent, telemetryspec.BlockProposedEventDetails{
 			Hash:    vote.R.Proposal.BlockDigest.String(),
 			Address: vote.R.Sender.String(),
@@ -484,7 +485,7 @@ func (t pseudonodeProposalsTask) execute(verifier *AsyncVoteVerifier, quit chan 
 			Period:  uint64(vote.R.Period),
 		})
 	}
-	t.node.log.Infof("pseudonode.makeProposals: %v proposals created for round %v, period %v", len(verifiedVotes), t.round, t.period)
+	t.node.log.Infof("pseudonode.makeProposals: %d proposals created for round %d, period %d", len(verifiedVotes), t.round, t.period)
 
 	for range verifiedVotes {
 		t.node.monitor.inc(pseudonodeCoserviceType)

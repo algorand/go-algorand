@@ -29,9 +29,5 @@ git add ./genesistimestamp.dat ./buildnumber.dat
 git commit -m "Build ${BUILD_NUMBER} Data"
 git push
 
-TAG=rel/nightly-$(scripts/compute_build_number.sh -f)
-git tag -a ${TAG} -m "Genesis Timestamp: $(cat ./genesistimestamp.dat)"
-git push origin ${TAG}
-
 popd
 rm -rf ${REPO_DIR}

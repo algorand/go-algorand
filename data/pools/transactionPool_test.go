@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -102,7 +102,7 @@ func newBlockEvaluator(t TestingT, l *ledger.Ledger) *ledger.BlockEvaluator {
 	require.NoError(t, err)
 
 	next := bookkeeping.MakeBlock(prev)
-	eval, err := l.StartEvaluator(next.BlockHeader, &alwaysVerifiedPool{}, nil)
+	eval, err := l.StartEvaluator(next.BlockHeader)
 	require.NoError(t, err)
 
 	return eval

@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -183,7 +183,7 @@ func (tracker *voteTracker) handle(r routerHandle, p player, e0 event) event {
 				// In order for this to be triggered, more than 75% of the vote for the given step need to vote for more than
 				// a single proposal. In that state, all the proposals become "above threshold". That's a serious issue, since
 				// it would compromise the honest node core assumption.
-				logging.Base().Panicf("too many equivocators for step %v: %v", e.Vote.R.Step, tracker.EquivocatorsCount)
+				logging.Base().Panicf("too many equivocators for step %d: %d", e.Vote.R.Step, tracker.EquivocatorsCount)
 			}
 
 			// decrease their weight from any block proposal they already

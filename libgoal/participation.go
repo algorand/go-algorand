@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -132,7 +132,7 @@ func (c *Client) GenParticipationKeysTo(address string, firstValid, lastValid, k
 		return
 	}
 
-	proto, ok := config.Consensus[protocol.ConsensusVersion(stat.LastVersion)]
+	proto, ok := c.consensus[protocol.ConsensusVersion(stat.LastVersion)]
 	if !ok {
 		err = fmt.Errorf("consensus protocol %s not supported", stat.LastVersion)
 		return
@@ -214,7 +214,7 @@ func (c *Client) InstallParticipationKeys(inputfile string) (part account.Partic
 		return
 	}
 
-	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
+	proto, ok := c.consensus[protocol.ConsensusCurrentVersion]
 	if !ok {
 		err = fmt.Errorf("Unknown consensus protocol %s", protocol.ConsensusCurrentVersion)
 		return

@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -38,6 +38,7 @@ var (
 )
 
 // State represents the state of the auction
+//msgp:ignore State
 type State int
 
 const (

@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -35,14 +35,27 @@ type TelemetryOperation struct {
 	pending        int32
 }
 
+type telemetryHook interface {
+	Fire(entry *logrus.Entry) error
+	Levels() []logrus.Level
+	Close()
+	Flush()
+	UpdateHookURI(uri string) (err error)
+
+	appendEntry(entry *logrus.Entry) bool
+	waitForEventAndReady() bool
+}
+
 type telemetryState struct {
-	history *logBuffer
-	hook    *asyncTelemetryHook
+	history   *logBuffer
+	hook      telemetryHook
+	sendToLog bool
 }
 
 // TelemetryConfig represents the configuration of Telemetry logging
 type TelemetryConfig struct {
 	Enable             bool
+	SendToLog          bool
 	URI                string
 	Name               string
 	GUID               string
@@ -67,5 +80,8 @@ type asyncTelemetryHook struct {
 	ready         bool
 	urlUpdate     chan bool
 }
+
+// A dummy noop type to get rid of checks like telemetry.hook != nil
+type dummyHook struct{}
 
 type hookFactory func(cfg TelemetryConfig) (logrus.Hook, error)

@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,11 +20,14 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
+	"github.com/algorand/go-deadlock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
@@ -48,7 +51,15 @@ type LibGoalFixture struct {
 	Name           string
 	network        netdeploy.Network
 	t              TestingT
+	tMu            deadlock.RWMutex
 	clientPartKeys map[string][]account.Participation
+	consensus      config.ConsensusProtocols
+}
+
+// SetConsensus applies a new consensus settings which would get deployed before
+// any of the nodes starts
+func (f *RestClientFixture) SetConsensus(consensus config.ConsensusProtocols) {
+	f.consensus = consensus
 }
 
 // Setup is called to initialize the test fixture for the test(s)
@@ -82,14 +93,36 @@ func (f *LibGoalFixture) setup(test TestingT, testName string, templateFile stri
 	os.RemoveAll(f.rootDir)
 	templateFile = filepath.Join(f.testDataDir, templateFile)
 	importKeys := false // Don't automatically import root keys when creating folders, we'll import on-demand
-	network, err := netdeploy.CreateNetworkFromTemplate("test", f.rootDir, templateFile, f.binDir, importKeys)
+	network, err := netdeploy.CreateNetworkFromTemplate("test", f.rootDir, templateFile, f.binDir, importKeys, f.nodeExitWithError, f.consensus)
 	f.failOnError(err, "CreateNetworkFromTemplate failed: %v")
-
 	f.network = network
 
 	if startNetwork {
 		f.Start()
 	}
+}
+
+// nodeExitWithError is a callback from the network indicating that the node exit with an error after a successfull startup.
+// i.e. node terminated, and not due to shutdown.. this is likely to be a crash/panic.
+func (f *LibGoalFixture) nodeExitWithError(nc *nodecontrol.NodeController, err error) {
+	if err == nil {
+		return
+	}
+
+	f.tMu.RLock()
+	defer f.tMu.RUnlock()
+	if f.t == nil {
+		return
+	}
+	exitError, ok := err.(*exec.ExitError)
+	if !ok {
+		require.NoError(f.t, err, "Node at %s has terminated with an error", nc.GetDataDir())
+		return
+	}
+	ws := exitError.Sys().(syscall.WaitStatus)
+	exitCode := ws.ExitStatus()
+
+	require.NoError(f.t, err, "Node at %s has terminated with error code %d", nc.GetDataDir(), exitCode)
 }
 
 func (f *LibGoalFixture) importRootKeys(lg *libgoal.Client, dataDir string) {
@@ -231,6 +264,8 @@ func (f *LibGoalFixture) Start() {
 	f.failOnError(err, "make libgoal client failed: %v")
 	f.LibGoalClient = client
 	f.NC = nodecontrol.MakeNodeController(f.binDir, f.network.PrimaryDataDir())
+	algodKmdPath, _ := filepath.Abs(filepath.Join(f.PrimaryDataDir(), libgoal.DefaultKMDDataDir))
+	f.NC.SetKMDDataDir(algodKmdPath)
 	f.clientPartKeys = make(map[string][]account.Participation)
 	f.importRootKeys(&f.LibGoalClient, f.PrimaryDataDir())
 }
@@ -239,8 +274,12 @@ func (f *LibGoalFixture) Start() {
 // It ensures the current test context is set and then reset after the test ends
 // It should be called in the form of "defer fixture.SetTestContext(t)()"
 func (f *LibGoalFixture) SetTestContext(t TestingT) func() {
+	f.tMu.Lock()
+	defer f.tMu.Unlock()
 	f.t = t
 	return func() {
+		f.tMu.Lock()
+		defer f.tMu.Unlock()
 		f.t = nil
 	}
 }
@@ -263,6 +302,7 @@ func (f *LibGoalFixture) Shutdown() {
 
 // ShutdownImpl implements the Fixture.ShutdownImpl method
 func (f *LibGoalFixture) ShutdownImpl(preserveData bool) {
+	f.NC.StopKMD()
 	if preserveData {
 		f.network.Stop(f.binDir)
 	} else {
@@ -415,8 +455,15 @@ func (f *LibGoalFixture) ConsensusParams(round uint64) (consensus config.Consens
 	if err != nil {
 		return
 	}
-
-	return config.Consensus[protocol.ConsensusVersion(block.CurrentProtocol)], nil
+	version := protocol.ConsensusVersion(block.CurrentProtocol)
+	if f.consensus != nil {
+		consensus, has := f.consensus[version]
+		if has {
+			return consensus, nil
+		}
+	}
+	consensus = config.Consensus[version]
+	return
 }
 
 // CurrentMinFeeAndBalance returns the MinTxnFee and MinBalance for the currently active protocol

@@ -15,11 +15,21 @@ BUILDCHANNEL     ?= $(shell ./scripts/compute_branch_channel.sh $(BUILDBRANCH))
 DEFAULTNETWORK   ?= $(shell ./scripts/compute_branch_network.sh $(BUILDBRANCH))
 DEFAULT_DEADLOCK ?= $(shell ./scripts/compute_branch_deadlock_default.sh $(BUILDBRANCH))
 
+GOTAGSLIST          := sqlite_unlock_notify sqlite_omit_load_extension
+
 ifeq ($(UNAME), Linux)
 EXTLDFLAGS := -static-libstdc++ -static-libgcc
+ifeq ($(ARCH), amd64)
+# the following predicate is abit misleading; it tests if we're not in centos.
+ifeq (,$(wildcard /etc/centos-release))
+EXTLDFLAGS  += -static
+endif
+GOTAGSLIST  += osusergo netgo static_build
+GOBUILDMODE := -buildmode pie
+endif
 endif
 
-GOTAGS          := --tags "sqlite_unlock_notify sqlite_omit_load_extension"
+GOTAGS      := --tags "$(GOTAGSLIST)"
 GOTRIMPATH	:= $(shell go help build | grep -q .-trimpath && echo -trimpath)
 
 GOLDFLAGS_BASE  := -X github.com/algorand/go-algorand/config.BuildNumber=$(BUILDNUMBER) \
@@ -33,6 +43,8 @@ GOLDFLAGS := $(GOLDFLAGS_BASE) \
 
 UNIT_TEST_SOURCES := $(sort $(shell GO111MODULE=off go list ./... | grep -v /go-algorand/test/ ))
 ALGOD_API_PACKAGES := $(sort $(shell GO111MODULE=off cd daemon/algod/api; go list ./... ))
+
+MSGP_GENERATE	:= ./protocol ./crypto ./data/basics ./data/transactions ./data/committee ./data/bookkeeping ./data/hashable ./auction ./agreement
 
 default: build
 
@@ -56,6 +68,9 @@ vet:
 check_license:
 	./scripts/check_license.sh
 
+check_shell:
+	find . -type f -name "*.sh" -exec shellcheck {} +
+
 sanity: vet fix lint fmt check_license
 
 cover:
@@ -66,6 +81,12 @@ prof:
 
 generate: deps
 	PATH=$(GOPATH1)/bin:$$PATH go generate ./...
+
+msgp: $(patsubst %,%/msgp_gen.go,$(MSGP_GENERATE))
+
+%/msgp_gen.go: deps ALWAYS
+	$(GOPATH1)/bin/msgp -file ./$(@D) -o $@
+ALWAYS:
 
 # build our fork of libsodium, placing artifacts into crypto/lib/ and crypto/include/
 crypto/lib/libsodium.a:
@@ -127,7 +148,7 @@ $(KMD_API_SWAGGER_INJECT): $(KMD_API_SWAGGER_SPEC) $(KMD_API_SWAGGER_SPEC).valid
 build: buildsrc gen
 
 buildsrc: crypto/lib/libsodium.a node_exporter NONGO_BIN deps $(ALGOD_API_SWAGGER_INJECT) $(KMD_API_SWAGGER_INJECT)
-	go install $(GOTRIMPATH) $(GOTAGS) -ldflags="$(GOLDFLAGS)" ./...
+	go install $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
 
 SOURCES_RACE := github.com/algorand/go-algorand/cmd/kmd
 
@@ -243,4 +264,4 @@ dump: $(addprefix gen/,$(addsuffix /genesis.dump, $(NETWORKS)))
 install: build
 	scripts/dev_install.sh -p $(GOPATH1)/bin
 
-.PHONY: default fmt vet lint check_license sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN
+.PHONY: default fmt vet lint check_license check_shell sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN

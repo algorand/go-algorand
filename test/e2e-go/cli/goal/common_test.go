@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,8 @@
 package goal
 
 import (
+	"flag"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -26,6 +28,17 @@ import (
 var fixture fixtures.GoalFixture
 
 func TestMain(m *testing.M) {
-	fixture.SetupShared("GoalTests", filepath.Join("nettemplates", "TwoNodes50Each.json"))
-	fixture.RunAndExit(m)
+	listMode := false
+	flag.Parse()
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "test.list" {
+			listMode = true
+		}
+	})
+	if !listMode {
+		fixture.SetupShared("GoalTests", filepath.Join("nettemplates", "TwoNodes50Each.json"))
+		fixture.RunAndExit(m)
+	} else {
+		os.Exit(m.Run())
+	}
 }

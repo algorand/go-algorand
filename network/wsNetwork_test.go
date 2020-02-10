@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -54,9 +54,11 @@ func TestMain(m *testing.M) {
 }
 
 func debugMetrics(t *testing.T) {
-	var buf strings.Builder
-	metrics.DefaultRegistry().WriteMetrics(&buf, "")
-	t.Log(buf.String())
+	if t.Failed() {
+		var buf strings.Builder
+		metrics.DefaultRegistry().WriteMetrics(&buf, "")
+		t.Log(buf.String())
+	}
 }
 
 type emptyPhonebook struct{}
@@ -83,6 +85,16 @@ func (e *oneEntryPhonebook) UpdateRetryAfter(addr string, retryAfter time.Time) 
 	if e.addr == addr {
 		e.retryAfter = retryAfter
 	}
+}
+
+func (e *oneEntryPhonebook) GetConnectionWaitTime(addr string) (addrInPhonebook bool,
+	waitTime time.Duration, provisionalTime time.Time) {
+	var t time.Time
+	return false, 0, t
+}
+
+func (e *oneEntryPhonebook) UpdateConnectionTime(addr string, t time.Time) bool {
+	return false
 }
 
 var defaultConfig config.Local
@@ -472,17 +484,24 @@ func TestSlowHandlers(t *testing.T) {
 		ipi++
 	}
 	ok := false
-	for i := 0; i < 10; i++ {
-		time.Sleep(time.Millisecond)
+	lastnw := -1
+	totalWait := 0
+	for i := 0; i < 7; i++ {
+		waitTime := int(1 << uint64(i))
+		time.Sleep(time.Duration(waitTime) * time.Millisecond)
+		totalWait += waitTime
 		nw := slowCounter.numWaiters()
 		if nw == incomingThreads {
 			ok = true
 			break
 		}
-		t.Logf("%dms %d waiting", i+1, nw)
+		if lastnw != nw {
+			t.Logf("%dms %d waiting", totalWait, nw)
+			lastnw = nw
+		}
 	}
 	if !ok {
-		t.Errorf("timeout waiting for %d threads to block on slow handler, have %d", incomingThreads, slowCounter.numWaiters())
+		t.Errorf("timeout waiting for %d threads to block on slow handler, have %d", incomingThreads, lastnw)
 	}
 	require.Equal(t, 0, fastCounter.Count())
 
@@ -781,7 +800,11 @@ func TestGetPeers(t *testing.T) {
 	waitReady(t, netB, readyTimeout.C)
 	t.Log("b ready")
 
-	ph := ArrayPhonebook{Entries: phonebookEntries{"a": phonebookData{}, "b": phonebookData{}, "c": phonebookData{}}}
+	ph := ArrayPhonebook{Entries: makePhonebookEntries(netA.config.ConnectionsRateLimitingCount,
+		time.Duration(netA.config.ConnectionsRateLimitingWindowSeconds)*time.Second)}
+
+	data := map[string]phonebookData{"a": phonebookData{}, "b": phonebookData{}, "c": phonebookData{}}
+	ph.Entries.data = data
 	phbMulti.AddOrUpdatePhonebook("ph", &ph)
 
 	//addrB, _ := netB.Address()

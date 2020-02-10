@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,9 +19,9 @@ package participation
 import (
 	"fmt"
 	"path/filepath"
-	"testing"
 	"runtime"
-	
+	"testing"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
@@ -30,7 +30,7 @@ import (
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 )
 
-func getFirstAccountFromNamedNode(fixture fixtures.RestClientFixture, r *require.Assertions, nodeName string) (account string) {
+func getFirstAccountFromNamedNode(fixture *fixtures.RestClientFixture, r *require.Assertions, nodeName string) (account string) {
 	cli := fixture.GetLibGoalClientForNamedNode(nodeName)
 	wh, err := cli.GetUnencryptedWalletHandle()
 	r.NoError(err)
@@ -82,13 +82,13 @@ func TestOnlineOfflineRewards(t *testing.T) {
 	defer fixture.Shutdown()
 
 	// get online and offline accounts
-	onlineAccount := getFirstAccountFromNamedNode(fixture, r, "Online")
+	onlineAccount := getFirstAccountFromNamedNode(&fixture, r, "Online")
 	onlineClient := fixture.GetLibGoalClientForNamedNode("Online")
-	offlineAccount := getFirstAccountFromNamedNode(fixture, r, "Offline")
+	offlineAccount := getFirstAccountFromNamedNode(&fixture, r, "Offline")
 	offlineClient := fixture.GetLibGoalClientForNamedNode("Offline")
 
 	// learn initial balances
-	initialRound := uint64(301)
+	initialRound := uint64(11)
 	r.NoError(fixture.WaitForRoundWithTimeout(initialRound))
 	initialOnlineBalance, _ := onlineClient.GetBalance(onlineAccount)
 	initialOfflineBalance, _ := offlineClient.GetBalance(offlineAccount)
@@ -131,6 +131,9 @@ func TestOnlineOfflineRewards(t *testing.T) {
 
 func TestPartkeyOnlyRewards(t *testing.T) {
 	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
+	if testing.Short() {
 		t.Skip()
 	}
 	t.Parallel()
@@ -184,7 +187,7 @@ func TestRewardUnitThreshold(t *testing.T) {
 	defer fixture.Shutdown()
 
 	// get "poor" account (has 1% stake as opposed to 33%)
-	poorAccount := getFirstAccountFromNamedNode(fixture, r, "SmallNode")
+	poorAccount := getFirstAccountFromNamedNode(&fixture, r, "SmallNode")
 	client := fixture.GetLibGoalClientForNamedNode("SmallNode")
 	// make new account
 	wh, _ := client.GetUnencryptedWalletHandle()
@@ -298,9 +301,25 @@ func TestRewardRateRecalculation(t *testing.T) {
 	t.Parallel()
 	r := require.New(t)
 
+	// consensusTestRapidRewardRecalculation is a version of ConsensusCurrentVersion
+	// that decreases the RewardsRateRefreshInterval greatly.
+	const consensusTestRapidRewardRecalculation = protocol.ConsensusVersion("test-fast-reward-recalculation")
+
+	rapidRecalcParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	rapidRecalcParams.RewardsRateRefreshInterval = 10
+	//because rapidRecalcParams is based on ConsensusCurrentVersion,
+	//it *shouldn't* have any ApprovedUpgrades
+	//but explicitly mark "no approved upgrades" just in case
+	rapidRecalcParams.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
 	var fixture fixtures.RestClientFixture
+	fixture.SetConsensus(config.ConsensusProtocols{
+		consensusTestRapidRewardRecalculation: rapidRecalcParams,
+	})
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each_RapidRewardRecalculation.json"))
 	defer fixture.Shutdown()
+	consensus, err := fixture.NC.GetConsensus()
+	r.NoError(err)
 
 	client := fixture.LibGoalClient
 	r.NoError(fixture.WaitForRoundWithTimeout(uint64(5)))
@@ -318,8 +337,9 @@ func TestRewardRateRecalculation(t *testing.T) {
 
 	blk, err := client.Block(curStatus.LastRound)
 	r.NoError(err)
-	consensus := config.Consensus[protocol.ConsensusVersion(blk.CurrentProtocol)]
-	rewardRecalcRound := consensus.RewardsRateRefreshInterval
+	r.Equal(protocol.ConsensusVersion(blk.CurrentProtocol), consensusTestRapidRewardRecalculation)
+	consensusParams := consensus[protocol.ConsensusVersion(blk.CurrentProtocol)]
+	rewardRecalcRound := consensusParams.RewardsRateRefreshInterval
 	r.NoError(fixture.WaitForRoundWithTimeout(rewardRecalcRound - 1))
 	balanceOfRewardsPool, roundQueried := fixture.GetBalanceAndRound(rewardsAccount)
 	if roundQueried != rewardRecalcRound-1 {
@@ -330,18 +350,18 @@ func TestRewardRateRecalculation(t *testing.T) {
 	r.NoError(fixture.WaitForRoundWithTimeout(rewardRecalcRound))
 	blk, err = client.Block(rewardRecalcRound)
 	r.NoError(err)
-	if !consensus.PendingResidueRewards {
+	if !consensusParams.PendingResidueRewards {
 		lastRoundBeforeRewardRecals.RewardsResidue = 0
 	}
 
-	r.Equalf((balanceOfRewardsPool-minBal-lastRoundBeforeRewardRecals.RewardsResidue)/consensus.RewardsRateRefreshInterval, blk.RewardsRate, "Mismatching (%d-%d-%d)/%d != %d @ round %d", balanceOfRewardsPool, minBal, lastRoundBeforeRewardRecals.RewardsResidue, consensus.RewardsRateRefreshInterval, blk.RewardsRate, lastRoundBeforeRewardRecals.Round)
+	r.Equalf((balanceOfRewardsPool-minBal-lastRoundBeforeRewardRecals.RewardsResidue)/consensusParams.RewardsRateRefreshInterval, blk.RewardsRate, "Mismatching (%d-%d-%d)/%d != %d @ round %d", balanceOfRewardsPool, minBal, lastRoundBeforeRewardRecals.RewardsResidue, consensusParams.RewardsRateRefreshInterval, blk.RewardsRate, lastRoundBeforeRewardRecals.Round)
 
 	curStatus, err = client.Status()
 	r.NoError(err)
 	deadline = curStatus.LastRound + uint64(5)
 	fixture.SendMoneyAndWait(deadline, amountToSend, minFee, richAccount.Address, rewardsAccount)
 
-	rewardRecalcRound = rewardRecalcRound + consensus.RewardsRateRefreshInterval
+	rewardRecalcRound = rewardRecalcRound + consensusParams.RewardsRateRefreshInterval
 
 	r.NoError(fixture.WaitForRoundWithTimeout(rewardRecalcRound - 1))
 	balanceOfRewardsPool, roundQueried = fixture.GetBalanceAndRound(rewardsAccount)
@@ -350,14 +370,14 @@ func TestRewardRateRecalculation(t *testing.T) {
 	}
 	lastRoundBeforeRewardRecals, err = client.Block(rewardRecalcRound - 1)
 	r.NoError(err)
-	consensus = config.Consensus[protocol.ConsensusVersion(lastRoundBeforeRewardRecals.CurrentProtocol)]
+	consensusParams = consensus[protocol.ConsensusVersion(lastRoundBeforeRewardRecals.CurrentProtocol)]
 	r.NoError(fixture.WaitForRoundWithTimeout(rewardRecalcRound))
 	blk, err = client.Block(rewardRecalcRound)
 	r.NoError(err)
-	if !consensus.PendingResidueRewards {
+	if !consensusParams.PendingResidueRewards {
 		lastRoundBeforeRewardRecals.RewardsResidue = 0
 	}
-	r.Equal((balanceOfRewardsPool-minBal-lastRoundBeforeRewardRecals.RewardsResidue)/consensus.RewardsRateRefreshInterval, blk.RewardsRate)
+	r.Equal((balanceOfRewardsPool-minBal-lastRoundBeforeRewardRecals.RewardsResidue)/consensusParams.RewardsRateRefreshInterval, blk.RewardsRate)
 	// if the network keeps progressing without error,
 	// this shows the network is healthy and that we didn't panic
 	finalRound := rewardRecalcRound + uint64(5)
