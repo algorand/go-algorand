@@ -46,6 +46,7 @@ type roundRequestsContext struct {
 }
 
 // pendingRequests keeps the context for all pending requests
+//msgp:ignore pendingRequestsContext
 type pendingRequestsContext map[round]roundRequestsContext
 
 func makePendingRequestsContext() pendingRequestsContext {
