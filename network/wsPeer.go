@@ -148,6 +148,9 @@ type wsPeer struct {
 
 	// createTime is the time at which the connection was established with the peer.
 	createTime time.Time
+
+	// peer version ( this is one of the version supported by the current node and listed in SupportedProtocolVersions )
+	version string
 }
 
 // HTTPPeer is what the opaque Peer might be.
