@@ -775,10 +775,14 @@ func typecheck(expected, got StackType) bool {
 }
 
 func filterFieldsForLineComment(fields []string) []string {
+	prevField := ""
 	for i, s := range fields {
 		if strings.HasPrefix(s, "//") {
-			return fields[:i]
+			if prevField != "base64" && prevField != "b64" {
+				return fields[:i]
+			}
 		}
+		prevField = s
 	}
 	return fields
 }
