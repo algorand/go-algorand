@@ -74,7 +74,7 @@ func (a *MicroAlgos) CodecDecodeSelf(dec *codec.Decoder) {
 }
 
 // CanMarshalMsg implements msgp.Marshaler
-func (_ MicroAlgos) CanMarshalMsg(z interface{}) bool {
+func (MicroAlgos) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(MicroAlgos)
 	return ok
 }
@@ -87,7 +87,7 @@ func (a MicroAlgos) MarshalMsg(b []byte) (o []byte, err error) {
 }
 
 // CanUnmarshalMsg implements msgp.Unmarshaler
-func (_ *MicroAlgos) CanUnmarshalMsg(z interface{}) bool {
+func (*MicroAlgos) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*MicroAlgos)
 	return ok
 }
