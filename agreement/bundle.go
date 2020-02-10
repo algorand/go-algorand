@@ -36,8 +36,8 @@ type unauthenticatedBundle struct {
 	Step     step          `codec:"step"`
 	Proposal proposalValue `codec:"prop"`
 
-	Votes             []voteAuthenticator             `codec:"vote"`
-	EquivocationVotes []equivocationVoteAuthenticator `codec:"eqv"`
+	Votes             []voteAuthenticator             `codec:"vote,allocbound=config.MaxVoteThreshold"`
+	EquivocationVotes []equivocationVoteAuthenticator `codec:"eqv,allocbound=config.MaxVoteThreshold"`
 }
 
 // bundle is a set of votes, all from the same round, period, and step, and from distinct senders, that reaches quorum.
@@ -48,19 +48,23 @@ type bundle struct {
 
 	U unauthenticatedBundle `codec:"u"`
 
-	Votes             []vote             `codec:"vote"`
-	EquivocationVotes []equivocationVote `codec:"eqv"`
+	Votes             []vote             `codec:"vote,allocbound=config.MaxVoteThreshold"`
+	EquivocationVotes []equivocationVote `codec:"eqv,allocbound=config.MaxVoteThreshold"`
 }
 
 // voteAuthenticators omit the Round, Period, Step, and Proposal for compression
 // and to simplify checking logic.
 type voteAuthenticator struct {
+	_struct struct{} `codec:""` // not omitempty
+
 	Sender basics.Address                      `codec:"snd"`
 	Cred   committee.UnauthenticatedCredential `codec:"cred"`
 	Sig    crypto.OneTimeSignature             `codec:"sig,omitempty,omitemptycheckstruct"`
 }
 
 type equivocationVoteAuthenticator struct {
+	_struct struct{} `codec:""` // not omitempty
+
 	Sender    basics.Address                      `codec:"snd"`
 	Cred      committee.UnauthenticatedCredential `codec:"cred"`
 	Sigs      [2]crypto.OneTimeSignature          `codec:"sig,omitempty,omitemptycheckstruct"`
