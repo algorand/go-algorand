@@ -192,15 +192,11 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 
 // WsGetBlockRequest is a msgpack message requesting a block
 type WsGetBlockRequest struct {
-	_struct struct{} `codec:""`
-
 	Round uint64 `json:"round"`
 }
 
 // WsGetBlockOut is a msgpack message delivered on responding to a block (not rpc-based though)
 type WsGetBlockOut struct {
-	_struct struct{} `codec:""`
-
 	Round      uint64
 	Error      string
 	BlockBytes []byte `json:"blockbytes"`
@@ -238,7 +234,7 @@ func (ls *LedgerService) handleCatchupReq(ctx context.Context, reqMsg network.In
 	}()
 
 	var req WsGetBlockRequest
-	err := protocol.Decode(reqMsg.Data, &req)
+	err := protocol.DecodeReflect(reqMsg.Data, &req)
 	if err != nil {
 		res.Error = err.Error()
 		return
@@ -257,7 +253,7 @@ func (ls *LedgerService) handleCatchupReq(ctx context.Context, reqMsg network.In
 func (ls *LedgerService) sendCatchupRes(ctx context.Context, target network.UnicastPeer, reqTag protocol.Tag, outMsg WsGetBlockOut) {
 	t := reqTag.Complement()
 	logging.Base().Infof("catching down peer: %v, round %v. outcome: %v. ledger: %v", target.GetAddress(), outMsg.Round, outMsg.Error, ls.ledger.LastRound())
-	err := target.Unicast(ctx, protocol.Encode(&outMsg), t)
+	err := target.Unicast(ctx, protocol.EncodeReflect(outMsg), t)
 	if err != nil {
 		logging.Base().Info("failed to respond to catchup req", err)
 	}
