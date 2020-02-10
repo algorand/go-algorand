@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"io/ioutil"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -71,12 +72,23 @@ type ConsensusParams struct {
 	// to be high enough to ensure that there are sufficient participants
 	// after the upgrade.
 	//
-	// There is a delay of UpgradeWaitRounds between approval of
-	// an upgrade and its deployment, to give clients time to notify users.
-	UpgradeVoteRounds   uint64
-	UpgradeThreshold    uint64
-	UpgradeWaitRounds   uint64
-	MaxVersionStringLen int
+	// A consensus protocol upgrade may specify the delay between its
+	// acceptance and its execution.  This gives clients time to notify
+	// users.  This delay is specified by the upgrade proposer and must
+	// be between MinUpgradeWaitRounds and MaxUpgradeWaitRounds (inclusive)
+	// in the old protocol's parameters.  Note that these parameters refer
+	// to the representation of the delay in a block rather than the actual
+	// delay: if the specified delay is zero, it is equivalent to
+	// DefaultUpgradeWaitRounds.
+	//
+	// The maximum length of a consensus version string is
+	// MaxVersionStringLen.
+	UpgradeVoteRounds        uint64
+	UpgradeThreshold         uint64
+	DefaultUpgradeWaitRounds uint64
+	MinUpgradeWaitRounds     uint64
+	MaxUpgradeWaitRounds     uint64
+	MaxVersionStringLen      int
 
 	// MaxTxnBytesPerBlock determines the maximum number of bytes
 	// that transactions can take up in a block.  Specifically,
@@ -95,8 +107,10 @@ type ConsensusParams struct {
 	MaxTxnLife uint64
 
 	// ApprovedUpgrades describes the upgrade proposals that this protocol
-	// implementation will vote for.
-	ApprovedUpgrades map[protocol.ConsensusVersion]bool
+	// implementation will vote for, along with their delay value
+	// (in rounds).  A delay value of zero is the same as a delay of
+	// DefaultUpgradeWaitRounds.
+	ApprovedUpgrades map[protocol.ConsensusVersion]uint64
 
 	// SupportGenesisHash indicates support for the GenesisHash
 	// fields in transactions (and requires them in blocks).
@@ -224,21 +238,34 @@ type ConsensusParams struct {
 
 	// max decimal precision for assets
 	MaxAssetDecimals uint32
+
+	// whether to use the old buggy Credential.lowestOutput function
+	// TODO(upgrade): Please remove as soon as the upgrade goes through
+	UseBuggyProposalLowestOutput bool
 }
+
+// ConsensusProtocols defines a set of supported protocol versions and their
+// corresponding parameters.
+type ConsensusProtocols map[protocol.ConsensusVersion]ConsensusParams
 
 // Consensus tracks the protocol-level settings for different versions of the
 // consensus protocol.
-var Consensus map[protocol.ConsensusVersion]ConsensusParams
+var Consensus ConsensusProtocols
+
+// MaxVoteThreshold is the largest threshold for a bundle over all supported
+// consensus protocols, used for decoding purposes.
+var MaxVoteThreshold int
+
+func maybeMaxVoteThreshold(t uint64) {
+	if int(t) > MaxVoteThreshold {
+		MaxVoteThreshold = int(t)
+	}
+}
 
 func init() {
-	Consensus = make(map[protocol.ConsensusVersion]ConsensusParams)
+	Consensus = make(ConsensusProtocols)
 
 	initConsensusProtocols()
-	initConsensusTestProtocols()
-
-	// This must appear last, since it depends on all of the other
-	// versions to already be registered (by the above calls).
-	initConsensusTestFastUpgrade()
 
 	// Allow tuning SmallLambda for faster consensus in single-machine e2e
 	// tests.  Useful for development.  This might make sense to fold into
@@ -248,6 +275,106 @@ func init() {
 	if err == nil {
 		Protocol.SmallLambda = time.Duration(algoSmallLambda) * time.Millisecond
 	}
+
+	for _, p := range Consensus {
+		maybeMaxVoteThreshold(p.SoftCommitteeThreshold)
+		maybeMaxVoteThreshold(p.CertCommitteeThreshold)
+		maybeMaxVoteThreshold(p.NextCommitteeThreshold)
+		maybeMaxVoteThreshold(p.LateCommitteeThreshold)
+		maybeMaxVoteThreshold(p.RedoCommitteeThreshold)
+		maybeMaxVoteThreshold(p.DownCommitteeThreshold)
+	}
+}
+
+// SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.
+func SaveConfigurableConsensus(dataDirectory string, params ConsensusProtocols) error {
+	consensusProtocolPath := filepath.Join(dataDirectory, ConfigurableConsensusProtocolsFilename)
+
+	encodedConsensusParams, err := json.Marshal(params)
+	if err != nil {
+		return err
+	}
+	err = ioutil.WriteFile(consensusProtocolPath, encodedConsensusParams, 0644)
+	return err
+}
+
+// DeepCopy creates a deep copy of a consensus protocols map.
+func (cp ConsensusProtocols) DeepCopy() ConsensusProtocols {
+	staticConsensus := make(ConsensusProtocols)
+	for consensusVersion, consensusParams := range cp {
+		// recreate the ApprovedUpgrades map since we don't want to modify the original one.
+		if consensusParams.ApprovedUpgrades != nil {
+			newApprovedUpgrades := make(map[protocol.ConsensusVersion]uint64)
+			for ver, when := range consensusParams.ApprovedUpgrades {
+				newApprovedUpgrades[ver] = when
+			}
+			consensusParams.ApprovedUpgrades = newApprovedUpgrades
+		}
+		staticConsensus[consensusVersion] = consensusParams
+	}
+	return staticConsensus
+}
+
+// Merge merges a configurable consensus ontop of the existing consensus protocol and return
+// a new consensus protocol without modify any of the incoming structures.
+func (cp ConsensusProtocols) Merge(configurableConsensus ConsensusProtocols) ConsensusProtocols {
+	staticConsensus := cp.DeepCopy()
+
+	for consensusVersion, consensusParams := range configurableConsensus {
+		if consensusParams.ApprovedUpgrades == nil {
+			// if we were provided with an empty ConsensusParams, delete the existing reference to this consensus version
+			for cVer, cParam := range staticConsensus {
+				if cVer == consensusVersion {
+					delete(staticConsensus, cVer)
+				} else if _, has := cParam.ApprovedUpgrades[consensusVersion]; has {
+					// delete upgrade to deleted version
+					delete(cParam.ApprovedUpgrades, consensusVersion)
+				}
+			}
+		} else {
+			// need to add/update entry
+			staticConsensus[consensusVersion] = consensusParams
+		}
+	}
+
+	return staticConsensus
+}
+
+// LoadConfigurableConsensusProtocols loads the configurable protocols from the data directroy
+func LoadConfigurableConsensusProtocols(dataDirectory string) error {
+	newConsensus, err := PreloadConfigurableConsensusProtocols(dataDirectory)
+	if err != nil {
+		return err
+	}
+	if newConsensus != nil {
+		Consensus = newConsensus
+	}
+	return nil
+}
+
+// PreloadConfigurableConsensusProtocols loads the configurable protocols from the data directroy
+// and merge it with a copy of the Consensus map. Then, it returns it to the caller.
+func PreloadConfigurableConsensusProtocols(dataDirectory string) (ConsensusProtocols, error) {
+	consensusProtocolPath := filepath.Join(dataDirectory, ConfigurableConsensusProtocolsFilename)
+	file, err := os.Open(consensusProtocolPath)
+
+	if err != nil {
+		if os.IsNotExist(err) {
+			// this file is not required, only optional. if it's missing, no harm is done.
+			return Consensus, nil
+		}
+		return nil, err
+	}
+	defer file.Close()
+
+	configurableConsensus := make(ConsensusProtocols)
+
+	decoder := json.NewDecoder(file)
+	err = decoder.Decode(&configurableConsensus)
+	if err != nil {
+		return nil, err
+	}
+	return Consensus.Merge(configurableConsensus), nil
 }
 
 func initConsensusProtocols() {
@@ -257,10 +384,10 @@ func initConsensusProtocols() {
 
 	// Base consensus protocol version, v7.
 	v7 := ConsensusParams{
-		UpgradeVoteRounds:   10000,
-		UpgradeThreshold:    9000,
-		UpgradeWaitRounds:   10000,
-		MaxVersionStringLen: 64,
+		UpgradeVoteRounds:        10000,
+		UpgradeThreshold:         9000,
+		DefaultUpgradeWaitRounds: 10000,
+		MaxVersionStringLen:      64,
 
 		MinBalance:          10000,
 		MinTxnFee:           1000,
@@ -274,7 +401,7 @@ func initConsensusProtocols() {
 		RewardUnit:                 1e6,
 		RewardsRateRefreshInterval: 5e5,
 
-		ApprovedUpgrades: map[protocol.ConsensusVersion]bool{},
+		ApprovedUpgrades: map[protocol.ConsensusVersion]uint64{},
 
 		NumProposers:           30,
 		SoftCommitteeSize:      2500,
@@ -297,10 +424,11 @@ func initConsensusProtocols() {
 
 		MaxBalLookback: 320,
 
-		MaxTxGroupSize: 1,
+		MaxTxGroupSize:               1,
+		UseBuggyProposalLowestOutput: true, // TODO(upgrade): Please remove as soon as the upgrade goes through
 	}
 
-	v7.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	v7.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	Consensus[protocol.ConsensusV7] = v7
 
 	// v8 uses parameters and a seed derivation policy (the "twin seeds") from Georgios' new analysis
@@ -321,20 +449,20 @@ func initConsensusProtocols() {
 	v8.DownCommitteeSize = 5000
 	v8.DownCommitteeThreshold = 3838
 
-	v8.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	v8.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	Consensus[protocol.ConsensusV8] = v8
 
 	// v7 can be upgraded to v8.
-	v7.ApprovedUpgrades[protocol.ConsensusV8] = true
+	v7.ApprovedUpgrades[protocol.ConsensusV8] = 0
 
 	// v9 increases the minimum balance to 100,000 microAlgos.
 	v9 := v8
 	v9.MinBalance = 100000
-	v9.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	v9.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	Consensus[protocol.ConsensusV9] = v9
 
 	// v8 can be upgraded to v9.
-	v8.ApprovedUpgrades[protocol.ConsensusV9] = true
+	v8.ApprovedUpgrades[protocol.ConsensusV9] = 0
 
 	// v10 introduces fast partition recovery (and also raises NumProposers).
 	v10 := v9
@@ -346,82 +474,82 @@ func initConsensusProtocols() {
 	v10.RedoCommitteeThreshold = 1768
 	v10.DownCommitteeSize = 6000
 	v10.DownCommitteeThreshold = 4560
-	v10.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	v10.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	Consensus[protocol.ConsensusV10] = v10
 
 	// v9 can be upgraded to v10.
-	v9.ApprovedUpgrades[protocol.ConsensusV10] = true
+	v9.ApprovedUpgrades[protocol.ConsensusV10] = 0
 
 	// v11 introduces SignedTxnInBlock.
 	v11 := v10
 	v11.SupportSignedTxnInBlock = true
 	v11.PaysetCommitFlat = true
-	v11.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	v11.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	Consensus[protocol.ConsensusV11] = v11
 
 	// v10 can be upgraded to v11.
-	v10.ApprovedUpgrades[protocol.ConsensusV11] = true
+	v10.ApprovedUpgrades[protocol.ConsensusV11] = 0
 
 	// v12 increases the maximum length of a version string.
 	v12 := v11
 	v12.MaxVersionStringLen = 128
-	v12.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	v12.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	Consensus[protocol.ConsensusV12] = v12
 
 	// v11 can be upgraded to v12.
-	v11.ApprovedUpgrades[protocol.ConsensusV12] = true
+	v11.ApprovedUpgrades[protocol.ConsensusV12] = 0
 
 	// v13 makes the consensus version a meaningful string.
 	v13 := v12
-	v13.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	v13.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	Consensus[protocol.ConsensusV13] = v13
 
 	// v12 can be upgraded to v13.
-	v12.ApprovedUpgrades[protocol.ConsensusV13] = true
+	v12.ApprovedUpgrades[protocol.ConsensusV13] = 0
 
 	// v14 introduces tracking of closing amounts in ApplyData, and enables
 	// GenesisHash in transactions.
 	v14 := v13
 	v14.ApplyData = true
 	v14.SupportGenesisHash = true
-	v14.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	v14.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	Consensus[protocol.ConsensusV14] = v14
 
 	// v13 can be upgraded to v14.
-	v13.ApprovedUpgrades[protocol.ConsensusV14] = true
+	v13.ApprovedUpgrades[protocol.ConsensusV14] = 0
 
 	// v15 introduces tracking of reward distributions in ApplyData.
 	v15 := v14
 	v15.RewardsInApplyData = true
 	v15.ForceNonParticipatingFeeSink = true
-	v15.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	v15.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	Consensus[protocol.ConsensusV15] = v15
 
 	// v14 can be upgraded to v15.
-	v14.ApprovedUpgrades[protocol.ConsensusV15] = true
+	v14.ApprovedUpgrades[protocol.ConsensusV15] = 0
 
 	// v16 fixes domain separation in credentials.
 	v16 := v15
 	v16.CredentialDomainSeparationEnabled = true
 	v16.RequireGenesisHash = true
-	v16.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	v16.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	Consensus[protocol.ConsensusV16] = v16
 
 	// v15 can be upgraded to v16.
-	v15.ApprovedUpgrades[protocol.ConsensusV16] = true
+	v15.ApprovedUpgrades[protocol.ConsensusV16] = 0
 
 	// ConsensusV17 points to 'final' spec commit
 	v17 := v16
-	v17.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	v17.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	Consensus[protocol.ConsensusV17] = v17
 
 	// v16 can be upgraded to v17.
-	v16.ApprovedUpgrades[protocol.ConsensusV17] = true
+	v16.ApprovedUpgrades[protocol.ConsensusV17] = 0
 
 	// ConsensusV18 points to reward calculation spec commit
 	v18 := v17
 	v18.PendingResidueRewards = true
-	v18.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	v18.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	v18.TxnCounter = true
 	v18.Asset = true
 	v18.LogicSigVersion = 1
@@ -439,115 +567,45 @@ func initConsensusProtocols() {
 
 	// ConsensusV19 is the official spec commit ( teal, assets, group tx )
 	v19 := v18
-	v19.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	v19.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	Consensus[protocol.ConsensusV19] = v19
 
 	// v18 can be upgraded to v19.
-	v18.ApprovedUpgrades[protocol.ConsensusV19] = true
+	v18.ApprovedUpgrades[protocol.ConsensusV19] = 0
 	// v17 can be upgraded to v19.
-	v17.ApprovedUpgrades[protocol.ConsensusV19] = true
+	v17.ApprovedUpgrades[protocol.ConsensusV19] = 0
 
 	// v20 points to adding the precision to the assets.
 	v20 := v19
-	v20.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	v20.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	v20.MaxAssetDecimals = 19
 	// we want to adjust the upgrade time to be roughly one week.
 	// one week, in term of rounds would be:
 	// 140651 = (7 * 24 * 60 * 60 / 4.3)
 	// for the sake of future manual calculations, we'll round that down
 	// a bit :
-	v20.UpgradeWaitRounds = 140000
+	v20.DefaultUpgradeWaitRounds = 140000
 	Consensus[protocol.ConsensusV20] = v20
 
 	// v19 can be upgraded to v20.
-	v19.ApprovedUpgrades[protocol.ConsensusV20] = true
+	v19.ApprovedUpgrades[protocol.ConsensusV20] = 0
+
+	// v21 fixes a bug in Credential.lowestOutput that would cause larger accounts to be selected to propose disproportionately more often than small accounts
+	v21 := v20
+	v21.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	v21.UseBuggyProposalLowestOutput = false // TODO(upgrade): Please remove this line as soon as the protocol upgrade goes through
+	Consensus[protocol.ConsensusV21] = v21
+	// v20 can be upgraded to v21.
+	v20.ApprovedUpgrades[protocol.ConsensusV21] = 0
 
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v20
-	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
+	vFuture := v21
+	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	vFuture.MinUpgradeWaitRounds = 10000
+	vFuture.MaxUpgradeWaitRounds = 150000
 	Consensus[protocol.ConsensusFuture] = vFuture
-}
-
-func initConsensusTestProtocols() {
-	// Various test protocol versions
-	Consensus[protocol.ConsensusTest0] = ConsensusParams{
-		UpgradeVoteRounds:   2,
-		UpgradeThreshold:    1,
-		UpgradeWaitRounds:   2,
-		MaxVersionStringLen: 64,
-
-		MaxTxnBytesPerBlock: 1000000,
-		DefaultKeyDilution:  10000,
-
-		ApprovedUpgrades: map[protocol.ConsensusVersion]bool{
-			protocol.ConsensusTest1: true,
-		},
-	}
-
-	Consensus[protocol.ConsensusTest1] = ConsensusParams{
-		UpgradeVoteRounds:   10,
-		UpgradeThreshold:    8,
-		UpgradeWaitRounds:   10,
-		MaxVersionStringLen: 64,
-
-		MaxTxnBytesPerBlock: 1000000,
-		DefaultKeyDilution:  10000,
-
-		ApprovedUpgrades: map[protocol.ConsensusVersion]bool{},
-	}
-
-	testBigBlocks := Consensus[protocol.ConsensusCurrentVersion]
-	testBigBlocks.MaxTxnBytesPerBlock = 100000000
-	testBigBlocks.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
-	Consensus[protocol.ConsensusTestBigBlocks] = testBigBlocks
-
-	rapidRecalcParams := Consensus[protocol.ConsensusCurrentVersion]
-	rapidRecalcParams.RewardsRateRefreshInterval = 25
-	//because rapidRecalcParams is based on ConsensusCurrentVersion,
-	//it *shouldn't* have any ApprovedUpgrades
-	//but explicitly mark "no approved upgrades" just in case
-	rapidRecalcParams.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
-	Consensus[protocol.ConsensusTestRapidRewardRecalculation] = rapidRecalcParams
-
-	// Setting the testShorterLookback parameters derived from ConsensusCurrentVersion
-	// Will result in MaxBalLookback = 32
-	// Used to run tests faster where past MaxBalLookback values are checked
-	testShorterLookback := Consensus[protocol.ConsensusCurrentVersion]
-	testShorterLookback.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
-
-	// MaxBalLookback  =  2 x SeedRefreshInterval x SeedLookback
-	// ref. https://github.com/algorandfoundation/specs/blob/master/dev/abft.md
-	testShorterLookback.SeedLookback = 2
-	testShorterLookback.SeedRefreshInterval = 8
-	testShorterLookback.MaxBalLookback = 2 * testShorterLookback.SeedLookback * testShorterLookback.SeedRefreshInterval // 32
-	Consensus[protocol.ConsensusTestShorterLookback] = testShorterLookback
-}
-
-func initConsensusTestFastUpgrade() {
-	fastUpgradeProtocols := make(map[protocol.ConsensusVersion]ConsensusParams)
-
-	for proto, params := range Consensus {
-		fastParams := params
-		fastParams.UpgradeVoteRounds = 5
-		fastParams.UpgradeThreshold = 3
-		fastParams.UpgradeWaitRounds = 5
-		fastParams.MaxVersionStringLen += len(protocol.ConsensusTestFastUpgrade(""))
-		fastParams.ApprovedUpgrades = make(map[protocol.ConsensusVersion]bool)
-
-		for ver, flag := range params.ApprovedUpgrades {
-			fastParams.ApprovedUpgrades[protocol.ConsensusTestFastUpgrade(ver)] = flag
-		}
-
-		fastUpgradeProtocols[protocol.ConsensusTestFastUpgrade(proto)] = fastParams
-	}
-
-	// Put the test protocols into the Consensus struct; this
-	// is done as a separate step so we don't recurse forever.
-	for proto, params := range fastUpgradeProtocols {
-		Consensus[proto] = params
-	}
 }
 
 // Local holds the per-node-instance configuration settings for the protocol.
@@ -751,6 +809,13 @@ type Local struct {
 	// PeerConnectionsUpdateInterval defines the interval at which the peer connections information is being sent to the
 	// telemetry ( when enabled ). Defined in seconds.
 	PeerConnectionsUpdateInterval int
+
+	// EnableProfiler enables the go pprof endpoints, should be false if
+	// the algod api will be exposed to untrusted individuals
+	EnableProfiler bool
+
+	// TelemetryToLog records messages to node.log that are normally sent to remote event monitoring
+	TelemetryToLog bool
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)
@@ -767,6 +832,11 @@ const LedgerFilenamePrefix = "ledger"
 // CrashFilename is the name of the agreement database file.
 // It is used to recover from node crashes.
 const CrashFilename = "crash.sqlite"
+
+// ConfigurableConsensusProtocolsFilename defines a set of consensus prototocols that
+// are to be loaded from the data directory ( if present ), to override the
+// built-in supported consensus protocols.
+const ConfigurableConsensusProtocolsFilename = "consensus.json"
 
 // LoadConfigFromDisk returns a Local config structure based on merging the defaults
 // with settings loaded from the config file from the custom dir.  If the custom file

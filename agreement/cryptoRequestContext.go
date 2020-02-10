@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -46,6 +46,7 @@ type roundRequestsContext struct {
 }
 
 // pendingRequests keeps the context for all pending requests
+//msgp:ignore pendingRequestsContext
 type pendingRequestsContext map[round]roundRequestsContext
 
 func makePendingRequestsContext() pendingRequestsContext {

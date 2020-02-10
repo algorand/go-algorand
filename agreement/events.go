@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -68,6 +68,7 @@ type externalEvent interface {
 // type of the implementing struct.
 //
 //go:generate stringer -type=eventType
+//msgp:ignore eventType
 type eventType int
 
 const (

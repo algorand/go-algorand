@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -85,7 +85,20 @@ func BenchmarkPaymentsThroughput(b *testing.B) {
 func doBenchTemplate(b *testing.B, template string, moneynode string) {
 	fmt.Printf("Starting to benchmark template %s\n", template)
 
+	// consensusTestBigBlocks is a version of ConsensusV0 used for testing
+	// with big block size (large MaxTxnBytesPerBlock).
+	// at the time versioning was introduced.
+	const consensusTestBigBlocks = protocol.ConsensusVersion("test-big-blocks")
+
 	var fixture fixtures.RestClientFixture
+
+	testBigBlocks := config.Consensus[protocol.ConsensusCurrentVersion]
+	testBigBlocks.MaxTxnBytesPerBlock = 100000000
+	testBigBlocks.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	fixture.SetConsensus(config.ConsensusProtocols{
+		consensusTestBigBlocks: testBigBlocks,
+	})
 	fixture.Setup(b, filepath.Join("nettemplates", template))
 	defer fixture.Shutdown()
 

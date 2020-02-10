@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -64,7 +64,7 @@ func TestTooManyArgs(t *testing.T) {
 	require.NoError(t, err)
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = program
-	args := [EvalMaxArgs + 1][]byte{}
+	args := [transactions.EvalMaxArgs + 1][]byte{}
 	txn.Lsig.Args = args[:]
 	sb := strings.Builder{}
 	pass, err := Eval(program, defaultEvalParams(&sb, &txn))

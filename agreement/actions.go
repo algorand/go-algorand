@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,13 +20,13 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/logspec"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
 )
 
 //go:generate stringer -type=actionType
+//msgp:ignore actionType
 type actionType int
 
 const (
@@ -227,7 +227,7 @@ func (a ensureAction) do(ctx context.Context, s *Service) {
 
 	if a.Payload.ve != nil {
 		logEvent.Type = logspec.RoundConcluded
-		s.log.with(logEvent).Infof("committed round %v with pre-validated block %v", a.Certificate.Round, a.Certificate.Proposal)
+		s.log.with(logEvent).Infof("committed round %d with pre-validated block %v", a.Certificate.Round, a.Certificate.Proposal)
 		s.log.EventWithDetails(telemetryspec.Agreement, telemetryspec.BlockAcceptedEvent, telemetryspec.BlockAcceptedEventDetails{
 			Address: a.Certificate.Proposal.OriginalProposer.String(),
 			Hash:    a.Certificate.Proposal.BlockDigest.String(),
@@ -238,11 +238,11 @@ func (a ensureAction) do(ctx context.Context, s *Service) {
 		block := a.Payload.Block
 		if !a.PayloadOk {
 			logEvent.Type = logspec.RoundWaiting
-			s.log.with(logEvent).Infof("round %v concluded without block for %v; waiting on ledger", a.Certificate.Round, a.Certificate.Proposal)
+			s.log.with(logEvent).Infof("round %d concluded without block for %v; waiting on ledger", a.Certificate.Round, a.Certificate.Proposal)
 			s.Ledger.EnsureDigest(a.Certificate, s.quit, s.voteVerifier)
 		} else {
 			logEvent.Type = logspec.RoundConcluded
-			s.log.with(logEvent).Infof("committed round %v with block %v", a.Certificate.Round, a.Certificate.Proposal)
+			s.log.with(logEvent).Infof("committed round %d with block %v", a.Certificate.Round, a.Certificate.Proposal)
 			s.log.EventWithDetails(telemetryspec.Agreement, telemetryspec.BlockAcceptedEvent, telemetryspec.BlockAcceptedEventDetails{
 				Address: a.Certificate.Proposal.OriginalProposer.String(),
 				Hash:    a.Certificate.Proposal.BlockDigest.String(),
@@ -253,7 +253,7 @@ func (a ensureAction) do(ctx context.Context, s *Service) {
 	}
 	logEventStart := logEvent
 	logEventStart.Type = logspec.RoundStart
-	s.log.with(logEventStart).Infof("finished round %v", a.Certificate.Round)
+	s.log.with(logEventStart).Infof("finished round %d", a.Certificate.Round)
 	s.tracer.timeR().StartRound(a.Certificate.Round + 1)
 	s.tracer.timeR().RecStep(0, propose, bottom)
 }
@@ -312,7 +312,7 @@ func (a pseudonodeAction) do(ctx context.Context, s *Service) {
 		case errPseudonodeNoProposals:
 			// no participation keys, do nothing.
 		default:
-			logging.Base().Errorf("pseudonode.MakeProposals call failed %v", err)
+			s.log.Errorf("pseudonode.MakeProposals call failed %v", err)
 		}
 	case repropose:
 		logEvent := logspec.AgreementEvent{
@@ -336,7 +336,7 @@ func (a pseudonodeAction) do(ctx context.Context, s *Service) {
 			// do nothing
 		default:
 			// otherwise,
-			logging.Base().Errorf("pseudonode.MakeVotes call failed for reproposal(%v) %v", a.T, err)
+			s.log.Errorf("pseudonode.MakeVotes call failed for reproposal(%v) %v", a.T, err)
 		}
 	case attest:
 		logEvent := logspec.AgreementEvent{
@@ -360,7 +360,7 @@ func (a pseudonodeAction) do(ctx context.Context, s *Service) {
 			s.demux.prioritize(voteEvents)
 		default:
 			// otherwise,
-			logging.Base().Errorf("pseudonode.MakeVotes call failed(%v) %v", a.T, err)
+			s.log.Errorf("pseudonode.MakeVotes call failed(%v) %v", a.T, err)
 			fallthrough // just so that we would close the channel.
 		case errPseudonodeNoVotes:
 			// do nothing; we're closing the channel just to avoid leaving open channels, but it's not

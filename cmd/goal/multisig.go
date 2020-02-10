@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -34,6 +34,7 @@ import (
 var (
 	addr     string
 	msigAddr string
+	noSig    bool
 )
 
 func init() {
@@ -44,8 +45,8 @@ func init() {
 
 	addSigCmd.Flags().StringVarP(&txFilename, "tx", "t", "", "Partially-signed transaction file to add signature to")
 	addSigCmd.Flags().StringVarP(&addr, "address", "a", "", "Address of the key to sign with")
+	addSigCmd.Flags().BoolVarP(&noSig, "no-sig", "n", false, "Fill in the transaction's multisig field with public keys and threshold information, but don't produce a signature")
 	addSigCmd.MarkFlagRequired("tx")
-	addSigCmd.MarkFlagRequired("address")
 
 	signProgramCmd.Flags().StringVarP(&programSource, "program", "p", "", "Program source to be compiled and signed")
 	signProgramCmd.Flags().StringVarP(&progByteFile, "program-bytes", "P", "", "Program binary to be signed")
@@ -62,7 +63,7 @@ func init() {
 var multisigCmd = &cobra.Command{
 	Use:   "multisig",
 	Short: "Provides tools working with multisig transactions ",
-	Long:  `Create, examine, and add signatures to multisig transactions`,
+	Long:  `Create, examine, and add signatures to multisig transactions.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		//If no arguments passed, we should fallback to help
@@ -73,13 +74,20 @@ var multisigCmd = &cobra.Command{
 var addSigCmd = &cobra.Command{
 	Use:   "sign -t TXFILE -a ADDR",
 	Short: "Add a signature to a multisig transaction",
-	Long:  `Start a multisig, or add a signature to an existing multisig, for a given transaction`,
+	Long:  `Start a multisig, or add a signature to an existing multisig, for a given transaction.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-
 		data, err := readFile(txFilename)
 		if err != nil {
 			reportErrorf(fileReadError, txFilename, err)
+		}
+
+		// --address and --no-sig are mutually exclusive, since if
+		// we're not signing we don't need an address
+		if addr == "" && !noSig {
+			reportErrorf(addrNoSigError)
+		} else if addr != "" && noSig {
+			reportErrorf(addrNoSigError)
 		}
 
 		dataDir := ensureSingleDataDir()
@@ -98,9 +106,21 @@ var addSigCmd = &cobra.Command{
 				reportErrorf(txDecodeError, txFilename, err)
 			}
 
-			msig, err := client.MultisigSignTransactionWithWallet(wh, pw, stxn.Txn, addr, stxn.Msig)
-			if err != nil {
-				reportErrorf(errorSigningTX, err)
+			var msig crypto.MultisigSig
+			if noSig {
+				multisigInfo, err := client.LookupMultisigAccount(wh, stxn.Txn.Sender.String())
+				if err != nil {
+					reportErrorf(msigLookupError, err)
+				}
+				msig, err = msigInfoToMsig(multisigInfo)
+				if err != nil {
+					reportErrorf(msigParseError, err)
+				}
+			} else {
+				msig, err = client.MultisigSignTransactionWithWallet(wh, pw, stxn.Txn, addr, stxn.Msig)
+				if err != nil {
+					reportErrorf(errorSigningTX, err)
+				}
 			}
 
 			// The following line makes stxn.cachedEncodingLen incorrect, but it's okay because we're just serializing it to a file
@@ -119,7 +139,7 @@ var addSigCmd = &cobra.Command{
 var signProgramCmd = &cobra.Command{
 	Use:   "signprogram -t TXFILE -a ADDR",
 	Short: "Add a signature to a multisig LogicSig",
-	Long:  `Start a multisig LogicSig, or add a signature to an existing multisig, for a given program`,
+	Long:  `Start a multisig LogicSig, or add a signature to an existing multisig, for a given program.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		dataDir := ensureSingleDataDir()
@@ -181,11 +201,11 @@ var signProgramCmd = &cobra.Command{
 			}
 			multisigInfo, err := client.LookupMultisigAccount(wh, msigAddr)
 			if err != nil {
-				reportErrorf("could not lookup multisig address", err)
+				reportErrorf(msigLookupError, err)
 			}
 			msig, err := msigInfoToMsig(multisigInfo)
 			if err != nil {
-				reportErrorf("internal err processing msig: %s", err)
+				reportErrorf(msigParseError, err)
 			}
 			lsig.Msig = msig
 		}
@@ -205,7 +225,7 @@ var signProgramCmd = &cobra.Command{
 var mergeSigCmd = &cobra.Command{
 	Use:   "merge -o MERGEDTXFILE TXFILE1 TXFILE2 ...",
 	Short: "Merge multisig signatures on transactions",
-	Long:  `Combine multiple partially-signed multisig transactions, and write out transactions with a single merged multisig signature`,
+	Long:  `Combine multiple partially-signed multisig transactions, and write out transactions with a single merged multisig signature.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) == 0 {
 			reportErrorf(txNoFilesError)

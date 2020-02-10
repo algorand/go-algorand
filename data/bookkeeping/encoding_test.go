@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -54,7 +54,7 @@ func TestBlockWithTxnEncoding(t *testing.T) {
 			},
 		},
 	}
-	enc := protocol.Encode(b)
+	enc := protocol.Encode(&b)
 
 	var b2 Block
 	err := protocol.Decode(enc, &b2)

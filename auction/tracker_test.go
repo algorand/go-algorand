@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -66,7 +66,7 @@ func genConfirmedTx(msg interface{}, round uint64, from, to basics.Address,
 		Payment: &v1.PaymentTransactionType{
 			To: to.String(),
 		},
-		Note: protocol.Encode(nf),
+		Note: protocol.Encode(&nf),
 	}
 }
 

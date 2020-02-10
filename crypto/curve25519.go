@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -48,17 +48,22 @@ func init() {
 		logging.Init()
 		logging.Base().Fatal("failed to initialize libsodium!")
 	}
+
+	// Check sizes of structs
+	_ = [C.crypto_sign_ed25519_BYTES]byte(ed25519Signature{})
+	_ = [C.crypto_sign_ed25519_PUBLICKEYBYTES]byte(ed25519PublicKey{})
+	_ = [C.crypto_sign_ed25519_SECRETKEYBYTES]byte(ed25519PrivateKey{})
+	_ = [C.crypto_sign_ed25519_SEEDBYTES]byte(ed25519Seed{})
 }
 
 // A Seed holds the entropy needed to generate cryptographic keys.
 type Seed ed25519Seed
 
 /* Classical signatures */
-
-type ed25519Signature [C.crypto_sign_ed25519_BYTES]byte
-type ed25519PublicKey [C.crypto_sign_ed25519_PUBLICKEYBYTES]byte
-type ed25519PrivateKey [C.crypto_sign_ed25519_SECRETKEYBYTES]byte
-type ed25519Seed [C.crypto_sign_ed25519_SEEDBYTES]byte
+type ed25519Signature [64]byte
+type ed25519PublicKey [32]byte
+type ed25519PrivateKey [64]byte
+type ed25519Seed [32]byte
 
 // MasterDerivationKey is used to derive ed25519 keys for use in wallets
 type MasterDerivationKey [masterDerivationKeyLenBytes]byte

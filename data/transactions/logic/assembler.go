@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -775,10 +775,14 @@ func typecheck(expected, got StackType) bool {
 }
 
 func filterFieldsForLineComment(fields []string) []string {
+	prevField := ""
 	for i, s := range fields {
 		if strings.HasPrefix(s, "//") {
-			return fields[:i]
+			if prevField != "base64" && prevField != "b64" {
+				return fields[:i]
+			}
 		}
+		prevField = s
 	}
 	return fields
 }

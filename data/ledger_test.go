@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -34,7 +34,6 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/util/execpool"
 )
 
 func incaddr(user *basics.Address) {
@@ -69,9 +68,6 @@ func BenchmarkAssemblePayset(b *testing.B) {
 	log := logging.TestingLog(b)
 	secrets := make([]*crypto.SignatureSecrets, numUsers)
 	addresses := make([]basics.Address, numUsers)
-
-	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
-	defer backlogPool.Shutdown()
 
 	genesis := make(map[basics.Address]basics.AccountData)
 	for i := 0; i < numUsers; i++ {
@@ -164,7 +160,7 @@ func BenchmarkAssemblePayset(b *testing.B) {
 		}
 		b.StartTimer()
 		newEmptyBlk := bookkeeping.MakeBlock(prev)
-		eval, err := l.StartEvaluator(newEmptyBlk.BlockHeader, tp, backlogPool)
+		eval, err := l.StartEvaluator(newEmptyBlk.BlockHeader)
 		if err != nil {
 			b.Errorf("could not make proposals at round %d: could not start evaluator: %v", next, err)
 			return

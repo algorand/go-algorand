@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -198,7 +198,7 @@ func (kcl KMDClient) ExportMasterDerivationKey(walletHandle []byte, walletPasswo
 
 // SignTransaction wraps kmdapi.APIV1POSTTransactionSignRequest
 func (kcl KMDClient) SignTransaction(walletHandle, pw []byte, tx transactions.Transaction) (resp kmdapi.APIV1POSTTransactionSignResponse, err error) {
-	txBytes := protocol.Encode(tx)
+	txBytes := protocol.Encode(&tx)
 	req := kmdapi.APIV1POSTTransactionSignRequest{
 		WalletHandleToken: string(walletHandle),
 		WalletPassword:    string(pw),

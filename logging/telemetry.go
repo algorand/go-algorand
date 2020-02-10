@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -71,19 +71,21 @@ func makeLevels(min logrus.Level) []logrus.Level {
 }
 
 func makeTelemetryState(cfg TelemetryConfig, hookFactory hookFactory) (*telemetryState, error) {
-	history := createLogBuffer(logBufferDepth)
-	if cfg.SessionGUID == "" {
-		cfg.SessionGUID = uuid.NewV4().String()
+	telemetry := &telemetryState{}
+	telemetry.history = createLogBuffer(logBufferDepth)
+	if cfg.Enable {
+		if cfg.SessionGUID == "" {
+			cfg.SessionGUID = uuid.NewV4().String()
+		}
+		hook, err := createTelemetryHook(cfg, telemetry.history, hookFactory)
+		if err != nil {
+			return nil, err
+		}
+		telemetry.hook = createAsyncHookLevels(hook, 32, 100, makeLevels(cfg.MinLogLevel))
+	} else {
+		telemetry.hook = new(dummyHook)
 	}
-	hook, err := createTelemetryHook(cfg, history, hookFactory)
-	if err != nil {
-		return nil, err
-	}
-
-	telemetry := &telemetryState{
-		history,
-		createAsyncHookLevels(hook, 32, 100, makeLevels(cfg.MinLogLevel)),
-	}
+	telemetry.sendToLog = cfg.SendToLog
 	return telemetry, nil
 }
 
@@ -222,11 +224,16 @@ func (t *telemetryState) logTelemetry(l logger, message string, details interfac
 	entry.Level = logrus.InfoLevel
 	entry.Message = message
 
+	if t.sendToLog {
+		entry.Info(message)
+	}
 	t.hook.Fire(entry)
 }
 
 func (t *telemetryState) Close() {
-	t.hook.Close()
+	if t.hook != nil {
+		t.hook.Close()
+	}
 }
 
 func (t *telemetryState) Flush() {

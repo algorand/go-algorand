@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -267,7 +267,6 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 func (handler *TxHandler) checkAlreadyCommitted(tx *txBacklogMsg) (processingDone bool) {
 	txids := make([]transactions.Txid, len(tx.unverifiedTxGroup))
 	for i := range tx.unverifiedTxGroup {
-		tx.unverifiedTxGroup[i].Txn.InitCaches()
 		txids[i] = tx.unverifiedTxGroup[i].ID()
 	}
 	logging.Base().Debugf("got a tx group with IDs %v", txids)

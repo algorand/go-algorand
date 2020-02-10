@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -63,4 +63,23 @@ func TestGenerateGenesis(t *testing.T) {
 	_, err = os.Stat(filepath.Join(targetFolder, config.GenesisJSONFile))
 	fileExists := err == nil
 	a.True(fileExists)
+}
+
+func TestValidate(t *testing.T) {
+	a := require.New(t)
+
+	templateDir, _ := filepath.Abs("../test/testdata/nettemplates")
+	template, _ := loadTemplate(filepath.Join(templateDir, "David20.json"))
+	err := template.Validate()
+	a.NoError(err)
+
+	templateDir, _ = filepath.Abs("../test/testdata/nettemplates")
+	template, _ = loadTemplate(filepath.Join(templateDir, "TenThousandAccountsEqual.json"))
+	err = template.Validate()
+	a.NoError(err)
+
+	templateDir, _ = filepath.Abs("../test/testdata/nettemplates")
+	template, _ = loadTemplate(filepath.Join(templateDir, "NegativeStake.json"))
+	err = template.Validate()
+	a.Error(err)
 }

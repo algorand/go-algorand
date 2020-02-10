@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -49,4 +49,12 @@ type NodeConfig struct {
 func (nc NodeConfig) IsRelay() bool {
 	// If we advertise to the world an address where we listen for gossip network connections, we are taking on the role of relay.
 	return nc.NetAddress != ""
+}
+
+// NodeConfigGoal represents is a simplified version of NodeConfig used with 'goal network' commands
+type NodeConfigGoal struct {
+	Name              string
+	IsRelay           bool `json:",omitempty"`
+	Wallets           []NodeWalletData
+	DeadlockDetection int `json:"-"`
 }

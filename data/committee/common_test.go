@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -171,7 +171,7 @@ type AgreementSelector struct {
 
 // ToBeHashed implements the crypto.Hashable interface.
 func (sel AgreementSelector) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.AgreementSelector, protocol.Encode(sel)
+	return protocol.AgreementSelector, protocol.Encode(&sel)
 }
 
 // CommitteeSize returns the size of the committee,

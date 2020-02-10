@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,7 +25,7 @@ import (
 type voteTrackerPeriod struct {
 	// Make it explicit that we are serializing player fields for crash recovery;
 	// we should probably adopt this convention over the rest of player at some point.
-	Cached nextThresholdStatusEvent `codec:"cached"`
+	Cached nextThresholdStatusEvent
 }
 
 func (t *voteTrackerPeriod) T() stateMachineTag {

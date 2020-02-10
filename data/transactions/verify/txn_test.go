@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -111,7 +111,7 @@ func TestTxnValidationEncodeDecode(t *testing.T) {
 			t.Errorf("signed transaction %#v did not verify", txn)
 		}
 
-		x := protocol.Encode(txn)
+		x := protocol.Encode(&txn)
 		var signedTx transactions.SignedTxn
 		protocol.Decode(x, &signedTx)
 

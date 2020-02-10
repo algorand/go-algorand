@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -160,6 +160,7 @@ func TestAccountDBInit(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	dbs := dbOpenTest(t)
+	setDbLogging(t, dbs)
 	defer dbs.close()
 
 	tx, err := dbs.wdb.Handle.Begin()
@@ -180,6 +181,7 @@ func TestAccountDBRound(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	dbs := dbOpenTest(t)
+	setDbLogging(t, dbs)
 	defer dbs.close()
 
 	tx, err := dbs.wdb.Handle.Begin()

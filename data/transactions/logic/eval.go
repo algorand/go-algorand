@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -43,9 +43,6 @@ import (
 
 // EvalMaxVersion is the max version we can interpret and run
 const EvalMaxVersion = 1
-
-// EvalMaxArgs is the maximum number of arguments to an LSig
-const EvalMaxArgs = 255
 
 // EvalMaxScratchSize is the maximum number of scratch slots.
 const EvalMaxScratchSize = 255
@@ -194,7 +191,7 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 		err = errLogicSignNotSupported
 		return
 	}
-	if params.Txn.Lsig.Args != nil && len(params.Txn.Lsig.Args) > EvalMaxArgs {
+	if params.Txn.Lsig.Args != nil && len(params.Txn.Lsig.Args) > transactions.EvalMaxArgs {
 		err = errTooManyArgs
 		return
 	}

@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -32,6 +32,7 @@ const (
 	networkCoserviceType
 )
 
+//msgp:ignore coserviceType
 type coserviceType int
 
 type coserviceMonitor struct {
@@ -44,8 +45,8 @@ type coserviceMonitor struct {
 }
 
 type coserviceListener interface {
-	inc(sum uint)
-	dec(sum uint)
+	inc(sum uint, state map[coserviceType]uint)
+	dec(sum uint, state map[coserviceType]uint)
 }
 
 func (m *coserviceMonitor) inc(t coserviceType) {
@@ -62,7 +63,7 @@ func (m *coserviceMonitor) inc(t coserviceType) {
 	m.c[t]++
 
 	if m.coserviceListener != nil {
-		m.coserviceListener.inc(m.sum())
+		m.coserviceListener.inc(m.sum(), m.c)
 	}
 }
 
@@ -83,7 +84,7 @@ func (m *coserviceMonitor) dec(t coserviceType) {
 	m.c[t]--
 
 	if m.coserviceListener != nil {
-		m.coserviceListener.dec(m.sum())
+		m.coserviceListener.dec(m.sum(), m.c)
 	}
 }
 

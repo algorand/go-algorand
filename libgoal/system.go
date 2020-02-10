@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,7 +26,8 @@ import (
 type SystemConfig struct {
 	// SharedServer is true if this is a daemon on a multiuser system.
 	// If not shared, kmd and other files are often stored under $ALGORAND_DATA when otherwise they might go under $HOME/.algorand/
-	SharedServer bool `json:"shared_server,omitempty"`
+	SharedServer   bool `json:"shared_server,omitempty"`
+	SystemdManaged bool `json:"systemd_managed,omitempty"`
 }
 
 // map data dir to loaded config
@@ -71,4 +72,17 @@ func AlgorandDataIsPrivate(dataDir string) bool {
 		return true
 	}
 	return !sc.SharedServer
+}
+
+// AlgorandDaemonSystemdManaged returns true if the algod process for a given data dir is managed by systemd
+// if not, algod will be managed as an indivudal process for the dir
+func AlgorandDaemonSystemdManaged(dataDir string) bool {
+	if dataDir == "" {
+		return false
+	}
+	sc, err := ReadSystemConfig(dataDir)
+	if err != nil {
+		return false
+	}
+	return sc.SystemdManaged
 }
