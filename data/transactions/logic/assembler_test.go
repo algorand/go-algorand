@@ -240,6 +240,25 @@ bnz wat`
 	require.Nil(t, program)
 }
 
+func TestAssembleBase64(t *testing.T) {
+	text := `byte base64 //GWRM+yy3BCavBDXO/FYTNZ6o2Jai5edsMCBdDEz+0=
+byte base64 avGWRM+yy3BCavBDXO/FYTNZ6o2Jai5edsMCBdDEz//=
+//
+//text
+==
+int 1 //sometext
+&& //somemoretext
+==
+byte b64 //GWRM+yy3BCavBDXO/FYTNZ6o2Jai5edsMCBdDEz+8=
+byte b64 avGWRM+yy3BCavBDXO/FYTNZ6o2Jai5edsMCBdDEz//=
+==
+||`
+	program, err := AssembleString(text)
+	require.NoError(t, err)
+	s := hex.EncodeToString(program)
+	require.Equal(t, "01200101260320fff19644cfb2cb70426af0435cefc5613359ea8d896a2e5e76c30205d0c4cfed206af19644cfb2cb70426af0435cefc5613359ea8d896a2e5e76c30205d0c4cfff20fff19644cfb2cb70426af0435cefc5613359ea8d896a2e5e76c30205d0c4cfef2829122210122a291211", s)
+}
+
 func TestAssembleRejectUnkLabel(t *testing.T) {
 	text := `int 1
 bnz nowhere`
