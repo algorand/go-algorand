@@ -48,7 +48,9 @@ type HTTPTxSync struct {
 
 const requestContentType = "application/x-www-form-urlencoded"
 
-func responseBytes(response *http.Response, log logging.Logger, limit uint64) (data []byte, err error) {
+// ResponseBytes reads the content of the response object and return the body content
+// while obeying the read size limits
+func ResponseBytes(response *http.Response, log logging.Logger, limit uint64) (data []byte, err error) {
 	// response.Body is always non-nil
 	defer response.Body.Close()
 	if response.ContentLength >= 0 {
@@ -103,7 +105,8 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 	hts.rootURL = hpeer.GetAddress()
 	client := hpeer.GetHTTPClient()
 	if client == nil {
-		client = http.DefaultClient
+		client = &http.Client{}
+		client.Transport = hts.peers.GetRoundTripper()
 	}
 	parsedURL, err := network.ParseHostOrURL(hts.rootURL)
 	if err != nil {
@@ -123,7 +126,7 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 	request.Header.Set("Content-Type", requestContentType)
 	network.SetUserAgentHeader(request.Header)
 	request = request.WithContext(ctx)
-	response, err := hts.peers.MakeHTTPRequest(client, request)
+	response, err := client.Do(request)
 	if err != nil {
 		hts.log.Warnf("txSync POST %v: %s", syncURL, err)
 		return nil, err
@@ -158,7 +161,7 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 		return nil, fmt.Errorf("txSync POST invalid content type '%s'", contentTypes[0])
 	}
 
-	data, err := responseBytes(response, hts.log, hts.maxTxSyncResponseBytes)
+	data, err := ResponseBytes(response, hts.log, hts.maxTxSyncResponseBytes)
 	if err != nil {
 		hts.log.Warn("txSync body read failed: ", err)
 		return nil, err
