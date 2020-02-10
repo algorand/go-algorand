@@ -83,7 +83,7 @@ func BenchmarkCodecEncoder(b *testing.B) {
 
 	b.Run("Encode", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			Encode(s)
+			EncodeReflect(s)
 		}
 	})
 

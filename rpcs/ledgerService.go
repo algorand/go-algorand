@@ -53,12 +53,15 @@ type LedgerService struct {
 
 // EncodedBlockCert defines how GetBlockBytes encodes a block and its certificate
 type EncodedBlockCert struct {
+	_struct struct{} `codec:""`
+
 	Block       bookkeeping.Block     `codec:"block"`
 	Certificate agreement.Certificate `codec:"cert"`
 }
 
 // PreEncodedBlockCert defines how GetBlockBytes encodes a block and its certificate,
 // using a pre-encoded Block and Certificate in msgpack format.
+//msgp:ignore PreEncodedBlockCert
 type PreEncodedBlockCert struct {
 	Block       codec.Raw `codec:"block"`
 	Certificate codec.Raw `codec:"cert"`
@@ -189,11 +192,15 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 
 // WsGetBlockRequest is a msgpack message requesting a block
 type WsGetBlockRequest struct {
+	_struct struct{} `codec:""`
+
 	Round uint64 `json:"round"`
 }
 
 // WsGetBlockOut is a msgpack message delivered on responding to a block (not rpc-based though)
 type WsGetBlockOut struct {
+	_struct struct{} `codec:""`
+
 	Round      uint64
 	Error      string
 	BlockBytes []byte `json:"blockbytes"`
@@ -250,7 +257,7 @@ func (ls *LedgerService) handleCatchupReq(ctx context.Context, reqMsg network.In
 func (ls *LedgerService) sendCatchupRes(ctx context.Context, target network.UnicastPeer, reqTag protocol.Tag, outMsg WsGetBlockOut) {
 	t := reqTag.Complement()
 	logging.Base().Infof("catching down peer: %v, round %v. outcome: %v. ledger: %v", target.GetAddress(), outMsg.Round, outMsg.Error, ls.ledger.LastRound())
-	err := target.Unicast(ctx, protocol.Encode(outMsg), t)
+	err := target.Unicast(ctx, protocol.Encode(&outMsg), t)
 	if err != nil {
 		logging.Base().Info("failed to respond to catchup req", err)
 	}
@@ -263,7 +270,7 @@ func RawBlockBytes(ledger *data.Ledger, round basics.Round) ([]byte, error) {
 		return nil, err
 	}
 
-	return protocol.Encode(PreEncodedBlockCert{
+	return protocol.EncodeReflect(PreEncodedBlockCert{
 		Block:       blk,
 		Certificate: cert,
 	}), nil

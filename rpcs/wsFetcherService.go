@@ -106,7 +106,7 @@ func (fs *WsFetcherService) RequestBlock(ctx context.Context, target network.Uni
 	}()
 
 	req := WsGetBlockRequest{Round: uint64(round)}
-	err := target.Unicast(ctx, protocol.Encode(req), tag)
+	err := target.Unicast(ctx, protocol.Encode(&req), tag)
 	if err != nil {
 		return WsGetBlockOut{}, fmt.Errorf("WsFetcherService.RequestBlock(%d): unicast failed, %v", round, err)
 	}

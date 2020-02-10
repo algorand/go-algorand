@@ -109,10 +109,10 @@ func EncodeMsgp(obj msgp.Marshaler) []byte {
 }
 
 // Encode returns a msgpack-encoded byte buffer for a given object.
-func Encode(obj interface{}) []byte {
-	msgp, ok := obj.(msgp.Marshaler)
-	if ok && msgp.CanMarshalMsg(msgp) {
-		return EncodeMsgp(msgp)
+// func Encode(obj interface{}) []byte {
+func Encode(obj msgp.Marshaler) []byte {
+	if obj.CanMarshalMsg(obj) {
+		return EncodeMsgp(obj)
 	}
 	return EncodeReflect(obj)
 }
@@ -190,10 +190,9 @@ func DecodeMsgp(b []byte, objptr msgp.Unmarshaler) (err error) {
 
 // Decode attempts to decode a msgpack-encoded byte buffer
 // into an object instance pointed to by objptr.
-func Decode(b []byte, objptr interface{}) error {
-	msgp, ok := objptr.(msgp.Unmarshaler)
-	if ok && msgp.CanUnmarshalMsg(msgp) {
-		return DecodeMsgp(b, msgp)
+func Decode(b []byte, objptr msgp.Unmarshaler) error {
+	if objptr.CanUnmarshalMsg(objptr) {
+		return DecodeMsgp(b, objptr)
 	}
 	return DecodeReflect(b, objptr)
 }
