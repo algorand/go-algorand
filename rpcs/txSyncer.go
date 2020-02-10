@@ -124,7 +124,7 @@ func (syncer *TxSyncer) syncFromClient(client TxSyncClient) error {
 	defer cf()
 	txgroups, err := client.Sync(ctx, filter)
 	if err != nil {
-		return fmt.Errorf("TxSyncer.Sync: peer %v error %v", client.Address(), err)
+		return fmt.Errorf("TxSyncer.Sync: peer '%v' error '%v'", client.Address(), err)
 	}
 
 	// test to see if all the transaction that we've received honor the bloom filter constraints

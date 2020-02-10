@@ -2,7 +2,7 @@
 
 # Path(s) are relative to the root of the Jenkins workspace.
 
-INSTANCE=$(cat scripts/release/tmp/instance)
+INSTANCE=$(cat scripts/release/common/ec2/tmp/instance)
 
 rm -rf ./*.deb ./*.rpm
 python3 scripts/get_current_installers.py "$1/$2"
