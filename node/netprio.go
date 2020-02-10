@@ -27,13 +27,13 @@ import (
 )
 
 type netPrioResponse struct {
-	_struct struct{} `codec:"omitempty"`
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Nonce string
 }
 
 type netPrioResponseSigned struct {
-	_struct struct{} `codec:"omitempty"`
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Response netPrioResponse
 	Round    basics.Round

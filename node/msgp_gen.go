@@ -9,10 +9,22 @@ import (
 // MarshalMsg implements msgp.Marshaler
 func (z *netPrioResponse) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 1
-	// string "Nonce"
-	o = append(o, 0x81, 0xa5, 0x4e, 0x6f, 0x6e, 0x63, 0x65)
-	o = msgp.AppendString(o, (*z).Nonce)
+	// omitempty: check for empty values
+	zb0001Len := uint32(1)
+	var zb0001Mask uint8 /* 2 bits */
+	if (*z).Nonce == "" {
+		zb0001Len--
+		zb0001Mask |= 0x1
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x1) == 0 { // if not empty
+			// string "Nonce"
+			o = append(o, 0xa5, 0x4e, 0x6f, 0x6e, 0x63, 0x65)
+			o = msgp.AppendString(o, (*z).Nonce)
+		}
+	}
 	return
 }
 
@@ -103,33 +115,73 @@ func (z *netPrioResponse) MsgIsZero() bool {
 // MarshalMsg implements msgp.Marshaler
 func (z *netPrioResponseSigned) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 4
-	// string "Response"
-	o = append(o, 0x84, 0xa8, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65)
-	// map header, size 1
-	// string "Nonce"
-	o = append(o, 0x81, 0xa5, 0x4e, 0x6f, 0x6e, 0x63, 0x65)
-	o = msgp.AppendString(o, (*z).Response.Nonce)
-	// string "Round"
-	o = append(o, 0xa5, 0x52, 0x6f, 0x75, 0x6e, 0x64)
-	o, err = (*z).Round.MarshalMsg(o)
-	if err != nil {
-		err = msgp.WrapError(err, "Round")
-		return
+	// omitempty: check for empty values
+	zb0001Len := uint32(4)
+	var zb0001Mask uint8 /* 5 bits */
+	if (*z).Response.Nonce == "" {
+		zb0001Len--
+		zb0001Mask |= 0x1
 	}
-	// string "Sender"
-	o = append(o, 0xa6, 0x53, 0x65, 0x6e, 0x64, 0x65, 0x72)
-	o, err = (*z).Sender.MarshalMsg(o)
-	if err != nil {
-		err = msgp.WrapError(err, "Sender")
-		return
+	if (*z).Round.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x2
 	}
-	// string "Sig"
-	o = append(o, 0xa3, 0x53, 0x69, 0x67)
-	o, err = (*z).Sig.MarshalMsg(o)
-	if err != nil {
-		err = msgp.WrapError(err, "Sig")
-		return
+	if (*z).Sender.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	if (*z).Sig.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x8
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x1) == 0 { // if not empty
+			// string "Response"
+			o = append(o, 0xa8, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65)
+			// omitempty: check for empty values
+			zb0002Len := uint32(1)
+			var zb0002Mask uint8 /* 2 bits */
+			if (*z).Response.Nonce == "" {
+				zb0002Len--
+				zb0002Mask |= 0x1
+			}
+			// variable map header, size zb0002Len
+			o = append(o, 0x80|uint8(zb0002Len))
+			if (zb0002Mask & 0x1) == 0 { // if not empty
+				// string "Nonce"
+				o = append(o, 0xa5, 0x4e, 0x6f, 0x6e, 0x63, 0x65)
+				o = msgp.AppendString(o, (*z).Response.Nonce)
+			}
+		}
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "Round"
+			o = append(o, 0xa5, 0x52, 0x6f, 0x75, 0x6e, 0x64)
+			o, err = (*z).Round.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "Round")
+				return
+			}
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "Sender"
+			o = append(o, 0xa6, 0x53, 0x65, 0x6e, 0x64, 0x65, 0x72)
+			o, err = (*z).Sender.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "Sender")
+				return
+			}
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "Sig"
+			o = append(o, 0xa3, 0x53, 0x69, 0x67)
+			o, err = (*z).Sig.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "Sig")
+				return
+			}
+		}
 	}
 	return
 }
