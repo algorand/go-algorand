@@ -25,7 +25,7 @@ import (
 type voteTrackerPeriod struct {
 	// Make it explicit that we are serializing player fields for crash recovery;
 	// we should probably adopt this convention over the rest of player at some point.
-	Cached nextThresholdStatusEvent `codec:"cached"`
+	Cached nextThresholdStatusEvent
 }
 
 func (t *voteTrackerPeriod) T() stateMachineTag {

@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 )
 
+//msgp:ignore traceLevel
 type traceLevel int
 
 const (
