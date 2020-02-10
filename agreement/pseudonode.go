@@ -115,6 +115,7 @@ type pseudonodeVerifier struct {
 	incomingTasks chan pseudonodeTask
 }
 
+//msgp:ignore verifiedCryptoResults
 type verifiedCryptoResults []asyncVerifyVoteResponse
 
 func makePseudonode(factory BlockFactory, validator BlockValidator, keys KeyManager, ledger Ledger, voteVerifier *AsyncVoteVerifier, log serviceLogger) pseudonode {

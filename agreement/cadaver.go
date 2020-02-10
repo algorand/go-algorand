@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+//msgp:ignore cadaverEntryType
 type cadaverEntryType int
 
 const (
