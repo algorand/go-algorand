@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package rpcs
+package catchup
 
 import (
 	"context"
@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/rpcs"
 )
 
 // DefaultFetchTimeout is the default time a fetcher should wait for a block
@@ -63,7 +64,7 @@ type FetcherFactory interface {
 type NetworkFetcherFactory struct {
 	net       network.GossipNode
 	peerLimit int
-	fs        *WsFetcherService
+	fs        *rpcs.WsFetcherService
 
 	log logging.Logger
 }
@@ -79,7 +80,7 @@ func (factory NetworkFetcherFactory) makeHTTPFetcherFromPeer(log logging.Logger,
 
 // MakeNetworkFetcherFactory returns a network fetcher factory, that associates fetchers with no more than peerLimit peers from the aggregator.
 // WSClientSource can be nil, if no network exists to create clients from (defaults to http clients)
-func MakeNetworkFetcherFactory(net network.GossipNode, peerLimit int, fs *WsFetcherService) NetworkFetcherFactory {
+func MakeNetworkFetcherFactory(net network.GossipNode, peerLimit int, fs *rpcs.WsFetcherService) NetworkFetcherFactory {
 	var factory NetworkFetcherFactory
 	factory.net = net
 	factory.peerLimit = peerLimit
@@ -297,7 +298,7 @@ func (cf *ComposedFetcher) Close() {
 /* Utils */
 
 func processBlockBytes(fetchedBuf []byte, r basics.Round, debugStr string) (blk *bookkeeping.Block, cert *agreement.Certificate, err error) {
-	var decodedEntry EncodedBlockCert
+	var decodedEntry rpcs.EncodedBlockCert
 	err = protocol.Decode(fetchedBuf, &decodedEntry)
 	if err != nil {
 		err = fmt.Errorf("networkFetcher.FetchBlock(%d): cannot decode block from peer %v: %v", r, debugStr, err)
