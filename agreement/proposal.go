@@ -103,6 +103,8 @@ func (p proposal) u() unauthenticatedProposal {
 
 // A proposerSeed is a Hashable input to proposer seed derivation.
 type proposerSeed struct {
+	_struct struct{} `codec:""` // not omitempty
+
 	Addr basics.Address   `codec:"addr"`
 	VRF  crypto.VrfOutput `codec:"vrf"`
 }
@@ -114,6 +116,8 @@ func (s proposerSeed) ToBeHashed() (protocol.HashID, []byte) {
 
 // A seedInput is a Hashable input to seed rerandomization.
 type seedInput struct {
+	_struct struct{} `codec:""` // not omitempty
+
 	Alpha   crypto.Digest `codec:"alpha"`
 	History crypto.Digest `codec:"hist"`
 }

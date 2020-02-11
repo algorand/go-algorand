@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package rpcs
+package catchup
 
 import (
 	"context"
@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/rpcs"
 )
 
 // Buffer messages from the network to have fewer drops.
@@ -43,7 +44,7 @@ type WsFetcher struct {
 	clients map[network.Peer]*wsFetcherClient
 
 	// service
-	service *WsFetcherService
+	service *rpcs.WsFetcherService
 
 	// metadata
 	log logging.Logger
@@ -53,7 +54,7 @@ type WsFetcher struct {
 // MakeWsFetcher creates a fetcher that fetches over the gossip network.
 // It instantiates a NetworkFetcher under the hood, registers as a handler for the given message tag,
 // and demuxes messages appropriately to the corresponding fetcher clients.
-func MakeWsFetcher(log logging.Logger, tag protocol.Tag, peers []network.Peer, service *WsFetcherService) Fetcher {
+func MakeWsFetcher(log logging.Logger, tag protocol.Tag, peers []network.Peer, service *rpcs.WsFetcherService) Fetcher {
 	f := &WsFetcher{
 		log: log,
 		tag: tag,
@@ -104,7 +105,7 @@ func (wsf *WsFetcher) Close() {
 type wsFetcherClient struct {
 	target      network.UnicastPeer                    // the peer where we're going to send the request.
 	tag         protocol.Tag                           // the tag that is associated with the request/
-	service     *WsFetcherService                      // the fetcher service. This is where we perform the actual request and waiting for the response.
+	service     *rpcs.WsFetcherService                 // the fetcher service. This is where we perform the actual request and waiting for the response.
 	pendingCtxs map[context.Context]context.CancelFunc // a map of all the current pending contexts.
 
 	closed bool // a flag indicating that the fetcher will not perform additional block retrivals.
