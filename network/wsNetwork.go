@@ -27,6 +27,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"path"
 	"regexp"
@@ -748,40 +749,39 @@ func (wn *WebsocketNetwork) setHeaders(header http.Header) {
 	localInstanceName := wn.log.GetInstanceName()
 	header.Set(TelemetryIDHeader, localTelemetryGUID)
 	header.Set(InstanceNameHeader, localInstanceName)
-	header.Set(ProtocolVersionHeader, ProtocolVersion)
 	header.Set(AddressHeader, wn.PublicAddress())
 	header.Set(NodeRandomHeader, wn.RandomID)
 }
 
 // checkServerResponseVariables check that the version and random-id in the request headers matches the server ones.
 // it returns true if it's a match, and false otherwise.
-func (wn *WebsocketNetwork) checkServerResponseVariables(header http.Header, addr string) bool {
-	otherVersion := header.Get(ProtocolVersionHeader)
-	if otherVersion != ProtocolVersion {
-		wn.log.Infof("new peer %s version mismatch, mine=%s theirs=%s, headers %#v", addr, ProtocolVersion, otherVersion, header)
-		return false
+func (wn *WebsocketNetwork) checkServerResponseVariables(otherHeader http.Header, addr string) (bool, string) {
+	matchingVersion, otherVersion := wn.checkProtocolVersionMatch(otherHeader)
+	if matchingVersion == "" {
+		wn.log.Infof("new peer %s version mismatch, mine=%v theirs=%s, headers %#v", addr, SupportedProtocolVersions, otherVersion, otherHeader)
+		return false, ""
 	}
-	otherRandom := header.Get(NodeRandomHeader)
+	otherRandom := otherHeader.Get(NodeRandomHeader)
 	if otherRandom == wn.RandomID || otherRandom == "" {
 		// This is pretty harmless and some configurations of phonebooks or DNS records make this likely. Quietly filter it out.
 		if otherRandom == "" {
 			// missing header.
-			wn.log.Warnf("new peer %s did not include random ID header in request. mine=%s headers %#v", addr, wn.RandomID, header)
+			wn.log.Warnf("new peer %s did not include random ID header in request. mine=%s headers %#v", addr, wn.RandomID, otherHeader)
 		} else {
 			wn.log.Debugf("new peer %s has same node random id, am I talking to myself? %s", addr, wn.RandomID)
 		}
-		return false
+		return false, ""
 	}
-	otherGenesisID := header.Get(GenesisHeader)
+	otherGenesisID := otherHeader.Get(GenesisHeader)
 	if wn.GenesisID != otherGenesisID {
 		if otherGenesisID != "" {
-			wn.log.Warnf("new peer %#v genesis mismatch, mine=%#v theirs=%#v, headers %#v", addr, wn.GenesisID, otherGenesisID, header)
+			wn.log.Warnf("new peer %#v genesis mismatch, mine=%#v theirs=%#v, headers %#v", addr, wn.GenesisID, otherGenesisID, otherHeader)
 		} else {
-			wn.log.Warnf("new peer %#v did not include genesis header in response. mine=%#v headers %#v", addr, wn.GenesisID, header)
+			wn.log.Warnf("new peer %#v did not include genesis header in response. mine=%#v headers %#v", addr, wn.GenesisID, otherHeader)
 		}
-		return false
+		return false, ""
 	}
-	return true
+	return true, matchingVersion
 }
 
 // getCommonHeaders retreives the common headers for both incoming and outgoing connections from the provided headers.
@@ -826,6 +826,28 @@ func (wn *WebsocketNetwork) checkIncomingConnectionLimits(response http.Response
 	return http.StatusOK
 }
 
+// checkProtocolVersionMatch test ProtocolAcceptVersionHeader and ProtocolVersionHeader headers from the request/response and see if it can find a match.
+func (wn *WebsocketNetwork) checkProtocolVersionMatch(otherHeaders http.Header) (matchingVersion string, otherVersion string) {
+	otherAcceptedVersions := otherHeaders[textproto.CanonicalMIMEHeaderKey(ProtocolAcceptVersionHeader)]
+	for _, otherAcceptedVersion := range otherAcceptedVersions {
+		// do we have a matching version ?
+		for _, supportedProtocolVersion := range SupportedProtocolVersions {
+			if supportedProtocolVersion == otherAcceptedVersion {
+				matchingVersion = supportedProtocolVersion
+				return matchingVersion, ""
+			}
+		}
+	}
+
+	otherVersion = otherHeaders.Get(ProtocolVersionHeader)
+	for _, supportedProtocolVersion := range SupportedProtocolVersions {
+		if supportedProtocolVersion == otherVersion {
+			return supportedProtocolVersion, otherVersion
+		}
+	}
+	return "", otherVersion
+}
+
 // checkIncomingConnectionVariables checks the variables that were provided on the request, and compares them to the
 // local server supported parameters. If all good, it returns http.StatusOK; otherwise, it write the error to the ResponseWriter
 // and returns the http status.
@@ -844,19 +866,6 @@ func (wn *WebsocketNetwork) checkIncomingConnectionVariables(response http.Respo
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "mismatching genesis-id"})
 		response.WriteHeader(http.StatusPreconditionFailed)
 		response.Write([]byte("mismatching genesis ID"))
-		return http.StatusPreconditionFailed
-	}
-
-	otherVersion := request.Header.Get(ProtocolVersionHeader)
-	if otherVersion != ProtocolVersion {
-		wn.log.Infof("new peer %s version mismatch, mine=%s theirs=%s, headers %#v", request.RemoteAddr, ProtocolVersion, otherVersion, request.Header)
-		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "mismatching protocol version"})
-		response.WriteHeader(http.StatusPreconditionFailed)
-		message := fmt.Sprintf("Requested version %s = %s mismatches server version", ProtocolVersionHeader, otherVersion)
-		n, err := response.Write([]byte(message))
-		if err != nil {
-			wn.log.Warnf("ws failed to write response '%s' : n = %d err = %v", message, n, err)
-		}
 		return http.StatusPreconditionFailed
 	}
 
@@ -899,6 +908,19 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 		return
 	}
 
+	matchingVersion, otherVersion := wn.checkProtocolVersionMatch(request.Header)
+	if matchingVersion == "" {
+		wn.log.Infof("new peer %s version mismatch, mine=%v theirs=%s, headers %#v", request.RemoteAddr, SupportedProtocolVersions, otherVersion, request.Header)
+		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "mismatching protocol version"})
+		response.WriteHeader(http.StatusPreconditionFailed)
+		message := fmt.Sprintf("Requested version %s not in %v mismatches server version", otherVersion, SupportedProtocolVersions)
+		n, err := response.Write([]byte(message))
+		if err != nil {
+			wn.log.Warnf("ws failed to write response '%s' : n = %d err = %v", message, n, err)
+		}
+		return
+	}
+
 	if wn.checkIncomingConnectionVariables(response, request) != http.StatusOK {
 		// we've already logged and written all response(s).
 		return
@@ -907,15 +929,16 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 	// if UseXForwardedForAddressField is not empty, attempt to override the otherPublicAddr with the X Forwarded For origin
 	trackedRequest.otherPublicAddr = trackedRequest.remoteAddr
 
-	requestHeader := make(http.Header)
-	wn.setHeaders(requestHeader)
-	requestHeader.Set(GenesisHeader, wn.GenesisID)
+	responseHeader := make(http.Header)
+	wn.setHeaders(responseHeader)
+	responseHeader.Set(ProtocolVersionHeader, matchingVersion)
+	responseHeader.Set(GenesisHeader, wn.GenesisID)
 	var challenge string
 	if wn.prioScheme != nil {
 		challenge = wn.prioScheme.NewPrioChallenge()
-		requestHeader.Set(PriorityChallengeHeader, challenge)
+		responseHeader.Set(PriorityChallengeHeader, challenge)
 	}
-	conn, err := wn.upgrader.Upgrade(response, request, requestHeader)
+	conn, err := wn.upgrader.Upgrade(response, request, responseHeader)
 	if err != nil {
 		wn.log.Info("ws upgrade fail ", err)
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "ws upgrade fail"})
@@ -935,6 +958,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 		incomingMsgFilter: wn.incomingMsgFilter,
 		prioChallenge:     challenge,
 		createTime:        trackedRequest.created,
+		version:           matchingVersion,
 	}
 	peer.TelemetryGUID = trackedRequest.otherTelemetryGUID
 	peer.init(wn.config, wn.outgoingMessagesBufferSize)
@@ -1426,8 +1450,14 @@ func (wn *WebsocketNetwork) getDNSAddrs(dnsBootstrap string) []string {
 	return srvPhonebook
 }
 
-// ProtocolVersionHeader HTTP header for protocol version. TODO: this may be unneeded redundance since we also have url versioning "/v1/..."
+// ProtocolVersionHeader HTTP header for protocol version.
 const ProtocolVersionHeader = "X-Algorand-Version"
+
+// ProtocolAcceptVersionHeader HTTP header for accept protocol version. Client use this to advertise supported protocol versions.
+const ProtocolAcceptVersionHeader = "X-Algorand-Accept-Version"
+
+// SupportedProtocolVersions contains the list of supported protocol versions by this node ( in order of preference ).
+var SupportedProtocolVersions = []string{ /*"2",*/ "1"}
 
 // ProtocolVersion is the current version attached to the ProtocolVersionHeader header
 const ProtocolVersion = "1"
@@ -1553,6 +1583,11 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	defer wn.wg.Done()
 	requestHeader := make(http.Header)
 	wn.setHeaders(requestHeader)
+	for _, supportedProtocolVersion := range SupportedProtocolVersions {
+		requestHeader.Add(ProtocolAcceptVersionHeader, supportedProtocolVersion)
+	}
+	// for backward compatability, include the ProtocolVersion header as well.
+	requestHeader.Set(ProtocolVersionHeader, ProtocolVersion)
 	SetUserAgentHeader(requestHeader)
 	myInstanceName := wn.log.GetInstanceName()
 	requestHeader.Set(InstanceNameHeader, myInstanceName)
@@ -1600,10 +1635,9 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	}
 
 	// no need to test the response.StatusCode since we know it's going to be http.StatusSwitchingProtocols, as it's already being tested inside websocketDialer.DialContext.
-	// checking the headers here is abit redundent; the server has already verified that the headers match. But we will need this in the future -
-	// once our server would support multiple protocols, we would need to verify here that we use the correct protocol, out of the "proposed" protocols we have provided in the
-	// request headers.
-	if !wn.checkServerResponseVariables(response.Header, gossipAddr) {
+	// we need to examine the headers here to extract which protocol version we should be using.
+	responseHeaderOk, matchingVersion := wn.checkServerResponseVariables(response.Header, gossipAddr)
+	if !responseHeaderOk {
 		// The error was already logged, so no need to log again.
 		return
 	}
@@ -1613,7 +1647,9 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		conn:              conn,
 		outgoing:          true,
 		incomingMsgFilter: wn.incomingMsgFilter,
-		createTime:        time.Now()}
+		createTime:        time.Now(),
+		version:           matchingVersion,
+	}
 	peer.TelemetryGUID, peer.InstanceName, _ = getCommonHeaders(response.Header)
 	peer.init(wn.config, wn.outgoingMessagesBufferSize)
 	wn.addPeer(peer)
