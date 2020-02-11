@@ -41,7 +41,7 @@ else
     echo ${BUILD_NUMBER} > "${REPO_ROOT}"/buildnumber.dat
 fi
 FULLVERSION=$(PATH=${PATH} "${REPO_ROOT}"/scripts/compute_build_number.sh -f)
-echo "${FULLVERSION}" > "${REPO_ROOT}"/fullversion.dat
+echo "${FULLVERSION}" > "${HOME}"/fullversion.dat
 export FULLVERSION
 
 # a bash user might `source build_env` to manually continue a broken build
