@@ -68,6 +68,7 @@ type externalEvent interface {
 // type of the implementing struct.
 //
 //go:generate stringer -type=eventType
+//msgp:ignore eventType
 type eventType int
 
 const (

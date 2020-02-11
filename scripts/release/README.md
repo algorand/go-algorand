@@ -7,7 +7,8 @@ The `release/` directory will have a structure that looks like the following:
             test/
             prod/
             ...
-            <scripts common to all builds {.sh,.md,Dockerfile,etc}>
+            common/
+                # scripts common to all builds {.sh,.md,Dockerfile,etc}
 
 Each subdirectory of `release/` represents a build pipeline and is self-contained.  In other words, it will have its own `Jenkinsfile` and whatever else it needs to perform its job.
 
