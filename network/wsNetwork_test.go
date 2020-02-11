@@ -1343,3 +1343,44 @@ func TestSetUserAgentHeader(t *testing.T) {
 	require.Equal(t, 1, len(headers))
 	t.Log(headers)
 }
+
+func TestCheckProtocolVersionMatch(t *testing.T) {
+	// note - this test changes the SupportedProtocolVersions global variable ( SupportedProtocolVersions ) and therefore cannot be parallelized.
+	originalSupportedProtocolVersions := SupportedProtocolVersions
+	defer func() {
+		SupportedProtocolVersions = originalSupportedProtocolVersions
+	}()
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Level(defaultConfig.BaseLoggerDebugLevel))
+	wn := &WebsocketNetwork{
+		log:       log,
+		config:    defaultConfig,
+		phonebook: MakeMultiPhonebook(),
+		GenesisID: "go-test-network-genesis",
+		NetworkID: config.Devtestnet,
+	}
+	wn.setup()
+
+	SupportedProtocolVersions = []string{"2", "1"}
+
+	header1 := make(http.Header)
+	header1.Add(ProtocolAcceptVersionHeader, "1")
+	header1.Add(ProtocolVersionHeader, "3")
+	matchingVersion, otherVersion := wn.checkProtocolVersionMatch(header1)
+	require.Equal(t, "1", matchingVersion)
+	require.Equal(t, "", otherVersion)
+
+	header2 := make(http.Header)
+	header2.Add(ProtocolAcceptVersionHeader, "3")
+	header2.Add(ProtocolAcceptVersionHeader, "4")
+	header2.Add(ProtocolVersionHeader, "1")
+	matchingVersion, otherVersion = wn.checkProtocolVersionMatch(header2)
+	require.Equal(t, "1", matchingVersion)
+	require.Equal(t, "1", otherVersion)
+
+	header3 := make(http.Header)
+	header3.Add(ProtocolVersionHeader, "3")
+	matchingVersion, otherVersion = wn.checkProtocolVersionMatch(header3)
+	require.Equal(t, "", matchingVersion)
+	require.Equal(t, "3", otherVersion)
+}
