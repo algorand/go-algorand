@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # shellcheck disable=2045
 
-if [ $# -eq 0 ]
+if [ $# -ne 1 ]
 then
     echo "Usage: $0 <DIRECTORY>"
     exit 1

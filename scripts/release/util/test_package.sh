@@ -5,6 +5,7 @@
 GREEN_FG=$(tput setaf 2 2>/dev/null)
 RED_FG=$(tput setaf 1 2>/dev/null)
 TEAL_FG=$(tput setaf 6 2>/dev/null)
+YELLOW_FG=$(tput setaf 3 2>/dev/null)
 END_FG_COLOR=$(tput sgr0 2>/dev/null)
 
 # TODO: The following error happens on centos:8
@@ -23,7 +24,10 @@ OS_LIST=(
     ubuntu:18.04
 )
 
+BRANCH=
 CHANNEL=stable
+HASH=
+RELEASE=
 FAILED=()
 
 while [ "$1" != "" ]; do
@@ -51,6 +55,12 @@ while [ "$1" != "" ]; do
     esac
     shift
 done
+
+if [ -z "$BRANCH" ] || [ -z "$HASH" ] || [ -z "$RELEASE" ]
+then
+    echo "$YELLOW_FG[Usage]$END_FG_COLOR $0 -b BRANCH -c CHANNEL -h HASH -r RELEASE"
+    exit 1
+fi
 
 build_images () {
     # We'll use this simple tokenized Dockerfile.

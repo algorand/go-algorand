@@ -5,7 +5,13 @@
 
 GREEN_FG=$(tput setaf 2 2>/dev/null)
 RED_FG=$(tput setaf 1 2>/dev/null)
+YELLOW_FG=$(tput setaf 3 2>/dev/null)
 END_FG_COLOR=$(tput sgr0 2>/dev/null)
+
+BRANCH=
+CHANNEL=stable
+HASH=
+RELEASE=
 
 while [ "$1" != "" ]; do
     case "$1" in
@@ -32,6 +38,12 @@ while [ "$1" != "" ]; do
     esac
     shift
 done
+
+if [ -z "$BRANCH" ] || [ -z "$HASH" ] || [ -z "$RELEASE" ]
+then
+    echo "$YELLOW_FG[Usage]$END_FG_COLOR $0 -b BRANCH -c CHANNEL -h HASH -r RELEASE"
+    exit 1
+fi
 
 echo "[$0] Testing: algod -v"
 if < /etc/os-release grep Ubuntu > /dev/null
