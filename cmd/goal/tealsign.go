@@ -59,8 +59,14 @@ func init() {
 var tealsignCmd = &cobra.Command{
 	Use:   "tealsign",
 	Short: "Sign data to be verified in a TEAL program",
-	Long:  `Sign data to be verified in a TEAL program`,
-	Args:  validateNoPosArgsFn,
+	Long: `Sign data to be verified in a TEAL program.
+
+Data verified by the ed25519verify TEAL opcode must be domain separated. As part of this process, the signed payload includes the hash of the program logic. This hash must be specified. To do this, provide a transaction whose logic sig contains the program via --lsig-txn, or provide a contract address directly with --contract-addr. These options are mutually exclusive.
+
+Next, you must specify the data to be signed. When using --lsig-txn, you can use the --sign-txid flag to sign that transaction's txid. Alternatively, arbitrary data can be signed with the --data-file, --data-b64, or --data-b32 options. These options are mutually exclusive.
+
+The base64 encoding of the signature will always be printed to stdout. Optionally, when using --lsig-txn, you may specify that the signature be used as a TEAL argument for that transaction. Specify the argument index with the --set-lsig-arg-idx flag. The --lsig-txn file will be updated in place, and any existing argument at that index will be overwritten.`,
+	Args: validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		/*
 		 * First, fetch the key for signing

@@ -127,10 +127,10 @@ const (
 	tealsignParseb64      = "failed to base64 decode data to sign: %v"
 	tealsignParseb32      = "failed to base32 decode data to sign: %v"
 	tealsignTxIDLsigReq   = "--sign-txid requires --lsig-txn"
-	tealsignSetArgLsigReq = "--set-lsig-arg requires --lsig-txn"
+	tealsignSetArgLsigReq = "--set-lsig-arg-idx requires --lsig-txn"
 	tealsignDataReq       = "need exactly one of --sign-txid, --data-file, --data-b64, or --data-b32"
 	tealsignInfoSig       = "Generated signature: %s"
-	tealsignTooManyArg    = "--set-lsig-arg too large, maximum of %d arguments"
+	tealsignTooManyArg    = "--set-lsig-arg-idx too large, maximum of %d arguments"
 	tealsignInfoWroteSig  = "Wrote signature for %s to LSig.Args[%d]"
 
 	// Wallet
