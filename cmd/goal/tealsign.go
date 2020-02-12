@@ -46,14 +46,14 @@ func init() {
 	clerkCmd.AddCommand(tealsignCmd)
 
 	tealsignCmd.Flags().StringVar(&keyFilename, "keyfile", "", "algokey private key file to sign with")
-	tealsignCmd.Flags().StringVar(&signerAcct, "account", "", "address of account to sign with")
-	tealsignCmd.Flags().StringVar(&lsigTxnFilename, "lsig-txn", "", "transaction with logicsig to sign data for")
-	tealsignCmd.Flags().StringVar(&contractAddr, "contract-addr", "", "contract address to sign data for. not necessary if --lsig-txn is provided")
-	tealsignCmd.Flags().BoolVar(&signTxID, "sign-txid", false, "use the txid of --lsig-txn as the data to sign")
-	tealsignCmd.Flags().StringVar(&dataFile, "data-file", "", "data file to sign")
+	tealsignCmd.Flags().StringVar(&signerAcct, "account", "", "Address of account to sign with")
+	tealsignCmd.Flags().StringVar(&lsigTxnFilename, "lsig-txn", "", "Transaction with logicsig to sign data for")
+	tealsignCmd.Flags().StringVar(&contractAddr, "contract-addr", "", "Contract address to sign data for. not necessary if --lsig-txn is provided")
+	tealsignCmd.Flags().BoolVar(&signTxID, "sign-txid", false, "Use the txid of --lsig-txn as the data to sign")
+	tealsignCmd.Flags().StringVar(&dataFile, "data-file", "", "Data file to sign")
 	tealsignCmd.Flags().StringVar(&datab64, "data-b64", "", "base64 data to sign")
 	tealsignCmd.Flags().StringVar(&datab32, "data-b32", "", "base32 data to sign")
-	tealsignCmd.Flags().IntVar(&setLsigArg, "set-lsig-arg", -1, "if --lsig-txn is also specified, set this lsig arg to the raw signature bytes")
+	tealsignCmd.Flags().IntVar(&setLsigArg, "set-lsig-arg-idx", -1, "If --lsig-txn is also specified, set the lsig arg at this index to the raw signature bytes. Overwrites any existing argument at this index. Updates --lsig-txn file in place. nil args will be prepended if necessary.")
 }
 
 var tealsignCmd = &cobra.Command{
@@ -184,7 +184,7 @@ var tealsignCmd = &cobra.Command{
 		}
 
 		/*
-		 * Sign the payload and print signature to stdout
+		 * Sign the payload
 		 */
 
 		signature := sec.Sign(logic.Msg{
