@@ -53,7 +53,7 @@ func init() {
 	tealsignCmd.Flags().StringVar(&dataFile, "data-file", "", "Data file to sign")
 	tealsignCmd.Flags().StringVar(&datab64, "data-b64", "", "base64 data to sign")
 	tealsignCmd.Flags().StringVar(&datab32, "data-b32", "", "base32 data to sign")
-	tealsignCmd.Flags().IntVar(&setLsigArg, "set-lsig-arg-idx", -1, "If --lsig-txn is also specified, set the lsig arg at this index to the raw signature bytes. Overwrites any existing argument at this index. Updates --lsig-txn file in place. nil args will be prepended if necessary.")
+	tealsignCmd.Flags().IntVar(&setLsigArg, "set-lsig-arg-idx", -1, "If --lsig-txn is also specified, set the lsig arg at this index to the raw signature bytes. Overwrites any existing argument at this index. Updates --lsig-txn file in place. nil args will be appended until index is valid.")
 }
 
 var tealsignCmd = &cobra.Command{
