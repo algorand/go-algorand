@@ -43,6 +43,7 @@ func (ts Topics) MarshallTopics() (b []byte, e error) {
 		bufferSize += len(val.data)
 	}
 
+	
 	buffer := make([]byte, bufferSize)
 	bidx := binary.PutUvarint(buffer, uint64(len(ts)))
 	for _, val := range ts {
