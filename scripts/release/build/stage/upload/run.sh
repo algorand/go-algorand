@@ -5,9 +5,7 @@
 CHANNEL="$1"
 BUCKET_LOCATION="$2"
 INSTANCE=$(cat scripts/release/common/ec2/tmp/instance)
-
-scp -i ReleaseBuildInstanceKey.pem -o StrictHostKeyChecking=no -r ubuntu@"$INSTANCE":~/fullversion.dat .
-FULLVERSION=$(cat fullversion.dat)
+FULLVERSION=$(ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@"$INSTANCE" cat ~/fullversion.dat)
 
 rm -rf pkg && mkdir -p pkg/"$FULLVERSION"
 
