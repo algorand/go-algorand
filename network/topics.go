@@ -17,18 +17,16 @@
 package network
 
 import (
-	 
 	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
-
 	//	"github.com/algorand/go-algorand/crypto"
 )
 
 // Topic is a key-value pair
 type Topic struct {
-	key string
+	key  string
 	data []byte
 }
 
@@ -36,24 +34,23 @@ type Topic struct {
 type Topics []Topic
 
 // MarshalTopics serializes the topics into a byte array
-func (ta Topics) MarshalTopics()(b []byte, e error) {
+func (ta Topics) MarshalTopics() (b []byte, e error) {
 
 	// Calculate the total buffer size required to store the topics
 	bufferSize := binary.MaxVarintLen32 // store topic array size
 
 	for _, val := range ta {
-		bufferSize += 2*binary.MaxVarintLen32 // store key size and the data size
+		bufferSize += 2 * binary.MaxVarintLen32 // store key size and the data size
 		bufferSize += len(val.key)
 		bufferSize += len(val.data)
 	}
 
-	
 	buffer := make([]byte, bufferSize)
-	bidx := binary.PutUvarint(buffer, uint64(len(ta)))	
+	bidx := binary.PutUvarint(buffer, uint64(len(ta)))
 	for _, val := range ta {
 		// write the key size
 		n := binary.PutUvarint(buffer[bidx:], uint64(len(val.key)))
-		bidx +=n
+		bidx += n
 		// write the key
 		n = copy(buffer[bidx:], []byte(val.key))
 		bidx += n
@@ -68,14 +65,14 @@ func (ta Topics) MarshalTopics()(b []byte, e error) {
 
 	// the size could be smaller than estimated because used
 	// MaxVarintLen32 instead of the real size during estimation
-	if bidx > bufferSize { 
-		e = fmt.Errorf("Unexpected error during Marshalling.!")
+	if bidx > bufferSize {
+		e = fmt.Errorf("unexpected error during Marshalling")
 	}
 	return buffer, e
 }
 
-// Unmarshall the topics from the byte array
-func UnmarshalTopics(buffer []byte) (ts Topics, err error) {
+// UnmarshallTopics unmarshalls the topics from the byte array
+func UnmarshallTopics(buffer []byte) (ts Topics, err error) {
 	reader := bytes.NewReader(buffer)
 
 	// Get the number of topics
@@ -84,8 +81,8 @@ func UnmarshalTopics(buffer []byte) (ts Topics, err error) {
 		return nil, e
 	}
 	topics := make([]Topic, numTopics)
-	
-	for x:=0; x < int(numTopics); x++ {
+
+	for x := 0; x < int(numTopics); x++ {
 		// read the key length
 		len, e := binary.ReadUvarint(reader)
 		if e != nil {
