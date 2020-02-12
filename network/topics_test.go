@@ -36,6 +36,7 @@ func TestTopics(t *testing.T) {
 		},
 	}
 
+	// Check if the topics were initialized correctly
 	require.Equal(t, 2, len(topics))
 
 	require.Equal(t, "key1", topics[0].key)
@@ -44,12 +45,15 @@ func TestTopics(t *testing.T) {
 	require.Equal(t, "Key2", topics[1].key)
 	require.Equal(t, "value of key2", string(topics[1].data))
 
+	// Check if can be marshalled without errors
 	buffer, e := topics.MarshalTopics()
 	require.Empty(t,e)
 
+	// Check if can be unmarshalled without errors
 	unMarshalled, e := UnmarshalTopics(buffer)
 	require.Empty(t,e)
 
+	// Check if the unmarshalled is equal to the original 
 	require.Equal(t, len(topics), len(unMarshalled))
 
 	require.Equal(t, topics[0].key, unMarshalled[0].key)
