@@ -47,13 +47,13 @@ func TestTopics(t *testing.T) {
 
 	// Check if can be marshalled without errors
 	buffer, e := topics.MarshalTopics()
-	require.Empty(t,e)
+	require.Empty(t, e)
 
 	// Check if can be unmarshalled without errors
-	unMarshalled, e := UnmarshalTopics(buffer)
-	require.Empty(t,e)
+	unMarshalled, e := UnmarshallTopics(buffer)
+	require.Empty(t, e)
 
-	// Check if the unmarshalled is equal to the original 
+	// Check if the unmarshalled is equal to the original
 	require.Equal(t, len(topics), len(unMarshalled))
 
 	require.Equal(t, topics[0].key, unMarshalled[0].key)
