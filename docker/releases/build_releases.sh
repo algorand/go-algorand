@@ -4,27 +4,37 @@
 # e.g. `docker login`
 # Login name is "algorand".
 
-# To build both images, one could run:
-#
-# $ ./build_releases.sh
-# $ ./build_releases.sh testnet
-#
-# or
-#
-# for name in {mainnet,testnet}
-# do
-#     ./build_releases.sh $name
-# done
-
 GREEN_FG=$(tput setaf 2 2>/dev/null)
 RED_FG=$(tput setaf 1 2>/dev/null)
 END_FG_COLOR=$(tput sgr0 2>/dev/null)
 
-# Default to "mainnet".
-NAME=${1:-mainnet}
-NETWORK=
+# These are reasonable defaults.
+NETWORK=mainnet
+NAME=stable
+DEPLOY=true
 
-if [[ ! "$NAME" =~ ^mainnet$|^testnet$ ]]
+while [ "$1" != "" ]; do
+    case "$1" in
+        --name)
+            shift
+            NAME="${1-stable}"
+            ;;
+        --network)
+            shift
+            NETWORK="$1"
+            ;;
+        --no-deploy)
+            DEPLOY=false
+            ;;
+        *)
+            echo "Unknown option" "$1"
+            exit 1
+            ;;
+    esac
+    shift
+done
+
+if [[ ! "$NETWORK" =~ ^mainnet$|^testnet$ ]]
 then
     echo "$RED_FG[$0]$END_FG_COLOR Network values must be either \`mainnet\` or \`testnet\`."
     exit 1
@@ -59,10 +69,15 @@ EOF
 
 build_image
 
-if ! docker push algorand/"$NAME":latest
+if $DEPLOY
 then
-    echo -e "\n$RED_FG[$0]$END_FG_COLOR \`docker push\` failed."
-    exit 1
+    if ! docker push algorand/"$NAME":latest
+    then
+        echo -e "\n$RED_FG[$0]$END_FG_COLOR \`docker push\` failed."
+        exit 1
+    fi
+
+    echo -e "\n$GREEN_FG[$0]$END_FG_COLOR Successfully published to docker hub."
 fi
 
 echo "$GREEN_FG[$0]$END_FG_COLOR Build completed with no failures."
