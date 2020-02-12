@@ -20,11 +20,13 @@ pipeline {
     agent any
 
     stages {
+        /*
         stage("sync staging and production buckets") {
             steps {
                 sh script: "scripts/release/prod/stage/sync/run.sh ${params.bucket_location_staging} ${params.bucket_location_prod} ${params.channel} ${params.release}"
             }
         }
+        */
 
         stage("create ec2 instance") {
             steps {
