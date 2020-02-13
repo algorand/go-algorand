@@ -241,6 +241,7 @@ func makeAsyncPersistenceLoop(log serviceLogger, crash db.Accessor, ledger Ledge
 
 func (p *asyncPersistenceLoop) Enqueue(clock timers.Clock, round basics.Round, period period, step step, raw []byte, done chan error) (events <-chan externalEvent) {
 	eventsChannel := make(chan externalEvent, 1)
+
 	p.pending <- persistentRequest{
 		round:  round,
 		period: period,
@@ -250,6 +251,7 @@ func (p *asyncPersistenceLoop) Enqueue(clock timers.Clock, round basics.Round, p
 		clock:  clock,
 		events: eventsChannel,
 	}
+
 	return eventsChannel
 }
 
@@ -282,12 +284,6 @@ func (p *asyncPersistenceLoop) loop(ctx context.Context) {
 		case <-p.ledger.Wait(s.round.SubSaturate(1)):
 		}
 
-		// sanity check
-		_, _, _, _, derr := decode(s.raw, s.clock)
-		if derr != nil {
-			logging.Base().Errorf("could not decode own encoded disk state: %v", derr)
-		}
-
 		// store the state.
 		err := persist(p.log, p.crashDb, s.round, s.period, s.step, s.raw)
 
@@ -299,5 +295,13 @@ func (p *asyncPersistenceLoop) loop(ctx context.Context) {
 			done:   s.done,
 		}
 		close(s.events)
+
+		// sanity check; we check it after the fact, since it's not expected to ever happen.
+		// performance-wise, it takes approximitly 300000ns to execute, and we don't want it to
+		// block the persist operation.
+		_, _, _, _, derr := decode(s.raw, s.clock)
+		if derr != nil {
+			logging.Base().Errorf("could not decode own encoded disk state: %v", derr)
+		}
 	}
 }
