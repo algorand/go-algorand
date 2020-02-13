@@ -2,7 +2,7 @@ pipeline {
     parameters {
         string defaultValue: 'master', description: 'Branch name or tag name.', name: 'branch', trim: true
         string defaultValue: 'stable', description: 'Staged channel which should be released.', name: 'channel', trim: true
-        string defaultValue: 's3://algorand-builds/channel', description: 's3://bucket/prefix', name: 'bucket_location', trim: true
+        string defaultValue: 'algorand-builds/channel', description: 's3://bucket/prefix', name: 'bucket_location', trim: true
 
         // AWS
         string defaultValue: 'us-west-1', description: 'AWS Region', name: 'region', trim: true
@@ -58,12 +58,7 @@ pipeline {
         stage("upload") {
             steps {
                 script {
-                    def fullversion = sh(
-                        script: 'PATH=/usr/local/go/bin bash scripts/compute_build_number.sh -f',
-                        returnStdout: true
-                    ).trim()
-
-                    sh script: "scripts/release/build/stage/upload/run.sh ${params.channel} ${params.bucket_location} ${fullversion}"
+                    sh script: "scripts/release/build/stage/upload/run.sh ${params.channel} ${params.bucket_location}"
                 }
             }
         }
