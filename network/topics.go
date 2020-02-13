@@ -115,3 +115,19 @@ func Hash(topics []byte) (partialHash uint64, e error) {
 	partialHash = digest.TrimUint64()
 	return partialHash, nil
 }
+
+// Hash returns the hash of serialized topics with nonce added to it
+func (ts Topics)Hash(nonce []byte) (d crypto.Digest, e error) {
+
+	topics, e := ts.MarshalTopics()
+	if e != nil {
+		return d, e
+	}
+	
+	joined := make([]byte, len(topics)+len(nonce))
+	copy(joined, topics)
+	copy(joined[len(topics):], nonce)
+
+	digest := crypto.Hash(joined)
+	return digest, nil
+}
