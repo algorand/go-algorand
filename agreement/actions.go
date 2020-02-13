@@ -96,11 +96,11 @@ type networkAction struct {
 	Tag protocol.Tag
 	h   MessageHandle // this is cleared to correctly handle ephemeral network state on recovery
 
-	UnauthenticatedVote   unauthenticatedVote
-	UnauthenticatedBundle unauthenticatedBundle
-	CompoundMessage       compoundMessage
+	UnauthenticatedVote   unauthenticatedVote   `codec:",omitempty"`
+	UnauthenticatedBundle unauthenticatedBundle `codec:",omitempty"`
+	CompoundMessage       compoundMessage       `codec:",omitempty"`
 
-	UnauthenticatedVotes []unauthenticatedVote
+	UnauthenticatedVotes []unauthenticatedVote `codec:",omitempty"`
 
 	Err serializableError
 }
