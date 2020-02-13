@@ -20,8 +20,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"github.com/algorand/go-algorand/crypto"
 	"io"
-	//	"github.com/algorand/go-algorand/crypto"
 )
 
 // Topic is a key-value pair
@@ -34,20 +34,20 @@ type Topic struct {
 type Topics []Topic
 
 // MarshalTopics serializes the topics into a byte array
-func (ta Topics) MarshalTopics() (b []byte, e error) {
+func (ts Topics) MarshalTopics() (b []byte, e error) {
 
 	// Calculate the total buffer size required to store the topics
 	bufferSize := binary.MaxVarintLen32 // store topic array size
 
-	for _, val := range ta {
+	for _, val := range ts {
 		bufferSize += 2 * binary.MaxVarintLen32 // store key size and the data size
 		bufferSize += len(val.key)
 		bufferSize += len(val.data)
 	}
 
 	buffer := make([]byte, bufferSize)
-	bidx := binary.PutUvarint(buffer, uint64(len(ta)))
-	for _, val := range ta {
+	bidx := binary.PutUvarint(buffer, uint64(len(ts)))
+	for _, val := range ts {
 		// write the key size
 		n := binary.PutUvarint(buffer[bidx:], uint64(len(val.key)))
 		bidx += n
@@ -109,4 +109,20 @@ func UnmarshallTopics(buffer []byte) (ts Topics, err error) {
 		}
 	}
 	return topics, e
+}
+
+// Hash returns the hash of serialized topics with nonce added to it
+func (ts Topics)Hash(nonce []byte) (d crypto.Digest, e error) {
+
+	topics, e := ts.MarshalTopics()
+	if e != nil {
+		return d, e
+	}
+	
+	joined := make([]byte, len(topics)+len(nonce))
+	copy(joined, topics)
+	copy(joined[len(topics):], nonce)
+
+	digest := crypto.Hash(joined)
+	return digest, nil
 }

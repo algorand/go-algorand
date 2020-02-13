@@ -18,6 +18,7 @@ package network
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"math/rand"
@@ -151,6 +152,11 @@ type wsPeer struct {
 
 	// peer version ( this is one of the version supported by the current node and listed in SupportedProtocolVersions )
 	version string
+
+	// Nonce used to uinquely identify requests
+	nonce uint64
+
+	ResponseChannels map[uint64]chan *http.Response
 }
 
 // HTTPPeer is what the opaque Peer might be.
@@ -524,4 +530,42 @@ func (wp *wsPeer) CheckSlowWritingPeer(now time.Time) bool {
 	}
 	timeSinceMessageCreated := now.Sub(time.Unix(0, ongoingMessageTime))
 	return timeSinceMessageCreated > maxMessageQueueDuration
+}
+
+func (wp *wsPeer) getNonce() []byte {
+	wp.nonce = wp.nonce + 1
+	buf := make([]byte, binary.MaxVarintLen64)
+	n := binary.PutUvarint(buf, wp.nonce)
+	return buf[:n]
+}
+
+func (wp *wsPeer) Request(ctx context.Context, topics Topics) (resp http.Response, e error) {
+	nonce := wp.getNonce()
+
+	hash, e := topics.Hash(nonce)
+	if e != nil {
+		return resp, e
+	}
+
+	topics = append(topics, Topic{key: "nonnce", data: nonce})
+	//serializedMsg, e := topics.MarshalTopics()
+	if e != nil {
+		return resp, e
+	}
+
+	partialHash := hash.TrimUint64()
+
+	wp.ResponseChannels[partialHash] = make(chan *http.Response)
+	//	Send serializedMsg
+	//	select {
+	//	ctx:
+
+	//		<-ResponseChannels[hash]:
+	//		return response
+	//	}
+	return resp, nil
+}
+
+func (wp *wsPeer) Read() {
+
 }
