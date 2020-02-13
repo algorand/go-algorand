@@ -17,8 +17,10 @@
 package crypto
 
 // #cgo CFLAGS: -Wall -std=c99
-// #cgo CFLAGS: -I${SRCDIR}/include/
-// #cgo LDFLAGS: ${SRCDIR}/lib/libsodium.a
+// #cgo darwin,amd64 CFLAGS: -I${SRCDIR}/libs/darwin/amd64/include
+// #cgo darwin,amd64 LDFLAGS: ${SRCDIR}/libs/darwin/amd64/lib/libsodium.a
+// #cgo linux,amd64 CFLAGS: -I${SRCDIR}/libs/linux/amd64/include
+// #cgo linux,amd64 LDFLAGS: ${SRCDIR}/libs/linux/amd64/lib/libsodium.a
 // #include <stdint.h>
 // #include "sodium.h"
 import "C"

@@ -6,6 +6,7 @@ export GO111MODULE
 UNAME		:= $(shell uname)
 SRCPATH     := $(shell pwd)
 ARCH        := $(shell ./scripts/archtype.sh)
+OS_TYPE     := $(shell ./scripts/ostype.sh)
 
 # If build number already set, use it - to ensure same build number across multiple platforms being built
 BUILDNUMBER      ?= $(shell ./scripts/compute_build_number.sh)
@@ -90,9 +91,11 @@ ALWAYS:
 
 # build our fork of libsodium, placing artifacts into crypto/lib/ and crypto/include/
 crypto/lib/libsodium.a:
-	cd crypto/libsodium-fork && \
-		./autogen.sh && \
-		./configure --disable-shared --prefix="$(SRCPATH)/crypto/" && \
+	mkdir -p crypto/copies/$(OS_TYPE)/$(ARCH)
+	cp -R crypto/libsodium-fork crypto/copies/$(OS_TYPE)/$(ARCH)/libsodium-fork
+	cd crypto/copies/$(OS_TYPE)/$(ARCH)/libsodium-fork && \
+		./autogen.sh --prefix $(SRCPATH)/crypto/libs/$(OS_TYPE)/$(ARCH) && \
+		./configure --disable-shared --prefix="$(SRCPATH)/crypto/libs/$(OS_TYPE)/$(ARCH)" && \
 		$(MAKE) && \
 		$(MAKE) install
 
@@ -209,6 +212,8 @@ clean:
 	cd crypto/libsodium-fork && \
 		test ! -e Makefile || make clean
 	rm -rf crypto/lib
+	rm -rf crypto/libs
+	rm -rf crypto/copies
 
 # clean without crypto
 cleango:
@@ -265,3 +270,16 @@ install: build
 	scripts/dev_install.sh -p $(GOPATH1)/bin
 
 .PHONY: default fmt vet lint check_license check_shell sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN
+
+### TARGETS FOR CICD PROCESS
+
+ci-deps:
+	scripts/configure_dev.sh && \
+	scripts/check_deps.sh
+
+ci-buildsrc: crypto/lib/libsodium.a node_exporter NONGO_BIN $(ALGOD_API_SWAGGER_INJECT) $(KMD_API_SWAGGER_INJECT)
+	OS_TYPE=$(OS_TYPE) ARCH=$(ARCH) go install $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
+
+ci-build: ci-buildsrc gen
+	mkdir -p $(SRCPATH)/tmp/$(OS_TYPE)/$(ARCH)/dev_pkg && \
+	PKG_ROOT=$(SRCPATH)/tmp/$(OS_TYPE)/$(ARCH)/dev_pkg scripts/dev_install.sh -p $(GOPATH1)/bin
