@@ -1,4 +1,17 @@
 stages:
+  build-linux-amd64:
+  - task: docker.Make
+    image: centos-algo:7
+    arch: amd64
+    target: ci-deps ci-build ci-package
+  build-linux-arm64:
+  - task: docker.Make
+    image: centos-algo:7
+    arch: arm64v8
+    target: ci-deps ci-build ci-package
+  build-local:
+  - task: shell.Make
+    target: ci-deps ci-build ci-package
   release:
   - task: release.notes.GenerateReleaseNotes
     releaseVersion: ${GO_ALGORAND_RELEASE_VERSION}

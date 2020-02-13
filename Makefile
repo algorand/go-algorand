@@ -274,12 +274,16 @@ install: build
 ### TARGETS FOR CICD PROCESS
 
 ci-deps:
-	scripts/configure_dev.sh && \
+	scripts/configure_dev-deps.sh && \
 	scripts/check_deps.sh
 
 ci-buildsrc: crypto/lib/libsodium.a node_exporter NONGO_BIN $(ALGOD_API_SWAGGER_INJECT) $(KMD_API_SWAGGER_INJECT)
-	OS_TYPE=$(OS_TYPE) ARCH=$(ARCH) go install $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
+	go install $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
 
 ci-build: ci-buildsrc gen
 	mkdir -p $(SRCPATH)/tmp/$(OS_TYPE)/$(ARCH)/dev_pkg && \
 	PKG_ROOT=$(SRCPATH)/tmp/$(OS_TYPE)/$(ARCH)/dev_pkg scripts/dev_install.sh -p $(GOPATH1)/bin
+
+ci-package:
+	mkdir -p $(SRCPATH)/assets/node_pkgs/$(OS_TYPE)/$(ARCH) && \
+	PKG_ROOT=$(SRCPATH)/assets/node_pkgs/$(OS_TYPE)/$(ARCH) NO_BUILD=True VARIATIONS=literally_anything scripts/build_packages.sh $(OS_TYPE)/$(ARCH)
