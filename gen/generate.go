@@ -21,7 +21,11 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
+	"sync"
+
+	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/account"
@@ -118,91 +122,144 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 	rootKeyCreated := 0
 	partKeyCreated := 0
 
-	for _, wallet := range allocation {
-		var root account.Root
-		var part account.Participation
+	pendingWallets := make(chan genesisAllocation, len(allocation))
+	concurrentWalletGenerators := runtime.NumCPU() * 2
+	errorsChannel := make(chan error, concurrentWalletGenerators)
+	verbosedOutput := make(chan string)
+	var creatingWalletsWaitGroup sync.WaitGroup
+	var writeMu deadlock.Mutex
 
-		wfilename := filepath.Join(outDir, config.RootKeyFilename(wallet.Name))
-		pfilename := filepath.Join(outDir, config.PartKeyFilename(wallet.Name, firstWalletValid, lastWalletValid))
-
-		root, rootDB, rootkeyErr := loadRootKey(wfilename)
-		if rootkeyErr != nil && !os.IsNotExist(rootkeyErr) {
-			return rootkeyErr
-		}
-
-		part, partDB, partkeyErr := loadPartKeys(pfilename)
-		if partkeyErr != nil && !os.IsNotExist(partkeyErr) && partkeyErr != account.ErrUnsupportedSchema {
-			return partkeyErr
-		}
-
-		if rootkeyErr == nil && partkeyErr == nil {
-			if verbose {
-				fmt.Println("Reusing existing wallet:", wfilename, pfilename)
+	createWallet := func() {
+		defer creatingWalletsWaitGroup.Done()
+		for {
+			var wallet genesisAllocation
+			select {
+			case wallet = <-pendingWallets:
+			default:
+				return
 			}
-		} else {
-			// At this point either rootKeys is valid or rootkeyErr != nil
-			// Likewise, either partkey is valid or partkeyErr != nil
-			if rootkeyErr != nil {
-				os.Remove(wfilename)
+			var root account.Root
+			var part account.Participation
 
-				rootDB, err = db.MakeErasableAccessor(wfilename)
-				if err != nil {
-					err = fmt.Errorf("couldn't open root DB accessor %s: %v", wfilename, err)
-				} else {
-					root, err = account.GenerateRoot(rootDB)
+			wfilename := filepath.Join(outDir, config.RootKeyFilename(wallet.Name))
+			pfilename := filepath.Join(outDir, config.PartKeyFilename(wallet.Name, firstWalletValid, lastWalletValid))
+
+			root, rootDB, rootkeyErr := loadRootKey(wfilename)
+			if rootkeyErr != nil && !os.IsNotExist(rootkeyErr) {
+				errorsChannel <- rootkeyErr
+				return
+			}
+
+			part, partDB, partkeyErr := loadPartKeys(pfilename)
+			if partkeyErr != nil && !os.IsNotExist(partkeyErr) && partkeyErr != account.ErrUnsupportedSchema {
+				errorsChannel <- partkeyErr
+				return
+			}
+
+			if rootkeyErr == nil && partkeyErr == nil {
+				if verbose {
+					verbosedOutput <- fmt.Sprintln("Reusing existing wallet:", wfilename, pfilename)
 				}
-				if err != nil {
+			} else {
+				// At this point either rootKeys is valid or rootkeyErr != nil
+				// Likewise, either partkey is valid or partkeyErr != nil
+				if rootkeyErr != nil {
 					os.Remove(wfilename)
-					return
+
+					rootDB, err = db.MakeErasableAccessor(wfilename)
+					if err != nil {
+						err = fmt.Errorf("couldn't open root DB accessor %s: %v", wfilename, err)
+					} else {
+						root, err = account.GenerateRoot(rootDB)
+					}
+					if err != nil {
+						os.Remove(wfilename)
+						errorsChannel <- err
+						return
+					}
+					if verbose {
+						verbosedOutput <- fmt.Sprintf("Created new rootkey: %s", wfilename)
+					}
+					rootKeyCreated++
 				}
-				if verbose {
-					fmt.Printf("Created new rootkey: %s\n", wfilename)
+
+				if partkeyErr != nil && wallet.Online == basics.Online {
+					os.Remove(pfilename)
+
+					partDB, err = db.MakeErasableAccessor(pfilename)
+					if err != nil {
+						err = fmt.Errorf("couldn't open participation DB accessor %s: %v", pfilename, err)
+						os.Remove(pfilename)
+						errorsChannel <- err
+						return
+					}
+
+					part, err = account.FillDBWithParticipationKeys(partDB, root.Address(), basics.Round(firstWalletValid), basics.Round(lastWalletValid), partKeyDilution)
+					if err != nil {
+						err = fmt.Errorf("could not generate new participation file %s: %v", pfilename, err)
+						os.Remove(pfilename)
+						errorsChannel <- err
+						return
+					}
+					if verbose {
+						verbosedOutput <- fmt.Sprintf("Created new partkey: %s", pfilename)
+					}
+					partKeyCreated++
 				}
-				rootKeyCreated++
 			}
 
-			if partkeyErr != nil && wallet.Online == basics.Online {
-				os.Remove(pfilename)
+			var data basics.AccountData
+			data.Status = wallet.Online
+			data.MicroAlgos.Raw = wallet.Stake
+			if wallet.Online == basics.Online {
+				data.VoteID = part.VotingSecrets().OneTimeSignatureVerifier
+				data.SelectionID = part.VRFSecrets().PK
+				data.VoteFirstValid = part.FirstValid
+				data.VoteLastValid = part.LastValid
+				data.VoteKeyDilution = part.KeyDilution
+			}
 
-				partDB, err = db.MakeErasableAccessor(pfilename)
-				if err != nil {
-					err = fmt.Errorf("couldn't open participation DB accessor %s: %v", pfilename, err)
-					os.Remove(pfilename)
-					return
-				}
+			writeMu.Lock()
+			records[wallet.Name] = data
 
-				part, err = account.FillDBWithParticipationKeys(partDB, root.Address(), basics.Round(firstWalletValid), basics.Round(lastWalletValid), partKeyDilution)
-				if err != nil {
-					err = fmt.Errorf("could not generate new participation file %s: %v", pfilename, err)
-					os.Remove(pfilename)
-					return
-				}
-				if verbose {
-					fmt.Printf("Created new partkey: %s\n", pfilename)
-				}
-				partKeyCreated++
+			genesisAddrs[wallet.Name] = root.Address()
+			writeMu.Unlock()
+
+			rootDB.Close()
+			if wallet.Online == basics.Online {
+				partDB.Close()
 			}
 		}
+	}
 
-		var data basics.AccountData
-		data.Status = wallet.Online
-		data.MicroAlgos.Raw = wallet.Stake
-		if wallet.Online == basics.Online {
-			data.VoteID = part.VotingSecrets().OneTimeSignatureVerifier
-			data.SelectionID = part.VRFSecrets().PK
-			data.VoteFirstValid = part.FirstValid
-			data.VoteLastValid = part.LastValid
-			data.VoteKeyDilution = part.KeyDilution
-		}
+	for _, wallet := range allocation {
+		pendingWallets <- wallet
+	}
 
-		records[wallet.Name] = data
+	if verbose {
+		// create a listener for the verbosedOutput
+		go func() {
+			for textOut := range verbosedOutput {
+				fmt.Printf("%s\n", textOut)
+			}
+		}()
+	}
 
-		genesisAddrs[wallet.Name] = root.Address()
+	creatingWalletsWaitGroup.Add(concurrentWalletGenerators)
+	for routinesCounter := 0; routinesCounter < concurrentWalletGenerators; routinesCounter++ {
+		go createWallet()
+	}
 
-		rootDB.Close()
-		if wallet.Online == basics.Online {
-			partDB.Close()
-		}
+	// wait until all goroutines are done.
+	creatingWalletsWaitGroup.Wait()
+
+	close(verbosedOutput)
+
+	// check to see if we had any errors.
+	select {
+	case err := <-errorsChannel:
+		return err
+	default:
 	}
 
 	genesisAddrs["FeeSink"] = feeSink
