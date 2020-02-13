@@ -241,7 +241,6 @@ func makeAsyncPersistenceLoop(log serviceLogger, crash db.Accessor, ledger Ledge
 
 func (p *asyncPersistenceLoop) Enqueue(clock timers.Clock, round basics.Round, period period, step step, raw []byte, done chan error) (events <-chan externalEvent) {
 	eventsChannel := make(chan externalEvent, 1)
-
 	p.pending <- persistentRequest{
 		round:  round,
 		period: period,
@@ -251,7 +250,6 @@ func (p *asyncPersistenceLoop) Enqueue(clock timers.Clock, round basics.Round, p
 		clock:  clock,
 		events: eventsChannel,
 	}
-
 	return eventsChannel
 }
 
