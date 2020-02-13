@@ -660,7 +660,7 @@ func (e thresholdEvent) ComparableStr() string {
 //
 // The ordering is given as follows:
 //
-//  - certThreshold events are fresher than all other events.
+//  - certThreshold events are fresher than all other non-certThreshold events.
 //  - Events from a later period are fresher than events from an older period.
 //  - nextThreshold events are fresher than softThreshold events from the same
 //    period.

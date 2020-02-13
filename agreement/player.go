@@ -619,7 +619,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 		}
 		if e.t() == bundlePresent {
 			ub := e.Input.UnauthenticatedBundle
-			return append(actions, verifyBundleAction(e, ub.Round, ub.Period))
+			return append(actions, verifyBundleAction(e, ub.Round, ub.Period, ub.Step))
 		}
 		a0 := relayAction(e, protocol.VoteBundleTag, ef.(thresholdEvent).Bundle)
 		a1 := p.handle(r, ef)

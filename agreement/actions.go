@@ -179,6 +179,7 @@ type cryptoAction struct {
 	Proposal  proposalValue // TODO deprecate
 	Round     round
 	Period    period
+	Step      step
 	Pinned    bool
 	TaskIndex int
 }
@@ -198,7 +199,7 @@ func (a cryptoAction) do(ctx context.Context, s *Service) {
 	case verifyPayload:
 		s.demux.verifyPayload(ctx, a.M, a.Round, a.Period, a.Pinned)
 	case verifyBundle:
-		s.demux.verifyBundle(ctx, a.M, a.Round, a.Period)
+		s.demux.verifyBundle(ctx, a.M, a.Round, a.Period, a.Step)
 	}
 }
 
@@ -430,16 +431,16 @@ func relayAction(e messageEvent, tag protocol.Tag, o interface{}) action {
 	return a
 }
 
-func verifyBundleAction(e messageEvent, r round, p period) action {
-	return cryptoAction{T: verifyBundle, M: e.Input, Round: r, Period: p}
-}
-
 func verifyVoteAction(e messageEvent, r round, p period, taskIndex int) action {
 	return cryptoAction{T: verifyVote, M: e.Input, Round: r, Period: p, TaskIndex: taskIndex}
 }
 
 func verifyPayloadAction(e messageEvent, r round, p period, pinned bool) action {
 	return cryptoAction{T: verifyPayload, M: e.Input, Round: r, Period: p, Pinned: pinned}
+}
+
+func verifyBundleAction(e messageEvent, r round, p period, s step) action {
+	return cryptoAction{T: verifyBundle, M: e.Input, Round: r, Period: p, Step: s}
 }
 
 func zeroAction(t actionType) action {

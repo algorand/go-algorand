@@ -520,7 +520,12 @@ func (t *demuxTester) EnsureDigest(Certificate, *AsyncVoteVerifier) {
 }
 
 // implement cryptoVerifier
-func (t *demuxTester) Verify(ctx context.Context, request cryptoRequest) {
+func (t *demuxTester) VerifyProposal(ctx context.Context, request cryptoProposalRequest) {
+	// we don't care about this function in this test.
+}
+
+// implement cryptoVerifier
+func (t *demuxTester) VerifyBundle(ctx context.Context, request cryptoBundleRequest) {
 	// we don't care about this function in this test.
 }
 
