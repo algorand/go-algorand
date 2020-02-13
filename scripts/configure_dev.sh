@@ -22,17 +22,7 @@ if [ "${OS}" = "linux" ]; then
         fi
         sudo apt-get update
         sudo apt-get install -y libboost-all-dev expect jq autoconf shellcheck
-    elif which yum > /dev/null; then
-        if ! which sudo > /dev/null
-        then
-            yum -y update
-            yum -y install sudo
-        fi
-        sudo yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm && \
-        sudo yum update -y && \
-        sudo yum install -y autoconf wget awscli git gnupg2 nfs-utils python36 sqlite3 boost-devel expect jq libtool gcc-c++ libstdc++-devel libstdc++-static rpmdevtools createrepo rpm-sign bzip2 which ShellCheck
     fi
-
     
 elif [ "${OS}" = "darwin" ]; then
     brew update
