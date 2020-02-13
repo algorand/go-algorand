@@ -36,7 +36,6 @@ import (
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/rpcs"
 )
 
 var defaultConfig = config.Local{
@@ -62,13 +61,13 @@ func makeMockFactory(fetcher *MockedFetcher) *MockedFetcherFactory {
 	return &factory
 }
 
-func (factory *MockedFetcherFactory) New() rpcs.Fetcher {
+func (factory *MockedFetcherFactory) New() Fetcher {
 	factory.mu.Lock()
 	defer factory.mu.Unlock()
 	return factory.fetcher
 }
 
-func (factory *MockedFetcherFactory) NewOverGossip(tag protocol.Tag) rpcs.Fetcher {
+func (factory *MockedFetcherFactory) NewOverGossip(tag protocol.Tag) Fetcher {
 	return factory.New()
 }
 
@@ -107,9 +106,9 @@ type MockedFetcher struct {
 	mu          deadlock.Mutex
 }
 
-func (m *MockedFetcher) FetchBlock(ctx context.Context, round basics.Round) (*bookkeeping.Block, *agreement.Certificate, rpcs.FetcherClient, error) {
+func (m *MockedFetcher) FetchBlock(ctx context.Context, round basics.Round) (*bookkeeping.Block, *agreement.Certificate, FetcherClient, error) {
 	if m.timeout {
-		time.Sleep(rpcs.DefaultFetchTimeout + time.Second)
+		time.Sleep(DefaultFetchTimeout + time.Second)
 	}
 	time.Sleep(m.latency)
 
