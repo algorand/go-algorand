@@ -8,7 +8,7 @@ BRANCH="$2"
 CHANNEL="$3"
 RELEASE="$4"
 
-rm -rf pkg/* && mkdir -p pkg/"$FULLVERSION"
+rm -rf pkg && mkdir -p pkg/"$FULLVERSION"
 aws s3 sync s3://"$BUCKET"/"$CHANNEL"/"$RELEASE" pkg/ --exclude "*" --include "*.deb" --include "*.rpm"
 ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@"$INSTANCE" mkdir node_pkg
 # Upload the packages and their signatures.
