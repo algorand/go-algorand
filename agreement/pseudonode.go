@@ -403,29 +403,31 @@ func (t pseudonodeVotesTask) execute(quit chan struct{}) {
 	for _, vote := range votes {
 		totalWeight += vote.Cred.Weight
 	}
-	for _, vote := range votes {
-		logEvent := logspec.AgreementEvent{
-			Type:         logspec.VoteBroadcast,
-			Sender:       vote.R.Sender.String(),
-			Hash:         vote.R.Proposal.BlockDigest.String(),
-			ObjectRound:  uint64(vote.R.Round),
-			ObjectPeriod: uint64(vote.R.Period),
-			ObjectStep:   uint64(vote.R.Step),
-			Weight:       vote.Cred.Weight,
-			WeightTotal:  totalWeight,
+	if t.node.log.IsLevelEnabled(logging.Info) {
+		for _, vote := range votes {
+			logEvent := logspec.AgreementEvent{
+				Type:         logspec.VoteBroadcast,
+				Sender:       vote.R.Sender.String(),
+				Hash:         vote.R.Proposal.BlockDigest.String(),
+				ObjectRound:  uint64(vote.R.Round),
+				ObjectPeriod: uint64(vote.R.Period),
+				ObjectStep:   uint64(vote.R.Step),
+				Weight:       vote.Cred.Weight,
+				WeightTotal:  totalWeight,
+			}
+			t.node.log.with(logEvent).Infof("vote created for broadcast (weight %v, total weight %v)", vote.Cred.Weight, totalWeight)
+			t.node.log.EventWithDetails(telemetryspec.Agreement, telemetryspec.VoteSentEvent, telemetryspec.VoteEventDetails{
+				Address: vote.R.Sender.String(),
+				Hash:    vote.R.Proposal.BlockDigest.String(),
+				Round:   uint64(vote.R.Round),
+				Period:  uint64(vote.R.Period),
+				Step:    uint64(vote.R.Step),
+				Weight:  vote.Cred.Weight,
+				// Recovered: false,
+			})
 		}
-		t.node.log.with(logEvent).Infof("vote created for broadcast (weight %v, total weight %v)", vote.Cred.Weight, totalWeight)
-		t.node.log.EventWithDetails(telemetryspec.Agreement, telemetryspec.VoteSentEvent, telemetryspec.VoteEventDetails{
-			Address: vote.R.Sender.String(),
-			Hash:    vote.R.Proposal.BlockDigest.String(),
-			Round:   uint64(vote.R.Round),
-			Period:  uint64(vote.R.Period),
-			Step:    uint64(vote.R.Step),
-			Weight:  vote.Cred.Weight,
-			// Recovered: false,
-		})
+		t.node.log.Infof("pseudonode.makeVotes: %v votes created for %v at (%v, %v, %v), total weight %v", len(votes), t.prop, t.round, t.period, t.step, totalWeight)
 	}
-	t.node.log.Infof("pseudonode.makeVotes: %v votes created for %v at (%v, %v, %v), total weight %v", len(votes), t.prop, t.round, t.period, t.step, totalWeight)
 
 	if len(votes) > 0 {
 		// wait until the persist state is flushed, as we don't want to send any vote unless we've completed flushing it to disk.
@@ -501,12 +503,14 @@ func (t pseudonodeProposalsTask) execute(quit chan struct{}) {
 			ObjectPeriod: uint64(vote.R.Period),
 		}
 		t.node.log.with(logEvent).Infof("pseudonode.makeProposals: proposal created for (%d, %d)", vote.R.Round, vote.R.Period)
-		t.node.log.EventWithDetails(telemetryspec.Agreement, telemetryspec.BlockProposedEvent, telemetryspec.BlockProposedEventDetails{
-			Hash:    vote.R.Proposal.BlockDigest.String(),
-			Address: vote.R.Sender.String(),
-			Round:   uint64(vote.R.Round),
-			Period:  uint64(vote.R.Period),
-		})
+		if t.node.log.GetTelemetryEnabled() {
+			t.node.log.EventWithDetails(telemetryspec.Agreement, telemetryspec.BlockProposedEvent, telemetryspec.BlockProposedEventDetails{
+				Hash:    vote.R.Proposal.BlockDigest.String(),
+				Address: vote.R.Sender.String(),
+				Round:   uint64(vote.R.Round),
+				Period:  uint64(vote.R.Period),
+			})
+		}
 	}
 	t.node.log.Infof("pseudonode.makeProposals: %d proposals created for round %d, period %d", len(votes), t.round, t.period)
 
