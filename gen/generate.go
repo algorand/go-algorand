@@ -24,6 +24,7 @@ import (
 	"runtime"
 	"sort"
 	"sync"
+	"sync/atomic"
 
 	"github.com/algorand/go-deadlock"
 
@@ -119,8 +120,8 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 	sort.SliceStable(allocation, func(i, j int) bool {
 		return allocation[i].Name < allocation[j].Name
 	})
-	rootKeyCreated := 0
-	partKeyCreated := 0
+	rootKeyCreated := int64(0)
+	partKeyCreated := int64(0)
 
 	pendingWallets := make(chan genesisAllocation, len(allocation))
 	concurrentWalletGenerators := runtime.NumCPU() * 2
@@ -181,7 +182,7 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 					if verbose {
 						verbosedOutput <- fmt.Sprintf("Created new rootkey: %s", wfilename)
 					}
-					rootKeyCreated++
+					atomic.AddInt64(&rootKeyCreated, 1)
 				}
 
 				if partkeyErr != nil && wallet.Online == basics.Online {
@@ -205,7 +206,7 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 					if verbose {
 						verbosedOutput <- fmt.Sprintf("Created new partkey: %s", pfilename)
 					}
-					partKeyCreated++
+					atomic.AddInt64(&partKeyCreated, 1)
 				}
 			}
 
