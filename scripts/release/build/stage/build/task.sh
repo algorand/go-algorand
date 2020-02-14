@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
+# shellcheck disable=1090
+
+set -ex
 
 echo
 date "+build_release begin BUILD stage %Y%m%d_%H%M%S"
 echo
 
-set -ex
+. "${HOME}/build_env"
 
 export GOPATH=${HOME}/go
 export PATH=${HOME}/gpgbin:${GOPATH}/bin:/usr/local/go/bin:${PATH}
@@ -14,8 +17,6 @@ REPO_ROOT="${HOME}"/go/src/github.com/algorand/go-algorand/
 
 cd "${REPO_ROOT}"
 export RELEASE_GENESIS_PROCESS=true
-export HASH="$1"
-export CHANNEL="$2"
 PLATFORM=$("${REPO_ROOT}"/scripts/osarchtype.sh)
 PLATFORM_SPLIT=(${PLATFORM//\// })
 OS=${PLATFORM_SPLIT[0]}
@@ -40,24 +41,17 @@ else
 
     echo ${BUILD_NUMBER} > "${REPO_ROOT}"/buildnumber.dat
 fi
-FULLVERSION=$(PATH=${PATH} "${REPO_ROOT}"/scripts/compute_build_number.sh -f)
-echo "${FULLVERSION}" > "${HOME}"/fullversion.dat
-export FULLVERSION
 
 # a bash user might `source build_env` to manually continue a broken build
-cat <<EOF>>"${HOME}"/build_env
+cat << EOF >> "${HOME}"/build_env
 export RELEASE_GENESIS_PROCESS=${RELEASE_GENESIS_PROCESS}
 PLATFORM=${PLATFORM}
 OS=${OS}
 ARCH=${ARCH}
-export HASH=${HASH}
-export CHANNEL=${CHANNEL}
 export DEFAULTNETWORK=${DEFAULTNETWORK}
 export PKG_ROOT=${PKG_ROOT}
 export VARIATIONS=${VARIATIONS}
 BUILD_NUMBER=${BUILD_NUMBER}
-export FULLVERSION=${FULLVERSION}
-DC_IP=${DC_IP}
 REPO_ROOT=${REPO_ROOT}
 EOF
 

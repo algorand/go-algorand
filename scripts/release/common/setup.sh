@@ -1,28 +1,19 @@
 #!/usr/bin/env bash
 
+set -ex
+
 if [ -z "${BUILDTIMESTAMP}" ]; then
     date "+%Y%m%d_%H%M%S" > "${HOME}/buildtimestamp"
     BUILDTIMESTAMP=$(cat "${HOME}/buildtimestamp")
     export BUILDTIMESTAMP
     echo run "${0}" with output to "${HOME}/buildlog_${BUILDTIMESTAMP}"
-    (bash "${0}" "${1}" "${2}" 2>&1) | tee "${HOME}/buildlog_${BUILDTIMESTAMP}"
+    (bash "${0}" "${1}" 2>&1) | tee "${HOME}/buildlog_${BUILDTIMESTAMP}"
     exit 0
 fi
 
 echo
 date "+build_release begin SETUP stage %Y%m%d_%H%M%S"
 echo
-
-set -ex
-
-GIT_REPO_PATH=https://github.com/algorand/go-algorand
-BRANCH=${1:-"master"}
-export BRANCH
-CHANNEL=${2:-"stable"}
-export CHANNEL
-RELEASE="$3"
-export RELEASE
-export DEBIAN_FRONTEND=noninteractive
 
 sudo apt-get update -q
 sudo apt-get upgrade -q -y
@@ -33,10 +24,15 @@ sudo rngd -r /dev/urandom
 mkdir -p "${HOME}"/{.gnupg,dummyaptly,dummyrepo,go,gpgbin,keys,node_pkg,prodrepo}
 mkdir -p "${HOME}"/go/bin
 
+BRANCH=${1:-"master"}
+export BRANCH
+
 # Check out
 mkdir -p "${HOME}/go/src/github.com/algorand"
-cd "${HOME}/go/src/github.com/algorand" && git clone --single-branch --branch "${BRANCH}" "${GIT_REPO_PATH}" go-algorand
+cd "${HOME}/go/src/github.com/algorand" && git clone --single-branch --branch "${BRANCH}" https://github.com/algorand/go-algorand go-algorand
 # TODO: if we are checking out a release tag, `git tag --verify` it
+
+export DEBIAN_FRONTEND=noninteractive
 
 cd "${HOME}"
 git clone --single-branch --branch deploy_to_prod_ben-branch https://github.com/btoll/go-algorand ben-branch
@@ -51,7 +47,7 @@ GOPATH=$(/usr/local/go/bin/go env GOPATH)
 export PATH=${HOME}/gpgbin:${GOPATH}/bin:/usr/local/go/bin:${PATH}
 export GOPATH
 
-cat <<EOF>"${HOME}/gpgbin/remote_gpg_socket"
+cat << EOF > "${HOME}/gpgbin/remote_gpg_socket"
 export GOPATH=\${HOME}/go
 export PATH=\${HOME}/gpgbin:${GOPATH}/bin:/usr/local/go/bin:${PATH}
 gpgconf --list-dirs | grep agent-socket | awk -F: '{ print \$2 }'
@@ -94,7 +90,7 @@ cat<<EOF>> "${HOME}/.bashrc"
 export EDITOR=vi
 EOF
 
-cat<<EOF>> "${HOME}/.profile"
+cat << EOF >> "${HOME}/.profile"
 export GOPATH=\${HOME}/go
 export PATH=\${HOME}/gpgbin:\${GOPATH}/bin:/usr/local/go/bin:\${PATH}
 EOF
@@ -111,10 +107,11 @@ git checkout v1.4.0
 make install
 
 # a bash user might `source build_env` to manually continue a broken build
-cat <<EOF>>"${HOME}"/build_env
-CHANNEL=${CHANNEL}
-DC_IP=$(curl --silent http://169.254.169.254/latest/meta-data/local-ipv4)
-FULLVERSION=${RELEASE}
+cat << EOF > "${HOME}"/build_env
+export BRANCH=${BRANCH}
+export CHANNEL=$("${GOPATH}"/src/github.com/algorand/go-algorand/scripts/compute_branch_channel.sh "${BRANCH}")
+export DC_IP=$(curl --silent http://169.254.169.254/latest/meta-data/local-ipv4)
+export FULLVERSION=$("${GOPATH}"/src/github.com/algorand/go-algorand/scripts/compute_build_number.sh -f)
 EOF
 
 echo
