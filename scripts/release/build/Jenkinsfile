@@ -1,11 +1,5 @@
-/*
 def REGION = "us-west-1"
 def AMI = "ami-0dd655843c87b6930"
-def TYPE = "t2.2xlarge"
-*/
-
-def REGION = "us-east-2"
-def AMI = "ami-0fc20dd1da406780b"
 def TYPE = "t2.2xlarge"
 
 pipeline {
@@ -71,7 +65,8 @@ pipeline {
         stage("upload") {
             steps {
                 script {
-                    sh script: "scripts/release/build/stage/upload/run.sh ${params.channel} ${params.bucket_location}"
+                    /*sh script: "scripts/release/build/stage/upload/run.sh ${env.GIT_BRANCH} ${params.bucket_location}"*/
+                    sh script: "scripts/release/build/stage/upload/run.sh ${env.GIT_BRANCH}"
                 }
             }
         }

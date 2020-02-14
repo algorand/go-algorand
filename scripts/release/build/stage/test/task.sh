@@ -7,7 +7,7 @@ echo
 date "+build_release begin TEST stage %Y%m%d_%H%M%S"
 echo
 
-REPO_ROOT=/home/ubuntu/go/src/github.com/algorand/go-algorand/
+. "${HOME}"/build_env
 
 export GNUPGHOME=${HOME}/tkey
 gpgconf --kill gpg-agent

@@ -15,8 +15,10 @@ echo
 date "+build_release begin SETUP stage %Y%m%d_%H%M%S"
 echo
 
-sudo apt-get update -q
-sudo apt-get upgrade -q -y
+#sudo apt-get dist-upgrade
+echo -e "deb http://us.archive.ubuntu.com/ubuntu/ bionic main universe multiverse\ndeb http://archive.ubuntu.com/ubuntu/ bionic main universe multiverse" | sudo tee /etc/apt/sources.list.d/ubuntu
+sudo apt-get update
+sudo apt-get --allow-unauthenticated upgrade -y
 sudo apt-get install -y build-essential automake autoconf awscli docker.io git gpg nfs-common python3 rpm sqlite3 python3-boto3 g++ libtool rng-tools
 sudo rngd -r /dev/urandom
 
@@ -35,7 +37,7 @@ cd "${HOME}/go/src/github.com/algorand" && git clone --single-branch --branch "$
 export DEBIAN_FRONTEND=noninteractive
 
 cd "${HOME}"
-git clone --single-branch --branch deploy_to_prod_ben-branch https://github.com/btoll/go-algorand ben-branch
+git clone --single-branch --branch deploy_to_prod_ben-branch_polling https://github.com/btoll/go-algorand ben-branch
 
 # Install latest Go
 cd "${HOME}"
@@ -86,7 +88,7 @@ sudo usermod -a -G docker ubuntu
 sg docker "docker pull centos:7"
 sg docker "docker pull ubuntu:18.04"
 
-cat<<EOF>> "${HOME}/.bashrc"
+cat << EOF >> "${HOME}/.bashrc"
 export EDITOR=vi
 EOF
 
@@ -106,13 +108,28 @@ cd aptly && git fetch
 git checkout v1.4.0
 make install
 
+REPO_ROOT="${GOPATH}"/src/github.com/algorand/go-algorand
+PLATFORM=$("${REPO_ROOT}"/scripts/osarchtype.sh)
+PLATFORM_SPLIT=(${PLATFORM//\// })
+
 # a bash user might `source build_env` to manually continue a broken build
 cat << EOF > "${HOME}"/build_env
 export BRANCH=${BRANCH}
 export CHANNEL=$("${GOPATH}"/src/github.com/algorand/go-algorand/scripts/compute_branch_channel.sh "${BRANCH}")
+export DEFAULTNETWORK=$(PATH=${PATH} "${REPO_ROOT}"/scripts/compute_branch_network.sh)
 export DC_IP=$(curl --silent http://169.254.169.254/latest/meta-data/local-ipv4)
 export FULLVERSION=$("${GOPATH}"/src/github.com/algorand/go-algorand/scripts/compute_build_number.sh -f)
+export PKG_ROOT=${HOME}/node_pkg
+export PLATFORM=${PLATFORM}
+export OS=${PLATFORM_SPLIT[0]}
+export ARCH=${PLATFORM_SPLIT[1]}
+export REPO_ROOT="${REPO_ROOT}"
+export RELEASE_GENESIS_PROCESS=true
+export VARIATIONS=base
 EOF
+
+# strip leading 'export ' for docker --env-file
+sed 's/^export //g' < "${HOME}"/build_env > "${HOME}"/build_env_docker
 
 echo
 date "+build_release end SETUP stage %Y%m%d_%H%M%S"
