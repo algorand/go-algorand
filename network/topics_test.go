@@ -46,7 +46,7 @@ func TestTopics(t *testing.T) {
 	require.Equal(t, "value of key2", string(topics[1].data))
 
 	// Check if can be marshalled without errors
-	buffer, e := topics.MarshalTopics()
+	buffer, e := topics.MarshallTopics()
 	require.Empty(t, e)
 
 	// Check if can be unmarshalled without errors

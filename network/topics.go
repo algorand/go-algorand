@@ -17,11 +17,9 @@
 package network
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"github.com/algorand/go-algorand/crypto"
-	"io"
 )
 
 // Topic is a key-value pair
@@ -33,8 +31,8 @@ type Topic struct {
 // Topics is an array of type Topic
 type Topics []Topic
 
-// MarshalTopics serializes the topics into a byte array
-func (ts Topics) MarshalTopics() (b []byte, e error) {
+// MarshallTopics serializes the topics into a byte array
+func (ts Topics) MarshallTopics() (b []byte, e error) {
 
 	// Calculate the total buffer size required to store the topics
 	bufferSize := binary.MaxVarintLen32 // store topic array size
@@ -63,66 +61,57 @@ func (ts Topics) MarshalTopics() (b []byte, e error) {
 		bidx += n
 	}
 
-	// the size could be smaller than estimated because used
-	// MaxVarintLen32 instead of the real size during estimation
-	if bidx > bufferSize {
-		e = fmt.Errorf("unexpected error during Marshalling")
-	}
-	return buffer, e
+	return buffer[:bidx], e
 }
 
 // UnmarshallTopics unmarshalls the topics from the byte array
 func UnmarshallTopics(buffer []byte) (ts Topics, err error) {
-	reader := bytes.NewReader(buffer)
-
 	// Get the number of topics
-	numTopics, e := binary.ReadUvarint(reader)
-	if e != nil {
-		return nil, e
+	var idx int
+	numTopics, nr := binary.Uvarint(buffer[idx:])
+	if nr <= 0 {
+		return nil, fmt.Errorf("UnmarshallTopics: could not read the number of topics")
 	}
+	idx += nr
 	topics := make([]Topic, numTopics)
 
 	for x := 0; x < int(numTopics); x++ {
 		// read the key length
-		len, e := binary.ReadUvarint(reader)
-		if e != nil {
-			return nil, e
+		strlen, nr := binary.Uvarint(buffer[idx:])
+		if nr <= 0 {
+			return nil, fmt.Errorf("UnmarshallTopics: could not read the key length")
 		}
+		idx += nr
+
 		// read the key
-		tmpBuffer := make([]byte, len)
-		_, e = io.ReadAtLeast(reader, tmpBuffer, int(len))
-		if e != nil {
-			return nil, e
+		if len(buffer) < idx+int(strlen) {
+			return nil, fmt.Errorf("UnmarshallTopics: could not read the key")
 		}
-		topics[x].key = string(tmpBuffer)
+		topics[x].key = string(buffer[idx : idx+int(strlen)])
+		idx += int(strlen)
 
 		// read the data length
-		len, e = binary.ReadUvarint(reader)
-		if e != nil {
-			return nil, e
+		strlen, nr = binary.Uvarint(buffer[idx:])
+		if nr <= 0 {
+			return nil, fmt.Errorf("UnmarshallTopics: could not read the data length")
 		}
+		idx += nr
+
 		// read the data
-		topics[x].data = make([]byte, len)
-		_, e = io.ReadAtLeast(reader, topics[x].data, int(len))
-		if e != nil {
-			return nil, e
+		if len(buffer) < idx+int(strlen) {
+			return nil, fmt.Errorf("UnmarshallTopics: could not read the key")
 		}
+		topics[x].data = make([]byte, strlen)
+		copy(topics[x].data, buffer[idx:idx+int(strlen)])
+		idx += int(strlen)
 	}
-	return topics, e
+	return topics, nil
 }
 
-// Hash returns the hash of serialized topics with nonce added to it
-func (ts Topics)Hash(nonce []byte) (d crypto.Digest, e error) {
-
-	topics, e := ts.MarshalTopics()
-	if e != nil {
-		return d, e
-	}
-	
-	joined := make([]byte, len(topics)+len(nonce))
-	copy(joined, topics)
-	copy(joined[len(topics):], nonce)
-
-	digest := crypto.Hash(joined)
-	return digest, nil
+// Hash returns the hash of serialized topics.
+// Expects the nonce to be already added as a topic
+func Hash(topics []byte) (partialHash uint64, e error) {
+	digest := crypto.Hash(topics)
+	partialHash = digest.TrimUint64()
+	return partialHash, nil
 }
