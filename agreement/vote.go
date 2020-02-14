@@ -182,6 +182,44 @@ func makeVote(rv rawVote, voting crypto.OneTimeSigner, selection *crypto.VRFSecr
 	return unauthenticatedVote{R: rv, Cred: cred, Sig: sig}, nil
 }
 
+// signVote sign a given raw vote and uses the provided credential.
+//
+// signVote returns an error it it fails.
+func signVote(rv rawVote, voting crypto.OneTimeSigner, l Ledger, cred committee.Credential) (vote, error) {
+	proto, err := l.ConsensusParams(ParamsRound(rv.Round))
+	if err != nil {
+		return vote{}, fmt.Errorf("makeVote: could not get consensus params for round %d: %v", ParamsRound(rv.Round), err)
+	}
+
+	if proto.FastPartitionRecovery {
+		switch rv.Step {
+		case propose, soft, cert, late, redo:
+			if rv.Proposal == bottom {
+				logging.Base().Panicf("makeVote: votes from step %d cannot validate bottom", rv.Step)
+			}
+		case down:
+			if rv.Proposal != bottom {
+				logging.Base().Panicf("makeVote: votes from step %d must validate bottom", rv.Step)
+			}
+		}
+	} else {
+		switch rv.Step {
+		case propose, soft, cert:
+			if rv.Proposal == bottom {
+				logging.Base().Panicf("makeVote: votes from step %d cannot validate bottom", rv.Step)
+			}
+		}
+	}
+
+	ephID := basics.OneTimeIDForRound(rv.Round, voting.KeyDilution(proto))
+	sig := voting.Sign(ephID, rv)
+	if (sig == crypto.OneTimeSignature{}) {
+		return vote{}, fmt.Errorf("makeVote: got back empty signature for vote")
+	}
+
+	return vote{R: rv, Cred: cred, Sig: sig}, nil
+}
+
 // ToBeHashed implements the Hashable interface.
 func (rv rawVote) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Vote, protocol.Encode(rv)

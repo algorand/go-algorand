@@ -104,7 +104,7 @@ func MakeService(p Parameters) *Service {
 
 	s.voteVerifier = MakeAsyncVoteVerifier(s.BacklogPool)
 	s.demux = makeDemux(s.Network, s.Ledger, s.BlockValidator, s.voteVerifier, s.EventsProcessingMonitor, s.log)
-	s.loopback = makePseudonode(s.BlockFactory, s.BlockValidator, s.KeyManager, s.Ledger, s.voteVerifier, s.log)
+	s.loopback = makePseudonode(s.BlockFactory, s.BlockValidator, s.KeyManager, s.Ledger, s.voteVerifier, s.voteVerifier.backlogExecPool, s.log)
 	s.persistenceLoop = makeAsyncPersistenceLoop(s.log, s.Accessor, s.Ledger)
 
 	return s

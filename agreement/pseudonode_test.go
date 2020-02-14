@@ -26,6 +26,7 @@ import (
 
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/execpool"
 )
 
 // The serializedPseudonode is the trivial implementation for the pseudonode interface
@@ -141,7 +142,11 @@ func TestPseudonode(t *testing.T) {
 	sLogger := serviceLogger{logging.Base()}
 
 	keyManager := simpleKeyManager(accounts)
-	pb := makePseudonode(testBlockFactory{Owner: 0}, testBlockValidator{}, keyManager, ledger, MakeAsyncVoteVerifier(nil), sLogger)
+	execPool := execpool.MakePool(t)
+	defer execPool.Shutdown()
+	backlogPool := execpool.MakeBacklog(execPool, 0, execpool.LowPriority, t)
+	defer backlogPool.Shutdown()
+	pb := makePseudonode(testBlockFactory{Owner: 0}, testBlockValidator{}, keyManager, ledger, MakeAsyncVoteVerifier(nil), backlogPool, sLogger)
 	defer pb.Quit()
 	spn := makeSerializedPseudonode(testBlockFactory{Owner: 0}, testBlockValidator{}, keyManager, ledger)
 	defer spn.Quit()
@@ -258,7 +263,7 @@ func TestPseudonode(t *testing.T) {
 }
 
 func makeSerializedPseudonode(factory BlockFactory, validator BlockValidator, keys KeyManager, ledger Ledger) pseudonode {
-	return serializedPseudonode{
+	spn := serializedPseudonode{
 		asyncPseudonode: asyncPseudonode{
 			factory:   factory,
 			validator: validator,
@@ -267,6 +272,8 @@ func makeSerializedPseudonode(factory BlockFactory, validator BlockValidator, ke
 			log:       serviceLogger{logging.Base()},
 		},
 	}
+	spn.tasksPool = execpool.MakeBacklog(nil, 0, execpool.HighPriority, &spn)
+	return spn
 }
 
 func (n serializedPseudonode) MakeProposals(ctx context.Context, r round, p period) (outChan <-chan externalEvent, err error) {
@@ -285,7 +292,7 @@ func (n serializedPseudonode) MakeProposals(ctx context.Context, r round, p peri
 	verifiedProposals := make([]cryptoResult, len(proposals))
 
 	for i, vote := range votes {
-		verifier.VerifyVote(ctx, cryptoVoteRequest{message: message{Tag: protocol.AgreementVoteTag, UnauthenticatedVote: vote}})
+		verifier.VerifyVote(ctx, cryptoVoteRequest{message: message{Tag: protocol.AgreementVoteTag, UnauthenticatedVote: vote.u()}})
 		select {
 		case cryptoResult, ok := <-verifier.VerifiedVotes():
 			if !ok {
@@ -364,5 +371,5 @@ func (n serializedPseudonode) MakeVotes(ctx context.Context, r round, p period, 
 }
 
 func (n serializedPseudonode) Quit() {
-	// nothing to do ! this serializedPseudonode is so simplified that no destructor is needed.
+	n.tasksPool.Shutdown()
 }

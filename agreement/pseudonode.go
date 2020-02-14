@@ -22,12 +22,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/logspec"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/execpool"
 )
 
 // AssemblyTime is the max amount of time to spend on generating a proposal block.
@@ -77,6 +80,7 @@ type asyncPseudonode struct {
 	quit      chan struct{}   // a quit signal for the verifier goroutines
 	closeWg   *sync.WaitGroup // frontend waitgroup to get notified when all the verifier goroutines are done.
 	monitor   *coserviceMonitor
+	tasksPool execpool.BacklogPool
 
 	proposalsVerifier *pseudonodeVerifier // dynamically generated verifier goroutine that manages incoming proposals making request.
 	votesVerifier     *pseudonodeVerifier // dynamically generated verifier goroutine that manages incoming votes making request.
@@ -118,13 +122,14 @@ type pseudonodeVerifier struct {
 //msgp:ignore verifiedCryptoResults
 type verifiedCryptoResults []asyncVerifyVoteResponse
 
-func makePseudonode(factory BlockFactory, validator BlockValidator, keys KeyManager, ledger Ledger, voteVerifier *AsyncVoteVerifier, log serviceLogger) pseudonode {
+func makePseudonode(factory BlockFactory, validator BlockValidator, keys KeyManager, ledger Ledger, voteVerifier *AsyncVoteVerifier, tasksPool execpool.BacklogPool, log serviceLogger) pseudonode {
 	pn := asyncPseudonode{
 		factory:   factory,
 		validator: validator,
 		keys:      keys,
 		ledger:    ledger,
 		log:       log,
+		tasksPool: tasksPool,
 		quit:      make(chan struct{}),
 		closeWg:   &sync.WaitGroup{},
 	}
@@ -249,38 +254,128 @@ func (n asyncPseudonode) getParticipations(procName string, round basics.Round) 
 	return participations
 }
 
-// makeProposals creates a slice of block proposals for the given round and period.
-func (n asyncPseudonode) makeProposals(round basics.Round, period period, accounts []account.Participation) ([]proposal, []unauthenticatedVote) {
-	deadline := time.Now().Add(AssemblyTime)
-	ve, err := n.factory.AssembleBlock(round, deadline)
+type roundParticipationCredentials struct {
+	account      account.Participation
+	cred         committee.Credential
+	err          error
+	balanceRound basics.Round
+	selector     selector
+	proto        config.ConsensusParams
+	totalMoney   basics.MicroAlgos
+	index        int
+}
+
+func (n asyncPseudonode) checkParticipationCredentials(arg interface{}) interface{} {
+	p := arg.(*roundParticipationCredentials)
+	record, err := n.ledger.BalanceRecord(p.balanceRound, p.account.Address())
 	if err != nil {
-		n.log.Errorf("pseudonode.makeProposals: could not generate a proposal for round %d: %v", round, err)
+		p.err = err
+		return p
+	}
+
+	cred := committee.MakeCredential(&p.account.VRFSecrets().SK, p.selector)
+	p.cred, p.err = cred.Verify(p.proto, committee.Membership{Record: record, Selector: p.selector, TotalMoney: p.totalMoney})
+	if p.err != nil {
+		// account not selected.
+		return p
+	}
+	return p
+}
+
+// makeProposals creates a slice of block proposals for the given round and period.
+func (n asyncPseudonode) makeProposals(round basics.Round, period period, accounts []account.Participation) ([]proposal, []vote) {
+	proto, err := n.ledger.ConsensusParams(ParamsRound(round))
+	if err != nil {
 		return nil, nil
 	}
 
-	votes := make([]unauthenticatedVote, 0, len(accounts))
-	proposals := make([]proposal, 0, len(accounts))
-	for _, account := range accounts {
-		payload, proposal, err := proposalForBlock(account.Address(), account.VRFSecrets(), ve, period, n.ledger)
+	seedRound := seedRound(round, proto)
+	seed, err := n.ledger.Seed(seedRound)
+	if err != nil {
+		err = fmt.Errorf("asyncPseudonode.makeProposals (r=%d): Failed to obtain seed in round %d: %v", round, seedRound, err)
+		return nil, nil
+	}
+	balanceRound := balanceRound(round, proto)
+	total, err := n.ledger.Circulation(balanceRound)
+	if err != nil {
+		err = fmt.Errorf("asyncPseudonode.makeProposals (r=%d): Failed to obtain total circulation in round %d: %v", round, balanceRound, err)
+		return nil, nil
+	}
+
+	sel := makeSelector(seed, round, period, propose)
+
+	credentialsCh := make(chan interface{}, len(accounts))
+	for i, account := range accounts {
+		roundParticipationCredential := &roundParticipationCredentials{
+			account:      account,
+			balanceRound: balanceRound,
+			selector:     sel,
+			totalMoney:   total,
+			proto:        proto,
+			index:        i,
+		}
+		if n.tasksPool.EnqueueBacklog(
+			context.Background(),
+			n.checkParticipationCredentials,
+			roundParticipationCredential,
+			credentialsCh) != nil {
+			return nil, nil
+		}
+	}
+
+	haveBlock := false
+	var ve ValidatedBlock
+	votes := make([]vote, len(accounts))
+	proposals := make([]proposal, len(accounts))
+	for i := 0; i < len(accounts); i++ {
+		// read one crypto result at a time.
+		part := (<-credentialsCh).(*roundParticipationCredentials)
+		if part.err != nil {
+			// this account was not selected. keep going.
+			continue
+		}
+
+		// this account was selected. do we have a block ready ? if not, we should make one.
+		if !haveBlock {
+			haveBlock = true
+			deadline := time.Now().Add(AssemblyTime)
+			ve, err = n.factory.AssembleBlock(round, deadline)
+			if err != nil {
+				n.log.Errorf("pseudonode.makeProposals: could not generate a proposal for round %d: %v", round, err)
+				return nil, nil
+			}
+		}
+		// we have a cert and a block.
+		payload, proposal, err := proposalForBlock(part.account.Address(), part.account.VRFSecrets(), ve, period, n.ledger)
 		if err != nil {
-			n.log.Errorf("pseudonode.makeProposals: could not create proposal for block (address %v): %v", account.Address(), err)
+			n.log.Errorf("pseudonode.makeProposals: could not create proposal for block (address %v): %v", part.account.Address(), err)
 			continue
 		}
 
 		// attempt to make the vote
-		rv := rawVote{Sender: account.Address(), Round: round, Period: period, Step: propose, Proposal: proposal}
-		uv, err := makeVote(rv, account.VotingSigner(), account.VRFSecrets(), n.ledger)
+		rv := rawVote{Sender: part.account.Address(), Round: round, Period: period, Step: propose, Proposal: proposal}
+		vote, err := signVote(rv, part.account.VotingSigner(), n.ledger, part.cred)
 		if err != nil {
 			n.log.Warnf("pseudonode.makeProposals: could not create vote: %v", err)
 			continue
 		}
-
 		// create the block proposal
-		proposals = append(proposals, payload)
-		votes = append(votes, uv)
+		votes[part.index] = vote
+		proposals[part.index] = payload
 	}
 
-	return proposals, votes
+	// omit unpopulated entries from votes/proposals.
+	usedEntries := 0
+	for i := 0; i < len(accounts); i++ {
+		if votes[i].R.Round == 0 {
+			continue
+		}
+		votes[usedEntries] = votes[i]
+		proposals[usedEntries] = proposals[i]
+		usedEntries++
+	}
+
+	return proposals[:usedEntries], votes[:usedEntries]
 }
 
 // makeVotes creates a slice of votes for a given proposal value in a given
@@ -450,31 +545,8 @@ func (t pseudonodeProposalsTask) execute(verifier *AsyncVoteVerifier, quit chan 
 	// It's not immediately obvious how to log a diff, we may need to change the interface.
 	// For now, don't log at all, and revisit when the metric becomes more important.
 
-	results := make(chan asyncVerifyVoteResponse, len(votes))
-	for i, uv := range votes {
-		msg := message{Tag: protocol.AgreementVoteTag, UnauthenticatedVote: uv}
-		verifier.verifyVote(context.TODO(), t.node.ledger, uv, i, msg, results)
-	}
+	for _, vote := range votes {
 
-	cryptoOutputs := make([]asyncVerifyVoteResponse, len(votes))
-	for i := 0; i < len(votes); i++ {
-		resp := <-results
-		cryptoOutputs[resp.index] = resp
-	}
-
-	var verifiedVotes []asyncVerifyVoteResponse
-	var verifiedPayloads []proposal
-
-	for i := range cryptoOutputs {
-		if cryptoOutputs[i].err != nil {
-			// this is normal and happens every time an account isn't self-selected for voting.
-			continue
-		}
-
-		verifiedVotes = append(verifiedVotes, cryptoOutputs[i])
-		verifiedPayloads = append(verifiedPayloads, payloads[i])
-
-		vote := cryptoOutputs[i].v
 		logEvent := logspec.AgreementEvent{
 			Type:         logspec.ProposalBroadcast,
 			Hash:         vote.R.Proposal.BlockDigest.String(),
@@ -491,20 +563,26 @@ func (t pseudonodeProposalsTask) execute(verifier *AsyncVoteVerifier, quit chan 
 			})
 		}
 	}
-	t.node.log.Infof("pseudonode.makeProposals: %d proposals created for round %d, period %d", len(verifiedVotes), t.round, t.period)
+	t.node.log.Infof("pseudonode.makeProposals: %d proposals created for round %d, period %d", len(votes), t.round, t.period)
 
-	for range verifiedVotes {
+	for range votes {
 		t.node.monitor.inc(pseudonodeCoserviceType)
 	}
-	for range verifiedPayloads {
+	for range payloads {
 		t.node.monitor.inc(pseudonodeCoserviceType)
 	}
 	t.node.monitor.dec(pseudonodeCoserviceType)
 
 	// push results into channel.
-	for _, r := range verifiedVotes {
+	for _, r := range votes {
 		select {
-		case t.out <- messageEvent{T: voteVerified, Input: r.message, Err: makeSerErr(r.err)}:
+		case t.out <- messageEvent{
+			T: voteVerified,
+			Input: message{
+				Tag:                 protocol.AgreementVoteTag,
+				UnauthenticatedVote: r.u(),
+				Vote:                r},
+			Err: makeSerErr(nil)}:
 		case <-quit:
 			return
 		case <-t.context.Done():
@@ -513,7 +591,7 @@ func (t pseudonodeProposalsTask) execute(verifier *AsyncVoteVerifier, quit chan 
 		}
 	}
 
-	for _, payload := range verifiedPayloads {
+	for _, payload := range payloads {
 		msg := message{Tag: protocol.ProposalPayloadTag, UnauthenticatedProposal: payload.u(), Proposal: payload}
 		select {
 		case t.out <- messageEvent{T: payloadVerified, Input: msg}:
