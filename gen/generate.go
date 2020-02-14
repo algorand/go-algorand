@@ -130,6 +130,7 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 	var writeMu deadlock.Mutex
 
 	createWallet := func() {
+		var err error
 		defer creatingWalletsWaitGroup.Done()
 		for {
 			var wallet genesisAllocation
