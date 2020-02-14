@@ -1,24 +1,13 @@
 #!/usr/bin/env bash
 # shellcheck disable=2029
 
-# This is temporary (taken from `compute_branch_channel.sh`).
-if [ "$1" = "master" ]; then
-    CHANNEL=master
-elif [ "$1" = "rel/nightly" ]; then
-    CHANNEL=nightly
-elif [ "$1" = "rel/stable" ]; then
-    CHANNEL=stable
-elif [ "$1" = "rel/beta" ]; then
-    CHANNEL=beta
-else
-    CHANNEL=dev
-fi
-
 # Path(s) are relative to the root of the Jenkins workspace.
 INSTANCE=$(cat scripts/release/common/ec2/tmp/instance)
 #BUCKET="$1"
 BRANCH="$1"
-RELEASE="$4"
+BUILD_ENV=$(ssh -i ReleaseBuildInstanceKey.pem -o -A ubuntu@"$INSTANCE" cat build_env)
+CHANNEL=$(sed -n 's/.*CHANNEL=\(.*\)/\1/p' <<< "$BUILD_ENV")
+RELEASE=$(sed -n 's/.*FULLVERSION=\(.*\)/\1/p' <<< "$BUILD_ENV")
 
 rm -rf pkg/* && mkdir -p pkg/"$FULLVERSION"
 #aws s3 sync s3://"$BUCKET"/"$CHANNEL"/"$RELEASE" pkg/ --exclude "*" --include "*.deb" --include "*.rpm"

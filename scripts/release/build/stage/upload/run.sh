@@ -2,24 +2,11 @@
 
 # Path(s) are relative to the root of the Jenkins workspace.
 
-# This is temporary (taken from `compute_branch_channel.sh`).
-if [ "$1" = "master" ]; then
-    CHANNEL=master
-elif [ "$1" = "rel/nightly" ]; then
-    CHANNEL=nightly
-elif [ "$1" = "rel/stable" ]; then
-    CHANNEL=stable
-elif [ "$1" = "rel/beta" ]; then
-    CHANNEL=beta
-else
-    CHANNEL=dev
-fi
-
 #BUCKET_LOCATION="$2"
 INSTANCE=$(cat scripts/release/common/ec2/tmp/instance)
-
-scp -i ReleaseBuildInstanceKey.pem -o StrictHostKeyChecking=no -r ubuntu@"$INSTANCE":~/fullversion.dat .
-FULLVERSION=$(cat fullversion.dat)
+BUILD_ENV=$(ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@"$INSTANCE" cat /home/ubuntu/build_env)
+CHANNEL=$(sed -n 's/.*CHANNEL=\(.*\)/\1/p' <<< "$BUILD_ENV")
+FULLVERSION=$(sed -n 's/.*FULLVERSION=\(.*\)/\1/p' <<< "$BUILD_ENV")
 
 rm -rf pkg && mkdir -p pkg/"$FULLVERSION"
 

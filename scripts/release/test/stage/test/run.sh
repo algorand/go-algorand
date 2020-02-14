@@ -2,20 +2,9 @@
 
 # Path(s) are relative to the root of the Jenkins workspace.
 
-# This is temporary (taken from `compute_branch_channel.sh`).
-if [ "$1" = "master" ]; then
-    CHANNEL=master
-elif [ "$1" = "rel/nightly" ]; then
-    CHANNEL=nightly
-elif [ "$1" = "rel/stable" ]; then
-    CHANNEL=stable
-elif [ "$1" = "rel/beta" ]; then
-    CHANNEL=beta
-else
-    CHANNEL=dev
-fi
-
 INSTANCE=$(cat scripts/release/common/ec2/tmp/instance)
+BUILD_ENV=$(ssh -i ReleaseBuildInstanceKey.pem -o -A ubuntu@"$INSTANCE" cat build_env)
+CHANNEL=$(sed -n 's/.*CHANNEL=\(.*\)/\1/p' <<< "$BUILD_ENV")
 
 rm -rf ./*.deb ./*.rpm
 #python3 scripts/get_current_installers.py "$1/$CHANNEL"
