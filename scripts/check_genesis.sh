@@ -8,8 +8,6 @@ mkdir -p ${TEMPDIR}/gen
 
 GOPATH=$(go env GOPATH)
 
-cd ${GOPATH}/src/github.com/algorand/go-algorand
-
 if [ "${DEFAULTNETWORK}" = "" ]; then
     DEFAULTNETWORK=$(./scripts/compute_branch_network.sh)
 fi

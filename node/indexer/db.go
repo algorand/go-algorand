@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -118,12 +118,13 @@ func (idb *DB) AddBlock(b bookkeeping.Block) error {
 		}
 		defer stmt.Close()
 
-		payset, err := b.DecodePayset()
+		payset, err := b.DecodePaysetFlat()
 		if err != nil {
 			return err
 		}
-		for _, txn := range payset {
-			_, err = stmt.Exec(txn.ID().String(), txn.Txn.Sender.String(), txn.Txn.Receiver.String(), b.Round(), b.TimeStamp)
+		for _, txad := range payset {
+			txn := txad.SignedTxn
+			_, err = stmt.Exec(txn.ID().String(), txn.Txn.Sender.String(), txn.Txn.GetReceiverAddress().String(), b.Round(), b.TimeStamp)
 			if err != nil {
 				return err
 			}
@@ -173,7 +174,7 @@ func (idb *DB) GetTransactionByID(txid string) (Transaction, error) {
 // if top is 0, it will return 25 transactions by default
 func (idb *DB) GetTransactionsRoundsByAddr(addr string, top uint64) ([]uint64, error) {
 	query := `
-		SELECT 
+		SELECT DISTINCT
 			round
 		FROM
 			transactions
@@ -219,7 +220,7 @@ func (idb *DB) GetTransactionsRoundsByAddr(addr string, top uint64) ([]uint64, e
 // if top is 0, it will return 100 transactions by default
 func (idb *DB) GetTransactionsRoundsByAddrAndDate(addr string, top uint64, from, to int64) ([]uint64, error) {
 	query := `
-		SELECT
+		SELECT DISTINCT
 			round
 		FROM
 			transactions

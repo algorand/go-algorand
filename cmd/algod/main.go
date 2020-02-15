@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -37,6 +37,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/tools/network"
 	"github.com/algorand/go-algorand/util/metrics"
 	"github.com/algorand/go-algorand/util/tokens"
 )
@@ -73,13 +74,12 @@ func main() {
 		rand.Seed(time.Now().UnixNano())
 	}
 
-	version := config.GetCurrentVersion()
 	if *versionCheck {
-		fmt.Printf("%d\n%s.%s [%s] (commit #%s)\n%s\n", version.AsUInt64(), version.String(),
-			version.Channel, version.Branch, version.GetCommitHash(), config.GetLicenseInfo())
+		fmt.Println(config.FormatVersionAndLicense())
 		return
 	}
 
+	version := config.GetCurrentVersion()
 	heartbeatGauge := metrics.MakeStringGauge()
 	heartbeatGauge.Set("version", version.String())
 	heartbeatGauge.Set("version-num", strconv.FormatUint(version.AsUInt64(), 10))
@@ -153,22 +153,39 @@ func main() {
 	}
 	defer fileLock.Unlock()
 
+	cfg, err := config.LoadConfigFromDisk(absolutePath)
+	if err != nil && !os.IsNotExist(err) {
+		// log is not setup yet, this will log to stderr
+		log.Fatalf("Cannot load config: %v", err)
+	}
+
+	err = config.LoadConfigurableConsensusProtocols(absolutePath)
+	if err != nil {
+		// log is not setup yet, this will log to stderr
+		log.Fatalf("Unable to load optional consensus protocols file: %v", err)
+	}
+
 	// Enable telemetry hook in daemon to send logs to cloud
 	// If ALGOTEST env variable is set, telemetry is disabled - allows disabling telemetry for tests
 	isTest := os.Getenv("ALGOTEST") != ""
+	remoteTelemetryEnabled := false
 	if !isTest {
-		telemetryConfig, err := logging.EnsureTelemetryConfig(nil, genesis.ID())
+		telemetryConfig, err := logging.EnsureTelemetryConfig(&dataDir, genesis.ID())
 		if err != nil {
 			fmt.Fprintln(os.Stdout, "error loading telemetry config", err)
 		}
-
-		// Apply telemetry override.
-		hasOverride, override := logging.TelemetryOverride(*telemetryOverride)
-		if hasOverride {
-			telemetryConfig.Enable = override
+		if os.IsPermission(err) {
+			fmt.Fprintf(os.Stderr, "Permission error on accessing telemetry config: %v", err)
+			os.Exit(1)
 		}
 
-		if telemetryConfig.Enable {
+		telemetryConfig.SendToLog = telemetryConfig.SendToLog || cfg.TelemetryToLog
+
+		// Apply telemetry override.
+		telemetryConfig.Enable = logging.TelemetryOverride(*telemetryOverride)
+		remoteTelemetryEnabled = telemetryConfig.Enable
+
+		if telemetryConfig.Enable || telemetryConfig.SendToLog {
 			// If session GUID specified, use it.
 			if *sessionGUID != "" {
 				if len(*sessionGUID) == 36 {
@@ -179,46 +196,12 @@ func main() {
 			if err != nil {
 				fmt.Fprintln(os.Stdout, "error creating telemetry hook", err)
 			}
-
-			if log.GetTelemetryEnabled() {
-				currentVersion := config.GetCurrentVersion()
-				startupDetails := telemetryspec.StartupEventDetails{
-					Version:      currentVersion.String(),
-					CommitHash:   currentVersion.CommitHash,
-					Branch:       currentVersion.Branch,
-					Channel:      currentVersion.Channel,
-					InstanceHash: crypto.Hash([]byte(absolutePath)).String(),
-				}
-
-				log.EventWithDetails(telemetryspec.ApplicationState, telemetryspec.StartupEvent, startupDetails)
-				// Send a heartbeat event every 10 minutes as a sign of life
-				ticker := time.NewTicker(10 * time.Minute)
-				go func() {
-					values := make(map[string]string)
-					for {
-						metrics.DefaultRegistry().AddMetrics(values)
-
-						heartbeatDetails := telemetryspec.HeartbeatEventDetails{
-							Metrics: values,
-						}
-
-						log.EventWithDetails(telemetryspec.ApplicationState, telemetryspec.HeartbeatEvent, heartbeatDetails)
-						<-ticker.C
-					}
-				}()
-			}
 		}
 	}
 
 	s := algod.Server{
 		RootPath: absolutePath,
 		Genesis:  genesis,
-	}
-
-	cfg, err := config.LoadConfigFromDisk(s.RootPath)
-	if err != nil && !os.IsNotExist(err) {
-		// log is not setup yet, this will log to stderr
-		log.Fatalf("Cannot load config: %v", err)
 	}
 
 	// Generate a REST API token if one was not provided
@@ -238,6 +221,7 @@ func main() {
 	}
 
 	// If overriding peers, disable SRV lookup
+	telemetryDNSBootstrapID := cfg.DNSBootstrapID
 	var peerOverrideArray []string
 	if *peerOverride != "" {
 		peerOverrideArray = strings.Split(*peerOverride, ";")
@@ -285,6 +269,59 @@ func main() {
 		deadlockState = "disabled"
 	}
 	fmt.Fprintf(os.Stdout, "Deadlock detection is set to: %s (Default state is '%s')\n", deadlockState, config.DefaultDeadlock)
+
+	if log.GetTelemetryEnabled() {
+		done := make(chan struct{})
+		defer close(done)
+
+		// Make a copy of config and reset DNSBootstrapID in case it was disabled.
+		cfgCopy := cfg
+		cfgCopy.DNSBootstrapID = telemetryDNSBootstrapID
+
+		// If the telemetry URI is not set, periodically check SRV records for new telemetry URI
+		if remoteTelemetryEnabled && log.GetTelemetryURI() == "" {
+			network.StartTelemetryURIUpdateService(time.Minute, cfg, s.Genesis.Network, log, done)
+		}
+
+		currentVersion := config.GetCurrentVersion()
+		startupDetails := telemetryspec.StartupEventDetails{
+			Version:      currentVersion.String(),
+			CommitHash:   currentVersion.CommitHash,
+			Branch:       currentVersion.Branch,
+			Channel:      currentVersion.Channel,
+			InstanceHash: crypto.Hash([]byte(absolutePath)).String(),
+		}
+
+		log.EventWithDetails(telemetryspec.ApplicationState, telemetryspec.StartupEvent, startupDetails)
+
+		// Send a heartbeat event every 10 minutes as a sign of life
+		go func() {
+			ticker := time.NewTicker(10 * time.Minute)
+			defer ticker.Stop()
+
+			sendHeartbeat := func() {
+				values := make(map[string]string)
+				metrics.DefaultRegistry().AddMetrics(values)
+
+				heartbeatDetails := telemetryspec.HeartbeatEventDetails{
+					Metrics: values,
+				}
+
+				log.EventWithDetails(telemetryspec.ApplicationState, telemetryspec.HeartbeatEvent, heartbeatDetails)
+			}
+
+			// Send initial heartbeat, followed by one every 10 minutes.
+			sendHeartbeat()
+			for {
+				select {
+				case <-ticker.C:
+					sendHeartbeat()
+				case <-done:
+					return
+				}
+			}
+		}()
+	}
 
 	s.Start()
 }

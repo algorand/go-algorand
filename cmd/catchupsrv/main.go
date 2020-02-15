@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,15 +17,18 @@
 package main
 
 import (
+	"encoding/base64"
 	"flag"
-	"fmt"
 	"io/ioutil"
 	"net/http"
+	"path"
 	"strconv"
 
 	"github.com/algorand/websocket"
 	"github.com/gorilla/mux"
 
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/rpcs"
 )
@@ -35,6 +38,9 @@ var dirFlag = flag.String("dir", "", "Directory containing catchup blocks")
 
 func main() {
 	flag.Parse()
+
+	log := logging.Base()
+	log.SetLevel(logging.Info)
 
 	if *dirFlag == "" {
 		panic("Must specify -dir")
@@ -59,8 +65,12 @@ func main() {
 		pathVars := mux.Vars(r)
 		genesisID := pathVars["genesisID"]
 
+		var rnd [10]byte
+		crypto.RandBytes(rnd[:])
+
 		requestHeader := make(http.Header)
 		requestHeader.Set(network.GenesisHeader, genesisID)
+		requestHeader.Set(network.NodeRandomHeader, base64.StdEncoding.EncodeToString(rnd[:]))
 		requestHeader.Set(network.ProtocolVersionHeader, "1")
 
 		conn, err := upgrader.Upgrade(w, r, requestHeader)
@@ -84,10 +94,24 @@ func main() {
 		roundStr := pathVars["round"]
 		genesisID := pathVars["genesisID"]
 
-		data, err := ioutil.ReadFile(fmt.Sprintf("%s/v%s/%s/block/%s",
-			*dirFlag, versionStr, genesisID, roundStr))
+		blkPath, err := stringBlockToPath(roundStr)
 		if err != nil {
-			fmt.Printf("%s %s: %v\n", r.Method, r.URL, err)
+			log.Infof("%s %s: %v", r.Method, r.URL, err)
+			http.NotFound(w, r)
+			return
+		}
+
+		data, err := ioutil.ReadFile(
+			path.Join(
+				*dirFlag,
+				"v"+versionStr,
+				genesisID,
+				"block",
+				blkPath,
+			),
+		)
+		if err != nil {
+			log.Infof("%s %s: %v", r.Method, r.URL, err)
 			http.NotFound(w, r)
 			return
 		}

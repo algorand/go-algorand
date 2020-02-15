@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -253,7 +253,7 @@ func (cfg DeployedNetwork) BuildNetworkFromTemplate(buildCfg BuildConfig, rootDi
 	if cfg.useExistingGenesis {
 		fmt.Println(" *** using existing genesis files ***")
 	} else {
-		if err = gen.GenerateGenesisFiles(cfg.GenesisData, genesisFolder); err != nil {
+		if err = gen.GenerateGenesisFiles(cfg.GenesisData, config.Consensus, genesisFolder, true); err != nil {
 			return
 		}
 	}

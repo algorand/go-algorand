@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -37,14 +37,6 @@ type PaymentTxnFields struct {
 	CloseRemainderTo basics.Address `codec:"close"`
 }
 
-func (payment PaymentTxnFields) senderDeductions() (amount basics.MicroAlgos, empty bool) {
-	amount = payment.Amount
-	if payment.CloseRemainderTo != (basics.Address{}) {
-		empty = true
-	}
-	return
-}
-
 func (payment PaymentTxnFields) checkSpender(header Header, spec SpecialAddresses, proto config.ConsensusParams) error {
 	if header.Sender == payment.CloseRemainderTo {
 		return fmt.Errorf("transaction cannot close account to its sender %v", header.Sender)
@@ -79,7 +71,7 @@ func (payment PaymentTxnFields) apply(header Header, balances Balances, spec Spe
 	}
 
 	if payment.CloseRemainderTo != (basics.Address{}) {
-		rec, err := balances.Get(header.Sender)
+		rec, err := balances.Get(header.Sender, true)
 		if err != nil {
 			return err
 		}
@@ -92,9 +84,21 @@ func (payment PaymentTxnFields) apply(header Header, balances Balances, spec Spe
 		}
 
 		// Confirm that we have no balance left
-		rec, err = balances.Get(header.Sender)
+		rec, err = balances.Get(header.Sender, true)
 		if !rec.AccountData.MicroAlgos.IsZero() {
 			return fmt.Errorf("balance %d still not zero after CloseRemainderTo", rec.AccountData.MicroAlgos.Raw)
+		}
+
+		// Confirm that there is no asset-related state in the account
+		if len(rec.Assets) > 0 {
+			return fmt.Errorf("cannot close: %d outstanding assets", len(rec.Assets))
+		}
+
+		if len(rec.AssetParams) > 0 {
+			// This should be impossible because every asset created
+			// by an account (in AssetParams) must also appear in Assets,
+			// which we checked above.
+			return fmt.Errorf("cannot close: %d outstanding created assets", len(rec.AssetParams))
 		}
 
 		// Clear out entire account record, to allow the DB to GC it

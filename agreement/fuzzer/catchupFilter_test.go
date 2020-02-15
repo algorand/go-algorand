@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -86,7 +86,7 @@ func (n *CatchupFilter) Tick(newClockTime int) bool {
 	if n.debugMessage {
 		fmt.Printf("Node %d catching up on clock %d\n", n.nodeID, newClockTime)
 	}
-	n.fuzzer.Catchup(n.nodeID)
+	n.fuzzer.StartCatchingUp(n.nodeID)
 	caughtUpLedgerRound := n.fuzzer.ledgers[n.nodeID].NextRound()
 	if n.debugMessage {
 		fmt.Printf("Node %d caught up from round %d to round %d\n", n.nodeID, currentLedgerRound, caughtUpLedgerRound)

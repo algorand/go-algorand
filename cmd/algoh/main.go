@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -31,10 +31,12 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/client"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/shared/algoh"
+	"github.com/algorand/go-algorand/tools/network"
 	"github.com/algorand/go-algorand/util"
 )
 
@@ -65,7 +67,7 @@ func main() {
 	flag.Parse()
 	nc := getNodeController()
 
-	genesisID, err := nc.GetGenesisID()
+	genesis, err := nc.GetGenesis()
 	if err != nil {
 		fmt.Fprintln(os.Stdout, "error loading telemetry config", err)
 		return
@@ -76,10 +78,7 @@ func main() {
 	config.UpdateVersionDataDir(absolutePath)
 
 	if *versionCheck {
-		version := config.GetCurrentVersion()
-		versionInfo := version.AsUInt64()
-		fmt.Printf("%d\n%s.%s [%s] (commit #%s)\n", versionInfo, version.String(),
-			version.Channel, version.Branch, version.GetCommitHash())
+		fmt.Println(config.FormatVersionAndLicense())
 		return
 	}
 
@@ -103,8 +102,9 @@ func main() {
 	}
 	validateConfig(algohConfig)
 
+	done := make(chan struct{})
 	log := logging.Base()
-	configureLogging(genesisID, log, absolutePath)
+	configureLogging(genesis, log, absolutePath, done)
 	defer log.CloseTelemetry()
 
 	exeDir, err = util.ExeDir()
@@ -114,7 +114,6 @@ func main() {
 
 	var errorOutput stdCollector
 	var output stdCollector
-	done := make(chan struct{})
 	go func() {
 		args := make([]string, len(os.Args)-1)
 		copy(args, os.Args[1:]) // Copy our arguments (skip the executable)
@@ -252,7 +251,7 @@ func getNodeController() nodecontrol.NodeController {
 	return nc
 }
 
-func configureLogging(genesisID string, log logging.Logger, rootPath string) {
+func configureLogging(genesis bookkeeping.Genesis, log logging.Logger, rootPath string, abort chan struct{}) {
 	log = logging.Base()
 
 	liveLog := fmt.Sprintf("%s/host.log", rootPath)
@@ -265,7 +264,7 @@ func configureLogging(genesisID string, log logging.Logger, rootPath string) {
 	log.SetJSONFormatter()
 	log.SetLevel(logging.Debug)
 
-	initTelemetry(genesisID, log, rootPath)
+	initTelemetry(genesis, log, rootPath, abort)
 
 	// if we have the telemetry enabled, we want to use it's sessionid as part of the
 	// collected metrics decorations.
@@ -274,22 +273,19 @@ func configureLogging(genesisID string, log logging.Logger, rootPath string) {
 	fmt.Fprintln(writer, "++++++++++++++++++++++++++++++++++++++++")
 }
 
-func initTelemetry(genesisID string, log logging.Logger, dataDirectory string) {
+func initTelemetry(genesis bookkeeping.Genesis, log logging.Logger, dataDirectory string, abort chan struct{}) {
 	// Enable telemetry hook in daemon to send logs to cloud
 	// If ALGOTEST env variable is set, telemetry is disabled - allows disabling telemetry for tests
 	isTest := os.Getenv("ALGOTEST") != ""
 	if !isTest {
-		telemetryConfig, err := logging.EnsureTelemetryConfig(nil, genesisID)
+		telemetryConfig, err := logging.EnsureTelemetryConfig(&dataDirectory, genesis.ID())
 		if err != nil {
 			fmt.Fprintln(os.Stdout, "error loading telemetry config", err)
 			return
 		}
 
 		// Apply telemetry override.
-		hasOverride, override := logging.TelemetryOverride(*telemetryOverride)
-		if hasOverride {
-			telemetryConfig.Enable = override
-		}
+		telemetryConfig.Enable = logging.TelemetryOverride(*telemetryOverride)
 
 		if telemetryConfig.Enable {
 			err = log.EnableTelemetry(telemetryConfig)
@@ -297,13 +293,25 @@ func initTelemetry(genesisID string, log logging.Logger, dataDirectory string) {
 				fmt.Fprintln(os.Stdout, "error creating telemetry hook", err)
 				return
 			}
-			// For privacy concerns, we don't want to provide the full data directory to telemetry.
-			// But to be useful where multiple nodes are installed for convenience, we should be
-			// able to discriminate between instances with the last letter of the path.
-			if dataDirectory != "" {
-				dataDirectory = dataDirectory[len(dataDirectory)-1:]
-			}
+
 			if log.GetTelemetryEnabled() {
+				cfg, err := config.LoadConfigFromDisk(dataDirectory)
+				if err != nil && !os.IsNotExist(err) {
+					log.Fatalf("Cannot load config: %v", err)
+				}
+
+				// If the telemetry URI is not set, periodically check SRV records for new telemetry URI
+				if log.GetTelemetryURI() == "" {
+					network.StartTelemetryURIUpdateService(time.Minute, cfg, genesis.Network, log, abort)
+				}
+
+				// For privacy concerns, we don't want to provide the full data directory to telemetry.
+				// But to be useful where multiple nodes are installed for convenience, we should be
+				// able to discriminate between instances with the last letter of the path.
+				if dataDirectory != "" {
+					dataDirectory = dataDirectory[len(dataDirectory)-1:]
+				}
+
 				currentVersion := config.GetCurrentVersion()
 				startupDetails := telemetryspec.StartupEventDetails{
 					Version:      currentVersion.String(),

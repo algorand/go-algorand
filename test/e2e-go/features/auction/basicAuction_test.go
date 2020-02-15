@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@ package auction
 
 import (
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -35,6 +36,12 @@ func detectAuctionCannotProceed(r *require.Assertions, params auction.Params, la
 }
 
 func TestStartAndEndAuctionNoBids(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
+	if testing.Short() {
+		t.Skip()
+	}
 	t.Parallel()
 	r := require.New(t)
 	var fixture fixtures.AuctionFixture
@@ -70,6 +77,12 @@ func TestStartAndEndAuctionNoBids(t *testing.T) {
 }
 
 func TestStartAndEndAuctionOneUserOneBid(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
+	if testing.Short() {
+		t.Skip()
+	}
 	t.Parallel()
 	r := require.New(t)
 	var fixture fixtures.AuctionFixture
@@ -133,6 +146,12 @@ func TestStartAndEndAuctionOneUserOneBid(t *testing.T) {
 }
 
 func TestStartAndEndAuctionOneUserTenBids(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
+	if testing.Short() {
+		t.Skip()
+	}
 	t.Parallel()
 	r := require.New(t)
 	var fixture fixtures.AuctionFixture
@@ -294,6 +313,9 @@ func TestStartAndEndAuctionTenUsersOneBidEach(t *testing.T) {
 }
 
 func TestStartAndEndAuctionTenUsersTenBidsEach(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	t.Parallel()
 	r := require.New(t)
 	var fixture fixtures.AuctionFixture
@@ -388,6 +410,9 @@ func TestStartAndEndAuctionTenUsersTenBidsEach(t *testing.T) {
 }
 
 func TestDecayingPrice(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	t.Parallel()
 	r := require.New(t)
 	var fixture fixtures.AuctionFixture

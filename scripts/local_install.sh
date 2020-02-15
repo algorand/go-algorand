@@ -2,9 +2,6 @@
 
 set -e
 
-export GOPATH=$(go env GOPATH)
-cd ${GOPATH}/src/github.com/algorand/go-algorand
-
 export CHANNEL="dev"
 
 TARGETBINDIR=""
@@ -57,8 +54,10 @@ if [ ${NOINSTALL} -eq 0 ]; then
 fi
 
 # Build install package into ~/dev_pkg
-export PKG_ROOT=$(pwd)/tmp/dev_pkg
-rm -rf ${PKG_ROOT}
+if [ -z "${PKG_ROOT}" ]; then
+    export PKG_ROOT=$(pwd)/tmp/dev_pkg
+    rm -rf ${PKG_ROOT}
+fi
 mkdir -p ${PKG_ROOT}
 
 # Generate the install package

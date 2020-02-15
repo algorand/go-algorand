@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -126,6 +126,30 @@ func (r TransactionsResponse) getBody() interface{} {
 	return r.Body
 }
 
+// AssetsResponse contains a list of assets
+//
+// swagger:response AssetsResponse
+type AssetsResponse struct {
+	// in: body
+	Body *v1.AssetList
+}
+
+func (r AssetsResponse) getBody() interface{} {
+	return r.Body
+}
+
+// AssetInformationResponse contains asset information
+//
+// swagger:response AssetInformationResponse
+type AssetInformationResponse struct {
+	// in: body
+	Body *v1.AssetParams
+}
+
+func (r AssetInformationResponse) getBody() interface{} {
+	return r.Body
+}
+
 // TransactionFeeResponse contains a suggested fee
 //
 // swagger:response TransactionFeeResponse
@@ -148,6 +172,18 @@ type TransactionParamsResponse struct {
 }
 
 func (r TransactionParamsResponse) getBody() interface{} {
+	return r.Body
+}
+
+// RawBlockResponse contains encoded, raw block information
+//
+// swagger:response RawBlockResponse
+type RawBlockResponse struct {
+	// in: body
+	Body *v1.RawBlock
+}
+
+func (r RawBlockResponse) getBody() interface{} {
 	return r.Body
 }
 

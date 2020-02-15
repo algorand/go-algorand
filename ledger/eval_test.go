@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -30,7 +30,6 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/util/execpool"
 )
 
 var testPoolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
@@ -43,20 +42,20 @@ func init() {
 }
 
 func TestBlockEvaluator(t *testing.T) {
-	blks, accts, addrs, keys := genesis(10)
-
-	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
-	defer backlogPool.Shutdown()
+	genesisInitState, addrs, keys := genesis(10)
 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	l, err := OpenLedger(logging.Base(), dbName, true, blks, accts, blks[0].BlockHeader.GenesisHash)
+	const inMem = true
+	const archival = true
+	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, archival)
+	require.NoError(t, err)
+	defer l.Close()
+
+	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader)
 	require.NoError(t, err)
 
-	newBlock := bookkeeping.MakeBlock(blks[len(blks)-1].BlockHeader)
-	eval, err := l.StartEvaluator(newBlock.BlockHeader, nil, backlogPool)
-	require.NoError(t, err)
-
-	genHash := blks[0].BlockHeader.GenesisHash
+	genHash := genesisInitState.Block.BlockHeader.GenesisHash
 	txn := transactions.Transaction{
 		Type: protocol.PaymentTx,
 		Header: transactions.Header{
@@ -72,21 +71,9 @@ func TestBlockEvaluator(t *testing.T) {
 		},
 	}
 
-	// Zero signature should fail
-	st := transactions.SignedTxn{
-		Txn: txn,
-	}
-	err = eval.Transaction(st, nil)
-	require.Error(t, err)
-
-	// Random signature should fail
-	crypto.RandBytes(st.Sig[:])
-	err = eval.Transaction(st, nil)
-	require.Error(t, err)
-
 	// Correct signature should work
-	st = txn.Sign(keys[0])
-	err = eval.Transaction(st, &transactions.ApplyData{})
+	st := txn.Sign(keys[0])
+	err = eval.Transaction(st, transactions.ApplyData{})
 	require.NoError(t, err)
 
 	selfTxn := transactions.Transaction{
@@ -103,12 +90,13 @@ func TestBlockEvaluator(t *testing.T) {
 			Amount:   basics.MicroAlgos{Raw: 100},
 		},
 	}
-	err = eval.Transaction(selfTxn.Sign(keys[2]), &transactions.ApplyData{})
+	err = eval.Transaction(selfTxn.Sign(keys[2]), transactions.ApplyData{})
 	require.NoError(t, err)
 
 	validatedBlock, err := eval.GenerateBlock()
 	require.NoError(t, err)
 
+	accts := genesisInitState.Accounts
 	bal0 := accts[addrs[0]]
 	bal1 := accts[addrs[1]]
 	bal2 := accts[addrs[2]]

@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -30,4 +30,8 @@ const (
 	metricNoExternalHostAndFailedAutoDetect = "No external host name was provided, and auto-detecting external IP address failed : %v\n"
 	metricNoExternalHostUsingAutoDetectedIP = "No external host name was provided; auto-detecting external IP address = %s\n"
 	metricDataDirectoryEmpty                = "no data directory was specified. Please use either -d or set environment variable ALGORAND_DATA"
+
+	telemetryConfigReadError = "Could not read telemetry config: %s\n"
+
+	pathErrFormat = "%s: %s\n"
 )

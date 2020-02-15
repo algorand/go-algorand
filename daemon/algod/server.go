@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -55,9 +55,7 @@ type Server struct {
 	node                 *node.AlgorandFullNode
 	metricCollector      *metrics.MetricService
 	metricServiceStarted bool
-
-	stopping deadlock.Mutex
-	stopped  bool
+	stopping             chan struct{}
 }
 
 // Initialize creates a Node instance with applicable network services
@@ -65,10 +63,19 @@ func (s *Server) Initialize(cfg config.Local) error {
 	// set up node
 	s.log = logging.Base()
 
-	liveLog := fmt.Sprintf("%s/node.log", s.RootPath)
-	archive := fmt.Sprintf("%s/node.archive.log", s.RootPath)
+	liveLog := filepath.Join(s.RootPath, "node.log")
+	archive := filepath.Join(s.RootPath, cfg.LogArchiveName)
 	fmt.Println("Logging to: ", liveLog)
-	logWriter := logging.MakeCyclicFileWriter(liveLog, archive, cfg.LogSizeLimit)
+	var maxLogAge time.Duration
+	var err error
+	if cfg.LogArchiveMaxAge != "" {
+		maxLogAge, err = time.ParseDuration(cfg.LogArchiveMaxAge)
+		if err != nil {
+			s.log.Fatalf("invalid config LogArchiveMaxAge: %s", err)
+			maxLogAge = 0
+		}
+	}
+	logWriter := logging.MakeCyclicFileWriter(liveLog, archive, cfg.LogSizeLimit, maxLogAge)
 	s.log.SetOutput(logWriter)
 	s.log.SetJSONFormatter()
 	s.log.SetLevel(logging.Level(cfg.BaseLoggerDebugLevel))
@@ -169,9 +176,11 @@ func (s *Server) Start() {
 		os.Exit(1)
 	}
 
+	s.stopping = make(chan struct{})
+
 	// use the data dir as the static file dir (for our API server), there's
 	// no need to separate the two yet. This lets us serve the swagger.json file.
-	apiHandler := apiServer.NewRouter(s.log, s.node, apiToken, s.RootPath)
+	apiHandler := apiServer.NewRouter(s.log, s.node, s.stopping, apiToken)
 
 	addr := cfg.EndpointAddress
 	if addr == "" {
@@ -192,8 +201,6 @@ func (s *Server) Start() {
 		ReadTimeout:  time.Duration(cfg.RestReadTimeoutSeconds) * time.Second,
 		WriteTimeout: time.Duration(cfg.RestWriteTimeoutSeconds) * time.Second,
 	}
-
-	defer s.Stop()
 
 	tcpListener := listener.(*net.TCPListener)
 	errChan := make(chan error, 1)
@@ -218,30 +225,28 @@ func (s *Server) Start() {
 	c := make(chan os.Signal)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
 	signal.Ignore(syscall.SIGHUP)
-	go func() {
-		sig := <-c
+
+	fmt.Printf("Node running and accepting RPC requests over HTTP on port %v. Press Ctrl-C to exit\n", addr)
+	select {
+	case err := <-errChan:
+		if err != nil {
+			s.log.Warn(err)
+		} else {
+			s.log.Info("Node exited successfully")
+		}
+		s.Stop()
+	case sig := <-c:
 		fmt.Printf("Exiting on %v\n", sig)
 		s.Stop()
 		os.Exit(0)
-	}()
-
-	fmt.Printf("Node running and accepting RPC requests over HTTP on port %v. Press Ctrl-C to exit\n", addr)
-	err = <-errChan
-	if err != nil {
-		s.log.Warn(err)
-	} else {
-		s.log.Info("Node exited successfully")
 	}
 }
 
 // Stop initiates a graceful shutdown of the node by shutting down the network server.
 func (s *Server) Stop() {
-	s.stopping.Lock()
-	defer s.stopping.Unlock()
-
-	if s.stopped {
-		return
-	}
+	// close the s.stopping, which would signal the rest api router that any pending commands
+	// should be aborted.
+	close(s.stopping)
 
 	// Attempt to log a shutdown event before we exit...
 	s.log.Event(telemetryspec.ApplicationState, telemetryspec.ShutdownEvent)
@@ -266,8 +271,6 @@ func (s *Server) Stop() {
 	os.Remove(s.pidFile)
 	os.Remove(s.netFile)
 	os.Remove(s.netListenFile)
-
-	s.stopped = true
 }
 
 // OverridePhonebook is used to replace the phonebook associated with

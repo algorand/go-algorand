@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -39,9 +39,12 @@ const (
 	OneTimeSigKey2    HashID = "OT2"
 	PaysetFlat        HashID = "PF"
 	Payload           HashID = "PL"
+	Program           HashID = "Program"
+	ProgramData       HashID = "ProgData"
 	ProposerSeed      HashID = "PS"
 	Seed              HashID = "SD"
 	TestHashable      HashID = "TE"
+	TxGroup           HashID = "TG"
 	Transaction       HashID = "TX"
 	Vote              HashID = "VO"
 )

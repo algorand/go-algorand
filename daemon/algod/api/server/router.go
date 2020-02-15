@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -54,7 +54,7 @@
 // Autogenerate the swagger json - automatically run by the 'make build' step.
 // Base path must be a fully specified package name (else, it seems that swagger feeds a relative path to
 // loader.Config.Import(), and that breaks the vendor directory if the source is symlinked from elsewhere)
-//go:generate swagger generate spec -o="../swagger.json" --base-path="github.com/algorand/go-algorand/daemon/algod/api/server"
+//go:generate swagger generate spec -o="../swagger.json"
 //go:generate swagger validate ../swagger.json --stop-on-error
 //go:generate ./lib/bundle_swagger_json.sh
 package server
@@ -76,6 +76,7 @@ import (
 const (
 	apiV1Tag              = "v1"
 	debugRouteName        = "debug"
+	pprofEndpointPrefix   = "/debug/pprof/"
 	urlAuthEndpointPrefix = "/urlAuth/{apiToken:[0-9a-f]+}"
 )
 
@@ -106,7 +107,7 @@ func registerHandlers(router *mux.Router, prefix string, routes lib.Routes, ctx 
 }
 
 // NewRouter builds and returns a new router from routes
-func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, apiToken string, staticFileDir string) *mux.Router {
+func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-chan struct{}, apiToken string) *mux.Router {
 	router := mux.NewRouter().StrictSlash(true)
 
 	// Middleware
@@ -115,14 +116,17 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, apiToken stri
 	router.Use(middlewares.CORS)
 
 	// Request Context
-	ctx := lib.ReqContext{Node: node, Log: logger, StaticDataDir: staticFileDir}
+	ctx := lib.ReqContext{Node: node, Log: logger, Shutdown: shutdown}
 
-	// Registers /debug/pprof handler under root path and under /urlAuth path
-	// to support header or url-provided token.
-	router.PathPrefix("/debug/pprof/").Handler(http.DefaultServeMux)
+	// Route pprof requests
+	if node.Config().EnableProfiler {
+		// Registers /debug/pprof handler under root path and under /urlAuth path
+		// to support header or url-provided token.
+		router.PathPrefix(pprofEndpointPrefix).Handler(http.DefaultServeMux)
 
-	urlAuthRouter := router.PathPrefix(urlAuthEndpointPrefix)
-	urlAuthRouter.PathPrefix("/debug/pprof/").Handler(http.DefaultServeMux).Name(debugRouteName)
+		urlAuthRouter := router.PathPrefix(urlAuthEndpointPrefix)
+		urlAuthRouter.PathPrefix(pprofEndpointPrefix).Handler(http.DefaultServeMux).Name(debugRouteName)
+	}
 
 	// Registering common routes
 	registerHandlers(router, "", common.Routes, ctx)

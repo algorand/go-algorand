@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -97,9 +97,9 @@ type (
 		//
 		// If enough votes are collected, the proposal is approved, and will
 		// definitely take effect.  The proposal lingers for some number of
-		// rounds (UpgradeWaitRounds) to give clients a chance to notify users
-		// about an approved upgrade, if the client doesn't support it, so the
-		// user has a chance to download updated client software.
+		// rounds to give clients a chance to notify users about an approved
+		// upgrade, if the client doesn't support it, so the user has a chance
+		// to download updated client software.
 		//
 		// Block proposers influence this upgrade machinery through two fields
 		// in UpgradeVote: UpgradePropose, which proposes an upgrade to a new
@@ -111,11 +111,23 @@ type (
 		// the new block's UpgradeVote.
 		UpgradeState
 		UpgradeVote
+
+		// TxnCounter counts the number of transactions committed in the
+		// ledger, from the time at which support for this feature was
+		// introduced.
+		//
+		// Specifically, TxnCounter is the number of the next transaction
+		// that will be committed after this block.  It is 0 when no
+		// transactions have ever been committed (since TxnCounter
+		// started being supported).
+		TxnCounter uint64 `codec:"tc"`
 	}
 
 	// RewardsState represents the global parameters controlling the rate
 	// at which accounts accrue rewards.
 	RewardsState struct {
+		_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 		// The FeeSink accepts transaction fees. It can only spend to
 		// the incentive pool.
 		FeeSink basics.Address `codec:"fees"`
@@ -144,8 +156,13 @@ type (
 	// UpgradeVote represents the vote of the block proposer with
 	// respect to protocol upgrades.
 	UpgradeVote struct {
+		_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 		// UpgradePropose indicates a proposed upgrade
 		UpgradePropose protocol.ConsensusVersion `codec:"upgradeprop"`
+
+		// UpgradeDelay indicates the time between acceptance and execution
+		UpgradeDelay basics.Round `codec:"upgradedelay"`
 
 		// UpgradeApprove indicates a yes vote for the current proposal
 		UpgradeApprove bool `codec:"upgradeyes"`
@@ -155,6 +172,7 @@ type (
 	// strictly speaking, computable from the history of all UpgradeVotes
 	// but we keep it in the block for explicitness and convenience
 	// (instead of materializing it separately, like balances).
+	//msgp:ignore UpgradeState
 	UpgradeState struct {
 		CurrentProtocol        protocol.ConsensusVersion `codec:"proto"`
 		NextProtocol           protocol.ConsensusVersion `codec:"nextproto"`
@@ -178,7 +196,7 @@ func (bh BlockHeader) Hash() BlockHash {
 
 // ToBeHashed implements the crypto.Hashable interface
 func (bh BlockHeader) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.BlockHeader, protocol.Encode(bh)
+	return protocol.BlockHeader, protocol.Encode(&bh)
 }
 
 // Digest returns a cryptographic digest summarizing the Block.
@@ -225,8 +243,20 @@ func (s RewardsState) NextRewardsState(nextRound basics.Round, nextProto config.
 	res = s
 
 	if nextRound == s.RewardsRecalculationRound {
+		maxSpentOver := nextProto.MinBalance
+		overflowed := false
+
+		if nextProto.PendingResidueRewards {
+			maxSpentOver, overflowed = basics.OAdd(maxSpentOver, s.RewardsResidue)
+			if overflowed {
+				logging.Base().Errorf("overflowed when trying to accumulate MinBalance(%d) and RewardsResidue(%d) for round %d (state %+v)", nextProto.MinBalance, s.RewardsResidue, nextRound, s)
+				// this should never happen, but if it does, adjust the maxSpentOver so that we will have no rewards.
+				maxSpentOver = incentivePoolBalance.Raw
+			}
+		}
+
 		// it is time to refresh the rewards rate
-		newRate, overflowed := basics.OSub(incentivePoolBalance.Raw, nextProto.MinBalance)
+		newRate, overflowed := basics.OSub(incentivePoolBalance.Raw, maxSpentOver)
 		if overflowed {
 			logging.Base().Errorf("overflowed when trying to refresh RewardsRate for round %v (state %+v)", nextRound, s)
 			newRate = 0
@@ -258,7 +288,7 @@ func (s RewardsState) NextRewardsState(nextRound basics.Round, nextProto config.
 	return
 }
 
-// computeUpgradeState determines the UpgradeState for a block at round thisR,
+// applyUpgradeVote determines the UpgradeState for a block at round r,
 // given the previous block's UpgradeState "s" and this block's UpgradeVote.
 //
 // This function returns an error if the input is not valid in prevState: that
@@ -268,37 +298,52 @@ func (s UpgradeState) applyUpgradeVote(r basics.Round, vote UpgradeVote) (res Up
 	// Locate the config parameters for current protocol
 	params, ok := config.Consensus[s.CurrentProtocol]
 	if !ok {
-		err = fmt.Errorf("computeUpgradeState: unsupported protocol %v", s.CurrentProtocol)
+		err = fmt.Errorf("applyUpgradeVote: unsupported protocol %v", s.CurrentProtocol)
 		return
 	}
 
 	// Apply proposal of upgrade to new protocol
 	if vote.UpgradePropose != "" {
 		if s.NextProtocol != "" {
-			err = fmt.Errorf("computeUpgradeState: new proposal during existing proposal")
+			err = fmt.Errorf("applyUpgradeVote: new proposal during existing proposal")
 			return
 		}
 
 		if len(vote.UpgradePropose) > params.MaxVersionStringLen {
-			err = fmt.Errorf("proposed protocol version %s too long", vote.UpgradePropose)
+			err = fmt.Errorf("applyUpgradeVote: proposed protocol version %s too long", vote.UpgradePropose)
 			return
+		}
+
+		upgradeDelay := uint64(vote.UpgradeDelay)
+		if upgradeDelay > params.MaxUpgradeWaitRounds || upgradeDelay < params.MinUpgradeWaitRounds {
+			err = fmt.Errorf("applyUpgradeVote: proposed upgrade wait rounds %d out of permissible range", upgradeDelay)
+			return
+		}
+
+		if upgradeDelay == 0 {
+			upgradeDelay = params.DefaultUpgradeWaitRounds
 		}
 
 		s.NextProtocol = vote.UpgradePropose
 		s.NextProtocolApprovals = 0
 		s.NextProtocolVoteBefore = r + basics.Round(params.UpgradeVoteRounds)
-		s.NextProtocolSwitchOn = r + basics.Round(params.UpgradeVoteRounds) + basics.Round(params.UpgradeWaitRounds)
+		s.NextProtocolSwitchOn = r + basics.Round(params.UpgradeVoteRounds) + basics.Round(upgradeDelay)
+	} else {
+		if vote.UpgradeDelay != 0 {
+			err = fmt.Errorf("applyUpgradeVote: upgrade delay %d nonzero when not proposing", vote.UpgradeDelay)
+			return
+		}
 	}
 
 	// Apply approval of existing protocol upgrade
 	if vote.UpgradeApprove {
 		if s.NextProtocol == "" {
-			err = fmt.Errorf("computeUpgradeState: approval without an active proposal")
+			err = fmt.Errorf("applyUpgradeVote: approval without an active proposal")
 			return
 		}
 
 		if r >= s.NextProtocolVoteBefore {
-			err = fmt.Errorf("computeUpgradeState: approval after vote deadline")
+			err = fmt.Errorf("applyUpgradeVote: approval after vote deadline")
 			return
 		}
 
@@ -326,14 +371,14 @@ func (s UpgradeState) applyUpgradeVote(r basics.Round, vote UpgradeVote) (res Up
 	return
 }
 
-// MakeBlock constructs a new valid block with an empty payset and an unset Seed.
-func MakeBlock(prev BlockHeader) Block {
-	round := prev.Round + 1
-
+// ProcessUpgradeParams determines our upgrade vote, applies it, and returns
+// the generated UpgradeVote and the new UpgradeState
+func ProcessUpgradeParams(prev BlockHeader) (uv UpgradeVote, us UpgradeState, err error) {
 	// Find parameters for current protocol; panic if not supported
 	prevParams, ok := config.Consensus[prev.CurrentProtocol]
 	if !ok {
-		logging.Base().Panicf("MakeBlock: previous protocol %v not supported", prev.CurrentProtocol)
+		err = fmt.Errorf("previous protocol %v not supported", prev.CurrentProtocol)
+		return
 	}
 
 	// Decide on the votes for protocol upgrades
@@ -342,24 +387,34 @@ func MakeBlock(prev BlockHeader) Block {
 	// If there is no upgrade proposal, see if we can make one
 	if prev.NextProtocol == "" {
 		for k, v := range prevParams.ApprovedUpgrades {
-			if v {
-				upgradeVote.UpgradePropose = k
-				upgradeVote.UpgradeApprove = true
-				break
-			}
+			upgradeVote.UpgradePropose = k
+			upgradeVote.UpgradeDelay = basics.Round(v)
+			upgradeVote.UpgradeApprove = true
+			break
 		}
 	}
 
-	// If there is a proposal being voted on, see if we approve it
+	// If there is a proposal being voted on, see if we approve it and its delay
+	round := prev.Round + 1
 	if round < prev.NextProtocolVoteBefore {
-		if prevParams.ApprovedUpgrades[prev.NextProtocol] {
-			upgradeVote.UpgradeApprove = true
-		}
+		_, ok := prevParams.ApprovedUpgrades[prev.NextProtocol]
+		upgradeVote.UpgradeApprove = ok
 	}
 
 	upgradeState, err := prev.UpgradeState.applyUpgradeVote(round, upgradeVote)
 	if err != nil {
-		logging.Base().Panicf("MakeBlock: constructed invalid upgrade vote %v for round %v in state %v: %v", upgradeVote, round, prev.UpgradeState, err)
+		err = fmt.Errorf("constructed invalid upgrade vote %v for round %v in state %v: %v", upgradeVote, round, prev.UpgradeState, err)
+		return
+	}
+
+	return upgradeVote, upgradeState, err
+}
+
+// MakeBlock constructs a new valid block with an empty payset and an unset Seed.
+func MakeBlock(prev BlockHeader) Block {
+	upgradeVote, upgradeState, err := ProcessUpgradeParams(prev)
+	if err != nil {
+		logging.Base().Panicf("MakeBlock: error processing upgrade: %v", err)
 	}
 
 	params, ok := config.Consensus[upgradeState.CurrentProtocol]
@@ -381,7 +436,7 @@ func MakeBlock(prev BlockHeader) Block {
 	// the merkle root of TXs will update when fillpayset is called
 	return Block{
 		BlockHeader: BlockHeader{
-			Round:        round,
+			Round:        prev.Round + 1,
 			Branch:       prev.Hash(),
 			TxnRoot:      emptyPayset.Commit(params.PaysetCommitFlat),
 			UpgradeVote:  upgradeVote,
@@ -468,21 +523,35 @@ func (block Block) ContentsMatchHeader() bool {
 	return block.Payset.Commit(proto.PaysetCommitFlat) == block.TxnRoot
 }
 
-// DecodePayset decodes block.Payset using DecodeSignedTxn (and ignores ApplyData).
-func (block Block) DecodePayset() ([]transactions.SignedTxn, error) {
-	res := make([]transactions.SignedTxn, len(block.Payset))
-	for i, txib := range block.Payset {
+// DecodePaysetGroups decodes block.Payset using DecodeSignedTxn, and returns
+// the transactions in groups.
+func (block Block) DecodePaysetGroups() ([][]transactions.SignedTxnWithAD, error) {
+	var res [][]transactions.SignedTxnWithAD
+	var lastGroup []transactions.SignedTxnWithAD
+	for _, txib := range block.Payset {
 		var err error
-		res[i], _, err = block.DecodeSignedTxn(txib)
+		var stxnad transactions.SignedTxnWithAD
+		stxnad.SignedTxn, stxnad.ApplyData, err = block.DecodeSignedTxn(txib)
 		if err != nil {
 			return nil, err
 		}
+
+		if lastGroup != nil && (lastGroup[0].SignedTxn.Txn.Group != stxnad.SignedTxn.Txn.Group || lastGroup[0].SignedTxn.Txn.Group.IsZero()) {
+			res = append(res, lastGroup)
+			lastGroup = nil
+		}
+
+		lastGroup = append(lastGroup, stxnad)
+	}
+	if lastGroup != nil {
+		res = append(res, lastGroup)
 	}
 	return res, nil
 }
 
-// DecodePaysetWithAD decodes block.Payset using DecodeSignedTxn
-func (block Block) DecodePaysetWithAD() ([]transactions.SignedTxnWithAD, error) {
+// DecodePaysetFlat decodes block.Payset using DecodeSignedTxn, and
+// flattens groups.
+func (block Block) DecodePaysetFlat() ([]transactions.SignedTxnWithAD, error) {
 	res := make([]transactions.SignedTxnWithAD, len(block.Payset))
 	for i, txib := range block.Payset {
 		var err error
@@ -492,6 +561,31 @@ func (block Block) DecodePaysetWithAD() ([]transactions.SignedTxnWithAD, error) 
 		}
 	}
 	return res, nil
+}
+
+// SignedTxnsToGroups splits a slice of SignedTxns into groups.
+func SignedTxnsToGroups(txns []transactions.SignedTxn) (res [][]transactions.SignedTxn) {
+	var lastGroup []transactions.SignedTxn
+	for _, tx := range txns {
+		if lastGroup != nil && (lastGroup[0].Txn.Group != tx.Txn.Group || lastGroup[0].Txn.Group.IsZero()) {
+			res = append(res, lastGroup)
+			lastGroup = nil
+		}
+
+		lastGroup = append(lastGroup, tx)
+	}
+	if lastGroup != nil {
+		res = append(res, lastGroup)
+	}
+	return res
+}
+
+// SignedTxnGroupsFlatten combines all groups into a flat slice of SignedTxns.
+func SignedTxnGroupsFlatten(txgroups [][]transactions.SignedTxn) (res []transactions.SignedTxn) {
+	for _, txgroup := range txgroups {
+		res = append(res, txgroup...)
+	}
+	return res
 }
 
 // NextVersionInfo returns information about the next expected protocol version.
@@ -542,7 +636,6 @@ func (bh BlockHeader) DecodeSignedTxn(stb transactions.SignedTxnInBlock) (transa
 		}
 	}
 
-	st.ResetCaches()
 	return st, ad, nil
 }
 

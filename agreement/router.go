@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package agreement
 // A stateMachineTag uniquely identifies the type of a state machine.
 //
 // Rounds, periods, and steps may be used to further identify different state machine instances of the same type.
+//msgp:ignore stateMachineTag
 type stateMachineTag int
 
 //go:generate stringer -type=stateMachineTag
@@ -263,4 +264,11 @@ func stagedValue(p0 player, h routerHandle, r round, p period) stagingValueEvent
 	qe := stagingValueEvent{Round: r, Period: p}
 	e := h.dispatch(p0, qe, proposalMachineRound, r, p, 0)
 	return e.(stagingValueEvent)
+}
+
+// pinnedValue gets the current pinned value for some (r)
+func pinnedValue(p0 player, h routerHandle, r round) pinnedValueEvent {
+	qe := pinnedValueEvent{Round: r}
+	e := h.dispatch(p0, qe, proposalMachineRound, r, 0, 0)
+	return e.(pinnedValueEvent)
 }

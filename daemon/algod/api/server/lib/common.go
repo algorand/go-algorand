@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -43,9 +43,9 @@ type Routes []Route
 // ReqContext is passed to each of the handlers below via wrapCtx, allowing
 // handlers to interact with the node
 type ReqContext struct {
-	Node          *node.AlgorandFullNode
-	Log           logging.Logger
-	StaticDataDir string
+	Node     *node.AlgorandFullNode
+	Log      logging.Logger
+	Shutdown <-chan struct{}
 }
 
 // ErrorResponse sets the specified status code (should != 200), and fills in the

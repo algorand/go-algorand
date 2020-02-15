@@ -1,8 +1,5 @@
 #!/bin/bash
 
-export GOPATH=$(go env GOPATH)
-cd ${GOPATH}/src/github.com/algorand/go-algorand
-
 BINDIR=""
 DATADIR=""
 CHANNEL="dev"

@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,8 @@
 package basics
 
 import (
+	"reflect"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
@@ -103,6 +105,37 @@ type AccountData struct {
 	VoteFirstValid  Round  `codec:"voteFst"`
 	VoteLastValid   Round  `codec:"voteLst"`
 	VoteKeyDilution uint64 `codec:"voteKD"`
+
+	// If this account created an asset, AssetParams stores
+	// the parameters defining that asset.  The params are indexed
+	// by the Index of the AssetID; the Creator is this account's address.
+	//
+	// An account with any asset in AssetParams cannot be
+	// closed, until the asset is destroyed.  An asset can
+	// be destroyed if this account holds AssetParams.Total units
+	// of that asset (in the Assets array below).
+	//
+	// NOTE: do not modify this value in-place in existing AccountData
+	// structs; allocate a copy and modify that instead.  AccountData
+	// is expected to have copy-by-value semantics.
+	AssetParams map[AssetIndex]AssetParams `codec:"apar,allocbound=-"`
+
+	// Assets is the set of assets that can be held by this
+	// account.  Assets (i.e., slots in this map) are explicitly
+	// added and removed from an account by special transactions.
+	// The map is keyed by the AssetID, which is the address of
+	// the account that created the asset plus a unique counter
+	// to distinguish re-created assets.
+	//
+	// Each asset bumps the required MinBalance in this account.
+	//
+	// An account that creates an asset must have its own asset
+	// in the Assets map until that asset is destroyed.
+	//
+	// NOTE: do not modify this value in-place in existing AccountData
+	// structs; allocate a copy and modify that instead.  AccountData
+	// is expected to have copy-by-value semantics.
+	Assets map[AssetIndex]AssetHolding `codec:"asset,allocbound=-"`
 }
 
 // AccountDetail encapsulates meaningful details about a given account, for external consumption
@@ -125,6 +158,77 @@ type BalanceDetail struct {
 	TotalMoney  MicroAlgos
 	OnlineMoney MicroAlgos
 	Accounts    []AccountDetail
+}
+
+// AssetIndex is the unique integer index of an asset that can be used to look
+// up the creator of the asset, whose balance record contains the AssetParams
+type AssetIndex uint64
+
+// AssetLocator stores both the asset creator, whose balance record contains
+// the asset parameters, and the asset index, which is the key into those
+// parameters
+type AssetLocator struct {
+	Creator Address
+	Index   AssetIndex
+}
+
+// AssetHolding describes an asset held by an account.
+type AssetHolding struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Amount uint64 `codec:"a"`
+	Frozen bool   `codec:"f"`
+}
+
+// AssetParams describes the parameters of an asset.
+type AssetParams struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	// Total specifies the total number of units of this asset
+	// created.
+	Total uint64 `codec:"t"`
+
+	// Decimals specifies the number of digits to display after the decimal
+	// place when displaying this asset. A value of 0 represents an asset
+	// that is not divisible, a value of 1 represents an asset divisible
+	// into tenths, and so on. This value must be between 0 and 19
+	// (inclusive).
+	Decimals uint32 `codec:"dc"`
+
+	// DefaultFrozen specifies whether slots for this asset
+	// in user accounts are frozen by default or not.
+	DefaultFrozen bool `codec:"df"`
+
+	// UnitName specifies a hint for the name of a unit of
+	// this asset.
+	UnitName string `codec:"un"`
+
+	// AssetName specifies a hint for the name of the asset.
+	AssetName string `codec:"an"`
+
+	// URL specifies a URL where more information about the asset can be
+	// retrieved
+	URL string `codec:"au"`
+
+	// MetadataHash specifies a commitment to some unspecified asset
+	// metadata. The format of this metadata is up to the application.
+	MetadataHash [32]byte `codec:"am"`
+
+	// Manager specifies an account that is allowed to change the
+	// non-zero addresses in this AssetParams.
+	Manager Address `codec:"m"`
+
+	// Reserve specifies an account whose holdings of this asset
+	// should be reported as "not minted".
+	Reserve Address `codec:"r"`
+
+	// Freeze specifies an account that is allowed to change the
+	// frozen state of holdings of this asset.
+	Freeze Address `codec:"f"`
+
+	// Clawback specifies an account that is allowed to take units
+	// of this asset from any account.
+	Clawback Address `codec:"c"`
 }
 
 // MakeAccountData returns a UserToken
@@ -180,6 +284,15 @@ func (u AccountData) KeyDilution(proto config.ConsensusParams) uint64 {
 	return proto.DefaultKeyDilution
 }
 
+// IsZero checks if an AccountData value is the same as its zero value.
+func (u AccountData) IsZero() bool {
+	if u.Assets != nil && len(u.Assets) == 0 {
+		u.Assets = nil
+	}
+
+	return reflect.DeepEqual(u, AccountData{})
+}
+
 // BalanceRecord pairs an account's address with its associated data.
 type BalanceRecord struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
@@ -191,5 +304,5 @@ type BalanceRecord struct {
 
 // ToBeHashed implements the crypto.Hashable interface
 func (u BalanceRecord) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.BalanceRecord, protocol.Encode(u)
+	return protocol.BalanceRecord, protocol.Encode(&u)
 }

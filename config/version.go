@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -29,7 +29,7 @@ import (
 
 // VersionMajor is the Major semantic version number (#.y.z) - changed when first public release (0.y.z -> 1.y.z)
 // and when backwards compatibility is broken.
-const VersionMajor = 1
+const VersionMajor = 2
 
 // VersionMinor is the Minor semantic version number (x.#.z) - changed when backwards-compatible features are introduced.
 // Not enforced until after initial public release (x > 0).
@@ -108,6 +108,13 @@ var currentVersion = Version{
 // GetCurrentVersion retrieves a copy of the current global Version structure (for the application)
 func GetCurrentVersion() Version {
 	return currentVersion
+}
+
+// FormatVersionAndLicense prints current version and license information
+func FormatVersionAndLicense() string {
+	version := GetCurrentVersion()
+	return fmt.Sprintf("%d\n%s.%s [%s] (commit #%s)\n%s\n", version.AsUInt64(), version.String(),
+		version.Channel, version.Branch, version.GetCommitHash(), GetLicenseInfo())
 }
 
 // SetCurrentVersion allows replacing the current global Version structure (for the application)

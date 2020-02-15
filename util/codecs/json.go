@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -162,7 +162,9 @@ func SaveNonDefaultValuesToFile(filename string, object, defaultObject interface
 	}
 	defer outFile.Close()
 	writer := bufio.NewWriter(outFile)
-	_, err = writer.WriteString(strings.Join(newFile, "\n"))
+	combined := strings.Join(newFile, "\n")
+	combined = strings.TrimRight(combined, "\r\n ")
+	_, err = writer.WriteString(combined)
 	if err == nil {
 		writer.Flush()
 	}

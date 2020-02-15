@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -51,7 +51,7 @@ type genesisAllocation struct {
 }
 
 // GenerateGenesisFiles generates the genesis.json file and wallet files for a give genesis configuration.
-func GenerateGenesisFiles(genesisData GenesisData, outDir string) error {
+func GenerateGenesisFiles(genesisData GenesisData, consensus config.ConsensusProtocols, outDir string, verbose bool) error {
 	err := os.Mkdir(outDir, os.ModeDir|os.FileMode(0777))
 	if err != nil && os.IsNotExist(err) {
 		return fmt.Errorf("couldn't make output directory '%s': %v", outDir, err.Error())
@@ -93,24 +93,30 @@ func GenerateGenesisFiles(genesisData GenesisData, outDir string) error {
 		genesisData.RewardsPool = defaultPoolAddr
 	}
 
-	return generateGenesisFiles(outDir, proto, genesisData.NetworkName, genesisData.VersionModifier, allocation, genesisData.FirstPartKeyRound, genesisData.LastPartKeyRound, genesisData.FeeSink, genesisData.RewardsPool, genesisData.Comment)
+	consensusParams, ok := consensus[proto]
+	if !ok {
+		return fmt.Errorf("protocol %s not supported", proto)
+	}
+
+	return generateGenesisFiles(outDir, proto, consensusParams, genesisData.NetworkName, genesisData.VersionModifier, allocation, genesisData.FirstPartKeyRound, genesisData.LastPartKeyRound, genesisData.PartKeyDilution, genesisData.FeeSink, genesisData.RewardsPool, genesisData.Comment, verbose)
 }
 
-func generateGenesisFiles(outDir string, proto protocol.ConsensusVersion, netName string, schemaVersionModifier string,
-	allocation []genesisAllocation, firstWalletValid uint64, lastWalletValid uint64, feeSink, rewardsPool basics.Address, comment string) (err error) {
+func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion, protoParams config.ConsensusParams, netName string, schemaVersionModifier string,
+	allocation []genesisAllocation, firstWalletValid uint64, lastWalletValid uint64, partKeyDilution uint64, feeSink, rewardsPool basics.Address, comment string, verbose bool) (err error) {
 
 	genesisAddrs := make(map[string]basics.Address)
 	records := make(map[string]basics.AccountData)
 
-	params, ok := config.Consensus[proto]
-	if !ok {
-		return fmt.Errorf("protocol %s not supported", proto)
+	if partKeyDilution == 0 {
+		partKeyDilution = protoParams.DefaultKeyDilution
 	}
 
 	// Sort account names alphabetically
 	sort.SliceStable(allocation, func(i, j int) bool {
 		return allocation[i].Name < allocation[j].Name
 	})
+	rootKeyCreated := 0
+	partKeyCreated := 0
 
 	for _, wallet := range allocation {
 		var root account.Root
@@ -130,7 +136,9 @@ func generateGenesisFiles(outDir string, proto protocol.ConsensusVersion, netNam
 		}
 
 		if rootkeyErr == nil && partkeyErr == nil {
-			fmt.Println("Reusing existing wallet:", wfilename, pfilename)
+			if verbose {
+				fmt.Println("Reusing existing wallet:", wfilename, pfilename)
+			}
 		} else {
 			// At this point either rootKeys is valid or rootkeyErr != nil
 			// Likewise, either partkey is valid or partkeyErr != nil
@@ -147,7 +155,10 @@ func generateGenesisFiles(outDir string, proto protocol.ConsensusVersion, netNam
 					os.Remove(wfilename)
 					return
 				}
-				fmt.Printf("Created new rootkey: %s\n", wfilename)
+				if verbose {
+					fmt.Printf("Created new rootkey: %s\n", wfilename)
+				}
+				rootKeyCreated++
 			}
 
 			if partkeyErr != nil && wallet.Online == basics.Online {
@@ -160,13 +171,16 @@ func generateGenesisFiles(outDir string, proto protocol.ConsensusVersion, netNam
 					return
 				}
 
-				part, err = account.FillDBWithParticipationKeys(partDB, root.Address(), basics.Round(firstWalletValid), basics.Round(lastWalletValid), params.DefaultKeyDilution)
+				part, err = account.FillDBWithParticipationKeys(partDB, root.Address(), basics.Round(firstWalletValid), basics.Round(lastWalletValid), partKeyDilution)
 				if err != nil {
 					err = fmt.Errorf("could not generate new participation file %s: %v", pfilename, err)
 					os.Remove(pfilename)
 					return
 				}
-				fmt.Printf("Created new partkey: %s\n", pfilename)
+				if verbose {
+					fmt.Printf("Created new partkey: %s\n", pfilename)
+				}
+				partKeyCreated++
 			}
 		}
 
@@ -194,10 +208,13 @@ func generateGenesisFiles(outDir string, proto protocol.ConsensusVersion, netNam
 	genesisAddrs["FeeSink"] = feeSink
 	genesisAddrs["RewardsPool"] = rewardsPool
 
-	fmt.Println(proto, config.Consensus[proto].MinBalance)
+	if verbose {
+		fmt.Println(protoVersion, protoParams.MinBalance)
+	}
+
 	records["FeeSink"] = basics.AccountData{
 		Status:     basics.NotParticipating,
-		MicroAlgos: basics.MicroAlgos{Raw: config.Consensus[proto].MinBalance},
+		MicroAlgos: basics.MicroAlgos{Raw: protoParams.MinBalance},
 	}
 	records["RewardsPool"] = basics.AccountData{
 		Status:     basics.NotParticipating,
@@ -206,7 +223,7 @@ func generateGenesisFiles(outDir string, proto protocol.ConsensusVersion, netNam
 
 	sinkAcct := genesisAllocation{
 		Name:   "FeeSink",
-		Stake:  config.Consensus[proto].MinBalance,
+		Stake:  protoParams.MinBalance,
 		Online: basics.NotParticipating,
 	}
 	poolAcct := genesisAllocation{
@@ -222,7 +239,7 @@ func generateGenesisFiles(outDir string, proto protocol.ConsensusVersion, netNam
 
 	g := bookkeeping.Genesis{
 		SchemaID:    schemaID + schemaVersionModifier,
-		Proto:       proto,
+		Proto:       protoVersion,
 		Network:     protocol.NetworkID(netName),
 		Timestamp:   0,
 		FeeSink:     feeSink.String(),
@@ -242,6 +259,11 @@ func generateGenesisFiles(outDir string, proto protocol.ConsensusVersion, netNam
 
 	jsonData := protocol.EncodeJSON(g)
 	err = ioutil.WriteFile(filepath.Join(outDir, config.GenesisJSONFile), append(jsonData, '\n'), 0666)
+
+	if (!verbose) && (rootKeyCreated > 0 || partKeyCreated > 0) {
+		fmt.Printf("Created %d new rootkeys and %d new partkeys.\n", rootKeyCreated, partKeyCreated)
+	}
+
 	return
 }
 

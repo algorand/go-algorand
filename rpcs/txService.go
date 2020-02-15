@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,12 +33,12 @@ import (
 
 // TxService provides a service that allows a remote caller to retrieve missing pending transactions
 type TxService struct {
-	pool        PendingTxAggregate
-	pendingTxns []transactions.SignedTxn
-	lastUpdate  int64
-	mu          deadlock.RWMutex
-	genesisID   string
-	log         logging.Logger
+	pool            PendingTxAggregate
+	pendingTxGroups [][]transactions.SignedTxn
+	lastUpdate      int64
+	mu              deadlock.RWMutex
+	genesisID       string
+	log             logging.Logger
 	// limit the amount of data we're going to process on this request.
 	// the request body should include the bloom filter encoding. This would
 	// protect the server from calls that include large body requests.
@@ -142,30 +142,39 @@ func (txs *TxService) ServeHTTP(response http.ResponseWriter, request *http.Requ
 }
 
 func (txs *TxService) getFilteredTxns(bloom *bloom.Filter) (txns []transactions.SignedTxn) {
-	pendingTxns := txs.updateTxCache()
+	pendingTxGroups := txs.updateTxCache()
 
 	missingTxns := make([]transactions.SignedTxn, 0)
 	encodedLength := 0
-	for _, tx := range pendingTxns {
-		id := tx.ID()
-		if !bloom.Test(id[:]) {
-			txLength := tx.GetEncodedLength()
-			if encodedLength+txLength > txs.responseSizeLimit {
+	for _, txgroup := range pendingTxGroups {
+		missing := false
+		txGroupLength := 0
+		for _, tx := range txgroup {
+			id := tx.ID()
+			if !bloom.Test(id[:]) {
+				missing = true
+			}
+			txGroupLength += tx.GetEncodedLength()
+		}
+		if missing {
+			if encodedLength+txGroupLength > txs.responseSizeLimit {
 				break
 			}
-			missingTxns = append(missingTxns, tx)
-			encodedLength += txLength
+			for _, tx := range txgroup {
+				missingTxns = append(missingTxns, tx)
+			}
+			encodedLength += txGroupLength
 		}
 	}
 	return missingTxns
 }
 
-func (txs *TxService) updateTxCache() (pendingTxns []transactions.SignedTxn) {
+func (txs *TxService) updateTxCache() (pendingTxGroups [][]transactions.SignedTxn) {
 	currentUnixTime := time.Now().Unix()
 	txs.mu.RLock()
 	if txs.lastUpdate != 0 && txs.lastUpdate+updateInterval >= currentUnixTime {
 		// no need to update.
-		pendingTxns = txs.pendingTxns
+		pendingTxGroups = txs.pendingTxGroups
 		txs.mu.RUnlock()
 		return
 	}
@@ -178,11 +187,11 @@ func (txs *TxService) updateTxCache() (pendingTxns []transactions.SignedTxn) {
 	if txs.lastUpdate == 0 || txs.lastUpdate+updateInterval < currentUnixTime {
 		// The txs.pool.Pending() function allocates a new array on every call. That means that the old
 		// array ( if being used ) is still valid. There is no risk of data race here since
-		// the txs.pendingTxns is a slice (hence a pointer to the array) and not the array itself.
-		txs.pendingTxns = txs.pool.Pending()
+		// the txs.pendingTxGroups is a slice (hence a pointer to the array) and not the array itself.
+		txs.pendingTxGroups = txs.pool.Pending()
 		txs.lastUpdate = currentUnixTime
 	}
-	return txs.pendingTxns
+	return txs.pendingTxGroups
 }
 
 // TxServiceHTTPPath is the URL path to sync pending transactions from

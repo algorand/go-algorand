@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # build_packages.sh - Builds packages for one or more platforms and creates .tar.gz archive to be used for auto-update.
 #           Packages are assembled under $HOME/node_pkg.  This directory is deleted before starting.
@@ -20,9 +20,6 @@ if [ "$#" -eq 0 ]; then
 fi
 
 set -x
-
-export GOPATH=$(go env GOPATH)
-cd ${GOPATH}/src/github.com/algorand/go-algorand
 
 if [ "${FULLVERSION}" = "" ]; then
     export FULLVERSION=$(./scripts/compute_build_number.sh -f)

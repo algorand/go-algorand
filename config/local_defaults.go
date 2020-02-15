@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,33 +21,79 @@ import (
 	"time"
 )
 
-var defaultLocal = defaultLocalV4
+var defaultLocal = defaultLocalV5
 
-const configVersion = uint32(4)
+const configVersion = uint32(5)
 
 // !!! WARNING !!!
 //
 // These versioned structures need to be maintained CAREFULLY and treated
 // like UNIVERSAL CONSTANTS - they should not be modified once committed.
 //
-// Add fields or change defaults in a new defaultLocalV# instance,
+// New fields may be added to the current defaultLocalV# and should
+// also be added to installer/config.json.example and
+// test/testdata/configs/config-v{n}.json
+//
+// Changing a default value requires creating a new defaultLocalV# instance,
 // bump the version number (configVersion), and add appropriate migration and tests.
-//
-// EXCEPTION: If you are adding a new value whose default value is it's implicit default value
-//            it is safe / acceptable to add it without bumping the Config version.
-//
-// CLARIFICATION:
-//
-// If you need to add a parameter that has a default value different from its
-// zero value (eg int != 0, string != ""), you must bump the Config version.
-//
-// If you need to change a parameter's default, you must bump the Config version AND
-// provide a migration implementation.
 //
 // !!! WARNING !!!
 
+var defaultLocalV5 = Local{
+	// DO NOT MODIFY VALUES - New values may be added carefully - See WARNING at top of file
+	Version:                               5,
+	Archival:                              false,
+	BaseLoggerDebugLevel:                  4, // Was 1
+	BroadcastConnectionsLimit:             -1,
+	AnnounceParticipationKey:              true,
+	PriorityPeers:                         map[string]bool{},
+	CadaverSizeTarget:                     1073741824,
+	CatchupFailurePeerRefreshRate:         10,
+	CatchupParallelBlocks:                 16,
+	ConnectionsRateLimitingCount:          60,
+	ConnectionsRateLimitingWindowSeconds:  1,
+	DeadlockDetection:                     0,
+	DNSBootstrapID:                        "<network>.algorand.network",
+	EnableAgreementReporting:              false,
+	EnableAgreementTimeMetrics:            false,
+	EnableIncomingMessageFilter:           false,
+	EnableMetricReporting:                 false,
+	EnableOutgoingNetworkMessageFiltering: true,
+	EnableRequestLogger:                   false,
+	EnableTopAccountsReporting:            false,
+	EndpointAddress:                       "127.0.0.1:0",
+	GossipFanout:                          4,
+	IncomingConnectionsLimit:              10000, // Was -1
+	IncomingMessageFilterBucketCount:      5,
+	IncomingMessageFilterBucketSize:       512,
+	LogArchiveName:                        "node.archive.log",
+	LogArchiveMaxAge:                      "",
+	LogSizeLimit:                          1073741824,
+	MaxConnectionsPerIP:                   30,
+	NetAddress:                            "",
+	NodeExporterListenAddress:             ":9100",
+	NodeExporterPath:                      "./node_exporter",
+	OutgoingMessageFilterBucketCount:      3,
+	OutgoingMessageFilterBucketSize:       128,
+	ReconnectTime:                         1 * time.Minute, // Was 60ns
+	ReservedFDs:                           256,
+	RestReadTimeoutSeconds:                15,
+	RestWriteTimeoutSeconds:               120,
+	RunHosted:                             false,
+	SuggestedFeeBlockHistory:              3,
+	SuggestedFeeSlidingWindowSize:         50,
+	TelemetryToLog:                        true,
+	TxPoolExponentialIncreaseFactor:       2,
+	TxPoolSize:                            15000,
+	TxSyncIntervalSeconds:                 60,
+	TxSyncTimeoutSeconds:                  30,
+	TxSyncServeResponseSize:               1000000,
+	PeerConnectionsUpdateInterval:         3600,
+	// DO NOT MODIFY VALUES - New values may be added carefully - See WARNING at top of file
+}
+
 var defaultLocalV4 = Local{
-	// DO NOT MODIFY THIS STRUCTURE IN ANY WAY - See WARNING at top of file
+	// DO NOT MODIFY VALUES - New values may be added carefully - See WARNING at top of file
 	Version:                               4,
 	Archival:                              false,
 	BaseLoggerDebugLevel:                  4, // Was 1
@@ -57,6 +103,8 @@ var defaultLocalV4 = Local{
 	CadaverSizeTarget:                     1073741824,
 	CatchupFailurePeerRefreshRate:         10,
 	CatchupParallelBlocks:                 50,
+	ConnectionsRateLimitingCount:          60,
+	ConnectionsRateLimitingWindowSeconds:  1,
 	DeadlockDetection:                     0,
 	DNSBootstrapID:                        "<network>.algorand.network",
 	EnableAgreementReporting:              false,
@@ -64,12 +112,15 @@ var defaultLocalV4 = Local{
 	EnableIncomingMessageFilter:           false,
 	EnableMetricReporting:                 false,
 	EnableOutgoingNetworkMessageFiltering: true,
+	EnableRequestLogger:                   false,
 	EnableTopAccountsReporting:            false,
 	EndpointAddress:                       "127.0.0.1:0",
 	GossipFanout:                          4,
 	IncomingConnectionsLimit:              10000, // Was -1
 	IncomingMessageFilterBucketCount:      5,
 	IncomingMessageFilterBucketSize:       512,
+	LogArchiveName:                        "node.archive.log",
+	LogArchiveMaxAge:                      "",
 	LogSizeLimit:                          1073741824,
 	MaxConnectionsPerIP:                   30,
 	NetAddress:                            "",
@@ -89,11 +140,12 @@ var defaultLocalV4 = Local{
 	TxSyncIntervalSeconds:                 60,
 	TxSyncTimeoutSeconds:                  30,
 	TxSyncServeResponseSize:               1000000,
-	// DO NOT MODIFY THIS STRUCTURE IN ANY WAY - See WARNING at top of file
+
+	// DO NOT MODIFY VALUES - New values may be added carefully - See WARNING at top of file
 }
 
 var defaultLocalV3 = Local{
-	// DO NOT MODIFY THIS STRUCTURE IN ANY WAY - See WARNING at top of file
+	// DO NOT MODIFY VALUES - New values may be added carefully - See WARNING at top of file
 	Version:                               3,
 	Archival:                              false,
 	BaseLoggerDebugLevel:                  4, // Was 1
@@ -131,11 +183,11 @@ var defaultLocalV3 = Local{
 	TxSyncTimeoutSeconds:                  30,
 	TxSyncServeResponseSize:               1000000,
 	IsIndexerActive:                       false,
-	// DO NOT MODIFY THIS STRUCTURE IN ANY WAY - See WARNING at top of file
+	// DO NOT MODIFY VALUES - New values may be added carefully - See WARNING at top of file
 }
 
 var defaultLocalV2 = Local{
-	// DO NOT MODIFY THIS STRUCTURE IN ANY WAY - See WARNING at top of file
+	// DO NOT MODIFY VALUES - New values may be added carefully - See WARNING at top of file
 	Version:                               2,
 	Archival:                              false,
 	BaseLoggerDebugLevel:                  4, // Was 1
@@ -165,11 +217,11 @@ var defaultLocalV2 = Local{
 	TxPoolSize:                            50000,
 	TxSyncIntervalSeconds:                 60,
 	TxSyncTimeoutSeconds:                  30,
-	// DO NOT MODIFY THIS STRUCTURE IN ANY WAY - See WARNING at top of file
+	// DO NOT MODIFY VALUES - New values may be added carefully - See WARNING at top of file
 }
 
 var defaultLocalV1 = Local{
-	// DO NOT MODIFY THIS STRUCTURE IN ANY WAY - See WARNING at top of file
+	// DO NOT MODIFY VALUES - New values may be added carefully - See WARNING at top of file
 	Version:                               1,
 	Archival:                              false,
 	BaseLoggerDebugLevel:                  4, // Was 1
@@ -198,11 +250,11 @@ var defaultLocalV1 = Local{
 	TxPoolSize:                            50000,
 	TxSyncIntervalSeconds:                 60,
 	TxSyncTimeoutSeconds:                  30,
-	// DO NOT MODIFY THIS STRUCTURE IN ANY WAY - See WARNING at top of file
+	// DO NOT MODIFY VALUES - New values may be added carefully - See WARNING at top of file
 }
 
 var defaultLocalV0 = Local{
-	// DO NOT MODIFY THIS STRUCTURE IN ANY WAY - See WARNING at top of file
+	// DO NOT MODIFY VALUES - New values may be added carefully - See WARNING at top of file
 	Version:                               0,
 	Archival:                              false,
 	BaseLoggerDebugLevel:                  1,
@@ -230,7 +282,7 @@ var defaultLocalV0 = Local{
 	TxPoolSize:                            50000,
 	TxSyncIntervalSeconds:                 60,
 	TxSyncTimeoutSeconds:                  30,
-	// DO NOT MODIFY THIS STRUCTURE IN ANY WAY - See WARNING at top of file
+	// DO NOT MODIFY VALUES - New values may be added carefully - See WARNING at top of file
 }
 
 func migrate(cfg Local) (newCfg Local, err error) {
@@ -289,6 +341,20 @@ func migrate(cfg Local) (newCfg Local, err error) {
 			newCfg.PriorityPeers = map[string]bool{}
 		}
 		newCfg.Version = 4
+	}
+	// Migrate 4 -> 5
+	if newCfg.Version == 4 {
+		if newCfg.TxPoolSize == defaultLocalV4.TxPoolSize {
+			newCfg.TxPoolSize = defaultLocalV5.TxPoolSize
+		}
+		if newCfg.CatchupParallelBlocks == defaultLocalV4.CatchupParallelBlocks {
+			newCfg.CatchupParallelBlocks = defaultLocalV5.CatchupParallelBlocks
+		}
+		if newCfg.PeerConnectionsUpdateInterval == defaultLocalV4.PeerConnectionsUpdateInterval {
+			newCfg.PeerConnectionsUpdateInterval = defaultLocalV5.PeerConnectionsUpdateInterval
+		}
+
+		newCfg.Version = 5
 	}
 
 	if newCfg.Version != configVersion {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,7 +20,10 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -41,6 +44,11 @@ var runUnderHost bool
 var telemetryOverride string
 var maxPendingTransactions uint64
 var waitSec uint32
+var newNodeNetwork string
+var newNodeDestination string
+var newNodeArchival bool
+var newNodeIndexer bool
+var newNodeRelay string
 
 func init() {
 	nodeCmd.AddCommand(startCmd)
@@ -52,6 +60,7 @@ func init() {
 	nodeCmd.AddCommand(generateTokenCmd)
 	nodeCmd.AddCommand(pendingTxnsCmd)
 	nodeCmd.AddCommand(waitCmd)
+	nodeCmd.AddCommand(createCmd)
 
 	startCmd.Flags().StringVarP(&peerDial, "peer", "p", "", "Peer address to dial for initial connection")
 	startCmd.Flags().StringVarP(&listenIP, "listen", "l", "", "Endpoint / REST address to listen on")
@@ -64,8 +73,17 @@ func init() {
 	startCmd.Flags().StringVarP(&telemetryOverride, "telemetry", "t", "", `Enable telemetry if supported (Use "true", "false", "0" or "1")`)
 	restartCmd.Flags().StringVarP(&telemetryOverride, "telemetry", "t", "", `Enable telemetry if supported (Use "true", "false", "0" or "1")`)
 	pendingTxnsCmd.Flags().Uint64VarP(&maxPendingTransactions, "maxPendingTxn", "m", 0, "Cap the number of txns to fetch")
-
 	waitCmd.Flags().Uint32VarP(&waitSec, "waittime", "w", 5, "Time (in seconds) to wait for node to make progress")
+	createCmd.Flags().StringVar(&newNodeNetwork, "network", "", "Network the new node should point to")
+	createCmd.Flags().StringVar(&newNodeDestination, "destination", "", "Destination path for the new node")
+	localDefaults := config.GetDefaultLocal()
+	createCmd.Flags().BoolVarP(&newNodeArchival, "archival", "a", localDefaults.Archival, "Make the new node archival, storing all blocks")
+	createCmd.Flags().BoolVarP(&runUnderHost, "hosted", "H", localDefaults.RunHosted, "Configure the new node to run hosted by algoh")
+	createCmd.Flags().BoolVarP(&newNodeIndexer, "indexer", "i", localDefaults.IsIndexerActive, "Configure the new node to enable the indexer feature (implies --archival)")
+	createCmd.Flags().StringVar(&newNodeRelay, "relay", localDefaults.NetAddress, "Configure as a relay with specified listening address (NetAddress)")
+	createCmd.Flags().StringVar(&listenIP, "api", "", "REST API Endpoint")
+	createCmd.MarkFlagRequired("destination")
+	createCmd.MarkFlagRequired("network")
 }
 
 var nodeCmd = &cobra.Command{
@@ -81,8 +99,7 @@ var nodeCmd = &cobra.Command{
 
 var startCmd = &cobra.Command{
 	Use:   "start",
-	Short: "Init the specified algorand node",
-	Long:  `Init the specified algorand node`,
+	Short: "Init the specified Algorand node.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		binDir, err := util.ExeDir()
@@ -90,6 +107,10 @@ var startCmd = &cobra.Command{
 			panic(err)
 		}
 		onDataDirs(func(dataDir string) {
+			if libgoal.AlgorandDaemonSystemdManaged(dataDir) {
+				reportErrorf(errorNodeManagedBySystemd, "start")
+			}
+
 			nc := nodecontrol.MakeNodeController(binDir, dataDir)
 			nodeArgs := nodecontrol.AlgodStartArgs{
 				PeerAddress:       peerDial,
@@ -128,8 +149,7 @@ func getRunHostedConfigFlag(dataDir string) bool {
 
 var stopCmd = &cobra.Command{
 	Use:   "stop",
-	Short: "stop the specified Algorand node",
-	Long:  `Stop the specified Algorand node`,
+	Short: "stop the specified Algorand node.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		binDir, err := util.ExeDir()
@@ -137,6 +157,10 @@ var stopCmd = &cobra.Command{
 			panic(err)
 		}
 		onDataDirs(func(dataDir string) {
+			if libgoal.AlgorandDaemonSystemdManaged(dataDir) {
+				reportErrorf(errorNodeManagedBySystemd, "stop")
+			}
+
 			nc := nodecontrol.MakeNodeController(binDir, dataDir)
 
 			log.Info(infoTryingToStopNode)
@@ -153,8 +177,7 @@ var stopCmd = &cobra.Command{
 
 var restartCmd = &cobra.Command{
 	Use:   "restart",
-	Short: "stop, and then start, the specified Algorand node",
-	Long:  `Stop, and then start, the specified Algorand node`,
+	Short: "Stop, and then start, the specified Algorand node.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		binDir, err := util.ExeDir()
@@ -162,6 +185,10 @@ var restartCmd = &cobra.Command{
 			panic(err)
 		}
 		onDataDirs(func(dataDir string) {
+			if libgoal.AlgorandDaemonSystemdManaged(dataDir) {
+				reportErrorf(errorNodeManagedBySystemd, "restart")
+			}
+
 			nc := nodecontrol.MakeNodeController(binDir, dataDir)
 
 			_, err = nc.GetAlgodPID()
@@ -210,8 +237,7 @@ var restartCmd = &cobra.Command{
 
 var generateTokenCmd = &cobra.Command{
 	Use:   "generatetoken",
-	Short: "Generate and install a new API token",
-	Long:  "Generate and install a new API token",
+	Short: "Generate and install a new API token.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		onDataDirs(func(dataDir string) {
@@ -244,38 +270,55 @@ var generateTokenCmd = &cobra.Command{
 var statusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Get the current node status",
-	Long:  `Show the current status of the running Algorand node`,
+	Long:  `Show the current status of the running Algorand node.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		onDataDirs(func(dataDir string) {
-			client := ensureAlgodClient(dataDir)
-			stat, err := client.Status()
-			if err != nil {
-				reportErrorf(errorNodeStatus, err)
-			}
-			vers, err := client.AlgodVersions()
-			if err != nil {
-				reportErrorf(errorNodeStatus, err)
-			}
-
-			fmt.Println(makeStatusString(stat))
-			if vers.GenesisID != "" {
-				fmt.Printf("Genesis ID: %s\n", vers.GenesisID)
-			}
-			fmt.Printf("Genesis hash: %s\n", base64.StdEncoding.EncodeToString(vers.GenesisHash[:]))
-		})
+		onDataDirs(getStatus)
 	},
+}
+
+func getStatus(dataDir string) {
+	client := ensureAlgodClient(dataDir)
+	stat, err := client.Status()
+	if err != nil {
+		reportErrorf(errorNodeStatus, err)
+	}
+	vers, err := client.AlgodVersions()
+	if err != nil {
+		reportErrorf(errorNodeStatus, err)
+	}
+
+	fmt.Println(makeStatusString(stat))
+	if vers.GenesisID != "" {
+		fmt.Printf("Genesis ID: %s\n", vers.GenesisID)
+	}
+	fmt.Printf("Genesis hash: %s\n", base64.StdEncoding.EncodeToString(vers.GenesisHash[:]))
 }
 
 func makeStatusString(stat v1.NodeStatus) string {
 	lastRoundTime := fmt.Sprintf("%.1fs", time.Duration(stat.TimeSinceLastRound).Seconds())
 	catchupTime := fmt.Sprintf("%.1fs", time.Duration(stat.CatchupTime).Seconds())
-	return fmt.Sprintf(infoNodeStatus, stat.LastRound, lastRoundTime, catchupTime, stat.LastVersion, stat.NextVersion, stat.NextVersionRound, stat.NextVersionSupported)
+	statusString := fmt.Sprintf(
+		infoNodeStatus,
+		stat.LastRound,
+		lastRoundTime,
+		catchupTime,
+		stat.LastVersion,
+		stat.NextVersion,
+		stat.NextVersionRound,
+		stat.NextVersionSupported)
+
+	if stat.StoppedAtUnsupportedRound {
+		statusString = statusString + "\n" + fmt.Sprintf(catchupStoppedOnUnsupported, stat.LastRound)
+	}
+
+	return statusString
 }
 
 var lastroundCmd = &cobra.Command{
 	Use:   "lastround",
 	Short: "Print the last round number",
+	Long:  `Prints the most recent round confirmed by the Algorand node.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		onDataDirs(func(dataDir string) {
@@ -347,7 +390,7 @@ var pendingTxnsCmd = &cobra.Command{
 var waitCmd = &cobra.Command{
 	Use:   "wait",
 	Short: "Waits for the node to make progress",
-	Long:  "Waits for the node to make progress, which includes catching up",
+	Long:  "Waits for the node to make progress, which includes catching up.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		client := ensureAlgodClient(ensureSingleDataDir())
@@ -371,6 +414,96 @@ var waitCmd = &cobra.Command{
 					os.Exit(0)
 				}
 			}
+		}
+	},
+}
+
+func isValidIP(userInput string) bool {
+	host, port, err := net.SplitHostPort(userInput)
+	if err != nil {
+		return false
+	}
+	if port == "" {
+		return false
+	}
+	if host == "" {
+		return false
+	}
+	return net.ParseIP(host) != nil
+}
+
+var createCmd = &cobra.Command{
+	Use:   "create",
+	Short: "Create a node at the desired data directory for the desired network.",
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, _ []string) {
+
+		// validate network input
+		validNetworks := map[string]bool{"mainnet": true, "testnet": true, "devnet": true, "betanet": true}
+		if !validNetworks[newNodeNetwork] {
+			reportErrorf(errorNodeCreation, "passed network name invalid")
+		}
+
+		// validate and store passed options
+		localConfig := config.GetDefaultLocal()
+		if newNodeRelay != "" {
+			if isValidIP(newNodeRelay) {
+				localConfig.NetAddress = newNodeRelay
+			} else {
+				reportErrorf(errorNodeCreationIPFailure, newNodeRelay)
+			}
+		}
+		if listenIP != "" {
+			if isValidIP(listenIP) {
+				localConfig.EndpointAddress = listenIP
+			} else {
+				reportErrorf(errorNodeCreationIPFailure, listenIP)
+			}
+		}
+		localConfig.Archival = newNodeArchival || newNodeRelay != "" || newNodeIndexer
+		localConfig.IsIndexerActive = newNodeIndexer
+		localConfig.RunHosted = runUnderHost
+
+		// locate genesis block
+		exePath, err := util.ExeDir()
+		if err != nil {
+			reportErrorln(errorNodeCreation, err)
+		}
+		firstChoicePath := filepath.Join(exePath, "genesisfiles", newNodeNetwork, "genesis.json")
+		secondChoicePath := filepath.Join("var", "lib", "algorand", "genesis", newNodeNetwork, "genesis.json")
+		thirdChoicePath := filepath.Join(exePath, "genesisfiles", "genesis", newNodeNetwork, "genesis.json")
+		paths := []string{firstChoicePath, secondChoicePath, thirdChoicePath}
+		correctPath := ""
+		for _, pathCandidate := range paths {
+			if util.FileExists(pathCandidate) {
+				correctPath = pathCandidate
+				break
+			}
+		}
+		if correctPath == "" {
+			reportErrorf("Could not find genesis.json file. Paths checked: %v", strings.Join(paths, ","))
+		}
+
+		// verify destination does not exist, and attempt to create destination folder
+		if util.FileExists(newNodeDestination) {
+			reportErrorf(errorNodeCreation, "destination folder already exists")
+		}
+		destPath := filepath.Join(newNodeDestination, "genesis.json")
+		err = os.MkdirAll(newNodeDestination, 0766)
+		if err != nil {
+			reportErrorf(errorNodeCreation, "could not create destination folder")
+		}
+
+		// copy genesis block to destination
+		_, err = util.CopyFile(correctPath, destPath)
+		if err != nil {
+			reportErrorf(errorNodeCreation, err)
+		}
+
+		// save config to destination
+		err = localConfig.SaveToDisk(newNodeDestination)
+		if err != nil {
+			reportErrorf(errorNodeCreation, err)
 		}
 	},
 }

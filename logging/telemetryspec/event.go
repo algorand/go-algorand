@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -238,4 +238,41 @@ type BlockStatsEventDetails struct {
 	ActiveUsers         uint64
 	AgreementDurationMs uint64
 	NetworkDowntimeMs   uint64
+}
+
+// HTTPRequestEvent event
+const HTTPRequestEvent Event = "HTTPRequest"
+
+// HTTPRequestDetails contains details for the HTTPRequestEvent
+// This should resemble the Common Log Format, as it's being used as the source data for generating it.
+type HTTPRequestDetails struct {
+	Client       string // The ip address of the remote
+	InstanceName string // The node identifier
+	Request      string // The request string, i.e. "GET /apache_pb.gif HTTP/1.0"
+	StatusCode   uint64 // The response status code
+	BodyLength   uint64 // The returned body length, in bytes
+	UserAgent    string // The user-agent string ( if any )
+}
+
+// PeerConnectionsEvent event
+const PeerConnectionsEvent Event = "PeerConnections"
+
+// PeersConnectionDetails contains details for PeerConnectionsEvent
+type PeersConnectionDetails struct {
+	IncomingPeers []PeerConnectionDetails
+	OutgoingPeers []PeerConnectionDetails
+}
+
+// PeerConnectionDetails contains details for PeerConnectionsEvent regarding a single peer ( either incoming or outgoing )
+type PeerConnectionDetails struct {
+	// Address is the IP address of the remote connected socket
+	Address string
+	// The HostName is the TelemetryGUID passed via the X-Algorand-TelId header during the http connection handshake.
+	HostName string
+	// InstanceName is the node-specific hashed instance name that was passed via X-Algorand-InstanceName header during the http connection handshake.
+	InstanceName string
+	// ConnectionDuration is the duration of the connection, in seconds.
+	ConnectionDuration uint
+	// Endpoint is the dialed-to address, for an outgoing connection. Not being used for incoming connection.
+	Endpoint string `json:",omitempty"`
 }

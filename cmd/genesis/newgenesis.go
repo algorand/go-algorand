@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/gen"
 	"github.com/algorand/go-algorand/util"
 )
@@ -28,13 +29,16 @@ import (
 var outDir = flag.String("d", "", "The directory containing the generated ledger and wallet files.")
 var netName = flag.String("n", "", "The name of the network for this ledger (will override config file).")
 var configFile = flag.String("c", "", "The config file containing the genesis ledger and wallets")
+var quiet = flag.Bool("q", false, "Skip verbose informational messages")
 
 func init() {
 	flag.Parse()
 }
 
 func main() {
-	fmt.Println("Network Name: " + *netName)
+	if !*quiet {
+		fmt.Println("Network Name: " + *netName)
+	}
 
 	cfgFile := *configFile
 	if !util.FileExists(cfgFile) {
@@ -50,7 +54,7 @@ func main() {
 		genesisData.NetworkName = *netName
 	}
 
-	err = gen.GenerateGenesisFiles(genesisData, *outDir)
+	err = gen.GenerateGenesisFiles(genesisData, config.Consensus, *outDir, !*quiet)
 	if err != nil {
 		reportErrorf("Cannot write genesis files: %s", err)
 	}

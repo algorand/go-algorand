@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -35,6 +35,10 @@ func corsMiddleware(allowedOrigins []string) func(http.Handler) http.Handler {
 			for _, allowedOrigin := range allowedOrigins {
 				if subtle.ConstantTimeCompare([]byte(origin), []byte(allowedOrigin)) == 1 {
 					found = allowedOrigin
+					break
+				} else if allowedOrigin == "*" {
+					found = origin
+					break
 				}
 			}
 

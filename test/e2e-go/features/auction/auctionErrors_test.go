@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@ package auction
 
 import (
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -27,6 +28,12 @@ import (
 )
 
 func TestInvalidDeposit(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	t.Parallel()
 	r := require.New(t)
 
@@ -112,6 +119,9 @@ func TestInvalidDeposit(t *testing.T) {
 }
 
 func TestNoDepositAssociatedWithBid(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
 	t.Parallel()
 	r := require.New(t)
 
@@ -273,6 +283,12 @@ func unpartitionNetwork(fixture *fixtures.AuctionFixture, r *require.Assertions)
 }
 
 func TestStartAndPartitionAuctionTenUsersTenBidsEach(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
+	if testing.Short() {
+		t.Skip()
+	}
 	t.Parallel()
 	r := require.New(t)
 	var fixture fixtures.AuctionFixture

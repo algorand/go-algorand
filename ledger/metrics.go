@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -38,7 +38,7 @@ func (mt *metricsTracker) loadFromDisk(l ledgerForTracker) error {
 func (mt *metricsTracker) close() {
 }
 
-func (mt *metricsTracker) newBlock(blk bookkeeping.Block, delta stateDelta) {
+func (mt *metricsTracker) newBlock(blk bookkeeping.Block, delta StateDelta) {
 	rnd := blk.Round()
 	mt.ledgerRound.Set(float64(rnd), map[string]string{})
 	mt.ledgerTransactionsTotal.Add(float64(len(blk.Payset)), map[string]string{})

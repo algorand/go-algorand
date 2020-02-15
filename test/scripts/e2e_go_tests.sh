@@ -5,10 +5,13 @@ echo "######################################################################"
 set -e
 
 export GOPATH=$(go env GOPATH)
-REPO_DIR=${GOPATH}/src/github.com/algorand/go-algorand
+export GO111MODULE=on
+
+# Anchor our repo root reference location
+REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"/../..
 
 # Need bin-race binaries for e2e tests
-pushd ${REPO_DIR}
+pushd ${REPO_ROOT}
 make build-race -j4
 popd
 
@@ -28,8 +31,7 @@ fi
 echo "Test output can be found in ${TESTDIR}"
 
 if [ "${SRCROOT}" = "" ]; then
-    cd ${GOPATH}/src/github.com/algorand/go-algorand
-    export SRCROOT="$(pwd -P)"
+    export SRCROOT=${REPO_ROOT}
 fi
 
 if [ "${NODEBINDIR}" = "" ]; then
@@ -44,13 +46,6 @@ if [ "${TESTDATADIR}" = "" ]; then
 fi
 
 cd ${SRCROOT}/test/e2e-go
-
-# For now, disable long-running e2e tests on Travis
-# (the ones that won't complete...)
-SHORTTEST=
-if [ "${TRAVIS_BRANCH}" != "" ]; then
-    SHORTTEST=-short
-fi
 
 # If one or more -t <pattern> are specified, use go test -run <pattern> for each
 
@@ -70,8 +65,39 @@ while [ "$1" != "" ]; do
     shift
 done
 
+# ARM64 has some memory related issues with fork. Since we don't really care
+# about testing the forking capabilities, we're just run the tests one at a time.
+EXECUTE_TESTS_INDIVIDUALLY="false"
+ARCHTYPE=$("${SRCROOT}/scripts/archtype.sh")
+if [ "${ARCHTYPE}" = "arm64" ]; then
+    EXECUTE_TESTS_INDIVIDUALLY="true"
+fi
+
+
 if [ "${#TESTPATTERNS[@]}" -eq 0 ]; then
-    go test -race -timeout 1h -v ${SHORTTEST} ./...
+    if [ "${EXECUTE_TESTS_INDIVIDUALLY}" = "true" ]; then
+        TESTS_DIRECTORIES=$(GO111MODULE=off go list ./...)
+        for TEST_DIR in ${TESTS_DIRECTORIES[@]}; do
+            TESTS=$(go test -list ".*" ${TEST_DIR} -vet=off | grep -v "github.com" || true)
+            for TEST_NAME in ${TESTS[@]}; do
+                go test -race -timeout 1h -vet=off -v ${SHORTTEST} -run ${TEST_NAME} ${TEST_DIR}
+                KMD_INSTANCES_COUNT=$(ps -Af | grep kmd | grep -v "grep" | wc -l | tr -d ' ')
+                if [ "${KMD_INSTANCES_COUNT}" != "0" ]; then
+                    echo "One or more than one KMD instances remains running:"
+                    ps -Af | grep kmd | grep -v "grep"
+                    exit 1
+                fi
+                ALGOD_INSTANCES_COUNT=$(ps -Af | grep algod | grep -v "grep" | wc -l | tr -d ' ')
+                if [ "${ALGOD_INSTANCES_COUNT}" != "0" ]; then
+                    echo "One or more than one algod instances remains running:"
+                    ps -Af | grep algod | grep -v "grep"
+                    exit 1
+                fi
+            done
+        done
+    else
+        go test -race -timeout 1h -v ${SHORTTEST} ./...
+    fi
 else
     for TEST in ${TESTPATTERNS[@]}; do
         go test -race -timeout 1h -v ${SHORTTEST} -run ${TEST} ./...

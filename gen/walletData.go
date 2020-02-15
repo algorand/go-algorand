@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -45,6 +45,7 @@ type GenesisData struct {
 	ConsensusProtocol protocol.ConsensusVersion
 	FirstPartKeyRound uint64
 	LastPartKeyRound  uint64
+	PartKeyDilution   uint64
 	Wallets           []WalletData
 	FeeSink           basics.Address
 	RewardsPool       basics.Address

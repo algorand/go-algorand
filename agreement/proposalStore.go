@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -179,6 +179,11 @@ func (store *proposalStore) underlying() listener {
 //
 // - A readStaging event is dispatched to the proposalMachinePeriod.  The proposalStore
 //   sets the matching proposal payload (if one exists) in the response.
+//
+// - A readPinned event is delivered when the player wants to query the current
+//   pinned proposalValue, and corresponding payload if one exists. This occurs
+//   during resynchronization when players may relay the pinned value.
+//   The event is handled exclusively by the proposalStore and not forwarded.
 func (store *proposalStore) handle(r routerHandle, p player, e event) event {
 	if store.Relevant == nil {
 		store.Relevant = make(map[period]proposalValue)
@@ -264,6 +269,7 @@ func (store *proposalStore) handle(r routerHandle, p player, e event) event {
 		}
 
 	case newPeriod:
+		// called before p.Period actually changes (if it does)
 		starting := e.(newPeriodEvent).Proposal
 		staged := stagedValue(p, r, p.Round, p.Period).Proposal
 		if starting != bottom {
@@ -333,6 +339,13 @@ func (store *proposalStore) handle(r routerHandle, p player, e event) event {
 		se.Committable = ea.Assembled
 		se.Payload = ea.Payload
 		return se
+	case readPinned:
+		se := e.(pinnedValueEvent)
+		ea := store.Assemblers[store.Pinned] // If pinned is bottom, assembled/payloadOK = false, payload = bottom
+		se.Proposal = store.Pinned
+		se.PayloadOK = ea.Assembled
+		se.Payload = ea.Payload
+		return se
 	}
 	logging.Base().Panicf("proposalStore: bad event type: observed an event of type %v", e.t())
 	panic("not reached")
@@ -361,7 +374,7 @@ func (store *proposalStore) lastRelevant(pv proposalValue) (p period, pinned boo
 	}
 
 	for per := range store.Relevant {
-		if per > p {
+		if per > p && store.Relevant[per] == pv {
 			p = per
 		}
 	}

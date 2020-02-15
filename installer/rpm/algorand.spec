@@ -27,11 +27,12 @@ This package provides an implementation of the Algorand protocol.
 mkdir -p %{buildroot}/usr/bin
 # NOTE: keep in sync with scripts/build_deb.sh bin_files
 # NOTE: keep in sync with %files section below
-for f in algod algoh algokey carpenter catchupsrv diagcfg goal kmd msgpacktool node_exporter; do
+for f in algocfg algod algoh algokey carpenter catchupsrv ddconfig.sh diagcfg goal kmd msgpacktool node_exporter; do
   install -m 755 ${GOPATH}/bin/${f} %{buildroot}/usr/bin/${f}
 done
 
 mkdir -p %{buildroot}/var/lib/algorand
+chmod 775 %{buildroot}/var/lib/algorand
 for f in config.json.example system.json; do
   install -m 644 ${REPO_DIR}/installer/${f} %{buildroot}/var/lib/algorand/${f}
 done
@@ -54,7 +55,7 @@ install -m 644 ${REPO_DIR}/installer/rpm/algorand.repo %{buildroot}/usr/lib/algo
 
 mkdir -p %{buildroot}/var/lib/algorand/genesis
 if [ "%{RELEASE_GENESIS_PROCESS}" != "x" ]; then
-  genesis_dirs=("devnet" "testnet" "mainnet")
+  genesis_dirs=("devnet" "testnet" "mainnet" "betanet")
   for dir in "${genesis_dirs[@]}"; do
     mkdir -p %{buildroot}/var/lib/algorand/genesis/${dir}
     cp ${REPO_DIR}/installer/genesis/${dir}/genesis.json %{buildroot}/var/lib/algorand/genesis/${dir}/genesis.json
@@ -67,22 +68,25 @@ else
 fi
 
 %files
+/usr/bin/algocfg
 /usr/bin/algod
 /usr/bin/algoh
 /usr/bin/algokey
 /usr/bin/carpenter
 /usr/bin/catchupsrv
+/usr/bin/ddconfig.sh
 /usr/bin/diagcfg
 /usr/bin/goal
 /usr/bin/kmd
 /usr/bin/msgpacktool
 /usr/bin/node_exporter
 /var/lib/algorand/config.json.example
-/var/lib/algorand/system.json
+%config(noreplace) /var/lib/algorand/system.json
 %config(noreplace) /var/lib/algorand/genesis.json
 %if %{RELEASE_GENESIS_PROCESS} != "x"
   /var/lib/algorand/genesis/devnet/genesis.json
   /var/lib/algorand/genesis/testnet/genesis.json
+  /var/lib/algorand/genesis/betanet/genesis.json
   /var/lib/algorand/genesis/mainnet/genesis.json
 %endif
 /lib/systemd/system/algorand.service
@@ -97,11 +101,9 @@ fi
 %pre
 getent passwd algorand >/dev/null || \
 	useradd --system --home-dir /var/lib/algorand --no-create-home algorand >/dev/null
-getent group nogroup >/dev/null || \
-	groupadd --system nogroup >/dev/null
 
 %post
-chown -R algorand /var/lib/algorand
+chown -R algorand:algorand /var/lib/algorand
 %systemd_post algorand
 
 %preun

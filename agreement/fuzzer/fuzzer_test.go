@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -127,10 +127,11 @@ func (n *Fuzzer) initAgreementNode(nodeID int, filters ...NetworkFilterFactory) 
 		return false
 	}
 
+	logger := n.log.WithFields(logging.Fields{"Source": "service-" + strconv.Itoa(nodeID)})
 	n.agreementParams[nodeID] = agreement.Parameters{
-		Logger:                  n.log.WithFields(logging.Fields{"Source": "service-" + strconv.Itoa(nodeID)}),
+		Logger:                  logger,
 		Ledger:                  n.ledgers[nodeID],
-		Network:                 gossip.WrapNetwork(n.facades[nodeID]),
+		Network:                 gossip.WrapNetwork(n.facades[nodeID], logger),
 		KeyManager:              simpleKeyManager(n.accounts[nodeID : nodeID+1]),
 		BlockValidator:          n.blockValidator,
 		BlockFactory:            testBlockFactory{Owner: nodeID},
@@ -363,6 +364,18 @@ func (n *Fuzzer) LedgerSync(l *testLedger, r basics.Round, c agreement.Certifica
 	return true
 }
 
+// set the catchup flag for the node so that we can continuesly catch up the node.
+// once the node is keeping up, this would get disabled.
+func (n *Fuzzer) StartCatchingUp(nodeID int) {
+	if nodeID == -1 {
+		for nodeID := range n.ledgers {
+			n.ledgers[nodeID].catchingUp = true
+		}
+	} else {
+		n.ledgers[nodeID].catchingUp = true
+	}
+}
+
 func (n *Fuzzer) Catchup(nodeID int) {
 	// find the ledger with the highest round.
 	highRoundLedger := n.ledgers[0]
@@ -484,6 +497,14 @@ func (n *Fuzzer) exhaustNetworkOperations() (networkActivity bool, ticks int) {
 	return
 }
 
+func (n *Fuzzer) checkCatchup() {
+	for nodeID, ledger := range n.ledgers {
+		if ledger.catchingUp {
+			n.Catchup(nodeID)
+		}
+	}
+}
+
 func (n *Fuzzer) runLoop(ticksCount, inactivityThreshold int, runResult *RunResult) bool {
 	clockAccelaration := int32(1)
 	networkInactivityCounter := 0
@@ -511,6 +532,8 @@ func (n *Fuzzer) runLoop(ticksCount, inactivityThreshold int, runResult *RunResu
 			clockAccelaration = 1
 		}
 		n.CheckBlockingEnsureDigest()
+
+		n.checkCatchup()
 	}
 	return true
 }
@@ -531,7 +554,7 @@ func (n *Fuzzer) Run(trialTicks, recoveryTicks, inactivityTicks int) (bool, *Run
 		return true, &runResult
 	}
 
-	n.Catchup(-1)
+	n.StartCatchingUp(-1)
 	n.RemoveFilters()
 
 	// perform the recovery phase
@@ -571,7 +594,7 @@ func (n *Fuzzer) CrashNode(nodeID int) {
 	n.facades[nodeID].ClearHandlers()
 	n.ledgers[nodeID].ClearNotifications()
 
-	n.agreementParams[nodeID].Network = gossip.WrapNetwork(n.facades[nodeID])
+	n.agreementParams[nodeID].Network = gossip.WrapNetwork(n.facades[nodeID], n.log)
 	n.agreements[nodeID] = agreement.MakeService(n.agreementParams[nodeID])
 
 	cadaverFilename := fmt.Sprintf("%v-%v", n.networkName, nodeID)

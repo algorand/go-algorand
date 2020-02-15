@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -184,18 +184,28 @@ func (nc *NodeController) StartAlgod(args AlgodStartArgs) (alreadyRunning bool, 
 	}
 
 	// Wait on the algod process and check if exits
-	c := make(chan bool)
+	algodExitChan := make(chan struct{})
+	startAlgodCompletedChan := make(chan struct{})
+	defer close(startAlgodCompletedChan)
 	go func() {
 		// this Wait call is important even beyond the scope of this function; it allows the system to
 		// move the process from a "zombie" state into "done" state, and is required for the Signal(0) test.
-		algodCmd.Wait()
-		c <- true
+		err := algodCmd.Wait()
+		select {
+		case <-startAlgodCompletedChan:
+			// we've already exited this function, so we want to report to the error to the callback.
+			if args.ExitErrorCallback != nil {
+				args.ExitErrorCallback(nc, err)
+			}
+		default:
+		}
+		algodExitChan <- struct{}{}
 	}()
 
 	success := false
 	for !success {
 		select {
-		case <-c:
+		case <-algodExitChan:
 			return false, errAlgodExitedEarly
 		case <-time.After(time.Millisecond * 100):
 			// If we can't talk to the API yet, spin
@@ -303,30 +313,31 @@ func (nc NodeController) Clone(targetDir string, copyLedger bool) (err error) {
 	return
 }
 
-// GetGenesisID returns the current genesis directory ID for our instance
-func (nc NodeController) GetGenesisID() (string, error) {
+// GetGenesis returns the current genesis for our instance
+func (nc NodeController) GetGenesis() (bookkeeping.Genesis, error) {
+	var genesis bookkeeping.Genesis
+
 	genesisFile := filepath.Join(nc.GetDataDir(), config.GenesisJSONFile)
 	genesisText, err := ioutil.ReadFile(genesisFile)
 	if err != nil {
-		return "", err
+		return genesis, err
 	}
 
-	var genesis bookkeeping.Genesis
 	err = protocol.DecodeJSON(genesisText, &genesis)
 	if err != nil {
-		return "", err
+		return genesis, err
 	}
 
-	return genesis.ID(), nil
+	return genesis, nil
 }
 
 // GetGenesisDir returns the current genesis directory for our instance
 func (nc NodeController) GetGenesisDir() (string, error) {
-	genesisID, err := nc.GetGenesisID()
+	genesis, err := nc.GetGenesis()
 	if err != nil {
 		return "", err
 	}
-	genesisDir := filepath.Join(nc.GetDataDir(), genesisID)
+	genesisDir := filepath.Join(nc.GetDataDir(), genesis.ID())
 	return genesisDir, nil
 }
 
@@ -363,4 +374,15 @@ func (nc NodeController) readGenesisJSON(genesisFile string) (genesisLedger book
 
 	err = protocol.DecodeJSON(genesisText, &genesisLedger)
 	return
+}
+
+// SetConsensus applies a new consensus settings which would get deployed before
+// any of the nodes starts
+func (nc NodeController) SetConsensus(consensus config.ConsensusProtocols) error {
+	return config.SaveConfigurableConsensus(nc.algodDataDir, consensus)
+}
+
+// GetConsensus rebuild the consensus version from the data directroy
+func (nc NodeController) GetConsensus() (config.ConsensusProtocols, error) {
+	return config.PreloadConfigurableConsensusProtocols(nc.algodDataDir)
 }

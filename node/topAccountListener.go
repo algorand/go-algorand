@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,6 +21,7 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
@@ -60,9 +61,9 @@ func (t *topAccountListener) init(balances basics.BalanceDetail) {
 }
 
 // BlockListener event, triggered when the ledger writes a new block.
-func (t *topAccountListener) OnNewBlock(b bookkeeping.Block) {
+func (t *topAccountListener) OnNewBlock(block bookkeeping.Block, delta ledger.StateDelta) {
 	// XXX revise for new ledger API
-	// t.update(b, balances)
+	// t.update(block, balances)
 
 	// If number of accounts after update is insufficient, do a full re-init
 	if len(t.accounts) < numTopAccounts {
@@ -96,12 +97,13 @@ func (t *topAccountListener) update(b bookkeeping.Block, balances basics.Balance
 	// Lookup map for updated accounts.
 	accountSet := make(map[basics.Address]bool)
 
-	payset, err := b.DecodePayset()
+	payset, err := b.DecodePaysetFlat()
 	if err != nil {
 		return
 	}
 
-	for _, tx := range payset {
+	for _, txad := range payset {
+		tx := txad.SignedTxn
 		if tx.Txn.Type == protocol.PaymentTx {
 			accountSet[tx.Txn.Receiver] = true
 			if tx.Txn.CloseRemainderTo != (basics.Address{}) {

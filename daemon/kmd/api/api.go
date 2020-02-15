@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -58,7 +58,7 @@
 // Autogenerate the swagger json.
 // Base path must be a fully specified package name (else, it seems that swagger feeds a relative path to
 // loader.Config.Import(), and that breaks the vendor directory if the source is symlinked from elsewhere)
-//go:generate swagger generate spec -m -o="./swagger.json" --base-path="github.com/algorand/go-algorand/daemon/kmd/"
+//go:generate swagger generate spec -m -o="./swagger.json"
 //go:generate swagger validate ./swagger.json --stop-on-error
 //go:generate ../lib/kmdapi/bundle_swagger_json.sh
 package api

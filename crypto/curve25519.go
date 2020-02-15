@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -48,17 +48,22 @@ func init() {
 		logging.Init()
 		logging.Base().Fatal("failed to initialize libsodium!")
 	}
+
+	// Check sizes of structs
+	_ = [C.crypto_sign_ed25519_BYTES]byte(ed25519Signature{})
+	_ = [C.crypto_sign_ed25519_PUBLICKEYBYTES]byte(ed25519PublicKey{})
+	_ = [C.crypto_sign_ed25519_SECRETKEYBYTES]byte(ed25519PrivateKey{})
+	_ = [C.crypto_sign_ed25519_SEEDBYTES]byte(ed25519Seed{})
 }
 
 // A Seed holds the entropy needed to generate cryptographic keys.
 type Seed ed25519Seed
 
 /* Classical signatures */
-
-type ed25519Signature [C.crypto_sign_ed25519_BYTES]byte
-type ed25519PublicKey [C.crypto_sign_ed25519_PUBLICKEYBYTES]byte
-type ed25519PrivateKey [C.crypto_sign_ed25519_SECRETKEYBYTES]byte
-type ed25519Seed [C.crypto_sign_ed25519_SEEDBYTES]byte
+type ed25519Signature [64]byte
+type ed25519PublicKey [32]byte
+type ed25519PrivateKey [64]byte
+type ed25519Seed [32]byte
 
 // MasterDerivationKey is used to derive ed25519 keys for use in wallets
 type MasterDerivationKey [masterDerivationKeyLenBytes]byte
@@ -171,12 +176,12 @@ func GenerateSignatureSecrets(seed Seed) *SignatureSecrets {
 // cryptographic secrets.
 func (s *SignatureSecrets) Sign(message Hashable) Signature {
 	cryptoSigSecretsSignTotal.Inc(map[string]string{})
-	return s.signBytes(hashRep(message))
+	return s.SignBytes(hashRep(message))
 }
 
-// signBytes signs a message directly, without first hashing.
+// SignBytes signs a message directly, without first hashing.
 // Caller is responsible for domain separation.
-func (s *SignatureSecrets) signBytes(message []byte) Signature {
+func (s *SignatureSecrets) SignBytes(message []byte) Signature {
 	cryptoSigSecretsSignBytesTotal.Inc(map[string]string{})
 	return Signature(ed25519Sign(ed25519PrivateKey(s.SK), message))
 }
@@ -191,10 +196,10 @@ func (v SignatureVerifier) Verify(message Hashable, sig Signature) bool {
 	return ed25519Verify(ed25519PublicKey(v), hashRep(message), ed25519Signature(sig))
 }
 
-// verifyBytes verifies a signature, where the message is not hashed first.
+// VerifyBytes verifies a signature, where the message is not hashed first.
 // Caller is responsible for domain separation.
 // If the message is a Hashable, Verify() can be used instead.
-func (v SignatureVerifier) verifyBytes(message []byte, sig Signature) bool {
+func (v SignatureVerifier) VerifyBytes(message []byte, sig Signature) bool {
 	cryptoSigSecretsVerifyBytesTotal.Inc(map[string]string{})
 	return ed25519Verify(ed25519PublicKey(v), message, ed25519Signature(sig))
 }

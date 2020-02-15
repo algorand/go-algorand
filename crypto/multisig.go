@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -38,7 +38,7 @@ type MultisigSig struct {
 
 	Version   uint8            `codec:"v"`
 	Threshold uint8            `codec:"thr"`
-	Subsigs   []MultisigSubsig `codec:"subsig"`
+	Subsigs   []MultisigSubsig `codec:"subsig,allocbound=maxMultisig"`
 }
 
 // MultisigPreimageFromPKs makes an empty MultisigSig for a given preimage. It should be renamed.

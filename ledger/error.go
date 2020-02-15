@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,7 +21,6 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/protocol"
 )
 
 // TransactionInLedgerError is returned when a transaction cannot be added because it has already been done
@@ -43,14 +42,6 @@ type BlockInLedgerError struct {
 // Error satisfies builtin interface `error`
 func (bile BlockInLedgerError) Error() string {
 	return fmt.Sprintf("block number already in ledger: block %d < next Round %d", bile.LastRound, bile.NextRound)
-}
-
-// ProtocolError is used to indicate that an unsupported protocol has been detected.
-type ProtocolError protocol.ConsensusVersion
-
-// Error satisfies builtin interface `error`
-func (err ProtocolError) Error() string {
-	return fmt.Sprintf("protocol not supported: %s", err)
 }
 
 // ErrNoEntry is used to indicate that a block is not present in the ledger.

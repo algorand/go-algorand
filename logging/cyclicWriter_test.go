@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -32,7 +32,7 @@ func TestCyclicWrite(t *testing.T) {
 
 	space := 1024
 	limit := uint64(space)
-	cyclicWriter := MakeCyclicFileWriter(liveFileName, archiveFileName, limit)
+	cyclicWriter := MakeCyclicFileWriter(liveFileName, archiveFileName, limit, 0)
 
 	firstWrite := make([]byte, space, space)
 	for i := 0; i < space; i++ {

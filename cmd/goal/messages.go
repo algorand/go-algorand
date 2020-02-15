@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,7 +19,7 @@ package main
 const (
 	// General
 	errorNoDataDirectory     = "Data directory not specified.  Please use -d or set $ALGORAND_DATA in your environment. Exiting."
-	errorOneDataDirSupported = "One one data directory can be specified for this command."
+	errorOneDataDirSupported = "Only one data directory can be specified for this command."
 	errorRequestFail         = "Error processing command: %s"
 	errorGenesisIDFail       = "Error determining kmd folder (%s). Ensure the node is running in %s."
 	errorDirectoryNotExist   = "Specified directory '%s' does not exist."
@@ -58,11 +58,15 @@ const (
 	infoTryingToStopNode             = "Trying to stop the node..."
 	infoNodeSuccessfullyStopped      = "The node was successfully stopped."
 	infoNodeStatus                   = "Last committed block: %d\nTime since last block: %s\nSync Time: %s\nLast consensus protocol: %s\nNext consensus protocol: %s\nRound for next consensus protocol: %d\nNext consensus protocol supported: %v"
+	catchupStoppedOnUnsupported      = "Last supported block (%d) is committed. The next block consensus protocol is not supported. Catchup service is stopped."
+	errorNodeCreationIPFailure       = "Parsing passed IP %v failed: need a valid IPv4 or IPv6 address with a specified port number"
 	errorNodeNotDetected             = "Algorand node does not appear to be running: %s"
 	errorNodeStatus                  = "Cannot contact Algorand node: %s."
 	errorNodeFailedToStart           = "Algorand node failed to start: %s"
 	errorNodeRunning                 = "Node must be stopped before writing APIToken"
 	errorNodeFailGenToken            = "Cannot generate API token: %s"
+	errorNodeCreation                = "Error during node creation: %v"
+	errorNodeManagedBySystemd        = "This node is managed by systemd, you must run the following command to make your desired state change to your node:\n\nsystemctl %s algorand.service"
 	errorKill                        = "Cannot kill node: %s"
 	errorCloningNode                 = "Error cloning the node: %s"
 	infoNodeCloned                   = "Node cloned successfully to: %s"
@@ -72,11 +76,15 @@ const (
 	infoDataDir                      = "[Data Directory: %s]"
 	errLoadingConfig                 = "Error loading Config file from '%s': %v"
 
+	// Asset
+	malformedMetadataHash = "Cannot base64-decode metadata hash %s: %s"
+
 	// Clerk
 	infoTxIssued    = "Sent %d MicroAlgos from account %s to address %s, transaction ID: %s. Fee set to %d"
 	infoTxCommitted = "Transaction %s committed in round %d"
 	infoTxPending   = "Transaction %s still pending as of round %d"
 	malformedNote   = "Cannot base64-decode note %s: %s"
+	malformedLease  = "Cannot base64-decode lease %s: %s"
 	fileReadError   = "Cannot read file %s: %s"
 	fileWriteError  = "Cannot write file %s: %s"
 	txDecodeError   = "Cannot decode transactions from %s: %s"
@@ -88,6 +96,9 @@ const (
 	soFlagError     = "-s is not meaningful without -o"
 	infoRawTxIssued = "Raw transaction ID %s issued"
 	txPoolError     = "Transaction %s kicked out of local node pool: %s"
+	addrNoSigError  = "Exactly one of --address or --no-sig is required"
+	msigLookupError = "Could not lookup multisig information: %s"
+	msigParseError  = "Multisig information parsing error: %s"
 
 	infoAutoFeeSet = "Automatically set fee to %d MicroAlgos"
 
@@ -103,6 +114,24 @@ const (
 	infoNetworkStarted       = "Network Started under %s"
 	infoNetworkStopped       = "Network Stopped under %s"
 	infoNetworkDeleted       = "Network Deleted under %s"
+
+	multisigProgramCollision = "should have at most one of --program/-p | --program-bytes/-P | --lsig/-L"
+
+	tealsignMutKeyArgs    = "--keyfile and --account are mutually exclusive"
+	tealsignMutLsigArgs   = "Need exactly one of --contract-addr or --lsig-txn"
+	tealsignKeyfileFail   = "Failed to read keyfile: %v"
+	tealsignNoWithAcct    = "--account is not yet supported"
+	tealsignEmptyLogic    = "LogicSig must have non-empty program"
+	tealsignParseAddr     = "Failed to parse contract addr: %v"
+	tealsignParseData     = "Failed to parse data to sign: %v"
+	tealsignParseb64      = "failed to base64 decode data to sign: %v"
+	tealsignParseb32      = "failed to base32 decode data to sign: %v"
+	tealsignTxIDLsigReq   = "--sign-txid requires --lsig-txn"
+	tealsignSetArgLsigReq = "--set-lsig-arg-idx requires --lsig-txn"
+	tealsignDataReq       = "need exactly one of --sign-txid, --data-file, --data-b64, or --data-b32"
+	tealsignInfoSig       = "Generated signature: %s"
+	tealsignTooManyArg    = "--set-lsig-arg-idx too large, maximum of %d arguments"
+	tealsignInfoWroteSig  = "Wrote signature for %s to LSig.Args[%d]"
 
 	// Wallet
 	infoRecoveryPrompt           = "Please type your recovery mnemonic below, and hit return when you are done: "
@@ -138,4 +167,9 @@ const (
 	errWalletNotFound        = "Wallet '%s' not found"
 	errDefaultWalletNotFound = "Wallet with ID '%s' not found. Was the default wallet deleted?"
 	errGettingToken          = "Couldn't get token for wallet '%s' (ID: %s): %s"
+
+	// Ledger
+	errParsingRoundNumber  = "Error parsing round number: %s"
+	errBadBlockArgs        = "Cannot combine --b32=true or --strict=true with --raw"
+	errEncodingBlockAsJSON = "Error encoding block as json: %s"
 )

@@ -28,25 +28,35 @@ function runGoFmt() {
 }
 
 function runGoLint() {
-    warningCount=$($GOPATH/bin/golint `go list ./... | grep -v /vendor/ | grep -v /test/e2e-go/` | wc -l)
-    if [ $warningCount -eq 0 ]; then
+    warningCount=$("$GOPATH"/bin/golint $(GO111MODULE=off go list ./... | grep -v /vendor/ | grep -v /test/e2e-go/) | wc -l | tr -d ' ')
+    if [ "${warningCount}" = "0" ]; then
         return 0
     fi
 
-    echo >&2 "golint must be clean.  Please run the following to list issues:"
+    echo >&2 "golint must be clean.  Please run the following to list issues(${warningCount}):"
     echo >&2 " make lint"
 
     return 1
 }
 
 GOPATH=$(go env GOPATH)
-cd ${GOPATH}/src/github.com/algorand/go-algorand
+export GOPATH
+export GO111MODULE=on
 
 echo "Building libsodium-fork..."
-make "`pwd`/crypto/lib/libsodium.a"
+make crypto/lib/libsodium.a
+
+SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
+OS=$("${SCRIPTPATH}"/../ostype.sh)
+ARCH=$("${SCRIPTPATH}"/../archtype.sh)
+
+if [ "${OS}-${ARCH}" = "linux-arm" ]; then
+    echo "Skipping running 'go vet'/gofmt/golint for arm builds"
+    exit 0
+fi
 
 echo "Running go vet..."
-go vet `go list ./... | grep -v /vendor/ | grep -v /test/e2e-go/`
+go vet $(GO111MODULE=off go list ./... | grep -v /test/e2e-go/)
 
 echo "Running gofmt..."
 runGoFmt
@@ -54,3 +64,5 @@ runGoFmt
 echo "Running golint..."
 runGoLint
 
+echo "Running check_license..."
+./scripts/check_license.sh

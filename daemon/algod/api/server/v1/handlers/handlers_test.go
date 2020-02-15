@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -15,3 +15,59 @@
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
 package handlers
+
+import (
+	"errors"
+	"fmt"
+	"testing"
+
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/node"
+	"github.com/algorand/go-algorand/protocol"
+	"github.com/stretchr/testify/require"
+)
+
+func TestDecorateUnknownTransactionTypeError(t *testing.T) {
+	type TestCase struct {
+		err             error
+		txn             node.TxnWithStatus
+		expectedOutcome error
+	}
+
+	paymentTx := transactions.Transaction{Type: protocol.PaymentTx}
+	keyregTx := transactions.Transaction{Type: protocol.KeyRegistrationTx}
+	signedPaymentTx := transactions.SignedTxn{Txn: paymentTx}
+	signedKeyregTx := transactions.SignedTxn{Txn: keyregTx}
+
+	testCases := []TestCase{
+		TestCase{
+			err:             errors.New(errBlockHashBeenDeletedArchival),
+			expectedOutcome: errors.New(errBlockHashBeenDeletedArchival),
+		},
+		TestCase{
+			err:             errors.New(errUnknownTransactionType),
+			txn:             node.TxnWithStatus{Txn: signedPaymentTx, ConfirmedRound: basics.Round(12345)},
+			expectedOutcome: fmt.Errorf(errInvalidTransactionTypeLedger, paymentTx.Type, paymentTx.ID().String(), basics.Round(12345)),
+		},
+		TestCase{
+			err:             errors.New(errUnknownTransactionType),
+			txn:             node.TxnWithStatus{Txn: signedKeyregTx, ConfirmedRound: basics.Round(5678)},
+			expectedOutcome: fmt.Errorf(errInvalidTransactionTypeLedger, keyregTx.Type, keyregTx.ID().String(), basics.Round(5678)),
+		},
+		TestCase{
+			err:             errors.New(errUnknownTransactionType),
+			txn:             node.TxnWithStatus{Txn: signedPaymentTx},
+			expectedOutcome: fmt.Errorf(errInvalidTransactionTypePending, paymentTx.Type, paymentTx.ID().String()),
+		},
+		TestCase{
+			err:             errors.New(errUnknownTransactionType),
+			txn:             node.TxnWithStatus{Txn: signedKeyregTx},
+			expectedOutcome: fmt.Errorf(errInvalidTransactionTypePending, keyregTx.Type, keyregTx.ID().String()),
+		},
+	}
+	for _, testCase := range testCases {
+		outcome := decorateUnknownTransactionTypeError(testCase.err, testCase.txn)
+		require.Equal(t, outcome.Error(), testCase.expectedOutcome.Error())
+	}
+}

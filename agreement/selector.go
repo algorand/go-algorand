@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,6 +28,8 @@ import (
 // A Selector is the input used to define proposers and members of voting
 // committees.
 type selector struct {
+	_struct struct{} `codec:""` // not omitempty
+
 	Seed   committee.Seed `codec:"seed"`
 	Round  basics.Round   `codec:"rnd"`
 	Period period         `codec:"per"`
@@ -64,19 +66,19 @@ func membership(l LedgerReader, addr basics.Address, r basics.Round, p period, s
 
 	record, err := l.BalanceRecord(balanceRound, addr)
 	if err != nil {
-		err = fmt.Errorf("Service.initializeVote (r=%v): Failed to obtain balance record for address %v in round %v: %v", r, addr, balanceRound, err)
+		err = fmt.Errorf("Service.initializeVote (r=%d): Failed to obtain balance record for address %v in round %d: %v", r, addr, balanceRound, err)
 		return
 	}
 
 	total, err := l.Circulation(balanceRound)
 	if err != nil {
-		err = fmt.Errorf("Service.initializeVote (r=%v): Failed to obtain total circulation in round %v: %v", r, balanceRound, err)
+		err = fmt.Errorf("Service.initializeVote (r=%d): Failed to obtain total circulation in round %d: %v", r, balanceRound, err)
 		return
 	}
 
 	seed, err := l.Seed(seedRound)
 	if err != nil {
-		err = fmt.Errorf("Service.initializeVote (r=%v): Failed to obtain seed in round %v: %v", r, seedRound, err)
+		err = fmt.Errorf("Service.initializeVote (r=%d): Failed to obtain seed in round %d: %v", r, seedRound, err)
 		return
 	}
 

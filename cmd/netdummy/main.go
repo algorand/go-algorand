@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -47,7 +47,9 @@ func main() {
 	log.SetLevel(logging.Debug)
 	log.SetOutput(os.Stderr)
 
-	addrs := &network.ArrayPhonebook{Entries: []string{*serverAddress}}
+	addrs := network.MakeArrayPhonebook(conf.ConnectionsRateLimitingCount,
+		time.Duration(conf.ConnectionsRateLimitingWindowSeconds)*time.Second)
+	addrs.Entries.ReplacePeerList([]string{*serverAddress})
 
 	var nodes []network.GossipNode
 	for i := 0; i < *numClients; i++ {

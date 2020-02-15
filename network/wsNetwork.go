@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,10 +27,13 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"path"
 	"regexp"
+	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -171,6 +174,9 @@ type GossipNode interface {
 
 	// ClearHandlers deregisters all the existing message handlers.
 	ClearHandlers()
+
+	// GetRoundTripper returns a Transport that would limit the number of outgoing connections.
+	GetRoundTripper() http.RoundTripper
 }
 
 // IncomingMessage represents a message arriving from some peer in our p2p network
@@ -279,8 +285,7 @@ type WebsocketNetwork struct {
 	broadcastQueueHighPrio chan broadcastRequest
 	broadcastQueueBulk     chan broadcastRequest
 
-	phonebook    Phonebook
-	dnsPhonebook ThreadsafePhonebook
+	phonebook *MultiPhonebook
 
 	GenesisID string
 	NetworkID protocol.NetworkID
@@ -308,14 +313,22 @@ type WebsocketNetwork struct {
 	prioTracker      *prioTracker
 	prioResponseChan chan *wsPeer
 
-	// once we detect that we have a misconfigured UseForwardedForAddress, we set this and write an warning message.
-	misconfiguredUseForwardedForAddress bool
-
 	// outgoingMessagesBufferSize is the size used for outgoing messages.
 	outgoingMessagesBufferSize int
 
 	// slowWritingPeerMonitorInterval defines the interval between two consecutive tests for slow peer writing
 	slowWritingPeerMonitorInterval time.Duration
+
+	requestsTracker *RequestTracker
+	requestsLogger  *RequestLogger
+
+	// lastPeerConnectionsSent is the last time the peer connections were sent ( or attempted to be sent ) to the telemetry server.
+	lastPeerConnectionsSent time.Time
+
+	// transport and dialer are customized to limit the number of
+	// connection in compliance with connectionsRateLimitingCount.
+	transport rateLimitingTransport
+	dialer    Dialer
 }
 
 type broadcastRequest struct {
@@ -495,7 +508,8 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 			var addrs []string
 			addrs = wn.phonebook.GetAddresses(1000)
 			for _, addr := range addrs {
-				outPeers = append(outPeers, &wsPeerCore{net: wn, rootURL: addr})
+				peerCore := makePeerCore(wn, addr, wn.GetRoundTripper(), "" /*origin address*/)
+				outPeers = append(outPeers, &peerCore)
 			}
 		case PeersConnectedIn:
 			wn.peersLock.RLock()
@@ -511,12 +525,23 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 }
 
 func (wn *WebsocketNetwork) setup() {
+
+	wn.dialer = makeRateLimitingDialer(wn.phonebook)
+	wn.transport = makeRateLimitingTransport(wn.phonebook, 10*time.Second, &wn.dialer)
+
 	wn.upgrader.ReadBufferSize = 4096
 	wn.upgrader.WriteBufferSize = 4096
 	wn.upgrader.EnableCompression = false
+	wn.lastPeerConnectionsSent = time.Now()
 	wn.router = mux.NewRouter()
 	wn.router.Handle(GossipNetworkPath, wn)
-	wn.server.Handler = wn.router
+	wn.requestsTracker = makeRequestsTracker(wn.router, wn.log, wn.config)
+	if wn.config.EnableRequestLogger {
+		wn.requestsLogger = makeRequestLogger(wn.requestsTracker, wn.log)
+		wn.server.Handler = wn.requestsLogger
+	} else {
+		wn.server.Handler = wn.requestsTracker
+	}
 	wn.server.ReadHeaderTimeout = httpServerReadHeaderTimeout
 	wn.server.WriteTimeout = httpServerWriteTimeout
 	wn.server.IdleTimeout = httpServerIdleTimeout
@@ -587,6 +612,13 @@ func (wn *WebsocketNetwork) rlimitIncomingConnections() error {
 	// Set rlim_cur to match IncomingConnectionsLimit
 	newLimit := uint64(wn.config.IncomingConnectionsLimit) + wn.config.ReservedFDs
 	if newLimit > lim.Cur {
+		if runtime.GOOS == "darwin" && newLimit > 10240 && lim.Max == 0x7fffffffffffffff {
+			// The max file limit is 10240, even though
+			// the max returned by Getrlimit is 1<<63-1.
+			// This is OPEN_MAX in sys/syslimits.h.
+			// see https://github.com/golang/go/issues/30401
+			newLimit = 10240
+		}
 		lim.Cur = newLimit
 		err = unix.Setrlimit(unix.RLIMIT_NOFILE, &lim)
 		if err != nil {
@@ -619,7 +651,10 @@ func (wn *WebsocketNetwork) Start() {
 			wn.log.Errorf("network could not listen %v: %s", wn.config.NetAddress, err)
 			return
 		}
-		wn.listener = netutil.LimitListener(listener, wn.config.IncomingConnectionsLimit)
+		// wrap the original listener with a limited connection listener
+		listener = netutil.LimitListener(listener, wn.config.IncomingConnectionsLimit)
+		// wrap the limited connection listener with a requests tracker listener
+		wn.listener = wn.requestsTracker.Listener(listener)
 		wn.log.Debugf("listening on %s", wn.listener.Addr().String())
 	}
 	if wn.config.TLSCertFile != "" && wn.config.TLSKeyFile != "" {
@@ -694,7 +729,9 @@ func (wn *WebsocketNetwork) Stop() {
 		wn.log.Warnf("problem shutting down %s: %v", listenAddr, err)
 	}
 	wn.wg.Wait()
-	wn.log.Debugf("closed %s", listenAddr)
+	if wn.listener != nil {
+		wn.log.Debugf("closed %s", listenAddr)
+	}
 }
 
 // RegisterHandlers registers the set of given message handlers.
@@ -708,94 +745,50 @@ func (wn *WebsocketNetwork) ClearHandlers() {
 }
 
 func (wn *WebsocketNetwork) setHeaders(header http.Header) {
-	myTelemetryGUID := wn.log.GetTelemetryHostName()
-	header.Set(TelemetryIDHeader, myTelemetryGUID)
-	header.Set(ProtocolVersionHeader, ProtocolVersion)
+	localTelemetryGUID := wn.log.GetTelemetryHostName()
+	localInstanceName := wn.log.GetInstanceName()
+	header.Set(TelemetryIDHeader, localTelemetryGUID)
+	header.Set(InstanceNameHeader, localInstanceName)
 	header.Set(AddressHeader, wn.PublicAddress())
 	header.Set(NodeRandomHeader, wn.RandomID)
 }
 
-// retrieve the origin ip address from the http header, if such exists and it's a valid ip address.
-func (wn *WebsocketNetwork) getForwardedConnectionAddress(header http.Header) (ip net.IP) {
-	if wn.config.UseXForwardedForAddressField == "" {
-		return
-	}
-	forwardedForString := header.Get(wn.config.UseXForwardedForAddressField)
-	if forwardedForString == "" {
-		if !wn.misconfiguredUseForwardedForAddress {
-			wn.log.Warnf("UseForwardedForAddressField is configured as '%s', but no value was retrieved from header", wn.config.UseXForwardedForAddressField)
-			wn.misconfiguredUseForwardedForAddress = true
-		}
-		return
-	}
-	ip = net.ParseIP(forwardedForString)
-	if ip == nil {
-		// if origin isn't a valid IP Address, log this.,
-		wn.log.Warnf("unable to parse origin address: '%s'", forwardedForString)
-	}
-	return
-}
-
 // checkServerResponseVariables check that the version and random-id in the request headers matches the server ones.
 // it returns true if it's a match, and false otherwise.
-func (wn *WebsocketNetwork) checkServerResponseVariables(header http.Header, addr string) bool {
-	otherVersion := header.Get(ProtocolVersionHeader)
-	if otherVersion != ProtocolVersion {
-		wn.log.Infof("new peer %s version mismatch, mine=%s theirs=%s, headers %#v", addr, ProtocolVersion, otherVersion, header)
-		return false
+func (wn *WebsocketNetwork) checkServerResponseVariables(otherHeader http.Header, addr string) (bool, string) {
+	matchingVersion, otherVersion := wn.checkProtocolVersionMatch(otherHeader)
+	if matchingVersion == "" {
+		wn.log.Infof("new peer %s version mismatch, mine=%v theirs=%s, headers %#v", addr, SupportedProtocolVersions, otherVersion, otherHeader)
+		return false, ""
 	}
-	otherRandom := header.Get(NodeRandomHeader)
+	otherRandom := otherHeader.Get(NodeRandomHeader)
 	if otherRandom == wn.RandomID || otherRandom == "" {
 		// This is pretty harmless and some configurations of phonebooks or DNS records make this likely. Quietly filter it out.
 		if otherRandom == "" {
 			// missing header.
-			wn.log.Warnf("new peer %s did not include random ID header in request. mine=%s headers %#v", addr, wn.RandomID, header)
+			wn.log.Warnf("new peer %s did not include random ID header in request. mine=%s headers %#v", addr, wn.RandomID, otherHeader)
 		} else {
 			wn.log.Debugf("new peer %s has same node random id, am I talking to myself? %s", addr, wn.RandomID)
 		}
-		return false
+		return false, ""
 	}
-	otherGenesisID := header.Get(GenesisHeader)
+	otherGenesisID := otherHeader.Get(GenesisHeader)
 	if wn.GenesisID != otherGenesisID {
 		if otherGenesisID != "" {
-			wn.log.Warnf("new peer %#v genesis mismatch, mine=%#v theirs=%#v, headers %#v", addr, wn.GenesisID, otherGenesisID, header)
+			wn.log.Warnf("new peer %#v genesis mismatch, mine=%#v theirs=%#v, headers %#v", addr, wn.GenesisID, otherGenesisID, otherHeader)
 		} else {
-			wn.log.Warnf("new peer %#v did not include genesis header in response. mine=%#v headers %#v", addr, wn.GenesisID, header)
+			wn.log.Warnf("new peer %#v did not include genesis header in response. mine=%#v headers %#v", addr, wn.GenesisID, otherHeader)
 		}
-		return false
+		return false, ""
 	}
-	return true
-}
-
-// update the provided url with the given originIP
-func (wn *WebsocketNetwork) updateURLHost(originalRootURL string, originIP net.IP) (newAddress string, err error) {
-	if originIP == nil {
-		return "", nil
-	}
-	sourceURL, err := url.Parse(originalRootURL)
-	if err != nil {
-		wn.log.Errorf("unable to parse url: '%s', error: %v", originalRootURL, err)
-		return
-	}
-	port := sourceURL.Port()
-	host := originIP.String()
-	if originIP.To4() == nil {
-		// it's an IPv6
-		host = "[" + host + "]"
-	}
-	if port != "" {
-		host = host + ":" + port
-	}
-	sourceURL.Host = host
-	newAddress = sourceURL.String()
-	return
+	return true, matchingVersion
 }
 
 // getCommonHeaders retreives the common headers for both incoming and outgoing connections from the provided headers.
 func getCommonHeaders(headers http.Header) (otherTelemetryGUID, otherInstanceName, otherPublicAddr string) {
-	otherTelemetryGUID = headers.Get(TelemetryIDHeader)
-	otherInstanceName = headers.Get(InstanceNameHeader)
-	otherPublicAddr = headers.Get(AddressHeader)
+	otherTelemetryGUID = logging.SanitizeTelemetryString(headers.Get(TelemetryIDHeader), 1)
+	otherInstanceName = logging.SanitizeTelemetryString(headers.Get(InstanceNameHeader), 2)
+	otherPublicAddr = logging.SanitizeTelemetryString(headers.Get(AddressHeader), 1)
 	return
 }
 
@@ -815,7 +808,8 @@ func (wn *WebsocketNetwork) checkIncomingConnectionLimits(response http.Response
 		return http.StatusServiceUnavailable
 	}
 
-	if wn.connectedForIP(remoteHost) >= wn.config.MaxConnectionsPerIP {
+	totalConnections := wn.connectedForIP(remoteHost)
+	if totalConnections >= wn.config.MaxConnectionsPerIP {
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "incoming_connection_per_ip_limit"})
 		wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerFailEvent,
 			telemetryspec.ConnectPeerFailEventDetails{
@@ -828,7 +822,30 @@ func (wn *WebsocketNetwork) checkIncomingConnectionLimits(response http.Response
 		response.WriteHeader(http.StatusServiceUnavailable)
 		return http.StatusServiceUnavailable
 	}
+
 	return http.StatusOK
+}
+
+// checkProtocolVersionMatch test ProtocolAcceptVersionHeader and ProtocolVersionHeader headers from the request/response and see if it can find a match.
+func (wn *WebsocketNetwork) checkProtocolVersionMatch(otherHeaders http.Header) (matchingVersion string, otherVersion string) {
+	otherAcceptedVersions := otherHeaders[textproto.CanonicalMIMEHeaderKey(ProtocolAcceptVersionHeader)]
+	for _, otherAcceptedVersion := range otherAcceptedVersions {
+		// do we have a matching version ?
+		for _, supportedProtocolVersion := range SupportedProtocolVersions {
+			if supportedProtocolVersion == otherAcceptedVersion {
+				matchingVersion = supportedProtocolVersion
+				return matchingVersion, ""
+			}
+		}
+	}
+
+	otherVersion = otherHeaders.Get(ProtocolVersionHeader)
+	for _, supportedProtocolVersion := range SupportedProtocolVersions {
+		if supportedProtocolVersion == otherVersion {
+			return supportedProtocolVersion, otherVersion
+		}
+	}
+	return "", otherVersion
 }
 
 // checkIncomingConnectionVariables checks the variables that were provided on the request, and compares them to the
@@ -852,61 +869,55 @@ func (wn *WebsocketNetwork) checkIncomingConnectionVariables(response http.Respo
 		return http.StatusPreconditionFailed
 	}
 
-	otherVersion := request.Header.Get(ProtocolVersionHeader)
-	if otherVersion != ProtocolVersion {
-		wn.log.Infof("new peer %s version mismatch, mine=%s theirs=%s, headers %#v", request.RemoteAddr, ProtocolVersion, otherVersion, request.Header)
-		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "mismatching protocol version"})
-		response.WriteHeader(http.StatusPreconditionFailed)
-		message := fmt.Sprintf("Requested version %s = %s mismatches server version", ProtocolVersionHeader, otherVersion)
-		n, err := response.Write([]byte(message))
-		if err != nil {
-			wn.log.Warnf("ws failed to write response '%s' : n = %d err = %v", message, n, err)
-		}
-		return http.StatusPreconditionFailed
-	}
-
 	otherRandom := request.Header.Get(NodeRandomHeader)
-	if otherRandom == wn.RandomID || otherRandom == "" {
+	if otherRandom == "" {
 		// This is pretty harmless and some configurations of phonebooks or DNS records make this likely. Quietly filter it out.
 		var message string
-		if otherRandom == "" {
-			// missing header.
-			wn.log.Warnf("new peer %s did not include random ID header in request. mine=%s headers %#v", request.RemoteAddr, wn.RandomID, request.Header)
-			networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "missing random ID header"})
-			message = fmt.Sprintf("Request was missing a %s header", NodeRandomHeader)
-		} else {
-			wn.log.Debugf("new peer %s has same node random id, am I talking to myself? %s", request.RemoteAddr, wn.RandomID)
-			networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "matching random ID header"})
-			message = fmt.Sprintf("Request included matching %s=%s header", NodeRandomHeader, otherRandom)
-		}
+		// missing header.
+		wn.log.Warnf("new peer %s did not include random ID header in request. mine=%s headers %#v", request.RemoteAddr, wn.RandomID, request.Header)
+		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "missing random ID header"})
+		message = fmt.Sprintf("Request was missing a %s header", NodeRandomHeader)
 		response.WriteHeader(http.StatusPreconditionFailed)
 		n, err := response.Write([]byte(message))
 		if err != nil {
 			wn.log.Warnf("ws failed to write response '%s' : n = %d err = %v", message, n, err)
 		}
 		return http.StatusPreconditionFailed
+	} else if otherRandom == wn.RandomID {
+		// This is pretty harmless and some configurations of phonebooks or DNS records make this likely. Quietly filter it out.
+		var message string
+		wn.log.Debugf("new peer %s has same node random id, am I talking to myself? %s", request.RemoteAddr, wn.RandomID)
+		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "matching random ID header"})
+		message = fmt.Sprintf("Request included matching %s=%s header", NodeRandomHeader, otherRandom)
+		response.WriteHeader(http.StatusLoopDetected)
+		n, err := response.Write([]byte(message))
+		if err != nil {
+			wn.log.Warnf("ws failed to write response '%s' : n = %d err = %v", message, n, err)
+		}
+		return http.StatusLoopDetected
 	}
 	return http.StatusOK
 }
 
 // ServerHTTP handles the gossip network functions over websockets
 func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *http.Request) {
-	remoteHost, _, err := net.SplitHostPort(request.RemoteAddr)
-	if err != nil {
-		// this error should not happen. The go framework is responsible for populating the RemoteAddr using the incoming TCP connection
-		// information.
-		wn.log.Errorf("could not parse request.RemoteAddr=%v, %s", request.RemoteAddr, err)
-		response.WriteHeader(http.StatusServiceUnavailable)
+	trackedRequest := wn.requestsTracker.GetTrackedRequest(request)
+
+	if wn.checkIncomingConnectionLimits(response, request, trackedRequest.remoteHost, trackedRequest.otherTelemetryGUID, trackedRequest.otherInstanceName) != http.StatusOK {
+		// we've already logged and written all response(s).
 		return
 	}
-	originIP := wn.getForwardedConnectionAddress(request.Header)
-	if originIP != nil {
-		remoteHost = originIP.String()
-	}
-	otherTelemetryGUID, otherInstanceName, otherPublicAddr := getCommonHeaders(request.Header)
 
-	if wn.checkIncomingConnectionLimits(response, request, remoteHost, otherTelemetryGUID, otherInstanceName) != http.StatusOK {
-		// we've already logged and written all response(s).
+	matchingVersion, otherVersion := wn.checkProtocolVersionMatch(request.Header)
+	if matchingVersion == "" {
+		wn.log.Infof("new peer %s version mismatch, mine=%v theirs=%s, headers %#v", request.RemoteAddr, SupportedProtocolVersions, otherVersion, request.Header)
+		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "mismatching protocol version"})
+		response.WriteHeader(http.StatusPreconditionFailed)
+		message := fmt.Sprintf("Requested version %s not in %v mismatches server version", otherVersion, SupportedProtocolVersions)
+		n, err := response.Write([]byte(message))
+		if err != nil {
+			wn.log.Warnf("ws failed to write response '%s' : n = %d err = %v", message, n, err)
+		}
 		return
 	}
 
@@ -916,53 +927,50 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 	}
 
 	// if UseXForwardedForAddressField is not empty, attempt to override the otherPublicAddr with the X Forwarded For origin
-	if originIP != nil {
-		newURL, err := wn.updateURLHost(otherPublicAddr, originIP)
-		if err != nil {
-			wn.log.Errorf("updateURLHost failed : %v", err)
-		} else {
-			otherPublicAddr = newURL
-		}
-	}
+	trackedRequest.otherPublicAddr = trackedRequest.remoteAddr
 
-	requestHeader := make(http.Header)
-	wn.setHeaders(requestHeader)
-	requestHeader.Set(GenesisHeader, wn.GenesisID)
+	responseHeader := make(http.Header)
+	wn.setHeaders(responseHeader)
+	responseHeader.Set(ProtocolVersionHeader, matchingVersion)
+	responseHeader.Set(GenesisHeader, wn.GenesisID)
 	var challenge string
 	if wn.prioScheme != nil {
 		challenge = wn.prioScheme.NewPrioChallenge()
-		requestHeader.Set(PriorityChallengeHeader, challenge)
+		responseHeader.Set(PriorityChallengeHeader, challenge)
 	}
-	conn, err := wn.upgrader.Upgrade(response, request, requestHeader)
+	conn, err := wn.upgrader.Upgrade(response, request, responseHeader)
 	if err != nil {
 		wn.log.Info("ws upgrade fail ", err)
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "ws upgrade fail"})
 		return
 	}
 
+	// we want to tell the response object that the status was changed to 101 ( switching protocols ) so that it will be logged.
+	if wn.requestsLogger != nil {
+		wn.requestsLogger.SetStatusCode(response, http.StatusSwitchingProtocols)
+	}
+
 	peer := &wsPeer{
-		wsPeerCore: wsPeerCore{
-			net:           wn,
-			rootURL:       otherPublicAddr,
-			originAddress: remoteHost,
-		},
+		wsPeerCore:        makePeerCore(wn, trackedRequest.otherPublicAddr, wn.GetRoundTripper(), trackedRequest.remoteHost),
 		conn:              conn,
 		outgoing:          false,
-		InstanceName:      otherInstanceName,
+		InstanceName:      trackedRequest.otherInstanceName,
 		incomingMsgFilter: wn.incomingMsgFilter,
 		prioChallenge:     challenge,
+		createTime:        trackedRequest.created,
+		version:           matchingVersion,
 	}
-	peer.TelemetryGUID = otherTelemetryGUID
+	peer.TelemetryGUID = trackedRequest.otherTelemetryGUID
 	peer.init(wn.config, wn.outgoingMessagesBufferSize)
 	wn.addPeer(peer)
 	localAddr, _ := wn.Address()
-	wn.log.With("event", "ConnectedIn").With("remote", otherPublicAddr).With("local", localAddr).Infof("Accepted incoming connection from peer %s", otherPublicAddr)
+	wn.log.With("event", "ConnectedIn").With("remote", trackedRequest.otherPublicAddr).With("local", localAddr).Infof("Accepted incoming connection from peer %s", trackedRequest.otherPublicAddr)
 	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerEvent,
 		telemetryspec.PeerEventDetails{
-			Address:      remoteHost,
-			HostName:     otherTelemetryGUID,
+			Address:      trackedRequest.remoteHost,
+			HostName:     trackedRequest.otherTelemetryGUID,
 			Incoming:     true,
-			InstanceName: otherInstanceName,
+			InstanceName: trackedRequest.otherInstanceName,
 		})
 
 	peers.Set(float64(wn.NumPeers()), nil)
@@ -1191,16 +1199,16 @@ func (wn *WebsocketNetwork) isConnectedTo(addr string) bool {
 }
 
 // connectedForIP returns number of peers with same host
-func (wn *WebsocketNetwork) connectedForIP(host string) int {
+func (wn *WebsocketNetwork) connectedForIP(host string) (totalConnections int) {
 	wn.peersLock.RLock()
 	defer wn.peersLock.RUnlock()
-	out := 0
+	totalConnections = 0
 	for _, peer := range wn.peers {
 		if host == peer.OriginAddress() {
-			out++
+			totalConnections++
 		}
 	}
-	return out
+	return
 }
 
 const meshThreadInterval = time.Minute
@@ -1238,16 +1246,24 @@ func (wn *WebsocketNetwork) meshThread() {
 		}
 
 		// TODO: only do DNS fetch every N seconds? Honor DNS TTL? Trust DNS library we're using to handle caching and TTL?
-		dnsAddrs := wn.getDNSAddrs()
-		if len(dnsAddrs) > 0 {
-			wn.log.Debugf("got %d dns addrs, %#v", len(dnsAddrs), dnsAddrs[:imin(5, len(dnsAddrs))])
-			wn.dnsPhonebook.ReplacePeerList(dnsAddrs)
-			mp, ok := wn.phonebook.(*MultiPhonebook)
-			if ok {
-				mp.AddPhonebook(&wn.dnsPhonebook)
+		dnsBootstrapArray := wn.config.DNSBootstrapArray(wn.NetworkID)
+		for _, dnsBootstrap := range dnsBootstrapArray {
+			dnsAddrs := wn.getDNSAddrs(dnsBootstrap)
+			if len(dnsAddrs) > 0 {
+				wn.log.Debugf("got %d dns addrs, %#v", len(dnsAddrs), dnsAddrs[:imin(5, len(dnsAddrs))])
+				dnsPhonebook := wn.phonebook.GetPhonebook(dnsBootstrap)
+				if dnsPhonebook == nil {
+					// create one, if we don't have one already.
+					dnsPhonebook = MakeThreadsafePhonebook(wn.config.ConnectionsRateLimitingCount,
+						time.Duration(wn.config.ConnectionsRateLimitingWindowSeconds)*time.Second)
+					wn.phonebook.AddOrUpdatePhonebook(dnsBootstrap, dnsPhonebook)
+				}
+				if tsPhonebook, ok := dnsPhonebook.(*ThreadsafePhonebook); ok {
+					tsPhonebook.ReplacePeerList(dnsAddrs)
+				}
+			} else {
+				wn.log.Infof("got no DNS addrs for network %s", wn.NetworkID)
 			}
-		} else {
-			wn.log.Debugf("got no DNS addrs for network %#v", wn.NetworkID)
 		}
 		desired := wn.config.GossipFanout
 		numOutgoing := wn.numOutgoingPeers() + wn.numOutgoingPending()
@@ -1273,7 +1289,44 @@ func (wn *WebsocketNetwork) meshThread() {
 		if request.done != nil {
 			close(request.done)
 		}
+
+		// send the currently connected peers information to the
+		// telemetry server; that would allow the telemetry server
+		// to construct a cross-node map of all the nodes interconnections.
+		wn.sendPeerConnectionsTelemetryStatus()
 	}
+}
+
+// sendPeerConnectionsTelemetryStatus sends a snapshot of the currently connected peers
+// to the telemetry server. Internally, it's using a timer to ensure that it would only
+// send the information once every hour ( configurable via PeerConnectionsUpdateInterval )
+func (wn *WebsocketNetwork) sendPeerConnectionsTelemetryStatus() {
+	now := time.Now()
+	if wn.lastPeerConnectionsSent.Add(time.Duration(wn.config.PeerConnectionsUpdateInterval)*time.Second).After(now) || wn.config.PeerConnectionsUpdateInterval <= 0 {
+		// it's not yet time to send the update.
+		return
+	}
+	wn.lastPeerConnectionsSent = now
+	var peers []*wsPeer
+	peers = wn.peerSnapshot(peers)
+	var connectionDetails telemetryspec.PeersConnectionDetails
+	for _, peer := range peers {
+		connDetail := telemetryspec.PeerConnectionDetails{
+			ConnectionDuration: uint(now.Sub(peer.createTime).Seconds()),
+			HostName:           peer.TelemetryGUID,
+			InstanceName:       peer.InstanceName,
+		}
+		if peer.outgoing {
+			connDetail.Address = justHost(peer.conn.RemoteAddr().String())
+			connDetail.Endpoint = peer.GetAddress()
+			connectionDetails.OutgoingPeers = append(connectionDetails.OutgoingPeers, connDetail)
+		} else {
+			connDetail.Address = peer.OriginAddress()
+			connectionDetails.IncomingPeers = append(connectionDetails.IncomingPeers, connDetail)
+		}
+	}
+
+	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.PeerConnectionsEvent, connectionDetails)
 }
 
 // prioWeightRefreshTime controls how often we refresh the weights
@@ -1385,9 +1438,8 @@ func (wn *WebsocketNetwork) peersToPing() []*wsPeer {
 	return out
 }
 
-func (wn *WebsocketNetwork) getDNSAddrs() []string {
-	dnsBootstrap := wn.config.DNSBootstrap(wn.NetworkID)
-	srvPhonebook, err := wn.readFromBootstrap(dnsBootstrap)
+func (wn *WebsocketNetwork) getDNSAddrs(dnsBootstrap string) []string {
+	srvPhonebook, err := tools_network.ReadFromSRV("algobootstrap", "tcp", dnsBootstrap, wn.config.FallbackDNSResolverAddress)
 	if err != nil {
 		// only log this warning on testnet or devnet
 		if wn.NetworkID == config.Devnet || wn.NetworkID == config.Testnet {
@@ -1398,49 +1450,14 @@ func (wn *WebsocketNetwork) getDNSAddrs() []string {
 	return srvPhonebook
 }
 
-func (wn *WebsocketNetwork) readFromBootstrap(bootstrapID string) (addrs []string, err error) {
-	if bootstrapID == "" {
-		wn.log.Debug("no dns lookup due to empty bootstrapID")
-		return
-	}
-
-	_, records, sysLookupErr := net.LookupSRV("algobootstrap", "tcp", bootstrapID)
-	if sysLookupErr != nil {
-		var resolver tools_network.Resolver
-		// try to resolve the address. If it's an dotted-numbers format, it would return that right away.
-		// if it's a named address, we would attempt to parse it and might fail.
-		// ( failing isn't that bad; the resolver would internally try to use 8.8.8.8 instead )
-		if DNSIPAddr, err2 := net.ResolveIPAddr("ip", wn.config.FallbackDNSResolverAddress); err2 == nil {
-			resolver.DNSAddress = *DNSIPAddr
-		} else {
-			wn.log.Infof("readFromBootstrap: Failed to resolve fallback DNS resolver address '%s': %v; falling back to default fallback resolver address", wn.config.FallbackDNSResolverAddress, err2)
-		}
-
-		_, records, err = resolver.LookupSRV(context.Background(), "algobootstrap", "tcp", bootstrapID)
-		if err != nil {
-			wn.log.Warnf("readFromBootstrap: DNS LookupSRV failed when using system resolver(%v) as well as via %s due to %v", sysLookupErr, resolver.EffectiveResolverDNS(), err)
-			return
-		}
-		// we succeeded when using the public dns. log this.
-		wn.log.Infof("readFromBootstrap: DNS LookupSRV failed when using the system resolver(%v); using public DNS(%s) server directly instead.", sysLookupErr, resolver.EffectiveResolverDNS())
-	}
-	for _, srv := range records {
-		// empty target won't take us far; skip these
-		if srv.Target == "" {
-			continue
-		}
-		// according to the SRV spec, each target need to end with a dot. While this would make a valid host name, including the
-		// last dot could lead to a non-canonical domain name representation, which would better get avoided.
-		if srv.Target[len(srv.Target)-1:] == "." {
-			srv.Target = srv.Target[:len(srv.Target)-1]
-		}
-		addrs = append(addrs, fmt.Sprintf("%s:%d", srv.Target, srv.Port))
-	}
-	return
-}
-
-// ProtocolVersionHeader HTTP header for protocol version. TODO: this may be unneeded redundance since we also have url versioning "/v1/..."
+// ProtocolVersionHeader HTTP header for protocol version.
 const ProtocolVersionHeader = "X-Algorand-Version"
+
+// ProtocolAcceptVersionHeader HTTP header for accept protocol version. Client use this to advertise supported protocol versions.
+const ProtocolAcceptVersionHeader = "X-Algorand-Accept-Version"
+
+// SupportedProtocolVersions contains the list of supported protocol versions by this node ( in order of preference ).
+var SupportedProtocolVersions = []string{ /*"2",*/ "1"}
 
 // ProtocolVersion is the current version attached to the ProtocolVersionHeader header
 const ProtocolVersion = "1"
@@ -1462,6 +1479,12 @@ const InstanceNameHeader = "X-Algorand-InstanceName"
 
 // PriorityChallengeHeader HTTP header informs a client about the challenge it should sign to increase network priority.
 const PriorityChallengeHeader = "X-Algorand-PriorityChallenge"
+
+// TooManyRequestsRetryAfterHeader HTTP header let the client know when to make the next connection attempt
+const TooManyRequestsRetryAfterHeader = "Retry-After"
+
+// UserAgentHeader is the HTTP header identify the user agent.
+const UserAgentHeader = "User-Agent"
 
 var websocketsScheme = map[string]string{"http": "ws", "https": "wss"}
 
@@ -1542,10 +1565,10 @@ func (wn *WebsocketNetwork) numOutgoingPending() int {
 	return len(wn.tryConnectAddrs)
 }
 
-var websocketDialer = websocket.Dialer{
-	Proxy:             http.ProxyFromEnvironment,
-	HandshakeTimeout:  45 * time.Second,
-	EnableCompression: false,
+// GetRoundTripper returns an http.Transport that limits the number of connection
+// to comply with connectionsRateLimitingCount.
+func (wn *WebsocketNetwork) GetRoundTripper() http.RoundTripper {
+	return &wn.transport
 }
 
 // tryConnect opens websocket connection and checks initial connection parameters.
@@ -1560,8 +1583,22 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	defer wn.wg.Done()
 	requestHeader := make(http.Header)
 	wn.setHeaders(requestHeader)
+	for _, supportedProtocolVersion := range SupportedProtocolVersions {
+		requestHeader.Add(ProtocolAcceptVersionHeader, supportedProtocolVersion)
+	}
+	// for backward compatability, include the ProtocolVersion header as well.
+	requestHeader.Set(ProtocolVersionHeader, ProtocolVersion)
+	SetUserAgentHeader(requestHeader)
 	myInstanceName := wn.log.GetInstanceName()
 	requestHeader.Set(InstanceNameHeader, myInstanceName)
+	var websocketDialer = websocket.Dialer{
+		Proxy:             http.ProxyFromEnvironment,
+		HandshakeTimeout:  45 * time.Second,
+		EnableCompression: false,
+		NetDialContext:    wn.dialer.DialContext,
+		NetDial:           wn.dialer.Dial,
+	}
+
 	conn, response, err := websocketDialer.DialContext(wn.ctx, gossipAddr, requestHeader)
 	if err != nil {
 		if err == websocket.ErrBadHandshake {
@@ -1576,9 +1613,18 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 			// we're guaranteed to have a valid response object.
 			switch response.StatusCode {
 			case http.StatusPreconditionFailed:
-				wn.log.Warnf("ws connect(%s) fail - bad handshake, precondition failed : %s error : '%s'", gossipAddr, errString)
+				wn.log.Warnf("ws connect(%s) fail - bad handshake, precondition failed : '%s'", gossipAddr, errString)
 			case http.StatusLoopDetected:
 				wn.log.Infof("ws connect(%s) aborted due to connecting to self", gossipAddr)
+			case http.StatusTooManyRequests:
+				wn.log.Infof("ws connect(%s) aborted due to connecting too frequently", gossipAddr)
+				retryAfterHeader := response.Header.Get(TooManyRequestsRetryAfterHeader)
+				if retryAfter, retryParseErr := strconv.ParseUint(retryAfterHeader, 10, 32); retryParseErr == nil {
+					// we've got a retry-after header.
+					// convert it to a timestamp so that we could use it.
+					retryAfterTime := time.Now().Add(time.Duration(retryAfter) * time.Second)
+					wn.phonebook.UpdateRetryAfter(addr, retryAfterTime)
+				}
 			default:
 				wn.log.Warnf("ws connect(%s) fail - bad handshake, Status code = %d, Headers = %#v, Body = %s", gossipAddr, response.StatusCode, response.Header, errString)
 			}
@@ -1589,16 +1635,22 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	}
 
 	// no need to test the response.StatusCode since we know it's going to be http.StatusSwitchingProtocols, as it's already being tested inside websocketDialer.DialContext.
-	// checking the headers here is abit redundent; the server has already verified that the headers match. But we will need this in the future -
-	// once our server would support multiple protocols, we would need to verify here that we use the correct protocol, out of the "proposed" protocols we have provided in the
-	// request headers.
-	if !wn.checkServerResponseVariables(response.Header, gossipAddr) {
+	// we need to examine the headers here to extract which protocol version we should be using.
+	responseHeaderOk, matchingVersion := wn.checkServerResponseVariables(response.Header, gossipAddr)
+	if !responseHeaderOk {
 		// The error was already logged, so no need to log again.
 		return
 	}
 
-	peer := &wsPeer{wsPeerCore: wsPeerCore{net: wn, rootURL: addr}, conn: conn, outgoing: true, incomingMsgFilter: wn.incomingMsgFilter}
-	peer.TelemetryGUID = response.Header.Get(TelemetryIDHeader)
+	peer := &wsPeer{
+		wsPeerCore:        makePeerCore(wn, addr, wn.GetRoundTripper(), "" /* origin */),
+		conn:              conn,
+		outgoing:          true,
+		incomingMsgFilter: wn.incomingMsgFilter,
+		createTime:        time.Now(),
+		version:           matchingVersion,
+	}
+	peer.TelemetryGUID, peer.InstanceName, _ = getCommonHeaders(response.Header)
 	peer.init(wn.config, wn.outgoingMessagesBufferSize)
 	wn.addPeer(peer)
 	localAddr, _ := wn.Address()
@@ -1608,7 +1660,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 			Address:      justHost(conn.RemoteAddr().String()),
 			HostName:     peer.TelemetryGUID,
 			Incoming:     false,
-			InstanceName: myInstanceName,
+			InstanceName: peer.InstanceName,
 		})
 
 	peers.Set(float64(wn.NumPeers()), nil)
@@ -1631,7 +1683,8 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 
 // NewWebsocketNetwork constructor for websockets based gossip network
 func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebook Phonebook, genesisID string, networkID protocol.NetworkID) (wn *WebsocketNetwork, err error) {
-	outerPhonebook := &MultiPhonebook{phonebooks: []Phonebook{phonebook}}
+	outerPhonebook := MakeMultiPhonebook()
+	outerPhonebook.AddOrUpdatePhonebook("default", phonebook)
 	wn = &WebsocketNetwork{log: log, config: config, phonebook: outerPhonebook, GenesisID: genesisID, NetworkID: networkID}
 
 	wn.setup()
@@ -1657,7 +1710,7 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 	// first logging, then take the lock and do the actual accounting.
 	// definitely don't change this to do the logging while holding the lock.
 	localAddr, _ := wn.Address()
-	wn.log.With("event", "Disconnected").With("remote", peer.rootURL).With("local", localAddr).Infof("Peer %v disconnected", peer.rootURL)
+	wn.log.With("event", "Disconnected").With("remote", peer.rootURL).With("local", localAddr).Infof("Peer %s disconnected: %s", peer.rootURL, reason)
 	peerAddr := peer.OriginAddress()
 	// we might be able to get addr out of conn, or it might be closed
 	if peerAddr == "" && peer.conn != nil {
@@ -1759,4 +1812,11 @@ func justHost(hostPort string) string {
 		return hostPort
 	}
 	return host
+}
+
+// SetUserAgentHeader adds the User-Agent header to the provided heades map.
+func SetUserAgentHeader(header http.Header) {
+	version := config.GetCurrentVersion()
+	ua := fmt.Sprintf("algod/%d.%d (%s; commit=%s; %d) %s(%s)", version.Major, version.Minor, version.Channel, version.CommitHash, version.BuildNumber, runtime.GOOS, runtime.GOARCH)
+	header.Set(UserAgentHeader, ua)
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -32,6 +32,16 @@ func TestSignVerifyEmptyMessage(t *testing.T) {
 	sig := ed25519Sign(sk, []byte{})
 	if !ed25519Verify(pk, []byte{}, sig) {
 		t.Errorf("sig of an empty message failed to verify")
+	}
+}
+
+func TestVerifyZeros(t *testing.T) {
+	var pk SignatureVerifier
+	var sig Signature
+	for x := byte(0); x < 255; x++ {
+		if pk.VerifyBytes([]byte{x}, sig) {
+			t.Errorf("Zero sig with zero pk successfully verified message %x", x)
+		}
 	}
 }
 

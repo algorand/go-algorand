@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,32 +17,44 @@
 package logging
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/sirupsen/logrus"
 )
 
 type telemetryFilteredHook struct {
-	wrappedHook    logrus.Hook
-	reportLogLevel logrus.Level
-	history        *logBuffer
-	sessionGUID    string
+	telemetryConfig TelemetryConfig
+	wrappedHook     logrus.Hook
+	reportLogLevel  logrus.Level
+	history         *logBuffer
+	sessionGUID     string
+	factory         hookFactory
+	levels          []logrus.Level
 }
 
 // newFilteredTelemetryHook creates a hook filter for ensuring telemetry events are
 // always included by the wrapped log hook.
-func newTelemetryFilteredHook(hook logrus.Hook, reportLogLevel logrus.Level, history *logBuffer, sessionGUID string) (logrus.Hook, error) {
+func newTelemetryFilteredHook(cfg TelemetryConfig, hook logrus.Hook, reportLogLevel logrus.Level, history *logBuffer, sessionGUID string, factory hookFactory, levels []logrus.Level) (logrus.Hook, error) {
 	filteredHook := &telemetryFilteredHook{
+		cfg,
 		hook,
 		reportLogLevel,
 		history,
 		sessionGUID,
+		factory,
+		levels,
 	}
 	return filteredHook, nil
 }
 
 // Fire is required to implement logrus hook interface
 func (hook *telemetryFilteredHook) Fire(entry *logrus.Entry) error {
+	// Just in case
+	if hook.wrappedHook == nil {
+		return errors.New("the wrapped hook has not been initialized")
+	}
+
 	// Don't include log history when logging debug.Stack() - just pass it through.
 	if entry.Level == logrus.ErrorLevel && strings.HasPrefix(entry.Message, stackPrefix) {
 		return hook.wrappedHook.Fire(entry)
@@ -75,5 +87,9 @@ func (hook *telemetryFilteredHook) Fire(entry *logrus.Entry) error {
 
 // Levels Required for logrus hook interface
 func (hook *telemetryFilteredHook) Levels() []logrus.Level {
-	return hook.wrappedHook.Levels()
+	if hook.wrappedHook != nil {
+		return hook.wrappedHook.Levels()
+	}
+
+	return hook.levels
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -153,6 +153,20 @@ func (kcl KMDClient) MultisigSignTransaction(walletHandle, pw []byte, tx []byte,
 	return
 }
 
+// MultisigSignProgram wraps kmdapi.APIV1POSTMultisigProgramSignRequest
+func (kcl KMDClient) MultisigSignProgram(walletHandle, pw []byte, addr string, data []byte, pk crypto.PublicKey, partial crypto.MultisigSig) (resp kmdapi.APIV1POSTMultisigProgramSignResponse, err error) {
+	req := kmdapi.APIV1POSTMultisigProgramSignRequest{
+		WalletHandleToken: string(walletHandle),
+		WalletPassword:    string(pw),
+		Program:           data,
+		Address:           addr,
+		PublicKey:         pk,
+		PartialMsig:       partial,
+	}
+	err = kcl.DoV1Request(req, &resp)
+	return
+}
+
 // RenewWalletHandle wraps kmdapi.APIV1POSTKeyListRequest
 func (kcl KMDClient) RenewWalletHandle(walletHandle []byte) (resp kmdapi.APIV1POSTWalletRenewResponse, err error) {
 	req := kmdapi.APIV1POSTWalletRenewRequest{
@@ -184,11 +198,23 @@ func (kcl KMDClient) ExportMasterDerivationKey(walletHandle []byte, walletPasswo
 
 // SignTransaction wraps kmdapi.APIV1POSTTransactionSignRequest
 func (kcl KMDClient) SignTransaction(walletHandle, pw []byte, tx transactions.Transaction) (resp kmdapi.APIV1POSTTransactionSignResponse, err error) {
-	txBytes := protocol.Encode(tx)
+	txBytes := protocol.Encode(&tx)
 	req := kmdapi.APIV1POSTTransactionSignRequest{
 		WalletHandleToken: string(walletHandle),
 		WalletPassword:    string(pw),
 		Transaction:       txBytes,
+	}
+	err = kcl.DoV1Request(req, &resp)
+	return
+}
+
+// SignProgram wraps kmdapi.APIV1POSTProgramSignRequest
+func (kcl KMDClient) SignProgram(walletHandle, pw []byte, addr string, data []byte) (resp kmdapi.APIV1POSTProgramSignResponse, err error) {
+	req := kmdapi.APIV1POSTProgramSignRequest{
+		WalletHandleToken: string(walletHandle),
+		WalletPassword:    string(pw),
+		Program:           data,
+		Address:           addr,
 	}
 	err = kcl.DoV1Request(req, &resp)
 	return

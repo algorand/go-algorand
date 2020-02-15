@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 export GOPATH=$(go env GOPATH)
-cd ${GOPATH}/src/github.com/algorand/go-algorand
+cd "$(dirname "$0")"/..
 
 # If enlistment isn't clean, it's 'dev'
 ./scripts/check_clean_enlistment.sh
@@ -27,6 +27,8 @@ BRANCHPARENT="$(git show-branch | grep '\*' | grep -v '${BRANCH}' | head -n1 | s
 
 if [ "${BRANCHPARENT}" = "rel/stable" ]; then
     echo "testnet"
+elif [ "${BRANCHPARENT}" = "rel/beta" ]; then
+    echo "betanet"
 else
     echo "devnet"
 fi

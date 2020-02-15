@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -59,9 +59,11 @@ func spinNetwork(t *testing.T, nodesCount int) ([]*networkImpl, []*messageCounte
 	start := time.Now()
 	nodesAddresses := []string{}
 	gossipNodes := []network.GossipNode{}
-	phonebooks := make([]network.ThreadsafePhonebook, nodesCount)
+	phonebooks := make([]*network.ThreadsafePhonebook, nodesCount)
 	for nodeIdx := 0; nodeIdx < nodesCount; nodeIdx++ {
-		gossipNode, err := network.NewWebsocketGossipNode(log.With("node", nodeIdx), cfg, &phonebooks[nodeIdx], "go-test-agreement-network-genesis", config.Devtestnet)
+		phonebooks[nodeIdx] = network.MakeThreadsafePhonebook(cfg.ConnectionsRateLimitingCount,
+			time.Duration(cfg.ConnectionsRateLimitingWindowSeconds)*time.Second)
+		gossipNode, err := network.NewWebsocketGossipNode(log.With("node", nodeIdx), cfg, phonebooks[nodeIdx], "go-test-agreement-network-genesis", config.Devtestnet)
 		if err != nil {
 			t.Fatalf("fail making ws node: %v", err)
 		}
@@ -83,7 +85,7 @@ func spinNetwork(t *testing.T, nodesCount int) ([]*networkImpl, []*messageCounte
 	networkImpls := []*networkImpl{}
 	msgCounters := []*messageCounter{}
 	for _, gossipNode := range gossipNodes {
-		networkImpl := WrapNetwork(gossipNode).(*networkImpl)
+		networkImpl := WrapNetwork(gossipNode, log).(*networkImpl)
 		networkImpls = append(networkImpls, networkImpl)
 		msgCounter := startMessageCounter(networkImpl)
 		msgCounters = append(msgCounters, msgCounter)

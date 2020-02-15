@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,8 +17,6 @@
 package codes
 
 const (
-	// ExitCodeKMDInvalidArgs is returned if any cli arguments are invalid
-	ExitCodeKMDInvalidArgs = 1
 	// ExitCodeKMDLogError is returned if we can't open the log file
 	ExitCodeKMDLogError = 2
 	// ExitCodeKMDError is the catch-all exit code for most kmd errors

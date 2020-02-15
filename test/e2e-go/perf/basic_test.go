@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -85,7 +85,20 @@ func BenchmarkPaymentsThroughput(b *testing.B) {
 func doBenchTemplate(b *testing.B, template string, moneynode string) {
 	fmt.Printf("Starting to benchmark template %s\n", template)
 
+	// consensusTestBigBlocks is a version of ConsensusV0 used for testing
+	// with big block size (large MaxTxnBytesPerBlock).
+	// at the time versioning was introduced.
+	const consensusTestBigBlocks = protocol.ConsensusVersion("test-big-blocks")
+
 	var fixture fixtures.RestClientFixture
+
+	testBigBlocks := config.Consensus[protocol.ConsensusCurrentVersion]
+	testBigBlocks.MaxTxnBytesPerBlock = 100000000
+	testBigBlocks.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	fixture.SetConsensus(config.ConsensusProtocols{
+		consensusTestBigBlocks: testBigBlocks,
+	})
 	fixture.Setup(b, filepath.Join("nettemplates", template))
 	defer fixture.Shutdown()
 
@@ -98,6 +111,12 @@ func doBenchTemplate(b *testing.B, template string, moneynode string) {
 	require.NoError(b, err)
 	require.True(b, len(addrs) > 0)
 	addr := addrs[0]
+
+	suggest, err := c.SuggestedParams()
+	require.NoError(b, err)
+
+	var genesisHash crypto.Digest
+	copy(genesisHash[:], suggest.GenesisHash)
 
 	// Increase the number of keepalive connections, since we use many
 	// goroutines to talk to algod and kmd.
@@ -141,14 +160,15 @@ func doBenchTemplate(b *testing.B, template string, moneynode string) {
 					txn := transactions.Transaction{
 						Type: protocol.PaymentTx,
 						Header: transactions.Header{
-							Sender:     sender,
-							Fee:        basics.MicroAlgos{Raw: 1001},
-							FirstValid: basics.Round(round),
-							LastValid:  basics.Round(round) + basics.Round(proto.MaxTxnLife),
+							Sender:      sender,
+							Fee:         basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee},
+							FirstValid:  basics.Round(round),
+							LastValid:   basics.Round(round) + basics.Round(proto.MaxTxnLife),
+							GenesisHash: genesisHash,
 						},
 						PaymentTxnFields: transactions.PaymentTxnFields{
 							Receiver: dst,
-							Amount:   basics.MicroAlgos{Raw: 1000},
+							Amount:   basics.MicroAlgos{Raw: 100000},
 						},
 					}
 

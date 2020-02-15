@@ -1,0 +1,88 @@
+// Splits money sent to some account to two recipients at some ratio.
+// This is a contract account.
+//
+// This allows either a two-transaction group, for executing a
+// split, or single transaction, for closing the account.
+//
+// Withdrawals from this account are allowed as a group transaction which
+// sends TMPL_RCV1 and TMPL_RCV2 amounts with exactly the ratio of
+// TMPL_RAT1/TMPL_RAT2.  At least TMPL_MINPAY must be sent to TMPL_RCV1.
+// (CloseRemainderTo must be zero.)
+//
+// After TMPL_TIMEOUT passes, all funds can be refunded to TMPL_OWN.
+//
+// Parameters:
+//  - TMPL_RCV1: the first recipient in the split account
+//  - TMPL_RCV2: the second recipient in the split account
+//  - TMPL_RAT1: fraction of money to be paid to the first recipient
+//  - TMPL_RAT2: fraction of money to be paid to the second recipient
+//  - TMPL_MINPAY: minimum amount to be paid out of the account
+//  - TMPL_TIMEOUT: the round at which the account expires
+//  - TMPL_OWN: the address to refund funds to on timeout
+//  - TMPL_FEE: half of the maximum fee used by each split forwarding group transaction
+txn TypeEnum
+int 1
+==
+txn Fee
+int TMPL_FEE
+<=
+&&
+global GroupSize
+int 2
+==
+bnz split
+
+// close case
+txn CloseRemainderTo
+addr TMPL_OWN
+==
+txn Receiver
+global ZeroAddress
+==
+&&
+txn Amount
+int 0
+==
+&&
+txn FirstValid
+int TMPL_TIMEOUT
+>
+&&
+int 1
+bnz done
+
+// split case
+split:
+gtxn 0 Sender
+gtxn 1 Sender
+==
+txn CloseRemainderTo
+global ZeroAddress
+==
+&&
+gtxn 0 Receiver
+addr TMPL_RCV1
+==
+&&
+gtxn 1 Receiver
+addr TMPL_RCV2
+==
+&&
+// 0.Amount / 1.Amount == RAT1 / RAT2
+// ===
+// 0.Amount * RAT2 == 1.Amount * RAT1
+// TODO: redo with mulw
+gtxn 0 Amount
+int TMPL_RAT2
+*
+gtxn 1 Amount
+int TMPL_RAT1
+*
+==
+&&
+gtxn 0 Amount
+int TMPL_MINPAY
+>=
+&&
+done:
+&&

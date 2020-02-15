@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -50,6 +50,7 @@ type Client struct {
 	kmdStartArgs nodecontrol.KMDStartArgs
 	dataDir      string
 	cacheDir     string
+	consensus    config.ConsensusProtocols
 }
 
 // ClientConfig is data to configure a Client
@@ -164,6 +165,11 @@ func (c *Client) init(config ClientConfig, clientType ClientType) error {
 			return err
 		}
 	}
+
+	c.consensus, err = nc.GetConsensus()
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -243,7 +249,11 @@ func (c *Client) getAlgodClient() (algodclient.RestClient, error) {
 }
 
 func (c *Client) ensureGenesisID() (string, error) {
-	return c.nc.GetGenesisID()
+	genesis, err := c.nc.GetGenesis()
+	if err != nil {
+		return "", err
+	}
+	return genesis.ID(), nil
 }
 
 // GenesisID fetches the genesis ID for the running algod node
@@ -430,8 +440,13 @@ type MultisigInfo struct {
 
 // SendPaymentFromWallet signs a transaction using the given wallet and returns the resulted transaction id
 func (c *Client) SendPaymentFromWallet(walletHandle, pw []byte, from, to string, fee, amount uint64, note []byte, closeTo string, firstValid, lastValid basics.Round) (transactions.Transaction, error) {
+	return c.SendPaymentFromWalletWithLease(walletHandle, pw, from, to, fee, amount, note, closeTo, [32]byte{}, firstValid, lastValid)
+}
+
+// SendPaymentFromWalletWithLease is like SendPaymentFromWallet, but with a custom lease.
+func (c *Client) SendPaymentFromWalletWithLease(walletHandle, pw []byte, from, to string, fee, amount uint64, note []byte, closeTo string, lease [32]byte, firstValid, lastValid basics.Round) (transactions.Transaction, error) {
 	// Build the transaction
-	tx, err := c.ConstructPayment(from, to, fee, amount, note, closeTo, firstValid, lastValid)
+	tx, err := c.ConstructPayment(from, to, fee, amount, note, closeTo, lease, firstValid, lastValid)
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
@@ -470,19 +485,77 @@ func (c *Client) signAndBroadcastTransactionWithWallet(walletHandle, pw []byte, 
 	return tx, nil
 }
 
+// ComputeValidityRounds takes first, last and rounds provided by a user and resolves them into
+// actual firstValid and lastValid.
+// Resolution table
+//
+// validRounds | lastValid | result (lastValid)
+// -------------------------------------------------
+// 	  	 0     |     0     | firstValid + maxTxnLife
+// 		 0     |     N     | lastValid
+// 		 M     |     0     | first + validRounds - 1
+// 		 M     |     M     | error
+//
+func (c *Client) ComputeValidityRounds(firstValid, lastValid, validRounds uint64) (uint64, uint64, error) {
+	params, err := c.SuggestedParams()
+	if err != nil {
+		return 0, 0, err
+	}
+	cparams, ok := c.consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
+	if !ok {
+		return 0, 0, fmt.Errorf("cannot construct transaction: unknown consensus protocol %s", params.ConsensusVersion)
+	}
+
+	return computeValidityRounds(firstValid, lastValid, validRounds, params.LastRound, cparams.MaxTxnLife)
+}
+
+func computeValidityRounds(firstValid, lastValid, validRounds, lastRound, maxTxnLife uint64) (uint64, uint64, error) {
+	if validRounds != 0 && lastValid != 0 {
+		return 0, 0, fmt.Errorf("cannot construct transaction: ambiguous input: lastValid = %d, validRounds = %d", lastValid, validRounds)
+	}
+
+	if firstValid == 0 {
+		firstValid = lastRound + 1
+	}
+
+	if validRounds != 0 {
+		// MaxTxnLife is the maximum difference between LastValid and FirstValid
+		// so that validRounds = maxTxnLife+1 gives lastValid = firstValid + validRounds - 1 = firstValid + maxTxnLife
+		if validRounds > maxTxnLife+1 {
+			return 0, 0, fmt.Errorf("cannot construct transaction: txn validity period %d is greater than protocol max txn lifetime %d", validRounds-1, maxTxnLife)
+		}
+		lastValid = firstValid + validRounds - 1
+	} else if lastValid == 0 {
+		lastValid = firstValid + maxTxnLife
+	}
+
+	if firstValid > lastValid {
+		return 0, 0, fmt.Errorf("cannot construct transaction: txn would first be valid on round %d which is after last valid round %d", firstValid, lastValid)
+	} else if lastValid-firstValid > maxTxnLife {
+		return 0, 0, fmt.Errorf("cannot construct transaction: txn validity period ( %d to %d ) is greater than protocol max txn lifetime %d", firstValid, lastValid, maxTxnLife)
+	}
+
+	return firstValid, lastValid, nil
+}
+
 // ConstructPayment builds a payment transaction to be signed
 // If the fee is 0, the function will use the suggested one form the network
+// Although firstValid and lastValid come pre-computed in a normal flow,
+// additional validation is done by computeValidityRounds:
 // if the lastValid is 0, firstValid + maxTxnLifetime will be used
 // if the firstValid is 0, lastRound + 1 will be used
-func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []byte, closeTo string, firstValid, lastValid basics.Round) (transactions.Transaction, error) {
+func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []byte, closeTo string, lease [32]byte, firstValid, lastValid basics.Round) (transactions.Transaction, error) {
 	fromAddr, err := basics.UnmarshalChecksumAddress(from)
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
 
-	toAddr, err := basics.UnmarshalChecksumAddress(to)
-	if err != nil {
-		return transactions.Transaction{}, err
+	var toAddr basics.Address
+	if to != "" {
+		toAddr, err = basics.UnmarshalChecksumAddress(to)
+		if err != nil {
+			return transactions.Transaction{}, err
+		}
 	}
 
 	// Get current round, protocol, genesis ID
@@ -491,16 +564,13 @@ func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []by
 		return transactions.Transaction{}, err
 	}
 
-	cp := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
-	if firstValid == 0 && lastValid == 0 {
-		firstValid = basics.Round(params.LastRound + 1)
-		lastValid = firstValid + basics.Round(cp.MaxTxnLife)
-	} else if firstValid != 0 && lastValid == 0 {
-		lastValid = firstValid + basics.Round(cp.MaxTxnLife)
-	} else if firstValid > lastValid {
-		return transactions.Transaction{}, fmt.Errorf("cannot construct payment: txn would first be valid on round %d which is after last valid round %d", firstValid, lastValid)
-	} else if lastValid-firstValid > basics.Round(cp.MaxTxnLife) {
-		return transactions.Transaction{}, fmt.Errorf("cannot construct payment: txn validity period ( %d to %d ) is greater than protocol max txn lifetime %d ", firstValid, lastValid, cp.MaxTxnLife)
+	cp, ok := c.consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
+	if !ok {
+		return transactions.Transaction{}, fmt.Errorf("ConstructPayment: unknown consensus protocol %s", params.ConsensusVersion)
+	}
+	fv, lv, err := computeValidityRounds(uint64(firstValid), uint64(lastValid), 0, params.LastRound, cp.MaxTxnLife)
+	if err != nil {
+		return transactions.Transaction{}, err
 	}
 
 	tx := transactions.Transaction{
@@ -508,8 +578,9 @@ func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []by
 		Header: transactions.Header{
 			Sender:     fromAddr,
 			Fee:        basics.MicroAlgos{Raw: fee},
-			FirstValid: firstValid,
-			LastValid:  lastValid,
+			FirstValid: basics.Round(fv),
+			LastValid:  basics.Round(lv),
+			Lease:      lease,
 			Note:       note,
 		},
 		PaymentTxnFields: transactions.PaymentTxnFields{
@@ -570,6 +641,15 @@ func (c *Client) AccountInformation(account string) (resp v1.Account, err error)
 	return
 }
 
+// AssetInformation takes an asset's index and returns its information
+func (c *Client) AssetInformation(index uint64) (resp v1.AssetParams, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		resp, err = algod.AssetInformation(index)
+	}
+	return
+}
+
 // TransactionInformation takes an address and associated txid and return its information
 func (c *Client) TransactionInformation(addr, txid string) (resp v1.Transaction, err error) {
 	algod, err := c.ensureAlgodClient()
@@ -594,6 +674,15 @@ func (c *Client) Block(round uint64) (resp v1.Block, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.Block(round)
+	}
+	return
+}
+
+// RawBlock takes a round and returns its block
+func (c *Client) RawBlock(round uint64) (resp v1.RawBlock, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		resp, err = algod.RawBlock(round)
 	}
 	return
 }
@@ -712,5 +801,11 @@ func (c *Client) ConsensusParams(round uint64) (consensus config.ConsensusParams
 		return
 	}
 
-	return config.Consensus[protocol.ConsensusVersion(block.CurrentProtocol)], nil
+	params, ok := c.consensus[protocol.ConsensusVersion(block.CurrentProtocol)]
+	if !ok {
+		err = fmt.Errorf("ConsensusParams: unknown consensus protocol %s", block.CurrentProtocol)
+		return
+	}
+
+	return params, nil
 }

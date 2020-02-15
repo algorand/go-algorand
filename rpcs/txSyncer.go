@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -32,25 +32,20 @@ import (
 // PendingTxAggregate is a container of pending transactions
 type PendingTxAggregate interface {
 	PendingTxIDs() []transactions.Txid
-	Pending() []transactions.SignedTxn
+	Pending() [][]transactions.SignedTxn
 }
 
 // TxSyncClient abstracts sync-ing pending transactions from a peer.
 type TxSyncClient interface {
-	Sync(ctx context.Context, bloom *bloom.Filter) (txns []transactions.SignedTxn, err error)
+	Sync(ctx context.Context, bloom *bloom.Filter) (txns [][]transactions.SignedTxn, err error)
 	Address() string
 	Close() error
-}
-
-// PeerSource is a subset of network.GossipNode
-type PeerSource interface {
-	GetPeers(options ...network.PeerOption) []network.Peer
 }
 
 // TxSyncer fetches pending transactions that are missing from its pool, and feeds them to the handler
 type TxSyncer struct {
 	pool         PendingTxAggregate
-	clientSource PeerSource
+	clientSource network.GossipNode
 	handler      data.SolicitedTxHandler
 	ctx          context.Context
 	cancel       context.CancelFunc
@@ -63,7 +58,7 @@ type TxSyncer struct {
 }
 
 // MakeTxSyncer returns a TxSyncer
-func MakeTxSyncer(pool PendingTxAggregate, clientSource PeerSource, txHandler data.SolicitedTxHandler, syncInterval time.Duration, syncTimeout time.Duration, serverResponseSize int) *TxSyncer {
+func MakeTxSyncer(pool PendingTxAggregate, clientSource network.GossipNode, txHandler data.SolicitedTxHandler, syncInterval time.Duration, syncTimeout time.Duration, serverResponseSize int) *TxSyncer {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &TxSyncer{
 		pool:         pool,
@@ -127,23 +122,34 @@ func (syncer *TxSyncer) syncFromClient(client TxSyncClient) error {
 
 	ctx, cf := context.WithTimeout(syncer.ctx, syncer.syncTimeout)
 	defer cf()
-	txns, err := client.Sync(ctx, filter)
+	txgroups, err := client.Sync(ctx, filter)
 	if err != nil {
-		return fmt.Errorf("TxSyncer.Sync: peer %v error %v", client.Address(), err)
+		return fmt.Errorf("TxSyncer.Sync: peer '%v' error '%v'", client.Address(), err)
 	}
 
 	// test to see if all the transaction that we've received honor the bloom filter constraints
 	// that we've requested.
-	for _, tx := range txns {
-		tx.InitCaches()
-		txID := tx.ID()
-		if filter.Test(txID[:]) {
-			// we just found a transaction that shouldn't have been included in the response.
-			client.Close()
-			return fmt.Errorf("TxSyncer.Sync: peer %v sent a transaction that was included in the bloom filter", client.Address())
+	for _, txgroup := range txgroups {
+		var txnsInFilter int
+		for i := range txgroup {
+			txID := txgroup[i].ID()
+			if filter.Test(txID[:]) {
+				// we just found a transaction that shouldn't have been
+				// included in the response.  maybe this is a false positive
+				// and other transactions in the group aren't included in the
+				// bloom filter, though.
+				txnsInFilter++
+			}
 		}
+
+		// if the entire group was in the bloom filter, report an error.
+		if txnsInFilter == len(txgroup) {
+			client.Close()
+			return fmt.Errorf("TxSyncer.Sync: peer %v sent a transaction group that was entirely included in the bloom filter", client.Address())
+		}
+
 		// send the transaction to the trasaction pool
-		if syncer.handler.Handle(tx) != nil {
+		if syncer.handler.Handle(txgroup) != nil {
 			client.Close()
 			return fmt.Errorf("TxSyncer.Sync: peer %v sent invalid transaction", client.Address())
 		}

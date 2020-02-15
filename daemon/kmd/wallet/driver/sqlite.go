@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,6 +33,8 @@ import (
 	"github.com/algorand/go-algorand/daemon/kmd/config"
 	"github.com/algorand/go-algorand/daemon/kmd/wallet"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-codec/codec"
 )
@@ -131,7 +133,7 @@ func msgpackDecode(b []byte, objptr interface{}) error {
 
 // InitWithConfig accepts a driver configuration so that the SQLite driver
 // knows where to read and write its wallet databases
-func (swd *SQLiteWalletDriver) InitWithConfig(cfg config.KMDConfig) error {
+func (swd *SQLiteWalletDriver) InitWithConfig(cfg config.KMDConfig, log logging.Logger) error {
 	swd.globalCfg = cfg
 	swd.sqliteCfg = cfg.DriverConfig.SQLiteWalletDriverConfig
 
@@ -1016,7 +1018,7 @@ func (sw *SQLiteWallet) LookupMultisigPreimage(addr crypto.Digest) (version, thr
 	row := db.QueryRow("SELECT version, threshold, pks FROM msig_addrs WHERE address=?", addr[:])
 	err = row.Scan(&versionCandidate, &thresholdCandidate, &pksBlob)
 	if err != nil {
-		err = errKeyNotFound
+		err = errMsigDataNotFound
 		return
 	}
 
@@ -1108,7 +1110,36 @@ func (sw *SQLiteWallet) SignTransaction(tx transactions.Transaction, pw []byte) 
 	}
 
 	// Sign the transaction
-	stx = protocol.Encode(tx.Sign(secrets))
+	stxn := tx.Sign(secrets)
+	stx = protocol.Encode(&stxn)
+	return
+}
+
+// SignProgram signs the passed data for the src address
+func (sw *SQLiteWallet) SignProgram(data []byte, src crypto.Digest, pw []byte) (stx []byte, err error) {
+	// Check the password
+	err = sw.CheckPassword(pw)
+	if err != nil {
+		return
+	}
+
+	// Fetch the required key
+	sk, err := sw.fetchSecretKey(crypto.Digest(src))
+	if err != nil {
+		return
+	}
+
+	// Generate the signature secrets
+	secrets, err := crypto.SecretKeyToSignatureSecrets(sk)
+	if err != nil {
+		err = errSKToPK
+		return
+	}
+
+	progb := logic.Program(data)
+	// Sign the transaction
+	sig := secrets.Sign(&progb)
+	stx = sig[:]
 	return
 }
 
@@ -1194,6 +1225,97 @@ func (sw *SQLiteWallet) MultisigSignTransaction(tx transactions.Transaction, pk 
 	// Sign the transaction, and merge the multisig into the partial
 	version, threshold, pks := partial.Preimage()
 	msig2, err := crypto.MultisigSign(tx, addr, version, threshold, pks, *secrets)
+	if err != nil {
+		return
+	}
+	sig, err = crypto.MultisigMerge(partial, msig2)
+	return
+}
+
+// MultisigSignProgram starts a multisig signature or adds a signature to a
+// partially signed multisig transaction signature of the passed transaction
+// using the key
+func (sw *SQLiteWallet) MultisigSignProgram(data []byte, src crypto.Digest, pk crypto.PublicKey, partial crypto.MultisigSig, pw []byte) (sig crypto.MultisigSig, err error) {
+	// Check the password
+	err = sw.CheckPassword(pw)
+	if err != nil {
+		return
+	}
+
+	if partial.Version == 0 && partial.Threshold == 0 && len(partial.Subsigs) == 0 {
+		// We weren't given a partial multisig, so create a new one
+
+		// Look up the preimage in the database
+		var pks []crypto.PublicKey
+		var version, threshold uint8
+		version, threshold, pks, err = sw.LookupMultisigPreimage(src)
+		if err != nil {
+			return
+		}
+
+		// Fetch the required secret key
+		var sk crypto.PrivateKey
+		sk, err = sw.fetchSecretKey(publicKeyToAddress(pk))
+		if err != nil {
+			return
+		}
+
+		// Convert the secret key to crypto.SignatureSecrets
+		var secrets *crypto.SignatureSecrets
+		secrets, err = crypto.SecretKeyToSignatureSecrets(sk)
+		if err != nil {
+			err = errSKToPK
+			return
+		}
+
+		// Sign the transaction
+		from := src
+		progb := logic.Program(data)
+		sig, err = crypto.MultisigSign(&progb, from, version, threshold, pks, *secrets)
+		return
+	}
+
+	// We were given a partial multisig, so add to it
+
+	// Check preimage matches tx src address
+	var addr crypto.Digest
+	addr, err = crypto.MultisigAddrGenWithSubsigs(partial.Version, partial.Threshold, partial.Subsigs)
+	if err != nil {
+		return
+	}
+	if addr != src {
+		err = errMsigWrongAddr
+		return
+	}
+
+	// Check that key is one of the ones in the preimage
+	err = errMsigWrongKey
+	for _, subsig := range partial.Subsigs {
+		if pk == subsig.Key {
+			err = nil
+			break
+		}
+	}
+	if err != nil {
+		return
+	}
+
+	// Fetch the required secret key
+	sk, err := sw.fetchSecretKey(publicKeyToAddress(pk))
+	if err != nil {
+		return
+	}
+
+	// Convert the secret key to crypto.SignatureSecrets
+	secrets, err := crypto.SecretKeyToSignatureSecrets(sk)
+	if err != nil {
+		return
+	}
+
+	// Sign the transaction, and merge the multisig into the partial
+	version, threshold, pks := partial.Preimage()
+	progb := logic.Program(data)
+	msig2, err := crypto.MultisigSign(&progb, addr, version, threshold, pks, *secrets)
 	if err != nil {
 		return
 	}

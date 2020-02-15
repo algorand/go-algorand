@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,8 +19,10 @@ package handlers
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -30,12 +32,14 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/rpcs"
 )
 
 func nodeStatus(node *node.AlgorandFullNode) (res v1.NodeStatus, err error) {
@@ -45,14 +49,69 @@ func nodeStatus(node *node.AlgorandFullNode) (res v1.NodeStatus, err error) {
 	}
 
 	return v1.NodeStatus{
-		LastRound:            uint64(stat.LastRound),
-		LastVersion:          string(stat.LastVersion),
-		NextVersion:          string(stat.NextVersion),
-		NextVersionRound:     uint64(stat.NextVersionRound),
-		NextVersionSupported: stat.NextVersionSupported,
-		TimeSinceLastRound:   stat.TimeSinceLastRound().Nanoseconds(),
-		CatchupTime:          stat.CatchupTime.Nanoseconds(),
+		LastRound:                 uint64(stat.LastRound),
+		LastVersion:               string(stat.LastVersion),
+		NextVersion:               string(stat.NextVersion),
+		NextVersionRound:          uint64(stat.NextVersionRound),
+		NextVersionSupported:      stat.NextVersionSupported,
+		TimeSinceLastRound:        stat.TimeSinceLastRound().Nanoseconds(),
+		CatchupTime:               stat.CatchupTime.Nanoseconds(),
+		StoppedAtUnsupportedRound: stat.StoppedAtUnsupportedRound,
 	}, nil
+}
+
+// decorateUnknownTransactionTypeError takes an error of type errUnknownTransactionType and converts it into
+// either errInvalidTransactionTypeLedger or errInvalidTransactionTypePending as needed.
+func decorateUnknownTransactionTypeError(err error, txs node.TxnWithStatus) error {
+	if err.Error() != errUnknownTransactionType {
+		return err
+	}
+	if txs.ConfirmedRound != basics.Round(0) {
+		return fmt.Errorf(errInvalidTransactionTypeLedger, txs.Txn.Txn.Type, txs.Txn.Txn.ID().String(), txs.ConfirmedRound)
+	}
+	return fmt.Errorf(errInvalidTransactionTypePending, txs.Txn.Txn.Type, txs.Txn.Txn.ID().String())
+}
+
+// txEncode copies the data fields of the internal transaction object and populate the v1.Transaction accordingly.
+// if unexpected transaction type is encountered, an error is returned. The caller is expected to ignore the returned
+// transaction when error is non-nil.
+func txEncode(tx transactions.Transaction, ad transactions.ApplyData) (v1.Transaction, error) {
+	var res v1.Transaction
+	switch tx.Type {
+	case protocol.PaymentTx:
+		res = paymentTxEncode(tx, ad)
+	case protocol.KeyRegistrationTx:
+		res = keyregTxEncode(tx, ad)
+	case protocol.AssetConfigTx:
+		res = assetConfigTxEncode(tx, ad)
+	case protocol.AssetTransferTx:
+		res = assetTransferTxEncode(tx, ad)
+	case protocol.AssetFreezeTx:
+		res = assetFreezeTxEncode(tx, ad)
+	default:
+		return res, errors.New(errUnknownTransactionType)
+	}
+
+	res.Type = string(tx.Type)
+	res.TxID = tx.ID().String()
+	res.From = tx.Src().String()
+	res.Fee = tx.TxFee().Raw
+	res.FirstRound = uint64(tx.First())
+	res.LastRound = uint64(tx.Last())
+	res.Note = tx.Aux()
+	res.FromRewards = ad.SenderRewards.Raw
+	res.GenesisID = tx.GenesisID
+	res.GenesisHash = tx.GenesisHash[:]
+
+	if tx.Group != (crypto.Digest{}) {
+		res.Group = tx.Group[:]
+	}
+
+	if tx.Lease != ([32]byte{}) {
+		res.Lease = tx.Lease[:]
+	}
+
+	return res, nil
 }
 
 func paymentTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
@@ -69,25 +128,180 @@ func paymentTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.
 	}
 
 	return v1.Transaction{
-		Type:        string(tx.Type),
-		TxID:        tx.ID().String(),
-		From:        tx.Src().String(),
-		Fee:         tx.TxFee().Raw,
-		FirstRound:  uint64(tx.First()),
-		LastRound:   uint64(tx.Last()),
-		Note:        tx.Aux(),
-		Payment:     &payment,
-		FromRewards: ad.SenderRewards.Raw,
-		GenesisID:   tx.GenesisID,
-		GenesisHash: tx.GenesisHash[:],
+		Payment: &payment,
 	}
 }
 
-func txWithStatusEncode(tr node.TxnWithStatus) v1.Transaction {
-	s := paymentTxEncode(tr.Txn.Txn, tr.ApplyData)
+func keyregTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
+	keyreg := v1.KeyregTransactionType{
+		VotePK:          tx.KeyregTxnFields.VotePK[:],
+		SelectionPK:     tx.KeyregTxnFields.SelectionPK[:],
+		VoteFirst:       uint64(tx.KeyregTxnFields.VoteFirst),
+		VoteLast:        uint64(tx.KeyregTxnFields.VoteLast),
+		VoteKeyDilution: tx.KeyregTxnFields.VoteKeyDilution,
+	}
+
+	return v1.Transaction{
+		Keyreg: &keyreg,
+	}
+}
+
+func participationKeysEncode(r basics.AccountData) *v1.Participation {
+	var apiParticipation v1.Participation
+	apiParticipation.ParticipationPK = r.VoteID[:]
+	apiParticipation.VRFPK = r.SelectionID[:]
+	apiParticipation.VoteFirst = uint64(r.VoteFirstValid)
+	apiParticipation.VoteLast = uint64(r.VoteLastValid)
+	apiParticipation.VoteKeyDilution = r.VoteKeyDilution
+
+	return &apiParticipation
+}
+
+func assetParams(creator basics.Address, params basics.AssetParams) v1.AssetParams {
+	paramsModel := v1.AssetParams{
+		Total:         params.Total,
+		DefaultFrozen: params.DefaultFrozen,
+		Decimals:      params.Decimals,
+	}
+
+	paramsModel.UnitName = strings.TrimRight(string(params.UnitName[:]), "\x00")
+	paramsModel.AssetName = strings.TrimRight(string(params.AssetName[:]), "\x00")
+	paramsModel.URL = strings.TrimRight(string(params.URL[:]), "\x00")
+	if params.MetadataHash != [32]byte{} {
+		paramsModel.MetadataHash = params.MetadataHash[:]
+	}
+
+	if !creator.IsZero() {
+		paramsModel.Creator = creator.String()
+	}
+
+	if !params.Manager.IsZero() {
+		paramsModel.ManagerAddr = params.Manager.String()
+	}
+
+	if !params.Reserve.IsZero() {
+		paramsModel.ReserveAddr = params.Reserve.String()
+	}
+
+	if !params.Freeze.IsZero() {
+		paramsModel.FreezeAddr = params.Freeze.String()
+	}
+
+	if !params.Clawback.IsZero() {
+		paramsModel.ClawbackAddr = params.Clawback.String()
+	}
+
+	return paramsModel
+}
+
+func assetConfigTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
+	params := assetParams(basics.Address{}, tx.AssetConfigTxnFields.AssetParams)
+
+	config := v1.AssetConfigTransactionType{
+		AssetID: uint64(tx.AssetConfigTxnFields.ConfigAsset),
+		Params:  params,
+	}
+
+	return v1.Transaction{
+		AssetConfig: &config,
+	}
+}
+
+func assetTransferTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
+	xfer := v1.AssetTransferTransactionType{
+		AssetID:  uint64(tx.AssetTransferTxnFields.XferAsset),
+		Amount:   tx.AssetTransferTxnFields.AssetAmount,
+		Receiver: tx.AssetTransferTxnFields.AssetReceiver.String(),
+	}
+
+	if !tx.AssetTransferTxnFields.AssetSender.IsZero() {
+		xfer.Sender = tx.AssetTransferTxnFields.AssetSender.String()
+	}
+
+	if !tx.AssetTransferTxnFields.AssetCloseTo.IsZero() {
+		xfer.CloseTo = tx.AssetTransferTxnFields.AssetCloseTo.String()
+	}
+
+	return v1.Transaction{
+		AssetTransfer: &xfer,
+	}
+}
+
+func assetFreezeTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
+	freeze := v1.AssetFreezeTransactionType{
+		AssetID:         uint64(tx.AssetFreezeTxnFields.FreezeAsset),
+		Account:         tx.AssetFreezeTxnFields.FreezeAccount.String(),
+		NewFreezeStatus: tx.AssetFreezeTxnFields.AssetFrozen,
+	}
+
+	return v1.Transaction{
+		AssetFreeze: &freeze,
+	}
+}
+
+func txWithStatusEncode(tr node.TxnWithStatus) (v1.Transaction, error) {
+	s, err := txEncode(tr.Txn.Txn, tr.ApplyData)
+	if err != nil {
+		err = decorateUnknownTransactionTypeError(err, tr)
+		return v1.Transaction{}, err
+	}
 	s.ConfirmedRound = uint64(tr.ConfirmedRound)
 	s.PoolError = tr.PoolError
-	return s
+	return s, nil
+}
+
+func computeAssetIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, payset []transactions.SignedTxnWithAD) (aidx uint64) {
+	// Compute transaction index in block
+	offset := -1
+	for idx, stxnib := range payset {
+		if tx.Txn.Txn.ID() == stxnib.Txn.ID() {
+			offset = idx
+			break
+		}
+	}
+
+	// Sanity check that txn was in fetched block
+	if offset < 0 {
+		return 0
+	}
+
+	// Count into block to get created asset index
+	return txnCounter - uint64(len(payset)) + uint64(offset) + 1
+}
+
+// computeAssetIndexFromTxn returns the created asset index given a confirmed
+// transaction whose confirmation block is available in the ledger. Note that
+// 0 is an invalid asset index (they start at 1).
+func computeAssetIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx uint64) {
+	// Must have ledger
+	if l == nil {
+		return 0
+	}
+	// Transaction must be confirmed
+	if tx.ConfirmedRound == 0 {
+		return 0
+	}
+	// Transaction must be AssetConfig transaction
+	if tx.Txn.Txn.AssetConfigTxnFields == (transactions.AssetConfigTxnFields{}) {
+		return 0
+	}
+	// Transaction must be creating an asset
+	if tx.Txn.Txn.AssetConfigTxnFields.ConfigAsset != 0 {
+		return 0
+	}
+
+	// Look up block where transaction was confirmed
+	blk, err := l.Block(tx.ConfirmedRound)
+	if err != nil {
+		return 0
+	}
+
+	payset, err := blk.DecodePaysetFlat()
+	if err != nil {
+		return 0
+	}
+
+	return computeAssetIndexInPayset(tx, blk.BlockHeader.TxnCounter, payset)
 }
 
 func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error) {
@@ -118,7 +332,7 @@ func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error)
 
 	// Transactions
 	var txns []v1.Transaction
-	payset, err := b.DecodePaysetWithAD()
+	payset, err := b.DecodePaysetFlat()
 	if err != nil {
 		return v1.Block{}, err
 	}
@@ -129,7 +343,13 @@ func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error)
 			ConfirmedRound: b.Round(),
 			ApplyData:      txn.ApplyData,
 		}
-		txns = append(txns, txWithStatusEncode(tx))
+
+		encTx, err := txWithStatusEncode(tx)
+		if err != nil {
+			return v1.Block{}, err
+		}
+
+		txns = append(txns, encTx)
 	}
 
 	block.Transactions = v1.TransactionList{Transactions: txns}
@@ -199,9 +419,29 @@ func WaitForBlock(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ledger := ctx.Node.Ledger()
+	latestBlkHdr, err := ledger.BlockHdr(ledger.Latest())
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
+		return
+	}
+	if latestBlkHdr.NextProtocol != "" {
+		if _, nextProtocolSupported := config.Consensus[latestBlkHdr.NextProtocol]; !nextProtocolSupported {
+			// see if the desired protocol switch is expect to happen before or after the above point.
+			if latestBlkHdr.NextProtocolSwitchOn <= basics.Round(queryRound+1) {
+				// we would never reach to this round, since this round would happen after the (unsupported) protocol upgrade.
+				lib.ErrorResponse(w, http.StatusBadRequest, err, errRequestedRoundInUnsupportedRound, ctx.Log)
+				return
+			}
+		}
+	}
+
 	select {
+	case <-ctx.Shutdown:
+		lib.ErrorResponse(w, http.StatusInternalServerError, err, errServiceShuttingDown, ctx.Log)
+		return
 	case <-time.After(1 * time.Minute):
-	case <-ctx.Node.Ledger().Wait(basics.Round(queryRound + 1)):
+	case <-ledger.Wait(basics.Round(queryRound + 1)):
 	}
 
 	nodeStatus, err := nodeStatus(ctx.Node)
@@ -244,19 +484,35 @@ func RawTransaction(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) 
 	//         schema: {type: string}
 	//       401: { description: Invalid API Token }
 	//       default: { description: Unknown Error }
-	var st transactions.SignedTxn
-	err := protocol.NewDecoder(r.Body).Decode(&st)
+	var txgroup []transactions.SignedTxn
+	dec := protocol.NewDecoder(r.Body)
+	for {
+		var st transactions.SignedTxn
+		err := dec.Decode(&st)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			lib.ErrorResponse(w, http.StatusBadRequest, err, err.Error(), ctx.Log)
+			return
+		}
+		txgroup = append(txgroup, st)
+	}
+
+	if len(txgroup) == 0 {
+		err := errors.New("empty txgroup")
+		lib.ErrorResponse(w, http.StatusBadRequest, err, err.Error(), ctx.Log)
+		return
+	}
+
+	err := ctx.Node.BroadcastSignedTxGroup(txgroup)
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusBadRequest, err, err.Error(), ctx.Log)
 		return
 	}
 
-	txid, err := ctx.Node.BroadcastSignedTxn(st)
-	if err != nil {
-		lib.ErrorResponse(w, http.StatusBadRequest, err, err.Error(), ctx.Log)
-		return
-	}
-
+	// For backwards compatibility, return txid of first tx in group
+	txid := txgroup[0].ID()
 	SendJSON(TransactionIDResponse{&v1.TransactionID{TxID: txid.String()}}, w, ctx.Log)
 }
 
@@ -323,6 +579,40 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	var assets map[uint64]v1.AssetHolding
+	if len(record.Assets) > 0 {
+		assets = make(map[uint64]v1.AssetHolding)
+		for curid, holding := range record.Assets {
+			var creator string
+			creatorAddr, err := myLedger.GetAssetCreator(curid)
+			if err == nil {
+				creator = creatorAddr.String()
+			} else {
+				// Asset may have been deleted, so we can no
+				// longer fetch the creator
+				creator = ""
+			}
+			assets[uint64(curid)] = v1.AssetHolding{
+				Creator: creator,
+				Amount:  holding.Amount,
+				Frozen:  holding.Frozen,
+			}
+		}
+	}
+
+	var thisAssetParams map[uint64]v1.AssetParams
+	if len(record.AssetParams) > 0 {
+		thisAssetParams = make(map[uint64]v1.AssetParams)
+		for idx, params := range record.AssetParams {
+			thisAssetParams[uint64(idx)] = assetParams(addr, params)
+		}
+	}
+
+	var apiParticipation *v1.Participation
+	if record.VoteID != (crypto.OneTimeSignatureVerifier{}) {
+		apiParticipation = participationKeysEncode(record)
+	}
+
 	accountInfo := v1.Account{
 		Round:                       uint64(lastRound),
 		Address:                     addr.String(),
@@ -331,6 +621,9 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 		AmountWithoutPendingRewards: amountWithoutPendingRewards.Raw,
 		Rewards:                     record.RewardedMicroAlgos.Raw,
 		Status:                      record.Status.String(),
+		Participation:               apiParticipation,
+		AssetParams:                 thisAssetParams,
+		Assets:                      assets,
 	}
 
 	SendJSON(AccountInformationResponse{&accountInfo}, w, ctx.Log)
@@ -397,7 +690,8 @@ func TransactionInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.R
 		return
 	}
 
-	latestRound := ctx.Node.Ledger().Latest()
+	ledger := ctx.Node.Ledger()
+	latestRound := ledger.Latest()
 	stat, err := ctx.Node.Status()
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
@@ -414,7 +708,11 @@ func TransactionInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.R
 
 	if txn, ok := ctx.Node.GetTransaction(addr, txID, start, latestRound); ok {
 		var responseTxs v1.Transaction
-		responseTxs = txWithStatusEncode(txn)
+		responseTxs, err = txWithStatusEncode(txn)
+		if err != nil {
+			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToParseTransaction, ctx.Log)
+			return
+		}
 
 		response := TransactionResponse{
 			Body: &responseTxs,
@@ -425,7 +723,7 @@ func TransactionInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.R
 	}
 
 	// We didn't find it, return a failure
-	lib.ErrorResponse(w, http.StatusNotFound, err, errTransactionNotFound, ctx.Log)
+	lib.ErrorResponse(w, http.StatusNotFound, errors.New(errTransactionNotFound), errTransactionNotFound, ctx.Log)
 	return
 }
 
@@ -480,8 +778,20 @@ func PendingTransactionInformation(ctx lib.ReqContext, w http.ResponseWriter, r 
 	}
 
 	if txn, ok := ctx.Node.GetPendingTransaction(txID); ok {
-		var responseTxs v1.Transaction
-		responseTxs = txWithStatusEncode(txn)
+		ledger := ctx.Node.Ledger()
+		responseTxs, err := txWithStatusEncode(txn)
+		if err != nil {
+			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToParseTransaction, ctx.Log)
+			return
+		}
+
+		responseTxs.TransactionResults = &v1.TransactionResults{
+			// This field will be omitted for transactions that did not
+			// create an asset (or for which we could not look up the block
+			// it was created in), because computeAssetIndexFromTxn will
+			// return 0 in that case.
+			CreatedAssetIndex: computeAssetIndexFromTxn(txn, ledger),
+		}
 
 		response := TransactionResponse{
 			Body: &responseTxs,
@@ -546,7 +856,13 @@ func GetPendingTransactions(ctx lib.ReqContext, w http.ResponseWriter, r *http.R
 
 	responseTxs := make([]v1.Transaction, len(txs))
 	for i, twr := range txs {
-		responseTxs[i] = paymentTxEncode(twr.Txn, transactions.ApplyData{})
+		responseTxs[i], err = txEncode(twr.Txn, transactions.ApplyData{})
+		if err != nil {
+			// update the error as needed
+			err = decorateUnknownTransactionTypeError(err, node.TxnWithStatus{Txn: twr})
+			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpTransactionPool, ctx.Log)
+			return
+		}
 	}
 
 	response := PendingTransactionsResponse{
@@ -559,6 +875,256 @@ func GetPendingTransactions(ctx lib.ReqContext, w http.ResponseWriter, r *http.R
 	}
 
 	SendJSON(response, w, ctx.Log)
+}
+
+// GetPendingTransactionsByAddress is an httpHandler for route GET /v1/account/addr:[A-Z0-9]{KeyLength}}/transactions/pending.
+func GetPendingTransactionsByAddress(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
+	// swagger:operation GET /v1/account/{addr}/transactions/pending GetPendingTransactionsByAddress
+	// ---
+	//     Summary: Get a list of unconfirmed transactions currently in the transaction pool by address.
+	//     Description: >
+	//       Get the list of pending transactions by address, sorted by priority,
+	//       in decreasing order, truncated at the end at MAX. If MAX = 0,
+	//       returns all pending transactions.
+	//     Produces:
+	//     - application/json
+	//     Schemes:
+	//     - http
+	//     Parameters:
+	//       - name: addr
+	//         in: path
+	//         type: string
+	//         pattern: "[A-Z0-9]{58}"
+	//         required: true
+	//         description: An account public key
+	//       - name: max
+	//         in: query
+	//         type: integer
+	//         format: int64
+	//         minimum: 0
+	//         required: false
+	//         description: Truncated number of transactions to display. If max=0, returns all pending txns.
+	//     Responses:
+	//       "200":
+	//         "$ref": '#/responses/PendingTransactionsResponse'
+	//       500:
+	//         description: Internal Error
+	//         schema: {type: string}
+	//       401: { description: Invalid API Token }
+	//       default: { description: Unknown Error }
+
+	queryMax := r.FormValue("max")
+	max, err := strconv.ParseUint(queryMax, 10, 64)
+	if queryMax != "" && err != nil {
+		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errFailedToParseMaxValue), errFailedToParseMaxValue, ctx.Log)
+		return
+	}
+
+	queryAddr := mux.Vars(r)["addr"]
+	if queryAddr == "" {
+		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errNoAccountSpecified), errNoAccountSpecified, ctx.Log)
+		return
+	}
+
+	addr, err := basics.UnmarshalChecksumAddress(queryAddr)
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusBadRequest, err, errFailedToParseAddress, ctx.Log)
+		return
+	}
+
+	txs, err := ctx.Node.GetPendingTxnsFromPool()
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpTransactionPool, ctx.Log)
+		return
+	}
+
+	responseTxs := make([]v1.Transaction, 0)
+	for i, twr := range txs {
+		if twr.Txn.Sender == addr || twr.Txn.Receiver == addr {
+			// truncate in case max was passed
+			if max > 0 && uint64(i) > max {
+				break
+			}
+
+			tx, err := txEncode(twr.Txn, transactions.ApplyData{})
+			responseTxs = append(responseTxs, tx)
+			if err != nil {
+				// update the error as needed
+				err = decorateUnknownTransactionTypeError(err, node.TxnWithStatus{Txn: twr})
+				lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpTransactionPool, ctx.Log)
+				return
+			}
+		}
+	}
+
+	response := PendingTransactionsResponse{
+		Body: &v1.PendingTransactions{
+			TruncatedTxns: v1.TransactionList{
+				Transactions: responseTxs,
+			},
+			TotalTxns: uint64(len(responseTxs)),
+		},
+	}
+
+	SendJSON(response, w, ctx.Log)
+}
+
+// AssetInformation is an httpHandler for route GET /v1/asset/{index:[0-9]+}
+func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
+	// swagger:operation GET /v1/asset/{index} AssetInformation
+	// ---
+	//     Summary: Get asset information.
+	//     Description: >
+	//       Given the asset's unique index, this call returns the asset's creator,
+	//       manager, reserve, freeze, and clawback addresses
+	//     Produces:
+	//     - application/json
+	//     Schemes:
+	//     - http
+	//     Parameters:
+	//       - name: index
+	//         in: path
+	//         type: integer
+	//         format: int64
+	//         required: true
+	//         description: Asset index
+	//     Responses:
+	//       200:
+	//         "$ref": '#/responses/AssetInformationResponse'
+	//       400:
+	//         description: Bad Request
+	//         schema: {type: string}
+	//       500:
+	//         description: Internal Error
+	//         schema: {type: string}
+	//       401: { description: Invalid API Token }
+	//       default: { description: Unknown Error }
+	queryIndex, err := strconv.ParseUint(mux.Vars(r)["index"], 10, 64)
+
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusBadRequest, err, errFailedToParseAssetIndex, ctx.Log)
+		return
+	}
+
+	ledger := ctx.Node.Ledger()
+	aidx := basics.AssetIndex(queryIndex)
+	creator, err := ledger.GetAssetCreator(aidx)
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusNotFound, err, errFailedToGetAssetCreator, ctx.Log)
+		return
+	}
+
+	lastRound := ledger.Latest()
+	record, err := ledger.Lookup(lastRound, creator)
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
+		return
+	}
+
+	if asset, ok := record.AssetParams[aidx]; ok {
+		thisAssetParams := assetParams(creator, asset)
+		SendJSON(AssetInformationResponse{&thisAssetParams}, w, ctx.Log)
+	} else {
+		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errFailedRetrievingAsset), errFailedRetrievingAsset, ctx.Log)
+		return
+	}
+}
+
+// Assets is an httpHandler for route GET /v1/assets
+func Assets(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
+	// swagger:operation GET /v1/assets Assets
+	// ---
+	//     Summary: List assets
+	//     Description: Returns list of up to `max` assets, where the maximum assetIdx is <= `assetIdx`
+	//     Produces:
+	//     - application/json
+	//     Schemes:
+	//     - http
+	//     Parameters:
+	//       - name: assetIdx
+	//         in: query
+	//         type: integer
+	//         format: int64
+	//         minimum: 0
+	//         required: false
+	//         description: Fetch assets with asset index <= assetIdx. If zero, fetch most recent assets.
+	//       - name: max
+	//         in: query
+	//         type: integer
+	//         format: int64
+	//         minimum: 0
+	//         maximum: 100
+	//         required: false
+	//         description: Fetch no more than this many assets
+	//     Responses:
+	//       200:
+	//         "$ref": '#/responses/AssetsResponse'
+	//       400:
+	//         description: Bad Request
+	//         schema: {type: string}
+	//       500:
+	//         description: Internal Error
+	//         schema: {type: string}
+	//       401: { description: Invalid API Token }
+	//       default: { description: Unknown Error }
+
+	const maxAssetsToList = 100
+
+	// Parse max assets to fetch from db
+	max, err := strconv.ParseInt(r.FormValue("max"), 10, 64)
+	if err != nil || max < 0 || max > maxAssetsToList {
+		err := fmt.Errorf(errFailedParsingMaxAssetsToList, 0, maxAssetsToList)
+		lib.ErrorResponse(w, http.StatusBadRequest, err, err.Error(), ctx.Log)
+		return
+	}
+
+	// Parse maximum asset idx
+	assetIdx, err := strconv.ParseInt(r.FormValue("assetIdx"), 10, 64)
+	if err != nil || assetIdx < 0 {
+		errs := errFailedParsingAssetIdx
+		lib.ErrorResponse(w, http.StatusBadRequest, errors.New(errs), errs, ctx.Log)
+		return
+	}
+
+	// If assetIdx is 0, we want the most recent assets, so make it intmax
+	if assetIdx == 0 {
+		assetIdx = (1 << 63) - 1
+	}
+
+	// Query asset range from the database
+	ledger := ctx.Node.Ledger()
+	alocs, err := ledger.ListAssets(basics.AssetIndex(assetIdx), uint64(max))
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingAsset, ctx.Log)
+		return
+	}
+
+	// Fill in the asset models
+	lastRound := ledger.Latest()
+	var result v1.AssetList
+	for _, aloc := range alocs {
+		// Fetch the asset parameters
+		creatorRecord, err := ledger.Lookup(lastRound, aloc.Creator)
+		if err != nil {
+			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
+			return
+		}
+
+		// Ensure no race with asset deletion
+		rp, ok := creatorRecord.AssetParams[aloc.Index]
+		if !ok {
+			continue
+		}
+
+		// Append the result
+		params := assetParams(aloc.Creator, rp)
+		result.Assets = append(result.Assets, v1.Asset{
+			AssetIndex:  uint64(aloc.Index),
+			AssetParams: params,
+		})
+	}
+
+	SendJSON(AssetsResponse{&result}, w, ctx.Log)
 }
 
 // SuggestedFee is an httpHandler for route GET /v1/transactions/fee
@@ -636,6 +1202,12 @@ func GetBlock(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	//         minimum: 0
 	//         required: true
 	//         description: The round from which to fetch block information.
+	//       - name: raw
+	//         in: query
+	//         type: integer
+	//         format: int64
+	//         required: false
+	//         description: Return raw msgpack block bytes
 	//     Responses:
 	//       200:
 	//         "$ref": '#/responses/BlockResponse'
@@ -653,7 +1225,35 @@ func GetBlock(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b, c, err := ctx.Node.Ledger().BlockCert(basics.Round(queryRound))
+	// raw msgpack option:
+	rawstr := r.FormValue("raw")
+	if rawstr != "" {
+		rawint, err := strconv.ParseUint(rawstr, 10, 64)
+		if err != nil {
+			lib.ErrorResponse(w, http.StatusBadRequest, err, errFailedParsingRawOption, ctx.Log)
+			return
+		}
+		if rawint != 0 {
+			blockbytes, err := rpcs.RawBlockBytes(ctx.Node.Ledger(), basics.Round(queryRound))
+			if err != nil {
+				lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
+				return
+			}
+			w.Header().Set("Content-Type", rpcs.LedgerResponseContentType)
+			w.Header().Set("Content-Length", strconv.Itoa(len(blockbytes)))
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			w.WriteHeader(http.StatusOK)
+			_, err = w.Write(blockbytes)
+			if err != nil {
+				ctx.Log.Warnf("algod failed to write an object to the response stream: %v", err)
+			}
+			return
+		}
+	}
+
+	// decoded json-reencoded default:
+	ledger := ctx.Node.Ledger()
+	b, c, err := ledger.BlockCert(basics.Round(queryRound))
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
 		return
@@ -880,7 +1480,11 @@ func Transactions(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 
 	responseTxs := make([]v1.Transaction, len(txs))
 	for i, twr := range txs {
-		responseTxs[i] = txWithStatusEncode(twr)
+		responseTxs[i], err = txWithStatusEncode(twr)
+		if err != nil {
+			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToParseTransaction, ctx.Log)
+			return
+		}
 	}
 
 	response := TransactionsResponse{
@@ -947,7 +1551,11 @@ func GetTransactionByID(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 
 	if txn, err := ctx.Node.GetTransactionByID(txID, basics.Round(rnd)); err == nil {
 		var responseTxs v1.Transaction
-		responseTxs = txWithStatusEncode(txn)
+		responseTxs, err = txWithStatusEncode(txn)
+		if err != nil {
+			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToParseTransaction, ctx.Log)
+			return
+		}
 
 		response := TransactionResponse{
 			Body: &responseTxs,

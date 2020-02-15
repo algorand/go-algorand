@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -113,6 +113,8 @@ func TestTransactionPoolOrderingAndClearing(t *testing.T) {
 }
 
 func TestTransactionPoolExponentialFees(t *testing.T) {
+	t.Skip("new FIFO pool does not have exponential fee txn replacement")
+
 	t.Parallel()
 	r := require.New(t)
 

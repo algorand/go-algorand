@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -56,6 +56,10 @@ func (network *MockNetwork) Stop() {
 func (network *MockNetwork) RequestConnectOutgoing(replace bool, quit <-chan struct{}) {
 }
 
+// Disconnect - unused function
+func (network *MockNetwork) Disconnect(badpeer network.Peer) {
+}
+
 // DisconnectPeers - unused function
 func (network *MockNetwork) DisconnectPeers() {
 }
@@ -67,6 +71,11 @@ func (network *MockNetwork) RegisterRPCName(name string, rcvr interface{}) {
 // GetPeers - unused function
 func (network *MockNetwork) GetPeers(options ...network.PeerOption) []network.Peer {
 	return nil
+}
+
+// GetRoundTripper -- returns the network round tripper
+func (network *MockNetwork) GetRoundTripper() http.RoundTripper {
+	return http.DefaultTransport
 }
 
 // Ready - always ready

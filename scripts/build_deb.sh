@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/usr/bin/env bash
 
 # build_deb.sh - Build a .deb package for one platform.
 #
@@ -6,6 +6,7 @@
 #
 # Examples: scripts/build_deb.sh amd64
 
+set -e
 if [ ! "$#" -eq 2 ]; then
     echo "Syntax: build_deb.sh <arch> <output directory>"
     exit 1
@@ -22,8 +23,7 @@ ARCH=$1
 OUTDIR="$2"
 
 export GOPATH=$(go env GOPATH)
-REPO_DIR=${GOPATH}/src/github.com/algorand/go-algorand
-cd ${REPO_DIR}
+REPO_DIR=$(pwd)
 
 echo "Building debian package for '${OS} - ${ARCH}'"
 
@@ -48,17 +48,19 @@ mkdir -p ${PKG_ROOT}/usr/bin
 
 if [ "${VARIATION}" = "" ]; then
     # NOTE: keep in sync with installer/rpm/algorand.spec
-    bin_files=("algod" "algoh" "algokey" "carpenter" "catchupsrv" "diagcfg" "goal" "kmd" "msgpacktool" "node_exporter")
+    bin_files=("algocfg" "algod" "algoh" "algokey" "carpenter" "catchupsrv" "ddconfig.sh" "diagcfg" "goal" "kmd" "msgpacktool" "node_exporter")
 fi
 
 for bin in "${bin_files[@]}"; do
     cp ${GOPATH}/bin/${bin} ${PKG_ROOT}/usr/bin
+    chmod 755 ${PKG_ROOT}/usr/bin/${bin}
 done
 
 mkdir -p ${PKG_ROOT}/usr/lib/algorand
-lib_files=("updater" "find-nodes.sh" "updatekey.json")
+lib_files=("updater" "find-nodes.sh")
 for lib in "${lib_files[@]}"; do
     cp ${GOPATH}/bin/${lib} ${PKG_ROOT}/usr/lib/algorand
+    chmod g-w ${PKG_ROOT}/usr/lib/algorand/${lib}
 done
 
 data_files=("config.json.example" "system.json")
@@ -68,7 +70,7 @@ for data in "${data_files[@]}"; do
 done
 
 if [ ! -z "${RELEASE_GENESIS_PROCESS}" ]; then
-    genesis_dirs=("devnet" "testnet" "mainnet")
+    genesis_dirs=("devnet" "testnet" "mainnet" "betanet")
     for dir in "${genesis_dirs[@]}"; do
         mkdir -p ${PKG_ROOT}/var/lib/algorand/genesis/${dir}
         cp ${REPO_DIR}/installer/genesis/${dir}/genesis.json ${PKG_ROOT}/var/lib/algorand/genesis/${dir}/genesis.json
@@ -76,7 +78,7 @@ if [ ! -z "${RELEASE_GENESIS_PROCESS}" ]; then
     done
     # Copy the appropriate network genesis.json for our default (in root ./genesis folder)
     cp ${PKG_ROOT}/var/lib/algorand/genesis/${DEFAULT_RELEASE_NETWORK}/genesis.json ${PKG_ROOT}/var/lib/algorand
-elif [[ "${CHANNEL}" == "dev" || "${CHANNEL}" == "stable" || "${CHANNEL}" == "nightly" ]]; then
+elif [[ "${CHANNEL}" == "dev" || "${CHANNEL}" == "stable" || "${CHANNEL}" == "nightly" || "${CHANNEL}" == "beta" ]]; then
     cp ${REPO_DIR}/installer/genesis/${DEFAULTNETWORK}/genesis.json ${PKG_ROOT}/var/lib/algorand/genesis.json
     #${GOPATH}/bin/buildtools genesis ensure -n ${DEFAULTNETWORK} --source ${REPO_DIR}/gen/${DEFAULTNETWORK}/genesis.json --target ${PKG_ROOT}/var/lib/algorand/genesis.json --releasedir ${REPO_DIR}/installer/genesis
 else
@@ -93,6 +95,7 @@ systemd_files=("algorand.service" "algorand@.service")
 mkdir -p ${PKG_ROOT}/lib/systemd/system
 for svc in "${systemd_files[@]}"; do
     cp installer/${svc} ${PKG_ROOT}/lib/systemd/system
+    chmod 644 ${PKG_ROOT}/lib/systemd/system/${svc}
 done
 
 unattended_upgrades_files=("51algorand-upgrades")
@@ -100,6 +103,10 @@ mkdir -p ${PKG_ROOT}/etc/apt/apt.conf.d
 for f in "${unattended_upgrades_files[@]}"; do
     cp installer/${f} ${PKG_ROOT}/etc/apt/apt.conf.d
 done
+
+# files should not be group writable but directories should be
+chmod -R g-w ${PKG_ROOT}/var/lib/algorand
+find ${PKG_ROOT}/var/lib/algorand -type d | xargs chmod g+w
 
 mkdir -p ${PKG_ROOT}/DEBIAN
 debian_files=("control" "postinst" "prerm" "postrm" "conffiles")

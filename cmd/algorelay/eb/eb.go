@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,8 +18,8 @@ package eb
 
 // Relay represents the configuration data necessary for a single Relay
 type Relay struct {
-	ID             int64 // db key injected when loaded
-	IPOrDNSName    string
+	ID             int64  // db key injected when loaded
+	Address        string // ip or dns name; use to be called IPOrDNSName.
 	MetricsEnabled bool
 	CheckSuccess   bool   // true if check was successful
 	DNSAlias       string // DNS Alias name used

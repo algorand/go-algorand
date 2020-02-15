@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,20 +25,16 @@ import (
 // with a script on build through a package init() function.
 var SwaggerSpecJSON string
 
-// Bytes is a byte array
-// swagger:strfmt binary
-type Bytes = []byte // note that we need to make this its own object to get the strfmt annotation to work properly. Otherwise swagger generates []uint8
-
 // APIV1MasterDerivationKey is a swagger annotated alias of crypto.MasterDerivationKey
-// swagger:strfmt binary
+// swagger:strfmt byte
 type APIV1MasterDerivationKey = crypto.MasterDerivationKey
 
 // APIV1PrivateKey is a swagger annotated alias of crypto.privateKey
-// swagger:strfmt binary
+// swagger:strfmt byte
 type APIV1PrivateKey = crypto.PrivateKey
 
 // APIV1PublicKey is a swagger annotated alias of crypto.PublicKey
-// swagger:strfmt binary
+// swagger:strfmt byte
 type APIV1PublicKey = crypto.PublicKey
 
 // APIV1Wallet is the API's representation of a wallet

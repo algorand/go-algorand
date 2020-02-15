@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -80,7 +80,7 @@ type sendMessage struct {
 type wsPeerCore struct {
 	net           *WebsocketNetwork
 	rootURL       string
-	originAddress string
+	originAddress string // incoming connection remote host
 	client        http.Client
 }
 
@@ -145,6 +145,12 @@ type wsPeer struct {
 
 	prioAddress basics.Address
 	prioWeight  uint64
+
+	// createTime is the time at which the connection was established with the peer.
+	createTime time.Time
+
+	// peer version ( this is one of the version supported by the current node and listed in SupportedProtocolVersions )
+	version string
 }
 
 // HTTPPeer is what the opaque Peer might be.
@@ -164,6 +170,16 @@ type UnicastPeer interface {
 	GetAddress() string
 	// Unicast sends the given bytes to this specific peer. Does not wait for message to be sent.
 	Unicast(ctx context.Context, data []byte, tag protocol.Tag) error
+}
+
+// Create a wsPeerCore object
+func makePeerCore(net *WebsocketNetwork, rootURL string, roundTripper http.RoundTripper, originAddress string) wsPeerCore {
+	return wsPeerCore{
+		net:           net,
+		rootURL:       rootURL,
+		originAddress: originAddress,
+		client:        http.Client{Transport: roundTripper},
+	}
 }
 
 // GetAddress returns the root url to use to connect to this peer.

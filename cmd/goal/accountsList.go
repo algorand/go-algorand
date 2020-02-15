@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -223,6 +223,13 @@ func (accountList *AccountsList) outputAccount(addr string, acctInfo v1.Account,
 	}
 	if multisigInfo != nil {
 		fmt.Printf("\t[%d/%d multisig]", multisigInfo.Threshold, len(multisigInfo.PKs))
+	}
+	if len(acctInfo.AssetParams) > 0 {
+		fmt.Printf("\t[created assets:")
+		for curid, params := range acctInfo.AssetParams {
+			fmt.Printf(" %d (%d %s)", curid, params.Total, params.UnitName)
+		}
+		fmt.Printf("]")
 	}
 	if accountList.isDefault(addr) {
 		fmt.Printf("\t*Default")

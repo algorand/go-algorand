@@ -51,7 +51,8 @@ type Level uint32
 
 // Create a general Base logger
 var (
-	baseLogger Logger
+	baseLogger      Logger
+	telemetryConfig TelemetryConfig
 )
 
 const (
@@ -88,6 +89,10 @@ func Init() {
 
 func init() {
 	Init()
+}
+
+func initializeConfig(cfg TelemetryConfig) {
+	telemetryConfig = cfg
 }
 
 // Fields maps logrus fields
@@ -149,6 +154,7 @@ type Logger interface {
 	AddHook(hook logrus.Hook)
 
 	EnableTelemetry(cfg TelemetryConfig) error
+	UpdateTelemetryURI(uri string) error
 	GetTelemetryEnabled() bool
 	Metrics(category telemetryspec.Category, metrics telemetryspec.MetricDetails, details interface{})
 	Event(category telemetryspec.Category, identifier telemetryspec.Event)
@@ -157,6 +163,7 @@ type Logger interface {
 	GetTelemetrySession() string
 	GetTelemetryHostName() string
 	GetInstanceName() string
+	GetTelemetryURI() string
 	CloseTelemetry()
 }
 
@@ -359,10 +366,18 @@ func NewLogger() Logger {
 }
 
 func (l logger) EnableTelemetry(cfg TelemetryConfig) (err error) {
-	if l.loggerState.telemetry != nil || !cfg.Enable {
+	if l.loggerState.telemetry != nil || (!cfg.Enable && !cfg.SendToLog) {
 		return nil
 	}
 	return EnableTelemetry(cfg, &l)
+}
+
+func (l logger) UpdateTelemetryURI(uri string) (err error) {
+	err = l.loggerState.telemetry.hook.UpdateHookURI(uri)
+	if err == nil {
+		telemetryConfig.URI = uri
+	}
+	return
 }
 
 func (l logger) GetTelemetryEnabled() bool {
@@ -370,24 +385,19 @@ func (l logger) GetTelemetryEnabled() bool {
 }
 
 func (l logger) GetTelemetrySession() string {
-	if l.loggerState.telemetry == nil {
-		return ""
-	}
-	return l.loggerState.telemetry.sessionGUID
+	return telemetryConfig.SessionGUID
 }
 
 func (l logger) GetTelemetryHostName() string {
-	if l.loggerState.telemetry == nil {
-		return ""
-	}
-	return l.loggerState.telemetry.hostName
+	return telemetryConfig.getHostName()
 }
 
 func (l logger) GetInstanceName() string {
-	if l.loggerState.telemetry == nil {
-		return ""
-	}
-	return l.loggerState.telemetry.instanceName
+	return telemetryConfig.getInstanceName()
+}
+
+func (l logger) GetTelemetryURI() string {
+	return telemetryConfig.URI
 }
 
 func (l logger) Metrics(category telemetryspec.Category, metrics telemetryspec.MetricDetails, details interface{}) {

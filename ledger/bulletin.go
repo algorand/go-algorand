@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -86,7 +86,7 @@ func (b *bulletin) loadFromDisk(l ledgerForTracker) error {
 func (b *bulletin) close() {
 }
 
-func (b *bulletin) newBlock(blk bookkeeping.Block, delta stateDelta) {
+func (b *bulletin) newBlock(blk bookkeeping.Block, delta StateDelta) {
 }
 
 func (b *bulletin) committedUpTo(rnd basics.Round) basics.Round {

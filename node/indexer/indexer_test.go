@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -47,28 +47,40 @@ func (s *IndexSuite) SetupSuite() {
 	s.idx, err = MakeIndexer(".", &TestLedger{}, true)
 	require.NoError(s.T(), err)
 
-	// Gen some simple txn
-	for i := 2; i < 10; i++ {
-		_, s.txns, s.secrets, s.addrs = generateTestObjects(5000, 100)
+	numOfTransactions := 5000
+	numOfAccounts := 10
+	numOfBlocks := 10
+
+	require.Equal(s.T(), 0, numOfTransactions%numOfBlocks, "Number of transaction must be "+
+		"divisible by the number of blocks")
+
+	_, s.txns, s.secrets, s.addrs = generateTestObjects(numOfTransactions, numOfAccounts)
+
+	// Gen some simple blocks
+	for i := 0; i < numOfBlocks; i++ {
 		var txnEnc []transactions.SignedTxnInBlock
 		b := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
-				Round:     basics.Round(uint64(i)),
+				Round:     basics.Round(uint64(i + 2)),
 				TimeStamp: time.Now().Unix(),
 			},
 		}
-		for _, tx := range s.txns {
-			txib, err := b.EncodeSignedTxn(tx, transactions.ApplyData{})
+
+		chunkSize := numOfTransactions / numOfBlocks
+		for t := i * chunkSize; t < (i+1)*chunkSize; t++ {
+
+			txid, err := b.EncodeSignedTxn(s.txns[t], transactions.ApplyData{})
 			require.NoError(s.T(), err)
-			txnEnc = append(txnEnc, txib)
+			txnEnc = append(txnEnc, txid)
 		}
+
 		b.Payset = txnEnc
 		err = s.idx.NewBlock(b)
 		require.NoError(s.T(), err)
 
 		r, err := s.idx.LastBlock()
 		require.NoError(s.T(), err)
-		require.Equal(s.T(), basics.Round(i), r)
+		require.Equal(s.T(), basics.Round(i+2), r)
 	}
 }
 
@@ -80,26 +92,61 @@ func (s *IndexSuite) TearDownSuite() {
 
 func (s *IndexSuite) TestIndexer_GetRoundByTXID() {
 	txID := s.txns[0].ID().String()
-	goldenRound := uint64(9)
 
-	round, err := s.idx.GetRoundByTXID(txID)
+	_, err := s.idx.GetRoundByTXID(txID)
 
 	require.NoError(s.T(), err)
-	require.Equal(s.T(), goldenRound, round)
 
 }
 
 func (s *IndexSuite) TestIndexer_GetRoundsByAddress() {
 	var count int
-	for _, txn := range s.txns {
-		if txn.Txn.Sender == s.addrs[0] || txn.Txn.Receiver == s.addrs[0] {
-			count++
-		}
-	}
 
 	res, err := s.idx.GetRoundsByAddress(s.addrs[0].GetUserAddress(), uint64(count))
 	require.NoError(s.T(), err)
-	require.Equal(s.T(), count, len(res))
+
+	// Should be equal to the number of blocks.
+	require.Equal(s.T(), 10, len(res))
+}
+
+func (s *IndexSuite) TestIndexer_DuplicateRounds() {
+	// Get Transactions (we're guranteed to have more than one txn per address per block)
+
+	res, err := s.idx.GetRoundsByAddress(s.addrs[0].String(), 100)
+
+	require.NoError(s.T(), err)
+
+	// Check for dups
+	seen := make(map[uint64]bool)
+	for _, b := range res {
+		require.False(s.T(), seen[b])
+		seen[b] = true
+	}
+}
+
+func (s *IndexSuite) TestIndexer_Asset() {
+	query := "SELECT txid from transactions where (from_addr = $1 OR to_addr = $1)"
+	rows, err := s.idx.IDB.dbr.Handle.Query(query, s.addrs[0].String())
+	require.NoError(s.T(), err)
+	defer rows.Close()
+
+	txids := make(map[string]bool, 0)
+	var txid string
+	for rows.Next() {
+		err := rows.Scan(&txid)
+		require.NoError(s.T(), err)
+		txids[txid] = true
+	}
+
+	// make sure all txns are in list
+	for _, txn := range s.txns {
+		if txn.Txn.Type == protocol.AssetTransferTx {
+			if txn.Txn.Sender == s.addrs[0] || txn.Txn.AssetReceiver == s.addrs[0] {
+				require.True(s.T(), txids[txn.ID().String()])
+			}
+		}
+	}
+
 }
 
 func TestExampleTestSuite(t *testing.T) {
@@ -179,17 +226,28 @@ func generateTestObjects(numTxs, numAccs int) ([]transactions.Transaction, []tra
 		exp := iss + 10
 
 		txs[i] = transactions.Transaction{
-			Type: protocol.PaymentTx,
 			Header: transactions.Header{
 				Sender:     addresses[s],
 				Fee:        basics.MicroAlgos{Raw: f},
 				FirstValid: basics.Round(iss),
 				LastValid:  basics.Round(exp),
 			},
-			PaymentTxnFields: transactions.PaymentTxnFields{
+		}
+
+		// Create half assets and half payment
+		if i%2 == 0 {
+			txs[i].Type = protocol.PaymentTx
+			txs[i].PaymentTxnFields = transactions.PaymentTxnFields{
 				Receiver: addresses[r],
 				Amount:   basics.MicroAlgos{Raw: uint64(a)},
-			},
+			}
+		} else {
+			txs[i].Type = protocol.AssetTransferTx
+			txs[i].AssetTransferTxnFields = transactions.AssetTransferTxnFields{
+				AssetReceiver: addresses[r],
+				AssetAmount:   uint64(a),
+				XferAsset:     basics.AssetIndex(uint64(rand.Intn(20000))),
+			}
 		}
 		signed[i] = txs[i].Sign(secrets[s])
 	}

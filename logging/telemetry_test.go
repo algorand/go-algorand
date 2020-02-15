@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -74,7 +74,6 @@ func makeTelemetryTestFixtureWithConfig(minLevel logrus.Level, cfg *TelemetryCon
 		f.cfg = createTelemetryConfig()
 	} else {
 		f.cfg = *cfg
-		f.cfg.LogHistoryDepth = 5
 	}
 	f.cfg.Enable = true
 	f.cfg.MinLogLevel = minLevel

@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,9 +24,19 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/committee" //TODO(upgrade) remove this line
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
+
+// TODO(upgrade) remove the entire lessMaybeBuggy function once the upgrade goes through
+func lessMaybeBuggy(cred, other committee.Credential) bool {
+	// this function calls either Less or LessBuggy depending on ConsensusCurrentVersion, which is what the agreement tests use
+	if config.Consensus[protocol.ConsensusCurrentVersion].UseBuggyProposalLowestOutput {
+		return cred.LessBuggy(other)
+	}
+	return cred.Less(other)
+}
 
 var playerTracer tracer
 
@@ -59,7 +69,8 @@ func generateProposalEvents(t *testing.T, player player, accs testAccountData, f
 	lowestCredential := votes[0].Cred
 	lowestProposal = votes[0].R.Proposal
 	for _, vote := range votes {
-		if vote.Cred.Less(lowestCredential) {
+		// if vote.Cred.Less(lowestCredential) { //TODO(upgrade) uncomment this line
+		if lessMaybeBuggy(vote.Cred, lowestCredential) { // TODO(upgrade) remove this line
 			lowestCredential = vote.Cred
 			lowestProposal = vote.R.Proposal
 		}
@@ -490,13 +501,14 @@ func TestPlayerLateBlockProposalPeriod0(t *testing.T) {
 
 /* White box tests that make sure player enters the right state */
 
-func setupP(t *testing.T, r round, p period, s step) (plyr *player, pMachine *ioAutomataConcretePlayer, helper *voteMakerHelper) {
+func setupP(t *testing.T, r round, p period, s step) (plyr *player, pMachine ioAutomata, helper *voteMakerHelper) {
 	// Set up a composed test machine starting at specified rps
 	rRouter := makeRootRouter(player{Round: r, Period: p, Step: s, Deadline: filterTimeout})
-	pMachine = &ioAutomataConcretePlayer{rootRouter: &rRouter}
+	concreteMachine := ioAutomataConcretePlayer{rootRouter: &rRouter}
+	plyr = concreteMachine.underlying()
+	pMachine = &concreteMachine
 	helper = &voteMakerHelper{}
 	helper.Setup()
-	plyr = pMachine.underlying()
 	// return plyr so we can inspect its state in white box manner
 	return
 }
@@ -1733,12 +1745,37 @@ func TestPlayerRePropagatesProposalPayload(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
 
+	// let's stage the value in period 10, so that we relay the block at the end of period 10
+	votes := make([]vote, int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
+	for i := 0; i < int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, soft, *pV)
+	}
+	bun := unauthenticatedBundle{
+		Round:    r,
+		Period:   p - 1,
+		Proposal: *pV,
+	}
+	inMsg = messageEvent{
+		T: bundleVerified,
+		Input: message{
+			Bundle: bundle{
+				U:     bun,
+				Votes: votes,
+			},
+			UnauthenticatedBundle: bun,
+		},
+		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+	}
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
 	// gen next value bundle to fast forward into period 11
-	votes := make([]vote, int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
+	votes = make([]vote, int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next, *pV)
 	}
-	bun := unauthenticatedBundle{
+	bun = unauthenticatedBundle{
 		Round:    r,
 		Period:   p - 1,
 		Proposal: *pV,
@@ -1763,11 +1800,9 @@ func TestPlayerRePropagatesProposalPayload(t *testing.T) {
 	relayEvent := ev(networkAction{T: broadcast, Tag: protocol.VoteBundleTag, UnauthenticatedBundle: bun})
 	require.Truef(t, pM.getTrace().Contains(relayEvent), "Player should relay freshest bundle = next value bundle")
 
-	// check payload is relayed
-	// todo: this fails. See documentation about the spec, whether payloads should be relayed on synch
-	// or left to the vote-payload reattachment mechanism.
-	//relayPayloadEvent := ev(networkAction{T: broadcast, Tag: protocol.ProposalPayloadTag, CompoundMessage: compoundMessage{Proposal: payload.u(), Vote: vVote.u()}})
-	//require.Truef(t, pM.getTrace().Contains(relayPayloadEvent), "Player should relay payload on resynch")
+	// check payload is relayed due to staging, even if it is not pinned
+	relayPayloadEvent := ev(networkAction{T: broadcast, Tag: protocol.ProposalPayloadTag, CompoundMessage: compoundMessage{Proposal: payload.u()}})
+	require.Truef(t, pM.getTrace().Contains(relayPayloadEvent), "Player should relay payload on resynch")
 
 	// now, let's say someone saw the next value bundle, and they reproposed
 	vVote = helper.MakeVerifiedVote(t, 100, r, p, propose, *pV)
@@ -1784,8 +1819,83 @@ func TestPlayerRePropagatesProposalPayload(t *testing.T) {
 	require.NoError(t, panicErr)
 
 	// we should attach a relay payload to this proposal
-	relayPayloadEvent := ev(networkAction{T: broadcast, Tag: protocol.ProposalPayloadTag, CompoundMessage: compoundMessage{Proposal: payload.u(), Vote: vVote.u()}})
+	relayPayloadEvent = ev(networkAction{T: broadcast, Tag: protocol.ProposalPayloadTag, CompoundMessage: compoundMessage{Proposal: payload.u(), Vote: vVote.u()}})
 	require.Truef(t, pM.getTrace().Contains(relayPayloadEvent), "Player should relay payload on resynch")
+
+	// now, trigger soft vote timeout
+	err, panicErr = pM.transition(makeTimeoutEvent())
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	// now, trigger cert vote timeout; now step = next
+	pM.resetTrace()
+	err, panicErr = pM.transition(makeTimeoutEvent())
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+	// check that this next vote contains old pV
+	relayPayloadEvent = ev(networkAction{T: broadcast, Tag: protocol.ProposalPayloadTag, CompoundMessage: compoundMessage{Proposal: payload.u()}})
+	require.Truef(t, pM.getTrace().Contains(relayPayloadEvent), "Player should relay payload on resynch")
+
+	// now, stage a new payload for this same period p.
+	payloadNext, pVNext := helper.MakeRandomProposalPayload(t, r)
+	votes = make([]vote, int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
+	for i := 0; i < int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p, soft, *pVNext)
+	}
+	bun = unauthenticatedBundle{
+		Round:    r,
+		Period:   p,
+		Proposal: *pVNext,
+	}
+	inMsg = messageEvent{
+		T: bundleVerified,
+		Input: message{
+			Bundle: bundle{
+				U:     bun,
+				Votes: votes,
+			},
+			UnauthenticatedBundle: bun,
+		},
+		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+	}
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+	// Also deliver the payload this period.
+	vVote = helper.MakeVerifiedVote(t, 0, r, p, propose, *pVNext)
+	inMsg = messageEvent{
+		T: voteVerified,
+		Input: message{
+			Vote:                vVote,
+			UnauthenticatedVote: vVote.u(),
+		},
+	}
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+	inMsg = messageEvent{
+		T: payloadVerified,
+		Input: message{
+			Proposal: *payloadNext,
+		},
+		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+	}
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	// make sure we relay the new payload (staged has precedence over pinned)
+	// now, trigger second next step
+	pM.resetTrace()
+	err, panicErr = pM.transition(makeTimeoutEvent()) // inject randomness
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+	err, panicErr = pM.transition(makeTimeoutEvent()) // actually send next + 1 vote
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+	relayPayloadEvent = ev(networkAction{T: broadcast, Tag: protocol.ProposalPayloadTag, CompoundMessage: compoundMessage{Proposal: payloadNext.u()}})
+	fmt.Println(relayPayloadEvent)
+	require.Truef(t, pM.getTrace().Contains(relayPayloadEvent), "Player should relay staged payload over pinned payload on resynch")
 }
 
 // Malformed Messages
@@ -2258,6 +2368,102 @@ func TestPlayerRegression_EnsuresCertThreshFromOldPeriod_8ba23942(t *testing.T) 
 	require.Equalf(t, period(0), pWhite.Period, "player did not enter period 0 in new round")
 	commitEvent := ev(ensureAction{Certificate: Certificate(bun)})
 	require.Truef(t, pM.getTrace().Contains(commitEvent), "Player should try to ensure block/digest on ledger")
+}
+
+func TestPlayerAlwaysResynchsPinnedValue(t *testing.T) {
+	// a white box test that checks the pinned value is relayed even it is not staged in the period corresponding to the freshest bundle
+	const r = round(209)
+	const p = period(12)
+	pWhite, pM, helper := setupP(t, r, p-2, soft)
+	payload, pV := helper.MakeRandomProposalPayload(t, r)
+
+	// store a payload for period 10
+	vv := helper.MakeVerifiedVote(t, 0, r, p-2, propose, *pV)
+	inMsg := messageEvent{
+		T: voteVerified,
+		Input: message{
+			Vote:                vv,
+			UnauthenticatedVote: vv.u(),
+		},
+		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+	}
+	err, panicErr := pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+	inMsg = messageEvent{
+		T: payloadVerified,
+		Input: message{
+			Proposal:                *payload,
+			UnauthenticatedProposal: payload.u(),
+		},
+		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+	}
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	// gen next value bundle to fast forward into period 11
+	votes := make([]vote, int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
+	for i := 0; i < int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p-2, next, *pV)
+	}
+	bun := unauthenticatedBundle{
+		Round:    r,
+		Period:   p - 2,
+		Proposal: *pV,
+	}
+	inMsg = messageEvent{
+		T: bundleVerified,
+		Input: message{
+			Bundle: bundle{
+				U:     bun,
+				Votes: votes,
+			},
+			UnauthenticatedBundle: bun,
+		},
+		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+	}
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	// Generate one more to fast-forward into period 12; note that period 11 has no staged value.
+	votes = make([]vote, int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
+	for i := 0; i < int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next, *pV)
+	}
+	bun = unauthenticatedBundle{
+		Round:    r,
+		Period:   p - 1,
+		Proposal: *pV,
+	}
+	inMsg = messageEvent{
+		T: bundleVerified,
+		Input: message{
+			Bundle: bundle{
+				U:     bun,
+				Votes: votes,
+			},
+			UnauthenticatedBundle: bun,
+		},
+		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+	}
+	pM.resetTrace() // clean up the history
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	// Now, player should be in period 12, and should have tried to resychronize the pinned payload
+	trace := pM.getTrace()
+	require.Equalf(t, p, pWhite.Period, "player did not fast forward to new period")
+	zeroEvent := ev(rezeroAction{})
+	require.Truef(t, trace.Contains(zeroEvent), "Player should reset clock")
+
+	resynchEvent := ev(networkAction{T: broadcast, Tag: protocol.VoteBundleTag, UnauthenticatedBundle: bun})
+	require.Truef(t, trace.Contains(resynchEvent), "Player should relay freshest bundle = next value bundle")
+
+	rePayloadEvent := ev(networkAction{T: broadcast, Tag: protocol.ProposalPayloadTag, CompoundMessage: compoundMessage{Proposal: payload.u()}})
+	require.Truef(t, trace.Contains(rePayloadEvent), "Player should relay payload even if not staged in previous period")
 }
 
 // todo: test pipelined rounds, and round interruption

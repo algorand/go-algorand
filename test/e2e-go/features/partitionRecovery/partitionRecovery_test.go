@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@ package partitionrecovery
 
 import (
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -90,10 +91,13 @@ func TestPartitionRecoverySwapStartup(t *testing.T) {
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachWithRelay.json"))
 	defer fixture.Shutdown()
 
-	runTestWithStaggeredStopStart(t, fixture)
+	runTestWithStaggeredStopStart(t, &fixture)
 }
 
 func TestPartitionRecoveryStaggerRestart(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	if testing.Short() {
 		t.Skip()
 	}
@@ -110,10 +114,10 @@ func TestPartitionRecoveryStaggerRestart(t *testing.T) {
 	fixture.Setup(t, filepath.Join("nettemplates", "ThreeNodesEvenDist.json"))
 	defer fixture.Shutdown()
 
-	runTestWithStaggeredStopStart(t, fixture)
+	runTestWithStaggeredStopStart(t, &fixture)
 }
 
-func runTestWithStaggeredStopStart(t *testing.T, fixture fixtures.RestClientFixture) {
+func runTestWithStaggeredStopStart(t *testing.T, fixture *fixtures.RestClientFixture) {
 	a := require.New(t)
 
 	// Get Node1 so we can wait until it has reached the target round
@@ -155,6 +159,9 @@ func runTestWithStaggeredStopStart(t *testing.T, fixture fixtures.RestClientFixt
 }
 
 func TestBasicPartitionRecoveryPartOffline(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	if testing.Short() {
 		t.Skip()
 	}
@@ -206,6 +213,9 @@ func TestBasicPartitionRecoveryPartOffline(t *testing.T) {
 }
 
 func TestPartitionHalfOffline(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	if testing.Short() {
 		t.Skip()
 	}

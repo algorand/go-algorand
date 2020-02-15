@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -42,7 +42,7 @@ func (tt *timeTracker) loadFromDisk(l ledgerForTracker) error {
 func (tt *timeTracker) close() {
 }
 
-func (tt *timeTracker) newBlock(blk bookkeeping.Block, delta stateDelta) {
+func (tt *timeTracker) newBlock(blk bookkeeping.Block, delta StateDelta) {
 	rnd := blk.Round()
 	tt.timestamps[rnd] = delta.hdr.TimeStamp
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,6 +21,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"os/user"
 	"path/filepath"
 	"strings"
@@ -30,6 +31,7 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/logging"
@@ -46,11 +48,15 @@ var verboseVersionPrint bool
 
 var kmdDataDirFlag string
 
+var versionCheck bool
+
 func init() {
 	// infile
 	rootCmd.AddCommand(versionCmd)
 	versionCmd.Flags().BoolVarP(&verboseVersionPrint, "verbose", "v", false, "Print all version info available")
+	rootCmd.Flags().BoolVarP(&versionCheck, "version", "v", false, "Display and write current build version and exit")
 	rootCmd.AddCommand(licenseCmd)
+	rootCmd.AddCommand(reportCmd)
 
 	// account.go
 	rootCmd.AddCommand(accountCmd)
@@ -60,6 +66,9 @@ func init() {
 
 	// clerk.go
 	rootCmd.AddCommand(clerkCmd)
+
+	// asset.go
+	rootCmd.AddCommand(assetCmd)
 
 	// node.go
 	rootCmd.AddCommand(nodeCmd)
@@ -91,8 +100,11 @@ var rootCmd = &cobra.Command{
 	Long:  `GOAL is the CLI for interacting Algorand software instance. The binary 'goal' is installed alongside the algod binary and is considered an integral part of the complete installation. The binaries should be used in tandem - you should not try to use a version of goal with a different version of algod.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
+		if versionCheck {
+			fmt.Println(config.FormatVersionAndLicense())
+			return
+		}
 		//If no arguments passed, we should fallback to help
-
 		cmd.HelpFunc()(cmd, args)
 	},
 }
@@ -141,22 +153,23 @@ func main() {
 
 var versionCmd = &cobra.Command{
 	Use:   "version",
-	Short: "The current version of the Algorand daemon (algod)",
-	Long:  `The current version of the Algorand daemon (algod)`,
+	Short: "The current version of the Algorand daemon (algod).",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		onDataDirs(func(dataDir string) {
 			response, err := ensureAlgodClient(dataDir).AlgodVersions()
 			if err != nil {
-				panic(err)
+				fmt.Println(err)
+				os.Exit(1)
 			}
 			if !verboseVersionPrint {
 				fmt.Println(response.Versions)
-			} else {
-				fmt.Printf("Version: %v \n", response.Versions)
-				fmt.Printf("GenesisID: %v \n", response.GenesisID)
-				// fmt.Printf("Channel: %v \n", response.Channel)
-				// fmt.Printf("Commit: %v - #%v \n", response.Branch, response.CommitHash)
+				return
+			}
+			fmt.Printf("Version: %v \n", response.Versions)
+			fmt.Printf("GenesisID: %s \n", response.GenesisID)
+			if (response.Build != common.BuildVersion{}) {
+				fmt.Printf("Build: %d.%d.%d.%s [%s] (commit #%s)\n", response.Build.Major, response.Build.Minor, response.Build.BuildNumber, response.Build.Channel, response.Build.Branch, response.Build.CommitHash)
 			}
 		})
 	},
@@ -164,11 +177,43 @@ var versionCmd = &cobra.Command{
 
 var licenseCmd = &cobra.Command{
 	Use:   "license",
-	Short: "Display license information",
-	Long:  `Displays license information`,
+	Short: "Display license information.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println(config.GetLicenseInfo())
+	},
+}
+
+var reportCmd = &cobra.Command{
+	Use:   "report",
+	Short: "",
+	Long:  "Produces report helpful for debugging.",
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println(config.FormatVersionAndLicense())
+		fmt.Println()
+		data, err := exec.Command("uname", "-a").CombinedOutput()
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		fmt.Println(string(data))
+
+		dirs := getDataDirs()
+		report := len(dirs) > 1
+		for _, dir := range dirs {
+			if report {
+				reportInfof(infoDataDir, dir)
+			}
+			genesis, err := readGenesis(dir)
+			if err != nil {
+				fmt.Println(err)
+				os.Exit(1)
+			}
+			fmt.Printf("Genesis ID from genesis.json: %s\n", genesis.ID())
+		}
+		fmt.Println()
+		onDataDirs(getStatus)
 	},
 }
 
@@ -242,6 +287,14 @@ func ensureSingleDataDir() string {
 		reportErrorln(errorOneDataDirSupported)
 	}
 	return ensureFirstDataDir()
+}
+
+// like ensureSingleDataDir() but doesn't exit()
+func maybeSingleDataDir() string {
+	if len(dataDirs) > 1 {
+		return ""
+	}
+	return resolveDataDir()
 }
 
 func getDataDirs() (dirs []string) {
@@ -394,6 +447,8 @@ func getWalletHandleMaybePassword(dataDir string, walletName string, getPassword
 		return token, nil, nil
 	}
 
+	reportInfof("Failed to get cached wallet handle: %v", err)
+
 	// Assume any errors were "wrong password" errors, until we have actual
 	// API error codes
 	pw = ensurePasswordForWallet(walletName)
@@ -474,4 +529,14 @@ func readFile(filename string) ([]byte, error) {
 		return ioutil.ReadAll(os.Stdin)
 	}
 	return ioutil.ReadFile(filename)
+}
+
+func checkTxValidityPeriodCmdFlags(cmd *cobra.Command) {
+	validRoundsChanged := cmd.Flags().Changed("validrounds") || cmd.Flags().Changed("validRounds")
+	if validRoundsChanged && cmd.Flags().Changed("lastvalid") {
+		reportErrorf("Only one of [--validrounds] or [--lastvalid] can be specified")
+	}
+	if validRoundsChanged && numValidRounds == 0 {
+		reportErrorf("[--validrounds] can not be zero")
+	}
 }

@@ -9,9 +9,6 @@ export ALGOTEST=1
 
 SCRIPT_PATH="$( cd "$(dirname "$0")" ; pwd -P )"
 
-export GOPATH=$(go env GOPATH)
-cd ${GOPATH}/src/github.com/algorand/go-algorand
-
 SRCROOT="$(pwd -P)"
 
 # Use same PKG_ROOT location as local_install.sh uses.
@@ -58,10 +55,26 @@ echo Killing all instances and installing current build
 pkill -u $(whoami) -x algod || true
 ./scripts/local_install.sh -c ${CHANNEL} -p ${BINDIR} -d ${DATADIR}
 
+# check our install
+${BINDIR}/algod -v
+${BINDIR}/goal -v
+
+./test/scripts/goal_subcommand_sanity.sh "${BINDIR}" "${TEMPDIR}"
+
+export PATH=${BINDIR}:${PATH}
+export GOPATH=$(go env GOPATH)
+
 # Change current directory to test/scripts so we can just use ./test.sh to exec.
 cd "${SCRIPT_PATH}"
 
-./e2e_basic_start_stop.sh
+./timeout 200 ./e2e_basic_start_stop.sh
+
+python3 -m venv ${TEMPDIR}/ve
+. ${TEMPDIR}/ve/bin/activate
+${TEMPDIR}/ve/bin/pip3 install --upgrade pip
+${TEMPDIR}/ve/bin/pip3 install py-algorand-sdk cryptography
+${TEMPDIR}/ve/bin/python3 e2e_client_runner.py e2e_subs/*.sh
+deactivate
 
 # Export our root temp folder as 'TESTDIR' for tests to use as their root test folder
 # This allows us to clean up everything with our rm -rf trap.

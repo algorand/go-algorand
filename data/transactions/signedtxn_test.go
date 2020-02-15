@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,7 +21,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -40,8 +39,8 @@ func TestEncoding(t *testing.T) {
 	ids[stxn2.ID()] = true
 	require.Len(t, ids, 2, "Signed payment and signed key reg have the same Txid -- either domain separation or txid caching is broken")
 
-	paymentBytes := protocol.Encode(stxn1)
-	keyRegBytes := protocol.Encode(stxn2)
+	paymentBytes := protocol.Encode(&stxn1)
+	keyRegBytes := protocol.Encode(&stxn2)
 
 	bytes := make(map[crypto.Digest]bool)
 	bytes[crypto.Hash(paymentBytes)] = true
@@ -69,10 +68,8 @@ func TestDecodeNil(t *testing.T) {
 	var st SignedTxn
 	err := protocol.Decode(nilEncoding, &st)
 	if err == nil {
-		// These three functions used to panic when run on a zero value of SignedTxn.
-		st.Verify(spec, config.Consensus[protocol.ConsensusCurrentVersion])
+		// This function used to panic when run on a zero value of SignedTxn.
 		st.ID()
-		st.Priority()
 	}
 }
 

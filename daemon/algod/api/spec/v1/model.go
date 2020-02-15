@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -16,10 +16,6 @@
 
 // Package v1 defines models exposed by algod rest api
 package v1
-
-// swagger:strfmt binary
-type bytes = []byte // note that we need to make this its own object to get the strfmt annotation to work properly. Otherwise swagger generates []uint8 instead of type binary
-// ^ one day we should probably fork swagger, to avoid this workaround.
 
 // NodeStatus contains the information about a node status
 // swagger:model NodeStatus
@@ -58,6 +54,15 @@ type NodeStatus struct {
 	//
 	// required: true
 	CatchupTime int64 `json:"catchupTime"`
+
+	// HasSyncedSinceStartup indicates whether a round has completed since startup
+	// Required: true
+	HasSyncedSinceStartup bool `json:"hasSyncedSinceStartup"`
+
+	// StoppedAtUnsupportedRound indicates that the node does not support the new rounds and has stopped making progress
+	//
+	// Required: true
+	StoppedAtUnsupportedRound bool `json:"stoppedAtUnsupportedRound"`
 }
 
 // TransactionID Description
@@ -67,6 +72,37 @@ type TransactionID struct {
 	//
 	// required: true
 	TxID string `json:"txId"`
+}
+
+// Participation Description
+// swagger:model Participation
+type Participation struct { // Round and Address fields are redundant if Participation embedded in Account. Exclude for now.
+	// ParticipationPK is the root participation public key (if any) currently registered for this round
+	//
+	// required: true
+	// swagger:strfmt byte
+	ParticipationPK []byte `json:"partpkb64"`
+
+	// VRFPK is the selection public key (if any) currently registered for this round
+	//
+	// required: true
+	// swagger:strfmt byte
+	VRFPK []byte `json:"vrfpkb64"`
+
+	// VoteFirst is the first round for which this participation is valid.
+	//
+	// required: true
+	VoteFirst uint64 `json:"votefst"`
+
+	// VoteLast is the last round for which this participation is valid.
+	//
+	// required: true
+	VoteLast uint64 `json:"votelst"`
+
+	// VoteKeyDilution is the number of subkeys in for each batch of participation keys.
+	//
+	// required: true
+	VoteKeyDilution uint64 `json:"votekd"`
 }
 
 // Account Description
@@ -99,7 +135,7 @@ type Account struct {
 	// required: true
 	AmountWithoutPendingRewards uint64 `json:"amountwithoutpendingrewards"`
 
-	// Rewards indicates the total rewards of MicroAlgos the account has recieved
+	// Rewards indicates the total rewards of MicroAlgos the account has received, including pending rewards.
 	//
 	// required: true
 	Rewards uint64 `json:"rewards"`
@@ -111,6 +147,140 @@ type Account struct {
 	//
 	// required: true
 	Status string `json:"status"`
+
+	// Participation is the participation information currently associated with the account, if any.
+	// This field is optional and may not be set even if participation information is registered.
+	// In future REST API versions, this field may become required.
+	//
+	// required: false
+	Participation *Participation `json:"participation,omitempty"`
+
+	// AssetParams specifies the parameters of assets created by this account.
+	//
+	// required: false
+	AssetParams map[uint64]AssetParams `json:"thisassettotal,omitempty"`
+
+	// Assets specifies the holdings of assets by this account,
+	// indexed by the asset ID.
+	//
+	// required: false
+	Assets map[uint64]AssetHolding `json:"assets,omitempty"`
+}
+
+// Asset specifies both the unique identifier and the parameters for an asset
+// swagger:model Asset
+type Asset struct {
+	// AssetIndex is the unique asset identifier
+	//
+	// required: true
+	AssetIndex uint64
+
+	// AssetParams specifies the parameters of asset referred to by AssetIndex
+	//
+	// required: true
+	AssetParams AssetParams
+}
+
+// AssetParams specifies the parameters for an asset.
+// swagger:model AssetParams
+type AssetParams struct {
+	// Creator specifies the address that created this asset.
+	// This is the address where the parameters for this asset
+	// can be found, and also the address where unwanted asset
+	// units can be sent in the worst case.
+	//
+	// required: true
+	Creator string `json:"creator"`
+
+	// Total specifies the total number of units of this asset.
+	//
+	// required: true
+	Total uint64 `json:"total"`
+
+	// Decimals specifies the number of digits to use after the decimal
+	// point when displaying this asset. If 0, the asset is not divisible.
+	// If 1, the base unit of the asset is in tenths. If 2, the base unit
+	// of the asset is in hundredths, and so on.
+	//
+	// required: true
+	Decimals uint32 `json:"decimals"`
+
+	// DefaultFrozen specifies whether holdings in this asset
+	// are frozen by default.
+	//
+	// required: false
+	DefaultFrozen bool `json:"defaultfrozen"`
+
+	// UnitName specifies the name of a unit of this asset,
+	// as supplied by the creator.
+	//
+	// required: false
+	UnitName string `json:"unitname,omitempty"`
+
+	// AssetName specifies the name of this asset,
+	// as supplied by the creator.
+	//
+	// required: false
+	AssetName string `json:"assetname,omitempty"`
+
+	// URL specifies a URL where more information about the asset can be
+	// retrieved
+	//
+	// required: false
+	URL string `json:"url,omitempty"`
+
+	// MetadataHash specifies a commitment to some unspecified asset
+	// metadata. The format of this metadata is up to the application.
+	//
+	// required: false
+	// swagger:strfmt byte
+	MetadataHash []byte `json:"metadatahash,omitempty"`
+
+	// ManagerAddr specifies the address used to manage the keys of this
+	// asset and to destroy it.
+	//
+	// required: false
+	ManagerAddr string `json:"managerkey"`
+
+	// ReserveAddr specifies the address holding reserve (non-minted)
+	// units of this asset.
+	//
+	// required: false
+	ReserveAddr string `json:"reserveaddr"`
+
+	// FreezeAddr specifies the address used to freeze holdings of
+	// this asset.  If empty, freezing is not permitted.
+	//
+	// required: false
+	FreezeAddr string `json:"freezeaddr"`
+
+	// ClawbackAddr specifies the address used to clawback holdings of
+	// this asset.  If empty, clawback is not permitted.
+	//
+	// required: false
+	ClawbackAddr string `json:"clawbackaddr"`
+}
+
+// AssetHolding specifies the holdings of a particular asset.
+// swagger:model AssetHolding
+type AssetHolding struct {
+	// Creator specifies the address that created this asset.
+	// This is the address where the parameters for this asset
+	// can be found, and also the address where unwanted asset
+	// units can be sent in the worst case.
+	//
+	// required: true
+	Creator string `json:"creator"`
+
+	// Amount specifies the number of units held.
+	//
+	// required: true
+	Amount uint64 `json:"amount"`
+
+	// Frozen specifies whether this holding is frozen.
+	//
+	// required: false
+	Frozen bool `json:"frozen"`
 }
 
 // Transaction contains all fields common to all transactions and serves as an envelope to all transactions
@@ -150,12 +320,28 @@ type Transaction struct {
 	// Note is a free form data
 	//
 	// required: false
-	Note bytes `json:"noteb64,omitempty"`
+	// swagger:strfmt byte
+	Note []byte `json:"noteb64,omitempty"`
+
+	// Lease enforces mutual exclusion of transactions.  If this field is
+	// nonzero, then once the transaction is confirmed, it acquires the
+	// lease identified by the (Sender, Lease) pair of the transaction until
+	// the LastValid round passes.  While this transaction possesses the
+	// lease, no other transaction specifying this lease can be confirmed.
+	//
+	// required: false
+	// swagger:strfmt byte
+	Lease []byte `json:"lease,omitempty"`
 
 	// ConfirmedRound indicates the block number this transaction appeared in
 	//
 	// required: false
-	ConfirmedRound uint64 `json:"round,omitempty"`
+	ConfirmedRound uint64 `json:"round"`
+
+	// TransactionResults contains information about the side effects of a transaction
+	//
+	// required: false
+	TransactionResults *TransactionResults `json:"txresults,omitempty"`
 
 	// PoolError indicates the transaction was evicted from this node's transaction
 	// pool (if non-empty).  A non-empty PoolError does not guarantee that the
@@ -168,7 +354,31 @@ type Transaction struct {
 	// This is a list of all supported transactions.
 	// To add another one, create a struct with XXXTransactionType and embed it here.
 	// To prevent extraneous fields, all must have the "omitempty" tag.
+
+	// Payment contains the additional fields for a payment transaction.
+	//
+	// required: false
 	Payment *PaymentTransactionType `json:"payment,omitempty"`
+
+	// Keyreg contains the additional fields for a keyreg transaction.
+	//
+	// required: false
+	Keyreg *KeyregTransactionType `json:"keyreg,omitempty"`
+
+	// AssetConfig contains the additional fields for an asset config transaction.
+	//
+	// required: false
+	AssetConfig *AssetConfigTransactionType `json:"curcfg,omitempty"`
+
+	// AssetTransfer contains the additional fields for an asset transfer transaction.
+	//
+	// required: false
+	AssetTransfer *AssetTransferTransactionType `json:"curxfer,omitempty"`
+
+	// AssetFreeze contains the additional fields for an asset freeze transaction.
+	//
+	// required: false
+	AssetFreeze *AssetFreezeTransactionType `json:"curfrz,omitempty"`
 
 	// FromRewards is the amount of pending rewards applied to the From
 	// account as part of this transaction.
@@ -184,7 +394,14 @@ type Transaction struct {
 	// Genesis hash
 	//
 	// required: true
-	GenesisHash bytes `json:"genesishashb64"`
+	// swagger:strfmt byte
+	GenesisHash []byte `json:"genesishashb64"`
+
+	// Group
+	//
+	// required: false
+	// swagger:strfmt byte
+	Group []byte `json:"group,omitempty"`
 }
 
 // PaymentTransactionType contains the additional fields for a payment Transaction
@@ -223,6 +440,108 @@ type PaymentTransactionType struct {
 	CloseRewards uint64 `json:"closerewards"`
 }
 
+// KeyregTransactionType contains the additional fields for a keyreg Transaction
+// swagger:model KeyregTransactionType
+type KeyregTransactionType struct {
+	// VotePK is the participation public key used in key registration transactions
+	//
+	// required: false
+	// swagger:strfmt byte
+	VotePK []byte `json:"votekey"`
+
+	// SelectionPK is the VRF public key used in key registration transactions
+	//
+	// required: false
+	// swagger:strfmt byte
+	SelectionPK []byte `json:"selkey"`
+
+	// VoteFirst is the first round this participation key is valid
+	//
+	// required: false
+	VoteFirst uint64 `json:"votefst"`
+
+	// VoteLast is the last round this participation key is valid
+	//
+	// required: false
+	VoteLast uint64 `json:"votelst"`
+
+	// VoteKeyDilution is the dilution for the 2-level participation key
+	//
+	// required: false
+	VoteKeyDilution uint64 `json:"votekd"`
+}
+
+// TransactionResults contains information about the side effects of a transaction
+// swagger:model TransactionResults
+type TransactionResults struct {
+	// CreatedAssetIndex indicates the asset index of an asset created by this txn
+	//
+	// required: false
+	CreatedAssetIndex uint64 `json:"createdasset,omitempty"`
+}
+
+// AssetConfigTransactionType contains the additional fields for an asset config transaction
+// swagger:model AssetConfigTransactionType
+type AssetConfigTransactionType struct {
+	// AssetID is the asset being configured (or empty if creating)
+	//
+	// required: false
+	AssetID uint64 `json:"id"`
+
+	// Params specifies the new asset parameters (or empty if deleting)
+	//
+	// required: false
+	Params AssetParams `json:"params"`
+}
+
+// AssetTransferTransactionType contains the additional fields for an asset transfer transaction
+// swagger:model AssetTransferTransactionType
+type AssetTransferTransactionType struct {
+	// AssetID is the asset being configured (or empty if creating)
+	//
+	// required: true
+	AssetID uint64 `json:"id"`
+
+	// Amount is the amount being transferred.
+	//
+	// required: true
+	Amount uint64 `json:"amt"`
+
+	// Sender is the source account (if using clawback).
+	//
+	// required: false
+	Sender string `json:"snd"`
+
+	// Receiver is the recipient account.
+	//
+	// required: true
+	Receiver string `json:"rcv"`
+
+	// CloseTo is the destination for remaining funds (if closing).
+	//
+	// required: false
+	CloseTo string `json:"closeto"`
+}
+
+// AssetFreezeTransactionType contains the additional fields for an asset freeze transaction
+// swagger:model AssetFreezeTransactionType
+type AssetFreezeTransactionType struct {
+	// AssetID is the asset being configured (or empty if creating)
+	//
+	// required: true
+	AssetID uint64 `json:"id"`
+
+	// Account specifies the account where the asset is being frozen or thawed.
+	//
+	// required: true
+	Account string `json:"acct"`
+
+	// NewFreezeStatus specifies the new freeze status.
+	//
+	// required: true
+	NewFreezeStatus bool `json:"freeze"`
+}
+
 // TransactionList contains a list of transactions
 // swagger:model TransactionList
 type TransactionList struct {
@@ -230,6 +549,15 @@ type TransactionList struct {
 	//
 	// required: true
 	Transactions []Transaction `json:"transactions,omitempty"`
+}
+
+// AssetList contains a list of assets
+// swagger:model AssetList
+type AssetList struct {
+	// AssetList is a list of assets
+	//
+	// required: true
+	Assets []Asset `json:"assets,omitempty"`
 }
 
 // TransactionFee contains the suggested fee
@@ -264,7 +592,8 @@ type TransactionParams struct {
 	// Genesis hash
 	//
 	// required: true
-	GenesisHash bytes `json:"genesishashb64"`
+	// swagger:strfmt byte
+	GenesisHash []byte `json:"genesishashb64"`
 
 	// LastRound indicates the last round seen
 	//
@@ -282,6 +611,21 @@ type TransactionParams struct {
 	//
 	// required: false
 	MinTxnFee uint64 `json:"minFee"`
+}
+
+// RawResponse is fulfilled by responses that should not be decoded as msgpack
+type RawResponse interface {
+	SetBytes([]byte)
+}
+
+// RawBlock represents an encoded msgpack block
+// swagger:model RawBlock
+// swagger:strfmt byte
+type RawBlock []byte
+
+// SetBytes fulfills the RawResponse interface on RawBlock
+func (rb *RawBlock) SetBytes(b []byte) {
+	*rb = b
 }
 
 // Block contains a block information
