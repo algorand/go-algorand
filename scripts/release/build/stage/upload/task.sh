@@ -2,12 +2,13 @@
 # shellcheck disable=1090,2129
 # AWS_EFS_MOUNT= NFS to mount for `aptly` persistent state and scratch storage
 
+set -ex
+
 echo
 date "+build_release begin UPLOAD stage %Y%m%d_%H%M%S"
 echo
 
 . "${HOME}/build_env"
-set -ex
 
 cd "${PKG_ROOT}"
 
