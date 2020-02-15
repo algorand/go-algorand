@@ -1,14 +1,10 @@
+def REGION = "us-west-1"
+def AMI = "ami-0dd655843c87b6930"
+def TYPE = "t2.2xlarge"
+
 pipeline {
     parameters {
         string defaultValue: 'master', description: 'Branch name or tag name.', name: 'branch', trim: true
-        string defaultValue: 'stable', description: 'Staged channel which should be tested.', name: 'channel', trim: true
-        string defaultValue: '', description: 'Release to test', name: 'release', trim: true
-        string defaultValue: 'algorand-builds', description: 'bucket/prefix', name: 'bucket_location', trim: true
-
-        // AWS
-        string defaultValue: 'us-west-1', description: 'AWS Region', name: 'region', trim: true
-        string defaultValue: 'ami-0dd655843c87b6930', description: 'Amazon Machine Image (default: Ubuntu Server 18.04 LTS, 8 vCPUs, 32 GB RAM', name: 'ami', trim: true
-        string defaultValue: 't2.2xlarge', description: 'Instance Type', name: 'type', trim: true
     }
 
     environment {
@@ -21,31 +17,28 @@ pipeline {
     stages {
         stage("create ec2 instance") {
             steps {
-                sh script: "scripts/release/common/create.sh ${params.region} ${params.ami} ${params.type}"
+                sh script: "scripts/release/common/create.sh ${REGION} ${AMI} ${TYPE}"
             }
         }
 
-        stage("setup ec2 instance") {
+        stage("setup") {
             steps {
-                script {
-                    if (params.channel == null || params.channel == "") {
-                        error("Missing required parameter [channel].")
-                    }
-                }
-
-                sh script: "scripts/release/test/stage/setup/run.sh ${params.bucket_location} ${params.branch} ${params.channel} ${params.release}"
+                sh script: "scripts/release/test/stage/setup/run.sh ${params.branch}"
             }
         }
 
         stage("test") {
             steps {
+                /*
                 sh script: "scripts/release/test/stage/test/run.sh ${params.bucket_location} ${params.channel}"
+                */
+                sh script: "scripts/release/test/stage/test/run.sh ${params.branch}"
             }
         }
 
         stage("delete ec2 instance") {
             steps {
-                sh script: "scripts/release/common/delete.sh ${params.region}"
+                sh script: "scripts/release/common/delete.sh ${REGION}"
             }
         }
     }
