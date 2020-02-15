@@ -36,8 +36,7 @@ fi
 sg docker "docker build -t algocentosbuild - < $HOME/ben-branch/scripts/release/common/centos-build.Dockerfile"
 
 #sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME},dst=/root/subhome algocentosbuild /root/subhome/go/src/github.com/algorand/go-algorand/scripts/release/build/rpm/build.sh"
-#sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME},dst=/root/subhome algocentosbuild /root/subhome/ben-branch/scripts/release/build/rpm/build.sh"
-sg docker "docker run --rm --mount type=bind,src=${HOME},dst=/root/subhome algocentosbuild /root/subhome/ben-branch/scripts/release/build/rpm/build.sh"
+sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME},dst=/root/subhome algocentosbuild /root/subhome/ben-branch/scripts/release/build/rpm/build.sh"
 
 echo
 date "+build_release end BUILD stage %Y%m%d_%H%M%S"

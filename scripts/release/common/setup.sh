@@ -15,7 +15,6 @@ echo
 date "+build_release begin SETUP stage %Y%m%d_%H%M%S"
 echo
 
-#sudo apt-get dist-upgrade
 echo -e "deb http://us.archive.ubuntu.com/ubuntu/ bionic main universe multiverse\ndeb http://archive.ubuntu.com/ubuntu/ bionic main universe multiverse" | sudo tee /etc/apt/sources.list.d/ubuntu
 
 sudo apt-get update
@@ -24,7 +23,7 @@ sudo apt-get --allow-unauthenticated upgrade -y
 sudo apt-get update
 sudo apt-get --allow-unauthenticated upgrade -y
 
-sudo apt-get install -y build-essential automake autoconf awscli docker.io git gpg nfs-common python3 rpm sqlite3 python3-boto3 g++ libtool rng-tools
+sudo apt-get install -y build-essential automake autoconf awscli docker.io git gpg nfs-common python python3 rpm sqlite3 python3-boto3 g++ libtool rng-tools
 sudo rngd -r /dev/urandom
 
 #umask 0077
@@ -118,9 +117,10 @@ PLATFORM=$("${REPO_ROOT}"/scripts/osarchtype.sh)
 PLATFORM_SPLIT=(${PLATFORM//\// })
 
 # a bash user might `source build_env` to manually continue a broken build
+#export CHANNEL=$("${GOPATH}"/src/github.com/algorand/go-algorand/scripts/compute_branch_channel.sh "${BRANCH}")
 cat << EOF > "${HOME}"/build_env
 export BRANCH=${BRANCH}
-export CHANNEL=$("${GOPATH}"/src/github.com/algorand/go-algorand/scripts/compute_branch_channel.sh "${BRANCH}")
+export CHANNEL=$("${HOME}"/ben-branch/scripts/compute_branch_channel.sh "${BRANCH}")
 export DEFAULTNETWORK=$(PATH=${PATH} "${REPO_ROOT}"/scripts/compute_branch_network.sh)
 export DC_IP=$(curl --silent http://169.254.169.254/latest/meta-data/local-ipv4)
 export FULLVERSION=$("${GOPATH}"/src/github.com/algorand/go-algorand/scripts/compute_build_number.sh -f)
@@ -128,7 +128,7 @@ export PKG_ROOT=${HOME}/node_pkg
 export PLATFORM=${PLATFORM}
 export OS=${PLATFORM_SPLIT[0]}
 export ARCH=${PLATFORM_SPLIT[1]}
-export REPO_ROOT="${REPO_ROOT}"
+export REPO_ROOT=${REPO_ROOT}
 export RELEASE_GENESIS_PROCESS=true
 export VARIATIONS=base
 EOF
