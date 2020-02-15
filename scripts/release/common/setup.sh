@@ -128,7 +128,7 @@ export PKG_ROOT=${HOME}/node_pkg
 export PLATFORM=${PLATFORM}
 export OS=${PLATFORM_SPLIT[0]}
 export ARCH=${PLATFORM_SPLIT[1]}
-export REPO_ROOT="${REPO_ROOT}"
+export REPO_ROOT=${REPO_ROOT}
 export RELEASE_GENESIS_PROCESS=true
 export VARIATIONS=base
 EOF

@@ -34,7 +34,7 @@ pipeline {
             }
         }
 
-        stage("setup ec2 instance") {
+        stage("setup") {
             steps {
                 script {
                     if (params.channel == null || params.channel == "") {

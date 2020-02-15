@@ -21,7 +21,7 @@ pipeline {
             }
         }
 
-        stage("setup ec2 instance") {
+        stage("setup") {
             steps {
                 sh script: "scripts/release/test/stage/setup/run.sh ${params.branch}"
             }
