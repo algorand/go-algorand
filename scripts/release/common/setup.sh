@@ -15,15 +15,8 @@ echo
 date "+build_release begin SETUP stage %Y%m%d_%H%M%S"
 echo
 
-#sudo apt-get dist-upgrade
-echo -e "deb http://us.archive.ubuntu.com/ubuntu/ bionic main universe multiverse\ndeb http://archive.ubuntu.com/ubuntu/ bionic main universe multiverse" | sudo tee /etc/apt/sources.list.d/ubuntu
-
 sudo apt-get update
-sudo apt-get --allow-unauthenticated upgrade -y
-
-sudo apt-get update
-sudo apt-get --allow-unauthenticated upgrade -y
-
+sudo apt-get upgrade -y
 sudo apt-get install -y build-essential automake autoconf awscli docker.io git gpg nfs-common python3 rpm sqlite3 python3-boto3 g++ libtool rng-tools
 sudo rngd -r /dev/urandom
 
@@ -40,9 +33,6 @@ cd "${HOME}/go/src/github.com/algorand" && git clone --single-branch --branch "$
 # TODO: if we are checking out a release tag, `git tag --verify` it
 
 export DEBIAN_FRONTEND=noninteractive
-
-cd "${HOME}"
-git clone --single-branch --branch deploy_to_prod_ben-branch_polling https://github.com/btoll/go-algorand ben-branch
 
 # Install latest Go
 cd "${HOME}"
