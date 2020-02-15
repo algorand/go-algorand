@@ -24,7 +24,7 @@ sudo apt-get --allow-unauthenticated upgrade -y
 sudo apt-get update
 sudo apt-get --allow-unauthenticated upgrade -y
 
-sudo apt-get install -y build-essential automake autoconf awscli docker.io git gpg nfs-common python3 rpm sqlite3 python3-boto3 g++ libtool rng-tools
+sudo apt-get install -y build-essential automake autoconf awscli docker.io git gpg nfs-common python python3 rpm sqlite3 python3-boto3 g++ libtool rng-tools
 sudo rngd -r /dev/urandom
 
 #umask 0077
@@ -128,7 +128,7 @@ export PKG_ROOT=${HOME}/node_pkg
 export PLATFORM=${PLATFORM}
 export OS=${PLATFORM_SPLIT[0]}
 export ARCH=${PLATFORM_SPLIT[1]}
-export REPO_ROOT="${REPO_ROOT}"
+export REPO_ROOT=${REPO_ROOT}
 export RELEASE_GENESIS_PROCESS=true
 export VARIATIONS=base
 EOF

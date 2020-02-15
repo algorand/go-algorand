@@ -1,0 +1,19 @@
+pipeline {
+    parameters {
+        string defaultValue: 'master', description: 'Branch name or tag name.', name: 'branch', trim: true
+    }
+
+    agent any
+
+    stages {
+        stage("trigger test job") {
+            steps {
+                build job: 'test',
+                parameters: [
+                    string(name: 'branch', value: params.branch)
+                ]
+            }
+        }
+    }
+}
+
