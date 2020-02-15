@@ -2,10 +2,11 @@
 
 # Path(s) are relative to the root of the Jenkins workspace.
 
-CHANNEL="$1"
-BUCKET_LOCATION="$2"
+#BUCKET_LOCATION="$2"
 INSTANCE=$(cat scripts/release/common/ec2/tmp/instance)
-FULLVERSION=$(ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@"$INSTANCE" cat ~/fullversion.dat)
+BUILD_ENV=$(ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@"$INSTANCE" cat /home/ubuntu/build_env)
+CHANNEL=$(sed -n 's/.*CHANNEL=\(.*\)/\1/p' <<< "$BUILD_ENV")
+FULLVERSION=$(sed -n 's/.*FULLVERSION=\(.*\)/\1/p' <<< "$BUILD_ENV")
 
 rm -rf pkg && mkdir -p pkg/"$FULLVERSION"
 
@@ -14,5 +15,6 @@ scp -i ReleaseBuildInstanceKey.pem -o StrictHostKeyChecking=no -r ubuntu@"$INSTA
 
 # Create the buildlog file.
 scp -i ReleaseBuildInstanceKey.pem -o StrictHostKeyChecking=no ubuntu@"$INSTANCE":~/build_status_"$CHANNEL"_*.asc.gz pkg/
-aws s3 sync --exclude dev* --exclude master* --exclude nightly* --exclude stable* --acl public-read pkg/"$FULLVERSION" s3://"$BUCKET_LOCATION"/"$CHANNEL"/"$FULLVERSION"/
+#aws s3 sync --exclude dev* --exclude master* --exclude nightly* --exclude stable* --acl public-read pkg/"$FULLVERSION" s3://"$BUCKET_LOCATION"/"$CHANNEL"/"$FULLVERSION"/
+aws s3 sync --exclude dev* --exclude master* --exclude nightly* --exclude stable* --acl public-read pkg/"$FULLVERSION" s3://ben-test-2.0.3/"$CHANNEL"/"$FULLVERSION"/
 
