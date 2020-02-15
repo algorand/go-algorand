@@ -8,7 +8,7 @@ CHANNEL=$(sed -n 's/.*CHANNEL=\(.*\)/\1/p' <<< "$BUILD_ENV")
 
 rm -rf ./*.deb ./*.rpm
 #python3 scripts/get_current_installers.py "$1/$CHANNEL"
-python3 scripts/get_current_installers.py "algorand-builds/$CHANNEL"
+python3 scripts/get_current_installers.py "algorand-builds/channel/$CHANNEL"
 
 # Copy previous installers into ~.
 scp -i ReleaseBuildInstanceKey.pem -o StrictHostKeyChecking=no ./*.deb ubuntu@"$INSTANCE":
