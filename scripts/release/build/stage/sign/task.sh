@@ -1,20 +1,18 @@
 #!/usr/bin/env bash
 # shellcheck disable=1090,2129,2035
 
+set -ex
+
 echo
 date "+build_release begin SIGN stage %Y%m%d_%H%M%S"
 echo
 
 . "${HOME}/build_env"
-set -ex
 
 sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=/run/user/1000/gnupg/S.gpg-agent,dst=/root/S.gpg-agent --mount type=bind,src=${HOME}/keys,dst=/root/keys --mount type=bind,src=${HOME},dst=/root/subhome algocentosbuild /root/subhome/go/src/github.com/algorand/go-algorand/scripts/release/build/rpm/sign.sh"
 
-# Anchor our repo root reference location
-REPO_ROOT="${HOME}"/go/src/github.com/algorand/go-algorand/
-
 pushd "${REPO_ROOT}"
-git archive --prefix="algorand-${FULLVERSION}/" "${HASH}" | gzip > "${PKG_ROOT}/algorand_${CHANNEL}_source_${FULLVERSION}.tar.gz"
+git archive --prefix="algorand-${FULLVERSION}/" "${BRANCH}" | gzip > "${PKG_ROOT}/algorand_${CHANNEL}_source_${FULLVERSION}.tar.gz"
 popd
 
 cd "${PKG_ROOT}" || exit
