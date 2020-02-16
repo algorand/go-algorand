@@ -188,25 +188,25 @@ func makeVote(rv rawVote, voting crypto.OneTimeSigner, selection *crypto.VRFSecr
 func signVote(rv rawVote, voting crypto.OneTimeSigner, l Ledger, cred committee.Credential) (vote, error) {
 	proto, err := l.ConsensusParams(ParamsRound(rv.Round))
 	if err != nil {
-		return vote{}, fmt.Errorf("makeVote: could not get consensus params for round %d: %v", ParamsRound(rv.Round), err)
+		return vote{}, fmt.Errorf("signVote: could not get consensus params for round %d: %v", ParamsRound(rv.Round), err)
 	}
 
 	if proto.FastPartitionRecovery {
 		switch rv.Step {
 		case propose, soft, cert, late, redo:
 			if rv.Proposal == bottom {
-				logging.Base().Panicf("makeVote: votes from step %d cannot validate bottom", rv.Step)
+				logging.Base().Panicf("signVote: votes from step %d cannot validate bottom", rv.Step)
 			}
 		case down:
 			if rv.Proposal != bottom {
-				logging.Base().Panicf("makeVote: votes from step %d must validate bottom", rv.Step)
+				logging.Base().Panicf("signVote: votes from step %d must validate bottom", rv.Step)
 			}
 		}
 	} else {
 		switch rv.Step {
 		case propose, soft, cert:
 			if rv.Proposal == bottom {
-				logging.Base().Panicf("makeVote: votes from step %d cannot validate bottom", rv.Step)
+				logging.Base().Panicf("signVote: votes from step %d cannot validate bottom", rv.Step)
 			}
 		}
 	}
@@ -214,7 +214,7 @@ func signVote(rv rawVote, voting crypto.OneTimeSigner, l Ledger, cred committee.
 	ephID := basics.OneTimeIDForRound(rv.Round, voting.KeyDilution(proto))
 	sig := voting.Sign(ephID, rv)
 	if (sig == crypto.OneTimeSignature{}) {
-		return vote{}, fmt.Errorf("makeVote: got back empty signature for vote")
+		return vote{}, fmt.Errorf("signVote: got back empty signature for vote")
 	}
 
 	return vote{R: rv, Cred: cred, Sig: sig}, nil
