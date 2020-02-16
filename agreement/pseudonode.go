@@ -255,30 +255,28 @@ func (n asyncPseudonode) getParticipations(procName string, round basics.Round) 
 }
 
 type roundParticipationCredentials struct {
+	// input fields for checkParticipationCredentials
 	account      account.Participation
-	cred         committee.Credential
-	err          error
 	balanceRound basics.Round
 	selector     selector
 	proto        config.ConsensusParams
 	totalMoney   basics.MicroAlgos
 	index        int
+	// output fields for checkParticipationCredentials
+	cred committee.Credential
+	err  error
 }
 
 func (n asyncPseudonode) checkParticipationCredentials(arg interface{}) interface{} {
 	p := arg.(*roundParticipationCredentials)
-	record, err := n.ledger.BalanceRecord(p.balanceRound, p.account.Address())
-	if err != nil {
-		p.err = err
+	var record basics.BalanceRecord
+	record, p.err = n.ledger.BalanceRecord(p.balanceRound, p.account.Address())
+	if p.err != nil {
 		return p
 	}
 
 	cred := committee.MakeCredential(&p.account.VRFSecrets().SK, p.selector)
 	p.cred, p.err = cred.Verify(p.proto, committee.Membership{Record: record, Selector: p.selector, TotalMoney: p.totalMoney})
-	if p.err != nil {
-		// account not selected.
-		return p
-	}
 	return p
 }
 
@@ -352,7 +350,7 @@ func (n asyncPseudonode) makeProposals(round basics.Round, period period, accoun
 			continue
 		}
 
-		// attempt to make the vote
+		// attempt to make the signed vote. We already have the membership certificate ready.
 		rv := rawVote{Sender: part.account.Address(), Round: round, Period: period, Step: propose, Proposal: proposal}
 		vote, err := signVote(rv, part.account.VotingSigner(), n.ledger, part.cred)
 		if err != nil {
