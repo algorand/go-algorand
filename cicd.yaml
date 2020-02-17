@@ -2,19 +2,32 @@ stages:
   build-linux-amd64:
   - task: docker.Make
     image: centos-algo:7
+    workDir: /go/src/github.com/algorand/go-algorand
     arch: amd64
-    target: ci-deps ci-build ci-package
+    target: fulltest
+  - task: docker.Make
+    image: centos-algo:7
+    workDir: /go/src/github.com/algorand/go-algorand
+    arch: amd64
+    target: ci-deps ci-build
   build-linux-arm64:
   - task: docker.Make
     image: centos-algo:7
+    workDir: /go/src/github.com/algorand/go-algorand
     arch: arm64v8
-    target: ci-deps ci-build ci-package
+    target: fulltest
+  - task: docker.Make
+    image: centos-algo:7
+    workDir: /go/src/github.com/algorand/go-algorand
+    arch: arm64v8
+    target: ci-deps ci-build
   build-local:
   - task: shell.Make
-    target: ci-deps ci-build ci-package
+    target: fulltest
+  - task: shell.Make
+    target: ci-deps ci-build
   release:
   - task: release.notes.GenerateReleaseNotes
     releaseVersion: ${GO_ALGORAND_RELEASE_VERSION}
     githubPatToken: ${GITHUB_PAT_TOKEN}
     githubRepoFullName: algorand/go-algorand
-
