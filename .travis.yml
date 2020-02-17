@@ -79,6 +79,18 @@ jobs:
       name: MacOS AMD64 Integration Test
       script:
         - ./scripts/travis/integration_test.sh
+    - # same stage, parallel job
+      name: External ARM Integration Test
+      os: linux
+      env:
+        - BUILD_TYPE: "external_build"
+        - TARGET_PLATFORM: "linux-arm"
+      addons:
+        apt:
+          packages:
+            - awscli
+      script:
+        - scripts/travis/external_build.sh ./scripts/travis/integration_test.sh
 
     - stage: build_release
       os: linux
