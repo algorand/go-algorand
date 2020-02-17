@@ -3,7 +3,7 @@
 # If enlistment isn't clean, it's 'dev'
 CWD=$(cd "$(dirname "$0")" && pwd -P)
 
-if ! "$CWD"/scripts/check_clean_enlistment.sh
+if ! "$CWD"/check_clean_enlistment.sh
 then
     echo "dev"
     exit 0
