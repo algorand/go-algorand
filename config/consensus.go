@@ -21,6 +21,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/algorand/go-algorand/protocol"
@@ -548,4 +549,41 @@ func initConsensusProtocols() {
 	vFuture.MinUpgradeWaitRounds = 10000
 	vFuture.MaxUpgradeWaitRounds = 150000
 	Consensus[protocol.ConsensusFuture] = vFuture
+}
+
+// Global defines global Algorand protocol parameters which should not be overriden.
+type Global struct {
+	SmallLambda time.Duration // min amount of time to wait for leader's credential (i.e., time to propagate one credential)
+	BigLambda   time.Duration // max amount of time to wait for leader's proposal (i.e., time to propagate one block)
+}
+
+// Protocol holds the global configuration settings for the agreement protocol,
+// initialized with our current defaults. This is used across all nodes we create.
+var Protocol = Global{
+	SmallLambda: 2000 * time.Millisecond,
+	BigLambda:   15000 * time.Millisecond,
+}
+
+func init() {
+	Consensus = make(ConsensusProtocols)
+
+	initConsensusProtocols()
+
+	// Allow tuning SmallLambda for faster consensus in single-machine e2e
+	// tests.  Useful for development.  This might make sense to fold into
+	// a protocol-version-specific setting, once we move SmallLambda into
+	// ConsensusParams.
+	algoSmallLambda, err := strconv.ParseInt(os.Getenv("ALGOSMALLLAMBDAMSEC"), 10, 64)
+	if err == nil {
+		Protocol.SmallLambda = time.Duration(algoSmallLambda) * time.Millisecond
+	}
+
+	for _, p := range Consensus {
+		maybeMaxVoteThreshold(p.SoftCommitteeThreshold)
+		maybeMaxVoteThreshold(p.CertCommitteeThreshold)
+		maybeMaxVoteThreshold(p.NextCommitteeThreshold)
+		maybeMaxVoteThreshold(p.LateCommitteeThreshold)
+		maybeMaxVoteThreshold(p.RedoCommitteeThreshold)
+		maybeMaxVoteThreshold(p.DownCommitteeThreshold)
+	}
 }
