@@ -42,7 +42,7 @@ SNAPSHOT=algodummy-$(date +%Y%m%d_%H%M%S)
 trap "${HOME}"/go/src/github.com/algorand/go-algorand/scripts/kill_httpd.sh 0
 
 #sg docker "docker run --rm --env-file ${HOME}/build_env --mount type=bind,src=${HOME}/keys,dst=/root/keys --mount type=bind,src=${HOME},dst=/root/subhome --mount type=bind,src=${HOME}/go,dst=/root/go --mount type=bind,src=/usr/local/go,dst=/usr/local/go ubuntu:16.04 bash /root/subhome/go/src/github.com/algorand/go-algorand/scripts/release/test/deb/test_algorand.sh"
-sg docker "docker run --rm --env-file ${HOME}/build_env --mount type=bind,src=${HOME}/keys,dst=/root/keys --mount type=bind,src=${HOME},dst=/root/subhome --mount type=bind,src=${HOME}/go,dst=/root/go --mount type=bind,src=/usr/local/go,dst=/usr/local/go ubuntu:16.04 bash /root/subhome/ben-branch/scripts/release/test/deb/test_algorand.sh"
+sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME}/keys,dst=/root/keys --mount type=bind,src=${HOME},dst=/root/subhome --mount type=bind,src=${HOME}/go,dst=/root/go --mount type=bind,src=/usr/local/go,dst=/usr/local/go ubuntu:16.04 bash /root/subhome/ben-branch/scripts/release/test/deb/test_algorand.sh"
 
 export DC_IP
 
@@ -61,7 +61,7 @@ STATUS=0
 #  --mount type=bind,src=${GOPATH}/src/github.com/algorand/go-algorand/test/testdata,dst=/testdata \
 #  --mount type=bind,src=${HOME}/keys,dst=/root/keys \
 #  debian:stable bash /workdir/deb/test_apt-get.sh"
-sg docker "docker run --rm --env-file ${HOME}/build_env \
+sg docker "docker run --rm --env-file ${HOME}/build_env_docker \
   --mount type=bind,src=${HOME}/ben-branch/scripts/release/test,dst=/workdir \
   --mount type=bind,src=${GOPATH}/src/github.com/algorand/go-algorand/test/e2e-go/cli/goal/expect,dst=/expectdir \
   --mount type=bind,src=${GOPATH}/src/github.com/algorand/go-algorand/test/testdata,dst=/testdata \
