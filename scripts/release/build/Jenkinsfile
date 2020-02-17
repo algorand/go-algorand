@@ -23,10 +23,7 @@ pipeline {
 
         stage("setup") {
             steps {
-                /*
                 sh script: "scripts/release/build/stage/setup/run.sh ${env.GIT_BRANCH}"
-                */
-                sh script: "scripts/release/build/stage/setup/run.sh ${params.branch}"
             }
         }
 
@@ -68,7 +65,7 @@ pipeline {
             steps {
                 build job: 'test',
                 parameters: [
-                    string(name: 'branch', value: params.branch)
+                    string(name: 'branch', value: env.GIT_BRANCH)
                 ]
             }
         }

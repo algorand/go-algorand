@@ -18,10 +18,7 @@ echo
 echo -e "deb http://us.archive.ubuntu.com/ubuntu/ bionic main universe multiverse\ndeb http://archive.ubuntu.com/ubuntu/ bionic main universe multiverse" | sudo tee /etc/apt/sources.list.d/ubuntu
 
 sudo apt-get update
-sudo apt-get --allow-unauthenticated upgrade -y
-
-sudo apt-get update
-sudo apt-get --allow-unauthenticated upgrade -y
+sudo apt-get upgrade -y
 
 sudo apt-get install -y build-essential automake autoconf awscli docker.io git gpg nfs-common python python3 rpm sqlite3 python3-boto3 g++ libtool rng-tools
 sudo rngd -r /dev/urandom
@@ -39,9 +36,6 @@ cd "${HOME}/go/src/github.com/algorand" && git clone --single-branch --branch "$
 # TODO: if we are checking out a release tag, `git tag --verify` it
 
 export DEBIAN_FRONTEND=noninteractive
-
-cd "${HOME}"
-git clone --single-branch --branch deploy_to_prod_ben-branch_polling https://github.com/btoll/go-algorand ben-branch
 
 # Install latest Go
 cd "${HOME}"
@@ -117,10 +111,9 @@ PLATFORM=$("${REPO_ROOT}"/scripts/osarchtype.sh)
 PLATFORM_SPLIT=(${PLATFORM//\// })
 
 # a bash user might `source build_env` to manually continue a broken build
-#export CHANNEL=$("${GOPATH}"/src/github.com/algorand/go-algorand/scripts/compute_branch_channel.sh "${BRANCH}")
 cat << EOF > "${HOME}"/build_env
 export BRANCH=${BRANCH}
-export CHANNEL=$("${HOME}"/ben-branch/scripts/compute_branch_channel.sh "${BRANCH}")
+export CHANNEL=$("${GOPATH}"/src/github.com/algorand/go-algorand/scripts/compute_branch_channel.sh "${BRANCH}")
 export DEFAULTNETWORK=$(PATH=${PATH} "${REPO_ROOT}"/scripts/compute_branch_network.sh)
 export DC_IP=$(curl --silent http://169.254.169.254/latest/meta-data/local-ipv4)
 export FULLVERSION=$("${GOPATH}"/src/github.com/algorand/go-algorand/scripts/compute_build_number.sh -f)
