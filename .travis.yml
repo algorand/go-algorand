@@ -80,7 +80,7 @@ jobs:
       script:
         - ./scripts/travis/integration_test.sh
     - # same stage, parallel job
-      name: External ARM Integration Test
+      name: External ARM Build
       os: linux
       env:
         - BUILD_TYPE: "external_build"
@@ -90,7 +90,7 @@ jobs:
           packages:
             - awscli
       script:
-        - scripts/travis/external_build.sh ./scripts/travis/integration_test.sh
+        - scripts/travis/external_build.sh ./scripts/travis/build_test.sh
 
     - stage: build_release
       os: linux
