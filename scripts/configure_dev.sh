@@ -14,16 +14,14 @@ function install_or_upgrade {
 }
 
 if [ "${OS}" = "linux" ]; then
-    if which apt-get > /dev/null; then
-        if ! which sudo > /dev/null
-        then
-            apt-get update
-            apt-get -y install sudo
-        fi
-        sudo apt-get update
-        sudo apt-get install -y libboost-all-dev expect jq autoconf shellcheck
+    if ! which sudo > /dev/null
+    then
+        apt-get update
+        apt-get -y install sudo
     fi
-    
+
+    sudo apt-get update
+    sudo apt-get install -y libboost-all-dev expect jq autoconf shellcheck
 elif [ "${OS}" = "darwin" ]; then
     brew update
     brew tap homebrew/cask
