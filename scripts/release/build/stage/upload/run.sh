@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -ex
+
 # Path(s) are relative to the root of the Jenkins workspace.
 
 #BUCKET_LOCATION="$2"

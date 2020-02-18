@@ -8,7 +8,7 @@ export PATH=${GOPATH}/bin:/usr/local/go/bin:${PATH}
 apt-get update
 apt-get install -y gnupg2 curl software-properties-common python3
 
-apt install -y /root/subhome/node_pkg/*.deb
+apt-get install -y /root/subhome/node_pkg/*.deb
 algod -v
 
 mkdir -p /root/testnode
