@@ -43,7 +43,9 @@ func TestTopics(t *testing.T) {
 	require.Equal(t, "value 1", string(topics[0].data))
 
 	require.Equal(t, "Key2", topics[1].key)
-	require.Equal(t, "value of key2", string(topics[1].data))
+	val, found := topics.GetValue("key2")
+	require.Equal(t, true, found)
+	require.Equal(t, "value of key2", string(val))
 
 	// Check if can be marshalled without errors
 	buffer, e := topics.MarshallTopics()

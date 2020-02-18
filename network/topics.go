@@ -115,3 +115,13 @@ func Hash(topics []byte) (partialHash uint64, e error) {
 	partialHash = digest.TrimUint64()
 	return partialHash, nil
 }
+
+// GetValue returns the value of the key if the key is found in the topics
+func (ts *Topics)GetValue(key string)(val []byte, found bool) {
+	for _, t := range *ts {
+		if t.key == key {
+			return t.data, true
+		}
+	}
+	return
+}

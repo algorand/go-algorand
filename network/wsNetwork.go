@@ -223,6 +223,9 @@ const (
 
 	// Broadcast - forward to everyone (except the sender)
 	Broadcast
+
+	// Respond - reply to the sender
+	Respond
 )
 
 // MessageHandler takes a IncomingMessage (e.g., vote, transaction), processes it, and returns what (if anything)
@@ -999,6 +1002,12 @@ func (wn *WebsocketNetwork) messageHandlerThread() {
 			}
 			//wn.log.Debugf("msg handling %#v [%d]byte", msg.Tag, len(msg.Data))
 			start := time.Now()
+			// Get the hash/key of the request message
+			hash, err := Hash(msg.Data)
+			if err != nil {
+				// handle something
+			}
+			
 			// now, send to global handlers
 			outmsg := wn.handlers.Handle(msg)
 			handled := time.Now()
@@ -1012,6 +1021,8 @@ func (wn *WebsocketNetwork) messageHandlerThread() {
 				go wn.disconnectThread(msg.Sender, disconnectBadData)
 			case Broadcast:
 				wn.Broadcast(wn.ctx, msg.Tag, msg.Data, false, msg.Sender)
+			case Respond:
+				msg.Sender.(*wsPeer).Respond(wn.ctx, outmsg.Tag, hash, outmsg.Payload)
 			default:
 			}
 		case <-inactivityCheckTicker.C:
