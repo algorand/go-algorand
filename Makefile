@@ -280,7 +280,3 @@ ci-deps:
 ci-build: buildsrc gen
 	mkdir -p $(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH) && \
 	PKG_ROOT=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH) NO_BUILD=True VARIATIONS=literally_anything scripts/build_packages.sh $(OS_TYPE)/$(ARCH)
-
-.EXPORT_ALL_VARIABLES:
-CGO_CFLAGS  = -I$(SRCPATH)/crypto/libs/$(OS_TYPE)/$(ARCH)/include
-CGO_LDFLAGS = $(SRCPATH)/crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a
