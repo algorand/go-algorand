@@ -116,18 +116,12 @@ func Hash(topics []byte) (partialHash uint64, e error) {
 	return partialHash, nil
 }
 
-// Hash returns the hash of serialized topics with nonce added to it
-func (ts Topics)Hash(nonce []byte) (d crypto.Digest, e error) {
-
-	topics, e := ts.MarshalTopics()
-	if e != nil {
-		return d, e
+// GetValue returns the value of the key if the key is found in the topics
+func (ts *Topics)GetValue(key string)(val []byte, found bool) {
+	for _, t := range *ts {
+		if t.key == key {
+			return t.data, true
+		}
 	}
-	
-	joined := make([]byte, len(topics)+len(nonce))
-	copy(joined, topics)
-	copy(joined[len(topics):], nonce)
-
-	digest := crypto.Hash(joined)
-	return digest, nil
+	return
 }
