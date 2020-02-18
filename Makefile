@@ -85,7 +85,7 @@ generate: deps
 msgp: $(patsubst %,%/msgp_gen.go,$(MSGP_GENERATE))
 
 %/msgp_gen.go: deps ALWAYS
-	$(GOPATH1)/bin/msgp -file ./$(@D) -o $@ -warnmask github.com/algorand/go-algorand
+	$(GOPATH1)/bin/msgp -file ./$(@D) -o $@ 1>/dev/null
 ALWAYS:
 
 # build our fork of libsodium, placing artifacts into crypto/lib/ and crypto/include/
