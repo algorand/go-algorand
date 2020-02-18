@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -ex
+
 # Path(s) are relative to the root of the Jenkins workspace.
 
 INSTANCE=$(cat scripts/release/common/ec2/tmp/instance)
