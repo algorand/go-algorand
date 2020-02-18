@@ -58,7 +58,7 @@ pipeline {
 
         stage("trigger test job") {
             steps {
-                build job: 'test',
+                build job: 'test-packages',
                 parameters: [
                     string(name: 'branch', value: env.GIT_BRANCH)
                 ]
