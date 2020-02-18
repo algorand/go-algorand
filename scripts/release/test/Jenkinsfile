@@ -29,9 +29,6 @@ pipeline {
 
         stage("test") {
             steps {
-                /*
-                sh script: "scripts/release/test/stage/test/run.sh ${params.bucket_location} ${params.channel}"
-                */
                 sh script: "scripts/release/test/stage/test/run.sh ${params.branch}"
             }
         }
