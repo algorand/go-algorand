@@ -41,7 +41,7 @@ SNAPSHOT=algodummy-$(date +%Y%m%d_%H%M%S)
 (cd "${HOME}"/dummyaptly/public && python3 "${HOME}"/go/src/github.com/algorand/go-algorand/scripts/httpd.py --pid "${HOME}"/phttpd.pid) &
 trap "${HOME}"/go/src/github.com/algorand/go-algorand/scripts/kill_httpd.sh 0
 
-sg docker "docker run --rm --env-file ${HOME}/build_env --mount type=bind,src=${HOME}/keys,dst=/root/keys --mount type=bind,src=${HOME},dst=/root/subhome --mount type=bind,src=${HOME}/go,dst=/root/go --mount type=bind,src=/usr/local/go,dst=/usr/local/go ubuntu:16.04 bash /root/subhome/go/src/github.com/algorand/go-algorand/scripts/release/test/deb/test_algorand.sh"
+sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME}/keys,dst=/root/keys --mount type=bind,src=${HOME},dst=/root/subhome --mount type=bind,src=${HOME}/go,dst=/root/go --mount type=bind,src=/usr/local/go,dst=/usr/local/go ubuntu:16.04 bash /root/subhome/go/src/github.com/algorand/go-algorand/scripts/release/test/deb/test_algorand.sh"
 
 export DC_IP
 
@@ -54,8 +54,8 @@ echo "DC_IP: $DC_IP"
 STATUS=0
 
 # run the docker container
-sg docker "docker run --rm --env-file ${HOME}/build_env \
-  --mount type=bind,src=${HOME}/go/src/github.com/algorand/go-algorand/scripts/release/test,dst=/workdir \
+sg docker "docker run --rm --env-file ${HOME}/build_env_docker \
+  --mount type=bind,src=${GOPATH}/src/github.com/algorand/go-algorand/scripts/release/test,dst=/workdir \
   --mount type=bind,src=${GOPATH}/src/github.com/algorand/go-algorand/test/e2e-go/cli/goal/expect,dst=/expectdir \
   --mount type=bind,src=${GOPATH}/src/github.com/algorand/go-algorand/test/testdata,dst=/testdata \
   --mount type=bind,src=${HOME}/keys,dst=/root/keys \
