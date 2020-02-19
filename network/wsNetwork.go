@@ -1003,10 +1003,7 @@ func (wn *WebsocketNetwork) messageHandlerThread() {
 			//wn.log.Debugf("msg handling %#v [%d]byte", msg.Tag, len(msg.Data))
 			start := time.Now()
 			// Get the hash/key of the request message
-			hash, err := Hash(msg.Data)
-			if err != nil {
-				// handle something
-			}
+			hash := Hash(msg.Data)
 			
 			// now, send to global handlers
 			outmsg := wn.handlers.Handle(msg)

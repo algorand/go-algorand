@@ -32,7 +32,7 @@ type Topic struct {
 type Topics []Topic
 
 // MarshallTopics serializes the topics into a byte array
-func (ts Topics) MarshallTopics() (b []byte, e error) {
+func (ts Topics) MarshallTopics() (b []byte) {
 
 	// Calculate the total buffer size required to store the topics
 	bufferSize := binary.MaxVarintLen32 // store topic array size
@@ -60,8 +60,7 @@ func (ts Topics) MarshallTopics() (b []byte, e error) {
 		n = copy(buffer[bidx:], val.data)
 		bidx += n
 	}
-
-	return buffer[:bidx], e
+	return buffer[:bidx]
 }
 
 // UnmarshallTopics unmarshalls the topics from the byte array
@@ -110,10 +109,10 @@ func UnmarshallTopics(buffer []byte) (ts Topics, err error) {
 
 // Hash returns the hash of serialized topics.
 // Expects the nonce to be already added as a topic
-func Hash(topics []byte) (partialHash uint64, e error) {
+func Hash(topics []byte) (partialHash uint64) {
 	digest := crypto.Hash(topics)
 	partialHash = digest.TrimUint64()
-	return partialHash, nil
+	return partialHash
 }
 
 // GetValue returns the value of the key if the key is found in the topics

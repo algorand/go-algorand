@@ -1389,16 +1389,16 @@ func handleTopicRequest(msg IncomingMessage) (out OutgoingMessage) {
 
 	topics, err := UnmarshallTopics(msg.Data)
 	if err != nil {
-		return nil
+		return
 	}
 
 	val1b, f := topics.GetValue("val1")
 	if !f {
-		return nil
+		return
 	}
 	val2b, f := topics.GetValue("val2")
 	if !f {
-		return nil
+		return
 	}
 	val1 := int(val1b[0])
 	val2 := int(val2b[0])
@@ -1411,7 +1411,7 @@ func handleTopicRequest(msg IncomingMessage) (out OutgoingMessage) {
 	}
 	responseTopicsByteArray, err := respTopics.MarshallTopics()
 	if err != nil {
-		return nil
+		return
 	}
 	return OutgoingMessage{
 		Action:  Respond,

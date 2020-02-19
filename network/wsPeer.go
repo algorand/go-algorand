@@ -160,8 +160,11 @@ type wsPeer struct {
 	// Nonce used to uinquely identify requests
 	nonce uint64
 
-	ResponseChannels map[uint64]chan *Response
-	rcMu             deadlock.RWMutex
+	// responseChannels used by the client to wait on the response of the request
+	responseChannels map[uint64]chan *Response
+
+	// responseChannelsMutex guards the operations of responseChannels
+	responseChannelsMutex             deadlock.RWMutex
 }
 
 // HTTPPeer is what the opaque Peer might be.
@@ -233,16 +236,14 @@ func (wp *wsPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag) err
 	return err
 }
 
-// Response
-// write the reponse here for case Respond
-// Request submits the request to the server, waits for a response
+// Respond submits the request to the server, waits for a response
 func (wp *wsPeer) Respond(ctx context.Context, tag Tag, requestHash uint64, topicsArray []byte) (e error) {
 
+	// Unmarshall the topics to add the request hash and the nonce
 	topics, e := UnmarshallTopics(topicsArray)
 	if e != nil {
 		return e
 	}
-
 	// Add the request key
 	requestHashData := make([]byte, binary.MaxVarintLen64)
 	binary.PutUvarint(requestHashData, requestHash)
@@ -252,14 +253,8 @@ func (wp *wsPeer) Respond(ctx context.Context, tag Tag, requestHash uint64, topi
 	nonce := wp.getNonce()
 	topics = append(topics, Topic{key: "nonce", data: nonce})
 
-	// Get the topics in serialized form
-	serializedMsg, e := topics.MarshallTopics()
-	if e != nil {
-		return e
-	}
-
-	// Get the topics' hash
-	//	hash, e := Hash(serializedMsg)
+	// Serialize the topics
+	serializedMsg := topics.MarshallTopics()
 
 	// Send serializedMsg
 	select {
@@ -280,7 +275,7 @@ func (wp *wsPeer) init(config config.Local, sendBufferLength int) {
 	wp.sendBufferHighPrio = make(chan sendMessage, sendBufferLength)
 	wp.sendBufferBulk = make(chan sendMessage, sendBufferLength)
 	atomic.StoreInt64(&wp.lastPacketTime, time.Now().UnixNano())
-	wp.ResponseChannels = make(map[uint64]chan *Response)
+	wp.responseChannels = make(map[uint64]chan *Response)
 
 	// processed is a channel that messageHandlerThread writes to
 	// when it's done with one of our messages, so that we can queue
@@ -390,32 +385,33 @@ func (wp *wsPeer) readLoop() {
 			return
 		}
 
-
-		
-
-		// shant... handle the response messages here
+		// Handle Topic message
 		if msg.Tag == protocol.TopicMsgRespTag {
 			topics, err := UnmarshallTopics(msg.Data)
+			if err != nil {
+				wp.net.log.Debugf("wsPeer readLoop: could not read the message: %s", err)
+				continue
+			}
 			requestHash, found := topics.GetValue("RequestHash")
 			if !found {
-				// do something
-			}
-			if err != nil {
-				// do something
+				wp.net.log.Debugf("wsPeer readLoop: message is missing the RequestHash")
+				continue
 			}
 			hashKey, _ := binary.Uvarint(requestHash)
 			found, channel := wp.getResponseChannel(hashKey)
-			if found {
-				resp := Response {Data: msg.Data}
-				channel <- &resp
+			if !found {
+				wp.net.log.Debugf("wsPeer readLoop: received a message response for a stale request")
+				continue
 			}
-		}
-
-		select {
-		case wp.net.readBuffer <- msg:
-		case <-wp.closing:
-			wp.net.log.Debugf("peer closing %s", wp.conn.RemoteAddr().String())
-			return
+			resp := Response {Data: msg.Data}
+			channel <- &resp
+		} else {
+			select {
+			case wp.net.readBuffer <- msg:
+			case <-wp.closing:
+				wp.net.log.Debugf("peer closing %s", wp.conn.RemoteAddr().String())
+				return
+			}
 		}
 	}
 }
@@ -615,14 +611,11 @@ func (wp *wsPeer) Request(ctx context.Context, tag Tag, topics Topics) (resp *Re
 	nonce := wp.getNonce()
 	topics = append(topics, Topic{key: "nonce", data: nonce})
 
-	// Get the topics in serialized form
-	serializedMsg, e := topics.MarshallTopics()
-	if e != nil {
-		return resp, e
-	}
+	// serialize the topics
+	serializedMsg := topics.MarshallTopics()
 
 	// Get the topics' hash
-	hash, e := Hash(serializedMsg)
+	hash := Hash(serializedMsg)
 
 	// Make a response channel to wait on the server response
 	wp.makeResponceChannel(hash)
@@ -642,7 +635,7 @@ func (wp *wsPeer) Request(ctx context.Context, tag Tag, topics Topics) (resp *Re
 
 	// wait for the channel.
 	select {
-	case resp = <-wp.ResponseChannels[hash]:
+	case resp = <-wp.responseChannels[hash]:
 		return resp, nil
 	case <-ctx.Done():
 		return resp, ctx.Err()
@@ -651,27 +644,23 @@ func (wp *wsPeer) Request(ctx context.Context, tag Tag, topics Topics) (resp *Re
 	return resp, nil
 }
 
-func (wp *wsPeer) Read() {
-
-}
-
 func (wp *wsPeer) makeResponceChannel(key uint64) {
 	newChan := make(chan *Response, 1)
-	wp.rcMu.Lock()
-	defer func() { wp.rcMu.Unlock() }()
-	wp.ResponseChannels[key] = newChan
+	wp.responseChannelsMutex.Lock()
+	defer func() { wp.responseChannelsMutex.Unlock() }()
+	wp.responseChannels[key] = newChan
 }
 
 func (wp *wsPeer) removeResponseChannel(key uint64) {
-	wp.rcMu.Lock()
-	defer func() { wp.rcMu.Unlock() }()
-	delete(wp.ResponseChannels, key)
+	wp.responseChannelsMutex.Lock()
+	defer func() { wp.responseChannelsMutex.Unlock() }()
+	delete(wp.responseChannels, key)
 }
 
 func (wp *wsPeer) getResponseChannel(key uint64) (found bool, respChan chan *Response) {
-	wp.rcMu.Lock()
-	defer func() { wp.rcMu.Unlock() }()
-	respChan, found = wp.ResponseChannels[key]
+	wp.responseChannelsMutex.Lock()
+	defer func() { wp.responseChannelsMutex.Unlock() }()
+	respChan, found = wp.responseChannels[key]
 
 	return
 }
