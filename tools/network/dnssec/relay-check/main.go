@@ -17,6 +17,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -26,24 +27,31 @@ import (
 )
 
 func main() {
-	if len(os.Args) < 2 {
-		fmt.Printf("Usage: %s <DOMAIN-NAME>\n\tWhere <DOMAIN-NAME> is a name containing SRV record, like '_algobootstrap._tcp.mainnet.algorand.network'\n", os.Args[0])
+	if len(os.Args) < 4 {
+		fmt.Printf(`Usage: %s <service> <proto> <name>
+Where\n
+<service> is a SRV service, for example 'algobootstrap',
+<proto> is SRV protocol ('tcp', 'udp'),
+<name> is SRV name like 'mainnet.algorand.network
+`, os.Args[0])
 		os.Exit(1)
 	}
 
-	srvName := os.Args[1]
+	srvService := os.Args[1]
+	srvProto := os.Args[2]
+	srvName := os.Args[3]
 
 	success := make(map[string]bool)
 	errors := make(map[string]string)
 	nonSigned := make(map[string]string)
 	r := dnssec.MakeDnssecResolver(nil, time.Second)
-	entries, err := r.LookupSRV(srvName)
+	_, entries, err := r.LookupSRV(context.Background(), srvService, srvProto, srvName)
 	if err != nil {
 		fmt.Printf("%v\n", err)
 		return
 	}
 	for _, entry := range entries {
-		_, err := r.LookupIPRecursive(entry.Target, 4)
+		_, err := r.LookupIPAddr(context.Background(), entry.Target)
 		if err == nil {
 			success[entry.Target] = true
 		} else {

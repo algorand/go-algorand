@@ -17,6 +17,7 @@
 package dnssec
 
 import (
+	"context"
 	"encoding/xml"
 	"fmt"
 	"time"
@@ -76,8 +77,8 @@ type TrustAnchor struct {
 
 // queryImpl performs DNS query using provided client
 // if it fails then retries with TCP client
-func queryImpl(client *dns.Client, server string, msg *dns.Msg) (resp *dns.Msg, err error) {
-	resp, _, err = client.Exchange(msg, server)
+func queryImpl(ctx context.Context, client *dns.Client, server string, msg *dns.Msg) (resp *dns.Msg, err error) {
+	resp, _, err = client.ExchangeContext(ctx, msg, server)
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +105,7 @@ func (r *resolverImpl) serverList() []string {
 	return r.servers
 }
 
-func (r *resolverImpl) query(name string, qtype uint16) (resp *dns.Msg, err error) {
+func (r *resolverImpl) query(ctx context.Context, name string, qtype uint16) (resp *dns.Msg, err error) {
 	name = dns.Fqdn(name)
 
 	msg := new(dns.Msg)
@@ -113,7 +114,7 @@ func (r *resolverImpl) query(name string, qtype uint16) (resp *dns.Msg, err erro
 	msg.SetEdns0(4096, true) // high enough value prevents truncation and retries with TCP
 
 	for _, server := range r.servers {
-		resp, err := queryImpl(r.client, server, msg)
+		resp, err := queryImpl(ctx, r.client, server, msg)
 		if err != nil {
 			continue
 		}
@@ -122,8 +123,8 @@ func (r *resolverImpl) query(name string, qtype uint16) (resp *dns.Msg, err erro
 	return nil, fmt.Errorf("no answer for (%s, %d) from DNS servers %v", name, qtype, r.servers)
 }
 
-func (r *resolverImpl) queryRRSet(name string, qtype uint16) (*[]dns.RR, *[]dns.RRSIG, error) {
-	msg, err := r.query(name, qtype)
+func (r *resolverImpl) queryRRSet(ctx context.Context, name string, qtype uint16) (*[]dns.RR, *[]dns.RRSIG, error) {
+	msg, err := r.query(ctx, name, qtype)
 	if err != nil {
 		return nil, nil, err
 	}

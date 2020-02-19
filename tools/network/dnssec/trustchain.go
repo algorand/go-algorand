@@ -17,6 +17,7 @@
 package dnssec
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -136,8 +137,8 @@ func (tz *trustedZone) verifyDS(rrSet *[]dns.RR, rrSig *[]dns.RRSIG) (cacheOutda
 // Note2: the function requests both DNSKEY (from child) and DS (from parent)
 // and this allows to tolerate KSK rotation: if child zone refreshed KSK
 // then its digest is propadated to parent DS and used to sign child's DNSKEY
-func makeTrustedZone(fqZoneName string, pz *trustedZone, r resolverIf) (tz *trustedZone, cacheOutdated bool, err error) {
-	rrSet, rrSig, err := r.queryRRSet(fqZoneName, dns.TypeDNSKEY)
+func makeTrustedZone(ctx context.Context, fqZoneName string, pz *trustedZone, r resolverIf) (tz *trustedZone, cacheOutdated bool, err error) {
+	rrSet, rrSig, err := r.queryRRSet(ctx, fqZoneName, dns.TypeDNSKEY)
 	if err != nil {
 		return nil, false, err
 	}
@@ -168,7 +169,7 @@ func makeTrustedZone(fqZoneName string, pz *trustedZone, r resolverIf) (tz *trus
 	} else {
 		var rrSet *[]dns.RR
 		var rrSig *[]dns.RRSIG
-		rrSet, rrSig, err = r.queryRRSet(fqZoneName, dns.TypeDS) // stored at parent of fqZoneName
+		rrSet, rrSig, err = r.queryRRSet(ctx, fqZoneName, dns.TypeDS) // stored at parent of fqZoneName
 		if err != nil {
 			return
 		}
@@ -224,7 +225,7 @@ func (t *trustChain) removeSelfAndChildren(zone string) {
 // It also performs cache invalidation: if child-parent authentication fails because of keys mismatch
 // then parent zone is updated from the network and the process repeats.
 // For example, example.com. is represented by 3 trusted zones: [".", "com.", "example.com."]
-func (t *trustChain) ensure(fqZoneName string, keytags []uint16) error {
+func (t *trustChain) ensure(ctx context.Context, fqZoneName string, keytags []uint16) error {
 	// get zones from . to fqZoneName
 	zones, err := splitToZones(fqZoneName)
 	if err != nil {
@@ -257,7 +258,7 @@ func (t *trustChain) ensure(fqZoneName string, keytags []uint16) error {
 			if zoneIdx > 0 {
 				parentZone = t.trustedZones[zones[zoneIdx-1]]
 			}
-			if tz, cacheOutdated, err = makeTrustedZone(zone, parentZone, t.resolver); err != nil {
+			if tz, cacheOutdated, err = makeTrustedZone(ctx, zone, parentZone, t.resolver); err != nil {
 				return err
 			}
 			if cacheOutdated {
@@ -309,7 +310,7 @@ func (t *trustChain) getDNSKey(fqZoneName string, keyTag uint16) (key *dns.DNSKE
 	return &k, found
 }
 
-func (t *trustChain) authenticate(rrSet *[]dns.RR, rrSig *[]dns.RRSIG) (err error) {
+func (t *trustChain) authenticate(ctx context.Context, rrSet *[]dns.RR, rrSig *[]dns.RRSIG) (err error) {
 	// response authentication includes the following steps
 	// 1. Ensure the trust chain is valid. This requires keys' signature check back to the root if not cached
 	// 2. Check the signature using authenticated DNSKEY
@@ -334,7 +335,7 @@ func (t *trustChain) authenticate(rrSet *[]dns.RR, rrSig *[]dns.RRSIG) (err erro
 
 	// 1. ensure trust from the root to the signer
 	// 2. check the keys are in place
-	err = t.ensure(fqdn, keytags)
+	err = t.ensure(ctx, fqdn, keytags)
 	if err != nil {
 		return err
 	}

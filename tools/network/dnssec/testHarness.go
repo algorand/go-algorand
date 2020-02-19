@@ -17,6 +17,7 @@
 package dnssec
 
 import (
+	"context"
 	"crypto"
 	"crypto/rsa"
 	"fmt"
@@ -156,7 +157,7 @@ func makeTestResolver() *testResolver {
 	return r
 }
 
-func (r *testResolver) queryRRSet(domain string, qtype uint16) (*[]dns.RR, *[]dns.RRSIG, error) {
+func (r *testResolver) queryRRSet(ctx context.Context, domain string, qtype uint16) (*[]dns.RR, *[]dns.RRSIG, error) {
 	if zone, ok := r.entries[domain]; ok {
 		if entry, ok := zone[qtype]; ok {
 			return &entry.rr, &entry.sig, nil
@@ -182,7 +183,7 @@ func (r *testResolver) queryRRSet(domain string, qtype uint16) (*[]dns.RR, *[]dn
 	return nil, nil, fmt.Errorf("%s not found", domain)
 }
 
-func (r *testResolver) query(domain string, qtype uint16) (resp *dns.Msg, err error) {
+func (r *testResolver) query(ctx context.Context, domain string, qtype uint16) (resp *dns.Msg, err error) {
 	msg := new(dns.Msg)
 	msg.RecursionDesired = true
 	msg.SetQuestion(domain, qtype)
@@ -204,7 +205,7 @@ func (r *testResolver) serverList() []string {
 }
 
 func (r *testResolver) queryDNSKeyRRSet(domain string) (zsk []dns.DNSKEY, ksk []dns.DNSKEY, rrSig []dns.RRSIG) {
-	rrs, rrsigs, _ := r.queryRRSet(domain, dns.TypeDNSKEY)
+	rrs, rrsigs, _ := r.queryRRSet(context.Background(), domain, dns.TypeDNSKEY)
 	for _, r := range *rrs {
 		switch t := r.(type) {
 		case *dns.DNSKEY:
@@ -247,7 +248,7 @@ func (r *testResolver) sign(rrset *[]dns.RR, signer string, keytag uint16, expTi
 func (r *testResolver) updateDNSKEYRRSet(zone string, key *dns.DNSKEY, sk crypto.PrivateKey) ([]dns.RR, map[uint16]crypto.PrivateKey) {
 	var rrset *[]dns.RR
 	var err error
-	if rrset, _, err = r.queryRRSet(zone, dns.TypeDNSKEY); err != nil {
+	if rrset, _, err = r.queryRRSet(context.Background(), zone, dns.TypeDNSKEY); err != nil {
 		// no entry, create a new one
 		rr := []dns.RR{key}
 		secretKeys := make(map[uint16]crypto.PrivateKey)
@@ -485,7 +486,7 @@ func (r *testResolver) updateRegRecord(domain string, signer string, tp uint16, 
 }
 
 func (r *testResolver) queryDSRRSet(domain string) (dss []dns.DS, rrSig []dns.RRSIG, err error) {
-	rrs, rrsigs, err := r.queryRRSet(domain, dns.TypeDS)
+	rrs, rrsigs, err := r.queryRRSet(context.Background(), domain, dns.TypeDS)
 	if err != nil {
 		return
 	}
