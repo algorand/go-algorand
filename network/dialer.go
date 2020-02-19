@@ -72,5 +72,7 @@ func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.
 
 func (d *Dialer) innerDialContext(ctx context.Context, network, address string) (net.Conn, error) {
 	// this would be a good place to have the dnssec evaluated.
+	// TODO: replace d.innerDialer.Resolver with dnssec.DefaultResolver
+	// Possible alternatives: add a config option EnableDNSSEC or make a fall-back resolver
 	return d.innerDialer.DialContext(ctx, network, address)
 }

@@ -22,6 +22,7 @@ import (
 	"net"
 
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/tools/network/dnssec"
 )
 
 // ReadFromSRV is a helper to collect SRV addresses for a given name.
@@ -36,25 +37,32 @@ func ReadFromSRV(service string, protocol string, name string, fallbackDNSResolv
 		return
 	}
 
-	_, records, sysLookupErr := net.LookupSRV(service, protocol, name)
-	if sysLookupErr != nil {
-		var resolver Resolver
-		// try to resolve the address. If it's an dotted-numbers format, it would return that right away.
-		// if it's a named address, we would attempt to parse it and might fail.
-		// ( failing isn't that bad; the resolver would internally try to use 8.8.8.8 instead )
-		if DNSIPAddr, err2 := net.ResolveIPAddr("ip", fallbackDNSResolverAddress); err2 == nil {
-			resolver.DNSAddress = *DNSIPAddr
-		} else {
-			log.Infof("ReadFromBootstrap: Failed to resolve fallback DNS resolver address '%s': %v; falling back to default fallback resolver address", fallbackDNSResolverAddress, err2)
-		}
+	var records []*net.SRV
+	var dnssecError error
+	_, records, dnssecError = dnssec.LookupSRV(service, protocol, name)
+	if dnssecError != nil {
+		log.Warnf("ReadFromBootstrap: Failed to obtain SRV with DNSSEC: %s", dnssecError.Error())
+		var sysLookupErr error
+		_, records, sysLookupErr = net.LookupSRV(service, protocol, name)
+		if sysLookupErr != nil {
+			var resolver Resolver
+			// try to resolve the address. If it's an dotted-numbers format, it would return that right away.
+			// if it's a named address, we would attempt to parse it and might fail.
+			// ( failing isn't that bad; the resolver would internally try to use 8.8.8.8 instead )
+			if DNSIPAddr, err2 := net.ResolveIPAddr("ip", fallbackDNSResolverAddress); err2 == nil {
+				resolver.DNSAddress = *DNSIPAddr
+			} else {
+				log.Infof("ReadFromBootstrap: Failed to resolve fallback DNS resolver address '%s': %v; falling back to default fallback resolver address", fallbackDNSResolverAddress, err2)
+			}
 
-		_, records, err = resolver.LookupSRV(context.Background(), service, protocol, name)
-		if err != nil {
-			err = fmt.Errorf("ReadFromBootstrap: DNS LookupSRV failed when using system resolver(%v) as well as via %s due to %v", sysLookupErr, resolver.EffectiveResolverDNS(), err)
-			return
+			_, records, err = resolver.LookupSRV(context.Background(), service, protocol, name)
+			if err != nil {
+				err = fmt.Errorf("ReadFromBootstrap: DNS LookupSRV failed when using system resolver(%v) as well as via %s due to %v", sysLookupErr, resolver.EffectiveResolverDNS(), err)
+				return
+			}
+			// we succeeded when using the public dns. log this.
+			log.Infof("ReadFromBootstrap: DNS LookupSRV failed when using the system resolver(%v); using public DNS(%s) server directly instead.", sysLookupErr, resolver.EffectiveResolverDNS())
 		}
-		// we succeeded when using the public dns. log this.
-		log.Infof("ReadFromBootstrap: DNS LookupSRV failed when using the system resolver(%v); using public DNS(%s) server directly instead.", sysLookupErr, resolver.EffectiveResolverDNS())
 	}
 	for _, srv := range records {
 		// empty target won't take us far; skip these
