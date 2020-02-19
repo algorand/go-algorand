@@ -71,7 +71,7 @@ var signCmd = &cobra.Command{
 			}
 
 			stxn.Sig = key.Sign(stxn.Txn)
-			outBytes = append(outBytes, protocol.Encode(stxn)...)
+			outBytes = append(outBytes, protocol.Encode(&stxn)...)
 		}
 
 		err = ioutil.WriteFile(signOutfile, outBytes, 0600)

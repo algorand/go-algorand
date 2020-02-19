@@ -185,5 +185,5 @@ func (cred Credential) lowestOutput() *big.Int {
 }
 
 func (cred hashableCredential) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.Credential, protocol.Encode(cred)
+	return protocol.Credential, protocol.Encode(&cred)
 }

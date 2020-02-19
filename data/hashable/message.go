@@ -28,5 +28,5 @@ type Message struct {
 
 // ToBeHashed implements the crypto.Hashable interface
 func (msg Message) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.Message, protocol.Encode(msg)
+	return protocol.Message, protocol.Encode(&msg)
 }
