@@ -26,9 +26,9 @@ import (
 )
 
 type resolverImpl struct {
-	client     *dns.Client
-	servers    []string
-	rootAnchor string
+	readTimeout time.Duration
+	servers     []string
+	rootAnchor  string
 }
 
 func makeDNSClient(net string, timeout time.Duration) (client *dns.Client) {
@@ -77,14 +77,13 @@ type TrustAnchor struct {
 
 // queryImpl performs DNS query using provided client
 // if it fails then retries with TCP client
-func queryImpl(ctx context.Context, client *dns.Client, server string, msg *dns.Msg) (resp *dns.Msg, err error) {
-	resp, _, err = client.ExchangeContext(ctx, msg, server)
+func queryImpl(ctx context.Context, server string, msg *dns.Msg, timeout time.Duration) (resp *dns.Msg, err error) {
+	resp, _, err = (&dns.Client{Net: "udp", ReadTimeout: timeout}).ExchangeContext(ctx, msg, server)
 	if err != nil {
 		return nil, err
 	}
 	if resp.Truncated {
-		tcpClient := makeDNSClient("tcp", client.ReadTimeout)
-		resp, _, err = tcpClient.Exchange(msg, server)
+		resp, _, err = (&dns.Client{Net: "tcp", ReadTimeout: timeout}).ExchangeContext(ctx, msg, server)
 		if err != nil {
 			return nil, err
 		}
@@ -114,7 +113,7 @@ func (r *resolverImpl) query(ctx context.Context, name string, qtype uint16) (re
 	msg.SetEdns0(4096, true) // high enough value prevents truncation and retries with TCP
 
 	for _, server := range r.servers {
-		resp, err := queryImpl(ctx, r.client, server, msg)
+		resp, err := queryImpl(ctx, server, msg, r.readTimeout)
 		if err != nil {
 			continue
 		}

@@ -58,8 +58,7 @@ var DefaultDNSSECResolver = MakeDnssecResolver([]string{defaultDnssecAwareServer
 
 // MakeDnssecResolver return resolver from given NS servers and timeout duration
 func MakeDnssecResolver(servers []string, timeout time.Duration) (r Resolver) {
-	client := makeDNSClient("udp", timeout)
-	rs := &resolverImpl{client: client, servers: servers, rootAnchor: rootAnchorXML}
+	rs := &resolverImpl{readTimeout: timeout, servers: servers, rootAnchor: rootAnchorXML}
 
 	if len(rs.servers) == 0 {
 		rs.servers = append(rs.servers, defaultDnssecAwareServer)

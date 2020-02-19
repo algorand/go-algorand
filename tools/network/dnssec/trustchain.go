@@ -22,12 +22,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/algorand/go-deadlock"
 	"github.com/miekg/dns"
 )
 
 type trustChain struct {
 	resolver     resolverIf
 	trustedZones map[string]*trustedZone
+	mu           deadlock.RWMutex
 }
 
 type trustedZone struct {
@@ -213,6 +215,7 @@ func makeTrustedZone(ctx context.Context, fqZoneName string, pz *trustedZone, r 
 	return
 }
 
+// must be called with the lock taken
 func (t *trustChain) removeSelfAndChildren(zone string) {
 	for k := range t.trustedZones {
 		if strings.HasSuffix(k, zone) {
@@ -246,6 +249,10 @@ func (t *trustChain) ensure(ctx context.Context, fqZoneName string, keytags []ui
 	// causing 2 * len(zones) iterations
 	// makeTrustedZone does not return cacheOutdated and refreshedZones has indication that the root was already updated
 	// and the second fallback to the root zone will fail
+
+	// this would not survive after granular locks and concurrent underlying zones removal
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	for {
 		zone := zones[zoneIdx]
 		tz, ok := t.trustedZones[zone]
@@ -302,7 +309,9 @@ func (t *trustChain) ensure(ctx context.Context, fqZoneName string, keytags []ui
 }
 
 func (t *trustChain) getDNSKey(fqZoneName string, keyTag uint16) (key *dns.DNSKEY, found bool) {
+	t.mu.RLock()
 	trustedZone, ok := t.trustedZones[fqZoneName]
+	t.mu.RUnlock()
 	if !ok {
 		return
 	}
