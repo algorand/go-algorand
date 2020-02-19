@@ -94,6 +94,7 @@ const disconnectWriteError disconnectReason = "WriteError"
 const disconnectIdleConn disconnectReason = "IdleConnection"
 const disconnectSlowConn disconnectReason = "SlowConnection"
 
+// Response is the structure holding the response from the server
 type Response struct {
 	Data []byte
 }
@@ -164,7 +165,7 @@ type wsPeer struct {
 	responseChannels map[uint64]chan *Response
 
 	// responseChannelsMutex guards the operations of responseChannels
-	responseChannelsMutex             deadlock.RWMutex
+	responseChannelsMutex deadlock.RWMutex
 }
 
 // HTTPPeer is what the opaque Peer might be.
@@ -403,7 +404,7 @@ func (wp *wsPeer) readLoop() {
 				wp.net.log.Debugf("wsPeer readLoop: received a message response for a stale request")
 				continue
 			}
-			resp := Response {Data: msg.Data}
+			resp := Response{Data: msg.Data}
 			channel <- &resp
 		} else {
 			select {
@@ -640,8 +641,6 @@ func (wp *wsPeer) Request(ctx context.Context, tag Tag, topics Topics) (resp *Re
 	case <-ctx.Done():
 		return resp, ctx.Err()
 	}
-
-	return resp, nil
 }
 
 func (wp *wsPeer) makeResponceChannel(key uint64) {

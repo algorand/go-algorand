@@ -1402,17 +1402,14 @@ func handleTopicRequest(msg IncomingMessage) (out OutgoingMessage) {
 	}
 	val1 := int(val1b[0])
 	val2 := int(val2b[0])
-	
+
 	respTopics := Topics{
 		Topic{
 			key:  "value",
-			data: []byte{byte(val1+val2)},
+			data: []byte{byte(val1 + val2)},
 		},
 	}
-	responseTopicsByteArray, err := respTopics.MarshallTopics()
-	if err != nil {
-		return
-	}
+	responseTopicsByteArray := respTopics.MarshallTopics()
 	return OutgoingMessage{
 		Action:  Respond,
 		Tag:     protocol.TopicMsgRespTag,

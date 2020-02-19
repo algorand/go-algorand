@@ -1004,7 +1004,7 @@ func (wn *WebsocketNetwork) messageHandlerThread() {
 			start := time.Now()
 			// Get the hash/key of the request message
 			hash := Hash(msg.Data)
-			
+
 			// now, send to global handlers
 			outmsg := wn.handlers.Handle(msg)
 			handled := time.Now()
