@@ -16,7 +16,7 @@ stages:
     configFilePath: scripts/configure_dev-deps.sh
     workDir: /go/src/github.com/algorand/go-algorand
     arch: amd64
-    target: ci-deps ci-build
+    target: ci-build
   build-linux-arm64:
   - task: shell.docker.Ensure
     image: algorand/go-algorand-linux
@@ -34,12 +34,12 @@ stages:
     image: algorand/go-algorand-linux
     workDir: /go/src/github.com/algorand/go-algorand
     arch: arm64v8
-    target: ci-deps ci-build
+    target: ci-build
   build-local:
   - task: shell.Make
-    target: fulltest
+    target: ci-deps fulltest
   - task: shell.Make
-    target: ci-deps ci-build
+    target: ci-build
   release:
   - task: release.notes.GenerateReleaseNotes
     releaseVersion: ${GO_ALGORAND_RELEASE_VERSION}
