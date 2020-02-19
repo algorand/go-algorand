@@ -43,9 +43,6 @@ GOPATH=$(go env GOPATH)
 export GOPATH
 export GO111MODULE=on
 
-echo "Building libsodium-fork..."
-make crypto/lib/libsodium.a
-
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 OS=$("${SCRIPTPATH}"/../ostype.sh)
 ARCH=$("${SCRIPTPATH}"/../archtype.sh)
