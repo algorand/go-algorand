@@ -15,7 +15,7 @@ if [ "${BUILD_TYPE}" = "integration" ]; then
     export SHORTTEST 
     ./test/scripts/run_integration_tests.sh
 elif [ "${TRAVIS_EVENT_TYPE}" = "cron" ] || [[ "${TRAVIS_BRANCH}" =~ ^rel/ ]]; then
-    if [[ "${OS}" != "darwin" ] && [ "${OS}" != "linux-arm64" ]]; then
+    if [ "${OS}" != "darwin" ] && [ "${OS}" != "linux-arm64" ]; then
 	make fulltest -j4
     fi
 else
