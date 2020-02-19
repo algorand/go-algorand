@@ -1389,33 +1389,29 @@ func handleTopicRequest(msg IncomingMessage) (out OutgoingMessage) {
 
 	topics, err := UnmarshallTopics(msg.Data)
 	if err != nil {
-		// do something
+		return nil
 	}
 
 	val1b, f := topics.GetValue("val1")
 	if !f {
-		// do something
+		return nil
 	}
 	val2b, f := topics.GetValue("val2")
 	if !f {
-		// do something
+		return nil
 	}
 	val1 := int(val1b[0])
 	val2 := int(val2b[0])
 	
 	respTopics := Topics{
 		Topic{
-			key:  "command",
-			data: []byte("answer"),
-		},
-		Topic{
-			key:  "val",
+			key:  "value",
 			data: []byte{byte(val1+val2)},
 		},
 	}
 	responseTopicsByteArray, err := respTopics.MarshallTopics()
 	if err != nil {
-		// do something
+		return nil
 	}
 	return OutgoingMessage{
 		Action:  Respond,
@@ -1438,11 +1434,6 @@ func TestWebsocketNetworkTopicRoundtrip(t *testing.T) {
 	netB.phonebook.AddOrUpdatePhonebook("default", &oneEntryPhonebook{addr: addrA})
 	netB.Start()
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
-	//	counter := newMessageCounter(t, 2)
-	//	counterDone := counter.done
-	//	netB.RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{Tag: debugTag, MessageHandler: counter}})
-
-
 
 	netB.RegisterHandlers([]TaggedMessageHandler{
 		TaggedMessageHandler{
@@ -1474,18 +1465,11 @@ func TestWebsocketNetworkTopicRoundtrip(t *testing.T) {
 		},
 	}
 
-	_, err := peerA.Request(context.Background(), protocol.TopicMsgReqTag, topics)
-
+	resp, err := peerA.Request(context.Background(), protocol.TopicMsgReqTag, topics)
+	respTopics, err := UnmarshallTopics(resp.Data)
 	assert.NoError(t, err)
 
-
-
-
-
-
-
-
-
-	
-
+	sum, found := respTopics.GetValue("value")
+	assert.Equal(t, true, found)
+	assert.Equal(t, 5, int(sum[0]))
 }
