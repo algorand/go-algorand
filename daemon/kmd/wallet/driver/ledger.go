@@ -145,20 +145,20 @@ func (lwd *LedgerWalletDriver) scanWalletsLocked() error {
 		delete(lwd.wallets, deadPath)
 	}
 
-	// Add in new devices
+	// Add in new ledger wallets if they appear valid
 	for _, dev := range newDevs {
-		id := pathToID(dev.USBInfo().Path)
-		lwd.wallets[id] = &LedgerWallet{
+		newWallet := &LedgerWallet{
 			dev: dev,
 		}
-	}
 
-	// Check that each device responds to algorand app requests
-	for id, dev := range lwd.wallets {
-		_, err := dev.ListKeys()
+		// Check that device responds to Algorand app requests
+		_, err := newWallet.ListKeys()
 		if err != nil {
-			delete(lwd.wallets, id)
+			continue
 		}
+
+		id := pathToID(dev.USBInfo().Path)
+		lwd.wallets[id] = newWallet
 	}
 
 	return nil
