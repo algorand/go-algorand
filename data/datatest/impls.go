@@ -158,10 +158,4 @@ func (i ledgerImpl) EnsureDigest(cert agreement.Certificate, verifier *agreement
 	if consistencyCheck() {
 		return
 	}
-
-	<-i.Wait(r)
-	if !consistencyCheck() {
-		err := fmt.Errorf("Wait channel fired without matching block in round %v", r)
-		panic(err)
-	}
 }
