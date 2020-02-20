@@ -244,14 +244,10 @@ func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, respMsg O
 	requestHash := Hash(reqMsg.Data)
 
 	topics := respMsg.Topics
-	// Add the request key
+	// Add the request hash
 	requestHashData := make([]byte, binary.MaxVarintLen64)
 	binary.PutUvarint(requestHashData, requestHash)
 	topics = append(topics, Topic{key: "RequestHash", data: requestHashData})
-
-	// Add nonce as a topic
-	nonce := wp.getNonce()
-	topics = append(topics, Topic{key: "nonce", data: nonce})
 
 	// Serialize the topics
 	serializedMsg := topics.MarshallTopics()
@@ -606,9 +602,8 @@ func (wp *wsPeer) CheckSlowWritingPeer(now time.Time) bool {
 // getNonce returns the byte representation of ever increasing uint64
 // The value is stored on wsPeer
 func (wp *wsPeer) getNonce() []byte {
-	atomic.AddUint64(&wp.nonce, 1)
 	buf := make([]byte, binary.MaxVarintLen64)
-	binary.PutUvarint(buf, wp.nonce)
+	binary.PutUvarint(buf, atomic.AddUint64(&wp.nonce, 1))
 	return buf
 }
 
@@ -636,7 +631,7 @@ func (wp *wsPeer) Request(ctx context.Context, tag Tag, topics Topics) (resp *Re
 		enqueued:     time.Now(),
 		peerEnqueued: time.Now()}:
 	case <-wp.closing:
-		wp.net.log.Debugf("peer closing %s", wp.conn.RemoteAddr().String())
+		e = fmt.Errorf("peer closing %s", wp.conn.RemoteAddr().String())
 		return
 	case <-ctx.Done():
 		return resp, ctx.Err()
@@ -647,7 +642,7 @@ func (wp *wsPeer) Request(ctx context.Context, tag Tag, topics Topics) (resp *Re
 	case resp = <-wp.responseChannels[hash]:
 		return resp, nil
 	case <-wp.closing:
-		wp.net.log.Debugf("peer closing %s", wp.conn.RemoteAddr().String())
+		e = fmt.Errorf("peer closing %s", wp.conn.RemoteAddr().String())
 		return
 	case <-ctx.Done():
 		return resp, ctx.Err()

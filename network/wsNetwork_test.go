@@ -1416,7 +1416,7 @@ func handleTopicRequest(msg IncomingMessage) (out OutgoingMessage) {
 	}
 }
 
-var TopicMsgReqTag Tag = "TQ"
+var topicMsgReqTag Tag = "TQ"
 
 // Set up two nodes, test topics send/recieve is working
 func TestWebsocketNetworkTopicRoundtrip(t *testing.T) {
@@ -1435,7 +1435,7 @@ func TestWebsocketNetworkTopicRoundtrip(t *testing.T) {
 
 	netB.RegisterHandlers([]TaggedMessageHandler{
 		TaggedMessageHandler{
-			Tag:            TopicMsgReqTag,
+			Tag:            topicMsgReqTag,
 			MessageHandler: HandlerFunc(handleTopicRequest),
 		},
 	})
@@ -1463,7 +1463,7 @@ func TestWebsocketNetworkTopicRoundtrip(t *testing.T) {
 		},
 	}
 
-	resp, err := peerA.Request(context.Background(), TopicMsgReqTag, topics)
+	resp, err := peerA.Request(context.Background(), topicMsgReqTag, topics)
 	assert.NoError(t, err)
 
 	sum, found := resp.Topics.GetValue("value")

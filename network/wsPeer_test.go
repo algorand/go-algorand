@@ -39,28 +39,35 @@ func TestCheckSlowWritingPeer(t *testing.T) {
 
 }
 
-// TestGetNonce tests if the values are incremented correctly
+// TestGetNonce tests if unique values are generated each time
 func TestGetNonce(t *testing.T) {
+	numValues := 1000
 	peer := wsPeer{}
-	doneChannel := make(chan bool, 1)
-	for x := 0; x < 200; x++ {
+	valueChannel := make(chan uint64, numValues)
+	for x := 0; x < numValues; x++ {
 		go func() {
 			ans := peer.getNonce()
 			val, _ := binary.Uvarint(ans)
-			if val == 200 {
-				doneChannel <- true
-			}
+			valueChannel <- val
 		}()
 	}
+
+	// Timeout
 	maxWait := time.After(2 * time.Second)
-	done := false
-	select {
-	case <-doneChannel:
-		done = true
-	case <-maxWait:
+
+	// check if all the values are unique
+	seenValue := make([]bool, numValues+1)
+	for x := 0; x < numValues; x++ {
+		select {
+		case val := <-valueChannel:
+			require.Equal(t, false, seenValue[val])
+			seenValue[val] = true
+		case <-maxWait:
+			break
+		}
 	}
-	require.Equal(t, true, done)
-	twentyOne := peer.getNonce()
-	val, _ := binary.Uvarint(twentyOne)
-	require.Equal(t, uint64(201), val)
+	// Check if all the values were generated
+	for x := 1; x <= numValues; x++ {
+		require.Equal(t, true, seenValue[x])
+	}
 }
