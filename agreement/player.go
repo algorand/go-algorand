@@ -265,14 +265,8 @@ func (p *player) handleThresholdEvent(r routerHandle, e thresholdEvent) []action
 	var actions []action
 	switch e.t() {
 	case certThreshold:
-		// stage the value for *at least* the current round and *current* period,
-		// which is safe for all certThreshold periods
 		// for future periods, fast-forwarding below will ensure correct staging
-		if e.Period < p.Period {
-			// scribble over (r, p) so that after dispatching,
-			// block does not get dropped with -> newPeriod -> trim
-			e.Period = p.Period
-		}
+		// for past periods, having a freshest certThreshold will prevent losing the block
 		r.dispatch(*p, e, proposalMachine, 0, 0, 0)
 		// Now, also check if we have the block.
 		res := stagedValue(*p, r, e.Round, e.Period)
