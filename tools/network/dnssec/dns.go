@@ -75,29 +75,22 @@ type TrustAnchor struct {
 	Digests []KeyDigest `xml:"KeyDigest"`
 }
 
-// queryImpl performs DNS query using provided client
+// queryImpl performs DNS query against provided server. It respects both context and timeout restrictions.
 // if it fails then retries with TCP client
 func queryImpl(ctx context.Context, server string, msg *dns.Msg, timeout time.Duration) (resp *dns.Msg, err error) {
-	resp, _, err = (&dns.Client{Net: "udp", ReadTimeout: timeout}).ExchangeContext(ctx, msg, server)
-	if err != nil {
-		return nil, err
-	}
-	if resp.Truncated {
-		resp, _, err = (&dns.Client{Net: "tcp", ReadTimeout: timeout}).ExchangeContext(ctx, msg, server)
-		if err != nil {
+	for _, netType := range []string{"udp", "tcp"} {
+		if resp, _, err = (&dns.Client{Net: netType, ReadTimeout: timeout}).ExchangeContext(ctx, msg, server); err != nil {
 			return nil, err
 		}
-
-		// well... should not happen but check and report error
-		if resp.Truncated {
-			var name string
-			if len(msg.Question) > 0 {
-				name = msg.Question[0].Name
-			}
-			return nil, fmt.Errorf("DNS response for %s is still truncated even after retrying TCP", name)
+		if !resp.Truncated {
+			return
 		}
 	}
-	return resp, err
+	var name string
+	if len(msg.Question) > 0 {
+		name = msg.Question[0].Name
+	}
+	return nil, fmt.Errorf("DNS response for %s is still truncated even after retrying TCP", name)
 }
 
 func (r *resolverImpl) serverList() []string {
@@ -122,7 +115,7 @@ func (r *resolverImpl) query(ctx context.Context, name string, qtype uint16) (re
 	return nil, fmt.Errorf("no answer for (%s, %d) from DNS servers %v", name, qtype, r.servers)
 }
 
-func (r *resolverImpl) queryRRSet(ctx context.Context, name string, qtype uint16) (*[]dns.RR, *[]dns.RRSIG, error) {
+func (r *resolverImpl) queryRRSet(ctx context.Context, name string, qtype uint16) ([]dns.RR, []dns.RRSIG, error) {
 	msg, err := r.query(ctx, name, qtype)
 	if err != nil {
 		return nil, nil, err
@@ -131,8 +124,8 @@ func (r *resolverImpl) queryRRSet(ctx context.Context, name string, qtype uint16
 		return nil, nil, fmt.Errorf("DNS error: %s", dns.RcodeToString[msg.Rcode])
 	}
 
-	var rrSig []dns.RRSIG
-	rrSet := make([]dns.RR, 0, len(msg.Answer)) // answer usually contains 1-2 RRSIG so we use a bit more memory than needed
+	rrSet := make([]dns.RR, 0, len(msg.Answer)) // answer usually contains 1-2 RRSIG so we use quite a bit more memory than needed
+	rrSig := make([]dns.RRSIG, 0, len(msg.Answer))
 	for _, rr := range msg.Answer {
 		switch obj := rr.(type) {
 		case *dns.RRSIG:
@@ -141,10 +134,10 @@ func (r *resolverImpl) queryRRSet(ctx context.Context, name string, qtype uint16
 			rrSet = append(rrSet, rr)
 		}
 	}
-	if rrSig == nil || len(rrSig) == 0 {
+	if len(rrSig) == 0 {
 		return nil, nil, fmt.Errorf("no signature in DNS response for %s", name)
 	}
-	return &rrSet, &rrSig, nil
+	return rrSet, rrSig, nil
 }
 
 func (r *resolverImpl) rootTrustAnchor() ([]dns.DS, error) {

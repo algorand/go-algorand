@@ -157,10 +157,10 @@ func makeTestResolver() *testResolver {
 	return r
 }
 
-func (r *testResolver) queryRRSet(ctx context.Context, domain string, qtype uint16) (*[]dns.RR, *[]dns.RRSIG, error) {
+func (r *testResolver) queryRRSet(ctx context.Context, domain string, qtype uint16) ([]dns.RR, []dns.RRSIG, error) {
 	if zone, ok := r.entries[domain]; ok {
 		if entry, ok := zone[qtype]; ok {
-			return &entry.rr, &entry.sig, nil
+			return entry.rr, entry.sig, nil
 		}
 		if qtype == dns.TypeA {
 			if entry, ok := zone[dns.TypeCNAME]; ok {
@@ -175,7 +175,7 @@ func (r *testResolver) queryRRSet(ctx context.Context, domain string, qtype uint
 						rr = append(rr, e2.rr...)
 					}
 				}
-				return &rr, &sig, nil
+				return rr, sig, nil
 			}
 		}
 
@@ -206,7 +206,7 @@ func (r *testResolver) serverList() []string {
 
 func (r *testResolver) queryDNSKeyRRSet(domain string) (zsk []dns.DNSKEY, ksk []dns.DNSKEY, rrSig []dns.RRSIG) {
 	rrs, rrsigs, _ := r.queryRRSet(context.Background(), domain, dns.TypeDNSKEY)
-	for _, r := range *rrs {
+	for _, r := range rrs {
 		switch t := r.(type) {
 		case *dns.DNSKEY:
 			if t.Flags&dns.SEP != 0 {
@@ -216,7 +216,7 @@ func (r *testResolver) queryDNSKeyRRSet(domain string) (zsk []dns.DNSKEY, ksk []
 			}
 		}
 	}
-	rrSig = append(rrSig, (*rrsigs)[0])
+	rrSig = append(rrSig, rrsigs[0])
 	return
 }
 
@@ -231,7 +231,7 @@ func (r *testResolver) setRootAnchor(dss *[]dns.DS) {
 	r.anchor = *dss
 }
 
-func (r *testResolver) sign(rrset *[]dns.RR, signer string, keytag uint16, expTime time.Time, sk crypto.PrivateKey) (sig dns.RRSIG, err error) {
+func (r *testResolver) sign(rrset []dns.RR, signer string, keytag uint16, expTime time.Time, sk crypto.PrivateKey) (sig dns.RRSIG, err error) {
 	incTime, _ := time.Parse(time.RFC3339, "2020-01-01T00:00:00Z")
 	if expTime.IsZero() {
 		expTime, _ = time.Parse(time.RFC3339, "2030-01-01T00:00:00Z")
@@ -241,12 +241,12 @@ func (r *testResolver) sign(rrset *[]dns.RR, signer string, keytag uint16, expTi
 	sig.KeyTag = keytag
 	sig.SignerName = signer
 	sig.Algorithm = dns.RSASHA256
-	err = sig.Sign(sk.(*rsa.PrivateKey), *rrset)
+	err = sig.Sign(sk.(*rsa.PrivateKey), rrset)
 	return
 }
 
 func (r *testResolver) updateDNSKEYRRSet(zone string, key *dns.DNSKEY, sk crypto.PrivateKey) ([]dns.RR, map[uint16]crypto.PrivateKey) {
-	var rrset *[]dns.RR
+	var rrset []dns.RR
 	var err error
 	if rrset, _, err = r.queryRRSet(context.Background(), zone, dns.TypeDNSKEY); err != nil {
 		// no entry, create a new one
@@ -258,7 +258,7 @@ func (r *testResolver) updateDNSKEYRRSet(zone string, key *dns.DNSKEY, sk crypto
 	// filter out keys of the same time as the key provided
 	secretKeys := r.entries[zone][dns.TypeDNSKEY].sk
 	rrsetNew := []dns.RR{}
-	for _, rr := range *rrset {
+	for _, rr := range rrset {
 		k := rr.(*dns.DNSKEY)
 		if k.Flags != key.Flags {
 			rrsetNew = append(rrsetNew, rr)
@@ -302,7 +302,7 @@ func (r *testResolver) updateKSKNoCheck(zone string, key *dns.DNSKEY, sk crypto.
 
 	rrset, secretKeys := r.updateDNSKEYRRSet(zone, key, sk)
 	var sig dns.RRSIG
-	if sig, err = r.sign(&rrset, zone, key.KeyTag(), expTime, sk); err != nil {
+	if sig, err = r.sign(rrset, zone, key.KeyTag(), expTime, sk); err != nil {
 		return err
 	}
 	if _, ok := r.entries[zone]; !ok {
@@ -331,7 +331,7 @@ func (r *testResolver) updateZSK(zone string, key *dns.DNSKEY, sk crypto.Private
 	rrset, secretKeys := r.updateDNSKEYRRSet(zone, key, sk)
 	skKSK := secretKeys[ksk.KeyTag()]
 	var sig dns.RRSIG
-	if sig, err = r.sign(&rrset, zone, ksk.KeyTag(), expTime, skKSK); err != nil {
+	if sig, err = r.sign(rrset, zone, ksk.KeyTag(), expTime, skKSK); err != nil {
 		return err
 	}
 	r.entries[zone][dns.TypeDNSKEY] = rrRec{
@@ -380,7 +380,7 @@ func (r *testResolver) updateDNSKeyRecord(zone string, key *dns.DNSKEY, sk crypt
 	// re-sign all records except DNSKEY and DS with new ZSK
 	for k, rec := range r.entries[zone] {
 		if k != dns.TypeDNSKEY && k != dns.TypeDS {
-			if sig, err = r.sign(&rec.rr, zone, key.KeyTag(), expTime, sk); err != nil {
+			if sig, err = r.sign(rec.rr, zone, key.KeyTag(), expTime, sk); err != nil {
 				return err
 			}
 			r.entries[zone][k] = rrRec{
@@ -395,7 +395,7 @@ func (r *testResolver) updateDNSKeyRecord(zone string, key *dns.DNSKEY, sk crypt
 		if k != "." {
 			if z, err := getParentZone(k); err == nil && z == zone {
 				dsEntry := v[dns.TypeDS]
-				if sig, err = r.sign(&dsEntry.rr, zone, key.KeyTag(), expTime, sk); err != nil {
+				if sig, err = r.sign(dsEntry.rr, zone, key.KeyTag(), expTime, sk); err != nil {
 					return err
 				}
 				r.entries[k][dns.TypeDS] = rrRec{
@@ -430,7 +430,7 @@ func (r *testResolver) updateDSRecord(zone string, dss *[]dns.DS, expTime time.T
 		rrset[i] = &(*dss)[i]
 	}
 	var sig dns.RRSIG
-	if sig, err = r.sign(&rrset, parent, zsk.KeyTag(), expTime, sk); err != nil {
+	if sig, err = r.sign(rrset, parent, zsk.KeyTag(), expTime, sk); err != nil {
 		return err
 	}
 	if _, ok := r.entries[zone]; !ok {
@@ -470,7 +470,7 @@ func (r *testResolver) updateRegRecord(domain string, signer string, tp uint16, 
 	sk := r.entries[signer][dns.TypeDNSKEY].sk[zsk.KeyTag()]
 
 	var sig dns.RRSIG
-	if sig, err = r.sign(&rrset, signer, zsk.KeyTag(), expTime, sk); err != nil {
+	if sig, err = r.sign(rrset, signer, zsk.KeyTag(), expTime, sk); err != nil {
 		return err
 	}
 
@@ -490,12 +490,12 @@ func (r *testResolver) queryDSRRSet(domain string) (dss []dns.DS, rrSig []dns.RR
 	if err != nil {
 		return
 	}
-	for _, r := range *rrs {
+	for _, r := range rrs {
 		switch t := r.(type) {
 		case *dns.DS:
 			dss = append(dss, *t)
 		}
 	}
-	rrSig = append(rrSig, (*rrsigs)[0])
+	rrSig = append(rrSig, rrsigs[0])
 	return
 }

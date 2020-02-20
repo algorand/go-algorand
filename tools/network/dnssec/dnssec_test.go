@@ -32,12 +32,14 @@ func TestResolverCreation(t *testing.T) {
 	r := MakeDnssecResolver(nil, time.Second)
 	a.NotEmpty(r.resolver.serverList())
 	a.Equal("1.1.1.1:53", r.resolver.serverList()[0])
-	a.Equal(1, len(r.resolver.serverList()))
+	a.Equal("8.8.8.8:53", r.resolver.serverList()[1])
+	a.Equal(2, len(r.resolver.serverList()))
 
 	r = MakeDnssecResolver([]string{}, time.Second)
 	a.NotEmpty(r.resolver.serverList())
 	a.Equal("1.1.1.1:53", r.resolver.serverList()[0])
-	a.Equal(1, len(r.resolver.serverList()))
+	a.Equal("8.8.8.8:53", r.resolver.serverList()[1])
+	a.Equal(2, len(r.resolver.serverList()))
 
 	r = MakeDnssecResolver([]string{"8.8.8.8"}, time.Second)
 	a.NotEmpty(r.resolver.serverList())
@@ -181,13 +183,15 @@ func TestTrustedZone(t *testing.T) {
 		rrSig: rrSigRoot,
 	}
 
+	tt, _ = time.Parse(time.RFC3339, "2020-02-12T00:00:00Z")
+
 	rrsDS, rrsigsDS, _ := r.queryRRSet(context.Background(), "com.", dns.TypeDS)
-	cacheOutdated, err := tzRoot.verifyDS(rrsDS, rrsigsDS)
+	cacheOutdated, err := tzRoot.verifyDS(rrsDS, rrsigsDS, tt)
 	a.NoError(err)
 	a.False(cacheOutdated)
 
 	tzRoot.zsk = make(map[uint16]dns.DNSKEY)
-	cacheOutdated, err = tzRoot.verifyDS(rrsDS, rrsigsDS)
+	cacheOutdated, err = tzRoot.verifyDS(rrsDS, rrsigsDS, tt)
 	a.NoError(err)
 	a.True(cacheOutdated)
 
@@ -196,20 +200,22 @@ func TestTrustedZone(t *testing.T) {
 	zk = zsks[0]
 	zk.PublicKey = ksks[0].PublicKey
 	tzRoot.zsk[zsks[0].KeyTag()] = zk
-	cacheOutdated, err = tzRoot.verifyDS(rrsDS, rrsigsDS)
+	cacheOutdated, err = tzRoot.verifyDS(rrsDS, rrsigsDS, tt)
 	a.Error(err)
 	a.False(cacheOutdated)
 }
 
 func TestMakeTrustedZone(t *testing.T) {
 	a := require.New(t)
+
+	tt, _ := time.Parse(time.RFC3339, "2020-02-12T00:00:00Z")
 	r := makeTestResolver()
-	tzRoot, cacheOutdated, err := makeTrustedZone(context.Background(), ".", nil, r)
+	tzRoot, cacheOutdated, err := makeTrustedZone(context.Background(), ".", nil, r, tt)
 	a.NoError(err)
 	a.False(cacheOutdated)
 	a.NotEmpty(tzRoot)
 
-	tzCom, cacheOutdated, err := makeTrustedZone(context.Background(), "com.", tzRoot, r)
+	tzCom, cacheOutdated, err := makeTrustedZone(context.Background(), "com.", tzRoot, r, tt)
 	a.NoError(err)
 	a.False(cacheOutdated)
 	a.NotEmpty(tzCom)
@@ -217,7 +223,7 @@ func TestMakeTrustedZone(t *testing.T) {
 	// remove ZSK from root and expect cache outdated error (newer key in com. than in cached root)
 	backup := tzRoot.zsk
 	tzRoot.zsk = make(map[uint16]dns.DNSKEY)
-	tzCom, cacheOutdated, err = makeTrustedZone(context.Background(), "com.", tzRoot, r)
+	tzCom, cacheOutdated, err = makeTrustedZone(context.Background(), "com.", tzRoot, r, tt)
 	a.NoError(err)
 	a.True(cacheOutdated)
 	a.Empty(tzCom)
@@ -226,7 +232,7 @@ func TestMakeTrustedZone(t *testing.T) {
 	tzRoot.zsk = backup
 	backup = tzRoot.ksk
 	tzRoot.ksk = make(map[uint16]dns.DNSKEY)
-	tzCom, cacheOutdated, err = makeTrustedZone(context.Background(), "com.", tzRoot, r)
+	tzCom, cacheOutdated, err = makeTrustedZone(context.Background(), "com.", tzRoot, r, tt)
 	a.NoError(err)
 	a.False(cacheOutdated)
 	a.NotEmpty(tzCom)
@@ -242,7 +248,7 @@ func TestMakeTrustedZone(t *testing.T) {
 		break
 	}
 	tzRoot.zsk[zk.KeyTag()] = ks
-	tzCom, cacheOutdated, err = makeTrustedZone(context.Background(), "com.", tzRoot, r)
+	tzCom, cacheOutdated, err = makeTrustedZone(context.Background(), "com.", tzRoot, r, tt)
 	a.Error(err)
 	a.Contains(err.Error(), "DS signature verification failed")
 	a.False(cacheOutdated)
@@ -251,7 +257,7 @@ func TestMakeTrustedZone(t *testing.T) {
 	tzRoot.zsk = backup
 
 	// test non-existing zone
-	tzOrg, cacheOutdated, err := makeTrustedZone(context.Background(), "ttt.", tzRoot, r)
+	tzOrg, cacheOutdated, err := makeTrustedZone(context.Background(), "ttt.", tzRoot, r, tt)
 	a.Error(err)
 	a.False(cacheOutdated)
 	a.Empty(tzOrg)
@@ -267,7 +273,7 @@ func TestMakeTrustedZone(t *testing.T) {
 	err = re.updateDNSKeyRecord(".", rootZSK, rootZSKsk, time.Time{})
 	a.NoError(err)
 
-	tzRoot, cacheOutdated, err = makeTrustedZone(context.Background(), ".", nil, re)
+	tzRoot, cacheOutdated, err = makeTrustedZone(context.Background(), ".", nil, re, tt)
 	a.Error(err)
 	a.Contains(err.Error(), "EOF")
 	a.False(cacheOutdated)
@@ -283,7 +289,7 @@ func TestMakeTrustedZone(t *testing.T) {
 	err = re.updateDNSKeyRecord("test.", testZSK, testZSKsk, time.Time{})
 	a.NoError(err)
 
-	tzTest, cacheOutdated, err := makeTrustedZone(context.Background(), "test.", nil, re)
+	tzTest, cacheOutdated, err := makeTrustedZone(context.Background(), "test.", nil, re, tt)
 	a.Error(err)
 	a.Contains(err.Error(), "test. not found")
 	a.False(cacheOutdated)
@@ -305,7 +311,7 @@ func TestVerifyRRSig(t *testing.T) {
 	kskRoot := make(map[uint16]dns.DNSKEY)
 	kskRoot[ksks[0].KeyTag()] = ksks[0]
 
-	verified := verifyRRSig(rrs, rrsigs, tt, &kskRoot)
+	verified := verifyRRSig(rrs, rrsigs, tt, kskRoot)
 	a.Greater(len(verified), 0)
 
 	// check com. DNSKEY RRSIG
@@ -316,16 +322,16 @@ func TestVerifyRRSig(t *testing.T) {
 	kskCom := make(map[uint16]dns.DNSKEY)
 	kskCom[ksks[0].KeyTag()] = ksks[0]
 
-	verified = verifyRRSig(rrs, rrsigs, tt, &kskCom)
+	verified = verifyRRSig(rrs, rrsigs, tt, kskCom)
 	a.Greater(len(verified), 0)
 
 	// check com. DS RRSIG using . ZSK
 	rrsDS, rrsigsDS, _ := r.queryRRSet(context.Background(), "com.", dns.TypeDS)
-	verified = verifyRRSig(rrsDS, rrsigsDS, tt, &zskRoot)
+	verified = verifyRRSig(rrsDS, rrsigsDS, tt, zskRoot)
 	a.Greater(len(verified), 0)
 
 	// check failure
-	verified = verifyRRSig(rrs, rrsigsDS, tt, &zskRoot)
+	verified = verifyRRSig(rrs, rrsigsDS, tt, zskRoot)
 	a.Equal(0, len(verified))
 
 }
@@ -341,13 +347,13 @@ func TestVerifyKSKDigest(t *testing.T) {
 	ksk := make(map[uint16]dns.DNSKEY)
 	ksk[ksks[0].KeyTag()] = ksks[0]
 
-	matchedDS, verifiedKSK := verifyKSKDigest(&dss, &ksk)
+	matchedDS, verifiedKSK := verifyKSKDigest(dss, ksk)
 	a.Equal(1, len(verifiedKSK))
 	a.Equal(1, len(matchedDS))
 
 	// add a random key and ensure matches
 	ksk[zsks[0].KeyTag()] = zsks[0]
-	matchedDS, verifiedKSK = verifyKSKDigest(&dss, &ksk)
+	matchedDS, verifiedKSK = verifyKSKDigest(dss, ksk)
 	a.Equal(1, len(verifiedKSK))
 	a.Equal(1, len(matchedDS))
 
@@ -356,13 +362,13 @@ func TestVerifyKSKDigest(t *testing.T) {
 	a.NoError(err)
 	dss = append(dss, dss2...)
 
-	matchedDS, verifiedKSK = verifyKSKDigest(&dss, &ksk)
+	matchedDS, verifiedKSK = verifyKSKDigest(dss, ksk)
 	a.Equal(1, len(verifiedKSK))
 	a.Equal(1, len(matchedDS))
 
 	// check failure
 	dss = dss2
-	matchedDS, verifiedKSK = verifyKSKDigest(&dss, &ksk)
+	matchedDS, verifiedKSK = verifyKSKDigest(dss, ksk)
 	a.Equal(0, len(verifiedKSK))
 	a.Equal(0, len(matchedDS))
 }
@@ -693,9 +699,9 @@ func TestAuthenticate(t *testing.T) {
 	// check signerName validation
 	rrset, rrsig, err := r.queryRRSet(context.Background(), ".", dns.TypeDNSKEY)
 	a.NoError(err)
-	sig := (*rrsig)[0]
+	sig := rrsig[0]
 	sig.SignerName = "test"
-	*rrsig = append(*rrsig, sig)
+	rrsig = append(rrsig, sig)
 	tch := makeTrustChain(r)
 	err = tch.authenticate(context.Background(), rrset, rrsig)
 	a.Error(err)
@@ -725,7 +731,7 @@ func TestAuthenticate(t *testing.T) {
 
 	err = tch.authenticate(context.Background(), rrset, nil)
 	a.Error(err)
-	err = tch.authenticate(context.Background(), rrset, &[]dns.RRSIG{})
+	err = tch.authenticate(context.Background(), rrset, []dns.RRSIG{})
 	a.Error(err)
 }
 
@@ -757,7 +763,7 @@ func TestLookup(t *testing.T) {
 	dnssec := Resolver{
 		resolver:   r,
 		trustChain: makeTrustChain(r),
-		maxHops:    maxHops,
+		maxHops:    defaultMaxHops,
 	}
 
 	var err error
@@ -790,7 +796,7 @@ func TestLookup(t *testing.T) {
 	// create one more signature for www.test. but do not store the key
 	// ensure that one signature and the matched key found and validated
 	rrset := r.entries["www.test."][dns.TypeA]
-	sig, err := r.sign(&rrset.rr, "test.", testZSK2.KeyTag(), time.Time{}, testZSK2sk)
+	sig, err := r.sign(rrset.rr, "test.", testZSK2.KeyTag(), time.Time{}, testZSK2sk)
 	old := rrset.sig
 	rrset.sig = []dns.RRSIG{sig}
 	rrset.sig = append(rrset.sig, old...)
@@ -900,7 +906,7 @@ func TestLookup(t *testing.T) {
 	err = r.updateRegRecord("follower2.test.", "test.", dns.TypeCNAME, []dns.RR{&cname3}, time.Time{})
 	a.NoError(err)
 
-	dnssec.maxHops = 10
+	dnssec.maxHops = defaultMaxHops
 	addrs, err = dnssec.LookupIPAddr(context.Background(), "main.test.")
 	a.Error(err)
 	a.Contains(err.Error(), "loop detected: main.test. already seen")
@@ -928,7 +934,7 @@ func TestLookup(t *testing.T) {
 	dnssec = Resolver{
 		resolver:   r,
 		trustChain: makeTrustChain(r),
-		maxHops:    maxHops,
+		maxHops:    defaultMaxHops,
 	}
 	addrs, err = dnssec.LookupIPAddr(context.Background(), "www.test.")
 	a.Error(err)

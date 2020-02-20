@@ -27,7 +27,7 @@ import (
 )
 
 type trustChain struct {
-	resolver     resolverIf
+	resolver     netResolverIf
 	trustedZones map[string]*trustedZone
 	mu           deadlock.RWMutex
 }
@@ -40,7 +40,7 @@ type trustedZone struct {
 	dss   []dns.DS              // DS or root anchor authenticating this zone in DS format
 }
 
-func makeTrustChain(r resolverIf) *trustChain {
+func makeTrustChain(r netResolverIf) *trustChain {
 	return &trustChain{
 		resolver:     r,
 		trustedZones: make(map[string]*trustedZone),
@@ -49,14 +49,14 @@ func makeTrustChain(r resolverIf) *trustChain {
 
 // verifyRRSig takes RRSET, array of RRSIG, time and ZSKs in form of map
 // and returns a map of matched signatures by keytag
-func verifyRRSig(rrSet *[]dns.RR, rrSig *[]dns.RRSIG, t time.Time, keys *map[uint16]dns.DNSKEY) map[uint16]dns.RRSIG {
+func verifyRRSig(rrSet []dns.RR, rrSig []dns.RRSIG, t time.Time, keys map[uint16]dns.DNSKEY) map[uint16]dns.RRSIG {
 	verifiedSig := make(map[uint16]dns.RRSIG)
-	for _, sig := range *rrSig {
+	for _, sig := range rrSig {
 		if !sig.ValidityPeriod(t) {
 			continue
 		}
-		ksk := (*keys)[sig.KeyTag]
-		if err := sig.Verify(&ksk, *rrSet); err == nil {
+		ksk := keys[sig.KeyTag]
+		if err := sig.Verify(&ksk, rrSet); err == nil {
 			verifiedSig[sig.KeyTag] = sig
 		}
 	}
@@ -65,12 +65,12 @@ func verifyRRSig(rrSet *[]dns.RR, rrSig *[]dns.RRSIG, t time.Time, keys *map[uin
 
 // verifyKSKDigest takes array of DS and KSKs in form of map
 // and returns an array of matched DS records and verified keys
-func verifyKSKDigest(dss *[]dns.DS, ksk *map[uint16]dns.DNSKEY) ([]dns.DS, map[uint16]dns.DNSKEY) {
+func verifyKSKDigest(dss []dns.DS, ksk map[uint16]dns.DNSKEY) ([]dns.DS, map[uint16]dns.DNSKEY) {
 	verifiedKSK := make(map[uint16]dns.DNSKEY)
-	matchedDS := make([]dns.DS, 0, len(*dss))
+	matchedDS := make([]dns.DS, 0, len(dss))
 
-	for _, ds := range *dss {
-		if key, ok := (*ksk)[ds.KeyTag]; ok {
+	for _, ds := range dss {
+		if key, ok := ksk[ds.KeyTag]; ok {
 			keyDigest := strings.ToLower(key.ToDS(ds.DigestType).Digest)
 			if keyDigest == strings.ToLower(ds.Digest) {
 				verifiedKSK[ds.KeyTag] = key
@@ -102,11 +102,11 @@ func (tz *trustedZone) checkKeys(keytags []uint16) bool {
 
 // verifyDS checks DS RRSIG using this zone ZSK
 // cacheOutdated indicates no ZSK in this zone to verify RRSIG provided
-func (tz *trustedZone) verifyDS(rrSet *[]dns.RR, rrSig *[]dns.RRSIG) (cacheOutdated bool, err error) {
+func (tz *trustedZone) verifyDS(rrSet []dns.RR, rrSig []dns.RRSIG, t time.Time) (cacheOutdated bool, err error) {
 	// parent zone's DNSKEY RRSET is cached but DS is just came from the network
 	// and might be signed by newer key
-	kt := make([]uint16, 0, len(*rrSig))
-	for _, sig := range *rrSig {
+	kt := make([]uint16, 0, len(rrSig))
+	for _, sig := range rrSig {
 		kt = append(kt, sig.KeyTag)
 	}
 	// so if no such keys in a cache return cache outdated that must force this zone update
@@ -116,9 +116,9 @@ func (tz *trustedZone) verifyDS(rrSet *[]dns.RR, rrSig *[]dns.RRSIG) (cacheOutda
 	}
 
 	// at least one signature must be valid
-	verifiedSig := verifyRRSig(rrSet, rrSig, time.Now(), &tz.zsk)
+	verifiedSig := verifyRRSig(rrSet, rrSig, t, tz.zsk)
 	if len(verifiedSig) == 0 {
-		requestedZone := (*rrSig)[0].Hdr.Name
+		requestedZone := (rrSig)[0].Hdr.Name
 		err = fmt.Errorf("DS signature verification failed for %s", requestedZone)
 	}
 
@@ -139,7 +139,7 @@ func (tz *trustedZone) verifyDS(rrSet *[]dns.RR, rrSig *[]dns.RRSIG) (cacheOutda
 // Note2: the function requests both DNSKEY (from child) and DS (from parent)
 // and this allows to tolerate KSK rotation: if child zone refreshed KSK
 // then its digest is propadated to parent DS and used to sign child's DNSKEY
-func makeTrustedZone(ctx context.Context, fqZoneName string, pz *trustedZone, r resolverIf) (tz *trustedZone, cacheOutdated bool, err error) {
+func makeTrustedZone(ctx context.Context, fqZoneName string, pz *trustedZone, r netResolverIf, t time.Time) (tz *trustedZone, cacheOutdated bool, err error) {
 	rrSet, rrSig, err := r.queryRRSet(ctx, fqZoneName, dns.TypeDNSKEY)
 	if err != nil {
 		return nil, false, err
@@ -147,7 +147,7 @@ func makeTrustedZone(ctx context.Context, fqZoneName string, pz *trustedZone, r 
 
 	zsk := make(map[uint16]dns.DNSKEY)
 	ksk := make(map[uint16]dns.DNSKEY)
-	for _, rr := range *rrSet {
+	for _, rr := range rrSet {
 		switch obj := rr.(type) {
 		case *dns.DNSKEY:
 			if obj.Flags&dns.ZONE != 0 { // 256
@@ -169,19 +169,19 @@ func makeTrustedZone(ctx context.Context, fqZoneName string, pz *trustedZone, r 
 			return
 		}
 	} else {
-		var rrSet *[]dns.RR
-		var rrSig *[]dns.RRSIG
+		var rrSet []dns.RR
+		var rrSig []dns.RRSIG
 		rrSet, rrSig, err = r.queryRRSet(ctx, fqZoneName, dns.TypeDS) // stored at parent of fqZoneName
 		if err != nil {
 			return
 		}
 		// since a new zone is created that DS is always fetched from the network
 		// but parent zone is cached and cache outdated error possbile
-		cacheOutdated, err = pz.verifyDS(rrSet, rrSig)
+		cacheOutdated, err = pz.verifyDS(rrSet, rrSig, t)
 		if err != nil || cacheOutdated {
 			return
 		}
-		for _, rr := range *rrSet {
+		for _, rr := range rrSet {
 			switch obj := rr.(type) {
 			case *dns.DS:
 				dss = append(dss, *obj)
@@ -190,7 +190,7 @@ func makeTrustedZone(ctx context.Context, fqZoneName string, pz *trustedZone, r 
 	}
 
 	// find DNSKEY matched to RS retrieved from parent zone or from a trust anchor
-	matchedDS, verifiedKSK := verifyKSKDigest(&dss, &ksk)
+	matchedDS, verifiedKSK := verifyKSKDigest(dss, ksk)
 	if len(verifiedKSK) == 0 {
 		err = fmt.Errorf("failed to verify %s KSK against digest in parent DS", fqZoneName)
 		return
@@ -198,7 +198,7 @@ func makeTrustedZone(ctx context.Context, fqZoneName string, pz *trustedZone, r 
 
 	// validate DNSKEY RRSIG using matched (verified) keys
 	// DNSKEY RRSET is self-signed so makes sense to check this signature at the very end with authenticated via parent DS
-	verifiedSig := verifyRRSig(rrSet, rrSig, time.Now(), &verifiedKSK)
+	verifiedSig := verifyRRSig(rrSet, rrSig, t, verifiedKSK)
 	if len(verifiedSig) == 0 {
 		err = fmt.Errorf("no KSK to verify DNSKEY RRSet of %s", fqZoneName)
 		return
@@ -265,7 +265,7 @@ func (t *trustChain) ensure(ctx context.Context, fqZoneName string, keytags []ui
 			if zoneIdx > 0 {
 				parentZone = t.trustedZones[zones[zoneIdx-1]]
 			}
-			if tz, cacheOutdated, err = makeTrustedZone(ctx, zone, parentZone, t.resolver); err != nil {
+			if tz, cacheOutdated, err = makeTrustedZone(ctx, zone, parentZone, t.resolver, time.Now()); err != nil {
 				return err
 			}
 			if cacheOutdated {
@@ -319,26 +319,26 @@ func (t *trustChain) getDNSKey(fqZoneName string, keyTag uint16) (key *dns.DNSKE
 	return &k, found
 }
 
-func (t *trustChain) authenticate(ctx context.Context, rrSet *[]dns.RR, rrSig *[]dns.RRSIG) (err error) {
+func (t *trustChain) authenticate(ctx context.Context, rrSet []dns.RR, rrSig []dns.RRSIG) (err error) {
 	// response authentication includes the following steps
 	// 1. Ensure the trust chain is valid. This requires keys' signature check back to the root if not cached
 	// 2. Check the signature using authenticated DNSKEY
-	if rrSig == nil || len(*rrSig) == 0 {
+	if len(rrSig) == 0 {
 		return fmt.Errorf("empty RRSIG")
 	}
 
-	signer := (*rrSig)[0].SignerName
+	signer := rrSig[0].SignerName
 	// sanity check: ensure all RRSIG contain the same signer, it must be the parent zone
-	for i := 1; i < len(*rrSig); i++ {
-		if signer != (*rrSig)[i].SignerName {
-			return fmt.Errorf("signer name mismatch: %s vs %s", signer, (*rrSig)[i].SignerName)
+	for i := 1; i < len(rrSig); i++ {
+		if signer != rrSig[i].SignerName {
+			return fmt.Errorf("signer name mismatch: %s vs %s", signer, rrSig[i].SignerName)
 		}
 	}
 
 	fqdn := dns.Fqdn(signer)
 
-	keytags := make([]uint16, 0, len(*rrSig))
-	for _, sig := range *rrSig {
+	keytags := make([]uint16, 0, len(rrSig))
+	for _, sig := range rrSig {
 		keytags = append(keytags, sig.KeyTag)
 	}
 
@@ -349,14 +349,14 @@ func (t *trustChain) authenticate(ctx context.Context, rrSet *[]dns.RR, rrSig *[
 		return err
 	}
 
-	for _, sig := range *rrSig {
+	for _, sig := range rrSig {
 		// get already authenticated ZSK
 		key, ok := t.getDNSKey(fqdn, sig.KeyTag)
 		if !ok {
 			// skip, trustChain.ensure checks that at least one keytag is available
 			continue
 		}
-		if err = sig.Verify(key, *rrSet); err == nil {
+		if err = sig.Verify(key, rrSet); err == nil {
 			return nil
 		}
 	}
