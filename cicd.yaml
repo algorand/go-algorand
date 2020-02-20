@@ -1,7 +1,47 @@
 stages:
+  build-linux-amd64:
+  - task: shell.docker.Ensure
+    image: algorand/go-algorand-linux
+    arch: amd64
+    dockerFilePath: docker/build/cicd.Dockerfile
+    configFilePath: scripts/configure_dev-deps.sh
+  - task: docker.Make
+    image: algorand/go-algorand-linux
+    configFilePath: scripts/configure_dev-deps.sh
+    workDir: /go/src/github.com/algorand/go-algorand
+    arch: amd64
+    target: fulltest
+  - task: docker.Make
+    image: algorand/go-algorand-linux
+    configFilePath: scripts/configure_dev-deps.sh
+    workDir: /go/src/github.com/algorand/go-algorand
+    arch: amd64
+    target: ci-build
+  build-linux-arm64:
+  - task: shell.docker.Ensure
+    image: algorand/go-algorand-linux
+    arch: arm64v8
+    dockerFilePath: docker/build/cicd.Dockerfile
+    configFilePath: scripts/configure_dev-deps.sh
+  - task: docker.Make
+    configFilePath: scripts/configure_dev-deps.sh
+    image: algorand/go-algorand-linux
+    workDir: /go/src/github.com/algorand/go-algorand
+    arch: arm64v8
+    target: fulltest
+  - task: docker.Make
+    configFilePath: scripts/configure_dev-deps.sh
+    image: algorand/go-algorand-linux
+    workDir: /go/src/github.com/algorand/go-algorand
+    arch: arm64v8
+    target: ci-build
+  build-local:
+  - task: shell.Make
+    target: ci-deps fulltest
+  - task: shell.Make
+    target: ci-build
   release:
   - task: release.notes.GenerateReleaseNotes
     releaseVersion: ${GO_ALGORAND_RELEASE_VERSION}
     githubPatToken: ${GITHUB_PAT_TOKEN}
     githubRepoFullName: algorand/go-algorand
-
