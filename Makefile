@@ -6,6 +6,7 @@ export GO111MODULE
 UNAME		:= $(shell uname)
 SRCPATH     := $(shell pwd)
 ARCH        := $(shell ./scripts/archtype.sh)
+OS_TYPE     := $(shell ./scripts/ostype.sh)
 
 # If build number already set, use it - to ensure same build number across multiple platforms being built
 BUILDNUMBER      ?= $(shell ./scripts/compute_build_number.sh)
@@ -89,10 +90,12 @@ msgp: $(patsubst %,%/msgp_gen.go,$(MSGP_GENERATE))
 ALWAYS:
 
 # build our fork of libsodium, placing artifacts into crypto/lib/ and crypto/include/
-crypto/lib/libsodium.a:
-	cd crypto/libsodium-fork && \
-		./autogen.sh && \
-		./configure --disable-shared --prefix="$(SRCPATH)/crypto/" && \
+crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a:
+	mkdir -p crypto/copies/$(OS_TYPE)/$(ARCH)
+	cp -R crypto/libsodium-fork crypto/copies/$(OS_TYPE)/$(ARCH)/libsodium-fork
+	cd crypto/copies/$(OS_TYPE)/$(ARCH)/libsodium-fork && \
+		./autogen.sh --prefix $(SRCPATH)/crypto/libs/$(OS_TYPE)/$(ARCH) && \
+		./configure --disable-shared --prefix="$(SRCPATH)/crypto/libs/$(OS_TYPE)/$(ARCH)" && \
 		$(MAKE) && \
 		$(MAKE) install
 
@@ -108,7 +111,7 @@ ALGOD_API_FILES := $(shell find daemon/algod/api/server/common daemon/algod/api/
 ALGOD_API_SWAGGER_INJECT := daemon/algod/api/server/lib/bundledSpecInject.go
 
 # Note that swagger.json requires the go-swagger dep.
-$(ALGOD_API_SWAGGER_SPEC): $(ALGOD_API_FILES) crypto/lib/libsodium.a
+$(ALGOD_API_SWAGGER_SPEC): $(ALGOD_API_FILES) crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a
 	cd daemon/algod/api && \
 		PATH=$(GOPATH1)/bin:$$PATH \
 		go generate ./...
@@ -122,7 +125,7 @@ KMD_API_FILES := $(shell find daemon/kmd/api/ -type f | grep -v $(KMD_API_SWAGGE
 KMD_API_SWAGGER_WRAPPER := kmdSwaggerWrappers.go
 KMD_API_SWAGGER_INJECT := daemon/kmd/lib/kmdapi/bundledSpecInject.go
 
-$(KMD_API_SWAGGER_SPEC): $(KMD_API_FILES) crypto/lib/libsodium.a
+$(KMD_API_SWAGGER_SPEC): $(KMD_API_FILES) crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a
 	cd daemon/kmd/lib/kmdapi && \
 		python genSwaggerWrappers.py $(KMD_API_SWAGGER_WRAPPER)
 	cd daemon/kmd && \
@@ -147,7 +150,7 @@ $(KMD_API_SWAGGER_INJECT): $(KMD_API_SWAGGER_SPEC) $(KMD_API_SWAGGER_SPEC).valid
 
 build: buildsrc gen
 
-buildsrc: crypto/lib/libsodium.a node_exporter NONGO_BIN deps $(ALGOD_API_SWAGGER_INJECT) $(KMD_API_SWAGGER_INJECT)
+buildsrc: crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a node_exporter NONGO_BIN deps $(ALGOD_API_SWAGGER_INJECT) $(KMD_API_SWAGGER_INJECT)
 	go install $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
 
 SOURCES_RACE := github.com/algorand/go-algorand/cmd/kmd
@@ -209,6 +212,8 @@ clean:
 	cd crypto/libsodium-fork && \
 		test ! -e Makefile || make clean
 	rm -rf crypto/lib
+	rm -rf crypto/libs
+	rm -rf crypto/copies
 
 # clean without crypto
 cleango:
@@ -265,3 +270,13 @@ install: build
 	scripts/dev_install.sh -p $(GOPATH1)/bin
 
 .PHONY: default fmt vet lint check_license check_shell sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN
+
+### TARGETS FOR CICD PROCESS
+
+ci-deps:
+	scripts/configure_dev-deps.sh && \
+	scripts/check_deps.sh
+
+ci-build: buildsrc gen
+	mkdir -p $(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH) && \
+	PKG_ROOT=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH) NO_BUILD=True VARIATIONS=$(OS_TYPE)/$(ARCH) scripts/build_packages.sh $(OS_TYPE)/$(ARCH)
