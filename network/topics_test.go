@@ -17,6 +17,8 @@
 package network
 
 import (
+	"encoding/binary"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -62,4 +64,60 @@ func TestTopics(t *testing.T) {
 
 	require.Equal(t, topics[1].key, unMarshalled[1].key)
 	require.Equal(t, topics[1].data, unMarshalled[1].data)
+}
+
+// TestCurruptedTopics checks the errors
+// Makes sure UnmarshallTopics will not attempt to read beyond the buffer limits
+func TestCurruptedTopics(t *testing.T) {
+
+	var buffer []byte
+
+	// empty buffer
+	buffer = make([]byte, 0)
+	_, err := UnmarshallTopics(buffer)
+	require.Equal(t, err, fmt.Errorf("UnmarshallTopics: could not read the number of topics"))
+
+	// more than 32 topics
+	buffer = make([]byte, binary.MaxVarintLen32)
+	binary.PutUvarint(buffer, 33)
+	_, err = UnmarshallTopics(buffer)
+	require.Equal(t, err, fmt.Errorf("UnmarshallTopics: number of topics %d is greater than 32", 33))
+
+	// no room for the key length
+	buffer = make([]byte, 1)
+	binary.PutUvarint(buffer, 1)
+	_, err = UnmarshallTopics(buffer)
+	require.Equal(t, err, fmt.Errorf("UnmarshallTopics: could not read the key length"))
+
+	// key length > buffer size
+	buffer = make([]byte, 2)
+	binary.PutUvarint(buffer, 1)
+	binary.PutUvarint(buffer[1:], 5)
+	_, err = UnmarshallTopics(buffer)
+	require.Equal(t, err, fmt.Errorf("UnmarshallTopics: could not read the key"))
+
+	// key length > buffer size 64
+	buffer = make([]byte, 100)
+	binary.PutUvarint(buffer, 1)
+	binary.PutUvarint(buffer[1:], 65)
+	_, err = UnmarshallTopics(buffer)
+	require.Equal(t, err, fmt.Errorf("UnmarshallTopics: could not read the key"))
+
+	// no room for the data length
+	buffer = make([]byte, 3)
+	binary.PutUvarint(buffer, 1)     // 1 topic
+	binary.PutUvarint(buffer[1:], 1) // 1 char key
+	_, err = UnmarshallTopics(buffer)
+	require.Equal(t, err, fmt.Errorf("UnmarshallTopics: could not read the data length"))
+
+	// datalen > buffer size
+	buffer = make([]byte, 5)
+	binary.PutUvarint(buffer, 1)     // 1 topic
+	binary.PutUvarint(buffer[1:], 1) // 1 char key
+	// buffer size is 5. Room for 1 byte data.
+	// [/*topics:*/1, /*key len:*/ 1, /*key:*/ 0, /*data len:*/ 2, /*1 byte space for data*/ 0]
+	// 2 byte data size should error
+	binary.PutUvarint(buffer[3:], 2)
+	_, err = UnmarshallTopics(buffer)
+	require.Equal(t, err, fmt.Errorf("UnmarshallTopics: data larger than buffer size"))
 }

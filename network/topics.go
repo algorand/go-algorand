@@ -1,4 +1,4 @@
-// Copyright (C) 2020 Algorand, Inc.
+// Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package network
 import (
 	"encoding/binary"
 	"fmt"
+
 	"github.com/algorand/go-algorand/crypto"
 )
 
@@ -29,6 +30,8 @@ type Topic struct {
 }
 
 // Topics is an array of type Topic
+// The maximum number of topics allowed is 32
+// Each topic key can be 64 characters long and cannot be size 0
 type Topics []Topic
 
 // MarshallTopics serializes the topics into a byte array
@@ -71,6 +74,9 @@ func UnmarshallTopics(buffer []byte) (ts Topics, err error) {
 	if nr <= 0 {
 		return nil, fmt.Errorf("UnmarshallTopics: could not read the number of topics")
 	}
+	if numTopics > 32 { // numTopics is uint64
+		return nil, fmt.Errorf("UnmarshallTopics: number of topics %d is greater than 32", numTopics)
+	}
 	idx += nr
 	topics := make([]Topic, numTopics)
 
@@ -83,26 +89,26 @@ func UnmarshallTopics(buffer []byte) (ts Topics, err error) {
 		idx += nr
 
 		// read the key
-		if len(buffer) < idx+int(strlen) {
+		if len(buffer) < idx+int(strlen) || strlen > 64 || strlen == 0 {
 			return nil, fmt.Errorf("UnmarshallTopics: could not read the key")
 		}
 		topics[x].key = string(buffer[idx : idx+int(strlen)])
 		idx += int(strlen)
 
 		// read the data length
-		strlen, nr = binary.Uvarint(buffer[idx:])
+		dataLen, nr := binary.Uvarint(buffer[idx:])
 		if nr <= 0 {
 			return nil, fmt.Errorf("UnmarshallTopics: could not read the data length")
 		}
 		idx += nr
 
 		// read the data
-		if len(buffer) < idx+int(strlen) {
-			return nil, fmt.Errorf("UnmarshallTopics: could not read the key")
+		if len(buffer) < idx+int(dataLen) {
+			return nil, fmt.Errorf("UnmarshallTopics: data larger than buffer size")
 		}
-		topics[x].data = make([]byte, strlen)
-		copy(topics[x].data, buffer[idx:idx+int(strlen)])
-		idx += int(strlen)
+		topics[x].data = make([]byte, dataLen)
+		copy(topics[x].data, buffer[idx:idx+int(dataLen)])
+		idx += int(dataLen)
 	}
 	return topics, nil
 }

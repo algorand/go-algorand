@@ -17,6 +17,7 @@
 package network
 
 import (
+	"encoding/binary"
 	"testing"
 	"time"
 
@@ -36,4 +37,30 @@ func TestCheckSlowWritingPeer(t *testing.T) {
 	peer.intermittentOutgoingMessageEnqueueTime = now.Add(-maxMessageQueueDuration * 2).UnixNano()
 	require.Equal(t, peer.CheckSlowWritingPeer(now), true)
 
+}
+
+// TestGetNonce tests if the values are incremented correctly
+func TestGetNonce(t *testing.T) {
+	peer := wsPeer{}
+	doneChannel := make(chan bool, 1)
+	for x := 0; x < 200; x++ {
+		go func() {
+			ans := peer.getNonce()
+			val, _ := binary.Uvarint(ans)
+			if val == 200 {
+				doneChannel <- true
+			}
+		}()
+	}
+	maxWait := time.After(2 * time.Second)
+	done := false
+	select {
+	case <-doneChannel:
+		done = true
+	case <-maxWait:
+	}
+	require.Equal(t, true, done)
+	twentyOne := peer.getNonce()
+	val, _ := binary.Uvarint(twentyOne)
+	require.Equal(t, uint64(201), val)
 }

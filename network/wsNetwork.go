@@ -209,6 +209,7 @@ type OutgoingMessage struct {
 	Action  ForwardingPolicy
 	Tag     Tag
 	Payload []byte
+	Topics  Topics
 }
 
 // ForwardingPolicy is an enum indicating to whom we should send a message
@@ -253,7 +254,7 @@ type TaggedMessageHandler struct {
 // Propagate is a convenience function to save typing in the common case of a message handler telling us to propagate an incoming message
 // "return network.Propagate(msg)" instead of "return network.OutgoingMsg{network.Broadcast, msg.Tag, msg.Data}"
 func Propagate(msg IncomingMessage) OutgoingMessage {
-	return OutgoingMessage{Broadcast, msg.Tag, msg.Data}
+	return OutgoingMessage{Broadcast, msg.Tag, msg.Data, nil}
 }
 
 // GossipNetworkPath is the URL path to connect to the websocket gossip node at.
@@ -1002,8 +1003,6 @@ func (wn *WebsocketNetwork) messageHandlerThread() {
 			}
 			//wn.log.Debugf("msg handling %#v [%d]byte", msg.Tag, len(msg.Data))
 			start := time.Now()
-			// Get the hash/key of the request message
-			hash := Hash(msg.Data)
 
 			// now, send to global handlers
 			outmsg := wn.handlers.Handle(msg)
@@ -1019,7 +1018,7 @@ func (wn *WebsocketNetwork) messageHandlerThread() {
 			case Broadcast:
 				wn.Broadcast(wn.ctx, msg.Tag, msg.Data, false, msg.Sender)
 			case Respond:
-				msg.Sender.(*wsPeer).Respond(wn.ctx, outmsg.Tag, hash, outmsg.Payload)
+				msg.Sender.(*wsPeer).Respond(wn.ctx, msg, outmsg)
 			default:
 			}
 		case <-inactivityCheckTicker.C:

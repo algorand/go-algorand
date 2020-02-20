@@ -29,7 +29,6 @@ const (
 	PingTag            Tag = "pi"
 	PingReplyTag       Tag = "pj"
 	ProposalPayloadTag Tag = "PP"
-	TopicMsgReqTag     Tag = "TQ"
 	TopicMsgRespTag    Tag = "TS"
 	TxnTag             Tag = "TX"
 	UniCatchupReqTag   Tag = "UC"

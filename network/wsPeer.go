@@ -96,7 +96,7 @@ const disconnectSlowConn disconnectReason = "SlowConnection"
 
 // Response is the structure holding the response from the server
 type Response struct {
-	Data []byte
+	Topics Topics
 }
 
 type wsPeer struct {
@@ -238,13 +238,12 @@ func (wp *wsPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag) err
 }
 
 // Respond submits the request to the server, waits for a response
-func (wp *wsPeer) Respond(ctx context.Context, tag Tag, requestHash uint64, topicsArray []byte) (e error) {
+func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, respMsg OutgoingMessage) (e error) {
 
-	// Unmarshall the topics to add the request hash and the nonce
-	topics, e := UnmarshallTopics(topicsArray)
-	if e != nil {
-		return e
-	}
+	// Get the hash/key of the request message
+	requestHash := Hash(reqMsg.Data)
+
+	topics := respMsg.Topics
 	// Add the request key
 	requestHashData := make([]byte, binary.MaxVarintLen64)
 	binary.PutUvarint(requestHashData, requestHash)
@@ -260,9 +259,12 @@ func (wp *wsPeer) Respond(ctx context.Context, tag Tag, requestHash uint64, topi
 	// Send serializedMsg
 	select {
 	case wp.sendBufferBulk <- sendMessage{
-		data:         append([]byte(tag), serializedMsg...),
+		data:         append([]byte(protocol.TopicMsgRespTag), serializedMsg...),
 		enqueued:     time.Now(),
 		peerEnqueued: time.Now()}:
+	case <-wp.closing:
+		wp.net.log.Debugf("peer closing %s", wp.conn.RemoteAddr().String())
+		return
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -390,22 +392,27 @@ func (wp *wsPeer) readLoop() {
 		if msg.Tag == protocol.TopicMsgRespTag {
 			topics, err := UnmarshallTopics(msg.Data)
 			if err != nil {
-				wp.net.log.Debugf("wsPeer readLoop: could not read the message: %s", err)
+				wp.net.log.Warnf("wsPeer readLoop: could not read the message from: %s %s", wp.conn.RemoteAddr().String(), err)
 				continue
 			}
 			requestHash, found := topics.GetValue("RequestHash")
 			if !found {
-				wp.net.log.Debugf("wsPeer readLoop: message is missing the RequestHash")
+				wp.net.log.Warnf("wsPeer readLoop: message from %s is missing the RequestHash", wp.conn.RemoteAddr().String())
 				continue
 			}
 			hashKey, _ := binary.Uvarint(requestHash)
-			found, channel := wp.getResponseChannel(hashKey)
+			channel, found := wp.getResponseChannel(hashKey)
 			if !found {
-				wp.net.log.Debugf("wsPeer readLoop: received a message response for a stale request")
+				wp.net.log.Warnf("wsPeer readLoop: received a message response from %s for a stale request", wp.conn.RemoteAddr().String())
 				continue
 			}
-			resp := Response{Data: msg.Data}
-			channel <- &resp
+			resp := Response{Topics: topics}
+
+			select {
+			case channel <- &resp:
+			default:
+				wp.net.log.Warnf("wsPeer readLoop: channel blocked. Could not pass the response to the requester", wp.conn.RemoteAddr().String())
+			}
 		} else {
 			select {
 			case wp.net.readBuffer <- msg:
@@ -599,7 +606,7 @@ func (wp *wsPeer) CheckSlowWritingPeer(now time.Time) bool {
 // getNonce returns the byte representation of ever increasing uint64
 // The value is stored on wsPeer
 func (wp *wsPeer) getNonce() []byte {
-	atomic.StoreUint64(&wp.nonce, wp.nonce+1)
+	atomic.AddUint64(&wp.nonce, 1)
 	buf := make([]byte, binary.MaxVarintLen64)
 	binary.PutUvarint(buf, wp.nonce)
 	return buf
@@ -619,10 +626,8 @@ func (wp *wsPeer) Request(ctx context.Context, tag Tag, topics Topics) (resp *Re
 	hash := Hash(serializedMsg)
 
 	// Make a response channel to wait on the server response
-	wp.makeResponceChannel(hash)
-	defer func() {
-		wp.removeResponseChannel(hash)
-	}()
+	wp.makeResponseChannel(hash)
+	defer wp.removeResponseChannel(hash)
 
 	// Send serializedMsg
 	select {
@@ -630,6 +635,9 @@ func (wp *wsPeer) Request(ctx context.Context, tag Tag, topics Topics) (resp *Re
 		data:         append([]byte(tag), serializedMsg...),
 		enqueued:     time.Now(),
 		peerEnqueued: time.Now()}:
+	case <-wp.closing:
+		wp.net.log.Debugf("peer closing %s", wp.conn.RemoteAddr().String())
+		return
 	case <-ctx.Done():
 		return resp, ctx.Err()
 	}
@@ -638,27 +646,30 @@ func (wp *wsPeer) Request(ctx context.Context, tag Tag, topics Topics) (resp *Re
 	select {
 	case resp = <-wp.responseChannels[hash]:
 		return resp, nil
+	case <-wp.closing:
+		wp.net.log.Debugf("peer closing %s", wp.conn.RemoteAddr().String())
+		return
 	case <-ctx.Done():
 		return resp, ctx.Err()
 	}
 }
 
-func (wp *wsPeer) makeResponceChannel(key uint64) {
+func (wp *wsPeer) makeResponseChannel(key uint64) {
 	newChan := make(chan *Response, 1)
 	wp.responseChannelsMutex.Lock()
-	defer func() { wp.responseChannelsMutex.Unlock() }()
+	defer wp.responseChannelsMutex.Unlock()
 	wp.responseChannels[key] = newChan
 }
 
 func (wp *wsPeer) removeResponseChannel(key uint64) {
 	wp.responseChannelsMutex.Lock()
-	defer func() { wp.responseChannelsMutex.Unlock() }()
+	defer wp.responseChannelsMutex.Unlock()
 	delete(wp.responseChannels, key)
 }
 
-func (wp *wsPeer) getResponseChannel(key uint64) (found bool, respChan chan *Response) {
+func (wp *wsPeer) getResponseChannel(key uint64) (respChan chan *Response, found bool) {
 	wp.responseChannelsMutex.Lock()
-	defer func() { wp.responseChannelsMutex.Unlock() }()
+	defer wp.responseChannelsMutex.Unlock()
 	respChan, found = wp.responseChannels[key]
 
 	return
