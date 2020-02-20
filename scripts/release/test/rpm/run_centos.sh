@@ -9,7 +9,8 @@ echo
 date "+build_release begin TEST stage %Y%m%d_%H%M%S"
 echo
 
-sg docker "docker build -t algocentosbuild - < ${HOME}/go/src/github.com/algorand/go-algorand/scripts/release/common/centos-build.Dockerfile"
+# Run RPM build in Centos7 Docker container
+sg docker "docker build -t algocentosbuild - < ${HOME}/go/src/github.com/algorand/go-algorand/scripts/release/common/docker/centos.Dockerfile"
 
 cat <<EOF>"${HOME}"/dummyrepo/algodummy.repo
 [algodummy]
