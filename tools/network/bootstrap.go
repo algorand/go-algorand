@@ -26,7 +26,7 @@ import (
 )
 
 // ReadFromSRV is a helper to collect SRV addresses for a given name.
-func ReadFromSRV(service string, protocol string, name string, fallbackDNSResolverAddress string) (addrs []string, err error) {
+func ReadFromSRV(service string, protocol string, name string, fallbackDNSResolverAddress string, secure bool) (addrs []string, err error) {
 	log := logging.Base()
 	if name == "" {
 		log.Debug("no dns lookup due to empty name")
@@ -38,10 +38,14 @@ func ReadFromSRV(service string, protocol string, name string, fallbackDNSResolv
 	}
 
 	var records []*net.SRV
-	var dnssecError error
-	_, records, dnssecError = dnssec.LookupSRV(service, protocol, name)
-	if dnssecError != nil {
-		log.Warnf("ReadFromBootstrap: Failed to obtain SRV with DNSSEC: %s", dnssecError.Error())
+	if secure {
+		var dnssecError error
+		_, records, dnssecError = dnssec.LookupSRV(service, protocol, name)
+		if dnssecError != nil {
+			err = fmt.Errorf("ReadFromBootstrap: Failed to obtain SRV with DNSSEC: %s", dnssecError.Error())
+			return
+		}
+	} else {
 		var sysLookupErr error
 		_, records, sysLookupErr = net.LookupSRV(service, protocol, name)
 		if sysLookupErr != nil {

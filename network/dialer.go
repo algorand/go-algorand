@@ -20,24 +20,42 @@ import (
 	"context"
 	"net"
 	"time"
+
+	"github.com/algorand/go-algorand/tools/network/dnssec"
 )
+
+type netDialer interface {
+	DialContext(ctx context.Context, network, address string) (net.Conn, error)
+}
 
 // Dialer establish tcp-level connection with the destination
 type Dialer struct {
 	phonebook   *MultiPhonebook
-	innerDialer net.Dialer
+	innerDialer netDialer
+	resolver    *net.Resolver
 }
 
 // makeRateLimitingDialer creates a rate limiting dialer that would limit the connections
 // according to the entries in the phonebook.
-func makeRateLimitingDialer(phonebook *MultiPhonebook) Dialer {
+func makeRateLimitingDialer(phonebook *MultiPhonebook, resolver *dnssec.Resolver) Dialer {
+	var innerDialer netDialer = &net.Dialer{
+		Timeout:   30 * time.Second,
+		KeepAlive: 30 * time.Second,
+		DualStack: true,
+	}
+
+	// if a DNSSEC-aware resolver provided, use a wrapping dnssec.Dialer to parse addr, resolve it securely
+	// and call a regular net.Dialer
+	if resolver != nil {
+		innerDialer = &dnssec.Dialer{
+			InnerDialer: innerDialer.(*net.Dialer),
+			Resolver:    resolver,
+		}
+	}
+
 	return Dialer{
-		phonebook: phonebook,
-		innerDialer: net.Dialer{
-			Timeout:   30 * time.Second,
-			KeepAlive: 30 * time.Second,
-			DualStack: true,
-		},
+		phonebook:   phonebook,
+		innerDialer: innerDialer,
 	}
 }
 
@@ -72,7 +90,5 @@ func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.
 
 func (d *Dialer) innerDialContext(ctx context.Context, network, address string) (net.Conn, error) {
 	// this would be a good place to have the dnssec evaluated.
-	// TODO: replace d.innerDialer.Resolver with dnssec.DefaultResolver
-	// Possible alternatives: add a config option EnableDNSSEC or make a fall-back resolver
 	return d.innerDialer.DialContext(ctx, network, address)
 }
