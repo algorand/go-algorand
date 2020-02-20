@@ -12,7 +12,11 @@ pipeline {
         AWS_SECRET_ACCESS_KEY = credentials("prod-s3-aws-secret-access-key")
     }
 
-    agent any
+    agent {
+        dockerfile {
+            filename 'scripts/release/common/docker/setup.Dockerfile'
+        }
+    }
 
     stages {
         stage("create ec2 instance") {
