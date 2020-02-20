@@ -262,10 +262,12 @@ func (p *player) handleCheckpointEvent(r routerHandle, e checkpointEvent) []acti
 func (p *player) handleThresholdEvent(r routerHandle, e thresholdEvent) []action {
 	r.t.timeR().RecThreshold(e)
 
-	// Special case all cert thresholds: we must not ignore them, because they are the freshest bundle
 	var actions []action
-	if e.t() == certThreshold {
-		// e.Round = p.Round // must be true
+	switch e.t() {
+	case certThreshold:
+		// stage the value for *at least* the current round and *current* period,
+		// which is safe for all certThreshold periods
+		// for future periods, fast-forwarding below will ensure correct staging
 		if e.Period < p.Period {
 			// scribble over (r, p) so that after dispatching,
 			// block does not get dropped with -> newPeriod -> trim
@@ -284,34 +286,33 @@ func (p *player) handleThresholdEvent(r routerHandle, e thresholdEvent) []action
 		// we don't have the block! We need to ensure we will be able to receive the block.
 		// In addition, hint to the ledger to fetch by digest.
 		actions = append(actions, stageDigestAction{Certificate: Certificate(e.Bundle)})
-	}
-
-	// We might receive a next threshold event for the previous period due to fast-forwarding or a soft threshold.
-	// If we do, this is okay, but the proposalMachine contract-checker will complain.
-	// TODO test this case and update the contract-checker so it does not complain when this is benign
-	if p.Period >= e.Period+1 {
-		return actions
-	}
-
-	switch e.t() {
-	case certThreshold:
-		if p.Period != e.Period {
-			// the event is from the future.
+		if p.Period < e.Period {
 			actions = append(actions, p.enterPeriod(r, e, e.Period)...)
 		}
 		return actions
+
 	case softThreshold:
 		// note that it is ok not to stage softThresholds from previous periods; relaying the pinned block
 		// handles any edge case (w.r.t. resynchronization, at least)
-		if p.Period == e.Period {
-			ec := r.dispatch(*p, e, proposalMachine, p.Round, p.Period, 0)
-			if ec.t() == proposalCommittable && p.Step <= cert {
-				actions = append(actions, p.issueCertVote(r, ec.(committableEvent)))
-			}
-			return actions
+		if p.Period > e.Period {
+			return nil
 		}
-		return p.enterPeriod(r, e, e.Period)
+		if p.Period < e.Period {
+			return p.enterPeriod(r, e, e.Period)
+		}
+		ec := r.dispatch(*p, e, proposalMachine, p.Round, p.Period, 0)
+		if ec.t() == proposalCommittable && p.Step <= cert {
+			actions = append(actions, p.issueCertVote(r, ec.(committableEvent)))
+		}
+		return actions
+
 	case nextThreshold:
+		// We might receive a next threshold event for the previous period due to fast-forwarding or a soft threshold.
+		// If we do, this is okay, but the proposalMachine contract-checker will complain.
+		// TODO test this case and update the contract-checker so it does not complain when this is benign
+		if p.Period > e.Period {
+			return nil
+		}
 		return p.enterPeriod(r, e, e.Period+1)
 	default:
 		panic("bad event")
