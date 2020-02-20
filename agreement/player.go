@@ -574,14 +574,12 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 		// This allows us to handle late payloads (relative to cert-bundles, i.e., certificates) without resorting to catchup.
 		if ef.t() == proposalCommittable || ef.t() == payloadAccepted {
 			freshestRes := r.dispatch(*p, freshestBundleRequestEvent{}, voteMachineRound, p.Round, 0, 0).(freshestBundleEvent)
-			if freshestRes.Ok && freshestRes.Event.t() == certThreshold {
-				if freshestRes.Event.Proposal == e.Input.Proposal.value() {
-					cert := Certificate(freshestRes.Event.Bundle)
-					a0 := ensureAction{Payload: e.Input.Proposal, Certificate: cert}
-					actions = append(actions, a0)
-					as := p.enterRound(r, delegatedE, cert.Round+1)
-					return append(actions, as...)
-				}
+			if freshestRes.Ok && freshestRes.Event.t() == certThreshold && freshestRes.Event.Proposal == e.Input.Proposal.value() {
+				cert := Certificate(freshestRes.Event.Bundle)
+				a0 := ensureAction{Payload: e.Input.Proposal, Certificate: cert}
+				actions = append(actions, a0)
+				as := p.enterRound(r, delegatedE, cert.Round+1)
+				return append(actions, as...)
 			}
 		}
 
