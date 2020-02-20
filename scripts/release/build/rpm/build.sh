@@ -13,7 +13,7 @@ export HOME=/root
 
 GIT_REPO_PATH=https://github.com/algorand/go-algorand
 mkdir -p "${HOME}/go/src/github.com/algorand"
-cd "${HOME}/go/src/github.com/algorand" && git clone --single-branch --branch "${HASH}" "${GIT_REPO_PATH}" go-algorand
+cd "${HOME}/go/src/github.com/algorand" && git clone --single-branch --branch "${BRANCH}" "${GIT_REPO_PATH}" go-algorand
 
 # Get golang 1.12 and build its own copy of go-algorand.
 cd "${HOME}"
@@ -29,7 +29,6 @@ REPO_DIR=/root/go/src/github.com/algorand/go-algorand
 # Build!
 "${REPO_DIR}"/scripts/configure_dev-deps.sh
 cd "${REPO_DIR}"
-make crypto/lib/libsodium.a
 make build
 
 # Copy binaries to the host for use in the packaging stage.
