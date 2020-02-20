@@ -17,11 +17,13 @@ echo
 
 echo -e "deb http://us.archive.ubuntu.com/ubuntu/ bionic main universe multiverse\ndeb http://archive.ubuntu.com/ubuntu/ bionic main universe multiverse" | sudo tee /etc/apt/sources.list.d/ubuntu
 
-sudo apt-get update
-sudo apt-get --allow-unauthenticated upgrade -y
-
-sudo apt-get update
-sudo apt-get --allow-unauthenticated upgrade -y
+if ! sudo apt-get update && ! sudo apt-get upgrade -y
+then
+    if ! sudo apt-get update && ! sudo apt-get upgrade -y
+    then
+        exit 1
+    fi
+fi
 
 sudo apt-get install -y build-essential automake autoconf awscli docker.io git gpg nfs-common python python3 rpm sqlite3 python3-boto3 g++ libtool rng-tools
 sudo rngd -r /dev/urandom
@@ -35,13 +37,22 @@ export BRANCH
 
 # Check out
 mkdir -p "${HOME}/go/src/github.com/algorand"
-cd "${HOME}/go/src/github.com/algorand" && git clone --single-branch --branch "${BRANCH}" https://github.com/algorand/go-algorand go-algorand
+cd "${HOME}/go/src/github.com/algorand"
+if ! git clone --single-branch --branch "${BRANCH}" https://github.com/algorand/go-algorand go-algorand
+then
+    echo There has been a problem cloning the "$BRANCH" branch.
+    exit 1
+fi
 # TODO: if we are checking out a release tag, `git tag --verify` it
 
 export DEBIAN_FRONTEND=noninteractive
 
 cd "${HOME}"
-git clone --single-branch --branch deploy_to_prod_ben-branch_polling https://github.com/btoll/go-algorand ben-branch
+if ! git clone --single-branch --branch deploy_to_prod_ben-branch_polling https://github.com/btoll/go-algorand ben-branch
+then
+    echo There has been a problem cloning the "$BRANCH" branch.
+    exit 1
+fi
 
 # Install latest Go
 cd "${HOME}"
@@ -104,7 +115,11 @@ EOF
 # Install aptly for building debian repo
 mkdir -p "$GOPATH/src/github.com/aptly-dev"
 cd "$GOPATH/src/github.com/aptly-dev"
-git clone https://github.com/aptly-dev/aptly
+if ! git clone https://github.com/aptly-dev/aptly
+then
+    echo There has been a problem cloning the aptly project.
+    exit 1
+fi
 cd aptly && git fetch
 
 # As of 2019-06-06 release tag v1.3.0 is 2018-May, GnuPG 2 support was added in October but they haven't tagged a new release yet. Hash below seems to work so far.

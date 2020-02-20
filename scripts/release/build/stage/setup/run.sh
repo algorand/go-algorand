@@ -4,7 +4,6 @@
 set -ex
 
 # Path(s) are relative to the root of the Jenkins workspace.
-
 INSTANCE=$(cat scripts/release/common/ec2/tmp/instance)
 
 aws s3 cp s3://algorand-devops-misc/tools/gnupg2.2.9_centos7_amd64.tar.bz2 .

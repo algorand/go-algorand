@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 # shellcheck disable=2164
 
+echo
+echo
+echo
+echo
+echo $USER
+echo
+echo
+echo
+
 AWS_REGION="$1"
 AWS_AMI="$2"
 AWS_INSTANCE_TYPE="$3"
