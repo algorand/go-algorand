@@ -265,9 +265,13 @@ func (p *player) handleThresholdEvent(r routerHandle, e thresholdEvent) []action
 	// Special case all cert thresholds: we must not ignore them, because they are the freshest bundle
 	var actions []action
 	if e.t() == certThreshold {
-		// this threshold must be for p.Round, and originates from the vote SM tree
-		// First, stage the threshold if not already. It is entirely fine to stage values for periods in the past.
-		r.dispatch(*p, e, proposalMachine, p.Round, p.Period, 0)
+		// e.Round = p.Round // must be true
+		if e.Period < p.Period {
+			// scribble over (r, p) so that after dispatching,
+			// block does not get dropped with -> newPeriod -> trim
+			e.Period = p.Period
+		}
+		r.dispatch(*p, e, proposalMachine, 0, 0, 0)
 		// Now, also check if we have the block.
 		res := stagedValue(*p, r, e.Round, e.Period)
 		if res.Committable {
@@ -310,7 +314,6 @@ func (p *player) handleThresholdEvent(r routerHandle, e thresholdEvent) []action
 	case nextThreshold:
 		return p.enterPeriod(r, e, e.Period+1)
 	default:
-		// certThreshold was handled previously
 		panic("bad event")
 	}
 }
