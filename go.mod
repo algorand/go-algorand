@@ -5,7 +5,7 @@ go 1.12
 require (
 	github.com/algorand/go-codec/codec v0.0.0-20190507210007-269d70b6135d
 	github.com/algorand/go-deadlock v0.0.0-20181221160745-78d8cb5e2759
-	github.com/algorand/msgp v1.1.37
+	github.com/algorand/msgp v1.1.38
 	github.com/algorand/websocket v1.4.1
 	github.com/aws/aws-sdk-go v1.16.5
 	github.com/cpuguy83/go-md2man v1.0.8 // indirect
