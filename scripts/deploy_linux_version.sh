@@ -16,7 +16,7 @@ export GOPATH=$(go env GOPATH)
 # Anchor our repo root reference location
 REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"/..
 
-cd ${REPO_ROOT}/..
+cd ${REPO_ROOT}
 SRCPATH=${REPO_ROOT}
 
 TMPDIR="${SRCPATH}/tmp"
