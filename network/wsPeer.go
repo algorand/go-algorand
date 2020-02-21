@@ -397,7 +397,7 @@ func (wp *wsPeer) readLoop() {
 				continue
 			}
 			hashKey, _ := binary.Uvarint(requestHash)
-			channel, found := wp.getResponseChannel(hashKey)
+			channel, found := wp.getAndRemoveResponseChannel(hashKey)
 			if !found {
 				wp.net.log.Warnf("wsPeer readLoop: received a message response from %s for a stale request", wp.conn.RemoteAddr().String())
 				continue
@@ -621,8 +621,8 @@ func (wp *wsPeer) Request(ctx context.Context, tag Tag, topics Topics) (resp *Re
 	hash := hashTopics(serializedMsg)
 
 	// Make a response channel to wait on the server response
-	wp.makeResponseChannel(hash)
-	defer wp.removeResponseChannel(hash)
+	responseChannel := wp.makeResponseChannel(hash)
+	defer wp.getAndRemoveResponseChannel(hash)
 
 	// Send serializedMsg
 	select {
@@ -639,7 +639,7 @@ func (wp *wsPeer) Request(ctx context.Context, tag Tag, topics Topics) (resp *Re
 
 	// wait for the channel.
 	select {
-	case resp = <-wp.responseChannels[hash]:
+	case resp = <-responseChannel:
 		return resp, nil
 	case <-wp.closing:
 		e = fmt.Errorf("peer closing %s", wp.conn.RemoteAddr().String())
@@ -649,23 +649,20 @@ func (wp *wsPeer) Request(ctx context.Context, tag Tag, topics Topics) (resp *Re
 	}
 }
 
-func (wp *wsPeer) makeResponseChannel(key uint64) {
+func (wp *wsPeer) makeResponseChannel(key uint64) (responseChannel chan *Response) {
 	newChan := make(chan *Response, 1)
 	wp.responseChannelsMutex.Lock()
 	defer wp.responseChannelsMutex.Unlock()
 	wp.responseChannels[key] = newChan
+	return newChan
 }
 
-func (wp *wsPeer) removeResponseChannel(key uint64) {
-	wp.responseChannelsMutex.Lock()
-	defer wp.responseChannelsMutex.Unlock()
-	delete(wp.responseChannels, key)
-}
-
-func (wp *wsPeer) getResponseChannel(key uint64) (respChan chan *Response, found bool) {
+// getAndRemoveResponseChannel returns the channel and deletes the channel from the map
+func (wp *wsPeer) getAndRemoveResponseChannel(key uint64) (respChan chan *Response, found bool) {
 	wp.responseChannelsMutex.Lock()
 	defer wp.responseChannelsMutex.Unlock()
 	respChan, found = wp.responseChannels[key]
+	delete(wp.responseChannels, key)
 
 	return
 }
