@@ -27,23 +27,14 @@ import (
 
 const defaultMaxHops = 10
 
+var defaultDnssecAwareNSServers = []string{"1.1.1.1:53", "8.8.8.8:53"}
+
 // Resolver provides DNSSEC resolution
 type Resolver struct {
 	resolver   netResolverIf
 	trustChain *trustChain
 	maxHops    int
 }
-
-type netResolverIf interface {
-	query(ctx context.Context, domain string, qtype uint16) (resp *dns.Msg, err error)
-	queryRRSet(ctx context.Context, domain string, qtype uint16) ([]dns.RR, []dns.RRSIG, error)
-	rootTrustAnchor() ([]dns.DS, error)
-
-	// test functions
-	serverList() []string
-}
-
-var defaultDnssecAwareNSServers = []string{"1.1.1.1:53", "8.8.8.8:53"}
 
 // DefaultResolver with one DNS server and 1 second timeout
 var DefaultResolver = MakeDnssecResolver(defaultDnssecAwareNSServers, time.Second)
@@ -59,6 +50,23 @@ func MakeDnssecResolver(servers []string, timeout time.Duration) (r Resolver) {
 	r.trustChain = makeTrustChain(r.resolver)
 	r.maxHops = defaultMaxHops
 	return
+}
+
+type netResolverIf interface {
+	query(ctx context.Context, domain string, qtype uint16) (resp *dns.Msg, err error)
+	queryRRSet(ctx context.Context, domain string, qtype uint16) ([]dns.RR, []dns.RRSIG, error)
+	rootTrustAnchor() ([]dns.DS, error)
+
+	// test functions
+	serverList() []string
+}
+
+// TLSARec represents TLSA record content
+type TLSARec struct {
+	Usage        uint8
+	Selector     uint8
+	MatchingType uint8
+	Certificate  string `dns:"hex"`
 }
 
 // lookupImpl makes DNS request for a zone and verifies response signature
@@ -171,7 +179,7 @@ func (r *Resolver) LookupCNAME(ctx context.Context, host string) (cname string, 
 	return
 }
 
-// LookupSRV returns SRV records content for a given name
+// LookupSRV returns SRV records content for a service, proto and given name
 // Like net.Resolver, it orders results according to Priority and Weight
 func (r *Resolver) LookupSRV(ctx context.Context, service, proto, name string) (cname string, addrs []*net.SRV, err error) {
 	var fullName string
@@ -255,7 +263,7 @@ func (r *Resolver) LookupNS(ctx context.Context, name string) (addrs []*net.NS, 
 // LookupTXT returns TXT records content for a given name
 func (r *Resolver) LookupTXT(ctx context.Context, name string) (addrs []string, err error) {
 	var rrSet []dns.RR
-	if rrSet, err = r.lookupImpl(ctx, name, dns.TypeNS); err != nil {
+	if rrSet, err = r.lookupImpl(ctx, name, dns.TypeTXT); err != nil {
 		return
 	}
 
@@ -265,6 +273,37 @@ func (r *Resolver) LookupTXT(ctx context.Context, name string) (addrs []string, 
 			addrs = append(
 				addrs,
 				obj.Txt...,
+			)
+		}
+	}
+	return
+}
+
+// LookupTLSA returns TLSA records content for a service, proto and name
+func (r *Resolver) LookupTLSA(ctx context.Context, service, proto, name string) (addrs []TLSARec, err error) {
+	var fullName string
+	if service == "" && proto == "" {
+		fullName = name
+	} else {
+		fullName = "_" + service + "._" + proto + "." + name
+	}
+
+	var rrSet []dns.RR
+	if rrSet, err = r.lookupImpl(ctx, fullName, dns.TypeTLSA); err != nil {
+		return
+	}
+
+	for _, rr := range rrSet {
+		switch obj := rr.(type) {
+		case *dns.TLSA:
+			addrs = append(
+				addrs,
+				TLSARec{
+					Usage:        obj.Usage,
+					Selector:     obj.Selector,
+					MatchingType: obj.MatchingType,
+					Certificate:  obj.Certificate,
+				},
 			)
 		}
 	}

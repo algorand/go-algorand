@@ -941,6 +941,105 @@ func TestLookup(t *testing.T) {
 	a.Contains(err.Error(), ". not found")
 }
 
+func TestLookupAux(t *testing.T) {
+	a := require.New(t)
+
+	r := makeEmptyTestResolver()
+	dnssec := Resolver{
+		resolver:   r,
+		trustChain: makeTrustChain(r),
+		maxHops:    defaultMaxHops,
+	}
+
+	var err error
+	rootKSK, rootKSKsk := getKey(".", dns.ZONE|dns.SEP)
+	rootZSK, rootZSKsk := getKey(".", dns.ZONE)
+	rootAnchor := rootKSK.ToDS(dns.SHA256)
+
+	// make . zone
+	err = r.updateDSRecord(".", &[]dns.DS{*rootAnchor}, time.Time{})
+	a.NoError(err)
+	err = r.updateDNSKeyRecord(".", rootKSK, rootKSKsk, time.Time{})
+	a.NoError(err)
+	err = r.updateDNSKeyRecord(".", rootZSK, rootZSKsk, time.Time{})
+	a.NoError(err)
+
+	testKSK, testKSKsk := getKey("test.", dns.ZONE|dns.SEP)
+	testZSK, testZSKsk := getKey("test.", dns.ZONE)
+
+	// make test. zone
+	err = r.updateDSRecord("test.", &[]dns.DS{*testKSK.ToDS(dns.SHA256)}, time.Time{})
+	a.NoError(err)
+	err = r.updateDNSKeyRecord("test.", testKSK, testKSKsk, time.Time{})
+	a.NoError(err)
+	err = r.updateDNSKeyRecord("test.", testZSK, testZSKsk, time.Time{})
+	a.NoError(err)
+
+	// check MX
+	mxIn := []dns.RR{
+		&dns.MX{
+			Hdr:        dns.RR_Header{Name: "test.", Rrtype: dns.TypeMX, Class: dns.ClassINET, Ttl: 3600},
+			Preference: 1,
+			Mx:         "mail.test.",
+		},
+	}
+	err = r.updateRegRecord("test.", "test.", dns.TypeMX, mxIn, time.Time{})
+	a.NoError(err)
+	mxOut, err := dnssec.LookupMX(context.Background(), "test.")
+	a.NoError(err)
+	a.Equal(1, len(mxOut))
+	a.Equal("mail.test.", mxOut[0].Host)
+
+	// check TXT
+	txtIn := []dns.RR{
+		&dns.TXT{
+			Hdr: dns.RR_Header{Name: "test.", Rrtype: dns.TypeTXT, Class: dns.ClassINET, Ttl: 3600},
+			Txt: []string{"some text", "some other text"},
+		},
+		&dns.TXT{
+			Hdr: dns.RR_Header{Name: "test.", Rrtype: dns.TypeTXT, Class: dns.ClassINET, Ttl: 3600},
+			Txt: []string{"aaa"},
+		},
+	}
+	err = r.updateRegRecord("test.", "test.", dns.TypeTXT, txtIn, time.Time{})
+	a.NoError(err)
+	txtOut, err := dnssec.LookupTXT(context.Background(), "test.")
+	a.NoError(err)
+	a.Equal(3, len(txtOut))
+	a.Equal("some text", txtOut[0])
+
+	// check NS
+	nsIn := []dns.RR{
+		&dns.NS{
+			Hdr: dns.RR_Header{Name: "test.", Rrtype: dns.TypeNS, Class: dns.ClassINET, Ttl: 3600},
+			Ns:  "ns.test.",
+		},
+	}
+	err = r.updateRegRecord("test.", "test.", dns.TypeNS, nsIn, time.Time{})
+	a.NoError(err)
+	nsOut, err := dnssec.LookupNS(context.Background(), "test.")
+	a.NoError(err)
+	a.Equal(1, len(nsOut))
+	a.Equal("ns.test.", nsOut[0].Host)
+
+	// check TLSA
+	tlsaIn := []dns.RR{
+		&dns.TLSA{
+			Hdr:          dns.RR_Header{Name: "test.", Rrtype: dns.TypeTLSA, Class: dns.ClassINET, Ttl: 3600},
+			Usage:        1,
+			Selector:     2,
+			MatchingType: 3,
+			Certificate:  "AABBCCDD",
+		},
+	}
+	err = r.updateRegRecord("_443._tcp.test.", "test.", dns.TypeTLSA, tlsaIn, time.Time{})
+	a.NoError(err)
+	tlsaOut, err := dnssec.LookupTLSA(context.Background(), "443", "tcp", "test.")
+	a.NoError(err)
+	a.Equal(1, len(tlsaOut))
+	a.Equal(TLSARec{1, 2, 3, "AABBCCDD"}, tlsaOut[0])
+}
+
 func TestDeadNS(t *testing.T) {
 	t.Skip() // skip real network tests in autotest
 	a := require.New(t)
