@@ -39,14 +39,14 @@ func TestCheckSlowWritingPeer(t *testing.T) {
 
 }
 
-// TestGetNonce tests if unique values are generated each time
-func TestGetNonce(t *testing.T) {
+// TestGetRequestNonce tests if unique values are generated each time
+func TestGetRequestNonce(t *testing.T) {
 	numValues := 1000
 	peer := wsPeer{}
 	valueChannel := make(chan uint64, numValues)
 	for x := 0; x < numValues; x++ {
 		go func() {
-			ans := peer.getNonce()
+			ans := peer.getRequestNonce()
 			val, _ := binary.Uvarint(ans)
 			valueChannel <- val
 		}()

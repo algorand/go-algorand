@@ -113,9 +113,9 @@ func UnmarshallTopics(buffer []byte) (ts Topics, err error) {
 	return topics, nil
 }
 
-// Hash returns the hash of serialized topics.
+// hashTopics returns the hash of serialized topics.
 // Expects the nonce to be already added as a topic
-func Hash(topics []byte) (partialHash uint64) {
+func hashTopics(topics []byte) (partialHash uint64) {
 	digest := crypto.Hash(topics)
 	partialHash = digest.TrimUint64()
 	return partialHash

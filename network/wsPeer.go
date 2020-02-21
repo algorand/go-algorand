@@ -158,8 +158,8 @@ type wsPeer struct {
 	// peer version ( this is one of the version supported by the current node and listed in SupportedProtocolVersions )
 	version string
 
-	// Nonce used to uinquely identify requests
-	nonce uint64
+	// Nonce used to uniquely identify requests
+	requestNonce uint64
 
 	// responseChannels used by the client to wait on the response of the request
 	responseChannels map[uint64]chan *Response
@@ -241,7 +241,7 @@ func (wp *wsPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag) err
 func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, respMsg OutgoingMessage) (e error) {
 
 	// Get the hash/key of the request message
-	requestHash := Hash(reqMsg.Data)
+	requestHash := hashTopics(reqMsg.Data)
 
 	topics := respMsg.Topics
 	// Add the request hash
@@ -599,11 +599,11 @@ func (wp *wsPeer) CheckSlowWritingPeer(now time.Time) bool {
 	return timeSinceMessageCreated > maxMessageQueueDuration
 }
 
-// getNonce returns the byte representation of ever increasing uint64
+// getRequestNonce returns the byte representation of ever increasing uint64
 // The value is stored on wsPeer
-func (wp *wsPeer) getNonce() []byte {
+func (wp *wsPeer) getRequestNonce() []byte {
 	buf := make([]byte, binary.MaxVarintLen64)
-	binary.PutUvarint(buf, atomic.AddUint64(&wp.nonce, 1))
+	binary.PutUvarint(buf, atomic.AddUint64(&wp.requestNonce, 1))
 	return buf
 }
 
@@ -611,14 +611,14 @@ func (wp *wsPeer) getNonce() []byte {
 func (wp *wsPeer) Request(ctx context.Context, tag Tag, topics Topics) (resp *Response, e error) {
 
 	// Add nonce as a topic
-	nonce := wp.getNonce()
+	nonce := wp.getRequestNonce()
 	topics = append(topics, Topic{key: "nonce", data: nonce})
 
 	// serialize the topics
 	serializedMsg := topics.MarshallTopics()
 
 	// Get the topics' hash
-	hash := Hash(serializedMsg)
+	hash := hashTopics(serializedMsg)
 
 	// Make a response channel to wait on the server response
 	wp.makeResponseChannel(hash)
