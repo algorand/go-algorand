@@ -35,9 +35,9 @@ pipeline {
         stage("setup") {
             steps {
                 /*
-                sh script: "scripts/release/build/stage/setup/run.sh ${env.GIT_BRANCH}"
-                */
                 sh script: "scripts/release/build/stage/setup/run.sh ${params.branch}"
+                */
+                sh script: "scripts/release/build/stage/setup/run.sh ${env.GIT_BRANCH}"
             }
         }
 

@@ -1,3 +1,4 @@
 FROM ubuntu:18.04
-RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y awscli jq ssh
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y awscli jq git ssh
 
