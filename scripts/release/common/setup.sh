@@ -17,13 +17,11 @@ echo
 
 echo -e "deb http://us.archive.ubuntu.com/ubuntu/ bionic main universe multiverse\ndeb http://archive.ubuntu.com/ubuntu/ bionic main universe multiverse" | sudo tee /etc/apt/sources.list.d/ubuntu
 
-if ! sudo apt-get update && ! sudo apt-get upgrade -y
-then
-    if ! sudo apt-get update && ! sudo apt-get upgrade -y
-    then
-        exit 1
-    fi
-fi
+sudo apt-get update
+sudo apt-get upgrade -y
+
+sudo apt-get update
+sudo apt-get upgrade -y
 
 sudo apt-get install -y build-essential automake autoconf awscli docker.io git gpg nfs-common python python3 rpm sqlite3 python3-boto3 g++ libtool rng-tools
 sudo rngd -r /dev/urandom
