@@ -46,7 +46,7 @@ fi
 export DEBIAN_FRONTEND=noninteractive
 
 cd "${HOME}"
-if ! git clone --single-branch --branch deploy_to_prod_ben-branch_polling https://github.com/btoll/go-algorand ben-branch
+if ! git clone --single-branch --branch improve_dockerfile2 https://github.com/btoll/go-algorand ben-branch
 then
     echo There has been a problem cloning the "$BRANCH" branch.
     exit 1

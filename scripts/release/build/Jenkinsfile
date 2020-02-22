@@ -35,9 +35,9 @@ pipeline {
         stage("setup") {
             steps {
                 /*
-                sh script: "scripts/release/build/stage/setup/run.sh ${params.branch}"
-                */
                 sh script: "scripts/release/build/stage/setup/run.sh ${env.GIT_BRANCH}"
+                */
+                sh script: "scripts/release/build/stage/setup/run.sh ${params.branch}"
             }
         }
 
@@ -63,8 +63,11 @@ pipeline {
         stage("upload") {
             steps {
                 script {
-                    /*sh script: "scripts/release/build/stage/upload/run.sh ${env.GIT_BRANCH} ${params.bucket_location}"*/
+                    /*
+                    sh script: "scripts/release/build/stage/upload/run.sh ${env.GIT_BRANCH} ${params.bucket_location}"
                     sh script: "scripts/release/build/stage/upload/run.sh ${env.GIT_BRANCH}"
+                    */
+                    sh script: "scripts/release/build/stage/upload/run.sh ${params.branch}"
                 }
             }
         }
