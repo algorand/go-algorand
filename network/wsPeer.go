@@ -237,7 +237,7 @@ func (wp *wsPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag) err
 	return err
 }
 
-// Respond submits the request to the server, waits for a response
+// Respond sends the response of a request message
 func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, respMsg OutgoingMessage) (e error) {
 
 	// Get the hash/key of the request message
