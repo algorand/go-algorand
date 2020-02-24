@@ -169,7 +169,7 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 	hts.log.Debugf("http sync got %d bytes", len(data))
 
 	var txns []transactions.SignedTxn
-	err = protocol.Decode(data, &txns)
+	err = protocol.DecodeReflect(data, &txns)
 	if err != nil {
 		hts.log.Warn("txSync protocol decode: ", err)
 	}
