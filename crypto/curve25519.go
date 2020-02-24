@@ -130,6 +130,8 @@ type SignatureVerifier = PublicKey
 // SignatureSecrets are used by an entity to produce unforgeable signatures over
 // a message.
 type SignatureSecrets struct {
+	_struct struct{} `codec:""`
+
 	SignatureVerifier
 	SK ed25519PrivateKey
 }

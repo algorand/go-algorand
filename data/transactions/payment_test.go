@@ -45,28 +45,28 @@ func TestAlgosEncoding(t *testing.T) {
 	var i uint64
 
 	a.Raw = 222233333
-	err := protocol.Decode(protocol.Encode(a), &b)
+	err := protocol.Decode(protocol.Encode(&a), &b)
 	if err != nil {
 		panic(err)
 	}
 	require.Equal(t, a, b)
 
 	a.Raw = 12345678
-	err = protocol.Decode(protocol.Encode(a), &i)
+	err = protocol.DecodeReflect(protocol.Encode(a), &i)
 	if err != nil {
 		panic(err)
 	}
 	require.Equal(t, a.Raw, i)
 
 	i = 87654321
-	err = protocol.Decode(protocol.Encode(i), &a)
+	err = protocol.Decode(protocol.EncodeReflect(i), &a)
 	if err != nil {
 		panic(err)
 	}
 	require.Equal(t, a.Raw, i)
 
 	x := true
-	err = protocol.Decode(protocol.Encode(x), &a)
+	err = protocol.Decode(protocol.EncodeReflect(x), &a)
 	if err == nil {
 		panic("decode of bool into MicroAlgos succeeded")
 	}
