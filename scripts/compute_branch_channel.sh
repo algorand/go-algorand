@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 
 # If enlistment isn't clean, it's 'dev'
-./scripts/check_clean_enlistment.sh
-if [ $? -ne 0 ]; then
+CWD=$(cd "$(dirname "$0")" && pwd -P)
+
+if ! "$CWD"/check_clean_enlistment.sh
+then
     echo "dev"
     exit 0
 fi
@@ -18,3 +20,4 @@ elif [ "$1" = "rel/beta" ]; then
 else
     echo "dev"
 fi
+
