@@ -132,6 +132,8 @@ func TestEncodeEmbedded(t *testing.T) {
 	x.TxType = PaymentTx
 	x.A = 5
 
+	require.Equal(t, Encode(x), Encode(&x))
+	require.Equal(t, Encode(x.TxType), Encode(&x.TxType))
 	require.NotEqual(t, Encode(&x), Encode(&x.TxType))
 
 	var y embeddedMsgp
