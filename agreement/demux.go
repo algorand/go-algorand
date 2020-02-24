@@ -158,14 +158,14 @@ func (d *demux) verifyVote(ctx context.Context, m message, taskIndex int, r roun
 func (d *demux) verifyPayload(ctx context.Context, m message, r round, p period, pinned bool) {
 	d.UpdateEventsQueue(eventQueueCryptoVerifierProposal, 1)
 	d.monitor.inc(cryptoVerifierCoserviceType)
-	d.crypto.Verify(ctx, cryptoRequest{message: m, Round: r, Period: p, Pinned: pinned})
+	d.crypto.VerifyProposal(ctx, cryptoProposalRequest{message: m, Round: r, Period: p, Pinned: pinned})
 }
 
 // verifyBundle enqueues a bundle message to be verified.
-func (d *demux) verifyBundle(ctx context.Context, m message, r round, p period) {
+func (d *demux) verifyBundle(ctx context.Context, m message, r round, p period, s step) {
 	d.UpdateEventsQueue(eventQueueCryptoVerifierBundle, 1)
 	d.monitor.inc(cryptoVerifierCoserviceType)
-	d.crypto.Verify(ctx, cryptoRequest{message: m, Round: r, Period: p})
+	d.crypto.VerifyBundle(ctx, cryptoBundleRequest{message: m, Round: r, Period: p, Certify: s == cert})
 }
 
 // next blocks until it observes an external input event of interest for the state machine.
