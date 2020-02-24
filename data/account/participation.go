@@ -100,7 +100,8 @@ func (part Participation) DeleteOldKeys(current basics.Round, proto config.Conse
 		})
 		close(errorCh)
 	}
-	encodedVotingSecrets := protocol.Encode(part.Voting.Snapshot())
+	voting := part.Voting.Snapshot()
+	encodedVotingSecrets := protocol.Encode(&voting)
 	go deleteOldKeys(encodedVotingSecrets)
 	return errorCh
 }
@@ -191,7 +192,8 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 // Persist writes a Participation out to a database on the disk
 func (part Participation) Persist() error {
 	rawVRF := protocol.Encode(part.VRF)
-	rawVoting := protocol.Encode(part.Voting.Snapshot())
+	voting := part.Voting.Snapshot()
+	rawVoting := protocol.Encode(&voting)
 
 	return part.Store.Atomic(func(tx *sql.Tx) error {
 		err := partInstallDatabase(tx)

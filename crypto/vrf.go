@@ -45,6 +45,8 @@ type VRFProof = VrfProof
 
 // VRFSecrets is a wrapper for a VRF keypair. Use *VrfPrivkey instead
 type VRFSecrets struct {
+	_struct struct{} `codec:""`
+
 	PK VrfPubkey
 	SK VrfPrivkey
 }

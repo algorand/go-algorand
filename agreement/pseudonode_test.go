@@ -114,7 +114,7 @@ func compareEventChannels(t *testing.T, ch1, ch2 <-chan externalEvent) bool {
 				if !compareUnauthenticatedProposal(t, uo, up2) {
 					return false
 				}
-				if !assert.Equal(t, protocol.Encode(uo), protocol.Encode(up2)) {
+				if !assert.Equal(t, protocol.Encode(&uo), protocol.Encode(&up2)) {
 					return false
 				}
 				if !assert.Equal(t, uo.Digest(), up2.Digest()) {
