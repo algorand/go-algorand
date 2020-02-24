@@ -113,7 +113,7 @@ func (handler *TxHandler) Stop() {
 func reencode(stxns []transactions.SignedTxn) []byte {
 	var result [][]byte
 	for _, stxn := range stxns {
-		result = append(result, protocol.Encode(stxn))
+		result = append(result, protocol.Encode(&stxn))
 	}
 	return bytes.Join(result, nil)
 }

@@ -126,7 +126,7 @@ var addSigCmd = &cobra.Command{
 			// The following line makes stxn.cachedEncodingLen incorrect, but it's okay because we're just serializing it to a file
 			stxn.Msig = msig
 
-			outData = append(outData, protocol.Encode(stxn)...)
+			outData = append(outData, protocol.Encode(&stxn)...)
 		}
 
 		err = writeFile(txFilename, outData, 0600)
@@ -214,7 +214,7 @@ var signProgramCmd = &cobra.Command{
 			reportErrorf(errorSigningTX, err)
 		}
 		lsig.Msig = msig
-		lsigblob := protocol.Encode(lsig)
+		lsigblob := protocol.Encode(&lsig)
 		err = writeFile(outname, lsigblob, 0600)
 		if err != nil {
 			reportErrorf("%s: %s", outname, err)
@@ -284,7 +284,7 @@ var mergeSigCmd = &cobra.Command{
 		// Write out the transactions to the output file
 		var mergedData []byte
 		for _, txn := range mergedTxns {
-			mergedData = append(mergedData, protocol.Encode(txn)...)
+			mergedData = append(mergedData, protocol.Encode(&txn)...)
 		}
 
 		err := writeFile(txFilename, mergedData, 0600)

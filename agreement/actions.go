@@ -123,7 +123,7 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 	if a.T == broadcastVotes {
 		tag := protocol.AgreementVoteTag
 		for i, uv := range a.UnauthenticatedVotes {
-			data := protocol.Encode(uv)
+			data := protocol.Encode(&uv)
 			sendErr := s.Network.Broadcast(tag, data)
 			if sendErr != nil {
 				s.log.Warnf("Network was unable to queue votes for broadcast(%v). %d / %d votes for round %d period %d step %d were dropped.",
@@ -144,16 +144,16 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 	var data []byte
 	switch a.Tag {
 	case protocol.AgreementVoteTag:
-		data = protocol.Encode(a.UnauthenticatedVote)
+		data = protocol.Encode(&a.UnauthenticatedVote)
 	case protocol.VoteBundleTag:
-		data = protocol.Encode(a.UnauthenticatedBundle)
+		data = protocol.Encode(&a.UnauthenticatedBundle)
 	case protocol.ProposalPayloadTag:
 		msg := a.CompoundMessage
 		payload := transmittedPayload{
 			unauthenticatedProposal: msg.Proposal,
 			PriorVote:               msg.Vote,
 		}
-		data = protocol.Encode(payload)
+		data = protocol.Encode(&payload)
 	}
 
 	switch a.T {

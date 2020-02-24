@@ -68,13 +68,13 @@ func (m *Monotonic) TimeoutAt(delta time.Duration) <-chan time.Time {
 
 // Encode implements Clock.Encode.
 func (m *Monotonic) Encode() []byte {
-	return protocol.Encode(m.zero)
+	return protocol.EncodeReflect(m.zero)
 }
 
 // Decode implements Clock.Decode.
 func (m *Monotonic) Decode(data []byte) (Clock, error) {
 	var zero time.Time
-	err := protocol.Decode(data, &zero)
+	err := protocol.DecodeReflect(data, &zero)
 	if err == nil {
 		logging.Base().Debugf("Clock decoded with zero at %v", zero)
 	} else {

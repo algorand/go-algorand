@@ -60,7 +60,7 @@ func (fs *WsFetcherService) handleNetworkMsg(msg network.IncomingMessage) (out n
 		return
 	}
 
-	if decodeErr := protocol.Decode(msg.Data, &resp); decodeErr != nil {
+	if decodeErr := protocol.DecodeReflect(msg.Data, &resp); decodeErr != nil {
 		fs.log.Warnf("WsFetcherService(%s): request failed: unable to decode message : %v", uniPeer.GetAddress(), decodeErr)
 		out.Action = network.Disconnect
 		return
@@ -106,7 +106,7 @@ func (fs *WsFetcherService) RequestBlock(ctx context.Context, target network.Uni
 	}()
 
 	req := WsGetBlockRequest{Round: uint64(round)}
-	err := target.Unicast(ctx, protocol.Encode(req), tag)
+	err := target.Unicast(ctx, protocol.EncodeReflect(req), tag)
 	if err != nil {
 		return WsGetBlockOut{}, fmt.Errorf("WsFetcherService.RequestBlock(%d): unicast failed, %v", round, err)
 	}

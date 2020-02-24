@@ -111,7 +111,7 @@ func BenchmarkManyAccounts(b *testing.B) {
 			txib, err := blk.EncodeSignedTxn(st, transactions.ApplyData{})
 			require.NoError(b, err)
 
-			txlen := len(protocol.Encode(txib))
+			txlen := len(protocol.Encode(&txib))
 			if txbytes+txlen > proto.MaxTxnBytesPerBlock {
 				break
 			}
@@ -170,7 +170,7 @@ func BenchmarkValidate(b *testing.B) {
 			txib, err := newblk.EncodeSignedTxn(st, transactions.ApplyData{})
 			require.NoError(b, err)
 
-			txlen := len(protocol.Encode(txib))
+			txlen := len(protocol.Encode(&txib))
 			if txbytes+txlen > proto.MaxTxnBytesPerBlock {
 				break
 			}
