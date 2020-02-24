@@ -120,3 +120,22 @@ func TestEncodeInline(t *testing.T) {
 
 	require.Equal(t, EncodeReflect(a), EncodeReflect(b))
 }
+
+type embeddedMsgp struct {
+	TxType
+	A uint64
+}
+
+func TestEncodeEmbedded(t *testing.T) {
+	var x embeddedMsgp
+
+	x.TxType = PaymentTx
+	x.A = 5
+
+	require.NotEqual(t, Encode(&x), Encode(&x.TxType))
+
+	var y embeddedMsgp
+
+	require.NoError(t, Decode(Encode(&x), &y))
+	require.Equal(t, x, y)
+}

@@ -19,6 +19,7 @@ package protocol
 import (
 	"fmt"
 	"io"
+	"os"
 	"sync"
 
 	"github.com/algorand/go-codec/codec"
@@ -113,6 +114,10 @@ func Encode(obj msgp.Marshaler) []byte {
 	if obj.CanMarshalMsg(obj) {
 		return EncodeMsgp(obj)
 	}
+
+	// Use fmt instead of logging to avoid import loops;
+	// the expectation is that this should never happen.
+	fmt.Fprintf(os.Stderr, "Encoding %T using go-codec; stray embedded field?\n", obj)
 	return EncodeReflect(obj)
 }
 
@@ -174,6 +179,11 @@ func Decode(b []byte, objptr msgp.Unmarshaler) error {
 	if objptr.CanUnmarshalMsg(objptr) {
 		return DecodeMsgp(b, objptr)
 	}
+
+	// Use fmt instead of logging to avoid import loops;
+	// the expectation is that this should never happen.
+	fmt.Fprintf(os.Stderr, "Decoding %T using go-codec; stray embedded field?\n", objptr)
+
 	return DecodeReflect(b, objptr)
 }
 
