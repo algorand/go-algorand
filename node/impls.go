@@ -162,21 +162,11 @@ func (l agreementLedger) EnsureValidatedBlock(ve agreement.ValidatedBlock, c agr
 }
 
 // EnsureDigest implements agreement.LedgerWriter.EnsureDigest.
-func (l agreementLedger) EnsureDigest(cert agreement.Certificate, quit chan struct{}, verifier *agreement.AsyncVoteVerifier) {
-	certRoundReachedCh := l.Wait(cert.Round)
+func (l agreementLedger) EnsureDigest(cert agreement.Certificate, verifier *agreement.AsyncVoteVerifier) {
 	// clear out the pending certificates ( if any )
 	select {
 	case pendingCert := <-l.UnmatchedPendingCertificates:
 		logging.Base().Debugf("agreementLedger.EnsureDigest has flushed out pending request for certificate for round %d in favor of recent certificate for round %d", pendingCert.Cert.Round, cert.Round)
-	default:
-	}
-
-	// if the quit channel is closed, we want to exit here before placing the request on the UnmatchedPendingCertificates
-	// channel.
-	select {
-	case <-quit:
-		logging.Base().Debugf("EnsureDigest was asked to quit before we enqueue the certificate request")
-		return
 	default:
 	}
 
@@ -185,21 +175,5 @@ func (l agreementLedger) EnsureDigest(cert agreement.Certificate, quit chan stru
 	// 2. we just cleared a single item off this channel ( if there was any )
 	// 3. the EnsureDigest method is being called with the agreeement service guarantee
 	// 4. no other senders to this channel exists
-	// we want to have this as a select statement to check if we neeed to exit before enqueueing the task to the catchup service.
 	l.UnmatchedPendingCertificates <- catchup.PendingUnmatchedCertificate{Cert: cert, VoteVerifier: verifier}
-
-	defer func() {
-		// clear out the content of the UnmatchedPendingCertificates channel if we somehow managed to get this round aquired by a different method ( i.e. regular catchup )
-		select {
-		case <-l.UnmatchedPendingCertificates:
-		default:
-		}
-	}()
-
-	select {
-	case <-quit:
-		logging.Base().Debugf("EnsureDigest was asked to quit before we could acquire the block")
-	case <-certRoundReachedCh:
-		// great! we've reached the desired round.
-	}
 }
