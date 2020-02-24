@@ -90,7 +90,7 @@ func (r *Resolver) lookupImplCnameAware(ctx context.Context, name string, qt uin
 	}
 
 	// As https://tools.ietf.org/html/rfc1034 section 3.6.2 says
-	// NS can return CNAME for A request if there no A but CNAME
+	// NS can return CNAME for A request if there are no A but CNAME
 	// in real world such A-response can also have second-level CNAME alias and A records with signatures
 	//
 	// so that leave only CNAME RR matching to requested name to verify signature and return the filtered set

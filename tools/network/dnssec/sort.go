@@ -53,14 +53,12 @@ func (a srvRecArray) randomize(start, end int) {
 		for i := start; i < end; i++ {
 			rSum += int(a[i].Weight)
 			if rSum >= num {
-				if i > start {
-					a[start], a[i] = a[i], a[start]
-				}
+				// Remove this SRV RR from the set of the unordered SRV RRs
+				a[start], a[i] = a[i], a[start]
 				break
 			}
 		}
-		// Remove this SRV RR from the set of the unordered SRV RRs and
-		// apply the described algorithm to the unordered SRV RRs to select the next target host.
+		// And apply the described algorithm to the unordered SRV RRs to select the next target host.
 		sum -= int(a[start].Weight)
 		start++
 	}

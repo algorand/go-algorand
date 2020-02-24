@@ -90,7 +90,7 @@ func (tz *trustedZone) isExpired(t time.Time) bool {
 	return false
 }
 
-// ensure at least on of keytags in ZSK of this zone
+// ensure at least one of the keytags in ZSK of this zone
 func (tz *trustedZone) checkKeys(keytags []uint16) bool {
 	for _, kt := range keytags {
 		if _, ok := tz.zsk[kt]; ok {
@@ -129,16 +129,16 @@ func (tz *trustedZone) verifyDS(rrSet []dns.RR, rrSig []dns.RRSIG, t time.Time) 
 // it uses **resolver** is for emitting DNSKEY and DS queries and
 // **pz** for DS verification using cached keys.
 // returns:
-// 1. newly created trustedZone if case of success
+// 1. newly created trustedZone in case of success
 // 2. cacheOutdated if cached parent **pz** does not have ZSK for DS validation
-// 3. error if all other cases
+// 3. error in all other cases
 //
 // Note 1: the function should never return cacheOutdated for the root zone
 // otherwise it might cause infinity loop in the caller.
 //
 // Note2: the function requests both DNSKEY (from child) and DS (from parent)
 // and this allows to tolerate KSK rotation: if child zone refreshed KSK
-// then its digest is propadated to parent DS and used to sign child's DNSKEY
+// then its digest is propagated to parent DS and used to sign child's DNSKEY
 func makeTrustedZone(ctx context.Context, fqZoneName string, pz *trustedZone, r netResolverIf, t time.Time) (tz *trustedZone, cacheOutdated bool, err error) {
 	rrSet, rrSig, err := r.queryRRSet(ctx, fqZoneName, dns.TypeDNSKEY)
 	if err != nil {
