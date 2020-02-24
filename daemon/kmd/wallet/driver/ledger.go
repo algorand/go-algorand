@@ -18,10 +18,12 @@ package driver
 
 import (
 	"bytes"
+	"crypto/sha512"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/algorand/go-deadlock"
 
@@ -36,6 +38,7 @@ import (
 const (
 	ledgerWalletDriverName    = "ledger"
 	ledgerWalletDriverVersion = 1
+	ledgerIDLen               = 16
 
 	ledgerClass            = uint8(0x80)
 	ledgerInsGetPublicKey  = uint8(0x03)
@@ -116,14 +119,15 @@ func (lwd *LedgerWalletDriver) scanWalletsLocked() error {
 	// Try to open each new device, skipping ones that are already open.
 	var newDevs []LedgerUSB
 	for _, info := range infos {
-		if curPaths[info.Path] {
-			delete(curPaths, info.Path)
+		walletID := pathToID(info.Path)
+		if curPaths[walletID] {
+			delete(curPaths, walletID)
 			continue
 		}
 
 		dev, err := info.Open()
 		if err != nil {
-			lwd.log.Warnf("enumerated but failed to open ledger %x: %v", info.ProductID, err)
+			lwd.log.Warnf("enumerated but failed to open ledger %s %x: %v", info.Path, info.ProductID, err)
 			continue
 		}
 
@@ -141,13 +145,22 @@ func (lwd *LedgerWalletDriver) scanWalletsLocked() error {
 		delete(lwd.wallets, deadPath)
 	}
 
-	// Add in new devices
+	// Add in new ledger wallets if they appear valid
 	for _, dev := range newDevs {
-		id := dev.USBInfo().Path
-		lwd.wallets[id] = &LedgerWallet{
+		newWallet := &LedgerWallet{
 			dev: dev,
 		}
+
+		// Check that device responds to Algorand app requests
+		_, err := newWallet.ListKeys()
+		if err != nil {
+			continue
+		}
+
+		id := pathToID(dev.USBInfo().Path)
+		lwd.wallets[id] = newWallet
 	}
+
 	return nil
 }
 
@@ -211,15 +224,27 @@ func (lw *LedgerWallet) ExportMasterDerivationKey(pw []byte) (crypto.MasterDeriv
 	return crypto.MasterDerivationKey{}, errNotSupported
 }
 
+func pathToID(path string) string {
+	// The Path USB info field is platform-dependent and sometimes
+	// very long. We hash it to make the wallet name/ID less unwieldy
+	pathHashFull := sha512.Sum512_256([]byte(path))
+	return fmt.Sprintf("%x", pathHashFull[:ledgerIDLen])
+}
+
 // Metadata implements the Wallet interface.
 func (lw *LedgerWallet) Metadata() (wallet.Metadata, error) {
 	lw.mu.Lock()
 	defer lw.mu.Unlock()
 
 	info := lw.dev.USBInfo()
+
+	walletID := pathToID(info.Path)
+	walletName := fmt.Sprintf("%s-%s-%s-%s", info.Manufacturer, info.Product, info.Serial, walletID)
+	walletName = strings.Replace(walletName, " ", "-", -1)
+
 	return wallet.Metadata{
-		ID:                    []byte(info.Path),
-		Name:                  []byte(fmt.Sprintf("%s %s (serial %s, path %s)", info.Manufacturer, info.Product, info.Serial, info.Path)),
+		ID:                    []byte(walletID),
+		Name:                  []byte(walletName),
 		DriverName:            ledgerWalletDriverName,
 		DriverVersion:         ledgerWalletDriverVersion,
 		SupportedTransactions: ledgerWalletSupportedTxs,
