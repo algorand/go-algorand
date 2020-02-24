@@ -419,7 +419,7 @@ func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.Sign
 	var enc []byte
 	var txids []transactions.Txid
 	for _, tx := range txgroup {
-		enc = append(enc, protocol.Encode(tx)...)
+		enc = append(enc, protocol.Encode(&tx)...)
 		txids = append(txids, tx.ID())
 	}
 	err = node.net.Broadcast(context.TODO(), protocol.TxnTag, enc, true, nil)
