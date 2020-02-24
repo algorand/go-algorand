@@ -201,9 +201,9 @@ type LedgerWriter interface {
 	// as above.
 	EnsureValidatedBlock(ValidatedBlock, Certificate)
 
-	// EnsureDigest waits until some Block that corresponds to a given
-	// Certificate appears in the ledger.  EnsureDigest does not wait for
-	// the block to be written to disk; use Wait() if needed.
+	// EnsureDigest signals the Ledger to attempt to fetch a Block matching
+	// the given Certificate.  EnsureDigest does not wait for the block to
+	// be written to disk; use Wait() if needed.
 	//
 	// The Ledger must guarantee that after this method returns, any Seed,
 	// Record, or Circulation call reflects the contents of the Block
@@ -215,7 +215,7 @@ type LedgerWriter interface {
 	// this is the case, the behavior of Ledger is undefined.
 	// (Implementations are encouraged to panic or otherwise fail loudly in
 	// this case, because it means that a fork has occurred.)
-	EnsureDigest(Certificate, chan struct{}, *AsyncVoteVerifier)
+	EnsureDigest(Certificate, *AsyncVoteVerifier)
 }
 
 // A KeyManager stores and deletes participation keys.

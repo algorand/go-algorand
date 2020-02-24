@@ -1435,9 +1435,71 @@ func TestPlayerProposesNewRound(t *testing.T) {
 	const r = round(209)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r-1, p, soft)
+	pP, pV := helper.MakeRandomProposalPayload(t, r-1)
+
+	// send a payload
+	// store an arbitrary proposal/payload
+	vVote := helper.MakeVerifiedVote(t, 0, r-1, p, propose, *pV)
+	inMsg := messageEvent{
+		T: voteVerified,
+		Input: message{
+			Vote:                vVote,
+			UnauthenticatedVote: vVote.u(),
+		},
+	}
+	err, panicErr := pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+	inMsg = messageEvent{
+		T: payloadVerified,
+		Input: message{
+			Proposal: *pP,
+		},
+		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+	}
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
 
 	// gen cert to move into the next round
-	pV := helper.MakeRandomProposalValue()
+	votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
+	for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
+		votes[i] = helper.MakeVerifiedVote(t, i, r-1, p, cert, *pV)
+	}
+	bun := unauthenticatedBundle{
+		Round:    r - 1,
+		Period:   p,
+		Proposal: *pV,
+	}
+	inMsg = messageEvent{
+		T: bundleVerified,
+		Input: message{
+			Bundle: bundle{
+				U:     bun,
+				Votes: votes,
+			},
+			UnauthenticatedBundle: bun,
+		},
+		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+	}
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	require.Equalf(t, r, pWhite.Round, "player did not enter new round")
+	require.Equalf(t, period(0), pWhite.Period, "player did not enter period 0 in new round")
+	assembleEvent := ev(pseudonodeAction{T: assemble, Round: r, Period: 0})
+	require.Truef(t, pM.getTrace().Contains(assembleEvent), "Player should try to assemble new proposal")
+}
+
+func TestPlayerCertificateThenPayloadEntersNewRound(t *testing.T) {
+	// player should create a new proposal on new round
+	const r = round(209)
+	const p = period(0)
+	pWhite, pM, helper := setupP(t, r-1, p, soft)
+	pP, pV := helper.MakeRandomProposalPayload(t, r-1)
+
+	// gen cert; this should not advance into next round
 	votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
 		votes[i] = helper.MakeVerifiedVote(t, i, r-1, p, cert, *pV)
@@ -1462,9 +1524,24 @@ func TestPlayerProposesNewRound(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
 
+	require.Equalf(t, r-1, pWhite.Round, "player entered new round but shouldn't have without payload")
+	assembleEvent := ev(pseudonodeAction{T: assemble, Round: r, Period: 0})
+	require.Falsef(t, pM.getTrace().Contains(assembleEvent), "Player should not try to assemble new proposal without new round")
+
+	// send a payload corresponding with previous cert. now we should enter new round
+	inMsg = messageEvent{
+		T: payloadVerified,
+		Input: message{
+			Proposal: *pP,
+		},
+		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+	}
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
 	require.Equalf(t, r, pWhite.Round, "player did not enter new round")
 	require.Equalf(t, period(0), pWhite.Period, "player did not enter period 0 in new round")
-	assembleEvent := ev(pseudonodeAction{T: assemble, Round: r, Period: 0})
 	require.Truef(t, pM.getTrace().Contains(assembleEvent), "Player should try to assemble new proposal")
 }
 
@@ -1613,9 +1690,33 @@ func TestPlayerCommitsCertThreshold(t *testing.T) {
 	const r = round(20239)
 	const p = period(1001)
 	pWhite, pM, helper := setupP(t, r-1, p, soft)
+	pP, pV := helper.MakeRandomProposalPayload(t, r-1)
+
+	// send a payload
+	// store an arbitrary proposal/payload
+	vVote := helper.MakeVerifiedVote(t, 0, r-1, p, propose, *pV)
+	inMsg := messageEvent{
+		T: voteVerified,
+		Input: message{
+			Vote:                vVote,
+			UnauthenticatedVote: vVote.u(),
+		},
+	}
+	err, panicErr := pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+	inMsg = messageEvent{
+		T: payloadVerified,
+		Input: message{
+			Proposal: *pP,
+		},
+		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+	}
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
 
 	// gen cert to move into the next round
-	pV := helper.MakeRandomProposalValue()
 	votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
 		votes[i] = helper.MakeVerifiedVote(t, i, r-1, p, cert, *pV)
@@ -1625,7 +1726,7 @@ func TestPlayerCommitsCertThreshold(t *testing.T) {
 		Period:   p,
 		Proposal: *pV,
 	}
-	inMsg := messageEvent{
+	inMsg = messageEvent{
 		T: bundleVerified,
 		Input: message{
 			Bundle: bundle{
@@ -1636,13 +1737,13 @@ func TestPlayerCommitsCertThreshold(t *testing.T) {
 		},
 		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
 	}
-	err, panicErr := pM.transition(inMsg)
+	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
 
 	require.Equalf(t, r, pWhite.Round, "player did not enter new round")
 	require.Equalf(t, period(0), pWhite.Period, "player did not enter period 0 in new round")
-	commitEvent := ev(ensureAction{Certificate: Certificate(bun)})
+	commitEvent := ev(ensureAction{Certificate: Certificate(bun), Payload: *pP})
 	require.Truef(t, pM.getTrace().Contains(commitEvent), "Player should try to ensure block/digest on ledger")
 }
 
@@ -2183,14 +2284,39 @@ func TestPlayerRequestsPipelinedPayloadVerification(t *testing.T) {
 	require.Falsef(t, pM.getTrace().Contains(verifyEvent), "Player should not verify payload from r + 1")
 
 	// now enter next round
+	pP, pV := helper.MakeRandomProposalPayload(t, r)
+	// send a payload
+	// store an arbitrary proposal/payload
+	vVote := helper.MakeVerifiedVote(t, 0, r, p, propose, *pV)
+	inMsg = messageEvent{
+		T: voteVerified,
+		Input: message{
+			Vote:                vVote,
+			UnauthenticatedVote: vVote.u(),
+		},
+	}
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+	inMsg = messageEvent{
+		T: payloadVerified,
+		Input: message{
+			Proposal: *pP,
+		},
+		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+	}
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
 	votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, *pVTwo)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, *pV)
 	}
 	bun := unauthenticatedBundle{
 		Round:    r,
 		Period:   p,
-		Proposal: *pVTwo,
+		Proposal: *pV,
 	}
 	inMsg = messageEvent{
 		T: bundleVerified,
@@ -2209,7 +2335,7 @@ func TestPlayerRequestsPipelinedPayloadVerification(t *testing.T) {
 
 	require.Equalf(t, r+1, pWhite.Round, "player did not enter new round")
 	require.Equalf(t, period(0), pWhite.Period, "player did not enter period 0 in new round")
-	commitEvent := ev(ensureAction{Certificate: Certificate(bun)})
+	commitEvent := ev(ensureAction{Certificate: Certificate(bun), Payload: *pP})
 	require.Truef(t, pM.getTrace().Contains(commitEvent), "Player should try to ensure block/digest on ledger")
 
 	// make sure we sent out pipelined payload verify requests
@@ -2264,7 +2390,30 @@ func TestPlayerHandlesPipelinedThresholds(t *testing.T) {
 	}
 
 	// now, enter next round
-	_, pVTwo := helper.MakeRandomProposalPayload(t, r)
+	pPTwo, pVTwo := helper.MakeRandomProposalPayload(t, r)
+	// store pPTwo
+	vVote := helper.MakeVerifiedVote(t, 0, r, p, propose, *pVTwo)
+	inMsg := messageEvent{
+		T: voteVerified,
+		Input: message{
+			Vote:                vVote,
+			UnauthenticatedVote: vVote.u(),
+		},
+	}
+	err, panicErr := pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+	inMsg = messageEvent{
+		T: payloadVerified,
+		Input: message{
+			Proposal: *pPTwo,
+		},
+		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+	}
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
 	votes = make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, *pVTwo)
@@ -2274,7 +2423,7 @@ func TestPlayerHandlesPipelinedThresholds(t *testing.T) {
 		Period:   p,
 		Proposal: *pVTwo,
 	}
-	inMsg := messageEvent{
+	inMsg = messageEvent{
 		T: bundleVerified,
 		Input: message{
 			Bundle: bundle{
@@ -2285,7 +2434,7 @@ func TestPlayerHandlesPipelinedThresholds(t *testing.T) {
 		},
 		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
 	}
-	err, panicErr := pM.transition(inMsg)
+	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
 	require.Equalf(t, r+1, pWhite.Round, "player did not enter new round")
@@ -2315,7 +2464,7 @@ func TestPlayerRegression_EnsuresCertThreshFromOldPeriod_8ba23942(t *testing.T) 
 	pWhite, pM, helper := setupP(t, r, p, cert)
 
 	// send a next threshold to send player into period 1
-	pV := helper.MakeRandomProposalValue()
+	pP, pV := helper.MakeRandomProposalPayload(t, r)
 	votes := make([]vote, int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p, next, *pV)
@@ -2343,6 +2492,17 @@ func TestPlayerRegression_EnsuresCertThreshFromOldPeriod_8ba23942(t *testing.T) 
 	require.Equalf(t, p+1, pWhite.Period, "player did not fast forward to new period")
 
 	// gen cert threshold in period 0, should move into next round
+	// store an arbitrary payload. It should be accepted since the next quorum pinned pV.
+	inMsg = messageEvent{
+		T: payloadVerified,
+		Input: message{
+			Proposal: *pP,
+		},
+		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+	}
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
 	votes = make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, *pV) // period 0
@@ -2366,8 +2526,340 @@ func TestPlayerRegression_EnsuresCertThreshFromOldPeriod_8ba23942(t *testing.T) 
 	}
 	require.Equalf(t, r+1, pWhite.Round, "player did not enter new round")
 	require.Equalf(t, period(0), pWhite.Period, "player did not enter period 0 in new round")
-	commitEvent := ev(ensureAction{Certificate: Certificate(bun)})
-	require.Truef(t, pM.getTrace().Contains(commitEvent), "Player should try to ensure block/digest on ledger")
+	commitEvent := ev(ensureAction{Certificate: Certificate(bun), Payload: *pP})
+	require.Truef(t, pM.getTrace().Contains(commitEvent), "Player should try to ensure block on ledger")
+}
+
+func TestPlayer_RejectsCertThresholdFromPreviousRound(t *testing.T) {
+	const r = round(20)
+	const p = period(0)
+	pWhite, pM, helper := setupP(t, r, p, cert)
+
+	_, pV := helper.MakeRandomProposalPayload(t, r)
+	votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
+	for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
+		votes[i] = helper.MakeVerifiedVote(t, i, r-1, p+1, cert, *pV)
+		msg := messageEvent{
+			T: voteVerified,
+			Input: message{
+				Vote:                votes[i],
+				UnauthenticatedVote: votes[i].u(),
+			},
+			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+		}
+		err, panicErr := pM.transition(msg)
+		require.NoError(t, err)
+		require.NoError(t, panicErr)
+	}
+	bun := unauthenticatedBundle{
+		Round:    r - 1,
+		Period:   p + 1,
+		Step:     cert,
+		Proposal: *pV,
+	}
+	require.Equalf(t, r, pWhite.Round, "player entered new round... bad!")
+	require.Equalf(t, p, pWhite.Period, "player changed periods... bad!")
+	commitEvent := ev(stageDigestAction{Certificate: Certificate(bun)})
+	require.Falsef(t, pM.getTrace().Contains(commitEvent), "Player should not try to stage anything")
+}
+
+func TestPlayer_CommitsCertThresholdWithoutPreStaging(t *testing.T) {
+	// if player has pinned a block, then sees a cert threshold, it should commit
+	const r = round(20)
+	const p = period(0)
+	pWhite, pM, helper := setupP(t, r, p, cert)
+
+	// send a next threshold to send player into period 1
+	pP, pV := helper.MakeRandomProposalPayload(t, r)
+	votes := make([]vote, int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
+	for i := 0; i < int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p, next, *pV)
+	}
+	bun := unauthenticatedBundle{
+		Round:    r,
+		Period:   p,
+		Step:     next,
+		Proposal: *pV,
+	}
+	inMsg := messageEvent{
+		T: bundleVerified,
+		Input: message{
+			Bundle: bundle{
+				U:     bun,
+				Votes: votes,
+			},
+			UnauthenticatedBundle: bun,
+		},
+		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+	}
+	err, panicErr := pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+	require.Equalf(t, p+1, pWhite.Period, "player did not fast forward to new period")
+
+	// store an arbitrary payload. It should be accepted since the next quorum pinned pV.
+	inMsg = messageEvent{
+		T: payloadVerified,
+		Input: message{
+			Proposal: *pP,
+		},
+		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+	}
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	// generate a cert threshold for period 1. This should ensureBlock since we have the payload.
+	votes = make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
+	for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p+1, cert, *pV) // period 0
+		msg := messageEvent{
+			T: voteVerified,
+			Input: message{
+				Vote:                votes[i],
+				UnauthenticatedVote: votes[i].u(),
+			},
+			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+		}
+		err, panicErr = pM.transition(msg)
+		require.NoError(t, err)
+		require.NoError(t, panicErr)
+	}
+	bun = unauthenticatedBundle{
+		Round:    r,
+		Period:   p + 1,
+		Step:     cert,
+		Proposal: *pV,
+	}
+	require.Equalf(t, r+1, pWhite.Round, "player did not enter new round")
+	require.Equalf(t, period(0), pWhite.Period, "player did not enter period 0 in new round")
+	commitEvent := ev(ensureAction{Certificate: Certificate(bun), Payload: *pP})
+	require.Truef(t, pM.getTrace().Contains(commitEvent), "Player should try to ensure block on ledger")
+}
+
+func TestPlayer_CertThresholdDoesNotBlock(t *testing.T) {
+	// check that ledger gets a hint to stage digest
+	const r = round(20)
+	const p = period(0)
+	pWhite, pM, helper := setupP(t, r, p, cert)
+
+	_, pV := helper.MakeRandomProposalPayload(t, r)
+	votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
+	for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, *pV)
+		msg := messageEvent{
+			T: voteVerified,
+			Input: message{
+				Vote:                votes[i],
+				UnauthenticatedVote: votes[i].u(),
+			},
+			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+		}
+		err, panicErr := pM.transition(msg)
+		require.NoError(t, err)
+		require.NoError(t, panicErr)
+	}
+	bun := unauthenticatedBundle{
+		Round:    r,
+		Period:   p,
+		Step:     cert,
+		Proposal: *pV,
+	}
+	require.Equalf(t, r, pWhite.Round, "player entered new round... bad!")
+	require.Equalf(t, p, pWhite.Period, "player changed periods... bad!")
+	commitEvent := ev(stageDigestAction{Certificate: Certificate(bun)})
+	require.Truef(t, pM.getTrace().Contains(commitEvent), "Player should have staged something but didn't")
+}
+
+func TestPlayer_CertThresholdDoesNotBlockFuturePeriod(t *testing.T) {
+	// check that ledger gets a hint to stage digest
+	const r = round(20)
+	const p = period(0)
+	pWhite, pM, helper := setupP(t, r, p, cert)
+
+	_, pV := helper.MakeRandomProposalPayload(t, r)
+	votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
+	for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p+1, cert, *pV)
+		msg := messageEvent{
+			T: voteVerified,
+			Input: message{
+				Vote:                votes[i],
+				UnauthenticatedVote: votes[i].u(),
+			},
+			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+		}
+		err, panicErr := pM.transition(msg)
+		require.NoError(t, err)
+		require.NoError(t, panicErr)
+	}
+	bun := unauthenticatedBundle{
+		Round:    r,
+		Period:   p + 1,
+		Step:     cert,
+		Proposal: *pV,
+	}
+	require.Equalf(t, r, pWhite.Round, "player entered new round... bad!")
+	require.Equalf(t, p+1, pWhite.Period, "player should have changed periods but didn't")
+	commitEvent := ev(stageDigestAction{Certificate: Certificate(bun)})
+	require.Truef(t, pM.getTrace().Contains(commitEvent), "Player should have staged something but didn't")
+}
+
+func TestPlayer_CertThresholdFastForwards(t *testing.T) {
+	const r = round(20)
+	const p = period(0)
+	pWhite, pM, helper := setupP(t, r, p, cert)
+
+	_, pV := helper.MakeRandomProposalPayload(t, r)
+	// send a bundle - individual votes will get filtered.
+	votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
+	for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p+2, cert, *pV)
+	}
+	bun := unauthenticatedBundle{
+		Round:    r,
+		Period:   p + 2,
+		Step:     cert,
+		Proposal: *pV,
+	}
+	inMsg := messageEvent{
+		T: bundleVerified,
+		Input: message{
+			Bundle: bundle{
+				U:     bun,
+				Votes: votes,
+			},
+			UnauthenticatedBundle: bun,
+		},
+		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+	}
+	err, panicErr := pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	require.Equalf(t, r, pWhite.Round, "player entered new round... bad!")
+	require.Equalf(t, p+2, pWhite.Period, "player should have changed periods but didn't")
+	commitEvent := ev(stageDigestAction{Certificate: Certificate(bun)})
+	require.Truef(t, pM.getTrace().Contains(commitEvent), "Player should have staged something but didn't")
+}
+
+func TestPlayer_CertThresholdCommitsFuturePeriodIfAlreadyHasBlock(t *testing.T) {
+	const r = round(20)
+	const p = period(0)
+	pWhite, pM, helper := setupP(t, r, p, cert)
+
+	payload, pV := helper.MakeRandomProposalPayload(t, r)
+	// give player a proposal/payload.
+	proposalVote := helper.MakeVerifiedVote(t, 0, r, p, propose, *pV)
+	inMsg := messageEvent{
+		T: voteVerified,
+		Input: message{
+			Vote:                proposalVote,
+			UnauthenticatedVote: proposalVote.u(),
+		},
+		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+	}
+	err, panicErr := pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+	inMsg = messageEvent{
+		T: payloadVerified,
+		Input: message{
+			Proposal:                *payload,
+			UnauthenticatedProposal: payload.u(),
+		},
+		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+	}
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	// send a bundle - individual votes will get filtered.
+	votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
+	for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p+2, cert, *pV)
+	}
+	bun := unauthenticatedBundle{
+		Round:    r,
+		Period:   p + 2,
+		Step:     cert,
+		Proposal: *pV,
+	}
+	inMsg = messageEvent{
+		T: bundleVerified,
+		Input: message{
+			Bundle: bundle{
+				U:     bun,
+				Votes: votes,
+			},
+			UnauthenticatedBundle: bun,
+		},
+		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+	}
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	require.Equalf(t, r+1, pWhite.Round, "player did not enter new round... bad!")
+	require.Equalf(t, period(0), pWhite.Period, "player should have entered period 0 of new round but didn't")
+	commitEvent := ev(ensureAction{Certificate: Certificate(bun), Payload: *payload})
+	require.Truef(t, pM.getTrace().Contains(commitEvent), "Player should have commited a block but didn't")
+}
+
+func TestPlayer_PayloadAfterCertThresholdCommits(t *testing.T) {
+	const r = round(20)
+	const p = period(0)
+	pWhite, pM, helper := setupP(t, r, p, cert)
+
+	pP, pV := helper.MakeRandomProposalPayload(t, r)
+	// send a bundle - individual votes will get filtered.
+	votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
+	for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p+2, cert, *pV)
+	}
+	bun := unauthenticatedBundle{
+		Round:    r,
+		Period:   p + 2,
+		Step:     cert,
+		Proposal: *pV,
+	}
+	inMsg := messageEvent{
+		T: bundleVerified,
+		Input: message{
+			Bundle: bundle{
+				U:     bun,
+				Votes: votes,
+			},
+			UnauthenticatedBundle: bun,
+		},
+		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+	}
+	err, panicErr := pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	require.Equalf(t, r, pWhite.Round, "player entered new round... bad!")
+	require.Equalf(t, p+2, pWhite.Period, "player should have changed periods but didn't")
+	commitEvent := ev(stageDigestAction{Certificate: Certificate(bun)})
+	require.Truef(t, pM.getTrace().Contains(commitEvent), "Player should have staged something but didn't")
+	pM.resetTrace()
+
+	// now, deliver payload, commit.
+	inMsg = messageEvent{
+		T: payloadVerified,
+		Input: message{
+			Proposal:                *pP,
+			UnauthenticatedProposal: pP.u(),
+		},
+		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+	}
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+	require.Equalf(t, r+1, pWhite.Round, "player did not enter new round... bad!")
+	require.Equalf(t, period(0), pWhite.Period, "player should have entered period 0 but didn't")
+	commitEvent = ev(ensureAction{Certificate: Certificate(bun), Payload: *pP})
+	require.Truef(t, pM.getTrace().Contains(commitEvent), "Player should have committed but didn't")
 }
 
 func TestPlayerAlwaysResynchsPinnedValue(t *testing.T) {

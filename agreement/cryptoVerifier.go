@@ -41,19 +41,20 @@ type (
 	// If no goroutine is dequeuing cryptoResults from cryptoVerifier.Verified*, deadlock could occur.
 	// To avoid this scenario, callers should call cryptoVerifier.ChannelFull to back off from submitting requests.
 	cryptoVerifier interface {
-		// Verify enqueues the request to be verified.
-		//
-		// The passed-in context ctx may be used to cancel the enqueuing request.
-		//
-		// The Verify function supports proposals and bundles.
-		Verify(ctx context.Context, request cryptoRequest)
-
 		// VerifyVote enqueues the request to be verified.
 		//
 		// The passed-in context ctx may be used to cancel the enqueuing request.
-		//
-		// The VerifyVote function supports votes only.
 		VerifyVote(ctx context.Context, request cryptoVoteRequest)
+
+		// VerifyProposal enqueues the request to be verified.
+		//
+		// The passed-in context ctx may be used to cancel the enqueuing request.
+		VerifyProposal(ctx context.Context, request cryptoProposalRequest)
+
+		// VerifyBundle enqueues the request to be verified.
+		//
+		// The passed-in context ctx may be used to cancel the enqueuing request.
+		VerifyBundle(ctx context.Context, request cryptoBundleRequest)
 
 		// Verified returns a channel which contains verification results.
 		//
@@ -82,16 +83,24 @@ type (
 		TaskIndex int             // Caller specific number that would be passed back in the asyncVerifyVoteResponse.TaskIndex field
 		Round     round           // The round that we're going to test against.
 		Period    period          // The period associated with the message we're going to test.
-		Pinned    bool            // A flag that is set if this is a pinned value for the given round.
 		ctx       context.Context // A context for this request, if the context is cancelled then the request is stale.
 	}
 
-	cryptoRequest struct {
+	cryptoProposalRequest struct {
 		message                   // the message we would like to verify.
 		TaskIndex int             // Caller specific number that would be passed back in the cryptoResult.TaskIndex field
 		Round     round           // The round that we're going to test against.
 		Period    period          // The period associated with the message we're going to test.
 		Pinned    bool            // A flag that is set if this is a pinned value for the given round.
+		ctx       context.Context // A context for this request, if the context is cancelled then the request is stale.
+	}
+
+	cryptoBundleRequest struct {
+		message                   // the message we would like to verify.
+		TaskIndex int             // Caller specific number that would be passed back in the asyncVerifyVoteResponse.TaskIndex field
+		Round     round           // The round that we're going to test against.
+		Period    period          // The period associated with the message we're going to test.
+		Certify   bool            // A flag that set if this is a cert bundle.
 		ctx       context.Context // A context for this request, if the context is cancelled then the request is stale.
 	}
 
@@ -106,8 +115,8 @@ type (
 	poolCryptoVerifier struct {
 		voteVerifier *AsyncVoteVerifier
 		votes        voteChanPair
-		bundles      chanPair
-		proposals    chanPair
+		proposals    proposalChanPair
+		bundles      bundleChanPair
 
 		validator        BlockValidator
 		ledger           LedgerReader
@@ -118,14 +127,19 @@ type (
 		wg   sync.WaitGroup
 	}
 
-	chanPair struct {
-		in  chan cryptoRequest
-		out chan cryptoResult
-	}
-
 	voteChanPair struct {
 		in  chan cryptoVoteRequest
 		out chan asyncVerifyVoteResponse
+	}
+
+	proposalChanPair struct {
+		in  chan cryptoProposalRequest
+		out chan cryptoResult
+	}
+
+	bundleChanPair struct {
+		in  chan cryptoBundleRequest
+		out chan cryptoResult
 	}
 
 	bundleFuture struct {
@@ -147,8 +161,8 @@ func makeCryptoVerifier(l LedgerReader, v BlockValidator, voteVerifier *AsyncVot
 		in:  make(chan cryptoVoteRequest, voteVerifier.Parallelism()),
 		out: make(chan asyncVerifyVoteResponse, 3*voteVerifier.Parallelism()),
 	}
-	c.bundles = chanPair{
-		in:  make(chan cryptoRequest, 1),
+	c.bundles = bundleChanPair{
+		in:  make(chan cryptoBundleRequest, 1),
 		out: make(chan cryptoResult, 3),
 	}
 
@@ -156,8 +170,8 @@ func makeCryptoVerifier(l LedgerReader, v BlockValidator, voteVerifier *AsyncVot
 	// TODO We want proper backpressure from the proposalTable into the network.
 	baseBuffer := 3
 	maxVotes := cap(c.votes.in) + cap(c.votes.out) + voteVerifier.Parallelism()
-	c.proposals = chanPair{
-		in:  make(chan cryptoRequest, 1),
+	c.proposals = proposalChanPair{
+		in:  make(chan cryptoProposalRequest, 1),
 		out: make(chan cryptoResult, maxVotes+baseBuffer),
 	}
 
@@ -247,15 +261,24 @@ func (c *poolCryptoVerifier) bundleWaitWorker(fromVoteFill <-chan bundleFuture) 
 	}
 }
 
-func (c *poolCryptoVerifier) Verify(ctx context.Context, request cryptoRequest) {
-	c.proposalContexts.clearStaleContexts(request.Round, request.Period, request.Pinned)
-	request.ctx = c.proposalContexts.add(request)
+func (c *poolCryptoVerifier) VerifyVote(ctx context.Context, request cryptoVoteRequest) {
+	c.proposalContexts.clearStaleContexts(request.Round, request.Period, false, false)
+	request.ctx = c.proposalContexts.addVote(request)
 	switch request.Tag {
-	case protocol.VoteBundleTag:
+	case protocol.AgreementVoteTag:
 		select {
-		case c.bundles.in <- request:
+		case c.votes.in <- request:
 		case <-ctx.Done():
 		}
+	default:
+		logging.Base().Panicf("Verify action called on bad type: request is %v", request)
+	}
+}
+
+func (c *poolCryptoVerifier) VerifyProposal(ctx context.Context, request cryptoProposalRequest) {
+	c.proposalContexts.clearStaleContexts(request.Round, request.Period, request.Pinned, false)
+	request.ctx = c.proposalContexts.addProposal(request)
+	switch request.Tag {
 	case protocol.ProposalPayloadTag:
 		select {
 		case c.proposals.in <- request:
@@ -266,13 +289,13 @@ func (c *poolCryptoVerifier) Verify(ctx context.Context, request cryptoRequest) 
 	}
 }
 
-func (c *poolCryptoVerifier) VerifyVote(ctx context.Context, request cryptoVoteRequest) {
-	c.proposalContexts.clearStaleContexts(request.Round, request.Period, request.Pinned)
-	request.ctx = c.proposalContexts.addVote(request)
+func (c *poolCryptoVerifier) VerifyBundle(ctx context.Context, request cryptoBundleRequest) {
+	c.proposalContexts.clearStaleContexts(request.Round, request.Period, false, request.Certify)
+	request.ctx = c.proposalContexts.addBundle(request)
 	switch request.Tag {
-	case protocol.AgreementVoteTag:
+	case protocol.VoteBundleTag:
 		select {
-		case c.votes.in <- request:
+		case c.bundles.in <- request:
 		case <-ctx.Done():
 		}
 	default:
@@ -332,7 +355,7 @@ func (c *poolCryptoVerifier) proposalVerifyWorker() {
 	}
 }
 
-func (c *poolCryptoVerifier) verifyProposalPayload(request cryptoRequest) cryptoResult {
+func (c *poolCryptoVerifier) verifyProposalPayload(request cryptoProposalRequest) cryptoResult {
 	m := request.message
 	up := request.UnauthenticatedProposal
 
