@@ -266,7 +266,7 @@ func (l *testLedger) EnsureBlock(e bookkeeping.Block, c agreement.Certificate) {
 	l.notify(e.Round())
 }
 
-func (l *testLedger) EnsureDigest(c agreement.Certificate, quit chan struct{}, verifier *agreement.AsyncVoteVerifier) {
+func (l *testLedger) EnsureDigest(c agreement.Certificate, verifier *agreement.AsyncVoteVerifier) {
 	r := c.Round
 	consistencyCheck := func() bool {
 		l.mu.Lock()
@@ -286,14 +286,10 @@ func (l *testLedger) EnsureDigest(c agreement.Certificate, quit chan struct{}, v
 		return
 	}
 
-	select {
-	case <-quit:
-		return
-	case <-l.Wait(r):
-		if !consistencyCheck() {
-			err := fmt.Errorf("Wait channel fired without matching block in round %d", r)
-			panic(err)
-		}
+	<-l.Wait(r)
+	if !consistencyCheck() {
+		err := fmt.Errorf("Wait channel fired without matching block in round %d", r)
+		panic(err)
 	}
 }
 
