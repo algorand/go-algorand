@@ -25,7 +25,15 @@ while [ $SECONDS -lt $end ]; do
     aws s3 ls "${BUILD_LOG_PATH}"-"${LOG_SEQ}" ${NO_SIGN_REQUEST} 2> /dev/null > /dev/null
     if [ "$?" = "0" ]; then
         while true ; do
-            LOG_CHUNK=$(aws s3 cp "${BUILD_LOG_PATH}"-"${LOG_SEQ}" - ${NO_SIGN_REQUEST} 2> /dev/null)
+            if [ "${NO_SIGN_REQUEST}" == "--no-sign-request" ]; then
+                URL="${BUILD_LOG_PATH}-${LOG_SEQ}"
+                URL="${URL#s3://}"
+                URL="${URL/\//.s3.amazonaws.com/}"
+                URL="https://${URL}"
+                LOG_CHUNK=$(curl  --fail "${URL}" 2> /dev/null)
+            else
+                LOG_CHUNK=$(aws s3 cp "${BUILD_LOG_PATH}"-"${LOG_SEQ}" - ${NO_SIGN_REQUEST} 2> /dev/null)
+            fi
             if [ "$?" = "0" ]; then
                 echo "${LOG_CHUNK}"
                 ((LOG_SEQ++))
