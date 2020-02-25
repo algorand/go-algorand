@@ -1,39 +1,63 @@
 stages:
   build-linux-amd64:
+  - task: docker.Version
+    name: linux-amd64
+    arch: amd64
+    configFilePath: scripts/configure_dev-deps.sh
   - task: shell.docker.Ensure
     image: algorand/go-algorand-linux
     arch: amd64
+    version: '{{ docker.Version.linux-amd64.version }}'
     dockerFilePath: docker/build/cicd.Dockerfile
-    configFilePath: scripts/configure_dev-deps.sh
   - task: docker.Make
     image: algorand/go-algorand-linux
-    configFilePath: scripts/configure_dev-deps.sh
+    version: '{{ docker.Version.linux-amd64.version }}'
     workDir: /go/src/github.com/algorand/go-algorand
-    arch: amd64
     target: fulltest
   - task: docker.Make
     image: algorand/go-algorand-linux
-    configFilePath: scripts/configure_dev-deps.sh
+    version: '{{ docker.Version.linux-amd64.version }}'
     workDir: /go/src/github.com/algorand/go-algorand
-    arch: amd64
     target: ci-build
   build-linux-arm64:
+  - task: docker.Version
+    name: linux-arm64
+    arch: arm64v8
+    configFilePath: scripts/configure_dev-deps.sh
   - task: shell.docker.Ensure
     image: algorand/go-algorand-linux
     arch: arm64v8
+    version: '{{ docker.Version.linux-arm64.version }}'
     dockerFilePath: docker/build/cicd.Dockerfile
-    configFilePath: scripts/configure_dev-deps.sh
   - task: docker.Make
-    configFilePath: scripts/configure_dev-deps.sh
     image: algorand/go-algorand-linux
+    version: '{{ docker.Version.linux-arm64.version }}'
     workDir: /go/src/github.com/algorand/go-algorand
-    arch: arm64v8
     target: fulltest
   - task: docker.Make
-    configFilePath: scripts/configure_dev-deps.sh
     image: algorand/go-algorand-linux
+    version: '{{ docker.Version.linux-arm64.version }}'
     workDir: /go/src/github.com/algorand/go-algorand
-    arch: arm64v8
+    target: ci-build
+  build-linux-armv6:
+  - task: docker.Version
+    name: linux-arm64
+    arch: arm32v6
+    configFilePath: scripts/configure_dev-deps.sh
+  - task: shell.docker.Ensure
+    image: algorand/go-algorand-linux
+    arch: arm32v6
+    version: '{{ docker.Version.linux-arm64.version }}'
+    dockerFilePath: docker/build/armv6.Dockerfile
+  - task: docker.Make
+    image: algorand/go-algorand-linux
+    version: '{{ docker.Version.linux-arm64.version }}'
+    workDir: /go/src/github.com/algorand/go-algorand
+    target: test
+  - task: docker.Make
+    image: algorand/go-algorand-linux
+    version: '{{ docker.Version.linux-arm64.version }}'
+    workDir: /go/src/github.com/algorand/go-algorand
     target: ci-build
   build-local:
   - task: shell.Make
