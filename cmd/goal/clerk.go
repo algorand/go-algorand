@@ -207,7 +207,7 @@ func writeTxnToFile(client libgoal.Client, signTx bool, dataDir string, walletNa
 		return err
 	}
 	// Write the SignedTxn to the output file
-	return writeFile(filename, protocol.Encode(stxn), 0600)
+	return writeFile(filename, protocol.Encode(&stxn), 0600)
 }
 
 func getProgramArgs() [][]byte {
@@ -392,7 +392,7 @@ var sendCmd = &cobra.Command{
 				}
 			}
 		} else {
-			err = writeFile(txFilename, protocol.Encode(stx), 0600)
+			err = writeFile(txFilename, protocol.Encode(&stx), 0600)
 			if err != nil {
 				reportErrorf(err.Error())
 			}
@@ -514,7 +514,7 @@ var rawsendCmd = &cobra.Command{
 				}
 
 				fmt.Printf("  %s: %s\n", txid, errmsg)
-				rejectsData = append(rejectsData, protocol.Encode(txn)...)
+				rejectsData = append(rejectsData, protocol.Encode(&txn)...)
 			}
 
 			f, err := os.OpenFile(rejectsFilename, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
@@ -669,7 +669,7 @@ var signCmd = &cobra.Command{
 				}
 			}
 
-			outData = append(outData, protocol.Encode(signedTxn)...)
+			outData = append(outData, protocol.Encode(&signedTxn)...)
 			count++
 		}
 		err = writeFile(outFilename, outData, 0600)
@@ -715,7 +715,7 @@ var groupCmd = &cobra.Command{
 		var outData []byte
 		for _, txn := range txns {
 			txn.Txn.Group = crypto.HashObj(group)
-			outData = append(outData, protocol.Encode(txn)...)
+			outData = append(outData, protocol.Encode(&txn)...)
 		}
 
 		err = writeFile(outFilename, outData, 0600)
@@ -756,7 +756,7 @@ var splitCmd = &cobra.Command{
 		outBase := outFilename[:len(outFilename)-len(outExt)]
 		for idx, txn := range txns {
 			fn := fmt.Sprintf("%s-%d%s", outBase, idx, outExt)
-			err = writeFile(fn, protocol.Encode(txn), 0600)
+			err = writeFile(fn, protocol.Encode(&txn), 0600)
 			if err != nil {
 				reportErrorf(fileWriteError, outFilename, err)
 			}
@@ -850,7 +850,7 @@ var compileCmd = &cobra.Command{
 					reportErrorf(errorSigningTX, err)
 				}
 				ls := transactions.LogicSig{Logic: program, Sig: signature}
-				outblob = protocol.Encode(ls)
+				outblob = protocol.Encode(&ls)
 			}
 			if !noProgramOutput {
 				fout, err := os.Create(outname)
