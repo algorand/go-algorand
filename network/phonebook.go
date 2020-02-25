@@ -28,6 +28,8 @@ import (
 // of how many addresses the phonebook actually has. ( with the retry-after logic applied )
 const getAllAddresses = math.MaxInt32
 
+const defaultList = "default"
+
 // Phonebook stores or looks up addresses of nodes we might contact
 type Phonebook interface {
 	// GetAddresses(N) returns up to N addresses, but may return fewer
@@ -97,6 +99,17 @@ func (e *phonebookImpl) deletePhonebookEntry(entryName, networkName string) {
 	pbEntry := e.data[entryName]
 	delete(pbEntry.networkNames, networkName)
 	if 0 == len(pbEntry.networkNames) {
+		delete(e.data, entryName)
+	}
+}
+
+func (e *phonebookEntries) deletePhonebookEntry(entryName, phonebookName string) {
+	e.lock.Lock()
+	defer p.lock.Unlock()
+
+	pbEntry := e.data[entryName]
+	delete(pbEntry.phonebookNames, phonebookName)
+	if 0 == len(phbEntry.phoneboobNames) {
 		delete(e.data, entryName)
 	}
 }
