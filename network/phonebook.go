@@ -111,13 +111,10 @@ func (e *phonebookImpl) deletePhonebookEntry(entryName, networkName string) {
 	}
 }
 
-func (e *phonebookEntries) deletePhonebookEntry(entryName, phonebookName string) {
-	e.lock.Lock()
-	defer p.lock.Unlock()
-
+func (e *PhonebookImpl) deletePhonebookEntry(entryName, networkName string) {
 	pbEntry := e.data[entryName]
-	delete(pbEntry.phonebookNames, phonebookName)
-	if 0 == len(phbEntry.phoneboobNames) {
+	delete(pbEntry.networkNames, networkName)
+	if 0 == len(pbEntry.networkNames) {
 		delete(e.data, entryName)
 	}
 }
