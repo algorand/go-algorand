@@ -2,6 +2,8 @@
 
 set -ex
 
+trap 'bash ./scripts/release/common/ec2/shutdown.sh' ERR
+
 # Path(s) are relative to the root of the Jenkins workspace.
 
 #BUCKET_LOCATION="$2"

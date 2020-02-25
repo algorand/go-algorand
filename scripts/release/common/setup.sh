@@ -7,8 +7,9 @@ if [ -z "${BUILDTIMESTAMP}" ]; then
     BUILDTIMESTAMP=$(cat "${HOME}/buildtimestamp")
     export BUILDTIMESTAMP
     echo run "${0}" with output to "${HOME}/buildlog_${BUILDTIMESTAMP}"
-    (bash "${0}" "${1}" 2>&1) | tee "${HOME}/buildlog_${BUILDTIMESTAMP}"
-    exit 0
+    bash "${0}" "${1}" 2>&1 | tee "${HOME}/buildlog_${BUILDTIMESTAMP}"
+    # http://tldp.org/LDP/abs/html/internalvariables.html#PIPESTATUSREF
+    exit "${PIPESTATUS[0]}"
 fi
 
 echo
@@ -41,7 +42,6 @@ then
     echo There has been a problem cloning the "$BRANCH" branch.
     exit 1
 fi
-# TODO: if we are checking out a release tag, `git tag --verify` it
 
 export DEBIAN_FRONTEND=noninteractive
 
@@ -54,7 +54,14 @@ fi
 
 # Install latest Go
 cd "${HOME}"
-python3 "${HOME}/go/src/github.com/algorand/go-algorand/scripts/get_latest_go.py" --version-prefix=1.12
+
+#if ! python3 "${HOME}/go/src/github.com/algorand/go-algorand/scripts/get_latest_go.py" --version-prefix=1.12
+if ! python3 "${HOME}/go/src/github.com/algorand/go-algorand/scripts/get_latest_go.py" --version-prefix=1.14
+then
+    echo Golang could not be installed!
+    exit 1
+fi
+
 # $HOME will be interpreted by the outer shell to create the string passed to sudo bash
 sudo bash -c "cd /usr/local && tar zxf ${HOME}/go*.tar.gz"
 

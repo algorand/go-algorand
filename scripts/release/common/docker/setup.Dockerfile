@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Note that we're installing `awscli` from pip rather than from the apt repository because of
 # the following error message:
 #
@@ -12,11 +11,3 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y jq git python python-pip ssh && \
     pip install awscli
 
-||||||| merged common ancestors
-=======
-FROM ubuntu:18.04
-RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y awscli jq ssh
-#RUN adduser --uid $(grep jenkins /etc/passwd | awk -F: '{ print $3 }') ubuntu
-RUN adduser --uid 111 ubuntu
-
->>>>>>> master
