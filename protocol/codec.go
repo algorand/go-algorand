@@ -19,6 +19,7 @@ package protocol
 import (
 	"fmt"
 	"io"
+	"os"
 	"sync"
 
 	"github.com/algorand/go-codec/codec"
@@ -109,31 +110,15 @@ func EncodeMsgp(obj msgp.Marshaler) []byte {
 }
 
 // Encode returns a msgpack-encoded byte buffer for a given object.
-func Encode(obj interface{}) []byte {
-	msgp, ok := obj.(msgp.Marshaler)
-	if ok && msgp.CanMarshalMsg(msgp) {
-		return EncodeMsgp(msgp)
+func Encode(obj msgp.Marshaler) []byte {
+	if obj.CanMarshalMsg(obj) {
+		return EncodeMsgp(obj)
 	}
+
+	// Use fmt instead of logging to avoid import loops;
+	// the expectation is that this should never happen.
+	fmt.Fprintf(os.Stderr, "Encoding %T using go-codec; stray embedded field?\n", obj)
 	return EncodeReflect(obj)
-}
-
-// CountingWriter is an implementation of io.Writer that tracks the number
-// of bytes written (but discards the actual bytes).
-type CountingWriter struct {
-	N int
-}
-
-func (cw *CountingWriter) Write(b []byte) (int, error) {
-	blen := len(b)
-	cw.N += blen
-	return blen, nil
-}
-
-// EncodeLen returns len(Encode(obj))
-func EncodeLen(obj interface{}) int {
-	var cw CountingWriter
-	EncodeStream(&cw, obj)
-	return cw.N
 }
 
 // EncodeStream is like Encode but writes to an io.Writer instead.
@@ -190,11 +175,15 @@ func DecodeMsgp(b []byte, objptr msgp.Unmarshaler) (err error) {
 
 // Decode attempts to decode a msgpack-encoded byte buffer
 // into an object instance pointed to by objptr.
-func Decode(b []byte, objptr interface{}) error {
-	msgp, ok := objptr.(msgp.Unmarshaler)
-	if ok && msgp.CanUnmarshalMsg(msgp) {
-		return DecodeMsgp(b, msgp)
+func Decode(b []byte, objptr msgp.Unmarshaler) error {
+	if objptr.CanUnmarshalMsg(objptr) {
+		return DecodeMsgp(b, objptr)
 	}
+
+	// Use fmt instead of logging to avoid import loops;
+	// the expectation is that this should never happen.
+	fmt.Fprintf(os.Stderr, "Decoding %T using go-codec; stray embedded field?\n", objptr)
+
 	return DecodeReflect(b, objptr)
 }
 

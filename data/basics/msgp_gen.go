@@ -852,6 +852,9 @@ func (z AssetIndex) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ AssetIndex) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(AssetIndex)
+	if !ok {
+		_, ok = (z).(*AssetIndex)
+	}
 	return ok
 }
 
@@ -1951,6 +1954,9 @@ func (z Round) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ Round) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(Round)
+	if !ok {
+		_, ok = (z).(*Round)
+	}
 	return ok
 }
 
@@ -1994,6 +2000,9 @@ func (z RoundInterval) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ RoundInterval) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(RoundInterval)
+	if !ok {
+		_, ok = (z).(*RoundInterval)
+	}
 	return ok
 }
 
@@ -2037,6 +2046,9 @@ func (z Status) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ Status) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(Status)
+	if !ok {
+		_, ok = (z).(*Status)
+	}
 	return ok
 }
 

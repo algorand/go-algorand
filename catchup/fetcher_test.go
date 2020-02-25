@@ -221,7 +221,7 @@ func (df *dummyFetcher) GetBlockBytes(ctx context.Context, r basics.Round) (data
 		},
 	}
 
-	encodedData := protocol.Encode(dummyBlock)
+	encodedData := protocol.Encode(&dummyBlock)
 
 	select {
 	case <-timer.C:

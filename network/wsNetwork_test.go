@@ -1384,3 +1384,89 @@ func TestCheckProtocolVersionMatch(t *testing.T) {
 	require.Equal(t, "", matchingVersion)
 	require.Equal(t, "3", otherVersion)
 }
+
+func handleTopicRequest(msg IncomingMessage) (out OutgoingMessage) {
+
+	topics, err := UnmarshallTopics(msg.Data)
+	if err != nil {
+		return
+	}
+
+	val1b, f := topics.GetValue("val1")
+	if !f {
+		return
+	}
+	val2b, f := topics.GetValue("val2")
+	if !f {
+		return
+	}
+	val1 := int(val1b[0])
+	val2 := int(val2b[0])
+
+	respTopics := Topics{
+		Topic{
+			key:  "value",
+			data: []byte{byte(val1 + val2)},
+		},
+	}
+	return OutgoingMessage{
+		Action: Respond,
+		Tag:    protocol.TopicMsgRespTag,
+		Topics: respTopics,
+	}
+}
+
+var topicMsgReqTag Tag = "TQ"
+
+// Set up two nodes, test topics send/recieve is working
+func TestWebsocketNetworkTopicRoundtrip(t *testing.T) {
+	netA := makeTestWebsocketNode(t)
+	netA.config.GossipFanout = 1
+	netA.Start()
+	defer func() { t.Log("stopping A"); netA.Stop(); t.Log("A done") }()
+	netB := makeTestWebsocketNode(t)
+	netB.config.GossipFanout = 1
+	addrA, postListen := netA.Address()
+	require.True(t, postListen)
+	t.Log(addrA)
+	netB.phonebook.AddOrUpdatePhonebook("default", &oneEntryPhonebook{addr: addrA})
+	netB.Start()
+	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
+
+	netB.RegisterHandlers([]TaggedMessageHandler{
+		TaggedMessageHandler{
+			Tag:            topicMsgReqTag,
+			MessageHandler: HandlerFunc(handleTopicRequest),
+		},
+	})
+
+	readyTimeout := time.NewTimer(2 * time.Second)
+	waitReady(t, netA, readyTimeout.C)
+	t.Log("a ready")
+	waitReady(t, netB, readyTimeout.C)
+	t.Log("b ready")
+
+	peerA := netA.peers[0]
+
+	topics := Topics{
+		Topic{
+			key:  "command",
+			data: []byte("add"),
+		},
+		Topic{
+			key:  "val1",
+			data: []byte{1},
+		},
+		Topic{
+			key:  "val2",
+			data: []byte{4},
+		},
+	}
+
+	resp, err := peerA.Request(context.Background(), topicMsgReqTag, topics)
+	assert.NoError(t, err)
+
+	sum, found := resp.Topics.GetValue("value")
+	assert.Equal(t, true, found)
+	assert.Equal(t, 5, int(sum[0]))
+}

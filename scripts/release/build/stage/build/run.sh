@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# shellcheck disable=2029
+
+set -ex
 
 set -ex
 
