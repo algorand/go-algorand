@@ -86,7 +86,13 @@ type AlgorandFullNode struct {
 
 	ledger    *data.Ledger
 	net       network.GossipNode
+<<<<<<< variant A
 	phonebook network.Phonebook
+>>>>>>> variant B
+	phonebook *network.PhonebookImpl
+####### Ancestor
+	phonebook *network.ThreadsafePhonebook
+======= end
 
 	transactionPool *pools.TransactionPool
 	txHandler       *data.TxHandler

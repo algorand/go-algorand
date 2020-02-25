@@ -1198,7 +1198,13 @@ func TestSlowPeerDisconnection(t *testing.T) {
 	wn := &WebsocketNetwork{
 		log:                            log,
 		config:                         defaultConfig,
+<<<<<<< variant A
 		phonebook:                      MakePhonebook(1, 1*time.Millisecond),
+>>>>>>> variant B
+		phonebook:                      &PhonebookImpl{},
+####### Ancestor
+		phonebook:                      MakeMultiPhonebook(),
+======= end
 		GenesisID:                      "go-test-network-genesis",
 		NetworkID:                      config.Devtestnet,
 		slowWritingPeerMonitorInterval: time.Millisecond * 50,
