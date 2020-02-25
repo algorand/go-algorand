@@ -78,7 +78,7 @@ func TestRateLimiting(t *testing.T) {
 	wn := &WebsocketNetwork{
 		log:       log,
 		config:    defaultConfig,
-		phonebook: MakeMultiPhonebook(),
+		phonebook: &PhonebookImpl{},
 		GenesisID: "go-test-network-genesis",
 		NetworkID: config.Devtestnet,
 	}
@@ -105,15 +105,15 @@ func TestRateLimiting(t *testing.T) {
 	clientsCount := int(defaultConfig.ConnectionsRateLimitingCount + 5)
 
 	networks := make([]*WebsocketNetwork, clientsCount)
-	phonebooks := make([]*ThreadsafePhonebook, clientsCount)
+	phonebooks := make([]*PhonebookImpl, clientsCount)
 	for i := 0; i < clientsCount; i++ {
 		networks[i] = makeTestWebsocketNodeWithConfig(t, noAddressConfig)
 		networks[i].config.GossipFanout = 1
-		phonebooks[i] = MakeThreadsafePhonebook(networks[i].config.ConnectionsRateLimitingCount,
+		phonebooks[i] = MakePhonebookImpl(networks[i].config.ConnectionsRateLimitingCount,
 			time.Duration(networks[i].config.ConnectionsRateLimitingWindowSeconds)*time.Second)
-		phonebooks[i].ReplacePeerList([]string{addrA})
-		networks[i].phonebook = MakeMultiPhonebook()
-		networks[i].phonebook.AddOrUpdatePhonebook("default", phonebooks[i])
+		phonebooks[i].ReplacePeerList([]string{addrA}, "default")
+		networks[i].phonebook = &PhonebookImpl{}
+		networks[i].phonebook.ReplacePeerList([]string{addrA}, "default")
 		defer func(net *WebsocketNetwork, i int) {
 			t.Logf("stopping network %d", i)
 			net.Stop()
