@@ -29,7 +29,12 @@ export BRANCH
 
 # Check out
 mkdir -p "${HOME}/go/src/github.com/algorand"
-cd "${HOME}/go/src/github.com/algorand" && git clone --single-branch --branch "${BRANCH}" https://github.com/algorand/go-algorand go-algorand
+cd "${HOME}/go/src/github.com/algorand"
+if ! git clone --single-branch --branch "${BRANCH}" https://github.com/algorand/go-algorand go-algorand
+then
+    echo There has been a problem cloning the "$BRANCH" branch.
+    exit 1
+fi
 
 export DEBIAN_FRONTEND=noninteractive
 
@@ -97,7 +102,11 @@ EOF
 # Install aptly for building debian repo
 mkdir -p "$GOPATH/src/github.com/aptly-dev"
 cd "$GOPATH/src/github.com/aptly-dev"
-git clone https://github.com/aptly-dev/aptly
+if ! git clone https://github.com/aptly-dev/aptly
+then
+    echo There has been a problem cloning the aptly project.
+    exit 1
+fi
 cd aptly && git fetch
 
 # As of 2019-06-06 release tag v1.3.0 is 2018-May, GnuPG 2 support was added in October but they haven't tagged a new release yet. Hash below seems to work so far.
