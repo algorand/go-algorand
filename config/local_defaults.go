@@ -90,6 +90,7 @@ var defaultLocalV6 = Local{
 	TxSyncServeResponseSize:               1000000,
 	PeerConnectionsUpdateInterval:         3600,
 	DNSSecurityFlags:                      0x01, // New value with default 0x01
+	EnablePingHandler:                     true,
 	// DO NOT MODIFY VALUES - New values may be added carefully - See WARNING at top of file
 }
 
@@ -415,6 +416,9 @@ func migrate(cfg Local) (newCfg Local, err error) {
 	if newCfg.Version == 5 {
 		if newCfg.DNSSecurityFlags == 0 {
 			newCfg.DNSSecurityFlags = defaultLocalV6.DNSSecurityFlags
+		}
+		if newCfg.EnablePingHandler == defaultLocalV5.EnablePingHandler {
+			newCfg.EnablePingHandler = defaultLocalV6.EnablePingHandler
 		}
 
 		newCfg.Version = 6

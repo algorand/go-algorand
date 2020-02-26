@@ -46,5 +46,6 @@
     "TxSyncServeResponseSize": 1000000,
     "SuggestedFeeSlidingWindowSize":  50,
     "PeerConnectionsUpdateInterval": 3600,
-    "DNSSecurityFlags": 1
+    "DNSSecurityFlags": 1,
+    "EnablePingHandler": true
 }

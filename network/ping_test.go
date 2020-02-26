@@ -27,10 +27,12 @@ import (
 func TestPing(t *testing.T) {
 	netA := makeTestWebsocketNode(t)
 	netA.config.GossipFanout = 1
+	netA.config.PeerPingPeriodSeconds = 5
 	netA.Start()
 	defer func() { t.Log("stopping A"); netA.Stop(); t.Log("A done") }()
 	netB := makeTestWebsocketNode(t)
 	netB.config.GossipFanout = 1
+	netB.config.PeerPingPeriodSeconds = 5
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)

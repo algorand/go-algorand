@@ -95,8 +95,6 @@ func TestRateLimiting(t *testing.T) {
 
 	defer func() { t.Log("stopping A"); netA.Stop(); t.Log("A done") }()
 
-	counter := newMessageCounter(t, 5)
-	netA.RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{Tag: debugTag, MessageHandler: counter}})
 	netA.Start()
 	addrA, postListen := netA.Address()
 	require.Truef(t, postListen, "Listening network failed to start")
