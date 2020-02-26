@@ -262,6 +262,9 @@ type Local struct {
 	// 0x04 (dnssecTelemetryAddr) - validate telemetry and metrics names to addresses resolution
 	// ...
 	DNSSecurityFlags uint32
+
+	// EnablePingHandler controls whether the gossip node would respond to ping messages with a pong message.
+	EnablePingHandler bool
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)

@@ -71,3 +71,9 @@ func TestGetRequestNonce(t *testing.T) {
 		require.Equal(t, true, seenValue[x])
 	}
 }
+
+func TestDefaultMessageTagsLength(t *testing.T) {
+	for tag := range defaultSendMessageTags {
+		require.Equal(t, 2, len(tag))
+	}
+}
