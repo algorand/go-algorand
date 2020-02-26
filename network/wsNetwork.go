@@ -672,7 +672,7 @@ func (wn *WebsocketNetwork) Start() {
 		wn.scheme = "http"
 	}
 	wn.meshUpdateRequests <- meshRequest{false, nil}
-	if wn.config.PeerPingPeriodSeconds > 0 {
+	if wn.config.EnablePingHandler {
 		wn.RegisterHandlers(pingHandlers)
 	}
 	if wn.prioScheme != nil {

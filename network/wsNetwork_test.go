@@ -1472,13 +1472,13 @@ func TestWebsocketNetworkTopicRoundtrip(t *testing.T) {
 func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 	netA := makeTestWebsocketNode(t)
 	netA.config.GossipFanout = 1
-	netA.config.PeerPingPeriodSeconds = 0
+	netA.config.EnablePingHandler = false
 
 	netA.Start()
 	defer func() { t.Log("stopping A"); netA.Stop(); t.Log("A done") }()
 	netB := makeTestWebsocketNode(t)
 	netB.config.GossipFanout = 1
-	netB.config.PeerPingPeriodSeconds = 0
+	netB.config.EnablePingHandler = false
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
