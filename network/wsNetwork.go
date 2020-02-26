@@ -51,6 +51,7 @@ import (
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
 	tools_network "github.com/algorand/go-algorand/tools/network"
+	"github.com/algorand/go-algorand/tools/network/dnssec"
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
@@ -529,8 +530,11 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 }
 
 func (wn *WebsocketNetwork) setup() {
-
-	wn.dialer = makeRateLimitingDialer(wn.phonebook)
+	var preferredResolver *dnssec.Resolver
+	if wn.config.DNSSecurityRelayAddrEnforced() {
+		preferredResolver = &dnssec.DefaultResolver
+	}
+	wn.dialer = makeRateLimitingDialer(wn.phonebook, preferredResolver)
 	wn.transport = makeRateLimitingTransport(wn.phonebook, 10*time.Second, &wn.dialer)
 
 	wn.upgrader.ReadBufferSize = 4096
@@ -1446,7 +1450,7 @@ func (wn *WebsocketNetwork) peersToPing() []*wsPeer {
 }
 
 func (wn *WebsocketNetwork) getDNSAddrs(dnsBootstrap string) []string {
-	srvPhonebook, err := tools_network.ReadFromSRV("algobootstrap", "tcp", dnsBootstrap, wn.config.FallbackDNSResolverAddress)
+	srvPhonebook, err := tools_network.ReadFromSRV("algobootstrap", "tcp", dnsBootstrap, wn.config.FallbackDNSResolverAddress, wn.config.DNSSecuritySRVEnforced())
 	if err != nil {
 		// only log this warning on testnet or devnet
 		if wn.NetworkID == config.Devnet || wn.NetworkID == config.Testnet {
