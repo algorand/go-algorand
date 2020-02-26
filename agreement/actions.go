@@ -46,6 +46,7 @@ const (
 
 	// ledger
 	ensure
+	stageDigest
 
 	// time
 	rezero
@@ -123,7 +124,7 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 	if a.T == broadcastVotes {
 		tag := protocol.AgreementVoteTag
 		for i, uv := range a.UnauthenticatedVotes {
-			data := protocol.Encode(uv)
+			data := protocol.Encode(&uv)
 			sendErr := s.Network.Broadcast(tag, data)
 			if sendErr != nil {
 				s.log.Warnf("Network was unable to queue votes for broadcast(%v). %d / %d votes for round %d period %d step %d were dropped.",
@@ -144,16 +145,16 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 	var data []byte
 	switch a.Tag {
 	case protocol.AgreementVoteTag:
-		data = protocol.Encode(a.UnauthenticatedVote)
+		data = protocol.Encode(&a.UnauthenticatedVote)
 	case protocol.VoteBundleTag:
-		data = protocol.Encode(a.UnauthenticatedBundle)
+		data = protocol.Encode(&a.UnauthenticatedBundle)
 	case protocol.ProposalPayloadTag:
 		msg := a.CompoundMessage
 		payload := transmittedPayload{
 			unauthenticatedProposal: msg.Proposal,
 			PriorVote:               msg.Vote,
 		}
-		data = protocol.Encode(payload)
+		data = protocol.Encode(&payload)
 	}
 
 	switch a.T {
@@ -178,6 +179,7 @@ type cryptoAction struct {
 	Proposal  proposalValue // TODO deprecate
 	Round     round
 	Period    period
+	Step      step
 	Pinned    bool
 	TaskIndex int
 }
@@ -197,15 +199,16 @@ func (a cryptoAction) do(ctx context.Context, s *Service) {
 	case verifyPayload:
 		s.demux.verifyPayload(ctx, a.M, a.Round, a.Period, a.Pinned)
 	case verifyBundle:
-		s.demux.verifyBundle(ctx, a.M, a.Round, a.Period)
+		s.demux.verifyBundle(ctx, a.M, a.Round, a.Period, a.Step)
 	}
 }
 
 type ensureAction struct {
 	nonpersistent
 
-	Payload     proposal
-	PayloadOk   bool
+	// the payload that we will give to the ledger
+	Payload proposal
+	// the certificate proving commitment
 	Certificate Certificate
 }
 
@@ -214,7 +217,7 @@ func (a ensureAction) t() actionType {
 }
 
 func (a ensureAction) String() string {
-	return fmt.Sprintf("%v: %.5v", a.t().String(), a.Payload.Digest().String())
+	return fmt.Sprintf("%s: %.5s: %v, %v, %.5s", a.t().String(), a.Payload.Digest().String(), a.Certificate.Round, a.Certificate.Period, a.Certificate.Proposal.BlockDigest.String())
 }
 
 func (a ensureAction) do(ctx context.Context, s *Service) {
@@ -236,26 +239,46 @@ func (a ensureAction) do(ctx context.Context, s *Service) {
 		s.Ledger.EnsureValidatedBlock(a.Payload.ve, a.Certificate)
 	} else {
 		block := a.Payload.Block
-		if !a.PayloadOk {
-			logEvent.Type = logspec.RoundWaiting
-			s.log.with(logEvent).Infof("round %d concluded without block for %v; waiting on ledger", a.Certificate.Round, a.Certificate.Proposal)
-			s.Ledger.EnsureDigest(a.Certificate, s.quit, s.voteVerifier)
-		} else {
-			logEvent.Type = logspec.RoundConcluded
-			s.log.with(logEvent).Infof("committed round %d with block %v", a.Certificate.Round, a.Certificate.Proposal)
-			s.log.EventWithDetails(telemetryspec.Agreement, telemetryspec.BlockAcceptedEvent, telemetryspec.BlockAcceptedEventDetails{
-				Address: a.Certificate.Proposal.OriginalProposer.String(),
-				Hash:    a.Certificate.Proposal.BlockDigest.String(),
-				Round:   uint64(a.Certificate.Round),
-			})
-			s.Ledger.EnsureBlock(block, a.Certificate)
-		}
+		logEvent.Type = logspec.RoundConcluded
+		s.log.with(logEvent).Infof("committed round %d with block %v", a.Certificate.Round, a.Certificate.Proposal)
+		s.log.EventWithDetails(telemetryspec.Agreement, telemetryspec.BlockAcceptedEvent, telemetryspec.BlockAcceptedEventDetails{
+			Address: a.Certificate.Proposal.OriginalProposer.String(),
+			Hash:    a.Certificate.Proposal.BlockDigest.String(),
+			Round:   uint64(a.Certificate.Round),
+		})
+		s.Ledger.EnsureBlock(block, a.Certificate)
 	}
 	logEventStart := logEvent
 	logEventStart.Type = logspec.RoundStart
 	s.log.with(logEventStart).Infof("finished round %d", a.Certificate.Round)
 	s.tracer.timeR().StartRound(a.Certificate.Round + 1)
 	s.tracer.timeR().RecStep(0, propose, bottom)
+}
+
+type stageDigestAction struct {
+	nonpersistent
+	// Certificate identifies a block and is a proof commitment
+	Certificate Certificate // a block digest is probably sufficient; keep certificate for now to match ledger interface
+}
+
+func (a stageDigestAction) t() actionType {
+	return stageDigest
+}
+
+func (a stageDigestAction) String() string {
+	return fmt.Sprintf("%s: %.5s. %v. %v", a.t().String(), a.Certificate.Proposal.BlockDigest.String(), a.Certificate.Round, a.Certificate.Period)
+}
+
+func (a stageDigestAction) do(ctx context.Context, service *Service) {
+	logEvent := logspec.AgreementEvent{
+		Hash:   a.Certificate.Proposal.BlockDigest.String(),
+		Round:  uint64(a.Certificate.Round),
+		Period: uint64(a.Certificate.Period),
+		Sender: a.Certificate.Proposal.OriginalProposer.String(),
+		Type:   logspec.RoundWaiting,
+	}
+	service.log.with(logEvent).Infof("round %v concluded without block for %v; (async) waiting on ledger", a.Certificate.Round, a.Certificate.Proposal)
+	service.Ledger.EnsureDigest(a.Certificate, service.voteVerifier)
 }
 
 type rezeroAction struct {
@@ -408,16 +431,16 @@ func relayAction(e messageEvent, tag protocol.Tag, o interface{}) action {
 	return a
 }
 
-func verifyBundleAction(e messageEvent, r round, p period) action {
-	return cryptoAction{T: verifyBundle, M: e.Input, Round: r, Period: p}
-}
-
 func verifyVoteAction(e messageEvent, r round, p period, taskIndex int) action {
 	return cryptoAction{T: verifyVote, M: e.Input, Round: r, Period: p, TaskIndex: taskIndex}
 }
 
 func verifyPayloadAction(e messageEvent, r round, p period, pinned bool) action {
 	return cryptoAction{T: verifyPayload, M: e.Input, Round: r, Period: p, Pinned: pinned}
+}
+
+func verifyBundleAction(e messageEvent, r round, p period, s step) action {
+	return cryptoAction{T: verifyBundle, M: e.Input, Round: r, Period: p, Step: s}
 }
 
 func zeroAction(t actionType) action {

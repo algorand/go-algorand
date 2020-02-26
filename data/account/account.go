@@ -111,7 +111,8 @@ func RestoreRoot(store db.Accessor) (acc Root, err error) {
 		return
 	}
 
-	err = protocol.Decode(raw, &acc.secrets)
+	acc.secrets = &crypto.SignatureSecrets{}
+	err = protocol.Decode(raw, acc.secrets)
 	if err != nil {
 		err = fmt.Errorf("RestoreRoot: error decoding account: %v", err)
 		return
@@ -165,12 +166,14 @@ func RestoreParticipation(store db.Accessor) (acc Participation, err error) {
 		return Participation{}, err
 	}
 
-	err = protocol.Decode(rawVRF, &acc.VRF)
+	acc.VRF = &crypto.VRFSecrets{}
+	err = protocol.Decode(rawVRF, acc.VRF)
 	if err != nil {
 		return Participation{}, err
 	}
 
-	err = protocol.Decode(rawVoting, &acc.Voting)
+	acc.Voting = &crypto.OneTimeSignatureSecrets{}
+	err = protocol.Decode(rawVoting, acc.Voting)
 	if err != nil {
 		return Participation{}, err
 	}

@@ -13,7 +13,6 @@ export BUILD_DEB=1
 export NO_BUILD=1
 export GOPATH="${HOME}"/go
 export PATH="${GOPATH}":/usr/local/go/bin:"${PATH}"
-REPO_ROOT="${HOME}"/go/src/github.com/algorand/go-algorand
 pushd "${REPO_ROOT}"
 ./scripts/build_packages.sh "${PLATFORM}"
 popd
