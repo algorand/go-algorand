@@ -64,7 +64,7 @@ SHORT_HASH=${HASH:0:8}
 # Use a regex over the multi-line string.
 if [[ "$STR" =~ .*"$RELEASE.$CHANNEL [$BRANCH] (commit #$SHORT_HASH)".* ]]
 then
-    echo "$GREEN_FG[$0]$END_FG_COLOR The result of \`algod -v\` is a correct match."
+    echo -e "$GREEN_FG[$0]$END_FG_COLOR The result of \`algod -v\` is a correct match.\n$STR"
     exit 0
 fi
 
