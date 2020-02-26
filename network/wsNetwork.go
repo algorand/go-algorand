@@ -592,6 +592,7 @@ func (wn *WebsocketNetwork) setup() {
 	if wn.config.EnableIncomingMessageFilter {
 		wn.incomingMsgFilter = makeMessageFilter(wn.config.IncomingMessageFilterBucketCount, wn.config.IncomingMessageFilterBucketSize)
 	}
+	wn.handlers.log = wn.log
 }
 
 func (wn *WebsocketNetwork) rlimitIncomingConnections() error {
@@ -671,8 +672,12 @@ func (wn *WebsocketNetwork) Start() {
 		wn.scheme = "http"
 	}
 	wn.meshUpdateRequests <- meshRequest{false, nil}
-	wn.RegisterHandlers(pingHandlers)
-	wn.RegisterHandlers(prioHandlers)
+	if wn.config.EnablePingHandler {
+		wn.RegisterHandlers(pingHandlers)
+	}
+	if wn.prioScheme != nil {
+		wn.RegisterHandlers(prioHandlers)
+	}
 	if wn.listener != nil {
 		wn.wg.Add(1)
 		go wn.httpdThread()
@@ -1070,7 +1075,7 @@ func (wn *WebsocketNetwork) checkSlowWritingPeers() {
 func (wn *WebsocketNetwork) sendFilterMessage(msg IncomingMessage) {
 	digest := generateMessageDigest(msg.Tag, msg.Data)
 	//wn.log.Debugf("send filter %s(%d) %v", msg.Tag, len(msg.Data), digest)
-	wn.Broadcast(context.Background(), protocol.MsgSkipTag, digest[:], false, msg.Sender)
+	wn.Broadcast(context.Background(), protocol.MsgDigestSkipTag, digest[:], false, msg.Sender)
 }
 
 func (wn *WebsocketNetwork) broadcastThread() {
@@ -1136,7 +1141,7 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 	copy(mbytes[len(tbytes):], request.data)
 
 	var digest crypto.Digest
-	if request.tag != protocol.MsgSkipTag && len(request.data) >= messageFilterSize {
+	if request.tag != protocol.MsgDigestSkipTag && len(request.data) >= messageFilterSize {
 		digest = crypto.Hash(mbytes)
 	}
 
