@@ -2,6 +2,8 @@
 
 set -ex
 
+trap 'bash ./scripts/release/common/ec2/shutdown.sh' ERR
+
 # Path(s) are relative to the root of the Jenkins workspace.
 
 INSTANCE=$(cat scripts/release/common/ec2/tmp/instance)
@@ -14,5 +16,6 @@ python3 scripts/get_current_installers.py "s3://ben-test-2.0.3/$CHANNEL/$RELEASE
 
 # Copy previous installers into ~.
 scp -i ReleaseBuildInstanceKey.pem -o StrictHostKeyChecking=no ./*.deb ubuntu@"$INSTANCE":
-ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@"$INSTANCE" bash go/src/github.com/algorand/go-algorand/scripts/release/test/stage/test/task.sh
+#ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@"$INSTANCE" bash go/src/github.com/algorand/go-algorand/scripts/release/test/stage/test/task.sh
+ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@"$INSTANCE" bash ben-branch/scripts/release/test/stage/test/task.sh
 

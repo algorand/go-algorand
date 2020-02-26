@@ -11,9 +11,8 @@ export HOME=/root
 
 . "${HOME}"/subhome/build_env
 
-GIT_REPO_PATH=https://github.com/algorand/go-algorand
 mkdir -p "${HOME}/go/src/github.com/algorand"
-cd "${HOME}/go/src/github.com/algorand" && git clone --single-branch --branch "${BRANCH}" "${GIT_REPO_PATH}" go-algorand
+cd "${HOME}/go/src/github.com/algorand" && git clone --single-branch --branch "${BRANCH}" https://github.com/algorand/go-algorand go-algorand
 
 # Get golang 1.12 and build its own copy of go-algorand.
 cd "${HOME}"

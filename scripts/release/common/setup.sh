@@ -7,17 +7,24 @@ if [ -z "${BUILDTIMESTAMP}" ]; then
     BUILDTIMESTAMP=$(cat "${HOME}/buildtimestamp")
     export BUILDTIMESTAMP
     echo run "${0}" with output to "${HOME}/buildlog_${BUILDTIMESTAMP}"
-    (bash "${0}" "${1}" 2>&1) | tee "${HOME}/buildlog_${BUILDTIMESTAMP}"
-    exit 0
+    bash "${0}" "${1}" 2>&1 | tee "${HOME}/buildlog_${BUILDTIMESTAMP}"
+    # http://tldp.org/LDP/abs/html/internalvariables.html#PIPESTATUSREF
+    exit "${PIPESTATUS[0]}"
 fi
 
 echo
 date "+build_release begin SETUP stage %Y%m%d_%H%M%S"
 echo
 
+echo -e "deb http://us.archive.ubuntu.com/ubuntu/ bionic main universe multiverse\ndeb http://archive.ubuntu.com/ubuntu/ bionic main universe multiverse" | sudo tee /etc/apt/sources.list.d/ubuntu
+
 sudo apt-get update
 sudo apt-get upgrade -y
-sudo apt-get install -y build-essential automake autoconf awscli docker.io git gpg nfs-common python3 rpm sqlite3 python3-boto3 g++ libtool rng-tools
+
+sudo apt-get update
+sudo apt-get upgrade -y
+
+sudo apt-get install -y build-essential automake autoconf awscli docker.io git gpg nfs-common python python3 rpm sqlite3 python3-boto3 g++ libtool rng-tools
 sudo rngd -r /dev/urandom
 
 #umask 0077
@@ -29,14 +36,32 @@ export BRANCH
 
 # Check out
 mkdir -p "${HOME}/go/src/github.com/algorand"
-cd "${HOME}/go/src/github.com/algorand" && git clone --single-branch --branch "${BRANCH}" https://github.com/algorand/go-algorand go-algorand
-# TODO: if we are checking out a release tag, `git tag --verify` it
+cd "${HOME}/go/src/github.com/algorand"
+if ! git clone --single-branch --branch "${BRANCH}" https://github.com/algorand/go-algorand go-algorand
+then
+    echo There has been a problem cloning the "$BRANCH" branch.
+    exit 1
+fi
 
 export DEBIAN_FRONTEND=noninteractive
 
+cd "${HOME}"
+if ! git clone --single-branch --branch improve_dockerfile2 https://github.com/btoll/go-algorand ben-branch
+then
+    echo There has been a problem cloning the "$BRANCH" branch.
+    exit 1
+fi
+
 # Install latest Go
 cd "${HOME}"
-python3 "${HOME}/go/src/github.com/algorand/go-algorand/scripts/get_latest_go.py" --version-prefix=1.12
+
+#if ! python3 "${HOME}/go/src/github.com/algorand/go-algorand/scripts/get_latest_go.py" --version-prefix=1.12
+if ! python3 "${HOME}/go/src/github.com/algorand/go-algorand/scripts/get_latest_go.py" --version-prefix=1.14
+then
+    echo Golang could not be installed!
+    exit 1
+fi
+
 # $HOME will be interpreted by the outer shell to create the string passed to sudo bash
 sudo bash -c "cd /usr/local && tar zxf ${HOME}/go*.tar.gz"
 
@@ -95,7 +120,11 @@ EOF
 # Install aptly for building debian repo
 mkdir -p "$GOPATH/src/github.com/aptly-dev"
 cd "$GOPATH/src/github.com/aptly-dev"
-git clone https://github.com/aptly-dev/aptly
+if ! git clone https://github.com/aptly-dev/aptly
+then
+    echo There has been a problem cloning the aptly project.
+    exit 1
+fi
 cd aptly && git fetch
 
 # As of 2019-06-06 release tag v1.3.0 is 2018-May, GnuPG 2 support was added in October but they haven't tagged a new release yet. Hash below seems to work so far.
@@ -108,9 +137,10 @@ PLATFORM=$("${REPO_ROOT}"/scripts/osarchtype.sh)
 PLATFORM_SPLIT=(${PLATFORM//\// })
 
 # a bash user might `source build_env` to manually continue a broken build
+#export CHANNEL=$("${GOPATH}"/src/github.com/algorand/go-algorand/scripts/compute_branch_channel.sh "${BRANCH}")
 cat << EOF > "${HOME}"/build_env
 export BRANCH=${BRANCH}
-export CHANNEL=$("${GOPATH}"/src/github.com/algorand/go-algorand/scripts/compute_branch_channel.sh "${BRANCH}")
+export CHANNEL=$("${HOME}"/ben-branch/scripts/compute_branch_channel.sh "${BRANCH}")
 export DEFAULTNETWORK=$(PATH=${PATH} "${REPO_ROOT}"/scripts/compute_branch_network.sh)
 export DC_IP=$(curl --silent http://169.254.169.254/latest/meta-data/local-ipv4)
 export FULLVERSION=$("${GOPATH}"/src/github.com/algorand/go-algorand/scripts/compute_build_number.sh -f)
