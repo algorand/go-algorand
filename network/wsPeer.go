@@ -451,12 +451,13 @@ func (wp *wsPeer) readLoop() {
 	}
 }
 
-func (wp *wsPeer) handleMessageOfInterest(msg IncomingMessage) bool {
+func (wp *wsPeer) handleMessageOfInterest(msg IncomingMessage) (shutdown bool) {
+	shutdown = false
 	// decode the message, and ensure it's a valid message.
 	msgTagsMap, err := unmarshallMessageOfInterest(msg.Data)
 	if err != nil {
 		wp.net.log.Warnf("wsPeer handleMessageOfInterest: could not unmarshall message from: %s %v", wp.conn.RemoteAddr().String(), err)
-		return false
+		return
 	}
 	sm := sendMessage{
 		data:         nil,
@@ -469,22 +470,21 @@ func (wp *wsPeer) handleMessageOfInterest(msg IncomingMessage) bool {
 	// the rationale here is that this message is rarely sent, and we would benefit from having it being lock-free.
 	select {
 	case wp.sendBufferHighPrio <- sm:
-		return false
+		return
 	case <-wp.closing:
 		wp.net.log.Debugf("peer closing %s", wp.conn.RemoteAddr().String())
-		return true
+		shutdown = true
 	default:
 	}
 
 	select {
 	case wp.sendBufferHighPrio <- sm:
-		return false
 	case wp.sendBufferBulk <- sm:
-		return false
 	case <-wp.closing:
 		wp.net.log.Debugf("peer closing %s", wp.conn.RemoteAddr().String())
-		return true
+		shutdown = true
 	}
+	return
 }
 
 func (wp *wsPeer) readLoopCleanup() {
