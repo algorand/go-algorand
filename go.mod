@@ -31,6 +31,7 @@ require (
 	github.com/mattn/go-colorable v0.0.9 // indirect
 	github.com/mattn/go-isatty v0.0.4 // indirect
 	github.com/mattn/go-sqlite3 v1.10.0
+	github.com/miekg/dns v1.1.27
 	github.com/nu7hatch/gouuid v0.0.0-20131221200532-179d4d0c4d8d // indirect
 	github.com/olivere/elastic v6.2.14+incompatible
 	github.com/onsi/ginkgo v1.8.0 // indirect
