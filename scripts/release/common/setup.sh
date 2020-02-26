@@ -45,18 +45,10 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 
-cd "${HOME}"
-if ! git clone --single-branch --branch improve_dockerfile2 https://github.com/btoll/go-algorand ben-branch
-then
-    echo There has been a problem cloning the "$BRANCH" branch.
-    exit 1
-fi
-
 # Install latest Go
 cd "${HOME}"
 
-#if ! python3 "${HOME}/go/src/github.com/algorand/go-algorand/scripts/get_latest_go.py" --version-prefix=1.12
-if ! python3 "${HOME}/go/src/github.com/algorand/go-algorand/scripts/get_latest_go.py" --version-prefix=1.14
+if ! python3 "${HOME}/go/src/github.com/algorand/go-algorand/scripts/get_latest_go.py" --version-prefix=1.12
 then
     echo Golang could not be installed!
     exit 1
@@ -137,10 +129,9 @@ PLATFORM=$("${REPO_ROOT}"/scripts/osarchtype.sh)
 PLATFORM_SPLIT=(${PLATFORM//\// })
 
 # a bash user might `source build_env` to manually continue a broken build
-#export CHANNEL=$("${GOPATH}"/src/github.com/algorand/go-algorand/scripts/compute_branch_channel.sh "${BRANCH}")
 cat << EOF > "${HOME}"/build_env
 export BRANCH=${BRANCH}
-export CHANNEL=$("${HOME}"/ben-branch/scripts/compute_branch_channel.sh "${BRANCH}")
+export CHANNEL=$("${GOPATH}"/src/github.com/algorand/go-algorand/scripts/compute_branch_channel.sh "${BRANCH}")
 export DEFAULTNETWORK=$(PATH=${PATH} "${REPO_ROOT}"/scripts/compute_branch_network.sh)
 export DC_IP=$(curl --silent http://169.254.169.254/latest/meta-data/local-ipv4)
 export FULLVERSION=$("${GOPATH}"/src/github.com/algorand/go-algorand/scripts/compute_build_number.sh -f)
