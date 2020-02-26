@@ -116,7 +116,7 @@ func makeTestWebsocketNodeWithConfig(t testing.TB, conf config.Local) *Websocket
 	wn := &WebsocketNetwork{
 		log:       log,
 		config:    conf,
-		phonebook: &PhonebookImpl{},
+		phonebook: MakePhonebookImpl(1, 1*time.Millisecond),
 		GenesisID: "go-test-network-genesis",
 		NetworkID: config.Devtestnet,
 	}
@@ -685,7 +685,7 @@ func makeTestFilterWebsocketNode(t *testing.T, nodename string) *WebsocketNetwor
 	wn := &WebsocketNetwork{
 		log:       logging.TestingLog(t).With("node", nodename),
 		config:    dc,
-		phonebook: &PhonebookImpl{},
+		phonebook: MakePhonebookImpl(1, 1*time.Millisecond),
 		GenesisID: "go-test-network-genesis",
 		NetworkID: config.Devtestnet,
 	}
@@ -785,9 +785,9 @@ func TestGetPeers(t *testing.T) {
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
-	phba := &PhonebookImpl{}
-	phba.ReplacePeerList([]string{addrA}, "phba")
-	netB.phonebook = phba
+	phbMulti := MakePhonebookImpl(1, 1*time.Millisecond)
+	phbMulti.ReplacePeerList([]string{addrA}, "phba")
+	netB.phonebook = phbMulti
 	netB.Start()
 	defer netB.Stop()
 
@@ -797,12 +797,7 @@ func TestGetPeers(t *testing.T) {
 	waitReady(t, netB, readyTimeout.C)
 	t.Log("b ready")
 
-	ph := MakePhonebookImpl(netA.config.ConnectionsRateLimitingCount,
-		time.Duration(netA.config.ConnectionsRateLimitingWindowSeconds)*time.Second)
-
-	data := map[string]phonebookData{"a": phonebookData{}, "b": phonebookData{}, "c": phonebookData{}}
-	ph.data = data
-	ph.ReplacePeerList([]string{"a", "b", "c"}, "ph")
+	phbMulti.ReplacePeerList([]string{"a", "b", "c"}, "ph")
 
 	//addrB, _ := netB.Address()
 
@@ -1203,7 +1198,7 @@ func TestSlowPeerDisconnection(t *testing.T) {
 	wn := &WebsocketNetwork{
 		log:                            log,
 		config:                         defaultConfig,
-		phonebook:                      &PhonebookImpl{},
+		phonebook:                      MakePhonebookImpl(1, 1*time.Millisecond),
 		GenesisID:                      "go-test-network-genesis",
 		NetworkID:                      config.Devtestnet,
 		slowWritingPeerMonitorInterval: time.Millisecond * 50,
@@ -1257,7 +1252,7 @@ func TestForceMessageRelaying(t *testing.T) {
 	wn := &WebsocketNetwork{
 		log:       log,
 		config:    defaultConfig,
-		phonebook: &PhonebookImpl{},
+		phonebook: MakePhonebookImpl(1, 1*time.Millisecond),
 		GenesisID: "go-test-network-genesis",
 		NetworkID: config.Devtestnet,
 	}
@@ -1352,7 +1347,7 @@ func TestCheckProtocolVersionMatch(t *testing.T) {
 	wn := &WebsocketNetwork{
 		log:       log,
 		config:    defaultConfig,
-		phonebook: &PhonebookImpl{},
+		phonebook: MakePhonebookImpl(1, 1*time.Millisecond),
 		GenesisID: "go-test-network-genesis",
 		NetworkID: config.Devtestnet,
 	}

@@ -168,11 +168,11 @@ func TestThreadsafePhonebookExtensionLong(t *testing.T) {
 
 func TestMultiPhonebook(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j"}
-	pha := make([]string, 5)
+	pha := make([]string, 0)
 	for _, e := range set[:5] {
 		pha = append(pha, e)
 	}
-	phb := make([]string, 5)
+	phb := make([]string, 0)
 	for _, e := range set[5:] {
 		phb = append(phb, e)
 	}
@@ -187,11 +187,11 @@ func TestMultiPhonebook(t *testing.T) {
 
 func TestMultiPhonebookDuplicateFiltering(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j"}
-	pha := make([]string, 7)
+	pha := make([]string, 0)
 	for _, e := range set[:7] {
 		pha = append(pha, e)
 	}
-	phb := make([]string, 7)
+	phb := make([]string, 0)
 	for _, e := range set[3:] {
 		phb = append(phb, e)
 	}

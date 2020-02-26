@@ -104,9 +104,6 @@ func (e *PhonebookImpl) deletePhonebookEntry(entryName, networkName string) {
 // phonebookData for addr
 // It is expected to be later than ConnectionsRateLimitingWindow
 func (e *PhonebookImpl) popNElements(n int, addr string) {
-	e.lock.Lock()
-	defer e.lock.Unlock()
-
 	entry := e.data[addr]
 	entry.recentConnectionTimes = entry.recentConnectionTimes[n:]
 	e.data[addr] = entry
@@ -115,9 +112,6 @@ func (e *PhonebookImpl) popNElements(n int, addr string) {
 // AppendTime adds the current time to recentConnectionTimes in
 // phonebookData of addr
 func (e *PhonebookImpl) appendTime(addr string, t time.Time) {
-	e.lock.Lock()
-	defer e.lock.Unlock()
-
 	entry := e.data[addr]
 	entry.recentConnectionTimes = append(entry.recentConnectionTimes, t)
 	e.data[addr] = entry

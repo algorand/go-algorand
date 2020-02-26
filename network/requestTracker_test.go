@@ -112,7 +112,7 @@ func TestRateLimiting(t *testing.T) {
 		phonebooks[i] = MakePhonebookImpl(networks[i].config.ConnectionsRateLimitingCount,
 			time.Duration(networks[i].config.ConnectionsRateLimitingWindowSeconds)*time.Second)
 		phonebooks[i].ReplacePeerList([]string{addrA}, "default")
-		networks[i].phonebook = &PhonebookImpl{}
+		networks[i].phonebook = MakePhonebookImpl(1, 1*time.Millisecond)
 		networks[i].phonebook.ReplacePeerList([]string{addrA}, "default")
 		defer func(net *WebsocketNetwork, i int) {
 			t.Logf("stopping network %d", i)
