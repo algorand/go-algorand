@@ -55,6 +55,9 @@ type Phonebook interface {
 	// existing items that aren't included in they are being removed
 	// matching entries don't change
 	ReplacePeerList(dnsAddresses []string, networkName string)
+
+	// ExtendPeerList adds unique addresses to this set of addresses
+	ExtendPeerList(more []string, networkName string)
 }
 
 type phonebookData struct {
@@ -72,27 +75,27 @@ func makePhonebookData(networkName string) phonebookData {
 	return pbData
 }
 
-// PhonebookImpl holds the server connection configuration values
+// phonebookImpl holds the server connection configuration values
 // and the list of request times withing the time window for each
 // address.
-type PhonebookImpl struct {
+type phonebookImpl struct {
 	connectionsRateLimitingCount  uint
 	connectionsRateLimitingWindow time.Duration
 	data                          map[string]phonebookData
 	lock                          deadlock.RWMutex
 }
 
-// MakePhonebookImpl creates PhonebookImpl with the passed configuration values
-func MakePhonebookImpl(connectionsRateLimitingCount uint,
-	connectionsRateLimitingWindow time.Duration) *PhonebookImpl {
-	return &PhonebookImpl{
+// MakePhonebook creates phonebookImpl with the passed configuration values
+func MakePhonebook(connectionsRateLimitingCount uint,
+	connectionsRateLimitingWindow time.Duration) Phonebook {
+	return &phonebookImpl{
 		connectionsRateLimitingCount:  connectionsRateLimitingCount,
 		connectionsRateLimitingWindow: connectionsRateLimitingWindow,
 		data:                          make(map[string]phonebookData, 0),
 	}
 }
 
-func (e *PhonebookImpl) deletePhonebookEntry(entryName, networkName string) {
+func (e *phonebookImpl) deletePhonebookEntry(entryName, networkName string) {
 	pbEntry := e.data[entryName]
 	delete(pbEntry.networkNames, networkName)
 	if 0 == len(pbEntry.networkNames) {
@@ -103,7 +106,7 @@ func (e *PhonebookImpl) deletePhonebookEntry(entryName, networkName string) {
 // PopEarliestTime removes the earliest time from recentConnectionTimes in
 // phonebookData for addr
 // It is expected to be later than ConnectionsRateLimitingWindow
-func (e *PhonebookImpl) popNElements(n int, addr string) {
+func (e *phonebookImpl) popNElements(n int, addr string) {
 	entry := e.data[addr]
 	entry.recentConnectionTimes = entry.recentConnectionTimes[n:]
 	e.data[addr] = entry
@@ -111,13 +114,13 @@ func (e *PhonebookImpl) popNElements(n int, addr string) {
 
 // AppendTime adds the current time to recentConnectionTimes in
 // phonebookData of addr
-func (e *PhonebookImpl) appendTime(addr string, t time.Time) {
+func (e *phonebookImpl) appendTime(addr string, t time.Time) {
 	entry := e.data[addr]
 	entry.recentConnectionTimes = append(entry.recentConnectionTimes, t)
 	e.data[addr] = entry
 }
 
-func (e *PhonebookImpl) filterRetryTime(t time.Time) []string {
+func (e *phonebookImpl) filterRetryTime(t time.Time) []string {
 	o := make([]string, 0, len(e.data))
 	for addr, entry := range e.data {
 		if t.After(entry.retryAfter) {
@@ -131,7 +134,7 @@ func (e *PhonebookImpl) filterRetryTime(t time.Time) []string {
 // new entries in they are being added
 // existing items that aren't included in they are being removed
 // matching entries don't change
-func (e *PhonebookImpl) ReplacePeerList(dnsAddresses []string, networkName string) {
+func (e *phonebookImpl) ReplacePeerList(dnsAddresses []string, networkName string) {
 	e.lock.Lock()
 	defer e.lock.Unlock()
 
@@ -162,7 +165,7 @@ func (e *PhonebookImpl) ReplacePeerList(dnsAddresses []string, networkName strin
 }
 
 // UpdateRetryAfter updates ...
-func (e *PhonebookImpl) UpdateRetryAfter(addr string, retryAfter time.Time) {
+func (e *phonebookImpl) UpdateRetryAfter(addr string, retryAfter time.Time) {
 	e.lock.Lock()
 	defer e.lock.Unlock()
 
@@ -183,7 +186,7 @@ func (e *PhonebookImpl) UpdateRetryAfter(addr string, retryAfter time.Time) {
 // The connection should be established when the waitTime is 0.
 // It will register a provisional next connection time when the waitTime is 0.
 // The provisional time should be updated after the connection with UpdateConnectionTime
-func (e *PhonebookImpl) GetConnectionWaitTime(addr string) (addrInPhonebook bool,
+func (e *phonebookImpl) GetConnectionWaitTime(addr string) (addrInPhonebook bool,
 	waitTime time.Duration, provisionalTime time.Time) {
 	e.lock.Lock()
 	defer e.lock.Unlock()
@@ -228,7 +231,7 @@ func (e *PhonebookImpl) GetConnectionWaitTime(addr string) (addrInPhonebook bool
 
 // UpdateConnectionTime will update the provisional connection time.
 // Returns true of the addr was in the phonebook
-func (e *PhonebookImpl) UpdateConnectionTime(addr string, provisionalTime time.Time) bool {
+func (e *phonebookImpl) UpdateConnectionTime(addr string, provisionalTime time.Time) bool {
 	e.lock.Lock()
 	defer e.lock.Unlock()
 
@@ -285,14 +288,14 @@ func shuffleSelect(set []string, n int) []string {
 }
 
 // GetAddresses returns up to N shuffled address
-func (e *PhonebookImpl) GetAddresses(n int) []string {
+func (e *phonebookImpl) GetAddresses(n int) []string {
 	e.lock.RLock()
 	defer e.lock.RUnlock()
 	return shuffleSelect(e.filterRetryTime(time.Now()), n)
 }
 
 // ExtendPeerList adds unique addresses to this set of addresses
-func (e *PhonebookImpl) ExtendPeerList(more []string, networkName string) {
+func (e *phonebookImpl) ExtendPeerList(more []string, networkName string) {
 	e.lock.Lock()
 	defer e.lock.Unlock()
 	for _, addr := range more {
@@ -305,7 +308,7 @@ func (e *PhonebookImpl) ExtendPeerList(more []string, networkName string) {
 }
 
 // Length returns the number of addrs contained
-func (e *PhonebookImpl) Length() int {
+func (e *phonebookImpl) Length() int {
 	e.lock.RLock()
 	defer e.lock.RUnlock()
 	return len(e.data)

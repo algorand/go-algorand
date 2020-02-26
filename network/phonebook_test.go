@@ -87,7 +87,7 @@ func testPhonebookUniform(t *testing.T, set []string, ph Phonebook, getsize int)
 
 func TestArrayPhonebookAll(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e"}
-	ph := MakePhonebookImpl(1, 1)
+	ph := MakePhonebook(1, 1)
 	for _, e := range set {
 		ph.data[e] = phonebookData{}
 	}
@@ -96,7 +96,7 @@ func TestArrayPhonebookAll(t *testing.T) {
 
 func TestArrayPhonebookUniform1(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e"}
-	ph := MakePhonebookImpl(1, 1)
+	ph := MakePhonebook(1, 1)
 	for _, e := range set {
 		ph.data[e] = phonebookData{}
 	}
@@ -105,7 +105,7 @@ func TestArrayPhonebookUniform1(t *testing.T) {
 
 func TestArrayPhonebookUniform3(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e"}
-	ph := MakePhonebookImpl(1, 1)
+	ph := MakePhonebook(1, 1)
 	for _, e := range set {
 		ph.data[e] = phonebookData{}
 	}
@@ -125,7 +125,7 @@ func extenderThread(th *PhonebookImpl, more []string, wg *sync.WaitGroup, repeti
 func TestThreadsafePhonebookExtension(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e"}
 	more := []string{"f", "g", "h", "i", "j"}
-	ph := MakePhonebookImpl(1, 1)
+	ph := MakePhonebook(1, 1)
 	ph.ReplacePeerList(set, "default")
 	wg := sync.WaitGroup{}
 	wg.Add(5)
@@ -151,7 +151,7 @@ func TestThreadsafePhonebookExtensionLong(t *testing.T) {
 		t.SkipNow()
 		return
 	}
-	ph := MakePhonebookImpl(1, 1)
+	ph := MakePhonebook(1, 1)
 	wg := sync.WaitGroup{}
 	const threads = 5
 	const setSize = 1000
@@ -176,7 +176,7 @@ func TestMultiPhonebook(t *testing.T) {
 	for _, e := range set[5:] {
 		phb = append(phb, e)
 	}
-	mp := MakePhonebookImpl(1, 1*time.Millisecond)
+	mp := MakePhonebook(1, 1*time.Millisecond)
 	mp.ReplacePeerList(pha, "pha")
 	mp.ReplacePeerList(phb, "phb")
 
@@ -195,7 +195,7 @@ func TestMultiPhonebookDuplicateFiltering(t *testing.T) {
 	for _, e := range set[3:] {
 		phb = append(phb, e)
 	}
-	mp := MakePhonebookImpl(1, 1*time.Millisecond)
+	mp := MakePhonebook(1, 1*time.Millisecond)
 	mp.ReplacePeerList(pha, "pha")
 	mp.ReplacePeerList(phb, "phb")
 
@@ -205,7 +205,7 @@ func TestMultiPhonebookDuplicateFiltering(t *testing.T) {
 }
 
 func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
-	entries := MakePhonebookImpl(3, 200*time.Millisecond)
+	entries := MakePhonebook(3, 200*time.Millisecond)
 	addr1 := "addrABC"
 	addr2 := "addrXYZ"
 
@@ -299,7 +299,7 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 }
 
 func TestWaitAndAddConnectionTimeShortWindow(t *testing.T) {
-	entries := MakePhonebookImpl(3, 2*time.Millisecond)
+	entries := MakePhonebook(3, 2*time.Millisecond)
 	addr1 := "addrABC"
 
 	// Init the data structures
@@ -334,7 +334,7 @@ func TestWaitAndAddConnectionTimeShortWindow(t *testing.T) {
 }
 
 func BenchmarkThreadsafePhonebook(b *testing.B) {
-	ph := MakePhonebookImpl(1, 1)
+	ph := MakePhonebook(1, 1)
 	threads := 5
 	if b.N < threads {
 		threads = b.N

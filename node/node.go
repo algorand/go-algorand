@@ -86,7 +86,7 @@ type AlgorandFullNode struct {
 
 	ledger    *data.Ledger
 	net       network.GossipNode
-	phonebook *network.PhonebookImpl
+	phonebook network.Phonebook
 
 	transactionPool *pools.TransactionPool
 	txHandler       *data.TxHandler
@@ -148,7 +148,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookDir
 	node.log = log.With("name", cfg.NetAddress)
 	node.genesisID = genesis.ID()
 	node.genesisHash = crypto.HashObj(genesis)
-	node.phonebook = network.MakePhonebookImpl(cfg.ConnectionsRateLimitingCount,
+	node.phonebook = network.MakePhonebook(cfg.ConnectionsRateLimitingCount,
 		time.Duration(cfg.ConnectionsRateLimitingWindowSeconds)*time.Second)
 
 	addrs, err := config.LoadPhonebook(phonebookDir)

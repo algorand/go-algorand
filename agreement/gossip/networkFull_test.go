@@ -60,9 +60,9 @@ func spinNetwork(t *testing.T, nodesCount int) ([]*networkImpl, []*messageCounte
 	start := time.Now()
 	nodesAddresses := []string{}
 	gossipNodes := []network.GossipNode{}
-	phonebooks := make([]*network.PhonebookImpl, nodesCount)
+	phonebooks := make([]network.Phonebook, nodesCount)
 	for nodeIdx := 0; nodeIdx < nodesCount; nodeIdx++ {
-		phonebooks[nodeIdx] = network.MakePhonebookImpl(cfg.ConnectionsRateLimitingCount,
+		phonebooks[nodeIdx] = network.MakePhonebook(cfg.ConnectionsRateLimitingCount,
 			time.Duration(cfg.ConnectionsRateLimitingWindowSeconds)*time.Second)
 		gossipNode, err := network.NewWebsocketGossipNode(log.With("node", nodeIdx), cfg, phonebooks[nodeIdx], "go-test-agreement-network-genesis", config.Devtestnet)
 		if err != nil {

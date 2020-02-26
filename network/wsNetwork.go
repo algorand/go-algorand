@@ -1689,12 +1689,13 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 }
 
 // NewWebsocketNetwork constructor for websockets based gossip network
-func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookImpl *PhonebookImpl, genesisID string, networkID protocol.NetworkID) (wn *WebsocketNetwork, err error) {
-	addrList := make([]string, len(phonebookImpl.data))
-	for addr := range phonebookImpl.data {
+func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebook Phonebook, genesisID string, networkID protocol.NetworkID) (wn *WebsocketNetwork, err error) {
+	pbImpl := phonebook.(*phonebookImpl)
+	addrList := make([]string, len(pbImpl.data))
+	for addr := range pbImpl.data {
 		addrList = append(addrList, addr)
 	}
-	outerPhonebook := MakePhonebookImpl(config.ConnectionsRateLimitingCount,
+	outerPhonebook := MakePhonebook(config.ConnectionsRateLimitingCount,
 		time.Duration(config.ConnectionsRateLimitingWindowSeconds)*time.Second)
 	outerPhonebook.ReplacePeerList(addrList, "default")
 	wn = &WebsocketNetwork{log: log, config: config, phonebook: outerPhonebook, GenesisID: genesisID, NetworkID: networkID}
@@ -1704,7 +1705,7 @@ func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookImpl 
 }
 
 // NewWebsocketGossipNode constructs a websocket network node and returns it as a GossipNode interface implementation
-func NewWebsocketGossipNode(log logging.Logger, config config.Local, phonebook *PhonebookImpl, genesisID string, networkID protocol.NetworkID) (gn GossipNode, err error) {
+func NewWebsocketGossipNode(log logging.Logger, config config.Local, phonebook Phonebook, genesisID string, networkID protocol.NetworkID) (gn GossipNode, err error) {
 	return NewWebsocketNetwork(log, config, phonebook, genesisID, networkID)
 }
 

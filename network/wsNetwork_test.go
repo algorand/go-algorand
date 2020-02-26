@@ -116,7 +116,7 @@ func makeTestWebsocketNodeWithConfig(t testing.TB, conf config.Local) *Websocket
 	wn := &WebsocketNetwork{
 		log:       log,
 		config:    conf,
-		phonebook: MakePhonebookImpl(1, 1*time.Millisecond),
+		phonebook: MakePhonebook(1, 1*time.Millisecond),
 		GenesisID: "go-test-network-genesis",
 		NetworkID: config.Devtestnet,
 	}
@@ -685,7 +685,7 @@ func makeTestFilterWebsocketNode(t *testing.T, nodename string) *WebsocketNetwor
 	wn := &WebsocketNetwork{
 		log:       logging.TestingLog(t).With("node", nodename),
 		config:    dc,
-		phonebook: MakePhonebookImpl(1, 1*time.Millisecond),
+		phonebook: MakePhonebook(1, 1*time.Millisecond),
 		GenesisID: "go-test-network-genesis",
 		NetworkID: config.Devtestnet,
 	}
@@ -785,7 +785,7 @@ func TestGetPeers(t *testing.T) {
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
-	phbMulti := MakePhonebookImpl(1, 1*time.Millisecond)
+	phbMulti := MakePhonebook(1, 1*time.Millisecond)
 	phbMulti.ReplacePeerList([]string{addrA}, "phba")
 	netB.phonebook = phbMulti
 	netB.Start()
@@ -1198,7 +1198,7 @@ func TestSlowPeerDisconnection(t *testing.T) {
 	wn := &WebsocketNetwork{
 		log:                            log,
 		config:                         defaultConfig,
-		phonebook:                      MakePhonebookImpl(1, 1*time.Millisecond),
+		phonebook:                      MakePhonebook(1, 1*time.Millisecond),
 		GenesisID:                      "go-test-network-genesis",
 		NetworkID:                      config.Devtestnet,
 		slowWritingPeerMonitorInterval: time.Millisecond * 50,
@@ -1252,7 +1252,7 @@ func TestForceMessageRelaying(t *testing.T) {
 	wn := &WebsocketNetwork{
 		log:       log,
 		config:    defaultConfig,
-		phonebook: MakePhonebookImpl(1, 1*time.Millisecond),
+		phonebook: MakePhonebook(1, 1*time.Millisecond),
 		GenesisID: "go-test-network-genesis",
 		NetworkID: config.Devtestnet,
 	}
@@ -1347,7 +1347,7 @@ func TestCheckProtocolVersionMatch(t *testing.T) {
 	wn := &WebsocketNetwork{
 		log:       log,
 		config:    defaultConfig,
-		phonebook: MakePhonebookImpl(1, 1*time.Millisecond),
+		phonebook: MakePhonebook(1, 1*time.Millisecond),
 		GenesisID: "go-test-network-genesis",
 		NetworkID: config.Devtestnet,
 	}

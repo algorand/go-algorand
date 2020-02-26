@@ -47,7 +47,7 @@ func main() {
 	log.SetLevel(logging.Debug)
 	log.SetOutput(os.Stderr)
 
-	addrs := network.MakePhonebookImpl(conf.ConnectionsRateLimitingCount,
+	addrs := network.MakePhonebook(conf.ConnectionsRateLimitingCount,
 		time.Duration(conf.ConnectionsRateLimitingWindowSeconds)*time.Second)
 	addrs.ReplacePeerList([]string{*serverAddress}, conf.DNSBootstrapID)
 
