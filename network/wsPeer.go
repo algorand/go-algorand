@@ -388,7 +388,6 @@ func (wp *wsPeer) readLoop() {
 		case protocol.MsgOfInterestTag:
 			// try to decode the message-of-interest
 			if wp.handleMessageOfInterest(msg) {
-				fmt.Printf("message read recevie return\n")
 				return
 			}
 			continue
