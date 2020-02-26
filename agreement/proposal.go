@@ -62,7 +62,7 @@ type unauthenticatedProposal struct {
 
 // ToBeHashed implements the Hashable interface.
 func (p unauthenticatedProposal) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.Payload, protocol.Encode(p)
+	return protocol.Payload, protocol.Encode(&p)
 }
 
 // value returns the proposal-value associated with this proposal.
@@ -111,7 +111,7 @@ type proposerSeed struct {
 
 // ToBeHashed implements the Hashable interface.
 func (s proposerSeed) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.ProposerSeed, protocol.Encode(s)
+	return protocol.ProposerSeed, protocol.Encode(&s)
 }
 
 // A seedInput is a Hashable input to seed rerandomization.
@@ -124,7 +124,7 @@ type seedInput struct {
 
 // ToBeHashed implements the Hashable interface.
 func (i seedInput) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.ProposerSeed, protocol.Encode(i)
+	return protocol.ProposerSeed, protocol.Encode(&i)
 }
 
 func deriveNewSeed(address basics.Address, vrf *crypto.VRFSecrets, rnd round, period period, ledger LedgerReader) (newSeed committee.Seed, seedProof crypto.VRFProof, reterr error) {

@@ -40,12 +40,6 @@ func BenchmarkCodecEncoder(b *testing.B) {
 		}
 	})
 
-	b.Run("NilLen", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			EncodeLen(nil)
-		}
-	})
-
 	b.Run("NilReset", func(b *testing.B) {
 		enc := codec.NewEncoderBytes(nil, CodecHandle)
 		for i := 0; i < b.N; i++ {
@@ -64,41 +58,9 @@ func BenchmarkCodecEncoder(b *testing.B) {
 		}
 	})
 
-	b.Run("NilCount", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			var n CountingWriter
-			enc := codec.NewEncoder(&n, CodecHandle)
-			enc.MustEncode(nil)
-		}
-	})
-
-	b.Run("NilCountReset", func(b *testing.B) {
-		enc := codec.NewEncoder(nil, CodecHandle)
-		var n CountingWriter
-		for i := 0; i < b.N; i++ {
-			enc.Reset(&n)
-			enc.MustEncode(nil)
-		}
-	})
-
 	b.Run("Encode", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			Encode(s)
-		}
-	})
-
-	b.Run("EncodeStream", func(b *testing.B) {
-		var n CountingWriter
-		for i := 0; i < b.N; i++ {
-			EncodeStream(&n, s)
-		}
-	})
-
-	b.Run("EncodeStreamReuse", func(b *testing.B) {
-		var n CountingWriter
-		enc := codec.NewEncoder(&n, CodecHandle)
-		for i := 0; i < b.N; i++ {
-			enc.MustEncode(s)
+			EncodeReflect(s)
 		}
 	})
 }

@@ -59,9 +59,7 @@ func (m *proposalManager) handle(r routerHandle, p player, e event) event {
 		return m.handleMessageEvent(r, p, e.(filterableMessageEvent))
 	case roundInterruption:
 		return m.handleNewRound(r, p, e.(roundInterruptionEvent).Round)
-	case certThreshold:
-		return m.handleNewRound(r, p, e.(thresholdEvent).Round+1)
-	case softThreshold:
+	case softThreshold, certThreshold:
 		e := e.(thresholdEvent)
 		if p.Period < e.Period {
 			r = m.handleNewPeriod(r, p, e)
@@ -85,9 +83,8 @@ func (m *proposalManager) handleNewRound(r routerHandle, p player, round round) 
 	return e
 }
 
-// handleNewPeriod is called for nextThreshold events and softThreshold events
-// (when the softThreshold event is for a new period).  These events are
-// dispatched to the proposalMachineRound, and an empty event is returned.
+// handleNewPeriod is called for threshold events that move the state machine into a new period.
+// These events are dispatched to the proposalMachineRound, and an empty event is returned.
 func (m *proposalManager) handleNewPeriod(r routerHandle, p player, e thresholdEvent) routerHandle {
 	target := e.Period
 	if e.t() == nextThreshold {
