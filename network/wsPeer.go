@@ -514,6 +514,8 @@ func (wp *wsPeer) writeLoopSend(msg sendMessage) (exit bool) {
 		return false
 	}
 	if msg.msgTags != nil {
+		// when msg.msgTags is non-nil, the read loop has received a message-of-interest message that we want to apply.
+		// in order to avoid any locking, it sent it to this queue so that we could set it as the new outgoing message tag filter.
 		wp.sendMessageTag = msg.msgTags
 		return false
 	}
