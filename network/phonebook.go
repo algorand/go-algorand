@@ -103,7 +103,7 @@ func (e *phonebookImpl) deletePhonebookEntry(entryName, networkName string) {
 	}
 }
 
-func (e *PhonebookImpl) deletePhonebookEntry(entryName, networkName string) {
+func (e *phonebookImpl) deletePhonebookEntry(entryName, networkName string) {
 	pbEntry := e.data[entryName]
 	delete(pbEntry.networkNames, networkName)
 	if 0 == len(pbEntry.networkNames) {
