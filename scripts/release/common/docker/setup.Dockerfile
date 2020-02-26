@@ -1,7 +1,10 @@
 # Note that we're installing `awscli` from pip rather than from the apt repository because of
 # the following error message:
 #
-# upload failed: pkg/2.0.63803/build_status_dev_2.0.63803.asc.gz to s3://ben-test-2.0.3/dev/2.0.63803/build_status_dev_2.0.63803.asc.gz seek() takes 2 positional arguments but 3 were given
+# upload failed: pkg/2.0.63803/build_status_dev_2.0.63803.asc.gz to s3://{upload_location}/build_status_dev_2.0.63803.asc.gz seek() takes 2 positional arguments but 3 were given
+#
+# Note that the error only seems to occur when there is a file to upload with zero bytes,
+# but just to be safe we'll still use pip to download and install.
 #
 # https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=869194
 # https://github.com/boto/s3transfer/pull/102
