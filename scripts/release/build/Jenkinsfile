@@ -11,9 +11,7 @@ pipeline {
     agent {
         dockerfile {
             filename 'scripts/release/common/docker/setup.Dockerfile'
-            /*
-            args '-v /etc/passwd:/etc/passwd'
-            */
+            args '-u root'
         }
     }
 
