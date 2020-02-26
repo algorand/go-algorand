@@ -122,11 +122,11 @@ check_failures() {
 
 build_images
 check_failures built
-echo "$GREEN_FG[$0]$END_FG_COLOR Builds completed with no failures."
+echo "$GREEN_FG[$0]$END_FG_COLOR All builds completed with no failures."
 
 run_images
 check_failures verified
-echo "$GREEN_FG[$0]$END_FG_COLOR Runs completed with no failures."
+echo "$GREEN_FG[$0]$END_FG_COLOR All runs completed with no failures."
 
 cleanup
 
