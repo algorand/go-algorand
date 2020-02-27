@@ -111,6 +111,7 @@ type Transaction struct {
 	AssetConfigTxnFields
 	AssetTransferTxnFields
 	AssetFreezeTxnFields
+	ApplicationCallTxnFields
 }
 
 // ApplyData contains information about the transaction's execution.
@@ -263,6 +264,35 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		if !proto.Asset {
 			return fmt.Errorf("asset transaction not supported")
 		}
+	case protocol.ApplicationCallTx:
+		if !proto.Application {
+			return fmt.Errorf("application transaction not supported")
+		}
+
+		// Ensure requested action is valid
+		switch tx.Action {
+			case FunctionCallAction:
+			case OptInAction:
+			case CloseOutAction:
+			case CreateApplicationAction:
+			case DeleteApplicationAction:
+			default:
+			return fmt.Errorf("invalid application action")
+		}
+
+		if tx.Action == CreateApplicationAction {
+			if tx.ApplicationID != 0 {
+				return fmt.Errorf("ApplicationID must be 0 during creation, it will be determined when txn is confirmed")
+			}
+		} else {
+			// Ensure programs are only set for create action
+			if tx.ApprovalProgram != nil || tx.StateUpdateProgram != nil {
+				return fmt.Errorf("scripts may only be specified during application creation")
+			}
+		}
+
+		// APPLICATIONTODO
+		// TODO(maxj) check max script/schema/functionargs lengths
 
 	default:
 		return fmt.Errorf("unknown tx type %v", tx.Type)
@@ -287,6 +317,10 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 
 	if tx.AssetFreezeTxnFields != (AssetFreezeTxnFields{}) {
 		nonZeroFields[protocol.AssetFreezeTx] = true
+	}
+
+	if !tx.ApplicationCallTxnFields.Empty() {
+		nonZeroFields[protocol.ApplicationCallTx] = true
 	}
 
 	for t, nonZero := range nonZeroFields {

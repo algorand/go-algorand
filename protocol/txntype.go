@@ -38,6 +38,9 @@ const (
 	// AssetFreezeTx changes the freeze status of an asset
 	AssetFreezeTx TxType = "afrz"
 
+	// ApplicationCall is for creating, deleting, and interacting with applications
+	ApplicationCallTx TxType = "appl"
+
 	// UnknownTx signals an error
 	UnknownTx TxType = "unknown"
 )
