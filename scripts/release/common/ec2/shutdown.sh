@@ -1,17 +1,11 @@
 #!/usr/bin/env bash
 # shellcheck disable=2164
 
-AWS_REGION="$1"
+AWS_REGION="${1:-us-west-1}"
 GREEN_FG=$(echo -en "\e[32m")
 YELLOW_FG=$(echo -en "\e[33m")
 END_FG_COLOR=$(echo -en "\e[39m")
 REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"
-
-if [ "$AWS_REGION" = "" ]
-then
-    echo "Missing AWS_REGION argument"
-    exit 1
-fi
 
 pushd "$REPO_ROOT"/tmp > /dev/null
 SGID=$(cat sgid)
