@@ -28,8 +28,6 @@ import (
 // of how many addresses the phonebook actually has. ( with the retry-after logic applied )
 const getAllAddresses = math.MaxInt32
 
-const defaultList = "default"
-
 // Phonebook stores or looks up addresses of nodes we might contact
 type Phonebook interface {
 	// GetAddresses(N) returns up to N addresses, but may return fewer
@@ -50,9 +48,9 @@ type Phonebook interface {
 	// Returns true of the addr was in the phonebook
 	UpdateConnectionTime(addr string, provisionalTime time.Time) bool
 
-	// ReplacePeerList merges a set of addresses with that passed in.
-	// new entries in they are being added
-	// existing items that aren't included in they are being removed
+	// ReplacePeerList merges a set of addresses with that passed in for networkName
+	// new entries in dnsAddresses are being added
+	// existing items that aren't included in dnsAddresses are being removed
 	// matching entries don't change
 	ReplacePeerList(dnsAddresses []string, networkName string)
 
@@ -76,7 +74,7 @@ func makePhonebookData(networkName string) phonebookData {
 }
 
 // phonebookImpl holds the server connection configuration values
-// and the list of request times withing the time window for each
+// and the list of request times within the time window for each
 // address.
 type phonebookImpl struct {
 	connectionsRateLimitingCount  uint
@@ -164,7 +162,6 @@ func (e *phonebookImpl) ReplacePeerList(dnsAddresses []string, networkName strin
 	}
 }
 
-// UpdateRetryAfter updates ...
 func (e *phonebookImpl) UpdateRetryAfter(addr string, retryAfter time.Time) {
 	e.lock.Lock()
 	defer e.lock.Unlock()
@@ -173,7 +170,7 @@ func (e *phonebookImpl) UpdateRetryAfter(addr string, retryAfter time.Time) {
 
 	_, found := e.data[addr]
 	if !found {
-		entry = makePhonebookData(defaultList)
+		entry = makePhonebookData("default")
 	} else {
 		entry = e.data[addr]
 	}
