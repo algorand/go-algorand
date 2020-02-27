@@ -101,22 +101,6 @@ func (e *phonebookImpl) deletePhonebookEntry(entryName, networkName string) {
 	}
 }
 
-func (e *PhonebookImpl) deletePhonebookEntry(entryName, networkName string) {
-	pbEntry := e.data[entryName]
-	delete(pbEntry.networkNames, networkName)
-	if 0 == len(pbEntry.networkNames) {
-		delete(e.data, entryName)
-	}
-}
-
-func (e *phonebookImpl) deletePhonebookEntry(entryName, networkName string) {
-	pbEntry := e.data[entryName]
-	delete(pbEntry.networkNames, networkName)
-	if 0 == len(pbEntry.networkNames) {
-		delete(e.data, entryName)
-	}
-}
-
 // PopEarliestTime removes the earliest time from recentConnectionTimes in
 // phonebookEntryData for addr
 // It is expected to be later than ConnectionsRateLimitingWindow
