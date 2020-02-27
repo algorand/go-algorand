@@ -61,6 +61,25 @@ var duplicateNetworkMessageReceivedBytesTotal = metrics.MakeCounter(metrics.Dupl
 var outgoingNetworkMessageFilteredOutTotal = metrics.MakeCounter(metrics.OutgoingNetworkMessageFilteredOutTotal)
 var outgoingNetworkMessageFilteredOutBytesTotal = metrics.MakeCounter(metrics.OutgoingNetworkMessageFilteredOutBytesTotal)
 
+// defaultSendMessageTags is the default list of messages which a peer would
+// allow to be sent without receiving any explicit request.
+var defaultSendMessageTags = map[protocol.Tag]bool{
+	protocol.AgreementVoteTag:   true,
+	protocol.MsgDigestSkipTag:   true,
+	protocol.NetPrioResponseTag: true,
+	protocol.PingTag:            true,
+	protocol.PingReplyTag:       true,
+	protocol.ProposalPayloadTag: true,
+	protocol.TopicMsgRespTag:    true,
+	protocol.MsgOfInterestTag:   true,
+	protocol.TxnTag:             true,
+	protocol.UniCatchupReqTag:   true,
+	protocol.UniEnsBlockReqTag:  true,
+	protocol.UniEnsBlockResTag:  true,
+	protocol.UniCatchupResTag:   true,
+	protocol.VoteBundleTag:      true,
+}
+
 // interface allows substituting debug implementation for *websocket.Conn
 type wsPeerWebsocketConn interface {
 	RemoteAddr() net.Addr
@@ -73,8 +92,9 @@ type wsPeerWebsocketConn interface {
 
 type sendMessage struct {
 	data         []byte
-	enqueued     time.Time // the time at which the message was first generated
-	peerEnqueued time.Time // the time at which the peer was attempting to enqueue the message
+	enqueued     time.Time             // the time at which the message was first generated
+	peerEnqueued time.Time             // the time at which the peer was attempting to enqueue the message
+	msgTags      map[protocol.Tag]bool // when msgTags is speficied ( i.e. non-nil ), the send goroutine is to replace the message tag filter with this one. No data would be accompanied to this message.
 }
 
 // wsPeerCore also works for non-connected peers we want to do HTTP GET from
@@ -166,6 +186,10 @@ type wsPeer struct {
 
 	// responseChannelsMutex guards the operations of responseChannels
 	responseChannelsMutex deadlock.RWMutex
+
+	// sendMessageTag is a map of allowed message to send to a peer. We don't use any syncronization on this map, and the
+	// only gurentee is that it's being accessed only during startup and/or by the sending loop go routine.
+	sendMessageTag map[protocol.Tag]bool
 }
 
 // HTTPPeer is what the opaque Peer might be.
@@ -224,7 +248,7 @@ func (wp *wsPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag) err
 	copy(mbytes, tbytes)
 	copy(mbytes[len(tbytes):], msg)
 	var digest crypto.Digest
-	if tag != protocol.MsgSkipTag && len(msg) >= messageFilterSize {
+	if tag != protocol.MsgDigestSkipTag && len(msg) >= messageFilterSize {
 		digest = crypto.Hash(mbytes)
 	}
 
@@ -275,6 +299,7 @@ func (wp *wsPeer) init(config config.Local, sendBufferLength int) {
 	wp.sendBufferBulk = make(chan sendMessage, sendBufferLength)
 	atomic.StoreInt64(&wp.lastPacketTime, time.Now().UnixNano())
 	wp.responseChannels = make(map[uint64]chan *Response)
+	wp.sendMessageTag = defaultSendMessageTags
 
 	// processed is a channel that messageHandlerThread writes to
 	// when it's done with one of our messages, so that we can queue
@@ -359,11 +384,44 @@ func (wp *wsPeer) readLoop() {
 		networkReceivedBytesTotal.AddUint64(uint64(len(msg.Data)+2), nil)
 		networkMessageReceivedTotal.AddUint64(1, nil)
 		msg.Sender = wp
-		if msg.Tag == protocol.MsgSkipTag {
+		switch msg.Tag {
+		case protocol.MsgOfInterestTag:
+			// try to decode the message-of-interest
+			if wp.handleMessageOfInterest(msg) {
+				return
+			}
+			continue
+		case protocol.TopicMsgRespTag: // Handle Topic message
+			topics, err := UnmarshallTopics(msg.Data)
+			if err != nil {
+				wp.net.log.Warnf("wsPeer readLoop: could not read the message from: %s %s", wp.conn.RemoteAddr().String(), err)
+				continue
+			}
+			requestHash, found := topics.GetValue("RequestHash")
+			if !found {
+				wp.net.log.Warnf("wsPeer readLoop: message from %s is missing the RequestHash", wp.conn.RemoteAddr().String())
+				continue
+			}
+			hashKey, _ := binary.Uvarint(requestHash)
+			channel, found := wp.getAndRemoveResponseChannel(hashKey)
+			if !found {
+				wp.net.log.Warnf("wsPeer readLoop: received a message response from %s for a stale request", wp.conn.RemoteAddr().String())
+				continue
+			}
+
+			select {
+			case channel <- &Response{Topics: topics}:
+				// do nothing. writing was successfull.
+			default:
+				wp.net.log.Warnf("wsPeer readLoop: channel blocked. Could not pass the response to the requester", wp.conn.RemoteAddr().String())
+			}
+			continue
+		case protocol.MsgDigestSkipTag:
 			// network maintenance message handled immediately instead of handing off to general handlers
 			wp.handleFilterMessage(msg)
 			continue
 		}
+
 		if len(msg.Data) > 0 && wp.incomingMsgFilter != nil && dedupSafeTag(msg.Tag) {
 			if wp.incomingMsgFilter.CheckIncomingMessage(msg.Tag, msg.Data, true, true) {
 				//wp.net.log.Debugf("dropped incoming duplicate %s(%d)", msg.Tag, len(msg.Data))
@@ -384,40 +442,49 @@ func (wp *wsPeer) readLoop() {
 			return
 		}
 
-		// Handle Topic message
-		if msg.Tag == protocol.TopicMsgRespTag {
-			topics, err := UnmarshallTopics(msg.Data)
-			if err != nil {
-				wp.net.log.Warnf("wsPeer readLoop: could not read the message from: %s %s", wp.conn.RemoteAddr().String(), err)
-				continue
-			}
-			requestHash, found := topics.GetValue("RequestHash")
-			if !found {
-				wp.net.log.Warnf("wsPeer readLoop: message from %s is missing the RequestHash", wp.conn.RemoteAddr().String())
-				continue
-			}
-			hashKey, _ := binary.Uvarint(requestHash)
-			channel, found := wp.getAndRemoveResponseChannel(hashKey)
-			if !found {
-				wp.net.log.Warnf("wsPeer readLoop: received a message response from %s for a stale request", wp.conn.RemoteAddr().String())
-				continue
-			}
-			resp := Response{Topics: topics}
-
-			select {
-			case channel <- &resp:
-			default:
-				wp.net.log.Warnf("wsPeer readLoop: channel blocked. Could not pass the response to the requester", wp.conn.RemoteAddr().String())
-			}
-		} else {
-			select {
-			case wp.net.readBuffer <- msg:
-			case <-wp.closing:
-				wp.net.log.Debugf("peer closing %s", wp.conn.RemoteAddr().String())
-				return
-			}
+		select {
+		case wp.net.readBuffer <- msg:
+		case <-wp.closing:
+			wp.net.log.Debugf("peer closing %s", wp.conn.RemoteAddr().String())
+			return
 		}
 	}
+}
+
+func (wp *wsPeer) handleMessageOfInterest(msg IncomingMessage) (shutdown bool) {
+	shutdown = false
+	// decode the message, and ensure it's a valid message.
+	msgTagsMap, err := unmarshallMessageOfInterest(msg.Data)
+	if err != nil {
+		wp.net.log.Warnf("wsPeer handleMessageOfInterest: could not unmarshall message from: %s %v", wp.conn.RemoteAddr().String(), err)
+		return
+	}
+	sm := sendMessage{
+		data:         nil,
+		enqueued:     time.Now(),
+		peerEnqueued: time.Now(),
+		msgTags:      msgTagsMap,
+	}
+
+	// try to send the message to the send loop. The send loop will store the message locally and would use it.
+	// the rationale here is that this message is rarely sent, and we would benefit from having it being lock-free.
+	select {
+	case wp.sendBufferHighPrio <- sm:
+		return
+	case <-wp.closing:
+		wp.net.log.Debugf("peer closing %s", wp.conn.RemoteAddr().String())
+		shutdown = true
+	default:
+	}
+
+	select {
+	case wp.sendBufferHighPrio <- sm:
+	case wp.sendBufferBulk <- sm:
+	case <-wp.closing:
+		wp.net.log.Debugf("peer closing %s", wp.conn.RemoteAddr().String())
+		shutdown = true
+	}
+	return
 }
 
 func (wp *wsPeer) readLoopCleanup() {
@@ -446,6 +513,19 @@ func (wp *wsPeer) writeLoopSend(msg sendMessage) (exit bool) {
 		// just drop it, don't break the connection
 		return false
 	}
+	if msg.msgTags != nil {
+		// when msg.msgTags is non-nil, the read loop has received a message-of-interest message that we want to apply.
+		// in order to avoid any locking, it sent it to this queue so that we could set it as the new outgoing message tag filter.
+		wp.sendMessageTag = msg.msgTags
+		return false
+	}
+	// the tags are always 2 char long; note that this is safe since it's only being used for messages that we have generated locally.
+	tag := protocol.Tag(msg.data[:2])
+	if !wp.sendMessageTag[tag] {
+		// the peer isn't interested in this message.
+		return false
+	}
+
 	// check if this message was waiting in the queue for too long. If this is the case, return "true" to indicate that we want to close the connection.
 	msgWaitDuration := time.Now().Sub(msg.enqueued)
 	if msgWaitDuration > maxMessageQueueDuration {
