@@ -797,7 +797,7 @@ func setupAgreementWithValidator(t *testing.T, numNodes int, traceLevel traceLev
 
 	cleanupFn := func() {
 		for _, accessor := range dbAccessors {
-			defer accessor.Close()
+			accessor.Close()
 		}
 
 		if r := recover(); r != nil {
