@@ -89,11 +89,12 @@ func MakeErasableAccessor(dbfilename string) (Accessor, error) {
 }
 
 // runInitStatements executes initialization statements.
-func (db Accessor) runInitStatements() error {
+func (db *Accessor) runInitStatements() error {
 	for _, stmt := range initStatements {
 		_, err := db.Handle.Exec(stmt)
 		if err != nil {
 			db.Handle.Close()
+			db.Handle = nil
 			return err
 		}
 	}
@@ -114,7 +115,7 @@ func (db *Accessor) logger() logging.Logger {
 }
 
 // Close closes the connection.
-func (db Accessor) Close() {
+func (db *Accessor) Close() {
 	db.Handle.Close()
 	db.Handle = nil
 }
