@@ -78,7 +78,7 @@ func TestRateLimiting(t *testing.T) {
 	wn := &WebsocketNetwork{
 		log:       log,
 		config:    defaultConfig,
-		phonebook: &PhonebookImpl{},
+		phonebook: MakePhonebook(1,1),
 		GenesisID: "go-test-network-genesis",
 		NetworkID: config.Devtestnet,
 	}
@@ -105,7 +105,7 @@ func TestRateLimiting(t *testing.T) {
 	clientsCount := int(defaultConfig.ConnectionsRateLimitingCount + 5)
 
 	networks := make([]*WebsocketNetwork, clientsCount)
-	phonebooks := make([]*PhonebookImpl, clientsCount)
+	phonebooks := make([]Phonebook, clientsCount)
 	for i := 0; i < clientsCount; i++ {
 		networks[i] = makeTestWebsocketNodeWithConfig(t, noAddressConfig)
 		networks[i].config.GossipFanout = 1
