@@ -7,17 +7,25 @@ if [ -z "${BUILDTIMESTAMP}" ]; then
     BUILDTIMESTAMP=$(cat "${HOME}/buildtimestamp")
     export BUILDTIMESTAMP
     echo run "${0}" with output to "${HOME}/buildlog_${BUILDTIMESTAMP}"
-    (bash "${0}" "${1}" 2>&1) | tee "${HOME}/buildlog_${BUILDTIMESTAMP}"
-    exit 0
+    bash "${0}" "${1}" 2>&1 | tee "${HOME}/buildlog_${BUILDTIMESTAMP}"
+    # http://tldp.org/LDP/abs/html/internalvariables.html#PIPESTATUSREF
+    exit "${PIPESTATUS[0]}"
 fi
 
 echo
 date "+build_release begin SETUP stage %Y%m%d_%H%M%S"
 echo
 
+# `apt-get` fails randomly when downloading package, this is a hack that "works" reasonably well.
+echo -e "deb http://us.archive.ubuntu.com/ubuntu/ bionic main universe multiverse\ndeb http://archive.ubuntu.com/ubuntu/ bionic main universe multiverse" | sudo tee /etc/apt/sources.list.d/ubuntu
+
 sudo apt-get update
 sudo apt-get upgrade -y
-sudo apt-get install -y build-essential automake autoconf awscli docker.io git gpg nfs-common python3 rpm sqlite3 python3-boto3 g++ libtool rng-tools
+
+# `apt-get` fails randomly when downloading package, this is a hack that "works" reasonably well.
+sudo apt-get update
+
+sudo apt-get install -y build-essential automake autoconf awscli docker.io git gpg nfs-common python python3 rpm sqlite3 python3-boto3 g++ libtool rng-tools
 sudo rngd -r /dev/urandom
 
 #umask 0077
