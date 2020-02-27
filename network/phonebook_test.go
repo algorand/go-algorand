@@ -89,7 +89,7 @@ func TestArrayPhonebookAll(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e"}
 	ph := MakePhonebook(1, 1).(*phonebookImpl)
 	for _, e := range set {
-		ph.data[e] = phonebookData{}
+		ph.data[e] = phonebookEntryData{}
 	}
 	testPhonebookAll(t, set, ph)
 }
@@ -98,7 +98,7 @@ func TestArrayPhonebookUniform1(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e"}
 	ph := MakePhonebook(1, 1).(*phonebookImpl)
 	for _, e := range set {
-		ph.data[e] = phonebookData{}
+		ph.data[e] = phonebookEntryData{}
 	}
 	testPhonebookUniform(t, set, ph, 1)
 }
@@ -107,7 +107,7 @@ func TestArrayPhonebookUniform3(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e"}
 	ph := MakePhonebook(1, 1).(*phonebookImpl)
 	for _, e := range set {
-		ph.data[e] = phonebookData{}
+		ph.data[e] = phonebookEntryData{}
 	}
 	testPhonebookUniform(t, set, ph, 3)
 }
