@@ -36,14 +36,15 @@ then
     exit 1
 fi
 
-# TODO: if we are checking out a release tag, `git tag --verify` it
-
 export DEBIAN_FRONTEND=noninteractive
 
-# Install latest Go
+# Install latest go.1.12.9.
 cd "${HOME}"
-python3 "${HOME}/go/src/github.com/algorand/go-algorand/scripts/get_latest_go.py" --version-prefix=1.12
-# $HOME will be interpreted by the outer shell to create the string passed to sudo bash
+if ! curl -O https://dl.google.com/go/go1.12.9.linux-amd64.tar.gz
+then
+    echo Golang could not be installed!
+    exit 1
+fi
 sudo bash -c "cd /usr/local && tar zxf ${HOME}/go*.tar.gz"
 
 GOPATH=$(/usr/local/go/bin/go env GOPATH)
