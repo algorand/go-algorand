@@ -28,8 +28,6 @@ import (
 // of how many addresses the phonebook actually has. ( with the retry-after logic applied )
 const getAllAddresses = math.MaxInt32
 
-const defaultList = "default"
-
 // Phonebook stores or looks up addresses of nodes we might contact
 type Phonebook interface {
 	// GetAddresses(N) returns up to N addresses, but may return fewer
