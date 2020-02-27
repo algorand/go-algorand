@@ -13,12 +13,7 @@ stages:
     image: algorand/go-algorand-linux
     version: '{{ docker.Version.linux-amd64.version }}'
     workDir: /go/src/github.com/algorand/go-algorand
-    target: fulltest
-  - task: docker.Make
-    image: algorand/go-algorand-linux
-    version: '{{ docker.Version.linux-amd64.version }}'
-    workDir: /go/src/github.com/algorand/go-algorand
-    target: ci-build
+    target: fulltest ci-build
   build-linux-arm64:
   - task: docker.Version
     name: linux-arm64
@@ -33,12 +28,7 @@ stages:
     image: algorand/go-algorand-linux
     version: '{{ docker.Version.linux-arm64.version }}'
     workDir: /go/src/github.com/algorand/go-algorand
-    target: fulltest
-  - task: docker.Make
-    image: algorand/go-algorand-linux
-    version: '{{ docker.Version.linux-arm64.version }}'
-    workDir: /go/src/github.com/algorand/go-algorand
-    target: ci-build
+    target: fulltest ci-build
   build-linux-armv6:
   - task: docker.Version
     name: linux-arm64
@@ -53,12 +43,7 @@ stages:
     image: algorand/go-algorand-linux
     version: '{{ docker.Version.linux-arm64.version }}'
     workDir: /go/src/github.com/algorand/go-algorand
-    target: test
-  - task: docker.Make
-    image: algorand/go-algorand-linux
-    version: '{{ docker.Version.linux-arm64.version }}'
-    workDir: /go/src/github.com/algorand/go-algorand
-    target: ci-build
+    target: test ci-build
   build-local:
   - task: shell.Make
     target: ci-deps fulltest
