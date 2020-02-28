@@ -3,6 +3,8 @@
 
 set -ex
 
+trap 'bash ./scripts/release/common/ec2/shutdown.sh' ERR
+
 # Path(s) are relative to the root of the Jenkins workspace.
 BRANCH=$(./scripts/release/util/check_remote.sh "$1")
 INSTANCE=$(cat ./scripts/release/common/ec2/tmp/instance)
