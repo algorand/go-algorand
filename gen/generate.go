@@ -21,7 +21,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	//"runtime"
+	"runtime"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -125,9 +125,7 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 
 	pendingWallets := make(chan genesisAllocation, len(allocation))
 
-	// temporary disable the concurrent execution, as it seems to create an issue with sqlite concurrently model.
-	// this should be removed once the undelying issue is resolved.
-	concurrentWalletGenerators := int(1) // runtime.NumCPU() * 2
+	concurrentWalletGenerators := runtime.NumCPU() * 2
 	errorsChannel := make(chan error, concurrentWalletGenerators)
 	verbosedOutput := make(chan string)
 	var creatingWalletsWaitGroup sync.WaitGroup
