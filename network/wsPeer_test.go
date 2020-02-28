@@ -17,6 +17,7 @@
 package network
 
 import (
+	"encoding/binary"
 	"testing"
 	"time"
 
@@ -36,4 +37,43 @@ func TestCheckSlowWritingPeer(t *testing.T) {
 	peer.intermittentOutgoingMessageEnqueueTime = now.Add(-maxMessageQueueDuration * 2).UnixNano()
 	require.Equal(t, peer.CheckSlowWritingPeer(now), true)
 
+}
+
+// TestGetRequestNonce tests if unique values are generated each time
+func TestGetRequestNonce(t *testing.T) {
+	numValues := 1000
+	peer := wsPeer{}
+	valueChannel := make(chan uint64, numValues)
+	for x := 0; x < numValues; x++ {
+		go func() {
+			ans := peer.getRequestNonce()
+			val, _ := binary.Uvarint(ans)
+			valueChannel <- val
+		}()
+	}
+
+	// Timeout
+	maxWait := time.After(2 * time.Second)
+
+	// check if all the values are unique
+	seenValue := make([]bool, numValues+1)
+	for x := 0; x < numValues; x++ {
+		select {
+		case val := <-valueChannel:
+			require.Equal(t, false, seenValue[val])
+			seenValue[val] = true
+		case <-maxWait:
+			break
+		}
+	}
+	// Check if all the values were generated
+	for x := 1; x <= numValues; x++ {
+		require.Equal(t, true, seenValue[x])
+	}
+}
+
+func TestDefaultMessageTagsLength(t *testing.T) {
+	for tag := range defaultSendMessageTags {
+		require.Equal(t, 2, len(tag))
+	}
 }

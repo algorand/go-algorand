@@ -54,6 +54,7 @@ func spinNetwork(t *testing.T, nodesCount int) ([]*networkImpl, []*messageCounte
 	cfg.OutgoingMessageFilterBucketCount = 3
 	cfg.OutgoingMessageFilterBucketSize = 32
 	cfg.EnableOutgoingNetworkMessageFiltering = false
+	cfg.DNSBootstrapID = "" // prevent attempts of getting bootstrap SRV from DNS server(s)
 
 	log := logging.TestingLog(t)
 	start := time.Now()

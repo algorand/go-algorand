@@ -1,5 +1,5 @@
 {
-    "Version": 5,
+    "Version": 6,
     "AnnounceParticipationKey": true,
     "Archival": false,
     "BaseLoggerDebugLevel": 4,
@@ -48,5 +48,8 @@
     "TxPoolSize": 15000,
     "TxSyncIntervalSeconds": 60,
     "TxSyncServeResponseSize": 1000000,
-    "TxSyncTimeoutSeconds": 30    
+    "TxSyncTimeoutSeconds": 30,
+    "PeerConnectionsUpdateInterval": 3600,
+    "DNSSecurityFlags": 1,
+    "EnablePingHandler": true
 }

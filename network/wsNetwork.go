@@ -52,6 +52,7 @@ import (
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
 	tools_network "github.com/algorand/go-algorand/tools/network"
+	"github.com/algorand/go-algorand/tools/network/dnssec"
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
@@ -216,6 +217,7 @@ type OutgoingMessage struct {
 	Action  ForwardingPolicy
 	Tag     Tag
 	Payload []byte
+	Topics  Topics
 }
 
 // ForwardingPolicy is an enum indicating to whom we should send a message
@@ -230,6 +232,9 @@ const (
 
 	// Broadcast - forward to everyone (except the sender)
 	Broadcast
+
+	// Respond - reply to the sender
+	Respond
 )
 
 // MessageHandler takes a IncomingMessage (e.g., vote, transaction), processes it, and returns what (if anything)
@@ -257,7 +262,7 @@ type TaggedMessageHandler struct {
 // Propagate is a convenience function to save typing in the common case of a message handler telling us to propagate an incoming message
 // "return network.Propagate(msg)" instead of "return network.OutgoingMsg{network.Broadcast, msg.Tag, msg.Data}"
 func Propagate(msg IncomingMessage) OutgoingMessage {
-	return OutgoingMessage{Broadcast, msg.Tag, msg.Data}
+	return OutgoingMessage{Broadcast, msg.Tag, msg.Data, nil}
 }
 
 // GossipNetworkPath is the URL path to connect to the websocket gossip node at.
@@ -545,8 +550,11 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 }
 
 func (wn *WebsocketNetwork) setup() {
-
-	wn.dialer = makeRateLimitingDialer(wn.phonebook)
+	var preferredResolver *dnssec.Resolver
+	if wn.config.DNSSecurityRelayAddrEnforced() {
+		preferredResolver = &dnssec.DefaultResolver
+	}
+	wn.dialer = makeRateLimitingDialer(wn.phonebook, preferredResolver)
 	wn.transport = makeRateLimitingTransport(wn.phonebook, 10*time.Second, &wn.dialer)
 
 	wn.upgrader.ReadBufferSize = 4096
@@ -606,6 +614,7 @@ func (wn *WebsocketNetwork) setup() {
 	}
 	wn.connPerfMonitor = makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag, protocol.TxnTag})
 	wn.lastNetworkAdvance = time.Now().UTC()
+	wn.handlers.log = wn.log
 }
 
 func (wn *WebsocketNetwork) rlimitIncomingConnections() error {
@@ -692,8 +701,12 @@ func (wn *WebsocketNetwork) Start() {
 		wn.scheme = "http"
 	}
 	wn.meshUpdateRequests <- meshRequest{false, nil}
-	wn.RegisterHandlers(pingHandlers)
-	wn.RegisterHandlers(prioHandlers)
+	if wn.config.EnablePingHandler {
+		wn.RegisterHandlers(pingHandlers)
+	}
+	if wn.prioScheme != nil {
+		wn.RegisterHandlers(prioHandlers)
+	}
 	if wn.listener != nil {
 		wn.wg.Add(1)
 		go wn.httpdThread()
@@ -1028,6 +1041,7 @@ func (wn *WebsocketNetwork) messageHandlerThread() {
 			}
 			//wn.log.Debugf("msg handling %#v [%d]byte", msg.Tag, len(msg.Data))
 			start := time.Now()
+
 			// now, send to global handlers
 			outmsg := wn.handlers.Handle(msg)
 			handled := time.Now()
@@ -1041,6 +1055,8 @@ func (wn *WebsocketNetwork) messageHandlerThread() {
 				go wn.disconnectThread(msg.Sender, disconnectBadData)
 			case Broadcast:
 				wn.Broadcast(wn.ctx, msg.Tag, msg.Data, false, msg.Sender)
+			case Respond:
+				msg.Sender.(*wsPeer).Respond(wn.ctx, msg, outmsg)
 			default:
 			}
 		case <-inactivityCheckTicker.C:
@@ -1088,7 +1104,7 @@ func (wn *WebsocketNetwork) checkSlowWritingPeers() {
 func (wn *WebsocketNetwork) sendFilterMessage(msg IncomingMessage) {
 	digest := generateMessageDigest(msg.Tag, msg.Data)
 	//wn.log.Debugf("send filter %s(%d) %v", msg.Tag, len(msg.Data), digest)
-	wn.Broadcast(context.Background(), protocol.MsgSkipTag, digest[:], false, msg.Sender)
+	wn.Broadcast(context.Background(), protocol.MsgDigestSkipTag, digest[:], false, msg.Sender)
 }
 
 func (wn *WebsocketNetwork) broadcastThread() {
@@ -1154,7 +1170,7 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 	copy(mbytes[len(tbytes):], request.data)
 
 	var digest crypto.Digest
-	if request.tag != protocol.MsgSkipTag && len(request.data) >= messageFilterSize {
+	if request.tag != protocol.MsgDigestSkipTag && len(request.data) >= messageFilterSize {
 		digest = crypto.Hash(mbytes)
 	}
 
@@ -1593,7 +1609,7 @@ func (wn *WebsocketNetwork) peersToPing() []*wsPeer {
 }
 
 func (wn *WebsocketNetwork) getDNSAddrs(dnsBootstrap string) []string {
-	srvPhonebook, err := tools_network.ReadFromSRV("algobootstrap", "tcp", dnsBootstrap, wn.config.FallbackDNSResolverAddress)
+	srvPhonebook, err := tools_network.ReadFromSRV("algobootstrap", "tcp", dnsBootstrap, wn.config.FallbackDNSResolverAddress, wn.config.DNSSecuritySRVEnforced())
 	if err != nil {
 		// only log this warning on testnet or devnet
 		if wn.NetworkID == config.Devnet || wn.NetworkID == config.Testnet {
