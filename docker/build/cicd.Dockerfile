@@ -23,4 +23,5 @@ ENV PATH=$GOPATH/bin:$GOROOT/bin:$PATH \
     PKG_ROOT=${PKG_ROOT}
 WORKDIR $GOPATH/src/github.com/algorand/go-algorand
 RUN make ci-deps && make clean
+RUN echo "vm.max_map_count = 262144" >> /etc/sysctl.conf
 CMD ["/bin/bash"]
