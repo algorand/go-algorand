@@ -45,12 +45,12 @@ func (m *proposalManager) underlying() listener {
 // - It applies message relay rules to votePresent, voteVerified,
 //   payloadPresent, and payloadVerified events.
 //
-// - It enters a new round given a roundInterruption or a certThreshold event.
+// - It enters a new round given a roundInterruption.
 //
 // - It enters a new period given a nextThreshold event.  It also enters a new
-//   period given a softThreshold event, if necessary.
-//    - On entering a new period due to a softThreshold event, it dispatches
-//      this event to the proposalMachineRound.
+//   period given a softThreshold/certThreshold event, if necessary.
+//    - On entering a new period due to a softThreshold/certThreshold, it
+//      dispatches this event to the proposalMachineRound.
 //
 // For more details, see each method's respective documentation below.
 func (m *proposalManager) handle(r routerHandle, p player, e event) event {
