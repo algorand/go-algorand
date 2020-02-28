@@ -43,7 +43,7 @@ stages:
     image: algorand/go-algorand-linux
     version: '{{ docker.Version.linux-arm64.version }}'
     workDir: /go/src/github.com/algorand/go-algorand
-    target: test ci-build
+    target: ci-build
   build-local:
   - task: shell.Make
     target: ci-deps fulltest
