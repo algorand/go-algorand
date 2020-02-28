@@ -44,7 +44,7 @@ const (
 	sqliteWalletDriverVersion   = 1
 	sqliteWalletsDirName        = "sqlite_wallets"
 	sqliteWalletsDirPermissions = 0700
-	sqliteWalletDBOptions       = "_secure_delete=on&_tx_lock=exclusive"
+	sqliteWalletDBOptions       = "_secure_delete=on&_txlock=exclusive"
 	sqliteMaxWalletNameLen      = 64
 	sqliteMaxWalletIDLen        = 64
 	sqliteIntOverflow           = 1 << 63
@@ -831,7 +831,7 @@ func (sw *SQLiteWallet) GenerateKey(displayMnemonic bool) (addr crypto.Digest, e
 		return
 	}
 
-	// Begin an exclusive database transaction (we set _tx_lock=exclusive on the
+	// Begin an exclusive database transaction (we set _txlock=exclusive on the
 	// database connection string)
 	tx, err := db.Beginx()
 	if err != nil {
