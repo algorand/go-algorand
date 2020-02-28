@@ -26,6 +26,8 @@ import (
 	"fmt"
 	"reflect"
 	"runtime"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/mattn/go-sqlite3"
@@ -48,6 +50,7 @@ const busy = 1000
 // connection.  For now, it's just an optional "PRAGMA fullfsync=true" on
 // MacOSX.
 var initStatements []string
+var sqliteInitOnce sync.Once
 
 // An Accessor manages a sqlite database handle and any outstanding batching operations.
 type Accessor struct {
@@ -58,30 +61,48 @@ type Accessor struct {
 
 // MakeAccessor creates a new Accessor.
 func MakeAccessor(dbfilename string, readOnly bool, inMemory bool) (Accessor, error) {
-	var db Accessor
-	db.readOnly = readOnly
-
-	var err error
-	db.Handle, err = sql.Open("sqlite3", URI(dbfilename, readOnly, inMemory)+"&_journal_mode=wal")
-
-	if err == nil {
-		err = db.runInitStatements()
-	}
-
-	return db, err
+	return makeAccessorImpl(dbfilename, readOnly, inMemory, []string{"_journal_mode=wal"})
 }
 
 // MakeErasableAccessor creates a new Accessor with the secure_delete pragma set;
 // see https://www.sqlite.org/pragma.html#pragma_secure_delete
 // It is not read-only and not in-memory (otherwise, erasability doesn't matter)
 func MakeErasableAccessor(dbfilename string) (Accessor, error) {
-	var db Accessor
-	db.readOnly = false
+	return makeAccessorImpl(dbfilename, false, false, []string{"_secure_delete=on"})
+}
 
+func makeAccessorImpl(dbfilename string, readOnly bool, inMemory bool, params []string) (Accessor, error) {
+	var db Accessor
+	db.readOnly = readOnly
+
+	// SQLite3 driver we use (mattn/go-sqlite3) does not implement driver.DriverContext interface
+	// that forces sql.Open calling sql.OpenDB and return a struct without any touches to the underlying driver.
+	// Because of that SQLite library is not initialized until the very first call of sqlite3_open_v2 that happens
+	// in sql.DB.conn. SQLite initialization is not thread-safe on date of writing (2/27/2020) and
+	// mattn/go-sqlite3 has no special code to handle this case.
+	// Solution is to create a connection using a safe synchronization barrier right here.
+	// The connection goes to a connection pool inside Go's sql package and will be re-used when needed.
+	// See https://github.com/algorand/go-algorand/issues/846 for more details.
 	var err error
-	db.Handle, err = sql.Open("sqlite3", URI(dbfilename, false, false)+"&_secure_delete=on")
+	db.Handle, err = sql.Open("sqlite3", URI(dbfilename, readOnly, inMemory)+"&"+strings.Join(params, "&"))
 
 	if err == nil {
+		// create a connection to safely initialize SQLite once
+		initFn := func() {
+			var conn *sql.Conn
+			if conn, err = db.Handle.Conn(context.Background()); err != nil {
+				db.Close()
+				return
+			}
+			if err = conn.Close(); err != nil {
+				db.Close()
+			}
+		}
+		sqliteInitOnce.Do(initFn)
+		if err != nil {
+			// init failed, db closed and err is set
+			return db, err
+		}
 		err = db.runInitStatements()
 	}
 
@@ -93,8 +114,7 @@ func (db *Accessor) runInitStatements() error {
 	for _, stmt := range initStatements {
 		_, err := db.Handle.Exec(stmt)
 		if err != nil {
-			db.Handle.Close()
-			db.Handle = nil
+			db.Close()
 			return err
 		}
 	}
@@ -169,7 +189,7 @@ func (db *Accessor) getDecoratedLogger(fn idemFn, extras ...interface{}) logging
 
 // Atomic executes a piece of code with respect to the database atomically.
 // For transactions where readOnly is false, sync determines whether or not to wait for the result.
-func (db Accessor) Atomic(fn idemFn, extras ...interface{}) (err error) {
+func (db *Accessor) Atomic(fn idemFn, extras ...interface{}) (err error) {
 	start := time.Now()
 
 	// note that the sql library will drop panics inside an active transaction
