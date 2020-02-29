@@ -19,7 +19,6 @@ package transactions
 import (
 	"fmt"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -420,9 +419,6 @@ func TestAssetConfig(t *testing.T) {
 }
 
 func TestAssetInformation(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip()
-	}
 	t.Parallel()
 	a := require.New(t)
 
@@ -640,9 +636,6 @@ func TestAssetGroupCreateSendDestroy(t *testing.T) {
 }
 
 func TestAssetSend(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip()
-	}
 	t.Parallel()
 	a := require.New(t)
 
