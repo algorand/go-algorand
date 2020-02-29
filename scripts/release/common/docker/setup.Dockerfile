@@ -11,6 +11,6 @@
 
 FROM ubuntu:18.04
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y jq git python python-pip ssh && \
+RUN apt-get update && apt-get install -y jq git python python-pip python3-boto3 ssh && \
     pip install awscli
 
