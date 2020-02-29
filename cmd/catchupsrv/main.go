@@ -19,8 +19,10 @@ package main
 import (
 	"encoding/base64"
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"path"
 	"strconv"
 
@@ -35,6 +37,7 @@ import (
 
 var addrFlag = flag.String("addr", "127.0.0.1:4160", "Address to listen on")
 var dirFlag = flag.String("dir", "", "Directory containing catchup blocks")
+var tarDirFlag = flag.String("tardir", "", "Directory containing catchup blocks in M_N.tar.bz2")
 
 func main() {
 	flag.Parse()
@@ -42,8 +45,18 @@ func main() {
 	log := logging.Base()
 	log.SetLevel(logging.Info)
 
-	if *dirFlag == "" {
-		panic("Must specify -dir")
+	if *dirFlag == "" && *tarDirFlag == "" {
+		panic("Must specify -dir or -tardir")
+	}
+
+	var blocktars *tarBlockSet
+	if *tarDirFlag != "" {
+		var err error
+		blocktars, err = openTarBlockDir(*tarDirFlag)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s: error opening block tar dir, %v\n", *tarDirFlag, err)
+			os.Exit(1)
+		}
 	}
 
 	if *downloadFlag {
@@ -94,22 +107,33 @@ func main() {
 		roundStr := pathVars["round"]
 		genesisID := pathVars["genesisID"]
 
-		blkPath, err := stringBlockToPath(roundStr)
+		roundNumber, err := stringToBlock(roundStr)
 		if err != nil {
 			log.Infof("%s %s: %v", r.Method, r.URL, err)
 			http.NotFound(w, r)
 			return
 		}
 
-		data, err := ioutil.ReadFile(
-			path.Join(
-				*dirFlag,
-				"v"+versionStr,
-				genesisID,
-				"block",
-				blkPath,
-			),
-		)
+		var data []byte
+		if *dirFlag != "" {
+			blkPath := blockToPath(roundNumber)
+			data, err = ioutil.ReadFile(
+				path.Join(
+					*dirFlag,
+					"v"+versionStr,
+					genesisID,
+					"block",
+					blkPath,
+				),
+			)
+		} else if blocktars != nil {
+			data, err = blocktars.getBlock(roundNumber)
+		} else {
+			fmt.Fprintf(os.Stderr, "config err, no block dir and no block tar dir\n")
+			defer os.Exit(1)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 		if err != nil {
 			log.Infof("%s %s: %v", r.Method, r.URL, err)
 			http.NotFound(w, r)
@@ -120,8 +144,10 @@ func main() {
 		w.Header().Set("Content-Length", strconv.Itoa(len(data)))
 		w.WriteHeader(http.StatusOK)
 		w.Write(data)
+		log.Infof("OK %d", roundNumber)
 	})
 
+	log.Infof("serving %s", srv.Addr)
 	err := srv.ListenAndServe()
 	if err != nil {
 		panic(err)
