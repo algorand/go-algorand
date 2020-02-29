@@ -1,17 +1,14 @@
 #!/usr/bin/env bash
 
+set -ex
+
 # This is currently used by `test_package.sh`.
 # It is copied into a docker image at build time and then invoked at run time.
 
-GREEN_FG=$(tput setaf 2 2>/dev/null)
-RED_FG=$(tput setaf 1 2>/dev/null)
-YELLOW_FG=$(tput setaf 3 2>/dev/null)
-END_FG_COLOR=$(tput sgr0 2>/dev/null)
-
 BRANCH=
-CHANNEL=stable
-HASH=
-RELEASE=
+CHANNEL=
+COMMIT_HASH=
+FULLVERSION=
 
 while [ "$1" != "" ]; do
     case "$1" in
@@ -25,11 +22,11 @@ while [ "$1" != "" ]; do
             ;;
         -h)
             shift
-            HASH="$1"
+            COMMIT_HASH="$1"
             ;;
         -r)
             shift
-            RELEASE="$1"
+            FULLVERSION="$1"
             ;;
         *)
             echo "Unknown option" "$1"
@@ -39,9 +36,9 @@ while [ "$1" != "" ]; do
     shift
 done
 
-if [ -z "$BRANCH" ] || [ -z "$HASH" ] || [ -z "$RELEASE" ]
+if [ -z "$BRANCH" ] || [ -z "$COMMIT_HASH" ] || [ -z "$FULLVERSION" ]
 then
-    echo "$YELLOW_FG[Usage]$END_FG_COLOR $0 -b BRANCH -c CHANNEL -h HASH -r RELEASE"
+    echo "[ERROR] $0 -b BRANCH -c CHANNEL -h COMMIT_HASH -r FULLVERSION"
     exit 1
 fi
 
@@ -54,7 +51,7 @@ else
 fi
 
 STR=$(algod -v)
-SHORT_HASH=${HASH:0:8}
+SHORT_HASH=${COMMIT_HASH:0:8}
 
 # We're looking for a line that looks like the following:
 #
@@ -62,12 +59,12 @@ SHORT_HASH=${HASH:0:8}
 #
 # Since we're passing in the full hash, we won't using the closing paren.
 # Use a regex over the multi-line string.
-if [[ "$STR" =~ .*"$RELEASE.$CHANNEL [$BRANCH] (commit #$SHORT_HASH)".* ]]
+if [[ "$STR" =~ .*"$FULLVERSION.$CHANNEL [$BRANCH] (commit #$SHORT_HASH)".* ]]
 then
-    echo -e "$GREEN_FG[$0]$END_FG_COLOR The result of \`algod -v\` is a correct match.\n$STR"
+    echo -e "[$0] The result of \`algod -v\` is a correct match.\n$STR"
     exit 0
 fi
 
-echo "$RED_FG[$0]$END_FG_COLOR The result of \`algod -v\` is an incorrect match."
+echo "[$0] The result of \`algod -v\` is an incorrect match."
 exit 1
 

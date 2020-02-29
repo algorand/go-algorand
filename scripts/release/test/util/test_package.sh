@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
+# shellcheck disable=1090
 
 # TODO: use `trap` instead of cleanup function?
 
-GREEN_FG=$(tput setaf 2 2>/dev/null)
-RED_FG=$(tput setaf 1 2>/dev/null)
-TEAL_FG=$(tput setaf 6 2>/dev/null)
-YELLOW_FG=$(tput setaf 3 2>/dev/null)
-END_FG_COLOR=$(tput sgr0 2>/dev/null)
+set -ex
+
+. "${HOME}"/build_env
 
 # TODO: The following error happens on centos:8
 #
@@ -24,41 +23,11 @@ OS_LIST=(
     ubuntu:18.04
 )
 
-BRANCH=
-CHANNEL=stable
-HASH=
-RELEASE=
 FAILED=()
 
-while [ "$1" != "" ]; do
-    case "$1" in
-        -b)
-            shift
-            BRANCH="$1"
-            ;;
-        -c)
-            shift
-            CHANNEL="$1"
-            ;;
-        -h)
-            shift
-            HASH="$1"
-            ;;
-        -r)
-            shift
-            RELEASE="$1"
-            ;;
-        *)
-            echo "$RED_FG[$0]$END_FG_COLOR Unknown option $1"
-            exit 1
-            ;;
-    esac
-    shift
-done
-
-if [ -z "$BRANCH" ] || [ -z "$HASH" ] || [ -z "$RELEASE" ]
+if [ -z "$BRANCH" ] || [ -z "$COMMIT_HASH" ] || [ -z "$FULLVERSION" ]
 then
-    echo "$YELLOW_FG[Usage]$END_FG_COLOR $0 -b BRANCH -c CHANNEL -h HASH -r RELEASE"
+    echo "[ERROR] $0 was not provided with BRANCH, CHANNEL, COMMIT_HASH or FULLVERSION!"
     exit 1
 fi
 
@@ -69,8 +38,8 @@ build_images () {
 FROM {{OS}}
 
 WORKDIR /root
-COPY pkg/* /root/
-COPY smoke_test.sh .
+# It's easier just to copy all contents into the container.
+COPY . .
 CMD ["/bin/bash"]
 EOF
 
@@ -91,8 +60,8 @@ EOF
 run_images () {
     for item in ${OS_LIST[*]}
     do
-        echo "$TEAL_FG[$0]$END_FG_COLOR Running ${item}-test..."
-        if ! docker run --rm --name algorand -t "${item}-smoke-test" bash smoke_test.sh -b "$BRANCH" -c "$CHANNEL" -h "$HASH" -r "$RELEASE"
+        echo "[$0] Running ${item}-test..."
+        if ! docker run --rm --name algorand -t "${item}-smoke-test" bash smoke_test.sh -b "$BRANCH" -c "$CHANNEL" -h "$COMMIT_HASH" -r "$FULLVERSION"
         then
             FAILED+=("$item")
         fi
@@ -106,7 +75,7 @@ cleanup() {
 check_failures() {
     if [ "${#FAILED[@]}" -gt 0 ]
     then
-        echo -e "\n$RED_FG[$0]$END_FG_COLOR The following images could not be $1:"
+        echo -e "\n[$0] The following images could not be $1:"
 
         for failed in ${FAILED[*]}
         do
@@ -122,11 +91,11 @@ check_failures() {
 
 build_images
 check_failures built
-echo "$GREEN_FG[$0]$END_FG_COLOR All builds completed with no failures."
+echo "[$0] All builds completed with no failures."
 
 run_images
 check_failures verified
-echo "$GREEN_FG[$0]$END_FG_COLOR All runs completed with no failures."
+echo "[$0] All runs completed with no failures."
 
 cleanup
 
