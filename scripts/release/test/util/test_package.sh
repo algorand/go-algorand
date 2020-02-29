@@ -25,7 +25,7 @@ OS_LIST=(
 
 FAILED=()
 
-if [ -z "$BRANCH" ] || [ -z "$COMMIT_HASH" ] || [ -z "$FULLVERSION" ]
+if [ -z "$BRANCH" ] || [ -z "$CHANNEL" ] || [ -z "$COMMIT_HASH" ] || [ -z "$FULLVERSION" ]
 then
     echo "[ERROR] $0 was not provided with BRANCH, CHANNEL, COMMIT_HASH or FULLVERSION!"
     exit 1

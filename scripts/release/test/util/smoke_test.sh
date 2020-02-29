@@ -36,9 +36,9 @@ while [ "$1" != "" ]; do
     shift
 done
 
-if [ -z "$BRANCH" ] || [ -z "$COMMIT_HASH" ] || [ -z "$FULLVERSION" ]
+if [ -z "$BRANCH" ] || [ -z "$CHANNEL" ] || [ -z "$COMMIT_HASH" ] || [ -z "$FULLVERSION" ]
 then
-    echo "[ERROR] $0 -b BRANCH -c CHANNEL -h COMMIT_HASH -r FULLVERSION"
+    echo "[ERROR] $0 -b $BRANCH -c $CHANNEL -h $COMMIT_HASH -r $FULLVERSION"
     exit 1
 fi
 
