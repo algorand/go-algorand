@@ -58,14 +58,19 @@ type Phonebook interface {
 	ExtendPeerList(more []string, networkName string)
 }
 
-type phonebookEntryData struct {
+// addressData: holds the information associated with each phonebook address.
+// retryAfter: is the time to wait before retrying to connect to the address.
+// recentConnectionTimes: is the log of connection times used to observe the maximum
+//                        connections to the address in a given time window.
+// networkNames: lists the networks to which the given address belongs.
+type addressData struct {
 	retryAfter            time.Time
 	recentConnectionTimes []time.Time
 	networkNames          map[string]bool
 }
 
-func makePhonebookEntryData(networkName string) phonebookEntryData {
-	pbData := phonebookEntryData{
+func makePhonebookEntryData(networkName string) addressData {
+	pbData := addressData{
 		networkNames:          make(map[string]bool),
 		recentConnectionTimes: make([]time.Time, 0),
 	}
@@ -79,7 +84,7 @@ func makePhonebookEntryData(networkName string) phonebookEntryData {
 type phonebookImpl struct {
 	connectionsRateLimitingCount  uint
 	connectionsRateLimitingWindow time.Duration
-	data                          map[string]phonebookEntryData
+	data                          map[string]addressData
 	lock                          deadlock.RWMutex
 }
 
@@ -89,7 +94,7 @@ func MakePhonebook(connectionsRateLimitingCount uint,
 	return &phonebookImpl{
 		connectionsRateLimitingCount:  connectionsRateLimitingCount,
 		connectionsRateLimitingWindow: connectionsRateLimitingWindow,
-		data:                          make(map[string]phonebookEntryData, 0),
+		data:                          make(map[string]addressData, 0),
 	}
 }
 
@@ -102,7 +107,7 @@ func (e *phonebookImpl) deletePhonebookEntry(entryName, networkName string) {
 }
 
 // PopEarliestTime removes the earliest time from recentConnectionTimes in
-// phonebookEntryData for addr
+// addressData for addr
 // It is expected to be later than ConnectionsRateLimitingWindow
 func (e *phonebookImpl) popNElements(n int, addr string) {
 	entry := e.data[addr]
@@ -111,7 +116,7 @@ func (e *phonebookImpl) popNElements(n int, addr string) {
 }
 
 // AppendTime adds the current time to recentConnectionTimes in
-// phonebookEntryData of addr
+// addressData of addr
 func (e *phonebookImpl) appendTime(addr string, t time.Time) {
 	entry := e.data[addr]
 	entry.recentConnectionTimes = append(entry.recentConnectionTimes, t)
@@ -132,7 +137,7 @@ func (e *phonebookImpl) filterRetryTime(t time.Time) []string {
 // new entries in they are being added
 // existing items that aren't included in they are being removed
 // matching entries don't change
-func (e *phonebookImpl) ReplacePeerList(dnsAddresses []string, networkName string) {
+func (e *phonebookImpl) ReplacePeerList(addressesThey []string, networkName string) {
 	e.lock.Lock()
 	defer e.lock.Unlock()
 
@@ -144,7 +149,7 @@ func (e *phonebookImpl) ReplacePeerList(dnsAddresses []string, networkName strin
 		}
 	}
 
-	for _, addr := range dnsAddresses {
+	for _, addr := range addressesThey {
 		if pbData, has := e.data[addr]; has {
 			// we already have this.
 			// Update the networkName
@@ -158,7 +163,7 @@ func (e *phonebookImpl) ReplacePeerList(dnsAddresses []string, networkName strin
 		}
 	}
 
-	// remove items that were missing in dnsAddresses
+	// remove items that were missing in addressesThey
 	for k := range removeItems {
 		e.deletePhonebookEntry(k, networkName)
 	}
@@ -168,7 +173,7 @@ func (e *phonebookImpl) UpdateRetryAfter(addr string, retryAfter time.Time) {
 	e.lock.Lock()
 	defer e.lock.Unlock()
 
-	var entry phonebookEntryData
+	var entry addressData
 
 	entry, found := e.data[addr]
 	if !found {

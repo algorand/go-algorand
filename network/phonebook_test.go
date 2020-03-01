@@ -89,7 +89,7 @@ func TestArrayPhonebookAll(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e"}
 	ph := MakePhonebook(1, 1).(*phonebookImpl)
 	for _, e := range set {
-		ph.data[e] = phonebookEntryData{}
+		ph.data[e] = addressData{}
 	}
 	testPhonebookAll(t, set, ph)
 }
@@ -98,7 +98,7 @@ func TestArrayPhonebookUniform1(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e"}
 	ph := MakePhonebook(1, 1).(*phonebookImpl)
 	for _, e := range set {
-		ph.data[e] = phonebookEntryData{}
+		ph.data[e] = addressData{}
 	}
 	testPhonebookUniform(t, set, ph, 1)
 }
@@ -107,9 +107,25 @@ func TestArrayPhonebookUniform3(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e"}
 	ph := MakePhonebook(1, 1).(*phonebookImpl)
 	for _, e := range set {
-		ph.data[e] = phonebookEntryData{}
+		ph.data[e] = addressData{}
 	}
 	testPhonebookUniform(t, set, ph, 3)
+}
+
+// TestPhonebookExtension tests for extending different phonebooks with
+// addresses.
+func TestPhonebookExtension(t *testing.T) {
+	setA := []string{"a"}
+	moreB := []string{"b"}
+	ph := MakePhonebook(1, 1).(*phonebookImpl)
+	ph.ReplacePeerList(setA, "default")
+	ph.ExtendPeerList(moreB, "default")
+	ph.ExtendPeerList(setA, "other")
+	assert.Equal(t, 2, ph.Length())
+	assert.Equal(t, true, ph.data["a"].networkNames["default"])
+	assert.Equal(t, true, ph.data["a"].networkNames["other"])
+	assert.Equal(t, true, ph.data["b"].networkNames["default"])
+	assert.Equal(t, false, ph.data["b"].networkNames["other"])
 }
 
 func extenderThread(th *phonebookImpl, more []string, wg *sync.WaitGroup, repetitions int) {
