@@ -47,9 +47,9 @@ func main() {
 	log.SetLevel(logging.Debug)
 	log.SetOutput(os.Stderr)
 
-	addrs := network.MakeArrayPhonebook(conf.ConnectionsRateLimitingCount,
+	addrs := network.MakePhonebook(conf.ConnectionsRateLimitingCount,
 		time.Duration(conf.ConnectionsRateLimitingWindowSeconds)*time.Second)
-	addrs.Entries.ReplacePeerList([]string{*serverAddress})
+	addrs.ReplacePeerList([]string{*serverAddress}, conf.DNSBootstrapID)
 
 	var nodes []network.GossipNode
 	for i := 0; i < *numClients; i++ {
