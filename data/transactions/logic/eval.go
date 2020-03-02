@@ -91,7 +91,20 @@ type EvalParams struct {
 	GroupIndex int
 
 	Logger logging.Logger
+
+	RunModeFlags uint64
 }
+
+const (
+	// RunModeSignature is TEAL in LogicSig exceution
+	RunModeSignature = 1
+
+	// RunModeApplicationApproval is TEAL in application approval context
+	RunModeApplicationApproval = 2
+
+	// RunModeApplicationState is TEAL in application state-update context
+	RunModeApplicationState = 4
+)
 
 func (ep EvalParams) log() logging.Logger {
 	if ep.Logger != nil {
@@ -1102,6 +1115,10 @@ func (msg Msg) ToBeHashed() (protocol.HashID, []byte) {
 }
 
 func opEd25519verify(cx *evalContext) {
+	if (cx.RunModeFlags & (RunModeApplicationApproval | RunModeApplicationState)) != 0 {
+		cx.err = errors.New("ed25519verify not allowed in current mode")
+		return
+	}
 	last := len(cx.stack) - 1 // index of PK
 	prev := last - 1          // index of signature
 	pprev := prev - 1         // index of data
