@@ -36,8 +36,8 @@ func TestPing(t *testing.T) {
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
-	netB.phonebook = MakeMultiPhonebook()
-	netB.phonebook.AddOrUpdatePhonebook("default", &oneEntryPhonebook{addr: addrA})
+	netB.phonebook = MakePhonebook(1, 1*time.Millisecond)
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default")
 	netB.Start()
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 
