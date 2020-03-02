@@ -75,7 +75,11 @@ func spinNetwork(t *testing.T, nodesCount int) ([]*networkImpl, []*messageCounte
 		gossipNodes = append(gossipNodes, gossipNode)
 	}
 
-	for _, gossipNode := range gossipNodes {
+	for nodeIdx, gossipNode := range gossipNodes {
+		others := []string{}
+		others = append(others, nodesAddresses[nodeIdx+1:]...)
+		phonebooks[nodeIdx].ReplacePeerList(others, "")
+		log.Debugf("phonebook[%d] %#v", nodeIdx, others)
 		gossipNode.RequestConnectOutgoing(false, nil) // no disconnect.
 	}
 
