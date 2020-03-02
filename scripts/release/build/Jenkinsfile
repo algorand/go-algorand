@@ -53,6 +53,12 @@ pipeline {
             }
         }
 
+        stage("verify signatures") {
+            steps {
+                sh script: "scripts/release/build/stage/verify/run.sh"
+            }
+        }
+
         stage("upload") {
             steps {
                 script {
