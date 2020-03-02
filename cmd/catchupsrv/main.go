@@ -21,6 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"os"
 	"path"
@@ -144,7 +145,9 @@ func main() {
 		w.Header().Set("Content-Length", strconv.Itoa(len(data)))
 		w.WriteHeader(http.StatusOK)
 		w.Write(data)
-		log.Infof("OK %d", roundNumber)
+		if rand.Intn(20) == 0 {
+			log.Infof("OK %d", roundNumber)
+		}
 	})
 
 	log.Infof("serving %s", srv.Addr)

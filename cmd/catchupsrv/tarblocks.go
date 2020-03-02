@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -39,6 +38,11 @@ type tarBlockSet struct {
 	// tarfiles with an open handle
 	// a cache with random replacement
 	open []*tarBlockFile
+
+	// replacement index
+	nextOpen int
+
+	l sync.Mutex
 }
 
 const maxOpenTars = 3
@@ -62,6 +66,8 @@ func openTarBlockDir(path string) (tars *tarBlockSet, err error) {
 }
 
 func (tars *tarBlockSet) getBlock(round uint64) (data []byte, err error) {
+	tars.l.Lock()
+	defer tars.l.Unlock()
 	for _, tbf := range tars.open {
 		if tbf.first <= round && round <= tbf.last {
 			return tbf.getBlock(round)
@@ -70,10 +76,9 @@ func (tars *tarBlockSet) getBlock(round uint64) (data []byte, err error) {
 	for _, tbf := range tars.entries {
 		if tbf.first <= round && round <= tbf.last {
 			if len(tars.open) >= maxOpenTars {
-				// random replacement
-				i := rand.Intn(len(tars.open))
-				tars.open[i].close()
-				tars.open[i] = tbf
+				tars.open[tars.nextOpen].close()
+				tars.open[tars.nextOpen] = tbf
+				tars.nextOpen = (tars.nextOpen + 1) % len(tars.open)
 			} else {
 				tars.open = append(tars.open, tbf)
 			}
@@ -96,6 +101,8 @@ type tarBlockFile struct {
 	currentRound uint64
 
 	l sync.Mutex
+
+	blocks map[uint64][]byte
 }
 
 func parseTarPathname(path string) (tbf *tarBlockFile) {
@@ -141,6 +148,7 @@ func (tbf *tarBlockFile) _open() (err error) {
 	} else {
 		tbf.tarfile = tar.NewReader(tbf.rawFile)
 	}
+	tbf.blocks = make(map[uint64][]byte, 1000)
 	return nil
 }
 
@@ -158,6 +166,7 @@ func (tbf *tarBlockFile) _close() (err error) {
 		tbf.bz2Stream = nil
 		tbf.tarfile = nil
 		tbf.current = nil
+		tbf.blocks = nil
 	} else {
 		logging.Base().Infof("close %p %s", tbf, tbf.path)
 	}
@@ -167,8 +176,15 @@ func (tbf *tarBlockFile) _close() (err error) {
 func (tbf *tarBlockFile) getBlock(round uint64) (data []byte, err error) {
 	tbf.l.Lock()
 	defer tbf.l.Unlock()
-	logging.Base().Infof("get block %d", round)
-	defer logging.Base().Infof("get block %d done %v", round, err)
+	if tbf.blocks != nil {
+		var ok bool
+		data, ok = tbf.blocks[round]
+		if ok {
+			return
+		}
+	}
+	//logging.Base().Infof("get block %d", round)
+	//defer logging.Base().Infof("get block %d done %v", round, err)
 	if tbf.tarfile == nil {
 		err = tbf._open()
 		if err != nil {
@@ -180,40 +196,13 @@ func (tbf *tarBlockFile) getBlock(round uint64) (data []byte, err error) {
 			return
 		}
 	}
-	pass := 0
-	if tbf.current == nil {
-		// starting from the beginning, we won't miss anything, so if it's not there, don't start over from the beginning.
-		pass = 1
-	}
+	err = nil
 	for true {
-		if tbf.current != nil && tbf.currentRound == round {
-			data = make([]byte, tbf.current.Size)
-			_, err = io.ReadFull(tbf.tarfile, data)
-			if err != nil {
-				err = fmt.Errorf("%s: read %s, %v", tbf.path, tbf.current.Name, err)
-			}
-			return
-		}
-		if tbf.tarfile == nil {
-			err = fmt.Errorf("%s tarfile unexpectedly nil", tbf.path)
-			return
-		}
 		tbf.current, err = tbf.tarfile.Next()
 		if err == io.EOF {
 			tbf._close()
-			if pass == 0 {
-				// try again from the beginning
-				pass++
-				err = tbf._open()
-				if err != nil {
-					err = fmt.Errorf("%s: open, %v", tbf.path, err)
-					return
-				}
-				continue
-			} else {
-				// we don't have it
-				return nil, nil
-			}
+			// we don't have it
+			return nil, nil
 		}
 		if err != nil {
 			err = fmt.Errorf("%s: next, %v", tbf.path, err)
@@ -225,7 +214,15 @@ func (tbf *tarBlockFile) getBlock(round uint64) (data []byte, err error) {
 			err = fmt.Errorf("%s: could not parse block file name %#v, %v", tbf.path, tbf.current.Name, err)
 			return nil, err
 		}
-		// fall through to maybe-return clause at top of loop
+		data = make([]byte, tbf.current.Size)
+		_, err = io.ReadFull(tbf.tarfile, data)
+		if err != nil {
+			err = fmt.Errorf("%s: read %s, %v", tbf.path, tbf.current.Name, err)
+		}
+		tbf.blocks[tbf.currentRound] = data
+		if tbf.currentRound == round {
+			return
+		}
 	}
 	return nil, errors.New("this should be unreachable")
 }

@@ -265,12 +265,6 @@ type Local struct {
 
 	// EnablePingHandler controls whether the gossip node would respond to ping messages with a pong message.
 	EnablePingHandler bool
-
-	// BlockTarDirectory is a path to a directory containing files M_N.tar.bz2 which contain blocks M through N (decimal) as files in the tar archive. Used for catchup.
-	BlockTarDirectory string
-
-	// BlockDirectory is a path to a directory containing blocks (msgpack bytes) in files named with the decimal round number of the block. Used for catchup.
-	BlockDirectory string
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)
