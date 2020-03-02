@@ -30,14 +30,14 @@ type netDialer interface {
 
 // Dialer establish tcp-level connection with the destination
 type Dialer struct {
-	phonebook   *MultiPhonebook
+	phonebook   Phonebook
 	innerDialer netDialer
 	resolver    *net.Resolver
 }
 
 // makeRateLimitingDialer creates a rate limiting dialer that would limit the connections
 // according to the entries in the phonebook.
-func makeRateLimitingDialer(phonebook *MultiPhonebook, resolver *dnssec.Resolver) Dialer {
+func makeRateLimitingDialer(phonebook Phonebook, resolver *dnssec.Resolver) Dialer {
 	var innerDialer netDialer = &net.Dialer{
 		Timeout:   30 * time.Second,
 		KeepAlive: 30 * time.Second,
