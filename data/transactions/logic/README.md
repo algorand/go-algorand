@@ -171,7 +171,6 @@ Global fields are fields that are common to all the transactions in the group. I
 | 4 | GroupSize | uint64 | Number of transactions in this atomic transaction group. At least 1. |
 
 
-
 ### Flow Control
 
 | Op | Description |
@@ -180,6 +179,20 @@ Global fields are fields that are common to all the transactions in the group. I
 | `bnz` | branch if value X is not zero |
 | `pop` | discard value X from stack |
 | `dup` | duplicate last value on stack |
+
+### State Access
+
+| Op | Description |
+| --- | --- |
+| `balance` | get balance for the requested account A in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction |
+| `app_opted_in` | check if account A opted in for the application B => {0 or 1} |
+| `app_read_local` | read key K from local state of account A for the application B => {0 or 1 (top), value} |
+| `app_read_global` | read key K from global state of the current application => {0 or 1 (top), value} |
+| `app_write_local` | write key K to local state of account A for the application B |
+| `app_write_global` | write key K to global state of the current application |
+| `app_read_other_global` | read key K from global state of account A for the application B if A created B => {0 or 1 (top), value} |
+| `asset_read_holding` | read an asset A holding field X of account A  => {0 or 1 (top), value} |
+| `asset_read_params` | read an asset A params field X of account A  => {0 or 1 (top), value} |
 
 # Assembler Syntax
 

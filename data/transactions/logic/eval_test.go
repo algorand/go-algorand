@@ -52,10 +52,10 @@ func defaultEvalParams(sb *strings.Builder, txn *transactions.SignedTxn) EvalPar
 	}
 
 	if sb == nil { // have to do this since go's nil semantics: https://golang.org/doc/faq#nil_error
-		return EvalParams{Proto: &proto, Txn: pt}
+		return EvalParams{Proto: &proto, Txn: pt, RunModeFlags: RunModeSignature}
 	}
 
-	return EvalParams{Proto: &proto, Trace: sb, Txn: pt}
+	return EvalParams{Proto: &proto, Trace: sb, Txn: pt, RunModeFlags: RunModeSignature}
 }
 
 func TestTooManyArgs(t *testing.T) {
@@ -81,7 +81,7 @@ func TestWrongProtoVersion(t *testing.T) {
 	sb := strings.Builder{}
 	proto := defaultEvalProto()
 	proto.LogicSigVersion = 0
-	pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn})
+	pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, RunModeFlags: RunModeSignature})
 	require.Error(t, err)
 	require.False(t, pass)
 }
@@ -115,8 +115,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	txn.Lsig.Logic = program
 	txn.Lsig.Args = [][]byte{[]byte("=0\x97S\x85H\xe9\x91B\xfd\xdb;1\xf5Z\xaec?\xae\xf2I\x93\x08\x12\x94\xaa~\x06\x08\x849b")}
 	sb := strings.Builder{}
-	proto := defaultEvalProto()
-	ep := EvalParams{Proto: &proto, Txn: &txn, Trace: &sb}
+	ep := defaultEvalParams(&sb, &txn)
 	cost, err := Check(program, ep)
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
@@ -173,8 +172,7 @@ func TestTLHC(t *testing.T) {
 	txn.Txn.FirstValid = 999999
 	sb := strings.Builder{}
 	block := bookkeeping.Block{}
-	proto := defaultEvalProto()
-	ep := EvalParams{Proto: &proto, Txn: &txn, Trace: &sb}
+	ep := defaultEvalParams(&sb, &txn)
 	cost, err := Check(program, ep)
 	if err != nil {
 		t.Log(hex.EncodeToString(program))
@@ -193,7 +191,7 @@ func TestTLHC(t *testing.T) {
 	txn.Txn.Receiver = a2
 	txn.Txn.CloseRemainderTo = a2
 	sb = strings.Builder{}
-	ep = EvalParams{Proto: &proto, Txn: &txn, Trace: &sb}
+	ep = defaultEvalParams(&sb, &txn)
 	pass, err = Eval(program, ep)
 	if !pass {
 		t.Log(hex.EncodeToString(program))
@@ -206,7 +204,7 @@ func TestTLHC(t *testing.T) {
 	txn.Txn.CloseRemainderTo = a2
 	sb = strings.Builder{}
 	txn.Txn.FirstValid = 1
-	ep = EvalParams{Proto: &proto, Txn: &txn, Trace: &sb}
+	ep = defaultEvalParams(&sb, &txn)
 	pass, err = Eval(program, ep)
 	if pass {
 		t.Log(hex.EncodeToString(program))
@@ -219,7 +217,7 @@ func TestTLHC(t *testing.T) {
 	txn.Txn.CloseRemainderTo = a1
 	sb = strings.Builder{}
 	txn.Txn.FirstValid = 999999
-	ep = EvalParams{Proto: &proto, Txn: &txn, Trace: &sb}
+	ep = defaultEvalParams(&sb, &txn)
 	pass, err = Eval(program, ep)
 	if !pass {
 		t.Log(hex.EncodeToString(program))
@@ -232,7 +230,7 @@ func TestTLHC(t *testing.T) {
 	txn.Lsig.Args = [][]byte{[]byte("=0\x97S\x85H\xe9\x91B\xfd\xdb;1\xf5Z\xaec?\xae\xf2I\x93\x08\x12\x94\xaa~\x06\x08\x849a")}
 	sb = strings.Builder{}
 	block.BlockHeader.Round = 1
-	ep = EvalParams{Proto: &proto, Txn: &txn, Trace: &sb}
+	ep = defaultEvalParams(&sb, &txn)
 	pass, err = Eval(program, ep)
 	if pass {
 		t.Log(hex.EncodeToString(program))
@@ -692,8 +690,7 @@ func TestIntcTooFar(t *testing.T) {
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = program
 	txn.Lsig.Args = nil
-	proto := defaultEvalProto()
-	pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn})
+	pass, err := Eval(program, defaultEvalParams(&sb, &txn))
 	if pass {
 		t.Log(hex.EncodeToString(program))
 		t.Log(sb.String())
@@ -735,8 +732,7 @@ func TestTxnBadField(t *testing.T) {
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = program
 	txn.Lsig.Args = nil
-	proto := defaultEvalProto()
-	pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn})
+	pass, err := Eval(program, defaultEvalParams(&sb, &txn))
 	if pass {
 		t.Log(hex.EncodeToString(program))
 		t.Log(sb.String())
@@ -759,7 +755,7 @@ func TestGtxnBadIndex(t *testing.T) {
 	txgroup := make([]transactions.SignedTxn, 1)
 	txgroup[0] = txn
 	proto := defaultEvalProto()
-	pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, TxnGroup: txgroup})
+	pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, TxnGroup: txgroup, RunModeFlags: RunModeSignature})
 	if pass {
 		t.Log(hex.EncodeToString(program))
 		t.Log(sb.String())
@@ -782,7 +778,7 @@ func TestGtxnBadField(t *testing.T) {
 	txgroup := make([]transactions.SignedTxn, 1)
 	txgroup[0] = txn
 	proto := defaultEvalProto()
-	pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, TxnGroup: txgroup})
+	pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, TxnGroup: txgroup, RunModeFlags: RunModeSignature})
 	if pass {
 		t.Log(hex.EncodeToString(program))
 		t.Log(sb.String())
@@ -905,10 +901,11 @@ func TestGlobal(t *testing.T) {
 		LogicSigMaxCost: 20000,
 	}
 	ep := EvalParams{
-		Trace:    &sb,
-		Txn:      &txn,
-		Proto:    &proto,
-		TxnGroup: txgroup,
+		Trace:        &sb,
+		Txn:          &txn,
+		Proto:        &proto,
+		TxnGroup:     txgroup,
+		RunModeFlags: RunModeSignature,
 	}
 	pass, err := Eval(program, ep)
 	if !pass {
@@ -957,7 +954,7 @@ int %s
 			txn.Txn.Type = tt
 			sb := strings.Builder{}
 			proto := defaultEvalProto()
-			pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, GroupIndex: 3})
+			pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, GroupIndex: 3, RunModeFlags: RunModeSignature})
 			if !pass {
 				t.Log(hex.EncodeToString(program))
 				t.Log(sb.String())
@@ -1111,7 +1108,7 @@ func TestTxn(t *testing.T) {
 	}
 	sb := strings.Builder{}
 	proto := defaultEvalProto()
-	pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, GroupIndex: 3})
+	pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, GroupIndex: 3, RunModeFlags: RunModeSignature})
 	if !pass {
 		t.Log(hex.EncodeToString(program))
 		t.Log(sb.String())
@@ -1215,7 +1212,7 @@ int 2
 	}
 	sb = strings.Builder{}
 	proto := defaultEvalProto()
-	pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, TxnGroup: txgroup})
+	pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, TxnGroup: txgroup, RunModeFlags: RunModeSignature})
 	if !pass || err != nil {
 		t.Log(hex.EncodeToString(program))
 		t.Log(sb.String())
@@ -1672,6 +1669,7 @@ func TestPanic(t *testing.T) {
 			hackedOpcode = opcode
 			oldSpec = spec
 			opsByOpcode[opcode].op = opPanic
+			opsByOpcode[opcode].Modes = modeAny
 			program = append(program, byte(opcode))
 			oldOz = opSizeByOpcode[opcode]
 			opSizeByOpcode[opcode].checkFunc = checkPanic
@@ -2103,11 +2101,10 @@ func benchmarkBasicProgram(b *testing.B, source string) {
 	require.True(b, cost < 2000)
 	//b.Logf("%d bytes of program", len(program))
 	//b.Log(hex.EncodeToString(program))
-	proto := defaultEvalProto()
 	b.ResetTimer()
 	sb := strings.Builder{} // Trace: &sb
 	for i := 0; i < b.N; i++ {
-		pass, err := Eval(program, EvalParams{Proto: &proto})
+		pass, err := Eval(program, defaultEvalParams(nil, nil))
 		if !pass {
 			b.Log(sb.String())
 		}
@@ -2287,8 +2284,7 @@ ed25519verify`, pkStr))
 		txn.Lsig.Logic = programs[i]
 		txn.Lsig.Args = [][]byte{data[i][:], signatures[i][:]}
 		sb := strings.Builder{}
-		proto := defaultEvalProto()
-		ep := EvalParams{Proto: &proto, Txn: &txn, Trace: &sb}
+		ep := defaultEvalParams(&sb, &txn)
 		pass, err := Eval(programs[i], ep)
 		if !pass {
 			b.Log(hex.EncodeToString(programs[i]))
@@ -2327,4 +2323,20 @@ func BenchmarkCheckx5(b *testing.B) {
 			}
 		}
 	}
+}
+
+func TestStackValues(t *testing.T) {
+	t.Parallel()
+
+	actual := oneInt.plus(oneInt)
+	require.Equal(t, twoInts, actual)
+
+	actual = oneInt.plus(oneAny)
+	require.Equal(t, StackTypes{StackUint64, StackAny}, actual)
+
+	actual = twoInts.plus(oneBytes)
+	require.Equal(t, StackTypes{StackUint64, StackUint64, StackBytes}, actual)
+
+	actual = oneInt.plus(oneBytes).plus(oneAny)
+	require.Equal(t, StackTypes{StackUint64, StackBytes, StackAny}, actual)
 }

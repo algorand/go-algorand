@@ -96,17 +96,20 @@ type EvalParams struct {
 }
 
 const (
-	// RunModeSignature is TEAL in LogicSig exceution
-	RunModeSignature = 1
+	// RunModeSignature is TEAL in LogicSig execution
+	RunModeSignature = 1 << iota
 
 	// RunModeApplicationApproval is TEAL in application approval context
-	RunModeApplicationApproval = 2
+	RunModeApplicationApproval
 
 	// RunModeApplicationState is TEAL in application state-update context
-	RunModeApplicationState = 4
+	RunModeApplicationState
 
-	// local costant, run in any mode
-	modeAny = 7
+	// local constant, run in statefull mode
+	modeStatefull = RunModeApplicationApproval | RunModeApplicationState
+
+	// local constant, run in any mode
+	modeAny = RunModeSignature | RunModeApplicationApproval | RunModeApplicationState
 )
 
 func (ep EvalParams) log() logging.Logger {
@@ -144,6 +147,9 @@ type opFunc func(cx *evalContext)
 // StackType describes the type of a value on the operand stack
 type StackType byte
 
+// StackTypes is an alias for a list of StackType with syntactic sugar
+type StackTypes []StackType
+
 // StackNone in an OpSpec shows that the op pops or yields nothing
 const StackNone StackType = 0
 
@@ -168,6 +174,10 @@ func (st StackType) String() string {
 		return "[]byte"
 	}
 	return "internal error, unknown type"
+}
+
+func (sts StackTypes) plus(other StackTypes) StackTypes {
+	return append(sts, other...)
 }
 
 // PanicError wraps a recover() catching a panic()
@@ -320,18 +330,19 @@ func Check(program []byte, params EvalParams) (cost int, err error) {
 type OpSpec struct {
 	Opcode  byte
 	Name    string
-	op      opFunc      // evaluate the op
-	Args    []StackType // what gets popped from the stack
-	Returns []StackType // what gets pushed to the stack
-	Modes   uint64      // if non-zero, then (mode & Modes) != 0 to allow
+	op      opFunc     // evaluate the op
+	Args    StackTypes // what gets popped from the stack
+	Returns StackTypes // what gets pushed to the stack
+	Modes   uint64     // if non-zero, then (mode & Modes) != 0 to allow
 }
 
-var oneBytes = []StackType{StackBytes}
-var threeBytes = []StackType{StackBytes, StackBytes, StackBytes}
-var oneInt = []StackType{StackUint64}
-var twoInts = []StackType{StackUint64, StackUint64}
-var oneAny = []StackType{StackAny}
-var twoAny = []StackType{StackAny, StackAny}
+var oneBytes = StackTypes{StackBytes}
+var threeBytes = StackTypes{StackBytes, StackBytes, StackBytes}
+var oneInt = StackTypes{StackUint64}
+var twoInts = StackTypes{StackUint64, StackUint64}
+var oneAny = StackTypes{StackAny}
+var twoAny = StackTypes{StackAny, StackAny}
+var threeInts = StackTypes{StackUint64, StackUint64, StackUint64}
 
 // OpSpecs is the table of operations that can be assembled and evaluated.
 //
@@ -391,6 +402,17 @@ var OpSpecs = []OpSpec{
 	{0x40, "bnz", opBnz, oneInt, nil, modeAny},
 	{0x48, "pop", opPop, oneAny, nil, modeAny},
 	{0x49, "dup", opDup, oneAny, twoAny, modeAny},
+
+	{0x50, "balance", opBalance, oneInt, oneInt, modeStatefull},
+	{0x51, "app_opted_in", opAppCheckOptedIn, twoInts, oneInt, modeStatefull},
+	{0x52, "app_read_local", opAppReadLocalState, oneBytes.plus(twoInts), oneInt.plus(oneAny), modeStatefull},
+	{0x53, "app_read_global", opAppReadGlobalState, oneBytes, oneInt.plus(oneAny), modeStatefull},
+	{0x54, "app_write_local", opAppWriteLocalState, oneAny.plus(oneBytes).plus(oneInt), nil, RunModeApplicationState},
+	{0x55, "app_write_global", opAppWriteGlobalState, oneAny.plus(oneBytes), nil, RunModeApplicationState},
+	{0x56, "app_read_other_global", opAppReadOtherGlobalState, oneBytes.plus(twoInts), oneInt.plus(oneAny), modeStatefull},
+
+	{0x5A, "asset_read_holding", opAssetReadHolding, threeInts, oneInt.plus(oneAny), modeStatefull},
+	{0x5B, "asset_read_params", opAssetReadParams, threeInts, oneInt.plus(oneAny), modeStatefull},
 }
 
 // direct opcode bytes
@@ -1163,4 +1185,82 @@ func opStore(cx *evalContext) {
 	cx.scratch[gindex] = cx.stack[last]
 	cx.stack = cx.stack[:last]
 	cx.nextpc = cx.pc + 2
+}
+
+func opBalance(cx *evalContext) {
+	last := len(cx.stack) - 1 // account offset
+	// TODO
+	cx.stack[last].Uint = 0
+}
+
+func opAppCheckOptedIn(cx *evalContext) {
+	last := len(cx.stack) - 1 // account offset
+	prev := last - 1          // app id
+	// TODO
+	cx.stack[prev].Uint = 0
+	cx.stack = cx.stack[:last]
+}
+
+func opAppReadLocalState(cx *evalContext) {
+	last := len(cx.stack) - 1 // account offset
+	prev := last - 1          // app id
+	pprev := prev - 1         // state key
+	// TODO
+	cx.stack[pprev].Uint = 0
+	cx.stack[prev].Uint = 0
+	cx.stack = cx.stack[:last]
+}
+
+func opAppReadGlobalState(cx *evalContext) {
+	last := len(cx.stack) - 1 // state key
+	var sv stackValue
+	// TODO
+
+	cx.stack[last].Uint = 0
+	cx.stack = append(cx.stack, sv)
+}
+
+func opAppWriteLocalState(cx *evalContext) {
+	last := len(cx.stack) - 1 // account offset
+	prev := last - 1          // state key
+	pprev := prev - 1         // value
+	// TODO
+	cx.stack = cx.stack[:pprev]
+}
+
+func opAppWriteGlobalState(cx *evalContext) {
+	last := len(cx.stack) - 1 // state key
+	prev := last - 1          // value
+	// TODO
+	cx.stack = cx.stack[:prev]
+}
+
+func opAppReadOtherGlobalState(cx *evalContext) {
+	last := len(cx.stack) - 1 // account offset
+	prev := last - 1          // app id
+	pprev := prev - 1         // state key
+	// TODO
+	cx.stack[pprev].Uint = 0
+	cx.stack[prev].Uint = 0
+	cx.stack = cx.stack[:last]
+}
+
+func opAssetReadHolding(cx *evalContext) {
+	last := len(cx.stack) - 1 // account offset
+	prev := last - 1          // asset id
+	pprev := prev - 1         // asset holding enum value
+	// TODO
+	cx.stack[pprev].Uint = 0
+	cx.stack[prev].Uint = 0
+	cx.stack = cx.stack[:last]
+}
+
+func opAssetReadParams(cx *evalContext) {
+	last := len(cx.stack) - 1 // account offset
+	prev := last - 1          // asset id
+	pprev := prev - 1         // asset params enum value
+	// TODO
+	cx.stack[pprev].Uint = 0
+	cx.stack[prev].Uint = 0
+	cx.stack = cx.stack[:last]
 }

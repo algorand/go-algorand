@@ -87,6 +87,15 @@ var opDocList = []stringString{
 	{"bnz", "branch if value X is not zero"},
 	{"pop", "discard value X from stack"},
 	{"dup", "duplicate last value on stack"},
+	{"balance", "get balance for the requested account A in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction"},
+	{"app_opted_in", "check if account A opted in for the application B => {0 or 1}"},
+	{"app_read_local", "read key K from local state of account A for the application B => {0 or 1 (top), value}"},
+	{"app_read_global", "read key K from global state of the current application => {0 or 1 (top), value}"},
+	{"app_write_local", "write key K to local state of account A for the application B"},
+	{"app_write_global", "write key K to global state of the current application"},
+	{"app_read_other_global", "read key K from global state of account A for the application B if A created B => {0 or 1 (top), value}"},
+	{"asset_read_holding", "read an asset A holding field X of account A  => {0 or 1 (top), value}"},
+	{"asset_read_params", "read an asset A params field X of account A  => {0 or 1 (top), value}"},
 }
 
 var opDocByName map[string]string
@@ -125,7 +134,7 @@ func OpImmediateNote(opName string) string {
 
 // further documentation on the function of the opcode
 var opDocExtraList = []stringString{
-	{"ed25519verify", "The 32 byte public key is the last element on the stack, preceeded by the 64 byte signature at the second-to-last element on the stack, preceeded by the data which was signed at the third-to-last element on the stack."},
+	{"ed25519verify", "The 32 byte public key is the last element on the stack, preceded by the 64 byte signature at the second-to-last element on the stack, preceded by the data which was signed at the third-to-last element on the stack."},
 	{"bnz", "The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which are a high byte first and low byte second which together form a 16 bit offset which the instruction may branch to. For a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else proceed to next instruction at `pc + 3`. Branch targets must be well aligned instructions. (e.g. Branching to the second byte of a 2 byte op will be rejected.) Branch offsets are currently limited to forward branches only, 0-0x7fff. A future expansion might make this a signed 16 bit integer allowing for backward branches and looping."},
 	{"intcblock", "`intcblock` loads following program bytes into an array of integer constants in the evaluator. These integer constants can be referred to by `intc` and `intc_*` which will push the value onto the stack. Subsequent calls to `intcblock` reset and replace the integer constants available to the script."},
 	{"bytecblock", "`bytecblock` loads the following program bytes into an array of byte string constants in the evaluator. These constants can be referred to by `bytec` and `bytec_*` which will push the value onto the stack. Subsequent calls to `bytecblock` reset and replace the bytes constants available to the script."},
@@ -133,6 +142,12 @@ var opDocExtraList = []stringString{
 	{"txn", "FirstValidTime causes the program to fail. The field is reserved for future use."},
 	{"gtxn", "for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`"},
 	{"btoi", "`btoi` panics if the input is longer than 8 bytes"},
+	{"app_opted_in", "params: application id (top of the stack), account index"},
+	{"app_read_local", "params: state key (top of the stack), application id, account index. Return: is_exist flag (top of the stack), value"},
+	{"app_write_local", "params: value (top of the stack), state key, account index"},
+	{"app_read_other_global", "params: state key (top of the stack), application id, account index. Return: is_exist flag (top of the stack), value"},
+	{"asset_read_holding", "params: field (top of the stack), asset id, account index. Return: is_exist flag (top of the stack), value"},
+	{"asset_read_params", "params: field (top of the stack), asset id, account index. Return: is_exist flag (top of the stack), value"},
 }
 
 var opDocExtras map[string]string
@@ -157,6 +172,7 @@ var OpGroupList = []OpGroup{
 	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw"}},
 	{"Loading Values", []string{"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "global", "load", "store"}},
 	{"Flow Control", []string{"err", "bnz", "pop", "dup"}},
+	{"State Access", []string{"balance", "app_opted_in", "app_read_local", "app_read_global", "app_write_local", "app_write_global", "app_read_other_global", "asset_read_holding", "asset_read_params"}},
 }
 
 var opCostByName map[string]int
