@@ -22,37 +22,26 @@ import (
 
 type Action uint64
 
-type TealValue struct {
-	Int       uint64
-	ByteSlice []byte
-}
-
-type TealType string
-
-const (
-	TealByteSliceType TealType = "byt"
-	TealIntType TealType = "int"
-)
-
 const (
 	FunctionCallAction      Action = 0
 	OptInAction             Action = 1
 	CloseOutAction          Action = 2
 	CreateApplicationAction Action = 3
 	DeleteApplicationAction Action = 4
+	UpdateApplicationAction Action = 5
 )
 
 type ApplicationCallTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	ApplicationID uint64           `codec:"apid"`
-	Action        Action           `codec:"apan"`
-	FunctionArgs  []TealValue      `codec:"apfa"`
-	Accounts      []basics.Address `codec:"apat"`
+	ApplicationID uint64             `codec:"apid"`
+	Action        Action             `codec:"apan"`
+	FunctionArgs  []basics.TealValue `codec:"apfa"`
+	Accounts      []basics.Address   `codec:"apat"`
 
-	LocalStateSchema   map[TealType]uint64 `codec:"apls"`
-	ApprovalProgram    []byte              `codec:"apap"`
-	StateUpdateProgram []byte              `codec:"apsu"`
+	LocalStateSchema   map[basics.TealType]uint64 `codec:"apls"`
+	ApprovalProgram    []byte                     `codec:"apap"`
+	StateUpdateProgram []byte                     `codec:"apsu"`
 
 	// If you add any fields here, remember you MUST modify the Empty
 	// method below!

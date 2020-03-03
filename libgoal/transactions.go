@@ -357,6 +357,16 @@ func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, lastValid, fe
 	return tx, nil
 }
 
+func (c *Client) MakeUnsignedAppCreateTx(approvalProg []byte, stateProg []byte, globalSchema basics.StateSchema, localSchema basics.StateSchema, funcArgs []basics.TealValue, accounts []basics.Address) (transactions.Transaction, error) {
+	var tx transactions.Transaction
+
+	tx.Type = protocol.ApplicationCallTx
+	tx.Action = transactions.UpdateApplicationAction
+	tx.FunctionArgs = funcArgs
+
+	return tx, nil
+}
+
 // MakeUnsignedAssetCreateTx creates a tx template for creating
 // an asset.
 //

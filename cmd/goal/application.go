@@ -20,13 +20,21 @@ import (
 	// "fmt"
 
 	"github.com/spf13/cobra"
-
 	// "github.com/algorand/go-algorand/libgoal"
 )
 
 var (
-	appID uint64
+	appID      uint64
 	appCreator string
+
+	approvalProgFile    string
+	stateUpdateProgFile string
+
+	localSchemaInts       uint64
+	localSchemaByteSlices uint64
+
+	globalSchemaInts       uint64
+	globalSchemaByteSlices uint64
 )
 
 func init() {
@@ -35,11 +43,14 @@ func init() {
 	appCmd.AddCommand(callAppCmd)
 
 	appCmd.Flags().Uint64Var(&appID, "app-id", 0, "Asset ID")
-	appCmd.Flags().StringVar(&appCreator, "creator", "", "Account to create the asset")
+	appCmd.PersistentFlags().StringVarP(&walletName, "wallet", "w", "", "Set the wallet to be used for the selected operation")
+
+	createAppCmd.Flags().StringVar(&appCreator, "creator", "", "Account to create the asset")
+	createAppCmd.MarkFlagRequired("creator")
 }
 
 var appCmd = &cobra.Command{
-	Use: "app",
+	Use:   "app",
 	Short: "Manage applications",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -49,18 +60,67 @@ var appCmd = &cobra.Command{
 }
 
 var createAppCmd = &cobra.Command{
-	Use: "create",
+	Use:   "create",
 	Short: "Create an application",
-	Long: `Issue a transaction that creates an application`,
-	Args: validateNoPosArgsFn,
+	Long:  `Issue a transaction that creates an application`,
+	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		dataDir := ensureSingleDataDir()
 		client := ensureFullClient(dataDir)
 
 		// Construct the transaction
-		tx, err := client.MakeUnsignedAppCreateTx(creator)
+		tx, err := client.MakeUnsignedAppCreateTx(nil, nil, nil, nil, nil, nil)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
+		}
+
+		// Fill in note and lease
+		tx.Note = parseNoteField(cmd)
+		tx.Lease = parseLease(cmd)
+
+		// Fill in rounds, fee, etc.
+		fv, lv, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		if err != nil {
+			reportErrorf("Cannot determine last valid round: %s", err)
+		}
+
+		tx, err = client.FillUnsignedTxTemplate(appCreator, fv, lv, fee, tx)
+		if err != nil {
+			reportErrorf("Cannot construct transaction: %s", err)
+		}
+
+		// Broadcast or write transaction to file
+		if txFilename == "" {
+			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
+			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
+			if err != nil {
+				reportErrorf(errorSigningTX, err)
+			}
+
+			txid, err := client.BroadcastTransaction(signedTxn)
+			if err != nil {
+				reportErrorf(errorBroadcastingTX, err)
+			}
+
+			// Report tx details to user
+			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
+
+			if !noWaitAfterSend {
+				err = waitForCommit(client, txid)
+				if err != nil {
+					reportErrorf(err.Error())
+				}
+				// Check if we know about the transaction yet
+				_, err := client.PendingTransactionInformation(txid)
+				if err != nil {
+					reportErrorf("%v", err)
+				}
+			}
+		} else {
+			err = writeTxnToFile(client, sign, dataDir, walletName, tx, txFilename)
+			if err != nil {
+				reportErrorf(err.Error())
+			}
 		}
 	},
 }
