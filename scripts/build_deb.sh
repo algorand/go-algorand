@@ -2,12 +2,12 @@
 
 # build_deb.sh - Build a .deb package for one platform.
 #
-# Syntax:   build_deb.sh <arch> <output directory>
+# Syntax:   build_deb.sh <arch> <channel> <output directory>
 #
 # Examples: scripts/build_deb.sh amd64
 
 set -e
-if [ ! "$#" -eq 2 ]; then
+if [ "$#" -lt 2 ]; then
     echo "Syntax: build_deb.sh <arch> <output directory>"
     exit 1
 fi
@@ -21,6 +21,7 @@ fi
 OS=linux
 ARCH=$1
 OUTDIR="$2"
+PKG_NAME=$(./scripts/compute_package_name.sh ${3:-algorand})
 
 export GOPATH=$(go env GOPATH)
 REPO_DIR=$(pwd)
@@ -101,7 +102,9 @@ done
 unattended_upgrades_files=("51algorand-upgrades")
 mkdir -p ${PKG_ROOT}/etc/apt/apt.conf.d
 for f in "${unattended_upgrades_files[@]}"; do
-    cp installer/${f} ${PKG_ROOT}/etc/apt/apt.conf.d
+    cat installer/${f} \
+      | sed -e s,@PKG_NAME@,${PKG_NAME}, \
+      > ${PKG_ROOT}/etc/apt/apt.conf.d/${f}
 done
 
 # files should not be group writable but directories should be
@@ -116,6 +119,7 @@ for ctl in "${debian_files[@]}"; do
     cat installer/debian/${ctl} \
       | sed -e s,@ARCH@,${ARCH}, \
             -e s,@VER@,${VER}, \
+            -e s,@PKG_NAME@,${PKG_NAME}, \
       > ${PKG_ROOT}/DEBIAN/${ctl}
 done
 # TODO: make `Files:` segments for vendor/... and crypto/libsodium-fork, but reasonably this should be understood to cover all _our_ files and copied in packages continue to be licenced under their own terms
@@ -135,3 +139,4 @@ cp -p ${PKG_ROOT}/DEBIAN/copyright ${PKG_ROOT}/usr/share/doc/algorand/copyright
 
 OUTPUT="$OUTDIR"/algorand_${VER}_${ARCH}.deb
 dpkg-deb --build ${PKG_ROOT} ${OUTPUT}
+
