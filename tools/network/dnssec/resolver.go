@@ -27,7 +27,18 @@ import (
 
 const defaultMaxHops = 10
 
-var defaultDnssecAwareNSServers = []string{"1.1.1.1:53", "8.8.8.8:53"}
+// List of DNSSEC-aware servers
+// CloudFlare: 1.1.1.1:53 1.0.0.1:53
+// Google: 8.8.8.8:53 8.8.4.4:53
+// Yandex 77.88.8.8:53 77.88.8.1:53
+// Comodo 8.26.56.26:53 8.20.247.20:53
+//
+// Other - no DNSSEC
+// OpenDNS 208.67.222.222:53
+// Baidu 180.76.76.76:53
+// Alibaba 223.6.6.6:53
+
+var defaultDnssecAwareNSServers = []string{"1.1.1.1:53", "8.8.8.8:53", "77.88.8.8:53", "8.26.56.26:53"}
 
 // Resolver provides DNSSEC resolution
 type Resolver struct {
