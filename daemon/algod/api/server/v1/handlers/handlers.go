@@ -88,6 +88,8 @@ func txEncode(tx transactions.Transaction, ad transactions.ApplyData) (v1.Transa
 		res = assetTransferTxEncode(tx, ad)
 	case protocol.AssetFreezeTx:
 		res = assetFreezeTxEncode(tx, ad)
+	case protocol.ApplicationCallTx:
+		res = applicationCallTxEncode(tx, ad)
 	default:
 		return res, errors.New(errUnknownTransactionType)
 	}
@@ -205,6 +207,11 @@ func assetConfigTxEncode(tx transactions.Transaction, ad transactions.ApplyData)
 	return v1.Transaction{
 		AssetConfig: &config,
 	}
+}
+
+func applicationCallTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
+	// TODO(applications)
+	return v1.Transaction{}
 }
 
 func assetTransferTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {

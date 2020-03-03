@@ -551,6 +551,7 @@ func initConsensusProtocols() {
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	vFuture.MinUpgradeWaitRounds = 10000
 	vFuture.MaxUpgradeWaitRounds = 150000
+	vFuture.Application = true
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
 

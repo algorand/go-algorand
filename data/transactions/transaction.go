@@ -271,12 +271,12 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 
 		// Ensure requested action is valid
 		switch tx.Action {
-			case FunctionCallAction:
-			case OptInAction:
-			case CloseOutAction:
-			case CreateApplicationAction:
-			case DeleteApplicationAction:
-			default:
+		case FunctionCallAction:
+		case OptInAction:
+		case CloseOutAction:
+		case CreateApplicationAction:
+		case DeleteApplicationAction:
+		default:
 			return fmt.Errorf("invalid application action")
 		}
 
@@ -463,6 +463,9 @@ func (tx Transaction) Apply(balances Balances, spec SpecialAddresses, ctr uint64
 
 	case protocol.AssetFreezeTx:
 		err = tx.AssetFreezeTxnFields.apply(tx.Header, balances, spec, &ad)
+
+	case protocol.ApplicationCallTx:
+		err = tx.ApplicationCallTxnFields.apply(tx.Header, balances, spec, &ad)
 
 	default:
 		err = fmt.Errorf("Unknown transaction type %v", tx.Type)
