@@ -465,7 +465,7 @@ func (tx Transaction) Apply(balances Balances, spec SpecialAddresses, ctr uint64
 		err = tx.AssetFreezeTxnFields.apply(tx.Header, balances, spec, &ad)
 
 	case protocol.ApplicationCallTx:
-		err = tx.ApplicationCallTxnFields.apply(tx.Header, balances, spec, &ad)
+		err = tx.ApplicationCallTxnFields.apply(tx.Header, balances, spec, &ad, ctr)
 
 	default:
 		err = fmt.Errorf("Unknown transaction type %v", tx.Type)

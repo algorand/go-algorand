@@ -25,6 +25,16 @@ type TealType string
 
 type StateSchema map[TealType]uint64
 
+type TealKeyValue map[string]TealValue
+
+func (tk TealKeyValue) Clone() TealKeyValue {
+	res := make(TealKeyValue, len(tk))
+	for k, v := range tk {
+		res[k] = v
+	}
+	return res
+}
+
 const (
 	TealByteSliceType TealType = "byt"
 	TealIntType       TealType = "int"

@@ -17,6 +17,8 @@
 package transactions
 
 import (
+	"fmt"
+
 	"github.com/algorand/go-algorand/data/basics"
 )
 
@@ -72,6 +74,50 @@ func (ac ApplicationCallTxnFields) Empty() bool {
 	return true
 }
 
-func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, spec SpecialAddresses, ad *ApplyData) error {
+func cloneAppLocalStates(m map[basics.AppIndex]basics.TealKeyValue) map[basics.AppIndex]basics.TealKeyValue {
+	res := make(map[basics.AppIndex]basics.TealKeyValue, len(m))
+	for k, v := range m {
+		res[k] = v.Clone()
+	}
+	return res
+}
+
+func cloneAppParams(m map[basics.AppIndex]basics.AppParams) map[basics.AppIndex]basics.AppParams {
+	res := make(map[basics.AppIndex]basics.AppParams, len(m))
+	for k, v := range m {
+		res[k] = v
+	}
+	return res
+}
+
+func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, spec SpecialAddresses, ad *ApplyData, txnCounter uint64) error {
+
+	switch ac.Action {
+	case FunctionCallAction:
+	case OptInAction:
+	case CloseOutAction:
+	case CreateApplicationAction:
+		// Creating an application. Fetch the creator's balance record
+		record, err := balances.Get(header.Sender, false)
+		if err != nil {
+			return err
+		}
+
+		// Clone local states + app params, so that the state delta
+		// does not refer to the same underlying data structures
+		record.AppLocalStates = cloneAppLocalStates(record.AppLocalStates)
+		record.AppParams = cloneAppParams(record.AppParams)
+
+		// Allocate the new app params
+		newidx := basics.AppIndex(txnCounter + 1)
+		record.AppParams[newidx] = basics.AppParams{}
+
+		// Write back to the creator's balance record
+		return balances.Put(record)
+	case DeleteApplicationAction:
+	default:
+		return fmt.Errorf("invalid application action")
+	}
+
 	return nil
 }

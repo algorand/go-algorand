@@ -136,6 +136,13 @@ type AccountData struct {
 	// structs; allocate a copy and modify that instead.  AccountData
 	// is expected to have copy-by-value semantics.
 	Assets map[AssetIndex]AssetHolding `codec:"asset,allocbound=-"`
+
+	AppLocalStates map[AppIndex]TealKeyValue `codec:"appl,allocbound=-"`
+
+	AppParams map[AppIndex]AppParams `codec:"appp,allocbound=-"`
+}
+
+type AppParams struct {
 }
 
 // AccountDetail encapsulates meaningful details about a given account, for external consumption
@@ -159,6 +166,8 @@ type BalanceDetail struct {
 	OnlineMoney MicroAlgos
 	Accounts    []AccountDetail
 }
+
+type AppIndex uint64
 
 // AssetIndex is the unique integer index of an asset that can be used to look
 // up the creator of the asset, whose balance record contains the AssetParams
