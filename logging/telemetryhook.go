@@ -146,6 +146,7 @@ func (hook *asyncTelemetryHook) Fire(entry *logrus.Entry) error {
 	select {
 	case <-hook.quit:
 		// telemetry quit
+		hook.wg.Done()
 	case hook.entries <- entry:
 	default:
 		hook.wg.Done()
