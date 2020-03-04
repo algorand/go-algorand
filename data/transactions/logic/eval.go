@@ -403,20 +403,26 @@ var OpSpecs = []OpSpec{
 	{0x48, "pop", opPop, oneAny, nil, modeAny},
 	{0x49, "dup", opDup, oneAny, twoAny, modeAny},
 
-	{0x50, "balance", opBalance, oneInt, oneInt, modeStatefull},
-	{0x51, "app_opted_in", opAppCheckOptedIn, twoInts, oneInt, modeStatefull},
-	{0x52, "app_read_local", opAppReadLocalState, oneBytes.plus(twoInts), oneInt.plus(oneAny), modeStatefull},
-	{0x53, "app_read_global", opAppReadGlobalState, oneBytes, oneInt.plus(oneAny), modeStatefull},
-	{0x54, "app_write_local", opAppWriteLocalState, oneAny.plus(oneBytes).plus(oneInt), nil, RunModeApplicationState},
-	{0x55, "app_write_global", opAppWriteGlobalState, oneAny.plus(oneBytes), nil, RunModeApplicationState},
-	{0x56, "app_read_other_global", opAppReadOtherGlobalState, oneBytes.plus(twoInts), oneInt.plus(oneAny), modeStatefull},
+	{0x60, "balance", opBalance, oneInt, oneInt, modeStatefull},
+	{0x61, "app_opted_in", opAppCheckOptedIn, twoInts, oneInt, modeStatefull},
+	{0x62, "app_read_local", opAppReadLocalState, oneBytes.plus(twoInts), oneInt.plus(oneAny), modeStatefull},
+	{0x63, "app_read_global", opAppReadGlobalState, oneBytes, oneInt.plus(oneAny), modeStatefull},
+	{0x64, "app_write_local", opAppWriteLocalState, oneAny.plus(oneBytes).plus(oneInt), nil, RunModeApplicationState},
+	{0x65, "app_write_global", opAppWriteGlobalState, oneAny.plus(oneBytes), nil, RunModeApplicationState},
+	{0x66, "app_read_other_global", opAppReadOtherGlobalState, oneBytes.plus(twoInts), oneInt.plus(oneAny), modeStatefull},
+	{0x67, "app_arg", opAppArg, nil, oneBytes, modeStatefull},
+	{0x68, "app_arg_0", opAppArg0, nil, oneBytes, modeStatefull},
+	{0x69, "app_arg_1", opAppArg1, nil, oneBytes, modeStatefull},
+	{0x6A, "app_arg_2", opAppArg2, nil, oneBytes, modeStatefull},
+	{0x6B, "app_arg_3", opAppArg3, nil, oneBytes, modeStatefull},
 
-	{0x5A, "asset_read_holding", opAssetReadHolding, threeInts, oneInt.plus(oneAny), modeStatefull},
-	{0x5B, "asset_read_params", opAssetReadParams, threeInts, oneInt.plus(oneAny), modeStatefull},
+	{0x70, "asset_read_holding", opAssetReadHolding, threeInts, oneInt.plus(oneAny), modeStatefull},
+	{0x71, "asset_read_params", opAssetReadParams, threeInts, oneInt.plus(oneAny), modeStatefull},
 }
 
 // direct opcode bytes
 var opsByOpcode []OpSpec
+var opsByName map[string]OpSpec
 
 type opCheckFunc func(cx *evalContext) int
 
@@ -454,6 +460,10 @@ func init() {
 	opsByOpcode = make([]OpSpec, 256)
 	for _, oi := range OpSpecs {
 		opsByOpcode[oi.Opcode] = oi
+	}
+	opsByName = make(map[string]OpSpec, 256)
+	for _, oi := range OpSpecs {
+		opsByName[oi.Name] = oi
 	}
 
 	opSizeByName := make(map[string]*opSize, len(opSizes))
@@ -954,6 +964,16 @@ func opArgN(cx *evalContext, n uint64) {
 	val := nilToEmpty(cx.Txn.Lsig.Args[n])
 	cx.stack = append(cx.stack, stackValue{Bytes: val})
 }
+
+func opAppArgN(cx *evalContext, n uint64) {
+	if n >= uint64(len(cx.Txn.Txn.ApplicationArgs)) {
+		cx.err = fmt.Errorf("cannot load app arg[%d] of %d", n, len(cx.Txn.Txn.ApplicationArgs))
+		return
+	}
+	val := nilToEmpty(cx.Txn.Txn.ApplicationArgs[n])
+	cx.stack = append(cx.stack, stackValue{Bytes: val})
+}
+
 func opArg(cx *evalContext) {
 	n := uint64(cx.program[cx.pc+1])
 	opArgN(cx, n)
@@ -970,6 +990,24 @@ func opArg2(cx *evalContext) {
 }
 func opArg3(cx *evalContext) {
 	opArgN(cx, 3)
+}
+
+func opAppArg(cx *evalContext) {
+	n := uint64(cx.program[cx.pc+1])
+	opAppArgN(cx, n)
+	cx.nextpc = cx.pc + 2
+}
+func opAppArg0(cx *evalContext) {
+	opAppArgN(cx, 0)
+}
+func opAppArg1(cx *evalContext) {
+	opAppArgN(cx, 1)
+}
+func opAppArg2(cx *evalContext) {
+	opAppArgN(cx, 2)
+}
+func opAppArg3(cx *evalContext) {
+	opAppArgN(cx, 3)
 }
 
 func checkBnz(cx *evalContext) int {
