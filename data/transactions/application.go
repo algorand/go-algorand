@@ -36,10 +36,10 @@ const (
 type ApplicationCallTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	ApplicationID basics.AppIndex    `codec:"apid"`
-	Action        Action             `codec:"apan"`
-	FunctionArgs  []basics.TealValue `codec:"apfa"`
-	Accounts      []basics.Address   `codec:"apat"`
+	ApplicationID   basics.AppIndex    `codec:"apid"`
+	Action          Action             `codec:"apan"`
+	ApplicationArgs []basics.TealValue `codec:"apaa"`
+	Accounts        []basics.Address   `codec:"apat"`
 
 	LocalStateSchema   basics.StateSchema `codec:"apls"`
 	GlobalStateSchema  basics.StateSchema `codec:"apls"`
@@ -57,7 +57,7 @@ func (ac ApplicationCallTxnFields) Empty() bool {
 	if ac.Action != 0 {
 		return false
 	}
-	if ac.FunctionArgs != nil {
+	if ac.ApplicationArgs != nil {
 		return false
 	}
 	if ac.Accounts != nil {
