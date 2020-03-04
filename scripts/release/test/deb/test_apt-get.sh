@@ -1,9 +1,4 @@
 #!/usr/bin/env bash
-<<<<<<< HEAD:scripts/release/helper/deb_test.sh
-
-#set -xv
-=======
->>>>>>> rel/beta:scripts/release/test/deb/test_apt-get.sh
 
 #set -xv
 
@@ -23,11 +18,7 @@ apt-get install -y expect
 algod -v
 
 echo "starting test of algod with expect script testDebian.exp"
-<<<<<<< HEAD:scripts/release/helper/deb_test.sh
-OUTPUT=$(expect -d /workdir/testDebian.exp /var/lib/algorand /testdata)
-=======
 OUTPUT=$(expect -d /workdir/deb/testDebian.exp /var/lib/algorand /testdata)
->>>>>>> rel/beta:scripts/release/test/deb/test_apt-get.sh
 STATUS=$?
 echo "$OUTPUT"
 
