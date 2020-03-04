@@ -36,7 +36,7 @@ const (
 type ApplicationCallTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	ApplicationID uint64             `codec:"apid"`
+	ApplicationID basics.AppIndex    `codec:"apid"`
 	Action        Action             `codec:"apan"`
 	FunctionArgs  []basics.TealValue `codec:"apfa"`
 	Accounts      []basics.Address   `codec:"apat"`
@@ -158,7 +158,7 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, spec 
 	}
 
 	// Fetch the application parameters, if they exist
-	params, creator, doesNotExist, err := getAppParams(balances, appIdx)
+	_, creator, doesNotExist, err := getAppParams(balances, appIdx)
 	if err != nil {
 		return err
 	}
@@ -244,7 +244,7 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, spec 
 
 		// Allocate local state
 		record.AppLocalStates = cloneAppLocalStates(record.AppLocalStates)
-		record.AppLocalStates[appIdx] = basics.LocalState{}
+		record.AppLocalStates[appIdx] = basics.TealKeyValue{}
 		err = balances.Put(record)
 		if err != nil {
 			return err
@@ -282,8 +282,12 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, spec 
 		record.AppParams = cloneAppParams(record.AppParams)
 
 		// Fill in the updated programs
-		record.AppParams.ApprovalProgram = ac.ApprovalProgram
-		record.AppParams.StateUpdateProgram = ac.StateUpdateProgram
+		params := record.AppParams[appIdx]
+
+		params.ApprovalProgram = ac.ApprovalProgram
+		params.StateUpdateProgram = ac.StateUpdateProgram
+
+		record.AppParams[appIdx] = params
 		err = balances.Put(record)
 		if err != nil {
 			return err

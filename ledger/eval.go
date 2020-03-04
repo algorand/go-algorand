@@ -76,6 +76,10 @@ func (cs *roundCowState) GetAssetCreator(assetIdx basics.AssetIndex) (basics.Add
 	return cs.getAssetCreator(assetIdx)
 }
 
+func (cs *roundCowState) GetAppCreator(appIdx basics.AppIndex) (creator basics.Address, doesNotExist bool, err error) {
+	return basics.Address{}, false, nil
+}
+
 // wrappers for roundCowState to satisfy the (current) transactions.Balances interface
 func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (basics.BalanceRecord, error) {
 	acctdata, err := cs.lookup(addr)

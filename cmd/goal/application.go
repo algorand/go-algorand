@@ -17,10 +17,9 @@
 package main
 
 import (
-	// "fmt"
-
 	"github.com/spf13/cobra"
-	// "github.com/algorand/go-algorand/libgoal"
+
+	"github.com/algorand/go-algorand/data/basics"
 )
 
 var (
@@ -69,7 +68,8 @@ var createAppCmd = &cobra.Command{
 		client := ensureFullClient(dataDir)
 
 		// Construct the transaction
-		tx, err := client.MakeUnsignedAppCreateTx(nil, nil, nil, nil, nil, nil)
+		emptySchema := basics.StateSchema{}
+		tx, err := client.MakeUnsignedAppCreateTx("", "", emptySchema, emptySchema, nil, nil)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}

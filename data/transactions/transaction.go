@@ -59,6 +59,8 @@ type Balances interface {
 	// contains the asset params
 	GetAssetCreator(aidx basics.AssetIndex) (basics.Address, error)
 
+	GetAppCreator(aidx basics.AppIndex) (basics.Address, bool, error)
+
 	Put(basics.BalanceRecord) error
 
 	// Move MicroAlgos from one account to another, doing all necessary overflow checking (convenience method)
@@ -284,15 +286,16 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			if tx.ApplicationID != 0 {
 				return fmt.Errorf("ApplicationID must be 0 during creation, it will be determined when txn is confirmed")
 			}
-		} else {
-			// Ensure programs are only set for create action
-			if tx.ApprovalProgram != nil || tx.StateUpdateProgram != nil {
+		}
+
+		if tx.Action != CreateApplicationAction || tx.Action != UpdateApplicationAction {
+			// Ensure programs are only set for create or update actions
+			if tx.ApprovalProgram != "" || tx.StateUpdateProgram != "" {
 				return fmt.Errorf("scripts may only be specified during application creation")
 			}
 		}
 
-		// APPLICATIONTODO
-		// TODO(maxj) check max script/schema/functionargs lengths
+		// TODO(application) check max script/schema/functionargs lengths
 
 	default:
 		return fmt.Errorf("unknown tx type %v", tx.Type)

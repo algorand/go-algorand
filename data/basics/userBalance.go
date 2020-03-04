@@ -143,6 +143,8 @@ type AccountData struct {
 }
 
 type AppParams struct {
+	ApprovalProgram    string
+	StateUpdateProgram string
 }
 
 // AccountDetail encapsulates meaningful details about a given account, for external consumption
