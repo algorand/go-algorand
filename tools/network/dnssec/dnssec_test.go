@@ -33,13 +33,15 @@ func TestResolverCreation(t *testing.T) {
 	a.NotEmpty(r.resolver.serverList())
 	a.Equal("1.1.1.1:53", r.resolver.serverList()[0])
 	a.Equal("8.8.8.8:53", r.resolver.serverList()[1])
-	a.Equal(2, len(r.resolver.serverList()))
+	a.Equal("77.88.8.8:53", r.resolver.serverList()[2])
+	a.Equal("8.26.56.26:53", r.resolver.serverList()[3])
+	a.Equal(4, len(r.resolver.serverList()))
 
 	r = MakeDnssecResolver([]string{}, time.Second)
 	a.NotEmpty(r.resolver.serverList())
 	a.Equal("1.1.1.1:53", r.resolver.serverList()[0])
 	a.Equal("8.8.8.8:53", r.resolver.serverList()[1])
-	a.Equal(2, len(r.resolver.serverList()))
+	a.Equal(4, len(r.resolver.serverList()))
 
 	r = MakeDnssecResolver([]string{"8.8.8.8"}, time.Second)
 	a.NotEmpty(r.resolver.serverList())
