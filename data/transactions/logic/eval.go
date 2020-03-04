@@ -333,6 +333,7 @@ type OpSpec struct {
 	op      opFunc     // evaluate the op
 	Args    StackTypes // what gets popped from the stack
 	Returns StackTypes // what gets pushed to the stack
+	Version uint64     // TEAL version opcode introduced
 	Modes   uint64     // if non-zero, then (mode & Modes) != 0 to allow
 }
 
@@ -348,76 +349,76 @@ var threeInts = StackTypes{StackUint64, StackUint64, StackUint64}
 //
 // Any changes should be reflected in README.md which serves as the language spec.
 var OpSpecs = []OpSpec{
-	{0x00, "err", opErr, nil, nil, modeAny},
-	{0x01, "sha256", opSHA256, oneBytes, oneBytes, modeAny},
-	{0x02, "keccak256", opKeccak256, oneBytes, oneBytes, modeAny},
-	{0x03, "sha512_256", opSHA512_256, oneBytes, oneBytes, modeAny},
-	{0x04, "ed25519verify", opEd25519verify, threeBytes, oneInt, RunModeSignature},
-	{0x08, "+", opPlus, twoInts, oneInt, modeAny},
-	{0x09, "-", opMinus, twoInts, oneInt, modeAny},
-	{0x0a, "/", opDiv, twoInts, oneInt, modeAny},
-	{0x0b, "*", opMul, twoInts, oneInt, modeAny},
-	{0x0c, "<", opLt, twoInts, oneInt, modeAny},
-	{0x0d, ">", opGt, twoInts, oneInt, modeAny},
-	{0x0e, "<=", opLe, twoInts, oneInt, modeAny},
-	{0x0f, ">=", opGe, twoInts, oneInt, modeAny},
-	{0x10, "&&", opAnd, twoInts, oneInt, modeAny},
-	{0x11, "||", opOr, twoInts, oneInt, modeAny},
-	{0x12, "==", opEq, twoAny, oneInt, modeAny},
-	{0x13, "!=", opNeq, twoAny, oneInt, modeAny},
-	{0x14, "!", opNot, oneInt, oneInt, modeAny},
-	{0x15, "len", opLen, oneBytes, oneInt, modeAny},
-	{0x16, "itob", opItob, oneInt, oneBytes, modeAny},
-	{0x17, "btoi", opBtoi, oneBytes, oneInt, modeAny},
-	{0x18, "%", opModulo, twoInts, oneInt, modeAny},
-	{0x19, "|", opBitOr, twoInts, oneInt, modeAny},
-	{0x1a, "&", opBitAnd, twoInts, oneInt, modeAny},
-	{0x1b, "^", opBitXor, twoInts, oneInt, modeAny},
-	{0x1c, "~", opBitNot, oneInt, oneInt, modeAny},
-	{0x1d, "mulw", opMulw, twoInts, twoInts, modeAny},
+	{0x00, "err", opErr, nil, nil, 1, modeAny},
+	{0x01, "sha256", opSHA256, oneBytes, oneBytes, 1, modeAny},
+	{0x02, "keccak256", opKeccak256, oneBytes, oneBytes, 1, modeAny},
+	{0x03, "sha512_256", opSHA512_256, oneBytes, oneBytes, 1, modeAny},
+	{0x04, "ed25519verify", opEd25519verify, threeBytes, oneInt, 1, RunModeSignature},
+	{0x08, "+", opPlus, twoInts, oneInt, 1, modeAny},
+	{0x09, "-", opMinus, twoInts, oneInt, 1, modeAny},
+	{0x0a, "/", opDiv, twoInts, oneInt, 1, modeAny},
+	{0x0b, "*", opMul, twoInts, oneInt, 1, modeAny},
+	{0x0c, "<", opLt, twoInts, oneInt, 1, modeAny},
+	{0x0d, ">", opGt, twoInts, oneInt, 1, modeAny},
+	{0x0e, "<=", opLe, twoInts, oneInt, 1, modeAny},
+	{0x0f, ">=", opGe, twoInts, oneInt, 1, modeAny},
+	{0x10, "&&", opAnd, twoInts, oneInt, 1, modeAny},
+	{0x11, "||", opOr, twoInts, oneInt, 1, modeAny},
+	{0x12, "==", opEq, twoAny, oneInt, 1, modeAny},
+	{0x13, "!=", opNeq, twoAny, oneInt, 1, modeAny},
+	{0x14, "!", opNot, oneInt, oneInt, 1, modeAny},
+	{0x15, "len", opLen, oneBytes, oneInt, 1, modeAny},
+	{0x16, "itob", opItob, oneInt, oneBytes, 1, modeAny},
+	{0x17, "btoi", opBtoi, oneBytes, oneInt, 1, modeAny},
+	{0x18, "%", opModulo, twoInts, oneInt, 1, modeAny},
+	{0x19, "|", opBitOr, twoInts, oneInt, 1, modeAny},
+	{0x1a, "&", opBitAnd, twoInts, oneInt, 1, modeAny},
+	{0x1b, "^", opBitXor, twoInts, oneInt, 1, modeAny},
+	{0x1c, "~", opBitNot, oneInt, oneInt, 1, modeAny},
+	{0x1d, "mulw", opMulw, twoInts, twoInts, 1, modeAny},
 
-	{0x20, "intcblock", opIntConstBlock, nil, nil, modeAny},
-	{0x21, "intc", opIntConstLoad, nil, oneInt, modeAny},
-	{0x22, "intc_0", opIntConst0, nil, oneInt, modeAny},
-	{0x23, "intc_1", opIntConst1, nil, oneInt, modeAny},
-	{0x24, "intc_2", opIntConst2, nil, oneInt, modeAny},
-	{0x25, "intc_3", opIntConst3, nil, oneInt, modeAny},
-	{0x26, "bytecblock", opByteConstBlock, nil, nil, modeAny},
-	{0x27, "bytec", opByteConstLoad, nil, oneBytes, modeAny},
-	{0x28, "bytec_0", opByteConst0, nil, oneBytes, modeAny},
-	{0x29, "bytec_1", opByteConst1, nil, oneBytes, modeAny},
-	{0x2a, "bytec_2", opByteConst2, nil, oneBytes, modeAny},
-	{0x2b, "bytec_3", opByteConst3, nil, oneBytes, modeAny},
-	{0x2c, "arg", opArg, nil, oneBytes, modeAny},
-	{0x2d, "arg_0", opArg0, nil, oneBytes, modeAny},
-	{0x2e, "arg_1", opArg1, nil, oneBytes, modeAny},
-	{0x2f, "arg_2", opArg2, nil, oneBytes, modeAny},
-	{0x30, "arg_3", opArg3, nil, oneBytes, modeAny},
-	{0x31, "txn", opTxn, nil, oneAny, modeAny},       // TODO: check output type by subfield retrieved in txn,global,account,txid
-	{0x32, "global", opGlobal, nil, oneAny, modeAny}, // TODO: check output type against specific field
-	{0x33, "gtxn", opGtxn, nil, oneAny, modeAny},     // TODO: check output type by subfield retrieved in txn,global,account,txid
-	{0x34, "load", opLoad, nil, oneAny, modeAny},
-	{0x35, "store", opStore, oneAny, nil, modeAny},
+	{0x20, "intcblock", opIntConstBlock, nil, nil, 1, modeAny},
+	{0x21, "intc", opIntConstLoad, nil, oneInt, 1, modeAny},
+	{0x22, "intc_0", opIntConst0, nil, oneInt, 1, modeAny},
+	{0x23, "intc_1", opIntConst1, nil, oneInt, 1, modeAny},
+	{0x24, "intc_2", opIntConst2, nil, oneInt, 1, modeAny},
+	{0x25, "intc_3", opIntConst3, nil, oneInt, 1, modeAny},
+	{0x26, "bytecblock", opByteConstBlock, nil, nil, 1, modeAny},
+	{0x27, "bytec", opByteConstLoad, nil, oneBytes, 1, modeAny},
+	{0x28, "bytec_0", opByteConst0, nil, oneBytes, 1, modeAny},
+	{0x29, "bytec_1", opByteConst1, nil, oneBytes, 1, modeAny},
+	{0x2a, "bytec_2", opByteConst2, nil, oneBytes, 1, modeAny},
+	{0x2b, "bytec_3", opByteConst3, nil, oneBytes, 1, modeAny},
+	{0x2c, "arg", opArg, nil, oneBytes, 1, modeAny},
+	{0x2d, "arg_0", opArg0, nil, oneBytes, 1, modeAny},
+	{0x2e, "arg_1", opArg1, nil, oneBytes, 1, modeAny},
+	{0x2f, "arg_2", opArg2, nil, oneBytes, 1, modeAny},
+	{0x30, "arg_3", opArg3, nil, oneBytes, 1, modeAny},
+	{0x31, "txn", opTxn, nil, oneAny, 1, modeAny},       // TODO: check output type by subfield retrieved in txn,global,account,txid
+	{0x32, "global", opGlobal, nil, oneAny, 1, modeAny}, // TODO: check output type against specific field
+	{0x33, "gtxn", opGtxn, nil, oneAny, 1, modeAny},     // TODO: check output type by subfield retrieved in txn,global,account,txid
+	{0x34, "load", opLoad, nil, oneAny, 1, modeAny},
+	{0x35, "store", opStore, oneAny, nil, 1, modeAny},
 
-	{0x40, "bnz", opBnz, oneInt, nil, modeAny},
-	{0x48, "pop", opPop, oneAny, nil, modeAny},
-	{0x49, "dup", opDup, oneAny, twoAny, modeAny},
+	{0x40, "bnz", opBnz, oneInt, nil, 1, modeAny},
+	{0x48, "pop", opPop, oneAny, nil, 1, modeAny},
+	{0x49, "dup", opDup, oneAny, twoAny, 1, modeAny},
 
-	{0x60, "balance", opBalance, oneInt, oneInt, modeStatefull},
-	{0x61, "app_opted_in", opAppCheckOptedIn, twoInts, oneInt, modeStatefull},
-	{0x62, "app_read_local", opAppReadLocalState, oneBytes.plus(twoInts), oneInt.plus(oneAny), modeStatefull},
-	{0x63, "app_read_global", opAppReadGlobalState, oneBytes, oneInt.plus(oneAny), modeStatefull},
-	{0x64, "app_write_local", opAppWriteLocalState, oneAny.plus(oneBytes).plus(oneInt), nil, RunModeApplicationState},
-	{0x65, "app_write_global", opAppWriteGlobalState, oneAny.plus(oneBytes), nil, RunModeApplicationState},
-	{0x66, "app_read_other_global", opAppReadOtherGlobalState, oneBytes.plus(twoInts), oneInt.plus(oneAny), modeStatefull},
-	{0x67, "app_arg", opAppArg, nil, oneBytes, modeStatefull},
-	{0x68, "app_arg_0", opAppArg0, nil, oneBytes, modeStatefull},
-	{0x69, "app_arg_1", opAppArg1, nil, oneBytes, modeStatefull},
-	{0x6A, "app_arg_2", opAppArg2, nil, oneBytes, modeStatefull},
-	{0x6B, "app_arg_3", opAppArg3, nil, oneBytes, modeStatefull},
+	{0x60, "balance", opBalance, oneInt, oneInt, 2, modeStatefull},
+	{0x61, "app_opted_in", opAppCheckOptedIn, twoInts, oneInt, 2, modeStatefull},
+	{0x62, "app_read_local", opAppReadLocalState, oneBytes.plus(twoInts), oneInt.plus(oneAny), 2, modeStatefull},
+	{0x63, "app_read_global", opAppReadGlobalState, oneBytes, oneInt.plus(oneAny), 2, modeStatefull},
+	{0x64, "app_write_local", opAppWriteLocalState, oneAny.plus(oneBytes).plus(oneInt), nil, 2, RunModeApplicationState},
+	{0x65, "app_write_global", opAppWriteGlobalState, oneAny.plus(oneBytes), nil, 2, RunModeApplicationState},
+	{0x66, "app_read_other_global", opAppReadOtherGlobalState, oneBytes.plus(twoInts), oneInt.plus(oneAny), 2, modeStatefull},
+	{0x67, "app_arg", opAppArg, nil, oneBytes, 2, modeStatefull},
+	{0x68, "app_arg_0", opAppArg0, nil, oneBytes, 2, modeStatefull},
+	{0x69, "app_arg_1", opAppArg1, nil, oneBytes, 2, modeStatefull},
+	{0x6A, "app_arg_2", opAppArg2, nil, oneBytes, 2, modeStatefull},
+	{0x6B, "app_arg_3", opAppArg3, nil, oneBytes, 2, modeStatefull},
 
-	{0x70, "asset_read_holding", opAssetReadHolding, threeInts, oneInt.plus(oneAny), modeStatefull},
-	{0x71, "asset_read_params", opAssetReadParams, threeInts, oneInt.plus(oneAny), modeStatefull},
+	{0x70, "asset_read_holding", opAssetReadHolding, threeInts, oneInt.plus(oneAny), 2, modeStatefull},
+	{0x71, "asset_read_params", opAssetReadParams, threeInts, oneInt.plus(oneAny), 2, modeStatefull},
 }
 
 // direct opcode bytes
@@ -506,6 +507,10 @@ func (cx *evalContext) step() {
 	}
 	if (cx.RunModeFlags & opsByOpcode[opcode].Modes) == 0 {
 		cx.err = fmt.Errorf("%s not allowed in current mode", opsByOpcode[opcode].Name)
+		return
+	}
+	if opsByOpcode[opcode].Version > cx.version {
+		cx.err = fmt.Errorf("%s not allowed in program version %d", opsByOpcode[opcode].Name, cx.version)
 		return
 	}
 	argsTypes := opsByOpcode[opcode].Args
