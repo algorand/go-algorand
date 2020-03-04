@@ -76,6 +76,11 @@ func (sv *stackValue) String() string {
 	return fmt.Sprintf("%d 0x%x", sv.Uint, sv.Uint)
 }
 
+// LedgerForLogic represents ledger API for Statefull TEAL program
+type LedgerForLogic interface {
+	BalanceRecord(addr basics.Address) (*basics.BalanceRecord, error)
+}
+
 // EvalParams contains data that comes into condition evaluation.
 type EvalParams struct {
 	// the transaction being evaluated
@@ -93,6 +98,8 @@ type EvalParams struct {
 	Logger logging.Logger
 
 	RunModeFlags uint64
+
+	ledger LedgerForLogic
 }
 
 const (
@@ -1234,8 +1241,20 @@ func opStore(cx *evalContext) {
 
 func opBalance(cx *evalContext) {
 	last := len(cx.stack) - 1 // account offset
-	// TODO
-	cx.stack[last].Uint = 0
+	accountIdx := cx.stack[last].Uint
+	if accountIdx >= uint64(len(cx.Txn.Txn.Accounts)) {
+		cx.err = fmt.Errorf("cannot load account[%d] of %d", accountIdx, len(cx.Txn.Txn.Accounts))
+		return
+	}
+
+	addr := cx.Txn.Txn.Accounts[accountIdx]
+	br, err := cx.ledger.BalanceRecord(addr)
+	if err != nil {
+		cx.err = fmt.Errorf("failed to fetch %s balance record: %s", addr, err.Error())
+		return
+	}
+
+	cx.stack[last].Uint = uint64(br.MicroAlgos.ToUint64())
 }
 
 func opAppCheckOptedIn(cx *evalContext) {
