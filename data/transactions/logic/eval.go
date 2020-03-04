@@ -1102,6 +1102,8 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint
 		sv.Bytes = txid[:]
 	case Lease:
 		sv.Bytes = txn.Lease[:]
+	case Action:
+		sv.Uint = uint64(txn.Action)
 	default:
 		err = fmt.Errorf("invalid txn field %d", field)
 	}

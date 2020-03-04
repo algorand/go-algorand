@@ -563,6 +563,8 @@ const (
 	GroupIndex
 	// TxID Transaction.ID()
 	TxID
+	// Action        Action
+	Action
 
 	invalidTxnField // fence for some setup that loops from Sender..invalidTxnField
 )
@@ -601,6 +603,7 @@ var txnFieldTypePairs = []txnFieldType{
 	{AssetCloseTo, StackBytes},
 	{GroupIndex, StackUint64},
 	{TxID, StackBytes},
+	{Action, StackUint64},
 }
 
 // TxnFieldTypes is StackBytes or StackUint64 parallel to TxnFieldNames
@@ -614,6 +617,7 @@ var TxnTypeNames = []string{
 	string(protocol.AssetConfigTx),
 	string(protocol.AssetTransferTx),
 	string(protocol.AssetFreezeTx),
+	string(protocol.ApplicationCallTx),
 }
 
 // map TxnTypeName to its enum index, for `txn TypeEnum`

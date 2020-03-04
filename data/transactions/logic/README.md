@@ -125,6 +125,11 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `global` | push value from globals to stack |
 | `load` | copy a value from scratch space to the stack |
 | `store` | pop a value from the stack and store to scratch space |
+| `app_arg` | push ApplicationArgs[N] value to stack by index |
+| `app_arg_0` | push ApplicationArgs[0] to stack |
+| `app_arg_1` | push ApplicationArgs[1] to stack |
+| `app_arg_2` | push ApplicationArgs[2] to stack |
+| `app_arg_3` | push ApplicationArgs[3] to stack |
 
 **Transaction Fields**
 
@@ -154,6 +159,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 21 | AssetCloseTo | []byte | 32 byte address |
 | 22 | GroupIndex | uint64 | Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1. |
 | 23 | TxID | []byte | The computed ID for this transaction. 32 bytes. |
+| 24 | Action | uint64 |  |
 
 
 Additional details in the [opcodes document](TEAL_opcodes.md#txn) on the `txn` op.

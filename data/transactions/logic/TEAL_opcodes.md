@@ -360,6 +360,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 | 21 | AssetCloseTo | []byte | 32 byte address |
 | 22 | GroupIndex | uint64 | Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1. |
 | 23 | TxID | []byte | The computed ID for this transaction. 32 bytes. |
+| 24 | Action | uint64 |  |
 
 
 TypeEnum mapping:
@@ -372,6 +373,7 @@ TypeEnum mapping:
 | 3 | acfg | AssetConfig |
 | 4 | axfer | AssetTransfer |
 | 5 | afrz | AssetFreeze |
+| 6 | appl | invalid type name |
 
 
 FirstValidTime causes the program to fail. The field is reserved for future use.
@@ -442,14 +444,14 @@ The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which 
 
 ## balance
 
-- Opcode: 0x50
+- Opcode: 0x60
 - Pops: *... stack*, uint64
 - Pushes: uint64
 - get balance for the requested account A in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction
 
 ## app_opted_in
 
-- Opcode: 0x51
+- Opcode: 0x61
 - Pops: *... stack*, {uint64 A}, {uint64 B}
 - Pushes: uint64
 - check if account A opted in for the application B => {0 or 1}
@@ -458,7 +460,7 @@ params: application id (top of the stack), account index
 
 ## app_read_local
 
-- Opcode: 0x52
+- Opcode: 0x62
 - Pops: *... stack*, {[]byte A}, {uint64 B}, {uint64 C}
 - Pushes: uint64, any
 - read key K from local state of account A for the application B => {0 or 1 (top), value}
@@ -467,14 +469,14 @@ params: state key (top of the stack), application id, account index. Return: is_
 
 ## app_read_global
 
-- Opcode: 0x53
+- Opcode: 0x63
 - Pops: *... stack*, []byte
 - Pushes: uint64, any
 - read key K from global state of the current application => {0 or 1 (top), value}
 
 ## app_write_local
 
-- Opcode: 0x54
+- Opcode: 0x64
 - Pops: *... stack*, {any A}, {[]byte B}, {uint64 C}
 - Pushes: _None_
 - write key K to local state of account A for the application B
@@ -483,23 +485,58 @@ params: value (top of the stack), state key, account index
 
 ## app_write_global
 
-- Opcode: 0x55
+- Opcode: 0x65
 - Pops: *... stack*, {any A}, {[]byte B}
 - Pushes: _None_
 - write key K to global state of the current application
 
 ## app_read_other_global
 
-- Opcode: 0x56
+- Opcode: 0x66
 - Pops: *... stack*, {[]byte A}, {uint64 B}, {uint64 C}
 - Pushes: uint64, any
 - read key K from global state of account A for the application B if A created B => {0 or 1 (top), value}
 
 params: state key (top of the stack), application id, account index. Return: is_exist flag (top of the stack), value
 
+## app_arg
+
+- Opcode: 0x67
+- Pops: _None_
+- Pushes: []byte
+- push ApplicationArgs[N] value to stack by index
+
+## app_arg_0
+
+- Opcode: 0x68
+- Pops: _None_
+- Pushes: []byte
+- push ApplicationArgs[0] to stack
+
+## app_arg_1
+
+- Opcode: 0x69
+- Pops: _None_
+- Pushes: []byte
+- push ApplicationArgs[1] to stack
+
+## app_arg_2
+
+- Opcode: 0x6a
+- Pops: _None_
+- Pushes: []byte
+- push ApplicationArgs[2] to stack
+
+## app_arg_3
+
+- Opcode: 0x6b
+- Pops: _None_
+- Pushes: []byte
+- push ApplicationArgs[3] to stack
+
 ## asset_read_holding
 
-- Opcode: 0x5a
+- Opcode: 0x70
 - Pops: *... stack*, {uint64 A}, {uint64 B}, {uint64 C}
 - Pushes: uint64, any
 - read an asset A holding field X of account A  => {0 or 1 (top), value}
@@ -508,7 +545,7 @@ params: field (top of the stack), asset id, account index. Return: is_exist flag
 
 ## asset_read_params
 
-- Opcode: 0x5b
+- Opcode: 0x71
 - Pops: *... stack*, {uint64 A}, {uint64 B}, {uint64 C}
 - Pushes: uint64, any
 - read an asset A params field X of account A  => {0 or 1 (top), value}

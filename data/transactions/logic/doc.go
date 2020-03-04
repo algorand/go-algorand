@@ -229,6 +229,7 @@ var typeEnumDescriptions = []stringString{
 	{string(protocol.AssetConfigTx), "AssetConfig"},
 	{string(protocol.AssetTransferTx), "AssetTransfer"},
 	{string(protocol.AssetFreezeTx), "AssetFreeze"},
+	{string(protocol.ApplicationCallTx), "ApplicationCall"},
 }
 
 // TypeNameDescription returns extra description about a low level protocol transaction Type string

@@ -1055,6 +1055,10 @@ arg 7
 txn Lease
 arg 8
 ==
+&&
+txn Action
+int 0
+==
 &&`
 
 func TestTxn(t *testing.T) {
