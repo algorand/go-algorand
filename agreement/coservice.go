@@ -32,6 +32,7 @@ const (
 	networkCoserviceType
 )
 
+//msgp:ignore coserviceType
 type coserviceType int
 
 type coserviceMonitor struct {

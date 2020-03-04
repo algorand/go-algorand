@@ -83,7 +83,7 @@ var multisigCmd = &cobra.Command{
 				os.Exit(1)
 			}
 
-			outBytes = append(outBytes, protocol.Encode(stxn)...)
+			outBytes = append(outBytes, protocol.Encode(&stxn)...)
 		}
 
 		err = ioutil.WriteFile(multisigOutfile, outBytes, 0600)

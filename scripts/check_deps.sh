@@ -33,6 +33,10 @@ GO_DEPS=(
     "$GO_BIN/golint"
     "$GO_BIN/stringer"
     "$GO_BIN/swagger"
+<<<<<<< HEAD
+=======
+    "$GO_BIN/msgp"
+>>>>>>> rel/beta
 )
 
 check_deps() {

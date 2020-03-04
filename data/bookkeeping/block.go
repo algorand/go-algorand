@@ -126,6 +126,8 @@ type (
 	// RewardsState represents the global parameters controlling the rate
 	// at which accounts accrue rewards.
 	RewardsState struct {
+		_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 		// The FeeSink accepts transaction fees. It can only spend to
 		// the incentive pool.
 		FeeSink basics.Address `codec:"fees"`
@@ -154,6 +156,8 @@ type (
 	// UpgradeVote represents the vote of the block proposer with
 	// respect to protocol upgrades.
 	UpgradeVote struct {
+		_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 		// UpgradePropose indicates a proposed upgrade
 		UpgradePropose protocol.ConsensusVersion `codec:"upgradeprop"`
 
@@ -168,6 +172,7 @@ type (
 	// strictly speaking, computable from the history of all UpgradeVotes
 	// but we keep it in the block for explicitness and convenience
 	// (instead of materializing it separately, like balances).
+	//msgp:ignore UpgradeState
 	UpgradeState struct {
 		CurrentProtocol        protocol.ConsensusVersion `codec:"proto"`
 		NextProtocol           protocol.ConsensusVersion `codec:"nextproto"`
@@ -191,7 +196,7 @@ func (bh BlockHeader) Hash() BlockHash {
 
 // ToBeHashed implements the crypto.Hashable interface
 func (bh BlockHeader) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.BlockHeader, protocol.Encode(bh)
+	return protocol.BlockHeader, protocol.Encode(&bh)
 }
 
 // Digest returns a cryptographic digest summarizing the Block.
@@ -631,7 +636,6 @@ func (bh BlockHeader) DecodeSignedTxn(stb transactions.SignedTxnInBlock) (transa
 		}
 	}
 
-	st.ResetCaches()
 	return st, ad, nil
 }
 
