@@ -316,25 +316,25 @@ def xrun(cmd, *args, **kwargs):
         cmdr = repr(cmd)
         logger.error('subprocess timed out {}'.format(cmdr), exc_info=True)
         if p.stdout:
-            sys.stderr.write('output from {}:\n{}\n\n'.format(cmdr, p.stdout))
+            sys.stderr.write('output from {}:\n{}\n\n'.format(cmdr, p.stdout.read()))
         if p.stderr:
-            sys.stderr.write('stderr from {}:\n{}\n\n'.format(cmdr, p.stderr))
+            sys.stderr.write('stderr from {}:\n{}\n\n'.format(cmdr, p.stderr.read()))
         raise
     except Exception as e:
         cmdr = repr(cmd)
         logger.error('subprocess exception {}'.format(cmdr), exc_info=True)
         if p.stdout:
-            sys.stderr.write('output from {}:\n{}\n\n'.format(cmdr, p.stdout))
+            sys.stderr.write('output from {}:\n{}\n\n'.format(cmdr, p.stdout.read()))
         if p.stderr:
-            sys.stderr.write('stderr from {}:\n{}\n\n'.format(cmdr, p.stderr))
+            sys.stderr.write('stderr from {}:\n{}\n\n'.format(cmdr, p.stderr.read()))
         raise
     if p.returncode != 0:
         cmdr = repr(cmd)
         logger.error('cmd failed {}'.format(cmdr))
         if p.stdout:
-            sys.stderr.write('output from {}:\n{}\n\n'.format(cmdr, p.stdout))
+            sys.stderr.write('output from {}:\n{}\n\n'.format(cmdr, p.stdout.read()))
         if p.stderr:
-            sys.stderr.write('stderr from {}:\n{}\n\n'.format(cmdr, p.stderr))
+            sys.stderr.write('stderr from {}:\n{}\n\n'.format(cmdr, p.stderr.read()))
         raise Exception('error: cmd failed: {}'.format(cmdr))
 
 _logging_format = '%(asctime)s :%(lineno)d %(message)s'
