@@ -124,6 +124,7 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 	partKeyCreated := int64(0)
 
 	pendingWallets := make(chan genesisAllocation, len(allocation))
+
 	concurrentWalletGenerators := runtime.NumCPU() * 2
 	errorsChannel := make(chan error, concurrentWalletGenerators)
 	verbosedOutput := make(chan string)

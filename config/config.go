@@ -253,6 +253,18 @@ type Local struct {
 
 	// TelemetryToLog records messages to node.log that are normally sent to remote event monitoring
 	TelemetryToLog bool
+
+	// DNSSecurityFlags instructs algod validating DNS responses.
+	// Possible fla values
+	// 0x00 - disabled
+	// 0x01 (dnssecSRV) - validate SRV response
+	// 0x02 (dnssecRelayAddr) - validate relays' names to addresses resolution
+	// 0x04 (dnssecTelemetryAddr) - validate telemetry and metrics names to addresses resolution
+	// ...
+	DNSSecurityFlags uint32
+
+	// EnablePingHandler controls whether the gossip node would respond to ping messages with a pong message.
+	EnablePingHandler bool
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)
@@ -460,4 +472,25 @@ func GetDefaultConfigFilePath() (string, error) {
 		return "", errors.New("GetDefaultConfigFilePath fail - current user has no home directory")
 	}
 	return filepath.Join(currentUser.HomeDir, ".algorand"), nil
+}
+
+const (
+	dnssecSRV = 1 << iota
+	dnssecRelayAddr
+	dnssecTelemetryAddr
+)
+
+// DNSSecuritySRVEnforced returns true if SRV response verification enforced
+func (cfg Local) DNSSecuritySRVEnforced() bool {
+	return cfg.DNSSecurityFlags&dnssecSRV != 0
+}
+
+// DNSSecurityRelayAddrEnforced returns true if relay name to ip addr resolution enforced
+func (cfg Local) DNSSecurityRelayAddrEnforced() bool {
+	return cfg.DNSSecurityFlags&dnssecRelayAddr != 0
+}
+
+// DNSSecurityTelemeryAddrEnforced returns true if relay name to ip addr resolution enforced
+func (cfg Local) DNSSecurityTelemeryAddrEnforced() bool {
+	return cfg.DNSSecurityFlags&dnssecTelemetryAddr != 0
 }

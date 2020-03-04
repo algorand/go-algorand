@@ -54,14 +54,15 @@ func spinNetwork(t *testing.T, nodesCount int) ([]*networkImpl, []*messageCounte
 	cfg.OutgoingMessageFilterBucketCount = 3
 	cfg.OutgoingMessageFilterBucketSize = 32
 	cfg.EnableOutgoingNetworkMessageFiltering = false
+	cfg.DNSBootstrapID = "" // prevent attempts of getting bootstrap SRV from DNS server(s)
 
 	log := logging.TestingLog(t)
 	start := time.Now()
 	nodesAddresses := []string{}
 	gossipNodes := []network.GossipNode{}
-	phonebooks := make([]*network.ThreadsafePhonebook, nodesCount)
+	phonebooks := make([]network.Phonebook, nodesCount)
 	for nodeIdx := 0; nodeIdx < nodesCount; nodeIdx++ {
-		phonebooks[nodeIdx] = network.MakeThreadsafePhonebook(cfg.ConnectionsRateLimitingCount,
+		phonebooks[nodeIdx] = network.MakePhonebook(cfg.ConnectionsRateLimitingCount,
 			time.Duration(cfg.ConnectionsRateLimitingWindowSeconds)*time.Second)
 		gossipNode, err := network.NewWebsocketGossipNode(log.With("node", nodeIdx), cfg, phonebooks[nodeIdx], "go-test-agreement-network-genesis", config.Devtestnet)
 		if err != nil {
@@ -77,7 +78,7 @@ func spinNetwork(t *testing.T, nodesCount int) ([]*networkImpl, []*messageCounte
 	for nodeIdx, gossipNode := range gossipNodes {
 		others := []string{}
 		others = append(others, nodesAddresses[nodeIdx+1:]...)
-		phonebooks[nodeIdx].ReplacePeerList(others)
+		phonebooks[nodeIdx].ReplacePeerList(others, "")
 		log.Debugf("phonebook[%d] %#v", nodeIdx, others)
 		gossipNode.RequestConnectOutgoing(false, nil) // no disconnect.
 	}

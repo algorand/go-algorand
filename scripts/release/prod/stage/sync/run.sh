@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # shellcheck disable=2029
 
+set -ex
+
+trap 'bash ./scripts/release/common/ec2/shutdown.sh' ERR
+
 # Path(s) are relative to the root of the Jenkins workspace.
 STAGING="$1"
 PROD="$2"

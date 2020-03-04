@@ -205,8 +205,7 @@ func (agg *voteAggregator) filterVote(proto protocol.ConsensusVersion, p player,
 	panic("not reached")
 }
 
-// filterBundle filters a bundle, checking if it is both fresh and is neither a
-// duplicate nor equivocates twice.
+// filterBundle filters a bundle, checking if it is fresh.
 // TODO consider optimizing recovery by filtering bundles for some value if we
 // have already seen the threshold met for that value.  This will filter
 // repeated bundles sent by honest peers.
@@ -277,6 +276,10 @@ func voteFresh(proto protocol.ConsensusVersion, freshData freshnessData, vote un
 func bundleFresh(freshData freshnessData, b unauthenticatedBundle) error {
 	if freshData.PlayerRound != b.Round {
 		return fmt.Errorf("filtered bundle from different round: round %d != %d", freshData.PlayerRound, b.Round)
+	}
+
+	if b.Step == cert {
+		return nil
 	}
 
 	if freshData.PlayerPeriod != 0 && freshData.PlayerPeriod-1 > b.Period {

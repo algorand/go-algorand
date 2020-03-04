@@ -116,7 +116,7 @@ func makeTestWebsocketNodeWithConfig(t testing.TB, conf config.Local) *Websocket
 	wn := &WebsocketNetwork{
 		log:       log,
 		config:    conf,
-		phonebook: MakeMultiPhonebook(),
+		phonebook: MakePhonebook(1, 1*time.Millisecond),
 		GenesisID: "go-test-network-genesis",
 		NetworkID: config.Devtestnet,
 	}
@@ -198,8 +198,6 @@ func newMessageCounter(t testing.TB, target int) *messageCounterHandler {
 	return &messageCounterHandler{target: target, done: make(chan struct{}), t: t}
 }
 
-const debugTag = protocol.Tag("DD")
-
 func TestWebsocketNetworkStartStop(t *testing.T) {
 	netA := makeTestWebsocketNode(t)
 	netA.Start()
@@ -228,12 +226,12 @@ func TestWebsocketNetworkBasic(t *testing.T) {
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
-	netB.phonebook.AddOrUpdatePhonebook("default", &oneEntryPhonebook{addr: addrA})
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default")
 	netB.Start()
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 	counter := newMessageCounter(t, 2)
 	counterDone := counter.done
-	netB.RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{Tag: debugTag, MessageHandler: counter}})
+	netB.RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{Tag: protocol.TxnTag, MessageHandler: counter}})
 
 	readyTimeout := time.NewTimer(2 * time.Second)
 	waitReady(t, netA, readyTimeout.C)
@@ -241,8 +239,8 @@ func TestWebsocketNetworkBasic(t *testing.T) {
 	waitReady(t, netB, readyTimeout.C)
 	t.Log("b ready")
 
-	netA.Broadcast(context.Background(), debugTag, []byte("foo"), false, nil)
-	netA.Broadcast(context.Background(), debugTag, []byte("bar"), false, nil)
+	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("foo"), false, nil)
+	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("bar"), false, nil)
 
 	select {
 	case <-counterDone:
@@ -262,12 +260,12 @@ func TestWebsocketNetworkUnicast(t *testing.T) {
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
-	netB.phonebook.AddOrUpdatePhonebook("default", &oneEntryPhonebook{addr: addrA})
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default")
 	netB.Start()
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 	counter := newMessageCounter(t, 2)
 	counterDone := counter.done
-	netB.RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{Tag: debugTag, MessageHandler: counter}})
+	netB.RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{Tag: protocol.TxnTag, MessageHandler: counter}})
 
 	readyTimeout := time.NewTimer(2 * time.Second)
 	waitReady(t, netA, readyTimeout.C)
@@ -278,9 +276,9 @@ func TestWebsocketNetworkUnicast(t *testing.T) {
 	require.Equal(t, 1, len(netA.peers))
 	require.Equal(t, 1, len(netA.GetPeers(PeersConnectedIn)))
 	peerB := netA.peers[0]
-	err := peerB.Unicast(context.Background(), []byte("foo"), debugTag)
+	err := peerB.Unicast(context.Background(), []byte("foo"), protocol.TxnTag)
 	assert.NoError(t, err)
-	err = peerB.Unicast(context.Background(), []byte("bar"), debugTag)
+	err = peerB.Unicast(context.Background(), []byte("bar"), protocol.TxnTag)
 	assert.NoError(t, err)
 
 	select {
@@ -304,12 +302,12 @@ func TestWebsocketNetworkNoAddress(t *testing.T) {
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
-	netB.phonebook.AddOrUpdatePhonebook("default", &oneEntryPhonebook{addr: addrA})
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default")
 	netB.Start()
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 	counter := newMessageCounter(t, 2)
 	counterDone := counter.done
-	netB.RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{Tag: debugTag, MessageHandler: counter}})
+	netB.RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{Tag: protocol.TxnTag, MessageHandler: counter}})
 
 	readyTimeout := time.NewTimer(2 * time.Second)
 	waitReady(t, netA, readyTimeout.C)
@@ -317,8 +315,8 @@ func TestWebsocketNetworkNoAddress(t *testing.T) {
 	waitReady(t, netB, readyTimeout.C)
 	t.Log("b ready")
 
-	netA.Broadcast(context.Background(), debugTag, []byte("foo"), false, nil)
-	netA.Broadcast(context.Background(), debugTag, []byte("bar"), false, nil)
+	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("foo"), false, nil)
+	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("bar"), false, nil)
 
 	select {
 	case <-counterDone:
@@ -340,8 +338,8 @@ func lineNetwork(t *testing.T, numNodes int) (nodes []*WebsocketNetwork, counter
 		if i > 0 {
 			addrPrev, postListen := nodes[i-1].Address()
 			require.True(t, postListen)
-			nodes[i].phonebook.AddOrUpdatePhonebook("default", &oneEntryPhonebook{addr: addrPrev})
-			nodes[i].RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{Tag: debugTag, MessageHandler: &counters[i]}})
+			nodes[i].phonebook.ReplacePeerList([]string{addrPrev}, "default")
+			nodes[i].RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{Tag: protocol.TxnTag, MessageHandler: &counters[i]}})
 		}
 		nodes[i].Start()
 		counters[i].t = t
@@ -396,7 +394,7 @@ func TestLineNetwork(t *testing.T) {
 		sendTime := time.Now().UnixNano()
 		var timeblob [8]byte
 		binary.LittleEndian.PutUint64(timeblob[:], uint64(sendTime))
-		nodes[0].Broadcast(context.Background(), debugTag, timeblob[:], true, nil)
+		nodes[0].Broadcast(context.Background(), protocol.TxnTag, timeblob[:], true, nil)
 	}
 	select {
 	case <-counterDone:
@@ -687,7 +685,7 @@ func makeTestFilterWebsocketNode(t *testing.T, nodename string) *WebsocketNetwor
 	wn := &WebsocketNetwork{
 		log:       logging.TestingLog(t).With("node", nodename),
 		config:    dc,
-		phonebook: MakeMultiPhonebook(),
+		phonebook: MakePhonebook(1, 1*time.Millisecond),
 		GenesisID: "go-test-network-genesis",
 		NetworkID: config.Devtestnet,
 	}
@@ -708,12 +706,12 @@ func TestDupFilter(t *testing.T) {
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
-	netB.phonebook.AddOrUpdatePhonebook("default", &oneEntryPhonebook{addr: addrA})
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default")
 	netB.Start()
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 	counter := &messageCounterHandler{t: t, limit: 1, done: make(chan struct{})}
 	netB.RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{Tag: protocol.AgreementVoteTag, MessageHandler: counter}})
-	debugTag2 := protocol.Tag("D2")
+	debugTag2 := protocol.ProposalPayloadTag
 	counter2 := &messageCounterHandler{t: t, limit: 1, done: make(chan struct{})}
 	netB.RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{Tag: debugTag2, MessageHandler: counter2}})
 
@@ -721,7 +719,7 @@ func TestDupFilter(t *testing.T) {
 	require.True(t, postListen)
 	netC := makeTestFilterWebsocketNode(t, "c")
 	netC.config.GossipFanout = 1
-	netC.phonebook.AddOrUpdatePhonebook("default", &oneEntryPhonebook{addr: addrB})
+	netC.phonebook.ReplacePeerList([]string{addrB}, "default")
 	netC.Start()
 	defer netC.Stop()
 
@@ -787,9 +785,8 @@ func TestGetPeers(t *testing.T) {
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
-	phba := &oneEntryPhonebook{addr: addrA}
-	phbMulti := MakeMultiPhonebook()
-	phbMulti.AddOrUpdatePhonebook("phba", phba)
+	phbMulti := MakePhonebook(1, 1*time.Millisecond)
+	phbMulti.ReplacePeerList([]string{addrA}, "phba")
 	netB.phonebook = phbMulti
 	netB.Start()
 	defer netB.Stop()
@@ -800,12 +797,7 @@ func TestGetPeers(t *testing.T) {
 	waitReady(t, netB, readyTimeout.C)
 	t.Log("b ready")
 
-	ph := ArrayPhonebook{Entries: makePhonebookEntries(netA.config.ConnectionsRateLimitingCount,
-		time.Duration(netA.config.ConnectionsRateLimitingWindowSeconds)*time.Second)}
-
-	data := map[string]phonebookData{"a": phonebookData{}, "b": phonebookData{}, "c": phonebookData{}}
-	ph.Entries.data = data
-	phbMulti.AddOrUpdatePhonebook("ph", &ph)
+	phbMulti.ReplacePeerList([]string{"a", "b", "c"}, "ph")
 
 	//addrB, _ := netB.Address()
 
@@ -858,12 +850,12 @@ func BenchmarkWebsocketNetworkBasic(t *testing.B) {
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
-	netB.phonebook.AddOrUpdatePhonebook("default", &oneEntryPhonebook{addr: addrA})
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default")
 	netB.Start()
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 	returns := make(chan uint64, 100)
 	bhandler := benchmarkHandler{returns}
-	netB.RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{Tag: debugTag, MessageHandler: &bhandler}})
+	netB.RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{Tag: protocol.TxnTag, MessageHandler: &bhandler}})
 
 	readyTimeout := time.NewTimer(2 * time.Second)
 	waitReady(t, netA, readyTimeout.C)
@@ -886,7 +878,7 @@ func BenchmarkWebsocketNetworkBasic(t *testing.B) {
 		}
 		msg := make([]byte, msgSize)
 		binary.LittleEndian.PutUint64(msg, uint64(i))
-		err := netA.Broadcast(context.Background(), debugTag, msg, true, nil)
+		err := netA.Broadcast(context.Background(), protocol.TxnTag, msg, true, nil)
 		if err != nil {
 			t.Errorf("error on broadcast: %v", err)
 			return
@@ -938,7 +930,7 @@ func TestWebsocketNetworkPrio(t *testing.T) {
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
-	netB.phonebook.AddOrUpdatePhonebook("default", &oneEntryPhonebook{addr: addrA})
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default")
 	netB.Start()
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 
@@ -982,8 +974,8 @@ func TestWebsocketNetworkPrioLimit(t *testing.T) {
 	netB := makeTestWebsocketNode(t)
 	netB.SetPrioScheme(&prioB)
 	netB.config.GossipFanout = 1
-	netB.phonebook.AddOrUpdatePhonebook("default", &oneEntryPhonebook{addr: addrA})
-	netB.RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{Tag: debugTag, MessageHandler: counterB}})
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default")
+	netB.RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{Tag: protocol.TxnTag, MessageHandler: counterB}})
 	netB.Start()
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 
@@ -995,8 +987,8 @@ func TestWebsocketNetworkPrioLimit(t *testing.T) {
 	netC := makeTestWebsocketNode(t)
 	netC.SetPrioScheme(&prioC)
 	netC.config.GossipFanout = 1
-	netC.phonebook.AddOrUpdatePhonebook("default", &oneEntryPhonebook{addr: addrA})
-	netC.RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{Tag: debugTag, MessageHandler: counterC}})
+	netC.phonebook.ReplacePeerList([]string{addrA}, "default")
+	netC.RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{Tag: protocol.TxnTag, MessageHandler: counterC}})
 	netC.Start()
 	defer func() { t.Log("stopping C"); netC.Stop(); t.Log("C done") }()
 
@@ -1013,7 +1005,7 @@ func TestWebsocketNetworkPrioLimit(t *testing.T) {
 	}
 	waitReady(t, netA, time.After(time.Second))
 
-	netA.Broadcast(context.Background(), debugTag, nil, true, nil)
+	netA.Broadcast(context.Background(), protocol.TxnTag, nil, true, nil)
 
 	select {
 	case <-counterBdone:
@@ -1063,7 +1055,7 @@ func TestWebsocketNetworkManyIdle(t *testing.T) {
 	for i := 0; i < numClients; i++ {
 		client := makeTestWebsocketNodeWithConfig(t, clientConf)
 		client.config.GossipFanout = 1
-		client.phonebook.AddOrUpdatePhonebook("default", &oneEntryPhonebook{addr: relayAddr})
+		client.phonebook.ReplacePeerList([]string{relayAddr}, "default")
 		client.Start()
 		defer client.Stop()
 
@@ -1176,12 +1168,12 @@ func TestDelayedMessageDrop(t *testing.T) {
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
-	netB.phonebook.AddOrUpdatePhonebook("default", &oneEntryPhonebook{addr: addrA})
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default")
 	netB.Start()
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 	counter := newMessageCounter(t, 5)
 	counterDone := counter.done
-	netB.RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{Tag: debugTag, MessageHandler: counter}})
+	netB.RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{Tag: protocol.TxnTag, MessageHandler: counter}})
 
 	readyTimeout := time.NewTimer(2 * time.Second)
 	waitReady(t, netA, readyTimeout.C)
@@ -1189,7 +1181,7 @@ func TestDelayedMessageDrop(t *testing.T) {
 
 	currentTime := time.Now()
 	for i := 0; i < 10; i++ {
-		err := netA.broadcastWithTimestamp(debugTag, []byte("foo"), currentTime.Add(time.Hour*time.Duration(i-5)))
+		err := netA.broadcastWithTimestamp(protocol.TxnTag, []byte("foo"), currentTime.Add(time.Hour*time.Duration(i-5)))
 		require.NoErrorf(t, err, "No error was expected")
 	}
 
@@ -1206,7 +1198,7 @@ func TestSlowPeerDisconnection(t *testing.T) {
 	wn := &WebsocketNetwork{
 		log:                            log,
 		config:                         defaultConfig,
-		phonebook:                      MakeMultiPhonebook(),
+		phonebook:                      MakePhonebook(1, 1*time.Millisecond),
 		GenesisID:                      "go-test-network-genesis",
 		NetworkID:                      config.Devtestnet,
 		slowWritingPeerMonitorInterval: time.Millisecond * 50,
@@ -1226,7 +1218,7 @@ func TestSlowPeerDisconnection(t *testing.T) {
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
-	netB.phonebook.AddOrUpdatePhonebook("default", &oneEntryPhonebook{addr: addrA})
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default")
 	netB.Start()
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 
@@ -1260,7 +1252,7 @@ func TestForceMessageRelaying(t *testing.T) {
 	wn := &WebsocketNetwork{
 		log:       log,
 		config:    defaultConfig,
-		phonebook: MakeMultiPhonebook(),
+		phonebook: MakePhonebook(1, 1*time.Millisecond),
 		GenesisID: "go-test-network-genesis",
 		NetworkID: config.Devtestnet,
 	}
@@ -1274,7 +1266,7 @@ func TestForceMessageRelaying(t *testing.T) {
 
 	counter := newMessageCounter(t, 5)
 	counterDone := counter.done
-	netA.RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{Tag: debugTag, MessageHandler: counter}})
+	netA.RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{Tag: protocol.TxnTag, MessageHandler: counter}})
 	netA.Start()
 	addrA, postListen := netA.Address()
 	require.Truef(t, postListen, "Listening network failed to start")
@@ -1283,14 +1275,14 @@ func TestForceMessageRelaying(t *testing.T) {
 	noAddressConfig.NetAddress = ""
 	netB := makeTestWebsocketNodeWithConfig(t, noAddressConfig)
 	netB.config.GossipFanout = 1
-	netB.phonebook.AddOrUpdatePhonebook("default", &oneEntryPhonebook{addr: addrA})
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default")
 	netB.Start()
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 
 	noAddressConfig.ForceRelayMessages = true
 	netC := makeTestWebsocketNodeWithConfig(t, noAddressConfig)
 	netC.config.GossipFanout = 1
-	netC.phonebook.AddOrUpdatePhonebook("default", &oneEntryPhonebook{addr: addrA})
+	netC.phonebook.ReplacePeerList([]string{addrA}, "default")
 	netC.Start()
 	defer func() { t.Log("stopping C"); netC.Stop(); t.Log("C done") }()
 
@@ -1301,9 +1293,9 @@ func TestForceMessageRelaying(t *testing.T) {
 
 	// send 5 messages from both netB and netC to netA
 	for i := 0; i < 5; i++ {
-		err := netB.Relay(context.Background(), debugTag, []byte{1, 2, 3}, true, nil)
+		err := netB.Relay(context.Background(), protocol.TxnTag, []byte{1, 2, 3}, true, nil)
 		require.NoError(t, err)
-		err = netC.Relay(context.Background(), debugTag, []byte{1, 2, 3}, true, nil)
+		err = netC.Relay(context.Background(), protocol.TxnTag, []byte{1, 2, 3}, true, nil)
 		require.NoError(t, err)
 	}
 
@@ -1319,13 +1311,13 @@ func TestForceMessageRelaying(t *testing.T) {
 	netA.ClearHandlers()
 	counter = newMessageCounter(t, 10)
 	counterDone = counter.done
-	netA.RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{Tag: debugTag, MessageHandler: counter}})
+	netA.RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{Tag: protocol.TxnTag, MessageHandler: counter}})
 
 	// hack the relayMessages on the netB so that it would start sending messages.
 	netB.relayMessages = true
 	// send additional 10 messages from netB
 	for i := 0; i < 10; i++ {
-		err := netB.Relay(context.Background(), debugTag, []byte{1, 2, 3}, true, nil)
+		err := netB.Relay(context.Background(), protocol.TxnTag, []byte{1, 2, 3}, true, nil)
 		require.NoError(t, err)
 	}
 
@@ -1355,7 +1347,7 @@ func TestCheckProtocolVersionMatch(t *testing.T) {
 	wn := &WebsocketNetwork{
 		log:       log,
 		config:    defaultConfig,
-		phonebook: MakeMultiPhonebook(),
+		phonebook: MakePhonebook(1, 1*time.Millisecond),
 		GenesisID: "go-test-network-genesis",
 		NetworkID: config.Devtestnet,
 	}
@@ -1383,4 +1375,169 @@ func TestCheckProtocolVersionMatch(t *testing.T) {
 	matchingVersion, otherVersion = wn.checkProtocolVersionMatch(header3)
 	require.Equal(t, "", matchingVersion)
 	require.Equal(t, "3", otherVersion)
+}
+
+func handleTopicRequest(msg IncomingMessage) (out OutgoingMessage) {
+
+	topics, err := UnmarshallTopics(msg.Data)
+	if err != nil {
+		return
+	}
+
+	val1b, f := topics.GetValue("val1")
+	if !f {
+		return
+	}
+	val2b, f := topics.GetValue("val2")
+	if !f {
+		return
+	}
+	val1 := int(val1b[0])
+	val2 := int(val2b[0])
+
+	respTopics := Topics{
+		Topic{
+			key:  "value",
+			data: []byte{byte(val1 + val2)},
+		},
+	}
+	return OutgoingMessage{
+		Action: Respond,
+		Tag:    protocol.TopicMsgRespTag,
+		Topics: respTopics,
+	}
+}
+
+// Set up two nodes, test topics send/recieve is working
+func TestWebsocketNetworkTopicRoundtrip(t *testing.T) {
+	var topicMsgReqTag Tag = protocol.UniCatchupReqTag
+	netA := makeTestWebsocketNode(t)
+	netA.config.GossipFanout = 1
+	netA.Start()
+	defer func() { t.Log("stopping A"); netA.Stop(); t.Log("A done") }()
+	netB := makeTestWebsocketNode(t)
+	netB.config.GossipFanout = 1
+	addrA, postListen := netA.Address()
+	require.True(t, postListen)
+	t.Log(addrA)
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default")
+	netB.Start()
+	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
+
+	netB.RegisterHandlers([]TaggedMessageHandler{
+		TaggedMessageHandler{
+			Tag:            topicMsgReqTag,
+			MessageHandler: HandlerFunc(handleTopicRequest),
+		},
+	})
+
+	readyTimeout := time.NewTimer(2 * time.Second)
+	waitReady(t, netA, readyTimeout.C)
+	t.Log("a ready")
+	waitReady(t, netB, readyTimeout.C)
+	t.Log("b ready")
+
+	peerA := netA.peers[0]
+
+	topics := Topics{
+		Topic{
+			key:  "command",
+			data: []byte("add"),
+		},
+		Topic{
+			key:  "val1",
+			data: []byte{1},
+		},
+		Topic{
+			key:  "val2",
+			data: []byte{4},
+		},
+	}
+
+	resp, err := peerA.Request(context.Background(), topicMsgReqTag, topics)
+	assert.NoError(t, err)
+
+	sum, found := resp.Topics.GetValue("value")
+	assert.Equal(t, true, found)
+	assert.Equal(t, 5, int(sum[0]))
+}
+
+// Set up two nodes, have one of them request a certain message tag mask, and verify the other follow that.
+func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
+	netA := makeTestWebsocketNode(t)
+	netA.config.GossipFanout = 1
+	netA.config.EnablePingHandler = false
+
+	netA.Start()
+	defer func() { t.Log("stopping A"); netA.Stop(); t.Log("A done") }()
+	netB := makeTestWebsocketNode(t)
+	netB.config.GossipFanout = 1
+	netB.config.EnablePingHandler = false
+	addrA, postListen := netA.Address()
+	require.True(t, postListen)
+	t.Log(addrA)
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default")
+	netB.Start()
+	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
+
+	incomingMsgSync := deadlock.Mutex{}
+	msgCounters := make(map[protocol.Tag]int)
+	messageArriveWg := sync.WaitGroup{}
+	msgHandler := func(msg IncomingMessage) (out OutgoingMessage) {
+		incomingMsgSync.Lock()
+		defer incomingMsgSync.Unlock()
+		msgCounters[msg.Tag] = msgCounters[msg.Tag] + 1
+		messageArriveWg.Done()
+		return
+	}
+	messageFilterArriveWg := sync.WaitGroup{}
+	messageFilterArriveWg.Add(1)
+	waitMessageArriveHandler := func(msg IncomingMessage) (out OutgoingMessage) {
+		messageFilterArriveWg.Done()
+		return
+	}
+
+	// register all the handlers.
+	taggedHandlers := []TaggedMessageHandler{}
+	for tag := range defaultSendMessageTags {
+		taggedHandlers = append(taggedHandlers, TaggedMessageHandler{
+			Tag:            tag,
+			MessageHandler: HandlerFunc(msgHandler),
+		})
+	}
+	netB.RegisterHandlers(taggedHandlers)
+	netA.RegisterHandlers([]TaggedMessageHandler{
+		TaggedMessageHandler{
+			Tag:            protocol.AgreementVoteTag,
+			MessageHandler: HandlerFunc(waitMessageArriveHandler),
+		}})
+
+	readyTimeout := time.NewTimer(2 * time.Second)
+	waitReady(t, netA, readyTimeout.C)
+	waitReady(t, netB, readyTimeout.C)
+
+	// have netB asking netA to send it only AgreementVoteTag and ProposalPayloadTag
+	netB.Broadcast(context.Background(), protocol.MsgOfInterestTag, MarshallMessageOfInterest([]protocol.Tag{protocol.AgreementVoteTag, protocol.ProposalPayloadTag}), true, nil)
+	// send another message which we can track, so that we'll know that the first message was delivered.
+	netB.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte{0, 1, 2, 3, 4}, true, nil)
+	messageFilterArriveWg.Wait()
+
+	messageArriveWg.Add(5 * 2) // we're expecting exactly 10 messages.
+	// send 5 messages of few types.
+	for i := 0; i < 5; i++ {
+		netA.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte{0, 1, 2, 3, 4}, true, nil)
+		netA.Broadcast(context.Background(), protocol.TxnTag, []byte{0, 1, 2, 3, 4}, true, nil)
+		netA.Broadcast(context.Background(), protocol.UniEnsBlockResTag, []byte{0, 1, 2, 3, 4}, true, nil)
+		netA.Broadcast(context.Background(), protocol.ProposalPayloadTag, []byte{0, 1, 2, 3, 4}, true, nil)
+		netA.Broadcast(context.Background(), protocol.VoteBundleTag, []byte{0, 1, 2, 3, 4}, true, nil)
+	}
+	// wait until all the expected messages arrive.
+	messageArriveWg.Wait()
+	for tag, count := range msgCounters {
+		if tag == protocol.AgreementVoteTag || tag == protocol.ProposalPayloadTag {
+			require.Equal(t, 5, count)
+		} else {
+			require.Equal(t, 0, count)
+		}
+	}
 }
