@@ -16,14 +16,22 @@
 
 package basics
 
-type TealValue struct {
-	Int       uint64
-	ByteSlice []byte
-}
-
 type TealType string
 
-type StateSchema map[TealType]uint64
+type TealValue struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Type      TealType `codec:"vtp"`
+	Int       uint64   `codec:"vit"`
+	ByteSlice []byte   `codec:"vbs"`
+}
+
+type StateSchema struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	NumInt       uint64 `codec:"nit"`
+	NumByteSlice uint64 `codec:"nbs"`
+}
 
 type TealKeyValue map[string]TealValue
 

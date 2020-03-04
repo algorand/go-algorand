@@ -41,9 +41,10 @@ type ApplicationCallTxnFields struct {
 	FunctionArgs  []basics.TealValue `codec:"apfa"`
 	Accounts      []basics.Address   `codec:"apat"`
 
-	LocalStateSchema   map[basics.TealType]uint64 `codec:"apls"`
-	ApprovalProgram    []byte                     `codec:"apap"`
-	StateUpdateProgram []byte                     `codec:"apsu"`
+	LocalStateSchema   basics.StateSchema `codec:"apls"`
+	GlobalStateSchema  basics.StateSchema `codec:"apls"`
+	ApprovalProgram    string             `codec:"apap"`
+	StateUpdateProgram string             `codec:"apsu"`
 
 	// If you add any fields here, remember you MUST modify the Empty
 	// method below!
@@ -62,13 +63,16 @@ func (ac ApplicationCallTxnFields) Empty() bool {
 	if ac.Accounts != nil {
 		return false
 	}
-	if ac.LocalStateSchema != nil {
+	if ac.LocalStateSchema != (basics.StateSchema{}) {
 		return false
 	}
-	if ac.ApprovalProgram != nil {
+	if ac.GlobalStateSchema != (basics.StateSchema{}) {
 		return false
 	}
-	if ac.StateUpdateProgram != nil {
+	if ac.ApprovalProgram != "" {
+		return false
+	}
+	if ac.StateUpdateProgram != "" {
 		return false
 	}
 	return true
@@ -86,35 +90,205 @@ func cloneAppParams(m map[basics.AppIndex]basics.AppParams) map[basics.AppIndex]
 	res := make(map[basics.AppIndex]basics.AppParams, len(m))
 	for k, v := range m {
 		res[k] = v
+		// res[k].GlobalState = res[k].GlobalState.Clone()
 	}
 	return res
 }
 
-func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, spec SpecialAddresses, ad *ApplyData, txnCounter uint64) error {
+func getAppParams(balances Balances, aidx basics.AppIndex) (params basics.AppParams, creator basics.Address, doesNotExist bool, err error) {
+	creator, doesNotExist, err = balances.GetAppCreator(aidx)
+	if err != nil {
+		return
+	}
 
-	switch ac.Action {
-	case FunctionCallAction:
-	case OptInAction:
-	case CloseOutAction:
-	case CreateApplicationAction:
+	// App doesn't exist. Not an error, but return straight away
+	if doesNotExist {
+		return
+	}
+
+	creatorRecord, err := balances.Get(creator, false)
+	if err != nil {
+		return
+	}
+
+	params, ok := creatorRecord.AppParams[aidx]
+	if !ok {
+		// This should never happen! If app exists then we should have
+		// found the creator successfully.
+		// TODO(applications) panic here?
+		err = fmt.Errorf("app %d not found in account %s", aidx, creator.String())
+		return
+	}
+
+	return
+}
+
+func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, spec SpecialAddresses, ad *ApplyData, txnCounter uint64) error {
+	// Keep track of the application ID we're working on
+	appIdx := ac.ApplicationID
+
+	// If we're creating an application, allocate its AppParams
+	if ac.Action == CreateApplicationAction {
+		if ac.ApplicationID != 0 {
+			return fmt.Errorf("txn.ApplicationID must be 0 to create application")
+		}
+
 		// Creating an application. Fetch the creator's balance record
 		record, err := balances.Get(header.Sender, false)
 		if err != nil {
 			return err
 		}
 
-		// Clone local states + app params, so that the state delta
-		// does not refer to the same underlying data structures
+		// Clone local states + app params, so that we have a copy that is
+		// safe to modify
 		record.AppLocalStates = cloneAppLocalStates(record.AppLocalStates)
 		record.AppParams = cloneAppParams(record.AppParams)
 
 		// Allocate the new app params
-		newidx := basics.AppIndex(txnCounter + 1)
-		record.AppParams[newidx] = basics.AppParams{}
+		appIdx = basics.AppIndex(txnCounter + 1)
+		record.AppParams[appIdx] = basics.AppParams{
+			// TODO(applications) fill in this struct
+		}
 
-		// Write back to the creator's balance record
+		// Write back to the creator's balance record and continue
+		err = balances.Put(record)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Fetch the application parameters, if they exist
+	params, creator, doesNotExist, err := getAppParams(balances, appIdx)
+	if err != nil {
+		return err
+	}
+
+	// Closing out our LocalState. Execute the StateUpdate program if it
+	// exists. In this case, we don't execute the ApprovalProgram, since
+	// closing out is always allowed.
+	if ac.Action == CloseOutAction {
+		record, err := balances.Get(header.Sender, false)
+		if err != nil {
+			return err
+		}
+
+		// Ensure sender actually has LocalState allocated for this app.
+		// Can't close out not currently opted in
+		_, ok := record.AppLocalStates[appIdx]
+		if !ok {
+			return fmt.Errorf("cannot close out for app %d, not currently opted in")
+		}
+
+		// Execute the StateUpdate program, before we've deleted the LocalState
+		// for this account
+
+		// TODO(applications)
+		/*
+			err = eval(StateUpdateProgram, &ctxWithAD)
+			if err != nil {
+				return err
+			}
+		*/
+
+		// Deallocate the AppLocalState and finish
+		record.AppLocalStates = cloneAppLocalStates(record.AppLocalStates)
+		delete(record.AppLocalStates, appIdx)
 		return balances.Put(record)
+	}
+
+	// Past this point, the AppParams must exist. FunctionCall, OptIn, Delete,
+	// and Update
+	if doesNotExist {
+		return fmt.Errorf("only closing out is supported for applications that do not exist")
+	}
+
+	// Execute the Approval and StateUpdate programs
+
+	/*
+		// TODO(applications)
+		err, approved = eval(ApprovalProgram, &ctxWithAD)
+		if err != nil {
+			return err
+		}
+
+		if !approved {
+			return fmt.Errorf("ApplicationCall txn rejected by logic")
+		}
+
+		// Ignore failures of the StateUpdateProgram
+		_ = eval(StateUpdateProgram, &ctxWithAD)
+	*/
+
+	switch ac.Action {
+	case CreateApplicationAction:
+		// CreateApplication has created the application at this point,
+		// but we still execute stateful TEAL in order to allow
+		// initialization from txn.ApplicationArgs
+
+	case FunctionCallAction:
+		// FunctionCall is a no-op, since we already executed the
+		// StateUpdateProgram
+
+	case OptInAction:
+		// Opting into the application. Fetch the sender's balance record
+		record, err := balances.Get(header.Sender, false)
+		if err != nil {
+			return err
+		}
+
+		// If they've already opted in, that's an error
+		_, ok := record.AppLocalStates[appIdx]
+		if ok {
+			return fmt.Errorf("account has already opted into app %d", appIdx)
+		}
+
+		// Allocate local state
+		record.AppLocalStates = cloneAppLocalStates(record.AppLocalStates)
+		record.AppLocalStates[appIdx] = basics.LocalState{}
+		err = balances.Put(record)
+		if err != nil {
+			return err
+		}
+
 	case DeleteApplicationAction:
+		// Deleting the application. Fetch the creator's balance record
+		record, err := balances.Get(creator, false)
+		if err != nil {
+			return err
+		}
+
+		// Delete the AppParams
+		record.AppParams = cloneAppParams(record.AppParams)
+		delete(record.AppParams, appIdx)
+		err = balances.Put(record)
+		if err != nil {
+			return err
+		}
+
+	case UpdateApplicationAction:
+		// Ensure user isn't trying to update the local or global state
+		// schemas, because that operation is not allowed
+		if ac.LocalStateSchema != (basics.StateSchema{}) ||
+			ac.GlobalStateSchema != (basics.StateSchema{}) {
+			return fmt.Errorf("local and global state schemas are immutable")
+		}
+
+		// Updating the application. Fetch the creator's balance record
+		record, err := balances.Get(creator, false)
+		if err != nil {
+			return err
+		}
+
+		record.AppParams = cloneAppParams(record.AppParams)
+
+		// Fill in the updated programs
+		record.AppParams.ApprovalProgram = ac.ApprovalProgram
+		record.AppParams.StateUpdateProgram = ac.StateUpdateProgram
+		err = balances.Put(record)
+		if err != nil {
+			return err
+		}
+
 	default:
 		return fmt.Errorf("invalid application action")
 	}
