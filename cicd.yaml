@@ -29,19 +29,19 @@ stages:
     version: '{{ docker.Version.linux-arm64.version }}'
     workDir: /go/src/github.com/algorand/go-algorand
     target: fulltest ci-build
-  build-linux-armv6:
+  build-linux-arm:
   - task: docker.Version
-    name: linux-arm64
+    name: linux-arm
     arch: arm32v6
     configFilePath: scripts/configure_dev-deps.sh
   - task: shell.docker.Ensure
     image: algorand/go-algorand-linux
     arch: arm32v6
-    version: '{{ docker.Version.linux-arm64.version }}'
-    dockerFilePath: docker/build/armv6.Dockerfile
+    version: '{{ docker.Version.linux-arm.version }}'
+    dockerFilePath: docker/build/arm.Dockerfile
   - task: docker.Make
     image: algorand/go-algorand-linux
-    version: '{{ docker.Version.linux-arm64.version }}'
+    version: '{{ docker.Version.linux-arm.version }}'
     workDir: /go/src/github.com/algorand/go-algorand
     target: ci-build
   build-local:
