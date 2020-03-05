@@ -66,7 +66,7 @@ func genConfirmedTx(msg interface{}, round uint64, from, to basics.Address,
 		Payment: &v1.PaymentTransactionType{
 			To: to.String(),
 		},
-		Note: protocol.Encode(nf),
+		Note: protocol.Encode(&nf),
 	}
 }
 

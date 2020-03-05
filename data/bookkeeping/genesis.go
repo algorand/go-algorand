@@ -47,7 +47,7 @@ type Genesis struct {
 	Proto protocol.ConsensusVersion `codec:"proto"`
 
 	// Allocation determines the initial accounts and their state.
-	Allocation []GenesisAllocation `codec:"alloc"`
+	Allocation []GenesisAllocation `codec:"alloc,allocbound=-"`
 
 	// RewardsPool is the address of the rewards pool.
 	RewardsPool string `codec:"rwd"`
@@ -86,6 +86,11 @@ func (genesis Genesis) ID() string {
 // representing, and is purely informational.  State is the initial
 // account state.
 type GenesisAllocation struct {
+	// Unfortunately we forgot to specify omitempty, and now
+	// this struct must be encoded without omitempty for the
+	// Address, Comment, and State fields..
+	_struct struct{} `codec:""`
+
 	Address string             `codec:"addr"`
 	Comment string             `codec:"comment"`
 	State   basics.AccountData `codec:"state"`
@@ -93,5 +98,5 @@ type GenesisAllocation struct {
 
 // ToBeHashed impements the crypto.Hashable interface.
 func (genesis Genesis) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.Genesis, protocol.Encode(genesis)
+	return protocol.Genesis, protocol.Encode(&genesis)
 }

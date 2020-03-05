@@ -308,7 +308,7 @@ func (client RestClient) SuggestedParams() (response v1.TransactionParams, err e
 
 // SendRawTransaction gets a SignedTxn and broadcasts it to the network
 func (client RestClient) SendRawTransaction(txn transactions.SignedTxn) (response v1.TransactionID, err error) {
-	err = client.post(&response, "/transactions", protocol.Encode(txn))
+	err = client.post(&response, "/transactions", protocol.Encode(&txn))
 	return
 }
 
@@ -318,7 +318,7 @@ func (client RestClient) SendRawTransactionGroup(txgroup []transactions.SignedTx
 	// which can be computed by the client anyway..
 	var enc []byte
 	for _, tx := range txgroup {
-		enc = append(enc, protocol.Encode(tx)...)
+		enc = append(enc, protocol.Encode(&tx)...)
 	}
 
 	var response v1.TransactionID

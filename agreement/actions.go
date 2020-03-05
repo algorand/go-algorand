@@ -26,6 +26,7 @@ import (
 )
 
 //go:generate stringer -type=actionType
+//msgp:ignore actionType
 type actionType int
 
 const (

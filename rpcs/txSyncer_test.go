@@ -55,7 +55,6 @@ func makeMockPendingTxAggregate(txCount int) mockPendingTxAggregate {
 			},
 		}
 		stx := tx.Sign(sk)
-		stx.InitCaches()
 		mock.txns[i] = stx
 	}
 	return mock

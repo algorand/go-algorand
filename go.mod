@@ -5,6 +5,7 @@ go 1.12
 require (
 	github.com/algorand/go-codec/codec v0.0.0-20190507210007-269d70b6135d
 	github.com/algorand/go-deadlock v0.0.0-20181221160745-78d8cb5e2759
+	github.com/algorand/msgp v1.1.37
 	github.com/algorand/websocket v1.4.1
 	github.com/aws/aws-sdk-go v1.16.5
 	github.com/cpuguy83/go-md2man v1.0.8 // indirect
@@ -42,9 +43,13 @@ require (
 	github.com/spf13/cobra v0.0.3
 	github.com/spf13/pflag v1.0.3 // indirect
 	github.com/stretchr/testify v1.4.0
-	golang.org/x/crypto v0.0.0-20190605123033-f99c8df09eb5
-	golang.org/x/net v0.0.0-20190620200207-3b0461eec859
-	golang.org/x/sys v0.0.0-20190902133755-9109b7679e13
+	golang.org/x/crypto v0.0.0-20200208060501-ecb85df21340
+	golang.org/x/mod v0.2.0 // indirect
+	golang.org/x/net v0.0.0-20200202094626-16171245cfb2
+	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e // indirect
+	golang.org/x/sys v0.0.0-20200202164722-d101bd2416d5
+	golang.org/x/tools v0.0.0-20200207224406-61798d64f025 // indirect
+	golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543 // indirect
 	google.golang.org/appengine v1.6.1 // indirect
 	gopkg.in/airbrake/gobrake.v2 v2.0.9 // indirect
 	gopkg.in/gemnasium/logrus-airbrake-hook.v2 v2.1.2 // indirect

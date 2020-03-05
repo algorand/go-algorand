@@ -19,6 +19,7 @@ package agreement
 // A stateMachineTag uniquely identifies the type of a state machine.
 //
 // Rounds, periods, and steps may be used to further identify different state machine instances of the same type.
+//msgp:ignore stateMachineTag
 type stateMachineTag int
 
 //go:generate stringer -type=stateMachineTag

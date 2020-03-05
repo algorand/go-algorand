@@ -38,7 +38,7 @@ type MultisigSig struct {
 
 	Version   uint8            `codec:"v"`
 	Threshold uint8            `codec:"thr"`
-	Subsigs   []MultisigSubsig `codec:"subsig"`
+	Subsigs   []MultisigSubsig `codec:"subsig,allocbound=maxMultisig"`
 }
 
 // MultisigPreimageFromPKs makes an empty MultisigSig for a given preimage. It should be renamed.
