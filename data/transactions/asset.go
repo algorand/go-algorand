@@ -95,8 +95,15 @@ func cloneAssetParams(m map[basics.AssetIndex]basics.AssetParams) map[basics.Ass
 }
 
 func getParams(balances Balances, aidx basics.AssetIndex) (params basics.AssetParams, creator basics.Address, err error) {
-	creator, err = balances.GetAssetCreator(aidx)
+	creator, doesNotExist, err := balances.GetAssetCreator(aidx)
 	if err != nil {
+		return
+	}
+
+	// For assets, anywhere we're attempting to fetch parameters, we are
+	// assuming that the asset should exist.
+	if doesNotExist {
+		err = fmt.Errorf("asset %d does not exist or has been deleted", aidx)
 		return
 	}
 

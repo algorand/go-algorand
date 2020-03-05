@@ -340,13 +340,14 @@ func TestArchivalAssets(t *testing.T) {
 	// deleted assets
 	var existing, deleted int
 	for aidx, status := range assetIdxs {
-		c, err := l.GetAssetCreator(aidx)
+		c, doesNotExist, err := l.GetAssetCreator(aidx)
+		require.NoError(t, err)
 		if status {
-			require.NoError(t, err)
+			require.False(t, doesNotExist)
 			require.Equal(t, assetCreators[aidx], c)
 			existing++
 		} else {
-			require.Error(t, err)
+			require.True(t, doesNotExist)
 			require.Equal(t, basics.Address{}, c)
 			deleted++
 		}
@@ -366,13 +367,14 @@ func TestArchivalAssets(t *testing.T) {
 	existing = 0
 	deleted = 0
 	for aidx, status := range assetIdxs {
-		c, err := l.GetAssetCreator(aidx)
+		c, doesNotExist, err := l.GetAssetCreator(aidx)
+		require.NoError(t, err)
 		if status {
-			require.NoError(t, err)
+			require.False(t, doesNotExist)
 			require.Equal(t, assetCreators[aidx], c)
 			existing++
 		} else {
-			require.Error(t, err)
+			require.True(t, doesNotExist)
 			require.Equal(t, basics.Address{}, c)
 			deleted++
 		}
@@ -420,13 +422,14 @@ func TestArchivalAssets(t *testing.T) {
 	existing = 0
 	deleted = 0
 	for aidx, status := range assetIdxs {
-		c, err := l.GetAssetCreator(aidx)
+		c, doesNotExist, err := l.GetAssetCreator(aidx)
+		require.NoError(t, err)
 		if status {
-			require.NoError(t, err)
+			require.False(t, doesNotExist)
 			require.Equal(t, assetCreators[aidx], c)
 			existing++
 		} else {
-			require.Error(t, err)
+			require.True(t, doesNotExist)
 			require.Equal(t, basics.Address{}, c)
 			deleted++
 		}
@@ -456,13 +459,14 @@ func TestArchivalAssets(t *testing.T) {
 	existing = 0
 	deleted = 0
 	for aidx, status := range assetIdxs {
-		c, err := l.GetAssetCreator(aidx)
+		c, doesNotExist, err := l.GetAssetCreator(aidx)
+		require.NoError(t, err)
 		if status {
-			require.NoError(t, err)
+			require.False(t, doesNotExist)
 			require.Equal(t, assetCreators[aidx], c)
 			existing++
 		} else {
-			require.Error(t, err)
+			require.True(t, doesNotExist)
 			require.Equal(t, basics.Address{}, c)
 			deleted++
 		}

@@ -342,10 +342,10 @@ func (au *accountUpdates) listAssets(maxAssetIdx basics.AssetIndex, maxResults u
 	return res, nil
 }
 
-func (au *accountUpdates) getAssetCreatorForRound(rnd basics.Round, aidx basics.AssetIndex) (basics.Address, error) {
+func (au *accountUpdates) getAssetCreatorForRound(rnd basics.Round, aidx basics.AssetIndex) (creator basics.Address, doesNotExist bool, err error) {
 	offset, err := au.roundOffset(rnd)
 	if err != nil {
-		return basics.Address{}, err
+		return basics.Address{}, false, err
 	}
 
 	// If this is the most recent round, au.assets has will have the latest
@@ -355,9 +355,9 @@ func (au *accountUpdates) getAssetCreatorForRound(rnd basics.Round, aidx basics.
 		assetDelta, ok := au.assets[aidx]
 		if ok {
 			if assetDelta.created {
-				return assetDelta.creator, nil
+				return assetDelta.creator, false, nil
 			}
-			return basics.Address{}, fmt.Errorf("asset %v has been deleted", aidx)
+			return basics.Address{}, true, nil
 		}
 	} else {
 		for offset > 0 {
@@ -365,9 +365,9 @@ func (au *accountUpdates) getAssetCreatorForRound(rnd basics.Round, aidx basics.
 			assetDelta, ok := au.assetDeltas[offset][aidx]
 			if ok {
 				if assetDelta.created {
-					return assetDelta.creator, nil
+					return assetDelta.creator, false, nil
 				}
-				return basics.Address{}, fmt.Errorf("asset %v has been deleted", aidx)
+				return basics.Address{}, true, nil
 			}
 		}
 	}

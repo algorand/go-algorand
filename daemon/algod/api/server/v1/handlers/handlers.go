@@ -591,8 +591,8 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 		assets = make(map[uint64]v1.AssetHolding)
 		for curid, holding := range record.Assets {
 			var creator string
-			creatorAddr, err := myLedger.GetAssetCreator(curid)
-			if err == nil {
+			creatorAddr, doesNotExist, err := myLedger.GetAssetCreator(curid)
+			if err == nil && !doesNotExist {
 				creator = creatorAddr.String()
 			} else {
 				// Asset may have been deleted, so we can no
@@ -1015,8 +1015,8 @@ func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request
 
 	ledger := ctx.Node.Ledger()
 	aidx := basics.AssetIndex(queryIndex)
-	creator, err := ledger.GetAssetCreator(aidx)
-	if err != nil {
+	creator, doesNotExist, err := ledger.GetAssetCreator(aidx)
+	if err != nil || doesNotExist {
 		lib.ErrorResponse(w, http.StatusNotFound, err, errFailedToGetAssetCreator, ctx.Log)
 		return
 	}

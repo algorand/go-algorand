@@ -17,8 +17,6 @@
 package ledger
 
 import (
-	"fmt"
-
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -38,7 +36,8 @@ type roundCowParent interface {
 	lookup(basics.Address) (basics.AccountData, error)
 	isDup(basics.Round, basics.Round, transactions.Txid, txlease) (bool, error)
 	txnCounter() uint64
-	getAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error)
+	getAssetCreator(assetIdx basics.AssetIndex) (basics.Address, bool, error)
+	getAppCreator(assetIdx basics.AppIndex) (basics.Address, bool, error)
 }
 
 type roundCowState struct {
@@ -85,13 +84,17 @@ func (cb *roundCowState) rewardsLevel() uint64 {
 	return cb.mods.hdr.RewardsLevel
 }
 
-func (cb *roundCowState) getAssetCreator(aidx basics.AssetIndex) (basics.Address, error) {
+func (cb *roundCowState) getAppCreator(aidx basics.AppIndex) (basics.Address, bool, error) {
+	return cb.getAssetCreator(basics.AssetIndex(aidx))
+}
+
+func (cb *roundCowState) getAssetCreator(aidx basics.AssetIndex) (basics.Address, bool, error) {
 	delta, ok := cb.mods.assets[aidx]
 	if ok {
 		if delta.created {
-			return delta.creator, nil
+			return delta.creator, false, nil
 		}
-		return basics.Address{}, fmt.Errorf("asset %d has been deleted", aidx)
+		return basics.Address{}, true, nil
 	}
 	return cb.lookupParent.getAssetCreator(aidx)
 }

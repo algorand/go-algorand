@@ -57,7 +57,7 @@ type Balances interface {
 
 	// GetAssetCreator gets the address of the account whose balance record
 	// contains the asset params
-	GetAssetCreator(aidx basics.AssetIndex) (basics.Address, error)
+	GetAssetCreator(aidx basics.AssetIndex) (basics.Address, bool, error)
 
 	GetAppCreator(aidx basics.AppIndex) (basics.Address, bool, error)
 

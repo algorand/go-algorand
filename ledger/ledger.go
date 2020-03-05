@@ -283,15 +283,21 @@ func (l *Ledger) notifyCommit(r basics.Round) basics.Round {
 // GetAssetCreatorForRound looks up the asset creator given the numerical asset
 // ID. This is necessary so that we can retrieve the AssetParams from the
 // creator's balance record.
-func (l *Ledger) GetAssetCreatorForRound(rnd basics.Round, assetIdx basics.AssetIndex) (basics.Address, error) {
+func (l *Ledger) GetAssetCreatorForRound(rnd basics.Round, assetIdx basics.AssetIndex) (basics.Address, bool, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 	return l.accts.getAssetCreatorForRound(rnd, assetIdx)
 }
 
+func (l *Ledger) GetAppCreatorForRound(rnd basics.Round, appIdx basics.AppIndex) (basics.Address, bool, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.accts.getAssetCreatorForRound(rnd, basics.AssetIndex(appIdx))
+}
+
 // GetAssetCreator is like GetAssetCreatorForRound, but for the latest round
 // and race free with respect to ledger.Latest()
-func (l *Ledger) GetAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error) {
+func (l *Ledger) GetAssetCreator(assetIdx basics.AssetIndex) (basics.Address, bool, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 	return l.accts.getAssetCreatorForRound(l.blockQ.latest(), assetIdx)

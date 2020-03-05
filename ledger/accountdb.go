@@ -179,13 +179,14 @@ func (qs *accountsDbQueries) listAssets(maxAssetIdx basics.AssetIndex, maxResult
 	return
 }
 
-func (qs *accountsDbQueries) lookupAssetCreator(assetIdx basics.AssetIndex) (addr basics.Address, err error) {
+func (qs *accountsDbQueries) lookupAssetCreator(assetIdx basics.AssetIndex) (addr basics.Address, doesNotExist bool, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
 		err := qs.lookupAssetCreatorStmt.QueryRow(assetIdx).Scan(&buf)
 
 		if err == sql.ErrNoRows {
-			err = fmt.Errorf("asset %d does not exist or has been deleted", assetIdx)
+			doesNotExist = true
+			return nil
 		}
 
 		if err != nil {
