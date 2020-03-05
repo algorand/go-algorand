@@ -1694,8 +1694,8 @@ func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddre
 		time.Duration(config.ConnectionsRateLimitingWindowSeconds)*time.Second)
 	phonebook.ReplacePeerList(phonebookAddressees, config.DNSBootstrapID)
 	wn = &WebsocketNetwork{
-		log: log,
-		config: config,
+		log:       log,
+		config:    config,
 		phonebook: phonebook,
 		GenesisID: genesisID,
 		NetworkID: networkID,

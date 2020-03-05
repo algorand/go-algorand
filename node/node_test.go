@@ -55,13 +55,7 @@ var defaultConfig = config.Local{
 	IncomingConnectionsLimit: -1,
 }
 
-func setupFullNodes(
-	t *testing.T, 
-	proto protocol.ConsensusVersion,
-	verificationPool execpool.BacklogPool,
-	customConsensus config.ConsensusProtocols,
-	willDelayStartFirstNode bool) ([]*AlgorandFullNode, []string, []string) {
-	
+func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationPool execpool.BacklogPool, customConsensus config.ConsensusProtocols) ([]*AlgorandFullNode, []string, []string) {
 	util.RaiseRlimit(1000)
 	f, _ := os.Create(t.Name() + ".log")
 	logging.Base().SetJSONFormatter()
@@ -168,15 +162,6 @@ func setupFullNodes(
 	}
 
 	for i := range nodes {
-		// prepare the phonebook addresses
-		if willDelayStartFirstNode {
-			// connectPeers(nodes[1:])
-			
-			// delayStartNode(nodes[0], nodes[1:], 20*time.Second)
-		} else {
-			// connectPeers(nodes)
-		}
-		
 		rootDirectory := rootDirs[i]
 		cfg, err := config.LoadConfigFromDisk(rootDirectory)
 		require.NoError(t, err)
@@ -195,7 +180,7 @@ func TestSyncingFullNode(t *testing.T) {
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
-	nodes, wallets, rootDirs := setupFullNodes(t, protocol.ConsensusCurrentVersion, backlogPool, nil, true)
+	nodes, wallets, rootDirs := setupFullNodes(t, protocol.ConsensusCurrentVersion, backlogPool, nil)
 	for i := 0; i < len(nodes); i++ {
 		defer os.Remove(wallets[i])
 		defer os.RemoveAll(rootDirs[i])
@@ -252,7 +237,7 @@ func TestInitialSync(t *testing.T) {
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
-	nodes, wallets, rootdirs := setupFullNodes(t, protocol.ConsensusCurrentVersion, backlogPool, nil, true)
+	nodes, wallets, rootdirs := setupFullNodes(t, protocol.ConsensusCurrentVersion, backlogPool, nil)
 	for i := 0; i < len(nodes); i++ {
 		defer os.Remove(wallets[i])
 		defer os.RemoveAll(rootdirs[i])
@@ -319,7 +304,7 @@ func TestSimpleUpgrade(t *testing.T) {
 	testParams1.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	configurableConsensus[consensusTest1] = testParams1
 
-	nodes, wallets, rootDirs := setupFullNodes(t, consensusTest0, backlogPool, configurableConsensus, true)
+	nodes, wallets, rootDirs := setupFullNodes(t, consensusTest0, backlogPool, configurableConsensus)
 	for i := 0; i < len(nodes); i++ {
 		defer os.Remove(wallets[i])
 		defer os.RemoveAll(rootDirs[i])

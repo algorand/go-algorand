@@ -84,8 +84,8 @@ type AlgorandFullNode struct {
 	cancelCtx context.CancelFunc
 	config    config.Local
 
-	ledger    *data.Ledger
-	net       network.GossipNode
+	ledger *data.Ledger
+	net    network.GossipNode
 
 	transactionPool *pools.TransactionPool
 	txHandler       *data.TxHandler

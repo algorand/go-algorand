@@ -264,7 +264,7 @@ func main() {
 			log.Debugf("Cannot load static phonebook: %v", err)
 		}
 	}
-	
+
 	err = s.Initialize(cfg, phonebookAddressees)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -275,7 +275,7 @@ func main() {
 	if *initAndExit {
 		return
 	}
-	
+
 	deadlockState := "enabled"
 	if deadlock.Opts.Disable {
 		deadlockState = "disabled"
