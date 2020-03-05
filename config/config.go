@@ -243,6 +243,16 @@ type ConsensusParams struct {
 // consensus protocol.
 var Consensus map[protocol.ConsensusVersion]ConsensusParams
 
+// MaxVoteThreshold is the largest threshold for a bundle over all supported
+// consensus protocols, used for decoding purposes.
+var MaxVoteThreshold int
+
+func maybeMaxVoteThreshold(t uint64) {
+	if int(t) > MaxVoteThreshold {
+		MaxVoteThreshold = int(t)
+	}
+}
+
 func init() {
 	Consensus = make(map[protocol.ConsensusVersion]ConsensusParams)
 
@@ -260,6 +270,15 @@ func init() {
 	algoSmallLambda, err := strconv.ParseInt(os.Getenv("ALGOSMALLLAMBDAMSEC"), 10, 64)
 	if err == nil {
 		Protocol.SmallLambda = time.Duration(algoSmallLambda) * time.Millisecond
+	}
+
+	for _, p := range Consensus {
+		maybeMaxVoteThreshold(p.SoftCommitteeThreshold)
+		maybeMaxVoteThreshold(p.CertCommitteeThreshold)
+		maybeMaxVoteThreshold(p.NextCommitteeThreshold)
+		maybeMaxVoteThreshold(p.LateCommitteeThreshold)
+		maybeMaxVoteThreshold(p.RedoCommitteeThreshold)
+		maybeMaxVoteThreshold(p.DownCommitteeThreshold)
 	}
 }
 

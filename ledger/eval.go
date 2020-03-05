@@ -382,7 +382,6 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 		if !txn.Txn.Group.IsZero() {
 			txWithoutGroup := txn.Txn
 			txWithoutGroup.Group = crypto.Digest{}
-			txWithoutGroup.ResetCaches()
 
 			group.TxGroupHashes = append(group.TxGroupHashes, crypto.HashObj(txWithoutGroup))
 		} else if len(txgroup) > 1 {
@@ -497,7 +496,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 		txibs = append(txibs, txib)
 
 		if eval.validate {
-			groupTxBytes += len(protocol.Encode(txib))
+			groupTxBytes += len(protocol.Encode(&txib))
 			if eval.blockTxBytes+groupTxBytes > eval.proto.MaxTxnBytesPerBlock {
 				return ErrNoSpace
 			}
@@ -512,7 +511,6 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 		if !txad.SignedTxn.Txn.Group.IsZero() {
 			txWithoutGroup := txad.SignedTxn.Txn
 			txWithoutGroup.Group = crypto.Digest{}
-			txWithoutGroup.ResetCaches()
 
 			group.TxGroupHashes = append(group.TxGroupHashes, crypto.HashObj(txWithoutGroup))
 		} else if len(txgroup) > 1 {
