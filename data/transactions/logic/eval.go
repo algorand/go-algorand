@@ -42,7 +42,7 @@ import (
 )
 
 // EvalMaxVersion is the max version we can interpret and run
-const EvalMaxVersion = 1
+const EvalMaxVersion = LogicVersion
 
 // EvalMaxScratchSize is the maximum number of scratch slots.
 const EvalMaxScratchSize = 255
@@ -102,6 +102,9 @@ type EvalParams struct {
 	ledger LedgerForLogic
 }
 
+type opEvalFunc func(cx *evalContext)
+type opCheckFunc func(cx *evalContext) int
+
 const (
 	// RunModeSignature is TEAL in LogicSig execution
 	RunModeSignature = 1 << iota
@@ -148,8 +151,6 @@ type evalContext struct {
 
 	programHash crypto.Digest
 }
-
-type opFunc func(cx *evalContext)
 
 // StackType describes the type of a value on the operand stack
 type StackType byte
@@ -333,162 +334,6 @@ func Check(program []byte, params EvalParams) (cost int, err error) {
 	return
 }
 
-// OpSpec defines one byte opcode
-type OpSpec struct {
-	Opcode  byte
-	Name    string
-	op      opFunc     // evaluate the op
-	Args    StackTypes // what gets popped from the stack
-	Returns StackTypes // what gets pushed to the stack
-	Version uint64     // TEAL version opcode introduced
-	Modes   uint64     // if non-zero, then (mode & Modes) != 0 to allow
-}
-
-var oneBytes = StackTypes{StackBytes}
-var threeBytes = StackTypes{StackBytes, StackBytes, StackBytes}
-var oneInt = StackTypes{StackUint64}
-var twoInts = StackTypes{StackUint64, StackUint64}
-var oneAny = StackTypes{StackAny}
-var twoAny = StackTypes{StackAny, StackAny}
-var threeInts = StackTypes{StackUint64, StackUint64, StackUint64}
-
-// OpSpecs is the table of operations that can be assembled and evaluated.
-//
-// Any changes should be reflected in README.md which serves as the language spec.
-var OpSpecs = []OpSpec{
-	{0x00, "err", opErr, nil, nil, 1, modeAny},
-	{0x01, "sha256", opSHA256, oneBytes, oneBytes, 1, modeAny},
-	{0x02, "keccak256", opKeccak256, oneBytes, oneBytes, 1, modeAny},
-	{0x03, "sha512_256", opSHA512_256, oneBytes, oneBytes, 1, modeAny},
-	{0x04, "ed25519verify", opEd25519verify, threeBytes, oneInt, 1, RunModeSignature},
-	{0x08, "+", opPlus, twoInts, oneInt, 1, modeAny},
-	{0x09, "-", opMinus, twoInts, oneInt, 1, modeAny},
-	{0x0a, "/", opDiv, twoInts, oneInt, 1, modeAny},
-	{0x0b, "*", opMul, twoInts, oneInt, 1, modeAny},
-	{0x0c, "<", opLt, twoInts, oneInt, 1, modeAny},
-	{0x0d, ">", opGt, twoInts, oneInt, 1, modeAny},
-	{0x0e, "<=", opLe, twoInts, oneInt, 1, modeAny},
-	{0x0f, ">=", opGe, twoInts, oneInt, 1, modeAny},
-	{0x10, "&&", opAnd, twoInts, oneInt, 1, modeAny},
-	{0x11, "||", opOr, twoInts, oneInt, 1, modeAny},
-	{0x12, "==", opEq, twoAny, oneInt, 1, modeAny},
-	{0x13, "!=", opNeq, twoAny, oneInt, 1, modeAny},
-	{0x14, "!", opNot, oneInt, oneInt, 1, modeAny},
-	{0x15, "len", opLen, oneBytes, oneInt, 1, modeAny},
-	{0x16, "itob", opItob, oneInt, oneBytes, 1, modeAny},
-	{0x17, "btoi", opBtoi, oneBytes, oneInt, 1, modeAny},
-	{0x18, "%", opModulo, twoInts, oneInt, 1, modeAny},
-	{0x19, "|", opBitOr, twoInts, oneInt, 1, modeAny},
-	{0x1a, "&", opBitAnd, twoInts, oneInt, 1, modeAny},
-	{0x1b, "^", opBitXor, twoInts, oneInt, 1, modeAny},
-	{0x1c, "~", opBitNot, oneInt, oneInt, 1, modeAny},
-	{0x1d, "mulw", opMulw, twoInts, twoInts, 1, modeAny},
-
-	{0x20, "intcblock", opIntConstBlock, nil, nil, 1, modeAny},
-	{0x21, "intc", opIntConstLoad, nil, oneInt, 1, modeAny},
-	{0x22, "intc_0", opIntConst0, nil, oneInt, 1, modeAny},
-	{0x23, "intc_1", opIntConst1, nil, oneInt, 1, modeAny},
-	{0x24, "intc_2", opIntConst2, nil, oneInt, 1, modeAny},
-	{0x25, "intc_3", opIntConst3, nil, oneInt, 1, modeAny},
-	{0x26, "bytecblock", opByteConstBlock, nil, nil, 1, modeAny},
-	{0x27, "bytec", opByteConstLoad, nil, oneBytes, 1, modeAny},
-	{0x28, "bytec_0", opByteConst0, nil, oneBytes, 1, modeAny},
-	{0x29, "bytec_1", opByteConst1, nil, oneBytes, 1, modeAny},
-	{0x2a, "bytec_2", opByteConst2, nil, oneBytes, 1, modeAny},
-	{0x2b, "bytec_3", opByteConst3, nil, oneBytes, 1, modeAny},
-	{0x2c, "arg", opArg, nil, oneBytes, 1, modeAny},
-	{0x2d, "arg_0", opArg0, nil, oneBytes, 1, modeAny},
-	{0x2e, "arg_1", opArg1, nil, oneBytes, 1, modeAny},
-	{0x2f, "arg_2", opArg2, nil, oneBytes, 1, modeAny},
-	{0x30, "arg_3", opArg3, nil, oneBytes, 1, modeAny},
-	{0x31, "txn", opTxn, nil, oneAny, 1, modeAny},       // TODO: check output type by subfield retrieved in txn,global,account,txid
-	{0x32, "global", opGlobal, nil, oneAny, 1, modeAny}, // TODO: check output type against specific field
-	{0x33, "gtxn", opGtxn, nil, oneAny, 1, modeAny},     // TODO: check output type by subfield retrieved in txn,global,account,txid
-	{0x34, "load", opLoad, nil, oneAny, 1, modeAny},
-	{0x35, "store", opStore, oneAny, nil, 1, modeAny},
-
-	{0x40, "bnz", opBnz, oneInt, nil, 1, modeAny},
-	{0x48, "pop", opPop, oneAny, nil, 1, modeAny},
-	{0x49, "dup", opDup, oneAny, twoAny, 1, modeAny},
-
-	{0x60, "balance", opBalance, oneInt, oneInt, 2, modeStatefull},
-	{0x61, "app_opted_in", opAppCheckOptedIn, twoInts, oneInt, 2, modeStatefull},
-	{0x62, "app_read_local", opAppReadLocalState, oneBytes.plus(twoInts), oneInt.plus(oneAny), 2, modeStatefull},
-	{0x63, "app_read_global", opAppReadGlobalState, oneBytes, oneInt.plus(oneAny), 2, modeStatefull},
-	{0x64, "app_write_local", opAppWriteLocalState, oneAny.plus(oneBytes).plus(oneInt), nil, 2, RunModeApplicationState},
-	{0x65, "app_write_global", opAppWriteGlobalState, oneAny.plus(oneBytes), nil, 2, RunModeApplicationState},
-	{0x66, "app_read_other_global", opAppReadOtherGlobalState, oneBytes.plus(twoInts), oneInt.plus(oneAny), 2, modeStatefull},
-	{0x67, "app_arg", opAppArg, nil, oneBytes, 2, modeStatefull},
-	{0x68, "app_arg_0", opAppArg0, nil, oneBytes, 2, modeStatefull},
-	{0x69, "app_arg_1", opAppArg1, nil, oneBytes, 2, modeStatefull},
-	{0x6A, "app_arg_2", opAppArg2, nil, oneBytes, 2, modeStatefull},
-	{0x6B, "app_arg_3", opAppArg3, nil, oneBytes, 2, modeStatefull},
-
-	{0x70, "asset_read_holding", opAssetReadHolding, threeInts, oneInt.plus(oneAny), 2, modeStatefull},
-	{0x71, "asset_read_params", opAssetReadParams, threeInts, oneInt.plus(oneAny), 2, modeStatefull},
-}
-
-// direct opcode bytes
-var opsByOpcode []OpSpec
-var opsByName map[string]OpSpec
-
-type opCheckFunc func(cx *evalContext) int
-
-// opSize records the length in bytes for an op that is constant-length but not length 1
-type opSize struct {
-	name      string
-	cost      int
-	size      int
-	checkFunc opCheckFunc
-}
-
-// opSizes records the size of ops that are constant size but not 1
-// Also records time 'cost' and custom check functions.
-var opSizes = []opSize{
-	{"sha256", 7, 1, nil},
-	{"keccak256", 26, 1, nil},
-	{"sha512_256", 9, 1, nil},
-	{"ed25519verify", 1900, 1, nil},
-	{"bnz", 1, 3, checkBnz},
-	{"intc", 1, 2, nil},
-	{"bytec", 1, 2, nil},
-	{"arg", 1, 2, nil},
-	{"txn", 1, 2, nil},
-	{"gtxn", 1, 3, nil},
-	{"global", 1, 2, nil},
-	{"intcblock", 1, 0, checkIntConstBlock},
-	{"bytecblock", 1, 0, checkByteConstBlock},
-	{"load", 1, 2, nil},
-	{"store", 1, 2, nil},
-}
-
-var opSizeByOpcode []opSize
-
-func init() {
-	opsByOpcode = make([]OpSpec, 256)
-	for _, oi := range OpSpecs {
-		opsByOpcode[oi.Opcode] = oi
-	}
-	opsByName = make(map[string]OpSpec, 256)
-	for _, oi := range OpSpecs {
-		opsByName[oi.Name] = oi
-	}
-
-	opSizeByName := make(map[string]*opSize, len(opSizes))
-	for i, oz := range opSizes {
-		opSizeByName[oz.name] = &opSizes[i]
-	}
-	opSizeByOpcode = make([]opSize, 256)
-	for _, oi := range OpSpecs {
-		oz := opSizeByName[oi.Name]
-		if oz == nil {
-			opSizeByOpcode[oi.Opcode] = opSize{oi.Name, 1, 1, nil}
-		} else {
-			opSizeByOpcode[oi.Opcode] = *oz
-		}
-	}
-}
-
 func opCompat(expected, got StackType) bool {
 	if expected == StackAny {
 		return true
@@ -508,45 +353,46 @@ const MaxStackDepth = 1000
 
 func (cx *evalContext) step() {
 	opcode := cx.program[cx.pc]
-	if opsByOpcode[opcode].op == nil {
-		cx.err = fmt.Errorf("%3d illegal opcode %02x", cx.pc, opcode)
+	spec := opsByOpcode[cx.version][opcode]
+	if spec.op == nil {
+		cx.err = fmt.Errorf("%3d illegal opcode 0x%02x", cx.pc, opcode)
 		return
 	}
-	if (cx.RunModeFlags & opsByOpcode[opcode].Modes) == 0 {
-		cx.err = fmt.Errorf("%s not allowed in current mode", opsByOpcode[opcode].Name)
+	if (cx.RunModeFlags & spec.Modes) == 0 {
+		cx.err = fmt.Errorf("%s not allowed in current mode", spec.Name)
 		return
 	}
-	if opsByOpcode[opcode].Version > cx.version {
-		cx.err = fmt.Errorf("%s not allowed in program version %d", opsByOpcode[opcode].Name, cx.version)
+	if spec.Version > cx.version {
+		cx.err = fmt.Errorf("%s not allowed in program version %d", spec.Name, cx.version)
 		return
 	}
-	argsTypes := opsByOpcode[opcode].Args
+	argsTypes := spec.Args
 	if len(argsTypes) >= 0 {
 		// check args for stack underflow and types
 		if len(cx.stack) < len(argsTypes) {
-			cx.err = fmt.Errorf("stack underflow in %s", opsByOpcode[opcode].Name)
+			cx.err = fmt.Errorf("stack underflow in %s", spec.Name)
 			return
 		}
 		first := len(cx.stack) - len(argsTypes)
 		for i, argType := range argsTypes {
 			if !opCompat(argType, cx.stack[first+i].argType()) {
-				cx.err = fmt.Errorf("%s arg %d wanted %s but got %s", opsByOpcode[opcode].Name, i, argType.String(), cx.stack[first+i].typeName())
+				cx.err = fmt.Errorf("%s arg %d wanted %s but got %s", spec.Name, i, argType.String(), cx.stack[first+i].typeName())
 				return
 			}
 		}
 	}
-	oz := opSizeByOpcode[opcode]
+	oz := spec.opSize
 	if oz.size != 0 && (cx.pc+oz.size > len(cx.program)) {
-		cx.err = fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, opsByOpcode[opcode].Name)
+		cx.err = fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, spec.Name)
 		return
 	}
 	cx.cost += oz.cost
-	opsByOpcode[opcode].op(cx)
+	spec.op(cx)
 	if cx.Trace != nil {
 		if len(cx.stack) == 0 {
-			fmt.Fprintf(cx.Trace, "%3d %s => %s\n", cx.pc, opsByOpcode[opcode].Name, "<empty stack>")
+			fmt.Fprintf(cx.Trace, "%3d %s => %s\n", cx.pc, spec.Name, "<empty stack>")
 		} else {
-			fmt.Fprintf(cx.Trace, "%3d %s => %s\n", cx.pc, opsByOpcode[opcode].Name, cx.stack[len(cx.stack)-1].String())
+			fmt.Fprintf(cx.Trace, "%3d %s => %s\n", cx.pc, spec.Name, cx.stack[len(cx.stack)-1].String())
 		}
 	}
 	if cx.err != nil {
@@ -566,13 +412,14 @@ func (cx *evalContext) step() {
 
 func (cx *evalContext) checkStep() (cost int) {
 	opcode := cx.program[cx.pc]
-	if opsByOpcode[opcode].op == nil {
-		cx.err = fmt.Errorf("%3d illegal opcode %02x", cx.pc, opcode)
+	spec := opsByOpcode[cx.version][opcode]
+	if spec.op == nil {
+		cx.err = fmt.Errorf("%3d illegal opcode 0x%02x", cx.pc, opcode)
 		return 1
 	}
-	oz := opSizeByOpcode[opcode]
+	oz := spec.opSize
 	if oz.size != 0 && (cx.pc+oz.size > len(cx.program)) {
-		cx.err = fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, opsByOpcode[opcode].Name)
+		cx.err = fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, spec.Name)
 		return 1
 	}
 	if oz.checkFunc != nil {
@@ -1157,6 +1004,30 @@ func opGtxn(cx *evalContext) {
 	}
 	cx.stack = append(cx.stack, sv)
 	cx.nextpc = cx.pc + 3
+}
+
+func opGtxn2(cx *evalContext) {
+	gtxid := int(uint(cx.program[cx.pc+1]))
+	if gtxid >= len(cx.TxnGroup) {
+		cx.err = fmt.Errorf("gtxn lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
+		return
+	}
+	tx := &cx.TxnGroup[gtxid].Txn
+	field := uint64(cx.program[cx.pc+2])
+	var sv stackValue
+	var err error
+	if TxnField(field) == GroupIndex {
+		// GroupIndex; asking this when we just specified it is _dumb_, but oh well
+		sv.Uint = uint64(gtxid)
+	} else {
+		sv, err = cx.txnFieldToStack(tx, field)
+		if err != nil {
+			cx.err = err
+			return
+		}
+	}
+	cx.stack = append(cx.stack, sv)
+	cx.nextpc = cx.pc + 4
 }
 
 var zeroAddress basics.Address

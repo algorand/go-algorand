@@ -373,7 +373,7 @@ TypeEnum mapping:
 | 3 | acfg | AssetConfig |
 | 4 | axfer | AssetTransfer |
 | 5 | afrz | AssetFreeze |
-| 6 | appl | invalid type name |
+| 6 | appl | ApplicationCall |
 
 
 FirstValidTime causes the program to fail. The field is reserved for future use.
@@ -398,7 +398,7 @@ FirstValidTime causes the program to fail. The field is reserved for future use.
 
 ## gtxn
 
-- Opcode: 0x33 {uint8 transaction group index}{uint8 transaction field index}
+- Opcode: 0x33 {uint8 transaction group index}{uint8 transaction field index}{uint8 transaction field array index}
 - Pops: _None_
 - Pushes: any
 - push field to the stack from a transaction in the current transaction group
@@ -501,7 +501,7 @@ params: state key (top of the stack), application id, account index. Return: is_
 
 ## app_arg
 
-- Opcode: 0x67
+- Opcode: 0x67 {uint8 arg index N}
 - Pops: _None_
 - Pushes: []byte
 - push ApplicationArgs[N] value to stack by index

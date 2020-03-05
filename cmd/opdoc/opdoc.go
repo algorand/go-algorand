@@ -120,8 +120,9 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec) (err error) {
 
 func opsToMarkdown(out io.Writer) (err error) {
 	out.Write([]byte("# Opcodes\n\nOps have a 'cost' of 1 unless otherwise specified.\n\n"))
-	for i := range logic.OpSpecs {
-		err = opToMarkdown(out, &logic.OpSpecs[i])
+	opSpecs := logic.OpcodesByVersion(logic.LogicVersion)
+	for _, spec := range opSpecs {
+		err = opToMarkdown(out, &spec)
 		if err != nil {
 			return
 		}
@@ -197,8 +198,9 @@ func argEnumTypes(name string) string {
 }
 
 func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
-	records := make([]OpRecord, len(logic.OpSpecs))
-	for i, spec := range logic.OpSpecs {
+	opSpecs := logic.OpcodesByVersion(logic.LogicVersion)
+	records := make([]OpRecord, len(opSpecs))
+	for i, spec := range opSpecs {
 		records[i].Opcode = spec.Opcode
 		records[i].Name = spec.Name
 		records[i].Args = typeString(spec.Args)
@@ -213,7 +215,7 @@ func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
 		records[i].Groups = opGroups[spec.Name]
 	}
 	return &LanguageSpec{
-		EvalMaxVersion:  logic.EvalMaxVersion,
+		EvalMaxVersion:  logic.LogicVersion,
 		LogicSigVersion: config.Consensus[protocol.ConsensusCurrentVersion].LogicSigVersion,
 		Ops:             records,
 	}
