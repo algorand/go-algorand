@@ -18,13 +18,8 @@ package basics
 
 type TealType string
 
-type TealValue struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+type TealValue []byte
 
-	Type      TealType `codec:"vtp"`
-	Int       uint64   `codec:"vit"`
-	ByteSlice []byte   `codec:"vbs"`
-}
 
 type StateSchema struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`

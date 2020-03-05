@@ -76,6 +76,11 @@ func (sv *stackValue) String() string {
 	return fmt.Sprintf("%d 0x%x", sv.Uint, sv.Uint)
 }
 
+// LedgerForLogic represents ledger API for Statefull TEAL program
+type LedgerForLogic interface {
+	BalanceRecord(addr basics.Address) (*basics.BalanceRecord, error)
+}
+
 // EvalParams contains data that comes into condition evaluation.
 type EvalParams struct {
 	// the transaction being evaluated
@@ -91,7 +96,28 @@ type EvalParams struct {
 	GroupIndex int
 
 	Logger logging.Logger
+
+	RunModeFlags uint64
+
+	ledger LedgerForLogic
 }
+
+const (
+	// RunModeSignature is TEAL in LogicSig execution
+	RunModeSignature = 1 << iota
+
+	// RunModeApplicationApproval is TEAL in application approval context
+	RunModeApplicationApproval
+
+	// RunModeApplicationState is TEAL in application state-update context
+	RunModeApplicationState
+
+	// local constant, run in statefull mode
+	modeStatefull = RunModeApplicationApproval | RunModeApplicationState
+
+	// local constant, run in any mode
+	modeAny = RunModeSignature | RunModeApplicationApproval | RunModeApplicationState
+)
 
 func (ep EvalParams) log() logging.Logger {
 	if ep.Logger != nil {
@@ -128,6 +154,9 @@ type opFunc func(cx *evalContext)
 // StackType describes the type of a value on the operand stack
 type StackType byte
 
+// StackTypes is an alias for a list of StackType with syntactic sugar
+type StackTypes []StackType
+
 // StackNone in an OpSpec shows that the op pops or yields nothing
 const StackNone StackType = 0
 
@@ -152,6 +181,10 @@ func (st StackType) String() string {
 		return "[]byte"
 	}
 	return "internal error, unknown type"
+}
+
+func (sts StackTypes) plus(other StackTypes) StackTypes {
+	return append(sts, other...)
 }
 
 // PanicError wraps a recover() catching a panic()
@@ -304,80 +337,100 @@ func Check(program []byte, params EvalParams) (cost int, err error) {
 type OpSpec struct {
 	Opcode  byte
 	Name    string
-	op      opFunc      // evaluate the op
-	Args    []StackType // what gets popped from the stack
-	Returns []StackType // what gets pushed to the stack
+	op      opFunc     // evaluate the op
+	Args    StackTypes // what gets popped from the stack
+	Returns StackTypes // what gets pushed to the stack
+	Version uint64     // TEAL version opcode introduced
+	Modes   uint64     // if non-zero, then (mode & Modes) != 0 to allow
 }
 
-var oneBytes = []StackType{StackBytes}
-var threeBytes = []StackType{StackBytes, StackBytes, StackBytes}
-var oneInt = []StackType{StackUint64}
-var twoInts = []StackType{StackUint64, StackUint64}
-var oneAny = []StackType{StackAny}
-var twoAny = []StackType{StackAny, StackAny}
+var oneBytes = StackTypes{StackBytes}
+var threeBytes = StackTypes{StackBytes, StackBytes, StackBytes}
+var oneInt = StackTypes{StackUint64}
+var twoInts = StackTypes{StackUint64, StackUint64}
+var oneAny = StackTypes{StackAny}
+var twoAny = StackTypes{StackAny, StackAny}
+var threeInts = StackTypes{StackUint64, StackUint64, StackUint64}
 
 // OpSpecs is the table of operations that can be assembled and evaluated.
 //
 // Any changes should be reflected in README.md which serves as the language spec.
 var OpSpecs = []OpSpec{
-	{0x00, "err", opErr, nil, nil},
-	{0x01, "sha256", opSHA256, oneBytes, oneBytes},
-	{0x02, "keccak256", opKeccak256, oneBytes, oneBytes},
-	{0x03, "sha512_256", opSHA512_256, oneBytes, oneBytes},
-	{0x04, "ed25519verify", opEd25519verify, threeBytes, oneInt},
-	{0x08, "+", opPlus, twoInts, oneInt},
-	{0x09, "-", opMinus, twoInts, oneInt},
-	{0x0a, "/", opDiv, twoInts, oneInt},
-	{0x0b, "*", opMul, twoInts, oneInt},
-	{0x0c, "<", opLt, twoInts, oneInt},
-	{0x0d, ">", opGt, twoInts, oneInt},
-	{0x0e, "<=", opLe, twoInts, oneInt},
-	{0x0f, ">=", opGe, twoInts, oneInt},
-	{0x10, "&&", opAnd, twoInts, oneInt},
-	{0x11, "||", opOr, twoInts, oneInt},
-	{0x12, "==", opEq, twoAny, oneInt},
-	{0x13, "!=", opNeq, twoAny, oneInt},
-	{0x14, "!", opNot, oneInt, oneInt},
-	{0x15, "len", opLen, oneBytes, oneInt},
-	{0x16, "itob", opItob, oneInt, oneBytes},
-	{0x17, "btoi", opBtoi, oneBytes, oneInt},
-	{0x18, "%", opModulo, twoInts, oneInt},
-	{0x19, "|", opBitOr, twoInts, oneInt},
-	{0x1a, "&", opBitAnd, twoInts, oneInt},
-	{0x1b, "^", opBitXor, twoInts, oneInt},
-	{0x1c, "~", opBitNot, oneInt, oneInt},
-	{0x1d, "mulw", opMulw, twoInts, twoInts},
+	{0x00, "err", opErr, nil, nil, 1, modeAny},
+	{0x01, "sha256", opSHA256, oneBytes, oneBytes, 1, modeAny},
+	{0x02, "keccak256", opKeccak256, oneBytes, oneBytes, 1, modeAny},
+	{0x03, "sha512_256", opSHA512_256, oneBytes, oneBytes, 1, modeAny},
+	{0x04, "ed25519verify", opEd25519verify, threeBytes, oneInt, 1, RunModeSignature},
+	{0x08, "+", opPlus, twoInts, oneInt, 1, modeAny},
+	{0x09, "-", opMinus, twoInts, oneInt, 1, modeAny},
+	{0x0a, "/", opDiv, twoInts, oneInt, 1, modeAny},
+	{0x0b, "*", opMul, twoInts, oneInt, 1, modeAny},
+	{0x0c, "<", opLt, twoInts, oneInt, 1, modeAny},
+	{0x0d, ">", opGt, twoInts, oneInt, 1, modeAny},
+	{0x0e, "<=", opLe, twoInts, oneInt, 1, modeAny},
+	{0x0f, ">=", opGe, twoInts, oneInt, 1, modeAny},
+	{0x10, "&&", opAnd, twoInts, oneInt, 1, modeAny},
+	{0x11, "||", opOr, twoInts, oneInt, 1, modeAny},
+	{0x12, "==", opEq, twoAny, oneInt, 1, modeAny},
+	{0x13, "!=", opNeq, twoAny, oneInt, 1, modeAny},
+	{0x14, "!", opNot, oneInt, oneInt, 1, modeAny},
+	{0x15, "len", opLen, oneBytes, oneInt, 1, modeAny},
+	{0x16, "itob", opItob, oneInt, oneBytes, 1, modeAny},
+	{0x17, "btoi", opBtoi, oneBytes, oneInt, 1, modeAny},
+	{0x18, "%", opModulo, twoInts, oneInt, 1, modeAny},
+	{0x19, "|", opBitOr, twoInts, oneInt, 1, modeAny},
+	{0x1a, "&", opBitAnd, twoInts, oneInt, 1, modeAny},
+	{0x1b, "^", opBitXor, twoInts, oneInt, 1, modeAny},
+	{0x1c, "~", opBitNot, oneInt, oneInt, 1, modeAny},
+	{0x1d, "mulw", opMulw, twoInts, twoInts, 1, modeAny},
 
-	{0x20, "intcblock", opIntConstBlock, nil, nil},
-	{0x21, "intc", opIntConstLoad, nil, oneInt},
-	{0x22, "intc_0", opIntConst0, nil, oneInt},
-	{0x23, "intc_1", opIntConst1, nil, oneInt},
-	{0x24, "intc_2", opIntConst2, nil, oneInt},
-	{0x25, "intc_3", opIntConst3, nil, oneInt},
-	{0x26, "bytecblock", opByteConstBlock, nil, nil},
-	{0x27, "bytec", opByteConstLoad, nil, oneBytes},
-	{0x28, "bytec_0", opByteConst0, nil, oneBytes},
-	{0x29, "bytec_1", opByteConst1, nil, oneBytes},
-	{0x2a, "bytec_2", opByteConst2, nil, oneBytes},
-	{0x2b, "bytec_3", opByteConst3, nil, oneBytes},
-	{0x2c, "arg", opArg, nil, oneBytes},
-	{0x2d, "arg_0", opArg0, nil, oneBytes},
-	{0x2e, "arg_1", opArg1, nil, oneBytes},
-	{0x2f, "arg_2", opArg2, nil, oneBytes},
-	{0x30, "arg_3", opArg3, nil, oneBytes},
-	{0x31, "txn", opTxn, nil, oneAny},       // TODO: check output type by subfield retrieved in txn,global,account,txid
-	{0x32, "global", opGlobal, nil, oneAny}, // TODO: check output type against specific field
-	{0x33, "gtxn", opGtxn, nil, oneAny},     // TODO: check output type by subfield retrieved in txn,global,account,txid
-	{0x34, "load", opLoad, nil, oneAny},
-	{0x35, "store", opStore, oneAny, nil},
+	{0x20, "intcblock", opIntConstBlock, nil, nil, 1, modeAny},
+	{0x21, "intc", opIntConstLoad, nil, oneInt, 1, modeAny},
+	{0x22, "intc_0", opIntConst0, nil, oneInt, 1, modeAny},
+	{0x23, "intc_1", opIntConst1, nil, oneInt, 1, modeAny},
+	{0x24, "intc_2", opIntConst2, nil, oneInt, 1, modeAny},
+	{0x25, "intc_3", opIntConst3, nil, oneInt, 1, modeAny},
+	{0x26, "bytecblock", opByteConstBlock, nil, nil, 1, modeAny},
+	{0x27, "bytec", opByteConstLoad, nil, oneBytes, 1, modeAny},
+	{0x28, "bytec_0", opByteConst0, nil, oneBytes, 1, modeAny},
+	{0x29, "bytec_1", opByteConst1, nil, oneBytes, 1, modeAny},
+	{0x2a, "bytec_2", opByteConst2, nil, oneBytes, 1, modeAny},
+	{0x2b, "bytec_3", opByteConst3, nil, oneBytes, 1, modeAny},
+	{0x2c, "arg", opArg, nil, oneBytes, 1, modeAny},
+	{0x2d, "arg_0", opArg0, nil, oneBytes, 1, modeAny},
+	{0x2e, "arg_1", opArg1, nil, oneBytes, 1, modeAny},
+	{0x2f, "arg_2", opArg2, nil, oneBytes, 1, modeAny},
+	{0x30, "arg_3", opArg3, nil, oneBytes, 1, modeAny},
+	{0x31, "txn", opTxn, nil, oneAny, 1, modeAny},       // TODO: check output type by subfield retrieved in txn,global,account,txid
+	{0x32, "global", opGlobal, nil, oneAny, 1, modeAny}, // TODO: check output type against specific field
+	{0x33, "gtxn", opGtxn, nil, oneAny, 1, modeAny},     // TODO: check output type by subfield retrieved in txn,global,account,txid
+	{0x34, "load", opLoad, nil, oneAny, 1, modeAny},
+	{0x35, "store", opStore, oneAny, nil, 1, modeAny},
 
-	{0x40, "bnz", opBnz, oneInt, nil},
-	{0x48, "pop", opPop, oneAny, nil},
-	{0x49, "dup", opDup, oneAny, twoAny},
+	{0x40, "bnz", opBnz, oneInt, nil, 1, modeAny},
+	{0x48, "pop", opPop, oneAny, nil, 1, modeAny},
+	{0x49, "dup", opDup, oneAny, twoAny, 1, modeAny},
+
+	{0x60, "balance", opBalance, oneInt, oneInt, 2, modeStatefull},
+	{0x61, "app_opted_in", opAppCheckOptedIn, twoInts, oneInt, 2, modeStatefull},
+	{0x62, "app_read_local", opAppReadLocalState, oneBytes.plus(twoInts), oneInt.plus(oneAny), 2, modeStatefull},
+	{0x63, "app_read_global", opAppReadGlobalState, oneBytes, oneInt.plus(oneAny), 2, modeStatefull},
+	{0x64, "app_write_local", opAppWriteLocalState, oneAny.plus(oneBytes).plus(oneInt), nil, 2, RunModeApplicationState},
+	{0x65, "app_write_global", opAppWriteGlobalState, oneAny.plus(oneBytes), nil, 2, RunModeApplicationState},
+	{0x66, "app_read_other_global", opAppReadOtherGlobalState, oneBytes.plus(twoInts), oneInt.plus(oneAny), 2, modeStatefull},
+	{0x67, "app_arg", opAppArg, nil, oneBytes, 2, modeStatefull},
+	{0x68, "app_arg_0", opAppArg0, nil, oneBytes, 2, modeStatefull},
+	{0x69, "app_arg_1", opAppArg1, nil, oneBytes, 2, modeStatefull},
+	{0x6A, "app_arg_2", opAppArg2, nil, oneBytes, 2, modeStatefull},
+	{0x6B, "app_arg_3", opAppArg3, nil, oneBytes, 2, modeStatefull},
+
+	{0x70, "asset_read_holding", opAssetReadHolding, threeInts, oneInt.plus(oneAny), 2, modeStatefull},
+	{0x71, "asset_read_params", opAssetReadParams, threeInts, oneInt.plus(oneAny), 2, modeStatefull},
 }
 
 // direct opcode bytes
 var opsByOpcode []OpSpec
+var opsByName map[string]OpSpec
 
 type opCheckFunc func(cx *evalContext) int
 
@@ -416,6 +469,10 @@ func init() {
 	for _, oi := range OpSpecs {
 		opsByOpcode[oi.Opcode] = oi
 	}
+	opsByName = make(map[string]OpSpec, 256)
+	for _, oi := range OpSpecs {
+		opsByName[oi.Name] = oi
+	}
 
 	opSizeByName := make(map[string]*opSize, len(opSizes))
 	for i, oz := range opSizes {
@@ -453,6 +510,14 @@ func (cx *evalContext) step() {
 	opcode := cx.program[cx.pc]
 	if opsByOpcode[opcode].op == nil {
 		cx.err = fmt.Errorf("%3d illegal opcode %02x", cx.pc, opcode)
+		return
+	}
+	if (cx.RunModeFlags & opsByOpcode[opcode].Modes) == 0 {
+		cx.err = fmt.Errorf("%s not allowed in current mode", opsByOpcode[opcode].Name)
+		return
+	}
+	if opsByOpcode[opcode].Version > cx.version {
+		cx.err = fmt.Errorf("%s not allowed in program version %d", opsByOpcode[opcode].Name, cx.version)
 		return
 	}
 	argsTypes := opsByOpcode[opcode].Args
@@ -911,6 +976,16 @@ func opArgN(cx *evalContext, n uint64) {
 	val := nilToEmpty(cx.Txn.Lsig.Args[n])
 	cx.stack = append(cx.stack, stackValue{Bytes: val})
 }
+
+func opAppArgN(cx *evalContext, n uint64) {
+	if n >= uint64(len(cx.Txn.Txn.ApplicationArgs)) {
+		cx.err = fmt.Errorf("cannot load app arg[%d] of %d", n, len(cx.Txn.Txn.ApplicationArgs))
+		return
+	}
+	val := nilToEmpty(cx.Txn.Txn.ApplicationArgs[n])
+	cx.stack = append(cx.stack, stackValue{Bytes: val})
+}
+
 func opArg(cx *evalContext) {
 	n := uint64(cx.program[cx.pc+1])
 	opArgN(cx, n)
@@ -927,6 +1002,24 @@ func opArg2(cx *evalContext) {
 }
 func opArg3(cx *evalContext) {
 	opArgN(cx, 3)
+}
+
+func opAppArg(cx *evalContext) {
+	n := uint64(cx.program[cx.pc+1])
+	opAppArgN(cx, n)
+	cx.nextpc = cx.pc + 2
+}
+func opAppArg0(cx *evalContext) {
+	opAppArgN(cx, 0)
+}
+func opAppArg1(cx *evalContext) {
+	opAppArgN(cx, 1)
+}
+func opAppArg2(cx *evalContext) {
+	opAppArgN(cx, 2)
+}
+func opAppArg3(cx *evalContext) {
+	opAppArgN(cx, 3)
 }
 
 func checkBnz(cx *evalContext) int {
@@ -1021,6 +1114,8 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint
 		sv.Bytes = txid[:]
 	case Lease:
 		sv.Bytes = txn.Lease[:]
+	case Action:
+		sv.Uint = uint64(txn.Action)
 	default:
 		err = fmt.Errorf("invalid txn field %d", field)
 	}
@@ -1142,4 +1237,94 @@ func opStore(cx *evalContext) {
 	cx.scratch[gindex] = cx.stack[last]
 	cx.stack = cx.stack[:last]
 	cx.nextpc = cx.pc + 2
+}
+
+func opBalance(cx *evalContext) {
+	last := len(cx.stack) - 1 // account offset
+	accountIdx := cx.stack[last].Uint
+	if accountIdx >= uint64(len(cx.Txn.Txn.Accounts)) {
+		cx.err = fmt.Errorf("cannot load account[%d] of %d", accountIdx, len(cx.Txn.Txn.Accounts))
+		return
+	}
+
+	addr := cx.Txn.Txn.Accounts[accountIdx]
+	br, err := cx.ledger.BalanceRecord(addr)
+	if err != nil {
+		cx.err = fmt.Errorf("failed to fetch %s balance record: %s", addr, err.Error())
+		return
+	}
+
+	cx.stack[last].Uint = uint64(br.MicroAlgos.ToUint64())
+}
+
+func opAppCheckOptedIn(cx *evalContext) {
+	last := len(cx.stack) - 1 // account offset
+	prev := last - 1          // app id
+	// TODO
+	cx.stack[prev].Uint = 0
+	cx.stack = cx.stack[:last]
+}
+
+func opAppReadLocalState(cx *evalContext) {
+	last := len(cx.stack) - 1 // account offset
+	prev := last - 1          // app id
+	pprev := prev - 1         // state key
+	// TODO
+	cx.stack[pprev].Uint = 0
+	cx.stack[prev].Uint = 0
+	cx.stack = cx.stack[:last]
+}
+
+func opAppReadGlobalState(cx *evalContext) {
+	last := len(cx.stack) - 1 // state key
+	var sv stackValue
+	// TODO
+
+	cx.stack[last].Uint = 0
+	cx.stack = append(cx.stack, sv)
+}
+
+func opAppWriteLocalState(cx *evalContext) {
+	last := len(cx.stack) - 1 // account offset
+	prev := last - 1          // state key
+	pprev := prev - 1         // value
+	// TODO
+	cx.stack = cx.stack[:pprev]
+}
+
+func opAppWriteGlobalState(cx *evalContext) {
+	last := len(cx.stack) - 1 // state key
+	prev := last - 1          // value
+	// TODO
+	cx.stack = cx.stack[:prev]
+}
+
+func opAppReadOtherGlobalState(cx *evalContext) {
+	last := len(cx.stack) - 1 // account offset
+	prev := last - 1          // app id
+	pprev := prev - 1         // state key
+	// TODO
+	cx.stack[pprev].Uint = 0
+	cx.stack[prev].Uint = 0
+	cx.stack = cx.stack[:last]
+}
+
+func opAssetReadHolding(cx *evalContext) {
+	last := len(cx.stack) - 1 // account offset
+	prev := last - 1          // asset id
+	pprev := prev - 1         // asset holding enum value
+	// TODO
+	cx.stack[pprev].Uint = 0
+	cx.stack[prev].Uint = 0
+	cx.stack = cx.stack[:last]
+}
+
+func opAssetReadParams(cx *evalContext) {
+	last := len(cx.stack) - 1 // account offset
+	prev := last - 1          // asset id
+	pprev := prev - 1         // asset params enum value
+	// TODO
+	cx.stack[pprev].Uint = 0
+	cx.stack[prev].Uint = 0
+	cx.stack = cx.stack[:last]
 }

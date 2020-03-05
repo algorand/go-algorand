@@ -209,6 +209,28 @@ func (ops *OpStream) Arg(val uint64) error {
 	return nil
 }
 
+// AppArg writes opcode for loading from Txn.ApplicationArgs
+func (ops *OpStream) AppArg(val uint64) error {
+	switch val {
+	case 0:
+		ops.Out.WriteByte(opsByName["app_arg_0"].Opcode)
+	case 1:
+		ops.Out.WriteByte(opsByName["app_arg_1"].Opcode)
+	case 2:
+		ops.Out.WriteByte(opsByName["app_arg_2"].Opcode)
+	case 3:
+		ops.Out.WriteByte(opsByName["app_arg_3"].Opcode)
+	default:
+		if val > 0xff {
+			return errors.New("cannot have more than 256 args")
+		}
+		ops.Out.WriteByte(opsByName["app_arg"].Opcode)
+		ops.Out.WriteByte(uint8(val))
+	}
+	ops.tpush(StackBytes)
+	return nil
+}
+
 // Txn writes opcodes for loading a field from the current transaction
 func (ops *OpStream) Txn(val uint64) error {
 	if val >= uint64(len(TxnFieldNames)) {
@@ -428,6 +450,14 @@ func assembleArg(ops *OpStream, args []string) error {
 	return ops.Arg(val)
 }
 
+func assembleAppArg(ops *OpStream, args []string) error {
+	val, err := strconv.ParseUint(args[0], 0, 64)
+	if err != nil {
+		return err
+	}
+	return ops.AppArg(val)
+}
+
 func assembleBnz(ops *OpStream, args []string) error {
 	if len(args) != 1 {
 		return errors.New("bnz operation needs label argument")
@@ -533,6 +563,8 @@ const (
 	GroupIndex
 	// TxID Transaction.ID()
 	TxID
+	// Action        Action
+	Action
 
 	invalidTxnField // fence for some setup that loops from Sender..invalidTxnField
 )
@@ -571,6 +603,7 @@ var txnFieldTypePairs = []txnFieldType{
 	{AssetCloseTo, StackBytes},
 	{GroupIndex, StackUint64},
 	{TxID, StackBytes},
+	{Action, StackUint64},
 }
 
 // TxnFieldTypes is StackBytes or StackUint64 parallel to TxnFieldNames
@@ -584,6 +617,7 @@ var TxnTypeNames = []string{
 	string(protocol.AssetConfigTx),
 	string(protocol.AssetTransferTx),
 	string(protocol.AssetFreezeTx),
+	string(protocol.ApplicationCallTx),
 }
 
 // map TxnTypeName to its enum index, for `txn TypeEnum`
@@ -697,6 +731,7 @@ func init() {
 	argOps["bytecblock"] = assembleByteCBlock
 	argOps["addr"] = assembleAddr // parse basics.Address, actually just another []byte constant
 	argOps["arg"] = assembleArg
+	argOps["app_arg"] = assembleAppArg
 	argOps["txn"] = assembleTxn
 	argOps["gtxn"] = assembleGtxn
 	argOps["global"] = assembleGlobal
