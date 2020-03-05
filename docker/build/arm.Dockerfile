@@ -1,6 +1,5 @@
 FROM arm32v6/golang:1.12-alpine
-RUN echo "http://dl-cdn.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories && \
-    apk update && \
+RUN apk update && \
     apk add make && \
     apk add bash && \
     apk add git && \
@@ -26,4 +25,6 @@ COPY . $GOPATH/src/github.com/algorand/go-algorand
 WORKDIR $GOPATH/src/github.com/algorand/go-algorand
 ENV GCC_CONFIG="--with-arch=armv6"
 RUN make ci-deps && make clean
+RUN rm -rf $GOPATH/src/github.com/algorand/go-algorand && \
+    mkdir -p $GOPATH/src/github.com/algorand/go-algorand
 CMD ["/bin/bash"]
