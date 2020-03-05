@@ -42,6 +42,3 @@ tmp/node_pkgs
 data/transactions/logic/*.md
 
 *.pem
-
-# Ignore git files
-.git
