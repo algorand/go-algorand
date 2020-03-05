@@ -55,7 +55,13 @@ var defaultConfig = config.Local{
 	IncomingConnectionsLimit: -1,
 }
 
-func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationPool execpool.BacklogPool, customConsensus config.ConsensusProtocols) ([]*AlgorandFullNode, []string, []string) {
+func setupFullNodes(
+	t *testing.T, 
+	proto protocol.ConsensusVersion,
+	verificationPool execpool.BacklogPool,
+	customConsensus config.ConsensusProtocols,
+	willDelayStartFirstNode bool) ([]*AlgorandFullNode, []string, []string) {
+	
 	util.RaiseRlimit(1000)
 	f, _ := os.Create(t.Name() + ".log")
 	logging.Base().SetJSONFormatter()
@@ -162,11 +168,20 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 	}
 
 	for i := range nodes {
+		// prepare the phonebook addresses
+		if willDelayStartFirstNode {
+			// connectPeers(nodes[1:])
+			
+			// delayStartNode(nodes[0], nodes[1:], 20*time.Second)
+		} else {
+			// connectPeers(nodes)
+		}
+		
 		rootDirectory := rootDirs[i]
 		cfg, err := config.LoadConfigFromDisk(rootDirectory)
 		require.NoError(t, err)
 
-		node, err := MakeFull(logging.Base().With("source", t.Name()+strconv.Itoa(i)), rootDirectory, cfg, "", g)
+		node, err := MakeFull(logging.Base().With("source", t.Name()+strconv.Itoa(i)), rootDirectory, cfg, []string{}, g)
 		nodes[i] = node
 		require.NoError(t, err)
 	}
@@ -180,7 +195,7 @@ func TestSyncingFullNode(t *testing.T) {
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
-	nodes, wallets, rootDirs := setupFullNodes(t, protocol.ConsensusCurrentVersion, backlogPool, nil)
+	nodes, wallets, rootDirs := setupFullNodes(t, protocol.ConsensusCurrentVersion, backlogPool, nil, true)
 	for i := 0; i < len(nodes); i++ {
 		defer os.Remove(wallets[i])
 		defer os.RemoveAll(rootDirs[i])
@@ -237,7 +252,7 @@ func TestInitialSync(t *testing.T) {
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
-	nodes, wallets, rootdirs := setupFullNodes(t, protocol.ConsensusCurrentVersion, backlogPool, nil)
+	nodes, wallets, rootdirs := setupFullNodes(t, protocol.ConsensusCurrentVersion, backlogPool, nil, true)
 	for i := 0; i < len(nodes); i++ {
 		defer os.Remove(wallets[i])
 		defer os.RemoveAll(rootdirs[i])
@@ -304,7 +319,7 @@ func TestSimpleUpgrade(t *testing.T) {
 	testParams1.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	configurableConsensus[consensusTest1] = testParams1
 
-	nodes, wallets, rootDirs := setupFullNodes(t, consensusTest0, backlogPool, configurableConsensus)
+	nodes, wallets, rootDirs := setupFullNodes(t, consensusTest0, backlogPool, configurableConsensus, true)
 	for i := 0; i < len(nodes); i++ {
 		defer os.Remove(wallets[i])
 		defer os.RemoveAll(rootDirs[i])
@@ -391,7 +406,7 @@ func connectPeers(nodes []*AlgorandFullNode) {
 	}
 
 	for _, node := range nodes {
-		node.ExtendPeerList(neighbors...)
+		//		node.ExtendPeerList(neighbors...)
 		node.net.RequestConnectOutgoing(false, nil)
 	}
 }
@@ -406,9 +421,9 @@ func delayStartNode(node *AlgorandFullNode, peers []*AlgorandFullNode, delay tim
 	}()
 	wg.Wait()
 
-	node0Addr := node.config.NetAddress
+	//	node0Addr := node.config.NetAddress
 	for _, peer := range peers {
-		peer.ExtendPeerList(node0Addr)
+		//		peer.ExtendPeerList(node0Addr)
 		peer.net.RequestConnectOutgoing(false, nil)
 	}
 }

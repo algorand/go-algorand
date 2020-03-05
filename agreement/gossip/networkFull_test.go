@@ -64,7 +64,7 @@ func spinNetwork(t *testing.T, nodesCount int) ([]*networkImpl, []*messageCounte
 	for nodeIdx := 0; nodeIdx < nodesCount; nodeIdx++ {
 		phonebooks[nodeIdx] = network.MakePhonebook(cfg.ConnectionsRateLimitingCount,
 			time.Duration(cfg.ConnectionsRateLimitingWindowSeconds)*time.Second)
-		gossipNode, err := network.NewWebsocketGossipNode(log.With("node", nodeIdx), cfg, phonebooks[nodeIdx], "go-test-agreement-network-genesis", config.Devtestnet)
+		gossipNode, err := network.NewWebsocketGossipNode(log.With("node", nodeIdx), cfg, nodesAddresses, "go-test-agreement-network-genesis", config.Devtestnet)
 		if err != nil {
 			t.Fatalf("fail making ws node: %v", err)
 		}
@@ -75,11 +75,7 @@ func spinNetwork(t *testing.T, nodesCount int) ([]*networkImpl, []*messageCounte
 		gossipNodes = append(gossipNodes, gossipNode)
 	}
 
-	for nodeIdx, gossipNode := range gossipNodes {
-		others := []string{}
-		others = append(others, nodesAddresses[nodeIdx+1:]...)
-		phonebooks[nodeIdx].ReplacePeerList(others, "")
-		log.Debugf("phonebook[%d] %#v", nodeIdx, others)
+	for _, gossipNode := range gossipNodes {
 		gossipNode.RequestConnectOutgoing(false, nil) // no disconnect.
 	}
 

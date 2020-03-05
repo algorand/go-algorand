@@ -59,7 +59,7 @@ type Server struct {
 }
 
 // Initialize creates a Node instance with applicable network services
-func (s *Server) Initialize(cfg config.Local) error {
+func (s *Server) Initialize(cfg config.Local, phonebookAddressees []string) error {
 	// set up node
 	s.log = logging.Base()
 
@@ -119,13 +119,7 @@ func (s *Server) Initialize(cfg config.Local) error {
 			NodeExporterPath:          cfg.NodeExporterPath,
 		})
 
-	ex, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("cannot locate node executable: %s", err)
-	}
-	phonebookDir := filepath.Dir(ex)
-
-	s.node, err = node.MakeFull(s.log, s.RootPath, cfg, phonebookDir, s.Genesis)
+	s.node, err = node.MakeFull(s.log, s.RootPath, cfg, phonebookAddressees, s.Genesis)
 	if os.IsNotExist(err) {
 		return fmt.Errorf("node has not been installed: %s", err)
 	}
@@ -271,10 +265,4 @@ func (s *Server) Stop() {
 	os.Remove(s.pidFile)
 	os.Remove(s.netFile)
 	os.Remove(s.netListenFile)
-}
-
-// OverridePhonebook is used to replace the phonebook associated with
-// the server's node.
-func (s *Server) OverridePhonebook(dialOverride ...string) {
-	s.node.ReplacePeerList(dialOverride...)
 }

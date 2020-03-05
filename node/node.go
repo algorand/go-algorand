@@ -86,7 +86,6 @@ type AlgorandFullNode struct {
 
 	ledger    *data.Ledger
 	net       network.GossipNode
-	phonebook network.Phonebook
 
 	transactionPool *pools.TransactionPool
 	txHandler       *data.TxHandler
@@ -140,7 +139,7 @@ type TxnWithStatus struct {
 
 // MakeFull sets up an Algorand full node
 // (i.e., it returns a node that participates in consensus)
-func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookDir string, genesis bookkeeping.Genesis) (*AlgorandFullNode, error) {
+func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAddressees []string, genesis bookkeeping.Genesis) (*AlgorandFullNode, error) {
 
 	node := new(AlgorandFullNode)
 	node.rootDir = rootDir
@@ -148,17 +147,9 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookDir
 	node.log = log.With("name", cfg.NetAddress)
 	node.genesisID = genesis.ID()
 	node.genesisHash = crypto.HashObj(genesis)
-	node.phonebook = network.MakePhonebook(cfg.ConnectionsRateLimitingCount,
-		time.Duration(cfg.ConnectionsRateLimitingWindowSeconds)*time.Second)
-
-	addrs, err := config.LoadPhonebook(phonebookDir)
-	if err != nil {
-		log.Debugf("Cannot load static phonebook: %v", err)
-	}
-	node.phonebook.ReplacePeerList(addrs, node.config.DNSBootstrapID)
 
 	// tie network, block fetcher, and agreement services together
-	p2pNode, err := network.NewWebsocketNetwork(node.log, node.config, node.phonebook, genesis.ID(), genesis.Network)
+	p2pNode, err := network.NewWebsocketNetwork(node.log, node.config, phonebookAddressees, genesis.ID(), genesis.Network)
 	if err != nil {
 		log.Errorf("could not create websocket node: %v", err)
 		return nil, err
@@ -591,16 +582,6 @@ func (node *AlgorandFullNode) PoolStats() PoolStats {
 		NumOutstanding: uint64(node.transactionPool.PendingCount()),
 		NumExpired:     uint64(node.transactionPool.NumExpired(r)),
 	}
-}
-
-// ExtendPeerList dynamically adds a peer to a node's peer list.
-func (node *AlgorandFullNode) ExtendPeerList(peers ...string) {
-	node.phonebook.ExtendPeerList(peers, node.config.DNSBootstrapID)
-}
-
-// ReplacePeerList replaces the current peer list with a different one
-func (node *AlgorandFullNode) ReplacePeerList(peers ...string) {
-	node.phonebook.ReplacePeerList(peers, node.config.DNSBootstrapID)
 }
 
 // SuggestedFee returns the suggested fee per byte recommended to ensure a new transaction is processed in a timely fashion.
