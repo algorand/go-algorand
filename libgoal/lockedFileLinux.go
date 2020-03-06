@@ -19,6 +19,7 @@
 package libgoal
 
 import (
+	"fmt"
 	"io"
 	"os"
 
@@ -34,7 +35,7 @@ type linuxLocker struct {
 // Since older kernels (Linux kernel < 3.15) do not support OFD, we fall back to non-OFD in that case.
 // Falling back to the non-OFD lock would allow obtaining two locks by the same process. If this becomes
 // and issue, we might want to use flock, which wouldn't work across NFS on older Linux kernels.
-func makeLocker() *linuxLocker {
+func makeLocker() (*linuxLocker, error) {
 	locker := &linuxLocker{}
 
 	// Check whether F_OFD_SETLKW is supported
@@ -47,11 +48,11 @@ func makeLocker() *linuxLocker {
 		// Fall back to non-OFD locks
 		locker.setLockWait = unix.F_SETLKW
 	} else {
-		// Another unknown error occurred, panic
-		panic(err)
+		// Another unknown error occurred
+		return nil, fmt.Errorf("unknown error of FnctlFlock: %v", err)
 	}
 
-	return locker
+	return locker, nil
 }
 
 // the FcntlFlock has the most consistent behaviour across platforms,

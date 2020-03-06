@@ -36,9 +36,9 @@ type unixLocker struct {
 // As OFD is not available on non-Linux OS, we fall back to the non-OFD lock
 // Falling back to the non-OFD lock would allow obtaining two locks by the same process. If this becomes
 // and issue, we might want to use flock, which wouldn't work across NFS.
-func makeLocker() *unixLocker {
+func makeLocker() (*unixLocker, error) {
 	locker := &unixLocker{}
-	return locker
+	return locker, nil
 }
 
 // the FcntlFlock has the most unixLocker behaviour across platforms,
