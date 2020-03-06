@@ -139,7 +139,7 @@ type TxnWithStatus struct {
 
 // MakeFull sets up an Algorand full node
 // (i.e., it returns a node that participates in consensus)
-func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAddressees []string, genesis bookkeeping.Genesis) (*AlgorandFullNode, error) {
+func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAddresses []string, genesis bookkeeping.Genesis) (*AlgorandFullNode, error) {
 
 	node := new(AlgorandFullNode)
 	node.rootDir = rootDir
@@ -149,7 +149,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.genesisHash = crypto.HashObj(genesis)
 
 	// tie network, block fetcher, and agreement services together
-	p2pNode, err := network.NewWebsocketNetwork(node.log, node.config, phonebookAddressees, genesis.ID(), genesis.Network)
+	p2pNode, err := network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesis.ID(), genesis.Network)
 	if err != nil {
 		log.Errorf("could not create websocket node: %v", err)
 		return nil, err
