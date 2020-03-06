@@ -52,6 +52,12 @@ check_deps() {
     then
         missing_dep shellcheck
     fi
+
+    # Don't print `sqlite3`s location.
+    if ! which sqlite3 > /dev/null
+    then
+        missing_dep sqlite3
+    fi
 }
 
 check_deps
