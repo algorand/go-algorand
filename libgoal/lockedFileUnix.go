@@ -28,22 +28,15 @@ import (
 )
 
 type unixLocker struct {
-	setLockWait int
 }
 
 // makeLocker create a unix file locker.
-// note that the desired way is to use the OFD locker, which locks on the file descriptor level.
-// falling back to the non-OFD lock would allow obtaining two locks by the same process. If this becomes
+// Note that the desired way is to use the OFD locker, which locks on the file descriptor level.
+// As OFD is not available on non-Linux OS, we fall back to the non-OFD lock
+// Falling back to the non-OFD lock would allow obtaining two locks by the same process. If this becomes
 // and issue, we might want to use flock, which wouldn't work across NFS.
 func makeLocker() *unixLocker {
 	locker := &unixLocker{}
-	getlk := unix.Flock_t{Type: unix.F_RDLCK}
-	if err := unix.FcntlFlock(0, 36 /*F_OFD_GETLK*/, &getlk); err == nil {
-		// constants from /usr/include/bits/fcntl-linux.h
-		locker.setLockWait = 38 // F_OFD_SETLKW
-	} else {
-		locker.setLockWait = unix.F_SETLKW
-	}
 	return locker
 }
 
@@ -56,7 +49,7 @@ func (f *unixLocker) tryRLock(fd *os.File) error {
 		Start:  0,
 		Len:    0,
 	}
-	return unix.FcntlFlock(fd.Fd(), f.setLockWait, flock)
+	return unix.FcntlFlock(fd.Fd(), unix.F_SETLKW, flock)
 }
 
 func (f *unixLocker) tryLock(fd *os.File) error {
@@ -66,7 +59,7 @@ func (f *unixLocker) tryLock(fd *os.File) error {
 		Start:  0,
 		Len:    0,
 	}
-	return unix.FcntlFlock(fd.Fd(), f.setLockWait, flock)
+	return unix.FcntlFlock(fd.Fd(), unix.F_SETLKW, flock)
 }
 
 func (f *unixLocker) unlock(fd *os.File) error {
@@ -76,5 +69,5 @@ func (f *unixLocker) unlock(fd *os.File) error {
 		Start:  0,
 		Len:    0,
 	}
-	return unix.FcntlFlock(fd.Fd(), f.setLockWait, flock)
+	return unix.FcntlFlock(fd.Fd(), unix.F_SETLKW, flock)
 }
