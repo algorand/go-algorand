@@ -32,7 +32,6 @@ elif [ "${OS}" = "darwin" ]; then
     install_or_upgrade autoconf
     install_or_upgrade automake
     install_or_upgrade shellcheck
-    install_or_upgrade sqlite
 fi
 
 "$SCRIPTPATH"/configure_dev-deps.sh
