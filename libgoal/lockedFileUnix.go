@@ -14,14 +14,17 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-// +build !linux,!windows
+// Support all unix system except linux
+// in https://github.com/golang/sys/blob/master/unix/syscall_unix.go
+
+// +build aix darwin dragonfly freebsd netbsd openbsd solaris
 
 package libgoal
 
 import (
+	"golang.org/x/sys/unix"
 	"io"
 	"os"
-	"syscall"
 )
 
 type unixLocker struct {
@@ -34,12 +37,12 @@ type unixLocker struct {
 // and issue, we might want to use flock, which wouldn't work across NFS.
 func makeLocker() *unixLocker {
 	locker := &unixLocker{}
-	getlk := syscall.Flock_t{Type: syscall.F_RDLCK}
-	if err := syscall.FcntlFlock(0, 36 /*F_OFD_GETLK*/, &getlk); err == nil {
+	getlk := unix.Flock_t{Type: unix.F_RDLCK}
+	if err := unix.FcntlFlock(0, 36 /*F_OFD_GETLK*/, &getlk); err == nil {
 		// constants from /usr/include/bits/fcntl-linux.h
 		locker.setLockWait = 38 // F_OFD_SETLKW
 	} else {
-		locker.setLockWait = syscall.F_SETLKW
+		locker.setLockWait = unix.F_SETLKW
 	}
 	return locker
 }
@@ -47,31 +50,31 @@ func makeLocker() *unixLocker {
 // the FcntlFlock has the most unixLocker behaviour across platforms,
 // and supports both local and network file systems.
 func (f *unixLocker) tryRLock(fd *os.File) error {
-	flock := &syscall.Flock_t{
-		Type:   syscall.F_RDLCK,
+	flock := &unix.Flock_t{
+		Type:   unix.F_RDLCK,
 		Whence: int16(io.SeekStart),
 		Start:  0,
 		Len:    0,
 	}
-	return syscall.FcntlFlock(fd.Fd(), f.setLockWait, flock)
+	return unix.FcntlFlock(fd.Fd(), f.setLockWait, flock)
 }
 
 func (f *unixLocker) tryLock(fd *os.File) error {
-	flock := &syscall.Flock_t{
-		Type:   syscall.F_WRLCK,
+	flock := &unix.Flock_t{
+		Type:   unix.F_WRLCK,
 		Whence: int16(io.SeekStart),
 		Start:  0,
 		Len:    0,
 	}
-	return syscall.FcntlFlock(fd.Fd(), f.setLockWait, flock)
+	return unix.FcntlFlock(fd.Fd(), f.setLockWait, flock)
 }
 
 func (f *unixLocker) unlock(fd *os.File) error {
-	flock := &syscall.Flock_t{
-		Type:   syscall.F_UNLCK,
+	flock := &unix.Flock_t{
+		Type:   unix.F_UNLCK,
 		Whence: int16(io.SeekStart),
 		Start:  0,
 		Len:    0,
 	}
-	return syscall.FcntlFlock(fd.Fd(), f.setLockWait, flock)
+	return unix.FcntlFlock(fd.Fd(), f.setLockWait, flock)
 }

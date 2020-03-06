@@ -21,8 +21,6 @@ package libgoal
 import (
 	"io"
 	"os"
-	"syscall"
-
 	"golang.org/x/sys/unix"
 )
 
@@ -41,31 +39,31 @@ func makeLocker() *linuxLocker {
 // the FcntlFlock has the most consistent behaviour across platforms,
 // and supports both local and network file systems.
 func (f *linuxLocker) tryRLock(fd *os.File) error {
-	flock := &syscall.Flock_t{
-		Type:   syscall.F_RDLCK,
+	flock := &unix.Flock_t{
+		Type:   unix.F_RDLCK,
 		Whence: int16(io.SeekStart),
 		Start:  0,
 		Len:    0,
 	}
-	return syscall.FcntlFlock(fd.Fd(), unix.F_OFD_SETLKW, flock)
+	return unix.FcntlFlock(fd.Fd(), unix.F_OFD_SETLKW, flock)
 }
 
 func (f *linuxLocker) tryLock(fd *os.File) error {
-	flock := &syscall.Flock_t{
-		Type:   syscall.F_WRLCK,
+	flock := &unix.Flock_t{
+		Type:   unix.F_WRLCK,
 		Whence: int16(io.SeekStart),
 		Start:  0,
 		Len:    0,
 	}
-	return syscall.FcntlFlock(fd.Fd(), unix.F_OFD_SETLKW, flock)
+	return unix.FcntlFlock(fd.Fd(), unix.F_OFD_SETLKW, flock)
 }
 
 func (f *linuxLocker) unlock(fd *os.File) error {
-	flock := &syscall.Flock_t{
-		Type:   syscall.F_UNLCK,
+	flock := &unix.Flock_t{
+		Type:   unix.F_UNLCK,
 		Whence: int16(io.SeekStart),
 		Start:  0,
 		Len:    0,
 	}
-	return syscall.FcntlFlock(fd.Fd(), unix.F_OFD_SETLKW, flock)
+	return unix.FcntlFlock(fd.Fd(), unix.F_OFD_SETLKW, flock)
 }
