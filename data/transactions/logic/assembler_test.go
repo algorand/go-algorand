@@ -19,6 +19,7 @@ package logic
 import (
 	"bytes"
 	"encoding/hex"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -198,7 +199,7 @@ func TestAssemble(t *testing.T) {
 	program, err := AssembleString(bigTestAssembleNonsenseProgram)
 	require.NoError(t, err)
 	// check that compilation is stable over time and we assemble to the same bytes this month that we did last month.
-	expectedBytes, _ := hex.DecodeString("012008b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f01020026040212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d02424200320032013202320328292929292a0431003101310231043105310731083109310a310b310c310d310e310f31113112311331143115311833000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e0102222324252104082209240a220b230c240d250e230f23102311231223132314181b1c2b171615400003290349483403350222231d4821056021056121052b6248482b63484821052b2106642b210565210721052b66484821072105210670484821072105210671484868486a")
+	expectedBytes, _ := hex.DecodeString("022008b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f01020026040212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d02424200320032013202320328292929292a0431003101310231043105310731083109310a310b310c310d310e310f311131123113311431153118330000003300010033000200330004003300050033000700330008003300090033000a0033000b0033000c0033000d0033000e0033000f0033001100330012003300130033001400330015002d2e0102222324252104082209240a220b230c240d250e230f23102311231223132314181b1c2b171615400003290349483403350222231d4821056021056121052b6248482b63484821052b2106642b210565210721052b66484821072105210670484821072105210671484868486a")
 	if bytes.Compare(expectedBytes, program) != 0 {
 		// this print is for convenience if the program has been changed. the hex string can be copy pasted back in as a new expected result.
 		t.Log(hex.EncodeToString(program))
@@ -206,41 +207,67 @@ func TestAssemble(t *testing.T) {
 	require.Equal(t, expectedBytes, program)
 }
 
+// mutateProgVersion replaces version (first two symbols) in hex-encoded program
+func mutateProgVersion(version uint64, prog string) string {
+	return fmt.Sprintf("%02x%s", version, prog[2:])
+}
+
 func TestOpUint(t *testing.T) {
-	ops := OpStream{}
-	err := ops.Uint(0xcafebabe)
-	require.NoError(t, err)
-	program, err := ops.Bytes()
-	require.NoError(t, err)
-	s := hex.EncodeToString(program)
-	require.Equal(t, "012001bef5fad70c22", s)
+	for v := uint64(1); v <= AssemblerDefaultVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			ops := OpStream{Version: v}
+			err := ops.Uint(0xcafebabe)
+			require.NoError(t, err)
+			program, err := ops.Bytes()
+			require.NoError(t, err)
+			s := hex.EncodeToString(program)
+			expected := mutateProgVersion(v, "012001bef5fad70c22")
+			require.Equal(t, expected, s)
+		})
+	}
 }
 
 func TestOpUint64(t *testing.T) {
-	ops := OpStream{}
-	err := ops.Uint(0xcafebabecafebabe)
-	require.NoError(t, err)
-	program, err := ops.Bytes()
-	require.NoError(t, err)
-	s := hex.EncodeToString(program)
-	require.Equal(t, "012001bef5fad7ecd7aeffca0122", s)
+	t.Parallel()
+	for v := uint64(1); v <= AssemblerDefaultVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			t.Parallel()
+			ops := OpStream{Version: v}
+			err := ops.Uint(0xcafebabecafebabe)
+			require.NoError(t, err)
+			program, err := ops.Bytes()
+			require.NoError(t, err)
+			s := hex.EncodeToString(program)
+			require.Equal(t, mutateProgVersion(v, "012001bef5fad7ecd7aeffca0122"), s)
+		})
+	}
 }
 
 func TestOpBytes(t *testing.T) {
-	ops := OpStream{}
-	err := ops.ByteLiteral([]byte("abcdef"))
-	program, err := ops.Bytes()
-	require.NoError(t, err)
-	s := hex.EncodeToString(program)
-	require.Equal(t, "0126010661626364656628", s)
+	t.Parallel()
+	for v := uint64(1); v <= AssemblerDefaultVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			ops := OpStream{Version: v}
+			err := ops.ByteLiteral([]byte("abcdef"))
+			program, err := ops.Bytes()
+			require.NoError(t, err)
+			s := hex.EncodeToString(program)
+			require.Equal(t, mutateProgVersion(v, "0126010661626364656628"), s)
+		})
+	}
 }
 
 func TestAssembleInt(t *testing.T) {
-	text := "int 0xcafebabe"
-	program, err := AssembleString(text)
-	require.NoError(t, err)
-	s := hex.EncodeToString(program)
-	require.Equal(t, "012001bef5fad70c22", s)
+	t.Parallel()
+	for v := uint64(1); v <= AssemblerDefaultVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			text := "int 0xcafebabe"
+			program, err := AssembleStringWithVersion(text, v)
+			require.NoError(t, err)
+			s := hex.EncodeToString(program)
+			require.Equal(t, mutateProgVersion(v, "012001bef5fad70c22"), s)
+		})
+	}
 }
 
 /*
@@ -254,6 +281,7 @@ base64.b16encode(raw.encode())
 */
 
 func TestAssembleBytes(t *testing.T) {
+	t.Parallel()
 	variations := []string{
 		"byte b32 MFRGGZDFMY",
 		"byte base32 MFRGGZDFMY",
@@ -269,24 +297,34 @@ func TestAssembleBytes(t *testing.T) {
 		"byte base64(YWJjZGVm)",
 		"byte 0x616263646566",
 	}
-	for _, vi := range variations {
-		program, err := AssembleString(vi)
-		require.NoError(t, err)
-		s := hex.EncodeToString(program)
-		require.Equal(t, "0126010661626364656628", s)
+	for v := uint64(1); v <= AssemblerDefaultVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			for _, vi := range variations {
+				program, err := AssembleStringWithVersion(vi, v)
+				require.NoError(t, err)
+				s := hex.EncodeToString(program)
+				require.Equal(t, mutateProgVersion(v, "0126010661626364656628"), s)
+			}
+		})
 	}
 }
 
 func TestAssembleRejectNegJump(t *testing.T) {
+	t.Parallel()
 	text := `wat:
 int 1
 bnz wat`
-	program, err := AssembleString(text)
-	require.Error(t, err)
-	require.Nil(t, program)
+	for v := uint64(1); v <= AssemblerDefaultVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			program, err := AssembleStringWithVersion(text, v)
+			require.Error(t, err)
+			require.Nil(t, program)
+		})
+	}
 }
 
 func TestAssembleBase64(t *testing.T) {
+	t.Parallel()
 	text := `byte base64 //GWRM+yy3BCavBDXO/FYTNZ6o2Jai5edsMCBdDEz+0=
 byte base64 avGWRM+yy3BCavBDXO/FYTNZ6o2Jai5edsMCBdDEz//=
 //
@@ -299,23 +337,33 @@ byte b64 //GWRM+yy3BCavBDXO/FYTNZ6o2Jai5edsMCBdDEz+8=
 byte b64 avGWRM+yy3BCavBDXO/FYTNZ6o2Jai5edsMCBdDEz//=
 ==
 ||`
-	program, err := AssembleString(text)
-	require.NoError(t, err)
-	s := hex.EncodeToString(program)
-	require.Equal(t, "01200101260320fff19644cfb2cb70426af0435cefc5613359ea8d896a2e5e76c30205d0c4cfed206af19644cfb2cb70426af0435cefc5613359ea8d896a2e5e76c30205d0c4cfff20fff19644cfb2cb70426af0435cefc5613359ea8d896a2e5e76c30205d0c4cfef2829122210122a291211", s)
+	for v := uint64(1); v <= AssemblerDefaultVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			program, err := AssembleStringWithVersion(text, v)
+			require.NoError(t, err)
+			s := hex.EncodeToString(program)
+			require.Equal(t, mutateProgVersion(v, "01200101260320fff19644cfb2cb70426af0435cefc5613359ea8d896a2e5e76c30205d0c4cfed206af19644cfb2cb70426af0435cefc5613359ea8d896a2e5e76c30205d0c4cfff20fff19644cfb2cb70426af0435cefc5613359ea8d896a2e5e76c30205d0c4cfef2829122210122a291211"), s)
+		})
+	}
 }
 
 func TestAssembleRejectUnkLabel(t *testing.T) {
+	t.Parallel()
 	text := `int 1
 bnz nowhere`
-	program, err := AssembleString(text)
-	require.Error(t, err)
-	require.Nil(t, program)
+	for v := uint64(1); v <= AssemblerDefaultVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			program, err := AssembleStringWithVersion(text, v)
+			require.Error(t, err)
+			require.Nil(t, program)
+		})
+	}
 }
 
 func TestAssembleDisassemble(t *testing.T) {
 	// Specifically constructed program text that should be recreated by Disassemble()
 	// TODO: disassemble to int/byte psuedo-ops instead of raw intcblock/bytecblock/intc/bytec
+	t.Parallel()
 	text := `// version 1
 intcblock 0 1 2 3 4 5
 bytecblock 0xcafed00d 0x1337 0x2001 0xdeadbeef 0x70077007
@@ -355,7 +403,7 @@ txn VoteFirst
 txn VoteLast
 gtxn 12 Fee
 `
-	program, err := AssembleString(text)
+	program, err := AssembleStringV1(text)
 	require.NoError(t, err)
 	t2, err := Disassemble(program)
 	require.Equal(t, text, t2)
@@ -365,14 +413,40 @@ gtxn 12 Fee
 func TestAssembleDisassembleCycle(t *testing.T) {
 	// Test that disassembly re-assembles to the same program bytes.
 	// It disassembly won't necessarily perfectly recreate the source text, but assembling the result of Disassemble() should be the same program bytes.
-	program, err := AssembleString(bigTestAssembleNonsenseProgram)
-	require.NoError(t, err)
-	t2, err := Disassemble(program)
-	require.NoError(t, err)
-	p2, err := AssembleString(t2)
-	if err != nil {
-		t.Log(t2)
+	t.Parallel()
+
+	tests := map[uint64]string{
+		2: bigTestAssembleNonsenseProgram,
+		1: bigTestAssembleNonsenseProgram[:strings.Index(bigTestAssembleNonsenseProgram, "balance")],
 	}
+
+	for v, source := range tests {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			program, err := AssembleString(source)
+			require.NoError(t, err)
+			t2, err := Disassemble(program)
+			require.NoError(t, err)
+			p2, err := AssembleStringV2(t2)
+			if err != nil {
+				t.Log(t2)
+			}
+			require.NoError(t, err)
+			require.Equal(t, program, p2)
+		})
+	}
+}
+
+func TestAssembleVersions(t *testing.T) {
+	text := `int 1
+app_arg 1
+`
+	_, err := AssembleString(text)
 	require.NoError(t, err)
-	require.Equal(t, program, p2)
+
+	_, err = AssembleStringV2(text)
+	require.NoError(t, err)
+
+	_, err = AssembleStringV1(text)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unknown opcode app_arg")
 }

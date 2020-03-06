@@ -121,11 +121,12 @@ var opcodeImmediateNoteList = []stringString{
 	{"bytec", "{uint8 byte constant index}"},
 	{"arg", "{uint8 arg index N}"},
 	{"txn", "{uint8 transaction field index}"},
-	{"gtxn", "{uint8 transaction group index}{uint8 transaction field index}"},
+	{"gtxn", "{uint8 transaction group index}{uint8 transaction field index}{uint8 transaction field array index}"},
 	{"global", "{uint8 global field index}"},
 	{"bnz", "{0..0x7fff forward branch offset, big endian}"},
 	{"load", "{uint8 position in scratch space to load from}"},
 	{"store", "{uint8 position in scratch space to store to}"},
+	{"app_arg", "{uint8 arg index N}"},
 }
 var opcodeImmediateNotes map[string]string
 
@@ -184,40 +185,14 @@ var opCostByName map[string]int
 
 // OpCost returns the relative cost score for an op
 func OpCost(opName string) int {
-	if opCostByName == nil {
-		onn := make(map[string]int, len(opSizes))
-		for _, oz := range opSizes {
-			if oz.cost != 1 {
-				onn[oz.name] = oz.cost
-			}
-		}
-		opCostByName = onn
-	}
-	cost, hit := opCostByName[opName]
-	if hit {
-		return cost
-	}
-	return 1
+	return opsByName[LogicVersion][opName].opSize.cost
 }
 
 var opSizeByName map[string]int
 
 // OpSize returns the number of bytes for an op. 0 for variable.
 func OpSize(opName string) int {
-	if opSizeByName == nil {
-		onn := make(map[string]int, len(opSizes))
-		for _, oz := range opSizes {
-			if oz.size != 1 {
-				onn[oz.name] = oz.size
-			}
-		}
-		opSizeByName = onn
-	}
-	cost, hit := opSizeByName[opName]
-	if hit {
-		return cost
-	}
-	return 1
+	return opsByName[LogicVersion][opName].opSize.size
 }
 
 // see assembler.go TxnTypeNames
