@@ -19,9 +19,10 @@
 package libgoal
 
 import (
-	"golang.org/x/sys/unix"
 	"io"
 	"os"
+
+	"golang.org/x/sys/unix"
 )
 
 type linuxLocker struct {
