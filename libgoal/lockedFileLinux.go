@@ -19,20 +19,37 @@
 package libgoal
 
 import (
+	"golang.org/x/sys/unix"
 	"io"
 	"os"
-	"golang.org/x/sys/unix"
 )
 
 type linuxLocker struct {
+	setLockWait int
 }
 
 // makeLocker create a unix file locker.
-// note that the desired way is to use the OFD locker, which locks on the file descriptor level.
-// falling back to the non-OFD lock would allow obtaining two locks by the same process. If this becomes
-// and issue, we might want to use flock, which wouldn't work across NFS.
+// Note that the desired way is to use the OFD locker, which locks on the file descriptor level.
+// Since older kernels (Linux kernel < 3.15) do not support OFD, we fall back to non-OFD in that case.
+// Falling back to the non-OFD lock would allow obtaining two locks by the same process. If this becomes
+// and issue, we might want to use flock, which wouldn't work across NFS on older Linux kernels.
 func makeLocker() *linuxLocker {
 	locker := &linuxLocker{}
+
+	// Check whether F_OFD_SETLKW is supported
+	getlk := unix.Flock_t{Type: unix.F_RDLCK}
+	err := unix.FcntlFlock(0, unix.F_OFD_GETLK, &getlk)
+	if err == nil {
+		locker.setLockWait = unix.F_OFD_SETLKW
+	} else if err == unix.EINVAL {
+		// The command F_OFD_SETLKW is not available
+		// Fall back to non-OFD locks
+		locker.setLockWait = unix.F_SETLKW
+	} else {
+		// Another unknown error occurred, panic
+		panic(err)
+	}
+
 	return locker
 }
 
@@ -45,7 +62,7 @@ func (f *linuxLocker) tryRLock(fd *os.File) error {
 		Start:  0,
 		Len:    0,
 	}
-	return unix.FcntlFlock(fd.Fd(), unix.F_OFD_SETLKW, flock)
+	return unix.FcntlFlock(fd.Fd(), f.setLockWait, flock)
 }
 
 func (f *linuxLocker) tryLock(fd *os.File) error {
@@ -55,7 +72,7 @@ func (f *linuxLocker) tryLock(fd *os.File) error {
 		Start:  0,
 		Len:    0,
 	}
-	return unix.FcntlFlock(fd.Fd(), unix.F_OFD_SETLKW, flock)
+	return unix.FcntlFlock(fd.Fd(), f.setLockWait, flock)
 }
 
 func (f *linuxLocker) unlock(fd *os.File) error {
@@ -65,5 +82,5 @@ func (f *linuxLocker) unlock(fd *os.File) error {
 		Start:  0,
 		Len:    0,
 	}
-	return unix.FcntlFlock(fd.Fd(), unix.F_OFD_SETLKW, flock)
+	return unix.FcntlFlock(fd.Fd(), f.setLockWait, flock)
 }
