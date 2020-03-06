@@ -143,8 +143,10 @@ type AccountData struct {
 }
 
 type AppParams struct {
-	ApprovalProgram    string
-	StateUpdateProgram string
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	ApprovalProgram    string `codec:"approv,allocbound=-"`
+	StateUpdateProgram string `codec:"statup,allocbound=-"`
 }
 
 // AccountDetail encapsulates meaningful details about a given account, for external consumption
@@ -175,12 +177,22 @@ type AppIndex uint64
 // up the creator of the asset, whose balance record contains the AssetParams
 type AssetIndex uint64
 
-// AssetLocator stores both the asset creator, whose balance record contains
-// the asset parameters, and the asset index, which is the key into those
-// parameters
-type AssetLocator struct {
+type CreatableIndex uint64
+
+type CreatableType uint64
+
+const (
+	AssetCreatable CreatableType = 0
+	AppCreatable   CreatableType = 1
+)
+
+// CreatableLocator stores both the creator, whose balance record contains
+// the asset/app parameters, and the creatable index, which is the key into
+// those parameters
+type CreatableLocator struct {
+	Type    CreatableType
 	Creator Address
-	Index   AssetIndex
+	Index   CreatableIndex
 }
 
 // AssetHolding describes an asset held by an account.

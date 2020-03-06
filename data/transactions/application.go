@@ -38,13 +38,13 @@ type ApplicationCallTxnFields struct {
 
 	ApplicationID   basics.AppIndex    `codec:"apid"`
 	Action          Action             `codec:"apan"`
-	ApplicationArgs []basics.TealValue `codec:"apaa"`
-	Accounts        []basics.Address   `codec:"apat"`
+	ApplicationArgs []basics.TealValue `codec:"apaa,allocbound=1024"`
+	Accounts        []basics.Address   `codec:"apat,allocbound=1024"`
 
 	LocalStateSchema   basics.StateSchema `codec:"apls"`
-	GlobalStateSchema  basics.StateSchema `codec:"apls"`
-	ApprovalProgram    string             `codec:"apap"`
-	StateUpdateProgram string             `codec:"apsu"`
+	GlobalStateSchema  basics.StateSchema `codec:"apgs"`
+	ApprovalProgram    string             `codec:"apap,allocbound=4096"`
+	StateUpdateProgram string             `codec:"apsu,allocbound=4096"`
 
 	// If you add any fields here, remember you MUST modify the Empty
 	// method below!

@@ -56,6 +56,10 @@ type roundCowBase struct {
 	proto config.ConsensusParams
 }
 
+func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
+	return x.l.GetCreatorForRound(x.rnd, cidx, ctype)
+}
+
 func (x *roundCowBase) getAssetCreator(assetIdx basics.AssetIndex) (basics.Address, bool, error) {
 	return x.l.GetAssetCreatorForRound(x.rnd, assetIdx)
 }
@@ -185,6 +189,7 @@ type ledgerForEvaluator interface {
 	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, error)
 	GetAssetCreatorForRound(basics.Round, basics.AssetIndex) (basics.Address, bool, error)
 	GetAppCreatorForRound(basics.Round, basics.AppIndex) (basics.Address, bool, error)
+	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
 }
 
 // StartEvaluator creates a BlockEvaluator, given a ledger and a block header

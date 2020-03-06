@@ -20,7 +20,6 @@ type TealType string
 
 type TealValue []byte
 
-
 type StateSchema struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -28,6 +27,7 @@ type StateSchema struct {
 	NumByteSlice uint64 `codec:"nbs"`
 }
 
+//msgp:allocbound TealKeyValue 1024
 type TealKeyValue map[string]TealValue
 
 func (tk TealKeyValue) Clone() TealKeyValue {

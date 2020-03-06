@@ -41,8 +41,10 @@ func init() {
 	appCmd.AddCommand(deleteAppCmd)
 	appCmd.AddCommand(callAppCmd)
 
-	appCmd.Flags().Uint64Var(&appID, "app-id", 0, "Asset ID")
+	appCmd.PersistentFlags().StringVarP(&txFilename, "out", "o", "", "Dump an unsigned tx to the given file. In order to dump a signed transaction, pass -s")
+	appCmd.PersistentFlags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
 	appCmd.PersistentFlags().StringVarP(&walletName, "wallet", "w", "", "Set the wallet to be used for the selected operation")
+	appCmd.PersistentFlags().Uint64Var(&appID, "app-id", 0, "Asset ID")
 
 	createAppCmd.Flags().StringVar(&appCreator, "creator", "", "Account to create the asset")
 	createAppCmd.MarkFlagRequired("creator")

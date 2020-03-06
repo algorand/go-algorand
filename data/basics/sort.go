@@ -25,3 +25,23 @@ type SortAssetIndex []AssetIndex
 func (a SortAssetIndex) Len() int           { return len(a) }
 func (a SortAssetIndex) Less(i, j int) bool { return a[i] < a[j] }
 func (a SortAssetIndex) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+
+// SortAppIndex implements sorting by AppIndex keys for
+// canonical encoding of maps in msgpack format.
+//msgp:ignore SortAppIndex
+//msgp:sort AppIndex SortAppIndex
+type SortAppIndex []AppIndex
+
+func (a SortAppIndex) Len() int           { return len(a) }
+func (a SortAppIndex) Less(i, j int) bool { return a[i] < a[j] }
+func (a SortAppIndex) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+
+// SortString implements sorting by string keys for
+// canonical encoding of maps in msgpack format.
+//msgp:ignore SortString
+//msgp:sort string SortString
+type SortString []string
+
+func (a SortString) Len() int           { return len(a) }
+func (a SortString) Less(i, j int) bool { return a[i] < a[j] }
+func (a SortString) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }

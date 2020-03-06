@@ -283,30 +283,36 @@ func (l *Ledger) notifyCommit(r basics.Round) basics.Round {
 // GetAssetCreatorForRound looks up the asset creator given the numerical asset
 // ID. This is necessary so that we can retrieve the AssetParams from the
 // creator's balance record.
-func (l *Ledger) GetAssetCreatorForRound(rnd basics.Round, assetIdx basics.AssetIndex) (basics.Address, bool, error) {
+func (l *Ledger) GetAssetCreatorForRound(rnd basics.Round, aidx basics.AssetIndex) (basics.Address, bool, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.getAssetCreatorForRound(rnd, assetIdx)
+	return l.accts.getCreatorForRound(rnd, basics.CreatableIndex(aidx), basics.AssetCreatable)
 }
 
-func (l *Ledger) GetAppCreatorForRound(rnd basics.Round, appIdx basics.AppIndex) (basics.Address, bool, error) {
+func (l *Ledger) GetAppCreatorForRound(rnd basics.Round, aidx basics.AppIndex) (basics.Address, bool, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.getAssetCreatorForRound(rnd, basics.AssetIndex(appIdx))
+	return l.accts.getCreatorForRound(rnd, basics.CreatableIndex(aidx), basics.AppCreatable)
+}
+
+func (l *Ledger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.accts.getCreatorForRound(rnd, cidx, ctype)
 }
 
 // GetAssetCreator is like GetAssetCreatorForRound, but for the latest round
 // and race free with respect to ledger.Latest()
-func (l *Ledger) GetAssetCreator(assetIdx basics.AssetIndex) (basics.Address, bool, error) {
+func (l *Ledger) GetAssetCreator(aidx basics.AssetIndex) (basics.Address, bool, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.getAssetCreatorForRound(l.blockQ.latest(), assetIdx)
+	return l.accts.getCreatorForRound(l.blockQ.latest(), basics.CreatableIndex(aidx), basics.AssetCreatable)
 }
 
 // ListAssets takes a maximum asset index and maximum result length, and
 // returns up to that many asset AssetIDs from the database where asset id is
 // less than or equal to the maximum.
-func (l *Ledger) ListAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) (results []basics.AssetLocator, err error) {
+func (l *Ledger) ListAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) (results []basics.CreatableLocator, err error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 	return l.accts.listAssets(maxAssetIdx, maxResults)

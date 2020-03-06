@@ -361,7 +361,7 @@ func (c *Client) MakeUnsignedAppCreateTx(approvalProg string, stateProg string, 
 	var tx transactions.Transaction
 
 	tx.Type = protocol.ApplicationCallTx
-	tx.Action = transactions.UpdateApplicationAction
+	tx.Action = transactions.CreateApplicationAction
 	tx.ApplicationArgs = appArgs
 
 	return tx, nil

@@ -1118,7 +1118,7 @@ func Assets(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Ensure no race with asset deletion
-		rp, ok := creatorRecord.AssetParams[aloc.Index]
+		rp, ok := creatorRecord.AssetParams[basics.AssetIndex(aloc.Index)]
 		if !ok {
 			continue
 		}
