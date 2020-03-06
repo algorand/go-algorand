@@ -134,8 +134,8 @@ func (e *phonebookImpl) filterRetryTime(t time.Time) []string {
 }
 
 // ReplacePeerList merges a set of addresses with that passed in.
-// new entries in they are being added
-// existing items that aren't included in they are being removed
+// new entries in addressesThey are being added
+// existing items that aren't included in addressesThey are being removed
 // matching entries don't change
 func (e *phonebookImpl) ReplacePeerList(addressesThey []string, networkName string) {
 	e.lock.Lock()
