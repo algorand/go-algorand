@@ -170,9 +170,10 @@ int 2
 asset_read_params
 pop
 pop
-app_arg_0
+txna Accounts 0
 pop
-app_arg 2
+gtxna 0 ApplicationArgs 0
+pop
 `
 
 // Check that assembly output is stable across time.
@@ -191,20 +192,145 @@ func TestAssemble(t *testing.T) {
 		if !strings.Contains(bigTestAssembleNonsenseProgram, spec.Name) &&
 			!strings.HasPrefix(spec.Name, "int") &&
 			!strings.HasPrefix(spec.Name, "byte") &&
-			!strings.HasPrefix(spec.Name, "arg") &&
-			!strings.HasPrefix(spec.Name, "app_arg") {
+			!strings.HasPrefix(spec.Name, "arg") {
 			t.Errorf("test should contain op %v", spec.Name)
 		}
 	}
 	program, err := AssembleString(bigTestAssembleNonsenseProgram)
 	require.NoError(t, err)
 	// check that compilation is stable over time and we assemble to the same bytes this month that we did last month.
-	expectedBytes, _ := hex.DecodeString("022008b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f01020026040212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d02424200320032013202320328292929292a0431003101310231043105310731083109310a310b310c310d310e310f311131123113311431153118330000003300010033000200330004003300050033000700330008003300090033000a0033000b0033000c0033000d0033000e0033000f0033001100330012003300130033001400330015002d2e0102222324252104082209240a220b230c240d250e230f23102311231223132314181b1c2b171615400003290349483403350222231d4821056021056121052b6248482b63484821052b2106642b210565210721052b66484821072105210670484821072105210671484868486a")
+	expectedBytes, _ := hex.DecodeString("022008b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f01020026040212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d02424200320032013202320328292929292a0431003101310231043105310731083109310a310b310c310d310e310f31113112311331143115311833000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e0102222324252104082209240a220b230c240d250e230f23102311231223132314181b1c2b171615400003290349483403350222231d4821056021056121052b6248482b63484821052b2106642b210565210721052b664848210721052106704848210721052106714848361a00483700190048")
 	if bytes.Compare(expectedBytes, program) != 0 {
 		// this print is for convenience if the program has been changed. the hex string can be copy pasted back in as a new expected result.
 		t.Log(hex.EncodeToString(program))
 	}
 	require.Equal(t, expectedBytes, program)
+}
+
+func TestAssembleAlias(t *testing.T) {
+	t.Parallel()
+	source1 := `txn Accounts 0  // alias to txna
+pop
+gtxn 0 ApplicationArgs 0 // alias to gtxn
+pop
+`
+	prog1, err := AssembleString(source1)
+	require.NoError(t, err)
+
+	source2 := `txna Accounts 0
+pop
+gtxna 0 ApplicationArgs 0
+pop
+`
+	prog2, err := AssembleString(source2)
+	require.NoError(t, err)
+
+	require.Equal(t, prog1, prog2)
+}
+
+func TestAssembleTxna(t *testing.T) {
+	source := `txna Accounts 256`
+	_, err := AssembleString(source)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "txna cannot look up beyond index 255")
+
+	source = `txna ApplicationArgs 256`
+	_, err = AssembleString(source)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "txna cannot look up beyond index 255")
+
+	source = `txna Sender 256`
+	_, err = AssembleString(source)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "txna unknown arg")
+
+	source = `gtxna 0 Accounts 256`
+	_, err = AssembleString(source)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "gtxna cannot look up beyond index 255")
+
+	source = `gtxna 0 ApplicationArgs 256`
+	_, err = AssembleString(source)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "gtxna cannot look up beyond index 255")
+
+	source = `gtxna 256 Accounts 0`
+	_, err = AssembleString(source)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "gtxna cannot look up beyond index 255")
+
+	source = `gtxna 0 Sender 256`
+	_, err = AssembleString(source)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "gtxna unknown arg")
+
+	source = `txn Accounts 0`
+	_, err = AssembleStringV1(source)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "txn expects one argument")
+
+	source = `txn Accounts 0 1`
+	_, err = AssembleStringV2(source)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "txn expects one or two arguments")
+
+	source = `txna Accounts 0 1`
+	_, err = AssembleString(source)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "txna expects two arguments")
+
+	source = `txna Accounts a`
+	_, err = AssembleString(source)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "strconv.ParseUint")
+
+	source = `gtxn 0 Sender 0`
+	_, err = AssembleStringV1(source)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "gtxn expects two arguments")
+
+	source = `gtxn 0 Sender 1 2`
+	_, err = AssembleStringV2(source)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "gtxn expects two or three arguments")
+
+	source = `gtxna 0 Accounts 1 2`
+	_, err = AssembleString(source)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "gtxna expects three arguments")
+
+	source = `gtxna a Accounts 0`
+	_, err = AssembleString(source)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "strconv.ParseUint")
+
+	source = `gtxna 0 Accounts a`
+	_, err = AssembleString(source)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "strconv.ParseUint")
+}
+
+func TestAssembleGlobal(t *testing.T) {
+	source := `global`
+	_, err := AssembleString(source)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "global expects one argument")
+
+	source = `global a`
+	_, err = AssembleString(source)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "global unknown arg")
+}
+
+func TestAssembleDefault(t *testing.T) {
+	source := `byte 0x1122334455
+int 1
++
+// comment
+`
+	_, err := AssembleString(source)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "wanted type uint64 got []byte")
 }
 
 // mutateProgVersion replaces version (first two symbols) in hex-encoded program
@@ -436,9 +562,63 @@ func TestAssembleDisassembleCycle(t *testing.T) {
 	}
 }
 
+func TestAssembleDisassembleErrors(t *testing.T) {
+	source := `txn Sender`
+	program, err := AssembleString(source)
+	require.NoError(t, err)
+	program[2] = 0x50 // txn field
+	_, err = Disassemble(program)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid txn arg index")
+
+	source = `txna Accounts 0`
+	program, err = AssembleString(source)
+	require.NoError(t, err)
+	program[2] = 0x50 // txn field
+	_, err = Disassemble(program)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid txn arg index")
+
+	source = `gtxn 0 Sender`
+	program, err = AssembleString(source)
+	require.NoError(t, err)
+	program[3] = 0x50 // txn field
+	_, err = Disassemble(program)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid txn arg index")
+
+	source = `gtxna 0 Accounts 0`
+	program, err = AssembleString(source)
+	require.NoError(t, err)
+	program[3] = 0x50 // txn field
+	_, err = Disassemble(program)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid txn arg index")
+
+	source = `global MinTxnFee`
+	program, err = AssembleString(source)
+	require.NoError(t, err)
+	program[2] = 0x50 // txn field
+	_, err = Disassemble(program)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid global arg index")
+
+	program[0] = 0x11 // version
+	out, err := Disassemble(program)
+	require.NoError(t, err)
+	require.Contains(t, out, "unsupported version")
+
+	program[0] = 0x01 // version
+	program[1] = 0xFF // first opcode
+	out, err = Disassemble(program)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid opcode")
+
+}
+
 func TestAssembleVersions(t *testing.T) {
 	text := `int 1
-app_arg 1
+txna Accounts 0
 `
 	_, err := AssembleString(text)
 	require.NoError(t, err)
@@ -448,5 +628,5 @@ app_arg 1
 
 	_, err = AssembleStringV1(text)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "unknown opcode app_arg")
+	require.Contains(t, err.Error(), "unknown opcode txna")
 }

@@ -1196,6 +1196,14 @@ var testTxnProgramText = testTxnProgramTextV1 + `txn Action
 int 0
 ==
 &&
+txna ApplicationArgs 0
+byte 0x706179
+==
+&&
+txna Accounts 0
+arg 0
+==
+&&
 `
 
 func TestTxn(t *testing.T) {
@@ -1242,6 +1250,10 @@ func TestTxn(t *testing.T) {
 			txn.Txn.AssetSender = txn.Txn.Receiver
 			txn.Txn.AssetReceiver = txn.Txn.CloseRemainderTo
 			txn.Txn.AssetCloseTo = txn.Txn.Sender
+			txn.Txn.Accounts = make([]basics.Address, 1)
+			txn.Txn.Accounts[0] = txn.Txn.Sender
+			txn.Txn.ApplicationArgs = make([]basics.TealValue, 1)
+			txn.Txn.ApplicationArgs[0] = basics.TealValue(protocol.PaymentTx)
 			txn.Lsig.Logic = program
 			txid := txn.Txn.ID()
 			txn.Lsig.Args = [][]byte{
@@ -1320,11 +1332,22 @@ int 1
 global GroupSize
 int 2
 ==
-&&`
+&&
+`
+
+	gtxnText := gtxnTextV1 + `gtxna 0 ApplicationArgs 0
+byte 0x706179
+==
+&&
+gtxna 0 Accounts 0
+gtxn 0 Sender
+==
+&&
+`
 
 	tests := map[uint64]string{
 		1: gtxnTextV1,
-		2: gtxnTextV1,
+		2: gtxnText,
 	}
 
 	for v, source := range tests {
@@ -1354,6 +1377,10 @@ int 2
 			txn.Txn.VoteFirst = 1317
 			txn.Txn.VoteLast = 17776
 			txn.Txn.VoteKeyDilution = 1
+			txn.Txn.Accounts = make([]basics.Address, 1)
+			txn.Txn.Accounts[0] = txn.Txn.Sender
+			txn.Txn.ApplicationArgs = make([]basics.TealValue, 1)
+			txn.Txn.ApplicationArgs[0] = basics.TealValue(protocol.PaymentTx)
 			txgroup[0] = txn
 			txgroup[1].Txn.Amount.Raw = 42
 			txgroup[1].Txn.Fee.Raw = 1066
@@ -1381,6 +1408,82 @@ int 2
 			require.True(t, pass)
 		})
 	}
+}
+
+func TestTxna(t *testing.T) {
+	t.Parallel()
+	source := `txna Accounts 0
+txna ApplicationArgs 0
+==
+`
+	program, err := AssembleString(source)
+	require.NoError(t, err)
+	var txn transactions.SignedTxn
+	txn.Txn.Accounts = make([]basics.Address, 1)
+	txn.Txn.Accounts[0] = txn.Txn.Sender
+	txn.Txn.ApplicationArgs = make([]basics.TealValue, 1)
+	txn.Txn.ApplicationArgs[0] = basics.TealValue(protocol.PaymentTx)
+	txgroup := make([]transactions.SignedTxn, 1)
+	txgroup[0] = txn
+	ep := defaultEvalParams(nil, &txn)
+	ep.TxnGroup = txgroup
+	_, err = Eval(program, ep)
+	require.NoError(t, err)
+
+	// modify txn field
+	saved := program[2]
+	program[2] = 0x01
+	_, err = Eval(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "txna unsupported field")
+
+	// modify txn array index
+	program[2] = saved
+	saved = program[3]
+	program[3] = 1
+	_, err = Eval(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid Accounts index")
+
+	// modify txn array index in the second opcode
+	program[3] = saved
+	saved = program[6]
+	program[6] = 1
+	_, err = Eval(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid ApplicationArgs index")
+
+	// check gtxna
+	source = `gtxna 0 Accounts 0
+txna ApplicationArgs 0
+==`
+	program, err = AssembleString(source)
+	require.NoError(t, err)
+	_, err = Eval(program, ep)
+	require.NoError(t, err)
+
+	// modify gtxn index
+	saved = program[2]
+	program[2] = 0x01
+	_, err = Eval(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "gtxna lookup TxnGroup[1] but it only has 1")
+
+	// modify gtxn field
+	program[2] = saved
+	saved = program[3]
+	program[3] = 0x01
+	_, err = Eval(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "gtxna unsupported field")
+
+	// modify gtxn array index
+	program[3] = saved
+	saved = program[4]
+	program[4] = 0x01
+	_, err = Eval(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid Accounts index")
 }
 
 func TestBitOps(t *testing.T) {
@@ -2584,17 +2687,9 @@ func TestStackValues(t *testing.T) {
 	require.Equal(t, StackTypes{StackUint64, StackBytes, StackAny}, actual)
 }
 
-func TestOpSpecs(t *testing.T) {
-	t.Parallel()
-
-	for _, spec := range OpSpecs {
-		require.NotEmpty(t, spec.opSize, spec)
-	}
-}
-
 func TestEvalVersions(t *testing.T) {
 	text := `int 1
-app_arg 0
+txna ApplicationArgs 0
 pop
 `
 	program, err := AssembleString(text)
@@ -2619,6 +2714,6 @@ pop
 	ep.RunModeFlags = RunModeApplicationApproval
 	_, err = Eval(program, ep)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "illegal opcode 0x68") // app_arg_0 due to optimization
+	require.Contains(t, err.Error(), "illegal opcode 0x36") // txna
 
 }

@@ -209,28 +209,6 @@ func (ops *OpStream) Arg(val uint64) error {
 	return nil
 }
 
-// AppArg writes opcode for loading from Txn.ApplicationArgs
-func (ops *OpStream) AppArg(val uint64) error {
-	switch val {
-	case 0:
-		ops.Out.WriteByte(opsByName[ops.Version]["app_arg_0"].Opcode)
-	case 1:
-		ops.Out.WriteByte(opsByName[ops.Version]["app_arg_1"].Opcode)
-	case 2:
-		ops.Out.WriteByte(opsByName[ops.Version]["app_arg_2"].Opcode)
-	case 3:
-		ops.Out.WriteByte(opsByName[ops.Version]["app_arg_3"].Opcode)
-	default:
-		if val > 0xff {
-			return errors.New("cannot have more than 256 args")
-		}
-		ops.Out.WriteByte(opsByName[ops.Version]["app_arg"].Opcode)
-		ops.Out.WriteByte(uint8(val))
-	}
-	ops.tpush(StackBytes)
-	return nil
-}
-
 // Txn writes opcodes for loading a field from the current transaction
 func (ops *OpStream) Txn(val uint64) error {
 	if val >= uint64(len(TxnFieldNames)) {
@@ -239,6 +217,21 @@ func (ops *OpStream) Txn(val uint64) error {
 	ops.Out.WriteByte(0x31)
 	ops.Out.WriteByte(uint8(val))
 	ops.tpush(TxnFieldTypes[val])
+	return nil
+}
+
+// Txna writes opcodes for loading array field from the current transaction
+func (ops *OpStream) Txna(fieldNum uint64, arrayFieldIdx uint64) error {
+	if fieldNum >= uint64(len(TxnFieldNames)) {
+		return errors.New("invalid txn field")
+	}
+	if arrayFieldIdx > 255 {
+		return errors.New("txna cannot look up beyond index 255")
+	}
+	ops.Out.WriteByte(0x36)
+	ops.Out.WriteByte(uint8(fieldNum))
+	ops.Out.WriteByte(uint8(arrayFieldIdx))
+	ops.tpush(TxnFieldTypes[fieldNum])
 	return nil
 }
 
@@ -257,20 +250,19 @@ func (ops *OpStream) Gtxn(gid, val uint64) error {
 	return nil
 }
 
-// Gtxn2 writes opcodes for loading a field from the current transaction
-// TODO: add actual implementation
-func (ops *OpStream) Gtxn2(gid, val uint64) error {
-	if val >= uint64(len(TxnFieldNames)) {
+// Gtxna writes opcodes for loading an array field from the current transaction
+func (ops *OpStream) Gtxna(gid, fieldNum uint64, arrayFieldIdx uint64) error {
+	if fieldNum >= uint64(len(TxnFieldNames)) {
 		return errors.New("invalid txn field")
 	}
-	if gid > 255 {
-		return errors.New("gtxn cannot look up beyond group index 255")
+	if gid > 255 || arrayFieldIdx > 255 {
+		return errors.New("gtxna cannot look up beyond index 255")
 	}
-	ops.Out.WriteByte(0x33)
+	ops.Out.WriteByte(0x37)
 	ops.Out.WriteByte(uint8(gid))
-	ops.Out.WriteByte(uint8(val))
-	ops.Out.WriteByte(uint8(0))
-	ops.tpush(TxnFieldTypes[val])
+	ops.Out.WriteByte(uint8(fieldNum))
+	ops.Out.WriteByte(uint8(arrayFieldIdx))
+	ops.tpush(TxnFieldTypes[fieldNum])
 	return nil
 }
 
@@ -467,14 +459,6 @@ func assembleArg(ops *OpStream, spec *OpSpec, args []string) error {
 	return ops.Arg(val)
 }
 
-func assembleAppArg(ops *OpStream, spec *OpSpec, args []string) error {
-	val, err := strconv.ParseUint(args[0], 0, 64)
-	if err != nil {
-		return err
-	}
-	return ops.AppArg(val)
-}
-
 func assembleBnz(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return errors.New("bnz operation needs label argument")
@@ -578,6 +562,10 @@ const (
 	TxID
 	// Action        Action
 	Action
+	// ApplicationArgs []basics.TealValue
+	ApplicationArgs
+	// Accounts        []basics.Address
+	Accounts
 
 	invalidTxnField // fence for some setup that loops from Sender..invalidTxnField
 )
@@ -617,6 +605,8 @@ var txnFieldTypePairs = []txnFieldType{
 	{GroupIndex, StackUint64},
 	{TxID, StackBytes},
 	{Action, StackUint64},
+	{ApplicationArgs, StackBytes},
+	{Accounts, StackBytes},
 }
 
 // TxnFieldTypes is StackBytes or StackUint64 parallel to TxnFieldNames
@@ -650,6 +640,32 @@ func assembleTxn(ops *OpStream, spec *OpSpec, args []string) error {
 	return ops.Txn(uint64(val))
 }
 
+// assembleTxn2 generates txn or txna opcode depending on number of operands
+func assembleTxn2(ops *OpStream, spec *OpSpec, args []string) error {
+	if len(args) == 1 {
+		return assembleTxn(ops, spec, args)
+	}
+	if len(args) == 2 {
+		return assembleTxna(ops, spec, args)
+	}
+	return errors.New("txn expects one or two arguments")
+}
+
+func assembleTxna(ops *OpStream, spec *OpSpec, args []string) error {
+	if len(args) != 2 {
+		return errors.New("txna expects two arguments")
+	}
+	fieldNum, ok := txnFields[args[0]]
+	if !ok || fieldNum != uint(ApplicationArgs) && fieldNum != uint(Accounts) {
+		return fmt.Errorf("txna unknown arg %s", args[0])
+	}
+	arrayFieldIdx, err := strconv.ParseUint(args[1], 0, 64)
+	if err != nil {
+		return err
+	}
+	return ops.Txna(uint64(fieldNum), uint64(arrayFieldIdx))
+}
+
 func assembleGtxn(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 2 {
 		return errors.New("gtxn expects two arguments")
@@ -666,18 +682,32 @@ func assembleGtxn(ops *OpStream, spec *OpSpec, args []string) error {
 }
 
 func assembleGtxn2(ops *OpStream, spec *OpSpec, args []string) error {
-	if len(args) > 3 {
-		return errors.New("gtxn expects two or three arguments")
+	if len(args) == 2 {
+		return assembleGtxn(ops, spec, args)
+	}
+	if len(args) == 3 {
+		return assembleGtxna(ops, spec, args)
+	}
+	return errors.New("gtxn expects two or three arguments")
+}
+
+func assembleGtxna(ops *OpStream, spec *OpSpec, args []string) error {
+	if len(args) != 3 {
+		return errors.New("gtxna expects three arguments")
 	}
 	gtid, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
 		return err
 	}
-	val, ok := txnFields[args[1]]
-	if !ok {
-		return fmt.Errorf("gtxn unknown arg %s", args[0])
+	fieldNum, ok := txnFields[args[1]]
+	if !ok || fieldNum != uint(ApplicationArgs) && fieldNum != uint(Accounts) {
+		return fmt.Errorf("gtxna unknown arg %s", args[0])
 	}
-	return ops.Gtxn2(gtid, uint64(val))
+	arrayFieldIdx, err := strconv.ParseUint(args[2], 0, 64)
+	if err != nil {
+		return err
+	}
+	return ops.Gtxna(gtid, uint64(fieldNum), uint64(arrayFieldIdx))
 }
 
 //go:generate stringer -type=GlobalField
@@ -1266,11 +1296,6 @@ func disArg(dis *disassembleState, spec *OpSpec) {
 	_, dis.err = fmt.Fprintf(dis.out, "arg %d\n", dis.program[dis.pc+1])
 }
 
-func disAppArg(dis *disassembleState, spec *OpSpec) {
-	dis.nextpc = dis.pc + 2
-	_, dis.err = fmt.Fprintf(dis.out, "app_arg %d\n", dis.program[dis.pc+1])
-}
-
 func disTxn(dis *disassembleState, spec *OpSpec) {
 	dis.nextpc = dis.pc + 2
 	txarg := dis.program[dis.pc+1]
@@ -1279,6 +1304,17 @@ func disTxn(dis *disassembleState, spec *OpSpec) {
 		return
 	}
 	_, dis.err = fmt.Fprintf(dis.out, "txn %s\n", TxnFieldNames[txarg])
+}
+
+func disTxna(dis *disassembleState, spec *OpSpec) {
+	dis.nextpc = dis.pc + 3
+	txarg := dis.program[dis.pc+1]
+	if int(txarg) >= len(TxnFieldNames) {
+		dis.err = fmt.Errorf("invalid txn arg index %d at pc=%d", txarg, dis.pc)
+		return
+	}
+	arrayFieldIdx := dis.program[dis.pc+2]
+	_, dis.err = fmt.Fprintf(dis.out, "txn %s %d\n", TxnFieldNames[txarg], arrayFieldIdx)
 }
 
 func disGtxn(dis *disassembleState, spec *OpSpec) {
@@ -1292,7 +1328,7 @@ func disGtxn(dis *disassembleState, spec *OpSpec) {
 	_, dis.err = fmt.Fprintf(dis.out, "gtxn %d %s\n", gi, TxnFieldNames[txarg])
 }
 
-func disGtxn2(dis *disassembleState, spec *OpSpec) {
+func disGtxna(dis *disassembleState, spec *OpSpec) {
 	dis.nextpc = dis.pc + 4
 	gi := dis.program[dis.pc+1]
 	txarg := dis.program[dis.pc+2]
@@ -1300,8 +1336,8 @@ func disGtxn2(dis *disassembleState, spec *OpSpec) {
 		dis.err = fmt.Errorf("invalid txn arg index %d at pc=%d", txarg, dis.pc)
 		return
 	}
-	optarg := dis.program[dis.pc+3]
-	_, dis.err = fmt.Fprintf(dis.out, "gtxn %d %s %d\n", gi, TxnFieldNames[txarg], optarg)
+	arrayFieldIdx := dis.program[dis.pc+3]
+	_, dis.err = fmt.Fprintf(dis.out, "gtxna %d %s %d\n", gi, TxnFieldNames[txarg], arrayFieldIdx)
 }
 
 func disGlobal(dis *disassembleState, spec *OpSpec) {

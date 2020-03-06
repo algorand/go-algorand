@@ -81,6 +81,8 @@ var opDocList = []stringString{
 	{"arg_3", "push Args[3] to stack"},
 	{"txn", "push field from current transaction to stack"},
 	{"gtxn", "push field to the stack from a transaction in the current transaction group"},
+	{"txna", "push value of an array field from current transaction to stack"},
+	{"gtxna", "push value of a field to the stack from a transaction in the current transaction group"},
 	{"global", "push value from globals to stack"},
 	{"load", "copy a value from scratch space to the stack"},
 	{"store", "pop a value from the stack and store to scratch space"},
@@ -94,11 +96,6 @@ var opDocList = []stringString{
 	{"app_write_local", "write key K to local state of account A for the application B"},
 	{"app_write_global", "write key K to global state of the current application"},
 	{"app_read_other_global", "read key K from global state of account A for the application B if A created B => {0 or 1 (top), value}"},
-	{"app_arg", "push ApplicationArgs[N] value to stack by index"},
-	{"app_arg_0", "push ApplicationArgs[0] to stack"},
-	{"app_arg_1", "push ApplicationArgs[1] to stack"},
-	{"app_arg_2", "push ApplicationArgs[2] to stack"},
-	{"app_arg_3", "push ApplicationArgs[3] to stack"},
 	{"asset_read_holding", "read an asset A holding field X of account A  => {0 or 1 (top), value}"},
 	{"asset_read_params", "read an asset A params field X of account A  => {0 or 1 (top), value}"},
 }
@@ -121,12 +118,13 @@ var opcodeImmediateNoteList = []stringString{
 	{"bytec", "{uint8 byte constant index}"},
 	{"arg", "{uint8 arg index N}"},
 	{"txn", "{uint8 transaction field index}"},
-	{"gtxn", "{uint8 transaction group index}{uint8 transaction field index}{uint8 transaction field array index}"},
+	{"gtxn", "{uint8 transaction group index}{uint8 transaction field index}"},
+	{"txna", "{uint8 transaction field index}{uint8 transaction field array index}"},
+	{"gtxna", "{uint8 transaction group index}{uint8 transaction field index}{uint8 transaction field array index}"},
 	{"global", "{uint8 global field index}"},
 	{"bnz", "{0..0x7fff forward branch offset, big endian}"},
 	{"load", "{uint8 position in scratch space to load from}"},
 	{"store", "{uint8 position in scratch space to store to}"},
-	{"app_arg", "{uint8 arg index N}"},
 }
 var opcodeImmediateNotes map[string]string
 
@@ -176,7 +174,7 @@ type OpGroup struct {
 // OpGroupList is groupings of ops for documentation purposes.
 var OpGroupList = []OpGroup{
 	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw"}},
-	{"Loading Values", []string{"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "global", "load", "store", "app_arg", "app_arg_0", "app_arg_1", "app_arg_2", "app_arg_3"}},
+	{"Loading Values", []string{"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "txna", "gtxna", "global", "load", "store"}},
 	{"Flow Control", []string{"err", "bnz", "pop", "dup"}},
 	{"State Access", []string{"balance", "app_opted_in", "app_read_local", "app_read_global", "app_write_local", "app_write_global", "app_read_other_global", "asset_read_holding", "asset_read_params"}},
 }
@@ -238,6 +236,9 @@ var txnFieldDocList = []stringString{
 	{"AssetCloseTo", "32 byte address"},
 	{"GroupIndex", "Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1."},
 	{"TxID", "The computed ID for this transaction. 32 bytes."},
+	{"Action", "ApplicationCall transaction action"},
+	{"ApplicationArgs", "Arguments passed to the application in the ApplicationCall transaction"},
+	{"Accounts", "Accounts listed in the ApplicationCall transaction"},
 }
 
 // TxnFieldDocs are notes on fields available by `txn` and `gtxn`
