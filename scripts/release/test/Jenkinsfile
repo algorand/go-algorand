@@ -4,7 +4,7 @@ def TYPE = "t2.2xlarge"
 
 pipeline {
     parameters {
-        string defaultValue: 'master', description: 'Branch name or tag name.', name: 'branch', trim: true
+        string defaultValue: 'rel/stable', description: 'Branch name or tag name.', name: 'branch', trim: true
     }
 
     environment {
