@@ -7,9 +7,9 @@ if mule -v &> /dev/null; then
     exit 0
 fi
 
-if VERSION=$(pip3 --version) &> /dev/null; then
+if VERSION=$(pip3 --version 2> /dev/null); then
     PIP="pip3"
-elif VERSION=$(pip --version) &> /dev/null; then
+elif VERSION=$(pip --version 2> /dev/null); then
     PIP="pip"
 else
     echo "You must have pip installed to set up Mule"
