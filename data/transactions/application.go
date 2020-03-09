@@ -175,7 +175,7 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, spec 
 		// Can't close out not currently opted in
 		_, ok := record.AppLocalStates[appIdx]
 		if !ok {
-			return fmt.Errorf("cannot close out for app %d, not currently opted in")
+			return fmt.Errorf("cannot close out for app %d, not currently opted in", appIdx)
 		}
 
 		// Execute the StateUpdate program, before we've deleted the LocalState

@@ -42,6 +42,10 @@ func (balances keyregTestBalances) GetAssetCreator(assetIdx basics.AssetIndex) (
 	return basics.Address{}, false, nil
 }
 
+func (balances keyregTestBalances) GetAppCreator(assetIdx basics.AppIndex) (basics.Address, bool, error) {
+	return basics.Address{}, false, nil
+}
+
 func (balances keyregTestBalances) Put(basics.BalanceRecord) error {
 	return nil
 }
