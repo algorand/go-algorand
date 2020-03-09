@@ -24,9 +24,12 @@ done
 
 
 
-if mule -v &> /dev/null; then
-    echo "Mule version $(mule -v) is already installed"
-    exit 0
+if CURRENT_MULE_VERSION=$(mule -v 2> /dev/null); then
+    if [[ ${CURRENT_MULE_VERSION} == ${MULE_VERSION} ]]; then
+        echo "Mule version $(mule -v) is already installed"
+        exit 0
+    fi
+    echo "Mule version ${CURRENT_MULE_VERSION} currently installed, installing ${MULE_VERSION}..."
 fi
 
 if VERSION=$(pip3 --version 2> /dev/null); then
