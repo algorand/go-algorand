@@ -159,6 +159,7 @@ addons:
       - libboost-all-dev
       - fakeroot
       - rpm
+      - python3-pip
       - python3-venv
       - libssl-dev
       - libffi-dev
