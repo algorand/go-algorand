@@ -947,11 +947,16 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint
 		}
 		sv.Bytes = txn.ApplicationArgs[arrayFieldIdx]
 	case Accounts:
-		if arrayFieldIdx >= uint64(len(txn.Accounts)) {
-			err = fmt.Errorf("invalid Accounts index %d", arrayFieldIdx)
-			return
+		if arrayFieldIdx == 0 {
+			// special case: sender
+			sv.Bytes = txn.Sender[:]
+		} else {
+			if arrayFieldIdx > uint64(len(txn.Accounts)) {
+				err = fmt.Errorf("invalid Accounts index %d", arrayFieldIdx)
+				return
+			}
+			sv.Bytes = txn.Accounts[arrayFieldIdx-1][:]
 		}
-		sv.Bytes = txn.Accounts[arrayFieldIdx][:]
 	default:
 		err = fmt.Errorf("invalid txn field %d", field)
 	}
@@ -1128,11 +1133,18 @@ func opBalance(cx *evalContext) {
 		cx.err = fmt.Errorf("ledger not available")
 		return
 	}
-	if accountIdx >= uint64(len(cx.Txn.Txn.Accounts)) {
-		cx.err = fmt.Errorf("cannot load account[%d] of %d", accountIdx, len(cx.Txn.Txn.Accounts))
-		return
+
+	var addr basics.Address
+	if accountIdx == 0 {
+		// special case: sender
+		addr = cx.Txn.Txn.Sender
+	} else {
+		if accountIdx > uint64(len(cx.Txn.Txn.Accounts)) {
+			cx.err = fmt.Errorf("cannot load account[%d] of %d", accountIdx, len(cx.Txn.Txn.Accounts))
+			return
+		}
+		addr = cx.Txn.Txn.Accounts[accountIdx-1]
 	}
-	addr := cx.Txn.Txn.Accounts[accountIdx]
 
 	amount, err := cx.ledger.Balance(addr)
 	if err != nil {
@@ -1153,12 +1165,19 @@ func opAppCheckOptedIn(cx *evalContext) {
 		cx.err = fmt.Errorf("ledger not available")
 		return
 	}
-	if accountIdx >= uint64(len(cx.Txn.Txn.Accounts)) {
-		cx.err = fmt.Errorf("cannot load account[%d] of %d", accountIdx, len(cx.Txn.Txn.Accounts))
-		return
+
+	var addr basics.Address
+	if accountIdx == 0 {
+		// special case: sender
+		addr = cx.Txn.Txn.Sender
+	} else {
+		if accountIdx > uint64(len(cx.Txn.Txn.Accounts)) {
+			cx.err = fmt.Errorf("cannot load account[%d] of %d", accountIdx, len(cx.Txn.Txn.Accounts))
+			return
+		}
+		addr = cx.Txn.Txn.Accounts[accountIdx-1]
 	}
 
-	addr := cx.Txn.Txn.Accounts[accountIdx]
 	_, err := cx.ledger.AppLocalState(addr, appID)
 	if err != nil {
 		cx.stack[prev].Uint = 0
@@ -1182,12 +1201,19 @@ func opAppReadLocalState(cx *evalContext) {
 		cx.err = fmt.Errorf("ledger not available")
 		return
 	}
-	if accountIdx >= uint64(len(cx.Txn.Txn.Accounts)) {
-		cx.err = fmt.Errorf("cannot load account[%d] of %d", accountIdx, len(cx.Txn.Txn.Accounts))
-		return
+
+	var addr basics.Address
+	if accountIdx == 0 {
+		// special case: sender
+		addr = cx.Txn.Txn.Sender
+	} else {
+		if accountIdx > uint64(len(cx.Txn.Txn.Accounts)) {
+			cx.err = fmt.Errorf("cannot load account[%d] of %d", accountIdx, len(cx.Txn.Txn.Accounts))
+			return
+		}
+		addr = cx.Txn.Txn.Accounts[accountIdx-1]
 	}
 
-	addr := cx.Txn.Txn.Accounts[accountIdx]
 	state, err := cx.ledger.AppLocalState(addr, appID)
 	if err != nil {
 		cx.err = fmt.Errorf("failed to fetch local state [%s] of the app %d: %s", addr, appID, err.Error())
@@ -1207,6 +1233,8 @@ func opAppReadLocalState(cx *evalContext) {
 }
 
 func opAppReadGlobalState(cx *evalContext) {
+	// TODO: add Global State access restriction
+
 	last := len(cx.stack) - 1 // state key
 
 	key := cx.stack[last].Bytes

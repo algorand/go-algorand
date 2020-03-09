@@ -1234,7 +1234,7 @@ func makeSampleTxn() transactions.SignedTxn {
 	txn.Txn.AssetReceiver = txn.Txn.CloseRemainderTo
 	txn.Txn.AssetCloseTo = txn.Txn.Sender
 	txn.Txn.Accounts = make([]basics.Address, 1)
-	txn.Txn.Accounts[0] = txn.Txn.Sender
+	txn.Txn.Accounts[0] = txn.Txn.Receiver
 	txn.Txn.ApplicationArgs = make([]basics.TealValue, 1)
 	txn.Txn.ApplicationArgs[0] = basics.TealValue(protocol.PaymentTx)
 	return txn
@@ -1411,7 +1411,7 @@ gtxn 0 Sender
 
 func TestTxna(t *testing.T) {
 	t.Parallel()
-	source := `txna Accounts 0
+	source := `txna Accounts 1
 txna ApplicationArgs 0
 ==
 `
@@ -1439,7 +1439,7 @@ txna ApplicationArgs 0
 	// modify txn array index
 	program[2] = saved
 	saved = program[3]
-	program[3] = 1
+	program[3] = 0x02
 	_, err = Eval(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid Accounts index")
@@ -1447,13 +1447,28 @@ txna ApplicationArgs 0
 	// modify txn array index in the second opcode
 	program[3] = saved
 	saved = program[6]
-	program[6] = 1
+	program[6] = 0x01
 	_, err = Eval(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid ApplicationArgs index")
 
+	// check special case: Account 0 == Sender
+	// even without any additional context
+	source = `txna Accounts 0
+txn Sender
+==
+`
+	program2, err := AssembleString(source)
+	require.NoError(t, err)
+	var txn2 transactions.SignedTxn
+	copy(txn2.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
+	ep2 := defaultEvalParams(nil, &txn2)
+	pass, err := Eval(program2, ep2)
+	require.NoError(t, err)
+	require.True(t, pass)
+
 	// check gtxna
-	source = `gtxna 0 Accounts 0
+	source = `gtxna 0 Accounts 1
 txna ApplicationArgs 0
 ==`
 	program, err = AssembleString(source)
@@ -1479,10 +1494,28 @@ txna ApplicationArgs 0
 	// modify gtxn array index
 	program[3] = saved
 	saved = program[4]
-	program[4] = 0x01
+	program[4] = 0x02
 	_, err = Eval(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid Accounts index")
+
+	// check special case: Account 0 == Sender
+	// even without any additional context
+	source = `gtxna 0 Accounts 0
+txn Sender
+==
+`
+	program3, err := AssembleString(source)
+	require.NoError(t, err)
+	var txn3 transactions.SignedTxn
+	copy(txn2.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
+	txgroup3 := make([]transactions.SignedTxn, 1)
+	txgroup3[0] = txn3
+	ep3 := defaultEvalParams(nil, &txn3)
+	ep3.TxnGroup = txgroup3
+	pass, err = Eval(program3, ep3)
+	require.NoError(t, err)
+	require.True(t, pass)
 }
 
 func TestBitOps(t *testing.T) {
@@ -2958,7 +2991,7 @@ balance
 func TestBalance(t *testing.T) {
 	t.Parallel()
 
-	text := `int 1
+	text := `int 2
 balance
 int 1
 ==`
@@ -2984,12 +3017,29 @@ int 1
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "cannot load account")
 
+	text = `int 1
+balance
+int 1
+==`
+	program, err = AssembleString(text)
+	require.NoError(t, err)
+	pass, err := Eval(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+
 	text = `int 0
 balance
 int 1
 ==`
 	program, err = AssembleString(text)
 	require.NoError(t, err)
+	var addr basics.Address
+	copy(addr[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02"))
+	ep.ledger = makeTestLedger(
+		map[basics.Address]uint64{
+			addr: 1,
+		},
+	)
 	_, err = Eval(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to fetch balance")
@@ -2999,7 +3049,7 @@ int 1
 			txn.Txn.Sender: 1,
 		},
 	)
-	pass, err := Eval(program, ep)
+	pass, err = Eval(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 }
@@ -3007,7 +3057,7 @@ int 1
 func TestAppCheckOptedIn(t *testing.T) {
 	t.Parallel()
 
-	text := `int 1  // account idx
+	text := `int 2  // account idx
 int 100  // app idx
 app_opted_in
 int 1
@@ -3035,7 +3085,7 @@ int 1
 	require.Contains(t, err.Error(), "cannot load account")
 
 	// Receiver is not opted in
-	text = `int 0  // account idx
+	text = `int 1  // account idx
 int 100  // app idx
 app_opted_in
 int 0
@@ -3047,12 +3097,33 @@ int 0
 	require.True(t, pass)
 
 	// Sender is not opted in
+	text = `int 0  // account idx
+int 100  // app idx
+app_opted_in
+int 0
+==`
+	program, err = AssembleString(text)
+	require.NoError(t, err)
 	ledger := makeTestLedger(
 		map[basics.Address]uint64{
 			txn.Txn.Sender: 1,
 		},
 	)
 	ep.ledger = ledger
+	pass, err = Eval(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+
+	// Receiver opted in
+	text = `int 1  // account idx
+int 100  // app idx
+app_opted_in
+int 1
+==`
+	ledger.newApp(txn.Txn.Receiver, 100)
+
+	program, err = AssembleString(text)
+	require.NoError(t, err)
 	pass, err = Eval(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
@@ -3070,12 +3141,13 @@ int 1
 	pass, err = Eval(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
+
 }
 
 func TestAppReadLocalState(t *testing.T) {
 	t.Parallel()
 
-	text := `int 1  // account idx
+	text := `int 2  // account idx
 int 100 // app id
 txn ApplicationArgs 0
 app_read_local
@@ -3111,7 +3183,7 @@ int 1
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "cannot load account")
 
-	text = `int 0  // account idx
+	text = `int 1  // account idx
 int 100 // app id
 txn ApplicationArgs 0
 app_read_local
@@ -3131,23 +3203,43 @@ int 1`
 
 	ledger = makeTestLedger(
 		map[basics.Address]uint64{
-			txn.Txn.Sender: 1,
+			txn.Txn.Receiver: 1,
 		},
 	)
 	ep.ledger = ledger
-	ledger.newApp(txn.Txn.Sender, 9999)
+	ledger.newApp(txn.Txn.Receiver, 9999)
 
 	_, err = Eval(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to fetch local state")
 
 	// create the app and check the value from ApplicationArgs[0] (protocol.PaymentTx) does not exist
-	ledger.newApp(txn.Txn.Sender, 100)
+	ledger.newApp(txn.Txn.Receiver, 100)
 
 	pass, err := Eval(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
+	text = `int 1  // account idx
+int 100 // app id
+txn ApplicationArgs 0
+app_read_local
+bnz exist
+err
+exist:
+byte 0x414c474f
+==`
+
+	program, err = AssembleString(text)
+	require.NoError(t, err)
+
+	ledger.balances[txn.Txn.Receiver].apps[100][string(protocol.PaymentTx)] = basics.TealValue("ALGO")
+	pass, err = Eval(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+
+	// check special case account idx == 0 => sender
+	ledger.newApp(txn.Txn.Sender, 100)
 	text = `int 0  // account idx
 int 100 // app id
 txn ApplicationArgs 0
@@ -3165,6 +3257,7 @@ byte 0x414c474f
 	pass, err = Eval(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
+
 }
 
 func TestAppReadGlobalState(t *testing.T) {
