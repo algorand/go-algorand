@@ -145,8 +145,10 @@ type AccountData struct {
 type AppParams struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	ApprovalProgram    string `codec:"approv,allocbound=-"`
-	ClearStateProgram  string `codec:"clearp,allocbound=-"`
+	ApprovalProgram   string      `codec:"approv,allocbound=-"`
+	ClearStateProgram string      `codec:"clearp,allocbound=-"`
+	LocalStateSchema  StateSchema `codec:"lsch"`
+	GlobalStateSchema StateSchema `codec:"gsch"`
 }
 
 // AccountDetail encapsulates meaningful details about a given account, for external consumption

@@ -276,16 +276,24 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		case NoOpOC:
 		case OptInOC:
 		case CloseOutOC:
-		case DeleteApplicationOC:
+		case ClearStateOC:
 		case UpdateApplicationOC:
+		case DeleteApplicationOC:
 		default:
 			return fmt.Errorf("invalid application OnCompletion")
 		}
 
 		if tx.ApplicationID != 0 || tx.OnCompletion != UpdateApplicationOC {
-			// Ensure programs are only set for creattion or update
+			// Ensure programs are only set for creation or update
 			if tx.ApprovalProgram != "" || tx.ClearStateProgram != "" {
-				return fmt.Errorf("scripts may only be specified during application creation")
+				return fmt.Errorf("scripts may only be specified during application creation or update")
+			}
+		}
+
+		if tx.ApplicationID == 0 {
+			if tx.LocalStateSchema != (basics.StateSchema{}) ||
+				tx.GlobalStateSchema != (basics.StateSchema{}) {
+				return fmt.Errorf("local and global state schemas are immutable")
 			}
 		}
 

@@ -143,7 +143,10 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, spec 
 		// Allocate the new app params
 		appIdx = basics.AppIndex(txnCounter + 1)
 		record.AppParams[appIdx] = basics.AppParams{
-			// TODO(applications) fill in this struct
+			ApprovalProgram:   ac.ApprovalProgram,
+			ClearStateProgram: ac.ClearStateProgram,
+			LocalStateSchema:  ac.LocalStateSchema,
+			GlobalStateSchema: ac.GlobalStateSchema,
 		}
 
 		// Write back to the creator's balance record and continue
