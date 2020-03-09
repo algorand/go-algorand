@@ -166,7 +166,7 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 		cfg, err := config.LoadConfigFromDisk(rootDirectory)
 		require.NoError(t, err)
 
-		node, err := MakeFull(logging.Base().With("source", t.Name()+strconv.Itoa(i)), rootDirectory, cfg, "", g)
+		node, err := MakeFull(logging.Base().With("source", t.Name()+strconv.Itoa(i)), rootDirectory, cfg, []string{}, g)
 		nodes[i] = node
 		require.NoError(t, err)
 	}
@@ -391,7 +391,7 @@ func connectPeers(nodes []*AlgorandFullNode) {
 	}
 
 	for _, node := range nodes {
-		node.ExtendPeerList(neighbors...)
+		//		node.ExtendPeerList(neighbors...)
 		node.net.RequestConnectOutgoing(false, nil)
 	}
 }
@@ -406,9 +406,9 @@ func delayStartNode(node *AlgorandFullNode, peers []*AlgorandFullNode, delay tim
 	}()
 	wg.Wait()
 
-	node0Addr := node.config.NetAddress
+	//	node0Addr := node.config.NetAddress
 	for _, peer := range peers {
-		peer.ExtendPeerList(node0Addr)
+		//		peer.ExtendPeerList(node0Addr)
 		peer.net.RequestConnectOutgoing(false, nil)
 	}
 }

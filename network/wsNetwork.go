@@ -290,7 +290,7 @@ type WebsocketNetwork struct {
 	broadcastQueueHighPrio chan broadcastRequest
 	broadcastQueueBulk     chan broadcastRequest
 
-	phonebook *MultiPhonebook
+	phonebook Phonebook
 
 	GenesisID string
 	NetworkID protocol.NetworkID
@@ -1267,16 +1267,7 @@ func (wn *WebsocketNetwork) meshThread() {
 			dnsAddrs := wn.getDNSAddrs(dnsBootstrap)
 			if len(dnsAddrs) > 0 {
 				wn.log.Debugf("got %d dns addrs, %#v", len(dnsAddrs), dnsAddrs[:imin(5, len(dnsAddrs))])
-				dnsPhonebook := wn.phonebook.GetPhonebook(dnsBootstrap)
-				if dnsPhonebook == nil {
-					// create one, if we don't have one already.
-					dnsPhonebook = MakeThreadsafePhonebook(wn.config.ConnectionsRateLimitingCount,
-						time.Duration(wn.config.ConnectionsRateLimitingWindowSeconds)*time.Second)
-					wn.phonebook.AddOrUpdatePhonebook(dnsBootstrap, dnsPhonebook)
-				}
-				if tsPhonebook, ok := dnsPhonebook.(*ThreadsafePhonebook); ok {
-					tsPhonebook.ReplacePeerList(dnsAddrs)
-				}
+				wn.phonebook.ReplacePeerList(dnsAddrs, dnsBootstrap)
 			} else {
 				wn.log.Infof("got no DNS addrs for network %s", wn.NetworkID)
 			}
@@ -1698,18 +1689,25 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 }
 
 // NewWebsocketNetwork constructor for websockets based gossip network
-func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebook Phonebook, genesisID string, networkID protocol.NetworkID) (wn *WebsocketNetwork, err error) {
-	outerPhonebook := MakeMultiPhonebook()
-	outerPhonebook.AddOrUpdatePhonebook("default", phonebook)
-	wn = &WebsocketNetwork{log: log, config: config, phonebook: outerPhonebook, GenesisID: genesisID, NetworkID: networkID}
+func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID) (wn *WebsocketNetwork, err error) {
+	phonebook := MakePhonebook(config.ConnectionsRateLimitingCount,
+		time.Duration(config.ConnectionsRateLimitingWindowSeconds)*time.Second)
+	phonebook.ReplacePeerList(phonebookAddresses, config.DNSBootstrapID)
+	wn = &WebsocketNetwork{
+		log:       log,
+		config:    config,
+		phonebook: phonebook,
+		GenesisID: genesisID,
+		NetworkID: networkID,
+	}
 
 	wn.setup()
 	return wn, nil
 }
 
 // NewWebsocketGossipNode constructs a websocket network node and returns it as a GossipNode interface implementation
-func NewWebsocketGossipNode(log logging.Logger, config config.Local, phonebook Phonebook, genesisID string, networkID protocol.NetworkID) (gn GossipNode, err error) {
-	return NewWebsocketNetwork(log, config, phonebook, genesisID, networkID)
+func NewWebsocketGossipNode(log logging.Logger, config config.Local, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID) (gn GossipNode, err error) {
+	return NewWebsocketNetwork(log, config, phonebookAddresses, genesisID, networkID)
 }
 
 // SetPrioScheme specifies the network priority scheme for a network node

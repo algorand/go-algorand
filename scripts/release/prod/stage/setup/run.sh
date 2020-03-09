@@ -6,9 +6,9 @@ set -ex
 trap 'bash ./scripts/release/common/ec2/shutdown.sh' ERR
 
 # Path(s) are relative to the root of the Jenkins workspace.
+BRANCH=$(./scripts/release/util/check_remote.sh "$1")
 INSTANCE=$(cat scripts/release/common/ec2/tmp/instance)
 #BUCKET="$1"
-BRANCH="$1"
 
 BUILD_ENV=$(ssh -i ReleaseBuildInstanceKey.pem -o -A ubuntu@"$INSTANCE" cat build_env)
 CHANNEL=$(sed -n 's/.*CHANNEL=\(.*\)/\1/p' <<< "$BUILD_ENV")
