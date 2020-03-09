@@ -2688,6 +2688,8 @@ func TestStackValues(t *testing.T) {
 }
 
 func TestEvalVersions(t *testing.T) {
+	t.Parallel()
+
 	text := `int 1
 txna ApplicationArgs 0
 pop
@@ -2696,14 +2698,12 @@ pop
 	require.NoError(t, err)
 
 	ep := defaultEvalParams(nil, nil)
-	ep.RunModeFlags = RunModeApplicationApproval
 	ep.Txn = &transactions.SignedTxn{}
 	ep.Txn.Txn.ApplicationArgs = []basics.TealValue{[]byte("test")}
 	_, err = Eval(program, ep)
 	require.NoError(t, err)
 
 	ep = defaultEvalParamsV1(nil, nil)
-	ep.RunModeFlags = RunModeApplicationApproval
 	_, err = Eval(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "greater than protocol supported version 1")
@@ -2711,9 +2711,199 @@ pop
 	// hack the version and fail on illegal opcode
 	program[0] = 0x1
 	ep = defaultEvalParamsV1(nil, nil)
-	ep.RunModeFlags = RunModeApplicationApproval
 	_, err = Eval(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "illegal opcode 0x36") // txna
 
+}
+
+type testLedger struct{}
+
+func (t *testLedger) Balance(addr basics.Address) (uint64, error) {
+	return 1, nil
+}
+
+func TestEvalModes(t *testing.T) {
+	t.Parallel()
+	// ed25519verify and err are tested separately below
+
+	// check modeAny (TEAL v1 + txna/gtxna) are available in RunModeSignature
+	// check all opcodes available in RunModeApplication
+	allModeAnyOpcodes := `intcblock 0 1 1 1 1 5
+	bytecblock 0xcafed00d 0x1337 0x2001 0xdeadbeef 0x70077007
+bytec 0
+sha256
+keccak256
+sha512_256
+len
+intc_0
++
+intc_1
+-
+intc_2
+/
+intc_3
+*
+intc 4
+<
+intc_1
+>
+intc_1
+<=
+intc_1
+>=
+intc_1
+&&
+intc_1
+||
+bytec_1
+bytec_2
+!=
+bytec_3
+bytec 4
+==
+!
+itob
+btoi
+%	// use values left after bytes comparison
+|
+intc_1
+&
+txn Fee
+^
+global MinTxnFee
+~
+gtxn 0 LastValid
+mulw
+pop
+store 0
+load 0
+bnz label
+label:
+dup
+pop
+txna Accounts 0
+gtxna 0 ApplicationArgs 0
+==
+pop
+arg_0
+arg_1
+==
+arg_2
+arg_3
+==
+&&
+txn Sender
+arg 4
+!=
+&&
+!=
+`
+	allAppOpcodes := `int 0
+balance
+&&
+`
+	tests := map[uint64]string{
+		RunModeSignature:   allModeAnyOpcodes,
+		RunModeApplication: allModeAnyOpcodes + allAppOpcodes,
+	}
+
+	var txn transactions.SignedTxn
+	copy(txn.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
+	copy(txn.Txn.Receiver[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01"))
+	copy(txn.Txn.CloseRemainderTo[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02"))
+	copy(txn.Txn.VotePK[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui03"))
+	copy(txn.Txn.SelectionPK[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui04"))
+	txn.Txn.Note = []byte("fnord")
+	txn.Txn.Fee.Raw = 1337
+	txn.Txn.FirstValid = 42
+	txn.Txn.LastValid = 1066
+	txn.Txn.Amount.Raw = 1000000
+	txn.Txn.VoteFirst = 1317
+	txn.Txn.VoteLast = 17776
+	txn.Txn.VoteKeyDilution = 1
+	txn.Txn.Accounts = make([]basics.Address, 1)
+	txn.Txn.Accounts[0] = txn.Txn.Sender
+	txn.Txn.ApplicationArgs = make([]basics.TealValue, 1)
+	txn.Txn.ApplicationArgs[0] = basics.TealValue(protocol.PaymentTx)
+	txgroup := make([]transactions.SignedTxn, 2)
+	txgroup[0] = txn
+	txgroup[1].Txn.Amount.Raw = 42
+	txgroup[1].Txn.Fee.Raw = 1066
+	txgroup[1].Txn.FirstValid = 42
+	txgroup[1].Txn.LastValid = 1066
+	txgroup[1].Txn.Sender = txn.Txn.Receiver
+	txgroup[1].Txn.Receiver = txn.Txn.Sender
+	txn.Lsig.Args = [][]byte{
+		txn.Txn.Sender[:],
+		txn.Txn.Receiver[:],
+		txn.Txn.CloseRemainderTo[:],
+		txn.Txn.VotePK[:],
+		txn.Txn.SelectionPK[:],
+		txn.Txn.Note,
+	}
+	for mode, source := range tests {
+		t.Run(fmt.Sprintf("allOpcodes_mode=%d", mode), func(t *testing.T) {
+			program, err := AssembleString(source)
+			require.NoError(t, err)
+			ep := defaultEvalParams(nil, &txn)
+			ep.TxnGroup = txgroup
+			ep.RunModeFlags = mode
+			ep.ledger = &testLedger{}
+			_, err = Eval(program, ep)
+			require.NoError(t, err)
+		})
+	}
+
+	// check err opcode work in both modes
+	for mode := range tests {
+		t.Run(fmt.Sprintf("err_mode=%d", mode), func(t *testing.T) {
+			source := "err"
+			program, err := AssembleString(source)
+			require.NoError(t, err)
+			ep := defaultEvalParams(nil, nil)
+			ep.RunModeFlags = mode
+			_, err = Eval(program, ep)
+			require.Error(t, err)
+			require.NotContains(t, err.Error(), "not allowed in current mode")
+			require.Equal(t, err.Error(), "error")
+		})
+	}
+
+	// check ed25519verify is not allowed in RunModeApplication
+	source := "byte 0x01\nbyte 0x01\nbyte 0x01\ned25519verify"
+	program, err := AssembleString(source)
+	require.NoError(t, err)
+	ep := defaultEvalParams(nil, nil)
+	ep.RunModeFlags = RunModeApplication
+	_, err = Eval(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "ed25519verify not allowed in current mode")
+
+	// check new opcodes are not allowed in RunModeSignature
+	newOpcodeCalls := []string{
+		"int 0\nbalance",
+		"int 0\nint 0\napp_opted_in",
+		"int 0\nint 0\nbyte 0x01\napp_read_local",
+		"byte 0x01\nbyte 0x01\napp_read_global",
+		"int 0\nbyte 0x01\nint 0\napp_write_local",
+		"byte 0x01\nint 0\napp_write_global",
+		"int 0\nint 0\nbyte 0x01\napp_read_other_global",
+		"int 0\nint 0\nint 0\nasset_read_holding",
+		"int 0\nint 0\nint 0\nasset_read_params",
+	}
+
+	for _, source := range newOpcodeCalls {
+		program, err := AssembleString(source)
+		require.NoError(t, err)
+		ep := defaultEvalParams(nil, nil)
+		ep.RunModeFlags = RunModeSignature
+		_, err = Eval(program, ep)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "not allowed in current mode")
+	}
+
+	require.Equal(t, 1, RunModeSignature)
+	require.Equal(t, 2, RunModeApplication)
+	require.True(t, modeAny == RunModeSignature|RunModeApplication)
 }

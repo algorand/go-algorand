@@ -78,7 +78,7 @@ func (sv *stackValue) String() string {
 
 // LedgerForLogic represents ledger API for Statefull TEAL program
 type LedgerForLogic interface {
-	BalanceRecord(addr basics.Address) (*basics.BalanceRecord, error)
+	Balance(addr basics.Address) (uint64, error)
 }
 
 // GroupParams contains data that is used during TEAL evaluation that is common
@@ -117,17 +117,11 @@ const (
 	// RunModeSignature is TEAL in LogicSig execution
 	RunModeSignature = 1 << iota
 
-	// RunModeApplicationApproval is TEAL in application approval context
-	RunModeApplicationApproval
-
-	// RunModeApplicationState is TEAL in application state-update context
-	RunModeApplicationState
-
-	// local constant, run in statefull mode
-	modeStatefull = RunModeApplicationApproval | RunModeApplicationState
+	// RunModeApplication is TEAL in application/statefull
+	RunModeApplication
 
 	// local constant, run in any mode
-	modeAny = RunModeSignature | RunModeApplicationApproval | RunModeApplicationState
+	modeAny = RunModeSignature | RunModeApplication
 )
 
 func (ep EvalParams) log() logging.Logger {
@@ -1133,13 +1127,13 @@ func opBalance(cx *evalContext) {
 	}
 
 	addr := cx.Txn.Txn.Accounts[accountIdx]
-	br, err := cx.ledger.BalanceRecord(addr)
+	amount, err := cx.ledger.Balance(addr)
 	if err != nil {
-		cx.err = fmt.Errorf("failed to fetch %s balance record: %s", addr, err.Error())
+		cx.err = fmt.Errorf("failed to fetch %s balance: %s", addr, err.Error())
 		return
 	}
 
-	cx.stack[last].Uint = uint64(br.MicroAlgos.ToUint64())
+	cx.stack[last].Uint = amount
 }
 
 func opAppCheckOptedIn(cx *evalContext) {
