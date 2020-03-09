@@ -360,7 +360,9 @@ Overflow is an error condition which halts execution and fails the transaction. 
 | 21 | AssetCloseTo | []byte | 32 byte address |
 | 22 | GroupIndex | uint64 | Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1. |
 | 23 | TxID | []byte | The computed ID for this transaction. 32 bytes. |
-| 24 | Action | uint64 |  |
+| 24 | Action | uint64 | ApplicationCall transaction action |
+| 25 | ApplicationArgs | []byte | Arguments passed to the application in the ApplicationCall transaction |
+| 26 | Accounts | []byte | Accounts listed in the ApplicationCall transaction |
 
 
 TypeEnum mapping:
@@ -398,7 +400,7 @@ FirstValidTime causes the program to fail. The field is reserved for future use.
 
 ## gtxn
 
-- Opcode: 0x33 {uint8 transaction group index}{uint8 transaction field index}{uint8 transaction field array index}
+- Opcode: 0x33 {uint8 transaction group index}{uint8 transaction field index}
 - Pops: _None_
 - Pushes: any
 - push field to the stack from a transaction in the current transaction group
@@ -418,6 +420,20 @@ for notes on transaction fields available, see `txn`. If this transaction is _i_
 - Pops: *... stack*, any
 - Pushes: _None_
 - pop a value from the stack and store to scratch space
+
+## txna
+
+- Opcode: 0x36 {uint8 transaction field index}{uint8 transaction field array index}
+- Pops: _None_
+- Pushes: any
+- push value of an array field from current transaction to stack
+
+## gtxna
+
+- Opcode: 0x37 {uint8 transaction group index}{uint8 transaction field index}{uint8 transaction field array index}
+- Pops: _None_
+- Pushes: any
+- push value of a field to the stack from a transaction in the current transaction group
 
 ## bnz
 
@@ -498,41 +514,6 @@ params: value (top of the stack), state key, account index
 - read key K from global state of account A for the application B if A created B => {0 or 1 (top), value}
 
 params: state key (top of the stack), application id, account index. Return: is_exist flag (top of the stack), value
-
-## app_arg
-
-- Opcode: 0x67 {uint8 arg index N}
-- Pops: _None_
-- Pushes: []byte
-- push ApplicationArgs[N] value to stack by index
-
-## app_arg_0
-
-- Opcode: 0x68
-- Pops: _None_
-- Pushes: []byte
-- push ApplicationArgs[0] to stack
-
-## app_arg_1
-
-- Opcode: 0x69
-- Pops: _None_
-- Pushes: []byte
-- push ApplicationArgs[1] to stack
-
-## app_arg_2
-
-- Opcode: 0x6a
-- Pops: _None_
-- Pushes: []byte
-- push ApplicationArgs[2] to stack
-
-## app_arg_3
-
-- Opcode: 0x6b
-- Pops: _None_
-- Pushes: []byte
-- push ApplicationArgs[3] to stack
 
 ## asset_read_holding
 

@@ -104,11 +104,14 @@ var OpSpecs = []OpSpec{
 	{0x2f, "arg_2", opArg2, asmDefault, disDefault, nil, oneBytes, 1, modeAny, opSizeDefault},
 	{0x30, "arg_3", opArg3, asmDefault, disDefault, nil, oneBytes, 1, modeAny, opSizeDefault},
 	{0x31, "txn", opTxn, assembleTxn, disTxn, nil, oneAny, 1, modeAny, opSize{1, 2, nil}},             // TODO: check output type by subfield retrieved in txn,global,account,txid
+	{0x31, "txn", opTxn, assembleTxn2, disTxn, nil, oneAny, 2, modeAny, opSize{1, 2, nil}},            // TODO: check output type by subfield retrieved in txn,global,account,txid
 	{0x32, "global", opGlobal, assembleGlobal, disGlobal, nil, oneAny, 1, modeAny, opSize{1, 2, nil}}, // TODO: check output type against specific field
 	{0x33, "gtxn", opGtxn, assembleGtxn, disGtxn, nil, oneAny, 1, modeAny, opSize{1, 3, nil}},         // TODO: check output type by subfield retrieved in txn,global,account,txid
-	{0x33, "gtxn", opGtxn2, assembleGtxn2, disGtxn2, nil, oneAny, 2, modeAny, opSize{1, 4, nil}},      // TODO: check output type by subfield retrieved in txn,global,account,txid
+	{0x33, "gtxn", opGtxn, assembleGtxn2, disGtxn, nil, oneAny, 2, modeAny, opSize{1, 3, nil}},        // TODO: check output type by subfield retrieved in txn,global,account,txid
 	{0x34, "load", opLoad, assembleLoad, disLoad, nil, oneAny, 1, modeAny, opSize{1, 2, nil}},
 	{0x35, "store", opStore, assembleStore, disStore, oneAny, nil, 1, modeAny, opSize{1, 2, nil}},
+	{0x36, "txna", opTxna, assembleTxna, disTxna, nil, oneAny, 2, modeAny, opSize{1, 3, nil}},     // TODO: check output type by subfield retrieved in txn,global,account,txid
+	{0x37, "gtxna", opGtxna, assembleGtxna, disGtxna, nil, oneAny, 2, modeAny, opSize{1, 4, nil}}, // TODO: check output type by subfield retrieved in txn,global,account,txid
 
 	{0x40, "bnz", opBnz, assembleBnz, disBnz, oneInt, nil, 1, modeAny, opSize{1, 3, checkBnz}},
 	{0x48, "pop", opPop, asmDefault, disDefault, oneAny, nil, 1, modeAny, opSizeDefault},
@@ -121,11 +124,6 @@ var OpSpecs = []OpSpec{
 	{0x64, "app_write_local", opAppWriteLocalState, asmDefault, disDefault, oneAny.plus(oneBytes).plus(oneInt), nil, 2, RunModeApplicationState, opSizeDefault},
 	{0x65, "app_write_global", opAppWriteGlobalState, asmDefault, disDefault, oneAny.plus(oneBytes), nil, 2, RunModeApplicationState, opSizeDefault},
 	{0x66, "app_read_other_global", opAppReadOtherGlobalState, asmDefault, disDefault, oneBytes.plus(twoInts), oneInt.plus(oneAny), 2, modeStatefull, opSizeDefault},
-	{0x67, "app_arg", opAppArg, assembleAppArg, disAppArg, nil, oneBytes, 2, modeStatefull, opSize{1, 2, nil}},
-	{0x68, "app_arg_0", opAppArg0, asmDefault, disDefault, nil, oneBytes, 2, modeStatefull, opSizeDefault},
-	{0x69, "app_arg_1", opAppArg1, asmDefault, disDefault, nil, oneBytes, 2, modeStatefull, opSizeDefault},
-	{0x6A, "app_arg_2", opAppArg2, asmDefault, disDefault, nil, oneBytes, 2, modeStatefull, opSizeDefault},
-	{0x6B, "app_arg_3", opAppArg3, asmDefault, disDefault, nil, oneBytes, 2, modeStatefull, opSizeDefault},
 
 	{0x70, "asset_read_holding", opAssetReadHolding, asmDefault, disDefault, threeInts, oneInt.plus(oneAny), 2, modeStatefull, opSizeDefault},
 	{0x71, "asset_read_params", opAssetReadParams, asmDefault, disDefault, threeInts, oneInt.plus(oneAny), 2, modeStatefull, opSizeDefault},

@@ -824,15 +824,6 @@ func opArgN(cx *evalContext, n uint64) {
 	cx.stack = append(cx.stack, stackValue{Bytes: val})
 }
 
-func opAppArgN(cx *evalContext, n uint64) {
-	if n >= uint64(len(cx.Txn.Txn.ApplicationArgs)) {
-		cx.err = fmt.Errorf("cannot load app arg[%d] of %d", n, len(cx.Txn.Txn.ApplicationArgs))
-		return
-	}
-	val := nilToEmpty(cx.Txn.Txn.ApplicationArgs[n])
-	cx.stack = append(cx.stack, stackValue{Bytes: val})
-}
-
 func opArg(cx *evalContext) {
 	n := uint64(cx.program[cx.pc+1])
 	opArgN(cx, n)
@@ -849,24 +840,6 @@ func opArg2(cx *evalContext) {
 }
 func opArg3(cx *evalContext) {
 	opArgN(cx, 3)
-}
-
-func opAppArg(cx *evalContext) {
-	n := uint64(cx.program[cx.pc+1])
-	opAppArgN(cx, n)
-	cx.nextpc = cx.pc + 2
-}
-func opAppArg0(cx *evalContext) {
-	opAppArgN(cx, 0)
-}
-func opAppArg1(cx *evalContext) {
-	opAppArgN(cx, 1)
-}
-func opAppArg2(cx *evalContext) {
-	opAppArgN(cx, 2)
-}
-func opAppArg3(cx *evalContext) {
-	opAppArgN(cx, 3)
 }
 
 func checkBnz(cx *evalContext) int {
@@ -911,7 +884,7 @@ func opDup(cx *evalContext) {
 	cx.stack = append(cx.stack, sv)
 }
 
-func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint64) (sv stackValue, err error) {
+func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint64, arrayFieldIdx uint64) (sv stackValue, err error) {
 	err = nil
 	switch TxnField(field) {
 	case Sender:
@@ -963,6 +936,18 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint
 		sv.Bytes = txn.Lease[:]
 	case Action:
 		sv.Uint = uint64(txn.Action)
+	case ApplicationArgs:
+		if arrayFieldIdx >= uint64(len(txn.ApplicationArgs)) {
+			err = fmt.Errorf("invalid ApplicationArgs index %d", arrayFieldIdx)
+			return
+		}
+		sv.Bytes = txn.ApplicationArgs[arrayFieldIdx]
+	case Accounts:
+		if arrayFieldIdx >= uint64(len(txn.Accounts)) {
+			err = fmt.Errorf("invalid Accounts index %d", arrayFieldIdx)
+			return
+		}
+		sv.Bytes = txn.Accounts[arrayFieldIdx][:]
 	default:
 		err = fmt.Errorf("invalid txn field %d", field)
 	}
@@ -973,13 +958,30 @@ func opTxn(cx *evalContext) {
 	field := uint64(cx.program[cx.pc+1])
 	var sv stackValue
 	var err error
-	sv, err = cx.txnFieldToStack(&cx.Txn.Txn, field)
+	sv, err = cx.txnFieldToStack(&cx.Txn.Txn, field, 0)
 	if err != nil {
 		cx.err = err
 		return
 	}
 	cx.stack = append(cx.stack, sv)
 	cx.nextpc = cx.pc + 2
+}
+
+func opTxna(cx *evalContext) {
+	field := uint64(cx.program[cx.pc+1])
+	var sv stackValue
+	var err error
+	if field != uint64(ApplicationArgs) && field != uint64(Accounts) {
+		cx.err = fmt.Errorf("txna unsupported field %d", field)
+	}
+	arrayFieldIdx := uint64(cx.program[cx.pc+2])
+	sv, err = cx.txnFieldToStack(&cx.Txn.Txn, field, arrayFieldIdx)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	cx.stack = append(cx.stack, sv)
+	cx.nextpc = cx.pc + 3
 }
 
 func opGtxn(cx *evalContext) {
@@ -996,7 +998,7 @@ func opGtxn(cx *evalContext) {
 		// GroupIndex; asking this when we just specified it is _dumb_, but oh well
 		sv.Uint = uint64(gtxid)
 	} else {
-		sv, err = cx.txnFieldToStack(tx, field)
+		sv, err = cx.txnFieldToStack(tx, field, 0)
 		if err != nil {
 			cx.err = err
 			return
@@ -1006,10 +1008,10 @@ func opGtxn(cx *evalContext) {
 	cx.nextpc = cx.pc + 3
 }
 
-func opGtxn2(cx *evalContext) {
+func opGtxna(cx *evalContext) {
 	gtxid := int(uint(cx.program[cx.pc+1]))
 	if gtxid >= len(cx.TxnGroup) {
-		cx.err = fmt.Errorf("gtxn lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
+		cx.err = fmt.Errorf("gtxna lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
 		return
 	}
 	tx := &cx.TxnGroup[gtxid].Txn
@@ -1020,7 +1022,11 @@ func opGtxn2(cx *evalContext) {
 		// GroupIndex; asking this when we just specified it is _dumb_, but oh well
 		sv.Uint = uint64(gtxid)
 	} else {
-		sv, err = cx.txnFieldToStack(tx, field)
+		if field != uint64(ApplicationArgs) && field != uint64(Accounts) {
+			cx.err = fmt.Errorf("gtxna unsupported field %d", field)
+		}
+		arrayFieldIdx := uint64(cx.program[cx.pc+3])
+		sv, err = cx.txnFieldToStack(tx, field, arrayFieldIdx)
 		if err != nil {
 			cx.err = err
 			return
