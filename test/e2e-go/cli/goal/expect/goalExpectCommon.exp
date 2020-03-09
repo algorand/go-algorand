@@ -142,14 +142,14 @@ proc ::AlgorandGoal::StartNetwork { NETWORK_NAME NETWORK_TEMPLATE TEST_ALGO_DIR 
 
     # Running on ARM64, it seems that network creation is pretty slow.
     # 30 second won't be enough here, so I'm changing this to 90 seconds.
-    set timeout 90
+    set timeout 120
 
     if { [catch {
         # Create network
         puts "network create $NETWORK_NAME"
         spawn goal network create --network $NETWORK_NAME --template $NETWORK_TEMPLATE --datadir $TEST_ALGO_DIR --rootdir $TEST_ROOT_DIR
         expect {
-            timeout { close; ::AlgorandGoal::Abort "Timed out creating network" }
+            timeout { close; ::AlgorandGoal::Abort "Timed out creating network with timeout: $timeout" }
             "^Network $NETWORK_NAME created under.*" { puts "Network $NETWORK_NAME created" ; close  }
             close
         }
@@ -205,6 +205,7 @@ proc ::AlgorandGoal::StopNetwork { NETWORK_NAME TEST_ALGO_DIR TEST_ROOT_DIR } {
 
 # Create a new wallet
 proc ::AlgorandGoal::CreateWallet { WALLET_NAME WALLET_PASSWORD TEST_PRIMARY_NODE_DIR } {
+    set timeout 60
     if { [catch {
         set WALLET_PASS_PHRASE "NOT SET"
         spawn goal wallet new $WALLET_NAME -d $TEST_PRIMARY_NODE_DIR
@@ -237,6 +238,7 @@ proc ::AlgorandGoal::CreateWallet { WALLET_NAME WALLET_PASSWORD TEST_PRIMARY_NOD
 
 # Verify that the wallet exists
 proc ::AlgorandGoal::VerifyWallet { WALLET_NAME TEST_PRIMARY_NODE_DIR } {
+    set timeout 60
     if { [catch {
         spawn goal wallet list -d $TEST_PRIMARY_NODE_DIR
         expect {
@@ -249,6 +251,7 @@ proc ::AlgorandGoal::VerifyWallet { WALLET_NAME TEST_PRIMARY_NODE_DIR } {
 }
 
 proc ::AlgorandGoal::RecoverWallet { NEW_WALLET_NAME WALLET_PASSPHRASE NEW_WALLET_PASSWORD TEST_PRIMARY_NODE_DIR } {
+    set timeout 60
     if { [catch {
         spawn goal wallet new -r $NEW_WALLET_NAME -d $TEST_PRIMARY_NODE_DIR
            expect {
@@ -273,6 +276,7 @@ proc ::AlgorandGoal::RecoverWallet { NEW_WALLET_NAME WALLET_PASSPHRASE NEW_WALLE
 
 # Associate a new account with a specific wallet
 proc ::AlgorandGoal::CreateAccountForWallet { WALLET_NAME WALLET_PASSWORD TEST_PRIMARY_NODE_DIR } {
+    set timeout 60
     if { [catch {
         spawn goal account new -w $WALLET_NAME -d $TEST_PRIMARY_NODE_DIR
         while 1 {
@@ -291,6 +295,7 @@ proc ::AlgorandGoal::CreateAccountForWallet { WALLET_NAME WALLET_PASSWORD TEST_P
 
 # Verify that account exists
 proc ::AlgorandGoal::VerifyAccount { WALLET_NAME WALLET_PASSWORD ACCOUNT_ADDRESS TEST_PRIMARY_NODE_DIR } {
+    set timeout 60
     if { [catch {
         spawn goal account list -w $WALLET_NAME -d $TEST_PRIMARY_NODE_DIR
         while 1 {
@@ -308,12 +313,14 @@ proc ::AlgorandGoal::VerifyAccount { WALLET_NAME WALLET_PASSWORD ACCOUNT_ADDRESS
 
 # Delete an account
 proc ::AlgorandGoal::DeleteAccount { WALLET_NAME ACCOUNT_ADDRESS } {
+    set timeout 60
     spawn goal account delete --wallet $WALLET_NAME --address $ACCOUNT_ADDRESS
     expect {*}
 }
 
 #Select an account from the Wallet
 proc ::AlgorandGoal::GetAccountAddress { WALLET_NAME TEST_PRIMARY_NODE_DIR } {
+    set timeout 60
     if { [catch {
         spawn goal account list -w $WALLET_NAME -d $TEST_PRIMARY_NODE_DIR
         expect {
@@ -329,6 +336,7 @@ proc ::AlgorandGoal::GetAccountAddress { WALLET_NAME TEST_PRIMARY_NODE_DIR } {
 
 # Return the Account Balance
 proc ::AlgorandGoal::GetAccountBalance { WALLET_NAME ACCOUNT_ADDRESS TEST_PRIMARY_NODE_DIR } {
+    set timeout 60
     if { [ catch {
         spawn goal account balance -w $WALLET_NAME -a $ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR
         expect {
@@ -344,6 +352,7 @@ proc ::AlgorandGoal::GetAccountBalance { WALLET_NAME ACCOUNT_ADDRESS TEST_PRIMAR
 
 # Return the Account Rewards
 proc ::AlgorandGoal::GetAccountRewards { WALLET_NAME ACCOUNT_ADDRESS TEST_PRIMARY_NODE_DIR } {
+    set timeout 60
     spawn goal account rewards -w $WALLET_NAME -a $ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR
     expect {
         timeout { ::AlgorandGoal::Abort "Timed out retrieving account rewards for wallet $WALLET_NAME and account $ACCOUNT_ADDRESS"  }
@@ -355,6 +364,7 @@ proc ::AlgorandGoal::GetAccountRewards { WALLET_NAME ACCOUNT_ADDRESS TEST_PRIMAR
 
 # Account Transfer
 proc ::AlgorandGoal::AccountTransfer { FROM_WALLET_NAME FROM_WALLET_PASSWORD FROM_ACCOUNT_ADDRESS TRANSFER_AMOUNT TO_ACCOUNT_ADDRESS FEE_AMOUNT TEST_PRIMARY_NODE_DIR } {
+    set timeout 60
     if { [ catch {
         set TRANSACTION_ID "NOT SET"
         spawn goal clerk send --fee $FEE_AMOUNT --wallet $FROM_WALLET_NAME --amount $TRANSFER_AMOUNT --from $FROM_ACCOUNT_ADDRESS --to $TO_ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR -N
@@ -371,6 +381,7 @@ proc ::AlgorandGoal::AccountTransfer { FROM_WALLET_NAME FROM_WALLET_PASSWORD FRO
 
 # Wait for Account to achieve given balance
 proc ::AlgorandGoal::WaitForAccountBalance { WALLET_NAME ACCOUNT_ADDRESS EXPECTED_BALANCE TEST_PRIMARY_NODE_DIR } {
+    set timeout 60
     if { [catch {
     set i 0
         while 1 {
