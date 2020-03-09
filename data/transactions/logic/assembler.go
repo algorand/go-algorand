@@ -888,7 +888,8 @@ func (ops *OpStream) trace(format string, args ...interface{}) {
 // checks (and pops) arg types from arg type stack
 func (ops *OpStream) checkArgs(spec OpSpec) error {
 	firstPop := true
-	for i, argType := range spec.Args {
+	for i := len(spec.Args) - 1; i >= 0; i-- {
+		argType := spec.Args[i]
 		stype := ops.tpop()
 		if firstPop {
 			firstPop = false
