@@ -202,7 +202,7 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, spec 
 
 	/*
 		// TODO(applications)
-		err, approved = eval(ApprovalProgram, &ctxWithAD)
+		err, stateDelta, approved = eval(ApprovalProgram, &ctxWithAD)
 		if err != nil {
 			return err
 		}
@@ -210,9 +210,6 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, spec 
 		if !approved {
 			return fmt.Errorf("ApplicationCall txn rejected by logic")
 		}
-
-		// Ignore failures of the ClearStateProgram
-		_ = eval(ClearStateProgram, &ctxWithAD)
 	*/
 
 	switch ac.OnCompletion {
