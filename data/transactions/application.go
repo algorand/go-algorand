@@ -22,29 +22,29 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 )
 
-type Action uint64
+type OnCompletion uint64
 
 const (
-	FunctionCallAction      Action = 0
-	OptInAction             Action = 1
-	CloseOutAction          Action = 2
-	CreateApplicationAction Action = 3
-	DeleteApplicationAction Action = 4
-	UpdateApplicationAction Action = 5
+	NoOpOC              OnCompletion = 0
+	OptInOC             OnCompletion = 1
+	CloseOutOC          OnCompletion = 2
+	ClearStateOC        OnCompletion = 3
+	UpdateApplicationOC OnCompletion = 4
+	DeleteApplicationOC OnCompletion = 5
 )
 
 type ApplicationCallTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	ApplicationID   basics.AppIndex    `codec:"apid"`
-	Action          Action             `codec:"apan"`
+	OnCompletion    OnCompletion       `codec:"apan"`
 	ApplicationArgs []basics.TealValue `codec:"apaa,allocbound=1024"`
 	Accounts        []basics.Address   `codec:"apat,allocbound=1024"`
 
-	LocalStateSchema   basics.StateSchema `codec:"apls"`
-	GlobalStateSchema  basics.StateSchema `codec:"apgs"`
-	ApprovalProgram    string             `codec:"apap,allocbound=4096"`
-	StateUpdateProgram string             `codec:"apsu,allocbound=4096"`
+	LocalStateSchema  basics.StateSchema `codec:"apls"`
+	GlobalStateSchema basics.StateSchema `codec:"apgs"`
+	ApprovalProgram   string             `codec:"apap,allocbound=4096"`
+	ClearStateProgram string             `codec:"apsu,allocbound=4096"`
 
 	// If you add any fields here, remember you MUST modify the Empty
 	// method below!
@@ -54,7 +54,7 @@ func (ac ApplicationCallTxnFields) Empty() bool {
 	if ac.ApplicationID != 0 {
 		return false
 	}
-	if ac.Action != 0 {
+	if ac.OnCompletion != 0 {
 		return false
 	}
 	if ac.ApplicationArgs != nil {
@@ -72,7 +72,7 @@ func (ac ApplicationCallTxnFields) Empty() bool {
 	if ac.ApprovalProgram != "" {
 		return false
 	}
-	if ac.StateUpdateProgram != "" {
+	if ac.ClearStateProgram != "" {
 		return false
 	}
 	return true
@@ -128,11 +128,7 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, spec 
 	appIdx := ac.ApplicationID
 
 	// If we're creating an application, allocate its AppParams
-	if ac.Action == CreateApplicationAction {
-		if ac.ApplicationID != 0 {
-			return fmt.Errorf("txn.ApplicationID must be 0 to create application")
-		}
-
+	if ac.ApplicationID == 0 {
 		// Creating an application. Fetch the creator's balance record
 		record, err := balances.Get(header.Sender, false)
 		if err != nil {
@@ -163,10 +159,10 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, spec 
 		return err
 	}
 
-	// Closing out our LocalState. Execute the StateUpdate program if it
-	// exists. In this case, we don't execute the ApprovalProgram, since
-	// closing out is always allowed.
-	if ac.Action == CloseOutAction {
+	// Clear out our LocalState. In this case, we don't execute the
+	// ApprovalProgram, since clearing out is always allowed. We only
+	// execute the ClearStateProgram, whose failures are ignored.
+	if ac.OnCompletion == ClearStateOC {
 		record, err := balances.Get(header.Sender, false)
 		if err != nil {
 			return err
@@ -184,7 +180,7 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, spec 
 
 		// TODO(applications)
 		/*
-			err = eval(StateUpdateProgram, &ctxWithAD)
+			err = eval(ClearStateProgram, &ctxWithAD)
 			if err != nil {
 				return err
 			}
@@ -196,13 +192,13 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, spec 
 		return balances.Put(record)
 	}
 
-	// Past this point, the AppParams must exist. FunctionCall, OptIn, Delete,
-	// and Update
+	// Past this point, the AppParams must exist. NoOp, OptIn, OptOut,
+	// Delete, and Update
 	if doesNotExist {
 		return fmt.Errorf("only closing out is supported for applications that do not exist")
 	}
 
-	// Execute the Approval and StateUpdate programs
+	// Execute the Approval program
 
 	/*
 		// TODO(applications)
@@ -215,21 +211,14 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, spec 
 			return fmt.Errorf("ApplicationCall txn rejected by logic")
 		}
 
-		// Ignore failures of the StateUpdateProgram
-		_ = eval(StateUpdateProgram, &ctxWithAD)
+		// Ignore failures of the ClearStateProgram
+		_ = eval(ClearStateProgram, &ctxWithAD)
 	*/
 
-	switch ac.Action {
-	case CreateApplicationAction:
-		// CreateApplication has created the application at this point,
-		// but we still execute stateful TEAL in order to allow
-		// initialization from txn.ApplicationArgs
+	switch ac.OnCompletion {
+	case NoOpOC:
 
-	case FunctionCallAction:
-		// FunctionCall is a no-op, since we already executed the
-		// StateUpdateProgram
-
-	case OptInAction:
+	case OptInOC:
 		// Opting into the application. Fetch the sender's balance record
 		record, err := balances.Get(header.Sender, false)
 		if err != nil {
@@ -239,7 +228,7 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, spec 
 		// If they've already opted in, that's an error
 		_, ok := record.AppLocalStates[appIdx]
 		if ok {
-			return fmt.Errorf("account has already opted into app %d", appIdx)
+			return fmt.Errorf("account has already opted in to app %d", appIdx)
 		}
 
 		// Allocate local state
@@ -250,7 +239,28 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, spec 
 			return err
 		}
 
-	case DeleteApplicationAction:
+	case CloseOutOC:
+		// Closing out of the application. Fetch the sender's balance record
+		record, err := balances.Get(header.Sender, false)
+		if err != nil {
+			return err
+		}
+
+		// If they haven't opted in, that's an error
+		_, ok := record.AppLocalStates[appIdx]
+		if !ok {
+			return fmt.Errorf("account is not opted in to app %d", appIdx)
+		}
+
+		// Delete the local state
+		record.AppLocalStates = cloneAppLocalStates(record.AppLocalStates)
+		delete(record.AppLocalStates, appIdx)
+		err = balances.Put(record)
+		if err != nil {
+			return err
+		}
+
+	case DeleteApplicationOC:
 		// Deleting the application. Fetch the creator's balance record
 		record, err := balances.Get(creator, false)
 		if err != nil {
@@ -265,7 +275,7 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, spec 
 			return err
 		}
 
-	case UpdateApplicationAction:
+	case UpdateApplicationOC:
 		// Ensure user isn't trying to update the local or global state
 		// schemas, because that operation is not allowed
 		if ac.LocalStateSchema != (basics.StateSchema{}) ||
@@ -285,7 +295,7 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, spec 
 		params := record.AppParams[appIdx]
 
 		params.ApprovalProgram = ac.ApprovalProgram
-		params.StateUpdateProgram = ac.StateUpdateProgram
+		params.ClearStateProgram = ac.ClearStateProgram
 
 		record.AppParams[appIdx] = params
 		err = balances.Put(record)

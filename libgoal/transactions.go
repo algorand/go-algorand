@@ -357,11 +357,15 @@ func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, lastValid, fe
 	return tx, nil
 }
 
-func (c *Client) MakeUnsignedAppCreateTx(approvalProg string, stateProg string, globalSchema basics.StateSchema, localSchema basics.StateSchema, appArgs []basics.TealValue, accounts []basics.Address) (transactions.Transaction, error) {
+func (c *Client) MakeUnsignedAppCreateTx(approvalProg string, clearProg string, globalSchema basics.StateSchema, localSchema basics.StateSchema, appArgs []basics.TealValue, accounts []basics.Address) (transactions.Transaction, error) {
 	var tx transactions.Transaction
 
 	tx.Type = protocol.ApplicationCallTx
-	tx.Action = transactions.CreateApplicationAction
+
+	// Not necessary to set this explicitly, but for clarity, an
+	// ApplicaitonID of 0 is what indicates that this is a creation
+	// transaction
+	tx.ApplicationID = 0
 	tx.ApplicationArgs = appArgs
 
 	return tx, nil

@@ -1192,7 +1192,7 @@ arg 8
 &&
 `
 
-var testTxnProgramText = testTxnProgramTextV1 + `txn Action
+var testTxnProgramText = testTxnProgramTextV1 + `txn OnCompletion
 int 0
 ==
 &&

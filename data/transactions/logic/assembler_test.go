@@ -58,7 +58,7 @@ txn AssetAmount
 txn AssetSender
 txn AssetReceiver
 txn AssetCloseTo
-txn Action
+txn OnCompletion
 gtxn 0 Sender
 gtxn 0 Fee
 gtxn 0 FirstValid

@@ -146,7 +146,7 @@ type AppParams struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	ApprovalProgram    string `codec:"approv,allocbound=-"`
-	StateUpdateProgram string `codec:"statup,allocbound=-"`
+	ClearStateProgram  string `codec:"clearp,allocbound=-"`
 }
 
 // AccountDetail encapsulates meaningful details about a given account, for external consumption

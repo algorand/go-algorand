@@ -174,7 +174,7 @@ func (z *AccountData) MarshalMsg(b []byte) (o []byte, err error) {
 					zb0012Len--
 					zb0012Mask |= 0x2
 				}
-				if zb0010.StateUpdateProgram == "" {
+				if zb0010.ClearStateProgram == "" {
 					zb0012Len--
 					zb0012Mask |= 0x4
 				}
@@ -187,9 +187,9 @@ func (z *AccountData) MarshalMsg(b []byte) (o []byte, err error) {
 						o = msgp.AppendString(o, zb0010.ApprovalProgram)
 					}
 					if (zb0012Mask & 0x4) == 0 { // if not empty
-						// string "statup"
-						o = append(o, 0xa6, 0x73, 0x74, 0x61, 0x74, 0x75, 0x70)
-						o = msgp.AppendString(o, zb0010.StateUpdateProgram)
+						// string "clearp"
+						o = append(o, 0xa6, 0x63, 0x6c, 0x65, 0x61, 0x72, 0x70)
+						o = msgp.AppendString(o, zb0010.ClearStateProgram)
 					}
 				}
 			}
@@ -631,9 +631,9 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 					if zb0029 > 0 {
 						zb0029--
-						zb0010.StateUpdateProgram, bts, err = msgp.ReadStringBytes(bts)
+						zb0010.ClearStateProgram, bts, err = msgp.ReadStringBytes(bts)
 						if err != nil {
-							err = msgp.WrapError(err, "struct-from-array", "AppParams", zb0009, "struct-from-array", "StateUpdateProgram")
+							err = msgp.WrapError(err, "struct-from-array", "AppParams", zb0009, "struct-from-array", "ClearStateProgram")
 							return
 						}
 					}
@@ -666,10 +666,10 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 								err = msgp.WrapError(err, "struct-from-array", "AppParams", zb0009, "ApprovalProgram")
 								return
 							}
-						case "statup":
-							zb0010.StateUpdateProgram, bts, err = msgp.ReadStringBytes(bts)
+						case "clearp":
+							zb0010.ClearStateProgram, bts, err = msgp.ReadStringBytes(bts)
 							if err != nil {
-								err = msgp.WrapError(err, "struct-from-array", "AppParams", zb0009, "StateUpdateProgram")
+								err = msgp.WrapError(err, "struct-from-array", "AppParams", zb0009, "ClearStateProgram")
 								return
 							}
 						default:
@@ -997,9 +997,9 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						}
 						if zb0047 > 0 {
 							zb0047--
-							zb0010.StateUpdateProgram, bts, err = msgp.ReadStringBytes(bts)
+							zb0010.ClearStateProgram, bts, err = msgp.ReadStringBytes(bts)
 							if err != nil {
-								err = msgp.WrapError(err, "AppParams", zb0009, "struct-from-array", "StateUpdateProgram")
+								err = msgp.WrapError(err, "AppParams", zb0009, "struct-from-array", "ClearStateProgram")
 								return
 							}
 						}
@@ -1032,10 +1032,10 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 									err = msgp.WrapError(err, "AppParams", zb0009, "ApprovalProgram")
 									return
 								}
-							case "statup":
-								zb0010.StateUpdateProgram, bts, err = msgp.ReadStringBytes(bts)
+							case "clearp":
+								zb0010.ClearStateProgram, bts, err = msgp.ReadStringBytes(bts)
 								if err != nil {
-									err = msgp.WrapError(err, "AppParams", zb0009, "StateUpdateProgram")
+									err = msgp.WrapError(err, "AppParams", zb0009, "ClearStateProgram")
 									return
 								}
 							default:
@@ -1105,7 +1105,7 @@ func (z *AccountData) Msgsize() (s int) {
 		for zb0009, zb0010 := range (*z).AppParams {
 			_ = zb0009
 			_ = zb0010
-			s += 0 + zb0009.Msgsize() + 1 + 7 + msgp.StringPrefixSize + len(zb0010.ApprovalProgram) + 7 + msgp.StringPrefixSize + len(zb0010.StateUpdateProgram)
+			s += 0 + zb0009.Msgsize() + 1 + 7 + msgp.StringPrefixSize + len(zb0010.ApprovalProgram) + 7 + msgp.StringPrefixSize + len(zb0010.ClearStateProgram)
 		}
 	}
 	return
@@ -1200,7 +1200,7 @@ func (z *AppParams) MarshalMsg(b []byte) (o []byte, err error) {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if (*z).StateUpdateProgram == "" {
+	if (*z).ClearStateProgram == "" {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
@@ -1213,9 +1213,9 @@ func (z *AppParams) MarshalMsg(b []byte) (o []byte, err error) {
 			o = msgp.AppendString(o, (*z).ApprovalProgram)
 		}
 		if (zb0001Mask & 0x4) == 0 { // if not empty
-			// string "statup"
-			o = append(o, 0xa6, 0x73, 0x74, 0x61, 0x74, 0x75, 0x70)
-			o = msgp.AppendString(o, (*z).StateUpdateProgram)
+			// string "clearp"
+			o = append(o, 0xa6, 0x63, 0x6c, 0x65, 0x61, 0x72, 0x70)
+			o = msgp.AppendString(o, (*z).ClearStateProgram)
 		}
 	}
 	return
@@ -1249,9 +1249,9 @@ func (z *AppParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			(*z).StateUpdateProgram, bts, err = msgp.ReadStringBytes(bts)
+			(*z).ClearStateProgram, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "StateUpdateProgram")
+				err = msgp.WrapError(err, "struct-from-array", "ClearStateProgram")
 				return
 			}
 		}
@@ -1284,10 +1284,10 @@ func (z *AppParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "ApprovalProgram")
 					return
 				}
-			case "statup":
-				(*z).StateUpdateProgram, bts, err = msgp.ReadStringBytes(bts)
+			case "clearp":
+				(*z).ClearStateProgram, bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "StateUpdateProgram")
+					err = msgp.WrapError(err, "ClearStateProgram")
 					return
 				}
 			default:
@@ -1310,13 +1310,13 @@ func (_ *AppParams) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *AppParams) Msgsize() (s int) {
-	s = 1 + 7 + msgp.StringPrefixSize + len((*z).ApprovalProgram) + 7 + msgp.StringPrefixSize + len((*z).StateUpdateProgram)
+	s = 1 + 7 + msgp.StringPrefixSize + len((*z).ApprovalProgram) + 7 + msgp.StringPrefixSize + len((*z).ClearStateProgram)
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *AppParams) MsgIsZero() bool {
-	return ((*z).ApprovalProgram == "") && ((*z).StateUpdateProgram == "")
+	return ((*z).ApprovalProgram == "") && ((*z).ClearStateProgram == "")
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -2024,7 +2024,7 @@ func (z *BalanceRecord) MarshalMsg(b []byte) (o []byte, err error) {
 					zb0012Len--
 					zb0012Mask |= 0x2
 				}
-				if zb0010.StateUpdateProgram == "" {
+				if zb0010.ClearStateProgram == "" {
 					zb0012Len--
 					zb0012Mask |= 0x4
 				}
@@ -2037,9 +2037,9 @@ func (z *BalanceRecord) MarshalMsg(b []byte) (o []byte, err error) {
 						o = msgp.AppendString(o, zb0010.ApprovalProgram)
 					}
 					if (zb0012Mask & 0x4) == 0 { // if not empty
-						// string "statup"
-						o = append(o, 0xa6, 0x73, 0x74, 0x61, 0x74, 0x75, 0x70)
-						o = msgp.AppendString(o, zb0010.StateUpdateProgram)
+						// string "clearp"
+						o = append(o, 0xa6, 0x63, 0x6c, 0x65, 0x61, 0x72, 0x70)
+						o = msgp.AppendString(o, zb0010.ClearStateProgram)
 					}
 				}
 			}
@@ -2489,9 +2489,9 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 					if zb0029 > 0 {
 						zb0029--
-						zb0010.StateUpdateProgram, bts, err = msgp.ReadStringBytes(bts)
+						zb0010.ClearStateProgram, bts, err = msgp.ReadStringBytes(bts)
 						if err != nil {
-							err = msgp.WrapError(err, "struct-from-array", "AppParams", zb0009, "struct-from-array", "StateUpdateProgram")
+							err = msgp.WrapError(err, "struct-from-array", "AppParams", zb0009, "struct-from-array", "ClearStateProgram")
 							return
 						}
 					}
@@ -2524,10 +2524,10 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 								err = msgp.WrapError(err, "struct-from-array", "AppParams", zb0009, "ApprovalProgram")
 								return
 							}
-						case "statup":
-							zb0010.StateUpdateProgram, bts, err = msgp.ReadStringBytes(bts)
+						case "clearp":
+							zb0010.ClearStateProgram, bts, err = msgp.ReadStringBytes(bts)
 							if err != nil {
-								err = msgp.WrapError(err, "struct-from-array", "AppParams", zb0009, "StateUpdateProgram")
+								err = msgp.WrapError(err, "struct-from-array", "AppParams", zb0009, "ClearStateProgram")
 								return
 							}
 						default:
@@ -2861,9 +2861,9 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						}
 						if zb0047 > 0 {
 							zb0047--
-							zb0010.StateUpdateProgram, bts, err = msgp.ReadStringBytes(bts)
+							zb0010.ClearStateProgram, bts, err = msgp.ReadStringBytes(bts)
 							if err != nil {
-								err = msgp.WrapError(err, "AppParams", zb0009, "struct-from-array", "StateUpdateProgram")
+								err = msgp.WrapError(err, "AppParams", zb0009, "struct-from-array", "ClearStateProgram")
 								return
 							}
 						}
@@ -2896,10 +2896,10 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 									err = msgp.WrapError(err, "AppParams", zb0009, "ApprovalProgram")
 									return
 								}
-							case "statup":
-								zb0010.StateUpdateProgram, bts, err = msgp.ReadStringBytes(bts)
+							case "clearp":
+								zb0010.ClearStateProgram, bts, err = msgp.ReadStringBytes(bts)
 								if err != nil {
-									err = msgp.WrapError(err, "AppParams", zb0009, "StateUpdateProgram")
+									err = msgp.WrapError(err, "AppParams", zb0009, "ClearStateProgram")
 									return
 								}
 							default:
@@ -2969,7 +2969,7 @@ func (z *BalanceRecord) Msgsize() (s int) {
 		for zb0009, zb0010 := range (*z).AccountData.AppParams {
 			_ = zb0009
 			_ = zb0010
-			s += 0 + zb0009.Msgsize() + 1 + 7 + msgp.StringPrefixSize + len(zb0010.ApprovalProgram) + 7 + msgp.StringPrefixSize + len(zb0010.StateUpdateProgram)
+			s += 0 + zb0009.Msgsize() + 1 + 7 + msgp.StringPrefixSize + len(zb0010.ApprovalProgram) + 7 + msgp.StringPrefixSize + len(zb0010.ClearStateProgram)
 		}
 	}
 	return

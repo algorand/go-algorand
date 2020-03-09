@@ -9,52 +9,6 @@ import (
 )
 
 // MarshalMsg implements msgp.Marshaler
-func (z Action) MarshalMsg(b []byte) (o []byte, err error) {
-	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendUint64(o, uint64(z))
-	return
-}
-
-func (_ Action) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(Action)
-	if !ok {
-		_, ok = (z).(*Action)
-	}
-	return ok
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *Action) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	{
-		var zb0001 uint64
-		zb0001, bts, err = msgp.ReadUint64Bytes(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		(*z) = Action(zb0001)
-	}
-	o = bts
-	return
-}
-
-func (_ *Action) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*Action)
-	return ok
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z Action) Msgsize() (s int) {
-	s = msgp.Uint64Size
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z Action) MsgIsZero() bool {
-	return z == 0
-}
-
-// MarshalMsg implements msgp.Marshaler
 func (z *ApplicationCallTxnFields) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
@@ -64,7 +18,7 @@ func (z *ApplicationCallTxnFields) MarshalMsg(b []byte) (o []byte, err error) {
 		zb0003Len--
 		zb0003Mask |= 0x2
 	}
-	if (*z).Action == 0 {
+	if (*z).OnCompletion == 0 {
 		zb0003Len--
 		zb0003Mask |= 0x4
 	}
@@ -88,7 +42,7 @@ func (z *ApplicationCallTxnFields) MarshalMsg(b []byte) (o []byte, err error) {
 		zb0003Len--
 		zb0003Mask |= 0x80
 	}
-	if (*z).StateUpdateProgram == "" {
+	if (*z).ClearStateProgram == "" {
 		zb0003Len--
 		zb0003Mask |= 0x100
 	}
@@ -114,7 +68,7 @@ func (z *ApplicationCallTxnFields) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0003Mask & 0x4) == 0 { // if not empty
 			// string "apan"
 			o = append(o, 0xa4, 0x61, 0x70, 0x61, 0x6e)
-			o = msgp.AppendUint64(o, uint64((*z).Action))
+			o = msgp.AppendUint64(o, uint64((*z).OnCompletion))
 		}
 		if (zb0003Mask & 0x8) == 0 { // if not empty
 			// string "apap"
@@ -167,7 +121,7 @@ func (z *ApplicationCallTxnFields) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0003Mask & 0x100) == 0 { // if not empty
 			// string "apsu"
 			o = append(o, 0xa4, 0x61, 0x70, 0x73, 0x75)
-			o = msgp.AppendString(o, (*z).StateUpdateProgram)
+			o = msgp.AppendString(o, (*z).ClearStateProgram)
 		}
 	}
 	return
@@ -205,10 +159,10 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 				var zb0005 uint64
 				zb0005, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Action")
+					err = msgp.WrapError(err, "struct-from-array", "OnCompletion")
 					return
 				}
-				(*z).Action = Action(zb0005)
+				(*z).OnCompletion = OnCompletion(zb0005)
 			}
 		}
 		if zb0003 > 0 {
@@ -295,9 +249,9 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 		}
 		if zb0003 > 0 {
 			zb0003--
-			(*z).StateUpdateProgram, bts, err = msgp.ReadStringBytes(bts)
+			(*z).ClearStateProgram, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "StateUpdateProgram")
+				err = msgp.WrapError(err, "struct-from-array", "ClearStateProgram")
 				return
 			}
 		}
@@ -335,10 +289,10 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 					var zb0010 uint64
 					zb0010, bts, err = msgp.ReadUint64Bytes(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "Action")
+						err = msgp.WrapError(err, "OnCompletion")
 						return
 					}
-					(*z).Action = Action(zb0010)
+					(*z).OnCompletion = OnCompletion(zb0010)
 				}
 			case "apaa":
 				var zb0011 int
@@ -413,9 +367,9 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 					return
 				}
 			case "apsu":
-				(*z).StateUpdateProgram, bts, err = msgp.ReadStringBytes(bts)
+				(*z).ClearStateProgram, bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "StateUpdateProgram")
+					err = msgp.WrapError(err, "ClearStateProgram")
 					return
 				}
 			default:
@@ -446,13 +400,13 @@ func (z *ApplicationCallTxnFields) Msgsize() (s int) {
 	for zb0002 := range (*z).Accounts {
 		s += (*z).Accounts[zb0002].Msgsize()
 	}
-	s += 5 + (*z).LocalStateSchema.Msgsize() + 5 + (*z).GlobalStateSchema.Msgsize() + 5 + msgp.StringPrefixSize + len((*z).ApprovalProgram) + 5 + msgp.StringPrefixSize + len((*z).StateUpdateProgram)
+	s += 5 + (*z).LocalStateSchema.Msgsize() + 5 + (*z).GlobalStateSchema.Msgsize() + 5 + msgp.StringPrefixSize + len((*z).ApprovalProgram) + 5 + msgp.StringPrefixSize + len((*z).ClearStateProgram)
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *ApplicationCallTxnFields) MsgIsZero() bool {
-	return ((*z).ApplicationID.MsgIsZero()) && ((*z).Action == 0) && (len((*z).ApplicationArgs) == 0) && (len((*z).Accounts) == 0) && ((*z).LocalStateSchema.MsgIsZero()) && ((*z).GlobalStateSchema.MsgIsZero()) && ((*z).ApprovalProgram == "") && ((*z).StateUpdateProgram == "")
+	return ((*z).ApplicationID.MsgIsZero()) && ((*z).OnCompletion == 0) && (len((*z).ApplicationArgs) == 0) && (len((*z).Accounts) == 0) && ((*z).LocalStateSchema.MsgIsZero()) && ((*z).GlobalStateSchema.MsgIsZero()) && ((*z).ApprovalProgram == "") && ((*z).ClearStateProgram == "")
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1990,6 +1944,52 @@ func (z MinFeeError) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
+func (z OnCompletion) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendUint64(o, uint64(z))
+	return
+}
+
+func (_ OnCompletion) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(OnCompletion)
+	if !ok {
+		_, ok = (z).(*OnCompletion)
+	}
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *OnCompletion) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	{
+		var zb0001 uint64
+		zb0001, bts, err = msgp.ReadUint64Bytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = OnCompletion(zb0001)
+	}
+	o = bts
+	return
+}
+
+func (_ *OnCompletion) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*OnCompletion)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z OnCompletion) Msgsize() (s int) {
+	s = msgp.Uint64Size
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z OnCompletion) MsgIsZero() bool {
+	return z == 0
+}
+
+// MarshalMsg implements msgp.Marshaler
 func (z *PaymentTxnFields) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
@@ -3091,7 +3091,7 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte, err error) {
 		zb0004Len--
 		zb0004Mask |= 0x1000
 	}
-	if (*z).ApplicationCallTxnFields.Action == 0 {
+	if (*z).ApplicationCallTxnFields.OnCompletion == 0 {
 		zb0004Len--
 		zb0004Mask |= 0x2000
 	}
@@ -3119,7 +3119,7 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte, err error) {
 		zb0004Len--
 		zb0004Mask |= 0x80000
 	}
-	if (*z).ApplicationCallTxnFields.StateUpdateProgram == "" {
+	if (*z).ApplicationCallTxnFields.ClearStateProgram == "" {
 		zb0004Len--
 		zb0004Mask |= 0x100000
 	}
@@ -3269,7 +3269,7 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0004Mask & 0x2000) == 0 { // if not empty
 			// string "apan"
 			o = append(o, 0xa4, 0x61, 0x70, 0x61, 0x6e)
-			o = msgp.AppendUint64(o, uint64((*z).ApplicationCallTxnFields.Action))
+			o = msgp.AppendUint64(o, uint64((*z).ApplicationCallTxnFields.OnCompletion))
 		}
 		if (zb0004Mask & 0x4000) == 0 { // if not empty
 			// string "apap"
@@ -3331,7 +3331,7 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0004Mask & 0x100000) == 0 { // if not empty
 			// string "apsu"
 			o = append(o, 0xa4, 0x61, 0x70, 0x73, 0x75)
-			o = msgp.AppendString(o, (*z).ApplicationCallTxnFields.StateUpdateProgram)
+			o = msgp.AppendString(o, (*z).ApplicationCallTxnFields.ClearStateProgram)
 		}
 		if (zb0004Mask & 0x200000) == 0 { // if not empty
 			// string "arcv"
@@ -3797,10 +3797,10 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				var zb0006 uint64
 				zb0006, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Action")
+					err = msgp.WrapError(err, "struct-from-array", "OnCompletion")
 					return
 				}
-				(*z).ApplicationCallTxnFields.Action = Action(zb0006)
+				(*z).ApplicationCallTxnFields.OnCompletion = OnCompletion(zb0006)
 			}
 		}
 		if zb0004 > 0 {
@@ -3887,9 +3887,9 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			(*z).ApplicationCallTxnFields.StateUpdateProgram, bts, err = msgp.ReadStringBytes(bts)
+			(*z).ApplicationCallTxnFields.ClearStateProgram, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "StateUpdateProgram")
+				err = msgp.WrapError(err, "struct-from-array", "ClearStateProgram")
 				return
 			}
 		}
@@ -4101,10 +4101,10 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					var zb0011 uint64
 					zb0011, bts, err = msgp.ReadUint64Bytes(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "Action")
+						err = msgp.WrapError(err, "OnCompletion")
 						return
 					}
-					(*z).ApplicationCallTxnFields.Action = Action(zb0011)
+					(*z).ApplicationCallTxnFields.OnCompletion = OnCompletion(zb0011)
 				}
 			case "apaa":
 				var zb0012 int
@@ -4179,9 +4179,9 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "apsu":
-				(*z).ApplicationCallTxnFields.StateUpdateProgram, bts, err = msgp.ReadStringBytes(bts)
+				(*z).ApplicationCallTxnFields.ClearStateProgram, bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "StateUpdateProgram")
+					err = msgp.WrapError(err, "ClearStateProgram")
 					return
 				}
 			default:
@@ -4212,13 +4212,13 @@ func (z *Transaction) Msgsize() (s int) {
 	for zb0003 := range (*z).ApplicationCallTxnFields.Accounts {
 		s += (*z).ApplicationCallTxnFields.Accounts[zb0003].Msgsize()
 	}
-	s += 5 + (*z).ApplicationCallTxnFields.LocalStateSchema.Msgsize() + 5 + (*z).ApplicationCallTxnFields.GlobalStateSchema.Msgsize() + 5 + msgp.StringPrefixSize + len((*z).ApplicationCallTxnFields.ApprovalProgram) + 5 + msgp.StringPrefixSize + len((*z).ApplicationCallTxnFields.StateUpdateProgram)
+	s += 5 + (*z).ApplicationCallTxnFields.LocalStateSchema.Msgsize() + 5 + (*z).ApplicationCallTxnFields.GlobalStateSchema.Msgsize() + 5 + msgp.StringPrefixSize + len((*z).ApplicationCallTxnFields.ApprovalProgram) + 5 + msgp.StringPrefixSize + len((*z).ApplicationCallTxnFields.ClearStateProgram)
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Transaction) MsgIsZero() bool {
-	return ((*z).Type.MsgIsZero()) && ((*z).Header.Sender.MsgIsZero()) && ((*z).Header.Fee.MsgIsZero()) && ((*z).Header.FirstValid.MsgIsZero()) && ((*z).Header.LastValid.MsgIsZero()) && (len((*z).Header.Note) == 0) && ((*z).Header.GenesisID == "") && ((*z).Header.GenesisHash.MsgIsZero()) && ((*z).Header.Group.MsgIsZero()) && ((*z).Header.Lease == ([32]byte{})) && ((*z).KeyregTxnFields.VotePK.MsgIsZero()) && ((*z).KeyregTxnFields.SelectionPK.MsgIsZero()) && ((*z).KeyregTxnFields.VoteFirst.MsgIsZero()) && ((*z).KeyregTxnFields.VoteLast.MsgIsZero()) && ((*z).KeyregTxnFields.VoteKeyDilution == 0) && ((*z).KeyregTxnFields.Nonparticipation == false) && ((*z).PaymentTxnFields.Receiver.MsgIsZero()) && ((*z).PaymentTxnFields.Amount.MsgIsZero()) && ((*z).PaymentTxnFields.CloseRemainderTo.MsgIsZero()) && ((*z).AssetConfigTxnFields.ConfigAsset.MsgIsZero()) && ((*z).AssetConfigTxnFields.AssetParams.MsgIsZero()) && ((*z).AssetTransferTxnFields.XferAsset.MsgIsZero()) && ((*z).AssetTransferTxnFields.AssetAmount == 0) && ((*z).AssetTransferTxnFields.AssetSender.MsgIsZero()) && ((*z).AssetTransferTxnFields.AssetReceiver.MsgIsZero()) && ((*z).AssetTransferTxnFields.AssetCloseTo.MsgIsZero()) && ((*z).AssetFreezeTxnFields.FreezeAccount.MsgIsZero()) && ((*z).AssetFreezeTxnFields.FreezeAsset.MsgIsZero()) && ((*z).AssetFreezeTxnFields.AssetFrozen == false) && ((*z).ApplicationCallTxnFields.ApplicationID.MsgIsZero()) && ((*z).ApplicationCallTxnFields.Action == 0) && (len((*z).ApplicationCallTxnFields.ApplicationArgs) == 0) && (len((*z).ApplicationCallTxnFields.Accounts) == 0) && ((*z).ApplicationCallTxnFields.LocalStateSchema.MsgIsZero()) && ((*z).ApplicationCallTxnFields.GlobalStateSchema.MsgIsZero()) && ((*z).ApplicationCallTxnFields.ApprovalProgram == "") && ((*z).ApplicationCallTxnFields.StateUpdateProgram == "")
+	return ((*z).Type.MsgIsZero()) && ((*z).Header.Sender.MsgIsZero()) && ((*z).Header.Fee.MsgIsZero()) && ((*z).Header.FirstValid.MsgIsZero()) && ((*z).Header.LastValid.MsgIsZero()) && (len((*z).Header.Note) == 0) && ((*z).Header.GenesisID == "") && ((*z).Header.GenesisHash.MsgIsZero()) && ((*z).Header.Group.MsgIsZero()) && ((*z).Header.Lease == ([32]byte{})) && ((*z).KeyregTxnFields.VotePK.MsgIsZero()) && ((*z).KeyregTxnFields.SelectionPK.MsgIsZero()) && ((*z).KeyregTxnFields.VoteFirst.MsgIsZero()) && ((*z).KeyregTxnFields.VoteLast.MsgIsZero()) && ((*z).KeyregTxnFields.VoteKeyDilution == 0) && ((*z).KeyregTxnFields.Nonparticipation == false) && ((*z).PaymentTxnFields.Receiver.MsgIsZero()) && ((*z).PaymentTxnFields.Amount.MsgIsZero()) && ((*z).PaymentTxnFields.CloseRemainderTo.MsgIsZero()) && ((*z).AssetConfigTxnFields.ConfigAsset.MsgIsZero()) && ((*z).AssetConfigTxnFields.AssetParams.MsgIsZero()) && ((*z).AssetTransferTxnFields.XferAsset.MsgIsZero()) && ((*z).AssetTransferTxnFields.AssetAmount == 0) && ((*z).AssetTransferTxnFields.AssetSender.MsgIsZero()) && ((*z).AssetTransferTxnFields.AssetReceiver.MsgIsZero()) && ((*z).AssetTransferTxnFields.AssetCloseTo.MsgIsZero()) && ((*z).AssetFreezeTxnFields.FreezeAccount.MsgIsZero()) && ((*z).AssetFreezeTxnFields.FreezeAsset.MsgIsZero()) && ((*z).AssetFreezeTxnFields.AssetFrozen == false) && ((*z).ApplicationCallTxnFields.ApplicationID.MsgIsZero()) && ((*z).ApplicationCallTxnFields.OnCompletion == 0) && (len((*z).ApplicationCallTxnFields.ApplicationArgs) == 0) && (len((*z).ApplicationCallTxnFields.Accounts) == 0) && ((*z).ApplicationCallTxnFields.LocalStateSchema.MsgIsZero()) && ((*z).ApplicationCallTxnFields.GlobalStateSchema.MsgIsZero()) && ((*z).ApplicationCallTxnFields.ApprovalProgram == "") && ((*z).ApplicationCallTxnFields.ClearStateProgram == "")
 }
 
 // MarshalMsg implements msgp.Marshaler

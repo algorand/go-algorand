@@ -272,25 +272,19 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		}
 
 		// Ensure requested action is valid
-		switch tx.Action {
-		case FunctionCallAction:
-		case OptInAction:
-		case CloseOutAction:
-		case CreateApplicationAction:
-		case DeleteApplicationAction:
+		switch tx.OnCompletion {
+		case NoOpOC:
+		case OptInOC:
+		case CloseOutOC:
+		case DeleteApplicationOC:
+		case UpdateApplicationOC:
 		default:
-			return fmt.Errorf("invalid application action")
+			return fmt.Errorf("invalid application OnCompletion")
 		}
 
-		if tx.Action == CreateApplicationAction {
-			if tx.ApplicationID != 0 {
-				return fmt.Errorf("ApplicationID must be 0 during creation, it will be determined when txn is confirmed")
-			}
-		}
-
-		if tx.Action != CreateApplicationAction || tx.Action != UpdateApplicationAction {
-			// Ensure programs are only set for create or update actions
-			if tx.ApprovalProgram != "" || tx.StateUpdateProgram != "" {
+		if tx.ApplicationID != 0 || tx.OnCompletion != UpdateApplicationOC {
+			// Ensure programs are only set for creattion or update
+			if tx.ApprovalProgram != "" || tx.ClearStateProgram != "" {
 				return fmt.Errorf("scripts may only be specified during application creation")
 			}
 		}

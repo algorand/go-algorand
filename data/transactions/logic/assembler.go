@@ -560,8 +560,8 @@ const (
 	GroupIndex
 	// TxID Transaction.ID()
 	TxID
-	// Action        Action
-	Action
+	// OnCompletion        OnCompletion
+	OnCompletion
 	// ApplicationArgs []basics.TealValue
 	ApplicationArgs
 	// Accounts        []basics.Address
@@ -604,7 +604,7 @@ var txnFieldTypePairs = []txnFieldType{
 	{AssetCloseTo, StackBytes},
 	{GroupIndex, StackUint64},
 	{TxID, StackBytes},
-	{Action, StackUint64},
+	{OnCompletion, StackUint64},
 	{ApplicationArgs, StackBytes},
 	{Accounts, StackBytes},
 }

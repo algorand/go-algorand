@@ -934,8 +934,8 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint
 		sv.Bytes = txid[:]
 	case Lease:
 		sv.Bytes = txn.Lease[:]
-	case Action:
-		sv.Uint = uint64(txn.Action)
+	case OnCompletion:
+		sv.Uint = uint64(txn.OnCompletion)
 	case ApplicationArgs:
 		if arrayFieldIdx >= uint64(len(txn.ApplicationArgs)) {
 			err = fmt.Errorf("invalid ApplicationArgs index %d", arrayFieldIdx)
