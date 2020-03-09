@@ -4,7 +4,7 @@ set -e
 
 MULE_VERSION='0.0.0'
 
-HELP="Usage: cmd [-v] [-u]
+HELP="Usage: $0 [-v] [-u]
 
 Script for installing the mule cli.
 
