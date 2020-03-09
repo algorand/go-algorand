@@ -4,20 +4,24 @@ set -e
 
 MULE_VERSION='0.0.0'
 
-while getopts ":v:u" opt; do
+HELP="Usage: cmd [-v] [-u]
+
+Options:
+    -v        Version of mule cli (default is '${MULE_VERSION}')
+    -u        Authenticate to github (algorand/go-algorand-ci repository) with user credentials (Default is over ssh)
+"
+
+while getopts ":v:uh" opt; do
   case ${opt} in
     v ) MULE_VERSION=$OPTARG
       ;;
     u ) USER_AUTH="True"
       ;;
-    \? ) echo """
-Usage: cmd [-v] [-u]
-
-Options:
-    -v        Version of mule cli
-    -u        Authenticate to github (algorand/go-algorand-ci repository) with user credentials (Default is over ssh)
-"""
-        exit 1
+    h ) echo "${HELP}"
+        exit 0
+      ;;
+    \? ) echo "${HELP}"
+        exit 2
       ;;
   esac
 done
