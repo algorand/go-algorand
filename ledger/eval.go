@@ -471,6 +471,16 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 
 	cow := eval.state.child()
 
+	/*
+	 * Construct deets for Stateful TEAL evaluation
+	 */
+
+	/*	groupNoAD := make([]transactions.SignedTxn, len(txgroup))
+		for i := range txgroup {
+			groupNoAD[i] = txgroup[i].SignedTxn
+		}
+	*/
+
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
