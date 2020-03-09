@@ -37,7 +37,8 @@ jobs:
       os: linux
       name: Ubuntu AMD64 Build
       script:
-        - scripts/travis/build_test.sh
+        - scripts/install_mule.sh
+        - mule build-linux-amd64
     - # same stage, parallel job
       os: linux
       name: Ubuntu AMD64 Integration Test
@@ -49,12 +50,9 @@ jobs:
       env:
         - BUILD_TYPE: "external_build"
         - TARGET_PLATFORM: "linux-arm64"
-      addons:
-        apt:
-          packages:
-            - awscli
       script:
-        - scripts/travis/external_build.sh ./scripts/travis/build_test.sh
+        - scripts/install_mule.sh
+        - mule build-linux-arm64
     - # same stage, parallel job
       name: External ARM64 Integration Test
       os: linux
@@ -72,7 +70,8 @@ jobs:
       osx_image: xcode11
       name: MacOS AMD64 Build
       script:
-        - scripts/travis/build_test.sh
+        - scripts/install_mule.sh
+        - mule build-local
     - # same stage, parallel job
       os: osx
       osx_image: xcode11
