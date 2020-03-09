@@ -69,11 +69,14 @@ func defaultEvalParamsWithVersion(sb *strings.Builder, txn *transactions.SignedT
 		pt = &at
 	}
 
-	if sb == nil { // have to do this since go's nil semantics: https://golang.org/doc/faq#nil_error
-		return EvalParams{Proto: &proto, Txn: pt, RunModeFlags: RunModeSignature}
+	ep := EvalParams{}
+	ep.Proto = &proto
+	ep.RunModeFlags = RunModeSignature
+	ep.Txn = pt
+	if sb != nil { // have to do this since go's nil semantics: https://golang.org/doc/faq#nil_error
+		ep.Trace = sb
 	}
-
-	return EvalParams{Proto: &proto, Trace: sb, Txn: pt, RunModeFlags: RunModeSignature}
+	return ep
 }
 
 func TestTooManyArgs(t *testing.T) {
@@ -105,7 +108,9 @@ func TestWrongProtoVersion(t *testing.T) {
 			sb := strings.Builder{}
 			proto := defaultEvalProto()
 			proto.LogicSigVersion = 0
-			pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, RunModeFlags: RunModeSignature})
+			ep := defaultEvalParams(&sb, &txn)
+			ep.Proto = &proto
+			pass, err := Eval(program, ep)
 			require.Error(t, err)
 			require.False(t, pass)
 		})
@@ -877,8 +882,9 @@ func TestGtxnBadIndex(t *testing.T) {
 	txn.Lsig.Args = nil
 	txgroup := make([]transactions.SignedTxn, 1)
 	txgroup[0] = txn
-	proto := defaultEvalProto()
-	pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, TxnGroup: txgroup, RunModeFlags: RunModeSignature})
+	ep := defaultEvalParams(&sb, &txn)
+	ep.TxnGroup = txgroup
+	pass, err := Eval(program, ep)
 	if pass {
 		t.Log(hex.EncodeToString(program))
 		t.Log(sb.String())
@@ -900,8 +906,9 @@ func TestGtxnBadField(t *testing.T) {
 	txn.Lsig.Args = nil
 	txgroup := make([]transactions.SignedTxn, 1)
 	txgroup[0] = txn
-	proto := defaultEvalProto()
-	pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, TxnGroup: txgroup, RunModeFlags: RunModeSignature})
+	ep := defaultEvalParams(&sb, &txn)
+	ep.TxnGroup = txgroup
+	pass, err := Eval(program, ep)
 	if pass {
 		t.Log(hex.EncodeToString(program))
 		t.Log(sb.String())
@@ -1028,13 +1035,9 @@ func TestGlobal(t *testing.T) {
 				LogicSigVersion: LogicVersion,
 				LogicSigMaxCost: 20000,
 			}
-			ep := EvalParams{
-				Trace:        &sb,
-				Txn:          &txn,
-				Proto:        &proto,
-				TxnGroup:     txgroup,
-				RunModeFlags: RunModeSignature,
-			}
+			ep := defaultEvalParams(&sb, &txn)
+			ep.TxnGroup = txgroup
+			ep.Proto = &proto
 			pass, err := Eval(program, ep)
 			if !pass {
 				t.Log(hex.EncodeToString(program))
@@ -1085,8 +1088,9 @@ int %s
 					var txn transactions.SignedTxn
 					txn.Txn.Type = tt
 					sb := strings.Builder{}
-					proto := defaultEvalProto()
-					pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, GroupIndex: 3, RunModeFlags: RunModeSignature})
+					ep := defaultEvalParams(&sb, &txn)
+					ep.GroupIndex = 3
+					pass, err := Eval(program, ep)
 					if !pass {
 						t.Log(hex.EncodeToString(program))
 						t.Log(sb.String())
@@ -1285,8 +1289,9 @@ func TestTxn(t *testing.T) {
 				txn.Txn.Lease[:],
 			}
 			sb := strings.Builder{}
-			proto := defaultEvalProto()
-			pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, GroupIndex: 3, RunModeFlags: RunModeSignature})
+			ep := defaultEvalParams(&sb, &txn)
+			ep.GroupIndex = 3
+			pass, err := Eval(program, ep)
 			if !pass {
 				t.Log(hex.EncodeToString(program))
 				t.Log(sb.String())
@@ -1391,8 +1396,9 @@ gtxn 0 Sender
 				txn.Txn.Note,
 			}
 			sb = strings.Builder{}
-			proto := defaultEvalProto()
-			pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, TxnGroup: txgroup, RunModeFlags: RunModeSignature})
+			ep := defaultEvalParams(&sb, &txn)
+			ep.TxnGroup = txgroup
+			pass, err := Eval(program, ep)
 			if !pass || err != nil {
 				t.Log(hex.EncodeToString(program))
 				t.Log(sb.String())
@@ -2062,9 +2068,12 @@ func TestProgramProtoForbidden(t *testing.T) {
 	proto := config.ConsensusParams{
 		LogicSigVersion: EvalMaxVersion - 1,
 	}
-	_, err := Check(program[:vlen], EvalParams{Proto: &proto})
+	ep := EvalParams{}
+	ep.Proto = &proto
+	_, err := Check(program[:vlen], ep)
 	require.Error(t, err)
-	pass, err := Eval(program[:vlen], EvalParams{Proto: &proto, Txn: &transactions.SignedTxn{}})
+	ep.Txn = &transactions.SignedTxn{}
+	pass, err := Eval(program[:vlen], ep)
 	require.Error(t, err)
 	require.False(t, pass)
 	isNotPanic(t, err)
