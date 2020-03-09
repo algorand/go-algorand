@@ -37,7 +37,7 @@ jobs:
       os: linux
       name: Ubuntu AMD64 Build
       script:
-        - scripts/install_mule.sh
+        - scripts/install_mule.sh -u
         - mule build-linux-amd64
     - # same stage, parallel job
       name: External ARM64 Build
@@ -46,14 +46,14 @@ jobs:
         - BUILD_TYPE: "external_build"
         - TARGET_PLATFORM: "linux-arm64"
       script:
-        - scripts/install_mule.sh
+        - scripts/install_mule.sh -u
         - mule build-linux-arm64
     - # same stage, parallel job
       os: osx
       osx_image: xcode11
       name: MacOS AMD64 Build
       script:
-        - scripts/install_mule.sh
+        - scripts/install_mule.sh -u
         - mule build-local
 
     - stage: build_release
