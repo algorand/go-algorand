@@ -119,11 +119,11 @@ var OpSpecs = []OpSpec{
 
 	{0x60, "balance", opBalance, asmDefault, disDefault, oneInt, oneInt, 2, RunModeApplication, opSizeDefault},
 	{0x61, "app_opted_in", opAppCheckOptedIn, asmDefault, disDefault, twoInts, oneInt, 2, RunModeApplication, opSizeDefault},
-	{0x62, "app_read_local", opAppReadLocalState, asmDefault, disDefault, oneBytes.plus(twoInts), oneInt.plus(oneAny), 2, RunModeApplication, opSizeDefault},
+	{0x62, "app_read_local", opAppReadLocalState, asmDefault, disDefault, twoInts.plus(oneBytes), oneInt.plus(oneAny), 2, RunModeApplication, opSizeDefault},
 	{0x63, "app_read_global", opAppReadGlobalState, asmDefault, disDefault, oneBytes, oneInt.plus(oneAny), 2, RunModeApplication, opSizeDefault},
-	{0x64, "app_write_local", opAppWriteLocalState, asmDefault, disDefault, oneAny.plus(oneBytes).plus(oneInt), nil, 2, RunModeApplication, opSizeDefault},
-	{0x65, "app_write_global", opAppWriteGlobalState, asmDefault, disDefault, oneAny.plus(oneBytes), nil, 2, RunModeApplication, opSizeDefault},
-	{0x66, "app_read_other_global", opAppReadOtherGlobalState, asmDefault, disDefault, oneBytes.plus(twoInts), oneInt.plus(oneAny), 2, RunModeApplication, opSizeDefault},
+	{0x64, "app_write_local", opAppWriteLocalState, asmDefault, disDefault, oneInt.plus(oneBytes).plus(oneAny), nil, 2, RunModeApplication, opSizeDefault},
+	{0x65, "app_write_global", opAppWriteGlobalState, asmDefault, disDefault, oneBytes.plus(oneAny), nil, 2, RunModeApplication, opSizeDefault},
+	{0x66, "app_read_other_global", opAppReadOtherGlobalState, asmDefault, disDefault, twoInts.plus(oneBytes), oneInt.plus(oneAny), 2, RunModeApplication, opSizeDefault},
 
 	{0x70, "asset_read_holding", opAssetReadHolding, asmDefault, disDefault, threeInts, oneInt.plus(oneAny), 2, RunModeApplication, opSizeDefault},
 	{0x71, "asset_read_params", opAssetReadParams, asmDefault, disDefault, threeInts, oneInt.plus(oneAny), 2, RunModeApplication, opSizeDefault},

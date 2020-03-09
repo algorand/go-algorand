@@ -630,3 +630,15 @@ txna Accounts 0
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "unknown opcode txna")
 }
+
+func TestAssembleBalance(t *testing.T) {
+	t.Parallel()
+
+	text := `byte 0x00
+balance
+int 1
+==`
+	_, err := AssembleString(text)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "balance arg 0 wanted type uint64 got []byte")
+}

@@ -472,16 +472,16 @@ The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which 
 - Pushes: uint64
 - check if account A opted in for the application B => {0 or 1}
 
-params: application id (top of the stack), account index
+params: account index, application id (top of the stack on opcode entry)
 
 ## app_read_local
 
 - Opcode: 0x62
-- Pops: *... stack*, {[]byte A}, {uint64 B}, {uint64 C}
+- Pops: *... stack*, {uint64 A}, {uint64 B}, {[]byte C}
 - Pushes: uint64, any
 - read key K from local state of account A for the application B => {0 or 1 (top), value}
 
-params: state key (top of the stack), application id, account index. Return: is_exist flag (top of the stack), value
+params: account index, application id, state key. Return: did_exist flag (top of the stack), value
 
 ## app_read_global
 
@@ -493,27 +493,27 @@ params: state key (top of the stack), application id, account index. Return: is_
 ## app_write_local
 
 - Opcode: 0x64
-- Pops: *... stack*, {any A}, {[]byte B}, {uint64 C}
+- Pops: *... stack*, {uint64 A}, {[]byte B}, {any C}
 - Pushes: _None_
 - write key K to local state of account A for the application B
 
-params: value (top of the stack), state key, account index
+params: account index, state key, value
 
 ## app_write_global
 
 - Opcode: 0x65
-- Pops: *... stack*, {any A}, {[]byte B}
+- Pops: *... stack*, {[]byte A}, {any B}
 - Pushes: _None_
 - write key K to global state of the current application
 
 ## app_read_other_global
 
 - Opcode: 0x66
-- Pops: *... stack*, {[]byte A}, {uint64 B}, {uint64 C}
+- Pops: *... stack*, {uint64 A}, {uint64 B}, {[]byte C}
 - Pushes: uint64, any
 - read key K from global state of account A for the application B if A created B => {0 or 1 (top), value}
 
-params: state key (top of the stack), application id, account index. Return: is_exist flag (top of the stack), value
+params: account index, application id, state key. Return: did_exist flag (top of the stack), value
 
 ## asset_read_holding
 
@@ -522,7 +522,7 @@ params: state key (top of the stack), application id, account index. Return: is_
 - Pushes: uint64, any
 - read an asset A holding field X of account A  => {0 or 1 (top), value}
 
-params: field (top of the stack), asset id, account index. Return: is_exist flag (top of the stack), value
+params: account index, asset id, field. Return: did_exist flag, value
 
 ## asset_read_params
 
@@ -531,4 +531,4 @@ params: field (top of the stack), asset id, account index. Return: is_exist flag
 - Pushes: uint64, any
 - read an asset A params field X of account A  => {0 or 1 (top), value}
 
-params: field (top of the stack), asset id, account index. Return: is_exist flag (top of the stack), value
+params: account index, asset id, field. Return: did_exist flag, value
