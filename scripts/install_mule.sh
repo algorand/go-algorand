@@ -26,8 +26,6 @@ while getopts ":v:uh" opt; do
   esac
 done
 
-
-
 if CURRENT_MULE_VERSION=$(mule -v 2> /dev/null); then
     if [[ ${CURRENT_MULE_VERSION} == ${MULE_VERSION} ]]; then
         echo "Mule version $(mule -v) is already installed"
