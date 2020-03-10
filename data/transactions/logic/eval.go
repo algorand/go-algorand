@@ -79,8 +79,8 @@ func (sv *stackValue) String() string {
 // LedgerForLogic represents ledger API for Statefull TEAL program
 type LedgerForLogic interface {
 	Balance(addr basics.Address) (uint64, error)
-	AppLocalState(addr basics.Address, appID uint64) (map[string]basics.TealValue, error)
-	AppGlobalState(appID uint64) (map[string]basics.TealValue, error)
+	AppLocalState(addr basics.Address, appIdx basics.AppIndex) (basics.TealKeyValue, error)
+	AppGlobalState(appIdx basics.AppIndex) (basics.TealKeyValue, error)
 }
 
 // EvalParams contains data that comes into condition evaluation.
@@ -101,7 +101,7 @@ type EvalParams struct {
 
 	RunModeFlags uint64
 
-	ledger LedgerForLogic
+	Ledger LedgerForLogic
 }
 
 type opEvalFunc func(cx *evalContext)
@@ -1121,7 +1121,7 @@ func opBalance(cx *evalContext) {
 	last := len(cx.stack) - 1 // account offset
 	accountIdx := cx.stack[last].Uint
 
-	if cx.ledger == nil {
+	if cx.Ledger == nil {
 		cx.err = fmt.Errorf("ledger not available")
 		return
 	}
@@ -1138,7 +1138,7 @@ func opBalance(cx *evalContext) {
 		addr = cx.Txn.Txn.Accounts[accountIdx-1]
 	}
 
-	amount, err := cx.ledger.Balance(addr)
+	amount, err := cx.Ledger.Balance(addr)
 	if err != nil {
 		cx.err = fmt.Errorf("failed to fetch balance of %s: %s", addr, err.Error())
 		return
@@ -1153,7 +1153,7 @@ func opAppCheckOptedIn(cx *evalContext) {
 	appID := cx.stack[last].Uint
 	accountIdx := cx.stack[prev].Uint
 
-	if cx.ledger == nil {
+	if cx.Ledger == nil {
 		cx.err = fmt.Errorf("ledger not available")
 		return
 	}
@@ -1170,7 +1170,7 @@ func opAppCheckOptedIn(cx *evalContext) {
 		addr = cx.Txn.Txn.Accounts[accountIdx-1]
 	}
 
-	_, err := cx.ledger.AppLocalState(addr, appID)
+	_, err := cx.Ledger.AppLocalState(addr, basics.AppIndex(appID))
 	if err != nil {
 		cx.stack[prev].Uint = 0
 	} else {
@@ -1189,7 +1189,7 @@ func opAppReadLocalState(cx *evalContext) {
 	appID := cx.stack[prev].Uint
 	accountIdx := cx.stack[pprev].Uint
 
-	if cx.ledger == nil {
+	if cx.Ledger == nil {
 		cx.err = fmt.Errorf("ledger not available")
 		return
 	}
@@ -1206,7 +1206,7 @@ func opAppReadLocalState(cx *evalContext) {
 		addr = cx.Txn.Txn.Accounts[accountIdx-1]
 	}
 
-	state, err := cx.ledger.AppLocalState(addr, appID)
+	state, err := cx.Ledger.AppLocalState(addr, basics.AppIndex(appID))
 	if err != nil {
 		cx.err = fmt.Errorf("failed to fetch local state [%s] of the app %d: %s", addr, appID, err.Error())
 		return
@@ -1232,7 +1232,7 @@ func opAppReadGlobalState(cx *evalContext) {
 	key := cx.stack[last].Bytes
 	appID := uint64(cx.Txn.Txn.ApplicationID)
 
-	if cx.ledger == nil {
+	if cx.Ledger == nil {
 		cx.err = fmt.Errorf("ledger not available")
 		return
 	}
@@ -1242,7 +1242,7 @@ func opAppReadGlobalState(cx *evalContext) {
 		return
 	}
 
-	state, err := cx.ledger.AppGlobalState(appID)
+	state, err := cx.Ledger.AppGlobalState(basics.AppIndex(appID))
 	if err != nil {
 		cx.err = fmt.Errorf("failed to fetch app global state of the app %d", appID)
 		return

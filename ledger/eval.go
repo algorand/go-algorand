@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -482,7 +483,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
-		err := eval.transaction(txad.SignedTxn, groupNoAD, txad.ApplyData, cow, &txib)
+		err := eval.transaction(txad.SignedTxn, groupNoAD, gi, txad.ApplyData, cow, &txib)
 		if err != nil {
 			return err
 		}
@@ -532,7 +533,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 // transaction tentatively executes a new transaction as part of this block evaluation.
 // If the transaction cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, group []transactions.SignedTxn, ad transactions.ApplyData, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
+func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, group []transactions.SignedTxn, groupIndex int, ad transactions.ApplyData, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
 	var err error
 
 	if eval.validate {
@@ -557,8 +558,31 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, group []tran
 		RewardsPool: eval.block.BlockHeader.RewardsPool,
 	}
 
+	// Initialize an appLedger, which manages access to balance records
+	// for Stateful TEAL programs. Stateful TEAL may only access the
+	// sender's balance record or the balance record of accounts explicitly
+	// listed in ac.Accounts
+	whitelistWithSender := append(txn.Txn.Accounts, txn.Txn.Header.Sender)
+	appLedger, err := newAppLedger(cow, whitelistWithSender)
+	if err != nil {
+		return err
+	}
+
+	// Construct an appTealEvaluator (implements
+	// transactions.StateEvaluator) for use in ApplicationCall transactions
+	seval := appTealEvaluator{
+		evalParams: logic.EvalParams{
+			Txn: &txn,
+			Proto: &eval.proto,
+			TxnGroup: group,
+			GroupIndex: groupIndex,
+			RunModeFlags: logic.RunModeApplication,
+			Ledger: appLedger,
+		},
+	}
+
 	// Apply the transaction, updating the cow balances
-	applyData, err := txn.Txn.Apply(cow, nil, spec, cow.txnCounter())
+	applyData, err := txn.Txn.Apply(cow, seval, spec, cow.txnCounter())
 	if err != nil {
 		return fmt.Errorf("transaction %v: %v", txn.ID(), err)
 	}

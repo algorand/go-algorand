@@ -123,71 +123,6 @@ func getAppParams(balances Balances, aidx basics.AppIndex) (params basics.AppPar
 	return
 }
 
-// appLedger implements LedgerForLogic
-type appLedger struct {
-	addresses map[basics.Address]bool
-	balances  Balances
-}
-
-func newAppLedger(balances Balances, whitelist []basics.Address) (al appLedger, err error) {
-	if balances == nil {
-		err = fmt.Errorf("cannot create appLedger with nil balances")
-		return
-	}
-
-	if len(whitelist) < 1 {
-		err = fmt.Errorf("appLedger whitelist should at least include txn sender")
-		return
-	}
-
-	al.balances = balances
-	al.addresses = make(map[basics.Address]bool)
-	for _, addr := range whitelist {
-		al.addresses[addr] = true
-	}
-
-	return al, nil
-}
-
-func (al *appLedger) Balance(addr basics.Address) (uint64, error) {
-	// Ensure requested address is on whitelist
-	if !al.addresses[addr] {
-		return 0, fmt.Errorf("cannot access balance for %s, not sender or in txn.Addresses", addr.String())
-	}
-
-	// Fetch record with pending rewards applied
-	record, err := al.balances.Get(addr, true)
-	if err != nil {
-		return 0, err
-	}
-
-	return record.MicroAlgos.Raw, nil
-}
-
-func (al *appLedger) AppLocalState(addr basics.Address, appIdx basics.AppIndex) (basics.TealKeyValue, error) {
-	// Ensure requested address is on whitelist
-	if !al.addresses[addr] {
-		return nil, fmt.Errorf("cannot access localstate for %s, not sender or in txn.Addresses", addr.String())
-	}
-
-	// Don't fetch with pending rewards here since we are only returning
-	// the LocalState, not the balance
-	record, err := al.balances.Get(addr, false)
-	if err != nil {
-		return nil, err
-	}
-
-	_, ok := record.AppLocalStates[appIdx]
-	if !ok {
-		return nil, fmt.Errorf("addr %s not opted in to app %d, cannot fetch state", addr.String(), appIdx)
-	}
-
-	// Clone LocalState so that we don't edit it in place
-	cloned := record.AppLocalStates[appIdx].Clone()
-
-	return cloned, nil
-}
-
 func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva StateEvaluator, spec SpecialAddresses, ad *ApplyData, txnCounter uint64) error {
 	// Keep track of the application ID we're working on
 	appIdx := ac.ApplicationID
@@ -226,20 +161,6 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva
 	if err != nil {
 		return err
 	}
-
-	// Initialize an appLedger, which manages access to balance records
-	// for Stateful TEAL programs. Stateful TEAL may only access the
-	// sender's balance record or the balance record of accounts explicitly
-	// listed in ac.Accounts
-	whitelistWithSender := append(ac.Accounts, header.Sender)
-	appLedger, err := newAppLedger(balances, whitelistWithSender)
-	if err != nil {
-		return err
-	}
-	_ = appLedger
-
-	// Create the Stateful TEAL evaluation context
-
 
 	// Clear out our LocalState. In this case, we don't execute the
 	// ApprovalProgram, since clearing out is always allowed. We only
