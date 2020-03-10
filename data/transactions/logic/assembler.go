@@ -268,11 +268,35 @@ func (ops *OpStream) Gtxna(gid, fieldNum uint64, arrayFieldIdx uint64) error {
 // Global writes opcodes for loading an evaluator-global field
 func (ops *OpStream) Global(val uint64) error {
 	if val >= uint64(len(GlobalFieldNames)) {
-		return errors.New("invalid txn field")
+		return errors.New("invalid global field")
 	}
 	ops.Out.WriteByte(0x32)
 	ops.Out.WriteByte(uint8(val))
 	ops.tpush(GlobalFieldTypes[val])
+	return nil
+}
+
+// AssetHolding writes opcodes for accessing data from AssetHolding
+func (ops *OpStream) AssetHolding(val uint64) error {
+	if val >= uint64(len(AssetHoldingFieldNames)) {
+		return errors.New("invalid asset holding field")
+	}
+	ops.Out.WriteByte(opsByName[ops.Version]["asset_read_holding"].Opcode)
+	ops.Out.WriteByte(uint8(val))
+	ops.tpush(AssetHoldingFieldTypes[val])
+	ops.tpush(StackUint64)
+	return nil
+}
+
+// AssetParams writes opcodes for accessing data from AssetParams
+func (ops *OpStream) AssetParams(val uint64) error {
+	if val >= uint64(len(AssetParamsFieldNames)) {
+		return errors.New("invalid asset params field")
+	}
+	ops.Out.WriteByte(opsByName[ops.Version]["asset_read_params"].Opcode)
+	ops.Out.WriteByte(uint8(val))
+	ops.tpush(AssetParamsFieldTypes[val])
+	ops.tpush(StackUint64)
 	return nil
 }
 
@@ -595,6 +619,28 @@ func assembleGlobal(ops *OpStream, spec *OpSpec, args []string) error {
 		return fmt.Errorf("global unknown arg %v", args[0])
 	}
 	return ops.Global(uint64(val))
+}
+
+func assembleAssetHolding(ops *OpStream, spec *OpSpec, args []string) error {
+	if len(args) != 1 {
+		return errors.New("asset_read_holding expects one argument")
+	}
+	val, ok := assetHoldingFields[args[0]]
+	if !ok {
+		return fmt.Errorf("asset_read_holding unknown arg %v", args[0])
+	}
+	return ops.AssetHolding(uint64(val))
+}
+
+func assembleAssetParams(ops *OpStream, spec *OpSpec, args []string) error {
+	if len(args) != 1 {
+		return errors.New("asset_read_params expects one argument")
+	}
+	val, ok := assetParamsFields[args[0]]
+	if !ok {
+		return fmt.Errorf("asset_read_params unknown arg %v", args[0])
+	}
+	return ops.AssetParams(uint64(val))
 }
 
 type assembleFunc func(*OpStream, *OpSpec, []string) error
@@ -1158,6 +1204,26 @@ func disStore(dis *disassembleState, spec *OpSpec) {
 	n := uint(dis.program[dis.pc+1])
 	dis.nextpc = dis.pc + 2
 	_, dis.err = fmt.Fprintf(dis.out, "store %d\n", n)
+}
+
+func disAssetHolding(dis *disassembleState, spec *OpSpec) {
+	dis.nextpc = dis.pc + 2
+	arg := dis.program[dis.pc+1]
+	if int(arg) >= len(AssetHoldingFieldNames) {
+		dis.err = fmt.Errorf("invalid asset holding arg index %d at pc=%d", arg, dis.pc)
+		return
+	}
+	_, dis.err = fmt.Fprintf(dis.out, "asset_read_holding %s\n", AssetHoldingFieldNames[arg])
+}
+
+func disAssetParams(dis *disassembleState, spec *OpSpec) {
+	dis.nextpc = dis.pc + 2
+	arg := dis.program[dis.pc+1]
+	if int(arg) >= len(AssetParamsFieldNames) {
+		dis.err = fmt.Errorf("invalid asset params arg index %d at pc=%d", arg, dis.pc)
+		return
+	}
+	_, dis.err = fmt.Fprintf(dis.out, "asset_read_params %s\n", AssetParamsFieldNames[arg])
 }
 
 // Disassemble produces a text form of program bytes.

@@ -125,8 +125,8 @@ var OpSpecs = []OpSpec{
 	{0x65, "app_write_global", opAppWriteGlobalState, asmDefault, disDefault, oneBytes.plus(oneAny), nil, 2, RunModeApplication, opSizeDefault},
 	{0x66, "app_read_other_global", opAppReadOtherGlobalState, asmDefault, disDefault, twoInts.plus(oneBytes), oneInt.plus(oneAny), 2, RunModeApplication, opSizeDefault},
 
-	{0x70, "asset_read_holding", opAssetReadHolding, asmDefault, disDefault, threeInts, oneInt.plus(oneAny), 2, RunModeApplication, opSizeDefault},
-	{0x71, "asset_read_params", opAssetReadParams, asmDefault, disDefault, threeInts, oneInt.plus(oneAny), 2, RunModeApplication, opSizeDefault},
+	{0x70, "asset_read_holding", opAssetReadHolding, assembleAssetHolding, disAssetHolding, twoInts, oneInt.plus(oneAny), 2, RunModeApplication, opSize{1, 2, nil}},
+	{0x71, "asset_read_params", opAssetReadParams, assembleAssetParams, disAssetParams, twoInts, oneInt.plus(oneAny), 2, RunModeApplication, opSize{1, 2, nil}},
 }
 
 type sortByOpcode []OpSpec

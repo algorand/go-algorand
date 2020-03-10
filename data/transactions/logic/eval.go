@@ -81,6 +81,8 @@ type LedgerForLogic interface {
 	Balance(addr basics.Address) (uint64, error)
 	AppLocalState(addr basics.Address, appIdx basics.AppIndex) (basics.TealKeyValue, error)
 	AppGlobalState(appIdx basics.AppIndex) (basics.TealKeyValue, error)
+	AssetHolding(addr basics.Address, assetID uint64) (basics.AssetHolding, error)
+	AssetParams(addr basics.Address, assetID uint64) (basics.AssetParams, error)
 }
 
 // EvalParams contains data that comes into condition evaluation.
@@ -390,11 +392,25 @@ func (cx *evalContext) step() {
 	cx.cost += oz.cost
 	spec.op(cx)
 	if cx.Trace != nil {
-		if len(cx.stack) == 0 {
-			fmt.Fprintf(cx.Trace, "%3d %s => %s\n", cx.pc, spec.Name, "<empty stack>")
-		} else {
-			fmt.Fprintf(cx.Trace, "%3d %s => %s\n", cx.pc, spec.Name, cx.stack[len(cx.stack)-1].String())
+		immArgsString := " "
+		if spec.Name != "bnz" {
+			for i := 1; i < spec.opSize.size; i++ {
+				immArgsString += fmt.Sprintf("0x%02x ", cx.program[cx.pc+i])
+			}
 		}
+		var stackString string
+		if len(cx.stack) == 0 {
+			stackString = "<empty stack>"
+		} else {
+			num := 1
+			if len(spec.Returns) > 1 {
+				num = len(spec.Returns)
+			}
+			for i := 1; i <= num; i++ {
+				stackString += fmt.Sprintf("(%s) ", cx.stack[len(cx.stack)-i].String())
+			}
+		}
+		fmt.Fprintf(cx.Trace, "%3d %s%s=> %s\n", cx.pc, spec.Name, immArgsString, stackString)
 	}
 	if cx.err != nil {
 		return
@@ -885,6 +901,56 @@ func opDup(cx *evalContext) {
 	cx.stack = append(cx.stack, sv)
 }
 
+func (cx *evalContext) assetHoldingEnumToValue(holding *basics.AssetHolding, field uint64) (sv stackValue, err error) {
+	switch AssetHoldingField(field) {
+	case AssetHoldingAmount:
+		sv.Uint = holding.Amount
+	case AssetHoldingFrozen:
+		if holding.Frozen {
+			sv.Uint = 1
+		} else {
+			sv.Uint = 0
+		}
+	default:
+		err = fmt.Errorf("invalid asset holding field %d", field)
+	}
+	return
+}
+
+func (cx *evalContext) assetParamsEnumToValue(params *basics.AssetParams, field uint64) (sv stackValue, err error) {
+	switch AssetParamsField(field) {
+	case AssetParamsTotal:
+		sv.Uint = params.Total
+	case AssetParamsDecimals:
+		sv.Uint = uint64(params.Decimals)
+	case AssetParamsDefaultFrozen:
+		if params.DefaultFrozen {
+			sv.Uint = 1
+		} else {
+			sv.Uint = 0
+		}
+	case AssetParamsUnitName:
+		sv.Bytes = []byte(params.UnitName)
+	case AssetParamsAssetName:
+		sv.Bytes = []byte(params.AssetName)
+	case AssetParamsURL:
+		sv.Bytes = []byte(params.URL)
+	case AssetParamsMetadataHash:
+		sv.Bytes = params.MetadataHash[:]
+	case AssetParamsManager:
+		sv.Bytes = params.Manager[:]
+	case AssetParamsReserve:
+		sv.Bytes = params.Reserve[:]
+	case AssetParamsFreeze:
+		sv.Bytes = params.Freeze[:]
+	case AssetParamsClawback:
+		sv.Bytes = params.Clawback[:]
+	default:
+		err = fmt.Errorf("invalid asset params field %d", field)
+	}
+	return
+}
+
 func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint64, arrayFieldIdx uint64) (sv stackValue, err error) {
 	err = nil
 	switch TxnField(field) {
@@ -1122,8 +1188,26 @@ func opStore(cx *evalContext) {
 	cx.nextpc = cx.pc + 2
 }
 
+// getAccountAddrByOffset resolves account offset to address
+// it treats offset == 0 as Sender otherwise looks up into Txn.Accounts
+func getAccountAddrByOffset(txn *transactions.SignedTxn, accountIdx uint64) (basics.Address, error) {
+	var addr basics.Address
+	if accountIdx == 0 {
+		addr = txn.Txn.Sender
+		return addr, nil
+	}
+
+	if accountIdx > uint64(len(txn.Txn.Accounts)) {
+		return addr, fmt.Errorf("cannot load account[%d] of %d", accountIdx, len(txn.Txn.Accounts))
+	}
+
+	addr = txn.Txn.Accounts[accountIdx-1]
+	return addr, nil
+}
+
 func opBalance(cx *evalContext) {
 	last := len(cx.stack) - 1 // account offset
+
 	accountIdx := cx.stack[last].Uint
 
 	if cx.Ledger == nil {
@@ -1131,16 +1215,10 @@ func opBalance(cx *evalContext) {
 		return
 	}
 
-	var addr basics.Address
-	if accountIdx == 0 {
-		// special case: sender
-		addr = cx.Txn.Txn.Sender
-	} else {
-		if accountIdx > uint64(len(cx.Txn.Txn.Accounts)) {
-			cx.err = fmt.Errorf("cannot load account[%d] of %d", accountIdx, len(cx.Txn.Txn.Accounts))
-			return
-		}
-		addr = cx.Txn.Txn.Accounts[accountIdx-1]
+	addr, err := getAccountAddrByOffset(cx.Txn, accountIdx)
+	if err != nil {
+		cx.err = err
+		return
 	}
 
 	amount, err := cx.Ledger.Balance(addr)
@@ -1155,6 +1233,7 @@ func opBalance(cx *evalContext) {
 func opAppCheckOptedIn(cx *evalContext) {
 	last := len(cx.stack) - 1 // app id
 	prev := last - 1          // account offset
+
 	appID := cx.stack[last].Uint
 	accountIdx := cx.stack[prev].Uint
 
@@ -1163,16 +1242,10 @@ func opAppCheckOptedIn(cx *evalContext) {
 		return
 	}
 
-	var addr basics.Address
-	if accountIdx == 0 {
-		// special case: sender
-		addr = cx.Txn.Txn.Sender
-	} else {
-		if accountIdx > uint64(len(cx.Txn.Txn.Accounts)) {
-			cx.err = fmt.Errorf("cannot load account[%d] of %d", accountIdx, len(cx.Txn.Txn.Accounts))
-			return
-		}
-		addr = cx.Txn.Txn.Accounts[accountIdx-1]
+	addr, err := getAccountAddrByOffset(cx.Txn, accountIdx)
+	if err != nil {
+		cx.err = err
+		return
 	}
 
 	_, err := cx.Ledger.AppLocalState(addr, basics.AppIndex(appID))
@@ -1199,16 +1272,10 @@ func opAppReadLocalState(cx *evalContext) {
 		return
 	}
 
-	var addr basics.Address
-	if accountIdx == 0 {
-		// special case: sender
-		addr = cx.Txn.Txn.Sender
-	} else {
-		if accountIdx > uint64(len(cx.Txn.Txn.Accounts)) {
-			cx.err = fmt.Errorf("cannot load account[%d] of %d", accountIdx, len(cx.Txn.Txn.Accounts))
-			return
-		}
-		addr = cx.Txn.Txn.Accounts[accountIdx-1]
+	addr, err := getAccountAddrByOffset(cx.Txn, accountIdx)
+	if err != nil {
+		cx.err = err
+		return
 	}
 
 	state, err := cx.Ledger.AppLocalState(addr, basics.AppIndex(appID))
@@ -1224,7 +1291,7 @@ func opAppReadLocalState(cx *evalContext) {
 	} else {
 		// TODO(applications) fixme
 		//	cx.stack[pprev].Bytes = []byte(value)
-		_ = value
+		cx.stack[pprev].Bytes = []byte(value
 		cx.stack[prev].Uint = 1
 	}
 
@@ -1265,7 +1332,7 @@ func opAppReadGlobalState(cx *evalContext) {
 	} else {
 		// TODO(applications) fixme
 		//	cx.stack[last].Bytes = value
-		_ = value
+		cx.stack[last].Bytes = value
 		sv.Uint = 1
 	}
 
@@ -1300,21 +1367,75 @@ func opAppReadOtherGlobalState(cx *evalContext) {
 }
 
 func opAssetReadHolding(cx *evalContext) {
-	last := len(cx.stack) - 1 // asset holding enum value
-	prev := last - 1          // asset id
-	pprev := prev - 1         // account offset
-	// TODO
-	cx.stack[pprev].Uint = 0
-	cx.stack[prev].Uint = 0
-	cx.stack = cx.stack[:last]
+	last := len(cx.stack) - 1 // asset id
+	prev := last - 1          // account offset
+
+	assetID := cx.stack[last].Uint
+	accountIdx := cx.stack[prev].Uint
+	fieldIdx := uint64(cx.program[cx.pc+1])
+
+	if cx.ledger == nil {
+		cx.err = fmt.Errorf("ledger not available")
+		return
+	}
+
+	addr, err := getAccountAddrByOffset(cx.Txn, accountIdx)
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	var exist uint64 = 0
+	var value stackValue
+	if holding, err := cx.ledger.AssetHolding(addr, assetID); err == nil {
+		// the holding exist, read the value
+		exist = 1
+		value, err = cx.assetHoldingEnumToValue(&holding, fieldIdx)
+		if err != nil {
+			cx.err = err
+			return
+		}
+	}
+
+	cx.stack[prev] = value
+	cx.stack[last].Uint = exist
+
+	cx.nextpc = cx.pc + 2
 }
 
 func opAssetReadParams(cx *evalContext) {
-	last := len(cx.stack) - 1 // asset params enum value
-	prev := last - 1          // asset id
-	pprev := prev - 1         // account offset
-	// TODO
-	cx.stack[pprev].Uint = 0
-	cx.stack[prev].Uint = 0
-	cx.stack = cx.stack[:last]
+	last := len(cx.stack) - 1 // asset id
+	prev := last - 1          // account offset
+
+	assetID := cx.stack[last].Uint
+	accountIdx := cx.stack[prev].Uint
+	paramIdx := uint64(cx.program[cx.pc+1])
+
+	if cx.ledger == nil {
+		cx.err = fmt.Errorf("ledger not available")
+		return
+	}
+
+	addr, err := getAccountAddrByOffset(cx.Txn, accountIdx)
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	var exist uint64 = 0
+	var value stackValue
+	if params, err := cx.ledger.AssetParams(addr, assetID); err == nil {
+		// params exist, read the value
+		exist = 1
+		value, err = cx.assetParamsEnumToValue(&params, paramIdx)
+		if err != nil {
+			cx.err = err
+			return
+		}
+	}
+
+	cx.stack[prev] = value
+	cx.stack[last].Uint = exist
+
+	cx.nextpc = cx.pc + 2
 }

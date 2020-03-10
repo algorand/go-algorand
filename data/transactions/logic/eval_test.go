@@ -1059,6 +1059,7 @@ func TestTypeEnum(t *testing.T) {
 				protocol.AssetConfigTx,
 				protocol.AssetTransferTx,
 				protocol.AssetFreezeTx,
+				protocol.ApplicationCallTx,
 			}
 			// this is explicitly a local copy of the list so that someone
 			// doesn't accidentally disconnect the doc.go
@@ -1069,6 +1070,7 @@ func TestTypeEnum(t *testing.T) {
 				"AssetConfig",
 				"AssetTransfer",
 				"AssetFreeze",
+				"ApplicationCall",
 			}
 			for i, tt := range ttypes {
 				symbol := typeNames[i]
@@ -2753,9 +2755,11 @@ pop
 }
 
 type balanceRecord struct {
-	addr    basics.Address
-	balance uint64
-	apps    map[uint64]map[string]basics.TealValue
+	addr     basics.Address
+	balance  uint64
+	apps     map[uint64]map[string]basics.TealValue
+	holdings map[uint64]basics.AssetHolding
+	assets   map[uint64]basics.AssetParams
 }
 
 type testLedger struct {
@@ -2763,17 +2767,23 @@ type testLedger struct {
 	applications map[uint64]map[string]basics.TealValue
 }
 
+func makeBalanceRecord(addr basics.Address, balance uint64) balanceRecord {
+	br := balanceRecord{
+		addr:     addr,
+		balance:  balance,
+		apps:     make(map[uint64]map[string]basics.TealValue),
+		holdings: make(map[uint64]basics.AssetHolding),
+		assets:   make(map[uint64]basics.AssetParams),
+	}
+	return br
+}
+
 func makeTestLedger(balances map[basics.Address]uint64) *testLedger {
 	l := new(testLedger)
 	l.balances = make(map[basics.Address]balanceRecord)
 	if balances != nil {
 		for addr, balance := range balances {
-			br := balanceRecord{
-				addr:    addr,
-				balance: balance,
-				apps:    make(map[uint64]map[string]basics.TealValue),
-			}
-			l.balances[addr] = br
+			l.balances[addr] = makeBalanceRecord(addr, balance)
 
 		}
 	}
@@ -2785,13 +2795,27 @@ func (l *testLedger) newApp(addr basics.Address, appID uint64) {
 	l.applications[appID] = make(map[string]basics.TealValue)
 	br, ok := l.balances[addr]
 	if !ok {
-		br = balanceRecord{
-			addr:    addr,
-			balance: 0,
-			apps:    make(map[uint64]map[string]basics.TealValue),
-		}
+		br = makeBalanceRecord(addr, 0)
 	}
 	br.apps[appID] = make(map[string]basics.TealValue)
+	l.balances[addr] = br
+}
+
+func (l *testLedger) setAsset(addr basics.Address, assetID uint64, params basics.AssetParams) {
+	br, ok := l.balances[addr]
+	if !ok {
+		br = makeBalanceRecord(addr, 0)
+	}
+	br.assets[assetID] = params
+	l.balances[addr] = br
+}
+
+func (l *testLedger) setHolding(addr basics.Address, assetID uint64, holding basics.AssetHolding) {
+	br, ok := l.balances[addr]
+	if !ok {
+		br = makeBalanceRecord(addr, 0)
+	}
+	br.holdings[assetID] = holding
 	l.balances[addr] = br
 }
 
@@ -2813,7 +2837,7 @@ func (l *testLedger) AppLocalState(addr basics.Address, appID uint64) (map[strin
 		}
 		return nil, fmt.Errorf("No app for account")
 	}
-	return nil, fmt.Errorf("no app for this addr")
+	return nil, fmt.Errorf("no such address")
 }
 
 func (l *testLedger) AppGlobalState(appID uint64) (map[string]basics.TealValue, error) {
@@ -2821,6 +2845,26 @@ func (l *testLedger) AppGlobalState(appID uint64) (map[string]basics.TealValue, 
 		return state, nil
 	}
 	return nil, fmt.Errorf("no such app")
+}
+
+func (l *testLedger) AssetHolding(addr basics.Address, assetID uint64) (basics.AssetHolding, error) {
+	if br, ok := l.balances[addr]; ok {
+		if asset, ok := br.holdings[assetID]; ok {
+			return asset, nil
+		}
+		return basics.AssetHolding{}, fmt.Errorf("No asset for account")
+	}
+	return basics.AssetHolding{}, fmt.Errorf("no such address")
+}
+
+func (l *testLedger) AssetParams(addr basics.Address, assetID uint64) (basics.AssetParams, error) {
+	if br, ok := l.balances[addr]; ok {
+		if asset, ok := br.assets[assetID]; ok {
+			return asset, nil
+		}
+		return basics.AssetParams{}, fmt.Errorf("No asset for account")
+	}
+	return basics.AssetParams{}, fmt.Errorf("no such address")
 }
 
 func TestEvalModes(t *testing.T) {
@@ -2969,8 +3013,8 @@ balance
 		"int 1\nbyte 0x01\nbyte 0x01\napp_write_local",
 		"byte 0x01\nint 0\napp_write_global",
 		"int 0\nint 0\nbyte 0x01\napp_read_other_global",
-		"int 0\nint 0\nint 0\nasset_read_holding",
-		"int 0\nint 0\nint 0\nasset_read_params",
+		"int 0\nint 0\nasset_read_holding AssetHoldingFrozen",
+		"int 0\nint 0\nasset_read_params AssetParamsManager",
 	}
 
 	for _, source := range newOpcodeCalls {
@@ -3309,4 +3353,301 @@ byte 0x414c474f
 	pass, err := Eval(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
+}
+
+const assetsTestProgram = `int 0
+int 55
+asset_read_holding AssetHoldingAmount
+!
+bnz error
+int 123
+==
+int 0
+int 55
+asset_read_holding AssetHoldingFrozen
+!
+bnz error
+int 1
+==
+&&
+int 1
+int 55
+asset_read_params AssetParamsTotal
+!
+bnz error
+int 1000
+==
+&&
+int 1
+int 55
+asset_read_params AssetParamsDecimals
+!
+bnz error
+int 2
+==
+&&
+int 1
+int 55
+asset_read_params AssetParamsDefaultFrozen
+!
+bnz error
+int 0
+==
+&&
+int 1
+int 55
+asset_read_params AssetParamsUnitName
+!
+bnz error
+byte 0x414c474f
+==
+&&
+int 1
+int 55
+asset_read_params AssetParamsAssetName
+!
+bnz error
+len
+int 0
+==
+&&
+int 1
+int 55
+asset_read_params AssetParamsURL
+!
+bnz error
+txna ApplicationArgs 0
+==
+&&
+int 1
+int 55
+asset_read_params AssetParamsMetadataHash
+!
+bnz error
+byte 0x0000000000000000000000000000000000000000000000000000000000000000
+==
+&&
+int 1
+int 55
+asset_read_params AssetParamsManager
+!
+bnz error
+txna Accounts 0
+==
+&&
+int 1
+int 55
+asset_read_params AssetParamsReserve
+!
+bnz error
+txna Accounts 1
+==
+&&
+int 1
+int 55
+asset_read_params AssetParamsFreeze
+!
+bnz error
+txna Accounts 1
+==
+&&
+int 1
+int 55
+asset_read_params AssetParamsClawback
+!
+bnz error
+txna Accounts 1
+==
+&&
+bnz ok
+error:
+err
+ok:
+int 1
+`
+
+func TestAssets(t *testing.T) {
+	t.Parallel()
+	for _, field := range AssetHoldingFieldNames {
+		if !strings.Contains(assetsTestProgram, field) {
+			t.Errorf("TestAssets missing field %v", field)
+		}
+	}
+	for _, field := range AssetParamsFieldNames {
+		if !strings.Contains(assetsTestProgram, field) {
+			t.Errorf("TestAssets missing field %v", field)
+		}
+	}
+
+	// check generic errors
+	sources := []string{
+		"int 5\nint 55\nasset_read_holding AssetHoldingAmount",
+		"int 5\nint 55\nasset_read_params AssetParamsTotal",
+	}
+	for _, source := range sources {
+
+		program, err := AssembleString(source)
+		require.NoError(t, err)
+
+		txn := makeSampleTxn()
+		txgroup := makeSampleTxnGroup(txn)
+		ep := defaultEvalParams(nil, nil)
+		ep.Txn = &txn
+		ep.TxnGroup = txgroup
+		ep.RunModeFlags = RunModeApplication
+		_, err = Eval(program, ep)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "ledger not available")
+
+		ledger := makeTestLedger(
+			map[basics.Address]uint64{
+				txn.Txn.Sender: 1,
+			},
+		)
+		ep.ledger = ledger
+
+		_, err = Eval(program, ep)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "cannot load account[5]")
+	}
+
+	program, err := AssembleString(assetsTestProgram)
+	require.NoError(t, err)
+	cost, err := Check(program, defaultEvalParams(nil, nil))
+	require.NoError(t, err)
+	require.True(t, cost < 1000)
+
+	txn := makeSampleTxn()
+	sb := strings.Builder{}
+	ledger := makeTestLedger(
+		map[basics.Address]uint64{
+			txn.Txn.Sender: 1,
+		},
+	)
+	params := basics.AssetParams{
+		Total:         1000,
+		Decimals:      2,
+		DefaultFrozen: false,
+		UnitName:      "ALGO",
+		AssetName:     "",
+		URL:           string(protocol.PaymentTx),
+		Manager:       txn.Txn.Sender,
+		Reserve:       txn.Txn.Receiver,
+		Freeze:        txn.Txn.Receiver,
+		Clawback:      txn.Txn.Receiver,
+	}
+	ledger.setAsset(txn.Txn.Receiver, 55, params)
+	ledger.setHolding(txn.Txn.Sender, 55, basics.AssetHolding{Amount: 123, Frozen: true})
+
+	ep := defaultEvalParams(&sb, &txn)
+	ep.RunModeFlags = RunModeApplication
+	ep.ledger = ledger
+	pass, err := Eval(program, ep)
+	if !pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.NoError(t, err)
+	require.True(t, pass)
+
+	// check holdings bool value
+	source := `int 0
+int 55
+asset_read_holding AssetHoldingFrozen
+!
+bnz error
+int 0
+==
+bnz ok
+error:
+err
+ok:
+int 1
+`
+	program, err = AssembleString(source)
+	require.NoError(t, err)
+	ledger.setHolding(txn.Txn.Sender, 55, basics.AssetHolding{Amount: 123, Frozen: false})
+	pass, err = Eval(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+
+	// check holdings invalid offsets
+	require.Equal(t, opsByName[ep.Proto.LogicSigVersion]["asset_read_holding"].Opcode, program[8])
+	program[9] = 0x02
+	_, err = Eval(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid asset holding field 2")
+
+	// check holdings bool value
+	source = `int 1
+int 55
+asset_read_params AssetParamsDefaultFrozen
+!
+bnz error
+int 1
+==
+bnz ok
+error:
+err
+ok:
+int 1
+`
+	program, err = AssembleString(source)
+	require.NoError(t, err)
+	params.DefaultFrozen = true
+	ledger.setAsset(txn.Txn.Receiver, 55, params)
+	pass, err = Eval(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+
+	// check holdings invalid offsets
+	require.Equal(t, opsByName[ep.Proto.LogicSigVersion]["asset_read_params"].Opcode, program[7])
+	program[8] = 0x20
+	_, err = Eval(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid asset params field 32")
+
+	// check empty string
+	source = `int 1
+int 55
+asset_read_params AssetParamsURL
+!
+bnz error
+len
+int 0
+==
+bnz ok
+error:
+err
+ok:
+int 1
+`
+	program, err = AssembleString(source)
+	require.NoError(t, err)
+	params.URL = ""
+	ledger.setAsset(txn.Txn.Receiver, 55, params)
+	pass, err = Eval(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+
+	source = `int 1
+int 55
+asset_read_params AssetParamsURL
+!
+bnz error
+int 0
+==
+bnz ok
+error:
+err
+ok:
+int 1
+`
+	program, err = AssembleString(source)
+	require.NoError(t, err)
+	params.URL = ""
+	ledger.setAsset(txn.Txn.Receiver, 55, params)
+	pass, err = Eval(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "cannot compare ([]byte == uint64)")
 }

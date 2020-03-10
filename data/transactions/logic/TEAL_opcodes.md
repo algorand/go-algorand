@@ -518,17 +518,42 @@ params: account index, application id, state key. Return: did_exist flag (top of
 ## asset_read_holding
 
 - Opcode: 0x70
-- Pops: *... stack*, {uint64 A}, {uint64 B}, {uint64 C}
+- Pops: *... stack*, {uint64 A}, {uint64 B}
 - Pushes: uint64, any
 - read an asset A holding field X of account A  => {0 or 1 (top), value}
+
+`asset_read_holding` Fields:
+
+| Index | Name | Type | Notes |
+| --- | --- | --- | --- |
+| 0 | AssetHoldingAmount | uint64 | Amount of the asset unit held by this account |
+| 1 | AssetHoldingFrozen | uint64 | Is the asset frozen or not |
+
 
 params: account index, asset id, field. Return: did_exist flag, value
 
 ## asset_read_params
 
 - Opcode: 0x71
-- Pops: *... stack*, {uint64 A}, {uint64 B}, {uint64 C}
+- Pops: *... stack*, {uint64 A}, {uint64 B}
 - Pushes: uint64, any
 - read an asset A params field X of account A  => {0 or 1 (top), value}
+
+`asset_read_params` Fields:
+
+| Index | Name | Type | Notes |
+| --- | --- | --- | --- |
+| 0 | AssetParamsTotal | uint64 | Total number of units of this asset |
+| 1 | AssetParamsDecimals | uint64 | See AssetParams.Decimals |
+| 2 | AssetParamsDefaultFrozen | uint64 | Frozen by default or not |
+| 3 | AssetParamsUnitName | []byte | Asset unit name |
+| 4 | AssetParamsAssetName | []byte | Asset name |
+| 5 | AssetParamsURL | []byte | URL with additional info about the asset |
+| 6 | AssetParamsMetadataHash | []byte | Arbitrary commitment |
+| 7 | AssetParamsManager | []byte | Manager commitment |
+| 8 | AssetParamsReserve | []byte | Reserve address |
+| 9 | AssetParamsFreeze | []byte | Freeze address |
+| 10 | AssetParamsClawback | []byte | Clawback address |
+
 
 params: account index, asset id, field. Return: did_exist flag, value
