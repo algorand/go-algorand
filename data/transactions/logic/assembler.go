@@ -31,7 +31,6 @@ import (
 	"strings"
 
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/protocol"
 )
 
 // Writer is what we want here. Satisfied by bufio.Buffer
@@ -506,129 +505,6 @@ func assembleStore(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-//go:generate stringer -type=TxnField
-
-// TxnField is an enum type for `txn` and `gtxn`
-type TxnField int
-
-const (
-	// Sender Transaction.Sender
-	Sender TxnField = iota
-	// Fee Transaction.Fee
-	Fee
-	// FirstValid Transaction.FirstValid
-	FirstValid
-	// FirstValidTime panic
-	FirstValidTime
-	// LastValid Transaction.LastValid
-	LastValid
-	// Note Transaction.Note
-	Note
-	// Lease Transaction.Lease
-	Lease
-	// Receiver Transaction.Receiver
-	Receiver
-	// Amount Transaction.Amount
-	Amount
-	// CloseRemainderTo Transaction.CloseRemainderTo
-	CloseRemainderTo
-	// VotePK Transaction.VotePK
-	VotePK
-	// SelectionPK Transaction.SelectionPK
-	SelectionPK
-	// VoteFirst Transaction.VoteFirst
-	VoteFirst
-	// VoteLast Transaction.VoteLast
-	VoteLast
-	// VoteKeyDilution Transaction.VoteKeyDilution
-	VoteKeyDilution
-	// Type Transaction.Type
-	Type
-	// TypeEnum int(Transaction.Type)
-	TypeEnum
-	// XferAsset Transaction.XferAsset
-	XferAsset
-	// AssetAmount Transaction.AssetAmount
-	AssetAmount
-	// AssetSender Transaction.AssetSender
-	AssetSender
-	// AssetReceiver Transaction.AssetReceiver
-	AssetReceiver
-	// AssetCloseTo Transaction.AssetCloseTo
-	AssetCloseTo
-	// GroupIndex i for txngroup[i] == Txn
-	GroupIndex
-	// TxID Transaction.ID()
-	TxID
-	// OnCompletion        OnCompletion
-	OnCompletion
-	// ApplicationArgs []basics.TealValue
-	ApplicationArgs
-	// Accounts        []basics.Address
-	Accounts
-
-	invalidTxnField // fence for some setup that loops from Sender..invalidTxnField
-)
-
-// TxnFieldNames are arguments to the 'txn' and 'txnById' opcodes
-var TxnFieldNames []string
-var txnFields map[string]uint
-
-type txnFieldType struct {
-	field TxnField
-	ftype StackType
-}
-
-var txnFieldTypePairs = []txnFieldType{
-	{Sender, StackBytes},
-	{Fee, StackUint64},
-	{FirstValid, StackUint64},
-	{FirstValidTime, StackUint64},
-	{LastValid, StackUint64},
-	{Note, StackBytes},
-	{Lease, StackBytes},
-	{Receiver, StackBytes},
-	{Amount, StackUint64},
-	{CloseRemainderTo, StackBytes},
-	{VotePK, StackBytes},
-	{SelectionPK, StackBytes},
-	{VoteFirst, StackUint64},
-	{VoteLast, StackUint64},
-	{VoteKeyDilution, StackUint64},
-	{Type, StackBytes},
-	{TypeEnum, StackUint64},
-	{XferAsset, StackUint64},
-	{AssetAmount, StackUint64},
-	{AssetSender, StackBytes},
-	{AssetReceiver, StackBytes},
-	{AssetCloseTo, StackBytes},
-	{GroupIndex, StackUint64},
-	{TxID, StackBytes},
-	{OnCompletion, StackUint64},
-	{ApplicationArgs, StackBytes},
-	{Accounts, StackBytes},
-}
-
-// TxnFieldTypes is StackBytes or StackUint64 parallel to TxnFieldNames
-var TxnFieldTypes []StackType
-
-// TxnTypeNames is the values of Txn.Type in enum order
-var TxnTypeNames = []string{
-	string(protocol.UnknownTx),
-	string(protocol.PaymentTx),
-	string(protocol.KeyRegistrationTx),
-	string(protocol.AssetConfigTx),
-	string(protocol.AssetTransferTx),
-	string(protocol.AssetFreezeTx),
-	string(protocol.ApplicationCallTx),
-}
-
-// map TxnTypeName to its enum index, for `txn TypeEnum`
-var txnTypeIndexes map[string]int
-
-// map symbolic name to uint64 for assembleInt
-var txnTypeConstToUint64 map[string]uint64
-
 func assembleTxn(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return errors.New("txn expects one argument")
@@ -710,46 +586,6 @@ func assembleGtxna(ops *OpStream, spec *OpSpec, args []string) error {
 	return ops.Gtxna(gtid, uint64(fieldNum), uint64(arrayFieldIdx))
 }
 
-//go:generate stringer -type=GlobalField
-
-// GlobalField is an enum for `global` opcode
-type GlobalField int
-
-const (
-	// MinTxnFee ConsensusParams.MinTxnFee
-	MinTxnFee GlobalField = iota
-	// MinBalance ConsensusParams.MinBalance
-	MinBalance
-	// MaxTxnLife ConsensusParams.MaxTxnLife
-	MaxTxnLife
-	// ZeroAddress [32]byte{0...}
-	ZeroAddress
-	// GroupSize len(txn group)
-	GroupSize
-	invalidGlobalField
-)
-
-// GlobalFieldNames are arguments to the 'global' opcode
-var GlobalFieldNames []string
-
-type globalFieldType struct {
-	gfield GlobalField
-	ftype  StackType
-}
-
-var globalFieldTypeList = []globalFieldType{
-	{MinTxnFee, StackUint64},
-	{MinBalance, StackUint64},
-	{MaxTxnLife, StackUint64},
-	{ZeroAddress, StackBytes},
-	{GroupSize, StackUint64},
-}
-
-// GlobalFieldTypes is StackUint64 StackBytes in parallel with GlobalFieldNames
-var GlobalFieldTypes []StackType
-
-var globalFields map[string]uint
-
 func assembleGlobal(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return errors.New("global expects one argument")
@@ -761,16 +597,7 @@ func assembleGlobal(ops *OpStream, spec *OpSpec, args []string) error {
 	return ops.Global(uint64(val))
 }
 
-// AccountFieldNames are arguments to the 'account' opcode
-var AccountFieldNames = []string{
-	"Balance",
-}
-var accountFields map[string]uint
-
 type assembleFunc func(*OpStream, *OpSpec, []string) error
-
-// keywords handle parsing and assembling special asm language constructs like 'addr'
-var keywords map[string]assembleFunc
 
 func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 	err := ops.checkArgs(*spec)
@@ -788,6 +615,9 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
+// keywords handle parsing and assembling special asm language constructs like 'addr'
+var keywords map[string]assembleFunc
+
 func init() {
 	// WARNING: special case op assembly by argOps functions must do their own type stack maintenance via ops.tpop() ops.tpush()/ops.tpusha()
 	keywords = make(map[string]assembleFunc)
@@ -795,52 +625,6 @@ func init() {
 	keywords["byte"] = assembleByte
 	keywords["addr"] = assembleAddr // parse basics.Address, actually just another []byte constant
 	// WARNING: special case op assembly by argOps functions must do their own type stack maintenance via ops.tpop() ops.tpush()/ops.tpusha()
-
-	TxnFieldNames = make([]string, int(invalidTxnField))
-	for fi := Sender; fi < invalidTxnField; fi++ {
-		TxnFieldNames[fi] = fi.String()
-	}
-	txnFields = make(map[string]uint)
-	for i, tfn := range TxnFieldNames {
-		txnFields[tfn] = uint(i)
-	}
-
-	TxnFieldTypes = make([]StackType, int(invalidTxnField))
-	for i, ft := range txnFieldTypePairs {
-		if int(ft.field) != i {
-			panic("txnFieldTypePairs disjoint with TxnField enum")
-		}
-		TxnFieldTypes[i] = ft.ftype
-	}
-
-	GlobalFieldNames = make([]string, int(invalidGlobalField))
-	for i := MinTxnFee; i < invalidGlobalField; i++ {
-		GlobalFieldNames[int(i)] = i.String()
-	}
-	GlobalFieldTypes = make([]StackType, len(GlobalFieldNames))
-	for _, ft := range globalFieldTypeList {
-		GlobalFieldTypes[int(ft.gfield)] = ft.ftype
-	}
-	globalFields = make(map[string]uint)
-	for i, gfn := range GlobalFieldNames {
-		globalFields[gfn] = uint(i)
-	}
-
-	accountFields = make(map[string]uint)
-	for i, gfn := range AccountFieldNames {
-		accountFields[gfn] = uint(i)
-	}
-
-	txnTypeIndexes = make(map[string]int, len(TxnTypeNames))
-	for i, tt := range TxnTypeNames {
-		txnTypeIndexes[tt] = i
-	}
-
-	txnTypeConstToUint64 = make(map[string]uint64, len(TxnTypeNames))
-	for tt, v := range txnTypeIndexes {
-		symbol := TypeNameDescription(tt)
-		txnTypeConstToUint64[symbol] = uint64(v)
-	}
 }
 
 type lineErrorWrapper struct {

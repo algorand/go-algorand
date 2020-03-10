@@ -255,7 +255,34 @@ var globalFieldDocList = []stringString{
 // GlobalFieldDocs are notes on fields available in `global`
 var GlobalFieldDocs map[string]string
 
+var assetHoldingFieldDocList = []stringString{
+	{"AssetHoldingAmount", "Amount of the asset unit held by this account"},
+	{"AssetHoldingFrozen", "Is the asset frozen or not"},
+}
+
+// AssetHoldingFieldDocs are notes on fields available in `asset_read_holding`
+var AssetHoldingFieldDocs map[string]string
+
+var assetParamsFieldDocList = []stringString{
+	{"AssetParamsTotal", "Total number of units of this asset"},
+	{"AssetParamsDecimals", "See AssetParams.Decimals"},
+	{"AssetParamsDefaultFrozen", "Frozen by default or not"},
+	{"AssetParamsUnitName", "Asset unit name"},
+	{"AssetParamsAssetName", "Asset name"},
+	{"AssetParamsURL", "URL with additional info about the asset"},
+	{"AssetParamsMetadataHash", "Arbitrary commitment"},
+	{"AssetParamsManager", "Manager commitment"},
+	{"AssetParamsReserve", "Reserve address"},
+	{"AssetParamsFreeze", "Freeze address"},
+	{"AssetParamsClawback", "Clawback address"},
+}
+
+// AssetParamsFieldDocs are notes on fields available in `asset_read_params`
+var AssetParamsFieldDocs map[string]string
+
 func init() {
 	TxnFieldDocs = stringStringListToMap(txnFieldDocList)
 	GlobalFieldDocs = stringStringListToMap(globalFieldDocList)
+	AssetHoldingFieldDocs = stringStringListToMap(assetHoldingFieldDocList)
+	AssetParamsFieldDocs = stringStringListToMap(assetParamsFieldDocList)
 }
