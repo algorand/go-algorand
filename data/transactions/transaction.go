@@ -74,6 +74,10 @@ type Balances interface {
 	ConsensusParams() config.ConsensusParams
 }
 
+type StateEvaluator interface {
+	Eval(program []byte) (pass bool, stateDelta basics.StateDelta, err error)
+}
+
 // Header captures the fields common to every transaction type.
 type Header struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
@@ -446,7 +450,7 @@ func (tx Transaction) EstimateEncodedSize() int {
 }
 
 // Apply changes the balances according to this transaction.
-func (tx Transaction) Apply(balances Balances, spec SpecialAddresses, group []SignedTxn, ctr uint64) (ad ApplyData, err error) {
+func (tx Transaction) Apply(balances Balances, steva StateEvaluator, spec SpecialAddresses, ctr uint64) (ad ApplyData, err error) {
 	params := balances.ConsensusParams()
 
 	// move fee to pool
@@ -472,7 +476,7 @@ func (tx Transaction) Apply(balances Balances, spec SpecialAddresses, group []Si
 		err = tx.AssetFreezeTxnFields.apply(tx.Header, balances, spec, &ad)
 
 	case protocol.ApplicationCallTx:
-		err = tx.ApplicationCallTxnFields.apply(tx.Header, balances, spec, &ad, group, ctr)
+		err = tx.ApplicationCallTxnFields.apply(tx.Header, balances, steva, spec, &ad, ctr)
 
 	default:
 		err = fmt.Errorf("Unknown transaction type %v", tx.Type)

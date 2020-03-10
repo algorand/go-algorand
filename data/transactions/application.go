@@ -188,7 +188,7 @@ func (al *appLedger) AppLocalState(addr basics.Address, appIdx basics.AppIndex) 
 	return cloned, nil
 }
 
-func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, spec SpecialAddresses, ad *ApplyData, group []SignedTxn, txnCounter uint64) error {
+func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva StateEvaluator, spec SpecialAddresses, ad *ApplyData, txnCounter uint64) error {
 	// Keep track of the application ID we're working on
 	appIdx := ac.ApplicationID
 
@@ -238,6 +238,9 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, spec 
 	}
 	_ = appLedger
 
+	// Create the Stateful TEAL evaluation context
+
+
 	// Clear out our LocalState. In this case, we don't execute the
 	// ApprovalProgram, since clearing out is always allowed. We only
 	// execute the ClearStateProgram, whose failures are ignored.
@@ -254,7 +257,7 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, spec 
 			return fmt.Errorf("cannot close out for app %d, not currently opted in", appIdx)
 		}
 
-		// Execute the StateUpdate program, before we've deleted the LocalState
+		// Execute the ClearStateProgram, before we've deleted the LocalState
 		// for this account
 
 		// TODO(applications)

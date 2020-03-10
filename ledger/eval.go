@@ -558,7 +558,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, group []tran
 	}
 
 	// Apply the transaction, updating the cow balances
-	applyData, err := txn.Txn.Apply(cow, spec, group, cow.txnCounter())
+	applyData, err := txn.Txn.Apply(cow, nil, spec, cow.txnCounter())
 	if err != nil {
 		return fmt.Errorf("transaction %v: %v", txn.ID(), err)
 	}

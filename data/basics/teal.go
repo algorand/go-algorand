@@ -20,6 +20,9 @@ type TealType string
 
 type TealValue []byte
 
+// TODO(applications) placeholder
+type StateDelta []byte
+
 type StateSchema struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
