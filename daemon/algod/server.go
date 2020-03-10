@@ -200,13 +200,11 @@ func (s *Server) Start() {
 
 	tcpListener := listener.(*net.TCPListener)
 	errChan := make(chan error, 1)
-	fmt.Println("Starting server...")
 	go func() {
 		e.Listener = tcpListener
+		e.HideBanner = true
 		err := e.StartServer(&server)
-		fmt.Println("echo started...")
 
-		//err = server.Serve(tcpListener)
 		errChan <- err
 	}()
 

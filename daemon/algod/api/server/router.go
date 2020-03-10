@@ -60,6 +60,8 @@
 package server
 
 import (
+	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -131,4 +133,7 @@ func ConfigureRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdow
 
 	// Registering v1 routes
 	registerHandlers(e, apiV1Tag, routes.V1Routes, ctx)
+
+	// Registering v2 routes
+	generated.RegisterHandlers(e, &v2.V2Handlers{})
 }
