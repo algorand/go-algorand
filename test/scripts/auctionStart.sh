@@ -60,6 +60,8 @@ if [[ "${NODEBINDIR}" = "" ]]; then
     export NODEBINDIR="${GOPATH}/bin"
 fi
 
+export TOOLSBINDIR="${NODEBINDIR}/../tools"
+
 #define algod working dir
 if [[ "${ALGOTESTDIR}" = "" ]]; then
     export ALGOTESTDIR="${AUCTION_TESTDIR}/Primary"
@@ -86,8 +88,8 @@ pushd ${AUCTIONBANKTESTDIR}
 rm -f bank.sqlite3
 rm -f bank.keyfile
 rm -f ${AUCTIONBANKTESTDIR}/bank.key
-${NODEBINDIR}/auctionbank -create
-${NODEBINDIR}/auctionbank -addr ${AUCTION_BANK_PORT} &> ${AUCTIONBANKTESTDIR}/bank.key &
+${TOOLSBINDIR}/auctionbank -create
+${TOOLSBINDIR}/auctionbank -addr ${AUCTION_BANK_PORT} &> ${AUCTIONBANKTESTDIR}/bank.key &
 
 sleep ${WAIT_SECONDS}
 echo "Auction Bank PID: $(cat ${AUCTIONBANKTESTDIR}/auctionbank.pid)"
@@ -168,7 +170,7 @@ export AUCTIONMINIONSTATEFILE=${AUCTIONMINIONTESTDIR}/auctionminion.state
 
 sleep ${WAIT_SECONDS}
 
-${NODEBINDIR}/auctionminion -init -statefile ${AUCTIONMINIONSTATEFILE} &>${AUCTIONMINIONTESTDIR}/auctionminion_init.log
+${TOOLSBINDIR}/auctionminion -init -statefile ${AUCTIONMINIONSTATEFILE} &>${AUCTIONMINIONTESTDIR}/auctionminion_init.log
 
 # Update the auction minion state file, fill in AuctionKey from  am/master.pub, AlgodToken from xx/algod.token, and use correct algod URL
 
@@ -237,7 +239,7 @@ ${NODEBINDIR}/goal -d ${ALGOTESTDIR} clerk rawsend -f ${AUCTIONMASTERTESTDIR}/au
 
 # Start the auction console
 pushd ${AUCTIONCONSOLETESTDIR}
-nohup ${NODEBINDIR}/auctionconsole -apitoken $(cat ${ALGOTESTDIR}/algod.token) -auctionkey ${AUCTIONMASTERPUBKEY} -addr ${CONSOLE_PORT} -algod http://${ALGOD_PORT} &>${AUCTIONCONSOLETESTDIR}/auctionconsole.log &
+nohup ${TOOLSBINDIR}/auctionconsole -apitoken $(cat ${ALGOTESTDIR}/algod.token) -auctionkey ${AUCTIONMASTERPUBKEY} -addr ${CONSOLE_PORT} -algod http://${ALGOD_PORT} &>${AUCTIONCONSOLETESTDIR}/auctionconsole.log &
 popd
 
 

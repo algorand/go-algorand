@@ -10,10 +10,12 @@ export GO111MODULE=on
 # Anchor our repo root reference location
 REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"/../..
 
-# Need bin-race binaries for e2e tests
-pushd ${REPO_ROOT}
-make build-race -j4
-popd
+if [ "${NORACEBUILD}" = "" ]; then
+    # Need bin-race binaries for e2e tests
+    pushd ${REPO_ROOT}
+    make build-race -j4
+    popd
+-fi
 
 # Suppress telemetry reporting for tests
 export ALGOTEST=1
@@ -44,6 +46,11 @@ fi
 if [ "${TESTDATADIR}" = "" ]; then
     export TESTDATADIR=${SRCROOT}/test/testdata
 fi
+
+echo "NODEBINDIR:  ${NODEBINDIR}"
+echo "PATH:        ${PATH}"
+echo "SRCROOT:     ${SRCROOT}"
+echo "TESTDATADIR: ${TESTDATADIR}"
 
 cd ${SRCROOT}/test/e2e-go
 
