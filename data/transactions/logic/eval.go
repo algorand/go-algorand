@@ -78,7 +78,9 @@ func (sv *stackValue) String() string {
 
 // LedgerForLogic represents ledger API for Statefull TEAL program
 type LedgerForLogic interface {
-	BalanceRecord(addr basics.Address) (*basics.BalanceRecord, error)
+	Balance(addr basics.Address) (uint64, error)
+	AppLocalState(addr basics.Address, appID uint64) (map[string]basics.TealValue, error)
+	AppGlobalState(appID uint64) (map[string]basics.TealValue, error)
 }
 
 // GroupParams contains data that is used during TEAL evaluation that is common
@@ -117,17 +119,11 @@ const (
 	// RunModeSignature is TEAL in LogicSig execution
 	RunModeSignature = 1 << iota
 
-	// RunModeApplicationApproval is TEAL in application approval context
-	RunModeApplicationApproval
-
-	// RunModeApplicationState is TEAL in application state-update context
-	RunModeApplicationState
-
-	// local constant, run in statefull mode
-	modeStatefull = RunModeApplicationApproval | RunModeApplicationState
+	// RunModeApplication is TEAL in application/statefull
+	RunModeApplication
 
 	// local constant, run in any mode
-	modeAny = RunModeSignature | RunModeApplicationApproval | RunModeApplicationState
+	modeAny = RunModeSignature | RunModeApplication
 )
 
 func (ep EvalParams) log() logging.Logger {
@@ -951,11 +947,16 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint
 		}
 		sv.Bytes = txn.ApplicationArgs[arrayFieldIdx]
 	case Accounts:
-		if arrayFieldIdx >= uint64(len(txn.Accounts)) {
-			err = fmt.Errorf("invalid Accounts index %d", arrayFieldIdx)
-			return
+		if arrayFieldIdx == 0 {
+			// special case: sender
+			sv.Bytes = txn.Sender[:]
+		} else {
+			if arrayFieldIdx > uint64(len(txn.Accounts)) {
+				err = fmt.Errorf("invalid Accounts index %d", arrayFieldIdx)
+				return
+			}
+			sv.Bytes = txn.Accounts[arrayFieldIdx-1][:]
 		}
-		sv.Bytes = txn.Accounts[arrayFieldIdx][:]
 	default:
 		err = fmt.Errorf("invalid txn field %d", field)
 	}
@@ -1127,67 +1128,165 @@ func opStore(cx *evalContext) {
 func opBalance(cx *evalContext) {
 	last := len(cx.stack) - 1 // account offset
 	accountIdx := cx.stack[last].Uint
-	if accountIdx >= uint64(len(cx.Txn.Txn.Accounts)) {
-		cx.err = fmt.Errorf("cannot load account[%d] of %d", accountIdx, len(cx.Txn.Txn.Accounts))
+
+	if cx.ledger == nil {
+		cx.err = fmt.Errorf("ledger not available")
 		return
 	}
 
-	addr := cx.Txn.Txn.Accounts[accountIdx]
-	br, err := cx.ledger.BalanceRecord(addr)
+	var addr basics.Address
+	if accountIdx == 0 {
+		// special case: sender
+		addr = cx.Txn.Txn.Sender
+	} else {
+		if accountIdx > uint64(len(cx.Txn.Txn.Accounts)) {
+			cx.err = fmt.Errorf("cannot load account[%d] of %d", accountIdx, len(cx.Txn.Txn.Accounts))
+			return
+		}
+		addr = cx.Txn.Txn.Accounts[accountIdx-1]
+	}
+
+	amount, err := cx.ledger.Balance(addr)
 	if err != nil {
-		cx.err = fmt.Errorf("failed to fetch %s balance record: %s", addr, err.Error())
+		cx.err = fmt.Errorf("failed to fetch balance of %s: %s", addr, err.Error())
 		return
 	}
 
-	cx.stack[last].Uint = uint64(br.MicroAlgos.ToUint64())
+	cx.stack[last].Uint = amount
 }
 
 func opAppCheckOptedIn(cx *evalContext) {
-	last := len(cx.stack) - 1 // account offset
-	prev := last - 1          // app id
-	// TODO
-	cx.stack[prev].Uint = 0
+	last := len(cx.stack) - 1 // app id
+	prev := last - 1          // account offset
+	appID := cx.stack[last].Uint
+	accountIdx := cx.stack[prev].Uint
+
+	if cx.ledger == nil {
+		cx.err = fmt.Errorf("ledger not available")
+		return
+	}
+
+	var addr basics.Address
+	if accountIdx == 0 {
+		// special case: sender
+		addr = cx.Txn.Txn.Sender
+	} else {
+		if accountIdx > uint64(len(cx.Txn.Txn.Accounts)) {
+			cx.err = fmt.Errorf("cannot load account[%d] of %d", accountIdx, len(cx.Txn.Txn.Accounts))
+			return
+		}
+		addr = cx.Txn.Txn.Accounts[accountIdx-1]
+	}
+
+	_, err := cx.ledger.AppLocalState(addr, appID)
+	if err != nil {
+		cx.stack[prev].Uint = 0
+	} else {
+		cx.stack[prev].Uint = 1
+	}
+
 	cx.stack = cx.stack[:last]
 }
 
 func opAppReadLocalState(cx *evalContext) {
-	last := len(cx.stack) - 1 // account offset
+	last := len(cx.stack) - 1 // state key
 	prev := last - 1          // app id
-	pprev := prev - 1         // state key
-	// TODO
-	cx.stack[pprev].Uint = 0
-	cx.stack[prev].Uint = 0
+	pprev := prev - 1         // account offset
+
+	key := cx.stack[last].Bytes
+	appID := cx.stack[prev].Uint
+	accountIdx := cx.stack[pprev].Uint
+
+	if cx.ledger == nil {
+		cx.err = fmt.Errorf("ledger not available")
+		return
+	}
+
+	var addr basics.Address
+	if accountIdx == 0 {
+		// special case: sender
+		addr = cx.Txn.Txn.Sender
+	} else {
+		if accountIdx > uint64(len(cx.Txn.Txn.Accounts)) {
+			cx.err = fmt.Errorf("cannot load account[%d] of %d", accountIdx, len(cx.Txn.Txn.Accounts))
+			return
+		}
+		addr = cx.Txn.Txn.Accounts[accountIdx-1]
+	}
+
+	state, err := cx.ledger.AppLocalState(addr, appID)
+	if err != nil {
+		cx.err = fmt.Errorf("failed to fetch local state [%s] of the app %d: %s", addr, appID, err.Error())
+		return
+	}
+
+	value, ok := state[string(key)]
+	if !ok {
+		cx.stack[pprev].Uint = 0
+		cx.stack[prev].Uint = 0
+	} else {
+		cx.stack[pprev].Bytes = []byte(value)
+		cx.stack[prev].Uint = 1
+	}
+
 	cx.stack = cx.stack[:last]
 }
 
 func opAppReadGlobalState(cx *evalContext) {
-	last := len(cx.stack) - 1 // state key
-	var sv stackValue
-	// TODO
+	// TODO: add Global State access restriction
 
-	cx.stack[last].Uint = 0
+	last := len(cx.stack) - 1 // state key
+
+	key := cx.stack[last].Bytes
+	appID := uint64(cx.Txn.Txn.ApplicationID)
+
+	if cx.ledger == nil {
+		cx.err = fmt.Errorf("ledger not available")
+		return
+	}
+
+	if appID == 0 {
+		cx.err = fmt.Errorf("reading global state from app create tx not allowed")
+		return
+	}
+
+	state, err := cx.ledger.AppGlobalState(appID)
+	if err != nil {
+		cx.err = fmt.Errorf("failed to fetch app global state of the app %d", appID)
+		return
+	}
+
+	value, ok := state[string(key)]
+	var sv stackValue
+	if !ok {
+		cx.stack[last].Uint = 0
+		sv.Uint = 0
+	} else {
+		cx.stack[last].Bytes = value
+		sv.Uint = 1
+	}
 	cx.stack = append(cx.stack, sv)
 }
 
 func opAppWriteLocalState(cx *evalContext) {
-	last := len(cx.stack) - 1 // account offset
+	last := len(cx.stack) - 1 // value
 	prev := last - 1          // state key
-	pprev := prev - 1         // value
+	pprev := prev - 1         // account offset
 	// TODO
 	cx.stack = cx.stack[:pprev]
 }
 
 func opAppWriteGlobalState(cx *evalContext) {
-	last := len(cx.stack) - 1 // state key
-	prev := last - 1          // value
+	last := len(cx.stack) - 1 // value
+	prev := last - 1          // state key
 	// TODO
 	cx.stack = cx.stack[:prev]
 }
 
 func opAppReadOtherGlobalState(cx *evalContext) {
-	last := len(cx.stack) - 1 // account offset
+	last := len(cx.stack) - 1 // state key
 	prev := last - 1          // app id
-	pprev := prev - 1         // state key
+	pprev := prev - 1         // account offset
 	// TODO
 	cx.stack[pprev].Uint = 0
 	cx.stack[prev].Uint = 0
@@ -1195,9 +1294,9 @@ func opAppReadOtherGlobalState(cx *evalContext) {
 }
 
 func opAssetReadHolding(cx *evalContext) {
-	last := len(cx.stack) - 1 // account offset
+	last := len(cx.stack) - 1 // asset holding enum value
 	prev := last - 1          // asset id
-	pprev := prev - 1         // asset holding enum value
+	pprev := prev - 1         // account offset
 	// TODO
 	cx.stack[pprev].Uint = 0
 	cx.stack[prev].Uint = 0
@@ -1205,9 +1304,9 @@ func opAssetReadHolding(cx *evalContext) {
 }
 
 func opAssetReadParams(cx *evalContext) {
-	last := len(cx.stack) - 1 // account offset
+	last := len(cx.stack) - 1 // asset params enum value
 	prev := last - 1          // asset id
-	pprev := prev - 1         // asset params enum value
+	pprev := prev - 1         // account offset
 	// TODO
 	cx.stack[pprev].Uint = 0
 	cx.stack[prev].Uint = 0

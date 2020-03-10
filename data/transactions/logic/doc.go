@@ -146,12 +146,12 @@ var opDocExtraList = []stringString{
 	{"txn", "FirstValidTime causes the program to fail. The field is reserved for future use."},
 	{"gtxn", "for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`"},
 	{"btoi", "`btoi` panics if the input is longer than 8 bytes"},
-	{"app_opted_in", "params: application id (top of the stack), account index"},
-	{"app_read_local", "params: state key (top of the stack), application id, account index. Return: is_exist flag (top of the stack), value"},
-	{"app_write_local", "params: value (top of the stack), state key, account index"},
-	{"app_read_other_global", "params: state key (top of the stack), application id, account index. Return: is_exist flag (top of the stack), value"},
-	{"asset_read_holding", "params: field (top of the stack), asset id, account index. Return: is_exist flag (top of the stack), value"},
-	{"asset_read_params", "params: field (top of the stack), asset id, account index. Return: is_exist flag (top of the stack), value"},
+	{"app_opted_in", "params: account index, application id (top of the stack on opcode entry)"},
+	{"app_read_local", "params: account index, application id, state key. Return: did_exist flag (top of the stack), value"},
+	{"app_write_local", "params: account index, state key, value"},
+	{"app_read_other_global", "params: account index, application id, state key. Return: did_exist flag (top of the stack), value"},
+	{"asset_read_holding", "params: account index, asset id, field. Return: did_exist flag, value"},
+	{"asset_read_params", "params: account index, asset id, field. Return: did_exist flag, value"},
 }
 
 var opDocExtras map[string]string

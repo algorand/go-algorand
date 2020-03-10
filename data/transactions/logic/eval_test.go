@@ -69,11 +69,14 @@ func defaultEvalParamsWithVersion(sb *strings.Builder, txn *transactions.SignedT
 		pt = &at
 	}
 
-	if sb == nil { // have to do this since go's nil semantics: https://golang.org/doc/faq#nil_error
-		return EvalParams{Proto: &proto, Txn: pt, RunModeFlags: RunModeSignature}
+	ep := EvalParams{}
+	ep.Proto = &proto
+	ep.RunModeFlags = RunModeSignature
+	ep.Txn = pt
+	if sb != nil { // have to do this since go's nil semantics: https://golang.org/doc/faq#nil_error
+		ep.Trace = sb
 	}
-
-	return EvalParams{Proto: &proto, Trace: sb, Txn: pt, RunModeFlags: RunModeSignature}
+	return ep
 }
 
 func TestTooManyArgs(t *testing.T) {
@@ -105,7 +108,9 @@ func TestWrongProtoVersion(t *testing.T) {
 			sb := strings.Builder{}
 			proto := defaultEvalProto()
 			proto.LogicSigVersion = 0
-			pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, RunModeFlags: RunModeSignature})
+			ep := defaultEvalParams(&sb, &txn)
+			ep.Proto = &proto
+			pass, err := Eval(program, ep)
 			require.Error(t, err)
 			require.False(t, pass)
 		})
@@ -877,8 +882,9 @@ func TestGtxnBadIndex(t *testing.T) {
 	txn.Lsig.Args = nil
 	txgroup := make([]transactions.SignedTxn, 1)
 	txgroup[0] = txn
-	proto := defaultEvalProto()
-	pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, TxnGroup: txgroup, RunModeFlags: RunModeSignature})
+	ep := defaultEvalParams(&sb, &txn)
+	ep.TxnGroup = txgroup
+	pass, err := Eval(program, ep)
 	if pass {
 		t.Log(hex.EncodeToString(program))
 		t.Log(sb.String())
@@ -900,8 +906,9 @@ func TestGtxnBadField(t *testing.T) {
 	txn.Lsig.Args = nil
 	txgroup := make([]transactions.SignedTxn, 1)
 	txgroup[0] = txn
-	proto := defaultEvalProto()
-	pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, TxnGroup: txgroup, RunModeFlags: RunModeSignature})
+	ep := defaultEvalParams(&sb, &txn)
+	ep.TxnGroup = txgroup
+	pass, err := Eval(program, ep)
 	if pass {
 		t.Log(hex.EncodeToString(program))
 		t.Log(sb.String())
@@ -1028,13 +1035,9 @@ func TestGlobal(t *testing.T) {
 				LogicSigVersion: LogicVersion,
 				LogicSigMaxCost: 20000,
 			}
-			ep := EvalParams{
-				Trace:        &sb,
-				Txn:          &txn,
-				Proto:        &proto,
-				TxnGroup:     txgroup,
-				RunModeFlags: RunModeSignature,
-			}
+			ep := defaultEvalParams(&sb, &txn)
+			ep.TxnGroup = txgroup
+			ep.Proto = &proto
 			pass, err := Eval(program, ep)
 			if !pass {
 				t.Log(hex.EncodeToString(program))
@@ -1085,8 +1088,9 @@ int %s
 					var txn transactions.SignedTxn
 					txn.Txn.Type = tt
 					sb := strings.Builder{}
-					proto := defaultEvalProto()
-					pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, GroupIndex: 3, RunModeFlags: RunModeSignature})
+					ep := defaultEvalParams(&sb, &txn)
+					ep.GroupIndex = 3
+					pass, err := Eval(program, ep)
 					if !pass {
 						t.Log(hex.EncodeToString(program))
 						t.Log(sb.String())
@@ -1206,6 +1210,48 @@ arg 0
 &&
 `
 
+func makeSampleTxn() transactions.SignedTxn {
+	var txn transactions.SignedTxn
+	copy(txn.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
+	copy(txn.Txn.Receiver[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01"))
+	copy(txn.Txn.CloseRemainderTo[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02"))
+	copy(txn.Txn.VotePK[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui03"))
+	copy(txn.Txn.SelectionPK[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui04"))
+	txn.Txn.XferAsset = 10
+	// This is not a valid transaction to have all these fields set this way
+	txn.Txn.Note = []byte("fnord")
+	copy(txn.Txn.Lease[:], []byte("woofwoof"))
+	txn.Txn.Fee.Raw = 1337
+	txn.Txn.FirstValid = 42
+	txn.Txn.LastValid = 1066
+	txn.Txn.Amount.Raw = 1000000
+	txn.Txn.VoteFirst = 1317
+	txn.Txn.VoteLast = 17776
+	txn.Txn.VoteKeyDilution = 1
+	txn.Txn.Type = protocol.PaymentTx
+	txn.Txn.AssetAmount = 1234
+	txn.Txn.AssetSender = txn.Txn.Receiver
+	txn.Txn.AssetReceiver = txn.Txn.CloseRemainderTo
+	txn.Txn.AssetCloseTo = txn.Txn.Sender
+	txn.Txn.Accounts = make([]basics.Address, 1)
+	txn.Txn.Accounts[0] = txn.Txn.Receiver
+	txn.Txn.ApplicationArgs = make([]basics.TealValue, 1)
+	txn.Txn.ApplicationArgs[0] = basics.TealValue(protocol.PaymentTx)
+	return txn
+}
+
+func makeSampleTxnGroup(txn transactions.SignedTxn) []transactions.SignedTxn {
+	txgroup := make([]transactions.SignedTxn, 2)
+	txgroup[0] = txn
+	txgroup[1].Txn.Amount.Raw = 42
+	txgroup[1].Txn.Fee.Raw = 1066
+	txgroup[1].Txn.FirstValid = 42
+	txgroup[1].Txn.LastValid = 1066
+	txgroup[1].Txn.Sender = txn.Txn.Receiver
+	txgroup[1].Txn.Receiver = txn.Txn.Sender
+	return txgroup
+}
+
 func TestTxn(t *testing.T) {
 	t.Parallel()
 	for _, txnField := range TxnFieldNames {
@@ -1228,32 +1274,7 @@ func TestTxn(t *testing.T) {
 			cost, err := Check(program, defaultEvalParams(nil, nil))
 			require.NoError(t, err)
 			require.True(t, cost < 1000)
-			var txn transactions.SignedTxn
-			copy(txn.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
-			copy(txn.Txn.Receiver[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01"))
-			copy(txn.Txn.CloseRemainderTo[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02"))
-			copy(txn.Txn.VotePK[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui03"))
-			copy(txn.Txn.SelectionPK[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui04"))
-			txn.Txn.XferAsset = 10
-			// This is not a valid transaction to have all these fields set this way
-			txn.Txn.Note = []byte("fnord")
-			copy(txn.Txn.Lease[:], []byte("woofwoof"))
-			txn.Txn.Fee.Raw = 1337
-			txn.Txn.FirstValid = 42
-			txn.Txn.LastValid = 1066
-			txn.Txn.Amount.Raw = 1000000
-			txn.Txn.VoteFirst = 1317
-			txn.Txn.VoteLast = 17776
-			txn.Txn.VoteKeyDilution = 1
-			txn.Txn.Type = protocol.PaymentTx
-			txn.Txn.AssetAmount = 1234
-			txn.Txn.AssetSender = txn.Txn.Receiver
-			txn.Txn.AssetReceiver = txn.Txn.CloseRemainderTo
-			txn.Txn.AssetCloseTo = txn.Txn.Sender
-			txn.Txn.Accounts = make([]basics.Address, 1)
-			txn.Txn.Accounts[0] = txn.Txn.Sender
-			txn.Txn.ApplicationArgs = make([]basics.TealValue, 1)
-			txn.Txn.ApplicationArgs[0] = basics.TealValue(protocol.PaymentTx)
+			txn := makeSampleTxn()
 			txn.Lsig.Logic = program
 			txid := txn.Txn.ID()
 			txn.Lsig.Args = [][]byte{
@@ -1268,8 +1289,9 @@ func TestTxn(t *testing.T) {
 				txn.Txn.Lease[:],
 			}
 			sb := strings.Builder{}
-			proto := defaultEvalProto()
-			pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, GroupIndex: 3, RunModeFlags: RunModeSignature})
+			ep := defaultEvalParams(&sb, &txn)
+			ep.GroupIndex = 3
+			pass, err := Eval(program, ep)
 			if !pass {
 				t.Log(hex.EncodeToString(program))
 				t.Log(sb.String())
@@ -1362,32 +1384,8 @@ gtxn 0 Sender
 			}
 			require.NoError(t, err)
 			require.True(t, cost < 1000)
-			txgroup := make([]transactions.SignedTxn, 2)
-			var txn transactions.SignedTxn
-			copy(txn.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
-			copy(txn.Txn.Receiver[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01"))
-			copy(txn.Txn.CloseRemainderTo[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02"))
-			copy(txn.Txn.VotePK[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui03"))
-			copy(txn.Txn.SelectionPK[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui04"))
-			txn.Txn.Note = []byte("fnord")
-			txn.Txn.Fee.Raw = 1337
-			txn.Txn.FirstValid = 42
-			txn.Txn.LastValid = 1066
-			txn.Txn.Amount.Raw = 1000000
-			txn.Txn.VoteFirst = 1317
-			txn.Txn.VoteLast = 17776
-			txn.Txn.VoteKeyDilution = 1
-			txn.Txn.Accounts = make([]basics.Address, 1)
-			txn.Txn.Accounts[0] = txn.Txn.Sender
-			txn.Txn.ApplicationArgs = make([]basics.TealValue, 1)
-			txn.Txn.ApplicationArgs[0] = basics.TealValue(protocol.PaymentTx)
-			txgroup[0] = txn
-			txgroup[1].Txn.Amount.Raw = 42
-			txgroup[1].Txn.Fee.Raw = 1066
-			txgroup[1].Txn.FirstValid = 42
-			txgroup[1].Txn.LastValid = 1066
-			txgroup[1].Txn.Sender = txn.Txn.Receiver
-			txgroup[1].Txn.Receiver = txn.Txn.Sender
+			txn := makeSampleTxn()
+			txgroup := makeSampleTxnGroup(txn)
 			txn.Lsig.Logic = program
 			txn.Lsig.Args = [][]byte{
 				txn.Txn.Sender[:],
@@ -1398,8 +1396,9 @@ gtxn 0 Sender
 				txn.Txn.Note,
 			}
 			sb = strings.Builder{}
-			proto := defaultEvalProto()
-			pass, err := Eval(program, EvalParams{Proto: &proto, Trace: &sb, Txn: &txn, TxnGroup: txgroup, RunModeFlags: RunModeSignature})
+			ep := defaultEvalParams(&sb, &txn)
+			ep.TxnGroup = txgroup
+			pass, err := Eval(program, ep)
 			if !pass || err != nil {
 				t.Log(hex.EncodeToString(program))
 				t.Log(sb.String())
@@ -1412,7 +1411,7 @@ gtxn 0 Sender
 
 func TestTxna(t *testing.T) {
 	t.Parallel()
-	source := `txna Accounts 0
+	source := `txna Accounts 1
 txna ApplicationArgs 0
 ==
 `
@@ -1440,7 +1439,7 @@ txna ApplicationArgs 0
 	// modify txn array index
 	program[2] = saved
 	saved = program[3]
-	program[3] = 1
+	program[3] = 0x02
 	_, err = Eval(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid Accounts index")
@@ -1448,13 +1447,28 @@ txna ApplicationArgs 0
 	// modify txn array index in the second opcode
 	program[3] = saved
 	saved = program[6]
-	program[6] = 1
+	program[6] = 0x01
 	_, err = Eval(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid ApplicationArgs index")
 
+	// check special case: Account 0 == Sender
+	// even without any additional context
+	source = `txna Accounts 0
+txn Sender
+==
+`
+	program2, err := AssembleString(source)
+	require.NoError(t, err)
+	var txn2 transactions.SignedTxn
+	copy(txn2.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
+	ep2 := defaultEvalParams(nil, &txn2)
+	pass, err := Eval(program2, ep2)
+	require.NoError(t, err)
+	require.True(t, pass)
+
 	// check gtxna
-	source = `gtxna 0 Accounts 0
+	source = `gtxna 0 Accounts 1
 txna ApplicationArgs 0
 ==`
 	program, err = AssembleString(source)
@@ -1480,10 +1494,28 @@ txna ApplicationArgs 0
 	// modify gtxn array index
 	program[3] = saved
 	saved = program[4]
-	program[4] = 0x01
+	program[4] = 0x02
 	_, err = Eval(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid Accounts index")
+
+	// check special case: Account 0 == Sender
+	// even without any additional context
+	source = `gtxna 0 Accounts 0
+txn Sender
+==
+`
+	program3, err := AssembleString(source)
+	require.NoError(t, err)
+	var txn3 transactions.SignedTxn
+	copy(txn2.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
+	txgroup3 := make([]transactions.SignedTxn, 1)
+	txgroup3[0] = txn3
+	ep3 := defaultEvalParams(nil, &txn3)
+	ep3.TxnGroup = txgroup3
+	pass, err = Eval(program3, ep3)
+	require.NoError(t, err)
+	require.True(t, pass)
 }
 
 func TestBitOps(t *testing.T) {
@@ -2069,9 +2101,12 @@ func TestProgramProtoForbidden(t *testing.T) {
 	proto := config.ConsensusParams{
 		LogicSigVersion: EvalMaxVersion - 1,
 	}
-	_, err := Check(program[:vlen], EvalParams{Proto: &proto})
+	ep := EvalParams{}
+	ep.Proto = &proto
+	_, err := Check(program[:vlen], ep)
 	require.Error(t, err)
-	pass, err := Eval(program[:vlen], EvalParams{Proto: &proto, Txn: &transactions.SignedTxn{}})
+	ep.Txn = &transactions.SignedTxn{}
+	pass, err := Eval(program[:vlen], ep)
 	require.Error(t, err)
 	require.False(t, pass)
 	isNotPanic(t, err)
@@ -2688,6 +2723,8 @@ func TestStackValues(t *testing.T) {
 }
 
 func TestEvalVersions(t *testing.T) {
+	t.Parallel()
+
 	text := `int 1
 txna ApplicationArgs 0
 pop
@@ -2696,14 +2733,12 @@ pop
 	require.NoError(t, err)
 
 	ep := defaultEvalParams(nil, nil)
-	ep.RunModeFlags = RunModeApplicationApproval
 	ep.Txn = &transactions.SignedTxn{}
 	ep.Txn.Txn.ApplicationArgs = []basics.TealValue{[]byte("test")}
 	_, err = Eval(program, ep)
 	require.NoError(t, err)
 
 	ep = defaultEvalParamsV1(nil, nil)
-	ep.RunModeFlags = RunModeApplicationApproval
 	_, err = Eval(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "greater than protocol supported version 1")
@@ -2711,9 +2746,567 @@ pop
 	// hack the version and fail on illegal opcode
 	program[0] = 0x1
 	ep = defaultEvalParamsV1(nil, nil)
-	ep.RunModeFlags = RunModeApplicationApproval
 	_, err = Eval(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "illegal opcode 0x36") // txna
 
+}
+
+type balanceRecord struct {
+	addr    basics.Address
+	balance uint64
+	apps    map[uint64]map[string]basics.TealValue
+}
+
+type testLedger struct {
+	balances     map[basics.Address]balanceRecord
+	applications map[uint64]map[string]basics.TealValue
+}
+
+func makeTestLedger(balances map[basics.Address]uint64) *testLedger {
+	l := new(testLedger)
+	l.balances = make(map[basics.Address]balanceRecord)
+	if balances != nil {
+		for addr, balance := range balances {
+			br := balanceRecord{
+				addr:    addr,
+				balance: balance,
+				apps:    make(map[uint64]map[string]basics.TealValue),
+			}
+			l.balances[addr] = br
+
+		}
+	}
+	l.applications = make(map[uint64]map[string]basics.TealValue)
+	return l
+}
+
+func (l *testLedger) newApp(addr basics.Address, appID uint64) {
+	l.applications[appID] = make(map[string]basics.TealValue)
+	br, ok := l.balances[addr]
+	if !ok {
+		br = balanceRecord{
+			addr:    addr,
+			balance: 0,
+			apps:    make(map[uint64]map[string]basics.TealValue),
+		}
+	}
+	br.apps[appID] = make(map[string]basics.TealValue)
+	l.balances[addr] = br
+}
+
+func (l *testLedger) Balance(addr basics.Address) (amount uint64, err error) {
+	if l.balances == nil {
+		return 0, fmt.Errorf("empty ledger")
+	}
+	br, ok := l.balances[addr]
+	if !ok {
+		return 0, fmt.Errorf("no such address")
+	}
+	return br.balance, nil
+}
+
+func (l *testLedger) AppLocalState(addr basics.Address, appID uint64) (map[string]basics.TealValue, error) {
+	if br, ok := l.balances[addr]; ok {
+		if state, ok := br.apps[appID]; ok {
+			return state, nil
+		}
+		return nil, fmt.Errorf("No app for account")
+	}
+	return nil, fmt.Errorf("no app for this addr")
+}
+
+func (l *testLedger) AppGlobalState(appID uint64) (map[string]basics.TealValue, error) {
+	if state, ok := l.applications[appID]; ok {
+		return state, nil
+	}
+	return nil, fmt.Errorf("no such app")
+}
+
+func TestEvalModes(t *testing.T) {
+	t.Parallel()
+	// ed25519verify and err are tested separately below
+
+	// check modeAny (TEAL v1 + txna/gtxna) are available in RunModeSignature
+	// check all opcodes available in RunModeApplication
+	allModeAnyOpcodes := `intcblock 0 1 1 1 1 5
+	bytecblock 0xcafed00d 0x1337 0x2001 0xdeadbeef 0x70077007
+bytec 0
+sha256
+keccak256
+sha512_256
+len
+intc_0
++
+intc_1
+-
+intc_2
+/
+intc_3
+*
+intc 4
+<
+intc_1
+>
+intc_1
+<=
+intc_1
+>=
+intc_1
+&&
+intc_1
+||
+bytec_1
+bytec_2
+!=
+bytec_3
+bytec 4
+==
+!
+itob
+btoi
+%	// use values left after bytes comparison
+|
+intc_1
+&
+txn Fee
+^
+global MinTxnFee
+~
+gtxn 0 LastValid
+mulw
+pop
+store 0
+load 0
+bnz label
+label:
+dup
+pop
+txna Accounts 0
+gtxna 0 ApplicationArgs 0
+==
+pop
+arg_0
+arg_1
+==
+arg_2
+arg_3
+==
+&&
+txn Sender
+arg 4
+!=
+&&
+!=
+`
+	allAppOpcodes := `int 0
+balance
+&&
+`
+	tests := map[uint64]string{
+		RunModeSignature:   allModeAnyOpcodes,
+		RunModeApplication: allModeAnyOpcodes + allAppOpcodes,
+	}
+
+	txn := makeSampleTxn()
+	txgroup := makeSampleTxnGroup(txn)
+	txn.Lsig.Args = [][]byte{
+		txn.Txn.Sender[:],
+		txn.Txn.Receiver[:],
+		txn.Txn.CloseRemainderTo[:],
+		txn.Txn.VotePK[:],
+		txn.Txn.SelectionPK[:],
+		txn.Txn.Note,
+	}
+	for mode, source := range tests {
+		t.Run(fmt.Sprintf("allOpcodes_mode=%d", mode), func(t *testing.T) {
+			program, err := AssembleString(source)
+			require.NoError(t, err)
+			ep := defaultEvalParams(nil, &txn)
+			ep.TxnGroup = txgroup
+			ep.RunModeFlags = mode
+			ep.ledger = makeTestLedger(
+				map[basics.Address]uint64{
+					txn.Txn.Sender: 1,
+				},
+			)
+			_, err = Eval(program, ep)
+			require.NoError(t, err)
+		})
+	}
+
+	// check err opcode work in both modes
+	for mode := range tests {
+		t.Run(fmt.Sprintf("err_mode=%d", mode), func(t *testing.T) {
+			source := "err"
+			program, err := AssembleString(source)
+			require.NoError(t, err)
+			ep := defaultEvalParams(nil, nil)
+			ep.RunModeFlags = mode
+			_, err = Eval(program, ep)
+			require.Error(t, err)
+			require.NotContains(t, err.Error(), "not allowed in current mode")
+			require.Equal(t, err.Error(), "error")
+		})
+	}
+
+	// check ed25519verify is not allowed in RunModeApplication
+	source := "byte 0x01\nbyte 0x01\nbyte 0x01\ned25519verify"
+	program, err := AssembleString(source)
+	require.NoError(t, err)
+	ep := defaultEvalParams(nil, nil)
+	ep.RunModeFlags = RunModeApplication
+	_, err = Eval(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "ed25519verify not allowed in current mode")
+
+	// check new opcodes are not allowed in RunModeSignature
+	newOpcodeCalls := []string{
+		"int 0\nbalance",
+		"int 0\nint 0\napp_opted_in",
+		"int 0\nint 0\nbyte 0x01\napp_read_local",
+		"byte 0x01\napp_read_global",
+		"int 1\nbyte 0x01\nbyte 0x01\napp_write_local",
+		"byte 0x01\nint 0\napp_write_global",
+		"int 0\nint 0\nbyte 0x01\napp_read_other_global",
+		"int 0\nint 0\nint 0\nasset_read_holding",
+		"int 0\nint 0\nint 0\nasset_read_params",
+	}
+
+	for _, source := range newOpcodeCalls {
+		program, err := AssembleString(source)
+		require.NoError(t, err)
+		ep := defaultEvalParams(nil, nil)
+		ep.RunModeFlags = RunModeSignature
+		_, err = Eval(program, ep)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "not allowed in current mode")
+	}
+
+	require.Equal(t, 1, RunModeSignature)
+	require.Equal(t, 2, RunModeApplication)
+	require.True(t, modeAny == RunModeSignature|RunModeApplication)
+}
+
+func TestBalance(t *testing.T) {
+	t.Parallel()
+
+	text := `int 2
+balance
+int 1
+==`
+	program, err := AssembleString(text)
+	require.NoError(t, err)
+
+	txn := makeSampleTxn()
+	txgroup := makeSampleTxnGroup(txn)
+	ep := defaultEvalParams(nil, nil)
+	ep.Txn = &txn
+	ep.TxnGroup = txgroup
+	ep.RunModeFlags = RunModeApplication
+	_, err = Eval(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "ledger not available")
+
+	ep.ledger = makeTestLedger(
+		map[basics.Address]uint64{
+			txn.Txn.Receiver: 1,
+		},
+	)
+	_, err = Eval(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "cannot load account")
+
+	text = `int 1
+balance
+int 1
+==`
+	program, err = AssembleString(text)
+	require.NoError(t, err)
+	pass, err := Eval(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+
+	text = `int 0
+balance
+int 1
+==`
+	program, err = AssembleString(text)
+	require.NoError(t, err)
+	var addr basics.Address
+	copy(addr[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02"))
+	ep.ledger = makeTestLedger(
+		map[basics.Address]uint64{
+			addr: 1,
+		},
+	)
+	_, err = Eval(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "failed to fetch balance")
+
+	ep.ledger = makeTestLedger(
+		map[basics.Address]uint64{
+			txn.Txn.Sender: 1,
+		},
+	)
+	pass, err = Eval(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+}
+
+func TestAppCheckOptedIn(t *testing.T) {
+	t.Parallel()
+
+	text := `int 2  // account idx
+int 100  // app idx
+app_opted_in
+int 1
+==`
+	program, err := AssembleString(text)
+	require.NoError(t, err)
+
+	txn := makeSampleTxn()
+	txgroup := makeSampleTxnGroup(txn)
+	ep := defaultEvalParams(nil, nil)
+	ep.Txn = &txn
+	ep.TxnGroup = txgroup
+	ep.RunModeFlags = RunModeApplication
+	_, err = Eval(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "ledger not available")
+
+	ep.ledger = makeTestLedger(
+		map[basics.Address]uint64{
+			txn.Txn.Receiver: 1,
+		},
+	)
+	_, err = Eval(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "cannot load account")
+
+	// Receiver is not opted in
+	text = `int 1  // account idx
+int 100  // app idx
+app_opted_in
+int 0
+==`
+	program, err = AssembleString(text)
+	require.NoError(t, err)
+	pass, err := Eval(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+
+	// Sender is not opted in
+	text = `int 0  // account idx
+int 100  // app idx
+app_opted_in
+int 0
+==`
+	program, err = AssembleString(text)
+	require.NoError(t, err)
+	ledger := makeTestLedger(
+		map[basics.Address]uint64{
+			txn.Txn.Sender: 1,
+		},
+	)
+	ep.ledger = ledger
+	pass, err = Eval(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+
+	// Receiver opted in
+	text = `int 1  // account idx
+int 100  // app idx
+app_opted_in
+int 1
+==`
+	ledger.newApp(txn.Txn.Receiver, 100)
+
+	program, err = AssembleString(text)
+	require.NoError(t, err)
+	pass, err = Eval(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+
+	// Sender opted in
+	text = `int 0  // account idx
+int 100  // app idx
+app_opted_in
+int 1
+==`
+	ledger.newApp(txn.Txn.Sender, 100)
+
+	program, err = AssembleString(text)
+	require.NoError(t, err)
+	pass, err = Eval(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+
+}
+
+func TestAppReadLocalState(t *testing.T) {
+	t.Parallel()
+
+	text := `int 2  // account idx
+int 100 // app id
+txn ApplicationArgs 0
+app_read_local
+bnz exist
+int 0
+==
+bnz exit
+exist:
+err
+exit:
+int 1
+==`
+	program, err := AssembleString(text)
+	require.NoError(t, err)
+
+	txn := makeSampleTxn()
+	txgroup := makeSampleTxnGroup(txn)
+	ep := defaultEvalParams(nil, nil)
+	ep.Txn = &txn
+	ep.TxnGroup = txgroup
+	ep.RunModeFlags = RunModeApplication
+	_, err = Eval(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "ledger not available")
+
+	ledger := makeTestLedger(
+		map[basics.Address]uint64{
+			txn.Txn.Receiver: 1,
+		},
+	)
+	ep.ledger = ledger
+	_, err = Eval(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "cannot load account")
+
+	text = `int 1  // account idx
+int 100 // app id
+txn ApplicationArgs 0
+app_read_local
+bnz exist
+int 0
+==
+bnz exit
+exist:
+err
+exit:
+int 1`
+	program, err = AssembleString(text)
+	require.NoError(t, err)
+	_, err = Eval(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "failed to fetch local state")
+
+	ledger = makeTestLedger(
+		map[basics.Address]uint64{
+			txn.Txn.Receiver: 1,
+		},
+	)
+	ep.ledger = ledger
+	ledger.newApp(txn.Txn.Receiver, 9999)
+
+	_, err = Eval(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "failed to fetch local state")
+
+	// create the app and check the value from ApplicationArgs[0] (protocol.PaymentTx) does not exist
+	ledger.newApp(txn.Txn.Receiver, 100)
+
+	pass, err := Eval(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+
+	text = `int 1  // account idx
+int 100 // app id
+txn ApplicationArgs 0
+app_read_local
+bnz exist
+err
+exist:
+byte 0x414c474f
+==`
+
+	program, err = AssembleString(text)
+	require.NoError(t, err)
+
+	ledger.balances[txn.Txn.Receiver].apps[100][string(protocol.PaymentTx)] = basics.TealValue("ALGO")
+	pass, err = Eval(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+
+	// check special case account idx == 0 => sender
+	ledger.newApp(txn.Txn.Sender, 100)
+	text = `int 0  // account idx
+int 100 // app id
+txn ApplicationArgs 0
+app_read_local
+bnz exist
+err
+exist:
+byte 0x414c474f
+==`
+
+	program, err = AssembleString(text)
+	require.NoError(t, err)
+
+	ledger.balances[txn.Txn.Sender].apps[100][string(protocol.PaymentTx)] = basics.TealValue("ALGO")
+	pass, err = Eval(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+
+}
+
+func TestAppReadGlobalState(t *testing.T) {
+	t.Parallel()
+
+	text := `txn ApplicationArgs 0
+app_read_global
+bnz exist
+err
+exist:
+byte 0x414c474f
+==`
+	program, err := AssembleString(text)
+	require.NoError(t, err)
+
+	txn := makeSampleTxn()
+	txgroup := makeSampleTxnGroup(txn)
+	ep := defaultEvalParams(nil, nil)
+	ep.Txn = &txn
+	ep.TxnGroup = txgroup
+	ep.RunModeFlags = RunModeApplication
+	_, err = Eval(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "ledger not available")
+
+	ledger := makeTestLedger(
+		map[basics.Address]uint64{
+			txn.Txn.Sender: 1,
+		},
+	)
+	ep.ledger = ledger
+	_, err = Eval(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "reading global state from app create tx not allowed")
+
+	ep.Txn.Txn.ApplicationID = 100
+	_, err = Eval(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "failed to fetch app global state of the app")
+
+	// create the app and check the value from ApplicationArgs[0] (protocol.PaymentTx) does not exist
+	ledger.newApp(txn.Txn.Sender, 100)
+
+	_, err = Eval(program, ep)
+	require.Error(t, err)
+	require.Equal(t, err.Error(), "error")
+
+	ledger.applications[100][string(protocol.PaymentTx)] = basics.TealValue("ALGO")
+	pass, err := Eval(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
 }
