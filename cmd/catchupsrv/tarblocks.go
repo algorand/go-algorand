@@ -26,9 +26,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-deadlock"
 )
 
 type tarBlockSet struct {
@@ -42,7 +42,7 @@ type tarBlockSet struct {
 	// replacement index
 	nextOpen int
 
-	l sync.Mutex
+	l deadlock.Mutex
 }
 
 const maxOpenTars = 3
@@ -100,7 +100,7 @@ type tarBlockFile struct {
 	current      *tar.Header
 	currentRound uint64
 
-	l sync.Mutex
+	l deadlock.Mutex
 
 	blocks map[uint64][]byte
 }
