@@ -27,7 +27,7 @@ import (
 const KeyLength = 58
 
 // Routes contains all routes for v1
-var Routes = lib.Routes{
+var V1Routes = lib.Routes{
 	lib.Route{
 		Name:        "status",
 		Method:      "GET",

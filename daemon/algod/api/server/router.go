@@ -60,10 +60,9 @@
 package server
 
 import (
-	"fmt"
 	"net/http"
 
-	"github.com/gorilla/mux"
+	"github.com/labstack/echo/v4"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/server/common"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
@@ -80,40 +79,35 @@ const (
 	urlAuthEndpointPrefix = "/urlAuth/{apiToken:[0-9a-f]+}"
 )
 
-// wrapCtx is used to pass common context to each request without using any
-// global variables.
-func wrapCtx(ctx lib.ReqContext, handler func(lib.ReqContext, http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		handler(ctx, w, r)
+// wrapCtx passes a common context to each request without a global variable.
+func wrapCtx(ctx lib.ReqContext, handler func(lib.ReqContext, http.ResponseWriter, *http.Request)) echo.HandlerFunc {
+	return func(context echo.Context) error {
+		handler(ctx, context.Response(), context.Request())
+		return nil
 	}
 }
 
 // registerHandler registers a set of Routes to [router]. if [prefix] is not empty, it
 // registers the routes to a new sub-router [prefix]
-func registerHandlers(router *mux.Router, prefix string, routes lib.Routes, ctx lib.ReqContext) {
-	if prefix != "" {
-		router = router.PathPrefix(fmt.Sprintf("/%s", prefix)).Subrouter()
-	}
-
+func registerHandlers(router *echo.Echo, prefix string, routes lib.Routes, ctx lib.ReqContext) {
 	for _, route := range routes {
-		r := router.NewRoute()
-		if route.Path != "" {
-			r = r.Path(route.Path)
-		}
-		r = r.Name(route.Name)
-		r = r.Methods(route.Method)
-		r.HandlerFunc(wrapCtx(ctx, route.HandlerFunc))
+		r := router.Add(route.Method, prefix + route.Path, wrapCtx(ctx, route.HandlerFunc))
+		r.Name = route.Name
 	}
 }
 
 // NewRouter builds and returns a new router from routes
-func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-chan struct{}, apiToken string) *mux.Router {
-	router := mux.NewRouter().StrictSlash(true)
+func ConfigureRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-chan struct{}, apiToken string, e *echo.Echo) {
+	e.Use(echo.WrapMiddleware(middlewares.Logger(logger)))
+	// TODO: Rewrite the auth middleware to support the new auth requirements.
+	//e.Use(echo.WrapMiddleware(middlewares.Auth(logger, apiToken)))
+	e.Use(echo.WrapMiddleware(middlewares.CORS))
 
-	// Middleware
-	router.Use(middlewares.Logger(logger))
-	router.Use(middlewares.Auth(logger, apiToken))
-	router.Use(middlewares.CORS)
+	// We could use these out of the box instead of writing our own.
+	//e.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{
+	//	Format: "${remote_ip} - - ${time_rfc3339_nano} ${method} ${uri} ${protocol} ${status} ${bytes_in} ${user_agent} ${latency}\n",
+	//}))
+	//e.Use(middleware.CORS())
 
 	// Request Context
 	ctx := lib.ReqContext{Node: node, Log: logger, Shutdown: shutdown}
@@ -122,17 +116,19 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-ch
 	if node.Config().EnableProfiler {
 		// Registers /debug/pprof handler under root path and under /urlAuth path
 		// to support header or url-provided token.
-		router.PathPrefix(pprofEndpointPrefix).Handler(http.DefaultServeMux)
+		//router.PathPrefix(pprofEndpointPrefix).Handler(http.DefaultServeMux)
+		e.GET(pprofEndpointPrefix + "/*", echo.WrapHandler(http.DefaultServeMux))
 
-		urlAuthRouter := router.PathPrefix(urlAuthEndpointPrefix)
-		urlAuthRouter.PathPrefix(pprofEndpointPrefix).Handler(http.DefaultServeMux).Name(debugRouteName)
+		//urlAuthRouter := router.PathPrefix(urlAuthEndpointPrefix)
+		//urlAuthRouter.PathPrefix(pprofEndpointPrefix).Handler(http.DefaultServeMux).Name(debugRouteName)
+		grp := e.Group(urlAuthEndpointPrefix)
+		route := grp.GET(pprofEndpointPrefix + "/*", echo.WrapHandler(http.DefaultServeMux))
+		route.Name = debugRouteName
 	}
 
 	// Registering common routes
-	registerHandlers(router, "", common.Routes, ctx)
+	registerHandlers(e, "", common.Routes, ctx)
 
 	// Registering v1 routes
-	registerHandlers(router, apiV1Tag, routes.Routes, ctx)
-
-	return router
+	registerHandlers(e, apiV1Tag, routes.V1Routes, ctx)
 }

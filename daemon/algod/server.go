@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-deadlock"
+	"github.com/labstack/echo/v4"
 
 	"github.com/algorand/go-algorand/config"
 	apiServer "github.com/algorand/go-algorand/daemon/algod/api/server"
@@ -172,9 +173,11 @@ func (s *Server) Start() {
 
 	s.stopping = make(chan struct{})
 
+	e := echo.New()
+
 	// use the data dir as the static file dir (for our API server), there's
 	// no need to separate the two yet. This lets us serve the swagger.json file.
-	apiHandler := apiServer.NewRouter(s.log, s.node, s.stopping, apiToken)
+	apiServer.ConfigureRouter(s.log, s.node, s.stopping, apiToken, e)
 
 	addr := cfg.EndpointAddress
 	if addr == "" {
@@ -191,15 +194,19 @@ func (s *Server) Start() {
 	addr = listener.Addr().String()
 	server = http.Server{
 		Addr:         addr,
-		Handler:      apiHandler,
 		ReadTimeout:  time.Duration(cfg.RestReadTimeoutSeconds) * time.Second,
 		WriteTimeout: time.Duration(cfg.RestWriteTimeoutSeconds) * time.Second,
 	}
 
 	tcpListener := listener.(*net.TCPListener)
 	errChan := make(chan error, 1)
+	fmt.Println("Starting server...")
 	go func() {
-		err = server.Serve(tcpListener)
+		e.Listener = tcpListener
+		err := e.StartServer(&server)
+		fmt.Println("echo started...")
+
+		//err = server.Serve(tcpListener)
 		errChan <- err
 	}()
 
