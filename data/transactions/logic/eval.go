@@ -83,31 +83,23 @@ type LedgerForLogic interface {
 	AppGlobalState(appID uint64) (map[string]basics.TealValue, error)
 }
 
-// GroupParams contains data that is used during TEAL evaluation that is common
-// to the entire transaction group
-type GroupParams struct {
+// EvalParams contains data that comes into condition evaluation.
+type EvalParams struct {
+	// the transaction being evaluated
+	Txn *transactions.SignedTxn
+
 	Proto *config.ConsensusParams
 
 	Trace io.Writer
 
 	TxnGroup []transactions.SignedTxn
 
+	// GroupIndex should point to Txn within TxnGroup
+	GroupIndex int
+
 	Logger logging.Logger
 
 	RunModeFlags uint64
-}
-
-// EvalParams contains data that comes into condition evaluation.
-type EvalParams struct {
-	// GroupParams holds TEAL evaluation parameters that are not specific
-	// to this transaction
-	GroupParams
-
-	// the transaction being evaluated
-	Txn *transactions.SignedTxn
-
-	// GroupIndex should point to Txn within TxnGroup
-	GroupIndex int
 
 	ledger LedgerForLogic
 }

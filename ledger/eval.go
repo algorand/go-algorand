@@ -471,20 +471,18 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 
 	cow := eval.state.child()
 
-	/*
-	 * Construct deets for Stateful TEAL evaluation
-	 */
-
-	/*	groupNoAD := make([]transactions.SignedTxn, len(txgroup))
-		for i := range txgroup {
-			groupNoAD[i] = txgroup[i].SignedTxn
-		}
-	*/
+	// We have to pass the group along to the transaction verification
+	// context so that Stateful TEAL may be evaluated for Applications,
+	// since Stateful TEAL may refer to other transactions in the group
+	groupNoAD := make([]transactions.SignedTxn, len(txgroup))
+	for i := range txgroup {
+		groupNoAD[i] = txgroup[i].SignedTxn
+	}
 
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
-		err := eval.transaction(txad.SignedTxn, txad.ApplyData, cow, &txib)
+		err := eval.transaction(txad.SignedTxn, groupNoAD, txad.ApplyData, cow, &txib)
 		if err != nil {
 			return err
 		}
@@ -534,7 +532,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 // transaction tentatively executes a new transaction as part of this block evaluation.
 // If the transaction cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transactions.ApplyData, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
+func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, group []transactions.SignedTxn, ad transactions.ApplyData, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
 	var err error
 
 	if eval.validate {
@@ -560,7 +558,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 	}
 
 	// Apply the transaction, updating the cow balances
-	applyData, err := txn.Txn.Apply(cow, spec, cow.txnCounter())
+	applyData, err := txn.Txn.Apply(cow, spec, group, cow.txnCounter())
 	if err != nil {
 		return fmt.Errorf("transaction %v: %v", txn.ID(), err)
 	}

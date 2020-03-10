@@ -909,7 +909,7 @@ var dryrunCmd = &cobra.Command{
 			if txn.Lsig.Blank() {
 				continue
 			}
-			ep := logic.EvalParams{Txn: &txn, GroupParams: logic.GroupParams{Proto: &params}}
+			ep := logic.EvalParams{Txn: &txn, Proto: &params}
 			cost, err := logic.Check(txn.Lsig.Logic, ep)
 			if err != nil {
 				reportErrorf("program failed Check: %s", err)
@@ -918,11 +918,9 @@ var dryrunCmd = &cobra.Command{
 			ep = logic.EvalParams{
 				Txn:        &txn,
 				GroupIndex: i,
-				GroupParams: logic.GroupParams{
-					Proto:    &params,
-					Trace:    &sb,
-					TxnGroup: txgroup,
-				},
+				Proto:    &params,
+				Trace:    &sb,
+				TxnGroup: txgroup,
 			}
 			pass, err := logic.Eval(txn.Lsig.Logic, ep)
 			// TODO: optionally include `inspect` output here?
