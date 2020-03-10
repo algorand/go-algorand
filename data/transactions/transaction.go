@@ -75,7 +75,7 @@ type Balances interface {
 }
 
 type StateEvaluator interface {
-	Eval(program []byte) (pass bool, stateDelta basics.StateDelta, err error)
+	Eval(program []byte) (pass bool, stateDelta basics.EvalDelta, err error)
 }
 
 // Header captures the fields common to every transaction type.
@@ -289,7 +289,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			return fmt.Errorf("invalid application OnCompletion")
 		}
 
-		if tx.ApplicationID != 0 || tx.OnCompletion != UpdateApplicationOC {
+		if tx.ApplicationID != 0 && tx.OnCompletion != UpdateApplicationOC {
 			// Ensure programs are only set for creation or update
 			if tx.ApprovalProgram != "" || tx.ClearStateProgram != "" {
 				return fmt.Errorf("scripts may only be specified during application creation or update")

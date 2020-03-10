@@ -36,10 +36,10 @@ const (
 type ApplicationCallTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	ApplicationID   basics.AppIndex    `codec:"apid"`
-	OnCompletion    OnCompletion       `codec:"apan"`
-	ApplicationArgs []basics.TealValue `codec:"apaa,allocbound=1024"`
-	Accounts        []basics.Address   `codec:"apat,allocbound=1024"`
+	ApplicationID   basics.AppIndex  `codec:"apid"`
+	OnCompletion    OnCompletion     `codec:"apan"`
+	ApplicationArgs [][]byte         `codec:"apaa,allocbound=1024"`
+	Accounts        []basics.Address `codec:"apat,allocbound=1024"`
 
 	LocalStateSchema  basics.StateSchema `codec:"apls"`
 	GlobalStateSchema basics.StateSchema `codec:"apgs"`
@@ -123,6 +123,10 @@ func getAppParams(balances Balances, aidx basics.AppIndex) (params basics.AppPar
 	return
 }
 
+func (ac ApplicationCallTxnFields) applyStateDeltas(deltas basics.EvalDelta, params basics.AppParams, balances Balances, appIdx basics.AppIndex, allowOptIn, errIfBoundsExceeded bool) error {
+	return nil
+}
+
 func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva StateEvaluator, spec SpecialAddresses, ad *ApplyData, txnCounter uint64) error {
 	// Keep track of the application ID we're working on
 	appIdx := ac.ApplicationID
@@ -157,7 +161,7 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva
 	}
 
 	// Fetch the application parameters, if they exist
-	_, creator, doesNotExist, err := getAppParams(balances, appIdx)
+	params, creator, doesNotExist, err := getAppParams(balances, appIdx)
 	if err != nil {
 		return err
 	}
@@ -175,23 +179,39 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva
 		// Can't close out if not currently opted in
 		_, ok := record.AppLocalStates[appIdx]
 		if !ok {
-			return fmt.Errorf("cannot close out for app %d, not currently opted in", appIdx)
+			return fmt.Errorf("cannot clear state for app %d, not currently opted in", appIdx)
 		}
 
-		// Execute the ClearStateProgram, before we've deleted the LocalState
-		// for this account
+		// If the application still exists...
+		if !doesNotExist {
+			// Execute the ClearStateProgram before we've deleted the LocalState
+			// for this account. Ignore whether or not it succeeded or failed.
+			// ClearState transactions may never be rejected by app logic.
+			_, stateDeltas, err := steva.Eval([]byte(params.ClearStateProgram))
+			if err != nil {
+				// Ignore errors from the ClearStateProgram
+			}
 
-		// TODO(applications)
-		/*
-			err = eval(ClearStateProgram, &ctxWithAD)
+			// Program execution may produce some GlobalState and LocalState
+			// deltas. Apply them, provided they don't exceed the bounds set by
+			// the GlobalStateSchema and LocalStateSchema. If they do exceed
+			// those bounds, then don't fail, but also don't apply the changes.
+			allowOptIn := false
+			errIfBoundsExceeded := false
+			err = ac.applyStateDeltas(stateDeltas, params, balances, appIdx, allowOptIn, errIfBoundsExceeded)
 			if err != nil {
 				return err
 			}
-		*/
+		}
 
 		// Deallocate the AppLocalState and finish
+		record, err = balances.Get(header.Sender, false)
+		if err != nil {
+			return err
+		}
 		record.AppLocalStates = cloneAppLocalStates(record.AppLocalStates)
 		delete(record.AppLocalStates, appIdx)
+
 		return balances.Put(record)
 	}
 
@@ -202,42 +222,32 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva
 	}
 
 	// Execute the Approval program
+	approved, stateDeltas, err := steva.Eval([]byte(params.ApprovalProgram))
+	if err != nil {
+		return err
+	}
 
-	/*
-		// TODO(applications)
-		err, stateDelta, approved = eval(ApprovalProgram, &ctxWithAD)
-		if err != nil {
-			return err
-		}
+	if !approved {
+		return fmt.Errorf("transaction rejected by ApprovalProgram")
+	}
 
-		if !approved {
-			return fmt.Errorf("ApplicationCall txn rejected by logic")
-		}
-	*/
+	// Program execution may produce some GlobalState and LocalState
+	// deltas. Apply them, provided they don't exceed the bounds set by
+	// the GlobalStateSchema and LocalStateSchema. If they do exceed
+	// those bounds, then don't fail, but also don't apply the changes.
+	allowOptIn := ac.OnCompletion == OptInOC
+	errIfBoundsExceeded := true
+	err = ac.applyStateDeltas(stateDeltas, params, balances, appIdx, allowOptIn, errIfBoundsExceeded)
+	if err != nil {
+		return err
+	}
 
 	switch ac.OnCompletion {
 	case NoOpOC:
+		// Nothing to do
 
 	case OptInOC:
-		// Opting into the application. Fetch the sender's balance record
-		record, err := balances.Get(header.Sender, false)
-		if err != nil {
-			return err
-		}
-
-		// If they've already opted in, that's an error
-		_, ok := record.AppLocalStates[appIdx]
-		if ok {
-			return fmt.Errorf("account has already opted in to app %d", appIdx)
-		}
-
-		// Allocate local state
-		record.AppLocalStates = cloneAppLocalStates(record.AppLocalStates)
-		record.AppLocalStates[appIdx] = basics.TealKeyValue{}
-		err = balances.Put(record)
-		if err != nil {
-			return err
-		}
+		// Just handled by applyStateDeltas
 
 	case CloseOutOC:
 		// Closing out of the application. Fetch the sender's balance record

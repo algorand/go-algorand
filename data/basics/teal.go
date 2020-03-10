@@ -16,12 +16,34 @@
 
 package basics
 
-type TealType string
+type DeltaAction uint64
 
-type TealValue []byte
+const (
+	SetInt   DeltaAction = 0
+	SetBytes DeltaAction = 1
+	Delete   DeltaAction = 2
+)
 
-// TODO(applications) placeholder
-type StateDelta []byte
+type ValueDelta struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Action DeltaAction `codec:"at"`
+	Bytes  []byte      `codec:"bs,allocbound=-"`
+	Int    uint64      `codec:"it"`
+}
+
+//msgp:allocbound StateDelta -
+type StateDelta map[string]ValueDelta
+
+type EvalDelta struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	GlobalDelta StateDelta `codec:"gd,allocbound=-"`
+
+	// TODO(applications) perhaps make these keys be uint64 where 0 == sender
+	// and 1..n -> txn.Addresses
+	LocalDeltas map[Address]StateDelta `codec:"ld,allocbound=-"`
+}
 
 type StateSchema struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
@@ -30,7 +52,25 @@ type StateSchema struct {
 	NumByteSlice uint64 `codec:"nbs"`
 }
 
-//msgp:allocbound TealKeyValue 1024
+type TealType uint64
+
+const (
+	TealByteSliceType TealType = 0
+	TealIntType       TealType = 1
+)
+
+type TealValue struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Type TealType `codec:"tt"`
+
+	// TealValue is only used by TEAL programs and never parsed on the wire,
+	// so setting an unlimited allocbound on ByteSlice is OK
+	ByteSlice []byte `codec:"tb,allocbound=-"`
+	Int       uint64 `codec:"ti"`
+}
+
+//msgp:allocbound TealKeyValue 4096
 type TealKeyValue map[string]TealValue
 
 func (tk TealKeyValue) Clone() TealKeyValue {
@@ -40,8 +80,3 @@ func (tk TealKeyValue) Clone() TealKeyValue {
 	}
 	return res
 }
-
-const (
-	TealByteSliceType TealType = "byt"
-	TealIntType       TealType = "int"
-)

@@ -28,8 +28,13 @@ type appTealEvaluator struct {
 	evalParams logic.EvalParams
 }
 
-func (ae appTealEvaluator) Eval(program []byte) (pass bool, stateDelta basics.StateDelta, err error) {
-	return false, nil, nil
+func (ae appTealEvaluator) Eval(program []byte) (pass bool, stateDelta basics.EvalDelta, err error) {
+	pass, err = logic.Eval(program, ae.evalParams)
+	if err != nil {
+		return false, basics.EvalDelta{}, err
+	}
+
+	return pass, basics.EvalDelta{}, nil
 }
 
 // appLedger implements logic.LedgerForLogic

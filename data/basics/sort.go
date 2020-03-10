@@ -45,3 +45,13 @@ type SortString []string
 func (a SortString) Len() int           { return len(a) }
 func (a SortString) Less(i, j int) bool { return a[i] < a[j] }
 func (a SortString) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+
+// SortAddress implements sorting by Address keys for
+// canonical encoding of maps in msgpack format.
+//msgp:ignore SortAddress
+//msgp:sort Address SortAddress
+type SortAddress []Address
+
+func (a SortAddress) Len() int           { return len(a) }
+func (a SortAddress) Less(i, j int) bool { return string(a[i][:]) < string(a[j][:]) }
+func (a SortAddress) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }

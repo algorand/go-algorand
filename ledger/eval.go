@@ -572,12 +572,12 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, group []tran
 	// transactions.StateEvaluator) for use in ApplicationCall transactions
 	seval := appTealEvaluator{
 		evalParams: logic.EvalParams{
-			Txn: &txn,
-			Proto: &eval.proto,
-			TxnGroup: group,
-			GroupIndex: groupIndex,
+			Txn:          &txn,
+			Proto:        &eval.proto,
+			TxnGroup:     group,
+			GroupIndex:   groupIndex,
 			RunModeFlags: logic.RunModeApplication,
-			Ledger: appLedger,
+			Ledger:       appLedger,
 		},
 	}
 

@@ -225,7 +225,12 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 		err = errTooManyArgs
 		return
 	}
+
 	var cx evalContext
+	if len(program) == 0 {
+		cx.err = errors.New("invalid program (empty)")
+		return false, cx.err
+	}
 	version, vlen := binary.Uvarint(program)
 	if vlen <= 0 {
 		cx.err = errors.New("invalid version")
@@ -1217,9 +1222,13 @@ func opAppReadLocalState(cx *evalContext) {
 		cx.stack[pprev].Uint = 0
 		cx.stack[prev].Uint = 0
 	} else {
-		cx.stack[pprev].Bytes = []byte(value)
+		// TODO(applications) fixme
+		//	cx.stack[pprev].Bytes = []byte(value)
+		_ = value
 		cx.stack[prev].Uint = 1
 	}
+
+	panic("TODO(applications) implement w/ TealValue")
 
 	cx.stack = cx.stack[:last]
 }
@@ -1254,9 +1263,14 @@ func opAppReadGlobalState(cx *evalContext) {
 		cx.stack[last].Uint = 0
 		sv.Uint = 0
 	} else {
-		cx.stack[last].Bytes = value
+		// TODO(applications) fixme
+		//	cx.stack[last].Bytes = value
+		_ = value
 		sv.Uint = 1
 	}
+
+	panic("TODO(applications) implement w/ TealValue")
+
 	cx.stack = append(cx.stack, sv)
 }
 

@@ -20,6 +20,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 )
 
 var (
@@ -71,7 +72,14 @@ var createAppCmd = &cobra.Command{
 
 		// Construct the transaction
 		emptySchema := basics.StateSchema{}
-		tx, err := client.MakeUnsignedAppCreateTx("", "", emptySchema, emptySchema, nil, nil)
+
+		// Demo: program always succeeds
+		prog, err := logic.AssembleString(string("int 1"))
+		if err != nil {
+			reportErrorf("Cannot assemble program: %v", err)
+		}
+
+		tx, err := client.MakeUnsignedAppCreateTx(string(prog), string(prog), emptySchema, emptySchema, nil, nil)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
