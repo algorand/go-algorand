@@ -207,11 +207,10 @@ integration: build-race
 	./test/scripts/run_integration_tests.sh
 
 ci-integration:
-	NORACEBUILD="TRUE" \
 	NODEBINDIR=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/bin \
 	PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/bin:$$PATH \
 	SRCROOT=$(SRCPATH) \
-	./test/scripts/e2e_go_tests.sh
+	./test/scripts/e2e_go_tests.sh -norace
 
 testall: fulltest integration
 
