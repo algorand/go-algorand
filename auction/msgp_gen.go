@@ -2245,9 +2245,6 @@ func (z NoteFieldType) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ NoteFieldType) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(NoteFieldType)
-	if !ok {
-		_, ok = (z).(*NoteFieldType)
-	}
 	return ok
 }
 

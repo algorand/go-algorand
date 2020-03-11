@@ -80,19 +80,19 @@ func stackValueFromTealValue(tv *basics.TealValue) (sv stackValue, err error) {
 	switch tv.Type {
 	case basics.TealBytesType:
 		sv.Bytes = []byte(tv.Bytes)
-	case basics.TealIntType:
-		sv.Uint = tv.Int
+	case basics.TealUintType:
+		sv.Uint = tv.Uint
 	default:
 		err = fmt.Errorf("invalid TealValue type: %d", tv.Type)
 	}
 	return
 }
 
-func (sv *stackValue) fromTealValue(tv *basics.TealValue) string {
-	if sv.Bytes != nil {
-		return hex.EncodeToString(sv.Bytes)
+func (sv *stackValue) toTealValue() (tv basics.TealValue) {
+	if sv.argType() == StackBytes {
+		return basics.TealValue{Type: basics.TealBytesType, Bytes: string(sv.Bytes)}
 	}
-	return fmt.Sprintf("%d 0x%x", sv.Uint, sv.Uint)
+	return basics.TealValue{Type: basics.TealUintType, Uint: sv.Uint}
 }
 
 // LedgerForLogic represents ledger API for Statefull TEAL program
@@ -1298,6 +1298,14 @@ func opAppCheckOptedIn(cx *evalContext) {
 	cx.stack = cx.stack[:last]
 }
 
+func (cx *evalContext) appReadLocalKey(appID uint64, addr basics.Address, key string) (tv basics.TealValue) {
+	return
+}
+
+func (cx *evalContext) appWriteLocalKey(appID uint64, addr basics.Address, key string, tv basics.TealValue) error {
+	return nil
+}
+
 func opAppReadLocalState(cx *evalContext) {
 	last := len(cx.stack) - 1 // state key
 	prev := last - 1          // app id
@@ -1317,6 +1325,25 @@ func opAppReadLocalState(cx *evalContext) {
 		cx.err = err
 		return
 	}
+
+	// tv, ok, err := cx.appReadLocalKey(appID, addr, key)
+	// if err != nil {
+	// 	cx.err = fmt.Errorf("failed to fetch local state [%s] of the app %d: %s", addr, appID, err.Error())
+	// 	return
+	// }
+
+	// if !ok {
+	// 	cx.stack[pprev].Uint = 0
+	// 	cx.stack[prev].Uint = 0
+	// } else {
+	// 	sv, err := stackValueFromTealValue(&tv)
+	// 	if err != nil {
+	// 		cx.err = err
+	// 		return
+	// 	}
+	// 	cx.stack[pprev] = sv
+	// 	cx.stack[prev].Uint = 1
+	// }
 
 	state, err := cx.Ledger.AppLocalState(addr, basics.AppIndex(appID))
 	if err != nil {
@@ -1387,7 +1414,30 @@ func opAppWriteLocalState(cx *evalContext) {
 	last := len(cx.stack) - 1 // value
 	prev := last - 1          // state key
 	pprev := prev - 1         // account offset
-	// TODO
+
+	sv := cx.stack[last]
+	key := string(cx.stack[prev].Bytes)
+	accountIdx := cx.stack[pprev].Uint
+	appID := uint64(cx.Txn.Txn.ApplicationID)
+
+	if cx.Ledger == nil {
+		cx.err = fmt.Errorf("ledger not available")
+		return
+	}
+
+	if appID == 0 {
+		cx.err = fmt.Errorf("writing local state from app create tx not allowed")
+		return
+	}
+
+	addr, err := getAccountAddrByOffset(cx.Txn, accountIdx)
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	cx.appWriteLocalKey(appID, addr, key, sv.toTealValue())
+
 	cx.stack = cx.stack[:pprev]
 }
 

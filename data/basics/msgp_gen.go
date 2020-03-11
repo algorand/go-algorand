@@ -1001,9 +1001,6 @@ func (z AppIndex) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ AppIndex) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(AppIndex)
-	if !ok {
-		_, ok = (z).(*AppIndex)
-	}
 	return ok
 }
 
@@ -1056,11 +1053,11 @@ func (z *AppParams) MarshalMsg(b []byte) (o []byte, err error) {
 		zb0003Len--
 		zb0003Mask |= 0x8
 	}
-	if ((*z).GlobalStateSchema.NumInt == 0) && ((*z).GlobalStateSchema.NumByteSlice == 0) {
+	if ((*z).GlobalStateSchema.NumUint == 0) && ((*z).GlobalStateSchema.NumByteSlice == 0) {
 		zb0003Len--
 		zb0003Mask |= 0x10
 	}
-	if ((*z).LocalStateSchema.NumInt == 0) && ((*z).LocalStateSchema.NumByteSlice == 0) {
+	if ((*z).LocalStateSchema.NumUint == 0) && ((*z).LocalStateSchema.NumByteSlice == 0) {
 		zb0003Len--
 		zb0003Mask |= 0x20
 	}
@@ -1111,7 +1108,7 @@ func (z *AppParams) MarshalMsg(b []byte) (o []byte, err error) {
 				zb0004Len--
 				zb0004Mask |= 0x2
 			}
-			if (*z).GlobalStateSchema.NumInt == 0 {
+			if (*z).GlobalStateSchema.NumUint == 0 {
 				zb0004Len--
 				zb0004Mask |= 0x4
 			}
@@ -1123,9 +1120,9 @@ func (z *AppParams) MarshalMsg(b []byte) (o []byte, err error) {
 				o = msgp.AppendUint64(o, (*z).GlobalStateSchema.NumByteSlice)
 			}
 			if (zb0004Mask & 0x4) == 0 { // if not empty
-				// string "nit"
-				o = append(o, 0xa3, 0x6e, 0x69, 0x74)
-				o = msgp.AppendUint64(o, (*z).GlobalStateSchema.NumInt)
+				// string "nui"
+				o = append(o, 0xa3, 0x6e, 0x75, 0x69)
+				o = msgp.AppendUint64(o, (*z).GlobalStateSchema.NumUint)
 			}
 		}
 		if (zb0003Mask & 0x20) == 0 { // if not empty
@@ -1138,7 +1135,7 @@ func (z *AppParams) MarshalMsg(b []byte) (o []byte, err error) {
 				zb0005Len--
 				zb0005Mask |= 0x2
 			}
-			if (*z).LocalStateSchema.NumInt == 0 {
+			if (*z).LocalStateSchema.NumUint == 0 {
 				zb0005Len--
 				zb0005Mask |= 0x4
 			}
@@ -1150,9 +1147,9 @@ func (z *AppParams) MarshalMsg(b []byte) (o []byte, err error) {
 				o = msgp.AppendUint64(o, (*z).LocalStateSchema.NumByteSlice)
 			}
 			if (zb0005Mask & 0x4) == 0 { // if not empty
-				// string "nit"
-				o = append(o, 0xa3, 0x6e, 0x69, 0x74)
-				o = msgp.AppendUint64(o, (*z).LocalStateSchema.NumInt)
+				// string "nui"
+				o = append(o, 0xa3, 0x6e, 0x75, 0x69)
+				o = msgp.AppendUint64(o, (*z).LocalStateSchema.NumUint)
 			}
 		}
 	}
@@ -1206,9 +1203,9 @@ func (z *AppParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 				if zb0005 > 0 {
 					zb0005--
-					(*z).LocalStateSchema.NumInt, bts, err = msgp.ReadUint64Bytes(bts)
+					(*z).LocalStateSchema.NumUint, bts, err = msgp.ReadUint64Bytes(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "LocalStateSchema", "struct-from-array", "NumInt")
+						err = msgp.WrapError(err, "struct-from-array", "LocalStateSchema", "struct-from-array", "NumUint")
 						return
 					}
 				}
@@ -1243,10 +1240,10 @@ func (z *AppParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						return
 					}
 					switch string(field) {
-					case "nit":
-						(*z).LocalStateSchema.NumInt, bts, err = msgp.ReadUint64Bytes(bts)
+					case "nui":
+						(*z).LocalStateSchema.NumUint, bts, err = msgp.ReadUint64Bytes(bts)
 						if err != nil {
-							err = msgp.WrapError(err, "struct-from-array", "LocalStateSchema", "NumInt")
+							err = msgp.WrapError(err, "struct-from-array", "LocalStateSchema", "NumUint")
 							return
 						}
 					case "nbs":
@@ -1278,9 +1275,9 @@ func (z *AppParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 				if zb0007 > 0 {
 					zb0007--
-					(*z).GlobalStateSchema.NumInt, bts, err = msgp.ReadUint64Bytes(bts)
+					(*z).GlobalStateSchema.NumUint, bts, err = msgp.ReadUint64Bytes(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "GlobalStateSchema", "struct-from-array", "NumInt")
+						err = msgp.WrapError(err, "struct-from-array", "GlobalStateSchema", "struct-from-array", "NumUint")
 						return
 					}
 				}
@@ -1315,10 +1312,10 @@ func (z *AppParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						return
 					}
 					switch string(field) {
-					case "nit":
-						(*z).GlobalStateSchema.NumInt, bts, err = msgp.ReadUint64Bytes(bts)
+					case "nui":
+						(*z).GlobalStateSchema.NumUint, bts, err = msgp.ReadUint64Bytes(bts)
 						if err != nil {
-							err = msgp.WrapError(err, "struct-from-array", "GlobalStateSchema", "NumInt")
+							err = msgp.WrapError(err, "struct-from-array", "GlobalStateSchema", "NumUint")
 							return
 						}
 					case "nbs":
@@ -1420,9 +1417,9 @@ func (z *AppParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 					if zb0011 > 0 {
 						zb0011--
-						(*z).LocalStateSchema.NumInt, bts, err = msgp.ReadUint64Bytes(bts)
+						(*z).LocalStateSchema.NumUint, bts, err = msgp.ReadUint64Bytes(bts)
 						if err != nil {
-							err = msgp.WrapError(err, "LocalStateSchema", "struct-from-array", "NumInt")
+							err = msgp.WrapError(err, "LocalStateSchema", "struct-from-array", "NumUint")
 							return
 						}
 					}
@@ -1457,10 +1454,10 @@ func (z *AppParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 							return
 						}
 						switch string(field) {
-						case "nit":
-							(*z).LocalStateSchema.NumInt, bts, err = msgp.ReadUint64Bytes(bts)
+						case "nui":
+							(*z).LocalStateSchema.NumUint, bts, err = msgp.ReadUint64Bytes(bts)
 							if err != nil {
-								err = msgp.WrapError(err, "LocalStateSchema", "NumInt")
+								err = msgp.WrapError(err, "LocalStateSchema", "NumUint")
 								return
 							}
 						case "nbs":
@@ -1490,9 +1487,9 @@ func (z *AppParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 					if zb0013 > 0 {
 						zb0013--
-						(*z).GlobalStateSchema.NumInt, bts, err = msgp.ReadUint64Bytes(bts)
+						(*z).GlobalStateSchema.NumUint, bts, err = msgp.ReadUint64Bytes(bts)
 						if err != nil {
-							err = msgp.WrapError(err, "GlobalStateSchema", "struct-from-array", "NumInt")
+							err = msgp.WrapError(err, "GlobalStateSchema", "struct-from-array", "NumUint")
 							return
 						}
 					}
@@ -1527,10 +1524,10 @@ func (z *AppParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 							return
 						}
 						switch string(field) {
-						case "nit":
-							(*z).GlobalStateSchema.NumInt, bts, err = msgp.ReadUint64Bytes(bts)
+						case "nui":
+							(*z).GlobalStateSchema.NumUint, bts, err = msgp.ReadUint64Bytes(bts)
 							if err != nil {
-								err = msgp.WrapError(err, "GlobalStateSchema", "NumInt")
+								err = msgp.WrapError(err, "GlobalStateSchema", "NumUint")
 								return
 							}
 						case "nbs":
@@ -1615,7 +1612,7 @@ func (z *AppParams) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *AppParams) MsgIsZero() bool {
-	return ((*z).ApprovalProgram == "") && ((*z).ClearStateProgram == "") && (((*z).LocalStateSchema.NumInt == 0) && ((*z).LocalStateSchema.NumByteSlice == 0)) && (((*z).GlobalStateSchema.NumInt == 0) && ((*z).GlobalStateSchema.NumByteSlice == 0)) && (len((*z).GlobalState) == 0)
+	return ((*z).ApprovalProgram == "") && ((*z).ClearStateProgram == "") && (((*z).LocalStateSchema.NumUint == 0) && ((*z).LocalStateSchema.NumByteSlice == 0)) && (((*z).GlobalStateSchema.NumUint == 0) && ((*z).GlobalStateSchema.NumByteSlice == 0)) && (len((*z).GlobalState) == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1756,9 +1753,6 @@ func (z AssetIndex) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ AssetIndex) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(AssetIndex)
-	if !ok {
-		_, ok = (z).(*AssetIndex)
-	}
 	return ok
 }
 
@@ -3136,9 +3130,6 @@ func (z CreatableIndex) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ CreatableIndex) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(CreatableIndex)
-	if !ok {
-		_, ok = (z).(*CreatableIndex)
-	}
 	return ok
 }
 
@@ -3182,9 +3173,6 @@ func (z CreatableType) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ CreatableType) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(CreatableType)
-	if !ok {
-		_, ok = (z).(*CreatableType)
-	}
 	return ok
 }
 
@@ -3228,9 +3216,6 @@ func (z DeltaAction) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ DeltaAction) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(DeltaAction)
-	if !ok {
-		_, ok = (z).(*DeltaAction)
-	}
 	return ok
 }
 
@@ -3620,9 +3605,6 @@ func (z Round) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ Round) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(Round)
-	if !ok {
-		_, ok = (z).(*Round)
-	}
 	return ok
 }
 
@@ -3666,9 +3648,6 @@ func (z RoundInterval) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ RoundInterval) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(RoundInterval)
-	if !ok {
-		_, ok = (z).(*RoundInterval)
-	}
 	return ok
 }
 
@@ -3731,9 +3710,6 @@ func (z StateDelta) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ StateDelta) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(StateDelta)
-	if !ok {
-		_, ok = (z).(*StateDelta)
-	}
 	return ok
 }
 
@@ -3804,7 +3780,7 @@ func (z *StateSchema) MarshalMsg(b []byte) (o []byte, err error) {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if (*z).NumInt == 0 {
+	if (*z).NumUint == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
@@ -3817,9 +3793,9 @@ func (z *StateSchema) MarshalMsg(b []byte) (o []byte, err error) {
 			o = msgp.AppendUint64(o, (*z).NumByteSlice)
 		}
 		if (zb0001Mask & 0x4) == 0 { // if not empty
-			// string "nit"
-			o = append(o, 0xa3, 0x6e, 0x69, 0x74)
-			o = msgp.AppendUint64(o, (*z).NumInt)
+			// string "nui"
+			o = append(o, 0xa3, 0x6e, 0x75, 0x69)
+			o = msgp.AppendUint64(o, (*z).NumUint)
 		}
 	}
 	return
@@ -3845,9 +3821,9 @@ func (z *StateSchema) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			(*z).NumInt, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).NumUint, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "NumInt")
+				err = msgp.WrapError(err, "struct-from-array", "NumUint")
 				return
 			}
 		}
@@ -3882,10 +3858,10 @@ func (z *StateSchema) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 			switch string(field) {
-			case "nit":
-				(*z).NumInt, bts, err = msgp.ReadUint64Bytes(bts)
+			case "nui":
+				(*z).NumUint, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "NumInt")
+					err = msgp.WrapError(err, "NumUint")
 					return
 				}
 			case "nbs":
@@ -3920,7 +3896,7 @@ func (z *StateSchema) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *StateSchema) MsgIsZero() bool {
-	return ((*z).NumInt == 0) && ((*z).NumByteSlice == 0)
+	return ((*z).NumUint == 0) && ((*z).NumByteSlice == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -3932,9 +3908,6 @@ func (z Status) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ Status) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(Status)
-	if !ok {
-		_, ok = (z).(*Status)
-	}
 	return ok
 }
 
@@ -3997,9 +3970,6 @@ func (z TealKeyValue) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ TealKeyValue) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(TealKeyValue)
-	if !ok {
-		_, ok = (z).(*TealKeyValue)
-	}
 	return ok
 }
 
@@ -4074,9 +4044,6 @@ func (z TealType) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ TealType) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(TealType)
-	if !ok {
-		_, ok = (z).(*TealType)
-	}
 	return ok
 }
 
@@ -4121,11 +4088,11 @@ func (z *TealValue) MarshalMsg(b []byte) (o []byte, err error) {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if (*z).Int == 0 {
+	if (*z).Type == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if (*z).Type == 0 {
+	if (*z).Uint == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
@@ -4138,14 +4105,14 @@ func (z *TealValue) MarshalMsg(b []byte) (o []byte, err error) {
 			o = msgp.AppendString(o, (*z).Bytes)
 		}
 		if (zb0001Mask & 0x4) == 0 { // if not empty
-			// string "ti"
-			o = append(o, 0xa2, 0x74, 0x69)
-			o = msgp.AppendUint64(o, (*z).Int)
-		}
-		if (zb0001Mask & 0x8) == 0 { // if not empty
 			// string "tt"
 			o = append(o, 0xa2, 0x74, 0x74)
 			o = msgp.AppendUint64(o, uint64((*z).Type))
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "ui"
+			o = append(o, 0xa2, 0x75, 0x69)
+			o = msgp.AppendUint64(o, (*z).Uint)
 		}
 	}
 	return
@@ -4191,9 +4158,9 @@ func (z *TealValue) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			(*z).Int, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).Uint, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Int")
+				err = msgp.WrapError(err, "struct-from-array", "Uint")
 				return
 			}
 		}
@@ -4236,10 +4203,10 @@ func (z *TealValue) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Bytes")
 					return
 				}
-			case "ti":
-				(*z).Int, bts, err = msgp.ReadUint64Bytes(bts)
+			case "ui":
+				(*z).Uint, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "Int")
+					err = msgp.WrapError(err, "Uint")
 					return
 				}
 			default:
@@ -4268,7 +4235,7 @@ func (z *TealValue) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *TealValue) MsgIsZero() bool {
-	return ((*z).Type == 0) && ((*z).Bytes == "") && ((*z).Int == 0)
+	return ((*z).Type == 0) && ((*z).Bytes == "") && ((*z).Uint == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -4285,7 +4252,7 @@ func (z *ValueDelta) MarshalMsg(b []byte) (o []byte, err error) {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if (*z).Int == 0 {
+	if (*z).Uint == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
@@ -4303,9 +4270,9 @@ func (z *ValueDelta) MarshalMsg(b []byte) (o []byte, err error) {
 			o = msgp.AppendBytes(o, (*z).Bytes)
 		}
 		if (zb0001Mask & 0x8) == 0 { // if not empty
-			// string "it"
-			o = append(o, 0xa2, 0x69, 0x74)
-			o = msgp.AppendUint64(o, (*z).Int)
+			// string "ui"
+			o = append(o, 0xa2, 0x75, 0x69)
+			o = msgp.AppendUint64(o, (*z).Uint)
 		}
 	}
 	return
@@ -4351,9 +4318,9 @@ func (z *ValueDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			(*z).Int, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).Uint, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Int")
+				err = msgp.WrapError(err, "struct-from-array", "Uint")
 				return
 			}
 		}
@@ -4396,10 +4363,10 @@ func (z *ValueDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Bytes")
 					return
 				}
-			case "it":
-				(*z).Int, bts, err = msgp.ReadUint64Bytes(bts)
+			case "ui":
+				(*z).Uint, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "Int")
+					err = msgp.WrapError(err, "Uint")
 					return
 				}
 			default:
@@ -4428,5 +4395,5 @@ func (z *ValueDelta) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *ValueDelta) MsgIsZero() bool {
-	return ((*z).Action == 0) && (len((*z).Bytes) == 0) && ((*z).Int == 0)
+	return ((*z).Action == 0) && (len((*z).Bytes) == 0) && ((*z).Uint == 0)
 }

@@ -19,9 +19,9 @@ package basics
 type DeltaAction uint64
 
 const (
-	SetInt   DeltaAction = 0
-	SetBytes DeltaAction = 1
-	Delete   DeltaAction = 2
+	SetUInt DeltaAction = iota
+	SetBytes
+	Delete
 )
 
 type ValueDelta struct {
@@ -29,7 +29,7 @@ type ValueDelta struct {
 
 	Action DeltaAction `codec:"at"`
 	Bytes  []byte      `codec:"bs,allocbound=-"`
-	Int    uint64      `codec:"it"`
+	Uint   uint64      `codec:"ui"`
 }
 
 //msgp:allocbound StateDelta -
@@ -48,15 +48,15 @@ type EvalDelta struct {
 type StateSchema struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	NumInt       uint64 `codec:"nit"`
+	NumUint      uint64 `codec:"nui"`
 	NumByteSlice uint64 `codec:"nbs"`
 }
 
 type TealType uint64
 
 const (
-	TealBytesType TealType = 0
-	TealIntType   TealType = 1
+	TealBytesType TealType = iota
+	TealUintType
 )
 
 type TealValue struct {
@@ -68,7 +68,7 @@ type TealValue struct {
 	// so setting an unlimited allocbound on Bytes is OK. We use a string
 	// instead of []byte to allow copying this struct by value
 	Bytes string `codec:"tb,allocbound=-"`
-	Int   uint64 `codec:"ti"`
+	Uint  uint64 `codec:"ui"`
 }
 
 //msgp:allocbound TealKeyValue 4096

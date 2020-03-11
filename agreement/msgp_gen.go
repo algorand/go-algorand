@@ -1211,9 +1211,6 @@ func (z period) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ period) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(period)
-	if !ok {
-		_, ok = (z).(*period)
-	}
 	return ok
 }
 
@@ -2842,9 +2839,6 @@ func (z serializableErrorUnderlying) MarshalMsg(b []byte) (o []byte, err error) 
 
 func (_ serializableErrorUnderlying) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(serializableErrorUnderlying)
-	if !ok {
-		_, ok = (z).(*serializableErrorUnderlying)
-	}
 	return ok
 }
 
@@ -2888,9 +2882,6 @@ func (z step) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ step) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(step)
-	if !ok {
-		_, ok = (z).(*step)
-	}
 	return ok
 }
 
