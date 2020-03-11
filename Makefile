@@ -190,7 +190,7 @@ $(GOPATH1)/bin/%:
 test: build
 	go test $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 3600s
 
-ci-test: build
+ci-test: ci-build
 	go test $(GOTAGS) $(UNIT_TEST_SOURCES) -timeout 3600s
 
 fulltest: build-race
