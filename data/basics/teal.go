@@ -19,16 +19,16 @@ package basics
 type DeltaAction uint64
 
 const (
-	SetUInt DeltaAction = iota
-	SetBytes
-	Delete
+	SetUintAction  DeltaAction = 0
+	SetBytesAction DeltaAction = 1
+	DeleteAction   DeltaAction = 2
 )
 
 type ValueDelta struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Action DeltaAction `codec:"at"`
-	Bytes  []byte      `codec:"bs,allocbound=-"`
+	Bytes  string      `codec:"bs,allocbound=-"`
 	Uint   uint64      `codec:"ui"`
 }
 

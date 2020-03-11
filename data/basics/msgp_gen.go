@@ -1001,6 +1001,9 @@ func (z AppIndex) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ AppIndex) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(AppIndex)
+	if !ok {
+		_, ok = (z).(*AppIndex)
+	}
 	return ok
 }
 
@@ -1753,6 +1756,9 @@ func (z AssetIndex) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ AssetIndex) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(AssetIndex)
+	if !ok {
+		_, ok = (z).(*AssetIndex)
+	}
 	return ok
 }
 
@@ -3130,6 +3136,9 @@ func (z CreatableIndex) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ CreatableIndex) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(CreatableIndex)
+	if !ok {
+		_, ok = (z).(*CreatableIndex)
+	}
 	return ok
 }
 
@@ -3173,6 +3182,9 @@ func (z CreatableType) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ CreatableType) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(CreatableType)
+	if !ok {
+		_, ok = (z).(*CreatableType)
+	}
 	return ok
 }
 
@@ -3216,6 +3228,9 @@ func (z DeltaAction) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ DeltaAction) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(DeltaAction)
+	if !ok {
+		_, ok = (z).(*DeltaAction)
+	}
 	return ok
 }
 
@@ -3605,6 +3620,9 @@ func (z Round) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ Round) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(Round)
+	if !ok {
+		_, ok = (z).(*Round)
+	}
 	return ok
 }
 
@@ -3648,6 +3666,9 @@ func (z RoundInterval) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ RoundInterval) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(RoundInterval)
+	if !ok {
+		_, ok = (z).(*RoundInterval)
+	}
 	return ok
 }
 
@@ -3710,6 +3731,9 @@ func (z StateDelta) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ StateDelta) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(StateDelta)
+	if !ok {
+		_, ok = (z).(*StateDelta)
+	}
 	return ok
 }
 
@@ -3908,6 +3932,9 @@ func (z Status) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ Status) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(Status)
+	if !ok {
+		_, ok = (z).(*Status)
+	}
 	return ok
 }
 
@@ -3970,6 +3997,9 @@ func (z TealKeyValue) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ TealKeyValue) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(TealKeyValue)
+	if !ok {
+		_, ok = (z).(*TealKeyValue)
+	}
 	return ok
 }
 
@@ -4044,6 +4074,9 @@ func (z TealType) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ TealType) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(TealType)
+	if !ok {
+		_, ok = (z).(*TealType)
+	}
 	return ok
 }
 
@@ -4248,7 +4281,7 @@ func (z *ValueDelta) MarshalMsg(b []byte) (o []byte, err error) {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if len((*z).Bytes) == 0 {
+	if (*z).Bytes == "" {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
@@ -4267,7 +4300,7 @@ func (z *ValueDelta) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "bs"
 			o = append(o, 0xa2, 0x62, 0x73)
-			o = msgp.AppendBytes(o, (*z).Bytes)
+			o = msgp.AppendString(o, (*z).Bytes)
 		}
 		if (zb0001Mask & 0x8) == 0 { // if not empty
 			// string "ui"
@@ -4310,7 +4343,7 @@ func (z *ValueDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			(*z).Bytes, bts, err = msgp.ReadBytesBytes(bts, (*z).Bytes)
+			(*z).Bytes, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Bytes")
 				return
@@ -4358,7 +4391,7 @@ func (z *ValueDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					(*z).Action = DeltaAction(zb0004)
 				}
 			case "bs":
-				(*z).Bytes, bts, err = msgp.ReadBytesBytes(bts, (*z).Bytes)
+				(*z).Bytes, bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Bytes")
 					return
@@ -4389,11 +4422,11 @@ func (_ *ValueDelta) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *ValueDelta) Msgsize() (s int) {
-	s = 1 + 3 + msgp.Uint64Size + 3 + msgp.BytesPrefixSize + len((*z).Bytes) + 3 + msgp.Uint64Size
+	s = 1 + 3 + msgp.Uint64Size + 3 + msgp.StringPrefixSize + len((*z).Bytes) + 3 + msgp.Uint64Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *ValueDelta) MsgIsZero() bool {
-	return ((*z).Action == 0) && (len((*z).Bytes) == 0) && ((*z).Uint == 0)
+	return ((*z).Action == 0) && ((*z).Bytes == "") && ((*z).Uint == 0)
 }

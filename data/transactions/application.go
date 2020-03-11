@@ -78,22 +78,32 @@ func (ac ApplicationCallTxnFields) Empty() bool {
 	return true
 }
 
+// Allocate the map of LocalStates if it is nil, and then clone all LocalStates
 func cloneAppLocalStates(m map[basics.AppIndex]basics.TealKeyValue) map[basics.AppIndex]basics.TealKeyValue {
 	res := make(map[basics.AppIndex]basics.TealKeyValue, len(m))
 	for k, v := range m {
+		// TODO if required: performance improvement: only clone
+		// LocalState for app idx affected by this transaction
 		res[k] = v.Clone()
 	}
 	return res
 }
 
+// Allocate the map of AppParams if it is nil, and then clone all AppParams
 func cloneAppParams(m map[basics.AppIndex]basics.AppParams) map[basics.AppIndex]basics.AppParams {
 	res := make(map[basics.AppIndex]basics.AppParams, len(m))
 	for k, v := range m {
+		// TODO if required: performance improvement: only clone
+		// AppParams (and thus GlobalState) for app idx affected
+		// by this transaction
 		res[k] = v.Clone()
 	}
 	return res
 }
 
+// getAppParams fetches the creator address and AppParams for the app index,
+// if they exist. It does NOT clone the AppParams, so the returned params must
+// not be modified directly.
 func getAppParams(balances Balances, aidx basics.AppIndex) (params basics.AppParams, creator basics.Address, doesNotExist bool, err error) {
 	creator, doesNotExist, err = balances.GetAppCreator(aidx)
 	if err != nil {
@@ -112,9 +122,8 @@ func getAppParams(balances Balances, aidx basics.AppIndex) (params basics.AppPar
 
 	params, ok := creatorRecord.AppParams[aidx]
 	if !ok {
-		// This should never happen! If app exists then we should have
-		// found the creator successfully.
-		// TODO(applications) panic here?
+		// This should never happen. If app exists then we should have
+		// found the creator successfully. TODO(applications) panic here?
 		err = fmt.Errorf("app %d not found in account %s", aidx, creator.String())
 		return
 	}
@@ -122,7 +131,140 @@ func getAppParams(balances Balances, aidx basics.AppIndex) (params basics.AppPar
 	return
 }
 
-func (ac ApplicationCallTxnFields) applyStateDeltas(deltas basics.EvalDelta, params basics.AppParams, balances Balances, appIdx basics.AppIndex, allowOptIn, errIfBoundsExceeded bool) error {
+func applyDelta(stateDelta basics.StateDelta, kv basics.TealKeyValue) error {
+	if kv == nil {
+		return fmt.Errorf("cannot apply delta to nil TealKeyValue")
+	}
+	for key, valueDelta := range stateDelta {
+		switch valueDelta.Action {
+		case basics.SetUintAction:
+			kv[key] = basics.TealValue {
+				Type: basics.TealUintType,
+				Uint:  valueDelta.Uint,
+			}
+		case basics.SetBytesAction:
+			kv[key] = basics.TealValue {
+				Type:  basics.TealBytesType,
+				Bytes: valueDelta.Bytes,
+			}
+		case basics.DeleteAction:
+			delete(kv, key)
+		default:
+			return fmt.Errorf("unknown delta action %d", valueDelta.Action)
+		}
+	}
+	return nil
+}
+
+// applyStateDeltas applies a basics.EvalDelta to the app's global key/value
+// store as well as a set of local key/value stores. If this function returns
+// an error, the transaction must not be committed.
+func applyStateDeltas(evalDelta basics.EvalDelta, balances Balances, appIdx basics.AppIndex, errIfNotApplied bool) error {
+	// Fetch the application parameters and the creator's address
+	params, creator, doesNotExist, err := getAppParams(balances, appIdx)
+	if err != nil {
+		return err
+	}
+
+	if doesNotExist {
+		// This case should not happen, because an application that does not
+		// exist should not have programs that could produce state deltas (and
+		// we shouldn't have been called, period)
+		return fmt.Errorf("cannot apply state deltas to deleted application")
+	}
+
+	/*
+	 * 1. Apply GlobalState delta, allocating the key/value store if req'd
+	 */
+
+	// Clone the parameters so that they are safe to modify
+	params = params.Clone()
+
+	// Allocate the GlobalState map, if it has not been allocated already
+	if params.GlobalState == nil {
+		params.GlobalState = make(basics.TealKeyValue)
+	}
+
+	// Apply the GlobalDelta in place
+	err = applyDelta(evalDelta.GlobalDelta, params.GlobalState)
+	if err != nil {
+		return err
+	}
+
+	/*
+	 * 2. Apply each LocalState delta, fail fast if any affected account
+	 *    has not opted in to appIdx
+	 */
+
+	changes := make(map[basics.Address]basics.TealKeyValue, len(evalDelta.LocalDeltas))
+	for addr, delta := range evalDelta.LocalDeltas {
+		record, err := balances.Get(addr, false)
+		if err != nil {
+			return err
+		}
+
+		localState, ok := record.AppLocalStates[appIdx]
+		if !ok {
+			if !errIfNotApplied {
+				return nil
+			}
+			return fmt.Errorf("cannot apply LocalState delta to %v: acct has not opted in to app %d", addr.String(), appIdx)
+		}
+
+		// Clone local states + app params, so that we have a copy that is
+		// safe to modify
+		localState = localState.Clone()
+		err = applyDelta(delta, localState)
+		if err != nil {
+			return err
+		}
+
+		// Stage the change to be committed after schema checks
+		changes[addr] = localState
+	}
+
+	/*
+	 * 3. Check that updated key/value stores do not violate schemas
+	 */
+
+	// TODO(applications) this
+
+	/*
+	 * 4. Write GlobalState changes back to cow. This should be correct
+	 *    even if creator is in the local deltas, because the updated
+	 *    fields are orthogonal.
+	 */
+
+	creatorRecord, err := balances.Get(creator, false)
+	if err != nil {
+		return err
+	}
+
+	creatorRecord.AppParams[appIdx] = params
+
+	err = balances.Put(creatorRecord)
+	if err != nil {
+		return err
+	}
+
+	/*
+	 * 5. Write LocalState changes back to cow
+	 */
+
+	for addr, kv := range changes {
+		userRecord, err := balances.Get(addr, false)
+		if err != nil {
+			return err
+		}
+
+		userRecord.AppLocalStates[appIdx] = kv
+
+		err = balances.Put(userRecord)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -196,9 +338,8 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva
 			// deltas. Apply them, provided they don't exceed the bounds set by
 			// the GlobalStateSchema and LocalStateSchema. If they do exceed
 			// those bounds, then don't fail, but also don't apply the changes.
-			allowOptIn := false
-			errIfBoundsExceeded := false
-			err = ac.applyStateDeltas(stateDeltas, params, balances, appIdx, allowOptIn, errIfBoundsExceeded)
+			failIfNotApplied := false
+			err = applyStateDeltas(stateDeltas, balances, appIdx, failIfNotApplied)
 			if err != nil {
 				return err
 			}
@@ -231,13 +372,31 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva
 		return fmt.Errorf("transaction rejected by ApprovalProgram")
 	}
 
-	// Program execution may produce some GlobalState and LocalState
-	// deltas. Apply them, provided they don't exceed the bounds set by
-	// the GlobalStateSchema and LocalStateSchema. If they do exceed
-	// those bounds, then fail.
-	allowOptIn := ac.OnCompletion == OptInOC
-	errIfBoundsExceeded := true
-	err = ac.applyStateDeltas(stateDeltas, params, balances, appIdx, allowOptIn, errIfBoundsExceeded)
+	// If this is an OptIn transaction, ensure that the sender has already
+	// allocated their LocalState
+	if ac.OnCompletion == OptInOC {
+		record, err := balances.Get(header.Sender, false)
+		if err != nil {
+			return err
+		}
+
+		// If the user hasn't opted in yet, allocate their LocalState
+		_, ok := record.AppLocalStates[appIdx]
+		if !ok {
+			record.AppLocalStates = cloneAppLocalStates(record.AppLocalStates)
+			record.AppLocalStates[appIdx] = make(basics.TealKeyValue)
+			err = balances.Put(record)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	// Apply GlobalState and LocalState deltas, provided they don't exceed
+	// the bounds set by the GlobalStateSchema and LocalStateSchema.
+	// If they would exceed those bounds, then fail.
+	failIfNotApplied := true
+	err = applyStateDeltas(stateDeltas, balances, appIdx, failIfNotApplied)
 	if err != nil {
 		return err
 	}
@@ -247,7 +406,7 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva
 		// Nothing to do
 
 	case OptInOC:
-		// Just handled by applyStateDeltas
+		// Handled above
 
 	case CloseOutOC:
 		// Closing out of the application. Fetch the sender's balance record

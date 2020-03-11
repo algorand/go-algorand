@@ -1902,6 +1902,9 @@ func (z MinFeeError) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ MinFeeError) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(MinFeeError)
+	if !ok {
+		_, ok = (z).(*MinFeeError)
+	}
 	return ok
 }
 
@@ -1945,6 +1948,9 @@ func (z OnCompletion) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ OnCompletion) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(OnCompletion)
+	if !ok {
+		_, ok = (z).(*OnCompletion)
+	}
 	return ok
 }
 
@@ -2163,6 +2169,9 @@ func (z Payset) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ Payset) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(Payset)
+	if !ok {
+		_, ok = (z).(*Payset)
+	}
 	return ok
 }
 
