@@ -120,8 +120,6 @@ type EvalParams struct {
 
 	Logger logging.Logger
 
-	RunModeFlags uint64
-
 	Ledger LedgerForLogic
 }
 
@@ -129,14 +127,14 @@ type opEvalFunc func(cx *evalContext)
 type opCheckFunc func(cx *evalContext) int
 
 const (
-	// RunModeSignature is TEAL in LogicSig execution
-	RunModeSignature = 1 << iota
+	// runModeSignature is TEAL in LogicSig execution
+	runModeSignature = 1 << iota
 
-	// RunModeApplication is TEAL in application/statefull
-	RunModeApplication
+	// runModeApplication is TEAL in application/statefull
+	runModeApplication
 
 	// local constant, run in any mode
-	modeAny = RunModeSignature | RunModeApplication
+	modeAny = runModeSignature | runModeApplication
 )
 
 func (ep EvalParams) log() logging.Logger {
@@ -167,6 +165,10 @@ type evalContext struct {
 	branchTargets []int
 
 	programHash crypto.Digest
+
+	runModeFlags uint64
+
+	stateDelta basics.EvalDelta
 }
 
 // StackType describes the type of a value on the operand stack
@@ -220,34 +222,52 @@ var errCostTooHigh = errors.New("LogicSigMaxCost exceded")
 var errLogicSignNotSupported = errors.New("LogicSig not supported")
 var errTooManyArgs = errors.New("LogicSig has too many arguments")
 
+// EvalStatefull executes stateful TEAL program
+func EvalStatefull(program []byte, params EvalParams) (pass bool, delta basics.EvalDelta, err error) {
+	var cx evalContext
+	cx.EvalParams = params
+	cx.runModeFlags = runModeApplication
+	pass, err = eval(program, &cx)
+	delta = cx.stateDelta
+	return
+}
+
 // Eval checks to see if a transaction passes logic
 // A program passes succesfully if it finishes with one int element on the stack that is non-zero.
 func Eval(program []byte, params EvalParams) (pass bool, err error) {
+	var cx evalContext
+	cx.EvalParams = params
+	cx.runModeFlags = runModeSignature
+	return eval(program, &cx)
+}
+
+// eval impelementation
+// A program passes succesfully if it finishes with one int element on the stack that is non-zero.
+func eval(program []byte, cx *evalContext) (pass bool, err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			buf := make([]byte, 16*1024)
 			stlen := runtime.Stack(buf, false)
 			pass = false
 			errstr := string(buf[:stlen])
-			if params.Trace != nil {
-				if sb, ok := params.Trace.(*strings.Builder); ok {
+			if cx.EvalParams.Trace != nil {
+				if sb, ok := cx.EvalParams.Trace.(*strings.Builder); ok {
 					errstr += sb.String()
 				}
 			}
 			err = PanicError{x, errstr}
-			params.log().Errorf("recovered panic in Eval: %s", err)
+			cx.EvalParams.log().Errorf("recovered panic in Eval: %s", err)
 		}
 	}()
-	if (params.Proto == nil) || (params.Proto.LogicSigVersion == 0) {
+	if (cx.EvalParams.Proto == nil) || (cx.EvalParams.Proto.LogicSigVersion == 0) {
 		err = errLogicSignNotSupported
 		return
 	}
-	if params.Txn.Lsig.Args != nil && len(params.Txn.Lsig.Args) > transactions.EvalMaxArgs {
+	if cx.EvalParams.Txn.Lsig.Args != nil && len(cx.EvalParams.Txn.Lsig.Args) > transactions.EvalMaxArgs {
 		err = errTooManyArgs
 		return
 	}
 
-	var cx evalContext
 	if len(program) == 0 {
 		cx.err = errors.New("invalid program (empty)")
 		return false, cx.err
@@ -261,8 +281,8 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 		cx.err = fmt.Errorf("program version %d greater than max supported version %d", version, EvalMaxVersion)
 		return false, cx.err
 	}
-	if version > params.Proto.LogicSigVersion {
-		cx.err = fmt.Errorf("program version %d greater than protocol supported version %d", version, params.Proto.LogicSigVersion)
+	if version > cx.EvalParams.Proto.LogicSigVersion {
+		cx.err = fmt.Errorf("program version %d greater than protocol supported version %d", version, cx.EvalParams.Proto.LogicSigVersion)
 		return false, cx.err
 	}
 	// TODO: if EvalMaxVersion > version, ensure that inaccessible
@@ -271,7 +291,6 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 	// operations from an old program.
 	cx.version = version
 	cx.pc = vlen
-	cx.EvalParams = params
 	cx.stack = make([]stackValue, 0, 10)
 	cx.program = program
 	cx.programHash = crypto.HashObj(Program(program))
@@ -281,7 +300,7 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 		if cx.stepCount > len(cx.program) {
 			return false, errLoopDetected
 		}
-		if uint64(cx.cost) > params.Proto.LogicSigMaxCost {
+		if uint64(cx.cost) > cx.EvalParams.Proto.LogicSigMaxCost {
 			return false, errCostTooHigh
 		}
 	}
@@ -380,7 +399,7 @@ func (cx *evalContext) step() {
 		cx.err = fmt.Errorf("%3d illegal opcode 0x%02x", cx.pc, opcode)
 		return
 	}
-	if (cx.RunModeFlags & spec.Modes) == 0 {
+	if (cx.runModeFlags & spec.Modes) == 0 {
 		cx.err = fmt.Errorf("%s not allowed in current mode", spec.Name)
 		return
 	}

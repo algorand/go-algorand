@@ -29,12 +29,7 @@ type appTealEvaluator struct {
 }
 
 func (ae appTealEvaluator) Eval(program []byte) (pass bool, stateDelta basics.EvalDelta, err error) {
-	pass, err = logic.Eval(program, ae.evalParams)
-	if err != nil {
-		return false, basics.EvalDelta{}, err
-	}
-
-	return pass, basics.EvalDelta{}, nil
+	return logic.EvalStatefull(program, ae.evalParams)
 }
 
 // appLedger implements logic.LedgerForLogic
@@ -105,4 +100,14 @@ func (al *appLedger) AppLocalState(addr basics.Address, appIdx basics.AppIndex) 
 	cloned := record.AppLocalStates[appIdx].Clone()
 
 	return cloned, nil
+}
+
+func (al *appLedger) AssetHolding(addr basics.Address, assetID uint64) (basics.AssetHolding, error) {
+	// TOOD(application)
+	return basics.AssetHolding{}, fmt.Errorf("AssetHolding not implemented")
+}
+
+func (al *appLedger) AssetParams(addr basics.Address, assetID uint64) (basics.AssetParams, error) {
+	// TOOD(application)
+	return basics.AssetParams{}, fmt.Errorf("AssetParams not implemented")
 }

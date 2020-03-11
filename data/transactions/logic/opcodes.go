@@ -62,7 +62,7 @@ var OpSpecs = []OpSpec{
 	{0x01, "sha256", opSHA256, asmDefault, disDefault, oneBytes, oneBytes, 1, modeAny, opSize{7, 1, nil}},
 	{0x02, "keccak256", opKeccak256, asmDefault, disDefault, oneBytes, oneBytes, 1, modeAny, opSize{26, 1, nil}},
 	{0x03, "sha512_256", opSHA512_256, asmDefault, disDefault, oneBytes, oneBytes, 1, modeAny, opSize{9, 1, nil}},
-	{0x04, "ed25519verify", opEd25519verify, asmDefault, disDefault, threeBytes, oneInt, 1, RunModeSignature, opSize{1900, 1, nil}},
+	{0x04, "ed25519verify", opEd25519verify, asmDefault, disDefault, threeBytes, oneInt, 1, runModeSignature, opSize{1900, 1, nil}},
 	{0x08, "+", opPlus, asmDefault, disDefault, twoInts, oneInt, 1, modeAny, opSizeDefault},
 	{0x09, "-", opMinus, asmDefault, disDefault, twoInts, oneInt, 1, modeAny, opSizeDefault},
 	{0x0a, "/", opDiv, asmDefault, disDefault, twoInts, oneInt, 1, modeAny, opSizeDefault},
@@ -117,16 +117,16 @@ var OpSpecs = []OpSpec{
 	{0x48, "pop", opPop, asmDefault, disDefault, oneAny, nil, 1, modeAny, opSizeDefault},
 	{0x49, "dup", opDup, asmDefault, disDefault, oneAny, twoAny, 1, modeAny, opSizeDefault},
 
-	{0x60, "balance", opBalance, asmDefault, disDefault, oneInt, oneInt, 2, RunModeApplication, opSizeDefault},
-	{0x61, "app_opted_in", opAppCheckOptedIn, asmDefault, disDefault, twoInts, oneInt, 2, RunModeApplication, opSizeDefault},
-	{0x62, "app_read_local", opAppReadLocalState, asmDefault, disDefault, twoInts.plus(oneBytes), oneInt.plus(oneAny), 2, RunModeApplication, opSizeDefault},
-	{0x63, "app_read_global", opAppReadGlobalState, asmDefault, disDefault, oneBytes, oneInt.plus(oneAny), 2, RunModeApplication, opSizeDefault},
-	{0x64, "app_write_local", opAppWriteLocalState, asmDefault, disDefault, oneInt.plus(oneBytes).plus(oneAny), nil, 2, RunModeApplication, opSizeDefault},
-	{0x65, "app_write_global", opAppWriteGlobalState, asmDefault, disDefault, oneBytes.plus(oneAny), nil, 2, RunModeApplication, opSizeDefault},
-	{0x66, "app_read_other_global", opAppReadOtherGlobalState, asmDefault, disDefault, twoInts.plus(oneBytes), oneInt.plus(oneAny), 2, RunModeApplication, opSizeDefault},
+	{0x60, "balance", opBalance, asmDefault, disDefault, oneInt, oneInt, 2, runModeApplication, opSizeDefault},
+	{0x61, "app_opted_in", opAppCheckOptedIn, asmDefault, disDefault, twoInts, oneInt, 2, runModeApplication, opSizeDefault},
+	{0x62, "app_read_local", opAppReadLocalState, asmDefault, disDefault, twoInts.plus(oneBytes), oneInt.plus(oneAny), 2, runModeApplication, opSizeDefault},
+	{0x63, "app_read_global", opAppReadGlobalState, asmDefault, disDefault, oneBytes, oneInt.plus(oneAny), 2, runModeApplication, opSizeDefault},
+	{0x64, "app_write_local", opAppWriteLocalState, asmDefault, disDefault, oneInt.plus(oneBytes).plus(oneAny), nil, 2, runModeApplication, opSizeDefault},
+	{0x65, "app_write_global", opAppWriteGlobalState, asmDefault, disDefault, oneBytes.plus(oneAny), nil, 2, runModeApplication, opSizeDefault},
+	{0x66, "app_read_other_global", opAppReadOtherGlobalState, asmDefault, disDefault, twoInts.plus(oneBytes), oneInt.plus(oneAny), 2, runModeApplication, opSizeDefault},
 
-	{0x70, "asset_read_holding", opAssetReadHolding, assembleAssetHolding, disAssetHolding, twoInts, oneInt.plus(oneAny), 2, RunModeApplication, opSize{1, 2, nil}},
-	{0x71, "asset_read_params", opAssetReadParams, assembleAssetParams, disAssetParams, twoInts, oneInt.plus(oneAny), 2, RunModeApplication, opSize{1, 2, nil}},
+	{0x70, "asset_read_holding", opAssetReadHolding, assembleAssetHolding, disAssetHolding, twoInts, oneInt.plus(oneAny), 2, runModeApplication, opSize{1, 2, nil}},
+	{0x71, "asset_read_params", opAssetReadParams, assembleAssetParams, disAssetParams, twoInts, oneInt.plus(oneAny), 2, runModeApplication, opSize{1, 2, nil}},
 }
 
 type sortByOpcode []OpSpec
