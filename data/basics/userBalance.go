@@ -149,6 +149,14 @@ type AppParams struct {
 	ClearStateProgram string      `codec:"clearp,allocbound=-"`
 	LocalStateSchema  StateSchema `codec:"lsch"`
 	GlobalStateSchema StateSchema `codec:"gsch"`
+
+	GlobalState TealKeyValue `codec:"gs,allocbound=-"`
+}
+
+func (ap AppParams) Clone() (res AppParams) {
+	res = ap
+	res.GlobalState = ap.GlobalState.Clone()
+	return
 }
 
 // AccountDetail encapsulates meaningful details about a given account, for external consumption

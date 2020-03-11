@@ -38,7 +38,7 @@ type ApplicationCallTxnFields struct {
 
 	ApplicationID   basics.AppIndex  `codec:"apid"`
 	OnCompletion    OnCompletion     `codec:"apan"`
-	ApplicationArgs [][]byte         `codec:"apaa,allocbound=1024"`
+	ApplicationArgs []string         `codec:"apaa,allocbound=1024"`
 	Accounts        []basics.Address `codec:"apat,allocbound=1024"`
 
 	LocalStateSchema  basics.StateSchema `codec:"apls"`
@@ -89,8 +89,7 @@ func cloneAppLocalStates(m map[basics.AppIndex]basics.TealKeyValue) map[basics.A
 func cloneAppParams(m map[basics.AppIndex]basics.AppParams) map[basics.AppIndex]basics.AppParams {
 	res := make(map[basics.AppIndex]basics.AppParams, len(m))
 	for k, v := range m {
-		res[k] = v
-		// res[k].GlobalState = res[k].GlobalState.Clone()
+		res[k] = v.Clone()
 	}
 	return res
 }
@@ -144,7 +143,8 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva
 		record.AppLocalStates = cloneAppLocalStates(record.AppLocalStates)
 		record.AppParams = cloneAppParams(record.AppParams)
 
-		// Allocate the new app params
+		// Allocate the new app params (+ 1 so that we never have
+		// appIdx == 0 and to match Assets ID namespace)
 		appIdx = basics.AppIndex(txnCounter + 1)
 		record.AppParams[appIdx] = basics.AppParams{
 			ApprovalProgram:   ac.ApprovalProgram,

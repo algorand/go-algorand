@@ -58,7 +58,7 @@ func (z *ApplicationCallTxnFields) MarshalMsg(b []byte) (o []byte, err error) {
 				o = msgp.AppendArrayHeader(o, uint32(len((*z).ApplicationArgs)))
 			}
 			for zb0001 := range (*z).ApplicationArgs {
-				o = msgp.AppendBytes(o, (*z).ApplicationArgs[zb0001])
+				o = msgp.AppendString(o, (*z).ApplicationArgs[zb0001])
 			}
 		}
 		if (zb0003Mask & 0x4) == 0 { // if not empty
@@ -180,10 +180,10 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 			} else if (*z).ApplicationArgs != nil && cap((*z).ApplicationArgs) >= zb0006 {
 				(*z).ApplicationArgs = ((*z).ApplicationArgs)[:zb0006]
 			} else {
-				(*z).ApplicationArgs = make([][]byte, zb0006)
+				(*z).ApplicationArgs = make([]string, zb0006)
 			}
 			for zb0001 := range (*z).ApplicationArgs {
-				(*z).ApplicationArgs[zb0001], bts, err = msgp.ReadBytesBytes(bts, (*z).ApplicationArgs[zb0001])
+				(*z).ApplicationArgs[zb0001], bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "ApplicationArgs", zb0001)
 					return
@@ -308,10 +308,10 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 				} else if (*z).ApplicationArgs != nil && cap((*z).ApplicationArgs) >= zb0011 {
 					(*z).ApplicationArgs = ((*z).ApplicationArgs)[:zb0011]
 				} else {
-					(*z).ApplicationArgs = make([][]byte, zb0011)
+					(*z).ApplicationArgs = make([]string, zb0011)
 				}
 				for zb0001 := range (*z).ApplicationArgs {
-					(*z).ApplicationArgs[zb0001], bts, err = msgp.ReadBytesBytes(bts, (*z).ApplicationArgs[zb0001])
+					(*z).ApplicationArgs[zb0001], bts, err = msgp.ReadStringBytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "ApplicationArgs", zb0001)
 						return
@@ -390,7 +390,7 @@ func (_ *ApplicationCallTxnFields) CanUnmarshalMsg(z interface{}) bool {
 func (z *ApplicationCallTxnFields) Msgsize() (s int) {
 	s = 1 + 5 + (*z).ApplicationID.Msgsize() + 5 + msgp.Uint64Size + 5 + msgp.ArrayHeaderSize
 	for zb0001 := range (*z).ApplicationArgs {
-		s += msgp.BytesPrefixSize + len((*z).ApplicationArgs[zb0001])
+		s += msgp.StringPrefixSize + len((*z).ApplicationArgs[zb0001])
 	}
 	s += 5 + msgp.ArrayHeaderSize
 	for zb0002 := range (*z).Accounts {
@@ -3255,7 +3255,7 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte, err error) {
 				o = msgp.AppendArrayHeader(o, uint32(len((*z).ApplicationCallTxnFields.ApplicationArgs)))
 			}
 			for zb0002 := range (*z).ApplicationCallTxnFields.ApplicationArgs {
-				o = msgp.AppendBytes(o, (*z).ApplicationCallTxnFields.ApplicationArgs[zb0002])
+				o = msgp.AppendString(o, (*z).ApplicationCallTxnFields.ApplicationArgs[zb0002])
 			}
 		}
 		if (zb0004Mask & 0x2000) == 0 { // if not empty
@@ -3814,10 +3814,10 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			} else if (*z).ApplicationCallTxnFields.ApplicationArgs != nil && cap((*z).ApplicationCallTxnFields.ApplicationArgs) >= zb0007 {
 				(*z).ApplicationCallTxnFields.ApplicationArgs = ((*z).ApplicationCallTxnFields.ApplicationArgs)[:zb0007]
 			} else {
-				(*z).ApplicationCallTxnFields.ApplicationArgs = make([][]byte, zb0007)
+				(*z).ApplicationCallTxnFields.ApplicationArgs = make([]string, zb0007)
 			}
 			for zb0002 := range (*z).ApplicationCallTxnFields.ApplicationArgs {
-				(*z).ApplicationCallTxnFields.ApplicationArgs[zb0002], bts, err = msgp.ReadBytesBytes(bts, (*z).ApplicationCallTxnFields.ApplicationArgs[zb0002])
+				(*z).ApplicationCallTxnFields.ApplicationArgs[zb0002], bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "ApplicationArgs", zb0002)
 					return
@@ -4116,10 +4116,10 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				} else if (*z).ApplicationCallTxnFields.ApplicationArgs != nil && cap((*z).ApplicationCallTxnFields.ApplicationArgs) >= zb0012 {
 					(*z).ApplicationCallTxnFields.ApplicationArgs = ((*z).ApplicationCallTxnFields.ApplicationArgs)[:zb0012]
 				} else {
-					(*z).ApplicationCallTxnFields.ApplicationArgs = make([][]byte, zb0012)
+					(*z).ApplicationCallTxnFields.ApplicationArgs = make([]string, zb0012)
 				}
 				for zb0002 := range (*z).ApplicationCallTxnFields.ApplicationArgs {
-					(*z).ApplicationCallTxnFields.ApplicationArgs[zb0002], bts, err = msgp.ReadBytesBytes(bts, (*z).ApplicationCallTxnFields.ApplicationArgs[zb0002])
+					(*z).ApplicationCallTxnFields.ApplicationArgs[zb0002], bts, err = msgp.ReadStringBytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "ApplicationArgs", zb0002)
 						return
@@ -4198,7 +4198,7 @@ func (_ *Transaction) CanUnmarshalMsg(z interface{}) bool {
 func (z *Transaction) Msgsize() (s int) {
 	s = 3 + 5 + (*z).Type.Msgsize() + 4 + (*z).Header.Sender.Msgsize() + 4 + (*z).Header.Fee.Msgsize() + 3 + (*z).Header.FirstValid.Msgsize() + 3 + (*z).Header.LastValid.Msgsize() + 5 + msgp.BytesPrefixSize + len((*z).Header.Note) + 4 + msgp.StringPrefixSize + len((*z).Header.GenesisID) + 3 + (*z).Header.GenesisHash.Msgsize() + 4 + (*z).Header.Group.Msgsize() + 3 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 8 + (*z).KeyregTxnFields.VotePK.Msgsize() + 7 + (*z).KeyregTxnFields.SelectionPK.Msgsize() + 8 + (*z).KeyregTxnFields.VoteFirst.Msgsize() + 8 + (*z).KeyregTxnFields.VoteLast.Msgsize() + 7 + msgp.Uint64Size + 8 + msgp.BoolSize + 4 + (*z).PaymentTxnFields.Receiver.Msgsize() + 4 + (*z).PaymentTxnFields.Amount.Msgsize() + 6 + (*z).PaymentTxnFields.CloseRemainderTo.Msgsize() + 5 + (*z).AssetConfigTxnFields.ConfigAsset.Msgsize() + 5 + (*z).AssetConfigTxnFields.AssetParams.Msgsize() + 5 + (*z).AssetTransferTxnFields.XferAsset.Msgsize() + 5 + msgp.Uint64Size + 5 + (*z).AssetTransferTxnFields.AssetSender.Msgsize() + 5 + (*z).AssetTransferTxnFields.AssetReceiver.Msgsize() + 7 + (*z).AssetTransferTxnFields.AssetCloseTo.Msgsize() + 5 + (*z).AssetFreezeTxnFields.FreezeAccount.Msgsize() + 5 + (*z).AssetFreezeTxnFields.FreezeAsset.Msgsize() + 5 + msgp.BoolSize + 5 + (*z).ApplicationCallTxnFields.ApplicationID.Msgsize() + 5 + msgp.Uint64Size + 5 + msgp.ArrayHeaderSize
 	for zb0002 := range (*z).ApplicationCallTxnFields.ApplicationArgs {
-		s += msgp.BytesPrefixSize + len((*z).ApplicationCallTxnFields.ApplicationArgs[zb0002])
+		s += msgp.StringPrefixSize + len((*z).ApplicationCallTxnFields.ApplicationArgs[zb0002])
 	}
 	s += 5 + msgp.ArrayHeaderSize
 	for zb0003 := range (*z).ApplicationCallTxnFields.Accounts {

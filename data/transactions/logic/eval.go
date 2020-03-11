@@ -942,7 +942,7 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint
 			err = fmt.Errorf("invalid ApplicationArgs index %d", arrayFieldIdx)
 			return
 		}
-		sv.Bytes = txn.ApplicationArgs[arrayFieldIdx]
+		sv.Bytes = []byte(txn.ApplicationArgs[arrayFieldIdx])
 	case Accounts:
 		if arrayFieldIdx == 0 {
 			// special case: sender

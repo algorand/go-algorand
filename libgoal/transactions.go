@@ -357,7 +357,7 @@ func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, lastValid, fe
 	return tx, nil
 }
 
-func (c *Client) MakeUnsignedAppCreateTx(approvalProg string, clearProg string, globalSchema basics.StateSchema, localSchema basics.StateSchema, appArgs [][]byte, accounts []basics.Address) (transactions.Transaction, error) {
+func (c *Client) MakeUnsignedAppCreateTx(approvalProg string, clearProg string, globalSchema basics.StateSchema, localSchema basics.StateSchema, appArgs []string, accounts []basics.Address) (transactions.Transaction, error) {
 	var tx transactions.Transaction
 
 	tx.Type = protocol.ApplicationCallTx

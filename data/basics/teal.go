@@ -55,8 +55,8 @@ type StateSchema struct {
 type TealType uint64
 
 const (
-	TealByteSliceType TealType = 0
-	TealIntType       TealType = 1
+	TealBytesType TealType = 0
+	TealIntType   TealType = 1
 )
 
 type TealValue struct {
@@ -65,15 +65,19 @@ type TealValue struct {
 	Type TealType `codec:"tt"`
 
 	// TealValue is only used by TEAL programs and never parsed on the wire,
-	// so setting an unlimited allocbound on ByteSlice is OK
-	ByteSlice []byte `codec:"tb,allocbound=-"`
-	Int       uint64 `codec:"ti"`
+	// so setting an unlimited allocbound on Bytes is OK. We use a string
+	// instead of []byte to allow copying this struct by value
+	Bytes string `codec:"tb,allocbound=-"`
+	Int   uint64 `codec:"ti"`
 }
 
 //msgp:allocbound TealKeyValue 4096
 type TealKeyValue map[string]TealValue
 
 func (tk TealKeyValue) Clone() TealKeyValue {
+	if tk == nil {
+		return nil
+	}
 	res := make(TealKeyValue, len(tk))
 	for k, v := range tk {
 		res[k] = v
