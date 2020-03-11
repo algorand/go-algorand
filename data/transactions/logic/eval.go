@@ -365,6 +365,8 @@ func Check(program []byte, params EvalParams) (cost int, err error) {
 	cx.pc = vlen
 	cx.EvalParams = params
 	cx.program = program
+	// TODO: do we want Check for statefull apps?
+	cx.runModeFlags = runModeSignature
 	for (cx.err == nil) && (cx.pc < len(cx.program)) {
 		cost += cx.checkStep()
 	}
