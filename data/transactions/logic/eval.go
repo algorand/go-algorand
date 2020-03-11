@@ -76,6 +76,25 @@ func (sv *stackValue) String() string {
 	return fmt.Sprintf("%d 0x%x", sv.Uint, sv.Uint)
 }
 
+func stackValueFromTealValue(tv *basics.TealValue) (sv stackValue, err error) {
+	switch tv.Type {
+	case basics.TealBytesType:
+		sv.Bytes = []byte(tv.Bytes)
+	case basics.TealIntType:
+		sv.Uint = tv.Int
+	default:
+		err = fmt.Errorf("invalid TealValue type: %d", tv.Type)
+	}
+	return
+}
+
+func (sv *stackValue) fromTealValue(tv *basics.TealValue) string {
+	if sv.Bytes != nil {
+		return hex.EncodeToString(sv.Bytes)
+	}
+	return fmt.Sprintf("%d 0x%x", sv.Uint, sv.Uint)
+}
+
 // LedgerForLogic represents ledger API for Statefull TEAL program
 type LedgerForLogic interface {
 	Balance(addr basics.Address) (uint64, error)
@@ -1248,7 +1267,7 @@ func opAppCheckOptedIn(cx *evalContext) {
 		return
 	}
 
-	_, err := cx.Ledger.AppLocalState(addr, basics.AppIndex(appID))
+	_, err = cx.Ledger.AppLocalState(addr, basics.AppIndex(appID))
 	if err != nil {
 		cx.stack[prev].Uint = 0
 	} else {
@@ -1284,18 +1303,19 @@ func opAppReadLocalState(cx *evalContext) {
 		return
 	}
 
-	value, ok := state[string(key)]
+	tv, ok := state[string(key)]
 	if !ok {
 		cx.stack[pprev].Uint = 0
 		cx.stack[prev].Uint = 0
 	} else {
-		// TODO(applications) fixme
-		//	cx.stack[pprev].Bytes = []byte(value)
-		cx.stack[pprev].Bytes = []byte(value
+		sv, err := stackValueFromTealValue(&tv)
+		if err != nil {
+			cx.err = err
+			return
+		}
+		cx.stack[pprev] = sv
 		cx.stack[prev].Uint = 1
 	}
-
-	panic("TODO(applications) implement w/ TealValue")
 
 	cx.stack = cx.stack[:last]
 }
@@ -1324,21 +1344,22 @@ func opAppReadGlobalState(cx *evalContext) {
 		return
 	}
 
-	value, ok := state[string(key)]
-	var sv stackValue
+	tv, ok := state[string(key)]
+	var didExist stackValue
 	if !ok {
 		cx.stack[last].Uint = 0
-		sv.Uint = 0
+		didExist.Uint = 0
 	} else {
-		// TODO(applications) fixme
-		//	cx.stack[last].Bytes = value
-		cx.stack[last].Bytes = value
-		sv.Uint = 1
+		sv, err := stackValueFromTealValue(&tv)
+		if err != nil {
+			cx.err = err
+			return
+		}
+		cx.stack[last] = sv
+		didExist.Uint = 1
 	}
 
-	panic("TODO(applications) implement w/ TealValue")
-
-	cx.stack = append(cx.stack, sv)
+	cx.stack = append(cx.stack, didExist)
 }
 
 func opAppWriteLocalState(cx *evalContext) {
@@ -1374,7 +1395,7 @@ func opAssetReadHolding(cx *evalContext) {
 	accountIdx := cx.stack[prev].Uint
 	fieldIdx := uint64(cx.program[cx.pc+1])
 
-	if cx.ledger == nil {
+	if cx.Ledger == nil {
 		cx.err = fmt.Errorf("ledger not available")
 		return
 	}
@@ -1387,7 +1408,7 @@ func opAssetReadHolding(cx *evalContext) {
 
 	var exist uint64 = 0
 	var value stackValue
-	if holding, err := cx.ledger.AssetHolding(addr, assetID); err == nil {
+	if holding, err := cx.Ledger.AssetHolding(addr, assetID); err == nil {
 		// the holding exist, read the value
 		exist = 1
 		value, err = cx.assetHoldingEnumToValue(&holding, fieldIdx)
@@ -1411,7 +1432,7 @@ func opAssetReadParams(cx *evalContext) {
 	accountIdx := cx.stack[prev].Uint
 	paramIdx := uint64(cx.program[cx.pc+1])
 
-	if cx.ledger == nil {
+	if cx.Ledger == nil {
 		cx.err = fmt.Errorf("ledger not available")
 		return
 	}
@@ -1424,7 +1445,7 @@ func opAssetReadParams(cx *evalContext) {
 
 	var exist uint64 = 0
 	var value stackValue
-	if params, err := cx.ledger.AssetParams(addr, assetID); err == nil {
+	if params, err := cx.Ledger.AssetParams(addr, assetID); err == nil {
 		// params exist, read the value
 		exist = 1
 		value, err = cx.assetParamsEnumToValue(&params, paramIdx)

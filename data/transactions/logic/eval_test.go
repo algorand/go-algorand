@@ -1237,8 +1237,8 @@ func makeSampleTxn() transactions.SignedTxn {
 	txn.Txn.AssetCloseTo = txn.Txn.Sender
 	txn.Txn.Accounts = make([]basics.Address, 1)
 	txn.Txn.Accounts[0] = txn.Txn.Receiver
-	txn.Txn.ApplicationArgs = make([]basics.TealValue, 1)
-	txn.Txn.ApplicationArgs[0] = basics.TealValue(protocol.PaymentTx)
+	txn.Txn.ApplicationArgs = make([]string, 1)
+	txn.Txn.ApplicationArgs[0] = string(protocol.PaymentTx)
 	return txn
 }
 
@@ -1422,8 +1422,8 @@ txna ApplicationArgs 0
 	var txn transactions.SignedTxn
 	txn.Txn.Accounts = make([]basics.Address, 1)
 	txn.Txn.Accounts[0] = txn.Txn.Sender
-	txn.Txn.ApplicationArgs = make([]basics.TealValue, 1)
-	txn.Txn.ApplicationArgs[0] = basics.TealValue(protocol.PaymentTx)
+	txn.Txn.ApplicationArgs = make([]string, 1)
+	txn.Txn.ApplicationArgs[0] = string(protocol.PaymentTx)
 	txgroup := make([]transactions.SignedTxn, 1)
 	txgroup[0] = txn
 	ep := defaultEvalParams(nil, &txn)
@@ -2736,7 +2736,7 @@ pop
 
 	ep := defaultEvalParams(nil, nil)
 	ep.Txn = &transactions.SignedTxn{}
-	ep.Txn.Txn.ApplicationArgs = []basics.TealValue{[]byte("test")}
+	ep.Txn.Txn.ApplicationArgs = []string{"test"}
 	_, err = Eval(program, ep)
 	require.NoError(t, err)
 
@@ -2757,21 +2757,21 @@ pop
 type balanceRecord struct {
 	addr     basics.Address
 	balance  uint64
-	apps     map[uint64]map[string]basics.TealValue
+	apps     map[basics.AppIndex]map[string]basics.TealValue
 	holdings map[uint64]basics.AssetHolding
 	assets   map[uint64]basics.AssetParams
 }
 
 type testLedger struct {
 	balances     map[basics.Address]balanceRecord
-	applications map[uint64]map[string]basics.TealValue
+	applications map[basics.AppIndex]map[string]basics.TealValue
 }
 
 func makeBalanceRecord(addr basics.Address, balance uint64) balanceRecord {
 	br := balanceRecord{
 		addr:     addr,
 		balance:  balance,
-		apps:     make(map[uint64]map[string]basics.TealValue),
+		apps:     make(map[basics.AppIndex]map[string]basics.TealValue),
 		holdings: make(map[uint64]basics.AssetHolding),
 		assets:   make(map[uint64]basics.AssetParams),
 	}
@@ -2787,17 +2787,18 @@ func makeTestLedger(balances map[basics.Address]uint64) *testLedger {
 
 		}
 	}
-	l.applications = make(map[uint64]map[string]basics.TealValue)
+	l.applications = make(map[basics.AppIndex]map[string]basics.TealValue)
 	return l
 }
 
 func (l *testLedger) newApp(addr basics.Address, appID uint64) {
-	l.applications[appID] = make(map[string]basics.TealValue)
+	appIdx := basics.AppIndex(appID)
+	l.applications[appIdx] = make(map[string]basics.TealValue)
 	br, ok := l.balances[addr]
 	if !ok {
 		br = makeBalanceRecord(addr, 0)
 	}
-	br.apps[appID] = make(map[string]basics.TealValue)
+	br.apps[appIdx] = make(map[string]basics.TealValue)
 	l.balances[addr] = br
 }
 
@@ -2830,9 +2831,9 @@ func (l *testLedger) Balance(addr basics.Address) (amount uint64, err error) {
 	return br.balance, nil
 }
 
-func (l *testLedger) AppLocalState(addr basics.Address, appID uint64) (map[string]basics.TealValue, error) {
+func (l *testLedger) AppLocalState(addr basics.Address, appIdx basics.AppIndex) (basics.TealKeyValue, error) {
 	if br, ok := l.balances[addr]; ok {
-		if state, ok := br.apps[appID]; ok {
+		if state, ok := br.apps[appIdx]; ok {
 			return state, nil
 		}
 		return nil, fmt.Errorf("No app for account")
@@ -2840,8 +2841,8 @@ func (l *testLedger) AppLocalState(addr basics.Address, appID uint64) (map[strin
 	return nil, fmt.Errorf("no such address")
 }
 
-func (l *testLedger) AppGlobalState(appID uint64) (map[string]basics.TealValue, error) {
-	if state, ok := l.applications[appID]; ok {
+func (l *testLedger) AppGlobalState(appIdx basics.AppIndex) (basics.TealKeyValue, error) {
+	if state, ok := l.applications[appIdx]; ok {
 		return state, nil
 	}
 	return nil, fmt.Errorf("no such app")
@@ -2969,7 +2970,7 @@ balance
 			ep := defaultEvalParams(nil, &txn)
 			ep.TxnGroup = txgroup
 			ep.RunModeFlags = mode
-			ep.ledger = makeTestLedger(
+			ep.Ledger = makeTestLedger(
 				map[basics.Address]uint64{
 					txn.Txn.Sender: 1,
 				},
@@ -3052,7 +3053,7 @@ int 1
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "ledger not available")
 
-	ep.ledger = makeTestLedger(
+	ep.Ledger = makeTestLedger(
 		map[basics.Address]uint64{
 			txn.Txn.Receiver: 1,
 		},
@@ -3079,7 +3080,7 @@ int 1
 	require.NoError(t, err)
 	var addr basics.Address
 	copy(addr[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02"))
-	ep.ledger = makeTestLedger(
+	ep.Ledger = makeTestLedger(
 		map[basics.Address]uint64{
 			addr: 1,
 		},
@@ -3088,7 +3089,7 @@ int 1
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to fetch balance")
 
-	ep.ledger = makeTestLedger(
+	ep.Ledger = makeTestLedger(
 		map[basics.Address]uint64{
 			txn.Txn.Sender: 1,
 		},
@@ -3119,7 +3120,7 @@ int 1
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "ledger not available")
 
-	ep.ledger = makeTestLedger(
+	ep.Ledger = makeTestLedger(
 		map[basics.Address]uint64{
 			txn.Txn.Receiver: 1,
 		},
@@ -3153,7 +3154,7 @@ int 0
 			txn.Txn.Sender: 1,
 		},
 	)
-	ep.ledger = ledger
+	ep.Ledger = ledger
 	pass, err = Eval(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
@@ -3222,7 +3223,7 @@ int 1
 			txn.Txn.Receiver: 1,
 		},
 	)
-	ep.ledger = ledger
+	ep.Ledger = ledger
 	_, err = Eval(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "cannot load account")
@@ -3250,7 +3251,7 @@ int 1`
 			txn.Txn.Receiver: 1,
 		},
 	)
-	ep.ledger = ledger
+	ep.Ledger = ledger
 	ledger.newApp(txn.Txn.Receiver, 9999)
 
 	_, err = Eval(program, ep)
@@ -3277,7 +3278,7 @@ byte 0x414c474f
 	program, err = AssembleString(text)
 	require.NoError(t, err)
 
-	ledger.balances[txn.Txn.Receiver].apps[100][string(protocol.PaymentTx)] = basics.TealValue("ALGO")
+	ledger.balances[txn.Txn.Receiver].apps[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
 	pass, err = Eval(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
@@ -3297,7 +3298,7 @@ byte 0x414c474f
 	program, err = AssembleString(text)
 	require.NoError(t, err)
 
-	ledger.balances[txn.Txn.Sender].apps[100][string(protocol.PaymentTx)] = basics.TealValue("ALGO")
+	ledger.balances[txn.Txn.Sender].apps[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
 	pass, err = Eval(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
@@ -3332,7 +3333,7 @@ byte 0x414c474f
 			txn.Txn.Sender: 1,
 		},
 	)
-	ep.ledger = ledger
+	ep.Ledger = ledger
 	_, err = Eval(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "reading global state from app create tx not allowed")
@@ -3349,7 +3350,7 @@ byte 0x414c474f
 	require.Error(t, err)
 	require.Equal(t, err.Error(), "error")
 
-	ledger.applications[100][string(protocol.PaymentTx)] = basics.TealValue("ALGO")
+	ledger.applications[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
 	pass, err := Eval(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
@@ -3504,7 +3505,7 @@ func TestAssets(t *testing.T) {
 				txn.Txn.Sender: 1,
 			},
 		)
-		ep.ledger = ledger
+		ep.Ledger = ledger
 
 		_, err = Eval(program, ep)
 		require.Error(t, err)
@@ -3541,7 +3542,7 @@ func TestAssets(t *testing.T) {
 
 	ep := defaultEvalParams(&sb, &txn)
 	ep.RunModeFlags = RunModeApplication
-	ep.ledger = ledger
+	ep.Ledger = ledger
 	pass, err := Eval(program, ep)
 	if !pass {
 		t.Log(hex.EncodeToString(program))
