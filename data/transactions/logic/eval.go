@@ -76,11 +76,32 @@ func (sv *stackValue) String() string {
 	return fmt.Sprintf("%d 0x%x", sv.Uint, sv.Uint)
 }
 
+func stackValueFromTealValue(tv *basics.TealValue) (sv stackValue, err error) {
+	switch tv.Type {
+	case basics.TealBytesType:
+		sv.Bytes = []byte(tv.Bytes)
+	case basics.TealUintType:
+		sv.Uint = tv.Uint
+	default:
+		err = fmt.Errorf("invalid TealValue type: %d", tv.Type)
+	}
+	return
+}
+
+func (sv *stackValue) toTealValue() (tv basics.TealValue) {
+	if sv.argType() == StackBytes {
+		return basics.TealValue{Type: basics.TealBytesType, Bytes: string(sv.Bytes)}
+	}
+	return basics.TealValue{Type: basics.TealUintType, Uint: sv.Uint}
+}
+
 // LedgerForLogic represents ledger API for Statefull TEAL program
 type LedgerForLogic interface {
 	Balance(addr basics.Address) (uint64, error)
 	AppLocalState(addr basics.Address, appIdx basics.AppIndex) (basics.TealKeyValue, error)
 	AppGlobalState(appIdx basics.AppIndex) (basics.TealKeyValue, error)
+	AssetHolding(addr basics.Address, assetID uint64) (basics.AssetHolding, error)
+	AssetParams(addr basics.Address, assetID uint64) (basics.AssetParams, error)
 }
 
 // EvalParams contains data that comes into condition evaluation.
@@ -99,8 +120,6 @@ type EvalParams struct {
 
 	Logger logging.Logger
 
-	RunModeFlags uint64
-
 	Ledger LedgerForLogic
 }
 
@@ -108,14 +127,14 @@ type opEvalFunc func(cx *evalContext)
 type opCheckFunc func(cx *evalContext) int
 
 const (
-	// RunModeSignature is TEAL in LogicSig execution
-	RunModeSignature = 1 << iota
+	// runModeSignature is TEAL in LogicSig execution
+	runModeSignature = 1 << iota
 
-	// RunModeApplication is TEAL in application/statefull
-	RunModeApplication
+	// runModeApplication is TEAL in application/statefull
+	runModeApplication
 
 	// local constant, run in any mode
-	modeAny = RunModeSignature | RunModeApplication
+	modeAny = runModeSignature | runModeApplication
 )
 
 func (ep EvalParams) log() logging.Logger {
@@ -146,6 +165,10 @@ type evalContext struct {
 	branchTargets []int
 
 	programHash crypto.Digest
+
+	runModeFlags uint64
+
+	stateDelta basics.EvalDelta
 }
 
 // StackType describes the type of a value on the operand stack
@@ -199,34 +222,52 @@ var errCostTooHigh = errors.New("LogicSigMaxCost exceded")
 var errLogicSignNotSupported = errors.New("LogicSig not supported")
 var errTooManyArgs = errors.New("LogicSig has too many arguments")
 
+// EvalStatefull executes stateful TEAL program
+func EvalStatefull(program []byte, params EvalParams) (pass bool, delta basics.EvalDelta, err error) {
+	var cx evalContext
+	cx.EvalParams = params
+	cx.runModeFlags = runModeApplication
+	pass, err = eval(program, &cx)
+	delta = cx.stateDelta
+	return
+}
+
 // Eval checks to see if a transaction passes logic
 // A program passes succesfully if it finishes with one int element on the stack that is non-zero.
 func Eval(program []byte, params EvalParams) (pass bool, err error) {
+	var cx evalContext
+	cx.EvalParams = params
+	cx.runModeFlags = runModeSignature
+	return eval(program, &cx)
+}
+
+// eval impelementation
+// A program passes succesfully if it finishes with one int element on the stack that is non-zero.
+func eval(program []byte, cx *evalContext) (pass bool, err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			buf := make([]byte, 16*1024)
 			stlen := runtime.Stack(buf, false)
 			pass = false
 			errstr := string(buf[:stlen])
-			if params.Trace != nil {
-				if sb, ok := params.Trace.(*strings.Builder); ok {
+			if cx.EvalParams.Trace != nil {
+				if sb, ok := cx.EvalParams.Trace.(*strings.Builder); ok {
 					errstr += sb.String()
 				}
 			}
 			err = PanicError{x, errstr}
-			params.log().Errorf("recovered panic in Eval: %s", err)
+			cx.EvalParams.log().Errorf("recovered panic in Eval: %s", err)
 		}
 	}()
-	if (params.Proto == nil) || (params.Proto.LogicSigVersion == 0) {
+	if (cx.EvalParams.Proto == nil) || (cx.EvalParams.Proto.LogicSigVersion == 0) {
 		err = errLogicSignNotSupported
 		return
 	}
-	if params.Txn.Lsig.Args != nil && len(params.Txn.Lsig.Args) > transactions.EvalMaxArgs {
+	if cx.EvalParams.Txn.Lsig.Args != nil && len(cx.EvalParams.Txn.Lsig.Args) > transactions.EvalMaxArgs {
 		err = errTooManyArgs
 		return
 	}
 
-	var cx evalContext
 	if len(program) == 0 {
 		cx.err = errors.New("invalid program (empty)")
 		return false, cx.err
@@ -240,8 +281,8 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 		cx.err = fmt.Errorf("program version %d greater than max supported version %d", version, EvalMaxVersion)
 		return false, cx.err
 	}
-	if version > params.Proto.LogicSigVersion {
-		cx.err = fmt.Errorf("program version %d greater than protocol supported version %d", version, params.Proto.LogicSigVersion)
+	if version > cx.EvalParams.Proto.LogicSigVersion {
+		cx.err = fmt.Errorf("program version %d greater than protocol supported version %d", version, cx.EvalParams.Proto.LogicSigVersion)
 		return false, cx.err
 	}
 	// TODO: if EvalMaxVersion > version, ensure that inaccessible
@@ -250,7 +291,6 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 	// operations from an old program.
 	cx.version = version
 	cx.pc = vlen
-	cx.EvalParams = params
 	cx.stack = make([]stackValue, 0, 10)
 	cx.program = program
 	cx.programHash = crypto.HashObj(Program(program))
@@ -260,7 +300,7 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 		if cx.stepCount > len(cx.program) {
 			return false, errLoopDetected
 		}
-		if uint64(cx.cost) > params.Proto.LogicSigMaxCost {
+		if uint64(cx.cost) > cx.EvalParams.Proto.LogicSigMaxCost {
 			return false, errCostTooHigh
 		}
 	}
@@ -325,6 +365,8 @@ func Check(program []byte, params EvalParams) (cost int, err error) {
 	cx.pc = vlen
 	cx.EvalParams = params
 	cx.program = program
+	// TODO: do we want Check for statefull apps?
+	cx.runModeFlags = runModeSignature
 	for (cx.err == nil) && (cx.pc < len(cx.program)) {
 		cost += cx.checkStep()
 	}
@@ -359,7 +401,7 @@ func (cx *evalContext) step() {
 		cx.err = fmt.Errorf("%3d illegal opcode 0x%02x", cx.pc, opcode)
 		return
 	}
-	if (cx.RunModeFlags & spec.Modes) == 0 {
+	if (cx.runModeFlags & spec.Modes) == 0 {
 		cx.err = fmt.Errorf("%s not allowed in current mode", spec.Name)
 		return
 	}
@@ -390,11 +432,25 @@ func (cx *evalContext) step() {
 	cx.cost += oz.cost
 	spec.op(cx)
 	if cx.Trace != nil {
-		if len(cx.stack) == 0 {
-			fmt.Fprintf(cx.Trace, "%3d %s => %s\n", cx.pc, spec.Name, "<empty stack>")
-		} else {
-			fmt.Fprintf(cx.Trace, "%3d %s => %s\n", cx.pc, spec.Name, cx.stack[len(cx.stack)-1].String())
+		immArgsString := " "
+		if spec.Name != "bnz" {
+			for i := 1; i < spec.opSize.size; i++ {
+				immArgsString += fmt.Sprintf("0x%02x ", cx.program[cx.pc+i])
+			}
 		}
+		var stackString string
+		if len(cx.stack) == 0 {
+			stackString = "<empty stack>"
+		} else {
+			num := 1
+			if len(spec.Returns) > 1 {
+				num = len(spec.Returns)
+			}
+			for i := 1; i <= num; i++ {
+				stackString += fmt.Sprintf("(%s) ", cx.stack[len(cx.stack)-i].String())
+			}
+		}
+		fmt.Fprintf(cx.Trace, "%3d %s%s=> %s\n", cx.pc, spec.Name, immArgsString, stackString)
 	}
 	if cx.err != nil {
 		return
@@ -885,6 +941,56 @@ func opDup(cx *evalContext) {
 	cx.stack = append(cx.stack, sv)
 }
 
+func (cx *evalContext) assetHoldingEnumToValue(holding *basics.AssetHolding, field uint64) (sv stackValue, err error) {
+	switch AssetHoldingField(field) {
+	case AssetHoldingAmount:
+		sv.Uint = holding.Amount
+	case AssetHoldingFrozen:
+		if holding.Frozen {
+			sv.Uint = 1
+		} else {
+			sv.Uint = 0
+		}
+	default:
+		err = fmt.Errorf("invalid asset holding field %d", field)
+	}
+	return
+}
+
+func (cx *evalContext) assetParamsEnumToValue(params *basics.AssetParams, field uint64) (sv stackValue, err error) {
+	switch AssetParamsField(field) {
+	case AssetParamsTotal:
+		sv.Uint = params.Total
+	case AssetParamsDecimals:
+		sv.Uint = uint64(params.Decimals)
+	case AssetParamsDefaultFrozen:
+		if params.DefaultFrozen {
+			sv.Uint = 1
+		} else {
+			sv.Uint = 0
+		}
+	case AssetParamsUnitName:
+		sv.Bytes = []byte(params.UnitName)
+	case AssetParamsAssetName:
+		sv.Bytes = []byte(params.AssetName)
+	case AssetParamsURL:
+		sv.Bytes = []byte(params.URL)
+	case AssetParamsMetadataHash:
+		sv.Bytes = params.MetadataHash[:]
+	case AssetParamsManager:
+		sv.Bytes = params.Manager[:]
+	case AssetParamsReserve:
+		sv.Bytes = params.Reserve[:]
+	case AssetParamsFreeze:
+		sv.Bytes = params.Freeze[:]
+	case AssetParamsClawback:
+		sv.Bytes = params.Clawback[:]
+	default:
+		err = fmt.Errorf("invalid asset params field %d", field)
+	}
+	return
+}
+
 func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint64, arrayFieldIdx uint64) (sv stackValue, err error) {
 	err = nil
 	switch TxnField(field) {
@@ -1122,8 +1228,26 @@ func opStore(cx *evalContext) {
 	cx.nextpc = cx.pc + 2
 }
 
+// getAccountAddrByOffset resolves account offset to address
+// it treats offset == 0 as Sender otherwise looks up into Txn.Accounts
+func getAccountAddrByOffset(txn *transactions.SignedTxn, accountIdx uint64) (basics.Address, error) {
+	var addr basics.Address
+	if accountIdx == 0 {
+		addr = txn.Txn.Sender
+		return addr, nil
+	}
+
+	if accountIdx > uint64(len(txn.Txn.Accounts)) {
+		return addr, fmt.Errorf("cannot load account[%d] of %d", accountIdx, len(txn.Txn.Accounts))
+	}
+
+	addr = txn.Txn.Accounts[accountIdx-1]
+	return addr, nil
+}
+
 func opBalance(cx *evalContext) {
 	last := len(cx.stack) - 1 // account offset
+
 	accountIdx := cx.stack[last].Uint
 
 	if cx.Ledger == nil {
@@ -1131,16 +1255,10 @@ func opBalance(cx *evalContext) {
 		return
 	}
 
-	var addr basics.Address
-	if accountIdx == 0 {
-		// special case: sender
-		addr = cx.Txn.Txn.Sender
-	} else {
-		if accountIdx > uint64(len(cx.Txn.Txn.Accounts)) {
-			cx.err = fmt.Errorf("cannot load account[%d] of %d", accountIdx, len(cx.Txn.Txn.Accounts))
-			return
-		}
-		addr = cx.Txn.Txn.Accounts[accountIdx-1]
+	addr, err := getAccountAddrByOffset(cx.Txn, accountIdx)
+	if err != nil {
+		cx.err = err
+		return
 	}
 
 	amount, err := cx.Ledger.Balance(addr)
@@ -1155,6 +1273,7 @@ func opBalance(cx *evalContext) {
 func opAppCheckOptedIn(cx *evalContext) {
 	last := len(cx.stack) - 1 // app id
 	prev := last - 1          // account offset
+
 	appID := cx.stack[last].Uint
 	accountIdx := cx.stack[prev].Uint
 
@@ -1163,19 +1282,13 @@ func opAppCheckOptedIn(cx *evalContext) {
 		return
 	}
 
-	var addr basics.Address
-	if accountIdx == 0 {
-		// special case: sender
-		addr = cx.Txn.Txn.Sender
-	} else {
-		if accountIdx > uint64(len(cx.Txn.Txn.Accounts)) {
-			cx.err = fmt.Errorf("cannot load account[%d] of %d", accountIdx, len(cx.Txn.Txn.Accounts))
-			return
-		}
-		addr = cx.Txn.Txn.Accounts[accountIdx-1]
+	addr, err := getAccountAddrByOffset(cx.Txn, accountIdx)
+	if err != nil {
+		cx.err = err
+		return
 	}
 
-	_, err := cx.Ledger.AppLocalState(addr, basics.AppIndex(appID))
+	_, err = cx.Ledger.AppLocalState(addr, basics.AppIndex(appID))
 	if err != nil {
 		cx.stack[prev].Uint = 0
 	} else {
@@ -1183,6 +1296,14 @@ func opAppCheckOptedIn(cx *evalContext) {
 	}
 
 	cx.stack = cx.stack[:last]
+}
+
+func (cx *evalContext) appReadLocalKey(appID uint64, addr basics.Address, key string) (tv basics.TealValue) {
+	return
+}
+
+func (cx *evalContext) appWriteLocalKey(appID uint64, addr basics.Address, key string, tv basics.TealValue) error {
+	return nil
 }
 
 func opAppReadLocalState(cx *evalContext) {
@@ -1199,17 +1320,30 @@ func opAppReadLocalState(cx *evalContext) {
 		return
 	}
 
-	var addr basics.Address
-	if accountIdx == 0 {
-		// special case: sender
-		addr = cx.Txn.Txn.Sender
-	} else {
-		if accountIdx > uint64(len(cx.Txn.Txn.Accounts)) {
-			cx.err = fmt.Errorf("cannot load account[%d] of %d", accountIdx, len(cx.Txn.Txn.Accounts))
-			return
-		}
-		addr = cx.Txn.Txn.Accounts[accountIdx-1]
+	addr, err := getAccountAddrByOffset(cx.Txn, accountIdx)
+	if err != nil {
+		cx.err = err
+		return
 	}
+
+	// tv, ok, err := cx.appReadLocalKey(appID, addr, key)
+	// if err != nil {
+	// 	cx.err = fmt.Errorf("failed to fetch local state [%s] of the app %d: %s", addr, appID, err.Error())
+	// 	return
+	// }
+
+	// if !ok {
+	// 	cx.stack[pprev].Uint = 0
+	// 	cx.stack[prev].Uint = 0
+	// } else {
+	// 	sv, err := stackValueFromTealValue(&tv)
+	// 	if err != nil {
+	// 		cx.err = err
+	// 		return
+	// 	}
+	// 	cx.stack[pprev] = sv
+	// 	cx.stack[prev].Uint = 1
+	// }
 
 	state, err := cx.Ledger.AppLocalState(addr, basics.AppIndex(appID))
 	if err != nil {
@@ -1217,18 +1351,19 @@ func opAppReadLocalState(cx *evalContext) {
 		return
 	}
 
-	value, ok := state[string(key)]
+	tv, ok := state[string(key)]
 	if !ok {
 		cx.stack[pprev].Uint = 0
 		cx.stack[prev].Uint = 0
 	} else {
-		// TODO(applications) fixme
-		//	cx.stack[pprev].Bytes = []byte(value)
-		_ = value
+		sv, err := stackValueFromTealValue(&tv)
+		if err != nil {
+			cx.err = err
+			return
+		}
+		cx.stack[pprev] = sv
 		cx.stack[prev].Uint = 1
 	}
-
-	panic("TODO(applications) implement w/ TealValue")
 
 	cx.stack = cx.stack[:last]
 }
@@ -1257,28 +1392,52 @@ func opAppReadGlobalState(cx *evalContext) {
 		return
 	}
 
-	value, ok := state[string(key)]
-	var sv stackValue
+	tv, ok := state[string(key)]
+	var didExist stackValue
 	if !ok {
 		cx.stack[last].Uint = 0
-		sv.Uint = 0
+		didExist.Uint = 0
 	} else {
-		// TODO(applications) fixme
-		//	cx.stack[last].Bytes = value
-		_ = value
-		sv.Uint = 1
+		sv, err := stackValueFromTealValue(&tv)
+		if err != nil {
+			cx.err = err
+			return
+		}
+		cx.stack[last] = sv
+		didExist.Uint = 1
 	}
 
-	panic("TODO(applications) implement w/ TealValue")
-
-	cx.stack = append(cx.stack, sv)
+	cx.stack = append(cx.stack, didExist)
 }
 
 func opAppWriteLocalState(cx *evalContext) {
 	last := len(cx.stack) - 1 // value
 	prev := last - 1          // state key
 	pprev := prev - 1         // account offset
-	// TODO
+
+	sv := cx.stack[last]
+	key := string(cx.stack[prev].Bytes)
+	accountIdx := cx.stack[pprev].Uint
+	appID := uint64(cx.Txn.Txn.ApplicationID)
+
+	if cx.Ledger == nil {
+		cx.err = fmt.Errorf("ledger not available")
+		return
+	}
+
+	if appID == 0 {
+		cx.err = fmt.Errorf("writing local state from app create tx not allowed")
+		return
+	}
+
+	addr, err := getAccountAddrByOffset(cx.Txn, accountIdx)
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	cx.appWriteLocalKey(appID, addr, key, sv.toTealValue())
+
 	cx.stack = cx.stack[:pprev]
 }
 
@@ -1300,21 +1459,75 @@ func opAppReadOtherGlobalState(cx *evalContext) {
 }
 
 func opAssetReadHolding(cx *evalContext) {
-	last := len(cx.stack) - 1 // asset holding enum value
-	prev := last - 1          // asset id
-	pprev := prev - 1         // account offset
-	// TODO
-	cx.stack[pprev].Uint = 0
-	cx.stack[prev].Uint = 0
-	cx.stack = cx.stack[:last]
+	last := len(cx.stack) - 1 // asset id
+	prev := last - 1          // account offset
+
+	assetID := cx.stack[last].Uint
+	accountIdx := cx.stack[prev].Uint
+	fieldIdx := uint64(cx.program[cx.pc+1])
+
+	if cx.Ledger == nil {
+		cx.err = fmt.Errorf("ledger not available")
+		return
+	}
+
+	addr, err := getAccountAddrByOffset(cx.Txn, accountIdx)
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	var exist uint64 = 0
+	var value stackValue
+	if holding, err := cx.Ledger.AssetHolding(addr, assetID); err == nil {
+		// the holding exist, read the value
+		exist = 1
+		value, err = cx.assetHoldingEnumToValue(&holding, fieldIdx)
+		if err != nil {
+			cx.err = err
+			return
+		}
+	}
+
+	cx.stack[prev] = value
+	cx.stack[last].Uint = exist
+
+	cx.nextpc = cx.pc + 2
 }
 
 func opAssetReadParams(cx *evalContext) {
-	last := len(cx.stack) - 1 // asset params enum value
-	prev := last - 1          // asset id
-	pprev := prev - 1         // account offset
-	// TODO
-	cx.stack[pprev].Uint = 0
-	cx.stack[prev].Uint = 0
-	cx.stack = cx.stack[:last]
+	last := len(cx.stack) - 1 // asset id
+	prev := last - 1          // account offset
+
+	assetID := cx.stack[last].Uint
+	accountIdx := cx.stack[prev].Uint
+	paramIdx := uint64(cx.program[cx.pc+1])
+
+	if cx.Ledger == nil {
+		cx.err = fmt.Errorf("ledger not available")
+		return
+	}
+
+	addr, err := getAccountAddrByOffset(cx.Txn, accountIdx)
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	var exist uint64 = 0
+	var value stackValue
+	if params, err := cx.Ledger.AssetParams(addr, assetID); err == nil {
+		// params exist, read the value
+		exist = 1
+		value, err = cx.assetParamsEnumToValue(&params, paramIdx)
+		if err != nil {
+			cx.err = err
+			return
+		}
+	}
+
+	cx.stack[prev] = value
+	cx.stack[last].Uint = exist
+
+	cx.nextpc = cx.pc + 2
 }

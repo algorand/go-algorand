@@ -88,6 +88,14 @@ Global fields are fields that are common to all the transactions in the group. I
 
 @@ global_fields.md @@
 
+**Asset Fields**
+
+Asset fields include `AssetHolding` and `AssetParam` fields that are used in `asset_read_*` opcodes
+
+@@ asset_holding_fields.md @@
+
+@@ asset_params_fields.md @@
+
 ### Flow Control
 
 @@ Flow_Control.md @@

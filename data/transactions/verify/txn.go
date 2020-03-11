@@ -214,9 +214,8 @@ func LogicSigSanityCheck(txn *transactions.SignedTxn, ctx *Context) error {
 	}
 
 	ep := logic.EvalParams{
-		Proto:        &proto,
-		TxnGroup:     ctx.Group,
-		RunModeFlags: logic.RunModeSignature,
+		Proto:      &proto,
+		TxnGroup:   ctx.Group,
 		Txn:        txn,
 		GroupIndex: ctx.GroupIndex,
 	}
@@ -277,9 +276,8 @@ func LogicSig(txn *transactions.SignedTxn, ctx *Context) error {
 	}
 
 	ep := logic.EvalParams{
-		Proto:        &proto,
-		TxnGroup:     ctx.Group,
-		RunModeFlags: logic.RunModeSignature,
+		Proto:      &proto,
+		TxnGroup:   ctx.Group,
 		Txn:        txn,
 		GroupIndex: ctx.GroupIndex,
 	}

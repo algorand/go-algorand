@@ -176,6 +176,31 @@ Global fields are fields that are common to all the transactions in the group. I
 | 4 | GroupSize | uint64 | Number of transactions in this atomic transaction group. At least 1. |
 
 
+**Asset Fields**
+
+Asset fields include `AssetHolding` and `AssetParam` fields that are used in `asset_read_*` opcodes
+
+| Index | Name | Type | Notes |
+| --- | --- | --- | --- |
+| 0 | AssetHoldingAmount | uint64 | Amount of the asset unit held by this account |
+| 1 | AssetHoldingFrozen | uint64 | Is the asset frozen or not |
+
+
+| Index | Name | Type | Notes |
+| --- | --- | --- | --- |
+| 0 | AssetParamsTotal | uint64 | Total number of units of this asset |
+| 1 | AssetParamsDecimals | uint64 | See AssetParams.Decimals |
+| 2 | AssetParamsDefaultFrozen | uint64 | Frozen by default or not |
+| 3 | AssetParamsUnitName | []byte | Asset unit name |
+| 4 | AssetParamsAssetName | []byte | Asset name |
+| 5 | AssetParamsURL | []byte | URL with additional info about the asset |
+| 6 | AssetParamsMetadataHash | []byte | Arbitrary commitment |
+| 7 | AssetParamsManager | []byte | Manager commitment |
+| 8 | AssetParamsReserve | []byte | Reserve address |
+| 9 | AssetParamsFreeze | []byte | Freeze address |
+| 10 | AssetParamsClawback | []byte | Clawback address |
+
+
 ### Flow Control
 
 | Op | Description |

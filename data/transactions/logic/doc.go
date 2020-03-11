@@ -91,13 +91,13 @@ var opDocList = []stringString{
 	{"dup", "duplicate last value on stack"},
 	{"balance", "get balance for the requested account A in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction"},
 	{"app_opted_in", "check if account A opted in for the application B => {0 or 1}"},
-	{"app_read_local", "read key K from local state of account A for the application B => {0 or 1 (top), value}"},
-	{"app_read_global", "read key K from global state of the current application => {0 or 1 (top), value}"},
-	{"app_write_local", "write key K to local state of account A for the application B"},
-	{"app_write_global", "write key K to global state of the current application"},
-	{"app_read_other_global", "read key K from global state of account A for the application B if A created B => {0 or 1 (top), value}"},
-	{"asset_read_holding", "read an asset A holding field X of account A  => {0 or 1 (top), value}"},
-	{"asset_read_params", "read an asset A params field X of account A  => {0 or 1 (top), value}"},
+	{"app_read_local", "read from account's A from local state of the application B key C  => {0 or 1 (top), value}"},
+	{"app_read_global", "read key A from global state of a current application => {0 or 1 (top), value}"},
+	{"app_write_local", "write to account's A to local state of a current application key B with value C"},
+	{"app_write_global", "write key A and value B to global state of a current application"},
+	{"app_read_other_global", "if account A is a creator of the application B then read key K => {0 or 1 (top), value}"},
+	{"asset_read_holding", "read from account's A and asset B holding field X (imm arg)  => {0 or 1 (top), value}"},
+	{"asset_read_params", "read from account's A and asset B params field X (imm arg)  => {0 or 1 (top), value}"},
 }
 
 var opDocByName map[string]string
@@ -125,6 +125,8 @@ var opcodeImmediateNoteList = []stringString{
 	{"bnz", "{0..0x7fff forward branch offset, big endian}"},
 	{"load", "{uint8 position in scratch space to load from}"},
 	{"store", "{uint8 position in scratch space to store to}"},
+	{"asset_read_holding", "{uint8 asset holding field index}"},
+	{"asset_read_params", "{uint8 asset params field index}"},
 }
 var opcodeImmediateNotes map[string]string
 
@@ -150,8 +152,8 @@ var opDocExtraList = []stringString{
 	{"app_read_local", "params: account index, application id, state key. Return: did_exist flag (top of the stack), value"},
 	{"app_write_local", "params: account index, state key, value"},
 	{"app_read_other_global", "params: account index, application id, state key. Return: did_exist flag (top of the stack), value"},
-	{"asset_read_holding", "params: account index, asset id, field. Return: did_exist flag, value"},
-	{"asset_read_params", "params: account index, asset id, field. Return: did_exist flag, value"},
+	{"asset_read_holding", "params: account index, asset id. Return: did_exist flag, value"},
+	{"asset_read_params", "params: account index, asset id. Return: did_exist flag, value"},
 }
 
 var opDocExtras map[string]string
@@ -255,7 +257,34 @@ var globalFieldDocList = []stringString{
 // GlobalFieldDocs are notes on fields available in `global`
 var GlobalFieldDocs map[string]string
 
+var assetHoldingFieldDocList = []stringString{
+	{"AssetHoldingAmount", "Amount of the asset unit held by this account"},
+	{"AssetHoldingFrozen", "Is the asset frozen or not"},
+}
+
+// AssetHoldingFieldDocs are notes on fields available in `asset_read_holding`
+var AssetHoldingFieldDocs map[string]string
+
+var assetParamsFieldDocList = []stringString{
+	{"AssetParamsTotal", "Total number of units of this asset"},
+	{"AssetParamsDecimals", "See AssetParams.Decimals"},
+	{"AssetParamsDefaultFrozen", "Frozen by default or not"},
+	{"AssetParamsUnitName", "Asset unit name"},
+	{"AssetParamsAssetName", "Asset name"},
+	{"AssetParamsURL", "URL with additional info about the asset"},
+	{"AssetParamsMetadataHash", "Arbitrary commitment"},
+	{"AssetParamsManager", "Manager commitment"},
+	{"AssetParamsReserve", "Reserve address"},
+	{"AssetParamsFreeze", "Freeze address"},
+	{"AssetParamsClawback", "Clawback address"},
+}
+
+// AssetParamsFieldDocs are notes on fields available in `asset_read_params`
+var AssetParamsFieldDocs map[string]string
+
 func init() {
 	TxnFieldDocs = stringStringListToMap(txnFieldDocList)
 	GlobalFieldDocs = stringStringListToMap(globalFieldDocList)
+	AssetHoldingFieldDocs = stringStringListToMap(assetHoldingFieldDocList)
+	AssetParamsFieldDocs = stringStringListToMap(assetParamsFieldDocList)
 }

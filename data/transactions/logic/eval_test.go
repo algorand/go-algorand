@@ -71,7 +71,6 @@ func defaultEvalParamsWithVersion(sb *strings.Builder, txn *transactions.SignedT
 
 	ep := EvalParams{}
 	ep.Proto = &proto
-	ep.RunModeFlags = RunModeSignature
 	ep.Txn = pt
 	if sb != nil { // have to do this since go's nil semantics: https://golang.org/doc/faq#nil_error
 		ep.Trace = sb
@@ -1059,6 +1058,7 @@ func TestTypeEnum(t *testing.T) {
 				protocol.AssetConfigTx,
 				protocol.AssetTransferTx,
 				protocol.AssetFreezeTx,
+				protocol.ApplicationCallTx,
 			}
 			// this is explicitly a local copy of the list so that someone
 			// doesn't accidentally disconnect the doc.go
@@ -1069,6 +1069,7 @@ func TestTypeEnum(t *testing.T) {
 				"AssetConfig",
 				"AssetTransfer",
 				"AssetFreeze",
+				"ApplicationCall",
 			}
 			for i, tt := range ttypes {
 				symbol := typeNames[i]
@@ -1235,8 +1236,8 @@ func makeSampleTxn() transactions.SignedTxn {
 	txn.Txn.AssetCloseTo = txn.Txn.Sender
 	txn.Txn.Accounts = make([]basics.Address, 1)
 	txn.Txn.Accounts[0] = txn.Txn.Receiver
-	txn.Txn.ApplicationArgs = make([]basics.TealValue, 1)
-	txn.Txn.ApplicationArgs[0] = basics.TealValue(protocol.PaymentTx)
+	txn.Txn.ApplicationArgs = make([]string, 1)
+	txn.Txn.ApplicationArgs[0] = string(protocol.PaymentTx)
 	return txn
 }
 
@@ -1420,8 +1421,8 @@ txna ApplicationArgs 0
 	var txn transactions.SignedTxn
 	txn.Txn.Accounts = make([]basics.Address, 1)
 	txn.Txn.Accounts[0] = txn.Txn.Sender
-	txn.Txn.ApplicationArgs = make([]basics.TealValue, 1)
-	txn.Txn.ApplicationArgs[0] = basics.TealValue(protocol.PaymentTx)
+	txn.Txn.ApplicationArgs = make([]string, 1)
+	txn.Txn.ApplicationArgs[0] = string(protocol.PaymentTx)
 	txgroup := make([]transactions.SignedTxn, 1)
 	txgroup[0] = txn
 	ep := defaultEvalParams(nil, &txn)
@@ -2734,7 +2735,7 @@ pop
 
 	ep := defaultEvalParams(nil, nil)
 	ep.Txn = &transactions.SignedTxn{}
-	ep.Txn.Txn.ApplicationArgs = []basics.TealValue{[]byte("test")}
+	ep.Txn.Txn.ApplicationArgs = []string{"test"}
 	_, err = Eval(program, ep)
 	require.NoError(t, err)
 
@@ -2753,14 +2754,27 @@ pop
 }
 
 type balanceRecord struct {
-	addr    basics.Address
-	balance uint64
-	apps    map[uint64]map[string]basics.TealValue
+	addr     basics.Address
+	balance  uint64
+	apps     map[basics.AppIndex]map[string]basics.TealValue
+	holdings map[uint64]basics.AssetHolding
+	assets   map[uint64]basics.AssetParams
 }
 
 type testLedger struct {
 	balances     map[basics.Address]balanceRecord
-	applications map[uint64]map[string]basics.TealValue
+	applications map[basics.AppIndex]map[string]basics.TealValue
+}
+
+func makeBalanceRecord(addr basics.Address, balance uint64) balanceRecord {
+	br := balanceRecord{
+		addr:     addr,
+		balance:  balance,
+		apps:     make(map[basics.AppIndex]map[string]basics.TealValue),
+		holdings: make(map[uint64]basics.AssetHolding),
+		assets:   make(map[uint64]basics.AssetParams),
+	}
+	return br
 }
 
 func makeTestLedger(balances map[basics.Address]uint64) *testLedger {
@@ -2768,30 +2782,40 @@ func makeTestLedger(balances map[basics.Address]uint64) *testLedger {
 	l.balances = make(map[basics.Address]balanceRecord)
 	if balances != nil {
 		for addr, balance := range balances {
-			br := balanceRecord{
-				addr:    addr,
-				balance: balance,
-				apps:    make(map[uint64]map[string]basics.TealValue),
-			}
-			l.balances[addr] = br
+			l.balances[addr] = makeBalanceRecord(addr, balance)
 
 		}
 	}
-	l.applications = make(map[uint64]map[string]basics.TealValue)
+	l.applications = make(map[basics.AppIndex]map[string]basics.TealValue)
 	return l
 }
 
 func (l *testLedger) newApp(addr basics.Address, appID uint64) {
-	l.applications[appID] = make(map[string]basics.TealValue)
+	appIdx := basics.AppIndex(appID)
+	l.applications[appIdx] = make(map[string]basics.TealValue)
 	br, ok := l.balances[addr]
 	if !ok {
-		br = balanceRecord{
-			addr:    addr,
-			balance: 0,
-			apps:    make(map[uint64]map[string]basics.TealValue),
-		}
+		br = makeBalanceRecord(addr, 0)
 	}
-	br.apps[appID] = make(map[string]basics.TealValue)
+	br.apps[appIdx] = make(map[string]basics.TealValue)
+	l.balances[addr] = br
+}
+
+func (l *testLedger) setAsset(addr basics.Address, assetID uint64, params basics.AssetParams) {
+	br, ok := l.balances[addr]
+	if !ok {
+		br = makeBalanceRecord(addr, 0)
+	}
+	br.assets[assetID] = params
+	l.balances[addr] = br
+}
+
+func (l *testLedger) setHolding(addr basics.Address, assetID uint64, holding basics.AssetHolding) {
+	br, ok := l.balances[addr]
+	if !ok {
+		br = makeBalanceRecord(addr, 0)
+	}
+	br.holdings[assetID] = holding
 	l.balances[addr] = br
 }
 
@@ -2806,21 +2830,41 @@ func (l *testLedger) Balance(addr basics.Address) (amount uint64, err error) {
 	return br.balance, nil
 }
 
-func (l *testLedger) AppLocalState(addr basics.Address, appID uint64) (map[string]basics.TealValue, error) {
+func (l *testLedger) AppLocalState(addr basics.Address, appIdx basics.AppIndex) (basics.TealKeyValue, error) {
 	if br, ok := l.balances[addr]; ok {
-		if state, ok := br.apps[appID]; ok {
+		if state, ok := br.apps[appIdx]; ok {
 			return state, nil
 		}
 		return nil, fmt.Errorf("No app for account")
 	}
-	return nil, fmt.Errorf("no app for this addr")
+	return nil, fmt.Errorf("no such address")
 }
 
-func (l *testLedger) AppGlobalState(appID uint64) (map[string]basics.TealValue, error) {
-	if state, ok := l.applications[appID]; ok {
+func (l *testLedger) AppGlobalState(appIdx basics.AppIndex) (basics.TealKeyValue, error) {
+	if state, ok := l.applications[appIdx]; ok {
 		return state, nil
 	}
 	return nil, fmt.Errorf("no such app")
+}
+
+func (l *testLedger) AssetHolding(addr basics.Address, assetID uint64) (basics.AssetHolding, error) {
+	if br, ok := l.balances[addr]; ok {
+		if asset, ok := br.holdings[assetID]; ok {
+			return asset, nil
+		}
+		return basics.AssetHolding{}, fmt.Errorf("No asset for account")
+	}
+	return basics.AssetHolding{}, fmt.Errorf("no such address")
+}
+
+func (l *testLedger) AssetParams(addr basics.Address, assetID uint64) (basics.AssetParams, error) {
+	if br, ok := l.balances[addr]; ok {
+		if asset, ok := br.assets[assetID]; ok {
+			return asset, nil
+		}
+		return basics.AssetParams{}, fmt.Errorf("No asset for account")
+	}
+	return basics.AssetParams{}, fmt.Errorf("no such address")
 }
 
 func TestEvalModes(t *testing.T) {
@@ -2828,7 +2872,7 @@ func TestEvalModes(t *testing.T) {
 	// ed25519verify and err are tested separately below
 
 	// check modeAny (TEAL v1 + txna/gtxna) are available in RunModeSignature
-	// check all opcodes available in RunModeApplication
+	// check all opcodes available in runModeApplication
 	allModeAnyOpcodes := `intcblock 0 1 1 1 1 5
 	bytecblock 0xcafed00d 0x1337 0x2001 0xdeadbeef 0x70077007
 bytec 0
@@ -2904,8 +2948,8 @@ balance
 &&
 `
 	tests := map[uint64]string{
-		RunModeSignature:   allModeAnyOpcodes,
-		RunModeApplication: allModeAnyOpcodes + allAppOpcodes,
+		runModeSignature:   allModeAnyOpcodes,
+		runModeApplication: allModeAnyOpcodes + allAppOpcodes,
 	}
 
 	txn := makeSampleTxn()
@@ -2924,13 +2968,12 @@ balance
 			require.NoError(t, err)
 			ep := defaultEvalParams(nil, &txn)
 			ep.TxnGroup = txgroup
-			ep.RunModeFlags = mode
-			ep.ledger = makeTestLedger(
+			ep.Ledger = makeTestLedger(
 				map[basics.Address]uint64{
 					txn.Txn.Sender: 1,
 				},
 			)
-			_, err = Eval(program, ep)
+			_, _, err = EvalStatefull(program, ep)
 			require.NoError(t, err)
 		})
 	}
@@ -2942,25 +2985,23 @@ balance
 			program, err := AssembleString(source)
 			require.NoError(t, err)
 			ep := defaultEvalParams(nil, nil)
-			ep.RunModeFlags = mode
-			_, err = Eval(program, ep)
+			_, _, err = EvalStatefull(program, ep)
 			require.Error(t, err)
 			require.NotContains(t, err.Error(), "not allowed in current mode")
 			require.Equal(t, err.Error(), "error")
 		})
 	}
 
-	// check ed25519verify is not allowed in RunModeApplication
+	// check ed25519verify is not allowed in statefull mode
 	source := "byte 0x01\nbyte 0x01\nbyte 0x01\ned25519verify"
 	program, err := AssembleString(source)
 	require.NoError(t, err)
 	ep := defaultEvalParams(nil, nil)
-	ep.RunModeFlags = RunModeApplication
-	_, err = Eval(program, ep)
+	_, _, err = EvalStatefull(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "ed25519verify not allowed in current mode")
 
-	// check new opcodes are not allowed in RunModeSignature
+	// check new opcodes are not allowed in stateless mode
 	newOpcodeCalls := []string{
 		"int 0\nbalance",
 		"int 0\nint 0\napp_opted_in",
@@ -2969,23 +3010,22 @@ balance
 		"int 1\nbyte 0x01\nbyte 0x01\napp_write_local",
 		"byte 0x01\nint 0\napp_write_global",
 		"int 0\nint 0\nbyte 0x01\napp_read_other_global",
-		"int 0\nint 0\nint 0\nasset_read_holding",
-		"int 0\nint 0\nint 0\nasset_read_params",
+		"int 0\nint 0\nasset_read_holding AssetHoldingFrozen",
+		"int 0\nint 0\nasset_read_params AssetParamsManager",
 	}
 
 	for _, source := range newOpcodeCalls {
 		program, err := AssembleString(source)
 		require.NoError(t, err)
 		ep := defaultEvalParams(nil, nil)
-		ep.RunModeFlags = RunModeSignature
 		_, err = Eval(program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "not allowed in current mode")
 	}
 
-	require.Equal(t, 1, RunModeSignature)
-	require.Equal(t, 2, RunModeApplication)
-	require.True(t, modeAny == RunModeSignature|RunModeApplication)
+	require.Equal(t, 1, runModeSignature)
+	require.Equal(t, 2, runModeApplication)
+	require.True(t, modeAny == runModeSignature|runModeApplication)
 }
 
 func TestBalance(t *testing.T) {
@@ -3003,17 +3043,16 @@ int 1
 	ep := defaultEvalParams(nil, nil)
 	ep.Txn = &txn
 	ep.TxnGroup = txgroup
-	ep.RunModeFlags = RunModeApplication
-	_, err = Eval(program, ep)
+	_, _, err = EvalStatefull(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "ledger not available")
 
-	ep.ledger = makeTestLedger(
+	ep.Ledger = makeTestLedger(
 		map[basics.Address]uint64{
 			txn.Txn.Receiver: 1,
 		},
 	)
-	_, err = Eval(program, ep)
+	_, _, err = EvalStatefull(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "cannot load account")
 
@@ -3023,7 +3062,7 @@ int 1
 ==`
 	program, err = AssembleString(text)
 	require.NoError(t, err)
-	pass, err := Eval(program, ep)
+	pass, _, err := EvalStatefull(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
@@ -3035,21 +3074,21 @@ int 1
 	require.NoError(t, err)
 	var addr basics.Address
 	copy(addr[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02"))
-	ep.ledger = makeTestLedger(
+	ep.Ledger = makeTestLedger(
 		map[basics.Address]uint64{
 			addr: 1,
 		},
 	)
-	_, err = Eval(program, ep)
+	pass, _, err = EvalStatefull(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to fetch balance")
 
-	ep.ledger = makeTestLedger(
+	ep.Ledger = makeTestLedger(
 		map[basics.Address]uint64{
 			txn.Txn.Sender: 1,
 		},
 	)
-	pass, err = Eval(program, ep)
+	pass, _, err = EvalStatefull(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 }
@@ -3070,17 +3109,16 @@ int 1
 	ep := defaultEvalParams(nil, nil)
 	ep.Txn = &txn
 	ep.TxnGroup = txgroup
-	ep.RunModeFlags = RunModeApplication
-	_, err = Eval(program, ep)
+	_, _, err = EvalStatefull(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "ledger not available")
 
-	ep.ledger = makeTestLedger(
+	ep.Ledger = makeTestLedger(
 		map[basics.Address]uint64{
 			txn.Txn.Receiver: 1,
 		},
 	)
-	_, err = Eval(program, ep)
+	_, _, err = EvalStatefull(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "cannot load account")
 
@@ -3092,7 +3130,7 @@ int 0
 ==`
 	program, err = AssembleString(text)
 	require.NoError(t, err)
-	pass, err := Eval(program, ep)
+	pass, _, err := EvalStatefull(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
@@ -3109,8 +3147,8 @@ int 0
 			txn.Txn.Sender: 1,
 		},
 	)
-	ep.ledger = ledger
-	pass, err = Eval(program, ep)
+	ep.Ledger = ledger
+	pass, _, err = EvalStatefull(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
@@ -3124,7 +3162,7 @@ int 1
 
 	program, err = AssembleString(text)
 	require.NoError(t, err)
-	pass, err = Eval(program, ep)
+	pass, _, err = EvalStatefull(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
@@ -3138,7 +3176,7 @@ int 1
 
 	program, err = AssembleString(text)
 	require.NoError(t, err)
-	pass, err = Eval(program, ep)
+	pass, _, err = EvalStatefull(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
@@ -3168,8 +3206,7 @@ int 1
 	ep := defaultEvalParams(nil, nil)
 	ep.Txn = &txn
 	ep.TxnGroup = txgroup
-	ep.RunModeFlags = RunModeApplication
-	_, err = Eval(program, ep)
+	_, _, err = EvalStatefull(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "ledger not available")
 
@@ -3178,8 +3215,8 @@ int 1
 			txn.Txn.Receiver: 1,
 		},
 	)
-	ep.ledger = ledger
-	_, err = Eval(program, ep)
+	ep.Ledger = ledger
+	_, _, err = EvalStatefull(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "cannot load account")
 
@@ -3197,7 +3234,7 @@ exit:
 int 1`
 	program, err = AssembleString(text)
 	require.NoError(t, err)
-	_, err = Eval(program, ep)
+	_, _, err = EvalStatefull(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to fetch local state")
 
@@ -3206,17 +3243,17 @@ int 1`
 			txn.Txn.Receiver: 1,
 		},
 	)
-	ep.ledger = ledger
+	ep.Ledger = ledger
 	ledger.newApp(txn.Txn.Receiver, 9999)
 
-	_, err = Eval(program, ep)
+	_, _, err = EvalStatefull(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to fetch local state")
 
 	// create the app and check the value from ApplicationArgs[0] (protocol.PaymentTx) does not exist
 	ledger.newApp(txn.Txn.Receiver, 100)
 
-	pass, err := Eval(program, ep)
+	pass, _, err := EvalStatefull(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
@@ -3233,8 +3270,8 @@ byte 0x414c474f
 	program, err = AssembleString(text)
 	require.NoError(t, err)
 
-	ledger.balances[txn.Txn.Receiver].apps[100][string(protocol.PaymentTx)] = basics.TealValue("ALGO")
-	pass, err = Eval(program, ep)
+	ledger.balances[txn.Txn.Receiver].apps[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
+	pass, _, err = EvalStatefull(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
@@ -3253,8 +3290,8 @@ byte 0x414c474f
 	program, err = AssembleString(text)
 	require.NoError(t, err)
 
-	ledger.balances[txn.Txn.Sender].apps[100][string(protocol.PaymentTx)] = basics.TealValue("ALGO")
-	pass, err = Eval(program, ep)
+	ledger.balances[txn.Txn.Sender].apps[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
+	pass, _, err = EvalStatefull(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
@@ -3278,8 +3315,7 @@ byte 0x414c474f
 	ep := defaultEvalParams(nil, nil)
 	ep.Txn = &txn
 	ep.TxnGroup = txgroup
-	ep.RunModeFlags = RunModeApplication
-	_, err = Eval(program, ep)
+	_, _, err = EvalStatefull(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "ledger not available")
 
@@ -3288,25 +3324,320 @@ byte 0x414c474f
 			txn.Txn.Sender: 1,
 		},
 	)
-	ep.ledger = ledger
-	_, err = Eval(program, ep)
+	ep.Ledger = ledger
+	_, _, err = EvalStatefull(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "reading global state from app create tx not allowed")
 
 	ep.Txn.Txn.ApplicationID = 100
-	_, err = Eval(program, ep)
+	_, _, err = EvalStatefull(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to fetch app global state of the app")
 
 	// create the app and check the value from ApplicationArgs[0] (protocol.PaymentTx) does not exist
 	ledger.newApp(txn.Txn.Sender, 100)
 
-	_, err = Eval(program, ep)
+	_, _, err = EvalStatefull(program, ep)
 	require.Error(t, err)
 	require.Equal(t, err.Error(), "error")
 
-	ledger.applications[100][string(protocol.PaymentTx)] = basics.TealValue("ALGO")
-	pass, err := Eval(program, ep)
+	ledger.applications[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
+	pass, _, err := EvalStatefull(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
+}
+
+const assetsTestProgram = `int 0
+int 55
+asset_read_holding AssetHoldingAmount
+!
+bnz error
+int 123
+==
+int 0
+int 55
+asset_read_holding AssetHoldingFrozen
+!
+bnz error
+int 1
+==
+&&
+int 1
+int 55
+asset_read_params AssetParamsTotal
+!
+bnz error
+int 1000
+==
+&&
+int 1
+int 55
+asset_read_params AssetParamsDecimals
+!
+bnz error
+int 2
+==
+&&
+int 1
+int 55
+asset_read_params AssetParamsDefaultFrozen
+!
+bnz error
+int 0
+==
+&&
+int 1
+int 55
+asset_read_params AssetParamsUnitName
+!
+bnz error
+byte 0x414c474f
+==
+&&
+int 1
+int 55
+asset_read_params AssetParamsAssetName
+!
+bnz error
+len
+int 0
+==
+&&
+int 1
+int 55
+asset_read_params AssetParamsURL
+!
+bnz error
+txna ApplicationArgs 0
+==
+&&
+int 1
+int 55
+asset_read_params AssetParamsMetadataHash
+!
+bnz error
+byte 0x0000000000000000000000000000000000000000000000000000000000000000
+==
+&&
+int 1
+int 55
+asset_read_params AssetParamsManager
+!
+bnz error
+txna Accounts 0
+==
+&&
+int 1
+int 55
+asset_read_params AssetParamsReserve
+!
+bnz error
+txna Accounts 1
+==
+&&
+int 1
+int 55
+asset_read_params AssetParamsFreeze
+!
+bnz error
+txna Accounts 1
+==
+&&
+int 1
+int 55
+asset_read_params AssetParamsClawback
+!
+bnz error
+txna Accounts 1
+==
+&&
+bnz ok
+error:
+err
+ok:
+int 1
+`
+
+func TestAssets(t *testing.T) {
+	t.Parallel()
+	for _, field := range AssetHoldingFieldNames {
+		if !strings.Contains(assetsTestProgram, field) {
+			t.Errorf("TestAssets missing field %v", field)
+		}
+	}
+	for _, field := range AssetParamsFieldNames {
+		if !strings.Contains(assetsTestProgram, field) {
+			t.Errorf("TestAssets missing field %v", field)
+		}
+	}
+
+	// check generic errors
+	sources := []string{
+		"int 5\nint 55\nasset_read_holding AssetHoldingAmount",
+		"int 5\nint 55\nasset_read_params AssetParamsTotal",
+	}
+	for _, source := range sources {
+
+		program, err := AssembleString(source)
+		require.NoError(t, err)
+
+		txn := makeSampleTxn()
+		txgroup := makeSampleTxnGroup(txn)
+		ep := defaultEvalParams(nil, nil)
+		ep.Txn = &txn
+		ep.TxnGroup = txgroup
+		_, _, err = EvalStatefull(program, ep)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "ledger not available")
+
+		ledger := makeTestLedger(
+			map[basics.Address]uint64{
+				txn.Txn.Sender: 1,
+			},
+		)
+		ep.Ledger = ledger
+
+		_, _, err = EvalStatefull(program, ep)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "cannot load account[5]")
+	}
+
+	program, err := AssembleString(assetsTestProgram)
+	require.NoError(t, err)
+	cost, err := Check(program, defaultEvalParams(nil, nil))
+	require.NoError(t, err)
+	require.True(t, cost < 1000)
+
+	txn := makeSampleTxn()
+	sb := strings.Builder{}
+	ledger := makeTestLedger(
+		map[basics.Address]uint64{
+			txn.Txn.Sender: 1,
+		},
+	)
+	params := basics.AssetParams{
+		Total:         1000,
+		Decimals:      2,
+		DefaultFrozen: false,
+		UnitName:      "ALGO",
+		AssetName:     "",
+		URL:           string(protocol.PaymentTx),
+		Manager:       txn.Txn.Sender,
+		Reserve:       txn.Txn.Receiver,
+		Freeze:        txn.Txn.Receiver,
+		Clawback:      txn.Txn.Receiver,
+	}
+	ledger.setAsset(txn.Txn.Receiver, 55, params)
+	ledger.setHolding(txn.Txn.Sender, 55, basics.AssetHolding{Amount: 123, Frozen: true})
+
+	ep := defaultEvalParams(&sb, &txn)
+	ep.Ledger = ledger
+	pass, _, err := EvalStatefull(program, ep)
+	if !pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.NoError(t, err)
+	require.True(t, pass)
+
+	// check holdings bool value
+	source := `int 0
+int 55
+asset_read_holding AssetHoldingFrozen
+!
+bnz error
+int 0
+==
+bnz ok
+error:
+err
+ok:
+int 1
+`
+	program, err = AssembleString(source)
+	require.NoError(t, err)
+	ledger.setHolding(txn.Txn.Sender, 55, basics.AssetHolding{Amount: 123, Frozen: false})
+	pass, _, err = EvalStatefull(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+
+	// check holdings invalid offsets
+	require.Equal(t, opsByName[ep.Proto.LogicSigVersion]["asset_read_holding"].Opcode, program[8])
+	program[9] = 0x02
+	_, _, err = EvalStatefull(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid asset holding field 2")
+
+	// check holdings bool value
+	source = `int 1
+int 55
+asset_read_params AssetParamsDefaultFrozen
+!
+bnz error
+int 1
+==
+bnz ok
+error:
+err
+ok:
+int 1
+`
+	program, err = AssembleString(source)
+	require.NoError(t, err)
+	params.DefaultFrozen = true
+	ledger.setAsset(txn.Txn.Receiver, 55, params)
+	pass, _, err = EvalStatefull(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+
+	// check holdings invalid offsets
+	require.Equal(t, opsByName[ep.Proto.LogicSigVersion]["asset_read_params"].Opcode, program[7])
+	program[8] = 0x20
+	_, _, err = EvalStatefull(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid asset params field 32")
+
+	// check empty string
+	source = `int 1
+int 55
+asset_read_params AssetParamsURL
+!
+bnz error
+len
+int 0
+==
+bnz ok
+error:
+err
+ok:
+int 1
+`
+	program, err = AssembleString(source)
+	require.NoError(t, err)
+	params.URL = ""
+	ledger.setAsset(txn.Txn.Receiver, 55, params)
+	pass, _, err = EvalStatefull(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+
+	source = `int 1
+int 55
+asset_read_params AssetParamsURL
+!
+bnz error
+int 0
+==
+bnz ok
+error:
+err
+ok:
+int 1
+`
+	program, err = AssembleString(source)
+	require.NoError(t, err)
+	params.URL = ""
+	ledger.setAsset(txn.Txn.Receiver, 55, params)
+	pass, _, err = EvalStatefull(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "cannot compare ([]byte == uint64)")
 }
