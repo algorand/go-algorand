@@ -234,7 +234,7 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva
 	// Program execution may produce some GlobalState and LocalState
 	// deltas. Apply them, provided they don't exceed the bounds set by
 	// the GlobalStateSchema and LocalStateSchema. If they do exceed
-	// those bounds, then don't fail, but also don't apply the changes.
+	// those bounds, then fail.
 	allowOptIn := ac.OnCompletion == OptInOC
 	errIfBoundsExceeded := true
 	err = ac.applyStateDeltas(stateDeltas, params, balances, appIdx, allowOptIn, errIfBoundsExceeded)
