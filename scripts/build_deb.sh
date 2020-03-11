@@ -46,7 +46,7 @@ DEFAULT_RELEASE_NETWORK=$(./scripts/compute_branch_release_network.sh "${DEFAULT
 PKG_ROOT=$(mktemp -d)
 trap "rm -rf $PKG_ROOT" 0
 
-mkdir -p "${PKG_ROOT}"/usr/bin
+mkdir -p "${PKG_ROOT}/usr/bin"
 
 if [ "${VARIATION}" = "" ]; then
     # NOTE: keep in sync with installer/rpm/algorand.spec
@@ -58,7 +58,7 @@ for bin in "${bin_files[@]}"; do
     chmod 755 "${PKG_ROOT}/usr/bin/${bin}"
 done
 
-mkdir -p "${PKG_ROOT}"/usr/lib/algorand
+mkdir -p "${PKG_ROOT}/usr/lib/algorand"
 lib_files=("updater" "find-nodes.sh")
 for lib in "${lib_files[@]}"; do
     cp "${GOPATH}/bin/${lib}" "${PKG_ROOT}/usr/lib/algorand"
@@ -66,9 +66,9 @@ for lib in "${lib_files[@]}"; do
 done
 
 data_files=("config.json.example" "system.json")
-mkdir -p "${PKG_ROOT}"/var/lib/algorand
+mkdir -p "${PKG_ROOT}/var/lib/algorand"
 for data in "${data_files[@]}"; do
-    cp installer/"${data}" "${PKG_ROOT}"/var/lib/algorand
+    cp "installer/${data}" "${PKG_ROOT}/var/lib/algorand"
 done
 
 if [ ! -z "${RELEASE_GENESIS_PROCESS}" ]; then
@@ -79,12 +79,12 @@ if [ ! -z "${RELEASE_GENESIS_PROCESS}" ]; then
         #${GOPATH}/bin/buildtools genesis ensure -n ${dir} --source ${REPO_DIR}/gen/${dir}/genesis.json --target ${PKG_ROOT}/var/lib/algorand/genesis/${dir}/genesis.json --releasedir ${REPO_DIR}/installer/genesis
     done
     # Copy the appropriate network genesis.json for our default (in root ./genesis folder)
-    cp "${PKG_ROOT}/var/lib/algorand/genesis/${DEFAULT_RELEASE_NETWORK}/genesis.json" "${PKG_ROOT}"/var/lib/algorand
+    cp "${PKG_ROOT}/var/lib/algorand/genesis/${DEFAULT_RELEASE_NETWORK}/genesis.json" "${PKG_ROOT}/var/lib/algorand"
 elif [[ "${CHANNEL}" == "dev" || "${CHANNEL}" == "stable" || "${CHANNEL}" == "nightly" || "${CHANNEL}" == "beta" ]]; then
-    cp "${REPO_DIR}/installer/genesis/${DEFAULTNETWORK}/genesis.json" "${PKG_ROOT}"/var/lib/algorand/genesis.json
+    cp "${REPO_DIR}/installer/genesis/${DEFAULTNETWORK}/genesis.json" "${PKG_ROOT}/var/lib/algorand/genesis.json"
     #${GOPATH}/bin/buildtools genesis ensure -n ${DEFAULTNETWORK} --source ${REPO_DIR}/gen/${DEFAULTNETWORK}/genesis.json --target ${PKG_ROOT}/var/lib/algorand/genesis.json --releasedir ${REPO_DIR}/installer/genesis
 else
-    cp "${REPO_DIR}/installer/genesis/${DEFAULTNETWORK}/genesis.json" "${PKG_ROOT}"/var/lib/algorand
+    cp "${REPO_DIR}/installer/genesis/${DEFAULTNETWORK}/genesis.json" "${PKG_ROOT}/var/lib/algorand"
     # Disabled because we have static genesis files now
     #cp gen/${DEFAULTNETWORK}/genesis.json ${PKG_ROOT}/var/lib/algorand
     #if [ -z "${TIMESTAMP}" ]; then
@@ -94,34 +94,34 @@ else
 fi
 
 systemd_files=("algorand.service" "algorand@.service")
-mkdir -p "${PKG_ROOT}"/lib/systemd/system
+mkdir -p "${PKG_ROOT}/lib/systemd/system"
 for svc in "${systemd_files[@]}"; do
-    cp installer/"${svc}" "${PKG_ROOT}"/lib/systemd/system
+    cp "installer/${svc}" "${PKG_ROOT}/lib/systemd/system"
     chmod 644 "${PKG_ROOT}/lib/systemd/system/${svc}"
 done
 
 unattended_upgrades_files=("51algorand-upgrades")
-mkdir -p "${PKG_ROOT}"/etc/apt/apt.conf.d
+mkdir -p "${PKG_ROOT}/etc/apt/apt.conf.d"
 for f in "${unattended_upgrades_files[@]}"; do
-    cp installer/"${f}" "${PKG_ROOT}"/etc/apt/apt.conf.d
+    cp "installer/${f}" "${PKG_ROOT}/etc/apt/apt.conf.d"
 done
 
 # files should not be group writable but directories should be
-chmod -R g-w "${PKG_ROOT}"/var/lib/algorand
-find "${PKG_ROOT}"/var/lib/algorand -type d | xargs chmod g+w
+chmod -R g-w "${PKG_ROOT}/var/lib/algorand"
+find "${PKG_ROOT}/var/lib/algorand" -type d | xargs chmod g+w
 
-mkdir -p "${PKG_ROOT}"/DEBIAN
+mkdir -p "${PKG_ROOT}/DEBIAN"
 debian_files=("control" "postinst" "prerm" "postrm" "conffiles")
 for ctl in "${debian_files[@]}"; do
     # Copy first, to preserve permissions, then overwrite to fill in template.
-    cp -a installer/debian/"${ctl}" "${PKG_ROOT}/DEBIAN/${ctl}"
+    cp -a "installer/debian/${ctl}" "${PKG_ROOT}/DEBIAN/${ctl}"
     < installer/debian/"${ctl}" \
       sed -e s,@ARCH@,"${ARCH}", \
           -e s,@VER@,"${VER}", \
       > "${PKG_ROOT}/DEBIAN/${ctl}"
 done
 # TODO: make `Files:` segments for vendor/... and crypto/libsodium-fork, but reasonably this should be understood to cover all _our_ files and copied in packages continue to be licenced under their own terms
-cat <<EOF> "${PKG_ROOT}"/DEBIAN/copyright
+cat <<EOF> "${PKG_ROOT}/DEBIAN/copyright"
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: Algorand
 Upstream-Contact: Algorand developers <dev@algorand.com>
@@ -131,10 +131,10 @@ Files: *
 Copyright: Algorand developers <dev@algorand.com>
 License: AGPL-3+
 EOF
-sed 's/^$/./g' < COPYING | sed 's/^/ /g' >> "${PKG_ROOT}"/DEBIAN/copyright
-mkdir -p "${PKG_ROOT}"/usr/share/doc/algorand
-cp -p "${PKG_ROOT}"/DEBIAN/copyright "${PKG_ROOT}"/usr/share/doc/algorand/copyright
+sed 's/^$/./g' < COPYING | sed 's/^/ /g' >> "${PKG_ROOT}/DEBIAN/copyright"
+mkdir -p "${PKG_ROOT}/usr/share/doc/algorand"
+cp -p "${PKG_ROOT}/DEBIAN/copyright" "${PKG_ROOT}/usr/share/doc/algorand/copyright"
 
-OUTPUT="$OUTDIR"/algorand_${VER}_${ARCH}.deb
+OUTPUT="$OUTDIR/algorand_${VER}_${ARCH}.deb"
 dpkg-deb --build "${PKG_ROOT}" "${OUTPUT}"
 
