@@ -255,7 +255,7 @@ func (wp *wsPeerCore) PrepareURL(rawURL string) string {
 	return strings.Replace(rawURL, "{genesisID}", wp.net.GenesisID, -1)
 }
 
-func (wp *wsPeer) Verion() string {
+func (wp *wsPeer) Version() string {
 	return wp.version
 }
 
