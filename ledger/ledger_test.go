@@ -201,9 +201,10 @@ func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics
 func TestLedgerBasic(t *testing.T) {
 	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
 	const inMem = true
-	const archival = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
 	log := logging.TestingLog(t)
-	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, archival)
+	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
 	require.NoError(t, err, "could not open ledger")
 	defer l.Close()
 }
@@ -216,8 +217,9 @@ func TestLedgerBlockHeaders(t *testing.T) {
 
 	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
 	const inMem = true
-	const archival = true
-	l, err := OpenLedger(logging.Base(), t.Name(), inMem, genesisInitState, archival)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	l, err := OpenLedger(logging.Base(), t.Name(), inMem, genesisInitState, cfg)
 	a.NoError(err, "could not open ledger")
 	defer l.Close()
 
@@ -353,9 +355,10 @@ func TestLedgerSingleTx(t *testing.T) {
 
 	genesisInitState, initSecrets := testGenerateInitState(t, protocol.ConsensusV7)
 	const inMem = true
-	const archival = true
 	log := logging.TestingLog(t)
-	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, archival)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
 	a.NoError(err, "could not open ledger")
 	defer l.Close()
 
@@ -544,9 +547,10 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 
 	genesisInitState, initSecrets := testGenerateInitState(t, version)
 	const inMem = true
-	const archival = true
 	log := logging.TestingLog(t)
-	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, archival)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
 	a.NoError(err, "could not open ledger")
 	defer l.Close()
 

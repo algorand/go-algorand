@@ -265,6 +265,9 @@ type Local struct {
 
 	// EnablePingHandler controls whether the gossip node would respond to ping messages with a pong message.
 	EnablePingHandler bool
+
+	// CatchpointInterval set the interval at which catchpoint are being generated.
+	CatchpointInterval uint64
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)

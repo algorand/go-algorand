@@ -17,10 +17,12 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -331,5 +333,203 @@ func TestDBConcurrencyRW(t *testing.T) {
 			t.Errorf("Test has timed out. Last id is %d.\n", lastID)
 		}
 	}
+
+}
+
+func TestDBBackup(t *testing.T) {
+	os.Remove("fn.db")
+	os.Remove("fn.db-shm")
+	os.Remove("fn.db-wal")
+	os.Remove("fn-copy.db")
+	os.Remove("fn-copy.db-shm")
+	os.Remove("fn-copy.db-wal")
+	acc, err := MakeAccessor("fn.db", false, false)
+	require.NoError(t, err)
+	err = acc.Atomic(func(tx *sql.Tx) error {
+		_, err := tx.Exec("create table Service (id int, data blob)")
+		return err
+	})
+	require.NoError(t, err)
+	const entriesCount = 100
+
+	blob := []byte(fmt.Sprintf("%v", rand.Perm(1024)))
+	for i := 0; i < entriesCount; i++ {
+		err = acc.Atomic(func(tx *sql.Tx) error {
+			_, err := tx.Exec("insert into Service (id, data) values (?, ?)", i, blob)
+			return err
+		})
+		require.NoError(t, err)
+	}
+	err = acc.Checkpoint(context.Background())
+	require.NoError(t, err)
+	var nrows int
+	err = acc.Atomic(func(tx *sql.Tx) error {
+		row := tx.QueryRow("select count(*) from Service")
+		err := row.Scan(&nrows)
+		return err
+	})
+	require.NoError(t, err)
+	require.Equal(t, entriesCount, nrows)
+
+	backupAccessor, err := acc.Backup(context.Background(), "fn-copy.db")
+	require.NoError(t, err)
+	require.NotNil(t, backupAccessor)
+
+	// call Step just to iniialize the remaining and page count.
+	var complete bool
+	complete, err = backupAccessor.Step(0)
+	require.NoError(t, err)
+	require.False(t, complete)
+	remaining, total := 0, 0
+	for {
+		remaining = backupAccessor.Remaining()
+		total = backupAccessor.PageCount()
+		if remaining == 0 {
+			break
+		}
+		if remaining-((remaining+1)/2) == 0 {
+			// make sure to avoid completing the copy.
+			break
+		}
+		complete, err = backupAccessor.Step((remaining + 1) / 2)
+		if complete {
+			break
+		}
+		require.NoError(t, err)
+	}
+	require.NotEqual(t, 0, total)
+
+	// add one more entry to the source database before Finish is called.
+	err = acc.Atomic(func(tx *sql.Tx) error {
+		_, err := tx.Exec("insert into Service (id, data) values (?, ?)", entriesCount+1, blob)
+		return err
+	})
+	require.NoError(t, err)
+	backupAccessor.Step(-1)
+
+	acc.Close()
+
+	acc, err = backupAccessor.Finish()
+	require.NoError(t, err)
+
+	nrows = 0
+	err = acc.Atomic(func(tx *sql.Tx) error {
+		row := tx.QueryRow("select count(*) from Service")
+		err := row.Scan(&nrows)
+		return err
+	})
+	require.NoError(t, err)
+	require.Equal(t, entriesCount+1, nrows)
+	acc.Close()
+	os.Remove("fn.db")
+	os.Remove("fn.db-shm")
+	os.Remove("fn.db-wal")
+	os.Remove("fn-copy.db")
+	os.Remove("fn-copy.db-shm")
+	os.Remove("fn-copy.db-wal")
+}
+
+// TestDBWritingWhileReading
+// this test demonstate what happens when trying to start a writing operarion while
+// a long-running reading opeartion is taking place when the two accessors are opened in a read-write mode.
+func TestDBWritingWhileReading(t *testing.T) {
+	dbname := "fn.db"
+	os.Remove(dbname)
+	os.Remove(dbname + "-shm")
+	os.Remove(dbname + "-wal")
+	const entriesCount = 200
+
+	createDatabaseWithEntries := func() {
+		acc, err := MakeAccessor(dbname, false, false)
+		require.NoError(t, err)
+		defer acc.Close()
+		err = acc.Atomic(func(tx *sql.Tx) error {
+			_, err := tx.Exec("create table Service (id int, data blob)")
+			return err
+		})
+		require.NoError(t, err)
+
+		blob := []byte(fmt.Sprintf("%v", rand.Perm(1024)))
+		for i := 0; i < entriesCount; i++ {
+			err = acc.Atomic(func(tx *sql.Tx) error {
+				_, err := tx.Exec("insert into Service (id, data) values (?, ?)", i, blob)
+				return err
+			})
+			require.NoError(t, err)
+		}
+		err = acc.Checkpoint(context.Background())
+		require.NoError(t, err)
+
+	}
+	readingInProgress := make(chan bool, 1)
+	readingComplete := make(chan bool, 1)
+	var readingCompletedTime time.Time
+	readDatabaseWithEntries := func() {
+		acc, err := MakeAccessor(dbname, true, false)
+		require.NoError(t, err)
+		defer func() {
+			acc.Close()
+			readingCompletedTime = time.Now()
+			close(readingComplete)
+		}()
+		err = acc.Atomic(func(tx *sql.Tx) error {
+			rows, err := tx.Query("select id, data from Service")
+			require.NoError(t, err)
+			defer rows.Close()
+			var rowid int
+			var data []byte
+			firstRead := true
+			for rows.Next() {
+				err := rows.Scan(&rowid, &data)
+				if err != nil {
+					return err
+				}
+				require.True(t, rowid < entriesCount)
+				if firstRead {
+					firstRead = false
+					close(readingInProgress)
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+			return err
+		})
+	}
+
+	writeComplete := make(chan bool, 1)
+	var firstItemWriteTime time.Time
+	writeDatabaseWithEntries := func() {
+		acc, err := MakeAccessor(dbname, false, false)
+		require.NoError(t, err)
+		defer func() {
+			acc.Close()
+			close(writeComplete)
+		}()
+		blob := []byte(fmt.Sprintf("%v", rand.Perm(1024)))
+		for i := entriesCount; i < entriesCount+1; i++ {
+			err = acc.Atomic(func(tx *sql.Tx) error {
+				_, err := tx.Exec("insert into Service (id, data) values (?, ?)", i, blob)
+				return err
+			})
+			require.NoError(t, err)
+			if i == entriesCount {
+				firstItemWriteTime = time.Now()
+			}
+		}
+	}
+
+	createDatabaseWithEntries()
+	go readDatabaseWithEntries()
+	<-readingInProgress           // wait until the first reading completed, so that we know the reading transaction was created
+	go writeDatabaseWithEntries() // try to write. the expectancy is that this would get blocked until the reading for all the items is complete
+	<-readingComplete
+	<-writeComplete
+
+	//require.True(t, firstItemWriteTime.After(readingCompletedTime))
+	if firstItemWriteTime.After(readingCompletedTime) {
+		os.Remove(dbname)
+	}
+	os.Remove(dbname)
+	os.Remove(dbname + "-shm")
+	os.Remove(dbname + "-wal")
 
 }

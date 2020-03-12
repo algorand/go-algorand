@@ -1,0 +1,557 @@
+// Copyright (C) 2019-2020 Algorand, Inc.
+// This file is part of go-algorand
+//
+// go-algorand is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// go-algorand is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
+package ledger
+
+import (
+	"context"
+	"database/sql"
+	"os"
+	"path/filepath"
+	"strconv"
+	"sync"
+	"time"
+
+	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/util/db"
+)
+
+const defaultCatchpointNextCandidateRound = 0
+const databaseBackupRoundRate = 1024 * 1024 // set to 1MB per round.
+
+type nodeArchivalModeEnum uint64
+
+const (
+	nodeArchivalModeUnknown  nodeArchivalModeEnum = iota
+	nodeArchivalModeDisabled                      // archival mode is disabled for this node.
+	nodeArchivalModeEnabled                       // archival mode is enabled for this node.
+)
+
+type catchpointStageEnum uint64
+
+const (
+	catchpointStageUnknown   catchpointStageEnum = iota
+	catchpointStageScheduled                     // we have scheduled the next catchpoint, and we know exactly when the backup need to start ( in the future ). Non archival node would typically remain in this state.
+	catchpointStageBackingUp                     // we started backing up the balances, and will keep doing so until the we reach the schduled catchpoint round.
+	catchpointStageBackedUp                      // we reached the schduled catchpoint round and we're generating the catchpoint.
+)
+
+type catchpointTracker struct {
+	ledger                       ledgerForTracker     // the parent ledger
+	archivalLedger               bool                 // was the ledger configured as archival ? used only during startup to adjust current status if archival mode was changed by end-user since last startup.
+	log                          logging.Logger       // the log object
+	nextCatchpointCandidateRound basics.Round         // next catchpoint candidate round
+	nodeArchivalMode             nodeArchivalModeEnum // the current archival mode
+	stage                        catchpointStageEnum  // the current stage of the catchpoint tracker
+	lastCommittedRound           basics.Round         // the last committed round
+	lastCatchpointDatabaseSize   uint64               // the tracker database size on the last time we were at a catchpoint round.
+	catchpointInterval           uint64               // the configured interval at which we generate catchpoints
+
+	// The following fields are typically used only by archival nodes.
+	stagingDatabaseName        string             // the full path of the staging database name.
+	inMemoryDatabase           bool               // indicates whether the database copy should be done into an in-memory database.
+	backupAccessor             *db.BackupAccessor // the database accessor used during the catchpointStageBackingUp step.
+	backupRemainingPages       int                // remaining pages need to be copied
+	backupTotalPages           int                // total number of pages for the backup operation
+	backupRate                 int                // how many pages do we copy per step
+	stagingAccessor            db.Accessor        // the backed-up database accessor, one the backup is complete.
+	buildingCatchpoint         chan error         // this channel is being updated by the background goroutine that builds the catchpoint file
+	catchpointBuilderWaitGroup sync.WaitGroup
+	closingCtx                 context.Context
+	signalClosing              context.CancelFunc
+}
+
+// why do we backup ?
+// on archival node, we want to make sure that if the node is crashing on round n+1, we will always be able to
+// generate a catchpoint.
+
+func (cp *catchpointTracker) initialize(cfg config.Local, dbPathPrefix string, dbMem bool) {
+	cp.catchpointInterval = cfg.CatchpointInterval
+	cp.inMemoryDatabase = dbMem
+	cp.stagingDatabaseName = dbPathPrefix + ".catchpoint.staging.sqlite"
+	cp.archivalLedger = cfg.Archival
+	cp.buildingCatchpoint = make(chan error, 1)
+	cp.closingCtx, cp.signalClosing = context.WithCancel(context.Background())
+	return
+}
+
+// committedUpTo is called after we've committed the given round to disk, and allow us to move the catchpoint state one step further.
+func (cp *catchpointTracker) committedUpTo(rnd basics.Round) (outRound basics.Round) {
+	cp.lastCommittedRound = rnd
+	outRound = rnd
+	cp.log.Infof("catchpointTracker: committedUpTo: round=%d stage=%d next=%d", rnd, cp.stage, cp.nextCatchpointCandidateRound)
+	switch cp.stage {
+	case catchpointStageScheduled:
+		// if this is an archival node,
+		if cp.nodeArchivalMode == nodeArchivalModeEnabled {
+			startBackupRound := cp.startBackupRound()
+			if rnd >= startBackupRound {
+				// it's time to start the backup.
+				err := cp.startBackup(context.Background())
+				if err != nil {
+					// TODO.
+				}
+			}
+		} else {
+			// this is not an archival node.
+			// update the schedule once we've reached a catchpoint round.
+			if cp.isCatchpointRound(rnd) {
+				err := cp.scheduleCatchpoint()
+				if err != nil {
+					// TODO.
+
+				}
+			}
+		}
+	case catchpointStageBackingUp:
+		// try to make some progress. This stage is applicable only for archival nodes.
+		if rnd < cp.nextCatchpointCandidateRound {
+			// we haven't reached the catchpoint round.
+			pagesToCopy := cp.backupRate
+			if cp.backupRemainingPages <= pagesToCopy {
+				// don't copy the last page.
+				pagesToCopy = cp.backupRemainingPages - 1
+			}
+
+			cp.backupAccessor.Step(pagesToCopy)
+			cp.backupRemainingPages = cp.backupAccessor.Remaining()
+		} else {
+			// we reached the catchpoint round.
+			err := cp.finishBackup()
+			if err != nil {
+				// TODO.
+			}
+		}
+	case catchpointStageBackedUp:
+		// see if we're done building the catchpoint.
+		select {
+		case err := <-cp.buildingCatchpoint:
+			if err != nil {
+				// TODO - report the error.
+			}
+			err = cp.scheduleCatchpoint()
+			if err != nil {
+				// TODO.
+
+			}
+
+		default:
+			// no, we're still processing the staging database.
+		}
+	}
+	return
+}
+
+func (cp *catchpointTracker) loadFromDisk(l ledgerForTracker) error {
+	cp.ledger = l
+	cp.log = l.trackerLog()
+	cp.lastCommittedRound = l.Latest() // at load time, Latest == committed.
+	trackerDBs := cp.ledger.trackerDB()
+
+	// load the catchpoint tracker state from the database.
+	err := trackerDBs.wdb.Atomic(cp.loadCatchpointState)
+	if err != nil {
+		return err
+	}
+
+	if cp.nodeArchivalMode == nodeArchivalModeDisabled && cp.archivalLedger {
+		// user enabled the archival mode since last startup
+		err = cp.updateArchivalMode(true)
+		if err != nil {
+			return err
+		}
+
+	} else if cp.nodeArchivalMode == nodeArchivalModeEnabled && (!cp.archivalLedger) {
+		// user disabled the archival mode since last startup
+		err = cp.updateArchivalMode(false)
+		if err != nil {
+			return err
+		}
+	}
+
+	rescheduleCatchpoint := true
+	if cp.nodeArchivalMode == nodeArchivalModeEnabled && cp.stage == catchpointStageBackedUp {
+		// start the checkpoint staging file generation.
+		cp.stagingAccessor, err = db.MakeAccessor(cp.stagingDatabaseName, false, false)
+		if err == nil {
+			// no error, so kick off the staging catchpoint generator
+			rescheduleCatchpoint = false
+			cp.asyncGenerateCatchpoint()
+		}
+	}
+
+	if rescheduleCatchpoint {
+		err = cp.scheduleCatchpoint()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (cp *catchpointTracker) close() {
+	switch cp.stage {
+	case catchpointStageBackingUp:
+		cp.abortBackup()
+		cp.deleteStagingBackup()
+	case catchpointStageBackedUp:
+		cp.signalClosing()
+		cp.catchpointBuilderWaitGroup.Wait()
+	default:
+	}
+}
+
+func (cp *catchpointTracker) newBlock(blk bookkeeping.Block, delta StateDelta) {
+	// we don't do much when a new block comes in and before it's being committed to disk.
+}
+
+func (cp *catchpointTracker) loadCatchpointState(tx *sql.Tx) (err error) {
+	nextCatchpointRound := uint64(0)
+	nextCatchpointRound, _, err = cp.readOrDefaultUint64(context.Background(), tx, "catchpointNextCandidateRound", defaultCatchpointNextCandidateRound)
+	if err != nil {
+		cp.log.Errorf("catchpointTracker: unable to load catchpoint state 'catchpointNextCandidateRound': %v", err)
+		return
+	}
+	cp.nextCatchpointCandidateRound = basics.Round(nextCatchpointRound)
+
+	archivalMode := uint64(0)
+	archivalMode, _, err = cp.readOrDefaultUint64(context.Background(), tx, "catchpointArchivalMode", uint64(nodeArchivalModeUnknown))
+	if err != nil {
+		cp.log.Errorf("catchpointTracker: unable to load catchpoint state 'catchpointArchivalMode': %v", err)
+		return
+	}
+	if archivalMode == uint64(nodeArchivalModeUnknown) {
+		if cp.archivalLedger {
+			archivalMode = uint64(nodeArchivalModeEnabled)
+		} else {
+			archivalMode = uint64(nodeArchivalModeDisabled)
+		}
+		_, err = cp.setOrClearUint64(context.Background(), tx, "catchpointArchivalMode", archivalMode, uint64(nodeArchivalModeUnknown))
+		if err != nil {
+			cp.log.Errorf("catchpointTracker: unable to set catchpoint state 'catchpointArchivalMode': %v", err)
+			return
+		}
+	}
+	cp.nodeArchivalMode = nodeArchivalModeEnum(archivalMode)
+
+	catchpointStage := uint64(0)
+	catchpointStage, _, err = cp.readOrDefaultUint64(context.Background(), tx, "catchpointStage", uint64(catchpointStageUnknown))
+	if err != nil {
+		cp.log.Errorf("catchpointTracker: unable to read catchpoint state 'catchpointStage': %v", err)
+		return
+	}
+	cp.stage = catchpointStageEnum(catchpointStage)
+
+	cp.lastCatchpointDatabaseSize, _, err = cp.readOrDefaultUint64(context.Background(), tx, "catchpointLastDatabaseSize", uint64(0))
+	if err != nil {
+		cp.log.Errorf("catchpointTracker: unable to read catchpoint state 'catchpointLastDatabaseSize': %v", err)
+		return
+	}
+
+	return nil
+}
+
+func (cp *catchpointTracker) scheduleCatchpoint() error {
+	if cp.catchpointInterval == 0 {
+		cp.log.Infof("catchpointTracker: scheduleCatchpoint: catchpointInterval is zero")
+		return nil
+	}
+
+	isCatchpointRound := cp.isCatchpointRound(cp.lastCommittedRound)
+	var nextCatchpointRound uint64
+	if cp.nodeArchivalMode != nodeArchivalModeEnabled {
+		nextCatchpointRound = ((uint64(cp.lastCommittedRound) / cp.catchpointInterval) + 1) * cp.catchpointInterval
+	} else {
+		// on archival nodes, try to first flush the current catchpoint if we're on a catchpoint round.
+		if isCatchpointRound {
+			nextCatchpointRound = (uint64(cp.lastCommittedRound) / cp.catchpointInterval) * cp.catchpointInterval
+		} else {
+			nextCatchpointRound = ((uint64(cp.lastCommittedRound) / cp.catchpointInterval) + 1) * cp.catchpointInterval
+		}
+	}
+
+	var dbSize uint64
+
+	// the point where we want to start backing up is somewhere in the future, just set it here for now.
+	trackerDBs := cp.ledger.trackerDB()
+	err := trackerDBs.wdb.Atomic(func(tx *sql.Tx) (err error) {
+		_, err = cp.setOrClearUint64(context.Background(), tx, "catchpointNextCandidateRound", nextCatchpointRound, 0)
+		if err != nil {
+			cp.log.Errorf("catchpointTracker: scheduleCatchpoint: unable to set catchpoint state 'catchpointNextCandidateRound': %v", err)
+			return
+		}
+		_, err = cp.setOrClearUint64(context.Background(), tx, "catchpointStage", uint64(catchpointStageScheduled), uint64(catchpointStageUnknown))
+		if err != nil {
+			cp.log.Errorf("catchpointTracker: scheduleCatchpoint: unable to set catchpoint state 'catchpointStage': %v", err)
+			return
+		}
+
+		if cp.nodeArchivalMode == nodeArchivalModeEnabled {
+			dbSize, err = cp.databaseSize(tx)
+			if err != nil {
+				cp.log.Errorf("catchpointTracker: scheduleCatchpoint: unable to read database size: %v", err)
+				return err
+			}
+			_, err = cp.setOrClearUint64(context.Background(), tx, "catchpointLastDatabaseSize", dbSize, 0)
+			if err != nil {
+				cp.log.Errorf("catchpointTracker: scheduleCatchpoint: unable to set catchpoint state 'catchpointLastDatabaseSize': %v", err)
+				return
+			}
+		}
+		return err
+	})
+	if err != nil {
+		return err
+	}
+
+	cp.nextCatchpointCandidateRound = basics.Round(nextCatchpointRound)
+	cp.stage = catchpointStageScheduled
+
+	if cp.nodeArchivalMode != nodeArchivalModeEnabled {
+		return nil
+	}
+
+	cp.lastCatchpointDatabaseSize = dbSize
+	startBackupRound := cp.startBackupRound()
+	if startBackupRound <= cp.lastCommittedRound {
+		err = cp.startBackup(context.Background())
+		if err != nil {
+			cp.log.Errorf("catchpointTracker: scheduleCatchpoint: unable to start backup: %v", err)
+			return err
+		}
+
+		// at this time, we don't know if we'll be able to keep with with whatever rate we've set to do, so we'll need to copy all the pages - 1 right now.
+		if cp.backupRemainingPages > 1 {
+			cp.backupAccessor.Step(cp.backupRemainingPages - 1)
+			cp.backupRemainingPages = cp.backupAccessor.Remaining()
+		}
+
+		// should we finish this backup and move to the next stage ?
+		if isCatchpointRound {
+			cp.finishBackup()
+		}
+	}
+
+	return nil
+}
+
+func (cp *catchpointTracker) isCatchpointRound(rnd basics.Round) bool {
+	if cp.catchpointInterval == 0 {
+		return false
+	}
+	return 0 == (uint64(rnd) % cp.catchpointInterval)
+}
+
+func (cp *catchpointTracker) startBackupRound() basics.Round {
+	return basics.Round(uint64(cp.nextCatchpointCandidateRound) - (cp.lastCatchpointDatabaseSize / databaseBackupRoundRate) - 1)
+}
+
+func (cp *catchpointTracker) updateArchivalMode(enable bool) error {
+	mode := nodeArchivalModeDisabled
+	if enable {
+		mode = nodeArchivalModeEnabled
+	}
+	trackerDBs := cp.ledger.trackerDB()
+	err := trackerDBs.wdb.Atomic(func(tx *sql.Tx) (err error) {
+		_, err = cp.setOrClearUint64(context.Background(), tx, "catchpointNextCandidateRound", 0, 0)
+		if err != nil {
+			cp.log.Errorf("catchpointTracker: updateArchivalMode: unable to set catchpoint state 'catchpointNextCandidateRound': %v", err)
+			return
+		}
+		_, err = cp.setOrClearUint64(context.Background(), tx, "catchpointLastDatabaseSize", 0, 0)
+		if err != nil {
+			cp.log.Errorf("catchpointTracker: updateArchivalMode: unable to set catchpoint state 'catchpointLastDatabaseSize': %v", err)
+			return
+		}
+		_, err = cp.setOrClearUint64(context.Background(), tx, "catchpointStage", uint64(catchpointStageUnknown), uint64(catchpointStageUnknown))
+		if err != nil {
+			cp.log.Errorf("catchpointTracker: updateArchivalMode: unable to set catchpoint state 'catchpointStage': %v", err)
+			return
+		}
+		_, err = cp.setOrClearUint64(context.Background(), tx, "catchpointArchivalMode", uint64(mode), uint64(nodeArchivalModeUnknown))
+		if err != nil {
+			cp.log.Errorf("catchpointTracker: updateArchivalMode: unable to set catchpoint state 'catchpointArchivalMode': %v", err)
+			return
+		}
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	cp.lastCatchpointDatabaseSize = 0
+	cp.nodeArchivalMode = mode
+	previousStage := cp.stage
+	cp.stage = catchpointStageUnknown
+	cp.nextCatchpointCandidateRound = 0
+
+	// if the previous stage had a backed up database, we want to delete it.
+	// ( i.e. this is called only when the user has changed the archival model in the configuration file )
+	if previousStage == catchpointStageBackingUp || previousStage == catchpointStageBackedUp {
+		err = cp.deleteStagingBackup()
+		if err != nil {
+			cp.log.Errorf("catchpointTracker: updateArchivalMode: unable to delete staged backup database: %v", err)
+			return err
+		}
+	}
+	return nil
+}
+
+func (cp *catchpointTracker) startBackup(ctx context.Context) (err error) {
+	trackerDBs := cp.ledger.trackerDB()
+	cp.backupAccessor, err = trackerDBs.rdb.Backup(ctx, cp.stagingDatabaseName, cp.inMemoryDatabase)
+	if err != nil {
+		cp.log.Errorf("catchpointTracker: startBackup: unable to create backup accessor: %v", err)
+		cp.deleteStagingBackup()
+		return err
+	}
+	// call the Step to initialize the Remaining and PageCount.
+	_, err = cp.backupAccessor.Step(0)
+	if err != nil {
+		cp.log.Errorf("catchpointTracker: startBackup: unable to make backup step: %v", err)
+		cp.deleteStagingBackup()
+		return err
+	}
+	cp.backupRemainingPages = cp.backupAccessor.Remaining()
+	cp.backupTotalPages = cp.backupAccessor.PageCount()
+	if cp.lastCommittedRound < cp.nextCatchpointCandidateRound {
+		cp.backupRate = int(uint64(cp.backupTotalPages*2) / (uint64(cp.nextCatchpointCandidateRound) - uint64(cp.lastCommittedRound)))
+	} else {
+		cp.backupRate = -1 // copy all.
+	}
+
+	err = trackerDBs.wdb.Atomic(func(tx *sql.Tx) (err error) {
+		_, err = cp.setOrClearUint64(context.Background(), tx, "catchpointStage", uint64(catchpointStageBackingUp), uint64(catchpointStageUnknown))
+		return
+	})
+	if err != nil {
+		cp.log.Errorf("catchpointTracker: startBackup: unable to update 'catchpointStage': %v", err)
+		cp.deleteStagingBackup()
+		return err
+	}
+	cp.stage = catchpointStageBackingUp
+	return
+}
+
+func (cp *catchpointTracker) abortBackup() (err error) {
+	cp.stagingAccessor, err = cp.backupAccessor.Finish()
+	if err != nil {
+		cp.log.Errorf("catchpointTracker: finishBackup: unable to finish backing up database: %v", err)
+		return
+	}
+	cp.backupAccessor = nil
+	if err != nil {
+		return
+	}
+	cp.stagingAccessor.Close()
+	return
+}
+
+func (cp *catchpointTracker) finishBackup() (err error) {
+	cp.backupAccessor.Step(-1)
+	cp.stagingAccessor, err = cp.backupAccessor.Finish()
+	if err != nil {
+		cp.log.Errorf("catchpointTracker: finishBackup: unable to finish backing up database: %v", err)
+		return
+	}
+	cp.backupAccessor = nil
+	if err != nil {
+		return
+	}
+	trackerDBs := cp.ledger.trackerDB()
+	err = trackerDBs.wdb.Atomic(func(tx *sql.Tx) (err error) {
+		_, err = cp.setOrClearUint64(context.Background(), tx, "catchpointStage", uint64(catchpointStageBackedUp), uint64(catchpointStageUnknown))
+		return
+	})
+	if err != nil {
+		cp.log.Errorf("catchpointTracker: finishBackup: unable to update 'catchpointStage': %v", err)
+		return
+	}
+	cp.stage = catchpointStageBackedUp
+	cp.asyncGenerateCatchpoint()
+	return
+}
+
+func (cp *catchpointTracker) deleteStagingBackup() (err error) {
+	err = os.Remove(cp.stagingDatabaseName)
+	if !os.IsNotExist(err) {
+		return err
+	}
+	err = os.Remove(cp.stagingDatabaseName + "-shm")
+	if !os.IsNotExist(err) {
+		return err
+	}
+	err = os.Remove(cp.stagingDatabaseName + "-wal")
+	if !os.IsNotExist(err) {
+		return err
+	}
+	err = nil
+	return
+}
+
+func catchpointRoundToPath(rnd basics.Round) string {
+	irnd := int64(rnd)
+	outStr := ""
+	for {
+		if irnd == 0 {
+			break
+		}
+		outStr = filepath.Join(outStr, strconv.FormatInt(irnd%256, 36))
+		irnd = irnd / 256
+	}
+	outStr = filepath.Join(outStr, strconv.FormatInt(int64(rnd), 10)+".catchpoint")
+	return outStr
+}
+
+func (cp *catchpointTracker) asyncGenerateCatchpoint() {
+	cp.catchpointBuilderWaitGroup.Add(1)
+	go func() {
+		var err error = nil
+		defer func() {
+			cp.stagingAccessor.Close()
+			cp.deleteStagingBackup()
+			cp.buildingCatchpoint <- err
+			cp.catchpointBuilderWaitGroup.Done()
+		}()
+
+		// create a dummy file for now.
+		catchpointsRoot := filepath.Dir(cp.stagingDatabaseName)
+		catchpointPath := filepath.Join(catchpointsRoot, "catchpoints", catchpointRoundToPath(cp.nextCatchpointCandidateRound))
+
+		writer := makeCatchpointWriter(catchpointPath, cp.stagingAccessor)
+		more := true
+		for more && err == nil {
+			stepCtx, stepCancelFunction := context.WithTimeout(cp.closingCtx, 50*time.Millisecond)
+			more, err = writer.WriteStep(stepCtx)
+			stepCancelFunction()
+			if err == nil && more {
+				// we just wrote some data, but there is more to be written.
+				// go to sleep for while.
+				select {
+				case <-time.After(100 * time.Millisecond):
+				case <-cp.closingCtx.Done():
+					err = cp.closingCtx.Err()
+					return
+				}
+			}
+			if err != nil {
+				cp.log.Errorf("catchpointTracker: asyncGenerateCatchpoint: unable to create catchpoint : %v", err)
+			}
+		}
+	}()
+}

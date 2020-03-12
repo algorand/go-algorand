@@ -17,6 +17,7 @@
 package ledger
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 
@@ -67,6 +68,38 @@ var accountsResetExprs = []string{
 type accountDelta struct {
 	old basics.AccountData
 	new basics.AccountData
+}
+
+func (cp *catchpointTracker) readOrDefaultUint64(ctx context.Context, tx *sql.Tx, stateName string, defaultValue uint64) (rnd uint64, def bool, err error) {
+	var val sql.NullInt64
+	err = tx.QueryRowContext(ctx, "SELECT rnd FROM acctrounds WHERE id=?", stateName).Scan(&val)
+	if err == sql.ErrNoRows || false == val.Valid {
+		rnd = defaultValue
+		err = nil
+		def = true
+		return
+	}
+	if err == nil {
+		rnd = uint64(val.Int64)
+	}
+	return
+}
+
+func (cp *catchpointTracker) setOrClearUint64(ctx context.Context, tx *sql.Tx, stateName string, setValue uint64, defaultValue uint64) (cleared bool, err error) {
+	_, err = tx.Exec("DELETE FROM acctrounds WHERE id=?", stateName)
+
+	if setValue == defaultValue {
+		return true, err
+	}
+
+	// we don't know if there is an entry in the table for this state, so we'll delete it just in case.
+	_, err = tx.Exec("INSERT INTO acctrounds(id, rnd) VALUES(?, ?)", stateName, setValue)
+	return false, err
+}
+
+func (cp *catchpointTracker) databaseSize(tx *sql.Tx) (size uint64, err error) {
+	err = tx.QueryRow("SELECT page_count * page_size as size FROM pragma_page_count(), pragma_page_size()").Scan(&size)
+	return
 }
 
 // accountsInit fills the database using tx with initAccounts if the
@@ -399,5 +432,44 @@ func accountsNewRound(tx *sql.Tx, rnd basics.Round, updates map[basics.Address]a
 		return
 	}
 
+	return
+}
+
+type encodedBalanceRecord struct {
+	_struct     struct{} `codec:",omitempty,omitemptyarray"`
+	Address     []byte   `codec:"pk"`
+	AccountData []byte   `codec:"ad"`
+}
+
+func encodedAccountsRange(tx *sql.Tx, startAccountIndex, accountCount int) (bals []encodedBalanceRecord, err error) {
+	rows, err := tx.Query("SELECT address, data FROM accountbase LIMIT ? OFFSET ?", accountCount, startAccountIndex)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	bals = make([]encodedBalanceRecord, 0, accountCount)
+	for rows.Next() {
+		var addrbuf []byte
+		var buf []byte
+		err = rows.Scan(&addrbuf, &buf)
+		if err != nil {
+			return
+		}
+
+		bals = append(bals, encodedBalanceRecord{Address: addrbuf, AccountData: buf})
+	}
+
+	err = rows.Err()
+	return
+}
+
+func totalAccounts(ctx context.Context, tx *sql.Tx) (total uint64, err error) {
+	err = tx.QueryRowContext(ctx, "SELECT count(*) FROM accountbase").Scan(&total)
+	if err == sql.ErrNoRows {
+		total = 0
+		err = nil
+		return
+	}
 	return
 }

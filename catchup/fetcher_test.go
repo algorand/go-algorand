@@ -443,10 +443,11 @@ func buildTestLedger(t *testing.T) (ledger *data.Ledger, next basics.Round, b bo
 	genBal := data.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
 	genHash := crypto.Digest{0x42}
 	const inMem = true
-	const archival = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
 	ledger, err = data.LoadLedger(
 		log, t.Name(), inMem, protocol.ConsensusCurrentVersion, genBal, "", genHash,
-		nil, archival,
+		nil, cfg,
 	)
 	if err != nil {
 		t.Fatal("couldn't build ledger", err)
@@ -663,11 +664,12 @@ func TestGetBlockMocked(t *testing.T) {
 	// A is running the ledger service and will respond to fetch requests
 	genBal := data.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
 	const inMem = true
-	const archival = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
 	ledgerA, err := data.LoadLedger(
 		log.With("name", "A"), t.Name(), inMem,
 		protocol.ConsensusCurrentVersion, genBal, "", crypto.Digest{},
-		nil, archival,
+		nil, cfg,
 	)
 	if err != nil {
 		t.Errorf("Couldn't make ledger: %v", err)
@@ -746,11 +748,12 @@ func TestGetFutureBlock(t *testing.T) {
 	gen := data.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
 	// A is running the ledger service and will respond to fetch requests
 	const inMem = true
-	const archival = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
 	ledgerA, err := data.LoadLedger(
 		log.With("name", "A"), t.Name(), inMem,
 		protocol.ConsensusCurrentVersion, gen, "", crypto.Digest{},
-		nil, archival,
+		nil, cfg,
 	)
 	if err != nil {
 		t.Errorf("Couldn't make ledger: %v", err)

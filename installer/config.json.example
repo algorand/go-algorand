@@ -49,5 +49,6 @@
     "TxSyncTimeoutSeconds": 30,
     "PeerConnectionsUpdateInterval": 3600,
     "DNSSecurityFlags": 1,
-    "EnablePingHandler": true
+    "EnablePingHandler": true,
+    "CatchpointInterval": 20000
 }

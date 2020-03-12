@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -103,9 +104,10 @@ func TestArchival(t *testing.T) {
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	genesisInitState := getInitState()
 	const inMem = true
-	const archival = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
 	log := logging.TestingLog(t)
-	l, err := OpenLedger(log, dbName, inMem, genesisInitState, archival)
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 	wl := &wrappedLedger{
@@ -158,9 +160,10 @@ func TestArchivalRestart(t *testing.T) {
 
 	genesisInitState := getInitState()
 	const inMem = false // use persistent storage
-	const archival = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
 
-	l, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
+	l, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	blk := genesisInitState.Block
 
@@ -188,7 +191,7 @@ func TestArchivalRestart(t *testing.T) {
 	// close and reopen the same DB, ensure latest/earliest are not changed
 	l.Close()
 
-	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
+	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -288,8 +291,9 @@ func TestArchivalAssets(t *testing.T) {
 
 	// open ledger
 	const inMem = false // use persistent storage
-	const archival = true
-	l, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	l, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	blk := genesisInitState.Block
 
@@ -357,7 +361,7 @@ func TestArchivalAssets(t *testing.T) {
 
 	// close and reopen the same DB
 	l.Close()
-	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
+	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -447,7 +451,7 @@ func TestArchivalAssets(t *testing.T) {
 
 	// close and reopen the same DB
 	l.Close()
-	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
+	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -494,10 +498,11 @@ func TestArchivalFromNonArchival(t *testing.T) {
 
 	genesisInitState := getInitState()
 	const inMem = false // use persistent storage
-	archival := false
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = false
 
 	log := logging.TestingLog(t)
-	l, err := OpenLedger(log, dbPrefix, inMem, genesisInitState, archival)
+	l, err := OpenLedger(log, dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	blk := genesisInitState.Block
 
@@ -525,8 +530,8 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	// close and reopen the same DB, ensure the DB truncated
 	l.Close()
 
-	archival = true
-	l, err = OpenLedger(log, dbPrefix, inMem, genesisInitState, archival)
+	cfg.Archival = true
+	l, err = OpenLedger(log, dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 

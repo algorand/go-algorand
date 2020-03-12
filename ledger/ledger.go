@@ -55,12 +55,13 @@ type Ledger struct {
 	genesisHash crypto.Digest
 
 	// State-machine trackers
-	accts    accountUpdates
-	txTail   txTail
-	bulletin bulletin
-	notifier blockNotifier
-	time     timeTracker
-	metrics  metricsTracker
+	accts      accountUpdates
+	txTail     txTail
+	bulletin   bulletin
+	notifier   blockNotifier
+	time       timeTracker
+	metrics    metricsTracker
+	catchpoint catchpointTracker
 
 	trackers  trackerRegistry
 	trackerMu deadlock.RWMutex
@@ -80,12 +81,12 @@ type InitState struct {
 // genesisInitState.Accounts specify the initial blocks and accounts to use if the
 // database wasn't initialized before.
 func OpenLedger(
-	log logging.Logger, dbPathPrefix string, dbMem bool, genesisInitState InitState, isArchival bool,
+	log logging.Logger, dbPathPrefix string, dbMem bool, genesisInitState InitState, cfg config.Local,
 ) (*Ledger, error) {
 	var err error
 	l := &Ledger{
 		log:         log,
-		archival:    isArchival,
+		archival:    cfg.Archival,
 		genesisHash: genesisInitState.GenesisHash,
 	}
 
@@ -108,7 +109,7 @@ func OpenLedger(
 	l.blockDBs.wdb.SetLogger(log)
 
 	err = l.blockDBs.wdb.Atomic(func(tx *sql.Tx) error {
-		return initBlocksDB(tx, l, []bookkeeping.Block{genesisInitState.Block}, isArchival)
+		return initBlocksDB(tx, l, []bookkeeping.Block{genesisInitState.Block}, cfg.Archival)
 	})
 	if err != nil {
 		err = fmt.Errorf("OpenLedger.initBlocksDB %v", err)
@@ -129,6 +130,7 @@ func OpenLedger(
 
 	l.accts.initProto = config.Consensus[genesisInitState.Block.CurrentProtocol]
 	l.accts.initAccounts = initAccounts
+	l.catchpoint.initialize(cfg, dbPathPrefix, dbMem)
 
 	l.trackers.register(&l.accts)
 	l.trackers.register(&l.txTail)
@@ -136,6 +138,7 @@ func OpenLedger(
 	l.trackers.register(&l.notifier)
 	l.trackers.register(&l.time)
 	l.trackers.register(&l.metrics)
+	l.trackers.register(&l.catchpoint)
 
 	err = l.trackers.loadFromDisk(l)
 	if err != nil {

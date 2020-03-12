@@ -46,8 +46,9 @@ func TestBlockEvaluator(t *testing.T) {
 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	const inMem = true
-	const archival = true
-	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, archival)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 
