@@ -37,7 +37,6 @@ type WsFetcherService struct {
 	pendingRequests map[string]chan WsGetBlockOut
 }
 
-
 // Constant strings used as keys for topics
 const (
 	roundKey           = "roundKey"

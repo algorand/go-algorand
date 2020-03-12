@@ -280,7 +280,7 @@ func (ls *LedgerService) handleCatchupReq(ctx context.Context, reqMsg network.In
 				[]byte("LedgerService handleCatchupReq: request data-type is missing"))}
 		return
 	}
-	
+
 	round, read := binary.Uvarint(roundBytes)
 	if read <= 0 {
 		topics = network.Topics{
@@ -319,7 +319,7 @@ func topicBlockBytes(ledger *data.Ledger, round basics.Round, requestType string
 	default:
 		errMsg := "LedgerService topicBlockBytes: request type is unknown"
 		return network.Topics{
-			network.MakeTopic(network.ErrorKey, []byte(errMsg))}		
+			network.MakeTopic(network.ErrorKey, []byte(errMsg))}
 	}
 }
 
