@@ -249,7 +249,23 @@ func main() {
 		log.Fatalf("DefaultDeadlock is somehow not set to an expected value (enable / disable): %s", config.DefaultDeadlock)
 	}
 
-	err = s.Initialize(cfg)
+	var phonebookAddresses []string
+	if peerOverrideArray != nil {
+		phonebookAddresses = peerOverrideArray
+	} else {
+		ex, err := os.Executable()
+		if err != nil {
+			log.Errorf("cannot locate node executable: %s", err)
+		} else {
+			phonebookDir := filepath.Dir(ex)
+			phonebookAddresses, err = config.LoadPhonebook(phonebookDir)
+			if err != nil {
+				log.Debugf("Cannot load static phonebook: %v", err)
+			}
+		}
+	}
+
+	err = s.Initialize(cfg, phonebookAddresses)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		log.Error(err)
@@ -258,10 +274,6 @@ func main() {
 
 	if *initAndExit {
 		return
-	}
-
-	if peerOverrideArray != nil {
-		s.OverridePhonebook(peerOverrideArray...)
 	}
 
 	deadlockState := "enabled"

@@ -1689,16 +1689,25 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 }
 
 // NewWebsocketNetwork constructor for websockets based gossip network
-func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebook Phonebook, genesisID string, networkID protocol.NetworkID) (wn *WebsocketNetwork, err error) {
-	wn = &WebsocketNetwork{log: log, config: config, phonebook: phonebook, GenesisID: genesisID, NetworkID: networkID}
+func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID) (wn *WebsocketNetwork, err error) {
+	phonebook := MakePhonebook(config.ConnectionsRateLimitingCount,
+		time.Duration(config.ConnectionsRateLimitingWindowSeconds)*time.Second)
+	phonebook.ReplacePeerList(phonebookAddresses, config.DNSBootstrapID)
+	wn = &WebsocketNetwork{
+		log:       log,
+		config:    config,
+		phonebook: phonebook,
+		GenesisID: genesisID,
+		NetworkID: networkID,
+	}
 
 	wn.setup()
 	return wn, nil
 }
 
 // NewWebsocketGossipNode constructs a websocket network node and returns it as a GossipNode interface implementation
-func NewWebsocketGossipNode(log logging.Logger, config config.Local, phonebook Phonebook, genesisID string, networkID protocol.NetworkID) (gn GossipNode, err error) {
-	return NewWebsocketNetwork(log, config, phonebook, genesisID, networkID)
+func NewWebsocketGossipNode(log logging.Logger, config config.Local, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID) (gn GossipNode, err error) {
+	return NewWebsocketNetwork(log, config, phonebookAddresses, genesisID, networkID)
 }
 
 // SetPrioScheme specifies the network priority scheme for a network node

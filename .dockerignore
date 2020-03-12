@@ -28,6 +28,7 @@ cmd/updater/updater
 # Exclude our local temp directory
 tmp/dev_pkg
 tmp/out
+tmp/node_pkgs
 
 # Ignore vim backup and swap files
 *~
@@ -41,4 +42,3 @@ tmp/out
 data/transactions/logic/*.md
 
 *.pem
-
