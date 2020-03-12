@@ -255,6 +255,7 @@ func (wp *wsPeerCore) PrepareURL(rawURL string) string {
 	return strings.Replace(rawURL, "{genesisID}", wp.net.GenesisID, -1)
 }
 
+// Version returns the network.SupportedProtocolVersions version of the peer
 func (wp *wsPeer) Version() string {
 	return wp.version
 }
@@ -291,7 +292,7 @@ func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, responseT
 	// Add the request hash
 	requestHashData := make([]byte, binary.MaxVarintLen64)
 	binary.PutUvarint(requestHashData, requestHash)
-	responseTopics = append(responseTopics, Topic{key: RequestHashKey, data: requestHashData})
+	responseTopics = append(responseTopics, Topic{key: requestHashKey, data: requestHashData})
 
 	// Serialize the topics
 	serializedMsg := responseTopics.MarshallTopics()
@@ -424,9 +425,9 @@ func (wp *wsPeer) readLoop() {
 				wp.net.log.Warnf("wsPeer readLoop: could not read the message from: %s %s", wp.conn.RemoteAddr().String(), err)
 				continue
 			}
-			requestHash, found := topics.GetValue(RequestHashKey)
+			requestHash, found := topics.GetValue(requestHashKey)
 			if !found {
-				wp.net.log.Warnf("wsPeer readLoop: message from %s is missing the %v", wp.conn.RemoteAddr().String(), RequestHashKey)
+				wp.net.log.Warnf("wsPeer readLoop: message from %s is missing the %s", wp.conn.RemoteAddr().String(), requestHashKey)
 				continue
 			}
 			hashKey, _ := binary.Uvarint(requestHash)

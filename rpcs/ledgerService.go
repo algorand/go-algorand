@@ -233,48 +233,62 @@ func (ls *LedgerService) handleCatchupReq(ctx context.Context, reqMsg network.In
 	target := reqMsg.Sender.(network.UnicastPeer)
 	var respTopics network.Topics
 
-	if target.Version() == "2.1" {
+	if target.Version() == "1" {
+
 		defer func() {
-			target.Respond(ctx, reqMsg, respTopics)
+			ls.sendCatchupRes(ctx, target, reqMsg.Tag, res)
 		}()
-
-		topics, err := network.UnmarshallTopics(reqMsg.Data)
+		var req WsGetBlockRequest
+		err := protocol.DecodeReflect(reqMsg.Data, &req)
 		if err != nil {
-			topics = network.Topics{
-				network.MakeTopic(network.ErrorKey, []byte(err.Error()))}
+			res.Error = err.Error()
 			return
 		}
-		roundBytes, found := topics.GetValue(network.RoundKey)
-		if !found {
-			topics = network.Topics{
-				network.MakeTopic(network.ErrorKey,
-					[]byte("LedgerService handleCatchupReq: round number topic is missing"))}
+		res.Round = req.Round
+		encodedBlob, err := RawBlockBytes(ls.ledger, basics.Round(req.Round))
+
+		if err != nil {
+			res.Error = err.Error()
 			return
 		}
-		requestType, _ := topics.GetValue(network.RequestDataTypeKey)
-		round, _ := binary.Uvarint(roundBytes)
-		respTopics = topicBlockBytes(ls.ledger, basics.Round(round), string(requestType))
+		res.BlockBytes = encodedBlob
 		return
 	}
-
-	// Else, if version == 1
+	// Else, if version == 2.1
 	defer func() {
-		ls.sendCatchupRes(ctx, target, reqMsg.Tag, res)
+		target.Respond(ctx, reqMsg, respTopics)
 	}()
-	var req WsGetBlockRequest
-	err := protocol.DecodeReflect(reqMsg.Data, &req)
-	if err != nil {
-		res.Error = err.Error()
-		return
-	}
-	res.Round = req.Round
-	encodedBlob, err := RawBlockBytes(ls.ledger, basics.Round(req.Round))
 
+	topics, err := network.UnmarshallTopics(reqMsg.Data)
 	if err != nil {
-		res.Error = err.Error()
+		errMsg := "LedgerService handleCatchupReq UnmarshallTopics error: " + err.Error()
+		topics = network.Topics{
+			network.MakeTopic(network.ErrorKey, []byte(errMsg))}
 		return
 	}
-	res.BlockBytes = encodedBlob
+	roundBytes, found := topics.GetValue(roundKey)
+	if !found {
+		topics = network.Topics{
+			network.MakeTopic(network.ErrorKey,
+				[]byte("LedgerService handleCatchupReq: round-number topic is missing"))}
+		return
+	}
+	requestType, found := topics.GetValue(requestDataTypeKey)
+	if !found {
+		topics = network.Topics{
+			network.MakeTopic(network.ErrorKey,
+				[]byte("LedgerService handleCatchupReq: request data-type is missing"))}
+		return
+	}
+	
+	round, read := binary.Uvarint(roundBytes)
+	if read <= 0 {
+		topics = network.Topics{
+			network.MakeTopic(network.ErrorKey,
+				[]byte("LedgerService handleCatchupReq: error reading the round number"))}
+		return
+	}
+	respTopics = topicBlockBytes(ls.ledger, basics.Round(round), string(requestType))
 	return
 }
 
@@ -290,18 +304,23 @@ func (ls *LedgerService) sendCatchupRes(ctx context.Context, target network.Unic
 func topicBlockBytes(ledger *data.Ledger, round basics.Round, requestType string) network.Topics {
 	blk, cert, err := ledger.EncodedBlockCert(round)
 	if err != nil {
+		errMsg := "LedgerService topicBlockBytes: error in EncodedBlockCert: " + err.Error()
 		return network.Topics{
-			network.MakeTopic(network.ErrorKey, []byte(err.Error()))}
+			network.MakeTopic(network.ErrorKey, []byte(errMsg))}
 	}
-	if requestType == network.BlockAndCertValue {
+	switch requestType {
+	case blockAndCertValue:
 		return network.Topics{
 			network.MakeTopic(
-				network.BlockDataKey, blk),
+				blockDataKey, blk),
 			network.MakeTopic(
-				network.CertDataKey, cert),
+				certDataKey, cert),
 		}
+	default:
+		errMsg := "LedgerService topicBlockBytes: request type is unknown"
+		return network.Topics{
+			network.MakeTopic(network.ErrorKey, []byte(errMsg))}		
 	}
-	return network.Topics{}
 }
 
 // RawBlockBytes return the msgpack bytes for a block

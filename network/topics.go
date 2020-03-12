@@ -23,15 +23,10 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 )
 
-// Constant strings used as keys or values for topics
+// Constant strings used as keys for topics
 const (
-	RoundKey           = "ky"
-	RequestDataTypeKey = "typ"
-	RequestHashKey     = "RequestHash"
-	BlockDataKey       = "BDK"
-	CertDataKey        = "CDK"
-	ErrorKey           = "ERR"
-	BlockAndCertValue  = "BlockAndCertificate"
+	requestHashKey     = "RequestHash"
+	ErrorKey           = "ERR" // used for passing an error message
 )
 
 // Topic is a key-value pair
@@ -40,7 +35,7 @@ type Topic struct {
 	data []byte
 }
 
-// MakeTopic Create a Topic
+// MakeTopic Creates a Topic
 func MakeTopic(key string, data []byte) Topic {
 	return Topic{key: key, data: data}
 }
