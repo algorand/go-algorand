@@ -130,7 +130,7 @@ const (
 	// runModeSignature is TEAL in LogicSig execution
 	runModeSignature = 1 << iota
 
-	// runModeApplication is TEAL in application/statefull
+	// runModeApplication is TEAL in application/statefull\
 	runModeApplication
 
 	// local constant, run in any mode
@@ -142,6 +142,11 @@ func (ep EvalParams) log() logging.Logger {
 		return ep.Logger
 	}
 	return logging.Base()
+}
+
+type ckey struct {
+	app  uint64
+	addr basics.Address
 }
 
 type evalContext struct {
@@ -168,7 +173,9 @@ type evalContext struct {
 
 	runModeFlags uint64
 
-	stateDelta basics.EvalDelta
+	appLocalStateCache  map[ckey]basics.TealKeyValue
+	appGlobalStateCache map[ckey]basics.TealKeyValue
+	appEvalDelta        basics.EvalDelta
 }
 
 // StackType describes the type of a value on the operand stack
@@ -227,9 +234,14 @@ func EvalStateful(program []byte, params EvalParams) (pass bool, delta basics.Ev
 	var cx evalContext
 	cx.EvalParams = params
 	cx.runModeFlags = runModeApplication
+
+	cx.appEvalDelta = basics.MakeEvalDelta()
+	cx.appLocalStateCache = make(map[ckey]basics.TealKeyValue)
+	cx.appGlobalStateCache = make(map[ckey]basics.TealKeyValue)
+
 	pass, err = eval(program, &cx)
-	delta = cx.stateDelta
-	return
+	delta = cx.appEvalDelta
+	return pass, delta, err
 }
 
 // Eval checks to see if a transaction passes logic
@@ -1298,11 +1310,49 @@ func opAppCheckOptedIn(cx *evalContext) {
 	cx.stack = cx.stack[:last]
 }
 
-func (cx *evalContext) appReadLocalKey(appID uint64, addr basics.Address, key string) (tv basics.TealValue) {
-	return
+func (cx *evalContext) appReadLocalKey(appID uint64, addr basics.Address, key string) (basics.TealValue, bool, error) {
+	tkv, ok := cx.appLocalStateCache[ckey{appID, addr}]
+	if !ok {
+		var err error
+		tkv, err = cx.Ledger.AppLocalState(addr, basics.AppIndex(appID))
+		if err != nil {
+			return basics.TealValue{}, false, fmt.Errorf("failed to fetch local state [%s] of the app %d: %s", addr, appID, err.Error())
+		}
+		cx.appLocalStateCache[ckey{appID, addr}] = tkv
+	}
+
+	tv, ok := tkv[string(key)]
+	return tv, ok, nil
 }
 
+// appWriteLocalKey adds value to StateDelta
 func (cx *evalContext) appWriteLocalKey(appID uint64, addr basics.Address, key string, tv basics.TealValue) error {
+	tkv, ok := cx.appLocalStateCache[ckey{appID, addr}]
+	if !ok {
+		// if the state is not in the cache, load it
+		var err error
+		tkv, err = cx.Ledger.AppLocalState(addr, basics.AppIndex(appID))
+		if err != nil {
+			return fmt.Errorf("failed to fetch local state [%s] of the app %d: %s", addr, appID, err.Error())
+		}
+		cx.appLocalStateCache[ckey{appID, addr}] = tkv
+	}
+
+	// if the value is in cache => it is not changed, no state change
+	if v, ok := tkv[key]; ok && tv == v {
+		return nil
+	}
+
+	// update the value
+	tkv[key] = tv
+
+	// and update EvalDelta
+	delta, ok := cx.appEvalDelta.LocalDeltas[addr]
+	if !ok {
+		delta = make(basics.StateDelta)
+		cx.appEvalDelta.LocalDeltas[addr] = delta
+	}
+	delta[key] = tv.ToValueDelta()
 	return nil
 }
 
@@ -1326,32 +1376,12 @@ func opAppReadLocalState(cx *evalContext) {
 		return
 	}
 
-	// tv, ok, err := cx.appReadLocalKey(appID, addr, key)
-	// if err != nil {
-	// 	cx.err = fmt.Errorf("failed to fetch local state [%s] of the app %d: %s", addr, appID, err.Error())
-	// 	return
-	// }
-
-	// if !ok {
-	// 	cx.stack[pprev].Uint = 0
-	// 	cx.stack[prev].Uint = 0
-	// } else {
-	// 	sv, err := stackValueFromTealValue(&tv)
-	// 	if err != nil {
-	// 		cx.err = err
-	// 		return
-	// 	}
-	// 	cx.stack[pprev] = sv
-	// 	cx.stack[prev].Uint = 1
-	// }
-
-	state, err := cx.Ledger.AppLocalState(addr, basics.AppIndex(appID))
+	tv, ok, err := cx.appReadLocalKey(appID, addr, string(key))
 	if err != nil {
-		cx.err = fmt.Errorf("failed to fetch local state [%s] of the app %d: %s", addr, appID, err.Error())
+		cx.err = err
 		return
 	}
 
-	tv, ok := state[string(key)]
 	if !ok {
 		cx.stack[pprev].Uint = 0
 		cx.stack[prev].Uint = 0
@@ -1436,7 +1466,11 @@ func opAppWriteLocalState(cx *evalContext) {
 		return
 	}
 
-	cx.appWriteLocalKey(appID, addr, key, sv.toTealValue())
+	err = cx.appWriteLocalKey(appID, addr, key, sv.toTealValue())
+	if err != nil {
+		cx.err = err
+		return
+	}
 
 	cx.stack = cx.stack[:pprev]
 }

@@ -19,9 +19,9 @@ package basics
 type DeltaAction uint64
 
 const (
-	SetUintAction  DeltaAction = 0
-	SetBytesAction DeltaAction = 1
-	DeleteAction   DeltaAction = 2
+	SetUintAction DeltaAction = 1 + iota
+	SetBytesAction
+	DeleteAction
 )
 
 type ValueDelta struct {
@@ -45,6 +45,13 @@ type EvalDelta struct {
 	LocalDeltas map[Address]StateDelta `codec:"ld,allocbound=-"`
 }
 
+func MakeEvalDelta() EvalDelta {
+	return EvalDelta{
+		GlobalDelta: make(StateDelta),
+		LocalDeltas: make(map[Address]StateDelta),
+	}
+}
+
 type StateSchema struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -55,7 +62,7 @@ type StateSchema struct {
 type TealType uint64
 
 const (
-	TealBytesType TealType = iota
+	TealBytesType TealType = 1 + iota
 	TealUintType
 )
 
@@ -69,6 +76,18 @@ type TealValue struct {
 	// instead of []byte to allow copying this struct by value
 	Bytes string `codec:"tb,allocbound=-"`
 	Uint  uint64 `codec:"ui"`
+}
+
+// ToValueDelta creates ValueDelta from TealValue
+func (tv *TealValue) ToValueDelta() (vd ValueDelta) {
+	if tv.Type == TealUintType {
+		vd.Action = SetUintAction
+		vd.Uint = tv.Uint
+	} else {
+		vd.Action = SetBytesAction
+		vd.Bytes = tv.Bytes
+	}
+	return
 }
 
 //msgp:allocbound TealKeyValue 4096
