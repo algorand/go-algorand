@@ -173,8 +173,8 @@ type evalContext struct {
 
 	runModeFlags uint64
 
+	appGlobalStateCache basics.TealKeyValue
 	appLocalStateCache  map[ckey]basics.TealKeyValue
-	appGlobalStateCache map[uint64]basics.TealKeyValue
 	appEvalDelta        basics.EvalDelta
 }
 
@@ -236,8 +236,8 @@ func EvalStateful(program []byte, params EvalParams) (pass bool, delta basics.Ev
 	cx.runModeFlags = runModeApplication
 
 	cx.appEvalDelta = basics.MakeEvalDelta()
+	cx.appGlobalStateCache = nil // use nil as indicator of not loaded yet
 	cx.appLocalStateCache = make(map[ckey]basics.TealKeyValue)
-	cx.appGlobalStateCache = make(map[uint64]basics.TealKeyValue)
 
 	pass, err = eval(program, &cx)
 	delta = cx.appEvalDelta
@@ -1356,41 +1356,37 @@ func (cx *evalContext) appWriteLocalKey(appID uint64, addr basics.Address, key s
 	return nil
 }
 
-func (cx *evalContext) appReadGlobalKey(appID uint64, key string) (basics.TealValue, bool, error) {
-	tkv, ok := cx.appGlobalStateCache[appID]
-	if !ok {
-		var err error
-		tkv, err = cx.Ledger.AppGlobalState(basics.AppIndex(appID))
+func (cx *evalContext) appReadGlobalKey(key string) (basics.TealValue, bool, error) {
+	if cx.appGlobalStateCache == nil {
+		tkv, err := cx.Ledger.AppGlobalState()
 		if err != nil {
-			return basics.TealValue{}, false, fmt.Errorf("failed to fetch global state of the app %d: %s", appID, err.Error())
+			return basics.TealValue{}, false, fmt.Errorf("failed to fetch global state of this app: %s", err.Error())
 		}
-		cx.appGlobalStateCache[appID] = tkv
+		cx.appGlobalStateCache = tkv
 	}
 
-	tv, ok := tkv[string(key)]
+	tv, ok := cx.appGlobalStateCache[string(key)]
 	return tv, ok, nil
 }
 
 // appWriteGlobalKey adds value to StateDelta
 func (cx *evalContext) appWriteGlobalKey(appID uint64, key string, tv basics.TealValue) error {
-	tkv, ok := cx.appGlobalStateCache[appID]
-	if !ok {
+	if cx.appGlobalStateCache == nil {
 		// if the state is not in the cache, load it
-		var err error
-		tkv, err = cx.Ledger.AppGlobalState(basics.AppIndex(appID))
+		tkv, err := cx.Ledger.AppGlobalState()
 		if err != nil {
-			return fmt.Errorf("failed to fetch global state of the app %d: %s", appID, err.Error())
+			return fmt.Errorf("failed to fetch global state of this app: %s", err.Error())
 		}
-		cx.appGlobalStateCache[appID] = tkv
+		cx.appGlobalStateCache = tkv
 	}
 
 	// if the value is in cache => it is not changed, no state change
-	if v, ok := tkv[key]; ok && tv == v {
+	if v, ok := cx.appGlobalStateCache[key]; ok && tv == v {
 		return nil
 	}
 
 	// update the value
-	tkv[key] = tv
+	cx.appGlobalStateCache[key] = tv
 
 	// and update EvalDelta
 	cx.appEvalDelta.GlobalDelta[key] = tv.ToValueDelta()
@@ -1415,6 +1411,10 @@ func opAppReadLocalState(cx *evalContext) {
 	if err != nil {
 		cx.err = err
 		return
+	}
+
+	if appID != 0 && appID == uint64(cx.Txn.Txn.ApplicationID) {
+		appID = 0 // 0 is an alias for the current app
 	}
 
 	tv, ok, err := cx.appReadLocalKey(appID, addr, string(key))
@@ -1445,19 +1445,13 @@ func opAppReadGlobalState(cx *evalContext) {
 	last := len(cx.stack) - 1 // state key
 
 	key := cx.stack[last].Bytes
-	appID := uint64(cx.Txn.Txn.ApplicationID)
 
 	if cx.Ledger == nil {
 		cx.err = fmt.Errorf("ledger not available")
 		return
 	}
 
-	if appID == 0 {
-		cx.err = fmt.Errorf("reading global state from app create tx not allowed")
-		return
-	}
-
-	tv, ok, err := cx.appReadGlobalKey(appID, string(key))
+	tv, ok, err := cx.appReadGlobalKey(string(key))
 	if err != nil {
 		cx.err = err
 		return
@@ -1488,15 +1482,10 @@ func opAppWriteLocalState(cx *evalContext) {
 	sv := cx.stack[last]
 	key := string(cx.stack[prev].Bytes)
 	accountIdx := cx.stack[pprev].Uint
-	appID := uint64(cx.Txn.Txn.ApplicationID)
+	appID := uint64(0) // 0 is an alias for the current app
 
 	if cx.Ledger == nil {
 		cx.err = fmt.Errorf("ledger not available")
-		return
-	}
-
-	if appID == 0 {
-		cx.err = fmt.Errorf("writing local state from app create tx not allowed")
 		return
 	}
 

@@ -41,6 +41,7 @@ type testLedger struct {
 	applications map[basics.AppIndex]map[string]basics.TealValue
 	localCount   int
 	globalCount  int
+	appID        uint64
 }
 
 func makeBalanceRecord(addr basics.Address, balance uint64) balanceRecord {
@@ -73,6 +74,7 @@ func (l *testLedger) resetCounters() {
 }
 
 func (l *testLedger) newApp(addr basics.Address, appID uint64) {
+	l.appID = appID
 	appIdx := basics.AppIndex(appID)
 	l.applications[appIdx] = make(map[string]basics.TealValue)
 	br, ok := l.balances[addr]
@@ -114,6 +116,9 @@ func (l *testLedger) Balance(addr basics.Address) (amount uint64, err error) {
 
 func (l *testLedger) AppLocalState(addr basics.Address, appIdx basics.AppIndex) (basics.TealKeyValue, error) {
 	l.localCount++
+	if appIdx == 0 {
+		appIdx = basics.AppIndex(l.appID)
+	}
 	if br, ok := l.balances[addr]; ok {
 		if state, ok := br.apps[appIdx]; ok {
 			return state, nil
@@ -123,8 +128,9 @@ func (l *testLedger) AppLocalState(addr basics.Address, appIdx basics.AppIndex) 
 	return nil, fmt.Errorf("no such address")
 }
 
-func (l *testLedger) AppGlobalState(appIdx basics.AppIndex) (basics.TealKeyValue, error) {
+func (l *testLedger) AppGlobalState() (basics.TealKeyValue, error) {
 	l.globalCount++
+	var appIdx basics.AppIndex = basics.AppIndex(l.appID)
 	if state, ok := l.applications[appIdx]; ok {
 		return state, nil
 	}
@@ -609,14 +615,11 @@ byte 0x414c474f
 		},
 	)
 	ep.Ledger = ledger
-	_, _, err = EvalStateful(program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "reading global state from app create tx not allowed")
 
 	ep.Txn.Txn.ApplicationID = 100
 	_, _, err = EvalStateful(program, ep)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "failed to fetch global state of the app")
+	require.Contains(t, err.Error(), "failed to fetch global state")
 
 	// create the app and check the value from ApplicationArgs[0] (protocol.PaymentTx) does not exist
 	ledger.newApp(txn.Txn.Sender, 100)
@@ -1024,11 +1027,6 @@ int 1
 	)
 	ep.Ledger = ledger
 
-	txn.Txn.ApplicationID = 0
-	_, _, err = EvalStateful(program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "writing local state from app create tx not allowed")
-
 	txn.Txn.ApplicationID = 100
 	firstCmdOffset := 13
 	saved := program[firstCmdOffset]
@@ -1391,10 +1389,6 @@ int 0x77
 		},
 	)
 	ep.Ledger = ledger
-
-	_, _, err = EvalStateful(program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "reading global state from app create tx not allowed")
 
 	txn.Txn.ApplicationID = 100
 	_, _, err = EvalStateful(program, ep)
