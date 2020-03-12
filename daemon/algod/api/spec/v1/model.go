@@ -478,6 +478,11 @@ type TransactionResults struct {
 	//
 	// required: false
 	CreatedAssetIndex uint64 `json:"createdasset,omitempty"`
+
+	// CreatedAppIndex indicates the app index of an app created by this txn
+	//
+	// required: false
+	CreatedAppIndex uint64 `json:"createdapp,omitempty"`
 }
 
 // AssetConfigTransactionType contains the additional fields for an asset config transaction

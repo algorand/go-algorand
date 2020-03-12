@@ -257,7 +257,7 @@ func txWithStatusEncode(tr node.TxnWithStatus) (v1.Transaction, error) {
 	return s, nil
 }
 
-func computeAssetIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, payset []transactions.SignedTxnWithAD) (aidx uint64) {
+func computeCreatableIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, payset []transactions.SignedTxnWithAD) (aidx uint64) {
 	// Compute transaction index in block
 	offset := -1
 	for idx, stxnib := range payset {
@@ -308,7 +308,42 @@ func computeAssetIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx uint6
 		return 0
 	}
 
-	return computeAssetIndexInPayset(tx, blk.BlockHeader.TxnCounter, payset)
+	return computeCreatableIndexInPayset(tx, blk.BlockHeader.TxnCounter, payset)
+}
+
+// computeAppIndexFromTxn returns the created app index given a confirmed
+// transaction whose confirmation block is available in the ledger. Note that
+// 0 is an invalid asset index (they start at 1).
+func computeAppIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx uint64) {
+	// Must have ledger
+	if l == nil {
+		return 0
+	}
+	// Transaction must be confirmed
+	if tx.ConfirmedRound == 0 {
+		return 0
+	}
+	// Transaction must be AssetConfig transaction
+	if tx.Txn.Txn.ApplicationCallTxnFields.Empty() {
+		return 0
+	}
+	// Transaction must be creating an asset
+	if tx.Txn.Txn.ApplicationCallTxnFields.ApplicationID != 0 {
+		return 0
+	}
+
+	// Look up block where transaction was confirmed
+	blk, err := l.Block(tx.ConfirmedRound)
+	if err != nil {
+		return 0
+	}
+
+	payset, err := blk.DecodePaysetFlat()
+	if err != nil {
+		return 0
+	}
+
+	return computeCreatableIndexInPayset(tx, blk.BlockHeader.TxnCounter, payset)
 }
 
 func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error) {
@@ -798,6 +833,7 @@ func PendingTransactionInformation(ctx lib.ReqContext, w http.ResponseWriter, r 
 			// it was created in), because computeAssetIndexFromTxn will
 			// return 0 in that case.
 			CreatedAssetIndex: computeAssetIndexFromTxn(txn, ledger),
+			CreatedAppIndex:   computeAppIndexFromTxn(txn, ledger),
 		}
 
 		response := TransactionResponse{

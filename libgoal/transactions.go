@@ -357,21 +357,50 @@ func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, lastValid, fe
 	return tx, nil
 }
 
-func (c *Client) MakeUnsignedAppCreateTx(approvalProg string, clearProg string, globalSchema basics.StateSchema, localSchema basics.StateSchema, appArgs []string, accounts []basics.Address) (transactions.Transaction, error) {
-	var tx transactions.Transaction
-
+func (c *Client) MakeUnsignedAppCreateTx(approvalProg string, clearProg string, globalSchema basics.StateSchema, localSchema basics.StateSchema, appArgs []string, accounts []string) (tx transactions.Transaction, err error) {
 	tx.Type = protocol.ApplicationCallTx
 
 	// Not necessary to set ApplicationID explicitly here, but for clarity,
 	// an ApplicaitonID of 0 is what indicates that this is a creation
 	// transaction
 	tx.ApplicationID = 0
-	tx.ApplicationArgs = appArgs
+	tx.OnCompletion = transactions.NoOpOC
 
 	tx.ApprovalProgram = approvalProg
 	tx.ClearStateProgram = clearProg
 
+	tx.ApplicationArgs = appArgs
+	tx.Accounts, err = parseTxnAccounts(accounts)
+	if err != nil {
+		return tx, err
+	}
+
 	return tx, nil
+}
+
+func (c *Client) MakeUnsignedAppOptInTx(appIdx uint64, appArgs []string, accounts []string) (tx transactions.Transaction, err error) {
+	tx.Type = protocol.ApplicationCallTx
+	tx.ApplicationID = basics.AppIndex(appIdx)
+	tx.OnCompletion = transactions.OptInOC
+
+	tx.ApplicationArgs = appArgs
+	tx.Accounts, err = parseTxnAccounts(accounts)
+	if err != nil {
+		return tx, err
+	}
+
+	return tx, nil
+}
+
+func parseTxnAccounts(accounts []string) (parsed []basics.Address, err error) {
+	for _, acct := range accounts {
+		addr, err := basics.UnmarshalChecksumAddress(acct)
+		if err != nil {
+			return nil, err
+		}
+		parsed = append(parsed, addr)
+	}
+	return
 }
 
 // MakeUnsignedAssetCreateTx creates a tx template for creating

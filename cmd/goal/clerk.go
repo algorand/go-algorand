@@ -210,12 +210,12 @@ func writeTxnToFile(client libgoal.Client, signTx bool, dataDir string, walletNa
 	return writeFile(filename, protocol.Encode(&stxn), 0600)
 }
 
-func getProgramArgs() [][]byte {
-	if len(argB64Strings) == 0 {
+func getB64Args(slice []string) [][]byte {
+	if len(slice) == 0 {
 		return nil
 	}
-	programArgs := make([][]byte, len(argB64Strings))
-	for i, argstr := range argB64Strings {
+	programArgs := make([][]byte, len(slice))
+	for i, argstr := range slice {
 		if argstr == "" {
 			programArgs[i] = []byte{}
 			continue
@@ -227,6 +227,11 @@ func getProgramArgs() [][]byte {
 		}
 	}
 	return programArgs
+
+}
+
+func getProgramArgs() [][]byte {
+	return getB64Args(argB64Strings)
 }
 
 func parseNoteField(cmd *cobra.Command) []byte {
@@ -918,9 +923,9 @@ var dryrunCmd = &cobra.Command{
 			ep = logic.EvalParams{
 				Txn:        &txn,
 				GroupIndex: i,
-				Proto:    &params,
-				Trace:    &sb,
-				TxnGroup: txgroup,
+				Proto:      &params,
+				Trace:      &sb,
+				TxnGroup:   txgroup,
 			}
 			pass, err := logic.Eval(txn.Lsig.Logic, ep)
 			// TODO: optionally include `inspect` output here?
