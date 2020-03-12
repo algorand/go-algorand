@@ -191,7 +191,14 @@ test: build
 	go test $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 3600s
 
 ci-test: ci-build
-	go test $(GOTAGS) $(UNIT_TEST_SOURCES) -timeout 3600s
+ifeq ($(ARCH), amd64)
+	RACE=-race
+else
+	RACE=
+endif
+	for PACKAGE_DIRECTORY in $(UNIT_TEST_SOURCES) ; do \
+		go test $(GOTAGS) -timeout 2000s $(RACE) $$PACKAGE_DIRECTORY; \
+	done
 
 fulltest: build-race
 	for PACKAGE_DIRECTORY in $(UNIT_TEST_SOURCES) ; do \
@@ -206,12 +213,17 @@ $(addprefix short_test_target_, $(UNIT_TEST_SOURCES)): build
 integration: build-race
 	./test/scripts/run_integration_tests.sh
 
-ci_integration: ci_build
+ci-integration: ci-build
+ifeq ($(ARCH), amd64)
+	RACE=
+else
+	RACE=-norace
+endif
 	NODEBINDIR=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/bin \
 	PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/bin:$$PATH \
 	PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/test-utils:$$PATH \
 	SRCROOT=$(SRCPATH) \
-	./test/scripts/e2e_go_tests.sh -norace
+	./test/scripts/e2e_go_tests.sh $(RACE)
 
 testall: fulltest integration
 

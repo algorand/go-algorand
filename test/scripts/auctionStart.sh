@@ -60,8 +60,18 @@ if [[ "${NODEBINDIR}" = "" ]]; then
     export NODEBINDIR="${GOPATH}/bin"
 fi
 
-export TOOLSBINDIR="${NODEBINDIR}/../tools"
-export TESTBINDIR="${NODEBINDIR}/../test-utils"
+if [ -d "${NODEBINDIR}/../tools" ]; then
+    export TOOLSBINDIR="${NODEBINDIR}/../tools"
+else
+    export TOOLSBINDIR="${NODEBINDIR}"
+fi
+
+if [ -d "${NODEBINDIR}/../test-utils" ]; then
+    export TESTBINDIR="${NODEBINDIR}/../test-utils"
+else
+    export TESTBINDIR="${NODEBINDIR}"
+fi
+
 
 #define algod working dir
 if [[ "${ALGOTESTDIR}" = "" ]]; then
