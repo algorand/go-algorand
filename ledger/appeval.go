@@ -99,7 +99,7 @@ func (al *appLedger) AppLocalState(addr basics.Address, appIdx basics.AppIndex) 
 	// Clone LocalState so that we don't edit it in place
 	cloned := record.AppLocalStates[appIdx].Clone()
 
-	return cloned, nil
+	return cloned.KeyValue, nil
 }
 
 func (al *appLedger) AssetHolding(addr basics.Address, assetID uint64) (basics.AssetHolding, error) {

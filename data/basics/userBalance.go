@@ -137,9 +137,16 @@ type AccountData struct {
 	// is expected to have copy-by-value semantics.
 	Assets map[AssetIndex]AssetHolding `codec:"asset,allocbound=-"`
 
-	AppLocalStates map[AppIndex]TealKeyValue `codec:"appl,allocbound=-"`
+	AppLocalStates map[AppIndex]AppLocalState `codec:"appl,allocbound=-"`
 
 	AppParams map[AppIndex]AppParams `codec:"appp,allocbound=-"`
+}
+
+type AppLocalState struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Schema   StateSchema  `codec:"hsch"`
+	KeyValue TealKeyValue `codec:"tkv"`
 }
 
 type AppParams struct {
@@ -156,6 +163,12 @@ type AppParams struct {
 func (ap AppParams) Clone() (res AppParams) {
 	res = ap
 	res.GlobalState = ap.GlobalState.Clone()
+	return
+}
+
+func (al AppLocalState) Clone() (res AppLocalState) {
+	res = al
+	res.KeyValue = al.KeyValue.Clone()
 	return
 }
 

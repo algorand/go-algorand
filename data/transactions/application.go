@@ -79,8 +79,8 @@ func (ac ApplicationCallTxnFields) Empty() bool {
 }
 
 // Allocate the map of LocalStates if it is nil, and then clone all LocalStates
-func cloneAppLocalStates(m map[basics.AppIndex]basics.TealKeyValue) map[basics.AppIndex]basics.TealKeyValue {
-	res := make(map[basics.AppIndex]basics.TealKeyValue, len(m))
+func cloneAppLocalStates(m map[basics.AppIndex]basics.AppLocalState) map[basics.AppIndex]basics.AppLocalState {
+	res := make(map[basics.AppIndex]basics.AppLocalState, len(m))
 	for k, v := range m {
 		// TODO if required: performance improvement: only clone
 		// LocalState for app idx affected by this transaction
@@ -138,12 +138,12 @@ func applyDelta(stateDelta basics.StateDelta, kv basics.TealKeyValue) error {
 	for key, valueDelta := range stateDelta {
 		switch valueDelta.Action {
 		case basics.SetUintAction:
-			kv[key] = basics.TealValue {
+			kv[key] = basics.TealValue{
 				Type: basics.TealUintType,
-				Uint:  valueDelta.Uint,
+				Uint: valueDelta.Uint,
 			}
 		case basics.SetBytesAction:
-			kv[key] = basics.TealValue {
+			kv[key] = basics.TealValue{
 				Type:  basics.TealBytesType,
 				Bytes: valueDelta.Bytes,
 			}
@@ -193,10 +193,11 @@ func applyStateDeltas(evalDelta basics.EvalDelta, balances Balances, appIdx basi
 
 	/*
 	 * 2. Apply each LocalState delta, fail fast if any affected account
-	 *    has not opted in to appIdx
+	 *    has not opted in to appIdx (without having written anything back
+	 *    to the cow
 	 */
 
-	changes := make(map[basics.Address]basics.TealKeyValue, len(evalDelta.LocalDeltas))
+	changes := make(map[basics.Address]basics.AppLocalState, len(evalDelta.LocalDeltas))
 	for addr, delta := range evalDelta.LocalDeltas {
 		record, err := balances.Get(addr, false)
 		if err != nil {
@@ -214,7 +215,7 @@ func applyStateDeltas(evalDelta basics.EvalDelta, balances Balances, appIdx basi
 		// Clone local states + app params, so that we have a copy that is
 		// safe to modify
 		localState = localState.Clone()
-		err = applyDelta(delta, localState)
+		err = applyDelta(delta, localState.KeyValue)
 		if err != nil {
 			return err
 		}
@@ -235,14 +236,15 @@ func applyStateDeltas(evalDelta basics.EvalDelta, balances Balances, appIdx basi
 	 *    fields are orthogonal.
 	 */
 
-	creatorRecord, err := balances.Get(creator, false)
+	record, err := balances.Get(creator, false)
 	if err != nil {
 		return err
 	}
 
-	creatorRecord.AppParams[appIdx] = params
+	record.AppParams = cloneAppParams(record.AppParams)
+	record.AppParams[appIdx] = params
 
-	err = balances.Put(creatorRecord)
+	err = balances.Put(record)
 	if err != nil {
 		return err
 	}
@@ -251,15 +253,16 @@ func applyStateDeltas(evalDelta basics.EvalDelta, balances Balances, appIdx basi
 	 * 5. Write LocalState changes back to cow
 	 */
 
-	for addr, kv := range changes {
-		userRecord, err := balances.Get(addr, false)
+	for addr, newLocalState := range changes {
+		record, err := balances.Get(addr, false)
 		if err != nil {
 			return err
 		}
 
-		userRecord.AppLocalStates[appIdx] = kv
+		record.AppLocalStates = cloneAppLocalStates(record.AppLocalStates)
+		record.AppLocalStates[appIdx] = newLocalState
 
-		err = balances.Put(userRecord)
+		err = balances.Put(record)
 		if err != nil {
 			return err
 		}
@@ -380,11 +383,17 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva
 			return err
 		}
 
+		// TODO(applications) is it OK for an application with an empty schema
+		// to allocate an empty map here?
+
 		// If the user hasn't opted in yet, allocate their LocalState
 		_, ok := record.AppLocalStates[appIdx]
 		if !ok {
 			record.AppLocalStates = cloneAppLocalStates(record.AppLocalStates)
-			record.AppLocalStates[appIdx] = make(basics.TealKeyValue)
+			record.AppLocalStates[appIdx] = basics.AppLocalState{
+				Schema:   params.LocalStateSchema,
+				KeyValue: make(basics.TealKeyValue),
+			}
 			err = balances.Put(record)
 			if err != nil {
 				return err
