@@ -371,7 +371,7 @@ func TestDBBackup(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, entriesCount, nrows)
 
-	backupAccessor, err := acc.Backup(context.Background(), "fn-copy.db")
+	backupAccessor, err := acc.Backup(context.Background(), "fn-copy.db", false)
 	require.NoError(t, err)
 	require.NotNil(t, backupAccessor)
 
