@@ -255,26 +255,27 @@ func (ls *LedgerService) handleCatchupReq(ctx context.Context, reqMsg network.In
 		round, _ := binary.Uvarint(roundBytes)
 		respTopics = topicBlockBytes(ls.ledger, basics.Round(round), string(requestType))
 		return
-	} else {
-		defer func() {
-			ls.sendCatchupRes(ctx, target, reqMsg.Tag, res)
-		}()
-		var req WsGetBlockRequest
-		err := protocol.DecodeReflect(reqMsg.Data, &req)
-		if err != nil {
-			res.Error = err.Error()
-			return
-		}
-		res.Round = req.Round
-		encodedBlob, err := RawBlockBytes(ls.ledger, basics.Round(req.Round))
+	}
 
-		if err != nil {
-			res.Error = err.Error()
-			return
-		}
-		res.BlockBytes = encodedBlob
+	// Else, if version == 1
+	defer func() {
+		ls.sendCatchupRes(ctx, target, reqMsg.Tag, res)
+	}()
+	var req WsGetBlockRequest
+	err := protocol.DecodeReflect(reqMsg.Data, &req)
+	if err != nil {
+		res.Error = err.Error()
 		return
 	}
+	res.Round = req.Round
+	encodedBlob, err := RawBlockBytes(ls.ledger, basics.Round(req.Round))
+
+	if err != nil {
+		res.Error = err.Error()
+		return
+	}
+	res.BlockBytes = encodedBlob
+	return
 }
 
 func (ls *LedgerService) sendCatchupRes(ctx context.Context, target network.UnicastPeer, reqTag protocol.Tag, outMsg WsGetBlockOut) {

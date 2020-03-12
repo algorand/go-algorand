@@ -144,24 +144,25 @@ func (fs *WsFetcherService) RequestBlock(ctx context.Context, target network.Uni
 			BlockBytes: blockCertBytes,
 		}
 		return wsBlockOut, nil
-	} else {
-		req := WsGetBlockRequest{Round: uint64(round)}
-		err := target.Unicast(ctx, protocol.EncodeReflect(req), tag)
-		if err != nil {
-			return WsGetBlockOut{}, fmt.Errorf("WsFetcherService.RequestBlock(%d): unicast failed, %v", round, err)
-		}
-		select {
-		case resp := <-waitCh:
-			return resp, nil
-		case <-ctx.Done():
-			switch ctx.Err() {
-			case context.DeadlineExceeded:
-				return WsGetBlockOut{}, fmt.Errorf("WsFetcherService.RequestBlock(%d): request to %s was timed out", round, target.GetAddress())
-			case context.Canceled:
-				return WsGetBlockOut{}, fmt.Errorf("WsFetcherService.RequestBlock(%d): request to %s was cancelled by context", round, target.GetAddress())
-			default:
-				return WsGetBlockOut{}, ctx.Err()
-			}
+	}
+
+	// Else, if version == 1
+	req := WsGetBlockRequest{Round: uint64(round)}
+	err := target.Unicast(ctx, protocol.EncodeReflect(req), tag)
+	if err != nil {
+		return WsGetBlockOut{}, fmt.Errorf("WsFetcherService.RequestBlock(%d): unicast failed, %v", round, err)
+	}
+	select {
+	case resp := <-waitCh:
+		return resp, nil
+	case <-ctx.Done():
+		switch ctx.Err() {
+		case context.DeadlineExceeded:
+			return WsGetBlockOut{}, fmt.Errorf("WsFetcherService.RequestBlock(%d): request to %s was timed out", round, target.GetAddress())
+		case context.Canceled:
+			return WsGetBlockOut{}, fmt.Errorf("WsFetcherService.RequestBlock(%d): request to %s was cancelled by context", round, target.GetAddress())
+		default:
+			return WsGetBlockOut{}, ctx.Err()
 		}
 	}
 }

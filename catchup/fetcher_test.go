@@ -782,9 +782,9 @@ func (p *testUnicastPeer) GetAddress() string {
 
 func (p *testUnicastPeer) Request(ctx context.Context, tag protocol.Tag, topics network.Topics) (resp *network.Response, e error) {
 
-	responseChannel := make(chan *network.Response, 1)      
+	responseChannel := make(chan *network.Response, 1)
 	p.responseChannels[0] = responseChannel
-	
+
 	ps := p.gn.(*httpTestPeerSource)
 	var dispather network.MessageHandler
 	for _, v := range ps.dispatchHandlers {
@@ -803,21 +803,20 @@ func (p *testUnicastPeer) Request(ctx context.Context, tag protocol.Tag, topics 
 	case <-ctx.Done():
 		return resp, ctx.Err()
 	}
-	return resp, nil
 }
 
 func (p *testUnicastPeer) Respond(ctx context.Context, reqMsg network.IncomingMessage, responseTopics network.Topics) (e error) {
-	
+
 	hashKey := uint64(0)
 	channel, found := p.responseChannels[hashKey]
 	if !found {
 	}
-	
+
 	select {
 	case channel <- &network.Response{Topics: responseTopics}:
 	default:
 	}
-	
+
 	return nil
 }
 
