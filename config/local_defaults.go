@@ -41,7 +41,7 @@ const configVersion = uint32(7)
 
 var defaultLocalV7 = Local{
 	// DO NOT MODIFY VALUES - New values may be added carefully - See WARNING at top of file
-	Version:                               6,
+	Version:                               7,
 	Archival:                              false,
 	BaseLoggerDebugLevel:                  4,
 	BroadcastConnectionsLimit:             -1,

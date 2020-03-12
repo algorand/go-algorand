@@ -19,6 +19,7 @@ package ledger
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -99,10 +100,30 @@ func (cp *catchpointTracker) initialize(cfg config.Local, dbPathPrefix string, d
 	return
 }
 
+func (cp *catchpointTracker) updateLastCommittedRound() error {
+	// test to see if the commited round is identical to the one in the database.
+	trackerDBs := cp.ledger.trackerDB()
+	// load the catchpoint tracker state from the database.
+	err := trackerDBs.rdb.Atomic(func(tx *sql.Tx) (err error) {
+		cp.lastCommittedRound, err = accountsRound(tx)
+		return
+	})
+	if err != nil {
+		cp.log.Infof("catchpointTracker: updateLastCommittedRound: %v", err)
+	}
+	return err
+}
+
 // committedUpTo is called after we've committed the given round to disk, and allow us to move the catchpoint state one step further.
 func (cp *catchpointTracker) committedUpTo(rnd basics.Round) (outRound basics.Round) {
-	cp.lastCommittedRound = rnd
 	outRound = rnd
+
+	// get the latest db-committed round.
+	err := cp.updateLastCommittedRound()
+	if err != nil {
+		return
+	}
+
 	cp.log.Infof("catchpointTracker: committedUpTo: round=%d stage=%d next=%d", rnd, cp.stage, cp.nextCatchpointCandidateRound)
 	switch cp.stage {
 	case catchpointStageScheduled:
@@ -110,6 +131,18 @@ func (cp *catchpointTracker) committedUpTo(rnd basics.Round) (outRound basics.Ro
 		if cp.nodeArchivalMode == nodeArchivalModeEnabled {
 			startBackupRound := cp.startBackupRound()
 			if rnd >= startBackupRound {
+
+				// test to see if teh commited round is identical to the one in the database.
+				trackerDBs := cp.ledger.trackerDB()
+				// load the catchpoint tracker state from the database.
+				trackerDBs.rdb.Atomic(func(tx *sql.Tx) (err error) {
+					dbRound, err2 := accountsRound(tx)
+					if dbRound != rnd {
+						cp.log.Errorf("committedUpTo(%d) was called when database round was %d", rnd, dbRound)
+					}
+					return err2
+				})
+
 				// it's time to start the backup.
 				err := cp.startBackup(context.Background())
 				if err != nil {
@@ -174,11 +207,16 @@ func (cp *catchpointTracker) committedUpTo(rnd basics.Round) (outRound basics.Ro
 func (cp *catchpointTracker) loadFromDisk(l ledgerForTracker) error {
 	cp.ledger = l
 	cp.log = l.trackerLog()
-	cp.lastCommittedRound = l.Latest() // at load time, Latest == committed.
+	// get the latest db-committed round.
+	err := cp.updateLastCommittedRound()
+	if err != nil {
+		return err
+	}
+
 	trackerDBs := cp.ledger.trackerDB()
 
 	// load the catchpoint tracker state from the database.
-	err := trackerDBs.wdb.Atomic(cp.loadCatchpointState)
+	err = trackerDBs.wdb.Atomic(cp.loadCatchpointState)
 	if err != nil {
 		return err
 	}
@@ -518,13 +556,10 @@ func (cp *catchpointTracker) deleteStagingBackup() (err error) {
 }
 
 func catchpointRoundToPath(rnd basics.Round) string {
-	irnd := int64(rnd)
+	irnd := int64(rnd) / 256
 	outStr := ""
-	for {
-		if irnd == 0 {
-			break
-		}
-		outStr = filepath.Join(outStr, strconv.FormatInt(irnd%256, 36))
+	for irnd > 0 {
+		outStr = filepath.Join(outStr, fmt.Sprintf("%02x", irnd%256))
 		irnd = irnd / 256
 	}
 	outStr = filepath.Join(outStr, strconv.FormatInt(int64(rnd), 10)+".catchpoint")

@@ -238,7 +238,7 @@ func (cw *catchpointWriter) readHeaderFromDatabase(tx *sql.Tx) (err error) {
 		return
 	}
 	header.TotalChunks = (header.TotalAccounts + balancesChunkReadSize) / balancesChunkReadSize
-	header.Catchpoint = "**todo**"
+	header.Catchpoint = fmt.Sprintf("%d#**todo-hash**", header.Round)
 	header.Version = initialVersion
 	cw.fileHeader = &header
 	return
@@ -251,10 +251,16 @@ func (cw *catchpointWriter) GetSize() int64 {
 
 // GetRound returns the round number to which this catchpoint is generated for.
 func (cw *catchpointWriter) GetRound() basics.Round {
-	return cw.fileHeader.Round
+	if cw.fileHeader != nil {
+		return cw.fileHeader.Round
+	}
+	return basics.Round(0)
 }
 
 // GetRound returns the catchpoint string to which this catchpoint file was generated for.
 func (cw *catchpointWriter) GetCatchpoint() string {
-	return cw.fileHeader.Catchpoint
+	if cw.fileHeader != nil {
+		return cw.fileHeader.Catchpoint
+	}
+	return ""
 }
