@@ -118,9 +118,9 @@ const ConsensusV21 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/8096e2df2da75c3339986317f9abe69d4fa86b4b",
 )
 
-// ConsensusV21_1 (betanet-only) allows tuning the upgrade delay.
-const ConsensusV21_1 = ConsensusVersion(
-	"https://github.com/algorandfoundation/specs/tree/96076cefdb621f5024f9f1ebd7d0ce8c895b1dbc",
+// ConsensusV22 allows tuning the upgrade delay.
+const ConsensusV22 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/57016b942f6d97e6d4c0688b373bb0a2fc85a1a2",
 )
 
 // ConsensusFuture is a protocol that should not appear in any production

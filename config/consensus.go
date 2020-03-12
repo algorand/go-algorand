@@ -542,18 +542,18 @@ func initConsensusProtocols() {
 	// v20 can be upgraded to v21.
 	v20.ApprovedUpgrades[protocol.ConsensusV21] = 0
 
-	// v21_1 (betanet-only) is an upgrade which allows tuning the number of rounds to wait to execute upgrades.
-	v21_1 := v21
-	v21_1.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	v21_1.MinUpgradeWaitRounds = 10000
-	v21_1.MaxUpgradeWaitRounds = 150000
-	Consensus[protocol.ConsensusV21_1] = v21_1
-	// v21 can be upgraded to v21_1.
-	v21.ApprovedUpgrades[protocol.ConsensusV21_1] = 0
+	// v22 is an upgrade which allows tuning the number of rounds to wait to execute upgrades.
+	v22 := v21
+	v22.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	v22.MinUpgradeWaitRounds = 10000
+	v22.MaxUpgradeWaitRounds = 150000
+	Consensus[protocol.ConsensusV22] = v22
+	// v21 can be upgraded to v22.
+	v21.ApprovedUpgrades[protocol.ConsensusV22] = 0
 
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v21_1
+	vFuture := v22
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
