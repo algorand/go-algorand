@@ -115,12 +115,12 @@ func getAppParams(balances Balances, aidx basics.AppIndex) (params basics.AppPar
 		return
 	}
 
-	creatorRecord, err := balances.Get(creator, false)
+	record, err := balances.Get(creator, false)
 	if err != nil {
 		return
 	}
 
-	params, ok := creatorRecord.AppParams[aidx]
+	params, ok := record.AppParams[aidx]
 	if !ok {
 		// This should never happen. If app exists then we should have
 		// found the creator successfully. TODO(applications) panic here?
@@ -307,6 +307,17 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva
 
 	// Fetch the application parameters, if they exist
 	params, creator, doesNotExist, err := getAppParams(balances, appIdx)
+	if err != nil {
+		return err
+	}
+
+	// Initialize our TEAL evaluation context. Internally, this manages
+	// access to balance records for Stateful TEAL programs. Stateful TEAL
+	// may only access the sender's balance record or the balance records
+	// of accounts explicitly listed in ac.Accounts. Implicitly, the
+	// creator's balance record may be accessed via GlobalState.
+	whitelistWithSender := append(ac.Accounts, header.Sender)
+	err = steva.InitLedger(balances, whitelistWithSender, appIdx)
 	if err != nil {
 		return err
 	}

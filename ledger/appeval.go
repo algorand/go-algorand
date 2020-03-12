@@ -28,17 +28,34 @@ type appTealEvaluator struct {
 	evalParams logic.EvalParams
 }
 
-func (ae appTealEvaluator) Eval(program []byte) (pass bool, stateDelta basics.EvalDelta, err error) {
+// Eval evaluates a stateful TEAL program for an application. InitLedger must
+// be called before calling Eval.
+func (ae *appTealEvaluator) Eval(program []byte) (pass bool, stateDelta basics.EvalDelta, err error) {
+	if ae.evalParams.Ledger == nil {
+		err = fmt.Errorf("appTealEvaluator Ledger not initialized")
+		return
+	}
 	return logic.EvalStateful(program, ae.evalParams)
+}
+
+func (ae *appTealEvaluator) InitLedger(balances transactions.Balances, whitelist []basics.Address, appIdx basics.AppIndex) error {
+	ledger, err := newAppLedger(balances, whitelist, appIdx)
+	if err != nil {
+		return err
+	}
+
+	ae.evalParams.Ledger = ledger
+	return nil
 }
 
 // appLedger implements logic.LedgerForLogic
 type appLedger struct {
 	addresses map[basics.Address]bool
 	balances  transactions.Balances
+	appIdx    basics.AppIndex
 }
 
-func newAppLedger(balances transactions.Balances, whitelist []basics.Address) (al *appLedger, err error) {
+func newAppLedger(balances transactions.Balances, whitelist []basics.Address, appIdx basics.AppIndex) (al *appLedger, err error) {
 	if balances == nil {
 		err = fmt.Errorf("cannot create appLedger with nil balances")
 		return
@@ -49,7 +66,13 @@ func newAppLedger(balances transactions.Balances, whitelist []basics.Address) (a
 		return
 	}
 
+	if appIdx == 0 {
+		err = fmt.Errorf("cannot create appLedger for appIdx 0")
+		return
+	}
+
 	al = &appLedger{}
+	al.appIdx = appIdx
 	al.balances = balances
 	al.addresses = make(map[basics.Address]bool)
 	for _, addr := range whitelist {
@@ -74,11 +97,35 @@ func (al *appLedger) Balance(addr basics.Address) (uint64, error) {
 	return record.MicroAlgos.Raw, nil
 }
 
-func (al *appLedger) AppGlobalState(appIdx basics.AppIndex) (basics.TealKeyValue, error) {
-	return nil, nil
+func (al *appLedger) AppGlobalState() (basics.TealKeyValue, error) {
+	creator, doesNotExist, err := al.balances.GetAppCreator(al.appIdx)
+	if err != nil {
+		return nil, err
+	}
+
+	if doesNotExist {
+		return nil, fmt.Errorf("cannot fetch GlobalState, no app %d", al.appIdx)
+	}
+
+	creatorRecord, err := al.balances.Get(creator, false)
+	if err != nil {
+		return nil, err
+	}
+
+	params, ok := creatorRecord.AppParams[al.appIdx]
+	if !ok {
+		return nil, fmt.Errorf("app %d not found in account %s", al.appIdx, creator.String())
+	}
+
+	return params.GlobalState.Clone(), nil
 }
 
 func (al *appLedger) AppLocalState(addr basics.Address, appIdx basics.AppIndex) (basics.TealKeyValue, error) {
+	// Allow referring to the current appIdx as 0
+	if appIdx == 0 {
+		appIdx = al.appIdx
+	}
+
 	// Ensure requested address is on whitelist
 	if !al.addresses[addr] {
 		return nil, fmt.Errorf("cannot access localstate for %s, not sender or in txn.Addresses", addr.String())

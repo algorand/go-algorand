@@ -558,30 +558,19 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, group []tran
 		RewardsPool: eval.block.BlockHeader.RewardsPool,
 	}
 
-	// Initialize an appLedger, which manages access to balance records
-	// for Stateful TEAL programs. Stateful TEAL may only access the
-	// sender's balance record or the balance record of accounts explicitly
-	// listed in ac.Accounts
-	whitelistWithSender := append(txn.Txn.Accounts, txn.Txn.Header.Sender)
-	appLedger, err := newAppLedger(cow, whitelistWithSender)
-	if err != nil {
-		return err
-	}
-
 	// Construct an appTealEvaluator (implements
-	// transactions.StateEvaluator) for use in ApplicationCall transactions
-	seval := appTealEvaluator{
+	// transactions.StateEvaluator) for use in ApplicationCall transactions.
+	steva := appTealEvaluator{
 		evalParams: logic.EvalParams{
 			Txn:        &txn,
 			Proto:      &eval.proto,
 			TxnGroup:   group,
 			GroupIndex: groupIndex,
-			Ledger:     appLedger,
 		},
 	}
 
 	// Apply the transaction, updating the cow balances
-	applyData, err := txn.Txn.Apply(cow, seval, spec, cow.txnCounter())
+	applyData, err := txn.Txn.Apply(cow, &steva, spec, cow.txnCounter())
 	if err != nil {
 		return fmt.Errorf("transaction %v: %v", txn.ID(), err)
 	}

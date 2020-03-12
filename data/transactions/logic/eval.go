@@ -99,7 +99,7 @@ func (sv *stackValue) toTealValue() (tv basics.TealValue) {
 type LedgerForLogic interface {
 	Balance(addr basics.Address) (uint64, error)
 	AppLocalState(addr basics.Address, appIdx basics.AppIndex) (basics.TealKeyValue, error)
-	AppGlobalState(appIdx basics.AppIndex) (basics.TealKeyValue, error)
+	AppGlobalState() (basics.TealKeyValue, error)
 	AssetHolding(addr basics.Address, assetID uint64) (basics.AssetHolding, error)
 	AssetParams(addr basics.Address, assetID uint64) (basics.AssetParams, error)
 }
@@ -1416,7 +1416,7 @@ func opAppReadGlobalState(cx *evalContext) {
 		return
 	}
 
-	state, err := cx.Ledger.AppGlobalState(basics.AppIndex(appID))
+	state, err := cx.Ledger.AppGlobalState()
 	if err != nil {
 		cx.err = fmt.Errorf("failed to fetch app global state of the app %d", appID)
 		return
