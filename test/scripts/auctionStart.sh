@@ -61,6 +61,7 @@ if [[ "${NODEBINDIR}" = "" ]]; then
 fi
 
 export TOOLSBINDIR="${NODEBINDIR}/../tools"
+export TESTBINDIR="${NODEBINDIR}/../test-utils"
 
 #define algod working dir
 if [[ "${ALGOTESTDIR}" = "" ]]; then
@@ -88,8 +89,8 @@ pushd ${AUCTIONBANKTESTDIR}
 rm -f bank.sqlite3
 rm -f bank.keyfile
 rm -f ${AUCTIONBANKTESTDIR}/bank.key
-${TOOLSBINDIR}/auctionbank -create
-${TOOLSBINDIR}/auctionbank -addr ${AUCTION_BANK_PORT} &> ${AUCTIONBANKTESTDIR}/bank.key &
+${TESTBINDIR}/auctionbank -create
+${TESTBINDIR}/auctionbank -addr ${AUCTION_BANK_PORT} &> ${AUCTIONBANKTESTDIR}/bank.key &
 
 sleep ${WAIT_SECONDS}
 echo "Auction Bank PID: $(cat ${AUCTIONBANKTESTDIR}/auctionbank.pid)"
@@ -212,7 +213,7 @@ echo GENESIS_HASH ${GENESIS_HASH}
 export TXN_FEE=1000
 
 # Run the auction master to initialize the auction
-${NODEBINDIR}/auctionmaster -dir ${AUCTIONMASTERTESTDIR} -initparams -txround ${LAST_ROUND} -notesfee ${TXN_FEE} -payfee ${TXN_FEE} -currentversion ${CURRENT_VERSION} -genhash ${GENESIS_HASH}
+${TOOLSBINDIR}/auctionmaster -dir ${AUCTIONMASTERTESTDIR} -initparams -txround ${LAST_ROUND} -notesfee ${TXN_FEE} -payfee ${TXN_FEE} -currentversion ${CURRENT_VERSION} -genhash ${GENESIS_HASH}
 
 sleep ${WAIT_SECONDS}
 
