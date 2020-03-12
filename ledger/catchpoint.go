@@ -64,17 +64,25 @@ type catchpointTracker struct {
 	catchpointInterval           uint64               // the configured interval at which we generate catchpoints
 
 	// The following fields are typically used only by archival nodes.
-	stagingDatabaseName        string             // the full path of the staging database name.
-	inMemoryDatabase           bool               // indicates whether the database copy should be done into an in-memory database.
-	backupAccessor             *db.BackupAccessor // the database accessor used during the catchpointStageBackingUp step.
-	backupRemainingPages       int                // remaining pages need to be copied
-	backupTotalPages           int                // total number of pages for the backup operation
-	backupRate                 int                // how many pages do we copy per step
-	stagingAccessor            db.Accessor        // the backed-up database accessor, one the backup is complete.
-	buildingCatchpoint         chan error         // this channel is being updated by the background goroutine that builds the catchpoint file
-	catchpointBuilderWaitGroup sync.WaitGroup
-	closingCtx                 context.Context
-	signalClosing              context.CancelFunc
+	stagingDatabaseName        string                     // the full path of the staging database name.
+	inMemoryDatabase           bool                       // indicates whether the database copy should be done into an in-memory database.
+	backupAccessor             *db.BackupAccessor         // the database accessor used during the catchpointStageBackingUp step.
+	backupRemainingPages       int                        // remaining pages need to be copied
+	backupTotalPages           int                        // total number of pages for the backup operation
+	backupRate                 int                        // how many pages do we copy per step
+	stagingAccessor            db.Accessor                // the backed-up database accessor, one the backup is complete.
+	buildingCatchpoint         chan catchpointBuildResult // this channel is being updated by the background goroutine that builds the catchpoint file
+	catchpointBuilderWaitGroup sync.WaitGroup             // wait group to syncronize the catchpoint file creation
+	closingCtx                 context.Context            // a close context to notify the file creation goroutine that we're shutting down.
+	signalClosing              context.CancelFunc         // a close context function for closingCtx
+}
+
+type catchpointBuildResult struct {
+	err        error        // the error that was encoutered during the catchpoint file generation
+	round      basics.Round // the round number of the catchpoint file
+	fileName   string       // the file name of the catchpoint
+	fileSize   int64        // the file size of the catchpoint
+	catchpoint string       // the catchpoint string
 }
 
 // why do we backup ?
@@ -86,7 +94,7 @@ func (cp *catchpointTracker) initialize(cfg config.Local, dbPathPrefix string, d
 	cp.inMemoryDatabase = dbMem
 	cp.stagingDatabaseName = dbPathPrefix + ".catchpoint.staging.sqlite"
 	cp.archivalLedger = cfg.Archival
-	cp.buildingCatchpoint = make(chan error, 1)
+	cp.buildingCatchpoint = make(chan catchpointBuildResult, 1)
 	cp.closingCtx, cp.signalClosing = context.WithCancel(context.Background())
 	return
 }
@@ -141,7 +149,12 @@ func (cp *catchpointTracker) committedUpTo(rnd basics.Round) (outRound basics.Ro
 	case catchpointStageBackedUp:
 		// see if we're done building the catchpoint.
 		select {
-		case err := <-cp.buildingCatchpoint:
+		case buildResult := <-cp.buildingCatchpoint:
+			err := buildResult.err
+			if err != nil {
+				// TODO - report the error.
+			}
+			err = cp.saveCatchpoint(buildResult)
 			if err != nil {
 				// TODO - report the error.
 			}
@@ -521,37 +534,54 @@ func catchpointRoundToPath(rnd basics.Round) string {
 func (cp *catchpointTracker) asyncGenerateCatchpoint() {
 	cp.catchpointBuilderWaitGroup.Add(1)
 	go func() {
-		var err error = nil
+		var buildResult catchpointBuildResult
 		defer func() {
 			cp.stagingAccessor.Close()
 			cp.deleteStagingBackup()
-			cp.buildingCatchpoint <- err
+			cp.buildingCatchpoint <- buildResult
 			cp.catchpointBuilderWaitGroup.Done()
 		}()
 
 		// create a dummy file for now.
 		catchpointsRoot := filepath.Dir(cp.stagingDatabaseName)
-		catchpointPath := filepath.Join(catchpointsRoot, "catchpoints", catchpointRoundToPath(cp.nextCatchpointCandidateRound))
+		buildResult.fileName = filepath.Join("catchpoints", catchpointRoundToPath(cp.nextCatchpointCandidateRound))
+		catchpointPath := filepath.Join(catchpointsRoot, buildResult.fileName)
 
 		writer := makeCatchpointWriter(catchpointPath, cp.stagingAccessor)
 		more := true
-		for more && err == nil {
+		for more && buildResult.err == nil {
 			stepCtx, stepCancelFunction := context.WithTimeout(cp.closingCtx, 50*time.Millisecond)
-			more, err = writer.WriteStep(stepCtx)
+			more, buildResult.err = writer.WriteStep(stepCtx)
 			stepCancelFunction()
-			if err == nil && more {
+			if buildResult.err == nil && more {
 				// we just wrote some data, but there is more to be written.
 				// go to sleep for while.
 				select {
 				case <-time.After(100 * time.Millisecond):
 				case <-cp.closingCtx.Done():
-					err = cp.closingCtx.Err()
+					buildResult.err = cp.closingCtx.Err()
 					return
 				}
 			}
-			if err != nil {
-				cp.log.Errorf("catchpointTracker: asyncGenerateCatchpoint: unable to create catchpoint : %v", err)
+			if buildResult.err != nil {
+				cp.log.Errorf("catchpointTracker: asyncGenerateCatchpoint: unable to create catchpoint : %v", buildResult.err)
 			}
+			buildResult.fileSize = writer.GetSize()
+			buildResult.round = writer.GetRound()
+			buildResult.catchpoint = writer.GetCatchpoint()
 		}
 	}()
+}
+
+func (cp *catchpointTracker) saveCatchpoint(b catchpointBuildResult) (err error) {
+	trackerDBs := cp.ledger.trackerDB()
+	err = trackerDBs.wdb.Atomic(func(tx *sql.Tx) (err error) {
+		err = cp.storeCatchpoint(tx, b.round, b.fileName, b.catchpoint, b.fileSize)
+		return
+	})
+	if err != nil {
+		cp.log.Errorf("catchpointTracker: saveCatchpoint: unable to save catchpoint: %v", err)
+		return
+	}
+	return
 }

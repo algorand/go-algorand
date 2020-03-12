@@ -27,6 +27,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/algorand/go-codec/codec"
+
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -48,14 +50,23 @@ type catchpointWriter struct {
 	balancesChunk    catchpointFileBalancesChunk
 	fileHeader       *catchpointFileHeader
 	balancesChunkNum uint
+	writtenBytes     int64
+}
+
+type encodedBalanceRecord struct {
+	_struct     struct{}  `codec:",omitempty,omitemptyarray"`
+	Address     []byte    `codec:"pk"`
+	AccountData codec.Raw `codec:"ad"`
 }
 
 type catchpointFileHeader struct {
 	_struct       struct{}      `codec:",omitempty,omitemptyarray"`
-	Version       uint64        `codec:"ver"`
-	Round         basics.Round  `codec:"rnd"`
-	Totals        AccountTotals `codec:"tot"`
-	TotalAccounts uint64        `codec:"numacc"`
+	Version       uint64        `codec:"version"`
+	Round         basics.Round  `codec:"round"`
+	Totals        AccountTotals `codec:"accountTotals"`
+	TotalAccounts uint64        `codec:"accountsCount"`
+	TotalChunks   uint64        `codec:"chunksCount"`
+	Catchpoint    string        `codec:"catchpoint"`
 }
 
 type catchpointFileBalancesChunk []encodedBalanceRecord
@@ -180,6 +191,12 @@ func (cw *catchpointWriter) WriteStep(ctx context.Context) (more bool, err error
 				cw.file.Close()
 				cw.balancesChunk = nil
 				cw.file = nil
+				var fileInfo os.FileInfo
+				fileInfo, err = os.Stat(cw.filePath)
+				if err != nil {
+					return false, err
+				}
+				cw.writtenBytes = fileInfo.Size()
 				return false, nil
 			}
 			cw.balancesChunk = nil
@@ -220,7 +237,24 @@ func (cw *catchpointWriter) readHeaderFromDatabase(tx *sql.Tx) (err error) {
 	if err != nil {
 		return
 	}
+	header.TotalChunks = (header.TotalAccounts + balancesChunkReadSize) / balancesChunkReadSize
+	header.Catchpoint = "**todo**"
 	header.Version = initialVersion
 	cw.fileHeader = &header
 	return
+}
+
+// GetSize returns the number of bytes that have been written to the file.
+func (cw *catchpointWriter) GetSize() int64 {
+	return cw.writtenBytes
+}
+
+// GetRound returns the round number to which this catchpoint is generated for.
+func (cw *catchpointWriter) GetRound() basics.Round {
+	return cw.fileHeader.Round
+}
+
+// GetRound returns the catchpoint string to which this catchpoint file was generated for.
+func (cw *catchpointWriter) GetCatchpoint() string {
+	return cw.fileHeader.Catchpoint
 }

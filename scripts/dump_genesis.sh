@@ -34,6 +34,9 @@ for LEDGER in $LEDGERS; do
       assetcreators)
         SORT=asset
         ;;
+      storedcatchpoints)
+        SORT=round
+        ;;
       *)
         echo "Unknown table $T" >&2
         exit 1

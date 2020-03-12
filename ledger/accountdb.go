@@ -56,6 +56,11 @@ var accountsSchema = []string{
 	`CREATE TABLE IF NOT EXISTS assetcreators (
 		asset integer primary key,
 		creator blob)`,
+	`CREATE TABLE IF NOT EXISTS storedcatchpoints (
+		round integer primary key,
+		filename text NOT NULL,
+		catchpoint text NOT NULL,
+		filesize size NOT NULL)`,
 }
 
 var accountsResetExprs = []string{
@@ -63,6 +68,7 @@ var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS accounttotals`,
 	`DROP TABLE IF EXISTS accountbase`,
 	`DROP TABLE IF EXISTS assetcreators`,
+	`DROP TABLE IF EXISTS storedcatchpoints`,
 }
 
 type accountDelta struct {
@@ -99,6 +105,17 @@ func (cp *catchpointTracker) setOrClearUint64(ctx context.Context, tx *sql.Tx, s
 
 func (cp *catchpointTracker) databaseSize(tx *sql.Tx) (size uint64, err error) {
 	err = tx.QueryRow("SELECT page_count * page_size as size FROM pragma_page_count(), pragma_page_size()").Scan(&size)
+	return
+}
+
+func (cp *catchpointTracker) storeCatchpoint(tx *sql.Tx, round basics.Round, fileName string, catchpoint string, fileSize int64) (err error) {
+	_, err = tx.Exec("DELETE FROM storedcatchpoints WHERE round=?", round)
+
+	if err != nil {
+		return
+	}
+
+	_, err = tx.Exec("INSERT INTO storedcatchpoints(round, filename, catchpoint, filesize) VALUES(?, ?, ?, ?)", round, fileName, catchpoint, fileSize)
 	return
 }
 
@@ -433,12 +450,6 @@ func accountsNewRound(tx *sql.Tx, rnd basics.Round, updates map[basics.Address]a
 	}
 
 	return
-}
-
-type encodedBalanceRecord struct {
-	_struct     struct{} `codec:",omitempty,omitemptyarray"`
-	Address     []byte   `codec:"pk"`
-	AccountData []byte   `codec:"ad"`
 }
 
 func encodedAccountsRange(tx *sql.Tx, startAccountIndex, accountCount int) (bals []encodedBalanceRecord, err error) {
