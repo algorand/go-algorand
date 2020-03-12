@@ -174,7 +174,7 @@ type evalContext struct {
 	runModeFlags uint64
 
 	appLocalStateCache  map[ckey]basics.TealKeyValue
-	appGlobalStateCache map[ckey]basics.TealKeyValue
+	appGlobalStateCache map[uint64]basics.TealKeyValue
 	appEvalDelta        basics.EvalDelta
 }
 
@@ -237,7 +237,7 @@ func EvalStateful(program []byte, params EvalParams) (pass bool, delta basics.Ev
 
 	cx.appEvalDelta = basics.MakeEvalDelta()
 	cx.appLocalStateCache = make(map[ckey]basics.TealKeyValue)
-	cx.appGlobalStateCache = make(map[ckey]basics.TealKeyValue)
+	cx.appGlobalStateCache = make(map[uint64]basics.TealKeyValue)
 
 	pass, err = eval(program, &cx)
 	delta = cx.appEvalDelta
@@ -1356,6 +1356,47 @@ func (cx *evalContext) appWriteLocalKey(appID uint64, addr basics.Address, key s
 	return nil
 }
 
+func (cx *evalContext) appReadGlobalKey(appID uint64, key string) (basics.TealValue, bool, error) {
+	tkv, ok := cx.appGlobalStateCache[appID]
+	if !ok {
+		var err error
+		tkv, err = cx.Ledger.AppGlobalState(basics.AppIndex(appID))
+		if err != nil {
+			return basics.TealValue{}, false, fmt.Errorf("failed to fetch global state of the app %d: %s", appID, err.Error())
+		}
+		cx.appGlobalStateCache[appID] = tkv
+	}
+
+	tv, ok := tkv[string(key)]
+	return tv, ok, nil
+}
+
+// appWriteGlobalKey adds value to StateDelta
+func (cx *evalContext) appWriteGlobalKey(appID uint64, key string, tv basics.TealValue) error {
+	tkv, ok := cx.appGlobalStateCache[appID]
+	if !ok {
+		// if the state is not in the cache, load it
+		var err error
+		tkv, err = cx.Ledger.AppGlobalState(basics.AppIndex(appID))
+		if err != nil {
+			return fmt.Errorf("failed to fetch global state of the app %d: %s", appID, err.Error())
+		}
+		cx.appGlobalStateCache[appID] = tkv
+	}
+
+	// if the value is in cache => it is not changed, no state change
+	if v, ok := tkv[key]; ok && tv == v {
+		return nil
+	}
+
+	// update the value
+	tkv[key] = tv
+
+	// and update EvalDelta
+	cx.appEvalDelta.GlobalDelta[key] = tv.ToValueDelta()
+	return nil
+}
+
 func opAppReadLocalState(cx *evalContext) {
 	last := len(cx.stack) - 1 // state key
 	prev := last - 1          // app id
@@ -1416,13 +1457,12 @@ func opAppReadGlobalState(cx *evalContext) {
 		return
 	}
 
-	state, err := cx.Ledger.AppGlobalState()
+	tv, ok, err := cx.appReadGlobalKey(appID, string(key))
 	if err != nil {
-		cx.err = fmt.Errorf("failed to fetch app global state of the app %d", appID)
+		cx.err = err
 		return
 	}
 
-	tv, ok := state[string(key)]
 	var didExist stackValue
 	if !ok {
 		cx.stack[last].Uint = 0
@@ -1478,7 +1518,27 @@ func opAppWriteLocalState(cx *evalContext) {
 func opAppWriteGlobalState(cx *evalContext) {
 	last := len(cx.stack) - 1 // value
 	prev := last - 1          // state key
-	// TODO
+
+	sv := cx.stack[last]
+	key := string(cx.stack[prev].Bytes)
+	appID := uint64(cx.Txn.Txn.ApplicationID)
+
+	if cx.Ledger == nil {
+		cx.err = fmt.Errorf("ledger not available")
+		return
+	}
+
+	if appID == 0 {
+		cx.err = fmt.Errorf("writing global state from app create tx not allowed")
+		return
+	}
+
+	err := cx.appWriteGlobalKey(appID, key, sv.toTealValue())
+	if err != nil {
+		cx.err = err
+		return
+	}
+
 	cx.stack = cx.stack[:prev]
 }
 
