@@ -18,6 +18,7 @@ package rpcs
 
 import (
 	"context"
+	"encoding/binary"
 	"net/http"
 	"strconv"
 
@@ -229,25 +230,51 @@ func (ls *LedgerService) ListenForCatchupReq(reqs <-chan network.IncomingMessage
 // a blocking function for handling a catchup request
 func (ls *LedgerService) handleCatchupReq(ctx context.Context, reqMsg network.IncomingMessage) {
 	var res WsGetBlockOut
-	defer func() {
-		ls.sendCatchupRes(ctx, reqMsg.Sender.(network.UnicastPeer), reqMsg.Tag, res)
-	}()
+	target := reqMsg.Sender.(network.UnicastPeer)
+	var respTopics network.Topics
 
-	var req WsGetBlockRequest
-	err := protocol.DecodeReflect(reqMsg.Data, &req)
-	if err != nil {
-		res.Error = err.Error()
+	if target.Version() == "2.1" {
+		defer func() {
+			target.Respond(ctx, reqMsg, respTopics)
+		}()
+
+		topics, err := network.UnmarshallTopics(reqMsg.Data)
+		if err != nil {
+			topics = network.Topics{
+				network.MakeTopic(network.ErrorKey, []byte(err.Error()))}
+			return
+		}
+		roundBytes, found := topics.GetValue(network.RoundKey)
+		if !found {
+			topics = network.Topics{
+				network.MakeTopic(network.ErrorKey,
+					[]byte("LedgerService handleCatchupReq: round number topic is missing"))}
+			return
+		}
+		requestType, _ := topics.GetValue(network.RequestDataTypeKey)
+		round, _ := binary.Uvarint(roundBytes)
+		respTopics = topicBlockBytes(ls.ledger, basics.Round(round), string(requestType))
+		return
+	} else {
+		defer func() {
+			ls.sendCatchupRes(ctx, target, reqMsg.Tag, res)
+		}()
+		var req WsGetBlockRequest
+		err := protocol.DecodeReflect(reqMsg.Data, &req)
+		if err != nil {
+			res.Error = err.Error()
+			return
+		}
+		res.Round = req.Round
+		encodedBlob, err := RawBlockBytes(ls.ledger, basics.Round(req.Round))
+
+		if err != nil {
+			res.Error = err.Error()
+			return
+		}
+		res.BlockBytes = encodedBlob
 		return
 	}
-	res.Round = req.Round
-	encodedBlob, err := RawBlockBytes(ls.ledger, basics.Round(req.Round))
-
-	if err != nil {
-		res.Error = err.Error()
-		return
-	}
-	res.BlockBytes = encodedBlob
-	return
 }
 
 func (ls *LedgerService) sendCatchupRes(ctx context.Context, target network.UnicastPeer, reqTag protocol.Tag, outMsg WsGetBlockOut) {
@@ -257,6 +284,23 @@ func (ls *LedgerService) sendCatchupRes(ctx context.Context, target network.Unic
 	if err != nil {
 		logging.Base().Info("failed to respond to catchup req", err)
 	}
+}
+
+func topicBlockBytes(ledger *data.Ledger, round basics.Round, requestType string) network.Topics {
+	blk, cert, err := ledger.EncodedBlockCert(round)
+	if err != nil {
+		return network.Topics{
+			network.MakeTopic(network.ErrorKey, []byte(err.Error()))}
+	}
+	if requestType == network.BlockAndCertValue {
+		return network.Topics{
+			network.MakeTopic(
+				network.BlockDataKey, blk),
+			network.MakeTopic(
+				network.CertDataKey, cert),
+		}
+	}
+	return network.Topics{}
 }
 
 // RawBlockBytes return the msgpack bytes for a block

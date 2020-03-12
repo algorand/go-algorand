@@ -223,6 +223,9 @@ type UnicastPeer interface {
 	GetAddress() string
 	// Unicast sends the given bytes to this specific peer. Does not wait for message to be sent.
 	Unicast(ctx context.Context, data []byte, tag protocol.Tag) error
+	Version() string
+	Request(ctx context.Context, tag Tag, topics Topics) (resp *Response, e error)
+	Respond(ctx context.Context, reqMsg IncomingMessage, topics Topics) (e error)
 }
 
 // Create a wsPeerCore object
@@ -252,6 +255,10 @@ func (wp *wsPeerCore) PrepareURL(rawURL string) string {
 	return strings.Replace(rawURL, "{genesisID}", wp.net.GenesisID, -1)
 }
 
+func (wp *wsPeer) Verion() string {
+	return wp.version
+}
+
 // 	Unicast sends the given bytes to this specific peer. Does not wait for message to be sent.
 // (Implements UnicastPeer)
 func (wp *wsPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag) error {
@@ -276,19 +283,18 @@ func (wp *wsPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag) err
 }
 
 // Respond sends the response of a request message
-func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, respMsg OutgoingMessage) (e error) {
+func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, responseTopics Topics) (e error) {
 
 	// Get the hash/key of the request message
 	requestHash := hashTopics(reqMsg.Data)
 
-	topics := respMsg.Topics
 	// Add the request hash
 	requestHashData := make([]byte, binary.MaxVarintLen64)
 	binary.PutUvarint(requestHashData, requestHash)
-	topics = append(topics, Topic{key: "RequestHash", data: requestHashData})
+	responseTopics = append(responseTopics, Topic{key: RequestHashKey, data: requestHashData})
 
 	// Serialize the topics
-	serializedMsg := topics.MarshallTopics()
+	serializedMsg := responseTopics.MarshallTopics()
 
 	// Send serializedMsg
 	select {
@@ -418,9 +424,9 @@ func (wp *wsPeer) readLoop() {
 				wp.net.log.Warnf("wsPeer readLoop: could not read the message from: %s %s", wp.conn.RemoteAddr().String(), err)
 				continue
 			}
-			requestHash, found := topics.GetValue("RequestHash")
+			requestHash, found := topics.GetValue(RequestHashKey)
 			if !found {
-				wp.net.log.Warnf("wsPeer readLoop: message from %s is missing the RequestHash", wp.conn.RemoteAddr().String())
+				wp.net.log.Warnf("wsPeer readLoop: message from %s is missing the %v", wp.conn.RemoteAddr().String(), RequestHashKey)
 				continue
 			}
 			hashKey, _ := binary.Uvarint(requestHash)

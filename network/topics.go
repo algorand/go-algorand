@@ -23,10 +23,25 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 )
 
+
+const (
+	RoundKey  = "ky"
+	RequestDataTypeKey  = "typ"
+	RequestHashKey = "RequestHash"
+	BlockDataKey = "BDK"
+	CertDataKey = "CDK"
+	ErrorKey = "ERR"
+	BlockAndCertValue = "BlockAndCertificate"
+)
+
 // Topic is a key-value pair
 type Topic struct {
 	key  string
 	data []byte
+}
+
+func MakeTopic(key string, data []byte) Topic {
+	return Topic {key: key, data:data}
 }
 
 // Topics is an array of type Topic

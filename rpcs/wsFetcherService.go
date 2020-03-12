@@ -18,6 +18,7 @@ package rpcs
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 
 	"github.com/algorand/go-deadlock"
@@ -104,23 +105,63 @@ func (fs *WsFetcherService) RequestBlock(ctx context.Context, target network.Uni
 		delete(fs.pendingRequests, waitKey)
 		fs.mu.Unlock()
 	}()
+	if target.Version() == "2.1" {
+		roundBin := make([]byte, binary.MaxVarintLen64)
+		binary.PutUvarint(roundBin, uint64(round))
+		topics := network.Topics{
+			network.MakeTopic(network.RequestDataTypeKey,
+				[]byte(network.BlockAndCertValue)),
+			network.MakeTopic(
+				network.RoundKey,
+				roundBin),
+		}
+		resp, err := target.Request(ctx, tag, topics)
+		if err != nil {
+			return WsGetBlockOut{}, fmt.Errorf("WsFetcherService.RequestBlock(%d): Request failed, %v", round, err)
+		}
 
-	req := WsGetBlockRequest{Round: uint64(round)}
-	err := target.Unicast(ctx, protocol.EncodeReflect(req), tag)
-	if err != nil {
-		return WsGetBlockOut{}, fmt.Errorf("WsFetcherService.RequestBlock(%d): unicast failed, %v", round, err)
-	}
-	select {
-	case resp := <-waitCh:
-		return resp, nil
-	case <-ctx.Done():
-		switch ctx.Err() {
-		case context.DeadlineExceeded:
-			return WsGetBlockOut{}, fmt.Errorf("WsFetcherService.RequestBlock(%d): request to %s was timed out", round, target.GetAddress())
-		case context.Canceled:
-			return WsGetBlockOut{}, fmt.Errorf("WsFetcherService.RequestBlock(%d): request to %s was cancelled by context", round, target.GetAddress())
-		default:
-			return WsGetBlockOut{}, ctx.Err()
+		if errMsg, found := resp.Topics.GetValue(network.ErrorKey); found {
+			return WsGetBlockOut{}, fmt.Errorf(string(errMsg))
+		}
+
+		blk, found := resp.Topics.GetValue(network.BlockDataKey)
+		if !found {
+			return WsGetBlockOut{}, fmt.Errorf("WsFetcherService(%s): request failed: block data not found", target.GetAddress())
+		}
+		cert, found := resp.Topics.GetValue(network.CertDataKey)
+		if !found {
+			return WsGetBlockOut{}, fmt.Errorf("WsFetcherService(%s): request failed: cert data not found", target.GetAddress())
+		}
+
+		// For backward compatibility, the block and cert are repackaged here.
+		// This can be dropeed once the v1 is dropped.
+		blockCertBytes := protocol.EncodeReflect(PreEncodedBlockCert{
+			Block:       blk,
+			Certificate: cert})
+
+		wsBlockOut := WsGetBlockOut{
+			Round:      uint64(round),
+			BlockBytes: blockCertBytes,
+		}
+		return wsBlockOut, nil
+	} else {
+		req := WsGetBlockRequest{Round: uint64(round)}
+		err := target.Unicast(ctx, protocol.EncodeReflect(req), tag)
+		if err != nil {
+			return WsGetBlockOut{}, fmt.Errorf("WsFetcherService.RequestBlock(%d): unicast failed, %v", round, err)
+		}
+		select {
+		case resp := <-waitCh:
+			return resp, nil
+		case <-ctx.Done():
+			switch ctx.Err() {
+			case context.DeadlineExceeded:
+				return WsGetBlockOut{}, fmt.Errorf("WsFetcherService.RequestBlock(%d): request to %s was timed out", round, target.GetAddress())
+			case context.Canceled:
+				return WsGetBlockOut{}, fmt.Errorf("WsFetcherService.RequestBlock(%d): request to %s was cancelled by context", round, target.GetAddress())
+			default:
+				return WsGetBlockOut{}, ctx.Err()
+			}
 		}
 	}
 }
