@@ -202,7 +202,7 @@ type wsPeer struct {
 	peerMessageDelay int64
 
 	// throttledOutgoingConnection determines if this outgoing connection will be throttled bassed on it's
-	// performance or not. Throttled connections are more likly to be short-lived connections.
+	// performance or not. Throttled connections are more likely to be short-lived connections.
 	throttledOutgoingConnection bool
 }
 

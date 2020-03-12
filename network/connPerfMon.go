@@ -71,7 +71,7 @@ type pmStatistics struct {
 type connectionPerformanceMonitor struct {
 	deadlock.Mutex
 	monitoredConnections map[Peer]bool                // the map of the connection we're going to monitor. Messages coming from other connections would be ignored.
-	monitoredMessageTags map[Tag]bool                 // the map of the message tags we're interested in monitoring. Messages that aren't broadcast-type typically would be a good choice heer.
+	monitoredMessageTags map[Tag]bool                 // the map of the message tags we're interested in monitoring. Messages that aren't broadcast-type typically would be a good choice here.
 	stage                pmStage                      // the performance monitoring stage.
 	peerLastMsgTime      map[Peer]int64               // the map describing the last time we received a message from each of the peers.
 	lastIncomingMsgTime  int64                        // the time at which the last message was received from any of the peers.
@@ -125,7 +125,7 @@ func (pm *connectionPerformanceMonitor) GetPeersStatistics() (stat *pmStatistics
 
 // ComparePeers compares the given peers list or the existing peers being monitored. If the
 // peers list have changed since Reset was called, it would return false.
-// The method is insensetive to peer ordering and uses the peer interface pointer to determine equality.
+// The method is insensitive to peer ordering and uses the peer interface pointer to determine equality.
 func (pm *connectionPerformanceMonitor) ComparePeers(peers []Peer) bool {
 	pm.Lock()
 	defer pm.Unlock()
@@ -140,7 +140,7 @@ func (pm *connectionPerformanceMonitor) ComparePeers(peers []Peer) bool {
 // Reset updates the existing peers list to the one provided. The Reset method is expected to be used
 // in three scenarios :
 // 1. clearing out the existing monitoring - which brings it to initial state and disable monitoring.
-// 2. change monitored peers - in case we've had some of out peers disconnected/reconnected during the monitoring process.
+// 2. change monitored peers - in case we've had some of our peers disconnected/reconnected during the monitoring process.
 // 3. start monitoring
 func (pm *connectionPerformanceMonitor) Reset(peers []Peer) {
 	pm.Lock()
@@ -237,8 +237,8 @@ func (pm *connectionPerformanceMonitor) notifySync(msg *IncomingMessage) {
 	minMsgInterval := pm.updateMessageIdlingInterval(msg.Received)
 	if minMsgInterval > int64(pmSyncIdleTime) || (msg.Received-pm.stageStartTime > int64(pmSyncMaxTime)) {
 		// if we hit the first expression, then it means that we've managed to sync up the connections.
-		// otherwise, we've failed to sync up the connections. That's not great, as we're likly to
-		// have some "penelties" applied, but we can't do much about it.
+		// otherwise, we've failed to sync up the connections. That's not great, as we're likely to
+		// have some "penalties" applied, but we can't do much about it.
 		pm.accumulateMessage(msg, true)
 		pm.advanceStage(pmStageAccumulate, msg.Received)
 	}
