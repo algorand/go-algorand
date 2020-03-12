@@ -95,7 +95,7 @@ func (sv *stackValue) toTealValue() (tv basics.TealValue) {
 	return basics.TealValue{Type: basics.TealUintType, Uint: sv.Uint}
 }
 
-// LedgerForLogic represents ledger API for Statefull TEAL program
+// LedgerForLogic represents ledger API for Stateful TEAL program
 type LedgerForLogic interface {
 	Balance(addr basics.Address) (uint64, error)
 	AppLocalState(addr basics.Address, appIdx basics.AppIndex) (basics.TealKeyValue, error)
@@ -222,8 +222,8 @@ var errCostTooHigh = errors.New("LogicSigMaxCost exceded")
 var errLogicSignNotSupported = errors.New("LogicSig not supported")
 var errTooManyArgs = errors.New("LogicSig has too many arguments")
 
-// EvalStatefull executes stateful TEAL program
-func EvalStatefull(program []byte, params EvalParams) (pass bool, delta basics.EvalDelta, err error) {
+// EvalStateful executes stateful TEAL program
+func EvalStateful(program []byte, params EvalParams) (pass bool, delta basics.EvalDelta, err error) {
 	var cx evalContext
 	cx.EvalParams = params
 	cx.runModeFlags = runModeApplication

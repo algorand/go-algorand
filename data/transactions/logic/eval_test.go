@@ -2973,7 +2973,7 @@ balance
 					txn.Txn.Sender: 1,
 				},
 			)
-			_, _, err = EvalStatefull(program, ep)
+			_, _, err = EvalStateful(program, ep)
 			require.NoError(t, err)
 		})
 	}
@@ -2985,7 +2985,7 @@ balance
 			program, err := AssembleString(source)
 			require.NoError(t, err)
 			ep := defaultEvalParams(nil, nil)
-			_, _, err = EvalStatefull(program, ep)
+			_, _, err = EvalStateful(program, ep)
 			require.Error(t, err)
 			require.NotContains(t, err.Error(), "not allowed in current mode")
 			require.Equal(t, err.Error(), "error")
@@ -2997,7 +2997,7 @@ balance
 	program, err := AssembleString(source)
 	require.NoError(t, err)
 	ep := defaultEvalParams(nil, nil)
-	_, _, err = EvalStatefull(program, ep)
+	_, _, err = EvalStateful(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "ed25519verify not allowed in current mode")
 
@@ -3043,7 +3043,7 @@ int 1
 	ep := defaultEvalParams(nil, nil)
 	ep.Txn = &txn
 	ep.TxnGroup = txgroup
-	_, _, err = EvalStatefull(program, ep)
+	_, _, err = EvalStateful(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "ledger not available")
 
@@ -3052,7 +3052,7 @@ int 1
 			txn.Txn.Receiver: 1,
 		},
 	)
-	_, _, err = EvalStatefull(program, ep)
+	_, _, err = EvalStateful(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "cannot load account")
 
@@ -3062,7 +3062,7 @@ int 1
 ==`
 	program, err = AssembleString(text)
 	require.NoError(t, err)
-	pass, _, err := EvalStatefull(program, ep)
+	pass, _, err := EvalStateful(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
@@ -3079,7 +3079,7 @@ int 1
 			addr: 1,
 		},
 	)
-	pass, _, err = EvalStatefull(program, ep)
+	pass, _, err = EvalStateful(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to fetch balance")
 
@@ -3088,7 +3088,7 @@ int 1
 			txn.Txn.Sender: 1,
 		},
 	)
-	pass, _, err = EvalStatefull(program, ep)
+	pass, _, err = EvalStateful(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 }
@@ -3109,7 +3109,7 @@ int 1
 	ep := defaultEvalParams(nil, nil)
 	ep.Txn = &txn
 	ep.TxnGroup = txgroup
-	_, _, err = EvalStatefull(program, ep)
+	_, _, err = EvalStateful(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "ledger not available")
 
@@ -3118,7 +3118,7 @@ int 1
 			txn.Txn.Receiver: 1,
 		},
 	)
-	_, _, err = EvalStatefull(program, ep)
+	_, _, err = EvalStateful(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "cannot load account")
 
@@ -3130,7 +3130,7 @@ int 0
 ==`
 	program, err = AssembleString(text)
 	require.NoError(t, err)
-	pass, _, err := EvalStatefull(program, ep)
+	pass, _, err := EvalStateful(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
@@ -3148,7 +3148,7 @@ int 0
 		},
 	)
 	ep.Ledger = ledger
-	pass, _, err = EvalStatefull(program, ep)
+	pass, _, err = EvalStateful(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
@@ -3162,7 +3162,7 @@ int 1
 
 	program, err = AssembleString(text)
 	require.NoError(t, err)
-	pass, _, err = EvalStatefull(program, ep)
+	pass, _, err = EvalStateful(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
@@ -3176,7 +3176,7 @@ int 1
 
 	program, err = AssembleString(text)
 	require.NoError(t, err)
-	pass, _, err = EvalStatefull(program, ep)
+	pass, _, err = EvalStateful(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
@@ -3206,7 +3206,7 @@ int 1
 	ep := defaultEvalParams(nil, nil)
 	ep.Txn = &txn
 	ep.TxnGroup = txgroup
-	_, _, err = EvalStatefull(program, ep)
+	_, _, err = EvalStateful(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "ledger not available")
 
@@ -3216,7 +3216,7 @@ int 1
 		},
 	)
 	ep.Ledger = ledger
-	_, _, err = EvalStatefull(program, ep)
+	_, _, err = EvalStateful(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "cannot load account")
 
@@ -3234,7 +3234,7 @@ exit:
 int 1`
 	program, err = AssembleString(text)
 	require.NoError(t, err)
-	_, _, err = EvalStatefull(program, ep)
+	_, _, err = EvalStateful(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to fetch local state")
 
@@ -3246,14 +3246,14 @@ int 1`
 	ep.Ledger = ledger
 	ledger.newApp(txn.Txn.Receiver, 9999)
 
-	_, _, err = EvalStatefull(program, ep)
+	_, _, err = EvalStateful(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to fetch local state")
 
 	// create the app and check the value from ApplicationArgs[0] (protocol.PaymentTx) does not exist
 	ledger.newApp(txn.Txn.Receiver, 100)
 
-	pass, _, err := EvalStatefull(program, ep)
+	pass, _, err := EvalStateful(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
@@ -3271,7 +3271,7 @@ byte 0x414c474f
 	require.NoError(t, err)
 
 	ledger.balances[txn.Txn.Receiver].apps[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
-	pass, _, err = EvalStatefull(program, ep)
+	pass, _, err = EvalStateful(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
@@ -3291,7 +3291,7 @@ byte 0x414c474f
 	require.NoError(t, err)
 
 	ledger.balances[txn.Txn.Sender].apps[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
-	pass, _, err = EvalStatefull(program, ep)
+	pass, _, err = EvalStateful(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
@@ -3315,7 +3315,7 @@ byte 0x414c474f
 	ep := defaultEvalParams(nil, nil)
 	ep.Txn = &txn
 	ep.TxnGroup = txgroup
-	_, _, err = EvalStatefull(program, ep)
+	_, _, err = EvalStateful(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "ledger not available")
 
@@ -3325,24 +3325,24 @@ byte 0x414c474f
 		},
 	)
 	ep.Ledger = ledger
-	_, _, err = EvalStatefull(program, ep)
+	_, _, err = EvalStateful(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "reading global state from app create tx not allowed")
 
 	ep.Txn.Txn.ApplicationID = 100
-	_, _, err = EvalStatefull(program, ep)
+	_, _, err = EvalStateful(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to fetch app global state of the app")
 
 	// create the app and check the value from ApplicationArgs[0] (protocol.PaymentTx) does not exist
 	ledger.newApp(txn.Txn.Sender, 100)
 
-	_, _, err = EvalStatefull(program, ep)
+	_, _, err = EvalStateful(program, ep)
 	require.Error(t, err)
 	require.Equal(t, err.Error(), "error")
 
 	ledger.applications[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
-	pass, _, err := EvalStatefull(program, ep)
+	pass, _, err := EvalStateful(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 }
@@ -3486,7 +3486,7 @@ func TestAssets(t *testing.T) {
 		ep := defaultEvalParams(nil, nil)
 		ep.Txn = &txn
 		ep.TxnGroup = txgroup
-		_, _, err = EvalStatefull(program, ep)
+		_, _, err = EvalStateful(program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "ledger not available")
 
@@ -3497,7 +3497,7 @@ func TestAssets(t *testing.T) {
 		)
 		ep.Ledger = ledger
 
-		_, _, err = EvalStatefull(program, ep)
+		_, _, err = EvalStateful(program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "cannot load account[5]")
 	}
@@ -3532,7 +3532,7 @@ func TestAssets(t *testing.T) {
 
 	ep := defaultEvalParams(&sb, &txn)
 	ep.Ledger = ledger
-	pass, _, err := EvalStatefull(program, ep)
+	pass, _, err := EvalStateful(program, ep)
 	if !pass {
 		t.Log(hex.EncodeToString(program))
 		t.Log(sb.String())
@@ -3557,14 +3557,14 @@ int 1
 	program, err = AssembleString(source)
 	require.NoError(t, err)
 	ledger.setHolding(txn.Txn.Sender, 55, basics.AssetHolding{Amount: 123, Frozen: false})
-	pass, _, err = EvalStatefull(program, ep)
+	pass, _, err = EvalStateful(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
 	// check holdings invalid offsets
 	require.Equal(t, opsByName[ep.Proto.LogicSigVersion]["asset_read_holding"].Opcode, program[8])
 	program[9] = 0x02
-	_, _, err = EvalStatefull(program, ep)
+	_, _, err = EvalStateful(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid asset holding field 2")
 
@@ -3586,14 +3586,14 @@ int 1
 	require.NoError(t, err)
 	params.DefaultFrozen = true
 	ledger.setAsset(txn.Txn.Receiver, 55, params)
-	pass, _, err = EvalStatefull(program, ep)
+	pass, _, err = EvalStateful(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
 	// check holdings invalid offsets
 	require.Equal(t, opsByName[ep.Proto.LogicSigVersion]["asset_read_params"].Opcode, program[7])
 	program[8] = 0x20
-	_, _, err = EvalStatefull(program, ep)
+	_, _, err = EvalStateful(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid asset params field 32")
 
@@ -3616,7 +3616,7 @@ int 1
 	require.NoError(t, err)
 	params.URL = ""
 	ledger.setAsset(txn.Txn.Receiver, 55, params)
-	pass, _, err = EvalStatefull(program, ep)
+	pass, _, err = EvalStateful(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
@@ -3637,7 +3637,7 @@ int 1
 	require.NoError(t, err)
 	params.URL = ""
 	ledger.setAsset(txn.Txn.Receiver, 55, params)
-	pass, _, err = EvalStatefull(program, ep)
+	pass, _, err = EvalStateful(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "cannot compare ([]byte == uint64)")
 }
