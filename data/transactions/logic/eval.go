@@ -1370,7 +1370,7 @@ func (cx *evalContext) appReadGlobalKey(key string) (basics.TealValue, bool, err
 }
 
 // appWriteGlobalKey adds value to StateDelta
-func (cx *evalContext) appWriteGlobalKey(appID uint64, key string, tv basics.TealValue) error {
+func (cx *evalContext) appWriteGlobalKey(key string, tv basics.TealValue) error {
 	if cx.appGlobalStateCache == nil {
 		// if the state is not in the cache, load it
 		tkv, err := cx.Ledger.AppGlobalState()
@@ -1510,19 +1510,13 @@ func opAppWriteGlobalState(cx *evalContext) {
 
 	sv := cx.stack[last]
 	key := string(cx.stack[prev].Bytes)
-	appID := uint64(cx.Txn.Txn.ApplicationID)
 
 	if cx.Ledger == nil {
 		cx.err = fmt.Errorf("ledger not available")
 		return
 	}
 
-	if appID == 0 {
-		cx.err = fmt.Errorf("writing global state from app create tx not allowed")
-		return
-	}
-
-	err := cx.appWriteGlobalKey(appID, key, sv.toTealValue())
+	err := cx.appWriteGlobalKey(key, sv.toTealValue())
 	if err != nil {
 		cx.err = err
 		return

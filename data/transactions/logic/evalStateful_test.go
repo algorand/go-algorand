@@ -1341,11 +1341,6 @@ int 1
 	)
 	ep.Ledger = ledger
 
-	txn.Txn.ApplicationID = 0
-	_, _, err = EvalStateful(program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "writing global state from app create tx not allowed")
-
 	txn.Txn.ApplicationID = 100
 	_, _, err = EvalStateful(program, ep)
 	require.Error(t, err)
