@@ -566,7 +566,7 @@ func (m *activityMonitor) waitForActivity() {
 func (m *activityMonitor) waitForQuiet() {
 	select {
 	case <-m.quiet:
-	case <-time.After(5 * time.Second):
+	case <-time.After(10 * time.Second):
 		m.dump()
 
 		var buf [1000000]byte
