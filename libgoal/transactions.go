@@ -28,6 +28,8 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+var emptySchema = basics.StateSchema{}
+
 // SignTransactionWithWallet signs the passed transaction with keys from the wallet associated with the passed walletHandle
 func (c *Client) SignTransactionWithWallet(walletHandle, pw []byte, utx transactions.Transaction) (stx transactions.SignedTxn, err error) {
 	kmd, err := c.ensureKmdClient()
@@ -357,37 +359,49 @@ func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, lastValid, fe
 	return tx, nil
 }
 
-func (c *Client) MakeUnsignedAppCreateTx(approvalProg string, clearProg string, globalSchema basics.StateSchema, localSchema basics.StateSchema, appArgs []string, accounts []string) (tx transactions.Transaction, err error) {
-	tx.Type = protocol.ApplicationCallTx
+func (c *Client) MakeUnsignedAppCreateTx(onComplete transactions.OnCompletion, approvalProg string, clearProg string, globalSchema basics.StateSchema, localSchema basics.StateSchema, appArgs []string, accounts []string) (tx transactions.Transaction, err error) {
+	return c.MakeUnsignedApplicationCallTx(0, appArgs, accounts, onComplete, approvalProg, clearProg, globalSchema, localSchema)
+}
 
-	// Not necessary to set ApplicationID explicitly here, but for clarity,
-	// an ApplicaitonID of 0 is what indicates that this is a creation
-	// transaction
-	tx.ApplicationID = 0
-	tx.OnCompletion = transactions.NoOpOC
+func (c *Client) MakeUnsignedAppUpdateTx(appIdx uint64, appArgs []string, accounts []string, approvalProg string, clearProg string) (tx transactions.Transaction, err error) {
+	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, transactions.UpdateApplicationOC, approvalProg, clearProg, emptySchema, emptySchema)
+}
 
-	tx.ApprovalProgram = approvalProg
-	tx.ClearStateProgram = clearProg
-
-	tx.ApplicationArgs = appArgs
-	tx.Accounts, err = parseTxnAccounts(accounts)
-	if err != nil {
-		return tx, err
-	}
-
-	return tx, nil
+func (c *Client) MakeUnsignedAppDeleteTx(appIdx uint64, appArgs []string, accounts []string) (tx transactions.Transaction, err error) {
+	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, transactions.DeleteApplicationOC, "", "", emptySchema, emptySchema)
 }
 
 func (c *Client) MakeUnsignedAppOptInTx(appIdx uint64, appArgs []string, accounts []string) (tx transactions.Transaction, err error) {
+	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, transactions.OptInOC, "", "", emptySchema, emptySchema)
+}
+
+func (c *Client) MakeUnsignedAppCloseOutTx(appIdx uint64, appArgs []string, accounts []string) (tx transactions.Transaction, err error) {
+	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, transactions.CloseOutOC, "", "", emptySchema, emptySchema)
+}
+
+func (c *Client) MakeUnsignedAppClearStateTx(appIdx uint64, appArgs []string, accounts []string) (tx transactions.Transaction, err error) {
+	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, transactions.ClearStateOC, "", "", emptySchema, emptySchema)
+}
+
+func (c *Client) MakeUnsignedAppNoOpTx(appIdx uint64, appArgs []string, accounts []string) (tx transactions.Transaction, err error) {
+	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, transactions.NoOpOC, "", "", emptySchema, emptySchema)
+}
+
+func (c *Client) MakeUnsignedApplicationCallTx(appIdx uint64, appArgs []string, accounts []string, onCompletion transactions.OnCompletion, approvalProg string, clearProg string, globalSchema basics.StateSchema, localSchema basics.StateSchema) (tx transactions.Transaction, err error) {
 	tx.Type = protocol.ApplicationCallTx
 	tx.ApplicationID = basics.AppIndex(appIdx)
-	tx.OnCompletion = transactions.OptInOC
+	tx.OnCompletion = onCompletion
 
 	tx.ApplicationArgs = appArgs
 	tx.Accounts, err = parseTxnAccounts(accounts)
 	if err != nil {
 		return tx, err
 	}
+
+	tx.ApprovalProgram = approvalProg
+	tx.ClearStateProgram = clearProg
+	tx.LocalStateSchema = localSchema
+	tx.GlobalStateSchema = globalSchema
 
 	return tx, nil
 }

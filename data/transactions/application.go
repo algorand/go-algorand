@@ -370,20 +370,10 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva
 		return balances.Put(record)
 	}
 
-	// Past this point, the AppParams must exist. NoOp, OptIn, OptOut,
+	// Past this point, the AppParams must exist. NoOp, OptIn, CloseOut,
 	// Delete, and Update
 	if doesNotExist {
 		return fmt.Errorf("only closing out is supported for applications that do not exist")
-	}
-
-	// Execute the Approval program
-	approved, stateDeltas, err := steva.Eval([]byte(params.ApprovalProgram))
-	if err != nil {
-		return err
-	}
-
-	if !approved {
-		return fmt.Errorf("transaction rejected by ApprovalProgram")
 	}
 
 	// If this is an OptIn transaction, ensure that the sender has already
@@ -410,6 +400,16 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva
 				return err
 			}
 		}
+	}
+
+	// Execute the Approval program
+	approved, stateDeltas, err := steva.Eval([]byte(params.ApprovalProgram))
+	if err != nil {
+		return err
+	}
+
+	if !approved {
+		return fmt.Errorf("transaction rejected by ApprovalProgram")
 	}
 
 	// Apply GlobalState and LocalState deltas, provided they don't exceed
