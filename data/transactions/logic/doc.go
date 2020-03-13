@@ -94,8 +94,9 @@ var opDocList = []stringString{
 	{"app_read_local", "read from account's A from local state of the application B key C  => {0 or 1 (top), value}"},
 	{"app_read_global", "read key A from global state of a current application => {0 or 1 (top), value}"},
 	{"app_write_local", "write to account's A to local state of a current application key B with value C"},
-	{"app_write_global", "write key A and value B to global state of a current application"},
-	{"app_read_other_global", "if account A is a creator of the application B then read key K => {0 or 1 (top), value}"},
+	{"app_write_global", "write key A and value B to global state of the current application"},
+	{"app_delete_local", "delete from account's A local state key B of the current application"},
+	{"app_delete_global", "delete key A from a global state of the current application"},
 	{"asset_read_holding", "read from account's A and asset B holding field X (imm arg)  => {0 or 1 (top), value}"},
 	{"asset_read_params", "read from account's A and asset B params field X (imm arg)  => {0 or 1 (top), value}"},
 }
@@ -151,7 +152,8 @@ var opDocExtraList = []stringString{
 	{"app_opted_in", "params: account index, application id (top of the stack on opcode entry)"},
 	{"app_read_local", "params: account index, application id, state key. Return: did_exist flag (top of the stack), value"},
 	{"app_write_local", "params: account index, state key, value"},
-	{"app_read_other_global", "params: account index, application id, state key. Return: did_exist flag (top of the stack), value"},
+	{"app_delete_local", "params: account index, state key"},
+	{"app_delete_global", "params: state key"},
 	{"asset_read_holding", "params: account index, asset id. Return: did_exist flag, value"},
 	{"asset_read_params", "params: account index, asset id. Return: did_exist flag, value"},
 }
@@ -178,7 +180,7 @@ var OpGroupList = []OpGroup{
 	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw"}},
 	{"Loading Values", []string{"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "txna", "gtxna", "global", "load", "store"}},
 	{"Flow Control", []string{"err", "bnz", "pop", "dup"}},
-	{"State Access", []string{"balance", "app_opted_in", "app_read_local", "app_read_global", "app_write_local", "app_write_global", "app_read_other_global", "asset_read_holding", "asset_read_params"}},
+	{"State Access", []string{"balance", "app_opted_in", "app_read_local", "app_read_global", "app_write_local", "app_write_global", "app_delete_local", "app_delete_global", "asset_read_holding", "asset_read_params"}},
 }
 
 var opCostByName map[string]int

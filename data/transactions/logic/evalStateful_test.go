@@ -299,7 +299,8 @@ balance
 		"byte 0x01\napp_read_global",
 		"int 1\nbyte 0x01\nbyte 0x01\napp_write_local",
 		"byte 0x01\nint 0\napp_write_global",
-		"int 0\nint 0\nbyte 0x01\napp_read_other_global",
+		"int 0\nbyte 0x01\napp_delete_local",
+		"byte 0x01\napp_delete_global",
 		"int 0\nint 0\nasset_read_holding AssetHoldingFrozen",
 		"int 0\nint 0\nasset_read_params AssetParamsManager",
 	}
@@ -927,12 +928,12 @@ int 1
 	require.Contains(t, err.Error(), "cannot compare ([]byte == uint64)")
 }
 
-func TestAppLocalReadErrors(t *testing.T) {
+func TestAppLocalReadWriteDeleteErrors(t *testing.T) {
 	t.Parallel()
 
-	source := `int 0  // account idx (txn.Sender)
-int 100  // app id
-byte 0x414c474f  // key "ALGO"
+	sourceRead := `int 0  // account idx (txn.Sender)
+int 100                   // app id
+byte 0x414c474f           // key "ALGO"
 app_read_local
 !
 bnz error
@@ -940,7 +941,7 @@ int 0x77
 ==
 int 0
 int 100
-byte 0x414c474f41  // ALGOA
+byte 0x414c474f41         // ALGOA
 app_read_local
 !
 bnz error
@@ -953,103 +954,81 @@ err
 ok:
 int 1
 `
-	program, err := AssembleString(source)
-	require.NoError(t, err)
-
-	txn := makeSampleTxn()
-	ep := defaultEvalParams(nil, nil)
-	ep.Txn = &txn
-	_, _, err = EvalStateful(program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "ledger not available")
-
-	ledger := makeTestLedger(
-		map[basics.Address]uint64{
-			txn.Txn.Sender: 1,
-		},
-	)
-	ep.Ledger = ledger
-
-	firstCmdOffset := 20
-	saved := program[firstCmdOffset]
-	require.Equal(t, opsByName[0]["intc_0"].Opcode, saved)
-	program[firstCmdOffset] = opsByName[0]["intc_1"].Opcode
-	_, _, err = EvalStateful(program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "cannot load account[100]")
-
-	program[firstCmdOffset] = saved
-	_, _, err = EvalStateful(program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "failed to fetch local state")
-
-	ledger.newApp(txn.Txn.Sender, 100)
-
-	_, _, err = EvalStateful(program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "error") // no such key
-
-	ledger.balances[txn.Txn.Sender].apps[100]["ALGO"] = basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
-	ledger.balances[txn.Txn.Sender].apps[100]["ALGOA"] = basics.TealValue{Type: basics.TealUintType, Uint: 1}
-
-	ledger.resetCounters()
-	pass, delta, err := EvalStateful(program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
-	require.Equal(t, 0, len(delta.GlobalDelta))
-	require.Equal(t, 0, len(delta.LocalDeltas))
-	require.Equal(t, 1, ledger.localCount) // the second call to the state fulfilled from the cache
-}
-
-func TestAppLocalWriteErrors(t *testing.T) {
-	t.Parallel()
-
-	source := `int 0  // account idx (txn.Sender)
-byte 0x414c474f  // key "ALGO"
+	sourceWrite := `int 0  // account idx (txn.Sender)
+byte 0x414c474f            // key "ALGO"
 int 100
 app_write_local
 int 1
 `
-	program, err := AssembleString(source)
-	require.NoError(t, err)
+	sourceDelete := `int 0   // account idx
+byte 0x414c474f              // key "ALGO"
+app_delete_local
+int 100
+`
+	type test struct {
+		source       string
+		accNumOffset int
+	}
 
-	txn := makeSampleTxn()
-	ep := defaultEvalParams(nil, nil)
-	ep.Txn = &txn
-	_, _, err = EvalStateful(program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "ledger not available")
+	tests := map[string]test{
+		"read":   test{sourceRead, 20},
+		"write":  test{sourceWrite, 13},
+		"delete": test{sourceDelete, 12},
+	}
+	for name, test := range tests {
+		t.Run(fmt.Sprintf("test=%s", name), func(t *testing.T) {
+			source := test.source
+			firstCmdOffset := test.accNumOffset
 
-	ledger := makeTestLedger(
-		map[basics.Address]uint64{
-			txn.Txn.Sender: 1,
-		},
-	)
-	ep.Ledger = ledger
+			program, err := AssembleString(source)
+			require.NoError(t, err)
 
-	txn.Txn.ApplicationID = 100
-	firstCmdOffset := 13
-	saved := program[firstCmdOffset]
-	require.Equal(t, opsByName[0]["intc_0"].Opcode, saved)
-	program[firstCmdOffset] = opsByName[0]["intc_1"].Opcode
-	_, _, err = EvalStateful(program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "cannot load account[100]")
+			txn := makeSampleTxn()
+			ep := defaultEvalParams(nil, nil)
+			ep.Txn = &txn
+			_, _, err = EvalStateful(program, ep)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "ledger not available")
 
-	program[firstCmdOffset] = saved
-	_, _, err = EvalStateful(program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "failed to fetch local state")
+			ledger := makeTestLedger(
+				map[basics.Address]uint64{
+					txn.Txn.Sender: 1,
+				},
+			)
+			ep.Ledger = ledger
 
-	ledger.newApp(txn.Txn.Sender, 100)
+			saved := program[firstCmdOffset]
+			require.Equal(t, opsByName[0]["intc_0"].Opcode, saved)
+			program[firstCmdOffset] = opsByName[0]["intc_1"].Opcode
+			_, _, err = EvalStateful(program, ep)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "cannot load account[100]")
 
-	ledger.resetCounters()
-	pass, delta, err := EvalStateful(program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
-	require.Equal(t, 0, len(delta.GlobalDelta))
-	require.Equal(t, 1, len(delta.LocalDeltas))
-	require.Equal(t, 1, ledger.localCount)
+			program[firstCmdOffset] = saved
+			_, _, err = EvalStateful(program, ep)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "failed to fetch local state")
+
+			ledger.newApp(txn.Txn.Sender, 100)
+
+			if name == "read" {
+				_, _, err = EvalStateful(program, ep)
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "error") // no such key
+			}
+
+			ledger.balances[txn.Txn.Sender].apps[100]["ALGO"] = basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
+			ledger.balances[txn.Txn.Sender].apps[100]["ALGOA"] = basics.TealValue{Type: basics.TealUintType, Uint: 1}
+
+			ledger.resetCounters()
+			pass, delta, err := EvalStateful(program, ep)
+			require.NoError(t, err)
+			require.True(t, pass)
+			require.Equal(t, 0, len(delta.GlobalDelta))
+			// for read test: the second call to the state fulfilled from the cache
+			require.Equal(t, 1, ledger.localCount)
+		})
+	}
 }
 
 func TestAppLocalStateReadWrite(t *testing.T) {
@@ -1316,51 +1295,10 @@ int 1
 	require.Equal(t, 2, ledger.localCount) // one call to ledger per account
 }
 
-func TestAppGlobalWriteErrors(t *testing.T) {
+func TestAppGlobalReadWriteDeleteErrors(t *testing.T) {
 	t.Parallel()
 
-	source := `byte 0x414c474f  // key "ALGO"
-int 100
-app_write_global
-int 1
-`
-	program, err := AssembleString(source)
-	require.NoError(t, err)
-
-	txn := makeSampleTxn()
-	ep := defaultEvalParams(nil, nil)
-	ep.Txn = &txn
-	_, _, err = EvalStateful(program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "ledger not available")
-
-	ledger := makeTestLedger(
-		map[basics.Address]uint64{
-			txn.Txn.Sender: 1,
-		},
-	)
-	ep.Ledger = ledger
-
-	txn.Txn.ApplicationID = 100
-	_, _, err = EvalStateful(program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "failed to fetch global state")
-
-	ledger.newApp(txn.Txn.Sender, 100)
-
-	ledger.resetCounters()
-	pass, delta, err := EvalStateful(program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
-	require.Equal(t, 1, len(delta.GlobalDelta))
-	require.Equal(t, 0, len(delta.LocalDeltas))
-	require.Equal(t, 1, ledger.globalCount)
-}
-
-func TestAppGlobalReadErrors(t *testing.T) {
-	t.Parallel()
-
-	source := `byte 0x414c474f  // key "ALGO"
+	sourceRead := `byte 0x414c474f  // key "ALGO"
 app_read_global
 bnz ok
 err
@@ -1368,43 +1306,62 @@ ok:
 int 0x77
 ==
 `
-	program, err := AssembleString(source)
-	require.NoError(t, err)
+	sourceWrite := `byte 0x414c474f  // key "ALGO"
+int 100
+app_write_global
+int 1
+`
+	sourceDelete := `byte 0x414c474f  // key "ALGO"
+app_delete_global
+int 1
+`
+	tests := map[string]string{
+		"read":   sourceRead,
+		"write":  sourceWrite,
+		"delete": sourceDelete,
+	}
+	for name, source := range tests {
+		t.Run(fmt.Sprintf("test=%s", name), func(t *testing.T) {
+			program, err := AssembleString(source)
+			require.NoError(t, err)
 
-	txn := makeSampleTxn()
-	ep := defaultEvalParams(nil, nil)
-	ep.Txn = &txn
-	_, _, err = EvalStateful(program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "ledger not available")
+			txn := makeSampleTxn()
+			ep := defaultEvalParams(nil, nil)
+			ep.Txn = &txn
+			_, _, err = EvalStateful(program, ep)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "ledger not available")
 
-	ledger := makeTestLedger(
-		map[basics.Address]uint64{
-			txn.Txn.Sender: 1,
-		},
-	)
-	ep.Ledger = ledger
+			ledger := makeTestLedger(
+				map[basics.Address]uint64{
+					txn.Txn.Sender: 1,
+				},
+			)
+			ep.Ledger = ledger
 
-	txn.Txn.ApplicationID = 100
-	_, _, err = EvalStateful(program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "failed to fetch global state")
+			txn.Txn.ApplicationID = 100
+			_, _, err = EvalStateful(program, ep)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "failed to fetch global state")
 
-	ledger.newApp(txn.Txn.Sender, 100)
+			ledger.newApp(txn.Txn.Sender, 100)
 
-	_, _, err = EvalStateful(program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "error") // no such key
+			// a special test for read
+			if name == "read" {
+				_, _, err = EvalStateful(program, ep)
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "error") // no such key
+			}
+			ledger.applications[100]["ALGO"] = basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
 
-	ledger.applications[100]["ALGO"] = basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
-
-	ledger.resetCounters()
-	pass, delta, err := EvalStateful(program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
-	require.Equal(t, 0, len(delta.GlobalDelta))
-	require.Equal(t, 0, len(delta.LocalDeltas))
-	require.Equal(t, 1, ledger.globalCount)
+			ledger.resetCounters()
+			pass, delta, err := EvalStateful(program, ep)
+			require.NoError(t, err)
+			require.True(t, pass)
+			require.Equal(t, 0, len(delta.LocalDeltas))
+			require.Equal(t, 1, ledger.globalCount)
+		})
+	}
 }
 
 func TestAppGlobalReadWrite(t *testing.T) {
@@ -1581,4 +1538,426 @@ byte 0x414c474f
 
 	require.Equal(t, 1, ledger.globalCount)
 	require.Equal(t, 0, ledger.localCount)
+}
+
+func TestAppGlobalDelete(t *testing.T) {
+	t.Parallel()
+
+	// check write/delete/read
+	source := `byte 0x414c474f  // key "ALGO"
+int 0x77						// value
+app_write_global
+byte 0x414c474f41  // key "ALGOA"
+byte 0x414c474f
+app_write_global
+byte 0x414c474f
+app_delete_global
+byte 0x414c474f41
+app_delete_global
+byte 0x414c474f
+app_read_global
+bnz error
+byte 0x414c474f41
+app_read_global
+bnz error
+==
+bnz ok
+error:
+err
+ok:
+int 1
+`
+	ep := defaultEvalParams(nil, nil)
+	txn := makeSampleTxn()
+	txn.Txn.ApplicationID = 100
+	ep.Txn = &txn
+	ledger := makeTestLedger(
+		map[basics.Address]uint64{
+			txn.Txn.Sender: 1,
+		},
+	)
+	ep.Ledger = ledger
+	ledger.newApp(txn.Txn.Sender, 100)
+	sb := strings.Builder{}
+	ep.Trace = &sb
+
+	program, err := AssembleString(source)
+	require.NoError(t, err)
+	pass, delta, err := EvalStateful(program, ep)
+	if !pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.NoError(t, err)
+	require.True(t, pass)
+	require.Equal(t, 0, len(delta.GlobalDelta))
+	require.Equal(t, 0, len(delta.LocalDeltas))
+	require.Equal(t, 0, ledger.localCount)
+	require.Equal(t, 1, ledger.globalCount)
+
+	ledger.resetCounters()
+	delete(ledger.applications[100], "ALGOA")
+	delete(ledger.applications[100], "ALGO")
+
+	algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
+	ledger.applications[100]["ALGO"] = algoValue
+
+	// check delete existing
+	source = `byte 0x414c474f   // key "ALGO"
+app_delete_global
+byte 0x414c474f
+app_read_global
+==  // two zeros
+`
+
+	program, err = AssembleString(source)
+	require.NoError(t, err)
+	pass, delta, err = EvalStateful(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+	require.Equal(t, 1, len(delta.GlobalDelta))
+	vd := delta.GlobalDelta["ALGO"]
+	require.Equal(t, basics.DeleteAction, vd.Action)
+	require.Equal(t, uint64(0), vd.Uint)
+	require.Equal(t, "", vd.Bytes)
+	require.Equal(t, 0, len(delta.LocalDeltas))
+	require.Equal(t, 0, ledger.localCount)
+	require.Equal(t, 1, ledger.globalCount)
+
+	ledger.resetCounters()
+	delete(ledger.applications[100], "ALGOA")
+	delete(ledger.applications[100], "ALGO")
+
+	ledger.applications[100]["ALGO"] = algoValue
+
+	// check delete and write non-existing
+	source = `byte 0x414c474f41   // key "ALGOA"
+app_delete_global
+byte 0x414c474f41
+app_read_global
+==  // two zeros
+byte 0x414c474f41
+int 0x78
+app_write_global
+`
+	program, err = AssembleString(source)
+	require.NoError(t, err)
+	pass, delta, err = EvalStateful(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+	require.Equal(t, 1, len(delta.GlobalDelta))
+	vd = delta.GlobalDelta["ALGOA"]
+	require.Equal(t, basics.SetUintAction, vd.Action)
+	require.Equal(t, uint64(0x78), vd.Uint)
+	require.Equal(t, "", vd.Bytes)
+	require.Equal(t, 0, len(delta.LocalDeltas))
+	require.Equal(t, 0, ledger.localCount)
+	require.Equal(t, 1, ledger.globalCount)
+
+	ledger.resetCounters()
+	delete(ledger.applications[100], "ALGOA")
+	delete(ledger.applications[100], "ALGO")
+
+	ledger.applications[100]["ALGO"] = algoValue
+
+	// check delete and write existing
+	source = `byte 0x414c474f   // key "ALGO"
+app_delete_global
+byte 0x414c474f
+int 0x78
+app_write_global
+int 1
+`
+	program, err = AssembleString(source)
+	require.NoError(t, err)
+	pass, delta, err = EvalStateful(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+	require.Equal(t, 1, len(delta.GlobalDelta))
+	vd = delta.GlobalDelta["ALGO"]
+	require.Equal(t, basics.SetUintAction, vd.Action)
+	require.Equal(t, 0, len(delta.LocalDeltas))
+	require.Equal(t, 0, ledger.localCount)
+	require.Equal(t, 1, ledger.globalCount)
+
+	ledger.resetCounters()
+	delete(ledger.applications[100], "ALGOA")
+	delete(ledger.applications[100], "ALGO")
+
+	ledger.applications[100]["ALGO"] = algoValue
+
+	// check delete,write,delete existing
+	source = `byte 0x414c474f   // key "ALGO"
+app_delete_global
+byte 0x414c474f
+int 0x78
+app_write_global
+byte 0x414c474f
+app_delete_global
+int 1
+`
+	program, err = AssembleString(source)
+	require.NoError(t, err)
+	pass, delta, err = EvalStateful(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+	require.Equal(t, 1, len(delta.GlobalDelta))
+	vd = delta.GlobalDelta["ALGO"]
+	require.Equal(t, basics.DeleteAction, vd.Action)
+	require.Equal(t, 0, len(delta.LocalDeltas))
+	require.Equal(t, 0, ledger.localCount)
+	require.Equal(t, 1, ledger.globalCount)
+
+	ledger.resetCounters()
+	delete(ledger.applications[100], "ALGOA")
+	delete(ledger.applications[100], "ALGO")
+
+	ledger.applications[100]["ALGO"] = algoValue
+
+	// check delete,write,delete non-existing
+	source = `byte 0x414c474f41   // key "ALGOA"
+app_delete_global
+byte 0x414c474f41
+int 0x78
+app_write_global
+byte 0x414c474f41
+app_delete_global
+int 1
+`
+	program, err = AssembleString(source)
+	require.NoError(t, err)
+	pass, delta, err = EvalStateful(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+	require.Equal(t, 0, len(delta.GlobalDelta))
+	require.Equal(t, 0, len(delta.LocalDeltas))
+	require.Equal(t, 0, ledger.localCount)
+	require.Equal(t, 1, ledger.globalCount)
+}
+
+func TestAppLocalDelete(t *testing.T) {
+	t.Parallel()
+
+	// check write/delete/read
+	source := `int 0  // account
+byte 0x414c474f       // key "ALGO"
+int 0x77              // value
+app_write_local
+int 1
+byte 0x414c474f41     // key "ALGOA"
+byte 0x414c474f
+app_write_local
+int 0
+byte 0x414c474f
+app_delete_local
+int 1
+byte 0x414c474f41
+app_delete_local
+int 0
+int 0
+byte 0x414c474f
+app_read_local
+bnz error
+int 1
+int 100
+byte 0x414c474f41
+app_read_local
+bnz error
+==
+bnz ok
+error:
+err
+ok:
+int 1
+`
+	ep := defaultEvalParams(nil, nil)
+	txn := makeSampleTxn()
+	txn.Txn.ApplicationID = 100
+	ep.Txn = &txn
+	ledger := makeTestLedger(
+		map[basics.Address]uint64{
+			txn.Txn.Sender: 1,
+		},
+	)
+	ep.Ledger = ledger
+	ledger.newApp(txn.Txn.Sender, 100)
+	ledger.balances[txn.Txn.Receiver] = makeBalanceRecord(txn.Txn.Receiver, 1)
+	ledger.balances[txn.Txn.Receiver].apps[100] = make(basics.TealKeyValue)
+
+	sb := strings.Builder{}
+	ep.Trace = &sb
+
+	program, err := AssembleString(source)
+	require.NoError(t, err)
+	pass, delta, err := EvalStateful(program, ep)
+	if !pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.NoError(t, err)
+	require.True(t, pass)
+	require.Equal(t, 0, len(delta.GlobalDelta))
+	require.Equal(t, 0, len(delta.LocalDeltas))
+	require.Equal(t, 2, ledger.localCount)
+	require.Equal(t, 0, ledger.globalCount)
+
+	ledger.resetCounters()
+	delete(ledger.balances[txn.Txn.Sender].apps[100], "ALGOA")
+	delete(ledger.balances[txn.Txn.Sender].apps[100], "ALGO")
+	delete(ledger.balances[txn.Txn.Receiver].apps[100], "ALGOA")
+	delete(ledger.balances[txn.Txn.Receiver].apps[100], "ALGO")
+
+	algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
+	ledger.balances[txn.Txn.Sender].apps[100]["ALGO"] = algoValue
+
+	// check delete existing
+	source = `int 0  // account
+byte 0x414c474f      // key "ALGO"
+app_delete_local
+int 0
+int 100
+byte 0x414c474f
+app_read_local
+==  // two zeros
+`
+
+	program, err = AssembleString(source)
+	require.NoError(t, err)
+	pass, delta, err = EvalStateful(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+	require.Equal(t, 0, len(delta.GlobalDelta))
+	require.Equal(t, 1, len(delta.LocalDeltas))
+	vd := delta.LocalDeltas[txn.Txn.Sender]["ALGO"]
+	require.Equal(t, basics.DeleteAction, vd.Action)
+	require.Equal(t, uint64(0), vd.Uint)
+	require.Equal(t, "", vd.Bytes)
+	require.Equal(t, 1, ledger.localCount)
+	require.Equal(t, 0, ledger.globalCount)
+
+	ledger.resetCounters()
+	delete(ledger.balances[txn.Txn.Sender].apps[100], "ALGOA")
+	delete(ledger.balances[txn.Txn.Sender].apps[100], "ALGO")
+
+	ledger.balances[txn.Txn.Sender].apps[100]["ALGO"] = algoValue
+
+	// check delete and write non-existing
+	source = `int 0  // account
+byte 0x414c474f41    // key "ALGOA"
+app_delete_local
+int 0
+int 0
+byte 0x414c474f41
+app_read_local
+==  // two zeros
+int 0
+byte 0x414c474f41
+int 0x78
+app_write_local
+`
+	program, err = AssembleString(source)
+	require.NoError(t, err)
+	pass, delta, err = EvalStateful(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+	require.Equal(t, 0, len(delta.GlobalDelta))
+	require.Equal(t, 1, len(delta.LocalDeltas))
+	vd = delta.LocalDeltas[txn.Txn.Sender]["ALGOA"]
+	require.Equal(t, basics.SetUintAction, vd.Action)
+	require.Equal(t, uint64(0x78), vd.Uint)
+	require.Equal(t, "", vd.Bytes)
+	require.Equal(t, 1, ledger.localCount)
+	require.Equal(t, 0, ledger.globalCount)
+
+	ledger.resetCounters()
+	delete(ledger.balances[txn.Txn.Sender].apps[100], "ALGOA")
+	delete(ledger.balances[txn.Txn.Sender].apps[100], "ALGO")
+
+	ledger.balances[txn.Txn.Sender].apps[100]["ALGO"] = algoValue
+
+	// check delete and write existing
+	source = `int 0   // account
+byte 0x414c474f       // key "ALGO"
+app_delete_local
+int 0
+byte 0x414c474f
+int 0x78
+app_write_local
+int 1
+`
+	program, err = AssembleString(source)
+	require.NoError(t, err)
+	pass, delta, err = EvalStateful(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+	require.Equal(t, 0, len(delta.GlobalDelta))
+	require.Equal(t, 1, len(delta.LocalDeltas))
+	vd = delta.LocalDeltas[txn.Txn.Sender]["ALGO"]
+	require.Equal(t, basics.SetUintAction, vd.Action)
+	require.Equal(t, uint64(0x78), vd.Uint)
+	require.Equal(t, "", vd.Bytes)
+	require.Equal(t, 1, ledger.localCount)
+	require.Equal(t, 0, ledger.globalCount)
+
+	ledger.resetCounters()
+	delete(ledger.balances[txn.Txn.Sender].apps[100], "ALGOA")
+	delete(ledger.balances[txn.Txn.Sender].apps[100], "ALGO")
+
+	ledger.balances[txn.Txn.Sender].apps[100]["ALGO"] = algoValue
+
+	// check delete,write,delete existing
+	source = `int 0  // account
+byte 0x414c474f      // key "ALGO"
+app_delete_local
+int 0
+byte 0x414c474f
+int 0x78
+app_write_local
+int 0
+byte 0x414c474f
+app_delete_local
+int 1
+`
+	program, err = AssembleString(source)
+	require.NoError(t, err)
+	pass, delta, err = EvalStateful(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+	require.Equal(t, 0, len(delta.GlobalDelta))
+	require.Equal(t, 1, len(delta.LocalDeltas))
+	vd = delta.LocalDeltas[txn.Txn.Sender]["ALGO"]
+	require.Equal(t, basics.DeleteAction, vd.Action)
+	require.Equal(t, uint64(0), vd.Uint)
+	require.Equal(t, "", vd.Bytes)
+	require.Equal(t, 1, ledger.localCount)
+	require.Equal(t, 0, ledger.globalCount)
+
+	ledger.resetCounters()
+	delete(ledger.balances[txn.Txn.Sender].apps[100], "ALGOA")
+	delete(ledger.balances[txn.Txn.Sender].apps[100], "ALGO")
+
+	ledger.balances[txn.Txn.Sender].apps[100]["ALGO"] = algoValue
+
+	// check delete,write,delete non-existing
+	source = `int 0  // account
+byte 0x414c474f41    // key "ALGOA"
+app_delete_local
+int 0
+byte 0x414c474f41
+int 0x78
+app_write_local
+int 0
+byte 0x414c474f41
+app_delete_local
+int 1
+`
+	program, err = AssembleString(source)
+	require.NoError(t, err)
+	pass, delta, err = EvalStateful(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+	require.Equal(t, 0, len(delta.GlobalDelta))
+	require.Equal(t, 0, len(delta.LocalDeltas))
+	require.Equal(t, 1, ledger.localCount)
+	require.Equal(t, 0, ledger.globalCount)
 }
