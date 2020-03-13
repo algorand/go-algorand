@@ -149,12 +149,50 @@ func (al *appLedger) AppLocalState(addr basics.Address, appIdx basics.AppIndex) 
 	return cloned.KeyValue, nil
 }
 
-func (al *appLedger) AssetHolding(addr basics.Address, assetID uint64) (basics.AssetHolding, error) {
-	// TOOD(application)
-	return basics.AssetHolding{}, fmt.Errorf("AssetHolding not implemented")
+func (al *appLedger) AssetHolding(addr basics.Address, assetIdx uint64) (holding basics.AssetHolding, err error) {
+	// Ensure requested address is on whitelist
+	if !al.addresses[addr] {
+		err = fmt.Errorf("cannot access asset holding for %s, not sender or in txn.Addresses", addr.String())
+		return
+	}
+
+	// Fetch the requested balance record
+	record, err := al.balances.Get(addr, false)
+	if err != nil {
+		return
+	}
+
+	// Ensure we have the requested holding
+	holding, ok := record.Assets[basics.AssetIndex(assetIdx)]
+	if !ok {
+		err = fmt.Errorf("account %s has not opted in to asset %d", addr.String(), assetIdx)
+		return
+	}
+
+	// OK to return basics.AssetParams by value, it only holds value types
+	return holding, nil
 }
 
-func (al *appLedger) AssetParams(addr basics.Address, assetID uint64) (basics.AssetParams, error) {
-	// TOOD(application)
-	return basics.AssetParams{}, fmt.Errorf("AssetParams not implemented")
+func (al *appLedger) AssetParams(addr basics.Address, assetIdx uint64) (params basics.AssetParams, err error) {
+	// Ensure requested address is on whitelist
+	if !al.addresses[addr] {
+		err = fmt.Errorf("cannot access asset params for %s, not sender or in txn.Addresses", addr.String())
+		return
+	}
+
+	// Fetch the requested balance record
+	record, err := al.balances.Get(addr, false)
+	if err != nil {
+		return
+	}
+
+	// Ensure account created the requested asset
+	params, ok := record.AssetParams[basics.AssetIndex(assetIdx)]
+	if !ok {
+		err = fmt.Errorf("account %s has not created asset %d", addr.String(), assetIdx)
+		return
+	}
+
+	// OK to return basics.AssetParams by value, it only holds value types
+	return params, nil
 }
