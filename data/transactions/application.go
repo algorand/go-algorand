@@ -354,18 +354,18 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva
 			// for this account. Ignore whether or not it succeeded or failed.
 			// ClearState transactions may never be rejected by app logic.
 			_, stateDeltas, err := steva.Eval([]byte(params.ClearStateProgram))
-			if err != nil {
+			if err == nil {
+				// Program execution may produce some GlobalState and LocalState
+				// deltas. Apply them, provided they don't exceed the bounds set by
+				// the GlobalStateSchema and LocalStateSchema. If they do exceed
+				// those bounds, then don't fail, but also don't apply the changes.
+				failIfNotApplied := false
+				err = applyStateDeltas(stateDeltas, balances, appIdx, failIfNotApplied)
+				if err != nil {
+					return err
+				}
+			} else {
 				// Ignore errors from the ClearStateProgram
-			}
-
-			// Program execution may produce some GlobalState and LocalState
-			// deltas. Apply them, provided they don't exceed the bounds set by
-			// the GlobalStateSchema and LocalStateSchema. If they do exceed
-			// those bounds, then don't fail, but also don't apply the changes.
-			failIfNotApplied := false
-			err = applyStateDeltas(stateDeltas, balances, appIdx, failIfNotApplied)
-			if err != nil {
-				return err
 			}
 		}
 
