@@ -173,8 +173,8 @@ type evalContext struct {
 
 	runModeFlags uint64
 
+	appGlobalStateCache basics.TealKeyValue
 	appLocalStateCache  map[ckey]basics.TealKeyValue
-	appGlobalStateCache map[ckey]basics.TealKeyValue
 	appEvalDelta        basics.EvalDelta
 }
 
@@ -236,8 +236,8 @@ func EvalStateful(program []byte, params EvalParams) (pass bool, delta basics.Ev
 	cx.runModeFlags = runModeApplication
 
 	cx.appEvalDelta = basics.MakeEvalDelta()
+	cx.appGlobalStateCache = nil // use nil as indicator of not loaded yet
 	cx.appLocalStateCache = make(map[ckey]basics.TealKeyValue)
-	cx.appGlobalStateCache = make(map[ckey]basics.TealKeyValue)
 
 	pass, err = eval(program, &cx)
 	delta = cx.appEvalDelta
@@ -1356,6 +1356,43 @@ func (cx *evalContext) appWriteLocalKey(appID uint64, addr basics.Address, key s
 	return nil
 }
 
+func (cx *evalContext) appReadGlobalKey(key string) (basics.TealValue, bool, error) {
+	if cx.appGlobalStateCache == nil {
+		tkv, err := cx.Ledger.AppGlobalState()
+		if err != nil {
+			return basics.TealValue{}, false, fmt.Errorf("failed to fetch global state of this app: %s", err.Error())
+		}
+		cx.appGlobalStateCache = tkv
+	}
+
+	tv, ok := cx.appGlobalStateCache[string(key)]
+	return tv, ok, nil
+}
+
+// appWriteGlobalKey adds value to StateDelta
+func (cx *evalContext) appWriteGlobalKey(appID uint64, key string, tv basics.TealValue) error {
+	if cx.appGlobalStateCache == nil {
+		// if the state is not in the cache, load it
+		tkv, err := cx.Ledger.AppGlobalState()
+		if err != nil {
+			return fmt.Errorf("failed to fetch global state of this app: %s", err.Error())
+		}
+		cx.appGlobalStateCache = tkv
+	}
+
+	// if the value is in cache => it is not changed, no state change
+	if v, ok := cx.appGlobalStateCache[key]; ok && tv == v {
+		return nil
+	}
+
+	// update the value
+	cx.appGlobalStateCache[key] = tv
+
+	// and update EvalDelta
+	cx.appEvalDelta.GlobalDelta[key] = tv.ToValueDelta()
+	return nil
+}
+
 func opAppReadLocalState(cx *evalContext) {
 	last := len(cx.stack) - 1 // state key
 	prev := last - 1          // app id
@@ -1374,6 +1411,10 @@ func opAppReadLocalState(cx *evalContext) {
 	if err != nil {
 		cx.err = err
 		return
+	}
+
+	if appID != 0 && appID == uint64(cx.Txn.Txn.ApplicationID) {
+		appID = 0 // 0 is an alias for the current app
 	}
 
 	tv, ok, err := cx.appReadLocalKey(appID, addr, string(key))
@@ -1404,25 +1445,18 @@ func opAppReadGlobalState(cx *evalContext) {
 	last := len(cx.stack) - 1 // state key
 
 	key := cx.stack[last].Bytes
-	appID := uint64(cx.Txn.Txn.ApplicationID)
 
 	if cx.Ledger == nil {
 		cx.err = fmt.Errorf("ledger not available")
 		return
 	}
 
-	if appID == 0 {
-		cx.err = fmt.Errorf("reading global state from app create tx not allowed")
-		return
-	}
-
-	state, err := cx.Ledger.AppGlobalState()
+	tv, ok, err := cx.appReadGlobalKey(string(key))
 	if err != nil {
-		cx.err = fmt.Errorf("failed to fetch app global state of the app %d", appID)
+		cx.err = err
 		return
 	}
 
-	tv, ok := state[string(key)]
 	var didExist stackValue
 	if !ok {
 		cx.stack[last].Uint = 0
@@ -1448,15 +1482,10 @@ func opAppWriteLocalState(cx *evalContext) {
 	sv := cx.stack[last]
 	key := string(cx.stack[prev].Bytes)
 	accountIdx := cx.stack[pprev].Uint
-	appID := uint64(cx.Txn.Txn.ApplicationID)
+	appID := uint64(0) // 0 is an alias for the current app
 
 	if cx.Ledger == nil {
 		cx.err = fmt.Errorf("ledger not available")
-		return
-	}
-
-	if appID == 0 {
-		cx.err = fmt.Errorf("writing local state from app create tx not allowed")
 		return
 	}
 
@@ -1478,7 +1507,27 @@ func opAppWriteLocalState(cx *evalContext) {
 func opAppWriteGlobalState(cx *evalContext) {
 	last := len(cx.stack) - 1 // value
 	prev := last - 1          // state key
-	// TODO
+
+	sv := cx.stack[last]
+	key := string(cx.stack[prev].Bytes)
+	appID := uint64(cx.Txn.Txn.ApplicationID)
+
+	if cx.Ledger == nil {
+		cx.err = fmt.Errorf("ledger not available")
+		return
+	}
+
+	if appID == 0 {
+		cx.err = fmt.Errorf("writing global state from app create tx not allowed")
+		return
+	}
+
+	err := cx.appWriteGlobalKey(appID, key, sv.toTealValue())
+	if err != nil {
+		cx.err = err
+		return
+	}
+
 	cx.stack = cx.stack[:prev]
 }
 
