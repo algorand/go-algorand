@@ -180,11 +180,6 @@ func applyStateDeltas(evalDelta basics.EvalDelta, balances Balances, appIdx basi
 	// Clone the parameters so that they are safe to modify
 	params = params.Clone()
 
-	// Allocate the GlobalState map, if it has not been allocated already
-	if params.GlobalState == nil {
-		params.GlobalState = make(basics.TealKeyValue)
-	}
-
 	// Apply the GlobalDelta in place
 	err = applyDelta(evalDelta.GlobalDelta, params.GlobalState)
 	if err != nil {
@@ -207,6 +202,12 @@ func applyStateDeltas(evalDelta basics.EvalDelta, balances Balances, appIdx basi
 
 	changes := make(map[basics.Address]basics.AppLocalState, len(evalDelta.LocalDeltas))
 	for addr, delta := range evalDelta.LocalDeltas {
+		// Skip over empty deltas, because we shouldn't fail because of
+		// a zero-delta on an account that hasn't opted in
+		if len(delta) == 0 {
+			continue
+		}
+
 		record, err := balances.Get(addr, false)
 		if err != nil {
 			return err
@@ -306,6 +307,7 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva
 			ClearStateProgram: ac.ClearStateProgram,
 			LocalStateSchema:  ac.LocalStateSchema,
 			GlobalStateSchema: ac.GlobalStateSchema,
+			GlobalState:       make(basics.TealKeyValue),
 		}
 
 		// Write back to the creator's balance record and continue
