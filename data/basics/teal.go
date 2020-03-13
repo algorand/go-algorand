@@ -19,9 +19,9 @@ package basics
 type DeltaAction uint64
 
 const (
-	SetUintAction DeltaAction = 1 + iota
-	SetBytesAction
-	DeleteAction
+	SetUintAction  DeltaAction = 1
+	SetBytesAction DeltaAction = 2
+	DeleteAction   DeltaAction = 3
 )
 
 type ValueDelta struct {
@@ -62,8 +62,8 @@ type StateSchema struct {
 type TealType uint64
 
 const (
-	TealBytesType TealType = 1 + iota
-	TealUintType
+	TealBytesType TealType = 1
+	TealUintType  TealType = 2
 )
 
 type TealValue struct {
@@ -102,4 +102,29 @@ func (tk TealKeyValue) Clone() TealKeyValue {
 		res[k] = v
 	}
 	return res
+}
+
+func (tk TealKeyValue) SatisfiesSchema(schema StateSchema) bool {
+	// Count all of the types in the key/value store
+	var uintCount, bytesCount uint64
+	for _, value := range tk {
+		switch value.Type {
+		case TealBytesType:
+			bytesCount++
+		case TealUintType:
+			uintCount++
+		default:
+			// Shouldn't happen
+			return false
+		}
+	}
+
+	// Check against the schema
+	if uintCount > schema.NumUint {
+		return false
+	}
+	if bytesCount > schema.NumByteSlice {
+		return false
+	}
+	return true
 }

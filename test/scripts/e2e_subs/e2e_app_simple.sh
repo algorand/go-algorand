@@ -14,10 +14,10 @@ gcmd="goal -w ${WALLET}"
 ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 
 # Succeed in creating app that approves all transactions
-APPID=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog <(echo 'int 1') --clear-prog <(echo 'int 1') | grep Created | awk '{ print $6 }')
+APPID=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog <(echo 'int 1') --clear-prog <(echo 'int 1') --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 | grep Created | awk '{ print $6 }')
 
 # Fail to create app if approval program rejects creation
-RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog <(echo 'int 0') --clear-prog <(echo 'int 1') 2>&1 || true)
+RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog <(echo 'int 0') --clear-prog <(echo 'int 1') --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 2>&1 || true)
 EXPERROR='rejected by ApprovalProgram'
 if [[ $RES != *"${EXPERROR}"* ]]; then
     date '+app-create-test FAIL txn with failing approval prog should be rejected %Y%m%d_%H%M%S'

@@ -297,7 +297,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			}
 		}
 
-		if tx.ApplicationID == 0 {
+		if tx.ApplicationID != 0 {
 			if tx.LocalStateSchema != (basics.StateSchema{}) ||
 				tx.GlobalStateSchema != (basics.StateSchema{}) {
 				return fmt.Errorf("local and global state schemas are immutable")

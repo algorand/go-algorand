@@ -30,10 +30,10 @@ var (
 	approvalProgFile string
 	clearProgFile    string
 
-	localSchemaInts       uint64
+	localSchemaUints      uint64
 	localSchemaByteSlices uint64
 
-	globalSchemaInts       uint64
+	globalSchemaUints      uint64
 	globalSchemaByteSlices uint64
 
 	appAccounts []string
@@ -58,6 +58,11 @@ func init() {
 	createAppCmd.Flags().StringVar(&approvalProgFile, "approval-prog", "", "TEAL program to approve/reject transactions")
 	createAppCmd.Flags().StringVar(&clearProgFile, "clear-prog", "", "TEAL program to update application state when a user clears their state")
 
+	createAppCmd.Flags().Uint64Var(&globalSchemaUints, "global-ints", 0, "Maximum number of integer values that may be stored in the global key/value store. Immutable.")
+	createAppCmd.Flags().Uint64Var(&globalSchemaByteSlices, "global-byteslices", 0, "Maximum number of byte slices that may be stored in the global key/value store. Immutable.")
+	createAppCmd.Flags().Uint64Var(&localSchemaUints, "local-ints", 0, "Maximum number of integer values that may be stored in local (per-account) key/value stores for this app. Immutable.")
+	createAppCmd.Flags().Uint64Var(&localSchemaByteSlices, "local-byteslices", 0, "Maximum number of byte slices that may be stored in local (per-account) key/value stores for this app. Immutable.")
+
 	createAppCmd.Flags().StringVar(&appCreator, "creator", "", "Account to create the asset")
 	callAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to call app from")
 	optInAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to opt in")
@@ -65,6 +70,10 @@ func init() {
 	clearAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to clear app state for")
 
 	createAppCmd.MarkFlagRequired("creator")
+	createAppCmd.MarkFlagRequired("global-ints")
+	createAppCmd.MarkFlagRequired("global-byteslices")
+	createAppCmd.MarkFlagRequired("local-ints")
+	createAppCmd.MarkFlagRequired("local-byteslices")
 	createAppCmd.MarkFlagRequired("approval-prog")
 	createAppCmd.MarkFlagRequired("clear-prog")
 
@@ -100,13 +109,23 @@ var createAppCmd = &cobra.Command{
 		dataDir := ensureSingleDataDir()
 		client := ensureFullClient(dataDir)
 
+		// Construct schemas from args
+		localSchema := basics.StateSchema{
+			NumUint:      localSchemaUints,
+			NumByteSlice: localSchemaByteSlices,
+		}
+
+		globalSchema := basics.StateSchema{
+			NumUint:      globalSchemaUints,
+			NumByteSlice: globalSchemaByteSlices,
+		}
+
 		// Parse transaction parameters
-		emptySchema := basics.StateSchema{}
 		approvalProg := string(assembleFile(approvalProgFile))
 		clearProg := string(assembleFile(clearProgFile))
 		appArgs := getAppArgs()
 
-		tx, err := client.MakeUnsignedAppCreateTx(transactions.NoOpOC, approvalProg, clearProg, emptySchema, emptySchema, appArgs, appAccounts)
+		tx, err := client.MakeUnsignedAppCreateTx(transactions.NoOpOC, approvalProg, clearProg, globalSchema, localSchema, appArgs, appAccounts)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}

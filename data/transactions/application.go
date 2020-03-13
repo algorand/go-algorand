@@ -191,10 +191,18 @@ func applyStateDeltas(evalDelta basics.EvalDelta, balances Balances, appIdx basi
 		return err
 	}
 
+	// Make sure we haven't violated the GlobalStateSchema
+	if !params.GlobalState.SatisfiesSchema(params.GlobalStateSchema) {
+		if !errIfNotApplied {
+			return nil
+		}
+		return fmt.Errorf("GlobalState for app %d would use too much space", appIdx)
+	}
+
 	/*
 	 * 2. Apply each LocalState delta, fail fast if any affected account
-	 *    has not opted in to appIdx (without having written anything back
-	 *    to the cow
+	 *    has not opted in to appIdx or would violate the LocalStateSchema.
+	 *    Don't write anything back to the cow yet.
 	 */
 
 	changes := make(map[basics.Address]basics.AppLocalState, len(evalDelta.LocalDeltas))
@@ -220,18 +228,20 @@ func applyStateDeltas(evalDelta basics.EvalDelta, balances Balances, appIdx basi
 			return err
 		}
 
+		// Make sure we haven't violated the LocalStateSchema
+		if !localState.KeyValue.SatisfiesSchema(localState.Schema) {
+			if !errIfNotApplied {
+				return nil
+			}
+			return fmt.Errorf("LocalState for %s for app %d would use too much space", addr.String(), appIdx)
+		}
+
 		// Stage the change to be committed after schema checks
 		changes[addr] = localState
 	}
 
 	/*
-	 * 3. Check that updated key/value stores do not violate schemas
-	 */
-
-	// TODO(applications) this
-
-	/*
-	 * 4. Write GlobalState changes back to cow. This should be correct
+	 * 3. Write GlobalState changes back to cow. This should be correct
 	 *    even if creator is in the local deltas, because the updated
 	 *    fields are orthogonal.
 	 */
@@ -250,7 +260,7 @@ func applyStateDeltas(evalDelta basics.EvalDelta, balances Balances, appIdx basi
 	}
 
 	/*
-	 * 5. Write LocalState changes back to cow
+	 * 4. Write LocalState changes back to cow
 	 */
 
 	for addr, newLocalState := range changes {
