@@ -123,7 +123,8 @@ var OpSpecs = []OpSpec{
 	{0x63, "app_read_global", opAppReadGlobalState, asmDefault, disDefault, oneBytes, oneInt.plus(oneAny), 2, runModeApplication, opSizeDefault},
 	{0x64, "app_write_local", opAppWriteLocalState, asmDefault, disDefault, oneInt.plus(oneBytes).plus(oneAny), nil, 2, runModeApplication, opSizeDefault},
 	{0x65, "app_write_global", opAppWriteGlobalState, asmDefault, disDefault, oneBytes.plus(oneAny), nil, 2, runModeApplication, opSizeDefault},
-	{0x66, "app_read_other_global", opAppReadOtherGlobalState, asmDefault, disDefault, twoInts.plus(oneBytes), oneInt.plus(oneAny), 2, runModeApplication, opSizeDefault},
+	{0x66, "app_delete_local", opAppDeleteLocalState, asmDefault, disDefault, oneInt.plus(oneBytes), nil, 2, runModeApplication, opSizeDefault},
+	{0x67, "app_delete_global", opAppDeleteGlobalState, asmDefault, disDefault, oneBytes, nil, 2, runModeApplication, opSizeDefault},
 
 	{0x70, "asset_read_holding", opAssetReadHolding, assembleAssetHolding, disAssetHolding, twoInts, oneInt.plus(oneAny), 2, runModeApplication, opSize{1, 2, nil}},
 	{0x71, "asset_read_params", opAssetReadParams, assembleAssetParams, disAssetParams, twoInts, oneInt.plus(oneAny), 2, runModeApplication, opSize{1, 2, nil}},

@@ -96,6 +96,14 @@ func TestTooManyArgs(t *testing.T) {
 	}
 }
 
+func TestEmptyProgram(t *testing.T) {
+	t.Parallel()
+	pass, err := Eval(nil, defaultEvalParams(nil, nil))
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid program (empty)")
+	require.False(t, pass)
+}
+
 func TestWrongProtoVersion(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerDefaultVersion; v++ {
