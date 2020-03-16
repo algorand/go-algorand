@@ -17,7 +17,7 @@ gcmd="goal -w ${WALLET}"
 ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 
 # Succeed in creating app that approves transactions with arg[0] == 'hello'
-APPID=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog ${DIR}/tealprogs/argcheck.teal --global-byteslices 0 --global-ints 0 --local-byteslices 1 --local-ints 0 --app-arg-b64 "aGVsbG8=" --clear-prog <(echo 'int 1') | grep Created | awk '{ print $6 }')
+APPID=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog ${DIR}/tealprogs/loccheck.teal --global-byteslices 0 --global-ints 0 --local-byteslices 1 --local-ints 0 --app-arg-b64 "aGVsbG8=" --clear-prog <(echo 'int 1') | grep Created | awk '{ print $6 }')
 
 # Application call with no args should fail
 EXPERROR='rejected by ApprovalProgram'
