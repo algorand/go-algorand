@@ -122,7 +122,7 @@ func TestPaymentApply(t *testing.T) {
 			Amount:   basics.MicroAlgos{Raw: uint64(50)},
 		},
 	}
-	_, err := tx.Apply(mockBalV0, SpecialAddresses{FeeSink: feeSink}, 0)
+	_, err := tx.Apply(mockBalV0, nil, SpecialAddresses{FeeSink: feeSink}, 0)
 	require.NoError(t, err)
 }
 

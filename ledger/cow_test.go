@@ -38,8 +38,16 @@ func (ml *mockLedger) isDup(firstValid, lastValid basics.Round, txn transactions
 	return false, nil
 }
 
-func (ml *mockLedger) getAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error) {
-	return basics.Address{}, nil
+func (ml *mockLedger) getAssetCreator(assetIdx basics.AssetIndex) (basics.Address, bool, error) {
+	return basics.Address{}, false, nil
+}
+
+func (ml *mockLedger) getAppCreator(appIdx basics.AppIndex) (basics.Address, bool, error) {
+	return basics.Address{}, false, nil
+}
+
+func (ml *mockLedger) getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
+	return basics.Address{}, false, nil
 }
 
 func (ml *mockLedger) txnCounter() uint64 {
