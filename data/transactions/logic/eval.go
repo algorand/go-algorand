@@ -121,6 +121,9 @@ type EvalParams struct {
 	Logger logging.Logger
 
 	Ledger LedgerForLogic
+
+	// determines eval mode: runModeSignature or runModeApplication
+	runModeFlags uint64
 }
 
 type opEvalFunc func(cx *evalContext)
@@ -170,8 +173,6 @@ type evalContext struct {
 	branchTargets []int
 
 	programHash crypto.Digest
-
-	runModeFlags uint64
 
 	appGlobalStateRCache basics.TealKeyValue // read only state to track deletes
 	appGlobalStateWCache basics.TealKeyValue
@@ -347,9 +348,21 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 	return cx.stack[0].Uint != 0, nil
 }
 
+// CheckStateful should be faster than EvalStateful.
+// Returns 'cost' which is an estimate of relative execution time.
+func CheckStateful(program []byte, params EvalParams) (cost int, err error) {
+	params.runModeFlags = runModeApplication
+	return check(program, params)
+}
+
 // Check should be faster than Eval.
 // Returns 'cost' which is an estimate of relative execution time.
 func Check(program []byte, params EvalParams) (cost int, err error) {
+	params.runModeFlags = runModeSignature
+	return check(program, params)
+}
+
+func check(program []byte, params EvalParams) (cost int, err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			buf := make([]byte, 16*1024)
@@ -387,8 +400,6 @@ func Check(program []byte, params EvalParams) (cost int, err error) {
 	cx.pc = vlen
 	cx.EvalParams = params
 	cx.program = program
-	// TODO: do we want Check for statefull apps?
-	cx.runModeFlags = runModeSignature
 	for (cx.err == nil) && (cx.pc < len(cx.program)) {
 		cost += cx.checkStep()
 	}
@@ -495,6 +506,10 @@ func (cx *evalContext) checkStep() (cost int) {
 	if spec.op == nil {
 		cx.err = fmt.Errorf("%3d illegal opcode 0x%02x", cx.pc, opcode)
 		return 1
+	}
+	if (cx.runModeFlags & spec.Modes) == 0 {
+		cx.err = fmt.Errorf("%s not allowed in current mode", spec.Name)
+		return
 	}
 	oz := spec.opSize
 	if oz.size != 0 && (cx.pc+oz.size > len(cx.program)) {
