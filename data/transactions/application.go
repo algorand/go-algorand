@@ -43,8 +43,8 @@ type ApplicationCallTxnFields struct {
 
 	LocalStateSchema  basics.StateSchema `codec:"apls"`
 	GlobalStateSchema basics.StateSchema `codec:"apgs"`
-	ApprovalProgram   string             `codec:"apap,allocbound=4096"`
-	ClearStateProgram string             `codec:"apsu,allocbound=4096"`
+	ApprovalProgram   string             `codec:"apap"`
+	ClearStateProgram string             `codec:"apsu"`
 
 	// If you add any fields here, remember you MUST modify the Empty
 	// method below!
