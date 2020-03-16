@@ -662,18 +662,22 @@ func schemaMinBalance(schema basics.StateSchema, proto config.ConsensusParams) u
 }
 
 func calculateMinBalance(record basics.AccountData, proto config.ConsensusParams) uint64 {
-	// First: constant MinBalance + MinBalance for each Asset
-	min := basics.MulSaturate(proto.MinBalance, uint64(1+len(record.Assets)))
+	// First, base MinBalance
+	min := proto.MinBalance
+
+	// MinBalance for each Asset
+	assetCost := basics.MulSaturate(proto.MinBalance, uint64(len(record.Assets)))
+	min = basics.AddSaturate(min, assetCost)
 
 	// Now, compute additional MinBalance for each app the account has opted in to,
-	// based on the local schema and the base application opt-in cost
+	// based on the local state schema and the base application opt-in cost
 	for _, state := range record.AppLocalStates {
 		min = basics.AddSaturate(min, schemaMinBalance(state.Schema, proto))
 		min = basics.AddSaturate(min, proto.AppFlatOptInMinBalance)
 	}
 
 	// Next, compute additional MinBalance for each *created* application based on
-	// the global state schema and per-app cost
+	// the global state schema and base application creation cost
 	for _, params := range record.AppParams {
 		min = basics.AddSaturate(min, schemaMinBalance(params.GlobalStateSchema, proto))
 		min = basics.AddSaturate(min, proto.AppFlatParamsMinBalance)
