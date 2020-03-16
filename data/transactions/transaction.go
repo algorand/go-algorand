@@ -304,8 +304,23 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			}
 		}
 
-		// TODO(application) check max script/schema/functionargs lengths
+		if len(tx.ApplicationArgs) > proto.MaxApplicationArgs {
+			return fmt.Errorf("too many application args, max %d", proto.MaxApplicationArgs)
+		}
 
+		for i, arg := range tx.ApplicationArgs {
+			if len(arg) > proto.MaxApplicationArgLen {
+				return fmt.Errorf("application arg %d too long, max len %d bytes", i, proto.MaxApplicationArgLen)
+			}
+		}
+
+		if len(tx.ApprovalProgram) > proto.MaxApprovalProgramLen {
+			return fmt.Errorf("approval program too long. max len %d bytes", proto.MaxApprovalProgramLen)
+		}
+
+		if len(tx.ClearStateProgram) > proto.MaxClearStateProgramLen {
+			return fmt.Errorf("clear state program too long. max len %d bytes", proto.MaxClearStateProgramLen)
+		}
 	default:
 		return fmt.Errorf("unknown tx type %v", tx.Type)
 	}

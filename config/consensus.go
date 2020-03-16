@@ -212,6 +212,20 @@ type ConsensusParams struct {
 
 	// application support
 	Application bool
+
+	MaxApplicationArgs      int
+	MaxApplicationArgLen    int
+	MaxApprovalProgramLen   int
+	MaxClearStateProgramLen int
+
+	ApplicationParamsMinBalance    uint64
+	ApplicationFlatOptInMinBalance uint64
+	MaxApplicationTxnAccounts      uint64
+	SchemaMinBalancePerEntry       uint64
+	SchemaUintMinBalance           uint64
+	SchemaBytesMinBalance          uint64
+
+	MaximumMinimumBalance uint64
 }
 
 // ConsensusProtocols defines a set of supported protocol versions and their
@@ -551,8 +565,35 @@ func initConsensusProtocols() {
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	vFuture.MinUpgradeWaitRounds = 10000
 	vFuture.MaxUpgradeWaitRounds = 150000
-	vFuture.Application = true
 	vFuture.LogicSigVersion = 2
+
+	vFuture.Application = true
+
+	// 100.1 Algos (MinBalance for creating 1,000 assets)
+	vFuture.MaximumMinimumBalance = 100100000
+
+	// TODO(applications) tune these based off on performance
+	vFuture.MaxApplicationArgs = 16
+	vFuture.MaxApplicationArgLen = 128
+	vFuture.MaxApprovalProgramLen = 1024
+	vFuture.MaxClearStateProgramLen = 1024
+
+	// 0.1 Algos (Same min balance cost as an Asset)
+	vFuture.ApplicationParamsMinBalance = 100000
+	vFuture.ApplicationFlatOptInMinBalance = 100000
+
+	// Can look up Sender + 4 other balance records per Application txn
+	vFuture.MaxApplicationTxnAccounts = 4
+
+	// 64 byte keys @ ~333 microAlgos/byte + delta
+	vFuture.SchemaMinBalancePerEntry = 25000
+
+	// 9 bytes @ ~333 microAlgos/byte + delta
+	vFuture.SchemaUintMinBalance = 3500
+
+	// 64 byte values @ ~333 microAlgos/byte + delta
+	vFuture.SchemaBytesMinBalance = 25000
+
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
 
