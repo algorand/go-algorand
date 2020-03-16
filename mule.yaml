@@ -14,6 +14,7 @@ stages:
     version: '{{ docker.Version.linux-amd64.version }}'
     workDir: /go/src/github.com/algorand/go-algorand
     target: fulltest ci-build
+  test-linux-amd64:
   - task: docker.Make
     image: algorand/go-algorand-linux
     version: '{{ docker.Version.linux-amd64.version }}'
@@ -34,6 +35,7 @@ stages:
     version: '{{ docker.Version.linux-arm64.version }}'
     workDir: /go/src/github.com/algorand/go-algorand
     target: fulltest ci-build
+  test-linux-arm64:
   - task: docker.Make
     image: algorand/go-algorand-linux
     version: '{{ docker.Version.linux-arm64.version }}'
@@ -54,6 +56,7 @@ stages:
     version: '{{ docker.Version.linux-arm.version }}'
     workDir: /go/src/github.com/algorand/go-algorand
     target: ci-build
+  test-linux-arm:
   - task: docker.Make
     image: algorand/go-algorand-linux
     version: '{{ docker.Version.linux-arm.version }}'
