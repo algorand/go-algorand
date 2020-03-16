@@ -50,3 +50,16 @@ ${gcmd} app optin --app-id $APPID --from $ACCOUNT --app-arg-b64 "d3JpdGU="
 
 # Check should still succeed
 ${gcmd} app call --app-id $APPID --app-arg-b64 "Y2hlY2s=" --app-arg-b64 "YmFy" --from $ACCOUNT
+
+# Delete application should still succeed
+${gcmd} app delete --app-id $APPID --app-arg-b64 "aGVsbG8=" --from $ACCOUNT
+
+# Check should fail since we can't find program to execute
+RES=$(${gcmd} app call --app-id $APPID --app-arg-b64 "Y2hlY2s=" --app-arg-b64 "YmFy" --from $ACCOUNT || true)
+EXPERROR='only clearing out is supported'
+if [[ $RES != *"${EXPERROR}"* ]]; then
+    date '+app-create-test FAIL app call should fail if app has been deleted %Y%m%d_%H%M%S'
+fi
+
+# Clear should still succeed with arbitrary args
+${gcmd} app clear --app-id $APPID --app-arg-b64 "YXNkZg==" --from $ACCOUNT

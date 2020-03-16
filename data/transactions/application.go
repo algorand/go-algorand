@@ -385,7 +385,7 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva
 	// Past this point, the AppParams must exist. NoOp, OptIn, CloseOut,
 	// Delete, and Update
 	if doesNotExist {
-		return fmt.Errorf("only closing out is supported for applications that do not exist")
+		return fmt.Errorf("only clearing out is supported for applications that do not exist")
 	}
 
 	// If this is an OptIn transaction, ensure that the sender has already
