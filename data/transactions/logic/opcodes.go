@@ -98,11 +98,11 @@ var OpSpecs = []OpSpec{
 	{0x29, "bytec_1", opByteConst1, asmDefault, disDefault, nil, oneBytes, 1, modeAny, opSizeDefault},
 	{0x2a, "bytec_2", opByteConst2, asmDefault, disDefault, nil, oneBytes, 1, modeAny, opSizeDefault},
 	{0x2b, "bytec_3", opByteConst3, asmDefault, disDefault, nil, oneBytes, 1, modeAny, opSizeDefault},
-	{0x2c, "arg", opArg, assembleArg, disArg, nil, oneBytes, 1, modeAny, opSize{1, 2, nil}},
-	{0x2d, "arg_0", opArg0, asmDefault, disDefault, nil, oneBytes, 1, modeAny, opSizeDefault},
-	{0x2e, "arg_1", opArg1, asmDefault, disDefault, nil, oneBytes, 1, modeAny, opSizeDefault},
-	{0x2f, "arg_2", opArg2, asmDefault, disDefault, nil, oneBytes, 1, modeAny, opSizeDefault},
-	{0x30, "arg_3", opArg3, asmDefault, disDefault, nil, oneBytes, 1, modeAny, opSizeDefault},
+	{0x2c, "arg", opArg, assembleArg, disArg, nil, oneBytes, 1, runModeSignature, opSize{1, 2, nil}},
+	{0x2d, "arg_0", opArg0, asmDefault, disDefault, nil, oneBytes, 1, runModeSignature, opSizeDefault},
+	{0x2e, "arg_1", opArg1, asmDefault, disDefault, nil, oneBytes, 1, runModeSignature, opSizeDefault},
+	{0x2f, "arg_2", opArg2, asmDefault, disDefault, nil, oneBytes, 1, runModeSignature, opSizeDefault},
+	{0x30, "arg_3", opArg3, asmDefault, disDefault, nil, oneBytes, 1, runModeSignature, opSizeDefault},
 	{0x31, "txn", opTxn, assembleTxn, disTxn, nil, oneAny, 1, modeAny, opSize{1, 2, nil}},             // TODO: check output type by subfield retrieved in txn,global,account,txid
 	{0x31, "txn", opTxn, assembleTxn2, disTxn, nil, oneAny, 2, modeAny, opSize{1, 2, nil}},            // TODO: check output type by subfield retrieved in txn,global,account,txid
 	{0x32, "global", opGlobal, assembleGlobal, disGlobal, nil, oneAny, 1, modeAny, opSize{1, 2, nil}}, // TODO: check output type against specific field

@@ -163,8 +163,8 @@ func TestEvalModes(t *testing.T) {
 
 	// check modeAny (TEAL v1 + txna/gtxna) are available in RunModeSignature
 	// check all opcodes available in runModeApplication
-	allModeAnyOpcodes := `intcblock 0 1 1 1 1 5
-	bytecblock 0xcafed00d 0x1337 0x2001 0xdeadbeef 0x70077007
+	opcodesRunModeAny := `intcblock 0 1 1 1 1 5 100
+	bytecblock 0x414c474f 0x1337 0x2001 0xdeadbeef 0x70077007
 bytec 0
 sha256
 keccak256
@@ -219,27 +219,79 @@ pop
 txna Accounts 0
 gtxna 0 ApplicationArgs 0
 ==
-pop
-arg_0
+`
+	opcodesRunModeSignature := `arg_0
 arg_1
-==
+!=
 arg_2
 arg_3
-==
+!=
 &&
 txn Sender
 arg 4
 !=
 &&
 !=
-`
-	allAppOpcodes := `int 0
-balance
 &&
 `
-	tests := map[uint64]string{
-		runModeSignature:   allModeAnyOpcodes,
-		runModeApplication: allModeAnyOpcodes + allAppOpcodes,
+
+	opcodesRunModeApplication := `int 0
+balance
+&&
+intc_0
+intc 6  // 100
+app_opted_in
+&&
+intc_0
+bytec_0 // ALGO
+intc_1
+app_write_local
+bytec_0
+intc_1
+app_write_global
+intc_0
+intc 6
+bytec_0
+app_read_local
+pop
+&&
+bytec_0
+app_read_global
+pop
+&&
+intc_0
+bytec_0
+app_delete_local
+bytec_0
+app_delete_global
+intc_0
+intc 5 // 5
+asset_read_holding AssetHoldingAmount
+pop
+&&
+intc_0
+intc 5
+asset_read_params AssetParamsTotal
+pop
+&&
+!=
+`
+	type desc struct {
+		source string
+		fn     func([]byte, EvalParams) (bool, error)
+	}
+	tests := map[uint64]desc{
+		runModeSignature: desc{
+			opcodesRunModeAny + opcodesRunModeSignature,
+			func(program []byte, ep EvalParams) (bool, error) { return Eval(program, ep) },
+		},
+		runModeApplication: desc{
+			opcodesRunModeAny + opcodesRunModeApplication,
+			func(program []byte, ep EvalParams) (bool, error) {
+				pass, _, err := EvalStateful(program, ep)
+				return pass, err
+			},
+		},
 	}
 
 	txn := makeSampleTxn()
@@ -252,18 +304,44 @@ balance
 		txn.Txn.SelectionPK[:],
 		txn.Txn.Note,
 	}
-	for mode, source := range tests {
-		t.Run(fmt.Sprintf("allOpcodes_mode=%d", mode), func(t *testing.T) {
+	params := basics.AssetParams{
+		Total:         1000,
+		Decimals:      2,
+		DefaultFrozen: false,
+		UnitName:      "ALGO",
+		AssetName:     "",
+		URL:           string(protocol.PaymentTx),
+		Manager:       txn.Txn.Sender,
+		Reserve:       txn.Txn.Receiver,
+		Freeze:        txn.Txn.Receiver,
+		Clawback:      txn.Txn.Receiver,
+	}
+	algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
+	ledger := makeTestLedger(
+		map[basics.Address]uint64{
+			txn.Txn.Sender: 1,
+		},
+	)
+	ledger.newApp(txn.Txn.Sender, 100)
+	ledger.balances[txn.Txn.Sender].apps[100]["ALGO"] = algoValue
+	ledger.setAsset(txn.Txn.Receiver, 5, params)
+	ledger.setHolding(txn.Txn.Sender, 5, basics.AssetHolding{Amount: 123, Frozen: true})
+
+	for mode, test := range tests {
+		t.Run(fmt.Sprintf("opcodes_mode=%d", mode), func(t *testing.T) {
+			source := test.source
+			fn := test.fn
 			program, err := AssembleString(source)
 			require.NoError(t, err)
-			ep := defaultEvalParams(nil, &txn)
+			sb := strings.Builder{}
+			ep := defaultEvalParams(&sb, &txn)
 			ep.TxnGroup = txgroup
-			ep.Ledger = makeTestLedger(
-				map[basics.Address]uint64{
-					txn.Txn.Sender: 1,
-				},
-			)
-			_, _, err = EvalStateful(program, ep)
+			ep.Ledger = ledger
+			_, err = fn(program, ep)
+			if err != nil {
+				t.Log(hex.EncodeToString(program))
+				t.Log(sb.String())
+			}
 			require.NoError(t, err)
 		})
 	}
@@ -282,14 +360,23 @@ balance
 		})
 	}
 
-	// check ed25519verify is not allowed in statefull mode
-	source := "byte 0x01\nbyte 0x01\nbyte 0x01\ned25519verify"
-	program, err := AssembleString(source)
-	require.NoError(t, err)
-	ep := defaultEvalParams(nil, nil)
-	_, _, err = EvalStateful(program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "ed25519verify not allowed in current mode")
+	// check ed25519verify and arg are not allowed in statefull mode
+	disallowed := []string{
+		"byte 0x01\nbyte 0x01\nbyte 0x01\ned25519verify",
+		"arg 0",
+		"arg_0",
+		"arg_1",
+		"arg_2",
+		"arg_3",
+	}
+	for _, source := range disallowed {
+		program, err := AssembleString(source)
+		require.NoError(t, err)
+		ep := defaultEvalParams(nil, nil)
+		_, _, err = EvalStateful(program, ep)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "not allowed in current mode")
+	}
 
 	// check new opcodes are not allowed in stateless mode
 	newOpcodeCalls := []string{
