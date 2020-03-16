@@ -213,17 +213,17 @@ type ConsensusParams struct {
 	// application support
 	Application bool
 
-	MaxApplicationArgs      int
-	MaxApplicationArgLen    int
+	MaxAppArgs              int
+	MaxAppArgLen            int
 	MaxApprovalProgramLen   int
 	MaxClearStateProgramLen int
+	MaxAppTxnAccounts       int
 
-	ApplicationParamsMinBalance    uint64
-	ApplicationFlatOptInMinBalance uint64
-	MaxApplicationTxnAccounts      uint64
-	SchemaMinBalancePerEntry       uint64
-	SchemaUintMinBalance           uint64
-	SchemaBytesMinBalance          uint64
+	AppFlatParamsMinBalance  uint64
+	AppFlatOptInMinBalance   uint64
+	SchemaMinBalancePerEntry uint64
+	SchemaUintMinBalance     uint64
+	SchemaBytesMinBalance    uint64
 
 	MaximumMinimumBalance uint64
 }
@@ -573,17 +573,17 @@ func initConsensusProtocols() {
 	vFuture.MaximumMinimumBalance = 100100000
 
 	// TODO(applications) tune these based off on performance
-	vFuture.MaxApplicationArgs = 16
-	vFuture.MaxApplicationArgLen = 128
+	vFuture.MaxAppArgs = 16
+	vFuture.MaxAppArgLen = 128
 	vFuture.MaxApprovalProgramLen = 1024
 	vFuture.MaxClearStateProgramLen = 1024
 
 	// 0.1 Algos (Same min balance cost as an Asset)
-	vFuture.ApplicationParamsMinBalance = 100000
-	vFuture.ApplicationFlatOptInMinBalance = 100000
+	vFuture.AppFlatParamsMinBalance = 100000
+	vFuture.AppFlatOptInMinBalance = 100000
 
 	// Can look up Sender + 4 other balance records per Application txn
-	vFuture.MaxApplicationTxnAccounts = 4
+	vFuture.MaxAppTxnAccounts = 4
 
 	// 64 byte keys @ ~333 microAlgos/byte + delta
 	vFuture.SchemaMinBalancePerEntry = 25000

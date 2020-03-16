@@ -304,13 +304,13 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			}
 		}
 
-		if len(tx.ApplicationArgs) > proto.MaxApplicationArgs {
-			return fmt.Errorf("too many application args, max %d", proto.MaxApplicationArgs)
+		if len(tx.ApplicationArgs) > proto.MaxAppArgs {
+			return fmt.Errorf("too many application args, max %d", proto.MaxAppArgs)
 		}
 
 		for i, arg := range tx.ApplicationArgs {
-			if len(arg) > proto.MaxApplicationArgLen {
-				return fmt.Errorf("application arg %d too long, max len %d bytes", i, proto.MaxApplicationArgLen)
+			if len(arg) > proto.MaxAppArgLen {
+				return fmt.Errorf("application arg %d too long, max len %d bytes", i, proto.MaxAppArgLen)
 			}
 		}
 
@@ -321,6 +321,11 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		if len(tx.ClearStateProgram) > proto.MaxClearStateProgramLen {
 			return fmt.Errorf("clear state program too long. max len %d bytes", proto.MaxClearStateProgramLen)
 		}
+
+		if len(tx.Accounts) > proto.MaxAppTxnAccounts {
+			return fmt.Errorf("txn.Accounts too long, max number of accounts is %d", proto.MaxAppTxnAccounts)
+		}
+
 	default:
 		return fmt.Errorf("unknown tx type %v", tx.Type)
 	}

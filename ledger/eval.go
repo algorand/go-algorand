@@ -620,7 +620,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, group []tran
 		}
 
 		dataNew := data.WithUpdatedRewards(eval.proto, rewardlvl)
-		effectiveMinBalance := basics.MulSaturate(eval.proto.MinBalance, uint64(1+len(dataNew.Assets)))
+		effectiveMinBalance := calculateMinBalance(dataNew, eval.proto)
 		if dataNew.MicroAlgos.Raw < effectiveMinBalance {
 			return fmt.Errorf("transaction %v: account %v balance %d below min %d (%d assets)",
 				txn.ID(), addr, dataNew.MicroAlgos.Raw, effectiveMinBalance, len(dataNew.Assets))
@@ -631,6 +631,27 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, group []tran
 	cow.addTx(txn.Txn)
 
 	return nil
+}
+
+func calculateMinBalance(record basics.AccountData, proto config.ConsensusParams) uint64 {
+	// First: constant MinBalance + MinBalance * len(Assets)
+	min := basics.MulSaturate(proto.MinBalance, uint64(1+len(record.Assets)))
+
+	// Now, compute additional MinBalance for each app based on its schema and the
+	// base application opt-in cost
+	for _, state := range record.AppLocalStates {
+		utcost := basics.MulSaturate(proto.SchemaUintMinBalance, state.Schema.NumUint)
+		bscost := basics.MulSaturate(proto.SchemaBytesMinBalance, state.Schema.NumByteSlice)
+		min = basics.AddSaturate(min, utcost)
+		min = basics.AddSaturate(min, bscost)
+		min = basics.AddSaturate(min, proto.AppFlatOptInMinBalance)
+	}
+
+	// Next, compute base MinBalance for each *created* application
+	delta := basics.MulSaturate(proto.AppFlatParamsMinBalance, uint64(len(record.AppParams)))
+	min = basics.AddSaturate(min, delta)
+
+	return min
 }
 
 // Call "endOfBlock" after all the block's rewards and transactions are processed. Applies any deferred balance updates.
