@@ -28,7 +28,7 @@ type ValueDelta struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Action DeltaAction `codec:"at"`
-	Bytes  string      `codec:"bs,allocbound=-"`
+	Bytes  string      `codec:"bs"`
 	Uint   uint64      `codec:"ui"`
 }
 
@@ -38,7 +38,7 @@ type StateDelta map[string]ValueDelta
 type EvalDelta struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	GlobalDelta StateDelta `codec:"gd,allocbound=-"`
+	GlobalDelta StateDelta `codec:"gd"`
 
 	// TODO(applications) perhaps make these keys be uint64 where 0 == sender
 	// and 1..n -> txn.Addresses
@@ -71,10 +71,7 @@ type TealValue struct {
 
 	Type TealType `codec:"tt"`
 
-	// TealValue is only used by TEAL programs and never parsed on the wire,
-	// so setting an unlimited allocbound on Bytes is OK. We use a string
-	// instead of []byte to allow copying this struct by value
-	Bytes string `codec:"tb,allocbound=-"`
+	Bytes string `codec:"tb"`
 	Uint  uint64 `codec:"ui"`
 }
 
