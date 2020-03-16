@@ -262,20 +262,20 @@ func (ls *LedgerService) handleCatchupReq(ctx context.Context, reqMsg network.In
 	topics, err := network.UnmarshallTopics(reqMsg.Data)
 	if err != nil {
 		errMsg := "LedgerService handleCatchupReq UnmarshallTopics error: " + err.Error()
-		topics = network.Topics{
+		respTopics = network.Topics{
 			network.MakeTopic(network.ErrorKey, []byte(errMsg))}
 		return
 	}
 	roundBytes, found := topics.GetValue(roundKey)
 	if !found {
-		topics = network.Topics{
+		respTopics = network.Topics{
 			network.MakeTopic(network.ErrorKey,
 				[]byte("LedgerService handleCatchupReq: round-number topic is missing"))}
 		return
 	}
 	requestType, found := topics.GetValue(requestDataTypeKey)
 	if !found {
-		topics = network.Topics{
+		respTopics = network.Topics{
 			network.MakeTopic(network.ErrorKey,
 				[]byte("LedgerService handleCatchupReq: request data-type is missing"))}
 		return
@@ -283,7 +283,7 @@ func (ls *LedgerService) handleCatchupReq(ctx context.Context, reqMsg network.In
 
 	round, read := binary.Uvarint(roundBytes)
 	if read <= 0 {
-		topics = network.Topics{
+		respTopics = network.Topics{
 			network.MakeTopic(network.ErrorKey,
 				[]byte("LedgerService handleCatchupReq: error reading the round number"))}
 		return

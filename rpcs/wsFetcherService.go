@@ -39,11 +39,11 @@ type WsFetcherService struct {
 
 // Constant strings used as keys for topics
 const (
-	roundKey           = "roundKey"
-	requestDataTypeKey = "requestDataType"
-	blockDataKey       = "blockData"
-	certDataKey        = "certData"
-	blockAndCertValue  = "blockAndCert"
+	roundKey           = "roundKey"        // Block round-number topic-key in the request
+	requestDataTypeKey = "requestDataType" // Data-type topic-key in the request (e.g. block, cert, block+cert)
+	blockDataKey       = "blockData"       // Block-data topic-key in the response
+	certDataKey        = "certData"        // Cert-data topic-key in the response
+	blockAndCertValue  = "blockAndCert"    // block+cert request data (as the value of requestDataTypeKey)
 )
 
 func makePendingRequestKey(target network.UnicastPeer, round basics.Round, tag protocol.Tag) string {
