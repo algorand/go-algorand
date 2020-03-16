@@ -323,7 +323,15 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		}
 
 		if len(tx.Accounts) > proto.MaxAppTxnAccounts {
-			return fmt.Errorf("txn.Accounts too long, max number of accounts is %d", proto.MaxAppTxnAccounts)
+			return fmt.Errorf("tx.Accounts too long, max number of accounts is %d", proto.MaxAppTxnAccounts)
+		}
+
+		if tx.LocalStateSchema.NumEntries() > proto.MaxSchemaEntries {
+			return fmt.Errorf("tx.LocalStateSchema too large, max number of keys is %d", proto.MaxSchemaEntries)
+		}
+
+		if tx.GlobalStateSchema.NumEntries() > proto.MaxSchemaEntries {
+			return fmt.Errorf("tx.GlobalStateSchema too large, max number of keys is %d", proto.MaxSchemaEntries)
 		}
 
 	default:

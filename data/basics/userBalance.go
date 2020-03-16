@@ -309,6 +309,36 @@ func (u AccountData) WithUpdatedRewards(proto config.ConsensusParams, rewardsLev
 	return u
 }
 
+func (u AccountData) MinBalance(proto config.ConsensusParams) (res MicroAlgos) {
+	var min uint64
+
+	// First, base MinBalance
+	min = proto.MinBalance
+
+	// MinBalance for each Asset
+	assetCost := MulSaturate(proto.MinBalance, uint64(len(u.Assets)))
+	min = AddSaturate(min, assetCost)
+
+	// Now, compute additional MinBalance for each app the account has opted in to,
+	// based on the local state schema and the base application opt-in cost
+	for _, state := range u.AppLocalStates {
+		schemaCost := state.Schema.MinBalance(proto)
+		min = AddSaturate(min, schemaCost.Raw)
+		min = AddSaturate(min, proto.AppFlatOptInMinBalance)
+	}
+
+	// Next, compute additional MinBalance for each *created* application based on
+	// the global state schema and base application creation cost
+	for _, params := range u.AppParams {
+		schemaCost := params.GlobalStateSchema.MinBalance(proto)
+		min = AddSaturate(min, schemaCost.Raw)
+		min = AddSaturate(min, proto.AppFlatParamsMinBalance)
+	}
+
+	res.Raw = min
+	return res
+}
+
 // VotingStake returns the amount of MicroAlgos associated with the user's account
 // for the purpose of participating in the Algorand protocol.  It assumes the
 // caller has already updated rewards appropriately using WithUpdatedRewards().

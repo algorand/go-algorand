@@ -16,6 +16,10 @@
 
 package basics
 
+import (
+	"github.com/algorand/go-algorand/config"
+)
+
 type DeltaAction uint64
 
 const (
@@ -57,6 +61,32 @@ type StateSchema struct {
 
 	NumUint      uint64 `codec:"nui"`
 	NumByteSlice uint64 `codec:"nbs"`
+}
+
+func (sm StateSchema) NumEntries() (tot uint64) {
+	tot = AddSaturate(tot, sm.NumUint)
+	tot = AddSaturate(tot, sm.NumByteSlice)
+	return tot
+}
+
+func (sm StateSchema) MinBalance(proto config.ConsensusParams) (res MicroAlgos) {
+	// Flat cost for each key/value pair
+	flatCost := MulSaturate(proto.SchemaMinBalancePerEntry, sm.NumEntries())
+
+	// Cost for uints
+	uintCost := MulSaturate(proto.SchemaUintMinBalance, sm.NumUint)
+
+	// Cost for byte slices
+	bytesCost := MulSaturate(proto.SchemaBytesMinBalance, sm.NumByteSlice)
+
+	// Sum the separate costs
+	var min uint64
+	min = AddSaturate(min, flatCost)
+	min = AddSaturate(min, uintCost)
+	min = AddSaturate(min, bytesCost)
+
+	res.Raw = min
+	return res
 }
 
 type TealType uint64

@@ -224,6 +224,7 @@ type ConsensusParams struct {
 	SchemaMinBalancePerEntry uint64
 	SchemaUintMinBalance     uint64
 	SchemaBytesMinBalance    uint64
+	MaxSchemaEntries         uint64
 
 	MaximumMinimumBalance uint64
 }
@@ -593,6 +594,9 @@ func initConsensusProtocols() {
 
 	// 64 byte values @ ~333 microAlgos/byte + delta
 	vFuture.SchemaBytesMinBalance = 25000
+
+	// Maximum number of key/value pairs per global/local key/value store
+	vFuture.MaxSchemaEntries = 1024
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

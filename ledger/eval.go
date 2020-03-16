@@ -620,16 +620,16 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, group []tran
 		}
 
 		dataNew := data.WithUpdatedRewards(eval.proto, rewardlvl)
-		effectiveMinBalance := calculateMinBalance(dataNew, eval.proto)
-		if dataNew.MicroAlgos.Raw < effectiveMinBalance {
+		effectiveMinBalance := dataNew.MinBalance(eval.proto)
+		if dataNew.MicroAlgos.Raw < effectiveMinBalance.Raw {
 			return fmt.Errorf("transaction %v: account %v balance %d below min %d (%d assets)",
 				txn.ID(), addr, dataNew.MicroAlgos.Raw, effectiveMinBalance, len(dataNew.Assets))
 		}
 
 		// Check if we have exceeded the maximum minimum balance
 		if eval.proto.MaximumMinimumBalance != 0 {
-			if effectiveMinBalance > eval.proto.MaximumMinimumBalance {
-				return fmt.Errorf("transaction %v: account %v would use too much space after this transaction. Minimum balance requirements would be %d (greater than max %d)", txn.ID(), addr, effectiveMinBalance, eval.proto.MaximumMinimumBalance)
+			if effectiveMinBalance.Raw > eval.proto.MaximumMinimumBalance {
+				return fmt.Errorf("transaction %v: account %v would use too much space after this transaction. Minimum balance requirements would be %d (greater than max %d)", txn.ID(), addr, effectiveMinBalance.Raw, eval.proto.MaximumMinimumBalance)
 			}
 		}
 	}
@@ -638,52 +638,6 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, group []tran
 	cow.addTx(txn.Txn)
 
 	return nil
-}
-
-func schemaMinBalance(schema basics.StateSchema, proto config.ConsensusParams) uint64 {
-	// Count how many key/value pairs there are total
-	totalEntries := basics.AddSaturate(schema.NumUint, schema.NumByteSlice)
-
-	// Flat cost for each key/value pair
-	flatCost := basics.MulSaturate(proto.SchemaMinBalancePerEntry, totalEntries)
-
-	// Cost for uints
-	uintCost := basics.MulSaturate(proto.SchemaUintMinBalance, schema.NumUint)
-
-	// Cost for byte slices
-	bytesCost := basics.MulSaturate(proto.SchemaBytesMinBalance, schema.NumByteSlice)
-
-	// Sum the separate costs
-	var min uint64
-	min = basics.AddSaturate(min, flatCost)
-	min = basics.AddSaturate(min, uintCost)
-	min = basics.AddSaturate(min, bytesCost)
-	return min
-}
-
-func calculateMinBalance(record basics.AccountData, proto config.ConsensusParams) uint64 {
-	// First, base MinBalance
-	min := proto.MinBalance
-
-	// MinBalance for each Asset
-	assetCost := basics.MulSaturate(proto.MinBalance, uint64(len(record.Assets)))
-	min = basics.AddSaturate(min, assetCost)
-
-	// Now, compute additional MinBalance for each app the account has opted in to,
-	// based on the local state schema and the base application opt-in cost
-	for _, state := range record.AppLocalStates {
-		min = basics.AddSaturate(min, schemaMinBalance(state.Schema, proto))
-		min = basics.AddSaturate(min, proto.AppFlatOptInMinBalance)
-	}
-
-	// Next, compute additional MinBalance for each *created* application based on
-	// the global state schema and base application creation cost
-	for _, params := range record.AppParams {
-		min = basics.AddSaturate(min, schemaMinBalance(params.GlobalStateSchema, proto))
-		min = basics.AddSaturate(min, proto.AppFlatParamsMinBalance)
-	}
-
-	return min
 }
 
 // Call "endOfBlock" after all the block's rewards and transactions are processed. Applies any deferred balance updates.
