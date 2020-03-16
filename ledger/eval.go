@@ -625,6 +625,13 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, group []tran
 			return fmt.Errorf("transaction %v: account %v balance %d below min %d (%d assets)",
 				txn.ID(), addr, dataNew.MicroAlgos.Raw, effectiveMinBalance, len(dataNew.Assets))
 		}
+
+		// Check if we have exceeded the maximum minimum balance
+		if eval.proto.MaximumMinimumBalance != 0 {
+			if effectiveMinBalance > eval.proto.MaximumMinimumBalance {
+				return fmt.Errorf("transaction %v: account %v would use too much space after this transaction. Minimum balance requirements would be %d (greater than max %d)", txn.ID(), addr, effectiveMinBalance, eval.proto.MaximumMinimumBalance)
+			}
+		}
 	}
 
 	// Remember this txn
