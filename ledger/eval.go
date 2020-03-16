@@ -640,23 +640,44 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, group []tran
 	return nil
 }
 
+func schemaMinBalance(schema basics.StateSchema, proto config.ConsensusParams) uint64 {
+	// Count how many key/value pairs there are total
+	totalEntries := basics.AddSaturate(schema.NumUint, schema.NumByteSlice)
+
+	// Flat cost for each key/value pair
+	flatCost := basics.MulSaturate(proto.SchemaMinBalancePerEntry, totalEntries)
+
+	// Cost for uints
+	uintCost := basics.MulSaturate(proto.SchemaUintMinBalance, schema.NumUint)
+
+	// Cost for byte slices
+	bytesCost := basics.MulSaturate(proto.SchemaBytesMinBalance, schema.NumByteSlice)
+
+	// Sum the separate costs
+	var min uint64
+	min = basics.AddSaturate(min, flatCost)
+	min = basics.AddSaturate(min, uintCost)
+	min = basics.AddSaturate(min, bytesCost)
+	return min
+}
+
 func calculateMinBalance(record basics.AccountData, proto config.ConsensusParams) uint64 {
-	// First: constant MinBalance + MinBalance * len(Assets)
+	// First: constant MinBalance + MinBalance for each Asset
 	min := basics.MulSaturate(proto.MinBalance, uint64(1+len(record.Assets)))
 
-	// Now, compute additional MinBalance for each app based on its schema and the
-	// base application opt-in cost
+	// Now, compute additional MinBalance for each app the account has opted in to,
+	// based on the local schema and the base application opt-in cost
 	for _, state := range record.AppLocalStates {
-		utcost := basics.MulSaturate(proto.SchemaUintMinBalance, state.Schema.NumUint)
-		bscost := basics.MulSaturate(proto.SchemaBytesMinBalance, state.Schema.NumByteSlice)
-		min = basics.AddSaturate(min, utcost)
-		min = basics.AddSaturate(min, bscost)
+		min = basics.AddSaturate(min, schemaMinBalance(state.Schema, proto))
 		min = basics.AddSaturate(min, proto.AppFlatOptInMinBalance)
 	}
 
-	// Next, compute base MinBalance for each *created* application
-	delta := basics.MulSaturate(proto.AppFlatParamsMinBalance, uint64(len(record.AppParams)))
-	min = basics.AddSaturate(min, delta)
+	// Next, compute additional MinBalance for each *created* application based on
+	// the global state schema and per-app cost
+	for _, params := range record.AppParams {
+		min = basics.AddSaturate(min, schemaMinBalance(params.GlobalStateSchema, proto))
+		min = basics.AddSaturate(min, proto.AppFlatParamsMinBalance)
+	}
 
 	return min
 }
