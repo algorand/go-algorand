@@ -113,6 +113,8 @@ const disconnectReadError disconnectReason = "ReadError"
 const disconnectWriteError disconnectReason = "WriteError"
 const disconnectIdleConn disconnectReason = "IdleConnection"
 const disconnectSlowConn disconnectReason = "SlowConnection"
+const disconnectLeastPerformingPeer disconnectReason = "LeastPerformingPeer"
+const disconnectCliqueResolve disconnectReason = "CliqueResolving"
 
 // Response is the structure holding the response from the server
 type Response struct {
@@ -190,6 +192,18 @@ type wsPeer struct {
 	// sendMessageTag is a map of allowed message to send to a peer. We don't use any syncronization on this map, and the
 	// only gurentee is that it's being accessed only during startup and/or by the sending loop go routine.
 	sendMessageTag map[protocol.Tag]bool
+
+	// connMonitor used to measure the relative performance of the connection
+	// compared to the other outgoing connections. Incoming connections would have this
+	// field set to nil.
+	connMonitor *connectionPerformanceMonitor
+
+	// peerMessageDelay is calculated by the connection monitor; it's the relative avarage per-message delay.
+	peerMessageDelay int64
+
+	// throttledOutgoingConnection determines if this outgoing connection will be throttled bassed on it's
+	// performance or not. Throttled connections are more likely to be short-lived connections.
+	throttledOutgoingConnection bool
 }
 
 // HTTPPeer is what the opaque Peer might be.
@@ -384,6 +398,13 @@ func (wp *wsPeer) readLoop() {
 		networkReceivedBytesTotal.AddUint64(uint64(len(msg.Data)+2), nil)
 		networkMessageReceivedTotal.AddUint64(1, nil)
 		msg.Sender = wp
+
+		// for outgoing connections, we want to notify the connection monitor that we've received
+		// a message. The connection monitor would update it's statistics accordingly.
+		if wp.connMonitor != nil {
+			wp.connMonitor.Notify(&msg)
+		}
+
 		switch msg.Tag {
 		case protocol.MsgOfInterestTag:
 			// try to decode the message-of-interest
@@ -421,7 +442,6 @@ func (wp *wsPeer) readLoop() {
 			wp.handleFilterMessage(msg)
 			continue
 		}
-
 		if len(msg.Data) > 0 && wp.incomingMsgFilter != nil && dedupSafeTag(msg.Tag) {
 			if wp.incomingMsgFilter.CheckIncomingMessage(msg.Tag, msg.Data, true, true) {
 				//wp.net.log.Debugf("dropped incoming duplicate %s(%d)", msg.Tag, len(msg.Data))
