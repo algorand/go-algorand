@@ -58,7 +58,7 @@ func TestHandleCatchupReqNegative(t *testing.T) {
 		ledger: nil,
 	}
 
-	// case where topics is nil	
+	// case where topics is nil
 	ls.handleCatchupReq(context.Background(), reqMsg)
 	respTopics := reqMsg.Sender.(*mockUnicastPeer).responseTopics
 	val, found := respTopics.GetValue(network.ErrorKey)
@@ -66,29 +66,29 @@ func TestHandleCatchupReqNegative(t *testing.T) {
 	require.Equal(t, "UnmarshallTopics: could not read the number of topics", string(val))
 
 	// case where round number is missing
-	reqTopics := network.Topics {}
+	reqTopics := network.Topics{}
 	reqMsg.Data = reqTopics.MarshallTopics()
 	ls.handleCatchupReq(context.Background(), reqMsg)
 	respTopics = reqMsg.Sender.(*mockUnicastPeer).responseTopics
 
 	val, found = respTopics.GetValue(network.ErrorKey)
 	require.Equal(t, true, found)
-	require.Equal(t, "can't find round number", string(val))
+	require.Equal(t, noRoundNumberErrMsg, string(val))
 
 	// case where data type is missing
 	roundNumberData := make([]byte, 0)
-	reqTopics = network.Topics {network.MakeTopic(roundKey, roundNumberData)}
+	reqTopics = network.Topics{network.MakeTopic(roundKey, roundNumberData)}
 	reqMsg.Data = reqTopics.MarshallTopics()
 	ls.handleCatchupReq(context.Background(), reqMsg)
 	respTopics = reqMsg.Sender.(*mockUnicastPeer).responseTopics
 
 	val, found = respTopics.GetValue(network.ErrorKey)
 	require.Equal(t, true, found)
-	require.Equal(t, "can't find data-type", string(val))
+	require.Equal(t, noDataTypeErrMsg, string(val))
 
 	// case where round number is corrupted
 	roundNumberData = make([]byte, 0)
-	reqTopics = network.Topics {network.MakeTopic(roundKey, roundNumberData),
+	reqTopics = network.Topics{network.MakeTopic(roundKey, roundNumberData),
 		network.MakeTopic(requestDataTypeKey, []byte(blockAndCertValue)),
 	}
 	reqMsg.Data = reqTopics.MarshallTopics()
@@ -97,5 +97,5 @@ func TestHandleCatchupReqNegative(t *testing.T) {
 
 	val, found = respTopics.GetValue(network.ErrorKey)
 	require.Equal(t, true, found)
-	require.Equal(t, "unable to parse round number", string(val))
+	require.Equal(t, roundNumberParseErrMsg, string(val))
 }

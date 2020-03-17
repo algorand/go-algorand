@@ -227,6 +227,10 @@ func (ls *LedgerService) ListenForCatchupReq(reqs <-chan network.IncomingMessage
 	}
 }
 
+const noRoundNumberErrMsg = "can't find the round number"
+const noDataTypeErrMsg = "can't find the data-type"
+const roundNumberParseErrMsg = "unable to parse round number"
+
 // a blocking function for handling a catchup request
 func (ls *LedgerService) handleCatchupReq(ctx context.Context, reqMsg network.IncomingMessage) {
 	var res WsGetBlockOut
@@ -261,34 +265,34 @@ func (ls *LedgerService) handleCatchupReq(ctx context.Context, reqMsg network.In
 
 	topics, err := network.UnmarshallTopics(reqMsg.Data)
 	if err != nil {
-		logging.Base().Infof("LedgerService handleCatchupReq: %s", err.Error()) 
+		logging.Base().Infof("LedgerService handleCatchupReq: %s", err.Error())
 		respTopics = network.Topics{
 			network.MakeTopic(network.ErrorKey, []byte(err.Error()))}
 		return
 	}
 	roundBytes, found := topics.GetValue(roundKey)
 	if !found {
-		logging.Base().Infof("LedgerService handleCatchupReq: can't find round number")
+		logging.Base().Infof("LedgerService handleCatchupReq: %s", noRoundNumberErrMsg)
 		respTopics = network.Topics{
 			network.MakeTopic(network.ErrorKey,
-				[]byte("can't find round number"))}
+				[]byte(noRoundNumberErrMsg))}
 		return
 	}
 	requestType, found := topics.GetValue(requestDataTypeKey)
 	if !found {
-		logging.Base().Infof("LedgerService handleCatchupReq: can't find data-type")
+		logging.Base().Infof("LedgerService handleCatchupReq: %s", noDataTypeErrMsg)
 		respTopics = network.Topics{
 			network.MakeTopic(network.ErrorKey,
-				[]byte("can't find data-type"))}
+				[]byte(noDataTypeErrMsg))}
 		return
 	}
 
 	round, read := binary.Uvarint(roundBytes)
 	if read <= 0 {
-		logging.Base().Infof("LedgerService handleCatchupReq: unable to parse round number")
+		logging.Base().Infof("LedgerService handleCatchupReq: %s", roundNumberParseErrMsg)
 		respTopics = network.Topics{
 			network.MakeTopic(network.ErrorKey,
-				[]byte("unable to parse round number"))}
+				[]byte(roundNumberParseErrMsg))}
 		return
 	}
 	respTopics = topicBlockBytes(ls.ledger, basics.Round(round), string(requestType))
