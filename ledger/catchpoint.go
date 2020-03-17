@@ -55,6 +55,7 @@ const (
 
 type catchpointTracker struct {
 	ledger                       ledgerForTracker     // the parent ledger
+	dbs                          dbPair               // Connection to the tracker database
 	archivalLedger               bool                 // was the ledger configured as archival ? used only during startup to adjust current status if archival mode was changed by end-user since last startup.
 	log                          logging.Logger       // the log object
 	nextCatchpointCandidateRound basics.Round         // next catchpoint candidate round
@@ -118,11 +119,7 @@ func (cp *catchpointTracker) updateLastCommittedRound() error {
 func (cp *catchpointTracker) committedUpTo(rnd basics.Round) (outRound basics.Round) {
 	outRound = rnd
 
-	// get the latest db-committed round.
-	err := cp.updateLastCommittedRound()
-	if err != nil {
-		return
-	}
+	cp.lastCommittedRound = rnd
 
 	cp.log.Debugf("catchpointTracker: committedUpTo: round=%d stage=%d next=%d", rnd, cp.stage, cp.nextCatchpointCandidateRound)
 	switch cp.stage {
@@ -140,7 +137,7 @@ func (cp *catchpointTracker) committedUpTo(rnd basics.Round) (outRound basics.Ro
 		} else {
 			// this is not an archival node.
 			// update the schedule once we've reached a catchpoint round.
-			if cp.isCatchpointRound(rnd) {
+			if cp.isCatchpointCandidateRound(rnd) {
 				err := cp.scheduleCatchpoint()
 				if err != nil {
 					// TODO.
@@ -195,16 +192,12 @@ func (cp *catchpointTracker) committedUpTo(rnd basics.Round) (outRound basics.Ro
 func (cp *catchpointTracker) loadFromDisk(l ledgerForTracker) error {
 	cp.ledger = l
 	cp.log = l.trackerLog()
-	// get the latest db-committed round.
-	err := cp.updateLastCommittedRound()
-	if err != nil {
-		return err
-	}
+	cp.dbs = cp.ledger.trackerDB()
 
-	trackerDBs := cp.ledger.trackerDB()
+	cp.lastCommittedRound = l.Latest()
 
 	// load the catchpoint tracker state from the database.
-	err = trackerDBs.wdb.Atomic(cp.loadCatchpointState)
+	err := cp.dbs.wdb.Atomic(cp.loadCatchpointState)
 	if err != nil {
 		cp.log.Errorf("catchpointTracker: loadCatchpointState: %v", err)
 		return err
@@ -307,8 +300,18 @@ func (cp *catchpointTracker) scheduleCatchpoint() error {
 		cp.log.Infof("catchpointTracker: scheduleCatchpoint: catchpointInterval is zero")
 		return nil
 	}
+	hdr, err := cp.ledger.BlockHdr(cp.lastCommittedRound)
+	if err != nil {
+		cp.log.Infof("catchpointTracker: scheduleCatchpoint: no block header is available for round %d : %v", cp.lastCommittedRound, err)
+		return err
+	}
+	proto := config.Consensus[hdr.CurrentProtocol]
+	if cp.lastCommittedRound <= basics.Round(proto.MaxBalLookback) {
+		// don't schedule any catchpoint before we have MaxBalLookback entries.
+		return nil
+	}
 
-	isCatchpointRound := cp.isCatchpointRound(cp.lastCommittedRound)
+	isCatchpointRound := cp.isCatchpointCandidateRound(cp.lastCommittedRound)
 	var nextCatchpointRound uint64
 	if cp.nodeArchivalMode != nodeArchivalModeEnabled {
 		nextCatchpointRound = ((uint64(cp.lastCommittedRound) / cp.catchpointInterval) + 1) * cp.catchpointInterval
@@ -324,8 +327,7 @@ func (cp *catchpointTracker) scheduleCatchpoint() error {
 	var dbSize uint64
 
 	// the point where we want to start backing up is somewhere in the future, just set it here for now.
-	trackerDBs := cp.ledger.trackerDB()
-	err := trackerDBs.wdb.Atomic(func(tx *sql.Tx) (err error) {
+	err = cp.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
 		_, err = cp.setOrClearUint64(context.Background(), tx, "catchpointNextCandidateRound", nextCatchpointRound, 0)
 		if err != nil {
 			return fmt.Errorf("unable to set catchpoint state 'catchpointNextCandidateRound': %v", err)
@@ -391,7 +393,11 @@ func (cp *catchpointTracker) scheduleCatchpoint() error {
 	return nil
 }
 
-func (cp *catchpointTracker) isCatchpointRound(rnd basics.Round) bool {
+func (cp *catchpointTracker) isCatchpointRound(round basics.Round) bool {
+	return round == cp.nextCatchpointCandidateRound
+}
+
+func (cp *catchpointTracker) isCatchpointCandidateRound(rnd basics.Round) bool {
 	if cp.catchpointInterval == 0 {
 		return false
 	}
@@ -407,8 +413,8 @@ func (cp *catchpointTracker) updateArchivalMode(enable bool) error {
 	if enable {
 		mode = nodeArchivalModeEnabled
 	}
-	trackerDBs := cp.ledger.trackerDB()
-	err := trackerDBs.wdb.Atomic(func(tx *sql.Tx) (err error) {
+
+	err := cp.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
 		_, err = cp.setOrClearUint64(context.Background(), tx, "catchpointNextCandidateRound", 0, 0)
 		if err != nil {
 			return fmt.Errorf("unable to set catchpoint state 'catchpointNextCandidateRound': %v", err)
@@ -450,8 +456,7 @@ func (cp *catchpointTracker) updateArchivalMode(enable bool) error {
 }
 
 func (cp *catchpointTracker) startBackup(ctx context.Context) (err error) {
-	trackerDBs := cp.ledger.trackerDB()
-	cp.backupAccessor, err = trackerDBs.rdb.Backup(ctx, cp.stagingDatabaseName, cp.inMemoryDatabase)
+	cp.backupAccessor, err = cp.dbs.rdb.Backup(ctx, cp.stagingDatabaseName, cp.inMemoryDatabase)
 	if err != nil {
 		cp.log.Errorf("catchpointTracker: startBackup: unable to create backup accessor: %v", err)
 		cp.deleteStagingBackup()
@@ -472,7 +477,7 @@ func (cp *catchpointTracker) startBackup(ctx context.Context) (err error) {
 		cp.backupRate = -1 // copy all.
 	}
 
-	err = trackerDBs.wdb.Atomic(func(tx *sql.Tx) (err error) {
+	err = cp.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
 		_, err = cp.setOrClearUint64(context.Background(), tx, "catchpointStage", uint64(catchpointStageBackingUp), uint64(catchpointStageUnknown))
 		return
 	})
@@ -504,8 +509,7 @@ func (cp *catchpointTracker) finishBackup() (err error) {
 		return
 	}
 	cp.backupAccessor = nil
-	trackerDBs := cp.ledger.trackerDB()
-	err = trackerDBs.wdb.Atomic(func(tx *sql.Tx) (err error) {
+	err = cp.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
 		_, err = cp.setOrClearUint64(context.Background(), tx, "catchpointStage", uint64(catchpointStageBackedUp), uint64(catchpointStageUnknown))
 		return
 	})
@@ -547,8 +551,17 @@ func catchpointRoundToPath(rnd basics.Round) string {
 }
 
 func (cp *catchpointTracker) asyncGenerateCatchpoint() {
+	blockHdr, err := cp.ledger.BlockHdr(cp.nextCatchpointCandidateRound)
+	if err != nil {
+		buildResult := catchpointBuildResult{
+			err: fmt.Errorf("no block header is available for round %d : %v", cp.nextCatchpointCandidateRound, err),
+		}
+		cp.log.Errorf("catchpointTracker: asyncGenerateCatchpoint: %v", err)
+		cp.buildingCatchpoint <- buildResult
+		return
+	}
 	cp.catchpointBuilderWaitGroup.Add(1)
-	go func() {
+	go func(blockHeader bookkeeping.BlockHeader) {
 		var buildResult catchpointBuildResult
 		defer func() {
 			cp.stagingAccessor.Close()
@@ -559,10 +572,10 @@ func (cp *catchpointTracker) asyncGenerateCatchpoint() {
 
 		// create a dummy file for now.
 		catchpointsRoot := filepath.Dir(cp.stagingDatabaseName)
-		buildResult.fileName = filepath.Join("catchpoints", catchpointRoundToPath(cp.nextCatchpointCandidateRound))
+		buildResult.fileName = filepath.Join("catchpoints", catchpointRoundToPath(blockHeader.Round))
 		catchpointPath := filepath.Join(catchpointsRoot, buildResult.fileName)
 
-		writer := makeCatchpointWriter(catchpointPath, cp.stagingAccessor)
+		writer := makeCatchpointWriter(catchpointPath, cp.stagingAccessor, blockHeader.Round, blockHeader.Hash())
 		more := true
 		for more && buildResult.err == nil {
 			stepCtx, stepCancelFunction := context.WithTimeout(cp.closingCtx, 50*time.Millisecond)
@@ -582,15 +595,14 @@ func (cp *catchpointTracker) asyncGenerateCatchpoint() {
 				cp.log.Errorf("catchpointTracker: asyncGenerateCatchpoint: unable to create catchpoint : %v", buildResult.err)
 			}
 			buildResult.fileSize = writer.GetSize()
-			buildResult.round = writer.GetRound()
+			buildResult.round = blockHeader.Round
 			buildResult.catchpoint = writer.GetCatchpoint()
 		}
-	}()
+	}(blockHdr)
 }
 
 func (cp *catchpointTracker) saveCatchpoint(b catchpointBuildResult) (err error) {
-	trackerDBs := cp.ledger.trackerDB()
-	err = trackerDBs.wdb.Atomic(func(tx *sql.Tx) (err error) {
+	err = cp.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
 		err = cp.storeCatchpoint(tx, b.round, b.fileName, b.catchpoint, b.fileSize)
 		return
 	})

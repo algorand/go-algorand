@@ -28,6 +28,9 @@ import (
 	"github.com/algorand/go-algorand/logging"
 )
 
+// balancesFlushInterval defines how frequently we want to flush our balances to disk.
+const balancesFlushInterval = 5 * time.Second
+
 // A modifiedAccount represents an account that has been modified since
 // the persistent state stored in the account DB (i.e., in the range of
 // rounds covered by the accountUpdates tracker).
@@ -100,11 +103,17 @@ type accountUpdates struct {
 	// lastFlushTime is the time we last flushed updates to
 	// the accounts DB (bumping dbRound).
 	lastFlushTime time.Time
+
+	// ledger is the source ledger, which is used to syncronize
+	// the rounds at which we need to flush the balances to disk
+	// in favor of the catchpoint to be generated.
+	ledger ledgerForTracker
 }
 
 func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 	au.dbs = l.trackerDB()
 	au.log = l.trackerLog()
+	au.ledger = l
 
 	if au.initAccounts == nil {
 		return fmt.Errorf("accountUpdates.loadFromDisk: initAccounts not set")
@@ -376,25 +385,27 @@ func (au *accountUpdates) getAssetCreatorForRound(rnd basics.Round, aidx basics.
 	return au.accountsq.lookupAssetCreator(aidx)
 }
 
-func (au *accountUpdates) committedUpTo(rnd basics.Round) basics.Round {
+func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Round {
 	lookback := basics.Round(au.protos[len(au.protos)-1].MaxBalLookback)
-	if rnd < lookback {
+	if committedRound < lookback {
 		return 0
 	}
 
-	newBase := rnd - lookback
+	newBase := committedRound - lookback
 	if newBase <= au.dbRound {
 		// Already forgotten
 		return au.dbRound
 	}
 
 	if newBase > au.dbRound+basics.Round(len(au.deltas)) {
-		au.log.Panicf("committedUpTo: block %d too far in the future, lookback %d, dbRound %d, deltas %d", rnd, lookback, au.dbRound, len(au.deltas))
+		au.log.Panicf("committedUpTo: block %d too far in the future, lookback %d, dbRound %d, deltas %d", committedRound, lookback, au.dbRound, len(au.deltas))
 	}
 
 	// If we recently flushed, wait to aggregate some more blocks.
+	// ( unless we're creating a catchpoint, in which case we want to flush it right away
+	//   so that all the instances of the catchpoint would contain the exacy same data )
 	flushTime := time.Now()
-	if !flushTime.After(au.lastFlushTime.Add(5 * time.Second)) {
+	if !flushTime.After(au.lastFlushTime.Add(balancesFlushInterval)) && !au.ledger.isCatchpointRound(committedRound) {
 		return au.dbRound
 	}
 

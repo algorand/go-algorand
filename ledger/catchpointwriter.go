@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-codec/codec"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
@@ -38,19 +39,21 @@ const balancesChunkReadSize = 512
 const initialVersion = uint64(0200)
 
 type catchpointWriter struct {
-	hasher           hash.Hash
-	innerWriter      io.WriteCloser
-	dbr              db.Accessor
-	filePath         string
-	file             *os.File
-	gzip             *gzip.Writer
-	tar              *tar.Writer
-	headerWritten    bool
-	balancesOffset   int
-	balancesChunk    catchpointFileBalancesChunk
-	fileHeader       *catchpointFileHeader
-	balancesChunkNum uint
-	writtenBytes     int64
+	hasher            hash.Hash
+	innerWriter       io.WriteCloser
+	dbr               db.Accessor
+	filePath          string
+	file              *os.File
+	gzip              *gzip.Writer
+	tar               *tar.Writer
+	headerWritten     bool
+	balancesOffset    int
+	balancesChunk     catchpointFileBalancesChunk
+	fileHeader        *catchpointFileHeader
+	balancesChunkNum  uint
+	writtenBytes      int64
+	blocksRound       basics.Round
+	blockHeaderDigest bookkeeping.BlockHash
 }
 
 type encodedBalanceRecord struct {
@@ -60,21 +63,25 @@ type encodedBalanceRecord struct {
 }
 
 type catchpointFileHeader struct {
-	_struct       struct{}      `codec:",omitempty,omitemptyarray"`
-	Version       uint64        `codec:"version"`
-	Round         basics.Round  `codec:"round"`
-	Totals        AccountTotals `codec:"accountTotals"`
-	TotalAccounts uint64        `codec:"accountsCount"`
-	TotalChunks   uint64        `codec:"chunksCount"`
-	Catchpoint    string        `codec:"catchpoint"`
+	_struct           struct{}              `codec:",omitempty,omitemptyarray"`
+	Version           uint64                `codec:"version"`
+	BalancesRound     basics.Round          `codec:"balancesRound"`
+	BlocksRound       basics.Round          `codec:"blocksRound"`
+	Totals            AccountTotals         `codec:"accountTotals"`
+	TotalAccounts     uint64                `codec:"accountsCount"`
+	TotalChunks       uint64                `codec:"chunksCount"`
+	Catchpoint        string                `codec:"catchpoint"`
+	BlockHeaderDigest bookkeeping.BlockHash `codec:"blockHeaderDigest"`
 }
 
 type catchpointFileBalancesChunk []encodedBalanceRecord
 
-func makeCatchpointWriter(filePath string, dbr db.Accessor) *catchpointWriter {
+func makeCatchpointWriter(filePath string, dbr db.Accessor, blocksRound basics.Round, blockHeaderDigest bookkeeping.BlockHash) *catchpointWriter {
 	return &catchpointWriter{
-		filePath: filePath,
-		dbr:      dbr,
+		filePath:          filePath,
+		dbr:               dbr,
+		blocksRound:       blocksRound,
+		blockHeaderDigest: blockHeaderDigest,
 	}
 }
 
@@ -225,7 +232,7 @@ func (cw *catchpointWriter) readDatabaseStep(tx *sql.Tx) (err error) {
 
 func (cw *catchpointWriter) readHeaderFromDatabase(tx *sql.Tx) (err error) {
 	var header catchpointFileHeader
-	header.Round, err = accountsRound(tx)
+	header.BalancesRound, err = accountsRound(tx)
 	if err != nil {
 		return
 	}
@@ -238,8 +245,10 @@ func (cw *catchpointWriter) readHeaderFromDatabase(tx *sql.Tx) (err error) {
 		return
 	}
 	header.TotalChunks = (header.TotalAccounts + balancesChunkReadSize) / balancesChunkReadSize
-	header.Catchpoint = fmt.Sprintf("%d#**todo-hash**", header.Round)
+	header.BlocksRound = cw.blocksRound
+	header.Catchpoint = fmt.Sprintf("%d#**todo-hash**", header.BlocksRound)
 	header.Version = initialVersion
+	header.BlockHeaderDigest = cw.blockHeaderDigest
 	cw.fileHeader = &header
 	return
 }
@@ -249,10 +258,10 @@ func (cw *catchpointWriter) GetSize() int64 {
 	return cw.writtenBytes
 }
 
-// GetRound returns the round number to which this catchpoint is generated for.
-func (cw *catchpointWriter) GetRound() basics.Round {
+// GetBalancesRound returns the round number of the balances to which this catchpoint is generated for.
+func (cw *catchpointWriter) GetBalancesRound() basics.Round {
 	if cw.fileHeader != nil {
-		return cw.fileHeader.Round
+		return cw.fileHeader.BalancesRound
 	}
 	return basics.Round(0)
 }

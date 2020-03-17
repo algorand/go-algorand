@@ -175,6 +175,10 @@ func OpenLedger(
 	return l, nil
 }
 
+func (l *Ledger) isCatchpointRound(rnd basics.Round) bool {
+	return l.catchpoint.isCatchpointRound(rnd)
+}
+
 func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs dbPair, blockDBs dbPair, err error) {
 	// Backwards compatibility: we used to store both blocks and tracker
 	// state in a single SQLite db file.
