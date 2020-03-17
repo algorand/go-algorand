@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
@@ -142,27 +143,38 @@ func (vb validatedBlock) Block() bookkeeping.Block {
 type agreementLedger struct {
 	*data.Ledger
 	UnmatchedPendingCertificates chan catchup.PendingUnmatchedCertificate
+	n                            network.GossipNode
 }
 
-func makeAgreementLedger(ledger *data.Ledger) agreementLedger {
+func makeAgreementLedger(ledger *data.Ledger, net network.GossipNode) agreementLedger {
 	return agreementLedger{
 		Ledger:                       ledger,
 		UnmatchedPendingCertificates: make(chan catchup.PendingUnmatchedCertificate, 1),
+		n:                            net,
 	}
 }
 
 // EnsureBlock implements agreement.LedgerWriter.EnsureBlock.
 func (l agreementLedger) EnsureBlock(e bookkeeping.Block, c agreement.Certificate) {
 	l.Ledger.EnsureBlock(&e, c)
+	// let the network know that we've made some progress.
+	l.n.OnNetworkAdvance()
 }
 
 // EnsureValidatedBlock implements agreement.LedgerWriter.EnsureValidatedBlock.
 func (l agreementLedger) EnsureValidatedBlock(ve agreement.ValidatedBlock, c agreement.Certificate) {
 	l.Ledger.EnsureValidatedBlock(ve.(validatedBlock).vb, c)
+	// let the network know that we've made some progress.
+	l.n.OnNetworkAdvance()
 }
 
 // EnsureDigest implements agreement.LedgerWriter.EnsureDigest.
 func (l agreementLedger) EnsureDigest(cert agreement.Certificate, verifier *agreement.AsyncVoteVerifier) {
+	// let the network know that we've made some progress.
+	// this might be controverasl since we haven't received the entire block, but we did get the
+	// certificate, which means that network connections are likely to be just fine.
+	l.n.OnNetworkAdvance()
+
 	// clear out the pending certificates ( if any )
 	select {
 	case pendingCert := <-l.UnmatchedPendingCertificates:

@@ -265,6 +265,10 @@ type Local struct {
 
 	// EnablePingHandler controls whether the gossip node would respond to ping messages with a pong message.
 	EnablePingHandler bool
+
+	// DisableOutgoingConnectionThrottling disables the connection throttling of the network library, which
+	// allow the network library to continuesly disconnect relays based on their relative ( and absolute ) performance.
+	DisableOutgoingConnectionThrottling bool
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)

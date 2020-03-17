@@ -96,3 +96,6 @@ func (network *MockNetwork) ClearHandlers() {
 // RegisterHTTPHandler - empty implementation
 func (network *MockNetwork) RegisterHTTPHandler(path string, handler http.Handler) {
 }
+
+// OnNetworkAdvance - empty implementation
+func (network *MockNetwork) OnNetworkAdvance() {}
