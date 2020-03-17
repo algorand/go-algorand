@@ -171,13 +171,13 @@ func stxnVerifyCore(s *transactions.SignedTxn, ctx *Context) error {
 	}
 
 	if hasSig {
-		if crypto.SignatureVerifier(s.Txn.Src()).Verify(s.Txn, s.Sig) {
+		if crypto.SignatureVerifier(s.Authorizer()).Verify(s.Txn, s.Sig) {
 			return nil
 		}
 		return errors.New("signature validation failed")
 	}
 	if hasMsig {
-		if ok, _ := crypto.MultisigVerify(s.Txn, crypto.Digest(s.Txn.Src()), s.Msig); ok {
+		if ok, _ := crypto.MultisigVerify(s.Txn, crypto.Digest(s.Authorizer()), s.Msig); ok {
 			return nil
 		}
 		return errors.New("multisig validation failed")
@@ -237,10 +237,10 @@ func LogicSigSanityCheck(txn *transactions.SignedTxn, ctx *Context) error {
 		numSigs++
 	}
 	if numSigs == 0 {
-		// if the txn.Sender == hash(Logic) then this is a (potentially) valid operation on a contract-only account
+		// if the txn.Authorizer() == hash(Logic) then this is a (potentially) valid operation on a contract-only account
 		program := logic.Program(lsig.Logic)
 		lhash := crypto.HashObj(&program)
-		if crypto.Digest(txn.Txn.Sender) == lhash {
+		if crypto.Digest(txn.Authorizer()) == lhash {
 			return nil
 		}
 		return errors.New("LogicNot signed and not a Logic-only account")
@@ -251,12 +251,12 @@ func LogicSigSanityCheck(txn *transactions.SignedTxn, ctx *Context) error {
 
 	if !hasMsig {
 		program := logic.Program(lsig.Logic)
-		if !crypto.SignatureVerifier(txn.Txn.Src()).Verify(&program, lsig.Sig) {
+		if !crypto.SignatureVerifier(txn.Authorizer()).Verify(&program, lsig.Sig) {
 			return errors.New("logic signature validation failed")
 		}
 	} else {
 		program := logic.Program(lsig.Logic)
-		if ok, _ := crypto.MultisigVerify(&program, crypto.Digest(txn.Txn.Src()), lsig.Msig); !ok {
+		if ok, _ := crypto.MultisigVerify(&program, crypto.Digest(txn.Authorizer()), lsig.Msig); !ok {
 			return errors.New("logic multisig validation failed")
 		}
 	}
