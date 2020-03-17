@@ -1011,6 +1011,10 @@ txn CloseRemainderTo
 global GroupSize
 int 1
 ==
+&&
+global LogicSigVersion // TODO: stricter checking on field vs version
+int 2
+==
 &&`
 
 func TestGlobal(t *testing.T) {
@@ -1559,6 +1563,145 @@ int 0x310
 	}
 }
 
+func TestStringOps(t *testing.T) {
+	t.Parallel()
+	program, err := assembleStringWithTrace(t, `byte 0x123456789abc
+substring 1 3
+byte 0x3456
+==
+byte 0x12
+byte 0x3456
+byte 0x789abc
+concat
+concat
+byte 0x123456789abc
+==
+&&
+byte 0x123456789abc
+int 1
+int 3
+substring3
+byte 0x3456
+==
+&&`, 2)
+	require.NoError(t, err)
+	cost, err := Check(program, defaultEvalParams(nil, nil))
+	require.NoError(t, err)
+	require.True(t, cost < 1000)
+	sb := strings.Builder{}
+	pass, err := Eval(program, defaultEvalParams(&sb, nil))
+	if !pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.NoError(t, err)
+	require.True(t, pass)
+}
+
+func TestConsOverflow(t *testing.T) {
+	t.Parallel()
+	program, err := assembleStringWithTrace(t, `byte 0xf000000000000000
+dup
+concat
+dup
+concat
+dup
+concat
+dup
+concat
+dup
+concat
+dup
+concat
+dup
+concat
+dup
+concat
+dup
+concat
+dup
+concat
+dup
+concat
+dup
+concat
+dup
+concat
+dup
+concat
+dup
+concat
+dup
+concat
+dup
+concat
+dup
+concat
+len`, 2)
+	require.NoError(t, err)
+	cost, err := Check(program, defaultEvalParams(nil, nil))
+	require.NoError(t, err)
+	require.True(t, cost < 1000)
+	sb := strings.Builder{}
+	pass, err := Eval(program, defaultEvalParams(&sb, nil))
+	if pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.False(t, pass)
+	require.Error(t, err)
+	isNotPanic(t, err)
+}
+
+func TestSubstringFlop(t *testing.T) {
+	t.Parallel()
+	// fails in compiler
+	program, err := assembleStringWithTrace(t, `byte 0xf000000000000000
+substring 4 2
+len`, 2)
+	require.Error(t, err)
+
+	// fails at runtime
+	program, err = assembleStringWithTrace(t, `byte 0xf000000000000000
+int 4
+int 2
+substring3
+len`, 2)
+	require.NoError(t, err)
+	cost, err := Check(program, defaultEvalParams(nil, nil))
+	require.NoError(t, err)
+	require.True(t, cost < 1000)
+	sb := strings.Builder{}
+	pass, err := Eval(program, defaultEvalParams(&sb, nil))
+	if pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.False(t, pass)
+	require.Error(t, err)
+	isNotPanic(t, err)
+}
+
+func TestSubstringRange(t *testing.T) {
+	t.Parallel()
+	program, err := assembleStringWithTrace(t, `byte 0xf000000000000000
+substring 2 99
+len`, 2)
+	require.NoError(t, err)
+	cost, err := Check(program, defaultEvalParams(nil, nil))
+	require.NoError(t, err)
+	require.True(t, cost < 1000)
+	sb := strings.Builder{}
+	pass, err := Eval(program, defaultEvalParams(&sb, nil))
+	if pass {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.False(t, pass)
+	require.Error(t, err)
+	isNotPanic(t, err)
+}
+
 func TestLoadStore(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerDefaultVersion; v++ {
@@ -1958,6 +2101,22 @@ done:`, v)
 	}
 }
 
+func TestShortProgramTrue(t *testing.T) {
+	t.Parallel()
+	program, err := assembleStringWithTrace(t, `intcblock 1
+intc 0
+intc 0
+bnz done
+done:`, 2)
+	require.NoError(t, err)
+	cost, err := Check(program, defaultEvalParams(nil, nil))
+	require.NoError(t, err)
+	require.True(t, cost < 1000)
+	sb := strings.Builder{}
+	pass, err := Eval(program, defaultEvalParams(&sb, nil))
+	require.NoError(t, err)
+	require.True(t, pass)
+}
 func TestShortBytecblock(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerDefaultVersion; v++ {

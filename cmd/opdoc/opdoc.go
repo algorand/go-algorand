@@ -114,6 +114,10 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec) (err error) {
 	if cost != 1 {
 		fmt.Fprintf(out, "- **Cost**: %d\n", cost)
 	}
+	minVersion := logic.OpMinVersion(op.Name)
+	if minVersion > 0 {
+		fmt.Fprintf(out, "- LogicSigVersion >= %d\n", minVersion)
+	}
 	if op.Name == "global" {
 		globalFieldsMarkdown(out)
 	} else if op.Name == "txn" {

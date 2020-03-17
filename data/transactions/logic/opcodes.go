@@ -45,7 +45,9 @@ type OpSpec struct {
 }
 
 var oneBytes = StackTypes{StackBytes}
+var twoBytes = StackTypes{StackBytes, StackBytes}
 var threeBytes = StackTypes{StackBytes, StackBytes, StackBytes}
+var byteIntInt = StackTypes{StackBytes, StackUint64, StackUint64}
 var oneInt = StackTypes{StackUint64}
 var twoInts = StackTypes{StackUint64, StackUint64}
 var oneAny = StackTypes{StackAny}
@@ -116,6 +118,9 @@ var OpSpecs = []OpSpec{
 	{0x40, "bnz", opBnz, assembleBnz, disBnz, oneInt, nil, 1, modeAny, opSize{1, 3, checkBnz}},
 	{0x48, "pop", opPop, asmDefault, disDefault, oneAny, nil, 1, modeAny, opSizeDefault},
 	{0x49, "dup", opDup, asmDefault, disDefault, oneAny, twoAny, 1, modeAny, opSizeDefault},
+	{0x50, "concat", opConcat, asmDefault, disDefault, twoBytes, oneBytes, 2, modeAny, opSizeDefault},
+	{0x51, "substring", opSubstring, assembleSubstring, disSubstring, oneBytes, oneBytes, 2, modeAny, opSize{1, 3, nil}},
+	{0x52, "substring3", opSubstring3, asmDefault, disDefault, byteIntInt, oneBytes, 2, modeAny, opSizeDefault},
 
 	{0x60, "balance", opBalance, asmDefault, disDefault, oneInt, oneInt, 2, runModeApplication, opSizeDefault},
 	{0x61, "app_opted_in", opAppCheckOptedIn, asmDefault, disDefault, twoInts, oneInt, 2, runModeApplication, opSizeDefault},

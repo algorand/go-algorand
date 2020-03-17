@@ -54,8 +54,12 @@ type OpStream struct {
 	Version uint64
 	Trace   io.Writer
 	vubytes [9]byte
-	intc    []uint64
-	bytec   [][]byte
+
+	intc        []uint64
+	noIntcBlock bool
+
+	bytec        [][]byte
+	noBytecBlock bool
 
 	// Keep a stack of the types of what we would push and pop to typecheck a program
 	typeStack []StackType
@@ -67,6 +71,14 @@ type OpStream struct {
 	labels map[string]int
 
 	labelReferences []labelReference
+}
+
+// GetVersion returns the LogicSigVersion we're building to
+func (ops *OpStream) GetVersion() uint64 {
+	if ops.Version == 0 {
+		ops.Version = AssemblerDefaultVersion
+	}
+	return ops.Version
 }
 
 // SetLabelHere inserts a label reference to point to the next instruction
@@ -163,6 +175,10 @@ func (ops *OpStream) Bytec(constIndex uint) error {
 		ops.Out.WriteByte(0x27) // bytec
 		ops.Out.WriteByte(uint8(constIndex))
 	}
+	if constIndex >= uint(len(ops.bytec)) {
+		return fmt.Errorf("bytec %d is not defined", constIndex)
+	}
+	ops.trace("bytec %d %s", constIndex, hex.EncodeToString(ops.bytec[constIndex]))
 	ops.tpush(StackBytes)
 	return nil
 }
@@ -272,6 +288,7 @@ func (ops *OpStream) Global(val uint64) error {
 	}
 	ops.Out.WriteByte(0x32)
 	ops.Out.WriteByte(uint8(val))
+	ops.trace("%s (%s)", GlobalFieldNames[val], GlobalFieldTypes[val].String())
 	ops.tpush(GlobalFieldTypes[val])
 	return nil
 }
@@ -427,14 +444,17 @@ func assembleIntCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 	var scratch [binary.MaxVarintLen64]byte
 	l := binary.PutUvarint(scratch[:], uint64(len(args)))
 	ops.Out.Write(scratch[:l])
-	for _, xs := range args {
+	ops.intc = make([]uint64, len(args))
+	for i, xs := range args {
 		cu, err := strconv.ParseUint(xs, 0, 64)
 		if err != nil {
 			return err
 		}
 		l = binary.PutUvarint(scratch[:], cu)
 		ops.Out.Write(scratch[:l])
+		ops.intc[i] = cu
 	}
+	ops.noIntcBlock = true
 	return nil
 }
 
@@ -458,6 +478,8 @@ func assembleByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 		ops.Out.Write(scratch[:l])
 		ops.Out.Write(bv)
 	}
+	ops.bytec = bvals
+	ops.noBytecBlock = true
 	return nil
 }
 
@@ -527,6 +549,48 @@ func assembleStore(ops *OpStream, spec *OpSpec, args []string) error {
 	ops.Out.WriteByte(spec.Opcode)
 	ops.Out.WriteByte(byte(val))
 	return nil
+}
+
+func assembleSubstring(ops *OpStream, spec *OpSpec, args []string) error {
+	if len(args) != 2 {
+		return errors.New("substring expects 2 args")
+	}
+	start, err := strconv.ParseUint(args[0], 0, 64)
+	if err != nil {
+		return err
+	}
+	if start > EvalMaxScratchSize {
+		return errors.New("substring limited to 0..255")
+	}
+	end, err := strconv.ParseUint(args[1], 0, 64)
+	if err != nil {
+		return err
+	}
+	if end > EvalMaxScratchSize {
+		return errors.New("substring limited to 0..255")
+	}
+
+	if end < start {
+		return errors.New("substring end is before start")
+	}
+	opcode := byte(0x51)
+	err = ops.checkArgs(*spec)
+	if err != nil {
+		return err
+	}
+	ops.Out.WriteByte(opcode)
+	ops.Out.WriteByte(byte(start))
+	ops.Out.WriteByte(byte(end))
+	ops.trace(" pushes([]byte)")
+	ops.tpush(StackBytes)
+	return nil
+}
+
+func disSubstring(dis *disassembleState, spec *OpSpec) {
+	start := uint(dis.program[dis.pc+1])
+	end := uint(dis.program[dis.pc+2])
+	dis.nextpc = dis.pc + 3
+	_, dis.err = fmt.Fprintf(dis.out, "substring %d %d\n", start, end)
 }
 
 func assembleTxn(ops *OpStream, spec *OpSpec, args []string) error {
@@ -650,9 +714,15 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 	if err != nil {
 		return err
 	}
-	if spec.Returns != nil {
+	if len(spec.Returns) > 0 {
 		ops.tpusha(spec.Returns)
-		ops.trace("pushes%#v", spec.Returns)
+		ops.trace(" pushes(%s", spec.Returns[0].String())
+		if len(spec.Returns) > 1 {
+			for _, rt := range spec.Returns[1:] {
+				ops.trace(", %s", rt.String())
+			}
+		}
+		ops.trace(")")
 	}
 	err = ops.Out.WriteByte(spec.Opcode)
 	if err != nil {
@@ -723,9 +793,9 @@ func (ops *OpStream) checkArgs(spec OpSpec) error {
 		stype := ops.tpop()
 		if firstPop {
 			firstPop = false
-			ops.trace("pops(%s", stype.String())
+			ops.trace("pops(%s", argType.String())
 		} else {
-			ops.trace(", %s", stype.String())
+			ops.trace(", %s", argType.String())
 		}
 		if !typecheck(argType, stype) {
 			msg := fmt.Sprintf("%s arg %d wanted type %s got %s", spec.Name, i, argType.String(), stype.String())
@@ -737,7 +807,7 @@ func (ops *OpStream) checkArgs(spec OpSpec) error {
 		}
 	}
 	if !firstPop {
-		ops.trace(") ")
+		ops.trace(")")
 	}
 	return nil
 }
@@ -832,15 +902,9 @@ const AssemblerDefaultVersion = LogicVersion
 func (ops *OpStream) Bytes() (program []byte, err error) {
 	var scratch [binary.MaxVarintLen64]byte
 	prebytes := bytes.Buffer{}
-	// TODO: configurable what version to compile for in case we're near a version boundary?
-	version := ops.Version
-	if version == 0 {
-		//version = config.Consensus[protocol.ConsensusCurrentVersion].LogicSigVersion
-		version = AssemblerDefaultVersion
-	}
-	vlen := binary.PutUvarint(scratch[:], version)
+	vlen := binary.PutUvarint(scratch[:], ops.GetVersion())
 	prebytes.Write(scratch[:vlen])
-	if len(ops.intc) > 0 {
+	if len(ops.intc) > 0 && !ops.noIntcBlock {
 		prebytes.WriteByte(0x20) // intcblock
 		vlen := binary.PutUvarint(scratch[:], uint64(len(ops.intc)))
 		prebytes.Write(scratch[:vlen])
@@ -849,7 +913,7 @@ func (ops *OpStream) Bytes() (program []byte, err error) {
 			prebytes.Write(scratch[:vlen])
 		}
 	}
-	if len(ops.bytec) > 0 {
+	if len(ops.bytec) > 0 && !ops.noBytecBlock {
 		prebytes.WriteByte(0x26) // bytecblock
 		vlen := binary.PutUvarint(scratch[:], uint64(len(ops.bytec)))
 		prebytes.Write(scratch[:vlen])

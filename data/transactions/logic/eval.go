@@ -47,6 +47,9 @@ const EvalMaxVersion = LogicVersion
 // EvalMaxScratchSize is the maximum number of scratch slots.
 const EvalMaxScratchSize = 255
 
+// MaxStringSize is the limit of byte strings created by `cons`
+const MaxStringSize = 4069
+
 // stackValue is the type for the operand stack.
 // Each stackValue is either a valid []byte value or a uint64 value.
 // If (.Bytes != nil) the stackValue is a []byte value, otherwise uint64 value.
@@ -401,7 +404,12 @@ func check(program []byte, params EvalParams) (cost int, err error) {
 	cx.EvalParams = params
 	cx.program = program
 	for (cx.err == nil) && (cx.pc < len(cx.program)) {
+		prevpc := cx.pc
 		cost += cx.checkStep()
+		if cx.pc == prevpc {
+			err = fmt.Errorf("pc did not advance, stuck at %d", cx.pc)
+			return
+		}
 	}
 	if cx.err != nil {
 		err = fmt.Errorf("%3d %s", cx.pc, cx.err)
@@ -516,6 +524,7 @@ func (cx *evalContext) checkStep() (cost int) {
 		cx.err = fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, spec.Name)
 		return 1
 	}
+	prevpc := cx.pc
 	if oz.checkFunc != nil {
 		cost = oz.checkFunc(cx)
 		if cx.nextpc != 0 {
@@ -527,6 +536,9 @@ func (cx *evalContext) checkStep() (cost int) {
 	} else {
 		cost = oz.cost
 		cx.pc += oz.size
+	}
+	if cx.Trace != nil {
+		fmt.Fprintf(cx.Trace, "%3d %s\n", prevpc, spec.Name)
 	}
 	if cx.err != nil {
 		return 1
@@ -944,7 +956,14 @@ func checkBnz(cx *evalContext) int {
 	}
 	cx.nextpc = cx.pc + 3
 	target := cx.nextpc + int(offset)
-	if target >= len(cx.program) {
+	var branchTooFar bool
+	if cx.version >= 2 {
+		// branching to exactly the end of the program (target == len(cx.program)), the next pc after the last instruction, is okay and ends normally
+		branchTooFar = target > len(cx.program)
+	} else {
+		branchTooFar = target >= len(cx.program)
+	}
+	if branchTooFar {
 		cx.err = errors.New("bnz target beyond end of program")
 		return 1
 	}
@@ -1201,6 +1220,8 @@ func opGlobal(cx *evalContext) {
 		sv.Bytes = zeroAddress[:]
 	case GroupSize:
 		sv.Uint = uint64(len(cx.TxnGroup))
+	case LogicSigVersion:
+		sv.Uint = cx.Proto.LogicSigVersion
 	default:
 		cx.err = fmt.Errorf("invalid global[%d]", gindex)
 		return
@@ -1263,6 +1284,62 @@ func opStore(cx *evalContext) {
 	cx.scratch[gindex] = cx.stack[last]
 	cx.stack = cx.stack[:last]
 	cx.nextpc = cx.pc + 2
+}
+
+func opConcat(cx *evalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+	a := cx.stack[prev].Bytes
+	b := cx.stack[last].Bytes
+	newlen := len(a) + len(b)
+	if newlen > MaxStringSize {
+		cx.err = errors.New("cons resulted in string too long")
+		return
+	}
+	newvalue := make([]byte, newlen)
+	copy(newvalue, a)
+	copy(newvalue[len(a):], b)
+	cx.stack[prev].Bytes = newvalue
+	cx.stack = cx.stack[:last]
+}
+
+func substring(x []byte, start, end int) (out []byte, err error) {
+	out = x
+	if end <= start {
+		err = errors.New("substring end before start")
+		return
+	}
+	if start > len(x) || end > len(x) {
+		err = errors.New("substring range beyond length of string")
+		return
+	}
+	out = x[start:end]
+	err = nil
+	return
+}
+
+func opSubstring(cx *evalContext) {
+	last := len(cx.stack) - 1
+	start := cx.program[cx.pc+1]
+	end := cx.program[cx.pc+2]
+	cx.stack[last].Bytes, cx.err = substring(cx.stack[last].Bytes, int(start), int(end))
+	cx.nextpc = cx.pc + 3
+}
+
+const maxInt = int((^uint(0)) >> 1)
+
+func opSubstring3(cx *evalContext) {
+	last := len(cx.stack) - 1 // end
+	prev := last - 1          // start
+	pprev := prev - 1         // bytes
+	start := cx.stack[prev].Uint
+	end := cx.stack[last].Uint
+	if start > uint64(maxInt) || end > uint64(maxInt) {
+		cx.err = errors.New("substring range beyond length of string")
+		return
+	}
+	cx.stack[pprev].Bytes, cx.err = substring(cx.stack[pprev].Bytes, int(start), int(end))
+	cx.stack = cx.stack[:prev]
 }
 
 // getAccountAddrByOffset resolves account offset to address
