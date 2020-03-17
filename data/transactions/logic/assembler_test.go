@@ -573,6 +573,9 @@ txn AssetReceiver
 txn AssetCloseTo
 txn GroupIndex
 txn TxID
+txn OnCompletion
+txn ApplicationArgs
+txn Accounts
 gtxn 12 Fee
 `
 	for _, globalField := range GlobalFieldNames {
