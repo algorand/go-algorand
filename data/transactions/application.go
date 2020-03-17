@@ -347,7 +347,7 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva
 		// Can't close out if not currently opted in
 		_, ok := record.AppLocalStates[appIdx]
 		if !ok {
-			return fmt.Errorf("cannot clear state for app %d, not currently opted in", appIdx)
+			return fmt.Errorf("cannot clear state for app %d, account %s is not currently opted in", appIdx, header.Sender.String())
 		}
 
 		// If the application still exists...
@@ -396,12 +396,11 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva
 			return err
 		}
 
-		// TODO(applications) is it OK for an application with an empty schema
-		// to allocate an empty map here?
-
 		// If the user hasn't opted in yet, allocate their LocalState
 		_, ok := record.AppLocalStates[appIdx]
-		if !ok {
+		if ok {
+			return fmt.Errorf("account %s has already opted in to app %d", header.Sender.String(), appIdx)
+		} else {
 			record.AppLocalStates = cloneAppLocalStates(record.AppLocalStates)
 			record.AppLocalStates[appIdx] = basics.AppLocalState{
 				Schema:   params.LocalStateSchema,
@@ -450,7 +449,7 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva
 		// If they haven't opted in, that's an error
 		_, ok := record.AppLocalStates[appIdx]
 		if !ok {
-			return fmt.Errorf("account is not opted in to app %d", appIdx)
+			return fmt.Errorf("account %s is not opted in to app %d", header.Sender.String(), appIdx)
 		}
 
 		// Delete the local state
