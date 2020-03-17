@@ -112,6 +112,7 @@ func (n *node) add(cache *merkleTrieCache, d []byte) (nodeID storedNodeIdentifie
 			// make the new one as a child of the current one.
 			child, err := childNode.add(cache, d[1:])
 			if err != nil {
+				cache.deleteNode(child)
 				return nodeID, err
 			}
 			pnode.children[pnode.hash[0]] = child
@@ -156,6 +157,7 @@ func (n *node) add(cache *merkleTrieCache, d []byte) (nodeID storedNodeIdentifie
 		}
 		updatedChild, err := childNode.add(cache, d[1:])
 		if err != nil {
+			cache.deleteNode(updatedChild)
 			return nodeID, err
 		}
 		pnode.children[d[0]] = updatedChild
@@ -197,6 +199,7 @@ func (n *node) remove(cache *merkleTrieCache, key []byte) (nodeID storedNodeIden
 		// we have one or more children, see if it's the first child:
 		if pnode.firstChild == key[0] {
 			// we're removing the first child.
+			cache.deleteNode(pnode.children[pnode.firstChild])
 			next := pnode.childrenNext[pnode.firstChild]
 			pnode.children[pnode.firstChild] = storedNodeIdentifierNull
 			pnode.childrenNext[pnode.firstChild] = 0
@@ -228,6 +231,7 @@ func (n *node) remove(cache *merkleTrieCache, key []byte) (nodeID storedNodeIden
 		var updatedChildNodeID storedNodeIdentifier
 		updatedChildNodeID, err = childNode.remove(cache, key[1:])
 		if err != nil {
+			cache.deleteNode(updatedChildNodeID)
 			return nodeID, err
 		}
 		pnode.children[key[0]] = updatedChildNodeID
@@ -243,6 +247,7 @@ func (n *node) remove(cache *merkleTrieCache, key []byte) (nodeID storedNodeIden
 			pnode.leaf = true
 			pnode.hash = append([]byte{pnode.firstChild}, childNode.hash...)
 			pnode.childrenNext[key[0]] = 0
+			cache.deleteNode(pnode.children[key[0]])
 			pnode.children[key[0]] = storedNodeIdentifierNull
 			pnode.firstChild = 0
 		}

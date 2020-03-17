@@ -63,7 +63,9 @@ func (mt *MerkleTrie) Add(d []byte) (bool, error) {
 	if mt.root == storedNodeIdentifierNull {
 		// first item added to the tree.
 		var pnode *node
+		mt.cache.beginTransaction()
 		pnode, mt.root = mt.cache.allocateNewNode()
+		mt.cache.commitTransaction()
 		pnode.leaf = true
 		pnode.hash = d
 		return true, nil
@@ -76,12 +78,17 @@ func (mt *MerkleTrie) Add(d []byte) (bool, error) {
 	if found || (err != nil) {
 		return false, err
 	}
+	mt.cache.beginTransaction()
 	var updatedRoot storedNodeIdentifier
 	updatedRoot, err = pnode.add(mt.cache, d[:])
-	if err == nil {
-		mt.root = updatedRoot
+	if err != nil {
+		mt.cache.deleteNode(updatedRoot)
+		mt.cache.rollbackTransaction()
+		return false, err
 	}
-	return true, err
+	mt.root = updatedRoot
+	mt.cache.commitTransaction()
+	return true, nil
 }
 
 // Delete deletes the given hash to the trie, if such element exists.
@@ -98,17 +105,22 @@ func (mt *MerkleTrie) Delete(d []byte) (bool, error) {
 	if !found || err != nil {
 		return false, err
 	}
+	mt.cache.beginTransaction()
 	if pnode.leaf {
 		// remove the root.
 		mt.cache.deleteNode(mt.root)
 		mt.root = storedNodeIdentifierNull
+		mt.cache.commitTransaction()
 		return true, nil
 	}
 	var updatedRoot storedNodeIdentifier
 	updatedRoot, err = pnode.remove(mt.cache, d[:])
 	if err != nil {
+		mt.cache.deleteNode(updatedRoot)
+		mt.cache.rollbackTransaction()
 		return false, err
 	}
+	mt.cache.commitTransaction()
 	mt.root = updatedRoot
 	return true, nil
 }

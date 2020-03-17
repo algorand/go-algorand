@@ -34,6 +34,9 @@ type merkleTrieCache struct {
 	cacheSize  int // number of nodes that would reside in the case after evict is called.
 	nextNodeID storedNodeIdentifier
 	idToPtr    map[storedNodeIdentifier]*node
+
+	createdNodeIDs map[storedNodeIdentifier]bool
+	deletedNodeIDs map[storedNodeIdentifier]bool
 }
 
 func (mtc *merkleTrieCache) initialize() {
@@ -47,22 +50,55 @@ func (mtc *merkleTrieCache) allocateNewNode() (pnode *node, nid storedNodeIdenti
 	mtc.nextNodeID++
 	newNode := &node{}
 	mtc.idToPtr[nextID] = newNode
+
+	mtc.createdNodeIDs[nextID] = true
 	return newNode, nextID
 }
 
 func (mtc *merkleTrieCache) getNode(nid storedNodeIdentifier) (pnode *node, err error) {
 	pnode = mtc.idToPtr[nid]
 	if pnode == nil {
-		// todo - load from disk.
+		// todo - load it from disk.
 	}
 	return
 }
 
 func (mtc *merkleTrieCache) deleteNode(nid storedNodeIdentifier) (err error) {
-	pnode := mtc.idToPtr[nid]
+	/*pnode := mtc.idToPtr[nid]
 	if pnode == nil {
 		// todo - load from disk
 	}
-	delete(mtc.idToPtr, nid)
+	delete(mtc.idToPtr, nid)*/
+	if mtc.createdNodeIDs[nid] {
+		delete(mtc.createdNodeIDs, nid)
+	} else {
+		mtc.deletedNodeIDs[nid] = true
+	}
+
 	return nil
+}
+
+func (mtc *merkleTrieCache) beginTransaction() {
+	mtc.createdNodeIDs = make(map[storedNodeIdentifier]bool)
+	mtc.deletedNodeIDs = make(map[storedNodeIdentifier]bool)
+}
+
+func (mtc *merkleTrieCache) commitTransaction() {
+	// the created nodes are already on the list.
+	mtc.createdNodeIDs = nil
+	// delete the ones that we don't want from the list.
+	for nodeID := range mtc.deletedNodeIDs {
+		delete(mtc.idToPtr, nodeID)
+	}
+	mtc.deletedNodeIDs = nil
+}
+
+func (mtc *merkleTrieCache) rollbackTransaction() {
+	// no need to delete anything.
+	mtc.deletedNodeIDs = nil
+	// drop all the created nodes ids
+	for nodeID := range mtc.createdNodeIDs {
+		delete(mtc.idToPtr, nodeID)
+	}
+	mtc.createdNodeIDs = nil
 }
