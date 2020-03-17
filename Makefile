@@ -213,17 +213,22 @@ $(addprefix short_test_target_, $(UNIT_TEST_SOURCES)): build
 integration: build-race
 	./test/scripts/run_integration_tests.sh
 
-ci-integration: ci-build
+ci-integration:
+
 ifeq ($(ARCH), amd64)
-	RACE=
+	export NODEBINDIR=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/bin && \
+	export PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/bin:$$PATH && \
+	export PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/test-utils:$$PATH && \
+	export SRCROOT=$(SRCPATH) && \
+	./test/scripts/e2e_go_tests.sh
 else
-	RACE=-norace
+	export NODEBINDIR=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/bin && \
+	export PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/bin:$$PATH && \
+	export PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/test-utils:$$PATH && \
+	export SRCROOT=$(SRCPATH) && \
+	./test/scripts/e2e_go_tests.sh -norace
 endif
-	NODEBINDIR=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/bin \
-	PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/bin:$$PATH \
-	PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/test-utils:$$PATH \
-	SRCROOT=$(SRCPATH) \
-	./test/scripts/e2e_go_tests.sh $(RACE)
+
 
 testall: fulltest integration
 

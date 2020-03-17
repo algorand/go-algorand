@@ -10,7 +10,7 @@ export GO111MODULE=on
 # If one or more -t <pattern> are specified, use go test -run <pattern> for each
 
 TESTPATTERNS=()
-
+NORACEBUILD=""
 while [ "$1" != "" ]; do
     case "$1" in
         -t)
@@ -36,6 +36,9 @@ if [ "${NORACEBUILD}" = "" ]; then
     pushd ${REPO_ROOT}
     make build-race -j4
     popd
+    RACE_OPTION="-race"
+else
+    RACE_OPTION=""
 fi
 
 # Suppress telemetry reporting for tests
@@ -75,16 +78,16 @@ echo "TESTDATADIR: ${TESTDATADIR}"
 
 cd ${SRCROOT}/test/e2e-go
 
-
-
 # ARM64 has some memory related issues with fork. Since we don't really care
 # about testing the forking capabilities, we're just run the tests one at a time.
 EXECUTE_TESTS_INDIVIDUALLY="false"
 ARCHTYPE=$("${SRCROOT}/scripts/archtype.sh")
-if [ "${ARCHTYPE}" = "arm64" ]; then
+echo "ARCHTYPE:    ${ARCHTYPE}"
+if [[ "${ARCHTYPE}" = arm* ]]; then
     EXECUTE_TESTS_INDIVIDUALLY="true"
 fi
 
+echo "EXECUTE_TEST_INDIVIDUALLY = ${EXECUTE_TESTS_INDIVIDUALLY}"
 
 if [ "${#TESTPATTERNS[@]}" -eq 0 ]; then
     if [ "${EXECUTE_TESTS_INDIVIDUALLY}" = "true" ]; then
@@ -92,7 +95,7 @@ if [ "${#TESTPATTERNS[@]}" -eq 0 ]; then
         for TEST_DIR in ${TESTS_DIRECTORIES[@]}; do
             TESTS=$(go test -list ".*" ${TEST_DIR} -vet=off | grep -v "github.com" || true)
             for TEST_NAME in ${TESTS[@]}; do
-                go test -race -timeout 1h -vet=off -v ${SHORTTEST} -run ${TEST_NAME} ${TEST_DIR}
+                go test ${RACE_OPTION} -timeout 1h -vet=off -v ${SHORTTEST} -run ${TEST_NAME} ${TEST_DIR}
                 KMD_INSTANCES_COUNT=$(ps -Af | grep kmd | grep -v "grep" | wc -l | tr -d ' ')
                 if [ "${KMD_INSTANCES_COUNT}" != "0" ]; then
                     echo "One or more than one KMD instances remains running:"
@@ -108,11 +111,11 @@ if [ "${#TESTPATTERNS[@]}" -eq 0 ]; then
             done
         done
     else
-        go test -race -timeout 1h -v ${SHORTTEST} ./...
+        go test ${RACE_OPTION} -timeout 1h -v ${SHORTTEST} ./...
     fi
 else
     for TEST in ${TESTPATTERNS[@]}; do
-        go test -race -timeout 1h -v ${SHORTTEST} -run ${TEST} ./...
+        go test ${RACE_OPTION} -timeout 1h -v ${SHORTTEST} -run ${TEST} ./...
     done
 fi
 
