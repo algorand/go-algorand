@@ -142,6 +142,10 @@ type AccountData struct {
 	AppParams map[AppIndex]AppParams `codec:"appp,allocbound=-"`
 }
 
+// AppLocalState stores the LocalState associated with an application. It also
+// stores a cached copy of the application's LocalStateSchema so that
+// MinBalance requirements may be computed 1. without looking up the
+// AppParams and 2. even if the application has been deleted
 type AppLocalState struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -149,6 +153,7 @@ type AppLocalState struct {
 	KeyValue TealKeyValue `codec:"tkv"`
 }
 
+// AppParams stores the global information associated with an application
 type AppParams struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -160,12 +165,16 @@ type AppParams struct {
 	GlobalState TealKeyValue `codec:"gs,allocbound=-"`
 }
 
+// Clone returns a copy of some AppParams that may be modified without
+// affecting the original
 func (ap AppParams) Clone() (res AppParams) {
 	res = ap
 	res.GlobalState = ap.GlobalState.Clone()
 	return
 }
 
+// Clone returns a copy of some AppLocalState that may be modified without
+// affecting the original
 func (al AppLocalState) Clone() (res AppLocalState) {
 	res = al
 	res.KeyValue = al.KeyValue.Clone()
@@ -194,19 +203,30 @@ type BalanceDetail struct {
 	Accounts    []AccountDetail
 }
 
-type AppIndex uint64
-
 // AssetIndex is the unique integer index of an asset that can be used to look
 // up the creator of the asset, whose balance record contains the AssetParams
 type AssetIndex uint64
 
+// AppIndex is the unique integer index of an application that can be used to
+// look up the creator of the application, whose balance record contains the
+// AppParams
+type AppIndex uint64
+
+// CreatableIndex represents either an AssetIndex or AppIndex, which come from
+// the same namespace of indices as each other (both assets and apps are
+// "creatables")
 type CreatableIndex uint64
 
+// CreatableType is an enum representing whether or not a given creatable is an
+// application or an asset
 type CreatableType uint64
 
 const (
+	// AssetCreatable is the CreatableType corresponding to assets
 	AssetCreatable CreatableType = 0
-	AppCreatable   CreatableType = 1
+
+	// AppCreatable is the CreatableType corresponds to apps
+	AppCreatable CreatableType = 1
 )
 
 // CreatableLocator stores both the creator, whose balance record contains
@@ -309,6 +329,9 @@ func (u AccountData) WithUpdatedRewards(proto config.ConsensusParams, rewardsLev
 	return u
 }
 
+// MinBalance computes the minimum balance requirements for an account based on
+// some consensus parameters. MinBalance should correspond roughly to how much
+// storage the account is allowed to store on disk.
 func (u AccountData) MinBalance(proto config.ConsensusParams) (res MicroAlgos) {
 	var min uint64
 

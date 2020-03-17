@@ -22,17 +22,40 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 )
 
+// OnCompletion is an enum representing some layer 1 side effect that an
+// ApplicationCall transaction will have if it is included in a block.
 type OnCompletion uint64
 
 const (
-	NoOpOC              OnCompletion = 0
-	OptInOC             OnCompletion = 1
-	CloseOutOC          OnCompletion = 2
-	ClearStateOC        OnCompletion = 3
+	// NoOpOC indicates that an applicaiton transaction will simply call its
+	// ApprovalProgram
+	NoOpOC OnCompletion = 0
+
+	// OptInOC indicates that an application transaction will allocate some
+	// LocalState for the application in the sender's account
+	OptInOC OnCompletion = 1
+
+	// CloseOutOC indicates that an application transaction will deallocate
+	// some LocalState for the application from the user's account
+	CloseOutOC OnCompletion = 2
+
+	// ClearStateOC is similar to CloseOutOC, but may never fail. This
+	// allows users to reclaim their minimum balance from an application
+	// thye no longer wish to opt in to.
+	ClearStateOC OnCompletion = 3
+
+	// UpdateApplicationOC indicates that an application transaction will
+	// update the ApprovalProgram and ClearStateProgram for the application
 	UpdateApplicationOC OnCompletion = 4
+
+	// DeleteApplicationOC indicates that an application transaction will
+	// delete the AppParams for the application from the creator's balance
+	// record
 	DeleteApplicationOC OnCompletion = 5
 )
 
+// ApplicationCallTxnFields captures the transaction fields used for all
+// interactions with applications
 type ApplicationCallTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -50,6 +73,8 @@ type ApplicationCallTxnFields struct {
 	// method below!
 }
 
+// Empty indicates whether or not all the fields in the
+// ApplicationCallTxnFields are zeroed out
 func (ac ApplicationCallTxnFields) Empty() bool {
 	if ac.ApplicationID != 0 {
 		return false
@@ -298,7 +323,7 @@ func (ac ApplicationCallTxnFields) checkPrograms(steva StateEvaluator, maxCost i
 	}
 
 	if cost > maxCost {
-		return fmt.Errorf("ApprovalProgram too resource intensive. Cost is %d, max %d", cost, maxCost)
+		return fmt.Errorf("ClearStateProgram too resource intensive. Cost is %d, max %d", cost, maxCost)
 	}
 
 	return nil
@@ -417,28 +442,30 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva
 		return fmt.Errorf("only clearing out is supported for applications that do not exist")
 	}
 
-	// If this is an OptIn transaction, ensure that the sender has already
-	// allocated their LocalState so that TEAL may access it
+	// If this is an OptIn transaction, ensure that the sender has
+	// LocalState allocated prior to TEAL execution, so that it may be
+	// initialized in the same transaction.
 	if ac.OnCompletion == OptInOC {
 		record, err := balances.Get(header.Sender, false)
 		if err != nil {
 			return err
 		}
 
-		// If the user hasn't opted in yet, allocate their LocalState
+		// If the user has already opted in, fail
 		_, ok := record.AppLocalStates[appIdx]
 		if ok {
 			return fmt.Errorf("account %s has already opted in to app %d", header.Sender.String(), appIdx)
-		} else {
-			record.AppLocalStates = cloneAppLocalStates(record.AppLocalStates)
-			record.AppLocalStates[appIdx] = basics.AppLocalState{
-				Schema:   params.LocalStateSchema,
-				KeyValue: make(basics.TealKeyValue),
-			}
-			err = balances.Put(record)
-			if err != nil {
-				return err
-			}
+		}
+
+		// If the user hasn't opted in yet, allocate LocalState for the app
+		record.AppLocalStates = cloneAppLocalStates(record.AppLocalStates)
+		record.AppLocalStates[appIdx] = basics.AppLocalState{
+			Schema:   params.LocalStateSchema,
+			KeyValue: make(basics.TealKeyValue),
+		}
+		err = balances.Put(record)
+		if err != nil {
+			return err
 		}
 	}
 

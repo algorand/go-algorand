@@ -20,14 +20,22 @@ import (
 	"github.com/algorand/go-algorand/config"
 )
 
+// DeltaAction is an enum of actions that may be performed when applying a
+// delta to a TEAL key/value store
 type DeltaAction uint64
 
 const (
-	SetUintAction  DeltaAction = 1
+	// SetUintAction indicates that a Uint should be stored at a key
+	SetUintAction DeltaAction = 1
+
+	// SetBytesAction indicates that a TEAL byte slice should be stored at a key
 	SetBytesAction DeltaAction = 2
-	DeleteAction   DeltaAction = 3
+
+	// DeleteAction indicates that the value for a particular key should be deleted
+	DeleteAction DeltaAction = 3
 )
 
+// ValueDelta links a DeltaAction with a value to be set
 type ValueDelta struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -36,9 +44,14 @@ type ValueDelta struct {
 	Uint   uint64      `codec:"ui"`
 }
 
+// StateDelta is a map from key/value store keys to ValueDeltas, indicating
+// what should happen for that key
 //msgp:allocbound StateDelta -
 type StateDelta map[string]ValueDelta
 
+// EvalDelta stores StateDeltas for an application's global key/value store, as
+// well as StateDeltas for some number of accounts holding local state for that
+// application
 type EvalDelta struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -49,6 +62,7 @@ type EvalDelta struct {
 	LocalDeltas map[Address]StateDelta `codec:"ld,allocbound=-"`
 }
 
+// MakeEvalDelta creates an EvalDelta and allocates its fields
 func MakeEvalDelta() EvalDelta {
 	return EvalDelta{
 		GlobalDelta: make(StateDelta),
@@ -56,6 +70,7 @@ func MakeEvalDelta() EvalDelta {
 	}
 }
 
+// StateSchema sets maximums on the number of each value type that may be stored
 type StateSchema struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -63,12 +78,15 @@ type StateSchema struct {
 	NumByteSlice uint64 `codec:"nbs"`
 }
 
+// NumEntries counts the total number of values that may be stored for particular schema
 func (sm StateSchema) NumEntries() (tot uint64) {
 	tot = AddSaturate(tot, sm.NumUint)
 	tot = AddSaturate(tot, sm.NumByteSlice)
 	return tot
 }
 
+// MinBalance computes the MinBalance requirements for a StateSchema based on
+// the consensus parameters
 func (sm StateSchema) MinBalance(proto config.ConsensusParams) (res MicroAlgos) {
 	// Flat cost for each key/value pair
 	flatCost := MulSaturate(proto.SchemaMinBalancePerEntry, sm.NumEntries())
@@ -89,13 +107,19 @@ func (sm StateSchema) MinBalance(proto config.ConsensusParams) (res MicroAlgos) 
 	return res
 }
 
+// TealType is an enum of the types in a TEAL program: Bytes and Uint
 type TealType uint64
 
 const (
+	// TealBytesType represents the type of a byte slice in a TEAL program
 	TealBytesType TealType = 1
-	TealUintType  TealType = 2
+
+	// TealUintType represents the type of a uint in a TEAL program
+	TealUintType TealType = 2
 )
 
+// TealValue contains type information and a value, representing a value in a
+// TEAL program
 type TealValue struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -117,9 +141,13 @@ func (tv *TealValue) ToValueDelta() (vd ValueDelta) {
 	return
 }
 
+// TealKeyValue represents a key/value store for use in an application's
+// LocalState or GlobalState
 //msgp:allocbound TealKeyValue 4096
 type TealKeyValue map[string]TealValue
 
+// Clone returns a copy of a TealKeyValue that may be modified without
+// affecting the original
 func (tk TealKeyValue) Clone() TealKeyValue {
 	if tk == nil {
 		return nil
@@ -131,6 +159,9 @@ func (tk TealKeyValue) Clone() TealKeyValue {
 	return res
 }
 
+// SatisfiesSchema returns a boolean indicating whether or not a particular
+// TealKeyValue store meets the requirements set by a StateSchema on how
+// many values of each type are allowed
 func (tk TealKeyValue) SatisfiesSchema(schema StateSchema) bool {
 	// Count all of the types in the key/value store
 	var uintCount, bytesCount uint64
