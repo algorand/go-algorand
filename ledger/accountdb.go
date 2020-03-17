@@ -31,9 +31,9 @@ import (
 // accountsDbQueries is used to cache a prepared SQL statement to look up
 // the state of a single account.
 type accountsDbQueries struct {
-	listCreatablesStmt     *sql.Stmt
-	lookupStmt             *sql.Stmt
-	lookupCreatorStmt *sql.Stmt
+	listCreatablesStmt *sql.Stmt
+	lookupStmt         *sql.Stmt
+	lookupCreatorStmt  *sql.Stmt
 }
 
 var accountsSchema = []string{
@@ -309,7 +309,7 @@ func getChangedCreatables(creator basics.Address, delta accountDelta) map[basics
 			mods[basics.CreatableIndex(idx)] = modifiedCreatable{
 				created: true,
 				creator: creator,
-				ctype: basics.AssetCreatable,
+				ctype:   basics.AssetCreatable,
 			}
 		}
 	}
@@ -321,7 +321,7 @@ func getChangedCreatables(creator basics.Address, delta accountDelta) map[basics
 			mods[basics.CreatableIndex(idx)] = modifiedCreatable{
 				created: false,
 				creator: creator,
-				ctype: basics.AssetCreatable,
+				ctype:   basics.AssetCreatable,
 			}
 		}
 	}
@@ -333,7 +333,7 @@ func getChangedCreatables(creator basics.Address, delta accountDelta) map[basics
 			mods[basics.CreatableIndex(idx)] = modifiedCreatable{
 				created: true,
 				creator: creator,
-				ctype: basics.AppCreatable,
+				ctype:   basics.AppCreatable,
 			}
 		}
 	}
@@ -345,7 +345,7 @@ func getChangedCreatables(creator basics.Address, delta accountDelta) map[basics
 			mods[basics.CreatableIndex(idx)] = modifiedCreatable{
 				created: false,
 				creator: creator,
-				ctype: basics.AppCreatable,
+				ctype:   basics.AppCreatable,
 			}
 		}
 	}

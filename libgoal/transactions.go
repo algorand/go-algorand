@@ -359,34 +359,50 @@ func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, lastValid, fe
 	return tx, nil
 }
 
+// MakeUnsignedAppCreateTx makes a transaction for creating an application
 func (c *Client) MakeUnsignedAppCreateTx(onComplete transactions.OnCompletion, approvalProg string, clearProg string, globalSchema basics.StateSchema, localSchema basics.StateSchema, appArgs []string, accounts []string) (tx transactions.Transaction, err error) {
 	return c.MakeUnsignedApplicationCallTx(0, appArgs, accounts, onComplete, approvalProg, clearProg, globalSchema, localSchema)
 }
 
+// MakeUnsignedAppUpdateTx makes a transaction for updating an application's programs
 func (c *Client) MakeUnsignedAppUpdateTx(appIdx uint64, appArgs []string, accounts []string, approvalProg string, clearProg string) (tx transactions.Transaction, err error) {
 	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, transactions.UpdateApplicationOC, approvalProg, clearProg, emptySchema, emptySchema)
 }
 
+// MakeUnsignedAppDeleteTx makes a transaction for deleting an application
 func (c *Client) MakeUnsignedAppDeleteTx(appIdx uint64, appArgs []string, accounts []string) (tx transactions.Transaction, err error) {
 	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, transactions.DeleteApplicationOC, "", "", emptySchema, emptySchema)
 }
 
+// MakeUnsignedAppOptInTx makes a transaction for opting in to (allocating
+// some account-specific state for) an application
 func (c *Client) MakeUnsignedAppOptInTx(appIdx uint64, appArgs []string, accounts []string) (tx transactions.Transaction, err error) {
 	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, transactions.OptInOC, "", "", emptySchema, emptySchema)
 }
 
+// MakeUnsignedAppCloseOutTx makes a transaction for closing out of
+// (deallocating all account-specific state for) an application
 func (c *Client) MakeUnsignedAppCloseOutTx(appIdx uint64, appArgs []string, accounts []string) (tx transactions.Transaction, err error) {
 	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, transactions.CloseOutOC, "", "", emptySchema, emptySchema)
 }
 
+// MakeUnsignedAppClearStateTx makes a transaction for clearing out all
+// account-specific state for an application. It may not be rejected by the
+// application's logic.
 func (c *Client) MakeUnsignedAppClearStateTx(appIdx uint64, appArgs []string, accounts []string) (tx transactions.Transaction, err error) {
 	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, transactions.ClearStateOC, "", "", emptySchema, emptySchema)
 }
 
+// MakeUnsignedAppNoOpTx makes a transaction for interacting with an existing
+// application, potentially updating any account-specific local state and
+// global state associated with it.
 func (c *Client) MakeUnsignedAppNoOpTx(appIdx uint64, appArgs []string, accounts []string) (tx transactions.Transaction, err error) {
 	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, transactions.NoOpOC, "", "", emptySchema, emptySchema)
 }
 
+// MakeUnsignedApplicationCallTx is a helper for the above ApplicationCall
+// transaction constructors. A fully custom ApplicationCall transaction may
+// be constructed using this method.
 func (c *Client) MakeUnsignedApplicationCallTx(appIdx uint64, appArgs []string, accounts []string, onCompletion transactions.OnCompletion, approvalProg string, clearProg string, globalSchema basics.StateSchema, localSchema basics.StateSchema) (tx transactions.Transaction, err error) {
 	tx.Type = protocol.ApplicationCallTx
 	tx.ApplicationID = basics.AppIndex(appIdx)

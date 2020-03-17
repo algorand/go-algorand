@@ -283,19 +283,24 @@ func (l *Ledger) notifyCommit(r basics.Round) basics.Round {
 // GetAssetCreatorForRound looks up the asset creator given the numerical asset
 // ID. This is necessary so that we can retrieve the AssetParams from the
 // creator's balance record.
-func (l *Ledger) GetAssetCreatorForRound(rnd basics.Round, aidx basics.AssetIndex) (basics.Address, bool, error) {
+func (l *Ledger) GetAssetCreatorForRound(rnd basics.Round, aidx basics.AssetIndex) (creator basics.Address, doesNotExist bool, err error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 	return l.accts.getCreatorForRound(rnd, basics.CreatableIndex(aidx), basics.AssetCreatable)
 }
 
-func (l *Ledger) GetAppCreatorForRound(rnd basics.Round, aidx basics.AppIndex) (basics.Address, bool, error) {
+// GetAppCreatorForRound looks up the application creator given the app ID.
+// This is used to retrieve the AppParams from the creator's balance record.
+func (l *Ledger) GetAppCreatorForRound(rnd basics.Round, aidx basics.AppIndex) (creator basics.Address, doesNotExist bool, err error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 	return l.accts.getCreatorForRound(rnd, basics.CreatableIndex(aidx), basics.AppCreatable)
 }
 
-func (l *Ledger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
+// GetCreatorForRound takes a CreatableIndex and a CreatableType and tries to
+// look up a creator address, setting doesNotExist to true if the query
+// succeeded but no creator was found.
+func (l *Ledger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, doesNotExist bool, err error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 	return l.accts.getCreatorForRound(rnd, cidx, ctype)

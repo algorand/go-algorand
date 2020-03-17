@@ -74,6 +74,9 @@ type Balances interface {
 	ConsensusParams() config.ConsensusParams
 }
 
+// StateEvaluator is an interface that provides some Stateful TEAL
+// functionality that may be passed through to Apply from ledger, avoiding a
+// circular dependency between the logic and transactions packages
 type StateEvaluator interface {
 	Eval(program []byte) (pass bool, stateDelta basics.EvalDelta, err error)
 	Check(program []byte) (cost int, err error)
