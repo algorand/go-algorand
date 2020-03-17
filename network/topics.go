@@ -26,7 +26,7 @@ import (
 // Constant strings used as keys for topics
 const (
 	requestHashKey = "RequestHash"
-	ErrorKey       = "ERR" // used for passing an error message
+	ErrorKey       = "Error" // used for passing an error message
 )
 
 // Topic is a key-value pair

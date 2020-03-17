@@ -230,6 +230,8 @@ func (ls *LedgerService) ListenForCatchupReq(reqs <-chan network.IncomingMessage
 const noRoundNumberErrMsg = "can't find the round number"
 const noDataTypeErrMsg = "can't find the data-type"
 const roundNumberParseErrMsg = "unable to parse round number"
+const blockNotAvailabeErrMsg = "requested block is not available"
+const datatypeUnsupportedErrMsg = "requested data type is unsupported"
 
 // a blocking function for handling a catchup request
 func (ls *LedgerService) handleCatchupReq(ctx context.Context, reqMsg network.IncomingMessage) {
@@ -308,12 +310,16 @@ func (ls *LedgerService) sendCatchupRes(ctx context.Context, target network.Unic
 	}
 }
 
-func topicBlockBytes(ledger *data.Ledger, round basics.Round, requestType string) network.Topics {
-	blk, cert, err := ledger.EncodedBlockCert(round)
+func topicBlockBytes(dataLedger *data.Ledger, round basics.Round, requestType string) network.Topics {
+	blk, cert, err := dataLedger.EncodedBlockCert(round)
 	if err != nil {
-		errMsg := "LedgerService topicBlockBytes: error in EncodedBlockCert: " + err.Error()
+		switch err.(type) {
+		case ledger.ErrNoEntry:
+		default:
+			logging.Base().Infof("LedgerService topicBlockBytes: %s", err)			
+		}
 		return network.Topics{
-			network.MakeTopic(network.ErrorKey, []byte(errMsg))}
+			network.MakeTopic(network.ErrorKey, []byte(blockNotAvailabeErrMsg))}
 	}
 	switch requestType {
 	case blockAndCertValue:
@@ -324,9 +330,8 @@ func topicBlockBytes(ledger *data.Ledger, round basics.Round, requestType string
 				certDataKey, cert),
 		}
 	default:
-		errMsg := "LedgerService topicBlockBytes: request type is unknown"
-		return network.Topics{
-			network.MakeTopic(network.ErrorKey, []byte(errMsg))}
+    		return network.Topics{
+			network.MakeTopic(network.ErrorKey, []byte(datatypeUnsupportedErrMsg))}
 	}
 }
 
