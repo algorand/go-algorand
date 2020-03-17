@@ -57,12 +57,13 @@ func _() {
 	_ = x[MaxTxnLife-2]
 	_ = x[ZeroAddress-3]
 	_ = x[GroupSize-4]
-	_ = x[invalidGlobalField-5]
+	_ = x[LogicSigVersion-5]
+	_ = x[invalidGlobalField-6]
 }
 
-const _GlobalField_name = "MinTxnFeeMinBalanceMaxTxnLifeZeroAddressGroupSizeinvalidGlobalField"
+const _GlobalField_name = "MinTxnFeeMinBalanceMaxTxnLifeZeroAddressGroupSizeLogicSigVersioninvalidGlobalField"
 
-var _GlobalField_index = [...]uint8{0, 9, 19, 29, 40, 49, 67}
+var _GlobalField_index = [...]uint8{0, 9, 19, 29, 40, 49, 64, 82}
 
 func (i GlobalField) String() string {
 	if i < 0 || i >= GlobalField(len(_GlobalField_index)-1) {
