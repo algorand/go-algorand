@@ -218,6 +218,7 @@ type ConsensusParams struct {
 	MaxApprovalProgramLen   int
 	MaxClearStateProgramLen int
 	MaxAppTxnAccounts       int
+	MaxAppProgramCost       int
 
 	AppFlatParamsMinBalance  uint64
 	AppFlatOptInMinBalance   uint64
@@ -573,7 +574,7 @@ func initConsensusProtocols() {
 	// 100.1 Algos (MinBalance for creating 1,000 assets)
 	vFuture.MaximumMinimumBalance = 100100000
 
-	// TODO(applications) tune these based off on performance
+	// TODO(applications) tune these based on performance
 	vFuture.MaxAppArgs = 16
 	vFuture.MaxAppArgLen = 128
 	vFuture.MaxApprovalProgramLen = 1024
@@ -597,6 +598,10 @@ func initConsensusProtocols() {
 
 	// Maximum number of key/value pairs per global/local key/value store
 	vFuture.MaxSchemaEntries = 1024
+
+	// 20000 to match max stateless TEAL cost (for now)
+	// TODO(applications) tune this based on performance
+	vFuture.MaxAppProgramCost = 20000
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

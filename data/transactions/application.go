@@ -244,7 +244,7 @@ func applyStateDeltas(evalDelta basics.EvalDelta, balances Balances, appIdx basi
 	/*
 	 * 3. Write GlobalState changes back to cow. This should be correct
 	 *    even if creator is in the local deltas, because the updated
-	 *    fields are orthogonal.
+	 *    fields are different.
 	 */
 
 	record, err := balances.Get(creator, false)
@@ -282,25 +282,44 @@ func applyStateDeltas(evalDelta basics.EvalDelta, balances Balances, appIdx basi
 	return nil
 }
 
+func (ac ApplicationCallTxnFields) checkPrograms(steva StateEvaluator, maxCost int) error {
+	cost, err := steva.Check([]byte(ac.ApprovalProgram))
+	if err != nil {
+		return fmt.Errorf("check failed on ApprovalProgram: %v", err)
+	}
+
+	if cost > maxCost {
+		return fmt.Errorf("ApprovalProgram too resource intensive. Cost is %d, max %d", cost, maxCost)
+	}
+
+	cost, err = steva.Check([]byte(ac.ClearStateProgram))
+	if err != nil {
+		return fmt.Errorf("check failed on ClearStateProgram: %v", err)
+	}
+
+	if cost > maxCost {
+		return fmt.Errorf("ApprovalProgram too resource intensive. Cost is %d, max %d", cost, maxCost)
+	}
+
+	return nil
+}
+
 func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva StateEvaluator, spec SpecialAddresses, ad *ApplyData, txnCounter uint64) error {
 	// Keep track of the application ID we're working on
 	appIdx := ac.ApplicationID
 
-	// If we're creating an application, allocate its AppParams
+	// Specifying an application ID of 0 indicates application creation
 	if ac.ApplicationID == 0 {
-		// Creating an application. Fetch the creator's balance record
+		// Fetch the creator's (sender's) balance record
 		record, err := balances.Get(header.Sender, false)
 		if err != nil {
 			return err
 		}
 
-		// Clone local states + app params, so that we have a copy that is
-		// safe to modify
-		record.AppLocalStates = cloneAppLocalStates(record.AppLocalStates)
+		// Clone app params, so that we have a copy that is safe to modify
 		record.AppParams = cloneAppParams(record.AppParams)
 
-		// Allocate the new app params (+ 1 so that we never have
-		// appIdx == 0 and to match Assets ID namespace)
+		// Allocate the new app params (+ 1 to match Assets Idx namespace)
 		appIdx = basics.AppIndex(txnCounter + 1)
 		record.AppParams[appIdx] = basics.AppParams{
 			ApprovalProgram:   ac.ApprovalProgram,
@@ -317,19 +336,29 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva
 		}
 	}
 
-	// Fetch the application parameters, if they exist
-	params, creator, doesNotExist, err := getAppParams(balances, appIdx)
-	if err != nil {
-		return err
-	}
-
 	// Initialize our TEAL evaluation context. Internally, this manages
 	// access to balance records for Stateful TEAL programs. Stateful TEAL
 	// may only access the sender's balance record or the balance records
 	// of accounts explicitly listed in ac.Accounts. Implicitly, the
 	// creator's balance record may be accessed via GlobalState.
 	whitelistWithSender := append(ac.Accounts, header.Sender)
-	err = steva.InitLedger(balances, whitelistWithSender, appIdx)
+	err := steva.InitLedger(balances, whitelistWithSender, appIdx)
+	if err != nil {
+		return err
+	}
+
+	// If this txn is going to set new programs (either for creation or
+	// update), check that the programs are valid and not too expensive
+	if ac.ApplicationID == 0 || ac.OnCompletion == UpdateApplicationOC {
+		maxCost := balances.ConsensusParams().MaxAppProgramCost
+		err = ac.checkPrograms(steva, maxCost)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Fetch the application parameters, if they exist
+	params, creator, doesNotExist, err := getAppParams(balances, appIdx)
 	if err != nil {
 		return err
 	}
@@ -344,7 +373,7 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva
 		}
 
 		// Ensure sender actually has LocalState allocated for this app.
-		// Can't close out if not currently opted in
+		// Can't clear out if not currently opted in
 		_, ok := record.AppLocalStates[appIdx]
 		if !ok {
 			return fmt.Errorf("cannot clear state for app %d, account %s is not currently opted in", appIdx, header.Sender.String())
@@ -389,7 +418,7 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva
 	}
 
 	// If this is an OptIn transaction, ensure that the sender has already
-	// allocated their LocalState
+	// allocated their LocalState so that TEAL may access it
 	if ac.OnCompletion == OptInOC {
 		record, err := balances.Get(header.Sender, false)
 		if err != nil {

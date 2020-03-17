@@ -38,6 +38,16 @@ func (ae *appTealEvaluator) Eval(program []byte) (pass bool, stateDelta basics.E
 	return logic.EvalStateful(program, ae.evalParams)
 }
 
+// Check computes the cost of a TEAL program for an application. InitLedger must
+// be called before calling Check.
+func (ae *appTealEvaluator) Check(program []byte) (cost int, err error) {
+	if ae.evalParams.Ledger == nil {
+		err = fmt.Errorf("appTealEvaluator Ledger not initialized")
+		return
+	}
+	return logic.CheckStateful(program, ae.evalParams)
+}
+
 func (ae *appTealEvaluator) InitLedger(balances transactions.Balances, whitelist []basics.Address, appIdx basics.AppIndex) error {
 	ledger, err := newAppLedger(balances, whitelist, appIdx)
 	if err != nil {

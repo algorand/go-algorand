@@ -67,3 +67,6 @@ int 1
 bnz done
 
 done:
+// bnz end workaround
+int 0
+pop
