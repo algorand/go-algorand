@@ -157,6 +157,8 @@ const (
 	ZeroAddress
 	// GroupSize len(txn group)
 	GroupSize
+	// LogicSigVersion ConsensusParams.LogicSigVersion
+	LogicSigVersion
 	invalidGlobalField
 )
 
@@ -174,6 +176,7 @@ var globalFieldTypeList = []globalFieldType{
 	{MaxTxnLife, StackUint64},
 	{ZeroAddress, StackBytes},
 	{GroupSize, StackUint64},
+	{LogicSigVersion, StackUint64},
 }
 
 // GlobalFieldTypes is StackUint64 StackBytes in parallel with GlobalFieldNames

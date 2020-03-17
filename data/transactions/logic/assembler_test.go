@@ -38,6 +38,11 @@ byte base64(aGVsbG8gd29ybGQh)
 byte b64 aGVsbG8gd29ybGQh
 byte b64(aGVsbG8gd29ybGQh)
 addr RWXCBB73XJITATVQFOI7MVUUQOL2PFDDSDUMW4H4T2SNSX4SEUOQ2MM7F4
+concat
+substring 42 99
+intc 0
+intc 1
+substring3
 ed25519verify
 txn Sender
 txn Fee
@@ -196,7 +201,7 @@ func TestAssemble(t *testing.T) {
 	program, err := AssembleString(bigTestAssembleNonsenseProgram)
 	require.NoError(t, err)
 	// check that compilation is stable over time and we assemble to the same bytes this month that we did last month.
-	expectedBytes, _ := hex.DecodeString("022008b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f01020026040212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d02424200320032013202320328292929292a0431003101310231043105310731083109310a310b310c310d310e310f31113112311331143115311833000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e0102222324252104082209240a220b230c240d250e230f23102311231223132314181b1c2b171615400003290349483403350222231d4821056021056121052b6248482b63484821052b2106642b21056521072b662b6721072105700048482107210571004848361a00483700190048")
+	expectedBytes, _ := hex.DecodeString("022008b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f01020026040212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d02424200320032013202320328292929292a50512a632223520431003101310231043105310731083109310a310b310c310d310e310f31113112311331143115311833000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e0102222324252104082209240a220b230c240d250e230f23102311231223132314181b1c2b171615400003290349483403350222231d4821056021056121052b6248482b63484821052b2106642b21056521072b662b6721072105700048482107210571004848361a00483700190048")
 	if bytes.Compare(expectedBytes, program) != 0 {
 		// this print is for convenience if the program has been changed. the hex string can be copy pasted back in as a new expected result.
 		t.Log(hex.EncodeToString(program))
@@ -498,6 +503,20 @@ bnz nowhere`
 	}
 }
 
+func TestAssembleJumpToTheEnd(t *testing.T) {
+	text := `intcblock 1
+intc 0
+intc 0
+bnz done
+done:`
+	program, err := AssembleString(text)
+	require.NoError(t, err)
+	require.Equal(t, 9, len(program))
+	expectedProgBytes := []byte("\x01\x20\x01\x01\x22\x22\x40\x00\x00")
+	expectedProgBytes[0] = byte(AssemblerDefaultVersion)
+	require.Equal(t, expectedProgBytes, program)
+}
+
 func TestAssembleDisassemble(t *testing.T) {
 	// Specifically constructed program text that should be recreated by Disassemble()
 	// TODO: disassemble to int/byte psuedo-ops instead of raw intcblock/bytecblock/intc/bytec
@@ -525,6 +544,9 @@ bnz label1
 global MinTxnFee
 global MinBalance
 global MaxTxnLife
+global ZeroAddress
+global GroupSize
+global LogicSigVersion
 txn Sender
 txn Fee
 bnz label1
@@ -539,8 +561,30 @@ txn VotePK
 txn SelectionPK
 txn VoteFirst
 txn VoteLast
+txn FirstValidTime
+txn Lease
+txn VoteKeyDilution
+txn Type
+txn TypeEnum
+txn XferAsset
+txn AssetAmount
+txn AssetSender
+txn AssetReceiver
+txn AssetCloseTo
+txn GroupIndex
+txn TxID
 gtxn 12 Fee
 `
+	for _, globalField := range GlobalFieldNames {
+		if !strings.Contains(text, globalField) {
+			t.Errorf("TestAssembleDisassemble missing field global %v", globalField)
+		}
+	}
+	for _, txnField := range TxnFieldNames {
+		if !strings.Contains(text, txnField) {
+			t.Errorf("TestAssembleDisassemble missing field txn %v", txnField)
+		}
+	}
 	program, err := AssembleStringV1(text)
 	require.NoError(t, err)
 	t2, err := Disassemble(program)

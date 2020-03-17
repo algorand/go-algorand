@@ -331,6 +331,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 - Pops: _None_
 - Pushes: any
 - push field from current transaction to stack
+- LogicSigVersion >= 2
 
 `txn` Fields:
 
@@ -396,6 +397,7 @@ FirstValidTime causes the program to fail. The field is reserved for future use.
 | 2 | MaxTxnLife | uint64 | rounds |
 | 3 | ZeroAddress | []byte | 32 byte address of all zero bytes |
 | 4 | GroupSize | uint64 | Number of transactions in this atomic transaction group. At least 1. |
+| 5 | LogicSigVersion | uint64 |  |
 
 
 ## gtxn
@@ -404,6 +406,7 @@ FirstValidTime causes the program to fail. The field is reserved for future use.
 - Pops: _None_
 - Pushes: any
 - push field to the stack from a transaction in the current transaction group
+- LogicSigVersion >= 2
 
 for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`
 
@@ -427,6 +430,7 @@ for notes on transaction fields available, see `txn`. If this transaction is _i_
 - Pops: _None_
 - Pushes: any
 - push value of an array field from current transaction to stack
+- LogicSigVersion >= 2
 
 ## gtxna
 
@@ -434,6 +438,7 @@ for notes on transaction fields available, see `txn`. If this transaction is _i_
 - Pops: _None_
 - Pushes: any
 - push value of a field to the stack from a transaction in the current transaction group
+- LogicSigVersion >= 2
 
 ## bnz
 
@@ -443,6 +448,8 @@ for notes on transaction fields available, see `txn`. If this transaction is _i_
 - branch if value X is not zero
 
 The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which are a high byte first and low byte second which together form a 16 bit offset which the instruction may branch to. For a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else proceed to next instruction at `pc + 3`. Branch targets must be well aligned instructions. (e.g. Branching to the second byte of a 2 byte op will be rejected.) Branch offsets are currently limited to forward branches only, 0-0x7fff. A future expansion might make this a signed 16 bit integer allowing for backward branches and looping.
+
+At LogicSigVersion 2 it became allowed to branch to the end of the program exactly after the last instruction, removing the need for a last instruction or no-op as a branch target at the end. Branching beyond that may still fail the program.
 
 ## pop
 
@@ -458,12 +465,39 @@ The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which 
 - Pushes: any, any
 - duplicate last value on stack
 
+## concat
+
+- Opcode: 0x50
+- Pops: *... stack*, {[]byte A}, {[]byte B}
+- Pushes: []byte
+- pop two byte strings A and B and join them, push the result
+- LogicSigVersion >= 2
+
+`concat` panics if the result would be greater than 4096 bytes
+
+## substring
+
+- Opcode: 0x51
+- Pops: *... stack*, []byte
+- Pushes: []byte
+- pop a byte string X. For immediate values in 0..255 N and M: extract a range of bytes from it starting at N up to but not including M, push the substring result
+- LogicSigVersion >= 2
+
+## substring3
+
+- Opcode: 0x52
+- Pops: *... stack*, {[]byte A}, {uint64 B}, {uint64 C}
+- Pushes: []byte
+- pop a byte string A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result
+- LogicSigVersion >= 2
+
 ## balance
 
 - Opcode: 0x60
 - Pops: *... stack*, uint64
 - Pushes: uint64
 - get balance for the requested account A in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction
+- LogicSigVersion >= 2
 
 ## app_opted_in
 
@@ -471,6 +505,7 @@ The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which 
 - Pops: *... stack*, {uint64 A}, {uint64 B}
 - Pushes: uint64
 - check if account A opted in for the application B => {0 or 1}
+- LogicSigVersion >= 2
 
 params: account index, application id (top of the stack on opcode entry)
 
@@ -479,7 +514,8 @@ params: account index, application id (top of the stack on opcode entry)
 - Opcode: 0x62
 - Pops: *... stack*, {uint64 A}, {uint64 B}, {[]byte C}
 - Pushes: uint64, any
-- read key K from local state of account A for the application B => {0 or 1 (top), value}
+- read from account's A from local state of the application B key C  => {0 or 1 (top), value}
+- LogicSigVersion >= 2
 
 params: account index, application id, state key. Return: did_exist flag (top of the stack), value
 
@@ -488,14 +524,16 @@ params: account index, application id, state key. Return: did_exist flag (top of
 - Opcode: 0x63
 - Pops: *... stack*, []byte
 - Pushes: uint64, any
-- read key K from global state of the current application => {0 or 1 (top), value}
+- read key A from global state of a current application => {0 or 1 (top), value}
+- LogicSigVersion >= 2
 
 ## app_write_local
 
 - Opcode: 0x64
 - Pops: *... stack*, {uint64 A}, {[]byte B}, {any C}
 - Pushes: _None_
-- write key K to local state of account A for the application B
+- write to account's A to local state of a current application key B with value C
+- LogicSigVersion >= 2
 
 params: account index, state key, value
 
@@ -504,23 +542,36 @@ params: account index, state key, value
 - Opcode: 0x65
 - Pops: *... stack*, {[]byte A}, {any B}
 - Pushes: _None_
-- write key K to global state of the current application
+- write key A and value B to global state of the current application
+- LogicSigVersion >= 2
 
-## app_read_other_global
+## app_delete_local
 
 - Opcode: 0x66
-- Pops: *... stack*, {uint64 A}, {uint64 B}, {[]byte C}
-- Pushes: uint64, any
-- read key K from global state of account A for the application B if A created B => {0 or 1 (top), value}
+- Pops: *... stack*, {uint64 A}, {[]byte B}
+- Pushes: _None_
+- delete from account's A local state key B of the current application
+- LogicSigVersion >= 2
 
-params: account index, application id, state key. Return: did_exist flag (top of the stack), value
+params: account index, state key
+
+## app_delete_global
+
+- Opcode: 0x67
+- Pops: *... stack*, []byte
+- Pushes: _None_
+- delete key A from a global state of the current application
+- LogicSigVersion >= 2
+
+params: state key
 
 ## asset_read_holding
 
-- Opcode: 0x70
+- Opcode: 0x70 {uint8 asset holding field index}
 - Pops: *... stack*, {uint64 A}, {uint64 B}
 - Pushes: uint64, any
-- read an asset A holding field X of account A  => {0 or 1 (top), value}
+- read from account's A and asset B holding field X (imm arg)  => {0 or 1 (top), value}
+- LogicSigVersion >= 2
 
 `asset_read_holding` Fields:
 
@@ -530,14 +581,15 @@ params: account index, application id, state key. Return: did_exist flag (top of
 | 1 | AssetHoldingFrozen | uint64 | Is the asset frozen or not |
 
 
-params: account index, asset id, field. Return: did_exist flag, value
+params: account index, asset id. Return: did_exist flag, value
 
 ## asset_read_params
 
-- Opcode: 0x71
+- Opcode: 0x71 {uint8 asset params field index}
 - Pops: *... stack*, {uint64 A}, {uint64 B}
 - Pushes: uint64, any
-- read an asset A params field X of account A  => {0 or 1 (top), value}
+- read from account's A and asset B params field X (imm arg)  => {0 or 1 (top), value}
+- LogicSigVersion >= 2
 
 `asset_read_params` Fields:
 
@@ -556,4 +608,4 @@ params: account index, asset id, field. Return: did_exist flag, value
 | 10 | AssetParamsClawback | []byte | Clawback address |
 
 
-params: account index, asset id, field. Return: did_exist flag, value
+params: account index, asset id. Return: did_exist flag, value
