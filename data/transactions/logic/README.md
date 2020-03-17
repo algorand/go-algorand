@@ -94,6 +94,9 @@ For two-argument ops, `A` is the previous element on the stack and `B` is the la
 | `^` | A bitwise-xor B |
 | `~` | bitwise invert value X |
 | `mulw` | A times B out to 128-bit long result as low (top) and high uint64 values on the stack |
+| `concat` | pop two byte strings A and B and join them, push the result |
+| `substring` | pop a byte string X. For immediate values in 0..255 N and M: extract a range of bytes from it starting at N up to but not including M, push the substring result |
+| `substring3` | pop a byte string A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result |
 
 ### Loading Values
 
@@ -174,6 +177,7 @@ Global fields are fields that are common to all the transactions in the group. I
 | 2 | MaxTxnLife | uint64 | rounds |
 | 3 | ZeroAddress | []byte | 32 byte address of all zero bytes |
 | 4 | GroupSize | uint64 | Number of transactions in this atomic transaction group. At least 1. |
+| 5 | LogicSigVersion | uint64 |  |
 
 
 **Asset Fields**
@@ -216,13 +220,14 @@ Asset fields include `AssetHolding` and `AssetParam` fields that are used in `as
 | --- | --- |
 | `balance` | get balance for the requested account A in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction |
 | `app_opted_in` | check if account A opted in for the application B => {0 or 1} |
-| `app_read_local` | read key K from local state of account A for the application B => {0 or 1 (top), value} |
-| `app_read_global` | read key K from global state of the current application => {0 or 1 (top), value} |
-| `app_write_local` | write key K to local state of account A for the application B |
-| `app_write_global` | write key K to global state of the current application |
-| `app_read_other_global` | read key K from global state of account A for the application B if A created B => {0 or 1 (top), value} |
-| `asset_read_holding` | read an asset A holding field X of account A  => {0 or 1 (top), value} |
-| `asset_read_params` | read an asset A params field X of account A  => {0 or 1 (top), value} |
+| `app_read_local` | read from account's A from local state of the application B key C  => {0 or 1 (top), value} |
+| `app_read_global` | read key A from global state of a current application => {0 or 1 (top), value} |
+| `app_write_local` | write to account's A to local state of a current application key B with value C |
+| `app_write_global` | write key A and value B to global state of the current application |
+| `app_delete_local` | delete from account's A local state key B of the current application |
+| `app_delete_global` | delete key A from a global state of the current application |
+| `asset_read_holding` | read from account's A and asset B holding field X (imm arg)  => {0 or 1 (top), value} |
+| `asset_read_params` | read from account's A and asset B params field X (imm arg)  => {0 or 1 (top), value} |
 
 # Assembler Syntax
 
