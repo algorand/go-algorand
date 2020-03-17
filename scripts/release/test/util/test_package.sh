@@ -34,14 +34,11 @@ fi
 build_images () {
     # We'll use this simple tokenized Dockerfile.
     # https://serverfault.com/a/72511
-    IFS='' read -r -d '' TOKENIZED <<EOF
-FROM {{OS}}
-
-WORKDIR /root
-# It's easier just to copy all contents into the container.
-COPY . .
-CMD ["/bin/bash"]
-EOF
+    TOKENIZED=$(echo -e "\
+FROM {{OS}}\n\n\
+WORKDIR /root\n\
+COPY . .\n\
+CMD [\"/bin/bash\"]")
 
     for item in ${OS_LIST[*]}
     do
