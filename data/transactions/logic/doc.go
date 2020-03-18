@@ -246,7 +246,9 @@ var txnFieldDocList = []stringString{
 	{"TxID", "The computed ID for this transaction. 32 bytes."},
 	{"OnCompletion", "ApplicationCall transaction on completion action"},
 	{"ApplicationArgs", "Arguments passed to the application in the ApplicationCall transaction"},
+	{"NumAppArgs", "Number of ApplicationArgs"},
 	{"Accounts", "Accounts listed in the ApplicationCall transaction"},
+	{"NumAccounts", "Number of Accounts"},
 }
 
 // TxnFieldDocs are notes on fields available by `txn` and `gtxn`

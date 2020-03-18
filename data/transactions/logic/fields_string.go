@@ -34,13 +34,15 @@ func _() {
 	_ = x[TxID-23]
 	_ = x[OnCompletion-24]
 	_ = x[ApplicationArgs-25]
-	_ = x[Accounts-26]
-	_ = x[invalidTxnField-27]
+	_ = x[NumAppArgs-26]
+	_ = x[Accounts-27]
+	_ = x[NumAccounts-28]
+	_ = x[invalidTxnField-29]
 }
 
-const _TxnField_name = "SenderFeeFirstValidFirstValidTimeLastValidNoteLeaseReceiverAmountCloseRemainderToVotePKSelectionPKVoteFirstVoteLastVoteKeyDilutionTypeTypeEnumXferAssetAssetAmountAssetSenderAssetReceiverAssetCloseToGroupIndexTxIDOnCompletionApplicationArgsAccountsinvalidTxnField"
+const _TxnField_name = "SenderFeeFirstValidFirstValidTimeLastValidNoteLeaseReceiverAmountCloseRemainderToVotePKSelectionPKVoteFirstVoteLastVoteKeyDilutionTypeTypeEnumXferAssetAssetAmountAssetSenderAssetReceiverAssetCloseToGroupIndexTxIDOnCompletionApplicationArgsNumAppArgsAccountsNumAccountsinvalidTxnField"
 
-var _TxnField_index = [...]uint16{0, 6, 9, 19, 33, 42, 46, 51, 59, 65, 81, 87, 98, 107, 115, 130, 134, 142, 151, 162, 173, 186, 198, 208, 212, 224, 239, 247, 262}
+var _TxnField_index = [...]uint16{0, 6, 9, 19, 33, 42, 46, 51, 59, 65, 81, 87, 98, 107, 115, 130, 134, 142, 151, 162, 173, 186, 198, 208, 212, 224, 239, 249, 257, 268, 283}
 
 func (i TxnField) String() string {
 	if i < 0 || i >= TxnField(len(_TxnField_index)-1) {
