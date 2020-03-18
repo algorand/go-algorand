@@ -623,7 +623,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, group []tran
 		effectiveMinBalance := dataNew.MinBalance(eval.proto)
 		if dataNew.MicroAlgos.Raw < effectiveMinBalance.Raw {
 			return fmt.Errorf("transaction %v: account %v balance %d below min %d (%d assets)",
-				txn.ID(), addr, dataNew.MicroAlgos.Raw, effectiveMinBalance, len(dataNew.Assets))
+				txn.ID(), addr, dataNew.MicroAlgos.Raw, effectiveMinBalance.Raw, len(dataNew.Assets))
 		}
 
 		// Check if we have exceeded the maximum minimum balance
