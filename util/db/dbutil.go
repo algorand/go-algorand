@@ -147,12 +147,12 @@ func LoggedRetry(fn func() error, log logging.Logger) (err error) {
 	for i := 0; ; i++ {
 		if i > 0 {
 			if i < infoTxRetries {
-				log.Infof("db.LoggedRetry: %d connection retries (last err: %v)", i, err)
+				log.Infof("db.LoggedRetry: %d retries (last err: %v)", i, err)
 			} else if i >= 1000 {
-				log.Errorf("db.LoggedRetry: %d connection retries (last err: %v)", i, err)
+				log.Errorf("db.LoggedRetry: %d retries (last err: %v)", i, err)
 				return
 			} else if i%warnTxRetriesInterval == 0 {
-				log.Warnf("db.LoggedRetry: %d connection retries (last err: %v)", i, err)
+				log.Warnf("db.LoggedRetry: %d retries (last err: %v)", i, err)
 			}
 		}
 
@@ -241,12 +241,12 @@ func (db *Accessor) Atomic(fn idemFn, extras ...interface{}) (err error) {
 	for i := 0; ; i++ {
 		if i > 0 {
 			if i < infoTxRetries {
-				db.getDecoratedLogger(fn, extras).Infof("db.atomic: %d connection retries (last err: %v)", i, err)
+				db.getDecoratedLogger(fn, extras).Infof("db.atomic: %d retries (last err: %v)", i, err)
 			} else if i >= 1000 {
-				db.getDecoratedLogger(fn, extras).Errorf("db.atomic: %d connection retries (last err: %v)", i, err)
+				db.getDecoratedLogger(fn, extras).Errorf("db.atomic: %d retries (last err: %v)", i, err)
 				break
 			} else if i%warnTxRetriesInterval == 0 {
-				db.getDecoratedLogger(fn, extras).Warnf("db.atomic: %d connection retries (last err: %v)", i, err)
+				db.getDecoratedLogger(fn, extras).Warnf("db.atomic: %d retries (last err: %v)", i, err)
 			}
 		}
 
