@@ -78,8 +78,12 @@ const (
 	OnCompletion
 	// ApplicationArgs []basics.TealValue
 	ApplicationArgs
+	// NumAppArgs      len(ApplicationArgs)
+	NumAppArgs
 	// Accounts        []basics.Address
 	Accounts
+	// NumAccounts     len(Accounts)
+	NumAccounts
 
 	invalidTxnField // fence for some setup that loops from Sender..invalidTxnField
 )
@@ -120,7 +124,9 @@ var txnFieldTypePairs = []txnFieldType{
 	{TxID, StackBytes},
 	{OnCompletion, StackUint64},
 	{ApplicationArgs, StackBytes},
+	{NumAppArgs, StackUint64},
 	{Accounts, StackBytes},
+	{NumAccounts, StackUint64},
 }
 
 // TxnFieldTypes is StackBytes or StackUint64 parallel to TxnFieldNames

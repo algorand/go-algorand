@@ -1105,6 +1105,8 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint
 			return
 		}
 		sv.Bytes = []byte(txn.ApplicationArgs[arrayFieldIdx])
+	case NumAppArgs:
+		sv.Uint = uint64(len(txn.ApplicationArgs))
 	case Accounts:
 		if arrayFieldIdx == 0 {
 			// special case: sender
@@ -1116,6 +1118,8 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint
 			}
 			sv.Bytes = txn.Accounts[arrayFieldIdx-1][:]
 		}
+	case NumAccounts:
+		sv.Uint = uint64(len(txn.ApplicationArgs))
 	default:
 		err = fmt.Errorf("invalid txn field %d", field)
 	}
@@ -1141,6 +1145,7 @@ func opTxna(cx *evalContext) {
 	var err error
 	if field != uint64(ApplicationArgs) && field != uint64(Accounts) {
 		cx.err = fmt.Errorf("txna unsupported field %d", field)
+		return
 	}
 	arrayFieldIdx := uint64(cx.program[cx.pc+2])
 	sv, err = cx.txnFieldToStack(&cx.Txn.Txn, field, arrayFieldIdx)
@@ -1186,19 +1191,15 @@ func opGtxna(cx *evalContext) {
 	field := uint64(cx.program[cx.pc+2])
 	var sv stackValue
 	var err error
-	if TxnField(field) == GroupIndex {
-		// GroupIndex; asking this when we just specified it is _dumb_, but oh well
-		sv.Uint = uint64(gtxid)
-	} else {
-		if field != uint64(ApplicationArgs) && field != uint64(Accounts) {
-			cx.err = fmt.Errorf("gtxna unsupported field %d", field)
-		}
-		arrayFieldIdx := uint64(cx.program[cx.pc+3])
-		sv, err = cx.txnFieldToStack(tx, field, arrayFieldIdx)
-		if err != nil {
-			cx.err = err
-			return
-		}
+	if TxnField(field) != ApplicationArgs && TxnField(field) != Accounts {
+		cx.err = fmt.Errorf("gtxna unsupported field %d", field)
+		return
+	}
+	arrayFieldIdx := uint64(cx.program[cx.pc+3])
+	sv, err = cx.txnFieldToStack(tx, field, arrayFieldIdx)
+	if err != nil {
+		cx.err = err
+		return
 	}
 	cx.stack = append(cx.stack, sv)
 	cx.nextpc = cx.pc + 4

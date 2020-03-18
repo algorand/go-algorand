@@ -363,7 +363,9 @@ Overflow is an error condition which halts execution and fails the transaction. 
 | 23 | TxID | []byte | The computed ID for this transaction. 32 bytes. |
 | 24 | OnCompletion | uint64 | ApplicationCall transaction on completion action |
 | 25 | ApplicationArgs | []byte | Arguments passed to the application in the ApplicationCall transaction |
-| 26 | Accounts | []byte | Accounts listed in the ApplicationCall transaction |
+| 26 | NumAppArgs | uint64 | Number of ApplicationArgs |
+| 27 | Accounts | []byte | Accounts listed in the ApplicationCall transaction |
+| 28 | NumAccounts | uint64 | Number of Accounts |
 
 
 TypeEnum mapping:

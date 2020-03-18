@@ -1217,8 +1217,16 @@ txna ApplicationArgs 0
 byte 0x706179
 ==
 &&
+txn NumAppArgs
+int 1
+==
+&&
 txna Accounts 0
 arg 0
+==
+&&
+txn NumAccounts
+int 1
 ==
 &&
 `
@@ -1374,8 +1382,16 @@ int 2
 byte 0x706179
 ==
 &&
+gtxn 0 NumAppArgs
+int 1
+==
+&&
 gtxna 0 Accounts 0
 gtxn 0 Sender
+==
+&&
+gtxn 0 NumAccounts
+int 1
 ==
 &&
 `
