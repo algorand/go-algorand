@@ -314,6 +314,14 @@ func (l *Ledger) GetAssetCreator(aidx basics.AssetIndex) (basics.Address, bool, 
 	return l.accts.getCreatorForRound(l.blockQ.latest(), basics.CreatableIndex(aidx), basics.AssetCreatable)
 }
 
+// GetAppCreator is like GetAppCreatorForRound, but for the latest round
+// and race free with respect to ledger.Latest()
+func (l *Ledger) GetAppCreator(aidx basics.AppIndex) (basics.Address, bool, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.accts.getCreatorForRound(l.blockQ.latest(), basics.CreatableIndex(aidx), basics.AppCreatable)
+}
+
 // ListAssets takes a maximum asset index and maximum result length, and
 // returns up to that many asset AssetIDs from the database where asset id is
 // less than or equal to the maximum.

@@ -21,6 +21,7 @@ import (
 	"database/sql"
 	"fmt"
 	"io/ioutil"
+	mathrand "math/rand"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -249,9 +250,22 @@ func makeUnsignedAssetDestroyTx(client libgoal.Client, firstValid, lastValid bas
 	return txn, nil
 }
 
-func TestArchivalAssets(t *testing.T) {
-	// Start in archival mode, add 2K blocks with asset txns, restart, ensure all
-	// assets are there in index unless they were deleted
+func makeUnsignedApplicationCallTx(appIdx uint64, onCompletion transactions.OnCompletion) (tx transactions.Transaction, err error) {
+	tx.Type = protocol.ApplicationCallTx
+	tx.ApplicationID = basics.AppIndex(appIdx)
+	tx.OnCompletion = onCompletion
+
+	// int 1, always approved
+	tx.ApprovalProgram = "\x02\x20\x01\x01\x22"
+	tx.ClearStateProgram = "\x02\x20\x01\x01\x22"
+
+	return tx, nil
+}
+
+func TestArchivalCreatables(t *testing.T) {
+	// Start in archival mode, add 2K blocks with asset + app txns
+	// restart, ensure all assets are there in index unless they were
+	// deleted
 
 	dbTempDir, err := ioutil.TempDir("", "testdir"+t.Name())
 	require.NoError(t, err)
@@ -267,9 +281,14 @@ func TestArchivalAssets(t *testing.T) {
 	genesisInitState.GenesisHash = crypto.Digest{1}
 	genesisInitState.Block.BlockHeader.GenesisHash = crypto.Digest{1}
 
-	// true = created, false = deleted
-	assetIdxs := make(map[basics.AssetIndex]bool)
-	assetCreators := make(map[basics.AssetIndex]basics.Address)
+	type ActionEnum uint64
+	const AssetCreated ActionEnum = 0
+	const AppCreated ActionEnum = 1
+	const AssetDeleted ActionEnum = 2
+	const AppDeleted ActionEnum = 3
+
+	creatableIdxs := make(map[basics.CreatableIndex]ActionEnum)
+	allCreators := make(map[basics.CreatableIndex]basics.Address)
 
 	// keep track of existing/deleted assets for sanity check at end
 	var expectedExisting int
@@ -293,23 +312,34 @@ func TestArchivalAssets(t *testing.T) {
 	require.NoError(t, err)
 	blk := genesisInitState.Block
 
-	// create assets
+	// keep track of max created idx
+	var maxCreated uint64
+
+	// create apps and assets
 	client := libgoal.Client{}
 	for i := 0; i < maxBlocks; i++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 
-		// make a transaction that will create an asset
+		// make a transaction that will create an asset or application
 		creatorEncoded := creators[i].String()
-		tx, err := makeUnsignedAssetCreateTx(blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, 100, false, creatorEncoded, creatorEncoded, creatorEncoded, creatorEncoded, "m", "m", "", nil)
+		createdIdx := basics.CreatableIndex(blk.BlockHeader.TxnCounter + 1)
+		var tx transactions.Transaction
+		if mathrand.Float32() < 0.5 {
+			creatableIdxs[createdIdx] = AssetCreated
+			tx, err = makeUnsignedAssetCreateTx(blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, 100, false, creatorEncoded, creatorEncoded, creatorEncoded, creatorEncoded, "m", "m", "", nil)
+		} else {
+			creatableIdxs[createdIdx] = AppCreated
+			tx, err = makeUnsignedApplicationCallTx(0, transactions.NoOpOC)
+		}
 		require.NoError(t, err)
+
+		maxCreated = uint64(createdIdx)
+
 		tx.Sender = creators[i]
-		createdAssetIdx := basics.AssetIndex(blk.BlockHeader.TxnCounter + 1)
 		expectedExisting++
 
-		// mark asset as created for checking later
-		assetIdxs[createdAssetIdx] = true
-		assetCreators[createdAssetIdx] = tx.Sender
+		allCreators[createdIdx] = tx.Sender
 		blk.BlockHeader.TxnCounter++
 
 		// make a payset
@@ -318,13 +348,21 @@ func TestArchivalAssets(t *testing.T) {
 		payset = append(payset, stxnib)
 		blk.Payset = payset
 
-		// for one of the assets, delete it in the same block
-		if i == maxBlocks/2 {
-			tx0, err := makeUnsignedAssetDestroyTx(client, blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, blk.BlockHeader.TxnCounter)
+		// for some of the assets/apps, delete it in the same block
+		if i >= maxBlocks/2 && i < (3*(maxBlocks/4)) {
+			switch creatableIdxs[createdIdx] {
+			case AssetCreated:
+				tx, err = makeUnsignedAssetDestroyTx(client, blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, uint64(createdIdx))
+				creatableIdxs[createdIdx] = AssetDeleted
+			case AppCreated:
+				tx, err = makeUnsignedApplicationCallTx(uint64(createdIdx), transactions.DeleteApplicationOC)
+				creatableIdxs[createdIdx] = AppDeleted
+			default:
+				panic("unknown action")
+			}
 			require.NoError(t, err)
-			tx0.Sender = assetCreators[createdAssetIdx]
-			blk.Payset = append(blk.Payset, makeSignedTxnInBlock(tx0))
-			assetIdxs[createdAssetIdx] = false
+			tx.Sender = allCreators[createdIdx]
+			blk.Payset = append(blk.Payset, makeSignedTxnInBlock(tx))
 			blk.BlockHeader.TxnCounter++
 			expectedExisting--
 			expectedDeleted++
@@ -336,25 +374,43 @@ func TestArchivalAssets(t *testing.T) {
 	}
 	l.WaitForCommit(blk.Round())
 
-	// check that we can fetch creator for all created assets and can't for
-	// deleted assets
+	// check that we can fetch creator for all created assets/apps and
+	// can't for deleted assets/apps
 	var existing, deleted int
-	for aidx, status := range assetIdxs {
-		c, doesNotExist, err := l.GetAssetCreator(aidx)
-		require.NoError(t, err)
-		if status {
+	for aidx, status := range creatableIdxs {
+		switch status {
+		case AssetCreated:
+			c, doesNotExist, err := l.GetAssetCreator(basics.AssetIndex(aidx))
+			require.NoError(t, err)
 			require.False(t, doesNotExist)
-			require.Equal(t, assetCreators[aidx], c)
+			require.Equal(t, allCreators[aidx], c)
 			existing++
-		} else {
+		case AppCreated:
+			c, doesNotExist, err := l.GetAppCreator(basics.AppIndex(aidx))
+			require.NoError(t, err)
+			require.False(t, doesNotExist)
+			require.Equal(t, allCreators[aidx], c)
+			existing++
+		case AssetDeleted:
+			c, doesNotExist, err := l.GetAssetCreator(basics.AssetIndex(aidx))
+			require.NoError(t, err)
 			require.True(t, doesNotExist)
 			require.Equal(t, basics.Address{}, c)
 			deleted++
+		case AppDeleted:
+			c, doesNotExist, err := l.GetAppCreator(basics.AppIndex(aidx))
+			require.NoError(t, err)
+			require.True(t, doesNotExist)
+			require.Equal(t, basics.Address{}, c)
+			deleted++
+		default:
+			panic("unknown action")
 		}
 	}
+
 	require.Equal(t, expectedExisting, existing)
 	require.Equal(t, expectedDeleted, deleted)
-	require.Equal(t, len(assetIdxs), existing+deleted)
+	require.Equal(t, len(creatableIdxs), existing+deleted)
 
 	// close and reopen the same DB
 	l.Close()
@@ -366,38 +422,73 @@ func TestArchivalAssets(t *testing.T) {
 	// deleted assets
 	existing = 0
 	deleted = 0
-	for aidx, status := range assetIdxs {
-		c, doesNotExist, err := l.GetAssetCreator(aidx)
-		require.NoError(t, err)
-		if status {
+	for aidx, status := range creatableIdxs {
+		switch status {
+		case AssetCreated:
+			c, doesNotExist, err := l.GetAssetCreator(basics.AssetIndex(aidx))
+			require.NoError(t, err)
 			require.False(t, doesNotExist)
-			require.Equal(t, assetCreators[aidx], c)
+			require.Equal(t, allCreators[aidx], c)
 			existing++
-		} else {
+		case AppCreated:
+			c, doesNotExist, err := l.GetAppCreator(basics.AppIndex(aidx))
+			require.NoError(t, err)
+			require.False(t, doesNotExist)
+			require.Equal(t, allCreators[aidx], c)
+			existing++
+		case AssetDeleted:
+			c, doesNotExist, err := l.GetAssetCreator(basics.AssetIndex(aidx))
+			require.NoError(t, err)
 			require.True(t, doesNotExist)
 			require.Equal(t, basics.Address{}, c)
 			deleted++
+		case AppDeleted:
+			c, doesNotExist, err := l.GetAppCreator(basics.AppIndex(aidx))
+			require.NoError(t, err)
+			require.True(t, doesNotExist)
+			require.Equal(t, basics.Address{}, c)
+			deleted++
+		default:
+			panic("unknown action")
 		}
 	}
 	require.Equal(t, expectedExisting, existing)
 	require.Equal(t, expectedDeleted, deleted)
-	require.Equal(t, len(assetIdxs), existing+deleted)
+	require.Equal(t, len(creatableIdxs), existing+deleted)
 
-	// delete an old asset and a new asset
-	assetToDelete := basics.AssetIndex(1)
-	tx0, err := makeUnsignedAssetDestroyTx(client, blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, uint64(assetToDelete))
+	// delete an old creatable and a new creatable
+	creatableToDelete := basics.CreatableIndex(1)
+	var tx0 transactions.Transaction
+	switch creatableIdxs[creatableToDelete] {
+	case AssetCreated:
+		tx0, err = makeUnsignedAssetDestroyTx(client, blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, uint64(creatableToDelete))
+		creatableIdxs[creatableToDelete] = AssetDeleted
+	case AppCreated:
+		tx0, err = makeUnsignedApplicationCallTx(uint64(creatableToDelete), transactions.DeleteApplicationOC)
+		creatableIdxs[creatableToDelete] = AppDeleted
+	default:
+		panic("unknown action")
+	}
 	require.NoError(t, err)
-	tx0.Sender = assetCreators[assetToDelete]
-	assetIdxs[assetToDelete] = false
+	tx0.Sender = allCreators[creatableToDelete]
 	blk.BlockHeader.TxnCounter++
 	expectedExisting--
 	expectedDeleted++
 
-	assetToDelete = basics.AssetIndex(maxBlocks)
-	tx1, err := makeUnsignedAssetDestroyTx(client, blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, uint64(assetToDelete))
+	creatableToDelete = basics.CreatableIndex(maxCreated)
+	var tx1 transactions.Transaction
+	switch creatableIdxs[creatableToDelete] {
+	case AssetCreated:
+		tx1, err = makeUnsignedAssetDestroyTx(client, blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, uint64(creatableToDelete))
+		creatableIdxs[creatableToDelete] = AssetDeleted
+	case AppCreated:
+		tx1, err = makeUnsignedApplicationCallTx(uint64(creatableToDelete), transactions.DeleteApplicationOC)
+		creatableIdxs[creatableToDelete] = AppDeleted
+	default:
+		panic("unknown action")
+	}
 	require.NoError(t, err)
-	tx1.Sender = assetCreators[assetToDelete]
-	assetIdxs[assetToDelete] = false
+	tx1.Sender = allCreators[creatableToDelete]
 	blk.BlockHeader.TxnCounter++
 	expectedExisting--
 	expectedDeleted++
@@ -421,22 +512,39 @@ func TestArchivalAssets(t *testing.T) {
 	// deleted assets
 	existing = 0
 	deleted = 0
-	for aidx, status := range assetIdxs {
-		c, doesNotExist, err := l.GetAssetCreator(aidx)
-		require.NoError(t, err)
-		if status {
+	for aidx, status := range creatableIdxs {
+		switch status {
+		case AssetCreated:
+			c, doesNotExist, err := l.GetAssetCreator(basics.AssetIndex(aidx))
+			require.NoError(t, err)
 			require.False(t, doesNotExist)
-			require.Equal(t, assetCreators[aidx], c)
+			require.Equal(t, allCreators[aidx], c)
 			existing++
-		} else {
+		case AppCreated:
+			c, doesNotExist, err := l.GetAppCreator(basics.AppIndex(aidx))
+			require.NoError(t, err)
+			require.False(t, doesNotExist)
+			require.Equal(t, allCreators[aidx], c)
+			existing++
+		case AssetDeleted:
+			c, doesNotExist, err := l.GetAssetCreator(basics.AssetIndex(aidx))
+			require.NoError(t, err)
 			require.True(t, doesNotExist)
 			require.Equal(t, basics.Address{}, c)
 			deleted++
+		case AppDeleted:
+			c, doesNotExist, err := l.GetAppCreator(basics.AppIndex(aidx))
+			require.NoError(t, err)
+			require.True(t, doesNotExist)
+			require.Equal(t, basics.Address{}, c)
+			deleted++
+		default:
+			panic("unknown action")
 		}
 	}
 	require.Equal(t, expectedExisting, existing)
 	require.Equal(t, expectedDeleted, deleted)
-	require.Equal(t, len(assetIdxs), existing+deleted)
+	require.Equal(t, len(creatableIdxs), existing+deleted)
 
 	// Mine another maxBlocks blocks
 	for i := 0; i < maxBlocks; i++ {
@@ -458,22 +566,39 @@ func TestArchivalAssets(t *testing.T) {
 	// deleted assets
 	existing = 0
 	deleted = 0
-	for aidx, status := range assetIdxs {
-		c, doesNotExist, err := l.GetAssetCreator(aidx)
-		require.NoError(t, err)
-		if status {
+	for aidx, status := range creatableIdxs {
+		switch status {
+		case AssetCreated:
+			c, doesNotExist, err := l.GetAssetCreator(basics.AssetIndex(aidx))
+			require.NoError(t, err)
 			require.False(t, doesNotExist)
-			require.Equal(t, assetCreators[aidx], c)
+			require.Equal(t, allCreators[aidx], c)
 			existing++
-		} else {
+		case AppCreated:
+			c, doesNotExist, err := l.GetAppCreator(basics.AppIndex(aidx))
+			require.NoError(t, err)
+			require.False(t, doesNotExist)
+			require.Equal(t, allCreators[aidx], c)
+			existing++
+		case AssetDeleted:
+			c, doesNotExist, err := l.GetAssetCreator(basics.AssetIndex(aidx))
+			require.NoError(t, err)
 			require.True(t, doesNotExist)
 			require.Equal(t, basics.Address{}, c)
 			deleted++
+		case AppDeleted:
+			c, doesNotExist, err := l.GetAppCreator(basics.AppIndex(aidx))
+			require.NoError(t, err)
+			require.True(t, doesNotExist)
+			require.Equal(t, basics.Address{}, c)
+			deleted++
+		default:
+			panic("unknown action")
 		}
 	}
 	require.Equal(t, expectedExisting, existing)
 	require.Equal(t, expectedDeleted, deleted)
-	require.Equal(t, len(assetIdxs), existing+deleted)
+	require.Equal(t, len(creatableIdxs), existing+deleted)
 }
 
 func makeSignedTxnInBlock(tx transactions.Transaction) transactions.SignedTxnInBlock {

@@ -205,6 +205,12 @@ func applyStateDeltas(evalDelta basics.EvalDelta, balances Balances, appIdx basi
 	// Clone the parameters so that they are safe to modify
 	params = params.Clone()
 
+	// Allocate GlobalState if necessary. We need to do this now
+	// since an empty map will be written as nil to disk
+	if params.GlobalState == nil {
+		params.GlobalState = make(basics.TealKeyValue)
+	}
+
 	// Apply the GlobalDelta in place
 	err = applyDelta(evalDelta.GlobalDelta, params.GlobalState)
 	if err != nil {
@@ -246,9 +252,15 @@ func applyStateDeltas(evalDelta basics.EvalDelta, balances Balances, appIdx basi
 			return fmt.Errorf("cannot apply LocalState delta to %v: acct has not opted in to app %d", addr.String(), appIdx)
 		}
 
-		// Clone local states + app params, so that we have a copy that is
-		// safe to modify
+		// Clone LocalState so that we have a copy that is safe to modify
 		localState = localState.Clone()
+
+		// Allocate localState.KeyValue if necessary. We need to do
+		// this now since an empty map will be written as nil to disk
+		if localState.KeyValue == nil {
+			localState.KeyValue = make(basics.TealKeyValue)
+		}
+
 		err = applyDelta(delta, localState.KeyValue)
 		if err != nil {
 			return err
@@ -351,7 +363,6 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva
 			ClearStateProgram: ac.ClearStateProgram,
 			LocalStateSchema:  ac.LocalStateSchema,
 			GlobalStateSchema: ac.GlobalStateSchema,
-			GlobalState:       make(basics.TealKeyValue),
 		}
 
 		// Write back to the creator's balance record and continue
