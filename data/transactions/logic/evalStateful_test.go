@@ -2139,3 +2139,97 @@ int 1
 	require.Equal(t, 1, ledger.localCount)
 	require.Equal(t, 0, ledger.globalCount)
 }
+
+func TestEnumFieldErrors(t *testing.T) {
+	ep := defaultEvalParams(nil, nil)
+
+	source := `txn Amount`
+	origTxnType := TxnFieldTypes[Amount]
+	TxnFieldTypes[Amount] = StackBytes
+	defer func() {
+		TxnFieldTypes[Amount] = origTxnType
+	}()
+
+	program, err := AssembleString(source)
+	require.NoError(t, err)
+	_, err = Eval(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Amount expected field type is []byte but got uint64")
+	_, _, err = EvalStateful(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Amount expected field type is []byte but got uint64")
+
+	source = `global MinTxnFee`
+	origGlobalType := GlobalFieldTypes[MinTxnFee]
+	GlobalFieldTypes[MinTxnFee] = StackBytes
+	defer func() {
+		GlobalFieldTypes[MinTxnFee] = origGlobalType
+	}()
+
+	program, err = AssembleString(source)
+	require.NoError(t, err)
+	_, err = Eval(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "MinTxnFee expected field type is []byte but got uint64")
+	_, _, err = EvalStateful(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "MinTxnFee expected field type is []byte but got uint64")
+
+	txn := makeSampleTxn()
+	ledger := makeTestLedger(
+		map[basics.Address]uint64{
+			txn.Txn.Sender: 1,
+		},
+	)
+	params := basics.AssetParams{
+		Total:         1000,
+		Decimals:      2,
+		DefaultFrozen: false,
+		UnitName:      "ALGO",
+		AssetName:     "",
+		URL:           string(protocol.PaymentTx),
+		Manager:       txn.Txn.Sender,
+		Reserve:       txn.Txn.Receiver,
+		Freeze:        txn.Txn.Receiver,
+		Clawback:      txn.Txn.Receiver,
+	}
+	ledger.setAsset(txn.Txn.Receiver, 55, params)
+	ledger.setHolding(txn.Txn.Sender, 55, basics.AssetHolding{Amount: 123, Frozen: true})
+
+	ep.Txn = &txn
+	ep.Ledger = ledger
+
+	source = `int 0
+int 55
+asset_read_holding AssetHoldingAmount
+pop
+`
+	origAssetHoldingType := AssetHoldingFieldTypes[AssetHoldingAmount]
+	AssetHoldingFieldTypes[AssetHoldingAmount] = StackBytes
+	defer func() {
+		AssetHoldingFieldTypes[AssetHoldingAmount] = origAssetHoldingType
+	}()
+
+	program, err = AssembleString(source)
+	require.NoError(t, err)
+	_, _, err = EvalStateful(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "AssetHoldingAmount expected field type is []byte but got uint64")
+
+	source = `int 1
+int 55
+asset_read_params AssetParamsTotal
+pop
+`
+	origAssetParamsTotalType := AssetParamsFieldTypes[AssetParamsTotal]
+	AssetParamsFieldTypes[AssetParamsTotal] = StackBytes
+	defer func() {
+		AssetParamsFieldTypes[AssetParamsTotal] = origAssetParamsTotalType
+	}()
+
+	program, err = AssembleString(source)
+	require.NoError(t, err)
+	_, _, err = EvalStateful(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "AssetParamsTotal expected field type is []byte but got uint64")
+}

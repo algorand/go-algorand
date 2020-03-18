@@ -496,6 +496,23 @@ func (cx *evalContext) step() {
 	if cx.err != nil {
 		return
 	}
+	if cx.version >= 2 {
+		// additional type checks for return values
+		if len(cx.stack) < len(spec.Returns) {
+			cx.err = fmt.Errorf("%3d %s expected to return %d values but stack has only %d", cx.pc, spec.Name, len(spec.Returns), len(cx.stack))
+			return
+		}
+		for i := 0; i < len(spec.Returns); i++ {
+			sp := len(cx.stack) - 1 - i
+			stackType := cx.stack[sp].argType()
+			retType := spec.Returns[i]
+			if !typecheck(retType, stackType) {
+				cx.err = fmt.Errorf("%3d %s expected to return %s but actual is %s", cx.pc, spec.Name, retType.String(), stackType.String())
+				return
+			}
+		}
+	}
+
 	if len(cx.stack) > MaxStackDepth {
 		cx.err = errors.New("stack overflow")
 		return
@@ -1009,6 +1026,13 @@ func (cx *evalContext) assetHoldingEnumToValue(holding *basics.AssetHolding, fie
 		}
 	default:
 		err = fmt.Errorf("invalid asset holding field %d", field)
+		return
+	}
+
+	assetHoldingField := AssetHoldingField(field)
+	assetHoldingFieldType := AssetHoldingFieldTypes[assetHoldingField]
+	if assetHoldingFieldType != sv.argType() {
+		err = fmt.Errorf("%s expected field type is %s but got %s", assetHoldingField.String(), assetHoldingFieldType.String(), sv.argType().String())
 	}
 	return
 }
@@ -1043,6 +1067,13 @@ func (cx *evalContext) assetParamsEnumToValue(params *basics.AssetParams, field 
 		sv.Bytes = params.Clawback[:]
 	default:
 		err = fmt.Errorf("invalid asset params field %d", field)
+		return
+	}
+
+	assetParamsField := AssetParamsField(field)
+	assetParamsFieldType := AssetParamsFieldTypes[assetParamsField]
+	if assetParamsFieldType != sv.argType() {
+		err = fmt.Errorf("%s expected field type is %s but got %s", assetParamsField.String(), assetParamsFieldType.String(), sv.argType().String())
 	}
 	return
 }
@@ -1122,6 +1153,13 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint
 		sv.Uint = uint64(len(txn.ApplicationArgs))
 	default:
 		err = fmt.Errorf("invalid txn field %d", field)
+		return
+	}
+
+	txnField := TxnField(field)
+	txnFieldType := TxnFieldTypes[txnField]
+	if txnFieldType != sv.argType() {
+		err = fmt.Errorf("%s expected field type is %s but got %s", txnField.String(), txnFieldType.String(), sv.argType().String())
 	}
 	return
 }
@@ -1227,6 +1265,14 @@ func opGlobal(cx *evalContext) {
 		cx.err = fmt.Errorf("invalid global[%d]", gindex)
 		return
 	}
+
+	globalField := GlobalField(gindex)
+	globalFieldType := GlobalFieldTypes[globalField]
+	if globalFieldType != sv.argType() {
+		cx.err = fmt.Errorf("%s expected field type is %s but got %s", globalField.String(), globalFieldType.String(), sv.argType().String())
+		return
+	}
+
 	cx.stack = append(cx.stack, sv)
 	cx.nextpc = cx.pc + 2
 }
