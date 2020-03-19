@@ -267,25 +267,25 @@ var globalFieldDocList = []stringString{
 var GlobalFieldDocs map[string]string
 
 var assetHoldingFieldDocList = []stringString{
-	{"AssetHoldingAmount", "Amount of the asset unit held by this account"},
-	{"AssetHoldingFrozen", "Is the asset frozen or not"},
+	{"AssetBalance", "Amount of the asset unit held by this account"},
+	{"AssetFrozen", "Is the asset frozen or not"},
 }
 
 // AssetHoldingFieldDocs are notes on fields available in `asset_read_holding`
 var AssetHoldingFieldDocs map[string]string
 
 var assetParamsFieldDocList = []stringString{
-	{"AssetParamsTotal", "Total number of units of this asset"},
-	{"AssetParamsDecimals", "See AssetParams.Decimals"},
-	{"AssetParamsDefaultFrozen", "Frozen by default or not"},
-	{"AssetParamsUnitName", "Asset unit name"},
-	{"AssetParamsAssetName", "Asset name"},
-	{"AssetParamsURL", "URL with additional info about the asset"},
-	{"AssetParamsMetadataHash", "Arbitrary commitment"},
-	{"AssetParamsManager", "Manager commitment"},
-	{"AssetParamsReserve", "Reserve address"},
-	{"AssetParamsFreeze", "Freeze address"},
-	{"AssetParamsClawback", "Clawback address"},
+	{"AssetTotal", "Total number of units of this asset"},
+	{"AssetDecimals", "See AssetParams.Decimals"},
+	{"AssetDefaultFrozen", "Frozen by default or not"},
+	{"AssetUnitName", "Asset unit name"},
+	{"AssetAssetName", "Asset name"},
+	{"AssetURL", "URL with additional info about the asset"},
+	{"AssetMetadataHash", "Arbitrary commitment"},
+	{"AssetManager", "Manager commitment"},
+	{"AssetReserve", "Reserve address"},
+	{"AssetFreeze", "Freeze address"},
+	{"AssetClawback", "Clawback address"},
 }
 
 // AssetParamsFieldDocs are notes on fields available in `asset_read_params`

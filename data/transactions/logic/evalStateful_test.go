@@ -266,12 +266,12 @@ bytec_0
 app_delete_global
 intc_0
 intc 5 // 5
-asset_read_holding AssetHoldingAmount
+asset_read_holding AssetBalance
 pop
 &&
 intc_0
 intc 5
-asset_read_params AssetParamsTotal
+asset_read_params AssetTotal
 pop
 &&
 !=
@@ -395,8 +395,8 @@ pop
 		"byte 0x01\nint 0\napp_write_global",
 		"int 0\nbyte 0x01\napp_delete_local",
 		"byte 0x01\napp_delete_global",
-		"int 0\nint 0\nasset_read_holding AssetHoldingFrozen",
-		"int 0\nint 0\nasset_read_params AssetParamsManager",
+		"int 0\nint 0\nasset_read_holding AssetFrozen",
+		"int 0\nint 0\nasset_read_params AssetManager",
 	}
 
 	for _, source := range newOpcodeCalls {
@@ -758,14 +758,14 @@ byte 0x414c474f
 
 const assetsTestProgram = `int 0
 int 55
-asset_read_holding AssetHoldingAmount
+asset_read_holding AssetBalance
 !
 bnz error
 int 123
 ==
 int 0
 int 55
-asset_read_holding AssetHoldingFrozen
+asset_read_holding AssetFrozen
 !
 bnz error
 int 1
@@ -773,7 +773,7 @@ int 1
 &&
 int 1
 int 55
-asset_read_params AssetParamsTotal
+asset_read_params AssetTotal
 !
 bnz error
 int 1000
@@ -781,7 +781,7 @@ int 1000
 &&
 int 1
 int 55
-asset_read_params AssetParamsDecimals
+asset_read_params AssetDecimals
 !
 bnz error
 int 2
@@ -789,7 +789,7 @@ int 2
 &&
 int 1
 int 55
-asset_read_params AssetParamsDefaultFrozen
+asset_read_params AssetDefaultFrozen
 !
 bnz error
 int 0
@@ -797,7 +797,7 @@ int 0
 &&
 int 1
 int 55
-asset_read_params AssetParamsUnitName
+asset_read_params AssetUnitName
 !
 bnz error
 byte 0x414c474f
@@ -805,7 +805,7 @@ byte 0x414c474f
 &&
 int 1
 int 55
-asset_read_params AssetParamsAssetName
+asset_read_params AssetAssetName
 !
 bnz error
 len
@@ -814,7 +814,7 @@ int 0
 &&
 int 1
 int 55
-asset_read_params AssetParamsURL
+asset_read_params AssetURL
 !
 bnz error
 txna ApplicationArgs 0
@@ -822,7 +822,7 @@ txna ApplicationArgs 0
 &&
 int 1
 int 55
-asset_read_params AssetParamsMetadataHash
+asset_read_params AssetMetadataHash
 !
 bnz error
 byte 0x0000000000000000000000000000000000000000000000000000000000000000
@@ -830,7 +830,7 @@ byte 0x0000000000000000000000000000000000000000000000000000000000000000
 &&
 int 1
 int 55
-asset_read_params AssetParamsManager
+asset_read_params AssetManager
 !
 bnz error
 txna Accounts 0
@@ -838,7 +838,7 @@ txna Accounts 0
 &&
 int 1
 int 55
-asset_read_params AssetParamsReserve
+asset_read_params AssetReserve
 !
 bnz error
 txna Accounts 1
@@ -846,7 +846,7 @@ txna Accounts 1
 &&
 int 1
 int 55
-asset_read_params AssetParamsFreeze
+asset_read_params AssetFreeze
 !
 bnz error
 txna Accounts 1
@@ -854,7 +854,7 @@ txna Accounts 1
 &&
 int 1
 int 55
-asset_read_params AssetParamsClawback
+asset_read_params AssetClawback
 !
 bnz error
 txna Accounts 1
@@ -882,8 +882,8 @@ func TestAssets(t *testing.T) {
 
 	// check generic errors
 	sources := []string{
-		"int 5\nint 55\nasset_read_holding AssetHoldingAmount",
-		"int 5\nint 55\nasset_read_params AssetParamsTotal",
+		"int 5\nint 55\nasset_read_holding AssetBalance",
+		"int 5\nint 55\nasset_read_params AssetTotal",
 	}
 	for _, source := range sources {
 
@@ -956,7 +956,7 @@ func TestAssets(t *testing.T) {
 	// check holdings bool value
 	source := `int 0  // account idx (txn.Sender)
 int 55
-asset_read_holding AssetHoldingFrozen
+asset_read_holding AssetFrozen
 !
 bnz error
 int 0
@@ -987,7 +987,7 @@ int 1
 	// check holdings bool value
 	source = `int 1
 int 55
-asset_read_params AssetParamsDefaultFrozen
+asset_read_params AssetDefaultFrozen
 !
 bnz error
 int 1
@@ -1016,7 +1016,7 @@ int 1
 	// check empty string
 	source = `int 1  // account idx (txn.Accounts[1])
 int 55
-asset_read_params AssetParamsURL
+asset_read_params AssetURL
 !
 bnz error
 len
@@ -1038,7 +1038,7 @@ int 1
 
 	source = `int 1
 int 55
-asset_read_params AssetParamsURL
+asset_read_params AssetURL
 !
 bnz error
 int 0
@@ -2201,35 +2201,35 @@ func TestEnumFieldErrors(t *testing.T) {
 
 	source = `int 0
 int 55
-asset_read_holding AssetHoldingAmount
+asset_read_holding AssetBalance
 pop
 `
-	origAssetHoldingType := AssetHoldingFieldTypes[AssetHoldingAmount]
-	AssetHoldingFieldTypes[AssetHoldingAmount] = StackBytes
+	origAssetHoldingType := AssetHoldingFieldTypes[AssetBalance]
+	AssetHoldingFieldTypes[AssetBalance] = StackBytes
 	defer func() {
-		AssetHoldingFieldTypes[AssetHoldingAmount] = origAssetHoldingType
+		AssetHoldingFieldTypes[AssetBalance] = origAssetHoldingType
 	}()
 
 	program, err = AssembleString(source)
 	require.NoError(t, err)
 	_, _, err = EvalStateful(program, ep)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "AssetHoldingAmount expected field type is []byte but got uint64")
+	require.Contains(t, err.Error(), "AssetBalance expected field type is []byte but got uint64")
 
 	source = `int 1
 int 55
-asset_read_params AssetParamsTotal
+asset_read_params AssetTotal
 pop
 `
-	origAssetParamsTotalType := AssetParamsFieldTypes[AssetParamsTotal]
-	AssetParamsFieldTypes[AssetParamsTotal] = StackBytes
+	origAssetTotalType := AssetParamsFieldTypes[AssetTotal]
+	AssetParamsFieldTypes[AssetTotal] = StackBytes
 	defer func() {
-		AssetParamsFieldTypes[AssetParamsTotal] = origAssetParamsTotalType
+		AssetParamsFieldTypes[AssetTotal] = origAssetTotalType
 	}()
 
 	program, err = AssembleString(source)
 	require.NoError(t, err)
 	_, _, err = EvalStateful(program, ep)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "AssetParamsTotal expected field type is []byte but got uint64")
+	require.Contains(t, err.Error(), "AssetTotal expected field type is []byte but got uint64")
 }

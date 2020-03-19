@@ -165,12 +165,12 @@ byte 0x4242
 app_delete_global
 int 0
 int 1
-asset_read_holding AssetHoldingAmount
+asset_read_holding AssetBalance
 pop
 pop
 int 0
 int 1
-asset_read_params AssetParamsTotal
+asset_read_params AssetTotal
 pop
 pop
 txna Accounts 0
@@ -677,7 +677,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid opcode")
 
-	source = "int 0\nint 0\nasset_read_holding AssetHoldingFrozen"
+	source = "int 0\nint 0\nasset_read_holding AssetFrozen"
 	program, err = AssembleString(source)
 	require.NoError(t, err)
 	program[7] = 0x50 // holding field
@@ -685,7 +685,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid asset holding arg index")
 
-	source = "int 0\nint 0\nasset_read_params AssetParamsTotal"
+	source = "int 0\nint 0\nasset_read_params AssetTotal"
 	program, err = AssembleString(source)
 	require.NoError(t, err)
 	program[7] = 0x50 // params field

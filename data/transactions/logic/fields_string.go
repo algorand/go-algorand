@@ -78,23 +78,23 @@ func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
-	_ = x[AssetParamsTotal-0]
-	_ = x[AssetParamsDecimals-1]
-	_ = x[AssetParamsDefaultFrozen-2]
-	_ = x[AssetParamsUnitName-3]
-	_ = x[AssetParamsAssetName-4]
-	_ = x[AssetParamsURL-5]
-	_ = x[AssetParamsMetadataHash-6]
-	_ = x[AssetParamsManager-7]
-	_ = x[AssetParamsReserve-8]
-	_ = x[AssetParamsFreeze-9]
-	_ = x[AssetParamsClawback-10]
+	_ = x[AssetTotal-0]
+	_ = x[AssetDecimals-1]
+	_ = x[AssetDefaultFrozen-2]
+	_ = x[AssetUnitName-3]
+	_ = x[AssetAssetName-4]
+	_ = x[AssetURL-5]
+	_ = x[AssetMetadataHash-6]
+	_ = x[AssetManager-7]
+	_ = x[AssetReserve-8]
+	_ = x[AssetFreeze-9]
+	_ = x[AssetClawback-10]
 	_ = x[invalidAssetParamsField-11]
 }
 
-const _AssetParamsField_name = "AssetParamsTotalAssetParamsDecimalsAssetParamsDefaultFrozenAssetParamsUnitNameAssetParamsAssetNameAssetParamsURLAssetParamsMetadataHashAssetParamsManagerAssetParamsReserveAssetParamsFreezeAssetParamsClawbackinvalidAssetParamsField"
+const _AssetParamsField_name = "AssetTotalAssetDecimalsAssetDefaultFrozenAssetUnitNameAssetAssetNameAssetURLAssetMetadataHashAssetManagerAssetReserveAssetFreezeAssetClawbackinvalidAssetParamsField"
 
-var _AssetParamsField_index = [...]uint8{0, 16, 35, 59, 78, 98, 112, 135, 153, 171, 188, 207, 230}
+var _AssetParamsField_index = [...]uint8{0, 10, 23, 41, 54, 68, 76, 93, 105, 117, 128, 141, 164}
 
 func (i AssetParamsField) String() string {
 	if i < 0 || i >= AssetParamsField(len(_AssetParamsField_index)-1) {
@@ -106,14 +106,14 @@ func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
-	_ = x[AssetHoldingAmount-0]
-	_ = x[AssetHoldingFrozen-1]
+	_ = x[AssetBalance-0]
+	_ = x[AssetFrozen-1]
 	_ = x[invalidAssetHoldingField-2]
 }
 
-const _AssetHoldingField_name = "AssetHoldingAmountAssetHoldingFrozeninvalidAssetHoldingField"
+const _AssetHoldingField_name = "AssetBalanceAssetFrozeninvalidAssetHoldingField"
 
-var _AssetHoldingField_index = [...]uint8{0, 18, 36, 60}
+var _AssetHoldingField_index = [...]uint8{0, 12, 23, 47}
 
 func (i AssetHoldingField) String() string {
 	if i < 0 || i >= AssetHoldingField(len(_AssetHoldingField_index)-1) {

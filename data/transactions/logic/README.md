@@ -189,23 +189,23 @@ Asset fields include `AssetHolding` and `AssetParam` fields that are used in `as
 
 | Index | Name | Type | Notes |
 | --- | --- | --- | --- |
-| 0 | AssetHoldingAmount | uint64 | Amount of the asset unit held by this account |
-| 1 | AssetHoldingFrozen | uint64 | Is the asset frozen or not |
+| 0 | AssetBalance | uint64 | Amount of the asset unit held by this account |
+| 1 | AssetFrozen | uint64 | Is the asset frozen or not |
 
 
 | Index | Name | Type | Notes |
 | --- | --- | --- | --- |
-| 0 | AssetParamsTotal | uint64 | Total number of units of this asset |
-| 1 | AssetParamsDecimals | uint64 | See AssetParams.Decimals |
-| 2 | AssetParamsDefaultFrozen | uint64 | Frozen by default or not |
-| 3 | AssetParamsUnitName | []byte | Asset unit name |
-| 4 | AssetParamsAssetName | []byte | Asset name |
-| 5 | AssetParamsURL | []byte | URL with additional info about the asset |
-| 6 | AssetParamsMetadataHash | []byte | Arbitrary commitment |
-| 7 | AssetParamsManager | []byte | Manager commitment |
-| 8 | AssetParamsReserve | []byte | Reserve address |
-| 9 | AssetParamsFreeze | []byte | Freeze address |
-| 10 | AssetParamsClawback | []byte | Clawback address |
+| 0 | AssetTotal | uint64 | Total number of units of this asset |
+| 1 | AssetDecimals | uint64 | See AssetParams.Decimals |
+| 2 | AssetDefaultFrozen | uint64 | Frozen by default or not |
+| 3 | AssetUnitName | []byte | Asset unit name |
+| 4 | AssetAssetName | []byte | Asset name |
+| 5 | AssetURL | []byte | URL with additional info about the asset |
+| 6 | AssetMetadataHash | []byte | Arbitrary commitment |
+| 7 | AssetManager | []byte | Manager commitment |
+| 8 | AssetReserve | []byte | Reserve address |
+| 9 | AssetFreeze | []byte | Freeze address |
+| 10 | AssetClawback | []byte | Clawback address |
 
 
 ### Flow Control
