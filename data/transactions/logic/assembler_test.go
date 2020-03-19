@@ -144,33 +144,33 @@ int 1
 app_opted_in
 int 1
 byte 0x4242
-app_read_local
+app_local_get
 pop
 pop
 byte 0x4242
-app_read_global
+app_global_get
 pop
 pop
 int 1
 byte 0x4242
 int 2
-app_write_local
+app_local_put
 byte 0x4242
 int 1
-app_write_global
+app_global_put
 int 0
 byte 0x4242
-app_delete_local
+app_local_del
 byte 0x4242
-app_delete_global
+app_global_del
 int 0
 int 1
-asset_read_holding AssetHoldingAmount
+asset_holding_get AssetBalance
 pop
 pop
 int 0
 int 1
-asset_read_params AssetParamsTotal
+asset_params_get AssetTotal
 pop
 pop
 txna Accounts 0
@@ -677,7 +677,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid opcode")
 
-	source = "int 0\nint 0\nasset_read_holding AssetHoldingFrozen"
+	source = "int 0\nint 0\nasset_holding_get AssetFrozen"
 	program, err = AssembleString(source)
 	require.NoError(t, err)
 	program[7] = 0x50 // holding field
@@ -685,7 +685,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid asset holding arg index")
 
-	source = "int 0\nint 0\nasset_read_params AssetParamsTotal"
+	source = "int 0\nint 0\nasset_params_get AssetTotal"
 	program, err = AssembleString(source)
 	require.NoError(t, err)
 	program[7] = 0x50 // params field
@@ -722,23 +722,23 @@ int 1
 }
 
 func TestAssembleAsset(t *testing.T) {
-	source := "int 0\nint 0\nasset_read_holding ABC 1"
+	source := "int 0\nint 0\nasset_holding_get ABC 1"
 	_, err := AssembleString(source)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "asset_read_holding expects one argument")
+	require.Contains(t, err.Error(), "asset_holding_get expects one argument")
 
-	source = "int 0\nint 0\nasset_read_holding ABC"
+	source = "int 0\nint 0\nasset_holding_get ABC"
 	_, err = AssembleString(source)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "asset_read_holding unknown arg")
+	require.Contains(t, err.Error(), "asset_holding_get unknown arg")
 
-	source = "int 0\nint 0\nasset_read_params ABC 1"
+	source = "int 0\nint 0\nasset_params_get ABC 1"
 	_, err = AssembleString(source)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "asset_read_params expects one argument")
+	require.Contains(t, err.Error(), "asset_params_get expects one argument")
 
-	source = "int 0\nint 0\nasset_read_params ABC"
+	source = "int 0\nint 0\nasset_params_get ABC"
 	_, err = AssembleString(source)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "asset_read_params unknown arg")
+	require.Contains(t, err.Error(), "asset_params_get unknown arg")
 }

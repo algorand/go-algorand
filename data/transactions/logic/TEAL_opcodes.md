@@ -512,7 +512,7 @@ At LogicSigVersion 2 it became allowed to branch to the end of the program exact
 
 params: account index, application id (top of the stack on opcode entry)
 
-## app_read_local
+## app_local_get
 
 - Opcode: 0x62
 - Pops: *... stack*, {uint64 A}, {uint64 B}, {[]byte C}
@@ -522,7 +522,7 @@ params: account index, application id (top of the stack on opcode entry)
 
 params: account index, application id, state key. Return: did_exist flag (top of the stack), value
 
-## app_read_global
+## app_global_get
 
 - Opcode: 0x63
 - Pops: *... stack*, []byte
@@ -530,7 +530,7 @@ params: account index, application id, state key. Return: did_exist flag (top of
 - read key A from global state of a current application => {0 or 1 (top), value}
 - LogicSigVersion >= 2
 
-## app_write_local
+## app_local_put
 
 - Opcode: 0x64
 - Pops: *... stack*, {uint64 A}, {[]byte B}, {any C}
@@ -540,7 +540,7 @@ params: account index, application id, state key. Return: did_exist flag (top of
 
 params: account index, state key, value
 
-## app_write_global
+## app_global_put
 
 - Opcode: 0x65
 - Pops: *... stack*, {[]byte A}, {any B}
@@ -548,7 +548,7 @@ params: account index, state key, value
 - write key A and value B to global state of the current application
 - LogicSigVersion >= 2
 
-## app_delete_local
+## app_local_del
 
 - Opcode: 0x66
 - Pops: *... stack*, {uint64 A}, {[]byte B}
@@ -558,7 +558,7 @@ params: account index, state key, value
 
 params: account index, state key
 
-## app_delete_global
+## app_global_del
 
 - Opcode: 0x67
 - Pops: *... stack*, []byte
@@ -568,7 +568,7 @@ params: account index, state key
 
 params: state key
 
-## asset_read_holding
+## asset_holding_get
 
 - Opcode: 0x70 {uint8 asset holding field index}
 - Pops: *... stack*, {uint64 A}, {uint64 B}
@@ -576,17 +576,17 @@ params: state key
 - read from account's A and asset B holding field X (imm arg)  => {0 or 1 (top), value}
 - LogicSigVersion >= 2
 
-`asset_read_holding` Fields:
+`asset_holding_get` Fields:
 
 | Index | Name | Type | Notes |
 | --- | --- | --- | --- |
-| 0 | AssetHoldingAmount | uint64 | Amount of the asset unit held by this account |
-| 1 | AssetHoldingFrozen | uint64 | Is the asset frozen or not |
+| 0 | AssetBalance | uint64 | Amount of the asset unit held by this account |
+| 1 | AssetFrozen | uint64 | Is the asset frozen or not |
 
 
 params: account index, asset id. Return: did_exist flag, value
 
-## asset_read_params
+## asset_params_get
 
 - Opcode: 0x71 {uint8 asset params field index}
 - Pops: *... stack*, {uint64 A}, {uint64 B}
@@ -594,21 +594,21 @@ params: account index, asset id. Return: did_exist flag, value
 - read from account's A and asset B params field X (imm arg)  => {0 or 1 (top), value}
 - LogicSigVersion >= 2
 
-`asset_read_params` Fields:
+`asset_params_get` Fields:
 
 | Index | Name | Type | Notes |
 | --- | --- | --- | --- |
-| 0 | AssetParamsTotal | uint64 | Total number of units of this asset |
-| 1 | AssetParamsDecimals | uint64 | See AssetParams.Decimals |
-| 2 | AssetParamsDefaultFrozen | uint64 | Frozen by default or not |
-| 3 | AssetParamsUnitName | []byte | Asset unit name |
-| 4 | AssetParamsAssetName | []byte | Asset name |
-| 5 | AssetParamsURL | []byte | URL with additional info about the asset |
-| 6 | AssetParamsMetadataHash | []byte | Arbitrary commitment |
-| 7 | AssetParamsManager | []byte | Manager commitment |
-| 8 | AssetParamsReserve | []byte | Reserve address |
-| 9 | AssetParamsFreeze | []byte | Freeze address |
-| 10 | AssetParamsClawback | []byte | Clawback address |
+| 0 | AssetTotal | uint64 | Total number of units of this asset |
+| 1 | AssetDecimals | uint64 | See AssetParams.Decimals |
+| 2 | AssetDefaultFrozen | uint64 | Frozen by default or not |
+| 3 | AssetUnitName | []byte | Asset unit name |
+| 4 | AssetAssetName | []byte | Asset name |
+| 5 | AssetURL | []byte | URL with additional info about the asset |
+| 6 | AssetMetadataHash | []byte | Arbitrary commitment |
+| 7 | AssetManager | []byte | Manager commitment |
+| 8 | AssetReserve | []byte | Reserve address |
+| 9 | AssetFreeze | []byte | Freeze address |
+| 10 | AssetClawback | []byte | Clawback address |
 
 
 params: account index, asset id. Return: did_exist flag, value

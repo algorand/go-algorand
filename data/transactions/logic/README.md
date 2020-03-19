@@ -189,23 +189,23 @@ Asset fields include `AssetHolding` and `AssetParam` fields that are used in `as
 
 | Index | Name | Type | Notes |
 | --- | --- | --- | --- |
-| 0 | AssetHoldingAmount | uint64 | Amount of the asset unit held by this account |
-| 1 | AssetHoldingFrozen | uint64 | Is the asset frozen or not |
+| 0 | AssetBalance | uint64 | Amount of the asset unit held by this account |
+| 1 | AssetFrozen | uint64 | Is the asset frozen or not |
 
 
 | Index | Name | Type | Notes |
 | --- | --- | --- | --- |
-| 0 | AssetParamsTotal | uint64 | Total number of units of this asset |
-| 1 | AssetParamsDecimals | uint64 | See AssetParams.Decimals |
-| 2 | AssetParamsDefaultFrozen | uint64 | Frozen by default or not |
-| 3 | AssetParamsUnitName | []byte | Asset unit name |
-| 4 | AssetParamsAssetName | []byte | Asset name |
-| 5 | AssetParamsURL | []byte | URL with additional info about the asset |
-| 6 | AssetParamsMetadataHash | []byte | Arbitrary commitment |
-| 7 | AssetParamsManager | []byte | Manager commitment |
-| 8 | AssetParamsReserve | []byte | Reserve address |
-| 9 | AssetParamsFreeze | []byte | Freeze address |
-| 10 | AssetParamsClawback | []byte | Clawback address |
+| 0 | AssetTotal | uint64 | Total number of units of this asset |
+| 1 | AssetDecimals | uint64 | See AssetParams.Decimals |
+| 2 | AssetDefaultFrozen | uint64 | Frozen by default or not |
+| 3 | AssetUnitName | []byte | Asset unit name |
+| 4 | AssetAssetName | []byte | Asset name |
+| 5 | AssetURL | []byte | URL with additional info about the asset |
+| 6 | AssetMetadataHash | []byte | Arbitrary commitment |
+| 7 | AssetManager | []byte | Manager commitment |
+| 8 | AssetReserve | []byte | Reserve address |
+| 9 | AssetFreeze | []byte | Freeze address |
+| 10 | AssetClawback | []byte | Clawback address |
 
 
 ### Flow Control
@@ -223,14 +223,14 @@ Asset fields include `AssetHolding` and `AssetParam` fields that are used in `as
 | --- | --- |
 | `balance` | get balance for the requested account A in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction |
 | `app_opted_in` | check if account A opted in for the application B => {0 or 1} |
-| `app_read_local` | read from account's A from local state of the application B key C  => {0 or 1 (top), value} |
-| `app_read_global` | read key A from global state of a current application => {0 or 1 (top), value} |
-| `app_write_local` | write to account's A to local state of a current application key B with value C |
-| `app_write_global` | write key A and value B to global state of the current application |
-| `app_delete_local` | delete from account's A local state key B of the current application |
-| `app_delete_global` | delete key A from a global state of the current application |
-| `asset_read_holding` | read from account's A and asset B holding field X (imm arg)  => {0 or 1 (top), value} |
-| `asset_read_params` | read from account's A and asset B params field X (imm arg)  => {0 or 1 (top), value} |
+| `app_local_get` | read from account's A from local state of the application B key C  => {0 or 1 (top), value} |
+| `app_global_get` | read key A from global state of a current application => {0 or 1 (top), value} |
+| `app_local_put` | write to account's A to local state of a current application key B with value C |
+| `app_global_put` | write key A and value B to global state of the current application |
+| `app_local_del` | delete from account's A local state key B of the current application |
+| `app_global_del` | delete key A from a global state of the current application |
+| `asset_holding_get` | read from account's A and asset B holding field X (imm arg)  => {0 or 1 (top), value} |
+| `asset_params_get` | read from account's A and asset B params field X (imm arg)  => {0 or 1 (top), value} |
 
 # Assembler Syntax
 

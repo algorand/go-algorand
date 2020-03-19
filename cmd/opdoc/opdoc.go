@@ -73,12 +73,12 @@ func globalFieldsMarkdown(out io.Writer) {
 }
 
 func assetHoldingFieldsMarkdown(out io.Writer) {
-	fmt.Fprintf(out, "\n`asset_read_holding` Fields:\n\n")
+	fmt.Fprintf(out, "\n`asset_holding_get` Fields:\n\n")
 	fieldTableMarkdown(out, logic.AssetHoldingFieldNames, logic.AssetHoldingFieldTypes, logic.AssetHoldingFieldDocs)
 }
 
 func assetParamsFieldsMarkdown(out io.Writer) {
-	fmt.Fprintf(out, "\n`asset_read_params` Fields:\n\n")
+	fmt.Fprintf(out, "\n`asset_params_get` Fields:\n\n")
 	fieldTableMarkdown(out, logic.AssetParamsFieldNames, logic.AssetParamsFieldTypes, logic.AssetParamsFieldDocs)
 }
 
@@ -123,9 +123,9 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec) (err error) {
 		transactionFieldsMarkdown(out)
 		fmt.Fprintf(out, "\nTypeEnum mapping:\n\n")
 		typeEnumTableMarkdown(out)
-	} else if op.Name == "asset_read_holding" {
+	} else if op.Name == "asset_holding_get" {
 		assetHoldingFieldsMarkdown(out)
-	} else if op.Name == "asset_read_params" {
+	} else if op.Name == "asset_params_get" {
 		assetParamsFieldsMarkdown(out)
 	}
 	ode := logic.OpDocExtra(op.Name)

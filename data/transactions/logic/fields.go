@@ -193,18 +193,18 @@ var GlobalFieldTypes []StackType
 
 var globalFields map[string]uint
 
-// AssetHoldingField is an enum for `asset_read_holding` opcode
+// AssetHoldingField is an enum for `asset_holding_get` opcode
 type AssetHoldingField int
 
 const (
-	// AssetHoldingAmount AssetHolding.Amount
-	AssetHoldingAmount AssetHoldingField = iota
-	// AssetHoldingFrozen AssetHolding.Frozen
-	AssetHoldingFrozen
+	// AssetBalance AssetHolding.Amount
+	AssetBalance AssetHoldingField = iota
+	// AssetFrozen AssetHolding.Frozen
+	AssetFrozen
 	invalidAssetHoldingField
 )
 
-// AssetHoldingFieldNames are arguments to the 'asset_read_holding' opcode
+// AssetHoldingFieldNames are arguments to the 'asset_holding_get' opcode
 var AssetHoldingFieldNames []string
 
 type assetHoldingFieldType struct {
@@ -213,8 +213,8 @@ type assetHoldingFieldType struct {
 }
 
 var assetHoldingFieldTypeList = []assetHoldingFieldType{
-	{AssetHoldingAmount, StackUint64},
-	{AssetHoldingFrozen, StackUint64},
+	{AssetBalance, StackUint64},
+	{AssetFrozen, StackUint64},
 }
 
 // AssetHoldingFieldTypes is StackUint64 StackBytes in parallel with AssetHoldingFieldNames
@@ -222,36 +222,36 @@ var AssetHoldingFieldTypes []StackType
 
 var assetHoldingFields map[string]uint
 
-// AssetParamsField is an enum for `asset_read_params` opcode
+// AssetParamsField is an enum for `asset_params_get` opcode
 type AssetParamsField int
 
 const (
-	// AssetParamsTotal AssetParams.Total
-	AssetParamsTotal AssetParamsField = iota
-	// AssetParamsDecimals AssetParams.Decimals
-	AssetParamsDecimals
-	// AssetParamsDefaultFrozen AssetParams.AssetParamsDefaultFrozen
-	AssetParamsDefaultFrozen
-	// AssetParamsUnitName AssetParams.UnitName
-	AssetParamsUnitName
-	// AssetParamsAssetName AssetParams.AssetName
-	AssetParamsAssetName
-	// AssetParamsURL AssetParams.URL
-	AssetParamsURL
-	// AssetParamsMetadataHash AssetParams.MetadataHash
-	AssetParamsMetadataHash
-	// AssetParamsManager AssetParams.Manager
-	AssetParamsManager
-	// AssetParamsReserve AssetParams.Reserve
-	AssetParamsReserve
-	// AssetParamsFreeze AssetParams.Freeze
-	AssetParamsFreeze
-	// AssetParamsClawback AssetParams.Clawback
-	AssetParamsClawback
+	// AssetTotal AssetParams.Total
+	AssetTotal AssetParamsField = iota
+	// AssetDecimals AssetParams.Decimals
+	AssetDecimals
+	// AssetDefaultFrozen AssetParams.AssetDefaultFrozen
+	AssetDefaultFrozen
+	// AssetUnitName AssetParams.UnitName
+	AssetUnitName
+	// AssetAssetName AssetParams.AssetName
+	AssetAssetName
+	// AssetURL AssetParams.URL
+	AssetURL
+	// AssetMetadataHash AssetParams.MetadataHash
+	AssetMetadataHash
+	// AssetManager AssetParams.Manager
+	AssetManager
+	// AssetReserve AssetParams.Reserve
+	AssetReserve
+	// AssetFreeze AssetParams.Freeze
+	AssetFreeze
+	// AssetClawback AssetParams.Clawback
+	AssetClawback
 	invalidAssetParamsField
 )
 
-// AssetParamsFieldNames are arguments to the 'asset_read_holding' opcode
+// AssetParamsFieldNames are arguments to the 'asset_holding_get' opcode
 var AssetParamsFieldNames []string
 
 type assetParamsFieldType struct {
@@ -260,17 +260,17 @@ type assetParamsFieldType struct {
 }
 
 var assetParamsFieldTypeList = []assetParamsFieldType{
-	{AssetParamsTotal, StackUint64},
-	{AssetParamsDecimals, StackUint64},
-	{AssetParamsDefaultFrozen, StackUint64},
-	{AssetParamsUnitName, StackBytes},
-	{AssetParamsAssetName, StackBytes},
-	{AssetParamsURL, StackBytes},
-	{AssetParamsMetadataHash, StackBytes},
-	{AssetParamsManager, StackBytes},
-	{AssetParamsReserve, StackBytes},
-	{AssetParamsFreeze, StackBytes},
-	{AssetParamsClawback, StackBytes},
+	{AssetTotal, StackUint64},
+	{AssetDecimals, StackUint64},
+	{AssetDefaultFrozen, StackUint64},
+	{AssetUnitName, StackBytes},
+	{AssetAssetName, StackBytes},
+	{AssetURL, StackBytes},
+	{AssetMetadataHash, StackBytes},
+	{AssetManager, StackBytes},
+	{AssetReserve, StackBytes},
+	{AssetFreeze, StackBytes},
+	{AssetClawback, StackBytes},
 }
 
 // AssetParamsFieldTypes is StackUint64 StackBytes in parallel with AssetParamsFieldNames
@@ -310,7 +310,7 @@ func init() {
 	}
 
 	AssetHoldingFieldNames = make([]string, int(invalidAssetHoldingField))
-	for i := AssetHoldingAmount; i < invalidAssetHoldingField; i++ {
+	for i := AssetBalance; i < invalidAssetHoldingField; i++ {
 		AssetHoldingFieldNames[int(i)] = i.String()
 	}
 	AssetHoldingFieldTypes = make([]StackType, len(AssetHoldingFieldNames))
@@ -323,7 +323,7 @@ func init() {
 	}
 
 	AssetParamsFieldNames = make([]string, int(invalidAssetParamsField))
-	for i := AssetParamsTotal; i < invalidAssetParamsField; i++ {
+	for i := AssetTotal; i < invalidAssetParamsField; i++ {
 		AssetParamsFieldNames[int(i)] = i.String()
 	}
 	AssetParamsFieldTypes = make([]StackType, len(AssetParamsFieldNames))

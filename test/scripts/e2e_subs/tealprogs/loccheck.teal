@@ -34,7 +34,7 @@ int 0
 
 // Key "foo"
 byte base64 Zm9v
-app_read_local
+app_local_get
 
 // Value must exist
 int 0
@@ -60,7 +60,7 @@ byte base64 Zm9v
 
 // Value "bar"
 byte base64 YmFy
-app_write_local
+app_local_put
 
 int 1
 bnz succeed
@@ -76,6 +76,3 @@ int 1
 bnz done
 
 done:
-// bnz end workaround
-int 0
-pop

@@ -1016,9 +1016,9 @@ func opDup(cx *evalContext) {
 
 func (cx *evalContext) assetHoldingEnumToValue(holding *basics.AssetHolding, field uint64) (sv stackValue, err error) {
 	switch AssetHoldingField(field) {
-	case AssetHoldingAmount:
+	case AssetBalance:
 		sv.Uint = holding.Amount
-	case AssetHoldingFrozen:
+	case AssetFrozen:
 		if holding.Frozen {
 			sv.Uint = 1
 		} else {
@@ -1039,31 +1039,31 @@ func (cx *evalContext) assetHoldingEnumToValue(holding *basics.AssetHolding, fie
 
 func (cx *evalContext) assetParamsEnumToValue(params *basics.AssetParams, field uint64) (sv stackValue, err error) {
 	switch AssetParamsField(field) {
-	case AssetParamsTotal:
+	case AssetTotal:
 		sv.Uint = params.Total
-	case AssetParamsDecimals:
+	case AssetDecimals:
 		sv.Uint = uint64(params.Decimals)
-	case AssetParamsDefaultFrozen:
+	case AssetDefaultFrozen:
 		if params.DefaultFrozen {
 			sv.Uint = 1
 		} else {
 			sv.Uint = 0
 		}
-	case AssetParamsUnitName:
+	case AssetUnitName:
 		sv.Bytes = []byte(params.UnitName)
-	case AssetParamsAssetName:
+	case AssetAssetName:
 		sv.Bytes = []byte(params.AssetName)
-	case AssetParamsURL:
+	case AssetURL:
 		sv.Bytes = []byte(params.URL)
-	case AssetParamsMetadataHash:
+	case AssetMetadataHash:
 		sv.Bytes = params.MetadataHash[:]
-	case AssetParamsManager:
+	case AssetManager:
 		sv.Bytes = params.Manager[:]
-	case AssetParamsReserve:
+	case AssetReserve:
 		sv.Bytes = params.Reserve[:]
-	case AssetParamsFreeze:
+	case AssetFreeze:
 		sv.Bytes = params.Freeze[:]
-	case AssetParamsClawback:
+	case AssetClawback:
 		sv.Bytes = params.Clawback[:]
 	default:
 		err = fmt.Errorf("invalid asset params field %d", field)
@@ -1606,7 +1606,7 @@ func (cx *evalContext) appDeleteGlobalKey(key string) error {
 	return nil
 }
 
-func opAppReadLocalState(cx *evalContext) {
+func opAppGetLocalState(cx *evalContext) {
 	last := len(cx.stack) - 1 // state key
 	prev := last - 1          // app id
 	pprev := prev - 1         // account offset
@@ -1652,7 +1652,7 @@ func opAppReadLocalState(cx *evalContext) {
 	cx.stack = cx.stack[:last]
 }
 
-func opAppReadGlobalState(cx *evalContext) {
+func opAppGetGlobalState(cx *evalContext) {
 	// TODO: add Global State access restriction
 
 	last := len(cx.stack) - 1 // state key
@@ -1685,7 +1685,7 @@ func opAppReadGlobalState(cx *evalContext) {
 	cx.stack = append(cx.stack, isOk)
 }
 
-func opAppWriteLocalState(cx *evalContext) {
+func opAppPutLocalState(cx *evalContext) {
 	last := len(cx.stack) - 1 // value
 	prev := last - 1          // state key
 	pprev := prev - 1         // account offset
@@ -1715,7 +1715,7 @@ func opAppWriteLocalState(cx *evalContext) {
 	cx.stack = cx.stack[:pprev]
 }
 
-func opAppWriteGlobalState(cx *evalContext) {
+func opAppPutGlobalState(cx *evalContext) {
 	last := len(cx.stack) - 1 // value
 	prev := last - 1          // state key
 
@@ -1782,7 +1782,7 @@ func opAppDeleteGlobalState(cx *evalContext) {
 	cx.stack = cx.stack[:last]
 }
 
-func opAssetReadHolding(cx *evalContext) {
+func opAssetHoldingGet(cx *evalContext) {
 	last := len(cx.stack) - 1 // asset id
 	prev := last - 1          // account offset
 
@@ -1819,7 +1819,7 @@ func opAssetReadHolding(cx *evalContext) {
 	cx.nextpc = cx.pc + 2
 }
 
-func opAssetReadParams(cx *evalContext) {
+func opAssetParamsGet(cx *evalContext) {
 	last := len(cx.stack) - 1 // asset id
 	prev := last - 1          // account offset
 
