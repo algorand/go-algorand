@@ -144,7 +144,7 @@ func (db *Accessor) Close() {
 // that indicates database contention that warrants a retry.
 // Sends warnings and errors to log.
 func LoggedRetry(fn func() error, log logging.Logger) (err error) {
-	for i := 0; ; i++ {
+	for i := 0; (i == 0) || dbretry(err); i++ {
 		if i > 0 {
 			if i < infoTxRetries {
 				log.Infof("db.LoggedRetry: %d retries (last err: %v)", i, err)
@@ -157,11 +157,6 @@ func LoggedRetry(fn func() error, log logging.Logger) (err error) {
 		}
 
 		err = fn()
-		if dbretry(err) {
-			continue
-		}
-
-		return
 	}
 }
 
@@ -215,7 +210,7 @@ func (db *Accessor) Atomic(fn idemFn, extras ...interface{}) (err error) {
 	var conn *sql.Conn
 	ctx := context.Background()
 
-	for i := 0; ; i++ {
+	for i := 0; (i == 0) || dbretry(err); i++ {
 		if i > 0 {
 			if i < infoTxRetries {
 				db.getDecoratedLogger(fn, extras).Infof("db.atomic: %d connection retries (last err: %v)", i, err)
@@ -227,10 +222,6 @@ func (db *Accessor) Atomic(fn idemFn, extras ...interface{}) (err error) {
 			}
 		}
 		conn, err = db.Handle.Conn(ctx)
-		if dbretry(err) {
-			continue
-		}
-		break
 	}
 
 	if err != nil {
