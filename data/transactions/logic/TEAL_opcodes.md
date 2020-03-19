@@ -361,11 +361,12 @@ Overflow is an error condition which halts execution and fails the transaction. 
 | 21 | AssetCloseTo | []byte | 32 byte address |
 | 22 | GroupIndex | uint64 | Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1. |
 | 23 | TxID | []byte | The computed ID for this transaction. 32 bytes. |
-| 24 | OnCompletion | uint64 | ApplicationCall transaction on completion action |
-| 25 | ApplicationArgs | []byte | Arguments passed to the application in the ApplicationCall transaction |
-| 26 | NumAppArgs | uint64 | Number of ApplicationArgs |
-| 27 | Accounts | []byte | Accounts listed in the ApplicationCall transaction |
-| 28 | NumAccounts | uint64 | Number of Accounts |
+| 24 | ApplicationID | uint64 | ApplicationID from ApplicationCall transaction |
+| 25 | OnCompletion | uint64 | ApplicationCall transaction on completion action |
+| 26 | ApplicationArgs | []byte | Arguments passed to the application in the ApplicationCall transaction |
+| 27 | NumAppArgs | uint64 | Number of ApplicationArgs |
+| 28 | Accounts | []byte | Accounts listed in the ApplicationCall transaction |
+| 29 | NumAccounts | uint64 | Number of Accounts |
 
 
 TypeEnum mapping:

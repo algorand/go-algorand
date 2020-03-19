@@ -74,15 +74,17 @@ const (
 	GroupIndex
 	// TxID Transaction.ID()
 	TxID
-	// OnCompletion        OnCompletion
+	// ApplicationID basics.AppIndex
+	ApplicationID
+	// OnCompletion OnCompletion
 	OnCompletion
 	// ApplicationArgs []basics.TealValue
 	ApplicationArgs
-	// NumAppArgs      len(ApplicationArgs)
+	// NumAppArgs len(ApplicationArgs)
 	NumAppArgs
-	// Accounts        []basics.Address
+	// Accounts []basics.Address
 	Accounts
-	// NumAccounts     len(Accounts)
+	// NumAccounts len(Accounts)
 	NumAccounts
 
 	invalidTxnField // fence for some setup that loops from Sender..invalidTxnField
@@ -122,6 +124,7 @@ var txnFieldTypePairs = []txnFieldType{
 	{AssetCloseTo, StackBytes},
 	{GroupIndex, StackUint64},
 	{TxID, StackBytes},
+	{ApplicationID, StackUint64},
 	{OnCompletion, StackUint64},
 	{ApplicationArgs, StackBytes},
 	{NumAppArgs, StackUint64},

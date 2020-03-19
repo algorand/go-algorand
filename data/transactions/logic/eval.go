@@ -1128,6 +1128,8 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint
 		sv.Bytes = txid[:]
 	case Lease:
 		sv.Bytes = txn.Lease[:]
+	case ApplicationID:
+		sv.Uint = uint64(txn.ApplicationID)
 	case OnCompletion:
 		sv.Uint = uint64(txn.OnCompletion)
 	case ApplicationArgs:
