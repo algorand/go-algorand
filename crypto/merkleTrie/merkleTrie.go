@@ -17,14 +17,26 @@
 package merkletrie
 
 import (
+	"encoding/binary"
+
 	"github.com/algorand/go-algorand/crypto"
+)
+
+const (
+	// MerkleTreeVersion is the version of the encoded trie. If we ever want to make changes and want to have upgrade path,
+	// this would give us the ability to do so.
+	MerkleTreeVersion = uint64(0x1000000010000000)
+	// NodePageVersion is the version of the encoded node. If we ever want to make changes and want to have upgrade path,
+	// this would give us the ability to do so.
+	NodePageVersion = uint64(0x1000000010000000)
 )
 
 // MerkleTrie is a merkle trie intended to efficiently calculate the merkle root of
 // unordered elements
 type MerkleTrie struct {
-	root  storedNodeIdentifier
-	cache *merkleTrieCache
+	root       storedNodeIdentifier
+	nextNodeID storedNodeIdentifier
+	cache      *merkleTrieCache
 }
 
 // Stats structure is a helper for finding underlaying statistics about the trie
@@ -38,10 +50,11 @@ type Stats struct {
 // MakeMerkleTrie creates a merkle trie
 func MakeMerkleTrie() *MerkleTrie {
 	mt := &MerkleTrie{
-		root:  storedNodeIdentifierNull,
-		cache: &merkleTrieCache{},
+		root:       storedNodeIdentifierNull,
+		cache:      &merkleTrieCache{},
+		nextNodeID: storedNodeIdentifierBase,
 	}
-	mt.cache.initialize()
+	mt.cache.initialize(mt)
 	return mt
 }
 
@@ -80,7 +93,7 @@ func (mt *MerkleTrie) Add(d []byte) (bool, error) {
 	}
 	mt.cache.beginTransaction()
 	var updatedRoot storedNodeIdentifier
-	updatedRoot, err = pnode.add(mt.cache, d[:])
+	updatedRoot, err = pnode.add(mt.cache, d[:], make([]byte, 0, len(d)))
 	if err != nil {
 		mt.cache.deleteNode(updatedRoot)
 		mt.cache.rollbackTransaction()
@@ -114,7 +127,7 @@ func (mt *MerkleTrie) Delete(d []byte) (bool, error) {
 		return true, nil
 	}
 	var updatedRoot storedNodeIdentifier
-	updatedRoot, err = pnode.remove(mt.cache, d[:])
+	updatedRoot, err = pnode.remove(mt.cache, d[:], make([]byte, 0, len(d)))
 	if err != nil {
 		mt.cache.deleteNode(updatedRoot)
 		mt.cache.rollbackTransaction()
@@ -141,4 +154,20 @@ func (mt *MerkleTrie) GetStats() (stats Stats, err error) {
 // BeginTransaction starts an atomic transaction on the markle trie.
 func (mt *MerkleTrie) BeginTransaction() *Transaction {
 	return makeTransaction(mt)
+}
+
+// Commit stores the existings trie using the committer.
+func (mt *MerkleTrie) Commit() error {
+	bytes := mt.serialize()
+	mt.cache.committer.StorePage(storedNodeIdentifierNull, bytes)
+	return mt.cache.commit()
+}
+
+// serialize serializes the trie root
+func (mt *MerkleTrie) serialize() []byte {
+	serializedBuffer := make([]byte, 8*3)
+	version := binary.PutUvarint(serializedBuffer[:], MerkleTreeVersion)
+	root := binary.PutUvarint(serializedBuffer[version:], uint64(mt.root))
+	next := binary.PutUvarint(serializedBuffer[version+root:], uint64(mt.nextNodeID))
+	return serializedBuffer[:version+root+next]
 }

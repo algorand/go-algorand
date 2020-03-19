@@ -18,6 +18,7 @@ package merkletrie
 
 import (
 	"bytes"
+	"encoding/binary"
 
 	"github.com/algorand/go-algorand/crypto"
 )
@@ -90,7 +91,7 @@ func (n *node) find(cache *merkleTrieCache, d []byte) (bool, error) {
 }
 
 // assumption : we know that the key is absent from the tree
-func (n *node) add(cache *merkleTrieCache, d []byte) (nodeID storedNodeIdentifier, err error) {
+func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID storedNodeIdentifier, err error) {
 	// allocate a new node to replace the current one.
 	var pnode *node
 	pnode, nodeID = n.duplicate(cache)
@@ -110,13 +111,13 @@ func (n *node) add(cache *merkleTrieCache, d []byte) (nodeID storedNodeIdentifie
 
 		if d[0] == pnode.hash[0] {
 			// make the new one as a child of the current one.
-			child, err := childNode.add(cache, d[1:])
+			child, err := childNode.add(cache, d[1:], append(path, d[0]))
 			if err != nil {
 				cache.deleteNode(child)
 				return nodeID, err
 			}
 			pnode.children[pnode.hash[0]] = child
-			err = pnode.recalculateHash(cache)
+			err = pnode.recalculateHash(cache, path)
 			return nodeID, err
 		}
 	}
@@ -155,19 +156,19 @@ func (n *node) add(cache *merkleTrieCache, d []byte) (nodeID storedNodeIdentifie
 		if err != nil {
 			return nodeID, err
 		}
-		updatedChild, err := childNode.add(cache, d[1:])
+		updatedChild, err := childNode.add(cache, d[1:], append(path, d[0]))
 		if err != nil {
 			cache.deleteNode(updatedChild)
 			return nodeID, err
 		}
 		pnode.children[d[0]] = updatedChild
 	}
-	err = pnode.recalculateHash(cache)
+	err = pnode.recalculateHash(cache, path)
 	return nodeID, err
 }
 
-func (n *node) recalculateHash(cache *merkleTrieCache) error {
-	hashAccumulator := []byte{}
+func (n *node) recalculateHash(cache *merkleTrieCache, path []byte) error {
+	hashAccumulator := path
 	i := n.firstChild
 	for {
 		childNode, err := cache.getNode(n.children[i])
@@ -187,7 +188,7 @@ func (n *node) recalculateHash(cache *merkleTrieCache) error {
 
 // function remove is called only on non-leaf nodes.
 // assumption : we know that the key is already included in the tree
-func (n *node) remove(cache *merkleTrieCache, key []byte) (nodeID storedNodeIdentifier, err error) {
+func (n *node) remove(cache *merkleTrieCache, key []byte, path []byte) (nodeID storedNodeIdentifier, err error) {
 	// allocate a new node to replace the current one.
 	var pnode, childNode *node
 	pnode, nodeID = n.duplicate(cache)
@@ -229,7 +230,7 @@ func (n *node) remove(cache *merkleTrieCache, key []byte) (nodeID storedNodeIden
 		}
 	} else {
 		var updatedChildNodeID storedNodeIdentifier
-		updatedChildNodeID, err = childNode.remove(cache, key[1:])
+		updatedChildNodeID, err = childNode.remove(cache, key[1:], append(path, key[0]))
 		if err != nil {
 			cache.deleteNode(updatedChildNodeID)
 			return nodeID, err
@@ -253,7 +254,7 @@ func (n *node) remove(cache *merkleTrieCache, key []byte) (nodeID storedNodeIden
 		}
 	}
 	if !pnode.leaf {
-		err = pnode.recalculateHash(cache)
+		err = pnode.recalculateHash(cache, path)
 		if err != nil {
 			return
 		}
@@ -273,5 +274,82 @@ func (n *node) duplicate(cache *merkleTrieCache) (pnode *node, nodeID storedNode
 		copy(pnode.children[:], n.children[:])
 		copy(pnode.childrenNext[:], n.childrenNext[:])
 	}
+	return
+}
+
+// serialize the content of the node into the buffer, and return the number of bytes consumed in the process.
+func (n *node) serialize(buf []byte) int {
+	/*
+		hash         []byte
+		leaf         bool
+		firstChild   byte
+		children     []storedNodeIdentifier
+		childrenNext []byte
+	*/
+	w := binary.PutUvarint(buf[:], uint64(len(n.hash)))
+	copy(buf[w:], n.hash)
+	w += len(n.hash)
+	if n.leaf {
+		buf[w] = 0 // leaf
+		return w + 1
+	}
+	// non-leaf
+	buf[w] = 1 // non-leaf
+	w++
+	// store all the children, and terminate with a null.
+	i := n.firstChild
+	for {
+		if i == n.childrenNext[i] {
+			break
+		}
+		buf[w] = i
+		w++
+		x := binary.PutUvarint(buf[w:], uint64(n.children[i]))
+		w += x
+	}
+	buf[w] = i
+	w++
+	return w
+}
+
+func deserializeNode(buf []byte) (n *node, s int) {
+	n = &node{}
+	hashLength, hashLength2 := binary.Uvarint(buf[:])
+	if hashLength2 <= 0 {
+		return nil, hashLength2
+	}
+	n.hash = make([]byte, hashLength)
+	copy(n.hash, buf[hashLength2:hashLength2+int(hashLength)])
+	s = hashLength2 + int(hashLength)
+	n.leaf = (buf[s] == 0)
+	s++
+	if n.leaf {
+		return
+	}
+	n.children = make([]storedNodeIdentifier, 256)
+	n.childrenNext = make([]byte, 256)
+	first := true
+	prevChildIndex := byte(0)
+	for {
+		childIndex := buf[s]
+		s++
+		if childIndex <= prevChildIndex && !first {
+			break
+		}
+		if first {
+			first = false
+			n.firstChild = childIndex
+		} else {
+			n.childrenNext[prevChildIndex] = childIndex
+		}
+		nodeID, nodeIDLength := binary.Uvarint(buf[s:])
+		if nodeIDLength <= 0 {
+			return nil, nodeIDLength
+		}
+		s += nodeIDLength
+		n.children[childIndex] = storedNodeIdentifier(nodeID)
+		prevChildIndex = childIndex
+	}
+	n.childrenNext[prevChildIndex] = prevChildIndex
 	return
 }
