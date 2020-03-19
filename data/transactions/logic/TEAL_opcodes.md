@@ -331,7 +331,6 @@ Overflow is an error condition which halts execution and fails the transaction. 
 - Pops: _None_
 - Pushes: any
 - push field from current transaction to stack
-- LogicSigVersion >= 2
 
 `txn` Fields:
 
@@ -409,7 +408,6 @@ FirstValidTime causes the program to fail. The field is reserved for future use.
 - Pops: _None_
 - Pushes: any
 - push field to the stack from a transaction in the current transaction group
-- LogicSigVersion >= 2
 
 for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`
 
@@ -480,7 +478,7 @@ At LogicSigVersion 2 it became allowed to branch to the end of the program exact
 
 ## substring
 
-- Opcode: 0x51
+- Opcode: 0x51 {uint8 start position}{uint8 end position}
 - Pops: *... stack*, []byte
 - Pushes: []byte
 - pop a byte string X. For immediate values in 0..255 N and M: extract a range of bytes from it starting at N up to but not including M, push the substring result

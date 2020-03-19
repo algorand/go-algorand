@@ -106,6 +106,9 @@ var OpSpecs = []OpSpec{
 	{0x2f, "arg_2", opArg2, asmDefault, disDefault, nil, oneBytes, 1, runModeSignature, opSizeDefault},
 	{0x30, "arg_3", opArg3, asmDefault, disDefault, nil, oneBytes, 1, runModeSignature, opSizeDefault},
 	{0x31, "txn", opTxn, assembleTxn, disTxn, nil, oneAny, 1, modeAny, opSize{1, 2, nil}},
+	// It is ok to have the same opcode for different TEAL versions.
+	// This 'txn' asm command supports additional argument in version 2 and
+	// generates 'txna' opcode in that particular case
 	{0x31, "txn", opTxn, assembleTxn2, disTxn, nil, oneAny, 2, modeAny, opSize{1, 2, nil}},
 	{0x32, "global", opGlobal, assembleGlobal, disGlobal, nil, oneAny, 1, modeAny, opSize{1, 2, nil}},
 	{0x33, "gtxn", opGtxn, assembleGtxn, disGtxn, nil, oneAny, 1, modeAny, opSize{1, 3, nil}},
@@ -141,16 +144,50 @@ func (a sortByOpcode) Len() int           { return len(a) }
 func (a sortByOpcode) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a sortByOpcode) Less(i, j int) bool { return a[i].Opcode < a[j].Opcode }
 
+type opVer struct {
+	idx    int
+	minVer int
+}
+
 // OpcodesByVersion returns list of opcodes available in a specific version of TEAL
+// This function must be used for documentation only because it modifies opcode versions
 func OpcodesByVersion(version uint64) []OpSpec {
-	sub := make(map[byte]OpSpec)
-	for idx := range OpSpecs {
-		if OpSpecs[idx].Version <= version {
-			sub[OpSpecs[idx].Opcode] = OpSpecs[idx]
+	// for overwritten opcodes use the lowest version opcode was introduced in
+	maxOpcode := 0
+	for i := 0; i < len(OpSpecs); i++ {
+		if int(OpSpecs[i].Opcode) > maxOpcode {
+			maxOpcode = int(OpSpecs[i].Opcode)
 		}
 	}
-	result := make([]OpSpec, 0, len(sub))
-	for _, v := range sub {
+	overwritten := make([]opVer, maxOpcode+1)
+	for idx := range OpSpecs {
+		opcode := OpSpecs[idx].Opcode
+		cur := overwritten[opcode]
+		if cur.minVer == 0 {
+			cur.minVer = int(OpSpecs[idx].Version)
+		} else {
+			if int(OpSpecs[idx].Version) < cur.minVer {
+				cur.minVer = int(OpSpecs[idx].Version)
+			}
+		}
+		overwritten[opcode] = cur
+	}
+
+	subv := make(map[byte]OpSpec)
+	for idx := range OpSpecs {
+		if OpSpecs[idx].Version <= version {
+			subv[OpSpecs[idx].Opcode] = OpSpecs[idx]
+			// if the opcode was overwritten then assume backward compatibility
+			// and set version to minimum availalbe
+			if overwritten[OpSpecs[idx].Opcode].minVer < int(OpSpecs[idx].Version) {
+				copy := OpSpecs[idx]
+				copy.Version = uint64(overwritten[OpSpecs[idx].Opcode].minVer)
+				subv[OpSpecs[idx].Opcode] = copy
+			}
+		}
+	}
+	result := make([]OpSpec, 0, len(subv))
+	for _, v := range subv {
 		result = append(result, v)
 	}
 	sort.Sort(sortByOpcode(result))
