@@ -1209,7 +1209,11 @@ arg 8
 &&
 `
 
-var testTxnProgramText = testTxnProgramTextV1 + `txn OnCompletion
+var testTxnProgramText = testTxnProgramTextV1 + `txn ApplicationID
+int 123
+==
+&&
+txn OnCompletion
 int 0
 ==
 &&
@@ -1254,6 +1258,7 @@ func makeSampleTxn() transactions.SignedTxn {
 	txn.Txn.AssetSender = txn.Txn.Receiver
 	txn.Txn.AssetReceiver = txn.Txn.CloseRemainderTo
 	txn.Txn.AssetCloseTo = txn.Txn.Sender
+	txn.Txn.ApplicationID = basics.AppIndex(123)
 	txn.Txn.Accounts = make([]basics.Address, 1)
 	txn.Txn.Accounts[0] = txn.Txn.Receiver
 	txn.Txn.ApplicationArgs = make([]string, 1)

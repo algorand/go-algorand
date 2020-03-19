@@ -32,17 +32,18 @@ func _() {
 	_ = x[AssetCloseTo-21]
 	_ = x[GroupIndex-22]
 	_ = x[TxID-23]
-	_ = x[OnCompletion-24]
-	_ = x[ApplicationArgs-25]
-	_ = x[NumAppArgs-26]
-	_ = x[Accounts-27]
-	_ = x[NumAccounts-28]
-	_ = x[invalidTxnField-29]
+	_ = x[ApplicationID-24]
+	_ = x[OnCompletion-25]
+	_ = x[ApplicationArgs-26]
+	_ = x[NumAppArgs-27]
+	_ = x[Accounts-28]
+	_ = x[NumAccounts-29]
+	_ = x[invalidTxnField-30]
 }
 
-const _TxnField_name = "SenderFeeFirstValidFirstValidTimeLastValidNoteLeaseReceiverAmountCloseRemainderToVotePKSelectionPKVoteFirstVoteLastVoteKeyDilutionTypeTypeEnumXferAssetAssetAmountAssetSenderAssetReceiverAssetCloseToGroupIndexTxIDOnCompletionApplicationArgsNumAppArgsAccountsNumAccountsinvalidTxnField"
+const _TxnField_name = "SenderFeeFirstValidFirstValidTimeLastValidNoteLeaseReceiverAmountCloseRemainderToVotePKSelectionPKVoteFirstVoteLastVoteKeyDilutionTypeTypeEnumXferAssetAssetAmountAssetSenderAssetReceiverAssetCloseToGroupIndexTxIDApplicationIDOnCompletionApplicationArgsNumAppArgsAccountsNumAccountsinvalidTxnField"
 
-var _TxnField_index = [...]uint16{0, 6, 9, 19, 33, 42, 46, 51, 59, 65, 81, 87, 98, 107, 115, 130, 134, 142, 151, 162, 173, 186, 198, 208, 212, 224, 239, 249, 257, 268, 283}
+var _TxnField_index = [...]uint16{0, 6, 9, 19, 33, 42, 46, 51, 59, 65, 81, 87, 98, 107, 115, 130, 134, 142, 151, 162, 173, 186, 198, 208, 212, 225, 237, 252, 262, 270, 281, 296}
 
 func (i TxnField) String() string {
 	if i < 0 || i >= TxnField(len(_TxnField_index)-1) {
