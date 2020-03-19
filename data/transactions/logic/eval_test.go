@@ -2933,5 +2933,54 @@ pop
 	_, err = Eval(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "illegal opcode 0x36") // txna
+}
 
+func TestStepErrors(t *testing.T) {
+	source := `intcblock 0
+intc_0
+intc_0
++
+`
+	program, err := AssembleString(source)
+	require.NoError(t, err)
+
+	ep := defaultEvalParams(nil, nil)
+
+	origSpec := opsByName[LogicVersion]["+"]
+	spec := origSpec
+
+	spec.op = func(cx *evalContext) {
+		// empty stack
+		last := len(cx.stack) - 1
+		prev := last - 1
+		cx.stack = cx.stack[:prev]
+	}
+	opsByOpcode[LogicVersion][spec.Opcode] = spec
+	_, err = Eval(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "expected to return 1 values but stack has only 0")
+
+	spec.op = func(cx *evalContext) {
+		// return Bytes instead of Uint
+		last := len(cx.stack) - 1
+		prev := last - 1
+		cx.stack[prev] = stackValue{Bytes: []byte("test")}
+		cx.stack = cx.stack[:last]
+	}
+	opsByOpcode[LogicVersion][spec.Opcode] = spec
+	_, err = Eval(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "expected to return uint64 but actual is []byte")
+
+	spec.op = func(cx *evalContext) {
+		// overflow
+		cx.stack = make([]stackValue, 2000)
+	}
+	opsByOpcode[LogicVersion][spec.Opcode] = spec
+	_, err = Eval(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "stack overflow")
+
+	// restore, opsByOpcode is global
+	opsByOpcode[LogicVersion][spec.Opcode] = origSpec
 }

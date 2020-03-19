@@ -105,15 +105,15 @@ var OpSpecs = []OpSpec{
 	{0x2e, "arg_1", opArg1, asmDefault, disDefault, nil, oneBytes, 1, runModeSignature, opSizeDefault},
 	{0x2f, "arg_2", opArg2, asmDefault, disDefault, nil, oneBytes, 1, runModeSignature, opSizeDefault},
 	{0x30, "arg_3", opArg3, asmDefault, disDefault, nil, oneBytes, 1, runModeSignature, opSizeDefault},
-	{0x31, "txn", opTxn, assembleTxn, disTxn, nil, oneAny, 1, modeAny, opSize{1, 2, nil}},             // TODO: check output type by subfield retrieved in txn,global,account,txid
-	{0x31, "txn", opTxn, assembleTxn2, disTxn, nil, oneAny, 2, modeAny, opSize{1, 2, nil}},            // TODO: check output type by subfield retrieved in txn,global,account,txid
-	{0x32, "global", opGlobal, assembleGlobal, disGlobal, nil, oneAny, 1, modeAny, opSize{1, 2, nil}}, // TODO: check output type against specific field
-	{0x33, "gtxn", opGtxn, assembleGtxn, disGtxn, nil, oneAny, 1, modeAny, opSize{1, 3, nil}},         // TODO: check output type by subfield retrieved in txn,global,account,txid
-	{0x33, "gtxn", opGtxn, assembleGtxn2, disGtxn, nil, oneAny, 2, modeAny, opSize{1, 3, nil}},        // TODO: check output type by subfield retrieved in txn,global,account,txid
+	{0x31, "txn", opTxn, assembleTxn, disTxn, nil, oneAny, 1, modeAny, opSize{1, 2, nil}},
+	{0x31, "txn", opTxn, assembleTxn2, disTxn, nil, oneAny, 2, modeAny, opSize{1, 2, nil}},
+	{0x32, "global", opGlobal, assembleGlobal, disGlobal, nil, oneAny, 1, modeAny, opSize{1, 2, nil}},
+	{0x33, "gtxn", opGtxn, assembleGtxn, disGtxn, nil, oneAny, 1, modeAny, opSize{1, 3, nil}},
+	{0x33, "gtxn", opGtxn, assembleGtxn2, disGtxn, nil, oneAny, 2, modeAny, opSize{1, 3, nil}},
 	{0x34, "load", opLoad, assembleLoad, disLoad, nil, oneAny, 1, modeAny, opSize{1, 2, nil}},
 	{0x35, "store", opStore, assembleStore, disStore, oneAny, nil, 1, modeAny, opSize{1, 2, nil}},
-	{0x36, "txna", opTxna, assembleTxna, disTxna, nil, oneAny, 2, modeAny, opSize{1, 3, nil}},     // TODO: check output type by subfield retrieved in txn,global,account,txid
-	{0x37, "gtxna", opGtxna, assembleGtxna, disGtxna, nil, oneAny, 2, modeAny, opSize{1, 4, nil}}, // TODO: check output type by subfield retrieved in txn,global,account,txid
+	{0x36, "txna", opTxna, assembleTxna, disTxna, nil, oneAny, 2, modeAny, opSize{1, 3, nil}},
+	{0x37, "gtxna", opGtxna, assembleGtxna, disGtxna, nil, oneAny, 2, modeAny, opSize{1, 4, nil}},
 
 	{0x40, "bnz", opBnz, assembleBnz, disBnz, oneInt, nil, 1, modeAny, opSize{1, 3, checkBnz}},
 	{0x48, "pop", opPop, asmDefault, disDefault, oneAny, nil, 1, modeAny, opSizeDefault},
