@@ -155,9 +155,9 @@ func LoggedRetry(fn func() error, log logging.Logger) (err error) {
 				log.Warnf("db.LoggedRetry: %d retries (last err: %v)", i, err)
 			}
 		}
-
 		err = fn()
 	}
+	return
 }
 
 // Retry executes a function repeatedly as long as it returns an error
