@@ -331,7 +331,6 @@ Overflow is an error condition which halts execution and fails the transaction. 
 - Pops: _None_
 - Pushes: any
 - push field from current transaction to stack
-- LogicSigVersion >= 2
 
 `txn` Fields:
 
@@ -409,7 +408,6 @@ FirstValidTime causes the program to fail. The field is reserved for future use.
 - Pops: _None_
 - Pushes: any
 - push field to the stack from a transaction in the current transaction group
-- LogicSigVersion >= 2
 
 for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`
 
