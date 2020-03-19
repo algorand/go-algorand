@@ -193,7 +193,7 @@ var GlobalFieldTypes []StackType
 
 var globalFields map[string]uint
 
-// AssetHoldingField is an enum for `asset_read_holding` opcode
+// AssetHoldingField is an enum for `asset_holding_get` opcode
 type AssetHoldingField int
 
 const (
@@ -204,7 +204,7 @@ const (
 	invalidAssetHoldingField
 )
 
-// AssetHoldingFieldNames are arguments to the 'asset_read_holding' opcode
+// AssetHoldingFieldNames are arguments to the 'asset_holding_get' opcode
 var AssetHoldingFieldNames []string
 
 type assetHoldingFieldType struct {
@@ -222,7 +222,7 @@ var AssetHoldingFieldTypes []StackType
 
 var assetHoldingFields map[string]uint
 
-// AssetParamsField is an enum for `asset_read_params` opcode
+// AssetParamsField is an enum for `asset_params_get` opcode
 type AssetParamsField int
 
 const (
@@ -251,7 +251,7 @@ const (
 	invalidAssetParamsField
 )
 
-// AssetParamsFieldNames are arguments to the 'asset_read_holding' opcode
+// AssetParamsFieldNames are arguments to the 'asset_holding_get' opcode
 var AssetParamsFieldNames []string
 
 type assetParamsFieldType struct {

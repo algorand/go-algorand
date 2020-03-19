@@ -245,33 +245,33 @@ app_opted_in
 intc_0
 bytec_0 // ALGO
 intc_1
-app_write_local
+app_local_put
 bytec_0
 intc_1
-app_write_global
+app_global_put
 intc_0
 intc 6
 bytec_0
-app_read_local
+app_local_get
 pop
 &&
 bytec_0
-app_read_global
+app_global_get
 pop
 &&
 intc_0
 bytec_0
-app_delete_local
+app_local_del
 bytec_0
-app_delete_global
+app_global_del
 intc_0
 intc 5 // 5
-asset_read_holding AssetBalance
+asset_holding_get AssetBalance
 pop
 &&
 intc_0
 intc 5
-asset_read_params AssetTotal
+asset_params_get AssetTotal
 pop
 &&
 !=
@@ -389,14 +389,14 @@ pop
 	newOpcodeCalls := []string{
 		"int 0\nbalance",
 		"int 0\nint 0\napp_opted_in",
-		"int 0\nint 0\nbyte 0x01\napp_read_local",
-		"byte 0x01\napp_read_global",
-		"int 1\nbyte 0x01\nbyte 0x01\napp_write_local",
-		"byte 0x01\nint 0\napp_write_global",
-		"int 0\nbyte 0x01\napp_delete_local",
-		"byte 0x01\napp_delete_global",
-		"int 0\nint 0\nasset_read_holding AssetFrozen",
-		"int 0\nint 0\nasset_read_params AssetManager",
+		"int 0\nint 0\nbyte 0x01\napp_local_get",
+		"byte 0x01\napp_global_get",
+		"int 1\nbyte 0x01\nbyte 0x01\napp_local_put",
+		"byte 0x01\nint 0\napp_global_put",
+		"int 0\nbyte 0x01\napp_local_del",
+		"byte 0x01\napp_global_del",
+		"int 0\nint 0\nasset_holding_get AssetFrozen",
+		"int 0\nint 0\nasset_params_get AssetManager",
 	}
 
 	for _, source := range newOpcodeCalls {
@@ -587,7 +587,7 @@ func TestAppReadLocalState(t *testing.T) {
 	text := `int 2  // account idx
 int 100 // app id
 txn ApplicationArgs 0
-app_read_local
+app_local_get
 bnz exist
 int 0
 ==
@@ -625,7 +625,7 @@ int 1
 	text = `int 1  // account idx
 int 100 // app id
 txn ApplicationArgs 0
-app_read_local
+app_local_get
 bnz exist
 int 0
 ==
@@ -662,7 +662,7 @@ int 1`
 	text = `int 1  // account idx
 int 100 // app id
 txn ApplicationArgs 0
-app_read_local
+app_local_get
 bnz exist
 err
 exist:
@@ -686,7 +686,7 @@ byte 0x414c474f
 	text = `int 0  // account idx
 int 100 // app id
 txn ApplicationArgs 0
-app_read_local
+app_local_get
 bnz exist
 err
 exist:
@@ -707,7 +707,7 @@ func TestAppReadGlobalState(t *testing.T) {
 	t.Parallel()
 
 	text := `txn ApplicationArgs 0
-app_read_global
+app_global_get
 bnz exist
 err
 exist:
@@ -758,14 +758,14 @@ byte 0x414c474f
 
 const assetsTestProgram = `int 0
 int 55
-asset_read_holding AssetBalance
+asset_holding_get AssetBalance
 !
 bnz error
 int 123
 ==
 int 0
 int 55
-asset_read_holding AssetFrozen
+asset_holding_get AssetFrozen
 !
 bnz error
 int 1
@@ -773,7 +773,7 @@ int 1
 &&
 int 1
 int 55
-asset_read_params AssetTotal
+asset_params_get AssetTotal
 !
 bnz error
 int 1000
@@ -781,7 +781,7 @@ int 1000
 &&
 int 1
 int 55
-asset_read_params AssetDecimals
+asset_params_get AssetDecimals
 !
 bnz error
 int 2
@@ -789,7 +789,7 @@ int 2
 &&
 int 1
 int 55
-asset_read_params AssetDefaultFrozen
+asset_params_get AssetDefaultFrozen
 !
 bnz error
 int 0
@@ -797,7 +797,7 @@ int 0
 &&
 int 1
 int 55
-asset_read_params AssetUnitName
+asset_params_get AssetUnitName
 !
 bnz error
 byte 0x414c474f
@@ -805,7 +805,7 @@ byte 0x414c474f
 &&
 int 1
 int 55
-asset_read_params AssetAssetName
+asset_params_get AssetAssetName
 !
 bnz error
 len
@@ -814,7 +814,7 @@ int 0
 &&
 int 1
 int 55
-asset_read_params AssetURL
+asset_params_get AssetURL
 !
 bnz error
 txna ApplicationArgs 0
@@ -822,7 +822,7 @@ txna ApplicationArgs 0
 &&
 int 1
 int 55
-asset_read_params AssetMetadataHash
+asset_params_get AssetMetadataHash
 !
 bnz error
 byte 0x0000000000000000000000000000000000000000000000000000000000000000
@@ -830,7 +830,7 @@ byte 0x0000000000000000000000000000000000000000000000000000000000000000
 &&
 int 1
 int 55
-asset_read_params AssetManager
+asset_params_get AssetManager
 !
 bnz error
 txna Accounts 0
@@ -838,7 +838,7 @@ txna Accounts 0
 &&
 int 1
 int 55
-asset_read_params AssetReserve
+asset_params_get AssetReserve
 !
 bnz error
 txna Accounts 1
@@ -846,7 +846,7 @@ txna Accounts 1
 &&
 int 1
 int 55
-asset_read_params AssetFreeze
+asset_params_get AssetFreeze
 !
 bnz error
 txna Accounts 1
@@ -854,7 +854,7 @@ txna Accounts 1
 &&
 int 1
 int 55
-asset_read_params AssetClawback
+asset_params_get AssetClawback
 !
 bnz error
 txna Accounts 1
@@ -882,8 +882,8 @@ func TestAssets(t *testing.T) {
 
 	// check generic errors
 	sources := []string{
-		"int 5\nint 55\nasset_read_holding AssetBalance",
-		"int 5\nint 55\nasset_read_params AssetTotal",
+		"int 5\nint 55\nasset_holding_get AssetBalance",
+		"int 5\nint 55\nasset_params_get AssetTotal",
 	}
 	for _, source := range sources {
 
@@ -956,7 +956,7 @@ func TestAssets(t *testing.T) {
 	// check holdings bool value
 	source := `int 0  // account idx (txn.Sender)
 int 55
-asset_read_holding AssetFrozen
+asset_holding_get AssetFrozen
 !
 bnz error
 int 0
@@ -978,7 +978,7 @@ int 1
 	require.True(t, pass)
 
 	// check holdings invalid offsets
-	require.Equal(t, opsByName[ep.Proto.LogicSigVersion]["asset_read_holding"].Opcode, program[8])
+	require.Equal(t, opsByName[ep.Proto.LogicSigVersion]["asset_holding_get"].Opcode, program[8])
 	program[9] = 0x02
 	_, _, err = EvalStateful(program, ep)
 	require.Error(t, err)
@@ -987,7 +987,7 @@ int 1
 	// check holdings bool value
 	source = `int 1
 int 55
-asset_read_params AssetDefaultFrozen
+asset_params_get AssetDefaultFrozen
 !
 bnz error
 int 1
@@ -1007,7 +1007,7 @@ int 1
 	require.True(t, pass)
 
 	// check holdings invalid offsets
-	require.Equal(t, opsByName[ep.Proto.LogicSigVersion]["asset_read_params"].Opcode, program[7])
+	require.Equal(t, opsByName[ep.Proto.LogicSigVersion]["asset_params_get"].Opcode, program[7])
 	program[8] = 0x20
 	_, _, err = EvalStateful(program, ep)
 	require.Error(t, err)
@@ -1016,7 +1016,7 @@ int 1
 	// check empty string
 	source = `int 1  // account idx (txn.Accounts[1])
 int 55
-asset_read_params AssetURL
+asset_params_get AssetURL
 !
 bnz error
 len
@@ -1038,7 +1038,7 @@ int 1
 
 	source = `int 1
 int 55
-asset_read_params AssetURL
+asset_params_get AssetURL
 !
 bnz error
 int 0
@@ -1067,7 +1067,7 @@ func TestAppLocalReadWriteDeleteErrors(t *testing.T) {
 	sourceRead := `int 0  // account idx (txn.Sender)
 int 100                   // app id
 byte 0x414c474f           // key "ALGO"
-app_read_local
+app_local_get
 !
 bnz error
 int 0x77
@@ -1075,7 +1075,7 @@ int 0x77
 int 0
 int 100
 byte 0x414c474f41         // ALGOA
-app_read_local
+app_local_get
 !
 bnz error
 int 1
@@ -1090,12 +1090,12 @@ int 1
 	sourceWrite := `int 0  // account idx (txn.Sender)
 byte 0x414c474f            // key "ALGO"
 int 100
-app_write_local
+app_local_put
 int 1
 `
 	sourceDelete := `int 0   // account idx
 byte 0x414c474f              // key "ALGO"
-app_delete_local
+app_local_del
 int 100
 `
 	type test struct {
@@ -1186,15 +1186,15 @@ func TestAppLocalStateReadWrite(t *testing.T) {
 	source := `int 0 // account
 byte 0x414c474f      // key "ALGO"
 int 0x77             // value
-app_write_local
+app_local_put
 int 0 				 // account
 byte 0x414c474f41    // key "ALGOA"
 byte 0x414c474f      // value
-app_write_local
+app_local_put
 int 0                // account
 int 100              // app id
 byte 0x414c474f41    // key "ALGOA"
-app_read_local
+app_local_get
 bnz exist
 err
 exist:
@@ -1203,7 +1203,7 @@ byte 0x414c474f
 int 0                // account
 int 100              // app id
 byte 0x414c474f      // key "ALGO"
-app_read_local
+app_local_get
 bnz exist2
 err
 exist2:
@@ -1237,11 +1237,11 @@ int 0x77
 	source = `int 0  // account
 byte 0x414c474f       // key
 int 0x77              // value
-app_write_local
+app_local_put
 int 0                 // account
 int 100               // app id
 byte 0x414c474f       // key
-app_read_local
+app_local_get
 bnz exist
 err
 exist:
@@ -1271,18 +1271,18 @@ int 0x77
 	source = `int 0  // account
 int 100              // app id
 byte 0x414c474f      // key
-app_read_local
+app_local_get
 bnz exist
 err
 exist:
 int 0                // account
 byte 0x414c474f      // key
 int 0x77             // value
-app_write_local
+app_local_put
 int 0                // account
 int 100              // app id
 byte 0x414c474f      // key
-app_read_local
+app_local_get
 bnz exist2
 err
 exist2:
@@ -1305,7 +1305,7 @@ exist2:
 	source = `int 0  // account
 byte 0x414c474f41    // key "ALGOA"
 int 0x78             // value
-app_write_local
+app_local_put
 int 1
 `
 	ledger.resetCounters()
@@ -1329,11 +1329,11 @@ int 1
 	source = `int 0  // account
 byte 0x414c474f      // key "ALGO"
 int 0x78             // value
-app_write_local
+app_local_put
 int 0                // account
 int 100              // app id
 byte 0x414c474f      // key "ALGO"
-app_read_local
+app_local_get
 bnz exist
 err
 exist:
@@ -1361,14 +1361,14 @@ int 0x78
 	source = `int 0  // account
 int 100              // app id
 byte 0x414c474f      // key "ALGO"
-app_read_local
+app_local_get
 bnz exist
 err
 exist:
 int 0  				 // account
 byte 0x414c474f      // key "ALGO"
 int 0x78             // value
-app_write_local
+app_local_put
 `
 	ledger.resetCounters()
 	ledger.balances[txn.Txn.Sender].apps[100]["ALGO"] = algoValue
@@ -1391,19 +1391,19 @@ app_write_local
 	source = `int 0  // account
 byte 0x414c474f      // key "ALGO"
 int 0x77             // value
-app_write_local
+app_local_put
 int 0                // account
 byte 0x414c474f      // key "ALGO"
 int 0x78             // value
-app_write_local
+app_local_put
 int 0                // account
 byte 0x414c474f41    // key "ALGOA"
 int 0x78             // value
-app_write_local
+app_local_put
 int 1                // account
 byte 0x414c474f      // key "ALGO"
 int 0x79             // value
-app_write_local
+app_local_put
 int 1
 `
 	ledger.resetCounters()
@@ -1444,7 +1444,7 @@ func TestAppGlobalReadWriteDeleteErrors(t *testing.T) {
 	t.Parallel()
 
 	sourceRead := `byte 0x414c474f  // key "ALGO"
-app_read_global
+app_global_get
 bnz ok
 err
 ok:
@@ -1453,11 +1453,11 @@ int 0x77
 `
 	sourceWrite := `byte 0x414c474f  // key "ALGO"
 int 100
-app_write_global
+app_global_put
 int 1
 `
 	sourceDelete := `byte 0x414c474f  // key "ALGO"
-app_delete_global
+app_global_del
 int 1
 `
 	tests := map[string]string{
@@ -1515,19 +1515,19 @@ func TestAppGlobalReadWrite(t *testing.T) {
 	// check writing ints and bytes
 	source := `byte 0x414c474f  // key "ALGO"
 int 0x77						// value
-app_write_global
+app_global_put
 byte 0x414c474f41  // key "ALGOA"
 byte 0x414c474f
-app_write_global
+app_global_put
 byte 0x414c474f41
-app_read_global
+app_global_get
 bnz ok1
 err
 ok1:
 byte 0x414c474f
 ==
 byte 0x414c474f
-app_read_global
+app_global_get
 bnz ok2
 err
 ok2:
@@ -1572,9 +1572,9 @@ int 0x77
 	// write existing value before read
 	source = `byte 0x414c474f  // key "ALGO"
 int 0x77						// value
-app_write_global
+app_global_put
 byte 0x414c474f
-app_read_global
+app_global_get
 bnz ok
 err
 ok:
@@ -1599,16 +1599,16 @@ int 0x77
 
 	// write existing value after read
 	source = `byte 0x414c474f
-app_read_global
+app_global_get
 bnz ok
 err
 ok:
 pop
 byte 0x414c474f
 int 0x77
-app_write_global
+app_global_put
 byte 0x414c474f
-app_read_global
+app_global_get
 bnz ok2
 err
 ok2:
@@ -1630,16 +1630,16 @@ int 0x77
 
 	// write new values after and before read
 	source = `byte 0x414c474f
-app_read_global
+app_global_get
 bnz ok
 err
 ok:
 pop
 byte 0x414c474f
 int 0x78
-app_write_global
+app_global_put
 byte 0x414c474f
-app_read_global
+app_global_get
 bnz ok2
 err
 ok2:
@@ -1647,9 +1647,9 @@ int 0x78
 ==
 byte 0x414c474f41
 byte 0x414c474f
-app_write_global
+app_global_put
 byte 0x414c474f41
-app_read_global
+app_global_get
 bnz ok3
 err
 ok3:
@@ -1697,19 +1697,19 @@ func TestAppGlobalDelete(t *testing.T) {
 	// check write/delete/read
 	source := `byte 0x414c474f  // key "ALGO"
 int 0x77						// value
-app_write_global
+app_global_put
 byte 0x414c474f41  // key "ALGOA"
 byte 0x414c474f
-app_write_global
+app_global_put
 byte 0x414c474f
-app_delete_global
+app_global_del
 byte 0x414c474f41
-app_delete_global
+app_global_del
 byte 0x414c474f
-app_read_global
+app_global_get
 bnz error
 byte 0x414c474f41
-app_read_global
+app_global_get
 bnz error
 ==
 bnz ok
@@ -1758,9 +1758,9 @@ int 1
 
 	// check delete existing
 	source = `byte 0x414c474f   // key "ALGO"
-app_delete_global
+app_global_del
 byte 0x414c474f
-app_read_global
+app_global_get
 ==  // two zeros
 `
 
@@ -1786,13 +1786,13 @@ app_read_global
 
 	// check delete and write non-existing
 	source = `byte 0x414c474f41   // key "ALGOA"
-app_delete_global
+app_global_del
 byte 0x414c474f41
-app_read_global
+app_global_get
 ==  // two zeros
 byte 0x414c474f41
 int 0x78
-app_write_global
+app_global_put
 `
 	program, err = AssembleString(source)
 	require.NoError(t, err)
@@ -1816,10 +1816,10 @@ app_write_global
 
 	// check delete and write existing
 	source = `byte 0x414c474f   // key "ALGO"
-app_delete_global
+app_global_del
 byte 0x414c474f
 int 0x78
-app_write_global
+app_global_put
 int 1
 `
 	program, err = AssembleString(source)
@@ -1842,12 +1842,12 @@ int 1
 
 	// check delete,write,delete existing
 	source = `byte 0x414c474f   // key "ALGO"
-app_delete_global
+app_global_del
 byte 0x414c474f
 int 0x78
-app_write_global
+app_global_put
 byte 0x414c474f
-app_delete_global
+app_global_del
 int 1
 `
 	program, err = AssembleString(source)
@@ -1873,12 +1873,12 @@ int 1
 
 	// check delete,write,delete non-existing
 	source = `byte 0x414c474f41   // key "ALGOA"
-app_delete_global
+app_global_del
 byte 0x414c474f41
 int 0x78
-app_write_global
+app_global_put
 byte 0x414c474f41
-app_delete_global
+app_global_del
 int 1
 `
 	program, err = AssembleString(source)
@@ -1902,26 +1902,26 @@ func TestAppLocalDelete(t *testing.T) {
 	source := `int 0  // account
 byte 0x414c474f       // key "ALGO"
 int 0x77              // value
-app_write_local
+app_local_put
 int 1
 byte 0x414c474f41     // key "ALGOA"
 byte 0x414c474f
-app_write_local
+app_local_put
 int 0
 byte 0x414c474f
-app_delete_local
+app_local_del
 int 1
 byte 0x414c474f41
-app_delete_local
+app_local_del
 int 0
 int 0
 byte 0x414c474f
-app_read_local
+app_local_get
 bnz error
 int 1
 int 100
 byte 0x414c474f41
-app_read_local
+app_local_get
 bnz error
 ==
 bnz ok
@@ -1976,11 +1976,11 @@ int 1
 	// check delete existing
 	source = `int 0  // account
 byte 0x414c474f      // key "ALGO"
-app_delete_local
+app_local_del
 int 0
 int 100
 byte 0x414c474f
-app_read_local
+app_local_get
 ==  // two zeros
 `
 
@@ -2010,16 +2010,16 @@ app_read_local
 	// check delete and write non-existing
 	source = `int 0  // account
 byte 0x414c474f41    // key "ALGOA"
-app_delete_local
+app_local_del
 int 0
 int 0
 byte 0x414c474f41
-app_read_local
+app_local_get
 ==  // two zeros
 int 0
 byte 0x414c474f41
 int 0x78
-app_write_local
+app_local_put
 `
 	program, err = AssembleString(source)
 	require.NoError(t, err)
@@ -2047,11 +2047,11 @@ app_write_local
 	// check delete and write existing
 	source = `int 0   // account
 byte 0x414c474f       // key "ALGO"
-app_delete_local
+app_local_del
 int 0
 byte 0x414c474f
 int 0x78
-app_write_local
+app_local_put
 int 1
 `
 	program, err = AssembleString(source)
@@ -2080,14 +2080,14 @@ int 1
 	// check delete,write,delete existing
 	source = `int 0  // account
 byte 0x414c474f      // key "ALGO"
-app_delete_local
+app_local_del
 int 0
 byte 0x414c474f
 int 0x78
-app_write_local
+app_local_put
 int 0
 byte 0x414c474f
-app_delete_local
+app_local_del
 int 1
 `
 	program, err = AssembleString(source)
@@ -2116,14 +2116,14 @@ int 1
 	// check delete,write,delete non-existing
 	source = `int 0  // account
 byte 0x414c474f41    // key "ALGOA"
-app_delete_local
+app_local_del
 int 0
 byte 0x414c474f41
 int 0x78
-app_write_local
+app_local_put
 int 0
 byte 0x414c474f41
-app_delete_local
+app_local_del
 int 1
 `
 	program, err = AssembleString(source)
@@ -2201,7 +2201,7 @@ func TestEnumFieldErrors(t *testing.T) {
 
 	source = `int 0
 int 55
-asset_read_holding AssetBalance
+asset_holding_get AssetBalance
 pop
 `
 	origAssetHoldingType := AssetHoldingFieldTypes[AssetBalance]
@@ -2218,7 +2218,7 @@ pop
 
 	source = `int 1
 int 55
-asset_read_params AssetTotal
+asset_params_get AssetTotal
 pop
 `
 	origAssetTotalType := AssetParamsFieldTypes[AssetTotal]

@@ -28,7 +28,7 @@ byte base64 Y2hlY2s=
 // and arg 1 must be the value at "foo"
 // Key "foo"
 byte base64 Zm9v
-app_read_global
+app_global_get
 
 // Value must exist
 int 0
@@ -51,7 +51,7 @@ byte base64 Zm9v
 
 // Value "bar"
 byte base64 YmFy
-app_write_global
+app_global_put
 
 int 1
 bnz succeed
@@ -67,6 +67,3 @@ int 1
 bnz done
 
 done:
-// bnz end workaround
-int 0
-pop

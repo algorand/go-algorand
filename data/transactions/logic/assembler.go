@@ -298,7 +298,7 @@ func (ops *OpStream) AssetHolding(val uint64) error {
 	if val >= uint64(len(AssetHoldingFieldNames)) {
 		return errors.New("invalid asset holding field")
 	}
-	ops.Out.WriteByte(opsByName[ops.Version]["asset_read_holding"].Opcode)
+	ops.Out.WriteByte(opsByName[ops.Version]["asset_holding_get"].Opcode)
 	ops.Out.WriteByte(uint8(val))
 	ops.tpush(AssetHoldingFieldTypes[val])
 	ops.tpush(StackUint64)
@@ -310,7 +310,7 @@ func (ops *OpStream) AssetParams(val uint64) error {
 	if val >= uint64(len(AssetParamsFieldNames)) {
 		return errors.New("invalid asset params field")
 	}
-	ops.Out.WriteByte(opsByName[ops.Version]["asset_read_params"].Opcode)
+	ops.Out.WriteByte(opsByName[ops.Version]["asset_params_get"].Opcode)
 	ops.Out.WriteByte(uint8(val))
 	ops.tpush(AssetParamsFieldTypes[val])
 	ops.tpush(StackUint64)
@@ -687,22 +687,22 @@ func assembleGlobal(ops *OpStream, spec *OpSpec, args []string) error {
 
 func assembleAssetHolding(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
-		return errors.New("asset_read_holding expects one argument")
+		return errors.New("asset_holding_get expects one argument")
 	}
 	val, ok := assetHoldingFields[args[0]]
 	if !ok {
-		return fmt.Errorf("asset_read_holding unknown arg %v", args[0])
+		return fmt.Errorf("asset_holding_get unknown arg %v", args[0])
 	}
 	return ops.AssetHolding(uint64(val))
 }
 
 func assembleAssetParams(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
-		return errors.New("asset_read_params expects one argument")
+		return errors.New("asset_params_get expects one argument")
 	}
 	val, ok := assetParamsFields[args[0]]
 	if !ok {
-		return fmt.Errorf("asset_read_params unknown arg %v", args[0])
+		return fmt.Errorf("asset_params_get unknown arg %v", args[0])
 	}
 	return ops.AssetParams(uint64(val))
 }
@@ -1277,7 +1277,7 @@ func disAssetHolding(dis *disassembleState, spec *OpSpec) {
 		dis.err = fmt.Errorf("invalid asset holding arg index %d at pc=%d", arg, dis.pc)
 		return
 	}
-	_, dis.err = fmt.Fprintf(dis.out, "asset_read_holding %s\n", AssetHoldingFieldNames[arg])
+	_, dis.err = fmt.Fprintf(dis.out, "asset_holding_get %s\n", AssetHoldingFieldNames[arg])
 }
 
 func disAssetParams(dis *disassembleState, spec *OpSpec) {
@@ -1287,7 +1287,7 @@ func disAssetParams(dis *disassembleState, spec *OpSpec) {
 		dis.err = fmt.Errorf("invalid asset params arg index %d at pc=%d", arg, dis.pc)
 		return
 	}
-	_, dis.err = fmt.Fprintf(dis.out, "asset_read_params %s\n", AssetParamsFieldNames[arg])
+	_, dis.err = fmt.Fprintf(dis.out, "asset_params_get %s\n", AssetParamsFieldNames[arg])
 }
 
 // Disassemble produces a text form of program bytes.

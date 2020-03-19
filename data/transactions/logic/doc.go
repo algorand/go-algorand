@@ -94,14 +94,14 @@ var opDocList = []stringString{
 	{"substring3", "pop a byte string A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result"},
 	{"balance", "get balance for the requested account A in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction"},
 	{"app_opted_in", "check if account A opted in for the application B => {0 or 1}"},
-	{"app_read_local", "read from account's A from local state of the application B key C  => {0 or 1 (top), value}"},
-	{"app_read_global", "read key A from global state of a current application => {0 or 1 (top), value}"},
-	{"app_write_local", "write to account's A to local state of a current application key B with value C"},
-	{"app_write_global", "write key A and value B to global state of the current application"},
-	{"app_delete_local", "delete from account's A local state key B of the current application"},
-	{"app_delete_global", "delete key A from a global state of the current application"},
-	{"asset_read_holding", "read from account's A and asset B holding field X (imm arg)  => {0 or 1 (top), value}"},
-	{"asset_read_params", "read from account's A and asset B params field X (imm arg)  => {0 or 1 (top), value}"},
+	{"app_local_get", "read from account's A from local state of the application B key C  => {0 or 1 (top), value}"},
+	{"app_global_get", "read key A from global state of a current application => {0 or 1 (top), value}"},
+	{"app_local_put", "write to account's A to local state of a current application key B with value C"},
+	{"app_global_put", "write key A and value B to global state of the current application"},
+	{"app_local_del", "delete from account's A local state key B of the current application"},
+	{"app_global_del", "delete key A from a global state of the current application"},
+	{"asset_holding_get", "read from account's A and asset B holding field X (imm arg)  => {0 or 1 (top), value}"},
+	{"asset_params_get", "read from account's A and asset B params field X (imm arg)  => {0 or 1 (top), value}"},
 }
 
 var opDocByName map[string]string
@@ -129,8 +129,8 @@ var opcodeImmediateNoteList = []stringString{
 	{"bnz", "{0..0x7fff forward branch offset, big endian}"},
 	{"load", "{uint8 position in scratch space to load from}"},
 	{"store", "{uint8 position in scratch space to store to}"},
-	{"asset_read_holding", "{uint8 asset holding field index}"},
-	{"asset_read_params", "{uint8 asset params field index}"},
+	{"asset_holding_get", "{uint8 asset holding field index}"},
+	{"asset_params_get", "{uint8 asset params field index}"},
 }
 var opcodeImmediateNotes map[string]string
 
@@ -154,12 +154,12 @@ var opDocExtraList = []stringString{
 	{"btoi", "`btoi` panics if the input is longer than 8 bytes"},
 	{"concat", "`concat` panics if the result would be greater than 4096 bytes"},
 	{"app_opted_in", "params: account index, application id (top of the stack on opcode entry)"},
-	{"app_read_local", "params: account index, application id, state key. Return: did_exist flag (top of the stack), value"},
-	{"app_write_local", "params: account index, state key, value"},
-	{"app_delete_local", "params: account index, state key"},
-	{"app_delete_global", "params: state key"},
-	{"asset_read_holding", "params: account index, asset id. Return: did_exist flag, value"},
-	{"asset_read_params", "params: account index, asset id. Return: did_exist flag, value"},
+	{"app_local_get", "params: account index, application id, state key. Return: did_exist flag (top of the stack), value"},
+	{"app_local_put", "params: account index, state key, value"},
+	{"app_local_del", "params: account index, state key"},
+	{"app_global_del", "params: state key"},
+	{"asset_holding_get", "params: account index, asset id. Return: did_exist flag, value"},
+	{"asset_params_get", "params: account index, asset id. Return: did_exist flag, value"},
 }
 
 var opDocExtras map[string]string
@@ -184,7 +184,7 @@ var OpGroupList = []OpGroup{
 	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "concat", "substring", "substring3"}},
 	{"Loading Values", []string{"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "txna", "gtxna", "global", "load", "store"}},
 	{"Flow Control", []string{"err", "bnz", "pop", "dup"}},
-	{"State Access", []string{"balance", "app_opted_in", "app_read_local", "app_read_global", "app_write_local", "app_write_global", "app_delete_local", "app_delete_global", "asset_read_holding", "asset_read_params"}},
+	{"State Access", []string{"balance", "app_opted_in", "app_local_get", "app_global_get", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get"}},
 }
 
 var opCostByName map[string]int
@@ -271,7 +271,7 @@ var assetHoldingFieldDocList = []stringString{
 	{"AssetFrozen", "Is the asset frozen or not"},
 }
 
-// AssetHoldingFieldDocs are notes on fields available in `asset_read_holding`
+// AssetHoldingFieldDocs are notes on fields available in `asset_holding_get`
 var AssetHoldingFieldDocs map[string]string
 
 var assetParamsFieldDocList = []stringString{
@@ -288,7 +288,7 @@ var assetParamsFieldDocList = []stringString{
 	{"AssetClawback", "Clawback address"},
 }
 
-// AssetParamsFieldDocs are notes on fields available in `asset_read_params`
+// AssetParamsFieldDocs are notes on fields available in `asset_params_get`
 var AssetParamsFieldDocs map[string]string
 
 func init() {
