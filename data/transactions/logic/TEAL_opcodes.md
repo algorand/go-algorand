@@ -480,7 +480,7 @@ At LogicSigVersion 2 it became allowed to branch to the end of the program exact
 
 ## substring
 
-- Opcode: 0x51
+- Opcode: 0x51 {uint8 start position}{uint8 end position}
 - Pops: *... stack*, []byte
 - Pushes: []byte
 - pop a byte string X. For immediate values in 0..255 N and M: extract a range of bytes from it starting at N up to but not including M, push the substring result

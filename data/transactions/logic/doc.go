@@ -129,6 +129,7 @@ var opcodeImmediateNoteList = []stringString{
 	{"bnz", "{0..0x7fff forward branch offset, big endian}"},
 	{"load", "{uint8 position in scratch space to load from}"},
 	{"store", "{uint8 position in scratch space to store to}"},
+	{"substring", "{uint8 start position}{uint8 end position}"},
 	{"asset_holding_get", "{uint8 asset holding field index}"},
 	{"asset_params_get", "{uint8 asset params field index}"},
 }
