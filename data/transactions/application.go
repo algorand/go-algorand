@@ -420,8 +420,8 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva
 			// Execute the ClearStateProgram before we've deleted the LocalState
 			// for this account. Ignore whether or not it succeeded or failed.
 			// ClearState transactions may never be rejected by app logic.
-			_, stateDeltas, err := steva.Eval([]byte(params.ClearStateProgram))
-			if err == nil {
+			pass, stateDeltas, err := steva.Eval([]byte(params.ClearStateProgram))
+			if err == nil && pass {
 				// Program execution may produce some GlobalState and LocalState
 				// deltas. Apply them, provided they don't exceed the bounds set by
 				// the GlobalStateSchema and LocalStateSchema. If they do exceed
@@ -436,7 +436,7 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva
 				// stateful TEAL interpreter to apply state changes
 				ad.EvalDelta = stateDeltas
 			} else {
-				// Ignore errors from the ClearStateProgram
+				// Ignore errors and rejections from the ClearStateProgram
 			}
 		}
 
