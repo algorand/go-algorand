@@ -48,7 +48,6 @@ func (f *RestClientFixture) Setup(t TestingT, templateFile string) {
 // but does not start the network before returning.  Call NC.Start() to start later.
 func (f *RestClientFixture) SetupNoStart(t TestingT, templateFile string) {
 	f.LibGoalFixture.SetupNoStart(t, templateFile)
-	f.AlgodClient = f.GetAlgodClientForController(f.NC)
 }
 
 // SetupShared is called to initialize the test fixture that will be used for multiple tests
