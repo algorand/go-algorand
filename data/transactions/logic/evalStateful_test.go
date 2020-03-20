@@ -281,7 +281,7 @@ pop
 		eval   func([]byte, EvalParams) (bool, error)
 		check  func([]byte, EvalParams) (int, error)
 	}
-	tests := map[uint64]desc{
+	tests := map[runMode]desc{
 		runModeSignature: desc{
 			source: opcodesRunModeAny + opcodesRunModeSignature,
 			eval:   func(program []byte, ep EvalParams) (bool, error) { return Eval(program, ep) },
@@ -410,9 +410,10 @@ pop
 		require.Contains(t, err.Error(), "not allowed in current mode")
 	}
 
-	require.Equal(t, 1, runModeSignature)
-	require.Equal(t, 2, runModeApplication)
+	require.Equal(t, runMode(1), runModeSignature)
+	require.Equal(t, runMode(2), runModeApplication)
 	require.True(t, modeAny == runModeSignature|runModeApplication)
+	require.True(t, modeAny.Any())
 }
 
 func TestBalance(t *testing.T) {

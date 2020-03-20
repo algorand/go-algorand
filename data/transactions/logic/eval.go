@@ -126,22 +126,41 @@ type EvalParams struct {
 	Ledger LedgerForLogic
 
 	// determines eval mode: runModeSignature or runModeApplication
-	runModeFlags uint64
+	runModeFlags runMode
 }
 
 type opEvalFunc func(cx *evalContext)
 type opCheckFunc func(cx *evalContext) int
 
+type runMode uint64
+
 const (
 	// runModeSignature is TEAL in LogicSig execution
-	runModeSignature = 1 << iota
+	runModeSignature runMode = 1 << iota
 
-	// runModeApplication is TEAL in application/statefull\
+	// runModeApplication is TEAL in application/stateful mode
 	runModeApplication
 
 	// local constant, run in any mode
 	modeAny = runModeSignature | runModeApplication
 )
+
+func (r runMode) Any() bool {
+	return r == modeAny
+}
+
+func (r runMode) String() string {
+	switch r {
+	case runModeSignature:
+		return "Signature"
+	case runModeApplication:
+		return "Application"
+	case modeAny:
+		return "Any"
+	default:
+	}
+	return "Unknown"
+}
 
 func (ep EvalParams) log() logging.Logger {
 	if ep.Logger != nil {
