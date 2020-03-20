@@ -146,7 +146,6 @@ var defaultLocalV5 = Local{
 	TxSyncIntervalSeconds:                 60,
 	TxSyncTimeoutSeconds:                  30,
 	TxSyncServeResponseSize:               1000000,
-	PeerConnectionsUpdateInterval:         3600,
 	// DO NOT MODIFY VALUES - New values may be added carefully - See WARNING at top of file
 }
 
