@@ -269,6 +269,9 @@ type Local struct {
 	// DisableOutgoingConnectionThrottling disables the connection throttling of the network library, which
 	// allow the network library to continuesly disconnect relays based on their relative ( and absolute ) performance.
 	DisableOutgoingConnectionThrottling bool
+
+	// NetworkProtocolVersion overrides network protocol version ( if present )
+	NetworkProtocolVersion string
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)

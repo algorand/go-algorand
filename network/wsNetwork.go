@@ -615,6 +615,10 @@ func (wn *WebsocketNetwork) setup() {
 	wn.connPerfMonitor = makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag, protocol.TxnTag})
 	wn.lastNetworkAdvance = time.Now().UTC()
 	wn.handlers.log = wn.log
+
+	if wn.config.NetworkProtocolVersion != "" {
+		SupportedProtocolVersions = []string{wn.config.NetworkProtocolVersion}
+	}
 }
 
 func (wn *WebsocketNetwork) rlimitIncomingConnections() error {
@@ -1056,7 +1060,7 @@ func (wn *WebsocketNetwork) messageHandlerThread() {
 			case Broadcast:
 				wn.Broadcast(wn.ctx, msg.Tag, msg.Data, false, msg.Sender)
 			case Respond:
-				msg.Sender.(*wsPeer).Respond(wn.ctx, msg, outmsg)
+				msg.Sender.(*wsPeer).Respond(wn.ctx, msg, outmsg.Topics)
 			default:
 			}
 		case <-inactivityCheckTicker.C:
@@ -1618,7 +1622,7 @@ const ProtocolVersionHeader = "X-Algorand-Version"
 const ProtocolAcceptVersionHeader = "X-Algorand-Accept-Version"
 
 // SupportedProtocolVersions contains the list of supported protocol versions by this node ( in order of preference ).
-var SupportedProtocolVersions = []string{ /*"2",*/ "1"}
+var SupportedProtocolVersions = []string{"2.1", "1"}
 
 // ProtocolVersion is the current version attached to the ProtocolVersionHeader header
 const ProtocolVersion = "1"
