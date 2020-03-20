@@ -27,8 +27,9 @@ import (
 func TestInMemoryCommitter(t *testing.T) {
 	var memoryCommitter InMemoryCommitter
 	mt1 := MakeMerkleTrie(&memoryCommitter)
-	// create 100000 hashes.
-	hashes := make([]crypto.Digest, 100000)
+	// create 50000 hashes.
+	leafsCount := 50000
+	hashes := make([]crypto.Digest, leafsCount)
 	for i := 0; i < len(hashes); i++ {
 		hashes[i] = crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)})
 	}
@@ -42,7 +43,7 @@ func TestInMemoryCommitter(t *testing.T) {
 	}
 	mt1.Commit()
 	releasedNodes := mt1.Evict()
-	require.Equal(t, 52048, releasedNodes)
+	require.Equal(t, 18944, releasedNodes)
 	for i := len(hashes) / 2; i < len(hashes); i++ {
 		mt1.Add(hashes[i][:])
 	}
@@ -58,16 +59,16 @@ func TestInMemoryCommitter(t *testing.T) {
 	mt2Hash, _ := mt2.RootHash()
 
 	require.Equal(t, mt1Hash, mt2Hash)
-	require.Equal(t, 347, len(memoryCommitter.memStore)) // 347 pages.
+	require.Equal(t, 164, len(memoryCommitter.memStore)) // 164 pages.
 	// find the size of all the storage.
 	storageSize := 0
 	for _, bytes := range memoryCommitter.memStore {
 		storageSize += len(bytes)
 	}
-	require.Equal(t, 2748792, storageSize) // 2,748,792 / 50,000 ~= 55 bytes/leaf.
+	require.Equal(t, 1251144, storageSize) // 1,251,144 / 25,000 ~= 50 bytes/leaf.
 	stats, _ := mt1.GetStats()
-	require.Equal(t, 100000, int(stats.leafCount))
-	require.Equal(t, 130114, int(stats.nodesCount))
+	require.Equal(t, leafsCount, int(stats.leafCount))
+	require.Equal(t, 61926, int(stats.nodesCount))
 
 }
 
@@ -112,4 +113,46 @@ func TestNoRedundentPages(t *testing.T) {
 	nodesCount := int(stats.nodesCount)
 	require.Equal(t, nodesCount, len(trieNodes))
 	require.Equal(t, nodesCount, len(mt1.cache.idToPtr))
+}
+
+func TestMultipleCommits(t *testing.T) {
+
+	testSize := 5000
+	commitsCount := 5
+
+	hashes := make([]crypto.Digest, testSize)
+	for i := 0; i < len(hashes); i++ {
+		hashes[i] = crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)})
+	}
+
+	var memoryCommitter1 InMemoryCommitter
+	mt1 := MakeMerkleTrie(&memoryCommitter1)
+	for i := 0; i < len(hashes); i++ {
+
+		mt1.Add(hashes[i][:])
+		if i%(len(hashes)/commitsCount) == 0 {
+			mt1.Commit()
+		}
+	}
+	mt1.Commit()
+
+	var memoryCommitter2 InMemoryCommitter
+	mt2 := MakeMerkleTrie(&memoryCommitter2)
+	for i := 0; i < len(hashes); i++ {
+		mt2.Add(hashes[i][:])
+	}
+	mt2.Commit()
+
+	require.Equal(t, len(memoryCommitter1.memStore), len(memoryCommitter2.memStore))
+
+	storageSize1 := 0
+	for _, bytes := range memoryCommitter1.memStore {
+		storageSize1 += len(bytes)
+	}
+
+	storageSize2 := 0
+	for _, bytes := range memoryCommitter1.memStore {
+		storageSize2 += len(bytes)
+	}
+	require.Equal(t, storageSize1, storageSize2)
 }

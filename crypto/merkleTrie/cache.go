@@ -29,15 +29,15 @@ type storedNodeIdentifier uint64
 const (
 	storedNodeIdentifierNull = 0x0
 	storedNodeIdentifierBase = 0x4160
-	pageMaxSerializedSize    = 1024 * 1024
+	maxNodeSerializedSize    = 3000
 )
 
 // ErrLoadedPageMissingNode is returned when a request is made for a specific node identifier, and that identifier cannot
 // be found in neither the in-memory cache or on the persistent storage.
 var ErrLoadedPageMissingNode = errors.New("loaded page is missing a node")
 
-// ErrPageDecodingError is returned if the decoding of a page has failed.
-var ErrPageDecodingError = errors.New("error encountered while decoding page")
+// ErrPageDecodingFailuire is returned if the decoding of a page has failed.
+var ErrPageDecodingFailuire = errors.New("error encountered while decoding page")
 
 type merkleTrieCache struct {
 	idToPtr   map[storedNodeIdentifier]*node
@@ -127,23 +127,23 @@ func (mtc *merkleTrieCache) loadPage(page uint64) (err error) {
 	return
 }
 
-func (mtc *merkleTrieCache) deleteNode(nid storedNodeIdentifier) (err error) {
+func (mtc *merkleTrieCache) deleteNode(nid storedNodeIdentifier) {
 	if mtc.txCreatedNodeIDs[nid] {
 		delete(mtc.txCreatedNodeIDs, nid)
 		delete(mtc.idToPtr, nid)
 	} else {
 		mtc.txDeletedNodeIDs[nid] = true
 	}
-
-	return nil
 }
 
+// beginTransaction - used internaly by the merkleTrie
 func (mtc *merkleTrieCache) beginTransaction() {
 	mtc.txCreatedNodeIDs = make(map[storedNodeIdentifier]bool)
 	mtc.txDeletedNodeIDs = make(map[storedNodeIdentifier]bool)
 	mtc.txNextNodeID = mtc.mt.nextNodeID
 }
 
+// commitTransaction - used internaly by the merkleTrie
 func (mtc *merkleTrieCache) commitTransaction() {
 	// the created nodes are already on the list.
 	for nodeID := range mtc.txCreatedNodeIDs {
@@ -166,6 +166,7 @@ func (mtc *merkleTrieCache) commitTransaction() {
 	mtc.txDeletedNodeIDs = nil
 }
 
+// rollbackTransaction - used internaly by the merkleTrie
 func (mtc *merkleTrieCache) rollbackTransaction() {
 	// no need to delete anything.
 	mtc.txDeletedNodeIDs = nil
@@ -178,6 +179,7 @@ func (mtc *merkleTrieCache) rollbackTransaction() {
 	mtc.txNextNodeID = storedNodeIdentifierNull
 }
 
+// commit - used as part of the merkleTrie Commit functionality
 func (mtc *merkleTrieCache) commit() error {
 	pageSize := mtc.committer.GetNodesCountPerPage()
 
@@ -229,26 +231,26 @@ func (mtc *merkleTrieCache) commit() error {
 func decodePage(bytes []byte) (nodesMap map[storedNodeIdentifier]*node, err error) {
 	version, versionLength := binary.Uvarint(bytes[:])
 	if versionLength <= 0 {
-		return nil, ErrPageDecodingError
+		return nil, ErrPageDecodingFailuire
 	}
 	if version != NodePageVersion {
-		return nil, ErrPageDecodingError
+		return nil, ErrPageDecodingFailuire
 	}
 	nodesCount, nodesCountLength := binary.Varint(bytes[versionLength:])
 	if nodesCountLength <= 0 {
-		return nil, ErrPageDecodingError
+		return nil, ErrPageDecodingFailuire
 	}
 	nodesMap = make(map[storedNodeIdentifier]*node)
 	walk := nodesCountLength + versionLength
 	for i := int64(0); i < nodesCount; i++ {
 		nodeID, nodesIDLength := binary.Uvarint(bytes[walk:])
 		if nodesIDLength <= 0 {
-			return nil, ErrPageDecodingError
+			return nil, ErrPageDecodingFailuire
 		}
 		walk += nodesIDLength
 		pnode, nodeLength := deserializeNode(bytes[walk:])
 		if nodeLength <= 0 {
-			return nil, ErrPageDecodingError
+			return nil, ErrPageDecodingFailuire
 		}
 		walk += nodeLength
 		nodesMap[storedNodeIdentifier(nodeID)] = pnode
@@ -258,7 +260,7 @@ func decodePage(bytes []byte) (nodesMap map[storedNodeIdentifier]*node, err erro
 }
 
 func (mtc *merkleTrieCache) encodePage(nodeIDs []storedNodeIdentifier) []byte {
-	serializedBuffer := make([]byte, pageMaxSerializedSize)
+	serializedBuffer := make([]byte, maxNodeSerializedSize*len(nodeIDs)+32)
 	version := binary.PutUvarint(serializedBuffer[:], NodePageVersion)
 	length := binary.PutVarint(serializedBuffer[version:], int64(len(nodeIDs)))
 	walk := version + length
