@@ -41,6 +41,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - Pushes: uint64
 - for (data A, signature B, pubkey C) verify the signature of ("ProgData" || program_hash || data) against the pubkey => {0 or 1}
 - **Cost**: 1900
+- Mode: Signature
 
 The 32 byte public key is the last element on the stack, preceded by the 64 byte signature at the second-to-last element on the stack, preceded by the data which was signed at the third-to-last element on the stack.
 
@@ -296,6 +297,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 - Pops: _None_
 - Pushes: []byte
 - push Args[N] value to stack by index
+- Mode: Signature
 
 ## arg_0
 
@@ -303,6 +305,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 - Pops: _None_
 - Pushes: []byte
 - push Args[0] to stack
+- Mode: Signature
 
 ## arg_1
 
@@ -310,6 +313,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 - Pops: _None_
 - Pushes: []byte
 - push Args[1] to stack
+- Mode: Signature
 
 ## arg_2
 
@@ -317,6 +321,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 - Pops: _None_
 - Pushes: []byte
 - push Args[2] to stack
+- Mode: Signature
 
 ## arg_3
 
@@ -324,6 +329,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 - Pops: _None_
 - Pushes: []byte
 - push Args[3] to stack
+- Mode: Signature
 
 ## txn
 
@@ -499,6 +505,7 @@ At LogicSigVersion 2 it became allowed to branch to the end of the program exact
 - Pushes: uint64
 - get balance for the requested account A in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction
 - LogicSigVersion >= 2
+- Mode: Application
 
 ## app_opted_in
 
@@ -507,6 +514,7 @@ At LogicSigVersion 2 it became allowed to branch to the end of the program exact
 - Pushes: uint64
 - check if account A opted in for the application B => {0 or 1}
 - LogicSigVersion >= 2
+- Mode: Application
 
 params: account index, application id (top of the stack on opcode entry)
 
@@ -517,6 +525,7 @@ params: account index, application id (top of the stack on opcode entry)
 - Pushes: uint64, any
 - read from account's A from local state of the application B key C  => {0 or 1 (top), value}
 - LogicSigVersion >= 2
+- Mode: Application
 
 params: account index, application id, state key. Return: did_exist flag (top of the stack), value
 
@@ -527,6 +536,7 @@ params: account index, application id, state key. Return: did_exist flag (top of
 - Pushes: uint64, any
 - read key A from global state of a current application => {0 or 1 (top), value}
 - LogicSigVersion >= 2
+- Mode: Application
 
 ## app_local_put
 
@@ -535,6 +545,7 @@ params: account index, application id, state key. Return: did_exist flag (top of
 - Pushes: _None_
 - write to account's A to local state of a current application key B with value C
 - LogicSigVersion >= 2
+- Mode: Application
 
 params: account index, state key, value
 
@@ -545,6 +556,7 @@ params: account index, state key, value
 - Pushes: _None_
 - write key A and value B to global state of the current application
 - LogicSigVersion >= 2
+- Mode: Application
 
 ## app_local_del
 
@@ -553,6 +565,7 @@ params: account index, state key, value
 - Pushes: _None_
 - delete from account's A local state key B of the current application
 - LogicSigVersion >= 2
+- Mode: Application
 
 params: account index, state key
 
@@ -563,6 +576,7 @@ params: account index, state key
 - Pushes: _None_
 - delete key A from a global state of the current application
 - LogicSigVersion >= 2
+- Mode: Application
 
 params: state key
 
@@ -573,6 +587,7 @@ params: state key
 - Pushes: uint64, any
 - read from account's A and asset B holding field X (imm arg)  => {0 or 1 (top), value}
 - LogicSigVersion >= 2
+- Mode: Application
 
 `asset_holding_get` Fields:
 
@@ -591,6 +606,7 @@ params: account index, asset id. Return: did_exist flag, value
 - Pushes: uint64, any
 - read from account's A and asset B params field X (imm arg)  => {0 or 1 (top), value}
 - LogicSigVersion >= 2
+- Mode: Application
 
 `asset_params_get` Fields:
 

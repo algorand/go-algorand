@@ -40,7 +40,7 @@ type OpSpec struct {
 	Args    StackTypes      // what gets popped from the stack
 	Returns StackTypes      // what gets pushed to the stack
 	Version uint64          // TEAL version opcode introduced
-	Modes   uint64          // if non-zero, then (mode & Modes) != 0 to allow
+	Modes   runMode         // if non-zero, then (mode & Modes) != 0 to allow
 	opSize  opSize          // opSizes records the size of ops that are constant size but not 1, time 'cost' and custom check functions.
 }
 

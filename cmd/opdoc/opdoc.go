@@ -117,6 +117,9 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec) (err error) {
 	if op.Version > 1 {
 		fmt.Fprintf(out, "- LogicSigVersion >= %d\n", op.Version)
 	}
+	if !op.Modes.Any() {
+		fmt.Fprintf(out, "- Mode: %s\n", op.Modes.String())
+	}
 	if op.Name == "global" {
 		globalFieldsMarkdown(out)
 	} else if op.Name == "txn" {
