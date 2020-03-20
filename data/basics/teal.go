@@ -46,8 +46,25 @@ type ValueDelta struct {
 
 // StateDelta is a map from key/value store keys to ValueDeltas, indicating
 // what should happen for that key
-//msgp:allocbound StateDelta -
+//msgp:allocbound StateDelta config.MaxStateDeltaKeys
 type StateDelta map[string]ValueDelta
+
+// Equal checks whether two StateDeltas are equal. We don't check for nilness
+// equality because an empty map will encode/decode as nil. So if our generated
+// map is empty but not nil, we want to equal a decoded nil off the wire.
+func (sd StateDelta) Equal(o StateDelta) bool {
+	// Lengths should be the same
+	if len(sd) != len(o) {
+		return false
+	}
+	// All keys and deltas should be the same
+	for k, v := range sd {
+		if o[k] != v {
+			return false
+		}
+	}
+	return true
+}
 
 // EvalDelta stores StateDeltas for an application's global key/value store, as
 // well as StateDeltas for some number of accounts holding local state for that
@@ -59,7 +76,28 @@ type EvalDelta struct {
 
 	// TODO(applications) perhaps make these keys be uint64 where 0 == sender
 	// and 1..n -> txn.Addresses
-	LocalDeltas map[Address]StateDelta `codec:"ld,allocbound=-"`
+	LocalDeltas map[Address]StateDelta `codec:"ld,allocbound=config.MaxEvalDeltaAccounts"`
+}
+
+func (ed EvalDelta) Equal(o EvalDelta) bool {
+	// GlobalDeltas must be equal
+	if !ed.GlobalDelta.Equal(o.GlobalDelta) {
+		return false
+	}
+
+	// LocalDeltas length should be the same
+	if len(ed.LocalDeltas) != len(o.LocalDeltas) {
+		return false
+	}
+
+	// All keys and local StateDeltas should be the same
+	for k, v := range ed.LocalDeltas {
+		if !o.LocalDeltas[k].Equal(v) {
+			return false
+		}
+	}
+
+	return true
 }
 
 // MakeEvalDelta creates an EvalDelta and allocates its fields

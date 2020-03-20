@@ -579,11 +579,11 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, group []tran
 	// If we are validating and generating, we have no ApplyData yet.
 	if eval.validate && !eval.generate {
 		if eval.proto.ApplyData {
-			if ad != applyData {
+			if !ad.Equal(applyData) {
 				return fmt.Errorf("transaction %v: applyData mismatch: %v != %v", txn.ID(), ad, applyData)
 			}
 		} else {
-			if ad != (transactions.ApplyData{}) {
+			if !ad.Equal(transactions.ApplyData{}) {
 				return fmt.Errorf("transaction %v: applyData not supported", txn.ID())
 			}
 		}

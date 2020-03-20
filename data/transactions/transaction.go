@@ -138,6 +138,26 @@ type ApplyData struct {
 	SenderRewards   basics.MicroAlgos `codec:"rs"`
 	ReceiverRewards basics.MicroAlgos `codec:"rr"`
 	CloseRewards    basics.MicroAlgos `codec:"rc"`
+	EvalDelta       basics.EvalDelta  `codec:"dt"`
+}
+
+func (ad ApplyData) Equal(o ApplyData) bool {
+	if ad.ClosingAmount != o.ClosingAmount {
+		return false
+	}
+	if ad.SenderRewards != o.SenderRewards {
+		return false
+	}
+	if ad.ReceiverRewards != o.ReceiverRewards {
+		return false
+	}
+	if ad.CloseRewards != o.CloseRewards {
+		return false
+	}
+	if !ad.EvalDelta.Equal(o.EvalDelta) {
+		return false
+	}
+	return true
 }
 
 // TxGroup describes a group of transactions that must appear

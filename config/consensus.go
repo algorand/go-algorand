@@ -242,10 +242,38 @@ var Consensus ConsensusProtocols
 // consensus protocols, used for decoding purposes.
 var MaxVoteThreshold int
 
-func maybeMaxVoteThreshold(t uint64) {
-	if int(t) > MaxVoteThreshold {
-		MaxVoteThreshold = int(t)
+// MaxEvalDeltaAccounts is the largest number of accounts that may appear in
+// an eval delta, used for decoding purposes.
+var MaxEvalDeltaAccounts int
+
+// MaxStateDeltaKeys is the largest number of key/value pairs that may appear
+// in a StateDelta, used for decoding purposes
+var MaxStateDeltaKeys int
+
+func checkSetMax(value int, curMax *int) {
+	if value > *curMax {
+		*curMax = value
 	}
+}
+
+// checkSetAllocBounds sets some global variables used during msgpack decoding
+// to enforce memory allocation limits. The values should be generous to
+// prevent correctness bugs, but not so large that DoS attacks are trivial
+func checkSetAllocBounds(p ConsensusParams) {
+	checkSetMax(int(p.SoftCommitteeThreshold), &MaxVoteThreshold)
+	checkSetMax(int(p.CertCommitteeThreshold), &MaxVoteThreshold)
+	checkSetMax(int(p.NextCommitteeThreshold), &MaxVoteThreshold)
+	checkSetMax(int(p.LateCommitteeThreshold), &MaxVoteThreshold)
+	checkSetMax(int(p.RedoCommitteeThreshold), &MaxVoteThreshold)
+	checkSetMax(int(p.DownCommitteeThreshold), &MaxVoteThreshold)
+
+	// These bounds could be tighter, but since these values are just to
+	// prevent DoS, setting them to be the maximum number of allowed
+	// executed TEAL instructions should be fine (order of ~1000)
+	checkSetMax(p.MaxApprovalProgramLen, &MaxStateDeltaKeys)
+	checkSetMax(p.MaxClearStateProgramLen, &MaxStateDeltaKeys)
+	checkSetMax(p.MaxApprovalProgramLen, &MaxEvalDeltaAccounts)
+	checkSetMax(p.MaxClearStateProgramLen, &MaxEvalDeltaAccounts)
 }
 
 // SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.
@@ -633,12 +661,8 @@ func init() {
 		Protocol.SmallLambda = time.Duration(algoSmallLambda) * time.Millisecond
 	}
 
+	// Set allocation limits
 	for _, p := range Consensus {
-		maybeMaxVoteThreshold(p.SoftCommitteeThreshold)
-		maybeMaxVoteThreshold(p.CertCommitteeThreshold)
-		maybeMaxVoteThreshold(p.NextCommitteeThreshold)
-		maybeMaxVoteThreshold(p.LateCommitteeThreshold)
-		maybeMaxVoteThreshold(p.RedoCommitteeThreshold)
-		maybeMaxVoteThreshold(p.DownCommitteeThreshold)
+		checkSetAllocBounds(p)
 	}
 }

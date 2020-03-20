@@ -431,6 +431,10 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva
 				if err != nil {
 					return err
 				}
+
+				// Fill in applyData, so that consumers don't have to implement a
+				// stateful TEAL interpreter to apply state changes
+				ad.EvalDelta = stateDeltas
 			} else {
 				// Ignore errors from the ClearStateProgram
 			}
@@ -498,6 +502,10 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva
 	if err != nil {
 		return err
 	}
+
+	// Fill in applyData, so that consumers don't have to implement a
+	// stateful TEAL interpreter to apply state changes
+	ad.EvalDelta = stateDeltas
 
 	switch ac.OnCompletion {
 	case NoOpOC:
