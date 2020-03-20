@@ -102,6 +102,10 @@ type EvalDelta struct {
 	LocalDeltas map[Address]StateDelta `codec:"ld,allocbound=config.MaxEvalDeltaAccounts"`
 }
 
+// Equal compares two EvalDeltas and returns whether or not they are
+// equivalent. It does not care about nilness equality of LocalDeltas,
+// because the msgpack codec will encode an empty map as nil, and we want
+// an empty generated EvalDelta to equal an empty one we decode off the wire.
 func (ed EvalDelta) Equal(o EvalDelta) bool {
 	// GlobalDeltas must be equal
 	if !ed.GlobalDelta.Equal(o.GlobalDelta) {

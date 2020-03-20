@@ -141,6 +141,8 @@ type ApplyData struct {
 	EvalDelta       basics.EvalDelta  `codec:"dt"`
 }
 
+// Equal returns true if two ApplyDatas are equal, ignoring nilness equality on
+// EvalDelta's internal deltas (see EvalDelta.Equal for more information)
 func (ad ApplyData) Equal(o ApplyData) bool {
 	if ad.ClosingAmount != o.ClosingAmount {
 		return false
