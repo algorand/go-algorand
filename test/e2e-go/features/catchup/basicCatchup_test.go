@@ -19,7 +19,6 @@ package rewards
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 	"time"
 
@@ -73,10 +72,23 @@ func TestBasicCatchup(t *testing.T) {
 	a.NoError(err)
 }
 
+// TestCatchupOverGossip tests catchup across network versions
+// The current versions are the original v1 and the upgraded to v2.1
 func TestCatchupOverGossip(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip()
-	}
+	// ledger node upgraded version, fetcher node upgraded version
+	runCatchupOverGossip(t, false, false)
+	// ledger node older version, fetcher node upgraded version
+	runCatchupOverGossip(t, true, false)
+	// ledger node upgraded older version, fetcher node older version
+	runCatchupOverGossip(t, false, true)
+	// ledger node older version, fetcher node older version
+	runCatchupOverGossip(t, true, true)
+}
+
+func runCatchupOverGossip(t *testing.T,
+	ledgerNodeDowngrade,
+	fetcherNodeDowngrade bool) {
+
 	if testing.Short() {
 		t.Skip()
 	}
@@ -91,7 +103,28 @@ func TestCatchupOverGossip(t *testing.T) {
 	// Give the second node (which starts up last) all the stake so that its proposal always has better credentials,
 	// and so that its proposal isn't dropped. Otherwise the test burns 17s to recover. We don't care about stake
 	// distribution for catchup so this is fine.
-	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes100Second.json"))
+	fixture.SetupNoStart(t, filepath.Join("nettemplates", "TwoNodes100Second.json"))
+
+	if ledgerNodeDowngrade {
+		// Force the node to only support v1
+		dir, err := fixture.GetNodeDir("Node")
+		a.NoError(err)
+		cfg, err := config.LoadConfigFromDisk(dir)
+		a.NoError(err)
+		cfg.NetworkProtocolVersion = "1"
+		cfg.SaveToDisk(dir)
+	}
+
+	if fetcherNodeDowngrade {
+		// Force the node to only support v1
+		dir := fixture.PrimaryDataDir()
+		cfg, err := config.LoadConfigFromDisk(dir)
+		a.NoError(err)
+		cfg.NetworkProtocolVersion = "1"
+		cfg.SaveToDisk(dir)
+	}
+
+	fixture.Start()
 	defer fixture.Shutdown()
 	ncPrim, err := fixture.GetNodeController("Primary")
 	a.NoError(err)

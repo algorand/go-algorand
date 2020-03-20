@@ -316,7 +316,7 @@ func topicBlockBytes(dataLedger *data.Ledger, round basics.Round, requestType st
 		switch err.(type) {
 		case ledger.ErrNoEntry:
 		default:
-			logging.Base().Infof("LedgerService topicBlockBytes: %s", err)			
+			logging.Base().Infof("LedgerService topicBlockBytes: %s", err)
 		}
 		return network.Topics{
 			network.MakeTopic(network.ErrorKey, []byte(blockNotAvailabeErrMsg))}
@@ -330,7 +330,7 @@ func topicBlockBytes(dataLedger *data.Ledger, round basics.Round, requestType st
 				certDataKey, cert),
 		}
 	default:
-    		return network.Topics{
+		return network.Topics{
 			network.MakeTopic(network.ErrorKey, []byte(datatypeUnsupportedErrMsg))}
 	}
 }

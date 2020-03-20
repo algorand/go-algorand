@@ -223,6 +223,7 @@ type UnicastPeer interface {
 	GetAddress() string
 	// Unicast sends the given bytes to this specific peer. Does not wait for message to be sent.
 	Unicast(ctx context.Context, data []byte, tag protocol.Tag) error
+	// Version returns the matching version from network.SupportedProtocolVersions
 	Version() string
 	Request(ctx context.Context, tag Tag, topics Topics) (resp *Response, e error)
 	Respond(ctx context.Context, reqMsg IncomingMessage, topics Topics) (e error)
@@ -255,7 +256,7 @@ func (wp *wsPeerCore) PrepareURL(rawURL string) string {
 	return strings.Replace(rawURL, "{genesisID}", wp.net.GenesisID, -1)
 }
 
-// Version returns the network.SupportedProtocolVersions version of the peer
+// Version returns the matching version from network.SupportedProtocolVersions
 func (wp *wsPeer) Version() string {
 	return wp.version
 }

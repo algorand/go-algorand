@@ -615,6 +615,10 @@ func (wn *WebsocketNetwork) setup() {
 	wn.connPerfMonitor = makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag, protocol.TxnTag})
 	wn.lastNetworkAdvance = time.Now().UTC()
 	wn.handlers.log = wn.log
+
+	if wn.config.NetworkProtocolVersion != "" {
+		SupportedProtocolVersions = []string{wn.config.NetworkProtocolVersion}
+	}
 }
 
 func (wn *WebsocketNetwork) rlimitIncomingConnections() error {
