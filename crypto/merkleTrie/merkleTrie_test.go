@@ -26,7 +26,7 @@ import (
 )
 
 func TestAddingAndRemoving(t *testing.T) {
-	mt := MakeMerkleTrie()
+	mt := MakeMerkleTrie(nil)
 	// create 10000 hashes.
 	hashes := make([]crypto.Digest, 10000)
 	for i := 0; i < len(hashes); i++ {

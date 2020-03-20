@@ -25,7 +25,7 @@ import (
 )
 
 func TestTransactions(t *testing.T) {
-	mt := MakeMerkleTrie()
+	mt := MakeMerkleTrie(nil)
 	// create 500 hashes.
 	hashes := make([]crypto.Digest, 500)
 	for i := 0; i < len(hashes); i++ {
@@ -60,7 +60,7 @@ func TestTransactions(t *testing.T) {
 }
 
 func TestTransactionsFailedRollback(t *testing.T) {
-	mt := MakeMerkleTrie()
+	mt := MakeMerkleTrie(nil)
 	// create 500 hashes.
 	hashes := make([]crypto.Digest, 500)
 	for i := 0; i < len(hashes); i++ {

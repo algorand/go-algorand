@@ -116,6 +116,7 @@ func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID stored
 				cache.deleteNode(child)
 				return nodeID, err
 			}
+			cache.deleteNode(pnode.children[pnode.hash[0]])
 			pnode.children[pnode.hash[0]] = child
 			err = pnode.recalculateHash(cache, path)
 			return nodeID, err
@@ -161,6 +162,7 @@ func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID stored
 			cache.deleteNode(updatedChild)
 			return nodeID, err
 		}
+		cache.deleteNode(pnode.children[d[0]])
 		pnode.children[d[0]] = updatedChild
 	}
 	err = pnode.recalculateHash(cache, path)
@@ -168,7 +170,8 @@ func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID stored
 }
 
 func (n *node) recalculateHash(cache *merkleTrieCache, path []byte) error {
-	hashAccumulator := path
+	hashAccumulator := make([]byte, 0, 32*256) // we can have up to 256 elements, so preallocate enough storage.
+	copy(hashAccumulator, path)
 	i := n.firstChild
 	for {
 		childNode, err := cache.getNode(n.children[i])
@@ -265,27 +268,20 @@ func (n *node) remove(cache *merkleTrieCache, key []byte, path []byte) (nodeID s
 func (n *node) duplicate(cache *merkleTrieCache) (pnode *node, nodeID storedNodeIdentifier) {
 	pnode, nodeID = cache.allocateNewNode()
 	pnode.firstChild = n.firstChild
-	pnode.hash = make([]byte, len(n.hash))
-	copy(pnode.hash, n.hash)
+	pnode.hash = n.hash // the hash is safe for just copy without duplicate, since it's always being reallocated upon change.
 	pnode.leaf = n.leaf
 	if !pnode.leaf {
 		pnode.children = make([]storedNodeIdentifier, 256)
 		pnode.childrenNext = make([]byte, 256)
-		copy(pnode.children[:], n.children[:])
-		copy(pnode.childrenNext[:], n.childrenNext[:])
+		// copy the elements starting the first known entry.
+		copy(pnode.children[n.firstChild:], n.children[n.firstChild:])
+		copy(pnode.childrenNext[n.firstChild:], n.childrenNext[n.firstChild:])
 	}
 	return
 }
 
 // serialize the content of the node into the buffer, and return the number of bytes consumed in the process.
 func (n *node) serialize(buf []byte) int {
-	/*
-		hash         []byte
-		leaf         bool
-		firstChild   byte
-		children     []storedNodeIdentifier
-		childrenNext []byte
-	*/
 	w := binary.PutUvarint(buf[:], uint64(len(n.hash)))
 	copy(buf[w:], n.hash)
 	w += len(n.hash)
@@ -299,13 +295,14 @@ func (n *node) serialize(buf []byte) int {
 	// store all the children, and terminate with a null.
 	i := n.firstChild
 	for {
-		if i == n.childrenNext[i] {
-			break
-		}
 		buf[w] = i
 		w++
 		x := binary.PutUvarint(buf[w:], uint64(n.children[i]))
 		w += x
+		if i == n.childrenNext[i] {
+			break
+		}
+		i = n.childrenNext[i]
 	}
 	buf[w] = i
 	w++
@@ -330,6 +327,7 @@ func deserializeNode(buf []byte) (n *node, s int) {
 	n.childrenNext = make([]byte, 256)
 	first := true
 	prevChildIndex := byte(0)
+
 	for {
 		childIndex := buf[s]
 		s++

@@ -48,13 +48,22 @@ type Stats struct {
 }
 
 // MakeMerkleTrie creates a merkle trie
-func MakeMerkleTrie() *MerkleTrie {
+func MakeMerkleTrie(committer Committer) *MerkleTrie {
 	mt := &MerkleTrie{
 		root:       storedNodeIdentifierNull,
 		cache:      &merkleTrieCache{},
 		nextNodeID: storedNodeIdentifierBase,
 	}
-	mt.cache.initialize(mt)
+	if committer == nil {
+		committer = &InMemoryCommitter{}
+	} else {
+		rootBytes, err := committer.LoadPage(storedNodeIdentifierNull)
+		if err == nil {
+			mt.deserialize(rootBytes)
+		}
+	}
+
+	mt.cache.initialize(mt, committer)
 	return mt
 }
 
@@ -99,6 +108,7 @@ func (mt *MerkleTrie) Add(d []byte) (bool, error) {
 		mt.cache.rollbackTransaction()
 		return false, err
 	}
+	mt.cache.deleteNode(mt.root)
 	mt.root = updatedRoot
 	mt.cache.commitTransaction()
 	return true, nil
@@ -163,6 +173,11 @@ func (mt *MerkleTrie) Commit() error {
 	return mt.cache.commit()
 }
 
+// Evict removes elements from the cache that are no longer needed. Must not be called while the tree contains any uncommited changes.
+func (mt *MerkleTrie) Evict() int {
+	return mt.cache.evict(10000)
+}
+
 // serialize serializes the trie root
 func (mt *MerkleTrie) serialize() []byte {
 	serializedBuffer := make([]byte, 8*3)
@@ -170,4 +185,26 @@ func (mt *MerkleTrie) serialize() []byte {
 	root := binary.PutUvarint(serializedBuffer[version:], uint64(mt.root))
 	next := binary.PutUvarint(serializedBuffer[version+root:], uint64(mt.nextNodeID))
 	return serializedBuffer[:version+root+next]
+}
+
+// serialize serializes the trie root
+func (mt *MerkleTrie) deserialize(bytes []byte) error {
+	version, versionLen := binary.Uvarint(bytes[:])
+	if versionLen <= 0 {
+		return ErrPageDecodingError
+	}
+	if version != MerkleTreeVersion {
+		return ErrPageDecodingError
+	}
+	root, rootLen := binary.Uvarint(bytes[versionLen:])
+	if rootLen <= 0 {
+		return ErrPageDecodingError
+	}
+	nextNodeID, nextNodeIDLen := binary.Uvarint(bytes[versionLen+rootLen:])
+	if nextNodeIDLen <= 0 {
+		return ErrPageDecodingError
+	}
+	mt.root = storedNodeIdentifier(root)
+	mt.nextNodeID = storedNodeIdentifier(nextNodeID)
+	return nil
 }
