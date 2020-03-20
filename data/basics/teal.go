@@ -183,6 +183,16 @@ const (
 	TealUintType TealType = 2
 )
 
+func (tt TealType) String() string {
+	switch tt {
+	case TealBytesType:
+		return "b"
+	case TealUintType:
+		return "u"
+	}
+	return "unknown"
+}
+
 // TealValue contains type information and a value, representing a value in a
 // TEAL program
 type TealValue struct {

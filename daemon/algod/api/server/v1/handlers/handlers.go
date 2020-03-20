@@ -17,6 +17,7 @@
 package handlers
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -159,7 +160,7 @@ func participationKeysEncode(r basics.AccountData) *v1.Participation {
 	return &apiParticipation
 }
 
-func assetParams(creator basics.Address, params basics.AssetParams) v1.AssetParams {
+func modelAssetParams(creator basics.Address, params basics.AssetParams) v1.AssetParams {
 	paramsModel := v1.AssetParams{
 		Total:         params.Total,
 		DefaultFrozen: params.DefaultFrozen,
@@ -196,8 +197,55 @@ func assetParams(creator basics.Address, params basics.AssetParams) v1.AssetPara
 	return paramsModel
 }
 
+func modelSchema(schema basics.StateSchema) *v1.StateSchema {
+	return &v1.StateSchema{
+		NumUint:      schema.NumUint,
+		NumByteSlice: schema.NumByteSlice,
+	}
+}
+
+func modelValue(v basics.TealValue) v1.TealValue {
+	return v1.TealValue{
+		Type:  v.Type.String(),
+		Bytes: base64.StdEncoding.EncodeToString([]byte(v.Bytes)),
+		Uint:  v.Uint,
+	}
+}
+
+func modelTealKeyValue(kv basics.TealKeyValue) map[string]v1.TealValue {
+	b64 := base64.StdEncoding
+	res := make(map[string]v1.TealValue, len(kv))
+	for key, value := range kv {
+		kenc := b64.EncodeToString([]byte(key))
+		res[kenc] = modelValue(value)
+	}
+	return res
+}
+
+func modelAppParams(creator basics.Address, params basics.AppParams) v1.AppParams {
+	b64 := base64.StdEncoding
+	res := v1.AppParams{
+		ApprovalProgram:   b64.EncodeToString([]byte(params.ApprovalProgram)),
+		ClearStateProgram: b64.EncodeToString([]byte(params.ClearStateProgram)),
+		GlobalStateSchema: modelSchema(params.GlobalStateSchema),
+		LocalStateSchema:  modelSchema(params.LocalStateSchema),
+		GlobalState:       modelTealKeyValue(params.GlobalState),
+	}
+	if !creator.IsZero() {
+		res.Creator = creator.String()
+	}
+	return res
+}
+
+func modelAppLocalState(s basics.AppLocalState) v1.AppLocalState {
+	return v1.AppLocalState{
+		Schema:   modelSchema(s.Schema),
+		KeyValue: modelTealKeyValue(s.KeyValue),
+	}
+}
+
 func assetConfigTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
-	params := assetParams(basics.Address{}, tx.AssetConfigTxnFields.AssetParams)
+	params := modelAssetParams(basics.Address{}, tx.AssetConfigTxnFields.AssetParams)
 
 	config := v1.AssetConfigTransactionType{
 		AssetID: uint64(tx.AssetConfigTxnFields.ConfigAsset),
@@ -210,8 +258,31 @@ func assetConfigTxEncode(tx transactions.Transaction, ad transactions.ApplyData)
 }
 
 func applicationCallTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
-	// TODO(applications)
-	return v1.Transaction{}
+	b64 := base64.StdEncoding
+	app := v1.ApplicationCallTransactionType{
+		ApplicationID:     uint64(tx.ApplicationID),
+		ApprovalProgram:   b64.EncodeToString([]byte(tx.ApprovalProgram)),
+		ClearStateProgram: b64.EncodeToString([]byte(tx.ClearStateProgram)),
+		LocalStateSchema:  modelSchema(tx.LocalStateSchema),
+		GlobalStateSchema: modelSchema(tx.GlobalStateSchema),
+		OnCompletion:      tx.OnCompletion.String(),
+	}
+
+	var encodedAccounts []string
+	for _, addr := range tx.Accounts {
+		encodedAccounts = append(encodedAccounts, addr.String())
+	}
+
+	var encodedArgs []string
+	for _, arg := range tx.ApplicationArgs {
+		encodedArgs = append(encodedArgs, b64.EncodeToString([]byte(arg)))
+	}
+
+	app.Accounts = encodedAccounts
+	app.ApplicationArgs = encodedArgs
+	return v1.Transaction{
+		ApplicationCall: &app,
+	}
 }
 
 func assetTransferTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
@@ -642,11 +713,27 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	var thisAssetParams map[uint64]v1.AssetParams
+	var assetParams map[uint64]v1.AssetParams
 	if len(record.AssetParams) > 0 {
-		thisAssetParams = make(map[uint64]v1.AssetParams)
+		assetParams = make(map[uint64]v1.AssetParams)
 		for idx, params := range record.AssetParams {
-			thisAssetParams[uint64(idx)] = assetParams(addr, params)
+			assetParams[uint64(idx)] = modelAssetParams(addr, params)
+		}
+	}
+
+	var apps map[uint64]v1.AppLocalState
+	if len(record.AppLocalStates) > 0 {
+		apps = make(map[uint64]v1.AppLocalState)
+		for idx, state := range record.AppLocalStates {
+			apps[uint64(idx)] = modelAppLocalState(state)
+		}
+	}
+
+	var appParams map[uint64]v1.AppParams
+	if len(record.AppParams) > 0 {
+		appParams = make(map[uint64]v1.AppParams)
+		for idx, params := range record.AppParams {
+			appParams[uint64(idx)] = modelAppParams(addr, params)
 		}
 	}
 
@@ -664,8 +751,10 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 		Rewards:                     record.RewardedMicroAlgos.Raw,
 		Status:                      record.Status.String(),
 		Participation:               apiParticipation,
-		AssetParams:                 thisAssetParams,
+		AssetParams:                 assetParams,
 		Assets:                      assets,
+		AppParams:                   appParams,
+		AppLocalStates:              apps,
 	}
 
 	SendJSON(AccountInformationResponse{&accountInfo}, w, ctx.Log)
@@ -1065,7 +1154,7 @@ func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request
 	}
 
 	if asset, ok := record.AssetParams[aidx]; ok {
-		thisAssetParams := assetParams(creator, asset)
+		thisAssetParams := modelAssetParams(creator, asset)
 		SendJSON(AssetInformationResponse{&thisAssetParams}, w, ctx.Log)
 	} else {
 		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errFailedRetrievingAsset), errFailedRetrievingAsset, ctx.Log)
@@ -1160,7 +1249,7 @@ func Assets(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Append the result
-		params := assetParams(aloc.Creator, rp)
+		params := modelAssetParams(aloc.Creator, rp)
 		result.Assets = append(result.Assets, v1.Asset{
 			AssetIndex:  uint64(aloc.Index),
 			AssetParams: params,

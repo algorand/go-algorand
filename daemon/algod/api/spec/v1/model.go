@@ -105,6 +105,100 @@ type Participation struct { // Round and Address fields are redundant if Partici
 	VoteKeyDilution uint64 `json:"votekd"`
 }
 
+// TealValue represents a value stored in a TEAL key/value store. It inclues
+// type information to disambiguate empty values from each other.
+//
+// swagger: model TealValue
+type TealValue struct {
+	// Type is the type of the value, either "b" for a TEAL byte slice or
+	// "u" for a TEAL uint
+	//
+	// required: true
+	Type string `json:"t"`
+
+	// Bytes is the value of a TEAL byte slice
+	//
+	// required: true
+	Bytes string `json:"b,omitempty"`
+
+	// Uint is the value of a TEAL uint
+	//
+	// required: true
+	Uint uint64 `json:"u,omitempty"`
+}
+
+// AppParams stores the global information associated with the application,
+// including its current logic, state schemas, and global state.
+//
+// swagger: model AppParams
+type AppParams struct {
+	// Creator is the creator of the application, whose account stores the
+	// AppParams
+	//
+	// required: true
+	Creator string `json:"creator,omitempty"`
+
+	// ApprovalProgram is the logic that executes for each ApplicationCall
+	// transaction besides those where OnCompletion == ClearStateOC. It can
+	// read and write global state for the application, as well as
+	// account-specific local state.
+	//
+	// required: true
+	ApprovalProgram string `json:"approvprog"`
+
+	// ClearStateProgram is the logic that executes for each ApplicationCall
+	// transaction where OnCompletion == ClearStateOC. It can read and write
+	// global state for the application, as well as account-specific local
+	// state. However, it cannot reject the transaction.
+	//
+	// required: true
+	ClearStateProgram string `json:"clearprog"`
+
+	// LocalStateSchema sets limits on the number of strings and integers
+	// that may be stored in an account's LocalState. for this application.
+	// The larger these limits are, the larger minimum balance must be
+	// maintained inside the account of any users who opt into this
+	// application. The LocalStateSchema is immutable.
+	//
+	// require: true
+	LocalStateSchema *StateSchema `json:"localschema"`
+
+	// GlobalStateSchema sets limits on the number of strings and integers
+	// that may be stored in the GlobalState. The larger these limits are,
+	// the larger minimum balance must be maintained inside the creator's
+	// account (in order to 'pay' for the state that can be used). The
+	// GlobalStateSchema is immutable.
+	//
+	// require: true
+	GlobalStateSchema *StateSchema `json:"globalschema"`
+
+	// GlobalState stores global keys and values associated with this
+	// application. It must respect the limits set by GlobalStateSchema.
+	//
+	// require: true
+	GlobalState map[string]TealValue `json:"globalstate"`
+}
+
+// StateSchema represents a LocalStateSchema or GlobalStateSchema. These
+// schemas determine how much storage may be used in a LocalState or
+// GlobalState for an application. The more space used, the larger minimum
+// balance must be maintained in the account holding the data.
+//
+// swagger: model StateSchema
+type StateSchema struct {
+	// NumUint is the maximum number of TEAL uints that may be stored in
+	// the key/value store
+	//
+	// required: true
+	NumUint uint64 `json:"uints"`
+
+	// NumByteSlice is the maximum number of TEAL byte slices that may be
+	// stored in the key/value store
+	//
+	// required: true
+	NumByteSlice uint64 `json:"byteslices"`
+}
+
 // Account Description
 // swagger:model Account
 type Account struct {
@@ -165,9 +259,38 @@ type Account struct {
 	//
 	// required: false
 	Assets map[uint64]AssetHolding `json:"assets,omitempty"`
+
+	// AppLocalStates is a map of local states for applications this
+	// account has opted in to, as well as a copy of each application's
+	// LocalStateSchema
+	//
+	// required: false
+	AppLocalStates map[uint64]AppLocalState `json:"applocalstates,omitempty"`
+
+	// AppParams is a map of application parameters for applications that
+	// were created by this account. These parameters include the
+	// application's global state map
+	//
+	// required: false
+	AppParams map[uint64]AppParams `json:"appparams,omitempty"`
+}
+
+// AppLocalState holds the local key/value store of an application for an
+// account that has opted in, as well as a copy of that application's
+// LocalStateSchema
+//
+// swagger:model AppLocalState
+type AppLocalState struct {
+	// Schema is a copy of the application's LocalStateSchema
+	Schema *StateSchema `json:"localschema"`
+
+	// KeyValue is the key/value store representing the application's
+	// local state in this account
+	KeyValue map[string]TealValue `json:"localstate"`
 }
 
 // Asset specifies both the unique identifier and the parameters for an asset
+//
 // swagger:model Asset
 type Asset struct {
 	// AssetIndex is the unique asset identifier
@@ -380,6 +503,11 @@ type Transaction struct {
 	// required: false
 	AssetFreeze *AssetFreezeTransactionType `json:"curfrz,omitempty"`
 
+	// ApplicationCall
+	//
+	// required: true
+	ApplicationCall *ApplicationCallTransactionType `json:"app,omitempty"`
+
 	// FromRewards is the amount of pending rewards applied to the From
 	// account as part of this transaction.
 	//
@@ -545,6 +673,69 @@ type AssetFreezeTransactionType struct {
 	//
 	// required: true
 	NewFreezeStatus bool `json:"freeze"`
+}
+
+// ApplicationCallTransactionType contains the additional fields for an ApplicationCall transaction
+// swagger:model ApplicationCallTransactionType
+type ApplicationCallTransactionType struct {
+	// ApplicationID is the application being interacted with, or 0 if
+	// creating a new application.
+	//
+	// required: true
+	ApplicationID uint64 `json:"id"`
+
+	// Accounts lists the accounts (in addition to the sender) that may be
+	// accessed from the application's ApprovalProgram and ClearStateProgram.
+	// These programs may read and write the LocalState and GlobalState
+	// associated with the application.
+	//
+	// required: true
+	Accounts []string `json:"accounts"`
+
+	// ApplicationArgs lists some transaction-specific arguments accessible
+	// from application logic
+	//
+	// required: true
+	ApplicationArgs []string `json:"appargs"`
+
+	// ApprovalProgram determines whether or not this ApplicationCall
+	// transaction will be approved or not. It does not execute when
+	// OnCompletion == ClearStateOC, because clearing local state is always
+	// allowed.
+	//
+	// required: true
+	ApprovalProgram string `json:"approvprog,omitempty"`
+
+	// ClearStateProgram executes when an ApplicationCall transaction
+	// executes with OnCompletion == ClearStateOC. However, this program
+	// may not reject the transaction (only update state). If this program
+	//
+	// required: true
+	ClearStateProgram string `json:"clearprog,omitempty"`
+
+	// GlobalStateSchema sets limits on the number of strings and integers
+	// that may be stored in the GlobalState. The larger these limits are,
+	// the larger minimum balance must be maintained inside the creator's
+	// account (in order to 'pay' for the state that can be used). The
+	// GlobalStateSchema is immutable.
+	//
+	// require: true
+	GlobalStateSchema *StateSchema `json:"globalschema,omitempty"`
+
+	// LocalStateSchema sets limits on the number of strings and integers
+	// that may be stored in an account's LocalState. for this application.
+	// The larger these limits are, the larger minimum balance must be
+	// maintained inside the account of any users who opt into this
+	// application. The LocalStateSchema is immutable.
+	//
+	// require: true
+	LocalStateSchema *StateSchema `json:"localschema,omitempty"`
+
+	// OnCompletion specifies what side effects this transaction will have
+	// if it successfully makes it into a block.
+	//
+	// require: true
+	OnCompletion string `json:"oncompletion"`
 }
 
 // TransactionList contains a list of transactions

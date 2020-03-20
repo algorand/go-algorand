@@ -54,6 +54,24 @@ const (
 	DeleteApplicationOC OnCompletion = 5
 )
 
+func (oc OnCompletion) String() string {
+	switch oc {
+	case NoOpOC:
+		return "noop"
+	case OptInOC:
+		return "optin"
+	case CloseOutOC:
+		return "closeout"
+	case ClearStateOC:
+		return "clearstate"
+	case UpdateApplicationOC:
+		return "update"
+	case DeleteApplicationOC:
+		return "delete"
+	}
+	return "unknown"
+}
+
 // ApplicationCallTxnFields captures the transaction fields used for all
 // interactions with applications
 type ApplicationCallTxnFields struct {
