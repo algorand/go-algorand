@@ -211,6 +211,17 @@ func applyStateDeltas(evalDelta basics.EvalDelta, balances Balances, appIdx basi
 		params.GlobalState = make(basics.TealKeyValue)
 	}
 
+	// Check that the global state delta isn't breaking any rules regarding
+	// key/value lengths
+	proto := balances.ConsensusParams()
+	err = evalDelta.GlobalDelta.Valid(proto)
+	if err != nil {
+		if !errIfNotApplied {
+			return nil
+		}
+		return fmt.Errorf("cannot apply GlobalState delta: %v", err)
+	}
+
 	// Apply the GlobalDelta in place
 	err = applyDelta(evalDelta.GlobalDelta, params.GlobalState)
 	if err != nil {
@@ -237,6 +248,16 @@ func applyStateDeltas(evalDelta basics.EvalDelta, balances Balances, appIdx basi
 		// a zero-delta on an account that hasn't opted in
 		if len(delta) == 0 {
 			continue
+		}
+
+		// Check that the local state delta isn't breaking any rules regarding
+		// key/value lengths
+		err = delta.Valid(proto)
+		if err != nil {
+			if !errIfNotApplied {
+				return nil
+			}
+			return fmt.Errorf("cannot apply LocalState delta for %s: %v", addr.String(), err)
 		}
 
 		record, err := balances.Get(addr, false)

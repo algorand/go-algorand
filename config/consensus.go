@@ -219,6 +219,8 @@ type ConsensusParams struct {
 	MaxClearStateProgramLen int
 	MaxAppTxnAccounts       int
 	MaxAppProgramCost       int
+	MaxAppKeyLen            int
+	MaxAppBytesValueLen     int
 
 	AppFlatParamsMinBalance  uint64
 	AppFlatOptInMinBalance   uint64
@@ -607,6 +609,8 @@ func initConsensusProtocols() {
 	vFuture.MaxAppArgLen = 128
 	vFuture.MaxApprovalProgramLen = 1024
 	vFuture.MaxClearStateProgramLen = 1024
+	vFuture.MaxAppKeyLen = 64
+	vFuture.MaxAppBytesValueLen = 64
 
 	// 0.1 Algos (Same min balance cost as an Asset)
 	vFuture.AppFlatParamsMinBalance = 100000

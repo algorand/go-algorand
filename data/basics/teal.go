@@ -17,6 +17,8 @@
 package basics
 
 import (
+	"fmt"
+
 	"github.com/algorand/go-algorand/config"
 )
 
@@ -64,6 +66,27 @@ func (sd StateDelta) Equal(o StateDelta) bool {
 		}
 	}
 	return true
+}
+
+// Valid checks whether the keys and values in a StateDelta conform to the
+// consensus parameters' maximum lengths
+func (sd StateDelta) Valid(proto config.ConsensusParams) error {
+	for key, delta := range sd {
+		if len(key) > proto.MaxAppKeyLen {
+			return fmt.Errorf("key too long: length was %d, maximum is %d", len(key), proto.MaxAppKeyLen)
+		}
+		switch delta.Action {
+		case SetBytesAction:
+			if len(delta.Bytes) > proto.MaxAppBytesValueLen {
+				return fmt.Errorf("cannot set value for key 0x%x, too long: length was %d, maximum is %d", key, len(delta.Bytes), proto.MaxAppBytesValueLen)
+			}
+		case SetUintAction:
+		case DeleteAction:
+		default:
+			return fmt.Errorf("unknown delta action")
+		}
+	}
+	return nil
 }
 
 // EvalDelta stores StateDeltas for an application's global key/value store, as
