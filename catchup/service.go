@@ -63,7 +63,7 @@ type Service struct {
 	syncStartNS     int64 // at top of struct to keep 64 bit aligned for atomic.* ops
 	cfg             config.Local
 	ledger          Ledger
-	fetcherFactory  rpcs.FetcherFactory
+	fetcherFactory  FetcherFactory
 	ctx             context.Context
 	cancel          func()
 	done            chan struct{}
@@ -81,7 +81,7 @@ type Service struct {
 	lastSupportedRound           basics.Round
 	unmatchedPendingCertificates <-chan PendingUnmatchedCertificate
 
-	latestRoundFetcherFactory rpcs.FetcherFactory
+	latestRoundFetcherFactory FetcherFactory
 }
 
 // A BlockAuthenticator authenticates blocks given a certificate.
@@ -102,13 +102,13 @@ func MakeService(log logging.Logger, config config.Local, net network.GossipNode
 	s = &Service{}
 	s.ctx, s.cancel = context.WithCancel(context.Background())
 	s.cfg = config
-	s.fetcherFactory = rpcs.MakeNetworkFetcherFactory(net, catchupPeersForSync, wsf)
+	s.fetcherFactory = MakeNetworkFetcherFactory(net, catchupPeersForSync, wsf)
 	s.ledger = ledger
 	s.net = net
 	s.auth = auth
 	s.unmatchedPendingCertificates = unmatchedPendingCertificates
 
-	s.latestRoundFetcherFactory = rpcs.MakeNetworkFetcherFactory(net, blockQueryPeerLimit, wsf)
+	s.latestRoundFetcherFactory = MakeNetworkFetcherFactory(net, blockQueryPeerLimit, wsf)
 
 	s.log = log.With("Context", "sync")
 	s.InitialSyncDone = make(chan struct{})
@@ -153,8 +153,8 @@ func (s *Service) SynchronizingTime() time.Duration {
 }
 
 // function scope to make a bunch of defer statements better
-func (s *Service) innerFetch(fetcher rpcs.Fetcher, r basics.Round) (blk *bookkeeping.Block, cert *agreement.Certificate, rpcc rpcs.FetcherClient, err error) {
-	ctx, cf := context.WithTimeout(s.ctx, rpcs.DefaultFetchTimeout)
+func (s *Service) innerFetch(fetcher Fetcher, r basics.Round) (blk *bookkeeping.Block, cert *agreement.Certificate, rpcc FetcherClient, err error) {
+	ctx, cf := context.WithTimeout(s.ctx, DefaultFetchTimeout)
 	defer cf()
 	stopWaitingForLedgerRound := make(chan struct{})
 	defer close(stopWaitingForLedgerRound)
@@ -170,7 +170,7 @@ func (s *Service) innerFetch(fetcher rpcs.Fetcher, r basics.Round) (blk *bookkee
 
 // fetchAndWrite fetches a block, checks the cert, and writes it to the ledger. Cert checking and ledger writing both wait for the ledger to advance if necessary.
 // Returns false if we couldn't fetch or write (i.e., if we failed even after a given number of retries or if we were told to abort.)
-func (s *Service) fetchAndWrite(fetcher rpcs.Fetcher, r basics.Round, prevFetchCompleteChan chan bool, lookbackComplete chan bool) bool {
+func (s *Service) fetchAndWrite(fetcher Fetcher, r basics.Round, prevFetchCompleteChan chan bool, lookbackComplete chan bool) bool {
 	i := 0
 	hasLookback := false
 	for !fetcher.OutOfPeers(r) {
@@ -287,7 +287,7 @@ func (s *Service) fetchAndWrite(fetcher rpcs.Fetcher, r basics.Round, prevFetchC
 
 type task func() basics.Round
 
-func (s *Service) pipelineCallback(fetcher rpcs.Fetcher, r basics.Round, thisFetchComplete chan bool, prevFetchCompleteChan chan bool, lookbackChan chan bool) func() basics.Round {
+func (s *Service) pipelineCallback(fetcher Fetcher, r basics.Round, thisFetchComplete chan bool, prevFetchCompleteChan chan bool, lookbackChan chan bool) func() basics.Round {
 	return func() basics.Round {
 		fetchResult := s.fetchAndWrite(fetcher, r, prevFetchCompleteChan, lookbackChan)
 
@@ -483,7 +483,7 @@ func (s *Service) sync(cert *PendingUnmatchedCertificate) {
 		seedLookback := uint64(2)
 		proto, err := s.ledger.ConsensusParams(pr)
 		if err != nil {
-			s.log.Errorf("catchup: could not get consensus parameters for round %v: $%v", pr, err)
+			s.log.Errorf("catchup: could not get consensus parameters for round %v: %v", pr, err)
 		} else {
 			seedLookback = proto.SeedLookback
 		}
@@ -578,9 +578,9 @@ func (s *Service) nextRoundIsNotSupported(nextRound basics.Round) bool {
 	lastLedgerRound := s.ledger.LastRound()
 	supportedUpgrades := config.Consensus
 
-	block, error := s.ledger.Block(lastLedgerRound)
-	if error != nil {
-		s.log.Errorf("nextRoundIsNotSupported: could not retrieve last block (%d) from the ledger.", lastLedgerRound)
+	block, err := s.ledger.Block(lastLedgerRound)
+	if err != nil {
+		s.log.Errorf("nextRoundIsNotSupported: could not retrieve last block (%d) from the ledger : %v", lastLedgerRound, err)
 		return false
 	}
 	bh := block.BlockHeader

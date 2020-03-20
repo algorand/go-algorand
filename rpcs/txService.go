@@ -130,7 +130,7 @@ func (txs *TxService) ServeHTTP(response http.ResponseWriter, request *http.Requ
 		return
 	}
 	txns := txs.getFilteredTxns(filter)
-	txblob := protocol.Encode(txns)
+	txblob := protocol.EncodeReflect(txns)
 	txs.log.Debugf("sending %d txns in %d bytes", len(txns), len(txblob))
 	response.Header().Set("Content-Length", strconv.Itoa(len(txblob)))
 	response.Header().Set("Content-Type", responseContentType)

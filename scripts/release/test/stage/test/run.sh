@@ -2,6 +2,8 @@
 
 set -ex
 
+trap 'bash ./scripts/release/common/ec2/shutdown.sh' ERR
+
 # Path(s) are relative to the root of the Jenkins workspace.
 
 INSTANCE=$(cat scripts/release/common/ec2/tmp/instance)

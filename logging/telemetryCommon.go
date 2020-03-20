@@ -35,9 +35,20 @@ type TelemetryOperation struct {
 	pending        int32
 }
 
+type telemetryHook interface {
+	Fire(entry *logrus.Entry) error
+	Levels() []logrus.Level
+	Close()
+	Flush()
+	UpdateHookURI(uri string) (err error)
+
+	appendEntry(entry *logrus.Entry) bool
+	waitForEventAndReady() bool
+}
+
 type telemetryState struct {
 	history   *logBuffer
-	hook      *asyncTelemetryHook
+	hook      telemetryHook
 	sendToLog bool
 }
 
@@ -69,5 +80,8 @@ type asyncTelemetryHook struct {
 	ready         bool
 	urlUpdate     chan bool
 }
+
+// A dummy noop type to get rid of checks like telemetry.hook != nil
+type dummyHook struct{}
 
 type hookFactory func(cfg TelemetryConfig) (logrus.Hook, error)

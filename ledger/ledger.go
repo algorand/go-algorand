@@ -99,18 +99,25 @@ func OpenLedger(
 
 	l.trackerDBs, l.blockDBs, err = openLedgerDB(dbPathPrefix, dbMem)
 	if err != nil {
+		err = fmt.Errorf("OpenLedger.openLedgerDB %v", err)
 		return nil, err
 	}
+	l.trackerDBs.rdb.SetLogger(log)
+	l.trackerDBs.wdb.SetLogger(log)
+	l.blockDBs.rdb.SetLogger(log)
+	l.blockDBs.wdb.SetLogger(log)
 
 	err = l.blockDBs.wdb.Atomic(func(tx *sql.Tx) error {
 		return initBlocksDB(tx, l, []bookkeeping.Block{genesisInitState.Block}, isArchival)
 	})
 	if err != nil {
+		err = fmt.Errorf("OpenLedger.initBlocksDB %v", err)
 		return nil, err
 	}
 
 	l.blockQ, err = bqInit(l)
 	if err != nil {
+		err = fmt.Errorf("OpenLedger.bqInit %v", err)
 		return nil, err
 	}
 
@@ -132,6 +139,7 @@ func OpenLedger(
 
 	err = l.trackers.loadFromDisk(l)
 	if err != nil {
+		err = fmt.Errorf("OpenLedger.loadFromDisk %v", err)
 		return nil, err
 	}
 
@@ -207,6 +215,7 @@ func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs dbPair, blockDBs 
 func initBlocksDB(tx *sql.Tx, l *Ledger, initBlocks []bookkeeping.Block, isArchival bool) (err error) {
 	err = blockInit(tx, initBlocks)
 	if err != nil {
+		err = fmt.Errorf("initBlocksDB.blockInit %v", err)
 		return err
 	}
 
@@ -214,6 +223,7 @@ func initBlocksDB(tx *sql.Tx, l *Ledger, initBlocks []bookkeeping.Block, isArchi
 	if isArchival {
 		earliest, err := blockEarliest(tx)
 		if err != nil {
+			err = fmt.Errorf("initBlocksDB.blockEarliest %v", err)
 			return err
 		}
 
@@ -223,10 +233,12 @@ func initBlocksDB(tx *sql.Tx, l *Ledger, initBlocks []bookkeeping.Block, isArchi
 			l.log.Warnf("resetting blocks DB (earliest block is %v)", earliest)
 			err := blockResetDB(tx)
 			if err != nil {
+				err = fmt.Errorf("initBlocksDB.blockResetDB %v", err)
 				return err
 			}
 			err = blockInit(tx, initBlocks)
 			if err != nil {
+				err = fmt.Errorf("initBlocksDB.blockInit 2 %v", err)
 				return err
 			}
 		}
@@ -356,10 +368,6 @@ func (l *Ledger) LatestCommitted() basics.Round {
 	return l.blockQ.latestCommitted()
 }
 
-func (l *Ledger) blockAux(rnd basics.Round) (bookkeeping.Block, evalAux, error) {
-	return l.blockQ.getBlockAux(rnd)
-}
-
 // Block returns the block for round rnd.
 func (l *Ledger) Block(rnd basics.Round) (blk bookkeeping.Block, err error) {
 	return l.blockQ.getBlock(rnd)
@@ -395,7 +403,7 @@ func (l *Ledger) BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreem
 // is returned if this is not the expected next block number.
 func (l *Ledger) AddBlock(blk bookkeeping.Block, cert agreement.Certificate) error {
 	// passing nil as the verificationPool is ok since we've asking the evaluator to skip verification.
-	updates, aux, err := l.eval(context.Background(), blk, nil, false, nil, nil)
+	updates, err := l.eval(context.Background(), blk, false, nil, nil)
 	if err != nil {
 		return err
 	}
@@ -403,7 +411,6 @@ func (l *Ledger) AddBlock(blk bookkeeping.Block, cert agreement.Certificate) err
 	vb := ValidatedBlock{
 		blk:   blk,
 		delta: updates,
-		aux:   aux,
 	}
 
 	return l.AddValidatedBlock(vb, cert)
@@ -419,7 +426,7 @@ func (l *Ledger) AddValidatedBlock(vb ValidatedBlock, cert agreement.Certificate
 	l.trackerMu.Lock()
 	defer l.trackerMu.Unlock()
 
-	err := l.blockQ.putBlock(vb.blk, cert, vb.aux)
+	err := l.blockQ.putBlock(vb.blk, cert)
 	if err != nil {
 		return err
 	}
@@ -474,9 +481,9 @@ func (l *Ledger) trackerLog() logging.Logger {
 	return l.log
 }
 
-func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, aux evalAux) (StateDelta, error) {
+func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block) (StateDelta, error) {
 	// passing nil as the verificationPool is ok since we've asking the evaluator to skip verification.
-	delta, _, err := l.eval(context.Background(), blk, &aux, false, nil, nil)
+	delta, err := l.eval(context.Background(), blk, false, nil, nil)
 	return delta, err
 }
 

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package rpcs
+package catchup
 
 import (
 	"context"
@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/rpcs"
 )
 
 // set max fetcher size to 5MB, this is enough to fit the block and certificate
@@ -45,6 +46,7 @@ type FetcherClient interface {
 type HTTPFetcher struct {
 	peer    network.HTTPPeer
 	rootURL string
+	net     network.GossipNode
 
 	client *http.Client
 
@@ -52,8 +54,8 @@ type HTTPFetcher struct {
 }
 
 // MakeHTTPFetcher wraps an HTTPPeer so that we can get blocks from it
-func MakeHTTPFetcher(log logging.Logger, peer network.HTTPPeer) (fc FetcherClient) {
-	fc = &HTTPFetcher{peer, peer.GetAddress(), peer.GetHTTPClient(), log}
+func MakeHTTPFetcher(log logging.Logger, peer network.HTTPPeer, net network.GossipNode) (fc FetcherClient) {
+	fc = &HTTPFetcher{peer, peer.GetAddress(), net, peer.GetHTTPClient(), log}
 	return
 }
 
@@ -104,13 +106,13 @@ func (hf *HTTPFetcher) GetBlockBytes(ctx context.Context, r basics.Round) (data 
 	// TODO: Temporarily allow old and new content types so we have time for lazy upgrades
 	// Remove this 'old' string after next release.
 	const ledgerResponseContentTypeOld = "application/algorand-block-v1"
-	if contentTypes[0] != LedgerResponseContentType && contentTypes[0] != ledgerResponseContentTypeOld {
+	if contentTypes[0] != rpcs.LedgerResponseContentType && contentTypes[0] != ledgerResponseContentTypeOld {
 		hf.log.Warnf("http block fetcher response has an invalid content type : %s", contentTypes[0])
 		response.Body.Close()
 		return nil, fmt.Errorf("http block fetcher invalid content type '%s'", contentTypes[0])
 	}
 
-	return responseBytes(response, hf.log, fetcherMaxBlockBytes)
+	return rpcs.ResponseBytes(response, hf.log, fetcherMaxBlockBytes)
 }
 
 // Address is part of FetcherClient interface.
