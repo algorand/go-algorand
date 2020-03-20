@@ -164,6 +164,7 @@ var defaultLocalV5 = Local{
 	ConnectionsRateLimitingCount:          60,
 	ConnectionsRateLimitingWindowSeconds:  1,
 	DeadlockDetection:                     0,
+	DisableOutgoingConnectionThrottling:   false,
 	DNSBootstrapID:                        "<network>.algorand.network",
 	EnableAgreementReporting:              false,
 	EnableAgreementTimeMetrics:            false,
@@ -186,6 +187,7 @@ var defaultLocalV5 = Local{
 	NodeExporterPath:                      "./node_exporter",
 	OutgoingMessageFilterBucketCount:      3,
 	OutgoingMessageFilterBucketSize:       128,
+	PeerConnectionsUpdateInterval:         3600,
 	ReconnectTime:                         1 * time.Minute, // Was 60ns
 	ReservedFDs:                           256,
 	RestReadTimeoutSeconds:                15,
@@ -199,7 +201,6 @@ var defaultLocalV5 = Local{
 	TxSyncIntervalSeconds:                 60,
 	TxSyncTimeoutSeconds:                  30,
 	TxSyncServeResponseSize:               1000000,
-	PeerConnectionsUpdateInterval:         3600,
 	// DO NOT MODIFY VALUES - New values may be added carefully - See WARNING at top of file
 }
 
