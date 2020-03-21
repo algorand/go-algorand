@@ -144,22 +144,20 @@ func (db *Accessor) Close() {
 // that indicates database contention that warrants a retry.
 // Sends warnings and errors to log.
 func LoggedRetry(fn func() error, log logging.Logger) (err error) {
-	for i := 0; ; i++ {
-		if i > 0 && i%warnTxRetries == 0 {
-			if i >= 1000 {
-				log.Errorf("db.Retry: %d retries (last err: %v)", i, err)
+	for i := 0; (i == 0) || dbretry(err); i++ {
+		if i > 0 {
+			if i < infoTxRetries {
+				log.Infof("db.LoggedRetry: %d retries (last err: %v)", i, err)
+			} else if i >= 1000 {
+				log.Errorf("db.LoggedRetry: %d retries (last err: %v)", i, err)
 				return
+			} else if i%warnTxRetriesInterval == 0 {
+				log.Warnf("db.LoggedRetry: %d retries (last err: %v)", i, err)
 			}
-			log.Warnf("db.Retry: %d retries (last err: %v)", i, err)
 		}
-
 		err = fn()
-		if dbretry(err) {
-			continue
-		}
-
-		return
 	}
+	return
 }
 
 // Retry executes a function repeatedly as long as it returns an error
@@ -209,21 +207,38 @@ func (db *Accessor) Atomic(fn idemFn, extras ...interface{}) (err error) {
 	}
 
 	var tx *sql.Tx
-	ctx := context.Background()
 	var conn *sql.Conn
-	conn, err = db.Handle.Conn(ctx)
+	ctx := context.Background()
+
+	for i := 0; (i == 0) || dbretry(err); i++ {
+		if i > 0 {
+			if i < infoTxRetries {
+				db.getDecoratedLogger(fn, extras).Infof("db.atomic: %d connection retries (last err: %v)", i, err)
+			} else if i >= 1000 {
+				db.getDecoratedLogger(fn, extras).Errorf("db.atomic: %d connection retries (last err: %v)", i, err)
+				break
+			} else if i%warnTxRetriesInterval == 0 {
+				db.getDecoratedLogger(fn, extras).Warnf("db.atomic: %d connection retries (last err: %v)", i, err)
+			}
+		}
+		conn, err = db.Handle.Conn(ctx)
+	}
+
 	if err != nil {
 		return
 	}
 	defer conn.Close()
 
 	for i := 0; ; i++ {
-		if i > 0 && i%warnTxRetries == 0 {
-			if i >= 1000 {
-				db.getDecoratedLogger(fn, extras).Errorf("dbatomic: %d retries (last err: %v)", i, err)
+		if i > 0 {
+			if i < infoTxRetries {
+				db.getDecoratedLogger(fn, extras).Infof("db.atomic: %d retries (last err: %v)", i, err)
+			} else if i >= 1000 {
+				db.getDecoratedLogger(fn, extras).Errorf("db.atomic: %d retries (last err: %v)", i, err)
 				break
+			} else if i%warnTxRetriesInterval == 0 {
+				db.getDecoratedLogger(fn, extras).Warnf("db.atomic: %d retries (last err: %v)", i, err)
 			}
-			db.getDecoratedLogger(fn, extras).Warnf("dbatomic: %d retries (last err: %v)", i, err)
 		}
 
 		tx, err = conn.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable, ReadOnly: db.readOnly})
@@ -282,4 +297,5 @@ func dbretry(obj error) bool {
 
 type idemFn func(tx *sql.Tx) error
 
-const warnTxRetries = 1
+const infoTxRetries = 5
+const warnTxRetriesInterval = 1

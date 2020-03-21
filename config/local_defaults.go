@@ -71,6 +71,7 @@ var defaultLocalV6 = Local{
 	LogSizeLimit:                          1073741824,
 	MaxConnectionsPerIP:                   30,
 	NetAddress:                            "",
+	NetworkProtocolVersion:                "",
 	NodeExporterListenAddress:             ":9100",
 	NodeExporterPath:                      "./node_exporter",
 	OutgoingMessageFilterBucketCount:      3,
