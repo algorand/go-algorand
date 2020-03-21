@@ -44,6 +44,9 @@ then
     exit 1
 fi
 
+cd go-algorand
+COMMIT_HASH=$(git rev-parse "${BRANCH}")
+
 export DEBIAN_FRONTEND=noninteractive
 
 # Install latest go.1.12.9.
@@ -130,6 +133,7 @@ PLATFORM_SPLIT=(${PLATFORM//\// })
 cat << EOF > "${HOME}"/build_env
 export BRANCH=${BRANCH}
 export CHANNEL=$("${GOPATH}"/src/github.com/algorand/go-algorand/scripts/compute_branch_channel.sh "${BRANCH}")
+export COMMIT_HASH=${COMMIT_HASH}
 export DEFAULTNETWORK=$(PATH=${PATH} "${REPO_ROOT}"/scripts/compute_branch_network.sh)
 export DC_IP=$(curl --silent http://169.254.169.254/latest/meta-data/local-ipv4)
 export FULLVERSION=$("${GOPATH}"/src/github.com/algorand/go-algorand/scripts/compute_build_number.sh -f)
