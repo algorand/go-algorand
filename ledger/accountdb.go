@@ -61,6 +61,9 @@ var accountsSchema = []string{
 		filename text NOT NULL,
 		catchpoint text NOT NULL,
 		filesize size NOT NULL)`,
+	`CREATE TABLE IF NOT EXISTS accounthashes (
+			id integer primary key,
+			data blob)`,
 }
 
 var accountsResetExprs = []string{
@@ -69,6 +72,7 @@ var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS accountbase`,
 	`DROP TABLE IF EXISTS assetcreators`,
 	`DROP TABLE IF EXISTS storedcatchpoints`,
+	`DROP TABLE IF EXISTS accounthashes`,
 }
 
 type accountDelta struct {
@@ -483,4 +487,40 @@ func totalAccounts(ctx context.Context, tx *sql.Tx) (total uint64, err error) {
 		return
 	}
 	return
+}
+
+const (
+	merkleCommitterNodesPerPage = 128
+)
+
+type merkleCommitter struct {
+	tx *sql.Tx
+}
+
+// StorePage stores a single page in an in-memory persistence.
+func (mc *merkleCommitter) StorePage(page uint64, content []byte) error {
+	if len(content) == 0 {
+		_, err := mc.tx.Exec("DELETE FROM accounthashes WHERE id=?", page)
+		return err
+	}
+	_, err := mc.tx.Exec("INSERT OR REPLACE INTO accounthashes(id, data) VALUES(?, ?)", page, content)
+	return err
+}
+
+// LoadPage load a single page from an in-memory persistence.
+func (mc *merkleCommitter) LoadPage(page uint64) (content []byte, err error) {
+	err = mc.tx.QueryRow("SELECT data FROM accounthashes WHERE id = ?", page).Scan(&content)
+	if err == sql.ErrNoRows {
+		content = nil
+		err = nil
+		return
+	} else if err != nil {
+		return nil, err
+	}
+	return content, nil
+}
+
+// GetNodesCountPerPage returns the page size ( number of nodes per page )
+func (mc *merkleCommitter) GetNodesCountPerPage() (pageSize int64) {
+	return merkleCommitterNodesPerPage
 }

@@ -34,8 +34,9 @@ var errTransactionRollbackFailed = errors.New("unable to rollback merkle tree op
 // and only a single transaction is allowed at any given time. Moreover, a transaction that is not
 // complete ( by calling to Rollback/Commit ), will default to the Commit behaviour.
 type Transaction struct {
-	mt  *MerkleTrie
-	log []loggedOperation
+	mt                *Trie
+	log               []loggedOperation
+	previousCommitter Committer
 }
 
 type loggedOperation struct {
@@ -43,9 +44,10 @@ type loggedOperation struct {
 	hash []byte
 }
 
-func makeTransaction(mt *MerkleTrie) *Transaction {
+func makeTransaction(mt *Trie, committer Committer) *Transaction {
 	return &Transaction{
-		mt: mt,
+		mt:                mt,
+		previousCommitter: mt.SetCommitter(committer),
 	}
 }
 
@@ -71,11 +73,13 @@ func (t *Transaction) Add(d []byte) (added bool, err error) {
 
 // Commit commits the applied Delete/Add operations and returns the number of applied changes.
 func (t *Transaction) Commit() int {
+	defer t.mt.SetCommitter(t.previousCommitter)
 	return len(t.log)
 }
 
 // Rollback rolls back the pending operations, and returns the number of operations that were rolled back.
 func (t *Transaction) Rollback() (int, error) {
+	defer t.mt.SetCommitter(t.previousCommitter)
 	undoRollingBack := func(startIdx int) {
 		for j := startIdx; j >= 0; j-- {
 			switch t.log[j].txOp {

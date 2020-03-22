@@ -76,6 +76,10 @@ func (wl *wrappedLedger) trackerLog() logging.Logger {
 	return wl.l.trackerLog()
 }
 
+func (wl *wrappedLedger) isCatchpointRound(round basics.Round) bool {
+	return false
+}
+
 func getInitState() (genesisInitState InitState) {
 	blk := bookkeeping.Block{}
 	blk.CurrentProtocol = protocol.ConsensusCurrentVersion

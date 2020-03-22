@@ -18,18 +18,26 @@ package ledger
 
 import (
 	"database/sql"
+	"encoding/binary"
 	"fmt"
 	"sort"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/protocol"
 )
 
-// balancesFlushInterval defines how frequently we want to flush our balances to disk.
-const balancesFlushInterval = 5 * time.Second
+const (
+	// balancesFlushInterval defines how frequently we want to flush our balances to disk.
+	balancesFlushInterval = 5 * time.Second
+	// trieCachedNodesCount defines how many balances trie nodes we would like to keep around in memory
+	trieCachedNodesCount = 10000
+)
 
 // A modifiedAccount represents an account that has been modified since
 // the persistent state stored in the account DB (i.e., in the range of
@@ -108,6 +116,10 @@ type accountUpdates struct {
 	// the rounds at which we need to flush the balances to disk
 	// in favor of the catchpoint to be generated.
 	ledger ledgerForTracker
+
+	// The Trie tracking the current account balances. Always matches the balances that were
+	// written to the database.
+	balancesTrie *merkletrie.Trie
 }
 
 func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
@@ -187,6 +199,14 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 	return nil
 }
 
+func accountHashBuilder(addr basics.Address, accountData basics.AccountData) []byte {
+	hash := make([]byte, 9+crypto.DigestSize)
+	rewardsSpace := binary.PutUvarint(hash[:], accountData.RewardsBase)
+	entryHash := crypto.Hash(append(addr[:], protocol.Encode(&accountData)[:]...))
+	copy(hash[rewardsSpace:], entryHash[:])
+	return hash[:rewardsSpace+crypto.DigestSize]
+}
+
 // Initialize accounts DB if needed and return account round
 func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 	err := accountsInit(tx, au.initAccounts, au.initProto)
@@ -198,7 +218,98 @@ func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 	if err != nil {
 		return 0, err
 	}
+
+	// create the merkle trie for the balances
+	committer := &merkleCommitter{tx}
+	trie, err := merkletrie.MakeTrie(committer, trieCachedNodesCount)
+	if err != nil {
+		return 0, err
+	}
+	if rnd == 0 {
+		// if we just initialize the database ( successfully !), than make sure to feed the same accounts changes to the merkle trie.
+		for addr, data := range au.initAccounts {
+			_, err := trie.Add(accountHashBuilder(addr, data))
+			if err != nil {
+				return 0, err
+			}
+		}
+		err = trie.Commit()
+		if err != nil {
+			return 0, err
+		}
+	} else {
+		// we migth have a database that was previously initialized, and now we're adding the balances trie. In that case, we need to add all the existing balances to this trie.
+		// we can figure this out by examinine the hash of the root:
+		rootHash, err := trie.RootHash()
+		if err != nil {
+			return rnd, err
+		}
+		if rootHash.IsZero() {
+			for {
+				accountIdx := 0
+				bal, err := encodedAccountsRange(tx, accountIdx, balancesChunkReadSize)
+				if err != nil {
+					return rnd, err
+				}
+				if len(bal) == 0 {
+					break
+				}
+				for _, balance := range bal {
+					addrBytes, accountBytes := balance.Address, balance.AccountData
+					var addr basics.Address
+					copy(addr[:], addrBytes)
+					var accountData basics.AccountData
+					err = protocol.Decode(accountBytes, &accountData)
+					if err != nil {
+						return rnd, err
+					}
+					added, err := trie.Add(accountHashBuilder(addr, accountData))
+					if err != nil {
+						return rnd, err
+					}
+					if !added {
+						au.log.Warnf("attempted to add duplicate hash '%v' to merkle trie.")
+					}
+				}
+				// this trie Commit call only attempt to write it to the database using the current transaction.
+				// if anything goes wrong, it will still get rolled back.
+				err = trie.Commit()
+				if err != nil {
+					return 0, err
+				}
+				trie.Evict()
+				if len(bal) < balancesChunkReadSize {
+					break
+				}
+				accountIdx += balancesChunkReadSize
+			}
+		}
+	}
+	au.balancesTrie = trie
 	return rnd, nil
+}
+
+func (au *accountUpdates) accountsUpdateBalaces(balancesTx *merkletrie.Transaction, accountsDeltas map[basics.Address]accountDelta) (err error) {
+	var added, deleted bool
+	for addr, delta := range accountsDeltas {
+		deleted, err = balancesTx.Delete(accountHashBuilder(addr, delta.old))
+		if err != nil {
+			return err
+		}
+		if !deleted {
+			au.log.Warnf("failed to delete hash '%v' from merkle trie")
+		}
+		added, err = balancesTx.Add(accountHashBuilder(addr, delta.new))
+		if err != nil {
+			return err
+		}
+		if !added {
+			au.log.Warnf("attempted to add duplicate hash '%v' to merkle trie")
+		}
+	}
+	// write it all to disk.
+	err = au.balancesTrie.Commit()
+	return
 }
 
 func (au *accountUpdates) close() {
@@ -416,12 +527,25 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Roun
 	var assetFlushcount map[basics.AssetIndex]int
 
 	offset := uint64(newBase - au.dbRound)
-	err := au.dbs.wdb.Atomic(func(tx *sql.Tx) error {
+	err := au.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
+		balancesHashTx := au.balancesTrie.BeginTransaction(&merkleCommitter{tx})
+		defer func() {
+			if err != nil {
+				balancesHashTx.Rollback()
+			} else {
+				balancesHashTx.Commit()
+				au.balancesTrie.Evict()
+			}
+		}()
 		flushcount = make(map[basics.Address]int)
 		assetFlushcount = make(map[basics.AssetIndex]int)
 		for i := uint64(0); i < offset; i++ {
 			rnd := au.dbRound + basics.Round(i) + 1
-			err := accountsNewRound(tx, rnd, au.deltas[i], au.roundTotals[i+1].RewardsLevel, au.protos[i+1])
+			err = accountsNewRound(tx, rnd, au.deltas[i], au.roundTotals[i+1].RewardsLevel, au.protos[i+1])
+			if err != nil {
+				return err
+			}
+			err = au.accountsUpdateBalaces(balancesHashTx, au.deltas[i])
 			if err != nil {
 				return err
 			}

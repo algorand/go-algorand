@@ -26,7 +26,7 @@ import (
 
 func TestInMemoryCommitter(t *testing.T) {
 	var memoryCommitter InMemoryCommitter
-	mt1 := MakeMerkleTrie(&memoryCommitter)
+	mt1, _ := MakeTrie(&memoryCommitter, defaultTestEvictSize)
 	// create 50000 hashes.
 	leafsCount := 50000
 	hashes := make([]crypto.Digest, leafsCount)
@@ -50,7 +50,7 @@ func TestInMemoryCommitter(t *testing.T) {
 
 	mt1Hash, _ := mt1.RootHash()
 
-	mt2 := MakeMerkleTrie(&memoryCommitter)
+	mt2, _ := MakeTrie(&memoryCommitter, defaultTestEvictSize)
 
 	for i := len(hashes) / 2; i < len(hashes); i++ {
 		mt2.Add(hashes[i][:])
@@ -88,7 +88,7 @@ func (n *node) getChildren() (list []storedNodeIdentifier) {
 
 func TestNoRedundentPages(t *testing.T) {
 	var memoryCommitter InMemoryCommitter
-	mt1 := MakeMerkleTrie(&memoryCommitter)
+	mt1, _ := MakeTrie(&memoryCommitter, defaultTestEvictSize)
 
 	testSize := 20000
 	// create 20000 hashes.
@@ -126,7 +126,7 @@ func TestMultipleCommits(t *testing.T) {
 	}
 
 	var memoryCommitter1 InMemoryCommitter
-	mt1 := MakeMerkleTrie(&memoryCommitter1)
+	mt1, _ := MakeTrie(&memoryCommitter1, defaultTestEvictSize)
 	for i := 0; i < len(hashes); i++ {
 
 		mt1.Add(hashes[i][:])
@@ -137,7 +137,7 @@ func TestMultipleCommits(t *testing.T) {
 	mt1.Commit()
 
 	var memoryCommitter2 InMemoryCommitter
-	mt2 := MakeMerkleTrie(&memoryCommitter2)
+	mt2, _ := MakeTrie(&memoryCommitter2, defaultTestEvictSize)
 	for i := 0; i < len(hashes); i++ {
 		mt2.Add(hashes[i][:])
 	}

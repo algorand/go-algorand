@@ -37,6 +37,9 @@ for LEDGER in $LEDGERS; do
       storedcatchpoints)
         SORT=round
         ;;
+      accounthashes)
+        SORT=id
+        ;;
       *)
         echo "Unknown table $T" >&2
         exit 1

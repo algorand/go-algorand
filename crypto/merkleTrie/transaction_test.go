@@ -25,7 +25,7 @@ import (
 )
 
 func TestTransactions(t *testing.T) {
-	mt := MakeMerkleTrie(nil)
+	mt, _ := MakeTrie(nil, defaultTestEvictSize)
 	// create 500 hashes.
 	hashes := make([]crypto.Digest, 500)
 	for i := 0; i < len(hashes); i++ {
@@ -41,7 +41,7 @@ func TestTransactions(t *testing.T) {
 
 	baseline, err := mt.RootHash()
 	require.NoError(t, err)
-	tx := mt.BeginTransaction()
+	tx := mt.BeginTransaction(&InMemoryCommitter{})
 	for i := 20; i < 30; i++ {
 		added, err := tx.Add(hashes[i][:])
 		require.NotEqual(t, false, added)
@@ -60,7 +60,7 @@ func TestTransactions(t *testing.T) {
 }
 
 func TestTransactionsFailedRollback(t *testing.T) {
-	mt := MakeMerkleTrie(nil)
+	mt, _ := MakeTrie(nil, defaultTestEvictSize)
 	// create 500 hashes.
 	hashes := make([]crypto.Digest, 500)
 	for i := 0; i < len(hashes); i++ {
@@ -76,7 +76,7 @@ func TestTransactionsFailedRollback(t *testing.T) {
 
 	baseline, err := mt.RootHash()
 	require.NoError(t, err)
-	tx := mt.BeginTransaction()
+	tx := mt.BeginTransaction(&InMemoryCommitter{})
 	for i := 20; i < 30; i++ {
 		added, err := tx.Add(hashes[i][:])
 		require.NotEqual(t, false, added)
