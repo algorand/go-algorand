@@ -270,6 +270,9 @@ type Local struct {
 	// allow the network library to continuesly disconnect relays based on their relative ( and absolute ) performance.
 	DisableOutgoingConnectionThrottling bool
 
+	// NetworkProtocolVersion overrides network protocol version ( if present )
+	NetworkProtocolVersion string
+
 	// CatchpointInterval set the interval at which catchpoint are being generated.
 	CatchpointInterval uint64
 }
