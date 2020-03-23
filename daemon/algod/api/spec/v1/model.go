@@ -199,6 +199,22 @@ type StateSchema struct {
 	NumByteSlice uint64 `json:"byteslices"`
 }
 
+// Applicaiton specifies both the unique identifier and the parameters for an
+// application
+//
+// swagger:model Application
+type Application struct {
+	// AppIndex is the unique application identifier
+	//
+	// required: true
+	AppIndex uint64 `json:"appidx"`
+
+	// AppParams specifies the parameters of application referred to by AppIndex
+	//
+	// required: true
+	AppParams AppParams `json:"appparams"`
+}
+
 // Account Description
 // swagger:model Account
 type Account struct {
@@ -750,10 +766,19 @@ type TransactionList struct {
 // AssetList contains a list of assets
 // swagger:model AssetList
 type AssetList struct {
-	// AssetList is a list of assets
+	// Assets is a list of assets
 	//
 	// required: true
 	Assets []Asset `json:"assets,omitempty"`
+}
+
+// ApplicationList contains a list of applications
+// swagger:model ApplicationList
+type ApplicationList struct {
+	// Applications is a list of applications
+	//
+	// required: true
+	Applications []Application `json:"applications,omitempty"`
 }
 
 // TransactionFee contains the suggested fee

@@ -1259,6 +1259,103 @@ func Assets(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	SendJSON(AssetsResponse{&result}, w, ctx.Log)
 }
 
+// Applications is an httpHandler for route GET /v1/applications
+func Applications(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
+	// swagger:operation GET /v1/applications Applications
+	// ---
+	//     Summary: List applications
+	//     Description: Returns list of up to `max` applications, where the maximum appIdx is <= `appIdx`
+	//     Produces:
+	//     - application/json
+	//     Schemes:
+	//     - http
+	//     Parameters:
+	//       - name: appIdx
+	//         in: query
+	//         type: integer
+	//         format: int64
+	//         minimum: 0
+	//         required: false
+	//         description: Fetch applications with application index <= appIdx. If zero, fetch most recent assets.
+	//       - name: max
+	//         in: query
+	//         type: integer
+	//         format: int64
+	//         minimum: 0
+	//         maximum: 100
+	//         required: false
+	//         description: Fetch no more than this many applications
+	//     Responses:
+	//       200:
+	//         "$ref": '#/responses/ApplicationsResponse'
+	//       400:
+	//         description: Bad Request
+	//         schema: {type: string}
+	//       500:
+	//         description: Internal Error
+	//         schema: {type: string}
+	//       401: { description: Invalid API Token }
+	//       default: { description: Unknown Error }
+
+	const maxAppsToList = 100
+
+	// Parse max app to fetch from db
+	max, err := strconv.ParseInt(r.FormValue("max"), 10, 64)
+	if err != nil || max < 0 || max > maxAppsToList {
+		err := fmt.Errorf(errFailedParsingMaxAppsToList, 0, maxAppsToList)
+		lib.ErrorResponse(w, http.StatusBadRequest, err, err.Error(), ctx.Log)
+		return
+	}
+
+	// Parse maximum app idx
+	appIdx, err := strconv.ParseInt(r.FormValue("appIdx"), 10, 64)
+	if err != nil || appIdx < 0 {
+		errs := errFailedParsingAppIdx
+		lib.ErrorResponse(w, http.StatusBadRequest, errors.New(errs), errs, ctx.Log)
+		return
+	}
+
+	// If appIdx is 0, we want the most recent apps, so make it intmax
+	if appIdx == 0 {
+		appIdx = (1 << 63) - 1
+	}
+
+	// Query app range from the database
+	ledger := ctx.Node.Ledger()
+	alocs, err := ledger.ListApplications(basics.AppIndex(appIdx), uint64(max))
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingAsset, ctx.Log)
+		return
+	}
+
+	// Fill in the app models
+	lastRound := ledger.Latest()
+	var result v1.ApplicationList
+	for _, aloc := range alocs {
+		// Fetch the app parameters
+		creatorRecord, err := ledger.Lookup(lastRound, aloc.Creator)
+		if err != nil {
+			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
+			return
+		}
+
+		// Ensure no race with app deletion
+		rp, ok := creatorRecord.AppParams[basics.AppIndex(aloc.Index)]
+		if !ok {
+			continue
+		}
+
+		// Append the result
+		params := modelAppParams(aloc.Creator, rp)
+		result.Applications = append(result.Applications, v1.Application{
+			AppIndex:  uint64(aloc.Index),
+			AppParams: params,
+		})
+	}
+
+	SendJSON(ApplicationsResponse{&result}, w, ctx.Log)
+}
+
 // SuggestedFee is an httpHandler for route GET /v1/transactions/fee
 func SuggestedFee(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	// swagger:operation GET /v1/transactions/fee SuggestedFee
