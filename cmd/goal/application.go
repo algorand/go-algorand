@@ -17,6 +17,9 @@
 package main
 
 import (
+	"encoding/json"
+	"os"
+
 	"github.com/spf13/cobra"
 
 	"github.com/algorand/go-algorand/data/basics"
@@ -38,6 +41,9 @@ var (
 
 	appAccounts []string
 	appB64Args  []string
+
+	fetchLocal  bool
+	fetchGlobal bool
 )
 
 func init() {
@@ -47,11 +53,11 @@ func init() {
 	appCmd.AddCommand(optInAppCmd)
 	appCmd.AddCommand(closeOutAppCmd)
 	appCmd.AddCommand(clearAppCmd)
+	appCmd.AddCommand(readStateAppCmd)
 
 	appCmd.PersistentFlags().StringVarP(&txFilename, "out", "o", "", "Dump an unsigned tx to the given file. In order to dump a signed transaction, pass -s")
 	appCmd.PersistentFlags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
 	appCmd.PersistentFlags().StringVarP(&walletName, "wallet", "w", "", "Set the wallet to be used for the selected operation")
-	appCmd.PersistentFlags().Uint64Var(&appIdx, "app-id", 0, "Asset ID")
 	appCmd.PersistentFlags().StringSliceVar(&appB64Args, "app-arg-b64", nil, "Base64 encoded args for application transactions")
 	appCmd.PersistentFlags().StringSliceVar(&appAccounts, "app-account", nil, "Accounts that may be accessed from application logic")
 
@@ -62,13 +68,27 @@ func init() {
 	createAppCmd.Flags().Uint64Var(&globalSchemaByteSlices, "global-byteslices", 0, "Maximum number of byte slices that may be stored in the global key/value store. Immutable.")
 	createAppCmd.Flags().Uint64Var(&localSchemaUints, "local-ints", 0, "Maximum number of integer values that may be stored in local (per-account) key/value stores for this app. Immutable.")
 	createAppCmd.Flags().Uint64Var(&localSchemaByteSlices, "local-byteslices", 0, "Maximum number of byte slices that may be stored in local (per-account) key/value stores for this app. Immutable.")
-
 	createAppCmd.Flags().StringVar(&appCreator, "creator", "", "Account to create the asset")
+
 	callAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to call app from")
 	optInAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to opt in")
 	closeOutAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to opt out")
 	clearAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to clear app state for")
 	deleteAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to send delete transaction from")
+	readStateAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to fetch state from")
+
+	// Can't use PersistentFlags on the root because for some reason marking
+	// a root command as required with MarkPersistentFlagRequired isn't
+	// working
+	callAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Asset ID")
+	optInAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Asset ID")
+	closeOutAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Asset ID")
+	clearAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Asset ID")
+	deleteAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Asset ID")
+	readStateAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Asset ID")
+
+	readStateAppCmd.Flags().BoolVar(&fetchLocal, "local", false, "Fetch account-specific state for this application. `--from` address is required when using this flag")
+	readStateAppCmd.Flags().BoolVar(&fetchGlobal, "global", false, "Fetch global state for this application.")
 
 	createAppCmd.MarkFlagRequired("creator")
 	createAppCmd.MarkFlagRequired("global-ints")
@@ -80,6 +100,20 @@ func init() {
 
 	optInAppCmd.MarkFlagRequired("app-id")
 	optInAppCmd.MarkFlagRequired("from")
+
+	callAppCmd.MarkFlagRequired("app-id")
+	callAppCmd.MarkFlagRequired("from")
+
+	closeOutAppCmd.MarkFlagRequired("app-id")
+	closeOutAppCmd.MarkFlagRequired("from")
+
+	clearAppCmd.MarkFlagRequired("app-id")
+	clearAppCmd.MarkFlagRequired("from")
+
+	deleteAppCmd.MarkFlagRequired("app-id")
+	deleteAppCmd.MarkFlagRequired("from")
+
+	readStateAppCmd.MarkFlagRequired("app-id")
 }
 
 func getAppArgs() []string {
@@ -522,5 +556,71 @@ var deleteAppCmd = &cobra.Command{
 				reportErrorf(err.Error())
 			}
 		}
+	},
+}
+
+var readStateAppCmd = &cobra.Command{
+	Use:   "read",
+	Short: "Read local or global state for an application",
+	Long:  `Read global or local (account-specific) state for an application`,
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, _ []string) {
+		dataDir := ensureSingleDataDir()
+		client := ensureFullClient(dataDir)
+
+		// Ensure exactly one of --local or --global is specified
+		if fetchLocal == fetchGlobal {
+			reportErrorf(errorLocalGlobal)
+		}
+
+		// If fetching local state, ensure account is specified
+		if fetchLocal && account == "" {
+			reportErrorf(errorLocalStateRequiresAccount)
+		}
+
+		if fetchLocal {
+			// Fetching local state. Get account information
+			response, err := client.AccountInformation(account)
+			if err != nil {
+				reportErrorf(errorRequestFail, err)
+			}
+
+			// Get application local state
+			local, ok := response.AppLocalStates[appIdx]
+			if !ok {
+				reportErrorf(errorAccountNotOptedInToApp, appIdx)
+			}
+
+			// Encode local state to json, print, and exit
+			enc, err := json.MarshalIndent(local.KeyValue, "", "  ")
+			if err != nil {
+				reportErrorf(errorMarshalingState, err)
+			}
+
+			// Print to stdout
+			os.Stdout.Write(enc)
+			return
+		}
+
+		if fetchGlobal {
+			// Fetching global state. Get application information
+			params, err := client.ApplicationInformation(appIdx)
+			if err != nil {
+				reportErrorf(errorRequestFail, err)
+			}
+
+			// Encode global state to json, print, and exit
+			enc, err := json.MarshalIndent(params.GlobalState, "", "  ")
+			if err != nil {
+				reportErrorf(errorMarshalingState, err)
+			}
+
+			// Print to stdout
+			os.Stdout.Write(enc)
+			return
+		}
+
+		// Should be unreachable
+		return
 	},
 }

@@ -650,6 +650,15 @@ func (c *Client) AssetInformation(index uint64) (resp v1.AssetParams, err error)
 	return
 }
 
+// ApplicationInformation takes an app's index and returns its information
+func (c *Client) ApplicationInformation(index uint64) (resp v1.AppParams, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		resp, err = algod.ApplicationInformation(index)
+	}
+	return
+}
+
 // TransactionInformation takes an address and associated txid and return its information
 func (c *Client) TransactionInformation(addr, txid string) (resp v1.Transaction, err error) {
 	algod, err := c.ensureAlgodClient()

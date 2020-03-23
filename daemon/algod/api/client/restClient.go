@@ -243,6 +243,11 @@ type assetsParams struct {
 	Max      uint64 `url:"max"`
 }
 
+type appsParams struct {
+	AppIdx uint64 `url:"appIdx"`
+	Max    uint64 `url:"max"`
+}
+
 type rawblockParams struct {
 	Raw uint64 `url:"raw"`
 }
@@ -260,9 +265,22 @@ func (client RestClient) AssetInformation(index uint64) (response v1.AssetParams
 	return
 }
 
+// ApplicationInformation gets the ApplicationInformationResponse associated
+// with the passed application index
+func (client RestClient) ApplicationInformation(index uint64) (response v1.AppParams, err error) {
+	err = client.get(&response, fmt.Sprintf("/application/%d", index), nil)
+	return
+}
+
 // Assets gets up to max assets with maximum asset index assetIdx
 func (client RestClient) Assets(assetIdx, max uint64) (response v1.AssetList, err error) {
 	err = client.get(&response, "/assets", assetsParams{assetIdx, max})
+	return
+}
+
+// Applications gets up to max applications with maximum application index appIdx
+func (client RestClient) Applications(appIdx, max uint64) (response v1.ApplicationList, err error) {
+	err = client.get(&response, "/applications", appsParams{appIdx, max})
 	return
 }
 

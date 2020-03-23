@@ -79,6 +79,12 @@ const (
 	// Asset
 	malformedMetadataHash = "Cannot base64-decode metadata hash %s: %s"
 
+	// Application
+	errorLocalGlobal               = "Exactly one of --local or --global is required"
+	errorLocalStateRequiresAccount = "--local requires --from account"
+	errorAccountNotOptedInToApp    = "%s has not opted in to application %d"
+	errorMarshalingState           = "failed to encode state: %s"
+
 	// Clerk
 	infoTxIssued    = "Sent %d MicroAlgos from account %s to address %s, transaction ID: %s. Fee set to %d"
 	infoTxCommitted = "Transaction %s committed in round %d"
