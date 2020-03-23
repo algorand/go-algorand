@@ -113,6 +113,8 @@ const disconnectReadError disconnectReason = "ReadError"
 const disconnectWriteError disconnectReason = "WriteError"
 const disconnectIdleConn disconnectReason = "IdleConnection"
 const disconnectSlowConn disconnectReason = "SlowConnection"
+const disconnectLeastPerformingPeer disconnectReason = "LeastPerformingPeer"
+const disconnectCliqueResolve disconnectReason = "CliqueResolving"
 
 // Response is the structure holding the response from the server
 type Response struct {
@@ -190,6 +192,18 @@ type wsPeer struct {
 	// sendMessageTag is a map of allowed message to send to a peer. We don't use any syncronization on this map, and the
 	// only gurentee is that it's being accessed only during startup and/or by the sending loop go routine.
 	sendMessageTag map[protocol.Tag]bool
+
+	// connMonitor used to measure the relative performance of the connection
+	// compared to the other outgoing connections. Incoming connections would have this
+	// field set to nil.
+	connMonitor *connectionPerformanceMonitor
+
+	// peerMessageDelay is calculated by the connection monitor; it's the relative avarage per-message delay.
+	peerMessageDelay int64
+
+	// throttledOutgoingConnection determines if this outgoing connection will be throttled bassed on it's
+	// performance or not. Throttled connections are more likely to be short-lived connections.
+	throttledOutgoingConnection bool
 }
 
 // HTTPPeer is what the opaque Peer might be.
@@ -209,6 +223,10 @@ type UnicastPeer interface {
 	GetAddress() string
 	// Unicast sends the given bytes to this specific peer. Does not wait for message to be sent.
 	Unicast(ctx context.Context, data []byte, tag protocol.Tag) error
+	// Version returns the matching version from network.SupportedProtocolVersions
+	Version() string
+	Request(ctx context.Context, tag Tag, topics Topics) (resp *Response, e error)
+	Respond(ctx context.Context, reqMsg IncomingMessage, topics Topics) (e error)
 }
 
 // Create a wsPeerCore object
@@ -238,6 +256,11 @@ func (wp *wsPeerCore) PrepareURL(rawURL string) string {
 	return strings.Replace(rawURL, "{genesisID}", wp.net.GenesisID, -1)
 }
 
+// Version returns the matching version from network.SupportedProtocolVersions
+func (wp *wsPeer) Version() string {
+	return wp.version
+}
+
 // 	Unicast sends the given bytes to this specific peer. Does not wait for message to be sent.
 // (Implements UnicastPeer)
 func (wp *wsPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag) error {
@@ -262,19 +285,18 @@ func (wp *wsPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag) err
 }
 
 // Respond sends the response of a request message
-func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, respMsg OutgoingMessage) (e error) {
+func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, responseTopics Topics) (e error) {
 
 	// Get the hash/key of the request message
 	requestHash := hashTopics(reqMsg.Data)
 
-	topics := respMsg.Topics
 	// Add the request hash
 	requestHashData := make([]byte, binary.MaxVarintLen64)
 	binary.PutUvarint(requestHashData, requestHash)
-	topics = append(topics, Topic{key: "RequestHash", data: requestHashData})
+	responseTopics = append(responseTopics, Topic{key: requestHashKey, data: requestHashData})
 
 	// Serialize the topics
-	serializedMsg := topics.MarshallTopics()
+	serializedMsg := responseTopics.MarshallTopics()
 
 	// Send serializedMsg
 	select {
@@ -384,6 +406,13 @@ func (wp *wsPeer) readLoop() {
 		networkReceivedBytesTotal.AddUint64(uint64(len(msg.Data)+2), nil)
 		networkMessageReceivedTotal.AddUint64(1, nil)
 		msg.Sender = wp
+
+		// for outgoing connections, we want to notify the connection monitor that we've received
+		// a message. The connection monitor would update it's statistics accordingly.
+		if wp.connMonitor != nil {
+			wp.connMonitor.Notify(&msg)
+		}
+
 		switch msg.Tag {
 		case protocol.MsgOfInterestTag:
 			// try to decode the message-of-interest
@@ -397,9 +426,9 @@ func (wp *wsPeer) readLoop() {
 				wp.net.log.Warnf("wsPeer readLoop: could not read the message from: %s %s", wp.conn.RemoteAddr().String(), err)
 				continue
 			}
-			requestHash, found := topics.GetValue("RequestHash")
+			requestHash, found := topics.GetValue(requestHashKey)
 			if !found {
-				wp.net.log.Warnf("wsPeer readLoop: message from %s is missing the RequestHash", wp.conn.RemoteAddr().String())
+				wp.net.log.Warnf("wsPeer readLoop: message from %s is missing the %s", wp.conn.RemoteAddr().String(), requestHashKey)
 				continue
 			}
 			hashKey, _ := binary.Uvarint(requestHash)
@@ -421,7 +450,6 @@ func (wp *wsPeer) readLoop() {
 			wp.handleFilterMessage(msg)
 			continue
 		}
-
 		if len(msg.Data) > 0 && wp.incomingMsgFilter != nil && dedupSafeTag(msg.Tag) {
 			if wp.incomingMsgFilter.CheckIncomingMessage(msg.Tag, msg.Data, true, true) {
 				//wp.net.log.Debugf("dropped incoming duplicate %s(%d)", msg.Tag, len(msg.Data))
