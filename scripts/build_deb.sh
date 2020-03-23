@@ -3,13 +3,13 @@
 
 # build_deb.sh - Build a .deb package for one platform.
 #
-# Syntax:   build_deb.sh <arch> <channel> <output directory>
+# Syntax:   build_deb.sh <arch> <output directory> <channel>
 #
 # Examples: scripts/build_deb.sh amd64
 
 set -e
 if [ "$#" -lt 2 ]; then
-    echo "Syntax: build_deb.sh <arch> <output directory>"
+    echo "Syntax: build_deb.sh <arch> <output directory> <channel>"
     exit 1
 fi
 
@@ -20,9 +20,10 @@ if [ "$EUID" != "0" ]; then
 fi
 
 OS=linux
-ARCH=$1
+ARCH="$1"
 OUTDIR="$2"
-PKG_NAME=$(./scripts/compute_package_name.sh "${3:-algorand}")
+CHANNEL=${CHANNEL:-$3}
+PKG_NAME=$(./scripts/compute_package_name.sh "${CHANNEL:-stable}")
 
 GOPATH=$(go env GOPATH)
 export GOPATH
@@ -105,7 +106,7 @@ unattended_upgrades_files=("51algorand-upgrades")
 mkdir -p "${PKG_ROOT}/etc/apt/apt.conf.d"
 for f in "${unattended_upgrades_files[@]}"; do
     < "installer/${f}" \
-      sed -e "s,@PKG_NAME@,${PKG_NAME}," \
+      sed -e "s,@CHANNEL@,${CHANNEL}," \
       > "${PKG_ROOT}/etc/apt/apt.conf.d/${f}"
 done
 
