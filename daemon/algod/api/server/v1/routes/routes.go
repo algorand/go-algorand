@@ -134,6 +134,13 @@ var Routes = lib.Routes{
 	},
 
 	lib.Route{
+		Name:        "application-information-by-id",
+		Method:      "GET",
+		Path:        fmt.Sprintf("/application/{index:[0-9]+}"),
+		HandlerFunc: handlers.ApplicationInformation,
+	},
+
+	lib.Route{
 		Name:        "list-applications",
 		Method:      "GET",
 		Path:        fmt.Sprintf("/applications"),

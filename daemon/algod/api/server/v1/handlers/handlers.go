@@ -1142,6 +1142,8 @@ func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request
 	aidx := basics.AssetIndex(queryIndex)
 	creator, doesNotExist, err := ledger.GetAssetCreator(aidx)
 	if err != nil || doesNotExist {
+		// Treat a database error and a nonexistent application the
+		// same to avoid changing API behavior
 		lib.ErrorResponse(w, http.StatusNotFound, err, errFailedToGetAssetCreator, ctx.Log)
 		return
 	}
@@ -1259,6 +1261,71 @@ func Assets(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	SendJSON(AssetsResponse{&result}, w, ctx.Log)
 }
 
+// ApplicationInformation is an httpHandler for route GET /v1/app/{index:[0-9]+}
+func ApplicationInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
+	// swagger:operation GET /v1/application/{index} ApplicationInformation
+	// ---
+	//     Summary: Get application information.
+	//     Description: >
+	//       Given the application's unique index, this call returns the application's
+	//       creator and global parameters (including global state).
+	//     Produces:
+	//     - application/json
+	//     Schemes:
+	//     - http
+	//     Parameters:
+	//       - name: index
+	//         in: path
+	//         type: integer
+	//         format: int64
+	//         required: true
+	//         description: App index
+	//     Responses:
+	//       200:
+	//         "$ref": '#/responses/ApplicationInformationResponse'
+	//       400:
+	//         description: Bad Request
+	//         schema: {type: string}
+	//       500:
+	//         description: Internal Error
+	//         schema: {type: string}
+	//       401: { description: Invalid API Token }
+	//       default: { description: Unknown Error }
+	queryIndex, err := strconv.ParseUint(mux.Vars(r)["index"], 10, 64)
+
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusBadRequest, err, errFailedToParseAppIndex, ctx.Log)
+		return
+	}
+
+	ledger := ctx.Node.Ledger()
+	aidx := basics.AppIndex(queryIndex)
+	creator, doesNotExist, err := ledger.GetAppCreator(aidx)
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusNotFound, err, errFailedToGetAppCreator, ctx.Log)
+		return
+	}
+	if doesNotExist {
+		lib.ErrorResponse(w, http.StatusNotFound, err, errAppDoesNotExist, ctx.Log)
+		return
+	}
+
+	lastRound := ledger.Latest()
+	record, err := ledger.Lookup(lastRound, creator)
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
+		return
+	}
+
+	if app, ok := record.AppParams[aidx]; ok {
+		appParams := modelAppParams(creator, app)
+		SendJSON(ApplicationInformationResponse{&appParams}, w, ctx.Log)
+	} else {
+		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errFailedRetrievingApp), errFailedRetrievingApp, ctx.Log)
+		return
+	}
+}
+
 // Applications is an httpHandler for route GET /v1/applications
 func Applications(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	// swagger:operation GET /v1/applications Applications
@@ -1324,7 +1391,7 @@ func Applications(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	ledger := ctx.Node.Ledger()
 	alocs, err := ledger.ListApplications(basics.AppIndex(appIdx), uint64(max))
 	if err != nil {
-		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingAsset, ctx.Log)
+		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingApp, ctx.Log)
 		return
 	}
 
