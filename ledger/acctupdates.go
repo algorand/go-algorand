@@ -99,6 +99,9 @@ type accountUpdates struct {
 	// i.e., totals is one longer than deltas.
 	roundTotals []AccountTotals
 
+	// roundDigest stores the digest of the block for every round starting with dbRound and every round after it.
+	roundDigest []crypto.Digest
+
 	// initAccounts specifies initial account values for database.
 	initAccounts map[basics.Address]basics.AccountData
 
@@ -312,6 +315,25 @@ func (au *accountUpdates) accountsUpdateBalaces(balancesTx *merkletrie.Transacti
 	return
 }
 
+func (au *accountUpdates) accountsCreateCatchpointLabel(tx *sql.Tx, committedRound basics.Round, offset uint64) (err error) {
+	var totals AccountTotals
+	var balancesHash crypto.Digest
+	totals, err = au.totals(committedRound)
+	if err != nil {
+		return
+	}
+	balancesHash, err = au.balancesTrie.RootHash()
+	if err != nil {
+		return
+	}
+	cpLabel := makeCatchpointLabel(committedRound, au.roundDigest[offset], balancesHash, totals)
+	label := cpLabel.String()
+	if label == "" {
+		return nil
+	}
+	return nil
+}
+
 func (au *accountUpdates) close() {
 }
 
@@ -512,11 +534,14 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Roun
 		au.log.Panicf("committedUpTo: block %d too far in the future, lookback %d, dbRound %d, deltas %d", committedRound, lookback, au.dbRound, len(au.deltas))
 	}
 
+	// check to see if this is a catchpoint round
+	isCatchpointRound := au.ledger.isCatchpointRound(committedRound)
+
 	// If we recently flushed, wait to aggregate some more blocks.
 	// ( unless we're creating a catchpoint, in which case we want to flush it right away
 	//   so that all the instances of the catchpoint would contain the exacy same data )
 	flushTime := time.Now()
-	if !flushTime.After(au.lastFlushTime.Add(balancesFlushInterval)) && !au.ledger.isCatchpointRound(committedRound) {
+	if !flushTime.After(au.lastFlushTime.Add(balancesFlushInterval)) && !isCatchpointRound {
 		return au.dbRound
 	}
 
@@ -558,7 +583,10 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Roun
 				flushcount[addr] = flushcount[addr] + 1
 			}
 		}
-		return nil
+		if isCatchpointRound {
+			err = au.accountsCreateCatchpointLabel(tx, committedRound, offset)
+		}
+		return err
 	})
 	if err != nil {
 		au.log.Warnf("unable to advance account snapshot: %v", err)
@@ -604,6 +632,7 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Roun
 	}
 
 	au.deltas = au.deltas[offset:]
+	au.roundDigest = au.roundDigest[offset:]
 	au.protos = au.protos[offset:]
 	au.roundTotals = au.roundTotals[offset:]
 	au.assetDeltas = au.assetDeltas[offset:]
@@ -628,6 +657,7 @@ func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta StateDelta) {
 	au.deltas = append(au.deltas, delta.accts)
 	au.protos = append(au.protos, proto)
 	au.assetDeltas = append(au.assetDeltas, make(map[basics.AssetIndex]modifiedAsset))
+	au.roundDigest = append(au.roundDigest, blk.Digest())
 
 	var ot basics.OverflowTracker
 	newTotals := au.roundTotals[len(au.roundTotals)-1]

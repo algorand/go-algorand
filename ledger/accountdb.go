@@ -64,6 +64,10 @@ var accountsSchema = []string{
 	`CREATE TABLE IF NOT EXISTS accounthashes (
 			id integer primary key,
 			data blob)`,
+	`CREATE TABLE IF NOT EXISTS catchpointstate (
+			id string primary key,
+			intval integer,
+			strval text)`,
 }
 
 var accountsResetExprs = []string{
@@ -72,6 +76,7 @@ var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS accountbase`,
 	`DROP TABLE IF EXISTS assetcreators`,
 	`DROP TABLE IF EXISTS storedcatchpoints`,
+	`DROP TABLE IF EXISTS catchpointstate`,
 	`DROP TABLE IF EXISTS accounthashes`,
 }
 
@@ -82,7 +87,7 @@ type accountDelta struct {
 
 func (cp *catchpointTracker) readOrDefaultUint64(ctx context.Context, tx *sql.Tx, stateName string, defaultValue uint64) (rnd uint64, def bool, err error) {
 	var val sql.NullInt64
-	err = tx.QueryRowContext(ctx, "SELECT rnd FROM acctrounds WHERE id=?", stateName).Scan(&val)
+	err = tx.QueryRowContext(ctx, "SELECT intval FROM catchpointstate WHERE id=?", stateName).Scan(&val)
 	if err == sql.ErrNoRows || false == val.Valid {
 		rnd = defaultValue
 		err = nil
@@ -96,14 +101,14 @@ func (cp *catchpointTracker) readOrDefaultUint64(ctx context.Context, tx *sql.Tx
 }
 
 func (cp *catchpointTracker) setOrClearUint64(ctx context.Context, tx *sql.Tx, stateName string, setValue uint64, defaultValue uint64) (cleared bool, err error) {
-	_, err = tx.Exec("DELETE FROM acctrounds WHERE id=?", stateName)
+	_, err = tx.Exec("DELETE FROM catchpointstate WHERE id=?", stateName)
 
 	if setValue == defaultValue {
 		return true, err
 	}
 
 	// we don't know if there is an entry in the table for this state, so we'll delete it just in case.
-	_, err = tx.Exec("INSERT INTO acctrounds(id, rnd) VALUES(?, ?)", stateName, setValue)
+	_, err = tx.Exec("INSERT INTO catchpointstate(id, intval) VALUES(?, ?)", stateName, setValue)
 	return false, err
 }
 
