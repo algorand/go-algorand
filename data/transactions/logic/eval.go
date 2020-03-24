@@ -593,7 +593,7 @@ func (cx *evalContext) checkStep() (cost int) {
 }
 
 func opErr(cx *evalContext) {
-	cx.err = errors.New("error")
+	cx.err = errors.New("TEAL runtime error (opcode)")
 }
 
 func opSHA256(cx *evalContext) {
