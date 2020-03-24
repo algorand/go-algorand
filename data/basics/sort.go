@@ -16,6 +16,10 @@
 
 package basics
 
+import (
+	"bytes"
+)
+
 // SortAssetIndex implements sorting by AssetIndex keys for
 // canonical encoding of maps in msgpack format.
 //msgp:ignore SortAssetIndex
@@ -53,5 +57,5 @@ func (a SortString) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 type SortAddress []Address
 
 func (a SortAddress) Len() int           { return len(a) }
-func (a SortAddress) Less(i, j int) bool { return string(a[i][:]) < string(a[j][:]) }
+func (a SortAddress) Less(i, j int) bool { return bytes.Compare(a[i][:], a[j][:]) < 0 }
 func (a SortAddress) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
