@@ -295,7 +295,7 @@ func TestSignTransaction(t *testing.T) {
 	// Request a signature
 	req1 := kmdapi.APIV1POSTTransactionSignRequest{
 		WalletHandleToken: walletHandleToken,
-		Transaction:       protocol.Encode(tx),
+		Transaction:       protocol.Encode(&tx),
 		WalletPassword:    f.WalletPassword,
 	}
 	resp1 := kmdapi.APIV1POSTTransactionSignResponse{}
@@ -399,7 +399,7 @@ func BenchmarkSignTransaction(b *testing.B) {
 			// Request a signature
 			req1 := kmdapi.APIV1POSTTransactionSignRequest{
 				WalletHandleToken: walletHandleToken,
-				Transaction:       protocol.Encode(tx),
+				Transaction:       protocol.Encode(&tx),
 				WalletPassword:    f.WalletPassword,
 			}
 			resp1 := kmdapi.APIV1POSTTransactionSignResponse{}

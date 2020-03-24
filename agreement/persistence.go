@@ -51,14 +51,14 @@ func persistent(as []action) bool {
 // encode serializes the current state into a byte array.
 func encode(t timers.Clock, rr rootRouter, p player, a []action) []byte {
 	var s diskState
-	s.Router = protocol.Encode(rr)
-	s.Player = protocol.Encode(p)
+	s.Router = protocol.EncodeReflect(rr)
+	s.Player = protocol.EncodeReflect(p)
 	s.Clock = t.Encode()
 	for _, act := range a {
 		s.ActionTypes = append(s.ActionTypes, act.t())
-		s.Actions = append(s.Actions, protocol.Encode(act))
+		s.Actions = append(s.Actions, protocol.EncodeReflect(act))
 	}
-	raw := protocol.Encode(s)
+	raw := protocol.EncodeReflect(s)
 	return raw
 }
 
@@ -173,7 +173,7 @@ func decode(raw []byte, t0 timers.Clock) (t timers.Clock, rr rootRouter, p playe
 	a2 := []action{}
 	var s diskState
 
-	err = protocol.Decode(raw, &s)
+	err = protocol.DecodeReflect(raw, &s)
 	if err != nil {
 		logging.Base().Errorf("decode (agreement): error decoding retrieved state (len = %v): %v", len(raw), err)
 		return
@@ -184,20 +184,20 @@ func decode(raw []byte, t0 timers.Clock) (t timers.Clock, rr rootRouter, p playe
 		return
 	}
 
-	err = protocol.Decode(s.Player, &p2)
+	err = protocol.DecodeReflect(s.Player, &p2)
 	if err != nil {
 		return
 	}
 
 	rr2 = makeRootRouter(p2)
-	err = protocol.Decode(s.Router, &rr2)
+	err = protocol.DecodeReflect(s.Router, &rr2)
 	if err != nil {
 		return
 	}
 
 	for i := range s.Actions {
 		act := zeroAction(s.ActionTypes[i])
-		err = protocol.Decode(s.Actions[i], &act)
+		err = protocol.DecodeReflect(s.Actions[i], &act)
 		if err != nil {
 			return
 		}
@@ -282,12 +282,6 @@ func (p *asyncPersistenceLoop) loop(ctx context.Context) {
 		case <-p.ledger.Wait(s.round.SubSaturate(1)):
 		}
 
-		// sanity check
-		_, _, _, _, derr := decode(s.raw, s.clock)
-		if derr != nil {
-			logging.Base().Errorf("could not decode own encoded disk state: %v", derr)
-		}
-
 		// store the state.
 		err := persist(p.log, p.crashDb, s.round, s.period, s.step, s.raw)
 
@@ -299,5 +293,13 @@ func (p *asyncPersistenceLoop) loop(ctx context.Context) {
 			done:   s.done,
 		}
 		close(s.events)
+
+		// sanity check; we check it after the fact, since it's not expected to ever happen.
+		// performance-wise, it takes approximitly 300000ns to execute, and we don't want it to
+		// block the persist operation.
+		_, _, _, _, derr := decode(s.raw, s.clock)
+		if derr != nil {
+			logging.Base().Errorf("could not decode own encoded disk state: %v", derr)
+		}
 	}
 }

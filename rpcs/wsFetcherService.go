@@ -18,6 +18,7 @@ package rpcs
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 
 	"github.com/algorand/go-deadlock"
@@ -35,6 +36,15 @@ type WsFetcherService struct {
 	mu              deadlock.RWMutex
 	pendingRequests map[string]chan WsGetBlockOut
 }
+
+// Constant strings used as keys for topics
+const (
+	roundKey           = "roundKey"        // Block round-number topic-key in the request
+	requestDataTypeKey = "requestDataType" // Data-type topic-key in the request (e.g. block, cert, block+cert)
+	blockDataKey       = "blockData"       // Block-data topic-key in the response
+	certDataKey        = "certData"        // Cert-data topic-key in the response
+	blockAndCertValue  = "blockAndCert"    // block+cert request data (as the value of requestDataTypeKey)
+)
 
 func makePendingRequestKey(target network.UnicastPeer, round basics.Round, tag protocol.Tag) string {
 	return fmt.Sprintf("<%s>:%d:%s", target.GetAddress(), round, tag)
@@ -60,7 +70,7 @@ func (fs *WsFetcherService) handleNetworkMsg(msg network.IncomingMessage) (out n
 		return
 	}
 
-	if decodeErr := protocol.Decode(msg.Data, &resp); decodeErr != nil {
+	if decodeErr := protocol.DecodeReflect(msg.Data, &resp); decodeErr != nil {
 		fs.log.Warnf("WsFetcherService(%s): request failed: unable to decode message : %v", uniPeer.GetAddress(), decodeErr)
 		out.Action = network.Disconnect
 		return
@@ -104,25 +114,66 @@ func (fs *WsFetcherService) RequestBlock(ctx context.Context, target network.Uni
 		delete(fs.pendingRequests, waitKey)
 		fs.mu.Unlock()
 	}()
-
-	req := WsGetBlockRequest{Round: uint64(round)}
-	err := target.Unicast(ctx, protocol.Encode(req), tag)
-	if err != nil {
-		return WsGetBlockOut{}, fmt.Errorf("WsFetcherService.RequestBlock(%d): unicast failed, %v", round, err)
-	}
-	select {
-	case resp := <-waitCh:
-		return resp, nil
-	case <-ctx.Done():
-		switch ctx.Err() {
-		case context.DeadlineExceeded:
-			return WsGetBlockOut{}, fmt.Errorf("WsFetcherService.RequestBlock(%d): request to %s was timed out", round, target.GetAddress())
-		case context.Canceled:
-			return WsGetBlockOut{}, fmt.Errorf("WsFetcherService.RequestBlock(%d): request to %s was cancelled by context", round, target.GetAddress())
-		default:
-			return WsGetBlockOut{}, ctx.Err()
+	if target.Version() == "1" {
+		req := WsGetBlockRequest{Round: uint64(round)}
+		err := target.Unicast(ctx, protocol.EncodeReflect(req), tag)
+		if err != nil {
+			return WsGetBlockOut{}, fmt.Errorf("WsFetcherService.RequestBlock(%d): unicast failed, %v", round, err)
+		}
+		select {
+		case resp := <-waitCh:
+			return resp, nil
+		case <-ctx.Done():
+			switch ctx.Err() {
+			case context.DeadlineExceeded:
+				return WsGetBlockOut{}, fmt.Errorf("WsFetcherService.RequestBlock(%d): request to %s was timed out", round, target.GetAddress())
+			case context.Canceled:
+				return WsGetBlockOut{}, fmt.Errorf("WsFetcherService.RequestBlock(%d): request to %s was cancelled by context", round, target.GetAddress())
+			default:
+				return WsGetBlockOut{}, ctx.Err()
+			}
 		}
 	}
+
+	// Else, if version == 2.1
+	roundBin := make([]byte, binary.MaxVarintLen64)
+	binary.PutUvarint(roundBin, uint64(round))
+	topics := network.Topics{
+		network.MakeTopic(requestDataTypeKey,
+			[]byte(blockAndCertValue)),
+		network.MakeTopic(
+			roundKey,
+			roundBin),
+	}
+	resp, err := target.Request(ctx, tag, topics)
+	if err != nil {
+		return WsGetBlockOut{}, fmt.Errorf("WsFetcherService(%s).RequestBlock(%d): Request failed, %v", target.GetAddress(), round, err)
+	}
+
+	if errMsg, found := resp.Topics.GetValue(network.ErrorKey); found {
+		return WsGetBlockOut{}, fmt.Errorf("WsFetcherService(%s).RequestBlock(%d): Request failed, %s", target.GetAddress(), round, string(errMsg))
+	}
+
+	blk, found := resp.Topics.GetValue(blockDataKey)
+	if !found {
+		return WsGetBlockOut{}, fmt.Errorf("WsFetcherService(%s): request failed: block data not found", target.GetAddress())
+	}
+	cert, found := resp.Topics.GetValue(certDataKey)
+	if !found {
+		return WsGetBlockOut{}, fmt.Errorf("WsFetcherService(%s): request failed: cert data not found", target.GetAddress())
+	}
+
+	// For backward compatibility, the block and cert are repackaged here.
+	// This can be dropeed once the v1 is dropped.
+	blockCertBytes := protocol.EncodeReflect(PreEncodedBlockCert{
+		Block:       blk,
+		Certificate: cert})
+
+	wsBlockOut := WsGetBlockOut{
+		Round:      uint64(round),
+		BlockBytes: blockCertBytes,
+	}
+	return wsBlockOut, nil
 }
 
 // RegisterWsFetcherService creates and returns a WsFetcherService that services gossip fetcher responses

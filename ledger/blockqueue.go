@@ -33,7 +33,6 @@ import (
 type blockEntry struct {
 	block bookkeeping.Block
 	cert  agreement.Certificate
-	aux   evalAux
 }
 
 type blockQueue struct {
@@ -92,7 +91,7 @@ func (bq *blockQueue) syncer() {
 
 		err := bq.l.blockDBs.wdb.Atomic(func(tx *sql.Tx) error {
 			for _, e := range workQ {
-				err0 := blockPut(tx, e.block, e.cert, e.aux)
+				err0 := blockPut(tx, e.block, e.cert)
 				if err0 != nil {
 					return err0
 				}
@@ -156,7 +155,7 @@ func (bq *blockQueue) latestCommitted() basics.Round {
 	return bq.lastCommitted
 }
 
-func (bq *blockQueue) putBlock(blk bookkeeping.Block, cert agreement.Certificate, aux evalAux) error {
+func (bq *blockQueue) putBlock(blk bookkeeping.Block, cert agreement.Certificate) error {
 	bq.mu.Lock()
 	defer bq.mu.Unlock()
 
@@ -183,7 +182,6 @@ func (bq *blockQueue) putBlock(blk bookkeeping.Block, cert agreement.Certificate
 	bq.q = append(bq.q, blockEntry{
 		block: blk,
 		cert:  cert,
-		aux:   aux,
 	})
 	bq.cond.Broadcast()
 	return nil
@@ -299,25 +297,6 @@ func (bq *blockQueue) getBlockCert(r basics.Round) (blk bookkeeping.Block, cert 
 	err = bq.l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
 		var err0 error
 		blk, cert, err0 = blockGetCert(tx, r)
-		return err0
-	})
-	err = updateErrNoEntry(err, lastCommitted, latest)
-	return
-}
-
-func (bq *blockQueue) getBlockAux(r basics.Round) (blk bookkeeping.Block, aux evalAux, err error) {
-	e, lastCommitted, latest, err := bq.checkEntry(r)
-	if e != nil {
-		return e.block, e.aux, nil
-	}
-
-	if err != nil {
-		return
-	}
-
-	err = bq.l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
-		var err0 error
-		blk, aux, err0 = blockGetAux(tx, r)
 		return err0
 	})
 	err = updateErrNoEntry(err, lastCommitted, latest)

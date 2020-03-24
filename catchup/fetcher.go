@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package rpcs
+package catchup
 
 import (
 	"context"
@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/rpcs"
 )
 
 // DefaultFetchTimeout is the default time a fetcher should wait for a block
@@ -61,9 +62,9 @@ type FetcherFactory interface {
 
 // NetworkFetcherFactory creates network fetchers
 type NetworkFetcherFactory struct {
-	net       PeerSource
+	net       network.GossipNode
 	peerLimit int
-	fs        *WsFetcherService
+	fs        *rpcs.WsFetcherService
 
 	log logging.Logger
 }
@@ -71,7 +72,7 @@ type NetworkFetcherFactory struct {
 func (factory NetworkFetcherFactory) makeHTTPFetcherFromPeer(log logging.Logger, peer network.Peer) FetcherClient {
 	hp, ok := peer.(network.HTTPPeer)
 	if ok {
-		return MakeHTTPFetcher(log, hp)
+		return MakeHTTPFetcher(log, hp, factory.net)
 	}
 	log.Errorf("%T %#v is not HTTPPeer", peer, peer)
 	return nil
@@ -79,7 +80,7 @@ func (factory NetworkFetcherFactory) makeHTTPFetcherFromPeer(log logging.Logger,
 
 // MakeNetworkFetcherFactory returns a network fetcher factory, that associates fetchers with no more than peerLimit peers from the aggregator.
 // WSClientSource can be nil, if no network exists to create clients from (defaults to http clients)
-func MakeNetworkFetcherFactory(net PeerSource, peerLimit int, fs *WsFetcherService) NetworkFetcherFactory {
+func MakeNetworkFetcherFactory(net network.GossipNode, peerLimit int, fs *rpcs.WsFetcherService) NetworkFetcherFactory {
 	var factory NetworkFetcherFactory
 	factory.net = net
 	factory.peerLimit = peerLimit
@@ -116,7 +117,9 @@ func (factory NetworkFetcherFactory) New() Fetcher {
 	}
 }
 
-// NewOverGossip returns a gossip fetcher using the given message tag.
+// NewOverGossip returns a fetcher using the given message tag.
+// If there are gossip peers, then it returns a fetcher over gossip
+// Otherwise, it returns an HTTP fetcher
 // We should never build two fetchers utilising the same tag. Why?
 func (factory NetworkFetcherFactory) NewOverGossip(tag protocol.Tag) Fetcher {
 	gossipPeers := factory.net.GetPeers(network.PeersConnectedIn)
@@ -295,7 +298,7 @@ func (cf *ComposedFetcher) Close() {
 /* Utils */
 
 func processBlockBytes(fetchedBuf []byte, r basics.Round, debugStr string) (blk *bookkeeping.Block, cert *agreement.Certificate, err error) {
-	var decodedEntry EncodedBlockCert
+	var decodedEntry rpcs.EncodedBlockCert
 	err = protocol.Decode(fetchedBuf, &decodedEntry)
 	if err != nil {
 		err = fmt.Errorf("networkFetcher.FetchBlock(%d): cannot decode block from peer %v: %v", r, debugStr, err)

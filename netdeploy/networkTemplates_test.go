@@ -64,3 +64,22 @@ func TestGenerateGenesis(t *testing.T) {
 	fileExists := err == nil
 	a.True(fileExists)
 }
+
+func TestValidate(t *testing.T) {
+	a := require.New(t)
+
+	templateDir, _ := filepath.Abs("../test/testdata/nettemplates")
+	template, _ := loadTemplate(filepath.Join(templateDir, "David20.json"))
+	err := template.Validate()
+	a.NoError(err)
+
+	templateDir, _ = filepath.Abs("../test/testdata/nettemplates")
+	template, _ = loadTemplate(filepath.Join(templateDir, "TenThousandAccountsEqual.json"))
+	err = template.Validate()
+	a.NoError(err)
+
+	templateDir, _ = filepath.Abs("../test/testdata/nettemplates")
+	template, _ = loadTemplate(filepath.Join(templateDir, "NegativeStake.json"))
+	err = template.Validate()
+	a.Error(err)
+}
