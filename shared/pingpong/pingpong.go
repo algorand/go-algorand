@@ -368,13 +368,8 @@ func constructTxn(from, to string, fee, amt, aidx uint64, client libgoal.Client,
 		crypto.RandBytes(lease[:])
 	}
 
-	if cfg.NumAsset == 0 { // Construct payment transaction
-		txn, err = client.ConstructPayment(from, to, fee, amt, noteField[:], "", lease, 0, 0)
-		if !cfg.Quiet {
-			fmt.Fprintf(os.Stdout, "Sending %d : %s -> %s\n", amt, from, to)
-		}
-	} else if cfg.NumApp > 0 {
-		accts := []string{to}
+	if cfg.NumApp > 0 { // Construct app transaction
+		accts := []string{from, to}
 		txn, err = client.MakeUnsignedAppNoOpTx(aidx, nil, accts)
 		if err != nil {
 			return
@@ -396,7 +391,13 @@ func constructTxn(from, to string, fee, amt, aidx uint64, client libgoal.Client,
 		if !cfg.Quiet {
 			fmt.Fprintf(os.Stdout, "Sending %d asset %d: %s -> %s\n", amt, aidx, from, to)
 		}
+	} else {
+		txn, err = client.ConstructPayment(from, to, fee, amt, noteField[:], "", lease, 0, 0)
+		if !cfg.Quiet {
+			fmt.Fprintf(os.Stdout, "Sending %d : %s -> %s\n", amt, from, to)
+		}
 	}
+
 	if err != nil {
 		return
 	}
