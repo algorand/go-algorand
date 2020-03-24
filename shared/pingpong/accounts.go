@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"github.com/algorand/go-algorand/crypto"
 	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/libgoal"
 	"sort"
 	"time"
@@ -259,6 +261,135 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 				fmt.Printf("Fund %d asset %d to account %s\n", assetAmt, k, addr)
 			}
 			accounts[cfg.SrcAccount] -= tx.Fee.Raw
+		}
+
+	}
+	return
+}
+
+func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig) (appParams map[uint64]v1.AppParams, err error) {
+	// get existing apps
+	account, accountErr := client.AccountInformation(cfg.SrcAccount)
+	if accountErr != nil {
+		fmt.Printf("Cannot lookup source account")
+		err = accountErr
+		return
+	}
+
+	// Get wallet handle token
+	var h []byte
+	h, err = client.GetUnencryptedWalletHandle()
+	if err != nil {
+		return
+	}
+
+	toCreate := int(cfg.NumApp) - len(account.AppParams)
+
+	// create apps in srcAccount
+	for i := 0; i < toCreate; i++ {
+		var tx transactions.Transaction
+
+		// This is just the "int 1" program
+		prog := "\x02\x20\x01\x01\x22"
+		schema := basics.StateSchema{}
+		tx, err = client.MakeUnsignedAppCreateTx(transactions.NoOpOC, prog, prog, schema, schema, nil, nil)
+		if err != nil {
+			fmt.Printf("Cannot create app txn\n")
+			return
+		}
+
+		tx, err = client.FillUnsignedTxTemplate(cfg.SrcAccount, 0, 0, cfg.MaxFee, tx)
+		if err != nil {
+			fmt.Printf("Cannot fill app creation txn\n")
+			return
+		}
+
+		// Ensure different txids
+		var note [8]byte
+		crypto.RandBytes(note[:])
+		tx.Note = note[:]
+
+		signedTxn, signErr := client.SignTransactionWithWallet(h, nil, tx)
+		if signErr != nil {
+			fmt.Printf("Cannot sign app creation txn\n")
+			err = signErr
+			return
+		}
+
+		txid, broadcastErr := client.BroadcastTransaction(signedTxn)
+		if broadcastErr != nil {
+			fmt.Printf("Cannot broadcast app creation txn\n")
+			err = broadcastErr
+			return
+		}
+
+		if !cfg.Quiet {
+			fmt.Printf("Create a new app: txid=%s\n", txid)
+		}
+
+		accounts[cfg.SrcAccount] -= tx.Fee.Raw
+	}
+
+	// get these apps
+	for {
+		account, accountErr = client.AccountInformation(cfg.SrcAccount)
+		if accountErr != nil {
+			fmt.Printf("Cannot lookup source account")
+			err = accountErr
+			return
+		}
+		if len(account.AppParams) >= int(cfg.NumApp) {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+
+	appParams = account.AppParams
+
+	for addr := range accounts {
+		addrAccount, addrErr := client.AccountInformation(addr)
+		if addrErr != nil {
+			fmt.Printf("Cannot lookup source account")
+			err = addrErr
+			return
+		}
+
+		for k := range appParams {
+			// if addr already opted in to this app, skip
+			if _, ok := addrAccount.AppLocalStates[k]; !ok {
+				// opt in to app
+				var tx transactions.Transaction
+				tx, err = client.MakeUnsignedAppOptInTx(k, nil, nil)
+				if err != nil {
+					fmt.Printf("Cannot opt in to app %v in account %v\n", k, addr)
+					return
+				}
+
+				tx, err = client.FillUnsignedTxTemplate(addr, 0, 0, cfg.MaxFee, tx)
+				if err != nil {
+					fmt.Printf("Cannot fill app %v init txn in account %v\n", k, addr)
+					return
+				}
+
+				signedTxn, signErr := client.SignTransactionWithWallet(h, nil, tx)
+				if signErr != nil {
+					fmt.Printf("Cannot sign app %v init txn in account %v\n", k, addr)
+					err = signErr
+					return
+				}
+
+				_, broadcastErr := client.BroadcastTransaction(signedTxn)
+				if broadcastErr != nil {
+					fmt.Printf("Cannot broadcast app %v init txn in account %v\n", k, addr)
+					err = broadcastErr
+					return
+				}
+
+				if !cfg.Quiet {
+					fmt.Printf("Init app %v in account %v\n", k, addr)
+				}
+				accounts[addr] -= tx.Fee.Raw
+			}
 		}
 
 	}

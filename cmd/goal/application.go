@@ -588,7 +588,7 @@ var readStateAppCmd = &cobra.Command{
 			// Get application local state
 			local, ok := response.AppLocalStates[appIdx]
 			if !ok {
-				reportErrorf(errorAccountNotOptedInToApp, appIdx)
+				reportErrorf(errorAccountNotOptedInToApp, account, appIdx)
 			}
 
 			// Encode local state to json, print, and exit

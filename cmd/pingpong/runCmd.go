@@ -57,6 +57,7 @@ var txnPerSec uint64
 var teal string
 var groupSize uint32
 var numAsset uint32
+var numApp uint32
 
 func init() {
 	rootCmd.AddCommand(runCmd)
@@ -86,6 +87,7 @@ func init() {
 	runCmd.Flags().StringVar(&teal, "teal", "", "teal test scenario, can be light, normal, or heavy, this overrides --program")
 	runCmd.Flags().Uint32Var(&groupSize, "groupsize", 1, "The number of transactions in each group")
 	runCmd.Flags().Uint32Var(&numAsset, "numasset", 0, "The number of assets each account holds")
+	runCmd.Flags().Uint32Var(&numApp, "numapp", 0, "The number of apps each account opts in to")
 	runCmd.Flags().BoolVar(&randomLease, "randomlease", false, "set the lease to contain a random value")
 }
 
@@ -238,14 +240,24 @@ var runCmd = &cobra.Command{
 		if numAsset <= 1000 {
 			cfg.NumAsset = numAsset
 		} else {
-			reportErrorf("Invalid number of asset: %d, (valid number: 1 - 1000)\n", numAsset)
+			reportErrorf("Invalid number of assets: %d, (valid number: 0 - 1000)\n", numAsset)
+		}
+
+		if numApp <= 1000 {
+			cfg.NumApp = numApp
+		} else {
+			reportErrorf("Invalid number of apps: %d, (valid number: 0 - 1000)\n", numApp)
+		}
+
+		if numAsset != 0 && numApp != 0 {
+			reportErrorf("only one of numapp and numasset may be specified")
 		}
 
 		reportInfof("Preparing to initialize PingPong with config:\n")
 		cfg.Dump(os.Stdout)
 
 		// Initialize accounts if necessary
-		accounts, assetParams, cfg, err := pingpong.PrepareAccounts(ac, cfg)
+		accounts, assetParams, appParams, cfg, err := pingpong.PrepareAccounts(ac, cfg)
 		if err != nil {
 			reportErrorf("Error preparing accounts for transfers: %v\n", err)
 		}
@@ -258,7 +270,7 @@ var runCmd = &cobra.Command{
 		cfg.Dump(os.Stdout)
 
 		// Kick off the real processing
-		pingpong.RunPingPong(context.Background(), ac, accounts, assetParams, cfg)
+		pingpong.RunPingPong(context.Background(), ac, accounts, assetParams, appParams, cfg)
 	},
 }
 
