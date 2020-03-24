@@ -61,6 +61,7 @@ var creatablesMigration = []string{
 	`ALTER TABLE assetcreators RENAME TO creatables`,
 	`ALTER TABLE creatables RENAME COLUMN asset TO creatable`,
 	`ALTER TABLE creatables ADD COLUMN ctype INTEGER DEFAULT 0`,
+	`CREATE INDEX creatable_ctype_idx ON creatables (creatable, ctype)`,
 }
 
 var accountsResetExprs = []string{
