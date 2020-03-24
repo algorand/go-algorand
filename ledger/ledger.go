@@ -287,6 +287,14 @@ func (l *Ledger) notifyCommit(r basics.Round) basics.Round {
 	return minToSave
 }
 
+// GetLastCatchpoint returns the latest catchpoint label that was written to the
+// database.
+func (l *Ledger) GetLastCatchpoint() string {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.accts.getLastCatchpoint()
+}
+
 // GetAssetCreatorForRound looks up the asset creator given the numerical asset
 // ID. This is necessary so that we can retrieve the AssetParams from the
 // creator's balance record.

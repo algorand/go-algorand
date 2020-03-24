@@ -17,6 +17,7 @@
 package ledger
 
 import (
+	"context"
 	"database/sql"
 	"encoding/binary"
 	"fmt"
@@ -123,6 +124,9 @@ type accountUpdates struct {
 	// The Trie tracking the current account balances. Always matches the balances that were
 	// written to the database.
 	balancesTrie *merkletrie.Trie
+
+	// The last catchpoint label that was writted to the database. Should always align with what's in the database,
+	lastCatchpoint string
 }
 
 func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
@@ -160,6 +164,11 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 		}
 
 		au.roundTotals = []AccountTotals{totals}
+
+		au.lastCatchpoint, _, err0 = readCatchpoingStateString(context.Background(), tx, "lastCatchpoint")
+		if err0 != nil {
+			return err0
+		}
 		return nil
 	})
 	if err != nil {
@@ -300,14 +309,14 @@ func (au *accountUpdates) accountsUpdateBalaces(balancesTx *merkletrie.Transacti
 			return err
 		}
 		if !deleted {
-			au.log.Warnf("failed to delete hash '%v' from merkle trie")
+			au.log.Warnf("failed to delete hash '%v' from merkle trie", delta.old)
 		}
 		added, err = balancesTx.Add(accountHashBuilder(addr, delta.new))
 		if err != nil {
 			return err
 		}
 		if !added {
-			au.log.Warnf("attempted to add duplicate hash '%v' to merkle trie")
+			au.log.Warnf("attempted to add duplicate hash '%v' to merkle trie", delta.new)
 		}
 	}
 	// write it all to disk.
@@ -315,10 +324,10 @@ func (au *accountUpdates) accountsUpdateBalaces(balancesTx *merkletrie.Transacti
 	return
 }
 
-func (au *accountUpdates) accountsCreateCatchpointLabel(tx *sql.Tx, committedRound basics.Round, offset uint64) (err error) {
+func (au *accountUpdates) accountsCreateCatchpointLabel(tx *sql.Tx, committedRound, balancesRound basics.Round, offset uint64) (err error) {
 	var totals AccountTotals
 	var balancesHash crypto.Digest
-	totals, err = au.totals(committedRound)
+	totals, err = au.totals(balancesRound)
 	if err != nil {
 		return
 	}
@@ -326,12 +335,17 @@ func (au *accountUpdates) accountsCreateCatchpointLabel(tx *sql.Tx, committedRou
 	if err != nil {
 		return
 	}
-	cpLabel := makeCatchpointLabel(committedRound, au.roundDigest[offset], balancesHash, totals)
+	ledgerBlockDigest := au.roundDigest[offset]
+	cpLabel := makeCatchpointLabel(committedRound, ledgerBlockDigest, balancesHash, totals)
 	label := cpLabel.String()
 	if label == "" {
 		return nil
 	}
-	return nil
+	_, err = writeCatchpointStateString(context.Background(), tx, "lastCatchpoint", label)
+	if err == nil {
+		au.lastCatchpoint = label
+	}
+	return err
 }
 
 func (au *accountUpdates) close() {
@@ -484,6 +498,10 @@ func (au *accountUpdates) listAssets(maxAssetIdx basics.AssetIndex, maxResults u
 	return res, nil
 }
 
+func (au *accountUpdates) getLastCatchpoint() string {
+	return au.lastCatchpoint
+}
+
 func (au *accountUpdates) getAssetCreatorForRound(rnd basics.Round, aidx basics.AssetIndex) (basics.Address, error) {
 	offset, err := au.roundOffset(rnd)
 	if err != nil {
@@ -584,7 +602,7 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Roun
 			}
 		}
 		if isCatchpointRound {
-			err = au.accountsCreateCatchpointLabel(tx, committedRound, offset)
+			err = au.accountsCreateCatchpointLabel(tx, committedRound, au.dbRound+basics.Round(offset), uint64(committedRound-au.dbRound)-1)
 		}
 		return err
 	})

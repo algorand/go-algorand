@@ -64,6 +64,8 @@ type StatusReport struct {
 	CatchupTime               time.Duration
 	HasSyncedSinceStartup     bool
 	StoppedAtUnsupportedRound bool
+	LastCatchpoint            string
+	Catchpoint                string // the catchpoint where we're currently catching up to. If the node isn't in fast catchup mode, it will be empty.
 }
 
 // TimeSinceLastRound returns the time since the last block was approved (locally), or 0 if no blocks seen
@@ -92,8 +94,8 @@ type AlgorandFullNode struct {
 	accountManager  *data.AccountManager
 	feeTracker      *pools.FeeTracker
 
-	algorandService *agreement.Service
-	syncer          *catchup.Service
+	agreementService *agreement.Service
+	catchupService   *catchup.Service
 
 	indexer *indexer.Indexer
 
@@ -237,9 +239,9 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		RandomSource:   node,
 		BacklogPool:    node.highPriorityCryptoVerificationPool,
 	}
-	node.algorandService = agreement.MakeService(agreementParameters)
+	node.agreementService = agreement.MakeService(agreementParameters)
 
-	node.syncer = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.wsFetcherService, blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)}, agreementLedger.UnmatchedPendingCertificates)
+	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.wsFetcherService, blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)}, agreementLedger.UnmatchedPendingCertificates)
 	node.txPoolSyncer = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
 
 	err = node.loadParticipationKeys()
@@ -301,9 +303,9 @@ func (node *AlgorandFullNode) Start() {
 	node.net.Start()
 	node.config.NetAddress, _ = node.net.Address()
 
-	node.syncer.Start()
-	node.algorandService.Start()
-	node.txPoolSyncer.Start(node.syncer.InitialSyncDone)
+	node.catchupService.Start()
+	node.agreementService.Start()
+	node.txPoolSyncer.Start(node.catchupService.InitialSyncDone)
 	node.ledgerService.Start()
 	node.txHandler.Start()
 
@@ -352,8 +354,8 @@ func (node *AlgorandFullNode) Stop() {
 
 	node.txHandler.Stop()
 	node.net.Stop()
-	node.algorandService.Shutdown()
-	node.syncer.Stop()
+	node.agreementService.Shutdown()
+	node.catchupService.Stop()
 	node.txPoolSyncer.Stop()
 	node.ledgerService.Stop()
 	node.highPriorityCryptoVerificationPool.Shutdown()
@@ -543,12 +545,13 @@ func (node *AlgorandFullNode) Status() (s StatusReport, err error) {
 
 	s.LastVersion = b.CurrentProtocol
 	s.NextVersion, s.NextVersionRound, s.NextVersionSupported = b.NextVersionInfo()
-	s.SynchronizingTime = node.syncer.SynchronizingTime()
+	s.SynchronizingTime = node.catchupService.SynchronizingTime()
 	s.LastRoundTimestamp = node.lastRoundTimestamp
-	s.CatchupTime = node.syncer.SynchronizingTime()
+	s.CatchupTime = node.catchupService.SynchronizingTime()
 	s.HasSyncedSinceStartup = node.hasSyncedSinceStartup
 	s.StoppedAtUnsupportedRound = s.LastRound+1 == s.NextVersionRound && !s.NextVersionSupported
-
+	s.LastCatchpoint = node.ledger.GetLastCatchpoint()
+	s.Catchpoint = "18970#LZNETY4ZMHAHIE2J5NVDPXHK6PPQTRCUUUYDQCC3G3QL3T36UBPQ" // todo.
 	return
 }
 
@@ -754,4 +757,14 @@ func (node *AlgorandFullNode) GetTransactionByID(txid transactions.Txid, rnd bas
 		ConfirmedRound: rnd,
 		ApplyData:      stx.ApplyData,
 	}, nil
+}
+
+// StartCatchup starts the catchpoint mode and attempt to get to the provided catchpoint
+func (node *AlgorandFullNode) StartCatchup(catchpoint string) error {
+	return nil
+}
+
+// AbortCatchup aborts the given catchpoint
+func (node *AlgorandFullNode) AbortCatchup(catchpoint string) error {
+	return nil
 }

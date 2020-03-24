@@ -57,6 +57,8 @@ func nodeStatus(node *node.AlgorandFullNode) (res v1.NodeStatus, err error) {
 		TimeSinceLastRound:        stat.TimeSinceLastRound().Nanoseconds(),
 		CatchupTime:               stat.CatchupTime.Nanoseconds(),
 		StoppedAtUnsupportedRound: stat.StoppedAtUnsupportedRound,
+		LastCatchpoint:            stat.LastCatchpoint,
+		Catchpoint:                stat.Catchpoint,
 	}, nil
 }
 
@@ -1568,4 +1570,104 @@ func GetTransactionByID(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 	// We didn't find it, return a failure
 	lib.ErrorResponse(w, http.StatusNotFound, errors.New(errTransactionNotFound), errTransactionNotFound, ctx.Log)
 	return
+}
+
+// StartCatchup is an httpHandler for route PUT /v1/catchup/{catchpoint:[0-9]{1,10}#[A-Z0-9]{1,53}}
+func StartCatchup(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
+	// swagger:operation PUT /v1/catchup/{catchpoint:[0-9]{1,10}#[A-Z0-9]{1,53}} StartCatchup
+	// ---
+	//     Summary: Set the node in a catchup mode
+	//     Description: Set the node in a catchup mode trying to reach the desired catchpoint
+	//     Produces:
+	//     - application/json
+	//     Schemes:
+	//     - http
+	//     Parameters:
+	//       - name: catchpoint
+	//         in: query
+	//         type: string
+	//         pattern: "[0-9]{1,10}#[A-Z0-9]{1,53}"
+	//         required: true
+	//         description: The catchpoint the node is to attempt to retrieve.
+	//     Responses:
+	//       200:
+	//         "$ref": '#/responses/StartCatchupResponse'
+	//       400:
+	//         description: Bad Request
+	//         schema: {type: string}
+	//       500:
+	//         description: Internal Error
+	//         schema: {type: string}
+	//       401: { description: Invalid API Token }
+	//       default: { description: Unknown Error }
+	catchpoint := r.FormValue("catchpoint")
+	_, _, err := ledger.ParseCatchpointLabel(catchpoint)
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusBadRequest, err, errFailedToParseCatchpoint, ctx.Log)
+		return
+	}
+
+	err = ctx.Node.StartCatchup(catchpoint)
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusInternalServerError, err, fmt.Sprintf(errFailedToStartCatchup, err), ctx.Log)
+		return
+	}
+
+	response := StartCatchupResponse{
+		Body: &v1.CatchupResponse{
+			Catchpoint: catchpoint,
+		},
+	}
+
+	SendJSON(response, w, ctx.Log)
+}
+
+// AbortCatchup is an httpHandler for route DELETE /v1/catchup/{catchpoint:[0-9]{1,10}#[A-Z0-9]{1,53}}
+func AbortCatchup(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
+	// swagger:operation DELETE /v1/catchup/{catchpoint:[0-9]{1,10}#[A-Z0-9]{1,53}} AbortCatchup
+	// ---
+	//     Summary: Exit from catchup mode
+	//     Description: Abort the node's catchup mode
+	//     Produces:
+	//     - application/json
+	//     Schemes:
+	//     - http
+	//     Parameters:
+	//       - name: catchpoint
+	//         in: query
+	//         type: string
+	//         pattern: "[0-9]{1,10}#[A-Z0-9]{1,53}"
+	//         required: true
+	//         description: The catchpoint the node is to attempt to retrieve.
+	//     Responses:
+	//       200:
+	//         "$ref": '#/responses/AbortCatchupResponse'
+	//       400:
+	//         description: Bad Request
+	//         schema: {type: string}
+	//       500:
+	//         description: Internal Error
+	//         schema: {type: string}
+	//       401: { description: Invalid API Token }
+	//       default: { description: Unknown Error }
+	catchpoint := r.FormValue("catchpoint")
+	_, _, err := ledger.ParseCatchpointLabel(catchpoint)
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusBadRequest, err, errFailedToParseCatchpoint, ctx.Log)
+		return
+	}
+
+	err = ctx.Node.AbortCatchup(catchpoint)
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusInternalServerError, err, fmt.Sprintf(errFailedToAbortCatchup, err), ctx.Log)
+		return
+	}
+
+	response := AbortCatchupResponse{
+		Body: &v1.CatchupResponse{
+			Catchpoint: catchpoint,
+		},
+	}
+
+	SendJSON(response, w, ctx.Log)
 }

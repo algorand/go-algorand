@@ -85,11 +85,11 @@ type accountDelta struct {
 	new basics.AccountData
 }
 
-func (cp *catchpointTracker) readOrDefaultUint64(ctx context.Context, tx *sql.Tx, stateName string, defaultValue uint64) (rnd uint64, def bool, err error) {
+func readCatchpoingStateUint64(ctx context.Context, tx *sql.Tx, stateName string) (rnd uint64, def bool, err error) {
 	var val sql.NullInt64
 	err = tx.QueryRowContext(ctx, "SELECT intval FROM catchpointstate WHERE id=?", stateName).Scan(&val)
 	if err == sql.ErrNoRows || false == val.Valid {
-		rnd = defaultValue
+		rnd = 0 // default to zero.
 		err = nil
 		def = true
 		return
@@ -100,15 +100,40 @@ func (cp *catchpointTracker) readOrDefaultUint64(ctx context.Context, tx *sql.Tx
 	return
 }
 
-func (cp *catchpointTracker) setOrClearUint64(ctx context.Context, tx *sql.Tx, stateName string, setValue uint64, defaultValue uint64) (cleared bool, err error) {
-	_, err = tx.Exec("DELETE FROM catchpointstate WHERE id=?", stateName)
-
-	if setValue == defaultValue {
+func writeCatchpointStateUint64(ctx context.Context, tx *sql.Tx, stateName string, setValue uint64) (cleared bool, err error) {
+	if setValue == 0 {
+		_, err = tx.Exec("DELETE FROM catchpointstate WHERE id=?", stateName)
 		return true, err
 	}
 
-	// we don't know if there is an entry in the table for this state, so we'll delete it just in case.
-	_, err = tx.Exec("INSERT INTO catchpointstate(id, intval) VALUES(?, ?)", stateName, setValue)
+	// we don't know if there is an entry in the table for this state, so we'll insert/replace it just in case.
+	_, err = tx.Exec("INSERT OR REPLACE INTO catchpointstate(id, intval) VALUES(?, ?)", stateName, setValue)
+	return false, err
+}
+
+func readCatchpoingStateString(ctx context.Context, tx *sql.Tx, stateName string) (str string, def bool, err error) {
+	var val sql.NullString
+	err = tx.QueryRowContext(ctx, "SELECT strval FROM catchpointstate WHERE id=?", stateName).Scan(&val)
+	if err == sql.ErrNoRows || false == val.Valid {
+		str = "" // default to empty string
+		err = nil
+		def = true
+		return
+	}
+	if err == nil {
+		str = val.String
+	}
+	return
+}
+
+func writeCatchpointStateString(ctx context.Context, tx *sql.Tx, stateName string, setValue string) (cleared bool, err error) {
+	if setValue == "" {
+		_, err = tx.Exec("DELETE FROM catchpointstate WHERE id=?", stateName)
+		return true, err
+	}
+
+	// we don't know if there is an entry in the table for this state, so we'll insert/replace it just in case.
+	_, err = tx.Exec("INSERT OR REPLACE INTO catchpointstate(id, strval) VALUES(?, ?)", stateName, setValue)
 	return false, err
 }
 

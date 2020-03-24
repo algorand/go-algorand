@@ -63,6 +63,16 @@ type NodeStatus struct {
 	//
 	// Required: true
 	StoppedAtUnsupportedRound bool `json:"stoppedAtUnsupportedRound"`
+
+	// LastCatchpoint indicates the node's last encountered catchpoint
+	//
+	// Required: true
+	LastCatchpoint string `json:"lastCatchpoint,omitempty"`
+
+	// Catchpoint indicates the catchpoint that the node is currently trying to retrieve
+	//
+	// Required: true
+	Catchpoint string `json:"catchpoint,omitempty"`
 }
 
 // TransactionID Description
@@ -766,4 +776,12 @@ type PendingTransactions struct {
 	// TotalTxns
 	// required: true
 	TotalTxns uint64 `json:"totalTxns"`
+}
+
+// CatchupResponse represents a the outcome of starting or aborting the catchup process
+// swagger:model CatchupState
+type CatchupResponse struct {
+	// Catchpoint
+	// required: true
+	Catchpoint string `json:"catchpoint"`
 }

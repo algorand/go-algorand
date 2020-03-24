@@ -809,3 +809,37 @@ func (c *Client) ConsensusParams(round uint64) (consensus config.ConsensusParams
 
 	return params, nil
 }
+
+// AbortCatchup aborts the currently running catchup
+func (c *Client) AbortCatchup() error {
+	algod, err := c.ensureAlgodClient()
+	if err != nil {
+		return err
+	}
+	resp, err := algod.Status()
+	if err != nil {
+		return err
+	}
+	if resp.Catchpoint == "" {
+		// no error - we were not catching up.
+		return nil
+	}
+	_, err = algod.AbortCatchup(resp.Catchpoint)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// Catchup start catching up to the give catchpoint label.
+func (c *Client) Catchup(catchpointLabel string) error {
+	algod, err := c.ensureAlgodClient()
+	if err != nil {
+		return err
+	}
+	_, err = algod.Catchup(catchpointLabel)
+	if err != nil {
+		return err
+	}
+	return nil
+}

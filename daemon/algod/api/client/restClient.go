@@ -337,6 +337,18 @@ func (client RestClient) RawBlock(round uint64) (response v1.RawBlock, err error
 	return
 }
 
+// AbortCatchup aborts the currently running catchup
+func (client RestClient) AbortCatchup(catchpointLabel string) (response v1.RawResponse, err error) {
+	err = client.submitForm(&response, fmt.Sprintf("/catchup/%s", catchpointLabel), nil, "DELETE", false, true)
+	return
+}
+
+// Catchup start catching up to the give catchpoint label
+func (client RestClient) Catchup(catchpointLabel string) (response v1.RawResponse, err error) {
+	err = client.submitForm(&response, fmt.Sprintf("/catchup/%s", catchpointLabel), nil, "PUT", false, true)
+	return
+}
+
 // GetGoRoutines gets a dump of the goroutines from pprof
 // Not supported
 func (client RestClient) GetGoRoutines(ctx context.Context) (goRoutines string, err error) {

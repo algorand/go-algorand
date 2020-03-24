@@ -256,14 +256,14 @@ func (cp *catchpointTracker) newBlock(blk bookkeeping.Block, delta StateDelta) {
 
 func (cp *catchpointTracker) loadCatchpointState(tx *sql.Tx) (err error) {
 	nextCatchpointRound := uint64(0)
-	nextCatchpointRound, _, err = cp.readOrDefaultUint64(context.Background(), tx, "catchpointNextCandidateRound", defaultCatchpointNextCandidateRound)
+	nextCatchpointRound, _, err = readCatchpoingStateUint64(context.Background(), tx, "catchpointNextCandidateRound")
 	if err != nil {
 		return fmt.Errorf("unable to load catchpoint state 'catchpointNextCandidateRound': %v", err)
 	}
 	cp.nextCatchpointCandidateRound = basics.Round(nextCatchpointRound)
 
 	archivalMode := uint64(0)
-	archivalMode, _, err = cp.readOrDefaultUint64(context.Background(), tx, "catchpointArchivalMode", uint64(nodeArchivalModeUnknown))
+	archivalMode, _, err = readCatchpoingStateUint64(context.Background(), tx, "catchpointArchivalMode")
 	if err != nil {
 		return fmt.Errorf("unable to load catchpoint state 'catchpointArchivalMode': %v", err)
 	}
@@ -273,7 +273,7 @@ func (cp *catchpointTracker) loadCatchpointState(tx *sql.Tx) (err error) {
 		} else {
 			archivalMode = uint64(nodeArchivalModeDisabled)
 		}
-		_, err = cp.setOrClearUint64(context.Background(), tx, "catchpointArchivalMode", archivalMode, uint64(nodeArchivalModeUnknown))
+		_, err = writeCatchpointStateUint64(context.Background(), tx, "catchpointArchivalMode", archivalMode)
 		if err != nil {
 			return fmt.Errorf("unable to set catchpoint state 'catchpointArchivalMode': %v", err)
 		}
@@ -281,13 +281,13 @@ func (cp *catchpointTracker) loadCatchpointState(tx *sql.Tx) (err error) {
 	cp.nodeArchivalMode = nodeArchivalModeEnum(archivalMode)
 
 	catchpointStage := uint64(0)
-	catchpointStage, _, err = cp.readOrDefaultUint64(context.Background(), tx, "catchpointStage", uint64(catchpointStageUnknown))
+	catchpointStage, _, err = readCatchpoingStateUint64(context.Background(), tx, "catchpointStage")
 	if err != nil {
 		return fmt.Errorf("unable to read catchpoint state 'catchpointStage': %v", err)
 	}
 	cp.stage = catchpointStageEnum(catchpointStage)
 
-	cp.lastCatchpointDatabaseSize, _, err = cp.readOrDefaultUint64(context.Background(), tx, "catchpointLastDatabaseSize", uint64(0))
+	cp.lastCatchpointDatabaseSize, _, err = readCatchpoingStateUint64(context.Background(), tx, "catchpointLastDatabaseSize")
 	if err != nil {
 		return fmt.Errorf("unable to read catchpoint state 'catchpointLastDatabaseSize': %v", err)
 	}
@@ -328,11 +328,11 @@ func (cp *catchpointTracker) scheduleCatchpoint() error {
 
 	// the point where we want to start backing up is somewhere in the future, just set it here for now.
 	err = cp.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
-		_, err = cp.setOrClearUint64(context.Background(), tx, "catchpointNextCandidateRound", nextCatchpointRound, 0)
+		_, err = writeCatchpointStateUint64(context.Background(), tx, "catchpointNextCandidateRound", nextCatchpointRound)
 		if err != nil {
 			return fmt.Errorf("unable to set catchpoint state 'catchpointNextCandidateRound': %v", err)
 		}
-		_, err = cp.setOrClearUint64(context.Background(), tx, "catchpointStage", uint64(catchpointStageScheduled), uint64(catchpointStageUnknown))
+		_, err = writeCatchpointStateUint64(context.Background(), tx, "catchpointStage", uint64(catchpointStageScheduled))
 		if err != nil {
 			return fmt.Errorf("unable to set catchpoint state 'catchpointStage': %v", err)
 		}
@@ -342,7 +342,7 @@ func (cp *catchpointTracker) scheduleCatchpoint() error {
 			if err != nil {
 				return fmt.Errorf("unable to read database size: %v", err)
 			}
-			_, err = cp.setOrClearUint64(context.Background(), tx, "catchpointLastDatabaseSize", dbSize, 0)
+			_, err = writeCatchpointStateUint64(context.Background(), tx, "catchpointLastDatabaseSize", dbSize)
 			if err != nil {
 				return fmt.Errorf("unable to set catchpoint state 'catchpointLastDatabaseSize': %v", err)
 			}
@@ -415,19 +415,19 @@ func (cp *catchpointTracker) updateArchivalMode(enable bool) error {
 	}
 
 	err := cp.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
-		_, err = cp.setOrClearUint64(context.Background(), tx, "catchpointNextCandidateRound", 0, 0)
+		_, err = writeCatchpointStateUint64(context.Background(), tx, "catchpointNextCandidateRound", 0)
 		if err != nil {
 			return fmt.Errorf("unable to set catchpoint state 'catchpointNextCandidateRound': %v", err)
 		}
-		_, err = cp.setOrClearUint64(context.Background(), tx, "catchpointLastDatabaseSize", 0, 0)
+		_, err = writeCatchpointStateUint64(context.Background(), tx, "catchpointLastDatabaseSize", 0)
 		if err != nil {
 			return fmt.Errorf("unable to set catchpoint state 'catchpointLastDatabaseSize': %v", err)
 		}
-		_, err = cp.setOrClearUint64(context.Background(), tx, "catchpointStage", uint64(catchpointStageUnknown), uint64(catchpointStageUnknown))
+		_, err = writeCatchpointStateUint64(context.Background(), tx, "catchpointStage", uint64(catchpointStageUnknown))
 		if err != nil {
 			return fmt.Errorf("unable to set catchpoint state 'catchpointStage': %v", err)
 		}
-		_, err = cp.setOrClearUint64(context.Background(), tx, "catchpointArchivalMode", uint64(mode), uint64(nodeArchivalModeUnknown))
+		_, err = writeCatchpointStateUint64(context.Background(), tx, "catchpointArchivalMode", uint64(mode))
 		if err != nil {
 			return fmt.Errorf("unable to set catchpoint state 'catchpointArchivalMode': %v", err)
 		}
@@ -478,7 +478,7 @@ func (cp *catchpointTracker) startBackup(ctx context.Context) (err error) {
 	}
 
 	err = cp.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
-		_, err = cp.setOrClearUint64(context.Background(), tx, "catchpointStage", uint64(catchpointStageBackingUp), uint64(catchpointStageUnknown))
+		_, err = writeCatchpointStateUint64(context.Background(), tx, "catchpointStage", uint64(catchpointStageBackingUp))
 		return
 	})
 	if err != nil {
@@ -510,7 +510,7 @@ func (cp *catchpointTracker) finishBackup() (err error) {
 	}
 	cp.backupAccessor = nil
 	err = cp.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
-		_, err = cp.setOrClearUint64(context.Background(), tx, "catchpointStage", uint64(catchpointStageBackedUp), uint64(catchpointStageUnknown))
+		_, err = writeCatchpointStateUint64(context.Background(), tx, "catchpointStage", uint64(catchpointStageBackedUp))
 		return
 	})
 	if err != nil {
