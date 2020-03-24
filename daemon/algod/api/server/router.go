@@ -135,5 +135,10 @@ func ConfigureRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdow
 	registerHandlers(e, apiV1Tag, routes.V1Routes, ctx)
 
 	// Registering v2 routes
-	generated.RegisterHandlers(e, &v2.V2Handlers{})
+	v2Handler := v2.V2Handlers{
+		Node:     node,
+		Log:      logger,
+		Shutdown: shutdown,
+	}
+	generated.RegisterHandlers(e, &v2Handler)
 }

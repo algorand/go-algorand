@@ -147,62 +147,12 @@ type AssetParams struct {
 	Url *string `json:"url,omitempty"`
 }
 
-// NodeStatus defines model for NodeStatus.
-type NodeStatus struct {
-
-	// CatchupTime in nanoseconds
-	CatchupTime uint64 `json:"catchup-time"`
-
-	// HasSyncedSinceStartup indicates whether a round has completed since startup
-	HasSyncedSinceStartup bool `json:"has-synced-since-startup"`
-
-	// LastRound indicates the last round seen
-	LastRound uint64 `json:"last-round"`
-
-	// LastVersion indicates the last consensus version supported
-	LastVersion *string `json:"last-version,omitempty"`
-
-	// NextVersion of consensus protocol to use
-	NextVersion *string `json:"next-version,omitempty"`
-
-	// NextVersionRound is the round at which the next consensus version will apply
-	NextVersionRound *uint64 `json:"next-version-round,omitempty"`
-
-	// NextVersionSupported indicates whether the next consensus version is supported by this node
-	NextVersionSupported *bool `json:"next-version-supported,omitempty"`
-
-	// StoppedAtUnsupportedRound indicates that the node does not support the new rounds and has stopped making progress
-	StoppedAtUnsupportedRound bool `json:"stopped-at-unsupported-round"`
-
-	// TimeSinceLastRound in nanoseconds
-	TimeSinceLastRound uint64 `json:"time-since-last-round"`
-}
-
-// RawBlock defines model for RawBlock.
-type RawBlock map[string]interface{}
-
-// RawTransaction defines model for RawTransaction.
-type RawTransaction map[string]interface{}
-
-// Supply defines model for Supply.
-type Supply struct {
-
-	// Round
-	CurrentRound uint64 `json:"current_round"`
-
-	// OnlineMoney
-	OnlineMoney uint64 `json:"online-money"`
-
-	// TotalMoney
-	TotalMoney uint64 `json:"total-money"`
-}
-
 // TransactionParams defines model for TransactionParams.
 type TransactionParams struct {
 
 	// ConsensusVersion indicates the consensus protocol version
 	// as of LastRound.
-	ConsensusVersion string `json:"consensusVersion"`
+	ConsensusVersion string `json:"consensus-version"`
 
 	// Fee is the suggested transaction fee
 	// Fee is in units of micro-Algos per byte.
@@ -210,18 +160,18 @@ type TransactionParams struct {
 	// at least MinTxnFee for the current network protocol.
 	Fee uint64 `json:"fee"`
 
+	// GenesisHash is the hash of the genesis block.
+	GenesisHash []byte `json:"genesis-hash"`
+
 	// GenesisID is an ID listed in the genesis block.
 	GenesisID string `json:"genesisID"`
 
-	// GenesisHash is the hash of the genesis block.
-	Genesishash []byte `json:"genesishash"`
-
 	// LastRound indicates the last round seen
-	LastRound uint64 `json:"lastRound"`
+	LastRound uint64 `json:"last-round"`
 
 	// The minimum transaction fee (not per byte) required for the
 	// txn to validate for the current network protocol.
-	MinFee *uint64 `json:"minFee,omitempty"`
+	MinFee uint64 `json:"min-fee"`
 }
 
 // Version defines model for Version.
@@ -310,9 +260,104 @@ type TxId []byte
 // TxType defines model for tx-type.
 type TxType string
 
+// AccountResponse defines model for AccountResponse.
+type AccountResponse Account
+
+// BlockResponse defines model for BlockResponse.
+type BlockResponse map[string]interface{}
+
 // Error defines model for Error.
 type Error struct {
 	Error string `json:"error"`
+}
+
+// NodeStatusResponse defines model for NodeStatusResponse.
+type NodeStatusResponse struct {
+
+	// CatchupTime in nanoseconds
+	CatchupTime uint64 `json:"catchup-time"`
+
+	// HasSyncedSinceStartup indicates whether a round has completed since startup
+	HasSyncedSinceStartup bool `json:"has-synced-since-startup"`
+
+	// LastRound indicates the last round seen
+	LastRound uint64 `json:"last-round"`
+
+	// LastVersion indicates the last consensus version supported
+	LastVersion *string `json:"last-version,omitempty"`
+
+	// NextVersion of consensus protocol to use
+	NextVersion *string `json:"next-version,omitempty"`
+
+	// NextVersionRound is the round at which the next consensus version will apply
+	NextVersionRound *uint64 `json:"next-version-round,omitempty"`
+
+	// NextVersionSupported indicates whether the next consensus version is supported by this node
+	NextVersionSupported *bool `json:"next-version-supported,omitempty"`
+
+	// StoppedAtUnsupportedRound indicates that the node does not support the new rounds and has stopped making progress
+	StoppedAtUnsupportedRound bool `json:"stopped-at-unsupported-round"`
+
+	// TimeSinceLastRound in nanoseconds
+	TimeSinceLastRound uint64 `json:"time-since-last-round"`
+}
+
+// PendingTransactionResponse defines model for PendingTransactionResponse.
+type PendingTransactionResponse struct {
+
+	// The asset index if the transaction was found and it created an asset.
+	AssetIndex *uint64 `json:"asset-index,omitempty"`
+
+	// Rewards in microalgos applied to the close remainder to account.
+	CloseRewards *uint64 `json:"close-rewards,omitempty"`
+
+	// Closing amount for the transaction.
+	ClosingAmount *uint64 `json:"closing-amount,omitempty"`
+
+	// The round where this transaction was confirmed, if present.
+	ConfirmedRound *uint64 `json:"confirmed-round,omitempty"`
+
+	// Indicates that the transaction was kicked out of this node's transaction pool (and specifies why that happened).  An empty string indicates the transaction wasn't kicked out of this node's txpool due to an error.
+	PoolError string `json:"pool-error"`
+
+	// Rewards in microalgos applied to the receiver account.
+	ReceiverRewards *uint64 `json:"receiver-rewards,omitempty"`
+
+	// Rewards in microalgos applied to the sender account.
+	SenderRewards *uint64 `json:"sender-rewards,omitempty"`
+
+	// The raw transaction encoded as a JSON string or Base64 encoded message pack object.
+	Txn string `json:"txn"`
+}
+
+// PendingTransactionsResponse defines model for PendingTransactionsResponse.
+type PendingTransactionsResponse struct {
+
+	// An array of transactions encoded as either a JSON string or a Base64 encoded message pack object.
+	TopTransactions []string `json:"top-transactions"`
+
+	// Total number of transactions in the pool.
+	TotalTransactions uint64 `json:"total-transactions"`
+}
+
+// PostTransactionsResponse defines model for PostTransactionsResponse.
+type PostTransactionsResponse struct {
+
+	// encoding of the transaction hash.
+	TxId string `json:"txId"`
+}
+
+// SupplyResponse defines model for SupplyResponse.
+type SupplyResponse struct {
+
+	// Round
+	CurrentRound uint64 `json:"current_round"`
+
+	// OnlineMoney
+	OnlineMoney uint64 `json:"online-money"`
+
+	// TotalMoney
+	TotalMoney uint64 `json:"total-money"`
 }
 
 // GetPendingTransactionsByAddressParams defines parameters for GetPendingTransactionsByAddress.
