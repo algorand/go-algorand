@@ -394,11 +394,11 @@ func computeAppIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx uint64)
 	if tx.ConfirmedRound == 0 {
 		return 0
 	}
-	// Transaction must be AssetConfig transaction
+	// Transaction must be ApplicationCall transaction
 	if tx.Txn.Txn.ApplicationCallTxnFields.Empty() {
 		return 0
 	}
-	// Transaction must be creating an asset
+	// Transaction must be creating an application
 	if tx.Txn.Txn.ApplicationCallTxnFields.ApplicationID != 0 {
 		return 0
 	}
@@ -918,9 +918,9 @@ func PendingTransactionInformation(ctx lib.ReqContext, w http.ResponseWriter, r 
 
 		responseTxs.TransactionResults = &v1.TransactionResults{
 			// This field will be omitted for transactions that did not
-			// create an asset (or for which we could not look up the block
-			// it was created in), because computeAssetIndexFromTxn will
-			// return 0 in that case.
+			// create an app/asset (or for which we could not look up the
+			// block it was created in), because compute{App|Asset}IndexFromTxn
+			// will return 0 in that case.
 			CreatedAssetIndex: computeAssetIndexFromTxn(txn, ledger),
 			CreatedAppIndex:   computeAppIndexFromTxn(txn, ledger),
 		}
