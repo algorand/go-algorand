@@ -115,7 +115,7 @@ chmod -R g-w "${PKG_ROOT}/var/lib/algorand"
 find "${PKG_ROOT}/var/lib/algorand" -type d | xargs chmod g+w
 
 mkdir -p "${PKG_ROOT}/DEBIAN"
-debian_files=("control" "postinst" "prerm" "postrm" "conffiles")
+debian_files=("control" "preinst" "postinst" "prerm" "postrm" "conffiles")
 for ctl in "${debian_files[@]}"; do
     # Copy first, to preserve permissions, then overwrite to fill in template.
     cp -a "installer/debian/${ctl}" "${PKG_ROOT}/DEBIAN/${ctl}"
