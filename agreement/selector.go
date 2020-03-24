@@ -38,7 +38,7 @@ type selector struct {
 
 // ToBeHashed implements the crypto.Hashable interface.
 func (sel selector) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.AgreementSelector, protocol.Encode(sel)
+	return protocol.AgreementSelector, protocol.Encode(&sel)
 }
 
 // CommitteeSize returns the size of the committee, which is determined by
@@ -66,19 +66,19 @@ func membership(l LedgerReader, addr basics.Address, r basics.Round, p period, s
 
 	record, err := l.BalanceRecord(balanceRound, addr)
 	if err != nil {
-		err = fmt.Errorf("Service.initializeVote (r=%v): Failed to obtain balance record for address %v in round %v: %v", r, addr, balanceRound, err)
+		err = fmt.Errorf("Service.initializeVote (r=%d): Failed to obtain balance record for address %v in round %d: %v", r, addr, balanceRound, err)
 		return
 	}
 
 	total, err := l.Circulation(balanceRound)
 	if err != nil {
-		err = fmt.Errorf("Service.initializeVote (r=%v): Failed to obtain total circulation in round %v: %v", r, balanceRound, err)
+		err = fmt.Errorf("Service.initializeVote (r=%d): Failed to obtain total circulation in round %d: %v", r, balanceRound, err)
 		return
 	}
 
 	seed, err := l.Seed(seedRound)
 	if err != nil {
-		err = fmt.Errorf("Service.initializeVote (r=%v): Failed to obtain seed in round %v: %v", r, seedRound, err)
+		err = fmt.Errorf("Service.initializeVote (r=%d): Failed to obtain seed in round %d: %v", r, seedRound, err)
 		return
 	}
 

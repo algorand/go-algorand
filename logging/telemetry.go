@@ -84,6 +84,8 @@ func makeTelemetryState(cfg TelemetryConfig, hookFactory hookFactory) (*telemetr
 			return nil, err
 		}
 		telemetry.hook = createAsyncHookLevels(hook, 32, 100, makeLevels(cfg.MinLogLevel))
+	} else {
+		telemetry.hook = new(dummyHook)
 	}
 	telemetry.sendToLog = cfg.SendToLog
 	return telemetry, nil
@@ -227,13 +229,13 @@ func (t *telemetryState) logTelemetry(l logger, message string, details interfac
 	if t.sendToLog {
 		entry.Info(message)
 	}
-	if t.hook != nil {
-		t.hook.Fire(entry)
-	}
+	t.hook.Fire(entry)
 }
 
 func (t *telemetryState) Close() {
-	t.hook.Close()
+	if t.hook != nil {
+		t.hook.Close()
+	}
 }
 
 func (t *telemetryState) Flush() {
