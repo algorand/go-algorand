@@ -61,14 +61,14 @@ func init() {
 	appCmd.PersistentFlags().StringSliceVar(&appB64Args, "app-arg-b64", nil, "Base64 encoded args for application transactions")
 	appCmd.PersistentFlags().StringSliceVar(&appAccounts, "app-account", nil, "Accounts that may be accessed from application logic")
 
-	createAppCmd.Flags().StringVar(&approvalProgFile, "approval-prog", "", "TEAL program to approve/reject transactions")
-	createAppCmd.Flags().StringVar(&clearProgFile, "clear-prog", "", "TEAL program to update application state when a user clears their state")
+	createAppCmd.Flags().StringVar(&approvalProgFile, "approval-prog", "", "TEAL program filename for approving/rejecting transactions")
+	createAppCmd.Flags().StringVar(&clearProgFile, "clear-prog", "", "TEAL program filename for updating application state when a user clears their local state")
 
 	createAppCmd.Flags().Uint64Var(&globalSchemaUints, "global-ints", 0, "Maximum number of integer values that may be stored in the global key/value store. Immutable.")
 	createAppCmd.Flags().Uint64Var(&globalSchemaByteSlices, "global-byteslices", 0, "Maximum number of byte slices that may be stored in the global key/value store. Immutable.")
 	createAppCmd.Flags().Uint64Var(&localSchemaUints, "local-ints", 0, "Maximum number of integer values that may be stored in local (per-account) key/value stores for this app. Immutable.")
 	createAppCmd.Flags().Uint64Var(&localSchemaByteSlices, "local-byteslices", 0, "Maximum number of byte slices that may be stored in local (per-account) key/value stores for this app. Immutable.")
-	createAppCmd.Flags().StringVar(&appCreator, "creator", "", "Account to create the asset")
+	createAppCmd.Flags().StringVar(&appCreator, "creator", "", "Account to create the application")
 
 	callAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to call app from")
 	optInAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to opt in")
@@ -80,12 +80,12 @@ func init() {
 	// Can't use PersistentFlags on the root because for some reason marking
 	// a root command as required with MarkPersistentFlagRequired isn't
 	// working
-	callAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Asset ID")
-	optInAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Asset ID")
-	closeOutAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Asset ID")
-	clearAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Asset ID")
-	deleteAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Asset ID")
-	readStateAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Asset ID")
+	callAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
+	optInAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
+	closeOutAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
+	clearAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
+	deleteAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
+	readStateAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
 
 	readStateAppCmd.Flags().BoolVar(&fetchLocal, "local", false, "Fetch account-specific state for this application. `--from` address is required when using this flag")
 	readStateAppCmd.Flags().BoolVar(&fetchGlobal, "global", false, "Fetch global state for this application.")
