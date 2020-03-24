@@ -199,7 +199,7 @@ type StateSchema struct {
 	NumByteSlice uint64 `json:"byteslices"`
 }
 
-// Applicaiton specifies both the unique identifier and the parameters for an
+// Application specifies both the unique identifier and the parameters for an
 // application
 //
 // swagger:model Application
