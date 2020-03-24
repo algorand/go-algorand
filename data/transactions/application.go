@@ -514,8 +514,7 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva
 		// If the user hasn't opted in yet, allocate LocalState for the app
 		record.AppLocalStates = cloneAppLocalStates(record.AppLocalStates)
 		record.AppLocalStates[appIdx] = basics.AppLocalState{
-			Schema:   params.LocalStateSchema,
-			KeyValue: make(basics.TealKeyValue),
+			Schema: params.LocalStateSchema,
 		}
 		err = balances.Put(record)
 		if err != nil {

@@ -127,7 +127,13 @@ func (al *appLedger) AppGlobalState() (basics.TealKeyValue, error) {
 		return nil, fmt.Errorf("app %d not found in account %s", al.appIdx, creator.String())
 	}
 
-	return params.GlobalState.Clone(), nil
+	// GlobalState might be nil, so make sure we don't return a nil map
+	keyValue := params.GlobalState.Clone()
+	if keyValue == nil {
+		keyValue = make(basics.TealKeyValue)
+	}
+
+	return keyValue, nil
 }
 
 func (al *appLedger) AppLocalState(addr basics.Address, appIdx basics.AppIndex) (basics.TealKeyValue, error) {
@@ -156,7 +162,13 @@ func (al *appLedger) AppLocalState(addr basics.Address, appIdx basics.AppIndex) 
 	// Clone LocalState so that we don't edit it in place
 	cloned := record.AppLocalStates[appIdx].Clone()
 
-	return cloned.KeyValue, nil
+	// KeyValue might be nil, so make sure we don't return a nil map
+	keyValue := cloned.KeyValue
+	if keyValue == nil {
+		keyValue = make(basics.TealKeyValue)
+	}
+
+	return keyValue, nil
 }
 
 func (al *appLedger) AssetHolding(addr basics.Address, assetIdx uint64) (holding basics.AssetHolding, err error) {
