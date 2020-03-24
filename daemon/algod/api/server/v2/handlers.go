@@ -3,6 +3,7 @@ package v2
 import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/labstack/echo/v4"
+
 )
 
 type V2Handlers struct {}
@@ -28,6 +29,16 @@ func (v2 *V2Handlers) GetBlock(ctx echo.Context, round uint64, params generated.
 // Get the current supply reported by the ledger.
 // (GET /v2/ledger/supply)
 func (v2 *V2Handlers) GetSupply(ctx echo.Context) error {
+	return nil
+}
+
+// (POST /v2/register-participation-keys/{account-id})
+func (v2 *V2Handlers) PostV2RegisterParticipationKeysAccountId(ctx echo.Context, accountId string, params generated.PostV2RegisterParticipationKeysAccountIdParams) error {
+	return nil
+}
+
+// (POST /v2/shutdown)
+func (v2 *V2Handlers) PostV2Shutdown(ctx echo.Context, params generated.PostV2ShutdownParams) error {
 	return nil
 }
 
@@ -63,17 +74,7 @@ func (v2 *V2Handlers) GetPendingTransactions(ctx echo.Context, params generated.
 
 // Get a specific pending transaction.
 // (GET /v2/transactions/pending/{txid})
-func (v2 *V2Handlers) PendingTransactionInformation(ctx echo.Context, txid string) error {
+func (v2 *V2Handlers) PendingTransactionInformation(ctx echo.Context, txid string, params generated.PendingTransactionInformationParams) error {
 	return nil
 }
 
-
-// (GET /v2/register-participation-keys/{account-id})
-func (v2 *V2Handlers) GetV2RegisterParticipationKeysAccountId(ctx echo.Context, accountId string, params generated.GetV2RegisterParticipationKeysAccountIdParams) error {
-	return nil
-}
-
-// (GET /v2/shutdown)
-func (v2 *V2Handlers) GetV2Shutdown(ctx echo.Context, params generated.GetV2ShutdownParams) error {
-	return nil
-}
