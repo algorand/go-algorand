@@ -34,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -255,9 +256,36 @@ func makeUnsignedApplicationCallTx(appIdx uint64, onCompletion transactions.OnCo
 	tx.ApplicationID = basics.AppIndex(appIdx)
 	tx.OnCompletion = onCompletion
 
-	// int 1, always approved
-	tx.ApprovalProgram = "\x02\x20\x01\x01\x22"
-	tx.ClearStateProgram = "\x02\x20\x01\x01\x22"
+	// If creating, set programs
+	if appIdx == 0 {
+		testprog := `
+			// Write global["foo"] = "bar"
+			byte base64 Zm9v
+			byte base64 YmFy
+			app_global_put
+
+			// Write sender.local["foo"] = "bar"
+			// txn.Sender
+			int 0
+			byte base64 Zm9v
+			byte base64 YmFy
+			app_local_put
+
+			int 1
+		`
+		asm, err := logic.AssembleString(testprog)
+		if err != nil {
+			return tx, err
+		}
+		tx.ApprovalProgram = string(asm)
+		tx.ClearStateProgram = string(asm)
+		tx.GlobalStateSchema = basics.StateSchema{
+			NumByteSlice: 1,
+		}
+		tx.LocalStateSchema = basics.StateSchema{
+			NumByteSlice: 1,
+		}
+	}
 
 	return tx, nil
 }
@@ -330,7 +358,7 @@ func TestArchivalCreatables(t *testing.T) {
 			tx, err = makeUnsignedAssetCreateTx(blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, 100, false, creatorEncoded, creatorEncoded, creatorEncoded, creatorEncoded, "m", "m", "", nil)
 		} else {
 			creatableIdxs[createdIdx] = AppCreated
-			tx, err = makeUnsignedApplicationCallTx(0, transactions.NoOpOC)
+			tx, err = makeUnsignedApplicationCallTx(0, transactions.OptInOC)
 		}
 		require.NoError(t, err)
 
