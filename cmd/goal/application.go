@@ -195,7 +195,7 @@ var createAppCmd = &cobra.Command{
 				reportErrorf(errorBroadcastingTX, err)
 			}
 
-			reportInfof("Attempting to create app (approval hash %v, clear hash %v)", crypto.HashObj(logic.Program(approvalProg)), crypto.HashObj(logic.Program(clearProg)))
+			reportInfof("Attempting to create app (approval size %d, hash %v; clear size %d, hash %v)", len(approvalProg), crypto.HashObj(logic.Program(approvalProg)), len(clearProg), crypto.HashObj(logic.Program(clearProg)))
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
