@@ -450,8 +450,6 @@ func getWalletHandleMaybePassword(dataDir string, walletName string, getPassword
 		return token, nil, nil
 	}
 
-	reportInfof("Failed to get cached wallet handle: %v", err)
-
 	// Assume any errors were "wrong password" errors, until we have actual
 	// API error codes
 	pw = ensurePasswordForWallet(walletName)

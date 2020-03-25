@@ -75,6 +75,7 @@ func TestBasicCatchup(t *testing.T) {
 // TestCatchupOverGossip tests catchup across network versions
 // The current versions are the original v1 and the upgraded to v2.1
 func TestCatchupOverGossip(t *testing.T) {
+	t.Parallel()
 	// ledger node upgraded version, fetcher node upgraded version
 	runCatchupOverGossip(t, false, false)
 	// ledger node older version, fetcher node upgraded version
@@ -92,7 +93,6 @@ func runCatchupOverGossip(t *testing.T,
 	if testing.Short() {
 		t.Skip()
 	}
-	t.Parallel()
 	a := require.New(t)
 	// Overview of this test:
 	// Start a two-node network (Primary with 0% stake, Secondary with 100% stake)
