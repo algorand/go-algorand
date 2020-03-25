@@ -267,7 +267,9 @@ type TxType string
 type AccountResponse Account
 
 // BlockResponse defines model for BlockResponse.
-type BlockResponse map[string]interface{}
+type BlockResponse struct {
+	Block string `json:"block"`
+}
 
 // Error defines model for Error.
 type Error struct {

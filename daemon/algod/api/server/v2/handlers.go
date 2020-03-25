@@ -56,8 +56,28 @@ func (v2 *V2Handlers) AccountInformation(ctx echo.Context, address string) error
 // Get the block for the given round.
 // (GET /v2/blocks/{round})
 func (v2 *V2Handlers) GetBlock(ctx echo.Context, round uint64, params generated.GetBlockParams) error {
-	// TODO
-	return nil
+	handle, err := getCodecHandle(params.Format)
+	if err != nil {
+		return returnError(ctx, http.StatusBadRequest, err, v2.Log)
+	}
+
+	// TODO: What is raw block bytes, should I use that instead?
+	//blockbytes, err := rpcs.RawBlockBytes(v2.Node.Ledger(), basics.Round(round))
+
+	ledger := v2.Node.Ledger()
+	b, _, err := ledger.BlockCert(basics.Round(round))
+	if err != nil {
+		return returnError(ctx, http.StatusInternalServerError, err, v2.Log)
+	}
+
+	encoded, err := encode(handle, b)
+	if err != nil {
+		return returnError(ctx, http.StatusInternalServerError, err, v2.Log)
+	}
+
+	return ctx.JSON(http.StatusOK, generated.BlockResponse{
+		Block: encoded,
+	})
 }
 
 // Get the current supply reported by the ledger.
