@@ -85,7 +85,7 @@ type accountDelta struct {
 	new basics.AccountData
 }
 
-func readCatchpoingStateUint64(ctx context.Context, tx *sql.Tx, stateName string) (rnd uint64, def bool, err error) {
+func readCatchpointStateUint64(ctx context.Context, tx *sql.Tx, stateName string) (rnd uint64, def bool, err error) {
 	var val sql.NullInt64
 	err = tx.QueryRowContext(ctx, "SELECT intval FROM catchpointstate WHERE id=?", stateName).Scan(&val)
 	if err == sql.ErrNoRows || false == val.Valid {

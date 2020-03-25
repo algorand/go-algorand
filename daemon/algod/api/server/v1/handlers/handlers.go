@@ -1600,10 +1600,10 @@ func StartCatchup(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	//         schema: {type: string}
 	//       401: { description: Invalid API Token }
 	//       default: { description: Unknown Error }
-	catchpoint := r.FormValue("catchpoint")
+	catchpoint := mux.Vars(r)["catchpoint"]
 	_, _, err := ledger.ParseCatchpointLabel(catchpoint)
 	if err != nil {
-		lib.ErrorResponse(w, http.StatusBadRequest, err, errFailedToParseCatchpoint, ctx.Log)
+		lib.ErrorResponse(w, http.StatusBadRequest, err /*errFailedToParseCatchpoint*/, fmt.Sprintf("invalid catchpoint : %v", catchpoint), ctx.Log)
 		return
 	}
 
@@ -1650,7 +1650,7 @@ func AbortCatchup(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	//         schema: {type: string}
 	//       401: { description: Invalid API Token }
 	//       default: { description: Unknown Error }
-	catchpoint := r.FormValue("catchpoint")
+	catchpoint := mux.Vars(r)["catchpoint"]
 	_, _, err := ledger.ParseCatchpointLabel(catchpoint)
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusBadRequest, err, errFailedToParseCatchpoint, ctx.Log)

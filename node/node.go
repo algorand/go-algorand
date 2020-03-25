@@ -801,8 +801,8 @@ func (node *AlgorandFullNode) StartCatchup(catchpoint string) error {
 	if node.catchpointCatchupService != nil {
 		return fmt.Errorf("unable to start catchpoint catchup for '%s' - already catching up '%s'", catchpoint, node.catchpointCatchupService.CatchpointLabel)
 	}
-	node.catchpointCatchupService = catchup.MakeCatchpointCatchupService(catchpoint)
-	node.catchpointCatchupService.Start()
+	node.catchpointCatchupService = catchup.MakeCatchpointCatchupService(catchpoint, node)
+	node.catchpointCatchupService.Start(context.Background())
 	return nil
 }
 

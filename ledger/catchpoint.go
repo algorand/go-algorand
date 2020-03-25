@@ -256,14 +256,14 @@ func (cp *catchpointTracker) newBlock(blk bookkeeping.Block, delta StateDelta) {
 
 func (cp *catchpointTracker) loadCatchpointState(tx *sql.Tx) (err error) {
 	nextCatchpointRound := uint64(0)
-	nextCatchpointRound, _, err = readCatchpoingStateUint64(context.Background(), tx, "catchpointNextCandidateRound")
+	nextCatchpointRound, _, err = readCatchpointStateUint64(context.Background(), tx, "catchpointNextCandidateRound")
 	if err != nil {
 		return fmt.Errorf("unable to load catchpoint state 'catchpointNextCandidateRound': %v", err)
 	}
 	cp.nextCatchpointCandidateRound = basics.Round(nextCatchpointRound)
 
 	archivalMode := uint64(0)
-	archivalMode, _, err = readCatchpoingStateUint64(context.Background(), tx, "catchpointArchivalMode")
+	archivalMode, _, err = readCatchpointStateUint64(context.Background(), tx, "catchpointArchivalMode")
 	if err != nil {
 		return fmt.Errorf("unable to load catchpoint state 'catchpointArchivalMode': %v", err)
 	}
@@ -281,13 +281,13 @@ func (cp *catchpointTracker) loadCatchpointState(tx *sql.Tx) (err error) {
 	cp.nodeArchivalMode = nodeArchivalModeEnum(archivalMode)
 
 	catchpointStage := uint64(0)
-	catchpointStage, _, err = readCatchpoingStateUint64(context.Background(), tx, "catchpointStage")
+	catchpointStage, _, err = readCatchpointStateUint64(context.Background(), tx, "catchpointStage")
 	if err != nil {
 		return fmt.Errorf("unable to read catchpoint state 'catchpointStage': %v", err)
 	}
 	cp.stage = catchpointStageEnum(catchpointStage)
 
-	cp.lastCatchpointDatabaseSize, _, err = readCatchpoingStateUint64(context.Background(), tx, "catchpointLastDatabaseSize")
+	cp.lastCatchpointDatabaseSize, _, err = readCatchpointStateUint64(context.Background(), tx, "catchpointLastDatabaseSize")
 	if err != nil {
 		return fmt.Errorf("unable to read catchpoint state 'catchpointLastDatabaseSize': %v", err)
 	}

@@ -100,7 +100,7 @@ func (client RestClient) submitForm(response interface{}, path string, request i
 
 	var req *http.Request
 	var body io.Reader
-
+	fmt.Printf("makeing request for '%s'\n", path) // todo - remove this line.
 	if request != nil {
 		if rawRequestPaths[path] {
 			reqBytes, ok := request.([]byte)
@@ -338,13 +338,13 @@ func (client RestClient) RawBlock(round uint64) (response v1.RawBlock, err error
 }
 
 // AbortCatchup aborts the currently running catchup
-func (client RestClient) AbortCatchup(catchpointLabel string) (response v1.RawResponse, err error) {
+func (client RestClient) AbortCatchup(catchpointLabel string) (response v1.CatchupResponse, err error) {
 	err = client.submitForm(&response, fmt.Sprintf("/catchup/%s", catchpointLabel), nil, "DELETE", false, true)
 	return
 }
 
 // Catchup start catching up to the give catchpoint label
-func (client RestClient) Catchup(catchpointLabel string) (response v1.RawResponse, err error) {
+func (client RestClient) Catchup(catchpointLabel string) (response v1.CatchupResponse, err error) {
 	err = client.submitForm(&response, fmt.Sprintf("/catchup/%s", catchpointLabel), nil, "PUT", false, true)
 	return
 }
