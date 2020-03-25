@@ -42,6 +42,8 @@ func init() {
 	params1.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{
 		proto2: 0,
 	}
+	params1.MinUpgradeWaitRounds = 0
+	params1.MaxUpgradeWaitRounds = 0
 	config.Consensus[proto1] = params1
 
 	params2 := config.Consensus[protocol.ConsensusCurrentVersion]
