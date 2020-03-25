@@ -94,8 +94,9 @@ type AlgorandFullNode struct {
 	accountManager  *data.AccountManager
 	feeTracker      *pools.FeeTracker
 
-	agreementService *agreement.Service
-	catchupService   *catchup.Service
+	agreementService         *agreement.Service
+	catchupService           *catchup.Service
+	catchpointCatchupService *catchup.CatchpointCatchupService
 
 	indexer *indexer.Indexer
 
@@ -552,7 +553,10 @@ func (node *AlgorandFullNode) Status() (s StatusReport, err error) {
 	s.HasSyncedSinceStartup = node.hasSyncedSinceStartup
 	s.StoppedAtUnsupportedRound = s.LastRound+1 == s.NextVersionRound && !s.NextVersionSupported
 	s.LastCatchpoint = node.ledger.GetLastCatchpoint()
-	s.Catchpoint = "18970#LZNETY4ZMHAHIE2J5NVDPXHK6PPQTRCUUUYDQCC3G3QL3T36UBPQ" // todo.
+	if node.catchpointCatchupService != nil {
+		s.Catchpoint = node.catchpointCatchupService.CatchpointLabel // "18970#LZNETY4ZMHAHIE2J5NVDPXHK6PPQTRCUUUYDQCC3G3QL3T36UBPQ"
+	}
+
 	return
 }
 
@@ -762,10 +766,29 @@ func (node *AlgorandFullNode) GetTransactionByID(txid transactions.Txid, rnd bas
 
 // StartCatchup starts the catchpoint mode and attempt to get to the provided catchpoint
 func (node *AlgorandFullNode) StartCatchup(catchpoint string) error {
+	node.mu.Lock()
+	defer node.mu.Unlock()
+	if node.indexer != nil {
+		return fmt.Errorf("catching up using a catchpoint is not supported on indexer-enabled nodes")
+	}
+	if node.catchpointCatchupService != nil {
+		return fmt.Errorf("unable to start catchpoint catchup for '%s' - already catching up '%s'", catchpoint, node.catchpointCatchupService.CatchpointLabel)
+	}
+	node.catchpointCatchupService = catchup.MakeCatchpointCatchupService(catchpoint)
+	node.catchpointCatchupService.Start()
 	return nil
 }
 
 // AbortCatchup aborts the given catchpoint
 func (node *AlgorandFullNode) AbortCatchup(catchpoint string) error {
+	node.mu.Lock()
+	defer node.mu.Unlock()
+	if node.catchpointCatchupService == nil {
+		return nil
+	}
+	if node.catchpointCatchupService.CatchpointLabel != catchpoint {
+		return fmt.Errorf("unable to abort catchpoint catchup for '%s' - already catching up '%s'", catchpoint, node.catchpointCatchupService.CatchpointLabel)
+	}
+	node.catchpointCatchupService.Abort()
 	return nil
 }
