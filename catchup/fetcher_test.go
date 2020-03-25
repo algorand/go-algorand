@@ -880,7 +880,7 @@ func TestGetBlockWS(t *testing.T) {
 		up := makeTestUnicastPeer(net, version, t)
 		net.peers = append(net.peers, up)
 
-		fs := rpcs.RegisterWsFetcherService(logging.TestingLog(t), net)
+		fs := rpcs.MakeWsFetcherService(logging.TestingLog(t), net)
 
 		_, ok := net.GetPeers(network.PeersConnectedIn)[0].(network.UnicastPeer)
 		require.True(t, ok)

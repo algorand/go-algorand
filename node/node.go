@@ -215,7 +215,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	}
 
 	node.ledgerService = rpcs.MakeLedgerService(cfg, node.ledger, p2pNode, node.genesisID)
-	node.wsFetcherService = rpcs.RegisterWsFetcherService(node.log, p2pNode)
+	node.wsFetcherService = rpcs.MakeWsFetcherService(node.log, p2pNode)
 	rpcs.RegisterTxService(node.transactionPool, p2pNode, node.genesisID, cfg.TxPoolSize, cfg.TxSyncServeResponseSize)
 
 	crashPathname := filepath.Join(genesisDir, config.CrashFilename)
@@ -306,6 +306,7 @@ func (node *AlgorandFullNode) Start() {
 	node.net.Start()
 	node.config.NetAddress, _ = node.net.Address()
 
+	node.wsFetcherService.Start()
 	node.catchupService.Start()
 	node.agreementService.Start()
 	node.txPoolSyncerService.Start(node.catchupService.InitialSyncDone)
@@ -379,6 +380,7 @@ func (node *AlgorandFullNode) Stop() {
 	node.catchupService.Stop()
 	node.txPoolSyncerService.Stop()
 	node.ledgerService.Stop()
+	node.wsFetcherService.Stop()
 	node.highPriorityCryptoVerificationPool.Shutdown()
 	node.lowPriorityCryptoVerificationPool.Shutdown()
 	node.cryptoPool.Shutdown()
