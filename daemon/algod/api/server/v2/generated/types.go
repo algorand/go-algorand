@@ -280,23 +280,20 @@ type NodeStatusResponse struct {
 	// CatchupTime in nanoseconds
 	CatchupTime uint64 `json:"catchup-time"`
 
-	// HasSyncedSinceStartup indicates whether a round has completed since startup
-	HasSyncedSinceStartup bool `json:"has-synced-since-startup"`
-
 	// LastRound indicates the last round seen
 	LastRound uint64 `json:"last-round"`
 
 	// LastVersion indicates the last consensus version supported
-	LastVersion *string `json:"last-version,omitempty"`
+	LastVersion string `json:"last-version"`
 
 	// NextVersion of consensus protocol to use
-	NextVersion *string `json:"next-version,omitempty"`
+	NextVersion string `json:"next-version"`
 
 	// NextVersionRound is the round at which the next consensus version will apply
-	NextVersionRound *uint64 `json:"next-version-round,omitempty"`
+	NextVersionRound uint64 `json:"next-version-round"`
 
 	// NextVersionSupported indicates whether the next consensus version is supported by this node
-	NextVersionSupported *bool `json:"next-version-supported,omitempty"`
+	NextVersionSupported bool `json:"next-version-supported"`
 
 	// StoppedAtUnsupportedRound indicates that the node does not support the new rounds and has stopped making progress
 	StoppedAtUnsupportedRound bool `json:"stopped-at-unsupported-round"`

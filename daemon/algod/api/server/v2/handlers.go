@@ -69,8 +69,23 @@ func (v2 *V2Handlers) PostV2Shutdown(ctx echo.Context, params generated.PostV2Sh
 // Gets the current node status.
 // (GET /v2/status)
 func (v2 *V2Handlers) GetStatus(ctx echo.Context) error {
-	// TODO
-	return nil
+	stat, err := v2.Node.Status()
+	if err != nil {
+		return returnError(ctx, http.StatusInternalServerError, errors.New(errFailedRetrievingNodeStatus), v2.Log)
+	}
+
+	response := generated.NodeStatusResponse{
+		LastRound:                 uint64(stat.LastRound),
+		LastVersion:               string(stat.LastVersion),
+		NextVersion:               string(stat.NextVersion),
+		NextVersionRound:          uint64(stat.NextVersionRound),
+		NextVersionSupported:      stat.NextVersionSupported,
+		TimeSinceLastRound:        uint64(stat.TimeSinceLastRound().Nanoseconds()),
+		CatchupTime:               uint64(stat.CatchupTime.Nanoseconds()),
+		StoppedAtUnsupportedRound: stat.StoppedAtUnsupportedRound,
+	}
+
+	return ctx.JSON(http.StatusOK, response)
 }
 
 // Gets the node status after waiting for the given round.
