@@ -17,8 +17,12 @@
 package main
 
 import (
+	"encoding/base32"
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"os"
+	"strconv"
 
 	"github.com/spf13/cobra"
 
@@ -41,8 +45,9 @@ var (
 	globalSchemaUints      uint64
 	globalSchemaByteSlices uint64
 
-	appAccounts []string
-	appB64Args  []string
+	appStrAccounts   []string
+	appB64Args       []string
+	appInputFilename string
 
 	fetchLocal  bool
 	fetchGlobal bool
@@ -62,7 +67,8 @@ func init() {
 	appCmd.PersistentFlags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
 	appCmd.PersistentFlags().StringVarP(&walletName, "wallet", "w", "", "Set the wallet to be used for the selected operation")
 	appCmd.PersistentFlags().StringSliceVar(&appB64Args, "app-arg-b64", nil, "Base64 encoded args for application transactions")
-	appCmd.PersistentFlags().StringSliceVar(&appAccounts, "app-account", nil, "Accounts that may be accessed from application logic")
+	appCmd.PersistentFlags().StringSliceVar(&appStrAccounts, "app-account", nil, "Accounts that may be accessed from application logic")
+	appCmd.PersistentFlags().StringVarP(&appInputFilename, "app-input", "i", "", "JSON file containing encoded arguments and inputs (mutually exclusive with app-arg-b64 and app-account)")
 
 	createAppCmd.Flags().StringVar(&approvalProgFile, "approval-prog", "", "TEAL assembly program filename for approving/rejecting transactions")
 	createAppCmd.Flags().StringVar(&clearProgFile, "clear-prog", "", "TEAL assembly program filename for updating application state when a user clears their local state")
@@ -129,6 +135,16 @@ func init() {
 	readStateAppCmd.MarkFlagRequired("app-id")
 }
 
+type AppCallArg struct {
+	Encoding string `json:"encoding"`
+	Value    string `json:"value"`
+}
+
+type AppCallInputs struct {
+	Accounts []string     `json:"accounts"`
+	Args     []AppCallArg `json:"args"`
+}
+
 func getAppArgs() []string {
 	decoded := getB64Args(appB64Args)
 	out := make([]string, len(decoded))
@@ -136,6 +152,71 @@ func getAppArgs() []string {
 		out[i] = string(b)
 	}
 	return out
+}
+
+func processAppInputFile() (args, accounts []string) {
+	var inputs AppCallInputs
+	f, err := os.Open(appInputFilename)
+	if err != nil {
+		reportErrorf("Could not open app input JSON file: %v", err)
+	}
+
+	dec := json.NewDecoder(f)
+	err = dec.Decode(&inputs)
+	if err != nil {
+		reportErrorf("Could not decode app input JSON file: %v", err)
+	}
+
+	accounts = inputs.Accounts
+	args = make([]string, len(inputs.Args))
+	for i, arg := range inputs.Args {
+		var rawValue string
+		switch arg.Encoding {
+		case "str", "string":
+			rawValue = arg.Value
+		case "int", "integer":
+			num, err := strconv.ParseUint(arg.Value, 10, 64)
+			if err != nil {
+				reportErrorf("Could not parse uint64 from string (%s) in app input JSON file: %v", arg.Value, err)
+			}
+			ibytes := make([]byte, 8)
+			binary.BigEndian.PutUint64(ibytes, num)
+			rawValue = string(ibytes)
+		case "addr", "address":
+			addr, err := basics.UnmarshalChecksumAddress(arg.Value)
+			if err != nil {
+				reportErrorf("Could not unmarshal checksummed address from string (%s) in app input JSON file: %v", arg.Value, err)
+			}
+			rawValue = string(addr[:])
+		case "b32", "base32", "byte base32":
+			data, err := base32.StdEncoding.DecodeString(arg.Value)
+			if err != nil {
+				reportErrorf("Could not decode base32-encoded string (%s) in app input JSON file: %v", arg.Value, err)
+			}
+			rawValue = string(data)
+		case "b64", "base64", "byte base64":
+			data, err := base64.StdEncoding.DecodeString(arg.Value)
+			if err != nil {
+				reportErrorf("Could not decode base64-encoded string (%s) in app input JSON file: %v", arg.Value, err)
+			}
+			rawValue = string(data)
+		default:
+			reportErrorf("Unknown encoding in app input JSON file: %s", arg.Encoding)
+		}
+
+		args[i] = rawValue
+	}
+	return
+}
+
+func getAppInputs() (args, accounts []string) {
+	if (appB64Args != nil || appStrAccounts != nil) && appInputFilename != "" {
+		reportErrorf("Cannot specify both command-line arguments/accounts and JSON input filename")
+	}
+	if appInputFilename != "" {
+		return processAppInputFile()
+	}
+	return getAppArgs(), appStrAccounts
 }
 
 var appCmd = &cobra.Command{
@@ -171,7 +252,7 @@ var createAppCmd = &cobra.Command{
 		// Parse transaction parameters
 		approvalProg := string(assembleFile(approvalProgFile))
 		clearProg := string(assembleFile(clearProgFile))
-		appArgs := getAppArgs()
+		appArgs, appAccounts := getAppInputs()
 
 		tx, err := client.MakeUnsignedAppCreateTx(transactions.NoOpOC, approvalProg, clearProg, globalSchema, localSchema, appArgs, appAccounts)
 		if err != nil {
@@ -312,7 +393,7 @@ var optInAppCmd = &cobra.Command{
 		client := ensureFullClient(dataDir)
 
 		// Parse transaction parameters
-		appArgs := getAppArgs()
+		appArgs, appAccounts := getAppInputs()
 
 		tx, err := client.MakeUnsignedAppOptInTx(appIdx, appArgs, appAccounts)
 		if err != nil {
@@ -380,7 +461,7 @@ var closeOutAppCmd = &cobra.Command{
 		client := ensureFullClient(dataDir)
 
 		// Parse transaction parameters
-		appArgs := getAppArgs()
+		appArgs, appAccounts := getAppInputs()
 
 		tx, err := client.MakeUnsignedAppCloseOutTx(appIdx, appArgs, appAccounts)
 		if err != nil {
@@ -448,7 +529,7 @@ var clearAppCmd = &cobra.Command{
 		client := ensureFullClient(dataDir)
 
 		// Parse transaction parameters
-		appArgs := getAppArgs()
+		appArgs, appAccounts := getAppInputs()
 
 		tx, err := client.MakeUnsignedAppClearStateTx(appIdx, appArgs, appAccounts)
 		if err != nil {
@@ -516,7 +597,7 @@ var callAppCmd = &cobra.Command{
 		client := ensureFullClient(dataDir)
 
 		// Parse transaction parameters
-		appArgs := getAppArgs()
+		appArgs, appAccounts := getAppInputs()
 
 		tx, err := client.MakeUnsignedAppNoOpTx(appIdx, appArgs, appAccounts)
 		if err != nil {
@@ -584,7 +665,7 @@ var deleteAppCmd = &cobra.Command{
 		client := ensureFullClient(dataDir)
 
 		// Parse transaction parameters
-		appArgs := getAppArgs()
+		appArgs, appAccounts := getAppInputs()
 
 		tx, err := client.MakeUnsignedAppDeleteTx(appIdx, appArgs, appAccounts)
 		if err != nil {
