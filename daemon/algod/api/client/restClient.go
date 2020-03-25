@@ -100,7 +100,7 @@ func (client RestClient) submitForm(response interface{}, path string, request i
 
 	var req *http.Request
 	var body io.Reader
-	fmt.Printf("makeing request for '%s'\n", path) // todo - remove this line.
+
 	if request != nil {
 		if rawRequestPaths[path] {
 			reqBytes, ok := request.([]byte)
