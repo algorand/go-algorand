@@ -50,6 +50,7 @@ type LedgerService struct {
 	genesisID   string
 	catchupReqs chan network.IncomingMessage
 	stop        chan struct{}
+	net         network.GossipNode
 }
 
 // EncodedBlockCert defines how GetBlockBytes encodes a block and its certificate
@@ -68,26 +69,27 @@ type PreEncodedBlockCert struct {
 	Certificate codec.Raw `codec:"cert"`
 }
 
-// RegisterLedgerService creates a LedgerService around the provider Ledger and registers it for RPC with the provided Registrar
-func RegisterLedgerService(config config.Local, ledger *data.Ledger, registrar Registrar, genesisID string) *LedgerService {
-	service := &LedgerService{ledger: ledger, genesisID: genesisID}
-	registrar.RegisterHTTPHandler(LedgerServiceBlockPath, service)
-	c := make(chan network.IncomingMessage, config.CatchupParallelBlocks*ledgerServerCatchupRequestBufferSize)
-
-	handlers := []network.TaggedMessageHandler{
-		{Tag: protocol.UniCatchupReqTag, MessageHandler: network.HandlerFunc(service.processIncomingMessage)},
-		{Tag: protocol.UniEnsBlockReqTag, MessageHandler: network.HandlerFunc(service.processIncomingMessage)},
+// MakeLedgerService creates a LedgerService around the provider Ledger and registers it for RPC with the provided Registrar
+func MakeLedgerService(config config.Local, ledger *data.Ledger, net network.GossipNode, genesisID string) *LedgerService {
+	service := &LedgerService{
+		ledger:      ledger,
+		genesisID:   genesisID,
+		catchupReqs: make(chan network.IncomingMessage, config.CatchupParallelBlocks*ledgerServerCatchupRequestBufferSize),
+		stop:        make(chan struct{}),
+		net:         net,
 	}
-
-	registrar.RegisterHandlers(handlers)
-	service.catchupReqs = c
-	service.stop = make(chan struct{})
-
+	net.RegisterHTTPHandler(LedgerServiceBlockPath, service)
 	return service
 }
 
 // Start listening to catchup requests over ws
 func (ls *LedgerService) Start() {
+	handlers := []network.TaggedMessageHandler{
+		{Tag: protocol.UniCatchupReqTag, MessageHandler: network.HandlerFunc(ls.processIncomingMessage)},
+		{Tag: protocol.UniEnsBlockReqTag, MessageHandler: network.HandlerFunc(ls.processIncomingMessage)},
+	}
+
+	ls.net.RegisterHandlers(handlers)
 	go ls.ListenForCatchupReq(ls.catchupReqs, ls.stop)
 }
 

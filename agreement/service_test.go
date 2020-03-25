@@ -510,6 +510,8 @@ func (e *testingNetworkEndpoint) Disconnect(h MessageHandle) {
 	e.parent.disconnect(e.id, sourceID)
 }
 
+func (e *testingNetworkEndpoint) Start() {}
+
 type activityMonitor struct {
 	deadlock.Mutex
 

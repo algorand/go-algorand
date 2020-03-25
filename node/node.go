@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -118,7 +119,8 @@ type AlgorandFullNode struct {
 	ledgerService    *rpcs.LedgerService
 	wsFetcherService *rpcs.WsFetcherService // to handle inbound gossip msgs for fetching over gossip
 
-	oldKeyDeletionNotify chan struct{}
+	oldKeyDeletionNotify        chan struct{}
+	monitoringRoutinesWaitGroup sync.WaitGroup
 }
 
 // TxnWithStatus represents information about a single transaction,
@@ -212,7 +214,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		}
 	}
 
-	node.ledgerService = rpcs.RegisterLedgerService(cfg, node.ledger, p2pNode, node.genesisID)
+	node.ledgerService = rpcs.MakeLedgerService(cfg, node.ledger, p2pNode, node.genesisID)
 	node.wsFetcherService = rpcs.RegisterWsFetcherService(node.log, p2pNode)
 	rpcs.RegisterTxService(node.transactionPool, p2pNode, node.genesisID, cfg.TxPoolSize, cfg.TxSyncServeResponseSize)
 
@@ -328,6 +330,14 @@ func (node *AlgorandFullNode) Start() {
 		node.log.Infof("Indexer is not available - %v", err)
 	}
 
+	node.startMonitoringRoutines()
+
+}
+
+// startMonitoringRoutines starts the internal monitoring routines used by the node.
+func (node *AlgorandFullNode) startMonitoringRoutines() {
+	node.monitoringRoutinesWaitGroup.Add(3)
+
 	// Periodically check for new participation keys
 	go node.checkForParticipationKeys()
 
@@ -337,6 +347,12 @@ func (node *AlgorandFullNode) Start() {
 
 	// TODO re-enable with configuration flag post V1
 	//go logging.UsageLogThread(node.ctx, node.log, 100*time.Millisecond, nil)
+}
+
+// waitMonitoringRoutines waits for all the monitoring routines to exit. Note that
+// the node.mu must not be taken, and that the node's context should have been canceled.
+func (node *AlgorandFullNode) waitMonitoringRoutines() {
+	node.monitoringRoutinesWaitGroup.Wait()
 }
 
 // ListeningAddress retrieves the node's current listening address, if any.
@@ -350,7 +366,10 @@ func (node *AlgorandFullNode) ListeningAddress() (string, bool) {
 // Stop stops running the node. Once a node is closed, it can never start again.
 func (node *AlgorandFullNode) Stop() {
 	node.mu.Lock()
-	defer node.mu.Unlock()
+	defer func() {
+		node.mu.Unlock()
+		node.waitMonitoringRoutines()
+	}()
 
 	node.net.ClearHandlers()
 
@@ -606,6 +625,7 @@ func (node *AlgorandFullNode) GetPendingTxnsFromPool() ([]transactions.SignedTxn
 
 // Reload participation keys from disk periodically
 func (node *AlgorandFullNode) checkForParticipationKeys() {
+	defer node.monitoringRoutinesWaitGroup.Done()
 	ticker := time.NewTicker(participationKeyCheckSecs * time.Second)
 	for {
 		select {
@@ -668,8 +688,10 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 	return nil
 }
 
+var txPoolGuage = metrics.MakeGauge(metrics.MetricName{Name: "algod_tx_pool_count", Description: "current number of available transactions in pool"})
+
 func (node *AlgorandFullNode) txPoolGaugeThread() {
-	txPoolGuage := metrics.MakeGauge(metrics.MetricName{Name: "algod_tx_pool_count", Description: "current number of available transactions in pool"})
+	defer node.monitoringRoutinesWaitGroup.Done()
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 	for true {
@@ -708,6 +730,7 @@ func (node *AlgorandFullNode) OnNewBlock(block bookkeeping.Block, delta ledger.S
 // It runs in a separate thread so that, during catchup, we
 // don't have to delete key for each block we received.
 func (node *AlgorandFullNode) oldKeyDeletionThread() {
+	defer node.monitoringRoutinesWaitGroup.Done()
 	for {
 		select {
 		case <-node.ctx.Done():
@@ -752,6 +775,7 @@ func (node *AlgorandFullNode) Indexer() (*indexer.Indexer, error) {
 }
 
 // GetTransactionByID gets transaction by ID
+// this function is intended to be called externally via the REST api interface.
 func (node *AlgorandFullNode) GetTransactionByID(txid transactions.Txid, rnd basics.Round) (TxnWithStatus, error) {
 	stx, _, err := node.ledger.LookupTxid(txid, rnd)
 	if err != nil {
@@ -765,6 +789,7 @@ func (node *AlgorandFullNode) GetTransactionByID(txid transactions.Txid, rnd bas
 }
 
 // StartCatchup starts the catchpoint mode and attempt to get to the provided catchpoint
+// this function is intended to be called externally via the REST api interface.
 func (node *AlgorandFullNode) StartCatchup(catchpoint string) error {
 	node.mu.Lock()
 	defer node.mu.Unlock()
@@ -780,6 +805,7 @@ func (node *AlgorandFullNode) StartCatchup(catchpoint string) error {
 }
 
 // AbortCatchup aborts the given catchpoint
+// this function is intended to be called externally via the REST api interface.
 func (node *AlgorandFullNode) AbortCatchup(catchpoint string) error {
 	node.mu.Lock()
 	defer node.mu.Unlock()
