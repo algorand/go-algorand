@@ -116,6 +116,8 @@ type EvalParams struct {
 
 	Trace io.Writer
 
+	Debugger *Debugger
+
 	TxnGroup []transactions.SignedTxn
 
 	// GroupIndex should point to Txn within TxnGroup
@@ -201,6 +203,9 @@ type evalContext struct {
 	appLocalStateRCache  map[ckey]basics.TealKeyValue // read only state to track deletes
 	appLocalStateWCache  map[ckey]basics.TealKeyValue
 	appEvalDelta         basics.EvalDelta
+
+	// Stores state & disassembly for the optional web debugger
+	debuggerState DebuggerState
 }
 
 // StackType describes the type of a value on the operand stack
@@ -266,6 +271,8 @@ func EvalStateful(program []byte, params EvalParams) (pass bool, delta basics.Ev
 	cx.appLocalStateRCache = make(map[ckey]basics.TealKeyValue)
 	cx.appLocalStateWCache = make(map[ckey]basics.TealKeyValue)
 
+	// cx.Debugger = &Debugger{URL: "http://localhost:9392"}
+
 	pass, err = eval(program, &cx)
 	// remove possible leftovers from writing and removing keys
 	for k, v := range cx.appEvalDelta.LocalDeltas {
@@ -304,6 +311,14 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 			cx.EvalParams.log().Errorf("recovered panic in Eval: %s", err)
 		}
 	}()
+
+	defer func() {
+		// Ensure we update the debugger before exiting
+		if cx.Debugger != nil {
+			cx.Debugger.complete(cx)
+		}
+	}()
+
 	if (cx.EvalParams.Proto == nil) || (cx.EvalParams.Proto.LogicSigVersion == 0) {
 		err = errLogicSignNotSupported
 		return
@@ -330,6 +345,7 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 		cx.err = fmt.Errorf("program version %d greater than protocol supported version %d", version, cx.EvalParams.Proto.LogicSigVersion)
 		return false, cx.err
 	}
+
 	// TODO: if EvalMaxVersion > version, ensure that inaccessible
 	// fields as of the program's version are zero or other
 	// default value so that no one is hiding unexpected
@@ -339,7 +355,16 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 	cx.stack = make([]stackValue, 0, 10)
 	cx.program = program
 	cx.programHash = crypto.HashObj(Program(program))
+
+	if cx.Debugger != nil {
+		cx.Debugger.register(cx)
+	}
+
 	for (cx.err == nil) && (cx.pc < len(cx.program)) {
+		if cx.Debugger != nil {
+			cx.Debugger.update(cx)
+		}
+
 		cx.step()
 		cx.stepCount++
 		if cx.stepCount > len(cx.program) {
@@ -353,6 +378,7 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 		if cx.Trace != nil {
 			fmt.Fprintf(cx.Trace, "%3d %s\n", cx.pc, cx.err)
 		}
+
 		return false, cx.err
 	}
 	if len(cx.stack) != 1 {
@@ -457,6 +483,7 @@ const MaxStackDepth = 1000
 func (cx *evalContext) step() {
 	opcode := cx.program[cx.pc]
 	spec := opsByOpcode[cx.version][opcode]
+
 	if spec.op == nil {
 		cx.err = fmt.Errorf("%3d illegal opcode 0x%02x", cx.pc, opcode)
 		return
