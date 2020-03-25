@@ -135,14 +135,14 @@ func init() {
 	readStateAppCmd.MarkFlagRequired("app-id")
 }
 
-type AppCallArg struct {
+type appCallArg struct {
 	Encoding string `json:"encoding"`
 	Value    string `json:"value"`
 }
 
-type AppCallInputs struct {
+type appCallInputs struct {
 	Accounts []string     `json:"accounts"`
-	Args     []AppCallArg `json:"args"`
+	Args     []appCallArg `json:"args"`
 }
 
 func getAppArgs() []string {
@@ -155,7 +155,7 @@ func getAppArgs() []string {
 }
 
 func processAppInputFile() (args, accounts []string) {
-	var inputs AppCallInputs
+	var inputs appCallInputs
 	f, err := os.Open(appInputFilename)
 	if err != nil {
 		reportErrorf("Could not open app input JSON file: %v", err)
@@ -325,7 +325,7 @@ var updateAppCmd = &cobra.Command{
 		// Parse transaction parameters
 		approvalProg := string(assembleFile(approvalProgFile))
 		clearProg := string(assembleFile(clearProgFile))
-		appArgs := getAppArgs()
+		appArgs, appAccounts := getAppInputs()
 
 		tx, err := client.MakeUnsignedAppUpdateTx(appIdx, appArgs, appAccounts, approvalProg, clearProg)
 		if err != nil {
