@@ -33,6 +33,19 @@ func returnError(ctx echo.Context, code int, err error, logger logging.Logger) e
 	return ctx.JSON(code, generated.Error{Error:err.Error()})
 }
 
+
+// (POST /v2/register-participation-keys/{account-id})
+func (v2 *V2Handlers) PostV2RegisterParticipationKeysAccountId(ctx echo.Context, accountId string, params generated.PostV2RegisterParticipationKeysAccountIdParams) error {
+	// TODO
+	return nil
+}
+
+// (POST /v2/shutdown)
+func (v2 *V2Handlers) PostV2Shutdown(ctx echo.Context, params generated.PostV2ShutdownParams) error {
+	// TODO
+	return nil
+}
+
 // Get account information.
 // (GET /v2/accounts/{address})
 func (v2 *V2Handlers) AccountInformation(ctx echo.Context, address string) error {
@@ -50,20 +63,19 @@ func (v2 *V2Handlers) GetBlock(ctx echo.Context, round uint64, params generated.
 // Get the current supply reported by the ledger.
 // (GET /v2/ledger/supply)
 func (v2 *V2Handlers) GetSupply(ctx echo.Context) error {
-	// TODO
-	return nil
-}
+	latest := v2.Node.Ledger().Latest()
+	totals, err := v2.Node.Ledger().Totals(latest)
+	if err != nil {
+		return returnError(ctx, http.StatusInternalServerError, fmt.Errorf("GetSupply(): round %d, failed: %v", latest, err), v2.Log)
+	}
 
-// (POST /v2/register-participation-keys/{account-id})
-func (v2 *V2Handlers) PostV2RegisterParticipationKeysAccountId(ctx echo.Context, accountId string, params generated.PostV2RegisterParticipationKeysAccountIdParams) error {
-	// TODO
-	return nil
-}
+	supply := generated.SupplyResponse{
+		CurrentRound: uint64(latest),
+		TotalMoney:   totals.Participating().Raw,
+		OnlineMoney:  totals.Online.Money.Raw,
+	}
 
-// (POST /v2/shutdown)
-func (v2 *V2Handlers) PostV2Shutdown(ctx echo.Context, params generated.PostV2ShutdownParams) error {
-	// TODO
-	return nil
+	return ctx.JSON(http.StatusOK, supply)
 }
 
 // Gets the current node status.
