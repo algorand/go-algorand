@@ -233,6 +233,9 @@ type Format string
 // Limit defines model for limit.
 type Limit uint64
 
+// Max defines model for max.
+type Max uint64
+
 // MaxRound defines model for max-round.
 type MaxRound uint64
 
@@ -365,6 +368,9 @@ type GetPendingTransactionsByAddressParams struct {
 
 	// Truncated number of transactions to display. If max=0, returns all pending txns.
 	Max *uint64 `json:"max,omitempty"`
+
+	// Configures whether the response object is JSON or MessagePack encoded.
+	Format *string `json:"format,omitempty"`
 }
 
 // GetBlockParams defines parameters for GetBlock.

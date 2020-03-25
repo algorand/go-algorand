@@ -3,6 +3,7 @@ package v2
 import (
 	"errors"
 	"fmt"
+	"github.com/algorand/go-algorand/data/basics"
 	"io"
 	"net/http"
 	"strings"
@@ -29,13 +30,6 @@ type V2Handlers struct {
 // Get account information.
 // (GET /v2/accounts/{address})
 func (v2 *V2Handlers) AccountInformation(ctx echo.Context, address string) error {
-	// TODO
-	return nil
-}
-
-// Get a list of unconfirmed transactions currently in the transaction pool by address.
-// (GET /v2/accounts/{addr}/transactions/pending)
-func (v2 *V2Handlers) GetPendingTransactionsByAddress(ctx echo.Context, addr string, params generated.GetPendingTransactionsByAddressParams) error {
 	// TODO
 	return nil
 }
@@ -140,40 +134,6 @@ func returnError(ctx echo.Context, code int, err error, logger logging.Logger) e
 	return ctx.JSON(code, generated.Error{Error:err.Error()})
 }
 
-// Get a list of unconfirmed transactions currently in the transaction pool.
-// (GET /v2/transactions/pending)
-func (v2 *V2Handlers) GetPendingTransactions(ctx echo.Context, params generated.GetPendingTransactionsParams) error {
-	txns, err := v2.Node.GetPendingTxnsFromPool()
-	if err != nil {
-		return returnError(ctx, http.StatusInternalServerError, err, v2.Log)
-	}
-
-	handle, err := getCodecHandle(params.Format)
-	if err != nil {
-		return returnError(ctx, http.StatusBadRequest, err, v2.Log)
-	}
-
-	// Convert transactions to msgp / json strings
-	encodedTxns := make([]string, 0)
-	for idx, txn := range txns {
-		if params.Max != nil && uint64(idx) >= *params.Max {
-			break;
-		}
-
-		encodedTxn, err := encode(handle, txn)
-		if err != nil {
-			return returnError(ctx, http.StatusInternalServerError, err, v2.Log)
-		}
-		encodedTxns = append(encodedTxns, encodedTxn)
-
-	}
-
-	return ctx.JSON(http.StatusOK, generated.PendingTransactionsResponse{
-		TopTransactions:   encodedTxns,
-		TotalTransactions: uint64(len(txns)),
-	})
-}
-
 func computeAssetIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, payset []transactions.SignedTxnWithAD) (aidx *uint64) {
 	// Compute transaction index in block
 	offset := -1
@@ -258,6 +218,8 @@ func encode(handle codec.Handle, obj interface{}) (string, error) {
 	return string(output), nil
 }
 
+
+
 // Get a specific pending transaction.
 // (GET /v2/transactions/pending/{txid})
 func (v2 *V2Handlers) PendingTransactionInformation(ctx echo.Context, txid string, params generated.PendingTransactionInformationParams) error {
@@ -308,5 +270,70 @@ func (v2 *V2Handlers) PendingTransactionInformation(ctx echo.Context, txid strin
 	return ctx.JSON(http.StatusNotFound, errors.New(errTransactionNotFound))
 	//lib.ErrorResponse(w, http.StatusNotFound, errors.New(errTransactionNotFound), errTransactionNotFound, ctx.Log)
 	//return
+}
+
+func (v2 *V2Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format *string, addrFilter *string) error {
+	var addrPtr *basics.Address
+
+	if addrFilter != nil {
+		addr, err := basics.UnmarshalChecksumAddress(*addrFilter)
+		if err != nil {
+			return returnError(ctx, http.StatusBadRequest, errors.New(errFailedToParseAddress), v2.Log)
+		}
+		addrPtr = &addr
+	}
+
+	txns, err := v2.Node.GetPendingTxnsFromPool()
+	if err != nil {
+		return returnError(ctx, http.StatusInternalServerError, err, v2.Log)
+	}
+
+	handle, err := getCodecHandle(format)
+	if err != nil {
+		return returnError(ctx, http.StatusBadRequest, err, v2.Log)
+	}
+
+	// TODO: What should I put in here? MatchAddress uses this to check the FeeSink so I think this is fine.
+	spec := transactions.SpecialAddresses{
+		FeeSink:     basics.Address{},
+		RewardsPool: basics.Address{},
+	}
+
+	// Convert transactions to msgp / json strings
+	encodedTxns := make([]string, 0)
+	for _, txn := range txns {
+		// break out if we've reached the max number of transactions
+		if max != nil && uint64(len(encodedTxns)) >= *max {
+			break;
+		}
+
+		// continue if we have an address filter and the address doesn't match the transaction.
+		if addrPtr != nil && !txn.Txn.MatchAddress(*addrPtr, spec) {
+			continue;
+		}
+
+		encodedTxn, err := encode(handle, txn)
+		if err != nil {
+			return returnError(ctx, http.StatusInternalServerError, err, v2.Log)
+		}
+		encodedTxns = append(encodedTxns, encodedTxn)
+	}
+
+	return ctx.JSON(http.StatusOK, generated.PendingTransactionsResponse{
+		TopTransactions:   encodedTxns,
+		TotalTransactions: uint64(len(txns)),
+	})
+}
+
+// Get a list of unconfirmed transactions currently in the transaction pool.
+// (GET /v2/transactions/pending)
+func (v2 *V2Handlers) GetPendingTransactions(ctx echo.Context, params generated.GetPendingTransactionsParams) error {
+	return v2.getPendingTransactions(ctx, params.Max, params.Format, nil)
+}
+
+// Get a list of unconfirmed transactions currently in the transaction pool by address.
+// (GET /v2/accounts/{addr}/transactions/pending)
+func (v2 *V2Handlers) GetPendingTransactionsByAddress(ctx echo.Context, addr string, params generated.GetPendingTransactionsByAddressParams) error {
+	return v2.getPendingTransactions(ctx, params.Max, params.Format, &addr)
 }
 
