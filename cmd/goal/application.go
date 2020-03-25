@@ -51,6 +51,7 @@ var (
 func init() {
 	appCmd.AddCommand(createAppCmd)
 	appCmd.AddCommand(deleteAppCmd)
+	appCmd.AddCommand(updateAppCmd)
 	appCmd.AddCommand(callAppCmd)
 	appCmd.AddCommand(optInAppCmd)
 	appCmd.AddCommand(closeOutAppCmd)
@@ -66,6 +67,9 @@ func init() {
 	createAppCmd.Flags().StringVar(&approvalProgFile, "approval-prog", "", "TEAL assembly program filename for approving/rejecting transactions")
 	createAppCmd.Flags().StringVar(&clearProgFile, "clear-prog", "", "TEAL assembly program filename for updating application state when a user clears their local state")
 
+	updateAppCmd.Flags().StringVar(&approvalProgFile, "approval-prog", "", "TEAL assembly program filename for approving/rejecting transactions")
+	updateAppCmd.Flags().StringVar(&clearProgFile, "clear-prog", "", "TEAL assembly program filename for updating application state when a user clears their local state")
+
 	createAppCmd.Flags().Uint64Var(&globalSchemaUints, "global-ints", 0, "Maximum number of integer values that may be stored in the global key/value store. Immutable.")
 	createAppCmd.Flags().Uint64Var(&globalSchemaByteSlices, "global-byteslices", 0, "Maximum number of byte slices that may be stored in the global key/value store. Immutable.")
 	createAppCmd.Flags().Uint64Var(&localSchemaUints, "local-ints", 0, "Maximum number of integer values that may be stored in local (per-account) key/value stores for this app. Immutable.")
@@ -78,6 +82,7 @@ func init() {
 	clearAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to clear app state for")
 	deleteAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to send delete transaction from")
 	readStateAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to fetch state from")
+	updateAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to send update transaction from")
 
 	// Can't use PersistentFlags on the root because for some reason marking
 	// a root command as required with MarkPersistentFlagRequired isn't
@@ -88,6 +93,7 @@ func init() {
 	clearAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
 	deleteAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
 	readStateAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
+	updateAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
 
 	readStateAppCmd.Flags().BoolVar(&fetchLocal, "local", false, "Fetch account-specific state for this application. `--from` address is required when using this flag")
 	readStateAppCmd.Flags().BoolVar(&fetchGlobal, "global", false, "Fetch global state for this application.")
@@ -114,6 +120,11 @@ func init() {
 
 	deleteAppCmd.MarkFlagRequired("app-id")
 	deleteAppCmd.MarkFlagRequired("from")
+
+	updateAppCmd.MarkFlagRequired("app-id")
+	updateAppCmd.MarkFlagRequired("from")
+	updateAppCmd.MarkFlagRequired("approval-prog")
+	updateAppCmd.MarkFlagRequired("clear-prog")
 
 	readStateAppCmd.MarkFlagRequired("app-id")
 }
@@ -183,7 +194,6 @@ var createAppCmd = &cobra.Command{
 		}
 
 		if txFilename == "" {
-			// Report tx details to user
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
 			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
 			if err != nil {
@@ -214,6 +224,76 @@ var createAppCmd = &cobra.Command{
 			}
 		} else {
 			// Broadcast or write transaction to file
+			err = writeTxnToFile(client, sign, dataDir, walletName, tx, txFilename)
+			if err != nil {
+				reportErrorf(err.Error())
+			}
+		}
+	},
+}
+
+var updateAppCmd = &cobra.Command{
+	Use:   "update",
+	Short: "Update an application's programs",
+	Long:  `Issue a transaction that updates an application's ApprovalProgram and ClearStateProgram`,
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, _ []string) {
+		dataDir := ensureSingleDataDir()
+		client := ensureFullClient(dataDir)
+
+		// Parse transaction parameters
+		approvalProg := string(assembleFile(approvalProgFile))
+		clearProg := string(assembleFile(clearProgFile))
+		appArgs := getAppArgs()
+
+		tx, err := client.MakeUnsignedAppUpdateTx(appIdx, appArgs, appAccounts, approvalProg, clearProg)
+		if err != nil {
+			reportErrorf("Cannot create application txn: %v", err)
+		}
+
+		// Fill in note and lease
+		tx.Note = parseNoteField(cmd)
+		tx.Lease = parseLease(cmd)
+
+		// Fill in rounds, fee, etc.
+		fv, lv, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		if err != nil {
+			reportErrorf("Cannot determine last valid round: %s", err)
+		}
+
+		tx, err = client.FillUnsignedTxTemplate(account, fv, lv, fee, tx)
+		if err != nil {
+			reportErrorf("Cannot construct transaction: %s", err)
+		}
+
+		// Broadcast or write transaction to file
+		if txFilename == "" {
+			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
+			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
+			if err != nil {
+				reportErrorf(errorSigningTX, err)
+			}
+
+			txid, err := client.BroadcastTransaction(signedTxn)
+			if err != nil {
+				reportErrorf(errorBroadcastingTX, err)
+			}
+
+			reportInfof("Attempting to update app (approval size %d, hash %v; clear size %d, hash %v)", len(approvalProg), crypto.HashObj(logic.Program(approvalProg)), len(clearProg), crypto.HashObj(logic.Program(clearProg)))
+			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
+
+			if !noWaitAfterSend {
+				err = waitForCommit(client, txid)
+				if err != nil {
+					reportErrorf(err.Error())
+				}
+				// Check if we know about the transaction yet
+				_, err := client.PendingTransactionInformation(txid)
+				if err != nil {
+					reportErrorf("%v", err)
+				}
+			}
+		} else {
 			err = writeTxnToFile(client, sign, dataDir, walletName, tx, txFilename)
 			if err != nil {
 				reportErrorf(err.Error())
