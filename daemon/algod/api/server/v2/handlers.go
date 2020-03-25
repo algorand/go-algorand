@@ -13,6 +13,7 @@ import (
 	"github.com/algorand/go-codec/codec"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
@@ -26,6 +27,11 @@ type V2Handlers struct {
 	Node     *node.AlgorandFullNode
 	Log      logging.Logger
 	Shutdown <-chan struct{}
+}
+
+func returnErrorLogInternal(ctx echo.Context, code int, err error, logger logging.Logger, internal string) error {
+	logger.Info(internal)
+	return ctx.JSON(code, generated.Error{Error:err.Error()})
 }
 
 func returnError(ctx echo.Context, code int, err error, logger logging.Logger) error {
@@ -46,11 +52,138 @@ func (v2 *V2Handlers) PostV2Shutdown(ctx echo.Context, params generated.PostV2Sh
 	return nil
 }
 
+func addrOrNil(addr basics.Address) *string {
+	if addr.IsZero() {
+		return nil
+	}
+	ret := addr.String()
+	return &ret
+}
+
+func strOrNil(str string) *string {
+	if str == "" {
+		return nil
+	}
+	return &str
+}
+
+func numOrNil(num uint64) *uint64 {
+	if num == 0 {
+		return nil
+	}
+	return &num
+}
+
+func byteOrNil(data []byte) *[]byte {
+	if len(data) == 0 {
+		return nil
+	}
+	return &data
+}
+
 // Get account information.
 // (GET /v2/accounts/{address})
 func (v2 *V2Handlers) AccountInformation(ctx echo.Context, address string) error {
-	// TODO
-	return nil
+	addr, err := basics.UnmarshalChecksumAddress(address)
+	if err != nil {
+		return returnError(ctx, http.StatusBadRequest, err, v2.Log)
+	}
+
+	myLedger := v2.Node.Ledger()
+	lastRound := myLedger.Latest()
+	record, err := myLedger.Lookup(lastRound, basics.Address(addr))
+	if err != nil {
+		return returnError(ctx, http.StatusInternalServerError, err, v2.Log)
+	}
+	recordWithoutPendingRewards, err := myLedger.LookupWithoutRewards(lastRound, basics.Address(addr))
+	if err != nil {
+		return returnErrorLogInternal(ctx, http.StatusInternalServerError, err, v2.Log, errFailedLookingUpLedger)
+	}
+
+	amount := record.MicroAlgos
+	amountWithoutPendingRewards := recordWithoutPendingRewards.MicroAlgos
+	pendingRewards, overflowed := basics.OSubA(amount, amountWithoutPendingRewards)
+	if overflowed {
+		return returnErrorLogInternal(ctx, http.StatusInternalServerError, err, v2.Log, errInternalFailure)
+	}
+
+	assets := make([]generated.AssetHolding, 0)
+	if len(record.Assets) > 0 {
+		//assets = make(map[uint64]v1.AssetHolding)
+		for curid, holding := range record.Assets {
+			var creator string
+			creatorAddr, err := myLedger.GetAssetCreator(curid)
+			if err == nil {
+				creator = creatorAddr.String()
+			} else {
+				// Asset may have been deleted, so we can no
+				// longer fetch the creator
+				creator = ""
+			}
+
+			holding := generated.AssetHolding{
+				Amount:   holding.Amount,
+				AssetId:  uint64(curid),
+				Creator:  creator,
+				IsFrozen: holding.Frozen,
+			}
+
+			assets = append(assets, holding)
+		}
+	}
+
+	createdAssets := make([]generated.Asset, 0)
+	if len(record.AssetParams) > 0 {
+		for idx, params := range record.AssetParams {
+			assetParams := generated.AssetParams{
+				Creator:       address,
+				Total:         params.Total,
+				Decimals:      uint64(params.Decimals),
+				DefaultFrozen: &params.DefaultFrozen,
+				MetadataHash:  byteOrNil(params.MetadataHash[:]),
+				Name:          strOrNil(params.AssetName),
+				UnitName:      strOrNil(params.UnitName),
+				Url:           strOrNil(params.URL),
+				Clawback:      addrOrNil(params.Clawback),
+				Freeze:        addrOrNil(params.Freeze),
+				Manager:       addrOrNil(params.Manager),
+				Reserve:       addrOrNil(params.Reserve),
+			}
+			asset := generated.Asset{
+				Index:  uint64(idx),
+				Params: assetParams,
+			}
+			createdAssets = append(createdAssets, asset)
+		}
+	}
+
+	var apiParticipation *generated.AccountParticipation
+	if record.VoteID != (crypto.OneTimeSignatureVerifier{}) {
+		apiParticipation = &generated.AccountParticipation {
+			VoteParticipationKey:      byteOrNil(record.VoteID[:]),
+			SelectionParticipationKey: byteOrNil(record.SelectionID[:]),
+			VoteFirstValid:            numOrNil(uint64(record.VoteFirstValid)),
+			VoteLastValid:             numOrNil(uint64(record.VoteLastValid)),
+			VoteKeyDilution:           numOrNil(uint64(record.VoteKeyDilution)),
+		}
+	}
+
+	response := generated.AccountResponse{
+		Type:                        nil,
+		Round:                       uint64(lastRound),
+		Address:                     addr.String(),
+		Amount:                      amount.Raw,
+		PendingRewards:              pendingRewards.Raw,
+		AmountWithoutPendingRewards: amountWithoutPendingRewards.Raw,
+		Rewards:                     record.RewardedMicroAlgos.Raw,
+		Status:                      record.Status.String(),
+		RewardBase:                  &record.RewardsBase,
+		Participation:               apiParticipation,
+		CreatedAssets:               &createdAssets,
+		Assets:                      &assets,
+	}
+
+	return ctx.JSON(http.StatusOK, response)
 }
 
 // Get the block for the given round.

@@ -104,7 +104,7 @@ type AssetHolding struct {
 	Creator string `json:"creator"`
 
 	// \[f\] whether or not the holding is frozen.
-	IsFrozen *bool `json:"is-frozen,omitempty"`
+	IsFrozen bool `json:"is-frozen"`
 }
 
 // AssetParams defines model for AssetParams.
