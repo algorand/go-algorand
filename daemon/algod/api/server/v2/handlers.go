@@ -3,10 +3,10 @@ package v2
 import (
 	"errors"
 	"fmt"
-	"github.com/algorand/go-algorand/data/basics"
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/labstack/echo/v4"
 
@@ -15,6 +15,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
@@ -25,6 +26,11 @@ type V2Handlers struct {
 	Node     *node.AlgorandFullNode
 	Log      logging.Logger
 	Shutdown <-chan struct{}
+}
+
+func returnError(ctx echo.Context, code int, err error, logger logging.Logger) error {
+	logger.Info(err)
+	return ctx.JSON(code, generated.Error{Error:err.Error()})
 }
 
 // Get account information.
@@ -70,8 +76,33 @@ func (v2 *V2Handlers) GetStatus(ctx echo.Context) error {
 // Gets the node status after waiting for the given round.
 // (GET /v2/status/wait-for-block-after/{round}/)
 func (v2 *V2Handlers) WaitForBlock(ctx echo.Context, round uint64) error {
-	// TODO
-	return nil
+	ledger := v2.Node.Ledger()
+	latestBlkHdr, err := ledger.BlockHdr(ledger.Latest())
+	if err != nil {
+		return returnError(ctx, http.StatusInternalServerError, err, v2.Log)
+	}
+
+	// Check if we're stalled due to an unsupported protocol version
+	if latestBlkHdr.NextProtocol != "" {
+		if _, nextProtocolSupported := config.Consensus[latestBlkHdr.NextProtocol]; !nextProtocolSupported {
+			// see if the desired protocol switch is expect to happen before or after the above point.
+			if latestBlkHdr.NextProtocolSwitchOn <= basics.Round(round+1) {
+				// we would never reach to this round, since this round would happen after the (unsupported) protocol upgrade.
+				return returnError(ctx, http.StatusBadRequest, err, v2.Log)
+			}
+		}
+	}
+
+	// Wait
+	select {
+	case <-v2.Shutdown:
+		return returnError(ctx, http.StatusInternalServerError, err, v2.Log)
+	case <-time.After(1 * time.Minute):
+	case <-ledger.Wait(basics.Round(round + 1)):
+	}
+
+	// Return status after the wait
+	return v2.GetStatus(ctx)
 }
 
 // Broadcasts a raw transaction to the network.
@@ -127,11 +158,6 @@ func (v2 *V2Handlers) TransactionParams(ctx echo.Context) error {
 	params.MinFee = proto.MinTxnFee
 
 	return ctx.JSON(http.StatusOK, params)
-}
-
-func returnError(ctx echo.Context, code int, err error, logger logging.Logger) error {
-	logger.Info(err)
-	return ctx.JSON(code, generated.Error{Error:err.Error()})
 }
 
 func computeAssetIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, payset []transactions.SignedTxnWithAD) (aidx *uint64) {
@@ -267,9 +293,7 @@ func (v2 *V2Handlers) PendingTransactionInformation(ctx echo.Context, txid strin
 	}
 
 	// We didn't find it, return a failure
-	return ctx.JSON(http.StatusNotFound, errors.New(errTransactionNotFound))
-	//lib.ErrorResponse(w, http.StatusNotFound, errors.New(errTransactionNotFound), errTransactionNotFound, ctx.Log)
-	//return
+	return returnError(ctx, http.StatusNotFound, errors.New(errTransactionNotFound), v2.Log)
 }
 
 func (v2 *V2Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format *string, addrFilter *string) error {
@@ -312,6 +336,7 @@ func (v2 *V2Handlers) getPendingTransactions(ctx echo.Context, max *uint64, form
 			continue;
 		}
 
+		// Encode the transaction and added to the results
 		encodedTxn, err := encode(handle, txn)
 		if err != nil {
 			return returnError(ctx, http.StatusInternalServerError, err, v2.Log)
