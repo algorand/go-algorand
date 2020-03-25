@@ -1,4 +1,4 @@
-Package: algorand
+Package: @PKG_NAME@
 Homepage: https://www.algorand.com/
 Maintainer: Algorand developers <dev@algorand.com>
 Version: @VER@
