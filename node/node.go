@@ -108,7 +108,7 @@ type AlgorandFullNode struct {
 	lastRoundTimestamp    time.Time
 	hasSyncedSinceStartup bool
 
-	txPoolSyncer *rpcs.TxSyncer
+	txPoolSyncerService *rpcs.TxSyncer
 
 	cryptoPool                         execpool.ExecutionPool
 	lowPriorityCryptoVerificationPool  execpool.BacklogPool
@@ -242,7 +242,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.agreementService = agreement.MakeService(agreementParameters)
 
 	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.wsFetcherService, blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)}, agreementLedger.UnmatchedPendingCertificates)
-	node.txPoolSyncer = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
+	node.txPoolSyncerService = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
 
 	err = node.loadParticipationKeys()
 	if err != nil {
@@ -305,7 +305,7 @@ func (node *AlgorandFullNode) Start() {
 
 	node.catchupService.Start()
 	node.agreementService.Start()
-	node.txPoolSyncer.Start(node.catchupService.InitialSyncDone)
+	node.txPoolSyncerService.Start(node.catchupService.InitialSyncDone)
 	node.ledgerService.Start()
 	node.txHandler.Start()
 
@@ -320,8 +320,9 @@ func (node *AlgorandFullNode) Start() {
 		if err != nil {
 			node.log.Errorf("indexer failed to start, turning it off - %v", err)
 			node.config.IsIndexerActive = false
+		} else {
+			node.log.Info("Indexer was started successfully")
 		}
-		node.log.Info("Indexer was started successfully")
 	} else {
 		node.log.Infof("Indexer is not available - %v", err)
 	}
@@ -356,7 +357,7 @@ func (node *AlgorandFullNode) Stop() {
 	node.net.Stop()
 	node.agreementService.Shutdown()
 	node.catchupService.Stop()
-	node.txPoolSyncer.Stop()
+	node.txPoolSyncerService.Stop()
 	node.ledgerService.Stop()
 	node.highPriorityCryptoVerificationPool.Shutdown()
 	node.lowPriorityCryptoVerificationPool.Shutdown()
