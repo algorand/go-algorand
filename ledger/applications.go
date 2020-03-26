@@ -171,7 +171,7 @@ func (al *appLedger) AppLocalState(addr basics.Address, appIdx basics.AppIndex) 
 	return keyValue, nil
 }
 
-func (al *appLedger) AssetHolding(addr basics.Address, assetIdx uint64) (holding basics.AssetHolding, err error) {
+func (al *appLedger) AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (holding basics.AssetHolding, err error) {
 	// Ensure requested address is on whitelist
 	if !al.addresses[addr] {
 		err = fmt.Errorf("cannot access asset holding for %s, not sender or in txn.Addresses", addr.String())
@@ -185,7 +185,7 @@ func (al *appLedger) AssetHolding(addr basics.Address, assetIdx uint64) (holding
 	}
 
 	// Ensure we have the requested holding
-	holding, ok := record.Assets[basics.AssetIndex(assetIdx)]
+	holding, ok := record.Assets[assetIdx]
 	if !ok {
 		err = fmt.Errorf("account %s has not opted in to asset %d", addr.String(), assetIdx)
 		return
@@ -195,7 +195,7 @@ func (al *appLedger) AssetHolding(addr basics.Address, assetIdx uint64) (holding
 	return holding, nil
 }
 
-func (al *appLedger) AssetParams(addr basics.Address, assetIdx uint64) (params basics.AssetParams, err error) {
+func (al *appLedger) AssetParams(addr basics.Address, assetIdx basics.AssetIndex) (params basics.AssetParams, err error) {
 	// Ensure requested address is on whitelist
 	if !al.addresses[addr] {
 		err = fmt.Errorf("cannot access asset params for %s, not sender or in txn.Addresses", addr.String())
@@ -209,7 +209,7 @@ func (al *appLedger) AssetParams(addr basics.Address, assetIdx uint64) (params b
 	}
 
 	// Ensure account created the requested asset
-	params, ok := record.AssetParams[basics.AssetIndex(assetIdx)]
+	params, ok := record.AssetParams[assetIdx]
 	if !ok {
 		err = fmt.Errorf("account %s has not created asset %d", addr.String(), assetIdx)
 		return
