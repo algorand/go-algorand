@@ -42,25 +42,25 @@ func (v2 *V2Handlers) PostV2Shutdown(ctx echo.Context, params generated.PostV2Sh
 func (v2 *V2Handlers) AccountInformation(ctx echo.Context, address string) error {
 	addr, err := basics.UnmarshalChecksumAddress(address)
 	if err != nil {
-		return returnError(ctx, http.StatusBadRequest, err, v2.Log)
+		return returnError(ctx, http.StatusBadRequest, err, errFailedToParseAddress, v2.Log)
 	}
 
 	myLedger := v2.Node.Ledger()
 	lastRound := myLedger.Latest()
 	record, err := myLedger.Lookup(lastRound, basics.Address(addr))
 	if err != nil {
-		return returnError(ctx, http.StatusInternalServerError, err, v2.Log)
+		return returnError(ctx, http.StatusInternalServerError, err, errFailedLookingUpLedger, v2.Log)
 	}
 	recordWithoutPendingRewards, err := myLedger.LookupWithoutRewards(lastRound, basics.Address(addr))
 	if err != nil {
-		return returnErrorLogInternal(ctx, http.StatusInternalServerError, err, v2.Log, errFailedLookingUpLedger)
+		return returnError(ctx, http.StatusInternalServerError, err, errFailedLookingUpLedger, v2.Log)
 	}
 
 	amount := record.MicroAlgos
 	amountWithoutPendingRewards := recordWithoutPendingRewards.MicroAlgos
 	pendingRewards, overflowed := basics.OSubA(amount, amountWithoutPendingRewards)
 	if overflowed {
-		return returnErrorLogInternal(ctx, http.StatusInternalServerError, err, v2.Log, errInternalFailure)
+		return returnError(ctx, http.StatusInternalServerError, err, errInternalFailure, v2.Log)
 	}
 
 	assets := make([]generated.AssetHolding, 0)
@@ -147,21 +147,21 @@ func (v2 *V2Handlers) AccountInformation(ctx echo.Context, address string) error
 func (v2 *V2Handlers) GetBlock(ctx echo.Context, round uint64, params generated.GetBlockParams) error {
 	handle, err := getCodecHandle(params.Format)
 	if err != nil {
-		return returnError(ctx, http.StatusBadRequest, err, v2.Log)
+		return returnError(ctx, http.StatusBadRequest, err, errFailedParsingFormatOption, v2.Log)
 	}
 
 	// TODO: What is raw block bytes, should I use that instead?
 	//blockbytes, err := rpcs.RawBlockBytes(v2.Node.Ledger(), basics.Round(round))
 
 	ledger := v2.Node.Ledger()
-	b, _, err := ledger.BlockCert(basics.Round(round))
+	block, _, err := ledger.BlockCert(basics.Round(round))
 	if err != nil {
-		return returnError(ctx, http.StatusInternalServerError, err, v2.Log)
+		return returnError(ctx, http.StatusInternalServerError, err, errFailedLookingUpLedger, v2.Log)
 	}
 
-	encoded, err := encode(handle, b)
+	encoded, err := encode(handle, block)
 	if err != nil {
-		return returnError(ctx, http.StatusInternalServerError, err, v2.Log)
+		return returnError(ctx, http.StatusInternalServerError, err, errFailedToParseBlock, v2.Log)
 	}
 
 	return ctx.JSON(http.StatusOK, generated.BlockResponse{
@@ -175,7 +175,8 @@ func (v2 *V2Handlers) GetSupply(ctx echo.Context) error {
 	latest := v2.Node.Ledger().Latest()
 	totals, err := v2.Node.Ledger().Totals(latest)
 	if err != nil {
-		return returnError(ctx, http.StatusInternalServerError, fmt.Errorf("GetSupply(): round %d, failed: %v", latest, err), v2.Log)
+		err = fmt.Errorf("GetSupply(): round %d, failed: %v", latest, err)
+		return returnError(ctx, http.StatusInternalServerError, err, errInternalFailure, v2.Log)
 	}
 
 	supply := generated.SupplyResponse{
@@ -192,7 +193,7 @@ func (v2 *V2Handlers) GetSupply(ctx echo.Context) error {
 func (v2 *V2Handlers) GetStatus(ctx echo.Context) error {
 	stat, err := v2.Node.Status()
 	if err != nil {
-		return returnError(ctx, http.StatusInternalServerError, errors.New(errFailedRetrievingNodeStatus), v2.Log)
+		return returnError(ctx, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, v2.Log)
 	}
 
 	response := generated.NodeStatusResponse{
@@ -215,16 +216,16 @@ func (v2 *V2Handlers) WaitForBlock(ctx echo.Context, round uint64) error {
 	ledger := v2.Node.Ledger()
 	latestBlkHdr, err := ledger.BlockHdr(ledger.Latest())
 	if err != nil {
-		return returnError(ctx, http.StatusInternalServerError, err, v2.Log)
+		return returnError(ctx, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, v2.Log)
 	}
 
-	// Check if we're stalled due to an unsupported protocol version
+	// TODO: Replace this with Node.Status().StoppedAtUnsupportedRound ?
 	if latestBlkHdr.NextProtocol != "" {
 		if _, nextProtocolSupported := config.Consensus[latestBlkHdr.NextProtocol]; !nextProtocolSupported {
 			// see if the desired protocol switch is expect to happen before or after the above point.
 			if latestBlkHdr.NextProtocolSwitchOn <= basics.Round(round+1) {
 				// we would never reach to this round, since this round would happen after the (unsupported) protocol upgrade.
-				return returnError(ctx, http.StatusBadRequest, err, v2.Log)
+				return returnError(ctx, http.StatusBadRequest, err, errRequestedRoundInUnsupportedRound, v2.Log)
 			}
 		}
 	}
@@ -232,7 +233,7 @@ func (v2 *V2Handlers) WaitForBlock(ctx echo.Context, round uint64) error {
 	// Wait
 	select {
 	case <-v2.Shutdown:
-		return returnError(ctx, http.StatusInternalServerError, err, v2.Log)
+		return returnError(ctx, http.StatusInternalServerError, err, errServiceShuttingDown, v2.Log)
 	case <-time.After(1 * time.Minute):
 	case <-ledger.Wait(basics.Round(round + 1)):
 	}
@@ -253,19 +254,19 @@ func (v2 *V2Handlers) RawTransaction(ctx echo.Context) error {
 			break
 		}
 		if err != nil {
-			return returnError(ctx, http.StatusBadRequest, err, v2.Log)
+			return returnError(ctx, http.StatusBadRequest, err, err.Error(), v2.Log)
 		}
 		txgroup = append(txgroup, st)
 	}
 
 	if len(txgroup) == 0 {
 		err := errors.New("empty txgroup")
-		return returnError(ctx, http.StatusBadRequest, err, v2.Log)
+		return returnError(ctx, http.StatusBadRequest, err, err.Error(), v2.Log)
 	}
 
 	err := v2.Node.BroadcastSignedTxGroup(txgroup)
 	if err != nil {
-		return returnError(ctx, http.StatusBadRequest, err, v2.Log)
+		return returnError(ctx, http.StatusBadRequest, err, err.Error(), v2.Log)
 	}
 
 	// For backwards compatibility, return txid of first tx in group
@@ -278,7 +279,7 @@ func (v2 *V2Handlers) RawTransaction(ctx echo.Context) error {
 func (v2 *V2Handlers) TransactionParams(ctx echo.Context) error {
 	stat, err := v2.Node.Status()
 	if err != nil {
-		return returnError(ctx, http.StatusInternalServerError, err, v2.Log)
+		return returnError(ctx, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, v2.Log)
 	}
 
 	gh := v2.Node.GenesisHash()
@@ -300,8 +301,8 @@ func (v2 *V2Handlers) TransactionParams(ctx echo.Context) error {
 // (GET /v2/transactions/pending/{txid})
 func (v2 *V2Handlers) PendingTransactionInformation(ctx echo.Context, txid string, params generated.PendingTransactionInformationParams) error {
 	txID := transactions.Txid{}
-	if txID.UnmarshalText([]byte(txid)) != nil {
-		return returnError(ctx, http.StatusBadRequest, fmt.Errorf(errNoTxnSpecified), v2.Log)
+	if err := txID.UnmarshalText([]byte(txid)); err != nil {
+		return returnError(ctx, http.StatusBadRequest, err, errNoTxnSpecified, v2.Log)
 	}
 
 	if txn, ok := v2.Node.GetPendingTransaction(txID); ok {
@@ -317,12 +318,12 @@ func (v2 *V2Handlers) PendingTransactionInformation(ctx echo.Context, txid strin
 
 		handle, err := getCodecHandle(params.Format)
 		if err != nil {
-			return returnError(ctx, http.StatusBadRequest, err, v2.Log)
+			return returnError(ctx, http.StatusBadRequest, err, errFailedParsingFormatOption, v2.Log)
 		}
 
 		encoded, err := encode(handle, txn.Txn)
 		if err != nil {
-			return returnError(ctx, http.StatusInternalServerError, err, v2.Log)
+			return returnError(ctx, http.StatusInternalServerError, err, errFailedToParseTransaction, v2.Log)
 		}
 
 		response.Txn = encoded
@@ -343,7 +344,8 @@ func (v2 *V2Handlers) PendingTransactionInformation(ctx echo.Context, txid strin
 	}
 
 	// We didn't find it, return a failure
-	return returnError(ctx, http.StatusNotFound, errors.New(errTransactionNotFound), v2.Log)
+	err := errors.New(errTransactionNotFound)
+	return returnError(ctx, http.StatusNotFound, err, err.Error(), v2.Log)
 }
 
 func (v2 *V2Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format *string, addrFilter *string) error {
@@ -352,19 +354,19 @@ func (v2 *V2Handlers) getPendingTransactions(ctx echo.Context, max *uint64, form
 	if addrFilter != nil {
 		addr, err := basics.UnmarshalChecksumAddress(*addrFilter)
 		if err != nil {
-			return returnError(ctx, http.StatusBadRequest, errors.New(errFailedToParseAddress), v2.Log)
+			return returnError(ctx, http.StatusBadRequest, err, errFailedToParseAddress, v2.Log)
 		}
 		addrPtr = &addr
 	}
 
-	txns, err := v2.Node.GetPendingTxnsFromPool()
-	if err != nil {
-		return returnError(ctx, http.StatusInternalServerError, err, v2.Log)
-	}
-
 	handle, err := getCodecHandle(format)
 	if err != nil {
-		return returnError(ctx, http.StatusBadRequest, err, v2.Log)
+		return returnError(ctx, http.StatusBadRequest, err, errFailedParsingFormatOption, v2.Log)
+	}
+
+	txns, err := v2.Node.GetPendingTxnsFromPool()
+	if err != nil {
+		return returnError(ctx, http.StatusInternalServerError, err, errFailedLookingUpTransactionPool, v2.Log)
 	}
 
 	// TODO: What should I put in here? MatchAddress uses this to check the FeeSink so I think this is fine.
@@ -389,7 +391,7 @@ func (v2 *V2Handlers) getPendingTransactions(ctx echo.Context, max *uint64, form
 		// Encode the transaction and added to the results
 		encodedTxn, err := encode(handle, txn)
 		if err != nil {
-			return returnError(ctx, http.StatusInternalServerError, err, v2.Log)
+			return returnError(ctx, http.StatusInternalServerError, err, errFailedLookingUpTransactionPool, v2.Log)
 		}
 		encodedTxns = append(encodedTxns, encodedTxn)
 	}

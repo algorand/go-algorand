@@ -15,16 +15,10 @@ import (
 	"github.com/algorand/go-codec/codec"
 )
 
-// returnErrorLogInternal logs an internal message while returning the encoded response.
-func returnErrorLogInternal(ctx echo.Context, code int, err error, logger logging.Logger, internal string) error {
+// returnError logs an internal message while returning the encoded response.
+func returnError(ctx echo.Context, code int, internal error, external string, logger logging.Logger) error {
 	logger.Info(internal)
-	return ctx.JSON(code, generated.Error{Error:err.Error()})
-}
-
-// returnErrorlogs logs the error, then returns the encoded response.
-func returnError(ctx echo.Context, code int, err error, logger logging.Logger) error {
-	logger.Info(err)
-	return ctx.JSON(code, generated.Error{Error:err.Error()})
+	return ctx.JSON(code, generated.Error{Error:external})
 }
 
 func addrOrNil(addr basics.Address) *string {
