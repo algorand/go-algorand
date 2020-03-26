@@ -118,7 +118,7 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string) error {
 
 	var apiParticipation *generated.AccountParticipation
 	if record.VoteID != (crypto.OneTimeSignatureVerifier{}) {
-		apiParticipation = &generated.AccountParticipation {
+		apiParticipation = &generated.AccountParticipation{
 			VoteParticipationKey:      byteOrNil(record.VoteID[:]),
 			SelectionParticipationKey: byteOrNil(record.SelectionID[:]),
 			VoteFirstValid:            numOrNil(uint64(record.VoteFirstValid)),
@@ -274,7 +274,7 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 
 	// For backwards compatibility, return txid of first tx in group
 	txid := txgroup[0].ID()
-	return ctx.JSON(http.StatusOK, generated.PostTransactionsResponse{TxId:txid.String()})
+	return ctx.JSON(http.StatusOK, generated.PostTransactionsResponse{TxId: txid.String()})
 }
 
 // TransactionParams gets parameters for constructing a new transaction
@@ -385,12 +385,12 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 	for _, txn := range txns {
 		// break out if we've reached the max number of transactions
 		if max != nil && uint64(len(encodedTxns)) >= *max {
-			break;
+			break
 		}
 
 		// continue if we have an address filter and the address doesn't match the transaction.
 		if addrPtr != nil && !txn.Txn.MatchAddress(*addrPtr, spec) {
-			continue;
+			continue
 		}
 
 		// Encode the transaction and added to the results
@@ -418,4 +418,3 @@ func (v2 *Handlers) GetPendingTransactions(ctx echo.Context, params generated.Ge
 func (v2 *Handlers) GetPendingTransactionsByAddress(ctx echo.Context, addr string, params generated.GetPendingTransactionsByAddressParams) error {
 	return v2.getPendingTransactions(ctx, params.Max, params.Format, &addr)
 }
-

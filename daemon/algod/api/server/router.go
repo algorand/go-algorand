@@ -93,7 +93,7 @@ func wrapCtx(ctx lib.ReqContext, handler func(lib.ReqContext, http.ResponseWrite
 // registers the routes to a new sub-router [prefix]
 func registerHandlers(router *echo.Echo, prefix string, routes lib.Routes, ctx lib.ReqContext) {
 	for _, route := range routes {
-		r := router.Add(route.Method, prefix + route.Path, wrapCtx(ctx, route.HandlerFunc))
+		r := router.Add(route.Method, prefix+route.Path, wrapCtx(ctx, route.HandlerFunc))
 		r.Name = route.Name
 	}
 }
@@ -119,12 +119,12 @@ func ConfigureRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdow
 		// Registers /debug/pprof handler under root path and under /urlAuth path
 		// to support header or url-provided token.
 		//router.PathPrefix(pprofEndpointPrefix).Handler(http.DefaultServeMux)
-		e.GET(pprofEndpointPrefix + "/*", echo.WrapHandler(http.DefaultServeMux))
+		e.GET(pprofEndpointPrefix+"/*", echo.WrapHandler(http.DefaultServeMux))
 
 		//urlAuthRouter := router.PathPrefix(urlAuthEndpointPrefix)
 		//urlAuthRouter.PathPrefix(pprofEndpointPrefix).Handler(http.DefaultServeMux).Name(debugRouteName)
 		grp := e.Group(urlAuthEndpointPrefix)
-		route := grp.GET(pprofEndpointPrefix + "/*", echo.WrapHandler(http.DefaultServeMux))
+		route := grp.GET(pprofEndpointPrefix+"/*", echo.WrapHandler(http.DefaultServeMux))
 		route.Name = debugRouteName
 	}
 

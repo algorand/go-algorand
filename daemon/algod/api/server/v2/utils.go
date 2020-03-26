@@ -18,7 +18,7 @@ import (
 // returnError logs an internal message while returning the encoded response.
 func returnError(ctx echo.Context, code int, internal error, external string, logger logging.Logger) error {
 	logger.Info(internal)
-	return ctx.JSON(code, generated.Error{Error:external})
+	return ctx.JSON(code, generated.Error{Error: external})
 }
 
 func addrOrNil(addr basics.Address) *string {
@@ -49,7 +49,6 @@ func byteOrNil(data []byte) *[]byte {
 	}
 	return &data
 }
-
 
 func computeAssetIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, payset []transactions.SignedTxnWithAD) (aidx *uint64) {
 	// Compute transaction index in block
