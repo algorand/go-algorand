@@ -116,7 +116,7 @@ type AlgorandFullNode struct {
 	lowPriorityCryptoVerificationPool  execpool.BacklogPool
 	highPriorityCryptoVerificationPool execpool.BacklogPool
 
-	ledgerService    *rpcs.LedgerService
+	blockService     *rpcs.BlockService
 	wsFetcherService *rpcs.WsFetcherService // to handle inbound gossip msgs for fetching over gossip
 
 	oldKeyDeletionNotify        chan struct{}
@@ -214,7 +214,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		}
 	}
 
-	node.ledgerService = rpcs.MakeLedgerService(cfg, node.ledger, p2pNode, node.genesisID)
+	node.blockService = rpcs.MakeBlockService(cfg, node.ledger, p2pNode, node.genesisID)
 	node.wsFetcherService = rpcs.MakeWsFetcherService(node.log, p2pNode)
 	rpcs.RegisterTxService(node.transactionPool, p2pNode, node.genesisID, cfg.TxPoolSize, cfg.TxSyncServeResponseSize)
 
@@ -254,6 +254,19 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	}
 
 	node.oldKeyDeletionNotify = make(chan struct{}, 1)
+
+	catchpointCatchupState, err := node.ledger.GetCatchpointCatchupState(context.Background())
+	if err != nil {
+		log.Errorf("unable to determine catchpoint catchup state: %v", err)
+		return nil, err
+	}
+	if catchpointCatchupState != ledger.CatchpointCatchupStateInactive {
+		node.catchpointCatchupService, err = catchup.MakeCatchpointCatchupService(context.Background(), node, node.log, node.net)
+		if err != nil {
+			log.Errorf("unable to create catchpoint catchup service: %v", err)
+			return nil, err
+		}
+	}
 
 	return node, err
 }
@@ -302,36 +315,40 @@ func (node *AlgorandFullNode) Start() {
 	node.mu.Lock()
 	defer node.mu.Unlock()
 
-	// start accepting connections
-	node.net.Start()
-	node.config.NetAddress, _ = node.net.Address()
-
-	node.wsFetcherService.Start()
-	node.catchupService.Start()
-	node.agreementService.Start()
-	node.txPoolSyncerService.Start(node.catchupService.InitialSyncDone)
-	node.ledgerService.Start()
-	node.txHandler.Start()
-
 	// Set up a context we can use to cancel goroutines on Stop()
 	ctx, cancel := context.WithCancel(context.Background())
 	node.ctx = ctx
 	node.cancelCtx = cancel
 
-	// start indexer
-	if idx, err := node.Indexer(); err == nil {
-		err := idx.Start()
-		if err != nil {
-			node.log.Errorf("indexer failed to start, turning it off - %v", err)
-			node.config.IsIndexerActive = false
-		} else {
-			node.log.Info("Indexer was started successfully")
-		}
-	} else {
-		node.log.Infof("Indexer is not available - %v", err)
-	}
+	// start accepting connections
+	node.net.Start()
+	node.config.NetAddress, _ = node.net.Address()
 
-	node.startMonitoringRoutines()
+	if node.catchpointCatchupService != nil {
+		node.catchpointCatchupService.Start(node.ctx)
+	} else {
+		node.wsFetcherService.Start()
+		node.catchupService.Start()
+		node.agreementService.Start()
+		node.txPoolSyncerService.Start(node.catchupService.InitialSyncDone)
+		node.blockService.Start()
+		node.txHandler.Start()
+
+		// start indexer
+		if idx, err := node.Indexer(); err == nil {
+			err := idx.Start()
+			if err != nil {
+				node.log.Errorf("indexer failed to start, turning it off - %v", err)
+				node.config.IsIndexerActive = false
+			} else {
+				node.log.Info("Indexer was started successfully")
+			}
+		} else {
+			node.log.Infof("Indexer is not available - %v", err)
+		}
+
+		node.startMonitoringRoutines()
+	}
 
 }
 
@@ -374,13 +391,19 @@ func (node *AlgorandFullNode) Stop() {
 
 	node.net.ClearHandlers()
 
-	node.txHandler.Stop()
 	node.net.Stop()
-	node.agreementService.Shutdown()
-	node.catchupService.Stop()
-	node.txPoolSyncerService.Stop()
-	node.ledgerService.Stop()
-	node.wsFetcherService.Stop()
+
+	if node.catchpointCatchupService != nil {
+		node.catchpointCatchupService.Stop()
+	} else {
+		node.txHandler.Stop()
+		node.agreementService.Shutdown()
+		node.catchupService.Stop()
+		node.txPoolSyncerService.Stop()
+		node.blockService.Stop()
+		node.wsFetcherService.Stop()
+	}
+
 	node.highPriorityCryptoVerificationPool.Shutdown()
 	node.lowPriorityCryptoVerificationPool.Shutdown()
 	node.cryptoPool.Shutdown()
@@ -573,7 +596,7 @@ func (node *AlgorandFullNode) Status() (s StatusReport, err error) {
 	s.CatchupTime = node.catchupService.SynchronizingTime()
 	s.HasSyncedSinceStartup = node.hasSyncedSinceStartup
 	s.StoppedAtUnsupportedRound = s.LastRound+1 == s.NextVersionRound && !s.NextVersionSupported
-	s.LastCatchpoint = node.ledger.GetLastCatchpoint()
+	s.LastCatchpoint = node.ledger.GetLastCatchpointLabel()
 	if node.catchpointCatchupService != nil {
 		s.Catchpoint = node.catchpointCatchupService.CatchpointLabel // "18970#LZNETY4ZMHAHIE2J5NVDPXHK6PPQTRCUUUYDQCC3G3QL3T36UBPQ"
 	}
@@ -801,8 +824,13 @@ func (node *AlgorandFullNode) StartCatchup(catchpoint string) error {
 	if node.catchpointCatchupService != nil {
 		return fmt.Errorf("unable to start catchpoint catchup for '%s' - already catching up '%s'", catchpoint, node.catchpointCatchupService.CatchpointLabel)
 	}
-	node.catchpointCatchupService = catchup.MakeCatchpointCatchupService(catchpoint, node)
-	node.catchpointCatchupService.Start(context.Background())
+	var err error
+	node.catchpointCatchupService, err = catchup.MakeNewCatchpointCatchupService(catchpoint, node, node.log, node.net)
+	if err != nil {
+		node.log.Warnf("unable to create catchpoint catchup service : %v", err)
+		return err
+	}
+	node.catchpointCatchupService.Start(node.ctx)
 	return nil
 }
 
@@ -819,4 +847,50 @@ func (node *AlgorandFullNode) AbortCatchup(catchpoint string) error {
 	}
 	node.catchpointCatchupService.Abort()
 	return nil
+}
+
+// SetCatchpointCatchupMode change the node's operational mode from catchpoint catchup mode and back
+func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode bool) {
+	node.mu.Lock()
+	if catchpointCatchupMode {
+		// stop..
+
+		defer func() {
+			node.mu.Unlock()
+			node.waitMonitoringRoutines()
+		}()
+		node.txHandler.Stop()
+		node.agreementService.Shutdown()
+		node.catchupService.Stop()
+		node.txPoolSyncerService.Stop()
+		node.blockService.Stop()
+		node.wsFetcherService.Stop()
+
+		// at this point, the catchpoint catchup is done ( either successfully or not.. )
+		node.catchpointCatchupService = nil
+		return
+	}
+	defer node.mu.Unlock()
+	// start
+	node.wsFetcherService.Start()
+	node.catchupService.Start()
+	node.agreementService.Start()
+	node.txPoolSyncerService.Start(node.catchupService.InitialSyncDone)
+	node.blockService.Start()
+	node.txHandler.Start()
+
+	// start indexer
+	if idx, err := node.Indexer(); err == nil {
+		err := idx.Start()
+		if err != nil {
+			node.log.Errorf("indexer failed to start, turning it off - %v", err)
+			node.config.IsIndexerActive = false
+		} else {
+			node.log.Info("Indexer was started successfully")
+		}
+	} else {
+		node.log.Infof("Indexer is not available - %v", err)
+	}
+
+	node.startMonitoringRoutines()
 }

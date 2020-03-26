@@ -37,15 +37,19 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// LedgerResponseContentType is the HTTP Content-Type header for a raw binary block
-const LedgerResponseContentType = "application/x-algorand-block-v1"
-const ledgerResponseHasBlockCacheControl = "public, max-age=31536000, immutable"    // 31536000 seconds are one year.
-const ledgerResponseMissingBlockCacheControl = "public, max-age=1, must-revalidate" // cache for 1 second, and force revalidation afterward
-const ledgerServerMaxBodyLength = 512                                               // we don't really pass meaningful content here, so 512 bytes should be a safe limit
-const ledgerServerCatchupRequestBufferSize = 10
+// BlockResponseContentType is the HTTP Content-Type header for a raw binary block
+const BlockResponseContentType = "application/x-algorand-block-v1"
+const blockResponseHasBlockCacheControl = "public, max-age=31536000, immutable"    // 31536000 seconds are one year.
+const blockResponseMissingBlockCacheControl = "public, max-age=1, must-revalidate" // cache for 1 second, and force revalidation afterward
+const blockServerMaxBodyLength = 512                                               // we don't really pass meaningful content here, so 512 bytes should be a safe limit
+const blockServerCatchupRequestBufferSize = 10
 
-// LedgerService represents the Ledger RPC API
-type LedgerService struct {
+// BlockServiceBlockPath is the path to register BlockService as a handler for when using gorilla/mux
+// e.g. .Handle(BlockServiceBlockPath, &ls)
+const BlockServiceBlockPath = "/v{version:[0-9.]+}/{genesisID}/block/{round:[0-9a-z]+}"
+
+// BlockService represents the Block RPC API
+type BlockService struct {
 	ledger      *data.Ledger
 	genesisID   string
 	catchupReqs chan network.IncomingMessage
@@ -69,21 +73,21 @@ type PreEncodedBlockCert struct {
 	Certificate codec.Raw `codec:"cert"`
 }
 
-// MakeLedgerService creates a LedgerService around the provider Ledger and registers it for RPC with the provided Registrar
-func MakeLedgerService(config config.Local, ledger *data.Ledger, net network.GossipNode, genesisID string) *LedgerService {
-	service := &LedgerService{
+// MakeBlockService creates a BlockService around the provider Ledger and registers it for RPC with the provided Registrar
+func MakeBlockService(config config.Local, ledger *data.Ledger, net network.GossipNode, genesisID string) *BlockService {
+	service := &BlockService{
 		ledger:      ledger,
 		genesisID:   genesisID,
-		catchupReqs: make(chan network.IncomingMessage, config.CatchupParallelBlocks*ledgerServerCatchupRequestBufferSize),
+		catchupReqs: make(chan network.IncomingMessage, config.CatchupParallelBlocks*blockServerCatchupRequestBufferSize),
 		stop:        make(chan struct{}),
 		net:         net,
 	}
-	net.RegisterHTTPHandler(LedgerServiceBlockPath, service)
+	net.RegisterHTTPHandler(BlockServiceBlockPath, service)
 	return service
 }
 
 // Start listening to catchup requests over ws
-func (ls *LedgerService) Start() {
+func (ls *BlockService) Start() {
 	handlers := []network.TaggedMessageHandler{
 		{Tag: protocol.UniCatchupReqTag, MessageHandler: network.HandlerFunc(ls.processIncomingMessage)},
 		{Tag: protocol.UniEnsBlockReqTag, MessageHandler: network.HandlerFunc(ls.processIncomingMessage)},
@@ -94,18 +98,14 @@ func (ls *LedgerService) Start() {
 }
 
 // Stop servicing catchup requests over ws
-func (ls *LedgerService) Stop() {
+func (ls *BlockService) Stop() {
 	close(ls.stop)
 }
-
-// LedgerServiceBlockPath is the path to register LedgerService as a handler for when using gorilla/mux
-// e.g. .Handle(LedgerServiceBlockPath, &ls)
-const LedgerServiceBlockPath = "/v{version:[0-9.]+}/{genesisID}/block/{round:[0-9a-z]+}"
 
 // ServerHTTP returns blocks
 // Either /v{version}/block/{round} or ?b={round}&v={version}
 // Uses gorilla/mux for path argument parsing.
-func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.Request) {
+func (ls *BlockService) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	pathVars := mux.Vars(request)
 	versionStr, hasVersionStr := pathVars["version"]
 	roundStr, hasRoundStr := pathVars["round"]
@@ -130,7 +130,7 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 	}
 	if (!hasVersionStr) || (!hasRoundStr) {
 		// try query arg ?b={round}
-		request.Body = http.MaxBytesReader(response, request.Body, ledgerServerMaxBodyLength)
+		request.Body = http.MaxBytesReader(response, request.Body, blockServerMaxBodyLength)
 		err := request.ParseForm()
 		if err != nil {
 			logging.Base().Debug("http block parse form err", err)
@@ -172,7 +172,7 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 		switch err.(type) {
 		case ledger.ErrNoEntry:
 			// entry cound not be found.
-			response.Header().Set("Cache-Control", ledgerResponseMissingBlockCacheControl)
+			response.Header().Set("Cache-Control", blockResponseMissingBlockCacheControl)
 			response.WriteHeader(http.StatusNotFound)
 			return
 		default:
@@ -183,9 +183,9 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 		}
 	}
 
-	response.Header().Set("Content-Type", LedgerResponseContentType)
+	response.Header().Set("Content-Type", BlockResponseContentType)
 	response.Header().Set("Content-Length", strconv.Itoa(len(encodedBlockCert)))
-	response.Header().Set("Cache-Control", ledgerResponseHasBlockCacheControl)
+	response.Header().Set("Cache-Control", blockResponseHasBlockCacheControl)
 	response.WriteHeader(http.StatusOK)
 	_, err = response.Write(encodedBlockCert)
 	if err != nil {
@@ -205,7 +205,7 @@ type WsGetBlockOut struct {
 	BlockBytes []byte `json:"blockbytes"`
 }
 
-func (ls *LedgerService) processIncomingMessage(msg network.IncomingMessage) (n network.OutgoingMessage) {
+func (ls *BlockService) processIncomingMessage(msg network.IncomingMessage) (n network.OutgoingMessage) {
 	// don't block - just stick in a slightly buffered channel if possible
 	select {
 	case ls.catchupReqs <- msg:
@@ -216,7 +216,7 @@ func (ls *LedgerService) processIncomingMessage(msg network.IncomingMessage) (n 
 }
 
 // ListenForCatchupReq handles catchup getblock request
-func (ls *LedgerService) ListenForCatchupReq(reqs <-chan network.IncomingMessage, stop chan struct{}) {
+func (ls *BlockService) ListenForCatchupReq(reqs <-chan network.IncomingMessage, stop chan struct{}) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	for {
@@ -236,7 +236,7 @@ const blockNotAvailabeErrMsg = "requested block is not available"
 const datatypeUnsupportedErrMsg = "requested data type is unsupported"
 
 // a blocking function for handling a catchup request
-func (ls *LedgerService) handleCatchupReq(ctx context.Context, reqMsg network.IncomingMessage) {
+func (ls *BlockService) handleCatchupReq(ctx context.Context, reqMsg network.IncomingMessage) {
 	var res WsGetBlockOut
 	target := reqMsg.Sender.(network.UnicastPeer)
 	var respTopics network.Topics
@@ -269,14 +269,14 @@ func (ls *LedgerService) handleCatchupReq(ctx context.Context, reqMsg network.In
 
 	topics, err := network.UnmarshallTopics(reqMsg.Data)
 	if err != nil {
-		logging.Base().Infof("LedgerService handleCatchupReq: %s", err.Error())
+		logging.Base().Infof("BlockService handleCatchupReq: %s", err.Error())
 		respTopics = network.Topics{
 			network.MakeTopic(network.ErrorKey, []byte(err.Error()))}
 		return
 	}
 	roundBytes, found := topics.GetValue(roundKey)
 	if !found {
-		logging.Base().Infof("LedgerService handleCatchupReq: %s", noRoundNumberErrMsg)
+		logging.Base().Infof("BlockService handleCatchupReq: %s", noRoundNumberErrMsg)
 		respTopics = network.Topics{
 			network.MakeTopic(network.ErrorKey,
 				[]byte(noRoundNumberErrMsg))}
@@ -284,7 +284,7 @@ func (ls *LedgerService) handleCatchupReq(ctx context.Context, reqMsg network.In
 	}
 	requestType, found := topics.GetValue(requestDataTypeKey)
 	if !found {
-		logging.Base().Infof("LedgerService handleCatchupReq: %s", noDataTypeErrMsg)
+		logging.Base().Infof("BlockService handleCatchupReq: %s", noDataTypeErrMsg)
 		respTopics = network.Topics{
 			network.MakeTopic(network.ErrorKey,
 				[]byte(noDataTypeErrMsg))}
@@ -293,7 +293,7 @@ func (ls *LedgerService) handleCatchupReq(ctx context.Context, reqMsg network.In
 
 	round, read := binary.Uvarint(roundBytes)
 	if read <= 0 {
-		logging.Base().Infof("LedgerService handleCatchupReq: %s", roundNumberParseErrMsg)
+		logging.Base().Infof("BlockService handleCatchupReq: %s", roundNumberParseErrMsg)
 		respTopics = network.Topics{
 			network.MakeTopic(network.ErrorKey,
 				[]byte(roundNumberParseErrMsg))}
@@ -303,7 +303,7 @@ func (ls *LedgerService) handleCatchupReq(ctx context.Context, reqMsg network.In
 	return
 }
 
-func (ls *LedgerService) sendCatchupRes(ctx context.Context, target network.UnicastPeer, reqTag protocol.Tag, outMsg WsGetBlockOut) {
+func (ls *BlockService) sendCatchupRes(ctx context.Context, target network.UnicastPeer, reqTag protocol.Tag, outMsg WsGetBlockOut) {
 	t := reqTag.Complement()
 	logging.Base().Infof("catching down peer: %v, round %v. outcome: %v. ledger: %v", target.GetAddress(), outMsg.Round, outMsg.Error, ls.ledger.LastRound())
 	err := target.Unicast(ctx, protocol.EncodeReflect(outMsg), t)
@@ -318,7 +318,7 @@ func topicBlockBytes(dataLedger *data.Ledger, round basics.Round, requestType st
 		switch err.(type) {
 		case ledger.ErrNoEntry:
 		default:
-			logging.Base().Infof("LedgerService topicBlockBytes: %s", err)
+			logging.Base().Infof("BlockService topicBlockBytes: %s", err)
 		}
 		return network.Topics{
 			network.MakeTopic(network.ErrorKey, []byte(blockNotAvailabeErrMsg))}

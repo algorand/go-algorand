@@ -287,12 +287,12 @@ func (l *Ledger) notifyCommit(r basics.Round) basics.Round {
 	return minToSave
 }
 
-// GetLastCatchpoint returns the latest catchpoint label that was written to the
+// GetLastCatchpointLabel returns the latest catchpoint label that was written to the
 // database.
-func (l *Ledger) GetLastCatchpoint() string {
+func (l *Ledger) GetLastCatchpointLabel() string {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.getLastCatchpoint()
+	return l.accts.getLastCatchpointLabel()
 }
 
 // GetAssetCreatorForRound looks up the asset creator given the numerical asset
@@ -485,6 +485,11 @@ func (l *Ledger) AllBalances(rnd basics.Round) (map[basics.Address]basics.Accoun
 // GenesisHash returns the genesis hash for this ledger.
 func (l *Ledger) GenesisHash() crypto.Digest {
 	return l.genesisHash
+}
+
+// GetCatchpointCatchupState returns the current state of the catchpoint catchup.
+func (l *Ledger) GetCatchpointCatchupState(ctx context.Context) (state CatchpointCatchupState, err error) {
+	return MakeCatchpointCatchupAccessor(l).GetState(ctx)
 }
 
 // ledgerForTracker methods

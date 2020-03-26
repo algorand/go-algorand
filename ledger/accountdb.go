@@ -85,6 +85,13 @@ type accountDelta struct {
 	new basics.AccountData
 }
 
+func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx) (err error) {
+	s := "DROP TABLE IF EXISTS catchpointbalances;"
+	s += "CREATE TABLE IF NOT EXISTS catchpointbalances(address blob primary key, data blob);"
+	_, err = tx.Exec(s)
+	return err
+}
+
 func readCatchpointStateUint64(ctx context.Context, tx *sql.Tx, stateName string) (rnd uint64, def bool, err error) {
 	var val sql.NullInt64
 	err = tx.QueryRowContext(ctx, "SELECT intval FROM catchpointstate WHERE id=?", stateName).Scan(&val)
@@ -111,7 +118,7 @@ func writeCatchpointStateUint64(ctx context.Context, tx *sql.Tx, stateName strin
 	return false, err
 }
 
-func readCatchpoingStateString(ctx context.Context, tx *sql.Tx, stateName string) (str string, def bool, err error) {
+func readCatchpointStateString(ctx context.Context, tx *sql.Tx, stateName string) (str string, def bool, err error) {
 	var val sql.NullString
 	err = tx.QueryRowContext(ctx, "SELECT strval FROM catchpointstate WHERE id=?", stateName).Scan(&val)
 	if err == sql.ErrNoRows || false == val.Valid {

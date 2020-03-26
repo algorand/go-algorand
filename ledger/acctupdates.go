@@ -165,7 +165,7 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 
 		au.roundTotals = []AccountTotals{totals}
 
-		au.lastCatchpoint, _, err0 = readCatchpoingStateString(context.Background(), tx, "lastCatchpoint")
+		au.lastCatchpoint, _, err0 = readCatchpointStateString(context.Background(), tx, "lastCatchpoint")
 		if err0 != nil {
 			return err0
 		}
@@ -498,7 +498,7 @@ func (au *accountUpdates) listAssets(maxAssetIdx basics.AssetIndex, maxResults u
 	return res, nil
 }
 
-func (au *accountUpdates) getLastCatchpoint() string {
+func (au *accountUpdates) getLastCatchpointLabel() string {
 	return au.lastCatchpoint
 }
 

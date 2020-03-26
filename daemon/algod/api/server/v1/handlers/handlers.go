@@ -1241,7 +1241,7 @@ func GetBlock(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 				lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
 				return
 			}
-			w.Header().Set("Content-Type", rpcs.LedgerResponseContentType)
+			w.Header().Set("Content-Type", rpcs.BlockResponseContentType)
 			w.Header().Set("Content-Length", strconv.Itoa(len(blockbytes)))
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 			w.WriteHeader(http.StatusOK)

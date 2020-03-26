@@ -18,30 +18,20 @@ package catchup
 
 import (
 	"context"
+	"fmt"
 	"sync"
+	"time"
 
 	"github.com/algorand/go-algorand/data"
-	/*	"context"
-		"fmt"
-		"sync"
-		"sync/atomic"
-		"time"
-
-		"github.com/algorand/go-algorand/agreement"
-		"github.com/algorand/go-algorand/config"
-		"github.com/algorand/go-algorand/crypto"
-		"github.com/algorand/go-algorand/data/basics"
-		"github.com/algorand/go-algorand/data/bookkeeping"
-		"github.com/algorand/go-algorand/ledger"
-		"github.com/algorand/go-algorand/logging"
-		"github.com/algorand/go-algorand/logging/telemetryspec"
-		"github.com/algorand/go-algorand/network"
-		"github.com/algorand/go-algorand/protocol"
-		"github.com/algorand/go-algorand/rpcs"*/)
+	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/network"
+)
 
 // CatchpointCatchupNodeServices defines set of functionalities required by the node to be supplied for the catchpoint catchup service.
 type CatchpointCatchupNodeServices interface {
 	Ledger() *data.Ledger
+	SetCatchpointCatchupMode(bool)
 }
 
 // CatchpointCatchupService represents the catchpoint catchup service.
@@ -51,29 +41,195 @@ type CatchpointCatchupService struct {
 	ctx             context.Context
 	cancelCtxFunc   context.CancelFunc
 	running         sync.WaitGroup
+	ledgerAccessor  *ledger.CatchpointCatchupAccessor
+	stage           ledger.CatchpointCatchupState
+	log             logging.Logger
+	newService      bool // indicates whether this service was created after the node was running ( i.e. true ) or the node just started to find that it was previously perfoming catchup
+	net             network.GossipNode
 }
 
-// MakeCatchpointCatchupService creates a catchpoint catchup service
-func MakeCatchpointCatchupService(catchpoint string, node CatchpointCatchupNodeServices) *CatchpointCatchupService {
-	return &CatchpointCatchupService{
+// MakeCatchpointCatchupService creates a catchpoint catchup service for a node that is already in catchpoint catchup mode
+func MakeCatchpointCatchupService(ctx context.Context, node CatchpointCatchupNodeServices, log logging.Logger, net network.GossipNode) (*CatchpointCatchupService, error) {
+	service := &CatchpointCatchupService{
+		node:           node,
+		ledgerAccessor: ledger.MakeCatchpointCatchupAccessor(node.Ledger().Ledger),
+		log:            log,
+		newService:     false,
+		net:            net,
+	}
+	err := service.loadStateVariables(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return service, nil
+}
+
+// MakeNewCatchpointCatchupService creates a new catchpoint catchup service for a node that is not in catchpoint catchup mode
+func MakeNewCatchpointCatchupService(catchpoint string, node CatchpointCatchupNodeServices, log logging.Logger, net network.GossipNode) (*CatchpointCatchupService, error) {
+	service := &CatchpointCatchupService{
 		CatchpointLabel: catchpoint,
 		node:            node,
+		ledgerAccessor:  ledger.MakeCatchpointCatchupAccessor(node.Ledger().Ledger),
+		stage:           ledger.CatchpointCatchupStateInactive,
+		log:             log,
+		newService:      true,
+		net:             net,
 	}
+	if catchpoint == "" {
+		return nil, fmt.Errorf("MakeNewCatchpointCatchupService: catchpoint is invalid")
+	}
+
+	return service, nil
 }
 
-// Start starts the catchpoint catchup service
+// Start starts the catchpoint catchup service ( continue in the process )
 func (cs *CatchpointCatchupService) Start(ctx context.Context) {
 	cs.ctx, cs.cancelCtxFunc = context.WithCancel(ctx)
 	cs.running.Add(1)
 	go cs.run()
-
 }
 
-// Abort aborts the catchpoint catchup service
+// Abort aborts the catchpoint catchup process
 func (cs *CatchpointCatchupService) Abort() {
 
 }
 
+// Stop stops the catchpoint catchup service - unlike Abort, this is not intended to abort the process but rather to allow
+// cleanup of in-memory resources for the purpose of clean shutdown.
+func (cs *CatchpointCatchupService) Stop() {
+	// signal the running goroutine that we want to stop
+	cs.cancelCtxFunc()
+	// wait for the running goroutine to terminate.
+	cs.running.Wait()
+}
+
 func (cs *CatchpointCatchupService) run() {
 	defer cs.running.Done()
+	var err error
+	for {
+		// check if we need to abort.
+		select {
+		case <-cs.ctx.Done():
+			return
+		default:
+		}
+
+		switch cs.stage {
+		case ledger.CatchpointCatchupStateInactive:
+			err = cs.processStageInactive()
+		case ledger.CatchpointCatchupStateLedgerDownload:
+			err = cs.processStageLedgerDownload()
+		case ledger.CatchpointCatchupStateLastestBlockDownload:
+			err = cs.processStageLastestBlockDownload()
+		case ledger.CatchpointCatchupStateBlocksDownload:
+			err = cs.processStageBlocksDownload()
+		case ledger.CatchpointCatchupStateSwitch:
+			err = cs.processStageSwitch()
+		default:
+			cs.log.Warnf("unexpected catchpoint catchup stage encountered : %v", cs.stage)
+			// todo - abort..
+		}
+
+		if err != nil && err != cs.ctx.Err() {
+			cs.log.Warnf("catchpoint catchup stage error : %v", err)
+			time.Sleep(200 * time.Millisecond)
+		}
+	}
+}
+
+func (cs *CatchpointCatchupService) loadStateVariables(ctx context.Context) (err error) {
+	cs.CatchpointLabel, err = cs.ledgerAccessor.GetLabel(ctx)
+	if err != nil {
+		return err
+	}
+	cs.stage, err = cs.ledgerAccessor.GetState(ctx)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (cs *CatchpointCatchupService) processStageInactive() (err error) {
+	err = cs.ledgerAccessor.SetLabel(cs.ctx, cs.CatchpointLabel)
+	if err != nil {
+		return err
+	}
+	err = cs.updateStage(ledger.CatchpointCatchupStateLedgerDownload)
+	if err != nil {
+		return err
+	}
+	if cs.newService {
+		// we need to let the node know that it should shut down all the unneed services to avoid clashes.
+		cs.node.SetCatchpointCatchupMode(true)
+	}
+	return nil
+}
+
+func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
+	round, _, _ := ledger.ParseCatchpointLabel(cs.CatchpointLabel)
+
+	// download balances file.
+	ledgerFetcher := makeLedgerFetcher(cs.net, cs.ledgerAccessor, cs.log)
+
+	for {
+		err = cs.ledgerAccessor.ResetStagingBalances(cs.ctx)
+		if err != nil {
+			return err
+		}
+		err = ledgerFetcher.getLedger(cs.ctx, round)
+		if err == nil {
+			break
+		}
+
+		// TODO : limit number of retries.
+	}
+
+	err = cs.updateStage(ledger.CatchpointCatchupStateLastestBlockDownload)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err error) {
+	// TODO:
+	err = cs.updateStage(ledger.CatchpointCatchupStateBlocksDownload)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
+	// TODO:
+	err = cs.updateStage(ledger.CatchpointCatchupStateSwitch)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (cs *CatchpointCatchupService) processStageSwitch() (err error) {
+	// TODO:
+
+	// todo - tell the ledger to reload all it's internal state.
+
+	err = cs.updateStage(ledger.CatchpointCatchupStateInactive)
+	if err != nil {
+		return err
+	}
+	cs.node.SetCatchpointCatchupMode(false)
+	return nil
+}
+
+func (cs *CatchpointCatchupService) updateStage(newStage ledger.CatchpointCatchupState) (err error) {
+	err = cs.ledgerAccessor.SetState(cs.ctx, newStage)
+	if err != nil {
+		return err
+	}
+	cs.stage = newStage
+	cs.node.SetCatchpointCatchupMode(false)
+	return nil
 }

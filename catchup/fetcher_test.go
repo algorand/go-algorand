@@ -588,10 +588,10 @@ func TestGetBlockHTTP(t *testing.T) {
 		return
 	}
 	net := buildTestHTTPPeerSource()
-	ls := rpcs.MakeLedgerService(config.GetDefaultLocal(), ledger, net, "test genesisID")
+	ls := rpcs.MakeBlockService(config.GetDefaultLocal(), ledger, net, "test genesisID")
 
 	nodeA := basicRPCNode{}
-	nodeA.RegisterHTTPHandler(rpcs.LedgerServiceBlockPath, ls)
+	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
 	nodeA.start()
 	defer nodeA.stop()
 	rootURL := nodeA.rootURL()
@@ -674,7 +674,7 @@ func TestGetBlockMocked(t *testing.T) {
 	if err != nil {
 		t.Errorf("Couldn't make ledger: %v", err)
 	}
-	rpcs.MakeLedgerService(config.GetDefaultLocal(), ledgerA, nodeA, "test genesisID")
+	rpcs.MakeBlockService(config.GetDefaultLocal(), ledgerA, nodeA, "test genesisID")
 
 	next := ledgerA.NextRound()
 	genHash := crypto.Digest{0x42}
@@ -758,7 +758,7 @@ func TestGetFutureBlock(t *testing.T) {
 	if err != nil {
 		t.Errorf("Couldn't make ledger: %v", err)
 	}
-	rpcs.MakeLedgerService(config.GetDefaultLocal(), ledgerA, nodeA, "test genesisID")
+	rpcs.MakeBlockService(config.GetDefaultLocal(), ledgerA, nodeA, "test genesisID")
 
 	// B tries to fetch block 4
 	factory := MakeNetworkFetcherFactory(nodeB, 10, nil)
@@ -873,7 +873,7 @@ func TestGetBlockWS(t *testing.T) {
 		net := buildTestHTTPPeerSource()
 		ledgerServiceConfig := config.GetDefaultLocal()
 		ledgerServiceConfig.CatchupParallelBlocks = 5
-		ls := rpcs.MakeLedgerService(ledgerServiceConfig, ledger, net, "test genesisID")
+		ls := rpcs.MakeBlockService(ledgerServiceConfig, ledger, net, "test genesisID")
 
 		ls.Start()
 
