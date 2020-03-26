@@ -235,7 +235,7 @@ func (rctx *requestContext) continueHandler(w http.ResponseWriter, r *http.Reque
 }
 
 func (rctx *requestContext) homeHandler(w http.ResponseWriter, r *http.Request) {
-	home, err := template.ParseFiles("/home/maxj/Projects/algorand/go-algorand/cmd/tealdbg/home.html")
+	home, err := template.New("home").Parse(homepage)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
