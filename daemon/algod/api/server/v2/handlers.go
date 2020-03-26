@@ -289,7 +289,7 @@ func (v2 *Handlers) TransactionParams(ctx echo.Context) error {
 
 	var params generated.TransactionParams
 	params.Fee = v2.Node.SuggestedFee().Raw
-	params.GenesisID = v2.Node.GenesisID()
+	params.GenesisId = v2.Node.GenesisID()
 	params.GenesisHash = gh[:]
 	params.LastRound = uint64(stat.LastRound)
 	params.ConsensusVersion = string(stat.LastVersion)
