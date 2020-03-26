@@ -27,6 +27,7 @@ import (
 	"io"
 	"math"
 	"math/big"
+	"os"
 	"runtime"
 	"sort"
 	"strings"
@@ -116,8 +117,6 @@ type EvalParams struct {
 
 	Trace io.Writer
 
-	Debugger *Debugger
-
 	TxnGroup []transactions.SignedTxn
 
 	// GroupIndex should point to Txn within TxnGroup
@@ -206,6 +205,7 @@ type evalContext struct {
 
 	// Stores state & disassembly for the optional web debugger
 	debuggerState DebuggerState
+	debugger      *Debugger
 }
 
 // StackType describes the type of a value on the operand stack
@@ -271,8 +271,6 @@ func EvalStateful(program []byte, params EvalParams) (pass bool, delta basics.Ev
 	cx.appLocalStateRCache = make(map[ckey]basics.TealKeyValue)
 	cx.appLocalStateWCache = make(map[ckey]basics.TealKeyValue)
 
-	// cx.Debugger = &Debugger{URL: "http://localhost:9392"}
-
 	pass, err = eval(program, &cx)
 	// remove possible leftovers from writing and removing keys
 	for k, v := range cx.appEvalDelta.LocalDeltas {
@@ -314,8 +312,8 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 
 	defer func() {
 		// Ensure we update the debugger before exiting
-		if cx.Debugger != nil {
-			cx.Debugger.complete(cx)
+		if cx.debugger != nil {
+			cx.debugger.complete(cx)
 		}
 	}()
 
@@ -356,13 +354,18 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 	cx.program = program
 	cx.programHash = crypto.HashObj(Program(program))
 
-	if cx.Debugger != nil {
-		cx.Debugger.register(cx)
+	debugURL := os.Getenv("TEAL_DEBUGGER_URL")
+	if debugURL != "" {
+		cx.debugger = &Debugger{URL: debugURL}
+	}
+
+	if cx.debugger != nil {
+		cx.debugger.register(cx)
 	}
 
 	for (cx.err == nil) && (cx.pc < len(cx.program)) {
-		if cx.Debugger != nil {
-			cx.Debugger.update(cx)
+		if cx.debugger != nil {
+			cx.debugger.update(cx)
 		}
 
 		cx.step()
