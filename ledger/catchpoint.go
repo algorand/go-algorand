@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -350,7 +351,7 @@ func (cp *catchpointTracker) scheduleCatchpoint() error {
 		return err
 	})
 	if err != nil {
-		cp.log.Errorf("catchpointTracker: scheduleCatchpoint: %v", err)
+		cp.log.Warnf("catchpointTracker: scheduleCatchpoint: %v", err)
 		return err
 	}
 
@@ -366,7 +367,7 @@ func (cp *catchpointTracker) scheduleCatchpoint() error {
 	if startBackupRound <= cp.lastCommittedRound {
 		err = cp.startBackup(context.Background())
 		if err != nil {
-			cp.log.Errorf("catchpointTracker: scheduleCatchpoint: unable to start backup: %v", err)
+			cp.log.Warnf("catchpointTracker: scheduleCatchpoint: unable to start backup: %v", err)
 			return err
 		}
 
@@ -374,11 +375,11 @@ func (cp *catchpointTracker) scheduleCatchpoint() error {
 		if cp.backupRemainingPages > 1 {
 			complete, err := cp.backupAccessor.Step(cp.backupRemainingPages - 1)
 			if err != nil {
-				cp.log.Errorf("catchpointTracker: scheduleCatchpoint: unable to make a backup step: %v", err)
+				cp.log.Warnf("catchpointTracker: scheduleCatchpoint: unable to make a backup step: %v", err)
 				return err
 			}
 			if complete {
-				cp.log.Errorf("catchpointTracker: scheduleCatchpoint: step(%d) is not expected to complete the database backup, as %d pages remained", cp.backupRemainingPages-1, cp.backupRemainingPages)
+				cp.log.Warnf("catchpointTracker: scheduleCatchpoint: step(%d) is not expected to complete the database backup, as %d pages remained", cp.backupRemainingPages-1, cp.backupRemainingPages)
 				return err
 			}
 			cp.backupRemainingPages = cp.backupAccessor.Remaining()
@@ -434,7 +435,7 @@ func (cp *catchpointTracker) updateArchivalMode(enable bool) error {
 		return nil
 	})
 	if err != nil {
-		cp.log.Errorf("catchpointTracker: updateArchivalMode: %v", err)
+		cp.log.Warnf("catchpointTracker: updateArchivalMode: %v", err)
 		return err
 	}
 	cp.lastCatchpointDatabaseSize = 0
@@ -448,7 +449,7 @@ func (cp *catchpointTracker) updateArchivalMode(enable bool) error {
 	if previousStage == catchpointStageBackingUp || previousStage == catchpointStageBackedUp {
 		err = cp.deleteStagingBackup()
 		if err != nil {
-			cp.log.Errorf("catchpointTracker: updateArchivalMode: unable to delete staged backup database: %v", err)
+			cp.log.Warnf("catchpointTracker: updateArchivalMode: unable to delete staged backup database: %v", err)
 			return err
 		}
 	}
@@ -458,14 +459,14 @@ func (cp *catchpointTracker) updateArchivalMode(enable bool) error {
 func (cp *catchpointTracker) startBackup(ctx context.Context) (err error) {
 	cp.backupAccessor, err = cp.dbs.rdb.Backup(ctx, cp.stagingDatabaseName, cp.inMemoryDatabase)
 	if err != nil {
-		cp.log.Errorf("catchpointTracker: startBackup: unable to create backup accessor: %v", err)
+		cp.log.Warnf("catchpointTracker: startBackup: unable to create backup accessor: %v", err)
 		cp.deleteStagingBackup()
 		return err
 	}
 	// call the Step to initialize the Remaining and PageCount.
 	_, err = cp.backupAccessor.Step(0)
 	if err != nil {
-		cp.log.Errorf("catchpointTracker: startBackup: unable to make backup step: %v", err)
+		cp.log.Warnf("catchpointTracker: startBackup: unable to make backup step: %v", err)
 		cp.deleteStagingBackup()
 		return err
 	}
@@ -482,7 +483,7 @@ func (cp *catchpointTracker) startBackup(ctx context.Context) (err error) {
 		return
 	})
 	if err != nil {
-		cp.log.Errorf("catchpointTracker: startBackup: unable to update 'catchpointStage': %v", err)
+		cp.log.Warnf("catchpointTracker: startBackup: unable to update 'catchpointStage': %v", err)
 		cp.deleteStagingBackup()
 		return err
 	}
@@ -493,7 +494,7 @@ func (cp *catchpointTracker) startBackup(ctx context.Context) (err error) {
 func (cp *catchpointTracker) abortBackup() (err error) {
 	cp.stagingAccessor, err = cp.backupAccessor.Finish()
 	if err != nil {
-		cp.log.Errorf("catchpointTracker: abortBackup: unable to finish backing up database: %v", err)
+		cp.log.Warnf("catchpointTracker: abortBackup: unable to finish backing up database: %v", err)
 		return
 	}
 	cp.backupAccessor = nil
@@ -505,7 +506,7 @@ func (cp *catchpointTracker) finishBackup() (err error) {
 	cp.backupAccessor.Step(-1)
 	cp.stagingAccessor, err = cp.backupAccessor.Finish()
 	if err != nil {
-		cp.log.Errorf("catchpointTracker: finishBackup: unable to finish backing up database: %v", err)
+		cp.log.Warnf("catchpointTracker: finishBackup: unable to finish backing up database: %v", err)
 		return
 	}
 	cp.backupAccessor = nil
@@ -514,7 +515,7 @@ func (cp *catchpointTracker) finishBackup() (err error) {
 		return
 	})
 	if err != nil {
-		cp.log.Errorf("catchpointTracker: finishBackup: unable to update 'catchpointStage': %v", err)
+		cp.log.Warnf("catchpointTracker: finishBackup: unable to update 'catchpointStage': %v", err)
 		return
 	}
 	cp.stage = catchpointStageBackedUp
@@ -556,7 +557,7 @@ func (cp *catchpointTracker) asyncGenerateCatchpoint() {
 		buildResult := catchpointBuildResult{
 			err: fmt.Errorf("no block header is available for round %d : %v", cp.nextCatchpointCandidateRound, err),
 		}
-		cp.log.Errorf("catchpointTracker: asyncGenerateCatchpoint: %v", err)
+		cp.log.Debugf("catchpointTracker: asyncGenerateCatchpoint: %v", err)
 		cp.buildingCatchpoint <- buildResult
 		return
 	}
@@ -592,7 +593,7 @@ func (cp *catchpointTracker) asyncGenerateCatchpoint() {
 				}
 			}
 			if buildResult.err != nil {
-				cp.log.Errorf("catchpointTracker: asyncGenerateCatchpoint: unable to create catchpoint : %v", buildResult.err)
+				cp.log.Warnf("catchpointTracker: asyncGenerateCatchpoint: unable to create catchpoint : %v", buildResult.err)
 			}
 			buildResult.fileSize = writer.GetSize()
 			buildResult.round = blockHeader.Round
@@ -607,8 +608,71 @@ func (cp *catchpointTracker) saveCatchpoint(b catchpointBuildResult) (err error)
 		return
 	})
 	if err != nil {
-		cp.log.Errorf("catchpointTracker: saveCatchpoint: unable to save catchpoint: %v", err)
+		cp.log.Warnf("catchpointTracker: saveCatchpoint: unable to save catchpoint: %v", err)
 		return
 	}
 	return
+}
+
+func (cp *catchpointTracker) getCatchpointStream(round basics.Round) (io.ReadCloser, error) {
+	dbFileName := ""
+	err := cp.dbs.rdb.Atomic(func(tx *sql.Tx) (err error) {
+		dbFileName, _, _, err = cp.getCatchpoint(tx, round)
+		return
+	})
+	if err != nil && err != sql.ErrNoRows {
+		// we had some sql error.
+		return nil, fmt.Errorf("catchpointTracker: getCatchpointStream: unable to lookup catchpoint %d: %v", round, err)
+	}
+	if dbFileName != "" {
+		catchpointsRoot := filepath.Dir(cp.stagingDatabaseName)
+		catchpointPath := filepath.Join(catchpointsRoot, dbFileName)
+		file, err := os.OpenFile(catchpointPath, os.O_RDONLY, 0666)
+		if err == nil && file != nil {
+			return file, nil
+		}
+		// else, see if this is a file-not-found error
+		if os.IsNotExist(err) {
+			// the database told us that we have this file.. but we couldn't find it.
+			// delete it from the database.
+			b := catchpointBuildResult{
+				round:      round,
+				fileName:   "",
+				catchpoint: "",
+				fileSize:   0,
+			}
+			err := cp.saveCatchpoint(b)
+			if err != nil {
+				cp.log.Warnf("catchpointTracker: getCatchpointStream: unable to delete missing catchpoint entry: %v", err)
+				return nil, err
+			}
+
+			return nil, ErrNoEntry{}
+		}
+		// it's some other error.
+		return nil, fmt.Errorf("catchpointTracker: getCatchpointStream: unable to open catchpoint file '%s' %v", catchpointPath, err)
+	}
+
+	// if the database doesn't know about that round, see if we have that file anyway:
+	catchpointsRoot := filepath.Dir(cp.stagingDatabaseName)
+	fileName := filepath.Join("catchpoints", catchpointRoundToPath(round))
+	catchpointPath := filepath.Join(catchpointsRoot, fileName)
+	file, err := os.OpenFile(catchpointPath, os.O_RDONLY, 0666)
+	if err == nil && file != nil {
+		// great, if found that we should have had this in the database.. add this one now :
+		fileInfo, err := file.Stat()
+		if err != nil {
+			// we couldn't get the stat, so just return with the file.
+			return file, nil
+		}
+		b := catchpointBuildResult{
+			round:      round,
+			fileName:   fileName,
+			catchpoint: "",
+			fileSize:   fileInfo.Size(),
+		}
+		cp.saveCatchpoint(b)
+		return file, nil
+	}
+	return nil, ErrNoEntry{}
 }

@@ -578,7 +578,7 @@ func (s *httpTestPeerSource) addPeer(rootURL string) {
 }
 
 // Build a ledger with genesis and one block, start an HTTPServer around it, use NetworkFetcher to fetch the block.
-// For smaller test, see ledgerService_test.go TestGetBlockHTTP
+// For smaller test, see blockService_test.go TestGetBlockHTTP
 // todo - fix this one
 func TestGetBlockHTTP(t *testing.T) {
 	// start server
@@ -871,9 +871,9 @@ func TestGetBlockWS(t *testing.T) {
 	for _, version := range versions { // range network.SupportedProtocolVersions {
 
 		net := buildTestHTTPPeerSource()
-		ledgerServiceConfig := config.GetDefaultLocal()
-		ledgerServiceConfig.CatchupParallelBlocks = 5
-		ls := rpcs.MakeBlockService(ledgerServiceConfig, ledger, net, "test genesisID")
+		blockServiceConfig := config.GetDefaultLocal()
+		blockServiceConfig.CatchupParallelBlocks = 5
+		ls := rpcs.MakeBlockService(blockServiceConfig, ledger, net, "test genesisID")
 
 		ls.Start()
 

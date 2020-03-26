@@ -152,11 +152,16 @@ func (cp *catchpointTracker) databaseSize(tx *sql.Tx) (size uint64, err error) {
 func (cp *catchpointTracker) storeCatchpoint(tx *sql.Tx, round basics.Round, fileName string, catchpoint string, fileSize int64) (err error) {
 	_, err = tx.Exec("DELETE FROM storedcatchpoints WHERE round=?", round)
 
-	if err != nil {
+	if err != nil || (fileName == "" && catchpoint == "" && fileSize == 0) {
 		return
 	}
 
 	_, err = tx.Exec("INSERT INTO storedcatchpoints(round, filename, catchpoint, filesize) VALUES(?, ?, ?, ?)", round, fileName, catchpoint, fileSize)
+	return
+}
+
+func (cp *catchpointTracker) getCatchpoint(tx *sql.Tx, round basics.Round) (fileName string, catchpoint string, fileSize int64, err error) {
+	err = tx.QueryRow("SELECT filename, catchpoint, filesize FROM storedcatchpoints WHERE round=?", int64(round)).Scan(&fileName, &catchpoint, &fileSize)
 	return
 }
 

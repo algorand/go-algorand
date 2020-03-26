@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/algorand/go-deadlock"
@@ -490,6 +491,13 @@ func (l *Ledger) GenesisHash() crypto.Digest {
 // GetCatchpointCatchupState returns the current state of the catchpoint catchup.
 func (l *Ledger) GetCatchpointCatchupState(ctx context.Context) (state CatchpointCatchupState, err error) {
 	return MakeCatchpointCatchupAccessor(l).GetState(ctx)
+}
+
+// GetCatchpointStream - todo ..
+func (l *Ledger) GetCatchpointStream(round basics.Round) (io.ReadCloser, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.catchpoint.getCatchpointStream(round)
 }
 
 // ledgerForTracker methods
