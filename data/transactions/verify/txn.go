@@ -100,6 +100,9 @@ func TxnPool(s *transactions.SignedTxn, ctx Context, verificationPool execpool.B
 	if s.Txn.Src() == zeroAddress {
 		return errors.New("empty address")
 	}
+	if !proto.SupportRekeying && (s.AuthAddr != basics.Address{}) {
+		return errors.New("nonempty AuthAddr but rekeying not supported")
+	}
 
 	outCh := make(chan error, 1)
 	cx := asyncVerifyContext{s: s, outCh: outCh, ctx: &ctx}
@@ -124,6 +127,9 @@ func Txn(s *transactions.SignedTxn, ctx Context) error {
 	zeroAddress := basics.Address{}
 	if s.Txn.Src() == zeroAddress {
 		return errors.New("empty address")
+	}
+	if !proto.SupportRekeying && (s.AuthAddr != basics.Address{}) {
+		return errors.New("nonempty AuthAddr but rekeying not supported")
 	}
 
 	return stxnVerifyCore(s, &ctx)

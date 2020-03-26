@@ -338,7 +338,9 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 	if !proto.SupportTxGroups && (tx.Group != crypto.Digest{}) {
 		return fmt.Errorf("transaction has group but groups not yet enabled")
 	}
-	// TODO(rekey) check that rekeyto is empty if rekeying is not supported
+	if !proto.SupportRekeying && (tx.RekeyTo != basics.Address{}) {
+		return fmt.Errorf("transaction has RekeyTo set but rekeying not yet enabled")
+	}
 	return nil
 }
 

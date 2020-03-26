@@ -118,6 +118,15 @@ func TestBlockEvaluator(t *testing.T) {
 }
 
 func TestRekeying(t *testing.T) {
+	// Pretend rekeying is supported
+	actual := config.Consensus[protocol.ConsensusCurrentVersion]
+	pretend := actual
+	pretend.SupportRekeying = true
+	config.Consensus[protocol.ConsensusCurrentVersion] = pretend
+	defer func(){
+		config.Consensus[protocol.ConsensusCurrentVersion] = actual
+	}()
+
 	// Bring up a ledger
 	genesisInitState, addrs, keys := genesis(10)
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
