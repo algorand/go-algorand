@@ -49,7 +49,7 @@ const EvalMaxVersion = LogicVersion
 const EvalMaxScratchSize = 255
 
 // MaxStringSize is the limit of byte strings created by `cons`
-const MaxStringSize = 4069
+const MaxStringSize = 4096
 
 // stackValue is the type for the operand stack.
 // Each stackValue is either a valid []byte value or a uint64 value.
@@ -102,10 +102,10 @@ func (sv *stackValue) toTealValue() (tv basics.TealValue) {
 // LedgerForLogic represents ledger API for Stateful TEAL program
 type LedgerForLogic interface {
 	Balance(addr basics.Address) (uint64, error)
-	AppLocalState(addr basics.Address, appIdx basics.AppIndex) (basics.TealKeyValue, error)
 	AppGlobalState() (basics.TealKeyValue, error)
-	AssetHolding(addr basics.Address, assetID uint64) (basics.AssetHolding, error)
-	AssetParams(addr basics.Address, assetID uint64) (basics.AssetParams, error)
+	AppLocalState(addr basics.Address, appIdx basics.AppIndex) (basics.TealKeyValue, error)
+	AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error)
+	AssetParams(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetParams, error)
 }
 
 // EvalParams contains data that comes into condition evaluation.
@@ -1852,7 +1852,7 @@ func opAssetHoldingGet(cx *evalContext) {
 
 	var exist uint64 = 0
 	var value stackValue
-	if holding, err := cx.Ledger.AssetHolding(addr, assetID); err == nil {
+	if holding, err := cx.Ledger.AssetHolding(addr, basics.AssetIndex(assetID)); err == nil {
 		// the holding exist, read the value
 		exist = 1
 		value, err = cx.assetHoldingEnumToValue(&holding, fieldIdx)
@@ -1889,7 +1889,7 @@ func opAssetParamsGet(cx *evalContext) {
 
 	var exist uint64 = 0
 	var value stackValue
-	if params, err := cx.Ledger.AssetParams(addr, assetID); err == nil {
+	if params, err := cx.Ledger.AssetParams(addr, basics.AssetIndex(assetID)); err == nil {
 		// params exist, read the value
 		exist = 1
 		value, err = cx.assetParamsEnumToValue(&params, paramIdx)

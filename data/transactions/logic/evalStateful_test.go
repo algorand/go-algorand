@@ -137,9 +137,9 @@ func (l *testLedger) AppGlobalState() (basics.TealKeyValue, error) {
 	return nil, fmt.Errorf("no such app")
 }
 
-func (l *testLedger) AssetHolding(addr basics.Address, assetID uint64) (basics.AssetHolding, error) {
+func (l *testLedger) AssetHolding(addr basics.Address, assetID basics.AssetIndex) (basics.AssetHolding, error) {
 	if br, ok := l.balances[addr]; ok {
-		if asset, ok := br.holdings[assetID]; ok {
+		if asset, ok := br.holdings[uint64(assetID)]; ok {
 			return asset, nil
 		}
 		return basics.AssetHolding{}, fmt.Errorf("No asset for account")
@@ -147,9 +147,9 @@ func (l *testLedger) AssetHolding(addr basics.Address, assetID uint64) (basics.A
 	return basics.AssetHolding{}, fmt.Errorf("no such address")
 }
 
-func (l *testLedger) AssetParams(addr basics.Address, assetID uint64) (basics.AssetParams, error) {
+func (l *testLedger) AssetParams(addr basics.Address, assetID basics.AssetIndex) (basics.AssetParams, error) {
 	if br, ok := l.balances[addr]; ok {
-		if asset, ok := br.assets[assetID]; ok {
+		if asset, ok := br.assets[uint64(assetID)]; ok {
 			return asset, nil
 		}
 		return basics.AssetParams{}, fmt.Errorf("No asset for account")
@@ -361,7 +361,7 @@ pop
 			_, err = test.eval(program, ep)
 			require.Error(t, err)
 			require.NotContains(t, err.Error(), "not allowed in current mode")
-			require.Equal(t, err.Error(), "error")
+			require.Contains(t, err.Error(), "err opcode")
 		})
 	}
 
@@ -746,7 +746,7 @@ byte 0x414c474f
 
 	_, _, err = EvalStateful(program, ep)
 	require.Error(t, err)
-	require.Equal(t, err.Error(), "error")
+	require.Contains(t, err.Error(), "err opcode")
 
 	ledger.applications[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
 	cost, err = CheckStateful(program, ep)
@@ -1151,7 +1151,7 @@ int 100
 			if name == "read" {
 				_, _, err = EvalStateful(program, ep)
 				require.Error(t, err)
-				require.Contains(t, err.Error(), "error") // no such key
+				require.Contains(t, err.Error(), "err opcode") // no such key
 			}
 
 			ledger.balances[txn.Txn.Sender].apps[100]["ALGO"] = basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
@@ -1496,7 +1496,7 @@ int 1
 			if name == "read" {
 				_, _, err = EvalStateful(program, ep)
 				require.Error(t, err)
-				require.Contains(t, err.Error(), "error") // no such key
+				require.Contains(t, err.Error(), "err opcode") // no such key
 			}
 			ledger.applications[100]["ALGO"] = basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
 
