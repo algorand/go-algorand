@@ -18,7 +18,7 @@ type ExecID string
 
 type debugConfig struct {
 	// If -1, don't break
-	BreakIfPCExceeds int `json:"breakonpc"`
+	BreakOnPC int `json:"breakonpc"`
 }
 
 type execContext struct {
@@ -67,7 +67,7 @@ func (rctx *requestContext) register(state logic.DebuggerState) {
 
 	// Allocate a default debugConfig (don't break)
 	exec.debugConfig = debugConfig{
-		BreakIfPCExceeds: -1,
+		BreakOnPC: -1,
 	}
 
 	// Allocate an acknowledgement channel
@@ -123,10 +123,13 @@ func (rctx *requestContext) updateHandler(w http.ResponseWriter, r *http.Request
 	go func() {
 		// Check if we are triggered and acknolwedge asynchronously
 		cfg := exec.debugConfig
-		if cfg.BreakIfPCExceeds != -1 {
-			if state.PC > cfg.BreakIfPCExceeds {
-				// Inform the user
+		if cfg.BreakOnPC != -1 {
+			if state.PC >= cfg.BreakOnPC {
+				// Breakpoint hit! Inform the user
 				rctx.notifications <- Notification{"updated", state}
+			} else {
+				// Continue if we haven't hit the next breakpoint 
+				exec.acknowledged <- true
 			}
 		} else {
 			// User won't send acknowledement, so we will
