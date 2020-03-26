@@ -124,7 +124,7 @@ func (rctx *requestContext) updateHandler(w http.ResponseWriter, r *http.Request
 		// Check if we are triggered and acknolwedge asynchronously
 		cfg := exec.debugConfig
 		if cfg.BreakOnPC != -1 {
-			if state.PC == cfg.BreakOnPC {
+			if cfg.BreakOnPC == 0 || state.PC == cfg.BreakOnPC {
 				// Breakpoint hit! Inform the user
 				rctx.notifications <- Notification{"updated", state}
 			} else {
