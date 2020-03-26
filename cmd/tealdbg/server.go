@@ -14,6 +14,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 )
 
+// ExecID is a unique execution ID
 type ExecID string
 
 type debugConfig struct {
@@ -31,15 +32,19 @@ type execContext struct {
 	debugConfig debugConfig
 }
 
+// ConfigRequest tells us what breakpoints to hit, if any
 type ConfigRequest struct {
 	debugConfig
 	ExecID ExecID `json:"execid"`
 }
 
+// ContinueRequest tells a particular execution to continue
 type ContinueRequest struct {
 	ExecID ExecID `json:"execid"`
 }
 
+// Notification is sent to the client over their websocket connection
+// on each new TEAL execution/update/complation
 type Notification struct {
 	Event         string              `json:"event"`
 	DebuggerState logic.DebuggerState `json:"state"`

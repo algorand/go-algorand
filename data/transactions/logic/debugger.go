@@ -11,15 +11,20 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 )
 
+// Debugger represents a connection to tealdbg
 type Debugger struct {
 	URL string
 }
 
+// PCOffset stores the mapping from a program counter value to an offset in the
+// disassembly of the bytecode
 type PCOffset struct {
 	PC     int `json:"pc"`
 	Offset int `json:"offset"`
 }
 
+// DebuggerState is a representation of the evaluation context that we encode
+// to json and send to tealdbg
 type DebuggerState struct {
 	PC          int            `json:"pc"`
 	Stack       []v1.TealValue `json:"stack"`

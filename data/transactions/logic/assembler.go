@@ -1290,6 +1290,8 @@ func disAssetParams(dis *disassembleState, spec *OpSpec) {
 	_, dis.err = fmt.Fprintf(dis.out, "asset_params_get %s\n", AssetParamsFieldNames[arg])
 }
 
+// DisassembleInstrumented is like Disassemble, but additionally returns where
+// each program counter value maps in the disassembly
 func DisassembleInstrumented(program []byte) (text string, pcOffset []PCOffset, err error) {
 	out := strings.Builder{}
 	dis := disassembleState{program: program, out: &out}
