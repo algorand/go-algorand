@@ -49,7 +49,7 @@ const EvalMaxVersion = LogicVersion
 const EvalMaxScratchSize = 255
 
 // MaxStringSize is the limit of byte strings created by `cons`
-const MaxStringSize = 4069
+const MaxStringSize = 4096
 
 // stackValue is the type for the operand stack.
 // Each stackValue is either a valid []byte value or a uint64 value.
