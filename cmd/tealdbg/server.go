@@ -52,6 +52,12 @@ type requestContext struct {
 	// Receive registration, update, and completed notifications from TEAL
 	notifications chan Notification
 
+	// Last subscription ID used for notifications broadcasts to web clients
+	maxSubID uint64
+
+	// Broadcast notifications to all web clients over their respective channels
+	subscriptions map[uint64]chan Notification
+
 	// State stored per execution
 	execContexts map[ExecID]execContext
 }
@@ -221,7 +227,7 @@ func (rctx *requestContext) continueHandler(w http.ResponseWriter, r *http.Reque
 }
 
 func (rctx *requestContext) homeHandler(w http.ResponseWriter, r *http.Request) {
-	home, err := template.New("home").Parse(homepage)
+	home, err := template.ParseFiles("/home/maxj/Projects/algorand/go-algorand/cmd/tealdbg/home.html")
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -230,6 +236,37 @@ func (rctx *requestContext) homeHandler(w http.ResponseWriter, r *http.Request) 
 	w.WriteHeader(http.StatusOK)
 	home.Execute(w, nil)
 	return
+}
+
+func (rctx *requestContext) broadcastNotifications() {
+	for {
+		select {
+		case notification := <-rctx.notifications:
+			rctx.mux.Lock()
+			for _, ch := range rctx.subscriptions {
+				select {
+					case ch <- notification:
+					default:
+				}
+			}
+			rctx.mux.Unlock()
+		}
+	}
+}
+
+func (rctx *requestContext) registerNotifications() (uint64, chan Notification) {
+	rctx.mux.Lock()
+	defer rctx.mux.Unlock()
+	rctx.maxSubID++
+	notifications := make(chan Notification)
+	rctx.subscriptions[rctx.maxSubID] = notifications
+	return rctx.maxSubID, notifications
+}
+
+func (rctx *requestContext) unregisterNotifications(id uint64) {
+	rctx.mux.Lock()
+	defer rctx.mux.Unlock()
+	delete(rctx.subscriptions, id)
 }
 
 func (rctx *requestContext) subscribeHandler(ws *websocket.Conn) {
@@ -248,10 +285,13 @@ func (rctx *requestContext) subscribeHandler(ws *websocket.Conn) {
 		return
 	}
 
+	subid, notifications := rctx.registerNotifications()
+	defer rctx.unregisterNotifications(subid)
+
 	// Wait on notifications and forward to the user
 	for {
 		select {
-		case notification := <-rctx.notifications:
+		case notification := <-notifications:
 			enc, err := json.Marshal(notification)
 			if err != nil {
 				return
@@ -272,6 +312,7 @@ func main() {
 	rctx := requestContext{
 		mux:           sync.Mutex{},
 		notifications: make(chan Notification),
+		subscriptions: make(map[uint64]chan Notification),
 		execContexts:  make(map[ExecID]execContext),
 	}
 
@@ -297,6 +338,8 @@ func main() {
 		WriteTimeout: time.Duration(0),
 		ReadTimeout:  time.Duration(0),
 	}
+
+	go rctx.broadcastNotifications()
 
 	log.Printf("starting server on %s", appAddress)
 	server.ListenAndServe()
