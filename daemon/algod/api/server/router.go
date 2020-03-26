@@ -98,7 +98,7 @@ func registerHandlers(router *echo.Echo, prefix string, routes lib.Routes, ctx l
 	}
 }
 
-// NewRouter builds and returns a new router from routes
+// ConfigureRouter builds and returns a new router from routes
 func ConfigureRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-chan struct{}, apiToken string, e *echo.Echo) {
 	e.Use(echo.WrapMiddleware(middlewares.Logger(logger)))
 	// TODO: Rewrite the auth middleware to support the new auth requirements.
@@ -135,7 +135,7 @@ func ConfigureRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdow
 	registerHandlers(e, apiV1Tag, routes.V1Routes, ctx)
 
 	// Registering v2 routes
-	v2Handler := v2.V2Handlers{
+	v2Handler := v2.Handlers{
 		Node:     node,
 		Log:      logger,
 		Shutdown: shutdown,

@@ -26,7 +26,7 @@ import (
 // KeyLength is the an Algorand's public address length
 const KeyLength = 58
 
-// Routes contains all routes for v1
+// V1Routes contains all routes for v1
 var V1Routes = lib.Routes{
 	lib.Route{
 		Name:        "status",

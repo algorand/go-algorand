@@ -118,7 +118,7 @@ func getCodecHandle(formatPtr *string) (codec.Handle, error) {
 	} else if format == "msgpack" || format == "msgp" {
 		handle = protocol.CodecHandle
 	} else {
-		fmt.Sprintf("invalid format: %s", format)
+		return nil, fmt.Errorf("invalid format: %s", format)
 	}
 
 	return handle, nil

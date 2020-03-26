@@ -19,27 +19,30 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-type V2Handlers struct {
+// Handlers is an implementation to the V2 route handler interface defined by the generated code.
+type Handlers struct {
 	Node     *node.AlgorandFullNode
 	Log      logging.Logger
 	Shutdown <-chan struct{}
 }
 
+// PostV2RegisterParticipationKeysAccountId registers participation keys.
 // (POST /v2/register-participation-keys/{account-id})
-func (v2 *V2Handlers) PostV2RegisterParticipationKeysAccountId(ctx echo.Context, accountId string, params generated.PostV2RegisterParticipationKeysAccountIdParams) error {
+func (v2 *Handlers) PostV2RegisterParticipationKeysAccountId(ctx echo.Context, accountId string, params generated.PostV2RegisterParticipationKeysAccountIdParams) error {
 	// TODO
 	return nil
 }
 
+// PostV2Shutdown shuts down the node.
 // (POST /v2/shutdown)
-func (v2 *V2Handlers) PostV2Shutdown(ctx echo.Context, params generated.PostV2ShutdownParams) error {
+func (v2 *Handlers) PostV2Shutdown(ctx echo.Context, params generated.PostV2ShutdownParams) error {
 	// TODO
 	return nil
 }
 
-// Get account information.
+// AccountInformation gets account information for a given account.
 // (GET /v2/accounts/{address})
-func (v2 *V2Handlers) AccountInformation(ctx echo.Context, address string) error {
+func (v2 *Handlers) AccountInformation(ctx echo.Context, address string) error {
 	addr, err := basics.UnmarshalChecksumAddress(address)
 	if err != nil {
 		return returnError(ctx, http.StatusBadRequest, err, errFailedToParseAddress, v2.Log)
@@ -142,9 +145,9 @@ func (v2 *V2Handlers) AccountInformation(ctx echo.Context, address string) error
 	return ctx.JSON(http.StatusOK, response)
 }
 
-// Get the block for the given round.
+// GetBlock gets the block for the given round.
 // (GET /v2/blocks/{round})
-func (v2 *V2Handlers) GetBlock(ctx echo.Context, round uint64, params generated.GetBlockParams) error {
+func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params generated.GetBlockParams) error {
 	handle, err := getCodecHandle(params.Format)
 	if err != nil {
 		return returnError(ctx, http.StatusBadRequest, err, errFailedParsingFormatOption, v2.Log)
@@ -169,9 +172,9 @@ func (v2 *V2Handlers) GetBlock(ctx echo.Context, round uint64, params generated.
 	})
 }
 
-// Get the current supply reported by the ledger.
+// GetSupply gets the current supply reported by the ledger.
 // (GET /v2/ledger/supply)
-func (v2 *V2Handlers) GetSupply(ctx echo.Context) error {
+func (v2 *Handlers) GetSupply(ctx echo.Context) error {
 	latest := v2.Node.Ledger().Latest()
 	totals, err := v2.Node.Ledger().Totals(latest)
 	if err != nil {
@@ -188,9 +191,9 @@ func (v2 *V2Handlers) GetSupply(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, supply)
 }
 
-// Gets the current node status.
+// GetStatus gets the current node status.
 // (GET /v2/status)
-func (v2 *V2Handlers) GetStatus(ctx echo.Context) error {
+func (v2 *Handlers) GetStatus(ctx echo.Context) error {
 	stat, err := v2.Node.Status()
 	if err != nil {
 		return returnError(ctx, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, v2.Log)
@@ -210,9 +213,9 @@ func (v2 *V2Handlers) GetStatus(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, response)
 }
 
-// Gets the node status after waiting for the given round.
+// WaitForBlock gets the node status after waiting for the given round.
 // (GET /v2/status/wait-for-block-after/{round}/)
-func (v2 *V2Handlers) WaitForBlock(ctx echo.Context, round uint64) error {
+func (v2 *Handlers) WaitForBlock(ctx echo.Context, round uint64) error {
 	ledger := v2.Node.Ledger()
 	latestBlkHdr, err := ledger.BlockHdr(ledger.Latest())
 	if err != nil {
@@ -242,9 +245,9 @@ func (v2 *V2Handlers) WaitForBlock(ctx echo.Context, round uint64) error {
 	return v2.GetStatus(ctx)
 }
 
-// Broadcasts a raw transaction to the network.
+// RawTransaction broadcasts a raw transaction to the network.
 // (POST /v2/transactions)
-func (v2 *V2Handlers) RawTransaction(ctx echo.Context) error {
+func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 	var txgroup []transactions.SignedTxn
 	dec := protocol.NewDecoder(ctx.Request().Body)
 	for {
@@ -274,9 +277,9 @@ func (v2 *V2Handlers) RawTransaction(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, generated.PostTransactionsResponse{TxId:txid.String()})
 }
 
-// Get parameters for constructing a new transaction
+// TransactionParams gets parameters for constructing a new transaction
 // (GET /v2/transactions/params)
-func (v2 *V2Handlers) TransactionParams(ctx echo.Context) error {
+func (v2 *Handlers) TransactionParams(ctx echo.Context) error {
 	stat, err := v2.Node.Status()
 	if err != nil {
 		return returnError(ctx, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, v2.Log)
@@ -297,9 +300,10 @@ func (v2 *V2Handlers) TransactionParams(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, params)
 }
 
-// Get a specific pending transaction.
+// PendingTransactionInformation gets a specific pending transaction, or looks it up in the ledger if the recently
+// confirmed block is still in the ledger.
 // (GET /v2/transactions/pending/{txid})
-func (v2 *V2Handlers) PendingTransactionInformation(ctx echo.Context, txid string, params generated.PendingTransactionInformationParams) error {
+func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string, params generated.PendingTransactionInformationParams) error {
 	txID := transactions.Txid{}
 	if err := txID.UnmarshalText([]byte(txid)); err != nil {
 		return returnError(ctx, http.StatusBadRequest, err, errNoTxnSpecified, v2.Log)
@@ -348,7 +352,8 @@ func (v2 *V2Handlers) PendingTransactionInformation(ctx echo.Context, txid strin
 	return returnError(ctx, http.StatusNotFound, err, err.Error(), v2.Log)
 }
 
-func (v2 *V2Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format *string, addrFilter *string) error {
+// getPendingTransactions is a generalized version of the get pending transactions endpoints for code reuse.
+func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format *string, addrFilter *string) error {
 	var addrPtr *basics.Address
 
 	if addrFilter != nil {
@@ -402,15 +407,15 @@ func (v2 *V2Handlers) getPendingTransactions(ctx echo.Context, max *uint64, form
 	})
 }
 
-// Get a list of unconfirmed transactions currently in the transaction pool.
+// GetPendingTransactions gets a list of unconfirmed transactions currently in the transaction pool.
 // (GET /v2/transactions/pending)
-func (v2 *V2Handlers) GetPendingTransactions(ctx echo.Context, params generated.GetPendingTransactionsParams) error {
+func (v2 *Handlers) GetPendingTransactions(ctx echo.Context, params generated.GetPendingTransactionsParams) error {
 	return v2.getPendingTransactions(ctx, params.Max, params.Format, nil)
 }
 
-// Get a list of unconfirmed transactions currently in the transaction pool by address.
+// GetPendingTransactionsByAddress gets a list of unconfirmed transactions currently in the transaction pool by address.
 // (GET /v2/accounts/{addr}/transactions/pending)
-func (v2 *V2Handlers) GetPendingTransactionsByAddress(ctx echo.Context, addr string, params generated.GetPendingTransactionsByAddressParams) error {
+func (v2 *Handlers) GetPendingTransactionsByAddress(ctx echo.Context, addr string, params generated.GetPendingTransactionsByAddressParams) error {
 	return v2.getPendingTransactions(ctx, params.Max, params.Format, &addr)
 }
 
