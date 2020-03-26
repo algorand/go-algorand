@@ -26,16 +26,16 @@ type Handlers struct {
 	Shutdown <-chan struct{}
 }
 
-// PostV2RegisterParticipationKeysAccountId registers participation keys.
-// (POST /v2/register-participation-keys/{account-id})
-func (v2 *Handlers) PostV2RegisterParticipationKeysAccountId(ctx echo.Context, accountId string, params generated.PostV2RegisterParticipationKeysAccountIdParams) error {
+// RegisterParticipationKeys registers participation keys.
+// (POST /v2/register-participation-keys/{address})
+func (v2 *Handlers) RegisterParticipationKeys(ctx echo.Context, address string, params generated.RegisterParticipationKeysParams) error {
 	// TODO
 	return nil
 }
 
-// PostV2Shutdown shuts down the node.
+// ShutdownNode shuts down the node.
 // (POST /v2/shutdown)
-func (v2 *Handlers) PostV2Shutdown(ctx echo.Context, params generated.PostV2ShutdownParams) error {
+func (v2 *Handlers) ShutdownNode(ctx echo.Context, params generated.ShutdownNodeParams) error {
 	// TODO
 	return nil
 }
@@ -414,7 +414,7 @@ func (v2 *Handlers) GetPendingTransactions(ctx echo.Context, params generated.Ge
 }
 
 // GetPendingTransactionsByAddress gets a list of unconfirmed transactions currently in the transaction pool by address.
-// (GET /v2/accounts/{addr}/transactions/pending)
+// (GET /v2/accounts/{address}/transactions/pending)
 func (v2 *Handlers) GetPendingTransactionsByAddress(ctx echo.Context, addr string, params generated.GetPendingTransactionsByAddressParams) error {
 	return v2.getPendingTransactions(ctx, params.Max, params.Format, &addr)
 }

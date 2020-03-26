@@ -164,7 +164,7 @@ type TransactionParams struct {
 	GenesisHash []byte `json:"genesis-hash"`
 
 	// GenesisID is an ID listed in the genesis block.
-	GenesisID string `json:"genesisID"`
+	GenesisId string `json:"genesis-id"`
 
 	// LastRound indicates the last round seen
 	LastRound uint64 `json:"last-round"`
@@ -379,8 +379,8 @@ type GetBlockParams struct {
 	Format *string `json:"format,omitempty"`
 }
 
-// PostV2RegisterParticipationKeysAccountIdParams defines parameters for PostV2RegisterParticipationKeysAccountId.
-type PostV2RegisterParticipationKeysAccountIdParams struct {
+// RegisterParticipationKeysParams defines parameters for RegisterParticipationKeys.
+type RegisterParticipationKeysParams struct {
 
 	// The fee to use when submitting key registration transactions. Defaults to the suggested fee.
 	Fee *uint64 `json:"fee,omitempty"`
@@ -395,8 +395,8 @@ type PostV2RegisterParticipationKeysAccountIdParams struct {
 	NoWait *bool `json:"no-wait,omitempty"`
 }
 
-// PostV2ShutdownParams defines parameters for PostV2Shutdown.
-type PostV2ShutdownParams struct {
+// ShutdownNodeParams defines parameters for ShutdownNode.
+type ShutdownNodeParams struct {
 	Timeout *uint64 `json:"timeout,omitempty"`
 }
 
