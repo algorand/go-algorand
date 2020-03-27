@@ -87,6 +87,8 @@ var opDocList = []stringString{
 	{"load", "copy a value from scratch space to the stack"},
 	{"store", "pop a value from the stack and store to scratch space"},
 	{"bnz", "branch if value X is not zero"},
+	{"bz", "branch if value X is zero"},
+	{"b", "branch unconditionally to offset"},
 	{"pop", "discard value X from stack"},
 	{"dup", "duplicate last value on stack"},
 	{"concat", "pop two byte strings A and B and join them, push the result"},
@@ -127,6 +129,8 @@ var opcodeImmediateNoteList = []stringString{
 	{"gtxna", "{uint8 transaction group index}{uint8 transaction field index}{uint8 transaction field array index}"},
 	{"global", "{uint8 global field index}"},
 	{"bnz", "{0..0x7fff forward branch offset, big endian}"},
+	{"bz", "{0..0x7fff forward branch offset, big endian}"},
+	{"b", "{0..0x7fff forward branch offset, big endian}"},
 	{"load", "{uint8 position in scratch space to load from}"},
 	{"store", "{uint8 position in scratch space to store to}"},
 	{"substring", "{uint8 start position}{uint8 end position}"},
@@ -147,6 +151,8 @@ func OpImmediateNote(opName string) string {
 var opDocExtraList = []stringString{
 	{"ed25519verify", "The 32 byte public key is the last element on the stack, preceded by the 64 byte signature at the second-to-last element on the stack, preceded by the data which was signed at the third-to-last element on the stack."},
 	{"bnz", "The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which are a high byte first and low byte second which together form a 16 bit offset which the instruction may branch to. For a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else proceed to next instruction at `pc + 3`. Branch targets must be well aligned instructions. (e.g. Branching to the second byte of a 2 byte op will be rejected.) Branch offsets are currently limited to forward branches only, 0-0x7fff. A future expansion might make this a signed 16 bit integer allowing for backward branches and looping.\n\nAt LogicSigVersion 2 it became allowed to branch to the end of the program exactly after the last instruction, removing the need for a last instruction or no-op as a branch target at the end. Branching beyond that may still fail the program."},
+	{"bz", "See `bnz` for details on how branches work"},
+	{"b", "See `bnz` for details on how branches work. `b` always jumps to the offset."},
 	{"intcblock", "`intcblock` loads following program bytes into an array of integer constants in the evaluator. These integer constants can be referred to by `intc` and `intc_*` which will push the value onto the stack. Subsequent calls to `intcblock` reset and replace the integer constants available to the script."},
 	{"bytecblock", "`bytecblock` loads the following program bytes into an array of byte string constants in the evaluator. These constants can be referred to by `bytec` and `bytec_*` which will push the value onto the stack. Subsequent calls to `bytecblock` reset and replace the bytes constants available to the script."},
 	{"*", "Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `mulw`."},
@@ -184,7 +190,7 @@ type OpGroup struct {
 var OpGroupList = []OpGroup{
 	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "concat", "substring", "substring3"}},
 	{"Loading Values", []string{"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "txna", "gtxna", "global", "load", "store"}},
-	{"Flow Control", []string{"err", "bnz", "pop", "dup"}},
+	{"Flow Control", []string{"err", "bnz", "bz", "b", "pop", "dup"}},
 	{"State Access", []string{"balance", "app_opted_in", "app_local_get", "app_global_get", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get"}},
 }
 
