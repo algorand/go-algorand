@@ -483,7 +483,7 @@ func (s *Service) sync(cert *PendingUnmatchedCertificate) {
 		seedLookback := uint64(2)
 		proto, err := s.ledger.ConsensusParams(pr)
 		if err != nil {
-			s.log.Errorf("catchup: could not get consensus parameters for round %v: $%v", pr, err)
+			s.log.Errorf("catchup: could not get consensus parameters for round %v: %v", pr, err)
 		} else {
 			seedLookback = proto.SeedLookback
 		}
@@ -578,9 +578,9 @@ func (s *Service) nextRoundIsNotSupported(nextRound basics.Round) bool {
 	lastLedgerRound := s.ledger.LastRound()
 	supportedUpgrades := config.Consensus
 
-	block, error := s.ledger.Block(lastLedgerRound)
-	if error != nil {
-		s.log.Errorf("nextRoundIsNotSupported: could not retrieve last block (%d) from the ledger.", lastLedgerRound)
+	block, err := s.ledger.Block(lastLedgerRound)
+	if err != nil {
+		s.log.Errorf("nextRoundIsNotSupported: could not retrieve last block (%d) from the ledger : %v", lastLedgerRound, err)
 		return false
 	}
 	bh := block.BlockHeader

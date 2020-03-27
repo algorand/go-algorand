@@ -2,7 +2,7 @@
 ## unattended upgrades for the Algorand node software.
 
 Unattended-Upgrade::Allowed-Origins {
-  "Algorand:stable";
+  "Algorand:@CHANNEL@";
 };
 
 Dpkg::Options {

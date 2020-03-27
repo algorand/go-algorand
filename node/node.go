@@ -222,7 +222,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 
 	blockFactory := makeBlockFactory(node.ledger, node.transactionPool, node.config.EnableProcessBlockStats, node.highPriorityCryptoVerificationPool)
 	blockValidator := blockValidatorImpl{l: node.ledger, tp: node.transactionPool, verificationPool: node.highPriorityCryptoVerificationPool}
-	agreementLedger := makeAgreementLedger(node.ledger)
+	agreementLedger := makeAgreementLedger(node.ledger, node.net)
 
 	agreementParameters := agreement.Parameters{
 		Logger:         log,

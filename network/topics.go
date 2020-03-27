@@ -23,10 +23,21 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 )
 
+// Constant strings used as keys for topics
+const (
+	requestHashKey = "RequestHash"
+	ErrorKey       = "Error" // used for passing an error message
+)
+
 // Topic is a key-value pair
 type Topic struct {
 	key  string
 	data []byte
+}
+
+// MakeTopic Creates a Topic
+func MakeTopic(key string, data []byte) Topic {
+	return Topic{key: key, data: data}
 }
 
 // Topics is an array of type Topic
