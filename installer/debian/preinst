@@ -1,0 +1,23 @@
+#!/bin/bash
+
+PKG_NAME=@PKG_NAME@
+VERSION="$2"
+
+if test "$1" = install &&
+    dpkg-query --list 'algorand*' > /dev/null
+then
+    if PKG_INFO=$(dpkg-query --show --showformat='${Package} ${Status}\n' 'algorand*' | grep "install ok installed")
+    then
+        INSTALLED_PKG=$(echo "$PKG_INFO" | awk '{print $1}')
+
+        if [ "$INSTALLED_PKG" != "$PKG_NAME" ]
+        then
+            echo -e "\nAlgorand does not currently support multi-distribution installations!\n\
+To install this package, it is necessary to first remove the \`$INSTALLED_PKG\` package:\n\n\
+apt remove $INSTALLED_PKG\n\
+apt install $PKG_NAME=$VERSION\n"
+            exit 1
+        fi
+    fi
+fi
+
