@@ -739,7 +739,7 @@ func printable(str string) bool {
 func heuristicFormatStr(str string) string {
 	decoded, err := base64.StdEncoding.DecodeString(str)
 	if err != nil {
-		reportErrorf("Fatal error: could not decode base64-encoded string: %s")
+		reportErrorf("Fatal error: could not decode base64-encoded string: %s", str)
 	}
 
 	if printable(string(decoded)) {
