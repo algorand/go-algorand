@@ -22,26 +22,13 @@ import (
 	"fmt"
 	"strings"
 
-	//"github.com/algorand/go-codec/codec"
-
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merkletrie"
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	/*"archive/tar"
-	  "compress/gzip"
-	  "context"
-	  "database/sql"
-	  "fmt"
-	  "hash"
-	  "io"
-	  "os"
-	  "path/filepath"
-
-	  "github.com/algorand/go-codec/codec"
-
-	  "github.com/algorand/go-algorand/data/basics"
-	  "github.com/algorand/go-algorand/data/bookkeeping"
-	  "github.com/algorand/go-algorand/protocol"
-	  "github.com/algorand/go-algorand/util/db"*/)
+)
 
 // CatchpointCatchupAccessor is an accessor wrapping the database storage for the catchpoint catchup functionality.
 type CatchpointCatchupAccessor struct {
@@ -200,12 +187,113 @@ func (c *CatchpointCatchupAccessor) processStagingBalances(ctx context.Context, 
 
 	wdb := c.ledger.trackerDB().wdb
 	err = wdb.Atomic(func(tx *sql.Tx) (err error) {
+		// create the merkle trie for the balances
+		mc, err0 := makeMerkleCommitter(tx, true)
+		if err0 != nil {
+			return err0
+		}
+		trie, err := merkletrie.MakeTrie(mc, trieCachedNodesCount)
+		if err != nil {
+			return err
+		}
+
 		err = writeCatchpointStagingBalances(ctx, tx, balances)
 		if err != nil {
 			return
 		}
+
+		for _, balance := range balances {
+			var accountData basics.AccountData
+			err = protocol.Decode(balance.AccountData, &accountData)
+			if err != nil {
+				return err
+			}
+			var addr basics.Address
+			copy(addr[:], balance.Address)
+			hash := accountHashBuilder(addr, accountData, balance.AccountData)
+			added, err := trie.Add(hash)
+			if !added {
+				c.log.Warnf("attempted to add duplicate hash '%v' to merkle trie.", hash)
+			}
+			if err != nil {
+				return err
+			}
+		}
 		return
 	})
 
+	return err
+}
+
+// GetCatchupBlockRound returns the latest block round matching the current catchpoint
+func (c *CatchpointCatchupAccessor) GetCatchupBlockRound(ctx context.Context) (round basics.Round, err error) {
+	rdb := c.ledger.trackerDB().rdb
+	err = rdb.Atomic(func(tx *sql.Tx) (err error) {
+		var iRound uint64
+		iRound, _, err = readCatchpointStateUint64(ctx, tx, "catchpointCatchupBlockRound")
+		if err != nil {
+			return fmt.Errorf("unable to read catchpoint catchup state 'catchpointCatchupBlockRound': %v", err)
+		}
+		round = basics.Round(iRound)
+		return
+	})
+	return
+}
+
+// VerifyCatchpoint verifies that the catchpoint is valid by reconstructing the label.
+func (c *CatchpointCatchupAccessor) VerifyCatchpoint(ctx context.Context, blk *bookkeeping.Block) (err error) {
+
+	rdb := c.ledger.trackerDB().rdb
+	var balancesHash crypto.Digest
+	var blockRound basics.Round
+	var totals AccountTotals
+	var catchpointLabel string
+	err = rdb.Atomic(func(tx *sql.Tx) (err error) {
+		catchpointLabel, _, err = readCatchpointStateString(ctx, tx, "catchpointCatchupLabel")
+		if err != nil {
+			return fmt.Errorf("unable to read catchpoint catchup state 'catchpointCatchupLabel': %v", err)
+		}
+
+		var iRound uint64
+		iRound, _, err = readCatchpointStateUint64(ctx, tx, "catchpointCatchupBlockRound")
+		if err != nil {
+			return fmt.Errorf("unable to read catchpoint catchup state 'catchpointCatchupBlockRound': %v", err)
+		}
+		blockRound = basics.Round(iRound)
+
+		// create the merkle trie for the balances
+		mc, err0 := makeMerkleCommitter(tx, true)
+		if err0 != nil {
+			return err0
+		}
+		var trie *merkletrie.Trie
+		trie, err = merkletrie.MakeTrie(mc, trieCachedNodesCount)
+		if err != nil {
+			return err
+		}
+
+		balancesHash, err = trie.RootHash()
+		if err != nil {
+			return err
+		}
+
+		totals, err = accountsTotals(tx, true)
+		if err != nil {
+			return err
+		}
+		return
+	})
+	if err != nil {
+		return err
+	}
+	if blockRound != blk.Round() {
+		return fmt.Errorf("block round in block header doesn't match block round in catchpoint")
+	}
+
+	catchpointLabelMaker := makeCatchpointLabel(blockRound, blk.Digest(), balancesHash, totals)
+
+	if catchpointLabel != catchpointLabelMaker.String() {
+		return fmt.Errorf("catchpoint hash mismatch")
+	}
 	return nil
 }

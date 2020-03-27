@@ -567,22 +567,46 @@ const (
 )
 
 type merkleCommitter struct {
-	tx *sql.Tx
+	tx         *sql.Tx
+	deleteStmt *sql.Stmt
+	insertStmt *sql.Stmt
+	selectStmt *sql.Stmt
+}
+
+func makeMerkleCommitter(tx *sql.Tx, staging bool) (mc *merkleCommitter, err error) {
+	mc = &merkleCommitter{tx: tx}
+	accountHashesTable := "accounthashes"
+	if staging {
+		accountHashesTable = "catchpointaccounthashes"
+	}
+	mc.deleteStmt, err = tx.Prepare("DELETE FROM " + accountHashesTable + " WHERE id=?")
+	if err != nil {
+		return nil, err
+	}
+	mc.insertStmt, err = tx.Prepare("INSERT OR REPLACE INTO " + accountHashesTable + "(id, data) VALUES(?, ?)")
+	if err != nil {
+		return nil, err
+	}
+	mc.selectStmt, err = tx.Prepare("SELECT data FROM " + accountHashesTable + " WHERE id = ?")
+	if err != nil {
+		return nil, err
+	}
+	return mc, nil
 }
 
 // StorePage stores a single page in an in-memory persistence.
 func (mc *merkleCommitter) StorePage(page uint64, content []byte) error {
 	if len(content) == 0 {
-		_, err := mc.tx.Exec("DELETE FROM accounthashes WHERE id=?", page)
+		_, err := mc.deleteStmt.Exec(page)
 		return err
 	}
-	_, err := mc.tx.Exec("INSERT OR REPLACE INTO accounthashes(id, data) VALUES(?, ?)", page, content)
+	_, err := mc.insertStmt.Exec(page, content)
 	return err
 }
 
 // LoadPage load a single page from an in-memory persistence.
 func (mc *merkleCommitter) LoadPage(page uint64) (content []byte, err error) {
-	err = mc.tx.QueryRow("SELECT data FROM accounthashes WHERE id = ?", page).Scan(&content)
+	err = mc.selectStmt.QueryRow(page).Scan(&content)
 	if err == sql.ErrNoRows {
 		content = nil
 		err = nil

@@ -211,10 +211,10 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 	return nil
 }
 
-func accountHashBuilder(addr basics.Address, accountData basics.AccountData) []byte {
+func accountHashBuilder(addr basics.Address, accountData basics.AccountData, encodedAccountData []byte) []byte {
 	hash := make([]byte, 9+crypto.DigestSize)
 	rewardsSpace := binary.PutUvarint(hash[:], accountData.RewardsBase)
-	entryHash := crypto.Hash(append(addr[:], protocol.Encode(&accountData)[:]...))
+	entryHash := crypto.Hash(append(addr[:], encodedAccountData[:]...))
 	copy(hash[rewardsSpace:], entryHash[:])
 	return hash[:rewardsSpace+crypto.DigestSize]
 }
@@ -232,7 +232,10 @@ func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 	}
 
 	// create the merkle trie for the balances
-	committer := &merkleCommitter{tx}
+	committer, err := makeMerkleCommitter(tx, false)
+	if err != nil {
+		return 0, err
+	}
 	trie, err := merkletrie.MakeTrie(committer, trieCachedNodesCount)
 	if err != nil {
 		return 0, err
@@ -240,7 +243,7 @@ func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 	if rnd == 0 {
 		// if we just initialize the database ( successfully !), than make sure to feed the same accounts changes to the merkle trie.
 		for addr, data := range au.initAccounts {
-			_, err := trie.Add(accountHashBuilder(addr, data))
+			_, err := trie.Add(accountHashBuilder(addr, data, protocol.Encode(&data)))
 			if err != nil {
 				return 0, err
 			}
@@ -275,7 +278,7 @@ func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 					if err != nil {
 						return rnd, err
 					}
-					hash := accountHashBuilder(addr, accountData)
+					hash := accountHashBuilder(addr, accountData, protocol.Encode(&accountData))
 					added, err := trie.Add(hash)
 					if err != nil {
 						return rnd, err
@@ -305,19 +308,21 @@ func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 func (au *accountUpdates) accountsUpdateBalaces(balancesTx *merkletrie.Transaction, accountsDeltas map[basics.Address]accountDelta) (err error) {
 	var added, deleted bool
 	for addr, delta := range accountsDeltas {
-		deleted, err = balancesTx.Delete(accountHashBuilder(addr, delta.old))
+		deleteHash := accountHashBuilder(addr, delta.old, protocol.Encode(&delta.old))
+		deleted, err = balancesTx.Delete(deleteHash)
 		if err != nil {
 			return err
 		}
 		if !deleted {
-			au.log.Warnf("failed to delete hash '%v' from merkle trie", delta.old)
+			au.log.Warnf("failed to delete hash '%v' from merkle trie", deleteHash)
 		}
-		added, err = balancesTx.Add(accountHashBuilder(addr, delta.new))
+		addHash := accountHashBuilder(addr, delta.new, protocol.Encode(&delta.new))
+		added, err = balancesTx.Add(addHash)
 		if err != nil {
 			return err
 		}
 		if !added {
-			au.log.Warnf("attempted to add duplicate hash '%v' to merkle trie", delta.new)
+			au.log.Warnf("attempted to add duplicate hash '%v' to merkle trie", addHash)
 		}
 	}
 	// write it all to disk.
@@ -572,7 +577,11 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Roun
 
 	offset := uint64(newBase - au.dbRound)
 	err := au.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
-		balancesHashTx := au.balancesTrie.BeginTransaction(&merkleCommitter{tx})
+		mc, err0 := makeMerkleCommitter(tx, false)
+		if err0 != nil {
+			return err0
+		}
+		balancesHashTx := au.balancesTrie.BeginTransaction(mc)
 		defer func() {
 			if err != nil {
 				balancesHashTx.Rollback()

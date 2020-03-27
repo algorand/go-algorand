@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/data"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
@@ -47,6 +48,11 @@ type CatchpointCatchupService struct {
 	newService      bool // indicates whether this service was created after the node was running ( i.e. true ) or the node just started to find that it was previously perfoming catchup
 	net             network.GossipNode
 }
+
+const (
+	maxLedgerDownloadAttempts = 50
+	maxBlockDownloadAttempts  = 50
+)
 
 // MakeCatchpointCatchupService creates a catchpoint catchup service for a node that is already in catchpoint catchup mode
 func MakeCatchpointCatchupService(ctx context.Context, node CatchpointCatchupNodeServices, log logging.Logger, net network.GossipNode) (*CatchpointCatchupService, error) {
@@ -172,8 +178,11 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 
 	// download balances file.
 	ledgerFetcher := makeLedgerFetcher(cs.net, cs.ledgerAccessor, cs.log)
+	attemptsCount := 0
 
 	for {
+		attemptsCount++
+
 		err = cs.ledgerAccessor.ResetStagingBalances(cs.ctx)
 		if err != nil {
 			return err
@@ -183,7 +192,9 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 			break
 		}
 
-		// TODO : limit number of retries.
+		if attemptsCount >= maxLedgerDownloadAttempts {
+			return fmt.Errorf("catchpoint catchup exceeded number of attempts to retrieve ledger")
+		}
 	}
 
 	err = cs.updateStage(ledger.CatchpointCatchupStateLastestBlockDownload)
@@ -194,7 +205,36 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 }
 
 func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err error) {
-	// TODO:
+	blockRound, err := cs.ledgerAccessor.GetCatchupBlockRound(cs.ctx)
+	if err != nil {
+		return err
+	}
+
+	fetcherFactory := MakeNetworkFetcherFactory(cs.net, 10, nil)
+	attemptsCount := 0
+	var blk *bookkeeping.Block
+	var client FetcherClient
+	for {
+		attemptsCount++
+		fetcher := fetcherFactory.New()
+		blk, _, client, err = fetcher.FetchBlock(cs.ctx, blockRound)
+		if err != nil {
+			if attemptsCount <= maxBlockDownloadAttempts {
+				// try again.
+				continue
+			}
+			return err
+		}
+		// success
+		client.Close()
+		break
+	}
+
+	err = cs.ledgerAccessor.VerifyCatchpoint(cs.ctx, blk)
+	if err != nil {
+		return err
+	}
+
 	err = cs.updateStage(ledger.CatchpointCatchupStateBlocksDownload)
 	if err != nil {
 		return err
