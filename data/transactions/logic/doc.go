@@ -89,6 +89,7 @@ var opDocList = []stringString{
 	{"bnz", "branch if value X is not zero"},
 	{"bz", "branch if value X is zero"},
 	{"b", "branch unconditionally to offset"},
+	{"return", "use last value on stack as success value; end"},
 	{"pop", "discard value X from stack"},
 	{"dup", "duplicate last value on stack"},
 	{"concat", "pop two byte strings A and B and join them, push the result"},
@@ -190,7 +191,7 @@ type OpGroup struct {
 var OpGroupList = []OpGroup{
 	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "concat", "substring", "substring3"}},
 	{"Loading Values", []string{"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "txna", "gtxna", "global", "load", "store"}},
-	{"Flow Control", []string{"err", "bnz", "bz", "b", "pop", "dup"}},
+	{"Flow Control", []string{"err", "bnz", "bz", "b", "return", "pop", "dup"}},
 	{"State Access", []string{"balance", "app_opted_in", "app_local_get", "app_global_get", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get"}},
 }
 

@@ -121,6 +121,7 @@ var OpSpecs = []OpSpec{
 	{0x40, "bnz", opBnz, assembleBranch, disBranch, oneInt, nil, 1, modeAny, opSize{1, 3, checkBranch}},
 	{0x41, "bz", opBz, assembleBranch, disBranch, oneInt, nil, 2, modeAny, opSize{1, 3, checkBranch}},
 	{0x42, "b", opB, assembleBranch, disBranch, nil, nil, 2, modeAny, opSize{1, 3, checkBranch}},
+	{0x43, "return", opReturn, asmDefault, disDefault, oneInt, nil, 2, modeAny, opSizeDefault},
 	{0x48, "pop", opPop, asmDefault, disDefault, oneAny, nil, 1, modeAny, opSizeDefault},
 	{0x49, "dup", opDup, asmDefault, disDefault, oneAny, twoAny, 1, modeAny, opSizeDefault},
 	{0x50, "concat", opConcat, asmDefault, disDefault, twoBytes, oneBytes, 2, modeAny, opSizeDefault},

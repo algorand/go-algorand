@@ -626,6 +626,18 @@ func opErr(cx *evalContext) {
 	cx.err = errors.New("TEAL runtime encountered err opcode")
 }
 
+func opReturn(cx *evalContext) {
+	// Achieve the end condition:
+	// Take the last element on the stack and make it the return value (only element on the stack)
+	// Move the pc to the end of the program
+	last := len(cx.stack) - 1
+	if last != 0 {
+		cx.stack[0] = cx.stack[last]
+		cx.stack = cx.stack[:1]
+	}
+	cx.nextpc = len(cx.program)
+}
+
 func opSHA256(cx *evalContext) {
 	last := len(cx.stack) - 1
 	hash := sha256.Sum256(cx.stack[last].Bytes)
