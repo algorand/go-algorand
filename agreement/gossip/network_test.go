@@ -327,6 +327,7 @@ func spinNetworkImpl(domain *whiteholeDomain) (whiteholeNet *whiteholeNetwork, c
 	netImpl := WrapNetwork(whiteholeNet, logging.Base()).(*networkImpl)
 	counter = startMessageCounter(netImpl)
 	whiteholeNet.Start()
+	netImpl.Start()
 	return
 }
 
