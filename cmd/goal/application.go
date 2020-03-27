@@ -23,10 +23,12 @@ import (
 	"encoding/json"
 	"os"
 	"strconv"
+	"unicode"
 
 	"github.com/spf13/cobra"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -51,6 +53,7 @@ var (
 
 	fetchLocal  bool
 	fetchGlobal bool
+	guessFormat bool
 )
 
 func init() {
@@ -103,6 +106,7 @@ func init() {
 
 	readStateAppCmd.Flags().BoolVar(&fetchLocal, "local", false, "Fetch account-specific state for this application. `--from` address is required when using this flag")
 	readStateAppCmd.Flags().BoolVar(&fetchGlobal, "global", false, "Fetch global state for this application.")
+	readStateAppCmd.Flags().BoolVar(&guessFormat, "guess-format", false, "Format application state using heuristics to guess data encoding.")
 
 	createAppCmd.MarkFlagRequired("creator")
 	createAppCmd.MarkFlagRequired("global-ints")
@@ -723,6 +727,54 @@ var deleteAppCmd = &cobra.Command{
 	},
 }
 
+func printable(str string) bool {
+	for _, r := range str {
+		if !unicode.IsPrint(r) {
+			return false
+		}
+	}
+	return true
+}
+
+func heuristicFormatStr(str string) string {
+	decoded, err := base64.StdEncoding.DecodeString(str)
+	if err != nil {
+		reportErrorf("Fatal error: could not decode base64-encoded string: %s", str)
+	}
+
+	if printable(string(decoded)) {
+		return string(decoded)
+	}
+
+	if len(decoded) == 32 {
+		var addr basics.Address
+		copy(addr[:], decoded)
+		return addr.String()
+	}
+
+	return str
+}
+
+func heuristicFormatKey(key string) string {
+	return heuristicFormatStr(key)
+}
+
+func heuristicFormatVal(val v1.TealValue) v1.TealValue {
+	if val.Type == "u" {
+		return val
+	}
+	val.Bytes = heuristicFormatStr(val.Bytes)
+	return val
+}
+
+func heuristicFormat(state map[string]v1.TealValue) map[string]v1.TealValue {
+	result := make(map[string]v1.TealValue)
+	for k, v := range state {
+		result[heuristicFormatKey(k)] = heuristicFormatVal(v)
+	}
+	return result
+}
+
 var readStateAppCmd = &cobra.Command{
 	Use:   "read",
 	Short: "Read local or global state for an application",
@@ -755,8 +807,13 @@ var readStateAppCmd = &cobra.Command{
 				reportErrorf(errorAccountNotOptedInToApp, account, appIdx)
 			}
 
+			kv := local.KeyValue
+			if guessFormat {
+				kv = heuristicFormat(kv)
+			}
+
 			// Encode local state to json, print, and exit
-			enc, err := json.MarshalIndent(local.KeyValue, "", "  ")
+			enc, err := json.MarshalIndent(kv, "", "  ")
 			if err != nil {
 				reportErrorf(errorMarshalingState, err)
 			}
@@ -773,8 +830,13 @@ var readStateAppCmd = &cobra.Command{
 				reportErrorf(errorRequestFail, err)
 			}
 
+			kv := params.GlobalState
+			if guessFormat {
+				kv = heuristicFormat(kv)
+			}
+
 			// Encode global state to json, print, and exit
-			enc, err := json.MarshalIndent(params.GlobalState, "", "  ")
+			enc, err := json.MarshalIndent(kv, "", "  ")
 			if err != nil {
 				reportErrorf(errorMarshalingState, err)
 			}
