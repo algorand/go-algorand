@@ -112,7 +112,7 @@ for var in "${VARIATION_ARRAY[@]}"; do
         if [ ! -z "${BUILD_DEB}" -a $(scripts/ostype.sh) = "linux" ]; then
             DEBTMP=$(mktemp -d 2>/dev/null || mktemp -d -t "debtmp")
             trap "rm -rf ${DEBTMP}" 0
-            scripts/build_deb.sh ${ARCH} ${DEBTMP}
+            scripts/build_deb.sh ${ARCH} ${DEBTMP} ${CHANNEL}
             if [ $? -ne 0 ]; then
                 echo "Error building debian package for ${PLATFORM}.  Aborting..."
                 exit 1
