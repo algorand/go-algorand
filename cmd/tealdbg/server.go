@@ -21,13 +21,13 @@ import (
 	"html/template"
 	"log"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/gorilla/mux"
 	"golang.org/x/net/websocket"
 
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-deadlock"
 )
 
 // ExecID is a unique execution ID
@@ -68,7 +68,7 @@ type Notification struct {
 
 type requestContext struct {
 	// Prevent races when accessing maps
-	mux sync.Mutex
+	mux deadlock.Mutex
 
 	// Receive registration, update, and completed notifications from TEAL
 	notifications chan Notification
@@ -149,7 +149,7 @@ func (rctx *requestContext) updateHandler(w http.ResponseWriter, r *http.Request
 				// Breakpoint hit! Inform the user
 				rctx.notifications <- Notification{"updated", state}
 			} else {
-				// Continue if we haven't hit the next breakpoint 
+				// Continue if we haven't hit the next breakpoint
 				exec.acknowledged <- true
 			}
 		} else {
@@ -269,8 +269,8 @@ func (rctx *requestContext) broadcastNotifications() {
 			rctx.mux.Lock()
 			for _, ch := range rctx.subscriptions {
 				select {
-					case ch <- notification:
-					default:
+				case ch <- notification:
+				default:
 				}
 			}
 			rctx.mux.Unlock()
@@ -334,7 +334,7 @@ func main() {
 	appAddress := "localhost:9392"
 
 	rctx := requestContext{
-		mux:           sync.Mutex{},
+		mux:           deadlock.Mutex{},
 		notifications: make(chan Notification),
 		subscriptions: make(map[uint64]chan Notification),
 		execContexts:  make(map[ExecID]execContext),
