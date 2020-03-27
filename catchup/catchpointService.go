@@ -52,7 +52,7 @@ type CatchpointCatchupService struct {
 func MakeCatchpointCatchupService(ctx context.Context, node CatchpointCatchupNodeServices, log logging.Logger, net network.GossipNode) (*CatchpointCatchupService, error) {
 	service := &CatchpointCatchupService{
 		node:           node,
-		ledgerAccessor: ledger.MakeCatchpointCatchupAccessor(node.Ledger().Ledger),
+		ledgerAccessor: ledger.MakeCatchpointCatchupAccessor(node.Ledger().Ledger, log),
 		log:            log,
 		newService:     false,
 		net:            net,
@@ -70,7 +70,7 @@ func MakeNewCatchpointCatchupService(catchpoint string, node CatchpointCatchupNo
 	service := &CatchpointCatchupService{
 		CatchpointLabel: catchpoint,
 		node:            node,
-		ledgerAccessor:  ledger.MakeCatchpointCatchupAccessor(node.Ledger().Ledger),
+		ledgerAccessor:  ledger.MakeCatchpointCatchupAccessor(node.Ledger().Ledger, log),
 		stage:           ledger.CatchpointCatchupStateInactive,
 		log:             log,
 		newService:      true,

@@ -158,7 +158,7 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 			}
 		}
 
-		totals, err0 := accountsTotals(tx)
+		totals, err0 := accountsTotals(tx, false)
 		if err0 != nil {
 			return err0
 		}
@@ -257,8 +257,8 @@ func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 			return rnd, err
 		}
 		if rootHash.IsZero() {
+			accountIdx := 0
 			for {
-				accountIdx := 0
 				bal, err := encodedAccountsRange(tx, accountIdx, balancesChunkReadSize)
 				if err != nil {
 					return rnd, err
@@ -275,12 +275,13 @@ func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 					if err != nil {
 						return rnd, err
 					}
-					added, err := trie.Add(accountHashBuilder(addr, accountData))
+					hash := accountHashBuilder(addr, accountData)
+					added, err := trie.Add(hash)
 					if err != nil {
 						return rnd, err
 					}
 					if !added {
-						au.log.Warnf("attempted to add duplicate hash '%v' to merkle trie.")
+						au.log.Warnf("attempted to add duplicate hash '%v' to merkle trie.", hash)
 					}
 				}
 				// this trie Commit call only attempt to write it to the database using the current transaction.

@@ -85,9 +85,33 @@ type accountDelta struct {
 	new basics.AccountData
 }
 
+func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []encodedBalanceRecord) error {
+	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointbalances(address, data) VALUES(?, ?)")
+	if err != nil {
+		return err
+	}
+
+	for _, balance := range bals {
+		result, err := insertStmt.ExecContext(ctx, balance.Address, balance.AccountData)
+		if err != nil {
+			return err
+		}
+		aff, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if aff != 1 {
+			return fmt.Errorf("number of affected record in insert was expected to be one, but was %d", aff)
+		}
+
+	}
+	return nil
+}
+
 func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx) (err error) {
 	s := "DROP TABLE IF EXISTS catchpointbalances;"
 	s += "CREATE TABLE IF NOT EXISTS catchpointbalances(address blob primary key, data blob);"
+	s += "DELETE FROM accounttotals where id='catchpointStaging';"
 	_, err = tx.Exec(s)
 	return err
 }
@@ -197,7 +221,7 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 			return fmt.Errorf("overflow computing totals")
 		}
 
-		err = accountsPutTotals(tx, totals)
+		err = accountsPutTotals(tx, totals, false)
 		if err != nil {
 			return err
 		}
@@ -348,8 +372,12 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 	return
 }
 
-func accountsTotals(tx *sql.Tx) (totals AccountTotals, err error) {
-	row := tx.QueryRow("SELECT online, onlinerewardunits, offline, offlinerewardunits, notparticipating, notparticipatingrewardunits, rewardslevel FROM accounttotals")
+func accountsTotals(tx *sql.Tx, catchpointStaging bool) (totals AccountTotals, err error) {
+	id := ""
+	if catchpointStaging {
+		id = "catchpointStaging"
+	}
+	row := tx.QueryRow("SELECT online, onlinerewardunits, offline, offlinerewardunits, notparticipating, notparticipatingrewardunits, rewardslevel FROM accounttotals WHERE id=?", id)
 	err = row.Scan(&totals.Online.Money.Raw, &totals.Online.RewardUnits,
 		&totals.Offline.Money.Raw, &totals.Offline.RewardUnits,
 		&totals.NotParticipating.Money.Raw, &totals.NotParticipating.RewardUnits,
@@ -358,10 +386,13 @@ func accountsTotals(tx *sql.Tx) (totals AccountTotals, err error) {
 	return
 }
 
-func accountsPutTotals(tx *sql.Tx, totals AccountTotals) error {
-	// The "id" field is there so that we can use a convenient REPLACE INTO statement
+func accountsPutTotals(tx *sql.Tx, totals AccountTotals, catchpointStaging bool) error {
+	id := ""
+	if catchpointStaging {
+		id = "catchpointStaging"
+	}
 	_, err := tx.Exec("REPLACE INTO accounttotals (id, online, onlinerewardunits, offline, offlinerewardunits, notparticipating, notparticipatingrewardunits, rewardslevel) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-		"",
+		id,
 		totals.Online.Money.Raw, totals.Online.RewardUnits,
 		totals.Offline.Money.Raw, totals.Offline.RewardUnits,
 		totals.NotParticipating.Money.Raw, totals.NotParticipating.RewardUnits,
@@ -412,7 +443,7 @@ func accountsNewRound(tx *sql.Tx, rnd basics.Round, updates map[basics.Address]a
 	}
 
 	var ot basics.OverflowTracker
-	totals, err := accountsTotals(tx)
+	totals, err := accountsTotals(tx, false)
 	if err != nil {
 		return
 	}
@@ -490,7 +521,7 @@ func accountsNewRound(tx *sql.Tx, rnd basics.Round, updates map[basics.Address]a
 		return
 	}
 
-	err = accountsPutTotals(tx, totals)
+	err = accountsPutTotals(tx, totals, false)
 	if err != nil {
 		return
 	}

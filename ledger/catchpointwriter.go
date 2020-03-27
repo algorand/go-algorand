@@ -236,7 +236,7 @@ func (cw *catchpointWriter) readHeaderFromDatabase(tx *sql.Tx) (err error) {
 	if err != nil {
 		return
 	}
-	header.Totals, err = accountsTotals(tx)
+	header.Totals, err = accountsTotals(tx, false)
 	if err != nil {
 		return
 	}

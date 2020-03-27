@@ -20,6 +20,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
+
+	//"github.com/algorand/go-codec/codec"
+
+	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/protocol"
 	/*"archive/tar"
 	  "compress/gzip"
 	  "context"
@@ -40,6 +46,7 @@ import (
 // CatchpointCatchupAccessor is an accessor wrapping the database storage for the catchpoint catchup functionality.
 type CatchpointCatchupAccessor struct {
 	ledger *Ledger
+	log    logging.Logger
 }
 
 // CatchpointCatchupState is the state of the current catchpoint catchup process
@@ -62,9 +69,10 @@ const (
 )
 
 // MakeCatchpointCatchupAccessor creates a CatchpointCatchupAccessor given a ledger
-func MakeCatchpointCatchupAccessor(ledger *Ledger) *CatchpointCatchupAccessor {
+func MakeCatchpointCatchupAccessor(ledger *Ledger, log logging.Logger) *CatchpointCatchupAccessor {
 	return &CatchpointCatchupAccessor{
 		ledger: ledger,
+		log:    log,
 	}
 }
 
@@ -144,6 +152,60 @@ func (c *CatchpointCatchupAccessor) ResetStagingBalances(ctx context.Context) (e
 }
 
 // ProgressStagingBalances deserialize the given bytes as a temporary staging balances
-func (c *CatchpointCatchupAccessor) ProgressStagingBalances(sectionName string, bytes []byte) (err error) {
+func (c *CatchpointCatchupAccessor) ProgressStagingBalances(ctx context.Context, sectionName string, bytes []byte) (err error) {
+	if sectionName == "content.msgpack" {
+		return c.processStagingContent(ctx, bytes)
+	}
+	if strings.HasPrefix(sectionName, "balances.") && strings.HasSuffix(sectionName, ".msgpack") {
+		return c.processStagingBalances(ctx, bytes)
+	}
+	// we want to allow undefined sections to support backward compatibility.
+	c.log.Warnf("CatchpointCatchupAccessor::ProgressStagingBalances encountered unexpected section name '%s' of length %d, which would be ignored", sectionName, len(bytes))
+	return nil
+}
+
+// ProgressStagingBalances deserialize the given bytes as a temporary staging balances
+func (c *CatchpointCatchupAccessor) processStagingContent(ctx context.Context, bytes []byte) (err error) {
+	var fileHeader catchpointFileHeader
+	err = protocol.DecodeReflect(bytes, &fileHeader)
+	if err != nil {
+		return err
+	}
+	if fileHeader.Version != initialVersion {
+		return fmt.Errorf("unable to process catchpoint - version %d is not supported", fileHeader.Version)
+	}
+
+	// the following fields are now going to be ignored. We should add these to the database and validate these
+	// later on:
+	// TotalAccounts, TotalAccounts, Catchpoint, BlockHeaderDigest, BalancesRound
+	wdb := c.ledger.trackerDB().wdb
+	err = wdb.Atomic(func(tx *sql.Tx) (err error) {
+		_, err = writeCatchpointStateUint64(ctx, tx, "catchpointCatchupBlockRound", uint64(fileHeader.BlocksRound))
+		if err != nil {
+			return fmt.Errorf("unable to write catchpoint catchup state 'catchpointCatchupLabel': %v", err)
+		}
+		err = accountsPutTotals(tx, fileHeader.Totals, true)
+		return
+	})
+	return err
+}
+
+// ProgressStagingBalances deserialize the given bytes as a temporary staging balances
+func (c *CatchpointCatchupAccessor) processStagingBalances(ctx context.Context, bytes []byte) (err error) {
+	var balances catchpointFileBalancesChunk
+	err = protocol.DecodeReflect(bytes, &balances)
+	if err != nil {
+		return err
+	}
+
+	wdb := c.ledger.trackerDB().wdb
+	err = wdb.Atomic(func(tx *sql.Tx) (err error) {
+		err = writeCatchpointStagingBalances(ctx, tx, balances)
+		if err != nil {
+			return
+		}
+		return
+	})
+
 	return nil
 }

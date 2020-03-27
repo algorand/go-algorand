@@ -490,7 +490,7 @@ func (l *Ledger) GenesisHash() crypto.Digest {
 
 // GetCatchpointCatchupState returns the current state of the catchpoint catchup.
 func (l *Ledger) GetCatchpointCatchupState(ctx context.Context) (state CatchpointCatchupState, err error) {
-	return MakeCatchpointCatchupAccessor(l).GetState(ctx)
+	return MakeCatchpointCatchupAccessor(l, l.log).GetState(ctx)
 }
 
 // GetCatchpointStream - todo ..

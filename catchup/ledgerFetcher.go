@@ -107,13 +107,13 @@ func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPee
 			}
 			readComplete += int64(bytesRead)
 		}
-		err = lf.processBalancesBlock(header.Name, balancesBlockBytes)
+		err = lf.processBalancesBlock(ctx, header.Name, balancesBlockBytes)
 		if err != nil {
 			return err
 		}
 	}
 }
 
-func (lf *ledgerFetcher) processBalancesBlock(sectionName string, bytes []byte) error {
-	return lf.accessor.ProgressStagingBalances(sectionName, bytes)
+func (lf *ledgerFetcher) processBalancesBlock(ctx context.Context, sectionName string, bytes []byte) error {
+	return lf.accessor.ProgressStagingBalances(ctx, sectionName, bytes)
 }

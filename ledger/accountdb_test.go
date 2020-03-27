@@ -144,7 +144,7 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 	require.NoError(t, err)
 	require.Equal(t, all, accts)
 
-	totals, err := accountsTotals(tx)
+	totals, err := accountsTotals(tx, false)
 	require.NoError(t, err)
 	require.Equal(t, totals.Online.Money.Raw, totalOnline)
 	require.Equal(t, totals.Offline.Money.Raw, totalOffline)
