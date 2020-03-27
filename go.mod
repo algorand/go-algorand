@@ -11,7 +11,7 @@ require (
 	github.com/cpuguy83/go-md2man v1.0.8 // indirect
 	github.com/davidlazar/go-crypto v0.0.0-20170701192655-dcfb0a7ac018
 	github.com/dchest/siphash v1.2.1
-	github.com/deepmap/oapi-codegen v1.3.6
+	github.com/deepmap/oapi-codegen v1.3.5
 	github.com/fatih/color v1.7.0
 	github.com/fortytw2/leaktest v1.3.0 // indirect
 	github.com/gen2brain/beeep v0.0.0-20180718162406-4e430518395f
@@ -56,3 +56,5 @@ require (
 	gopkg.in/sohlich/elogrus.v3 v3.0.0-20180410122755-1fa29e2f2009
 	gopkg.in/toast.v1 v1.0.0-20180812000517-0a84660828b2 // indirect
 )
+
+replace github.com/deepmap/oapi-codegen v1.3.5 => github.com/winder/oapi-codegen v1.3.5-algorand
