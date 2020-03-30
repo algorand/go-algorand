@@ -80,6 +80,7 @@ type ledgerTracker interface {
 // access.  This is particularly useful for testing trackers in isolation.
 type ledgerForTracker interface {
 	trackerDB() dbPair
+	blockDB() dbPair
 	trackerLog() logging.Logger
 	trackerEvalVerified(bookkeeping.Block) (StateDelta, error)
 	isCatchpointRound(basics.Round) bool

@@ -80,6 +80,10 @@ func (ml *mockLedgerForTracker) trackerDB() dbPair {
 	return ml.dbs
 }
 
+func (ml *mockLedgerForTracker) blockDB() dbPair {
+	return dbPair{}
+}
+
 func (ml *mockLedgerForTracker) trackerLog() logging.Logger {
 	return ml.log
 }

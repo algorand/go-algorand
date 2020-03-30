@@ -72,6 +72,10 @@ func (wl *wrappedLedger) trackerDB() dbPair {
 	return wl.l.trackerDB()
 }
 
+func (wl *wrappedLedger) blockDB() dbPair {
+	return wl.l.blockDB()
+}
+
 func (wl *wrappedLedger) trackerLog() logging.Logger {
 	return wl.l.trackerLog()
 }

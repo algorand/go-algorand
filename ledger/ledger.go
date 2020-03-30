@@ -511,6 +511,11 @@ func (l *Ledger) trackerDB() dbPair {
 	return l.trackerDBs
 }
 
+// ledgerForTracker methods
+func (l *Ledger) blockDB() dbPair {
+	return l.blockDBs
+}
+
 func (l *Ledger) trackerLog() logging.Logger {
 	return l.log
 }

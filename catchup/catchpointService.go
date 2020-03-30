@@ -22,7 +22,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
@@ -237,7 +239,7 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 		return err
 	}
 
-	err = cs.ledgerAccessor.StoreBlock(cs.ctx, blk)
+	err = cs.ledgerAccessor.StoreFirstBlock(cs.ctx, blk)
 	if err != nil {
 		return err
 	}
@@ -250,7 +252,46 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 }
 
 func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
-	// TODO:
+	topBlock, err := cs.ledgerAccessor.EnsureFirstBlock(cs.ctx)
+	if err != nil {
+		return err
+	}
+
+	lookback := int(config.Consensus[topBlock.CurrentProtocol].MaxBalLookback)
+	prevBlock := &topBlock
+	fetcherFactory := MakeNetworkFetcherFactory(cs.net, 10, nil)
+	attemptsCount := 0
+	blocksFetched := 1 // we already got the first block in the previous step.
+	var blk *bookkeeping.Block
+	var client FetcherClient
+	for blocksFetched < lookback {
+		attemptsCount++
+		fetcher := fetcherFactory.New()
+		blk, _, client, err = fetcher.FetchBlock(cs.ctx, topBlock.Round()-basics.Round(blocksFetched))
+		if err != nil {
+			if attemptsCount <= maxBlockDownloadAttempts {
+				// try again.
+				continue
+			}
+			return err
+		}
+		// success
+		client.Close()
+
+		// validate :
+		if prevBlock.BlockHeader.Branch != blk.Hash() {
+			// not identical, retry download.
+			continue
+		}
+		// all good, persist and move on.
+		err = cs.ledgerAccessor.StoreBlock(cs.ctx, blk)
+		if err != nil {
+			// todo log
+			continue
+		}
+		prevBlock = blk
+	}
+
 	err = cs.updateStage(ledger.CatchpointCatchupStateSwitch)
 	if err != nil {
 		return err

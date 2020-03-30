@@ -297,7 +297,54 @@ func (c *CatchpointCatchupAccessor) VerifyCatchpoint(ctx context.Context, blk *b
 	return nil
 }
 
+// StoreFirstBlock stores a single block to the blocks database.
+func (c *CatchpointCatchupAccessor) StoreFirstBlock(ctx context.Context, blk *bookkeeping.Block) (err error) {
+	blockDbs := c.ledger.blockDB()
+	err = blockDbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
+		return blockStartCatchupStaging(tx, *blk)
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // StoreBlock stores a single block to the blocks database.
 func (c *CatchpointCatchupAccessor) StoreBlock(ctx context.Context, blk *bookkeeping.Block) (err error) {
-	c.ledger.blockD
+	blockDbs := c.ledger.blockDB()
+	err = blockDbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
+		return blockPutStaging(tx, *blk)
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// FinishBlocks concludes the catchup of the blocks database.
+func (c *CatchpointCatchupAccessor) FinishBlocks(ctx context.Context, applyChanges bool) (err error) {
+	blockDbs := c.ledger.blockDB()
+	err = blockDbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
+		if applyChanges {
+			return blockCompleteCatchup(tx)
+		}
+		return blockAbortCatchup(tx)
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// EnsureFirstBlock ensure that we have a single block in the staging block table, and returns that block
+func (c *CatchpointCatchupAccessor) EnsureFirstBlock(ctx context.Context) (blk bookkeeping.Block, err error) {
+	blockDbs := c.ledger.blockDB()
+	err = blockDbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
+		blk, err = blockEnsureSingleBlock(tx)
+		return
+	})
+	if err != nil {
+		return blk, err
+	}
+	return blk, nil
 }
