@@ -31,14 +31,14 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/data/transactions/logic"
+	//"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
 
 var testprog string
 
-func makeUnsignedApplicationCallTxPerf(appIdx uint64, onCompletion transactions.OnCompletion) (tx transactions.Transaction, err error) {
+/*func makeUnsignedApplicationCallTxPerf(appIdx uint64, onCompletion transactions.OnCompletion) (tx transactions.Transaction, err error) {
 	tx.Type = protocol.ApplicationCallTx
 	tx.ApplicationID = basics.AppIndex(appIdx)
 	tx.OnCompletion = onCompletion
@@ -56,7 +56,7 @@ func makeUnsignedApplicationCallTxPerf(appIdx uint64, onCompletion transactions.
 	}
 
 	return tx, nil
-}
+}*/
 
 func makeUnsignedPayment(sender basics.Address) transactions.Transaction {
 	return transactions.Transaction{
@@ -118,9 +118,10 @@ func benchmarkBlockEvalPerf(txtype string, txPerBlockAndNumCreators int, b *test
 			// make a transaction that will create an asset or application
 			var tx transactions.Transaction
 
-			if txtype == "app" {
+			/*if txtype == "app" {
 				tx, err = makeUnsignedApplicationCallTxPerf(0, transactions.OptInOC)
-			} else if txtype == "asset" {
+			} else*/
+			if txtype == "asset" {
 				creatorEncoded := creators[j].String()
 				tx, err = makeUnsignedAssetCreateTx(blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, 100, false, creatorEncoded, creatorEncoded, creatorEncoded, creatorEncoded, "m", "m", "", nil)
 			} else if txtype == "pay" {
@@ -163,6 +164,7 @@ func BenchmarkAssetEvalPerf1000(b *testing.B) { benchmarkBlockEvalPerf("asset", 
 func BenchmarkAssetEvalPerf1500(b *testing.B) { benchmarkBlockEvalPerf("asset", 1500, b) }
 func BenchmarkAssetEvalPerf2000(b *testing.B) { benchmarkBlockEvalPerf("asset", 2000, b) }
 
+/*
 func BenchmarkAppEvalPerf100(b *testing.B)  { benchmarkBlockEvalPerf("app", 100, b) }
 func BenchmarkAppEvalPerf500(b *testing.B)  { benchmarkBlockEvalPerf("app", 500, b) }
 func BenchmarkAppEvalPerf1000(b *testing.B) { benchmarkBlockEvalPerf("app", 1000, b) }
@@ -727,4 +729,4 @@ int 1
 		panic(err)
 	}
 	testprog = string(testprogBytes)
-}
+}*/
