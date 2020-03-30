@@ -133,9 +133,11 @@ func blockGetCert(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, cert agr
 		return
 	}
 
-	err = protocol.Decode(certbuf, &cert)
-	if err != nil {
-		return
+	if certbuf != nil {
+		err = protocol.Decode(certbuf, &cert)
+		if err != nil {
+			return
+		}
 	}
 
 	return

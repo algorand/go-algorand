@@ -148,6 +148,21 @@ func OpenLedger(
 	}
 
 	// Check that the genesis hash, if present, matches.
+	err = l.verifyMatchingGenesisHash(genesisInitState.GenesisHash)
+	if err != nil {
+		return nil, err
+	}
+
+	return l, nil
+}
+
+func (l *Ledger) isCatchpointRound(rnd basics.Round) bool {
+	return l.catchpoint.isCatchpointRound(rnd)
+}
+
+// verifyMatchingGenesisHash tests to see that the latest block header pointing to the same genesis hash provided in genesisHash.
+func (l *Ledger) verifyMatchingGenesisHash(genesisHash crypto.Digest) (err error) {
+	// Check that the genesis hash, if present, matches.
 	err = l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
 		latest, err := blockLatest(tx)
 		if err != nil {
@@ -160,24 +175,15 @@ func OpenLedger(
 		}
 
 		params := config.Consensus[hdr.CurrentProtocol]
-		if params.SupportGenesisHash && hdr.GenesisHash != genesisInitState.GenesisHash {
+		if params.SupportGenesisHash && hdr.GenesisHash != genesisHash {
 			return fmt.Errorf(
 				"latest block %d genesis hash %v does not match expected genesis hash %v",
-				latest, hdr.GenesisHash, genesisInitState.GenesisHash,
+				latest, hdr.GenesisHash, genesisHash,
 			)
 		}
-
 		return nil
 	})
-	if err != nil {
-		return nil, err
-	}
-
-	return l, nil
-}
-
-func (l *Ledger) isCatchpointRound(rnd basics.Round) bool {
-	return l.catchpoint.isCatchpointRound(rnd)
+	return
 }
 
 func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs dbPair, blockDBs dbPair, err error) {

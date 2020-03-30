@@ -51,7 +51,7 @@ const (
 	// CatchpointCatchupStateSwitch indicates that we're switching to use the downloaded ledger/blocks content
 	CatchpointCatchupStateSwitch
 
-	// catchpointCatchupStateLast is the last entries in the CatchpointCatchupState enumeration.
+	// catchpointCatchupStateLast is the last entry in the CatchpointCatchupState enumeration.
 	catchpointCatchupStateLast = CatchpointCatchupStateSwitch
 )
 
@@ -242,7 +242,6 @@ func (c *CatchpointCatchupAccessor) GetCatchupBlockRound(ctx context.Context) (r
 
 // VerifyCatchpoint verifies that the catchpoint is valid by reconstructing the label.
 func (c *CatchpointCatchupAccessor) VerifyCatchpoint(ctx context.Context, blk *bookkeeping.Block) (err error) {
-
 	rdb := c.ledger.trackerDB().rdb
 	var balancesHash crypto.Digest
 	var blockRound basics.Round
@@ -296,4 +295,9 @@ func (c *CatchpointCatchupAccessor) VerifyCatchpoint(ctx context.Context, blk *b
 		return fmt.Errorf("catchpoint hash mismatch")
 	}
 	return nil
+}
+
+// StoreBlock stores a single block to the blocks database.
+func (c *CatchpointCatchupAccessor) StoreBlock(ctx context.Context, blk *bookkeeping.Block) (err error) {
+	c.ledger.blockD
 }

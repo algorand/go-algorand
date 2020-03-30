@@ -137,9 +137,11 @@ func (cs *CatchpointCatchupService) run() {
 			// todo - abort..
 		}
 
-		if err != nil && err != cs.ctx.Err() {
-			cs.log.Warnf("catchpoint catchup stage error : %v", err)
-			time.Sleep(200 * time.Millisecond)
+		if err != nil {
+			if err != cs.ctx.Err() {
+				cs.log.Warnf("catchpoint catchup stage error : %v", err)
+				time.Sleep(200 * time.Millisecond)
+			}
 		}
 	}
 }
@@ -231,6 +233,11 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 	}
 
 	err = cs.ledgerAccessor.VerifyCatchpoint(cs.ctx, blk)
+	if err != nil {
+		return err
+	}
+
+	err = cs.ledgerAccessor.StoreBlock(cs.ctx, blk)
 	if err != nil {
 		return err
 	}
