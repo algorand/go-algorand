@@ -451,6 +451,41 @@ func (eval *BlockEvaluator) TransactionGroup(txads []transactions.SignedTxnWithA
 	return eval.transactionGroup(txads, true)
 }
 
+// prepareAppEvaluators creates appTealEvaluators for each ApplicationCall
+// transaction in the group
+func (eval *BlockEvaluator) prepareAppEvaluators(txgroup []transactions.SignedTxnWithAD) (res []*appTealEvaluator) {
+	var groupNoAD []transactions.SignedTxn
+	res = make([]*appTealEvaluator, len(txgroup))
+	for i, txn := range txgroup {
+		// Ignore any non-ApplicationCall transactions
+		if txn.SignedTxn.Txn.Type != protocol.ApplicationCallTx {
+			continue
+		}
+
+		// Initialize group without ApplyData lazily
+		if groupNoAD == nil {
+			groupNoAD = make([]transactions.SignedTxn, len(txgroup))
+			for j := range txgroup {
+				groupNoAD[j] = txgroup[j].SignedTxn
+			}
+		}
+
+		// Construct an appTealEvaluator (implements
+		// transactions.StateEvaluator) for use in ApplicationCall transactions.
+		steva := appTealEvaluator{
+			evalParams: logic.EvalParams{
+				Txn:        &txn.SignedTxn,
+				Proto:      &eval.proto,
+				TxnGroup:   groupNoAD,
+				GroupIndex: i,
+			},
+		}
+
+		res[i] = &steva
+	}
+	return
+}
+
 // transactionGroup tentatively executes a group of transactions as part of this block evaluation.
 // If the transaction group cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.  If remember is true,
@@ -472,18 +507,13 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 
 	cow := eval.state.child()
 
-	// We have to pass the group along to the transaction verification
-	// context so that Stateful TEAL may be evaluated for Applications,
-	// since Stateful TEAL may refer to other transactions in the group
-	groupNoAD := make([]transactions.SignedTxn, len(txgroup))
-	for i := range txgroup {
-		groupNoAD[i] = txgroup[i].SignedTxn
-	}
+	// Prepare TEAL contexts for any ApplicationCall transactions in the group
+	appEvaluators := eval.prepareAppEvaluators(txgroup)
 
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
-		err := eval.transaction(txad.SignedTxn, groupNoAD, gi, txad.ApplyData, cow, &txib)
+		err := eval.transaction(txad.SignedTxn, appEvaluators[gi], txad.ApplyData, cow, &txib)
 		if err != nil {
 			return err
 		}
@@ -533,7 +563,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 // transaction tentatively executes a new transaction as part of this block evaluation.
 // If the transaction cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, group []transactions.SignedTxn, groupIndex int, ad transactions.ApplyData, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
+func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, appEval *appTealEvaluator, ad transactions.ApplyData, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
 	var err error
 
 	if eval.validate {
@@ -558,19 +588,8 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, group []tran
 		RewardsPool: eval.block.BlockHeader.RewardsPool,
 	}
 
-	// Construct an appTealEvaluator (implements
-	// transactions.StateEvaluator) for use in ApplicationCall transactions.
-	steva := appTealEvaluator{
-		evalParams: logic.EvalParams{
-			Txn:        &txn,
-			Proto:      &eval.proto,
-			TxnGroup:   group,
-			GroupIndex: groupIndex,
-		},
-	}
-
 	// Apply the transaction, updating the cow balances
-	applyData, err := txn.Txn.Apply(cow, &steva, spec, cow.txnCounter())
+	applyData, err := txn.Txn.Apply(cow, appEval, spec, cow.txnCounter())
 	if err != nil {
 		return fmt.Errorf("transaction %v: %v", txn.ID(), err)
 	}
