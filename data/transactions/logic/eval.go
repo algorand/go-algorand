@@ -631,10 +631,8 @@ func opReturn(cx *evalContext) {
 	// Take the last element on the stack and make it the return value (only element on the stack)
 	// Move the pc to the end of the program
 	last := len(cx.stack) - 1
-	if last != 0 {
-		cx.stack[0] = cx.stack[last]
-		cx.stack = cx.stack[:1]
-	}
+	cx.stack[0] = cx.stack[last]
+	cx.stack = cx.stack[:1]
 	cx.nextpc = len(cx.program)
 }
 
