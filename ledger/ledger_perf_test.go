@@ -36,6 +36,8 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+var testprog string
+
 func makeUnsignedApplicationCallTxPerf(appIdx uint64, onCompletion transactions.OnCompletion) (tx transactions.Transaction, err error) {
 	tx.Type = protocol.ApplicationCallTx
 	tx.ApplicationID = basics.AppIndex(appIdx)
@@ -43,35 +45,13 @@ func makeUnsignedApplicationCallTxPerf(appIdx uint64, onCompletion transactions.
 
 	// If creating, set programs
 	if appIdx == 0 {
-		/*
-			testprog := `
-				// Write global["foo"] = "bar"
-				byte base64 Zm9v
-				byte base64 YmFy
-				app_global_put
-
-				// Write sender.local["foo"] = "bar"
-				// txn.Sender
-				int 0
-				byte base64 Zm9v
-				byte base64 YmFy
-				app_local_put
-
-				int 1
-			`
-		*/
-		testprog := `int 1`
-		asm, err := logic.AssembleString(testprog)
-		if err != nil {
-			return tx, err
-		}
-		tx.ApprovalProgram = string(asm)
-		tx.ClearStateProgram = string(asm)
+		tx.ApprovalProgram = string(testprog)
+		tx.ClearStateProgram = string(testprog)
 		tx.GlobalStateSchema = basics.StateSchema{
-			NumByteSlice: 1,
+			NumByteSlice: 50,
 		}
 		tx.LocalStateSchema = basics.StateSchema{
-			NumByteSlice: 1,
+			NumByteSlice: 50,
 		}
 	}
 
@@ -188,3 +168,563 @@ func BenchmarkAppEvalPerf500(b *testing.B)  { benchmarkBlockEvalPerf("app", 500,
 func BenchmarkAppEvalPerf1000(b *testing.B) { benchmarkBlockEvalPerf("app", 1000, b) }
 func BenchmarkAppEvalPerf1500(b *testing.B) { benchmarkBlockEvalPerf("app", 1500, b) }
 func BenchmarkAppEvalPerf2000(b *testing.B) { benchmarkBlockEvalPerf("app", 2000, b) }
+
+func init() {
+	testasm := `
+byte base64 MA==
+byte base64 YmFy
+app_global_put
+
+
+byte base64 MQ==
+byte base64 YmFy
+app_global_put
+
+
+byte base64 Mg==
+byte base64 YmFy
+app_global_put
+
+
+byte base64 Mw==
+byte base64 YmFy
+app_global_put
+
+
+byte base64 NA==
+byte base64 YmFy
+app_global_put
+
+
+byte base64 NQ==
+byte base64 YmFy
+app_global_put
+
+
+byte base64 Ng==
+byte base64 YmFy
+app_global_put
+
+
+byte base64 Nw==
+byte base64 YmFy
+app_global_put
+
+
+byte base64 OA==
+byte base64 YmFy
+app_global_put
+
+
+byte base64 OQ==
+byte base64 YmFy
+app_global_put
+
+
+byte base64 MTA=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 MTE=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 MTI=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 MTM=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 MTQ=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 MTU=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 MTY=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 MTc=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 MTg=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 MTk=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 MjA=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 MjE=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 MjI=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 MjM=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 MjQ=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 MjU=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 MjY=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 Mjc=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 Mjg=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 Mjk=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 MzA=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 MzE=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 MzI=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 MzM=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 MzQ=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 MzU=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 MzY=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 Mzc=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 Mzg=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 Mzk=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 NDA=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 NDE=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 NDI=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 NDM=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 NDQ=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 NDU=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 NDY=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 NDc=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 NDg=
+byte base64 YmFy
+app_global_put
+
+
+byte base64 NDk=
+byte base64 YmFy
+app_global_put
+
+int 0
+byte base64 MA==
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 MQ==
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 Mg==
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 Mw==
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 NA==
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 NQ==
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 Ng==
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 Nw==
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 OA==
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 OQ==
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 MTA=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 MTE=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 MTI=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 MTM=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 MTQ=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 MTU=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 MTY=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 MTc=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 MTg=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 MTk=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 MjA=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 MjE=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 MjI=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 MjM=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 MjQ=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 MjU=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 MjY=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 Mjc=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 Mjg=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 Mjk=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 MzA=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 MzE=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 MzI=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 MzM=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 MzQ=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 MzU=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 MzY=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 Mzc=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 Mzg=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 Mzk=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 NDA=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 NDE=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 NDI=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 NDM=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 NDQ=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 NDU=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 NDY=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 NDc=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 NDg=
+byte base64 YmFy
+app_local_put
+
+
+int 0
+byte base64 NDk=
+byte base64 YmFy
+app_local_put
+
+int 1
+`
+	// testasm = `int 1`
+	testprogBytes, err := logic.AssembleString(testasm)
+	if err != nil {
+		panic(err)
+	}
+	testprog = string(testprogBytes)
+}
