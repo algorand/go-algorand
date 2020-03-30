@@ -156,7 +156,7 @@ func BenchmarkPaymentEvalPerf100(b *testing.B)  { benchmarkBlockEvalPerf("pay", 
 func BenchmarkPaymentEvalPerf500(b *testing.B)  { benchmarkBlockEvalPerf("pay", 500, b) }
 func BenchmarkPaymentEvalPerf1000(b *testing.B) { benchmarkBlockEvalPerf("pay", 1000, b) }
 func BenchmarkPaymentEvalPerf1500(b *testing.B) { benchmarkBlockEvalPerf("pay", 1500, b) }
-func BenchmarkPaymentEvalPerf2000(b *testing.B) { benchmarkBlockEvalPerf("pay", 2000, b) }
+func BenchmarkPaymentEvalPerf5000(b *testing.B) { benchmarkBlockEvalPerf("pay", 5000, b) }
 
 func BenchmarkAssetEvalPerf100(b *testing.B)  { benchmarkBlockEvalPerf("asset", 100, b) }
 func BenchmarkAssetEvalPerf500(b *testing.B)  { benchmarkBlockEvalPerf("asset", 500, b) }
