@@ -3,6 +3,7 @@ echo "######################################################################"
 echo "  e2e_basic_start_stop"
 echo "######################################################################"
 set -e
+set -x
 
 # Suppress telemetry reporting for tests
 export ALGOTEST=1
