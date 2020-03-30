@@ -12,6 +12,7 @@ RUNNING_COUNT=0
 
 function update_running_count() {
     PIDS=($(pgrep -u $(whoami) -x algod)) || true
+    echo ${PIDS}
     RUNNING_COUNT=${#PIDS[@]}
 }
 
