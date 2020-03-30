@@ -504,9 +504,9 @@ func assembleArg(ops *OpStream, spec *OpSpec, args []string) error {
 	return ops.Arg(val)
 }
 
-func assembleBnz(ops *OpStream, spec *OpSpec, args []string) error {
+func assembleBranch(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
-		return errors.New("bnz operation needs label argument")
+		return errors.New("branch operation needs label argument")
 	}
 	ops.ReferToLabel(ops.sourceLine, ops.Out.Len(), args[0])
 	err := ops.checkArgs(*spec)
@@ -1245,7 +1245,7 @@ func disGlobal(dis *disassembleState, spec *OpSpec) {
 	_, dis.err = fmt.Fprintf(dis.out, "global %s\n", GlobalFieldNames[garg])
 }
 
-func disBnz(dis *disassembleState, spec *OpSpec) {
+func disBranch(dis *disassembleState, spec *OpSpec) {
 	dis.nextpc = dis.pc + 3
 	offset := (uint(dis.program[dis.pc+1]) << 8) | uint(dis.program[dis.pc+2])
 	target := int(offset) + dis.pc + 3
@@ -1255,7 +1255,7 @@ func disBnz(dis *disassembleState, spec *OpSpec) {
 		label = fmt.Sprintf("label%d", dis.labelCount)
 		dis.putLabel(label, target)
 	}
-	_, dis.err = fmt.Fprintf(dis.out, "bnz %s\n", label)
+	_, dis.err = fmt.Fprintf(dis.out, "%s %s\n", spec.Name, label)
 }
 
 func disLoad(dis *disassembleState, spec *OpSpec) {
