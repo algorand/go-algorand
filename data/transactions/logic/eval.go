@@ -626,6 +626,16 @@ func opErr(cx *evalContext) {
 	cx.err = errors.New("TEAL runtime encountered err opcode")
 }
 
+func opReturn(cx *evalContext) {
+	// Achieve the end condition:
+	// Take the last element on the stack and make it the return value (only element on the stack)
+	// Move the pc to the end of the program
+	last := len(cx.stack) - 1
+	cx.stack[0] = cx.stack[last]
+	cx.stack = cx.stack[:1]
+	cx.nextpc = len(cx.program)
+}
+
 func opSHA256(cx *evalContext) {
 	last := len(cx.stack) - 1
 	hash := sha256.Sum256(cx.stack[last].Bytes)
@@ -1014,10 +1024,11 @@ func opArg3(cx *evalContext) {
 	opArgN(cx, 3)
 }
 
-func checkBnz(cx *evalContext) int {
+// checks any branch that is {op} {int16 be offset}
+func checkBranch(cx *evalContext) int {
 	offset := (uint(cx.program[cx.pc+1]) << 8) | uint(cx.program[cx.pc+2])
 	if offset > 0x7fff {
-		cx.err = fmt.Errorf("bnz offset %x too large", offset)
+		cx.err = fmt.Errorf("branch offset %x too large", offset)
 		return 1
 	}
 	cx.nextpc = cx.pc + 3
@@ -1030,7 +1041,7 @@ func checkBnz(cx *evalContext) int {
 		branchTooFar = target >= len(cx.program)
 	}
 	if branchTooFar {
-		cx.err = errors.New("bnz target beyond end of program")
+		cx.err = errors.New("branch target beyond end of program")
 		return 1
 	}
 	cx.branchTargets = append(cx.branchTargets, target)
@@ -1050,6 +1061,30 @@ func opBnz(cx *evalContext) {
 		}
 		cx.nextpc += int(offset)
 	}
+}
+
+func opBz(cx *evalContext) {
+	last := len(cx.stack) - 1
+	cx.nextpc = cx.pc + 3
+	isZero := cx.stack[last].Uint == 0
+	cx.stack = cx.stack[:last] // pop
+	if isZero {
+		offset := (uint(cx.program[cx.pc+1]) << 8) | uint(cx.program[cx.pc+2])
+		if offset > 0x7fff {
+			cx.err = fmt.Errorf("bz offset %x too large", offset)
+			return
+		}
+		cx.nextpc += int(offset)
+	}
+}
+
+func opB(cx *evalContext) {
+	offset := (uint(cx.program[cx.pc+1]) << 8) | uint(cx.program[cx.pc+2])
+	if offset > 0x7fff {
+		cx.err = fmt.Errorf("b offset %x too large", offset)
+		return
+	}
+	cx.nextpc = cx.pc + 3 + int(offset)
 }
 
 func opPop(cx *evalContext) {

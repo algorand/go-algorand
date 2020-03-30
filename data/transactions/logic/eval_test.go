@@ -439,6 +439,103 @@ pop
 	}
 }
 
+func TestBz(t *testing.T) {
+	t.Parallel()
+	for v := uint64(2); v <= AssemblerDefaultVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			program, err := AssembleStringWithVersion(`int 0
+dup
+bz safe
+err
+safe:
+int 1
++`, v)
+			require.NoError(t, err)
+			cost, err := Check(program, defaultEvalParams(nil, nil))
+			require.NoError(t, err)
+			require.True(t, cost < 1000)
+			sb := strings.Builder{}
+			pass, err := Eval(program, defaultEvalParams(&sb, nil))
+			if !pass {
+				t.Log(hex.EncodeToString(program))
+				t.Log(sb.String())
+			}
+			require.NoError(t, err)
+			require.True(t, pass)
+		})
+	}
+}
+
+func TestB(t *testing.T) {
+	t.Parallel()
+	for v := uint64(2); v <= AssemblerDefaultVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			program, err := AssembleStringWithVersion(`b safe
+err
+safe:
+int 1`, v)
+			require.NoError(t, err)
+			cost, err := Check(program, defaultEvalParams(nil, nil))
+			require.NoError(t, err)
+			require.True(t, cost < 1000)
+			sb := strings.Builder{}
+			pass, err := Eval(program, defaultEvalParams(&sb, nil))
+			if !pass {
+				t.Log(hex.EncodeToString(program))
+				t.Log(sb.String())
+			}
+			require.NoError(t, err)
+			require.True(t, pass)
+		})
+	}
+}
+
+func TestReturn(t *testing.T) {
+	t.Parallel()
+	for v := uint64(2); v <= AssemblerDefaultVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			program, err := AssembleStringWithVersion(`int 1
+return
+err`, v)
+			require.NoError(t, err)
+			cost, err := Check(program, defaultEvalParams(nil, nil))
+			require.NoError(t, err)
+			require.True(t, cost < 1000)
+			sb := strings.Builder{}
+			pass, err := Eval(program, defaultEvalParams(&sb, nil))
+			if !pass {
+				t.Log(hex.EncodeToString(program))
+				t.Log(sb.String())
+			}
+			require.NoError(t, err)
+			require.True(t, pass)
+		})
+	}
+}
+
+func TestReturnFalse(t *testing.T) {
+	t.Parallel()
+	for v := uint64(2); v <= AssemblerDefaultVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			program, err := AssembleStringWithVersion(`int 0
+return
+int 1`, v)
+			require.NoError(t, err)
+			cost, err := Check(program, defaultEvalParams(nil, nil))
+			require.NoError(t, err)
+			require.True(t, cost < 1000)
+			sb := strings.Builder{}
+			pass, err := Eval(program, defaultEvalParams(&sb, nil))
+			if pass {
+				t.Log(hex.EncodeToString(program))
+				t.Log(sb.String())
+			}
+			require.False(t, pass)
+			require.NoError(t, err)
+		})
+	}
+}
+
 func TestSubUnderflow(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerDefaultVersion; v++ {
