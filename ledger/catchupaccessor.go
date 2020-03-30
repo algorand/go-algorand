@@ -129,7 +129,7 @@ func (c *CatchpointCatchupAccessor) SetLabel(ctx context.Context, label string) 
 func (c *CatchpointCatchupAccessor) ResetStagingBalances(ctx context.Context) (err error) {
 	wdb := c.ledger.trackerDB().wdb
 	err = wdb.Atomic(func(tx *sql.Tx) (err error) {
-		err = resetCatchpointStagingBalances(ctx, tx)
+		err = resetCatchpointStagingBalances(ctx, tx, true)
 		if err != nil {
 			return fmt.Errorf("unable to reset catchpoint catchup balances : %v", err)
 		}
@@ -164,12 +164,16 @@ func (c *CatchpointCatchupAccessor) processStagingContent(ctx context.Context, b
 
 	// the following fields are now going to be ignored. We should add these to the database and validate these
 	// later on:
-	// TotalAccounts, TotalAccounts, Catchpoint, BlockHeaderDigest, BalancesRound
+	// TotalAccounts, TotalAccounts, Catchpoint, BlockHeaderDigest
 	wdb := c.ledger.trackerDB().wdb
 	err = wdb.Atomic(func(tx *sql.Tx) (err error) {
 		_, err = writeCatchpointStateUint64(ctx, tx, "catchpointCatchupBlockRound", uint64(fileHeader.BlocksRound))
 		if err != nil {
-			return fmt.Errorf("unable to write catchpoint catchup state 'catchpointCatchupLabel': %v", err)
+			return fmt.Errorf("unable to write catchpoint catchup state 'catchpointCatchupBlockRound': %v", err)
+		}
+		_, err = writeCatchpointStateUint64(ctx, tx, "catchpointCatchupBalancesRound", uint64(fileHeader.BalancesRound))
+		if err != nil {
+			return fmt.Errorf("unable to write catchpoint catchup state 'catchpointCatchupBalancesRound': %v", err)
 		}
 		err = accountsPutTotals(tx, fileHeader.Totals, true)
 		return
@@ -208,6 +212,17 @@ func (c *CatchpointCatchupAccessor) processStagingBalances(ctx context.Context, 
 			if err != nil {
 				return err
 			}
+
+			// if the account has any asset params, it means that it's the creator of an asset.
+			if len(accountData.AssetParams) > 0 {
+				for aidx := range accountData.AssetParams {
+					err = writeCatchpointStagingAssets(ctx, tx, balance.Address, aidx)
+					if err != nil {
+						return err
+					}
+				}
+			}
+
 			var addr basics.Address
 			copy(addr[:], balance.Address)
 			hash := accountHashBuilder(addr, accountData, balance.AccountData)
@@ -347,4 +362,71 @@ func (c *CatchpointCatchupAccessor) EnsureFirstBlock(ctx context.Context) (blk b
 		return blk, err
 	}
 	return blk, nil
+}
+
+// CompleteCatchup completes the catchpoint catchup process by switching the databases tables around
+// and reloading the ledger.
+func (c *CatchpointCatchupAccessor) CompleteCatchup(ctx context.Context) (err error) {
+	err = c.FinishBlocks(ctx, true)
+	if err != nil {
+		return err
+	}
+	err = c.FinishBlalances(ctx)
+	if err != nil {
+		return err
+	}
+	c.ledger.reloadLedger()
+	return nil
+}
+
+// FinishBlalances concludes the catchup of the balances(tracker) database.
+func (c *CatchpointCatchupAccessor) FinishBlalances(ctx context.Context) (err error) {
+	wdb := c.ledger.trackerDB().wdb
+	err = wdb.Atomic(func(tx *sql.Tx) (err error) {
+		var balancesRound uint64
+		var totals AccountTotals
+
+		balancesRound, _, err = readCatchpointStateUint64(ctx, tx, "catchpointCatchupBalancesRound")
+		if err != nil {
+			return err
+		}
+
+		totals, err = accountsTotals(tx, true)
+		if err != nil {
+			return err
+		}
+
+		err = applyCatchpointStagingBalances(ctx, tx, basics.Round(balancesRound))
+		if err != nil {
+			return err
+		}
+
+		err = accountsPutTotals(tx, totals, false)
+		if err != nil {
+			return err
+		}
+
+		err = resetCatchpointStagingBalances(ctx, tx, false)
+		if err != nil {
+			return err
+		}
+
+		_, err = writeCatchpointStateUint64(ctx, tx, "catchpointCatchupBalancesRound", 0)
+		if err != nil {
+			return err
+		}
+
+		_, err = writeCatchpointStateUint64(ctx, tx, "catchpointCatchupBlockRound", 0)
+		if err != nil {
+			return err
+		}
+
+		_, err = writeCatchpointStateString(ctx, tx, "catchpointCatchupLabel", "")
+		if err != nil {
+			return err
+		}
+
+		return
+	})
+	return err
 }

@@ -55,6 +55,10 @@ type Ledger struct {
 	// genesisHash stores the genesis hash for this ledger.
 	genesisHash crypto.Digest
 
+	genesisAccounts map[basics.Address]basics.AccountData
+
+	genesisProto config.ConsensusParams
+
 	// State-machine trackers
 	accts      accountUpdates
 	txTail     txTail
@@ -86,9 +90,11 @@ func OpenLedger(
 ) (*Ledger, error) {
 	var err error
 	l := &Ledger{
-		log:         log,
-		archival:    cfg.Archival,
-		genesisHash: genesisInitState.GenesisHash,
+		log:             log,
+		archival:        cfg.Archival,
+		genesisHash:     genesisInitState.GenesisHash,
+		genesisAccounts: genesisInitState.Accounts,
+		genesisProto:    config.Consensus[genesisInitState.Block.CurrentProtocol],
 	}
 
 	l.headerCache.maxEntries = 10
@@ -117,21 +123,40 @@ func OpenLedger(
 		return nil, err
 	}
 
-	l.blockQ, err = bqInit(l)
+	if l.genesisAccounts == nil {
+		l.genesisAccounts = make(map[basics.Address]basics.AccountData)
+	}
+
+	l.catchpoint.initialize(cfg, dbPathPrefix, dbMem)
+
+	err = l.reloadLedger()
 	if err != nil {
-		err = fmt.Errorf("OpenLedger.bqInit %v", err)
 		return nil, err
 	}
 
-	// Accounts are special because they get an initialization argument (initAccounts).
-	initAccounts := genesisInitState.Accounts
-	if initAccounts == nil {
-		initAccounts = make(map[basics.Address]basics.AccountData)
+	return l, nil
+}
+
+func (l *Ledger) reloadLedger() error {
+	// close first.
+	l.trackers.close()
+	if l.blockQ != nil {
+		l.blockQ.close()
+		l.blockQ = nil
 	}
 
-	l.accts.initProto = config.Consensus[genesisInitState.Block.CurrentProtocol]
-	l.accts.initAccounts = initAccounts
-	l.catchpoint.initialize(cfg, dbPathPrefix, dbMem)
+	// reload.
+
+	var err error
+	l.blockQ, err = bqInit(l)
+	if err != nil {
+		err = fmt.Errorf("reloadLedger.bqInit %v", err)
+		return err
+	}
+
+	// Accounts are special because they get an initialization argument (initAccounts).
+	l.accts.initProto = l.genesisProto
+	l.accts.initAccounts = l.genesisAccounts
 
 	l.trackers.register(&l.accts)
 	l.trackers.register(&l.txTail)
@@ -143,17 +168,16 @@ func OpenLedger(
 
 	err = l.trackers.loadFromDisk(l)
 	if err != nil {
-		err = fmt.Errorf("OpenLedger.loadFromDisk %v", err)
-		return nil, err
+		err = fmt.Errorf("reloadLedger.loadFromDisk %v", err)
+		return err
 	}
 
 	// Check that the genesis hash, if present, matches.
-	err = l.verifyMatchingGenesisHash(genesisInitState.GenesisHash)
+	err = l.verifyMatchingGenesisHash()
 	if err != nil {
-		return nil, err
+		return err
 	}
-
-	return l, nil
+	return nil
 }
 
 func (l *Ledger) isCatchpointRound(rnd basics.Round) bool {
@@ -161,7 +185,7 @@ func (l *Ledger) isCatchpointRound(rnd basics.Round) bool {
 }
 
 // verifyMatchingGenesisHash tests to see that the latest block header pointing to the same genesis hash provided in genesisHash.
-func (l *Ledger) verifyMatchingGenesisHash(genesisHash crypto.Digest) (err error) {
+func (l *Ledger) verifyMatchingGenesisHash() (err error) {
 	// Check that the genesis hash, if present, matches.
 	err = l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
 		latest, err := blockLatest(tx)
@@ -175,10 +199,10 @@ func (l *Ledger) verifyMatchingGenesisHash(genesisHash crypto.Digest) (err error
 		}
 
 		params := config.Consensus[hdr.CurrentProtocol]
-		if params.SupportGenesisHash && hdr.GenesisHash != genesisHash {
+		if params.SupportGenesisHash && hdr.GenesisHash != l.genesisHash {
 			return fmt.Errorf(
 				"latest block %d genesis hash %v does not match expected genesis hash %v",
-				latest, hdr.GenesisHash, genesisHash,
+				latest, hdr.GenesisHash, l.genesisHash,
 			)
 		}
 		return nil

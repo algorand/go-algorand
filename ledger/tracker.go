@@ -132,4 +132,5 @@ func (tr *trackerRegistry) close() {
 	for _, lt := range tr.trackers {
 		lt.close()
 	}
+	tr.trackers = nil
 }

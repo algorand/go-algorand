@@ -85,6 +85,14 @@ type accountDelta struct {
 	new basics.AccountData
 }
 
+func writeCatchpointStagingAssets(ctx context.Context, tx *sql.Tx, addr []byte, assetIdx basics.AssetIndex) error {
+	_, err := tx.ExecContext(ctx, "INSERT INTO catchpointassetcreators(asset, creator) VALUES(?, ?)", assetIdx, addr)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []encodedBalanceRecord) error {
 	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointbalances(address, data) VALUES(?, ?)")
 	if err != nil {
@@ -108,12 +116,40 @@ func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []enco
 	return nil
 }
 
-func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx) (err error) {
+func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup bool) (err error) {
 	s := "DROP TABLE IF EXISTS catchpointbalances;"
-	s += "CREATE TABLE IF NOT EXISTS catchpointbalances(address blob primary key, data blob);"
+	s += "DROP TABLE IF EXISTS catchpointassetcreators;"
+	s += "DROP TABLE IF EXISTS catchpointaccounthashes;"
 	s += "DELETE FROM accounttotals where id='catchpointStaging';"
+	if newCatchup {
+		s += "CREATE TABLE IF NOT EXISTS catchpointassetcreators(asset integer primary key, creator blob);"
+		s += "CREATE TABLE IF NOT EXISTS catchpointbalances(address blob primary key, data blob);"
+		s += "CREATE TABLE IF NOT EXISTS catchpointaccounthashes(id integer primary key, data blob);"
+	}
 	_, err = tx.Exec(s)
 	return err
+}
+
+// applies the changes.
+func applyCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, balancesRound basics.Round) (err error) {
+	s := "ALTER TABLE balances RENAME TO balances_old;"
+	s += "ALTER TABLE assetcreators RENAME TO assetcreators_old;"
+	s += "ALTER TABLE accounthashes RENAME TO accounthashes_old;"
+	s += "ALTER TABLE catchpointbalances RENAME TO balances;"
+	s += "ALTER TABLE catchpointassetcreators RENAME TO assetcreators;"
+	s += "ALTER TABLE catchpointaccounthashes RENAME TO accounthashes;"
+	s += "DROP TABLE IF EXISTS balances_old;"
+	s += "DROP TABLE IF EXISTS assetcreators_old;"
+	s += "DROP TABLE IF EXISTS accounthashes_old;"
+	_, err = tx.Exec(s)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec("INSERT OR REPLACE INTO acctrounds(id, rnd) VALUES('acctbase', ?)", balancesRound)
+	if err != nil {
+		return err
+	}
+	return
 }
 
 func readCatchpointStateUint64(ctx context.Context, tx *sql.Tx, stateName string) (rnd uint64, def bool, err error) {

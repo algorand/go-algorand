@@ -300,9 +300,10 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 }
 
 func (cs *CatchpointCatchupService) processStageSwitch() (err error) {
-	// TODO:
-
-	// todo - tell the ledger to reload all it's internal state.
+	err = cs.ledgerAccessor.CompleteCatchup(cs.ctx)
+	if err != nil {
+		return err
+	}
 
 	err = cs.updateStage(ledger.CatchpointCatchupStateInactive)
 	if err != nil {
@@ -318,6 +319,5 @@ func (cs *CatchpointCatchupService) updateStage(newStage ledger.CatchpointCatchu
 		return err
 	}
 	cs.stage = newStage
-	cs.node.SetCatchpointCatchupMode(false)
 	return nil
 }
