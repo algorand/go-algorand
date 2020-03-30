@@ -75,9 +75,13 @@ func TestAgreementTime(t *testing.T) {
 		require.Equal(t, 1, len(sender.events))
 		details := sender.events[0].details.(telemetryspec.BlockStatsEventDetails)
 
-		// Make sure the duration is close to 500ms
+		// Test to see that the wait duration is at least the amount of time we slept
 		require.True(t, int(details.AgreementDurationMs) >= int(sleepTime)/int(time.Millisecond))
 
+		// we want to test that the time is roughly the sleeping-time ( sleepTime ), but slow machines might not reflect that accurately.
+		// to address that, we calculate the envelope time of the two onBlock calls, which is always greater than the desired high watermark.
+		// this would give us an indication that the local machine isn't performing that great, and we might want to repeat the
+		// test with a different time constrains.
 		if end.Sub(start) >= sleepTimeHighWatermark {
 			// something else took CPU between the above two onBlock calls; repeat the test with a larget interval.
 			sleepTime *= 2
