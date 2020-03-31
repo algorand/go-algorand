@@ -416,7 +416,12 @@ function check_for_new_ledger() {
 
     if [ -z $EXISTING_VER ]; then
         if [ -z ${GENESIS_NETWORK_DIR} ]; then
-            echo "Updating genesis files for default network"
+            if [ ${CHANNEL} == "beta" ]; then
+                GENESIS_NETWORK_DIR="betanet"
+                echo "Updating genesis files for betanet network"
+            else
+                echo "Updating genesis files for default network"
+            fi
         else
             echo "Installing genesis files for network ${GENESIS_NETWORK_DIR}"
         fi
