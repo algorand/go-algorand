@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/verify"
 	//"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -59,9 +60,20 @@ var testprog string
 	return tx, nil
 }*/
 
-func makeUnsignedPayment(sender basics.Address) transactions.Transaction {
+type alwaysVerifiedCache struct{}
+
+func (vc *alwaysVerifiedCache) Verified(txn transactions.SignedTxn, params verify.Params) bool {
+	return true
+}
+
+func makeUnsignedPayment(sender basics.Address, round int) transactions.Transaction {
 	return transactions.Transaction{
 		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			FirstValid: basics.Round(round),
+			LastValid:  basics.Round(round + 1000),
+			Fee:        basics.MicroAlgos{Raw: 1000},
+		},
 		PaymentTxnFields: transactions.PaymentTxnFields{
 			Receiver: sender,
 			Amount:   basics.MicroAlgos{Raw: 1234},
@@ -98,24 +110,46 @@ func benchmarkBlockEvalPerf(txtype string, txPerBlockAndNumCreators int, b *test
 		genesisInitState.Accounts[creator] = basics.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890})
 	}
 
-	// open ledger
+	// open first ledger
 	const inMem = false // use persistent storage
 	const archival = true
-	l, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
+	l0, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
+	require.NoError(b, err)
+
+	// open second ledger
+	dbName = fmt.Sprintf("%s.%d.2", b.Name(), crypto.RandUint64())
+	dbPrefix = filepath.Join(dbTempDir, dbName)
+	l1, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
 	require.NoError(b, err)
 
 	blk := genesisInitState.Block
 
-	// build all the blocks
+	// init both ledgers, and build all the blocks in the first ledger
 	numBlocks := b.N
+	cert := agreement.Certificate{}
 	var blocks []bookkeeping.Block
 	for i := 0; i < numBlocks; i++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 		blk.BlockHeader.GenesisID = "x"
 
+		if i == 0 {
+			err = l0.AddBlock(blk, cert)
+			require.NoError(b, err)
+
+			err = l1.AddBlock(blk, cert)
+			require.NoError(b, err)
+			continue
+		}
+
+		prev, err := l0.BlockHdr(basics.Round(i))
+		require.NoError(b, err)
+
+		newBlk := bookkeeping.MakeBlock(prev)
+		eval, err := l0.StartEvaluator(newBlk.BlockHeader)
+		require.NoError(b, err)
+
 		// build a payset
-		var payset transactions.Payset
 		for j := 0; j < txPerBlockAndNumCreators; j++ {
 			// make a transaction that will create an asset or application
 			var tx transactions.Transaction
@@ -125,55 +159,42 @@ func benchmarkBlockEvalPerf(txtype string, txPerBlockAndNumCreators int, b *test
 			} else*/
 			if txtype == "asset" {
 				creatorEncoded := creators[j].String()
-				tx, err = makeUnsignedAssetCreateTx(blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, 100, false, creatorEncoded, creatorEncoded, creatorEncoded, creatorEncoded, "m", "m", "", nil)
+				tx, err = makeUnsignedAssetCreateTx(basics.Round(i), basics.Round(i)+1000, 100, false, creatorEncoded, creatorEncoded, creatorEncoded, creatorEncoded, "m", "m", "", nil)
 			} else if txtype == "pay" {
-				tx = makeUnsignedPayment(creators[j])
+				tx = makeUnsignedPayment(creators[j], i)
 			} else {
 				b.Error("unknown tx type")
 			}
 			require.NoError(b, err)
 			tx.Sender = creators[j]
 			tx.Note = []byte(fmt.Sprintf("%d,%d", i, j))
-			blk.BlockHeader.TxnCounter++
-			stxnib := makeSignedTxnInBlock(tx)
-			payset = append(payset, stxnib)
+			tx.GenesisHash = crypto.Digest{1}
+
+			var stxn transactions.SignedTxn
+			stxn.Txn = tx
+
+			err = eval.Transaction(stxn, transactions.ApplyData{})
+			require.NoError(b, err)
 		}
 
-		blk.Payset = payset
-		blocks = append(blocks, blk)
+		lvb, err := eval.GenerateBlock()
+		require.NoError(b, err)
+
+		err = l0.AddBlock(lvb.blk, cert)
+		require.NoError(b, err)
+
+		blocks = append(blocks, lvb.blk)
 	}
 
 	b.Logf("built %d blocks, %d transactions", numBlocks, txPerBlockAndNumCreators)
+
+	// eval + add all the (valid) blocks to the second ledger, timing it
+	vc := alwaysVerifiedCache{}
 	b.ResetTimer()
-
-	// eval + add all the blocks
-	cert := agreement.Certificate{}
-	for r, blk := range blocks {
-		if r == 0 {
-			err = l.AddBlock(blk, cert)
-			require.NoError(b, err)
-			continue
-		}
-
-		prev, err := l.BlockHdr(basics.Round(r))
+	for _, blk := range blocks {
+		_, err = l1.eval(context.Background(), blk, true, &vc, nil)
 		require.NoError(b, err)
-
-		newEmptyBlk := bookkeeping.MakeBlock(prev)
-		eval, err := l.StartEvaluator(newEmptyBlk.BlockHeader)
-		require.NoError(b, err)
-
-		lvb, err := eval.GenerateBlock()
-
-		updates, err := l.eval(context.Background(), lvb.blk, true, nil, nil)
-
-		require.NoError(b, err)
-
-		vb := ValidatedBlock{
-			blk:   blk,
-			delta: updates,
-		}
-
-		err = l.AddValidatedBlock(vb, cert)
+		err = l1.AddBlock(blk, cert)
 		require.NoError(b, err)
 	}
 }
