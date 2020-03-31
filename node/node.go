@@ -55,18 +55,22 @@ const participationKeyCheckSecs = 60
 
 // StatusReport represents the current basic status of the node
 type StatusReport struct {
-	LastRound                 basics.Round
-	LastVersion               protocol.ConsensusVersion
-	NextVersion               protocol.ConsensusVersion
-	NextVersionRound          basics.Round
-	NextVersionSupported      bool
-	LastRoundTimestamp        time.Time
-	SynchronizingTime         time.Duration
-	CatchupTime               time.Duration
-	HasSyncedSinceStartup     bool
-	StoppedAtUnsupportedRound bool
-	LastCatchpoint            string
-	Catchpoint                string // the catchpoint where we're currently catching up to. If the node isn't in fast catchup mode, it will be empty.
+	LastRound                          basics.Round
+	LastVersion                        protocol.ConsensusVersion
+	NextVersion                        protocol.ConsensusVersion
+	NextVersionRound                   basics.Round
+	NextVersionSupported               bool
+	LastRoundTimestamp                 time.Time
+	SynchronizingTime                  time.Duration
+	CatchupTime                        time.Duration
+	HasSyncedSinceStartup              bool
+	StoppedAtUnsupportedRound          bool
+	LastCatchpoint                     string // the last catchpoint hit by the node. This would get updated regardless of whether the node is catching up using catchpoints or not.
+	Catchpoint                         string // the catchpoint where we're currently catching up to. If the node isn't in fast catchup mode, it will be empty.
+	CatchpointCatchupTotalAccounts     uint64
+	CatchpointCatchupProcessedAccounts uint64
+	CatchpointCatchupPendingBlocks     uint64
+	CatchpointCatchupDownloadedBlocks  uint64
 }
 
 // TimeSinceLastRound returns the time since the last block was approved (locally), or 0 if no blocks seen
@@ -591,14 +595,22 @@ func (node *AlgorandFullNode) Status() (s StatusReport, err error) {
 
 	s.LastVersion = b.CurrentProtocol
 	s.NextVersion, s.NextVersionRound, s.NextVersionSupported = b.NextVersionInfo()
-	s.SynchronizingTime = node.catchupService.SynchronizingTime()
+
 	s.LastRoundTimestamp = node.lastRoundTimestamp
-	s.CatchupTime = node.catchupService.SynchronizingTime()
 	s.HasSyncedSinceStartup = node.hasSyncedSinceStartup
 	s.StoppedAtUnsupportedRound = s.LastRound+1 == s.NextVersionRound && !s.NextVersionSupported
 	s.LastCatchpoint = node.ledger.GetLastCatchpointLabel()
 	if node.catchpointCatchupService != nil {
-		s.Catchpoint = node.catchpointCatchupService.CatchpointLabel // "18970#LZNETY4ZMHAHIE2J5NVDPXHK6PPQTRCUUUYDQCC3G3QL3T36UBPQ"
+		stats := node.catchpointCatchupService.GetStatistics()
+		s.Catchpoint = stats.CatchpointLabel
+		s.CatchpointCatchupTotalAccounts = stats.TotalAccounts
+		s.CatchpointCatchupProcessedAccounts = stats.ProcessedAccounts
+		s.CatchpointCatchupPendingBlocks = stats.PendingBlocks
+		s.CatchpointCatchupDownloadedBlocks = stats.DownloadedBlocks
+		s.CatchupTime = time.Now().Sub(stats.StartTime)
+	} else {
+		s.SynchronizingTime = node.catchupService.SynchronizingTime()
+		s.CatchupTime = node.catchupService.SynchronizingTime()
 	}
 
 	return
@@ -822,7 +834,8 @@ func (node *AlgorandFullNode) StartCatchup(catchpoint string) error {
 		return fmt.Errorf("catching up using a catchpoint is not supported on indexer-enabled nodes")
 	}
 	if node.catchpointCatchupService != nil {
-		return fmt.Errorf("unable to start catchpoint catchup for '%s' - already catching up '%s'", catchpoint, node.catchpointCatchupService.CatchpointLabel)
+		stats := node.catchpointCatchupService.GetStatistics()
+		return fmt.Errorf("unable to start catchpoint catchup for '%s' - already catching up '%s'", catchpoint, stats.CatchpointLabel)
 	}
 	var err error
 	node.catchpointCatchupService, err = catchup.MakeNewCatchpointCatchupService(catchpoint, node, node.log, node.net)
@@ -842,8 +855,9 @@ func (node *AlgorandFullNode) AbortCatchup(catchpoint string) error {
 	if node.catchpointCatchupService == nil {
 		return nil
 	}
-	if node.catchpointCatchupService.CatchpointLabel != catchpoint {
-		return fmt.Errorf("unable to abort catchpoint catchup for '%s' - already catching up '%s'", catchpoint, node.catchpointCatchupService.CatchpointLabel)
+	stats := node.catchpointCatchupService.GetStatistics()
+	if stats.CatchpointLabel != catchpoint {
+		return fmt.Errorf("unable to abort catchpoint catchup for '%s' - already catching up '%s'", catchpoint, stats.CatchpointLabel)
 	}
 	node.catchpointCatchupService.Abort()
 	return nil

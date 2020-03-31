@@ -49,16 +49,20 @@ func nodeStatus(node *node.AlgorandFullNode) (res v1.NodeStatus, err error) {
 	}
 
 	return v1.NodeStatus{
-		LastRound:                 uint64(stat.LastRound),
-		LastVersion:               string(stat.LastVersion),
-		NextVersion:               string(stat.NextVersion),
-		NextVersionRound:          uint64(stat.NextVersionRound),
-		NextVersionSupported:      stat.NextVersionSupported,
-		TimeSinceLastRound:        stat.TimeSinceLastRound().Nanoseconds(),
-		CatchupTime:               stat.CatchupTime.Nanoseconds(),
-		StoppedAtUnsupportedRound: stat.StoppedAtUnsupportedRound,
-		LastCatchpoint:            stat.LastCatchpoint,
-		Catchpoint:                stat.Catchpoint,
+		LastRound:                          uint64(stat.LastRound),
+		LastVersion:                        string(stat.LastVersion),
+		NextVersion:                        string(stat.NextVersion),
+		NextVersionRound:                   uint64(stat.NextVersionRound),
+		NextVersionSupported:               stat.NextVersionSupported,
+		TimeSinceLastRound:                 stat.TimeSinceLastRound().Nanoseconds(),
+		CatchupTime:                        stat.CatchupTime.Nanoseconds(),
+		StoppedAtUnsupportedRound:          stat.StoppedAtUnsupportedRound,
+		LastCatchpoint:                     stat.LastCatchpoint,
+		Catchpoint:                         stat.Catchpoint,
+		CatchpointCatchupTotalAccounts:     stat.CatchpointCatchupTotalAccounts,
+		CatchpointCatchupProcessedAccounts: stat.CatchpointCatchupProcessedAccounts,
+		CatchpointCatchupPendingBlocks:     stat.CatchpointCatchupPendingBlocks,
+		CatchpointCatchupDownloadedBlocks:  stat.CatchpointCatchupDownloadedBlocks,
 	}, nil
 }
 

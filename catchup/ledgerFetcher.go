@@ -35,23 +35,28 @@ import (
 
 var errNoLedgerForRound = errors.New("No ledger available for given round")
 
+type ledgerFetcherReporter interface {
+	updateLedgerFetcherProgress(*ledger.CatchpointCatchupAccessorProgress)
+}
+
 type ledgerFetcher struct {
 	net      network.GossipNode
 	accessor *ledger.CatchpointCatchupAccessor
 	log      logging.Logger
 	peers    []network.Peer
+	reporter ledgerFetcherReporter
 }
 
-func makeLedgerFetcher(net network.GossipNode, accessor *ledger.CatchpointCatchupAccessor, log logging.Logger) *ledgerFetcher {
+func makeLedgerFetcher(net network.GossipNode, accessor *ledger.CatchpointCatchupAccessor, log logging.Logger, reporter ledgerFetcherReporter) *ledgerFetcher {
 	return &ledgerFetcher{
 		net:      net,
 		accessor: accessor,
 		log:      log,
+		reporter: reporter,
 	}
 }
 
 func (lf *ledgerFetcher) getLedger(ctx context.Context, round basics.Round) error {
-	fmt.Printf("getLedger called for round %d\n", round)
 	if len(lf.peers) == 0 {
 		lf.peers = lf.net.GetPeers(network.PeersPhonebook)
 		if len(lf.peers) == 0 {
@@ -71,7 +76,6 @@ func (lf *ledgerFetcher) getLedger(ctx context.Context, round basics.Round) erro
 }
 
 func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPeer, round basics.Round) error {
-	defer fmt.Printf("getPeerLedger -exit \n")
 	parsedURL, err := network.ParseHostOrURL(peer.GetAddress())
 	if err != nil {
 		return err
@@ -79,7 +83,6 @@ func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPee
 	parsedURL.Path = peer.PrepareURL(path.Join(parsedURL.Path, "/v1/{genesisID}/ledger/"+strconv.FormatUint(uint64(round), 36)))
 	ledgerURL := parsedURL.String()
 	lf.log.Debugf("ledger GET %#v peer %#v %T", ledgerURL, peer, peer)
-	fmt.Printf("ledger GET %#v \n", ledgerURL)
 	request, err := http.NewRequest("GET", ledgerURL, nil)
 	if err != nil {
 		return err
@@ -88,7 +91,7 @@ func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPee
 	network.SetUserAgentHeader(request.Header)
 	response, err := peer.GetHTTPClient().Do(request)
 	if err != nil {
-		lf.log.Debugf("GET %#v : %s", ledgerURL, err)
+		lf.log.Debugf("getPeerLedger GET %v : %s", ledgerURL, err)
 		return err
 	}
 	defer response.Body.Close()
@@ -101,7 +104,6 @@ func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPee
 	default:
 		return fmt.Errorf("getPeerLedger error response status code %d", response.StatusCode)
 	}
-	fmt.Printf("getPeerLedger - before reading\n")
 
 	// at this point, we've already receieved the response headers. ensure that the
 	// response content type is what we'd like it to be.
@@ -117,12 +119,11 @@ func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPee
 	}
 
 	tarReader := tar.NewReader(response.Body)
+	var downloadProgress ledger.CatchpointCatchupAccessorProgress
 	for {
-		fmt.Printf("getPeerLedger -tarReader.Next\n")
 		header, err := tarReader.Next()
 		if err != nil {
 			if err == io.EOF {
-				fmt.Printf("tarReader - no more headers\n")
 				return nil
 			}
 			return err
@@ -131,7 +132,6 @@ func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPee
 		readComplete := int64(0)
 
 		for readComplete < header.Size {
-			fmt.Printf("getPeerLedger - read loop %d / %d\n", readComplete, header.Size)
 			bytesRead, err := tarReader.Read(balancesBlockBytes[readComplete:])
 			if err != nil {
 				if err == io.EOF {
@@ -145,14 +145,16 @@ func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPee
 			}
 			readComplete += int64(bytesRead)
 		}
-		fmt.Printf("getPeerLedger - processBalancesBlock\n")
-		err = lf.processBalancesBlock(ctx, header.Name, balancesBlockBytes)
+		err = lf.processBalancesBlock(ctx, header.Name, balancesBlockBytes, &downloadProgress)
 		if err != nil {
 			return err
+		}
+		if lf.reporter != nil {
+			lf.reporter.updateLedgerFetcherProgress(&downloadProgress)
 		}
 	}
 }
 
-func (lf *ledgerFetcher) processBalancesBlock(ctx context.Context, sectionName string, bytes []byte) error {
-	return lf.accessor.ProgressStagingBalances(ctx, sectionName, bytes)
+func (lf *ledgerFetcher) processBalancesBlock(ctx context.Context, sectionName string, bytes []byte, downloadProgress *ledger.CatchpointCatchupAccessorProgress) error {
+	return lf.accessor.ProgressStagingBalances(ctx, sectionName, bytes, downloadProgress)
 }

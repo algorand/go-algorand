@@ -363,22 +363,40 @@ func getStatus(dataDir string) {
 func makeStatusString(stat v1.NodeStatus) string {
 	lastRoundTime := fmt.Sprintf("%.1fs", time.Duration(stat.TimeSinceLastRound).Seconds())
 	catchupTime := fmt.Sprintf("%.1fs", time.Duration(stat.CatchupTime).Seconds())
-	statusString := fmt.Sprintf(
-		infoNodeStatus,
-		stat.LastRound,
-		lastRoundTime,
-		catchupTime,
-		stat.LastVersion,
-		stat.NextVersion,
-		stat.NextVersionRound,
-		stat.NextVersionSupported)
+	var statusString string
+	if stat.Catchpoint == "" {
+		statusString = fmt.Sprintf(
+			infoNodeStatus,
+			stat.LastRound,
+			lastRoundTime,
+			catchupTime,
+			stat.LastVersion,
+			stat.NextVersion,
+			stat.NextVersionRound,
+			stat.NextVersionSupported)
 
-	if stat.LastCatchpoint != "" {
-		statusString = statusString + "\n" + fmt.Sprintf(nodeLastCatchpoint, stat.LastCatchpoint)
-	}
+		if stat.LastCatchpoint != "" {
+			statusString = statusString + "\n" + fmt.Sprintf(nodeLastCatchpoint, stat.LastCatchpoint)
+		}
 
-	if stat.StoppedAtUnsupportedRound {
-		statusString = statusString + "\n" + fmt.Sprintf(catchupStoppedOnUnsupported, stat.LastRound)
+		if stat.StoppedAtUnsupportedRound {
+			statusString = statusString + "\n" + fmt.Sprintf(catchupStoppedOnUnsupported, stat.LastRound)
+		}
+	} else {
+		statusString = fmt.Sprintf(
+			infoNodeCatchpointCatchupStatus,
+			stat.LastRound,
+			catchupTime,
+			stat.Catchpoint)
+
+		if stat.CatchpointCatchupTotalAccounts > 0 {
+			statusString = statusString + "\n" + fmt.Sprintf(infoNodeCatchpointCatchupAccounts, stat.CatchpointCatchupProcessedAccounts,
+				stat.CatchpointCatchupTotalAccounts)
+		}
+		if stat.CatchpointCatchupDownloadedBlocks+stat.CatchpointCatchupPendingBlocks > 0 {
+			statusString = statusString + "\n" + fmt.Sprintf(infoNodeCatchpointCatchupBlocks, stat.CatchpointCatchupPendingBlocks,
+				stat.CatchpointCatchupDownloadedBlocks)
+		}
 	}
 
 	return statusString

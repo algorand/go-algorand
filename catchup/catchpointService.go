@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
@@ -37,18 +39,30 @@ type CatchpointCatchupNodeServices interface {
 	SetCatchpointCatchupMode(bool) (newCtx context.Context)
 }
 
+// CatchpointCatchupStats is used for querying the current state of the catchpoint catchup process
+type CatchpointCatchupStats struct {
+	CatchpointLabel   string
+	TotalAccounts     uint64
+	ProcessedAccounts uint64
+	PendingBlocks     uint64
+	DownloadedBlocks  uint64
+	VerifiedBlocks    uint64
+	StartTime         time.Time
+}
+
 // CatchpointCatchupService represents the catchpoint catchup service.
 type CatchpointCatchupService struct {
-	CatchpointLabel string
-	node            CatchpointCatchupNodeServices
-	ctx             context.Context
-	cancelCtxFunc   context.CancelFunc
-	running         sync.WaitGroup
-	ledgerAccessor  *ledger.CatchpointCatchupAccessor
-	stage           ledger.CatchpointCatchupState
-	log             logging.Logger
-	newService      bool // indicates whether this service was created after the node was running ( i.e. true ) or the node just started to find that it was previously perfoming catchup
-	net             network.GossipNode
+	stats          CatchpointCatchupStats
+	statsMu        deadlock.Mutex
+	node           CatchpointCatchupNodeServices
+	ctx            context.Context
+	cancelCtxFunc  context.CancelFunc
+	running        sync.WaitGroup
+	ledgerAccessor *ledger.CatchpointCatchupAccessor
+	stage          ledger.CatchpointCatchupState
+	log            logging.Logger
+	newService     bool // indicates whether this service was created after the node was running ( i.e. true ) or the node just started to find that it was previously perfoming catchup
+	net            network.GossipNode
 }
 
 const (
@@ -59,6 +73,9 @@ const (
 // MakeCatchpointCatchupService creates a catchpoint catchup service for a node that is already in catchpoint catchup mode
 func MakeCatchpointCatchupService(ctx context.Context, node CatchpointCatchupNodeServices, log logging.Logger, net network.GossipNode) (*CatchpointCatchupService, error) {
 	service := &CatchpointCatchupService{
+		stats: CatchpointCatchupStats{
+			StartTime: time.Now(),
+		},
 		node:           node,
 		ledgerAccessor: ledger.MakeCatchpointCatchupAccessor(node.Ledger().Ledger, log),
 		log:            log,
@@ -76,13 +93,16 @@ func MakeCatchpointCatchupService(ctx context.Context, node CatchpointCatchupNod
 // MakeNewCatchpointCatchupService creates a new catchpoint catchup service for a node that is not in catchpoint catchup mode
 func MakeNewCatchpointCatchupService(catchpoint string, node CatchpointCatchupNodeServices, log logging.Logger, net network.GossipNode) (*CatchpointCatchupService, error) {
 	service := &CatchpointCatchupService{
-		CatchpointLabel: catchpoint,
-		node:            node,
-		ledgerAccessor:  ledger.MakeCatchpointCatchupAccessor(node.Ledger().Ledger, log),
-		stage:           ledger.CatchpointCatchupStateInactive,
-		log:             log,
-		newService:      true,
-		net:             net,
+		stats: CatchpointCatchupStats{
+			CatchpointLabel: catchpoint,
+			StartTime:       time.Now(),
+		},
+		node:           node,
+		ledgerAccessor: ledger.MakeCatchpointCatchupAccessor(node.Ledger().Ledger, log),
+		stage:          ledger.CatchpointCatchupStateInactive,
+		log:            log,
+		newService:     true,
+		net:            net,
 	}
 	if catchpoint == "" {
 		return nil, fmt.Errorf("MakeNewCatchpointCatchupService: catchpoint is invalid")
@@ -148,10 +168,15 @@ func (cs *CatchpointCatchupService) run() {
 }
 
 func (cs *CatchpointCatchupService) loadStateVariables(ctx context.Context) (err error) {
-	cs.CatchpointLabel, err = cs.ledgerAccessor.GetLabel(ctx)
+	var label string
+	label, err = cs.ledgerAccessor.GetLabel(ctx)
 	if err != nil {
 		return err
 	}
+	cs.statsMu.Lock()
+	cs.stats.CatchpointLabel = label
+	cs.statsMu.Unlock()
+
 	cs.stage, err = cs.ledgerAccessor.GetState(ctx)
 	if err != nil {
 		return err
@@ -160,7 +185,10 @@ func (cs *CatchpointCatchupService) loadStateVariables(ctx context.Context) (err
 }
 
 func (cs *CatchpointCatchupService) processStageInactive() (err error) {
-	err = cs.ledgerAccessor.SetLabel(cs.ctx, cs.CatchpointLabel)
+	cs.statsMu.Lock()
+	label := cs.stats.CatchpointLabel
+	cs.statsMu.Unlock()
+	err = cs.ledgerAccessor.SetLabel(cs.ctx, label)
 	if err != nil {
 		return cs.abort(fmt.Errorf("processStageInactive failed to set a catchpoint label : %v", err))
 	}
@@ -176,14 +204,17 @@ func (cs *CatchpointCatchupService) processStageInactive() (err error) {
 }
 
 func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
-	round, _, err0 := ledger.ParseCatchpointLabel(cs.CatchpointLabel)
+	cs.statsMu.Lock()
+	label := cs.stats.CatchpointLabel
+	cs.statsMu.Unlock()
+	round, _, err0 := ledger.ParseCatchpointLabel(label)
 
 	if err0 != nil {
 		return cs.abort(fmt.Errorf("processStageLedgerDownload failed to patse label : %v", err0))
 	}
 
 	// download balances file.
-	ledgerFetcher := makeLedgerFetcher(cs.net, cs.ledgerAccessor, cs.log)
+	ledgerFetcher := makeLedgerFetcher(cs.net, cs.ledgerAccessor, cs.log, cs)
 	attemptsCount := 0
 
 	for {
@@ -254,6 +285,13 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 		// success
 		client.Close()
 
+		// check block protocol version support.
+		if _, ok := config.Consensus[blk.BlockHeader.CurrentProtocol]; !ok {
+			cs.log.Warnf("processStageLastestBlockDownload: unsupported protocol version detected: '%v'", blk.BlockHeader.CurrentProtocol)
+			return cs.abort(fmt.Errorf("processStageLastestBlockDownload detected unsupported protocol version in block %d : %v", blk.Round(), blk.BlockHeader.CurrentProtocol))
+		}
+
+		// verify that the catchpoint is valid.
 		err = cs.ledgerAccessor.VerifyCatchpoint(cs.ctx, blk)
 		if err != nil {
 			if attemptsCount <= maxBlockDownloadAttempts {
@@ -292,6 +330,13 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 	}
 
 	lookback := int(config.Consensus[topBlock.CurrentProtocol].MaxBalLookback)
+
+	cs.statsMu.Lock()
+	cs.stats.PendingBlocks = uint64(lookback)
+	cs.stats.DownloadedBlocks = 0
+	cs.stats.VerifiedBlocks = 0
+	cs.statsMu.Unlock()
+
 	prevBlock := &topBlock
 	fetcherFactory := MakeNetworkFetcherFactory(cs.net, 10, nil)
 	attemptsCount := 0
@@ -315,20 +360,45 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 		// success
 		client.Close()
 
+		cs.statsMu.Lock()
+		cs.stats.DownloadedBlocks++
+		cs.statsMu.Unlock()
+
 		// validate :
 		if prevBlock.BlockHeader.Branch != blk.Hash() {
 			// not identical, retry download.
 			cs.log.Warnf("processStageBlocksDownload downloaded block(%d) did not match it's successor(%d) block hash %v != %v", blk.Round(), prevBlock.Round(), blk.Hash(), prevBlock.BlockHeader.Branch)
+			cs.statsMu.Lock()
+			cs.stats.DownloadedBlocks--
+			cs.statsMu.Unlock()
 			continue
 		}
+
+		// check block protocol version support.
+		if _, ok := config.Consensus[blk.BlockHeader.CurrentProtocol]; !ok {
+			cs.log.Warnf("processStageBlocksDownload: unsupported protocol version detected: '%v'", blk.BlockHeader.CurrentProtocol)
+			return cs.abort(fmt.Errorf("processStageBlocksDownload detected unsupported protocol version in block %d : %v", blk.Round(), blk.BlockHeader.CurrentProtocol))
+		}
+
+		cs.statsMu.Lock()
+		cs.stats.VerifiedBlocks++
+		cs.statsMu.Unlock()
+
 		// all good, persist and move on.
 		err = cs.ledgerAccessor.StoreBlock(cs.ctx, blk)
 		if err != nil {
 			cs.log.Warnf("processStageBlocksDownload failed to store downloaded staging block for round %d", blk.Round())
+			cs.statsMu.Lock()
+			cs.stats.DownloadedBlocks--
+			cs.stats.VerifiedBlocks--
+			cs.statsMu.Unlock()
 			continue
 		}
 		prevBlock = blk
 		blocksFetched++
+		cs.statsMu.Lock()
+		cs.stats.PendingBlocks--
+		cs.statsMu.Unlock()
 	}
 
 	err = cs.updateStage(ledger.CatchpointCatchupStateSwitch)
@@ -365,4 +435,19 @@ func (cs *CatchpointCatchupService) updateStage(newStage ledger.CatchpointCatchu
 func (cs *CatchpointCatchupService) updateNodeCatchupMode(catchupModeEnabled bool) {
 	newCtx := cs.node.SetCatchpointCatchupMode(catchupModeEnabled)
 	cs.ctx, cs.cancelCtxFunc = context.WithCancel(newCtx)
+}
+
+func (cs *CatchpointCatchupService) updateLedgerFetcherProgress(fetcherStats *ledger.CatchpointCatchupAccessorProgress) {
+	cs.statsMu.Lock()
+	defer cs.statsMu.Unlock()
+	cs.stats.TotalAccounts = fetcherStats.TotalAccounts
+	cs.stats.ProcessedAccounts = fetcherStats.ProcessedAccounts
+}
+
+// GetStatistics returns a copy of the current statistics
+func (cs *CatchpointCatchupService) GetStatistics() (out CatchpointCatchupStats) {
+	cs.statsMu.Lock()
+	defer cs.statsMu.Unlock()
+	out = cs.stats
+	return
 }

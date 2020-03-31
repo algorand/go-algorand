@@ -158,13 +158,21 @@ func (c *CatchpointCatchupAccessor) ResetStagingBalances(ctx context.Context, ne
 	return
 }
 
+// CatchpointCatchupAccessorProgress is used by the caller of ProgressStagingBalances to obtain progress information
+type CatchpointCatchupAccessorProgress struct {
+	TotalAccounts     uint64
+	ProcessedAccounts uint64
+	TotalChunks       uint64
+	SeenHeader        bool
+}
+
 // ProgressStagingBalances deserialize the given bytes as a temporary staging balances
-func (c *CatchpointCatchupAccessor) ProgressStagingBalances(ctx context.Context, sectionName string, bytes []byte) (err error) {
+func (c *CatchpointCatchupAccessor) ProgressStagingBalances(ctx context.Context, sectionName string, bytes []byte, progress *CatchpointCatchupAccessorProgress) (err error) {
 	if sectionName == "content.msgpack" {
-		return c.processStagingContent(ctx, bytes)
+		return c.processStagingContent(ctx, bytes, progress)
 	}
 	if strings.HasPrefix(sectionName, "balances.") && strings.HasSuffix(sectionName, ".msgpack") {
-		return c.processStagingBalances(ctx, bytes)
+		return c.processStagingBalances(ctx, bytes, progress)
 	}
 	// we want to allow undefined sections to support backward compatibility.
 	c.log.Warnf("CatchpointCatchupAccessor::ProgressStagingBalances encountered unexpected section name '%s' of length %d, which would be ignored", sectionName, len(bytes))
@@ -172,7 +180,10 @@ func (c *CatchpointCatchupAccessor) ProgressStagingBalances(ctx context.Context,
 }
 
 // ProgressStagingBalances deserialize the given bytes as a temporary staging balances
-func (c *CatchpointCatchupAccessor) processStagingContent(ctx context.Context, bytes []byte) (err error) {
+func (c *CatchpointCatchupAccessor) processStagingContent(ctx context.Context, bytes []byte, progress *CatchpointCatchupAccessorProgress) (err error) {
+	if progress.SeenHeader {
+		return fmt.Errorf("content chunk already seen")
+	}
 	var fileHeader catchpointFileHeader
 	err = protocol.DecodeReflect(bytes, &fileHeader)
 	if err != nil {
@@ -198,11 +209,19 @@ func (c *CatchpointCatchupAccessor) processStagingContent(ctx context.Context, b
 		err = accountsPutTotals(tx, fileHeader.Totals, true)
 		return
 	})
+	if err == nil {
+		progress.SeenHeader = true
+		progress.TotalAccounts = fileHeader.TotalAccounts
+		progress.TotalChunks = fileHeader.TotalChunks
+	}
 	return err
 }
 
 // ProgressStagingBalances deserialize the given bytes as a temporary staging balances
-func (c *CatchpointCatchupAccessor) processStagingBalances(ctx context.Context, bytes []byte) (err error) {
+func (c *CatchpointCatchupAccessor) processStagingBalances(ctx context.Context, bytes []byte, progress *CatchpointCatchupAccessorProgress) (err error) {
+	if !progress.SeenHeader {
+		return fmt.Errorf("content chunk was missing")
+	}
 	var balances catchpointFileBalancesChunk
 	err = protocol.DecodeReflect(bytes, &balances)
 	if err != nil {
@@ -260,7 +279,9 @@ func (c *CatchpointCatchupAccessor) processStagingBalances(ctx context.Context, 
 		}
 		return
 	})
-
+	if err == nil {
+		progress.ProcessedAccounts += uint64(len(balances))
+	}
 	return err
 }
 
