@@ -301,7 +301,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 	blocksFetched := 1 // we already got the first block in the previous step.
 	var blk *bookkeeping.Block
 	var client FetcherClient
-	for blocksFetched < lookback {
+	for blocksFetched <= lookback {
 		attemptsCount++
 		fetcher := fetcherFactory.New()
 		blk, _, client, err = fetcher.FetchBlock(cs.ctx, topBlock.Round()-basics.Round(blocksFetched))

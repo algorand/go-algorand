@@ -119,8 +119,8 @@ func (s *Service) Start() {
 	s.done = make(chan struct{})
 
 	s.voteVerifier = MakeAsyncVoteVerifier(s.BacklogPool)
-	s.demux = makeDemux(s.Network, s.Ledger, s.BlockValidator, s.voteVerifier, s.EventsProcessingMonitor, s.log)
-	s.loopback = makePseudonode(s.BlockFactory, s.BlockValidator, s.KeyManager, s.Ledger, s.voteVerifier, s.log)
+	s.demux = makeDemux(s.Network, s.Ledger, s.BlockValidator, s.voteVerifier, s.EventsProcessingMonitor, s.log, s.monitor)
+	s.loopback = makePseudonode(s.BlockFactory, s.BlockValidator, s.KeyManager, s.Ledger, s.voteVerifier, s.log, s.monitor)
 
 	s.persistenceLoop.Start()
 	input := make(chan externalEvent)

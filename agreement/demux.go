@@ -69,11 +69,12 @@ type demux struct {
 // makeDemux initializes the goroutines needed to process external events, setting up the appropriate channels.
 //
 // It must be called before other methods are called.
-func makeDemux(net Network, ledger LedgerReader, validator BlockValidator, voteVerifier *AsyncVoteVerifier, processingMonitor EventsProcessingMonitor, log logging.Logger) (d *demux) {
+func makeDemux(net Network, ledger LedgerReader, validator BlockValidator, voteVerifier *AsyncVoteVerifier, processingMonitor EventsProcessingMonitor, log logging.Logger, monitor *coserviceMonitor) (d *demux) {
 	d = new(demux)
 	d.crypto = makeCryptoVerifier(ledger, validator, voteVerifier, log)
 	d.log = log
 	d.ledger = ledger
+	d.monitor = monitor
 
 	tokenizerCtx, cancelTokenizers := context.WithCancel(context.Background())
 	d.rawVotes = d.tokenizeMessages(tokenizerCtx, net, protocol.AgreementVoteTag, decodeVote)
