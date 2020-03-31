@@ -51,8 +51,8 @@ type LedgerService struct {
 }
 
 // MakeLedgerService creates a BlockService around the provider Ledger and registers it for RPC with the provided Registrar
-func MakeLedgerService(config config.Local, ledger *data.Ledger, net network.GossipNode, genesisID string) *BlockService {
-	service := &BlockService{
+func MakeLedgerService(config config.Local, ledger *data.Ledger, net network.GossipNode, genesisID string) *LedgerService {
+	service := &LedgerService{
 		ledger:    ledger,
 		genesisID: genesisID,
 		net:       net,
@@ -149,6 +149,7 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 		}
 	}
 	defer cs.Close()
+	response.Header().Set("Content-Type", LedgerResponseContentType)
 	requestedCompressedResponse := strings.Contains(request.Header.Get("Accept-Encoding"), "gzip")
 	if requestedCompressedResponse {
 		response.Header().Set("Content-Encoding", "gzip")

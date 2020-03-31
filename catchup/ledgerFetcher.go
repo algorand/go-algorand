@@ -19,6 +19,7 @@ package catchup
 import (
 	"archive/tar"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -29,7 +30,10 @@ import (
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/rpcs"
 )
+
+var errNoLedgerForRound = errors.New("No ledger available for given round")
 
 type ledgerFetcher struct {
 	net      network.GossipNode
@@ -47,6 +51,7 @@ func makeLedgerFetcher(net network.GossipNode, accessor *ledger.CatchpointCatchu
 }
 
 func (lf *ledgerFetcher) getLedger(ctx context.Context, round basics.Round) error {
+	fmt.Printf("getLedger called for round %d\n", round)
 	if len(lf.peers) == 0 {
 		lf.peers = lf.net.GetPeers(network.PeersPhonebook)
 		if len(lf.peers) == 0 {
@@ -66,6 +71,7 @@ func (lf *ledgerFetcher) getLedger(ctx context.Context, round basics.Round) erro
 }
 
 func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPeer, round basics.Round) error {
+	defer fmt.Printf("getPeerLedger -exit \n")
 	parsedURL, err := network.ParseHostOrURL(peer.GetAddress())
 	if err != nil {
 		return err
@@ -73,6 +79,7 @@ func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPee
 	parsedURL.Path = peer.PrepareURL(path.Join(parsedURL.Path, "/v1/{genesisID}/ledger/"+strconv.FormatUint(uint64(round), 36)))
 	ledgerURL := parsedURL.String()
 	lf.log.Debugf("ledger GET %#v peer %#v %T", ledgerURL, peer, peer)
+	fmt.Printf("ledger GET %#v \n", ledgerURL)
 	request, err := http.NewRequest("GET", ledgerURL, nil)
 	if err != nil {
 		return err
@@ -85,28 +92,60 @@ func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPee
 		return err
 	}
 	defer response.Body.Close()
-	// TODO - validate content-type
+
+	// check to see that we had no errors.
+	switch response.StatusCode {
+	case http.StatusOK:
+	case http.StatusNotFound: // server could not find a block with that round numbers.
+		return errNoLedgerForRound
+	default:
+		return fmt.Errorf("getPeerLedger error response status code %d", response.StatusCode)
+	}
+	fmt.Printf("getPeerLedger - before reading\n")
+
+	// at this point, we've already receieved the response headers. ensure that the
+	// response content type is what we'd like it to be.
+	contentTypes := response.Header["Content-Type"]
+	if len(contentTypes) != 1 {
+		err = fmt.Errorf("http ledger fetcher invalid content type count %d", len(contentTypes))
+		return err
+	}
+
+	if contentTypes[0] != rpcs.LedgerResponseContentType {
+		err = fmt.Errorf("http ledger fetcher response has an invalid content type : %s", contentTypes[0])
+		return err
+	}
+
 	tarReader := tar.NewReader(response.Body)
 	for {
+		fmt.Printf("getPeerLedger -tarReader.Next\n")
 		header, err := tarReader.Next()
 		if err != nil {
 			if err == io.EOF {
+				fmt.Printf("tarReader - no more headers\n")
 				return nil
 			}
 			return err
 		}
-		balancesBlockBytes := make([]byte, 0, header.Size)
+		balancesBlockBytes := make([]byte, header.Size)
 		readComplete := int64(0)
+
 		for readComplete < header.Size {
+			fmt.Printf("getPeerLedger - read loop %d / %d\n", readComplete, header.Size)
 			bytesRead, err := tarReader.Read(balancesBlockBytes[readComplete:])
 			if err != nil {
 				if err == io.EOF {
-					return nil
+					readComplete += int64(bytesRead)
+					if readComplete == header.Size {
+						break
+					}
+					err = fmt.Errorf("unable to complete reading chunk data")
 				}
 				return err
 			}
 			readComplete += int64(bytesRead)
 		}
+		fmt.Printf("getPeerLedger - processBalancesBlock\n")
 		err = lf.processBalancesBlock(ctx, header.Name, balancesBlockBytes)
 		if err != nil {
 			return err

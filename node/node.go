@@ -98,6 +98,9 @@ type AlgorandFullNode struct {
 	agreementService         *agreement.Service
 	catchupService           *catchup.Service
 	catchpointCatchupService *catchup.CatchpointCatchupService
+	blockService             *rpcs.BlockService
+	ledgerService            *rpcs.LedgerService
+	wsFetcherService         *rpcs.WsFetcherService // to handle inbound gossip msgs for fetching over gossip
 
 	indexer *indexer.Indexer
 
@@ -115,9 +118,6 @@ type AlgorandFullNode struct {
 	cryptoPool                         execpool.ExecutionPool
 	lowPriorityCryptoVerificationPool  execpool.BacklogPool
 	highPriorityCryptoVerificationPool execpool.BacklogPool
-
-	blockService     *rpcs.BlockService
-	wsFetcherService *rpcs.WsFetcherService // to handle inbound gossip msgs for fetching over gossip
 
 	oldKeyDeletionNotify        chan struct{}
 	monitoringRoutinesWaitGroup sync.WaitGroup
@@ -215,6 +215,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	}
 
 	node.blockService = rpcs.MakeBlockService(cfg, node.ledger, p2pNode, node.genesisID)
+	node.ledgerService = rpcs.MakeLedgerService(cfg, node.ledger, p2pNode, node.genesisID)
 	node.wsFetcherService = rpcs.MakeWsFetcherService(node.log, p2pNode)
 	rpcs.RegisterTxService(node.transactionPool, p2pNode, node.genesisID, cfg.TxPoolSize, cfg.TxSyncServeResponseSize)
 
@@ -316,9 +317,7 @@ func (node *AlgorandFullNode) Start() {
 	defer node.mu.Unlock()
 
 	// Set up a context we can use to cancel goroutines on Stop()
-	ctx, cancel := context.WithCancel(context.Background())
-	node.ctx = ctx
-	node.cancelCtx = cancel
+	node.ctx, node.cancelCtx = context.WithCancel(context.Background())
 
 	// start accepting connections
 	node.net.Start()
@@ -332,6 +331,7 @@ func (node *AlgorandFullNode) Start() {
 		node.agreementService.Start()
 		node.txPoolSyncerService.Start(node.catchupService.InitialSyncDone)
 		node.blockService.Start()
+		node.ledgerService.Start()
 		node.txHandler.Start()
 
 		// start indexer
@@ -401,6 +401,7 @@ func (node *AlgorandFullNode) Stop() {
 		node.catchupService.Stop()
 		node.txPoolSyncerService.Stop()
 		node.blockService.Stop()
+		node.ledgerService.Stop()
 		node.wsFetcherService.Stop()
 	}
 
@@ -850,11 +851,10 @@ func (node *AlgorandFullNode) AbortCatchup(catchpoint string) error {
 }
 
 // SetCatchpointCatchupMode change the node's operational mode from catchpoint catchup mode and back
-func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode bool) {
+func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode bool) (newCtx context.Context) {
 	node.mu.Lock()
 	if catchpointCatchupMode {
 		// stop..
-
 		defer func() {
 			node.mu.Unlock()
 			node.waitMonitoringRoutines()
@@ -864,11 +864,14 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 		node.catchupService.Stop()
 		node.txPoolSyncerService.Stop()
 		node.blockService.Stop()
+		node.ledgerService.Stop()
 		node.wsFetcherService.Stop()
 
-		// at this point, the catchpoint catchup is done ( either successfully or not.. )
-		node.catchpointCatchupService = nil
-		return
+		node.cancelCtx()
+
+		// Set up a context we can use to cancel goroutines on Stop()
+		node.ctx, node.cancelCtx = context.WithCancel(context.Background())
+		return node.ctx
 	}
 	defer node.mu.Unlock()
 	// start
@@ -877,6 +880,7 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 	node.agreementService.Start()
 	node.txPoolSyncerService.Start(node.catchupService.InitialSyncDone)
 	node.blockService.Start()
+	node.ledgerService.Start()
 	node.txHandler.Start()
 
 	// start indexer
@@ -892,5 +896,14 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 		node.log.Infof("Indexer is not available - %v", err)
 	}
 
+	node.cancelCtx()
+
 	node.startMonitoringRoutines()
+	// at this point, the catchpoint catchup is done ( either successfully or not.. )
+	node.catchpointCatchupService = nil
+
+	// Set up a context we can use to cancel goroutines on Stop()
+	node.ctx, node.cancelCtx = context.WithCancel(context.Background())
+	return node.ctx
+
 }

@@ -126,12 +126,32 @@ func (c *CatchpointCatchupAccessor) SetLabel(ctx context.Context, label string) 
 }
 
 // ResetStagingBalances resets the current staging balances, preparing for a new set of balances to be added
-func (c *CatchpointCatchupAccessor) ResetStagingBalances(ctx context.Context) (err error) {
+func (c *CatchpointCatchupAccessor) ResetStagingBalances(ctx context.Context, newCatchup bool) (err error) {
 	wdb := c.ledger.trackerDB().wdb
 	err = wdb.Atomic(func(tx *sql.Tx) (err error) {
-		err = resetCatchpointStagingBalances(ctx, tx, true)
+		err = resetCatchpointStagingBalances(ctx, tx, newCatchup)
 		if err != nil {
 			return fmt.Errorf("unable to reset catchpoint catchup balances : %v", err)
+		}
+		if !newCatchup {
+			_, err = writeCatchpointStateUint64(ctx, tx, "catchpointCatchupBalancesRound", 0)
+			if err != nil {
+				return err
+			}
+
+			_, err = writeCatchpointStateUint64(ctx, tx, "catchpointCatchupBlockRound", 0)
+			if err != nil {
+				return err
+			}
+
+			_, err = writeCatchpointStateString(ctx, tx, "catchpointCatchupLabel", "")
+			if err != nil {
+				return err
+			}
+			_, err = writeCatchpointStateUint64(ctx, tx, "catchpointCatchupState", 0)
+			if err != nil {
+				return fmt.Errorf("unable to write catchpoint catchup state 'catchpointCatchupState': %v", err)
+			}
 		}
 		return
 	})
@@ -278,22 +298,22 @@ func (c *CatchpointCatchupAccessor) VerifyCatchpoint(ctx context.Context, blk *b
 		// create the merkle trie for the balances
 		mc, err0 := makeMerkleCommitter(tx, true)
 		if err0 != nil {
-			return err0
+			return fmt.Errorf("unable to make MerkleCommitter: %v", err0)
 		}
 		var trie *merkletrie.Trie
 		trie, err = merkletrie.MakeTrie(mc, trieCachedNodesCount)
 		if err != nil {
-			return err
+			return fmt.Errorf("unable to make trie: %v", err)
 		}
 
 		balancesHash, err = trie.RootHash()
 		if err != nil {
-			return err
+			return fmt.Errorf("unable to get trie root hash: %v", err)
 		}
 
 		totals, err = accountsTotals(tx, true)
 		if err != nil {
-			return err
+			return fmt.Errorf("unable to get accounts totals: %v", err)
 		}
 		return
 	})
@@ -424,6 +444,11 @@ func (c *CatchpointCatchupAccessor) FinishBlalances(ctx context.Context) (err er
 		_, err = writeCatchpointStateString(ctx, tx, "catchpointCatchupLabel", "")
 		if err != nil {
 			return err
+		}
+
+		_, err = writeCatchpointStateUint64(ctx, tx, "catchpointCatchupState", 0)
+		if err != nil {
+			return fmt.Errorf("unable to write catchpoint catchup state 'catchpointCatchupState': %v", err)
 		}
 
 		return
