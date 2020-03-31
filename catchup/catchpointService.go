@@ -291,7 +291,7 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 	topBlock, err := cs.ledgerAccessor.EnsureFirstBlock(cs.ctx)
 	if err != nil {
-		return err
+		return cs.abort(fmt.Errorf("processStageBlocksDownload failed, unable to ensure first block : %v", err))
 	}
 
 	lookback := int(config.Consensus[topBlock.CurrentProtocol].MaxBalLookback)
@@ -327,6 +327,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 			continue
 		}
 		prevBlock = blk
+		blocksFetched++
 	}
 
 	err = cs.updateStage(ledger.CatchpointCatchupStateSwitch)

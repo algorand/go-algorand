@@ -249,7 +249,7 @@ func blockStartCatchupStaging(tx *sql.Tx, blk bookkeeping.Block) error {
 	}
 
 	// insert the top entry to the blocks table.
-	_, err := tx.Exec("INSERT INTO blocks (rnd, proto, hdrdata, blkdata) VALUES (?, ?, ?, ?)",
+	_, err := tx.Exec("INSERT INTO catchpointblocks (rnd, proto, hdrdata, blkdata) VALUES (?, ?, ?, ?)",
 		blk.Round(),
 		blk.CurrentProtocol,
 		protocol.Encode(&blk.BlockHeader),

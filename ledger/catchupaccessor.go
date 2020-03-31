@@ -254,6 +254,10 @@ func (c *CatchpointCatchupAccessor) processStagingBalances(ctx context.Context, 
 				return err
 			}
 		}
+		err = trie.Commit()
+		if err != nil {
+			return
+		}
 		return
 	})
 

@@ -132,13 +132,13 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 
 // applies the changes.
 func applyCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, balancesRound basics.Round) (err error) {
-	s := "ALTER TABLE balances RENAME TO balances_old;"
+	s := "ALTER TABLE accountbase RENAME TO accountbase_old;"
 	s += "ALTER TABLE assetcreators RENAME TO assetcreators_old;"
 	s += "ALTER TABLE accounthashes RENAME TO accounthashes_old;"
-	s += "ALTER TABLE catchpointbalances RENAME TO balances;"
+	s += "ALTER TABLE catchpointbalances RENAME TO accountbase;"
 	s += "ALTER TABLE catchpointassetcreators RENAME TO assetcreators;"
 	s += "ALTER TABLE catchpointaccounthashes RENAME TO accounthashes;"
-	s += "DROP TABLE IF EXISTS balances_old;"
+	s += "DROP TABLE IF EXISTS accountbase_old;"
 	s += "DROP TABLE IF EXISTS assetcreators_old;"
 	s += "DROP TABLE IF EXISTS accounthashes_old;"
 	_, err = tx.Exec(s)
