@@ -17,6 +17,7 @@
 package ledger
 
 import (
+	"context"
 	"crypto/rand"
 	"fmt"
 	"io/ioutil"
@@ -111,6 +112,7 @@ func benchmarkBlockEvalPerf(txtype string, txPerBlockAndNumCreators int, b *test
 	for i := 0; i < numBlocks; i++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+		blk.BlockHeader.GenesisID = "x"
 
 		// build a payset
 		var payset transactions.Payset
@@ -144,10 +146,34 @@ func benchmarkBlockEvalPerf(txtype string, txPerBlockAndNumCreators int, b *test
 	b.Logf("built %d blocks, %d transactions", numBlocks, txPerBlockAndNumCreators)
 	b.ResetTimer()
 
-	// add all the blocks
-	for _, blk := range blocks {
-		// Add the blocks
-		err = l.AddBlock(blk, agreement.Certificate{})
+	// eval + add all the blocks
+	cert := agreement.Certificate{}
+	for r, blk := range blocks {
+		if r == 0 {
+			err = l.AddBlock(blk, cert)
+			require.NoError(b, err)
+			continue
+		}
+
+		prev, err := l.BlockHdr(basics.Round(r))
+		require.NoError(b, err)
+
+		newEmptyBlk := bookkeeping.MakeBlock(prev)
+		eval, err := l.StartEvaluator(newEmptyBlk.BlockHeader)
+		require.NoError(b, err)
+
+		lvb, err := eval.GenerateBlock()
+
+		updates, err := l.eval(context.Background(), lvb.blk, true, nil, nil)
+
+		require.NoError(b, err)
+
+		vb := ValidatedBlock{
+			blk:   blk,
+			delta: updates,
+		}
+
+		err = l.AddValidatedBlock(vb, cert)
 		require.NoError(b, err)
 	}
 }
