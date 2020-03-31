@@ -111,7 +111,7 @@ func benchmarkBlockEvalPerf(txtype string, txPerBlock int, b *testing.B) {
 	genesisInitState.Block.BlockHeader.GenesisHash = crypto.Digest{1}
 
 	// We will delete apps, generating 2x as many transactions
-	if txtype == "app" {
+	if txtype == "appheavy" || txtype == "applight" {
 		txPerBlock = txPerBlock / 2
 	}
 
