@@ -75,15 +75,14 @@ func makeDemux(net Network, ledger LedgerReader, validator BlockValidator, voteV
 	d.log = log
 	d.ledger = ledger
 	d.monitor = monitor
+	d.queue = make([]<-chan externalEvent, 0)
+	d.processingMonitor = processingMonitor
 
 	tokenizerCtx, cancelTokenizers := context.WithCancel(context.Background())
 	d.rawVotes = d.tokenizeMessages(tokenizerCtx, net, protocol.AgreementVoteTag, decodeVote)
 	d.rawProposals = d.tokenizeMessages(tokenizerCtx, net, protocol.ProposalPayloadTag, decodeProposal)
 	d.rawBundles = d.tokenizeMessages(tokenizerCtx, net, protocol.VoteBundleTag, decodeBundle)
 	d.cancelTokenizers = cancelTokenizers
-
-	d.queue = make([]<-chan externalEvent, 0)
-	d.processingMonitor = processingMonitor
 
 	return d
 }
