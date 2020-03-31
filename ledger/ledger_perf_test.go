@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -37,6 +38,8 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
+
+const heavyWriteCount = 768
 
 var testprogheavy string
 var testproglight string
@@ -55,7 +58,7 @@ func makeUnsignedApplicationCallTxPerf(appIdx uint64, load string, onCompletion 
 		var schemaamt uint64
 		if load == "appheavy" {
 			testprog = testprogheavy
-			schemaamt = 50
+			schemaamt = heavyWriteCount
 		}
 		tx.ApprovalProgram = testprog
 		tx.ClearStateProgram = testprog
@@ -378,557 +381,67 @@ func BenchmarkAppFullHeavy(b *testing.B) { benchmarkFullAppBlocks("appheavy", b)
 func BenchmarkAppFullLight(b *testing.B) { benchmarkFullAppBlocks("applight", b) }
 
 func init() {
-	testasm := `
-byte base64 MA==
-byte base64 YmFy
-app_global_put
+	heavyPrefix := `
+		int 1
+		itob
+		app_global_get
+		bnz delete
+	`
+
+	heavyWritePrefix := `
+		write:
+		int 0
+	`
+
+	heavyBlockWrite := `
+		int 1
+		+
+		dup
+		itob
+		dup
+		app_global_put
+	`
+
+	heavyWriteSuffix := `
+		pop
+		int 1
+		return
+	`
+
+	heavyDeletePrefix := `
+		delete:
+		int 0
+	`
+
+	heavyBlockDelete := `
+		int 1
+		+
+		dup
+		itob
+		app_global_del
+	`
+
+	heavyDeleteSuffix := `
+		pop
+		int 1
+		return
+	`
+
+	var heavyProgParts []string
+	heavyProgParts = append(heavyProgParts, heavyPrefix)
+	heavyProgParts = append(heavyProgParts, heavyWritePrefix)
+	for i := 0; i < heavyWriteCount; i++ {
+		heavyProgParts = append(heavyProgParts, heavyBlockWrite)
+	}
+	heavyProgParts = append(heavyProgParts, heavyWriteSuffix)
+	heavyProgParts = append(heavyProgParts, heavyDeletePrefix)
+	for i := 0; i < heavyWriteCount; i++ {
+		heavyProgParts = append(heavyProgParts, heavyBlockDelete)
+	}
+	heavyProgParts = append(heavyProgParts, heavyDeleteSuffix)
+
+	testasm := strings.Join(heavyProgParts, "\n")
 
-
-byte base64 MQ==
-byte base64 YmFy
-app_global_put
-
-
-byte base64 Mg==
-byte base64 YmFy
-app_global_put
-
-
-byte base64 Mw==
-byte base64 YmFy
-app_global_put
-
-
-byte base64 NA==
-byte base64 YmFy
-app_global_put
-
-
-byte base64 NQ==
-byte base64 YmFy
-app_global_put
-
-
-byte base64 Ng==
-byte base64 YmFy
-app_global_put
-
-
-byte base64 Nw==
-byte base64 YmFy
-app_global_put
-
-
-byte base64 OA==
-byte base64 YmFy
-app_global_put
-
-
-byte base64 OQ==
-byte base64 YmFy
-app_global_put
-
-
-byte base64 MTA=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 MTE=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 MTI=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 MTM=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 MTQ=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 MTU=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 MTY=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 MTc=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 MTg=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 MTk=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 MjA=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 MjE=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 MjI=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 MjM=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 MjQ=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 MjU=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 MjY=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 Mjc=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 Mjg=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 Mjk=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 MzA=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 MzE=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 MzI=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 MzM=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 MzQ=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 MzU=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 MzY=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 Mzc=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 Mzg=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 Mzk=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 NDA=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 NDE=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 NDI=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 NDM=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 NDQ=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 NDU=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 NDY=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 NDc=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 NDg=
-byte base64 YmFy
-app_global_put
-
-
-byte base64 NDk=
-byte base64 YmFy
-app_global_put
-
-int 0
-byte base64 MA==
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 MQ==
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 Mg==
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 Mw==
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 NA==
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 NQ==
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 Ng==
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 Nw==
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 OA==
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 OQ==
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 MTA=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 MTE=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 MTI=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 MTM=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 MTQ=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 MTU=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 MTY=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 MTc=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 MTg=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 MTk=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 MjA=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 MjE=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 MjI=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 MjM=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 MjQ=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 MjU=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 MjY=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 Mjc=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 Mjg=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 Mjk=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 MzA=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 MzE=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 MzI=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 MzM=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 MzQ=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 MzU=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 MzY=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 Mzc=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 Mzg=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 Mzk=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 NDA=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 NDE=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 NDI=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 NDM=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 NDQ=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 NDU=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 NDY=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 NDc=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 NDg=
-byte base64 YmFy
-app_local_put
-
-
-int 0
-byte base64 NDk=
-byte base64 YmFy
-app_local_put
-
-int 1
-`
 	heavyBytes, err := logic.AssembleString(testasm)
 	if err != nil {
 		panic(err)
