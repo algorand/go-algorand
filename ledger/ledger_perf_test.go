@@ -32,33 +32,43 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
-	//"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
 
-var testprog string
+var testprogheavy string
+var testproglight string
 
-/*func makeUnsignedApplicationCallTxPerf(appIdx uint64, onCompletion transactions.OnCompletion) (tx transactions.Transaction, err error) {
+func makeUnsignedApplicationCallTxPerf(appIdx uint64, load string, onCompletion transactions.OnCompletion, round int) (tx transactions.Transaction, err error) {
 	tx.Type = protocol.ApplicationCallTx
 	tx.ApplicationID = basics.AppIndex(appIdx)
 	tx.OnCompletion = onCompletion
+	tx.Header.FirstValid = basics.Round(round)
+	tx.Header.LastValid = basics.Round(round + 1000)
+	tx.Header.Fee = basics.MicroAlgos{Raw: 1000}
 
 	// If creating, set programs
 	if appIdx == 0 {
-		tx.ApprovalProgram = string(testprog)
-		tx.ClearStateProgram = string(testprog)
+		testprog := testproglight
+		var schemaamt uint64
+		if load == "appheavy" {
+			testprog = testprogheavy
+			schemaamt = 50
+		}
+		tx.ApprovalProgram = testprog
+		tx.ClearStateProgram = testprog
 		tx.GlobalStateSchema = basics.StateSchema{
-			NumByteSlice: 50,
+			NumByteSlice: schemaamt,
 		}
 		tx.LocalStateSchema = basics.StateSchema{
-			NumByteSlice: 50,
+			NumByteSlice: schemaamt,
 		}
 	}
 
 	return tx, nil
-}*/
+}
 
 type alwaysVerifiedCache struct{}
 
@@ -81,7 +91,7 @@ func makeUnsignedPayment(sender basics.Address, round int) transactions.Transact
 	}
 }
 
-func benchmarkBlockEvalPerf(txtype string, txPerBlockAndNumCreators int, b *testing.B) {
+func benchmarkBlockEvalPerf(txtype string, txPerBlock int, b *testing.B) {
 	// Start in archival mode, add 2K blocks with asset + app txns
 	// restart, ensure all assets are there in index unless they were
 	// deleted
@@ -100,9 +110,15 @@ func benchmarkBlockEvalPerf(txtype string, txPerBlockAndNumCreators int, b *test
 	genesisInitState.GenesisHash = crypto.Digest{1}
 	genesisInitState.Block.BlockHeader.GenesisHash = crypto.Digest{1}
 
+	// We will delete apps, generating 2x as many transactions
+	if txtype == "app" {
+		txPerBlock = txPerBlock / 2
+	}
+
 	// give creators money for min balance
 	var creators []basics.Address
-	for i := 0; i < txPerBlockAndNumCreators; i++ {
+	numCreators := txPerBlock
+	for i := 0; i < numCreators; i++ {
 		creator := basics.Address{}
 		_, err = rand.Read(creator[:])
 		require.NoError(b, err)
@@ -150,14 +166,13 @@ func benchmarkBlockEvalPerf(txtype string, txPerBlockAndNumCreators int, b *test
 		require.NoError(b, err)
 
 		// build a payset
-		for j := 0; j < txPerBlockAndNumCreators; j++ {
+		for j := 0; j < txPerBlock; j++ {
 			// make a transaction that will create an asset or application
 			var tx transactions.Transaction
 
-			/*if txtype == "app" {
-				tx, err = makeUnsignedApplicationCallTxPerf(0, transactions.OptInOC)
-			} else*/
-			if txtype == "asset" {
+			if txtype == "appheavy" || txtype == "applight" {
+				tx, err = makeUnsignedApplicationCallTxPerf(0, txtype, transactions.OptInOC, i)
+			} else if txtype == "asset" {
 				creatorEncoded := creators[j].String()
 				tx, err = makeUnsignedAssetCreateTx(basics.Round(i), basics.Round(i)+1000, 100, false, creatorEncoded, creatorEncoded, creatorEncoded, creatorEncoded, "m", "m", "", nil)
 			} else if txtype == "pay" {
@@ -175,6 +190,22 @@ func benchmarkBlockEvalPerf(txtype string, txPerBlockAndNumCreators int, b *test
 
 			err = eval.Transaction(stxn, transactions.ApplyData{})
 			require.NoError(b, err)
+
+			// Delete the newly created app
+			if txtype == "appheavy" || txtype == "applight" {
+				createdAppID := eval.state.txnCounter()
+				tx, err = makeUnsignedApplicationCallTxPerf(createdAppID, txtype, transactions.DeleteApplicationOC, i)
+				require.NoError(b, err)
+				tx.Sender = creators[j]
+				tx.Note = []byte(fmt.Sprintf("%d,%d", i, j))
+				tx.GenesisHash = crypto.Digest{1}
+
+				var stxn transactions.SignedTxn
+				stxn.Txn = tx
+
+				err = eval.Transaction(stxn, transactions.ApplyData{})
+				require.NoError(b, err)
+			}
 		}
 
 		lvb, err := eval.GenerateBlock()
@@ -186,7 +217,7 @@ func benchmarkBlockEvalPerf(txtype string, txPerBlockAndNumCreators int, b *test
 		blocks = append(blocks, lvb.blk)
 	}
 
-	b.Logf("built %d blocks, %d transactions", numBlocks, txPerBlockAndNumCreators)
+	b.Logf("built %d blocks, %d transactions", numBlocks, txPerBlock)
 
 	// eval + add all the (valid) blocks to the second ledger, timing it
 	vc := alwaysVerifiedCache{}
@@ -211,12 +242,17 @@ func BenchmarkAssetEvalPerf1000(b *testing.B) { benchmarkBlockEvalPerf("asset", 
 func BenchmarkAssetEvalPerf1500(b *testing.B) { benchmarkBlockEvalPerf("asset", 1500, b) }
 func BenchmarkAssetEvalPerf2000(b *testing.B) { benchmarkBlockEvalPerf("asset", 2000, b) }
 
-/*
-func BenchmarkAppEvalPerf100(b *testing.B)  { benchmarkBlockEvalPerf("app", 100, b) }
-func BenchmarkAppEvalPerf500(b *testing.B)  { benchmarkBlockEvalPerf("app", 500, b) }
-func BenchmarkAppEvalPerf1000(b *testing.B) { benchmarkBlockEvalPerf("app", 1000, b) }
-func BenchmarkAppEvalPerf1500(b *testing.B) { benchmarkBlockEvalPerf("app", 1500, b) }
-func BenchmarkAppEvalPerf2000(b *testing.B) { benchmarkBlockEvalPerf("app", 2000, b) }
+func BenchmarkAppLightEvalPerf100(b *testing.B)  { benchmarkBlockEvalPerf("applight", 100, b) }
+func BenchmarkAppLightEvalPerf500(b *testing.B)  { benchmarkBlockEvalPerf("applight", 500, b) }
+func BenchmarkAppLightEvalPerf1000(b *testing.B) { benchmarkBlockEvalPerf("applight", 1000, b) }
+func BenchmarkAppLightEvalPerf1500(b *testing.B) { benchmarkBlockEvalPerf("applight", 1500, b) }
+func BenchmarkAppLightEvalPerf2000(b *testing.B) { benchmarkBlockEvalPerf("applight", 2000, b) }
+
+func BenchmarkAppHeavyEvalPerf100(b *testing.B)  { benchmarkBlockEvalPerf("appheavy", 100, b) }
+func BenchmarkAppHeavyEvalPerf500(b *testing.B)  { benchmarkBlockEvalPerf("appheavy", 500, b) }
+func BenchmarkAppHeavyEvalPerf1000(b *testing.B) { benchmarkBlockEvalPerf("appheavy", 1000, b) }
+func BenchmarkAppHeavyEvalPerf1500(b *testing.B) { benchmarkBlockEvalPerf("appheavy", 1500, b) }
+func BenchmarkAppHeavyEvalPerf2000(b *testing.B) { benchmarkBlockEvalPerf("appheavy", 2000, b) }
 
 func init() {
 	testasm := `
@@ -770,10 +806,16 @@ app_local_put
 
 int 1
 `
-	// testasm = `int 1`
-	testprogBytes, err := logic.AssembleString(testasm)
+	heavyBytes, err := logic.AssembleString(testasm)
 	if err != nil {
 		panic(err)
 	}
-	testprog = string(testprogBytes)
-}*/
+	testprogheavy = string(heavyBytes)
+
+	testasm = `int 1`
+	lightBytes, err := logic.AssembleString(testasm)
+	if err != nil {
+		panic(err)
+	}
+	testproglight = string(lightBytes)
+}
