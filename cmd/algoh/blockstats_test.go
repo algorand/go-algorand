@@ -57,17 +57,40 @@ func TestConsecutiveBlocks(t *testing.T) {
 }
 
 func TestAgreementTime(t *testing.T) {
-	sender := MockEventSender{}
-	bs := blockstats{log: &sender}
+	sleepTime := 50 * time.Millisecond
+	testAttempts := 0
+	const maxTestAttempts = 10
+	for {
+		sleepTimeHighWatermark := time.Duration(int64(sleepTime) * 105 / 100)
 
-	bs.onBlock(v1.Block{Round: 300})
-	time.Sleep(500 * time.Millisecond)
-	bs.onBlock(v1.Block{Round: 301})
+		sender := MockEventSender{}
+		bs := blockstats{log: &sender}
 
-	require.Equal(t, 1, len(sender.events))
-	details := sender.events[0].details.(telemetryspec.BlockStatsEventDetails)
+		start := time.Now()
+		bs.onBlock(v1.Block{Round: 300})
+		time.Sleep(sleepTime)
+		bs.onBlock(v1.Block{Round: 301})
+		end := time.Now()
 
-	// Make sure the duration is close to 500ms
-	require.True(t, int(details.AgreementDurationMs) < 600)
-	require.True(t, int(details.AgreementDurationMs) > 400)
+		require.Equal(t, 1, len(sender.events))
+		details := sender.events[0].details.(telemetryspec.BlockStatsEventDetails)
+
+		// Test to see that the wait duration is at least the amount of time we slept
+		require.True(t, int(details.AgreementDurationMs) >= int(sleepTime)/int(time.Millisecond))
+
+		// we want to test that the time is roughly the sleeping-time ( sleepTime ), but slow machines might not reflect that accurately.
+		// to address that, we calculate the envelope time of the two onBlock calls, which is always greater than the desired high watermark.
+		// this would give us an indication that the local machine isn't performing that great, and we might want to repeat the
+		// test with a different time constrains.
+		if end.Sub(start) >= sleepTimeHighWatermark {
+			// something else took CPU between the above two onBlock calls; repeat the test with a larget interval.
+			sleepTime *= 2
+			testAttempts++
+			require.True(t, testAttempts < maxTestAttempts)
+			continue
+		}
+		require.True(t, int(details.AgreementDurationMs) < int(sleepTimeHighWatermark))
+		break
+	}
+
 }
