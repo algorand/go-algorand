@@ -100,18 +100,15 @@ type BlockAuthenticator interface {
 // If wsf is nil, then fetch over gossip is disabled.
 func MakeService(log logging.Logger, config config.Local, net network.GossipNode, ledger Ledger, wsf *rpcs.WsFetcherService, auth BlockAuthenticator, unmatchedPendingCertificates <-chan PendingUnmatchedCertificate) (s *Service) {
 	s = &Service{}
-	s.ctx, s.cancel = context.WithCancel(context.Background())
+
 	s.cfg = config
 	s.fetcherFactory = MakeNetworkFetcherFactory(net, catchupPeersForSync, wsf)
 	s.ledger = ledger
 	s.net = net
 	s.auth = auth
 	s.unmatchedPendingCertificates = unmatchedPendingCertificates
-
 	s.latestRoundFetcherFactory = MakeNetworkFetcherFactory(net, blockQueryPeerLimit, wsf)
-
 	s.log = log.With("Context", "sync")
-	s.InitialSyncDone = make(chan struct{})
 	s.parallelBlocks = config.CatchupParallelBlocks
 	s.deadlineTimeout = agreement.DeadlineTimeout()
 	return s
@@ -120,6 +117,8 @@ func MakeService(log logging.Logger, config config.Local, net network.GossipNode
 // Start the catchup service
 func (s *Service) Start() {
 	s.done = make(chan struct{})
+	s.ctx, s.cancel = context.WithCancel(context.Background())
+	s.InitialSyncDone = make(chan struct{})
 	go s.periodicSync()
 }
 
@@ -130,7 +129,6 @@ func (s *Service) Stop() {
 	if atomic.CompareAndSwapUint32(&s.initialSyncNotified, 0, 1) {
 		close(s.InitialSyncDone)
 	}
-	s.auth.Quit()
 }
 
 // IsSynchronizing returns true if we're currently executing a sync() call - either initial catchup

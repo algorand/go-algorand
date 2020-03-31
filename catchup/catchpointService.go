@@ -205,14 +205,7 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 
 		if attemptsCount >= maxLedgerDownloadAttempts {
 			err = fmt.Errorf("catchpoint catchup exceeded number of attempts to retrieve ledger")
-
-			err0 := cs.ledgerAccessor.ResetStagingBalances(cs.ctx, false)
-			if err0 != nil {
-				err = fmt.Errorf("unable to reset staging balances : %v; %v", err0, err)
-			}
-			cs.updateNodeCatchupMode(false)
-			cs.cancelCtxFunc()
-			return
+			return cs.abort(err)
 		}
 		cs.log.Infof("unable to download ledger : %v", err)
 		fmt.Printf("unable to download ledger : %v\n", err)
@@ -223,6 +216,17 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 		return err
 	}
 	return nil
+}
+
+func (cs *CatchpointCatchupService) abort(originatingErr error) error {
+	outError := originatingErr
+	err0 := cs.ledgerAccessor.ResetStagingBalances(cs.ctx, false)
+	if err0 != nil {
+		outError = fmt.Errorf("unable to reset staging balances : %v; %v", err0, outError)
+	}
+	cs.updateNodeCatchupMode(false)
+	cs.cancelCtxFunc()
+	return outError
 }
 
 func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err error) {
@@ -237,6 +241,7 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 	var client FetcherClient
 	for {
 		attemptsCount++
+
 		fetcher := fetcherFactory.New()
 		blk, _, client, err = fetcher.FetchBlock(cs.ctx, blockRound)
 		if err != nil {
@@ -247,26 +252,38 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 				// try again.
 				continue
 			}
-			return err
+			return cs.abort(fmt.Errorf("processStageLastestBlockDownload failed to get block %d : %v", blockRound, err))
 		}
 		// success
 		client.Close()
+
+		err = cs.ledgerAccessor.VerifyCatchpoint(cs.ctx, blk)
+		if err != nil {
+			if attemptsCount <= maxBlockDownloadAttempts {
+				// try again.
+				continue
+			}
+			return cs.abort(fmt.Errorf("VerifyCatchpoint failed : %v", err))
+		}
+
+		err = cs.ledgerAccessor.StoreFirstBlock(cs.ctx, blk)
+		if err != nil {
+			if attemptsCount <= maxBlockDownloadAttempts {
+				// try again.
+				continue
+			}
+			return cs.abort(fmt.Errorf("StoreFirstBlock failed : %v", err))
+		}
+
+		err = cs.updateStage(ledger.CatchpointCatchupStateBlocksDownload)
+		if err != nil {
+			if attemptsCount <= maxBlockDownloadAttempts {
+				// try again.
+				continue
+			}
+			return cs.abort(fmt.Errorf("updateStage failed : %v", err))
+		}
 		break
-	}
-
-	err = cs.ledgerAccessor.VerifyCatchpoint(cs.ctx, blk)
-	if err != nil {
-		err = fmt.Errorf("VerifyCatchpoint failed : %v", err)
-	}
-
-	err = cs.ledgerAccessor.StoreFirstBlock(cs.ctx, blk)
-	if err != nil {
-		return fmt.Errorf("StoreFirstBlock failed : %v", err)
-	}
-
-	err = cs.updateStage(ledger.CatchpointCatchupStateBlocksDownload)
-	if err != nil {
-		return fmt.Errorf("updateStage failed : %v", err)
 	}
 	return nil
 }

@@ -79,7 +79,6 @@ func MakeBlockService(config config.Local, ledger *data.Ledger, net network.Goss
 		ledger:      ledger,
 		genesisID:   genesisID,
 		catchupReqs: make(chan network.IncomingMessage, config.CatchupParallelBlocks*blockServerCatchupRequestBufferSize),
-		stop:        make(chan struct{}),
 		net:         net,
 	}
 	net.RegisterHTTPHandler(BlockServiceBlockPath, service)
@@ -94,6 +93,7 @@ func (ls *BlockService) Start() {
 	}
 
 	ls.net.RegisterHandlers(handlers)
+	ls.stop = make(chan struct{})
 	go ls.ListenForCatchupReq(ls.catchupReqs, ls.stop)
 }
 

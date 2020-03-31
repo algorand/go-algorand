@@ -31,10 +31,11 @@ type Multiplexer struct {
 }
 
 // MakeMultiplexer creates an empty Multiplexer
-func MakeMultiplexer() *Multiplexer {
-	m := new(Multiplexer)
-	m.ClearHandlers()
-	m.log = logging.Base()
+func MakeMultiplexer(log logging.Logger) *Multiplexer {
+	m := &Multiplexer{
+		log: log,
+	}
+	m.ClearHandlers([]Tag{}) // allocate the map
 	return m
 }
 
@@ -85,6 +86,18 @@ func (m *Multiplexer) RegisterHandlers(dispatch []TaggedMessageHandler) {
 }
 
 // ClearHandlers deregisters all the existing message handlers.
-func (m *Multiplexer) ClearHandlers() {
-	m.msgHandlers.Store(make(map[Tag]MessageHandler))
+func (m *Multiplexer) ClearHandlers(excludeTags []Tag) {
+	excludeTagsMap := make(map[Tag]bool)
+	for _, tag := range excludeTags {
+		excludeTagsMap[tag] = true
+	}
+	newMap := make(map[Tag]MessageHandler)
+	if len(excludeTags) > 0 {
+		for tag, handler := range m.getHandlersMap() {
+			if excludeTagsMap[tag] {
+				newMap[tag] = handler
+			}
+		}
+	}
+	m.msgHandlers.Store(newMap)
 }

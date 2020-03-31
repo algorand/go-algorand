@@ -118,6 +118,7 @@ type AlgorandFullNode struct {
 	cryptoPool                         execpool.ExecutionPool
 	lowPriorityCryptoVerificationPool  execpool.BacklogPool
 	highPriorityCryptoVerificationPool execpool.BacklogPool
+	catchupBlockAuth                   blockAuthenticatorImpl
 
 	oldKeyDeletionNotify        chan struct{}
 	monitoringRoutinesWaitGroup sync.WaitGroup
@@ -245,7 +246,8 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	}
 	node.agreementService = agreement.MakeService(agreementParameters)
 
-	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.wsFetcherService, blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)}, agreementLedger.UnmatchedPendingCertificates)
+	node.catchupBlockAuth = blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)}
+	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.wsFetcherService, node.catchupBlockAuth, agreementLedger.UnmatchedPendingCertificates)
 	node.txPoolSyncerService = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
 
 	err = node.loadParticipationKeys()
@@ -390,9 +392,7 @@ func (node *AlgorandFullNode) Stop() {
 	}()
 
 	node.net.ClearHandlers()
-
 	node.net.Stop()
-
 	if node.catchpointCatchupService != nil {
 		node.catchpointCatchupService.Stop()
 	} else {
@@ -404,12 +404,11 @@ func (node *AlgorandFullNode) Stop() {
 		node.ledgerService.Stop()
 		node.wsFetcherService.Stop()
 	}
-
+	node.catchupBlockAuth.Quit()
 	node.highPriorityCryptoVerificationPool.Shutdown()
 	node.lowPriorityCryptoVerificationPool.Shutdown()
 	node.cryptoPool.Shutdown()
 	node.cancelCtx()
-
 	if node.indexer != nil {
 		node.indexer.Shutdown()
 	}
@@ -859,6 +858,7 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 			node.mu.Unlock()
 			node.waitMonitoringRoutines()
 		}()
+		node.net.ClearHandlers()
 		node.txHandler.Stop()
 		node.agreementService.Shutdown()
 		node.catchupService.Stop()

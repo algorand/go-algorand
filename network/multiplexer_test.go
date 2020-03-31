@@ -54,8 +54,7 @@ func (th *testHandler) SawMsg(msg IncomingMessage) bool {
 }
 
 func TestMultiplexer(t *testing.T) {
-	m := MakeMultiplexer()
-	m.log = logging.TestingLog(t)
+	m := MakeMultiplexer(logging.TestingLog(t))
 	handler := &testHandler{}
 
 	// Handler shouldn't be called before it is registered
@@ -76,8 +75,7 @@ func TestMultiplexer(t *testing.T) {
 				panicked = true
 			}
 		}()
-		m := MakeMultiplexer()
-		m.log = logging.TestingLog(t)
+		m := MakeMultiplexer(logging.TestingLog(t))
 		m.RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{protocol.TxnTag, handler}, TaggedMessageHandler{protocol.TxnTag, handler}})
 
 	}()
@@ -89,8 +87,7 @@ func TestMultiplexer(t *testing.T) {
 				panicked = true
 			}
 		}()
-		m := MakeMultiplexer()
-		m.log = logging.TestingLog(t)
+		m := MakeMultiplexer(logging.TestingLog(t))
 		m.RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{protocol.TxnTag, handler}})
 		m.RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{protocol.TxnTag, handler}})
 
@@ -114,7 +111,7 @@ func TestMultiplexer(t *testing.T) {
 	handler.Reset()
 
 	// After deregistering, should not get any more incoming messages
-	m.ClearHandlers()
+	m.ClearHandlers([]Tag{})
 	msg5 := makeSignedTxnMsg()
 	m.Handle(msg5)
 	require.False(t, handler.SawMsg(msg5))

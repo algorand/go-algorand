@@ -94,17 +94,11 @@ func MakeService(p Parameters) *Service {
 
 	s.log = serviceLogger{Logger: p.Logger}
 
-	s.quit = make(chan struct{})
-	s.done = make(chan struct{})
-
 	// GOAL2-541: tracer is not concurrency safe. It should only ever be
 	// accessed by main state machine loop.
 	s.tracer = makeTracer(s.log, defaultCadaverName, p.CadaverSizeTarget,
 		s.Local.EnableAgreementReporting, s.Local.EnableAgreementTimeMetrics)
 
-	s.voteVerifier = MakeAsyncVoteVerifier(s.BacklogPool)
-	s.demux = makeDemux(s.Network, s.Ledger, s.BlockValidator, s.voteVerifier, s.EventsProcessingMonitor, s.log)
-	s.loopback = makePseudonode(s.BlockFactory, s.BlockValidator, s.KeyManager, s.Ledger, s.voteVerifier, s.log)
 	s.persistenceLoop = makeAsyncPersistenceLoop(s.log, s.Accessor, s.Ledger)
 
 	return s
@@ -120,6 +114,13 @@ func (s *Service) Start() {
 	s.parameters.Network.Start()
 	ctx, quitFn := context.WithCancel(context.Background())
 	s.quitFn = quitFn
+
+	s.quit = make(chan struct{})
+	s.done = make(chan struct{})
+
+	s.voteVerifier = MakeAsyncVoteVerifier(s.BacklogPool)
+	s.demux = makeDemux(s.Network, s.Ledger, s.BlockValidator, s.voteVerifier, s.EventsProcessingMonitor, s.log)
+	s.loopback = makePseudonode(s.BlockFactory, s.BlockValidator, s.KeyManager, s.Ledger, s.voteVerifier, s.log)
 
 	s.persistenceLoop.Start()
 	input := make(chan externalEvent)
