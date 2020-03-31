@@ -512,6 +512,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 // an error is returned and the block evaluator state is unchanged.
 func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transactions.ApplyData, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
 	var err error
+	var cachedTxid transactions.Txid
 
 	if eval.validate {
 		err = txn.Txn.Alive(eval.block)
@@ -520,8 +521,8 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 		}
 
 		// Transaction already in the ledger?
-		txid := txn.ID()
-		dup, err := cow.isDup(txn.Txn.First(), txn.Txn.Last(), txid, txlease{sender: txn.Txn.Sender, lease: txn.Txn.Lease})
+		cachedTxid = txn.ID()
+		dup, err := cow.isDup(txn.Txn.First(), txn.Txn.Last(), cachedTxid, txlease{sender: txn.Txn.Sender, lease: txn.Txn.Lease})
 		if err != nil {
 			return err
 		}
@@ -594,7 +595,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 	}
 
 	// Remember this txn
-	cow.addTx(txn.Txn)
+	cow.addTx(txn.Txn, cachedTxid)
 
 	return nil
 }
