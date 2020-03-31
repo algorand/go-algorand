@@ -91,11 +91,131 @@ func makeUnsignedPayment(sender basics.Address, round int) transactions.Transact
 	}
 }
 
-func benchmarkBlockEvalPerf(txtype string, txPerBlock int, b *testing.B) {
-	// Start in archival mode, add 2K blocks with asset + app txns
-	// restart, ensure all assets are there in index unless they were
-	// deleted
+func benchmarkFullAppBlocks(txtype string, b *testing.B) {
+	dbTempDir, err := ioutil.TempDir("", "testdir"+b.Name())
+	require.NoError(b, err)
+	dbName := fmt.Sprintf("%s.%d", b.Name(), crypto.RandUint64())
+	dbPrefix := filepath.Join(dbTempDir, dbName)
+	defer os.RemoveAll(dbTempDir)
 
+	genesisInitState := getInitState()
+
+	// Use future protocol
+	genesisInitState.Block.BlockHeader.GenesisHash = crypto.Digest{}
+	genesisInitState.Block.CurrentProtocol = protocol.ConsensusFuture
+	genesisInitState.GenesisHash = crypto.Digest{1}
+	genesisInitState.Block.BlockHeader.GenesisHash = crypto.Digest{1}
+
+	creator := basics.Address{}
+	_, err = rand.Read(creator[:])
+	require.NoError(b, err)
+	genesisInitState.Accounts[creator] = basics.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890})
+
+	// open first ledger
+	const inMem = false // use persistent storage
+	const archival = true
+	l0, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
+	require.NoError(b, err)
+
+	// open second ledger
+	dbName = fmt.Sprintf("%s.%d.2", b.Name(), crypto.RandUint64())
+	dbPrefix = filepath.Join(dbTempDir, dbName)
+	l1, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
+	require.NoError(b, err)
+
+	blk := genesisInitState.Block
+
+	numBlocks := b.N
+	cert := agreement.Certificate{}
+	var blocks []bookkeeping.Block
+	var createdAppIdx uint64
+	onCompletion := transactions.OptInOC
+	for i := 0; i < numBlocks+2; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+		blk.BlockHeader.GenesisID = "x"
+
+		// If this is the first block, add a blank one to both ledgers
+		if i == 0 {
+			err = l0.AddBlock(blk, cert)
+			require.NoError(b, err)
+			err = l1.AddBlock(blk, cert)
+			require.NoError(b, err)
+			continue
+		}
+
+		// Construct evaluator for next block
+		prev, err := l0.BlockHdr(basics.Round(i))
+		require.NoError(b, err)
+		newBlk := bookkeeping.MakeBlock(prev)
+		eval, err := l0.StartEvaluator(newBlk.BlockHeader)
+		require.NoError(b, err)
+
+		// build a payset
+		var j uint64
+		for {
+			j++
+			// make a transaction that will create an application or call it
+			var tx transactions.Transaction
+			tx, err = makeUnsignedApplicationCallTxPerf(createdAppIdx, txtype, onCompletion, i)
+			require.NoError(b, err)
+			tx.Sender = creator
+			tx.Note = []byte(fmt.Sprintf("%d,%d", i, j))
+			tx.GenesisHash = crypto.Digest{1}
+
+			// add tx to block
+			var stxn transactions.SignedTxn
+			stxn.Txn = tx
+			err = eval.Transaction(stxn, transactions.ApplyData{})
+
+			// check if block is full
+			if err == ErrNoSpace {
+				b.Logf("made full block with %d txns", j)
+				break
+			} else {
+				require.NoError(b, err)
+			}
+
+			// First block just creates app, don't fill it up
+			if i == 1 {
+				onCompletion = transactions.NoOpOC
+				createdAppIdx = eval.state.txnCounter()
+				break
+			}
+		}
+
+		lvb, err := eval.GenerateBlock()
+		require.NoError(b, err)
+
+		// If this is the app creation block, add to both ledgers
+		if i == 1 {
+			err = l0.AddBlock(lvb.blk, cert)
+			require.NoError(b, err)
+			err = l1.AddBlock(lvb.blk, cert)
+			require.NoError(b, err)
+			continue
+		}
+
+		err = l0.AddBlock(lvb.blk, cert)
+		require.NoError(b, err)
+
+		blocks = append(blocks, lvb.blk)
+	}
+
+	b.Logf("built %d blocks", numBlocks)
+
+	// eval + add all the (valid) blocks to the second ledger, timing it
+	vc := alwaysVerifiedCache{}
+	b.ResetTimer()
+	for _, blk := range blocks {
+		_, err = l1.eval(context.Background(), blk, true, &vc, nil)
+		require.NoError(b, err)
+		err = l1.AddBlock(blk, cert)
+		require.NoError(b, err)
+	}
+}
+
+func benchmarkBlockEvalPerf(txtype string, txPerBlock int, b *testing.B) {
 	dbTempDir, err := ioutil.TempDir("", "testdir"+b.Name())
 	require.NoError(b, err)
 	dbName := fmt.Sprintf("%s.%d", b.Name(), crypto.RandUint64())
@@ -253,6 +373,9 @@ func BenchmarkAppHeavyEvalPerf500(b *testing.B)  { benchmarkBlockEvalPerf("apphe
 func BenchmarkAppHeavyEvalPerf1000(b *testing.B) { benchmarkBlockEvalPerf("appheavy", 1000, b) }
 func BenchmarkAppHeavyEvalPerf1500(b *testing.B) { benchmarkBlockEvalPerf("appheavy", 1500, b) }
 func BenchmarkAppHeavyEvalPerf2000(b *testing.B) { benchmarkBlockEvalPerf("appheavy", 2000, b) }
+
+func BenchmarkAppFullHeavy(b *testing.B) { benchmarkFullAppBlocks("appheavy", b) }
+func BenchmarkAppFullLight(b *testing.B) { benchmarkFullAppBlocks("applight", b) }
 
 func init() {
 	testasm := `
