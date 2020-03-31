@@ -3,7 +3,6 @@ echo "######################################################################"
 echo "  e2e_basic_start_stop"
 echo "######################################################################"
 set -e
-set -x
 
 # Suppress telemetry reporting for tests
 export ALGOTEST=1
@@ -12,7 +11,6 @@ RUNNING_COUNT=0
 
 function update_running_count() {
     PIDS=($(pgrep -u $(whoami) -x algod)) || true
-    echo ${PIDS}
     RUNNING_COUNT=${#PIDS[@]}
 }
 
