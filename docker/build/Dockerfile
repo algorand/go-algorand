@@ -5,7 +5,8 @@ RUN apt-get update && apt-get install -y git libboost-all-dev wget sqlite3 autoc
 WORKDIR /root
 RUN wget --quiet https://dl.google.com/go/go${GOLANG_VERSION}.linux-amd64.tar.gz && tar -xvf go${GOLANG_VERSION}.linux-amd64.tar.gz && mv go /usr/local
 ENV GOROOT=/usr/local/go \
-    GOPATH=$HOME/go
+    GOPATH=$HOME/go \
+    GOPROXY=https://gocenter.io
 RUN mkdir -p $GOPATH/src/github.com/algorand
 WORKDIR $GOPATH/src/github.com/algorand
 COPY ./go-algorand ./go-algorand/
