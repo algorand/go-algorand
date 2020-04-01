@@ -48,8 +48,8 @@ func (ae *appTealEvaluator) Check(program []byte) (cost int, err error) {
 	return logic.CheckStateful(program, ae.evalParams)
 }
 
-func (ae *appTealEvaluator) InitLedger(balances transactions.Balances, whitelist []basics.Address, appIdx basics.AppIndex) error {
-	ledger, err := newAppLedger(balances, whitelist, appIdx)
+func (ae *appTealEvaluator) InitLedger(balances transactions.Balances, params basics.AppParams, whitelist []basics.Address, appIdx basics.AppIndex) error {
+	ledger, err := newAppLedger(balances, params, whitelist, appIdx)
 	if err != nil {
 		return err
 	}
@@ -63,9 +63,10 @@ type appLedger struct {
 	addresses map[basics.Address]bool
 	balances  transactions.Balances
 	appIdx    basics.AppIndex
+	params    basics.AppParams
 }
 
-func newAppLedger(balances transactions.Balances, whitelist []basics.Address, appIdx basics.AppIndex) (al *appLedger, err error) {
+func newAppLedger(balances transactions.Balances, params basics.AppParams, whitelist []basics.Address, appIdx basics.AppIndex) (al *appLedger, err error) {
 	if balances == nil {
 		err = fmt.Errorf("cannot create appLedger with nil balances")
 		return
@@ -85,6 +86,7 @@ func newAppLedger(balances transactions.Balances, whitelist []basics.Address, ap
 	al.appIdx = appIdx
 	al.balances = balances
 	al.addresses = make(map[basics.Address]bool)
+	al.params = params
 	for _, addr := range whitelist {
 		al.addresses[addr] = true
 	}
@@ -110,31 +112,10 @@ func (al *appLedger) Balance(addr basics.Address) (uint64, error) {
 // AppGlobalState returns the global state key/value store for this
 // application. The returned map must NOT be modified.
 func (al *appLedger) AppGlobalState() (basics.TealKeyValue, error) {
-	creator, doesNotExist, err := al.balances.GetAppCreator(al.appIdx)
-	if err != nil {
-		return nil, err
-	}
-
-	if doesNotExist {
-		return nil, fmt.Errorf("cannot fetch GlobalState, no app %d", al.appIdx)
-	}
-
-	creatorRecord, err := al.balances.Get(creator, false)
-	if err != nil {
-		return nil, err
-	}
-
-	params, ok := creatorRecord.AppParams[al.appIdx]
-	if !ok {
-		return nil, fmt.Errorf("app %d not found in account %s", al.appIdx, creator.String())
-	}
-
-	// GlobalState might be nil, so make sure we don't return a nil map
-	keyValue := params.GlobalState
+	keyValue := al.params.GlobalState
 	if keyValue == nil {
 		keyValue = make(basics.TealKeyValue)
 	}
-
 	return keyValue, nil
 }
 

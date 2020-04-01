@@ -80,7 +80,7 @@ type Balances interface {
 type StateEvaluator interface {
 	Eval(program []byte) (pass bool, stateDelta basics.EvalDelta, err error)
 	Check(program []byte) (cost int, err error)
-	InitLedger(balances Balances, whitelist []basics.Address, appIdx basics.AppIndex) error
+	InitLedger(balances Balances, params basics.AppParams, whitelist []basics.Address, appIdx basics.AppIndex) error
 }
 
 // Header captures the fields common to every transaction type.

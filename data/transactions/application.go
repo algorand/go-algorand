@@ -202,25 +202,11 @@ func applyDelta(stateDelta basics.StateDelta, kv basics.TealKeyValue) error {
 // applyStateDeltas applies a basics.EvalDelta to the app's global key/value
 // store as well as a set of local key/value stores. If this function returns
 // an error, the transaction must not be committed.
-func applyStateDeltas(evalDelta basics.EvalDelta, balances Balances, appIdx basics.AppIndex, errIfNotApplied bool) error {
-	// Fetch the application parameters and the creator's address
-	params, creator, doesNotExist, err := getAppParams(balances, appIdx)
-	if err != nil {
-		return err
-	}
-
-	if doesNotExist {
-		// This case should not happen, because an application that does not
-		// exist should not have programs that could produce state deltas (and
-		// we shouldn't have been called, period)
-		return fmt.Errorf("cannot apply state deltas to deleted application")
-	}
-
+func applyStateDeltas(evalDelta basics.EvalDelta, params basics.AppParams, creator basics.Address, balances Balances, appIdx basics.AppIndex, errIfNotApplied bool) error {
 	/*
 	 * 1. Apply GlobalState delta (if any), allocating the key/value store
 	 *    if req'd
 	 */
-
 	proto := balances.ConsensusParams()
 	if len(evalDelta.GlobalDelta) > 0 {
 		// Clone the parameters so that they are safe to modify
@@ -234,7 +220,7 @@ func applyStateDeltas(evalDelta basics.EvalDelta, balances Balances, appIdx basi
 
 		// Check that the global state delta isn't breaking any rules regarding
 		// key/value lengths
-		err = evalDelta.GlobalDelta.Valid(proto)
+		err := evalDelta.GlobalDelta.Valid(proto)
 		if err != nil {
 			if !errIfNotApplied {
 				return nil
@@ -273,7 +259,7 @@ func applyStateDeltas(evalDelta basics.EvalDelta, balances Balances, appIdx basi
 
 		// Check that the local state delta isn't breaking any rules regarding
 		// key/value lengths
-		err = delta.Valid(proto)
+		err := delta.Valid(proto)
 		if err != nil {
 			if !errIfNotApplied {
 				return nil
@@ -416,13 +402,19 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva
 		}
 	}
 
+	// Fetch the application parameters, if they exist
+	params, creator, doesNotExist, err := getAppParams(balances, appIdx)
+	if err != nil {
+		return err
+	}
+
 	// Initialize our TEAL evaluation context. Internally, this manages
 	// access to balance records for Stateful TEAL programs. Stateful TEAL
 	// may only access the sender's balance record or the balance records
 	// of accounts explicitly listed in ac.Accounts. Implicitly, the
 	// creator's balance record may be accessed via GlobalState.
 	whitelistWithSender := append(ac.Accounts, header.Sender)
-	err := steva.InitLedger(balances, whitelistWithSender, appIdx)
+	err = steva.InitLedger(balances, params, whitelistWithSender, appIdx)
 	if err != nil {
 		return err
 	}
@@ -435,12 +427,6 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva
 		if err != nil {
 			return err
 		}
-	}
-
-	// Fetch the application parameters, if they exist
-	params, creator, doesNotExist, err := getAppParams(balances, appIdx)
-	if err != nil {
-		return err
 	}
 
 	// Clear out our LocalState. In this case, we don't execute the
@@ -471,7 +457,7 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva
 				// the GlobalStateSchema and LocalStateSchema. If they do exceed
 				// those bounds, then don't fail, but also don't apply the changes.
 				failIfNotApplied := false
-				err = applyStateDeltas(stateDeltas, balances, appIdx, failIfNotApplied)
+				err = applyStateDeltas(stateDeltas, params, creator, balances, appIdx, failIfNotApplied)
 				if err != nil {
 					return err
 				}
@@ -541,7 +527,7 @@ func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva
 	// the bounds set by the GlobalStateSchema and LocalStateSchema.
 	// If they would exceed those bounds, then fail.
 	failIfNotApplied := true
-	err = applyStateDeltas(stateDeltas, balances, appIdx, failIfNotApplied)
+	err = applyStateDeltas(stateDeltas, params, creator, balances, appIdx, failIfNotApplied)
 	if err != nil {
 		return err
 	}
