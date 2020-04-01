@@ -217,41 +217,44 @@ func applyStateDeltas(evalDelta basics.EvalDelta, balances Balances, appIdx basi
 	}
 
 	/*
-	 * 1. Apply GlobalState delta, allocating the key/value store if req'd
+	 * 1. Apply GlobalState delta (if any), allocating the key/value store
+	 *    if req'd
 	 */
 
-	// Clone the parameters so that they are safe to modify
-	params = params.Clone()
-
-	// Allocate GlobalState if necessary. We need to do this now
-	// since an empty map will be written as nil to disk
-	if params.GlobalState == nil {
-		params.GlobalState = make(basics.TealKeyValue)
-	}
-
-	// Check that the global state delta isn't breaking any rules regarding
-	// key/value lengths
 	proto := balances.ConsensusParams()
-	err = evalDelta.GlobalDelta.Valid(proto)
-	if err != nil {
-		if !errIfNotApplied {
-			return nil
-		}
-		return fmt.Errorf("cannot apply GlobalState delta: %v", err)
-	}
+	if len(evalDelta.GlobalDelta) > 0 {
+		// Clone the parameters so that they are safe to modify
+		params = params.Clone()
 
-	// Apply the GlobalDelta in place
-	err = applyDelta(evalDelta.GlobalDelta, params.GlobalState)
-	if err != nil {
-		return err
-	}
-
-	// Make sure we haven't violated the GlobalStateSchema
-	if !params.GlobalState.SatisfiesSchema(params.GlobalStateSchema) {
-		if !errIfNotApplied {
-			return nil
+		// Allocate GlobalState if necessary. We need to do this now
+		// since an empty map will be written as nil to disk
+		if params.GlobalState == nil {
+			params.GlobalState = make(basics.TealKeyValue)
 		}
-		return fmt.Errorf("GlobalState for app %d would use too much space", appIdx)
+
+		// Check that the global state delta isn't breaking any rules regarding
+		// key/value lengths
+		err = evalDelta.GlobalDelta.Valid(proto)
+		if err != nil {
+			if !errIfNotApplied {
+				return nil
+			}
+			return fmt.Errorf("cannot apply GlobalState delta: %v", err)
+		}
+
+		// Apply the GlobalDelta in place
+		err = applyDelta(evalDelta.GlobalDelta, params.GlobalState)
+		if err != nil {
+			return err
+		}
+
+		// Make sure we haven't violated the GlobalStateSchema
+		if !params.GlobalState.SatisfiesSchema(params.GlobalStateSchema) {
+			if !errIfNotApplied {
+				return nil
+			}
+			return fmt.Errorf("GlobalState for app %d would use too much space", appIdx)
+		}
 	}
 
 	/*
@@ -288,7 +291,7 @@ func applyStateDeltas(evalDelta basics.EvalDelta, balances Balances, appIdx basi
 			if !errIfNotApplied {
 				return nil
 			}
-			return fmt.Errorf("cannot apply LocalState delta to %v: acct has not opted in to app %d", addr.String(), appIdx)
+			return fmt.Errorf("cannot apply LocalState delta to %s: acct has not opted in to app %d", addr.String(), appIdx)
 		}
 
 		// Clone LocalState so that we have a copy that is safe to modify
@@ -313,27 +316,29 @@ func applyStateDeltas(evalDelta basics.EvalDelta, balances Balances, appIdx basi
 			return fmt.Errorf("LocalState for %s for app %d would use too much space", addr.String(), appIdx)
 		}
 
-		// Stage the change to be committed after schema checks
+		// Stage the change to be committed after all schema checks
 		changes[addr] = localState
 	}
 
 	/*
-	 * 3. Write GlobalState changes back to cow. This should be correct
+	 * 3. Write any GlobalState changes back to cow. This should be correct
 	 *    even if creator is in the local deltas, because the updated
 	 *    fields are different.
 	 */
 
-	record, err := balances.Get(creator, false)
-	if err != nil {
-		return err
-	}
+	if len(evalDelta.GlobalDelta) > 0 {
+		record, err := balances.Get(creator, false)
+		if err != nil {
+			return err
+		}
 
-	record.AppParams = cloneAppParams(record.AppParams)
-	record.AppParams[appIdx] = params
+		record.AppParams = cloneAppParams(record.AppParams)
+		record.AppParams[appIdx] = params
 
-	err = balances.Put(record)
-	if err != nil {
-		return err
+		err = balances.Put(record)
+		if err != nil {
+			return err
+		}
 	}
 
 	/*
