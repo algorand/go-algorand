@@ -12,11 +12,10 @@
 #
 # Examples: scripts/check_clean_enlistment.sh
 
-# Treat travis builds as 'clean'
-if [ -z "${TRAVIS_BRANCH}" ]; then
-    if [[ -n $(git status --porcelain) ]]; then
-        exit 1
-    fi
-else
-    exit 0
+# Treat travis and jenkins builds as 'clean'
+if [ -z "${TRAVIS_BRANCH}" ] && [ -z "${JENKINS_URL}" ] ; then
+  if [[ -n $(git status --porcelain) ]]; then
+    exit 1
+  fi
 fi
+exit 0
