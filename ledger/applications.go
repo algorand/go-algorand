@@ -107,6 +107,8 @@ func (al *appLedger) Balance(addr basics.Address) (uint64, error) {
 	return record.MicroAlgos.Raw, nil
 }
 
+// AppGlobalState returns the global state key/value store for this
+// application. The returned map must NOT be modified.
 func (al *appLedger) AppGlobalState() (basics.TealKeyValue, error) {
 	creator, doesNotExist, err := al.balances.GetAppCreator(al.appIdx)
 	if err != nil {
@@ -128,7 +130,7 @@ func (al *appLedger) AppGlobalState() (basics.TealKeyValue, error) {
 	}
 
 	// GlobalState might be nil, so make sure we don't return a nil map
-	keyValue := params.GlobalState.Clone()
+	keyValue := params.GlobalState
 	if keyValue == nil {
 		keyValue = make(basics.TealKeyValue)
 	}
@@ -136,6 +138,8 @@ func (al *appLedger) AppGlobalState() (basics.TealKeyValue, error) {
 	return keyValue, nil
 }
 
+// AppLocalState returns the local state key/value store for this
+// account and application. The returned map must NOT be modified.
 func (al *appLedger) AppLocalState(addr basics.Address, appIdx basics.AppIndex) (basics.TealKeyValue, error) {
 	// Allow referring to the current appIdx as 0
 	if appIdx == 0 {
@@ -154,16 +158,13 @@ func (al *appLedger) AppLocalState(addr basics.Address, appIdx basics.AppIndex) 
 		return nil, err
 	}
 
-	_, ok := record.AppLocalStates[appIdx]
+	localState, ok := record.AppLocalStates[appIdx]
 	if !ok {
 		return nil, fmt.Errorf("addr %s not opted in to app %d, cannot fetch state", addr.String(), appIdx)
 	}
 
-	// Clone LocalState so that we don't edit it in place
-	cloned := record.AppLocalStates[appIdx].Clone()
-
 	// KeyValue might be nil, so make sure we don't return a nil map
-	keyValue := cloned.KeyValue
+	keyValue := localState.KeyValue
 	if keyValue == nil {
 		keyValue = make(basics.TealKeyValue)
 	}
@@ -191,7 +192,6 @@ func (al *appLedger) AssetHolding(addr basics.Address, assetIdx basics.AssetInde
 		return
 	}
 
-	// OK to return basics.AssetParams by value, it only holds value types
 	return holding, nil
 }
 
@@ -215,6 +215,5 @@ func (al *appLedger) AssetParams(addr basics.Address, assetIdx basics.AssetIndex
 		return
 	}
 
-	// OK to return basics.AssetParams by value, it only holds value types
 	return params, nil
 }

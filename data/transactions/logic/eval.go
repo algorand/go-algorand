@@ -197,11 +197,10 @@ type evalContext struct {
 
 	programHash crypto.Digest
 
-	appGlobalStateRCache basics.TealKeyValue // read only state to track deletes
-	appGlobalStateWCache basics.TealKeyValue
-	appLocalStateRCache  map[ckey]basics.TealKeyValue // read only state to track deletes
-	appLocalStateWCache  map[ckey]basics.TealKeyValue
-	appEvalDelta         basics.EvalDelta
+	globalStateCow      *keyValueCow
+	appLocalStateRCache map[ckey]basics.TealKeyValue // read only state to track deletes
+	appLocalStateWCache map[ckey]basics.TealKeyValue
+	appEvalDelta        basics.EvalDelta
 
 	// Stores state & disassembly for the optional web debugger
 	debuggerState DebuggerState
@@ -265,9 +264,14 @@ func EvalStateful(program []byte, params EvalParams) (pass bool, delta basics.Ev
 	cx.EvalParams = params
 	cx.runModeFlags = runModeApplication
 
-	cx.appEvalDelta = basics.MakeEvalDelta()
-	cx.appGlobalStateRCache = nil
-	cx.appGlobalStateWCache = nil // use nil as indicator of not loaded yet
+	cx.appEvalDelta = basics.EvalDelta{
+		GlobalDelta: make(basics.StateDelta),
+		LocalDeltas: make(map[basics.Address]basics.StateDelta),
+	}
+
+	// Allocate global delta cow lazily to avoid ledger lookups
+	cx.globalStateCow = nil
+
 	cx.appLocalStateRCache = make(map[ckey]basics.TealKeyValue)
 	cx.appLocalStateWCache = make(map[ckey]basics.TealKeyValue)
 
@@ -1623,70 +1627,44 @@ func (cx *evalContext) appDeleteLocalKey(appID uint64, addr basics.Address, key 
 	return nil
 }
 
-func (cx *evalContext) getGlobalKV() (basics.TealKeyValue, error) {
-	if cx.appGlobalStateWCache == nil {
-		tkv, err := cx.Ledger.AppGlobalState()
+func (cx *evalContext) getGlobalStateCow() (*keyValueCow, error) {
+	if cx.globalStateCow == nil {
+		globalKV, err := cx.Ledger.AppGlobalState()
 		if err != nil {
-			return nil, fmt.Errorf("failed to fetch global state of this app: %s", err.Error())
+			return nil, fmt.Errorf("failed to fetch global state: %v", err)
 		}
-		cx.appGlobalStateRCache = tkv.Clone()
-		cx.appGlobalStateWCache = tkv
+		cx.globalStateCow = makeKeyValueCow(globalKV, cx.appEvalDelta.GlobalDelta)
 	}
-	return cx.appGlobalStateWCache, nil
+	return cx.globalStateCow, nil
 }
 
 func (cx *evalContext) appReadGlobalKey(key string) (basics.TealValue, bool, error) {
-	tkv, err := cx.getGlobalKV()
+	kvCow, err := cx.getGlobalStateCow()
 	if err != nil {
 		return basics.TealValue{}, false, err
 	}
 
-	tv, ok := tkv[string(key)]
+	tv, ok := kvCow.read(key)
 	return tv, ok, nil
 }
 
 // appWriteGlobalKey adds value to StateDelta
 func (cx *evalContext) appWriteGlobalKey(key string, tv basics.TealValue) error {
-	tkv, err := cx.getGlobalKV()
+	kvCow, err := cx.getGlobalStateCow()
 	if err != nil {
 		return err
 	}
-
-	// if the value is in cache => it is not changed, no state change
-	if v, ok := tkv[key]; ok && tv == v {
-		return nil
-	}
-
-	// update the value
-	tkv[key] = tv
-
-	// and update EvalDelta
-	cx.appEvalDelta.GlobalDelta[key] = tv.ToValueDelta()
+	kvCow.write(key, tv)
 	return nil
 }
 
 // appDeleteGlobalKey deletes a value from the cache and adds it to StateDelta
 func (cx *evalContext) appDeleteGlobalKey(key string) error {
-	tkv, err := cx.getGlobalKV()
+	kvCow, err := cx.getGlobalStateCow()
 	if err != nil {
 		return err
 	}
-
-	// if the value is not in the cache => no state change
-	if _, ok := tkv[key]; !ok {
-		return nil
-	}
-
-	// update the value
-	delete(tkv, key)
-
-	// the key was not in the state originally then no state change
-	if _, ok := cx.appGlobalStateRCache[key]; !ok {
-		delete(cx.appEvalDelta.GlobalDelta, key)
-	} else {
-		// otherwise update EvalDelta
-		cx.appEvalDelta.GlobalDelta[key] = basics.ValueDelta{Action: basics.DeleteAction}
-	}
+	kvCow.del(key)
 	return nil
 }
 

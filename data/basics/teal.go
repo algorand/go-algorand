@@ -46,6 +46,28 @@ type ValueDelta struct {
 	Uint   uint64      `codec:"ui"`
 }
 
+// ToTealValue converts a ValueDelta into a TealValue if possible, and returns
+// ok = false with a value of 0 TealUint if the conversion is not possible.
+func (vd *ValueDelta) ToTealValue() (value TealValue, ok bool) {
+	switch vd.Action {
+	case SetBytesAction:
+		value.Type = TealBytesType
+		value.Bytes = vd.Bytes
+		ok = true
+	case SetUintAction:
+		value.Type = TealUintType
+		value.Uint = vd.Uint
+		ok = true
+	case DeleteAction:
+		value.Type = TealUintType
+		ok = false
+	default:
+		value.Type = TealUintType
+		ok = false
+	}
+	return value, ok
+}
+
 // StateDelta is a map from key/value store keys to ValueDeltas, indicating
 // what should happen for that key
 //msgp:allocbound StateDelta config.MaxStateDeltaKeys
@@ -125,14 +147,6 @@ func (ed EvalDelta) Equal(o EvalDelta) bool {
 	}
 
 	return true
-}
-
-// MakeEvalDelta creates an EvalDelta and allocates its fields
-func MakeEvalDelta() EvalDelta {
-	return EvalDelta{
-		GlobalDelta: make(StateDelta),
-		LocalDeltas: make(map[Address]StateDelta),
-	}
 }
 
 // StateSchema sets maximums on the number of each value type that may be stored
