@@ -1,8 +1,8 @@
-GOPATH		:= $(shell go env GOPATH)
+export GOPATH		:= $(shell go env GOPATH)
 GOPATH1		:= $(firstword $(subst :, ,$(GOPATH)))
-export GOPATH
-GO111MODULE	:= on
-export GO111MODULE
+export GO111MODULE	:= on
+export GOPROXY := https://gocenter.io
+
 UNAME		:= $(shell uname)
 SRCPATH     := $(shell pwd)
 ARCH        := $(shell ./scripts/archtype.sh)
