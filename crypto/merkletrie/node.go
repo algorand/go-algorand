@@ -170,7 +170,7 @@ func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID stored
 }
 
 func (n *node) recalculateHash(cache *merkleTrieCache, path []byte) error {
-	hashAccumulator := make([]byte, 0, 32*256) // we can have up to 256 elements, so preallocate enough storage.
+	hashAccumulator := make([]byte, 0, 64*256) // we can have up to 256 elements, so preallocate sufficient storage; append would expand the storage if it won't be enough.
 	copy(hashAccumulator, path)
 	i := n.firstChild
 	for {
@@ -178,6 +178,7 @@ func (n *node) recalculateHash(cache *merkleTrieCache, path []byte) error {
 		if err != nil {
 			return err
 		}
+		hashAccumulator = append(hashAccumulator, i)
 		hashAccumulator = append(hashAccumulator, childNode.hash...)
 		if n.childrenNext[i] == i {
 			break

@@ -308,22 +308,27 @@ func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 func (au *accountUpdates) accountsUpdateBalaces(balancesTx *merkletrie.Transaction, accountsDeltas map[basics.Address]accountDelta) (err error) {
 	var added, deleted bool
 	for addr, delta := range accountsDeltas {
-		deleteHash := accountHashBuilder(addr, delta.old, protocol.Encode(&delta.old))
-		deleted, err = balancesTx.Delete(deleteHash)
-		if err != nil {
-			return err
+		if !delta.old.IsZero() {
+			deleteHash := accountHashBuilder(addr, delta.old, protocol.Encode(&delta.old))
+			deleted, err = balancesTx.Delete(deleteHash)
+			if err != nil {
+				return err
+			}
+			if !deleted {
+				au.log.Warnf("failed to delete hash '%v' from merkle trie", deleteHash)
+			}
 		}
-		if !deleted {
-			au.log.Warnf("failed to delete hash '%v' from merkle trie", deleteHash)
+		if !delta.new.IsZero() {
+			addHash := accountHashBuilder(addr, delta.new, protocol.Encode(&delta.new))
+			added, err = balancesTx.Add(addHash)
+			if err != nil {
+				return err
+			}
+			if !added {
+				au.log.Warnf("attempted to add duplicate hash '%v' to merkle trie", addHash)
+			}
 		}
-		addHash := accountHashBuilder(addr, delta.new, protocol.Encode(&delta.new))
-		added, err = balancesTx.Add(addHash)
-		if err != nil {
-			return err
-		}
-		if !added {
-			au.log.Warnf("attempted to add duplicate hash '%v' to merkle trie", addHash)
-		}
+
 	}
 	// write it all to disk.
 	err = au.balancesTrie.Commit()

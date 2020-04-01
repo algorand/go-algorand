@@ -74,17 +74,15 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local) *TransactionPo
 		cfg.TxPoolExponentialIncreaseFactor = 1
 	}
 	pool := TransactionPool{
-		pendingTxids:    make(map[transactions.Txid]txPoolVerifyCacheVal),
-		rememberedTxids: make(map[transactions.Txid]txPoolVerifyCacheVal),
-		expiredTxCount:  make(map[basics.Round]int),
-		ledger:          ledger,
-		statusCache:     makeStatusCache(cfg.TxPoolSize),
-		logStats:        cfg.EnableAssembleStats,
-		expFeeFactor:    cfg.TxPoolExponentialIncreaseFactor,
-		txPoolMaxSize:   cfg.TxPoolSize,
+		ledger:        ledger,
+		statusCache:   makeStatusCache(cfg.TxPoolSize),
+		logStats:      cfg.EnableAssembleStats,
+		expFeeFactor:  cfg.TxPoolExponentialIncreaseFactor,
+		txPoolMaxSize: cfg.TxPoolSize,
 	}
 	pool.cond.L = &pool.mu
-	pool.recomputeBlockEvaluator(make(map[transactions.Txid]basics.Round))
+
+	pool.Reset()
 	return &pool
 }
 
@@ -99,6 +97,21 @@ const expiredHistory = 10
 // timeoutOnNewBlock determines how long Test() and Remember() wait for
 // OnNewBlock() to process a new block that appears to be in the ledger.
 const timeoutOnNewBlock = time.Second
+
+// Reset resets the content of the transaction pool
+func (pool *TransactionPool) Reset() {
+	pool.pendingTxids = make(map[transactions.Txid]txPoolVerifyCacheVal)
+	pool.pendingVerifyParams = nil
+	pool.pendingTxGroups = nil
+	pool.rememberedTxids = make(map[transactions.Txid]txPoolVerifyCacheVal)
+	pool.rememberedVerifyParams = nil
+	pool.rememberedTxGroups = nil
+	pool.expiredTxCount = make(map[basics.Round]int)
+	pool.numPendingWholeBlocks = 0
+	pool.pendingBlockEvaluator = nil
+	pool.statusCache.reset()
+	pool.recomputeBlockEvaluator(make(map[transactions.Txid]basics.Round))
+}
 
 // NumExpired returns the number of transactions that expired at the end of a round (only meaningful if cleanup has
 // been called for that round)

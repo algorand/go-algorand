@@ -889,6 +889,7 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 	}
 	defer node.mu.Unlock()
 	// start
+	node.transactionPool.Reset()
 	node.wsFetcherService.Start()
 	node.catchupService.Start()
 	node.agreementService.Start()
