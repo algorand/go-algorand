@@ -1,0 +1,34 @@
+tasks:
+  - task: docker.Version
+    configFilePath: scripts/configure_dev-deps.sh
+  - task: shell.docker.Ensure
+    image: algorand/go-algorand-ci-linux
+    version: '{{ docker.Version.outputs.version }}'
+    dockerFilePath: docker/build/cicd.Dockerfile
+    dependencies: docker.Version
+  - task: docker.Make
+    name: build
+    docker:
+      image: algorand/go-algorand-ci-linux
+      version: '{{ docker.Version.outputs.version }}'
+      workDir: /projects/go-algorand
+    target: ci-build
+  - task: docker.Make
+    name: package
+    docker:
+      image: algorand/go-algorand-ci-linux
+      version: '{{ docker.Version.outputs.version }}'
+      workDir: /projects/go-algorand
+    target: package
+
+jobs:
+  package:
+    configs:
+      arch: amd64
+      docker:
+        env:
+          - FOO=foo
+    tasks:
+      - shell.docker.Ensure
+      - docker.Make.package
+
