@@ -198,8 +198,8 @@ type evalContext struct {
 	programHash crypto.Digest
 
 	globalStateCow      *keyValueCow
-	appLocalStateRCache map[ckey]basics.TealKeyValue // read only state to track deletes
-	appLocalStateWCache map[ckey]basics.TealKeyValue
+	localStateCows      map[basics.Address]*keyValueCow
+	readOnlyLocalStates map[ckey]basics.TealKeyValue
 	appEvalDelta        basics.EvalDelta
 
 	// Stores state & disassembly for the optional web debugger
@@ -272,18 +272,23 @@ func EvalStateful(program []byte, params EvalParams) (pass bool, delta basics.Ev
 	// Allocate global delta cow lazily to avoid ledger lookups
 	cx.globalStateCow = nil
 
-	cx.appLocalStateRCache = make(map[ckey]basics.TealKeyValue)
-	cx.appLocalStateWCache = make(map[ckey]basics.TealKeyValue)
+	// Stores state cows for each modified LocalState for this app
+	cx.localStateCows = make(map[basics.Address]*keyValueCow)
 
+	// Stores read-only local key/value stores keyed off of <addr, app>
+	cx.readOnlyLocalStates = make(map[ckey]basics.TealKeyValue)
+
+	// Evaluate the program
 	pass, err = eval(program, &cx)
-	// remove possible leftovers from writing and removing keys
-	for k, v := range cx.appEvalDelta.LocalDeltas {
-		if len(v) == 0 {
-			delete(cx.appEvalDelta.LocalDeltas, k)
+
+	// Fill in state deltas
+	for addr, kvCow := range cx.localStateCows {
+		if len(kvCow.delta) > 0 {
+			cx.appEvalDelta.LocalDeltas[addr] = kvCow.delta
 		}
 	}
-	delta = cx.appEvalDelta
-	return pass, delta, err
+
+	return pass, cx.appEvalDelta, err
 }
 
 // Eval checks to see if a transaction passes logic
@@ -1549,81 +1554,70 @@ func opAppCheckOptedIn(cx *evalContext) {
 	cx.stack = cx.stack[:last]
 }
 
-func (cx *evalContext) getLocalKV(appID uint64, addr basics.Address) (basics.TealKeyValue, error) {
-	tkv, ok := cx.appLocalStateWCache[ckey{appID, addr}]
-	if !ok {
-		var err error
-		tkv, err = cx.Ledger.AppLocalState(addr, basics.AppIndex(appID))
+func (cx *evalContext) getReadOnlyLocalState(appID uint64, addr basics.Address) (basics.TealKeyValue, error) {
+	kvIdx := ckey{appID, addr}
+	if cx.readOnlyLocalStates[kvIdx] == nil {
+		localKV, err := cx.Ledger.AppLocalState(addr, basics.AppIndex(appID))
 		if err != nil {
-			return nil, fmt.Errorf("failed to fetch local state [%s] of the app %d: %s", addr, appID, err.Error())
+			return nil, fmt.Errorf("failed to fetch app local state local state for acct %s, app %d: %v", addr, appID, err)
 		}
-		cx.appLocalStateRCache[ckey{appID, addr}] = tkv.Clone()
-		cx.appLocalStateWCache[ckey{appID, addr}] = tkv
+		cx.readOnlyLocalStates[kvIdx] = localKV
 	}
-	return tkv, nil
+	return cx.readOnlyLocalStates[kvIdx], nil
+}
+
+func (cx *evalContext) getLocalStateCow(addr basics.Address) (*keyValueCow, error) {
+	if cx.localStateCows[addr] == nil {
+		localKV, err := cx.Ledger.AppLocalState(addr, basics.AppIndex(0))
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch app local state local state for acct %s: %v", addr, err)
+		}
+
+		localDelta := make(basics.StateDelta)
+		cx.localStateCows[addr] = makeKeyValueCow(localKV, localDelta)
+	}
+	return cx.localStateCows[addr], nil
 }
 
 func (cx *evalContext) appReadLocalKey(appID uint64, addr basics.Address, key string) (basics.TealValue, bool, error) {
-	tkv, err := cx.getLocalKV(appID, addr)
+	// If this is for the application mentioned in the transaction header,
+	// return the result from a LocalState cow, since we may have written
+	// to it
+	if appID == 0 || appID == uint64(cx.Txn.Txn.ApplicationID) {
+		kvCow, err := cx.getLocalStateCow(addr)
+		if err != nil {
+			return basics.TealValue{}, false, err
+		}
+		tv, ok := kvCow.read(key)
+		return tv, ok, nil
+	}
+
+	// Otherwise, the state is read only, so return from the read only cache
+	kv, err := cx.getReadOnlyLocalState(appID, addr)
 	if err != nil {
 		return basics.TealValue{}, false, err
 	}
-	tv, ok := tkv[string(key)]
+	tv, ok := kv[key]
 	return tv, ok, nil
 }
 
 // appWriteLocalKey adds value to StateDelta
-func (cx *evalContext) appWriteLocalKey(appID uint64, addr basics.Address, key string, tv basics.TealValue) error {
-	tkv, err := cx.getLocalKV(appID, addr)
+func (cx *evalContext) appWriteLocalKey(addr basics.Address, key string, tv basics.TealValue) error {
+	kvCow, err := cx.getLocalStateCow(addr)
 	if err != nil {
 		return err
 	}
-
-	// if the value is in cache => it is not changed, no state change
-	if v, ok := tkv[key]; ok && tv == v {
-		return nil
-	}
-
-	// update the value
-	tkv[key] = tv
-
-	// and update EvalDelta
-	delta, ok := cx.appEvalDelta.LocalDeltas[addr]
-	if !ok {
-		delta = make(basics.StateDelta)
-		cx.appEvalDelta.LocalDeltas[addr] = delta
-	}
-	delta[key] = tv.ToValueDelta()
+	kvCow.write(key, tv)
 	return nil
 }
 
 // appDeleteLocalKey deletes a value from the cache and adds it to StateDelta
-func (cx *evalContext) appDeleteLocalKey(appID uint64, addr basics.Address, key string) error {
-	tkv, err := cx.getLocalKV(appID, addr)
+func (cx *evalContext) appDeleteLocalKey(addr basics.Address, key string) error {
+	kvCow, err := cx.getLocalStateCow(addr)
 	if err != nil {
 		return err
 	}
-
-	// if the value is not in the cache => no state change
-	if _, ok := tkv[key]; !ok {
-		return nil
-	}
-
-	// update the value
-	delete(tkv, key)
-
-	// the key was not in the state originally then no state change
-	if _, ok := cx.appLocalStateRCache[ckey{appID, addr}][key]; !ok {
-		delete(cx.appEvalDelta.LocalDeltas[addr], key)
-	} else {
-		// otherwise update EvalDelta
-		delta, ok := cx.appEvalDelta.LocalDeltas[addr]
-		if !ok {
-			delta = make(basics.StateDelta)
-			cx.appEvalDelta.LocalDeltas[addr] = delta
-		}
-		delta[key] = basics.ValueDelta{Action: basics.DeleteAction}
-	}
+	kvCow.del(key)
 	return nil
 }
 
@@ -1755,7 +1749,6 @@ func opAppPutLocalState(cx *evalContext) {
 	sv := cx.stack[last]
 	key := string(cx.stack[prev].Bytes)
 	accountIdx := cx.stack[pprev].Uint
-	appID := uint64(0) // 0 is an alias for the current app
 
 	if cx.Ledger == nil {
 		cx.err = fmt.Errorf("ledger not available")
@@ -1768,7 +1761,7 @@ func opAppPutLocalState(cx *evalContext) {
 		return
 	}
 
-	err = cx.appWriteLocalKey(appID, addr, key, sv.toTealValue())
+	err = cx.appWriteLocalKey(addr, key, sv.toTealValue())
 	if err != nil {
 		cx.err = err
 		return
@@ -1804,7 +1797,6 @@ func opAppDeleteLocalState(cx *evalContext) {
 
 	key := string(cx.stack[last].Bytes)
 	accountIdx := cx.stack[prev].Uint
-	appID := uint64(0) // 0 is an alias for the current app
 
 	if cx.Ledger == nil {
 		cx.err = fmt.Errorf("ledger not available")
@@ -1817,7 +1809,7 @@ func opAppDeleteLocalState(cx *evalContext) {
 		return
 	}
 
-	err = cx.appDeleteLocalKey(appID, addr, key)
+	err = cx.appDeleteLocalKey(addr, key)
 	if err != nil {
 		cx.err = err
 		return
