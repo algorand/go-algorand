@@ -639,7 +639,7 @@ int 1`
 	require.NoError(t, err)
 	_, _, err = EvalStateful(program, ep)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "failed to fetch local state")
+	require.Contains(t, err.Error(), "failed to fetch app local state")
 
 	ledger = makeTestLedger(
 		map[basics.Address]uint64{
@@ -651,7 +651,7 @@ int 1`
 
 	_, _, err = EvalStateful(program, ep)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "failed to fetch local state")
+	require.Contains(t, err.Error(), "failed to fetch app local state")
 
 	// create the app and check the value from ApplicationArgs[0] (protocol.PaymentTx) does not exist
 	ledger.newApp(txn.Txn.Receiver, 100)
@@ -1144,7 +1144,7 @@ int 100
 			program[firstCmdOffset] = saved
 			_, _, err = EvalStateful(program, ep)
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "failed to fetch local state")
+			require.Contains(t, err.Error(), "failed to fetch app local state")
 
 			ledger.newApp(txn.Txn.Sender, 100)
 
