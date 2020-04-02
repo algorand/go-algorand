@@ -159,21 +159,21 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params generated.Ge
 	//blockbytes, err := rpcs.RawBlockBytes(v2.Node.Ledger(), basics.Round(round))
 
 	ledger := v2.Node.Ledger()
-	block, certs, err := ledger.BlockCert(basics.Round(round))
+	block, cert, err := ledger.BlockCert(basics.Round(round))
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
 
 	response := struct {
 		Block bookkeeping.Block     `json:"omitempty"`
-		Certs agreement.Certificate `json:"omitempty"`
+		Cert agreement.Certificate `json:"omitempty"`
 	}{
 		Block: block,
 	}
 
 	// If we're using the messagepack encoding, also include the certificates.
 	if handle == protocol.CodecHandle {
-		response.Certs = cert
+		response.Cert = cert
 	}
 
 	encoded, err := encode(handle, response)
