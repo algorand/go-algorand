@@ -164,7 +164,12 @@ func (pool *TransactionPool) rememberCommit(flush bool) {
 func (pool *TransactionPool) PendingCount() int {
 	pool.pendingMu.RLock()
 	defer pool.pendingMu.RUnlock()
+	return pool.pendingCountLocked()
+}
 
+// pendingCountLocked is a helper for PendingCount that returns the number of
+// transactions pending in the pool
+func (pool *TransactionPool) pendingCountLocked() int {
 	var count int
 	for _, txgroup := range pool.pendingTxGroups {
 		count += len(txgroup)
@@ -335,17 +340,6 @@ func (pool *TransactionPool) Remember(txgroup []transactions.SignedTxn, verifyPa
 	return nil
 }
 
-// PaysetLength returns the length of the current block evaluator's payset,
-// to be used as memory allocation size hint during block assembly.
-func (pool *TransactionPool) PaysetLength() int {
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
-	if pool.pendingBlockEvaluator != nil {
-		return pool.pendingBlockEvaluator.PaysetLength()
-	}
-	return 0
-}
-
 // Lookup returns the error associated with a transaction that used
 // to be in the pool.  If no status information is available (e.g., because
 // it was too long ago, or the transaction committed successfully), then
@@ -495,12 +489,6 @@ func (pool *TransactionPool) addToPendingBlockEvaluator(txgroup []transactions.S
 // in-pool transactions to it (removing any transactions that are rejected
 // by the BlockEvaluator).
 func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transactions.Txid]basics.Round) (stats telemetryspec.ProcessBlockMetrics) {
-	// Remember the current payset length as a size hint for the new evaluator
-	var poolPaysetLength int
-	if pool.pendingBlockEvaluator != nil {
-		poolPaysetLength = pool.pendingBlockEvaluator.PaysetLength()
-	}
-
 	pool.pendingBlockEvaluator = nil
 
 	latest := pool.ledger.Latest()
@@ -526,20 +514,22 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 		return
 	}
 
+	// Grab the trnasactions to be replayed through the new block evaluator
+	pool.pendingMu.RLock()
+	txgroups := pool.pendingTxGroups
+	verifyParams := pool.pendingVerifyParams
+	pendingCount := pool.pendingCountLocked()
+	pool.pendingMu.RUnlock()
+
 	next := bookkeeping.MakeBlock(prev)
 	pool.numPendingWholeBlocks = 0
-	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, poolPaysetLength)
+	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, pendingCount)
 	if err != nil {
 		logging.Base().Warnf("TransactionPool.recomputeBlockEvaluator: cannot start evaluator: %v", err)
 		return
 	}
 
 	// Feed the transactions in order.
-	pool.pendingMu.RLock()
-	txgroups := pool.pendingTxGroups
-	verifyParams := pool.pendingVerifyParams
-	pool.pendingMu.RUnlock()
-
 	for i, txgroup := range txgroups {
 		if len(txgroup) == 0 {
 			continue

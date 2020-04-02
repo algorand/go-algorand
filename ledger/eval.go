@@ -36,6 +36,11 @@ import (
 // ErrNoSpace indicates insufficient space for transaction in block
 var ErrNoSpace = errors.New("block does not have space for transaction")
 
+// maxPaysetHint makes sure that we don't allocate too much memory up front
+// in the block evaluator, since there cannot reasonably be more than this
+// many transactions in a block.
+const maxPaysetHint = 20000
+
 // VerifiedTxnCache captures the interface for a cache of previously
 // verified transactions.  This is expected to match the transaction
 // pool object.
@@ -214,6 +219,9 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHin
 	// Preallocate space for the payset so that we don't have to
 	// dynamically grow a slice (if evaluating a whole block).
 	if paysetHint >= 0 {
+		if paysetHint > maxPaysetHint {
+			paysetHint = maxPaysetHint
+		}
 		eval.block.Payset = make([]transactions.SignedTxnInBlock, 0, paysetHint)
 	}
 
