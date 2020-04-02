@@ -514,7 +514,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 		return
 	}
 
-	// Grab the trnasactions to be replayed through the new block evaluator
+	// Grab the transactions to be played through the new block evaluator
 	pool.pendingMu.RLock()
 	txgroups := pool.pendingTxGroups
 	verifyParams := pool.pendingVerifyParams
@@ -529,7 +529,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 		return
 	}
 
-	// Feed the transactions in order.
+	// Feed the transactions in order
 	for i, txgroup := range txgroups {
 		if len(txgroup) == 0 {
 			continue
