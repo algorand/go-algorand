@@ -26,6 +26,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/algorand/go-deadlock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -274,6 +275,9 @@ func BenchmarkPay(b *testing.B) { benchmarkFullBlocks(testCases["pay"], b) }
 
 func init() {
 	testCases = make(map[string]testParams)
+
+	// Disable deadlock checking library
+	deadlock.Opts.Disable = true
 
 	// No diffs
 	params := genAppTestParams(1, false, "local")
