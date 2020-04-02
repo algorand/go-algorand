@@ -60,17 +60,17 @@ func MakeTrie(committer Committer, cachedNodesCount int) (*Trie, error) {
 		rootBytes, err := committer.LoadPage(storedNodeIdentifierNull)
 		if err == nil {
 			if rootBytes != nil {
-				mt.deserialize(rootBytes)
+				err = mt.deserialize(rootBytes)
+				if err != nil {
+					return nil, err
+				}
 			}
 		} else {
 			return nil, err
 		}
 	}
 
-	err := mt.cache.initialize(mt, committer, cachedNodesCount)
-	if err != nil {
-		return nil, err
-	}
+	mt.cache.initialize(mt, committer, cachedNodesCount)
 	return mt, nil
 }
 
@@ -221,4 +221,12 @@ func (mt *Trie) deserialize(bytes []byte) error {
 	mt.root = storedNodeIdentifier(root)
 	mt.nextNodeID = storedNodeIdentifier(nextNodeID)
 	return nil
+}
+
+// reset is used to reset the trie to a given root & nextID. It's used exclusively as part of the
+// transaction rollback recovery in case no persistence could be established.
+func (mt *Trie) reset(root, nextID storedNodeIdentifier) {
+	mt.root = root
+	mt.nextNodeID = nextID
+	mt.cache.initialize(mt, mt.cache.committer, mt.cache.cachedNodeCount)
 }

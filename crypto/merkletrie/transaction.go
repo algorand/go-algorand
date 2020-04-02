@@ -34,9 +34,11 @@ var errTransactionRollbackFailed = errors.New("unable to rollback merkle tree op
 // and only a single transaction is allowed at any given time. Moreover, a transaction that is not
 // complete ( by calling to Rollback/Commit ), will default to the Commit behaviour.
 type Transaction struct {
-	mt                *Trie
-	log               []loggedOperation
-	previousCommitter Committer
+	mt                 *Trie
+	log                []loggedOperation
+	previousCommitter  Committer
+	previousRoot       storedNodeIdentifier
+	previousNextNodeID storedNodeIdentifier
 }
 
 type loggedOperation struct {
@@ -46,8 +48,10 @@ type loggedOperation struct {
 
 func makeTransaction(mt *Trie, committer Committer) *Transaction {
 	return &Transaction{
-		mt:                mt,
-		previousCommitter: mt.SetCommitter(committer),
+		mt:                 mt,
+		previousCommitter:  mt.SetCommitter(committer),
+		previousRoot:       mt.root,
+		previousNextNodeID: mt.nextNodeID,
 	}
 }
 
@@ -81,13 +85,18 @@ func (t *Transaction) Commit() int {
 func (t *Transaction) Rollback() (int, error) {
 	defer t.mt.SetCommitter(t.previousCommitter)
 	undoRollingBack := func(startIdx int) {
-		for j := startIdx; j >= 0; j-- {
+		var rollbackErr error
+		for j := startIdx; j >= 0 && rollbackErr == nil; j-- {
 			switch t.log[j].txOp {
 			case txOpAdd:
-				t.mt.Add(t.log[j].hash)
+				_, rollbackErr = t.mt.Add(t.log[j].hash)
 			case txOpDelete:
-				t.mt.Delete(t.log[j].hash)
+				_, rollbackErr = t.mt.Delete(t.log[j].hash)
 			}
+		}
+		if rollbackErr != nil {
+			// we were not able to roll back due to committer persistance issues.
+			t.mt.reset(t.previousRoot, t.previousNextNodeID)
 		}
 	}
 	for i, op := range t.log {

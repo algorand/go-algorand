@@ -54,9 +54,10 @@ type merkleTrieCache struct {
 
 	pagesPrioritizationList *list.List               // a list of the pages priorities. The item in the front has higher priority and would not get evicted as quickly as the item on the back
 	pagesPrioritizationMap  map[uint64]*list.Element // the list element of each of the priorities
+	deferedPageLoad         uint64                   // the page to load before the nextNodeID at init time. If zero, then nothing is being reloaded.
 }
 
-func (mtc *merkleTrieCache) initialize(mt *Trie, committer Committer, cachedNodeCount int) error {
+func (mtc *merkleTrieCache) initialize(mt *Trie, committer Committer, cachedNodeCount int) {
 	mtc.mt = mt
 	mtc.idToPtr = make(map[storedNodeIdentifier]*node)
 	mtc.txNextNodeID = storedNodeIdentifierNull
@@ -66,17 +67,15 @@ func (mtc *merkleTrieCache) initialize(mt *Trie, committer Committer, cachedNode
 	mtc.pagesPrioritizationList = list.New()
 	mtc.pagesPrioritizationMap = make(map[uint64]*list.Element)
 	mtc.cachedNodeCount = cachedNodeCount
+	mtc.deferedPageLoad = storedNodeIdentifierNull
 	if mt.nextNodeID != storedNodeIdentifierBase {
 		nodesPerPage := mtc.committer.GetNodesCountPerPage()
 		// if the next node is going to be on a new page, no need to reload the last page.
-		if (int64(mtc.mt.nextNodeID) / nodesPerPage) != (int64(mtc.mt.nextNodeID-1) / nodesPerPage) {
-			return nil
+		if (int64(mtc.mt.nextNodeID) / nodesPerPage) == (int64(mtc.mt.nextNodeID-1) / nodesPerPage) {
+			mtc.deferedPageLoad = uint64(mtc.mt.nextNodeID) / uint64(nodesPerPage)
 		}
-		// otherwise, load the last page.
-		_, err := mtc.getNode(mtc.mt.nextNodeID - 1)
-		return err
 	}
-	return nil
+	return
 }
 
 func (mtc *merkleTrieCache) allocateNewNode() (pnode *node, nid storedNodeIdentifier) {
@@ -195,6 +194,13 @@ func (mtc *merkleTrieCache) rollbackTransaction() {
 // commit - used as part of the merkleTrie Commit functionality
 func (mtc *merkleTrieCache) commit() error {
 	pageSize := mtc.committer.GetNodesCountPerPage()
+
+	if mtc.deferedPageLoad != storedNodeIdentifierNull {
+		err := mtc.loadPage(mtc.deferedPageLoad)
+		if err != nil {
+			return err
+		}
+	}
 
 	createdPages := make(map[int64][]storedNodeIdentifier)
 
