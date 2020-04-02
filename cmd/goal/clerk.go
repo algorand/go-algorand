@@ -210,12 +210,12 @@ func writeTxnToFile(client libgoal.Client, signTx bool, dataDir string, walletNa
 	return writeFile(filename, protocol.Encode(&stxn), 0600)
 }
 
-func getB64Args(slice []string) [][]byte {
-	if len(slice) == 0 {
+func getB64Args(args []string) [][]byte {
+	if len(args) == 0 {
 		return nil
 	}
-	programArgs := make([][]byte, len(slice))
-	for i, argstr := range slice {
+	programArgs := make([][]byte, len(args))
+	for i, argstr := range args {
 		if argstr == "" {
 			programArgs[i] = []byte{}
 			continue
