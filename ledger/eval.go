@@ -161,9 +161,8 @@ type BlockEvaluator struct {
 	proto       config.ConsensusParams
 	genesisHash crypto.Digest
 
-	block           bookkeeping.Block
-	blockTxBytes    int
-	blockPaysetHint int
+	block        bookkeeping.Block
+	blockTxBytes int
 
 	l ledgerForEvaluator
 }
