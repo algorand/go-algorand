@@ -58,9 +58,9 @@ func Auth(log logging.Logger, apiToken string) func(echo.HandlerFunc) echo.Handl
 			// Get the current route
 			var route string
 			for _, r := range ctx.Echo().Routes() {
-				if  ctx.Path() == r.Path {
+				if ctx.Path() == r.Path {
 					route = r.Path
-					break;
+					break
 				}
 			}
 

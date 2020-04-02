@@ -167,7 +167,7 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params generated.Ge
 	response := struct {
 		Block bookkeeping.Block     `json:"omitempty"`
 		Certs agreement.Certificate `json:"omitempty"`
-	} {
+	}{
 		Block: block,
 	}
 
