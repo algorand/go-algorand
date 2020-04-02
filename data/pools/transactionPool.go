@@ -335,6 +335,17 @@ func (pool *TransactionPool) Remember(txgroup []transactions.SignedTxn, verifyPa
 	return nil
 }
 
+// PaysetLength returns the length of the current block evaluator's payset,
+// to be used as memory allocation size hint during block assembly.
+func (pool *TransactionPool) PaysetLength() int {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+	if pool.pendingBlockEvaluator != nil {
+		return pool.pendingBlockEvaluator.PaysetLength()
+	}
+	return 0
+}
+
 // Lookup returns the error associated with a transaction that used
 // to be in the pool.  If no status information is available (e.g., because
 // it was too long ago, or the transaction committed successfully), then
@@ -484,6 +495,12 @@ func (pool *TransactionPool) addToPendingBlockEvaluator(txgroup []transactions.S
 // in-pool transactions to it (removing any transactions that are rejected
 // by the BlockEvaluator).
 func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transactions.Txid]basics.Round) (stats telemetryspec.ProcessBlockMetrics) {
+	// Remember the current payset length as a size hint for the new evaluator
+	var poolPaysetLength int
+	if pool.pendingBlockEvaluator != nil {
+		poolPaysetLength = pool.pendingBlockEvaluator.PaysetLength()
+	}
+
 	pool.pendingBlockEvaluator = nil
 
 	latest := pool.ledger.Latest()
@@ -511,7 +528,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 
 	next := bookkeeping.MakeBlock(prev)
 	pool.numPendingWholeBlocks = 0
-	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader)
+	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, poolPaysetLength)
 	if err != nil {
 		logging.Base().Warnf("TransactionPool.recomputeBlockEvaluator: cannot start evaluator: %v", err)
 		return

@@ -161,8 +161,9 @@ type BlockEvaluator struct {
 	proto       config.ConsensusParams
 	genesisHash crypto.Digest
 
-	block        bookkeeping.Block
-	blockTxBytes int
+	block           bookkeeping.Block
+	blockTxBytes    int
+	blockPaysetHint int
 
 	l ledgerForEvaluator
 }
@@ -179,12 +180,14 @@ type ledgerForEvaluator interface {
 }
 
 // StartEvaluator creates a BlockEvaluator, given a ledger and a block header
-// of the block that the caller is planning to evaluate.
-func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader) (*BlockEvaluator, error) {
-	return startEvaluator(l, hdr, true, true)
+// of the block that the caller is planning to evaluate. If the length of the
+// payset being evaluated is known in advance, a paysetHint >= 0 can be
+// passed, avoiding unnecessary payset slice growth.
+func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint int) (*BlockEvaluator, error) {
+	return startEvaluator(l, hdr, paysetHint, true, true)
 }
 
-func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, validate bool, generate bool) (*BlockEvaluator, error) {
+func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHint int, validate bool, generate bool) (*BlockEvaluator, error) {
 	proto, ok := config.Consensus[hdr.CurrentProtocol]
 	if !ok {
 		return nil, protocol.Error(hdr.CurrentProtocol)
@@ -207,6 +210,12 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, validate 
 		proto:       proto,
 		genesisHash: l.GenesisHash(),
 		l:           l,
+	}
+
+	// Preallocate space for the payset so that we don't have to
+	// dynamically grow a slice (if evaluating a whole block).
+	if paysetHint >= 0 {
+		eval.block.Payset = make([]transactions.SignedTxnInBlock, 0, paysetHint)
 	}
 
 	if hdr.Round > 0 {
@@ -323,6 +332,11 @@ func (eval *BlockEvaluator) workaroundOverspentRewards(rewardPoolBalance basics.
 	return
 }
 
+// PaysetLength returns the number of transactions in the block's payset so far.
+func (eval *BlockEvaluator) PaysetLength() int {
+	return len(eval.block.Payset)
+}
+
 // Round returns the round number of the block being evaluated by the BlockEvaluator.
 func (eval *BlockEvaluator) Round() basics.Round {
 	return eval.block.Round()
@@ -426,22 +440,20 @@ func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn, ad transacti
 			SignedTxn: txn,
 			ApplyData: ad,
 		},
-	}, true)
+	})
 }
 
 // TransactionGroup tentatively adds a new transaction group as part of this block evaluation.
 // If the transaction group cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
 func (eval *BlockEvaluator) TransactionGroup(txads []transactions.SignedTxnWithAD) error {
-	return eval.transactionGroup(txads, true)
+	return eval.transactionGroup(txads)
 }
 
 // transactionGroup tentatively executes a group of transactions as part of this block evaluation.
 // If the transaction group cannot be added to the block without violating some constraints,
-// an error is returned and the block evaluator state is unchanged.  If remember is true,
-// the transaction group is added to the block evaluator state; otherwise, the block evaluator
-// is not modified and does not remember this transaction group.
-func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWithAD, remember bool) error {
+// an error is returned and the block evaluator state is unchanged.
+func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWithAD) error {
 	// Nothing to do if there are no transactions.
 	if len(txgroup) == 0 {
 		return nil
@@ -498,11 +510,9 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 		}
 	}
 
-	if remember {
-		eval.block.Payset = append(eval.block.Payset, txibs...)
-		eval.blockTxBytes += groupTxBytes
-		cow.commitToParent()
-	}
+	eval.block.Payset = append(eval.block.Payset, txibs...)
+	eval.blockTxBytes += groupTxBytes
+	cow.commitToParent()
 
 	return nil
 }
@@ -722,7 +732,7 @@ func validateTransaction(txn transactions.SignedTxn, block bookkeeping.Block, pr
 // AddBlock: eval(context.Background(), blk, false, nil, nil)
 // tracker:  eval(context.Background(), blk, false, nil, nil)
 func (l *Ledger) eval(ctx context.Context, blk bookkeeping.Block, validate bool, txcache VerifiedTxnCache, executionPool execpool.BacklogPool) (StateDelta, error) {
-	eval, err := startEvaluator(l, blk.BlockHeader, validate, false)
+	eval, err := startEvaluator(l, blk.BlockHeader, len(blk.Payset), validate, false)
 	if err != nil {
 		return StateDelta{}, err
 	}
