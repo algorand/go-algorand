@@ -37,6 +37,10 @@ type (
 // depends on the order in which the Txids appear, and that Txids do NOT cover
 // transaction signatures.
 func (payset Payset) Commit(flat bool) crypto.Digest {
+	if len(payset) == 0 {
+		payset = nil
+	}
+
 	if flat {
 		return crypto.HashObj(payset)
 	}
