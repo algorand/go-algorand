@@ -22,7 +22,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/gorilla/mux"
+	"github.com/labstack/echo/v4"
 
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/tokens"
@@ -39,7 +39,7 @@ var noneAuthRoutes = []string{"healthcheck", "swagger.json"}
 
 // Auth takes a logger and an api token and return a middleware function
 // that satisfies the gorilla middleware interface.
-func Auth(log logging.Logger, apiToken string) func(http.Handler) http.Handler {
+func Auth(log logging.Logger, apiToken string) func(echo.HandlerFunc) echo.HandlerFunc {
 	// Make sure no one is trying to call us with an invalid token
 	err := tokens.ValidateAPIToken(apiToken)
 	if err != nil {
@@ -48,58 +48,61 @@ func Auth(log logging.Logger, apiToken string) func(http.Handler) http.Handler {
 
 	apiTokenBytes := []byte(apiToken)
 
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(ctx echo.Context) error {
 			// OPTIONS responses never require auth
-			if r.Method == "OPTIONS" {
-				next.ServeHTTP(w, r)
-				return
+			if ctx.Request().Method == "OPTIONS" {
+				return next(ctx)
 			}
 
 			// Get the current route
-			route := mux.CurrentRoute(r)
-			if route == nil {
-				http.Error(w, "Not Found", 404)
-				return
+			var route string
+			for _, r := range ctx.Echo().Routes() {
+				if  ctx.Path() == r.Path {
+					route = r.Path
+					break;
+				}
 			}
 
 			// Bypass none auth names
 			for _, name := range noneAuthRoutes {
-				if route.GetName() == name {
-					next.ServeHTTP(w, r)
-					return
+				if len(route) > 0 && route[1:] == name {
+					return next(ctx)
 				}
 			}
 
-			// Handle debug route
-			// Grab the apiToken from the HTTP header
-			providedToken := []byte(r.Header.Get(TokenHeader))
+			// Grab the apiToken from the HTTP header, or as a bearer token
+			providedToken := []byte(ctx.Request().Header.Get(TokenHeader))
 			if len(providedToken) == 0 {
 				// Accept tokens provided in a bearer token format.
-				authentication := strings.SplitN(r.Header.Get("Authorization"), " ", 2)
+				authentication := strings.SplitN(ctx.Request().Header.Get("Authorization"), " ", 2)
 				if len(authentication) == 2 && strings.EqualFold("Bearer", authentication[0]) {
 					providedToken = []byte(authentication[1])
 				}
 			}
-			if route.GetName() == debugRouteName {
+
+			// Handle debug routes with /urlAuth/:token prefix.
+			if ctx.Param("token") != "" {
 				// For debug routes, we place the apiToken in the path itself
-				providedToken = []byte(mux.Vars(r)["apiToken"])
+				providedToken = []byte(ctx.Param("token"))
+
 				// Internally, pprof matches exact routes and won't match our APIToken.
 				// We need to rewrite the requested path to exclude the token prefix.
 				// https://git.io/fp2NO
 				authPrefix := fmt.Sprintf(urlAuthFormatter, providedToken)
 				// /urlAuth/[token string]/debug/pprof/ => /debug/pprof/
-				r.URL.Path = strings.TrimPrefix(r.URL.Path, authPrefix)
+				newPath := strings.TrimPrefix(ctx.Request().URL.Path, authPrefix)
+				ctx.SetPath(newPath)
+				ctx.Request().URL.Path = newPath
 			}
 
 			// Check the token in constant time
 			if subtle.ConstantTimeCompare(providedToken, apiTokenBytes) == 1 {
 				// Token was correct, keep serving request
-				next.ServeHTTP(w, r)
-				return
+				return next(ctx)
 			}
 
-			http.Error(w, "Invalid API Token", 401)
-		})
+			return ctx.String(http.StatusUnauthorized, "Invalid API Token")
+		}
 	}
 }

@@ -2,23 +2,37 @@ package v2
 
 import (
 	"fmt"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
-	"github.com/algorand/go-algorand/logging"
-	"github.com/labstack/echo/v4"
+	"net/http"
 	"strings"
 
+	"github.com/algorand/go-codec/codec"
+	"github.com/labstack/echo/v4"
+
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-codec/codec"
 )
 
 // returnError logs an internal message while returning the encoded response.
 func returnError(ctx echo.Context, code int, internal error, external string, logger logging.Logger) error {
 	logger.Info(internal)
 	return ctx.JSON(code, generated.Error{Error: external})
+}
+
+func badRequest(ctx echo.Context, internal error, external string, log logging.Logger) error {
+	return returnError(ctx, http.StatusBadRequest, internal, external, log)
+}
+
+func internalError(ctx echo.Context, internal error, external string, log logging.Logger) error {
+	return returnError(ctx, http.StatusInternalServerError, internal, external, log)
+}
+
+func notFound(ctx echo.Context, internal error, external string, log logging.Logger) error {
+	return returnError(ctx, http.StatusNotFound, internal, external, log)
 }
 
 func addrOrNil(addr basics.Address) *string {

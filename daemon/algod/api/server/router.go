@@ -60,8 +60,6 @@
 package server
 
 import (
-	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -70,15 +68,14 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib/middlewares"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v1/routes"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 )
 
 const (
-	apiV1Tag              = "v1"
-	debugRouteName        = "debug"
-	pprofEndpointPrefix   = "/debug/pprof/"
-	urlAuthEndpointPrefix = "/urlAuth/:apiToken"
+	apiV1Tag = "v1"
 )
 
 // wrapCtx passes a common context to each request without a global variable.
@@ -114,18 +111,11 @@ func ConfigureRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdow
 	// Request Context
 	ctx := lib.ReqContext{Node: node, Log: logger, Shutdown: shutdown}
 
-	// Route pprof requests
+	// Route pprof requests to DefaultServeMux.
+	// The auth middleware removes /urlAuth/:token so that it can be routed correctly.
 	if node.Config().EnableProfiler {
-		// Registers /debug/pprof handler under root path and under /urlAuth path
-		// to support header or url-provided token.
-		//router.PathPrefix(pprofEndpointPrefix).Handler(http.DefaultServeMux)
-		e.GET(pprofEndpointPrefix+"/*", echo.WrapHandler(http.DefaultServeMux))
-
-		//urlAuthRouter := router.PathPrefix(urlAuthEndpointPrefix)
-		//urlAuthRouter.PathPrefix(pprofEndpointPrefix).Handler(http.DefaultServeMux).Name(debugRouteName)
-		grp := e.Group(urlAuthEndpointPrefix)
-		route := grp.GET(pprofEndpointPrefix+"/*", echo.WrapHandler(http.DefaultServeMux))
-		route.Name = debugRouteName
+		e.GET("/debug/pprof/*", echo.WrapHandler(http.DefaultServeMux))
+		e.GET("/urlAuth/:token/debug/pprof/*", echo.WrapHandler(http.DefaultServeMux))
 	}
 
 	// Registering common routes
