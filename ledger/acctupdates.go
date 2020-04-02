@@ -19,7 +19,6 @@ package ledger
 import (
 	"context"
 	"database/sql"
-	"encoding/binary"
 	"fmt"
 	"sort"
 	"time"
@@ -212,11 +211,15 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 }
 
 func accountHashBuilder(addr basics.Address, accountData basics.AccountData, encodedAccountData []byte) []byte {
-	hash := make([]byte, 9+crypto.DigestSize)
-	rewardsSpace := binary.PutUvarint(hash[:], accountData.RewardsBase)
+	hash := make([]byte, 4+crypto.DigestSize)
+	// write out the lowest 32 bits of the reward base. This should improve the caching of the trie by allowing
+	// recent updated to be in-cache, and "older" nodes will be left alone.
+	for i, rewards := 3, accountData.RewardsBase; i >= 0; i, rewards = i-1, rewards>>8 {
+		hash[i] = byte(accountData.RewardsBase & 0x255)
+	}
 	entryHash := crypto.Hash(append(addr[:], encodedAccountData[:]...))
-	copy(hash[rewardsSpace:], entryHash[:])
-	return hash[:rewardsSpace+crypto.DigestSize]
+	copy(hash[4:], entryHash[:])
+	return hash[:]
 }
 
 // Initialize accounts DB if needed and return account round
