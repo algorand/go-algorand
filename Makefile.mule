@@ -18,7 +18,7 @@ ci-build: ci-setup buildsrc gen
 			 scripts/build_packages.sh $(OS_TYPE)/$(ARCH)
 
 package-$(OS_TYPE)-$(ARCH): ci-setup
-	scripts/release/package/$(OS_TYPE)/$(ARCH)/rpm/package.sh
+	scripts/release/mule/package/$(OS_TYPE)/$(ARCH)/rpm/package.sh
 
 package: package-$(OS_TYPE)-$(ARCH)
 
