@@ -590,7 +590,9 @@ fi
 # Shutdown node before backing up so data is consistent and files aren't locked / in-use.
 shutdown_node
 
-backup_current_version
+if [ ${ALGOD_UPDATER_SKIP_BACKUP:-0} -ne 1 ]; then
+    backup_current_version
+fi
 
 # We don't care about return code - doesn't matter if we failed to archive
 
