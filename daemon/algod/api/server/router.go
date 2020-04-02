@@ -78,13 +78,13 @@ const (
 	apiV1Tag              = "v1"
 	debugRouteName        = "debug"
 	pprofEndpointPrefix   = "/debug/pprof/"
-	urlAuthEndpointPrefix = "/urlAuth/{apiToken:[0-9a-f]+}"
+	urlAuthEndpointPrefix = "/urlAuth/:apiToken"
 )
 
 // wrapCtx passes a common context to each request without a global variable.
-func wrapCtx(ctx lib.ReqContext, handler func(lib.ReqContext, http.ResponseWriter, *http.Request)) echo.HandlerFunc {
+func wrapCtx(ctx lib.ReqContext, handler func(lib.ReqContext, echo.Context)) echo.HandlerFunc {
 	return func(context echo.Context) error {
-		handler(ctx, context.Response(), context.Request())
+		handler(ctx, context)
 		return nil
 	}
 }
@@ -101,11 +101,11 @@ func registerHandlers(router *echo.Echo, prefix string, routes lib.Routes, ctx l
 // ConfigureRouter builds and returns a new router from routes
 func ConfigureRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-chan struct{}, apiToken string, e *echo.Echo) {
 	e.Use(echo.WrapMiddleware(middlewares.Logger(logger)))
-	// TODO: Rewrite the auth middleware to support the new auth requirements.
-	//e.Use(echo.WrapMiddleware(middlewares.Auth(logger, apiToken)))
+	// TODO: New auth middleware - https://github.com/algorand/go-algorand/issues/863
+	e.Use(middlewares.Auth(logger, apiToken))
 	e.Use(echo.WrapMiddleware(middlewares.CORS))
 
-	// We could use these out of the box instead of writing our own.
+	// Note: Echo has builtin middleware for logging / CORS that we should investigate:
 	//e.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{
 	//	Format: "${remote_ip} - - ${time_rfc3339_nano} ${method} ${uri} ${protocol} ${status} ${bytes_in} ${user_agent} ${latency}\n",
 	//}))
