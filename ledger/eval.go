@@ -339,11 +339,6 @@ func (eval *BlockEvaluator) workaroundOverspentRewards(rewardPoolBalance basics.
 	return
 }
 
-// PaysetLength returns the number of transactions in the block's payset so far.
-func (eval *BlockEvaluator) PaysetLength() int {
-	return len(eval.block.Payset)
-}
-
 // Round returns the round number of the block being evaluated by the BlockEvaluator.
 func (eval *BlockEvaluator) Round() basics.Round {
 	return eval.block.Round()
