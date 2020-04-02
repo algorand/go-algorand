@@ -24,13 +24,13 @@ function verify_at_least_one_running() {
 }
 
 function verify_none_running() {
-    # Shutting down can take some time, so retry up to 2 seconds
+    # Shutting down can take some time, so wait at least 5 seconds
     for TRIES in 1 2 3 4 5; do
         update_running_count
         if [ ${RUNNING_COUNT} -eq 0 ]; then
             return 0
         fi
-        sleep .4
+        sleep 1.4
     done
     echo "algod not expected to be running but it is"
     exit 1

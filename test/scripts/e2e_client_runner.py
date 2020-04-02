@@ -109,22 +109,23 @@ def _script_thread_inner(runset, scriptname):
         retcode = -1
     dt = time.time() - start
     if retcode != 0:
-        logger.error('%s failed in %f seconds', scriptname, dt)
-        st = os.stat(cmdlogpath)
-        with open(cmdlogpath, 'r') as fin:
-            if st.st_size > LOG_WHOLE_CUTOFF:
-                fin.seek(st.st_size - LOG_WHOLE_CUTOFF)
-                text = fin.read()
-                lines = text.splitlines()
-                if len(lines) > 1:
-                    # drop probably-partial first line
-                    lines = lines[1:]
-                sys.stderr.write('end of log follows:\n')
-                sys.stderr.write('\n'.join(lines))
-                sys.stderr.write('\n\n')
-            else:
-                sys.stderr.write('whole log follows:\n')
-                sys.stderr.write(fin.read())
+        with runset.lock:
+            logger.error('%s failed in %f seconds', scriptname, dt)
+            st = os.stat(cmdlogpath)
+            with open(cmdlogpath, 'r') as fin:
+                if st.st_size > LOG_WHOLE_CUTOFF:
+                    fin.seek(st.st_size - LOG_WHOLE_CUTOFF)
+                    text = fin.read()
+                    lines = text.splitlines()
+                    if len(lines) > 1:
+                        # drop probably-partial first line
+                        lines = lines[1:]
+                    sys.stderr.write('end of log follows ({}):\n'.format(scriptname))
+                    sys.stderr.write('\n'.join(lines))
+                    sys.stderr.write('\n\n')
+                else:
+                    sys.stderr.write('whole log follows ({}):\n'.format(scriptname))
+                    sys.stderr.write(fin.read())
     else:
         logger.info('finished %s OK in %f seconds', scriptname, dt)
     runset.done(scriptname, retcode == 0, dt)
