@@ -69,9 +69,8 @@ do
                 then
                     cat <(echo "$LICENSE") "$PROJECT_ROOT/$FILE" > "$PROJECT_ROOT/$FILE".1 &&
                         mv "$PROJECT_ROOT/$FILE"{.1,}
-                else
-                    echo "$FILE"
                 fi
+                echo "$FILE"
             else
                 echo -e "\n${RED_FG}$FILE${END_FG_COLOR}"
                 <"$PROJECT_ROOT/$FILE" head -n "$NUMLINES"
@@ -89,7 +88,11 @@ if [ "$(<README.md grep "${READMECOPYRIGHT}" | wc -l | tr -d ' ')" = "0" ]; then
 fi
 
 if [ $RETURN_VALUE -ne 0 ]; then
-    echo -e "\n${RED_FG}FAILED LICENSE CHECK.${END_FG_COLOR}\nUse 'check_license.sh -i' to fix.\n"
+    echo -e "\n${RED_FG}FAILED LICENSE CHECK.${END_FG_COLOR}"
+    if [ $INPLACE == "false" ]; then
+      echo -e "Use 'check_license.sh -i' to fix."
+    fi
+    echo ""
 fi
 exit $RETURN_VALUE
 
