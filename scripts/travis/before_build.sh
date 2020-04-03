@@ -39,20 +39,6 @@ function runGoLint() {
     return 1
 }
 
-function runCheckLicense() {
-    set +e
-    ./scripts/check_license.sh
-    ERROR_CODE=$?
-    set -e
-
-    if [ $ERROR_CODE -ne 0 ]; then
-        echo >&2 "check_license.sh must be clean.  Please run the following to fix issues:"
-        echo >&2 " check_license.sh -i"
-    fi
-
-    return $ERROR_CODE
-}
-
 GOPATH=$(go env GOPATH)
 export GOPATH
 export GO111MODULE=on
@@ -79,4 +65,4 @@ echo "Running golint..."
 runGoLint
 
 echo "Running check_license..."
-runCheckLicense
+./scripts/check_license.sh

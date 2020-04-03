@@ -15,6 +15,7 @@ EXCLUDE=(
 FILTER=$(IFS="|" ; echo "${EXCLUDE[*]}")
 INPLACE=false
 VERBOSE=false
+MOD_COUNT=0
 RETURN_VALUE=0
 
 usage() {
@@ -24,7 +25,7 @@ usage() {
     echo
     echo "Args:"
     echo "-i    Edit in-place."
-    echo "-v    Verbose, same as doing \`head -n 16\` on each file."
+    echo "-v    Verbose, same as doing \`head -n ${NUMLINES:-16}\` on each file."
     echo
 }
 
@@ -69,6 +70,7 @@ do
                 then
                     cat <(echo "$LICENSE") "$PROJECT_ROOT/$FILE" > "$PROJECT_ROOT/$FILE".1 &&
                         mv "$PROJECT_ROOT/$FILE"{.1,}
+                    ((MOD_COUNT++))
                 fi
                 echo "$FILE"
             else
@@ -87,10 +89,12 @@ if [ "$(<README.md grep "${READMECOPYRIGHT}" | wc -l | tr -d ' ')" = "0" ]; then
     echo "README.md file need to have it's license date range updated."
 fi
 
-if [ $RETURN_VALUE -ne 0 ] && [ $VERBOSE == "true" ] ; then
+if [ $RETURN_VALUE -ne 0 ] ; then
     echo -e "\n${RED_FG}FAILED LICENSE CHECK.${END_FG_COLOR}"
     if [ $INPLACE == "false" ]; then
       echo -e "Use 'check_license.sh -i' to fix."
+    else
+      echo "Modified $MOD_COUNT file(s)."
     fi
     echo ""
 fi
