@@ -512,7 +512,9 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 // an error is returned and the block evaluator state is unchanged.
 func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transactions.ApplyData, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
 	var err error
-	var cachedTxid transactions.Txid
+
+	// Only compute the TxID once
+	txid := txn.ID()
 
 	if eval.validate {
 		err = txn.Txn.Alive(eval.block)
@@ -521,13 +523,12 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 		}
 
 		// Transaction already in the ledger?
-		cachedTxid = txn.ID()
-		dup, err := cow.isDup(txn.Txn.First(), txn.Txn.Last(), cachedTxid, txlease{sender: txn.Txn.Sender, lease: txn.Txn.Lease})
+		dup, err := cow.isDup(txn.Txn.First(), txn.Txn.Last(), txid, txlease{sender: txn.Txn.Sender, lease: txn.Txn.Lease})
 		if err != nil {
 			return err
 		}
 		if dup {
-			return TransactionInLedgerError{txn.ID()}
+			return TransactionInLedgerError{txid}
 		}
 	}
 
@@ -539,7 +540,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 	// Apply the transaction, updating the cow balances
 	applyData, err := txn.Txn.Apply(cow, spec, cow.txnCounter())
 	if err != nil {
-		return fmt.Errorf("transaction %v: %v", txn.ID(), err)
+		return fmt.Errorf("transaction %v: %v", txid, err)
 	}
 
 	// Validate applyData if we are validating an existing block.
@@ -547,11 +548,11 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 	if eval.validate && !eval.generate {
 		if eval.proto.ApplyData {
 			if ad != applyData {
-				return fmt.Errorf("transaction %v: applyData mismatch: %v != %v", txn.ID(), ad, applyData)
+				return fmt.Errorf("transaction %v: applyData mismatch: %v != %v", txid, ad, applyData)
 			}
 		} else {
 			if ad != (transactions.ApplyData{}) {
-				return fmt.Errorf("transaction %v: applyData not supported", txn.ID())
+				return fmt.Errorf("transaction %v: applyData not supported", txid)
 			}
 		}
 	}
@@ -590,12 +591,12 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 		effectiveMinBalance := basics.MulSaturate(eval.proto.MinBalance, uint64(1+len(dataNew.Assets)))
 		if dataNew.MicroAlgos.Raw < effectiveMinBalance {
 			return fmt.Errorf("transaction %v: account %v balance %d below min %d (%d assets)",
-				txn.ID(), addr, dataNew.MicroAlgos.Raw, effectiveMinBalance, len(dataNew.Assets))
+				txid, addr, dataNew.MicroAlgos.Raw, effectiveMinBalance, len(dataNew.Assets))
 		}
 	}
 
 	// Remember this txn
-	cow.addTx(txn.Txn, cachedTxid)
+	cow.addTx(txn.Txn, txid)
 
 	return nil
 }
