@@ -218,7 +218,7 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHin
 
 	// Preallocate space for the payset so that we don't have to
 	// dynamically grow a slice (if evaluating a whole block).
-	if paysetHint >= 0 {
+	if paysetHint > 0 {
 		if paysetHint > maxPaysetHint {
 			paysetHint = maxPaysetHint
 		}

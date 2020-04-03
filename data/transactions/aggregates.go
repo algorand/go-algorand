@@ -37,6 +37,11 @@ type (
 // depends on the order in which the Txids appear, and that Txids do NOT cover
 // transaction signatures.
 func (payset Payset) Commit(flat bool) crypto.Digest {
+	// We used to build up Paysets from a nil slice with `append` during
+	// block evaluation, meaning zero-length paysets would remain nil.
+	// After we started allocating them up front, we started calling Commit
+	// on zero-length but non-nil Paysets. However, we want payset
+	// encodings to remain the same with or without this optimization.
 	if len(payset) == 0 {
 		payset = nil
 	}

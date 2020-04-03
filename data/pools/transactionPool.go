@@ -164,12 +164,12 @@ func (pool *TransactionPool) rememberCommit(flush bool) {
 func (pool *TransactionPool) PendingCount() int {
 	pool.pendingMu.RLock()
 	defer pool.pendingMu.RUnlock()
-	return pool.pendingCountLocked()
+	return pool.pendingCountNoLock()
 }
 
-// pendingCountLocked is a helper for PendingCount that returns the number of
+// pendingCountNoLock is a helper for PendingCount that returns the number of
 // transactions pending in the pool
-func (pool *TransactionPool) pendingCountLocked() int {
+func (pool *TransactionPool) pendingCountNoLock() int {
 	var count int
 	for _, txgroup := range pool.pendingTxGroups {
 		count += len(txgroup)
@@ -518,7 +518,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	pool.pendingMu.RLock()
 	txgroups := pool.pendingTxGroups
 	verifyParams := pool.pendingVerifyParams
-	pendingCount := pool.pendingCountLocked()
+	pendingCount := pool.pendingCountNoLock()
 	pool.pendingMu.RUnlock()
 
 	next := bookkeeping.MakeBlock(prev)
