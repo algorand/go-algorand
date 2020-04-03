@@ -223,6 +223,9 @@ Asset fields include `AssetHolding` and `AssetParam` fields that are used in `as
 | --- | --- |
 | `err` | Error. Panic immediately. This is primarily a fencepost against accidental zero bytes getting compiled into programs. |
 | `bnz` | branch if value X is not zero |
+| `bz` | branch if value X is zero |
+| `b` | branch unconditionally to offset |
+| `return` | use last value on stack as success value; end |
 | `pop` | discard value X from stack |
 | `dup` | duplicate last value on stack |
 
@@ -232,6 +235,7 @@ Asset fields include `AssetHolding` and `AssetParam` fields that are used in `as
 | --- | --- |
 | `balance` | get balance for the requested account A in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction |
 | `app_opted_in` | check if account A opted in for the application B => {0 or 1} |
+| `app_local_gets` | read from account's A from local state of the current application key B  => value |
 | `app_local_get` | read from account's A from local state of the application B key C  => {0 or 1 (top), value} |
 | `app_global_get` | read key A from global state of a current application => {0 or 1 (top), value} |
 | `app_local_put` | write to account's A to local state of a current application key B with value C |

@@ -458,6 +458,34 @@ The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which 
 
 At LogicSigVersion 2 it became allowed to branch to the end of the program exactly after the last instruction, removing the need for a last instruction or no-op as a branch target at the end. Branching beyond that may still fail the program.
 
+## bz
+
+- Opcode: 0x41 {0..0x7fff forward branch offset, big endian}
+- Pops: *... stack*, uint64
+- Pushes: _None_
+- branch if value X is zero
+- LogicSigVersion >= 2
+
+See `bnz` for details on how branches work
+
+## b
+
+- Opcode: 0x42 {0..0x7fff forward branch offset, big endian}
+- Pops: _None_
+- Pushes: _None_
+- branch unconditionally to offset
+- LogicSigVersion >= 2
+
+See `bnz` for details on how branches work. `b` always jumps to the offset.
+
+## return
+
+- Opcode: 0x43
+- Pops: *... stack*, uint64
+- Pushes: _None_
+- use last value on stack as success value; end
+- LogicSigVersion >= 2
+
 ## pop
 
 - Opcode: 0x48
@@ -518,9 +546,20 @@ At LogicSigVersion 2 it became allowed to branch to the end of the program exact
 
 params: account index, application id (top of the stack on opcode entry)
 
-## app_local_get
+## app_local_gets
 
 - Opcode: 0x62
+- Pops: *... stack*, {uint64 A}, {[]byte B}
+- Pushes: any
+- read from account's A from local state of the current application key B  => value
+- LogicSigVersion >= 2
+- Mode: Application
+
+params: account index, state key. Return: value
+
+## app_local_get
+
+- Opcode: 0x63
 - Pops: *... stack*, {uint64 A}, {uint64 B}, {[]byte C}
 - Pushes: uint64, any
 - read from account's A from local state of the application B key C  => {0 or 1 (top), value}
@@ -531,7 +570,7 @@ params: account index, application id, state key. Return: did_exist flag (top of
 
 ## app_global_get
 
-- Opcode: 0x63
+- Opcode: 0x64
 - Pops: *... stack*, []byte
 - Pushes: uint64, any
 - read key A from global state of a current application => {0 or 1 (top), value}
@@ -540,7 +579,7 @@ params: account index, application id, state key. Return: did_exist flag (top of
 
 ## app_local_put
 
-- Opcode: 0x64
+- Opcode: 0x65
 - Pops: *... stack*, {uint64 A}, {[]byte B}, {any C}
 - Pushes: _None_
 - write to account's A to local state of a current application key B with value C
@@ -551,7 +590,7 @@ params: account index, state key, value
 
 ## app_global_put
 
-- Opcode: 0x65
+- Opcode: 0x66
 - Pops: *... stack*, {[]byte A}, {any B}
 - Pushes: _None_
 - write key A and value B to global state of the current application
@@ -560,7 +599,7 @@ params: account index, state key, value
 
 ## app_local_del
 
-- Opcode: 0x66
+- Opcode: 0x67
 - Pops: *... stack*, {uint64 A}, {[]byte B}
 - Pushes: _None_
 - delete from account's A local state key B of the current application
@@ -571,7 +610,7 @@ params: account index, state key
 
 ## app_global_del
 
-- Opcode: 0x67
+- Opcode: 0x68
 - Pops: *... stack*, []byte
 - Pushes: _None_
 - delete key A from a global state of the current application
