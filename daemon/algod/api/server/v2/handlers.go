@@ -45,15 +45,15 @@ type Handlers struct {
 // RegisterParticipationKeys registers participation keys.
 // (POST /v2/register-participation-keys/{address})
 func (v2 *Handlers) RegisterParticipationKeys(ctx echo.Context, address string, params generated.RegisterParticipationKeysParams) error {
-	// TODO
-	return nil
+	// TODO: register participation keys endpoint
+	return ctx.String(http.StatusNotImplemented, "Endpoint not implemented.")
 }
 
 // ShutdownNode shuts down the node.
 // (POST /v2/shutdown)
 func (v2 *Handlers) ShutdownNode(ctx echo.Context, params generated.ShutdownNodeParams) error {
-	// TODO
-	return nil
+	// TODO: shutdown endpoint
+	return ctx.String(http.StatusNotImplemented, "Endpoint not implemented.")
 }
 
 // AccountInformation gets account information for a given account.
