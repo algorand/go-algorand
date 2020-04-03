@@ -181,7 +181,7 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params generated.Ge
 
 	response := struct {
 		Block bookkeeping.Block     `json:"block,omitempty"`
-		Cert agreement.Certificate  `json:"cert,omitempty"`
+		Cert  agreement.Certificate `json:"cert,omitempty"`
 	}{
 		Block: block,
 	}
