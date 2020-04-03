@@ -143,7 +143,6 @@ func (l *Ledger) AddressTxns(id basics.Address, r basics.Round) ([]transactions.
 		FeeSink:     blk.FeeSink,
 		RewardsPool: blk.RewardsPool,
 	}
-	proto := config.Consensus[blk.CurrentProtocol]
 
 	var res []transactions.SignedTxnWithAD
 	payset, err := blk.DecodePaysetFlat()
@@ -151,7 +150,7 @@ func (l *Ledger) AddressTxns(id basics.Address, r basics.Round) ([]transactions.
 		return nil, err
 	}
 	for _, tx := range payset {
-		if tx.Txn.MatchAddress(id, spec, proto) {
+		if tx.Txn.MatchAddress(id, spec) {
 			res = append(res, tx)
 		}
 	}
