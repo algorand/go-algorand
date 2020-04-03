@@ -29,10 +29,7 @@ usage() {
     echo
 }
 
-GREEN_FG=$(tput setaf 2 2>/dev/null)
 RED_FG=$(tput setaf 1 2>/dev/null)
-TEAL_FG=$(tput setaf 6 2>/dev/null)
-YELLOW_FG=$(tput setaf 3 2>/dev/null)
 END_FG_COLOR=$(tput sgr0 2>/dev/null)
 
 while [ "$1" != "" ]; do
@@ -79,9 +76,9 @@ done
 
 # check the README.md file.
 READMECOPYRIGHT="Copyright (C) 2019-$(date +"%Y"), Algorand Inc."
-if [ "$(<README.md grep "${READMECOPYRIGHT}" | wc -l | tr -d ' ')" = "0" ]; then
+if [ "$(<README.md grep -c "${READMECOPYRIGHT}" | tr -d ' ')" = "0" ]; then
     RETURN_VALUE=1
-    echo "README.md file need to have it's license date range updated."
+    echo "README.md file need to have its license date range updated."
 fi
 
 if [ $RETURN_VALUE -ne 0 ]; then
