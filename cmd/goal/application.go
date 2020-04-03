@@ -254,8 +254,8 @@ var createAppCmd = &cobra.Command{
 		}
 
 		// Parse transaction parameters
-		approvalProg := string(assembleFile(approvalProgFile))
-		clearProg := string(assembleFile(clearProgFile))
+		approvalProg := assembleFile(approvalProgFile)
+		clearProg := assembleFile(clearProgFile)
 		appArgs, appAccounts := getAppInputs()
 
 		tx, err := client.MakeUnsignedAppCreateTx(transactions.NoOpOC, approvalProg, clearProg, globalSchema, localSchema, appArgs, appAccounts)
@@ -327,8 +327,8 @@ var updateAppCmd = &cobra.Command{
 		client := ensureFullClient(dataDir)
 
 		// Parse transaction parameters
-		approvalProg := string(assembleFile(approvalProgFile))
-		clearProg := string(assembleFile(clearProgFile))
+		approvalProg := assembleFile(approvalProgFile)
+		clearProg := assembleFile(clearProgFile)
 		appArgs, appAccounts := getAppInputs()
 
 		tx, err := client.MakeUnsignedAppUpdateTx(appIdx, appArgs, appAccounts, approvalProg, clearProg)

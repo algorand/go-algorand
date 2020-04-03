@@ -157,8 +157,8 @@ type AppLocalState struct {
 type AppParams struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	ApprovalProgram   string      `codec:"approv,allocbound=-"`
-	ClearStateProgram string      `codec:"clearp,allocbound=-"`
+	ApprovalProgram   []byte      `codec:"approv,allocbound=-"`
+	ClearStateProgram []byte      `codec:"clearp,allocbound=-"`
 	LocalStateSchema  StateSchema `codec:"lsch"`
 	GlobalStateSchema StateSchema `codec:"gsch"`
 
@@ -167,16 +167,20 @@ type AppParams struct {
 
 // Clone returns a copy of some AppParams that may be modified without
 // affecting the original
-func (ap AppParams) Clone() (res AppParams) {
-	res = ap
+func (ap *AppParams) Clone() (res AppParams) {
+	res = *ap
+	res.ApprovalProgram = make([]byte, len(ap.ApprovalProgram))
+	copy(res.ApprovalProgram, ap.ApprovalProgram)
+	res.ClearStateProgram = make([]byte, len(ap.ClearStateProgram))
+	copy(res.ClearStateProgram, ap.ClearStateProgram)
 	res.GlobalState = ap.GlobalState.Clone()
 	return
 }
 
 // Clone returns a copy of some AppLocalState that may be modified without
 // affecting the original
-func (al AppLocalState) Clone() (res AppLocalState) {
-	res = al
+func (al *AppLocalState) Clone() (res AppLocalState) {
+	res = *al
 	res.KeyValue = al.KeyValue.Clone()
 	return
 }

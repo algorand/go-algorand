@@ -79,13 +79,13 @@ type ApplicationCallTxnFields struct {
 
 	ApplicationID   basics.AppIndex  `codec:"apid"`
 	OnCompletion    OnCompletion     `codec:"apan"`
-	ApplicationArgs []string         `codec:"apaa,allocbound=1024"`
+	ApplicationArgs [][]byte         `codec:"apaa,allocbound=1024"`
 	Accounts        []basics.Address `codec:"apat,allocbound=1024"`
 
 	LocalStateSchema  basics.StateSchema `codec:"apls"`
 	GlobalStateSchema basics.StateSchema `codec:"apgs"`
-	ApprovalProgram   string             `codec:"apap"`
-	ClearStateProgram string             `codec:"apsu"`
+	ApprovalProgram   []byte             `codec:"apap"`
+	ClearStateProgram []byte             `codec:"apsu"`
 
 	// If you add any fields here, remember you MUST modify the Empty
 	// method below!
@@ -93,7 +93,7 @@ type ApplicationCallTxnFields struct {
 
 // Empty indicates whether or not all the fields in the
 // ApplicationCallTxnFields are zeroed out
-func (ac ApplicationCallTxnFields) Empty() bool {
+func (ac *ApplicationCallTxnFields) Empty() bool {
 	if ac.ApplicationID != 0 {
 		return false
 	}
@@ -112,10 +112,10 @@ func (ac ApplicationCallTxnFields) Empty() bool {
 	if ac.GlobalStateSchema != (basics.StateSchema{}) {
 		return false
 	}
-	if ac.ApprovalProgram != "" {
+	if len(ac.ApprovalProgram) != 0 {
 		return false
 	}
-	if ac.ClearStateProgram != "" {
+	if len(ac.ClearStateProgram) != 0 {
 		return false
 	}
 	return true
@@ -349,7 +349,7 @@ func applyStateDeltas(evalDelta basics.EvalDelta, params basics.AppParams, creat
 	return nil
 }
 
-func (ac ApplicationCallTxnFields) checkPrograms(steva StateEvaluator, maxCost int) error {
+func (ac *ApplicationCallTxnFields) checkPrograms(steva StateEvaluator, maxCost int) error {
 	cost, err := steva.Check([]byte(ac.ApprovalProgram))
 	if err != nil {
 		return fmt.Errorf("check failed on ApprovalProgram: %v", err)
@@ -371,7 +371,7 @@ func (ac ApplicationCallTxnFields) checkPrograms(steva StateEvaluator, maxCost i
 	return nil
 }
 
-func (ac ApplicationCallTxnFields) apply(header Header, balances Balances, steva StateEvaluator, spec SpecialAddresses, ad *ApplyData, txnCounter uint64) error {
+func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, steva StateEvaluator, spec SpecialAddresses, ad *ApplyData, txnCounter uint64) error {
 	// Keep track of the application ID we're working on
 	appIdx := ac.ApplicationID
 

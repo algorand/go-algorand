@@ -1230,7 +1230,8 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint
 			err = fmt.Errorf("invalid ApplicationArgs index %d", arrayFieldIdx)
 			return
 		}
-		sv.Bytes = []byte(txn.ApplicationArgs[arrayFieldIdx])
+		sv.Bytes = make([]byte, len(txn.ApplicationArgs[arrayFieldIdx]))
+		copy(sv.Bytes, txn.ApplicationArgs[arrayFieldIdx])
 	case NumAppArgs:
 		sv.Uint = uint64(len(txn.ApplicationArgs))
 	case Accounts:
@@ -1247,9 +1248,11 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint
 	case NumAccounts:
 		sv.Uint = uint64(len(txn.Accounts))
 	case ApprovalProgram:
-		sv.Bytes = []byte(txn.ApprovalProgram)
+		sv.Bytes = make([]byte, len(txn.ApprovalProgram))
+		copy(sv.Bytes, txn.ApprovalProgram)
 	case ClearStateProgram:
-		sv.Bytes = []byte(txn.ClearStateProgram)
+		sv.Bytes = make([]byte, len(txn.ClearStateProgram))
+		copy(sv.Bytes, txn.ClearStateProgram)
 	default:
 		err = fmt.Errorf("invalid txn field %d", field)
 		return
