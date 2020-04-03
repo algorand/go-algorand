@@ -25,7 +25,7 @@ usage() {
     echo
     echo "Args:"
     echo "-i    Edit in-place."
-    echo "-v    Verbose, same as doing \`head -n ${NUMLINES:-16}\` on each file."
+    echo "-v    Verbose, same as doing \`head -n ${NUMLINES:-15}\` on each file."
     echo
 }
 
@@ -55,12 +55,13 @@ done
 for FILE in $VERSIONED_GO_FILES; do
     # https://en.wikipedia.org/wiki/Cat_(Unix)#Useless_use_of_cat
     if [[ $LICENSE != $(<"$PROJECT_ROOT/$FILE" head -n "$NUMLINES") ]]; then
-        if <"$PROJECT_ROOT/$FILE" head -n "$NUMLINES" | tr "\n" " " | grep -qvE "$FILTER"; then
+
+        if <"$PROJECT_ROOT/$FILE" head -n "$NUMLINES" | grep -qvE "$FILTER"; then
             RETURN_VALUE=1
 
             if ! $VERBOSE; then
                 if $INPLACE; then
-                    cat <(echo "$LICENSE") "$PROJECT_ROOT/$FILE" > "$PROJECT_ROOT/$FILE".1 &&
+                    cat <(echo -e "$LICENSE\n") "$PROJECT_ROOT/$FILE" > "$PROJECT_ROOT/$FILE".1 &&
                         mv "$PROJECT_ROOT/$FILE"{.1,}
                     ((MOD_COUNT++))
                 fi
