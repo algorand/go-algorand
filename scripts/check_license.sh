@@ -87,7 +87,7 @@ if [ "$(<README.md grep "${READMECOPYRIGHT}" | wc -l | tr -d ' ')" = "0" ]; then
     echo "README.md file need to have it's license date range updated."
 fi
 
-if [ $RETURN_VALUE -ne 0 ]; then
+if [ $RETURN_VALUE -ne 0 ] && [ $VERBOSE == "true" ] ; then
     echo -e "\n${RED_FG}FAILED LICENSE CHECK.${END_FG_COLOR}"
     if [ $INPLACE == "false" ]; then
       echo -e "Use 'check_license.sh -i' to fix."
