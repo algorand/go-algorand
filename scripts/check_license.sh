@@ -24,7 +24,7 @@ usage() {
     echo
     echo "Args:"
     echo "-i    Edit in-place."
-    echo "-v    Verbose, same as doing \`head -n 15\` on each file."
+    echo "-v    Verbose, same as doing \`head -n 16\` on each file."
     echo
 }
 
@@ -94,5 +94,6 @@ if [ $RETURN_VALUE -ne 0 ]; then
     fi
     echo ""
 fi
+
 exit $RETURN_VALUE
 
