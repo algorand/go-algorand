@@ -55,19 +55,14 @@ while [ "$1" != "" ]; do
     shift
 done
 
-for FILE in $VERSIONED_GO_FILES
-do
+for FILE in $VERSIONED_GO_FILES; do
     # https://en.wikipedia.org/wiki/Cat_(Unix)#Useless_use_of_cat
-    if [[ $LICENSE != $(<"$PROJECT_ROOT/$FILE" head -n "$NUMLINES") ]]
-    then
-        if <"$PROJECT_ROOT/$FILE" head -n "$NUMLINES" | tr "\n" " " | grep -qvE "$FILTER"
-        then
+    if [[ $LICENSE != $(<"$PROJECT_ROOT/$FILE" head -n "$NUMLINES") ]]; then
+        if <"$PROJECT_ROOT/$FILE" head -n "$NUMLINES" | tr "\n" " " | grep -qvE "$FILTER"; then
             RETURN_VALUE=1
 
-            if ! $VERBOSE
-            then
-                if $INPLACE
-                then
+            if ! $VERBOSE; then
+                if $INPLACE; then
                     cat <(echo "$LICENSE") "$PROJECT_ROOT/$FILE" > "$PROJECT_ROOT/$FILE".1 &&
                         mv "$PROJECT_ROOT/$FILE"{.1,}
                     ((MOD_COUNT++))
@@ -89,12 +84,12 @@ if [ "$(<README.md grep "${READMECOPYRIGHT}" | wc -l | tr -d ' ')" = "0" ]; then
     echo "README.md file need to have it's license date range updated."
 fi
 
-if [ $RETURN_VALUE -ne 0 ] ; then
+if [ $RETURN_VALUE -ne 0 ]; then
     echo -e "\n${RED_FG}FAILED LICENSE CHECK.${END_FG_COLOR}"
     if [ $INPLACE == "false" ]; then
-      echo -e "Use 'check_license.sh -i' to fix."
+        echo -e "Use 'check_license.sh -i' to fix."
     else
-      echo "Modified $MOD_COUNT file(s)."
+        echo "Modified $MOD_COUNT file(s)."
     fi
     echo ""
 fi
