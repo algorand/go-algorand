@@ -94,7 +94,9 @@ func (i *blockFactoryImpl) AssembleBlock(round basics.Round, deadline time.Time)
 
 	newEmptyBlk := bookkeeping.MakeBlock(prev)
 
-	eval, err := i.l.StartEvaluator(newEmptyBlk.BlockHeader)
+	// Start the block evaluator, hinting its payset length based on the
+	// transaction pool's block evaluator
+	eval, err := i.l.StartEvaluator(newEmptyBlk.BlockHeader, i.tp.PendingCount())
 	if err != nil {
 		return nil, fmt.Errorf("could not make proposals at round %d: could not start evaluator: %v", round, err)
 	}
