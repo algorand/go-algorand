@@ -1330,6 +1330,20 @@ txn NumAccounts
 int 1
 ==
 &&
+byte b64 UHJvZ3JhbQ==  // Program
+txn ApprovalProgram
+concat
+sha512_256
+arg 9
+==
+&&
+byte b64 UHJvZ3JhbQ==  // Program
+txn ClearStateProgram
+concat
+sha512_256
+arg 10
+==
+&&
 `
 
 func makeSampleTxn() transactions.SignedTxn {
@@ -1390,6 +1404,9 @@ func TestTxn(t *testing.T) {
 		2: testTxnProgramText,
 	}
 
+	clearProgram, err := AssembleStringWithVersion("int 1", 1)
+	require.NoError(t, err)
+
 	for v, source := range tests {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			program, err := AssembleStringWithVersion(source, v)
@@ -1398,8 +1415,12 @@ func TestTxn(t *testing.T) {
 			require.NoError(t, err)
 			require.True(t, cost < 1000)
 			txn := makeSampleTxn()
+			txn.Txn.ApprovalProgram = string(program)
+			txn.Txn.ClearStateProgram = string(clearProgram)
 			txn.Lsig.Logic = program
 			txid := txn.Txn.ID()
+			programHash := HashProgram(program)
+			clearProgramHash := HashProgram(clearProgram)
 			txn.Lsig.Args = [][]byte{
 				txn.Txn.Sender[:],
 				txn.Txn.Receiver[:],
@@ -1410,6 +1431,8 @@ func TestTxn(t *testing.T) {
 				[]byte{0, 0, 0, 0, 0, 0, 0, 1},
 				txid[:],
 				txn.Txn.Lease[:],
+				programHash[:],
+				clearProgramHash[:],
 			}
 			sb := strings.Builder{}
 			ep := defaultEvalParams(&sb, &txn)

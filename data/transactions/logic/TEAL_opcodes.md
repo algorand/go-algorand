@@ -372,6 +372,8 @@ Overflow is an error condition which halts execution and fails the transaction. 
 | 27 | NumAppArgs | uint64 | Number of ApplicationArgs |
 | 28 | Accounts | []byte | Accounts listed in the ApplicationCall transaction |
 | 29 | NumAccounts | uint64 | Number of Accounts |
+| 30 | ApprovalProgram | []byte | Approval program |
+| 31 | ClearStateProgram | []byte | Clear state program |
 
 
 TypeEnum mapping:

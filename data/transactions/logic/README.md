@@ -174,6 +174,8 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 27 | NumAppArgs | uint64 | Number of ApplicationArgs |
 | 28 | Accounts | []byte | Accounts listed in the ApplicationCall transaction |
 | 29 | NumAccounts | uint64 | Number of Accounts |
+| 30 | ApprovalProgram | []byte | Approval program |
+| 31 | ClearStateProgram | []byte | Clear state program |
 
 
 Additional details in the [opcodes document](TEAL_opcodes.md#txn) on the `txn` op.

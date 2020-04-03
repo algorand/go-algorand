@@ -586,6 +586,8 @@ txn ApplicationArgs
 txn NumAppArgs
 txn Accounts
 txn NumAccounts
+txn ApprovalProgram
+txn ClearStateProgram
 gtxn 12 Fee
 `
 	for _, globalField := range GlobalFieldNames {

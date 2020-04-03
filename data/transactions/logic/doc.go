@@ -260,6 +260,8 @@ var txnFieldDocList = []stringString{
 	{"NumAppArgs", "Number of ApplicationArgs"},
 	{"Accounts", "Accounts listed in the ApplicationCall transaction"},
 	{"NumAccounts", "Number of Accounts"},
+	{"ApprovalProgram", "Approval program"},
+	{"ClearStateProgram", "Clear state program"},
 }
 
 // TxnFieldDocs are notes on fields available by `txn` and `gtxn`

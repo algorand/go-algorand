@@ -1246,6 +1246,10 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint
 		}
 	case NumAccounts:
 		sv.Uint = uint64(len(txn.Accounts))
+	case ApprovalProgram:
+		sv.Bytes = []byte(txn.ApprovalProgram)
+	case ClearStateProgram:
+		sv.Bytes = []byte(txn.ClearStateProgram)
 	default:
 		err = fmt.Errorf("invalid txn field %d", field)
 		return
