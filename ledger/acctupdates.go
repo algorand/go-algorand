@@ -210,6 +210,7 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 	return nil
 }
 
+// accountHashBuilder calculates the hash key used for the trie by combining the account address and the account data
 func accountHashBuilder(addr basics.Address, accountData basics.AccountData, encodedAccountData []byte) []byte {
 	hash := make([]byte, 4+crypto.DigestSize)
 	// write out the lowest 32 bits of the reward base. This should improve the caching of the trie by allowing
