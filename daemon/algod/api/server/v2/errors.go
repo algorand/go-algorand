@@ -24,6 +24,7 @@ var (
 	errFailedToParseAddress             = "failed to parse the address"
 	errFailedToParseTransaction         = "failed to parse transaction"
 	errFailedToParseBlock               = "failed to parse block"
+	errFailedToParseCert                = "failed to parse cert"
 	errInternalFailure                  = "internal failure"
 	errNoTxnSpecified                   = "no transaction ID was specified"
 	errTransactionNotFound              = "couldn't find the required transaction in the required range"

@@ -147,33 +147,6 @@ type AssetParams struct {
 	Url *string `json:"url,omitempty"`
 }
 
-// TransactionParams defines model for TransactionParams.
-type TransactionParams struct {
-
-	// ConsensusVersion indicates the consensus protocol version
-	// as of LastRound.
-	ConsensusVersion string `json:"consensus-version"`
-
-	// Fee is the suggested transaction fee
-	// Fee is in units of micro-Algos per byte.
-	// Fee may fall to zero but transactions must still have a fee of
-	// at least MinTxnFee for the current network protocol.
-	Fee uint64 `json:"fee"`
-
-	// GenesisHash is the hash of the genesis block.
-	GenesisHash []byte `json:"genesis-hash"`
-
-	// GenesisID is an ID listed in the genesis block.
-	GenesisId string `json:"genesis-id"`
-
-	// LastRound indicates the last round seen
-	LastRound uint64 `json:"last-round"`
-
-	// The minimum transaction fee (not per byte) required for the
-	// txn to validate for the current network protocol.
-	MinFee uint64 `json:"min-fee"`
-}
-
 // Version defines model for Version.
 type Version struct {
 
@@ -269,6 +242,9 @@ type AccountResponse Account
 // BlockResponse defines model for BlockResponse.
 type BlockResponse struct {
 	Block string `json:"block"`
+
+	// Optional certificate object. This is only included when the format is set to message pack.
+	Cert *string `json:"cert,omitempty"`
 }
 
 // Error defines model for Error.
@@ -362,6 +338,33 @@ type SupplyResponse struct {
 	TotalMoney uint64 `json:"total-money"`
 }
 
+// TransactionParametersResponse defines model for TransactionParametersResponse.
+type TransactionParametersResponse struct {
+
+	// ConsensusVersion indicates the consensus protocol version
+	// as of LastRound.
+	ConsensusVersion string `json:"consensus-version"`
+
+	// Fee is the suggested transaction fee
+	// Fee is in units of micro-Algos per byte.
+	// Fee may fall to zero but transactions must still have a fee of
+	// at least MinTxnFee for the current network protocol.
+	Fee uint64 `json:"fee"`
+
+	// GenesisHash is the hash of the genesis block.
+	GenesisHash []byte `json:"genesis-hash"`
+
+	// GenesisID is an ID listed in the genesis block.
+	GenesisId string `json:"genesis-id"`
+
+	// LastRound indicates the last round seen
+	LastRound uint64 `json:"last-round"`
+
+	// The minimum transaction fee (not per byte) required for the
+	// txn to validate for the current network protocol.
+	MinFee uint64 `json:"min-fee"`
+}
+
 // GetPendingTransactionsByAddressParams defines parameters for GetPendingTransactionsByAddress.
 type GetPendingTransactionsByAddressParams struct {
 
@@ -389,9 +392,9 @@ type RegisterParticipationKeysParams struct {
 	KeyDilution *uint64 `json:"key-dilution,omitempty"`
 
 	// The last round for which the generated participation keys will be valid.
-	RoundLastValid *string `json:"round-last-valid,omitempty"`
+	RoundLastValid *uint64 `json:"round-last-valid,omitempty"`
 
-	// Don't wait for transaction to commit.
+	// Don't wait for transaction to commit before returning response.
 	NoWait *bool `json:"no-wait,omitempty"`
 }
 

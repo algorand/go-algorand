@@ -25,12 +25,10 @@ import (
 
 	"github.com/labstack/echo/v4"
 
-	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
@@ -180,16 +178,22 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params generated.Ge
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
 
-	response := struct {
-		Block bookkeeping.Block     `json:"block,omitempty"`
-		Cert  agreement.Certificate `json:"cert,omitempty"`
-	}{
-		Block: block,
+	encodedBlock, err := encode(handle, block)
+	if err != nil {
+		return internalError(ctx, err, errFailedToParseBlock, v2.Log)
+	}
+
+	response := generated.BlockResponse{
+		Block: encodedBlock,
 	}
 
 	// If we're using the messagepack encoding, also include the certificates.
 	if handle == protocol.CodecHandle {
-		response.Cert = cert
+		encodedCert, err := encode(handle, cert)
+		if err != nil {
+			return internalError(ctx, err, errFailedToParseCert, v2.Log)
+		}
+		response.Cert = &encodedCert
 	}
 
 	encoded, err := encode(handle, response)
@@ -310,7 +314,7 @@ func (v2 *Handlers) TransactionParams(ctx echo.Context) error {
 
 	gh := v2.Node.GenesisHash()
 
-	var params generated.TransactionParams
+	var params generated.TransactionParametersResponse
 	params.Fee = v2.Node.SuggestedFee().Raw
 	params.GenesisId = v2.Node.GenesisID()
 	params.GenesisHash = gh[:]
