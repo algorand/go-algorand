@@ -1556,27 +1556,31 @@ func opAppCheckOptedIn(cx *evalContext) {
 
 func (cx *evalContext) getReadOnlyLocalState(appID uint64, addr basics.Address) (basics.TealKeyValue, error) {
 	kvIdx := ckey{appID, addr}
-	if cx.readOnlyLocalStates[kvIdx] == nil {
-		localKV, err := cx.Ledger.AppLocalState(addr, basics.AppIndex(appID))
+	localKV, ok := cx.readOnlyLocalStates[kvIdx]
+	if !ok {
+		var err error
+		localKV, err = cx.Ledger.AppLocalState(addr, basics.AppIndex(appID))
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch app local state local state for acct %s, app %d: %v", addr, appID, err)
 		}
 		cx.readOnlyLocalStates[kvIdx] = localKV
 	}
-	return cx.readOnlyLocalStates[kvIdx], nil
+	return localKV, nil
 }
 
 func (cx *evalContext) getLocalStateCow(addr basics.Address) (*keyValueCow, error) {
-	if cx.localStateCows[addr] == nil {
+	kvCow, ok := cx.localStateCows[addr]
+	if !ok {
 		localKV, err := cx.Ledger.AppLocalState(addr, basics.AppIndex(0))
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch app local state local state for acct %s: %v", addr, err)
 		}
 
 		localDelta := make(basics.StateDelta)
-		cx.localStateCows[addr] = makeKeyValueCow(localKV, localDelta)
+		kvCow = makeKeyValueCow(localKV, localDelta)
+		cx.localStateCows[addr] = kvCow
 	}
-	return cx.localStateCows[addr], nil
+	return kvCow, nil
 }
 
 func (cx *evalContext) appReadLocalKey(appID uint64, addr basics.Address, key string) (basics.TealValue, bool, error) {
