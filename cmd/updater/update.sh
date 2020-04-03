@@ -18,6 +18,7 @@ HOSTEDSPEC=""
 BUCKET=""
 GENESIS_NETWORK_DIR=""
 GENESIS_NETWORK_DIR_SPEC=""
+SKIP_UPDATE=0
 
 set -o pipefail
 
@@ -83,6 +84,9 @@ while [ "$1" != "" ]; do
         -b)
             shift
             BUCKET="-b $1"
+            ;;
+        -s)
+            SKIP_UPDATE=1
             ;;
         *)
             echo "Unknown option" "$1"
@@ -590,7 +594,9 @@ fi
 # Shutdown node before backing up so data is consistent and files aren't locked / in-use.
 shutdown_node
 
-backup_current_version
+if [ ${SKIP_UPDATE} -eq 0 ]; then
+    backup_current_version
+fi
 
 # We don't care about return code - doesn't matter if we failed to archive
 
