@@ -56,7 +56,7 @@ for FILE in $VERSIONED_GO_FILES; do
     # https://en.wikipedia.org/wiki/Cat_(Unix)#Useless_use_of_cat
     if [[ $LICENSE != $(<"$PROJECT_ROOT/$FILE" head -n "$NUMLINES") ]]; then
 
-        if <"$PROJECT_ROOT/$FILE" head -n "$NUMLINES" | grep -qvE "$FILTER"; then
+        if <"$PROJECT_ROOT/$FILE" head -n "$NUMLINES" | tr "\n" " " | grep -qvE "$FILTER"; then
             RETURN_VALUE=1
 
             if ! $VERBOSE; then
