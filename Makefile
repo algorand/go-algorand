@@ -60,6 +60,7 @@ default: build
 
 fmt:
 	go fmt ./...
+	./scripts/check_license.sh -i
 
 fix: build
 	$(GOPATH1)/bin/algofix */
@@ -73,13 +74,10 @@ lint: deps
 vet:
 	go vet ./...
 
-check_license:
-	./scripts/check_license.sh
-
 check_shell:
 	find . -type f -name "*.sh" -exec shellcheck {} +
 
-sanity: vet fix lint fmt check_license
+sanity: vet fix lint fmt
 
 cover:
 	go test $(GOTAGS) -coverprofile=cover.out $(UNIT_TEST_SOURCES)
@@ -303,7 +301,7 @@ dump: $(addprefix gen/,$(addsuffix /genesis.dump, $(NETWORKS)))
 install: build
 	scripts/dev_install.sh -p $(GOPATH1)/bin
 
-.PHONY: default fmt vet lint check_license check_shell sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN
+.PHONY: default fmt vet lint check_shell sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN
 
 ### TARGETS FOR CICD PROCESS
 
