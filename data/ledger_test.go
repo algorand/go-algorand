@@ -160,7 +160,7 @@ func BenchmarkAssemblePayset(b *testing.B) {
 		}
 		b.StartTimer()
 		newEmptyBlk := bookkeeping.MakeBlock(prev)
-		eval, err := l.StartEvaluator(newEmptyBlk.BlockHeader)
+		eval, err := l.StartEvaluator(newEmptyBlk.BlockHeader, 0)
 		if err != nil {
 			b.Errorf("could not make proposals at round %d: could not start evaluator: %v", next, err)
 			return
