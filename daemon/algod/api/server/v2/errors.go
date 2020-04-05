@@ -27,7 +27,7 @@ var (
 	errFailedToParseCert                = "failed to parse cert"
 	errInternalFailure                  = "internal failure"
 	errNoTxnSpecified                   = "no transaction ID was specified"
-	errTransactionNotFound              = "couldn't find the required transaction in the required range"
+	errTransactionNotFound              = "could not find the transaction in the transaction pool or in the last 1000 confirmed rounds"
 	errServiceShuttingDown              = "operation aborted as server is shutting down"
 	errRequestedRoundInUnsupportedRound = "requested round would reach only after the protocol upgrade which isn't supported"
 )
