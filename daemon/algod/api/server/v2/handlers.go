@@ -313,18 +313,18 @@ func (v2 *Handlers) TransactionParams(ctx echo.Context) error {
 	}
 
 	gh := v2.Node.GenesisHash()
-
-	var params generated.TransactionParametersResponse
-	params.Fee = v2.Node.SuggestedFee().Raw
-	params.GenesisId = v2.Node.GenesisID()
-	params.GenesisHash = gh[:]
-	params.LastRound = uint64(stat.LastRound)
-	params.ConsensusVersion = string(stat.LastVersion)
-
 	proto := config.Consensus[stat.LastVersion]
-	params.MinFee = proto.MinTxnFee
 
-	return ctx.JSON(http.StatusOK, params)
+	response := generated.TransactionParametersResponse{
+		ConsensusVersion: string(stat.LastVersion),
+		Fee:              v2.Node.SuggestedFee().Raw,
+		GenesisHash:      gh[:],
+		GenesisId:        v2.Node.GenesisID(),
+		LastRound:        uint64(stat.LastRound),
+		MinFee:           proto.MinTxnFee,
+	}
+
+	return ctx.JSON(http.StatusOK, response)
 }
 
 // PendingTransactionInformation gets a specific pending transaction, or looks it up in the ledger if the recently
