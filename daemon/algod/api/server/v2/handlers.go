@@ -247,7 +247,7 @@ func (v2 *Handlers) GetStatus(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, response)
 }
 
-// WaitForBlock gets the node status after waiting for the given round.
+// WaitForBlock returns the node status after waiting for the given round.
 // (GET /v2/status/wait-for-block-after/{round}/)
 func (v2 *Handlers) WaitForBlock(ctx echo.Context, round uint64) error {
 	ledger := v2.Node.Ledger()
@@ -379,7 +379,7 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 	return notFound(ctx, err, err.Error(), v2.Log)
 }
 
-// getPendingTransactions is a generalized version of the get pending transactions endpoints for code reuse.
+// getPendingTransactions returns to the provided context a list of uncomfirmed transactions currently in the transaction pool with optional Max/Address filters.
 func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format *string, addrFilter *string) error {
 	var addrPtr *basics.Address
 
@@ -434,13 +434,13 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 	})
 }
 
-// GetPendingTransactions gets a list of unconfirmed transactions currently in the transaction pool.
+// GetPendingTransactions returns the list of unconfirmed transactions currently in the transaction pool.
 // (GET /v2/transactions/pending)
 func (v2 *Handlers) GetPendingTransactions(ctx echo.Context, params generated.GetPendingTransactionsParams) error {
 	return v2.getPendingTransactions(ctx, params.Max, params.Format, nil)
 }
 
-// GetPendingTransactionsByAddress gets a list of unconfirmed transactions currently in the transaction pool by address.
+// GetPendingTransactionsByAddress takes an Algorand address and returns its associated list of unconfirmed transactions currently in the transaction pool.
 // (GET /v2/accounts/{address}/transactions/pending)
 func (v2 *Handlers) GetPendingTransactionsByAddress(ctx echo.Context, addr string, params generated.GetPendingTransactionsByAddressParams) error {
 	return v2.getPendingTransactions(ctx, params.Max, params.Format, &addr)
