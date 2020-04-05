@@ -423,7 +423,7 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 		// Encode the transaction and added to the results
 		encodedTxn, err := encode(handle, txn)
 		if err != nil {
-			return internalError(ctx, err, errFailedLookingUpTransactionPool, v2.Log)
+			return internalError(ctx, err, errFailedToParseTransaction, v2.Log)
 		}
 		encodedTxns = append(encodedTxns, encodedTxn)
 	}
