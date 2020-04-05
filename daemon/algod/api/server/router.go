@@ -137,4 +137,6 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-ch
 		Shutdown: shutdown,
 	}
 	generated.RegisterHandlers(e, &v2Handler)
+
+	return e
 }
