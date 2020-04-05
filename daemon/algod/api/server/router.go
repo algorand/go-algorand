@@ -60,6 +60,7 @@
 package server
 
 import (
+	"net"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -95,8 +96,13 @@ func registerHandlers(router *echo.Echo, prefix string, routes lib.Routes, ctx l
 	}
 }
 
-// ConfigureRouter builds and returns a new router from routes
-func ConfigureRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-chan struct{}, apiToken string, e *echo.Echo) {
+// NewRouter builds and returns a new router with our REST handlers registered.
+func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-chan struct{}, apiToken string, listener net.Listener) *echo.Echo {
+	e := echo.New()
+
+	e.Listener = listener
+	e.HideBanner = true
+
 	e.Use(echo.WrapMiddleware(middlewares.Logger(logger)))
 	// TODO: New auth middleware - https://github.com/algorand/go-algorand/issues/863
 	e.Use(middlewares.Auth(logger, apiToken))
