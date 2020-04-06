@@ -327,8 +327,9 @@ func (v2 *Handlers) TransactionParams(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, response)
 }
 
-// PendingTransactionInformation gets a specific pending transaction, or looks it up in the ledger if the recently
-// confirmed block is still in the ledger. We keep the last 1000 rounds available in the ledger.
+// PendingTransactionInformation returns a transaction with the specified txID
+// from the transaction pool. If not found looks for the transaction in the
+// last proto.MaxTxnLife rounds
 // (GET /v2/transactions/pending/{txid})
 func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string, params generated.PendingTransactionInformationParams) error {
 	txID := transactions.Txid{}
