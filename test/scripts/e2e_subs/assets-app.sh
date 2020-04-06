@@ -6,9 +6,21 @@ set -ex
 set -o pipefail
 export SHELLOPTS
 
-CREATOR=$(goal account list | grep 500 | sort | head -n 1 | cut -d '	' -f 3)
-ALICE=$(goal account list | grep 500 | sort | head -n 2 | tail -n 1 | cut -d '	' -f 3)
-BOB=$(goal account list | grep 500 | sort | head -n 3 | tail -n 1 | cut -d '	' -f 3)
+WALLET=$1
+gcmd="goal -w ${WALLET}"
+
+# Directory of helper TEAL programs
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )/tealprogs"
+
+CREATOR=$(${gcmd} account list|awk '{ print $3 }')
+ALICE=$(${gcmd} account new|awk '{ print $6 }')
+BOB=$(${gcmd} account new|awk '{ print $6 }')
+MANAGER=$(${gcmd} account new|awk '{ print $6 }')
+
+${gcmd} clerk send -a 100000000 -f ${CREATOR} -t ${ALICE}
+${gcmd} clerk send -a 100000000 -f ${CREATOR} -t ${BOB}
+${gcmd} clerk send -a 100000000 -f ${CREATOR} -t ${MANAGER}
+
 ZERO='AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ'
 SUPPLY=10000000
 XFER1=1000
@@ -39,154 +51,154 @@ UNFREEZE_SCRIPT="{args: [{encoding: \"int\", value: \"0\"}], accounts: [\"$ALICE
 ### Basic reading, creation, deletion, transfers, and freezing
 
 # create
-APP_ID=$(goal app create --approval-prog appprog.teal --clear-prog appclear.teal --creator $CREATOR --global-byteslices 5 --global-ints 4 --local-byteslices 0 --local-ints 2 --app-input <(jq -n "$CREATE_SCRIPT") | grep "$APP_CREATED_STR" | cut -d ' ' -f 6)
+APP_ID=$(${gcmd} app create --approval-prog ${DIR}/appprog.teal --clear-prog ${DIR}/appclear.teal --creator $CREATOR --global-byteslices 5 --global-ints 4 --local-byteslices 0 --local-ints 2 --app-input <(jq -n "$CREATE_SCRIPT") | grep "$APP_CREATED_STR" | cut -d ' ' -f 6)
 
 # read global
-RES=$(goal app read --guess-format --app-id $APP_ID --global | jq -r .tt.u)
+RES=$(${gcmd} app read --guess-format --app-id $APP_ID --global | jq -r .tt.u)
 if [[ $RES != $SUPPLY ]]; then
     date "+assets-app FAIL expected supply to be set to $SUPPLY %Y%m%d_%H%M%S"
     false
 fi
 
-RES=$(goal app read --guess-format --app-id $APP_ID --global | jq -r .bl.u)
+RES=$(${gcmd} app read --guess-format --app-id $APP_ID --global | jq -r .bl.u)
 if [[ $RES != $SUPPLY ]]; then
     date "+assets-app FAIL expected creator to begin with $SUPPLY %Y%m%d_%H%M%S"
     false
 fi
 
 # read alice F
-RES=$(goal app read --guess-format --app-id $APP_ID --local -f $ALICE 2>&1 || true)
+RES=$(${gcmd} app read --guess-format --app-id $APP_ID --local -f $ALICE 2>&1 || true)
 if [[ $RES != *"$ERR_APP_OI_STR1"* ]]; then
     date '+assets-app FAIL expected read of non-opted in account to fail %Y%m%d_%H%M%S'
     false
 fi
 
 # optin alice
-goal app optin --app-id $APP_ID -f $ALICE
+${gcmd} app optin --app-id $APP_ID -f $ALICE
 
 # read alice
-RES=$(goal app read --guess-format --app-id $APP_ID --local -f $ALICE | jq .bl.u)
+RES=$(${gcmd} app read --guess-format --app-id $APP_ID --local -f $ALICE | jq .bl.u)
 if [[ $RES != 'null' ]]; then
     date '+assets-app FAIL expected opted-in account to start with no balance %Y%m%d_%H%M%S'
     false
 fi
 
-RES=$(goal app read --guess-format --app-id $APP_ID --local -f $ALICE | jq .fz.u)
+RES=$(${gcmd} app read --guess-format --app-id $APP_ID --local -f $ALICE | jq .fz.u)
 if [[ $RES != 'null' ]]; then
     date '+assets-app FAIL expected opted-in account to be non-frozen %Y%m%d_%H%M%S'
     false
 fi
 
 # xfer0 creator -> bob F
-RES=$(goal app call --app-id $APP_ID -f $CREATOR --app-input <(jq -n "$XFER0_SCRIPT") 2>&1 || true)
+RES=$(${gcmd} app call --app-id $APP_ID -f $CREATOR --app-input <(jq -n "$XFER0_SCRIPT") 2>&1 || true)
 if [[ $RES != *"$ERR_APP_OI_STR2"* ]]; then
     date '+assets-app FAIL transfer succeeded on account which has not opted in %Y%m%d_%H%M%S'
     false
 fi
     
 # xfer1 (2) creator -> alice
-goal app call --app-id $APP_ID -f $CREATOR --app-input <(jq -n "$XFER1_SCRIPT")
-goal app call --app-id $APP_ID -f $CREATOR --app-input <(jq -n "$XFER1_SCRIPT")
+${gcmd} app call --app-id $APP_ID -f $CREATOR --app-input <(jq -n "$XFER1_SCRIPT")
+${gcmd} app call --app-id $APP_ID -f $CREATOR --app-input <(jq -n "$XFER1_SCRIPT")
 
 # read alice
-RES=$(goal app read --guess-format --app-id $APP_ID --local -f $ALICE | jq .bl.u)
+RES=$(${gcmd} app read --guess-format --app-id $APP_ID --local -f $ALICE | jq .bl.u)
 if [[ $RES != $(( $XFER1 + $XFER1 )) ]]; then
     date "+assets-app FAIL transfer recipient does not have $XFER1 %Y%m%d_%H%M%S"
     false
 fi
 
 # delete F
-RES=$(goal app delete --app-id $APP_ID -f $CREATOR 2>&1 || true)
+RES=$(${gcmd} app delete --app-id $APP_ID -f $CREATOR 2>&1 || true)
 if [[ $RES != *"$ERR_APP_REJ_STR1"* ]]; then
     date "+assets-app FAIL should not be able to delete asset while outstanding holdings exist %Y%m%d_%H%M%S"
     false
 fi
 
 # freeze
-goal app call --app-id $APP_ID -f $CREATOR --app-input <(jq -n "$FREEZE_SCRIPT")
+${gcmd} app call --app-id $APP_ID -f $CREATOR --app-input <(jq -n "$FREEZE_SCRIPT")
 
 # xfer2 alice -> creator F
-RES=$(goal app call --app-id $APP_ID -f $ALICE --app-input <(jq -n "$XFER2_SCRIPT") 2>&1 || true)
+RES=$(${gcmd} app call --app-id $APP_ID -f $ALICE --app-input <(jq -n "$XFER2_SCRIPT") 2>&1 || true)
 if [[ $RES != *"$ERR_APP_REJ_STR2"* ]]; then
     date "+assets-app FAIL frozen account should not be able to send %Y%m%d_%H%M%S"
     false
 fi
 
 # xfer1 creator -> alice F
-RES=$(goal app call --app-id $APP_ID -f $CREATOR --app-input <(jq -n "$XFER1_SCRIPT") 2>&1 || true)
+RES=$(${gcmd} app call --app-id $APP_ID -f $CREATOR --app-input <(jq -n "$XFER1_SCRIPT") 2>&1 || true)
 if [[ $RES != *"$ERR_APP_REJ_STR2"* ]]; then
     date "+assets-app FAIL frozen account should not be able to receive %Y%m%d_%H%M%S"
     false
 fi
 
 # unfreeze
-goal app call --app-id $APP_ID -f $CREATOR --app-input <(jq -n "$UNFREEZE_SCRIPT")
+${gcmd} app call --app-id $APP_ID -f $CREATOR --app-input <(jq -n "$UNFREEZE_SCRIPT")
 
 # xfer1 creator -> alice
-goal app call --app-id $APP_ID -f $CREATOR --app-input <(jq -n "$XFER1_SCRIPT")
+${gcmd} app call --app-id $APP_ID -f $CREATOR --app-input <(jq -n "$XFER1_SCRIPT")
 
 # xfer5 alice |-> alice F
-RES=$(goal app closeout --app-id $APP_ID -f $ALICE --app-input <(jq -n "$XFER5_SCRIPT") 2>&1 || true)
+RES=$(${gcmd} app closeout --app-id $APP_ID -f $ALICE --app-input <(jq -n "$XFER5_SCRIPT") 2>&1 || true)
 if [[ $RES != *"$ERR_APP_REJ_STR1"* ]]; then
     date "+assets-app FAIL closing to self not permitted %Y%m%d_%H%M%S"
     false
 fi
 
 # optin bob
-goal app optin --app-id $APP_ID -f $BOB
+${gcmd} app optin --app-id $APP_ID -f $BOB
 
 # xfer3 alice -> bob overdraw F
-RES=$(goal app call --app-id $APP_ID -f $ALICE --app-input <(jq -n "$XFER3_SCRIPT") 2>&1 || true)
+RES=$(${gcmd} app call --app-id $APP_ID -f $ALICE --app-input <(jq -n "$XFER3_SCRIPT") 2>&1 || true)
 if [[ $RES != *"$ERR_APP_REJ_STR3"* ]]; then
     date "+assets-app FAIL overdraws are not permitted %Y%m%d_%H%M%S"
     false
 fi
 
 # xfer4 alice -> creator |-> bob
-goal app closeout --app-id $APP_ID -f $ALICE --app-input <(jq -n "$XFER4_SCRIPT")
+${gcmd} app closeout --app-id $APP_ID -f $ALICE --app-input <(jq -n "$XFER4_SCRIPT")
 
 # xfer5 bob |-> alice F
-RES=$(goal app closeout --app-id $APP_ID -f $BOB --app-input <(jq -n "$XFER5_SCRIPT") 2>&1 || true)
+RES=$(${gcmd} app closeout --app-id $APP_ID -f $BOB --app-input <(jq -n "$XFER5_SCRIPT") 2>&1 || true)
 if [[ $RES != *"$ERR_APP_OI_STR2"* ]]; then
     date "+assets-app FAIL overdraws are not permitted %Y%m%d_%H%M%S"
     false
 fi
 
 # optin alice
-goal app optin --app-id $APP_ID -f $ALICE
+${gcmd} app optin --app-id $APP_ID -f $ALICE
 
 # xfer5 bob |-> alice
-goal app closeout --app-id $APP_ID -f $BOB --app-input <(jq -n "$XFER5_SCRIPT")
+${gcmd} app closeout --app-id $APP_ID -f $BOB --app-input <(jq -n "$XFER5_SCRIPT")
 
 # clear alice
-goal app clear --app-id $APP_ID -f $ALICE
+${gcmd} app clear --app-id $APP_ID -f $ALICE
 
 # clear alice F
-RES=$(goal app clear --app-id $APP_ID -f $ALICE 2>&1 || true)
+RES=$(${gcmd} app clear --app-id $APP_ID -f $ALICE 2>&1 || true)
 if [[ $RES != *"$ERR_APP_OI_STR3"* ]]; then
     date "+assets-app FAIL should not be able to clear asset holding twice %Y%m%d_%H%M%S"
     false
 fi
 
 # delete
-goal app delete --app-id $APP_ID -f $CREATOR
+${gcmd} app delete --app-id $APP_ID -f $CREATOR
 
 # delete F
-RES=$(goal app delete --app-id $APP_ID -f $CREATOR 2>&1 || true)
+RES=$(${gcmd} app delete --app-id $APP_ID -f $CREATOR 2>&1 || true)
 if [[ $RES != *"$ERR_APP_CL_STR"* ]]; then
     date '+assets-app FAIL second deletion of application should fail %Y%m%d_%H%M%S'
     false
 fi
 
 # optin alice F
-RES=$(goal app optin --app-id $APP_ID -f $ALICE 2>&1 || true)
+RES=$(${gcmd} app optin --app-id $APP_ID -f $ALICE 2>&1 || true)
 if [[ $RES != *"$ERR_APP_CL_STR"* ]]; then
     date '+assets-app FAIL optin of deleted application should fail %Y%m%d_%H%M%S'
     false
 fi
 
 # read global F
-RES=$(goal app read --guess-format --app-id $APP_ID --global 2>&1 || true)
+RES=$(${gcmd} app read --guess-format --app-id $APP_ID --global 2>&1 || true)
 if [[ $RES != *"$ERR_APP_NE_STR"* ]]; then
     date '+assets-app FAIL read global of deleted application should fail %Y%m%d_%H%M%S'
     false
@@ -194,7 +206,6 @@ fi
 
 ### Reconfiguration, default-frozen, and clawback
 
-MANAGER=$(goal account list | grep 500 | sort | head -n 4 | tail -n 1 | cut -d '	' -f 3)
 DEFAULTFROZEN=1
 
 CREATE_SCRIPT="{args: [{encoding: \"addr\", value: \"$MANAGER\"}, {encoding: \"addr\", value: \"$CREATOR\"}, {encoding: \"addr\", value: \"$MANAGER\"}, {encoding: \"addr\", value: \"$MANAGER\"}, {encoding: \"addr\", value: \"$CREATOR\"}, {encoding: \"int\", value: \"$SUPPLY\"}, {encoding: \"int\", value: \"$DEFAULTFROZEN\"}]}"
@@ -207,79 +218,81 @@ CLAW1_SCRIPT="{args: [{encoding: \"int\", value: \"$XFER1\"}, {encoding: \"int\"
 CLAW2_SCRIPT="{args: [{encoding: \"int\", value: \"$XFER1\"}, {encoding: \"int\", value: \"0\"}], accounts: [\"$BOB\", \"$CREATOR\"]}"
 
 # create frozen
-APP_ID=$(goal app create --approval-prog appprog.teal --clear-prog appclear.teal --creator $CREATOR --global-byteslices 5 --global-ints 4 --local-byteslices 0 --local-ints 2 --app-input <(jq -n "$CREATE_SCRIPT") | grep "$APP_CREATED_STR" | cut -d ' ' -f 6)
+APP_ID=$(${gcmd} app create --approval-prog ${DIR}/appprog.teal --clear-prog ${DIR}/appclear.teal --creator $CREATOR --global-byteslices 5 --global-ints 4 --local-byteslices 0 --local-ints 2 --app-input <(jq -n "$CREATE_SCRIPT") | grep "$APP_CREATED_STR" | cut -d ' ' -f 6)
 
 # delete bad manager F
-RES=$(goal app delete --app-id $APP_ID -f $CREATOR 2>&1 || true)
+RES=$(${gcmd} app delete --app-id $APP_ID -f $CREATOR 2>&1 || true)
 if [[ $RES != *"$ERR_APP_REJ_STR1"* ]]; then
     date "+assets-app FAIL non-manager should not be able to delete asset %Y%m%d_%H%M%S"
     false
 fi
 
 # optin alice
-goal app optin --app-id $APP_ID -f $ALICE
+${gcmd} app optin --app-id $APP_ID -f $ALICE
 
 # xfer1 F
-RES=$(goal app call --app-id $APP_ID -f $CREATOR --app-input <(jq -n "$XFER1_SCRIPT") 2>&1 || true)
+RES=$(${gcmd} app call --app-id $APP_ID -f $CREATOR --app-input <(jq -n "$XFER1_SCRIPT") 2>&1 || true)
 if [[ $RES != *"$ERR_APP_REJ_STR2"* ]]; then
     date "+assets-app FAIL frozen account should not be able to receive %Y%m%d_%H%M%S"
     false
 fi
 
 # bad unfreeze F
-RES=$(goal app call --app-id $APP_ID -f $ALICE --app-input <(jq -n "$UNFREEZE_SCRIPT") 2>&1 || true)
+RES=$(${gcmd} app call --app-id $APP_ID -f $ALICE --app-input <(jq -n "$UNFREEZE_SCRIPT") 2>&1 || true)
 if [[ $RES != *"$ERR_APP_REJ_STR1"* ]]; then
     date "+assets-app FAIL non-freezer should not be able to unfreeze account %Y%m%d_%H%M%S"
     false
 fi
 
 # set freezer alice
-goal app call --app-id $APP_ID -f $MANAGER --app-input <(jq -n "$RECONFIG_SCRIPT")
+${gcmd} app call --app-id $APP_ID -f $MANAGER --app-input <(jq -n "$RECONFIG_SCRIPT")
 
 # unfreeze
-goal app call --app-id $APP_ID -f $ALICE --app-input <(jq -n "$UNFREEZE_SCRIPT")
+${gcmd} app call --app-id $APP_ID -f $ALICE --app-input <(jq -n "$UNFREEZE_SCRIPT")
 
 # xfer1
-goal app call --app-id $APP_ID -f $CREATOR --app-input <(jq -n "$XFER1_SCRIPT")
+${gcmd} app call --app-id $APP_ID -f $CREATOR --app-input <(jq -n "$XFER1_SCRIPT")
 
 # freeze
-goal app call --app-id $APP_ID -f $ALICE --app-input <(jq -n "$FREEZE_SCRIPT")
+${gcmd} app call --app-id $APP_ID -f $ALICE --app-input <(jq -n "$FREEZE_SCRIPT")
 
 # xfer1 F
-RES=$(goal app call --app-id $APP_ID -f $CREATOR --app-input <(jq -n "$XFER1_SCRIPT") 2>&1 || true)
+RES=$(${gcmd} app call --app-id $APP_ID -f $CREATOR --app-input <(jq -n "$XFER1_SCRIPT") 2>&1 || true)
 if [[ $RES != *"$ERR_APP_REJ_STR2"* ]]; then
     date "+assets-app FAIL re-frozen account should not be able to receive %Y%m%d_%H%M%S"
     false
 fi
 
 # closeout F
-RES=$(goal app call --app-id $APP_ID -f $ALICE --app-input <(jq -n "$CLOSEOUT_SCRIPT") 2>&1 || true)
+RES=$(${gcmd} app call --app-id $APP_ID -f $ALICE --app-input <(jq -n "$CLOSEOUT_SCRIPT") 2>&1 || true)
 if [[ $RES != *"$ERR_APP_REJ_STR2"* ]]; then
     date "+assets-app FAIL frozen account should not be able to closeout w/o clear %Y%m%d_%H%M%S"
     false
 fi
 
 # clear alice
-goal app clear --app-id $APP_ID -f $ALICE
+${gcmd} app clear --app-id $APP_ID -f $ALICE
 
 # optin bob
-goal app optin --app-id $APP_ID -f $BOB
+${gcmd} app optin --app-id $APP_ID -f $BOB
+
+exit 0
 
 # clawback transfer
-goal app call --app-id $APP_ID -f $MANAGER --app-input <(jq -n "$CLAW1_SCRIPT")
+${gcmd} app call --app-id $APP_ID -f $MANAGER --app-input <(jq -n "$CLAW1_SCRIPT")
 
 # delete F
-RES=$(goal app delete --app-id $APP_ID -f $MANAGER 2>&1 || true)
+RES=$(${gcmd} app delete --app-id $APP_ID -f $MANAGER 2>&1 || true)
 if [[ $RES != *"$ERR_APP_REJ_STR1"* ]]; then
     date "+assets-app FAIL should not be able to delete asset while outstanding holdings exist %Y%m%d_%H%M%S"
     false
 fi
 
 # clawback
-goal app call --app-id $APP_ID -f $MANAGER --app-input <(jq -n "$CLAW2_SCRIPT")
+${gcmd} app call --app-id $APP_ID -f $MANAGER --app-input <(jq -n "$CLAW2_SCRIPT")
 
 # delete
-goal app delete --app-id $APP_ID -f $MANAGER
+${gcmd} app delete --app-id $APP_ID -f $MANAGER
 
 # clear bob
-goal app clear --app-id $APP_ID -f $BOB
+${gcmd} app clear --app-id $APP_ID -f $BOB
