@@ -1246,6 +1246,10 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint
 		}
 	case NumAccounts:
 		sv.Uint = uint64(len(txn.Accounts))
+	case ApprovalProgram:
+		sv.Bytes = []byte(txn.ApprovalProgram)
+	case ClearStateProgram:
+		sv.Bytes = []byte(txn.ClearStateProgram)
 	default:
 		err = fmt.Errorf("invalid txn field %d", field)
 		return
@@ -1666,6 +1670,28 @@ func (cx *evalContext) appDeleteGlobalKey(key string) error {
 	return nil
 }
 
+func opAppGetLocalStateSimple(cx *evalContext) {
+	last := len(cx.stack) - 1 // state key
+	prev := last - 1          // account offset
+
+	key := cx.stack[last].Bytes
+	accountIdx := cx.stack[prev].Uint
+
+	appID := uint64(0)
+	result, ok, err := opAppGetLocalStateImpl(cx, key, appID, accountIdx)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	if !ok {
+		cx.err = fmt.Errorf("no such key %s", string(key))
+		return
+	}
+
+	cx.stack[prev] = result
+	cx.stack = cx.stack[:last]
+}
+
 func opAppGetLocalState(cx *evalContext) {
 	last := len(cx.stack) - 1 // state key
 	prev := last - 1          // app id
@@ -1675,19 +1701,35 @@ func opAppGetLocalState(cx *evalContext) {
 	appID := cx.stack[prev].Uint
 	accountIdx := cx.stack[pprev].Uint
 
-	if cx.Ledger == nil {
-		cx.err = fmt.Errorf("ledger not available")
-		return
+	if appID != 0 && appID == uint64(cx.Txn.Txn.ApplicationID) {
+		appID = 0 // 0 is an alias for the current app
 	}
 
-	addr, err := getAccountAddrByOffset(cx.Txn, accountIdx)
+	result, ok, err := opAppGetLocalStateImpl(cx, key, appID, accountIdx)
 	if err != nil {
 		cx.err = err
 		return
 	}
 
-	if appID != 0 && appID == uint64(cx.Txn.Txn.ApplicationID) {
-		appID = 0 // 0 is an alias for the current app
+	var isOk stackValue
+	if ok {
+		isOk.Uint = 1
+	}
+
+	cx.stack[pprev] = result
+	cx.stack[prev] = isOk
+	cx.stack = cx.stack[:last]
+}
+
+func opAppGetLocalStateImpl(cx *evalContext, key []byte, appID uint64, accountIdx uint64) (result stackValue, ok bool, err error) {
+	if cx.Ledger == nil {
+		err = fmt.Errorf("ledger not available")
+		return
+	}
+
+	addr, err := getAccountAddrByOffset(cx.Txn, accountIdx)
+	if err != nil {
+		return
 	}
 
 	tv, ok, err := cx.appReadLocalKey(appID, addr, string(key))
@@ -1696,20 +1738,10 @@ func opAppGetLocalState(cx *evalContext) {
 		return
 	}
 
-	var result stackValue
-	var isOk stackValue
-
 	if ok {
 		result, err = stackValueFromTealValue(&tv)
-		if err != nil {
-			cx.err = err
-			return
-		}
-		isOk.Uint = 1
 	}
-	cx.stack[pprev] = result
-	cx.stack[prev] = isOk
-	cx.stack = cx.stack[:last]
+	return
 }
 
 func opAppGetGlobalState(cx *evalContext) {

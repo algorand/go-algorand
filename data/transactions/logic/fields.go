@@ -86,6 +86,10 @@ const (
 	Accounts
 	// NumAccounts len(Accounts)
 	NumAccounts
+	// ApprovalProgram []byte
+	ApprovalProgram
+	// ClearStateProgram []byte
+	ClearStateProgram
 
 	invalidTxnField // fence for some setup that loops from Sender..invalidTxnField
 )
@@ -130,6 +134,8 @@ var txnFieldTypePairs = []txnFieldType{
 	{NumAppArgs, StackUint64},
 	{Accounts, StackBytes},
 	{NumAccounts, StackUint64},
+	{ApprovalProgram, StackBytes},
+	{ClearStateProgram, StackBytes},
 }
 
 // TxnFieldTypes is StackBytes or StackUint64 parallel to TxnFieldNames

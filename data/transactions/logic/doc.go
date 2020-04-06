@@ -97,6 +97,7 @@ var opDocList = []stringString{
 	{"substring3", "pop a byte string A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result"},
 	{"balance", "get balance for the requested account A in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction"},
 	{"app_opted_in", "check if account A opted in for the application B => {0 or 1}"},
+	{"app_local_gets", "read from account's A from local state of the current application key B  => value"},
 	{"app_local_get", "read from account's A from local state of the application B key C  => {0 or 1 (top), value}"},
 	{"app_global_get", "read key A from global state of a current application => {0 or 1 (top), value}"},
 	{"app_local_put", "write to account's A to local state of a current application key B with value C"},
@@ -162,6 +163,7 @@ var opDocExtraList = []stringString{
 	{"btoi", "`btoi` panics if the input is longer than 8 bytes"},
 	{"concat", "`concat` panics if the result would be greater than 4096 bytes"},
 	{"app_opted_in", "params: account index, application id (top of the stack on opcode entry)"},
+	{"app_local_gets", "params: account index, state key. Return: value"},
 	{"app_local_get", "params: account index, application id, state key. Return: did_exist flag (top of the stack), value"},
 	{"app_local_put", "params: account index, state key, value"},
 	{"app_local_del", "params: account index, state key"},
@@ -192,7 +194,7 @@ var OpGroupList = []OpGroup{
 	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "concat", "substring", "substring3"}},
 	{"Loading Values", []string{"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "txna", "gtxna", "global", "load", "store"}},
 	{"Flow Control", []string{"err", "bnz", "bz", "b", "return", "pop", "dup"}},
-	{"State Access", []string{"balance", "app_opted_in", "app_local_get", "app_global_get", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get"}},
+	{"State Access", []string{"balance", "app_opted_in", "app_local_gets", "app_local_get", "app_global_get", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get"}},
 }
 
 var opCostByName map[string]int
@@ -258,6 +260,8 @@ var txnFieldDocList = []stringString{
 	{"NumAppArgs", "Number of ApplicationArgs"},
 	{"Accounts", "Accounts listed in the ApplicationCall transaction"},
 	{"NumAccounts", "Number of Accounts"},
+	{"ApprovalProgram", "Approval program"},
+	{"ClearStateProgram", "Clear state program"},
 }
 
 // TxnFieldDocs are notes on fields available by `txn` and `gtxn`

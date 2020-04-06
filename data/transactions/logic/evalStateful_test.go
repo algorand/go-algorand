@@ -702,6 +702,36 @@ byte 0x414c474f
 	require.NoError(t, err)
 	require.True(t, pass)
 
+	// check app_local_gets
+	text = `int 0  // account idx
+txn ApplicationArgs 0
+app_local_gets
+byte 0x414c474f
+==`
+
+	program, err = AssembleString(text)
+	require.NoError(t, err)
+
+	ledger.balances[txn.Txn.Sender].apps[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
+	pass, _, err = EvalStateful(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+
+	// check app_local_gets error
+	text = `int 0  // account idx
+byte 0x414c474f
+app_local_gets
+byte 0x414c474f
+==`
+
+	program, err = AssembleString(text)
+	require.NoError(t, err)
+
+	ledger.balances[txn.Txn.Sender].apps[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
+	pass, _, err = EvalStateful(program, ep)
+	require.Error(t, err)
+	require.False(t, pass)
+	require.Contains(t, err.Error(), "no such key")
 }
 
 func TestAppReadGlobalState(t *testing.T) {
