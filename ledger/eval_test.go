@@ -168,7 +168,7 @@ func TestRekeying(t *testing.T) {
 		// So the ValidatedBlock that comes out isn't necessarily actually a valid block. We'll call Validate ourselves.
 
 		newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
-		eval, err := l.StartEvaluator(newBlock.BlockHeader)
+		eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
 		require.NoError(t, err)
 
 		for _, stxn := range stxns {
