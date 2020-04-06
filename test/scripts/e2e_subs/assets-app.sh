@@ -270,13 +270,13 @@ if [[ $RES != *"$ERR_APP_REJ_STR2"* ]]; then
     false
 fi
 
+exit 0
+
 # clear alice
 ${gcmd} app clear --app-id $APP_ID -f $ALICE
 
 # optin bob
 ${gcmd} app optin --app-id $APP_ID -f $BOB
-
-exit 0
 
 # clawback transfer
 ${gcmd} app call --app-id $APP_ID -f $MANAGER --app-input <(jq -n "$CLAW1_SCRIPT")
