@@ -345,54 +345,6 @@ func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig
 	}
 
 	appParams = account.AppParams
-
-	for addr := range accounts {
-		addrAccount, addrErr := client.AccountInformation(addr)
-		if addrErr != nil {
-			fmt.Printf("Cannot lookup source account")
-			err = addrErr
-			return
-		}
-
-		for k := range appParams {
-			// if addr already opted in to this app, skip
-			if _, ok := addrAccount.AppLocalStates[k]; !ok {
-				// opt in to app
-				var tx transactions.Transaction
-				tx, err = client.MakeUnsignedAppOptInTx(k, nil, nil)
-				if err != nil {
-					fmt.Printf("Cannot opt in to app %v in account %v\n", k, addr)
-					return
-				}
-
-				tx, err = client.FillUnsignedTxTemplate(addr, 0, 0, cfg.MaxFee, tx)
-				if err != nil {
-					fmt.Printf("Cannot fill app %v init txn in account %v\n", k, addr)
-					return
-				}
-
-				signedTxn, signErr := client.SignTransactionWithWallet(h, nil, tx)
-				if signErr != nil {
-					fmt.Printf("Cannot sign app %v init txn in account %v\n", k, addr)
-					err = signErr
-					return
-				}
-
-				_, broadcastErr := client.BroadcastTransaction(signedTxn)
-				if broadcastErr != nil {
-					fmt.Printf("Cannot broadcast app %v init txn in account %v\n", k, addr)
-					err = broadcastErr
-					return
-				}
-
-				if !cfg.Quiet {
-					fmt.Printf("Init app %v in account %v\n", k, addr)
-				}
-				accounts[addr] -= tx.Fee.Raw
-			}
-		}
-
-	}
 	return
 }
 
