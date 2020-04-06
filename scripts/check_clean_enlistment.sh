@@ -12,11 +12,9 @@
 #
 # Examples: scripts/check_clean_enlistment.sh
 
-# Treat travis builds as 'clean'
-if [ -z "${TRAVIS_BRANCH}" ]; then
-    if [[ -n $(git status --porcelain) ]]; then
-        exit 1
-    fi
+# Check for clean enlistment ignoring the update to buildnumber.dat which is expected during a release build
+if (( $(git status --porcelain | grep -c -v "buildnumber.dat" ) == 0 )); then
+   exit 0
 else
-    exit 0
+   exit 1
 fi
