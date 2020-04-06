@@ -36,6 +36,11 @@ import (
 // ErrNoSpace indicates insufficient space for transaction in block
 var ErrNoSpace = errors.New("block does not have space for transaction")
 
+// maxPaysetHint makes sure that we don't allocate too much memory up front
+// in the block evaluator, since there cannot reasonably be more than this
+// many transactions in a block.
+const maxPaysetHint = 20000
+
 // VerifiedTxnCache captures the interface for a cache of previously
 // verified transactions.  This is expected to match the transaction
 // pool object.
@@ -179,12 +184,14 @@ type ledgerForEvaluator interface {
 }
 
 // StartEvaluator creates a BlockEvaluator, given a ledger and a block header
-// of the block that the caller is planning to evaluate.
-func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader) (*BlockEvaluator, error) {
-	return startEvaluator(l, hdr, true, true)
+// of the block that the caller is planning to evaluate. If the length of the
+// payset being evaluated is known in advance, a paysetHint >= 0 can be
+// passed, avoiding unnecessary payset slice growth.
+func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint int) (*BlockEvaluator, error) {
+	return startEvaluator(l, hdr, paysetHint, true, true)
 }
 
-func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, validate bool, generate bool) (*BlockEvaluator, error) {
+func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHint int, validate bool, generate bool) (*BlockEvaluator, error) {
 	proto, ok := config.Consensus[hdr.CurrentProtocol]
 	if !ok {
 		return nil, protocol.Error(hdr.CurrentProtocol)
@@ -207,6 +214,15 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, validate 
 		proto:       proto,
 		genesisHash: l.GenesisHash(),
 		l:           l,
+	}
+
+	// Preallocate space for the payset so that we don't have to
+	// dynamically grow a slice (if evaluating a whole block).
+	if paysetHint > 0 {
+		if paysetHint > maxPaysetHint {
+			paysetHint = maxPaysetHint
+		}
+		eval.block.Payset = make([]transactions.SignedTxnInBlock, 0, paysetHint)
 	}
 
 	if hdr.Round > 0 {
@@ -426,22 +442,20 @@ func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn, ad transacti
 			SignedTxn: txn,
 			ApplyData: ad,
 		},
-	}, true)
+	})
 }
 
 // TransactionGroup tentatively adds a new transaction group as part of this block evaluation.
 // If the transaction group cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
 func (eval *BlockEvaluator) TransactionGroup(txads []transactions.SignedTxnWithAD) error {
-	return eval.transactionGroup(txads, true)
+	return eval.transactionGroup(txads)
 }
 
 // transactionGroup tentatively executes a group of transactions as part of this block evaluation.
 // If the transaction group cannot be added to the block without violating some constraints,
-// an error is returned and the block evaluator state is unchanged.  If remember is true,
-// the transaction group is added to the block evaluator state; otherwise, the block evaluator
-// is not modified and does not remember this transaction group.
-func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWithAD, remember bool) error {
+// an error is returned and the block evaluator state is unchanged.
+func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWithAD) error {
 	// Nothing to do if there are no transactions.
 	if len(txgroup) == 0 {
 		return nil
@@ -498,11 +512,9 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 		}
 	}
 
-	if remember {
-		eval.block.Payset = append(eval.block.Payset, txibs...)
-		eval.blockTxBytes += groupTxBytes
-		cow.commitToParent()
-	}
+	eval.block.Payset = append(eval.block.Payset, txibs...)
+	eval.blockTxBytes += groupTxBytes
+	cow.commitToParent()
 
 	return nil
 }
@@ -513,6 +525,9 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transactions.ApplyData, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
 	var err error
 
+	// Only compute the TxID once
+	txid := txn.ID()
+
 	if eval.validate {
 		err = txn.Txn.Alive(eval.block)
 		if err != nil {
@@ -520,13 +535,12 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 		}
 
 		// Transaction already in the ledger?
-		txid := txn.ID()
 		dup, err := cow.isDup(txn.Txn.First(), txn.Txn.Last(), txid, txlease{sender: txn.Txn.Sender, lease: txn.Txn.Lease})
 		if err != nil {
 			return err
 		}
 		if dup {
-			return TransactionInLedgerError{txn.ID()}
+			return TransactionInLedgerError{txid}
 		}
 	}
 
@@ -538,7 +552,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 	// Apply the transaction, updating the cow balances
 	applyData, err := txn.Txn.Apply(cow, spec, cow.txnCounter())
 	if err != nil {
-		return fmt.Errorf("transaction %v: %v", txn.ID(), err)
+		return fmt.Errorf("transaction %v: %v", txid, err)
 	}
 
 	// Validate applyData if we are validating an existing block.
@@ -546,11 +560,11 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 	if eval.validate && !eval.generate {
 		if eval.proto.ApplyData {
 			if ad != applyData {
-				return fmt.Errorf("transaction %v: applyData mismatch: %v != %v", txn.ID(), ad, applyData)
+				return fmt.Errorf("transaction %v: applyData mismatch: %v != %v", txid, ad, applyData)
 			}
 		} else {
 			if ad != (transactions.ApplyData{}) {
-				return fmt.Errorf("transaction %v: applyData not supported", txn.ID())
+				return fmt.Errorf("transaction %v: applyData not supported", txid)
 			}
 		}
 	}
@@ -589,12 +603,12 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 		effectiveMinBalance := basics.MulSaturate(eval.proto.MinBalance, uint64(1+len(dataNew.Assets)))
 		if dataNew.MicroAlgos.Raw < effectiveMinBalance {
 			return fmt.Errorf("transaction %v: account %v balance %d below min %d (%d assets)",
-				txn.ID(), addr, dataNew.MicroAlgos.Raw, effectiveMinBalance, len(dataNew.Assets))
+				txid, addr, dataNew.MicroAlgos.Raw, effectiveMinBalance, len(dataNew.Assets))
 		}
 	}
 
 	// Remember this txn
-	cow.addTx(txn.Txn)
+	cow.addTx(txn.Txn, txid)
 
 	return nil
 }
@@ -722,7 +736,7 @@ func validateTransaction(txn transactions.SignedTxn, block bookkeeping.Block, pr
 // AddBlock: eval(context.Background(), blk, false, nil, nil)
 // tracker:  eval(context.Background(), blk, false, nil, nil)
 func (l *Ledger) eval(ctx context.Context, blk bookkeeping.Block, validate bool, txcache VerifiedTxnCache, executionPool execpool.BacklogPool) (StateDelta, error) {
-	eval, err := startEvaluator(l, blk.BlockHeader, validate, false)
+	eval, err := startEvaluator(l, blk.BlockHeader, len(blk.Payset), validate, false)
 	if err != nil {
 		return StateDelta{}, err
 	}

@@ -215,8 +215,8 @@ func (tx Header) Alive(tc TxnContext) error {
 }
 
 // MatchAddress checks if the transaction touches a given address.
-func (tx Transaction) MatchAddress(addr basics.Address, spec SpecialAddresses, proto config.ConsensusParams) bool {
-	for _, candidate := range tx.RelevantAddrs(spec, proto) {
+func (tx Transaction) MatchAddress(addr basics.Address, spec SpecialAddresses) bool {
+	for _, candidate := range tx.RelevantAddrs(spec) {
 		if addr == candidate {
 			return true
 		}
@@ -323,7 +323,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		// this check is just to be safe, but reaching here seems impossible, since it requires computing a preimage of rwpool
 		return fmt.Errorf("transaction from incentive pool is invalid")
 	}
-	if tx.Sender == (basics.Address{}) {
+	if tx.Sender.IsZero() {
 		return fmt.Errorf("transaction cannot have zero sender")
 	}
 	if !proto.SupportTransactionLeases && (tx.Lease != [32]byte{}) {
@@ -352,19 +352,22 @@ func (tx Header) Last() basics.Round {
 
 // RelevantAddrs returns the addresses whose balance records this transaction will need to access.
 // The header's default is to return just the sender and the fee sink.
-func (tx Transaction) RelevantAddrs(spec SpecialAddresses, proto config.ConsensusParams) []basics.Address {
+func (tx Transaction) RelevantAddrs(spec SpecialAddresses) []basics.Address {
 	addrs := []basics.Address{tx.Sender, spec.FeeSink}
 
 	switch tx.Type {
 	case protocol.PaymentTx:
 		addrs = append(addrs, tx.PaymentTxnFields.Receiver)
-		if tx.PaymentTxnFields.CloseRemainderTo != (basics.Address{}) {
+		if !tx.PaymentTxnFields.CloseRemainderTo.IsZero() {
 			addrs = append(addrs, tx.PaymentTxnFields.CloseRemainderTo)
 		}
 	case protocol.AssetTransferTx:
 		addrs = append(addrs, tx.AssetTransferTxnFields.AssetReceiver)
-		if tx.AssetTransferTxnFields.AssetCloseTo != (basics.Address{}) {
+		if !tx.AssetTransferTxnFields.AssetCloseTo.IsZero() {
 			addrs = append(addrs, tx.AssetTransferTxnFields.AssetCloseTo)
+		}
+		if !tx.AssetTransferTxnFields.AssetSender.IsZero() {
+			addrs = append(addrs, tx.AssetTransferTxnFields.AssetSender)
 		}
 	}
 
