@@ -57,4 +57,4 @@ require (
 	gopkg.in/toast.v1 v1.0.0-20180812000517-0a84660828b2 // indirect
 )
 
-replace github.com/deepmap/oapi-codegen v1.3.5 => github.com/winder/oapi-codegen v1.3.5-algorand
+replace github.com/deepmap/oapi-codegen v1.3.5 => github.com/algorand/oapi-codegen v1.3.5-algorand
