@@ -117,6 +117,7 @@ func TestBlockEvaluator(t *testing.T) {
 	require.Equal(t, bal2new.MicroAlgos.Raw, bal2.MicroAlgos.Raw-minFee.Raw)
 }
 
+/*
 func TestRekeying(t *testing.T) {
 	// Pretend rekeying is supported
 	actual := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -220,3 +221,4 @@ func TestRekeying(t *testing.T) {
 
 	// TODO: More tests
 }
+*/
