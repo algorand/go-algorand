@@ -174,10 +174,9 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params generated.Ge
 	if handle == protocol.CodecHandle {
 		blockbytes, err := rpcs.RawBlockBytes(v2.Node.Ledger(), basics.Round(round))
 		if err != nil {
-			return internalError(ctx, err, errFailedToLookupRawBlock, v2.Log)
+			return internalError(ctx, err, err.Error(), v2.Log)
 		}
 
-		ctx.Response().Writer.Header().Add("Content-Encoding", "application/x-algorand-block-v1")
 		ctx.Response().Writer.Header().Add("X-Algorand-Struct", "block-v1")
 		return ctx.Blob(http.StatusOK, "application/msgpack", blockbytes)
 	}
