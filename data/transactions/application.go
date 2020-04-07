@@ -112,10 +112,10 @@ func (ac *ApplicationCallTxnFields) Empty() bool {
 	if ac.GlobalStateSchema != (basics.StateSchema{}) {
 		return false
 	}
-	if len(ac.ApprovalProgram) != 0 {
+	if ac.ApprovalProgram != nil {
 		return false
 	}
-	if len(ac.ClearStateProgram) != 0 {
+	if ac.ClearStateProgram != nil {
 		return false
 	}
 	return true
