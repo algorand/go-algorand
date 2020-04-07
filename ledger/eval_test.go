@@ -17,7 +17,6 @@
 package ledger
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -30,7 +29,6 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/protocol"
 )
 
