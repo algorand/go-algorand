@@ -76,6 +76,10 @@ The base64 encoding of the signature will always be printed to stdout. Optionall
 			reportErrorf(tealsignMutKeyArgs)
 		}
 
+		if keyFilename == "" && signerAcct == "" {
+			reportErrorf(tealsignMutKeyArgs)
+		}
+
 		var kdata []byte
 		var err error
 		if keyFilename != "" {
