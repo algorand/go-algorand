@@ -25,6 +25,7 @@ var (
 	errFailedToParseTransaction         = "failed to parse transaction"
 	errFailedToParseBlock               = "failed to parse block"
 	errFailedToParseCert                = "failed to parse cert"
+	errFailedToLookupRawBlock           = "failed to lookup raw block"
 	errInternalFailure                  = "internal failure"
 	errNoTxnSpecified                   = "no transaction ID was specified"
 	errTransactionNotFound              = "could not find the transaction in the transaction pool or in the last 1000 confirmed rounds"

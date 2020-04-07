@@ -33,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/rpcs"
 )
 
 // Handlers is an implementation to the V2 route handler interface defined by the generated code.
@@ -169,41 +170,29 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params generated.Ge
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
 
-	// TODO: What is raw block bytes, should I use that instead?
-	//blockbytes, err := rpcs.RawBlockBytes(v2.Node.Ledger(), basics.Round(round))
+	// msgpack format will return the raw block bytes and attach some custom headers.
+	if handle == protocol.CodecHandle {
+		blockbytes, err := rpcs.RawBlockBytes(v2.Node.Ledger(), basics.Round(round))
+		if err != nil {
+			return internalError(ctx, err, errFailedToLookupRawBlock, v2.Log)
+		}
+
+		ctx.Response().Writer.Header().Add("Content-Encoding", "application/x-algorand-block-v1")
+		ctx.Response().Writer.Header().Add("X-Algorand-Struct", "block-v1")
+		return ctx.Blob(http.StatusOK, "application/msgpack", blockbytes)
+	}
 
 	ledger := v2.Node.Ledger()
-	block, cert, err := ledger.BlockCert(basics.Round(round))
+	block, _, err := ledger.BlockCert(basics.Round(round))
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
 
-	encodedBlock, err := encode(handle, block)
-	if err != nil {
-		return internalError(ctx, err, errFailedToParseBlock, v2.Log)
-	}
+	response := generated.BlockResponse{}
 
-	response := generated.BlockResponse{
-		Block: encodedBlock,
-	}
+	toCodecMap(block, &response.Block)
 
-	// If we're using the messagepack encoding, also include the certificates.
-	if handle == protocol.CodecHandle {
-		encodedCert, err := encode(handle, cert)
-		if err != nil {
-			return internalError(ctx, err, errFailedToParseCert, v2.Log)
-		}
-		response.Cert = &encodedCert
-	}
-
-	encoded, err := encode(handle, response)
-	if err != nil {
-		return internalError(ctx, err, errFailedToParseBlock, v2.Log)
-	}
-
-	return ctx.JSON(http.StatusOK, generated.BlockResponse{
-		Block: encoded,
-	})
+	return ctx.JSON(http.StatusOK, response)
 }
 
 // GetSupply gets the current supply reported by the ledger.
@@ -339,7 +328,7 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 
 	if txn, ok := v2.Node.GetPendingTransaction(txID); ok {
 		response := generated.PendingTransactionResponse{
-			Txn:             "",
+			Txn:             nil,
 			PoolError:       "",
 			ClosingAmount:   nil,
 			ConfirmedRound:  nil,
@@ -353,12 +342,7 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 			return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 		}
 
-		encoded, err := encode(handle, txn.Txn)
-		if err != nil {
-			return internalError(ctx, err, errFailedToParseTransaction, v2.Log)
-		}
-
-		response.Txn = encoded
+		toCodecMap(txn.Txn, &response.Txn)
 
 		if txn.ConfirmedRound != 0 {
 			r := uint64(txn.ConfirmedRound)
@@ -370,6 +354,14 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 			response.CloseRewards = &txn.ApplyData.CloseRewards.Raw
 
 			response.AssetIndex = computeAssetIndexFromTxn(txn, v2.Node.Ledger())
+		}
+
+		if handle == protocol.CodecHandle {
+			data, err := encode(handle, response)
+			if err != nil {
+				return internalError(ctx, err, errFailedToParseTransaction, v2.Log)
+			}
+			return ctx.Blob(http.StatusOK, "application/msgpack", data)
 		}
 
 		return ctx.JSON(http.StatusOK, response)
@@ -409,7 +401,7 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 	}
 
 	// Convert transactions to msgp / json strings
-	encodedTxns := make([]string, 0)
+	encodedTxns := make([]map[string]interface{}, 0)
 	for _, txn := range txns {
 		// break out if we've reached the max number of transactions
 		if max != nil && uint64(len(encodedTxns)) >= *max {
@@ -421,18 +413,27 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 			continue
 		}
 
-		// Encode the transaction and added to the results
-		encodedTxn, err := encode(handle, txn)
-		if err != nil {
-			return internalError(ctx, err, errFailedToParseTransaction, v2.Log)
-		}
+		var encodedTxn map[string]interface{}
+		toCodecMap(txn, &encodedTxn)
 		encodedTxns = append(encodedTxns, encodedTxn)
 	}
 
-	return ctx.JSON(http.StatusOK, generated.PendingTransactionsResponse{
+	response := generated.PendingTransactionsResponse{
 		TopTransactions:   encodedTxns,
 		TotalTransactions: uint64(len(txns)),
-	})
+	}
+
+	// Encode to message pack
+	if handle == protocol.CodecHandle {
+		data, err := encode(handle, response)
+		if err != nil {
+			return internalError(ctx, err, errFailedToParseTransaction, v2.Log)
+		}
+
+		return ctx.Blob(http.StatusOK, "application/msgpack", data)
+	}
+
+	return ctx.JSON(http.StatusOK, response)
 }
 
 // GetPendingTransactions returns the list of unconfirmed transactions currently in the transaction pool.

@@ -241,10 +241,12 @@ type AccountResponse Account
 
 // BlockResponse defines model for BlockResponse.
 type BlockResponse struct {
-	Block string `json:"block"`
+
+	// Block header data.
+	Block map[string]interface{} `json:"block"`
 
 	// Optional certificate object. This is only included when the format is set to message pack.
-	Cert *string `json:"cert,omitempty"`
+	Cert *map[string]interface{} `json:"cert,omitempty"`
 }
 
 // Error defines model for Error.
@@ -304,15 +306,15 @@ type PendingTransactionResponse struct {
 	// Rewards in microalgos applied to the sender account.
 	SenderRewards *uint64 `json:"sender-rewards,omitempty"`
 
-	// The raw transaction encoded as a JSON string or Base64 encoded message pack object.
-	Txn string `json:"txn"`
+	// The raw signed transaction.
+	Txn map[string]interface{} `json:"txn"`
 }
 
 // PendingTransactionsResponse defines model for PendingTransactionsResponse.
 type PendingTransactionsResponse struct {
 
-	// An array of transactions encoded as either a JSON string or a Base64 encoded message pack object.
-	TopTransactions []string `json:"top-transactions"`
+	// An array of signed transaction objects.
+	TopTransactions []map[string]interface{} `json:"top-transactions"`
 
 	// Total number of transactions in the pool.
 	TotalTransactions uint64 `json:"total-transactions"`
