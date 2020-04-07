@@ -1328,11 +1328,11 @@ func (z *AppParams) MarshalMsg(b []byte) (o []byte, err error) {
 	// omitempty: check for empty values
 	zb0003Len := uint32(5)
 	var zb0003Mask uint8 /* 6 bits */
-	if (*z).ApprovalProgram == "" {
+	if len((*z).ApprovalProgram) == 0 {
 		zb0003Len--
 		zb0003Mask |= 0x2
 	}
-	if (*z).ClearStateProgram == "" {
+	if len((*z).ClearStateProgram) == 0 {
 		zb0003Len--
 		zb0003Mask |= 0x4
 	}
@@ -1354,12 +1354,12 @@ func (z *AppParams) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0003Mask & 0x2) == 0 { // if not empty
 			// string "approv"
 			o = append(o, 0xa6, 0x61, 0x70, 0x70, 0x72, 0x6f, 0x76)
-			o = msgp.AppendString(o, (*z).ApprovalProgram)
+			o = msgp.AppendBytes(o, (*z).ApprovalProgram)
 		}
 		if (zb0003Mask & 0x4) == 0 { // if not empty
 			// string "clearp"
 			o = append(o, 0xa6, 0x63, 0x6c, 0x65, 0x61, 0x72, 0x70)
-			o = msgp.AppendString(o, (*z).ClearStateProgram)
+			o = msgp.AppendBytes(o, (*z).ClearStateProgram)
 		}
 		if (zb0003Mask & 0x8) == 0 { // if not empty
 			// string "gs"
@@ -1463,7 +1463,7 @@ func (z *AppParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0003 > 0 {
 			zb0003--
-			(*z).ApprovalProgram, bts, err = msgp.ReadStringBytes(bts)
+			(*z).ApprovalProgram, bts, err = msgp.ReadBytesBytes(bts, (*z).ApprovalProgram)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ApprovalProgram")
 				return
@@ -1471,7 +1471,7 @@ func (z *AppParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0003 > 0 {
 			zb0003--
-			(*z).ClearStateProgram, bts, err = msgp.ReadStringBytes(bts)
+			(*z).ClearStateProgram, bts, err = msgp.ReadBytesBytes(bts, (*z).ClearStateProgram)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ClearStateProgram")
 				return
@@ -1681,13 +1681,13 @@ func (z *AppParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "approv":
-				(*z).ApprovalProgram, bts, err = msgp.ReadStringBytes(bts)
+				(*z).ApprovalProgram, bts, err = msgp.ReadBytesBytes(bts, (*z).ApprovalProgram)
 				if err != nil {
 					err = msgp.WrapError(err, "ApprovalProgram")
 					return
 				}
 			case "clearp":
-				(*z).ClearStateProgram, bts, err = msgp.ReadStringBytes(bts)
+				(*z).ClearStateProgram, bts, err = msgp.ReadBytesBytes(bts, (*z).ClearStateProgram)
 				if err != nil {
 					err = msgp.WrapError(err, "ClearStateProgram")
 					return
@@ -1886,7 +1886,7 @@ func (_ *AppParams) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *AppParams) Msgsize() (s int) {
-	s = 1 + 7 + msgp.StringPrefixSize + len((*z).ApprovalProgram) + 7 + msgp.StringPrefixSize + len((*z).ClearStateProgram) + 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 3 + msgp.MapHeaderSize
+	s = 1 + 7 + msgp.BytesPrefixSize + len((*z).ApprovalProgram) + 7 + msgp.BytesPrefixSize + len((*z).ClearStateProgram) + 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 3 + msgp.MapHeaderSize
 	if (*z).GlobalState != nil {
 		for zb0001, zb0002 := range (*z).GlobalState {
 			_ = zb0001
@@ -1899,7 +1899,7 @@ func (z *AppParams) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *AppParams) MsgIsZero() bool {
-	return ((*z).ApprovalProgram == "") && ((*z).ClearStateProgram == "") && (((*z).LocalStateSchema.NumUint == 0) && ((*z).LocalStateSchema.NumByteSlice == 0)) && (((*z).GlobalStateSchema.NumUint == 0) && ((*z).GlobalStateSchema.NumByteSlice == 0)) && (len((*z).GlobalState) == 0)
+	return (len((*z).ApprovalProgram) == 0) && (len((*z).ClearStateProgram) == 0) && (((*z).LocalStateSchema.NumUint == 0) && ((*z).LocalStateSchema.NumByteSlice == 0)) && (((*z).GlobalStateSchema.NumUint == 0) && ((*z).GlobalStateSchema.NumByteSlice == 0)) && (len((*z).GlobalState) == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler

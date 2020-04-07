@@ -22,7 +22,7 @@ func (z *ApplicationCallTxnFields) MarshalMsg(b []byte) (o []byte, err error) {
 		zb0003Len--
 		zb0003Mask |= 0x4
 	}
-	if (*z).ApprovalProgram == "" {
+	if len((*z).ApprovalProgram) == 0 {
 		zb0003Len--
 		zb0003Mask |= 0x8
 	}
@@ -42,7 +42,7 @@ func (z *ApplicationCallTxnFields) MarshalMsg(b []byte) (o []byte, err error) {
 		zb0003Len--
 		zb0003Mask |= 0x80
 	}
-	if (*z).ClearStateProgram == "" {
+	if len((*z).ClearStateProgram) == 0 {
 		zb0003Len--
 		zb0003Mask |= 0x100
 	}
@@ -58,7 +58,7 @@ func (z *ApplicationCallTxnFields) MarshalMsg(b []byte) (o []byte, err error) {
 				o = msgp.AppendArrayHeader(o, uint32(len((*z).ApplicationArgs)))
 			}
 			for zb0001 := range (*z).ApplicationArgs {
-				o = msgp.AppendString(o, (*z).ApplicationArgs[zb0001])
+				o = msgp.AppendBytes(o, (*z).ApplicationArgs[zb0001])
 			}
 		}
 		if (zb0003Mask & 0x4) == 0 { // if not empty
@@ -69,7 +69,7 @@ func (z *ApplicationCallTxnFields) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0003Mask & 0x8) == 0 { // if not empty
 			// string "apap"
 			o = append(o, 0xa4, 0x61, 0x70, 0x61, 0x70)
-			o = msgp.AppendString(o, (*z).ApprovalProgram)
+			o = msgp.AppendBytes(o, (*z).ApprovalProgram)
 		}
 		if (zb0003Mask & 0x10) == 0 { // if not empty
 			// string "apat"
@@ -117,7 +117,7 @@ func (z *ApplicationCallTxnFields) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0003Mask & 0x100) == 0 { // if not empty
 			// string "apsu"
 			o = append(o, 0xa4, 0x61, 0x70, 0x73, 0x75)
-			o = msgp.AppendString(o, (*z).ClearStateProgram)
+			o = msgp.AppendBytes(o, (*z).ClearStateProgram)
 		}
 	}
 	return
@@ -180,10 +180,10 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 			} else if (*z).ApplicationArgs != nil && cap((*z).ApplicationArgs) >= zb0006 {
 				(*z).ApplicationArgs = ((*z).ApplicationArgs)[:zb0006]
 			} else {
-				(*z).ApplicationArgs = make([]string, zb0006)
+				(*z).ApplicationArgs = make([][]byte, zb0006)
 			}
 			for zb0001 := range (*z).ApplicationArgs {
-				(*z).ApplicationArgs[zb0001], bts, err = msgp.ReadStringBytes(bts)
+				(*z).ApplicationArgs[zb0001], bts, err = msgp.ReadBytesBytes(bts, (*z).ApplicationArgs[zb0001])
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "ApplicationArgs", zb0001)
 					return
@@ -237,7 +237,7 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 		}
 		if zb0003 > 0 {
 			zb0003--
-			(*z).ApprovalProgram, bts, err = msgp.ReadStringBytes(bts)
+			(*z).ApprovalProgram, bts, err = msgp.ReadBytesBytes(bts, (*z).ApprovalProgram)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ApprovalProgram")
 				return
@@ -245,7 +245,7 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 		}
 		if zb0003 > 0 {
 			zb0003--
-			(*z).ClearStateProgram, bts, err = msgp.ReadStringBytes(bts)
+			(*z).ClearStateProgram, bts, err = msgp.ReadBytesBytes(bts, (*z).ClearStateProgram)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ClearStateProgram")
 				return
@@ -308,10 +308,10 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 				} else if (*z).ApplicationArgs != nil && cap((*z).ApplicationArgs) >= zb0011 {
 					(*z).ApplicationArgs = ((*z).ApplicationArgs)[:zb0011]
 				} else {
-					(*z).ApplicationArgs = make([]string, zb0011)
+					(*z).ApplicationArgs = make([][]byte, zb0011)
 				}
 				for zb0001 := range (*z).ApplicationArgs {
-					(*z).ApplicationArgs[zb0001], bts, err = msgp.ReadStringBytes(bts)
+					(*z).ApplicationArgs[zb0001], bts, err = msgp.ReadBytesBytes(bts, (*z).ApplicationArgs[zb0001])
 					if err != nil {
 						err = msgp.WrapError(err, "ApplicationArgs", zb0001)
 						return
@@ -357,13 +357,13 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 					return
 				}
 			case "apap":
-				(*z).ApprovalProgram, bts, err = msgp.ReadStringBytes(bts)
+				(*z).ApprovalProgram, bts, err = msgp.ReadBytesBytes(bts, (*z).ApprovalProgram)
 				if err != nil {
 					err = msgp.WrapError(err, "ApprovalProgram")
 					return
 				}
 			case "apsu":
-				(*z).ClearStateProgram, bts, err = msgp.ReadStringBytes(bts)
+				(*z).ClearStateProgram, bts, err = msgp.ReadBytesBytes(bts, (*z).ClearStateProgram)
 				if err != nil {
 					err = msgp.WrapError(err, "ClearStateProgram")
 					return
@@ -390,19 +390,19 @@ func (_ *ApplicationCallTxnFields) CanUnmarshalMsg(z interface{}) bool {
 func (z *ApplicationCallTxnFields) Msgsize() (s int) {
 	s = 1 + 5 + (*z).ApplicationID.Msgsize() + 5 + msgp.Uint64Size + 5 + msgp.ArrayHeaderSize
 	for zb0001 := range (*z).ApplicationArgs {
-		s += msgp.StringPrefixSize + len((*z).ApplicationArgs[zb0001])
+		s += msgp.BytesPrefixSize + len((*z).ApplicationArgs[zb0001])
 	}
 	s += 5 + msgp.ArrayHeaderSize
 	for zb0002 := range (*z).Accounts {
 		s += (*z).Accounts[zb0002].Msgsize()
 	}
-	s += 5 + (*z).LocalStateSchema.Msgsize() + 5 + (*z).GlobalStateSchema.Msgsize() + 5 + msgp.StringPrefixSize + len((*z).ApprovalProgram) + 5 + msgp.StringPrefixSize + len((*z).ClearStateProgram)
+	s += 5 + (*z).LocalStateSchema.Msgsize() + 5 + (*z).GlobalStateSchema.Msgsize() + 5 + msgp.BytesPrefixSize + len((*z).ApprovalProgram) + 5 + msgp.BytesPrefixSize + len((*z).ClearStateProgram)
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *ApplicationCallTxnFields) MsgIsZero() bool {
-	return ((*z).ApplicationID.MsgIsZero()) && ((*z).OnCompletion == 0) && (len((*z).ApplicationArgs) == 0) && (len((*z).Accounts) == 0) && ((*z).LocalStateSchema.MsgIsZero()) && ((*z).GlobalStateSchema.MsgIsZero()) && ((*z).ApprovalProgram == "") && ((*z).ClearStateProgram == "")
+	return ((*z).ApplicationID.MsgIsZero()) && ((*z).OnCompletion == 0) && (len((*z).ApplicationArgs) == 0) && (len((*z).Accounts) == 0) && ((*z).LocalStateSchema.MsgIsZero()) && ((*z).GlobalStateSchema.MsgIsZero()) && (len((*z).ApprovalProgram) == 0) && (len((*z).ClearStateProgram) == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -3172,7 +3172,7 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte, err error) {
 		zb0004Len--
 		zb0004Mask |= 0x2000
 	}
-	if (*z).ApplicationCallTxnFields.ApprovalProgram == "" {
+	if len((*z).ApplicationCallTxnFields.ApprovalProgram) == 0 {
 		zb0004Len--
 		zb0004Mask |= 0x4000
 	}
@@ -3196,7 +3196,7 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte, err error) {
 		zb0004Len--
 		zb0004Mask |= 0x80000
 	}
-	if (*z).ApplicationCallTxnFields.ClearStateProgram == "" {
+	if len((*z).ApplicationCallTxnFields.ClearStateProgram) == 0 {
 		zb0004Len--
 		zb0004Mask |= 0x100000
 	}
@@ -3336,7 +3336,7 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte, err error) {
 				o = msgp.AppendArrayHeader(o, uint32(len((*z).ApplicationCallTxnFields.ApplicationArgs)))
 			}
 			for zb0002 := range (*z).ApplicationCallTxnFields.ApplicationArgs {
-				o = msgp.AppendString(o, (*z).ApplicationCallTxnFields.ApplicationArgs[zb0002])
+				o = msgp.AppendBytes(o, (*z).ApplicationCallTxnFields.ApplicationArgs[zb0002])
 			}
 		}
 		if (zb0004Mask & 0x2000) == 0 { // if not empty
@@ -3347,7 +3347,7 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0004Mask & 0x4000) == 0 { // if not empty
 			// string "apap"
 			o = append(o, 0xa4, 0x61, 0x70, 0x61, 0x70)
-			o = msgp.AppendString(o, (*z).ApplicationCallTxnFields.ApprovalProgram)
+			o = msgp.AppendBytes(o, (*z).ApplicationCallTxnFields.ApprovalProgram)
 		}
 		if (zb0004Mask & 0x8000) == 0 { // if not empty
 			// string "apar"
@@ -3404,7 +3404,7 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0004Mask & 0x100000) == 0 { // if not empty
 			// string "apsu"
 			o = append(o, 0xa4, 0x61, 0x70, 0x73, 0x75)
-			o = msgp.AppendString(o, (*z).ApplicationCallTxnFields.ClearStateProgram)
+			o = msgp.AppendBytes(o, (*z).ApplicationCallTxnFields.ClearStateProgram)
 		}
 		if (zb0004Mask & 0x200000) == 0 { // if not empty
 			// string "arcv"
@@ -3895,10 +3895,10 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			} else if (*z).ApplicationCallTxnFields.ApplicationArgs != nil && cap((*z).ApplicationCallTxnFields.ApplicationArgs) >= zb0007 {
 				(*z).ApplicationCallTxnFields.ApplicationArgs = ((*z).ApplicationCallTxnFields.ApplicationArgs)[:zb0007]
 			} else {
-				(*z).ApplicationCallTxnFields.ApplicationArgs = make([]string, zb0007)
+				(*z).ApplicationCallTxnFields.ApplicationArgs = make([][]byte, zb0007)
 			}
 			for zb0002 := range (*z).ApplicationCallTxnFields.ApplicationArgs {
-				(*z).ApplicationCallTxnFields.ApplicationArgs[zb0002], bts, err = msgp.ReadStringBytes(bts)
+				(*z).ApplicationCallTxnFields.ApplicationArgs[zb0002], bts, err = msgp.ReadBytesBytes(bts, (*z).ApplicationCallTxnFields.ApplicationArgs[zb0002])
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "ApplicationArgs", zb0002)
 					return
@@ -3952,7 +3952,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			(*z).ApplicationCallTxnFields.ApprovalProgram, bts, err = msgp.ReadStringBytes(bts)
+			(*z).ApplicationCallTxnFields.ApprovalProgram, bts, err = msgp.ReadBytesBytes(bts, (*z).ApplicationCallTxnFields.ApprovalProgram)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ApprovalProgram")
 				return
@@ -3960,7 +3960,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			(*z).ApplicationCallTxnFields.ClearStateProgram, bts, err = msgp.ReadStringBytes(bts)
+			(*z).ApplicationCallTxnFields.ClearStateProgram, bts, err = msgp.ReadBytesBytes(bts, (*z).ApplicationCallTxnFields.ClearStateProgram)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ClearStateProgram")
 				return
@@ -4197,10 +4197,10 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				} else if (*z).ApplicationCallTxnFields.ApplicationArgs != nil && cap((*z).ApplicationCallTxnFields.ApplicationArgs) >= zb0012 {
 					(*z).ApplicationCallTxnFields.ApplicationArgs = ((*z).ApplicationCallTxnFields.ApplicationArgs)[:zb0012]
 				} else {
-					(*z).ApplicationCallTxnFields.ApplicationArgs = make([]string, zb0012)
+					(*z).ApplicationCallTxnFields.ApplicationArgs = make([][]byte, zb0012)
 				}
 				for zb0002 := range (*z).ApplicationCallTxnFields.ApplicationArgs {
-					(*z).ApplicationCallTxnFields.ApplicationArgs[zb0002], bts, err = msgp.ReadStringBytes(bts)
+					(*z).ApplicationCallTxnFields.ApplicationArgs[zb0002], bts, err = msgp.ReadBytesBytes(bts, (*z).ApplicationCallTxnFields.ApplicationArgs[zb0002])
 					if err != nil {
 						err = msgp.WrapError(err, "ApplicationArgs", zb0002)
 						return
@@ -4246,13 +4246,13 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "apap":
-				(*z).ApplicationCallTxnFields.ApprovalProgram, bts, err = msgp.ReadStringBytes(bts)
+				(*z).ApplicationCallTxnFields.ApprovalProgram, bts, err = msgp.ReadBytesBytes(bts, (*z).ApplicationCallTxnFields.ApprovalProgram)
 				if err != nil {
 					err = msgp.WrapError(err, "ApprovalProgram")
 					return
 				}
 			case "apsu":
-				(*z).ApplicationCallTxnFields.ClearStateProgram, bts, err = msgp.ReadStringBytes(bts)
+				(*z).ApplicationCallTxnFields.ClearStateProgram, bts, err = msgp.ReadBytesBytes(bts, (*z).ApplicationCallTxnFields.ClearStateProgram)
 				if err != nil {
 					err = msgp.WrapError(err, "ClearStateProgram")
 					return
@@ -4279,19 +4279,19 @@ func (_ *Transaction) CanUnmarshalMsg(z interface{}) bool {
 func (z *Transaction) Msgsize() (s int) {
 	s = 3 + 5 + (*z).Type.Msgsize() + 4 + (*z).Header.Sender.Msgsize() + 4 + (*z).Header.Fee.Msgsize() + 3 + (*z).Header.FirstValid.Msgsize() + 3 + (*z).Header.LastValid.Msgsize() + 5 + msgp.BytesPrefixSize + len((*z).Header.Note) + 4 + msgp.StringPrefixSize + len((*z).Header.GenesisID) + 3 + (*z).Header.GenesisHash.Msgsize() + 4 + (*z).Header.Group.Msgsize() + 3 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 8 + (*z).KeyregTxnFields.VotePK.Msgsize() + 7 + (*z).KeyregTxnFields.SelectionPK.Msgsize() + 8 + (*z).KeyregTxnFields.VoteFirst.Msgsize() + 8 + (*z).KeyregTxnFields.VoteLast.Msgsize() + 7 + msgp.Uint64Size + 8 + msgp.BoolSize + 4 + (*z).PaymentTxnFields.Receiver.Msgsize() + 4 + (*z).PaymentTxnFields.Amount.Msgsize() + 6 + (*z).PaymentTxnFields.CloseRemainderTo.Msgsize() + 5 + (*z).AssetConfigTxnFields.ConfigAsset.Msgsize() + 5 + (*z).AssetConfigTxnFields.AssetParams.Msgsize() + 5 + (*z).AssetTransferTxnFields.XferAsset.Msgsize() + 5 + msgp.Uint64Size + 5 + (*z).AssetTransferTxnFields.AssetSender.Msgsize() + 5 + (*z).AssetTransferTxnFields.AssetReceiver.Msgsize() + 7 + (*z).AssetTransferTxnFields.AssetCloseTo.Msgsize() + 5 + (*z).AssetFreezeTxnFields.FreezeAccount.Msgsize() + 5 + (*z).AssetFreezeTxnFields.FreezeAsset.Msgsize() + 5 + msgp.BoolSize + 5 + (*z).ApplicationCallTxnFields.ApplicationID.Msgsize() + 5 + msgp.Uint64Size + 5 + msgp.ArrayHeaderSize
 	for zb0002 := range (*z).ApplicationCallTxnFields.ApplicationArgs {
-		s += msgp.StringPrefixSize + len((*z).ApplicationCallTxnFields.ApplicationArgs[zb0002])
+		s += msgp.BytesPrefixSize + len((*z).ApplicationCallTxnFields.ApplicationArgs[zb0002])
 	}
 	s += 5 + msgp.ArrayHeaderSize
 	for zb0003 := range (*z).ApplicationCallTxnFields.Accounts {
 		s += (*z).ApplicationCallTxnFields.Accounts[zb0003].Msgsize()
 	}
-	s += 5 + (*z).ApplicationCallTxnFields.LocalStateSchema.Msgsize() + 5 + (*z).ApplicationCallTxnFields.GlobalStateSchema.Msgsize() + 5 + msgp.StringPrefixSize + len((*z).ApplicationCallTxnFields.ApprovalProgram) + 5 + msgp.StringPrefixSize + len((*z).ApplicationCallTxnFields.ClearStateProgram)
+	s += 5 + (*z).ApplicationCallTxnFields.LocalStateSchema.Msgsize() + 5 + (*z).ApplicationCallTxnFields.GlobalStateSchema.Msgsize() + 5 + msgp.BytesPrefixSize + len((*z).ApplicationCallTxnFields.ApprovalProgram) + 5 + msgp.BytesPrefixSize + len((*z).ApplicationCallTxnFields.ClearStateProgram)
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Transaction) MsgIsZero() bool {
-	return ((*z).Type.MsgIsZero()) && ((*z).Header.Sender.MsgIsZero()) && ((*z).Header.Fee.MsgIsZero()) && ((*z).Header.FirstValid.MsgIsZero()) && ((*z).Header.LastValid.MsgIsZero()) && (len((*z).Header.Note) == 0) && ((*z).Header.GenesisID == "") && ((*z).Header.GenesisHash.MsgIsZero()) && ((*z).Header.Group.MsgIsZero()) && ((*z).Header.Lease == ([32]byte{})) && ((*z).KeyregTxnFields.VotePK.MsgIsZero()) && ((*z).KeyregTxnFields.SelectionPK.MsgIsZero()) && ((*z).KeyregTxnFields.VoteFirst.MsgIsZero()) && ((*z).KeyregTxnFields.VoteLast.MsgIsZero()) && ((*z).KeyregTxnFields.VoteKeyDilution == 0) && ((*z).KeyregTxnFields.Nonparticipation == false) && ((*z).PaymentTxnFields.Receiver.MsgIsZero()) && ((*z).PaymentTxnFields.Amount.MsgIsZero()) && ((*z).PaymentTxnFields.CloseRemainderTo.MsgIsZero()) && ((*z).AssetConfigTxnFields.ConfigAsset.MsgIsZero()) && ((*z).AssetConfigTxnFields.AssetParams.MsgIsZero()) && ((*z).AssetTransferTxnFields.XferAsset.MsgIsZero()) && ((*z).AssetTransferTxnFields.AssetAmount == 0) && ((*z).AssetTransferTxnFields.AssetSender.MsgIsZero()) && ((*z).AssetTransferTxnFields.AssetReceiver.MsgIsZero()) && ((*z).AssetTransferTxnFields.AssetCloseTo.MsgIsZero()) && ((*z).AssetFreezeTxnFields.FreezeAccount.MsgIsZero()) && ((*z).AssetFreezeTxnFields.FreezeAsset.MsgIsZero()) && ((*z).AssetFreezeTxnFields.AssetFrozen == false) && ((*z).ApplicationCallTxnFields.ApplicationID.MsgIsZero()) && ((*z).ApplicationCallTxnFields.OnCompletion == 0) && (len((*z).ApplicationCallTxnFields.ApplicationArgs) == 0) && (len((*z).ApplicationCallTxnFields.Accounts) == 0) && ((*z).ApplicationCallTxnFields.LocalStateSchema.MsgIsZero()) && ((*z).ApplicationCallTxnFields.GlobalStateSchema.MsgIsZero()) && ((*z).ApplicationCallTxnFields.ApprovalProgram == "") && ((*z).ApplicationCallTxnFields.ClearStateProgram == "")
+	return ((*z).Type.MsgIsZero()) && ((*z).Header.Sender.MsgIsZero()) && ((*z).Header.Fee.MsgIsZero()) && ((*z).Header.FirstValid.MsgIsZero()) && ((*z).Header.LastValid.MsgIsZero()) && (len((*z).Header.Note) == 0) && ((*z).Header.GenesisID == "") && ((*z).Header.GenesisHash.MsgIsZero()) && ((*z).Header.Group.MsgIsZero()) && ((*z).Header.Lease == ([32]byte{})) && ((*z).KeyregTxnFields.VotePK.MsgIsZero()) && ((*z).KeyregTxnFields.SelectionPK.MsgIsZero()) && ((*z).KeyregTxnFields.VoteFirst.MsgIsZero()) && ((*z).KeyregTxnFields.VoteLast.MsgIsZero()) && ((*z).KeyregTxnFields.VoteKeyDilution == 0) && ((*z).KeyregTxnFields.Nonparticipation == false) && ((*z).PaymentTxnFields.Receiver.MsgIsZero()) && ((*z).PaymentTxnFields.Amount.MsgIsZero()) && ((*z).PaymentTxnFields.CloseRemainderTo.MsgIsZero()) && ((*z).AssetConfigTxnFields.ConfigAsset.MsgIsZero()) && ((*z).AssetConfigTxnFields.AssetParams.MsgIsZero()) && ((*z).AssetTransferTxnFields.XferAsset.MsgIsZero()) && ((*z).AssetTransferTxnFields.AssetAmount == 0) && ((*z).AssetTransferTxnFields.AssetSender.MsgIsZero()) && ((*z).AssetTransferTxnFields.AssetReceiver.MsgIsZero()) && ((*z).AssetTransferTxnFields.AssetCloseTo.MsgIsZero()) && ((*z).AssetFreezeTxnFields.FreezeAccount.MsgIsZero()) && ((*z).AssetFreezeTxnFields.FreezeAsset.MsgIsZero()) && ((*z).AssetFreezeTxnFields.AssetFrozen == false) && ((*z).ApplicationCallTxnFields.ApplicationID.MsgIsZero()) && ((*z).ApplicationCallTxnFields.OnCompletion == 0) && (len((*z).ApplicationCallTxnFields.ApplicationArgs) == 0) && (len((*z).ApplicationCallTxnFields.Accounts) == 0) && ((*z).ApplicationCallTxnFields.LocalStateSchema.MsgIsZero()) && ((*z).ApplicationCallTxnFields.GlobalStateSchema.MsgIsZero()) && (len((*z).ApplicationCallTxnFields.ApprovalProgram) == 0) && (len((*z).ApplicationCallTxnFields.ClearStateProgram) == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler

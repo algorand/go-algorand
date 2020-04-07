@@ -1372,8 +1372,8 @@ func makeSampleTxn() transactions.SignedTxn {
 	txn.Txn.ApplicationID = basics.AppIndex(123)
 	txn.Txn.Accounts = make([]basics.Address, 1)
 	txn.Txn.Accounts[0] = txn.Txn.Receiver
-	txn.Txn.ApplicationArgs = make([]string, 1)
-	txn.Txn.ApplicationArgs[0] = string(protocol.PaymentTx)
+	txn.Txn.ApplicationArgs = make([][]byte, 1)
+	txn.Txn.ApplicationArgs[0] = []byte(protocol.PaymentTx)
 	return txn
 }
 
@@ -1415,8 +1415,8 @@ func TestTxn(t *testing.T) {
 			require.NoError(t, err)
 			require.True(t, cost < 1000)
 			txn := makeSampleTxn()
-			txn.Txn.ApprovalProgram = string(program)
-			txn.Txn.ClearStateProgram = string(clearProgram)
+			txn.Txn.ApprovalProgram = program
+			txn.Txn.ClearStateProgram = clearProgram
 			txn.Lsig.Logic = program
 			txid := txn.Txn.ID()
 			programHash := HashProgram(program)
@@ -1574,8 +1574,8 @@ txna ApplicationArgs 0
 	var txn transactions.SignedTxn
 	txn.Txn.Accounts = make([]basics.Address, 1)
 	txn.Txn.Accounts[0] = txn.Txn.Sender
-	txn.Txn.ApplicationArgs = make([]string, 1)
-	txn.Txn.ApplicationArgs[0] = string(protocol.PaymentTx)
+	txn.Txn.ApplicationArgs = make([][]byte, 1)
+	txn.Txn.ApplicationArgs[0] = []byte(protocol.PaymentTx)
 	txgroup := make([]transactions.SignedTxn, 1)
 	txgroup[0] = txn
 	ep := defaultEvalParams(nil, &txn)
@@ -3043,7 +3043,7 @@ pop
 
 	ep := defaultEvalParams(nil, nil)
 	ep.Txn = &transactions.SignedTxn{}
-	ep.Txn.Txn.ApplicationArgs = []string{"test"}
+	ep.Txn.Txn.ApplicationArgs = [][]byte{[]byte("test")}
 	_, err = Eval(program, ep)
 	require.NoError(t, err)
 

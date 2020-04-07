@@ -290,7 +290,7 @@ func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig
 		var tx transactions.Transaction
 
 		// This is just the "int 1" program
-		prog := "\x02\x20\x01\x01\x22"
+		prog := []byte("\x02\x20\x01\x01\x22")
 		schema := basics.StateSchema{}
 		tx, err = client.MakeUnsignedAppCreateTx(transactions.NoOpOC, prog, prog, schema, schema, nil, nil)
 		if err != nil {
