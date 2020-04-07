@@ -43,7 +43,7 @@ import (
 type testParams struct {
 	txType     string
 	name       string
-	program    string
+	program    []byte
 	schemaSize uint64
 }
 
@@ -326,7 +326,7 @@ func init() {
 	params = testParams{
 		txType:  "app",
 		name:    fmt.Sprintf("int-1"),
-		program: string(progBytes),
+		program: progBytes,
 	}
 	testCases[params.name] = params
 
@@ -482,6 +482,6 @@ func genAppTestParams(numKeys int, bigDiffs bool, stateType string) testParams {
 		txType:     "app",
 		name:       fmt.Sprintf("bench-%s-%d-%s", stateType, numKeys, testDiffName),
 		schemaSize: uint64(numKeys),
-		program:    string(progBytes),
+		program:    progBytes,
 	}
 }

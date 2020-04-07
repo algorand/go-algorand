@@ -273,12 +273,12 @@ func makeUnsignedApplicationCallTx(appIdx uint64, onCompletion transactions.OnCo
 
 			int 1
 		`
-		asm, err := logic.AssembleString(testprog)
+		prog, err := logic.AssembleString(testprog)
 		if err != nil {
 			return tx, err
 		}
-		tx.ApprovalProgram = string(asm)
-		tx.ClearStateProgram = string(asm)
+		tx.ApprovalProgram = prog
+		tx.ClearStateProgram = prog
 		tx.GlobalStateSchema = basics.StateSchema{
 			NumByteSlice: 1,
 		}
