@@ -123,7 +123,7 @@ const (
 
 	multisigProgramCollision = "should have at most one of --program/-p | --program-bytes/-P | --lsig/-L"
 
-	tealsignMutKeyArgs    = "--keyfile and --account are mutually exclusive"
+	tealsignMutKeyArgs    = "Need exactly one of --keyfile or --account"
 	tealsignMutLsigArgs   = "Need exactly one of --contract-addr or --lsig-txn"
 	tealsignKeyfileFail   = "Failed to read keyfile: %v"
 	tealsignNoWithAcct    = "--account is not yet supported"
