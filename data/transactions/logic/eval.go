@@ -194,7 +194,7 @@ type evalContext struct {
 	// If Check pc skips a target, the source branch was invalid!
 	branchTargets []int
 
-	programHash crypto.Digest
+	programHashCached crypto.Digest
 
 	globalStateCow      *keyValueCow
 	localStateCows      map[basics.Address]*keyValueCow
@@ -349,7 +349,6 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 	cx.pc = vlen
 	cx.stack = make([]stackValue, 0, 10)
 	cx.program = program
-	cx.programHash = crypto.HashObj(Program(program))
 
 	for (cx.err == nil) && (cx.pc < len(cx.program)) {
 		cx.step()
@@ -1367,6 +1366,14 @@ func (msg Msg) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.ProgramData, append(msg.ProgramHash[:], msg.Data...)
 }
 
+// programHash lets us lazily compute H(cx.program)
+func (cx *evalContext) programHash() crypto.Digest {
+	if cx.programHashCached == (crypto.Digest{}) {
+		cx.programHashCached = crypto.HashObj(Program(cx.program))
+	}
+	return cx.programHashCached
+}
+
 func opEd25519verify(cx *evalContext) {
 	last := len(cx.stack) - 1 // index of PK
 	prev := last - 1          // index of signature
@@ -1386,7 +1393,7 @@ func opEd25519verify(cx *evalContext) {
 	}
 	copy(sig[:], cx.stack[prev].Bytes)
 
-	msg := Msg{ProgramHash: cx.programHash, Data: cx.stack[pprev].Bytes}
+	msg := Msg{ProgramHash: cx.programHash(), Data: cx.stack[pprev].Bytes}
 	if sv.Verify(msg, sig) {
 		cx.stack[pprev].Uint = 1
 	} else {
