@@ -213,6 +213,7 @@ func TestStoppedCatchupOnUnsupported(t *testing.T) {
 	testUnupgradedProtocol.UpgradeVoteRounds = 3
 	testUnupgradedProtocol.UpgradeThreshold = 2
 	testUnupgradedProtocol.DefaultUpgradeWaitRounds = 3
+	testUnupgradedProtocol.MinUpgradeWaitRounds = 0
 
 	testUnupgradedProtocol.ApprovedUpgrades[consensusTestUnupgradedToProtocol] = 0
 	consensus[consensusTestUnupgradedProtocol] = testUnupgradedProtocol
