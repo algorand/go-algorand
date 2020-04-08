@@ -525,7 +525,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	appEvaluators := eval.prepareAppEvaluators(txgroup)
 
 	// Evaluate each transaction in the group
-	txibs := make([]transactions.SignedTxnInBlock, 0, len(txgroup))
+	txibs = make([]transactions.SignedTxnInBlock, 0, len(txgroup))
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
