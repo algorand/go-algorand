@@ -153,7 +153,7 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 		prev, err := l0.BlockHdr(basics.Round(i))
 		require.NoError(b, err)
 		newBlk := bookkeeping.MakeBlock(prev)
-		eval, err := l0.StartEvaluator(newBlk.BlockHeader, 0)
+		eval, err := l0.StartEvaluator(newBlk.BlockHeader, 5000)
 		require.NoError(b, err)
 
 		// build a payset
@@ -266,6 +266,8 @@ func BenchmarkAppInt1(b *testing.B) { benchmarkFullBlocks(testCases["int-1"], b)
 
 func BenchmarkPay(b *testing.B) { benchmarkFullBlocks(testCases["pay"], b) }
 
+func BenchmarkBigNoOp(b *testing.B) { benchmarkFullBlocks(testCases["big-noop"], b) }
+
 func init() {
 	testCases = make(map[string]testParams)
 
@@ -304,6 +306,30 @@ func init() {
 		name:   "pay",
 	}
 	testCases[params.name] = params
+
+	// Big NoOp
+	params = testParams{
+		txType:  "app",
+		name:    "big-noop",
+		program: genBigNoOp(1020),
+	}
+	testCases[params.name] = params
+}
+
+func genBigNoOp(numOps int) []byte {
+	var progParts []string
+	for i := 0; i < numOps/2; i++ {
+		progParts = append(progParts, `int 1`)
+		progParts = append(progParts, `pop`)
+	}
+	progParts = append(progParts, `int 1`)
+	progParts = append(progParts, `return`)
+	progAsm := strings.Join(progParts, "\n")
+	progBytes, err := logic.AssembleString(progAsm)
+	if err != nil {
+		panic(err)
+	}
+	return progBytes
 }
 
 func genAppTestParams(numKeys int, bigDiffs bool, stateType string) testParams {
