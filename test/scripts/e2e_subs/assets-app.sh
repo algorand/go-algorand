@@ -271,8 +271,6 @@ if [[ $RES != *"$ERR_APP_REJ_STR2"* ]]; then
     false
 fi
 
-exit 0
-
 # clear alice
 ${gcmd} app clear --app-id $APP_ID -f $ALICE
 
