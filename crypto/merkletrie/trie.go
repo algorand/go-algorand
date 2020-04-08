@@ -205,18 +205,18 @@ func (mt *Trie) serialize() []byte {
 func (mt *Trie) deserialize(bytes []byte) error {
 	version, versionLen := binary.Uvarint(bytes[:])
 	if versionLen <= 0 {
-		return ErrPageDecodingFailuire
+		return ErrRootPageDecodingFailuire
 	}
 	if version != MerkleTreeVersion {
-		return ErrPageDecodingFailuire
+		return ErrRootPageDecodingFailuire
 	}
 	root, rootLen := binary.Uvarint(bytes[versionLen:])
 	if rootLen <= 0 {
-		return ErrPageDecodingFailuire
+		return ErrRootPageDecodingFailuire
 	}
 	nextNodeID, nextNodeIDLen := binary.Uvarint(bytes[versionLen+rootLen:])
 	if nextNodeIDLen <= 0 {
-		return ErrPageDecodingFailuire
+		return ErrRootPageDecodingFailuire
 	}
 	mt.root = storedNodeIdentifier(root)
 	mt.nextNodeID = storedNodeIdentifier(nextNodeID)

@@ -170,16 +170,18 @@ func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID stored
 }
 
 func (n *node) recalculateHash(cache *merkleTrieCache, path []byte) error {
-	hashAccumulator := make([]byte, 0, 64*256) // we can have up to 256 elements, so preallocate sufficient storage; append would expand the storage if it won't be enough.
-	copy(hashAccumulator, path)
+	hashAccumulator := make([]byte, 0, 64*256)                 // we can have up to 256 elements, so preallocate sufficient storage; append would expand the storage if it won't be enough.
+	hashAccumulator = append(hashAccumulator, byte(len(path))) // we add this string length before the actual string so it could get "decoded"; in practice, it makes a good domain separator.
+	hashAccumulator = append(hashAccumulator, path...)
 	i := n.firstChild
 	for {
 		childNode, err := cache.getNode(n.children[i])
 		if err != nil {
 			return err
 		}
-		hashAccumulator = append(hashAccumulator, i)
-		hashAccumulator = append(hashAccumulator, childNode.hash...)
+		hashAccumulator = append(hashAccumulator, byte(len(childNode.hash)+1)) // we add this string length before the actual string so it could get "decoded"; in practice, it makes a good domain separator.
+		hashAccumulator = append(hashAccumulator, i)                           // adding the first byte of the child
+		hashAccumulator = append(hashAccumulator, childNode.hash...)           // adding the reminder of the child
 		if n.childrenNext[i] == i {
 			break
 		}

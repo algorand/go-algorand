@@ -209,7 +209,7 @@ func (cp *catchpointTracker) databaseSize(tx *sql.Tx) (size uint64, err error) {
 	return
 }
 
-func (cp *catchpointTracker) storeCatchpoint(tx *sql.Tx, round basics.Round, fileName string, catchpoint string, fileSize int64) (err error) {
+func storeCatchpoint(tx *sql.Tx, round basics.Round, fileName string, catchpoint string, fileSize int64) (err error) {
 	_, err = tx.Exec("DELETE FROM storedcatchpoints WHERE round=?", round)
 
 	if err != nil || (fileName == "" && catchpoint == "" && fileSize == 0) {
@@ -220,7 +220,7 @@ func (cp *catchpointTracker) storeCatchpoint(tx *sql.Tx, round basics.Round, fil
 	return
 }
 
-func (cp *catchpointTracker) getCatchpoint(tx *sql.Tx, round basics.Round) (fileName string, catchpoint string, fileSize int64, err error) {
+func getCatchpoint(tx *sql.Tx, round basics.Round) (fileName string, catchpoint string, fileSize int64, err error) {
 	err = tx.QueryRow("SELECT filename, catchpoint, filesize FROM storedcatchpoints WHERE round=?", int64(round)).Scan(&fileName, &catchpoint, &fileSize)
 	return
 }

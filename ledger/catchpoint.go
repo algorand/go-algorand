@@ -604,7 +604,7 @@ func (cp *catchpointTracker) asyncGenerateCatchpoint() {
 
 func (cp *catchpointTracker) saveCatchpoint(b catchpointBuildResult) (err error) {
 	err = cp.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
-		err = cp.storeCatchpoint(tx, b.round, b.fileName, b.catchpoint, b.fileSize)
+		err = storeCatchpoint(tx, b.round, b.fileName, b.catchpoint, b.fileSize)
 		return
 	})
 	if err != nil {
@@ -617,7 +617,7 @@ func (cp *catchpointTracker) saveCatchpoint(b catchpointBuildResult) (err error)
 func (cp *catchpointTracker) getCatchpointStream(round basics.Round) (io.ReadCloser, error) {
 	dbFileName := ""
 	err := cp.dbs.rdb.Atomic(func(tx *sql.Tx) (err error) {
-		dbFileName, _, _, err = cp.getCatchpoint(tx, round)
+		dbFileName, _, _, err = getCatchpoint(tx, round)
 		return
 	})
 	if err != nil && err != sql.ErrNoRows {

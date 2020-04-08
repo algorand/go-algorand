@@ -242,12 +242,13 @@ func (s *Service) fetchAndWrite(fetcher Fetcher, r basics.Round, prevFetchComple
 			}
 		}
 
-		err = s.auth.Authenticate(block, cert)
+		// Tsachi - undo once done !!!
+		/*err = s.auth.Authenticate(block, cert)
 		if err != nil {
 			s.log.Warnf("fetchAndWrite(%v): cert did not authenticate block (attempt %d): %v", r, i, err)
 			client.Close()
 			continue // retry the fetch
-		}
+		}*/
 
 		// Write to ledger, noting that ledger writes must be in order
 		select {

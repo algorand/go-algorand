@@ -20,6 +20,7 @@ import (
 	"container/list"
 	"encoding/binary"
 	"errors"
+	"fmt"
 )
 
 // storedNodeIdentifier is the "equivilent" of a node-ptr, but oriented around persisting the
@@ -38,6 +39,9 @@ var ErrLoadedPageMissingNode = errors.New("loaded page is missing a node")
 
 // ErrPageDecodingFailuire is returned if the decoding of a page has failed.
 var ErrPageDecodingFailuire = errors.New("error encountered while decoding page")
+
+// ErrRootPageDecodingFailuire is returned if the decoding the root page has failed.
+var ErrRootPageDecodingFailuire = errors.New("error encountered while decoding root page")
 
 type merkleTrieCache struct {
 	idToPtr         map[storedNodeIdentifier]*node
@@ -125,9 +129,13 @@ func (mtc *merkleTrieCache) prioritizeNode(nid storedNodeIdentifier) {
 }
 
 func (mtc *merkleTrieCache) loadPage(page uint64) (err error) {
+	//fmt.Printf("loading page %d\n", page)
 	pageBytes, err := mtc.committer.LoadPage(page)
 	if err != nil {
 		return
+	}
+	if len(pageBytes) == 0 {
+		return fmt.Errorf("page %d is missing", page)
 	}
 	decodedNodes, err := decodePage(pageBytes)
 	if err != nil {
@@ -200,13 +208,17 @@ func (mtc *merkleTrieCache) commit() error {
 		if err != nil {
 			return err
 		}
+		mtc.deferedPageLoad = storedNodeIdentifierNull
 	}
 
 	createdPages := make(map[int64][]storedNodeIdentifier)
 
 	// create a list of all the pages that need to be created/updated
 	for nodeID := range mtc.pendingCreatedNID {
-		createdPages[int64(nodeID)/pageSize] = make([]storedNodeIdentifier, 0, pageSize)
+		nodePage := int64(nodeID) / pageSize
+		if cap(createdPages[nodePage]) == 0 {
+			createdPages[nodePage] = make([]storedNodeIdentifier, 0, pageSize)
+		}
 	}
 
 	// go over all the items that we have, and populate each of the pages.
@@ -220,6 +232,7 @@ func (mtc *merkleTrieCache) commit() error {
 	// store the pages.
 	for page, nodeIDs := range createdPages {
 		pageContent := mtc.encodePage(nodeIDs)
+		//fmt.Printf("storing page %d\n", page)
 		err := mtc.committer.StorePage(uint64(page), pageContent)
 		if err != nil {
 			return err
@@ -231,22 +244,39 @@ func (mtc *merkleTrieCache) commit() error {
 		}
 	}
 
+	if len(mtc.pendingCreatedNID) > 0 {
+		panic("pendingCreatedNID is not empty")
+	}
+
 	// pages that contains elemets that were removed.
 	toRemovePages := make(map[int64][]storedNodeIdentifier)
+	toUpdatePages := make(map[int64][]storedNodeIdentifier)
 	for nodeID := range mtc.pendingDeletionNID {
-		toRemovePages[int64(nodeID)/pageSize] = make([]storedNodeIdentifier, 0, pageSize)
+		nodePage := int64(nodeID) / pageSize
+		if cap(toRemovePages[nodePage]) == 0 {
+			toRemovePages[nodePage] = make([]storedNodeIdentifier, 0, pageSize)
+		}
+		toRemovePages[nodePage] = append(toRemovePages[nodePage], nodeID)
 	}
 
 	// iterate over the existing list and ensure we don't delete any page that has active elements
 	for nodeID := range mtc.idToPtr {
 		page := int64(nodeID) / pageSize
 		if _, has := toRemovePages[page]; has {
+			// we can't remove this page, since it contains elements are are still presents. we want to update this page instead.
+			for _, nid := range toRemovePages[page] {
+				delete(mtc.pendingDeletionNID, nid)
+			}
 			delete(toRemovePages, page)
+			toUpdatePages[page] = append(make([]storedNodeIdentifier, 0, pageSize), nodeID)
+		} else if cap(toUpdatePages[page]) > 0 {
+			toUpdatePages[page] = append(toUpdatePages[page], nodeID)
 		}
 	}
 
 	// delete the pages that we don't need anymore.
 	for page, nodeIDs := range toRemovePages {
+		//fmt.Printf("removing page %d\n", page)
 		err := mtc.committer.StorePage(uint64(page), nil)
 		if err != nil {
 			return err
@@ -256,15 +286,36 @@ func (mtc *merkleTrieCache) commit() error {
 		for _, nid := range nodeIDs {
 			delete(mtc.pendingDeletionNID, nid)
 		}
-	}
 
+		// since the entire page was removed from memory, we can also remove it from the priority list.
+		element := mtc.pagesPrioritizationMap[uint64(page)]
+		if element != nil {
+			mtc.pagesPrioritizationList.Remove(element)
+		}
+
+	}
+	// updated pages
+	for page, nodeIDs := range toUpdatePages {
+		if cap(createdPages[page]) > 0 {
+			continue
+		}
+		pageContent := mtc.encodePage(nodeIDs)
+		err := mtc.committer.StorePage(uint64(page), pageContent)
+		if err != nil {
+			return err
+		}
+	}
+	if len(mtc.pendingDeletionNID) > 0 {
+		panic("pendingDeletionNID is not empty")
+	}
 	return nil
 }
 
 func decodePage(bytes []byte) (nodesMap map[storedNodeIdentifier]*node, err error) {
 	version, versionLength := binary.Uvarint(bytes[:])
 	if versionLength <= 0 {
-		return nil, ErrPageDecodingFailuire
+		//return nil, ErrPageDecodingFailuire
+		return nil, fmt.Errorf("unable to decode page with %d bytes : %v", len(bytes), bytes)
 	}
 	if version != NodePageVersion {
 		return nil, ErrPageDecodingFailuire
@@ -309,6 +360,17 @@ func (mtc *merkleTrieCache) encodePage(nodeIDs []storedNodeIdentifier) []byte {
 
 func (mtc *merkleTrieCache) evict() (removedNodes int) {
 	pageSize := mtc.committer.GetNodesCountPerPage()
+
+	pageNodesIds := make(map[uint64][]storedNodeIdentifier)
+	for nodeID := range mtc.idToPtr {
+		page := uint64(nodeID) / uint64(pageSize)
+		if cap(pageNodesIds[page]) > 0 {
+			pageNodesIds[page] = append(pageNodesIds[page], nodeID)
+		} else {
+			pageNodesIds[page] = append(make([]storedNodeIdentifier, 0, pageSize), nodeID)
+		}
+	}
+
 	for len(mtc.idToPtr) > mtc.cachedNodeCount {
 		// get the least used page off the pagesPrioritizationList
 		element := mtc.pagesPrioritizationList.Back()
@@ -317,7 +379,7 @@ func (mtc *merkleTrieCache) evict() (removedNodes int) {
 		}
 		mtc.pagesPrioritizationList.Remove(element)
 		pageToRemove := element.Value.(uint64)
-		elementsToRemove := make([]storedNodeIdentifier, 0, pageSize)
+		/*elementsToRemove := make([]storedNodeIdentifier, 0, pageSize)
 		for nodeID := range mtc.idToPtr {
 			page := uint64(nodeID) / uint64(pageSize)
 			if page != pageToRemove {
@@ -328,7 +390,10 @@ func (mtc *merkleTrieCache) evict() (removedNodes int) {
 		for _, nodeID := range elementsToRemove {
 			delete(mtc.idToPtr, nodeID)
 			removedNodes++
-
+		}*/
+		for _, nodeID := range pageNodesIds[pageToRemove] {
+			delete(mtc.idToPtr, nodeID)
+			removedNodes++
 		}
 	}
 	return

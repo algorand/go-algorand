@@ -20,6 +20,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
 	"sort"
 	"time"
 
@@ -124,11 +127,41 @@ type accountUpdates struct {
 	// written to the database.
 	balancesTrie *merkletrie.Trie
 
-	// The last catchpoint label that was writted to the database. Should always align with what's in the database,
-	lastCatchpoint string
+	// The last catchpoint label that was writted to the database. Should always align with what's in the database.
+	// note that this is the last catchpoint *label* and not the catchpoint file.
+	lastCatchpointLabel string
+
+	// catchpointWriting help to syncronize the catchpoint writing. When this channel is closed, no writting is going on.
+	// the channel is non-closed while a catchpoint file is being generated.
+	catchpointWriting chan struct{}
+
+	// dbDirectory is the directory where the ledger and block sql file resides as well as the parent directroy for the catchup files to be generated
+	dbDirectory string
+
+	// the configured interval at which we generate catchpoints
+	catchpointInterval uint64
+
+	// was the ledger configured as an archival ledger ?
+	archivalLedger bool
+
+	// ctx is the context for canceling any pending catchpoint generation operation
+	ctx context.Context
+
+	// ctx is the canceling function canceling any pending catchpoint generation operation
+	ctxCancel context.CancelFunc
+}
+
+func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string, genesisProto config.ConsensusParams, genesisAccounts map[basics.Address]basics.AccountData) {
+	au.initProto = genesisProto
+	au.initAccounts = genesisAccounts
+	au.dbDirectory = filepath.Dir(dbPathPrefix)
+	au.archivalLedger = cfg.Archival
+	au.catchpointInterval = cfg.CatchpointInterval
+	au.ctx, au.ctxCancel = context.WithCancel(context.Background())
 }
 
 func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
+	var writingCatchpointRound uint64
 	au.dbs = l.trackerDB()
 	au.log = l.trackerLog()
 	au.ledger = l
@@ -164,10 +197,16 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 
 		au.roundTotals = []AccountTotals{totals}
 
-		au.lastCatchpoint, _, err0 = readCatchpointStateString(context.Background(), tx, "lastCatchpoint")
+		au.lastCatchpointLabel, _, err0 = readCatchpointStateString(context.Background(), tx, "lastCatchpoint")
 		if err0 != nil {
 			return err0
 		}
+
+		writingCatchpointRound, _, err0 = readCatchpointStateUint64(context.Background(), tx, "writingCatchpoint")
+		if err0 != nil {
+			return err0
+		}
+
 		return nil
 	})
 	if err != nil {
@@ -206,6 +245,14 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 		au.newBlock(blk, delta)
 		loaded = next
 	}
+	// close it always for now.
+	au.catchpointWriting = make(chan struct{}, 1)
+
+	if writingCatchpointRound == 0 {
+		close(au.catchpointWriting)
+	} else {
+		go au.generateCatchpoint(basics.Round(writingCatchpointRound))
+	}
 
 	return nil
 }
@@ -238,38 +285,45 @@ func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 	// create the merkle trie for the balances
 	committer, err := makeMerkleCommitter(tx, false)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("accountsInitialize was unable to makeMerkleCommitter: %v", err)
 	}
 	trie, err := merkletrie.MakeTrie(committer, trieCachedNodesCount)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("accountsInitialize was unable to MakeTrie: %v", err)
 	}
 	if rnd == 0 {
 		// if we just initialize the database ( successfully !), than make sure to feed the same accounts changes to the merkle trie.
 		for addr, data := range au.initAccounts {
-			_, err := trie.Add(accountHashBuilder(addr, data, protocol.Encode(&data)))
+			added, err := trie.Add(accountHashBuilder(addr, data, protocol.Encode(&data)))
 			if err != nil {
 				return 0, err
+			}
+			if !added {
+				panic("attempted to add duplicate hash '%v' to merkle trie.")
 			}
 		}
 		err = trie.Commit()
 		if err != nil {
-			return 0, err
+			return 0, fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err)
 		}
 	} else {
 		// we migth have a database that was previously initialized, and now we're adding the balances trie. In that case, we need to add all the existing balances to this trie.
 		// we can figure this out by examinine the hash of the root:
 		rootHash, err := trie.RootHash()
 		if err != nil {
-			return rnd, err
+			return rnd, fmt.Errorf("accountsInitialize was unable to retrieve trie root hash: %v", err)
 		}
 		if rootHash.IsZero() {
 			accountIdx := 0
 			for {
+				fmt.Printf("iteration %d\n", accountIdx)
+				t1 := time.Now()
 				bal, err := encodedAccountsRange(tx, accountIdx, balancesChunkReadSize)
 				if err != nil {
 					return rnd, err
 				}
+				t2 := time.Now()
+				fmt.Printf("encodedAccountsRange time was %d ms\n", t2.Sub(t1).Milliseconds())
 				if len(bal) == 0 {
 					break
 				}
@@ -285,28 +339,42 @@ func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 					hash := accountHashBuilder(addr, accountData, protocol.Encode(&accountData))
 					added, err := trie.Add(hash)
 					if err != nil {
-						return rnd, err
+						panic(fmt.Errorf("accountsInitialize was unable to add changes to trie: %v", err))
+						return rnd, fmt.Errorf("accountsInitialize was unable to add changes to trie: %v", err)
 					}
 					if !added {
 						au.log.Warnf("attempted to add duplicate hash '%v' to merkle trie.", hash)
 					}
 				}
+				t3 := time.Now()
+				fmt.Printf("adding balances time was %d ms\n", t3.Sub(t2).Milliseconds())
 				// this trie Commit call only attempt to write it to the database using the current transaction.
 				// if anything goes wrong, it will still get rolled back.
 				err = trie.Commit()
 				if err != nil {
-					return 0, err
+					panic(fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err))
+					return 0, fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err)
 				}
+				t4 := time.Now()
+				fmt.Printf("commit time was %d ms\n", t4.Sub(t3).Milliseconds())
 				trie.Evict()
+				t5 := time.Now()
+				fmt.Printf("evict time was %d ms\n", t5.Sub(t4).Milliseconds())
 				if len(bal) < balancesChunkReadSize {
 					break
 				}
+				//fmt.Printf("--- committed ---\n")
 				accountIdx += balancesChunkReadSize
 			}
 		}
 	}
+	//panic(nil)
 	au.balancesTrie = trie
 	return rnd, nil
+}
+
+func (au *accountUpdates) rebuildMerkleTrie() (err error) {
+	return nil
 }
 
 func (au *accountUpdates) accountsUpdateBalaces(balancesTx *merkletrie.Transaction, accountsDeltas map[basics.Address]accountDelta) (err error) {
@@ -316,6 +384,7 @@ func (au *accountUpdates) accountsUpdateBalaces(balancesTx *merkletrie.Transacti
 			deleteHash := accountHashBuilder(addr, delta.old, protocol.Encode(&delta.old))
 			deleted, err = balancesTx.Delete(deleteHash)
 			if err != nil {
+				panic(err)
 				return err
 			}
 			if !deleted {
@@ -326,6 +395,7 @@ func (au *accountUpdates) accountsUpdateBalaces(balancesTx *merkletrie.Transacti
 			addHash := accountHashBuilder(addr, delta.new, protocol.Encode(&delta.new))
 			added, err = balancesTx.Add(addHash)
 			if err != nil {
+				panic(err)
 				return err
 			}
 			if !added {
@@ -358,12 +428,13 @@ func (au *accountUpdates) accountsCreateCatchpointLabel(tx *sql.Tx, committedRou
 	}
 	_, err = writeCatchpointStateString(context.Background(), tx, "lastCatchpoint", label)
 	if err == nil {
-		au.lastCatchpoint = label
+		au.lastCatchpointLabel = label
 	}
 	return err
 }
 
 func (au *accountUpdates) close() {
+	au.ctxCancel()
 }
 
 func (au *accountUpdates) roundOffset(rnd basics.Round) (offset uint64, err error) {
@@ -514,7 +585,7 @@ func (au *accountUpdates) listAssets(maxAssetIdx basics.AssetIndex, maxResults u
 }
 
 func (au *accountUpdates) getLastCatchpointLabel() string {
-	return au.lastCatchpoint
+	return au.lastCatchpointLabel
 }
 
 func (au *accountUpdates) getAssetCreatorForRound(rnd basics.Round, aidx basics.AssetIndex) (basics.Address, error) {
@@ -567,8 +638,21 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Roun
 		au.log.Panicf("committedUpTo: block %d too far in the future, lookback %d, dbRound %d, deltas %d", committedRound, lookback, au.dbRound, len(au.deltas))
 	}
 
+	// if we're still writing the previous catchpoint, we can't flush the changes yet.
+	select {
+	case _, opened := <-au.catchpointWriting:
+		// the channel is not close, which mean someone wrote to that channel. This is should not happen.
+		if opened {
+			au.log.Warnf("committedUpTo: catchpointWriting was written into")
+			return au.dbRound
+		}
+	default:
+		// if we hit this path, it means that the channel is currently non-closed, which means that we're still writing the previous catchpoint.
+		return au.dbRound
+	}
+
 	// check to see if this is a catchpoint round
-	isCatchpointRound := au.ledger.isCatchpointRound(committedRound)
+	isCatchpointRound := (committedRound > 0) && (0 == (uint64(committedRound) % au.catchpointInterval))
 
 	// If we recently flushed, wait to aggregate some more blocks.
 	// ( unless we're creating a catchpoint, in which case we want to flush it right away
@@ -607,10 +691,10 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Roun
 			if err != nil {
 				return err
 			}
-			err = au.accountsUpdateBalaces(balancesHashTx, au.deltas[i])
+			/*err = au.accountsUpdateBalaces(balancesHashTx, au.deltas[i])
 			if err != nil {
 				return err
-			}
+			}*/
 
 			for aidx := range au.assetDeltas[i] {
 				assetFlushcount[aidx] = assetFlushcount[aidx] + 1
@@ -675,6 +759,13 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Roun
 	au.assetDeltas = au.assetDeltas[offset:]
 	au.dbRound = newBase
 	au.lastFlushTime = flushTime
+
+	if isCatchpointRound && au.archivalLedger {
+		// start generating the catchpoint on a separate goroutine.
+		au.catchpointWriting = make(chan struct{}, 1)
+		go au.generateCatchpoint(committedRound)
+	}
+
 	return au.dbRound
 }
 
@@ -744,5 +835,146 @@ func (au *accountUpdates) totals(rnd basics.Round) (totals AccountTotals, err er
 	}
 
 	totals = au.roundTotals[offset]
+	return
+}
+
+func (au *accountUpdates) generateCatchpoint(committedRound basics.Round) {
+	retryCatchpointCreation := false
+	defer func() {
+		if !retryCatchpointCreation {
+			// clear the writingCatchpoint flag
+			err := au.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
+				_, err = writeCatchpointStateUint64(context.Background(), tx, "writingCatchpoint", uint64(0))
+				return err
+			})
+			if err != nil {
+				au.log.Warnf("accountUpdates: generateCatchpoint unable to clear catchpoint state 'writingCatchpoint' for round %d: %v", committedRound, err)
+			}
+		}
+
+		close(au.catchpointWriting)
+	}()
+
+	blockHdr, err := au.ledger.BlockHdr(committedRound)
+	if err != nil {
+		au.log.Warnf("accountUpdates: generateCatchpoint unable to retrieve block header for committed block round %d: %v", committedRound, err)
+		return
+	}
+
+	err = au.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
+		_, err = writeCatchpointStateUint64(context.Background(), tx, "writingCatchpoint", uint64(committedRound))
+		return err
+	})
+	if err != nil {
+		au.log.Warnf("accountUpdates: generateCatchpoint unable to write catchpoint state 'writingCatchpoint' for round %d: %v", committedRound, err)
+		return
+	}
+
+	relCatchpointFileName := filepath.Join("catchpoints", catchpointRoundToPath(committedRound))
+	absCatchpointFileName := filepath.Join(au.dbDirectory, relCatchpointFileName)
+
+	catchpointWriter := makeCatchpointWriter(absCatchpointFileName, au.dbs.rdb, blockHdr.Round, blockHdr.Hash())
+
+	more := true
+	for more {
+		stepCtx, stepCancelFunction := context.WithTimeout(au.ctx, 50*time.Millisecond)
+		more, err = catchpointWriter.WriteStep(stepCtx)
+		stepCancelFunction()
+		if more && err == nil {
+			// we just wrote some data, but there is more to be written.
+			// go to sleep for while.
+			select {
+			case <-time.After(100 * time.Millisecond):
+			case <-au.ctx.Done():
+				retryCatchpointCreation = true
+				return
+			}
+		}
+		if err != nil {
+			au.log.Warnf("accountUpdates: generateCatchpoint: unable to create catchpoint : %v", err)
+			return
+		}
+	}
+
+	err = au.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
+		err = storeCatchpoint(tx, committedRound, relCatchpointFileName, catchpointWriter.GetCatchpoint(), catchpointWriter.GetSize())
+		return
+	})
+	if err != nil {
+		au.log.Warnf("accountUpdates: generateCatchpoint: unable to save catchpoint: %v", err)
+		return
+	}
+}
+
+func (au *accountUpdates) getCatchpointStream(round basics.Round) (io.ReadCloser, error) {
+	dbFileName := ""
+	err := au.dbs.rdb.Atomic(func(tx *sql.Tx) (err error) {
+		dbFileName, _, _, err = getCatchpoint(tx, round)
+		return
+	})
+	if err != nil && err != sql.ErrNoRows {
+		// we had some sql error.
+		return nil, fmt.Errorf("catchpointTracker: getCatchpointStream: unable to lookup catchpoint %d: %v", round, err)
+	}
+	if dbFileName != "" {
+		catchpointPath := filepath.Join(au.dbDirectory, dbFileName)
+		file, err := os.OpenFile(catchpointPath, os.O_RDONLY, 0666)
+		if err == nil && file != nil {
+			return file, nil
+		}
+		// else, see if this is a file-not-found error
+		if os.IsNotExist(err) {
+			// the database told us that we have this file.. but we couldn't find it.
+			// delete it from the database.
+			b := catchpointBuildResult{
+				round:      round,
+				fileName:   "",
+				catchpoint: "",
+				fileSize:   0,
+			}
+			err := au.saveCatchpoint(b)
+			if err != nil {
+				au.log.Warnf("catchpointTracker: getCatchpointStream: unable to delete missing catchpoint entry: %v", err)
+				return nil, err
+			}
+
+			return nil, ErrNoEntry{}
+		}
+		// it's some other error.
+		return nil, fmt.Errorf("catchpointTracker: getCatchpointStream: unable to open catchpoint file '%s' %v", catchpointPath, err)
+	}
+
+	// if the database doesn't know about that round, see if we have that file anyway:
+	fileName := filepath.Join("catchpoints", catchpointRoundToPath(round))
+	catchpointPath := filepath.Join(au.dbDirectory, fileName)
+	file, err := os.OpenFile(catchpointPath, os.O_RDONLY, 0666)
+	if err == nil && file != nil {
+		// great, if found that we should have had this in the database.. add this one now :
+		fileInfo, err := file.Stat()
+		if err != nil {
+			// we couldn't get the stat, so just return with the file.
+			return file, nil
+		}
+		b := catchpointBuildResult{
+			round:      round,
+			fileName:   fileName,
+			catchpoint: "",
+			fileSize:   fileInfo.Size(),
+		}
+		au.saveCatchpoint(b)
+		return file, nil
+	}
+	return nil, ErrNoEntry{}
+}
+
+func (au *accountUpdates) saveCatchpoint(b catchpointBuildResult) (err error) {
+	err = au.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
+		err = storeCatchpoint(tx, b.round, b.fileName, b.catchpoint, b.fileSize)
+		return
+	})
+	if err != nil {
+		au.log.Warnf("accountUpdates: saveCatchpoint: unable to save catchpoint: %v", err)
+		return
+	}
 	return
 }

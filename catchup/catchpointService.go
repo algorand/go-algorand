@@ -329,7 +329,11 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 		return cs.abort(fmt.Errorf("processStageBlocksDownload failed, unable to ensure first block : %v", err))
 	}
 
-	lookback := int(config.Consensus[topBlock.CurrentProtocol].MaxBalLookback)
+	// pick the lookback with the greater of either MaxTxnLife or MaxBalLookback
+	lookback := int(config.Consensus[topBlock.CurrentProtocol].MaxTxnLife)
+	if lookback < int(config.Consensus[topBlock.CurrentProtocol].MaxBalLookback) {
+		lookback = int(config.Consensus[topBlock.CurrentProtocol].MaxBalLookback)
+	}
 
 	cs.statsMu.Lock()
 	cs.stats.PendingBlocks = uint64(lookback)

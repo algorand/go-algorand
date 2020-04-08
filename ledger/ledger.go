@@ -60,13 +60,13 @@ type Ledger struct {
 	genesisProto config.ConsensusParams
 
 	// State-machine trackers
-	accts      accountUpdates
-	txTail     txTail
-	bulletin   bulletin
-	notifier   blockNotifier
-	time       timeTracker
-	metrics    metricsTracker
-	catchpoint catchpointTracker
+	accts    accountUpdates
+	txTail   txTail
+	bulletin bulletin
+	notifier blockNotifier
+	time     timeTracker
+	metrics  metricsTracker
+	//catchpoint catchpointTracker
 
 	trackers  trackerRegistry
 	trackerMu deadlock.RWMutex
@@ -127,7 +127,8 @@ func OpenLedger(
 		l.genesisAccounts = make(map[basics.Address]basics.AccountData)
 	}
 
-	l.catchpoint.initialize(cfg, dbPathPrefix, dbMem)
+	l.accts.initialize(cfg, dbPathPrefix, l.genesisProto, l.genesisAccounts)
+	//l.catchpoint.initialize(cfg, dbPathPrefix, dbMem)
 
 	err = l.reloadLedger()
 	if err != nil {
@@ -154,17 +155,13 @@ func (l *Ledger) reloadLedger() error {
 		return err
 	}
 
-	// Accounts are special because they get an initialization argument (initAccounts).
-	l.accts.initProto = l.genesisProto
-	l.accts.initAccounts = l.genesisAccounts
-
 	l.trackers.register(&l.accts)
 	l.trackers.register(&l.txTail)
 	l.trackers.register(&l.bulletin)
 	l.trackers.register(&l.notifier)
 	l.trackers.register(&l.time)
 	l.trackers.register(&l.metrics)
-	l.trackers.register(&l.catchpoint)
+	//l.trackers.register(&l.catchpoint)
 
 	err = l.trackers.loadFromDisk(l)
 	if err != nil {
@@ -181,7 +178,7 @@ func (l *Ledger) reloadLedger() error {
 }
 
 func (l *Ledger) isCatchpointRound(rnd basics.Round) bool {
-	return l.catchpoint.isCatchpointRound(rnd)
+	return false //l.catchpoint.isCatchpointRound(rnd)
 }
 
 // verifyMatchingGenesisHash tests to see that the latest block header pointing to the same genesis hash provided in genesisHash.
@@ -449,6 +446,7 @@ func (l *Ledger) BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreem
 // is returned if this is not the expected next block number.
 func (l *Ledger) AddBlock(blk bookkeeping.Block, cert agreement.Certificate) error {
 	// passing nil as the verificationPool is ok since we've asking the evaluator to skip verification.
+
 	updates, err := l.eval(context.Background(), blk, false, nil, nil)
 	if err != nil {
 		return err
@@ -476,7 +474,6 @@ func (l *Ledger) AddValidatedBlock(vb ValidatedBlock, cert agreement.Certificate
 	if err != nil {
 		return err
 	}
-
 	l.trackers.newBlock(vb.blk, vb.delta)
 	return nil
 }
@@ -527,7 +524,7 @@ func (l *Ledger) GetCatchpointCatchupState(ctx context.Context) (state Catchpoin
 func (l *Ledger) GetCatchpointStream(round basics.Round) (io.ReadCloser, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.catchpoint.getCatchpointStream(round)
+	return l.accts.getCatchpointStream(round)
 }
 
 // ledgerForTracker methods
