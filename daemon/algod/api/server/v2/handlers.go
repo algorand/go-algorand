@@ -393,7 +393,7 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 		return internalError(ctx, err, errFailedLookingUpTransactionPool, v2.Log)
 	}
 
-	// TODO: What should I put in here? MatchAddress uses this to check the FeeSink so I think this is fine.
+	// MatchAddress uses this to check FeeSink, we don't care about that here.
 	spec := transactions.SpecialAddresses{
 		FeeSink:     basics.Address{},
 		RewardsPool: basics.Address{},
