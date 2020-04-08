@@ -423,7 +423,7 @@ func (c *Client) MakeUnsignedApplicationCallTx(appIdx uint64, appArgs []string, 
 }
 
 func appArgsToBytes(appArgs []string) [][]byte {
-	res := make([][]byte, 0, len(appArgs))
+	res := make([][]byte, len(appArgs))
 	for i := range appArgs {
 		res[i] = []byte(appArgs[i])
 	}
