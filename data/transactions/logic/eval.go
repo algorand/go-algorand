@@ -468,7 +468,7 @@ const MaxStackDepth = 1000
 
 func (cx *evalContext) step() {
 	opcode := cx.program[cx.pc]
-	spec := opsByOpcode[cx.version][opcode]
+	spec := &opsByOpcode[cx.version][opcode]
 
 	if spec.op == nil {
 		cx.err = fmt.Errorf("%3d illegal opcode 0x%02x", cx.pc, opcode)
@@ -559,7 +559,7 @@ func (cx *evalContext) step() {
 
 func (cx *evalContext) checkStep() (cost int) {
 	opcode := cx.program[cx.pc]
-	spec := opsByOpcode[cx.version][opcode]
+	spec := &opsByOpcode[cx.version][opcode]
 	if spec.op == nil {
 		cx.err = fmt.Errorf("%3d illegal opcode 0x%02x", cx.pc, opcode)
 		return 1
