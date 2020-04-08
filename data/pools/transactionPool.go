@@ -177,7 +177,12 @@ func (pool *TransactionPool) rememberCommit(flush bool) {
 func (pool *TransactionPool) PendingCount() int {
 	pool.pendingMu.RLock()
 	defer pool.pendingMu.RUnlock()
+	return pool.pendingCountNoLock()
+}
 
+// pendingCountNoLock is a helper for PendingCount that returns the number of
+// transactions pending in the pool
+func (pool *TransactionPool) pendingCountNoLock() int {
 	var count int
 	for _, txgroup := range pool.pendingTxGroups {
 		count += len(txgroup)
@@ -522,20 +527,22 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 		return
 	}
 
+	// Grab the transactions to be played through the new block evaluator
+	pool.pendingMu.RLock()
+	txgroups := pool.pendingTxGroups
+	verifyParams := pool.pendingVerifyParams
+	pendingCount := pool.pendingCountNoLock()
+	pool.pendingMu.RUnlock()
+
 	next := bookkeeping.MakeBlock(prev)
 	pool.numPendingWholeBlocks = 0
-	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader)
+	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, pendingCount)
 	if err != nil {
 		logging.Base().Warnf("TransactionPool.recomputeBlockEvaluator: cannot start evaluator: %v", err)
 		return
 	}
 
-	// Feed the transactions in order.
-	pool.pendingMu.RLock()
-	txgroups := pool.pendingTxGroups
-	verifyParams := pool.pendingVerifyParams
-	pool.pendingMu.RUnlock()
-
+	// Feed the transactions in order
 	for i, txgroup := range txgroups {
 		if len(txgroup) == 0 {
 			continue
