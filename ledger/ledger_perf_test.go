@@ -178,6 +178,7 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 			// add tx to block
 			var stxn transactions.SignedTxn
 			stxn.Txn = tx
+			stxn.Sig = crypto.Signature{1}
 			err = eval.Transaction(stxn, transactions.ApplyData{})
 
 			// check if block is full
@@ -232,41 +233,33 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 func BenchmarkAppLocal1NoDiffs(b *testing.B) {
 	benchmarkFullBlocks(testCases["bench-local-1-no-diffs"], b)
 }
-func BenchmarkAppLocal250NoDiffs(b *testing.B) {
-	benchmarkFullBlocks(testCases["bench-local-250-no-diffs"], b)
-}
-func BenchmarkAppLocal750NoDiffs(b *testing.B) {
-	benchmarkFullBlocks(testCases["bench-local-750-no-diffs"], b)
+
+func BenchmarkAppLocal59NoDiffs(b *testing.B) {
+	benchmarkFullBlocks(testCases["bench-local-59-no-diffs"], b)
 }
 
 func BenchmarkAppGlobal1NoDiffs(b *testing.B) {
 	benchmarkFullBlocks(testCases["bench-global-1-no-diffs"], b)
 }
-func BenchmarkAppGlobal250NoDiffs(b *testing.B) {
-	benchmarkFullBlocks(testCases["bench-global-250-no-diffs"], b)
-}
-func BenchmarkAppGlobal750NoDiffs(b *testing.B) {
-	benchmarkFullBlocks(testCases["bench-global-750-no-diffs"], b)
+
+func BenchmarkAppGlobal59NoDiffs(b *testing.B) {
+	benchmarkFullBlocks(testCases["bench-global-59-no-diffs"], b)
 }
 
 func BenchmarkAppLocal1BigDiffs(b *testing.B) {
 	benchmarkFullBlocks(testCases["bench-local-1-big-diffs"], b)
 }
-func BenchmarkAppLocal250BigDiffs(b *testing.B) {
-	benchmarkFullBlocks(testCases["bench-local-250-big-diffs"], b)
-}
-func BenchmarkAppLocal750BigDiffs(b *testing.B) {
-	benchmarkFullBlocks(testCases["bench-local-750-big-diffs"], b)
+
+func BenchmarkAppLocal59BigDiffs(b *testing.B) {
+	benchmarkFullBlocks(testCases["bench-local-59-big-diffs"], b)
 }
 
 func BenchmarkAppGlobal1BigDiffs(b *testing.B) {
 	benchmarkFullBlocks(testCases["bench-global-1-big-diffs"], b)
 }
-func BenchmarkAppGlobal250BigDiffs(b *testing.B) {
-	benchmarkFullBlocks(testCases["bench-global-250-big-diffs"], b)
-}
-func BenchmarkAppGlobal750BigDiffs(b *testing.B) {
-	benchmarkFullBlocks(testCases["bench-global-750-big-diffs"], b)
+
+func BenchmarkAppGlobal59BigDiffs(b *testing.B) {
+	benchmarkFullBlocks(testCases["bench-global-59-big-diffs"], b)
 }
 
 func BenchmarkAppInt1(b *testing.B) { benchmarkFullBlocks(testCases["int-1"], b) }
@@ -279,43 +272,18 @@ func init() {
 	// Disable deadlock checking library
 	deadlock.Opts.Disable = true
 
-	// No diffs
-	params := genAppTestParams(1, false, "local")
-	testCases[params.name] = params
+	lengths := []int{1, 59}
+	diffs := []bool{true, false}
+	state := []string{"local", "global"}
 
-	params = genAppTestParams(250, false, "local")
-	testCases[params.name] = params
-
-	params = genAppTestParams(750, false, "local")
-	testCases[params.name] = params
-
-	params = genAppTestParams(1, false, "global")
-	testCases[params.name] = params
-
-	params = genAppTestParams(250, false, "global")
-	testCases[params.name] = params
-
-	params = genAppTestParams(750, false, "global")
-	testCases[params.name] = params
-
-	// Big diffs
-	params = genAppTestParams(1, true, "local")
-	testCases[params.name] = params
-
-	params = genAppTestParams(250, true, "local")
-	testCases[params.name] = params
-
-	params = genAppTestParams(750, true, "local")
-	testCases[params.name] = params
-
-	params = genAppTestParams(1, true, "global")
-	testCases[params.name] = params
-
-	params = genAppTestParams(250, true, "global")
-	testCases[params.name] = params
-
-	params = genAppTestParams(750, true, "global")
-	testCases[params.name] = params
+	for _, l := range lengths {
+		for _, d := range diffs {
+			for _, s := range state {
+				params := genAppTestParams(l, d, s)
+				testCases[params.name] = params
+			}
+		}
+	}
 
 	// Int 1
 	progBytes, err := logic.AssembleString(`int 1`)
@@ -323,7 +291,7 @@ func init() {
 		panic(err)
 	}
 
-	params = testParams{
+	params := testParams{
 		txType:  "app",
 		name:    fmt.Sprintf("int-1"),
 		program: progBytes,

@@ -638,9 +638,8 @@ func initConsensusProtocols() {
 	// Maximum number of key/value pairs per global/local key/value store
 	vFuture.MaxSchemaEntries = 1024
 
-	// 20000 to match max stateless TEAL cost (for now)
-	// TODO(applications) tune this based on performance
-	vFuture.MaxAppProgramCost = 20000
+	// Maximum cost of ApprovalProgram/ClearStateProgram
+	vFuture.MaxAppProgramCost = 1024
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
