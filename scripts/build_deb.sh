@@ -7,7 +7,7 @@
 #
 # Examples: scripts/build_deb.sh amd64
 
-set -e
+set -ex
 if [ "$#" -lt 2 ]; then
     echo "Syntax: build_deb.sh <arch> <output directory> <channel>"
     exit 1

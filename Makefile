@@ -305,12 +305,6 @@ install: build
 
 .PHONY: default fmt vet lint check_license check_shell sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN
 
-### TARGETS FOR CICD PROCESS
+###### TARGETS FOR CICD PROCESS ######
+include Makefile.mule
 
-ci-deps:
-	scripts/configure_dev-deps.sh && \
-	scripts/check_deps.sh
-
-ci-build: buildsrc gen
-	mkdir -p $(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH) && \
-	PKG_ROOT=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH) NO_BUILD=True VARIATIONS=$(OS_TYPE)/$(ARCH) scripts/build_packages.sh $(OS_TYPE)/$(ARCH)
