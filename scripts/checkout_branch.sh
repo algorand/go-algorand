@@ -15,6 +15,8 @@
 # Examples: scripts/checkout_branch.sh master
 #           scripts/checkout_branch.sh dev/mybranch
 
+set -ex
+
 if [ "$#" -ne 1 ]; then
     echo "Syntax: checkout_branch <branch>"
     exit 1
@@ -34,14 +36,7 @@ if (( $(git status --porcelain | grep -cve "buildnumber.dat$" ) != 0 )); then
     exit 1
 fi
 
-if ! git fetch; then
-    echo Error fetching repo
-    exit 1
-fi
-
+git fetch
 git checkout "$BRANCH"
-if ! git reset --hard "origin/$BRANCH"; then
-    echo Error checking out branch "$BRANCH"
-    exit 1
-fi
+git reset --hard "origin/$BRANCH"
 
