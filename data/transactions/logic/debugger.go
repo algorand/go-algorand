@@ -23,8 +23,9 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+
+	"github.com/satori/go.uuid"
 )
 
 // Debugger represents a connection to tealdbg
@@ -56,9 +57,7 @@ func (cx *evalContext) debugState() *DebuggerState {
 
 	// Generate unique execution ID if necessary
 	if ds.ExecID == "" {
-		var execID crypto.Digest
-		crypto.RandBytes(execID[:])
-		ds.ExecID = execID.String()
+		ds.ExecID = uuid.NewV4().String()
 	}
 
 	if ds.Disassembly == "" {
