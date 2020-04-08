@@ -27,7 +27,6 @@ import (
 	"io"
 	"math"
 	"math/big"
-	"os"
 	"runtime"
 	"sort"
 	"strings"
@@ -201,10 +200,6 @@ type evalContext struct {
 	localStateCows      map[basics.Address]*keyValueCow
 	readOnlyLocalStates map[ckey]basics.TealKeyValue
 	appEvalDelta        basics.EvalDelta
-
-	// Stores state & disassembly for the optional web debugger
-	debuggerState DebuggerState
-	debugger      *Debugger
 }
 
 // StackType describes the type of a value on the operand stack
@@ -319,13 +314,6 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 		}
 	}()
 
-	defer func() {
-		// Ensure we update the debugger before exiting
-		if cx.debugger != nil {
-			cx.debugger.complete(cx)
-		}
-	}()
-
 	if (cx.EvalParams.Proto == nil) || (cx.EvalParams.Proto.LogicSigVersion == 0) {
 		err = errLogicSignNotSupported
 		return
@@ -363,20 +351,7 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 	cx.program = program
 	cx.programHash = crypto.HashObj(Program(program))
 
-	debugURL := os.Getenv("TEAL_DEBUGGER_URL")
-	if debugURL != "" {
-		cx.debugger = &Debugger{URL: debugURL}
-	}
-
-	if cx.debugger != nil {
-		cx.debugger.register(cx)
-	}
-
 	for (cx.err == nil) && (cx.pc < len(cx.program)) {
-		if cx.debugger != nil {
-			cx.debugger.update(cx)
-		}
-
 		cx.step()
 		cx.stepCount++
 		if cx.stepCount > len(cx.program) {
