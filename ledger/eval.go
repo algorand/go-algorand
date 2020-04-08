@@ -524,6 +524,8 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	// Prepare TEAL contexts for any ApplicationCall transactions in the group
 	appEvaluators := eval.prepareAppEvaluators(txgroup)
 
+	// Evaluate each transaction in the group
+	txibs := make([]transactions.SignedTxnInBlock, 0, len(txgroup))
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
