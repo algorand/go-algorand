@@ -199,6 +199,7 @@ func TestPeriodicSync(t *testing.T) {
 
 	auth := &mockedAuthenticator{fail: true}
 	initialLocalRound := local.LastRound()
+	require.True(t, 0 == initialLocalRound)
 
 	// Make Service
 	s := MakeService(logging.Base(), defaultConfig, &mocks.MockNetwork{}, local, nil, auth, nil)
@@ -211,7 +212,7 @@ func TestPeriodicSync(t *testing.T) {
 	s.Start()
 	defer s.Stop()
 	time.Sleep(s.deadlineTimeout*2 - 200*time.Millisecond)
-	require.Equal(t, local.LastRound(), initialLocalRound)
+	require.Equal(t, initialLocalRound, local.LastRound())
 	auth.alter(-1, false)
 	s.fetcherFactory.(*MockedFetcherFactory).changeFetcher(&MockedFetcher{ledger: remote, timeout: false, tries: make(map[basics.Round]int)})
 	time.Sleep(2 * time.Second)

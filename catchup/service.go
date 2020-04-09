@@ -242,13 +242,12 @@ func (s *Service) fetchAndWrite(fetcher Fetcher, r basics.Round, prevFetchComple
 			}
 		}
 
-		// Tsachi - undo once done !!!
-		/*err = s.auth.Authenticate(block, cert)
+		err = s.auth.Authenticate(block, cert)
 		if err != nil {
 			s.log.Warnf("fetchAndWrite(%v): cert did not authenticate block (attempt %d): %v", r, i, err)
 			client.Close()
 			continue // retry the fetch
-		}*/
+		}
 
 		// Write to ledger, noting that ledger writes must be in order
 		select {
@@ -410,7 +409,6 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 // periodicSync periodically asks the network for its latest round and syncs if we've fallen behind (also if our ledger stops advancing)
 func (s *Service) periodicSync() {
 	defer close(s.done)
-
 	// wait until network is ready, or until we're told to quit
 	select {
 	case <-s.net.Ready():
@@ -507,7 +505,6 @@ func (s *Service) sync(cert *PendingUnmatchedCertificate) {
 		Time:       elapsedTime,
 		InitSync:   initSync,
 	})
-
 	s.log.Infof("Catchup Service: finished catching up, now at round %v (previously %v). Total time catching up %v.", s.ledger.LastRound(), pr, elapsedTime)
 }
 

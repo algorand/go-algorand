@@ -571,6 +571,7 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 
 		wl.minQueriedBlock = rnd
 
+		cleanTracker.close()
 		err := cleanTracker.loadFromDisk(wl)
 		require.NoError(t, err)
 

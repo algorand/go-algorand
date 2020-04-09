@@ -292,81 +292,65 @@ func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 	if err != nil {
 		return 0, fmt.Errorf("accountsInitialize was unable to MakeTrie: %v", err)
 	}
-	if rnd == 0 {
-		// if we just initialize the database ( successfully !), than make sure to feed the same accounts changes to the merkle trie.
-		for addr, data := range au.initAccounts {
-			added, err := trie.Add(accountHashBuilder(addr, data, protocol.Encode(&data)))
+
+	// we migth have a database that was previously initialized, and now we're adding the balances trie. In that case, we need to add all the existing balances to this trie.
+	// we can figure this out by examinine the hash of the root:
+	rootHash, err := trie.RootHash()
+	if err != nil {
+		return rnd, fmt.Errorf("accountsInitialize was unable to retrieve trie root hash: %v", err)
+	}
+	if rootHash.IsZero() {
+		accountIdx := 0
+		for {
+			fmt.Printf("iteration %d\n", accountIdx)
+			t1 := time.Now()
+			bal, err := encodedAccountsRange(tx, accountIdx, balancesChunkReadSize)
 			if err != nil {
-				return 0, err
+				return rnd, err
 			}
-			if !added {
-				panic("attempted to add duplicate hash '%v' to merkle trie.")
+			t2 := time.Now()
+			fmt.Printf("encodedAccountsRange time was %d ms\n", t2.Sub(t1).Nanoseconds()/1000000)
+			if len(bal) == 0 {
+				break
 			}
-		}
-		err = trie.Commit()
-		if err != nil {
-			return 0, fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err)
-		}
-	} else {
-		// we migth have a database that was previously initialized, and now we're adding the balances trie. In that case, we need to add all the existing balances to this trie.
-		// we can figure this out by examinine the hash of the root:
-		rootHash, err := trie.RootHash()
-		if err != nil {
-			return rnd, fmt.Errorf("accountsInitialize was unable to retrieve trie root hash: %v", err)
-		}
-		if rootHash.IsZero() {
-			accountIdx := 0
-			for {
-				fmt.Printf("iteration %d\n", accountIdx)
-				t1 := time.Now()
-				bal, err := encodedAccountsRange(tx, accountIdx, balancesChunkReadSize)
+			for _, balance := range bal {
+				addrBytes, accountBytes := balance.Address, balance.AccountData
+				var addr basics.Address
+				copy(addr[:], addrBytes)
+				var accountData basics.AccountData
+				err = protocol.Decode(accountBytes, &accountData)
 				if err != nil {
 					return rnd, err
 				}
-				t2 := time.Now()
-				fmt.Printf("encodedAccountsRange time was %d ms\n", t2.Sub(t1).Milliseconds())
-				if len(bal) == 0 {
-					break
-				}
-				for _, balance := range bal {
-					addrBytes, accountBytes := balance.Address, balance.AccountData
-					var addr basics.Address
-					copy(addr[:], addrBytes)
-					var accountData basics.AccountData
-					err = protocol.Decode(accountBytes, &accountData)
-					if err != nil {
-						return rnd, err
-					}
-					hash := accountHashBuilder(addr, accountData, protocol.Encode(&accountData))
-					added, err := trie.Add(hash)
-					if err != nil {
-						panic(fmt.Errorf("accountsInitialize was unable to add changes to trie: %v", err))
-						//return rnd, fmt.Errorf("accountsInitialize was unable to add changes to trie: %v", err)
-					}
-					if !added {
-						au.log.Warnf("attempted to add duplicate hash '%v' to merkle trie.", hash)
-					}
-				}
-				t3 := time.Now()
-				fmt.Printf("adding balances time was %d ms\n", t3.Sub(t2).Milliseconds())
-				// this trie Commit call only attempt to write it to the database using the current transaction.
-				// if anything goes wrong, it will still get rolled back.
-				err = trie.Commit()
+				hash := accountHashBuilder(addr, accountData, protocol.Encode(&accountData))
+				added, err := trie.Add(hash)
 				if err != nil {
-					panic(fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err))
-					//return 0, fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err)
+					panic(fmt.Errorf("accountsInitialize was unable to add changes to trie: %v", err))
+					//return rnd, fmt.Errorf("accountsInitialize was unable to add changes to trie: %v", err)
 				}
-				t4 := time.Now()
-				fmt.Printf("commit time was %d ms\n", t4.Sub(t3).Milliseconds())
-				trie.Evict()
-				t5 := time.Now()
-				fmt.Printf("evict time was %d ms\n", t5.Sub(t4).Milliseconds())
-				if len(bal) < balancesChunkReadSize {
-					break
+				if !added {
+					au.log.Warnf("attempted to add duplicate hash '%v' to merkle trie.", hash)
 				}
-				//fmt.Printf("--- committed ---\n")
-				accountIdx += balancesChunkReadSize
 			}
+			t3 := time.Now()
+			fmt.Printf("adding balances time was %d ms\n", t3.Sub(t2).Nanoseconds()/1000000)
+			// this trie Commit call only attempt to write it to the database using the current transaction.
+			// if anything goes wrong, it will still get rolled back.
+			err = trie.Commit()
+			if err != nil {
+				panic(fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err))
+				//return 0, fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err)
+			}
+			t4 := time.Now()
+			fmt.Printf("commit time was %d ms\n", t4.Sub(t3).Nanoseconds()/1000000)
+			trie.Evict()
+			t5 := time.Now()
+			fmt.Printf("evict time was %d ms\n", t5.Sub(t4).Nanoseconds()/1000000)
+			if len(bal) < balancesChunkReadSize {
+				break
+			}
+			//fmt.Printf("--- committed ---\n")
+			accountIdx += balancesChunkReadSize
 		}
 	}
 	//panic(nil)
@@ -435,7 +419,9 @@ func (au *accountUpdates) accountsCreateCatchpointLabel(tx *sql.Tx, committedRou
 }
 
 func (au *accountUpdates) close() {
-	au.ctxCancel()
+	if au.ctxCancel != nil {
+		au.ctxCancel()
+	}
 }
 
 func (au *accountUpdates) roundOffset(rnd basics.Round) (offset uint64, err error) {
@@ -653,7 +639,7 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Roun
 	}
 
 	// check to see if this is a catchpoint round
-	isCatchpointRound := (committedRound > 0) && (0 == (uint64(committedRound) % au.catchpointInterval))
+	isCatchpointRound := (committedRound > 0) && (au.catchpointInterval != 0) && (0 == (uint64(committedRound) % au.catchpointInterval))
 
 	// If we recently flushed, wait to aggregate some more blocks.
 	// ( unless we're creating a catchpoint, in which case we want to flush it right away
