@@ -15,7 +15,7 @@
 # Examples: scripts/checkout_branch.sh master
 #           scripts/checkout_branch.sh dev/mybranch
 
-set -ex
+set -exo pipefail
 
 if [ "$#" -ne 1 ]; then
     echo "Syntax: checkout_branch <branch>"
@@ -25,9 +25,10 @@ fi
 BRANCH="$1"
 
 # Anchor our repo root reference location
-REPO_ROOT="$( cd "$(dirname "$0")" || exit ; pwd -P )"/..
+export SHELLOPTS
+REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"/..
 
-cd "${REPO_ROOT}" || exit
+cd "${REPO_ROOT}"
 
 # Check for clean workspace ignoring the update to buildnumber.dat which is expected during a release build.
 # Use before a forced checkout to ensure we don't clobber or lose any changes.
