@@ -133,7 +133,7 @@ func (cb *roundCowState) txnCounter() uint64 {
 	return cb.lookupParent.txnCounter() + uint64(len(cb.mods.Txids))
 }
 
-func (cb *roundCowState) put(addr basics.Address, old basics.AccountData, new basics.AccountData) {
+func (cb *roundCowState) put(addr basics.Address, old basics.AccountData, new basics.AccountData, newCreatables []basics.CreatableLocator, deletedCreatables []basics.CreatableLocator) {
 	prev, present := cb.mods.accts[addr]
 	if present {
 		cb.mods.accts[addr] = accountDelta{old: prev.old, new: new}
@@ -141,10 +141,20 @@ func (cb *roundCowState) put(addr basics.Address, old basics.AccountData, new ba
 		cb.mods.accts[addr] = accountDelta{old: old, new: new}
 	}
 
-	// Get which asset indices were created and deleted, and update state
-	cDeltas := getChangedCreatables(addr, accountDelta{old: old, new: new})
-	for cidx, delta := range cDeltas {
-		cb.mods.creatables[cidx] = delta
+	for _, cl := range newCreatables {
+		cb.mods.creatables[cl.Index] = modifiedCreatable{
+			ctype:   cl.Type,
+			creator: addr,
+			created: true,
+		}
+	}
+
+	for _, cl := range deletedCreatables {
+		cb.mods.creatables[cl.Index] = modifiedCreatable{
+			ctype:   cl.Type,
+			creator: addr,
+			created: false,
+		}
 	}
 }
 

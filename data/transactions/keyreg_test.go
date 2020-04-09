@@ -50,6 +50,10 @@ func (balances keyregTestBalances) Put(basics.BalanceRecord) error {
 	return nil
 }
 
+func (balances keyregTestBalances) PutWithCreatables(basics.BalanceRecord, []basics.CreatableLocator, []basics.CreatableLocator) error {
+	return nil
+}
+
 func (balances keyregTestBalances) Move(src, dst basics.Address, amount basics.MicroAlgos, srcRewards, dstRewards *basics.MicroAlgos) error {
 	return nil
 }

@@ -402,8 +402,17 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, stev
 		totalSchema = totalSchema.AddSchema(ac.GlobalStateSchema)
 		record.TotalAppSchema = totalSchema
 
+		// Tell the cow what app we created
+		created := []basics.CreatableLocator{
+			basics.CreatableLocator{
+				Creator: header.Sender,
+				Type:    basics.AppCreatable,
+				Index:   basics.CreatableIndex(appIdx),
+			},
+		}
+
 		// Write back to the creator's balance record and continue
-		err = balances.Put(record)
+		err = balances.PutWithCreatables(record, created, nil)
 		if err != nil {
 			return err
 		}
@@ -611,7 +620,18 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, stev
 		// Delete the AppParams
 		record.AppParams = cloneAppParams(record.AppParams)
 		delete(record.AppParams, appIdx)
-		err = balances.Put(record)
+
+		// Tell the cow what app we deleted
+		deleted := []basics.CreatableLocator{
+			basics.CreatableLocator{
+				Creator: header.Sender,
+				Type:    basics.AppCreatable,
+				Index:   basics.CreatableIndex(appIdx),
+			},
+		}
+
+		// Write back to cow
+		err = balances.PutWithCreatables(record, nil, deleted)
 		if err != nil {
 			return err
 		}

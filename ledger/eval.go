@@ -107,11 +107,15 @@ func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (basi
 }
 
 func (cs *roundCowState) Put(record basics.BalanceRecord) error {
+	return cs.PutWithCreatables(record, nil, nil)
+}
+
+func (cs *roundCowState) PutWithCreatables(record basics.BalanceRecord, newCreatables []basics.CreatableLocator, deletedCreatables []basics.CreatableLocator) error {
 	olddata, err := cs.lookup(record.Addr)
 	if err != nil {
 		return err
 	}
-	cs.put(record.Addr, olddata, record.AccountData)
+	cs.put(record.Addr, olddata, record.AccountData, newCreatables, deletedCreatables)
 	return nil
 }
 
@@ -138,7 +142,7 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 	if overflowed {
 		return fmt.Errorf("overspend (account %v, data %+v, tried to spend %v)", from, fromBal, amt)
 	}
-	cs.put(from, fromBal, fromBalNew)
+	cs.put(from, fromBal, fromBalNew, nil, nil)
 
 	toBal, err := cs.lookup(to)
 	if err != nil {
@@ -159,7 +163,7 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 	if overflowed {
 		return fmt.Errorf("balance overflow (account %v, data %+v, was going to receive %v)", to, toBal, amt)
 	}
-	cs.put(to, toBal, toBalNew)
+	cs.put(to, toBal, toBalNew, nil, nil)
 
 	return nil
 }

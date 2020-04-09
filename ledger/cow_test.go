@@ -68,7 +68,7 @@ func checkCow(t *testing.T, cow *roundCowState, accts map[basics.Address]basics.
 
 func applyUpdates(cow *roundCowState, updates map[basics.Address]accountDelta) {
 	for addr, delta := range updates {
-		cow.put(addr, delta.old, delta.new)
+		cow.put(addr, delta.old, delta.new, nil, nil)
 	}
 }
 

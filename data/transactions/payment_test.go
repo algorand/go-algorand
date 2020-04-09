@@ -76,6 +76,10 @@ type mockBalances struct {
 	protocol.ConsensusVersion
 }
 
+func (balances mockBalances) PutWithCreatables(basics.BalanceRecord, []basics.CreatableLocator, []basics.CreatableLocator) error {
+	return nil
+}
+
 func (balances mockBalances) Get(basics.Address, bool) (basics.BalanceRecord, error) {
 	return basics.BalanceRecord{}, nil
 }
