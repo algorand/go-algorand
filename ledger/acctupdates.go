@@ -513,7 +513,7 @@ func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta StateDelta) {
 	newTotals := au.roundTotals[len(au.roundTotals)-1]
 	allBefore := newTotals.All()
 	newTotals.applyRewards(delta.hdr.RewardsLevel, &ot)
-	newAssetDeltas := au.creatableDeltas[len(au.creatableDeltas)-1]
+	newCreatableDeltas := au.creatableDeltas[len(au.creatableDeltas)-1]
 
 	for addr, data := range delta.accts {
 		newTotals.delAccount(proto, data.old, &ot)
@@ -533,7 +533,7 @@ func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta StateDelta) {
 			mcreat.ndeltas++
 			au.creatables[cidx] = mcreat
 
-			newAssetDeltas[cidx] = delta
+			newCreatableDeltas[cidx] = delta
 		}
 	}
 

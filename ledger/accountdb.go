@@ -298,7 +298,7 @@ func accountsPutTotals(tx *sql.Tx, totals AccountTotals) error {
 	return err
 }
 
-// getChangedCreatabless takes an accountDelta and returns which Creatables
+// getChangedCreatables takes an accountDelta and returns which Creatables
 // were created and which were deleted
 func getChangedCreatables(creator basics.Address, delta accountDelta) map[basics.CreatableIndex]modifiedCreatable {
 	mods := make(map[basics.CreatableIndex]modifiedCreatable)
