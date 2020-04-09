@@ -50,7 +50,7 @@ type catchpointWriter struct {
 	balancesOffset    int
 	balancesChunk     catchpointFileBalancesChunk
 	fileHeader        *catchpointFileHeader
-	balancesChunkNum  uint
+	balancesChunkNum  uint64
 	writtenBytes      int64
 	blocksRound       basics.Round
 	blockHeaderDigest bookkeeping.BlockHash
@@ -180,7 +180,7 @@ func (cw *catchpointWriter) WriteStep(ctx context.Context) (more bool, err error
 			cw.balancesChunkNum++
 			encodedChunk := protocol.EncodeReflect(cw.balancesChunk)
 			err = cw.tar.WriteHeader(&tar.Header{
-				Name: fmt.Sprintf("balances.%d.%d.msgpack", cw.balancesChunkNum, (cw.fileHeader.TotalAccounts+balancesChunkReadSize-1)/balancesChunkReadSize),
+				Name: fmt.Sprintf("balances.%d.%d.msgpack", cw.balancesChunkNum, cw.fileHeader.TotalChunks),
 				Mode: 0600,
 				Size: int64(len(encodedChunk)),
 			})
@@ -192,7 +192,7 @@ func (cw *catchpointWriter) WriteStep(ctx context.Context) (more bool, err error
 				return
 			}
 
-			if len(cw.balancesChunk) < balancesChunkReadSize {
+			if len(cw.balancesChunk) < balancesChunkReadSize || cw.balancesChunkNum == cw.fileHeader.TotalChunks {
 				cw.tar.Close()
 				cw.gzip.Close()
 				cw.file.Close()

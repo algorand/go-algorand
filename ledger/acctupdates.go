@@ -322,7 +322,7 @@ func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 				if err != nil {
 					return rnd, err
 				}
-				hash := accountHashBuilder(addr, accountData, protocol.Encode(&accountData))
+				hash := accountHashBuilder(addr, accountData, accountBytes)
 				added, err := trie.Add(hash)
 				if err != nil {
 					panic(fmt.Errorf("accountsInitialize was unable to add changes to trie: %v", err))
@@ -678,10 +678,10 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Roun
 			if err != nil {
 				return err
 			}
-			/*err = au.accountsUpdateBalaces(balancesHashTx, au.deltas[i])
+			err = au.accountsUpdateBalaces(balancesHashTx, au.deltas[i])
 			if err != nil {
 				return err
-			}*/
+			}
 
 			for aidx := range au.assetDeltas[i] {
 				assetFlushcount[aidx] = assetFlushcount[aidx] + 1
