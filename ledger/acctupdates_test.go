@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"testing"
 	"time"
+	"runtime"
 
 	"github.com/stretchr/testify/require"
 
@@ -165,6 +166,9 @@ func checkAcctUpdatesConsistency(t *testing.T, au *accountUpdates) {
 }
 
 func TestAcctUpdates(t *testing.T) {
+	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+		t.Skip("This test is too slow on ARM and causes travis builds to time out")
+	}
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	ml := makeMockLedgerForTracker(t)
