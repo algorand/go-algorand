@@ -42,6 +42,7 @@ type TransactionPool struct {
 	logAssembleStats     bool
 	expFeeFactor         uint64
 	txPoolMaxSize        int
+	ledger               *ledger.Ledger
 
 	mu                     deadlock.Mutex
 	cond                   sync.Cond
@@ -49,7 +50,6 @@ type TransactionPool struct {
 	pendingBlockEvaluator  *ledger.BlockEvaluator
 	numPendingWholeBlocks  basics.Round
 	feeThresholdMultiplier uint64
-	ledger                 *ledger.Ledger
 	statusCache            *statusCache
 
 	// pendingMu protects pendingTxGroups and pendingTxids
@@ -564,22 +564,26 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 // take longer than deadline to finish.
 func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Time) (*ledger.ValidatedBlock, error) {
 	start := time.Now()
+
+	pool.pendingMu.RLock()
+	pending := pool.pendingTxGroups
+	pendingCount := pool.pendingCountNoLock()
+	pool.pendingMu.RUnlock()
+
 	prev, err := pool.ledger.BlockHdr(round - 1)
 	if err != nil {
 		return nil, fmt.Errorf("could not make proposals at round %d: could not read block from ledger: %v", round, err)
 	}
-
 	newEmptyBlk := bookkeeping.MakeBlock(prev)
 
 	// Start the block evaluator, hinting its payset length based on the
 	// transaction pool's block evaluator
-	eval, err := pool.ledger.StartEvaluator(newEmptyBlk.BlockHeader, pool.PendingCount())
+	eval, err := pool.ledger.StartEvaluator(newEmptyBlk.BlockHeader, pendingCount)
 	if err != nil {
 		return nil, fmt.Errorf("could not make proposals at round %d: could not start evaluator: %v", round, err)
 	}
 
 	var stats telemetryspec.AssembleBlockMetrics
-	pending := pool.Pending()
 	stats.StartCount = len(pending)
 	stats.StopReason = telemetryspec.AssembleBlockEmpty
 	first := true
@@ -587,7 +591,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 
 	// retrieve a list of all the previously known txid in the current round. We want to retrieve it here so we could avoid
 	// exercising the ledger read lock.
-	prevRoundTxIds := pool.ledger.GetRoundTxIds(pool.ledger.Latest())
+	prevRoundTxIds := pool.ledger.GetRoundTxIds(round - 1)
 
 	for len(pending) > 0 {
 		txgroup := pending[0]
@@ -667,7 +671,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 
 	// Measure time here because we want to know how close to deadline we are
 	dt := time.Now().Sub(start)
-	stats.AssembleBlockStats.Nanoseconds = dt.Nanoseconds()
+	stats.Nanoseconds = dt.Nanoseconds()
 
 	lvb, err := eval.GenerateBlock()
 	if err != nil {
