@@ -104,6 +104,20 @@ func TestAccountsCanSendMoneyAcrossUpgradeV15toV16(t *testing.T) {
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV15Upgrade.json"))
 }
 
+func TestAccountsCanSendMoneyAcrossUpgradeV21toV22(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
+	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV21Upgrade.json"))
+}
+
+func TestAccountsCanSendMoneyAcrossUpgradeV22toV23(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
+	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV22Upgrade.json"))
+}
+
 // ConsensusTestFastUpgrade is meant for testing of protocol upgrades:
 // during testing, it is equivalent to another protocol with the exception
 // of the upgrade parameters, which allow for upgrades to take place after
@@ -120,6 +134,8 @@ func generateFastUpgradeConsensus() (fastUpgradeProtocols config.ConsensusProtoc
 		fastParams.UpgradeVoteRounds = 5
 		fastParams.UpgradeThreshold = 3
 		fastParams.DefaultUpgradeWaitRounds = 5
+		fastParams.MinUpgradeWaitRounds = 0
+		fastParams.MaxUpgradeWaitRounds = 0
 		fastParams.MaxVersionStringLen += len(consensusTestFastUpgrade(""))
 		fastParams.ApprovedUpgrades = make(map[protocol.ConsensusVersion]uint64)
 
