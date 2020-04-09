@@ -19,11 +19,14 @@ package main
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"github.com/algorand/go-algorand/data/basics"
 	"math/rand"
 	"strconv"
 	"strings"
 
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 )
 
@@ -33,66 +36,237 @@ type cdtDebugger struct {
 	contextID   int
 	scriptID    string
 	program     string
+	offsets     []logic.PCOffset
 	lines       []string
 	currentLine int
+	txnGroup    []transactions.SignedTxn
+	groupIndex  int
+}
+
+func makeObject(name, id string) RuntimePropertyDescriptor {
+	return RuntimePropertyDescriptor{
+		Name:         name,
+		Configurable: false,
+		Writable:     false,
+		Enumerable:   true,
+		IsOwn:        true,
+		Value: &RuntimeRemoteObject{
+			Type:        "object",
+			ClassName:   "Object",
+			Description: "Object",
+			ObjectID:    id,
+		},
+	}
+}
+
+func makeArray(name string, length int, id string) RuntimePropertyDescriptor {
+	return RuntimePropertyDescriptor{
+		Name:         name,
+		Configurable: false,
+		Writable:     false,
+		Enumerable:   true,
+		IsOwn:        true,
+		Value: &RuntimeRemoteObject{
+			Type:        "object",
+			Subtype:     "array",
+			ClassName:   "Array",
+			Description: fmt.Sprintf("Array(%d)", length),
+			ObjectID:    id,
+		},
+	}
+}
+
+func makePrimitive(field fieldDesc) RuntimePropertyDescriptor {
+	return RuntimePropertyDescriptor{
+		Name:         field.Name,
+		Configurable: false,
+		Writable:     false,
+		Enumerable:   true,
+		IsOwn:        true,
+		Value: &RuntimeRemoteObject{
+			Type:  field.Type,
+			Value: field.Value,
+		},
+	}
+}
+
+// tealTypeMap maps TealType to JS type
+var tealTypeMap = map[basics.TealType]string{
+	basics.TealBytesType: "string",
+	basics.TealUintType:  "number",
+}
+
+type fieldDesc struct {
+	Name  string
+	Value string
+	Type  string
+}
+
+func prepareTxn(txn *transactions.Transaction, groupIndex int) []fieldDesc {
+	result := make([]fieldDesc, 0, len(logic.TxnFieldNames))
+	for field, name := range logic.TxnFieldNames {
+		if field == int(logic.FirstValidTime) ||
+			field == int(logic.Accounts) ||
+			field == int(logic.ApplicationArgs) {
+			continue
+		}
+		var value string
+		var valType string = "string"
+		tv, err := logic.TxnFieldToTealValue(txn, groupIndex, logic.TxnField(field))
+		if err != nil {
+			value = err.Error()
+			valType = "undefined"
+		} else {
+			value = tv.String()
+			valType = tealTypeMap[tv.Type]
+		}
+		result = append(result, fieldDesc{name, value, valType})
+	}
+	return result
+}
+
+func (cdt *cdtDebugger) makeTxnPreview(groupIndex int) RuntimeObjectPreview {
+	var prop []RuntimePropertyPreview
+	if len(cdt.txnGroup) > 0 {
+		fields := prepareTxn(&cdt.txnGroup[groupIndex].Txn, groupIndex)
+		for _, field := range fields {
+			v := RuntimePropertyPreview{
+				Name:  field.Name,
+				Value: field.Value,
+				Type:  field.Type,
+			}
+			prop = append(prop, v)
+		}
+	}
+
+	p := RuntimeObjectPreview{Type: "object", Overflow: true, Properties: prop}
+	return p
+}
+
+func (cdt *cdtDebugger) makeGtxnPreview() RuntimeObjectPreview {
+	var prop []RuntimePropertyPreview
+	if len(cdt.txnGroup) > 0 {
+		for i := 0; i < len(cdt.txnGroup); i++ {
+			v := RuntimePropertyPreview{
+				Name:  strconv.Itoa(i),
+				Value: "Object",
+				Type:  "object",
+			}
+			prop = append(prop, v)
+		}
+	}
+	p := RuntimeObjectPreview{
+		Type:        "object",
+		Subtype:     "array",
+		Description: fmt.Sprintf("Array(%d)", len(cdt.txnGroup)),
+		Overflow:    false,
+		Properties:  prop}
+	return p
+}
+
+const localScopeObjID = "localScopeObjId"
+const txnObjID = "txnObjID"
+const gtxnObjID = "gtxnObjID"
+const stackObjID = "stackObjID"
+const scratchObjID = "scratchObjID"
+
+var gtxnObjIDPrefix = fmt.Sprintf("%s_gid_", gtxnObjID)
+
+func encodeGroupTxnID(groupIndex int) string {
+	return gtxnObjIDPrefix + strconv.Itoa(groupIndex)
+}
+
+func decodeGroupTxnID(objID string) (int, bool) {
+	if strings.HasPrefix(objID, gtxnObjIDPrefix) {
+		if val, err := strconv.ParseInt(objID[len(gtxnObjIDPrefix):], 10, 32); err == nil {
+			return int(val), true
+		}
+	}
+	return 0, false
+}
+
+func makeScope(cdt *cdtDebugger, preview bool) (descr []RuntimePropertyDescriptor) {
+	txn := makeObject("txn", txnObjID)
+	gtxn := makeArray("gtxn", len(cdt.txnGroup), gtxnObjID)
+	if preview {
+		txnPreview := cdt.makeTxnPreview(cdt.groupIndex)
+		gtxnPreview := cdt.makeGtxnPreview()
+		txn.Value.Preview = &txnPreview
+		gtxn.Value.Preview = &gtxnPreview
+	}
+
+	descr = []RuntimePropertyDescriptor{
+		txn,
+		gtxn,
+	}
+	return descr
+}
+
+func makeTxn(cdt *cdtDebugger, preview bool) (descr []RuntimePropertyDescriptor) {
+	if len(cdt.txnGroup) > 0 && cdt.groupIndex < len(cdt.txnGroup) && cdt.groupIndex >= 0 {
+		return makeTxnImpl(&cdt.txnGroup[cdt.groupIndex].Txn, cdt.groupIndex, preview)
+	}
+	return
+}
+
+func makeTxnImpl(txn *transactions.Transaction, groupIndex int, preview bool) (descr []RuntimePropertyDescriptor) {
+	fields := prepareTxn(txn, groupIndex)
+	for _, field := range fields {
+		descr = append(descr, makePrimitive(field))
+	}
+	return
+}
+
+func makeTxnGroup(cdt *cdtDebugger, preview bool) (descr []RuntimePropertyDescriptor) {
+	if len(cdt.txnGroup) > 0 {
+		for i := 0; i < len(cdt.txnGroup); i++ {
+			item := makeObject(strconv.Itoa(i), encodeGroupTxnID(i))
+			if preview {
+				txnPreview := cdt.makeTxnPreview(i)
+				item.Value.Preview = &txnPreview
+			}
+			descr = append(descr, item)
+		}
+	}
+	return
+}
+func makeStack(cdt *cdtDebugger, preview bool) (descr []RuntimePropertyDescriptor) {
+	return
+}
+func makeScratch(cdt *cdtDebugger, preview bool) (descr []RuntimePropertyDescriptor) {
+	return
+}
+
+type objectDescFn func(cdt *cdtDebugger, preview bool) []RuntimePropertyDescriptor
+
+var objectDescMap = map[string]objectDescFn{
+	localScopeObjID: makeScope,
+	txnObjID:        makeTxn,
+	gtxnObjID:       makeTxnGroup,
+	stackObjID:      makeStack,
+	scratchObjID:    makeScratch,
 }
 
 func (cdt *cdtDebugger) getObjectDescriptor(objID string, preview bool) (descr []RuntimePropertyDescriptor, err error) {
-	if objID == "localscope" {
-		descr = []RuntimePropertyDescriptor{
-			RuntimePropertyDescriptor{
-				Name:         "txn",
-				Configurable: false,
-				Writable:     true,
-				Value: &RuntimeRemoteObject{
-					Type:        "object",
-					ClassName:   "Object",
-					Description: "Current transaction",
-					ObjectID:    "txnobj",
-				},
-			},
-			RuntimePropertyDescriptor{
-				Name:         "gtxn",
-				Configurable: false,
-				Writable:     true,
-				Value: &RuntimeRemoteObject{
-					Type:        "object",
-					ClassName:   "Object",
-					Description: "Transaction group",
-					ObjectID:    "gtxnobj",
-				},
-			},
+	maker, ok := objectDescMap[objID]
+	if !ok {
+		if idx, ok := decodeGroupTxnID(objID); ok {
+			if idx >= len(cdt.txnGroup) || idx < 0 {
+				err = fmt.Errorf("invalid group idx: %d", idx)
+				return
+			}
+			if len(cdt.txnGroup) > 0 {
+				return makeTxnImpl(&cdt.txnGroup[idx].Txn, idx, preview), nil
+			}
 		}
-	} else if objID == "txnobj" {
-		descr = []RuntimePropertyDescriptor{
-			RuntimePropertyDescriptor{
-				Name:         "Sender",
-				Configurable: false,
-				Writable:     true,
-				IsOwn:        true,
-				Value: &RuntimeRemoteObject{
-					Type:  "string",
-					Value: "test sender",
-				},
-			},
-			RuntimePropertyDescriptor{
-				Name:         "Receiver",
-				Configurable: false,
-				Writable:     true,
-				IsOwn:        true,
-				Value: &RuntimeRemoteObject{
-					Type:  "string",
-					Value: "test receiver",
-				},
-			},
-		}
-	} else {
+		// might be nested object in array, parse and call
 		err = fmt.Errorf("unk object id: %s", objID)
+		return
 	}
-	return descr, err
+	return maker(cdt, preview), nil
 }
 
-func (cdt *cdtDebugger) handleCDTRequest(req *ChromeRequest, state *logic.DebuggerState) (ChromeResponse, error) {
+func (cdt *cdtDebugger) handleCDTRequest(req *ChromeRequest) (ChromeResponse, error) {
 	empty := make(map[string]interface{})
 
 	switch req.Method {
@@ -111,7 +285,7 @@ func (cdt *cdtDebugger) handleCDTRequest(req *ChromeRequest, state *logic.Debugg
 		if !ok {
 			return ChromeResponse{}, fmt.Errorf("getScriptSource failed: no scriptId")
 		}
-		source["scriptSource"] = state.Disassembly
+		source["scriptSource"] = cdt.program
 		return ChromeResponse{ID: req.ID, Result: source}, nil
 	case "Runtime.getProperties":
 		p := req.Params.(map[string]interface{})
@@ -129,8 +303,15 @@ func (cdt *cdtDebugger) handleCDTRequest(req *ChromeRequest, state *logic.Debugg
 
 		descr, err := cdt.getObjectDescriptor(objID, preview)
 		if err != nil {
+			fmt.Println("getObjectDescriptor error: " + err.Error())
 			return ChromeResponse{}, err
 		}
+		data, err := json.Marshal(descr)
+		if err != nil {
+			fmt.Println("getObjectDescriptor json error: " + err.Error())
+			return ChromeResponse{}, err
+		}
+		fmt.Printf("Descr object: %s\n", string(data))
 		result := map[string][]RuntimePropertyDescriptor{
 			"result": descr,
 		}
@@ -164,7 +345,7 @@ func (cdt *cdtDebugger) handleCDTRequest(req *ChromeRequest, state *logic.Debugg
 	case "Debugger.setBreakpointByUrl":
 		p := req.Params.(map[string]interface{})
 		bpLine := int(p["lineNumber"].(float64))
-		pc := cdt.lineToPC(bpLine, state)
+		pc := cdt.lineToPC(bpLine)
 		fmt.Printf("setBp line %d, pc %d\n", bpLine, pc)
 		cdt.rctx.setBreakpoint(ExecID(cdt.uuid), pc)
 		result := make(map[string]interface{})
@@ -175,7 +356,7 @@ func (cdt *cdtDebugger) handleCDTRequest(req *ChromeRequest, state *logic.Debugg
 		cdt.rctx.resume(ExecID(cdt.uuid))
 		return ChromeResponse{ID: req.ID, Result: empty}, nil
 	case "Debugger.stepOver", "Debugger.stepInto", "Debugger.stepOut":
-		nextpc := cdt.lineToPC(cdt.currentLine+1, state)
+		nextpc := cdt.lineToPC(cdt.currentLine + 1)
 		fmt.Printf("step line %d, pc %d\n", cdt.currentLine+1, nextpc)
 		cdt.rctx.setBreakpoint(ExecID(cdt.uuid), nextpc)
 		cdt.rctx.resume(ExecID(cdt.uuid))
@@ -238,7 +419,7 @@ func (cdt *cdtDebugger) makeDebuggerPausedEvent() DebuggerPausedEvent {
 			Type:        "object",
 			ClassName:   "Object",
 			Description: "Object",
-			ObjectID:    "localscope",
+			ObjectID:    localScopeObjID,
 		},
 		StartLocation: &DebuggerLocation{
 			ScriptID:     cdt.scriptID,
@@ -276,36 +457,35 @@ func (cdt *cdtDebugger) makeDebuggerPausedEvent() DebuggerPausedEvent {
 	return evPaused
 }
 
-func (cdt *cdtDebugger) lineToPC(line int, state *logic.DebuggerState) int {
-	if len(state.PCOffset) == 0 || line < 1 {
+func (cdt *cdtDebugger) lineToPC(line int) int {
+	if len(cdt.offsets) == 0 || line < 1 {
 		return 0
 	}
 
 	offset := len(strings.Join(cdt.lines[:line], "\n"))
 
-	for i := 0; i < len(state.PCOffset); i++ {
-		if state.PCOffset[i].Offset >= offset {
-			return state.PCOffset[i].PC
+	for i := 0; i < len(cdt.offsets); i++ {
+		if cdt.offsets[i].Offset >= offset {
+			return cdt.offsets[i].PC
 		}
 	}
 	return 0
 }
 
-func (cdt *cdtDebugger) pcToLine(state *logic.DebuggerState) int {
-	if len(state.PCOffset) == 0 {
+func (cdt *cdtDebugger) pcToLine(pc int) int {
+	if len(cdt.offsets) == 0 {
 		return 0
 	}
 
-	pc := state.PC
 	offset := 0
-	for i := 0; i < len(state.PCOffset); i++ {
-		if state.PCOffset[i].PC >= pc {
-			offset = state.PCOffset[i].Offset
+	for i := 0; i < len(cdt.offsets); i++ {
+		if cdt.offsets[i].PC >= pc {
+			offset = cdt.offsets[i].Offset
 			break
 		}
 	}
 	if offset == 0 {
-		offset = state.PCOffset[len(state.PCOffset)-1].Offset
+		offset = cdt.offsets[len(cdt.offsets)-1].Offset
 	}
 
 	return len(strings.Split(cdt.program[:offset], "\n")) - 1

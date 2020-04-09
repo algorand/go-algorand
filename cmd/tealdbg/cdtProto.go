@@ -117,11 +117,11 @@ type RuntimeObjectPreview struct {
 
 // RuntimePropertyPreview type
 type RuntimePropertyPreview struct {
-	Name         string               `json:"name"`                   // Property name.
-	Type         string               `json:"type"`                   // Object type. Accessor means that the property itself is an accessor property.
-	Value        string               `json:"value,omitempty"`        // User-friendly property value string.
-	ValuePreview RuntimeObjectPreview `json:"valuePreview,omitempty"` // Nested value preview.
-	Subtype      string               `json:"subtype,omitempty"`      // Object subtype hint. Specified for `object` type values only.
+	Name         string                `json:"name"`                   // Property name.
+	Type         string                `json:"type"`                   // Object type. Accessor means that the property itself is an accessor property.
+	Value        string                `json:"value,omitempty"`        // User-friendly property value string.
+	ValuePreview *RuntimeObjectPreview `json:"valuePreview,omitempty"` // Nested value preview.
+	Subtype      string                `json:"subtype,omitempty"`      // Object subtype hint. Specified for `object` type values only.
 }
 
 // RuntimeEntryPreview type
@@ -134,7 +134,7 @@ type RuntimeEntryPreview struct {
 type RuntimePropertyDescriptor struct {
 	Name         string               `json:"name"`                // Property name or symbol description.
 	Value        *RuntimeRemoteObject `json:"value,omitempty"`     // The value associated with the property.
-	Writable     bool                 `json:"writable,omitempty"`  // True if the value associated with the property may be changed (data descriptors only).
+	Writable     bool                 `json:"writable"`            // True if the value associated with the property may be changed (data descriptors only).
 	Get          *RuntimeRemoteObject `json:"get,omitempty"`       // A function which serves as a getter for the property, or `undefined` if there is no getter (accessor descriptors only).
 	Set          *RuntimeRemoteObject `json:"set,omitempty"`       // A function which serves as a setter for the property, or `undefined` if there is no setter (accessor descriptors only).
 	Configurable bool                 `json:"configurable"`        // True if the type of this property descriptor may be changed and if the property may be deleted from the corresponding object.

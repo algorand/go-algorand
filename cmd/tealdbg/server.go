@@ -104,8 +104,6 @@ var execContextCounter int32 = 0
 func (rctx *requestContext) register(state logic.DebuggerState) {
 	var exec execContext
 
-	fmt.Printf("register called: %v\n", state)
-
 	// Allocate a default debugConfig (don't break)
 	exec.debugConfig = debugConfig{
 		BreakOnPC: -1,
@@ -405,8 +403,8 @@ func (rctx *requestContext) unregisterNotifications(id uint64) {
 }
 
 var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
+	ReadBufferSize:  10240,
+	WriteBufferSize: 10240,
 }
 
 func (rctx *requestContext) subscribeHandler(w http.ResponseWriter, r *http.Request) {
@@ -467,9 +465,8 @@ func (rctx *requestContext) devtoolsWsHandler(w http.ResponseWriter, r *http.Req
 	done := make(chan struct{})
 	registred := make(chan struct{})
 
-	var program string
-	var programStateMu sync.Mutex
-	var programState logic.DebuggerState
+	var dbgStateMu sync.Mutex
+	var dbgState logic.DebuggerState
 
 	// Debugger notifications processing loop
 	go func() {
@@ -487,13 +484,12 @@ func (rctx *requestContext) devtoolsWsHandler(w http.ResponseWriter, r *http.Req
 					close(done)
 				case "registered":
 					// no mutex, the access already synchronized by "registred" chan
-					program = notification.DebuggerState.Disassembly
-					programState = notification.DebuggerState
+					dbgState = notification.DebuggerState
 					registred <- struct{}{}
 				case "updated":
-					programStateMu.Lock()
-					programState = notification.DebuggerState
-					programStateMu.Unlock()
+					dbgStateMu.Lock()
+					dbgState = notification.DebuggerState
+					dbgStateMu.Unlock()
 					cdtUpdatedCh <- struct{}{}
 				default:
 					fmt.Println("Unk event: " + notification.Event)
@@ -505,15 +501,21 @@ func (rctx *requestContext) devtoolsWsHandler(w http.ResponseWriter, r *http.Req
 	// wait until initial "registred" event
 	<-registred
 
+	dbgStateMu.Lock()
 	cdtd := cdtDebugger{
 		uuid:        uuid,
 		rctx:        rctx,
 		contextID:   int(exec.execContextID),
 		scriptID:    "52",
-		program:     program,
-		lines:       strings.Split(program, "\n"),
-		currentLine: 1, // start at line 1
+		program:     dbgState.Disassembly,
+		offsets:     dbgState.PCOffset,
+		lines:       strings.Split(dbgState.Disassembly, "\n"),
+		currentLine: 1,
+		// execution environment
+		txnGroup:   dbgState.TxnGroup,
+		groupIndex: dbgState.GroupIndex,
 	}
+	dbgStateMu.Unlock()
 	// Chrome Devtools reader
 	go func() {
 		for {
@@ -536,11 +538,7 @@ func (rctx *requestContext) devtoolsWsHandler(w http.ResponseWriter, r *http.Req
 			json.Unmarshal(msg[:n], &cdtReq)
 			fmt.Printf("%v\n", cdtReq)
 
-			programStateMu.Lock()
-			pgst := programState
-			programStateMu.Unlock()
-
-			if cdtResp, err := cdtd.handleCDTRequest(&cdtReq, &pgst); err == nil {
+			if cdtResp, err := cdtd.handleCDTRequest(&cdtReq); err == nil {
 				cdtRespCh <- cdtResp
 			} else {
 				fmt.Println(err.Error())
@@ -578,10 +576,9 @@ func (rctx *requestContext) devtoolsWsHandler(w http.ResponseWriter, r *http.Req
 					return
 				}
 			case <-cdtUpdatedCh:
-				programStateMu.Lock()
-				pgst := programState
-				programStateMu.Unlock()
-				cdtd.currentLine = cdtd.pcToLine(&pgst)
+				dbgStateMu.Lock()
+				cdtd.currentLine = cdtd.pcToLine(dbgState.PC)
+				dbgStateMu.Unlock()
 				evPaused := cdtd.makeDebuggerPausedEvent()
 				cdtEventCh <- &evPaused
 			case <-done:

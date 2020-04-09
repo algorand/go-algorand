@@ -24,6 +24,7 @@ import (
 	"net/http"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/data/transactions"
 
 	"github.com/satori/go.uuid"
 )
@@ -43,13 +44,15 @@ type PCOffset struct {
 // DebuggerState is a representation of the evaluation context that we encode
 // to json and send to tealdbg
 type DebuggerState struct {
-	PC          int            `json:"pc"`
-	Stack       []v1.TealValue `json:"stack"`
-	Scratch     []v1.TealValue `json:"scratch"`
-	Disassembly string         `json:"disasm"`
-	PCOffset    []PCOffset     `json:"pctooffset"`
-	ExecID      string         `json:"execid"`
-	Error       string         `json:"error"`
+	PC          int                      `json:"pc"`
+	Stack       []v1.TealValue           `json:"stack"`
+	Scratch     []v1.TealValue           `json:"scratch"`
+	Disassembly string                   `json:"disasm"`
+	PCOffset    []PCOffset               `json:"pctooffset"`
+	ExecID      string                   `json:"execid"`
+	Error       string                   `json:"error"`
+	TxnGroup    []transactions.SignedTxn `json:"txngroup"`
+	GroupIndex  int                      `json:"gindex"`
 }
 
 func (cx *evalContext) debugState() *DebuggerState {
@@ -100,6 +103,12 @@ func (cx *evalContext) debugState() *DebuggerState {
 
 	ds.Stack = stack
 	ds.Scratch = scratch
+	ds.GroupIndex = cx.GroupIndex
+	ds.TxnGroup = make([]transactions.SignedTxn, len(cx.TxnGroup))
+	for i := 0; i < len(cx.TxnGroup); i++ {
+		ds.TxnGroup[i] = cx.TxnGroup[i]
+	}
+
 	return ds
 }
 
