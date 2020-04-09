@@ -167,6 +167,10 @@ func (tx Transaction) Sign(secrets *crypto.SignatureSecrets) SignedTxn {
 		Txn: tx,
 		Sig: sig,
 	}
+	// Set the AuthAddr if the signing key doesn't match the transaction sender
+	if basics.Address(secrets.SignatureVerifier) != tx.Sender {
+		s.AuthAddr = basics.Address(secrets.SignatureVerifier)
+	}
 	return s
 }
 

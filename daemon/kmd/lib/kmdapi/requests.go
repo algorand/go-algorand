@@ -163,6 +163,7 @@ type APIV1POSTTransactionSignRequest struct {
 	WalletHandleToken string `json:"wallet_handle_token"`
 	// swagger:strfmt byte
 	Transaction    []byte `json:"transaction"`
+	PublicKey      crypto.PublicKey `json:"public_key"`
 	WalletPassword string `json:"wallet_password"`
 }
 
