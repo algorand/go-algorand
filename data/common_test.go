@@ -36,7 +36,17 @@ var poolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x
 var genesisHash = crypto.Digest{0xff, 0xfe, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe}
 var genesisID = "testingid"
 
+var proto = config.Consensus[protocol.ConsensusCurrentVersion]
+
+const mockBalancesMinBalance = 1000
 const defaultRewardUnit = 1e6
+
+func keypair() *crypto.SignatureSecrets {
+	var seed crypto.Seed
+	crypto.RandBytes(seed[:])
+	s := crypto.GenerateSignatureSecrets(seed)
+	return s
+}
 
 func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*Ledger, []account.Root, []account.Participation, []transactions.SignedTxn, func()) {
 	P := numAccounts               // n accounts
