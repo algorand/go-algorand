@@ -806,9 +806,10 @@ func testLedgerRegressionFaultyLeaseFirstValidCheck2f3880f7(t *testing.T, versio
 
 	genesisInitState, initSecrets := testGenerateInitState(t, version)
 	const inMem = true
-	const archival = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
 	log := logging.TestingLog(t)
-	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, archival)
+	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
 	a.NoError(err, "could not open ledger")
 	defer l.Close()
 
