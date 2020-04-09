@@ -669,14 +669,14 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 		stats.AverageFee = totalFees / uint64(stats.IncludedCount)
 	}
 
-	// Measure time here because we want to know how close to deadline we are
-	dt := time.Now().Sub(start)
-	stats.Nanoseconds = dt.Nanoseconds()
-
 	lvb, err := eval.GenerateBlock()
 	if err != nil {
 		return nil, fmt.Errorf("could not make proposals at round %d: could not finish evaluator: %v", round, err)
 	}
+
+	// Measure time here because we want to know how close to deadline we are
+	dt := time.Now().Sub(start)
+	stats.Nanoseconds = dt.Nanoseconds()
 
 	if pool.logAssembleStats {
 		var details struct {
