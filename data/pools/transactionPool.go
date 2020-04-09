@@ -579,93 +579,90 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 	}
 
 	var stats telemetryspec.AssembleBlockMetrics
-	// stats.AssembleBlockStats = pool.ledger.AssemblePayset(pool, eval, deadline)
-	{
-		pending := pool.Pending()
-		stats.StartCount = len(pending)
-		stats.StopReason = telemetryspec.AssembleBlockEmpty
-		first := true
-		totalFees := uint64(0)
+	pending := pool.Pending()
+	stats.StartCount = len(pending)
+	stats.StopReason = telemetryspec.AssembleBlockEmpty
+	first := true
+	totalFees := uint64(0)
 
-		// retrieve a list of all the previously known txid in the current round. We want to retrieve it here so we could avoid
-		// exercising the ledger read lock.
-		prevRoundTxIds := pool.ledger.GetRoundTxIds(pool.ledger.Latest())
+	// retrieve a list of all the previously known txid in the current round. We want to retrieve it here so we could avoid
+	// exercising the ledger read lock.
+	prevRoundTxIds := pool.ledger.GetRoundTxIds(pool.ledger.Latest())
 
-		for len(pending) > 0 {
-			txgroup := pending[0]
-			pending = pending[1:]
+	for len(pending) > 0 {
+		txgroup := pending[0]
+		pending = pending[1:]
 
-			if len(txgroup) == 0 {
+		if len(txgroup) == 0 {
+			stats.InvalidCount++
+			continue
+		}
+
+		// if we already had this tx in the previous round, and haven't removed it yet from the txpool, that's fine.
+		// just skip that one.
+		if prevRoundTxIds[txgroup[0].ID()] {
+			stats.EarlyCommittedCount++
+			continue
+		}
+
+		if time.Now().After(deadline) {
+			stats.StopReason = telemetryspec.AssembleBlockTimeout
+			break
+		}
+
+		txgroupad := make([]transactions.SignedTxnWithAD, len(txgroup))
+		for i, tx := range txgroup {
+			txgroupad[i].SignedTxn = tx
+		}
+		err := eval.TransactionGroup(txgroupad)
+		if err == ledger.ErrNoSpace {
+			stats.StopReason = telemetryspec.AssembleBlockFull
+			break
+		}
+		if err != nil {
+			// GOAL2-255: Don't warn for common case of txn already being in ledger
+			switch err.(type) {
+			case ledger.TransactionInLedgerError:
+				stats.CommittedCount++
+			case transactions.MinFeeError:
 				stats.InvalidCount++
-				continue
+				logging.Base().Infof("Cannot add pending transaction to block: %v", err)
+			default:
+				stats.InvalidCount++
+				logging.Base().Warnf("Cannot add pending transaction to block: %v", err)
 			}
+		} else {
+			for _, txn := range txgroup {
+				fee := txn.Txn.Fee.Raw
+				encodedLen := txn.GetEncodedLength()
 
-			// if we already had this tx in the previous round, and haven't removed it yet from the txpool, that's fine.
-			// just skip that one.
-			if prevRoundTxIds[txgroup[0].ID()] {
-				stats.EarlyCommittedCount++
-				continue
-			}
+				stats.IncludedCount++
+				totalFees += fee
 
-			if time.Now().After(deadline) {
-				stats.StopReason = telemetryspec.AssembleBlockTimeout
-				break
-			}
-
-			txgroupad := make([]transactions.SignedTxnWithAD, len(txgroup))
-			for i, tx := range txgroup {
-				txgroupad[i].SignedTxn = tx
-			}
-			err := eval.TransactionGroup(txgroupad)
-			if err == ledger.ErrNoSpace {
-				stats.StopReason = telemetryspec.AssembleBlockFull
-				break
-			}
-			if err != nil {
-				// GOAL2-255: Don't warn for common case of txn already being in ledger
-				switch err.(type) {
-				case ledger.TransactionInLedgerError:
-					stats.CommittedCount++
-				case transactions.MinFeeError:
-					stats.InvalidCount++
-					logging.Base().Infof("Cannot add pending transaction to block: %v", err)
-				default:
-					stats.InvalidCount++
-					logging.Base().Warnf("Cannot add pending transaction to block: %v", err)
-				}
-			} else {
-				for _, txn := range txgroup {
-					fee := txn.Txn.Fee.Raw
-					encodedLen := txn.GetEncodedLength()
-
-					stats.IncludedCount++
-					totalFees += fee
-
-					if first {
-						first = false
+				if first {
+					first = false
+					stats.MinFee = fee
+					stats.MaxFee = fee
+					stats.MinLength = encodedLen
+					stats.MaxLength = encodedLen
+				} else {
+					if fee < stats.MinFee {
 						stats.MinFee = fee
+					} else if fee > stats.MaxFee {
 						stats.MaxFee = fee
-						stats.MinLength = encodedLen
-						stats.MaxLength = encodedLen
-					} else {
-						if fee < stats.MinFee {
-							stats.MinFee = fee
-						} else if fee > stats.MaxFee {
-							stats.MaxFee = fee
-						}
-						if encodedLen < stats.MinLength {
-							stats.MinLength = encodedLen
-						} else if encodedLen > stats.MaxLength {
-							stats.MaxLength = encodedLen
-						}
 					}
-					stats.TotalLength += uint64(encodedLen)
+					if encodedLen < stats.MinLength {
+						stats.MinLength = encodedLen
+					} else if encodedLen > stats.MaxLength {
+						stats.MaxLength = encodedLen
+					}
 				}
+				stats.TotalLength += uint64(encodedLen)
 			}
 		}
-		if stats.IncludedCount != 0 {
-			stats.AverageFee = totalFees / uint64(stats.IncludedCount)
-		}
+	}
+	if stats.IncludedCount != 0 {
+		stats.AverageFee = totalFees / uint64(stats.IncludedCount)
 	}
 
 	// Measure time here because we want to know how close to deadline we are
