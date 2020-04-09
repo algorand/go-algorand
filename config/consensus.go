@@ -192,7 +192,12 @@ type ConsensusParams struct {
 	MaxTxGroupSize int
 
 	// support for transaction leases
+	// note: if FixTransactionLeases is not set, the transaction
+	// leases supported are faulty; specifically, they do not
+	// enforce exclusion correctly when the FirstValid of
+	// transactions do not match.
 	SupportTransactionLeases bool
+	FixTransactionLeases     bool
 
 	// 0 for no support, otherwise highest version supported
 	LogicSigVersion uint64
@@ -551,9 +556,18 @@ func initConsensusProtocols() {
 	// v21 can be upgraded to v22.
 	v21.ApprovedUpgrades[protocol.ConsensusV22] = 0
 
+	// v23 is an upgrade which fixes the behavior of leases so that
+	// it conforms with the intended spec.
+	v23 := v22
+	v23.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	v23.FixTransactionLeases = true
+	Consensus[protocol.ConsensusV23] = v23
+	// v22 can be upgraded to v23.
+	v22.ApprovedUpgrades[protocol.ConsensusV23] = 10000
+
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v22
+	vFuture := v23
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
