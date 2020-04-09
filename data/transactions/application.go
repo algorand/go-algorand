@@ -395,6 +395,13 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, stev
 			GlobalStateSchema: ac.GlobalStateSchema,
 		}
 
+		// Update the cached TotalStateSchema for this account, used
+		// when computing MinBalance, since the creator has to store
+		// the global state
+		totalSchema := record.TotalAppSchema
+		totalSchema = totalSchema.AddSchema(ac.GlobalStateSchema)
+		record.TotalAppSchema = totalSchema
+
 		// Write back to the creator's balance record and continue
 		err = balances.Put(record)
 		if err != nil {
@@ -470,11 +477,20 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, stev
 			}
 		}
 
-		// Deallocate the AppLocalState and finish
+		// Fetch the (potentially updated) record
 		record, err = balances.Get(header.Sender, false)
 		if err != nil {
 			return err
 		}
+
+		// Update the TotalAppSchema used for MinBalance calculation,
+		// since the sender no longer has to store LocalState
+		totalSchema := record.TotalAppSchema
+		localSchema := record.AppLocalStates[appIdx].Schema
+		totalSchema = totalSchema.SubSchema(localSchema)
+		record.TotalAppSchema = totalSchema
+
+		// Deallocate the AppLocalState and finish
 		record.AppLocalStates = cloneAppLocalStates(record.AppLocalStates)
 		delete(record.AppLocalStates, appIdx)
 
@@ -507,6 +523,13 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, stev
 		record.AppLocalStates[appIdx] = basics.AppLocalState{
 			Schema: params.LocalStateSchema,
 		}
+
+		// Update the TotalAppSchema used for MinBalance calculation,
+		// since the sender must now store LocalState
+		totalSchema := record.TotalAppSchema
+		totalSchema = totalSchema.AddSchema(params.LocalStateSchema)
+		record.TotalAppSchema = totalSchema
+
 		err = balances.Put(record)
 		if err != nil {
 			return err
@@ -551,14 +574,21 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, stev
 		}
 
 		// If they haven't opted in, that's an error
-		_, ok := record.AppLocalStates[appIdx]
+		localState, ok := record.AppLocalStates[appIdx]
 		if !ok {
 			return fmt.Errorf("account %s is not opted in to app %d", header.Sender.String(), appIdx)
 		}
 
+		// Update the TotalAppSchema used for MinBalance calculation,
+		// since the sender no longer has to store LocalState
+		totalSchema := record.TotalAppSchema
+		totalSchema = totalSchema.SubSchema(localState.Schema)
+		record.TotalAppSchema = totalSchema
+
 		// Delete the local state
 		record.AppLocalStates = cloneAppLocalStates(record.AppLocalStates)
 		delete(record.AppLocalStates, appIdx)
+
 		err = balances.Put(record)
 		if err != nil {
 			return err
@@ -570,6 +600,13 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, stev
 		if err != nil {
 			return err
 		}
+
+		// Update the TotalAppSchema used for MinBalance calculation,
+		// since the creator no longer has to store the GlobalState
+		totalSchema := record.TotalAppSchema
+		globalSchema := record.AppParams[appIdx].GlobalStateSchema
+		totalSchema = totalSchema.SubSchema(globalSchema)
+		record.TotalAppSchema = totalSchema
 
 		// Delete the AppParams
 		record.AppParams = cloneAppParams(record.AppParams)

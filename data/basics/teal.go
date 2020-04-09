@@ -157,6 +157,20 @@ type StateSchema struct {
 	NumByteSlice uint64 `codec:"nbs"`
 }
 
+// AddSchema adds two StateSchemas together
+func (sm StateSchema) AddSchema(osm StateSchema) (out StateSchema) {
+	out.NumUint = AddSaturate(sm.NumUint, osm.NumUint)
+	out.NumByteSlice = AddSaturate(sm.NumByteSlice, osm.NumByteSlice)
+	return
+}
+
+// SubSchema subtracts one StateSchema from another
+func (sm StateSchema) SubSchema(osm StateSchema) (out StateSchema) {
+	out.NumUint = SubSaturate(sm.NumUint, osm.NumUint)
+	out.NumByteSlice = SubSaturate(sm.NumByteSlice, osm.NumByteSlice)
+	return
+}
+
 // NumEntries counts the total number of values that may be stored for particular schema
 func (sm StateSchema) NumEntries() (tot uint64) {
 	tot = AddSaturate(tot, sm.NumUint)

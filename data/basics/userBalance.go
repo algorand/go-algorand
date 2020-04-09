@@ -140,6 +140,11 @@ type AccountData struct {
 	AppLocalStates map[AppIndex]AppLocalState `codec:"appl,allocbound=-"`
 
 	AppParams map[AppIndex]AppParams `codec:"appp,allocbound=-"`
+
+	// TotalAppSchema stores the sum of all of the LocalStateSchemas
+	// and GlobalStateSchemas in this account, so that we don't have
+	// to iterate over all state schemas to compute MinBalance.
+	TotalAppSchema StateSchema `codec:"tsch"`
 }
 
 // AppLocalState stores the LocalState associated with an application. It also
@@ -346,21 +351,18 @@ func (u AccountData) MinBalance(proto *config.ConsensusParams) (res MicroAlgos) 
 	assetCost := MulSaturate(proto.MinBalance, uint64(len(u.Assets)))
 	min = AddSaturate(min, assetCost)
 
-	// Now, compute additional MinBalance for each app the account has opted in to,
-	// based on the local state schema and the base application opt-in cost
-	for _, state := range u.AppLocalStates {
-		schemaCost := state.Schema.MinBalance(proto)
-		min = AddSaturate(min, schemaCost.Raw)
-		min = AddSaturate(min, proto.AppFlatOptInMinBalance)
-	}
+	// Base MinBalance for each created application
+	appCreationCost := MulSaturate(proto.AppFlatParamsMinBalance, uint64(len(u.AppParams)))
+	min = AddSaturate(min, appCreationCost)
 
-	// Next, compute additional MinBalance for each *created* application based on
-	// the global state schema and base application creation cost
-	for _, params := range u.AppParams {
-		schemaCost := params.GlobalStateSchema.MinBalance(proto)
-		min = AddSaturate(min, schemaCost.Raw)
-		min = AddSaturate(min, proto.AppFlatParamsMinBalance)
-	}
+	// Base MinBalance for each opted in application
+	appOptInCost := MulSaturate(proto.AppFlatOptInMinBalance, uint64(len(u.AppLocalStates)))
+	min = AddSaturate(min, appOptInCost)
+
+	// MinBalance for state usage measured by LocalStateSchemas and
+	// GlobalStateSchemas
+	schemaCost := u.TotalAppSchema.MinBalance(proto)
+	min = AddSaturate(min, schemaCost.Raw)
 
 	res.Raw = min
 	return res
