@@ -388,7 +388,7 @@ func (pool *TransactionPool) Verified(txn transactions.SignedTxn, params verify.
 		return false
 	}
 	pendingSigTxn := cacheval.txn
-	return pendingSigTxn.Sig == txn.Sig && pendingSigTxn.Msig.Equal(txn.Msig) && pendingSigTxn.Lsig.Equal(&txn.Lsig)
+	return pendingSigTxn.Sig == txn.Sig && pendingSigTxn.Msig.Equal(txn.Msig) && pendingSigTxn.Lsig.Equal(&txn.Lsig) && (pendingSigTxn.AuthAddr == txn.AuthAddr)
 }
 
 // OnNewBlock excises transactions from the pool that are included in the specified Block or if they've expired
