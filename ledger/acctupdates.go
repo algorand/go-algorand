@@ -53,7 +53,7 @@ type modifiedCreatable struct {
 	// creator of the app/asset
 	creator basics.Address
 
-	// Keeps track of how many times this asset appears in
+	// Keeps track of how many times this app/asset appears in
 	// accountUpdates.creatableDeltas
 	ndeltas int
 }
@@ -523,18 +523,16 @@ func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta StateDelta) {
 		macct.ndeltas++
 		macct.data = data.new
 		au.accounts[addr] = macct
+	}
 
-		cdeltas := getChangedCreatables(addr, data)
-		for cidx, delta := range cdeltas {
-			mcreat := au.creatables[cidx]
-			mcreat.creator = addr
-			mcreat.created = delta.created
-			mcreat.ctype = delta.ctype
-			mcreat.ndeltas++
-			au.creatables[cidx] = mcreat
-
-			newCreatableDeltas[cidx] = delta
-		}
+	for cidx, cdelta := range delta.creatables {
+		mcreat := au.creatables[cidx]
+		mcreat.creator = cdelta.creator
+		mcreat.created = cdelta.created
+		mcreat.ctype = cdelta.ctype
+		mcreat.ndeltas++
+		au.creatables[cidx] = mcreat
+		newCreatableDeltas[cidx] = cdelta
 	}
 
 	if ot.Overflowed {
