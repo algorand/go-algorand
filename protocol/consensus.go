@@ -123,6 +123,11 @@ const ConsensusV22 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/57016b942f6d97e6d4c0688b373bb0a2fc85a1a2",
 )
 
+// ConsensusV23 fixes lease behavior.
+const ConsensusV23 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/e5f565421d720c6f75cdd186f7098495caf9101f",
+)
+
 // ConsensusFuture is a protocol that should not appear in any production
 // network, but is used to test features before they are released.
 const ConsensusFuture = ConsensusVersion(
@@ -135,7 +140,7 @@ const ConsensusFuture = ConsensusVersion(
 
 // ConsensusCurrentVersion is the latest version and should be used
 // when a specific version is not provided.
-const ConsensusCurrentVersion = ConsensusV22
+const ConsensusCurrentVersion = ConsensusV23
 
 // Error is used to indicate that an unsupported protocol has been detected.
 type Error ConsensusVersion
