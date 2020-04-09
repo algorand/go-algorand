@@ -45,6 +45,7 @@ type testParams struct {
 	name       string
 	program    []byte
 	schemaSize uint64
+	numApps    uint64
 }
 
 var testCases map[string]testParams
@@ -171,15 +172,25 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 				panic("unknown tx type")
 			}
 
-			tx.Sender = creator
-			tx.Note = []byte(fmt.Sprintf("%d,%d", i, j))
-			tx.GenesisHash = crypto.Digest{1}
+			numApps := uint64(1)
+			if i == 1 {
+				if params.numApps != 0 {
+					numApps = params.numApps
+				}
+			}
 
-			// add tx to block
-			var stxn transactions.SignedTxn
-			stxn.Txn = tx
-			stxn.Sig = crypto.Signature{1}
-			err = eval.Transaction(stxn, transactions.ApplyData{})
+			for k := uint64(0); k < numApps; k++ {
+				tx.Sender = creator
+				tx.Note = []byte(fmt.Sprintf("%d,%d,%d", i, j, k))
+				tx.GenesisHash = crypto.Digest{1}
+
+				// add tx to block
+				var stxn transactions.SignedTxn
+				stxn.Txn = tx
+				stxn.Sig = crypto.Signature{1}
+				err = eval.Transaction(stxn, transactions.ApplyData{})
+
+			}
 
 			// check if block is full
 			if err == ErrNoSpace {
@@ -264,6 +275,8 @@ func BenchmarkAppGlobal59BigDiffs(b *testing.B) {
 
 func BenchmarkAppInt1(b *testing.B) { benchmarkFullBlocks(testCases["int-1"], b) }
 
+func BenchmarkAppInt1ManyApps(b *testing.B) { benchmarkFullBlocks(testCases["int-1-many-apps"], b) }
+
 func BenchmarkPay(b *testing.B) { benchmarkFullBlocks(testCases["pay"], b) }
 
 func BenchmarkBigNoOp(b *testing.B) { benchmarkFullBlocks(testCases["big-noop"], b) }
@@ -297,6 +310,15 @@ func init() {
 		txType:  "app",
 		name:    fmt.Sprintf("int-1"),
 		program: progBytes,
+	}
+	testCases[params.name] = params
+
+	// Int 1 many apps
+	params = testParams{
+		txType:  "app",
+		name:    fmt.Sprintf("int-1-many-apps"),
+		program: progBytes,
+		numApps: 500,
 	}
 	testCases[params.name] = params
 
