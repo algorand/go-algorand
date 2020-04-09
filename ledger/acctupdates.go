@@ -425,7 +425,7 @@ func (au *accountUpdates) committedUpTo(rnd basics.Round) basics.Round {
 		creatableFlushcount = make(map[basics.CreatableIndex]int)
 		for i := uint64(0); i < offset; i++ {
 			rnd := au.dbRound + basics.Round(i) + 1
-			err := accountsNewRound(tx, rnd, au.deltas[i], au.roundTotals[i+1].RewardsLevel, au.protos[i+1])
+			err := accountsNewRound(tx, rnd, au.deltas[i], au.creatableDeltas[i], au.roundTotals[i+1].RewardsLevel, au.protos[i+1])
 			if err != nil {
 				return err
 			}

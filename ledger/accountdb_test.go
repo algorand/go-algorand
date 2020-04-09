@@ -196,7 +196,7 @@ func TestAccountDBRound(t *testing.T) {
 	for i := 1; i < 10; i++ {
 		updates, newaccts, _ := randomDeltas(20, accts, 0)
 		accts = newaccts
-		err = accountsNewRound(tx, basics.Round(i), updates, 0, proto)
+		err = accountsNewRound(tx, basics.Round(i), updates, nil, 0, proto)
 		require.NoError(t, err)
 		checkAccounts(t, tx, basics.Round(i), accts)
 	}

@@ -298,63 +298,7 @@ func accountsPutTotals(tx *sql.Tx, totals AccountTotals) error {
 	return err
 }
 
-// getChangedCreatables takes an accountDelta and returns which Creatables
-// were created and which were deleted
-func getChangedCreatables(creator basics.Address, delta accountDelta) map[basics.CreatableIndex]modifiedCreatable {
-	mods := make(map[basics.CreatableIndex]modifiedCreatable)
-
-	// Get assets that were created
-	for idx := range delta.new.AssetParams {
-		// AssetParams are in now the balance record now, but _weren't_ before
-		if _, ok := delta.old.AssetParams[idx]; !ok {
-			mods[basics.CreatableIndex(idx)] = modifiedCreatable{
-				created: true,
-				creator: creator,
-				ctype:   basics.AssetCreatable,
-			}
-		}
-	}
-
-	// Get assets that were deleted
-	for idx := range delta.old.AssetParams {
-		// AssetParams were in the balance record, but _aren't_ anymore
-		if _, ok := delta.new.AssetParams[idx]; !ok {
-			mods[basics.CreatableIndex(idx)] = modifiedCreatable{
-				created: false,
-				creator: creator,
-				ctype:   basics.AssetCreatable,
-			}
-		}
-	}
-
-	// Get apps that were created
-	for idx := range delta.new.AppParams {
-		// AppParams are in now the balance record now, but _weren't_ before
-		if _, ok := delta.old.AppParams[idx]; !ok {
-			mods[basics.CreatableIndex(idx)] = modifiedCreatable{
-				created: true,
-				creator: creator,
-				ctype:   basics.AppCreatable,
-			}
-		}
-	}
-
-	// Get apps that were deleted
-	for idx := range delta.old.AppParams {
-		// AppParams were in the balance record, but _aren't_ anymore
-		if _, ok := delta.new.AppParams[idx]; !ok {
-			mods[basics.CreatableIndex(idx)] = modifiedCreatable{
-				created: false,
-				creator: creator,
-				ctype:   basics.AppCreatable,
-			}
-		}
-	}
-
-	return mods
-}
-
-func accountsNewRound(tx *sql.Tx, rnd basics.Round, updates map[basics.Address]accountDelta, rewardsLevel uint64, proto config.ConsensusParams) (err error) {
+func accountsNewRound(tx *sql.Tx, rnd basics.Round, updates map[basics.Address]accountDelta, creatables map[basics.CreatableIndex]modifiedCreatable, rewardsLevel uint64, proto config.ConsensusParams) (err error) {
 	var base basics.Round
 	err = tx.QueryRow("SELECT rnd FROM acctrounds WHERE id='acctbase'").Scan(&base)
 	if err != nil {
@@ -411,17 +355,16 @@ func accountsNewRound(tx *sql.Tx, rnd basics.Round, updates map[basics.Address]a
 
 		totals.delAccount(proto, data.old, &ot)
 		totals.addAccount(proto, data.new, &ot)
+	}
 
-		cdeltas := getChangedCreatables(addr, data)
-		for cidx, delta := range cdeltas {
-			if delta.created {
-				_, err = insertCreatableIdxStmt.Exec(cidx, addr[:], delta.ctype)
-			} else {
-				_, err = deleteCreatableIdxStmt.Exec(cidx, delta.ctype)
-			}
-			if err != nil {
-				return
-			}
+	for cidx, cdelta := range creatables {
+		if cdelta.created {
+			_, err = insertCreatableIdxStmt.Exec(cidx, cdelta.creator[:], cdelta.ctype)
+		} else {
+			_, err = deleteCreatableIdxStmt.Exec(cidx, cdelta.ctype)
+		}
+		if err != nil {
+			return
 		}
 	}
 
