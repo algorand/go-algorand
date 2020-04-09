@@ -65,24 +65,13 @@ func (i blockValidatorImpl) Validate(ctx context.Context, e bookkeeping.Block) (
 	return validatedBlock{vb: lvb}, nil
 }
 
-type blockFactoryImpl struct {
-	l        *data.Ledger
-	tp       *pools.TransactionPool
-	logStats bool
-}
-
-func makeBlockFactory(l *data.Ledger, tp *pools.TransactionPool, logStats bool, executionPool execpool.BacklogPool) *blockFactoryImpl {
-	bf := &blockFactoryImpl{
-		l:        l,
-		tp:       tp,
-		logStats: logStats,
-	}
-	return bf
+type blockFactory struct {
+	*pools.TransactionPool
 }
 
 // AssembleBlock implements Ledger.AssembleBlock.
-func (i *blockFactoryImpl) AssembleBlock(round basics.Round, deadline time.Time) (agreement.ValidatedBlock, error) {
-	lvb, err := i.tp.AssembleBlock(round, deadline, i.logStats)
+func (i blockFactory) AssembleBlock(round basics.Round, deadline time.Time) (agreement.ValidatedBlock, error) {
+	lvb, err := i.TransactionPool.AssembleBlock(round, deadline)
 	if err != nil {
 		return nil, err
 	}

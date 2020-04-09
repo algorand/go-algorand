@@ -37,6 +37,12 @@ import (
 // TransactionPool is a struct maintaining a sanitized pool of transactions that are available for inclusion in
 // a Block.  We sanitize it by preventing duplicates and limiting the number of transactions retained for each account
 type TransactionPool struct {
+	// const
+	logProcessBlockStats bool
+	logAssembleStats     bool
+	expFeeFactor         uint64
+	txPoolMaxSize        int
+
 	mu                     deadlock.Mutex
 	cond                   sync.Cond
 	expiredTxCount         map[basics.Round]int
@@ -45,9 +51,6 @@ type TransactionPool struct {
 	feeThresholdMultiplier uint64
 	ledger                 *ledger.Ledger
 	statusCache            *statusCache
-	logStats               bool
-	expFeeFactor           uint64
-	txPoolMaxSize          int
 
 	// pendingMu protects pendingTxGroups and pendingTxids
 	pendingMu           deadlock.RWMutex
@@ -74,14 +77,15 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local) *TransactionPo
 		cfg.TxPoolExponentialIncreaseFactor = 1
 	}
 	pool := TransactionPool{
-		pendingTxids:    make(map[transactions.Txid]txPoolVerifyCacheVal),
-		rememberedTxids: make(map[transactions.Txid]txPoolVerifyCacheVal),
-		expiredTxCount:  make(map[basics.Round]int),
-		ledger:          ledger,
-		statusCache:     makeStatusCache(cfg.TxPoolSize),
-		logStats:        cfg.EnableProcessBlockStats,
-		expFeeFactor:    cfg.TxPoolExponentialIncreaseFactor,
-		txPoolMaxSize:   cfg.TxPoolSize,
+		pendingTxids:         make(map[transactions.Txid]txPoolVerifyCacheVal),
+		rememberedTxids:      make(map[transactions.Txid]txPoolVerifyCacheVal),
+		expiredTxCount:       make(map[basics.Round]int),
+		ledger:               ledger,
+		statusCache:          makeStatusCache(cfg.TxPoolSize),
+		logProcessBlockStats: cfg.EnableProcessBlockStats,
+		logAssembleStats:     cfg.EnableAssembleStats,
+		expFeeFactor:         cfg.TxPoolExponentialIncreaseFactor,
+		txPoolMaxSize:        cfg.TxPoolSize,
 	}
 	pool.cond.L = &pool.mu
 	pool.recomputeBlockEvaluator(make(map[transactions.Txid]basics.Round))
@@ -394,7 +398,7 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledger.St
 	var unknownCommitted uint
 
 	commitedTxids := delta.Txids
-	if pool.logStats {
+	if pool.logProcessBlockStats {
 		pool.pendingMu.RLock()
 		for txid := range commitedTxids {
 			if _, ok := pool.pendingTxids[txid]; ok {
@@ -447,7 +451,7 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledger.St
 	pool.expiredTxCount[block.Round()] = int(stats.ExpiredCount)
 	delete(pool.expiredTxCount, block.Round()-expiredHistory*basics.Round(proto.MaxTxnLife))
 
-	if pool.logStats {
+	if pool.logProcessBlockStats {
 		var details struct {
 			Round uint64
 		}
@@ -558,7 +562,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 
 // AssembleBlock assembles a block for a given round, trying not to
 // take longer than deadline to finish.
-func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Time, logStats bool) (*ledger.ValidatedBlock, error) {
+func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Time) (*ledger.ValidatedBlock, error) {
 	start := time.Now()
 	prev, err := pool.ledger.BlockHdr(round - 1)
 	if err != nil {
@@ -673,7 +677,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 		return nil, fmt.Errorf("could not make proposals at round %d: could not finish evaluator: %v", round, err)
 	}
 
-	if logStats {
+	if pool.logAssembleStats {
 		var details struct {
 			Round uint64
 		}

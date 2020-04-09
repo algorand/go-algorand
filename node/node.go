@@ -220,7 +220,6 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		return nil, err
 	}
 
-	blockFactory := makeBlockFactory(node.ledger, node.transactionPool, node.config.EnableAssembleStats, node.highPriorityCryptoVerificationPool)
 	blockValidator := blockValidatorImpl{l: node.ledger, tp: node.transactionPool, verificationPool: node.highPriorityCryptoVerificationPool}
 	agreementLedger := makeAgreementLedger(node.ledger, node.net)
 
@@ -231,7 +230,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		Local:          node.config,
 		Network:        gossip.WrapNetwork(node.net, log),
 		Ledger:         agreementLedger,
-		BlockFactory:   blockFactory,
+		BlockFactory:   blockFactory{TransactionPool: node.transactionPool},
 		BlockValidator: blockValidator,
 		KeyManager:     node.accountManager,
 		RandomSource:   node,
