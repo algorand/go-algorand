@@ -209,6 +209,9 @@ type ConsensusParams struct {
 	// whether to use the old buggy Credential.lowestOutput function
 	// TODO(upgrade): Please remove as soon as the upgrade goes through
 	UseBuggyProposalLowestOutput bool
+
+	// SupportRekeying indicates support for account rekeying (the RekeyTo and AuthAddr fields)
+	SupportRekeying bool
 }
 
 // ConsensusProtocols defines a set of supported protocol versions and their
