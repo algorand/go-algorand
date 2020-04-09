@@ -92,7 +92,7 @@ func (sd StateDelta) Equal(o StateDelta) bool {
 
 // Valid checks whether the keys and values in a StateDelta conform to the
 // consensus parameters' maximum lengths
-func (sd StateDelta) Valid(proto config.ConsensusParams) error {
+func (sd StateDelta) Valid(proto *config.ConsensusParams) error {
 	for key, delta := range sd {
 		if len(key) > proto.MaxAppKeyLen {
 			return fmt.Errorf("key too long: length was %d, maximum is %d", len(key), proto.MaxAppKeyLen)
@@ -166,7 +166,7 @@ func (sm StateSchema) NumEntries() (tot uint64) {
 
 // MinBalance computes the MinBalance requirements for a StateSchema based on
 // the consensus parameters
-func (sm StateSchema) MinBalance(proto config.ConsensusParams) (res MicroAlgos) {
+func (sm StateSchema) MinBalance(proto *config.ConsensusParams) (res MicroAlgos) {
 	// Flat cost for each key/value pair
 	flatCost := MulSaturate(proto.SchemaMinBalancePerEntry, sm.NumEntries())
 

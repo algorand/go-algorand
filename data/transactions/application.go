@@ -220,7 +220,7 @@ func applyStateDeltas(evalDelta basics.EvalDelta, params basics.AppParams, creat
 
 		// Check that the global state delta isn't breaking any rules regarding
 		// key/value lengths
-		err := evalDelta.GlobalDelta.Valid(proto)
+		err := evalDelta.GlobalDelta.Valid(&proto)
 		if err != nil {
 			if !errIfNotApplied {
 				return nil
@@ -259,7 +259,7 @@ func applyStateDeltas(evalDelta basics.EvalDelta, params basics.AppParams, creat
 
 		// Check that the local state delta isn't breaking any rules regarding
 		// key/value lengths
-		err := delta.Valid(proto)
+		err := delta.Valid(&proto)
 		if err != nil {
 			if !errIfNotApplied {
 				return nil

@@ -336,7 +336,7 @@ func (u AccountData) WithUpdatedRewards(proto config.ConsensusParams, rewardsLev
 // MinBalance computes the minimum balance requirements for an account based on
 // some consensus parameters. MinBalance should correspond roughly to how much
 // storage the account is allowed to store on disk.
-func (u AccountData) MinBalance(proto config.ConsensusParams) (res MicroAlgos) {
+func (u AccountData) MinBalance(proto *config.ConsensusParams) (res MicroAlgos) {
 	var min uint64
 
 	// First, base MinBalance

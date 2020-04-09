@@ -655,7 +655,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, appEval *app
 		}
 
 		dataNew := data.WithUpdatedRewards(eval.proto, rewardlvl)
-		effectiveMinBalance := dataNew.MinBalance(eval.proto)
+		effectiveMinBalance := dataNew.MinBalance(&eval.proto)
 		if dataNew.MicroAlgos.Raw < effectiveMinBalance.Raw {
 			return fmt.Errorf("transaction %v: account %v balance %d below min %d (%d assets)",
 				txid, addr, dataNew.MicroAlgos.Raw, effectiveMinBalance.Raw, len(dataNew.Assets))
