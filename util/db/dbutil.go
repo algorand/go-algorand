@@ -23,7 +23,6 @@ package db
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"reflect"
 	"runtime"
@@ -60,12 +59,6 @@ type Accessor struct {
 	log      logging.Logger
 }
 
-type sqliteDriverConnections struct {
-	initilizationError error
-}
-
-var sqliteConnections sqliteDriverConnections
-
 // MakeAccessor creates a new Accessor.
 func MakeAccessor(dbfilename string, readOnly bool, inMemory bool) (Accessor, error) {
 	return makeAccessorImpl(dbfilename, readOnly, inMemory, []string{"_journal_mode=wal"})
@@ -78,7 +71,10 @@ func MakeErasableAccessor(dbfilename string) (Accessor, error) {
 	return makeAccessorImpl(dbfilename, false, false, []string{"_secure_delete=on"})
 }
 
-func sqlite3Init() {
+func makeAccessorImpl(dbfilename string, readOnly bool, inMemory bool, params []string) (Accessor, error) {
+	var db Accessor
+	db.readOnly = readOnly
+
 	// SQLite3 driver we use (mattn/go-sqlite3) does not implement driver.DriverContext interface
 	// that forces sql.Open calling sql.OpenDB and return a struct without any touches to the underlying driver.
 	// Because of that SQLite library is not initialized until the very first call of sqlite3_open_v2 that happens
@@ -87,38 +83,28 @@ func sqlite3Init() {
 	// Solution is to create a connection using a safe synchronization barrier right here.
 	// The connection goes to a connection pool inside Go's sql package and will be re-used when needed.
 	// See https://github.com/algorand/go-algorand/issues/846 for more details.
+	var err error
+	db.Handle, err = sql.Open("sqlite3", URI(dbfilename, readOnly, inMemory)+"&"+strings.Join(params, "&"))
 
-	// we create a dummy in-memory database and close it right after. This would suffice to initialize the sqlite library threading logic.
-	var dbHandler *sql.DB
-	dbHandler, sqliteConnections.initilizationError = sql.Open("sqlite3", URI("algorand-sqlite3-database-initializer", false, true)+"&_journal_mode=wal")
-	if sqliteConnections.initilizationError != nil {
-		return
+	if err == nil {
+		// create a connection to safely initialize SQLite once
+		initFn := func() {
+			var conn *sql.Conn
+			if conn, err = db.Handle.Conn(context.Background()); err != nil {
+				db.Close()
+				return
+			}
+			if err = conn.Close(); err != nil {
+				db.Close()
+			}
+		}
+		sqliteInitOnce.Do(initFn)
+		if err != nil {
+			// init failed, db closed and err is set
+			return db, err
+		}
+		err = db.runInitStatements()
 	}
-	sqliteConnections.initilizationError = dbHandler.Ping()
-	if sqliteConnections.initilizationError != nil {
-		return
-	}
-	sqliteConnections.initilizationError = dbHandler.Close()
-	if sqliteConnections.initilizationError != nil {
-		return
-	}
-}
-
-func makeAccessorImpl(dbfilename string, readOnly bool, inMemory bool, params []string) (db Accessor, err error) {
-	sqliteInitOnce.Do(sqlite3Init)
-
-	db.readOnly = readOnly
-
-	parameters := ""
-	if len(params) > 0 {
-		parameters = "&" + strings.Join(params, "&")
-	}
-	db.Handle, err = sql.Open("sqlite3", URI(dbfilename, readOnly, inMemory)+parameters)
-	if err != nil {
-		return Accessor{}, err
-	}
-
-	err = db.runInitStatements()
 
 	return db, err
 }
@@ -313,134 +299,3 @@ type idemFn func(tx *sql.Tx) error
 
 const infoTxRetries = 5
 const warnTxRetriesInterval = 1
-
-// BackupAccessor encapsulate the online backup API functionality
-type BackupAccessor struct {
-	backup         *sqlite3.SQLiteBackup
-	backupFinished chan bool
-	destAccessor   Accessor
-}
-
-// Checkpoint create a wal checkpoint, forcing the content of the WAL file to be flushed into the main database.
-func (db *Accessor) Checkpoint(ctx context.Context) (err error) {
-	var conn *sql.Conn
-	conn, err = db.Handle.Conn(ctx)
-	if err != nil {
-		return
-	}
-	defer conn.Close()
-	_, err = conn.ExecContext(ctx, "PRAGMA wal_checkpoint")
-	return
-}
-
-var errUnexpectedDriverConnector = errors.New("unexpected driver connector")
-var errNoBackupObjectExists = errors.New("no backup object")
-
-// Backup starts a backup of the existing database onto the destination database.
-func (db *Accessor) Backup(ctx context.Context, destDbFilename string, inMem bool) (backupAccessor *BackupAccessor, err error) {
-	backupStarted := make(chan bool, 1)
-
-	// we want to create the two connection and hold them open for a long time ( until the backup object is destroyed )
-	go func() {
-		var srcConn, dstConn *sql.Conn
-		srcConn, err = db.Handle.Conn(ctx)
-		if err != nil {
-			close(backupStarted)
-			return
-		}
-
-		err = srcConn.Raw(func(driverConn interface{}) error {
-			srcDriverConnector := driverConn.(*sqlite3.SQLiteConn)
-			if srcDriverConnector == nil {
-				return errUnexpectedDriverConnector
-			}
-			// cool, we have a driver connector.
-			destAccessor, err := makeAccessorImpl(destDbFilename, false, inMem, []string{})
-			if err != nil {
-				return err
-			}
-
-			dstConn, err = destAccessor.Handle.Conn(ctx)
-			if err != nil {
-				destAccessor.Close()
-				return err
-			}
-
-			err = dstConn.Raw(func(driverConn interface{}) error {
-				dstDriverConnector := driverConn.(*sqlite3.SQLiteConn)
-				if dstDriverConnector == nil {
-					return errUnexpectedDriverConnector
-				}
-				backup, err := dstDriverConnector.Backup("main", srcDriverConnector, "main")
-				if err != nil {
-					return err
-				}
-				backupAccessor = &BackupAccessor{
-					backup:         backup,
-					backupFinished: make(chan bool, 1),
-					destAccessor:   destAccessor,
-				}
-				close(backupStarted)
-				// wait for "finish" to be called.
-				<-backupAccessor.backupFinished
-				return nil
-			})
-
-			dstConn.Close()
-			if err != nil {
-				destAccessor.Close()
-			}
-			return err
-		})
-		srcConn.Close()
-		if err != nil {
-			close(backupStarted)
-			return
-		}
-	}()
-	// wait until the backup accessor is created, or fail to create ( where the err would be set )
-	select {
-	case <-backupStarted:
-		return backupAccessor, err
-	case <-ctx.Done():
-		return backupAccessor, ctx.Err()
-	}
-}
-
-// PageCount returns the page count needed for the backup.
-func (ba *BackupAccessor) PageCount() int {
-	if ba.backup != nil {
-		return ba.backup.PageCount()
-	}
-	return -1
-}
-
-// Remaining returns the remaining page count for the backup to complete.
-func (ba *BackupAccessor) Remaining() int {
-	if ba.backup != nil {
-		return ba.backup.Remaining()
-	}
-	return -1
-}
-
-// Step copy p number of pages
-func (ba *BackupAccessor) Step(p int) (bool, error) {
-	if ba.backup != nil {
-		return ba.backup.Step(p)
-	}
-	return false, errNoBackupObjectExists
-}
-
-// Finish completes the backup process
-func (ba *BackupAccessor) Finish() (Accessor, error) {
-	if ba.backup != nil {
-		err := ba.backup.Finish()
-		close(ba.backupFinished)
-		ba.destAccessor.Checkpoint(context.Background())
-		ba.backup = nil
-		destAccessor := ba.destAccessor
-		ba.destAccessor = Accessor{}
-		return destAccessor, err
-	}
-	return Accessor{}, errNoBackupObjectExists
-}
