@@ -79,7 +79,7 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local) *TransactionPo
 		expiredTxCount:  make(map[basics.Round]int),
 		ledger:          ledger,
 		statusCache:     makeStatusCache(cfg.TxPoolSize),
-		logStats:        cfg.EnableAssembleStats,
+		logStats:        cfg.EnableProcessBlockStats,
 		expFeeFactor:    cfg.TxPoolExponentialIncreaseFactor,
 		txPoolMaxSize:   cfg.TxPoolSize,
 	}
