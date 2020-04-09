@@ -507,13 +507,12 @@ func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta StateDelta) {
 
 	au.deltas = append(au.deltas, delta.accts)
 	au.protos = append(au.protos, proto)
-	au.creatableDeltas = append(au.creatableDeltas, make(map[basics.CreatableIndex]modifiedCreatable))
+	au.creatableDeltas = append(au.creatableDeltas, delta.creatables)
 
 	var ot basics.OverflowTracker
 	newTotals := au.roundTotals[len(au.roundTotals)-1]
 	allBefore := newTotals.All()
 	newTotals.applyRewards(delta.hdr.RewardsLevel, &ot)
-	newCreatableDeltas := au.creatableDeltas[len(au.creatableDeltas)-1]
 
 	for addr, data := range delta.accts {
 		newTotals.delAccount(proto, data.old, &ot)
@@ -532,7 +531,6 @@ func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta StateDelta) {
 		mcreat.ctype = cdelta.ctype
 		mcreat.ndeltas++
 		au.creatables[cidx] = mcreat
-		newCreatableDeltas[cidx] = cdelta
 	}
 
 	if ot.Overflowed {
