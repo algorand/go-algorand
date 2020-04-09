@@ -277,9 +277,9 @@ func BenchmarkAppInt1(b *testing.B) { benchmarkFullBlocks(testCases["int-1"], b)
 
 func BenchmarkAppInt1ManyApps(b *testing.B) { benchmarkFullBlocks(testCases["int-1-many-apps"], b) }
 
-func BenchmarkPay(b *testing.B) { benchmarkFullBlocks(testCases["pay"], b) }
+func BenchmarkAppBigNoOp(b *testing.B) { benchmarkFullBlocks(testCases["big-noop"], b) }
 
-func BenchmarkBigNoOp(b *testing.B) { benchmarkFullBlocks(testCases["big-noop"], b) }
+func BenchmarkPay(b *testing.B) { benchmarkFullBlocks(testCases["pay"], b) }
 
 func init() {
 	testCases = make(map[string]testParams)
