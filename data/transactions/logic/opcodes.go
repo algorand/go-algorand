@@ -199,15 +199,11 @@ func OpcodesByVersion(version uint64) []OpSpec {
 }
 
 // direct opcode bytes
-var opsByOpcode [][]OpSpec
-var opsByName []map[string]OpSpec
+var opsByOpcode [LogicVersion + 1][256]OpSpec
+var opsByName [LogicVersion + 1]map[string]OpSpec
 
 func init() {
-	opsByOpcode = make([][]OpSpec, LogicVersion+1)
-	opsByName = make([]map[string]OpSpec, LogicVersion+1)
-
 	for v := uint64(0); v <= EvalMaxVersion; v++ {
-		opsByOpcode[v] = make([]OpSpec, 256)
 		opsByName[v] = make(map[string]OpSpec, 256)
 
 		// for compatibility reason treat zero (empty) version as version 1

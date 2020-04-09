@@ -483,20 +483,20 @@ func (cx *evalContext) step() {
 		return
 	}
 	argsTypes := spec.Args
-	if len(argsTypes) >= 0 {
-		// check args for stack underflow and types
-		if len(cx.stack) < len(argsTypes) {
-			cx.err = fmt.Errorf("stack underflow in %s", spec.Name)
+
+	// check args for stack underflow and types
+	if len(cx.stack) < len(argsTypes) {
+		cx.err = fmt.Errorf("stack underflow in %s", spec.Name)
+		return
+	}
+	first := len(cx.stack) - len(argsTypes)
+	for i, argType := range argsTypes {
+		if !opCompat(argType, cx.stack[first+i].argType()) {
+			cx.err = fmt.Errorf("%s arg %d wanted %s but got %s", spec.Name, i, argType.String(), cx.stack[first+i].typeName())
 			return
 		}
-		first := len(cx.stack) - len(argsTypes)
-		for i, argType := range argsTypes {
-			if !opCompat(argType, cx.stack[first+i].argType()) {
-				cx.err = fmt.Errorf("%s arg %d wanted %s but got %s", spec.Name, i, argType.String(), cx.stack[first+i].typeName())
-				return
-			}
-		}
 	}
+
 	oz := spec.opSize
 	if oz.size != 0 && (cx.pc+oz.size > len(cx.program)) {
 		cx.err = fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, spec.Name)
@@ -528,22 +528,26 @@ func (cx *evalContext) step() {
 	if cx.err != nil {
 		return
 	}
-	if cx.version >= 2 {
-		// additional type checks for return values
-		if len(cx.stack) < len(spec.Returns) {
-			cx.err = fmt.Errorf("%3d %s expected to return %d values but stack has only %d", cx.pc, spec.Name, len(spec.Returns), len(cx.stack))
-			return
-		}
-		for i := 0; i < len(spec.Returns); i++ {
-			sp := len(cx.stack) - 1 - i
-			stackType := cx.stack[sp].argType()
-			retType := spec.Returns[i]
-			if !typecheck(retType, stackType) {
-				cx.err = fmt.Errorf("%3d %s expected to return %s but actual is %s", cx.pc, spec.Name, retType.String(), stackType.String())
+
+	/*
+		// TODO(pzbitskiy) turn this into a unit test
+		if cx.version >= 2 {
+			// additional type checks for return values
+			if len(cx.stack) < len(spec.Returns) {
+				cx.err = fmt.Errorf("%3d %s expected to return %d values but stack has only %d", cx.pc, spec.Name, len(spec.Returns), len(cx.stack))
 				return
 			}
+			for i := 0; i < len(spec.Returns); i++ {
+				sp := len(cx.stack) - 1 - i
+				stackType := cx.stack[sp].argType()
+				retType := spec.Returns[i]
+				if !typecheck(retType, stackType) {
+					cx.err = fmt.Errorf("%3d %s expected to return %s but actual is %s", cx.pc, spec.Name, retType.String(), stackType.String())
+					return
+				}
+			}
 		}
-	}
+	*/
 
 	if len(cx.stack) > MaxStackDepth {
 		cx.err = errors.New("stack overflow")
