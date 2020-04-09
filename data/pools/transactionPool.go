@@ -586,8 +586,6 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 	var stats telemetryspec.AssembleBlockMetrics
 	stats.StartCount = len(pending)
 	stats.StopReason = telemetryspec.AssembleBlockEmpty
-	first := true
-	totalFees := uint64(0)
 
 	// retrieve a list of all the previously known txid in the current round. We want to retrieve it here so we could avoid
 	// exercising the ledger read lock.
@@ -635,16 +633,31 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 				stats.InvalidCount++
 				logging.Base().Warnf("Cannot add pending transaction to block: %v", err)
 			}
-		} else {
-			for _, txn := range txgroup {
-				fee := txn.Txn.Fee.Raw
-				encodedLen := txn.GetEncodedLength()
+		}
+	}
+
+	lvb, err := eval.GenerateBlock()
+	if err != nil {
+		return nil, fmt.Errorf("could not make proposals at round %d: could not finish evaluator: %v", round, err)
+	}
+
+	// Measure time here because we want to know how close to deadline we are
+	dt := time.Now().Sub(start)
+	stats.Nanoseconds = dt.Nanoseconds()
+
+	if pool.logAssembleStats {
+		payset := lvb.Block().Payset
+		if len(payset) != 0 {
+			totalFees := uint64(0)
+
+			for i, txib := range payset {
+				fee := txib.Txn.Fee.Raw
+				encodedLen := txib.GetEncodedLength()
 
 				stats.IncludedCount++
 				totalFees += fee
 
-				if first {
-					first = false
+				if i == 0 {
 					stats.MinFee = fee
 					stats.MaxFee = fee
 					stats.MinLength = encodedLen
@@ -663,22 +676,10 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 				}
 				stats.TotalLength += uint64(encodedLen)
 			}
+
+			stats.AverageFee = totalFees / uint64(stats.IncludedCount)
 		}
-	}
-	if stats.IncludedCount != 0 {
-		stats.AverageFee = totalFees / uint64(stats.IncludedCount)
-	}
 
-	lvb, err := eval.GenerateBlock()
-	if err != nil {
-		return nil, fmt.Errorf("could not make proposals at round %d: could not finish evaluator: %v", round, err)
-	}
-
-	// Measure time here because we want to know how close to deadline we are
-	dt := time.Now().Sub(start)
-	stats.Nanoseconds = dt.Nanoseconds()
-
-	if pool.logAssembleStats {
 		var details struct {
 			Round uint64
 		}
