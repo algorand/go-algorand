@@ -18,7 +18,6 @@ package node
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -30,7 +29,6 @@ import (
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/util/execpool"
 )
@@ -68,59 +66,26 @@ func (i blockValidatorImpl) Validate(ctx context.Context, e bookkeeping.Block) (
 }
 
 type blockFactoryImpl struct {
-	l                *data.Ledger
-	tp               *pools.TransactionPool
-	logStats         bool
-	verificationPool execpool.BacklogPool
+	l        *data.Ledger
+	tp       *pools.TransactionPool
+	logStats bool
 }
 
 func makeBlockFactory(l *data.Ledger, tp *pools.TransactionPool, logStats bool, executionPool execpool.BacklogPool) *blockFactoryImpl {
 	bf := &blockFactoryImpl{
-		l:                l,
-		tp:               tp,
-		logStats:         logStats,
-		verificationPool: executionPool,
+		l:        l,
+		tp:       tp,
+		logStats: logStats,
 	}
 	return bf
 }
 
 // AssembleBlock implements Ledger.AssembleBlock.
 func (i *blockFactoryImpl) AssembleBlock(round basics.Round, deadline time.Time) (agreement.ValidatedBlock, error) {
-	start := time.Now()
-	prev, err := i.l.BlockHdr(round - 1)
+	lvb, err := i.tp.AssembleBlock(round, deadline, i.logStats)
 	if err != nil {
-		return nil, fmt.Errorf("could not make proposals at round %d: could not read block from ledger: %v", round, err)
+		return nil, err
 	}
-
-	newEmptyBlk := bookkeeping.MakeBlock(prev)
-
-	// Start the block evaluator, hinting its payset length based on the
-	// transaction pool's block evaluator
-	eval, err := i.l.StartEvaluator(newEmptyBlk.BlockHeader, i.tp.PendingCount())
-	if err != nil {
-		return nil, fmt.Errorf("could not make proposals at round %d: could not start evaluator: %v", round, err)
-	}
-
-	var stats telemetryspec.AssembleBlockMetrics
-	stats.AssembleBlockStats = i.l.AssemblePayset(i.tp, eval, deadline)
-
-	// Measure time here because we want to know how close to deadline we are
-	dt := time.Now().Sub(start)
-	stats.AssembleBlockStats.Nanoseconds = dt.Nanoseconds()
-
-	lvb, err := eval.GenerateBlock()
-	if err != nil {
-		return nil, fmt.Errorf("could not make proposals at round %d: could not finish evaluator: %v", round, err)
-	}
-
-	if i.logStats {
-		var details struct {
-			Round uint64
-		}
-		details.Round = uint64(round)
-		logging.Base().Metrics(telemetryspec.Transaction, stats, details)
-	}
-
 	return validatedBlock{vb: lvb}, nil
 }
 
