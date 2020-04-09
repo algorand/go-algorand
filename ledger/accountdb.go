@@ -566,7 +566,7 @@ func accountsNewRound(tx *sql.Tx, rnd basics.Round, updates map[basics.Address]a
 }
 
 func encodedAccountsRange(tx *sql.Tx, startAccountIndex, accountCount int) (bals []encodedBalanceRecord, err error) {
-	rows, err := tx.Query("SELECT address, data FROM accountbase LIMIT ? OFFSET ?", accountCount, startAccountIndex)
+	rows, err := tx.Query("SELECT address, data FROM accountbase ORDER BY rowid LIMIT ? OFFSET ?", accountCount, startAccountIndex)
 	if err != nil {
 		return
 	}

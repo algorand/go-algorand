@@ -134,14 +134,14 @@ var V1Routes = lib.Routes{
 	lib.Route{
 		Name:        "start-catchup",
 		Method:      "PUT",
-		Path:        fmt.Sprintf("/catchup/{catchpoint:[0-9]{1,10}#[A-Z0-9]{1,53}}"),
+		Path:        "/catchup/:catchpoint",
 		HandlerFunc: handlers.StartCatchup,
 	},
 
 	lib.Route{
 		Name:        "abort-catchup",
 		Method:      "DELETE",
-		Path:        fmt.Sprintf("/catchup/{catchpoint:[0-9]{1,10}#[A-Z0-9]{1,53}}"),
+		Path:        "/catchup/:catchpoint",
 		HandlerFunc: handlers.AbortCatchup,
 	},
 

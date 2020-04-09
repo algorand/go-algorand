@@ -1624,7 +1624,7 @@ func GetTransactionByID(ctx lib.ReqContext, context echo.Context) {
 }
 
 // StartCatchup is an httpHandler for route PUT /v1/catchup/{catchpoint:[0-9]{1,10}#[A-Z0-9]{1,53}}
-func StartCatchup(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
+func StartCatchup(ctx lib.ReqContext, context echo.Context) {
 	// swagger:operation PUT /v1/catchup/{catchpoint:[0-9]{1,10}#[A-Z0-9]{1,53}} StartCatchup
 	// ---
 	//     Summary: Set the node in a catchup mode
@@ -1651,7 +1651,9 @@ func StartCatchup(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	//         schema: {type: string}
 	//       401: { description: Invalid API Token }
 	//       default: { description: Unknown Error }
-	catchpoint := mux.Vars(r)["catchpoint"]
+	w := context.Response().Writer
+
+	catchpoint := context.Param("catchpoint")
 	_, _, err := ledger.ParseCatchpointLabel(catchpoint)
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusBadRequest, err /*errFailedToParseCatchpoint*/, fmt.Sprintf("invalid catchpoint : %v", catchpoint), ctx.Log)
@@ -1674,7 +1676,7 @@ func StartCatchup(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 }
 
 // AbortCatchup is an httpHandler for route DELETE /v1/catchup/{catchpoint:[0-9]{1,10}#[A-Z0-9]{1,53}}
-func AbortCatchup(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
+func AbortCatchup(ctx lib.ReqContext, context echo.Context) {
 	// swagger:operation DELETE /v1/catchup/{catchpoint:[0-9]{1,10}#[A-Z0-9]{1,53}} AbortCatchup
 	// ---
 	//     Summary: Exit from catchup mode
@@ -1701,7 +1703,8 @@ func AbortCatchup(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	//         schema: {type: string}
 	//       401: { description: Invalid API Token }
 	//       default: { description: Unknown Error }
-	catchpoint := mux.Vars(r)["catchpoint"]
+	w := context.Response().Writer
+	catchpoint := context.Param("catchpoint")
 	_, _, err := ledger.ParseCatchpointLabel(catchpoint)
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusBadRequest, err, errFailedToParseCatchpoint, ctx.Log)
