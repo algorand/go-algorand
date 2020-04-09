@@ -66,7 +66,6 @@ type Ledger struct {
 	notifier blockNotifier
 	time     timeTracker
 	metrics  metricsTracker
-	//catchpoint catchpointTracker
 
 	trackers  trackerRegistry
 	trackerMu deadlock.RWMutex
@@ -128,7 +127,6 @@ func OpenLedger(
 	}
 
 	l.accts.initialize(cfg, dbPathPrefix, l.genesisProto, l.genesisAccounts)
-	//l.catchpoint.initialize(cfg, dbPathPrefix, dbMem)
 
 	err = l.reloadLedger()
 	if err != nil {
@@ -161,7 +159,6 @@ func (l *Ledger) reloadLedger() error {
 	l.trackers.register(&l.notifier)
 	l.trackers.register(&l.time)
 	l.trackers.register(&l.metrics)
-	//l.trackers.register(&l.catchpoint)
 
 	err = l.trackers.loadFromDisk(l)
 	if err != nil {
@@ -175,10 +172,6 @@ func (l *Ledger) reloadLedger() error {
 		return err
 	}
 	return nil
-}
-
-func (l *Ledger) isCatchpointRound(rnd basics.Round) bool {
-	return false //l.catchpoint.isCatchpointRound(rnd)
 }
 
 // verifyMatchingGenesisHash tests to see that the latest block header pointing to the same genesis hash provided in genesisHash.

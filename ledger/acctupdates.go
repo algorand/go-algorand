@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -340,7 +341,7 @@ func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 					added, err := trie.Add(hash)
 					if err != nil {
 						panic(fmt.Errorf("accountsInitialize was unable to add changes to trie: %v", err))
-						return rnd, fmt.Errorf("accountsInitialize was unable to add changes to trie: %v", err)
+						//return rnd, fmt.Errorf("accountsInitialize was unable to add changes to trie: %v", err)
 					}
 					if !added {
 						au.log.Warnf("attempted to add duplicate hash '%v' to merkle trie.", hash)
@@ -353,7 +354,7 @@ func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 				err = trie.Commit()
 				if err != nil {
 					panic(fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err))
-					return 0, fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err)
+					//return 0, fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err)
 				}
 				t4 := time.Now()
 				fmt.Printf("commit time was %d ms\n", t4.Sub(t3).Milliseconds())
@@ -385,7 +386,7 @@ func (au *accountUpdates) accountsUpdateBalaces(balancesTx *merkletrie.Transacti
 			deleted, err = balancesTx.Delete(deleteHash)
 			if err != nil {
 				panic(err)
-				return err
+				//return err
 			}
 			if !deleted {
 				au.log.Warnf("failed to delete hash '%v' from merkle trie", deleteHash)
@@ -396,7 +397,7 @@ func (au *accountUpdates) accountsUpdateBalaces(balancesTx *merkletrie.Transacti
 			added, err = balancesTx.Add(addHash)
 			if err != nil {
 				panic(err)
-				return err
+				//return err
 			}
 			if !added {
 				au.log.Warnf("attempted to add duplicate hash '%v' to merkle trie", addHash)
@@ -906,6 +907,17 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round) {
 	}
 }
 
+func catchpointRoundToPath(rnd basics.Round) string {
+	irnd := int64(rnd) / 256
+	outStr := ""
+	for irnd > 0 {
+		outStr = filepath.Join(outStr, fmt.Sprintf("%02x", irnd%256))
+		irnd = irnd / 256
+	}
+	outStr = filepath.Join(outStr, strconv.FormatInt(int64(rnd), 10)+".catchpoint")
+	return outStr
+}
+
 func (au *accountUpdates) getCatchpointStream(round basics.Round) (io.ReadCloser, error) {
 	dbFileName := ""
 	err := au.dbs.rdb.Atomic(func(tx *sql.Tx) (err error) {
@@ -926,13 +938,7 @@ func (au *accountUpdates) getCatchpointStream(round basics.Round) (io.ReadCloser
 		if os.IsNotExist(err) {
 			// the database told us that we have this file.. but we couldn't find it.
 			// delete it from the database.
-			b := catchpointBuildResult{
-				round:      round,
-				fileName:   "",
-				catchpoint: "",
-				fileSize:   0,
-			}
-			err := au.saveCatchpoint(b)
+			err := au.saveCatchpoint(round, "", 0, "")
 			if err != nil {
 				au.log.Warnf("catchpointTracker: getCatchpointStream: unable to delete missing catchpoint entry: %v", err)
 				return nil, err
@@ -955,21 +961,16 @@ func (au *accountUpdates) getCatchpointStream(round basics.Round) (io.ReadCloser
 			// we couldn't get the stat, so just return with the file.
 			return file, nil
 		}
-		b := catchpointBuildResult{
-			round:      round,
-			fileName:   fileName,
-			catchpoint: "",
-			fileSize:   fileInfo.Size(),
-		}
-		au.saveCatchpoint(b)
+
+		au.saveCatchpoint(round, fileName, fileInfo.Size(), "")
 		return file, nil
 	}
 	return nil, ErrNoEntry{}
 }
 
-func (au *accountUpdates) saveCatchpoint(b catchpointBuildResult) (err error) {
+func (au *accountUpdates) saveCatchpoint(round basics.Round, fileName string, fileSize int64, catchpoint string) (err error) {
 	err = au.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
-		err = storeCatchpoint(tx, b.round, b.fileName, b.catchpoint, b.fileSize)
+		err = storeCatchpoint(tx, round, fileName, catchpoint, fileSize)
 		return
 	})
 	if err != nil {

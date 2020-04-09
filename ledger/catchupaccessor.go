@@ -268,7 +268,7 @@ func (c *CatchpointCatchupAccessor) processStagingBalances(ctx context.Context, 
 			added, err := trie.Add(hash)
 			if !added {
 				panic("attempted to add duplicate hash '%v' to merkle trie.")
-				c.log.Warnf("attempted to add duplicate hash '%v' to merkle trie.", hash)
+				//c.log.Warnf("attempted to add duplicate hash '%v' to merkle trie.", hash)
 			}
 			if err != nil {
 				return err

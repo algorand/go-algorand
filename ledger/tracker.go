@@ -86,7 +86,6 @@ type ledgerForTracker interface {
 	blockDB() dbPair
 	trackerLog() logging.Logger
 	trackerEvalVerified(bookkeeping.Block) (StateDelta, error)
-	isCatchpointRound(basics.Round) bool
 
 	Latest() basics.Round
 	Block(basics.Round) (bookkeeping.Block, error)

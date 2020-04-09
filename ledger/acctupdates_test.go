@@ -88,10 +88,6 @@ func (ml *mockLedgerForTracker) trackerLog() logging.Logger {
 	return ml.log
 }
 
-func (ml *mockLedgerForTracker) isCatchpointRound(basics.Round) bool {
-	return false
-}
-
 func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, latestRnd basics.Round, accts []map[basics.Address]basics.AccountData, rewards []uint64, proto config.ConsensusParams) {
 	latest := au.latest()
 	require.Equal(t, latest, latestRnd)
