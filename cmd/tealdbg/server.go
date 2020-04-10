@@ -514,6 +514,8 @@ func (rctx *requestContext) devtoolsWsHandler(w http.ResponseWriter, r *http.Req
 		// execution environment
 		txnGroup:   dbgState.TxnGroup,
 		groupIndex: dbgState.GroupIndex,
+		stack:      dbgState.Stack,
+		scratch:    dbgState.Scratch,
 	}
 	dbgStateMu.Unlock()
 	// Chrome Devtools reader
@@ -538,7 +540,10 @@ func (rctx *requestContext) devtoolsWsHandler(w http.ResponseWriter, r *http.Req
 			json.Unmarshal(msg[:n], &cdtReq)
 			fmt.Printf("%v\n", cdtReq)
 
-			if cdtResp, err := cdtd.handleCDTRequest(&cdtReq); err == nil {
+			dbgStateMu.Lock()
+			cdtResp, err := cdtd.handleCDTRequest(&cdtReq)
+			dbgStateMu.Unlock()
+			if err == nil {
 				cdtRespCh <- cdtResp
 			} else {
 				fmt.Println(err.Error())
@@ -578,6 +583,8 @@ func (rctx *requestContext) devtoolsWsHandler(w http.ResponseWriter, r *http.Req
 			case <-cdtUpdatedCh:
 				dbgStateMu.Lock()
 				cdtd.currentLine = cdtd.pcToLine(dbgState.PC)
+				cdtd.stack = dbgState.Stack
+				cdtd.scratch = dbgState.Scratch
 				dbgStateMu.Unlock()
 				evPaused := cdtd.makeDebuggerPausedEvent()
 				cdtEventCh <- &evPaused

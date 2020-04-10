@@ -18,14 +18,16 @@ package main
 
 import (
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
+	// "encoding/json"
 	"fmt"
-	"github.com/algorand/go-algorand/data/basics"
 	"math/rand"
 	"strconv"
 	"strings"
 
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 )
@@ -41,6 +43,8 @@ type cdtDebugger struct {
 	currentLine int
 	txnGroup    []transactions.SignedTxn
 	groupIndex  int
+	stack       []v1.TealValue
+	scratch     []v1.TealValue
 }
 
 func makeObject(name, id string) RuntimePropertyDescriptor {
@@ -125,6 +129,41 @@ func prepareTxn(txn *transactions.Transaction, groupIndex int) []fieldDesc {
 	return result
 }
 
+func prepareArray(array []v1.TealValue) []fieldDesc {
+	result := make([]fieldDesc, 0, len(logic.TxnFieldNames))
+	for i := 0; i < len(array); i++ {
+		tv := array[i]
+		name := strconv.Itoa(i)
+		var value string
+		var valType string
+		if tv.Type == "b" {
+			valType = "string"
+			data, err := base64.StdEncoding.DecodeString(tv.Bytes)
+			if err != nil {
+				value = tv.Bytes
+			} else {
+				prinable := true
+				for i := 0; i < len(data); i++ {
+					if !strconv.IsPrint(rune(data[i])) {
+						prinable = false
+						break
+					}
+				}
+				if prinable {
+					value = string(data)
+				} else {
+					value = hex.EncodeToString(data)
+				}
+			}
+		} else {
+			valType = "number"
+			value = strconv.Itoa(int(tv.Uint))
+		}
+		result = append(result, fieldDesc{name, value, valType})
+	}
+	return result
+}
+
 func (cdt *cdtDebugger) makeTxnPreview(groupIndex int) RuntimeObjectPreview {
 	var prop []RuntimePropertyPreview
 	if len(cdt.txnGroup) > 0 {
@@ -164,6 +203,34 @@ func (cdt *cdtDebugger) makeGtxnPreview() RuntimeObjectPreview {
 	return p
 }
 
+const maxArrayPreviewLength = 20
+
+func (cdt *cdtDebugger) makeArrayPreview(array []v1.TealValue) RuntimeObjectPreview {
+	var prop []RuntimePropertyPreview
+	fields := prepareArray(array)
+
+	length := len(fields)
+	if length > maxArrayPreviewLength {
+		length = maxArrayPreviewLength
+	}
+	for _, field := range fields[:length] {
+		v := RuntimePropertyPreview{
+			Name:  field.Name,
+			Value: field.Value,
+			Type:  field.Type,
+		}
+		prop = append(prop, v)
+	}
+
+	p := RuntimeObjectPreview{
+		Type:        "object",
+		Subtype:     "array",
+		Description: fmt.Sprintf("Array(%d)", len(array)),
+		Overflow:    true,
+		Properties:  prop}
+	return p
+}
+
 const localScopeObjID = "localScopeObjId"
 const txnObjID = "txnObjID"
 const gtxnObjID = "gtxnObjID"
@@ -188,16 +255,24 @@ func decodeGroupTxnID(objID string) (int, bool) {
 func makeScope(cdt *cdtDebugger, preview bool) (descr []RuntimePropertyDescriptor) {
 	txn := makeObject("txn", txnObjID)
 	gtxn := makeArray("gtxn", len(cdt.txnGroup), gtxnObjID)
+	stack := makeArray("stack", len(cdt.stack), stackObjID)
+	scratch := makeArray("scratch", len(cdt.scratch), scratchObjID)
 	if preview {
 		txnPreview := cdt.makeTxnPreview(cdt.groupIndex)
 		gtxnPreview := cdt.makeGtxnPreview()
+		stackPreview := cdt.makeArrayPreview(cdt.stack)
+		scratchPreview := cdt.makeArrayPreview(cdt.scratch)
 		txn.Value.Preview = &txnPreview
 		gtxn.Value.Preview = &gtxnPreview
+		stack.Value.Preview = &stackPreview
+		scratch.Value.Preview = &scratchPreview
 	}
 
 	descr = []RuntimePropertyDescriptor{
 		txn,
 		gtxn,
+		stack,
+		scratch,
 	}
 	return descr
 }
@@ -231,9 +306,23 @@ func makeTxnGroup(cdt *cdtDebugger, preview bool) (descr []RuntimePropertyDescri
 	return
 }
 func makeStack(cdt *cdtDebugger, preview bool) (descr []RuntimePropertyDescriptor) {
+	stack := make([]v1.TealValue, len(cdt.stack))
+	for i := 0; i < len(stack); i++ {
+		stack[i] = cdt.stack[len(cdt.stack)-1-i]
+	}
+
+	fields := prepareArray(stack)
+	for _, field := range fields {
+		descr = append(descr, makePrimitive(field))
+	}
 	return
 }
+
 func makeScratch(cdt *cdtDebugger, preview bool) (descr []RuntimePropertyDescriptor) {
+	fields := prepareArray(cdt.scratch)
+	for _, field := range fields {
+		descr = append(descr, makePrimitive(field))
+	}
 	return
 }
 
@@ -306,12 +395,12 @@ func (cdt *cdtDebugger) handleCDTRequest(req *ChromeRequest) (ChromeResponse, er
 			fmt.Println("getObjectDescriptor error: " + err.Error())
 			return ChromeResponse{}, err
 		}
-		data, err := json.Marshal(descr)
-		if err != nil {
-			fmt.Println("getObjectDescriptor json error: " + err.Error())
-			return ChromeResponse{}, err
-		}
-		fmt.Printf("Descr object: %s\n", string(data))
+		// data, err := json.Marshal(descr)
+		// if err != nil {
+		// 	fmt.Println("getObjectDescriptor json error: " + err.Error())
+		// 	return ChromeResponse{}, err
+		// }
+		// fmt.Printf("Descr object: %s\n", string(data))
 		result := map[string][]RuntimePropertyDescriptor{
 			"result": descr,
 		}
