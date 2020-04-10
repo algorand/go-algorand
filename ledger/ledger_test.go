@@ -777,3 +777,83 @@ func TestLedgerSingleTxApplyDataV18(t *testing.T) {
 func TestLedgerSingleTxApplyDataFuture(t *testing.T) {
 	testLedgerSingleTxApplyData(t, protocol.ConsensusFuture)
 }
+
+func TestLedgerRegressionFaultyLeaseFirstValidCheckOld(t *testing.T) {
+	testLedgerRegressionFaultyLeaseFirstValidCheck2f3880f7(t, protocol.ConsensusV22)
+}
+
+func TestLedgerRegressionFaultyLeaseFirstValidCheckV23(t *testing.T) {
+	testLedgerRegressionFaultyLeaseFirstValidCheck2f3880f7(t, protocol.ConsensusV23)
+}
+
+func TestLedgerRegressionFaultyLeaseFirstValidCheck(t *testing.T) {
+	testLedgerRegressionFaultyLeaseFirstValidCheck2f3880f7(t, protocol.ConsensusCurrentVersion)
+}
+
+func TestLedgerRegressionFaultyLeaseFirstValidCheckFuture(t *testing.T) {
+	testLedgerRegressionFaultyLeaseFirstValidCheck2f3880f7(t, protocol.ConsensusFuture)
+}
+
+func testLedgerRegressionFaultyLeaseFirstValidCheck2f3880f7(t *testing.T, version protocol.ConsensusVersion) {
+	a := require.New(t)
+
+	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
+	defer backlogPool.Shutdown()
+
+	genesisInitState, initSecrets := testGenerateInitState(t, version)
+	const inMem = true
+	const archival = true
+	log := logging.TestingLog(t)
+	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, archival)
+	a.NoError(err, "could not open ledger")
+	defer l.Close()
+
+	proto := config.Consensus[version]
+	poolAddr := testPoolAddr
+	sinkAddr := testSinkAddr
+
+	initAccounts := genesisInitState.Accounts
+	var addrList []basics.Address
+	for addr := range initAccounts {
+		if addr != poolAddr && addr != sinkAddr {
+			addrList = append(addrList, addr)
+		}
+	}
+
+	correctTxHeader := transactions.Header{
+		Sender:      addrList[0],
+		Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+		FirstValid:  l.Latest() + 1,
+		LastValid:   l.Latest() + 10,
+		GenesisID:   t.Name(),
+		GenesisHash: crypto.Hash([]byte(t.Name())),
+	}
+
+	correctPayFields := transactions.PaymentTxnFields{
+		Receiver: addrList[1],
+		Amount:   basics.MicroAlgos{Raw: initAccounts[addrList[0]].MicroAlgos.Raw / 10},
+	}
+
+	correctPay := transactions.Transaction{
+		Type:             protocol.PaymentTx,
+		Header:           correctTxHeader,
+		PaymentTxnFields: correctPayFields,
+	}
+
+	var ad transactions.ApplyData
+
+	correctPayLease := correctPay
+	correctPayLease.Sender = addrList[3]
+	correctPayLease.Lease[0] = 1
+
+	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "could not add initial payment transaction")
+
+	correctPayLease.FirstValid = l.Latest() + 1
+	correctPayLease.LastValid = l.Latest() + 10
+
+	if proto.FixTransactionLeases {
+		a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "added payment transaction with overlapping lease")
+	} else {
+		a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "should allow leasing payment transaction with newer FirstValid")
+	}
+}
