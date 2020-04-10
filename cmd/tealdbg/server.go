@@ -93,7 +93,7 @@ type requestContext struct {
 	apiAddress string
 
 	// Registered API endpoints for debug sessions
-	endpoints map[ExecID]struct{}
+	endpoints map[ExecID]cdtTabDescription
 
 	// Router for API endpoints registration
 	router *mux.Router
@@ -117,6 +117,7 @@ func (rctx *requestContext) register(state logic.DebuggerState) {
 	// Store the state for this execution
 	rctx.mux.Lock()
 	rctx.execContexts[ExecID(state.ExecID)] = exec
+	rctx.addCDTEndpoint(ExecID(state.ExecID))
 	rctx.mux.Unlock()
 
 	// Inform the user to configure execution
@@ -209,6 +210,7 @@ func (rctx *requestContext) completeHandler(w http.ResponseWriter, r *http.Reque
 	// Clean up exec-specific state
 	rctx.mux.Lock()
 	delete(rctx.execContexts, ExecID(state.ExecID))
+	rctx.removeCDTEndpoint(ExecID(state.ExecID))
 	rctx.mux.Unlock()
 
 	// Proceed!
@@ -313,7 +315,7 @@ type devtoolsVersion struct {
 	ProtocolVersion string `json:"Protocol-Version"`
 }
 
-func (rctx *requestContext) devtoolsVersionHandler(w http.ResponseWriter, r *http.Request) {
+func (rctx *requestContext) cdtVersionHandler(w http.ResponseWriter, r *http.Request) {
 	version := devtoolsVersion{Browser: "teal dbg", ProtocolVersion: "1.1"}
 	enc, err := json.Marshal(version)
 	if err != nil {
@@ -324,41 +326,48 @@ func (rctx *requestContext) devtoolsVersionHandler(w http.ResponseWriter, r *htt
 	return
 }
 
-type devtoolsTabDescription struct {
-	Description               string `json:"description"`
-	DevtoolsFrontendURL       string `json:"devtoolsFrontendUrl"`
-	ID                        string `json:"id"`
-	Title                     string `json:"title"`
-	TabType                   string `json:"type"`
-	URL                       string `json:"url"`
-	WebSocketDebuggerURL      string `json:"webSocketDebuggerUrl"`
-	DevtoolsFrontendURLCompat string `json:"devtoolsFrontendUrlCompat"`
-	FaviconURL                string `json:"faviconUrl"`
+func (rctx *requestContext) removeCDTEndpoint(execID ExecID) {
+	if _, ok := rctx.endpoints[execID]; !ok {
+		return
+	}
+	delete(rctx.endpoints, execID)
 }
 
-func (rctx *requestContext) devtoolsJSONHandler(w http.ResponseWriter, r *http.Request) {
-	tabList := make([]devtoolsTabDescription, 0, len(rctx.execContexts))
-	for execID := range rctx.execContexts {
-		uuid := string(execID)
-		address := rctx.apiAddress + "/" + uuid
-		desc := devtoolsTabDescription{
-			Description:               "",
-			ID:                        uuid,
-			Title:                     "Algorand TEAL program",
-			TabType:                   "node",
-			URL:                       "https://algorand.com/",
-			DevtoolsFrontendURL:       "chrome-devtools://devtools/bundled/js_app.html?experiments=true&v8only=false&ws=" + address,
-			DevtoolsFrontendURLCompat: "chrome-devtools://devtools/bundled/inspector.html?experiments=true&v8only=false&ws=" + address,
-			WebSocketDebuggerURL:      "ws://" + address,
-			FaviconURL:                "https://www.algorand.com/icons/icon-144x144.png",
-		}
-		tabList = append(tabList, desc)
-		if _, ok := rctx.endpoints[execID]; !ok {
-			rctx.router.HandleFunc("/"+uuid, rctx.devtoolsWsHandler)
-			rctx.endpoints[execID] = struct{}{}
-		}
+// must be called with rctx.mux locked
+func (rctx *requestContext) addCDTEndpoint(execID ExecID) {
+	if _, ok := rctx.endpoints[execID]; ok {
+		return
 	}
-	enc, err := json.Marshal(tabList)
+	uuid := string(execID)
+	address := rctx.apiAddress + "/" + uuid
+	desc := cdtTabDescription{
+		Description:               "",
+		ID:                        uuid,
+		Title:                     "Algorand TEAL program",
+		TabType:                   "node",
+		URL:                       "https://algorand.com/",
+		DevtoolsFrontendURL:       "chrome-devtools://devtools/bundled/js_app.html?experiments=true&v8only=false&ws=" + address,
+		DevtoolsFrontendURLCompat: "chrome-devtools://devtools/bundled/inspector.html?experiments=true&v8only=false&ws=" + address,
+		WebSocketDebuggerURL:      "ws://" + address,
+		FaviconURL:                "https://www.algorand.com/icons/icon-144x144.png",
+	}
+
+	rctx.router.HandleFunc("/"+uuid, rctx.cdtWsHandler)
+	rctx.endpoints[execID] = desc
+}
+
+func (rctx *requestContext) cdtJSONHandler(w http.ResponseWriter, r *http.Request) {
+	tabs := make([]cdtTabDescription, 0, len(rctx.execContexts))
+
+	func() {
+		rctx.mux.Lock()
+		defer rctx.mux.Unlock()
+		for _, desc := range rctx.endpoints {
+			tabs = append(tabs, desc)
+		}
+	}()
+
+	enc, err := json.Marshal(tabs)
 	if err != nil {
 		return
 	}
@@ -369,16 +378,21 @@ func (rctx *requestContext) devtoolsJSONHandler(w http.ResponseWriter, r *http.R
 
 func (rctx *requestContext) broadcastNotifications() {
 	for {
-		if len(rctx.subscriptions) == 0 {
+		rctx.mux.Lock()
+		length := len(rctx.subscriptions)
+		rctx.mux.Unlock()
+		if length == 0 {
 			time.Sleep(10 * time.Millisecond)
 			continue
 		}
 		select {
 		case notification := <-rctx.notifications:
 			rctx.mux.Lock()
+			fmt.Printf("broadcasting %s\n", notification.Event)
 			for _, ch := range rctx.subscriptions {
 				select {
 				case ch <- notification:
+					fmt.Println("broadcated")
 				default:
 				}
 			}
@@ -397,6 +411,7 @@ func (rctx *requestContext) registerNotifications() (uint64, chan Notification) 
 }
 
 func (rctx *requestContext) unregisterNotifications(id uint64) {
+	fmt.Printf("unregister: %d\n", id)
 	rctx.mux.Lock()
 	defer rctx.mux.Unlock()
 	delete(rctx.subscriptions, id)
@@ -439,7 +454,7 @@ func (rctx *requestContext) subscribeHandler(w http.ResponseWriter, r *http.Requ
 	}
 }
 
-func (rctx *requestContext) devtoolsWsHandler(w http.ResponseWriter, r *http.Request) {
+func (rctx *requestContext) cdtWsHandler(w http.ResponseWriter, r *http.Request) {
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		return
@@ -462,8 +477,10 @@ func (rctx *requestContext) devtoolsWsHandler(w http.ResponseWriter, r *http.Req
 	cdtEventCh := make(chan interface{}, 128)
 	cdtUpdatedCh := make(chan interface{}, 1)
 
-	done := make(chan struct{})
+	closed := make(chan struct{})
 	registred := make(chan struct{})
+
+	completed := false
 
 	var dbgStateMu sync.Mutex
 	var dbgState logic.DebuggerState
@@ -473,12 +490,14 @@ func (rctx *requestContext) devtoolsWsHandler(w http.ResponseWriter, r *http.Req
 		for {
 			select {
 			case notification := <-notifications:
+				fmt.Printf("received: %s\n", notification.Event)
 				switch notification.Event {
 				case "completed":
 					evCxtDestroyed := RuntimeExecutionContextDestroyedEvent{
 						Method: "Runtime.executionContextDestroyed",
 						Params: RuntimeExecutionContextDestroyedParams{int(exec.execContextID)},
 					}
+					completed = true
 					cdtEventCh <- &evCxtDestroyed
 				case "registered":
 					// no mutex, the access already synchronized by "registred" chan
@@ -492,7 +511,7 @@ func (rctx *requestContext) devtoolsWsHandler(w http.ResponseWriter, r *http.Req
 				default:
 					fmt.Println("Unk event: " + notification.Event)
 				}
-			case <-done:
+			case <-closed:
 				return
 			}
 		}
@@ -525,8 +544,8 @@ func (rctx *requestContext) devtoolsWsHandler(w http.ResponseWriter, r *http.Req
 			mtype, reader, err := ws.NextReader()
 			if err != nil {
 				fmt.Println(err.Error())
-				done <- struct{}{}
-				close(done)
+				closed <- struct{}{}
+				close(closed)
 				return
 			}
 			if mtype != websocket.TextMessage {
@@ -537,8 +556,8 @@ func (rctx *requestContext) devtoolsWsHandler(w http.ResponseWriter, r *http.Req
 			n, err := reader.Read(msg)
 			if err != nil {
 				fmt.Println(err.Error())
-				done <- struct{}{}
-				close(done)
+				closed <- struct{}{}
+				close(closed)
 				return
 			}
 			json.Unmarshal(msg[:n], &cdtReq)
@@ -592,13 +611,18 @@ func (rctx *requestContext) devtoolsWsHandler(w http.ResponseWriter, r *http.Req
 				dbgStateMu.Unlock()
 				evPaused := cdtd.makeDebuggerPausedEvent()
 				cdtEventCh <- &evPaused
-			case <-done:
+			case <-closed:
 				return
 			}
 		}
 	}()
 
-	<-done
+	<-closed
+
+	// handle CDT window closing without resuming
+	if !completed {
+		rctx.resume(ExecID(uuid))
+	}
 }
 
 func main() {
@@ -612,7 +636,7 @@ func main() {
 		subscriptions: make(map[uint64]chan Notification),
 		execContexts:  make(map[ExecID]execContext),
 		apiAddress:    appAddress,
-		endpoints:     make(map[ExecID]struct{}),
+		endpoints:     make(map[ExecID]cdtTabDescription),
 		router:        router,
 	}
 
@@ -627,9 +651,9 @@ func main() {
 	router.HandleFunc("/exec/continue", rctx.continueHandler).Methods("POST")
 
 	// Requests from Chrome Devtools
-	router.HandleFunc("/json/version", rctx.devtoolsVersionHandler).Methods("GET")
-	router.HandleFunc("/json", rctx.devtoolsJSONHandler).Methods("GET")
-	router.HandleFunc("/json/list", rctx.devtoolsJSONHandler).Methods("GET")
+	router.HandleFunc("/json/version", rctx.cdtVersionHandler).Methods("GET")
+	router.HandleFunc("/json", rctx.cdtJSONHandler).Methods("GET")
+	router.HandleFunc("/json/list", rctx.cdtJSONHandler).Methods("GET")
 
 	// Websocket requests from client
 	router.HandleFunc("/ws", rctx.subscribeHandler)

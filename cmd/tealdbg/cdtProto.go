@@ -33,6 +33,18 @@ type ChromeRequest struct {
 	Params interface{} `json:"params,omitempty"`
 }
 
+type cdtTabDescription struct {
+	Description               string `json:"description"`
+	DevtoolsFrontendURL       string `json:"devtoolsFrontendUrl"`
+	ID                        string `json:"id"`
+	Title                     string `json:"title"`
+	TabType                   string `json:"type"`
+	URL                       string `json:"url"`
+	WebSocketDebuggerURL      string `json:"webSocketDebuggerUrl"`
+	DevtoolsFrontendURLCompat string `json:"devtoolsFrontendUrlCompat"`
+	FaviconURL                string `json:"faviconUrl"`
+}
+
 // RuntimeStackTraceID type
 type RuntimeStackTraceID struct {
 	ID         string `json:"id"`                   //
