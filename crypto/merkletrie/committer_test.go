@@ -65,7 +65,7 @@ func TestInMemoryCommitter(t *testing.T) {
 	for _, bytes := range memoryCommitter.memStore {
 		storageSize += len(bytes)
 	}
-	require.Equal(t, 1251144, storageSize) // 1,251,144 / 25,000 ~= 50 bytes/leaf.
+	require.Equal(t, 1133445, storageSize) // 1,133,445 / 25,000 ~= 45 bytes/leaf.
 	stats, _ := mt1.GetStats()
 	require.Equal(t, leafsCount, int(stats.leafCount))
 	require.Equal(t, 61926, int(stats.nodesCount))
