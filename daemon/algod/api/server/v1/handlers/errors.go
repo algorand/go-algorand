@@ -46,4 +46,6 @@ var (
 	errFailedToParseCatchpoint             = "failed to parse catchpoint"
 	errFailedToAbortCatchup                = "failed to abort catchup : %v"
 	errFailedToStartCatchup                = "failed to start catchup : %v"
+	errOperationNotAvailableDuringCatchup  = "operation not available during catchup"
+	errCertificateIsMissingFromBlock       = "certificate is missing from block"
 )

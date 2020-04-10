@@ -42,7 +42,7 @@ import (
 	"github.com/algorand/go-algorand/rpcs"
 )
 
-func nodeStatus(node *node.AlgorandFullNode) (res v1.NodeStatus, err error) {
+func getNodeStatus(node *node.AlgorandFullNode) (res v1.NodeStatus, err error) {
 	stat, err := node.Status()
 	if err != nil {
 		return v1.NodeStatus{}, err
@@ -383,7 +383,7 @@ func Status(ctx lib.ReqContext, context echo.Context) {
 
 	w := context.Response().Writer
 
-	nodeStatus, err := nodeStatus(ctx.Node)
+	nodeStatus, err := getNodeStatus(ctx.Node)
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
 		return
@@ -448,6 +448,17 @@ func WaitForBlock(ctx lib.ReqContext, context echo.Context) {
 		}
 	}
 
+	nodeStatus, err := getNodeStatus(ctx.Node)
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
+		return
+	}
+	if nodeStatus.Catchpoint != "" {
+		// node is currently catching up to the requested catchpoint.
+		lib.ErrorResponse(w, http.StatusServiceUnavailable, fmt.Errorf("WaitForBlock failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, ctx.Log)
+		return
+	}
+
 	select {
 	case <-ctx.Shutdown:
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errServiceShuttingDown, ctx.Log)
@@ -456,7 +467,7 @@ func WaitForBlock(ctx lib.ReqContext, context echo.Context) {
 	case <-ledger.Wait(basics.Round(queryRound + 1)):
 	}
 
-	nodeStatus, err := nodeStatus(ctx.Node)
+	nodeStatus, err = getNodeStatus(ctx.Node)
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
 		return
@@ -521,7 +532,18 @@ func RawTransaction(ctx lib.ReqContext, context echo.Context) {
 		return
 	}
 
-	err := ctx.Node.BroadcastSignedTxGroup(txgroup)
+	nodeStatus, err := getNodeStatus(ctx.Node)
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
+		return
+	}
+	if nodeStatus.Catchpoint != "" {
+		// node is currently catching up to the requested catchpoint.
+		lib.ErrorResponse(w, http.StatusServiceUnavailable, fmt.Errorf("RawTransaction failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, ctx.Log)
+		return
+	}
+
+	err = ctx.Node.BroadcastSignedTxGroup(txgroup)
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusBadRequest, err, err.Error(), ctx.Log)
 		return
@@ -576,6 +598,7 @@ func AccountInformation(ctx lib.ReqContext, context echo.Context) {
 		return
 	}
 
+	// the following has a bug : the request below is not atomic.
 	myLedger := ctx.Node.Ledger()
 	lastRound := myLedger.Latest()
 	record, err := myLedger.Lookup(lastRound, basics.Address(addr))
@@ -800,6 +823,17 @@ func PendingTransactionInformation(ctx lib.ReqContext, context echo.Context) {
 		return
 	}
 
+	nodeStatus, err := getNodeStatus(ctx.Node)
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
+		return
+	}
+	if nodeStatus.Catchpoint != "" {
+		// node is currently catching up to the requested catchpoint.
+		lib.ErrorResponse(w, http.StatusServiceUnavailable, fmt.Errorf("PendingTransactionInformation failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, ctx.Log)
+		return
+	}
+
 	if txn, ok := ctx.Node.GetPendingTransaction(txID); ok {
 		ledger := ctx.Node.Ledger()
 		responseTxs, err := txWithStatusEncode(txn)
@@ -865,6 +899,17 @@ func GetPendingTransactions(ctx lib.ReqContext, context echo.Context) {
 	max, err := strconv.ParseUint(r.FormValue("max"), 10, 64)
 	if err != nil {
 		max = 0
+	}
+
+	nodeStatus, err := getNodeStatus(ctx.Node)
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
+		return
+	}
+	if nodeStatus.Catchpoint != "" {
+		// node is currently catching up to the requested catchpoint.
+		lib.ErrorResponse(w, http.StatusServiceUnavailable, fmt.Errorf("GetPendingTransactions failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, ctx.Log)
+		return
 	}
 
 	txs, err := ctx.Node.GetPendingTxnsFromPool()
@@ -959,6 +1004,17 @@ func GetPendingTransactionsByAddress(ctx lib.ReqContext, context echo.Context) {
 	addr, err := basics.UnmarshalChecksumAddress(queryAddr)
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusBadRequest, err, errFailedToParseAddress, ctx.Log)
+		return
+	}
+
+	nodeStatus, err := getNodeStatus(ctx.Node)
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
+		return
+	}
+	if nodeStatus.Catchpoint != "" {
+		// node is currently catching up to the requested catchpoint.
+		lib.ErrorResponse(w, http.StatusServiceUnavailable, fmt.Errorf("GetPendingTransactionsByAddress failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, ctx.Log)
 		return
 	}
 
@@ -1184,6 +1240,18 @@ func SuggestedFee(ctx lib.ReqContext, context echo.Context) {
 	//       default: { description: Unknown Error }
 
 	w := context.Response().Writer
+
+	nodeStatus, err := getNodeStatus(ctx.Node)
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
+		return
+	}
+	if nodeStatus.Catchpoint != "" {
+		// node is currently catching up to the requested catchpoint.
+		lib.ErrorResponse(w, http.StatusServiceUnavailable, fmt.Errorf("SuggestedFee failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, ctx.Log)
+		return
+	}
+
 	fee := v1.TransactionFee{Fee: ctx.Node.SuggestedFee().Raw}
 	SendJSON(TransactionFeeResponse{&fee}, w, ctx.Log)
 }
@@ -1208,6 +1276,11 @@ func SuggestedParams(ctx lib.ReqContext, context echo.Context) {
 	stat, err := ctx.Node.Status()
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
+		return
+	}
+	if stat.Catchpoint != "" {
+		// node is currently catching up to the requested catchpoint.
+		lib.ErrorResponse(w, http.StatusServiceUnavailable, fmt.Errorf("SuggestedParams failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, ctx.Log)
 		return
 	}
 
@@ -1303,6 +1376,12 @@ func GetBlock(ctx lib.ReqContext, context echo.Context) {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
 		return
 	}
+
+	if len(c.Votes) == 0 {
+		lib.ErrorResponse(w, http.StatusNotFound, err, errCertificateIsMissingFromBlock, ctx.Log)
+		return
+	}
+
 	block, err := blockEncode(b, c)
 
 	if err != nil {
