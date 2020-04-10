@@ -480,8 +480,6 @@ func (rctx *requestContext) devtoolsWsHandler(w http.ResponseWriter, r *http.Req
 						Params: RuntimeExecutionContextDestroyedParams{int(exec.execContextID)},
 					}
 					cdtEventCh <- &evCxtDestroyed
-					done <- struct{}{}
-					close(done)
 				case "registered":
 					// no mutex, the access already synchronized by "registred" chan
 					dbgState = notification.DebuggerState
@@ -494,6 +492,8 @@ func (rctx *requestContext) devtoolsWsHandler(w http.ResponseWriter, r *http.Req
 				default:
 					fmt.Println("Unk event: " + notification.Event)
 				}
+			case <-done:
+				return
 			}
 		}
 	}()
@@ -525,6 +525,8 @@ func (rctx *requestContext) devtoolsWsHandler(w http.ResponseWriter, r *http.Req
 			mtype, reader, err := ws.NextReader()
 			if err != nil {
 				fmt.Println(err.Error())
+				done <- struct{}{}
+				close(done)
 				return
 			}
 			if mtype != websocket.TextMessage {
@@ -535,6 +537,8 @@ func (rctx *requestContext) devtoolsWsHandler(w http.ResponseWriter, r *http.Req
 			n, err := reader.Read(msg)
 			if err != nil {
 				fmt.Println(err.Error())
+				done <- struct{}{}
+				close(done)
 				return
 			}
 			json.Unmarshal(msg[:n], &cdtReq)
