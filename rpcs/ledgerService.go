@@ -45,19 +45,23 @@ const LedgerServiceLedgerPath = "/v{version:[0-9.]+}/{genesisID}/ledger/{round:[
 
 // LedgerService represents the Ledger RPC API
 type LedgerService struct {
-	ledger    *data.Ledger
-	genesisID string
-	net       network.GossipNode
+	ledger        *data.Ledger
+	genesisID     string
+	net           network.GossipNode
+	enableService bool
 }
 
 // MakeLedgerService creates a BlockService around the provider Ledger and registers it for RPC with the provided Registrar
 func MakeLedgerService(config config.Local, ledger *data.Ledger, net network.GossipNode, genesisID string) *LedgerService {
 	service := &LedgerService{
-		ledger:    ledger,
-		genesisID: genesisID,
-		net:       net,
+		ledger:        ledger,
+		genesisID:     genesisID,
+		net:           net,
+		enableService: config.EnableLedgerService,
 	}
-	net.RegisterHTTPHandler(LedgerServiceLedgerPath, service)
+	if service.enableService {
+		net.RegisterHTTPHandler(LedgerServiceLedgerPath, service)
+	}
 	return service
 }
 

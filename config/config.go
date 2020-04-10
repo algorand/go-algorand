@@ -53,7 +53,8 @@ type Local struct {
 	Version uint32
 
 	// environmental (may be overridden)
-	// if true, does not garbage collect; also, replies to catchup requests
+	// When enabled, stores blocks indefinitally, otherwise, only the most recents blocks
+	// are being kept around. ( the precise number of recent blocks depends on the consensus parameters )
 	Archival bool
 
 	// gossipNode.go
@@ -275,6 +276,14 @@ type Local struct {
 
 	// CatchpointInterval set the interval at which catchpoint are being generated.
 	CatchpointInterval uint64
+
+	// EnableLedgerService enables the ledger serving service. The functionality of this depends on NetAddress, which must also be provided.
+	// This functionality is required for the catchpoint catchup.
+	EnableLedgerService bool
+
+	// EnableBlockService enables the block serving service. The functionality of this depends on NetAddress, which must also be provided.
+	// This functionality is required for the catchup.
+	EnableBlockService bool
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)
@@ -342,6 +351,8 @@ func mergeConfigFromFile(configpath string, source Local) (Local, error) {
 	// We can change this logic in the future, but it's currently the sanest default.
 	if source.NetAddress != "" {
 		source.Archival = true
+		source.EnableLedgerService = true
+		source.EnableBlockService = true
 	}
 
 	return source, err

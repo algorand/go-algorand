@@ -550,6 +550,8 @@ var createCmd = &cobra.Command{
 		localConfig.Archival = newNodeArchival || newNodeRelay != "" || newNodeIndexer
 		localConfig.IsIndexerActive = newNodeIndexer
 		localConfig.RunHosted = runUnderHost
+		localConfig.EnableLedgerService = localConfig.Archival
+		localConfig.EnableBlockService = localConfig.Archival
 
 		// locate genesis block
 		exePath, err := util.ExeDir()

@@ -50,11 +50,12 @@ const BlockServiceBlockPath = "/v{version:[0-9.]+}/{genesisID}/block/{round:[0-9
 
 // BlockService represents the Block RPC API
 type BlockService struct {
-	ledger      *data.Ledger
-	genesisID   string
-	catchupReqs chan network.IncomingMessage
-	stop        chan struct{}
-	net         network.GossipNode
+	ledger        *data.Ledger
+	genesisID     string
+	catchupReqs   chan network.IncomingMessage
+	stop          chan struct{}
+	net           network.GossipNode
+	enableService bool
 }
 
 // EncodedBlockCert defines how GetBlockBytes encodes a block and its certificate
@@ -76,23 +77,28 @@ type PreEncodedBlockCert struct {
 // MakeBlockService creates a BlockService around the provider Ledger and registers it for RPC with the provided Registrar
 func MakeBlockService(config config.Local, ledger *data.Ledger, net network.GossipNode, genesisID string) *BlockService {
 	service := &BlockService{
-		ledger:      ledger,
-		genesisID:   genesisID,
-		catchupReqs: make(chan network.IncomingMessage, config.CatchupParallelBlocks*blockServerCatchupRequestBufferSize),
-		net:         net,
+		ledger:        ledger,
+		genesisID:     genesisID,
+		catchupReqs:   make(chan network.IncomingMessage, config.CatchupParallelBlocks*blockServerCatchupRequestBufferSize),
+		net:           net,
+		enableService: config.EnableBlockService,
 	}
-	net.RegisterHTTPHandler(BlockServiceBlockPath, service)
+	if service.enableService {
+		net.RegisterHTTPHandler(BlockServiceBlockPath, service)
+	}
 	return service
 }
 
 // Start listening to catchup requests over ws
 func (ls *BlockService) Start() {
-	handlers := []network.TaggedMessageHandler{
-		{Tag: protocol.UniCatchupReqTag, MessageHandler: network.HandlerFunc(ls.processIncomingMessage)},
-		{Tag: protocol.UniEnsBlockReqTag, MessageHandler: network.HandlerFunc(ls.processIncomingMessage)},
-	}
+	if ls.enableService {
+		handlers := []network.TaggedMessageHandler{
+			{Tag: protocol.UniCatchupReqTag, MessageHandler: network.HandlerFunc(ls.processIncomingMessage)},
+			{Tag: protocol.UniEnsBlockReqTag, MessageHandler: network.HandlerFunc(ls.processIncomingMessage)},
+		}
 
-	ls.net.RegisterHandlers(handlers)
+		ls.net.RegisterHandlers(handlers)
+	}
 	ls.stop = make(chan struct{})
 	go ls.ListenForCatchupReq(ls.catchupReqs, ls.stop)
 }
@@ -338,10 +344,14 @@ func topicBlockBytes(dataLedger *data.Ledger, round basics.Round, requestType st
 }
 
 // RawBlockBytes return the msgpack bytes for a block
-func RawBlockBytes(ledger *data.Ledger, round basics.Round) ([]byte, error) {
-	blk, cert, err := ledger.EncodedBlockCert(round)
+func RawBlockBytes(l *data.Ledger, round basics.Round) ([]byte, error) {
+	blk, cert, err := l.EncodedBlockCert(round)
 	if err != nil {
 		return nil, err
+	}
+
+	if len(cert) == 0 {
+		return nil, ledger.ErrNoEntry{Round: round}
 	}
 
 	return protocol.EncodeReflect(PreEncodedBlockCert{

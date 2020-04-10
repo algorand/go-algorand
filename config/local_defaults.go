@@ -92,6 +92,8 @@ var defaultLocalV7 = Local{
 	DNSSecurityFlags:                      0x01,
 	EnablePingHandler:                     true,
 	CatchpointInterval:                    20000, // added in V7
+	EnableLedgerService:                   false, // added in V7
+	EnableBlockService:                    false, // added in V7
 	// DO NOT MODIFY VALUES - New values may be added carefully - See WARNING at top of file
 }
 
