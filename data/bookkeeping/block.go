@@ -316,7 +316,7 @@ func (s UpgradeState) applyUpgradeVote(r basics.Round, vote UpgradeVote) (res Up
 
 		upgradeDelay := uint64(vote.UpgradeDelay)
 		if upgradeDelay > params.MaxUpgradeWaitRounds || upgradeDelay < params.MinUpgradeWaitRounds {
-			err = fmt.Errorf("applyUpgradeVote: proposed upgrade wait rounds %d out of permissible range", upgradeDelay)
+			err = fmt.Errorf("applyUpgradeVote: proposed upgrade wait rounds %d out of permissible range [%d, %d]", upgradeDelay, params.MinUpgradeWaitRounds, params.MaxUpgradeWaitRounds)
 			return
 		}
 
