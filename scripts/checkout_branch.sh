@@ -15,7 +15,7 @@
 # Examples: scripts/checkout_branch.sh master
 #           scripts/checkout_branch.sh dev/mybranch
 
-set -exo pipefail
+set -eo pipefail
 
 if [ "$#" -ne 1 ]; then
     echo "Syntax: checkout_branch <branch>"
@@ -32,7 +32,7 @@ cd "${REPO_ROOT}"
 
 # Check for clean workspace ignoring the update to buildnumber.dat which is expected during a release build.
 # Use before a forced checkout to ensure we don't clobber or lose any changes.
-if (( $(git status --porcelain | grep -cve "buildnumber.dat$" ) != 0 )); then
+if (( $(git status --porcelain | grep -cve "buildnumber\.dat$" ) != 0 )); then
     echo "[WARNING] Your workspace has changes, and this operation will destroy them! Please clean your workspace before trying again."
     exit 1
 fi
