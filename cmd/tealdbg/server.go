@@ -218,6 +218,23 @@ func (rctx *requestContext) completeHandler(w http.ResponseWriter, r *http.Reque
 	return
 }
 
+func (rctx *requestContext) delBreakpoint(execID ExecID) error {
+	exec, ok := rctx.fetchExecContext(execID)
+	if !ok {
+		return fmt.Errorf("no such exec id: %s", execID)
+	}
+
+	// Update the config
+	exec.debugConfig = debugConfig{BreakOnPC: -1}
+
+	// Write the config
+	rctx.mux.Lock()
+	rctx.execContexts[execID] = exec
+	rctx.mux.Unlock()
+
+	return nil
+}
+
 func (rctx *requestContext) setBreakpoint(execID ExecID, pc int) error {
 	exec, ok := rctx.fetchExecContext(execID)
 	if !ok {
@@ -521,14 +538,16 @@ func (rctx *requestContext) cdtWsHandler(w http.ResponseWriter, r *http.Request)
 	<-registred
 
 	dbgStateMu.Lock()
+	lines := strings.Split(dbgState.Disassembly, "\n")
 	cdtd := cdtDebugger{
 		uuid:        uuid,
 		rctx:        rctx,
 		contextID:   int(exec.execContextID),
 		scriptID:    "52",
+		breakpoints: make([]bool, len(lines)),
 		program:     dbgState.Disassembly,
 		offsets:     dbgState.PCOffset,
-		lines:       strings.Split(dbgState.Disassembly, "\n"),
+		lines:       lines,
 		currentLine: 1,
 		// execution environment
 		txnGroup:   dbgState.TxnGroup,
@@ -605,7 +624,7 @@ func (rctx *requestContext) cdtWsHandler(w http.ResponseWriter, r *http.Request)
 				}
 			case <-cdtUpdatedCh:
 				dbgStateMu.Lock()
-				cdtd.currentLine = cdtd.pcToLine(dbgState.PC)
+				atomic.StoreUint32(&cdtd.currentLine, cdtd.pcToLine(dbgState.PC))
 				cdtd.stack = dbgState.Stack
 				cdtd.scratch = dbgState.Scratch
 				dbgStateMu.Unlock()

@@ -22,9 +22,11 @@ import (
 	"encoding/hex"
 	// "encoding/json"
 	"fmt"
-	"math/rand"
+	// "math/rand"
+	// "sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
@@ -37,10 +39,11 @@ type cdtDebugger struct {
 	rctx        *requestContext
 	contextID   int
 	scriptID    string
+	breakpoints []bool
 	program     string
 	offsets     []logic.PCOffset
 	lines       []string
-	currentLine int
+	currentLine uint32
 	txnGroup    []transactions.SignedTxn
 	groupIndex  int
 	stack       []v1.TealValue
@@ -431,25 +434,54 @@ func (cdt *cdtDebugger) handleCDTRequest(req *ChromeRequest) (ChromeResponse, er
 		}
 		result["locations"] = locs
 		return ChromeResponse{ID: req.ID, Result: result}, nil
+	case "Debugger.removeBreakpoint":
+		p := req.Params.(map[string]interface{})
+		bpLine, err := strconv.Atoi(p["breakpointId"].(string))
+		if err != nil {
+			return ChromeResponse{ID: req.ID, Result: empty}, err
+		}
+		if bpLine < 0 || bpLine >= len(cdt.breakpoints) {
+			return ChromeResponse{ID: req.ID, Result: empty}, fmt.Errorf("invalid bp line %d", bpLine)
+		}
+		if cdt.breakpoints[bpLine] {
+			cdt.rctx.delBreakpoint(ExecID(cdt.uuid))
+			cdt.breakpoints[bpLine] = false
+		}
+		return ChromeResponse{ID: req.ID, Result: empty}, nil
 	case "Debugger.setBreakpointByUrl":
 		p := req.Params.(map[string]interface{})
 		bpLine := int(p["lineNumber"].(float64))
-		pc := cdt.lineToPC(bpLine)
-		fmt.Printf("setBp line %d, pc %d\n", bpLine, pc)
-		cdt.rctx.setBreakpoint(ExecID(cdt.uuid), pc)
+		if bpLine >= len(cdt.lines) {
+			return ChromeResponse{ID: req.ID, Result: empty}, fmt.Errorf("invalid bp line %d", bpLine)
+		}
+		cdt.breakpoints[bpLine] = true
+		targetpc := cdt.lineToPC(uint32(bpLine))
+		cdt.rctx.setBreakpoint(ExecID(cdt.uuid), targetpc)
+
 		result := make(map[string]interface{})
-		result["breakpointId"] = strconv.Itoa(rand.Int())
-		result["locations"] = []DebuggerLocation{DebuggerLocation{ScriptID: cdt.scriptID, LineNumber: bpLine}}
+		result["breakpointId"] = strconv.Itoa(bpLine)
+		result["locations"] = []DebuggerLocation{
+			DebuggerLocation{ScriptID: cdt.scriptID, LineNumber: bpLine},
+		}
 		return ChromeResponse{ID: req.ID, Result: result}, nil
 	case "Debugger.resume":
+		currentLine := atomic.LoadUint32(&cdt.currentLine)
+		if currentLine < uint32(len(cdt.breakpoints)) {
+			for line, active := range cdt.breakpoints[currentLine+1:] {
+				if active {
+					targetpc := cdt.lineToPC(uint32(line) + currentLine + 1)
+					cdt.rctx.setBreakpoint(ExecID(cdt.uuid), targetpc)
+					break
+				}
+			}
+		}
 		cdt.rctx.resume(ExecID(cdt.uuid))
 		return ChromeResponse{ID: req.ID, Result: empty}, nil
 	case "Debugger.stepOver", "Debugger.stepInto", "Debugger.stepOut":
-		nextpc := cdt.lineToPC(cdt.currentLine + 1)
-		fmt.Printf("step line %d, pc %d\n", cdt.currentLine+1, nextpc)
+		nextpc := cdt.lineToPC(atomic.LoadUint32(&cdt.currentLine) + uint32(1))
 		cdt.rctx.setBreakpoint(ExecID(cdt.uuid), nextpc)
 		cdt.rctx.resume(ExecID(cdt.uuid))
-		cdt.currentLine++
+		atomic.AddUint32(&cdt.currentLine, 1)
 		fallthrough
 	default:
 		return ChromeResponse{ID: req.ID, Result: empty}, nil
@@ -527,7 +559,7 @@ func (cdt *cdtDebugger) makeDebuggerPausedEvent() DebuggerPausedEvent {
 		FunctionName: "",
 		Location: &DebuggerLocation{
 			ScriptID:     cdt.scriptID,
-			LineNumber:   cdt.currentLine,
+			LineNumber:   int(atomic.LoadUint32(&cdt.currentLine)),
 			ColumnNumber: progLines,
 		},
 		URL:        "file://program.teal.js",
@@ -546,7 +578,7 @@ func (cdt *cdtDebugger) makeDebuggerPausedEvent() DebuggerPausedEvent {
 	return evPaused
 }
 
-func (cdt *cdtDebugger) lineToPC(line int) int {
+func (cdt *cdtDebugger) lineToPC(line uint32) int {
 	if len(cdt.offsets) == 0 || line < 1 {
 		return 0
 	}
@@ -561,7 +593,7 @@ func (cdt *cdtDebugger) lineToPC(line int) int {
 	return 0
 }
 
-func (cdt *cdtDebugger) pcToLine(pc int) int {
+func (cdt *cdtDebugger) pcToLine(pc int) uint32 {
 	if len(cdt.offsets) == 0 {
 		return 0
 	}
@@ -577,5 +609,5 @@ func (cdt *cdtDebugger) pcToLine(pc int) int {
 		offset = cdt.offsets[len(cdt.offsets)-1].Offset
 	}
 
-	return len(strings.Split(cdt.program[:offset], "\n")) - 1
+	return uint32(len(strings.Split(cdt.program[:offset], "\n")) - 1)
 }
