@@ -1358,11 +1358,17 @@ func (cx *evalContext) getRound() (rnd uint64, err error) {
 	return uint64(cx.Ledger.Round()), nil
 }
 
+// GlobalFieldToTealValue is a thin wrapper for globalFieldToStack for external use
+func GlobalFieldToTealValue(proto *config.ConsensusParams, txnGroup []transactions.SignedTxn, groupIndex int) (basics.TealValue, error) {
+	cx := evalContext{EvalParams: EvalParams{Proto: proto, TxnGroup: txnGroup}}
+	sv, err := cx.globalFieldToStack(uint64(groupIndex))
+	return sv.toTealValue(), err
+}
+
+
 var zeroAddress basics.Address
 
-func opGlobal(cx *evalContext) {
-	gindex := uint64(cx.program[cx.pc+1])
-	var sv stackValue
+func (cx *evalContext) globalFieldToStack(gindex uint64) (sv stackValue, err error) {
 	switch GlobalField(gindex) {
 	case MinTxnFee:
 		sv.Uint = cx.Proto.MinTxnFee
@@ -1385,7 +1391,16 @@ func opGlobal(cx *evalContext) {
 			}
 		}
 	default:
-		cx.err = fmt.Errorf("invalid global[%d]", gindex)
+		err = fmt.Errorf("invalid global[%d]", gindex)
+	}
+	return sv, err
+}
+
+func opGlobal(cx *evalContext) {
+	gindex := uint64(cx.program[cx.pc+1])
+	sv, err := cx.globalFieldToStack(gindex)
+	if err != nil {
+		cx.err = err
 		return
 	}
 

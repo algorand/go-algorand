@@ -554,6 +554,7 @@ func (rctx *requestContext) cdtWsHandler(w http.ResponseWriter, r *http.Request)
 		groupIndex: dbgState.GroupIndex,
 		stack:      dbgState.Stack,
 		scratch:    dbgState.Scratch,
+		proto:      dbgState.Proto,
 	}
 	dbgStateMu.Unlock()
 	// Chrome Devtools reader

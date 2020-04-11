@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/transactions"
 
@@ -53,6 +54,7 @@ type DebuggerState struct {
 	Error       string                   `json:"error"`
 	TxnGroup    []transactions.SignedTxn `json:"txngroup"`
 	GroupIndex  int                      `json:"gindex"`
+	Proto       *config.ConsensusParams  `json:"proto"`
 }
 
 func (cx *evalContext) debugState() *DebuggerState {
@@ -104,10 +106,8 @@ func (cx *evalContext) debugState() *DebuggerState {
 	ds.Stack = stack
 	ds.Scratch = scratch
 	ds.GroupIndex = cx.GroupIndex
-	ds.TxnGroup = make([]transactions.SignedTxn, len(cx.TxnGroup))
-	for i := 0; i < len(cx.TxnGroup); i++ {
-		ds.TxnGroup[i] = cx.TxnGroup[i]
-	}
+	ds.TxnGroup = cx.TxnGroup
+	ds.Proto = cx.Proto
 
 	return ds
 }

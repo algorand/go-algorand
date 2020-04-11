@@ -28,6 +28,7 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -48,6 +49,7 @@ type cdtDebugger struct {
 	groupIndex  int
 	stack       []v1.TealValue
 	scratch     []v1.TealValue
+	proto       *config.ConsensusParams
 }
 
 func makeObject(name, id string) RuntimePropertyDescriptor {
@@ -107,6 +109,24 @@ type fieldDesc struct {
 	Name  string
 	Value string
 	Type  string
+}
+
+func prepareGlobals(cdt *cdtDebugger) []fieldDesc {
+	result := make([]fieldDesc, 0, len(logic.GlobalFieldNames))
+	for _, name := range logic.GlobalFieldNames {
+		var value string
+		var valType string = "string"
+		tv, err := logic.GlobalFieldToTealValue(cdt.proto, cdt.txnGroup, cdt.groupIndex)
+		if err != nil {
+			value = err.Error()
+			valType = "undefined"
+		} else {
+			value = tv.String()
+			valType = tealTypeMap[tv.Type]
+		}
+		result = append(result, fieldDesc{name, value, valType})
+	}
+	return result
 }
 
 func prepareTxn(txn *transactions.Transaction, groupIndex int) []fieldDesc {
@@ -234,7 +254,30 @@ func (cdt *cdtDebugger) makeArrayPreview(array []v1.TealValue) RuntimeObjectPrev
 	return p
 }
 
+func (cdt *cdtDebugger) makeGlobalsPreview() RuntimeObjectPreview {
+	var prop []RuntimePropertyPreview
+	fields := prepareGlobals(cdt)
+
+	for _, field := range fields {
+		v := RuntimePropertyPreview{
+			Name:  field.Name,
+			Value: field.Value,
+			Type:  field.Type,
+		}
+		prop = append(prop, v)
+	}
+
+	p := RuntimeObjectPreview{
+		Type:        "object",
+		Description: "Object",
+		Overflow:    true,
+		Properties:  prop}
+	return p
+}
+
 const localScopeObjID = "localScopeObjId"
+const globalScopeObjID = "globalScopeObjID"
+const globalsObjID = "globalsObjID"
 const txnObjID = "txnObjID"
 const gtxnObjID = "gtxnObjID"
 const stackObjID = "stackObjID"
@@ -255,7 +298,20 @@ func decodeGroupTxnID(objID string) (int, bool) {
 	return 0, false
 }
 
-func makeScope(cdt *cdtDebugger, preview bool) (descr []RuntimePropertyDescriptor) {
+func makeGlobalScope(cdt *cdtDebugger, preview bool) (descr []RuntimePropertyDescriptor) {
+	globals := makeObject("globals", globalsObjID)
+	if preview {
+		globalsPreview := cdt.makeGlobalsPreview()
+		globals.Value.Preview = &globalsPreview
+	}
+
+	descr = []RuntimePropertyDescriptor{
+		globals,
+	}
+	return descr
+}
+
+func makeLocalScope(cdt *cdtDebugger, preview bool) (descr []RuntimePropertyDescriptor) {
 	txn := makeObject("txn", txnObjID)
 	gtxn := makeArray("gtxn", len(cdt.txnGroup), gtxnObjID)
 	stack := makeArray("stack", len(cdt.stack), stackObjID)
@@ -278,6 +334,14 @@ func makeScope(cdt *cdtDebugger, preview bool) (descr []RuntimePropertyDescripto
 		scratch,
 	}
 	return descr
+}
+
+func makeGlobals(cdt *cdtDebugger, preview bool) (descr []RuntimePropertyDescriptor) {
+	fields := prepareGlobals(cdt)
+	for _, field := range fields {
+		descr = append(descr, makePrimitive(field))
+	}
+	return
 }
 
 func makeTxn(cdt *cdtDebugger, preview bool) (descr []RuntimePropertyDescriptor) {
@@ -308,6 +372,7 @@ func makeTxnGroup(cdt *cdtDebugger, preview bool) (descr []RuntimePropertyDescri
 	}
 	return
 }
+
 func makeStack(cdt *cdtDebugger, preview bool) (descr []RuntimePropertyDescriptor) {
 	stack := make([]v1.TealValue, len(cdt.stack))
 	for i := 0; i < len(stack); i++ {
@@ -318,6 +383,7 @@ func makeStack(cdt *cdtDebugger, preview bool) (descr []RuntimePropertyDescripto
 	for _, field := range fields {
 		descr = append(descr, makePrimitive(field))
 	}
+	descr = append(descr, makePrimitive(fieldDesc{Name: "length", Value: strconv.Itoa(len(cdt.stack)), Type: "number"}))
 	return
 }
 
@@ -326,17 +392,20 @@ func makeScratch(cdt *cdtDebugger, preview bool) (descr []RuntimePropertyDescrip
 	for _, field := range fields {
 		descr = append(descr, makePrimitive(field))
 	}
+	descr = append(descr, makePrimitive(fieldDesc{Name: "length", Value: strconv.Itoa(len(cdt.scratch)), Type: "number"}))
 	return
 }
 
 type objectDescFn func(cdt *cdtDebugger, preview bool) []RuntimePropertyDescriptor
 
 var objectDescMap = map[string]objectDescFn{
-	localScopeObjID: makeScope,
-	txnObjID:        makeTxn,
-	gtxnObjID:       makeTxnGroup,
-	stackObjID:      makeStack,
-	scratchObjID:    makeScratch,
+	globalScopeObjID: makeGlobalScope,
+	localScopeObjID:  makeLocalScope,
+	globalsObjID:     makeGlobals,
+	txnObjID:         makeTxn,
+	gtxnObjID:        makeTxnGroup,
+	stackObjID:       makeStack,
+	scratchObjID:     makeScratch,
 }
 
 func (cdt *cdtDebugger) getObjectDescriptor(objID string, preview bool) (descr []RuntimePropertyDescriptor, err error) {
@@ -553,7 +622,16 @@ func (cdt *cdtDebugger) makeDebuggerPausedEvent() DebuggerPausedEvent {
 			ColumnNumber: 0,
 		},
 	}
-	sc := []DebuggerScope{scopeLocal}
+	scopeGlobal := DebuggerScope{
+		Type: "global",
+		Object: RuntimeRemoteObject{
+			Type:        "object",
+			ClassName:   "Object",
+			Description: "Object",
+			ObjectID:    globalScopeObjID,
+		},
+	}
+	sc := []DebuggerScope{scopeLocal, scopeGlobal}
 	cf := DebuggerCallFrame{
 		CallFrameID:  "mainframe",
 		FunctionName: "",
