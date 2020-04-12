@@ -104,7 +104,6 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-ch
 	e.Listener = listener
 	e.HideBanner = true
 
-	// Make sure '/v1/ledger/supply' and '/v1/ledger/supply/' are both accepted.
 	e.Pre(middleware.RemoveTrailingSlash())
 
 	e.Use(echo.WrapMiddleware(middlewares.Logger(logger)))
