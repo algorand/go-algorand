@@ -64,6 +64,7 @@ import (
 	"net/http"
 
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/server/common"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
@@ -102,6 +103,8 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-ch
 
 	e.Listener = listener
 	e.HideBanner = true
+
+	e.Pre(middleware.RemoveTrailingSlash())
 
 	e.Use(echo.WrapMiddleware(middlewares.Logger(logger)))
 	// TODO: New auth middleware - https://github.com/algorand/go-algorand/issues/863
