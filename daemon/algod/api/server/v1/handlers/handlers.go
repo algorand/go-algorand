@@ -1377,7 +1377,7 @@ func GetBlock(ctx lib.ReqContext, context echo.Context) {
 		return
 	}
 
-	if len(c.Votes) == 0 {
+	if len(c.Votes) == 0 && c.Round > basics.Round(0) {
 		lib.ErrorResponse(w, http.StatusNotFound, err, errCertificateIsMissingFromBlock, ctx.Log)
 		return
 	}

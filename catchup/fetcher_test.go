@@ -674,7 +674,9 @@ func TestGetBlockMocked(t *testing.T) {
 	if err != nil {
 		t.Errorf("Couldn't make ledger: %v", err)
 	}
-	rpcs.MakeBlockService(config.GetDefaultLocal(), ledgerA, nodeA, "test genesisID")
+	blockServiceConfig := config.GetDefaultLocal()
+	blockServiceConfig.EnableBlockService = true
+	rpcs.MakeBlockService(blockServiceConfig, ledgerA, nodeA, "test genesisID")
 
 	next := ledgerA.NextRound()
 	genHash := crypto.Digest{0x42}
@@ -873,6 +875,7 @@ func TestGetBlockWS(t *testing.T) {
 		net := buildTestHTTPPeerSource()
 		blockServiceConfig := config.GetDefaultLocal()
 		blockServiceConfig.CatchupParallelBlocks = 5
+		blockServiceConfig.EnableBlockService = true
 		ls := rpcs.MakeBlockService(blockServiceConfig, ledger, net, "test genesisID")
 
 		ls.Start()
