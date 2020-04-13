@@ -41,14 +41,17 @@ import (
 )
 
 type testParams struct {
-	txType     string
+	testType   string
 	name       string
 	program    []byte
 	schemaSize uint64
 	numApps    uint64
+	asaAccts   uint64
 }
 
 var testCases map[string]testParams
+var asaClearStateProgram []byte
+var asaAppovalProgram []byte
 
 func makeUnsignedApplicationCallTxPerf(appIdx uint64, params testParams, onCompletion transactions.OnCompletion, round int) transactions.Transaction {
 	var tx transactions.Transaction
@@ -72,6 +75,40 @@ func makeUnsignedApplicationCallTxPerf(appIdx uint64, params testParams, onCompl
 		}
 	}
 
+	return tx
+}
+
+func makeUnsignedASATx(appIdx uint64, creator basics.Address, round int) transactions.Transaction {
+	var tx transactions.Transaction
+
+	tx.Type = protocol.ApplicationCallTx
+	tx.ApplicationID = basics.AppIndex(appIdx)
+	tx.Header.FirstValid = basics.Round(round)
+	tx.Header.LastValid = basics.Round(round + 1000)
+	tx.Header.Fee = basics.MicroAlgos{Raw: 1000}
+
+	if appIdx == 0 {
+		tx.ApplicationArgs = [][]byte{
+			creator[:],
+			creator[:],
+			creator[:],
+			creator[:],
+			creator[:],
+			[]byte{0, 0, 0, 1, 0, 0, 0, 0},
+			[]byte{0, 0, 0, 0, 0, 0, 0, 0},
+		}
+		tx.OnCompletion = transactions.NoOpOC
+		tx.ApprovalProgram = asaAppovalProgram
+		tx.ClearStateProgram = asaClearStateProgram
+		tx.GlobalStateSchema = basics.StateSchema{
+			NumByteSlice: 5,
+			NumUint:      4,
+		}
+		tx.LocalStateSchema = basics.StateSchema{
+			NumByteSlice: 0,
+			NumUint:      2,
+		}
+	}
 	return tx
 }
 
@@ -116,6 +153,18 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 	require.NoError(b, err)
 	genesisInitState.Accounts[creator] = basics.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890})
 
+	// Make some accounts to opt into ASA
+	var accts []basics.Address
+	if params.testType == "asa" {
+		for i := uint64(0); i < params.asaAccts; i++ {
+			acct := basics.Address{}
+			_, err = rand.Read(acct[:])
+			require.NoError(b, err)
+			genesisInitState.Accounts[acct] = basics.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890})
+			accts = append(accts, acct)
+		}
+	}
+
 	// open first ledger
 	const inMem = false // use persistent storage
 	const archival = true
@@ -141,7 +190,7 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 		blk.BlockHeader.GenesisID = "x"
 
-		// If this is the first block, add a blank one to both ledgers
+		// If this is the zeroth block, add a blank one to both ledgers
 		if i == 0 {
 			err = l0.AddBlock(blk, cert)
 			require.NoError(b, err)
@@ -163,11 +212,24 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 			j++
 			// make a transaction of the appropriate type
 			var tx transactions.Transaction
-			switch params.txType {
+			switch params.testType {
 			case "pay":
 				tx = makeUnsignedPaymentTx(creator, i)
 			case "app":
 				tx = makeUnsignedApplicationCallTxPerf(createdAppIdx, params, onCompletion, i)
+			case "asa":
+				tx = makeUnsignedASATx(createdAppIdx, creator, i)
+				// If we've created the ASA already, then fill in some spending parameters
+				if createdAppIdx != 0 {
+					// Creator spends to an opted in acct
+					tx.ApplicationArgs = [][]byte{
+						[]byte{0, 0, 0, 0, 0, 0, 0, 1},
+					}
+					tx.Accounts = []basics.Address{
+						accts[j%len(accts)],
+						basics.Address{},
+					}
+				}
 			default:
 				panic("unknown tx type")
 			}
@@ -179,6 +241,9 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 				}
 			}
 
+			// On first block, create params.numApps apps by adding numApps
+			// copies of the tx (with different notes fields). Otheriwse, just
+			// add 1.
 			for k := uint64(0); k < numApps; k++ {
 				tx.Sender = creator
 				tx.Note = []byte(fmt.Sprintf("%d,%d,%d", i, j, k))
@@ -200,10 +265,27 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 				require.NoError(b, err)
 			}
 
-			// First block just creates app
+			// First block just creates app + opts in accts if asa test
 			if i == 1 {
 				onCompletion = transactions.NoOpOC
 				createdAppIdx = eval.state.txnCounter()
+
+				// On first block, opt in all accts to asa (accts is empty if not asa test)
+				k := 0
+				for _, acct := range accts {
+					tx = makeUnsignedASATx(createdAppIdx, basics.Address{}, i)
+					tx.OnCompletion = transactions.OptInOC
+					tx.Sender = acct
+					tx.Note = []byte(fmt.Sprintf("%d,%d,%d", i, j, k))
+					tx.GenesisHash = crypto.Digest{1}
+					k++
+
+					// add tx to block
+					var stxn transactions.SignedTxn
+					stxn.Txn = tx
+					stxn.Sig = crypto.Signature{1}
+					err = eval.Transaction(stxn, transactions.ApplyData{})
+				}
 				break
 			}
 		}
@@ -279,6 +361,8 @@ func BenchmarkAppInt1ManyApps(b *testing.B) { benchmarkFullBlocks(testCases["int
 
 func BenchmarkAppBigNoOp(b *testing.B) { benchmarkFullBlocks(testCases["big-noop"], b) }
 
+func BenchmarkAppASA(b *testing.B) { benchmarkFullBlocks(testCases["asa"], b) }
+
 func BenchmarkPay(b *testing.B) { benchmarkFullBlocks(testCases["pay"], b) }
 
 func init() {
@@ -307,33 +391,52 @@ func init() {
 	}
 
 	params := testParams{
-		txType:  "app",
-		name:    fmt.Sprintf("int-1"),
-		program: progBytes,
+		testType: "app",
+		name:     fmt.Sprintf("int-1"),
+		program:  progBytes,
 	}
 	testCases[params.name] = params
 
 	// Int 1 many apps
 	params = testParams{
-		txType:  "app",
-		name:    fmt.Sprintf("int-1-many-apps"),
-		program: progBytes,
-		numApps: 500,
+		testType: "app",
+		name:     fmt.Sprintf("int-1-many-apps"),
+		program:  progBytes,
+		numApps:  500,
+	}
+	testCases[params.name] = params
+
+	// Assemble ASA programs
+	asaClearStateProgram, err = logic.AssembleString(asaClearAsm)
+	if err != nil {
+		panic(err)
+	}
+
+	asaAppovalProgram, err = logic.AssembleString(asaAppovalAsm)
+	if err != nil {
+		panic(err)
+	}
+
+	// ASAs
+	params = testParams{
+		testType: "asa",
+		name:     "asa",
+		asaAccts: 100,
 	}
 	testCases[params.name] = params
 
 	// Payments
 	params = testParams{
-		txType: "pay",
-		name:   "pay",
+		testType: "pay",
+		name:     "pay",
 	}
 	testCases[params.name] = params
 
 	// Big NoOp
 	params = testParams{
-		txType:  "app",
-		name:    "big-noop",
-		program: genBigNoOp(1020),
+		testType: "app",
+		name:     "big-noop",
+		program:  genBigNoOp(1020),
 	}
 	testCases[params.name] = params
 }
@@ -495,9 +598,615 @@ func genAppTestParams(numKeys int, bigDiffs bool, stateType string) testParams {
 	}
 
 	return testParams{
-		txType:     "app",
+		testType:   "app",
 		name:       fmt.Sprintf("bench-%s-%d-%s", stateType, numKeys, testDiffName),
 		schemaSize: uint64(numKeys),
 		program:    progBytes,
 	}
 }
+
+const asaClearAsm = `
+byte base64 Ymw=
+byte base64 Ymw=
+app_global_get
+pop
+int 0
+int 0
+byte base64 Ymw=
+app_local_get
+pop
++
+app_global_put
+int 1
+`
+
+const asaAppovalAsm = `
+txn NumAppArgs
+int 7
+==
+bnz if0
+txn ApplicationID
+int 0
+==
+!
+bnz assert2
+err
+assert2:
+txn NumAccounts
+int 0
+==
+bnz cond4
+txn NumAccounts
+int 1
+==
+bnz cond5
+txn NumAppArgs
+int 2
+==
+bnz cond6
+// transfer asset
+txna ApplicationArgs 0
+btoi
+store 1
+load 1
+int 0
+==
+bnz unless7
+// cannot modify frozen asset
+txn Sender
+byte base64 Y3I=
+app_global_get
+pop
+==
+bnz if9
+int 0
+int 0
+byte base64 Zno=
+app_local_get
+pop
+int 1
+==
+int 1
+bnz if_end10
+if9:
+byte base64 Zno=
+app_global_get
+pop
+int 1
+==
+if_end10:
+!
+bnz assert8
+err
+assert8:
+txn Sender
+byte base64 Y3I=
+app_global_get
+pop
+==
+bnz if11
+int 0
+byte base64 Ymw=
+int 0
+int 0
+byte base64 Ymw=
+app_local_get
+pop
+load 1
+-
+app_local_put
+int 1
+bnz if_end12
+if11:
+byte base64 Ymw=
+byte base64 Ymw=
+app_global_get
+pop
+load 1
+-
+app_global_put
+if_end12:
+unless7:
+load 1
+int 0
+==
+bnz unless13
+// cannot modify frozen asset
+txna Accounts 1
+byte base64 Y3I=
+app_global_get
+pop
+==
+bnz if15
+int 1
+int 0
+byte base64 Zno=
+app_local_get
+pop
+int 1
+==
+int 1
+bnz if_end16
+if15:
+byte base64 Zno=
+app_global_get
+pop
+int 1
+==
+if_end16:
+!
+bnz assert14
+err
+assert14:
+txna Accounts 1
+byte base64 Y3I=
+app_global_get
+pop
+==
+bnz if17
+int 1
+byte base64 Ymw=
+int 1
+int 0
+byte base64 Ymw=
+app_local_get
+pop
+load 1
++
+app_local_put
+int 1
+bnz if_end18
+if17:
+byte base64 Ymw=
+byte base64 Ymw=
+app_global_get
+pop
+load 1
++
+app_global_put
+if_end18:
+unless13:
+txna Accounts 2
+global ZeroAddress
+==
+bnz unless19
+int 0
+int 0
+byte base64 Ymw=
+app_local_get
+pop
+store 2
+load 2
+int 0
+==
+bnz unless20
+// cannot modify frozen asset
+txn Sender
+byte base64 Y3I=
+app_global_get
+pop
+==
+bnz if22
+int 0
+int 0
+byte base64 Zno=
+app_local_get
+pop
+int 1
+==
+int 1
+bnz if_end23
+if22:
+byte base64 Zno=
+app_global_get
+pop
+int 1
+==
+if_end23:
+!
+bnz assert21
+err
+assert21:
+txn Sender
+byte base64 Y3I=
+app_global_get
+pop
+==
+bnz if24
+int 0
+byte base64 Ymw=
+int 0
+int 0
+byte base64 Ymw=
+app_local_get
+pop
+load 2
+-
+app_local_put
+int 1
+bnz if_end25
+if24:
+byte base64 Ymw=
+byte base64 Ymw=
+app_global_get
+pop
+load 2
+-
+app_global_put
+if_end25:
+unless20:
+load 2
+int 0
+==
+bnz unless26
+// cannot modify frozen asset
+txna Accounts 2
+byte base64 Y3I=
+app_global_get
+pop
+==
+bnz if28
+int 2
+int 0
+byte base64 Zno=
+app_local_get
+pop
+int 1
+==
+int 1
+bnz if_end29
+if28:
+byte base64 Zno=
+app_global_get
+pop
+int 1
+==
+if_end29:
+!
+bnz assert27
+err
+assert27:
+txna Accounts 2
+byte base64 Y3I=
+app_global_get
+pop
+==
+bnz if30
+int 2
+byte base64 Ymw=
+int 2
+int 0
+byte base64 Ymw=
+app_local_get
+pop
+load 2
++
+app_local_put
+int 1
+bnz if_end31
+if30:
+byte base64 Ymw=
+byte base64 Ymw=
+app_global_get
+pop
+load 2
++
+app_global_put
+if_end31:
+unless26:
+unless19:
+txn NumAppArgs
+int 1
+==
+txn NumAccounts
+int 2
+==
+&&
+txn OnCompletion
+int 0
+==
+bnz if32
+txn OnCompletion
+int 2
+==
+int 0
+int 0
+byte base64 Ymw=
+app_local_get
+pop
+int 0
+==
+&&
+txna Accounts 2
+global ZeroAddress
+==
+!
+&&
+int 1
+bnz if_end33
+if32:
+txna Accounts 2
+global ZeroAddress
+==
+if_end33:
+&&
+int 1
+bnz cond_end3
+cond6:
+// clawback asset
+txna ApplicationArgs 0
+btoi
+store 0
+txna Accounts 1
+byte base64 Y3I=
+app_global_get
+pop
+==
+bnz if34
+int 1
+byte base64 Ymw=
+int 1
+int 0
+byte base64 Ymw=
+app_local_get
+pop
+load 0
+-
+app_local_put
+int 1
+bnz if_end35
+if34:
+byte base64 Ymw=
+byte base64 Ymw=
+app_global_get
+pop
+load 0
+-
+app_global_put
+if_end35:
+txna Accounts 2
+byte base64 Y3I=
+app_global_get
+pop
+==
+bnz if36
+int 2
+byte base64 Ymw=
+int 2
+int 0
+byte base64 Ymw=
+app_local_get
+pop
+load 0
++
+app_local_put
+int 1
+bnz if_end37
+if36:
+byte base64 Ymw=
+byte base64 Ymw=
+app_global_get
+pop
+load 0
++
+app_global_put
+if_end37:
+txn NumAccounts
+int 2
+==
+txn OnCompletion
+int 0
+==
+&&
+txn Sender
+byte base64 Y2w=
+app_global_get
+pop
+==
+&&
+int 1
+bnz cond_end3
+cond5:
+// freeze asset holding
+txna Accounts 1
+byte base64 Y3I=
+app_global_get
+pop
+==
+bnz if38
+int 1
+byte base64 Zno=
+txna ApplicationArgs 0
+btoi
+app_local_put
+int 1
+bnz if_end39
+if38:
+byte base64 Zno=
+txna ApplicationArgs 0
+btoi
+app_global_put
+if_end39:
+txn NumAppArgs
+int 1
+==
+txn OnCompletion
+int 0
+==
+&&
+txn Sender
+byte base64 ZnI=
+app_global_get
+pop
+==
+&&
+int 1
+bnz cond_end3
+cond4:
+// asset deletion or opt-in
+txn OnCompletion
+int 1
+==
+!
+bnz when40
+// opting in to implicit zero bl
+int 0
+byte base64 Zno=
+byte base64 ZGY=
+app_global_get
+pop
+app_local_put
+when40:
+txn NumAppArgs
+int 0
+==
+txn OnCompletion
+int 5
+==
+txn Sender
+byte base64 bW4=
+app_global_get
+pop
+==
+&&
+byte base64 dHQ=
+app_global_get
+pop
+byte base64 Ymw=
+app_global_get
+pop
+==
+&&
+txn OnCompletion
+int 1
+==
+txn Sender
+byte base64 Y3I=
+app_global_get
+pop
+==
+!
+&&
+||
+&&
+cond_end3:
+int 1
+bnz if_end1
+if0:
+// asset configuration
+txn ApplicationID
+int 0
+==
+bnz if41
+txn Sender
+byte base64 bW4=
+app_global_get
+pop
+==
+txna ApplicationArgs 0
+global ZeroAddress
+==
+byte base64 bW4=
+app_global_get
+pop
+global ZeroAddress
+==
+!
+||
+&&
+txna ApplicationArgs 1
+global ZeroAddress
+==
+byte base64 cnY=
+app_global_get
+pop
+global ZeroAddress
+==
+!
+||
+&&
+txna ApplicationArgs 2
+global ZeroAddress
+==
+byte base64 ZnI=
+app_global_get
+pop
+global ZeroAddress
+==
+!
+||
+&&
+txna ApplicationArgs 3
+global ZeroAddress
+==
+byte base64 Y2w=
+app_global_get
+pop
+global ZeroAddress
+==
+!
+||
+&&
+bnz assert43
+err
+assert43:
+int 1
+bnz if_end42
+if41:
+byte base64 Y3I=
+txna ApplicationArgs 4
+app_global_put
+byte base64 dHQ=
+txna ApplicationArgs 5
+btoi
+app_global_put
+byte base64 Ymw=
+txna ApplicationArgs 5
+btoi
+app_global_put
+byte base64 ZGY=
+txna ApplicationArgs 6
+btoi
+app_global_put
+if_end42:
+byte base64 bW4=
+txna ApplicationArgs 0
+app_global_put
+byte base64 cnY=
+txna ApplicationArgs 1
+app_global_put
+byte base64 ZnI=
+txna ApplicationArgs 2
+app_global_put
+byte base64 Y2w=
+txna ApplicationArgs 3
+app_global_put
+txn NumAccounts
+int 0
+==
+txn OnCompletion
+int 0
+==
+&&
+txna ApplicationArgs 0
+len
+int 32
+==
+&&
+txna ApplicationArgs 1
+len
+int 32
+==
+&&
+txna ApplicationArgs 2
+len
+int 32
+==
+&&
+txna ApplicationArgs 3
+len
+int 32
+==
+&&
+if_end1:
+`
