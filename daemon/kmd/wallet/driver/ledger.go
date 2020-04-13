@@ -317,11 +317,12 @@ func (lw *LedgerWallet) SignTransaction(tx transactions.Transaction, pk crypto.P
 	if len(pks) > 1 {
 		return nil, errors.New("LedgerWallet device only supports one key but ListKeys returned more than one")
 	}
-	if (pk != crypto.PublicKey{}) {
+	if len(pks) < 1 {
+		return nil, errKeyNotFound
+	}
+	if (pk != crypto.PublicKey{}) && pk != crypto.PublicKey(pks[0]) {
 		// A specific key was requested; return an error if it's not the one on the device.
-		if len(pks) < 1 || pks[0] != crypto.Digest(pk) {
-			return nil, errKeyNotFound
-		}
+		return nil, errKeyNotFound
 	}
 	pk = crypto.PublicKey(pks[0])
 
