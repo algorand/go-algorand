@@ -20,7 +20,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
-	// "encoding/json"
+	"encoding/json"
 	"fmt"
 	// "math/rand"
 	// "sort"
@@ -167,15 +167,20 @@ func prepareArray(array []v1.TealValue) []fieldDesc {
 			if err != nil {
 				value = tv.Bytes
 			} else {
-				prinable := true
+				printable := true
 				for i := 0; i < len(data); i++ {
 					if !strconv.IsPrint(rune(data[i])) {
-						prinable = false
+						printable = false
 						break
 					}
 				}
-				if prinable {
+				if printable {
 					value = string(data)
+				} else if len(data) < 8 {
+					value = fmt.Sprintf("%q", data)
+					if value[0] == '"' {
+						value = value[1 : len(value)-1]
+					}
 				} else {
 					value = hex.EncodeToString(data)
 				}
@@ -320,13 +325,21 @@ func makeLocalScope(cdt *cdtDebugger, preview bool) (descr []RuntimePropertyDesc
 	scratch := makeArray("scratch", len(cdt.scratch), scratchObjID)
 	if preview {
 		txnPreview := cdt.makeTxnPreview(cdt.groupIndex)
+		if len(txnPreview.Properties) > 0 {
+			txn.Value.Preview = &txnPreview
+		}
 		gtxnPreview := cdt.makeGtxnPreview()
+		if len(gtxnPreview.Properties) > 0 {
+			gtxn.Value.Preview = &gtxnPreview
+		}
 		stackPreview := cdt.makeArrayPreview(cdt.stack)
+		if len(stackPreview.Properties) > 0 {
+			stack.Value.Preview = &stackPreview
+		}
 		scratchPreview := cdt.makeArrayPreview(cdt.scratch)
-		txn.Value.Preview = &txnPreview
-		gtxn.Value.Preview = &gtxnPreview
-		stack.Value.Preview = &stackPreview
-		scratch.Value.Preview = &scratchPreview
+		if len(scratchPreview.Properties) > 0 {
+			scratch.Value.Preview = &scratchPreview
+		}
 	}
 
 	pc := makePrimitive(fieldDesc{
@@ -487,12 +500,15 @@ func (cdt *cdtDebugger) handleCDTRequest(req *ChromeRequest, isCompleted bool) (
 			err = fmt.Errorf("getObjectDescriptor error: " + err.Error())
 			return
 		}
-		// data, err := json.Marshal(descr)
-		// if err != nil {
-		// 	fmt.Println("getObjectDescriptor json error: " + err.Error())
-		// 	return ChromeResponse{}, err
-		// }
-		// fmt.Printf("Descr object: %s\n", string(data))
+
+		var data []byte
+		data, err = json.Marshal(descr)
+		if err != nil {
+			err = fmt.Errorf("getObjectDescriptor json error: " + err.Error())
+			return
+		}
+		fmt.Printf("Descr object: %s\n", string(data))
+
 		result := map[string][]RuntimePropertyDescriptor{
 			"result": descr,
 		}
