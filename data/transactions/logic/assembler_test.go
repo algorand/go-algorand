@@ -750,3 +750,14 @@ func TestAssembleAsset(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "asset_params_get unknown arg")
 }
+
+func TestDisassembleSingleOp(t *testing.T) {
+	// test ensures no double arg_0 entries in disassebly listing
+	sample := "// version 2\narg_0\n"
+	program, err := AssembleString(sample)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(program))
+	disassembled, err := Disassemble(program)
+	require.NoError(t, err)
+	require.Equal(t, sample, disassembled)
+}
