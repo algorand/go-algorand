@@ -121,25 +121,24 @@ func (ac *ApplicationCallTxnFields) Empty() bool {
 	return true
 }
 
-// Allocate the map of LocalStates if it is nil, and then clone all LocalStates
+// Allocate the map of LocalStates if it is nil, and return a copy. We do *not*
+// call clone on each AppLocalState -- callers must do that for any values
+// where they intend to modify a contained refernece type e.g. KeyValue.
 func cloneAppLocalStates(m map[basics.AppIndex]basics.AppLocalState) map[basics.AppIndex]basics.AppLocalState {
 	res := make(map[basics.AppIndex]basics.AppLocalState, len(m))
 	for k, v := range m {
-		// TODO if required: performance improvement: only clone
-		// LocalState for app idx affected by this transaction
-		res[k] = v.Clone()
+		res[k] = v
 	}
 	return res
 }
 
-// Allocate the map of AppParams if it is nil, and then clone all AppParams
+// Allocate the map of AppParams if it is nil, and return a copy. We do *not*
+// call clone on each AppParams -- callers must do that for any values where
+// they intend to modify a contained reference type e.g. the GlobalState.
 func cloneAppParams(m map[basics.AppIndex]basics.AppParams) map[basics.AppIndex]basics.AppParams {
 	res := make(map[basics.AppIndex]basics.AppParams, len(m))
 	for k, v := range m {
-		// TODO if required: performance improvement: only clone
-		// AppParams (and thus GlobalState) for app idx affected
-		// by this transaction
-		res[k] = v.Clone()
+		res[k] = v
 	}
 	return res
 }
@@ -228,7 +227,7 @@ func applyStateDeltas(evalDelta basics.EvalDelta, params basics.AppParams, creat
 			return fmt.Errorf("cannot apply GlobalState delta: %v", err)
 		}
 
-		// Apply the GlobalDelta in place
+		// Apply the GlobalDelta in place on the cloned copy
 		err = applyDelta(evalDelta.GlobalDelta, params.GlobalState)
 		if err != nil {
 			return err
@@ -318,6 +317,8 @@ func applyStateDeltas(evalDelta basics.EvalDelta, params basics.AppParams, creat
 			return err
 		}
 
+		// Overwrite parameters for this appIdx with our cloned,
+		// modified params
 		record.AppParams = cloneAppParams(record.AppParams)
 		record.AppParams[appIdx] = params
 
