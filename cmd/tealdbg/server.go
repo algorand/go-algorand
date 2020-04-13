@@ -53,6 +53,9 @@ type execContext struct {
 
 	// devtools context id
 	execContextID int32
+
+	// notifications from eval
+	notifications chan Notification
 }
 
 // ConfigRequest tells us what breakpoints to hit, if any
@@ -77,14 +80,8 @@ type requestContext struct {
 	// Prevent races when accessing maps
 	mux deadlock.Mutex
 
-	// Receive registration, update, and completed notifications from TEAL
-	notifications chan Notification
-
 	// Last subscription ID used for notifications broadcasts to web clients
 	maxSubID uint64
-
-	// Broadcast notifications to all web clients over their respective channels
-	subscriptions map[uint64]chan Notification
 
 	// State stored per execution
 	execContexts map[ExecID]execContext
@@ -113,6 +110,7 @@ func (rctx *requestContext) register(state logic.DebuggerState) {
 
 	// Allocate an acknowledgement channel
 	exec.acknowledged = make(chan bool)
+	exec.notifications = make(chan Notification)
 
 	// Store the state for this execution
 	rctx.mux.Lock()
@@ -121,7 +119,7 @@ func (rctx *requestContext) register(state logic.DebuggerState) {
 	rctx.mux.Unlock()
 
 	// Inform the user to configure execution
-	rctx.notifications <- Notification{"registered", state}
+	exec.notifications <- Notification{"registered", state}
 
 	fmt.Printf("register wait for ack\n")
 
@@ -170,7 +168,7 @@ func (rctx *requestContext) updateHandler(w http.ResponseWriter, r *http.Request
 		if cfg.BreakOnPC != -1 {
 			if cfg.BreakOnPC == 0 || state.PC == cfg.BreakOnPC {
 				// Breakpoint hit! Inform the user
-				rctx.notifications <- Notification{"updated", state}
+				exec.notifications <- Notification{"updated", state}
 			} else {
 				// Continue if we haven't hit the next breakpoint
 				exec.acknowledged <- true
@@ -204,8 +202,14 @@ func (rctx *requestContext) completeHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	exec, ok := rctx.execContexts[ExecID(state.ExecID)]
+	if !ok {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
 	// Inform the user
-	rctx.notifications <- Notification{"completed", state}
+	exec.notifications <- Notification{"completed", state}
 
 	// Clean up exec-specific state
 	rctx.mux.Lock()
@@ -393,47 +397,6 @@ func (rctx *requestContext) cdtJSONHandler(w http.ResponseWriter, r *http.Reques
 	return
 }
 
-func (rctx *requestContext) broadcastNotifications() {
-	for {
-		rctx.mux.Lock()
-		length := len(rctx.subscriptions)
-		rctx.mux.Unlock()
-		if length == 0 {
-			time.Sleep(10 * time.Millisecond)
-			continue
-		}
-		select {
-		case notification := <-rctx.notifications:
-			rctx.mux.Lock()
-			fmt.Printf("broadcasting %s\n", notification.Event)
-			for _, ch := range rctx.subscriptions {
-				select {
-				case ch <- notification:
-					fmt.Println("broadcated")
-				default:
-				}
-			}
-			rctx.mux.Unlock()
-		}
-	}
-}
-
-func (rctx *requestContext) registerNotifications() (uint64, chan Notification) {
-	rctx.mux.Lock()
-	defer rctx.mux.Unlock()
-	rctx.maxSubID++
-	notifications := make(chan Notification)
-	rctx.subscriptions[rctx.maxSubID] = notifications
-	return rctx.maxSubID, notifications
-}
-
-func (rctx *requestContext) unregisterNotifications(id uint64) {
-	fmt.Printf("unregister: %d\n", id)
-	rctx.mux.Lock()
-	defer rctx.mux.Unlock()
-	delete(rctx.subscriptions, id)
-}
-
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  10240,
 	WriteBufferSize: 10240,
@@ -455,14 +418,17 @@ func (rctx *requestContext) subscribeHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	subid, notifications := rctx.registerNotifications()
-	defer rctx.unregisterNotifications(subid)
+	var notifications chan Notification
+	rctx.mux.Lock()
+	for _, exec := range rctx.execContexts {
+		notifications = exec.notifications
+	}
+	rctx.mux.Unlock()
 
 	// Wait on notifications and forward to the user
 	for {
 		select {
 		case notification := <-notifications:
-			fmt.Printf("received: %v\n", notification)
 			err := ws.WriteJSON(&notification)
 			if err != nil {
 				return
@@ -484,11 +450,11 @@ func (rctx *requestContext) cdtWsHandler(w http.ResponseWriter, r *http.Request)
 	}
 	exec, ok := rctx.execContexts[ExecID(uuid)]
 	if !ok {
+		w.WriteHeader(http.StatusNotFound)
 		return
 	}
 
-	subid, notifications := rctx.registerNotifications()
-	defer rctx.unregisterNotifications(subid)
+	notifications := exec.notifications
 
 	cdtRespCh := make(chan ChromeResponse, 128)
 	cdtEventCh := make(chan interface{}, 128)
@@ -651,13 +617,11 @@ func main() {
 	appAddress := "localhost:9392"
 
 	rctx := requestContext{
-		mux:           deadlock.Mutex{},
-		notifications: make(chan Notification),
-		subscriptions: make(map[uint64]chan Notification),
-		execContexts:  make(map[ExecID]execContext),
-		apiAddress:    appAddress,
-		endpoints:     make(map[ExecID]cdtTabDescription),
-		router:        router,
+		mux:          deadlock.Mutex{},
+		execContexts: make(map[ExecID]execContext),
+		apiAddress:   appAddress,
+		endpoints:    make(map[ExecID]cdtTabDescription),
+		router:       router,
 	}
 
 	// Requests from TEAL evaluator
@@ -684,8 +648,6 @@ func main() {
 		WriteTimeout: time.Duration(0),
 		ReadTimeout:  time.Duration(0),
 	}
-
-	go rctx.broadcastNotifications()
 
 	log.Printf("starting server on %s", appAddress)
 	server.ListenAndServe()
