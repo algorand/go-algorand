@@ -202,6 +202,7 @@ func (rctx *requestContext) completeHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	fmt.Printf("completeHandler %s\n", state.ExecID)
 	exec, ok := rctx.execContexts[ExecID(state.ExecID)]
 	if !ok {
 		w.WriteHeader(http.StatusNotFound)
@@ -210,6 +211,7 @@ func (rctx *requestContext) completeHandler(w http.ResponseWriter, r *http.Reque
 
 	// Inform the user
 	exec.notifications <- Notification{"completed", state}
+	fmt.Printf("completeHandler notified %s\n", state.ExecID)
 
 	// Clean up exec-specific state
 	rctx.mux.Lock()
@@ -475,17 +477,15 @@ func (rctx *requestContext) cdtWsHandler(w http.ResponseWriter, r *http.Request)
 			case notification := <-notifications:
 				fmt.Printf("received: %s\n", notification.Event)
 				switch notification.Event {
-				case "completed":
-					evCxtDestroyed := RuntimeExecutionContextDestroyedEvent{
-						Method: "Runtime.executionContextDestroyed",
-						Params: RuntimeExecutionContextDestroyedParams{int(exec.execContextID)},
-					}
-					completed = true
-					cdtEventCh <- &evCxtDestroyed
 				case "registered":
 					// no mutex, the access already synchronized by "registred" chan
 					dbgState = notification.DebuggerState
 					registred <- struct{}{}
+				case "completed":
+					// if completed we still want to see updated state
+					completed = true
+					close(notifications)
+					fallthrough
 				case "updated":
 					dbgStateMu.Lock()
 					dbgState = notification.DebuggerState
@@ -495,6 +495,9 @@ func (rctx *requestContext) cdtWsHandler(w http.ResponseWriter, r *http.Request)
 					fmt.Println("Unk event: " + notification.Event)
 				}
 			case <-closed:
+				return
+			}
+			if completed {
 				return
 			}
 		}
@@ -550,23 +553,15 @@ func (rctx *requestContext) cdtWsHandler(w http.ResponseWriter, r *http.Request)
 			fmt.Printf("%v\n", cdtReq)
 
 			dbgStateMu.Lock()
-			cdtResp, err := cdtd.handleCDTRequest(&cdtReq)
+			cdtResp, events, err := cdtd.handleCDTRequest(&cdtReq, completed)
 			dbgStateMu.Unlock()
-			if err == nil {
-				cdtRespCh <- cdtResp
-			} else {
+			if err != nil {
 				fmt.Println(err.Error())
+				continue
 			}
-			// some messages change processing state
-			switch cdtReq.Method {
-			case "Debugger.enable":
-				evCtxCreated := cdtd.makeContextCreatedEvent()
-				evParsed := cdtd.makeScriptParsedEvent()
-				cdtEventCh <- &evCtxCreated
-				cdtEventCh <- &evParsed
-			case "Runtime.runIfWaitingForDebugger":
-				evPaused := cdtd.makeDebuggerPausedEvent()
-				cdtEventCh <- &evPaused
+			cdtRespCh <- cdtResp
+			for _, event := range events {
+				cdtEventCh <- event
 			}
 		}
 	}()
@@ -591,12 +586,22 @@ func (rctx *requestContext) cdtWsHandler(w http.ResponseWriter, r *http.Request)
 				}
 			case <-cdtUpdatedCh:
 				dbgStateMu.Lock()
-				atomic.StoreUint32(&cdtd.currentLine, cdtd.pcToLine(dbgState.PC))
+				line := cdtd.pcToLine(dbgState.PC)
+				if completed {
+					line++
+				}
+				atomic.StoreUint32(&cdtd.currentLine, line)
 				cdtd.stack = dbgState.Stack
 				cdtd.scratch = dbgState.Scratch
+				lastAction := cdtd.lastAction
 				dbgStateMu.Unlock()
-				evPaused := cdtd.makeDebuggerPausedEvent()
-				cdtEventCh <- &evPaused
+				var event interface{}
+				if completed && lastAction == "resume" {
+					event = cdtd.makeContextDestroyedEvent()
+				} else {
+					event = cdtd.makeDebuggerPausedEvent()
+				}
+				cdtEventCh <- event
 			case <-closed:
 				return
 			}
@@ -605,9 +610,18 @@ func (rctx *requestContext) cdtWsHandler(w http.ResponseWriter, r *http.Request)
 
 	<-closed
 
-	// handle CDT window closing without resuming
+	// handle CDT window closing without resuming execution
+	// resume and consume a final "completed" notification
 	if !completed {
 		rctx.resume(ExecID(uuid))
+		defer func() {
+			for {
+				select {
+				case <-notifications:
+					return
+				}
+			}
+		}()
 	}
 }
 

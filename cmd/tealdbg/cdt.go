@@ -45,11 +45,13 @@ type cdtDebugger struct {
 	offsets     []logic.PCOffset
 	lines       []string
 	currentLine uint32
-	txnGroup    []transactions.SignedTxn
-	groupIndex  int
-	stack       []v1.TealValue
-	scratch     []v1.TealValue
-	proto       *config.ConsensusParams
+	lastAction  string
+
+	txnGroup   []transactions.SignedTxn
+	groupIndex int
+	stack      []v1.TealValue
+	scratch    []v1.TealValue
+	proto      *config.ConsensusParams
 }
 
 func makeObject(name, id string) RuntimePropertyDescriptor {
@@ -327,12 +329,19 @@ func makeLocalScope(cdt *cdtDebugger, preview bool) (descr []RuntimePropertyDesc
 		scratch.Value.Preview = &scratchPreview
 	}
 
+	pc := makePrimitive(fieldDesc{
+		Name:  "PC",
+		Value: strconv.Itoa(cdt.lineToPC(atomic.LoadUint32(&cdt.currentLine))),
+		Type:  "number",
+	})
 	descr = []RuntimePropertyDescriptor{
+		pc,
 		txn,
 		gtxn,
 		stack,
 		scratch,
 	}
+
 	return descr
 }
 
@@ -374,6 +383,7 @@ func makeTxnGroup(cdt *cdtDebugger, preview bool) (descr []RuntimePropertyDescri
 }
 
 func makeStack(cdt *cdtDebugger, preview bool) (descr []RuntimePropertyDescriptor) {
+	fmt.Printf("makeStack\n")
 	stack := make([]v1.TealValue, len(cdt.stack))
 	for i := 0; i < len(stack); i++ {
 		stack[i] = cdt.stack[len(cdt.stack)-1-i]
@@ -427,32 +437,41 @@ func (cdt *cdtDebugger) getObjectDescriptor(objID string, preview bool) (descr [
 	return maker(cdt, preview), nil
 }
 
-func (cdt *cdtDebugger) handleCDTRequest(req *ChromeRequest) (ChromeResponse, error) {
+func (cdt *cdtDebugger) handleCDTRequest(req *ChromeRequest, isCompleted bool) (response ChromeResponse, events []interface{}, err error) {
 	empty := make(map[string]interface{})
-
 	switch req.Method {
 	case "Debugger.enable":
+		evCtxCreated := cdt.makeContextCreatedEvent()
+		evParsed := cdt.makeScriptParsedEvent()
+		events = append(events, &evCtxCreated, &evParsed)
+
 		debuggerID := make(map[string]string)
 		debuggerID["debuggerId"] = cdt.uuid
-		return ChromeResponse{ID: req.ID, Result: debuggerID}, nil
+		response = ChromeResponse{ID: req.ID, Result: debuggerID}
+	case "Runtime.runIfWaitingForDebugger":
+		evPaused := cdt.makeDebuggerPausedEvent()
+		events = append(events, &evPaused)
+		response = ChromeResponse{ID: req.ID, Result: empty}
 	case "Runtime.getIsolateId":
 		isolateID := make(map[string]string)
 		isolateID["id"] = cdt.uuid
-		return ChromeResponse{ID: req.ID, Result: isolateID}, nil
+		response = ChromeResponse{ID: req.ID, Result: isolateID}
 	case "Debugger.getScriptSource":
 		p := req.Params.(map[string]interface{})
 		_, ok := p["scriptId"]
 		source := make(map[string]string)
 		if !ok {
-			return ChromeResponse{}, fmt.Errorf("getScriptSource failed: no scriptId")
+			err = fmt.Errorf("getScriptSource failed: no scriptId")
+			return
 		}
 		source["scriptSource"] = cdt.program
-		return ChromeResponse{ID: req.ID, Result: source}, nil
+		response = ChromeResponse{ID: req.ID, Result: source}
 	case "Runtime.getProperties":
 		p := req.Params.(map[string]interface{})
 		objIDRaw, ok := p["objectId"]
 		if !ok {
-			return ChromeResponse{}, fmt.Errorf("getProperties failed: no objectId")
+			err = fmt.Errorf("getProperties failed: no objectId")
+			return
 		}
 		objID := objIDRaw.(string)
 
@@ -462,10 +481,11 @@ func (cdt *cdtDebugger) handleCDTRequest(req *ChromeRequest) (ChromeResponse, er
 			preview = previewRaw.(bool)
 		}
 
-		descr, err := cdt.getObjectDescriptor(objID, preview)
+		var descr []RuntimePropertyDescriptor
+		descr, err = cdt.getObjectDescriptor(objID, preview)
 		if err != nil {
-			fmt.Println("getObjectDescriptor error: " + err.Error())
-			return ChromeResponse{}, err
+			err = fmt.Errorf("getObjectDescriptor error: " + err.Error())
+			return
 		}
 		// data, err := json.Marshal(descr)
 		// if err != nil {
@@ -476,14 +496,15 @@ func (cdt *cdtDebugger) handleCDTRequest(req *ChromeRequest) (ChromeResponse, er
 		result := map[string][]RuntimePropertyDescriptor{
 			"result": descr,
 		}
-		return ChromeResponse{ID: req.ID, Result: result}, nil
+		response = ChromeResponse{ID: req.ID, Result: result}
 	case "Debugger.getPossibleBreakpoints":
 		p := req.Params.(map[string]interface{})
 		var start, end map[string]interface{}
 		var startLine, endLine int
 		var scriptID string
 		if _, ok := p["start"]; !ok {
-			return ChromeResponse{ID: req.ID, Result: empty}, nil
+			response = ChromeResponse{ID: req.ID, Result: empty}
+			return
 		}
 
 		start = p["start"].(map[string]interface{})
@@ -502,26 +523,29 @@ func (cdt *cdtDebugger) handleCDTRequest(req *ChromeRequest) (ChromeResponse, er
 			locs = append(locs, DebuggerLocation{ScriptID: scriptID, LineNumber: ln})
 		}
 		result["locations"] = locs
-		return ChromeResponse{ID: req.ID, Result: result}, nil
+		response = ChromeResponse{ID: req.ID, Result: result}
 	case "Debugger.removeBreakpoint":
 		p := req.Params.(map[string]interface{})
-		bpLine, err := strconv.Atoi(p["breakpointId"].(string))
+		var bpLine int
+		bpLine, err = strconv.Atoi(p["breakpointId"].(string))
 		if err != nil {
-			return ChromeResponse{ID: req.ID, Result: empty}, err
+			return
 		}
 		if bpLine < 0 || bpLine >= len(cdt.breakpoints) {
-			return ChromeResponse{ID: req.ID, Result: empty}, fmt.Errorf("invalid bp line %d", bpLine)
+			err = fmt.Errorf("invalid bp line %d", bpLine)
+			return
 		}
 		if cdt.breakpoints[bpLine] {
 			cdt.rctx.delBreakpoint(ExecID(cdt.uuid))
 			cdt.breakpoints[bpLine] = false
 		}
-		return ChromeResponse{ID: req.ID, Result: empty}, nil
+		response = ChromeResponse{ID: req.ID, Result: empty}
 	case "Debugger.setBreakpointByUrl":
 		p := req.Params.(map[string]interface{})
 		bpLine := int(p["lineNumber"].(float64))
 		if bpLine >= len(cdt.lines) {
-			return ChromeResponse{ID: req.ID, Result: empty}, fmt.Errorf("invalid bp line %d", bpLine)
+			err = fmt.Errorf("invalid bp line %d", bpLine)
+			return
 		}
 		cdt.breakpoints[bpLine] = true
 		targetpc := cdt.lineToPC(uint32(bpLine))
@@ -532,7 +556,7 @@ func (cdt *cdtDebugger) handleCDTRequest(req *ChromeRequest) (ChromeResponse, er
 		result["locations"] = []DebuggerLocation{
 			DebuggerLocation{ScriptID: cdt.scriptID, LineNumber: bpLine},
 		}
-		return ChromeResponse{ID: req.ID, Result: result}, nil
+		response = ChromeResponse{ID: req.ID, Result: result}
 	case "Debugger.resume":
 		currentLine := atomic.LoadUint32(&cdt.currentLine)
 		if currentLine < uint32(len(cdt.breakpoints)) {
@@ -544,17 +568,29 @@ func (cdt *cdtDebugger) handleCDTRequest(req *ChromeRequest) (ChromeResponse, er
 				}
 			}
 		}
+		cdt.lastAction = "resume"
 		cdt.rctx.resume(ExecID(cdt.uuid))
-		return ChromeResponse{ID: req.ID, Result: empty}, nil
+		if isCompleted {
+			evDestroyed := cdt.makeContextDestroyedEvent()
+			events = append(events, &evDestroyed)
+		}
+		response = ChromeResponse{ID: req.ID, Result: empty}
 	case "Debugger.stepOver", "Debugger.stepInto", "Debugger.stepOut":
 		nextpc := cdt.lineToPC(atomic.LoadUint32(&cdt.currentLine) + uint32(1))
 		cdt.rctx.setBreakpoint(ExecID(cdt.uuid), nextpc)
 		cdt.rctx.resume(ExecID(cdt.uuid))
 		atomic.AddUint32(&cdt.currentLine, 1)
-		fallthrough
+		cdt.lastAction = "step"
+		if isCompleted {
+			evDestroyed := cdt.makeContextDestroyedEvent()
+			events = append(events, &evDestroyed)
+		}
+		response = ChromeResponse{ID: req.ID, Result: empty}
 	default:
-		return ChromeResponse{ID: req.ID, Result: empty}, nil
+		response = ChromeResponse{ID: req.ID, Result: empty}
 	}
+
+	return
 }
 
 func (cdt *cdtDebugger) makeContextCreatedEvent() RuntimeExecutionContextCreatedEvent {
@@ -574,6 +610,13 @@ func (cdt *cdtDebugger) makeContextCreatedEvent() RuntimeExecutionContextCreated
 		},
 	}
 	return evCtxCreated
+}
+
+func (cdt *cdtDebugger) makeContextDestroyedEvent() RuntimeExecutionContextDestroyedEvent {
+	return RuntimeExecutionContextDestroyedEvent{
+		Method: "Runtime.executionContextDestroyed",
+		Params: RuntimeExecutionContextDestroyedParams{cdt.contextID},
+	}
 }
 
 func (cdt *cdtDebugger) makeScriptParsedEvent() DebuggerScriptParsedEvent {
