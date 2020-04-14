@@ -51,7 +51,7 @@ type Wallet interface {
 	ListMultisigAddrs() (addrs []crypto.Digest, err error)
 	DeleteMultisigAddr(addr crypto.Digest, pw []byte) error
 
-	SignTransaction(tx transactions.Transaction, pw []byte) ([]byte, error)
+	SignTransaction(tx transactions.Transaction, pk crypto.PublicKey, pw []byte) ([]byte, error)
 
 	MultisigSignTransaction(tx transactions.Transaction, pk crypto.PublicKey, partial crypto.MultisigSig, pw []byte) (crypto.MultisigSig, error)
 
