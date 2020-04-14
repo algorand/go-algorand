@@ -121,8 +121,6 @@ func (rctx *requestContext) register(state logic.DebuggerState) {
 	// Inform the user to configure execution
 	exec.notifications <- Notification{"registered", state}
 
-	fmt.Printf("register wait for ack\n")
-
 	// Wait for acknowledgement
 	<-exec.acknowledged
 }
@@ -202,7 +200,6 @@ func (rctx *requestContext) completeHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	fmt.Printf("completeHandler %s\n", state.ExecID)
 	exec, ok := rctx.execContexts[ExecID(state.ExecID)]
 	if !ok {
 		w.WriteHeader(http.StatusNotFound)
@@ -211,7 +208,6 @@ func (rctx *requestContext) completeHandler(w http.ResponseWriter, r *http.Reque
 
 	// Inform the user
 	exec.notifications <- Notification{"completed", state}
-	fmt.Printf("completeHandler notified %s\n", state.ExecID)
 
 	// Clean up exec-specific state
 	rctx.mux.Lock()
@@ -377,6 +373,9 @@ func (rctx *requestContext) addCDTEndpoint(execID ExecID) {
 
 	rctx.router.HandleFunc("/"+uuid, rctx.cdtWsHandler)
 	rctx.endpoints[execID] = desc
+
+	fmt.Printf("Debugger listening on: %s\n", desc.WebSocketDebuggerURL)
+	fmt.Printf("Or open in Chrome:\n%s\n", desc.DevtoolsFrontendURL)
 }
 
 func (rctx *requestContext) cdtJSONHandler(w http.ResponseWriter, r *http.Request) {
@@ -402,6 +401,15 @@ func (rctx *requestContext) cdtJSONHandler(w http.ResponseWriter, r *http.Reques
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  10240,
 	WriteBufferSize: 10240,
+	CheckOrigin: func(r *http.Request) bool {
+		if len(r.Header.Get("Origin")) == 0 {
+			return true
+		}
+		if strings.HasPrefix(r.Header.Get("Origin"), "devtools://") {
+			return true
+		}
+		return false
+	},
 }
 
 func (rctx *requestContext) subscribeHandler(w http.ResponseWriter, r *http.Request) {
@@ -442,6 +450,7 @@ func (rctx *requestContext) subscribeHandler(w http.ResponseWriter, r *http.Requ
 func (rctx *requestContext) cdtWsHandler(w http.ResponseWriter, r *http.Request) {
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
+		fmt.Printf("Error on connection upgrade: %v\n", err)
 		return
 	}
 	defer ws.Close()
