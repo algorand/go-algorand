@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/condvar"
 )
 
@@ -652,7 +653,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 
 			for i, txib := range payset {
 				fee := txib.Txn.Fee.Raw
-				encodedLen := txib.GetEncodedLength()
+				encodedLen := len(protocol.Encode(&txib))
 
 				stats.IncludedCount++
 				totalFees += fee
