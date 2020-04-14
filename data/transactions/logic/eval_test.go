@@ -3060,7 +3060,10 @@ pop
 	require.Contains(t, err.Error(), "illegal opcode 0x36") // txna
 }
 
-func TestStepErrors(t *testing.T) {
+func TestStepReturnTypesErrors(t *testing.T) {
+	// TODO(pzbitskiy) turn this into a unit test
+	t.Skip()
+
 	source := `intcblock 0
 intc_0
 intc_0
@@ -3073,6 +3076,10 @@ intc_0
 
 	origSpec := opsByName[LogicVersion]["+"]
 	spec := origSpec
+	defer func() {
+		// restore, opsByOpcode is global
+		opsByOpcode[LogicVersion][spec.Opcode] = origSpec
+	}()
 
 	spec.op = func(cx *evalContext) {
 		// empty stack
@@ -3096,6 +3103,25 @@ intc_0
 	_, err = Eval(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "expected to return uint64 but actual is []byte")
+}
+
+func TestStepErrors(t *testing.T) {
+	source := `intcblock 0
+	intc_0
+	intc_0
+	+
+	`
+	program, err := AssembleString(source)
+	require.NoError(t, err)
+
+	ep := defaultEvalParams(nil, nil)
+
+	origSpec := opsByName[LogicVersion]["+"]
+	spec := origSpec
+	defer func() {
+		// restore, opsByOpcode is global
+		opsByOpcode[LogicVersion][spec.Opcode] = origSpec
+	}()
 
 	spec.op = func(cx *evalContext) {
 		// overflow
@@ -3105,7 +3131,4 @@ intc_0
 	_, err = Eval(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "stack overflow")
-
-	// restore, opsByOpcode is global
-	opsByOpcode[LogicVersion][spec.Opcode] = origSpec
 }
