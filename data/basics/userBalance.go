@@ -106,6 +106,12 @@ type AccountData struct {
 	VoteLastValid   Round  `codec:"voteLst"`
 	VoteKeyDilution uint64 `codec:"voteKD"`
 
+	// SpendingKey is the address against which signatures/multisigs/logicsigs should be checked.
+	// If empty, the address of the account whose AccountData this is is used.
+	// A transaction may change an account's SpendingKey to "re-key" the account.
+	// This allows key rotation, changing the members in a multisig, etc.
+	SpendingKey Address `codec:"spend"`
+
 	// If this account created an asset, AssetParams stores
 	// the parameters defining that asset.  The params are indexed
 	// by the Index of the AssetID; the Creator is this account's address.

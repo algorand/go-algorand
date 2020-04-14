@@ -601,6 +601,20 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, appEval *app
 		if dup {
 			return TransactionInLedgerError{txid}
 		}
+
+		// Does the address that authorized the transaction actually match whatever address the sender has rekeyed to?
+		// i.e., the sig/lsig/msig was checked against the txn.Authorizer() address, but does this match the SpendingKey in the sender's balance record?
+		acctdata, err := cow.lookup(txn.Txn.Sender)
+		if err != nil {
+			return err
+		}
+		correctAuthorizer := acctdata.SpendingKey
+		if (correctAuthorizer == basics.Address{}) {
+			correctAuthorizer = txn.Txn.Sender
+		}
+		if txn.Authorizer() != correctAuthorizer {
+			return fmt.Errorf("transaction %v: should have been authorized by %v but was actually authorized by %v", txn.ID(), correctAuthorizer, txn.Authorizer())
+		}
 	}
 
 	spec := transactions.SpecialAddresses{

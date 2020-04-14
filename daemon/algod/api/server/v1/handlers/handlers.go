@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gorilla/mux"
+	"github.com/labstack/echo/v4"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
@@ -471,7 +471,7 @@ func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error)
 }
 
 // Status is an httpHandler for route GET /v1/status
-func Status(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
+func Status(ctx lib.ReqContext, context echo.Context) {
 	// swagger:operation GET /v1/status GetStatus
 	//---
 	//     Summary: Gets the current node status.
@@ -487,6 +487,9 @@ func Status(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	//         schema: {type: string}
 	//       401: { description: Invalid API Token }
 	//       default: { description: Unknown Error }
+
+	w := context.Response().Writer
+
 	nodeStatus, err := nodeStatus(ctx.Node)
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
@@ -498,7 +501,7 @@ func Status(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 }
 
 // WaitForBlock is an httpHandler for route GET /v1/status/wait-for-block-after/{round:[0-9]+}
-func WaitForBlock(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
+func WaitForBlock(ctx lib.ReqContext, context echo.Context) {
 	// swagger:operation GET /v1/status/wait-for-block-after/{round}/ WaitForBlock
 	// ---
 	//     Summary: Gets the node status after waiting for the given round.
@@ -526,7 +529,10 @@ func WaitForBlock(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	//         schema: {type: string}
 	//       401: { description: Invalid API Token }
 	//       default: { description: Unknown Error }
-	queryRound, err := strconv.ParseUint(mux.Vars(r)["round"], 10, 64)
+
+	w := context.Response().Writer
+
+	queryRound, err := strconv.ParseUint(context.Param("round"), 10, 64)
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusBadRequest, err, errFailedParsingRoundNumber, ctx.Log)
 		return
@@ -568,7 +574,7 @@ func WaitForBlock(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 }
 
 // RawTransaction is an httpHandler for route POST /v1/transactions
-func RawTransaction(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
+func RawTransaction(ctx lib.ReqContext, context echo.Context) {
 	// swagger:operation POST /v1/transactions RawTransaction
 	// ---
 	//     Summary: Broadcasts a raw transaction to the network.
@@ -597,6 +603,10 @@ func RawTransaction(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) 
 	//         schema: {type: string}
 	//       401: { description: Invalid API Token }
 	//       default: { description: Unknown Error }
+
+	w := context.Response().Writer
+	r := context.Request()
+
 	var txgroup []transactions.SignedTxn
 	dec := protocol.NewDecoder(r.Body)
 	for {
@@ -630,7 +640,7 @@ func RawTransaction(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) 
 }
 
 // AccountInformation is an httpHandler for route GET /v1/account/{addr:[A-Z0-9]{KeyLength}}
-func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
+func AccountInformation(ctx lib.ReqContext, context echo.Context) {
 	// swagger:operation GET /v1/account/{address} AccountInformation
 	// ---
 	//     Summary: Get account information.
@@ -657,7 +667,10 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 	//         schema: {type: string}
 	//       401: { description: Invalid API Token }
 	//       default: { description: Unknown Error }
-	queryAddr := mux.Vars(r)["addr"]
+
+	w := context.Response().Writer
+
+	queryAddr := context.Param("addr")
 
 	if queryAddr == "" {
 		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errNoAccountSpecified), errNoAccountSpecified, ctx.Log)
@@ -761,7 +774,7 @@ func AccountInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 }
 
 // TransactionInformation is an httpHandler for route GET /v1/account/{addr:[A-Z0-9]{KeyLength}}/transaction/{txid:[A-Z0-9]+}
-func TransactionInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
+func TransactionInformation(ctx lib.ReqContext, context echo.Context) {
 	// swagger:operation GET /v1/account/{address}/transaction/{txid} TransactionInformation
 	// ---
 	//     Summary: Get a specific confirmed transaction.
@@ -797,7 +810,9 @@ func TransactionInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.R
 	//       401: { description: Invalid API Token }
 	//       default: { description: Unknown Error }
 
-	queryTxID := mux.Vars(r)["txid"]
+	w := context.Response().Writer
+
+	queryTxID := context.Param("txid")
 	if queryTxID == "" {
 		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errNoTxnSpecified), errNoTxnSpecified, ctx.Log)
 		return
@@ -809,7 +824,7 @@ func TransactionInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.R
 		return
 	}
 
-	queryAddr := mux.Vars(r)["addr"]
+	queryAddr := context.Param("addr")
 	if queryAddr == "" {
 		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errNoAccountSpecified), errNoAccountSpecified, ctx.Log)
 		return
@@ -859,7 +874,7 @@ func TransactionInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.R
 }
 
 // PendingTransactionInformation is an httpHandler for route GET /v1/transactions/pending/{txid:[A-Z0-9]+}
-func PendingTransactionInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
+func PendingTransactionInformation(ctx lib.ReqContext, context echo.Context) {
 	// swagger:operation GET /v1/transactions/pending/{txid} PendingTransactionInformation
 	// ---
 	//     Summary: Get a specific pending transaction.
@@ -896,7 +911,9 @@ func PendingTransactionInformation(ctx lib.ReqContext, w http.ResponseWriter, r 
 	//       401: { description: Invalid API Token }
 	//       default: { description: Unknown Error }
 
-	queryTxID := mux.Vars(r)["txid"]
+	w := context.Response().Writer
+
+	queryTxID := context.Param("txid")
 	if queryTxID == "" {
 		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errNoTxnSpecified), errNoTxnSpecified, ctx.Log)
 		return
@@ -939,7 +956,7 @@ func PendingTransactionInformation(ctx lib.ReqContext, w http.ResponseWriter, r 
 }
 
 // GetPendingTransactions is an httpHandler for route GET /v1/transactions/pending.
-func GetPendingTransactions(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
+func GetPendingTransactions(ctx lib.ReqContext, context echo.Context) {
 	// swagger:operation GET /v1/transactions/pending GetPendingTransactions
 	// ---
 	//     Summary: Get a list of unconfirmed transactions currently in the transaction pool.
@@ -967,6 +984,10 @@ func GetPendingTransactions(ctx lib.ReqContext, w http.ResponseWriter, r *http.R
 	//         schema: {type: string}
 	//       401: { description: Invalid API Token }
 	//       default: { description: Unknown Error }
+
+	w := context.Response().Writer
+	r := context.Request()
+
 	max, err := strconv.ParseUint(r.FormValue("max"), 10, 64)
 	if err != nil {
 		max = 0
@@ -1010,7 +1031,7 @@ func GetPendingTransactions(ctx lib.ReqContext, w http.ResponseWriter, r *http.R
 }
 
 // GetPendingTransactionsByAddress is an httpHandler for route GET /v1/account/addr:[A-Z0-9]{KeyLength}}/transactions/pending.
-func GetPendingTransactionsByAddress(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
+func GetPendingTransactionsByAddress(ctx lib.ReqContext, context echo.Context) {
 	// swagger:operation GET /v1/account/{addr}/transactions/pending GetPendingTransactionsByAddress
 	// ---
 	//     Summary: Get a list of unconfirmed transactions currently in the transaction pool by address.
@@ -1045,6 +1066,9 @@ func GetPendingTransactionsByAddress(ctx lib.ReqContext, w http.ResponseWriter, 
 	//       401: { description: Invalid API Token }
 	//       default: { description: Unknown Error }
 
+	w := context.Response().Writer
+	r := context.Request()
+
 	queryMax := r.FormValue("max")
 	max, err := strconv.ParseUint(queryMax, 10, 64)
 	if queryMax != "" && err != nil {
@@ -1052,7 +1076,7 @@ func GetPendingTransactionsByAddress(ctx lib.ReqContext, w http.ResponseWriter, 
 		return
 	}
 
-	queryAddr := mux.Vars(r)["addr"]
+	queryAddr := context.Param("addr")
 	if queryAddr == "" {
 		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errNoAccountSpecified), errNoAccountSpecified, ctx.Log)
 		return
@@ -1102,7 +1126,7 @@ func GetPendingTransactionsByAddress(ctx lib.ReqContext, w http.ResponseWriter, 
 }
 
 // AssetInformation is an httpHandler for route GET /v1/asset/{index:[0-9]+}
-func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
+func AssetInformation(ctx lib.ReqContext, context echo.Context) {
 	// swagger:operation GET /v1/asset/{index} AssetInformation
 	// ---
 	//     Summary: Get asset information.
@@ -1131,7 +1155,10 @@ func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request
 	//         schema: {type: string}
 	//       401: { description: Invalid API Token }
 	//       default: { description: Unknown Error }
-	queryIndex, err := strconv.ParseUint(mux.Vars(r)["index"], 10, 64)
+
+	w := context.Response().Writer
+
+	queryIndex, err := strconv.ParseUint(context.Param("index"), 10, 64)
 
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusBadRequest, err, errFailedToParseAssetIndex, ctx.Log)
@@ -1165,7 +1192,7 @@ func AssetInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request
 }
 
 // Assets is an httpHandler for route GET /v1/assets
-func Assets(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
+func Assets(ctx lib.ReqContext, context echo.Context) {
 	// swagger:operation GET /v1/assets Assets
 	// ---
 	//     Summary: List assets
@@ -1201,6 +1228,9 @@ func Assets(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	//         schema: {type: string}
 	//       401: { description: Invalid API Token }
 	//       default: { description: Unknown Error }
+
+	w := context.Response().Writer
+	r := context.Request()
 
 	const maxAssetsToList = 100
 
@@ -1262,7 +1292,7 @@ func Assets(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 }
 
 // ApplicationInformation is an httpHandler for route GET /v1/app/{index:[0-9]+}
-func ApplicationInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
+func ApplicationInformation(ctx lib.ReqContext, context echo.Context) {
 	// swagger:operation GET /v1/application/{index} ApplicationInformation
 	// ---
 	//     Summary: Get application information.
@@ -1291,7 +1321,9 @@ func ApplicationInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.R
 	//         schema: {type: string}
 	//       401: { description: Invalid API Token }
 	//       default: { description: Unknown Error }
-	queryIndex, err := strconv.ParseUint(mux.Vars(r)["index"], 10, 64)
+	w := context.Response().Writer
+
+	queryIndex, err := strconv.ParseUint(context.Param("index"), 10, 64)
 
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusBadRequest, err, errFailedToParseAppIndex, ctx.Log)
@@ -1327,7 +1359,7 @@ func ApplicationInformation(ctx lib.ReqContext, w http.ResponseWriter, r *http.R
 }
 
 // Applications is an httpHandler for route GET /v1/applications
-func Applications(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
+func Applications(ctx lib.ReqContext, context echo.Context) {
 	// swagger:operation GET /v1/applications Applications
 	// ---
 	//     Summary: List applications
@@ -1363,6 +1395,8 @@ func Applications(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	//         schema: {type: string}
 	//       401: { description: Invalid API Token }
 	//       default: { description: Unknown Error }
+	w := context.Response().Writer
+	r := context.Request()
 
 	const maxAppsToList = 100
 
@@ -1424,7 +1458,7 @@ func Applications(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 }
 
 // SuggestedFee is an httpHandler for route GET /v1/transactions/fee
-func SuggestedFee(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
+func SuggestedFee(ctx lib.ReqContext, context echo.Context) {
 	// swagger:operation GET /v1/transactions/fee SuggestedFee
 	// ---
 	//     Summary: Get the suggested fee
@@ -1442,12 +1476,14 @@ func SuggestedFee(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	//         "$ref": '#/responses/TransactionFeeResponse'
 	//       401: { description: Invalid API Token }
 	//       default: { description: Unknown Error }
+
+	w := context.Response().Writer
 	fee := v1.TransactionFee{Fee: ctx.Node.SuggestedFee().Raw}
 	SendJSON(TransactionFeeResponse{&fee}, w, ctx.Log)
 }
 
 // SuggestedParams is an httpHandler for route GET /v1/transactions/params
-func SuggestedParams(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
+func SuggestedParams(ctx lib.ReqContext, context echo.Context) {
 	// swagger:operation GET /v1/transactions/params TransactionParams
 	// ---
 	//     Summary: Get parameters for constructing a new transaction
@@ -1460,6 +1496,9 @@ func SuggestedParams(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request)
 	//         "$ref": '#/responses/TransactionParamsResponse'
 	//       401: { description: Invalid API Token }
 	//       default: { description: Unknown Error }
+
+	w := context.Response().Writer
+
 	stat, err := ctx.Node.Status()
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
@@ -1482,7 +1521,7 @@ func SuggestedParams(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request)
 }
 
 // GetBlock is an httpHandler for route GET /v1/block/{round}
-func GetBlock(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
+func GetBlock(ctx lib.ReqContext, context echo.Context) {
 	// swagger:operation GET /v1/block/{round} GetBlock
 	// ---
 	//     Summary: Get the block for the given round.
@@ -1515,7 +1554,11 @@ func GetBlock(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	//         schema: {type: string}
 	//       401: { description: Invalid API Token }
 	//       default: { description: Unknown Error }
-	queryRound, err := strconv.ParseUint(mux.Vars(r)["round"], 10, 64)
+
+	w := context.Response().Writer
+	r := context.Request()
+
+	queryRound, err := strconv.ParseUint(context.Param("round"), 10, 64)
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusBadRequest, err, errFailedParsingRoundNumber, ctx.Log)
 		return
@@ -1565,7 +1608,7 @@ func GetBlock(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 }
 
 // GetSupply is an httpHandler for route GET /v1/ledger/supply
-func GetSupply(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
+func GetSupply(ctx lib.ReqContext, context echo.Context) {
 	// swagger:operation GET /v1/ledger/supply GetSupply
 	//---
 	//     Summary: Get the current supply reported by the ledger.
@@ -1578,6 +1621,9 @@ func GetSupply(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	//         "$ref": '#/responses/SupplyResponse'
 	//       401: { description: Invalid API Token }
 	//       default: { description: Unknown Error }
+
+	w := context.Response().Writer
+
 	latest := ctx.Node.Ledger().Latest()
 	totals, err := ctx.Node.Ledger().Totals(latest)
 	if err != nil {
@@ -1610,7 +1656,7 @@ func parseTime(t string) (res time.Time, err error) {
 }
 
 // Transactions is an httpHandler for route GET /v1/account/{addr:[A-Z0-9]+}/transactions
-func Transactions(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
+func Transactions(ctx lib.ReqContext, context echo.Context) {
 	// swagger:operation GET /v1/account/{address}/transactions Transactions
 	// ---
 	//     Summary: Get a list of confirmed transactions.
@@ -1670,7 +1716,10 @@ func Transactions(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	//       401: { description: Invalid API Token }
 	//       default: { description: Unknown Error }
 
-	queryAddr := mux.Vars(r)["addr"]
+	w := context.Response().Writer
+	r := context.Request()
+
+	queryAddr := context.Param("addr")
 	addr, err := basics.UnmarshalChecksumAddress(queryAddr)
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusBadRequest, err, errFailedToParseAddress, ctx.Log)
@@ -1793,7 +1842,7 @@ func Transactions(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 }
 
 // GetTransactionByID is an httpHandler for route GET /v1/transaction/{txid}
-func GetTransactionByID(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
+func GetTransactionByID(ctx lib.ReqContext, context echo.Context) {
 	// swagger:operation GET /v1/transaction/{txid} Transaction
 	// ---
 	//     Summary: Get an information of a single transaction.
@@ -1821,13 +1870,15 @@ func GetTransactionByID(ctx lib.ReqContext, w http.ResponseWriter, r *http.Reque
 	//       401: { description: Invalid API Token }
 	//       default: { description: Unknown Error }
 
+	w := context.Response().Writer
+
 	indexer, err := ctx.Node.Indexer()
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errIndexerNotRunning, ctx.Log)
 		return
 	}
 
-	queryTxID := mux.Vars(r)["txid"]
+	queryTxID := context.Param("txid")
 	if queryTxID == "" {
 		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errNoTxnSpecified), errNoTxnSpecified, ctx.Log)
 		return
