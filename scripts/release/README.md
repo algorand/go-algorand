@@ -97,7 +97,7 @@ This section briefly describes the expected outcomes of the current build pipeli
 
     In addition, local snapshots are used by Debian-based (`aptly`) and RHEL-based tooling to deploy the respective packages to `algorand-releases`.  These are the packages which can then by downloaded by `apt` and `yum`.
 
-    There are now three separate distributions: `stable`, `beta` and `nightly`.  All three distros contain multiple versions of the following packages, respectively: `algorand`, `algorand-beta` and `algorand-nightly`.
+    There are now two distributions: `stable` and `beta`.  Both distros contain multiple versions of the following packages, respectively: `algorand` and `algorand-beta`.
 
 ## Jenkins Release Build
 
