@@ -522,7 +522,7 @@ func (rctx *requestContext) cdtWsHandler(w http.ResponseWriter, r *http.Request)
 		rctx:        rctx,
 		contextID:   int(exec.execContextID),
 		scriptID:    "52",
-		breakpoints: make([]bool, len(lines)),
+		breakpoints: make([]breakpointState, len(lines)),
 		program:     dbgState.Disassembly,
 		offsets:     dbgState.PCOffset,
 		lines:       lines,

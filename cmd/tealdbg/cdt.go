@@ -69,12 +69,21 @@ func (b *atomicBool) IsSet() bool {
 	return atomic.LoadUint32(&b.value) != 0
 }
 
+type breakpointState struct {
+	set    bool
+	active bool
+}
+
+func (bs *breakpointState) NonEmpty() bool {
+	return bs.set
+}
+
 type cdtDebugger struct {
 	uuid         string
 	rctx         *requestContext
 	contextID    int
 	scriptID     string
-	breakpoints  []bool
+	breakpoints  []breakpointState
 	program      string
 	offsets      []logic.PCOffset
 	lines        []string
@@ -572,6 +581,27 @@ func (cdt *cdtDebugger) handleCDTRequest(req *ChromeRequest, isCompleted bool) (
 			"result": descr,
 		}
 		response = ChromeResponse{ID: req.ID, Result: result}
+	case "Debugger.setBreakpointsActive":
+		p := req.Params.(map[string]interface{})
+		activeRaw, ok := p["active"]
+		active := false
+		if ok {
+			if value, ok := activeRaw.(bool); ok && value {
+				active = true
+			}
+		}
+		fmt.Printf("Setting all bpx to %v\n", active)
+		for i := 0; i < len(cdt.breakpoints); i++ {
+			if cdt.breakpoints[i].NonEmpty() {
+				cdt.breakpoints[i].active = active
+				fmt.Printf("Set %d to %v\n", i, active)
+			}
+		}
+		if !active {
+			cdt.rctx.delBreakpoint(ExecID(cdt.uuid))
+		}
+
+		response = ChromeResponse{ID: req.ID, Result: empty}
 	case "Debugger.getPossibleBreakpoints":
 		p := req.Params.(map[string]interface{})
 		var start, end map[string]interface{}
@@ -610,9 +640,9 @@ func (cdt *cdtDebugger) handleCDTRequest(req *ChromeRequest, isCompleted bool) (
 			err = fmt.Errorf("invalid bp line %d", bpLine)
 			return
 		}
-		if cdt.breakpoints[bpLine] {
+		if cdt.breakpoints[bpLine].NonEmpty() {
 			cdt.rctx.delBreakpoint(ExecID(cdt.uuid))
-			cdt.breakpoints[bpLine] = false
+			cdt.breakpoints[bpLine] = breakpointState{}
 		}
 		response = ChromeResponse{ID: req.ID, Result: empty}
 	case "Debugger.setBreakpointByUrl":
@@ -622,7 +652,7 @@ func (cdt *cdtDebugger) handleCDTRequest(req *ChromeRequest, isCompleted bool) (
 			err = fmt.Errorf("invalid bp line %d", bpLine)
 			return
 		}
-		cdt.breakpoints[bpLine] = true
+		cdt.breakpoints[bpLine] = breakpointState{set: true, active: true}
 		targetpc := cdt.lineToPC(uint32(bpLine))
 		cdt.rctx.setBreakpoint(ExecID(cdt.uuid), targetpc)
 
@@ -635,8 +665,8 @@ func (cdt *cdtDebugger) handleCDTRequest(req *ChromeRequest, isCompleted bool) (
 	case "Debugger.resume":
 		currentLine := atomic.LoadUint32(&cdt.currentLine)
 		if currentLine < uint32(len(cdt.breakpoints)) {
-			for line, active := range cdt.breakpoints[currentLine+1:] {
-				if active {
+			for line, bpState := range cdt.breakpoints[currentLine+1:] {
+				if bpState.set && bpState.active {
 					targetpc := cdt.lineToPC(uint32(line) + currentLine + 1)
 					cdt.rctx.setBreakpoint(ExecID(cdt.uuid), targetpc)
 					break
