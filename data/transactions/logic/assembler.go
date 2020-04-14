@@ -991,7 +991,7 @@ func (dis *disassembleState) putLabel(label string, target int) {
 type disassembleFunc func(dis *disassembleState, spec *OpSpec)
 
 func disDefault(dis *disassembleState, spec *OpSpec) {
-	dis.nextpc++
+	dis.nextpc = dis.pc + 1
 	_, dis.err = fmt.Fprintf(dis.out, "%s\n", spec.Name)
 }
 
