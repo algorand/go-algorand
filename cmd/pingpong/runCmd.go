@@ -58,6 +58,7 @@ var teal string
 var groupSize uint32
 var numAsset uint32
 var numApp uint32
+var appProgOps uint32
 
 func init() {
 	rootCmd.AddCommand(runCmd)
@@ -88,6 +89,7 @@ func init() {
 	runCmd.Flags().Uint32Var(&groupSize, "groupsize", 1, "The number of transactions in each group")
 	runCmd.Flags().Uint32Var(&numAsset, "numasset", 0, "The number of assets each account holds")
 	runCmd.Flags().Uint32Var(&numApp, "numapp", 0, "The number of apps each account opts in to")
+	runCmd.Flags().Uint32Var(&appProgOps, "appprogops", 0, "The approximate number of TEAL operations to perform in each ApplicationCall transaction")
 	runCmd.Flags().BoolVar(&randomLease, "randomlease", false, "set the lease to contain a random value")
 }
 
@@ -242,6 +244,8 @@ var runCmd = &cobra.Command{
 		} else {
 			reportErrorf("Invalid number of assets: %d, (valid number: 0 - 1000)\n", numAsset)
 		}
+
+		cfg.AppProgOps = appProgOps
 
 		if numApp <= 1000 {
 			cfg.NumApp = numApp

@@ -22,8 +22,10 @@ import (
 	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/libgoal"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -267,6 +269,22 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 	return
 }
 
+func genBigNoOp(numOps uint32) []byte {
+	var progParts []string
+	for i := uint32(0); i < numOps/2; i++ {
+		progParts = append(progParts, `int 1`)
+		progParts = append(progParts, `pop`)
+	}
+	progParts = append(progParts, `int 1`)
+	progParts = append(progParts, `return`)
+	progAsm := strings.Join(progParts, "\n")
+	progBytes, err := logic.AssembleString(progAsm)
+	if err != nil {
+		panic(err)
+	}
+	return progBytes
+}
+
 func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig) (appParams map[uint64]v1.AppParams, err error) {
 	// get existing apps
 	account, accountErr := client.AccountInformation(cfg.SrcAccount)
@@ -289,8 +307,7 @@ func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig
 	for i := 0; i < toCreate; i++ {
 		var tx transactions.Transaction
 
-		// This is just the "int 1" program
-		prog := []byte("\x02\x20\x01\x01\x22")
+		prog := genBigNoOp(cfg.AppProgOps)
 		schema := basics.StateSchema{}
 		tx, err = client.MakeUnsignedAppCreateTx(transactions.NoOpOC, prog, prog, schema, schema, nil, nil)
 		if err != nil {
