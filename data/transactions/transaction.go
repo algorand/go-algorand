@@ -325,13 +325,14 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			return fmt.Errorf("invalid application OnCompletion")
 		}
 
+		// Programs may only be set for creation or update
 		if tx.ApplicationID != 0 && tx.OnCompletion != UpdateApplicationOC {
-			// Ensure programs are only set for creation or update
 			if len(tx.ApprovalProgram) != 0 || len(tx.ClearStateProgram) != 0 {
 				return fmt.Errorf("scripts may only be specified during application creation or update")
 			}
 		}
 
+		// Schemas may only be set during application creation
 		if tx.ApplicationID != 0 {
 			if tx.LocalStateSchema != (basics.StateSchema{}) ||
 				tx.GlobalStateSchema != (basics.StateSchema{}) {
@@ -339,14 +340,21 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			}
 		}
 
+		// Limit total number of arguments
 		if len(tx.ApplicationArgs) > proto.MaxAppArgs {
 			return fmt.Errorf("too many application args, max %d", proto.MaxAppArgs)
 		}
 
+		// Limit length of each argument
 		for i, arg := range tx.ApplicationArgs {
 			if len(arg) > proto.MaxAppArgLen {
 				return fmt.Errorf("application arg %d too long, max len %d bytes", i, proto.MaxAppArgLen)
 			}
+		}
+
+		// Limit number of accounts referred to in a single ApplicationCall
+		if len(tx.Accounts) > proto.MaxAppTxnAccounts {
+			return fmt.Errorf("tx.Accounts too long, max number of accounts is %d", proto.MaxAppTxnAccounts)
 		}
 
 		if len(tx.ApprovalProgram) > proto.MaxApprovalProgramLen {
@@ -357,10 +365,6 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			return fmt.Errorf("clear state program too long. max len %d bytes", proto.MaxClearStateProgramLen)
 		}
 
-		if len(tx.Accounts) > proto.MaxAppTxnAccounts {
-			return fmt.Errorf("tx.Accounts too long, max number of accounts is %d", proto.MaxAppTxnAccounts)
-		}
-
 		if tx.LocalStateSchema.NumEntries() > proto.MaxSchemaEntries {
 			return fmt.Errorf("tx.LocalStateSchema too large, max number of keys is %d", proto.MaxSchemaEntries)
 		}
@@ -368,7 +372,6 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		if tx.GlobalStateSchema.NumEntries() > proto.MaxSchemaEntries {
 			return fmt.Errorf("tx.GlobalStateSchema too large, max number of keys is %d", proto.MaxSchemaEntries)
 		}
-
 	default:
 		return fmt.Errorf("unknown tx type %v", tx.Type)
 	}

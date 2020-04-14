@@ -327,32 +327,32 @@ func BenchmarkAppLocal1NoDiffs(b *testing.B) {
 	benchmarkFullBlocks(testCases["bench-local-1-no-diffs"], b)
 }
 
-func BenchmarkAppLocal59NoDiffs(b *testing.B) {
-	benchmarkFullBlocks(testCases["bench-local-59-no-diffs"], b)
+func BenchmarkAppLocal16NoDiffs(b *testing.B) {
+	benchmarkFullBlocks(testCases["bench-local-16-no-diffs"], b)
 }
 
 func BenchmarkAppGlobal1NoDiffs(b *testing.B) {
 	benchmarkFullBlocks(testCases["bench-global-1-no-diffs"], b)
 }
 
-func BenchmarkAppGlobal59NoDiffs(b *testing.B) {
-	benchmarkFullBlocks(testCases["bench-global-59-no-diffs"], b)
+func BenchmarkAppGlobal16NoDiffs(b *testing.B) {
+	benchmarkFullBlocks(testCases["bench-global-16-no-diffs"], b)
 }
 
 func BenchmarkAppLocal1BigDiffs(b *testing.B) {
 	benchmarkFullBlocks(testCases["bench-local-1-big-diffs"], b)
 }
 
-func BenchmarkAppLocal59BigDiffs(b *testing.B) {
-	benchmarkFullBlocks(testCases["bench-local-59-big-diffs"], b)
+func BenchmarkAppLocal16BigDiffs(b *testing.B) {
+	benchmarkFullBlocks(testCases["bench-local-16-big-diffs"], b)
 }
 
 func BenchmarkAppGlobal1BigDiffs(b *testing.B) {
 	benchmarkFullBlocks(testCases["bench-global-1-big-diffs"], b)
 }
 
-func BenchmarkAppGlobal59BigDiffs(b *testing.B) {
-	benchmarkFullBlocks(testCases["bench-global-59-big-diffs"], b)
+func BenchmarkAppGlobal16BigDiffs(b *testing.B) {
+	benchmarkFullBlocks(testCases["bench-global-16-big-diffs"], b)
 }
 
 func BenchmarkAppInt1(b *testing.B) { benchmarkFullBlocks(testCases["int-1"], b) }
@@ -360,6 +360,8 @@ func BenchmarkAppInt1(b *testing.B) { benchmarkFullBlocks(testCases["int-1"], b)
 func BenchmarkAppInt1ManyApps(b *testing.B) { benchmarkFullBlocks(testCases["int-1-many-apps"], b) }
 
 func BenchmarkAppBigNoOp(b *testing.B) { benchmarkFullBlocks(testCases["big-noop"], b) }
+
+func BenchmarkAppBigHashes(b *testing.B) { benchmarkFullBlocks(testCases["big-hashes"], b) }
 
 func BenchmarkAppASA(b *testing.B) { benchmarkFullBlocks(testCases["asa"], b) }
 
@@ -371,7 +373,7 @@ func init() {
 	// Disable deadlock checking library
 	deadlock.Opts.Disable = true
 
-	lengths := []int{1, 59}
+	lengths := []int{1, 16}
 	diffs := []bool{true, false}
 	state := []string{"local", "global"}
 
@@ -402,7 +404,7 @@ func init() {
 		testType: "app",
 		name:     fmt.Sprintf("int-1-many-apps"),
 		program:  progBytes,
-		numApps:  500,
+		numApps:  10,
 	}
 	testCases[params.name] = params
 
@@ -422,6 +424,7 @@ func init() {
 		testType: "asa",
 		name:     "asa",
 		asaAccts: 100,
+		numApps:  10,
 	}
 	testCases[params.name] = params
 
@@ -436,7 +439,15 @@ func init() {
 	params = testParams{
 		testType: "app",
 		name:     "big-noop",
-		program:  genBigNoOp(1020),
+		program:  genBigNoOp(696),
+	}
+	testCases[params.name] = params
+
+	// Big hashes
+	params = testParams{
+		testType: "app",
+		name:     "big-hashes",
+		program:  genBigHashes(10, 625),
 	}
 	testCases[params.name] = params
 }
@@ -444,6 +455,26 @@ func init() {
 func genBigNoOp(numOps int) []byte {
 	var progParts []string
 	for i := 0; i < numOps/2; i++ {
+		progParts = append(progParts, `int 1`)
+		progParts = append(progParts, `pop`)
+	}
+	progParts = append(progParts, `int 1`)
+	progParts = append(progParts, `return`)
+	progAsm := strings.Join(progParts, "\n")
+	progBytes, err := logic.AssembleString(progAsm)
+	if err != nil {
+		panic(err)
+	}
+	return progBytes
+}
+
+func genBigHashes(numHashes int, numPad int) []byte {
+	var progParts []string
+	progParts = append(progParts, `byte base64 AA==`)
+	for i := 0; i < numHashes; i++ {
+		progParts = append(progParts, `sha256`)
+	}
+	for i := 0; i < numPad/2; i++ {
 		progParts = append(progParts, `int 1`)
 		progParts = append(progParts, `pop`)
 	}

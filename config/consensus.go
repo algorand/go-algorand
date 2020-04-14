@@ -229,6 +229,8 @@ type ConsensusParams struct {
 	MaxAppProgramCost       int
 	MaxAppKeyLen            int
 	MaxAppBytesValueLen     int
+	MaxAppsCreated          int
+	MaxAppsOptedIn          int
 
 	AppFlatParamsMinBalance  uint64
 	AppFlatOptInMinBalance   uint64
@@ -653,10 +655,16 @@ func initConsensusProtocols() {
 	vFuture.SchemaBytesMinBalance = 25000
 
 	// Maximum number of key/value pairs per global/local key/value store
-	vFuture.MaxSchemaEntries = 1024
+	vFuture.MaxSchemaEntries = 16
 
 	// Maximum cost of ApprovalProgram/ClearStateProgram
-	vFuture.MaxAppProgramCost = 1024
+	vFuture.MaxAppProgramCost = 700
+
+	// Maximum number of apps a single account can create
+	vFuture.MaxAppsCreated = 10
+
+	// Maximum number of apps a single account can opt into
+	vFuture.MaxAppsOptedIn = 10
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

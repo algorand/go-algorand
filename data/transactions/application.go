@@ -384,6 +384,12 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, stev
 			return err
 		}
 
+		// Make sure the creator isn't already at the app creation max
+		maxAppsCreated := balances.ConsensusParams().MaxAppsCreated
+		if len(record.AppParams) >= maxAppsCreated {
+			return fmt.Errorf("cannot create app for %s: max created apps per acct is %d", header.Sender.String(), maxAppsCreated)
+		}
+
 		// Clone app params, so that we have a copy that is safe to modify
 		record.AppParams = cloneAppParams(record.AppParams)
 
@@ -459,7 +465,7 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, stev
 		// Can't clear out if not currently opted in
 		_, ok := record.AppLocalStates[appIdx]
 		if !ok {
-			return fmt.Errorf("cannot clear state for app %d, account %s is not currently opted in", appIdx, header.Sender.String())
+			return fmt.Errorf("cannot clear state for app %d: account %s is not currently opted in", appIdx, header.Sender.String())
 		}
 
 		// If the application still exists...
@@ -526,6 +532,12 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, stev
 		_, ok := record.AppLocalStates[appIdx]
 		if ok {
 			return fmt.Errorf("account %s has already opted in to app %d", header.Sender.String(), appIdx)
+		}
+
+		// Make sure the user isn't already at the app opt-in max
+		maxAppsOptedIn := balances.ConsensusParams().MaxAppsOptedIn
+		if len(record.AppLocalStates) >= maxAppsOptedIn {
+			return fmt.Errorf("cannot opt in app %d for %s: max opted-in apps per acct is %d", appIdx, header.Sender.String(), maxAppsOptedIn)
 		}
 
 		// If the user hasn't opted in yet, allocate LocalState for the app
@@ -638,24 +650,15 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, stev
 		}
 
 	case UpdateApplicationOC:
-		// Ensure user isn't trying to update the local or global state
-		// schemas, because that operation is not allowed
-		if ac.LocalStateSchema != (basics.StateSchema{}) ||
-			ac.GlobalStateSchema != (basics.StateSchema{}) {
-			return fmt.Errorf("local and global state schemas are immutable")
-		}
-
 		// Updating the application. Fetch the creator's balance record
 		record, err := balances.Get(creator, false)
 		if err != nil {
 			return err
 		}
 
+		// Fill in the new programs
 		record.AppParams = cloneAppParams(record.AppParams)
-
-		// Fill in the updated programs
 		params := record.AppParams[appIdx]
-
 		params.ApprovalProgram = ac.ApprovalProgram
 		params.ClearStateProgram = ac.ClearStateProgram
 
