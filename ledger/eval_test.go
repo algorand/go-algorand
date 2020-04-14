@@ -30,8 +30,8 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/execpool"
 )
 
 var testPoolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
@@ -123,7 +123,7 @@ func TestRekeying(t *testing.T) {
 	pretend := actual
 	pretend.SupportRekeying = true
 	config.Consensus[protocol.ConsensusCurrentVersion] = pretend
-	defer func(){
+	defer func() {
 		config.Consensus[protocol.ConsensusCurrentVersion] = actual
 	}()
 
@@ -146,13 +146,13 @@ func TestRekeying(t *testing.T) {
 		txn := transactions.Transaction{
 			Type: protocol.PaymentTx,
 			Header: transactions.Header{
-				Sender: sender,
-				Fee:    minFee,
-				FirstValid: nextRound,
-				LastValid: nextRound,
+				Sender:      sender,
+				Fee:         minFee,
+				FirstValid:  nextRound,
+				LastValid:   nextRound,
 				GenesisHash: genHash,
-				RekeyTo: rekeyto,
-				Note: []byte{uniq},
+				RekeyTo:     rekeyto,
+				Note:        []byte{uniq},
 			},
 			PaymentTxnFields: transactions.PaymentTxnFields{
 				Receiver: sender,
@@ -192,7 +192,7 @@ func TestRekeying(t *testing.T) {
 	// [A -> 0][0,A] (normal transaction)
 	// [A -> B][0,A] (rekey)
 	txn0 := makeTxn(addrs[0], basics.Address{}, basics.Address{}, keys[0], 0) // Normal transaction
-	txn1 := makeTxn(addrs[0], addrs[1], basics.Address{}, keys[0], 1) // Rekey transaction
+	txn1 := makeTxn(addrs[0], addrs[1], basics.Address{}, keys[0], 1)         // Rekey transaction
 
 	// Test 1: Do only good things
 	// (preamble)
@@ -201,8 +201,8 @@ func TestRekeying(t *testing.T) {
 	// [A -> 0][0,A] (normal transaction again)
 	test1txns := []transactions.SignedTxn{
 		txn0, txn1, // (preamble)
-		makeTxn(addrs[0], basics.Address{}, addrs[1], keys[1], 2), // [A -> 0][B,B]
-		makeTxn(addrs[0], addrs[0], addrs[1], keys[1], 3), // [A -> A][B,B]
+		makeTxn(addrs[0], basics.Address{}, addrs[1], keys[1], 2),         // [A -> 0][B,B]
+		makeTxn(addrs[0], addrs[0], addrs[1], keys[1], 3),                 // [A -> A][B,B]
 		makeTxn(addrs[0], basics.Address{}, basics.Address{}, keys[0], 4), // [A -> 0][0,A]
 	}
 	err = tryBlock(test1txns)

@@ -20,8 +20,8 @@ import (
 	"errors"
 
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // SignedTxn wraps a transaction and a signature.
@@ -31,11 +31,11 @@ import (
 type SignedTxn struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Sig  crypto.Signature   `codec:"sig"`
-	Msig crypto.MultisigSig `codec:"msig"`
-	Lsig LogicSig           `codec:"lsig"`
-	Txn  Transaction        `codec:"txn"`
-	AuthAddr basics.Address `codec:"sgnr"`
+	Sig      crypto.Signature   `codec:"sig"`
+	Msig     crypto.MultisigSig `codec:"msig"`
+	Lsig     LogicSig           `codec:"lsig"`
+	Txn      Transaction        `codec:"txn"`
+	AuthAddr basics.Address     `codec:"sgnr"`
 }
 
 // SignedTxnInBlock is how a signed transaction is encoded in a block.
