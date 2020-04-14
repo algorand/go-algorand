@@ -703,8 +703,8 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 	pool.assemblyMu.Lock()
 	defer pool.assemblyMu.Unlock()
 
-	deadline = deadline.Add(assemblyWaitEps)
 	pool.assemblyDeadline = deadline
+	deadline = deadline.Add(assemblyWaitEps)
 	for time.Now().Before(deadline) && (!pool.assemblyResults.ok || pool.assemblyResults.blk.Block().Round() < round) {
 		condvar.TimedWait(&pool.assemblyCond, deadline.Sub(time.Now()))
 	}
