@@ -599,17 +599,13 @@ func (rctx *requestContext) cdtWsHandler(w http.ResponseWriter, r *http.Request)
 				if completed {
 					line++
 				}
+				cdtd.err.Store(dbgState.Error)
 				atomic.StoreUint32(&cdtd.currentLine, line)
 				cdtd.stack = dbgState.Stack
 				cdtd.scratch = dbgState.Scratch
-				lastAction := cdtd.lastAction
 				dbgStateMu.Unlock()
-				var event interface{}
-				if completed && lastAction == "resume" {
-					event = cdtd.makeContextDestroyedEvent()
-				} else {
-					event = cdtd.makeDebuggerPausedEvent()
-				}
+
+				event := cdtd.computeEvent(completed)
 				cdtEventCh <- event
 			case <-closed:
 				return

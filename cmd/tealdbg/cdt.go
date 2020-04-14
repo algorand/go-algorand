@@ -35,17 +35,53 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 )
 
+type atomicString struct {
+	value atomic.Value
+}
+
+func (s *atomicString) Store(other string) {
+	s.value.Store(other)
+}
+
+func (s *atomicString) Load() string {
+	result := s.value.Load()
+	if result != nil {
+		if value, ok := result.(string); ok {
+			return value
+		}
+	}
+	return ""
+}
+
+type atomicBool struct {
+	value uint32
+}
+
+func (b *atomicBool) SetTo(other bool) {
+	var converted uint32 = 0
+	if other {
+		converted = 1
+	}
+	atomic.StoreUint32(&b.value, converted)
+}
+
+func (b *atomicBool) IsSet() bool {
+	return atomic.LoadUint32(&b.value) != 0
+}
+
 type cdtDebugger struct {
-	uuid        string
-	rctx        *requestContext
-	contextID   int
-	scriptID    string
-	breakpoints []bool
-	program     string
-	offsets     []logic.PCOffset
-	lines       []string
-	currentLine uint32
-	lastAction  string
+	uuid         string
+	rctx         *requestContext
+	contextID    int
+	scriptID     string
+	breakpoints  []bool
+	program      string
+	offsets      []logic.PCOffset
+	lines        []string
+	currentLine  uint32
+	lastAction   atomicString
+	err          atomicString
+	pauseOnError atomicBool
 
 	txnGroup   []transactions.SignedTxn
 	groupIndex int
@@ -289,6 +325,7 @@ const txnObjID = "txnObjID"
 const gtxnObjID = "gtxnObjID"
 const stackObjID = "stackObjID"
 const scratchObjID = "scratchObjID"
+const tealErrorID = "tealErrorID"
 
 var gtxnObjIDPrefix = fmt.Sprintf("%s_gid_", gtxnObjID)
 
@@ -406,7 +443,8 @@ func makeStack(cdt *cdtDebugger, preview bool) (descr []RuntimePropertyDescripto
 	for _, field := range fields {
 		descr = append(descr, makePrimitive(field))
 	}
-	descr = append(descr, makePrimitive(fieldDesc{Name: "length", Value: strconv.Itoa(len(cdt.stack)), Type: "number"}))
+	field := fieldDesc{Name: "length", Value: strconv.Itoa(len(cdt.stack)), Type: "number"}
+	descr = append(descr, makePrimitive(field))
 	return
 }
 
@@ -415,7 +453,16 @@ func makeScratch(cdt *cdtDebugger, preview bool) (descr []RuntimePropertyDescrip
 	for _, field := range fields {
 		descr = append(descr, makePrimitive(field))
 	}
-	descr = append(descr, makePrimitive(fieldDesc{Name: "length", Value: strconv.Itoa(len(cdt.scratch)), Type: "number"}))
+	field := fieldDesc{Name: "length", Value: strconv.Itoa(len(cdt.scratch)), Type: "number"}
+	descr = append(descr, makePrimitive(field))
+	return
+}
+
+func makeTealError(cdt *cdtDebugger, preview bool) (descr []RuntimePropertyDescriptor) {
+	if lastError := cdt.err.Load(); len(lastError) != 0 {
+		field := fieldDesc{Name: "message", Value: lastError, Type: "string"}
+		descr = append(descr, makePrimitive(field))
+	}
 	return
 }
 
@@ -429,6 +476,7 @@ var objectDescMap = map[string]objectDescFn{
 	gtxnObjID:        makeTxnGroup,
 	stackObjID:       makeStack,
 	scratchObjID:     makeScratch,
+	tealErrorID:      makeTealError,
 }
 
 func (cdt *cdtDebugger) getObjectDescriptor(objID string, preview bool) (descr []RuntimePropertyDescriptor, err error) {
@@ -479,6 +527,17 @@ func (cdt *cdtDebugger) handleCDTRequest(req *ChromeRequest, isCompleted bool) (
 		}
 		source["scriptSource"] = cdt.program
 		response = ChromeResponse{ID: req.ID, Result: source}
+	case "Debugger.setPauseOnExceptions":
+		p := req.Params.(map[string]interface{})
+		stateRaw, ok := p["state"]
+		enable := false
+		if ok {
+			if state, ok := stateRaw.(string); ok && state != "none" {
+				enable = true
+			}
+		}
+		cdt.pauseOnError.SetTo(enable)
+		response = ChromeResponse{ID: req.ID, Result: empty}
 	case "Runtime.getProperties":
 		p := req.Params.(map[string]interface{})
 		objIDRaw, ok := p["objectId"]
@@ -584,7 +643,7 @@ func (cdt *cdtDebugger) handleCDTRequest(req *ChromeRequest, isCompleted bool) (
 				}
 			}
 		}
-		cdt.lastAction = "resume"
+		cdt.lastAction.Store("resume")
 		cdt.rctx.resume(ExecID(cdt.uuid))
 		if isCompleted {
 			evDestroyed := cdt.makeContextDestroyedEvent()
@@ -596,7 +655,7 @@ func (cdt *cdtDebugger) handleCDTRequest(req *ChromeRequest, isCompleted bool) (
 		cdt.rctx.setBreakpoint(ExecID(cdt.uuid), nextpc)
 		cdt.rctx.resume(ExecID(cdt.uuid))
 		atomic.AddUint32(&cdt.currentLine, 1)
-		cdt.lastAction = "step"
+		cdt.lastAction.Store("step")
 		if isCompleted {
 			evDestroyed := cdt.makeContextDestroyedEvent()
 			events = append(events, &evDestroyed)
@@ -707,12 +766,33 @@ func (cdt *cdtDebugger) makeDebuggerPausedEvent() DebuggerPausedEvent {
 		Method: "Debugger.paused",
 		Params: DebuggerPausedParams{
 			CallFrames:     []DebuggerCallFrame{cf},
-			Reason:         "Break on start",
+			Reason:         "other",
 			HitBreakpoints: make([]string, 0),
 		},
 	}
 
+	if lastError := cdt.err.Load(); len(lastError) != 0 {
+		evPaused.Params.Reason = "exception"
+		evPaused.Params.Data = map[string]interface{}{
+			"type":        "object",
+			"className":   "Error",
+			"description": lastError,
+			"objectId":    "tealErrorID",
+		}
+	}
+
 	return evPaused
+}
+
+func (cdt *cdtDebugger) computeEvent(isCompleted bool) (event interface{}) {
+	if isCompleted && cdt.pauseOnError.IsSet() && len(cdt.err.Load()) != 0 {
+		event = cdt.makeDebuggerPausedEvent()
+	} else if isCompleted && cdt.lastAction.Load() == "resume" {
+		event = cdt.makeContextDestroyedEvent()
+	} else {
+		event = cdt.makeDebuggerPausedEvent()
+	}
+	return
 }
 
 func (cdt *cdtDebugger) lineToPC(line uint32) int {
