@@ -34,8 +34,17 @@ import (
 	"github.com/algorand/go-algorand/util/condvar"
 )
 
-// TransactionPool is a struct maintaining a sanitized pool of transactions that are available for inclusion in
-// a Block.  We sanitize it by preventing duplicates and limiting the number of transactions retained for each account
+// A TransactionPool prepares valid blocks for proposal and caches
+// validated transaction groups.
+//
+// At all times, a TransactionPool maintains a queue of transaction
+// groups slated for proposal.  TransactionPool.Remember adds a
+// properly-signed and well-formed transaction group to this queue
+// only if its fees are sufficiently high and its state changes are
+// consistent with the prior transactions in the queue.
+//
+// TransactionPool.AssembleBlock constructs a valid block for
+// proposal given a deadline.
 type TransactionPool struct {
 	// const
 	logProcessBlockStats bool
@@ -68,10 +77,7 @@ type TransactionPool struct {
 	rememberedTxids        map[transactions.Txid]txPoolVerifyCacheVal
 }
 
-// MakeTransactionPool is the constructor, it uses Ledger to ensure that no account has pending transactions that together overspend.
-//
-// The pool also contains status information for the last transactionPoolStatusSize
-// transactions that were removed from the pool without being committed.
+// MakeTransactionPool makes a transaction pool.
 func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local) *TransactionPool {
 	if cfg.TxPoolExponentialIncreaseFactor < 1 {
 		cfg.TxPoolExponentialIncreaseFactor = 1
