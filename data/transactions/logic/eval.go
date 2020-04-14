@@ -534,26 +534,6 @@ func (cx *evalContext) step() {
 		return
 	}
 
-	/*
-		// TODO(pzbitskiy) turn this into a unit test
-		if cx.version >= 2 {
-			// additional type checks for return values
-			if len(cx.stack) < len(spec.Returns) {
-				cx.err = fmt.Errorf("%3d %s expected to return %d values but stack has only %d", cx.pc, spec.Name, len(spec.Returns), len(cx.stack))
-				return
-			}
-			for i := 0; i < len(spec.Returns); i++ {
-				sp := len(cx.stack) - 1 - i
-				stackType := cx.stack[sp].argType()
-				retType := spec.Returns[i]
-				if !typecheck(retType, stackType) {
-					cx.err = fmt.Errorf("%3d %s expected to return %s but actual is %s", cx.pc, spec.Name, retType.String(), stackType.String())
-					return
-				}
-			}
-		}
-	*/
-
 	if len(cx.stack) > MaxStackDepth {
 		cx.err = errors.New("stack overflow")
 		return

@@ -2264,3 +2264,131 @@ pop
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "AssetTotal expected field type is []byte but got uint64")
 }
+
+func TestReturnTypes(t *testing.T) {
+	// Ensure all opcodes return values they supposed to according to the OpSpecs table
+	t.Parallel()
+	typeToArg := map[StackType]string{
+		StackUint64: "int 1\n",
+		StackAny:    "int 1\n",
+		StackBytes:  "byte 0x33343536\n",
+	}
+	ep := defaultEvalParams(nil, nil)
+	txn := makeSampleTxn()
+	txgroup := makeSampleTxnGroup(txn)
+	ep.Txn = &txn
+	ep.TxnGroup = txgroup
+	txn.Lsig.Args = [][]byte{
+		[]byte("aoeu"),
+		[]byte("aoeu"),
+		[]byte("aoeu2"),
+		[]byte("aoeu3"),
+	}
+	ledger := makeTestLedger(
+		map[basics.Address]uint64{
+			txn.Txn.Sender: 1,
+		},
+	)
+	params := basics.AssetParams{
+		Total:         1000,
+		Decimals:      2,
+		DefaultFrozen: false,
+		UnitName:      "ALGO",
+		AssetName:     "",
+		URL:           string(protocol.PaymentTx),
+		Manager:       txn.Txn.Sender,
+		Reserve:       txn.Txn.Receiver,
+		Freeze:        txn.Txn.Receiver,
+		Clawback:      txn.Txn.Receiver,
+	}
+	ledger.setAsset(txn.Txn.Receiver, 1, params)
+	ledger.setHolding(txn.Txn.Sender, 1, basics.AssetHolding{Amount: 123, Frozen: true})
+	ledger.newApp(txn.Txn.Sender, 1)
+	ledger.balances[txn.Txn.Receiver] = makeBalanceRecord(txn.Txn.Receiver, 1)
+	ledger.balances[txn.Txn.Receiver].apps[1] = make(basics.TealKeyValue)
+	key, err := hex.DecodeString("33343536")
+	require.NoError(t, err)
+	algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
+	ledger.balances[txn.Txn.Receiver].apps[1][string(key)] = algoValue
+
+	ep.Ledger = ledger
+
+	specialCmd := map[string]string{
+		"txn":               "txn Sender",
+		"txna":              "txna ApplicationArgs 0",
+		"gtxn":              "gtxn 0 Sender",
+		"gtxna":             "gtxna 0 ApplicationArgs 0",
+		"global":            "global MinTxnFee",
+		"arg":               "arg 0",
+		"load":              "load 0",
+		"store":             "store 0",
+		"intc":              "intcblock 0\nintc 0",
+		"intc_0":            "intcblock 0\nintc_0",
+		"intc_1":            "intcblock 0 0\nintc_1",
+		"intc_2":            "intcblock 0 0 0\nintc_2",
+		"intc_3":            "intcblock 0 0 0 0\nintc_3",
+		"bytec":             "bytecblock 0x32\nbytec 0",
+		"bytec_0":           "bytecblock 0x32\nbytec_0",
+		"bytec_1":           "bytecblock 0x32 0x33\nbytec_1",
+		"bytec_2":           "bytecblock 0x32 0x33 0x34\nbytec_2",
+		"bytec_3":           "bytecblock 0x32 0x33 0x34 0x35\nbytec_3",
+		"substring":         "substring 0 2",
+		"ed25519verify":     "pop\npop\npop\nint 1", // ignore
+		"asset_params_get":  "asset_params_get AssetTotal",
+		"asset_holding_get": "asset_holding_get AssetBalance",
+	}
+
+	byName := opsByName[LogicVersion]
+	for _, m := range []runMode{runModeSignature, runModeApplication} {
+		t.Run(fmt.Sprintf("m=%s", m.String()), func(t *testing.T) {
+			for name, spec := range byName {
+				if len(spec.Returns) == 0 || (m&spec.Modes) == 0 {
+					continue
+				}
+				var sb strings.Builder
+				sb.Grow(64)
+				for _, t := range spec.Args {
+					sb.WriteString(typeToArg[t])
+				}
+				if cmd, ok := specialCmd[name]; ok {
+					sb.WriteString(cmd + "\n")
+				} else {
+					sb.WriteString(name + "\n")
+				}
+				source := sb.String()
+				fmt.Printf("%s\n", source)
+				program, err := AssembleString(source)
+				require.NoError(t, err)
+
+				var cx evalContext
+				cx.EvalParams = ep
+				cx.runModeFlags = m
+				if m == runModeApplication {
+					cx.appEvalDelta = basics.EvalDelta{
+						GlobalDelta: make(basics.StateDelta),
+						LocalDeltas: make(map[basics.Address]basics.StateDelta),
+					}
+					cx.globalStateCow = nil
+					cx.localStateCows = make(map[basics.Address]*keyValueCow)
+					cx.readOnlyLocalStates = make(map[ckey]basics.TealKeyValue)
+				}
+				eval(program, &cx)
+
+				require.Equal(
+					t,
+					len(spec.Returns), len(cx.stack),
+					fmt.Sprintf("%s expected to return %d values but stack has %d", spec.Name, len(spec.Returns), len(cx.stack)),
+				)
+				for i := 0; i < len(spec.Returns); i++ {
+					sp := len(cx.stack) - 1 - i
+					stackType := cx.stack[sp].argType()
+					retType := spec.Returns[i]
+					require.True(
+						t, typecheck(retType, stackType),
+						fmt.Sprintf("%s expected to return %s but actual is %s", spec.Name, retType.String(), stackType.String()),
+					)
+				}
+			}
+		})
+	}
+}
