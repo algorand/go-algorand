@@ -627,7 +627,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 	return nil
 }
 
-// Call "endOfBlock" after all the block's rewards and transactions are processed. Applies any deferred balance updates.
+// Call "endOfBlock" after all the block's rewards and transactions are processed.
 func (eval *BlockEvaluator) endOfBlock() error {
 	if eval.generate {
 		eval.block.TxnRoot = eval.block.Payset.Commit(eval.proto.PaysetCommitFlat)
@@ -684,6 +684,7 @@ func (eval *BlockEvaluator) GenerateBlock() (*ValidatedBlock, error) {
 		blk:   eval.block,
 		delta: eval.state.mods,
 	}
+	eval.state = makeRoundCowState(eval.state, eval.block.BlockHeader) // XXX fix this
 	return &vb, nil
 }
 
