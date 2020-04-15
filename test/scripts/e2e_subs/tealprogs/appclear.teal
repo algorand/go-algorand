@@ -1,7 +1,6 @@
 byte base64 Ymw=
 byte base64 Ymw=
-app_global_get
-pop
+app_global_gets
 int 0
 int 0
 byte base64 Ymw=

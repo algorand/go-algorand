@@ -27,6 +27,7 @@ byte base64 Y2hlY2s=
 
 // and arg 1 must be the value at "foo"
 // Key "foo"
+int 0
 byte base64 Zm9v
 app_global_get
 
@@ -63,7 +64,5 @@ bnz done
 
 fail:
 int 0
-int 1
-bnz done
 
 done:
