@@ -1702,13 +1702,9 @@ func opAppGetLocalStateSimple(cx *evalContext) {
 	accountIdx := cx.stack[prev].Uint
 
 	var appID uint64 = 0
-	result, ok, err := opAppGetLocalStateImpl(cx, appID, key, accountIdx)
+	result, _, err := opAppGetLocalStateImpl(cx, appID, key, accountIdx)
 	if err != nil {
 		cx.err = err
-		return
-	}
-	if !ok {
-		cx.err = fmt.Errorf("no such key %s", string(key))
 		return
 	}
 
@@ -1786,14 +1782,9 @@ func opAppGetGlobalStateSimple(cx *evalContext) {
 	key := cx.stack[last].Bytes
 
 	var appID uint64 = 0
-	result, ok, err := opAppGetGlobalStateImpl(cx, appID, key)
+	result, _, err := opAppGetGlobalStateImpl(cx, appID, key)
 	if err != nil {
 		cx.err = err
-		return
-	}
-
-	if !ok {
-		cx.err = fmt.Errorf("no such key %s", string(key))
 		return
 	}
 

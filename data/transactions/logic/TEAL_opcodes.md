@@ -558,7 +558,7 @@ params: account index, application id (top of the stack on opcode entry)
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: account index, state key. Return: value
+params: account index, state key. Return: value. The value is zero if the key does ont exist
 
 ## app_local_get
 
@@ -579,6 +579,8 @@ params: account index, application id, state key. Return: did_exist flag (top of
 - read key A from global state of a current application => value
 - LogicSigVersion >= 2
 - Mode: Application
+
+params: state key. Return: value. The value is zero if the key does ont exist
 
 ## app_global_get
 
