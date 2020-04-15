@@ -85,13 +85,13 @@ func (cb *roundCowState) rewardsLevel() uint64 {
 	return cb.mods.hdr.RewardsLevel
 }
 
-func (cb *roundCowState) getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, doesNotExist bool, err error) {
+func (cb *roundCowState) getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
 	delta, ok := cb.mods.creatables[cidx]
 	if ok {
 		if delta.created && delta.ctype == ctype {
-			return delta.creator, false, nil
+			return delta.creator, true, nil
 		}
-		return basics.Address{}, true, nil
+		return basics.Address{}, false, nil
 	}
 	return cb.lookupParent.getCreator(cidx, ctype)
 }
