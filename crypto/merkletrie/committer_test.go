@@ -112,7 +112,7 @@ func TestNoRedundentPages(t *testing.T) {
 	require.Equal(t, testSize, int(stats.leafCount))
 	nodesCount := int(stats.nodesCount)
 	require.Equal(t, nodesCount, len(trieNodes))
-	require.Equal(t, nodesCount, len(mt1.cache.idToPtr))
+	require.Equal(t, nodesCount, mt1.cache.cachedNodeCount)
 }
 
 func TestMultipleCommits(t *testing.T) {

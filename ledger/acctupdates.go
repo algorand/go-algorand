@@ -302,14 +302,10 @@ func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 	if rootHash.IsZero() {
 		accountIdx := 0
 		for {
-			fmt.Printf("iteration %d\n", accountIdx)
-			t1 := time.Now()
 			bal, err := encodedAccountsRange(tx, accountIdx, balancesChunkReadSize)
 			if err != nil {
 				return rnd, err
 			}
-			t2 := time.Now()
-			fmt.Printf("encodedAccountsRange time was %d ms\n", t2.Sub(t1).Nanoseconds()/1000000)
 			if len(bal) == 0 {
 				break
 			}
@@ -325,35 +321,26 @@ func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 				hash := accountHashBuilder(addr, accountData, accountBytes)
 				added, err := trie.Add(hash)
 				if err != nil {
-					panic(fmt.Errorf("accountsInitialize was unable to add changes to trie: %v", err))
-					//return rnd, fmt.Errorf("accountsInitialize was unable to add changes to trie: %v", err)
+					return rnd, fmt.Errorf("accountsInitialize was unable to add changes to trie: %v", err)
 				}
 				if !added {
 					au.log.Warnf("attempted to add duplicate hash '%v' to merkle trie.", hash)
 				}
 			}
-			t3 := time.Now()
-			fmt.Printf("adding balances time was %d ms\n", t3.Sub(t2).Nanoseconds()/1000000)
+
 			// this trie Commit call only attempt to write it to the database using the current transaction.
 			// if anything goes wrong, it will still get rolled back.
 			err = trie.Commit()
 			if err != nil {
-				panic(fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err))
-				//return 0, fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err)
+				return 0, fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err)
 			}
-			t4 := time.Now()
-			fmt.Printf("commit time was %d ms\n", t4.Sub(t3).Nanoseconds()/1000000)
 			trie.Evict()
-			t5 := time.Now()
-			fmt.Printf("evict time was %d ms\n", t5.Sub(t4).Nanoseconds()/1000000)
 			if len(bal) < balancesChunkReadSize {
 				break
 			}
-			//fmt.Printf("--- committed ---\n")
 			accountIdx += balancesChunkReadSize
 		}
 	}
-	//panic(nil)
 	au.balancesTrie = trie
 	return rnd, nil
 }
@@ -369,8 +356,7 @@ func (au *accountUpdates) accountsUpdateBalaces(balancesTx *merkletrie.Transacti
 			deleteHash := accountHashBuilder(addr, delta.old, protocol.Encode(&delta.old))
 			deleted, err = balancesTx.Delete(deleteHash)
 			if err != nil {
-				panic(err)
-				//return err
+				return err
 			}
 			if !deleted {
 				au.log.Warnf("failed to delete hash '%v' from merkle trie", deleteHash)
@@ -380,8 +366,7 @@ func (au *accountUpdates) accountsUpdateBalaces(balancesTx *merkletrie.Transacti
 			addHash := accountHashBuilder(addr, delta.new, protocol.Encode(&delta.new))
 			added, err = balancesTx.Add(addHash)
 			if err != nil {
-				panic(err)
-				//return err
+				return err
 			}
 			if !added {
 				au.log.Warnf("attempted to add duplicate hash '%v' to merkle trie", addHash)
