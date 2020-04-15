@@ -44,8 +44,6 @@ trap "rm -rf $PKG_ROOT" 0
 
 mkdir -p "${PKG_ROOT}/usr/bin"
 
-# TODO
-#if [ "${VARIATION}" = "" ]; then
 if [ "${VARIATIONS}" = "" ]; then
     # NOTE: keep in sync with installer/rpm/algorand.spec
     bin_files=("algocfg" "algod" "algoh" "algokey" "carpenter" "catchupsrv" "ddconfig.sh" "diagcfg" "goal" "kmd" "msgpacktool" "node_exporter")

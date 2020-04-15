@@ -30,7 +30,7 @@ tasks:
       image: algorand/go-algorand-ci-linux-centos
       version: '{{ docker.Version.outputs.version }}'
       workDir: /projects/go-algorand
-      volumes: [ /home/btoll/go/bin:/projects/go-algorand/go/bin ]
+      volumes: [ $HOME/go/bin:/projects/go-algorand/go/bin ]
     target: package-rpm WORKDIR=/projects/go-algorand
 
   - task: docker.Make
@@ -39,16 +39,13 @@ tasks:
       image: algorand/go-algorand-ci-linux-ubuntu
       version: '{{ docker.Version.outputs.version }}'
       workDir: /projects/go-algorand
-      volumes: [ /home/btoll/go/bin:/projects/go-algorand/go/bin ]
+      volumes: [ $HOME/go/bin:/projects/go-algorand/go/bin ]
     target: package-deb WORKDIR=/projects/go-algorand
 
 jobs:
   package:
     configs:
       arch: amd64
-      docker:
-        env:
-          - FOO=foo
     tasks:
       - shell.docker.Ensure.rpm
       - docker.Make.rpm
