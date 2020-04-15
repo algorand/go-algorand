@@ -146,14 +146,14 @@ func cloneAppParams(m map[basics.AppIndex]basics.AppParams) map[basics.AppIndex]
 // getAppParams fetches the creator address and AppParams for the app index,
 // if they exist. It does NOT clone the AppParams, so the returned params must
 // not be modified directly.
-func getAppParams(balances Balances, aidx basics.AppIndex) (params basics.AppParams, creator basics.Address, doesNotExist bool, err error) {
-	creator, doesNotExist, err = balances.GetAppCreator(aidx)
+func getAppParams(balances Balances, aidx basics.AppIndex) (params basics.AppParams, creator basics.Address, exists bool, err error) {
+	creator, exists, err = balances.GetAppCreator(aidx)
 	if err != nil {
 		return
 	}
 
 	// App doesn't exist. Not an error, but return straight away
-	if doesNotExist {
+	if !exists {
 		return
 	}
 
@@ -426,7 +426,7 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, stev
 	}
 
 	// Fetch the application parameters, if they exist
-	params, creator, doesNotExist, err := getAppParams(balances, appIdx)
+	params, creator, exists, err := getAppParams(balances, appIdx)
 	if err != nil {
 		return err
 	}
@@ -469,10 +469,10 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, stev
 		}
 
 		// If the application still exists...
-		if !doesNotExist {
+		if exists {
 			// Execute the ClearStateProgram before we've deleted the LocalState
-			// for this account. Ignore whether or not it succeeded or failed.
-			// ClearState transactions may never be rejected by app logic.
+			// for this account. If the ClearStateProgram does not fail, apply any
+			// state deltas it generated.
 			pass, stateDeltas, err := steva.Eval([]byte(params.ClearStateProgram))
 			if err == nil && pass {
 				// Program execution may produce some GlobalState and LocalState
@@ -493,7 +493,7 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, stev
 			}
 		}
 
-		// Fetch the (potentially updated) record
+		// Fetch the (potentially updated) sender record
 		record, err = balances.Get(header.Sender, false)
 		if err != nil {
 			return err
@@ -515,7 +515,7 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, stev
 
 	// Past this point, the AppParams must exist. NoOp, OptIn, CloseOut,
 	// Delete, and Update
-	if doesNotExist {
+	if !exists {
 		return fmt.Errorf("only clearing out is supported for applications that do not exist")
 	}
 

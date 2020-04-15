@@ -88,8 +88,8 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string) error {
 		//assets = make(map[uint64]v1.AssetHolding)
 		for curid, holding := range record.Assets {
 			var creator string
-			creatorAddr, doesNotExist, err := myLedger.GetAssetCreator(curid)
-			if err == nil && !doesNotExist {
+			creatorAddr, ok, err := myLedger.GetAssetCreator(curid)
+			if err == nil && ok {
 				creator = creatorAddr.String()
 			} else {
 				// Asset may have been deleted, so we can no

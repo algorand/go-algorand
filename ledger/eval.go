@@ -86,11 +86,11 @@ func (x *roundCowBase) txnCounter() uint64 {
 	return x.txnCount
 }
 
-func (cs *roundCowState) GetAssetCreator(assetIdx basics.AssetIndex) (creator basics.Address, doesNotExist bool, err error) {
+func (cs *roundCowState) GetAssetCreator(assetIdx basics.AssetIndex) (creator basics.Address, ok bool, err error) {
 	return cs.getAssetCreator(assetIdx)
 }
 
-func (cs *roundCowState) GetAppCreator(appIdx basics.AppIndex) (creator basics.Address, doesNotExist bool, err error) {
+func (cs *roundCowState) GetAppCreator(appIdx basics.AppIndex) (creator basics.Address, ok bool, err error) {
 	return cs.getAppCreator(appIdx)
 }
 

@@ -625,12 +625,12 @@ func initConsensusProtocols() {
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	vFuture.LogicSigVersion = 2
 
+	// Enable application support
 	vFuture.Application = true
 
 	// 100.1 Algos (MinBalance for creating 1,000 assets)
 	vFuture.MaximumMinimumBalance = 100100000
 
-	// TODO(applications) tune these based on performance
 	vFuture.MaxAppArgs = 16
 	vFuture.MaxAppArgLen = 128
 	vFuture.MaxApprovalProgramLen = 1024

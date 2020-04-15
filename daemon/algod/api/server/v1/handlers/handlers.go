@@ -710,8 +710,8 @@ func AccountInformation(ctx lib.ReqContext, context echo.Context) {
 		assets = make(map[uint64]v1.AssetHolding)
 		for curid, holding := range record.Assets {
 			var creator string
-			creatorAddr, doesNotExist, err := ledger.GetAssetCreator(curid)
-			if err == nil && !doesNotExist {
+			creatorAddr, ok, err := ledger.GetAssetCreator(curid)
+			if err == nil && ok {
 				creator = creatorAddr.String()
 			} else {
 				// Asset may have been deleted, so we can no
@@ -1167,8 +1167,8 @@ func AssetInformation(ctx lib.ReqContext, context echo.Context) {
 
 	ledger := ctx.Node.Ledger()
 	aidx := basics.AssetIndex(queryIndex)
-	creator, doesNotExist, err := ledger.GetAssetCreator(aidx)
-	if err != nil || doesNotExist {
+	creator, ok, err := ledger.GetAssetCreator(aidx)
+	if err != nil || !ok {
 		// Treat a database error and a nonexistent application the
 		// same to avoid changing API behavior
 		lib.ErrorResponse(w, http.StatusNotFound, err, errFailedToGetAssetCreator, ctx.Log)
@@ -1332,12 +1332,12 @@ func ApplicationInformation(ctx lib.ReqContext, context echo.Context) {
 
 	ledger := ctx.Node.Ledger()
 	aidx := basics.AppIndex(queryIndex)
-	creator, doesNotExist, err := ledger.GetAppCreator(aidx)
+	creator, ok, err := ledger.GetAppCreator(aidx)
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusNotFound, err, errFailedToGetAppCreator, ctx.Log)
 		return
 	}
-	if doesNotExist {
+	if !ok {
 		lib.ErrorResponse(w, http.StatusNotFound, err, errAppDoesNotExist, ctx.Log)
 		return
 	}

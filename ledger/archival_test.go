@@ -408,27 +408,27 @@ func TestArchivalCreatables(t *testing.T) {
 	for aidx, status := range creatableIdxs {
 		switch status {
 		case AssetCreated:
-			c, doesNotExist, err := l.GetAssetCreator(basics.AssetIndex(aidx))
+			c, ok, err := l.GetAssetCreator(basics.AssetIndex(aidx))
 			require.NoError(t, err)
-			require.False(t, doesNotExist)
+			require.True(t, ok)
 			require.Equal(t, allCreators[aidx], c)
 			existing++
 		case AppCreated:
-			c, doesNotExist, err := l.GetAppCreator(basics.AppIndex(aidx))
+			c, ok, err := l.GetAppCreator(basics.AppIndex(aidx))
 			require.NoError(t, err)
-			require.False(t, doesNotExist)
+			require.True(t, ok)
 			require.Equal(t, allCreators[aidx], c)
 			existing++
 		case AssetDeleted:
-			c, doesNotExist, err := l.GetAssetCreator(basics.AssetIndex(aidx))
+			c, ok, err := l.GetAssetCreator(basics.AssetIndex(aidx))
 			require.NoError(t, err)
-			require.True(t, doesNotExist)
+			require.False(t, ok)
 			require.Equal(t, basics.Address{}, c)
 			deleted++
 		case AppDeleted:
-			c, doesNotExist, err := l.GetAppCreator(basics.AppIndex(aidx))
+			c, ok, err := l.GetAppCreator(basics.AppIndex(aidx))
 			require.NoError(t, err)
-			require.True(t, doesNotExist)
+			require.False(t, ok)
 			require.Equal(t, basics.Address{}, c)
 			deleted++
 		default:
@@ -453,27 +453,27 @@ func TestArchivalCreatables(t *testing.T) {
 	for aidx, status := range creatableIdxs {
 		switch status {
 		case AssetCreated:
-			c, doesNotExist, err := l.GetAssetCreator(basics.AssetIndex(aidx))
+			c, ok, err := l.GetAssetCreator(basics.AssetIndex(aidx))
 			require.NoError(t, err)
-			require.False(t, doesNotExist)
+			require.True(t, ok)
 			require.Equal(t, allCreators[aidx], c)
 			existing++
 		case AppCreated:
-			c, doesNotExist, err := l.GetAppCreator(basics.AppIndex(aidx))
+			c, ok, err := l.GetAppCreator(basics.AppIndex(aidx))
 			require.NoError(t, err)
-			require.False(t, doesNotExist)
+			require.True(t, ok)
 			require.Equal(t, allCreators[aidx], c)
 			existing++
 		case AssetDeleted:
-			c, doesNotExist, err := l.GetAssetCreator(basics.AssetIndex(aidx))
+			c, ok, err := l.GetAssetCreator(basics.AssetIndex(aidx))
 			require.NoError(t, err)
-			require.True(t, doesNotExist)
+			require.False(t, ok)
 			require.Equal(t, basics.Address{}, c)
 			deleted++
 		case AppDeleted:
-			c, doesNotExist, err := l.GetAppCreator(basics.AppIndex(aidx))
+			c, ok, err := l.GetAppCreator(basics.AppIndex(aidx))
 			require.NoError(t, err)
-			require.True(t, doesNotExist)
+			require.False(t, ok)
 			require.Equal(t, basics.Address{}, c)
 			deleted++
 		default:
@@ -543,27 +543,27 @@ func TestArchivalCreatables(t *testing.T) {
 	for aidx, status := range creatableIdxs {
 		switch status {
 		case AssetCreated:
-			c, doesNotExist, err := l.GetAssetCreator(basics.AssetIndex(aidx))
+			c, ok, err := l.GetAssetCreator(basics.AssetIndex(aidx))
 			require.NoError(t, err)
-			require.False(t, doesNotExist)
+			require.True(t, ok)
 			require.Equal(t, allCreators[aidx], c)
 			existing++
 		case AppCreated:
-			c, doesNotExist, err := l.GetAppCreator(basics.AppIndex(aidx))
+			c, ok, err := l.GetAppCreator(basics.AppIndex(aidx))
 			require.NoError(t, err)
-			require.False(t, doesNotExist)
+			require.True(t, ok)
 			require.Equal(t, allCreators[aidx], c)
 			existing++
 		case AssetDeleted:
-			c, doesNotExist, err := l.GetAssetCreator(basics.AssetIndex(aidx))
+			c, ok, err := l.GetAssetCreator(basics.AssetIndex(aidx))
 			require.NoError(t, err)
-			require.True(t, doesNotExist)
+			require.False(t, ok)
 			require.Equal(t, basics.Address{}, c)
 			deleted++
 		case AppDeleted:
-			c, doesNotExist, err := l.GetAppCreator(basics.AppIndex(aidx))
+			c, ok, err := l.GetAppCreator(basics.AppIndex(aidx))
 			require.NoError(t, err)
-			require.True(t, doesNotExist)
+			require.False(t, ok)
 			require.Equal(t, basics.Address{}, c)
 			deleted++
 		default:
@@ -597,27 +597,27 @@ func TestArchivalCreatables(t *testing.T) {
 	for aidx, status := range creatableIdxs {
 		switch status {
 		case AssetCreated:
-			c, doesNotExist, err := l.GetAssetCreator(basics.AssetIndex(aidx))
+			c, ok, err := l.GetAssetCreator(basics.AssetIndex(aidx))
 			require.NoError(t, err)
-			require.False(t, doesNotExist)
+			require.True(t, ok)
 			require.Equal(t, allCreators[aidx], c)
 			existing++
 		case AppCreated:
-			c, doesNotExist, err := l.GetAppCreator(basics.AppIndex(aidx))
+			c, ok, err := l.GetAppCreator(basics.AppIndex(aidx))
 			require.NoError(t, err)
-			require.False(t, doesNotExist)
+			require.True(t, ok)
 			require.Equal(t, allCreators[aidx], c)
 			existing++
 		case AssetDeleted:
-			c, doesNotExist, err := l.GetAssetCreator(basics.AssetIndex(aidx))
+			c, ok, err := l.GetAssetCreator(basics.AssetIndex(aidx))
 			require.NoError(t, err)
-			require.True(t, doesNotExist)
+			require.False(t, ok)
 			require.Equal(t, basics.Address{}, c)
 			deleted++
 		case AppDeleted:
-			c, doesNotExist, err := l.GetAppCreator(basics.AppIndex(aidx))
+			c, ok, err := l.GetAppCreator(basics.AppIndex(aidx))
 			require.NoError(t, err)
-			require.True(t, doesNotExist)
+			require.False(t, ok)
 			require.Equal(t, basics.Address{}, c)
 			deleted++
 		default:

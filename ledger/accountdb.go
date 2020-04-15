@@ -203,19 +203,22 @@ func (qs *accountsDbQueries) listCreatables(maxIdx basics.CreatableIndex, maxRes
 	return
 }
 
-func (qs *accountsDbQueries) lookupCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (addr basics.Address, doesNotExist bool, err error) {
+func (qs *accountsDbQueries) lookupCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (addr basics.Address, ok bool, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
 		err := qs.lookupCreatorStmt.QueryRow(cidx, ctype).Scan(&buf)
 
+		// Common error: creatable does not exist
 		if err == sql.ErrNoRows {
-			doesNotExist = true
 			return nil
 		}
 
+		// Some other database error
 		if err != nil {
 			return err
 		}
+
+		ok = true
 		copy(addr[:], buf)
 		return nil
 	})

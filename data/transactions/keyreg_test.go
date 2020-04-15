@@ -39,11 +39,11 @@ func (balances keyregTestBalances) Get(addr basics.Address, withPendingRewards b
 }
 
 func (balances keyregTestBalances) GetAssetCreator(assetIdx basics.AssetIndex) (basics.Address, bool, error) {
-	return basics.Address{}, false, nil
+	return basics.Address{}, true, nil
 }
 
 func (balances keyregTestBalances) GetAppCreator(assetIdx basics.AppIndex) (basics.Address, bool, error) {
-	return basics.Address{}, false, nil
+	return basics.Address{}, true, nil
 }
 
 func (balances keyregTestBalances) Put(basics.BalanceRecord) error {

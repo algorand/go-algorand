@@ -357,7 +357,7 @@ func (au *accountUpdates) listCreatables(maxCreatableIdx basics.CreatableIndex, 
 	return res, nil
 }
 
-func (au *accountUpdates) getCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, doesNotExist bool, err error) {
+func (au *accountUpdates) getCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
 	offset, err := au.roundOffset(rnd)
 	if err != nil {
 		return basics.Address{}, false, err
@@ -370,9 +370,9 @@ func (au *accountUpdates) getCreatorForRound(rnd basics.Round, cidx basics.Creat
 		creatableDelta, ok := au.creatables[cidx]
 		if ok {
 			if creatableDelta.created && creatableDelta.ctype == ctype {
-				return creatableDelta.creator, false, nil
+				return creatableDelta.creator, true, nil
 			}
-			return basics.Address{}, true, nil
+			return basics.Address{}, false, nil
 		}
 	} else {
 		for offset > 0 {
@@ -380,9 +380,9 @@ func (au *accountUpdates) getCreatorForRound(rnd basics.Round, cidx basics.Creat
 			creatableDelta, ok := au.creatableDeltas[offset][cidx]
 			if ok {
 				if creatableDelta.created && creatableDelta.ctype == ctype {
-					return creatableDelta.creator, false, nil
+					return creatableDelta.creator, true, nil
 				}
-				return basics.Address{}, true, nil
+				return basics.Address{}, false, nil
 			}
 		}
 	}
