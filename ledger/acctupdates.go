@@ -756,14 +756,13 @@ func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta StateDelta) {
 
 	au.deltas = append(au.deltas, delta.accts)
 	au.protos = append(au.protos, proto)
-	au.assetDeltas = append(au.assetDeltas, make(map[basics.AssetIndex]modifiedAsset))
+	au.assetDeltas = append(au.assetDeltas, delta.assets)
 	au.roundDigest = append(au.roundDigest, blk.Digest())
 
 	var ot basics.OverflowTracker
 	newTotals := au.roundTotals[len(au.roundTotals)-1]
 	allBefore := newTotals.All()
 	newTotals.applyRewards(delta.hdr.RewardsLevel, &ot)
-	newAssetDeltas := au.assetDeltas[len(au.assetDeltas)-1]
 
 	for addr, data := range delta.accts {
 		newTotals.delAccount(proto, data.old, &ot)
@@ -773,17 +772,14 @@ func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta StateDelta) {
 		macct.ndeltas++
 		macct.data = data.new
 		au.accounts[addr] = macct
+	}
 
-		adeltas := getChangedAssetIndices(addr, data)
-		for aidx, delta := range adeltas {
-			masset := au.assets[aidx]
-			masset.creator = addr
-			masset.created = delta.created
-			masset.ndeltas++
-			au.assets[aidx] = masset
-
-			newAssetDeltas[aidx] = delta
-		}
+	for aidx, adelta := range delta.assets {
+		masset := au.assets[aidx]
+		masset.creator = adelta.creator
+		masset.created = adelta.created
+		masset.ndeltas++
+		au.assets[aidx] = masset
 	}
 
 	if ot.Overflowed {

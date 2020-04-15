@@ -18,9 +18,9 @@ package ledger
 
 import (
 	"fmt"
+	"runtime"
 	"testing"
 	"time"
-	"runtime"
 
 	"github.com/stretchr/testify/require"
 

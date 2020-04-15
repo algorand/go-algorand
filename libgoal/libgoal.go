@@ -460,7 +460,8 @@ func (c *Client) signAndBroadcastTransactionWithWallet(walletHandle, pw []byte, 
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
-	resp0, err := kmd.SignTransaction(walletHandle, pw, tx)
+	// TODO(rekeying) probably libgoal should allow passing in different public key to sign with
+	resp0, err := kmd.SignTransaction(walletHandle, pw, crypto.PublicKey{}, tx)
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
