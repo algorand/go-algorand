@@ -19,6 +19,7 @@ package logic
 import (
 	"encoding/hex"
 	"fmt"
+	"math/rand"
 	"strings"
 	"testing"
 
@@ -101,6 +102,10 @@ func (l *testLedger) setHolding(addr basics.Address, assetID uint64, holding bas
 	}
 	br.holdings[assetID] = holding
 	l.balances[addr] = br
+}
+
+func (l *testLedger) RoundNumber() uint64 {
+	return rand.Uint64()
 }
 
 func (l *testLedger) Balance(addr basics.Address) (amount uint64, err error) {
@@ -2391,4 +2396,24 @@ func TestReturnTypes(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRoundNumber(t *testing.T) {
+	source := `global RoundNumber
+int 1
+>=
+`
+	ledger := makeTestLedger(
+		map[basics.Address]uint64{},
+	)
+	ep := defaultEvalParams(nil, nil)
+	ep.Ledger = ledger
+
+	program, err := AssembleString(source)
+	require.NoError(t, err)
+	_, err = CheckStateful(program, ep)
+	require.NoError(t, err)
+	pass, _, err := EvalStateful(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
 }

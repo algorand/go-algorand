@@ -174,6 +174,9 @@ const (
 	GroupSize
 	// LogicSigVersion ConsensusParams.LogicSigVersion
 	LogicSigVersion
+	// RoundNumber basics.Round
+	RoundNumber
+
 	invalidGlobalField
 )
 
@@ -192,6 +195,7 @@ var globalFieldTypeList = []globalFieldType{
 	{ZeroAddress, StackBytes},
 	{GroupSize, StackUint64},
 	{LogicSigVersion, StackUint64},
+	{RoundNumber, StackUint64},
 }
 
 // GlobalFieldTypes is StackUint64 StackBytes in parallel with GlobalFieldNames

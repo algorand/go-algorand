@@ -273,6 +273,7 @@ var globalFieldDocList = []stringString{
 	{"MaxTxnLife", "rounds"},
 	{"ZeroAddress", "32 byte address of all zero bytes"},
 	{"GroupSize", "Number of transactions in this atomic transaction group. At least 1."},
+	{"RoundNumber", "Current round number"},
 }
 
 // GlobalFieldDocs are notes on fields available in `global`
