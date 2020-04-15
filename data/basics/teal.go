@@ -119,8 +119,6 @@ type EvalDelta struct {
 
 	GlobalDelta StateDelta `codec:"gd"`
 
-	// TODO(applications) perhaps make these keys be uint64 where 0 == sender
-	// and 1..n -> txn.Addresses
 	LocalDeltas map[Address]StateDelta `codec:"ld,allocbound=config.MaxEvalDeltaAccounts"`
 }
 
