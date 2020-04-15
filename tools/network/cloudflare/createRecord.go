@@ -150,7 +150,7 @@ func parseCreateDNSRecordResponse(response *http.Response) (*CreateDNSRecordResp
 	}
 	var parsedReponse CreateDNSRecordResponse
 	if err := json.Unmarshal(body, &parsedReponse); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to Unmarshal response body '%s' : %v", string(body), err)
 	}
 	return &parsedReponse, nil
 }
