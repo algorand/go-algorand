@@ -497,6 +497,9 @@ func assembleAddr(ops *OpStream, spec *OpSpec, args []string) error {
 }
 
 func assembleArg(ops *OpStream, spec *OpSpec, args []string) error {
+	if len(args) != 1 {
+		return errors.New("arg operation needs one argument")
+	}
 	val, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
 		return err
@@ -521,6 +524,9 @@ func assembleBranch(ops *OpStream, spec *OpSpec, args []string) error {
 }
 
 func assembleLoad(ops *OpStream, spec *OpSpec, args []string) error {
+	if len(args) != 1 {
+		return errors.New("load operation needs one argument")
+	}
 	val, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
 		return err
@@ -535,6 +541,9 @@ func assembleLoad(ops *OpStream, spec *OpSpec, args []string) error {
 }
 
 func assembleStore(ops *OpStream, spec *OpSpec, args []string) error {
+	if len(args) != 1 {
+		return errors.New("store operation needs one argument")
+	}
 	val, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
 		return err
